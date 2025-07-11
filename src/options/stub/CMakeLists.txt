@@ -12,21 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(stub)
-add_subdirectory(cache)
-add_subdirectory(client)
-add_subdirectory(common)
-
-file(GLOB DINGOFS_OPTIONS_LIB_SRCS
-    "cache/*.cpp"
-    "mdsv2/*.cpp"
-    "options.cpp"
+add_library(stub_options
+    dynamic_option.cc
 )
 
-add_library(dingofs_options ${DINGOFS_OPTIONS_LIB_SRCS})
-
-target_link_libraries(dingofs_options
-    toml11::toml11
+target_link_libraries(stub_options
     gflags::gflags
     glog::glog
 )

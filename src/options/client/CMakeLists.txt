@@ -26,10 +26,11 @@ add_library(client_options
 
 target_link_libraries(client_options
     stub_common
+    stub_options
+    cache_options
+    cache_lib # TODO: remove this
     brpc::brpc
     fmt::fmt
     glog::glog
     gflags::gflags
-    cache_options
-    cache_lib # TODO: remove this
 )

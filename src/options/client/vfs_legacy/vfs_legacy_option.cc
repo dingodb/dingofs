@@ -16,12 +16,15 @@
 
 #include "options/client/vfs_legacy/vfs_legacy_option.h"
 
+#include <glog/logging.h>
+
 #include <string>
 
 #include "blockaccess/s3/s3_common.h"
 #include "options/client/client_dynamic_option.h"
 #include "options/client/common_option.h"
 #include "options/client/vfs_legacy/vfs_legacy_dynamic_config.h"
+#include "options/stub/dynamic_option.h"
 #include "stub/common/config.h"
 
 namespace dingofs {
@@ -230,6 +233,42 @@ void InitVFSLegacyOption(utils::Configuration* conf, VFSLegacyOption* option) {
                             &FLAGS_fuseClientBurstReadIops);
   conf->GetValueFatalIfFail("fuseClient.throttle.burstReadIopsSecs",
                             &FLAGS_fuseClientBurstReadIopsSecs);
+
+  // logging
+  if (!conf->GetBoolValue("access_logging", &FLAGS_access_logging)) {
+    LOG(INFO) << "Not found `access_logging` in conf, default: "
+              << FLAGS_access_logging;
+  }
+  if (!conf->GetInt64Value("access_log_threshold_us",
+                           &FLAGS_access_log_threshold_us)) {
+    LOG(INFO) << "Not found `access_log_threshold_us` in conf, "
+                 "default: "
+              << FLAGS_access_log_threshold_us;
+  }
+
+  if (!conf->GetBoolValue("mds_access_logging",
+                          &stub::FLAGS_mds_access_logging)) {
+    LOG(INFO) << "Not found `mds_access_logging` in conf, default: "
+              << stub::FLAGS_mds_access_logging;
+  }
+  if (!conf->GetInt64Value("mds_access_log_threshold_us",
+                           &stub::FLAGS_mds_access_log_threshold_us)) {
+    LOG(INFO) << "Not found `mds_access_log_threshold_us` in conf, "
+                 "default: "
+              << stub::FLAGS_mds_access_log_threshold_us;
+  }
+
+  if (!conf->GetBoolValue("meta_access_logging",
+                          &stub::FLAGS_meta_access_logging)) {
+    LOG(INFO) << "Not found `meta_access_logging` in conf, default: "
+              << stub::FLAGS_meta_access_logging;
+  }
+  if (!conf->GetInt64Value("meta_access_log_threshold_us",
+                           &stub::FLAGS_meta_access_log_threshold_us)) {
+    LOG(INFO) << "Not found `meta_access_log_threshold_us` in conf, "
+                 "default: "
+              << stub::FLAGS_meta_access_log_threshold_us;
+  }
 
   SetBrpcOpt(conf);
 }

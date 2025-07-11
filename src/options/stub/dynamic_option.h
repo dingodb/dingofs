@@ -14,21 +14,22 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_SRC_CLIENT_OPTIONS_CLIENT_DYNAMIC_OPTION_H_
-#define DINGOFS_SRC_CLIENT_OPTIONS_CLIENT_DYNAMIC_OPTION_H_
+#ifndef DINGOFS_OPTIONS_STUB_DYNAMIC_OPITON_H_
+#define DINGOFS_OPTIONS_STUB_DYNAMIC_OPITON_H_
 
 #include <gflags/gflags.h>
+#include <gflags/gflags_declare.h>
 
 namespace dingofs {
-namespace client {
+namespace stub {
 
-#define USING_FLAG(name) using ::dingofs::client::FLAGS_##name;
+DECLARE_bool(mds_access_logging);
+DECLARE_int64(mds_access_log_threshold_us);
 
-// access log
-DECLARE_bool(access_logging);
-DECLARE_int64(access_log_threshold_us);
+DECLARE_bool(meta_access_logging);
+DECLARE_int64(meta_access_log_threshold_us);
 
-}  // namespace client
+}  // namespace stub
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_OPTIONS_CLIENT_DYNAMIC_OPTION_H_
+#endif  // DINGOFS_OPTIONS_STUB_DYNAMIC_OPITON_H_

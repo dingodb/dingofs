@@ -16,20 +16,17 @@
 
 #include "options/client/client_dynamic_option.h"
 
+#include "options/gflag_validator.h"
+
 namespace dingofs {
 namespace client {
-
-namespace {
-bool PassDouble(const char*, double) { return true; }
-bool PassUint64(const char*, uint64_t) { return true; }
-bool PassInt32(const char*, int32_t) { return true; }
-bool PassUint32(const char*, uint32_t) { return true; }
-bool PassBool(const char*, bool) { return true; }
-};  // namespace
 
 // access log
 DEFINE_bool(access_logging, true, "enable access log");
 DEFINE_validator(access_logging, &PassBool);
+
+DEFINE_int64(access_log_threshold_us, 0, "access log threshold");
+DEFINE_validator(access_log_threshold_us, &PassInt64);
 
 }  // namespace client
 }  // namespace dingofs

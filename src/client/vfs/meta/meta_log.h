@@ -36,7 +36,7 @@ class MetaLogGuard {
   using MessageHandler = std::function<std::string()>;
 
   explicit MetaLogGuard(MessageHandler handler)
-      : enabled_(FLAGS_meta_logging), handler_(std::move(handler)) {
+      : enabled_(FLAGS_vfs_meta_logging), handler_(std::move(handler)) {
     if (!enabled_) {
       return;
     }

@@ -14,21 +14,21 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_SRC_CLIENT_OPTIONS_CLIENT_DYNAMIC_OPTION_H_
-#define DINGOFS_SRC_CLIENT_OPTIONS_CLIENT_DYNAMIC_OPTION_H_
+#ifndef DINGOFS_OPTIONS_GFLAG_VALIDATATOR_H_
+#define DINGOFS_OPTIONS_GFLAG_VALIDATATOR_H_
 
 #include <gflags/gflags.h>
+#include <glog/logging.h>
 
 namespace dingofs {
-namespace client {
 
-#define USING_FLAG(name) using ::dingofs::client::FLAGS_##name;
+static bool PassDouble(const char*, double) { return true; }
+static bool PassInt64(const char*, int64_t) { return true; }
+static bool PassUint64(const char*, uint64_t) { return true; }
+static bool PassInt32(const char*, int32_t) { return true; }
+static bool PassUint32(const char*, uint32_t) { return true; }
+static bool PassBool(const char*, bool) { return true; }
 
-// access log
-DECLARE_bool(access_logging);
-DECLARE_int64(access_log_threshold_us);
-
-}  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_OPTIONS_CLIENT_DYNAMIC_OPTION_H_
+#endif  // DINGOFS_OPTIONS_GFLAG_VALIDATATOR_H_

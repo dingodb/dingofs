@@ -31,6 +31,7 @@
 #include "metaserver/metaserver.h"
 #include "metaserver/superpartition/access_log.h"
 #include "options/common/dynamic_vlog.h"
+#include "stub/rpcclient/mds_access_log.h"
 #include "stub/rpcclient/meta_access_log.h"
 #include "utils/configuration.h"
 #include "utils/thread_util.h"
@@ -108,6 +109,32 @@ void LoadConfigFromCmdline(Configuration* conf) {
   if (GetCommandLineFlagInfo("v", &info) && !info.is_default) {
     conf->SetIntValue("metaserver.loglevel", FLAGS_v);
   }
+
+  // access logging
+  if (!conf->GetBoolValue("mds_access_logging",
+                          &dingofs::stub::FLAGS_mds_access_logging)) {
+    LOG(INFO) << "Not found `mds_access_logging` in conf, default: "
+              << dingofs::stub::FLAGS_mds_access_logging;
+  }
+  if (!conf->GetInt64Value("mds_access_log_threshold_us",
+                           &dingofs::stub::FLAGS_mds_access_log_threshold_us)) {
+    LOG(INFO) << "Not found `mds_access_log_threshold_us` in conf, "
+                 "default: "
+              << dingofs::stub::FLAGS_mds_access_log_threshold_us;
+  }
+
+  if (!conf->GetBoolValue("meta_access_logging",
+                          &dingofs::stub::FLAGS_meta_access_logging)) {
+    LOG(INFO) << "Not found `meta_access_logging` in conf, default: "
+              << dingofs::stub::FLAGS_meta_access_logging;
+  }
+  if (!conf->GetInt64Value(
+          "meta_access_log_threshold_us",
+          &dingofs::stub::FLAGS_meta_access_log_threshold_us)) {
+    LOG(INFO) << "Not found `meta_access_log_threshold_us` in conf, "
+                 "default: "
+              << dingofs::stub::FLAGS_meta_access_log_threshold_us;
+  }
 }
 
 }  // namespace
@@ -151,7 +178,7 @@ int main(int argc, char** argv) {
 
   // init block access log
   dingofs::blockaccess::InitBlockAccessLog(FLAGS_log_dir);
-
+  dingofs::stub::InitMdsAccessLog(FLAGS_log_dir);
   dingofs::stub::InitMetaAccessLog(FLAGS_log_dir);
 
   dingofs::metaserver::Metaserver metaserver;

@@ -16,16 +16,10 @@
 
 #include "options/client/fuse/fuse_dynamic_option.h"
 
+#include "options/gflag_validator.h"
+
 namespace dingofs {
 namespace client {
-
-namespace {
-bool PassDouble(const char*, double) { return true; }
-bool PassUint64(const char*, uint64_t) { return true; }
-bool PassInt32(const char*, int32_t) { return true; }
-bool PassUint32(const char*, uint32_t) { return true; }
-bool PassBool(const char*, bool) { return true; }
-};  // namespace
 
 // fuse module
 DEFINE_bool(fuse_file_info_direct_io, false, "use direct io for file");

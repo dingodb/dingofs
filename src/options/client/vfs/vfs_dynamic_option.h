@@ -24,7 +24,7 @@ namespace dingofs {
 namespace client {
 
 // meta system log
-DECLARE_bool(meta_logging);
+DECLARE_bool(vfs_meta_logging);
 
 DECLARE_int32(flush_bg_thread);
 

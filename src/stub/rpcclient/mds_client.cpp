@@ -28,8 +28,10 @@
 #include <vector>
 
 #include "dingofs/cachegroup.pb.h"
+#include "metrics/mds/mds_client.h"
 #include "metrics/metric_guard.h"
 #include "stub/common/config.h"
+#include "stub/rpcclient/mds_access_log.h"
 #include "utils/string_util.h"
 
 namespace dingofs {
@@ -246,6 +248,14 @@ FSStatusCode MdsClientImpl::Init(
 
 FSStatusCode MdsClientImpl::MountFs(const std::string& fsName,
                                     const Mountpoint& mountPt, FsInfo* fsInfo) {
+  FSStatusCode ret = FSStatusCode::OK;
+  auto start = butil::cpuwide_time_us();
+
+  MdsAccessLogGuard log(start, [&]() {
+    return absl::StrFormat("mount_fs (%s) %s", fsName,
+                           ((ret == FSStatusCode::OK) ? "ok" : "failed"));
+  });
+
   auto task = RPCTask {
     (void)addrindex;
     (void)rpctimeoutMS;
@@ -267,7 +277,7 @@ FSStatusCode MdsClientImpl::MountFs(const std::string& fsName,
       return -cntl->ErrorCode();
     }
 
-    FSStatusCode ret = response.statuscode();
+    ret = response.statuscode();
     if (ret != FSStatusCode::OK) {
       LOG(WARNING) << "MountFs: fsname = " << fsName
                    << ", mountPt = " << mountPt.ShortDebugString()
@@ -283,6 +293,14 @@ FSStatusCode MdsClientImpl::MountFs(const std::string& fsName,
 
 FSStatusCode MdsClientImpl::UmountFs(const std::string& fsName,
                                      const Mountpoint& mountPt) {
+  FSStatusCode ret = FSStatusCode::OK;
+  auto start = butil::cpuwide_time_us();
+
+  MdsAccessLogGuard log(start, [&]() {
+    return absl::StrFormat("umount_fs (%s) %s", fsName,
+                           ((ret == FSStatusCode::OK) ? "ok" : "failed"));
+  });
+
   auto task = RPCTask {
     (void)addrindex;
     (void)rpctimeoutMS;
@@ -304,7 +322,7 @@ FSStatusCode MdsClientImpl::UmountFs(const std::string& fsName,
       return -cntl->ErrorCode();
     }
 
-    FSStatusCode ret = response.statuscode();
+    ret = response.statuscode();
     LOG_IF(WARNING, ret != FSStatusCode::OK)
         << "UmountFs: fsname = " << fsName
         << ", mountPt = " << mountPt.ShortDebugString() << ", errcode = " << ret
@@ -314,8 +332,8 @@ FSStatusCode MdsClientImpl::UmountFs(const std::string& fsName,
   return ReturnError(rpcexcutor_.DoRPCTask(task, mdsOpt_.mdsMaxRetryMS));
 }
 
-FSStatusCode MdsClientImpl::GetFsInfo(const std::string& fsName,
-                                      FsInfo* fsInfo) {
+pb::mds::FSStatusCode MdsClientImpl::DoGetFsInfo(const std::string& fs_name,
+                                                 pb::mds::FsInfo* fs_info) {
   auto task = RPCTask {
     (void)addrindex;
     (void)rpctimeoutMS;
@@ -328,61 +346,94 @@ FSStatusCode MdsClientImpl::GetFsInfo(const std::string& fsName,
                              start);
 
     pb::mds::GetFsInfoResponse response;
-    mdsbasecli_->GetFsInfo(fsName, &response, cntl, channel);
+    mdsbasecli_->GetFsInfo(fs_name, &response, cntl, channel);
 
     if (cntl->Failed()) {
-      LOG(WARNING) << "GetFsInfo Failed, errorcode = " << cntl->ErrorCode()
-                   << ", error content:" << cntl->ErrorText()
-                   << ", log id = " << cntl->log_id();
+      LOG(WARNING) << "Fail GetFsInfo, fsname: " << fs_name
+                   << ", errorcode: " << cntl->ErrorCode()
+                   << ", error content: " << cntl->ErrorText()
+                   << ", log_id: " << cntl->log_id();
       is_ok = false;
       return -cntl->ErrorCode();
     }
 
     FSStatusCode ret = response.statuscode();
     if (ret != FSStatusCode::OK) {
-      LOG(WARNING) << "GetFsInfo: fsname = " << fsName << ", errcode = " << ret
-                   << ", errmsg = " << FSStatusCode_Name(ret);
+      LOG(WARNING) << "Fail GetFsInfo, fsname: " << fs_name
+                   << ", log_id: " << cntl->log_id()
+                   << ", errmsg:" << FSStatusCode_Name(ret);
     } else if (response.has_fsinfo()) {
-      fsInfo->CopyFrom(response.fsinfo());
+      fs_info->CopyFrom(response.fsinfo());
     }
 
+    return ret;
+  };
+
+  return ReturnError(rpcexcutor_.DoRPCTask(task, mdsOpt_.mdsMaxRetryMS));
+}
+
+FSStatusCode MdsClientImpl::GetFsInfo(const std::string& fs_name,
+                                      FsInfo* fs_info) {
+  FSStatusCode ret = FSStatusCode::OK;
+  auto start = butil::cpuwide_time_us();
+
+  MdsAccessLogGuard log(start, [&]() {
+    return absl::StrFormat("get_fs_info_by_name (%s) %s", fs_name,
+                           ((ret == FSStatusCode::OK) ? "ok" : "failed"));
+  });
+
+  ret = DoGetFsInfo(fs_name, fs_info);
+  return ret;
+}
+
+pb::mds::FSStatusCode MdsClientImpl::DoGetFsInfo(uint32_t fs_id,
+                                                 pb::mds::FsInfo* fs_info) {
+  auto task = RPCTask {
+    (void)addrindex;
+    (void)rpctimeoutMS;
+    // getfsinfo metrics information
+    auto start = butil::cpuwide_time_us();
+    bool is_ok = true;
+    MetricListGuard mdsGuard(&is_ok,
+                             {&MDSClientMetric::GetInstance().getFsInfo,
+                              &MDSClientMetric::GetInstance().getAllOperation},
+                             start);
+
+    pb::mds::GetFsInfoResponse response;
+    mdsbasecli_->GetFsInfo(fs_id, &response, cntl, channel);
+    if (cntl->Failed()) {
+      LOG(WARNING) << "Fail GetFsInfo, fs_id: " << fs_id
+                   << ", errorcode: " << cntl->ErrorCode()
+                   << ", error content: " << cntl->ErrorText()
+                   << ", log_id: " << cntl->log_id();
+      is_ok = false;
+      return -cntl->ErrorCode();
+    }
+
+    FSStatusCode ret = response.statuscode();
+    if (ret != FSStatusCode::OK) {
+      LOG(WARNING) << "Fail GetFsInfo, fs_id: " << fs_id
+                   << ", log_id: " << cntl->log_id()
+                   << ", errmsg: " << FSStatusCode_Name(ret);
+    } else if (response.has_fsinfo()) {
+      fs_info->CopyFrom(response.fsinfo());
+    }
     return ret;
   };
   return ReturnError(rpcexcutor_.DoRPCTask(task, mdsOpt_.mdsMaxRetryMS));
 }
 
-FSStatusCode MdsClientImpl::GetFsInfo(uint32_t fsId, FsInfo* fsInfo) {
-  auto task = RPCTask {
-    (void)addrindex;
-    (void)rpctimeoutMS;
-    // getfsinfo metrics information
-    auto start = butil::cpuwide_time_us();
-    bool is_ok = true;
-    MetricListGuard mdsGuard(&is_ok,
-                             {&MDSClientMetric::GetInstance().getFsInfo,
-                              &MDSClientMetric::GetInstance().getAllOperation},
-                             start);
+FSStatusCode MdsClientImpl::GetFsInfo(uint32_t fs_id, FsInfo* fs_info) {
+  FSStatusCode ret = FSStatusCode::OK;
 
-    pb::mds::GetFsInfoResponse response;
-    mdsbasecli_->GetFsInfo(fsId, &response, cntl, channel);
-    if (cntl->Failed()) {
-      LOG(WARNING) << "GetFsInfo Failed, errorcode = " << cntl->ErrorCode()
-                   << ", error content:" << cntl->ErrorText()
-                   << ", log id = " << cntl->log_id();
-      is_ok = false;
-      return -cntl->ErrorCode();
-    }
+  auto start = butil::cpuwide_time_us();
+  MdsAccessLogGuard log(start, [&]() {
+    return absl::StrFormat("get_fs_info_by_id (%d) %s", fs_id,
+                           ((ret == FSStatusCode::OK) ? "ok" : "failed"));
+  });
 
-    FSStatusCode ret = response.statuscode();
-    if (ret != FSStatusCode::OK) {
-      LOG(WARNING) << "GetFsInfo: fsid = " << fsId << ", errcode = " << ret
-                   << ", errmsg = " << FSStatusCode_Name(ret);
-    } else if (response.has_fsinfo()) {
-      fsInfo->CopyFrom(response.fsinfo());
-    }
-    return ret;
-  };
-  return ReturnError(rpcexcutor_.DoRPCTask(task, mdsOpt_.mdsMaxRetryMS));
+  ret = DoGetFsInfo(fs_id, fs_info);
+  return ret;
 }
 
 template <typename T>
@@ -410,10 +461,12 @@ void GetEndPoint(const T& info, butil::EndPoint* internal,
   butil::str2endpoint(externalIp.c_str(), externalPort, external);
 }
 
-bool MdsClientImpl::GetMetaServerInfo(
-    const PeerAddr& addr, CopysetPeerInfo<MetaserverID>* metaserverInfo) {
+bool MdsClientImpl::DoGetMetaServerInfo(
+    const common::PeerAddr& addr,
+    common::CopysetPeerInfo<common::MetaserverID>* metaserver_info) {
   std::vector<std::string> strs;
   dingofs::utils::SplitString(addr.ToString(), ":", &strs);
+
   const std::string& ip = strs[0];
   uint64_t port;
   ::dingofs::utils::StringToUll(strs[1], &port);
@@ -433,8 +486,8 @@ bool MdsClientImpl::GetMetaServerInfo(
     pb::mds::topology::GetMetaServerInfoResponse response;
     mdsbasecli_->GetMetaServerInfo(port, ip, &response, cntl, channel);
     if (cntl->Failed()) {
-      LOG(WARNING) << "GetMetaServerInfo Failed, errorcode = "
-                   << cntl->ErrorCode()
+      LOG(WARNING) << "Fail GetMetaServerInfo, ip: " << ip << ", port: " << port
+                   << ", errorcode = " << cntl->ErrorCode()
                    << ", error content:" << cntl->ErrorText()
                    << ", log id = " << cntl->log_id();
       is_ok = false;
@@ -443,26 +496,41 @@ bool MdsClientImpl::GetMetaServerInfo(
 
     TopoStatusCode ret = response.statuscode();
     if (ret != TopoStatusCode::TOPO_OK) {
-      LOG(WARNING) << "GetMetaServerInfo: ip= " << ip << ", port= " << port
-                   << ", errcode = " << ret;
+      LOG(WARNING) << "Fail GetMetaServerInfo, ip: " << ip << ", port: " << port
+                   << ", log id = " << cntl->log_id()
+                   << ", errcode = " << TopoStatusCode_Name(ret);
     } else {
       const auto& info = response.metaserverinfo();
-      MetaserverID metaserverID = info.metaserverid();
+      MetaserverID metaserver_id = info.metaserverid();
       butil::EndPoint internal;
       butil::EndPoint external;
       GetEndPoint(info, &internal, &external);
-      *metaserverInfo = CopysetPeerInfo<MetaserverID>(
-          metaserverID, PeerAddr(internal), PeerAddr(external));
+      *metaserver_info = CopysetPeerInfo<MetaserverID>(
+          metaserver_id, PeerAddr(internal), PeerAddr(external));
     }
 
     return ret;
   };
+
   return 0 == rpcexcutor_.DoRPCTask(task, mdsOpt_.mdsMaxRetryMS);
 }
 
-bool MdsClientImpl::GetMetaServerListInCopysets(
-    const LogicPoolID& logicalpooid, const std::vector<CopysetID>& copysetidvec,
-    std::vector<CopysetInfo<MetaserverID>>* cpinfoVec) {
+bool MdsClientImpl::GetMetaServerInfo(
+    const PeerAddr& addr, CopysetPeerInfo<MetaserverID>* metaserver_info) {
+  bool ok = true;
+  auto start = butil::cpuwide_time_us();
+  MdsAccessLogGuard log(start, [&]() {
+    return absl::StrFormat("get_metaserver_info %s", (ok ? "ok" : "failed"));
+  });
+
+  ok = DoGetMetaServerInfo(addr, metaserver_info);
+  return ok;
+}
+
+bool MdsClientImpl::DoGetMetaServerListInCopysets(
+    const common::LogicPoolID& logicalpooid,
+    const std::vector<common::CopysetID>& copysetidvec,
+    std::vector<common::CopysetInfo<common::MetaserverID>>* copyset_infos) {
   auto task = RPCTask {
     (void)addrindex;
     (void)rpctimeoutMS;
@@ -488,14 +556,16 @@ bool MdsClientImpl::GetMetaServerListInCopysets(
     int csinfonum = response.csinfo_size();
     for (int i = 0; i < csinfonum; i++) {
       CopysetInfo<MetaserverID> copysetseverl;
-      dingofs::pb::mds::topology::CopySetServerInfo info = response.csinfo(i);
+      const dingofs::pb::mds::topology::CopySetServerInfo& info =
+          response.csinfo(i);
 
       copysetseverl.lpid_ = logicalpooid;
       copysetseverl.cpid_ = info.copysetid();
       int cslocsNum = info.cslocs_size();
       for (int j = 0; j < cslocsNum; j++) {
         CopysetPeerInfo<MetaserverID> csinfo;
-        dingofs::pb::mds::topology::MetaServerLocation csl = info.cslocs(j);
+        const dingofs::pb::mds::topology::MetaServerLocation& csl =
+            info.cslocs(j);
         csinfo.peerID = csl.metaserverid();
         butil::EndPoint internal;
         butil::EndPoint external;
@@ -504,8 +574,9 @@ bool MdsClientImpl::GetMetaServerListInCopysets(
         csinfo.externalAddr = PeerAddr(external);
         copysetseverl.AddCopysetPeerInfo(csinfo);
       }
-      cpinfoVec->push_back(copysetseverl);
+      copyset_infos->push_back(copysetseverl);
     }
+
     TopoStatusCode ret = response.statuscode();
     LOG_IF(WARNING, TopoStatusCode::TOPO_OK != 0)
         << "GetMetaServerList failed"
@@ -517,8 +588,23 @@ bool MdsClientImpl::GetMetaServerListInCopysets(
   return 0 == rpcexcutor_.DoRPCTask(task, mdsOpt_.mdsMaxRetryMS);
 }
 
-bool MdsClientImpl::CreatePartition(
-    uint32_t fsID, uint32_t count, std::vector<PartitionInfo>* partitionInfos) {
+bool MdsClientImpl::GetMetaServerListInCopysets(
+    const LogicPoolID& logicalpooid, const std::vector<CopysetID>& copysetidvec,
+    std::vector<CopysetInfo<MetaserverID>>* copyset_infos) {
+  bool ok = true;
+  auto start = butil::cpuwide_time_us();
+  MdsAccessLogGuard log(start, [&]() {
+    return absl::StrFormat("get_metaserver_list_in_copysets (%d) %s",
+                           logicalpooid, (ok ? "ok" : "failed"));
+  });
+
+  ok = DoGetMetaServerListInCopysets(logicalpooid, copysetidvec, copyset_infos);
+  return ok;
+}
+
+bool MdsClientImpl::DoCreatePartition(
+    uint32_t fs_id, uint32_t count,
+    std::vector<pb::common::PartitionInfo>* partition_infos) {
   auto task = RPCTask {
     (void)addrindex;
     (void)rpctimeoutMS;
@@ -531,36 +617,37 @@ bool MdsClientImpl::CreatePartition(
                              start);
 
     pb::mds::topology::CreatePartitionResponse response;
-    mdsbasecli_->CreatePartition(fsID, count, &response, cntl, channel);
+    mdsbasecli_->CreatePartition(fs_id, count, &response, cntl, channel);
     if (cntl->Failed()) {
-      LOG(WARNING) << "CreatePartition from mds failed, error is "
-                   << cntl->ErrorText() << ", log id = " << cntl->log_id();
+      LOG(WARNING) << "Fail CreatePartition from mds, fs_id: " << fs_id
+                   << ", count: " << count << ", error is " << cntl->ErrorText()
+                   << ", log id = " << cntl->log_id();
       is_ok = false;
       return -cntl->ErrorCode();
     }
 
     TopoStatusCode ret = response.statuscode();
     if (ret != TopoStatusCode::TOPO_OK) {
-      LOG(WARNING) << "CreatePartition: fsID = " << fsID
-                   << ", count = " << count << ", errcode = " << ret
-                   << ", errmsg = " << TopoStatusCode_Name(ret);
+      LOG(WARNING) << "Fail CreatePartition from mds, fs_id: " << fs_id
+                   << ", count: " << count << ", log id: " << cntl->log_id()
+                   << ", err: " << TopoStatusCode_Name(ret);
       return ret;
     }
 
-    int partitionNum = response.partitioninfolist_size();
-    if (partitionNum == 0) {
-      LOG(ERROR) << "CreatePartition: fsID = " << fsID << ", count = " << count
+    int partition_num = response.partitioninfolist_size();
+    if (partition_num == 0) {
+      LOG(ERROR) << "CreatePartition: fs_id " << fs_id << ", count = " << count
                  << ", errcode = " << ret
                  << ", errmsg = " << TopoStatusCode_Name(ret)
                  << ", but no partition info returns";
       return TopoStatusCode::TOPO_CREATE_PARTITION_FAIL;
     }
 
-    partitionInfos->reserve(count);
-    partitionInfos->clear();
+    partition_infos->reserve(count);
+    partition_infos->clear();
     std::move(response.mutable_partitioninfolist()->begin(),
               response.mutable_partitioninfolist()->end(),
-              std::back_inserter(*partitionInfos));
+              std::back_inserter(*partition_infos));
 
     return TopoStatusCode::TOPO_OK;
   };
@@ -568,9 +655,23 @@ bool MdsClientImpl::CreatePartition(
   return 0 == rpcexcutor_.DoRPCTask(task, mdsOpt_.mdsMaxRetryMS);
 }
 
-bool MdsClientImpl::GetCopysetOfPartitions(
-    const std::vector<uint32_t>& partitionIDList,
-    std::map<uint32_t, Copyset>* copysetMap) {
+bool MdsClientImpl::CreatePartition(
+    uint32_t fs_id, uint32_t count,
+    std::vector<PartitionInfo>* partition_infos) {
+  bool ok = true;
+  auto start = butil::cpuwide_time_us();
+  MdsAccessLogGuard log(start, [&]() {
+    return absl::StrFormat("create_partition (%d, %d) %s", fs_id, count,
+                           (ok ? "ok" : "failed"));
+  });
+
+  ok = DoCreatePartition(fs_id, count, partition_infos);
+  return ok;
+}
+
+bool MdsClientImpl::DoGetCopysetOfPartitions(
+    const std::vector<uint32_t>& partition_id_list,
+    std::map<uint32_t, pb::mds::topology::Copyset>* copyset_map) {
   auto task = RPCTask {
     (void)addrindex;
     (void)rpctimeoutMS;
@@ -584,10 +685,10 @@ bool MdsClientImpl::GetCopysetOfPartitions(
         start);
 
     pb::mds::topology::GetCopysetOfPartitionResponse response;
-    mdsbasecli_->GetCopysetOfPartitions(partitionIDList, &response, cntl,
+    mdsbasecli_->GetCopysetOfPartitions(partition_id_list, &response, cntl,
                                         channel);
     if (cntl->Failed()) {
-      LOG(WARNING) << "GetCopysetOfPartition from mds failed, error is "
+      LOG(WARNING) << "Fail GetCopysetOfPartition from mds, error is "
                    << cntl->ErrorText() << ", log id = " << cntl->log_id();
       is_ok = false;
       return -cntl->ErrorCode();
@@ -595,23 +696,23 @@ bool MdsClientImpl::GetCopysetOfPartitions(
 
     TopoStatusCode ret = response.statuscode();
     if (ret != TopoStatusCode::TOPO_OK) {
-      LOG(WARNING) << "GetCopysetOfPartition: errcode = " << ret
+      LOG(WARNING) << "Fail GetCopysetOfPartition from mds,  errcode = " << ret
                    << ", errmsg = " << TopoStatusCode_Name(ret);
       return ret;
     }
 
     int size = response.copysetmap_size();
     if (size == 0) {
-      LOG(WARNING) << "GetCopysetOfPartition: errcode = " << ret
+      LOG(WARNING) << "GetCopysetOfPartition, errcode = " << ret
                    << ", errmsg = " << TopoStatusCode_Name(ret)
                    << ", but no copyset returns";
       return TopoStatusCode::TOPO_INTERNAL_ERROR;
     }
 
-    copysetMap->clear();
+    copyset_map->clear();
     for (auto it : response.copysetmap()) {
       CopysetPeerInfo<MetaserverID> csinfo;
-      copysetMap->emplace(it.first, it.second);
+      copyset_map->emplace(it.first, it.second);
     }
 
     return TopoStatusCode::TOPO_OK;
@@ -620,8 +721,21 @@ bool MdsClientImpl::GetCopysetOfPartitions(
   return 0 == rpcexcutor_.DoRPCTask(task, mdsOpt_.mdsMaxRetryMS);
 }
 
-bool MdsClientImpl::ListPartition(uint32_t fsID,
-                                  std::vector<PartitionInfo>* partitionInfos) {
+bool MdsClientImpl::GetCopysetOfPartitions(
+    const std::vector<uint32_t>& partition_id_list,
+    std::map<uint32_t, pb::mds::topology::Copyset>* copyset_map) {
+  bool ok = true;
+  auto start = butil::cpuwide_time_us();
+  MdsAccessLogGuard log(start, [&]() {
+    return absl::StrFormat("get_opyset_of_partitions (%d) %s",
+                           partition_id_list.size(), (ok ? "ok" : "failed"));
+  });
+  ok = DoGetCopysetOfPartitions(partition_id_list, copyset_map);
+  return ok;
+}
+
+bool MdsClientImpl::DoListPartition(
+    uint32_t fs_id, std::vector<pb::common::PartitionInfo>* partition_infos) {
   auto task = RPCTask {
     (void)addrindex;
     (void)rpctimeoutMS;
@@ -634,33 +748,48 @@ bool MdsClientImpl::ListPartition(uint32_t fsID,
                              start);
 
     pb::mds::topology::ListPartitionResponse response;
-    mdsbasecli_->ListPartition(fsID, &response, cntl, channel);
+    mdsbasecli_->ListPartition(fs_id, &response, cntl, channel);
     if (cntl->Failed()) {
-      LOG(WARNING) << "ListPartition from mds failed, error is "
-                   << cntl->ErrorText() << ", log id = " << cntl->log_id();
+      LOG(WARNING) << "Fail ListPartition from mds, fs_id: " << fs_id
+                   << ", error is " << cntl->ErrorText()
+                   << ", log id = " << cntl->log_id();
       is_ok = false;
       return -cntl->ErrorCode();
     }
 
     TopoStatusCode ret = response.statuscode();
     if (ret != TopoStatusCode::TOPO_OK) {
-      LOG(WARNING) << "ListPartition: fsID = " << fsID << ", errcode = " << ret
+      LOG(WARNING) << "Fail ListPartition from mds, fs_id: " << fs_id
+                   << ", log id = " << cntl->log_id() << ", errcode = " << ret
                    << ", errmsg = " << TopoStatusCode_Name(ret);
       return ret;
     }
 
-    partitionInfos->clear();
+    partition_infos->clear();
     // when fs is creating and mds exit at the same time,
     // this may cause this fs has no partition
-    int partitionNum = response.partitioninfolist_size();
-    for (int i = 0; i < partitionNum; i++) {
-      partitionInfos->push_back(response.partitioninfolist(i));
+    int partition_num = response.partitioninfolist_size();
+    for (int i = 0; i < partition_num; i++) {
+      partition_infos->push_back(response.partitioninfolist(i));
     }
 
     return TopoStatusCode::TOPO_OK;
   };
 
   return 0 == rpcexcutor_.DoRPCTask(task, mdsOpt_.mdsMaxRetryMS);
+}
+
+bool MdsClientImpl::ListPartition(
+    uint32_t fs_id, std::vector<pb::common::PartitionInfo>* partition_infos) {
+  bool ok = true;
+  auto start = butil::cpuwide_time_us();
+  MdsAccessLogGuard log(start, [&]() {
+    return absl::StrFormat("list_partition (%d) %s", fs_id,
+                           (ok ? "ok" : "failed"));
+  });
+
+  ok = DoListPartition(fs_id, partition_infos);
+  return ok;
 }
 
 bool MdsClientImpl::AllocOrGetMemcacheCluster(uint32_t fsId,
@@ -701,8 +830,9 @@ bool MdsClientImpl::AllocOrGetMemcacheCluster(uint32_t fsId,
   return 0 == ReturnError(rpcexcutor_.DoRPCTask(task, mdsOpt_.mdsMaxRetryMS));
 }
 
-FSStatusCode MdsClientImpl::AllocS3ChunkId(uint32_t fsId, uint32_t idNum,
-                                           uint64_t* chunkId) {
+pb::mds::FSStatusCode MdsClientImpl::DoAllocS3ChunkId(uint32_t fs_id,
+                                                      uint32_t id_num,
+                                                      uint64_t* chunk_id) {
   auto task = RPCTask {
     (void)addrindex;
     (void)rpctimeoutMS;
@@ -715,35 +845,53 @@ FSStatusCode MdsClientImpl::AllocS3ChunkId(uint32_t fsId, uint32_t idNum,
                              start);
 
     pb::mds::AllocateS3ChunkResponse response;
-    mdsbasecli_->AllocS3ChunkId(fsId, idNum, &response, cntl, channel);
+    mdsbasecli_->AllocS3ChunkId(fs_id, id_num, &response, cntl, channel);
     if (cntl->Failed()) {
-      LOG(WARNING) << "AllocS3ChunkId Failed, errorcode = " << cntl->ErrorCode()
+      LOG(WARNING) << "Fail AllocS3ChunkId errorcode: " << cntl->ErrorCode()
+                   << ", fsid: " << fs_id << ", idnum: " << id_num
                    << ", error content:" << cntl->ErrorText()
                    << ", log id = " << cntl->log_id();
       is_ok = false;
       return -cntl->ErrorCode();
     }
 
-    VLOG(9) << "AllocS3ChunkId: fsid = " << fsId << " id_num: " << idNum
-            << " response: " << response.ShortDebugString();
+    VLOG(12) << "AllocS3ChunkId: fsid = " << fs_id << " id_num: " << id_num
+             << " response: " << response.ShortDebugString();
 
     FSStatusCode ret = response.statuscode();
     if (ret != FSStatusCode::OK) {
-      LOG(WARNING) << "AllocS3ChunkId: fsid = " << fsId << ", errcode = " << ret
-                   << ", errmsg = " << FSStatusCode_Name(ret);
+      LOG(WARNING) << "Fail AllocS3ChunkId errorcode: " << cntl->ErrorCode()
+                   << ", fsid: " << fs_id << ", idnum: " << id_num
+                   << ", log:  " << cntl->log_id()
+                   << ", FSStatusCode_Name: " << FSStatusCode_Name(ret);
     } else if (response.has_beginchunkid()) {
-      *chunkId = response.beginchunkid();
+      *chunk_id = response.beginchunkid();
     }
 
     return ret;
   };
+
   return ReturnError(rpcexcutor_.DoRPCTask(task, mdsOpt_.mdsMaxRetryMS));
 }
 
-FSStatusCode MdsClientImpl::RefreshSession(
-    const std::vector<pb::mds::topology::PartitionTxId>& txIds,
-    std::vector<pb::mds::topology::PartitionTxId>* latestTxIdList,
-    const std::string& fs_name, const Mountpoint& mountpoint) {
+FSStatusCode MdsClientImpl::AllocS3ChunkId(uint32_t fs_id, uint32_t id_num,
+                                           uint64_t* chunk_id) {
+  FSStatusCode ret = FSStatusCode::OK;
+
+  auto start = butil::cpuwide_time_us();
+  MdsAccessLogGuard log(start, [&]() {
+    return absl::StrFormat("alloc_s3_chunk_id (%d, %d) %s", fs_id, id_num,
+                           ((ret == FSStatusCode::OK) ? "ok" : "failed"));
+  });
+
+  ret = DoAllocS3ChunkId(fs_id, id_num, chunk_id);
+  return ret;
+}
+
+pb::mds::FSStatusCode MdsClientImpl::DoRefreshSession(
+    const std::vector<pb::mds::topology::PartitionTxId>& tx_ids,
+    std::vector<pb::mds::topology::PartitionTxId>* latest_tx_id_list,
+    const std::string& fs_name, const pb::mds::Mountpoint& mountpoint) {
   auto task = RPCTask {
     (void)addrindex;
     (void)rpctimeoutMS;
@@ -757,12 +905,13 @@ FSStatusCode MdsClientImpl::RefreshSession(
 
     pb::mds::RefreshSessionRequest request;
     pb::mds::RefreshSessionResponse response;
-    *request.mutable_txids() = {txIds.begin(), txIds.end()};
+    *request.mutable_txids() = {tx_ids.begin(), tx_ids.end()};
     request.set_fsname(fs_name);
     *request.mutable_mountpoint() = mountpoint;
     mdsbasecli_->RefreshSession(request, &response, cntl, channel);
+
     if (cntl->Failed()) {
-      LOG(WARNING) << "RefreshSession fail, errcode = " << cntl->ErrorCode()
+      LOG(WARNING) << "Fail RefreshSession, errcode = " << cntl->ErrorCode()
                    << ", error content: " << cntl->ErrorText()
                    << ", log id = " << cntl->log_id();
       is_ok = false;
@@ -771,11 +920,11 @@ FSStatusCode MdsClientImpl::RefreshSession(
 
     FSStatusCode ret = response.statuscode();
     if (ret != FSStatusCode::OK) {
-      LOG(WARNING) << "RefreshSession fail, errcode = " << ret
+      LOG(WARNING) << "Fail RefreshSession log id = " << cntl->log_id()
                    << ", errmsg = " << FSStatusCode_Name(ret);
     } else if (response.latesttxidlist_size() > 0) {
-      *latestTxIdList = {response.latesttxidlist().begin(),
-                         response.latesttxidlist().end()};
+      *latest_tx_id_list = {response.latesttxidlist().begin(),
+                            response.latesttxidlist().end()};
       LOG(INFO) << "RefreshSession need update partition txid list: "
                 << response.DebugString();
     }
@@ -784,6 +933,23 @@ FSStatusCode MdsClientImpl::RefreshSession(
   };
 
   return ReturnError(rpcexcutor_.DoRPCTask(task, mdsOpt_.mdsMaxRetryMS));
+}
+
+pb::mds::FSStatusCode MdsClientImpl::RefreshSession(
+    const std::vector<pb::mds::topology::PartitionTxId>& tx_ids,
+    std::vector<pb::mds::topology::PartitionTxId>* latest_tx_id_list,
+    const std::string& fs_name, const pb::mds::Mountpoint& mountpoint) {
+  FSStatusCode ret = FSStatusCode::OK;
+  auto start = butil::cpuwide_time_us();
+
+  MdsAccessLogGuard log(start, [&]() {
+    return absl::StrFormat("refresh_session (%s, %d) %s", fs_name,
+                           tx_ids.size(),
+                           ((ret == FSStatusCode::OK) ? "ok" : "failed"));
+  });
+
+  ret = DoRefreshSession(tx_ids, latest_tx_id_list, fs_name, mountpoint);
+  return ret;
 }
 
 FSStatusCode MdsClientImpl::GetLatestTxId(const GetLatestTxIdRequest& request,

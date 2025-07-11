@@ -16,6 +16,7 @@
 
 #include "options/client/vfs/vfs_option.h"
 
+#include "options/client/client_dynamic_option.h"
 #include "options/client/common_option.h"
 #include "options/client/memory/page_option.h"
 #include "utils/configuration.h"
@@ -72,6 +73,17 @@ void InitVFSOption(utils::Configuration* conf, VFSOption* option) {
     FLAGS_bthread_worker_num = 0;
     LOG(INFO) << "Not found `vfs.bthread_worker_num` in conf, "
                  "default to 0";
+  }
+
+  if (!conf->GetBoolValue("access_logging", &FLAGS_access_logging)) {
+    LOG(INFO) << "Not found `access_logging` in conf, default: "
+              << FLAGS_access_logging;
+  }
+  if (!conf->GetInt64Value("access_log_threshold_us",
+                           &FLAGS_access_log_threshold_us)) {
+    LOG(INFO) << "Not found `access_log_threshold_us` in conf, "
+                 "default: "
+              << FLAGS_access_log_threshold_us;
   }
 
   SetBrpcOpt(conf);

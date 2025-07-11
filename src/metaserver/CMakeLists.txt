@@ -42,6 +42,7 @@ target_link_libraries(metaserver_lib
     dynamic_vlog
     local_fs
     metaserver_s3
+    stub_options
     braft::braft
     brpc::brpc
     RocksDB::rocksdb

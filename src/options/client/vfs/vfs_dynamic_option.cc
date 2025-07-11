@@ -16,16 +16,12 @@
 
 #include "options/client/vfs/vfs_dynamic_option.h"
 
+#include "options/gflag_validator.h"
+
 namespace dingofs {
 namespace client {
 
 namespace {
-bool PassDouble(const char*, double) { return true; }
-bool PassUint64(const char*, uint64_t) { return true; }
-bool PassInt32(const char*, int32_t) { return true; }
-bool PassUint32(const char*, uint32_t) { return true; }
-bool PassBool(const char*, bool) { return true; }
-
 bool ValidateDelimiterLength(const char* flag_name, const std::string& value) {
   (void)flag_name;
   if (value.length() != 1) {
@@ -36,8 +32,8 @@ bool ValidateDelimiterLength(const char* flag_name, const std::string& value) {
 };  // namespace
 
 // access log
-DEFINE_bool(meta_logging, true, "enable meta system log");
-DEFINE_validator(meta_logging, &PassBool);
+DEFINE_bool(vfs_meta_logging, true, "enable vfs meta system log");
+DEFINE_validator(vfs_meta_logging, &PassBool);
 
 DEFINE_int32(flush_bg_thread, 16, "Number of background flush threads");
 DEFINE_validator(flush_bg_thread, &PassInt32);

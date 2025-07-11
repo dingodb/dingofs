@@ -14,21 +14,23 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_SRC_CLIENT_OPTIONS_CLIENT_DYNAMIC_OPTION_H_
-#define DINGOFS_SRC_CLIENT_OPTIONS_CLIENT_DYNAMIC_OPTION_H_
+#include "options/stub/dynamic_option.h"
 
-#include <gflags/gflags.h>
+#include "options/gflag_validator.h"
 
 namespace dingofs {
-namespace client {
+namespace stub {
 
-#define USING_FLAG(name) using ::dingofs::client::FLAGS_##name;
+DEFINE_bool(mds_access_logging, true, "enable mds access log");
+DEFINE_validator(mds_access_logging, &PassBool);
+DEFINE_int64(mds_access_log_threshold_us, 10 * 1000,
+             "mds access log threshold in us");
+DEFINE_validator(mds_access_log_threshold_us, &PassInt64);
 
-// access log
-DECLARE_bool(access_logging);
-DECLARE_int64(access_log_threshold_us);
+DEFINE_bool(meta_access_logging, true, "enable meta access log");
+DEFINE_validator(meta_access_logging, &PassBool);
+DEFINE_int64(meta_access_log_threshold_us, 0, "meta access log threshold");
+DEFINE_validator(meta_access_log_threshold_us, &PassInt64);
 
-}  // namespace client
+}  // namespace stub
 }  // namespace dingofs
-
-#endif  // DINGOFS_SRC_CLIENT_OPTIONS_CLIENT_DYNAMIC_OPTION_H_

@@ -31,7 +31,6 @@
 #include "dingofs/cachegroup.pb.h"
 #include "dingofs/mds.pb.h"
 #include "dingofs/topology.pb.h"
-#include "metrics/mds/mds_client.h"
 #include "stub/common/config.h"
 #include "stub/common/metacache_struct.h"
 #include "stub/rpcclient/base_client.h"
@@ -257,44 +256,44 @@ class MdsClientImpl : public MdsClient {
   pb::mds::FSStatusCode UmountFs(const std::string& fsName,
                                  const pb::mds::Mountpoint& mountPt) override;
 
-  pb::mds::FSStatusCode GetFsInfo(const std::string& fsName,
-                                  pb::mds::FsInfo* fsInfo) override;
+  pb::mds::FSStatusCode GetFsInfo(const std::string& fs_name,
+                                  pb::mds::FsInfo* fs_info) override;
 
-  pb::mds::FSStatusCode GetFsInfo(uint32_t fsId,
-                                  pb::mds::FsInfo* fsInfo) override;
+  pb::mds::FSStatusCode GetFsInfo(uint32_t fs_id,
+                                  pb::mds::FsInfo* fs_info) override;
 
   bool GetMetaServerInfo(
       const common::PeerAddr& addr,
-      common::CopysetPeerInfo<common::MetaserverID>* metaserverInfo) override;
+      common::CopysetPeerInfo<common::MetaserverID>* metaserver_info) override;
 
   bool GetMetaServerListInCopysets(
       const common::LogicPoolID& logicalpooid,
       const std::vector<common::CopysetID>& copysetidvec,
-      std::vector<common::CopysetInfo<common::MetaserverID>>* cpinfoVec)
+      std::vector<common::CopysetInfo<common::MetaserverID>>* copyset_infos)
       override;
 
   bool CreatePartition(
-      uint32_t fsID, uint32_t count,
-      std::vector<pb::common::PartitionInfo>* partitionInfos) override;
+      uint32_t fs_id, uint32_t count,
+      std::vector<pb::common::PartitionInfo>* partition_infos) override;
 
   bool GetCopysetOfPartitions(
-      const std::vector<uint32_t>& partitionIDList,
-      std::map<uint32_t, pb::mds::topology::Copyset>* copysetMap) override;
+      const std::vector<uint32_t>& partition_id_list,
+      std::map<uint32_t, pb::mds::topology::Copyset>* copyset_map) override;
 
   bool ListPartition(
-      uint32_t fsID,
-      std::vector<pb::common::PartitionInfo>* partitionInfos) override;
+      uint32_t fs_id,
+      std::vector<pb::common::PartitionInfo>* partition_infos) override;
 
   bool AllocOrGetMemcacheCluster(
       uint32_t fsId, pb::mds::topology::MemcacheClusterInfo* cluster) override;
 
-  pb::mds::FSStatusCode AllocS3ChunkId(uint32_t fsId, uint32_t idNum,
-                                       uint64_t* chunkId) override;
+  pb::mds::FSStatusCode AllocS3ChunkId(uint32_t fs_id, uint32_t id_num,
+                                       uint64_t* chunk_id) override;
 
   pb::mds::FSStatusCode RefreshSession(
-      const std::vector<pb::mds::topology::PartitionTxId>& txIds,
-      std::vector<pb::mds::topology::PartitionTxId>* latestTxIdList,
-      const std::string& fsName,
+      const std::vector<pb::mds::topology::PartitionTxId>& tx_ids,
+      std::vector<pb::mds::topology::PartitionTxId>* latest_tx_id_list,
+      const std::string& fs_name,
       const pb::mds::Mountpoint& mountpoint) override;
 
   pb::mds::FSStatusCode GetLatestTxId(
@@ -340,6 +339,38 @@ class MdsClientImpl : public MdsClient {
       const pb::mds::cachegroup::HeartbeatRequest::Statistic& stat) override;
 
  private:
+  pb::mds::FSStatusCode DoGetFsInfo(const std::string& fs_name,
+                                    pb::mds::FsInfo* fs_info);
+
+  pb::mds::FSStatusCode DoGetFsInfo(uint32_t fs_id, pb::mds::FsInfo* fs_info);
+
+  bool DoGetMetaServerInfo(
+      const common::PeerAddr& addr,
+      common::CopysetPeerInfo<common::MetaserverID>* metaserver_info);
+
+  bool DoGetMetaServerListInCopysets(
+      const common::LogicPoolID& logicalpooid,
+      const std::vector<common::CopysetID>& copysetidvec,
+      std::vector<common::CopysetInfo<common::MetaserverID>>* copyset_infos);
+
+  bool DoCreatePartition(
+      uint32_t fs_id, uint32_t count,
+      std::vector<pb::common::PartitionInfo>* partition_infos);
+
+  bool DoGetCopysetOfPartitions(
+      const std::vector<uint32_t>& partition_id_list,
+      std::map<uint32_t, pb::mds::topology::Copyset>* copyset_map);
+
+  bool DoListPartition(uint32_t fs_id,
+                       std::vector<pb::common::PartitionInfo>* partition_infos);
+
+  pb::mds::FSStatusCode DoAllocS3ChunkId(uint32_t fs_id, uint32_t id_num,
+                                         uint64_t* chunk_id);
+
+  pb::mds::FSStatusCode DoRefreshSession(
+      const std::vector<pb::mds::topology::PartitionTxId>& tx_ids,
+      std::vector<pb::mds::topology::PartitionTxId>* latest_tx_id_list,
+      const std::string& fs_name, const pb::mds::Mountpoint& mountpoint);
   pb::mds::FSStatusCode ReturnError(int retcode);
 
   pb::mds::FSStatusCode GetLatestTxId(

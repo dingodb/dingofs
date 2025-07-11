@@ -25,16 +25,10 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include "options/gflag_validator.h"
+
 namespace dingofs {
 namespace client {
-
-namespace {
-bool PassDouble(const char*, double) { return true; }
-bool PassUint64(const char*, uint64_t) { return true; }
-bool PassInt32(const char*, int32_t) { return true; }
-bool PassUint32(const char*, uint32_t) { return true; }
-bool PassBool(const char*, bool) { return true; }
-};  // namespace
 
 // thread num or bthread num
 DEFINE_uint32(stat_timer_thread_num, 8, "stat timer thread num");

@@ -43,6 +43,7 @@
 #include "options/client/common_option.h"
 #include "options/client/vfs/vfs_option.h"
 #include "options/client/vfs_legacy/vfs_legacy_option.h"
+#include "stub/rpcclient/mds_access_log.h"
 #include "stub/rpcclient/meta_access_log.h"
 #include "utils/configuration.h"
 
@@ -79,7 +80,8 @@ static Status InitLog() {
               dingofs::cache::InitCacheTraceLog(FLAGS_log_dir) &&
               blockaccess::InitBlockAccessLog(FLAGS_log_dir) &&
               dingofs::client::vfs::InitMetaLog(FLAGS_log_dir) &&
-              dingofs::stub::InitMetaAccessLog(FLAGS_log_dir);
+              dingofs::stub::InitMetaAccessLog(FLAGS_log_dir) &&
+              dingofs::stub::InitMdsAccessLog(FLAGS_log_dir);
 
   CHECK(succ) << "Init log failed, unexpected!";
   return Status::OK();

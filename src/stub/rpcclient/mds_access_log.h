@@ -14,39 +14,42 @@
  * limitations under the License.
  */
 
-#ifndef DINGODB_SRC_STUB_RPCCLIENT_META_ACCESS_LOG_H_
-#define DINGODB_SRC_STUB_RPCCLIENT_META_ACCESS_LOG_H_
+#ifndef DINGODB_SRC_STUB_RPCCLIENT_MDS_ACCESS_LOG_H_
+#define DINGODB_SRC_STUB_RPCCLIENT_MDS_ACCESS_LOG_H_
 
 #include <butil/time.h>
+#include <gflags/gflags.h>
+#include <gflags/gflags_declare.h>
 #include <spdlog/sinks/daily_file_sink.h>
 #include <spdlog/spdlog.h>
 #include <unistd.h>
 
 #include <cstdint>
 #include <string>
+
 #include "options/stub/dynamic_option.h"
 
 namespace dingofs {
 namespace stub {
 
-extern std::shared_ptr<spdlog::logger> meta_access_logger;
+extern std::shared_ptr<spdlog::logger> mds_access_logger;
 
-bool InitMetaAccessLog(const std::string& prefix);
+bool InitMdsAccessLog(const std::string& prefix);
 
-struct MetaAccessLogGuard {
+struct MdsAccessLogGuard {
   using MessageHandler = std::function<std::string()>;
 
-  explicit MetaAccessLogGuard(int64_t p_start_us, MessageHandler handler)
+  explicit MdsAccessLogGuard(int64_t p_start_us, MessageHandler handler)
       : start_us(p_start_us), handler(handler) {}
 
-  ~MetaAccessLogGuard() {
-    if (!FLAGS_meta_access_logging) {
+  ~MdsAccessLogGuard() {
+    if (!FLAGS_mds_access_logging) {
       return;
     }
 
     int64_t duration_us = butil::cpuwide_time_us() - start_us;
-    if (duration_us > FLAGS_meta_access_log_threshold_us) {
-      meta_access_logger->info("{0} <{1:.6f}>", handler(), (duration_us) / 1e6);
+    if (duration_us > FLAGS_mds_access_log_threshold_us) {
+      mds_access_logger->info("{0} <{1:.6f}>", handler(), (duration_us) / 1e6);
     }
   }
 
@@ -57,4 +60,4 @@ struct MetaAccessLogGuard {
 }  // namespace stub
 }  // namespace dingofs
 
-#endif  // DINGODB_SRC_STUB_RPCCLIENT_META_ACCESS_LOG_H_
+#endif  // DINGODB_SRC_STUB_RPCCLIENT_MDS_ACCESS_LOG_H_

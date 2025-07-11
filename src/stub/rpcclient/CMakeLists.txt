@@ -21,6 +21,7 @@ add_library(rpcclient
     metaserver_client.cpp
     task_excutor.cpp
     meta_access_log.cpp
+    mds_access_log.cpp
 )
 
 target_link_libraries(rpcclient
@@ -29,6 +30,7 @@ target_link_libraries(rpcclient
     dingofs_metrics
     dingofs_utils
     dingofs_common
+    stub_options
     brpc::brpc
     gflags::gflags
     glog::glog

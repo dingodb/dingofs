@@ -14,21 +14,24 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_SRC_CLIENT_OPTIONS_CLIENT_DYNAMIC_OPTION_H_
-#define DINGOFS_SRC_CLIENT_OPTIONS_CLIENT_DYNAMIC_OPTION_H_
+#include "stub/rpcclient/mds_access_log.h"
 
+#include <absl/strings/str_format.h>
 #include <gflags/gflags.h>
 
 namespace dingofs {
-namespace client {
+namespace stub {
 
-#define USING_FLAG(name) using ::dingofs::client::FLAGS_##name;
+std::shared_ptr<spdlog::logger> mds_access_logger;
 
-// access log
-DECLARE_bool(access_logging);
-DECLARE_int64(access_log_threshold_us);
+bool InitMdsAccessLog(const std::string& prefix) {
+  std::string filename =
+      absl::StrFormat("%s/mds_access_%d.log", prefix, getpid());
+  mds_access_logger = spdlog::daily_logger_mt("mds_access", filename, 0, 0);
+  spdlog::flush_every(std::chrono::seconds(1));
+  return true;
+}
 
-}  // namespace client
+}  // namespace stub
+
 }  // namespace dingofs
-
-#endif  // DINGOFS_SRC_CLIENT_OPTIONS_CLIENT_DYNAMIC_OPTION_H_

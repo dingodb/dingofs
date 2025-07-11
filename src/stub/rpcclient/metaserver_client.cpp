@@ -190,7 +190,8 @@ MetaStatusCode MetaServerClientImpl::GetDentry(uint32_t fs_id, uint64_t inodeid,
     stub.GetDentry(cntl, &request, &response, nullptr);
 
     if (cntl->Failed()) {
-      LOG(WARNING) << "GetDentry Failed, errorcode = " << cntl->ErrorCode()
+      LOG(WARNING) << "Fail GetDentry ino: " << inodeid << ", fs_id: " << fs_id
+                   << ", errorcode = " << cntl->ErrorCode()
                    << ", error content:" << cntl->ErrorText()
                    << ", log id = " << cntl->log_id();
       is_ok = false;
@@ -266,9 +267,11 @@ MetaStatusCode MetaServerClientImpl::ListDentry(
     stub.ListDentry(cntl, &request, &response, nullptr);
 
     if (cntl->Failed()) {
-      LOG(WARNING) << "ListDentry Failed, errorcode = " << cntl->ErrorCode()
+      LOG(WARNING) << "ListDentry Failed, ino: " << inodeid
+                   << ", errorcode = " << cntl->ErrorCode()
                    << ", error content:" << cntl->ErrorText()
-                   << ", log id = " << cntl->log_id();
+                   << ", log id = " << cntl->log_id()
+                   << ", request: " << request.ShortDebugString();
       is_ok = false;
       return -cntl->ErrorCode();
     }
@@ -356,7 +359,8 @@ MetaStatusCode MetaServerClientImpl::CreateDentry(const Dentry& dentry) {
     if (cntl->Failed()) {
       LOG(WARNING) << "CreateDentry Failed, errorcode = " << cntl->ErrorCode()
                    << ", error content:" << cntl->ErrorText()
-                   << ", log id = " << cntl->log_id();
+                   << ", log id = " << cntl->log_id()
+                   << ", request: " << request.ShortDebugString();
       is_ok = false;
       return -cntl->ErrorCode();
     }
@@ -433,7 +437,8 @@ MetaStatusCode MetaServerClientImpl::DeleteDentry(uint32_t fs_id,
     if (cntl->Failed()) {
       LOG(WARNING) << "DeleteDentry Failed, errorcode = " << cntl->ErrorCode()
                    << ", error content:" << cntl->ErrorText()
-                   << ", log id = " << cntl->log_id();
+                   << ", log id = " << cntl->log_id()
+                   << ", request: " << request.ShortDebugString();
       is_ok = false;
       return -cntl->ErrorCode();
     }
@@ -508,7 +513,8 @@ MetaStatusCode MetaServerClientImpl::PrepareRenameTx(
       LOG(WARNING) << "PrepareRenameTx failed"
                    << ", errorCode = " << cntl->ErrorCode()
                    << ", errorText = " << cntl->ErrorText()
-                   << ", logId = " << cntl->log_id();
+                   << ", logId = " << cntl->log_id()
+                   << ", request: " << request.ShortDebugString();
       is_ok = false;
       return -cntl->ErrorCode();
     }
@@ -516,14 +522,16 @@ MetaStatusCode MetaServerClientImpl::PrepareRenameTx(
     auto rc = response.statuscode();
     if (rc != MetaStatusCode::OK) {
       LOG(WARNING) << "PrepareRenameTx: retCode = " << rc
-                   << ", message = " << MetaStatusCode_Name(rc);
+                   << ", message = " << MetaStatusCode_Name(rc)
+                   << ", request: " << request.ShortDebugString();
     } else if (response.has_appliedindex()) {
       metaCache_->UpdateApplyIndex(CopysetGroupID(poolID, copysetID),
                                    response.appliedindex());
     } else {
       LOG(WARNING) << "PrepareRenameTx OK"
                    << ", but applyIndex not set in response:"
-                   << response.ShortDebugString();
+                   << response.ShortDebugString()
+                   << ", request: " << request.ShortDebugString();
       return -1;
     }
 
@@ -574,7 +582,8 @@ MetaStatusCode MetaServerClientImpl::GetInode(uint32_t fs_id, uint64_t inodeid,
     if (cntl->Failed()) {
       LOG(WARNING) << "GetInode Failed, errorcode = " << cntl->ErrorCode()
                    << ", error content:" << cntl->ErrorText()
-                   << ", log id = " << cntl->log_id();
+                   << ", log id = " << cntl->log_id()
+                   << ", request: " << request.ShortDebugString();
       is_ok = false;
       return -cntl->ErrorCode();
     }
@@ -772,7 +781,8 @@ MetaStatusCode MetaServerClientImpl::BatchGetInodeAttr(
         LOG(WARNING) << "BatchGetInodeAttr Failed, errorcode = "
                      << cntl->ErrorCode()
                      << ", error content:" << cntl->ErrorText()
-                     << ", log id = " << cntl->log_id();
+                     << ", log id = " << cntl->log_id()
+                     << ", request: " << request.ShortDebugString();
         is_ok = false;
         return -cntl->ErrorCode();
       }
