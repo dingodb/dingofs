@@ -19,6 +19,7 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
 
 #include "mdsv2/common/type.h"
 
@@ -143,7 +144,7 @@ class MetaCodec {
   static std::string EncodeFileSessionValue(const FileSessionEntry& file_session);
   static FileSessionEntry DecodeFileSessionValue(const std::string& value);
 
-  // dir quota format: ${prefix} kTableFsMeta {fs_id} kMetaDirQuota {ino}
+  // dir quota format: ${prefix} kTableFsMeta {fs_id} kMetaFsDirQuota {ino}
   static bool IsDirQuotaKey(const std::string& key);
   static std::string EncodeDirQuotaKey(uint32_t fs_id, Ino ino);
   static void DecodeDirQuotaKey(const std::string& key, uint32_t& fs_id, Ino& ino);
@@ -171,6 +172,16 @@ class MetaCodec {
   static void DecodeFsStatsKey(const std::string& key, uint32_t& fs_id, uint64_t& time_ns);
   static std::string EncodeFsStatsValue(const FsStatsDataEntry& stats);
   static FsStatsDataEntry DecodeFsStatsValue(const std::string& value);
+
+  // check key belongs to a specific table
+  static bool IsMetaTableKey(const std::string& key);
+  static bool IsFsStatsTableKey(const std::string& key);
+  static bool IsFsMetaTableKey(const std::string& key);
+
+  static std::pair<std::string, std::string> ParseMetaTableKey(const std::string& key, const std::string& value);
+  static std::pair<std::string, std::string> ParseFsStatsTableKey(const std::string& key, const std::string& value);
+  static std::pair<std::string, std::string> ParseFsMetaTableKey(const std::string& key, const std::string& value);
+  static std::pair<std::string, std::string> ParseKey(const std::string& key, const std::string& value);
 };
 
 }  // namespace mdsv2

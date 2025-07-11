@@ -67,26 +67,25 @@ using HashRouterUPtr = std::unique_ptr<HashRouter>;
 
 class FsUtils {
  public:
-  FsUtils(KVStorageSPtr kv_storage) : kv_storage_(kv_storage) {}
-  FsUtils(KVStorageSPtr kv_storage, const FsInfoType& fs_info) : kv_storage_(kv_storage), fs_info_(fs_info) {
+  FsUtils(OperationProcessorSPtr operation_processor) : operation_processor_(operation_processor) {}
+  FsUtils(OperationProcessorSPtr operation_processor, const FsInfoType& fs_info)
+      : operation_processor_(operation_processor), fs_info_(fs_info) {
     if (fs_info_.partition_policy().type() == pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION) {
       hash_router_ = std::make_unique<HashRouter>(fs_info_.partition_policy().parent_hash());
     }
   }
-  FsUtils(OperationProcessorSPtr operation_processor) : operation_processor_(operation_processor) {}
 
   FsTreeNode* GenFsTree(uint32_t fs_id);
   std::string GenFsTreeJsonString();
-  Status GenDirJsonString(Ino parent, std::string& result);
+  Status GenDirJsonString(Ino parent, std::string& output);
 
   Status GetChunks(uint32_t fs_id, Ino ino, std::vector<ChunkType>& chunks);
 
  private:
   void GenFsTreeJson(FsTreeNode* node, nlohmann::json& doc);
-  Status GenRootDirJsonString(std::string& result);
+  Status GenRootDirJsonString(std::string& output);
 
   FsInfoType fs_info_;
-  KVStorageSPtr kv_storage_;
 
   OperationProcessorSPtr operation_processor_;
 

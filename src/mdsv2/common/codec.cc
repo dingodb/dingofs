@@ -442,7 +442,6 @@ Range MetaCodec::GetFsStatsRange(uint32_t fs_id) {
 }
 
 // lock format: ${prefix} kTableMeta kMetaLock {name}
-
 static const uint32_t kLockKeyHeaderSize = kPrefixSize + 2;  // prefix + table id + meta type
 
 bool MetaCodec::IsLockKey(const std::string& key) {
@@ -1101,6 +1100,266 @@ FsStatsDataEntry MetaCodec::DecodeFsStatsValue(const std::string& value) {
   CHECK(stats.ParseFromString(value)) << "parse fs stats fail.";
 
   return std::move(stats);
+}
+
+bool MetaCodec::IsMetaTableKey(const std::string& key) {
+  if (key.size() <= kPrefixSize + 1) {
+    return false;
+  }
+
+  if (key.substr(0, kPrefixSize) != kPrefix || key.at(kPrefixSize) != kTableMeta) {
+    return false;
+  }
+
+  return true;
+}
+
+bool MetaCodec::IsFsStatsTableKey(const std::string& key) {
+  if (key.size() <= kPrefixSize + 1) {
+    return false;
+  }
+
+  if (key.substr(0, kPrefixSize) != kPrefix || key.at(kPrefixSize) != kTableFsStats) {
+    return false;
+  }
+
+  return true;
+}
+
+bool MetaCodec::IsFsMetaTableKey(const std::string& key) {
+  if (key.size() <= kPrefixSize + 1) {
+    return false;
+  }
+
+  if (key.substr(0, kPrefixSize) != kPrefix || key.at(kPrefixSize) != kTableFsMeta) {
+    return false;
+  }
+
+  return true;
+}
+
+std::pair<std::string, std::string> MetaCodec::ParseMetaTableKey(const std::string& key, const std::string& value) {
+  std::string key_desc, value_desc;
+
+  MetaType meta_type = static_cast<MetaType>(key.at(kPrefixSize + 1));
+  switch (meta_type) {
+    case kMetaLock: {
+      std::string name;
+      DecodeLockKey(key, name);
+
+      key_desc = fmt::format("{} kTableMeta kMetaLock {}", kPrefix, name);
+
+      int64_t mds_id;
+      uint64_t epoch;
+      uint64_t expire_time_ms;
+      DecodeLockValue(value, mds_id, epoch, expire_time_ms);
+
+      value_desc = fmt::format("{} {} {}", mds_id, epoch, expire_time_ms);
+    } break;
+
+    case kMetaAutoIncrement: {
+      std::string name;
+      DecodeAutoIncrementIDKey(key, name);
+
+      key_desc = fmt::format("{} kTableMeta kMetaAutoIncrement {}", kPrefix, name);
+
+      uint64_t next_id;
+      DecodeAutoIncrementIDValue(value, next_id);
+
+      value_desc = fmt::format("{} {}", next_id);
+    } break;
+
+    case kMetaHeartbeat: {
+      pb::mdsv2::Role role = static_cast<pb::mdsv2::Role>(key.at(kPrefixSize + 2));
+      if (role == pb::mdsv2::ROLE_MDS) {
+        int64_t mds_id;
+        DecodeHeartbeatKey(key, mds_id);
+
+        key_desc = fmt::format("{} kTableMeta kMetaHeartbeat kRoleMds {}", kPrefix, mds_id);
+
+        auto mds_info = DecodeHeartbeatMdsValue(value);
+        value_desc = mds_info.ShortDebugString();
+
+      } else if (role == pb::mdsv2::ROLE_CLIENT) {
+        std::string client_id;
+        DecodeHeartbeatKey(key, client_id);
+
+        key_desc = fmt::format("{} kTableMeta kMetaHeartbeat kRoleClient {}", kPrefix, client_id);
+
+        auto client_info = DecodeHeartbeatClientValue(value);
+        value_desc = client_info.ShortDebugString();
+      }
+
+    } break;
+
+    case kMetaFs: {
+      std::string name;
+      DecodeFsKey(key, name);
+      key_desc = fmt::format("{} kTableMeta kMetaFs {}", kPrefix, name);
+
+      auto fs_info = DecodeFsValue(value);
+      value_desc = fs_info.ShortDebugString();
+
+    } break;
+
+    case kMetaFsQuota: {
+      uint32_t fs_id;
+      DecodeFsQuotaKey(key, fs_id);
+      key_desc = fmt::format("{} kTableMeta kMetaFsQuota {}", kPrefix, fs_id);
+
+      auto quota = DecodeFsQuotaValue(value);
+      value_desc = quota.ShortDebugString();
+
+    } break;
+
+    default:
+      CHECK(false) << fmt::format("invalid meta type({}) key({}).", static_cast<int>(meta_type),
+                                  Helper::StringToHex(key));
+  }
+
+  return std::make_pair(std::move(key_desc), std::move(value_desc));
+}
+
+std::pair<std::string, std::string> MetaCodec::ParseFsStatsTableKey(const std::string& key, const std::string& value) {
+  CHECK(IsFsStatsKey(key)) << fmt::format("invalid fs stats key({}).", Helper::StringToHex(key));
+
+  std::string key_desc, value_desc;
+
+  uint32_t fs_id;
+  uint64_t time_ns;
+  DecodeFsStatsKey(key, fs_id, time_ns);
+  key_desc = fmt::format("{} kTableFsStats kMetaFsStats {} {}", kPrefix, fs_id, time_ns);
+
+  auto fs_stats = DecodeFsStatsValue(value);
+  value_desc = fs_stats.ShortDebugString();
+
+  return std::make_pair(std::move(key_desc), std::move(value_desc));
+}
+
+std::pair<std::string, std::string> MetaCodec::ParseFsMetaTableKey(const std::string& key, const std::string& value) {
+  CHECK(IsFsMetaTableKey(key)) << fmt::format("invalid fs meta key({}).", Helper::StringToHex(key));
+
+  std::string key_desc, value_desc;
+
+  MetaType meta_type = static_cast<MetaType>(key.at(kPrefixSize + 1 + 4));
+  switch (meta_type) {
+    case kMetaFsInode: {
+      FsInodeType inode_type = static_cast<FsInodeType>(key.at(kPrefixSize + 1 + 4 + 1 + 8));
+      switch (inode_type) {
+        case kFsInodeAttr: {
+          uint32_t fs_id;
+          Ino ino;
+          DecodeInodeKey(key, fs_id, ino);
+
+          key_desc = fmt::format("{} kTableFsMeta {} kMetaFsInode {} kFsInodeAttr", kPrefix, fs_id, ino);
+
+          auto attr = DecodeInodeValue(value);
+          value_desc = attr.ShortDebugString();
+        } break;
+
+        case kFsInodeDentry: {
+          uint32_t fs_id;
+          Ino ino;
+          std::string name;
+          DecodeDentryKey(key, fs_id, ino, name);
+
+          key_desc = fmt::format("{} kTableFsMeta {} kMetaFsInode {} kFsInodeDentry {}", kPrefix, fs_id, ino, name);
+
+          auto dentry = DecodeDentryValue(value);
+          value_desc = dentry.ShortDebugString();
+        } break;
+
+        case kFsInodeChunk: {
+          uint32_t fs_id;
+          Ino ino;
+          uint64_t chunk_index;
+          DecodeChunkKey(key, fs_id, ino, chunk_index);
+
+          key_desc =
+              fmt::format("{} kTableFsMeta {} kMetaFsInode {} kFsInodeChunk {}", kPrefix, fs_id, ino, chunk_index);
+
+          auto chunk = DecodeChunkValue(value);
+          value_desc = chunk.ShortDebugString();
+        } break;
+
+        default:
+          CHECK(false) << fmt::format("invalid inode type({}) key({}).", static_cast<int>(inode_type),
+                                      Helper::StringToHex(key));
+      }
+    } break;
+
+    case kMetaFsFileSession: {
+      uint32_t fs_id;
+      Ino ino;
+      std::string session_id;
+      DecodeFileSessionKey(key, fs_id, ino, session_id);
+
+      key_desc = fmt::format("{} kTableFsMeta {} kMetaFsFileSession {} {}", kPrefix, fs_id, ino, session_id);
+
+      auto file_session = DecodeFileSessionValue(value);
+      value_desc = file_session.ShortDebugString();
+    } break;
+
+    case kMetaFsDirQuota: {
+      uint32_t fs_id;
+      Ino ino;
+      DecodeDirQuotaKey(key, fs_id, ino);
+
+      key_desc = fmt::format("{} kTableFsMeta {} kMetaFsDirQuota {}", kPrefix, fs_id, ino);
+
+      auto dir_quota = DecodeDirQuotaValue(value);
+      value_desc = dir_quota.ShortDebugString();
+
+    } break;
+    case kMetaFsDelSlice: {
+      uint32_t fs_id;
+      Ino ino;
+      uint64_t chunk_index;
+      uint64_t time_ns;
+      DecodeDelSliceKey(key, fs_id, ino, chunk_index, time_ns);
+
+      key_desc = fmt::format("{} kTableFsMeta {} kMetaFsDelSlice {} {} {}", kPrefix, fs_id, ino, chunk_index, time_ns);
+
+      auto del_slice = DecodeDelSliceValue(value);
+      value_desc = del_slice.ShortDebugString();
+    } break;
+
+    case kMetaFsDelFile: {
+      uint32_t fs_id;
+      Ino ino;
+      DecodeDelFileKey(key, fs_id, ino);
+
+      key_desc = fmt::format("{} kTableFsMeta {} kMetaFsDelFile {} {}", kPrefix, fs_id, ino);
+
+      auto del_file = DecodeDelFileValue(value);
+      value_desc = del_file.ShortDebugString();
+    } break;
+
+    default:
+      CHECK(false) << fmt::format("invalid meta type({}) key({}).", static_cast<int>(meta_type),
+                                  Helper::StringToHex(key));
+  }
+
+  return std::make_pair(std::move(key_desc), std::move(value_desc));
+}
+
+std::pair<std::string, std::string> MetaCodec::ParseKey(const std::string& key, const std::string& value) {
+  TableID table_id = static_cast<TableID>(key.at(kPrefixSize));
+  switch (table_id) {
+    case kTableMeta:
+      return ParseMetaTableKey(key, value);
+    case kTableFsStats:
+
+      return ParseFsStatsTableKey(key, value);
+    case kTableFsMeta:
+      return ParseFsMetaTableKey(key, value);
+
+    default:
+      CHECK(false) << fmt::format("invalid table id({}) key({}).", static_cast<int>(table_id),
+                                  Helper::StringToHex(key));
+  }
+
+  return {};
 }
 
 }  // namespace mdsv2

@@ -1326,7 +1326,6 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
     auto file_system = file_system_set->GetFileSystem(fs_id);
     if (file_system != nullptr) {
       auto fs_info = file_system->GetFsInfo();
-      // FsUtils fs_utils(Server::GetInstance().GetKVStorage(), fs_info);
       RenderFsTreePage(fs_info, os);
 
     } else {
@@ -1452,7 +1451,7 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
     auto file_system = file_system_set->GetFileSystem(fs_id);
     if (file_system != nullptr) {
       auto fs_info = file_system->GetFsInfo();
-      FsUtils fs_utils(Server::GetInstance().GetKVStorage(), fs_info);
+      FsUtils fs_utils(Server::GetInstance().GetOperationProcessor(), fs_info);
       std::string result;
       auto status = fs_utils.GenDirJsonString(ino, result);
       if (status.ok()) {

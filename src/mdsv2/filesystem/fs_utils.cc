@@ -28,7 +28,9 @@
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
 #include "mdsv2/common/status.h"
+#include "mdsv2/common/tracing.h"
 #include "mdsv2/common/type.h"
+#include "mdsv2/filesystem/store_operation.h"
 #include "nlohmann/json.hpp"
 
 namespace dingofs {
@@ -50,7 +52,7 @@ void FreeFsTree(FsTreeNode* root) {
   delete root;
 }
 
-void FreeMap(std::multimap<uint64_t, FsTreeNode*>& node_map) {
+static void FreeMap(std::multimap<uint64_t, FsTreeNode*>& node_map) {
   for (auto [_, node] : node_map) {
     delete node;
   }
@@ -69,84 +71,70 @@ static Status GetFsInfo(KVStorageSPtr kv_storage, const std::string& fs_name, pb
   return Status::OK();
 }
 
-static FsTreeNode* GenFsTreeStruct(KVStorageSPtr kv_storage, uint32_t fs_id,
+static FsTreeNode* GenFsTreeStruct(OperationProcessorSPtr operation_processor, uint32_t fs_id,
                                    std::multimap<uint64_t, FsTreeNode*>& node_map) {
-  // todo
-  Range range = MetaCodec::GetFsMetaTableRange(fs_id);
-
-  // scan dentry/attr table
-  auto txn = kv_storage->NewTxn();
-  std::vector<KeyValue> kvs;
-  Status status;
   uint64_t count = 0;
-  do {
-    kvs.clear();
-    status = txn->Scan(range, FLAGS_fs_scan_batch_size, kvs);
-    if (!status.ok()) {
-      DINGO_LOG(ERROR) << fmt::format("[fsutils] scan dentry table fail, {}.", status.error_str());
-      break;
-    }
+  Trace trace;
+  ScanFsMetaTableOperation operation(trace, fs_id, [&](const std::string& key, const std::string& value) -> bool {
+    uint32_t fs_id = 0;
+    uint64_t ino = 0;
 
-    for (const auto& kv : kvs) {
-      uint32_t fs_id = 0;
-      uint64_t ino = 0;
+    if (MetaCodec::IsInodeKey(key)) {
+      MetaCodec::DecodeInodeKey(key, fs_id, ino);
+      const AttrType attr = MetaCodec::DecodeInodeValue(value);
 
-      if (MetaCodec::IsInodeKey(kv.key)) {
-        MetaCodec::DecodeInodeKey(kv.key, fs_id, ino);
-        const AttrType attr = MetaCodec::DecodeInodeValue(kv.value);
+      // DINGO_LOG(INFO) << fmt::format("attr({}).", attr.ShortDebugString());
+      auto it = node_map.find(ino);
+      if (it == node_map.end()) {
+        node_map.insert({ino, new FsTreeNode{.attr = attr}});
+      }
+      while (it != node_map.end() && it->first == ino) {
+        it->second->attr = attr;
+        ++it;
+      }
 
-        // DINGO_LOG(INFO) << fmt::format("attr({}).", attr.ShortDebugString());
-        auto it = node_map.find(ino);
-        if (it == node_map.end()) {
-          node_map.insert({ino, new FsTreeNode{.attr = attr}});
+    } else if (MetaCodec::IsDentryKey(key)) {
+      // dentry
+      uint64_t parent = 0;
+      std::string name;
+      MetaCodec::DecodeDentryKey(key, fs_id, parent, name);
+      pb::mdsv2::Dentry dentry = MetaCodec::DecodeDentryValue(value);
+
+      // DINGO_LOG(INFO) << fmt::format("dentry({}).", dentry.ShortDebugString());
+
+      FsTreeNode* item = new FsTreeNode{.dentry = dentry};
+      auto it = node_map.find(dentry.ino());
+      if (it != node_map.end()) {
+        item->attr = it->second->attr;
+        if (it->second->dentry.name().empty()) {
+          delete it->second;
+          node_map.erase(it);
         }
-        while (it != node_map.end() && it->first == ino) {
-          it->second->attr = attr;
-          ++it;
-        }
+      }
+      node_map.insert({dentry.ino(), item});
 
-      } else if (MetaCodec::IsDentryKey(kv.key)) {
-        // dentry
-        uint64_t parent = 0;
-        std::string name;
-        MetaCodec::DecodeDentryKey(kv.key, fs_id, parent, name);
-        pb::mdsv2::Dentry dentry = MetaCodec::DecodeDentryValue(kv.value);
-
-        // DINGO_LOG(INFO) << fmt::format("dentry({}).", dentry.ShortDebugString());
-
-        FsTreeNode* item = new FsTreeNode{.dentry = dentry};
-        auto it = node_map.find(dentry.ino());
-        if (it != node_map.end()) {
-          item->attr = it->second->attr;
-          if (it->second->dentry.name().empty()) {
-            delete it->second;
-            node_map.erase(it);
-          }
-        }
-        node_map.insert({dentry.ino(), item});
-
-        it = node_map.find(parent);
-        if (it != node_map.end()) {
-          it->second->children.push_back(item);
-        } else {
-          if (parent != 0) {
-            DINGO_LOG(ERROR) << fmt::format("[fsutils] not found parent({}) for dentry({}/{})", parent, fs_id, name);
-          }
+      it = node_map.find(parent);
+      if (it != node_map.end()) {
+        it->second->children.push_back(item);
+      } else {
+        if (parent != 0) {
+          LOG(ERROR) << fmt::format("[fsutils] not found parent({}) for dentry({}/{})", parent, fs_id, name);
         }
       }
     }
 
-    count += kvs.size();
-  } while (kvs.size() >= FLAGS_fs_scan_batch_size);
+    ++count;
 
+    return true;
+  });
+
+  auto status = operation_processor->RunAlone(&operation);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("[fsutils] scan dentry table fail, {}.", status.error_str());
     return nullptr;
   }
 
-  DINGO_LOG(INFO) << fmt::format("[fsutils] scan dentry table kv num({}).", count);
-
-  auto it = node_map.find(1);
+  auto it = node_map.find(kRootIno);
   if (it == node_map.end()) {
     DINGO_LOG(ERROR) << "[fsutils] not found root node.";
     return nullptr;
@@ -182,7 +170,7 @@ static void FreeOrphan(std::multimap<uint64_t, FsTreeNode*>& node_map) {
 
 FsTreeNode* FsUtils::GenFsTree(uint32_t fs_id) {
   std::multimap<uint64_t, FsTreeNode*> node_map;
-  FsTreeNode* root = GenFsTreeStruct(kv_storage_, fs_id, node_map);
+  FsTreeNode* root = GenFsTreeStruct(operation_processor_, fs_id, node_map);
 
   LabeledOrphan(root);
 
@@ -228,7 +216,7 @@ std::string FsUtils::GenFsTreeJsonString() {
   CHECK(!fs_info_.fs_name().empty()) << "fs_info is empty";
 
   std::multimap<uint64_t, FsTreeNode*> node_map;
-  FsTreeNode* root = GenFsTreeStruct(kv_storage_, fs_info_.fs_id(), node_map);
+  FsTreeNode* root = GenFsTreeStruct(operation_processor_, fs_info_.fs_id(), node_map);
   if (root == nullptr) {
     FreeMap(node_map);
     return "gen fs tree struct fail";
@@ -242,19 +230,17 @@ std::string FsUtils::GenFsTreeJsonString() {
   return doc.dump();
 }
 
-Status FsUtils::GenRootDirJsonString(std::string& result) {
+Status FsUtils::GenRootDirJsonString(std::string& output) {
   const uint32_t fs_id = fs_info_.fs_id();
 
-  auto txn = kv_storage_->NewTxn();
+  Trace trace;
+  GetInodeAttrOperation operation(trace, fs_id, kRootIno);
 
-  std::string value;
-  auto status = txn->Get(MetaCodec::EncodeInodeKey(fs_id, kRootIno), value);
-  if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[fsutils] get root inode fail, {}.", status.error_str());
-    return status;
-  }
+  auto status = operation_processor_->RunAlone(&operation);
+  if (!status.ok()) return status;
 
-  auto attr = MetaCodec::DecodeInodeValue(value);
+  auto& result = operation.GetResult();
+  auto& attr = result.attr;
 
   nlohmann::json doc = nlohmann::json::array();
 
@@ -276,65 +262,56 @@ Status FsUtils::GenRootDirJsonString(std::string& result) {
 
   doc.push_back(item);
 
-  result = doc.dump();
+  output = doc.dump();
+
   return Status::OK();
 }
 
-Status FsUtils::GenDirJsonString(Ino parent, std::string& result) {
+Status FsUtils::GenDirJsonString(Ino parent, std::string& output) {
   if (parent == kRootParentIno) {
-    return GenRootDirJsonString(result);
+    return GenRootDirJsonString(output);
   }
 
   const uint32_t fs_id = fs_info_.fs_id();
-  Range range = MetaCodec::GetDentryRange(fs_id, parent, false);
 
-  auto txn = kv_storage_->NewTxn();
-
-  std::vector<KeyValue> kvs;
-  auto status = txn->Scan(range, 100000, kvs);
-  if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[fsutils] scan dentry table fail, {}.", status.error_str());
-    return status;
-  }
-
-  if (kvs.empty()) {
-    return Status(pb::error::ENOT_FOUND, "not found kv");
-  }
-
-  // add child dentry
   std::map<Ino, DentryType> dentries;
-  for (const auto& kv : kvs) {
-    auto dentry = MetaCodec::DecodeDentryValue(kv.value);
+  Trace trace;
+  ScanDentryOperation operation(trace, fs_id, parent, [&](const DentryType& dentry) -> bool {
     dentries.insert(std::make_pair(dentry.ino(), dentry));
-  }
+
+    return true;
+  });
+
+  auto status = operation_processor_->RunAlone(&operation);
+  if (!status.ok()) return status;
 
   // batch get inode attrs
   std::map<Ino, AttrType> attrs;
   uint32_t count = 0;
-  std::vector<std::string> keys;
-  keys.reserve(kBatchGetSize);
+  std::vector<Ino> inoes;
+  inoes.reserve(kBatchGetSize);
   for (auto& [ino, dentry] : dentries) {
-    keys.push_back(MetaCodec::EncodeInodeKey(fs_id, ino));
+    inoes.push_back(ino);
 
-    if (++count == dentries.size() || keys.size() == kBatchGetSize) {
-      std::vector<KeyValue> inode_kvs;
-      status = txn->BatchGet(keys, inode_kvs);
+    if (++count == dentries.size() || inoes.size() == kBatchGetSize) {
+      BatchGetInodeAttrOperation batch_op(trace, fs_id, inoes);
+      status = operation_processor_->RunAlone(&batch_op);
       if (!status.ok()) {
         DINGO_LOG(ERROR) << fmt::format("[fsutils] batch get inode attrs fail, {}.", status.error_str());
         return status;
       }
+      auto& result = batch_op.GetResult();
 
-      if (inode_kvs.size() != keys.size()) {
-        DINGO_LOG(WARNING) << fmt::format("[fsutils] batch get inode attrs size({}) not match keys size({}).",
-                                          inode_kvs.size(), keys.size());
+      if (result.attrs.size() != inoes.size()) {
+        DINGO_LOG(WARNING) << fmt::format("[fsutils] batch get attrs size({}) not match ino size({}).",
+                                          result.attrs.size(), inoes.size());
       }
 
-      for (const auto& kv : inode_kvs) {
-        auto attr = MetaCodec::DecodeInodeValue(kv.value);
+      for (const auto& attr : result.attrs) {
         attrs.insert(std::make_pair(attr.ino(), attr));
       }
 
-      keys.clear();
+      inoes.clear();
     }
   }
 
@@ -369,7 +346,7 @@ Status FsUtils::GenDirJsonString(Ino parent, std::string& result) {
     doc.push_back(item);
   }
 
-  result = doc.dump();
+  output = doc.dump();
 
   return Status::OK();
 }

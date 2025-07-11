@@ -97,9 +97,15 @@ class Operation {
     kScanDelFile = 73,
     kScanDelSlice = 74,
 
+    kScanMetaTable = 75,
+    kScanFsMetaTable = 76,
+
     kSaveFsStats = 80,
     kScanFsStats = 81,
     kGetAndCompactFsStats = 82,
+
+    kGetInodeAttr = 90,
+    kBatchGetInodeAttr = 91,
   };
 
   const char* OpName() const;
@@ -1154,7 +1160,8 @@ class ScanFileSessionOperation : public Operation {
 
   ScanFileSessionOperation(Trace& trace, uint32_t fs_id, Ino ino, HandlerType handler)
       : Operation(trace), fs_id_(fs_id), ino_(ino), handler_(handler) {};
-  ScanFileSessionOperation(Trace& trace,uint32_t fs_id, HandlerType handler) : Operation(trace), fs_id_(fs_id), handler_(handler) {};
+  ScanFileSessionOperation(Trace& trace, uint32_t fs_id, HandlerType handler)
+      : Operation(trace), fs_id_(fs_id), handler_(handler) {};
   ~ScanFileSessionOperation() override = default;
 
   struct Result : public Operation::Result {
@@ -1315,6 +1322,8 @@ class ScanDentryOperation : public Operation {
 
   ScanDentryOperation(Trace& trace, uint32_t fs_id, Ino ino, const std::string& last_name, HandlerType handler)
       : Operation(trace), fs_id_(fs_id), ino_(ino), last_name_(last_name), handler_(handler) {};
+  ScanDentryOperation(Trace& trace, uint32_t fs_id, Ino ino, HandlerType handler)
+      : Operation(trace), fs_id_(fs_id), ino_(ino), last_name_(""), handler_(handler) {};
   ~ScanDentryOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kScanDentry; }
@@ -1362,6 +1371,41 @@ class ScanDelFileOperation : public Operation {
   OpType GetOpType() const override { return OpType::kScanDelFile; }
 
   uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  uint32_t fs_id_{0};
+  Txn::ScanHandlerType scan_handler_;
+};
+
+class ScanMetaTableOperation : public Operation {
+ public:
+  ScanMetaTableOperation(Trace& trace, Txn::ScanHandlerType scan_handler)
+      : Operation(trace), scan_handler_(scan_handler) {};
+  ~ScanMetaTableOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kScanMetaTable; }
+
+  uint32_t GetFsId() const override { return 0; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  Txn::ScanHandlerType scan_handler_;
+};
+
+class ScanFsMetaTableOperation : public Operation {
+ public:
+  ScanFsMetaTableOperation(Trace& trace, uint32_t fs_id, Txn::ScanHandlerType scan_handler)
+      : Operation(trace), fs_id_(fs_id), scan_handler_(scan_handler) {};
+  ~ScanFsMetaTableOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kScanFsMetaTable; }
+
+  uint32_t GetFsId() const override { return 0; }
   Ino GetIno() const override { return 0; }
 
   Status Run(TxnUPtr& txn) override;
@@ -1437,6 +1481,56 @@ class GetAndCompactFsStatsOperation : public Operation {
  private:
   const uint32_t fs_id_;
   const uint64_t mark_time_ns_{0};
+  Result result_;
+};
+
+class GetInodeAttrOperation : public Operation {
+ public:
+  GetInodeAttrOperation(Trace& trace, uint32_t fs_id, uint64_t ino) : Operation(trace), fs_id_(fs_id), ino_(ino) {};
+  ~GetInodeAttrOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kGetInodeAttr; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return ino_; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  uint32_t fs_id_;
+  uint64_t ino_;
+};
+
+class BatchGetInodeAttrOperation : public Operation {
+ public:
+  BatchGetInodeAttrOperation(Trace& trace, uint32_t fs_id, const std::vector<Ino>& inoes)
+      : Operation(trace), fs_id_(fs_id), inoes_(inoes) {};
+  ~BatchGetInodeAttrOperation() override = default;
+
+  struct Result : public Operation::Result {
+    std::vector<AttrType> attrs;
+  };
+
+  OpType GetOpType() const override { return OpType::kBatchGetInodeAttr; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+  template <int size = 0>
+  Result& GetResult() {
+    auto& result = Operation::GetResult();
+    result_.status = result.status;
+    result_.attr = std::move(result.attr);
+
+    return result_;
+  }
+
+ private:
+  uint32_t fs_id_;
+  std::vector<Ino> inoes_;
+
   Result result_;
 };
 

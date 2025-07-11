@@ -364,14 +364,21 @@ InodeSPtr FileSystem::GetInodeFromCache(Ino ino) { return inode_cache_.GetInode(
 std::map<uint64_t, InodeSPtr> FileSystem::GetAllInodesFromCache() { return inode_cache_.GetAllInodes(); }
 
 Status FileSystem::GetInodeFromStore(Ino ino, const std::string& reason, bool is_cache, InodeSPtr& out_inode) {
-  std::string key = MetaCodec::EncodeInodeKey(fs_id_, ino);
-  std::string value;
-  auto status = kv_storage_->Get(key, value);
+  Trace trace;
+  GetInodeAttrOperation operation(trace, fs_id_, ino);
+
+  auto status = RunOperation(&operation);
   if (!status.ok()) {
-    return Status(pb::error::ENOT_FOUND, fmt::format("not found inode({}), {}", ino, status.error_str()));
+    if (status.error_code() != pb::error::ENOT_FOUND) {
+      DINGO_LOG(ERROR) << fmt::format("[fs.{}] fetch inode({}) from store fail, reason({}), status({}).", fs_id_, ino,
+                                      reason, status.error_str());
+    }
+    return status;
   }
 
-  out_inode = Inode::New(MetaCodec::DecodeInodeValue(value));
+  auto& result = operation.GetResult();
+
+  out_inode = Inode::New(result.attr);
 
   if (is_cache) inode_cache_.PutInode(ino, out_inode);
 

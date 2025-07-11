@@ -260,6 +260,12 @@ const char* Operation::OpName() const {
     case OpType::kScanDelSlice:
       return "ScanDelSlice";
 
+    case OpType::kScanMetaTable:
+      return "ScanMetaTable";
+
+    case OpType::kScanFsMetaTable:
+      return "ScanFsMetaTable";
+
     case OpType::kSaveFsStats:
       return "SaveFsStats";
 
@@ -268,6 +274,12 @@ const char* Operation::OpName() const {
 
     case OpType::kGetAndCompactFsStats:
       return "GetAndCompactFsStats";
+
+    case OpType::kGetInodeAttr:
+      return "GetInodeAttr";
+
+    case OpType::kBatchGetInodeAttr:
+      return "BatchGetInodeAttr";
 
     default:
       return "UnknownOperation";
@@ -1806,6 +1818,20 @@ Status ScanDelFileOperation::Run(TxnUPtr& txn) {
   return txn->Scan(range, scan_handler_);
 }
 
+Status ScanMetaTableOperation::Run(TxnUPtr& txn) {
+  Range range = MetaCodec::GetMetaTableRange();
+
+  return txn->Scan(range, scan_handler_);
+}
+
+Status ScanFsMetaTableOperation::Run(TxnUPtr& txn) {
+  CHECK(fs_id_ > 0) << "fs_id is 0";
+
+  Range range = MetaCodec::GetFsMetaTableRange(fs_id_);
+
+  return txn->Scan(range, scan_handler_);
+}
+
 Status SaveFsStatsOperation::Run(TxnUPtr& txn) {
   txn->Put(MetaCodec::EncodeFsStatsKey(fs_id_, GetTime()), MetaCodec::EncodeFsStatsValue(fs_stats_));
 
@@ -1863,6 +1889,42 @@ Status GetAndCompactFsStatsOperation::Run(TxnUPtr& txn) {
   }
 
   result_.fs_stats = std::move(stats);
+
+  return Status::OK();
+}
+
+Status GetInodeAttrOperation::Run(TxnUPtr& txn) {
+  CHECK(fs_id_ > 0) << "fs_id is 0";
+  CHECK(ino_ > 0) << "ino is 0";
+
+  std::string value;
+  auto status = txn->Get(MetaCodec::EncodeInodeKey(fs_id_, ino_), value);
+  if (!status.ok()) return status;
+
+  SetAttr(MetaCodec::DecodeInodeValue(value));
+
+  return Status::OK();
+}
+
+Status BatchGetInodeAttrOperation::Run(TxnUPtr& txn) {
+  CHECK(fs_id_ > 0) << "fs_id is 0";
+  CHECK(!inoes_.empty()) << "inoes_ is empty";
+
+  std::vector<std::string> keys;
+  keys.reserve(inoes_.size());
+  for (auto& ino : inoes_) {
+    keys.push_back(MetaCodec::EncodeInodeKey(fs_id_, ino));
+  }
+
+  std::vector<KeyValue> kvs;
+  auto status = txn->BatchGet(keys, kvs);
+  if (!status.ok()) return status;
+
+  for (auto& kv : kvs) {
+    CHECK(MetaCodec::IsInodeKey(kv.key)) << fmt::format("invalid inode key({}).", kv.key);
+
+    result_.attrs.push_back(MetaCodec::DecodeInodeValue(kv.value));
+  }
 
   return Status::OK();
 }
