@@ -299,7 +299,7 @@ Status GcProcessor::LaunchGc() {
 
 bool GcProcessor::Execute(TaskRunnablePtr task) {
   if (!worker_set_->ExecuteLeastQueue(task)) {
-    DINGO_LOG(ERROR) << "[gc] execute compact task fail.";
+    DINGO_LOG(ERROR) << "[gc] execute task fail.";
     return false;
   }
   return true;
@@ -307,7 +307,7 @@ bool GcProcessor::Execute(TaskRunnablePtr task) {
 
 bool GcProcessor::Execute(Ino ino, TaskRunnablePtr task) {
   if (!worker_set_->ExecuteHash(ino, task)) {
-    DINGO_LOG(ERROR) << "[gc] execute compact task fail.";
+    DINGO_LOG(ERROR) << "[gc] execute task fail.";
     return false;
   }
   return true;

@@ -21,6 +21,7 @@
 #include "mdsv2/client/integration_test.h"
 #include "mdsv2/client/mds.h"
 #include "mdsv2/client/store.h"
+#include "mdsv2/common/constant.h"
 #include "mdsv2/common/helper.h"
 
 DEFINE_string(coor_addr, "", "coordinator address, etc: list://127.0.0.1:22001 or file://./coor_list");
@@ -47,9 +48,6 @@ DEFINE_uint64(ino, 0, "ino");
 DEFINE_uint64(parent, 0, "parent");
 DEFINE_string(parents, "", "parents");
 DEFINE_uint32(num, 1, "num");
-
-DEFINE_string(meta_table_name, "dingofs-meta", "meta table name");
-DEFINE_string(fsstats_table_name, "dingofs-fsstats", "fs stats table name");
 
 DEFINE_uint32(max_bytes, 1024 * 1024 * 1024, "max bytes");
 DEFINE_uint32(max_inodes, 1000000, "max inodes");
@@ -157,8 +155,8 @@ int main(int argc, char* argv[]) {
     dingofs::mdsv2::client::StoreCommandRunner::Options options;
     options.fs_id = FLAGS_fs_id;
     options.fs_name = FLAGS_fs_name;
-    options.meta_table_name = FLAGS_meta_table_name;
-    options.fsstats_table_name = FLAGS_fsstats_table_name;
+    options.meta_table_name = dingofs::mdsv2::kMetaTableName;
+    options.fsstats_table_name = dingofs::mdsv2::kFsStatsTableName;
     dingofs::mdsv2::client::StoreCommandRunner::Run(options, GetDefaultCoorAddrPath(), lower_cmd);
   }
 

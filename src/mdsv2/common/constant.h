@@ -16,6 +16,7 @@
 #define DINGOFS_MDSV2_COMMON_CONSTANT_H_
 
 #include <cstdint>
+#include <string>
 
 namespace dingofs {
 namespace mdsv2 {
@@ -33,6 +34,11 @@ const int kEmptyDirMinLinkNum = 2;
 
 const uint64_t kRootIno = 1;
 const uint64_t kRootParentIno = 0;
+
+const std::string kMetaTableName = "dingofs-meta";
+const std::string kFsStatsTableName = "dingofs-fsstats";
+
+inline std::string GenFsMetaTableName(const std::string& fs_name) { return "dingofs-fsmeta[" + fs_name + "]"; }
 
 }  // namespace mdsv2
 }  // namespace dingofs

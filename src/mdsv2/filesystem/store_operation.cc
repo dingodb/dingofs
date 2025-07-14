@@ -281,6 +281,9 @@ const char* Operation::OpName() const {
     case OpType::kBatchGetInodeAttr:
       return "BatchGetInodeAttr";
 
+    case OpType::kImportKV:
+      return "ImportKV";
+
     default:
       return "UnknownOperation";
   }
@@ -1929,6 +1932,19 @@ Status BatchGetInodeAttrOperation::Run(TxnUPtr& txn) {
   return Status::OK();
 }
 
+Status ImportKVOperation::Run(TxnUPtr& txn) {
+  CHECK(!kvs_.empty()) << "kvs_ is empty";
+
+  for (const auto& kv : kvs_) {
+    CHECK(!kv.key.empty()) << "key is empty";
+    CHECK(!kv.value.empty()) << "value is empty";
+
+    txn->Put(kv.key, kv.value);
+  }
+
+  return Status::OK();
+}
+
 OperationProcessor::OperationProcessor(KVStorageSPtr kv_storage) : kv_storage_(kv_storage) {
   bthread_mutex_init(&mutex_, nullptr);
   bthread_cond_init(&cond_, nullptr);
@@ -2248,6 +2264,27 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
 
   // notify operation finish
   Notify(batch_operation);
+}
+
+Status OperationProcessor::CheckTable(const Range& range) {
+  auto status = kv_storage_->IsExistTable(range.start, range.end);
+  if (!status.ok()) {
+    if (status.error_code() != pb::error::ENOT_FOUND) {
+      DINGO_LOG(ERROR) << "[fsset] check fs table exist fail, error: " << status.error_str();
+    }
+  }
+
+  return status;
+}
+
+Status OperationProcessor::CreateTable(const std::string& table_name, const Range& range, int64_t& table_id) {
+  KVStorage::TableOption option = {.start_key = range.start, .end_key = range.end};
+  Status status = kv_storage_->CreateTable(table_name, option, table_id);
+  if (!status.ok()) {
+    return Status(pb::error::EINTERNAL, fmt::format("create table({}) fail, {}", table_name, status.error_str()));
+  }
+
+  return Status::OK();
 }
 
 }  // namespace mdsv2

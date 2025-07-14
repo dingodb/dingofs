@@ -44,7 +44,7 @@ enum TableID : unsigned char {
 
 // meta type:
 //      kMetaLock: lock, used for distributed lock
-//      kMetaAutoIncrement: auto increment id, used for fs id, ino
+//      kMetaAutoIncrementID: auto increment id, used for fs id, ino
 //      kMetaHeartbeat: heartbeat, used for mds/client heartbeat
 //      kMetaFs: fs info, used for filesystem info
 //      kMetaFsQuota: fs quota, used for filesystem quota
@@ -56,7 +56,7 @@ enum TableID : unsigned char {
 //      kMetaFsDelFile: fs deleted file, used for deleted file
 enum MetaType : unsigned char {
   kMetaLock = 1,
-  kMetaAutoIncrement = 3,
+  kMetaAutoIncrementID = 3,
   kMetaHeartbeat = 5,
   kMetaFs = 7,
   kMetaFsQuota = 9,
@@ -147,12 +147,12 @@ Range MetaCodec::GetAutoIncrementIDRange() {
   auto& start = range.start;
   start = kPrefix;
   start.push_back(kTableMeta);
-  start.push_back(kMetaAutoIncrement);
+  start.push_back(kMetaAutoIncrementID);
 
   auto& end = range.end;
   end = kPrefix;
   end.push_back(kTableMeta);
-  end.push_back(kMetaAutoIncrement + 1);
+  end.push_back(kMetaAutoIncrementID + 1);
 
   return std::move(range);
 }
@@ -493,7 +493,7 @@ void MetaCodec::DecodeLockValue(const std::string& value, int64_t& mds_id, uint6
   expire_time_ms = SerialHelper::ReadULong(value.substr(16, 8));
 }
 
-// auto increment id format: ${prefix} kTableMeta kMetaAutoIncrement {name}
+// auto increment id format: ${prefix} kTableMeta kMetaAutoIncrementID {name}
 static const uint32_t kAutoIncrementIDKeyHeaderSize = kPrefixSize + 2;  // prefix + table id + meta type
 
 bool MetaCodec::IsAutoIncrementIDKey(const std::string& key) {
@@ -501,7 +501,7 @@ bool MetaCodec::IsAutoIncrementIDKey(const std::string& key) {
     return false;
   }
 
-  if (key.at(kPrefixSize) != kTableMeta || key.at(kPrefixSize + 1) != kMetaAutoIncrement) {
+  if (key.at(kPrefixSize) != kTableMeta || key.at(kPrefixSize + 1) != kMetaAutoIncrementID) {
     return false;
   }
 
@@ -514,7 +514,7 @@ std::string MetaCodec::EncodeAutoIncrementIDKey(const std::string& name) {
 
   key.append(kPrefix);
   key.push_back(kTableMeta);
-  key.push_back(kMetaAutoIncrement);
+  key.push_back(kMetaAutoIncrementID);
   key.append(name);
 
   return std::move(key);
@@ -1157,11 +1157,11 @@ std::pair<std::string, std::string> MetaCodec::ParseMetaTableKey(const std::stri
       value_desc = fmt::format("{} {} {}", mds_id, epoch, expire_time_ms);
     } break;
 
-    case kMetaAutoIncrement: {
+    case kMetaAutoIncrementID: {
       std::string name;
       DecodeAutoIncrementIDKey(key, name);
 
-      key_desc = fmt::format("{} kTableMeta kMetaAutoIncrement {}", kPrefix, name);
+      key_desc = fmt::format("{} kTableMeta kMetaAutoIncrementID {}", kPrefix, name);
 
       uint64_t next_id;
       DecodeAutoIncrementIDValue(value, next_id);

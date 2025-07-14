@@ -18,6 +18,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -67,11 +68,13 @@ DEFINE_uint32(filesystem_hash_bucket_num, 1024, "Filesystem hash bucket num.");
 
 DEFINE_uint32(compact_slice_threshold_num, 64, "Compact slice threshold num.");
 
-bool IsReserveNode(Ino ino) { return ino == kRootIno; }
+static bool IsReserveNode(Ino ino) { return ino == kRootIno; }
 
-bool IsReserveName(const std::string& name) { return name == kStatsName || name == kRecyleName; }
+static bool IsReserveName(const std::string& name) { return name == kStatsName || name == kRecyleName; }
 
-bool IsInvalidName(const std::string& name) { return name.empty() || name.size() > FLAGS_filesystem_name_max_size; }
+static bool IsInvalidName(const std::string& name) {
+  return name.empty() || name.size() > FLAGS_filesystem_name_max_size;
+}
 
 FileSystem::FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr id_generator,
                        IdGeneratorSPtr slice_id_generator, KVStorageSPtr kv_storage,
@@ -1613,9 +1616,7 @@ Status FileSystem::CommitRename(Context& ctx, const RenameParam& param, Ino& old
 static uint64_t CalculateDeltaLength(uint64_t length, const std::vector<pb::mdsv2::Slice>& slices) {
   uint64_t temp_length = length;
   for (const auto& slice : slices) {
-    if (temp_length < slice.offset() + slice.len()) {
-      temp_length = slice.offset() + slice.len();
-    }
+    temp_length = std::max(temp_length, slice.offset() + slice.len());
   }
 
   return temp_length - length;
@@ -2274,7 +2275,7 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, FsInfoType& fs_info) 
   {
     auto range = MetaCodec::GetFsMetaTableRange(fs_id);
     KVStorage::TableOption option = {.start_key = range.start, .end_key = range.end};
-    std::string table_name = fmt::format("dingofs-fs[{}]", param.fs_name);
+    std::string table_name = GenFsMetaTableName(param.fs_name);
     Status status = kv_storage_->CreateTable(table_name, option, dentry_table_id);
     if (!status.ok()) {
       return Status(pb::error::EINTERNAL, fmt::format("create dentry table fail, {}", status.error_str()));

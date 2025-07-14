@@ -106,6 +106,8 @@ class Operation {
 
     kGetInodeAttr = 90,
     kBatchGetInodeAttr = 91,
+
+    kImportKV = 100,
   };
 
   const char* OpName() const;
@@ -1534,6 +1536,22 @@ class BatchGetInodeAttrOperation : public Operation {
   Result result_;
 };
 
+class ImportKVOperation : public Operation {
+ public:
+  ImportKVOperation(Trace& trace, std::vector<KeyValue> kvs) : Operation(trace), kvs_(std::move(kvs)) {};
+  ~ImportKVOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kImportKV; }
+
+  uint32_t GetFsId() const override { return 0; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  std::vector<KeyValue> kvs_;
+};
+
 struct BatchOperation {
   uint32_t fs_id{0};
   uint64_t ino{0};
@@ -1579,6 +1597,9 @@ class OperationProcessor {
 
   bool RunBatched(Operation* operation);
   Status RunAlone(Operation* operation);
+
+  Status CheckTable(const Range& range);
+  Status CreateTable(const std::string& table_name, const Range& range, int64_t& table_id);
 
  private:
   static std::map<OperationProcessor::Key, BatchOperation> Grouping(std::vector<Operation*>& operations);

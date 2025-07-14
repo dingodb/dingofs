@@ -55,7 +55,9 @@ class Input {
     kS3,
   };
 
-  virtual bool Read(std::string& key, std::string& value) = 0;
+  virtual bool IsEof() const = 0;
+
+  virtual Status Read(std::string& key, std::string& value) = 0;
 };
 
 using InputUPtr = std::unique_ptr<Input>;
@@ -76,8 +78,8 @@ class Backup {
   bool Init(const std::string& coor_addr);
   void Destroy();
 
-  void BackupMetaTable(const Options& options);
-  void BackupFsMetaTable(const Options& options, uint32_t fs_id);
+  Status BackupMetaTable(const Options& options);
+  Status BackupFsMetaTable(const Options& options, uint32_t fs_id);
 
  private:
   Status BackupMetaTable(OutputUPtr output);
@@ -93,6 +95,7 @@ class Restore {
 
   struct Options {
     Input::Type type = Input::Type::kFile;  // input type
+    uint32_t fs_id{0};                      // file system ID
     std::string file_path;                  // input file path (if type is kFile)
     std::string bucket_name;                // S3 bucket name
     std::string object_name;                // S3 object name
@@ -101,10 +104,18 @@ class Restore {
   bool Init(const std::string& coor_addr);
   void Destroy();
 
-  void RestoreMetaTable(const Options& options);
-  void RestoreFsMetaTable(const Options& options, uint32_t fs_id);
+  Status RestoreMetaTable(const Options& options);
+  Status RestoreFsMetaTable(const Options& options, uint32_t fs_id);
 
  private:
+  Status IsExistMetaTable();
+  Status IsExistFsMetaTable(uint32_t fs_id);
+
+  Status CreateMetaTable();
+  Status CreateFsMetaTable(uint32_t fs_id, const std::string& fs_name);
+
+  Status GetFsInfo(uint32_t fs_id, FsInfoType& fs_info);
+
   Status RestoreMetaTable(InputUPtr input);
   Status RestoreFsMetaTable(uint32_t fs_id, InputUPtr input);
 
