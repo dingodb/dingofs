@@ -36,6 +36,7 @@
 #include "absl/memory/memory.h"
 #include "blockaccess/accesser_common.h"
 #include "blockaccess/s3/aws/s3_adapter.h"
+#include "common/version.h"
 #include "metaserver/common/dynamic_config.h"
 #include "metaserver/common/types.h"
 #include "metaserver/compaction/s3compact_manager.h"
@@ -47,7 +48,6 @@
 #include "metaserver/storage/rocksdb_perf.h"
 #include "metaserver/trash/trash_manager.h"
 #include "utils/crc32.h"
-#include "utils/dingo_version.h"
 #include "utils/string_util.h"
 #include "utils/uri_parser.h"
 
@@ -229,8 +229,8 @@ void Metaserver::Init() {
 
   // read aws sdk relate param from conf file
   blockaccess::BlockAccessOptions block_access_options;
-  blockaccess::InitAwsSdkConfig(conf_.get(),
-                               &block_access_options.s3_options.aws_sdk_config);
+  blockaccess::InitAwsSdkConfig(
+      conf_.get(), &block_access_options.s3_options.aws_sdk_config);
   blockaccess::InitBlockAccesserThrottleOptions(
       conf_.get(), &block_access_options.throttle_options);
 
@@ -447,7 +447,7 @@ void Metaserver::Run() {
   LOG_IF(FATAL, heartbeat_.Run() != 0) << "Failed to start heartbeat manager.";
 
   // set metaserver version in metric
-  dingofs::utils::ExposeDingoVersion();
+  dingofs::ExposeDingoVersion();
 
   PartitionCleanManager::GetInstance().Run();
 

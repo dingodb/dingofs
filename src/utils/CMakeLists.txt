@@ -25,7 +25,6 @@ target_link_libraries(dingofs_auth
 add_library(dingofs_utils
     channel_pool.cpp
     configuration.cpp
-    dingo_version.cpp
     leaky_bucket.cpp
     location_operator.cpp
     stringstatus.cpp

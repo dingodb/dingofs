@@ -29,6 +29,7 @@
 #include <utility>
 
 #include "blockaccess/block_accesser_factory.h"
+#include "common/version.h"
 #include "mds/cachegroup/cache_group_member_manager.h"
 #include "mds/cachegroup/cache_group_member_service.h"
 #include "mds/cachegroup/config.h"
@@ -36,7 +37,6 @@
 #include "mds/mds_service.h"
 #include "mds/topology/topology_service.h"
 #include "mds/topology/topology_storge_etcd.h"
-#include "utils/dingo_version.h"
 
 namespace brpc {
 DECLARE_bool(graceful_quit_on_sigterm);
@@ -268,7 +268,7 @@ void MDS::Run() {
   }
 
   // set mds version in metric
-  dingofs::utils::ExposeDingoVersion();
+  dingofs::ExposeDingoVersion();
 
   LOG_IF(FATAL, topology_->Run()) << "run topology module fail";
   topologyMetricService_->Run();
@@ -334,7 +334,7 @@ void MDS::StartDummyServer() {
   status_.set_value("follower");
 
   // set mds version in metric
-  dingofs::utils::ExposeDingoVersion();
+  dingofs::ExposeDingoVersion();
 
   LOG_IF(FATAL, 0 != brpc::StartDummyServerAt(options_.dummyPort))
       << "Start dummy server failed";

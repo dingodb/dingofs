@@ -54,4 +54,6 @@ void ShowVerion();
 
 void LogVerion();
 
+void ExposeDingoVersion();
+
 }  // namespace dingofs

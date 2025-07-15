@@ -14,6 +14,7 @@
 
 #include "common/version.h"
 
+#include <bvar/bvar.h>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
@@ -49,6 +50,18 @@ void LogVerion() {
   LOG(INFO) << "DINGOFS GIT_COMMIT_HASH:[" << FLAGS_git_commit_hash << "]";
   LOG(INFO) << "DINGOFS BUILD_TYPE:[" << FLAGS_dingofs_build_type << "]";
   LOG(INFO) << "PID: " << getpid();
+}
+
+void ExposeDingoVersion() {
+  static bvar::Status<std::string> version;
+  version.expose_as("dingo", "version");
+
+  if (FLAGS_major_version.size() == 0) {
+    version.set_value("unknown");
+  } else {
+    version.set_value("%s.%s", FLAGS_major_version.c_str(),
+                      FLAGS_minor_version.c_str());
+  }
 }
 
 }  // namespace dingofs
