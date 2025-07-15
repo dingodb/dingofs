@@ -139,7 +139,7 @@ Status RemoteNodeImpl::Put(ContextSPtr ctx, const BlockKey& key,
 
   status = rpc_->Put(ctx, key, block);
   if (!status.ok()) {
-    LOG_PUT_ERROR();
+    GENERIC_LOG_PUT_ERROR();
   }
   return CheckStatus(status);
 }
@@ -160,7 +160,7 @@ Status RemoteNodeImpl::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
     status = rpc_->Range(ctx, key, offset, length, buffer, option);
   }
   if (!status.ok()) {
-    LOG_RANGE_ERROR();
+    GENERIC_LOG_RANGE_ERROR();
   }
   return CheckStatus(status);
 }
@@ -176,7 +176,7 @@ Status RemoteNodeImpl::Cache(ContextSPtr ctx, const BlockKey& key,
 
   status = rpc_->Cache(ctx, key, block);
   if (!status.ok()) {
-    LOG_CACHE_ERROR();
+    GENERIC_LOG_CACHE_ERROR();
   }
   return status;  // Skip CheckStatus(...) here
 }
@@ -191,8 +191,8 @@ Status RemoteNodeImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
   }
 
   status = rpc_->Prefetch(ctx, key, length);
-  if (!status.ok() && !status.IsExist()) {
-    LOG_PREFETCH_ERROR();
+  if (!status.ok()) {
+    GENERIC_LOG_PREFETCH_ERROR();
   }
   return status;  // Skip CheckStatus(...) here
 }

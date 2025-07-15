@@ -104,24 +104,34 @@ RangeTaskFactory::RangeTaskFactory(BlockCacheSPtr block_cache)
     : block_cache_(block_cache) {}
 
 Task RangeTaskFactory::GenTask(const BlockKey& key) {
-  return [this, key]() { Range(key); };
+  return [this, key]() { RangeAll(key); };
 }
 
-void RangeTaskFactory::Range(const BlockKey& key) {
+void RangeTaskFactory::RangeAll(const BlockKey& key) {
+  IOBuffer buffer;
+  off_t offset = FLAGS_offset;
+  size_t blksize = FLAGS_blksize;
+  while (blksize) {
+    size_t length = std::min(FLAGS_blksize - offset, FLAGS_length);
+    Range(key, offset, length, &buffer);
+
+    offset += length;
+    blksize -= length;
+  }
+}
+
+void RangeTaskFactory::Range(const BlockKey& key, off_t offset, size_t length,
+                             IOBuffer* buffer) {
   auto option = RangeOption();
   option.retrive = FLAGS_retrive;
   option.block_size = FLAGS_blksize;
+  auto status =
+      block_cache_->Range(NewContext(), key, offset, length, buffer, option);
 
-  IOBuffer buffer;
-  auto status = block_cache_->Range(NewContext(), key, FLAGS_offset,
-                                    FLAGS_length, &buffer, option);
   if (!status.ok()) {
     LOG(ERROR) << "Range block (key=" << key.Filename()
                << ") failed: " << status.ToString();
   }
-
-  // auto hole = std::make_unique<char[]>(FLAGS_blksize);
-  // buffer.CopyTo(hole.get());
 }
 
 TaskFactoryUPtr NewFactory(BlockCacheSPtr block_cache, const std::string& op) {

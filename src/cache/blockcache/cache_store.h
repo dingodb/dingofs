@@ -92,11 +92,12 @@ struct BlockKey {
 
 // block
 struct Block {
+  Block() = default;
   Block(IOBuffer buffer) : buffer(buffer), size(buffer.Size()) {}
   Block(const char* data, size_t size) : buffer(data, size), size(size) {}
 
   IOBuffer buffer;
-  size_t size;
+  size_t size{0};
 };
 
 // block context

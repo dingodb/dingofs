@@ -77,6 +77,11 @@ bool LRUCache::Delete(const CacheKey& key, CacheValue* deleted) {
   return true;
 }
 
+bool LRUCache::Exist(const CacheKey& key) {
+  ListNode* node;
+  return HashLookup(key.Filename(), &node);
+}
+
 CacheItems LRUCache::Evict(FilterFunc filter) {
   CacheItems evicted;
   if (EvictNode(&inactive_, filter, &evicted)) {  // continue
@@ -116,7 +121,7 @@ CacheItem LRUCache::KV(ListNode* node) {
   CacheKey key;
   // we use CacheKey.Filename() as hash key
   auto filename = hash_->Key(node->handle);
-  CHECK(key.ParseFromFilename(filename));
+  CHECK(key.ParseFromFilename(filename)) << "filename = " << filename;
   return CacheItem(key, node->value);
 }
 

@@ -88,7 +88,10 @@ class RangeTaskFactory final : public TaskFactory {
   Task GenTask(const BlockKey& key) override;
 
  private:
-  void Range(const BlockKey& key);
+ private:
+  void RangeAll(const BlockKey& key);
+  void Range(const BlockKey& key, off_t offset, size_t length,
+             IOBuffer* buffer);
 
   BlockCacheSPtr block_cache_;
 };

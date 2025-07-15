@@ -50,6 +50,7 @@ class LRUCache {
   virtual void Add(const CacheKey& key, const CacheValue& value);
   virtual bool Get(const CacheKey& key, CacheValue* value);
   virtual bool Delete(const CacheKey& key, CacheValue* deleted);
+  virtual bool Exist(const CacheKey& key);
   virtual CacheItems Evict(FilterFunc filter);
 
   virtual size_t Size();

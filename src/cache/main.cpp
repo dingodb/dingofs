@@ -20,14 +20,6 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include <gflags/gflags.h>
-
 #include "cache/server.h"
-#include "cache/utils/logging.h"
 
-int main(int argc, char** argv) {
-  google::ParseCommandLineFlags(&argc, &argv, false);
-  dingofs::cache::InitLogging(argv[0]);
-
-  return dingofs::cache::RunServer();
-}
+int main(int argc, char** argv) { return dingofs::cache::Run(argc, argv); }

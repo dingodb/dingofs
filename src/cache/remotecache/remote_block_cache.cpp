@@ -22,25 +22,32 @@
 
 #include "cache/remotecache/remote_block_cache.h"
 
+#include <butil/iobuf.h>
+
 #include <memory>
 
 #include "cache/common/const.h"
 #include "cache/common/macro.h"
+#include "cache/remotecache/mem_cache.h"
 #include "cache/remotecache/remote_node_group.h"
 #include "cache/utils/bthread.h"
 #include "cache/utils/context.h"
+#include "common/io_buffer.h"
 #include "common/status.h"
 #include "options/cache/tiercache.h"
-
-namespace brpc {
-DECLARE_int32(max_connection_pool_size);
-}  // namespace brpc
 
 namespace dingofs {
 namespace cache {
 
 DEFINE_string(cache_group, "",
               "Cache group name to use, empty means not use cache group");
+
+DEFINE_bool(enable_remote_prefetch, true,
+            "Whether enable remote prefetch, default is true");
+DEFINE_validator(enable_remote_prefetch, brpc::PassValidate);
+
+DEFINE_uint32(remote_prefetch_max_buffer_size_mb, 512,
+              "Maximum buffer size for remote prefetch");
 
 static const std::string kModule = kRemoteBlockCacheMoudule;
 
@@ -49,18 +56,22 @@ RemoteBlockCacheImpl::RemoteBlockCacheImpl(RemoteBlockCacheOption option,
     : running_(false),
       option_(option),
       storage_(storage),
-      joiner_(std::make_unique<BthreadJoiner>()) {
+      joiner_(std::make_unique<BthreadJoiner>()),
+      memcache_(std::make_shared<MemCacheImpl>(
+          FLAGS_remote_prefetch_max_buffer_size_mb * kMiB)) {
   if (HasCacheStore()) {
-    remote_node_ = std::make_unique<RemoteNodeGroup>(option);
+    remote_node_ = std::make_shared<RemoteNodeGroup>(option);
   } else {
-    remote_node_ = std::make_unique<NoneRemoteNode>();
+    remote_node_ = std::make_shared<NoneRemoteNode>();
   }
-  brpc::FLAGS_max_connection_pool_size = 256;
+  prefetcher_ = std::make_unique<Prefetcher>(memcache_, remote_node_);
 }
 
 Status RemoteBlockCacheImpl::Start() {
   CHECK_NOTNULL(remote_node_);
   CHECK_NOTNULL(storage_);
+  CHECK_NOTNULL(memcache_);
+  CHECK_NOTNULL(prefetcher_);
   CHECK_NOTNULL(joiner_);
 
   if (running_) {
@@ -81,6 +92,18 @@ Status RemoteBlockCacheImpl::Start() {
     return status;
   }
 
+  status = memcache_->Start();
+  if (!status.ok()) {
+    LOG(ERROR) << "Start mem cache failed: " << status.ToString();
+    return status;
+  }
+
+  status = prefetcher_->Start();
+  if (!status.ok()) {
+    LOG(ERROR) << "Start prefetcher failed: " << status.ToString();
+    return status;
+  }
+
   running_ = true;
 
   LOG(INFO) << "Remote block cache is up.";
@@ -90,21 +113,33 @@ Status RemoteBlockCacheImpl::Start() {
 }
 
 Status RemoteBlockCacheImpl::Shutdown() {
-  if (running_.exchange(false)) {
+  if (!running_.exchange(false)) {
     return Status::OK();
   }
 
   LOG(INFO) << "Remote block cache is shutting down...";
 
-  auto status = joiner_->Shutdown();
+  auto status = prefetcher_->Shutdown();
   if (!status.ok()) {
-    LOG(ERROR) << "Shutdown bthread joiner failed: " << status.ToString();
+    LOG(ERROR) << "Shutdown prefetcher failed: " << status.ToString();
+    return status;
+  }
+
+  status = memcache_->Shutdown();
+  if (!status.ok()) {
+    LOG(ERROR) << "Shutdown mem cache failed: " << status.ToString();
     return status;
   }
 
   status = remote_node_->Shutdown();
   if (!status.ok()) {
     LOG(ERROR) << "Shutdown remote node failed: " << status.ToString();
+    return status;
+  }
+
+  status = joiner_->Shutdown();
+  if (!status.ok()) {
+    LOG(ERROR) << "Shutdown bthread joiner failed: " << status.ToString();
     return status;
   }
 
@@ -153,6 +188,18 @@ Status RemoteBlockCacheImpl::Range(ContextSPtr ctx, const BlockKey& key,
   TraceLogGuard log(ctx, status, timer, kModule, "range(%s,%lld,%zu)",
                     key.Filename(), offset, length);
   StepTimerGuard guard(timer);
+
+  if (FLAGS_enable_remote_prefetch && option.block_size != 0) {
+    prefetcher_->Submit(ctx, key, option.block_size);
+  }
+
+  NEXT_STEP(kRetrieveCache);
+  Block block;
+  status = memcache_->Get(key, &block);
+  if (status.ok()) {
+    block.buffer.AppendTo(buffer, length, offset);
+    return status;
+  }
 
   NEXT_STEP(kRemoteRange);
   status = remote_node_->Range(ctx, key, offset, length, buffer, option);

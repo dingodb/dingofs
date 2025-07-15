@@ -59,8 +59,8 @@ void Worker::ExecTask(std::function<void()> task) {
   timer.stop();
 
   collector_->Submit([this, timer](Stat* stat, Stat* total) {
-    stat->Add(FLAGS_length, timer.u_elapsed());
-    total->Add(FLAGS_length, timer.u_elapsed());
+    stat->Add(FLAGS_blksize, timer.u_elapsed());
+    total->Add(FLAGS_blksize, timer.u_elapsed());
   });
 }
 

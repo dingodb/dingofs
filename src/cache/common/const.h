@@ -62,6 +62,7 @@ static const std::string kNodeRange = "node_range";
 static const std::string kNodeCache = "node_cache";
 static const std::string kNodePrefetch = "node_prefetch";
 static const std::string kSendResponse = "send_response";
+static const std::string kRetrieveCache = "memcache";
 
 // step: disk cache
 static const std::string kStageBlock = "stage";

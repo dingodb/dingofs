@@ -62,7 +62,7 @@ BlockCacheImpl::BlockCacheImpl(BlockCacheOption option,
   if (HasCacheStore()) {
     store_ = std::make_shared<DiskCacheGroup>(option.disk_cache_options);
   } else {
-    store_ = std::make_shared<MemCache>();
+    store_ = std::make_shared<MemStore>();
   }
   uploader_ = std::make_shared<BlockCacheUploader>(store_, storage_pool_);
 }

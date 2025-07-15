@@ -24,6 +24,8 @@
 #define DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_BLOCK_CACHE_H_
 
 #include "cache/blockcache/block_cache.h"
+#include "cache/remotecache/mem_cache.h"
+#include "cache/remotecache/prefetcher.h"
 #include "cache/remotecache/remote_node.h"
 #include "cache/storage/storage.h"
 #include "cache/utils/bthread.h"
@@ -71,6 +73,8 @@ class RemoteBlockCacheImpl final : public BlockCache {
   RemoteBlockCacheOption option_;
   RemoteNodeSPtr remote_node_;
   StorageSPtr storage_;
+  MemCacheSPtr memcache_;
+  PrefetcherUPtr prefetcher_;
   BthreadJoinerUPtr joiner_;
 };
 

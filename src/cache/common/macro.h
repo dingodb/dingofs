@@ -25,8 +25,6 @@
 
 #include <absl/strings/str_format.h>
 
-#include "cache/storage/filesystem.h"
-
 namespace dingofs {
 namespace cache {
 
@@ -66,7 +64,7 @@ namespace cache {
 #define VLOG_6(...) VLOG(6) << absl::StrFormat(__VA_ARGS__)
 #define VLOG_9(...) VLOG(9) << absl::StrFormat(__VA_ARGS__)
 
-#define LOG_PUT_ERROR()                                          \
+#define GENERIC_LOG_PUT_ERROR()                                  \
   do {                                                           \
     LOG(ERROR) << "[" << ctx->TraceId()                          \
                << "] Put block failed: key = " << key.Filename() \
@@ -74,7 +72,7 @@ namespace cache {
                << ", status = " << status.ToString();            \
   } while (0);
 
-#define LOG_RANGE_ERROR()                                            \
+#define GENERIC_LOG_RANGE_ERROR()                                    \
   do {                                                               \
     LOG(ERROR) << "[" << ctx->TraceId()                              \
                << "] Range block failed: key = " << key.Filename()   \
@@ -82,7 +80,7 @@ namespace cache {
                << ", status = " << status.ToString();                \
   } while (0);
 
-#define LOG_CACHE_ERROR()                                          \
+#define GENERIC_LOG_CACHE_ERROR()                                  \
   do {                                                             \
     LOG(ERROR) << "[" << ctx->TraceId()                            \
                << "] Cache block failed: key = " << key.Filename() \
@@ -90,7 +88,7 @@ namespace cache {
                << ", status = " << status.ToString();              \
   } while (0);
 
-#define LOG_PREFETCH_ERROR()                                          \
+#define GENERIC_LOG_PREFETCH_ERROR()                                  \
   do {                                                                \
     LOG(ERROR) << "[" << ctx->TraceId()                               \
                << "] Prefetch block failed: key = " << key.Filename() \

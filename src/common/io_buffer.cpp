@@ -34,7 +34,7 @@ IOBuffer::IOBuffer(const char* data, size_t size) { iobuf_.append(data, size); }
 
 butil::IOBuf& IOBuffer::IOBuf() { return iobuf_; }
 
-const butil::IOBuf& IOBuffer::ConstIOBuf() { return iobuf_; }
+const butil::IOBuf& IOBuffer::ConstIOBuf() const { return iobuf_; }
 
 std::vector<iovec> IOBuffer::Fetch() const {
   std::vector<iovec> iovecs;
@@ -55,6 +55,10 @@ char* IOBuffer::Fetch1() const {
 }
 
 void IOBuffer::CopyTo(char* dest) { iobuf_.copy_to(dest); }
+
+void IOBuffer::AppendTo(IOBuffer* buffer, size_t n, size_t pos) {
+  iobuf_.append_to(&buffer->IOBuf(), n, pos);
+}
 
 size_t IOBuffer::Size() const { return iobuf_.length(); }
 

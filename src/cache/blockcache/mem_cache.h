@@ -31,10 +31,10 @@
 namespace dingofs {
 namespace cache {
 
-class MemCache final : public CacheStore {
+class MemStore final : public CacheStore {
  public:
-  MemCache() = default;
-  ~MemCache() override = default;
+  MemStore() = default;
+  ~MemStore() override = default;
 
   Status Start(UploadFunc) override { return Status::OK(); }
   Status Shutdown() override { return Status::OK(); }

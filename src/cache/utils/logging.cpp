@@ -33,7 +33,7 @@ namespace dingofs {
 namespace cache {
 
 DEFINE_string(logdir, "/tmp",
-              "Speficied logging directory for glog and access log");
+              "Specified logging directory for glog and access log");
 
 DEFINE_int32(loglevel, 0, "Sets glog logging level: 0, 1, 2 and etc");
 
@@ -66,7 +66,7 @@ void InitLogging(const char* argv0) {
   CHECK(blockaccess::InitBlockAccessLog(FLAGS_log_dir))
       << "Init block access log failed.";
 
-  CHECK(stub::InitMdsAccessLog(FLAGS_log_dir)) << "Init MDS access log failed.";
+  CHECK(stub::InitMdsAccessLog(FLAGS_logdir)) << "Init mds access log failed.";
 
   LOG(INFO) << "Init block access logger success: log_dir = " << FLAGS_log_dir;
 }
