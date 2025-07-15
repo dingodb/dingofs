@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#ifndef DINGOFS_COMMON_VERSION_H_
+#define DINGOFS_COMMON_VERSION_H_
+
 #include <gflags/gflags_declare.h>
 
 namespace dingofs {
@@ -46,6 +49,10 @@ DECLARE_bool(show_version);
 #define GIT_COMMIT_TIME "unknown"
 #endif
 
+#ifndef GIT_LAST_COMMIT_ID
+#define GIT_LAST_COMMIT_ID "unknown"
+#endif
+
 #ifndef DINGOFS_BUILD_TYPE
 #define DINGOFS_BUILD_TYPE "unknown"
 #endif
@@ -57,3 +64,5 @@ void LogVerion();
 void ExposeDingoVersion();
 
 }  // namespace dingofs
+
+#endif // DINGOFS_COMMON_VERSION_H_

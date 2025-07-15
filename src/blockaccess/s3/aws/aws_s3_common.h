@@ -24,6 +24,7 @@
 #include <string>
 
 #include "blockaccess/accesser_common.h"
+#include "common/status.h"
 #include "utils/configuration.h"
 #include "utils/macros.h"
 
@@ -42,7 +43,7 @@ using AwsGetObjectAsyncCallBack =
 struct AwsGetObjectAsyncContext : public Aws::Client::AsyncCallerContext {
   std::shared_ptr<GetObjectAsyncContext> get_obj_ctx;
   AwsGetObjectAsyncCallBack cb;
-  int retCode;
+  Status ret;
   size_t actualLen;
 };
 
@@ -52,7 +53,7 @@ using AwsPutObjectAsyncCallBack =
 struct AwsPutObjectAsyncContext : public Aws::Client::AsyncCallerContext {
   std::shared_ptr<PutObjectAsyncContext> put_obj_ctx;
   AwsPutObjectAsyncCallBack cb;
-  int retCode;
+  Status ret;
 };
 
 // https://github.com/aws/aws-sdk-cpp/issues/1430

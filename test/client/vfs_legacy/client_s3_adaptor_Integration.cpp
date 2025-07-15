@@ -1079,7 +1079,7 @@ TEST_F(ClientS3IntegrationTest, test_truncate_small3) {
             tmp.len = context->buffer_size;
             tmp.buf = new char[context->buffer_size];
             strncpy(tmp.buf, context->buffer, context->buffer_size);
-            context->ret_code = 0;
+            context->ret = Status::OK();
             context->cb(context);
           }));
 
@@ -1340,7 +1340,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_first_write) {
       .WillRepeatedly(
           Invoke([&](const std::shared_ptr<blockaccess::PutObjectAsyncContext>&
                          context) {
-            context->ret_code = 0;
+            context->ret = Status::OK();
             context->cb(context);
           }));
   EXPECT_CALL(mockInodeManager_, GetInode(_, _))
@@ -1402,7 +1402,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_overlap_write) {
       .WillRepeatedly(
           Invoke([&](const std::shared_ptr<blockaccess::PutObjectAsyncContext>&
                          context) {
-            context->ret_code = 0;
+            context->ret = Status::OK();
             context->cb(context);
           }));
   s3ClientAdaptor_->Write(inode->GetInodeId(), offset, len, buf);
@@ -1457,7 +1457,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_overlap_write2) {
       .WillRepeatedly(
           Invoke([&](const std::shared_ptr<blockaccess::PutObjectAsyncContext>&
                          context) {
-            context->ret_code = 0;
+            context->ret = Status::OK();
             context->cb(context);
           }));
   s3ClientAdaptor_->Write(inode->GetInodeId(), offset, len, buf);
@@ -1517,7 +1517,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_hole_write) {
       .WillRepeatedly(
           Invoke([&](const std::shared_ptr<blockaccess::PutObjectAsyncContext>&
                          context) {
-            context->ret_code = 0;
+            context->ret = Status::OK();
             context->cb(context);
           }));
   s3ClientAdaptor_->Write(inode->GetInodeId(), offset, len, buf);
@@ -1577,7 +1577,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_more_chunk) {
       .WillRepeatedly(
           Invoke([&](const std::shared_ptr<blockaccess::PutObjectAsyncContext>&
                          context) {
-            context->ret_code = 0;
+            context->ret = Status::OK();
             context->cb(context);
           }));
   s3ClientAdaptor_->Write(inode->GetInodeId(), offset, len, buf);
@@ -1650,7 +1650,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read1) {
             tmp.len = context->buffer_size;
             tmp.buf = new char[context->buffer_size];
             strncpy(tmp.buf, context->buffer, context->buffer_size);
-            context->ret_code = 0;
+            context->ret = Status::OK();
             context->cb(context);
           }));
   s3ClientAdaptor_->Write(inode->GetInodeId(), offset, len, buf);
@@ -1731,7 +1731,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read2) {
             tmp.len = context->buffer_size;
             tmp.buf = new char[context->buffer_size];
             strncpy(tmp.buf, context->buffer, context->buffer_size);
-            context->ret_code = 0;
+            context->ret = Status::OK();
             context->cb(context);
           }));
   s3ClientAdaptor_->Write(inode->GetInodeId(), offset, len, buf);
@@ -1815,7 +1815,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read3) {
             tmp.len = context->buffer_size;
             tmp.buf = new char[context->buffer_size];
             strncpy(tmp.buf, context->buffer, context->buffer_size);
-            context->ret_code = 0;
+            context->ret = Status::OK();
             context->cb(context);
           }));
   s3ClientAdaptor_->Write(inode->GetInodeId(), offset, len, buf);
@@ -1920,7 +1920,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read4) {
             tmp.len = context->buffer_size;
             tmp.buf = new char[context->buffer_size];
             strncpy(tmp.buf, context->buffer, context->buffer_size);
-            context->ret_code = 0;
+            context->ret = Status::OK();
             context->cb(context);
           }));
   s3ClientAdaptor_->Write(inode->GetInodeId(), offset, len, buf);
@@ -2000,7 +2000,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read5) {
             tmp.len = context->buffer_size;
             tmp.buf = new char[context->buffer_size];
             strncpy(tmp.buf, context->buffer, context->buffer_size);
-            context->ret_code = 0;
+            context->ret = Status::OK();
             context->cb(context);
           }));
   s3ClientAdaptor_->Write(inode->GetInodeId(), offset, len, buf);
@@ -2094,7 +2094,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read6) {
             tmp.len = context->buffer_size;
             tmp.buf = new char[context->buffer_size];
             strncpy(tmp.buf, context->buffer, context->buffer_size);
-            context->ret_code = 0;
+            context->ret = Status::OK();
             context->cb(context);
           }));
   s3ClientAdaptor_->Write(inode->GetInodeId(), offset, len, buf);
@@ -2187,7 +2187,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read7) {
             tmp.len = context->buffer_size;
             tmp.buf = new char[context->buffer_size];
             strncpy(tmp.buf, context->buffer, context->buffer_size);
-            context->ret_code = 0;
+            context->ret = Status::OK();
             context->cb(context);
           }));
   s3ClientAdaptor_->Write(inode->GetInodeId(), offset, len, buf);
@@ -2283,7 +2283,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read8) {
             tmp.len = context->buffer_size;
             tmp.buf = new char[context->buffer_size];
             strncpy(tmp.buf, context->buffer, context->buffer_size);
-            context->ret_code = 0;
+            context->ret = Status::OK();
             context->cb(context);
           }));
   s3ClientAdaptor_->Write(inode->GetInodeId(), offset, len, buf);
@@ -2377,7 +2377,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read9) {
             tmp.len = context->buffer_size;
             tmp.buf = new char[context->buffer_size];
             strncpy(tmp.buf, context->buffer, context->buffer_size);
-            context->ret_code = 0;
+            context->ret = Status::OK();
             context->cb(context);
           }));
   s3ClientAdaptor_->Write(inode->GetInodeId(), offset, len, buf);
@@ -2479,7 +2479,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read10) {
             tmp.len = context->buffer_size;
             tmp.buf = new char[context->buffer_size];
             strncpy(tmp.buf, context->buffer, context->buffer_size);
-            context->ret_code = 0;
+            context->ret = Status::OK();
             context->cb(context);
           }));
   s3ClientAdaptor_->Write(inode->GetInodeId(), offset, len, buf);
@@ -2592,7 +2592,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read11) {
             tmp.len = context->buffer_size;
             tmp.buf = new char[context->buffer_size];
             strncpy(tmp.buf, context->buffer, context->buffer_size);
-            context->ret_code = 0;
+            context->ret = Status::OK();
             context->cb(context);
           }));
   s3ClientAdaptor_->Write(inode->GetInodeId(), offset, len, buf);
@@ -2676,7 +2676,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read12) {
             tmp.len = context->buffer_size;
             tmp.buf = new char[context->buffer_size];
             strncpy(tmp.buf, context->buffer, context->buffer_size);
-            context->ret_code = 0;
+            context->ret = Status::OK();
             context->cb(context);
           }));
   s3ClientAdaptor_->Write(inode->GetInodeId(), offset, len, buf);
@@ -2756,7 +2756,7 @@ TEST_F(ClientS3IntegrationTest, test_fssync_success_and_fail) {
             tmp.len = context->buffer_size;
             tmp.buf = new char[context->buffer_size];
             strncpy(tmp.buf, context->buffer, context->buffer_size);
-            context->ret_code = 0;
+            context->ret = Status::OK();
             context->cb(context);
           }));
 
@@ -2814,7 +2814,7 @@ TEST_F(ClientS3IntegrationTest, test_fssync_overlap_write) {
             tmp.len = context->buffer_size;
             tmp.buf = new char[context->buffer_size];
             strncpy(tmp.buf, context->buffer, context->buffer_size);
-            context->ret_code = 0;
+            context->ret = Status::OK();
             context->cb(context);
           }));
   s3ClientAdaptor_->Write(inode->GetInodeId(), offset, len, buf);
@@ -2857,7 +2857,7 @@ TEST_F(ClientS3IntegrationTest, test_write_read_remotekvcache) {
         .WillRepeatedly(Invoke(
             [&](const std::shared_ptr<blockaccess::PutObjectAsyncContext>&
                     context) {
-              context->ret_code = 0;
+              context->ret = Status::OK();
               context->cb(context);
             }));
     EXPECT_CALL(mockInodeManager_, GetInode(_, _))

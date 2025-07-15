@@ -37,7 +37,7 @@ enum class RetryStrategy : uint8_t {
   kNotRetry = 1,
 };
 
-using RetryCallback = std::function<RetryStrategy(int code)>;
+using RetryCallback = std::function<RetryStrategy(Status)>;
 
 // BlockAccesser is a class that provides a way to access block from a data
 // source. It is a base class for all data access classes.

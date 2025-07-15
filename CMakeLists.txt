@@ -105,6 +105,12 @@ execute_process(
   OUTPUT_VARIABLE GIT_COMMIT_TIME
   OUTPUT_STRIP_TRAILING_WHITESPACE)
 
+execute_process(
+  COMMAND git log -1 --format=%h
+  OUTPUT_VARIABLE GIT_LAST_COMMIT_ID
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
 if(NOT GIT_VERSION)
   set(GIT_VERSION "unknown")
   message(WARNING "Git version is unknown")
@@ -120,12 +126,14 @@ message(STATUS "Git tag name: ${GIT_TAG_NAME}")
 message(STATUS "Git commit user: ${GIT_COMMIT_USER}")
 message(STATUS "Git commit mail: ${GIT_COMMIT_MAIL}")
 message(STATUS "Git commit time: ${GIT_COMMIT_TIME}")
+message(STATUS "Git last commit id: ${GIT_LAST_COMMIT_ID}")
 
 add_definitions(-DGIT_VERSION="${GIT_VERSION}")
 add_definitions(-DGIT_TAG_NAME="${GIT_TAG_NAME}")
 add_definitions(-DGIT_COMMIT_USER="${GIT_COMMIT_USER}")
 add_definitions(-DGIT_COMMIT_MAIL="${GIT_COMMIT_MAIL}")
 add_definitions(-DGIT_COMMIT_TIME="${GIT_COMMIT_TIME}")
+add_definitions(-DGIT_LAST_COMMIT_ID="${GIT_LAST_COMMIT_ID}")
 add_definitions(-DDINGOFS_BUILD_TYPE="${CMAKE_BUILD_TYPE}")
 
 # find dingoEureka

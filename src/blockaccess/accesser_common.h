@@ -24,6 +24,7 @@
 
 #include "blockaccess/rados/rados_common.h"
 #include "blockaccess/s3/s3_common.h"
+#include "common/status.h"
 
 namespace dingofs {
 namespace blockaccess {
@@ -95,7 +96,7 @@ struct PutObjectAsyncContext {
   const char* buffer;
   size_t buffer_size;
   uint64_t start_time;
-  int ret_code;
+  Status ret;
 
   PutObjectAsyncCallBack cb;
 };
@@ -108,7 +109,7 @@ struct GetObjectAsyncContext {
   char* buf;
   off_t offset;
   size_t len;
-  int ret_code;
+  Status ret;
   uint32_t retry;
   size_t actual_len;
 

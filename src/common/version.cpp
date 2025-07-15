@@ -30,6 +30,9 @@ DEFINE_string(git_commit_mail, GIT_COMMIT_MAIL,
               "current dingo git commit mail");
 DEFINE_string(git_commit_time, GIT_COMMIT_TIME,
               "current dingo git commit time");
+DEFINE_string(git_last_commit_id, GIT_LAST_COMMIT_ID,
+              "current dingo branch git last commit id");
+
 DEFINE_string(major_version, MAJOR_VERSION, "current dingo major version");
 DEFINE_string(minor_version, MINOR_VERSION, "current dingo mino version");
 DEFINE_string(dingofs_build_type, DINGOFS_BUILD_TYPE,
@@ -59,8 +62,9 @@ void ExposeDingoVersion() {
   if (FLAGS_major_version.size() == 0) {
     version.set_value("unknown");
   } else {
-    version.set_value("%s.%s", FLAGS_major_version.c_str(),
-                      FLAGS_minor_version.c_str());
+    version.set_value("%s.%s-%s", FLAGS_major_version.c_str(),
+                      FLAGS_minor_version.c_str(),
+                      FLAGS_git_last_commit_id.c_str());
   }
 }
 

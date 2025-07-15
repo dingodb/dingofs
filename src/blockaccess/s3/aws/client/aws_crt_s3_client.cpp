@@ -152,7 +152,9 @@ void AwsCrtS3Client::PutObjectAsync(
             << "message: " << response.GetError().GetMessage()
             << "resend: " << ctx->put_obj_ctx->key;
 
-        ctx->retCode = (response.IsSuccess() ? 0 : -1);
+        ctx->ret = (response.IsSuccess()
+                        ? Status::OK()
+                        : Status::IoError(response.GetError().GetMessage()));
         ctx->cb(ctx);
       };
 
@@ -235,7 +237,9 @@ void AwsCrtS3Client::GetObjectAsync(
             << response.GetError().GetMessage();
 
         ctx->actualLen = response.GetResult().GetContentLength();
-        ctx->retCode = (response.IsSuccess() ? 0 : -1);
+        ctx->ret = (response.IsSuccess()
+                        ? Status::OK()
+                        : Status::IoError(response.GetError().GetMessage()));
         ctx->cb(ctx);
       };
 

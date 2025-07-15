@@ -29,6 +29,7 @@
 #include "cache/storage/closure.h"
 #include "cache/storage/storage.h"
 #include "common/io_buffer.h"
+#include "common/status.h"
 
 namespace dingofs {
 namespace cache {
@@ -63,7 +64,7 @@ class PutClosure final : public StorageClosure {
  private:
   Block CopyBlock();
 
-  void OnComplete(int retcode);
+  void OnComplete(Status s);
 
   ContextSPtr ctx_;
   BlockKey key_;
@@ -81,7 +82,7 @@ class RangeClosure final : public StorageClosure {
   void Run() override;
 
  private:
-  void OnComplete(int retcode);
+  void OnComplete(Status s);
 
   ContextSPtr ctx_;
   BlockKey key_;

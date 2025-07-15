@@ -175,6 +175,7 @@ Status RadosAccesser::Get(const std::string& key, std::string* data) {
   return s;
 }
 
+// TODO: transfer rc to Status
 Status RadosAccesser::Range(const std::string& key, off_t offset, size_t length,
                             char* buffer) {
   return ExecuteSyncOp(key, [&](rados_ioctx_t ioctx) {
@@ -183,7 +184,11 @@ Status RadosAccesser::Range(const std::string& key, off_t offset, size_t length,
       LOG(ERROR) << "Failed to read object, key: " << key
                  << ", length: " << length << ", offset: " << offset
                  << ", err: " << strerror(-err);
-      return Status::IoError("Failed to read object");
+      if (err == -ENOENT) {
+        return Status::NotFound("Not found object");
+      } else {
+        return Status::IoError("Failed to read object");
+      }
     }
     return Status::OK();
   });
@@ -309,9 +314,13 @@ static void AsyncGetCallback(RadosAsyncIOUnit* io_unit, int ret_code) {
       std::get<std::shared_ptr<GetObjectAsyncContext>>(io_unit->async_context);
 
   if (ret_code < 0) {
-    get_context->ret_code = ret_code;
+    if (ret_code == -ENOENT) {
+      get_context->ret = Status::NotFound(strerror(-ret_code));
+    } else {
+      get_context->ret = Status::IoError(strerror(-ret_code));
+    }
   } else {
-    get_context->ret_code = 0;
+    get_context->ret = Status::OK();
     get_context->actual_len = ret_code;
   }
 
@@ -344,7 +353,8 @@ static void AsyncPutCallback(RadosAsyncIOUnit* io_unit, int ret_code) {
 
   auto put_context =
       std::get<std::shared_ptr<PutObjectAsyncContext>>(io_unit->async_context);
-  put_context->ret_code = ret_code;
+  put_context->ret =
+      (ret_code < 0) ? Status::IoError(strerror(-ret_code)) : Status::OK();
   put_context->cb(put_context);
 }
 

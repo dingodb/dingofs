@@ -136,12 +136,12 @@ void BlockAccesserImpl::AsyncPut(
   context->cb = [this, start_us,
                  origin_cb](const std::shared_ptr<PutObjectAsyncContext>& ctx) {
     BlockAccessLogGuard log(start_us, [&]() {
-      return absl::StrFormat("async_put_block (%s, %d) : %d", ctx->key,
-                             ctx->buffer_size, ctx->ret_code);
+      return absl::StrFormat("async_put_block (%s, %d) : %s", ctx->key,
+                             ctx->buffer_size, ctx->ret.ToString());
     });
-    MetricGuard<int> guard(&ctx->ret_code,
-                           &BlockMetric::GetInstance().write_block,
-                           ctx->buffer_size, start_us);
+    MetricGuard<Status> guard(&ctx->ret,
+                              &BlockMetric::GetInstance().write_block,
+                              ctx->buffer_size, start_us);
 
     block_put_async_num << -1;
     inflight_bytes_throttle_->OnComplete(ctx->buffer_size);
@@ -169,7 +169,7 @@ void BlockAccesserImpl::AsyncPut(const std::string& key, const char* buffer,
   put_obj_ctx->start_time = butil::cpuwide_time_us();
   put_obj_ctx->cb =
       [&, retry_cb](const std::shared_ptr<PutObjectAsyncContext>& ctx) {
-        if (retry_cb(ctx->ret_code) == RetryStrategy::kRetry) {
+        if (retry_cb(ctx->ret) == RetryStrategy::kRetry) {
           AsyncPut(ctx);
         }
       };
@@ -208,12 +208,11 @@ void BlockAccesserImpl::AsyncGet(
   context->cb = [this, start_us,
                  origin_cb](const std::shared_ptr<GetObjectAsyncContext>& ctx) {
     BlockAccessLogGuard log(start_us, [&]() {
-      return absl::StrFormat("async_get_block (%s, %d, %d) : %d", ctx->key,
-                             ctx->offset, ctx->len, ctx->ret_code);
+      return absl::StrFormat("async_get_block (%s, %d, %d) : %s", ctx->key,
+                             ctx->offset, ctx->len, ctx->ret.ToString());
     });
-    MetricGuard<int> guard(&ctx->ret_code,
-                           &BlockMetric::GetInstance().read_block, ctx->len,
-                           start_us);
+    MetricGuard<Status> guard(&ctx->ret, &BlockMetric::GetInstance().read_block,
+                              ctx->len, start_us);
 
     block_get_async_num << -1;
     inflight_bytes_throttle_->OnComplete(ctx->len);
@@ -264,7 +263,7 @@ void BlockAccesserImpl::AsyncRange(const std::string& key, off_t offset,
   get_obj_ctx->len = length;
   get_obj_ctx->cb =
       [&, retry_cb](const std::shared_ptr<GetObjectAsyncContext>& ctx) {
-        if (retry_cb(ctx->ret_code) == RetryStrategy::kRetry) {
+        if (retry_cb(ctx->ret) == RetryStrategy::kRetry) {
           AsyncGet(ctx);
         }
       };

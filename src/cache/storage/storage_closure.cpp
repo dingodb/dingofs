@@ -46,9 +46,9 @@ void PutClosure::Run() {
     option_.async_cache_func(key_, block);
   }
 
-  auto retry_cb = [this, block](int retcode) {
-    if (retcode == 0) {  // Success
-      this->OnComplete(retcode);
+  auto retry_cb = [this, block](Status s) {
+    if (s.ok()) {  // Success
+      this->OnComplete(s);
       return blockaccess::RetryStrategy::kNotRetry;
     }
     return blockaccess::RetryStrategy::kRetry;
@@ -58,9 +58,8 @@ void PutClosure::Run() {
                             retry_cb);
 }
 
-void PutClosure::OnComplete(int retcode) {
-  StorageClosure::status() =
-      retcode == 0 ? Status::OK() : Status::Internal("storage put failed");
+void PutClosure::OnComplete(Status s) {
+  StorageClosure::status() = s;
   StorageClosure::Run();
 }
 
@@ -91,8 +90,8 @@ void RangeClosure::Run() {
   iobuf.append_user_data(data, length_, Helper::DeleteBuffer);
   *buffer_ = IOBuffer(iobuf);
 
-  auto retry_cb = [this](int retcode) {
-    this->OnComplete(retcode);
+  auto retry_cb = [this](Status s) {
+    this->OnComplete(s);
     return blockaccess::RetryStrategy::kNotRetry;  // Never retry for range
   };
 
@@ -100,9 +99,8 @@ void RangeClosure::Run() {
                               buffer_->Fetch1(), retry_cb);
 }
 
-void RangeClosure::OnComplete(int retcode) {
-  StorageClosure::status() =
-      retcode == 0 ? Status::OK() : Status::Internal("storage range failed");
+void RangeClosure::OnComplete(Status s) {
+  StorageClosure::status() = s;
   StorageClosure::Run();
 }
 

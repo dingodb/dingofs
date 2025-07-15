@@ -85,7 +85,7 @@ void S3Adapter::PutObjectAsync(std::shared_ptr<PutObjectAsyncContext> context) {
   aws_ctx->put_obj_ctx = context;
   aws_ctx->cb = [this](const std::shared_ptr<AwsPutObjectAsyncContext>& ctx) {
     // for return
-    ctx->put_obj_ctx->ret_code = ctx->retCode;
+    ctx->put_obj_ctx->ret = ctx->ret;
     ctx->put_obj_ctx->cb(ctx->put_obj_ctx);
   };
 
@@ -108,7 +108,7 @@ void S3Adapter::GetObjectAsync(std::shared_ptr<GetObjectAsyncContext> context) {
   aws_ctx->cb = [this](const std::shared_ptr<AwsGetObjectAsyncContext>& ctx) {
     // for return
     ctx->get_obj_ctx->actual_len = ctx->actualLen;
-    ctx->get_obj_ctx->ret_code = ctx->retCode;
+    ctx->get_obj_ctx->ret = ctx->ret;
     ctx->get_obj_ctx->cb(ctx->get_obj_ctx);
   };
 
