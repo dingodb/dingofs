@@ -654,7 +654,7 @@ Status VFSWrapper::GetXattr(Ino ino, const std::string& name,
 
   s = vfs_->GetXattr(ino, name, value);
   VLOG(1) << "VFSGetXattr end, value: " << *value
-          << " status: " << s.ToString();
+          << ", status: " << s.ToString();
   if (!s.ok()) {
     op_metric.FailOp();
   }

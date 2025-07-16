@@ -75,7 +75,7 @@ bool FsQuota::CheckQuota(int64_t new_space, int64_t new_inodes) {
 }
 
 void FsQuota::Refresh(Quota quota) {
-  VLOG(6) << "RefreshFsQuota  old fs_quota: " << ToString()
+  VLOG(6) << "RefreshFsQuota old fs_quota: " << ToString()
           << ", new quota: " << quota.ShortDebugString();
   WriteLockGuard lk(rwlock_);
   quota_ = quota;
