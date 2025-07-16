@@ -73,6 +73,12 @@ static void InitS3ClientAdaptorOption(
     utils::Configuration* conf, S3ClientAdaptorOption* s3_client_adaptor_opt) {
   conf->GetValueFatalIfFail("data_stream.page.size",
                             &s3_client_adaptor_opt->pageSize);
+
+  if (!conf->GetBoolValue("s3.prefetch", &FLAGS_s3_prefetch)) {
+    LOG(INFO) << "Not found `s3.prefetch` in conf, default: "
+              << (FLAGS_s3_prefetch ? "true" : "false");
+  }
+
   conf->GetValueFatalIfFail("s3.prefetchBlocks",
                             &s3_client_adaptor_opt->prefetchBlocks);
   conf->GetValueFatalIfFail("s3.prefetchExecQueueNum",
@@ -180,6 +186,27 @@ void InitVFSLegacyOption(utils::Configuration* conf, VFSLegacyOption* option) {
   InitBlockCacheOption(conf, &option->block_cache_option);
   InitRemoteBlockCacheOption(conf, &option->remote_block_cache_option);
   InitFuseOption(conf, &option->fuse_option);
+
+  if (!conf->GetUInt32Value("client.fs_usage_flush_interval_second",
+                            &FLAGS_fs_usage_flush_interval_second)) {
+    LOG(INFO) << "Not found `client.fs_usage_flush_interval_second` in conf, "
+                 "default: "
+              << FLAGS_fs_usage_flush_interval_second;
+  }
+
+  if (!conf->GetUInt32Value("client.flush_quota_interval_second",
+                            &FLAGS_flush_quota_interval_second)) {
+    LOG(INFO) << "Not found `client.flush_quota_interval_second` in conf, "
+                 "default: "
+              << FLAGS_flush_quota_interval_second;
+  }
+
+  if (!conf->GetUInt32Value("client.load_quota_interval_second",
+                            &FLAGS_load_quota_interval_second)) {
+    LOG(INFO) << "Not found `client.load_quota_interval_second` in conf, "
+                 "default: "
+              << FLAGS_load_quota_interval_second;
+  }
 
   conf->GetValueFatalIfFail("fuseClient.listDentryLimit",
                             &option->listDentryLimit);
