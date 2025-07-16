@@ -15,6 +15,7 @@
 #ifndef DINGOFS_MDV2_FILESYSTEM_PARTITION_H_
 #define DINGOFS_MDV2_FILESYSTEM_PARTITION_H_
 
+#include <cstdint>
 #include <memory>
 
 #include "mdsv2/filesystem/dentry.h"
@@ -58,7 +59,7 @@ class Partition {
 // use lru cache to store partition
 class PartitionCache {
  public:
-  PartitionCache();
+  PartitionCache(uint32_t fs_id);
   ~PartitionCache();
 
   PartitionCache(const PartitionCache&) = delete;
@@ -74,6 +75,7 @@ class PartitionCache {
   std::map<uint64_t, PartitionPtr> GetAll();
 
  private:
+  uint32_t fs_id_{0};
   // dir ino -> partition
   utils::LRUCache<uint64_t, PartitionPtr> cache_;
 };

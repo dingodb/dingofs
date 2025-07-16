@@ -1329,7 +1329,7 @@ std::pair<std::string, std::string> MetaCodec::ParseFsMetaTableKey(const std::st
       Ino ino;
       DecodeDelFileKey(key, fs_id, ino);
 
-      key_desc = fmt::format("{} kTableFsMeta {} kMetaFsDelFile {} {}", kPrefix, fs_id, ino);
+      key_desc = fmt::format("{} kTableFsMeta {} kMetaFsDelFile {}", kPrefix, fs_id, ino);
 
       auto del_file = DecodeDelFileValue(value);
       value_desc = del_file.ShortDebugString();

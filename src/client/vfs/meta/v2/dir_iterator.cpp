@@ -159,6 +159,7 @@ bool DirIteratorManager::Dump(Json::Value& value) {
   Json::Value items;
   for (const auto& [fh, dir_iterator] : dir_iterator_map_) {
     Json::Value item;
+    item["fh"] = fh;
     if (!dir_iterator->Dump(item)) {
       return false;
     }

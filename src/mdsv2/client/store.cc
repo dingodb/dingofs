@@ -15,6 +15,7 @@
 #include "mdsv2/client/store.h"
 
 #include <cstdint>
+#include <iostream>
 #include <ostream>
 #include <string>
 
@@ -53,12 +54,13 @@ bool StoreClient::CreateMetaTable(const std::string& name) {
   KVStorage::TableOption option = {.start_key = range.start, .end_key = range.end};
   auto status = kv_storage_->CreateTable(name, option, table_id);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("create meta table fail, error: {}.", status.error_str());
+    std::cerr << fmt::format("create meta table fail, error: {}.", status.error_str()) << '\n';
     return false;
   }
 
-  DINGO_LOG(INFO) << fmt::format("create meta table success, start_key({}), end_key({}).",
-                                 Helper::StringToHex(option.start_key), Helper::StringToHex(option.end_key));
+  std::cout << fmt::format("create meta table success, start_key({}), end_key({}).",
+                           Helper::StringToHex(option.start_key), Helper::StringToHex(option.end_key))
+            << '\n';
 
   return true;
 }
@@ -69,12 +71,13 @@ bool StoreClient::CreateFsStatsTable(const std::string& name) {
   KVStorage::TableOption option = {.start_key = range.start, .end_key = range.end};
   auto status = kv_storage_->CreateTable(name, option, table_id);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("create fs stats table fail, error: {}.", status.error_str());
+    std::cerr << fmt::format("create fs stats table fail, error: {}.", status.error_str()) << '\n';
     return false;
   }
 
-  DINGO_LOG(INFO) << fmt::format("create fs stats table success, start_key({}), end_key({}).",
-                                 Helper::StringToHex(option.start_key), Helper::StringToHex(option.end_key));
+  std::cout << fmt::format("create fs stats table success, start_key({}), end_key({}).",
+                           Helper::StringToHex(option.start_key), Helper::StringToHex(option.end_key))
+            << '\n';
 
   return true;
 }
@@ -105,7 +108,7 @@ static void TraversePrint(FsTreeNode* item, bool is_details, int level) {
 
 void StoreClient::PrintDentryTree(uint32_t fs_id, bool is_details) {
   if (fs_id == 0) {
-    std::cout << "fs_id is invalid." << std::endl;
+    std::cerr << "fs_id is invalid.\n";
     return;
   }
 
@@ -133,13 +136,13 @@ bool StoreCommandRunner::Run(const Options& options, const std::string& coor_add
   if (mds_cmd.count(cmd) == 0) return false;
 
   if (coor_addr.empty()) {
-    std::cout << "coordinator address is empty." << '\n';
+    std::cerr << "coordinator address is empty." << '\n';
     return false;
   }
 
   dingofs::mdsv2::client::StoreClient store_client;
   if (!store_client.Init(coor_addr)) {
-    std::cout << "init store client fail." << '\n';
+    std::cerr << "init store client fail." << '\n';
     return -1;
   }
 

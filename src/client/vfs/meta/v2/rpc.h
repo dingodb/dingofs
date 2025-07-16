@@ -15,6 +15,7 @@
 #ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_RPC_H_
 #define DINGOFS_SRC_CLIENT_VFS_META_V2_RPC_H_
 
+#include <brpc/errno.pb.h>
 #include <butil/endpoint.h>
 #include <fmt/format.h>
 #include <gflags/gflags_declare.h>
@@ -167,7 +168,10 @@ Status RPC::SendRequest(const EndPoint& endpoint,
       LOG(ERROR) << fmt::format(
           "[rpc][{}][{}][{}us] fail, {} {} {} request({}).",
           EndPointToStr(endpoint), api_name, elapsed_us, cntl.log_id(),
-          cntl.ErrorCode(), cntl.ErrorText(), request.ShortDebugString());
+          retry_count, cntl.ErrorText(), request.ShortDebugString());
+      // if the error is timeout, we can retry
+      if (cntl.ErrorCode() == brpc::ERPCTIMEDOUT) continue;
+
       DeleteChannel(endpoint);
       return Status::NetError(cntl.ErrorCode(), cntl.ErrorText());
     }
@@ -179,8 +183,6 @@ Status RPC::SendRequest(const EndPoint& endpoint,
           request.ShortDebugString(), response.ShortDebugString());
       return Status();
     }
-
-    ++retry_count;
 
     if (response.error().errcode() != pb::error::ENOT_FOUND) {
       LOG(ERROR) << fmt::format(
@@ -196,7 +198,7 @@ Status RPC::SendRequest(const EndPoint& endpoint,
       break;
     }
 
-  } while (retry_count < FLAGS_rpc_retry_times);
+  } while (++retry_count < FLAGS_rpc_retry_times);
 
   return TransformError(response.error());
 }

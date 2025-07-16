@@ -33,7 +33,7 @@ using FileSessionPtr = std::shared_ptr<FileSessionEntry>;
 // cache file session
 class FileSessionCache {
  public:
-  FileSessionCache();
+  FileSessionCache(uint32_t fs_id);
   ~FileSessionCache() = default;
 
   struct Key {
@@ -108,10 +108,6 @@ class FileSessionManager {
   FileSessionCache file_session_cache_;
 
   OperationProcessorSPtr operation_processor_;
-
-  // statistics
-  bvar::Adder<uint64_t> total_count_metrics_;
-  bvar::Adder<int64_t> count_metrics_;
 };
 
 }  // namespace mdsv2

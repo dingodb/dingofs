@@ -34,10 +34,7 @@ namespace mdsv2 {
 DECLARE_uint32(fs_scan_batch_size);
 DECLARE_uint32(txn_max_retry_times);
 
-static const std::string kFileSessionCacheCountMetricsName = "dingofs_file_session_cache_count";
-
-static const std::string kFileSessionTatalCountMetricsName = "dingofs_file_session_total_count";
-static const std::string kFileSessionCountMetricsName = "dingofs_file_session_count";
+static const std::string kFileSessionCacheCountMetricsName = "dingofs_{}_file_session_cache_count";
 
 static FileSessionPtr NewFileSession(uint32_t fs_id, Ino ino, const std::string& client_id) {
   auto file_session = std::make_shared<FileSessionEntry>();
@@ -51,7 +48,8 @@ static FileSessionPtr NewFileSession(uint32_t fs_id, Ino ino, const std::string&
   return file_session;
 }
 
-FileSessionCache::FileSessionCache() : count_metrics_(kFileSessionCacheCountMetricsName) {}
+FileSessionCache::FileSessionCache(uint32_t fs_id)
+    : count_metrics_(fmt::format(kFileSessionCacheCountMetricsName, fs_id)) {}
 
 bool FileSessionCache::Put(FileSessionPtr file_session) {
   utils::WriteLockGuard guard(lock_);
@@ -148,10 +146,7 @@ bool FileSessionCache::IsExist(uint64_t ino, const std::string& session_id) {
 }
 
 FileSessionManager::FileSessionManager(uint32_t fs_id, OperationProcessorSPtr operation_processor)
-    : fs_id_(fs_id),
-      operation_processor_(operation_processor),
-      total_count_metrics_(kFileSessionTatalCountMetricsName),
-      count_metrics_(kFileSessionCountMetricsName) {}
+    : fs_id_(fs_id), file_session_cache_(fs_id), operation_processor_(operation_processor) {}
 
 Status FileSessionManager::Create(uint64_t ino, const std::string& client_id, FileSessionPtr& file_session) {
   file_session = NewFileSession(fs_id_, ino, client_id);
@@ -159,9 +154,6 @@ Status FileSessionManager::Create(uint64_t ino, const std::string& client_id, Fi
   // add to cache
   CHECK(file_session_cache_.Put(file_session))
       << fmt::format("[filesession] put file session fail, {}/{}", ino, client_id);
-
-  total_count_metrics_ << 1;
-  count_metrics_ << 1;
 
   return Status::OK();
 }
@@ -239,16 +231,12 @@ Status FileSessionManager::Delete(uint64_t ino, const std::string& session_id) {
   // delete cache
   file_session_cache_.Delete(ino, session_id);
 
-  count_metrics_ << -1;
-
   return Status::OK();
 }
 
 Status FileSessionManager::Delete(uint64_t ino) {
   // delete cache
   file_session_cache_.Delete(ino);
-
-  // count_metrics_ << (0 - static_cast<int64_t>(file_sessions.size()));
 
   return Status::OK();
 }

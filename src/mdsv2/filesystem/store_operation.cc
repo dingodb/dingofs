@@ -41,7 +41,7 @@ namespace mdsv2 {
 DEFINE_uint32(process_operation_batch_size, 64, "process operation batch size.");
 DEFINE_uint32(txn_max_retry_times, 5, "txn max retry times.");
 
-DEFINE_uint32(merge_operation_delay_us, 0, "merge operation delay us.");
+DEFINE_uint32(merge_operation_delay_us, 10, "merge operation delay us.");
 
 static const uint32_t kOpNameBufInitSize = 128;
 
@@ -164,9 +164,6 @@ const char* Operation::OpName() const {
     case OpType::kUpdateXAttr:
       return "UpdateXAttr";
 
-    case OpType::kUpsertChunk:
-      return "UpdateChunk";
-
     case OpType::kFallocate:
       return "Fallocate";
 
@@ -187,6 +184,18 @@ const char* Operation::OpName() const {
 
     case OpType::kCompactChunk:
       return "CompactChunk";
+
+    case OpType::kUpsertChunk:
+      return "UpsertChunk";
+
+    case OpType::kGetChunk:
+      return "GetChunk";
+
+    case OpType::kScanChunk:
+      return "ScanChunk";
+
+    case OpType::kCleanChunk:
+      return "CleanChunk";
 
     case OpType::kSetFsQuota:
       return "SetFsQuota";
@@ -653,9 +662,9 @@ std::string UpsertChunkOperation::PrefetchKey() {
 }
 
 Status UpsertChunkOperation::RunInBatch(TxnUPtr& txn, AttrType& attr, const std::vector<KeyValue>& prefetch_kvs) {
-  ChunkType& chunk = result_.chunk;
+  ChunkType chunk;
 
-  std::string key = MetaCodec::EncodeChunkKey(fs_info_.fs_id(), ino_, chunk_index_);
+  const std::string key = MetaCodec::EncodeChunkKey(fs_info_.fs_id(), ino_, chunk_index_);
   auto value = FindValue(prefetch_kvs, key);
   if (!value.empty()) chunk = MetaCodec::DecodeChunkValue(value);
 
@@ -668,18 +677,29 @@ Status UpsertChunkOperation::RunInBatch(TxnUPtr& txn, AttrType& attr, const std:
 
   } else {
     // exist chunk, update slice
+    // check if slice already exist
+    auto is_exist_fn = [&](const SliceType& slice) -> bool {
+      for (const auto& exist_slice : chunk.slices()) {
+        if (exist_slice.id() == slice.id()) {
+          return true;
+        }
+      }
+      return false;
+    };
+
     for (auto& slice : slices_) {
-      *chunk.add_slices() = slice;
+      if (!is_exist_fn(slice)) *chunk.add_slices() = slice;
     }
   }
 
   chunk.set_version(chunk.version() + 1);
   txn->Put(key, MetaCodec::EncodeChunkValue(chunk));
+  result_.chunk = std::move(chunk);
 
   // update length
   uint64_t prev_length = attr.length();
   for (auto& slice : slices_) {
-    if (attr.length() < slice.offset() + slice.len()) {
+    if (attr.length() < (slice.offset() + slice.len())) {
       attr.set_length(slice.offset() + slice.len());
     }
   }
@@ -2149,7 +2169,7 @@ void OperationProcessor::LaunchExecuteBatchOperation(const BatchOperation& batch
 
   bthread_t tid;
   bthread_attr_t attr = BTHREAD_ATTR_SMALL;
-  if (bthread_start_background(
+  if (bthread_start_urgent(
           &tid, &attr,
           [](void* arg) -> void* {
             Params* params = reinterpret_cast<Params*>(arg);

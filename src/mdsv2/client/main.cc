@@ -33,6 +33,7 @@ DEFINE_string(s3_endpoint, "", "s3 endpoint");
 DEFINE_string(s3_ak, "", "s3 ak");
 DEFINE_string(s3_sk, "", "s3 sk");
 DEFINE_string(s3_bucketname, "", "s3 bucket name");
+DEFINE_string(s3_objectname, "", "s3 object name");
 
 DEFINE_string(fs_name, "", "fs name");
 DEFINE_uint32(fs_id, 0, "fs id");
@@ -57,6 +58,7 @@ DEFINE_bool(is_force, false, "is force");
 DEFINE_string(type, "", "type backup[meta|fsmeta]");
 DEFINE_string(output_type, "stdout", "output type[stdout|file|s3]");
 DEFINE_string(out, "./output", "output file path");
+DEFINE_bool(is_binary, false, "is binary");
 
 static std::string GetDefaultCoorAddrPath() {
   if (!FLAGS_coor_addr.empty()) {
@@ -73,19 +75,23 @@ static std::string GetDefaultCoorAddrPath() {
   return "";
 }
 
+// get the last name from the path
+// e.g. /path/to/file.txt -> file.txt
+static std::string GetLastName(const std::string& name) {
+  size_t pos = name.find_last_of('/');
+  if (pos == std::string::npos) {
+    return name;
+  }
+  return name.substr(pos + 1);
+}
+
 int main(int argc, char* argv[]) {
   using Helper = dingofs::mdsv2::Helper;
 
-  FLAGS_minloglevel = google::GLOG_INFO;
-  FLAGS_logtostdout = true;
-  FLAGS_logtostderr = true;
-  FLAGS_colorlogtostdout = true;
-  FLAGS_logbufsecs = 0;
-  google::InitGoogleLogging(argv[0]);
-
   google::ParseCommandLineFlags(&argc, &argv, true);
 
-  // dingofs::mdsv2::DingoLogger::InitLogger("./log", "mdsv2_client", dingofs::mdsv2::LogLevel::kINFO);
+  std::string program_name = GetLastName(std::string(argv[0]));
+  dingofs::mdsv2::DingoLogger::InitLogger("./log", program_name, dingofs::mdsv2::LogLevel::kINFO);
 
   std::string lower_cmd = Helper::ToLowerCase(FLAGS_cmd);
 
@@ -104,6 +110,14 @@ int main(int argc, char* argv[]) {
     options.fs_id = FLAGS_fs_id;
     options.fs_name = FLAGS_fs_name;
     options.file_path = FLAGS_out;
+    options.is_binary = FLAGS_is_binary;
+
+    auto& s3_info = options.s3_info;
+    s3_info.ak = FLAGS_s3_ak;
+    s3_info.sk = FLAGS_s3_sk;
+    s3_info.endpoint = FLAGS_s3_endpoint;
+    s3_info.bucket_name = FLAGS_s3_bucketname;
+    s3_info.object_name = FLAGS_s3_objectname;
 
     if (dingofs::mdsv2::br::BackupCommandRunner::Run(options, GetDefaultCoorAddrPath(), lower_cmd)) {
       return 0;
@@ -118,8 +132,13 @@ int main(int argc, char* argv[]) {
     options.fs_id = FLAGS_fs_id;
     options.fs_name = FLAGS_fs_name;
     options.file_path = FLAGS_out;
-    options.bucket_name = FLAGS_s3_bucketname;
-    options.object_name = FLAGS_s3_endpoint;
+
+    auto& s3_info = options.s3_info;
+    s3_info.ak = FLAGS_s3_ak;
+    s3_info.sk = FLAGS_s3_sk;
+    s3_info.endpoint = FLAGS_s3_endpoint;
+    s3_info.bucket_name = FLAGS_s3_bucketname;
+    s3_info.object_name = FLAGS_s3_objectname;
 
     if (dingofs::mdsv2::br::RestoreCommandRunner::Run(options, GetDefaultCoorAddrPath(), lower_cmd)) {
       return 0;
@@ -141,10 +160,14 @@ int main(int argc, char* argv[]) {
     options.fs_partition_type = FLAGS_fs_partition_type;
     options.chunk_size = FLAGS_chunk_size;
     options.block_size = FLAGS_block_size;
-    options.s3_endpoint = FLAGS_s3_endpoint;
-    options.s3_ak = FLAGS_s3_ak;
-    options.s3_sk = FLAGS_s3_sk;
-    options.s3_bucketname = FLAGS_s3_bucketname;
+
+    auto& s3_info = options.s3_info;
+    s3_info.ak = FLAGS_s3_ak;
+    s3_info.sk = FLAGS_s3_sk;
+    s3_info.endpoint = FLAGS_s3_endpoint;
+    s3_info.bucket_name = FLAGS_s3_bucketname;
+    s3_info.object_name = FLAGS_s3_objectname;
+
     if (dingofs::mdsv2::client::MdsCommandRunner::Run(options, FLAGS_mds_addr, lower_cmd, FLAGS_fs_id)) {
       return 0;
     }

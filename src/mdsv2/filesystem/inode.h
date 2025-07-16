@@ -82,7 +82,7 @@ class Inode {
 // cache all file/dir inode
 class InodeCache {
  public:
-  InodeCache();
+  InodeCache(uint32_t fs_id);
   ~InodeCache();
 
   InodeCache(const InodeCache&) = delete;
@@ -98,6 +98,7 @@ class InodeCache {
   std::map<uint64_t, InodeSPtr> GetAllInodes();
 
  private:
+  // ino -> inode
   utils::LRUCache<uint64_t, InodeSPtr> cache_;
 };
 

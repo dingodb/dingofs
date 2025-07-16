@@ -29,7 +29,7 @@ using ParentMemoSPtr = std::shared_ptr<ParentMemo>;
 
 class ParentMemo {
  public:
-  ParentMemo(uint64_t fs_id) : fs_id_(fs_id) {}
+  ParentMemo(uint64_t fs_id);
   ~ParentMemo() = default;
 
   static ParentMemoSPtr New(uint64_t fs_id) { return std::make_shared<ParentMemo>(fs_id); }
@@ -46,6 +46,9 @@ class ParentMemo {
   utils::RWLock rwlock_;
   // ino -> parent
   std::unordered_map<Ino, Ino> parent_map_;
+
+  // statistics
+  bvar::Adder<int64_t> count_metrics_;
 };
 
 }  // namespace mdsv2

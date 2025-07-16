@@ -14,21 +14,23 @@
 
 #include "mdsv2/filesystem/inode.h"
 
+#include <glog/logging.h>
+
 #include <cstdint>
 #include <memory>
 #include <string>
 #include <utility>
 
 #include "fmt/core.h"
+#include "fmt/format.h"
 #include "gflags/gflags.h"
-#include "glog/logging.h"
 #include "mdsv2/common/logging.h"
 #include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 namespace mdsv2 {
 
-static const std::string kInodeCacheMetricsPrefix = "dingofs_inode_cache_";
+static const std::string kInodeCacheMetricsPrefix = "dingofs_{}_inode_cache_";
 
 // 0: no limit
 DEFINE_uint32(inode_cache_max_count, 0, "inode cache max count");
@@ -147,9 +149,8 @@ bool Inode::UpdateIf(const AttrType& attr) {
 
   DINGO_LOG(INFO) << fmt::format("[inode.{}] update attr,this({}) version({}->{}).", attr_.ino(), (void*)this,
                                  attr_.version(), attr.version());
-  if (attr.version() <= attr_.version()) {
-    return false;
-  }
+  CHECK(attr.version() > attr_.version()) << fmt::format("[inode.{}] version should be greater than {}, but is {}.",
+                                                         attr_.ino(), attr_.version(), attr.version());
 
   attr_ = attr;
 
@@ -161,9 +162,8 @@ bool Inode::UpdateIf(AttrType&& attr) {
 
   DINGO_LOG(INFO) << fmt::format("[inode.{}] update attr,this({}) version({}->{}).", attr_.ino(), (void*)this,
                                  attr_.version(), attr.version());
-  if (attr.version() <= attr_.version()) {
-    return false;
-  }
+  CHECK(attr.version() > attr_.version()) << fmt::format("[inode.{}] version should be greater than {}, but is {}.",
+                                                         attr_.ino(), attr_.version(), attr.version());
 
   attr_ = std::move(attr);
 
@@ -182,8 +182,9 @@ Inode::AttrType&& Inode::Move() {
   return std::move(attr_);
 }
 
-InodeCache::InodeCache()
-    : cache_(FLAGS_inode_cache_max_count, std::make_shared<utils::CacheMetrics>(kInodeCacheMetricsPrefix)) {}
+InodeCache::InodeCache(uint32_t fs_id)
+    : cache_(FLAGS_inode_cache_max_count,
+             std::make_shared<utils::CacheMetrics>(fmt::format(kInodeCacheMetricsPrefix, fs_id))) {}
 
 InodeCache::~InodeCache() {}  // NOLINT
 

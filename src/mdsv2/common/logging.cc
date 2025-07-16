@@ -17,7 +17,6 @@
 #include <glog/logging.h>
 
 #include <cstdint>
-#include <iomanip>
 
 #include "fmt/core.h"
 

@@ -21,25 +21,26 @@
 #include <string>
 
 #include "mdsv2/common/status.h"
+#include "mdsv2/common/type.h"
 #include "mdsv2/filesystem/store_operation.h"
 
 namespace dingofs {
 namespace mdsv2 {
 namespace br {
 
+enum class Type : uint8_t {
+  kFile,
+  kStdout,
+  kS3,
+};
+
 class Output {
  public:
   Output() = default;
   virtual ~Output() = default;
 
-  enum class Type : uint8_t {
-    kFile,
-    kStdout,
-    kS3,
-  };
-
+  virtual bool Init() = 0;
   virtual void Append(const std::string& key, const std::string& value) = 0;
-
   virtual void Flush() = 0;
 };
 
@@ -50,13 +51,8 @@ class Input {
   Input() = default;
   virtual ~Input() = default;
 
-  enum class Type : uint8_t {
-    kFile,
-    kS3,
-  };
-
+  virtual bool Init() = 0;
   virtual bool IsEof() const = 0;
-
   virtual Status Read(std::string& key, std::string& value) = 0;
 };
 
@@ -68,11 +64,13 @@ class Backup {
   ~Backup();
 
   struct Options {
-    Output::Type type = Output::Type::kStdout;  // output type
-    bool is_binary = false;                     // output in binary format
-    std::string file_path;                      // output file path (if type is kFile)
-    std::string bucket_name;                    // S3 bucket name
-    std::string object_name;                    // S3 object name
+    Type type = Type::kStdout;  // output type
+    bool is_binary = false;     // output in binary format
+    std::string file_path;      // output file path (if type is kFile)
+
+    uint32_t fs_id{0};  // file system ID
+
+    S3Info s3_info;
   };
 
   bool Init(const std::string& coor_addr);
@@ -94,11 +92,13 @@ class Restore {
   ~Restore() = default;
 
   struct Options {
-    Input::Type type = Input::Type::kFile;  // input type
-    uint32_t fs_id{0};                      // file system ID
-    std::string file_path;                  // input file path (if type is kFile)
-    std::string bucket_name;                // S3 bucket name
-    std::string object_name;                // S3 object name
+    Type type = Type::kStdout;  // output type
+    bool is_binary = false;     // output in binary format
+    std::string file_path;      // output file path (if type is kFile)
+
+    uint32_t fs_id{0};  // file system ID
+
+    S3Info s3_info;
   };
 
   bool Init(const std::string& coor_addr);
@@ -134,8 +134,8 @@ class BackupCommandRunner {
     std::string fs_name;
     std::string file_path;
     bool is_binary{false};
-    std::string bucket_name;
-    std::string object_name;
+
+    S3Info s3_info;
   };
 
   static bool Run(const Options& options, const std::string& coor_addr, const std::string& cmd);
@@ -152,8 +152,8 @@ class RestoreCommandRunner {
     uint32_t fs_id{0};
     std::string fs_name;
     std::string file_path;
-    std::string bucket_name;
-    std::string object_name;
+
+    S3Info s3_info;  // S3 information for backup and restore
   };
 
   static bool Run(const Options& options, const std::string& coor_addr, const std::string& cmd);

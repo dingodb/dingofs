@@ -126,8 +126,8 @@ using pb::mdsv2::DeleteDirQuotaResponse;
 
 class MDSClient {
  public:
-  MDSClient(uint32_t fs_id) : fs_id_(fs_id) {}
-  ~MDSClient() = default;
+  MDSClient(uint32_t fs_id);
+  ~MDSClient();
 
   bool Init(const std::string& mds_addr);
 
@@ -142,10 +142,8 @@ class MDSClient {
     std::string partition_type;
     uint32_t chunk_size;
     uint32_t block_size;
-    std::string s3_endpoint;
-    std::string s3_ak;
-    std::string s3_sk;
-    std::string s3_bucketname;
+
+    S3Info s3_info;
     std::string owner = "deng";
   };
 
@@ -223,10 +221,8 @@ class MdsCommandRunner {
     std::string fs_partition_type;
     uint32_t chunk_size;
     uint32_t block_size;
-    std::string s3_endpoint;
-    std::string s3_ak;
-    std::string s3_sk;
-    std::string s3_bucketname;
+
+    S3Info s3_info;
   };
 
   static bool Run(const Options& options, const std::string& mds_addr, const std::string& cmd, uint32_t fs_id);

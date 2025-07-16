@@ -83,6 +83,8 @@ FileSystem::FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr 
     : self_mds_id_(self_mds_id),
       fs_info_(std::move(fs_info)),
       fs_id_(fs_info_->GetFsId()),
+      inode_cache_(fs_id_),
+      partition_cache_(fs_id_),
       id_generator_(std::move(id_generator)),
       slice_id_generator_(slice_id_generator),
       kv_storage_(kv_storage),
@@ -442,7 +444,7 @@ Status FileSystem::DestoryInode(uint32_t fs_id, Ino ino) {
   return Status::OK();
 }
 
-static uint64_t ElapsedTimeUs(uint64_t start_time) { return (Helper::TimestampNs() - start_time) / 1000; }
+static uint64_t ElapsedTimeUs(uint64_t start_time_ns) { return (Helper::TimestampNs() - start_time_ns) / 1000; }
 
 Status FileSystem::RunOperation(Operation* operation) {
   CHECK(operation != nullptr) << "operation is null.";

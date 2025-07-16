@@ -17,12 +17,19 @@
 namespace dingofs {
 namespace mdsv2 {
 
+static const std::string kParentMemoCountMetricsName = "dingofs_{}_parent_memo_count";
+
+ParentMemo::ParentMemo(uint64_t fs_id)
+    : fs_id_(fs_id), count_metrics_(fmt::format(kParentMemoCountMetricsName, fs_id)) {}
+
 void ParentMemo::Remeber(Ino ino, Ino parent) {
   utils::WriteLockGuard lk(rwlock_);
 
   auto it = parent_map_.find(ino);
   if (it == parent_map_.end()) {
     parent_map_.emplace(ino, parent);
+    count_metrics_ << 1;
+
   } else {
     it->second = parent;
   }
@@ -32,6 +39,7 @@ void ParentMemo::Forget(Ino ino) {
   utils::WriteLockGuard lk(rwlock_);
 
   parent_map_.erase(ino);
+  count_metrics_ << -1;
 }
 
 bool ParentMemo::GetParent(Ino ino, Ino& parent) {

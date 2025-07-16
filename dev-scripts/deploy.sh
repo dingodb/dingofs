@@ -61,7 +61,7 @@ function deploy_server() {
     if [ -f "${dstpath}/bin/${client_name}" ]; then
       rm -f "${dstpath}/bin/${client_name}"
     fi
-    ln "${srcpath}/build/bin/${client_name}" "${dstpath}/bin/${client_name}"
+    ln -s "${srcpath}/build/bin/${client_name}" "${dstpath}/bin/${client_name}"
   fi
 
   if [ "${FLAGS_replace_conf}" == "0" ]; then

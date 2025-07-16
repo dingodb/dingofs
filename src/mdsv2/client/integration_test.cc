@@ -48,10 +48,12 @@ void MDSIntegrationTest::SetUp() {
   params.partition_type = "monolithic";
   params.chunk_size = 1048576;
   params.block_size = 65536;
-  params.s3_endpoint = "test_endpoint";
-  params.s3_ak = "test_ak";
-  params.s3_sk = "test_sk";
-  params.s3_bucketname = "test_bucket";
+
+  auto& s3_info = params.s3_info;
+  s3_info.endpoint = "test_endpoint";
+  s3_info.ak = "test_ak";
+  s3_info.sk = "test_sk";
+  s3_info.bucket_name = "test_bucket";
   auto create_fs_resp = mds_client_->CreateFs(fs_name_, params);
   ASSERT_EQ(create_fs_resp.error().errcode(), dingofs::pb::error::OK);
   mds_client_->SetFsId(create_fs_resp.fs_info().fs_id());

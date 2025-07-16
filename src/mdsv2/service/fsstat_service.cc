@@ -1251,12 +1251,12 @@ static void RenderChunk(uint64_t& count, uint64_t chunk_size, ChunkType chunk, b
     for (size_t i = 0; i < slices.size(); ++i) {
       const auto& slice = slices.at(i);
       if (i + 1 < slices.size()) {
-        os << fmt::format(R"(<li style="color:gray;">{} [{},{}) {} {}</li>)", slice.id(), slice.offset(), slice.len(),
-                          slice.size(), slice.zero());
+        os << fmt::format(R"(<li style="color:gray;">{} [{},{}) {} {} {}</li>)", slice.id(), slice.offset(),
+                          slice.offset() + slice.len(), slice.len(), slice.size(), slice.zero());
 
       } else {
-        os << fmt::format(R"(<li>{} [{},{}) {} {}</li>)", slice.id(), slice.offset(), slice.len(), slice.size(),
-                          slice.zero());
+        os << fmt::format(R"(<li>{} [{},{}) {} {} {}</li>)", slice.id(), slice.offset(), slice.offset() + slice.len(),
+                          slice.len(), slice.size(), slice.zero());
       }
     }
     os << "</ul></td>";
@@ -1270,7 +1270,7 @@ static void RenderChunksPage(Ino ino, const std::vector<ChunkType>& chunks, buti
 
   os << "<head>" << RenderHead("dingofs chunk") << "</head>";
   os << "<body>";
-  os << fmt::format(R"(<h1 style="text-align:center;">File({} Chunk</h1>)", ino);
+  os << fmt::format(R"(<h1 style="text-align:center;">File({}) Chunk</h1>)", ino);
 
   os << R"(<div style="margin: 12px;font-size:smaller">)";
   os << fmt::format(R"(<h3>Chunk [{}]</h3>)", chunks.size());
@@ -1285,7 +1285,7 @@ static void RenderChunksPage(Ino ino, const std::vector<ChunkType>& chunks, buti
   os << "<th>Index</th>";
   os << "<th>Version</th>";
   os << "<th>Range(byte)</th>";
-  os << "<th>Slice<div>id [offset, len) size zero</div></th>";
+  os << "<th>Slice<div>id range len size zero</div></th>";
   os << "</tr>";
 
   uint64_t count = 0;

@@ -68,6 +68,24 @@ inline std::string DescribeAttr(const AttrType& attr) {
                      attr.atime());
 }
 
+struct S3Info {
+  // s3 info
+  std::string ak;
+  std::string sk;           // S3 access key and secret key
+  std::string endpoint;     // S3 endpoint
+  std::string bucket_name;  // S3 bucket name
+  std::string object_name;  // S3 object name
+
+  bool Validate() const {
+    return !ak.empty() && !sk.empty() && !endpoint.empty() && !bucket_name.empty() && !object_name.empty();
+  }
+
+  std::string ToString() const {
+    return fmt::format("ak: {}, sk: {}, endpoint: {}, bucket_name: {}, object_name: {}", ak, sk, endpoint, bucket_name,
+                       object_name);
+  }
+};
+
 }  // namespace mdsv2
 }  // namespace dingofs
 

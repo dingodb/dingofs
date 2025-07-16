@@ -33,6 +33,16 @@ namespace dingofs {
 namespace mdsv2 {
 namespace client {
 
+MDSClient::MDSClient(uint32_t fs_id) : fs_id_(fs_id) {
+  FLAGS_logtostdout = true;
+  FLAGS_logtostderr = true;
+}
+
+MDSClient::~MDSClient() {
+  FLAGS_logtostdout = false;
+  FLAGS_logtostderr = false;
+}
+
 bool MDSClient::Init(const std::string& mds_addr) {
   interaction_ = dingofs::mdsv2::client::Interaction::New();
   return interaction_->Init(mds_addr);
@@ -76,7 +86,8 @@ CreateFsResponse MDSClient::CreateFs(const std::string& fs_name, const CreateFsP
     return response;
   }
 
-  if (params.s3_endpoint.empty() || params.s3_ak.empty() || params.s3_sk.empty() || params.s3_bucketname.empty()) {
+  const auto& s3_info = params.s3_info;
+  if (s3_info.endpoint.empty() || s3_info.ak.empty() || s3_info.sk.empty() || s3_info.bucket_name.empty()) {
     DINGO_LOG(ERROR) << "s3 info is empty";
     return response;
   }
@@ -105,15 +116,12 @@ CreateFsResponse MDSClient::CreateFs(const std::string& fs_name, const CreateFsP
     request.set_partition_type(::dingofs::pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION);
   }
 
-  pb::mdsv2::S3Info s3_info;
-  s3_info.set_ak(params.s3_ak);
-  s3_info.set_sk(params.s3_sk);
-  s3_info.set_endpoint(params.s3_endpoint);
-  s3_info.set_bucketname(params.s3_bucketname);
-
-  s3_info.set_object_prefix(0);
-
-  *request.mutable_fs_extra()->mutable_s3_info() = s3_info;
+  auto* mut_s3_info = request.mutable_fs_extra()->mutable_s3_info();
+  mut_s3_info->set_ak(s3_info.ak);
+  mut_s3_info->set_sk(s3_info.sk);
+  mut_s3_info->set_endpoint(s3_info.endpoint);
+  mut_s3_info->set_bucketname(s3_info.bucket_name);
+  mut_s3_info->set_object_prefix(0);
 
   DINGO_LOG(INFO) << "CreateFs request: " << request.ShortDebugString();
 
@@ -836,10 +844,7 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr, 
     params.partition_type = options.fs_partition_type;
     params.chunk_size = options.chunk_size;
     params.block_size = options.block_size;
-    params.s3_endpoint = options.s3_endpoint;
-    params.s3_ak = options.s3_ak;
-    params.s3_sk = options.s3_sk;
-    params.s3_bucketname = options.s3_bucketname;
+    params.s3_info = options.s3_info;
 
     mds_client.CreateFs(options.fs_name, params);
 
