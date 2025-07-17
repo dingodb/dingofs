@@ -116,6 +116,9 @@ int TaskExecutor::DoRPCTaskInner(TaskExecutorDone* done) {
             << ", channel: " << desc.str();
 
     retCode = ExcuteTask(channel.get(), done);
+    VLOG(12) << "Finish task ret_code: " << retCode
+             << ", task: " << task_->TaskContextStr();
+
     needRetry = OnReturn(retCode);
 
     if (needRetry) {

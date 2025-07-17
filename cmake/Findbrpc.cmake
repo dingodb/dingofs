@@ -25,7 +25,7 @@ if(BRPC_FOUND AND NOT (TARGET brpc::brpc))
   set(BRPC_DEPS_LIBS
       OpenSSL::SSL
       leveldb
-      gflags
+      gflags::gflags
       Snappy::snappy
       ZLIB::ZLIB
       fmt::fmt

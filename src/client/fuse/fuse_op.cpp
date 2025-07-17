@@ -597,16 +597,32 @@ void FuseOpSetXattr(fuse_req_t req, fuse_ino_t ino, const char* name,
 
 void FuseOpGetXattr(fuse_req_t req, fuse_ino_t ino, const char* name,
                     size_t size) {
-  VLOG(1) << "FuseOpGetXattr inodeId=" << ino << ", name: " << name
+  VLOG(1) << "FuseOpGetXattr ino: " << ino << ", name: " << name
           << ", size: " << size;
 
   std::string value;
   Status s = g_vfs->GetXattr(ino, name, &value);
+
   if (!s.ok()) {
     ReplyError(req, s);
-  } else {
-    ReplyBuf(req, value.data(), value.size());
+    return;
   }
+
+  if (size == 0) {
+    // If size is 0, we just reply the size of the xattr
+    ReplyXattr(req, value.size());
+    return;
+  }
+
+  if (size < value.size()) {
+    // If size is less than the length of the xattr, we return ERANGE
+    ReplyError(req, Status::OutOfRange(absl::StrFormat(
+                        "xattr size %zu is less than required %zu", size,
+                        value.size())));
+    return;
+  }
+
+  ReplyBuf(req, value.data(), value.size());
 }
 
 void FuseOpListXattr(fuse_req_t req, fuse_ino_t ino, size_t size) {

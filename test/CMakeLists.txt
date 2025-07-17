@@ -27,9 +27,9 @@ set(TEST_DEPS
 set(TEST_DEPS_WITHOUT_MAIN
     GTest::gtest 
     GTest::gmock
-    glog
-    gflags
-    brpc
+    glog::glog
+    gflags::gflags
+    brpc::brpc
     dl
 )
 
