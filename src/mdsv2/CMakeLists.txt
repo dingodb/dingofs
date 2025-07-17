@@ -50,7 +50,7 @@ target_link_libraries(mdsv2_lib
 
   dingo::sdk
 
-  brpc
+  brpc::brpc
   fmt
   gflags
   glog
