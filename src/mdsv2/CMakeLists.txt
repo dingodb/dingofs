@@ -51,11 +51,10 @@ target_link_libraries(mdsv2_lib
   absl::strings
 
   dingo::sdk
-
-  brpc
-  fmt
-  gflags
-  glog
+  brpc::brpc
+  fmt::fmt
+  gflags::gflags
+  glog::glog
   backtrace
   libunwind
 )

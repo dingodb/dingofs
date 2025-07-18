@@ -31,12 +31,10 @@ target_link_libraries(dingo-mdsv2-client
   mdsv2_filesystem
 
   dingo::sdk
-
-  brpc
-  leveldb
-  fmt
-  gflags
-  glog
+  brpc::brpc
+  fmt::fmt
+  gflags::gflags
+  glog::glog
   OpenSSL::SSL
   GTest::gtest
 )
