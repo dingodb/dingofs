@@ -49,7 +49,7 @@ void HandleManager::FlushAll() {
   std::lock_guard<std::mutex> lock(mutex_);
   for (auto& [fh, handle] : handles_) {
     Status s = handle->file->Flush();
-    if (s.ok()) {
+    if (!s.ok()) {
       LOG(ERROR) << "Failed to flush file handle: " << fh
                  << ", error: " << s.ToString();
     }
