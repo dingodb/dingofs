@@ -27,6 +27,7 @@
 #include <glog/logging.h>
 
 #include "blockaccess/block_access_log.h"
+#include "stub/rpcclient/mds_access_log.h"
 
 namespace dingofs {
 namespace cache {
@@ -64,6 +65,9 @@ void InitLogging(const char* argv0) {
 
   CHECK(blockaccess::InitBlockAccessLog(FLAGS_log_dir))
       << "Init block access log failed.";
+
+  CHECK(stub::InitMdsAccessLog(FLAGS_log_dir)) << "Init MDS access log failed.";
+
   LOG(INFO) << "Init block access logger success: log_dir = " << FLAGS_log_dir;
 }
 

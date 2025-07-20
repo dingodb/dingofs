@@ -530,6 +530,7 @@ int FileCacheManager::Read(uint64_t inode_id, uint64_t offset, uint64_t length,
 }
 
 bool FileCacheManager::ReadKVRequestFromLocalCache(const cache::BlockKey& key,
+                                                   uint64_t block_total_length,
                                                    char* buffer,
                                                    uint64_t offset,
                                                    uint64_t len) {
@@ -538,6 +539,7 @@ bool FileCacheManager::ReadKVRequestFromLocalCache(const cache::BlockKey& key,
     IOBuffer io_buffer;
     auto option = cache::RangeOption();
     option.retrive = false;
+    option.block_size = block_total_length;
     auto status = block_cache->Range(cache::NewContext(), key, offset, len,
                                      &io_buffer, option);
     if (status.IsNotFound()) {
@@ -665,8 +667,9 @@ Status FileCacheManager::ProcessKVRequest(const S3ReadRequest& req,
     do {
       std::string name = key.Filename();
       std::string store_key = key.StoreKey();
-      if (ReadKVRequestFromLocalCache(
-              key, current_buf, block_pos - object_offset, current_read_len)) {
+      if (ReadKVRequestFromLocalCache(key, req.block_total_length, current_buf,
+                                      block_pos - object_offset,
+                                      current_read_len)) {
         VLOG(9) << "inodeId=" << inode_ << " read " << store_key
                 << " from local cache ok";
         break;
@@ -771,6 +774,7 @@ void FileCacheManager::HandleReadRequest(
 
   VLOG(9) << "inodeId=" << inodeId
           << " HandleReadRequest s3info chunkid:" << s3ChunkInfo.chunkid()
+          << ", block_total_length:" << s3_chunk_info_len
           << ", offset:" << s3_chunk_info_offset
           << ", len:" << s3_chunk_info_len
           << ", compaction:" << s3ChunkInfo.compaction()
@@ -812,6 +816,7 @@ void FileCacheManager::HandleReadRequest(
                file_offset + length - s3_chunk_info_offset);
       } else {
         s3_request.chunkId = s3ChunkInfo.chunkid();
+        s3_request.block_total_length = s3_chunk_info_len;
         s3_request.offset = s3_chunk_info_offset;
         s3_request.len = file_offset + length - s3_chunk_info_offset;
         s3_request.objectOffset =
@@ -832,6 +837,7 @@ void FileCacheManager::HandleReadRequest(
                s3_chunk_info_len);
       } else {
         s3_request.chunkId = s3ChunkInfo.chunkid();
+        s3_request.block_total_length = s3_chunk_info_len;
         s3_request.offset = s3_chunk_info_offset;
         s3_request.len = s3_chunk_info_len;
         s3_request.objectOffset =
@@ -870,6 +876,7 @@ void FileCacheManager::HandleReadRequest(
                length);
       } else {
         s3_request.chunkId = s3ChunkInfo.chunkid();
+        s3_request.block_total_length = s3_chunk_info_len;
         s3_request.offset = file_offset;
         s3_request.len = length;
         if (file_offset / block_size == s3_chunk_info_offset / block_size) {
@@ -894,6 +901,7 @@ void FileCacheManager::HandleReadRequest(
                s3_chunk_info_offset + s3_chunk_info_len - file_offset);
       } else {
         s3_request.chunkId = s3ChunkInfo.chunkid();
+        s3_request.block_total_length = s3_chunk_info_len;
         s3_request.offset = file_offset;
         s3_request.len = s3_chunk_info_offset + s3_chunk_info_len - file_offset;
         if (file_offset / block_size == s3_chunk_info_offset / block_size) {

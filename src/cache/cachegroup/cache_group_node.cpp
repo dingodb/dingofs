@@ -268,6 +268,9 @@ Status CacheGroupNodeImpl::RangeStorage(ContextSPtr ctx, StepTimer& timer,
   if (block_size == 0 || length <= FLAGS_max_range_size_kb * kKiB) {
     NEXT_STEP(kS3Range)
     status = storage->Range(ctx, key, offset, length, buffer);
+    if (status.ok() && block_size > 0) {
+      block_cache_->AsyncPrefetch(ctx, key, block_size, [](Status status) {});
+    }
     return status;
   }
 

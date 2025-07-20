@@ -74,7 +74,8 @@ struct ReadRequest {
 
 struct S3ReadRequest {
   uint64_t chunkId;
-  uint64_t offset;  // file offset
+  uint64_t block_total_length;  // total length of the belong block
+  uint64_t offset;              // file offset
   uint64_t len;
   uint64_t objectOffset;  // s3 object's begin in the block
   uint64_t readOffset;    // read buf offset
@@ -84,10 +85,12 @@ struct S3ReadRequest {
 
   std::string DebugString() const {
     std::ostringstream os;
-    os << "S3ReadRequest ( chunkId = " << chunkId << ", offset = " << offset
-       << ", len = " << len << ", objectOffset = " << objectOffset
-       << ", readOffset = " << readOffset << ", fsId = " << fsId
-       << ", inodeId = " << inodeId << ", compaction = " << compaction << " )";
+    os << "S3ReadRequest ( chunkId = " << chunkId
+       << ", block_total_length = " << block_total_length
+       << ", offset = " << offset << ", len = " << len
+       << ", objectOffset = " << objectOffset << ", readOffset = " << readOffset
+       << ", fsId = " << fsId << ", inodeId = " << inodeId
+       << ", compaction = " << compaction << " )";
     return os.str();
   }
 };
@@ -414,7 +417,8 @@ class FileCacheManager {
                           uint64_t file_len);
 
   // read kv request from local disk cache
-  bool ReadKVRequestFromLocalCache(const cache::BlockKey& key, char* buffer,
+  bool ReadKVRequestFromLocalCache(const cache::BlockKey& key,
+                                   uint64_t block_total_length, char* buffer,
                                    uint64_t offset, uint64_t length);
 
   // read kv request from remote cache like memcached
