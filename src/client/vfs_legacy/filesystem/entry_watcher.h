@@ -38,7 +38,7 @@ class EntryWatcher {
  public:
   using LRUType = utils::LRUCache<Ino, bool>;
 
-  EntryWatcher(const std::string& nocto_suffix);
+  EntryWatcher(const std::string& writeback_suffix);
 
   void Remeber(const pb::metaserver::InodeAttr& attr,
                const std::string& filename);

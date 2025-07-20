@@ -128,7 +128,7 @@ static void InitFileSystemOption(utils::Configuration* c,
                                  FileSystemOption* option) {
   c->GetValueFatalIfFail("fs.cto", &option->cto);
   c->GetValueFatalIfFail("fs.cto", &FLAGS_enableCto);
-  c->GetValueFatalIfFail("fs.nocto_suffix", &option->nocto_suffix);
+  c->GetValue("fs.writeback_suffix", &option->writeback_suffix);
   c->GetValueFatalIfFail("fs.disableXAttr", &option->disableXAttr);
   c->GetValueFatalIfFail("fs.maxNameLength", &option->maxNameLength);
   c->GetValueFatalIfFail("fs.accessLogging", &FLAGS_access_logging);

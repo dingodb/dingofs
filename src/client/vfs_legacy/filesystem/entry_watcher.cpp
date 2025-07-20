@@ -40,16 +40,17 @@ using utils::WriteLockGuard;
 
 using pb::metaserver::InodeAttr;
 
-EntryWatcher::EntryWatcher(const std::string& nocto_suffix) {
+EntryWatcher::EntryWatcher(const std::string& writeback_suffix) {
   nocto_ = std::make_unique<LRUType>(65536);
 
-  if (nocto_suffix.empty()) {
+  if (writeback_suffix.empty()) {
     return;
   }
 
-  std::vector<std::string> suffixs = absl::StrSplit(nocto_suffix, ":");
+  std::vector<std::string> suffixs = absl::StrSplit(writeback_suffix, ":");
   for (const auto& suffix : suffixs) {
-    VLOG(3) << "nocto_suffix " << nocto_suffix << ", split suffix " << suffix;
+    VLOG(3) << "writeback_suffix " << writeback_suffix << ", split suffix "
+            << suffix;
     if (!suffix.empty()) {
       suffixs_.push_back(suffix);
     }

@@ -55,7 +55,7 @@ FileSystem::FileSystem(uint32_t fs_id, std::string fs_name,
   openFiles_ = std::make_shared<OpenFiles>(option_.openFilesOption, deferSync_);
   attrWatcher_ = std::make_shared<AttrWatcher>(option_.attrWatcherOption,
                                                openFiles_, dirCache_);
-  entry_watcher_ = std::make_shared<EntryWatcher>(option_.nocto_suffix);
+  entry_watcher_ = std::make_shared<EntryWatcher>(option_.writeback_suffix);
   handlerManager_ = std::make_shared<HandlerManager>();
   rpc_ = std::make_shared<RPCClient>(option.rpcOption, member);
 }

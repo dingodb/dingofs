@@ -103,7 +103,7 @@ struct DeferSyncOption {
 
 struct FileSystemOption {
   bool cto;
-  std::string nocto_suffix;
+  std::string writeback_suffix;
   bool disableXAttr;
   uint32_t maxNameLength;
   uint32_t blockSize = 0x10000u;
