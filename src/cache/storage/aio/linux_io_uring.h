@@ -28,13 +28,14 @@
 #include <sys/epoll.h>
 
 #include "cache/storage/aio/aio.h"
+#include "cache/utils/buffer_pool.h"
 
 namespace dingofs {
 namespace cache {
 
 class LinuxIOUring final : public IORing {
  public:
-  explicit LinuxIOUring(uint32_t iodepth);
+  LinuxIOUring(uint32_t iodepth, BufferPoolSPtr buffer_pool);
 
   Status Start() override;
   Status Shutdown() override;
@@ -43,8 +44,6 @@ class LinuxIOUring final : public IORing {
   Status SubmitIO() override;
   Status WaitIO(uint64_t timeout_ms,
                 std::vector<Aio*>* completed_aios) override;
-
-  uint32_t GetIODepth() const override;
 
  private:
   static bool Supported();
@@ -55,6 +54,7 @@ class LinuxIOUring final : public IORing {
 
   std::atomic<bool> running_;
   uint32_t iodepth_;
+  BufferPoolSPtr buffer_pool_;
   io_uring io_uring_;
   int epoll_fd_;
 };

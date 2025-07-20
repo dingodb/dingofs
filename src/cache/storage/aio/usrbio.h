@@ -97,8 +97,6 @@ class USRBIO final : public IORing {
   Status WaitIO(uint64_t /*timeout_ms*/, std::vector<Aio*>* /*aios*/) override {
     RETURN_NOT_SUPPORT();
   }
-
-  uint32_t GetIODepth() const override { return 0; }
 };
 
 #endif  // WITH_LIBUSRBIO

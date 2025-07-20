@@ -1,4 +1,7 @@
-Block Cache Layer
+Tier Block Cache
+===
+
+Block Cache
 ===
 
 ```
@@ -6,34 +9,36 @@ Block Cache Layer
 |     Client     |
 +----------------+
         |
-        | (put、range...)
+        | (put, range, cache, prefetch)
         v
 +----------------+  -----upload----->  +----------------+
 |  Block  Cache  |                     |       S3       |
 +----------------+  <----download----  +----------------+
-        |
-        | (stage、removestage、cache、load...)
-        v
+         |
+         | (stage, removestage, cache, load)
+         v
++------------------+
+|   Cache  Store   |
++------------------+
+         |
+         |
+         v
++------------------+
+| Local FileSystem |
++------------------+
+         |
+         | (writefile、readfile...)
+         v
 +----------------+
-|  Cache  Store  |
+|    IO Uring    |
 +----------------+
-        |
-        | (writefile、readfile...)
-        v
+         |
+         | (write, read)
+         v
 +----------------+
 |      Disk      |
 +----------------+
 ```
-
-* `block_cache_throttle`
-* `block_cache_uploader`
-* `disk_cache_group`
-* `disk_cache`
-    * `disk_cache_loader`
-    * `disk_cache_manager`
-    * `disk_cache_metric`
-    * `disk_cache_watcher`
-    * `disk_state_health_checker`
 
 Cache Group Layer
 ===

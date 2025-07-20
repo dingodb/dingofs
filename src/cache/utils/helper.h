@@ -52,6 +52,7 @@ class Helper {
   }
 
   // sys conf
+  static int GetProcessCores();
   static uint64_t GetSysPageSize();
   static uint64_t GetIOAlignedBlockSize();
   static bool IsAligned(uint64_t n, uint64_t m);

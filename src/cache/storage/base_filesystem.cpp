@@ -25,6 +25,7 @@
 #include <gflags/gflags.h>
 
 #include "absl/cleanup/cleanup.h"
+#include "cache/common/macro.h"
 #include "cache/storage/filesystem.h"
 #include "cache/utils/context.h"
 #include "cache/utils/helper.h"
@@ -80,7 +81,7 @@ Status BaseFileSystem::Walk(const std::string& prefix, WalkFunc func) {
 
   struct dirent* dirent;
   struct stat stat;
-  auto defer = absl::MakeCleanup([dir]() { Posix::CloseDir(dir); });
+  SCOPE_EXIT { Posix::CloseDir(dir); };
   for (;;) {
     status = Posix::ReadDir(dir, &dirent);
     if (status.IsEndOfFile()) {

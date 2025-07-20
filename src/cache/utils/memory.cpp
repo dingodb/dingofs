@@ -16,43 +16,39 @@
 
 /*
  * Project: DingoFS
- * Created Date: 2025-06-09
+ * Created Date: 2025-07-18
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_UTILS_OFFLOAD_THREAD_POOL_H_
-#define DINGOFS_SRC_CACHE_UTILS_OFFLOAD_THREAD_POOL_H_
+#include <sys/mman.h>
+#include <unistd.h>
 
-#include <functional>
+#include <cerrno>
+#include <cstddef>
+#include <cstring>
+#include <stdexcept>
 
-#include "cache/common/type.h"
-#include "cache/utils/helper.h"
 namespace dingofs {
 namespace cache {
 
-class OffloadThreadPool {
- public:
-  using TaskFunc = std::function<void()>;
-
-  static OffloadThreadPool& GetInstance() {
-    static OffloadThreadPool instance;
-    return instance;
+// 分配大页内存，size 必须为大页大小的整数倍
+void* AllocHugePage(size_t size) {
+  void* ptr = mmap(nullptr, size, PROT_READ | PROT_WRITE,
+                   MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB, -1, 0);
+  if (ptr == MAP_FAILED) {
+    throw std::runtime_error(std::string("mmap hugepage failed: ") +
+                             std::strerror(errno));
   }
+  return ptr;
+}
 
-  void Start(int num_threads = 0) {
-    if (num_threads == 0) {
-      num_threads = Helper::GetProcessCores();
-    }
-    CHECK_EQ(thread_pool_.Start(num_threads), 0);
+// 释放大页内存
+void FreeHugePage(void* ptr, size_t size) {
+  if (munmap(ptr, size) != 0) {
+    throw std::runtime_error(std::string("munmap hugepage failed: ") +
+                             std::strerror(errno));
   }
-
-  void Submit(TaskFunc task) { thread_pool_.Enqueue(task); }
-
- private:
-  TaskThreadPool thread_pool_{"offload_thread_pool"};
-};
+}
 
 }  // namespace cache
 }  // namespace dingofs
-
-#endif  // DINGOFS_SRC_CACHE_UTILS_OFFLOAD_THREAD_POOL_H_

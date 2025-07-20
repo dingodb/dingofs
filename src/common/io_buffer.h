@@ -60,6 +60,8 @@ class IOBuffer {
   butil::IOBuf& IOBuf();
   const butil::IOBuf& ConstIOBuf() const;
 
+  void AppendUserData(void* data, size_t size,
+                      std::function<void(void*)> deleter);
   std::vector<iovec> Fetch() const;
   char* Fetch1() const;
 

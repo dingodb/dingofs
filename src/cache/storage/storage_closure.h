@@ -53,11 +53,11 @@ class StorageClosure : public Closure {
   BthreadConditionVariable cond_;
 };
 
-class PutClosure final : public StorageClosure {
+class UploadClosure final : public StorageClosure {
  public:
-  PutClosure(ContextSPtr ctx, const BlockKey& key, const Block& block,
-             Storage::PutOption option,
-             blockaccess::BlockAccesser* block_accesser);
+  UploadClosure(ContextSPtr ctx, const BlockKey& key, const Block& block,
+                UploadOption option,
+                blockaccess::BlockAccesser* block_accesser);
 
   void Run() override;
 
@@ -69,15 +69,15 @@ class PutClosure final : public StorageClosure {
   ContextSPtr ctx_;
   BlockKey key_;
   Block block_;
-  Storage::PutOption option_;
+  UploadOption option_;
   blockaccess::BlockAccesser* block_accesser_;
 };
 
-class RangeClosure final : public StorageClosure {
+class DownloadClosure final : public StorageClosure {
  public:
-  RangeClosure(ContextSPtr ctx, const BlockKey& key, off_t offset,
-               size_t length, IOBuffer* buffer, Storage::RangeOption option,
-               blockaccess::BlockAccesser* block_accesser);
+  DownloadClosure(ContextSPtr ctx, const BlockKey& key, off_t offset,
+                  size_t length, IOBuffer* buffer, DownloadOption option,
+                  blockaccess::BlockAccesser* block_accesser);
 
   void Run() override;
 
@@ -89,7 +89,7 @@ class RangeClosure final : public StorageClosure {
   off_t offset_;
   size_t length_;
   IOBuffer* buffer_;
-  Storage::RangeOption option_;
+  DownloadOption option_;
   blockaccess::BlockAccesser* block_accesser_;
 };
 

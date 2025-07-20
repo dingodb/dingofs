@@ -22,6 +22,10 @@
 
 #include "cache/storage/local_filesystem.h"
 
+#include <fmt/format.h>
+
+#include <memory>
+
 #include "cache/common/const.h"
 #include "cache/common/macro.h"
 #include "cache/storage/aio/aio.h"
@@ -29,6 +33,7 @@
 #include "cache/storage/aio/linux_io_uring.h"
 #include "cache/storage/base_filesystem.h"
 #include "cache/storage/filesystem.h"
+#include "cache/utils/buffer_pool.h"
 #include "cache/utils/context.h"
 #include "cache/utils/helper.h"
 #include "cache/utils/posix.h"
@@ -44,7 +49,10 @@ static const std::string kModule = kFileSysteMoudle;
 LocalFileSystem::LocalFileSystem(CheckStatusFunc check_status_func)
     : BaseFileSystem::BaseFileSystem(check_status_func),
       running_(false),
-      io_ring_(std::make_shared<LinuxIOUring>(FLAGS_ioring_iodepth)),
+      buffer_pool_(std::make_shared<BufferPool>(
+          FLAGS_ioring_iodepth, Helper::GetIOAlignedBlockSize(), 4 * kMiB)),
+      io_ring_(
+          std::make_shared<LinuxIOUring>(FLAGS_ioring_iodepth, buffer_pool_)),
       aio_queue_(std::make_unique<AioQueueImpl>(io_ring_)),
       page_cache_manager_(std::make_unique<PageCacheManager>()) {}
 
@@ -62,6 +70,12 @@ Status LocalFileSystem::Start() {
   auto status = page_cache_manager_->Start();
   if (!status.ok()) {
     LOG(ERROR) << "Start page cache manager failed: " << status.ToString();
+    return status;
+  }
+
+  status = io_ring_->Start();
+  if (!status.ok()) {
+    LOG_ERROR("Start io ring failed: %s", status.ToString());
     return status;
   }
 
@@ -126,15 +140,19 @@ Status LocalFileSystem::WriteFile(ContextSPtr ctx, const std::string& path,
   auto tmppath = Helper::TempFilepath(path);
   status = MkDirs(Helper::ParentDir(tmppath));
   if (!status.ok() && !status.IsExist()) {
-    LOG_ERROR("[%s] Create parent directory failed: path = %s, status = %s",
-              ctx->TraceId(), tmppath, status.ToString());
+    LOG(ERROR) << ctx->ToString() << " Create parent directory failed: "
+               << "path = " << tmppath << ", status = " << status.ToString();
     return CheckStatus(status);
   }
 
   NEXT_STEP(kOpenFile);
+  int flags = Posix::kDefaultCreatFlags;
+  if (option.use_direct &&
+      Helper::IsAligned(buffer.Size(), Helper::GetIOAlignedBlockSize())) {
+    flags |= O_DIRECT;
+  }
+
   int fd;
-  bool use_direct = Helper::IsAligned(buffer);
-  int flags = Posix::kDefaultCreatFlags | (use_direct ? O_DIRECT : 0);
   status = Posix::Open(tmppath, flags, 0644, &fd);
   if (!status.ok()) {
     LOG_ERROR("[%s] Open file failed: path = %s, status = %s", ctx->TraceId(),
@@ -185,9 +203,9 @@ Status LocalFileSystem::ReadFile(ContextSPtr ctx, const std::string& path,
     NEXT_STEP(kMmap);
     status = MapFile(ctx, fd, offset, length, buffer, option);
     if (!status.ok()) {
-      LOG_ERROR(
-          "[%s] Map file failed: path = %s, offset = %lld, length = %zu, "
-          "status = %s",
+      LOG(ERROR) << fmt::format(
+          "[{}] Map file failed: path = {}, offset = {}"
+          ", length = {}, status = {}",
           ctx->TraceId(), path, offset, length, status.ToString());
       return CheckStatus(status);
     }

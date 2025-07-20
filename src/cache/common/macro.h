@@ -25,6 +25,8 @@
 
 #include <absl/strings/str_format.h>
 
+#include "butil/memory/scope_guard.h"
+
 namespace dingofs {
 namespace cache {
 
@@ -95,6 +97,40 @@ namespace cache {
                << ", length = " << length                                   \
                << ", status = " << status.ToString();                       \
   } while (0);
+
+#define GENERIC_LOG_STAGE_ERROR()                                  \
+  do {                                                             \
+    LOG(ERROR) << "[" << ctx->TraceId()                            \
+               << "] Stage block failed: key = " << key.Filename() \
+               << ", length = " << block.size                      \
+               << ", status = " << status.ToString();              \
+  } while (0);
+
+#define GENERIC_LOG_LOAD_ERROR()                                     \
+  do {                                                               \
+    LOG(ERROR) << "[" << ctx->TraceId()                              \
+               << "] Load block failed: key = " << key.Filename()    \
+               << ", offset = " << offset << ", length = " << length \
+               << ", status = " << status.ToString();                \
+  } while (0);
+
+#define GENERIC_LOG_UPLOAD_ERROR()                                  \
+  do {                                                              \
+    LOG(ERROR) << "[" << ctx->TraceId()                             \
+               << "] Upload block failed: key = " << key.Filename() \
+               << ", size = " << block.size                         \
+               << ", status = " << status.ToString();               \
+  } while (0);
+
+#define GENERIC_LOG_DOWNLOAD_ERROR()                                  \
+  do {                                                                \
+    LOG(ERROR) << "[" << ctx->TraceId()                               \
+               << "] Download block failed: key = " << key.Filename() \
+               << ", offset = " << offset << ", length = " << length  \
+               << ", status = " << status.ToString();                 \
+  } while (0);
+
+#define SCOPE_EXIT BRPC_SCOPE_EXIT
 
 }  // namespace cache
 }  // namespace dingofs

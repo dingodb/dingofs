@@ -52,7 +52,7 @@ AioQueueImpl::AioQueueImpl(std::shared_ptr<IORing> io_ring)
     : running_(false),
       ioring_(io_ring),
       infight_throttle_(
-          std::make_unique<InflightThrottle>(ioring_->GetIODepth())),
+          std::make_unique<InflightThrottle>(FLAGS_ioring_iodepth)),
       prep_io_queue_id_({0}),
       prep_aios_(kSubmitBatchSize) {}
 
@@ -65,12 +65,6 @@ Status AioQueueImpl::Start() {
   }
 
   LOG_INFO("Aio queue is starting...");
-
-  Status status = ioring_->Start();
-  if (!status.ok()) {
-    LOG_ERROR("Start io ring failed: %s", status.ToString());
-    return status;
-  }
 
   bthread::ExecutionQueueOptions options;
   options.use_pthread = true;
@@ -85,7 +79,7 @@ Status AioQueueImpl::Start() {
 
   running_ = true;
 
-  LOG_INFO("Aio queue is up: iodepth = %d", ioring_->GetIODepth());
+  LOG_INFO("Aio queue is up: iodepth = %d", FLAGS_ioring_iodepth);
 
   CHECK_RUNNING("Aio queue");
   return Status::OK();
