@@ -30,6 +30,7 @@
 #include "cache/remotecache/remote_node_manager.h"
 #include "cache/utils/con_hash.h"
 #include "cache/utils/context.h"
+#include "metrics/cache/remote_node_group_metric.h"
 #include "options/cache/tiercache.h"
 
 namespace dingofs {
@@ -85,6 +86,7 @@ class RemoteNodeGroup final : public RemoteNode {
   RemoteBlockCacheOption option_;
   CacheUpstreamSPtr upstream_;
   RemoteNodeManagerUPtr node_manager_;
+  RemoteNodeGroupMetricSPtr metric_;
 };
 
 using RemoteNodeGorupSPtr = std::shared_ptr<RemoteNodeGroup>;

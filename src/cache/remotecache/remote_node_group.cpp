@@ -129,7 +129,8 @@ std::string CacheUpstream::MemberKey(const PBCacheGroupMember& member) const {
 RemoteNodeGroup::RemoteNodeGroup(RemoteBlockCacheOption option)
     : running_(false),
       option_(option),
-      upstream_(std::make_shared<CacheUpstream>()) {
+      upstream_(std::make_shared<CacheUpstream>()),
+      metric_(std::make_shared<RemoteNodeGroupMetric>()) {
   node_manager_ = std::make_unique<RemoteNodeManager>(
       option, [this](const PBCacheGroupMembers& members) {
         return OnMemberLoad(members);
@@ -139,6 +140,7 @@ RemoteNodeGroup::RemoteNodeGroup(RemoteBlockCacheOption option)
 Status RemoteNodeGroup::Start() {
   CHECK_NOTNULL(upstream_);
   CHECK_NOTNULL(node_manager_);
+  CHECK_NOTNULL(metric_);
 
   if (running_) {
     return Status::OK();
@@ -178,26 +180,48 @@ Status RemoteNodeGroup::Shutdown() {
 Status RemoteNodeGroup::Put(ContextSPtr ctx, const BlockKey& key,
                             const Block& block) {
   CHECK_RUNNING("Remote node group");
-  return GetNode(key)->Put(ctx, key, block);
+
+  Status status;
+  RemoteNodeGroupMetricGuard metirc_guard(__func__, block.size, status,
+                                          metric_);
+  status = GetNode(key)->Put(ctx, key, block);
+
+  return status;
 }
 
 Status RemoteNodeGroup::Range(ContextSPtr ctx, const BlockKey& key,
                               off_t offset, size_t length, IOBuffer* buffer,
                               RangeOption option) {
   CHECK_RUNNING("Remote node group");
-  return GetNode(key)->Range(ctx, key, offset, length, buffer, option);
+
+  Status status;
+  RemoteNodeGroupMetricGuard metric_guard(__func__, length, status, metric_);
+  status = GetNode(key)->Range(ctx, key, offset, length, buffer, option);
+
+  return status;
 }
 
 Status RemoteNodeGroup::Cache(ContextSPtr ctx, const BlockKey& key,
                               const Block& block) {
   CHECK_RUNNING("Remote node group");
-  return GetNode(key)->Cache(ctx, key, block);
+
+  Status status;
+  RemoteNodeGroupMetricGuard metric_guard(__func__, block.size, status,
+                                          metric_);
+  status = GetNode(key)->Cache(ctx, key, block);
+
+  return status;
 }
 
 Status RemoteNodeGroup::Prefetch(ContextSPtr ctx, const BlockKey& key,
                                  size_t length) {
   CHECK_RUNNING("Remote node group");
-  return GetNode(key)->Prefetch(ctx, key, length);
+
+  Status status;
+  RemoteNodeGroupMetricGuard metric_guard(__func__, length, status, metric_);
+  status = GetNode(key)->Prefetch(ctx, key, length);
+
+  return status;
 }
 
 RemoteNodeSPtr RemoteNodeGroup::GetNode(const BlockKey& key) {
