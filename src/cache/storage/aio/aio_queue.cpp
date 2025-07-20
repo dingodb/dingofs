@@ -52,7 +52,7 @@ AioQueueImpl::AioQueueImpl(std::shared_ptr<IORing> io_ring)
     : running_(false),
       ioring_(io_ring),
       infight_throttle_(
-          std::make_unique<InflightThrottle>(ioring_->GetIODepth())),
+          std::make_unique<InflightThrottle>(FLAGS_ioring_iodepth)),
       prep_io_queue_id_({0}),
       prep_aios_(kSubmitBatchSize) {}
 
@@ -65,12 +65,6 @@ Status AioQueueImpl::Start() {
   }
 
   LOG_INFO("Aio queue is starting...");
-
-  Status status = ioring_->Start();
-  if (!status.ok()) {
-    LOG_ERROR("Start io ring failed: %s", status.ToString());
-    return status;
-  }
 
   bthread::ExecutionQueueOptions options;
   options.use_pthread = true;
@@ -85,7 +79,7 @@ Status AioQueueImpl::Start() {
 
   running_ = true;
 
-  LOG_INFO("Aio queue is up: iodepth = %d", ioring_->GetIODepth());
+  LOG_INFO("Aio queue is up: iodepth = %d", FLAGS_ioring_iodepth);
 
   CHECK_RUNNING("Aio queue");
   return Status::OK();
@@ -96,7 +90,7 @@ Status AioQueueImpl::Shutdown() {
     return Status::OK();
   }
 
-  LOG_INFO("Aio queue is shutting down...");
+  LOG(INFO) << "Aio queue is shutting down...";
 
   if (bthread::execution_queue_stop(prep_io_queue_id_) != 0) {
     LOG_ERROR("Stop execution queue failed.");
@@ -107,16 +101,9 @@ Status AioQueueImpl::Shutdown() {
   }
 
   bg_wait_thread_.join();
-
-  auto status = ioring_->Shutdown();
-  if (!status.ok()) {
-    LOG_ERROR("Shutdown io ring failed: %s", status.ToString());
-    return status;
-  }
-
   prep_aios_.clear();
 
-  LOG_INFO("Aio queue is shutting down...");
+  LOG(INFO) << "Aio queue is down.";
 
   CHECK_DOWN("Aio queue");
   CHECK_EQ(prep_aios_.size(), 0);

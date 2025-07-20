@@ -51,9 +51,6 @@ Status CacheGroupNodeServerImpl::Start() {
   // Init signal
   InstallSignal();
 
-  // Init offload thread pool
-  OffloadThreadPool::GetInstance().Start();
-
   // Start cache group node
   auto status = node_->Start();
   if (!status.ok()) {

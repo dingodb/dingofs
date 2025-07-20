@@ -38,13 +38,19 @@ namespace cache {
 
 struct Aio : public Closure {
   Aio(ContextSPtr ctx, int fd, off_t offset, size_t length, IOBuffer* buffer,
-      bool for_read = false)
+      bool for_read, int fixed_buffer_index = -1)
       : ctx(ctx),
         fd(fd),
         offset(offset),
         length(length),
         buffer(buffer),
-        for_read(for_read) {}
+        for_read(for_read),
+        fixed_buffer_index(fixed_buffer_index) {
+    CHECK_GT(fd, 0);
+    CHECK_GE(offset, 0);
+    CHECK_GT(length, 0);
+    CHECK_NOTNULL(buffer);
+  }
 
   std::string ToString() const {
     return absl::StrFormat("%s(%d,%lld,%zu)", for_read ? "read" : "write", fd,
@@ -68,7 +74,7 @@ struct Aio : public Closure {
   size_t length;
   IOBuffer* buffer;
   bool for_read;
-  std::vector<iovec> iovecs;  // only for write
+  int fixed_buffer_index;
   BthreadMutex mutex;
   BthreadConditionVariable cond;
 };
@@ -84,8 +90,6 @@ class IORing {
   virtual Status SubmitIO() = 0;
   virtual Status WaitIO(uint64_t timeout_ms,
                         std::vector<Aio*>* completed_aios) = 0;
-
-  virtual uint32_t GetIODepth() const = 0;
 };
 
 using IORingSPtr = std::shared_ptr<IORing>;

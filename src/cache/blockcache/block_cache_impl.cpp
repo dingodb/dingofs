@@ -151,8 +151,7 @@ Status BlockCacheImpl::Put(ContextSPtr ctx, const BlockKey& key,
         "[%s] Stage block failed: key = %s, length = %zu, status = %s",
         ctx->TraceId(), key.Filename(), block.size, status.ToString());
   } else {
-    LOG_ERROR("[%s] Stage block failed: key = %s, length = %zu, status = %s",
-              ctx->TraceId(), key.Filename(), block.size, status.ToString());
+    GENERIC_LOG_STAGE_ERROR();
   }
 
   // Stage block failed, try to upload it
@@ -178,10 +177,7 @@ Status BlockCacheImpl::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
     return status;
   } else if (!option.retrive) {  // failed but not retrive
     if (!status.IsNotFound()) {
-      LOG_ERROR(
-          "[%s] Load block failed: key = %s, offset = %lld, length = %zu, "
-          "status = %s",
-          ctx->TraceId(), key.Filename(), offset, length, status.ToString());
+      GENERIC_LOG_LOAD_ERROR();
     }
     return status;
   }
@@ -204,8 +200,7 @@ Status BlockCacheImpl::Cache(ContextSPtr ctx, const BlockKey& key,
   NEXT_STEP(kCacheBlock);
   status = store_->Cache(ctx, key, block);
   if (!status.ok()) {
-    LOG_ERROR("[%s] Cache block failed: key = %s, length = %zu, status = %s",
-              ctx->TraceId(), key.Filename(), block.size, status.ToString());
+    GENERIC_LOG_CACHE_ERROR("local block cache");
     return status;
   }
 
@@ -236,8 +231,7 @@ Status BlockCacheImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
   NEXT_STEP(kCacheBlock);
   status = store_->Cache(ctx, key, Block(buffer));
   if (!status.ok()) {
-    LOG_ERROR("[%s] Cache block failed: key = %s, length = %zu, status = %s",
-              ctx->TraceId(), key.Filename(), length, status.ToString());
+    GENERIC_LOG_PREFETCH_ERROR("local block cache");
     return status;
   }
 
@@ -327,7 +321,7 @@ Status BlockCacheImpl::StoragePut(ContextSPtr ctx, const BlockKey& key,
     return status;
   }
 
-  status = storage->Put(ctx, key, block);
+  status = storage->Upload(ctx, key, block);
   if (!status.ok()) {
     LOG_ERROR("[%s] Storage put failed: key = %s, status = %s", ctx->TraceId(),
               key.Filename(), status.ToString());
@@ -346,7 +340,7 @@ Status BlockCacheImpl::StorageRange(ContextSPtr ctx, const BlockKey& key,
     return status;
   }
 
-  status = storage->Range(ctx, key, offset, length, buffer);
+  status = storage->Download(ctx, key, offset, length, buffer);
   if (!status.ok()) {
     LOG_ERROR(
         "[%s] Storage range failed: key = %s, offset = %lld, length = %zu, "

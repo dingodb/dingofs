@@ -40,6 +40,8 @@ static const uint64_t kIOAlignedBlockSize = 4096;
 static const std::string kTempFileSuffix = ".tmp";
 
 // sys conf
+int Helper::GetProcessCores() { return sysconf(_SC_NPROCESSORS_ONLN); }
+
 uint64_t Helper::GetSysPageSize() { return sysconf(_SC_PAGESIZE); }
 
 uint64_t Helper::GetIOAlignedBlockSize() { return kIOAlignedBlockSize; }

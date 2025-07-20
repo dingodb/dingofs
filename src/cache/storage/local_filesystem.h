@@ -32,6 +32,7 @@
 #include "cache/storage/base_filesystem.h"
 #include "cache/storage/filesystem.h"
 #include "cache/storage/page_cache_manager.h"
+#include "cache/utils/buffer_pool.h"
 
 namespace dingofs {
 namespace cache {
@@ -49,7 +50,7 @@ class LocalFileSystem final : public BaseFileSystem {
                   size_t length, IOBuffer* buffer, ReadOption option) override;
 
  private:
-  Status AioWrite(ContextSPtr ctx, int fd, const IOBuffer& buffer,
+  Status AioWrite(ContextSPtr ctx, int fd, IOBuffer* buffer,
                   WriteOption option);
   Status AioRead(ContextSPtr ctx, int fd, off_t offset, size_t length,
                  IOBuffer* buffer, ReadOption option);
@@ -59,7 +60,10 @@ class LocalFileSystem final : public BaseFileSystem {
   void CloseFd(ContextSPtr ctx, int fd);
   void Unlink(ContextSPtr ctx, const std::string& path);
 
+  IOBuffer CopyBuffer(const IOBuffer& src);
+
   std::atomic<bool> running_;
+  BufferPoolSPtr buffer_pool_;
   IORingSPtr io_ring_;
   AioQueueUPtr aio_queue_;
   PageCacheManagerUPtr page_cache_manager_;

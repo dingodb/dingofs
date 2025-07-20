@@ -36,6 +36,26 @@ butil::IOBuf& IOBuffer::IOBuf() { return iobuf_; }
 
 const butil::IOBuf& IOBuffer::ConstIOBuf() const { return iobuf_; }
 
+void IOBuffer::CopyTo(char* dest) { iobuf_.copy_to(dest); }
+
+void IOBuffer::CopyTo(char* dest) const { iobuf_.copy_to(dest); }
+
+void IOBuffer::AppendTo(IOBuffer* buffer, size_t n, size_t pos) {
+  iobuf_.append_to(&buffer->IOBuf(), n, pos);
+}
+
+void IOBuffer::AppendUserData(void* data, size_t size,
+                              std::function<void(void*)> deleter) {
+  iobuf_.append_user_data(data, size, deleter);
+}
+
+size_t IOBuffer::Size() const { return iobuf_.length(); }
+
+char* IOBuffer::Fetch1() const {
+  CHECK_EQ(iobuf_.backing_block_num(), 1);
+  return (char*)iobuf_.fetch1();
+}
+
 std::vector<iovec> IOBuffer::Fetch() const {
   std::vector<iovec> iovecs;
   // for (int i = 0; i < iobuf_.block_count(); i++) { // FIXME
@@ -48,18 +68,5 @@ std::vector<iovec> IOBuffer::Fetch() const {
   }
   return iovecs;
 }
-
-char* IOBuffer::Fetch1() const {
-  CHECK_EQ(iobuf_.backing_block_num(), 1);
-  return (char*)iobuf_.fetch1();
-}
-
-void IOBuffer::CopyTo(char* dest) { iobuf_.copy_to(dest); }
-
-void IOBuffer::AppendTo(IOBuffer* buffer, size_t n, size_t pos) {
-  iobuf_.append_to(&buffer->IOBuf(), n, pos);
-}
-
-size_t IOBuffer::Size() const { return iobuf_.length(); }
 
 }  // namespace dingofs

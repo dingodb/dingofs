@@ -254,7 +254,7 @@ Status DiskCache::Stage(ContextSPtr ctx, const BlockKey& key,
   std::string stage_path(GetStagePath(key));
   std::string cache_path(GetCachePath(key));
   status = fs_->WriteFile(ctx, stage_path, block.buffer,
-                          WriteOption{.drop_page_cache = true});
+                          WriteOption{.direct_io = true});
   if (!status.ok()) {
     LOG_ERROR(
         "[%s] Write stage block file failed: path = %s, length = %zu, "
@@ -341,7 +341,7 @@ Status DiskCache::Cache(ContextSPtr ctx, const BlockKey& key,
   NEXT_STEP(kWriteFile);
   auto cache_path = GetCachePath(key);
   status = fs_->WriteFile(ctx, cache_path, block.buffer,
-                          WriteOption{.drop_page_cache = true});
+                          WriteOption{.direct_io = true});
   if (!status.ok()) {
     LOG_ERROR(
         "[%s] Write cache block file failed: path = %s, length = %zu, "

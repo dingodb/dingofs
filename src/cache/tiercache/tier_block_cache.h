@@ -83,7 +83,7 @@ class TierBlockCache final : public BlockCache {
   bool EnableRemoteStage() const;
   bool EnableRemoteCache() const;
 
-  using FillGroupCacheCb = Storage::PutOption::AsyncCacheFunc;
+  using FillGroupCacheCb = UploadOption::AsyncCacheFunc;
   FillGroupCacheCb NewFillGroupCacheCb(ContextSPtr ctx);
 
   // The behavior of local block cache is same as remote block cache,

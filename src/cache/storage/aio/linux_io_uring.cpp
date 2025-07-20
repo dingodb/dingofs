@@ -23,7 +23,9 @@
 #include "cache/storage/aio/linux_io_uring.h"
 
 #include <absl/strings/str_format.h>
+#include <liburing.h>
 
+#include <cstdint>
 #include <cstring>
 
 #include "cache/common/macro.h"
@@ -35,14 +37,18 @@
 namespace dingofs {
 namespace cache {
 
-LinuxIOUring::LinuxIOUring(uint32_t iodepth)
-    : running_(false), iodepth_(iodepth), io_uring_(), epoll_fd_(-1) {}
+LinuxIOUring::LinuxIOUring(uint32_t iodepth, std::vector<iovec> fixed_buffer)
+    : running_(false),
+      iodepth_(iodepth),
+      fixed_buffer_(fixed_buffer),
+      io_uring_(),
+      epoll_fd_(-1) {}
 
 bool LinuxIOUring::Supported() {
   struct io_uring ring;
   int rc = io_uring_queue_init(16, &ring, 0);
   if (rc < 0) {
-    LOG_SYSERR(errno, "io_uring_queue_init(16)");
+    LOG_SYSERR(-rc, "io_uring_queue_init(16)");
     return false;
   }
 
@@ -64,15 +70,21 @@ Status LinuxIOUring::Start() {
     return Status::NotSupport("not support io_uring");
   }
 
-  unsigned flags = IORING_SETUP_SQPOLL;  // TODO: more efficient flags
-  int rc = io_uring_queue_init(iodepth_, &io_uring_, flags);
-  if (rc < 0) {
-    LOG_SYSERR(errno, "io_uring_queue_init(%d)", iodepth_);
+  int rc = io_uring_queue_init(iodepth_, &io_uring_, 0);
+  if (rc != 0) {
+    LOG_SYSERR(-rc, "io_uring_queue_init(%d)", iodepth_);
     return Status::Internal("io_uring_queue_init() failed");
   }
 
+  rc = io_uring_register_buffers(&io_uring_, fixed_buffer_.data(),
+                                 fixed_buffer_.size());
+  if (rc < 0) {
+    LOG_SYSERR(-rc, "io_uring_register_buffers()");
+    return Status::Internal("io_uring_register_buffers() failed");
+  }
+
   epoll_fd_ = epoll_create1(0);
-  if (epoll_fd_ < 0) {
+  if (epoll_fd_ <= 0) {
     LOG_SYSERR(errno, "epoll_create1(0)");
     return Status::Internal("epoll_create1() failed");
   }
@@ -103,6 +115,7 @@ Status LinuxIOUring::Shutdown() {
   LOG_INFO("Linux IO uring is shutting down...");
 
   io_uring_queue_exit(&io_uring_);
+  io_uring_unregister_buffers(&io_uring_);
   epoll_fd_ = -1;
 
   LOG_INFO("Linux IO uring is down.");
@@ -112,17 +125,19 @@ Status LinuxIOUring::Shutdown() {
 }
 
 void LinuxIOUring::PrepWrite(io_uring_sqe* sqe, Aio* aio) {
-  aio->iovecs = aio->buffer->Fetch();
-  io_uring_prep_writev(sqe, aio->fd, aio->iovecs.data(), aio->iovecs.size(),
-                       aio->offset);
+  if (aio->fixed_buffer_index >= 0) {
+    io_uring_prep_write_fixed(sqe, aio->fd, aio->buffer->Fetch1(), aio->length,
+                              aio->offset, aio->fixed_buffer_index);
+  } else {
+    auto iovecs = aio->buffer->Fetch();
+    io_uring_prep_writev(sqe, aio->fd, iovecs.data(), iovecs.size(),
+                         aio->offset);
+  }
 }
 
 void LinuxIOUring::PrepRead(io_uring_sqe* sqe, Aio* aio) {
   char* data = new char[aio->length];
-  butil::IOBuf iobuf;
-  iobuf.append_user_data(data, aio->length, Helper::DeleteBuffer);
-  *aio->buffer = IOBuffer(iobuf);
-
+  aio->buffer->AppendUserData(data, aio->length, Helper::DeleteBuffer);
   io_uring_prep_read(sqe, aio->fd, data, aio->length, aio->offset);
 }
 
@@ -197,8 +212,6 @@ void LinuxIOUring::OnCompleted(Aio* aio, int retcode) {
 
   aio->status() = status;
 }
-
-uint32_t LinuxIOUring::GetIODepth() const { return iodepth_; }
 
 }  // namespace cache
 }  // namespace dingofs

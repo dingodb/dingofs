@@ -182,11 +182,11 @@ Status TierBlockCache::Put(ContextSPtr ctx, const BlockKey& key,
   }
 
   NEXT_STEP(kS3Put);
-  Storage::PutOption opt;
+  UploadOption opt;
   if (EnableRemoteCache() && FLAGS_fill_group_cache) {
     opt.async_cache_func = NewFillGroupCacheCb(ctx);
   }
-  status = storage_->Put(ctx, key, block, opt);
+  status = storage_->Upload(ctx, key, block, opt);
 
   if (!status.ok()) {
     LOG_ERROR("[%s] Put block failed: key = %s, length = %zu, status = %s",
@@ -224,7 +224,7 @@ Status TierBlockCache::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
         remote_block_cache_->Range(ctx, key, offset, length, buffer, option);
   } else if (option.retrive) {  // No remote cache, retrive storage
     NEXT_STEP(kS3Range);
-    status = storage_->Range(ctx, key, offset, length, buffer);
+    status = storage_->Download(ctx, key, offset, length, buffer);
   } else {
     status = Status::NotFound("no available cache can be tried");
   }

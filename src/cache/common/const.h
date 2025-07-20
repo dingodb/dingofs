@@ -29,6 +29,7 @@
 namespace dingofs {
 namespace cache {
 
+// size units
 static constexpr uint64_t kKiB = 1024ULL;
 static constexpr uint64_t kMiB = 1024ULL * kKiB;
 static constexpr uint64_t kGiB = 1024ULL * kMiB;
@@ -81,6 +82,7 @@ static const std::string kLinkFile = "link";
 static const std::string kRemoveFile = "unlink";
 static const std::string kRenameFile = "rename";
 static const std::string kMmap = "mmap";
+static const std::string kMemcpy = "memcpy";
 
 // step: aio
 static const std::string kAioWrite = "aio_write";

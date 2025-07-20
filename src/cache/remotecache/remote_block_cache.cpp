@@ -161,13 +161,13 @@ Status RemoteBlockCacheImpl::Put(ContextSPtr ctx, const BlockKey& key,
 
   if (!option.writeback) {
     NEXT_STEP(kS3Put);
-    status = storage_->Put(ctx, key, block);
+    status = storage_->Upload(ctx, key, block);
   } else {
     NEXT_STEP(kRemotePut);
     status = remote_node_->Put(ctx, key, block);
     if (!status.ok()) {
       NEXT_STEP(kS3Put);
-      status = storage_->Put(ctx, key, block);
+      status = storage_->Upload(ctx, key, block);
     }
   }
 
@@ -219,7 +219,7 @@ Status RemoteBlockCacheImpl::Range(ContextSPtr ctx, const BlockKey& key,
   }
 
   NEXT_STEP(kS3Range);
-  status = storage_->Range(ctx, key, offset, length, buffer);
+  status = storage_->Download(ctx, key, offset, length, buffer);
   if (!status.ok()) {
     LOG_ERROR(
         "[%s] Storage range failed: key = %s, offset = %lld"
@@ -243,10 +243,7 @@ Status RemoteBlockCacheImpl::Cache(ContextSPtr ctx, const BlockKey& key,
   status = remote_node_->Cache(ctx, key, block);
 
   if (!status.ok()) {
-    LOG_ERROR(
-        "[%s] Cache block failed: key = %s, length = %zu"
-        ", status = %s",
-        ctx->TraceId(), key.Filename(), block.size, status.ToString());
+    GENERIC_LOG_CACHE_ERROR("remote cache node");
   }
   return status;
 }
@@ -265,11 +262,8 @@ Status RemoteBlockCacheImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
   NEXT_STEP(kRemotePrefetch);
   status = remote_node_->Prefetch(ctx, key, length);
 
-  if (!status.ok() && !status.IsExist()) {
-    LOG_ERROR(
-        "[%s] Prefetch block failed: key = %s, "
-        "length = %zu, status = %s",
-        ctx->TraceId(), key.Filename(), length, status.ToString());
+  if (!status.ok()) {
+    GENERIC_LOG_PREFETCH_ERROR("remote cache node");
   }
   return status;
 }

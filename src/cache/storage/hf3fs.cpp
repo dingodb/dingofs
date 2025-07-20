@@ -22,7 +22,7 @@
 
 #include "cache/storage/hf3fs.h"
 
-#include "absl/cleanup/cleanup.h"
+#include "cache/common/macro.h"
 #include "cache/storage/aio/aio.h"
 #include "cache/storage/aio/aio_queue.h"
 #include "cache/storage/aio/usrbio.h"
@@ -76,12 +76,12 @@ Status HF3FS::WriteFile(ContextSPtr ctx, const std::string& path,
     return CheckStatus(status);
   }
 
-  auto defer = absl::MakeCleanup([&]() {
+  SCOPE_EXIT {
     Posix::Close(fd);
     if (!status.ok()) {
       Posix::Unlink(tmpfile);
     }
-  });
+  };
 
   status = AioWrite(ctx, fd, buffer);
   if (status.ok()) {
@@ -95,14 +95,15 @@ Status HF3FS::ReadFile(ContextSPtr ctx, const std::string& path, off_t offset,
   int fd;
   auto status = Posix::Open(path, O_RDONLY, &fd);
   if (status.ok()) {
-    auto defer = absl::MakeCleanup([fd]() { Posix::Close(fd); });
+    SCOPE_EXIT { Posix::Close(fd); };
     status = AioRead(ctx, fd, offset, length, buffer);
   }
   return CheckStatus(status);
 }
 
 Status HF3FS::AioWrite(ContextSPtr ctx, int fd, const IOBuffer& buffer) {
-  auto closure = Aio(ctx, fd, 0, buffer.Size(), const_cast<IOBuffer*>(&buffer));
+  auto closure =
+      Aio(ctx, fd, 0, buffer.Size(), const_cast<IOBuffer*>(&buffer), false);
   aio_queue_w_->Submit(&closure);
   closure.Wait();
   return closure.status();

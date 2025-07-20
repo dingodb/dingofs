@@ -65,7 +65,9 @@ struct FSStat {
 };
 
 struct WriteOption {
+  bool direct_io{false};
   bool drop_page_cache{false};
+  int fixed_buffer_index{-1};
 };
 
 struct ReadOption {

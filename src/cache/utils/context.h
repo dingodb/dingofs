@@ -44,6 +44,8 @@ class Context {
 
   std::string TraceId() const { return trace_id_; }
 
+  std::string ToString() const { return absl::StrFormat("[%s]", trace_id_); }
+
  private:
   std::string NewTraceId() {
     return absl::StrFormat("%lld", butil::cpuwide_time_ns());

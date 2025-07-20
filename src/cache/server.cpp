@@ -22,6 +22,7 @@
 
 #include "cache/cachegroup/cache_group_node_server.h"
 #include "cache/utils/logging.h"
+#include "cache/utils/offload_thread_pool.h"
 
 namespace brpc {
 DECLARE_bool(graceful_quit_on_sigterm);
@@ -31,14 +32,17 @@ DECLARE_int32(max_connection_pool_size);
 namespace dingofs {
 namespace cache {
 
-static void GlobalInitOrDie(int argc, char** argv) {
-  google::ParseCommandLineFlags(&argc, &argv, false);
-  InitLogging(argv[0]);
-}
-
 static void InitBrpcFlags() {
   brpc::FLAGS_graceful_quit_on_sigterm = true;
   brpc::FLAGS_max_connection_pool_size = 256;
+}
+
+static void GlobalInitOrDie(int argc, char** argv) {
+  google::ParseCommandLineFlags(&argc, &argv, false);
+
+  InitLogging(argv[0]);
+  InitBrpcFlags();
+  OffloadThreadPool::GetInstance().Start();
 }
 
 static Status StartServer() {
@@ -55,7 +59,6 @@ static Status StartServer() {
 
 int Run(int argc, char** argv) {
   GlobalInitOrDie(argc, argv);
-  InitBrpcFlags();
   return StartServer().ok() ? 0 : -1;
 }
 

@@ -16,45 +16,48 @@
 
 /*
  * Project: DingoFS
- * Created Date: 2025-06-09
+ * Created Date: 2025-07-26
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_UTILS_OFFLOAD_THREAD_POOL_H_
-#define DINGOFS_SRC_CACHE_UTILS_OFFLOAD_THREAD_POOL_H_
+#ifndef DINGOFS_SRC_CACHE_UTILS_BUFFER_POOL_H_
+#define DINGOFS_SRC_CACHE_UTILS_BUFFER_POOL_H_
 
-#include <functional>
+#include <cstddef>
+#include <memory>
+#include <queue>
 
 #include "cache/common/type.h"
-#include "cache/utils/helper.h"
+
 namespace dingofs {
 namespace cache {
 
-class OffloadThreadPool {
+class BufferPool {
  public:
-  using TaskFunc = std::function<void()>;
+  BufferPool(size_t size, size_t alignment, size_t blksize);
 
-  static OffloadThreadPool& GetInstance() {
-    static OffloadThreadPool instance;
-    return instance;
-  }
+  ~BufferPool();
 
-  void Start(int num_threads = 0) {
-    if (num_threads == 0) {
-      num_threads = Helper::GetProcessCores();
-    }
-    CHECK_EQ(thread_pool_.Start(num_threads), 0);
-  }
+  char* Alloc();
+  void Free(const char* ptr);
 
-  static void Submit(TaskFunc task) {
-    GetInstance().thread_pool_.Enqueue(task);
-  }
+  int Index(const char* ptr) const;
+
+  std::vector<iovec> RawBuffer() const;
 
  private:
-  TaskThreadPool thread_pool_{"offload_thread_pool"};
+  char* mem_start_;
+  size_t blksize_;
+  std::queue<int> freelist_;
+  std::vector<iovec> iovecs_;
+  BthreadMutex mutex_;
+  BthreadConditionVariable can_allocate_;
 };
+
+using BufferPoolUPtr = std::unique_ptr<BufferPool>;
+using BufferPoolSPtr = std::shared_ptr<BufferPool>;
 
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_UTILS_OFFLOAD_THREAD_POOL_H_
+#endif  // DINGOFS_SRC_CACHE_UTILS_BUFFER_POOL_H_

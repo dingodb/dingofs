@@ -94,8 +94,8 @@ Status StorageImpl::Shutdown() {
   return Status::OK();
 }
 
-Status StorageImpl::Put(ContextSPtr ctx, const BlockKey& key,
-                        const Block& block, PutOption option) {
+Status StorageImpl::Upload(ContextSPtr ctx, const BlockKey& key,
+                           const Block& block, UploadOption option) {
   DCHECK_RUNNING("Storage");
 
   Status status;
@@ -105,7 +105,7 @@ Status StorageImpl::Put(ContextSPtr ctx, const BlockKey& key,
   StepTimerGuard guard(timer);
 
   NEXT_STEP(kEnqueue);
-  auto closure = PutClosure(ctx, key, block, option, block_accesser_);
+  auto closure = UploadClosure(ctx, key, block, option, block_accesser_);
   CHECK_EQ(0, bthread::execution_queue_execute(queue_id_, &closure));
 
   NEXT_STEP(kS3Put);
@@ -113,15 +113,15 @@ Status StorageImpl::Put(ContextSPtr ctx, const BlockKey& key,
 
   status = closure.status();
   if (!status.ok()) {
-    LOG_ERROR("[%s] Storage put failed: key = %s, size = %lld, status = %s",
-              ctx->TraceId(), key.Filename(), block.size, status.ToString());
+    GENERIC_LOG_UPLOAD_ERROR();
     return status;
   }
   return status;
 }
 
-Status StorageImpl::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
-                          size_t length, IOBuffer* buffer, RangeOption option) {
+Status StorageImpl::Download(ContextSPtr ctx, const BlockKey& key, off_t offset,
+                             size_t length, IOBuffer* buffer,
+                             DownloadOption option) {
   DCHECK_RUNNING("Storage");
 
   Status status;
@@ -131,8 +131,8 @@ Status StorageImpl::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
   StepTimerGuard guard(timer);
 
   NEXT_STEP(kEnqueue);
-  auto closure =
-      RangeClosure(ctx, key, offset, length, buffer, option, block_accesser_);
+  auto closure = DownloadClosure(ctx, key, offset, length, buffer, option,
+                                 block_accesser_);
   CHECK_EQ(0, bthread::execution_queue_execute(queue_id_, &closure));
 
   NEXT_STEP(kS3Range);
@@ -140,10 +140,7 @@ Status StorageImpl::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
 
   status = closure.status();
   if (!status.ok()) {
-    LOG_ERROR(
-        "[%s] Storage range failed: key = %s, offset = %lld, length = %zu"
-        ", status = %s",
-        ctx->TraceId(), key.Filename(), offset, length, status.ToString());
+    GENERIC_LOG_DOWNLOAD_ERROR();
   }
   return status;
 }
@@ -157,7 +154,7 @@ int StorageImpl::HandleClosure(void* meta,
   StorageImpl* self = static_cast<StorageImpl*>(meta);
   for (; iter; iter++) {
     auto* op = *iter;
-    OffloadThreadPool::GetInstance().Submit(  // copy memory
+    OffloadThreadPool::Submit(  // copy memory
         [self, op]() { op->Run(); });
   }
   return 0;
