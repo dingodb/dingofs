@@ -19,7 +19,6 @@
 
 #include <json/json.h>
 
-#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -28,8 +27,6 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
-
-static std::atomic<uint64_t> next_fh = 1;
 
 using Ino = uint64_t;
 
@@ -195,10 +192,6 @@ struct FsInfo {
 };
 
 std::string FsInfo2Str(const FsInfo& fs_info);
-
-inline uint64_t GenFh() {
-  return next_fh.fetch_add(1, std::memory_order_relaxed);
-}
 
 //  *off* should be any non-zero value that the vfs can use to
 //  identify the current point in the directory stream. It does not

@@ -29,7 +29,7 @@
 #include <cstdint>
 #include <memory>
 
-#include "client/meta/vfs_meta.h"
+#include "client/meta/vfs_fh.h"
 #include "utils/string.h"
 
 namespace dingofs {
@@ -51,7 +51,7 @@ HandlerManager::~HandlerManager() = default;
 std::shared_ptr<FileHandler> HandlerManager::NewHandler() {
   UniqueLock lk(mutex_);
   auto handler = std::make_shared<FileHandler>();
-  handler->fh = vfs::GenFh();
+  handler->fh = vfs::FhGenerator::GenFh();
   handler->padding = false;
   handlers_.emplace(handler->fh, handler);
   return handler;
@@ -162,10 +162,10 @@ bool HandlerManager::Load(const Json::Value& value) {
     }
     max_fh = std::max(max_fh, fh);
   }
-  vfs::next_fh.store(max_fh + 1);  // update next_fh
+  vfs::FhGenerator::UpdateNextFh(max_fh + 1);  // update next_fh
 
   LOG(INFO) << "successfuly load " << handlers_.size()
-            << " handlers, next fh is:" << vfs::next_fh.load();
+            << " handlers, next fh is:" << vfs::FhGenerator::GetNextFh();
 
   return true;
 }

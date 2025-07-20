@@ -24,7 +24,7 @@
 #include <string>
 
 #include "client/common/client_dummy_server_info.h"
-#include "client/meta/vfs_meta.h"
+#include "client/meta/vfs_fh.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/data/file.h"
 #include "client/vfs/hub/vfs_hub.h"
@@ -423,7 +423,7 @@ Status VFSImpl::MkDir(Ino parent, const std::string& name, uint32_t uid,
 }
 
 Status VFSImpl::OpenDir(Ino ino, uint64_t* fh) {
-  *fh = GenFh();
+  *fh = vfs::FhGenerator::GenFh();
 
   return meta_system_->OpenDir(ino, *fh);
 }

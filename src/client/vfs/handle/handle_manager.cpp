@@ -18,6 +18,7 @@
 
 #include <memory>
 
+#include "client/meta/vfs_fh.h"
 #include "glog/logging.h"
 
 namespace dingofs {
@@ -27,7 +28,7 @@ namespace vfs {
 HandleSPtr HandleManager::NewHandle() {
   auto handle = std::make_shared<Handle>();
   std::lock_guard<std::mutex> lock(mutex_);
-  handle->fh = GenFh();
+  handle->fh = vfs::FhGenerator::GenFh();
   handles_[handle->fh] = handle;
 
   return handle;
