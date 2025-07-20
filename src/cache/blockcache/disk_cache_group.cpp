@@ -102,6 +102,7 @@ Status DiskCacheGroup::Stage(ContextSPtr ctx, const BlockKey& key,
   Status status;
   DiskCacheGroupMetricGuard metric_guard(__func__, block.size, status, metric_);
   status = GetStore(key)->Stage(ctx, key, block, option);
+
   return status;
 }
 
@@ -123,7 +124,11 @@ Status DiskCacheGroup::Cache(ContextSPtr ctx, const BlockKey& key,
                              const Block& block, CacheOption option) {
   CHECK_RUNNING("Disk cache group");
 
-  return GetStore(key)->Cache(ctx, key, block, option);
+  Status status;
+  DiskCacheGroupMetricGuard metric_guard(__func__, block.size, status, metric_);
+  status = GetStore(key)->Cache(ctx, key, block, option);
+
+  return status;
 }
 
 Status DiskCacheGroup::Load(ContextSPtr ctx, const BlockKey& key, off_t offset,
@@ -142,6 +147,7 @@ Status DiskCacheGroup::Load(ContextSPtr ctx, const BlockKey& key, off_t offset,
   Status status;
   DiskCacheGroupMetricGuard metirc_guard(__func__, length, status, metric_);
   status = store->Load(ctx, key, offset, length, buffer, option);
+
   return status;
 }
 

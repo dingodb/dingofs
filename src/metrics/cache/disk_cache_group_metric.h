@@ -38,7 +38,8 @@ struct DiskCacheGroupMetric {
   inline static const std::string prefix = "dingofs_disk_cache_group";
 
   OpMetric op_stage{absl::StrFormat("%s_%s", prefix, "stage")};
-  OpMetric op_load{absl::StrFormat("%s_%s", prefix, "cache")};
+  OpMetric op_cache{absl::StrFormat("%s_%s", prefix, "cache")};
+  OpMetric op_load{absl::StrFormat("%s_%s", prefix, "load")};
 };
 
 using DiskCacheGroupMetricSPtr = std::shared_ptr<DiskCacheGroupMetric>;
@@ -47,7 +48,7 @@ struct DiskCacheGroupMetricGuard {
   DiskCacheGroupMetricGuard(const std::string& op_name, size_t bytes,
                             Status& status, DiskCacheGroupMetricSPtr metric)
       : op_name(op_name), bytes(bytes), status(status), metric(metric) {
-    CHECK(op_name == "Stage" || op_name == "Load")
+    CHECK(op_name == "Stage" || op_name == "Cache" || op_name == "Load")
         << "Invalid operation name: " << op_name;
     timer.start();
   }
@@ -58,6 +59,8 @@ struct DiskCacheGroupMetricGuard {
     OpMetric* op;
     if (op_name == "Stage") {
       op = &metric->op_stage;
+    } else if (op_name == "Cache") {
+      op = &metric->op_cache;
     } else if (op_name == "Load") {
       op = &metric->op_load;
     }
