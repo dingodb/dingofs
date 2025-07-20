@@ -84,6 +84,9 @@ class Helper {
   static bool IsLink(const struct stat* stat);
   static std::string StrMode(uint16_t mode);
 
+  // validator
+  static bool NonEmptyString(const char* /*name*/, const std::string& value);
+
   // others
   static std::vector<uint64_t> NormalizeByGcd(
       const std::vector<uint64_t>& nums);

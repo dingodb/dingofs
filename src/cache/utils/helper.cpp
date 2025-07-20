@@ -185,6 +185,11 @@ std::string Helper::StrMode(uint16_t mode) {
   return s;
 }
 
+// validator
+bool Helper::NonEmptyString(const char* /*name*/, const std::string& value) {
+  return !value.empty();
+}
+
 // others
 std::vector<uint64_t> Helper::NormalizeByGcd(
     const std::vector<uint64_t>& nums) {

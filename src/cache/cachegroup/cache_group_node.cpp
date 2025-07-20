@@ -24,6 +24,7 @@
 
 #include <butil/binary_printer.h>
 #include <fmt/format.h>
+#include <gflags/gflags.h>
 #include <glog/logging.h>
 
 #include "cache/blockcache/block_cache.h"
@@ -41,7 +42,9 @@
 namespace dingofs {
 namespace cache {
 
-DEFINE_string(group_name, "default", "Which group this cache node belongs to");
+DEFINE_string(group_name, "", "Which group this cache node belongs to");
+DEFINE_validator(group_name, Helper::NonEmptyString);
+
 DEFINE_string(listen_ip, "127.0.0.1",
               "IP address to listen on for this cache group node");
 DEFINE_uint32(listen_port, 9300, "Port to listen on for this cache group node");
