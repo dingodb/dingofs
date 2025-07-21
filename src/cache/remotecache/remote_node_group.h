@@ -48,6 +48,7 @@ class CacheUpstream {
   RemoteNodeSPtr GetNode(const std::string& key);
 
   bool IsDiff(const PBCacheGroupMembers& members) const;
+  bool IsEmpty() const;
 
  private:
   std::vector<uint64_t> CalcWeights(const PBCacheGroupMembers& members);
@@ -79,7 +80,7 @@ class RemoteNodeGroup final : public RemoteNode {
  private:
   Status OnMemberLoad(const PBCacheGroupMembers& members);
 
-  RemoteNodeSPtr GetNode(const BlockKey& key);
+  Status GetNode(const BlockKey& key, RemoteNodeSPtr& node);
 
   std::atomic<bool> running_;
   BthreadRWLock rwlock_;  // protect upstream_
