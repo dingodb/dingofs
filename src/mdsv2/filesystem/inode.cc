@@ -149,8 +149,12 @@ bool Inode::UpdateIf(const AttrType& attr) {
 
   DINGO_LOG(INFO) << fmt::format("[inode.{}] update attr,this({}) version({}->{}).", attr_.ino(), (void*)this,
                                  attr_.version(), attr.version());
-  CHECK(attr.version() > attr_.version()) << fmt::format("[inode.{}] version should be greater than {}, but is {}.",
-                                                         attr_.ino(), attr_.version(), attr.version());
+
+  if (attr.version() <= attr_.version()) {
+    DINGO_LOG(WARNING) << fmt::format("[inode.{}] version abnormal, old({}) new({}).", attr_.ino(), attr_.version(),
+                                      attr.version());
+    return false;
+  }
 
   attr_ = attr;
 
@@ -162,8 +166,12 @@ bool Inode::UpdateIf(AttrType&& attr) {
 
   DINGO_LOG(INFO) << fmt::format("[inode.{}] update attr,this({}) version({}->{}).", attr_.ino(), (void*)this,
                                  attr_.version(), attr.version());
-  CHECK(attr.version() > attr_.version()) << fmt::format("[inode.{}] version should be greater than {}, but is {}.",
-                                                         attr_.ino(), attr_.version(), attr.version());
+
+  if (attr.version() <= attr_.version()) {
+    DINGO_LOG(WARNING) << fmt::format("[inode.{}] version abnormal, old({}) new({}).", attr_.ino(), attr_.version(),
+                                      attr.version());
+    return false;
+  }
 
   attr_ = std::move(attr);
 
