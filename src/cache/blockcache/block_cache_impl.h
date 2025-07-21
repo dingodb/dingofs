@@ -30,7 +30,6 @@
 #include "cache/storage/storage_pool.h"
 #include "cache/utils/bthread.h"
 #include "cache/utils/context.h"
-#include "cache/utils/infight_throttle.h"
 #include "options/cache/blockcache.h"
 
 namespace dingofs {
@@ -87,7 +86,6 @@ class BlockCacheImpl final : public BlockCache {
   StoragePoolSPtr storage_pool_;
   CacheStoreSPtr store_;
   BlockCacheUploaderSPtr uploader_;
-  InflightThrottleSPtr prefetch_throttle_;
   BthreadJoinerUPtr joiner_;
 };
 

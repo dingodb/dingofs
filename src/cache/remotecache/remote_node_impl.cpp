@@ -191,7 +191,7 @@ Status RemoteNodeImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
   }
 
   status = rpc_->Prefetch(ctx, key, length);
-  if (!status.ok()) {
+  if (!status.ok() && !status.IsExist()) {
     LOG_PREFETCH_ERROR();
   }
   return status;  // Skip CheckStatus(...) here

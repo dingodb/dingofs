@@ -139,7 +139,7 @@ void IntimeWarmUpManager::Prefetch(
             << " block: " << key.StoreKey() << " len: " << obj.obj_len;
     block_cache_->AsyncPrefetch(
         cache::NewContext(), key, obj.obj_len, [key](Status status) {
-          if (!status.ok()) {
+          if (!status.ok() && !status.IsExist()) {
             LOG(WARNING) << "Failed to prefetch block (key=" << key.Filename()
                          << "): " << status.ToString();
           }

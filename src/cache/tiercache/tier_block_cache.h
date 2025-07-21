@@ -29,6 +29,7 @@
 #include "cache/storage/storage.h"
 #include "cache/utils/bthread.h"
 #include "cache/utils/context.h"
+#include "cache/utils/inflight_tracker.h"
 #include "options/cache/blockcache.h"
 #include "options/cache/tiercache.h"
 
@@ -77,10 +78,10 @@ class TierBlockCache final : public BlockCache {
  private:
   BlockCachePtr GetSelfPtr() { return this; }
 
-  bool LocalEnableStage() const;
-  bool LocalEnableCache() const;
-  bool RemoteEnableStage() const;
-  bool RemoteEnableCache() const;
+  bool EnableLoadStage() const;
+  bool EnableLocaCache() const;
+  bool EnableRemoteStage() const;
+  bool EnableRemoteCache() const;
 
   using FillGroupCacheCb = Storage::PutOption::AsyncCacheFunc;
   FillGroupCacheCb NewFillGroupCacheCb(ContextSPtr ctx);
@@ -94,6 +95,7 @@ class TierBlockCache final : public BlockCache {
   BlockCacheUPtr local_block_cache_;
   BlockCacheUPtr remote_block_cache_;
   BthreadJoinerUPtr joiner_;
+  InflightTrackerUPtr inflight_tracker_;
 };
 
 }  // namespace cache

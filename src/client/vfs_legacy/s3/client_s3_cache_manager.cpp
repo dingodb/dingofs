@@ -748,7 +748,7 @@ void FileCacheManager::PrefetchS3Objs(
             << " block: " << name << ", read len: " << read_len;
     s3ClientAdaptor_->GetBlockCache()->AsyncPrefetch(
         cache::NewContext(), key, read_len, [key](Status status) {
-          if (!status.ok()) {
+          if (!status.ok() && !status.IsExist()) {
             LOG(WARNING) << "Prefetch block (key=" << key.Filename()
                          << ") failed: " << status.ToString();
           }

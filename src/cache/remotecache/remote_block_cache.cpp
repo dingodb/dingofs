@@ -218,7 +218,7 @@ Status RemoteBlockCacheImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
   NEXT_STEP(kRemotePrefetch);
   status = remote_node_->Prefetch(ctx, key, length);
 
-  if (!status.ok()) {
+  if (!status.ok() && !status.IsExist()) {
     LOG_ERROR(
         "[%s] Prefetch block failed: key = %s, "
         "length = %zu, status = %s",

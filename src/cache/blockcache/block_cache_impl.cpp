@@ -47,8 +47,6 @@ DEFINE_string(cache_store, "disk",
               "Cache store type, can be none, disk or 3fs");
 DEFINE_bool(enable_stage, true, "Whether to enable stage block for writeback");
 DEFINE_bool(enable_cache, true, "Whether to enable cache block");
-DEFINE_uint32(prefetch_max_inflights, 32,
-              "Maximum inflight requests for prefetching blocks");
 
 static const std::string kModule = kBlockCacheMoudule;
 
@@ -60,8 +58,6 @@ BlockCacheImpl::BlockCacheImpl(BlockCacheOption option,
     : running_(false),
       option_(option),
       storage_pool_(storage_pool),
-      prefetch_throttle_(
-          std::make_shared<InflightThrottle>(FLAGS_prefetch_max_inflights)),
       joiner_(std::make_unique<BthreadJoiner>()) {
   if (HasCacheStore()) {
     store_ = std::make_shared<DiskCacheGroup>(option.disk_cache_options);
@@ -77,7 +73,6 @@ Status BlockCacheImpl::Start() {
   CHECK_NOTNULL(storage_pool_);
   CHECK_NOTNULL(store_);
   CHECK_NOTNULL(uploader_);
-  CHECK_NOTNULL(prefetch_throttle_);
   CHECK_NOTNULL(joiner_);
 
   if (running_) {
@@ -309,8 +304,6 @@ void BlockCacheImpl::AsyncPrefetch(ContextSPtr ctx, const BlockKey& key,
                                    PrefetchOption option) {
   CHECK_RUNNING("Block cache");
 
-  // TODO: acts on sync op
-  InflightThrottleGuard guard(prefetch_throttle_, 1);
   auto* self = GetSelfPtr();
   auto tid = RunInBthread([self, ctx, key, length, cb, option]() {
     Status status = self->Prefetch(ctx, key, length, option);
