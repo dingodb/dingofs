@@ -14,14 +14,12 @@
 
 #include "mdsv2/common/logging.h"
 
-#include <glog/logging.h>
-
 #include <cstdint>
 
 #include "fmt/core.h"
+#include "glog/logging.h"
 
 namespace dingofs {
-
 namespace mdsv2 {
 
 void DingoLogger::InitLogger(const std::string& log_dir, const std::string& role, const LogLevel& level) {
@@ -80,5 +78,4 @@ void DingoLogger::ChangeGlogLevelUsingDingoLevel(const LogLevel& log_level, uint
 }
 
 }  // namespace mdsv2
-
 }  // namespace dingofs

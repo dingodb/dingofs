@@ -12,15 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <fmt/format.h>
-
 #include <csignal>
 #include <iostream>
 #include <string>
 
 #include "backtrace.h"
 #include "dlfcn.h"
-#include "fmt/core.h"
+#include "fmt/format.h"
 #include "glog/logging.h"
 #include "libunwind.h"
 #include "mdsv2/common/helper.h"
@@ -28,6 +26,7 @@
 #include "mdsv2/server.h"
 
 DEFINE_string(conf, "./conf/dingo-mdsv2.toml", "mdsv2 config path");
+DEFINE_string(gflag_conf, "./conf/dingo-mdsv2.gflags", "mdsv2 gflags config path");
 DEFINE_string(coor_url, "file://./conf/coor_list", "coor service url, e.g. file://<path> or list://<addr1>,<addr2>");
 
 DEFINE_bool(show_version, false, "show version and exit");
@@ -213,8 +212,8 @@ static bool GeneratePidFile(const std::string& filepath) {
 }
 
 int main(int argc, char* argv[]) {
-  if (dingofs::mdsv2::Helper::IsExistPath("conf/gflags.conf")) {
-    google::SetCommandLineOption("flagfile", "conf/gflags.conf");
+  if (dingofs::mdsv2::Helper::IsExistPath(FLAGS_gflag_conf)) {
+    google::SetCommandLineOption("flagfile", FLAGS_gflag_conf.c_str());
   }
 
   google::ParseCommandLineFlags(&argc, &argv, true);

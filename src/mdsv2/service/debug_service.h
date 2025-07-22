@@ -38,6 +38,11 @@ class DebugServiceImpl : public pb::debug::DebugService {
     return std::make_unique<DebugServiceImpl>(std::move(file_system_set));
   }
 
+  void GetLogLevel(google::protobuf::RpcController* controller, const pb::debug::GetLogLevelRequest* request,
+                   pb::debug::GetLogLevelResponse* response, google::protobuf::Closure* done) override;
+  void ChangeLogLevel(google::protobuf::RpcController* controller, const pb::debug::ChangeLogLevelRequest* request,
+                      pb::debug::ChangeLogLevelResponse* response, google::protobuf::Closure* done) override;
+
   void GetFs(google::protobuf::RpcController* controller, const pb::debug::GetFsRequest* request,
              pb::debug::GetFsResponse* response, google::protobuf::Closure* done) override;
 

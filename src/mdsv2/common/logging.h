@@ -15,15 +15,15 @@
 #ifndef DINGOFS_MDSV2_COMMON_LOGGING_H_
 #define DINGOFS_MDSV2_COMMON_LOGGING_H_
 
+#include <cstdint>
 #include <string>
 
 #include "glog/logging.h"
 
 namespace dingofs {
-
 namespace mdsv2 {
 
-enum LogLevel { kDEBUG = 0, kINFO = 1, kWARNING = 2, kERROR = 3, kFATAL = 4 };
+enum LogLevel : uint8_t { kDEBUG = 0, kINFO = 1, kWARNING = 2, kERROR = 3, kFATAL = 4 };
 
 // static std::string LogLevelToString(LogLevel level) {
 //   switch (level) {

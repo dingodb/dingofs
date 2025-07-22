@@ -112,13 +112,14 @@ class StdOutput : public Output {
 
     } else {
       auto desc = MetaCodec::ParseKey(key, value);
-      std::cout << fmt::format("key({}) value({})\n", desc.first, desc.second);
+      std::cout << fmt::format("{}. key({}) value({})\n", ++count_, desc.first, desc.second);
     }
   }
 
   void Flush() override { std::cout.flush(); }
 
  private:
+  uint32_t count_{0};  // count of key/value pairs
   bool is_binary_{false};
 };
 

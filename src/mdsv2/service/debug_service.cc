@@ -15,6 +15,7 @@
 #include "mdsv2/service/debug_service.h"
 
 #include "dingofs/debug.pb.h"
+#include "dingofs/error.pb.h"
 #include "mdsv2/common/context.h"
 #include "mdsv2/filesystem/dentry.h"
 #include "mdsv2/filesystem/inode.h"
@@ -25,6 +26,68 @@ namespace dingofs {
 namespace mdsv2 {
 
 FileSystemSPtr DebugServiceImpl::GetFileSystem(uint32_t fs_id) { return file_system_set_->GetFileSystem(fs_id); }
+
+void DebugServiceImpl::GetLogLevel(google::protobuf::RpcController*, const pb::debug::GetLogLevelRequest* request,
+                                   pb::debug::GetLogLevelResponse* response, google::protobuf::Closure* done) {
+  auto* svr_done = new ServiceClosure(__func__, done, request, response);
+  brpc::ClosureGuard done_guard(svr_done);
+
+  DINGO_LOG(INFO) << "GetLogLevel request:" << request->ShortDebugString();
+
+  auto* log_detail = response->mutable_log_detail();
+  log_detail->set_log_buf_secs(DingoLogger::GetLogBuffSecs());
+  log_detail->set_max_log_size(DingoLogger::GetMaxLogSize());
+  log_detail->set_stop_logging_if_full_disk(DingoLogger::GetStoppingWhenDiskFull());
+
+  int const min_log_level = DingoLogger::GetMinLogLevel();
+  int const min_verbose_level = DingoLogger::GetMinVerboseLevel();
+
+  if (min_log_level > pb::debug::FATAL) {
+    DINGO_LOG(ERROR) << "Invalid Log Level:" << min_log_level;
+    ServiceHelper::SetError(response->mutable_error(), pb::error::EILLEGAL_PARAMTETER,
+                            fmt::format("param min_log_level({}) illegal", min_log_level));
+    return;
+  }
+
+  if (min_log_level == 0 && min_verbose_level > 1) {
+    response->set_log_level(static_cast<pb::debug::LogLevel>(0));
+  } else {
+    response->set_log_level(static_cast<pb::debug::LogLevel>(min_log_level + 1));
+  }
+}
+
+static LogLevel LogLevelPB2LogLevel(const pb::debug::LogLevel& level) {
+  switch (level) {
+    case pb::debug::LogLevel::DEBUG:
+      return LogLevel::kDEBUG;
+    case pb::debug::LogLevel::INFO:
+      return LogLevel::kINFO;
+    case pb::debug::LogLevel::WARNING:
+      return LogLevel::kWARNING;
+    case pb::debug::LogLevel::ERROR:
+      return LogLevel::kERROR;
+    case pb::debug::LogLevel::FATAL:
+      return LogLevel::kFATAL;
+    default:
+      CHECK(false) << "invalid log level: " << level;
+  }
+}
+
+void DebugServiceImpl::ChangeLogLevel(google::protobuf::RpcController*, const pb::debug::ChangeLogLevelRequest* request,
+                                      pb::debug::ChangeLogLevelResponse* response, google::protobuf::Closure* done) {
+  auto* svr_done = new ServiceClosure(__func__, done, request, response);
+  brpc::ClosureGuard done_guard(svr_done);
+
+  DINGO_LOG(INFO) << "ChangeLogLevel request:" << request->ShortDebugString();
+
+  const pb::debug::LogLevel log_level = request->log_level();
+  const auto& log_detail = request->log_detail();
+
+  DingoLogger::ChangeGlogLevelUsingDingoLevel(LogLevelPB2LogLevel(log_level), log_detail.verbose());
+  DingoLogger::SetLogBuffSecs(log_detail.log_buf_secs());
+  DingoLogger::SetMaxLogSize(log_detail.max_log_size());
+  DingoLogger::SetStoppingWhenDiskFull(log_detail.stop_logging_if_full_disk());
+}
 
 void DebugServiceImpl::GetFs(google::protobuf::RpcController*, const pb::debug::GetFsRequest* request,
                              pb::debug::GetFsResponse* response, google::protobuf::Closure* done) {
