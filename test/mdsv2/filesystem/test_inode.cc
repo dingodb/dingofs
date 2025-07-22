@@ -59,7 +59,7 @@ class InodeCacheTest : public testing::Test {
 };
 
 TEST_F(InodeCacheTest, Put) {
-  InodeCache inode_cache;
+  InodeCache inode_cache(kFsId);
 
   {
     InodeSPtr inode = Inode::New(GenInode(kFsId, 2000, pb::mdsv2::FileType::DIRECTORY));
@@ -91,7 +91,7 @@ TEST_F(InodeCacheTest, Put) {
 }
 
 TEST_F(InodeCacheTest, Delete) {
-  InodeCache inode_cache;
+  InodeCache inode_cache(kFsId);
 
   {
     InodeSPtr inode = Inode::New(GenInode(kFsId, 2000, pb::mdsv2::FileType::DIRECTORY));

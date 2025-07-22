@@ -56,7 +56,7 @@ class PartitionCacheTest : public testing::Test {
 };
 
 TEST_F(PartitionCacheTest, Put) {
-  PartitionCache partition_cache;
+  PartitionCache partition_cache(kFsId);
 
   InodeSPtr inode = Inode::New(GenInode(kFsId, 1, pb::mdsv2::FileType::DIRECTORY));
   auto partition = Partition::New(inode);
@@ -75,7 +75,7 @@ TEST_F(PartitionCacheTest, Put) {
 }
 
 TEST_F(PartitionCacheTest, Delete) {
-  PartitionCache partition_cache;
+  PartitionCache partition_cache(kFsId);
 
   InodeSPtr inode = Inode::New(GenInode(kFsId, 1, pb::mdsv2::FileType::DIRECTORY));
   auto partition = Partition::New(inode);
