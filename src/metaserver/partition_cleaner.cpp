@@ -69,6 +69,8 @@ bool PartitionCleaner::ScanPartition() {
     usleep(partition_clean_option_.inodeDeletePeriodMs);
   }
 
+  partition_->Clear();
+
   uint32_t partition_id = partition_->GetPartitionId();
   if (partition_->EmptyInodeStorage()) {
     LOG(INFO) << "Inode num is 0, delete partition from metastore"

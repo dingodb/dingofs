@@ -44,6 +44,8 @@ class PartitionCleanManager {
            const std::shared_ptr<PartitionCleaner>& cleaner,
            copyset::CopysetNode* copyset_node);
 
+  bool IsAdded(uint32_t partition_id);
+
   void Init(const PartitionCleanOption& option) {
     option_ = option;
     partitionCleanerCount.expose_as("partition_clean_manager_", "cleaner");

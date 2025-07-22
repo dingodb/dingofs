@@ -416,10 +416,9 @@ MetaStatusCode MetaStoreImpl::DeletePartition(
     return MetaStatusCode::OK;
   }
 
-  if (it->second->GetStatus() != PartitionStatus::DELETING) {
+  if (!PartitionCleanManager::GetInstance().IsAdded(partitionId)) {
     LOG(INFO) << "DeletePartition, set partition to deleting"
               << ", partitionId = " << partitionId;
-    it->second->ClearDentry();
     std::shared_ptr<PartitionCleaner> partitionCleaner =
         std::make_shared<PartitionCleaner>(GetPartition(partitionId));
     PartitionCleanManager::GetInstance().Add(partitionId, partitionCleaner,
@@ -429,7 +428,7 @@ MetaStatusCode MetaStoreImpl::DeletePartition(
     RecycleManager::GetInstance().Remove(partitionId);
     it->second->CancelS3Compact();
   } else {
-    LOG(INFO) << "DeletePartition, partition is already deleting"
+    LOG(INFO) << "DeletePartition, partition is already in CleanManager,"
               << ", partitionId = " << partitionId;
   }
 

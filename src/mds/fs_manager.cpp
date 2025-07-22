@@ -33,10 +33,10 @@
 #include <unordered_map>
 #include <utility>
 
-#include "common/config_mapper.h"
-#include "common/define.h"
 #include "blockaccess/accesser_common.h"
 #include "blockaccess/block_accesser.h"
+#include "common/config_mapper.h"
+#include "common/define.h"
 #include "dingofs/common.pb.h"
 #include "dingofs/mds.pb.h"
 #include "mds/common/types.h"
@@ -134,9 +134,15 @@ bool FsManager::SetPartitionToDeleting(
 }
 
 void FsManager::ScanFs(const FsInfoWrapper& wrapper) {
+  VLOG(1) << "start to scan fs, fsName = " << wrapper.GetFsName()
+          << ", fsId = " << wrapper.GetFsId()
+          << ", status = " << pb::mds::FsStatus_Name(wrapper.GetStatus());
+
   if (wrapper.GetStatus() != pb::mds::FsStatus::DELETING) {
     return;
   }
+  LOG(INFO) << "starting to delete fs, fsName = " << wrapper.GetFsName()
+            << ", fsId = " << wrapper.GetFsId();
 
   std::list<pb::common::PartitionInfo> partition_list;
   topoManager_->ListPartitionOfFs(wrapper.GetFsId(), &partition_list);
@@ -148,16 +154,19 @@ void FsManager::ScanFs(const FsInfoWrapper& wrapper) {
     if (ret != FSStatusCode::OK) {
       LOG(ERROR) << "delete fs record fail, fsName = " << wrapper.GetFsName()
                  << ", errCode = " << FSStatusCode_Name(ret);
+    } else {
+      LOG(INFO) << "successfully delete fs, fsName = " << wrapper.GetFsName()
+                << ", fsId = " << wrapper.GetFsId();
     }
 
     return;
   }
 
   for (const pb::common::PartitionInfo& partition : partition_list) {
+    if (!DeletePartiton(wrapper.GetFsName(), partition)) {
+      continue;
+    }
     if (partition.status() != pb::common::PartitionStatus::DELETING) {
-      if (!DeletePartiton(wrapper.GetFsName(), partition)) {
-        continue;
-      }
       SetPartitionToDeleting(partition);
     }
   }
