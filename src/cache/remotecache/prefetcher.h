@@ -31,7 +31,7 @@
 #include "cache/blockcache/cache_store.h"
 #include "cache/common/type.h"
 #include "cache/remotecache/mem_cache.h"
-#include "cache/remotecache/remote_node.h"
+#include "cache/remotecache/remote_cache_node.h"
 #include "cache/utils/bthread.h"
 #include "cache/utils/context.h"
 
@@ -40,7 +40,7 @@ namespace cache {
 
 class Prefetcher {
  public:
-  Prefetcher(MemCacheSPtr mem_cache, RemoteNodeSPtr remote_node);
+  Prefetcher(MemCacheSPtr mem_cache, RemoteCacheNodeSPtr remote_node);
 
   Status Start();
   Status Shutdown();
@@ -69,7 +69,7 @@ class Prefetcher {
   std::atomic<bool> running_;
   BthreadRWLock rwlock_;  // for protect busy_
   MemCacheSPtr memcache_;
-  RemoteNodeSPtr remote_node_;
+  RemoteCacheNodeSPtr remote_node_;
   std::unordered_set<std::string> busy_;
   bthread::ExecutionQueueId<Task> queue_id_;
   BthreadJoinerUPtr joiner_;

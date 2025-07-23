@@ -20,8 +20,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_NODE_MANAGER_H_
-#define DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_NODE_MANAGER_H_
+#ifndef DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_CACHE_NODE_MANAGER_H_
+#define DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_CACHE_NODE_MANAGER_H_
 
 #include "cache/common/proto.h"
 #include "common/status.h"
@@ -34,9 +34,10 @@ namespace cache {
 
 using OnMemberLoad = std::function<Status(const PBCacheGroupMembers& members)>;
 
-class RemoteNodeManager {
+class RemoteCacheNodeManager {
  public:
-  RemoteNodeManager(RemoteBlockCacheOption option, OnMemberLoad on_member_load);
+  RemoteCacheNodeManager(RemoteBlockCacheOption option,
+                         OnMemberLoad on_member_load);
 
   Status Start();
   void Shutdown();
@@ -56,9 +57,9 @@ class RemoteNodeManager {
   std::unique_ptr<Executor> executor_;
 };
 
-using RemoteNodeManagerUPtr = std::unique_ptr<RemoteNodeManager>;
+using RemoteCacheNodeManagerUPtr = std::unique_ptr<RemoteCacheNodeManager>;
 
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_NODE_MANAGER_H_
+#endif  // DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_CACHE_NODE_MANAGER_H_

@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "cache/remotecache/remote_node_manager.h"
+#include "cache/remotecache/remote_cache_node_manager.h"
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
@@ -37,8 +37,8 @@ DEFINE_uint32(load_members_interval_ms, 1000,
 
 using dingofs::pb::mds::cachegroup::CacheGroupErrCode_Name;
 
-RemoteNodeManager::RemoteNodeManager(RemoteBlockCacheOption option,
-                                     OnMemberLoad on_member_load)
+RemoteCacheNodeManager::RemoteCacheNodeManager(RemoteBlockCacheOption option,
+                                               OnMemberLoad on_member_load)
     : running_(false),
       option_(option),
       on_member_load_(on_member_load),
@@ -46,7 +46,7 @@ RemoteNodeManager::RemoteNodeManager(RemoteBlockCacheOption option,
       mds_client_(std::make_shared<stub::rpcclient::MdsClientImpl>()),
       executor_(std::make_unique<BthreadExecutor>()) {}
 
-Status RemoteNodeManager::Start() {
+Status RemoteCacheNodeManager::Start() {
   CHECK_NOTNULL(on_member_load_);
   CHECK_NOTNULL(mds_base_);
   CHECK_NOTNULL(mds_client_);
@@ -82,7 +82,7 @@ Status RemoteNodeManager::Start() {
   return Status::OK();
 }
 
-void RemoteNodeManager::Shutdown() {
+void RemoteCacheNodeManager::Shutdown() {
   if (!running_.exchange(false)) {
     return;
   }
@@ -96,7 +96,7 @@ void RemoteNodeManager::Shutdown() {
   CHECK_DOWN("Remote node manager");
 }
 
-void RemoteNodeManager::BackgroudRefresh() {
+void RemoteCacheNodeManager::BackgroudRefresh() {
   auto status = RefreshMembers();
   if (!status.ok()) {
     LOG(ERROR) << "Refresh cache group members failed: " << status.ToString();
@@ -106,7 +106,7 @@ void RemoteNodeManager::BackgroudRefresh() {
                       FLAGS_load_members_interval_ms);
 }
 
-Status RemoteNodeManager::RefreshMembers() {
+Status RemoteCacheNodeManager::RefreshMembers() {
   PBCacheGroupMembers members;
   Status status = LoadMembers(&members);
   if (status.ok()) {
@@ -115,7 +115,7 @@ Status RemoteNodeManager::RefreshMembers() {
   return status;
 }
 
-Status RemoteNodeManager::LoadMembers(PBCacheGroupMembers* members) {
+Status RemoteCacheNodeManager::LoadMembers(PBCacheGroupMembers* members) {
   auto status =
       mds_client_->LoadCacheGroupMembers(option_.cache_group, members);
   if (status != PBCacheGroupErrCode::CacheGroupOk) {

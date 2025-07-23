@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "cache/remotecache/remote_node_impl.h"
+#include "cache/remotecache/remote_cache_node_impl.h"
 
 #include <absl/strings/str_format.h>
 #include <butil/iobuf.h>
@@ -50,17 +50,17 @@ DEFINE_bool(subrequest_ranges, true,
 DEFINE_uint32(subrequest_range_size, 262144, "Range size for each subrequest");
 DEFINE_validator(subrequest_range_size, brpc::PassValidate);
 
-RemoteNodeImpl::RemoteNodeImpl(const PBCacheGroupMember& member,
-                               RemoteBlockCacheOption /*option*/)
+RemoteCacheNodeImpl::RemoteCacheNodeImpl(const PBCacheGroupMember& member,
+                                         RemoteBlockCacheOption /*option*/)
     : running_(false),
       member_info_(member),
       rpc_(std::make_unique<RPCClient>(member.ip(), member.port())),
       state_machine_(std::make_shared<StateMachineImpl>()),
-      health_checker_(
-          std::make_unique<RemoteNodeHealthChecker>(member, state_machine_)),
+      health_checker_(std::make_unique<RemoteCacheNodeHealthChecker>(
+          member, state_machine_)),
       joiner_(std::make_unique<BthreadJoiner>()) {}
 
-Status RemoteNodeImpl::Start() {
+Status RemoteCacheNodeImpl::Start() {
   CHECK_NOTNULL(rpc_);
   CHECK_NOTNULL(state_machine_);
   CHECK_NOTNULL(health_checker_);
@@ -95,11 +95,11 @@ Status RemoteNodeImpl::Start() {
             << ", endpoint = " << member_info_.ip() << ":"
             << member_info_.port();
 
-  CHECK_RUNNING("Remote node");
+  CHECK_RUNNING("Remote cache node");
   return Status::OK();
 }
 
-Status RemoteNodeImpl::Shutdown() {
+Status RemoteCacheNodeImpl::Shutdown() {
   if (!running_.exchange(false)) {
     return Status::OK();
   }
@@ -124,12 +124,12 @@ Status RemoteNodeImpl::Shutdown() {
             << ", endpoint = " << member_info_.ip() << ":"
             << member_info_.port();
 
-  CHECK_DOWN("Remote node");
+  CHECK_DOWN("Remote cache node");
   return Status::OK();
 }
 
-Status RemoteNodeImpl::Put(ContextSPtr ctx, const BlockKey& key,
-                           const Block& block) {
+Status RemoteCacheNodeImpl::Put(ContextSPtr ctx, const BlockKey& key,
+                                const Block& block) {
   CHECK_RUNNING("Remote node");
 
   auto status = CheckHealth(ctx);
@@ -144,9 +144,9 @@ Status RemoteNodeImpl::Put(ContextSPtr ctx, const BlockKey& key,
   return CheckStatus(status);
 }
 
-Status RemoteNodeImpl::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
-                             size_t length, IOBuffer* buffer,
-                             RangeOption option) {
+Status RemoteCacheNodeImpl::Range(ContextSPtr ctx, const BlockKey& key,
+                                  off_t offset, size_t length, IOBuffer* buffer,
+                                  RangeOption option) {
   CHECK_RUNNING("Remote node");
 
   auto status = CheckHealth(ctx);
@@ -165,8 +165,8 @@ Status RemoteNodeImpl::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
   return CheckStatus(status);
 }
 
-Status RemoteNodeImpl::Cache(ContextSPtr ctx, const BlockKey& key,
-                             const Block& block) {
+Status RemoteCacheNodeImpl::Cache(ContextSPtr ctx, const BlockKey& key,
+                                  const Block& block) {
   CHECK_RUNNING("Remote node");
 
   auto status = CheckHealth(ctx);
@@ -181,8 +181,8 @@ Status RemoteNodeImpl::Cache(ContextSPtr ctx, const BlockKey& key,
   return status;  // Skip CheckStatus(...) here
 }
 
-Status RemoteNodeImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
-                                size_t length) {
+Status RemoteCacheNodeImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
+                                     size_t length) {
   CHECK_RUNNING("Remote node");
 
   auto status = CheckHealth(ctx);
@@ -197,9 +197,9 @@ Status RemoteNodeImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
   return status;  // Skip CheckStatus(...) here
 }
 
-std::vector<SubRangeRequest> RemoteNodeImpl::SplitRange(off_t offset,
-                                                        size_t length,
-                                                        size_t blksize) {
+std::vector<SubRangeRequest> RemoteCacheNodeImpl::SplitRange(off_t offset,
+                                                             size_t length,
+                                                             size_t blksize) {
   std::vector<SubRangeRequest> requests;
   while (length > 0) {
     off_t bound = (offset / blksize + 1) * blksize;
@@ -212,16 +212,17 @@ std::vector<SubRangeRequest> RemoteNodeImpl::SplitRange(off_t offset,
   return requests;
 }
 
-void RemoteNodeImpl::Subrequest(std::function<void()> func) {
+void RemoteCacheNodeImpl::Subrequest(std::function<void()> func) {
   auto tid = RunInBthread([func]() { func(); });
   if (tid != 0) {
     joiner_->BackgroundJoin(tid);
   }
 }
 
-Status RemoteNodeImpl::SubrequestRanges(ContextSPtr ctx, const BlockKey& key,
-                                        off_t offset, size_t length,
-                                        IOBuffer* buffer, RangeOption option) {
+Status RemoteCacheNodeImpl::SubrequestRanges(ContextSPtr ctx,
+                                             const BlockKey& key, off_t offset,
+                                             size_t length, IOBuffer* buffer,
+                                             RangeOption option) {
   auto requests = SplitRange(offset, length, FLAGS_subrequest_range_size);
 
   BthreadCountdownEvent countdown(requests.size());
@@ -249,7 +250,7 @@ Status RemoteNodeImpl::SubrequestRanges(ContextSPtr ctx, const BlockKey& key,
   return Status::OK();
 }
 
-Status RemoteNodeImpl::CheckHealth(ContextSPtr ctx) const {
+Status RemoteCacheNodeImpl::CheckHealth(ContextSPtr ctx) const {
   if (member_info_.state() !=
       PBCacheGroupMemberState::CacheGroupMemberStateOnline) {
     LOG_EVERY_SECOND(WARNING) << absl::StrFormat(
@@ -269,7 +270,7 @@ Status RemoteNodeImpl::CheckHealth(ContextSPtr ctx) const {
   return Status::OK();
 }
 
-Status RemoteNodeImpl::CheckStatus(Status status) {
+Status RemoteCacheNodeImpl::CheckStatus(Status status) {
   if (status.ok() || status.IsNotFound()) {
     state_machine_->Success();
   } else {

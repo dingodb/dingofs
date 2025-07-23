@@ -20,13 +20,13 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_NODE_IMPL_H_
-#define DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_NODE_IMPL_H_
+#ifndef DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_CACHE_NODE_IMPL_H_
+#define DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_CACHE_NODE_IMPL_H_
 
 #include <brpc/channel.h>
 
 #include "cache/blockcache/block_cache.h"
-#include "cache/remotecache/remote_node.h"
+#include "cache/remotecache/remote_cache_node.h"
 #include "cache/remotecache/remote_node_health_checker.h"
 #include "cache/remotecache/rpc_client.h"
 #include "cache/utils/bthread.h"
@@ -45,10 +45,10 @@ struct SubRangeRequest {
   Status status;
 };
 
-class RemoteNodeImpl final : public RemoteNode {
+class RemoteCacheNodeImpl final : public RemoteCacheNode {
  public:
-  RemoteNodeImpl(const PBCacheGroupMember& member,
-                 RemoteBlockCacheOption option);
+  RemoteCacheNodeImpl(const PBCacheGroupMember& member,
+                      RemoteBlockCacheOption option);
 
   Status Start() override;
   Status Shutdown() override;
@@ -74,11 +74,11 @@ class RemoteNodeImpl final : public RemoteNode {
   const PBCacheGroupMember member_info_;
   RPCClientUPtr rpc_;
   StateMachineSPtr state_machine_;
-  RemoteNodeHealthCheckerUPtr health_checker_;
+  RemoteCacheNodeHealthCheckerUPtr health_checker_;
   BthreadJoinerUPtr joiner_;
 };
 
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_NODE_IMPL_H_
+#endif  // DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_CACHE_NODE_IMPL_H_

@@ -34,19 +34,19 @@ DEFINE_uint32(ping_rpc_timeout_ms, 3000,
               "RPC timeout for pinging remote cache node in milliseconds");
 DEFINE_validator(ping_rpc_timeout_ms, brpc::PassValidate);
 
-RemoteNodeHealthChecker::RemoteNodeHealthChecker(
+RemoteCacheNodeHealthChecker::RemoteCacheNodeHealthChecker(
     const PBCacheGroupMember& member, StateMachineSPtr state_machine)
     : running_(false),
       member_info_(member),
       state_machine_(state_machine),
       executor_(std::make_unique<BthreadExecutor>()) {}
 
-void RemoteNodeHealthChecker::Start() {
+void RemoteCacheNodeHealthChecker::Start() {
   if (running_) {
     return;
   }
 
-  LOG(INFO) << "Remote node health checker is starting...";
+  LOG(INFO) << "Remote cache node health checker is starting...";
 
   CHECK(state_machine_->Start());
   CHECK(executor_->Start());
@@ -55,33 +55,33 @@ void RemoteNodeHealthChecker::Start() {
 
   running_ = true;
 
-  LOG(INFO) << "Remote node health checker is up.";
+  LOG(INFO) << "Remote cache node health checker is up.";
 
-  CHECK_RUNNING("Remote node health checker");
+  CHECK_RUNNING("Remote cache node health checker");
 }
 
-void RemoteNodeHealthChecker::Shutdown() {
+void RemoteCacheNodeHealthChecker::Shutdown() {
   if (!running_.exchange(false)) {
     return;
   }
 
-  LOG(INFO) << "Remote node health checker is shutting down...";
+  LOG(INFO) << "Remote cache node health checker is shutting down...";
 
   executor_->Stop();
   state_machine_->Shutdown();
 
-  LOG(INFO) << "Remote node health checker is down.";
+  LOG(INFO) << "Remote cache node health checker is down.";
 
-  CHECK_DOWN("Remote node health checker");
+  CHECK_DOWN("Remote cache node health checker");
 }
 
-void RemoteNodeHealthChecker::RunCheck() {
+void RemoteCacheNodeHealthChecker::RunCheck() {
   PingNode();
   executor_->Schedule([this] { RunCheck(); },
                       FLAGS_check_cache_node_state_duration_ms);
 }
 
-void RemoteNodeHealthChecker::PingNode() {
+void RemoteCacheNodeHealthChecker::PingNode() {
   auto status = SendPingrequest();
   if (!status.ok()) {
     state_machine_->Error();
@@ -90,7 +90,7 @@ void RemoteNodeHealthChecker::PingNode() {
   }
 }
 
-Status RemoteNodeHealthChecker::SendPingrequest() {
+Status RemoteCacheNodeHealthChecker::SendPingrequest() {
   brpc::Channel channel;
   PBPingRequest request;
   PBPingResponse reponse;

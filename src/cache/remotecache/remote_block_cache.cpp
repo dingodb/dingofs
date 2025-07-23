@@ -29,7 +29,7 @@
 #include "cache/common/const.h"
 #include "cache/common/macro.h"
 #include "cache/remotecache/mem_cache.h"
-#include "cache/remotecache/remote_node_group.h"
+#include "cache/remotecache/remote_cache_node_group.h"
 #include "cache/utils/bthread.h"
 #include "cache/utils/context.h"
 #include "common/io_buffer.h"
@@ -60,9 +60,9 @@ RemoteBlockCacheImpl::RemoteBlockCacheImpl(RemoteBlockCacheOption option,
       memcache_(std::make_shared<MemCacheImpl>(
           FLAGS_remote_prefetch_max_buffer_size_mb * kMiB)) {
   if (HasCacheStore()) {
-    remote_node_ = std::make_shared<RemoteNodeGroup>(option);
+    remote_node_ = std::make_shared<RemoteCacheNodeGroup>(option);
   } else {
-    remote_node_ = std::make_shared<NoneRemoteNode>();
+    remote_node_ = std::make_shared<NoneRemoteCacheNode>();
   }
   prefetcher_ = std::make_unique<Prefetcher>(memcache_, remote_node_);
 }

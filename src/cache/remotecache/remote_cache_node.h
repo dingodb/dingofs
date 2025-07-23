@@ -20,8 +20,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_NODE_H_
-#define DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_NODE_H_
+#ifndef DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_CACHE_NODE_H_
+#define DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_CACHE_NODE_H_
 
 #include <memory>
 
@@ -33,10 +33,10 @@
 namespace dingofs {
 namespace cache {
 
-// RemoteNode is the client of remote cache group node
-class RemoteNode {
+// RemoteCacheNode is the client of remote cache group node
+class RemoteCacheNode {
  public:
-  virtual ~RemoteNode() = default;
+  virtual ~RemoteCacheNode() = default;
 
   virtual Status Start() = 0;
   virtual Status Shutdown() = 0;
@@ -51,7 +51,7 @@ class RemoteNode {
                           size_t length) = 0;
 };
 
-class NoneRemoteNode final : public RemoteNode {
+class NoneRemoteCacheNode final : public RemoteCacheNode {
  public:
   Status Start() override { return Status::OK(); }
   Status Shutdown() override { return Status::OK(); }
@@ -78,10 +78,10 @@ class NoneRemoteNode final : public RemoteNode {
   }
 };
 
-using RemoteNodeSPtr = std::shared_ptr<RemoteNode>;
-using RemoteNodeUPtr = std::unique_ptr<RemoteNode>;
+using RemoteCacheNodeSPtr = std::shared_ptr<RemoteCacheNode>;
+using RemoteCacheNodeUPtr = std::unique_ptr<RemoteCacheNode>;
 
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_NODE_H_
+#endif  // DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_CACHE_NODE_H_

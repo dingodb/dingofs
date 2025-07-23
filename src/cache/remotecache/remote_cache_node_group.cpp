@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "cache/remotecache/remote_node_group.h"
+#include "cache/remotecache/remote_cache_node_group.h"
 
 #include <glog/logging.h>
 
@@ -29,9 +29,9 @@
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/common/macro.h"
-#include "cache/remotecache/remote_node.h"
-#include "cache/remotecache/remote_node_impl.h"
-#include "cache/remotecache/remote_node_manager.h"
+#include "cache/remotecache/remote_cache_node.h"
+#include "cache/remotecache/remote_cache_node_impl.h"
+#include "cache/remotecache/remote_cache_node_manager.h"
 #include "cache/utils/context.h"
 #include "cache/utils/helper.h"
 #include "cache/utils/ketama_con_hash.h"
@@ -68,7 +68,7 @@ Status CacheUpstream::Init() {
     }
 
     auto key = MemberKey(member);
-    auto node = std::make_shared<RemoteNodeImpl>(member, option_);
+    auto node = std::make_shared<RemoteCacheNodeImpl>(member, option_);
     auto status = node->Start();
     if (!status.ok()) {  // NOTE: only throw error
       LOG(ERROR) << "Init remote node failed: id = " << member.id()
@@ -88,7 +88,7 @@ Status CacheUpstream::Init() {
   return Status::OK();
 }
 
-RemoteNodeSPtr CacheUpstream::GetNode(const std::string& key) {
+RemoteCacheNodeSPtr CacheUpstream::GetNode(const std::string& key) {
   ConNode cnode;
   bool find = chash_->Lookup(key, cnode);
   CHECK(find);
@@ -129,18 +129,18 @@ std::string CacheUpstream::MemberKey(const PBCacheGroupMember& member) const {
   return std::to_string(member.id());
 }
 
-RemoteNodeGroup::RemoteNodeGroup(RemoteBlockCacheOption option)
+RemoteCacheNodeGroup::RemoteCacheNodeGroup(RemoteBlockCacheOption option)
     : running_(false),
       option_(option),
       upstream_(std::make_shared<CacheUpstream>()),
-      metric_(std::make_shared<RemoteNodeGroupMetric>()) {
-  node_manager_ = std::make_unique<RemoteNodeManager>(
+      metric_(std::make_shared<RemoteCacheCacheNodeGroupMetric>()) {
+  node_manager_ = std::make_unique<RemoteCacheNodeManager>(
       option, [this](const PBCacheGroupMembers& members) {
         return OnMemberLoad(members);
       });
 }
 
-Status RemoteNodeGroup::Start() {
+Status RemoteCacheNodeGroup::Start() {
   CHECK_NOTNULL(upstream_);
   CHECK_NOTNULL(node_manager_);
   CHECK_NOTNULL(metric_);
@@ -165,7 +165,7 @@ Status RemoteNodeGroup::Start() {
   return Status::OK();
 }
 
-Status RemoteNodeGroup::Shutdown() {
+Status RemoteCacheNodeGroup::Shutdown() {
   if (!running_.exchange(false)) {
     return Status::OK();
   }
@@ -180,14 +180,14 @@ Status RemoteNodeGroup::Shutdown() {
   return Status::OK();
 }
 
-Status RemoteNodeGroup::Put(ContextSPtr ctx, const BlockKey& key,
-                            const Block& block) {
+Status RemoteCacheNodeGroup::Put(ContextSPtr ctx, const BlockKey& key,
+                                 const Block& block) {
   CHECK_RUNNING("Remote node group");
 
   Status status;
-  RemoteNodeSPtr node;
-  RemoteNodeGroupMetricGuard metirc_guard(__func__, block.size, status,
-                                          metric_);
+  RemoteCacheNodeSPtr node;
+  RemoteCacheCacheNodeGroupMetricGuard metirc_guard(__func__, block.size,
+                                                    status, metric_);
   status = GetNode(key, node);
   if (status.ok()) {
     status = node->Put(ctx, key, block);
@@ -196,14 +196,15 @@ Status RemoteNodeGroup::Put(ContextSPtr ctx, const BlockKey& key,
   return status;
 }
 
-Status RemoteNodeGroup::Range(ContextSPtr ctx, const BlockKey& key,
-                              off_t offset, size_t length, IOBuffer* buffer,
-                              RangeOption option) {
+Status RemoteCacheNodeGroup::Range(ContextSPtr ctx, const BlockKey& key,
+                                   off_t offset, size_t length,
+                                   IOBuffer* buffer, RangeOption option) {
   CHECK_RUNNING("Remote node group");
 
   Status status;
-  RemoteNodeSPtr node;
-  RemoteNodeGroupMetricGuard metric_guard(__func__, length, status, metric_);
+  RemoteCacheNodeSPtr node;
+  RemoteCacheCacheNodeGroupMetricGuard metric_guard(__func__, length, status,
+                                                    metric_);
   status = GetNode(key, node);
   if (status.ok()) {
     status = node->Range(ctx, key, offset, length, buffer, option);
@@ -212,14 +213,14 @@ Status RemoteNodeGroup::Range(ContextSPtr ctx, const BlockKey& key,
   return status;
 }
 
-Status RemoteNodeGroup::Cache(ContextSPtr ctx, const BlockKey& key,
-                              const Block& block) {
+Status RemoteCacheNodeGroup::Cache(ContextSPtr ctx, const BlockKey& key,
+                                   const Block& block) {
   CHECK_RUNNING("Remote node group");
 
   Status status;
-  RemoteNodeSPtr node;
-  RemoteNodeGroupMetricGuard metric_guard(__func__, block.size, status,
-                                          metric_);
+  RemoteCacheNodeSPtr node;
+  RemoteCacheCacheNodeGroupMetricGuard metric_guard(__func__, block.size,
+                                                    status, metric_);
   status = GetNode(key, node);
   if (status.ok()) {
     status = node->Cache(ctx, key, block);
@@ -228,13 +229,14 @@ Status RemoteNodeGroup::Cache(ContextSPtr ctx, const BlockKey& key,
   return status;
 }
 
-Status RemoteNodeGroup::Prefetch(ContextSPtr ctx, const BlockKey& key,
-                                 size_t length) {
+Status RemoteCacheNodeGroup::Prefetch(ContextSPtr ctx, const BlockKey& key,
+                                      size_t length) {
   CHECK_RUNNING("Remote node group");
 
   Status status;
-  RemoteNodeSPtr node;
-  RemoteNodeGroupMetricGuard metric_guard(__func__, length, status, metric_);
+  RemoteCacheNodeSPtr node;
+  RemoteCacheCacheNodeGroupMetricGuard metric_guard(__func__, length, status,
+                                                    metric_);
   status = GetNode(key, node);
   if (status.ok()) {
     status = node->Prefetch(ctx, key, length);
@@ -243,7 +245,8 @@ Status RemoteNodeGroup::Prefetch(ContextSPtr ctx, const BlockKey& key,
   return status;
 }
 
-Status RemoteNodeGroup::GetNode(const BlockKey& key, RemoteNodeSPtr& node) {
+Status RemoteCacheNodeGroup::GetNode(const BlockKey& key,
+                                     RemoteCacheNodeSPtr& node) {
   ReadLockGuard lock(rwlock_);
   if (upstream_->IsEmpty()) {
     return Status::NotFound("no cache node available");
@@ -253,7 +256,7 @@ Status RemoteNodeGroup::GetNode(const BlockKey& key, RemoteNodeSPtr& node) {
   return Status::OK();
 }
 
-Status RemoteNodeGroup::OnMemberLoad(const PBCacheGroupMembers& members) {
+Status RemoteCacheNodeGroup::OnMemberLoad(const PBCacheGroupMembers& members) {
   if (!upstream_->IsDiff(members)) {
     return Status::OK();
   }

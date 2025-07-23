@@ -24,11 +24,11 @@
 namespace dingofs {
 namespace cache {
 
-class RemoteNodeHealthChecker {
+class RemoteCacheNodeHealthChecker {
  public:
-  RemoteNodeHealthChecker(const PBCacheGroupMember& member,
-                          StateMachineSPtr state_machine);
-  virtual ~RemoteNodeHealthChecker() = default;
+  RemoteCacheNodeHealthChecker(const PBCacheGroupMember& member,
+                               StateMachineSPtr state_machine);
+  virtual ~RemoteCacheNodeHealthChecker() = default;
 
   virtual void Start();
   virtual void Shutdown();
@@ -44,7 +44,8 @@ class RemoteNodeHealthChecker {
   std::unique_ptr<Executor> executor_;
 };
 
-using RemoteNodeHealthCheckerUPtr = std::unique_ptr<RemoteNodeHealthChecker>;
+using RemoteCacheNodeHealthCheckerUPtr =
+    std::unique_ptr<RemoteCacheNodeHealthChecker>;
 
 }  // namespace cache
 }  // namespace dingofs

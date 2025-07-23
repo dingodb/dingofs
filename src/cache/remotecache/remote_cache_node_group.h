@@ -20,17 +20,17 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_NODE_GROUP_H_
-#define DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_NODE_GROUP_H_
+#ifndef DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_CACHE_NODE_GROUP_H_
+#define DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_CACHE_NODE_GROUP_H_
 
 #include "cache/blockcache/block_cache.h"
 #include "cache/common/proto.h"
 #include "cache/common/type.h"
-#include "cache/remotecache/remote_node.h"
-#include "cache/remotecache/remote_node_manager.h"
+#include "cache/remotecache/remote_cache_node.h"
+#include "cache/remotecache/remote_cache_node_manager.h"
 #include "cache/utils/con_hash.h"
 #include "cache/utils/context.h"
-#include "metrics/cache/remote_node_group_metric.h"
+#include "metrics/cache/remote_cache_node_group_metric.h"
 #include "options/cache/tiercache.h"
 
 namespace dingofs {
@@ -45,7 +45,7 @@ class CacheUpstream {
 
   Status Init();
 
-  RemoteNodeSPtr GetNode(const std::string& key);
+  RemoteCacheNodeSPtr GetNode(const std::string& key);
 
   bool IsDiff(const PBCacheGroupMembers& members) const;
   bool IsEmpty() const;
@@ -58,14 +58,14 @@ class CacheUpstream {
   PBCacheGroupMembers members_;
   RemoteBlockCacheOption option_;
   std::shared_ptr<ConHash> chash_;
-  std::unordered_map<std::string, RemoteNodeSPtr> nodes_;
+  std::unordered_map<std::string, RemoteCacheNodeSPtr> nodes_;
 };
 
 using CacheUpstreamSPtr = std::shared_ptr<CacheUpstream>;
 
-class RemoteNodeGroup final : public RemoteNode {
+class RemoteCacheNodeGroup final : public RemoteCacheNode {
  public:
-  explicit RemoteNodeGroup(RemoteBlockCacheOption option);
+  explicit RemoteCacheNodeGroup(RemoteBlockCacheOption option);
 
   Status Start() override;
   Status Shutdown() override;
@@ -80,19 +80,19 @@ class RemoteNodeGroup final : public RemoteNode {
  private:
   Status OnMemberLoad(const PBCacheGroupMembers& members);
 
-  Status GetNode(const BlockKey& key, RemoteNodeSPtr& node);
+  Status GetNode(const BlockKey& key, RemoteCacheNodeSPtr& node);
 
   std::atomic<bool> running_;
   BthreadRWLock rwlock_;  // protect upstream_
   RemoteBlockCacheOption option_;
   CacheUpstreamSPtr upstream_;
-  RemoteNodeManagerUPtr node_manager_;
-  RemoteNodeGroupMetricSPtr metric_;
+  RemoteCacheNodeManagerUPtr node_manager_;
+  RemoteCacheCacheNodeGroupMetricSPtr metric_;
 };
 
-using RemoteNodeGorupSPtr = std::shared_ptr<RemoteNodeGroup>;
+using RemoteNodeGorupSPtr = std::shared_ptr<RemoteCacheNodeGroup>;
 
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_NODE_GROUP_H_
+#endif  // DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_CACHE_NODE_GROUP_H_

@@ -33,7 +33,7 @@
 namespace dingofs {
 namespace cache {
 
-Prefetcher::Prefetcher(MemCacheSPtr mem_cache, RemoteNodeSPtr remote_node)
+Prefetcher::Prefetcher(MemCacheSPtr mem_cache, RemoteCacheNodeSPtr remote_node)
     : running_(false),
       memcache_(mem_cache),
       remote_node_(remote_node),

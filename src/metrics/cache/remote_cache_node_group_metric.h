@@ -20,8 +20,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_METRICS_REMOTE_NODE_GROUP_H_
-#define DINGOFS_SRC_METRICS_REMOTE_NODE_GROUP_H_
+#ifndef DINGOFS_SRC_METRICS_CACHE_REMOTE_CACHE_NODE_GROUP_METRIC_H_
+#define DINGOFS_SRC_METRICS_CACHE_REMOTE_CACHE_NODE_GROUP_METRIC_H_
 
 #include <absl/strings/str_format.h>
 #include <bvar/latency_recorder.h>
@@ -32,8 +32,8 @@
 namespace dingofs {
 namespace cache {
 
-struct RemoteNodeGroupMetric {
-  RemoteNodeGroupMetric() = default;
+struct RemoteCacheCacheNodeGroupMetric {
+  RemoteCacheCacheNodeGroupMetric() = default;
 
   inline static const std::string prefix = "dingofs_remote_node_group";
 
@@ -43,11 +43,13 @@ struct RemoteNodeGroupMetric {
   OpMetric op_prefetch{absl::StrFormat("%s_%s", prefix, "prefetch")};
 };
 
-using RemoteNodeGroupMetricSPtr = std::shared_ptr<RemoteNodeGroupMetric>;
+using RemoteCacheCacheNodeGroupMetricSPtr =
+    std::shared_ptr<RemoteCacheCacheNodeGroupMetric>;
 
-struct RemoteNodeGroupMetricGuard {
-  RemoteNodeGroupMetricGuard(const std::string& op_name, size_t bytes,
-                             Status& status, RemoteNodeGroupMetricSPtr metric)
+struct RemoteCacheCacheNodeGroupMetricGuard {
+  RemoteCacheCacheNodeGroupMetricGuard(
+      const std::string& op_name, size_t bytes, Status& status,
+      RemoteCacheCacheNodeGroupMetricSPtr metric)
       : op_name(op_name), bytes(bytes), status(status), metric(metric) {
     CHECK(op_name == "Put" || op_name == "Range" || op_name == "Cache" ||
           op_name == "Prefetch")
@@ -55,7 +57,7 @@ struct RemoteNodeGroupMetricGuard {
     timer.start();
   }
 
-  ~RemoteNodeGroupMetricGuard() {
+  ~RemoteCacheCacheNodeGroupMetricGuard() {
     timer.stop();
 
     OpMetric* op;
@@ -83,10 +85,10 @@ struct RemoteNodeGroupMetricGuard {
   size_t bytes;
   Status& status;
   butil::Timer timer;
-  RemoteNodeGroupMetricSPtr metric;
+  RemoteCacheCacheNodeGroupMetricSPtr metric;
 };
 
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_METRICS_REMOTE_NODE_GROUP_H_
+#endif  // DINGOFS_SRC_METRICS_CACHE_REMOTE_CACHE_NODE_GROUP_METRIC_H_
