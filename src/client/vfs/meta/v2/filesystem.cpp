@@ -249,11 +249,11 @@ Status MDSV2FileSystem::StatFs(Ino, FsStat* fs_stat) {
   auto status = mds_client_->GetFsQuota(*fs_stat);
 
   if (fs_stat->max_bytes == 0) {
-    fs_stat->max_bytes = UINT64_MAX;
+    fs_stat->max_bytes = INT64_MAX;
   }
 
   if (fs_stat->max_inodes == 0) {
-    fs_stat->max_inodes = UINT64_MAX;
+    fs_stat->max_inodes = INT64_MAX;
   }
 
   return status;

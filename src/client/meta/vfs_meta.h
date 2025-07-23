@@ -123,10 +123,10 @@ struct DirEntry {
 };
 
 struct FsStat {
-  uint64_t max_bytes;
-  uint64_t used_bytes;
-  uint64_t max_inodes;
-  uint64_t used_inodes;
+  int64_t max_bytes;
+  int64_t used_bytes;
+  int64_t max_inodes;
+  int64_t used_inodes;
 };
 
 std::string FsStat2Str(const FsStat& fs_stat);

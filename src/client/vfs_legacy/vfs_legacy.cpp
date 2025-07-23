@@ -1974,12 +1974,12 @@ Status VFSOld::RmDir(Ino parent, const std::string& name) {
 Status VFSOld::StatFs(Ino ino, FsStat* fs_stat) {
   pb::metaserver::Quota quota = fs_->GetFsQuota();
 
-  uint64_t total_bytes = UINT64_MAX;
+  uint64_t total_bytes = INT64_MAX;
   if (quota.maxbytes() > 0) {
     total_bytes = quota.maxbytes();
   }
 
-  uint64_t total_inodes = UINT64_MAX;
+  uint64_t total_inodes = INT64_MAX;
   if (quota.maxinodes() > 0) {
     total_inodes = quota.maxinodes();
   }
