@@ -59,6 +59,8 @@ class CacheGroupMemberManager {
 
   virtual Errno HandleHeartbeat(const std::string& group_name,
                                 uint64_t member_id, const Statistic& stat) = 0;
+
+  virtual std::vector<std::string> LoadGroups() = 0;
 };
 
 class CacheGroupMemberManagerImpl : public CacheGroupMemberManager {
@@ -83,6 +85,8 @@ class CacheGroupMemberManagerImpl : public CacheGroupMemberManager {
 
   Errno HandleHeartbeat(const std::string& group_name, uint64_t member_id,
                         const Statistic& stat) override;
+
+  std::vector<std::string> LoadGroups() override;
 
  private:
   void SetMembersState(std::vector<CacheGroupMember>* members);

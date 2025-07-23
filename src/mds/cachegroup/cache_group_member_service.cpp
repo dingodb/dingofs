@@ -82,6 +82,14 @@ DEFINE_RPC_METHOD(CacheGroupMemberServiceImpl, Heartbeat) {
   response->set_status(PbErr(rc));
 }
 
+DEFINE_RPC_METHOD(CacheGroupMemberServiceImpl, LoadGroups) {  // NOLINT
+  (void)controller;
+  ::brpc::ClosureGuard done_guard(done);
+
+  const auto& group_names = member_manager_->LoadGroups();
+  *response->mutable_group_names() = {group_names.begin(), group_names.end()};
+}
+
 }  // namespace cachegroup
 }  // namespace mds
 }  // namespace dingofs

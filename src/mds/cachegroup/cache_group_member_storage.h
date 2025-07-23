@@ -51,6 +51,8 @@ class CacheGroupMemberStorage {
 
   virtual Errno GetGroupId(const std::string& group_name, uint64_t* id) = 0;
 
+  virtual std::vector<std::string> GetGroups() = 0;
+
   virtual Errno RegisterMember(uint64_t* id) = 0;
 
   virtual Errno RegisterGroup(const std::string& group_name, uint64_t* id) = 0;
@@ -77,6 +79,8 @@ class CacheGroupMemberStorageImpl : public CacheGroupMemberStorage {
   bool Init() override;
 
   Errno GetGroupId(const std::string& group_name, uint64_t* group_id) override;
+
+  std::vector<std::string> GetGroups() override;
 
   Errno RegisterMember(uint64_t* member_id) override;
 

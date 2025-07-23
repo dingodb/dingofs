@@ -153,6 +153,10 @@ Errno CacheGroupMemberManagerImpl::HandleHeartbeat(
   return storage_->SetMemberLastOnlineTime(group_id, member_id, TimestampMs());
 }
 
+std::vector<std::string> CacheGroupMemberManagerImpl::LoadGroups() {
+  return storage_->GetGroups();
+}
+
 uint64_t CacheGroupMemberManagerImpl::TimestampMs() {
   return std::chrono::duration_cast<std::chrono::milliseconds>(
              std::chrono::system_clock::now().time_since_epoch())

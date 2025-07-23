@@ -56,6 +56,7 @@ class CacheGroupMemberServiceImpl
   DECLARE_RPC_METHOD(LoadMembers);
   DECLARE_RPC_METHOD(ReweightMember);
   DECLARE_RPC_METHOD(Heartbeat);
+  DECLARE_RPC_METHOD(LoadGroups);
 
  private:
   std::shared_ptr<CacheGroupMemberManager> member_manager_;

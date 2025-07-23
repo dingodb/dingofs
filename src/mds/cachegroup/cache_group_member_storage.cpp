@@ -24,6 +24,8 @@
 
 #include <glog/logging.h>
 
+#include <string>
+
 #include "dingofs/cachegroup.pb.h"
 #include "mds/common/storage_key.h"
 #include "mdsv2/filesystem/store_operation.h"
@@ -185,6 +187,17 @@ Errno CacheGroupMemberStorageImpl::GetGroupId(const std::string& group_name,
   }
   *id = iter->second;
   return Errno::kOk;
+}
+
+std::vector<std::string> CacheGroupMemberStorageImpl::GetGroups() {
+  ReadLockGuard lk(rwlock_);
+  std::vector<std::string> group_names;
+  group_names.reserve(group_names_.size());
+  for (const auto& item : group_names_) {
+    group_names.emplace_back(item.first);
+  }
+
+  return group_names;
 }
 
 Errno CacheGroupMemberStorageImpl::RegisterMember(uint64_t* member_id) {
