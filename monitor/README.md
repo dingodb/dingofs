@@ -106,7 +106,7 @@ ff6f895bf9b1   grafana/grafana                            "/run.sh"             
 你可以手工或者自动方式来更新监控的目标信息，这两种方式只能选择其一。
 监控的目标必须来自同一个集群，暂不支持多个集群的监控。
 你可以手工编辑targets.json和etcd_targets.json文件来修改监控目标信息。
-其中targets.json用来修改mds、metaserver、client的监控目标,etcd_targets.json用来
+其中targets.json用来修改mds、metaserver、client、remotecache的监控目标,etcd_targets.json用来
 修改etcd的监控目标，这2个文件的位置在prometheus/data目录下。
 
 自动更新会实时从集群中获取监控目标，并重新生成targets.json和etcd_targets.json文件,对于你手工修改的信息，将会被覆盖。
@@ -147,7 +147,17 @@ targets.json:
             "172.20.0.10:9002",
             "172.20.0.11:9002"
         ]
-    }
+    },
+        {
+        "labels": {
+            "job": "remotecache"
+        },
+        "targets": [
+            "172.20.0.13:10000",
+            "172.20.0.14:10001",
+            "172.20.0.15:10002"
+        ]
+    },
 ]
 ```
 
@@ -174,7 +184,7 @@ etcd_targets.json:
 通过如下方式来验证安装是否成功：
 
 ```
-dingo --version
+dingo version
 ```
 
 然后执行脚本：
