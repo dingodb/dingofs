@@ -21,18 +21,21 @@
 namespace dingofs {
 namespace mdsv2 {
 
-static const std::string kChunkCacheCountMetricsName = "dingofs_chunk_cache_count";
+static const std::string kChunkCacheCountMetricsName = "dingofs_{}_chunk_cache_count";
 
-ChunkCache::ChunkCache() : count_metrics_(kChunkCacheCountMetricsName) {}
+ChunkCache::ChunkCache(uint32_t fs_id)
+    : fs_id_(fs_id), count_metrics_(fmt::format(kChunkCacheCountMetricsName, fs_id)) {}
 
-bool ChunkCache::PutIf(uint64_t ino, uint64_t chunk_index, const pb::mdsv2::Chunk& chunk) {
+static ChunkCache::ChunkSPtr NewChunk(ChunkType&& chunk) { return std::make_shared<ChunkType>(std::move(chunk)); }
+
+bool ChunkCache::PutIf(uint64_t ino, ChunkType chunk) {
   utils::WriteLockGuard lk(lock_);
 
-  auto key = Key{.ino = ino, .chunk_index = chunk_index};
+  auto key = Key{.ino = ino, .chunk_index = chunk.index()};
 
   auto it = chunk_map_.find(key);
   if (it == chunk_map_.end()) {
-    chunk_map_.insert(std::make_pair(key, std::make_shared<pb::mdsv2::Chunk>(chunk)));
+    chunk_map_.insert(std::make_pair(key, NewChunk(std::move(chunk))));
 
     count_metrics_ << 1;
 
@@ -42,30 +45,7 @@ bool ChunkCache::PutIf(uint64_t ino, uint64_t chunk_index, const pb::mdsv2::Chun
       return false;
     }
 
-    it->second = std::make_shared<pb::mdsv2::Chunk>(chunk);
-  }
-
-  return true;
-}
-
-bool ChunkCache::PutIf(uint64_t ino, uint64_t chunk_index, pb::mdsv2::Chunk&& chunk) {
-  utils::WriteLockGuard lk(lock_);
-
-  auto key = Key{.ino = ino, .chunk_index = chunk_index};
-
-  auto it = chunk_map_.find(key);
-  if (it == chunk_map_.end()) {
-    chunk_map_.insert(std::make_pair(key, std::make_shared<pb::mdsv2::Chunk>(std::move(chunk))));
-
-    count_metrics_ << 1;
-
-  } else {
-    const auto& old_chunk = it->second;
-    if (chunk.version() <= old_chunk->version()) {
-      return false;
-    }
-
-    it->second = std::make_shared<pb::mdsv2::Chunk>(std::move(chunk));
+    it->second = NewChunk(std::move(chunk));
   }
 
   return true;
@@ -84,7 +64,7 @@ void ChunkCache::Delete(uint64_t ino) {
   utils::WriteLockGuard lk(lock_);
 
   auto key = Key{.ino = ino, .chunk_index = 0};
-  for (auto it = chunk_map_.upper_bound(key); it != chunk_map_.end();) {
+  for (auto it = chunk_map_.lower_bound(key); it != chunk_map_.end();) {
     if (it->first.ino != ino) {
       break;
     }
@@ -94,7 +74,7 @@ void ChunkCache::Delete(uint64_t ino) {
   }
 }
 
-ChunkCache::Value ChunkCache::Get(uint64_t ino, uint64_t chunk_index) {
+ChunkCache::ChunkSPtr ChunkCache::Get(uint64_t ino, uint64_t chunk_index) {
   utils::ReadLockGuard lk(lock_);
 
   auto key = Key{.ino = ino, .chunk_index = chunk_index};
@@ -103,13 +83,13 @@ ChunkCache::Value ChunkCache::Get(uint64_t ino, uint64_t chunk_index) {
   return (it != chunk_map_.end()) ? it->second : nullptr;
 }
 
-std::vector<ChunkCache::Value> ChunkCache::Get(uint64_t ino) {
+std::vector<ChunkCache::ChunkSPtr> ChunkCache::Get(uint64_t ino) {
   utils::ReadLockGuard lk(lock_);
 
   auto key = Key{.ino = ino, .chunk_index = 0};
 
-  std::vector<ChunkCache::Value> chunks;
-  for (auto it = chunk_map_.upper_bound(key); it != chunk_map_.end(); ++it) {
+  std::vector<ChunkSPtr> chunks;
+  for (auto it = chunk_map_.lower_bound(key); it != chunk_map_.end(); ++it) {
     if (it->first.ino != ino) {
       break;
     }

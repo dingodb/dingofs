@@ -27,6 +27,7 @@
 #include "mdsv2/common/context.h"
 #include "mdsv2/common/status.h"
 #include "mdsv2/common/type.h"
+#include "mdsv2/filesystem/chunk_cache.h"
 #include "mdsv2/filesystem/dentry.h"
 #include "mdsv2/filesystem/file_session.h"
 #include "mdsv2/filesystem/fs_info.h"
@@ -295,6 +296,9 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   // parent memo
   ParentMemoSPtr parent_memo_;
+
+  // chunk cache
+  ChunkCache chunk_cache_;
 
   // quota
   quota::QuotaManager quota_manager_;

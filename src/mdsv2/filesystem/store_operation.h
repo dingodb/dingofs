@@ -582,6 +582,10 @@ class FallocateOperation : public Operation {
   FallocateOperation(Trace& trace, const Param& param) : Operation(trace), param_(param) {};
   ~FallocateOperation() override = default;
 
+  struct Result : public Operation::Result {
+    std::vector<ChunkType> effected_chunks;
+  };
+
   OpType GetOpType() const override { return OpType::kFallocate; }
 
   uint32_t GetFsId() const override { return param_.fs_id; }
@@ -589,11 +593,22 @@ class FallocateOperation : public Operation {
 
   Status RunInBatch(TxnUPtr& txn, AttrType& attr, const std::vector<KeyValue>& prefetch_kvs) override;
 
+  template <int size = 0>
+  Result& GetResult() {
+    auto& result = Operation::GetResult();
+    result_.status = result.status;
+    result_.attr = std::move(result.attr);
+
+    return result_;
+  }
+
  private:
-  Status PreAlloc(TxnUPtr& txn, AttrType& attr, uint64_t offset, uint32_t len) const;
-  Status SetZero(TxnUPtr& txn, AttrType& attr, uint64_t offset, uint64_t len, bool keep_size) const;
+  Status PreAlloc(TxnUPtr& txn, AttrType& attr, uint64_t offset, uint32_t len);
+  Status SetZero(TxnUPtr& txn, AttrType& attr, uint64_t offset, uint64_t len, bool keep_size);
 
   Param param_;
+
+  Result result_;
 };
 
 class OpenFileOperation : public Operation {
@@ -742,6 +757,7 @@ class CompactChunkOperation : public Operation {
 
   struct Result : public Operation::Result {
     TrashSliceList trash_slice_list;
+    std::vector<ChunkType> effected_chunks;
   };
 
   OpType GetOpType() const override { return OpType::kCompactChunk; }

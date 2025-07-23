@@ -747,7 +747,7 @@ Status CleanChunkOperation::Run(TxnUPtr& txn) {
   return Status::OK();
 }
 
-Status FallocateOperation::PreAlloc(TxnUPtr& txn, AttrType& attr, uint64_t offset, uint32_t len) const {
+Status FallocateOperation::PreAlloc(TxnUPtr& txn, AttrType& attr, uint64_t offset, uint32_t len) {
   uint64_t length = attr.length();
   const uint64_t new_length = offset + len;
 
@@ -764,6 +764,7 @@ Status FallocateOperation::PreAlloc(TxnUPtr& txn, AttrType& attr, uint64_t offse
   auto status = GetChunk(txn, fs_id, ino, length / chunk_size, max_chunk);
   if (!status.ok()) return status;
 
+  std::vector<ChunkType> effected_chunks;
   uint32_t count = 0;
   while (length < new_length) {
     uint64_t chunk_pos = length % chunk_size;
@@ -790,10 +791,12 @@ Status FallocateOperation::PreAlloc(TxnUPtr& txn, AttrType& attr, uint64_t offse
       chunk.add_slices()->Swap(&slice);
 
       txn->Put(MetaCodec::EncodeChunkKey(fs_id, ino, chunk_index), MetaCodec::EncodeChunkValue(chunk));
+      effected_chunks.push_back(std::move(chunk));
 
     } else {
       max_chunk.add_slices()->Swap(&slice);
       txn->Put(MetaCodec::EncodeChunkKey(fs_id, ino, chunk_index), MetaCodec::EncodeChunkValue(max_chunk));
+      effected_chunks.push_back(max_chunk);
     }
 
     length += delta_chunk_size;
@@ -803,6 +806,8 @@ Status FallocateOperation::PreAlloc(TxnUPtr& txn, AttrType& attr, uint64_t offse
     }
   }
 
+  result_.effected_chunks = std::move(effected_chunks);
+
   return Status::OK();
 }
 
@@ -811,7 +816,7 @@ Status FallocateOperation::PreAlloc(TxnUPtr& txn, AttrType& attr, uint64_t offse
 // 1. [offset, len)    |-----|
 // 2. [offset, len)    |-------------|
 // 3. [offset, len)                |-----|
-Status FallocateOperation::SetZero(TxnUPtr& txn, AttrType& attr, uint64_t offset, uint64_t len, bool keep_size) const {
+Status FallocateOperation::SetZero(TxnUPtr& txn, AttrType& attr, uint64_t offset, uint64_t len, bool keep_size) {
   const uint32_t fs_id = attr.fs_id();
   const Ino ino = attr.ino();
   const uint64_t chunk_size = param_.chunk_size;
@@ -826,6 +831,7 @@ Status FallocateOperation::SetZero(TxnUPtr& txn, AttrType& attr, uint64_t offset
   auto status = ScanChunk(txn, fs_id, ino, chunks);
   if (!status.ok()) return status;
 
+  std::vector<ChunkType> effected_chunks;
   uint32_t count = 0;
   while (offset < end_offset) {
     uint64_t chunk_pos = offset % chunk_size;
@@ -851,11 +857,13 @@ Status FallocateOperation::SetZero(TxnUPtr& txn, AttrType& attr, uint64_t offset
       chunk.add_slices()->Swap(&slice);
 
       txn->Put(MetaCodec::EncodeChunkKey(fs_id, ino, chunk_index), MetaCodec::EncodeChunkValue(chunk));
+      effected_chunks.push_back(std::move(chunk));
 
     } else {
       auto& chunk = it->second;
       chunk.add_slices()->Swap(&slice);
       txn->Put(MetaCodec::EncodeChunkKey(fs_id, ino, chunk_index), MetaCodec::EncodeChunkValue(chunk));
+      effected_chunks.push_back(chunk);
     }
 
     offset += delta_chunk_size;
@@ -868,6 +876,8 @@ Status FallocateOperation::SetZero(TxnUPtr& txn, AttrType& attr, uint64_t offset
   if (!keep_size && end_offset > attr.length()) {
     attr.set_length(end_offset);
   }
+
+  result_.effected_chunks = std::move(effected_chunks);
 
   return Status::OK();
 }
@@ -1460,6 +1470,8 @@ TrashSliceList CompactChunkOperation::CompactChunks(TxnUPtr& txn, uint32_t fs_id
 
 Status CompactChunkOperation::Run(TxnUPtr& txn) {
   const uint32_t fs_id = fs_info_.fs_id();
+  CHECK(fs_id > 0) << "fs_id is 0";
+  CHECK(ino_ > 0) << "ino is 0.";
 
   std::vector<ChunkType> chunks;
   if (chunk_index_ == 0) {
@@ -1482,11 +1494,13 @@ Status CompactChunkOperation::Run(TxnUPtr& txn) {
   }
 
   TrashSliceList trash_slice_list;
+  std::vector<ChunkType> effected_chunks;
   for (auto& chunk : chunks) {
     auto part_trash_slice_list = CompactChunk(txn, fs_id, ino_, file_length_, chunk);
     if (!part_trash_slice_list.slices().empty()) {
       chunk.set_version(chunk.version() + 1);
       txn->Put(MetaCodec::EncodeChunkKey(fs_id, ino_, chunk.index()), MetaCodec::EncodeChunkValue(chunk));
+      effected_chunks.push_back(chunk);
     }
 
     for (auto trash_slice = part_trash_slice_list.mutable_slices()->begin();
@@ -1496,6 +1510,7 @@ Status CompactChunkOperation::Run(TxnUPtr& txn) {
   }
 
   result_.trash_slice_list = std::move(trash_slice_list);
+  result_.effected_chunks = std::move(effected_chunks);
 
   return Status::OK();
 }

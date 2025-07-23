@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "dingofs/mdsv2.pb.h"
+#include "mdsv2/common/type.h"
 #include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
@@ -32,9 +33,21 @@ using ChunkCacheUPtr = std::unique_ptr<ChunkCache>;
 // single file chunk cache
 class ChunkCache {
  public:
-  ChunkCache();
+  ChunkCache(uint32_t fs_id);
   ~ChunkCache() = default;
 
+  using ChunkSPtr = std::shared_ptr<ChunkType>;
+
+  static ChunkCacheUPtr New(uint32_t fs_id) { return std::make_unique<ChunkCache>(fs_id); }
+
+  // if version is newer then put
+  bool PutIf(uint64_t ino, ChunkType chunk);
+  void Delete(uint64_t ino, uint64_t chunk_index);
+  void Delete(uint64_t ino);
+  ChunkSPtr Get(uint64_t ino, uint64_t chunk_index);
+  std::vector<ChunkSPtr> Get(uint64_t ino);
+
+ private:
   struct Key {
     uint64_t ino;
     uint64_t chunk_index;
@@ -47,23 +60,11 @@ class ChunkCache {
     }
   };
 
-  using Value = std::shared_ptr<pb::mdsv2::Chunk>;
-
-  static ChunkCacheUPtr New() { return std::make_unique<ChunkCache>(); }
-
-  // if version is newer then put
-  bool PutIf(uint64_t ino, uint64_t chunk_index, const pb::mdsv2::Chunk& chunk);
-  bool PutIf(uint64_t ino, uint64_t chunk_index, pb::mdsv2::Chunk&& chunk);
-  void Delete(uint64_t ino, uint64_t chunk_index);
-  void Delete(uint64_t ino);
-  Value Get(uint64_t ino, uint64_t chunk_index);
-  std::vector<Value> Get(uint64_t ino);
-
- private:
+  uint32_t fs_id_{0};
   utils::RWLock lock_;
 
-  // ino/chunk_index -> pb::mdsv2::Chunk
-  std::map<Key, Value> chunk_map_;
+  // ino/chunk_index -> ChunkType
+  std::map<Key, ChunkSPtr> chunk_map_;
 
   // statistics
   bvar::Adder<int64_t> count_metrics_;

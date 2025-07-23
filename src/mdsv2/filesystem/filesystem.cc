@@ -91,6 +91,7 @@ FileSystem::FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr 
       operation_processor_(operation_processor),
       mds_meta_map_(mds_meta_map),
       parent_memo_(ParentMemo::New(fs_id_)),
+      chunk_cache_(fs_id_),
       quota_manager_(fs_id_, parent_memo_, operation_processor),
       notify_buddy_(notify_buddy),
       file_session_manager_(fs_id_, operation_processor) {
@@ -1114,6 +1115,7 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name) {
   int64_t byte_delta = child_attr.type() != pb::mdsv2::SYM_LINK ? child_attr.length() : 0;
   if (child_attr.nlink() == 0) {
     quota_manager_.UpdateFsUsage(-byte_delta, -1);
+    chunk_cache_.Delete(child_attr.ino());
   }
   quota_manager_.UpdateDirUsage(parent, -byte_delta, -1);
 
@@ -1664,7 +1666,7 @@ Status FileSystem::WriteSlice(Context& ctx, Ino parent, Ino ino, uint64_t chunk_
   auto& result = operation.GetResult();
   auto& attr = result.attr;
   int64_t length_delta = result.length_delta;
-  const auto& chunk = result.chunk;
+  auto& chunk = result.chunk;
 
   // update cache
   inode->UpdateIf(attr);
@@ -1673,6 +1675,9 @@ Status FileSystem::WriteSlice(Context& ctx, Ino parent, Ino ino, uint64_t chunk_
   if (chunk.slices_size() > FLAGS_compact_slice_threshold_num) {
     DINGO_LOG(INFO) << fmt::format("[fs.{}] need compact chunk({}) for ino({}).", fs_id_, chunk_index, ino);
   }
+
+  // update chunk cache
+  chunk_cache_.PutIf(ino, std::move(chunk));
 
   // update quota
   quota_manager_.UpdateFsUsage(length_delta, 0);
@@ -1698,6 +1703,14 @@ Status FileSystem::ReadSlice(Context& ctx, Ino ino, uint64_t chunk_index, std::v
     return status;
   }
 
+  // get chunk from cache
+  auto chunk = chunk_cache_.Get(ino, chunk_index);
+  if (chunk != nullptr) {
+    slices = Helper::PbRepeatedToVector(chunk->slices());
+    return Status::OK();
+  }
+
+  // get chunk from backend store
   GetChunkOperation operation(trace, fs_id_, ino, chunk_index);
 
   status = RunOperation(&operation);
@@ -1712,6 +1725,9 @@ Status FileSystem::ReadSlice(Context& ctx, Ino ino, uint64_t chunk_index, std::v
   auto& result = operation.GetResult();
 
   slices = Helper::PbRepeatedToVector(result.chunk.slices());
+
+  // update chunk cache
+  chunk_cache_.PutIf(ino, std::move(result.chunk));
 
   return Status::OK();
 }
@@ -1759,6 +1775,7 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
   param.chunk_size = fs_info_->GetChunkSize();
   param.slice_id = slice_id;
   param.slice_num = slice_num;
+
   FallocateOperation operation(trace, param);
 
   status = RunOperation(&operation);
@@ -1770,10 +1787,16 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
 
   auto& result = operation.GetResult();
   auto& attr = result.attr;
+  auto& effected_chunks = result.effected_chunks;
 
   inode->UpdateIf(attr);
 
   entry_out.attr = std::move(attr);
+
+  // update chunk cache
+  for (auto& chunk : effected_chunks) {
+    chunk_cache_.PutIf(ino, std::move(chunk));
+  }
 
   return Status::OK();
 }
@@ -1800,12 +1823,18 @@ Status FileSystem::CompactChunk(Context& ctx, Ino ino, uint64_t chunk_index,
   status = RunOperation(&operation);
 
   auto& result = operation.GetResult();
+  auto& effected_chunks = result.effected_chunks;
   trash_slices = Helper::PbRepeatedToVector(result.trash_slice_list.mutable_slices());
 
   DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] compactchunk {}/{} finish, trash_slices({}) status({}).", fs_id_,
                                  ElapsedTimeUs(time_ns), ino, chunk_index, trash_slices.size(), status.error_str());
   if (!status.ok()) {
     return status;
+  }
+
+  // update chunk cache
+  for (auto& chunk : effected_chunks) {
+    chunk_cache_.PutIf(ino, std::move(chunk));
   }
 
   return Status::OK();
