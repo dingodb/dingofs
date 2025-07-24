@@ -34,7 +34,7 @@
 #include "cache/common/macro.h"
 #include "cache/common/proto.h"
 #include "cache/common/type.h"
-#include "cache/remotecache/remote_node_health_checker.h"
+#include "cache/remotecache/remote_cache_node_health_checker.h"
 #include "cache/remotecache/rpc_client.h"
 #include "cache/utils/bthread.h"
 #include "cache/utils/context.h"

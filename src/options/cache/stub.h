@@ -30,7 +30,8 @@
 namespace dingofs {
 namespace cache {
 
-// TODO(Wine93): Remove this file
+// FIXME: This file is used to define some configuration will be discarded
+// in the future
 DECLARE_string(mds_rpc_addrs);
 DECLARE_uint64(mds_rpc_retry_total_ms);
 DECLARE_uint64(mds_rpc_max_timeout_ms);
@@ -39,6 +40,8 @@ DECLARE_uint64(mds_rpc_retry_interval_us);
 DECLARE_uint64(mds_rpc_max_failed_times_before_change_addr);
 DECLARE_uint64(mds_rpc_normal_retry_times_before_trigger_wait);
 DECLARE_uint64(mds_rpc_wait_sleep_ms);
+DECLARE_string(mdsv2_rpc_addr);
+DECLARE_string(filesystem_mds_version);
 
 stub::common::MdsOption NewMdsOption();
 

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "cache/remotecache/remote_node_health_checker.h"
+#include "cache/remotecache/remote_cache_node_health_checker.h"
 
 #include <absl/strings/str_format.h>
 #include <brpc/channel.h>

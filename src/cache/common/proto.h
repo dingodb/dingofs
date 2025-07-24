@@ -26,13 +26,21 @@
 #include "common/status.h"
 #include "dingofs/blockcache.pb.h"
 #include "dingofs/cachegroup.pb.h"
+#include "dingofs/common.pb.h"
 #include "dingofs/mds.pb.h"
+#include "dingofs/mdsv2.pb.h"
 
 namespace dingofs {
 namespace cache {
 
 using PBFSStatusCode = pb::mds::FSStatusCode;
 using PBFsInfo = pb::mds::FsInfo;
+using PBFsInfoV2 = pb::mdsv2::FsInfo;
+using PBStorageInfo = pb::common::StorageInfo;
+using PBS3Info = pb::common::S3Info;
+using PBRadosInfo = pb::common::RadosInfo;
+using PBS3InfoV2 = pb::mdsv2::S3Info;
+using PBRadosInfoV2 = pb::mdsv2::RadosInfo;
 
 using PBCacheGroupMember = pb::mds::cachegroup::CacheGroupMember;
 using PBCacheGroupNodeMetadata = pb::mds::cachegroup::CacheGroupNodeMetadata;

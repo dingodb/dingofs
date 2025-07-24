@@ -22,12 +22,12 @@
 
 #include "cache/storage/storage_pool.h"
 
+#include <butil/time.h>
 #include <glog/logging.h>
 
 #include <memory>
 #include <mutex>
 
-#include "cache/common/macro.h"
 #include "cache/common/proto.h"
 #include "cache/common/type.h"
 #include "cache/storage/storage_impl.h"
@@ -45,10 +45,9 @@ Status SingleStorage::GetStorage(uint32_t /*fs_id*/, StorageSPtr& storage) {
   return Status::OK();
 }
 
-StoragePoolImpl::StoragePoolImpl(
-    std::shared_ptr<stub::rpcclient::MdsClient> mds_client)
-    : mds_client_(mds_client) {
-  CHECK_NOTNULL(mds_client);
+StoragePoolImpl::StoragePoolImpl(GetStorageInfoFunc get_storage_info_func)
+    : get_storage_info_func_(get_storage_info_func) {
+  CHECK_NOTNULL(get_storage_info_func_);
 }
 
 Status StoragePoolImpl::GetStorage(uint32_t fs_id, StorageSPtr& storage) {
@@ -75,41 +74,38 @@ bool StoragePoolImpl::Get(uint32_t fs_id, StorageSPtr& storage) {
 }
 
 Status StoragePoolImpl::Create(uint32_t fs_id, StorageSPtr& storage) {
-  // get filesyste information
-  PBFsInfo fs_info;
-  PBFSStatusCode code = mds_client_->GetFsInfo(fs_id, &fs_info);
-  if (code != PBFSStatusCode::OK) {
-    LOG_ERROR("Get filesystem information failed: fs_id = %d, rc = %s", fs_id,
-              FSStatusCode_Name(code));
-    return Status::Internal("get filesystem information failed");
-  } else if (!fs_info.has_storage_info()) {
-    LOG_ERROR("The filesystem missing storage_info: fs_id = %d", fs_id);
-    return Status::Internal("filesystem missing storage info");
-  }
-
-  // new block accesser
-  blockaccess::BlockAccessOptions block_access_opt;
-  FillBlockAccessOption(fs_info.storage_info(), &block_access_opt);
-  block_accesseres_[fs_id] =
-      std::make_unique<blockaccess::BlockAccesserImpl>(block_access_opt);
-  auto* block_accesser = block_accesseres_[fs_id].get();
-  auto status = block_accesser->Init();
+  // Get storage information
+  PBStorageInfo storage_info;
+  auto status = get_storage_info_func_(fs_id, &storage_info);
   if (!status.ok()) {
-    LOG_ERROR(
-        "Init block accesser for filesystem failed: fs_id = %d, status = %s",
-        fs_id, status.ToString());
+    LOG(ERROR) << "Get filesystem storage information failed: fs_id = " << fs_id
+               << ", status = " << status.ToString();
     return status;
   }
 
-  // new storage and init it
+  // New block accesser
+  blockaccess::BlockAccessOptions block_access_opt;
+  FillBlockAccessOption(storage_info, &block_access_opt);
+  block_accesseres_[fs_id] =
+      std::make_unique<blockaccess::BlockAccesserImpl>(block_access_opt);
+  auto* block_accesser = block_accesseres_[fs_id].get();
+  status = block_accesser->Init();
+  if (!status.ok()) {
+    LOG(ERROR) << "Init block accesser for filesystem failed: fs_id = " << fs_id
+               << ", status = " << status.ToString();
+    return status;
+  }
+
+  // New storage and init it
   storage = std::make_shared<StorageImpl>(block_accesser);
   status = storage->Start();
-  if (status.ok()) {
-    LOG(INFO) << "New storage for filesystem (fs_id=" << fs_id << ") success.";
-  } else {
-    LOG_ERROR("New storage for filesystem failed: fs_id = %d, status = %s",
-              fs_id, status.ToString());
+  if (!status.ok()) {
+    LOG(ERROR) << "New storage for filesystem failed: fs_id = " << fs_id
+               << ", status = " << status.ToString();
+    return status;
   }
+
+  LOG(INFO) << "New storage for filesystem (fs_id=" << fs_id << ") success.";
   return status;
 }
 

@@ -64,6 +64,8 @@ class MDSClient {
 
   static Status GetFsInfo(RPCPtr rpc, const std::string& name,
                           pb::mdsv2::FsInfo& fs_info);
+  static Status GetFsInfo(RPCPtr rpc, uint32_t fs_id,
+                          pb::mdsv2::FsInfo& fs_info);
 
   Status Heartbeat();
 
@@ -110,6 +112,9 @@ class MDSClient {
   Status GetFsQuota(FsStat& fs_stat);
 
  private:
+  static Status DoGetFsInfo(RPCPtr rpc, pb::mdsv2::GetFsInfoRequest& request,
+                            pb::mdsv2::FsInfo& fs_info);
+
   EndPoint GetEndpoint(Ino ino);
   EndPoint GetEndpointByParent(int64_t parent);
 

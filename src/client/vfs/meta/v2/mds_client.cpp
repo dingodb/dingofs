@@ -26,7 +26,6 @@
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 #include "mdsv2/common/constant.h"
-#include "mdsv2/common/logging.h"
 #include "mdsv2/common/type.h"
 
 namespace dingofs {
@@ -112,21 +111,29 @@ bool MDSClient::SetEndpoint(const std::string& ip, int port, bool is_default) {
   return rpc_->AddEndpoint(ip, port, is_default);
 }
 
+Status MDSClient::DoGetFsInfo(RPCPtr rpc, pb::mdsv2::GetFsInfoRequest& request,
+                              pb::mdsv2::FsInfo& fs_info) {
+  pb::mdsv2::GetFsInfoResponse response;
+
+  auto status = rpc->SendRequest("MDSService", "GetFsInfo", request, response);
+  if (status.ok()) {
+    fs_info = response.fs_info();
+  }
+  return status;
+}
+
 Status MDSClient::GetFsInfo(RPCPtr rpc, const std::string& name,
                             pb::mdsv2::FsInfo& fs_info) {
   pb::mdsv2::GetFsInfoRequest request;
-  pb::mdsv2::GetFsInfoResponse response;
-
   request.set_fs_name(name);
+  return DoGetFsInfo(rpc, request, fs_info);
+}
 
-  auto status = rpc->SendRequest("MDSService", "GetFsInfo", request, response);
-  if (!status.ok()) {
-    return status;
-  }
-
-  fs_info = response.fs_info();
-
-  return Status::OK();
+Status MDSClient::GetFsInfo(RPCPtr rpc, uint32_t fs_id,
+                            pb::mdsv2::FsInfo& fs_info) {
+  pb::mdsv2::GetFsInfoRequest request;
+  request.set_fs_id(fs_id);
+  return DoGetFsInfo(rpc, request, fs_info);
 }
 
 Status MDSClient::Heartbeat() {

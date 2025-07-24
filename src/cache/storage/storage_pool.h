@@ -24,6 +24,7 @@
 #define DINGOFS_SRC_CACHE_STORAGE_STORAGE_POOL_H_
 
 #include "blockaccess/block_accesser.h"
+#include "cache/common/proto.h"
 #include "cache/common/type.h"
 #include "cache/storage/storage.h"
 #include "common/status.h"
@@ -52,10 +53,12 @@ class SingleStorage final : public StoragePool {
   StorageSPtr storage_;
 };
 
+using GetStorageInfoFunc =
+    std::function<Status(uint32_t fs_id, PBStorageInfo* storage_info)>;
+
 class StoragePoolImpl final : public StoragePool {
  public:
-  explicit StoragePoolImpl(
-      std::shared_ptr<stub::rpcclient::MdsClient> mds_client);
+  explicit StoragePoolImpl(GetStorageInfoFunc get_storage_info_func);
 
   Status GetStorage(uint32_t fs_id, StorageSPtr& storage) override;
 
@@ -65,7 +68,7 @@ class StoragePoolImpl final : public StoragePool {
   void Insert(uint32_t fs_id, StorageSPtr storage);
 
   BthreadMutex mutex_;
-  std::shared_ptr<stub::rpcclient::MdsClient> mds_client_;
+  GetStorageInfoFunc get_storage_info_func_;
   std::unordered_map<uint32_t, blockaccess::BlockAccesserUPtr>
       block_accesseres_;
   std::unordered_map<uint32_t, StorageSPtr> storages_;

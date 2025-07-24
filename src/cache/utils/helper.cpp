@@ -102,8 +102,7 @@ std::string Helper::PathJoin(const std::vector<std::string>& subpaths) {
 }
 
 std::string Helper::TempFilepath(const std::string& filepath) {
-  return absl::StrFormat("%s.%lld.%s", filepath, TimestampNs(),
-                         kTempFileSuffix);
+  return absl::StrFormat("%s.%lld%s", filepath, TimestampNs(), kTempFileSuffix);
 }
 
 bool Helper::IsTempFilepath(const std::string& filepath) {

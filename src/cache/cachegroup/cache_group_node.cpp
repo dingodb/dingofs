@@ -30,6 +30,7 @@
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/block_cache_impl.h"
 #include "cache/blockcache/disk_cache_layout.h"
+#include "cache/cachegroup/stub.h"
 #include "cache/common/const.h"
 #include "cache/common/macro.h"
 #include "cache/utils/context.h"
@@ -38,6 +39,7 @@
 #include "common/status.h"
 #include "dingofs/mds.pb.h"
 #include "metrics/cache/cache_group_node_metric.h"
+#include "options/cache/stub.h"
 
 namespace dingofs {
 namespace cache {
@@ -65,8 +67,18 @@ CacheGroupNodeImpl::CacheGroupNodeImpl(CacheGroupNodeOption option)
       mds_client_(std::make_shared<stub::rpcclient::MdsClientImpl>()),
       member_(std::make_shared<CacheGroupNodeMemberImpl>(option, mds_client_)),
       heartbeat_(
-          std::make_unique<CacheGroupNodeHeartbeatImpl>(member_, mds_client_)),
-      storage_pool_(std::make_shared<StoragePoolImpl>(mds_client_)) {}
+          std::make_unique<CacheGroupNodeHeartbeatImpl>(member_, mds_client_)) {
+  if (FLAGS_filesystem_mds_version == "v1") {
+    storage_pool_ =
+        std::make_shared<StoragePoolImpl>(NewV1GetStorageInfoFunc(mds_client_));
+  } else if (FLAGS_filesystem_mds_version == "v2") {
+    std::make_shared<StoragePoolImpl>(
+        NewV2GetStorageInfoFunc(fLS::FLAGS_mdsv2_rpc_addr));
+  } else {
+    CHECK(false) << "Unsupport filesystem mds version: "
+                 << FLAGS_filesystem_mds_version;
+  }
+}
 
 Status CacheGroupNodeImpl::Start() {
   CHECK_NOTNULL(mds_base_);

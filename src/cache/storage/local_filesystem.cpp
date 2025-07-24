@@ -172,7 +172,7 @@ Status LocalFileSystem::ReadFile(ContextSPtr ctx, const std::string& path,
                     Helper::Filename(path), offset, length);
   StepTimerGuard guard(timer);
 
-  NEXT_STEP(kCreatFile);
+  NEXT_STEP(kOpenFile);
   int fd;
   status = Posix::Open(path, O_RDONLY, &fd);
   if (!status.ok()) {

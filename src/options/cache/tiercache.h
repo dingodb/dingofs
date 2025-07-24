@@ -41,21 +41,18 @@ DECLARE_uint32(load_members_interval_ms);
 DECLARE_bool(fill_group_cache);
 
 // Set whether split range request into subrequests.
+// (default is true)
 DECLARE_bool(subrequest_ranges);
 
 // Range size for each subrequest
 DECLARE_uint32(subrequest_range_size);
 
 // Sets whether to enable prefetching for remote cache operations.
-DECLARE_bool(enable_prefetch);
-
-// The whole block will be splited into multiple requests and prefetch from
-// remote parallel (default is 256KB).
-DECLARE_uint32(prefetch_split_iosize_kb);
+DECLARE_bool(enable_remote_prefetch);
 
 // Sets the max buffer size for cache prefetch blocks in memory
 // (default is 512MB).
-DECLARE_uint32(prefetch_max_buffer_size_mb);
+DECLARE_uint32(remote_prefetch_max_buffer_size_mb);
 
 // Timeout (ms) for put rpc request
 DECLARE_uint32(rpc_put_request_timeout_ms);

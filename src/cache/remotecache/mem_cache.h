@@ -26,10 +26,8 @@
 #include <bthread/execution_queue.h>
 
 #include <memory>
-#include <unordered_map>
 
 #include "cache/blockcache/cache_store.h"
-#include "cache/blockcache/lru_common.h"
 #include "cache/common/type.h"
 #include "common/status.h"
 #include "utils/lru_cache.h"

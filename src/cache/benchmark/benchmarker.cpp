@@ -24,6 +24,7 @@
 
 #include <memory>
 
+#include "cache/cachegroup/stub.h"
 #include "cache/common/type.h"
 #include "cache/storage/storage_pool.h"
 #include "cache/tiercache/tier_block_cache.h"
@@ -36,7 +37,8 @@ namespace cache {
 Benchmarker::Benchmarker()
     : mds_base_(std::make_unique<stub::rpcclient::MDSBaseClient>()),
       mds_client_(std::make_shared<stub::rpcclient::MdsClientImpl>()),
-      storage_pool_(std::make_shared<StoragePoolImpl>(mds_client_)),
+      storage_pool_(std::make_shared<StoragePoolImpl>(
+          NewV1GetStorageInfoFunc(mds_client_))),
       collector_(std::make_unique<Collector>()),
       reporter_(std::make_shared<Reporter>(collector_)),
       thread_pool_(std::make_unique<TaskThreadPool>("benchmarker_worker")) {

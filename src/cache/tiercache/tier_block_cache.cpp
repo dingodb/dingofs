@@ -264,8 +264,7 @@ Status TierBlockCache::Cache(ContextSPtr ctx, const BlockKey& key,
   }
 
   if (!status.ok()) {
-    LOG_ERROR("[%s] Cache block failed: key = %s, length = %zu, status = %s",
-              ctx->TraceId(), key.Filename(), block.size, status.ToString());
+    GENERIC_LOG_CACHE_ERROR();
   }
   return status;
 }

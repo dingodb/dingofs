@@ -25,4 +25,6 @@ target_link_libraries(cache_cachegroup
     cache_metrics
     cache_storage
     cache_blockcache
+    vfs_meta_v2_lib
+    jsoncpp
 )

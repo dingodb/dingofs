@@ -37,6 +37,8 @@ DEFINE_uint64(mds_rpc_retry_interval_us, 50000, "");
 DEFINE_uint64(mds_rpc_max_failed_times_before_change_addr, 2, "");
 DEFINE_uint64(mds_rpc_normal_retry_times_before_trigger_wait, 3, "");
 DEFINE_uint64(mds_rpc_wait_sleep_ms, 1000, "");
+DEFINE_string(mdsv2_rpc_addr, "", "");
+DEFINE_string(filesystem_mds_version, "v1", "");
 
 stub::common::MdsOption NewMdsOption() {
   stub::common::MdsOption option;
