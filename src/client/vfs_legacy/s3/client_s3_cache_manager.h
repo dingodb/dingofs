@@ -74,7 +74,8 @@ struct ReadRequest {
 
 struct S3ReadRequest {
   uint64_t chunkId;
-  uint64_t block_total_length;  // total length of the belong block
+  uint64_t slice_start_offset;  // slice start offset in the file
+  uint64_t slice_end_offset;    // slice end offset in the file
   uint64_t offset;              // file offset
   uint64_t len;
   uint64_t objectOffset;  // s3 object's begin in the block
@@ -86,11 +87,11 @@ struct S3ReadRequest {
   std::string DebugString() const {
     std::ostringstream os;
     os << "S3ReadRequest ( chunkId = " << chunkId
-       << ", block_total_length = " << block_total_length
-       << ", offset = " << offset << ", len = " << len
-       << ", objectOffset = " << objectOffset << ", readOffset = " << readOffset
-       << ", fsId = " << fsId << ", inodeId = " << inodeId
-       << ", compaction = " << compaction << " )";
+       << ", slice_start_offset = " << slice_start_offset
+       << ", slice_end_offset = " << slice_end_offset << ", offset = " << offset
+       << ", len = " << len << ", objectOffset = " << objectOffset
+       << ", readOffset = " << readOffset << ", fsId = " << fsId
+       << ", inodeId = " << inodeId << ", compaction = " << compaction << " )";
     return os.str();
   }
 };
@@ -379,8 +380,9 @@ class FileCacheManager {
                    uint64_t* chunkSize);
 
   // GetBlockLoc: get block info according to offset
-  void GetBlockLoc(uint64_t offset, uint64_t* chunkIndex, uint64_t* chunkPos,
-                   uint64_t* blockIndex, uint64_t* blockPos);
+  void GetBlockLoc(const S3ReadRequest& req, uint64_t* chunkIndex,
+                   uint64_t* chunkPos, uint64_t* blockIndex, uint64_t* blockPos,
+                   uint64_t* block_whole_length);
 
   // read data from memory read/write cache
   void ReadFromMemCache(uint64_t offset, uint64_t length, char* dataBuf,
@@ -418,7 +420,7 @@ class FileCacheManager {
 
   // read kv request from local disk cache
   bool ReadKVRequestFromLocalCache(const cache::BlockKey& key,
-                                   uint64_t block_total_length, char* buffer,
+                                   uint64_t block_whole_length, char* buffer,
                                    uint64_t offset, uint64_t length);
 
   // read kv request from remote cache like memcached

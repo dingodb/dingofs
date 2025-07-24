@@ -348,15 +348,36 @@ void FileCacheManager::GetChunkLoc(uint64_t offset, uint64_t* index,
   *chunkPos = offset % *chunkSize;
 }
 
-void FileCacheManager::GetBlockLoc(uint64_t offset, uint64_t* chunkIndex,
-                                   uint64_t* chunkPos, uint64_t* blockIndex,
-                                   uint64_t* blockPos) {
+void FileCacheManager::GetBlockLoc(const S3ReadRequest& req,
+                                   uint64_t* chunkIndex, uint64_t* chunkPos,
+                                   uint64_t* blockIndex, uint64_t* blockPos,
+                                   uint64_t* block_whole_length) {
+  auto offset = req.offset;
   uint64_t chunkSize = 0;
   uint64_t blockSize = s3ClientAdaptor_->GetBlockSize();
   GetChunkLoc(offset, chunkIndex, chunkPos, &chunkSize);
 
   *blockIndex = offset % chunkSize / blockSize;
   *blockPos = offset % chunkSize % blockSize;
+
+  {
+    auto chunk_size = chunkSize;
+    auto chunk_index = *chunkIndex;
+    auto block_size = blockSize;
+    auto block_index = *blockIndex;
+
+    auto chunk_start_offset = chunk_index * chunk_size;
+
+    auto block_start_offset = chunk_start_offset + (block_index * block_size);
+    auto block_end_offset =
+        chunk_start_offset + ((block_index + 1) * block_size);
+
+    auto slice_start_offset = req.slice_start_offset;
+    auto slice_end_offset = req.slice_end_offset;
+
+    *block_whole_length = std::min(slice_end_offset, block_end_offset) -
+                          std::max(slice_start_offset, block_start_offset);
+  }
 }
 
 void FileCacheManager::ReadFromMemCache(
@@ -530,7 +551,7 @@ int FileCacheManager::Read(uint64_t inode_id, uint64_t offset, uint64_t length,
 }
 
 bool FileCacheManager::ReadKVRequestFromLocalCache(const cache::BlockKey& key,
-                                                   uint64_t block_total_length,
+                                                   uint64_t block_whole_length,
                                                    char* buffer,
                                                    uint64_t offset,
                                                    uint64_t len) {
@@ -539,7 +560,7 @@ bool FileCacheManager::ReadKVRequestFromLocalCache(const cache::BlockKey& key,
     IOBuffer io_buffer;
     auto option = cache::RangeOption();
     option.retrive = false;
-    option.block_size = block_total_length;
+    option.block_size = block_whole_length;
     auto status = block_cache->Range(cache::NewContext(), key, offset, len,
                                      &io_buffer, option);
     if (status.IsNotFound()) {
@@ -632,7 +653,9 @@ Status FileCacheManager::ProcessKVRequest(const S3ReadRequest& req,
   uint64_t chunk_pos = 0;
   uint64_t block_index = 0;
   uint64_t block_pos = 0;
-  GetBlockLoc(req.offset, &chunk_index, &chunk_pos, &block_index, &block_pos);
+  uint64_t block_whole_length = 0;
+  GetBlockLoc(req, &chunk_index, &chunk_pos, &block_index, &block_pos,
+              &block_whole_length);
 
   const uint64_t block_size = s3ClientAdaptor_->GetBlockSize();
   const uint64_t chunk_size = s3ClientAdaptor_->GetChunkSize();
@@ -667,7 +690,7 @@ Status FileCacheManager::ProcessKVRequest(const S3ReadRequest& req,
     do {
       std::string name = key.Filename();
       std::string store_key = key.StoreKey();
-      if (ReadKVRequestFromLocalCache(key, req.block_total_length, current_buf,
+      if (ReadKVRequestFromLocalCache(key, block_whole_length, current_buf,
                                       block_pos - object_offset,
                                       current_read_len)) {
         VLOG(9) << "inodeId=" << inode_ << " read " << store_key
@@ -774,7 +797,6 @@ void FileCacheManager::HandleReadRequest(
 
   VLOG(9) << "inodeId=" << inodeId
           << " HandleReadRequest s3info chunkid:" << s3ChunkInfo.chunkid()
-          << ", block_total_length:" << s3_chunk_info_len
           << ", offset:" << s3_chunk_info_offset
           << ", len:" << s3_chunk_info_len
           << ", compaction:" << s3ChunkInfo.compaction()
@@ -784,6 +806,8 @@ void FileCacheManager::HandleReadRequest(
   uint64_t file_offset = request.index * chunk_size + request.chunkPos;
   uint64_t length = request.len;
   uint64_t buf_offset = request.bufOffset;
+  s3_request.slice_start_offset = s3_chunk_info_offset;
+  s3_request.slice_end_offset = s3_chunk_info_offset + s3_chunk_info_len;
 
   uint64_t read_offset = 0;
   /*
@@ -816,7 +840,6 @@ void FileCacheManager::HandleReadRequest(
                file_offset + length - s3_chunk_info_offset);
       } else {
         s3_request.chunkId = s3ChunkInfo.chunkid();
-        s3_request.block_total_length = s3_chunk_info_len;
         s3_request.offset = s3_chunk_info_offset;
         s3_request.len = file_offset + length - s3_chunk_info_offset;
         s3_request.objectOffset =
@@ -837,7 +860,6 @@ void FileCacheManager::HandleReadRequest(
                s3_chunk_info_len);
       } else {
         s3_request.chunkId = s3ChunkInfo.chunkid();
-        s3_request.block_total_length = s3_chunk_info_len;
         s3_request.offset = s3_chunk_info_offset;
         s3_request.len = s3_chunk_info_len;
         s3_request.objectOffset =
@@ -876,7 +898,6 @@ void FileCacheManager::HandleReadRequest(
                length);
       } else {
         s3_request.chunkId = s3ChunkInfo.chunkid();
-        s3_request.block_total_length = s3_chunk_info_len;
         s3_request.offset = file_offset;
         s3_request.len = length;
         if (file_offset / block_size == s3_chunk_info_offset / block_size) {
@@ -901,7 +922,6 @@ void FileCacheManager::HandleReadRequest(
                s3_chunk_info_offset + s3_chunk_info_len - file_offset);
       } else {
         s3_request.chunkId = s3ChunkInfo.chunkid();
-        s3_request.block_total_length = s3_chunk_info_len;
         s3_request.offset = file_offset;
         s3_request.len = s3_chunk_info_offset + s3_chunk_info_len - file_offset;
         if (file_offset / block_size == s3_chunk_info_offset / block_size) {
