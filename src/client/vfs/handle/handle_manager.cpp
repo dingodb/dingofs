@@ -19,6 +19,7 @@
 #include <memory>
 
 #include "client/meta/vfs_fh.h"
+#include "client/vfs/data/file.h"
 #include "glog/logging.h"
 
 namespace dingofs {
@@ -55,6 +56,66 @@ void HandleManager::FlushAll() {
                  << ", error: " << s.ToString();
     }
   }
+}
+
+bool HandleManager::Dump(Json::Value& value) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  Json::Value handle_array = Json::arrayValue;
+
+  for (const auto& handle : handles_) {
+    auto fileHandle = handle.second;
+
+    Json::Value item;
+    item["ino"] = fileHandle->ino;
+    item["fh"] = fileHandle->fh;
+    item["flags"] = fileHandle->flags;
+
+    handle_array.append(item);
+  }
+  value["handlers"] = handle_array;
+
+  LOG(INFO) << "successfuly dump " << handles_.size() << " handlers";
+
+  return true;
+}
+
+bool HandleManager::Load(const Json::Value& value) {
+  const Json::Value& handlers = value["handlers"];
+  if (!handlers.isArray()) {
+    LOG(ERROR) << "handlers is not an array.";
+    return false;
+  }
+  if (handlers.empty()) {
+    LOG(INFO) << "no handlers to load";
+    return true;
+  }
+
+  uint64_t max_fh = 0;
+  for (const auto& handler : handlers) {
+    // peek inode,fh,flags
+    Ino ino = handler["padding"].asUInt64();
+    uint64_t fh = handler["fh"].asUInt64();
+    bool is_dir = handler["is_dir"].asBool();
+    uint flags = handler["flags"].asUInt();
+
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      auto file_handler = std::make_shared<Handle>();
+      file_handler->ino = ino;
+      file_handler->fh = fh;
+      file_handler->flags = flags;
+      file_handler->file = std::make_unique<File>(vfs_hub_, ino);
+
+      handles_.emplace(file_handler->fh, file_handler);
+    }
+    max_fh = std::max(max_fh, fh);
+  }
+  vfs::FhGenerator::UpdateNextFh(max_fh + 1);  // update next_fh
+
+  LOG(INFO) << "successfuly load " << handles_.size()
+            << " handlers, next fh is:" << vfs::FhGenerator::GetNextFh();
+
+  return true;
 }
 
 }  // namespace vfs

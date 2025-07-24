@@ -31,6 +31,8 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
+class VFSHub;
+
 // temporary store .stats file data
 struct FileBuffer {
   size_t size{0};
@@ -58,7 +60,7 @@ using HandleSPtr = std::shared_ptr<Handle>;
 
 class HandleManager {
  public:
-  HandleManager() = default;
+  HandleManager(VFSHub* hub) : vfs_hub_(hub) {};
   ~HandleManager() = default;
 
   HandleSPtr NewHandle();
@@ -70,13 +72,13 @@ class HandleManager {
   //  only called when process exit
   void FlushAll();
 
-  // Todo: implement dump and load
-  bool Dump(Json::Value& value) { return true; }
-  bool Load(const Json::Value& value) { return true; }
+  bool Dump(Json::Value& value);
+  bool Load(const Json::Value& value);
 
  private:
   std::mutex mutex_;
   std::unordered_map<uint64_t, HandleSPtr> handles_;
+  VFSHub* vfs_hub_{nullptr};
 };
 
 }  // namespace vfs

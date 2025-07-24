@@ -27,13 +27,13 @@
 #include "blockaccess/block_accesser_factory.h"
 #include "blockaccess/rados/rados_common.h"
 #include "cache/tiercache/tier_block_cache.h"
+#include "client/meta/vfs_meta.h"
 #include "client/vfs.h"
 #include "client/vfs/background/periodic_flush_manager.h"
 #include "client/vfs/meta/dummy/dummy_filesystem.h"
 #include "client/vfs/meta/meta_system.h"
 #include "client/vfs/meta/meta_wrapper.h"
 #include "client/vfs/meta/v2/filesystem.h"
-#include "client/meta/vfs_meta.h"
 #include "common/status.h"
 #include "options/client/common_option.h"
 #include "options/client/vfs/vfs_dynamic_option.h"
@@ -114,7 +114,7 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
   block_accesser_ = factory.NewBlockAccesser(vfs_option_.block_access_opt);
   DINGOFS_RETURN_NOT_OK(block_accesser_->Init());
 
-  handle_manager_ = std::make_unique<HandleManager>();
+  handle_manager_ = std::make_unique<HandleManager>(this);
 
   {
     // related to block cache
