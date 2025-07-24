@@ -101,7 +101,16 @@ bool MetaServerInfo::IsUnstable() const {
 bool MetaServerInfo::IsHealthy() const { return state == OnlineState::ONLINE; }
 
 bool MetaServerInfo::IsResourceOverload() const {
-  return space.IsResourceOverload();
+  if (space.IsResourceOverload()) {
+    LOG(ERROR) << "metaserver: " << info.serverId << ", ip: " << info.ip
+               << ", port: " << info.port
+               << " is resource overload, diskThresholdByte: "
+               << space.GetDiskThreshold()
+               << ", diskUsedByte: " << space.GetDiskUsed();
+    return true;
+  }
+
+  return false;
 }
 
 double MetaServerInfo::GetResourceUseRatioPercent() const {
@@ -110,6 +119,8 @@ double MetaServerInfo::GetResourceUseRatioPercent() const {
 
 bool MetaServerInfo::IsMetaserverResourceAvailable() const {
   if (!IsHealthy()) {
+    LOG(ERROR) << "metaserver: " << info.serverId << ", ip: " << info.ip
+               << ", port: " << info.port << " is offline";
     return false;
   }
   return space.IsMetaserverResourceAvailable();

@@ -43,6 +43,18 @@ void PartitionCleanManager::Add(
   partitionCleanerCount << 1;
 }
 
+bool PartitionCleanManager::IsAdded(uint32_t partition_id) {
+  dingofs::utils::WriteLockGuard lock_guard(rwLock_);
+
+  for (auto& cleaner : partitonCleanerList_) {
+    if (cleaner->GetPartitionId() == partition_id) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 void PartitionCleanManager::Remove(uint32_t partition_id) {
   dingofs::utils::WriteLockGuard lock_guard(rwLock_);
   // 1. first check inProcessingCleaner
