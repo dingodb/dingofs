@@ -72,7 +72,7 @@ CacheGroupNodeImpl::CacheGroupNodeImpl(CacheGroupNodeOption option)
     storage_pool_ =
         std::make_shared<StoragePoolImpl>(NewV1GetStorageInfoFunc(mds_client_));
   } else if (FLAGS_filesystem_mds_version == "v2") {
-    std::make_shared<StoragePoolImpl>(
+    storage_pool_ = std::make_shared<StoragePoolImpl>(
         NewV2GetStorageInfoFunc(fLS::FLAGS_mdsv2_rpc_addr));
   } else {
     CHECK(false) << "Unsupport filesystem mds version: "

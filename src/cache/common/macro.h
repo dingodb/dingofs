@@ -64,36 +64,36 @@ namespace cache {
 #define VLOG_6(...) VLOG(6) << absl::StrFormat(__VA_ARGS__)
 #define VLOG_9(...) VLOG(9) << absl::StrFormat(__VA_ARGS__)
 
-#define GENERIC_LOG_PUT_ERROR()                                  \
-  do {                                                           \
-    LOG(ERROR) << "[" << ctx->TraceId()                          \
-               << "] Put block failed: key = " << key.Filename() \
-               << ", length = " << block.size                    \
-               << ", status = " << status.ToString();            \
-  } while (0);
-
-#define GENERIC_LOG_RANGE_ERROR()                                    \
+#define GENERIC_LOG_PUT_ERROR(to)                                    \
   do {                                                               \
-    LOG(ERROR) << "[" << ctx->TraceId()                              \
-               << "] Range block failed: key = " << key.Filename()   \
-               << ", offset = " << offset << ", length = " << length \
+    LOG(ERROR) << "[" << ctx->TraceId() << "] Put block to " << (to) \
+               << " failed: key = " << key.Filename()                \
+               << ", length = " << block.size                        \
                << ", status = " << status.ToString();                \
   } while (0);
 
-#define GENERIC_LOG_CACHE_ERROR()                                  \
-  do {                                                             \
-    LOG(ERROR) << "[" << ctx->TraceId()                            \
-               << "] Cache block failed: key = " << key.Filename() \
-               << ", length = " << block.size                      \
-               << ", status = " << status.ToString();              \
+#define GENERIC_LOG_RANGE_ERROR(from)                                      \
+  do {                                                                     \
+    LOG(ERROR) << "[" << ctx->TraceId() << "] Range block from " << (from) \
+               << " failed: key = " << key.Filename()                      \
+               << ", offset = " << offset << ", length = " << length       \
+               << ", status = " << status.ToString();                      \
   } while (0);
 
-#define GENERIC_LOG_PREFETCH_ERROR()                                  \
-  do {                                                                \
-    LOG(ERROR) << "[" << ctx->TraceId()                               \
-               << "] Prefetch block failed: key = " << key.Filename() \
-               << ", length = " << length                             \
-               << ", status = " << status.ToString();                 \
+#define GENERIC_LOG_CACHE_ERROR(to)                                    \
+  do {                                                                 \
+    LOG(ERROR) << "[" << ctx->TraceId() << "] Cache block to " << (to) \
+               << " failed: key = " << key.Filename()                  \
+               << ", length = " << block.size                          \
+               << ", status = " << status.ToString();                  \
+  } while (0);
+
+#define GENERIC_LOG_PREFETCH_ERROR(to)                                      \
+  do {                                                                      \
+    LOG(ERROR) << "[" << ctx->TraceId() << "] Prefetch block into " << (to) \
+               << " failed: key = " << key.Filename()                       \
+               << ", length = " << length                                   \
+               << ", status = " << status.ToString();                       \
   } while (0);
 
 }  // namespace cache

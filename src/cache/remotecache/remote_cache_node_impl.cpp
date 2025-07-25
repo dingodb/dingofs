@@ -139,7 +139,7 @@ Status RemoteCacheNodeImpl::Put(ContextSPtr ctx, const BlockKey& key,
 
   status = rpc_->Put(ctx, key, block);
   if (!status.ok()) {
-    GENERIC_LOG_PUT_ERROR();
+    GENERIC_LOG_PUT_ERROR("cache node");
   }
   return CheckStatus(status);
 }
@@ -160,7 +160,7 @@ Status RemoteCacheNodeImpl::Range(ContextSPtr ctx, const BlockKey& key,
     status = rpc_->Range(ctx, key, offset, length, buffer, option);
   }
   if (!status.ok()) {
-    GENERIC_LOG_RANGE_ERROR();
+    GENERIC_LOG_RANGE_ERROR("remote cache node");
   }
   return CheckStatus(status);
 }
@@ -176,7 +176,7 @@ Status RemoteCacheNodeImpl::Cache(ContextSPtr ctx, const BlockKey& key,
 
   status = rpc_->Cache(ctx, key, block);
   if (!status.ok()) {
-    GENERIC_LOG_CACHE_ERROR();
+    GENERIC_LOG_CACHE_ERROR("remote cache node");
   }
   return status;  // Skip CheckStatus(...) here
 }
@@ -192,7 +192,7 @@ Status RemoteCacheNodeImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
 
   status = rpc_->Prefetch(ctx, key, length);
   if (!status.ok()) {
-    GENERIC_LOG_PREFETCH_ERROR();
+    GENERIC_LOG_PREFETCH_ERROR("remote cache node");
   }
   return status;  // Skip CheckStatus(...) here
 }

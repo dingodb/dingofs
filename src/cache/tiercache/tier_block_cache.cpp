@@ -264,7 +264,7 @@ Status TierBlockCache::Cache(ContextSPtr ctx, const BlockKey& key,
   }
 
   if (!status.ok()) {
-    GENERIC_LOG_CACHE_ERROR();
+    // GENERIC_LOG_CACHE_ERROR();
   }
   return status;
 }
