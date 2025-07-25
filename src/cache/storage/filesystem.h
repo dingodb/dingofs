@@ -65,6 +65,7 @@ struct FSStat {
 };
 
 struct WriteOption {
+  bool use_direct{false};
   bool drop_page_cache{false};
 };
 

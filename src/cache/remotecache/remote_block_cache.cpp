@@ -243,10 +243,7 @@ Status RemoteBlockCacheImpl::Cache(ContextSPtr ctx, const BlockKey& key,
   status = remote_node_->Cache(ctx, key, block);
 
   if (!status.ok()) {
-    LOG_ERROR(
-        "[%s] Cache block failed: key = %s, length = %zu"
-        ", status = %s",
-        ctx->TraceId(), key.Filename(), block.size, status.ToString());
+    GENERIC_LOG_CACHE_ERROR();
   }
   return status;
 }
@@ -265,11 +262,8 @@ Status RemoteBlockCacheImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
   NEXT_STEP(kRemotePrefetch);
   status = remote_node_->Prefetch(ctx, key, length);
 
-  if (!status.ok() && !status.IsExist()) {
-    LOG_ERROR(
-        "[%s] Prefetch block failed: key = %s, "
-        "length = %zu, status = %s",
-        ctx->TraceId(), key.Filename(), length, status.ToString());
+  if (!status.ok()) {
+    GENERIC_LOG_PREFETCH_ERROR();
   }
   return status;
 }

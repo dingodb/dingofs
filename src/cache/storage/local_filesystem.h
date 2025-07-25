@@ -32,6 +32,7 @@
 #include "cache/storage/base_filesystem.h"
 #include "cache/storage/filesystem.h"
 #include "cache/storage/page_cache_manager.h"
+#include "cache/utils/buffer_pool.h"
 
 namespace dingofs {
 namespace cache {
@@ -60,6 +61,7 @@ class LocalFileSystem final : public BaseFileSystem {
   void Unlink(ContextSPtr ctx, const std::string& path);
 
   std::atomic<bool> running_;
+  BufferPoolSPtr buffer_pool_;
   IORingSPtr io_ring_;
   AioQueueUPtr aio_queue_;
   PageCacheManagerUPtr page_cache_manager_;

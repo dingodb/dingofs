@@ -31,16 +31,16 @@
 namespace dingofs {
 namespace cache {
 
-PutClosure::PutClosure(ContextSPtr ctx, const BlockKey& key, const Block& block,
-                       Storage::PutOption option,
-                       blockaccess::BlockAccesser* block_accesser)
+UploadClosure::UploadClosure(ContextSPtr ctx, const BlockKey& key,
+                             const Block& block, UploadOption option,
+                             blockaccess::BlockAccesser* block_accesser)
     : ctx_(ctx),
       key_(key),
       block_(block),
       option_(option),
       block_accesser_(block_accesser) {}
 
-void PutClosure::Run() {
+void UploadClosure::Run() {
   auto block = CopyBlock();  // Copy data to continuous memory
   if (option_.async_cache_func) {
     option_.async_cache_func(key_, block);
@@ -58,12 +58,12 @@ void PutClosure::Run() {
                             retry_cb);
 }
 
-void PutClosure::OnComplete(Status s) {
+void UploadClosure::OnComplete(Status s) {
   StorageClosure::status() = s;
   StorageClosure::Run();
 }
 
-Block PutClosure::CopyBlock() {
+Block UploadClosure::CopyBlock() {
   char* data = new char[block_.size];
   block_.buffer.CopyTo(data);
 
@@ -72,10 +72,10 @@ Block PutClosure::CopyBlock() {
   return Block(IOBuffer(iobuf));
 }
 
-RangeClosure::RangeClosure(ContextSPtr ctx, const BlockKey& key, off_t offset,
-                           size_t length, IOBuffer* buffer,
-                           Storage::RangeOption option,
-                           blockaccess::BlockAccesser* block_accesser)
+DownloadClosure::DownloadClosure(ContextSPtr ctx, const BlockKey& key,
+                                 off_t offset, size_t length, IOBuffer* buffer,
+                                 DownloadOption option,
+                                 blockaccess::BlockAccesser* block_accesser)
     : ctx_(ctx),
       key_(key),
       offset_(offset),
@@ -84,7 +84,7 @@ RangeClosure::RangeClosure(ContextSPtr ctx, const BlockKey& key, off_t offset,
       option_(option),
       block_accesser_(block_accesser) {}
 
-void RangeClosure::Run() {
+void DownloadClosure::Run() {
   char* data = new char[length_];
   butil::IOBuf iobuf;
   iobuf.append_user_data(data, length_, Helper::DeleteBuffer);
@@ -99,7 +99,7 @@ void RangeClosure::Run() {
                               buffer_->Fetch1(), retry_cb);
 }
 
-void RangeClosure::OnComplete(Status s) {
+void DownloadClosure::OnComplete(Status s) {
   StorageClosure::status() = s;
   StorageClosure::Run();
 }
