@@ -310,10 +310,11 @@ Status RPCClient::SendRequest(ContextSPtr ctx, const std::string& api_name,
   timer.stop();
 
   LOG(ERROR) << absl::StrFormat(
-      "[rpc][%s][%s:%d][%.6lf][%s] failed: request(%s) exceed max retry times "
+      "[%s][rpc][%s][%s:%d][%.6lf] failed: request(%s) exceed max retry times "
       "(%d).",
-      api_name, server_ip_, server_port_, timer.u_elapsed(1.0) / 1e6,
-      ctx->TraceId(), request.ShortDebugString(), FLAGS_rpc_max_retry_times);
+      ctx->TraceId(), api_name, server_ip_, server_port_,
+      timer.u_elapsed(1.0) / 1e6, request.ShortDebugString(),
+      FLAGS_rpc_max_retry_times);
 
   return Status::Internal("rpc failed exceed max retry times");
 };

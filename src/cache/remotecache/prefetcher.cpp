@@ -140,10 +140,10 @@ void Prefetcher::DoPrefetch(const Task& task) {
   auto status =
       remote_node_->Range(task.ctx, task.key, 0, task.length, &buffer, option);
   if (!status.ok()) {
-    LOG(ERROR) << "[" << task.ctx->TraceId() << "] Prefetch failed: "
-               << ": key = " << task.key.Filename()
-               << ", length = " << task.length
-               << ", status =" << status.ToString();
+    LOG_EVERY_N(WARNING, 100)
+        << "[" << task.ctx->TraceId() << "] Prefetch failed: "
+        << "key = " << task.key.Filename() << ", length = " << task.length
+        << ", status = " << status.ToString();
     return;
   }
 

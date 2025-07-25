@@ -65,6 +65,11 @@ Status CacheUpstream::Init() {
       LOG(INFO) << "Skip non-online cache group member: id = " << member.id()
                 << ", endpoint = " << member.ip() << ":" << member.port();
       continue;
+    } else if (member.weight() == 0) {
+      LOG(INFO) << "Skip cache group member with zero weight: id = "
+                << member.id() << ", endpoint = " << member.ip() << ":"
+                << member.port();
+      continue;
     }
 
     auto key = MemberKey(member);
