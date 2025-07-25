@@ -68,29 +68,13 @@ void DirIterator::Next() {
   }
 }
 
-// struct Attr {
-//   Ino ino{0};
-//   uint32_t mode{0};
-//   uint32_t nlink{0};
-//   uint32_t uid{0};
-//   uint32_t gid{0};
-//   uint64_t length{0};
-//   uint64_t rdev{0};
-//   uint64_t atime{0};
-//   uint64_t mtime{0};
-//   uint64_t ctime{0};
-//   FileType type;
-//   // TODO: refact, maybe use separate key for hardlink
-//   std::vector<Ino> parents;
-// };
-
 bool DirIterator::Dump(Json::Value& value) {
   value["ino"] = ino_;
   value["last_name"] = last_name_;
   value["with_attr"] = with_attr_;
   value["offset"] = offset_;
 
-  Json::Value entries;
+  Json::Value entries = Json::arrayValue;
   for (const auto& entry : entries_) {
     Json::Value entry_item;
     entry_item["ino"] = entry.ino;
@@ -156,7 +140,7 @@ void DirIteratorManager::Delete(uint64_t fh) {
 bool DirIteratorManager::Dump(Json::Value& value) {
   utils::ReadLockGuard lk(lock_);
 
-  Json::Value items;
+  Json::Value items = Json::arrayValue;
   for (const auto& [fh, dir_iterator] : dir_iterator_map_) {
     Json::Value item;
     item["fh"] = fh;

@@ -58,7 +58,7 @@ class FileSessionMap {
   bool Dump(Json::Value& value) {
     utils::ReadLockGuard lk(lock_);
 
-    Json::Value items;
+    Json::Value items = Json::arrayValue;
     for (const auto& [fh, session_id] : file_session_map_) {
       Json::Value item;
       item["fh"] = fh;

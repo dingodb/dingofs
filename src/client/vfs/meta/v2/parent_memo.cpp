@@ -16,6 +16,8 @@
 
 #include <json/value.h>
 
+#include <algorithm>
+
 #include "fmt/core.h"
 
 namespace dingofs {
@@ -98,9 +100,7 @@ void ParentMemo::UpsertVersion(Ino ino, uint64_t version) {
 
   auto it = ino_map_.find(ino);
   if (it != ino_map_.end()) {
-    if (it->second.version < version) {
-      it->second.version = version;
-    }
+    it->second.version = std::max(it->second.version, version);
 
   } else {
     ino_map_[ino] = Entry{.parent = 0, .version = version};
@@ -113,9 +113,8 @@ void ParentMemo::Upsert(Ino ino, Ino parent, uint64_t version) {
   auto it = ino_map_.find(ino);
   if (it != ino_map_.end()) {
     it->second.parent = parent;
-    if (version > it->second.version) {
-      it->second.version = version;
-    }
+    it->second.version = std::max(version, it->second.version);
+
   } else {
     ino_map_[ino] = Entry{.parent = parent, .version = version};
   }
@@ -130,7 +129,7 @@ void ParentMemo::Delete(Ino ino) {
 bool ParentMemo::Dump(Json::Value& value) {
   utils::ReadLockGuard lk(lock_);
 
-  Json::Value items;
+  Json::Value items = Json::arrayValue;
   for (const auto& [ino, entry] : ino_map_) {
     Json::Value item;
     item["ino"] = ino;

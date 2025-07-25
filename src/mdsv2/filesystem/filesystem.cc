@@ -47,16 +47,11 @@
 #include "mdsv2/filesystem/notify_buddy.h"
 #include "mdsv2/filesystem/store_operation.h"
 #include "mdsv2/mds/mds_meta.h"
-#include "mdsv2/service/service_access.h"
 #include "mdsv2/storage/storage.h"
 #include "utils/uuid.h"
 
 namespace dingofs {
 namespace mdsv2 {
-
-static const int64_t kInoTableId = 1001;
-static const int64_t kInoBatchSize = 32;
-static const int64_t kInoStartId = 100000;
 
 static const std::string kFsTableName = "dingofs";
 
@@ -2253,12 +2248,6 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, FsInfoType& fs_info) 
     return status;
   }
 
-  uint32_t fs_id = 0;
-  status = GenFsId(fs_id);
-  if (BAIDU_UNLIKELY(!status.ok())) {
-    return status;
-  }
-
   // when create fs fail, clean up
   auto cleanup = [&](int64_t dentry_table_id, const std::string& fs_key, const std::string& quota_key) {
     // clean dentry table
@@ -2301,6 +2290,13 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, FsInfoType& fs_info) 
     }
   }
 
+  // generate fs id
+  uint32_t fs_id = 0;
+  status = GenFsId(fs_id);
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return status;
+  }
+
   // create dentry/inode table
   int64_t dentry_table_id = 0;
   {
@@ -2324,7 +2320,7 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, FsInfoType& fs_info) 
   }
 
   // create FileSystem instance
-  auto id_generator = AutoIncrementIdGenerator::New(coordinator_client_, kInoTableId, kInoStartId, kInoBatchSize);
+  auto id_generator = NewInodeIdGenerator(coordinator_client_, kv_storage_);
   CHECK(id_generator != nullptr) << "new id generator fail.";
 
   auto fs = FileSystem::New(self_mds_meta_.ID(), FsInfo::NewUnique(fs_info), std::move(id_generator),
@@ -2569,7 +2565,7 @@ bool FileSystemSet::LoadFileSystems() {
   }
 
   for (const auto& kv : kvs) {
-    auto id_generator = AutoIncrementIdGenerator::New(coordinator_client_, kInoTableId, kInoStartId, kInoBatchSize);
+    auto id_generator = NewInodeIdGenerator(coordinator_client_, kv_storage_);
     CHECK(id_generator != nullptr) << "new id generator fail.";
 
     auto fs_info = MetaCodec::DecodeFsValue(kv.value);

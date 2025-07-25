@@ -41,17 +41,17 @@ class IdGenerator {
 using IdGeneratorUPtr = std::unique_ptr<IdGenerator>;
 using IdGeneratorSPtr = std::shared_ptr<IdGenerator>;
 
-class AutoIncrementIdGenerator : public IdGenerator {
+class CoorAutoIncrementIdGenerator : public IdGenerator {
  public:
-  AutoIncrementIdGenerator(CoordinatorClientSPtr client, int64_t table_id, uint64_t start_id, uint32_t batch_size);
-  ~AutoIncrementIdGenerator() override;
+  CoorAutoIncrementIdGenerator(CoordinatorClientSPtr client, int64_t table_id, uint64_t start_id, uint32_t batch_size);
+  ~CoorAutoIncrementIdGenerator() override;
 
   static IdGeneratorUPtr New(CoordinatorClientSPtr client, int64_t table_id, uint64_t start_id, uint32_t batch_size) {
-    return std::make_unique<AutoIncrementIdGenerator>(client, table_id, start_id, batch_size);
+    return std::make_unique<CoorAutoIncrementIdGenerator>(client, table_id, start_id, batch_size);
   }
   static IdGeneratorSPtr NewShare(CoordinatorClientSPtr client, int64_t table_id, uint64_t start_id,
                                   uint32_t batch_size) {
-    return std::make_shared<AutoIncrementIdGenerator>(client, table_id, start_id, batch_size);
+    return std::make_shared<CoorAutoIncrementIdGenerator>(client, table_id, start_id, batch_size);
   }
 
   bool Init() override;
@@ -87,6 +87,10 @@ class StoreAutoIncrementIdGenerator : public IdGenerator {
     return std::make_unique<StoreAutoIncrementIdGenerator>(kv_storage, name, start_id, batch_size);
   }
 
+  static IdGeneratorSPtr NewShare(KVStorageSPtr kv_storage, const std::string& name, int64_t start_id, int batch_size) {
+    return std::make_shared<StoreAutoIncrementIdGenerator>(kv_storage, name, start_id, batch_size);
+  }
+
   bool Init() override;
   bool GenID(uint32_t num, uint64_t& id) override;
   bool GenID(uint32_t num, uint64_t min_slice_id, uint64_t& id) override;
@@ -109,6 +113,10 @@ class StoreAutoIncrementIdGenerator : public IdGenerator {
   // get the numnber of id at a time
   uint32_t batch_size_;
 };
+
+IdGeneratorUPtr NewFsIdGenerator(CoordinatorClientSPtr coordinator_client, KVStorageSPtr kv_storage);
+IdGeneratorUPtr NewInodeIdGenerator(CoordinatorClientSPtr coordinator_client, KVStorageSPtr kv_storage);
+IdGeneratorSPtr NewSliceIdGenerator(CoordinatorClientSPtr coordinator_client, KVStorageSPtr kv_storage);
 
 }  // namespace mdsv2
 }  // namespace dingofs

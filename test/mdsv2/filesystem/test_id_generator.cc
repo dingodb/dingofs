@@ -24,7 +24,7 @@ namespace dingofs {
 namespace mdsv2 {
 namespace unit_test {
 
-// test AutoIncrementIdGenerator
+// test CoorAutoIncrementIdGenerator
 class AutoIncrementIdGeneratorTest : public testing::Test {
  protected:
   static void SetUpTestSuite() {}
@@ -40,7 +40,7 @@ TEST_F(AutoIncrementIdGeneratorTest, GenID) {
   ASSERT_TRUE(coordinator_client->Init("")) << "init coordinator client fail.";
 
   int64_t table_id = 1001;
-  auto id_generator = AutoIncrementIdGenerator::New(coordinator_client, table_id, 20000, 8);
+  auto id_generator = CoorAutoIncrementIdGenerator::New(coordinator_client, table_id, 20000, 8);
   ASSERT_TRUE(id_generator->Init()) << "init id generator fail.";
 
   for (int i = 0; i < 1000; ++i) {

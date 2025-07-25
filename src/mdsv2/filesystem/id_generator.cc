@@ -14,26 +14,42 @@
 
 #include "mdsv2/filesystem/id_generator.h"
 
-#include <fmt/format.h>
-#include <glog/logging.h>
-
 #include <algorithm>
 #include <cstdint>
 
 #include "bthread/mutex.h"
 #include "dingofs/error.pb.h"
-#include "fmt/core.h"
+#include "fmt/format.h"
+#include "glog/logging.h"
 #include "mdsv2/common/codec.h"
 #include "mdsv2/common/logging.h"
 #include "mdsv2/common/status.h"
+#include "mdsv2/common/time.h"
 
 namespace dingofs {
 namespace mdsv2 {
 
 DECLARE_uint32(txn_max_retry_times);
 
-AutoIncrementIdGenerator::AutoIncrementIdGenerator(CoordinatorClientSPtr client, int64_t table_id, uint64_t start_id,
-                                                   uint32_t batch_size)
+DEFINE_string(id_generator_type, "coor", "id generator type, coor or store");
+
+const std::string kFsAutoIncrementIdName = "dingofs-fs-id";
+static const int64_t kFsTableId = 1000;
+static const int64_t kFsIdBatchSize = 8;
+static const int64_t kFsIdStartId = 20000;
+
+const std::string kInoAutoIncrementIdName = "dingofs-inode-id";
+static const int64_t kInoTableId = 1001;
+static const int64_t kInoBatchSize = 32;
+static const int64_t kInoStartId = 100000;
+
+const std::string kSliceAutoIncrementIdName = "dingofs-slice-id";
+static const int64_t kSliceTableId = 1002;
+static const int64_t kSliceIdBatchSize = 16;
+static const int64_t kSliceIdStartId = 10000000;
+
+CoorAutoIncrementIdGenerator::CoorAutoIncrementIdGenerator(CoordinatorClientSPtr client, int64_t table_id,
+                                                           uint64_t start_id, uint32_t batch_size)
     : client_(client), table_id_(table_id), start_id_(start_id), batch_size_(batch_size) {
   next_id_ = start_id;
   bundle_ = start_id;
@@ -42,11 +58,11 @@ AutoIncrementIdGenerator::AutoIncrementIdGenerator(CoordinatorClientSPtr client,
   CHECK(bthread_mutex_init(&mutex_, nullptr) == 0) << "init mutex fail.";
 }
 
-AutoIncrementIdGenerator::~AutoIncrementIdGenerator() {
+CoorAutoIncrementIdGenerator::~CoorAutoIncrementIdGenerator() {
   CHECK(bthread_mutex_destroy(&mutex_) == 0) << "destory mutex fail.";
 }
 
-bool AutoIncrementIdGenerator::Init() {
+bool CoorAutoIncrementIdGenerator::Init() {
   auto status = IsExistAutoIncrement();
   if (!status.ok()) {
     if (status.error_code() != pb::error::ENOT_FOUND) {
@@ -68,14 +84,12 @@ bool AutoIncrementIdGenerator::Init() {
   return true;
 }
 
-bool AutoIncrementIdGenerator::GenID(uint32_t num, uint64_t& id) { return GenID(num, 0, id); }
+bool CoorAutoIncrementIdGenerator::GenID(uint32_t num, uint64_t& id) { return GenID(num, 0, id); }
 
-bool AutoIncrementIdGenerator::GenID(uint32_t num, uint64_t min_slice_id, uint64_t& id) {
+bool CoorAutoIncrementIdGenerator::GenID(uint32_t num, uint64_t min_slice_id, uint64_t& id) {
   BAIDU_SCOPED_LOCK(mutex_);
 
-  if (next_id_ < min_slice_id) {
-    next_id_ = min_slice_id;
-  }
+  next_id_ = std::max(next_id_, min_slice_id);
 
   if (next_id_ + num > bundle_end_) {
     auto status = AllocateIds(std::max(num, batch_size_));
@@ -93,36 +107,40 @@ bool AutoIncrementIdGenerator::GenID(uint32_t num, uint64_t min_slice_id, uint64
   return true;
 }
 
-Status AutoIncrementIdGenerator::IsExistAutoIncrement() {
+Status CoorAutoIncrementIdGenerator::IsExistAutoIncrement() {
   int64_t start_id = -1;
   return client_->GetAutoIncrement(table_id_, start_id);
 }
 
-Status AutoIncrementIdGenerator::CreateAutoIncrement() {
+Status CoorAutoIncrementIdGenerator::CreateAutoIncrement() {
   DINGO_LOG(INFO) << fmt::format("[idalloc.{}] create auto increment table, start_id({}).", table_id_, start_id_);
   return client_->CreateAutoIncrement(table_id_, start_id_);
 }
 
-Status AutoIncrementIdGenerator::AllocateIds(uint32_t num) {
+Status CoorAutoIncrementIdGenerator::AllocateIds(uint32_t num) {
+  Status status;
+  Duration duration;
   int64_t bundle = 0;
   int64_t bundle_end = 0;
   do {
-    auto status = client_->GenerateAutoIncrement(table_id_, num, bundle, bundle_end);
+    status = client_->GenerateAutoIncrement(table_id_, num, bundle, bundle_end);
     if (!status.ok()) {
-      DINGO_LOG(ERROR) << fmt::format("[idalloc.{}] take bundle id fail, {}.", table_id_, status.error_str());
-      return status;
+      break;
     }
 
     CHECK(bundle >= 0 && bundle_end >= 0) << "bundle id is negative.";
   } while (bundle < next_id_);
 
-  bundle_ = bundle;
-  next_id_ = bundle;
-  bundle_end_ = bundle_end;
+  if (status.ok()) {
+    bundle_ = bundle;
+    next_id_ = bundle;
+    bundle_end_ = bundle_end;
+  }
 
-  DINGO_LOG(INFO) << fmt::format("[idalloc.{}] take bundle id, bundle[{}, {}).", table_id_, bundle_, bundle_end_);
+  DINGO_LOG(INFO) << fmt::format("[idalloc.{}][{}us] take bundle id, bundle[{}, {}) status({}).", table_id_,
+                                 duration.ElapsedUs(), bundle_, bundle_end_, status.error_str());
 
-  return Status::OK();
+  return status;
 }
 
 StoreAutoIncrementIdGenerator::StoreAutoIncrementIdGenerator(KVStorageSPtr kv_storage, const std::string& name,
@@ -143,7 +161,8 @@ bool StoreAutoIncrementIdGenerator::Init() {
   uint64_t alloc_id = 0;
   auto status = GetOrPutAllocId(alloc_id);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[idalloc.{}] init get alloc id fail.", key_);
+    DINGO_LOG(ERROR) << fmt::format("[idalloc.{}] init get alloc id fail, status({}).", key_, status.error_cstr());
+    return false;
   }
 
   next_id_ = alloc_id;
@@ -162,9 +181,7 @@ bool StoreAutoIncrementIdGenerator::GenID(uint32_t num, uint64_t min_slice_id, u
 
   BAIDU_SCOPED_LOCK(mutex_);
 
-  if (next_id_ < min_slice_id) {
-    next_id_ = min_slice_id;
-  }
+  next_id_ = std::max(next_id_, min_slice_id);
 
   if (next_id_ + num > last_alloc_id_) {
     auto status = AllocateIds(std::max(num, batch_size_));
@@ -178,7 +195,7 @@ bool StoreAutoIncrementIdGenerator::GenID(uint32_t num, uint64_t min_slice_id, u
   id = next_id_;
   next_id_ += num;
 
-  DINGO_LOG(DEBUG) << fmt::format("[idalloc.{}] alloc id({}) num({}).", key_, id, num);
+  DINGO_LOG(INFO) << fmt::format("[idalloc.{}] alloc id({}) num({}).", key_, id, num);
 
   return true;
 }
@@ -217,6 +234,7 @@ Status StoreAutoIncrementIdGenerator::GetOrPutAllocId(uint64_t& alloc_id) {
 }
 
 Status StoreAutoIncrementIdGenerator::AllocateIds(uint32_t size) {
+  Duration duration;
   Status status;
   int retry = 0;
   uint64_t start_alloc_id = std::max(next_id_, last_alloc_id_);
@@ -250,7 +268,48 @@ Status StoreAutoIncrementIdGenerator::AllocateIds(uint32_t size) {
     next_id_ = start_alloc_id;
   }
 
+  DINGO_LOG(INFO) << fmt::format("[idalloc.{}][{}us] take bundle id, bundle[{}, {}) status({}).", key_,
+                                 duration.ElapsedUs(), next_id_, last_alloc_id_, status.error_str());
+
   return status;
+}
+
+IdGeneratorUPtr NewFsIdGenerator(CoordinatorClientSPtr coordinator_client, KVStorageSPtr kv_storage) {
+  if (FLAGS_id_generator_type == "coor") {
+    return CoorAutoIncrementIdGenerator::New(coordinator_client, kFsTableId, kFsIdStartId, kFsIdBatchSize);
+
+  } else if (FLAGS_id_generator_type == "store") {
+    return StoreAutoIncrementIdGenerator::New(kv_storage, kFsAutoIncrementIdName, kFsIdStartId, kFsIdBatchSize);
+
+  } else {
+    CHECK(false) << fmt::format("invalid id generator type({}), use coor or store.", FLAGS_id_generator_type);
+  }
+}
+
+IdGeneratorUPtr NewInodeIdGenerator(CoordinatorClientSPtr coordinator_client, KVStorageSPtr kv_storage) {
+  if (FLAGS_id_generator_type == "coor") {
+    return CoorAutoIncrementIdGenerator::New(coordinator_client, kInoTableId, kInoStartId, kInoBatchSize);
+
+  } else if (FLAGS_id_generator_type == "store") {
+    return StoreAutoIncrementIdGenerator::New(kv_storage, kInoAutoIncrementIdName, kInoStartId, kInoBatchSize);
+
+  } else {
+    CHECK(false) << fmt::format("invalid id generator type({}), use coor or store.", FLAGS_id_generator_type);
+  }
+}
+
+IdGeneratorSPtr NewSliceIdGenerator(CoordinatorClientSPtr coordinator_client, KVStorageSPtr kv_storage) {
+  if (FLAGS_id_generator_type == "coor") {
+    return CoorAutoIncrementIdGenerator::NewShare(coordinator_client, kSliceTableId, kSliceIdStartId,
+                                                  kSliceIdBatchSize);
+
+  } else if (FLAGS_id_generator_type == "store") {
+    return StoreAutoIncrementIdGenerator::NewShare(kv_storage, kSliceAutoIncrementIdName, kSliceIdStartId,
+                                                   kSliceIdBatchSize);
+
+  } else {
+    CHECK(false) << fmt::format("invalid id generator type({}), use coor or store.", FLAGS_id_generator_type);
+  }
 }
 
 }  // namespace mdsv2

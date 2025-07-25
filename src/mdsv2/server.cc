@@ -42,14 +42,6 @@ DEFINE_int32(compact_chunk_interval_s, 5, "compact chunk interval seconds");
 
 DEFINE_string(pid_file_name, "pid", "pid file name");
 
-static const int64_t kFsTableId = 1000;
-static const int64_t kFsIdBatchSize = 8;
-static const int64_t kFsIdStartId = 20000;
-
-static const int64_t kSliceTableId = 1001;
-static const int64_t kSliceIdBatchSize = 8;
-static const int64_t kSliceIdStartId = 10000000;
-
 Server::~Server() {}  // NOLINT
 
 Server& Server::GetInstance() {
@@ -191,12 +183,11 @@ bool Server::InitFileSystem() {
   CHECK(operation_processor_ != nullptr) << "operation_processor is nullptr.";
   CHECK(notify_buddy_ != nullptr) << "notify_buddy is nullptr.";
 
-  auto fs_id_generator = AutoIncrementIdGenerator::New(coordinator_client_, kFsTableId, kFsIdStartId, kFsIdBatchSize);
+  auto fs_id_generator = NewFsIdGenerator(coordinator_client_, kv_storage_);
   CHECK(fs_id_generator != nullptr) << "new fs AutoIncrementIdGenerator fail.";
   CHECK(fs_id_generator->Init()) << "init fs AutoIncrementIdGenerator fail.";
 
-  auto slice_id_generator =
-      AutoIncrementIdGenerator::NewShare(coordinator_client_, kSliceTableId, kSliceIdStartId, kSliceIdBatchSize);
+  auto slice_id_generator = NewSliceIdGenerator(coordinator_client_, kv_storage_);
   CHECK(slice_id_generator != nullptr) << "new slice AutoIncrementIdGenerator fail.";
   CHECK(slice_id_generator->Init()) << "init slice AutoIncrementIdGenerator fail.";
 
