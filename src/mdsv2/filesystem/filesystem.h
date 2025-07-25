@@ -222,6 +222,8 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   friend class DebugServiceImpl;
   friend class FsStatServiceImpl;
 
+  IdGenerator& GetInoIdGenerator() { return *ino_id_generator_; }
+
   Status RunOperation(Operation* operation);
 
   // generate ino
@@ -275,7 +277,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   bool can_serve_{false};
 
   // generate inode id
-  IdGeneratorUPtr id_generator_;
+  IdGeneratorUPtr ino_id_generator_;
   // for slice id
   IdGeneratorSPtr slice_id_generator_;
 
@@ -373,6 +375,11 @@ class FileSystemSet {
   bool LoadFileSystems();
 
  private:
+  friend class FsStatServiceImpl;
+
+  IdGenerator& GetFsIdGenerator() { return *fs_id_generator_; }
+  IdGenerator& GetSliceIdGenerator() { return *slice_id_generator_; }
+
   Status GenFsId(uint32_t& fs_id);
   FsInfoType GenFsInfo(int64_t fs_id, const CreateFsParam& param);
 
@@ -386,7 +393,7 @@ class FileSystemSet {
   CoordinatorClientSPtr coordinator_client_;
 
   // for fs id
-  IdGeneratorUPtr id_generator_;
+  IdGeneratorUPtr fs_id_generator_;
   // for slice id
   IdGeneratorSPtr slice_id_generator_;
 

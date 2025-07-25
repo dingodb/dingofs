@@ -32,25 +32,27 @@ namespace mdsv2 {
 DECLARE_uint32(txn_max_retry_times);
 
 DEFINE_string(id_generator_type, "coor", "id generator type, coor or store");
+DEFINE_validator(id_generator_type,
+                 [](const char*, const std::string& value) -> bool { return value == "coor" || value == "store"; });
 
 const std::string kFsAutoIncrementIdName = "dingofs-fs-id";
 static const int64_t kFsTableId = 1000;
 static const int64_t kFsIdBatchSize = 8;
-static const int64_t kFsIdStartId = 20000;
+static const int64_t kFsIdStartId = 1e4;  // 10 thousand
 
 const std::string kInoAutoIncrementIdName = "dingofs-inode-id";
 static const int64_t kInoTableId = 1001;
 static const int64_t kInoBatchSize = 32;
-static const int64_t kInoStartId = 100000;
+static const int64_t kInoStartId = 2e10;  // 20 billion
 
 const std::string kSliceAutoIncrementIdName = "dingofs-slice-id";
 static const int64_t kSliceTableId = 1002;
-static const int64_t kSliceIdBatchSize = 16;
-static const int64_t kSliceIdStartId = 10000000;
+static const int64_t kSliceIdBatchSize = 32;
+static const int64_t kSliceIdStartId = 3e10;  // 30 billion
 
-CoorAutoIncrementIdGenerator::CoorAutoIncrementIdGenerator(CoordinatorClientSPtr client, int64_t table_id,
-                                                           uint64_t start_id, uint32_t batch_size)
-    : client_(client), table_id_(table_id), start_id_(start_id), batch_size_(batch_size) {
+CoorAutoIncrementIdGenerator::CoorAutoIncrementIdGenerator(CoordinatorClientSPtr client, const std::string& name,
+                                                           int64_t table_id, uint64_t start_id, uint32_t batch_size)
+    : client_(client), name_(name), table_id_(table_id), start_id_(start_id), batch_size_(batch_size) {
   next_id_ = start_id;
   bundle_ = start_id;
   bundle_end_ = start_id;
@@ -64,20 +66,23 @@ CoorAutoIncrementIdGenerator::~CoorAutoIncrementIdGenerator() {
 
 bool CoorAutoIncrementIdGenerator::Init() {
   auto status = IsExistAutoIncrement();
-  if (!status.ok()) {
-    if (status.error_code() != pb::error::ENOT_FOUND) {
-      return false;
-    }
-
-    DINGO_LOG(INFO) << fmt::format("[idalloc.{}] auto increment table not exist.", table_id_);
-  } else {
-    DINGO_LOG(INFO) << fmt::format("[idalloc.{}] auto increment table exist.", table_id_);
+  if (status.ok()) {
+    DINGO_LOG(INFO) << fmt::format("[idalloc.{}] autoincrement table exist.", name_);
     return true;
   }
 
+  if (status.error_code() != pb::error::ENOT_FOUND) {
+    DINGO_LOG(ERROR) << fmt::format("[idalloc.{}] check autoincrement table fail, status({}).", name_,
+                                    status.error_str());
+    return false;
+  }
+
+  DINGO_LOG(INFO) << fmt::format("[idalloc.{}] autoincrement table not exist.", name_);
+
   status = CreateAutoIncrement();
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << "Create auto increment table fail, error: " << status.error_str();
+    DINGO_LOG(ERROR) << fmt::format("[idalloc.{}] create autoincrement table fail, error({}).", name_,
+                                    status.error_str());
     return false;
   }
 
@@ -101,10 +106,14 @@ bool CoorAutoIncrementIdGenerator::GenID(uint32_t num, uint64_t min_slice_id, ui
   id = next_id_;
   next_id_ += num;
 
-  DINGO_LOG(INFO) << fmt::format("[idalloc.{}] alloc id {},{} bundle[{}, {}).", table_id_, id, num, bundle_,
-                                 bundle_end_);
+  DINGO_LOG(INFO) << fmt::format("[idalloc.{}] alloc id {},{} bundle[{}, {}).", name_, id, num, bundle_, bundle_end_);
 
   return true;
+}
+
+std::string CoorAutoIncrementIdGenerator::Describe() const {
+  return fmt::format("id generator[coordinator] name({}) start_id({}) batch_size({}) range[{}, {}) next_id({})", name_,
+                     start_id_, batch_size_, bundle_, bundle_end_, next_id_);
 }
 
 Status CoorAutoIncrementIdGenerator::IsExistAutoIncrement() {
@@ -113,7 +122,7 @@ Status CoorAutoIncrementIdGenerator::IsExistAutoIncrement() {
 }
 
 Status CoorAutoIncrementIdGenerator::CreateAutoIncrement() {
-  DINGO_LOG(INFO) << fmt::format("[idalloc.{}] create auto increment table, start_id({}).", table_id_, start_id_);
+  DINGO_LOG(INFO) << fmt::format("[idalloc.{}] create autoincrement table, start_id({}).", name_, start_id_);
   return client_->CreateAutoIncrement(table_id_, start_id_);
 }
 
@@ -137,7 +146,7 @@ Status CoorAutoIncrementIdGenerator::AllocateIds(uint32_t num) {
     bundle_end_ = bundle_end;
   }
 
-  DINGO_LOG(INFO) << fmt::format("[idalloc.{}][{}us] take bundle id, bundle[{}, {}) status({}).", table_id_,
+  DINGO_LOG(INFO) << fmt::format("[idalloc.{}][{}us] take bundle id, bundle[{}, {}) status({}).", name_,
                                  duration.ElapsedUs(), bundle_, bundle_end_, status.error_str());
 
   return status;
@@ -146,6 +155,7 @@ Status CoorAutoIncrementIdGenerator::AllocateIds(uint32_t num) {
 StoreAutoIncrementIdGenerator::StoreAutoIncrementIdGenerator(KVStorageSPtr kv_storage, const std::string& name,
                                                              int64_t start_id, int batch_size)
     : kv_storage_(kv_storage),
+      name_(name),
       key_(MetaCodec::EncodeAutoIncrementIDKey(name)),
       next_id_(start_id),
       last_alloc_id_(start_id),
@@ -161,7 +171,7 @@ bool StoreAutoIncrementIdGenerator::Init() {
   uint64_t alloc_id = 0;
   auto status = GetOrPutAllocId(alloc_id);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[idalloc.{}] init get alloc id fail, status({}).", key_, status.error_cstr());
+    DINGO_LOG(ERROR) << fmt::format("[idalloc.{}] init get alloc id fail, status({}).", name_, status.error_cstr());
     return false;
   }
 
@@ -175,7 +185,7 @@ bool StoreAutoIncrementIdGenerator::GenID(uint32_t num, uint64_t& id) { return G
 
 bool StoreAutoIncrementIdGenerator::GenID(uint32_t num, uint64_t min_slice_id, uint64_t& id) {
   if (num == 0) {
-    DINGO_LOG(ERROR) << fmt::format("[idalloc.{}] num cant not 0.", key_);
+    DINGO_LOG(ERROR) << fmt::format("[idalloc.{}] num cant not 0.", name_);
     return -1;
   }
 
@@ -186,7 +196,7 @@ bool StoreAutoIncrementIdGenerator::GenID(uint32_t num, uint64_t min_slice_id, u
   if (next_id_ + num > last_alloc_id_) {
     auto status = AllocateIds(std::max(num, batch_size_));
     if (!status.ok()) {
-      DINGO_LOG(ERROR) << fmt::format("[idalloc.{}] allocate id fail, {}.", key_, status.error_str());
+      DINGO_LOG(ERROR) << fmt::format("[idalloc.{}] allocate id fail, {}.", name_, status.error_str());
       return -1;
     }
   }
@@ -195,9 +205,14 @@ bool StoreAutoIncrementIdGenerator::GenID(uint32_t num, uint64_t min_slice_id, u
   id = next_id_;
   next_id_ += num;
 
-  DINGO_LOG(INFO) << fmt::format("[idalloc.{}] alloc id({}) num({}).", key_, id, num);
+  DINGO_LOG(INFO) << fmt::format("[idalloc.{}] alloc id({}) num({}).", name_, id, num);
 
   return true;
+}
+
+std::string StoreAutoIncrementIdGenerator::Describe() const {
+  return fmt::format("id generator[store] name({}) batch_size({}) last_alloc_id({}) next_id({})", name_, batch_size_,
+                     last_alloc_id_, next_id_);
 }
 
 Status StoreAutoIncrementIdGenerator::GetOrPutAllocId(uint64_t& alloc_id) {
@@ -268,7 +283,7 @@ Status StoreAutoIncrementIdGenerator::AllocateIds(uint32_t size) {
     next_id_ = start_alloc_id;
   }
 
-  DINGO_LOG(INFO) << fmt::format("[idalloc.{}][{}us] take bundle id, bundle[{}, {}) status({}).", key_,
+  DINGO_LOG(INFO) << fmt::format("[idalloc.{}][{}us] take bundle id, bundle[{}, {}) status({}).", name_,
                                  duration.ElapsedUs(), next_id_, last_alloc_id_, status.error_str());
 
   return status;
@@ -276,39 +291,41 @@ Status StoreAutoIncrementIdGenerator::AllocateIds(uint32_t size) {
 
 IdGeneratorUPtr NewFsIdGenerator(CoordinatorClientSPtr coordinator_client, KVStorageSPtr kv_storage) {
   if (FLAGS_id_generator_type == "coor") {
-    return CoorAutoIncrementIdGenerator::New(coordinator_client, kFsTableId, kFsIdStartId, kFsIdBatchSize);
+    return CoorAutoIncrementIdGenerator::New(coordinator_client, kFsAutoIncrementIdName, kFsTableId, kFsIdStartId,
+                                             kFsIdBatchSize);
 
   } else if (FLAGS_id_generator_type == "store") {
     return StoreAutoIncrementIdGenerator::New(kv_storage, kFsAutoIncrementIdName, kFsIdStartId, kFsIdBatchSize);
 
   } else {
-    CHECK(false) << fmt::format("invalid id generator type({}), use coor or store.", FLAGS_id_generator_type);
+    CHECK(false) << fmt::format("invalid id generator type({}), use coor|store.", FLAGS_id_generator_type);
   }
 }
 
 IdGeneratorUPtr NewInodeIdGenerator(CoordinatorClientSPtr coordinator_client, KVStorageSPtr kv_storage) {
   if (FLAGS_id_generator_type == "coor") {
-    return CoorAutoIncrementIdGenerator::New(coordinator_client, kInoTableId, kInoStartId, kInoBatchSize);
+    return CoorAutoIncrementIdGenerator::New(coordinator_client, kInoAutoIncrementIdName, kInoTableId, kInoStartId,
+                                             kInoBatchSize);
 
   } else if (FLAGS_id_generator_type == "store") {
     return StoreAutoIncrementIdGenerator::New(kv_storage, kInoAutoIncrementIdName, kInoStartId, kInoBatchSize);
 
   } else {
-    CHECK(false) << fmt::format("invalid id generator type({}), use coor or store.", FLAGS_id_generator_type);
+    CHECK(false) << fmt::format("invalid id generator type({}), use coor|store.", FLAGS_id_generator_type);
   }
 }
 
 IdGeneratorSPtr NewSliceIdGenerator(CoordinatorClientSPtr coordinator_client, KVStorageSPtr kv_storage) {
   if (FLAGS_id_generator_type == "coor") {
-    return CoorAutoIncrementIdGenerator::NewShare(coordinator_client, kSliceTableId, kSliceIdStartId,
-                                                  kSliceIdBatchSize);
+    return CoorAutoIncrementIdGenerator::NewShare(coordinator_client, kSliceAutoIncrementIdName, kSliceTableId,
+                                                  kSliceIdStartId, kSliceIdBatchSize);
 
   } else if (FLAGS_id_generator_type == "store") {
     return StoreAutoIncrementIdGenerator::NewShare(kv_storage, kSliceAutoIncrementIdName, kSliceIdStartId,
                                                    kSliceIdBatchSize);
 
   } else {
-    CHECK(false) << fmt::format("invalid id generator type({}), use coor or store.", FLAGS_id_generator_type);
+    CHECK(false) << fmt::format("invalid id generator type({}), use coor|store.", FLAGS_id_generator_type);
   }
 }
 

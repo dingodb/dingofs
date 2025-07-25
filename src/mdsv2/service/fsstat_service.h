@@ -18,7 +18,10 @@
 #include <memory>
 
 #include "brpc/builtin/tabbed.h"
+#include "brpc/server.h"
+#include "butil/iobuf.h"
 #include "dingofs/web.pb.h"
+#include "mdsv2/filesystem/filesystem.h"
 
 namespace dingofs {
 namespace mdsv2 {
@@ -38,6 +41,10 @@ class FsStatServiceImpl : public pb::web::FsStatService, public brpc::Tabbed {
   void default_method(::google::protobuf::RpcController* controller, const pb::web::FsStatRequest* request,
                       pb::web::FsStatResponse* response, ::google::protobuf::Closure* done) override;
   void GetTabInfo(brpc::TabInfoList*) const override;
+
+ private:
+  void RenderAutoIncrementIdGenerator(FileSystemSetSPtr file_system_set, butil::IOBufBuilder& os);
+  void RenderMainPage(const brpc::Server* server, FileSystemSetSPtr file_system_set, butil::IOBufBuilder& os);
 };
 
 }  // namespace mdsv2

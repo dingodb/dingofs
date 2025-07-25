@@ -14,7 +14,6 @@
 
 #include "mdsv2/server.h"
 
-#include <cstdint>
 #include <string>
 #include <utility>
 
@@ -38,7 +37,6 @@ namespace mdsv2 {
 
 DEFINE_string(mdsmonitor_lock_name, "/lock/mds/monitor", "mds monitor lock name");
 DEFINE_string(gc_lock_name, "/lock/mds/gc", "gc lock name");
-DEFINE_int32(compact_chunk_interval_s, 5, "compact chunk interval seconds");
 
 DEFINE_string(pid_file_name, "pid", "pid file name");
 
@@ -49,7 +47,7 @@ Server& Server::GetInstance() {
   return instance;
 }
 
-LogLevel GetDingoLogLevel(const std::string& log_level) {
+static LogLevel GetDingoLogLevel(const std::string& log_level) {
   if (Helper::IsEqualIgnoreCase(log_level, "DEBUG")) {
     return LogLevel::kDEBUG;
   } else if (Helper::IsEqualIgnoreCase(log_level, "INFO")) {

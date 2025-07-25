@@ -32,6 +32,9 @@ namespace dingofs {
 namespace mdsv2 {
 namespace unit_test {
 
+const std::string kFsAutoIncrementIdName = "dingofs-fs-id";
+const std::string kInoAutoIncrementIdName = "dingofs-inode-id";
+const std::string kSliceAutoIncrementIdName = "dingofs-slice-id";
 const int64_t kFsTableId = 1234;
 const int64_t kInodeTableId = 2345;
 const int64_t kSliceTableId = 3456;
@@ -58,10 +61,12 @@ class FileSystemSetTest : public testing::Test {
     auto coordinator_client = DummyCoordinatorClient::New();
     ASSERT_TRUE(coordinator_client->Init("")) << "init coordinator client fail.";
 
-    auto fs_id_generator = CoorAutoIncrementIdGenerator::New(coordinator_client, kFsTableId, 20000, 8);
+    auto fs_id_generator =
+        CoorAutoIncrementIdGenerator::New(coordinator_client, kFsAutoIncrementIdName, kFsTableId, 20000, 8);
     ASSERT_TRUE(fs_id_generator->Init()) << "init fs id generator fail.";
 
-    auto slice_id_generator = CoorAutoIncrementIdGenerator::NewShare(coordinator_client, kSliceTableId, 20001, 8);
+    auto slice_id_generator =
+        CoorAutoIncrementIdGenerator::NewShare(coordinator_client, kSliceAutoIncrementIdName, kSliceTableId, 20001, 8);
     ASSERT_TRUE(slice_id_generator->Init()) << "init fs id generator fail.";
 
     auto kv_storage = DummyStorage::New();
@@ -102,7 +107,8 @@ class FileSystemTest : public testing::Test {
     auto coordinator_client = DummyCoordinatorClient::New();
     ASSERT_TRUE(coordinator_client->Init("")) << "init coordinator client fail.";
 
-    auto fs_id_generator = CoorAutoIncrementIdGenerator::New(coordinator_client, kInodeTableId, 1000000, 8);
+    auto fs_id_generator =
+        CoorAutoIncrementIdGenerator::New(coordinator_client, kInoAutoIncrementIdName, kInodeTableId, 1000000, 8);
 
     auto kv_storage = DummyStorage::New();
     ASSERT_TRUE(kv_storage->Init("")) << "init kv storage fail.";

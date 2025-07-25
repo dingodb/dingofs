@@ -71,7 +71,7 @@ static bool IsInvalidName(const std::string& name) {
   return name.empty() || name.size() > FLAGS_filesystem_name_max_size;
 }
 
-FileSystem::FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr id_generator,
+FileSystem::FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr ino_id_generator,
                        IdGeneratorSPtr slice_id_generator, KVStorageSPtr kv_storage,
                        OperationProcessorSPtr operation_processor, MDSMetaMapSPtr mds_meta_map,
                        notify::NotifyBuddySPtr notify_buddy)
@@ -80,7 +80,7 @@ FileSystem::FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr 
       fs_id_(fs_info_->GetFsId()),
       inode_cache_(fs_id_),
       partition_cache_(fs_id_),
-      id_generator_(std::move(id_generator)),
+      ino_id_generator_(std::move(ino_id_generator)),
       slice_id_generator_(slice_id_generator),
       kv_storage_(kv_storage),
       operation_processor_(operation_processor),
@@ -103,7 +103,7 @@ FileSystem::~FileSystem() {
 FileSystemSPtr FileSystem::GetSelfPtr() { return std::dynamic_pointer_cast<FileSystem>(shared_from_this()); }
 
 bool FileSystem::Init() {
-  if (!id_generator_->Init()) {
+  if (!ino_id_generator_->Init()) {
     DINGO_LOG(ERROR) << fmt::format("[fs.{}] init generator fail.", fs_id_);
     return false;
   }
@@ -144,7 +144,7 @@ bool FileSystem::IsParentHashPartition() const {
 
 // odd number is dir inode, even number is file inode
 Status FileSystem::GenDirIno(Ino& ino) {
-  bool ret = id_generator_->GenID(1, ino);
+  bool ret = ino_id_generator_->GenID(1, ino);
   ino = (ino << 1) + 1;
 
   return ret ? Status::OK() : Status(pb::error::EGEN_FSID, "generate inode id fail");
@@ -152,7 +152,7 @@ Status FileSystem::GenDirIno(Ino& ino) {
 
 // odd number is dir inode, even number is file inode
 Status FileSystem::GenFileIno(Ino& ino) {
-  bool ret = id_generator_->GenID(1, ino);
+  bool ret = ino_id_generator_->GenID(1, ino);
   ino = ino << 1;
 
   return ret ? Status::OK() : Status(pb::error::EGEN_FSID, "generate inode id fail");
@@ -2117,7 +2117,7 @@ FileSystemSet::FileSystemSet(CoordinatorClientSPtr coordinator_client, IdGenerat
                              MDSMetaMapSPtr mds_meta_map, OperationProcessorSPtr operation_processor,
                              notify::NotifyBuddySPtr notify_buddy)
     : coordinator_client_(coordinator_client),
-      id_generator_(std::move(fs_id_generator)),
+      fs_id_generator_(std::move(fs_id_generator)),
       slice_id_generator_(slice_id_generator),
       kv_storage_(kv_storage),
       self_mds_meta_(self_mds_meta),
@@ -2148,7 +2148,7 @@ bool FileSystemSet::Init() {
 
 Status FileSystemSet::GenFsId(uint32_t& fs_id) {
   uint64_t temp_fs_id;
-  bool ret = id_generator_->GenID(2, temp_fs_id);
+  bool ret = fs_id_generator_->GenID(2, temp_fs_id);
   fs_id = static_cast<uint32_t>(temp_fs_id);
   return ret ? Status::OK() : Status(pb::error::EGEN_FSID, "generate fs id fail");
 }

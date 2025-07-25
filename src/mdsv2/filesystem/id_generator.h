@@ -36,6 +36,8 @@ class IdGenerator {
 
   virtual bool GenID(uint32_t num, uint64_t& id) = 0;
   virtual bool GenID(uint32_t num, uint64_t min_slice_id, uint64_t& id) = 0;
+
+  virtual std::string Describe() const = 0;
 };
 
 using IdGeneratorUPtr = std::unique_ptr<IdGenerator>;
@@ -43,20 +45,24 @@ using IdGeneratorSPtr = std::shared_ptr<IdGenerator>;
 
 class CoorAutoIncrementIdGenerator : public IdGenerator {
  public:
-  CoorAutoIncrementIdGenerator(CoordinatorClientSPtr client, int64_t table_id, uint64_t start_id, uint32_t batch_size);
+  CoorAutoIncrementIdGenerator(CoordinatorClientSPtr client, const std::string& name, int64_t table_id,
+                               uint64_t start_id, uint32_t batch_size);
   ~CoorAutoIncrementIdGenerator() override;
 
-  static IdGeneratorUPtr New(CoordinatorClientSPtr client, int64_t table_id, uint64_t start_id, uint32_t batch_size) {
-    return std::make_unique<CoorAutoIncrementIdGenerator>(client, table_id, start_id, batch_size);
+  static IdGeneratorUPtr New(CoordinatorClientSPtr client, const std::string& name, int64_t table_id, uint64_t start_id,
+                             uint32_t batch_size) {
+    return std::make_unique<CoorAutoIncrementIdGenerator>(client, name, table_id, start_id, batch_size);
   }
-  static IdGeneratorSPtr NewShare(CoordinatorClientSPtr client, int64_t table_id, uint64_t start_id,
-                                  uint32_t batch_size) {
-    return std::make_shared<CoorAutoIncrementIdGenerator>(client, table_id, start_id, batch_size);
+  static IdGeneratorSPtr NewShare(CoordinatorClientSPtr client, const std::string& name, int64_t table_id,
+                                  uint64_t start_id, uint32_t batch_size) {
+    return std::make_shared<CoorAutoIncrementIdGenerator>(client, name, table_id, start_id, batch_size);
   }
 
   bool Init() override;
   bool GenID(uint32_t num, uint64_t& id) override;
   bool GenID(uint32_t num, uint64_t min_slice_id, uint64_t& id) override;
+
+  std::string Describe() const override;
 
  private:
   Status IsExistAutoIncrement();
@@ -64,8 +70,10 @@ class CoorAutoIncrementIdGenerator : public IdGenerator {
 
   Status AllocateIds(uint32_t num);
 
-  int64_t table_id_{0};
-  uint64_t start_id_{0};
+  const std::string name_;
+
+  const int64_t table_id_{0};
+  const uint64_t start_id_{0};
   const uint32_t batch_size_{0};
 
   CoordinatorClientSPtr client_;
@@ -95,6 +103,8 @@ class StoreAutoIncrementIdGenerator : public IdGenerator {
   bool GenID(uint32_t num, uint64_t& id) override;
   bool GenID(uint32_t num, uint64_t min_slice_id, uint64_t& id) override;
 
+  std::string Describe() const override;
+
  private:
   Status GetOrPutAllocId(uint64_t& alloc_id);
   Status AllocateIds(uint32_t bundle_size);
@@ -103,15 +113,16 @@ class StoreAutoIncrementIdGenerator : public IdGenerator {
 
   bthread_mutex_t mutex_;
 
+  const std::string name_;
   // the key of id
-  std::string key_;
+  const std::string key_;
 
   // the next id can be allocated in this bunlde
   uint64_t next_id_;
   // the last id can be allocated in this bunlde
   uint64_t last_alloc_id_;
   // get the numnber of id at a time
-  uint32_t batch_size_;
+  const uint32_t batch_size_;
 };
 
 IdGeneratorUPtr NewFsIdGenerator(CoordinatorClientSPtr coordinator_client, KVStorageSPtr kv_storage);

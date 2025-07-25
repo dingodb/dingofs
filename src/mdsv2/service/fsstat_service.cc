@@ -35,6 +35,7 @@
 #include "mdsv2/common/logging.h"
 #include "mdsv2/common/type.h"
 #include "mdsv2/common/version.h"
+#include "mdsv2/filesystem/filesystem.h"
 #include "mdsv2/filesystem/fs_utils.h"
 #include "mdsv2/server.h"
 #include "mdsv2/storage/dingodb_storage.h"
@@ -328,6 +329,27 @@ static void RenderDistributedLock(const std::vector<StoreDistributionLock::LockE
   os << "</div>";
 }
 
+void FsStatServiceImpl::RenderAutoIncrementIdGenerator(FileSystemSetSPtr file_system_set, butil::IOBufBuilder& os) {
+  os << R"(<div style="margin:12px;margin-top:64px;font-size:smaller">)";
+  os << R"(<h3>Autoincrement ID Generator</h3>)";
+  os << R"(<div style="font-size:smaller;">)";
+
+  os << file_system_set->GetFsIdGenerator().Describe();
+  os << "<br>";
+  os << file_system_set->GetSliceIdGenerator().Describe();
+  os << "<br>";
+
+  auto fses = file_system_set->GetAllFileSystem();
+
+  for (const auto& fs : fses) {
+    os << fs->GetInoIdGenerator().Describe();
+    os << "<br>";
+  }
+
+  os << R"(</div>)";
+  os << R"(</div>)";
+}
+
 static void RenderGitInfo(butil::IOBufBuilder& os) {
   os << R"(<div style="margin:12px;margin-top:64px;font-size:smaller">)";
   os << R"(<h3>Git</h3>)";
@@ -349,7 +371,8 @@ static void RenderGitInfo(butil::IOBufBuilder& os) {
   os << R"(</div>)";
 }
 
-static void RenderMainPage(const brpc::Server* server, FileSystemSetSPtr file_system_set, butil::IOBufBuilder& os) {
+void FsStatServiceImpl::RenderMainPage(const brpc::Server* server, FileSystemSetSPtr file_system_set,
+                                       butil::IOBufBuilder& os) {
   os << "<!DOCTYPE html><html>\n";
 
   os << "<head>";
@@ -415,6 +438,9 @@ static void RenderMainPage(const brpc::Server* server, FileSystemSetSPtr file_sy
   } else {
     RenderDistributedLock(lock_entries, os);
   }
+
+  // auto increment id generator
+  RenderAutoIncrementIdGenerator(file_system_set, os);
 
   // git info
   RenderGitInfo(os);
