@@ -27,6 +27,8 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include <memory>
+
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/block_cache_impl.h"
 #include "cache/blockcache/disk_cache_layout.h"
@@ -247,6 +249,42 @@ Status CacheGroupNodeImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
   status = block_cache_->Prefetch(ctx, key, length, option);
 
   return status;
+}
+
+void CacheGroupNodeImpl::AsyncCache(ContextSPtr ctx, const BlockKey& key,
+                                    const Block& block, AsyncCallback callback,
+                                    CacheOption option) {
+  CHECK_RUNNING("Cache group node");
+
+  auto timer = std::make_shared<StepTimer>();
+  timer->Start();
+
+  auto cb = [timer, ctx, key, block, callback](Status status) {
+    TraceLogGuard log(ctx, status, *timer, kModule, "async_cache(%s,%zu)",
+                      key.Filename(), block.size);
+    callback(status);
+    timer->Stop();
+  };
+
+  block_cache_->AsyncCache(ctx, key, block, cb, option);
+}
+
+void CacheGroupNodeImpl::AsyncPrefetch(ContextSPtr ctx, const BlockKey& key,
+                                       size_t length, AsyncCallback callback,
+                                       PrefetchOption option) {
+  CHECK_RUNNING("Cache group node");
+
+  auto timer = std::make_shared<StepTimer>();
+  timer->Start();
+
+  auto cb = [timer, ctx, key, length, callback](Status status) {
+    TraceLogGuard log(ctx, status, *timer, kModule, "async_prefetch(%s,%zu)",
+                      key.Filename(), length);
+    callback(status);
+    timer->Stop();
+  };
+
+  block_cache_->AsyncPrefetch(ctx, key, length, cb, option);
 }
 
 Status CacheGroupNodeImpl::RangeCachedBlock(ContextSPtr ctx, StepTimer& timer,

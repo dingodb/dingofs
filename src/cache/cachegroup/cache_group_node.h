@@ -50,6 +50,13 @@ class CacheGroupNode {
                        CacheOption option = CacheOption()) = 0;
   virtual Status Prefetch(ContextSPtr ctx, const BlockKey& key, size_t length,
                           PrefetchOption option = PrefetchOption()) = 0;
+
+  virtual void AsyncCache(ContextSPtr ctx, const BlockKey& key,
+                          const Block& block, AsyncCallback callback,
+                          CacheOption option = CacheOption()) = 0;
+  virtual void AsyncPrefetch(ContextSPtr ctx, const BlockKey& key,
+                             size_t length, AsyncCallback callback,
+                             PrefetchOption option = PrefetchOption()) = 0;
 };
 
 using CacheGroupNodeSPtr = std::shared_ptr<CacheGroupNode>;
@@ -70,6 +77,13 @@ class CacheGroupNodeImpl final : public CacheGroupNode {
                CacheOption option = CacheOption()) override;
   Status Prefetch(ContextSPtr ctx, const BlockKey& key, size_t length,
                   PrefetchOption option = PrefetchOption()) override;
+
+  void AsyncCache(ContextSPtr ctx, const BlockKey& key, const Block& block,
+                  AsyncCallback callback,
+                  CacheOption option = CacheOption()) override;
+  void AsyncPrefetch(ContextSPtr ctx, const BlockKey& key, size_t length,
+                     AsyncCallback callback,
+                     PrefetchOption option = PrefetchOption()) override;
 
  private:
   void RewriteCacheDir();

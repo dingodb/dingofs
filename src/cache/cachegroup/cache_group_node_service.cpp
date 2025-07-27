@@ -101,8 +101,9 @@ DEFINE_RPC_METHOD(CacheGroupNodeServiceImpl, Cache) {
   IOBuffer buffer(cntl->request_attachment());
   status = CheckBodySize(request->block_size(), buffer.Size());
   if (status.ok()) {
-    NEXT_STEP(kNodePut);
-    status = node_->Cache(ctx, BlockKey(request->block_key()), Block(buffer));
+    NEXT_STEP(kNodeAsyncCache);
+    node_->AsyncCache(ctx, BlockKey(request->block_key()), Block(buffer),
+                      [](Status) {});
   }
 
   response->set_status(PBErr(status));
@@ -119,10 +120,11 @@ DEFINE_RPC_METHOD(CacheGroupNodeServiceImpl, Prefetch) {  // NOLINT
 
   timer.Start();
 
-  status = node_->Prefetch(ctx, BlockKey(request->block_key()),
-                           request->block_size());
+  NEXT_STEP(kNodeAsyncPrefetch);
+  node_->AsyncPrefetch(ctx, BlockKey(request->block_key()),
+                       request->block_size(), [](Status) {});
 
-  response->set_status(PBErr(status));
+  response->set_status(PBErr(Status::OK()));
 }
 
 DEFINE_RPC_METHOD(CacheGroupNodeServiceImpl, Ping) {  // NOLINT

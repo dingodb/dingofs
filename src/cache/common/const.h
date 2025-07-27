@@ -62,6 +62,8 @@ static const std::string kNodePut = "node_put";
 static const std::string kNodeRange = "node_range";
 static const std::string kNodeCache = "node_cache";
 static const std::string kNodePrefetch = "node_prefetch";
+static const std::string kNodeAsyncCache = "node_async_cache";
+static const std::string kNodeAsyncPrefetch = "node_async_prefetch";
 static const std::string kSendResponse = "send_response";
 static const std::string kRetrieveCache = "memcache";
 
