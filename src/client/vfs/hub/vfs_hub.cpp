@@ -120,9 +120,7 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
     // related to block cache
     auto block_cache_option = vfs_option_.block_cache_option;
     auto remote_block_cache_option = vfs_option_.remote_block_cache_option;
-
-    std::string uuid = absl::StrFormat("%d-%s", fs_info_.id, fs_info_.name);
-    RewriteCacheDir(&block_cache_option, uuid);
+    RewriteCacheDir(&block_cache_option, fs_info_.uuid);
 
     // block_cache_ = std::make_unique<cache::TierBlockCache>(
     //     block_cache_option, remote_block_cache_option,
