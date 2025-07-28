@@ -109,6 +109,7 @@ Status RPCClient::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
   status = SendRequest(ctx, kApiRange, request, response, response_attachment);
   if (status.ok()) {
     *buffer = IOBuffer(response_attachment);
+    ctx->SetCacheHit(response.has_cache_hit() ? response.cache_hit() : false);
   }
   return status;
 }
@@ -290,7 +291,7 @@ Status RPCClient::SendRequest(ContextSPtr ctx, const std::string& api_name,
       continue;
     }
 
-    // response status is not ok
+    // response status is ok
     if (response.status() == PBBlockCacheErrCode::BlockCacheOk) {
       response_attachment = cntl.response_attachment();
       return Status::OK();

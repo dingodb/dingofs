@@ -34,6 +34,7 @@
 #include "cache/utils/context.h"
 #include "common/io_buffer.h"
 #include "common/status.h"
+#include "metrics/cache/remote_block_cache_metric.h"
 #include "options/cache/tiercache.h"
 
 namespace dingofs {
@@ -103,6 +104,8 @@ Status RemoteBlockCacheImpl::Start() {
     LOG(ERROR) << "Start prefetcher failed: " << status.ToString();
     return status;
   }
+
+  RemoteBlockCacheMetric::Init();
 
   running_ = true;
 
@@ -188,6 +191,13 @@ Status RemoteBlockCacheImpl::Range(ContextSPtr ctx, const BlockKey& key,
   TraceLogGuard log(ctx, status, timer, kModule, "range(%s,%lld,%zu)",
                     key.Filename(), offset, length);
   StepTimerGuard guard(timer);
+  SCOPE_EXIT {
+    if (ctx->GetCacheHit()) {
+      RemoteBlockCacheMetric::AddCacheHit(1);
+    } else {
+      RemoteBlockCacheMetric::AddCacheMiss(1);
+    }
+  };
 
   if (FLAGS_enable_remote_prefetch && option.block_size != 0) {
     prefetcher_->Submit(ctx, key, option.block_size);
@@ -198,6 +208,7 @@ Status RemoteBlockCacheImpl::Range(ContextSPtr ctx, const BlockKey& key,
   status = memcache_->Get(key, &block);
   if (status.ok()) {
     block.buffer.AppendTo(buffer, length, offset);
+    ctx->SetCacheHit(true);
     return status;
   }
 
@@ -221,10 +232,7 @@ Status RemoteBlockCacheImpl::Range(ContextSPtr ctx, const BlockKey& key,
   NEXT_STEP(kS3Range);
   status = storage_->Download(ctx, key, offset, length, buffer);
   if (!status.ok()) {
-    LOG_ERROR(
-        "[%s] Storage range failed: key = %s, offset = %lld"
-        ", length = %zu, status = %s",
-        ctx->TraceId(), key.Filename(), offset, length, status.ToString());
+    GENERIC_LOG_DOWNLOAD_ERROR();
   }
   return status;
 }

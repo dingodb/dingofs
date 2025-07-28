@@ -26,7 +26,7 @@
 #include <bvar/passive_status.h>
 
 namespace dingofs {
-namespace metrics {
+namespace cache {
 
 struct BlockCacheMetric {
   static BlockCacheMetric& GetInstance() {
@@ -35,7 +35,7 @@ struct BlockCacheMetric {
   }
 };
 
-}  // namespace metrics
+}  // namespace cache
 }  // namespace dingofs
 
 #endif  // DINGOFS_SRC_METRICS_CACHE_BLOCK_CACHE_METRIC_H_

@@ -46,12 +46,16 @@ class Context {
 
   std::string ToString() const { return absl::StrFormat("[%s]", trace_id_); }
 
+  void SetCacheHit(bool cache_hit) { cache_hit_ = cache_hit; }
+  bool GetCacheHit() const { return cache_hit_; }
+
  private:
   std::string NewTraceId() {
     return absl::StrFormat("%lld", butil::cpuwide_time_ns());
   }
 
   const std::string trace_id_;
+  bool cache_hit_{false};
 };
 
 using ContextSPtr = std::shared_ptr<Context>;

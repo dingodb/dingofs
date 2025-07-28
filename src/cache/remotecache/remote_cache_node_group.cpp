@@ -105,6 +105,10 @@ RemoteCacheNodeSPtr CacheUpstream::GetNode(const std::string& key) {
 }
 
 bool CacheUpstream::IsDiff(const PBCacheGroupMembers& members) const {
+  if (members.size() != members_.size()) {
+    return true;  // different size
+  }
+
   std::unordered_map<uint64_t, PBCacheGroupMember> m;
   for (const auto& member : members_) {
     m[member.id()] = member;

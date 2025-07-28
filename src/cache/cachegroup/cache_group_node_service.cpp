@@ -85,6 +85,7 @@ DEFINE_RPC_METHOD(CacheGroupNodeServiceImpl, Range) {
     cntl->response_attachment().append(buffer.IOBuf());
   }
   response->set_status(PBErr(status));
+  response->set_cache_hit(ctx->GetCacheHit());
 }
 
 DEFINE_RPC_METHOD(CacheGroupNodeServiceImpl, Cache) {

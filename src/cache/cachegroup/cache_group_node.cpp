@@ -296,6 +296,7 @@ Status CacheGroupNodeImpl::RangeCachedBlock(ContextSPtr ctx, StepTimer& timer,
   auto status = block_cache_->Range(ctx, key, offset, length, buffer, option);
   if (status.ok()) {
     AddCacheHitCount(1);
+    ctx->SetCacheHit(true);
   } else {
     AddCacheMissCount(1);
   }
