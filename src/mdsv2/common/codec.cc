@@ -66,6 +66,7 @@ enum MetaType : unsigned char {
   kMetaFsDelSlice = 17,
   kMetaFsDelFile = 19,
   kMetaFsStats = 21,
+  kMetaFsOpLog = 23,
 };
 
 // inode meta type:
@@ -221,6 +222,24 @@ Range MetaCodec::GetFsQuotaRange() {
   end = kPrefix;
   end.push_back(kTableMeta);
   end.push_back(kMetaFsQuota + 1);
+
+  return std::move(range);
+}
+
+Range MetaCodec::GetFsConfigLogRange(uint32_t fs_id) {
+  Range range;
+
+  auto& start = range.start;
+  start = kPrefix;
+  start.push_back(kTableMeta);
+  start.push_back(kMetaFsOpLog);
+  SerialHelper::WriteInt(fs_id, start);
+
+  auto& end = range.end;
+  end = kPrefix;
+  end.push_back(kTableMeta);
+  end.push_back(kMetaFsOpLog);
+  SerialHelper::WriteInt(fs_id + 1, end);
 
   return std::move(range);
 }
@@ -710,6 +729,50 @@ QuotaEntry MetaCodec::DecodeFsQuotaValue(const std::string& value) {
   CHECK(quota.ParseFromString(value)) << "parse fs quota fail.";
 
   return std::move(quota);
+}
+
+// fs config log format: ${prefix} kTableMeta kMetaFsOpLog {fs_id} {time_ns}
+static const uint32_t kFsConfigLogKeySize = kPrefixSize + 1 + 1 + 4 + 8;
+
+bool MetaCodec::IsFsOpLogKey(const std::string& key) {
+  if (key.size() != kFsConfigLogKeySize) {
+    return false;
+  }
+
+  if (key.at(kPrefixSize) != kTableMeta || key.at(kPrefixSize + 1) != kMetaFsOpLog) {
+    return false;
+  }
+
+  return true;
+}
+
+std::string MetaCodec::EncodeFsOpLogKey(uint32_t fs_id, uint64_t time_ns) {
+  std::string key;
+  key.reserve(kFsConfigLogKeySize);
+
+  key.append(kPrefix);
+  key.push_back(kTableMeta);
+  key.push_back(kMetaFsOpLog);
+  SerialHelper::WriteInt(fs_id, key);
+  SerialHelper::WriteULong(time_ns, key);
+
+  return std::move(key);
+}
+
+void MetaCodec::DecodeFsOpLogKey(const std::string& key, uint32_t& fs_id, uint64_t& time_ns) {
+  CHECK(IsFsOpLogKey(key)) << fmt::format("invalid fs config log key({}).", Helper::StringToHex(key));
+
+  fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 1));
+  time_ns = SerialHelper::ReadULong(key.substr(kPrefixSize + 1 + 1 + 4));
+}
+
+std::string MetaCodec::EncodeFsOpLogValue(const FsOpLog& entry) { return entry.SerializeAsString(); }
+
+FsOpLog MetaCodec::DecodeFsOpLogValue(const std::string& value) {
+  FsOpLog entry;
+  CHECK(entry.ParseFromString(value)) << "parse fs config log fail.";
+
+  return std::move(entry);
 }
 
 // inode attr format: ${prefix} kTableFsMeta {fs_id} kMetaFsInode {ino} kFsInodeAttr

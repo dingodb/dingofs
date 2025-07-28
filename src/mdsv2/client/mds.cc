@@ -805,6 +805,48 @@ DeleteDirQuotaResponse MDSClient::DeleteDirQuota(Ino ino) {
   return response;
 }
 
+JoinFsResponse MDSClient::JoinFs(const std::string& fs_name, uint32_t fs_id, const std::vector<int64_t>& mds_ids) {
+  JoinFsRequest request;
+  JoinFsResponse response;
+
+  request.set_fs_id(fs_id);
+  request.set_fs_name(fs_name);
+  for (const auto& mds_id : mds_ids) {
+    request.add_mds_ids(mds_id);
+  }
+
+  DINGO_LOG(INFO) << "JoinFs request: " << request.ShortDebugString();
+
+  interaction_->SendRequest("MDSService", "JoinFs", request, response);
+  if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
+    DINGO_LOG(INFO) << "JoinFs success";
+  } else {
+    DINGO_LOG(ERROR) << "JoinFs fail, error: " << response.ShortDebugString();
+  }
+
+  return response;
+}
+
+QuitFsResponse MDSClient::QuitFs(const std::string& fs_name, uint32_t fs_id, const std::vector<int64_t>& mds_ids) {
+  QuitFsRequest request;
+  QuitFsResponse response;
+
+  request.set_fs_id(fs_id);
+  request.set_fs_name(fs_name);
+  for (const auto& mds_id : mds_ids) {
+    request.add_mds_ids(mds_id);
+  }
+
+  interaction_->SendRequest("MDSService", "QuitFs", request, response);
+  if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
+    DINGO_LOG(INFO) << "QuitFs success";
+  } else {
+    DINGO_LOG(ERROR) << "QuitFs fail, error: " << response.ShortDebugString();
+  }
+
+  return response;
+}
+
 bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr, const std::string& cmd,
                            uint32_t fs_id) {
   static std::set<std::string> mds_cmd = {
@@ -820,7 +862,8 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr, 
       "getfsstats",      "getfspersecondstats",
       "setfsquota",      "getfsquota",
       "setdirquota",     "getdirquota",
-      "deletedirquota",
+      "deletedirquota",  "joinfs",
+      "quitfs",
   };
 
   if (mds_cmd.count(cmd) == 0) return false;
@@ -945,6 +988,45 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr, 
       return true;
     }
     mds_client.DeleteDirQuota(options.ino);
+  } else if (cmd == Helper::ToLowerCase("JoinFs")) {
+    if (options.fs_name.empty() && options.fs_id == 0) {
+      std::cout << "fs_name and fs_id is empty." << '\n';
+      return true;
+    }
+
+    if (options.mds_id_list.empty()) {
+      std::cout << "mds_id_list is empty." << '\n';
+      return true;
+    }
+
+    std::vector<int64_t> mds_ids;
+    dingofs::mdsv2::Helper::SplitString(options.mds_id_list, ',', mds_ids);
+    auto response = mds_client.JoinFs(options.fs_name, options.fs_id, mds_ids);
+    if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
+      std::cout << "joinfs success." << '\n';
+    } else {
+      std::cout << "joinfs fail, error: " << response.ShortDebugString() << '\n';
+    }
+
+  } else if (cmd == Helper::ToLowerCase("QuitFs")) {
+    if (options.fs_name.empty() && options.fs_id == 0) {
+      std::cout << "fs_name and fs_id is empty." << '\n';
+      return true;
+    }
+
+    if (options.mds_id_list.empty()) {
+      std::cout << "mds_id_list is empty." << '\n';
+      return true;
+    }
+
+    std::vector<int64_t> mds_ids;
+    dingofs::mdsv2::Helper::SplitString(options.mds_id_list, ',', mds_ids);
+    auto response = mds_client.QuitFs(options.fs_name, options.fs_id, mds_ids);
+    if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
+      std::cout << "quitfs success." << '\n';
+    } else {
+      std::cout << "quitfs fail, error: " << response.ShortDebugString() << '\n';
+    }
   }
 
   return true;

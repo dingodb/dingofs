@@ -96,12 +96,7 @@ class FsInfo {
 
   uint64_t GetEpoch() {
     utils::ReadLockGuard lock(lock_);
-
-    if (fs_info_.partition_policy().type() == pb::mdsv2::MONOLITHIC_PARTITION) {
-      return fs_info_.partition_policy().mono().epoch();
-    } else {
-      return fs_info_.partition_policy().parent_hash().epoch();
-    }
+    return fs_info_.partition_policy().epoch();
   }
 
   void SetPartitionPolicy(const pb::mdsv2::PartitionPolicy& partition_policy) {
@@ -119,7 +114,7 @@ class FsInfo {
   void Update(const DataType& fs_info) {
     utils::WriteLockGuard lock(lock_);
 
-    if (fs_info.last_update_time_ns() > fs_info_.last_update_time_ns()) {
+    if (fs_info.version() > fs_info_.version()) {
       fs_info_ = fs_info;
     }
   }

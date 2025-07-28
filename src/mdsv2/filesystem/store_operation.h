@@ -42,11 +42,14 @@ class Operation {
   virtual ~Operation() = default;
 
   enum class OpType : uint8_t {
-    kMountFs = 0,
-    kUmountFs = 1,
-    kDeleteFs = 2,
-    kUpdateFs = 3,
-    kCreateRoot = 10,
+    kCreateFs = 0,
+    kGetFs = 1,
+    kMountFs = 2,
+    kUmountFs = 3,
+    kDeleteFs = 4,
+    kUpdateFs = 5,
+    kUpdateFsPartition = 6,
+    kCreateRoot = 7,
     kMkDir = 11,
     kMkNod = 12,
     kHardLink = 13,
@@ -100,6 +103,7 @@ class Operation {
 
     kScanMetaTable = 75,
     kScanFsMetaTable = 76,
+    kScanFsOpLog = 77,
 
     kSaveFsStats = 80,
     kScanFsStats = 81,
@@ -199,6 +203,53 @@ class Operation {
   Trace& trace_;
 };
 
+class CreateFsOperation : public Operation {
+ public:
+  CreateFsOperation(Trace& trace, const FsInfoType& fs_info) : Operation(trace), fs_info_(fs_info) {}
+  ~CreateFsOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kCreateFs; }
+
+  uint32_t GetFsId() const override { return fs_info_.fs_id(); }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  FsInfoType fs_info_;
+};
+
+class GetFsOperation : public Operation {
+ public:
+  GetFsOperation(Trace& trace, const std::string& fs_name) : Operation(trace), fs_name_(fs_name) {}
+  ~GetFsOperation() override = default;
+
+  struct Result : public Operation::Result {
+    FsInfoType fs_info;
+  };
+
+  OpType GetOpType() const override { return OpType::kGetFs; }
+
+  uint32_t GetFsId() const override { return 0; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+  template <int size = 0>
+  Result& GetResult() {
+    auto& result = Operation::GetResult();
+    result_.status = result.status;
+    result_.attr = std::move(result.attr);
+
+    return result_;
+  }
+
+ private:
+  const std::string fs_name_;
+
+  Result result_;
+};
+
 class MountFsOperation : public Operation {
  public:
   MountFsOperation(Trace& trace, std::string fs_name, pb::mdsv2::MountPoint mountpoint)
@@ -284,6 +335,41 @@ class UpdateFsOperation : public Operation {
  private:
   const std::string fs_name_;
   FsInfoType fs_info_;
+};
+
+class UpdateFsPartitionOperation : public Operation {
+ public:
+  using HandlerType = std::function<Status(PartitionPolicy&, FsOpLog&)>;
+
+  UpdateFsPartitionOperation(Trace& trace, const std::string& fs_name, HandlerType handler)
+      : Operation(trace), fs_name_(fs_name), handler_(handler) {};
+  ~UpdateFsPartitionOperation() override = default;
+
+  struct Result : public Operation::Result {
+    FsInfoType fs_info;
+  };
+
+  OpType GetOpType() const override { return OpType::kUpdateFsPartition; }
+
+  uint32_t GetFsId() const override { return 0; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+  template <int size = 0>
+  Result& GetResult() {
+    auto& result = Operation::GetResult();
+    result_.status = result.status;
+    result_.attr = std::move(result.attr);
+
+    return result_;
+  }
+
+ private:
+  const std::string fs_name_;
+  HandlerType handler_;
+
+  Result result_;
 };
 
 class CreateRootOperation : public Operation {
@@ -1453,6 +1539,25 @@ class ScanFsMetaTableOperation : public Operation {
  private:
   uint32_t fs_id_{0};
   Txn::ScanHandlerType scan_handler_;
+};
+
+class ScanFsOpLogOperation : public Operation {
+ public:
+  using HandlerType = std::function<bool(const FsOpLog&)>;
+  ScanFsOpLogOperation(Trace& trace, uint32_t fs_id, HandlerType handler)
+      : Operation(trace), fs_id_(fs_id), handler_(handler) {};
+  ~ScanFsOpLogOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kScanFsOpLog; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  uint32_t fs_id_{0};
+  HandlerType handler_;
 };
 
 class SaveFsStatsOperation : public Operation {

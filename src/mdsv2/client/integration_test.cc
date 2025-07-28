@@ -57,7 +57,7 @@ void MDSIntegrationTest::SetUp() {
   auto create_fs_resp = mds_client_->CreateFs(fs_name_, params);
   ASSERT_EQ(create_fs_resp.error().errcode(), dingofs::pb::error::OK);
   mds_client_->SetFsId(create_fs_resp.fs_info().fs_id());
-  mds_client_->SetEpoch(create_fs_resp.fs_info().partition_policy().mono().epoch());
+  mds_client_->SetEpoch(create_fs_resp.fs_info().partition_policy().epoch());
 }
 
 void MDSIntegrationTest::TearDown() {

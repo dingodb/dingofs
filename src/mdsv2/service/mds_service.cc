@@ -1294,6 +1294,24 @@ void MDSServiceImpl::GetAttr(google::protobuf::RpcController* controller, const 
                              pb::mdsv2::GetAttrResponse* response, google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
 
+  // validate request
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_id() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs_id is empty");
+    }
+    if (request->ino() == 0) {  // ino is required
+      return Status(pb::error::EILLEGAL_PARAMTETER, "ino is empty");
+    }
+
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
   // Run in queue.
   auto task = std::make_shared<ServiceTask>(
       [this, controller, request, response, svr_done]() { DoGetAttr(controller, request, response, svr_done); });
@@ -2602,6 +2620,68 @@ void MDSServiceImpl::NotifyBuddy(google::protobuf::RpcController* controller,
   }
 }
 
-}  // namespace mdsv2
+void MDSServiceImpl::JoinFs(google::protobuf::RpcController* controller, const pb::mdsv2::JoinFsRequest* request,
+                            pb::mdsv2::JoinFsResponse* response, google::protobuf::Closure* done) {
+  auto* svr_done = new ServiceClosure(__func__, done, request, response);
+  brpc::Controller* cntl = (brpc::Controller*)controller;
+  brpc::ClosureGuard done_guard(svr_done);
 
+  if (request->fs_name().empty() && request->fs_id() == 0) {
+    return ServiceHelper::SetError(response->mutable_error(), pb::error::EILLEGAL_PARAMTETER,
+                                   "fs_name or fs_id is empty");
+  }
+
+  if (request->mds_ids().empty()) {
+    return ServiceHelper::SetError(response->mutable_error(), pb::error::EILLEGAL_PARAMTETER, "mds_ids is empty");
+  }
+
+  Context ctx;
+  std::vector<uint64_t> mds_ids = Helper::PbRepeatedToVector(request->mds_ids());
+
+  std::string reason = "manual join fs";
+  Status status = !request->fs_name().empty() ? file_system_set_->JoinFs(ctx, request->fs_name(), mds_ids, reason)
+                                              : file_system_set_->JoinFs(ctx, request->fs_id(), mds_ids, reason);
+
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+}
+
+void MDSServiceImpl::QuitFs(google::protobuf::RpcController* controller, const pb::mdsv2::QuitFsRequest* request,
+                            pb::mdsv2::QuitFsResponse* response, google::protobuf::Closure* done) {
+  auto* svr_done = new ServiceClosure(__func__, done, request, response);
+  brpc::Controller* cntl = (brpc::Controller*)controller;
+  brpc::ClosureGuard done_guard(svr_done);
+
+  if (request->fs_name().empty() && request->fs_id() == 0) {
+    return ServiceHelper::SetError(response->mutable_error(), pb::error::EILLEGAL_PARAMTETER,
+                                   "fs_name or fs_id is empty");
+  }
+
+  if (request->mds_ids().empty()) {
+    return ServiceHelper::SetError(response->mutable_error(), pb::error::EILLEGAL_PARAMTETER, "mds_ids is empty");
+  }
+
+  Context ctx;
+  std::vector<uint64_t> mds_ids = Helper::PbRepeatedToVector(request->mds_ids());
+
+  std::string reason = "manual quit fs";
+  Status status = !request->fs_name().empty() ? file_system_set_->QuitFs(ctx, request->fs_name(), mds_ids, reason)
+                                              : file_system_set_->QuitFs(ctx, request->fs_id(), mds_ids, reason);
+
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+}
+
+void MDSServiceImpl::StopMds(google::protobuf::RpcController* controller, const pb::mdsv2::StopMdsRequest* request,
+                             pb::mdsv2::StopMdsResponse* response, google::protobuf::Closure* done) {
+  auto* svr_done = new ServiceClosure(__func__, done, request, response);
+  brpc::Controller* cntl = (brpc::Controller*)controller;
+  brpc::ClosureGuard done_guard(svr_done);
+}
+
+}  // namespace mdsv2
 }  // namespace dingofs

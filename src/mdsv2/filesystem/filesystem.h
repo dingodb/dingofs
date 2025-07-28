@@ -205,7 +205,12 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status RefreshFsInfo(const std::string& name);
   void RefreshFsInfo(const FsInfoType& fs_info);
 
-  Status UpdatePartitionPolicy(uint64_t mds_id);
+  Status JoinMonoFs(Context& ctx, uint64_t mds_id, const std::string& reason);
+  Status JoinHashFs(Context& ctx, const std::vector<uint64_t>& mds_ids, const std::string& reason);
+  Status QuitFs(Context& ctx, const std::vector<uint64_t>& mds_ids, const std::string& reason);
+  Status QuitAndJoinFs(Context& ctx, uint32_t fs_id, const std::vector<uint64_t>& quit_mds_ids,
+                       const std::vector<uint64_t>& join_mds_ids);
+
   Status UpdatePartitionPolicy(const std::map<uint64_t, pb::mdsv2::HashPartition::BucketSet>& distributions);
 
   PartitionCache& GetPartitionCache() { return partition_cache_; }
@@ -215,9 +220,9 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   FileSessionManager& GetFileSessionManager() { return file_session_manager_; }
 
-  // get deleted file
   Status GetDelFiles(std::vector<AttrType>& delfiles);
   Status GetDelSlices(std::vector<TrashSliceList>& delslices);
+  Status GetFsOpLogs(std::vector<FsOpLog>& fs_op_logs);
 
  private:
   friend class DebugServiceImpl;
@@ -266,6 +271,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   void UpdateParentMemo(const std::vector<Ino>& ancestors);
 
+  void NotifyBuddyRefreshFsInfo(int64_t mds_id, const FsInfoType& fs_info);
   void NotifyBuddyRefreshInode(AttrType&& attr);
   void NotifyBuddyCleanPartitionCache(Ino ino);
 
@@ -371,6 +377,15 @@ class FileSystemSet {
   uint32_t GetFsId(const std::string& fs_name);
   std::string GetFsName(const std::string& client_id);
   std::vector<FileSystemSPtr> GetAllFileSystem();
+
+  Status CheckMdsNormal(const std::vector<uint64_t>& mds_ids);
+
+  Status JoinFs(Context& ctx, uint32_t fs_id, const std::vector<uint64_t>& mds_ids, const std::string& reason);
+  Status JoinFs(Context& ctx, const std::string& fs_name, const std::vector<uint64_t>& mds_ids,
+                const std::string& reason);
+  Status QuitFs(Context& ctx, uint32_t fs_id, const std::vector<uint64_t>& mds_ids, const std::string& reason);
+  Status QuitFs(Context& ctx, const std::string& fs_name, const std::vector<uint64_t>& mds_ids,
+                const std::string& reason);
 
   // load already exist filesystem
   bool LoadFileSystems();

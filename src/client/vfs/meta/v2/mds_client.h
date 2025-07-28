@@ -38,6 +38,8 @@ namespace v2 {
 class MDSClient;
 using MDSClientPtr = std::shared_ptr<MDSClient>;
 
+using GetEndpointFn = std::function<EndPoint()>;
+
 class MDSClient {
  public:
   MDSClient(const ClientId& client_id, mdsv2::FsInfoPtr fs_info,
@@ -133,7 +135,8 @@ class MDSClient {
   void SetAncestorInContext(Request& request, Ino ino);
 
   template <typename Request, typename Response>
-  Status SendRequest(EndPoint& endpoint, const std::string& service_name,
+  Status SendRequest(GetEndpointFn get_endpoint_fn,
+                     const std::string& service_name,
                      const std::string& api_name, Request& request,
                      Response& response);
 
@@ -165,7 +168,7 @@ void MDSClient::SetAncestorInContext(Request& request, Ino ino) {
 }
 
 template <typename Request, typename Response>
-Status MDSClient::SendRequest(EndPoint& endpoint,
+Status MDSClient::SendRequest(GetEndpointFn get_endpoint_fn,
                               const std::string& service_name,
                               const std::string& api_name, Request& request,
                               Response& response) {
@@ -173,6 +176,7 @@ Status MDSClient::SendRequest(EndPoint& endpoint,
   request.mutable_context()->set_client_id(client_id_.ID());
   for (int retry = 0; retry < FLAGS_client_send_request_retry; ++retry) {
     request.mutable_context()->set_epoch(epoch_);
+    auto endpoint = get_endpoint_fn();
     auto status =
         rpc_->SendRequest(endpoint, service_name, api_name, request, response);
     if (!status.ok()) {

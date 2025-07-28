@@ -123,14 +123,7 @@ bool FileSystem::Init() {
 
 uint64_t FileSystem::Epoch() const {
   auto partition_policy = fs_info_->GetPartitionPolicy();
-  if (partition_policy.type() == pb::mdsv2::PartitionType::MONOLITHIC_PARTITION) {
-    return partition_policy.mono().epoch();
-
-  } else if (partition_policy.type() == pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION) {
-    return partition_policy.parent_hash().epoch();
-  }
-
-  return 0;
+  return partition_policy.epoch();
 }
 
 pb::mdsv2::PartitionType FileSystem::PartitionType() const { return fs_info_->GetPartitionType(); }
@@ -1488,6 +1481,12 @@ void FileSystem::UpdateParentMemo(const std::vector<Ino>& ancestors) {
   }
 }
 
+void FileSystem::NotifyBuddyRefreshFsInfo(int64_t mds_id, const FsInfoType& fs_info) {
+  if (mds_id == 0 || mds_id == self_mds_id_) return;
+
+  notify_buddy_->AsyncNotify(notify::RefreshFsInfoMessage::Create(mds_id, fs_info.fs_id(), fs_info.fs_name()));
+}
+
 void FileSystem::NotifyBuddyRefreshInode(AttrType&& attr) {
   if (notify_buddy_ == nullptr) return;
 
@@ -2035,13 +2034,17 @@ Status FileSystem::RefreshFsInfo() { return RefreshFsInfo(fs_info_->GetName()); 
 Status FileSystem::RefreshFsInfo(const std::string& name) {
   DINGO_LOG(INFO) << fmt::format("[fs.{}] refresh fs({}) info.", fs_id_, name);
 
-  std::string value;
-  auto status = kv_storage_->Get(MetaCodec::EncodeFsKey(name), value);
+  Trace trace;
+  GetFsOperation operation(trace, name);
+
+  auto status = RunOperation(&operation);
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("get fs info fail, {}", status.error_str()));
   }
 
-  RefreshFsInfo(MetaCodec::DecodeFsValue(value));
+  auto& result = operation.GetResult();
+
+  RefreshFsInfo(result.fs_info);
 
   return Status::OK();
 }
@@ -2054,43 +2057,188 @@ void FileSystem::RefreshFsInfo(const FsInfoType& fs_info) {
                                  can_serve_ ? "true" : "false");
 }
 
-Status FileSystem::UpdatePartitionPolicy(uint64_t mds_id) {
-  std::string key = MetaCodec::EncodeFsKey(fs_info_->GetName());
-
-  auto txn = kv_storage_->NewTxn();
-
-  std::string value;
-  auto status = txn->Get(key, value);
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("get fs info fail, {}", status.error_str()));
+Status FileSystem::JoinMonoFs(Context& ctx, uint64_t mds_id, const std::string& reason) {
+  if (PartitionType() != pb::mdsv2::PartitionType::MONOLITHIC_PARTITION) {
+    return Status(pb::error::ENOT_SUPPORT, "not support join fs for hash partition");
   }
 
-  FsInfoType fs_info = MetaCodec::DecodeFsValue(value);
-  CHECK(fs_info.partition_policy().type() == pb::mdsv2::PartitionType::MONOLITHIC_PARTITION)
-      << "invalid partition polocy type.";
+  int64_t old_mds_id = 0;
+  auto handler = [&](PartitionPolicy& partition_policy, FsOpLog& log) -> Status {
+    auto* mono = partition_policy.mutable_mono();
+    if (mono->mds_id() == mds_id) {
+      return Status(pb::error::EEXISTED, "mds already exist");
+    }
+    old_mds_id = mono->mds_id();
 
-  auto* mono = fs_info.mutable_partition_policy()->mutable_mono();
-  mono->set_epoch(mono->epoch() + 1);
-  mono->set_mds_id(mds_id);
+    mono->set_mds_id(mds_id);
 
-  fs_info.set_last_update_time_ns(Helper::TimestampNs());
+    log.set_fs_name(FsName());
+    log.set_fs_id(fs_id_);
+    log.set_type(pb::mdsv2::FsOpLog::JOIN_FS);
+    log.mutable_join_fs()->add_mds_ids(mds_id);
+    log.set_comment(reason);
 
-  status = txn->Put(key, MetaCodec::EncodeFsValue(fs_info));
+    return Status::OK();
+  };
+
+  auto& trace = ctx.GetTrace();
+  UpdateFsPartitionOperation operation(trace, FsName(), handler);
+
+  auto status = RunOperation(&operation);
   if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("put store fs fail, {}", status.error_str()));
+    return Status(pb::error::EINTERNAL, fmt::format("update fs partition policy fail, {}", status.error_str()));
   }
 
-  status = txn->Commit();
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("commit fail, {}", status.error_str()));
+  auto& result = operation.GetResult();
+
+  fs_info_->Update(result.fs_info);
+
+  NotifyBuddyRefreshFsInfo(old_mds_id, result.fs_info);
+
+  return Status::OK();
+}
+
+// 按bucket_id数量平均分布
+static void DistributeByMean(const std::vector<uint64_t>& mds_ids, pb::mdsv2::HashPartition& hash) {
+  uint32_t mean_num = hash.bucket_num() / (hash.distributions_size() + mds_ids.size());
+
+  std::vector<uint64_t> pending_bucket_ids;
+  pending_bucket_ids.reserve(mean_num * mds_ids.size());
+  for (auto& [mds_id, bucket_set] : *hash.mutable_distributions()) {
+    for (uint32_t i = mean_num; i < bucket_set.bucket_ids_size(); ++i) {
+      pending_bucket_ids.push_back(bucket_set.bucket_ids(i));
+    }
   }
 
-  fs_info_->Update(fs_info);
+  uint32_t pending_offset = 0;
+  for (const auto& mds_id : mds_ids) {
+    pb::mdsv2::HashPartition::BucketSet bucket_set;
+    while (pending_offset < pending_bucket_ids.size()) {
+      bucket_set.add_bucket_ids(pending_bucket_ids[pending_offset++]);
+      if (bucket_set.bucket_ids_size() >= mean_num) break;
+    }
 
-  can_serve_ = CanServe(self_mds_id_);
-  DINGO_LOG(INFO) << fmt::format("[fs.{}] update fs({}) can_serve({}).", fs_id_, fs_info.fs_name(),
-                                 can_serve_ ? "true" : "false");
+    hash.mutable_distributions()->insert({mds_id, std::move(bucket_set)});
+  }
+}
 
+Status FileSystem::JoinHashFs(Context& ctx, const std::vector<uint64_t>& mds_ids, const std::string& reason) {
+  if (PartitionType() != pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION) {
+    return Status(pb::error::ENOT_SUPPORT, "not support join fs for mono partition");
+  }
+
+  auto has_mds_fn = [&](const pb::mdsv2::HashPartition& hash) -> bool {
+    for (const auto& mds_id : mds_ids) {
+      if (hash.distributions().find(mds_id) != hash.distributions().end()) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  auto handler = [&](PartitionPolicy& partition_policy, FsOpLog& log) -> Status {
+    if (has_mds_fn(partition_policy.parent_hash())) {
+      return Status(pb::error::EEXISTED, "mds already exists");
+    }
+
+    auto* hash = partition_policy.mutable_parent_hash();
+    DistributeByMean(mds_ids, *hash);
+
+    log.set_fs_name(FsName());
+    log.set_fs_id(fs_id_);
+    log.set_type(pb::mdsv2::FsOpLog::JOIN_FS);
+    Helper::VectorToPbRepeated(mds_ids, log.mutable_join_fs()->mutable_mds_ids());
+    log.set_comment(reason);
+
+    return Status::OK();
+  };
+
+  auto& trace = ctx.GetTrace();
+  UpdateFsPartitionOperation operation(trace, FsName(), handler);
+
+  auto status = RunOperation(&operation);
+  if (!status.ok()) {
+    return Status(pb::error::EINTERNAL, fmt::format("update fs partition policy fail, {}", status.error_str()));
+  }
+
+  auto& result = operation.GetResult();
+
+  fs_info_->Update(result.fs_info);
+
+  return Status::OK();
+}
+
+// 把准备退出的mds负责的bucket_id平均分配给剩余mds
+static void ReDistributeByDeleteMds(const std::vector<uint64_t>& quit_mds_ids, pb::mdsv2::HashPartition& hash) {
+  std::vector<uint64_t> pending_bucket_ids;
+  for (const auto& mds_id : quit_mds_ids) {
+    auto it = hash.distributions().find(mds_id);
+    if (it == hash.distributions().end()) {
+      continue;  // not found, skip
+    }
+
+    const auto& bucket_set = it->second;
+
+    pending_bucket_ids.insert(pending_bucket_ids.end(), bucket_set.bucket_ids().begin(), bucket_set.bucket_ids().end());
+
+    hash.mutable_distributions()->erase(mds_id);
+  }
+
+  uint32_t index = 0;
+  for (const auto& bucket_id : pending_bucket_ids) {
+    hash.mutable_distributions()->at(index++ % hash.distributions_size()).add_bucket_ids(bucket_id);
+  }
+}
+
+Status FileSystem::QuitFs(Context& ctx, const std::vector<uint64_t>& mds_ids, const std::string& reason) {
+  if (PartitionType() != pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION) {
+    return Status(pb::error::ENOT_SUPPORT, "not support join fs for mono partition");
+  }
+
+  auto miss_mds_fn = [&](const pb::mdsv2::HashPartition& hash) -> bool {
+    for (const auto& mds_id : mds_ids) {
+      if (hash.distributions().find(mds_id) != hash.distributions().end()) {
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  auto handler = [&](PartitionPolicy& partition_policy, FsOpLog& log) -> Status {
+    auto* hash = partition_policy.mutable_parent_hash();
+    if (miss_mds_fn(*hash)) {
+      return Status(pb::error::ENOT_FOUND, "not found mds");
+    }
+    ReDistributeByDeleteMds(mds_ids, *hash);
+
+    log.set_fs_name(FsName());
+    log.set_fs_id(fs_id_);
+    log.set_type(pb::mdsv2::FsOpLog::QUIT_FS);
+    Helper::VectorToPbRepeated(mds_ids, log.mutable_quit_fs()->mutable_mds_ids());
+    log.set_comment(reason);
+
+    return Status::OK();
+  };
+
+  auto& trace = ctx.GetTrace();
+  UpdateFsPartitionOperation operation(trace, FsName(), handler);
+
+  auto status = RunOperation(&operation);
+  if (!status.ok()) {
+    return Status(pb::error::EINTERNAL, fmt::format("update fs partition policy fail, {}", status.error_str()));
+  }
+
+  auto& result = operation.GetResult();
+
+  fs_info_->Update(result.fs_info);
+
+  return Status::OK();
+}
+
+Status FileSystem::QuitAndJoinFs(Context& ctx, uint32_t fs_id, const std::vector<uint64_t>& quit_mds_ids,
+                                 const std::vector<uint64_t>& join_mds_ids) {
   return Status::OK();
 }
 
@@ -2108,8 +2256,8 @@ Status FileSystem::UpdatePartitionPolicy(const std::map<uint64_t, pb::mdsv2::Has
   CHECK(fs_info.partition_policy().type() == pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION)
       << "invalid partition polocy type.";
 
+  fs_info.mutable_partition_policy()->set_epoch(fs_info.partition_policy().epoch() + 1);
   auto* hash = fs_info.mutable_partition_policy()->mutable_parent_hash();
-  hash->set_epoch(hash->epoch() + 1);
   hash->mutable_distributions()->clear();
   for (const auto& [mds_id, bucket_set] : distributions) {
     hash->mutable_distributions()->insert({mds_id, bucket_set});
@@ -2150,6 +2298,18 @@ Status FileSystem::GetDelSlices(std::vector<TrashSliceList>& delslices) {
   uint32_t count = 0;
   ScanDelSliceOperation operation(trace, fs_id_, [&](const std::string&, const std::string& value) -> bool {
     delslices.push_back(MetaCodec::DecodeDelSliceValue(value));
+    ++count;
+    return true;
+  });
+
+  return RunOperation(&operation);
+}
+
+Status FileSystem::GetFsOpLogs(std::vector<FsOpLog>& fs_op_logs) {
+  Trace trace;
+  uint32_t count = 0;
+  ScanFsOpLogOperation operation(trace, fs_id_, [&](const FsOpLog& oplog) -> bool {
+    fs_op_logs.push_back(oplog);
     ++count;
     return true;
   });
@@ -2232,15 +2392,14 @@ FsInfoType FileSystemSet::GenFsInfo(int64_t fs_id, const CreateFsParam& param) {
   auto mds_metas = mds_meta_map_->GetAllMDSMeta();
   auto* partition_policy = fs_info.mutable_partition_policy();
   partition_policy->set_type(param.partition_type);
+  partition_policy->set_epoch(1);
   if (param.partition_type == pb::mdsv2::PartitionType::MONOLITHIC_PARTITION) {
     auto* mono = partition_policy->mutable_mono();
-    mono->set_epoch(1);
     int select_offset = Helper::GenerateRealRandomInteger(0, 1000) % mds_metas.size();
     mono->set_mds_id(mds_metas.at(select_offset).ID());
 
   } else if (param.partition_type == pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION) {
     auto* parent_hash = partition_policy->mutable_parent_hash();
-    parent_hash->set_epoch(1);
     parent_hash->set_bucket_num(FLAGS_filesystem_hash_bucket_num);
 
     auto mds_bucket_map = GenParentHashDistribution(mds_metas, FLAGS_filesystem_hash_bucket_num);
@@ -2357,8 +2516,9 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, FsInfoType& fs_info) 
   fs_info = GenFsInfo(fs_id, param);
 
   // create fs
-  KVStorage::WriteOption option;
-  status = kv_storage_->Put(option, fs_key, MetaCodec::EncodeFsValue(fs_info));
+  Trace trace;
+  CreateFsOperation operation(trace, fs_info);
+  status = RunOperation(&operation);
   if (!status.ok()) {
     cleanup(dentry_table_id, "", "");
     return Status(pb::error::EBACKEND_STORE, fmt::format("put store fs fail, {}", status.error_str()));
@@ -2596,6 +2756,83 @@ std::vector<FileSystemSPtr> FileSystemSet::GetAllFileSystem() {
   }
 
   return fses;
+}
+
+Status FileSystemSet::CheckMdsNormal(const std::vector<uint64_t>& mds_ids) {
+  for (const auto& mds_id : mds_ids) {
+    if (!mds_meta_map_->IsNormalMDSMeta(mds_id)) {
+      return Status(pb::error::ENOT_FOUND, fmt::format("mds({}) is not normal", mds_id));
+    }
+  }
+
+  return Status::OK();
+}
+
+Status FileSystemSet::JoinFs(Context& ctx, uint32_t fs_id, const std::vector<uint64_t>& mds_ids,
+                             const std::string& reason) {
+  auto fs = GetFileSystem(fs_id);
+  if (fs == nullptr) {
+    return Status(pb::error::ENOT_FOUND, fmt::format("not found fs({})", fs_id));
+  }
+
+  auto status = CheckMdsNormal(mds_ids);
+  if (!status.ok()) return status;
+
+  return JoinFs(ctx, fs->FsName(), mds_ids, reason);
+}
+
+Status FileSystemSet::JoinFs(Context& ctx, const std::string& fs_name, const std::vector<uint64_t>& mds_ids,
+                             const std::string& reason) {
+  auto fs = GetFileSystem(fs_name);
+  if (fs == nullptr) {
+    return Status(pb::error::ENOT_FOUND, fmt::format("not found fs({})", fs_name));
+  }
+
+  auto status = CheckMdsNormal(mds_ids);
+  if (!status.ok()) return status;
+
+  if (fs->PartitionType() == pb::mdsv2::PartitionType::MONOLITHIC_PARTITION) {
+    if (mds_ids.size() > 1) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "not support join mono fs with multiple mds");
+    }
+
+    return fs->JoinMonoFs(ctx, mds_ids.front(), reason);
+
+  } else if (fs->PartitionType() == pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION) {
+    return fs->JoinHashFs(ctx, mds_ids, reason);
+  }
+
+  return Status::OK();
+}
+
+Status FileSystemSet::QuitFs(Context& ctx, uint32_t fs_id, const std::vector<uint64_t>& mds_ids,
+                             const std::string& reason) {
+  auto fs = GetFileSystem(fs_id);
+  if (fs == nullptr) {
+    return Status(pb::error::ENOT_FOUND, fmt::format("not found fs({})", fs_id));
+  }
+
+  return QuitFs(ctx, fs->FsName(), mds_ids, reason);
+}
+
+Status FileSystemSet::QuitFs(Context& ctx, const std::string& fs_name, const std::vector<uint64_t>& mds_ids,
+                             const std::string& reason) {
+  auto fs = GetFileSystem(fs_name);
+  if (fs == nullptr) {
+    return Status(pb::error::ENOT_FOUND, fmt::format("not found fs({})", fs_name));
+  }
+
+  if (fs->PartitionType() == pb::mdsv2::PartitionType::MONOLITHIC_PARTITION) {
+    return Status(pb::error::EILLEGAL_PARAMTETER, "not support mono fs quit fs");
+
+  } else if (fs->PartitionType() == pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION) {
+    return fs->JoinHashFs(ctx, mds_ids, reason);
+
+  } else {
+    return Status(pb::error::ENOT_SUPPORT, reason);
+  }
+
+  return Status::OK();
 }
 
 bool FileSystemSet::LoadFileSystems() {

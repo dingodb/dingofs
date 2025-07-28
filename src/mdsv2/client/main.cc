@@ -16,7 +16,6 @@
 #include <vector>
 
 #include "gflags/gflags.h"
-#include "glog/logging.h"
 #include "mdsv2/client/br.h"
 #include "mdsv2/client/integration_test.h"
 #include "mdsv2/client/mds.h"
@@ -59,6 +58,8 @@ DEFINE_string(type, "", "type backup[meta|fsmeta]");
 DEFINE_string(output_type, "stdout", "output type[stdout|file|s3]");
 DEFINE_string(out, "./output", "output file path");
 DEFINE_bool(is_binary, false, "is binary");
+
+DEFINE_string(mds_id_list, "", "mds id list for joinfs or quitfs, e.g. 1,2,3");
 
 static std::string GetDefaultCoorAddrPath() {
   if (!FLAGS_coor_addr.empty()) {
@@ -148,11 +149,13 @@ int main(int argc, char* argv[]) {
   // run mds command
   {
     dingofs::mdsv2::client::MdsCommandRunner::Options options;
+    options.fs_id = FLAGS_fs_id;
     options.ino = FLAGS_ino;
     options.parent = FLAGS_parent;
     options.parents = FLAGS_parents;
     options.name = FLAGS_name;
     options.fs_name = FLAGS_fs_name;
+    options.mds_id_list = FLAGS_mds_id_list;
     options.prefix = FLAGS_prefix;
     options.num = FLAGS_num;
     options.max_bytes = FLAGS_max_bytes;

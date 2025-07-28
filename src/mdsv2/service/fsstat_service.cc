@@ -112,14 +112,14 @@ static std::string RenderPartitionPolicy(pb::mdsv2::PartitionPolicy partition_po
   switch (partition_policy.type()) {
     case pb::mdsv2::PartitionType::MONOLITHIC_PARTITION: {
       const auto& mono = partition_policy.mono();
-      result += fmt::format("epoch: {}", mono.epoch());
+      result += fmt::format("epoch: {}", partition_policy.epoch());
       result += "<br>";
       result += fmt::format("mds: {}", mono.mds_id());
     } break;
 
     case pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION: {
       const auto& parent_hash = partition_policy.parent_hash();
-      result += fmt::format("epoch: {}", parent_hash.epoch());
+      result += fmt::format("epoch: {}", partition_policy.epoch());
       result += "<br>";
       result += fmt::format("bucket_num: {}", parent_hash.bucket_num());
       result += "<br>";
@@ -189,6 +189,8 @@ static void RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes, butil:
     result += fmt::format(R"(<a href="FsStatService/delfiles/{}" target="_blank">delfiles</a>)", fs_info.fs_id());
     result += "<br>";
     result += fmt::format(R"(<a href="FsStatService/delslices/{}" target="_blank">delslices</a>)", fs_info.fs_id());
+    result += "<br>";
+    result += fmt::format(R"(<a href="FsStatService/oplog/{}" target="_blank">oplog</a>)", fs_info.fs_id());
     result += "</div>";
     return result;
   };
@@ -1194,6 +1196,63 @@ static void RenderDelslicePage(FileSystemSPtr filesystem, butil::IOBufBuilder& o
   os << "</body>";
 }
 
+static void RenderOplogPage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) {
+  os << "<!DOCTYPE html><html>";
+
+  os << "<head>" << RenderHead("dingofs fsoplog") << "</head>";
+  os << "<body>";
+  os << R"(<h1 style="text-align:center;">Fs OpLog</h1>)";
+
+  std::vector<FsOpLog> oplogs;
+  auto status = filesystem->GetFsOpLogs(oplogs);
+  if (!status.ok()) {
+    os << "Get fs oplog fail: " << status.error_str();
+    return;
+  }
+
+  os << R"(<div style="margin: 12px;font-size:smaller">)";
+  os << fmt::format(R"(<h3>Oplog [{}]</h3>)", oplogs.size());
+  os << R"(<table class="gridtable sortable" border=1>)";
+  os << "<tr>";
+  os << "<th>No.</th>";
+  os << "<th>Type</th>";
+  os << "<th>Parameter</th>";
+  os << "<th>comment</th>";
+  os << "<th>Time</th>";
+  os << "</tr>";
+
+  uint32_t no = 0;
+  for (const auto& oplog : oplogs) {
+    os << "<tr>";
+    os << "<td>" << ++no << "</td>";
+    os << "<td>" << pb::mdsv2::FsOpLog::Type_Name(oplog.type()) << "</td>";
+    switch (oplog.type()) {
+      case pb::mdsv2::FsOpLog::CREATE_FS:
+        os << "<td>" << oplog.create_fs().ShortDebugString() << "</td>";
+        break;
+      case pb::mdsv2::FsOpLog::JOIN_FS:
+        os << "<td>" << oplog.join_fs().ShortDebugString() << "</td>";
+        break;
+      case pb::mdsv2::FsOpLog::QUIT_FS:
+        os << "<td>" << oplog.quit_fs().ShortDebugString() << "</td>";
+        break;
+      case pb::mdsv2::FsOpLog::DELETE_FS:
+        os << "<td>" << oplog.delete_fs().ShortDebugString() << "</td>";
+        break;
+      default:
+        os << "<td>UNKNOWN</td>";
+    }
+    os << "<td>" << oplog.comment() << "</td>";
+    os << "<td>" << Helper::FormatMsTime(oplog.time_ms()) << "</td>";
+
+    os << "</tr>";
+  }
+
+  os << "</table>";
+  os << "</div>";
+  os << "</body>";
+}
+
 static void RenderInodePage(const AttrType& attr, butil::IOBufBuilder& os) {
   std::string header = fmt::format("Inode: {}", attr.ino());
   std::string json;
@@ -1439,6 +1498,19 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
     auto file_system = file_system_set->GetFileSystem(fs_id);
     if (file_system != nullptr) {
       RenderDelslicePage(file_system, os);
+
+    } else {
+      os << fmt::format("Not found file system {}.", fs_id);
+    }
+
+  } else if (params.size() == 2 && params[0] == "oplog") {
+    // /FsStatService/oplog/{fs_id}
+
+    uint32_t fs_id = Helper::StringToInt32(params[1]);
+    auto file_system_set = Server::GetInstance().GetFileSystemSet();
+    auto file_system = file_system_set->GetFileSystem(fs_id);
+    if (file_system != nullptr) {
+      RenderOplogPage(file_system, os);
 
     } else {
       os << fmt::format("Not found file system {}.", fs_id);

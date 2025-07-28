@@ -39,6 +39,8 @@ using MdsEntry = pb::mdsv2::MDS;
 using ClientEntry = pb::mdsv2::Client;
 using FileSessionEntry = pb::mdsv2::FileSession;
 using FsStatsDataEntry = pb::mdsv2::FsStatsData;
+using PartitionPolicy = pb::mdsv2::PartitionPolicy;
+using FsOpLog = pb::mdsv2::FsOpLog;
 
 struct Range {
   std::string start;

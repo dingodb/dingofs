@@ -40,8 +40,8 @@ DEFINE_uint32(client_offline_period_time_ms, 30 * 1000, "client offline period t
 
 DEFINE_uint32(client_clean_period_time_s, 600, "client clean period time s");
 
-void GetOfflineMDS(const std::vector<MDSMeta>& mdses, std::vector<MDSMeta>& online_mdses,
-                   std::vector<MDSMeta>& offline_mdses) {
+static void GetOfflineMDS(const std::vector<MDSMeta>& mdses, std::vector<MDSMeta>& online_mdses,
+                          std::vector<MDSMeta>& offline_mdses) {
   int64_t now_ms = Helper::TimestampMs();
 
   for (const auto& mds : mdses) {
@@ -55,7 +55,7 @@ void GetOfflineMDS(const std::vector<MDSMeta>& mdses, std::vector<MDSMeta>& onli
   }
 }
 
-bool IsOfflineMDS(const std::vector<MDSMeta>& offline_mdses, int64_t mds_id) {
+static bool IsOfflineMDS(const std::vector<MDSMeta>& offline_mdses, int64_t mds_id) {
   for (const auto& offline_mds : offline_mdses) {
     if (mds_id == offline_mds.ID()) {
       return true;
@@ -168,7 +168,7 @@ void Monitor::NotifyRefreshFs(const std::vector<MDSMeta>& mdses, const FsInfoTyp
   }
 }
 
-void CheckMdsAlive(std::vector<MDSMeta>& offline_mdses, std::vector<MDSMeta>& online_mdses) {
+static void CheckMdsAlive(std::vector<MDSMeta>& offline_mdses, std::vector<MDSMeta>& online_mdses) {
   for (auto it = offline_mdses.begin(); it != offline_mdses.end();) {
     auto& mds_meta = *it;
 
@@ -249,7 +249,7 @@ Status Monitor::ProcessFaultMDS(std::vector<MDSMeta>& mdses) {
     return false;
   };
 
-  auto is_offlines_func = [&offline_mdses](const std::vector<uint64_t>& mds_ids) -> bool {
+  auto has_offlines_func = [&offline_mdses](const std::vector<uint64_t>& mds_ids) -> bool {
     for (const auto& offline_mds : offline_mdses) {
       for (auto mds_id : mds_ids) {
         if (mds_id == offline_mds.ID()) {
@@ -270,7 +270,8 @@ Status Monitor::ProcessFaultMDS(std::vector<MDSMeta>& mdses) {
     if (partition_policy.type() == pb::mdsv2::PartitionType::MONOLITHIC_PARTITION) {
       if (is_offline_func(partition_policy.mono().mds_id())) {
         auto new_mds = pick_mds_func();
-        auto status = fs->UpdatePartitionPolicy(new_mds.ID());
+        Context ctx;
+        auto status = fs->JoinMonoFs(ctx, new_mds.ID(), "fault transfer fs by monitor");
         if (!status.ok()) {
           DINGO_LOG(ERROR) << fmt::format("[monitor] transfer fs({}) from mds({}) to mds({}) fail, {}.", fs->FsName(),
                                           partition_policy.mono().mds_id(), new_mds.ID(), status.error_str());
@@ -285,7 +286,7 @@ Status Monitor::ProcessFaultMDS(std::vector<MDSMeta>& mdses) {
 
     } else if (partition_policy.type() == pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION) {
       auto mds_ids = GetMdsIds(partition_policy.parent_hash());
-      if (is_offlines_func(mds_ids)) {
+      if (has_offlines_func(mds_ids)) {
         auto new_distributions =
             AdjustParentHashDistribution(GetDistributions(partition_policy.parent_hash()), online_mdses, offline_mdses);
 

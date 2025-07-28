@@ -31,7 +31,7 @@ namespace dingofs {
 namespace mdsv2 {
 namespace notify {
 
-enum class Type {
+enum class Type : int8_t {
   kRefreshFsInfo = 0,
   kRefreshInode = 1,
   kCleanPartitionCache = 2,
@@ -50,7 +50,7 @@ using MessageSPtr = std::shared_ptr<Message>;
 
 struct RefreshFsInfoMessage : public Message {
   RefreshFsInfoMessage(uint64_t mds_id, uint32_t fs_id, const std::string& fs_name)
-      : Message{Type::kRefreshInode, mds_id, fs_id}, fs_name(fs_name) {}
+      : Message{Type::kRefreshFsInfo, mds_id, fs_id}, fs_name(fs_name) {}
 
   static MessageSPtr Create(uint64_t mds_id, uint32_t fs_id, const std::string& fs_name) {
     return std::make_shared<RefreshFsInfoMessage>(mds_id, fs_id, fs_name);

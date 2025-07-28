@@ -98,13 +98,17 @@ class MDSMetaMap {
   static MDSMetaMapSPtr New() { return std::make_shared<MDSMetaMap>(); }
 
   void UpsertMDSMeta(const MDSMeta& mds_meta);
-  void DeleteMDSMeta(int64_t id);
+  void DeleteMDSMeta(int64_t mds_id);
 
-  bool GetMDSMeta(int64_t id, MDSMeta& mds_meta);
+  bool IsExistMDSMeta(int64_t mds_id);
+  bool IsNormalMDSMeta(int64_t mds_id);
+
+  bool GetMDSMeta(int64_t mds_id, MDSMeta& mds_meta);
   std::vector<MDSMeta> GetAllMDSMeta();
 
  private:
   utils::RWLock lock_;
+  // mds id -> MDSMeta
   std::map<int64_t, MDSMeta> mds_meta_map_;
 };
 

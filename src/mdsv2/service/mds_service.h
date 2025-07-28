@@ -196,6 +196,15 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
   void NotifyBuddy(google::protobuf::RpcController* controller, const pb::mdsv2::NotifyBuddyRequest* request,
                    pb::mdsv2::NotifyBuddyResponse* response, google::protobuf::Closure* done) override;
 
+  void JoinFs(google::protobuf::RpcController* controller, const pb::mdsv2::JoinFsRequest* request,
+                   pb::mdsv2::JoinFsResponse* response, google::protobuf::Closure* done) override;
+    
+  void QuitFs(google::protobuf::RpcController* controller, const pb::mdsv2::QuitFsRequest* request,
+                   pb::mdsv2::QuitFsResponse* response, google::protobuf::Closure* done) override;
+
+  void StopMds(google::protobuf::RpcController* controller, const pb::mdsv2::StopMdsRequest* request,
+                   pb::mdsv2::StopMdsResponse* response, google::protobuf::Closure* done) override;
+
  private:
   Status GenFsId(int64_t& fs_id);
   inline FileSystemSPtr GetFileSystem(uint32_t fs_id);

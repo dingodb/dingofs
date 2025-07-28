@@ -49,6 +49,9 @@ class MetaCodec {
   // format: ${prefix} kTableMeta kMetaFsQuota
   static Range GetFsQuotaRange();
 
+  // format: ${prefix} kTableMeta kMetaFsOpLog {fs_id} {time_ns}
+  static Range GetFsConfigLogRange(uint32_t fs_id);
+
   // format: ${prefix} kTableFsMeta {fs_id} kMetaFsInode {ino} kFsInodeDentry
   static Range GetDentryRange(uint32_t fs_id, Ino ino, bool include_parent);
   // format: ${prefix} kTableFsMeta {fs_id} kMetaFsInode {ino} kFsInodeChunk
@@ -115,6 +118,13 @@ class MetaCodec {
   static void DecodeFsQuotaKey(const std::string& key, uint32_t& fs_id);
   static std::string EncodeFsQuotaValue(const QuotaEntry& quota);
   static QuotaEntry DecodeFsQuotaValue(const std::string& value);
+
+  // fs config log format: ${prefix} kTableMeta kMetaFsOpLog {fs_id} {time_ns}
+  static bool IsFsOpLogKey(const std::string& key);
+  static std::string EncodeFsOpLogKey(uint32_t fs_id, uint64_t time_ns);
+  static void DecodeFsOpLogKey(const std::string& key, uint32_t& fs_id, uint64_t& time_ns);
+  static std::string EncodeFsOpLogValue(const FsOpLog& entry);
+  static FsOpLog DecodeFsOpLogValue(const std::string& value);
 
   // inode attr format: ${prefix} kTableFsMeta {fs_id} kMetaFsInode {ino} kFsInodeAttr
   static bool IsInodeKey(const std::string& key);

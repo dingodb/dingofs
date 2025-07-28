@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <string>
 
+#include "dingofs/mdsv2.pb.h"
 #include "mdsv2/client/interaction.h"
 #include "mdsv2/common/type.h"
 
@@ -124,6 +125,12 @@ using pb::mdsv2::GetDirQuotaResponse;
 using pb::mdsv2::DeleteDirQuotaRequest;
 using pb::mdsv2::DeleteDirQuotaResponse;
 
+using pb::mdsv2::JoinFsRequest;
+using pb::mdsv2::JoinFsResponse;
+
+using pb::mdsv2::QuitFsRequest;
+using pb::mdsv2::QuitFsResponse;
+
 class MDSClient {
  public:
   MDSClient(uint32_t fs_id);
@@ -195,6 +202,9 @@ class MDSClient {
   GetDirQuotaResponse GetDirQuota(Ino ino);
   DeleteDirQuotaResponse DeleteDirQuota(Ino ino);
 
+  JoinFsResponse JoinFs(const std::string& fs_name, uint32_t fs_id, const std::vector<int64_t>& mds_ids);
+  QuitFsResponse QuitFs(const std::string& fs_name, uint32_t fs_id, const std::vector<int64_t>& mds_ids);
+
  private:
   uint32_t fs_id_{0};
   uint64_t epoch_{0};
@@ -207,12 +217,14 @@ class MdsCommandRunner {
   ~MdsCommandRunner() = default;
 
   struct Options {
+    uint32_t fs_id{0};
     Ino ino;
     Ino parent;
     std::string parents;
     std::string name;
     std::string fs_name;
     std::string prefix;
+    std::string mds_id_list;
     uint32_t num;
     uint32_t max_bytes;
     uint32_t max_inodes;

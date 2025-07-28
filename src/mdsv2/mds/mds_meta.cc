@@ -94,16 +94,31 @@ void MDSMetaMap::UpsertMDSMeta(const MDSMeta& mds_meta) {
   mds_meta_map_[mds_meta.ID()] = mds_meta;
 }
 
-void MDSMetaMap::DeleteMDSMeta(int64_t id) {
+void MDSMetaMap::DeleteMDSMeta(int64_t mds_id) {
   utils::WriteLockGuard lk(lock_);
 
-  mds_meta_map_.erase(id);
+  mds_meta_map_.erase(mds_id);
 }
 
-bool MDSMetaMap::GetMDSMeta(int64_t id, MDSMeta& mds_meta) {
+bool MDSMetaMap::IsExistMDSMeta(int64_t mds_id) {
   utils::ReadLockGuard lk(lock_);
 
-  auto it = mds_meta_map_.find(id);
+  return mds_meta_map_.find(mds_id) != mds_meta_map_.end();
+}
+
+bool MDSMetaMap::IsNormalMDSMeta(int64_t mds_id) {
+  MDSMeta mds_meta;
+  if (!GetMDSMeta(mds_id, mds_meta)) {
+    return false;
+  }
+
+  return mds_meta.GetState() == MDSMeta::State::kNormal;
+}
+
+bool MDSMetaMap::GetMDSMeta(int64_t mds_id, MDSMeta& mds_meta) {
+  utils::ReadLockGuard lk(lock_);
+
+  auto it = mds_meta_map_.find(mds_id);
   if (it == mds_meta_map_.end()) {
     return false;
   }
