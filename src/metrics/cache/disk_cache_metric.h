@@ -36,8 +36,7 @@
 namespace dingofs {
 namespace cache {
 
-class DiskCacheMetric {
- public:
+struct DiskCacheMetric {
   DiskCacheMetric(cache::DiskCacheOption option);
 
   void Expose(const std::string& prefix);
@@ -62,8 +61,7 @@ class DiskCacheMetric {
   bvar::Adder<int64_t> cache_bytes;
   bvar::Status<bool> cache_full;
 
- private:
-  cache::DiskCacheOption option_;
+  cache::DiskCacheOption option;
 };
 
 using DiskCacheMetricSPtr = std::shared_ptr<DiskCacheMetric>;

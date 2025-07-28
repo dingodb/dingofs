@@ -11,30 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# Define the BASE_FLAGS and DINGO_DEFAULT_COPTS variables
 
-add_subdirectory(common)
-add_subdirectory(utils)
-add_subdirectory(storage)
-add_subdirectory(blockcache)
-add_subdirectory(cachegroup)
-add_subdirectory(remotecache)
-add_subdirectory(tiercache)
-add_subdirectory(benchmark)
-add_subdirectory(debug)
-
-add_library(cache_lib "server.cpp")
-target_link_libraries(cache_lib
-    cache_common
-    cache_utils
-    cache_options
-    cache_metrics
-    cache_storage
-    cache_blockcache
-    cache_cachegroup
-    cache_remotecache
-    cache_tiercache
-    cache_debug
+file(GLOB DEBUG_LIB_SRCS
+    "*.cpp"
 )
 
-add_executable(dingo-cache main.cpp)
-target_link_libraries(dingo-cache cache_lib)
+add_library(cache_debug ${DEBUG_LIB_SRCS})
+
+target_link_libraries(cache_debug
+    cache_utils
+)

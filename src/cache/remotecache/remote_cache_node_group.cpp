@@ -29,6 +29,7 @@
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/common/macro.h"
+#include "cache/debug/expose.h"
 #include "cache/remotecache/remote_cache_node.h"
 #include "cache/remotecache/remote_cache_node_impl.h"
 #include "cache/remotecache/remote_cache_node_manager.h"
@@ -277,6 +278,8 @@ Status RemoteCacheNodeGroup::OnMemberLoad(const PBCacheGroupMembers& members) {
     WriteLockGuard lock(rwlock_);
     upstream_ = upstream;
   }
+
+  ExposeRemoteCacheNodes(members);
 
   return Status::OK();
 }

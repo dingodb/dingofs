@@ -21,6 +21,8 @@
 
 #include "cache/common/macro.h"
 #include "cache/common/proto.h"
+#include "cache/debug/expose.h"
+#include "cache/utils/state_machine.h"
 #include "utils/executor/bthread/bthread_executor.h"
 
 namespace dingofs {
@@ -88,6 +90,9 @@ void RemoteCacheNodeHealthChecker::PingNode() {
   } else {
     state_machine_->Success();
   }
+
+  ExposeRemoteCacheNodeHealth(member_info_.id(),
+                              StateToString(state_machine_->GetState()));
 }
 
 Status RemoteCacheNodeHealthChecker::SendPingrequest() {

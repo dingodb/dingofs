@@ -26,6 +26,7 @@
 #include <memory>
 
 #include "cache/common/macro.h"
+#include "cache/debug/expose.h"
 #include "cache/utils/helper.h"
 #include "cache/utils/ketama_con_hash.h"
 #include "metrics/cache/disk_cache_group_metric.h"
@@ -67,6 +68,8 @@ Status DiskCacheGroup::Start(UploadFunc uploader) {
 
   chash_->Final();
   watcher_->Start();
+
+  ExposeDiskCaches(options_);
 
   running_ = true;
 

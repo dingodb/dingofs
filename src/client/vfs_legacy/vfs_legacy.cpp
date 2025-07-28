@@ -27,6 +27,7 @@
 #include <vector>
 
 #include "blockaccess/block_accesser.h"
+#include "cache/debug/expose.h"
 #include "cache/tiercache/tier_block_cache.h"
 #include "client/common/client_dummy_server_info.h"
 #include "client/meta/vfs_meta.h"
@@ -137,6 +138,11 @@ int VFSOld::InitBrpcServer() {
   if (server_.AddService(&inode_object_service_,
                          brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {
     LOG(ERROR) << "Fail to add InodeObjectsService";
+    return -1;
+  }
+
+  auto status = cache::AddCacheService(&server_);
+  if (!status.ok()) {
     return -1;
   }
 

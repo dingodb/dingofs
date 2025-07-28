@@ -28,7 +28,7 @@ namespace dingofs {
 namespace cache {
 
 DiskCacheMetric::DiskCacheMetric(cache::DiskCacheOption option)
-    : option_(option) {
+    : option(option) {
   Expose(absl::StrFormat("dingofs_disk_cache_%d_", option.cache_index));
   Reset();
 }
@@ -54,9 +54,9 @@ void DiskCacheMetric::Expose(const std::string& prefix) {
 
 void DiskCacheMetric::Reset() {
   uuid.set_value("-");
-  dir.set_value(option_.cache_dir);
+  dir.set_value(option.cache_dir);
   used_bytes.set_value(0);
-  capacity.set_value(option_.cache_size_mb * kMiB);
+  capacity.set_value(option.cache_size_mb * kMiB);
   free_space_ratio.set_value(cache::FLAGS_free_space_ratio);
   load_status.set_value("STOP");
   running_status.set_value("DOWN");

@@ -26,6 +26,7 @@
 #include <glog/logging.h>
 
 #include "cache/common/macro.h"
+#include "cache/debug/expose.h"
 #include "options/cache/tiercache.h"
 #include "utils/executor/bthread/bthread_executor.h"
 
@@ -73,6 +74,8 @@ Status RemoteCacheNodeManager::Start() {
   CHECK(executor_->Start());
   executor_->Schedule([this] { BackgroudRefresh(); },
                       FLAGS_load_members_interval_ms);
+
+  ExposeCacheGroupName(option_.cache_group);
 
   running_ = true;
 

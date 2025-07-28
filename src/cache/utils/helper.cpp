@@ -26,6 +26,7 @@
 #include <absl/strings/str_format.h>
 #include <absl/strings/str_join.h>
 #include <butil/file_util.h>
+#include <google/protobuf/util/json_util.h>
 
 #include <numeric>
 #include <string>
@@ -71,6 +72,21 @@ int64_t Helper::Timestamp() {
   return std::chrono::duration_cast<std::chrono::seconds>(
              std::chrono::system_clock::now().time_since_epoch())
       .count();
+}
+
+std::string Helper::NowTime() {
+  return FormatMsTime(TimestampMs(), "%Y-%m-%d %H:%M:%S");
+}
+
+std::string Helper::FormatMsTime(int64_t timestamp, const std::string& format) {
+  std::chrono::time_point<std::chrono::system_clock, std::chrono::milliseconds>
+      tp((std::chrono::milliseconds(timestamp)));
+
+  auto in_time_t = std::chrono::system_clock::to_time_t(tp);
+  std::stringstream ss;
+  ss << std::put_time(std::localtime(&in_time_t), format.c_str()) << "."
+     << timestamp % 1000;
+  return ss.str();
 }
 
 // filepath
@@ -227,6 +243,15 @@ bool Helper::IsAligned(const IOBuffer& buffer) {
 double Helper::Divide(uint64_t a, uint64_t b) {
   CHECK_NE(b, 0);
   return static_cast<double>(a) / static_cast<double>(b);
+}
+
+bool Helper::ProtoToJson(const google::protobuf::Message& message,
+                         std::string& json) {
+  google::protobuf::util::JsonPrintOptions options;
+  options.add_whitespace = true;
+  options.always_print_primitive_fields = true;
+  options.preserve_proto_field_names = true;
+  return MessageToJsonString(message, &json, options).ok();
 }
 
 }  // namespace cache

@@ -23,6 +23,7 @@
 #include <memory>
 #include <string>
 
+#include "cache/debug/expose.h"
 #include "client/common/client_dummy_server_info.h"
 #include "client/meta/vfs_fh.h"
 #include "client/vfs/common/helper.h"
@@ -481,6 +482,11 @@ Status VFSImpl::StartBrpcServer() {
         "Add inode blocks service to brpc server failed, rc: {}", rc);
     LOG(ERROR) << error_msg;
     return Status::Internal(error_msg);
+  }
+
+  auto status = cache::AddCacheService(&brpc_server_);
+  if (!status.ok()) {
+    return status;
   }
 
   brpc::ServerOptions brpc_server_options;

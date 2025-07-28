@@ -24,6 +24,7 @@
 #define DINGOFS_SRC_CACHE_UTILS_HELPER_H_
 
 #include <absl/strings/str_format.h>
+#include <google/protobuf/message.h>
 #include <sys/stat.h>
 
 #include <sstream>
@@ -62,6 +63,8 @@ class Helper {
   static int64_t TimestampUs();
   static int64_t TimestampMs();
   static int64_t Timestamp();
+  static std::string NowTime();
+  static std::string FormatMsTime(int64_t timestamp, const std::string& format);
 
   // filepath
   static std::string ParentDir(const std::string& path);
@@ -97,6 +100,9 @@ class Helper {
   static bool IsAligned(const IOBuffer& buffer);
 
   static double Divide(uint64_t a, uint64_t b);
+
+  static bool ProtoToJson(const google::protobuf::Message& message,
+                          std::string& json);
 };
 
 }  // namespace cache

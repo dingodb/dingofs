@@ -23,6 +23,8 @@
 #ifndef DINGOFS_SRC_CACHE_BLOCKCACHE_BLOCK_CACHE_H_
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_BLOCK_CACHE_H_
 
+#include <brpc/server.h>
+
 #include "cache/blockcache/cache_store.h"
 #include "cache/utils/context.h"
 #include "common/io_buffer.h"

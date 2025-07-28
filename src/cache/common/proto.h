@@ -25,6 +25,7 @@
 
 #include "common/status.h"
 #include "dingofs/blockcache.pb.h"
+#include "dingofs/cache.pb.h"
 #include "dingofs/cachegroup.pb.h"
 #include "dingofs/common.pb.h"
 #include "dingofs/mds.pb.h"
@@ -63,6 +64,8 @@ using PBPrefetchRequest = pb::cache::blockcache::PrefetchRequest;
 using PBPrefetchResponse = pb::cache::blockcache::PrefetchResponse;
 using PBPingRequest = pb::cache::blockcache::PingRequest;
 using PBPingResponse = pb::cache::blockcache::PingResponse;
+
+using PBCacheService = pb::cache::cache;
 
 inline PBBlockCacheErrCode PBErr(Status status) {
   if (status.ok()) {

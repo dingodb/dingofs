@@ -158,6 +158,7 @@ Status LocalFileSystem::WriteFile(ContextSPtr ctx, const std::string& path,
     return CheckStatus(status);
   }
 
+  // TODO: fallocate and split IO (1MB * 4)
   NEXT_STEP(kOpenFile);
   int fd;
   int flags = Posix::kDefaultCreatFlags;

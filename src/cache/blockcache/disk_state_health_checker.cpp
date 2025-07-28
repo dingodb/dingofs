@@ -19,6 +19,7 @@
 #include <memory>
 
 #include "cache/common/macro.h"
+#include "cache/debug/expose.h"
 #include "cache/utils/helper.h"
 #include "cache/utils/state_machine.h"
 #include "metrics/cache/disk_cache_metric.h"
@@ -100,6 +101,9 @@ void DiskStateHealthChecker::ProbeDisk() {
   } else {
     state_machine_->Success();
   }
+
+  ExposeDiskCacheHealth(metric_->option.cache_index,
+                        StateToString(state_machine_->GetState()));
 
   Helper::RemoveFile(filepath);
 }
