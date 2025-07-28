@@ -55,6 +55,7 @@ struct LocalCache {
 };
 
 struct RemoteCache {
+  std::string mds_addrs;
   std::string cache_group;
   std::string last_modified;
   std::unordered_map<uint64_t, Node> nodes;
@@ -97,6 +98,7 @@ static nlohmann::json ToJSON(LocalCache cache) {
 
 static nlohmann::json ToJSON(RemoteCache cache) {
   nlohmann::json msg;
+  msg["mds_addrs"] = cache.mds_addrs;
   msg["cache_group"] = cache.cache_group;
   msg["last_modified"] = cache.last_modified;
 
@@ -161,6 +163,11 @@ void ExposeDiskCaches(std::vector<DiskCacheOption> options) {
 void ExposeDiskCacheHealth(uint32_t cache_index, const std::string& health) {
   WriteLockGuard lk(rwlock);
   root.local_cache.disks[cache_index].health = health;
+}
+
+void ExposeMDSAddrs(const std::vector<std::string>& addrs) {
+  WriteLockGuard lk(rwlock);
+  root.remote_cache.mds_addrs = absl::StrJoin(addrs, ", ");
 }
 
 void ExposeCacheGroupName(const std::string& cache_group) {
