@@ -75,6 +75,7 @@ Status RemoteCacheNodeManager::Start() {
   executor_->Schedule([this] { BackgroudRefresh(); },
                       FLAGS_load_members_interval_ms);
 
+  ExposeMDSAddrs(option_.mds_option.rpcRetryOpt.addrs);
   ExposeCacheGroupName(option_.cache_group);
 
   running_ = true;

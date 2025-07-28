@@ -43,6 +43,7 @@ Status AddCacheService(brpc::Server* server);
 
 void ExposeDiskCaches(std::vector<DiskCacheOption> options);
 void ExposeDiskCacheHealth(uint32_t cache_index, const std::string& health);
+void ExposeMDSAddrs(const std::vector<std::string>& addrs);
 void ExposeCacheGroupName(const std::string& cache_group);
 void ExposeRemoteCacheNodes(const PBCacheGroupMembers& members);
 void ExposeRemoteCacheNodeHealth(uint64_t node_id, const std::string& health);
