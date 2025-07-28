@@ -26,8 +26,8 @@
 #include <vector>
 
 #include "bthread/types.h"
-#include "client/vfs/meta/meta_system.h"
 #include "client/meta/vfs_meta.h"
+#include "client/vfs/meta/meta_system.h"
 #include "dingofs/mdsv2.pb.h"
 
 namespace dingofs {
@@ -246,6 +246,7 @@ class DummyFileSystem : public vfs::MetaSystem {
                   std::string* value) override;
   Status SetXattr(Ino ino, const std::string& name, const std::string& value,
                   int flags) override;
+  Status RemoveXattr(Ino ino, const std::string& name) override;
   Status ListXattr(Ino ino, std::vector<std::string>* xattrs) override;
 
   Status Rename(Ino old_parent, const std::string& old_name, Ino new_parent,
@@ -288,6 +289,7 @@ class DummyFileSystem : public vfs::MetaSystem {
   void DecOrDeleteInodeNlink(uint64_t ino);
   void UpdateXAttr(uint64_t ino, const std::string& name,
                    const std::string& value);
+  void RemoveXAttr(uint64_t ino, const std::string& name);
   void UpdateInodeLength(uint64_t ino, size_t length);
 
   bthread_mutex_t mutex_;

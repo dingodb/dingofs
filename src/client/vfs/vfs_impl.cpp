@@ -410,6 +410,14 @@ Status VFSImpl::GetXattr(Ino ino, const std::string& name, std::string* value) {
   return meta_system_->GetXattr(ino, name, value);
 }
 
+Status VFSImpl::RemoveXattr(Ino ino, const std::string& name) {
+  if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
+    return Status::NoData("No Xattr data in .stats");
+  }
+
+  return meta_system_->RemoveXattr(ino, name);
+}
+
 Status VFSImpl::ListXattr(Ino ino, std::vector<std::string>* xattrs) {
   if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
     return Status::NoData("No Xattr data in .stats");

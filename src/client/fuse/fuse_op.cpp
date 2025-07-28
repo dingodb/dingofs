@@ -635,6 +635,13 @@ void FuseOpGetXattr(fuse_req_t req, fuse_ino_t ino, const char* name,
   ReplyBuf(req, value.data(), value.size());
 }
 
+void FuseOpRemoveXattr(fuse_req_t req, fuse_ino_t ino, const char* name) {
+  VLOG(1) << "FuseOpRemoveXattr ino: " << ino << ", name: " << name;
+  std::string strname(name);
+  Status s = g_vfs->RemoveXattr(ino, strname);
+  ReplyError(req, s);
+}
+
 void FuseOpListXattr(fuse_req_t req, fuse_ino_t ino, size_t size) {
   VLOG(1) << "FuseOpListXattr ino: " << ino << ", size: " << size;
   CHECK_GE(size, 0) << "size is illegal, size: " << size;

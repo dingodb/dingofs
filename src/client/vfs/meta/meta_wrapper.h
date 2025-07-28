@@ -88,6 +88,8 @@ class MetaWrapper : public MetaSystem {
   Status SetXattr(Ino ino, const std::string& name, const std::string& value,
                   int flags) override;
 
+  Status RemoveXattr(Ino ino, const std::string& name) override;
+
   Status ListXattr(Ino ino, std::vector<std::string>* xattrs) override;
 
   Status Rename(Ino old_parent, const std::string& old_name, Ino new_parent,

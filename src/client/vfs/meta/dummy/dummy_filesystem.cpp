@@ -790,6 +790,17 @@ Status DummyFileSystem::SetXattr(Ino ino, const std::string& name,
   return Status::OK();
 }
 
+Status DummyFileSystem::RemoveXattr(Ino ino, const std::string& name) {
+  PBInode inode;
+  if (!GetInode(ino, inode)) {
+    return Status::Internal(pb::error::ENOT_FOUND, "not found inode");
+  }
+
+  RemoveXattr(ino, name);
+
+  return Status::OK();
+}
+
 Status DummyFileSystem::ListXattr(Ino ino, std::vector<std::string>* xattrs) {
   PBInode inode;
   if (!GetInode(ino, inode)) {
@@ -1099,6 +1110,22 @@ void DummyFileSystem::UpdateXAttr(uint64_t ino, const std::string& name,
   } else {
     inode.mutable_xattrs()->insert({name, value});
   }
+}
+
+void DummyFileSystem::RemoveXAttr(uint64_t ino, const std::string& name) {
+  BAIDU_SCOPED_LOCK(mutex_);
+
+  auto it = inode_map_.find(ino);
+  if (it == inode_map_.end()) {
+    return;
+  }
+
+  auto& inode = it->second;
+  auto* mut_xattr = inode.mutable_xattrs();
+  auto xattr_it = mut_xattr->find(name);
+  if (xattr_it != mut_xattr->end()) {
+    mut_xattr->erase(xattr_it);
+  } 
 }
 
 void DummyFileSystem::UpdateInodeLength(uint64_t ino, size_t length) {

@@ -666,6 +666,24 @@ Status VFSWrapper::GetXattr(Ino ino, const std::string& name,
   return s;
 }
 
+Status VFSWrapper::RemoveXattr(Ino ino, const std::string& name) {
+  VLOG(1) << "VFSRemoveXattr ino: " << ino << " name: " << name;
+  Status s;
+  AccessLogGuard log([&]() {
+    return absl::StrFormat("removexattr (%d,%s): %s", ino, name, s.ToString());
+  });
+
+  if (name.length() > vfs_->GetMaxNameLength()) {
+    s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
+    return s;
+  }
+
+  // NOTE: s is used by log guard
+  s = vfs_->RemoveXattr(ino, name);
+  LOG(INFO) << "VFSSetXattr end, status: " << s.ToString();
+  return s;
+}
+
 Status VFSWrapper::ListXattr(Ino ino, std::vector<std::string>* xattrs) {
   VLOG(1) << "VFSListXattr ino: " << ino;
   Status s;

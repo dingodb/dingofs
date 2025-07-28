@@ -18,9 +18,9 @@
 
 #include <absl/strings/str_format.h>
 
+#include "client/meta/vfs_meta.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/meta/meta_log.h"
-#include "client/meta/vfs_meta.h"
 
 namespace dingofs {
 namespace client {
@@ -205,6 +205,17 @@ Status MetaWrapper::GetXattr(Ino ino, const std::string& name,
   });
 
   s = target_->GetXattr(ino, name, value);
+
+  return s;
+}
+
+Status MetaWrapper::RemoveXattr(Ino ino, const std::string& name) {
+  Status s;
+  MetaLogGuard log_guard([&]() {
+    return absl::StrFormat("remotexattr (%d,%s): %s", ino, name, s.ToString());
+  });
+
+  s = target_->RemoveXattr(ino, name);
 
   return s;
 }

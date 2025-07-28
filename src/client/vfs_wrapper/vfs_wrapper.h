@@ -98,6 +98,8 @@ class VFSWrapper {
 
   Status GetXattr(Ino ino, const std::string& name, std::string* value);
 
+  Status RemoveXattr(Ino ino, const std::string& name);
+
   Status ListXattr(Ino ino, std::vector<std::string>* xattrs);
 
   Status MkDir(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,

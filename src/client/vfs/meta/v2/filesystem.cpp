@@ -22,8 +22,8 @@
 #include <string>
 #include <vector>
 
-#include "client/vfs/meta/v2/client_id.h"
 #include "client/meta/vfs_meta.h"
+#include "client/vfs/meta/v2/client_id.h"
 #include "common/status.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
@@ -522,6 +522,11 @@ Status MDSV2FileSystem::SetXattr(Ino ino, const std::string& name,
   }
 
   return Status::OK();
+}
+
+Status MDSV2FileSystem::RemoveXattr(Ino ino, const std::string& name) {
+  return Status::NotSupport(
+      fmt::format("remove xattr({}) not supported, ino({})", name, ino));
 }
 
 Status MDSV2FileSystem::ListXattr(Ino ino, std::vector<std::string>* xattrs) {

@@ -118,6 +118,8 @@ class MetaSystem {
   virtual Status GetXattr(Ino ino, const std::string& name,
                           std::string* value) = 0;
 
+  virtual Status RemoveXattr(Ino ino, const std::string& name) = 0;
+
   virtual Status ListXattr(Ino ino, std::vector<std::string>* xattrs) = 0;
 
   // create a directory in parent directory

@@ -34,7 +34,7 @@ namespace vfs {
 
 class VFSImpl : public VFS {
  public:
-  VFSImpl(const VFSOption& vfs_option) : vfs_option_(vfs_option){};
+  VFSImpl(const VFSOption& vfs_option) : vfs_option_(vfs_option) {};
 
   ~VFSImpl() override = default;
 
@@ -95,6 +95,8 @@ class VFSImpl : public VFS {
 
   Status GetXattr(Ino ino, const std::string& name,
                   std::string* value) override;
+
+  Status RemoveXattr(Ino ino, const std::string& name) override;
 
   Status ListXattr(Ino ino, std::vector<std::string>* xattrs) override;
 

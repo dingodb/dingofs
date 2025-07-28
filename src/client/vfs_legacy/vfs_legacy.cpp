@@ -1692,6 +1692,12 @@ Status VFSOld::SetXattr(Ino ino, const std::string& name,
   return Status::OK();
 }
 
+Status VFSOld::RemoveXattr(Ino ino, const std::string& name) {
+  (void)ino;
+  (void)name;
+  return Status::NotSupport("RemoveXattr is not supported");
+}
+
 void VFSOld::QueryWarmupTask(Ino key, std::string* result) {
   warmup::WarmupProgress progress;
   bool ret = warmup_manager_->QueryWarmupProgress(key, &progress);
