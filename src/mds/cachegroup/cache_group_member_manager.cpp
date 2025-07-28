@@ -112,16 +112,29 @@ void CacheGroupMemberManagerImpl::SetMembersState(
   }
 }
 
+void CacheGroupMemberManagerImpl::FilterOutOfflineMember(
+    const std::vector<CacheGroupMember>& members,
+    std::vector<CacheGroupMember>* members_out) {
+  for (const auto& member : members) {
+    if (member.state() != CacheGroupMemberState::CacheGroupMemberStateOffline) {
+      members_out->emplace_back(member);
+    }
+  }
+}
+
 Errno CacheGroupMemberManagerImpl::LoadMembers(
-    const std::string& group_name, std::vector<CacheGroupMember>* members) {
+    const std::string& group_name, std::vector<CacheGroupMember>* members_out) {
   uint64_t group_id;
   auto rc = storage_->GetGroupId(group_name, &group_id);
   if (rc != Errno::kOk) {
     return rc;
   }
 
-  storage_->LoadMembers(group_id, members);
-  SetMembersState(members);
+  std::vector<CacheGroupMember> members;
+  storage_->LoadMembers(group_id, &members);
+  SetMembersState(&members);
+  FilterOutOfflineMember(members, members_out);
+
   return rc;
 }
 

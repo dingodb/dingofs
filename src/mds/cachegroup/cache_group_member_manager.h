@@ -52,7 +52,7 @@ class CacheGroupMemberManager {
                           CacheGroupMember member) = 0;
 
   virtual Errno LoadMembers(const std::string& group_name,
-                            std::vector<CacheGroupMember>* members) = 0;
+                            std::vector<CacheGroupMember>* members_out) = 0;
 
   virtual Errno ReweightMember(const std::string& group_name,
                                uint64_t member_id, uint32_t weight) = 0;
@@ -78,7 +78,7 @@ class CacheGroupMemberManagerImpl : public CacheGroupMemberManager {
                   CacheGroupMember member) override;
 
   Errno LoadMembers(const std::string& group_name,
-                    std::vector<CacheGroupMember>* members) override;
+                    std::vector<CacheGroupMember>* members_out) override;
 
   Errno ReweightMember(const std::string& group_name, uint64_t member_id,
                        uint32_t weight) override;
@@ -90,6 +90,8 @@ class CacheGroupMemberManagerImpl : public CacheGroupMemberManager {
 
  private:
   void SetMembersState(std::vector<CacheGroupMember>* members);
+  void FilterOutOfflineMember(const std::vector<CacheGroupMember>& members,
+                              std::vector<CacheGroupMember>* members_out);
 
   bool CheckId(uint64_t member_id);
 
