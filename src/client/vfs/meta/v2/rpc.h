@@ -35,14 +35,12 @@
 #include "fmt/core.h"
 #include "mdsv2/common/helper.h"
 #include "utils/concurrent/concurrent.h"
+#include "options/client/vfs/meta/v2_dynamic_option.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 namespace v2 {
-
-DECLARE_uint32(rpc_timeout_ms);
-DECLARE_int32(rpc_retry_times);
 
 class RPC;
 using RPCPtr = std::shared_ptr<RPC>;

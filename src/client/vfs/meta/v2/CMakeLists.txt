@@ -27,6 +27,7 @@ target_link_libraries(vfs_meta_v2_lib
     dingofs_common
     dynamic_vlog
     dingofs_utils
+    client_options
 
     stub_common
     gflags::gflags

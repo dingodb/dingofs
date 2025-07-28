@@ -23,7 +23,6 @@
 #include "dingofs/mdsv2.pb.h"
 #include "dingofs/metaserver.pb.h"
 #include "fmt/format.h"
-#include "gflags/gflags.h"
 #include "glog/logging.h"
 #include "mdsv2/common/constant.h"
 #include "mdsv2/common/type.h"
@@ -32,8 +31,6 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 namespace v2 {
-
-DEFINE_uint32(client_send_request_retry, 3, "client send request retry times");
 
 static FileType ToFileType(pb::mdsv2::FileType type) {
   switch (type) {

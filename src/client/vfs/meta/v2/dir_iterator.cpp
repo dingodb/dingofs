@@ -16,12 +16,12 @@
 
 #include <fmt/format.h>
 
+#include "options/client/vfs/meta/v2_option.h"
+
 namespace dingofs {
 namespace client {
 namespace vfs {
 namespace v2 {
-
-DEFINE_uint32(read_dir_batch_size, 1024, "read dir batch size.");
 
 Status DirIterator::Seek() {
   std::vector<DirEntry> entries;

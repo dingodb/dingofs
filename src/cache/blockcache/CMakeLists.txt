@@ -24,5 +24,6 @@ target_link_libraries(cache_blockcache
     cache_options
     cache_metrics
     cache_storage
+    cache_debug
     dingofs_executor
 )

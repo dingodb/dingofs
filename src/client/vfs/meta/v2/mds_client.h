@@ -28,13 +28,12 @@
 #include "dingofs/mdsv2.pb.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/filesystem/fs_info.h"
+#include "options/client/vfs/meta/v2_option.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 namespace v2 {
-
-DECLARE_uint32(client_send_request_retry);
 
 class MDSClient;
 using MDSClientPtr = std::shared_ptr<MDSClient>;
