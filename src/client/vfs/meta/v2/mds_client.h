@@ -97,6 +97,7 @@ class MDSClient {
   Status SetAttr(Ino ino, const Attr& attr, int to_set, Attr& out_attr);
   Status GetXAttr(Ino ino, const std::string& name, std::string& value);
   Status SetXAttr(Ino ino, const std::string& name, const std::string& value);
+  Status RemoveXAttr(Ino ino, const std::string& name);
   Status ListXAttr(Ino ino, std::map<std::string, std::string>& xattrs);
 
   Status Rename(Ino old_parent, const std::string& old_name, Ino new_parent,

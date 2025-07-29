@@ -731,6 +731,30 @@ Status MDSClient::SetXAttr(Ino ino, const std::string& name,
   return Status::OK();
 }
 
+Status MDSClient::RemoveXAttr(Ino ino, const std::string& name) {
+  CHECK(fs_id_ != 0) << "fs_id is invalid.";
+
+  auto endpoint =
+      mdsv2::IsDir(ino) ? GetEndpointByParent(ino) : GetEndpoint(ino);
+
+  pb::mdsv2::RemoveXAttrRequest request;
+  pb::mdsv2::RemoveXAttrResponse response;
+
+  request.set_fs_id(fs_id_);
+  request.set_ino(ino);
+  request.set_name(name);
+
+  auto status =
+      SendRequest(endpoint, "MDSService", "RemoveXAttr", request, response);
+  if (!status.ok()) {
+    return status;
+  }
+
+  parent_memo_->UpsertVersion(ino, response.inode_version());
+
+  return Status::OK();
+}
+
 Status MDSClient::ListXAttr(Ino ino,
                             std::map<std::string, std::string>& xattrs) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";

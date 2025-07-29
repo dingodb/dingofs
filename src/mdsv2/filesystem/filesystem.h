@@ -163,6 +163,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status GetXAttr(Context& ctx, Ino ino, Inode::XAttrMap& xattr);
   Status GetXAttr(Context& ctx, Ino ino, const std::string& name, std::string& value);
   Status SetXAttr(Context& ctx, Ino ino, const Inode::XAttrMap& xattrs, uint64_t& version);
+  Status RemoveXAttr(Context& ctx, Ino ino, const std::string& name, uint64_t& version);
 
   // rename
   struct RenameParam {

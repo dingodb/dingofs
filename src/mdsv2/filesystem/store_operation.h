@@ -53,6 +53,7 @@ class Operation {
     kSmyLink = 14,
     kUpdateAttr = 15,
     kUpdateXAttr = 16,
+    kRemoveXAttr = 17,
     kFallocate = 18,
     kOpenFile = 19,
     kCloseFile = 20,
@@ -133,6 +134,7 @@ class Operation {
     switch (GetOpType()) {
       case OpType::kUpdateAttr:
       case OpType::kUpdateXAttr:
+      case OpType::kRemoveXAttr:
       case OpType::kUpsertChunk:
       case OpType::kOpenFile:
       case OpType::kFallocate:
@@ -150,6 +152,7 @@ class Operation {
       case OpType::kSmyLink:
       case OpType::kUpdateAttr:
       case OpType::kUpdateXAttr:
+      case OpType::kRemoveXAttr:
       case OpType::kUpsertChunk:
       case OpType::kOpenFile:
       case OpType::kFallocate:
@@ -436,6 +439,25 @@ class UpdateXAttrOperation : public Operation {
   uint32_t fs_id_;
   uint64_t ino_;
   const Inode::XAttrMap& xattrs_;
+};
+
+class RemoveXAttrOperation : public Operation {
+ public:
+  RemoveXAttrOperation(Trace& trace, uint32_t fs_id, uint64_t ino, const std::string& name)
+      : Operation(trace), fs_id_(fs_id), ino_(ino), name_(name) {};
+  ~RemoveXAttrOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kRemoveXAttr; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return ino_; }
+
+  Status RunInBatch(TxnUPtr& txn, AttrType& attr, const std::vector<KeyValue>& prefetch_kvs) override;
+
+ private:
+  uint32_t fs_id_;
+  uint64_t ino_;
+  std::string name_;
 };
 
 class UpsertChunkOperation : public Operation {

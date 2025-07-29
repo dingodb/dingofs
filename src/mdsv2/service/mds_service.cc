@@ -1352,6 +1352,24 @@ void MDSServiceImpl::SetAttr(google::protobuf::RpcController* controller, const 
                              pb::mdsv2::SetAttrResponse* response, google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
 
+  // validate request
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_id() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs_id is empty");
+    }
+    if (request->ino() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "ino is empty");
+    }
+
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
   // Run in queue.
   auto task = std::make_shared<ServiceTask>(
       [this, controller, request, response, svr_done]() { DoSetAttr(controller, request, response, svr_done); });
@@ -1396,6 +1414,27 @@ void MDSServiceImpl::DoGetXAttr(google::protobuf::RpcController* controller, con
 void MDSServiceImpl::GetXAttr(google::protobuf::RpcController* controller, const pb::mdsv2::GetXAttrRequest* request,
                               pb::mdsv2::GetXAttrResponse* response, google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // validate request
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_id() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs_id is empty");
+    }
+    if (request->ino() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "ino is empty");
+    }
+    if (request->name().empty()) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "name is empty");
+    }
+
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
 
   // Run in queue.
   auto task = std::make_shared<ServiceTask>(
@@ -1442,9 +1481,98 @@ void MDSServiceImpl::SetXAttr(google::protobuf::RpcController* controller, const
                               pb::mdsv2::SetXAttrResponse* response, google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
 
+  // validate request
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_id() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs_id is empty");
+    }
+    if (request->ino() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "ino is empty");
+    }
+    if (request->xattrs().empty()) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "xattrs is empty");
+    }
+
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
   // Run in queue.
   auto task = std::make_shared<ServiceTask>(
       [this, controller, request, response, svr_done]() { DoSetXAttr(controller, request, response, svr_done); });
+
+  bool ret = write_worker_set_->Execute(task);
+  if (BAIDU_UNLIKELY(!ret)) {
+    brpc::ClosureGuard done_guard(svr_done);
+    ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
+                            "WorkerSet queue is full, please wait and retry");
+  }
+}
+
+void MDSServiceImpl::DoRemoveXAttr(google::protobuf::RpcController* controller,
+                                   const pb::mdsv2::RemoveXAttrRequest* request,
+                                   pb::mdsv2::RemoveXAttrResponse* response, TraceClosure* done) {
+  brpc::Controller* cntl = (brpc::Controller*)controller;
+  brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
+
+  auto file_system = GetFileSystem(request->fs_id());
+  if (file_system == nullptr) {
+    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
+  }
+
+  auto status = ValidateRequest(request, file_system);
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  const auto& req_ctx = request->context();
+  Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
+
+  uint64_t version;
+  status = file_system->RemoveXAttr(ctx, request->ino(), request->name(), version);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  response->set_inode_version(version);
+}
+
+void MDSServiceImpl::RemoveXAttr(google::protobuf::RpcController* controller,
+                                 const pb::mdsv2::RemoveXAttrRequest* request, pb::mdsv2::RemoveXAttrResponse* response,
+                                 google::protobuf::Closure* done) {
+  auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // validate request
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_id() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs_id is empty");
+    }
+    if (request->ino() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "ino is empty");
+    }
+    if (request->name().empty()) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "name is empty");
+    }
+
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  // Run in queue.
+  auto task = std::make_shared<ServiceTask>(
+      [this, controller, request, response, svr_done]() { DoRemoveXAttr(controller, request, response, svr_done); });
 
   bool ret = write_worker_set_->Execute(task);
   if (BAIDU_UNLIKELY(!ret)) {

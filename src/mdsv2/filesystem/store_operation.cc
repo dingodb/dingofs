@@ -164,6 +164,9 @@ const char* Operation::OpName() const {
     case OpType::kUpdateXAttr:
       return "UpdateXAttr";
 
+    case OpType::kRemoveXAttr:
+      return "RemoveXAttr";
+
     case OpType::kFallocate:
       return "Fallocate";
 
@@ -648,6 +651,17 @@ Status UpdateXAttrOperation::RunInBatch(TxnUPtr&, AttrType& attr, const std::vec
   for (const auto& [key, value] : xattrs_) {
     (*attr.mutable_xattrs())[key] = value;
   }
+
+  // update attr
+  attr.set_atime(std::max(attr.atime(), GetTime()));
+  attr.set_mtime(std::max(attr.mtime(), GetTime()));
+  attr.set_ctime(std::max(attr.ctime(), GetTime()));
+
+  return Status::OK();
+}
+
+Status RemoveXAttrOperation::RunInBatch(TxnUPtr&, AttrType& attr, const std::vector<KeyValue>&) {
+  attr.mutable_xattrs()->erase(name_);
 
   // update attr
   attr.set_atime(std::max(attr.atime(), GetTime()));

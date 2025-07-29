@@ -525,8 +525,14 @@ Status MDSV2FileSystem::SetXattr(Ino ino, const std::string& name,
 }
 
 Status MDSV2FileSystem::RemoveXattr(Ino ino, const std::string& name) {
-  return Status::NotSupport(
-      fmt::format("remove xattr({}) not supported, ino({})", name, ino));
+  auto status = mds_client_->RemoveXAttr(ino, name);
+  if (!status.ok()) {
+    return Status::Internal(
+        fmt::format("remove xattr({}) fail, ino({}) error: {}", name, ino,
+                    status.ToString()));
+  }
+
+  return Status::OK();
 }
 
 Status MDSV2FileSystem::ListXattr(Ino ino, std::vector<std::string>* xattrs) {

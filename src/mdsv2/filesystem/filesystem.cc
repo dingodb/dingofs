@@ -1431,6 +1431,51 @@ Status FileSystem::SetXAttr(Context& ctx, Ino ino, const Inode::XAttrMap& xattrs
   return Status::OK();
 }
 
+Status FileSystem::RemoveXAttr(Context& ctx, Ino ino, const std::string& name, uint64_t& version) {
+  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] removexattr ino({}), name({}).", fs_id_, ino, name);
+
+  if (!CanServe()) {
+    return Status(pb::error::ENOT_SERVE, "can not serve");
+  }
+
+  auto& trace = ctx.GetTrace();
+
+  InodeSPtr inode;
+  auto status = GetInode(ctx, ino, inode);
+  if (!status.ok()) {
+    return status;
+  }
+
+  uint64_t time_ns = Helper::TimestampNs();
+
+  // update backend store
+  RemoveXAttrOperation operation(trace, fs_id_, ino, name);
+
+  status = RunOperation(&operation);
+
+  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] removexattr {} finish, status({}).", fs_id_, ElapsedTimeUs(time_ns),
+                                 ino, status.error_str());
+
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, fmt::format("put inode fail, {}", status.error_str()));
+  }
+
+  auto& result = operation.GetResult();
+  auto& attr = result.attr;
+
+  version = attr.version();
+
+  // update cache
+  if (IsDir(ino) && IsParentHashPartition()) {
+    inode->UpdateIf(attr);
+    NotifyBuddyRefreshInode(std::move(attr));
+  } else {
+    inode->UpdateIf(std::move(attr));
+  }
+
+  return Status::OK();
+}
+
 void FileSystem::UpdateParentMemo(const std::vector<Ino>& ancestors) {
   if (IsParentHashPartition()) {
     for (size_t i = 1; i < ancestors.size(); ++i) {

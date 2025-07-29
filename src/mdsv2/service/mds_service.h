@@ -127,6 +127,9 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
   void SetXAttr(google::protobuf::RpcController* controller, const pb::mdsv2::SetXAttrRequest* request,
                 pb::mdsv2::SetXAttrResponse* response, google::protobuf::Closure* done) override;
 
+  void RemoveXAttr(google::protobuf::RpcController* controller, const pb::mdsv2::RemoveXAttrRequest* request,
+                   pb::mdsv2::RemoveXAttrResponse* response, google::protobuf::Closure* done) override;
+
   void ListXAttr(google::protobuf::RpcController* controller, const pb::mdsv2::ListXAttrRequest* request,
                  pb::mdsv2::ListXAttrResponse* response, google::protobuf::Closure* done) override;
 
@@ -270,6 +273,9 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
 
   void DoSetXAttr(google::protobuf::RpcController* controller, const pb::mdsv2::SetXAttrRequest* request,
                   pb::mdsv2::SetXAttrResponse* response, TraceClosure* done);
+
+  void DoRemoveXAttr(google::protobuf::RpcController* controller, const pb::mdsv2::RemoveXAttrRequest* request,
+                     pb::mdsv2::RemoveXAttrResponse* response, TraceClosure* done);
 
   void DoListXAttr(google::protobuf::RpcController* controller, const pb::mdsv2::ListXAttrRequest* request,
                    pb::mdsv2::ListXAttrResponse* response, TraceClosure* done);
