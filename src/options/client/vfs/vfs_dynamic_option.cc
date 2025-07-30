@@ -16,6 +16,8 @@
 
 #include "options/client/vfs/vfs_dynamic_option.h"
 
+#include <gflags/gflags.h>
+
 #include "options/gflag_validator.h"
 
 namespace dingofs {
@@ -35,8 +37,15 @@ bool ValidateDelimiterLength(const char* flag_name, const std::string& value) {
 DEFINE_bool(vfs_meta_logging, true, "enable vfs meta system log");
 DEFINE_validator(vfs_meta_logging, &PassBool);
 
-DEFINE_int32(flush_bg_thread, 16, "Number of background flush threads");
-DEFINE_validator(flush_bg_thread, &PassInt32);
+DEFINE_int32(vfs_flush_bg_thread, 16, "Number of background flush threads");
+DEFINE_validator(vfs_flush_bg_thread, &PassInt32);
+
+DEFINE_int32(vfs_read_executor_thread, 8, "Number of read executor threads");
+DEFINE_validator(vfs_read_executor_thread, &PassInt32);
+
+DEFINE_uint32(vfs_periodic_flush_interval_ms, 5 * 1000,
+              "Periodic flush interval in milliseconds");
+DEFINE_validator(vfs_periodic_flush_interval_ms, &PassUint32);
 
 // begin used in inode_blocks_service
 DEFINE_uint32(format_file_offset_width, 20, "Width of file offset in format");

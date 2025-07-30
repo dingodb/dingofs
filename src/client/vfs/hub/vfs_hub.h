@@ -26,11 +26,11 @@
 #include "blockaccess/block_accesser.h"
 #include "cache/blockcache/block_cache.h"
 #include "client/memory/page_allocator.h"
+#include "client/meta/vfs_meta.h"
 #include "client/vfs.h"
 #include "client/vfs/background/iperiodic_flush_manager.h"
 #include "client/vfs/handle/handle_manager.h"
 #include "client/vfs/meta/meta_system.h"
-#include "client/meta/vfs_meta.h"
 #include "common/status.h"
 #include "options/client/vfs/vfs_option.h"
 #include "utils/executor/executor.h"
@@ -60,6 +60,8 @@ class VFSHub {
   virtual blockaccess::BlockAccesser* GetBlockAccesser() = 0;
 
   virtual Executor* GetFlushExecutor() = 0;
+
+  virtual Executor* GetReadExecutor() = 0;
 
   virtual IPeriodicFlushManager* GetPeriodicFlushManger() = 0;
 
@@ -113,6 +115,11 @@ class VFSHubImpl : public VFSHub {
     return flush_executor_.get();
   }
 
+  Executor* GetReadExecutor() override {
+    CHECK_NOTNULL(read_executor_);
+    return read_executor_.get();
+  }
+
   IPeriodicFlushManager* GetPeriodicFlushManger() override {
     CHECK_NOTNULL(priodic_flush_manager_);
     return priodic_flush_manager_.get();
@@ -150,6 +157,7 @@ class VFSHubImpl : public VFSHub {
   //   std::unique_ptr<cache::BlockCache> block_cache_;
   std::shared_ptr<cache::BlockCache> block_cache_;
   std::unique_ptr<Executor> flush_executor_;
+  std::unique_ptr<Executor> read_executor_;
   std::unique_ptr<IPeriodicFlushManager> priodic_flush_manager_;
   std::shared_ptr<PageAllocator> page_allocator_;
 };

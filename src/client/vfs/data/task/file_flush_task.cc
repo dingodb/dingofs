@@ -33,6 +33,12 @@ void FileFlushTask::ChunkFlushed(uint64_t chunk_index, Status status) {
   if (!status.ok()) {
     LOG(WARNING) << fmt::format(
         "{} ChunkFlushed Failed to flush chunk_index: {}", UUID(), chunk_index);
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      if (status_.ok()) {
+        status_ = status;
+      }
+    }
   }
 
   if (flusing_chunk_.fetch_sub(1) == 1) {

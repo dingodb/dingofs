@@ -26,7 +26,11 @@ namespace client {
 // meta system log
 DECLARE_bool(vfs_meta_logging);
 
-DECLARE_int32(flush_bg_thread);
+DECLARE_int32(vfs_flush_bg_thread);
+
+DECLARE_int32(vfs_read_executor_thread);
+
+DECLARE_uint32(vfs_periodic_flush_interval_ms);
 
 // begin used in inode_blocks_service
 DECLARE_uint32(format_file_offset_width);

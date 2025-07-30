@@ -17,7 +17,7 @@ add_library(vfs_background
 )
 
 target_link_libraries(vfs_background
-    gflags::gflags
-    glog::glog
     vfs_hub
+    client_options
+    glog::glog
 )

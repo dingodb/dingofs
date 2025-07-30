@@ -21,6 +21,7 @@
 #include <memory>
 #include <mutex>
 #include <utility>
+#include <vector>
 
 #include "absl/cleanup/cleanup.h"
 #include "cache/blockcache/block_cache.h"
@@ -240,22 +241,6 @@ Status Chunk::BufferWrite(const char* buf, uint64_t size,
 }
 
 Status Chunk::Write(const char* buf, uint64_t size, uint64_t chunk_offset) {
-  {
-    Status tmp;
-    {
-      std::lock_guard<std::mutex> lg(mutex_);
-      if (!error_status_.ok()) {
-        tmp = error_status_;
-      }
-    }
-    if (!tmp.ok()) {
-      LOG(WARNING) << fmt::format(
-          "{} Write fail because chunk already broken, status: {}", UUID(),
-          tmp.ToString());
-      return tmp;
-    }
-  }
-
   if (FLAGS_data_use_direct_write) {
     return DirectWrite(buf, size, chunk_offset);
   } else {
@@ -264,22 +249,6 @@ Status Chunk::Write(const char* buf, uint64_t size, uint64_t chunk_offset) {
 }
 
 Status Chunk::Read(char* buf, uint64_t size, uint64_t chunk_offset) {
-  {
-    Status tmp;
-    {
-      std::lock_guard<std::mutex> lg(mutex_);
-      if (!error_status_.ok()) {
-        tmp = error_status_;
-      }
-    }
-    if (!tmp.ok()) {
-      LOG(WARNING) << fmt::format(
-          "{} Read fail because chunk already broken, status: {}", UUID(),
-          tmp.ToString());
-      return tmp;
-    }
-  }
-
   uint64_t read_file_offset = chunk_start_ + chunk_offset;
   uint64_t end_read_file_offset = read_file_offset + size;
 

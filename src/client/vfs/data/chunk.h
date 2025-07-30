@@ -36,6 +36,7 @@ namespace vfs {
 
 class VFSHub;
 
+// TOOD: separate the chunk to reader and writer
 class Chunk : public std::enable_shared_from_this<Chunk> {
  public:
   Chunk(VFSHub* hub, uint64_t ino, uint64_t index);

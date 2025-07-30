@@ -29,7 +29,6 @@
 #include "client/vfs/common/helper.h"
 #include "client/vfs/data/file.h"
 #include "client/vfs/hub/vfs_hub.h"
-#include "client/vfs/meta/meta_log.h"
 #include "common/define.h"
 #include "common/status.h"
 #include "fmt/format.h"
@@ -62,8 +61,6 @@ Status VFSImpl::Start(const VFSConfig& vfs_conf) {  // NOLINT
 Status VFSImpl::Stop() { return vfs_hub_->Stop(); }
 
 bool VFSImpl::Dump(Json::Value& value) {
-  MetaLogGuard log_guard([&]() { return "dump"; });
-
   CHECK(meta_system_ != nullptr) << "meta_system is null";
   CHECK(handle_manager_ != nullptr) << "handle_manager is null";
 
@@ -75,8 +72,6 @@ bool VFSImpl::Dump(Json::Value& value) {
 }
 
 bool VFSImpl::Load(const Json::Value& value) {
-  MetaLogGuard log_guard([&]() { return "load"; });
-
   CHECK(meta_system_ != nullptr) << "meta_system is null";
   CHECK(handle_manager_ != nullptr) << "handle_manager is null";
 
@@ -257,11 +252,6 @@ Status VFSImpl::Create(Ino parent, const std::string& name, uint32_t uid,
 Status VFSImpl::Read(Ino ino, char* buf, uint64_t size, uint64_t offset,
                      uint64_t fh, uint64_t* out_rsize) {
   Status s;
-  MetaLogGuard log_guard([&]() {
-    return absl::StrFormat("read (%d,%d,%d,%d): %s", ino, offset, size, fh,
-                           s.ToString());
-  });
-
   auto handle = handle_manager_->FindHandler(fh);
   VFS_CHECK_HANDLE(handle, ino, fh);
 
@@ -299,12 +289,6 @@ Status VFSImpl::Write(Ino ino, const char* buf, uint64_t size, uint64_t offset,
   static std::atomic<int> write_count{0};
   write_count.fetch_add(1);
   Status s;
-  MetaLogGuard log_guard([&]() {
-    write_count.fetch_sub(1);
-    return absl::StrFormat("write (%d,%d,%d,%d): %s %d %d", ino, offset, size,
-                           fh, s.ToString(), *out_wsize, write_count.load());
-  });
-
   auto handle = handle_manager_->FindHandler(fh);
   VFS_CHECK_HANDLE(handle, ino, fh);
 
@@ -325,10 +309,6 @@ Status VFSImpl::Flush(Ino ino, uint64_t fh) {
   }
 
   Status s;
-  MetaLogGuard log_guard([&]() {
-    return absl::StrFormat("flush (%d,%d): %s", ino, fh, s.ToString());
-  });
-
   auto handle = handle_manager_->FindHandler(fh);
   VFS_CHECK_HANDLE(handle, ino, fh);
 
@@ -350,10 +330,6 @@ Status VFSImpl::Release(Ino ino, uint64_t fh) {
   }
 
   Status s;
-  MetaLogGuard log_guard([&]() {
-    return absl::StrFormat("release (%d,%d): %s", ino, fh, s.ToString());
-  });
-
   auto handle = handle_manager_->FindHandler(fh);
   VFS_CHECK_HANDLE(handle, ino, fh);
 
@@ -374,11 +350,6 @@ Status VFSImpl::Release(Ino ino, uint64_t fh) {
 // TODO: seperate data flush with metadata flush
 Status VFSImpl::Fsync(Ino ino, int datasync, uint64_t fh) {
   Status s;
-  MetaLogGuard log_guard([&]() {
-    return absl::StrFormat("fsync (%d,%d,%d): %s", ino, datasync, fh,
-                           s.ToString());
-  });
-
   auto handle = handle_manager_->FindHandler(fh);
   VFS_CHECK_HANDLE(handle, ino, fh);
 

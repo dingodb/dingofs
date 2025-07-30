@@ -31,6 +31,7 @@ namespace client {
 namespace vfs {
 
 DECLARE_bool(data_use_direct_write);
+DECLARE_bool(data_single_thread_read);
 
 struct VFSMetaOption {
   uint32_t max_name_length{255};  // max length of file name

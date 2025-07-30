@@ -20,8 +20,11 @@ add_library(vfs_data
     flat/flat_file.cc
     task/file_flush_task.cc
     task/chunk_flush_task.cc
-    file.cc
+    reader/chunk_reader.cc
+    reader/file_reader.cc
+    reader/reader_common.cc
     chunk.cc
+    file.cc
 )
 
 target_link_libraries(vfs_data

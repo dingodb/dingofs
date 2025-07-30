@@ -19,15 +19,20 @@
 #include "options/client/client_dynamic_option.h"
 #include "options/client/common_option.h"
 #include "options/client/memory/page_option.h"
+#include "options/client/vfs/vfs_dynamic_option.h"
 #include "utils/configuration.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 
-DEFINE_bool(data_use_direct_write, true,
+DEFINE_bool(data_use_direct_write, false,
             "Use direct write to chunk, If true, use direct write to block "
             "cache, otherwise use buffer write");
+
+DEFINE_bool(data_single_thread_read, false,
+            "Use single thread read to chunk, If true, use single thread read "
+            "to block cache, otherwise use executor read with async");
 
 void InitVFSOption(utils::Configuration* conf, VFSOption* option) {
   blockaccess::InitAwsSdkConfig(
@@ -44,16 +49,37 @@ void InitVFSOption(utils::Configuration* conf, VFSOption* option) {
 
   // vfs data related
   if (!conf->GetBoolValue("vfs.data.use_direct_write",
-                          &vfs::FLAGS_data_use_direct_write)) {
-    vfs::FLAGS_data_use_direct_write = true;
+                          &FLAGS_data_use_direct_write)) {
     LOG(INFO) << "Not found `vfs.data.use_direct_write` in conf, "
-                 "default to true";
+                 "default to "
+              << (FLAGS_data_use_direct_write ? "true" : "false");
   }
 
   if (!conf->GetBoolValue("vfs.data.writeback",
                           &option->data_option.writeback)) {
     LOG(INFO) << "Not found `vfs.data.writeback` in conf, default:"
               << (option->data_option.writeback ? "true" : "false");
+  }
+
+  if (!conf->GetIntValue("vfs.data.flush_bg_thread",
+                         &FLAGS_vfs_flush_bg_thread)) {
+    LOG(INFO) << "Not found `vfs.data.flush_bg_thread` in conf, "
+                 "default to "
+              << FLAGS_vfs_flush_bg_thread;
+  }
+
+  if (!conf->GetBoolValue("vfs.data.single_tread_read",
+                          &FLAGS_data_single_thread_read)) {
+    LOG(INFO) << "Not found `vfs.data.single_tread_read` in conf, "
+                 "default to "
+              << (FLAGS_data_single_thread_read ? "true" : "false");
+  }
+
+  if (!conf->GetIntValue("vfs.data.read_executor_thread",
+                         &FLAGS_vfs_read_executor_thread)) {
+    LOG(INFO) << "Not found `vfs.data.read_executor_thread` in conf, "
+                 "default to "
+              << FLAGS_vfs_read_executor_thread;
   }
 
   // vfs meta related

@@ -25,18 +25,11 @@
 
 #include "client/vfs/handle/handle_manager.h"
 #include "client/vfs/hub/vfs_hub.h"
+#include "options/client/vfs/vfs_dynamic_option.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
-
-namespace {
-bool PassUint32(const char*, uint32_t) { return true; }
-};  // namespace
-
-DEFINE_uint32(periodic_flush_interval_ms, 5 * 1000,
-              "Periodic flush interval in milliseconds");
-DEFINE_validator(periodic_flush_interval_ms, &PassUint32);
 
 static std::atomic<uint64_t> seq_id_gen{1};
 
@@ -111,7 +104,7 @@ void PeriodicFlushManager::FlushHandle(uint64_t fh) {
           << " with seq_id: " << seq_id;
 
   vfs_hub_->GetFlushExecutor()->Schedule([this, fh] { FlushHandle(fh); },
-                                         FLAGS_periodic_flush_interval_ms);
+                                         FLAGS_vfs_periodic_flush_interval_ms);
 }
 
 void PeriodicFlushManager::SubmitToFlush(HandleSPtr handle) {
@@ -134,7 +127,7 @@ void PeriodicFlushManager::SubmitToFlush(HandleSPtr handle) {
   }
 
   vfs_hub_->GetFlushExecutor()->Schedule([this, fh] { FlushHandle(fh); },
-                                         FLAGS_periodic_flush_interval_ms);
+                                         FLAGS_vfs_periodic_flush_interval_ms);
 }
 
 }  // namespace vfs

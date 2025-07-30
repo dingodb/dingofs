@@ -132,8 +132,14 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
   }
 
   {
-    flush_executor_ = std::make_unique<ExecutorImpl>(FLAGS_flush_bg_thread);
+    flush_executor_ = std::make_unique<ExecutorImpl>(FLAGS_vfs_flush_bg_thread);
     flush_executor_->Start();
+  }
+
+  {
+    read_executor_ =
+        std::make_unique<ExecutorImpl>(FLAGS_vfs_read_executor_thread);
+    read_executor_->Start();
   }
 
   {
@@ -168,6 +174,8 @@ Status VFSHubImpl::Stop() {
   handle_manager_->FlushAll();
 
   priodic_flush_manager_->Stop();
+  read_executor_->Stop();
+  flush_executor_->Stop();
   block_cache_->Shutdown();
   meta_system_->UnInit();
 

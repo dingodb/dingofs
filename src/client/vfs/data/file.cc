@@ -53,8 +53,27 @@ Chunk* File::GetOrCreateChunk(uint64_t chunk_index) {
   }
 }
 
+Status File::PreCheck() {
+  Status tmp;
+  {
+    std::lock_guard<std::mutex> lg(mutex_);
+    if (!file_status_.ok()) {
+      tmp = file_status_;
+    }
+  }
+
+  if (!tmp.ok()) {
+    LOG(WARNING) << "File::PreCheck failed because file already broken, ino: "
+                 << ino_ << ", status: " << tmp.ToString();
+  }
+
+  return tmp;
+}
+
 Status File::Write(const char* buf, uint64_t size, uint64_t offset,
                    uint64_t* out_wsize) {
+  DINGOFS_RETURN_NOT_OK(PreCheck());
+
   uint64_t chunk_size = GetChunkSize();
   CHECK(chunk_size > 0) << "chunk size not allow 0";
 
@@ -97,9 +116,19 @@ Status File::Write(const char* buf, uint64_t size, uint64_t offset,
   return s;
 }
 
-// TODO : concurrent read
 Status File::Read(char* buf, uint64_t size, uint64_t offset,
                   uint64_t* out_rsize) {
+  if (FLAGS_data_single_thread_read) {
+    return DoReadWithSingleThread(buf, size, offset, out_rsize);
+  } else {
+    return file_reader_->Read(buf, size, offset, out_rsize);
+  }
+}
+
+Status File::DoReadWithSingleThread(char* buf, uint64_t size, uint64_t offset,
+                                    uint64_t* out_rsize) {
+  DINGOFS_RETURN_NOT_OK(PreCheck());
+
   Attr attr;
   vfs_hub_->GetMetaSystem()->GetAttr(ino_, &attr);
 
@@ -134,6 +163,19 @@ Status File::Read(char* buf, uint64_t size, uint64_t offset,
 
   *out_rsize = has_read;
   return Status::OK();
+}
+
+void File::FileFlushed(StatusCallback cb, Status status) {
+  if (!status.ok()) {
+    LOG(WARNING) << "File::FileFlushed failed, ino: " << ino_
+                 << ", status: " << status.ToString();
+    file_status_ = status;
+  }
+
+  cb(status);
+
+  VLOG(3) << "File::FileFlushed end ino: " << ino_
+          << ", status: " << status.ToString();
 }
 
 void File::AsyncFlush(StatusCallback cb) {
@@ -172,9 +214,9 @@ void File::AsyncFlush(StatusCallback cb) {
   }
 
   CHECK_NOTNULL(flush_task);
-  // TODO: maybe we need add callback to check if the flush task is
-  // failed or not, if failed, we need to mark file bad or retry?
-  flush_task->RunAsync(cb);
+  flush_task->RunAsync([this, cb](auto&& ph1) {
+    FileFlushed(cb, std::forward<decltype(ph1)>(ph1));
+  });
 
   VLOG(3) << "File::AsyncFlush end ino: " << ino_
           << ", file_flush_id: " << file_flush_id;

@@ -31,8 +31,6 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
-DECLARE_uint32(periodic_flush_interval_ms);
-
 class VFSHub;
 
 class PeriodicFlushManager : public IPeriodicFlushManager {
