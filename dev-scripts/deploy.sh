@@ -71,6 +71,7 @@ function deploy_server() {
 
     sed  -i 's,\$INSTANCE_ID\$,'"$instance_id"',g'                  $dist_conf
     sed  -i 's,\$SERVER_HOST\$,'"$SERVER_HOST"',g'                  $dist_conf
+    sed  -i 's,\$SERVER_LISTEN_HOST\$,'"$SERVER_LISTEN_HOST"',g'    $dist_conf
     sed  -i 's,\$SERVER_PORT\$,'"$server_port"',g'                  $dist_conf
     sed  -i 's,\$BASE_PATH\$,'"$dstpath"',g'                        $dist_conf
 

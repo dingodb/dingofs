@@ -41,7 +41,9 @@ class ServiceOption : public BaseOption {
 
 class ServerOption : public BaseOption {
   BIND_uint32(id, 0, "server id, must be unique in the cluster");
-  BIND_string(addr, "", "server address, format: ip:port");
+  BIND_string(host, "", "server host");
+  BIND_string(listen_host, "", "server listen host");
+  BIND_uint32(port, 0, "server port");
 
   BIND_suboption(service, "service", ServiceOption);
 };

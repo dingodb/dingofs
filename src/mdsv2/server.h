@@ -103,7 +103,7 @@ class Server {
   options::mdsv2::AppOption app_option_;
 
   // mds self info
-  MDSMeta mds_meta_;
+  MDSMeta self_mds_meta_;
   // all cluster mds
   MDSMetaMapSPtr mds_meta_map_;
 

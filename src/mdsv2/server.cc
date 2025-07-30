@@ -14,6 +14,8 @@
 
 #include "mdsv2/server.h"
 
+#include <fmt/format.h>
+
 #include <string>
 #include <utility>
 
@@ -76,8 +78,16 @@ bool Server::InitConfig(const std::string& path) {
     DINGO_LOG(ERROR) << "mds server id is 0, please set a valid id.";
     return false;
   }
-  if (server_option.addr().empty()) {
-    DINGO_LOG(ERROR) << "mds server addr is empty, please set a valid addr.";
+  if (server_option.host().empty()) {
+    DINGO_LOG(ERROR) << "mds server host is empty, please set a valid host.";
+    return false;
+  }
+  if (server_option.host() == "0.0.0.0") {
+    DINGO_LOG(ERROR) << "mds server host is 0.0.0.0, can't set it.";
+    return false;
+  }
+  if (server_option.port() == 0) {
+    DINGO_LOG(ERROR) << "mds server port is 0, please set a valid port.";
     return false;
   }
 
@@ -112,24 +122,18 @@ bool Server::InitMDSMeta() {
 
   const auto& server_option = app_option_.server();
 
-  mds_meta_.SetID(server_option.id());
+  self_mds_meta_.SetID(server_option.id());
 
-  std::string host;
-  int port;
-  if (!Helper::ParseAddr(server_option.addr(), host, port)) {
-    return false;
-  }
+  self_mds_meta_.SetHost(server_option.host());
+  self_mds_meta_.SetPort(server_option.port());
+  self_mds_meta_.SetState(MDSMeta::State::kNormal);
 
-  mds_meta_.SetHost(host);
-  mds_meta_.SetPort(port);
-  mds_meta_.SetState(MDSMeta::State::kNormal);
-
-  DINGO_LOG(INFO) << fmt::format("init mds meta, self: {}.", mds_meta_.ToString());
+  DINGO_LOG(INFO) << fmt::format("init mds meta, self: {}.", self_mds_meta_.ToString());
 
   mds_meta_map_ = MDSMetaMap::New();
   CHECK(mds_meta_map_ != nullptr) << "new MDSMetaMap fail.";
 
-  mds_meta_map_->UpsertMDSMeta(mds_meta_);
+  mds_meta_map_->UpsertMDSMeta(self_mds_meta_);
 
   return true;
 }
@@ -189,8 +193,9 @@ bool Server::InitFileSystem() {
   CHECK(slice_id_generator != nullptr) << "new slice AutoIncrementIdGenerator fail.";
   CHECK(slice_id_generator->Init()) << "init slice AutoIncrementIdGenerator fail.";
 
-  file_system_set_ = FileSystemSet::New(coordinator_client_, std::move(fs_id_generator), slice_id_generator,
-                                        kv_storage_, mds_meta_, mds_meta_map_, operation_processor_, notify_buddy_);
+  file_system_set_ =
+      FileSystemSet::New(coordinator_client_, std::move(fs_id_generator), slice_id_generator, kv_storage_,
+                         self_mds_meta_, mds_meta_map_, operation_processor_, notify_buddy_);
   CHECK(file_system_set_ != nullptr) << "new FileSystem fail.";
 
   return file_system_set_->Init();
@@ -211,18 +216,18 @@ bool Server::InitFsInfoSync() {
 
 bool Server::InitNotifyBuddy() {
   CHECK(mds_meta_map_ != nullptr) << "mds meta map is nullptr.";
-  notify_buddy_ = notify::NotifyBuddy::New(mds_meta_map_, mds_meta_.ID());
+  notify_buddy_ = notify::NotifyBuddy::New(mds_meta_map_, self_mds_meta_.ID());
 
   return notify_buddy_->Init();
 }
 
 bool Server::InitMonitor() {
   CHECK(coordinator_client_ != nullptr) << "coordinator client is nullptr.";
-  CHECK(mds_meta_.ID() > 0) << "mds id is invalid.";
+  CHECK(self_mds_meta_.ID() > 0) << "mds id is invalid.";
   CHECK(kv_storage_ != nullptr) << "kv storage is nullptr.";
   CHECK(notify_buddy_ != nullptr) << "notify_buddy is nullptr.";
 
-  auto dist_lock = StoreDistributionLock::New(kv_storage_, FLAGS_mdsmonitor_lock_name, mds_meta_.ID());
+  auto dist_lock = StoreDistributionLock::New(kv_storage_, FLAGS_mdsmonitor_lock_name, self_mds_meta_.ID());
   CHECK(dist_lock != nullptr) << "gc dist lock is nullptr.";
 
   monitor_ = Monitor::New(file_system_set_, dist_lock, notify_buddy_);
@@ -246,7 +251,7 @@ bool Server::InitGcProcessor() {
   CHECK(operation_processor_ != nullptr) << "operation_processor is nullptr.";
   CHECK(file_system_set_ != nullptr) << "file system set is nullptr.";
 
-  auto dist_lock = StoreDistributionLock::New(kv_storage_, FLAGS_gc_lock_name, mds_meta_.ID());
+  auto dist_lock = StoreDistributionLock::New(kv_storage_, FLAGS_gc_lock_name, self_mds_meta_.ID());
   CHECK(dist_lock != nullptr) << "gc dist lock is nullptr.";
 
   gc_processor_ = GcProcessor::New(file_system_set_, operation_processor_, dist_lock);
@@ -341,10 +346,13 @@ std::string Server::GetPidFilePath() {
 
 std::string Server::GetListenAddr() {
   const auto& server_option = app_option_.server();
-  return server_option.addr();
+
+  std::string host = server_option.listen_host().empty() ? server_option.host() : server_option.listen_host();
+
+  return fmt::format("{}:{}", host, server_option.port());
 }
 
-MDSMeta& Server::GetMDSMeta() { return mds_meta_; }
+MDSMeta& Server::GetMDSMeta() { return self_mds_meta_; }
 
 MDSMetaMapSPtr Server::GetMDSMetaMap() {
   CHECK(mds_meta_map_ != nullptr) << "mds meta map is nullptr.";

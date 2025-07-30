@@ -1,6 +1,9 @@
 [server]
 id = $INSTANCE_ID$
-addr = "$SERVER_HOST$:$SERVER_PORT$"
+host = "$SERVER_HOST$" # can't set 0.0.0.0
+listen_host = "$SERVER_LISTEN_HOST$" # maybe not set or set 0.0.0.0
+port = $SERVER_PORT$
+
 
 [server.service.meta]
 read_worker_num = 128
