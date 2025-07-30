@@ -252,6 +252,7 @@ RadosAsyncIOUnit::~RadosAsyncIOUnit() {
 static void CompleteCallback(rados_completion_t cb, void* arg) {
   RadosAsyncIOUnit* io_unit = static_cast<RadosAsyncIOUnit*>(arg);
 
+  VLOG(9) << "CompleteCallback is called, key: " << io_unit->key;
   CHECK_NOTNULL(io_unit);
   CHECK(rados_aio_is_complete(io_unit->completion))
       << "Completion is not "
@@ -271,10 +272,10 @@ static void CompleteCallback(rados_completion_t cb, void* arg) {
 // take ownership of io_unit and pass it to the callback
 void RadosAccesser::ExecuteAsyncOperation(
     RadosAsyncIOUnit* io_unit, std::function<int(RadosAsyncIOUnit*)> async_op) {
-  int err = CreateIoContext(cluster_, options_.pool_name, &io_unit->ioctx);
-
+  VLOG(9) << "ExecuteAsyncOperation is called, key: " << io_unit->key;
   auto defer = ::absl::MakeCleanup([&]() { delete io_unit; });
 
+  int err = CreateIoContext(cluster_, options_.pool_name, &io_unit->ioctx);
   if (err < 0) {
     LOG(ERROR) << "Failed to create ioctx, pool: " << options_.pool_name
                << ", key: " << io_unit->key << ", err: " << strerror(-err);
