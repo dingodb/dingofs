@@ -32,6 +32,7 @@
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
 #include "mdsv2/common/status.h"
+#include "mdsv2/common/time.h"
 #include "mdsv2/common/type.h"
 #include "mdsv2/storage/storage.h"
 
@@ -41,7 +42,7 @@ namespace mdsv2 {
 DEFINE_uint32(process_operation_batch_size, 64, "process operation batch size.");
 DEFINE_uint32(txn_max_retry_times, 5, "txn max retry times.");
 
-DEFINE_uint32(merge_operation_delay_us, 10, "merge operation delay us.");
+DEFINE_uint32(merge_operation_delay_us, 100, "merge operation delay us.");
 
 static const uint32_t kOpNameBufInitSize = 128;
 
@@ -2063,7 +2064,7 @@ bool OperationProcessor::RunBatched(Operation* operation) {
 }
 
 Status OperationProcessor::RunAlone(Operation* operation) {
-  uint64_t time_us = Helper::TimestampUs();
+  Duration duration;
 
   auto& trace = operation->GetTrace();
   const uint32_t fs_id = operation->GetFsId();
@@ -2073,6 +2074,7 @@ Status OperationProcessor::RunAlone(Operation* operation) {
   int64_t txn_id = 0;
   bool is_one_pc = false;
   do {
+    Duration once_duration;
     auto txn = kv_storage_->NewTxn();
     txn_id = txn->ID();
 
@@ -2080,8 +2082,7 @@ Status OperationProcessor::RunAlone(Operation* operation) {
     if (!status.ok()) {
       if (status.error_code() == pb::error::ESTORE_TXN_LOCK_CONFLICT) {
         DINGO_LOG(WARNING) << fmt::format("[operation.{}.{}][{}][{}us] alone run lock conflict, retry({}) status({}).",
-                                          fs_id, ino, txn_id, Helper::TimestampUs() - time_us, retry,
-                                          status.error_str());
+                                          fs_id, ino, txn_id, once_duration.ElapsedUs(), retry, status.error_str());
         bthread_usleep(Helper::GenerateRealRandomInteger(100, 1000));
         continue;
       }
@@ -2099,8 +2100,8 @@ Status OperationProcessor::RunAlone(Operation* operation) {
     }
 
     DINGO_LOG(WARNING) << fmt::format("[operation.{}.{}][{}][{}us] alone run {} fail, onepc({}) retry({}) status({}).",
-                                      fs_id, ino, txn_id, Helper::TimestampUs() - time_us, operation->OpName(),
-                                      is_one_pc, retry, status.error_str());
+                                      fs_id, ino, txn_id, once_duration.ElapsedUs(), operation->OpName(), is_one_pc,
+                                      retry, status.error_str());
 
     bthread_usleep(Helper::GenerateRealRandomInteger(100, 2000));
 
@@ -2109,8 +2110,8 @@ Status OperationProcessor::RunAlone(Operation* operation) {
   trace.RecordElapsedTime("store_operate");
 
   DINGO_LOG(INFO) << fmt::format("[operation.{}.{}][{}][{}us] alone run {} finish, onepc({}) retry({}) status({}).",
-                                 fs_id, ino, txn_id, Helper::TimestampUs() - time_us, operation->OpName(), is_one_pc,
-                                 retry, status.error_str());
+                                 fs_id, ino, txn_id, duration.ElapsedUs(), operation->OpName(), is_one_pc, retry,
+                                 status.error_str());
 
   if (!status.ok()) {
     operation->SetStatus(status);
@@ -2198,7 +2199,7 @@ void OperationProcessor::LaunchExecuteBatchOperation(const BatchOperation& batch
 
   bthread_t tid;
   bthread_attr_t attr = BTHREAD_ATTR_SMALL;
-  if (bthread_start_urgent(
+  if (bthread_start_background(
           &tid, &attr,
           [](void* arg) -> void* {
             Params* params = reinterpret_cast<Params*>(arg);
@@ -2219,7 +2220,7 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
   const uint32_t fs_id = batch_operation.fs_id;
   const uint64_t ino = batch_operation.ino;
 
-  uint64_t time_us = Helper::TimestampUs();
+  Duration duration;
 
   // get prefetch keys
   std::string primary_key = MetaCodec::EncodeInodeKey(fs_id, ino);
@@ -2240,6 +2241,8 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
   std::string op_names;
   op_names.reserve(kOpNameBufInitSize);
   do {
+    Duration once_duration;
+
     auto txn = kv_storage_->NewTxn();
     txn_id = txn->ID();
 
@@ -2248,8 +2251,7 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
     if (!status.ok()) {
       if (status.error_code() == pb::error::ESTORE_TXN_LOCK_CONFLICT) {
         DINGO_LOG(WARNING) << fmt::format("[operation.{}.{}][{}][{}us] batch run lock conflict, retry({}) status({}).",
-                                          fs_id, ino, txn_id, Helper::TimestampUs() - time_us, retry,
-                                          status.error_str());
+                                          fs_id, ino, txn_id, once_duration.ElapsedUs(), retry, status.error_str());
         bthread_usleep(Helper::GenerateRealRandomInteger(100, 1000));
         continue;
       }
@@ -2291,7 +2293,7 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
 
     DINGO_LOG(WARNING) << fmt::format(
         "[operation.{}.{}][{}][{}us] batch run ({}) fail, count({}) onepc({}) retry({}) status({}).", fs_id, ino,
-        txn_id, Helper::TimestampUs() - time_us, op_names, count, is_one_pc, retry, status.error_str());
+        txn_id, once_duration.ElapsedUs(), op_names, count, is_one_pc, retry, status.error_str());
 
     bthread_usleep(Helper::GenerateRealRandomInteger(100, 2000));
 
@@ -2301,7 +2303,7 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
 
   DINGO_LOG(INFO) << fmt::format(
       "[operation.{}.{}][{}][{}us] batch run ({}) finish, count({}) onepc({}) retry({}) status({}) attr({}).", fs_id,
-      ino, txn_id, Helper::TimestampUs() - time_us, op_names, count, is_one_pc, retry, status.error_str(),
+      ino, txn_id, Helper::TimestampUs() - duration.ElapsedUs(), op_names, count, is_one_pc, retry, status.error_str(),
       DescribeAttr(attr));
 
   if (status.ok()) {

@@ -206,7 +206,7 @@ bool VFSWrapper::Load() {
   const std::string path = fmt::format("{}.{}", kFdStatePath, pid);
   std::ifstream file(path);
   if (!file.is_open()) {
-    LOG(ERROR) << "write dingo-fuse state file fail, file: " << path;
+    LOG(ERROR) << "load dingo-fuse state file fail, file: " << path;
     return false;
   }
 
