@@ -14,7 +14,10 @@
 # Define the BASE_FLAGS and DINGO_DEFAULT_COPTS variables
 
 file(GLOB METRICS_LIB_SRCS
-    "*.cpp"
+    "common/*.cpp"
+    "blockcache/*.cpp"
+    "cachegroup/*.cpp"
+    "remotecache/*.cpp"
 )
 
 add_library(cache_metrics ${METRICS_LIB_SRCS})

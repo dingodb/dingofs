@@ -31,6 +31,7 @@
 #include "cache/blockcache/mem_cache.h"
 #include "cache/common/const.h"
 #include "cache/common/macro.h"
+#include "cache/debug/expose.h"
 #include "cache/storage/storage.h"
 #include "cache/storage/storage_pool.h"
 #include "cache/utils/bthread.h"
@@ -98,6 +99,8 @@ Status BlockCacheImpl::Start() {
     return status;
   }
 
+  ExposeLocalCacheProperty(option_.enable_stage, option_.enable_cache);
+
   running_ = true;
 
   LOG(INFO) << "Block cache is up.";
@@ -135,7 +138,7 @@ Status BlockCacheImpl::Put(ContextSPtr ctx, const BlockKey& key,
 
   if (!option.writeback) {
     NEXT_STEP(kS3Put);
-    status = StoragePut(ctx, key, block);
+    status = StorageUpload(ctx, key, block);
     return status;
   }
 
@@ -147,16 +150,17 @@ Status BlockCacheImpl::Put(ContextSPtr ctx, const BlockKey& key,
   if (status.ok()) {
     return status;
   } else if (status.IsCacheFull()) {
-    LOG_EVERY_SECOND(WARNING) << absl::StrFormat(
-        "[%s] Stage block failed: key = %s, length = %zu, status = %s",
-        ctx->TraceId(), key.Filename(), block.size, status.ToString());
+    LOG_EVERY_SECOND(WARNING)
+        << ctx->StrTraceId() << " Stage block failed: "
+        << "key = " << key.Filename() << ", length = " << block.size
+        << ", status = " << status.ToString();
   } else {
     GENERIC_LOG_STAGE_ERROR();
   }
 
   // Stage block failed, try to upload it
   NEXT_STEP(kS3Put);
-  status = StoragePut(ctx, key, block);
+  status = StorageUpload(ctx, key, block);
   return status;
 }
 
@@ -183,7 +187,7 @@ Status BlockCacheImpl::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
   }
 
   NEXT_STEP(kS3Range);
-  status = StorageRange(ctx, key, offset, length, buffer);
+  status = StorageDownload(ctx, key, offset, length, buffer);
   return status;
 }
 
@@ -199,9 +203,13 @@ Status BlockCacheImpl::Cache(ContextSPtr ctx, const BlockKey& key,
 
   NEXT_STEP(kCacheBlock);
   status = store_->Cache(ctx, key, block);
-  if (!status.ok()) {
-    GENERIC_LOG_CACHE_ERROR("local block cache");
-    return status;
+  if (status.IsCacheFull()) {
+    LOG_EVERY_SECOND(WARNING)
+        << ctx->StrTraceId() << " Cache block failed: "
+        << "key = " << key.Filename() << ", length = " << block.size
+        << ", status = " << status.ToString();
+  } else if (!status.ok()) {
+    GENERIC_LOG_CACHE_ERROR("disk");
   }
 
   return status;
@@ -223,7 +231,7 @@ Status BlockCacheImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
 
   NEXT_STEP(kS3Range);
   IOBuffer buffer;
-  status = StorageRange(ctx, key, 0, length, &buffer);
+  status = StorageDownload(ctx, key, 0, length, &buffer);
   if (!status.ok()) {
     return status;
   }
@@ -311,41 +319,40 @@ void BlockCacheImpl::AsyncPrefetch(ContextSPtr ctx, const BlockKey& key,
   }
 }
 
-Status BlockCacheImpl::StoragePut(ContextSPtr ctx, const BlockKey& key,
-                                  const Block& block) {
+Status BlockCacheImpl::StorageUpload(ContextSPtr ctx, const BlockKey& key,
+                                     const Block& block) {
   StorageSPtr storage;
   auto status = storage_pool_->GetStorage(key.fs_id, storage);
   if (!status.ok()) {
-    LOG_ERROR("[%s] Get storage failed: fs_id = %d, key = %s, status = %s",
-              ctx->TraceId(), key.fs_id, key.Filename(), status.ToString());
+    LOG(ERROR) << ctx->StrTraceId()
+               << " Get storage failed: key = " << key.Filename()
+               << ", status = " << status.ToString();
     return status;
   }
 
   status = storage->Upload(ctx, key, block);
   if (!status.ok()) {
-    LOG_ERROR("[%s] Storage put failed: key = %s, status = %s", ctx->TraceId(),
-              key.Filename(), status.ToString());
+    GENERIC_LOG_UPLOAD_ERROR();
   }
   return status;
 }
 
-Status BlockCacheImpl::StorageRange(ContextSPtr ctx, const BlockKey& key,
-                                    off_t offset, size_t length,
-                                    IOBuffer* buffer) {
+Status BlockCacheImpl::StorageDownload(ContextSPtr ctx, const BlockKey& key,
+                                       off_t offset, size_t length,
+                                       IOBuffer* buffer) {
   StorageSPtr storage;
   auto status = storage_pool_->GetStorage(key.fs_id, storage);
   if (!status.ok()) {
-    LOG_ERROR("[%s] Get storage failed: fs_id = %d, key = %s, status = %s",
-              ctx->TraceId(), key.fs_id, key.Filename(), status.ToString());
+    LOG(ERROR) << ctx->StrTraceId()
+               << " Get storage failed: key = " << key.Filename()
+               << ", offset = " << offset << ", length = " << length
+               << ", status = " << status.ToString();
     return status;
   }
 
   status = storage->Download(ctx, key, offset, length, buffer);
   if (!status.ok()) {
-    LOG_ERROR(
-        "[%s] Storage range failed: key = %s, offset = %lld, length = %zu, "
-        "status = %s",
-        ctx->TraceId(), key.Filename(), offset, length, status.ToString());
+    GENERIC_LOG_DOWNLOAD_ERROR();
   }
   return status;
 }

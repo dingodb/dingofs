@@ -40,7 +40,7 @@
 #include "common/io_buffer.h"
 #include "common/status.h"
 #include "dingofs/mds.pb.h"
-#include "metrics/cache/cache_group_node_metric.h"
+#include "metrics/cache/cachegroup/cache_group_node_metric.h"
 #include "options/cache/stub.h"
 
 namespace dingofs {

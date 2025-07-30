@@ -28,6 +28,7 @@
 #include <butil/time.h>
 #include <glog/logging.h>
 
+#include <ostream>
 #include <string>
 
 #include "cache/utils/logging.h"
@@ -41,10 +42,18 @@ class Context {
  public:
   Context() : trace_id_(NewTraceId()) {}
   Context(const std::string& trace_id) : trace_id_(trace_id) {}
+  Context(const std::string& trace_id, const std::string& sub_trace_id_)
+      : trace_id_(trace_id), sub_trace_id_(sub_trace_id_) {}
 
   std::string TraceId() const { return trace_id_; }
+  std::string SubTraceId() const { return sub_trace_id_; }
 
-  std::string ToString() const { return absl::StrFormat("[%s]", trace_id_); }
+  std::string StrTraceId() const {
+    if (sub_trace_id_.empty()) {
+      return absl::StrFormat("[%s]", trace_id_);
+    }
+    return absl::StrFormat("[%s:%s]", trace_id_, sub_trace_id_);
+  }
 
   void SetCacheHit(bool cache_hit) { cache_hit_ = cache_hit; }
   bool GetCacheHit() const { return cache_hit_; }
@@ -55,6 +64,7 @@ class Context {
   }
 
   const std::string trace_id_;
+  const std::string sub_trace_id_;
   bool cache_hit_{false};
 };
 

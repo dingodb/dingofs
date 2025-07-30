@@ -269,6 +269,8 @@ Status LocalFileSystem::AioWrite(ContextSPtr ctx, int fd, IOBuffer* buffer,
 
   if (!option.direct_io && option.drop_page_cache) {
     page_cache_manager_->AsyncDropPageCache(ctx, fd, 0, buffer->Size());
+  } else {
+    CloseFd(ctx, fd);
   }
   return status;
 }

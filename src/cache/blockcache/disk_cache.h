@@ -31,7 +31,7 @@
 #include "cache/blockcache/disk_cache_manager.h"
 #include "cache/blockcache/disk_state_health_checker.h"
 #include "cache/storage/filesystem.h"
-#include "metrics/cache/disk_cache_metric.h"
+#include "metrics/cache/blockcache/disk_cache_metric.h"
 #include "options/cache/blockcache.h"
 
 namespace dingofs {
@@ -93,6 +93,7 @@ class DiskCache final : public CacheStore {
   std::atomic<bool> running_;
   UploadFunc uploader_;
   std::string uuid_;
+  bool support_direct_io_;
   DiskCacheMetricSPtr metric_;
   DiskCacheLayoutSPtr layout_;
   StateMachineSPtr state_machine_;

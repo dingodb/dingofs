@@ -28,7 +28,7 @@
 #include "cache/blockcache/disk_cache_watcher.h"
 #include "cache/utils/con_hash.h"
 #include "cache/utils/context.h"
-#include "metrics/cache/disk_cache_group_metric.h"
+#include "metrics/cache/blockcache/disk_cache_group_metric.h"
 
 namespace dingofs {
 namespace cache {

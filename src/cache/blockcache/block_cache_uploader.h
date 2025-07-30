@@ -63,13 +63,14 @@ class BlockCacheUploader {
   Status RemoveStage(const StagingBlock& staging_block);
 
   bool IsRunning();
+  void WaitStoreUp();
 
   std::atomic<bool> running_;
   BthreadMutex mutex_;
   CacheStoreSPtr store_;
   StoragePoolSPtr storage_pool_;
   PendingQueueUPtr pending_queue_;
-  InflightThrottleUPtr inflights_throttle_;
+  InflightThrottleUPtr inflights_;
   TaskThreadPoolUPtr thread_pool_;  // uploading worker
   BthreadJoinerUPtr joiner_;
 };

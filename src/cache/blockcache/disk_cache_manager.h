@@ -27,7 +27,7 @@
 #include "cache/blockcache/lru_cache.h"
 #include "cache/blockcache/lru_common.h"
 #include "cache/common/type.h"
-#include "metrics/cache/disk_cache_metric.h"
+#include "metrics/cache/blockcache/disk_cache_metric.h"
 #include "utils/message_queue.h"
 
 namespace dingofs {

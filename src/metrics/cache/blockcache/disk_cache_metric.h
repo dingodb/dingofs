@@ -20,8 +20,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_METRICS_CACHE_DISK_CACHE_METRIC_H_
-#define DINGOFS_SRC_METRICS_CACHE_DISK_CACHE_METRIC_H_
+#ifndef DINGOFS_SRC_METRICS_CACHE_BLOCKCACHE_DISK_CACHE_METRIC_H_
+#define DINGOFS_SRC_METRICS_CACHE_BLOCKCACHE_DISK_CACHE_METRIC_H_
 
 #include <absl/strings/str_format.h>
 #include <bvar/reducer.h>
@@ -89,8 +89,7 @@ struct DiskCacheMetricGuard {
   Status& status;
   DiskCacheMetricSPtr metric;
 };
-
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_METRICS_CACHE_DISK_CACHE_METRIC_H_
+#endif  // DINGOFS_SRC_METRICS_CACHE_BLOCKCACHE_DISK_CACHE_METRIC_H_

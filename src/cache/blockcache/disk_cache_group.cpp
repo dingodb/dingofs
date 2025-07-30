@@ -29,7 +29,7 @@
 #include "cache/debug/expose.h"
 #include "cache/utils/helper.h"
 #include "cache/utils/ketama_con_hash.h"
-#include "metrics/cache/disk_cache_group_metric.h"
+#include "metrics/cache/blockcache/disk_cache_group_metric.h"
 
 namespace dingofs {
 namespace cache {
@@ -50,6 +50,8 @@ Status DiskCacheGroup::Start(UploadFunc uploader) {
   if (running_) {
     return Status::OK();
   }
+
+  LOG(INFO) << "Disk cache group is starting...";
 
   auto weights = CalcWeights(options_);
   for (size_t i = 0; i < options_.size(); i++) {
@@ -72,6 +74,8 @@ Status DiskCacheGroup::Start(UploadFunc uploader) {
   ExposeDiskCaches(options_);
 
   running_ = true;
+
+  LOG(INFO) << "Disk cache group is up.";
 
   CHECK_RUNNING("Disk cache group");
   return Status::OK();
@@ -100,8 +104,6 @@ Status DiskCacheGroup::Shutdown() {
 
 Status DiskCacheGroup::Stage(ContextSPtr ctx, const BlockKey& key,
                              const Block& block, StageOption option) {
-  CHECK_RUNNING("Disk cache group");
-
   Status status;
   DiskCacheGroupMetricGuard metric_guard(__func__, block.size, status, metric_);
   status = GetStore(key)->Stage(ctx, key, block, option);
@@ -125,8 +127,6 @@ Status DiskCacheGroup::RemoveStage(ContextSPtr ctx, const BlockKey& key,
 
 Status DiskCacheGroup::Cache(ContextSPtr ctx, const BlockKey& key,
                              const Block& block, CacheOption option) {
-  CHECK_RUNNING("Disk cache group");
-
   Status status;
   DiskCacheGroupMetricGuard metric_guard(__func__, block.size, status, metric_);
   status = GetStore(key)->Cache(ctx, key, block, option);
@@ -137,7 +137,7 @@ Status DiskCacheGroup::Cache(ContextSPtr ctx, const BlockKey& key,
 Status DiskCacheGroup::Load(ContextSPtr ctx, const BlockKey& key, off_t offset,
                             size_t length, IOBuffer* buffer,
                             LoadOption option) {
-  DCHECK_RUNNING("Disk cache group");
+  CHECK_RUNNING("Disk cache group");
 
   DiskCacheSPtr store;
   const auto& store_id = option.block_ctx.store_id;
@@ -179,7 +179,7 @@ std::vector<uint64_t> DiskCacheGroup::CalcWeights(
 DiskCacheSPtr DiskCacheGroup::GetStore(const BlockKey& key) const {
   ConNode node;
   bool find = chash_->Lookup(std::to_string(key.id), node);
-  CHECK(find);
+  CHECK(find) << "No corresponding store found: key = " << key.Filename();
 
   auto iter = stores_.find(node.key);
   CHECK(iter != stores_.end());
@@ -195,7 +195,8 @@ DiskCacheSPtr DiskCacheGroup::GetStore(const std::string& store_id) const {
   CHECK(!store_id.empty());
   auto iter = stores_.find(store_id);
 
-  CHECK(iter != stores_.end());
+  CHECK(iter != stores_.end())
+      << "Specified store not found: store_id = " << store_id;
   return iter->second;
 }
 

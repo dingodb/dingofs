@@ -27,7 +27,7 @@
 #include <bvar/latency_recorder.h>
 
 #include "common/status.h"
-#include "metrics/cache/common.h"
+#include "metrics/cache/common/common.h"
 
 namespace dingofs {
 namespace cache {

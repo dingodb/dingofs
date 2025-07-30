@@ -29,6 +29,7 @@
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/common/macro.h"
+#include "cache/common/proto.h"
 #include "cache/debug/expose.h"
 #include "cache/remotecache/remote_cache_node.h"
 #include "cache/remotecache/remote_cache_node_impl.h"
@@ -57,10 +58,8 @@ CacheUpstream::CacheUpstream(const PBCacheGroupMembers& members,
       chash_(std::make_shared<KetamaConHash>()) {}
 
 Status CacheUpstream::Init() {
-  auto weights = CalcWeights(members_);
-
-  for (size_t i = 0; i < members_.size(); i++) {
-    const auto& member = members_[i];
+  PBCacheGroupMembers members;
+  for (const auto& member : members_) {
     if (member.state() !=
         PBCacheGroupMemberState::CacheGroupMemberStateOnline) {
       LOG(INFO) << "Skip non-online cache group member: id = " << member.id()
@@ -72,7 +71,16 @@ Status CacheUpstream::Init() {
                 << member.port();
       continue;
     }
+    members.emplace_back(member);
+  }
 
+  if (members.empty()) {
+    return Status::OK();
+  }
+
+  auto weights = CalcWeights(members);
+  for (size_t i = 0; i < members.size(); i++) {
+    const auto& member = members[i];
     auto key = MemberKey(member);
     auto node = std::make_shared<RemoteCacheNodeImpl>(member, option_);
     auto status = node->Start();

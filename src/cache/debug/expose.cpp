@@ -46,15 +46,22 @@ struct Node {
   uint64_t id;
   std::string address;
   uint32_t weight;
-  std::string state;   // online, unstable
+  std::string state;   // online, unstable, offline
   std::string health;  // normal, unstable, down
 };
 
+struct Property {
+  bool enable_stage{false};
+  bool enable_cache{false};
+};
+
 struct LocalCache {
+  Property property;
   std::unordered_map<uint32_t, Disk> disks;
 };
 
 struct RemoteCache {
+  Property property;
   std::string mds_addrs;
   std::string cache_group;
   std::string last_modified;
@@ -84,8 +91,17 @@ static nlohmann::json ToJSON(Disk disk) {
   return msg;
 }
 
+static nlohmann::json ToJSON(Property property) {
+  nlohmann::json msg;
+  msg["enable_stage"] = property.enable_stage;
+  msg["enable_cache"] = property.enable_cache;
+  return msg;
+}
+
 static nlohmann::json ToJSON(LocalCache cache) {
   nlohmann::json msg;
+
+  msg["property"] = ToJSON(cache.property);
 
   nlohmann::json disks;
   for (const auto& item : cache.disks) {
@@ -98,6 +114,9 @@ static nlohmann::json ToJSON(LocalCache cache) {
 
 static nlohmann::json ToJSON(RemoteCache cache) {
   nlohmann::json msg;
+
+  msg["property"] = ToJSON(cache.property);
+
   msg["mds_addrs"] = cache.mds_addrs;
   msg["cache_group"] = cache.cache_group;
   msg["last_modified"] = cache.last_modified;
@@ -146,6 +165,18 @@ Status AddCacheService(brpc::Server* server) {
     return Status::Internal("add cache service failed");
   }
   return Status::OK();
+}
+
+void ExposeLocalCacheProperty(bool enable_stage, bool enable_cache) {
+  WriteLockGuard lk(rwlock);
+  root.local_cache.property.enable_stage = enable_stage;
+  root.local_cache.property.enable_cache = enable_cache;
+}
+
+void ExposeRemoteCacheProperty(bool enable_stage, bool enable_cache) {
+  WriteLockGuard lk(rwlock);
+  root.remote_cache.property.enable_stage = enable_stage;
+  root.remote_cache.property.enable_cache = enable_cache;
 }
 
 void ExposeDiskCaches(std::vector<DiskCacheOption> options) {

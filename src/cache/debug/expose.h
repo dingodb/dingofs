@@ -41,6 +41,8 @@ class CacheServiceImpl final : public PBCacheService {
 
 Status AddCacheService(brpc::Server* server);
 
+void ExposeLocalCacheProperty(bool enable_stage, bool enable_cache);
+void ExposeRemoteCacheProperty(bool enable_stage, bool enable_cache);
 void ExposeDiskCaches(std::vector<DiskCacheOption> options);
 void ExposeDiskCacheHealth(uint32_t cache_index, const std::string& health);
 void ExposeMDSAddrs(const std::vector<std::string>& addrs);

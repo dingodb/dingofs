@@ -24,7 +24,7 @@
 
 #include "cache/common/macro.h"
 #include "cache/common/proto.h"
-#include "metrics/cache/cache_group_node_metric.h"
+#include "metrics/cache/cachegroup/cache_group_node_metric.h"
 #include "utils/executor/bthread/bthread_executor.h"
 
 namespace dingofs {

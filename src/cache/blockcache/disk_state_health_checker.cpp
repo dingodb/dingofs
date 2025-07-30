@@ -22,7 +22,7 @@
 #include "cache/debug/expose.h"
 #include "cache/utils/helper.h"
 #include "cache/utils/state_machine.h"
-#include "metrics/cache/disk_cache_metric.h"
+#include "metrics/cache/blockcache/disk_cache_metric.h"
 #include "options/cache/blockcache.h"
 #include "utils/executor/bthread/bthread_executor.h"
 
@@ -96,7 +96,8 @@ void DiskStateHealthChecker::ProbeDisk() {
   }
 
   if (!status.ok()) {
-    LOG(ERROR) << "Probe disk failed: status = " << status.ToString();
+    LOG(ERROR) << "Probe disk failed: path = " << filepath
+               << ", status = " << status.ToString();
     state_machine_->Error();
   } else {
     state_machine_->Success();

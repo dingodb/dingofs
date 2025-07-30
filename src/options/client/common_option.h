@@ -67,6 +67,8 @@ static void InitBlockCacheOption(utils::Configuration* c,
                 &cache::FLAGS_upload_stage_throttle_bandwidth_mb);
     c->GetValue("block_cache.upload_stage_throttle_iops",
                 &cache::FLAGS_upload_stage_throttle_iops);
+    c->GetValue("block_cache.upload_stage_max_inflights",
+                &cache::FLAGS_upload_stage_max_inflights);
     c->GetValue("block_cache.prefecth_max_inflights",
                 &cache::FLAGS_prefetch_max_inflights);
   }

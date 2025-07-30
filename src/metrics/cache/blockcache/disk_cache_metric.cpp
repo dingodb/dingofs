@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "metrics/cache/disk_cache_metric.h"
+#include "metrics/cache/blockcache/disk_cache_metric.h"
 
 #include "cache/common/const.h"
 
