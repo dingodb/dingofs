@@ -165,13 +165,13 @@ Status VFSHubImpl::Stop() {
     return Status::OK();
   }
 
-  started_.store(false, std::memory_order_relaxed);
-
   handle_manager_->FlushAll();
 
   priodic_flush_manager_->Stop();
   block_cache_->Shutdown();
   meta_system_->UnInit();
+
+  started_.store(false, std::memory_order_relaxed);
 
   return Status::OK();
 }
