@@ -69,6 +69,7 @@ struct S3CompactWorkerOptions {
   uint64_t fragmentThreshold;
   uint64_t s3ReadMaxRetry;
   uint64_t s3ReadRetryInterval;
+  bool deleteOldObjs;
 
   // sleep interval in ms between compacting two inodes
   uint64_t sleepMS;

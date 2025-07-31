@@ -50,7 +50,7 @@ void S3CompactWorkQueueOption::Init(std::shared_ptr<Configuration> conf) {
   conf->GetValueFatalIfFail("global.port", &metaserverPort);
 
   blockaccess::InitAwsSdkConfig(conf.get(),
-                               &block_access_opts.s3_options.aws_sdk_config);
+                                &block_access_opts.s3_options.aws_sdk_config);
   blockaccess::InitBlockAccesserThrottleOptions(
       conf.get(), &block_access_opts.throttle_options);
 
@@ -67,6 +67,12 @@ void S3CompactWorkQueueOption::Init(std::shared_ptr<Configuration> conf) {
     fs_info_cache_size = 100;
     LOG(INFO)
         << "Not found `s3compactwq.fs_info_cache_size` in conf, default to 100";
+  }
+
+  if (!conf->GetBoolValue("s3compactwq.delete_old_objs", &deleteOldObjs)) {
+    LOG(INFO)
+        << "Not found `s3compactwq.delete_old_objs` in conf, default to true";
+    deleteOldObjs = true;
   }
 
   conf->GetValueFatalIfFail("s3compactwq.s3_read_max_retry", &s3ReadMaxRetry);
@@ -97,6 +103,7 @@ void S3CompactManager::Init(std::shared_ptr<Configuration> conf) {
     workerOptions_.block_access_opts = opts_.block_access_opts;
     workerOptions_.fs_info_cache = fs_info_cache_.get();
     workerOptions_.maxChunksPerCompact = opts_.maxChunksPerCompact;
+    workerOptions_.deleteOldObjs = opts_.deleteOldObjs;
     workerOptions_.fragmentThreshold = opts_.fragmentThreshold;
     workerOptions_.s3ReadMaxRetry = opts_.s3ReadMaxRetry;
     workerOptions_.s3ReadRetryInterval = opts_.s3ReadRetryInterval;

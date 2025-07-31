@@ -29,9 +29,9 @@
 
 #include "blockaccess/accesser_common.h"
 #include "blockaccess/block_accesser_factory.h"
+#include "metaserver/compaction/fs_info_cache.h"
 #include "metaserver/compaction/s3compact.h"
 #include "metaserver/compaction/s3compact_worker.h"
-#include "metaserver/compaction/fs_info_cache.h"
 #include "utils/configuration.h"
 
 namespace dingofs {
@@ -44,6 +44,7 @@ struct S3CompactWorkQueueOption {
   uint64_t threadNum;
   uint64_t fragmentThreshold;
   uint64_t maxChunksPerCompact;
+  bool deleteOldObjs;
   uint64_t enqueueSleepMS;
   std::vector<std::string> mdsAddrs;
   std::string metaserverIpStr;
@@ -82,7 +83,7 @@ class S3CompactManager {
   S3CompactWorkerContext workerContext_;
   S3CompactWorkerOptions workerOptions_;
 
-  std::shared_ptr<blockaccess::BlockAccesserFactory> block_accesser_factory_; 
+  std::shared_ptr<blockaccess::BlockAccesserFactory> block_accesser_factory_;
 
   std::vector<std::unique_ptr<S3CompactWorker>> workers_;
 

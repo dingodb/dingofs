@@ -34,9 +34,9 @@
 #include <vector>
 
 #include "absl/cleanup/cleanup.h"
+#include "blockaccess/block_accesser.h"
 #include "common/config_mapper.h"
 #include "common/s3util.h"
-#include "blockaccess/block_accesser.h"
 #include "dingofs/common.pb.h"
 #include "dingofs/mds.pb.h"
 #include "dingofs/metaserver.pb.h"
@@ -544,12 +544,17 @@ void CompactInodeJob::DeleteObjsOfS3ChunkInfoList(
       std::string obj_name = common::s3util::GenObjName(
           chunkinfo.chunkid(), index, chunkinfo.compaction(), ctx.fsId,
           ctx.inodeId);
-      VLOG(6) << "s3compact: delete " << obj_name;
-      Status s =
-          ctx.block_accesser->Delete(obj_name);  // don't care success or not
-      if (!s.ok()) {
-        LOG(INFO) << "s3compact: Fail delete block " << obj_name
-                  << " failed, status: " << s.ToString();
+      if (opts_->deleteOldObjs) {
+        VLOG(6) << "s3compact: delete " << obj_name;
+        Status s =
+            ctx.block_accesser->Delete(obj_name);  // don't care success or not
+        if (!s.ok()) {
+          LOG(INFO) << "s3compact: Fail delete block " << obj_name
+                    << " failed, status: " << s.ToString();
+        }
+      } else {
+        VLOG(6) << "s3compact: skip delete " << obj_name << ", chunkinfo: ["
+                << chunkinfo.ShortDebugString() << "]";
       }
     }
   }
@@ -603,6 +608,30 @@ void CompactInodeJob::CompactChunks(const S3CompactTask& task) {
   if (s3_chunk_info_add.empty() && s3_chunk_info_remove.empty()) {
     VLOG(6) << "s3compact: do nothing to metadata";
     return;
+  }
+
+  // print add,remove chunk info
+  VLOG(9) << "s3compact: s3chunkinfo add:";
+  for (const auto& element : s3_chunk_info_add) {
+    auto chunkIndex = element.first;
+    const auto& S3ChunkInfoList = element.second;
+
+    for (int i = 0; i < S3ChunkInfoList.s3chunks_size(); i++) {
+      const auto& chunkInfo = S3ChunkInfoList.s3chunks(i);
+      VLOG(9) << "Add chunk, chunkindex: " << chunkIndex << ", chunkinfo: ["
+              << chunkInfo.ShortDebugString() << "]";
+    }
+  }
+  VLOG(9) << "s3compact: s3chunkinfo remove:";
+  for (const auto& element : s3_chunk_info_remove) {
+    auto chunkIndex = element.first;
+    const auto& S3ChunkInfoList = element.second;
+
+    for (int i = 0; i < S3ChunkInfoList.s3chunks_size(); i++) {
+      const auto& chunkInfo = S3ChunkInfoList.s3chunks(i);
+      VLOG(9) << "remove chunk, chunkindex: " << chunkIndex << ", chunkinfo: ["
+              << chunkInfo.ShortDebugString() << "]";
+    }
   }
 
   // 2. update inode
