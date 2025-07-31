@@ -26,7 +26,7 @@
 #include <memory>
 
 #include "cache/common/macro.h"
-#include "cache/debug/expose.h"
+#include "cache/status/cache_status.h"
 #include "cache/utils/helper.h"
 #include "cache/utils/ketama_con_hash.h"
 #include "metrics/cache/blockcache/disk_cache_group_metric.h"
@@ -71,7 +71,7 @@ Status DiskCacheGroup::Start(UploadFunc uploader) {
   chash_->Final();
   watcher_->Start();
 
-  ExposeDiskCaches(options_);
+  SetStatusPage();
 
   running_ = true;
 
@@ -198,6 +198,19 @@ DiskCacheSPtr DiskCacheGroup::GetStore(const std::string& store_id) const {
   CHECK(iter != stores_.end())
       << "Specified store not found: store_id = " << store_id;
   return iter->second;
+}
+
+void DiskCacheGroup::SetStatusPage() const {
+  CacheStatus::Update([this](CacheStatus::Root& root) {
+    auto& disks = root.local_cache.disks;
+    for (int i = 0; i < options_.size(); i++) {
+      disks[i] = CacheStatus::Disk{
+          .dir = options_[i].cache_dir,
+          .capacity = options_[i].cache_size_mb,
+          .health = "normal",
+      };
+    }
+  });
 }
 
 }  // namespace cache

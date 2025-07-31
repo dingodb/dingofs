@@ -27,7 +27,7 @@
 #include <vector>
 
 #include "blockaccess/block_accesser.h"
-#include "cache/debug/expose.h"
+#include "cache/status/cache_status.h"
 #include "cache/tiercache/tier_block_cache.h"
 #include "client/common/client_dummy_server_info.h"
 #include "client/meta/vfs_meta.h"

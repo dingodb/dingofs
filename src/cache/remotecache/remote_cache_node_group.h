@@ -24,44 +24,15 @@
 #define DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_CACHE_NODE_GROUP_H_
 
 #include "cache/blockcache/block_cache.h"
-#include "cache/common/proto.h"
-#include "cache/common/type.h"
 #include "cache/remotecache/remote_cache_node.h"
 #include "cache/remotecache/remote_cache_node_manager.h"
-#include "cache/utils/con_hash.h"
+#include "cache/remotecache/upstream.h"
 #include "cache/utils/context.h"
 #include "metrics/cache/remotecache/remote_cache_node_group_metric.h"
 #include "options/cache/tiercache.h"
 
 namespace dingofs {
 namespace cache {
-
-class CacheUpstream {
- public:
-  CacheUpstream();
-
-  CacheUpstream(const PBCacheGroupMembers& members,
-                RemoteBlockCacheOption option);
-
-  Status Init();
-
-  RemoteCacheNodeSPtr GetNode(const std::string& key);
-
-  bool IsDiff(const PBCacheGroupMembers& members) const;
-  bool IsEmpty() const;
-
- private:
-  std::vector<uint64_t> CalcWeights(const PBCacheGroupMembers& members);
-
-  std::string MemberKey(const PBCacheGroupMember& member) const;
-
-  PBCacheGroupMembers members_;
-  RemoteBlockCacheOption option_;
-  std::shared_ptr<ConHash> chash_;
-  std::unordered_map<std::string, RemoteCacheNodeSPtr> nodes_;
-};
-
-using CacheUpstreamSPtr = std::shared_ptr<CacheUpstream>;
 
 class RemoteCacheNodeGroup final : public RemoteCacheNode {
  public:
@@ -78,14 +49,9 @@ class RemoteCacheNodeGroup final : public RemoteCacheNode {
   Status Prefetch(ContextSPtr ctx, const BlockKey& key, size_t length) override;
 
  private:
-  Status OnMemberLoad(const PBCacheGroupMembers& members);
-
-  Status GetNode(const BlockKey& key, RemoteCacheNodeSPtr& node);
-
   std::atomic<bool> running_;
-  BthreadRWLock rwlock_;  // protect upstream_
   RemoteBlockCacheOption option_;
-  CacheUpstreamSPtr upstream_;
+  UpstreamUPtr upstream_;
   RemoteCacheNodeManagerUPtr node_manager_;
   RemoteCacheCacheNodeGroupMetricSPtr metric_;
 };

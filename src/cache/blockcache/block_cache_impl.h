@@ -82,6 +82,8 @@ class BlockCacheImpl final : public BlockCache {
   Status StorageDownload(ContextSPtr ctx, const BlockKey& key, off_t offset,
                          size_t length, IOBuffer* buffer);
 
+  void SetStatusPage() const;
+
   std::atomic<bool> running_;
   BlockCacheOption option_;
   StoragePoolSPtr storage_pool_;

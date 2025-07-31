@@ -39,6 +39,8 @@ class DiskStateHealthChecker {
   void ProbeDisk();
   std::string GetProbeFilepath() const;
 
+  void SetStatusPage(State state) const;
+
   std::atomic<bool> running_;
   DiskCacheMetricSPtr metric_;
   DiskCacheLayoutSPtr layout_;

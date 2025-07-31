@@ -69,6 +69,11 @@ inline std::string StateEventToString(StateEvent event) {
   }
 }
 
+enum StateMachineType : uint8_t {
+  kDiskStateMachine = 0,
+  kNodeStateMachine = 1,
+};
+
 class StateMachine {
  public:
   using OnStateChangeFunc = std::function<void(State state)>;
@@ -85,6 +90,8 @@ class StateMachine {
 
   virtual State GetState() const = 0;
   virtual void OnEvent(StateEvent event) = 0;
+
+  virtual StateMachineType GetType() const = 0;
 };
 
 using StateMachineSPtr = std::shared_ptr<StateMachine>;

@@ -89,17 +89,17 @@ DECLARE_uint32(ioring_iodepth);
 DECLARE_bool(ioring_prefetch);
 
 // Sets the duration in seconds for the disk state tick.
-DECLARE_uint32(state_tick_duration_s);
+DECLARE_uint32(disk_state_tick_duration_s);
 
 // Sets the number of errors to trigger unstable state from normal state.
-DECLARE_uint32(state_normal2unstable_error_num);
+DECLARE_uint32(disk_state_normal2unstable_error_num);
 
 // Sets the number of successful operations to trigger normal state from
 // unstable state.
-DECLARE_uint32(state_unstable2normal_succ_num);
+DECLARE_uint32(disk_state_unstable2normal_succ_num);
 
 // Sets the duration in seconds to trigger down state from unstable state.
-DECLARE_uint32(state_unstable2down_s);
+DECLARE_uint32(disk_state_unstable2down_s);
 
 // Sets the duration in milliseconds to check the disk state.
 DECLARE_uint32(check_disk_state_duration_ms);

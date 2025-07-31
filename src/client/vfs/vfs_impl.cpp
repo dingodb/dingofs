@@ -23,7 +23,7 @@
 #include <memory>
 #include <string>
 
-#include "cache/debug/expose.h"
+#include "cache/status/cache_status.h"
 #include "client/common/client_dummy_server_info.h"
 #include "client/meta/vfs_fh.h"
 #include "client/vfs/common/helper.h"

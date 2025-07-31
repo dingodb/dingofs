@@ -13,12 +13,12 @@
 # limitations under the License.
 # Define the BASE_FLAGS and DINGO_DEFAULT_COPTS variables
 
-file(GLOB DEBUG_LIB_SRCS
+file(GLOB CACHE_STATUS_LIB_SRCS
     "*.cpp"
 )
 
-add_library(cache_debug ${DEBUG_LIB_SRCS})
+add_library(cache_status ${CACHE_STATUS_LIB_SRCS})
 
-target_link_libraries(cache_debug
+target_link_libraries(cache_status
     cache_utils
 )

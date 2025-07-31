@@ -16,27 +16,30 @@
 
 /*
  * Project: DingoFS
- * Created Date: 2025-06-02
+ * Created Date: 2025-08-03
  * Author: Jingli Chen (Wine93)
  */
 
-#include "options/cache/cachegroup.h"
+#include "mds/cachegroup/config.h"
 
-#include <absl/strings/str_split.h>
-#include <glog/logging.h>
-
-#include "options/cache/stub.h"
+#include <brpc/reloadable_flags.h>
 
 namespace dingofs {
-namespace cache {
+namespace mds {
+namespace cachegroup {
 
-CacheGroupNodeOption::CacheGroupNodeOption()
-    : group_name(FLAGS_group_name),
-      listen_ip(FLAGS_listen_ip),
-      listen_port(FLAGS_listen_port),
-      group_weight(FLAGS_group_weight),
-      replace_id(FLAGS_replace_id),
-      mds_option(NewMdsOption()) {}
+DEFINE_uint32(heartbeat_interval_s, 3,
+              "Interval for cache group member heartbeat in seconds");
+DEFINE_validator(heartbeat_interval_s, brpc::PassValidate);
 
-}  // namespace cache
+DEFINE_uint32(heartbeat_miss_timeout_s, 10,
+              "Timeout for missing heartbeat in seconds");
+DEFINE_validator(heartbeat_miss_timeout_s, brpc::PassValidate);
+
+DEFINE_uint32(heartbeat_offline_timeout_s, 30,
+              "Timeout for member to be considered offline in seconds");
+DEFINE_validator(heartbeat_offline_timeout_s, brpc::PassValidate);
+
+}  // namespace cachegroup
+}  // namespace mds
 }  // namespace dingofs

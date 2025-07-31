@@ -16,38 +16,36 @@
 
 /*
  * Project: DingoFS
- * Created Date: 2025-02-08
+ * Created Date: 2025-08-03
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_MDS_CACHEGROUP_ERRNO_H_
-#define DINGOFS_SRC_MDS_CACHEGROUP_ERRNO_H_
+#ifndef DINGOFS_SRC_MDS_CACHEGROUP_CODEC_H_
+#define DINGOFS_SRC_MDS_CACHEGROUP_CODEC_H_
 
-#include <cstdint>
 #include <string>
 
-#include "dingofs/cachegroup.pb.h"
+#include "mds/cachegroup/common.h"
 
 namespace dingofs {
 namespace mds {
 namespace cachegroup {
 
-using ::dingofs::pb::mds::cachegroup::CacheGroupErrCode;
+class Codec {
+ public:
+  static std::string EncodeGroupName(const std::string& group_name);
+  static std::string DecodeGroupName(const std::string& key);
+  static std::string EncodeGroupBirthTime(uint64_t birth_time);
+  static uint64_t DecodeGroupBirthTime(const std::string& value);
 
-enum class Errno : uint8_t {
-  kOk = 0,
-  kFail = 1,
-  kNotFound = 2,
-  kInvalidMemberId = 3,
-  kInvalidGroupName = 4,
+  static std::string EncodeMemberId(uint64_t member_id);
+  static uint64_t DecodeMemberId(const std::string& key);
+  static std::string EncodeMember(const PBCacheGroupMember& member);
+  static PBCacheGroupMember DecodeMember(const std::string& value);
 };
-
-std::string StrErr(Errno code);
-
-CacheGroupErrCode PbErr(Errno code);
 
 }  // namespace cachegroup
 }  // namespace mds
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_MDS_CACHEGROUP_ERRNO_H_
+#endif  // DINGOFS_SRC_MDS_CACHEGROUP_CODEC_H_

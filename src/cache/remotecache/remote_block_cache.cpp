@@ -28,9 +28,9 @@
 
 #include "cache/common/const.h"
 #include "cache/common/macro.h"
-#include "cache/debug/expose.h"
 #include "cache/remotecache/mem_cache.h"
 #include "cache/remotecache/remote_cache_node_group.h"
+#include "cache/status/cache_status.h"
 #include "cache/utils/bthread.h"
 #include "cache/utils/context.h"
 #include "common/io_buffer.h"
@@ -107,7 +107,7 @@ Status RemoteBlockCacheImpl::Start() {
   }
 
   RemoteBlockCacheMetric::Init();
-  ExposeRemoteCacheProperty(true, true);
+  SetStatusPage();
 
   running_ = true;
 
@@ -363,6 +363,13 @@ bool RemoteBlockCacheImpl::EnableCache() const { return HasCacheStore(); };
 bool RemoteBlockCacheImpl::IsCached(const BlockKey& /*key*/) const {
   return HasCacheStore();  // FIXME: using rpc request to check if the key is
                            // cached
+}
+
+void RemoteBlockCacheImpl::SetStatusPage() const {
+  CacheStatus::Update([this](CacheStatus::Root& root) {
+    root.remote_cache.property.enable_stage = true;
+    root.remote_cache.property.enable_cache = true;
+  });
 }
 
 }  // namespace cache

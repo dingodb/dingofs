@@ -12,6 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+/*
+ * Project: DingoFS
+ * Created Date: 2025-02-10
+ * Author: Jingli Chen (Wine93)
+ */
+
 #ifndef DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_NODE_HEALTH_CHECKER_H_
 #define DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_NODE_HEALTH_CHECKER_H_
 
@@ -38,9 +44,12 @@ class RemoteCacheNodeHealthChecker {
   void PingNode();
   Status SendPingrequest();
 
+  void SetStatusPage(State new_state);
+
   std::atomic<bool> running_;
-  const PBCacheGroupMember member_info_;
+  const PBCacheGroupMember member_;
   StateMachineSPtr state_machine_;
+  State state_;
   std::unique_ptr<Executor> executor_;
 };
 

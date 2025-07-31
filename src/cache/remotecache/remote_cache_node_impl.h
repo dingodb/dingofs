@@ -33,7 +33,6 @@
 #include "cache/utils/context.h"
 #include "cache/utils/state_machine.h"
 #include "common/io_buffer.h"
-#include "options/cache/tiercache.h"
 
 namespace dingofs {
 namespace cache {
@@ -47,8 +46,7 @@ struct SubRangeRequest {
 
 class RemoteCacheNodeImpl final : public RemoteCacheNode {
  public:
-  RemoteCacheNodeImpl(const PBCacheGroupMember& member,
-                      RemoteBlockCacheOption option);
+  RemoteCacheNodeImpl(const PBCacheGroupMember& member);
 
   Status Start() override;
   Status Shutdown() override;
@@ -71,7 +69,7 @@ class RemoteCacheNodeImpl final : public RemoteCacheNode {
   Status CheckStatus(Status status);
 
   std::atomic<bool> running_;
-  const PBCacheGroupMember member_info_;
+  PBCacheGroupMember member_;
   RPCClientUPtr rpc_;
   StateMachineSPtr state_machine_;
   RemoteCacheNodeHealthCheckerUPtr health_checker_;

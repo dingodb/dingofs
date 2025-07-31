@@ -28,6 +28,7 @@
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/utils/context.h"
+#include "cache/utils/state_machine.h"
 #include "common/status.h"
 
 namespace dingofs {
@@ -58,23 +59,23 @@ class NoneRemoteCacheNode final : public RemoteCacheNode {
 
   Status Put(ContextSPtr, const BlockKey& /*key*/,
              const Block& /*block*/) override {
-    return Status::NotSupport("Remote node is not supported");
+    return Status::NotSupport("remote cache node is not supported");
   }
 
   Status Range(ContextSPtr, const BlockKey& /*key*/, off_t /*offset*/,
                size_t /*length*/, IOBuffer* /*buffer*/,
                RangeOption /*block_size*/) override {
-    return Status::NotSupport("Remote node is not supported");
+    return Status::NotSupport("remote cache node is not supported");
   }
 
   Status Cache(ContextSPtr, const BlockKey& /*key*/,
                const Block& /*block*/) override {
-    return Status::NotSupport("Remote node is not supported");
+    return Status::NotSupport("remote cache node is not supported");
   }
 
   Status Prefetch(ContextSPtr, const BlockKey& /*key*/,
                   size_t /*length*/) override {
-    return Status::NotSupport("Remote node is not supported");
+    return Status::NotSupport("remote cache node is not supported");
   }
 };
 

@@ -23,12 +23,13 @@
 #include "cache/cachegroup/cache_group_node_member.h"
 
 #include "cache/common/proto.h"
-#include "cache/utils/helper.h"
-#include "utils/string.h"
-#include "utils/time.h"
 
 namespace dingofs {
 namespace cache {
+
+DEFINE_uint64(replace_id, 0,
+              "The ID to replace when joining the cache group. "
+              "If set to 0, no replacement will be done.");
 
 CacheGroupNodeMemberImpl::CacheGroupNodeMemberImpl(CacheGroupNodeOption option,
                                                    MdsClientSPtr mds_client)
@@ -40,140 +41,59 @@ CacheGroupNodeMemberImpl::CacheGroupNodeMemberImpl(CacheGroupNodeOption option,
 Status CacheGroupNodeMemberImpl::JoinGroup() {
   CHECK_NOTNULL(mds_client_);
 
-  uint64_t old_id;
-  auto status = LoadMemberId(&old_id);
-  if (!status.ok()) {
-    return status;
+  auto rc = mds_client_->JoinCacheGroup(
+      option_.group_name, option_.listen_ip, option_.listen_port,
+      option_.group_weight, option_.replace_id, &member_id_, &member_uuid_);
+  if (rc != PBCacheGroupErrCode::CacheGroupOk) {
+    LOG(ERROR) << "Join cache group failed: group_name = " << option_.group_name
+               << ", ip = " << option_.listen_ip
+               << ", port = " << option_.listen_port
+               << ", weight = " << option_.group_weight
+               << ", replace_id = " << option_.replace_id
+               << ", rc = " << CacheGroupErrCode_Name(rc);
+    return Status::Internal("join cache group failed");
   }
 
-  status = RegisterMember(old_id, &member_id_);
-  if (!status.ok()) {
-    return status;
-  }
+  LOG(INFO) << "Join cache group success: group_name = " << option_.group_name
+            << ", ip = " << option_.listen_ip
+            << ", port = " << option_.listen_port
+            << ", weight = " << option_.group_weight
+            << ", replace_id = " << option_.replace_id
+            << ", member_id = " << member_id_
+            << ", member_uuid = " << member_uuid_;
 
-  status = AddMember2Group(option_.group_name, member_id_);
-  if (!status.ok()) {
-    return status;
-  }
-
-  return SaveMemberId(member_id_);
+  return Status::OK();
 }
 
 Status CacheGroupNodeMemberImpl::LeaveGroup() {
-  // TODO: node status should be set to offline
-  return Status::OK();
-}
+  CHECK_NOTNULL(mds_client_);
 
-Status CacheGroupNodeMemberImpl::LoadMemberId(uint64_t* member_id) {
-  std::string content;
-  PBCacheGroupNodeMetadata metadata;
-
-  auto filepath = option_.metadata_filepath;
-  auto status = Helper::ReadFile(filepath, &content);
-  if (status.IsNotFound()) {
-    *member_id = 0;
-    LOG(INFO) << "Cache group node metadata file not found: filepath = "
-              << filepath;
-    return Status::OK();
-  } else if (!status.ok()) {
-    LOG(ERROR) << "Read cache group node metadata file failed: path = "
-               << filepath << ", status = " << status.ToString();
-    return status;
-  } else if (!metadata.ParseFromString(content)) {
-    LOG(ERROR) << "Cache group node metadata file maybe broken: filepath = "
-               << filepath;
-    return Status::Internal("parse cache group node metadata file failed");
-  }
-
-  *member_id = metadata.member_id();
-  member_uuid_ = metadata.member_uuid();
-
-  LOG(INFO) << "Load cache group node metadata success: filepath = " << filepath
-            << ", id = " << *member_id
-            << ", birth_time = " << metadata.birth_time()
-            << ", uuid = " << member_uuid_;
-
-  return Status::OK();
-}
-
-Status CacheGroupNodeMemberImpl::RegisterMember(uint64_t old_id,
-                                                uint64_t* member_id) {
-  auto rc = mds_client_->RegisterCacheGroupMember(old_id, member_id);
+  auto rc = mds_client_->LeaveCacheGroup(option_.group_name, option_.listen_ip,
+                                         option_.listen_port);
   if (rc != PBCacheGroupErrCode::CacheGroupOk) {
-    LOG(ERROR) << "Register member (id=" << old_id
-               << ") failed: rc = " << CacheGroupErrCode_Name(rc);
-    return Status::Internal("register cache group member failed");
+    LOG(ERROR) << "Leave cache group failed: group_name = "
+               << option_.group_name << ", ip = " << option_.listen_ip
+               << ", port = " << option_.listen_port
+               << ", rc = " << CacheGroupErrCode_Name(rc);
+    return Status::Internal("leave cache group failed");
   }
 
-  LOG(INFO) << "Register member success: id = " << (*member_id);
-
+  LOG(INFO) << "Leave cache group success: group_name = " << option_.group_name
+            << ", ip = " << option_.listen_ip
+            << ", port = " << option_.listen_port;
   return Status::OK();
-}
-
-Status CacheGroupNodeMemberImpl::AddMember2Group(const std::string& group_name,
-                                                 uint64_t member_id) {
-  PBCacheGroupMember member;
-  member.set_id(member_id);
-  member.set_ip(option_.listen_ip);
-  member.set_port(option_.listen_port);
-  member.set_weight(option_.group_weight);
-
-  auto rc = mds_client_->AddCacheGroupMember(group_name, member);
-  if (rc != PBCacheGroupErrCode::CacheGroupOk) {
-    LOG(ERROR) << "Add member (id=" << member.id() << ",ip=" << member.ip()
-               << ",port=" << member.port()
-               << ",weight=" << option_.group_weight
-               << ") to group (name=" << group_name
-               << ") failed: rc = " << CacheGroupErrCode_Name(rc);
-    return Status::Internal("add cache group member failed");
-  }
-
-  LOG(INFO) << "Add member (id=" << member.id() << ",ip=" << member.ip()
-            << ",port=" << member.port() << ",weight=" << option_.group_weight
-            << ") to group (name=" << group_name << ") success.";
-
-  return Status::OK();
-}
-
-Status CacheGroupNodeMemberImpl::SaveMemberId(uint64_t member_id) {
-  std::string content;
-  PBCacheGroupNodeMetadata metadata;
-  metadata.set_member_id(member_id);
-  metadata.set_birth_time(utils::TimeNow().seconds);
-  if (!member_uuid_.empty()) {
-    metadata.set_member_uuid(member_uuid_);
-  } else {
-    metadata.set_member_uuid(GenMemberUuid());
-  }
-
-  if (!metadata.SerializeToString(&content)) {
-    LOG(ERROR) << "Serialize cache group metadata failed.";
-    return Status::Internal("serialize cache group node metadata failed");
-  }
-
-  auto filepath = option_.metadata_filepath;
-  auto status = Helper::WriteFile(filepath, content);
-  if (!status.ok()) {
-    LOG(ERROR) << "Write cache group node metadata to file failed: "
-               << "filepath = " << filepath
-               << ", status = " << status.ToString();
-  }
-
-  LOG(INFO) << "Save cache group node metadata success: filepath = " << filepath
-            << ", id = " << metadata.member_id()
-            << ", birth_time = " << metadata.birth_time()
-            << ", uuid = " << metadata.member_uuid();
-
-  return status;
-}
-
-std::string CacheGroupNodeMemberImpl::GenMemberUuid() {
-  member_uuid_ = utils::GenUuid();
-  return member_uuid_;
 }
 
 std::string CacheGroupNodeMemberImpl::GetGroupName() const {
   return option_.group_name;
+}
+
+std::string CacheGroupNodeMemberImpl::GetListenIP() const {
+  return option_.listen_ip;
+}
+
+uint32_t CacheGroupNodeMemberImpl::GetListenPort() const {
+  return option_.listen_port;
 }
 
 uint64_t CacheGroupNodeMemberImpl::GetMemberId() const { return member_id_; }

@@ -72,6 +72,19 @@ DECLARE_uint32(rpc_max_retry_times);
 // Maximum rpc timeout (ms) for rpc request
 DECLARE_uint32(rpc_max_timeout_ms);
 
+// Sets the duration in seconds for the node state tick.
+DECLARE_uint32(node_state_tick_duration_s);
+
+// Sets the number of errors to trigger unstable state from normal state.
+DECLARE_uint32(node_state_normal2unstable_error_num);
+
+// Sets the number of successful operations to trigger normal state from
+// unstable state.
+DECLARE_uint32(node_state_unstable2normal_succ_num);
+
+// Sets the duration in seconds to trigger down state from unstable state.
+DECLARE_uint32(node_state_unstable2down_s);
+
 // Sets the duration in milliseconds to check the cache group node state.
 DECLARE_uint32(check_cache_node_state_duration_ms);
 

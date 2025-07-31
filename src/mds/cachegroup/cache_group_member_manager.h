@@ -24,82 +24,73 @@
 #define DINGOFS_SRC_MDS_CACHEGROUP_CACHE_GROUP_MEMBER_MANAGER_H_
 
 #include <cstdint>
-#include <memory>
 #include <string>
 
-#include "dingofs/cachegroup.pb.h"
 #include "mds/cachegroup/cache_group_member_storage.h"
-#include "mds/cachegroup/config.h"
-#include "mds/cachegroup/errno.h"
+#include "mds/cachegroup/common.h"
+#include "mds/kvstorageclient/etcd_client.h"
 
 namespace dingofs {
 namespace mds {
 namespace cachegroup {
 
-using ::dingofs::pb::mds::cachegroup::CacheGroupMember;
-using ::dingofs::utils::BthreadRWLock;
-using Statistic = ::dingofs::pb::mds::cachegroup::HeartbeatRequest::Statistic;
-
 class CacheGroupMemberManager {
  public:
   virtual ~CacheGroupMemberManager() = default;
 
-  virtual bool Init() = 0;
+  virtual Status Start() = 0;
+  virtual Status Shutdown() = 0;
 
-  virtual Errno RegisterMember(uint64_t old_id, uint64_t* member_id) = 0;
+  virtual Status JoinCacheGroup(const std::string& group_name,
+                                const std::string& ip, uint32_t port,
+                                uint32_t weight, uint64_t replace_id,
+                                uint64_t* member_id,
+                                std::string* member_uuid) = 0;
+  virtual Status LeaveCacheGroup(const std::string& group_name,
+                                 const std::string& ip, uint32_t port) = 0;
 
-  virtual Errno AddMember(const std::string& group_name,
-                          CacheGroupMember member) = 0;
+  virtual Status Heartbeat(const std::string& ip, uint32_t port) = 0;
 
-  virtual Errno LoadMembers(const std::string& group_name,
-                            std::vector<CacheGroupMember>* members_out) = 0;
+  virtual std::vector<std::string> GetGroupNames() = 0;
+  virtual Status GetMembers(const std::string& group_name,
+                            std::vector<PBCacheGroupMember>* members_out) = 0;
 
-  virtual Errno ReweightMember(const std::string& group_name,
-                               uint64_t member_id, uint32_t weight) = 0;
-
-  virtual Errno HandleHeartbeat(const std::string& group_name,
-                                uint64_t member_id, const Statistic& stat) = 0;
-
-  virtual std::vector<std::string> LoadGroups() = 0;
+  virtual Status ReweightMember(uint64_t member_id, uint32_t weight) = 0;
 };
+
+using CacheGroupMemberManagerSPtr = std::shared_ptr<CacheGroupMemberManager>;
 
 class CacheGroupMemberManagerImpl : public CacheGroupMemberManager {
  public:
-  CacheGroupMemberManagerImpl(CacheGroupOption option,
-                              std::shared_ptr<KVStorageClient> kv);
+  explicit CacheGroupMemberManagerImpl(kvstorage::KVStorageClientSPtr storage);
 
   ~CacheGroupMemberManagerImpl() override = default;
 
-  bool Init() override;
+  Status Start() override;
+  Status Shutdown() override;
 
-  Errno RegisterMember(uint64_t old_id, uint64_t* member_id) override;
+  Status JoinCacheGroup(const std::string& group_name, const std::string& ip,
+                        uint32_t port, uint32_t weight, uint64_t replace_id,
+                        uint64_t* member_id, std::string* member_uuid) override;
+  Status LeaveCacheGroup(const std::string& group_name, const std::string& ip,
+                         uint32_t port) override;
 
-  Errno AddMember(const std::string& group_name,
-                  CacheGroupMember member) override;
+  Status Heartbeat(const std::string& ip, uint32_t port) override;
 
-  Errno LoadMembers(const std::string& group_name,
-                    std::vector<CacheGroupMember>* members_out) override;
+  std::vector<std::string> GetGroupNames() override;
+  Status GetMembers(const std::string& group_name,
+                    std::vector<PBCacheGroupMember>* members_out) override;
 
-  Errno ReweightMember(const std::string& group_name, uint64_t member_id,
-                       uint32_t weight) override;
-
-  Errno HandleHeartbeat(const std::string& group_name, uint64_t member_id,
-                        const Statistic& stat) override;
-
-  std::vector<std::string> LoadGroups() override;
-
- private:
-  void SetMembersState(std::vector<CacheGroupMember>* members);
-  void FilterOutOfflineMember(const std::vector<CacheGroupMember>& members,
-                              std::vector<CacheGroupMember>* members_out);
-
-  bool CheckId(uint64_t member_id);
-
-  uint64_t TimestampMs();
+  Status ReweightMember(uint64_t member_id, uint32_t weight) override;
 
  private:
-  CacheGroupOption option_;
-  std::unique_ptr<CacheGroupMemberStorage> storage_;
+  Status GetOrCreateGroup(const std::string& group_name, GroupSPtr& group);
+  Status GetOrCreateMember(const std::string& ip, uint32_t port,
+                           MemberSPtr& member);
+
+  std::atomic<bool> running_;
+  MembersUPtr members_;
+  GroupsUPtr groups_;
 };
 
 }  // namespace cachegroup

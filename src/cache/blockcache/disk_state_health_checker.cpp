@@ -19,7 +19,7 @@
 #include <memory>
 
 #include "cache/common/macro.h"
-#include "cache/debug/expose.h"
+#include "cache/status/cache_status.h"
 #include "cache/utils/helper.h"
 #include "cache/utils/state_machine.h"
 #include "metrics/cache/blockcache/disk_cache_metric.h"
@@ -50,7 +50,9 @@ void DiskStateHealthChecker::Start() {
   LOG(INFO) << "Disk state health checker is starting...";
 
   CHECK(state_machine_->Start([&](State state) {
-    metric_->healthy_status.set_value(StateToString(state));
+    auto health = StateToString(state);
+    metric_->healthy_status.set_value(health);
+    SetStatusPage(state);
   }));
 
   CHECK(executor_->Start());
@@ -103,14 +105,19 @@ void DiskStateHealthChecker::ProbeDisk() {
     state_machine_->Success();
   }
 
-  ExposeDiskCacheHealth(metric_->option.cache_index,
-                        StateToString(state_machine_->GetState()));
-
+  SetStatusPage(state_machine_->GetState());
   Helper::RemoveFile(filepath);
 }
 
 std::string DiskStateHealthChecker::GetProbeFilepath() const {
   return Helper::PathJoin({layout_->GetProbeDir(), "probe"});
+}
+
+void DiskStateHealthChecker::SetStatusPage(State state) const {
+  CacheStatus::Update([&](CacheStatus::Root& root) {
+    root.local_cache.disks[metric_->GetCacheIndex()].health =
+        StateToString(state);
+  });
 }
 
 }  // namespace cache

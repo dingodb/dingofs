@@ -26,6 +26,7 @@
 #include <libetcdclient.h>
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -258,7 +259,10 @@ class EtcdClientImp : public KVStorageClient {
   // retry times when failed
   int retryTimes_;
 };
+
+using KVStorageClientSPtr = std::shared_ptr<KVStorageClient>;
+
 }  // namespace kvstorage
-}  // namespace dingo
+}  // namespace dingofs
 
 #endif  // SRC_KVSTORAGECLIENT_ETCD_CLIENT_H_

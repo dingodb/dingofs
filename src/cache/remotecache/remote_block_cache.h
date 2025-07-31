@@ -69,6 +69,8 @@ class RemoteBlockCacheImpl final : public BlockCache {
  private:
   BlockCachePtr GetSelfPtr() { return this; }
 
+  void SetStatusPage() const;
+
   std::atomic<bool> running_;
   RemoteBlockCacheOption option_;
   RemoteCacheNodeSPtr remote_node_;

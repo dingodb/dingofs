@@ -44,9 +44,7 @@ using PBS3InfoV2 = pb::mdsv2::S3Info;
 using PBRadosInfoV2 = pb::mdsv2::RadosInfo;
 
 using PBCacheGroupMember = pb::mds::cachegroup::CacheGroupMember;
-using PBCacheGroupNodeMetadata = pb::mds::cachegroup::CacheGroupNodeMetadata;
 using PBCacheGroupErrCode = pb::mds::cachegroup::CacheGroupErrCode;
-using PBStatistic = pb::mds::cachegroup::HeartbeatRequest::Statistic;
 using PBCacheGroupMemberState = pb::mds::cachegroup::CacheGroupMemberState;
 using PBCacheGroupMembers = std::vector<PBCacheGroupMember>;
 
