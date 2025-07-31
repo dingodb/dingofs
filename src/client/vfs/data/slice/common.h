@@ -27,13 +27,13 @@ namespace client {
 namespace vfs {
 
 struct SliceDataContext {
-  uint64_t fs_id{0};
-  uint64_t ino{0};
-  uint64_t chunk_index{0};
-  uint64_t seq{0};  // unique id for slice in current chunk, valid from 1
-  uint64_t chunk_size{0};
-  uint64_t block_size{0};
-  uint64_t page_size{0};
+  const uint64_t fs_id{0};
+  const uint64_t ino{0};
+  const uint64_t chunk_index{0};
+  const uint64_t seq{0};  // unique id for slice in current chunk, valid from 1
+  const uint64_t chunk_size{0};
+  const uint64_t block_size{0};
+  const uint64_t page_size{0};
 
   explicit SliceDataContext(uint64_t p_fs_id, uint64_t p_ino,
                             uint64_t p_chunk_index, uint64_t p_seq,

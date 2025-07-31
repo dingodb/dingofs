@@ -17,8 +17,10 @@
 #ifndef DINGOFS_CLIENT_VFS_DATA_CHUNK_H_
 #define DINGOFS_CLIENT_VFS_DATA_CHUNK_H_
 
+#include <condition_variable>
 #include <cstdint>
 #include <deque>
+#include <memory>
 #include <mutex>
 
 #include "cache/blockcache/block_cache.h"
@@ -108,9 +110,9 @@ class Chunk : public std::enable_shared_from_this<Chunk> {
 
   // --------new added--------
 
-  SliceData* FindWritableSliceUnLocked(uint64_t chunk_pos, uint64_t size);
-  SliceData* CreateSliceUnlocked(uint64_t chunk_pos);
-  SliceData* FindOrCreateSliceUnlocked(uint64_t chunk_pos, uint64_t size);
+  std::unique_ptr<SliceData> FindWritableSliceUnLocked(uint64_t chunk_pos, uint64_t size);
+  std::unique_ptr<SliceData> CreateSliceUnlocked(uint64_t chunk_pos);
+  std::unique_ptr<SliceData> FindOrCreateSliceUnlocked(uint64_t chunk_pos, uint64_t size);
 
   // --------new added--------
 
@@ -127,6 +129,8 @@ class Chunk : public std::enable_shared_from_this<Chunk> {
   const uint64_t chunk_end_{0};    // in file offset
 
   mutable std::mutex mutex_;
+  std::condition_variable writer_cv_;
+  std::unique_ptr<SliceData> writing_slice_{nullptr};
   // TODO: maybe use std::vector
   // seq_id -> slice datj
   std::map<uint64_t, std::unique_ptr<SliceData>> slices_;

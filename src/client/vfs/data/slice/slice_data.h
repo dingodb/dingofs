@@ -23,10 +23,10 @@
 #include <memory>
 #include <mutex>
 
+#include "client/meta/vfs_meta.h"
 #include "client/vfs/data/slice/block_data.h"
 #include "client/vfs/data/slice/common.h"
 #include "client/vfs/data/slice/task/slice_flush_task.h"
-#include "client/meta/vfs_meta.h"
 #include "common/callback.h"
 #include "common/status.h"
 #include "fmt/format.h"
@@ -67,6 +67,8 @@ class SliceData {
   std::string UUID() const {
     return fmt::format("slice_data-{}", context_.UUID());
   }
+
+  uint64_t Seq() const { return context_.seq; }
 
   // NOTE: should be called outside lock
   std::string ToString() const {

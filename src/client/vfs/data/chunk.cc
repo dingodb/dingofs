@@ -16,6 +16,8 @@
 
 #include "client/vfs/data/chunk.h"
 
+#include <glog/logging.h>
+
 #include <atomic>
 #include <cstdint>
 #include <memory>
@@ -146,7 +148,8 @@ Status Chunk::DirectWrite(const char* buf, uint64_t size,
 }
 
 // TODO: maybe this algorithm is not good enough
-SliceData* Chunk::FindWritableSliceUnLocked(uint64_t chunk_pos, uint64_t size) {
+std::unique_ptr<SliceData> Chunk::FindWritableSliceUnLocked(uint64_t chunk_pos,
+                                                            uint64_t size) {
   uint64_t end_in_chunk = chunk_pos + size;
 
   //   from new to old
@@ -168,33 +171,30 @@ SliceData* Chunk::FindWritableSliceUnLocked(uint64_t chunk_pos, uint64_t size) {
 
     if (chunk_pos == slice_data->End() ||
         end_in_chunk == slice_data->ChunkOffset()) {
-      return slice_data;
+      std::unique_ptr<SliceData> to_return = std::move(it->second);
+      CHECK_EQ(slices_.erase(seq), 1);
+      return to_return;
     }
   }
 
   return nullptr;
 }
 
-SliceData* Chunk::CreateSliceUnlocked(uint64_t chunk_pos) {
+std::unique_ptr<SliceData> Chunk::CreateSliceUnlocked(uint64_t chunk_pos) {
   // Use static because chunk with same index may be deleted and recreated
   uint64_t seq = slice_seq_id_gen.fetch_add(1, std::memory_order_relaxed);
   SliceDataContext ctx(fs_id_, ino_, index_, seq, chunk_size_, block_size_,
                        page_size_);
-
-  slices_.emplace(seq, std::make_unique<SliceData>(ctx, hub_, chunk_pos));
-
-  SliceData* data = slices_[seq].get();
-
-  VLOG(4) << fmt::format("{} Created new slice with seq: {}, slice_data: {}",
-                         UUID(), seq, data->ToString());
-
-  return data;
+  return std::make_unique<SliceData>(ctx, hub_, chunk_pos);
 }
 
-SliceData* Chunk::FindOrCreateSliceUnlocked(uint64_t chunk_pos, uint64_t size) {
-  SliceData* slice = FindWritableSliceUnLocked(chunk_pos, size);
+std::unique_ptr<SliceData> Chunk::FindOrCreateSliceUnlocked(uint64_t chunk_pos,
+                                                            uint64_t size) {
+  std::unique_ptr<SliceData> slice = FindWritableSliceUnLocked(chunk_pos, size);
   if (slice == nullptr) {
     slice = CreateSliceUnlocked(chunk_pos);
+    VLOG(4) << fmt::format("{} Created new slice_data: {}", UUID(),
+                           slice->ToString());
   }
   DCHECK_NOTNULL(slice);
   return slice;
@@ -215,27 +215,43 @@ Status Chunk::BufferWrite(const char* buf, uint64_t size,
 
   CHECK_GE(chunk_end_, end_write_file_offset);
 
-  Status s;
+  // TODO: check mem ratio, sleep when mem is near full
 
-  bool is_full = false;
   {
-    std::lock_guard<std::mutex> lg(mutex_);
-
-    SliceData* slice = FindOrCreateSliceUnlocked(chunk_offset, size);
-    s = slice->Write(buf, size, chunk_offset);
-
-    if (slice->Len() == chunk_size_) {
-      is_full = true;
-      VLOG(4) << fmt::format("{} slice_data: {} is full", UUID(),
-                             slice->ToString());
+    std::unique_lock<std::mutex> lg(mutex_);
+    while (writing_slice_ != nullptr) {
+      VLOG(4) << fmt::format("{} BufferWrite wait for writing_slice: {}",
+                             UUID(), writing_slice_->ToString());
+      writer_cv_.wait(lg);
     }
+
+    writing_slice_ = FindOrCreateSliceUnlocked(chunk_offset, size);
   }
 
+  CHECK_NOTNULL(writing_slice_);
+
+  Status s = writing_slice_->Write(buf, size, chunk_offset);
+
+  bool is_full = false;
+  if (writing_slice_->Len() == chunk_size_) {
+    is_full = true;
+    VLOG(4) << fmt::format("{} slice_data: {} is full", UUID(),
+                           writing_slice_->ToString());
+  }
+
+  VLOG(4) << fmt::format("{} BufferWrite End, will notity", UUID());
+
+  {
+    std::unique_lock<std::mutex> lg(mutex_);
+    slices_.emplace(writing_slice_->Seq(), std::move(writing_slice_));
+    writing_slice_ = nullptr;
+    writer_cv_.notify_all();
+  }
+
+  // TODO: only need to flush current slice
   if (is_full) {
     TriggerFlush();
   }
-
-  VLOG(4) << fmt::format("{} BufferWrite End ", UUID());
 
   return s;
 }
