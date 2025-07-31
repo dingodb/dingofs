@@ -671,7 +671,7 @@ MetaStatusCode MetaStoreImpl::CreateRootInode(
   quota.set_maxbytes(0);
   quota.set_maxinodes(0);
   quota.set_usedbytes(0);
-  quota.set_usedinodes(0);
+  quota.set_usedinodes(1);  // the root inode is always used
   return super_partition_->SetFsQuota(request->fsid(), quota);
 }
 
