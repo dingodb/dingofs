@@ -7,10 +7,11 @@ prefix?= "$(PWD)/projects"
 release?= 0
 dep?= 0
 only?= "*"
-tag?= "dingodatabase/dingofs:unknown"
+image_name?= "dingodatabase/dingofs:unknown"
 case?= "*"
 os?= "rocky9"
 ci?=0
+image_type?=0
 
 define help_msg
 ## list
@@ -38,9 +39,9 @@ Examples:
 
 ## image
 Usage:
-    make image tag=TAG os=OS
+    make image image_name=image_name os=OS image_type=TYPE # 0: skip build image, 1: build mds v1 image, 2: build mdsv2 image
 Examples:
-    make image tag=dingodb/dingofs:v1.2 os=rocky9
+    make image image_name=dingodatabase/dingofs:test os=rocky9 image_type=1
 endef
 export help_msg
 
@@ -60,10 +61,10 @@ file_install:
 	@bash build-scripts/file-install.sh --prefix=$(prefix) --only=$(only)
 
 file_deploy_config:
-	@bash build-scripts/file-deploy-config.sh $(os)
+	@bash build-scripts/file-deploy-config.sh --os=$(os)
 
 file_image:
-	@bash build-scripts/file-deploy-config.sh $(os) $(tag) ${build-image}
+	@bash build-scripts/file-deploy-config.sh --os=$(os) --name=$(image_name) --type=${image_type}
 
 playground:
 	@bash build-scripts/playground.sh

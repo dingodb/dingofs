@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 
 # $1: os
-
+g_os="rocky9"
 g_image_base="dingodatabase/dingofs-base"
+g_image_name="dingodatabase/dingofs:latest"
+g_image_type="0" # 0: skip build image, 1: build mds v1 image, 2: build mdsv2 image, 
 # g_image_base="harbor.zetyun.cn/dingofs/dingofs-base"
 
 ############################  BASIC FUNCTIONS
@@ -21,6 +23,15 @@ die() {
 
 ############################ FUNCTIONS
 # usage: process_config_template  conf/client.conf /path/to/dingofs/docker/rocky9/dingofs/confg/client.conf
+function usage() {
+    echo "Usage: $0 [options]"
+    echo "Options:"
+    echo "  --name <image_name>         Set the name of the Docker image to build"
+    echo "  --os <os_name>              Set the operating system (default: rocky9)"
+    echo "  --image-type <type>         Set the type of image to build (1 for MDS v1, 2 for MDS v2, 0 to skip)"
+    echo "  -h, --help                  Show this help message"
+}
+
 function process_config_template() {
     dsv=$1
     src=$2
@@ -53,8 +64,43 @@ install_pkg() {
     fi
 }
 
+get_options() {
+    local args=`getopt --long name:,os:,type:,help -n "$0" -- "$@"`
+    eval set -- "${args}"
+    while true
+    do
+        case "$1" in
+            --name)
+                g_image_name=$2
+                shift 2
+                ;;
+            --os)
+                g_os=$2
+                shift 2
+                ;;
+            --type)
+                g_image_type=$2
+                shift 2
+                ;;
+            -h)
+                usage
+                exit 1
+                ;;
+            --)
+                shift
+                break
+                ;;
+            *)
+                exit 1
+                ;;
+        esac
+    done
+}
+
+get_options "$@"
+
 ############################  MAIN()
-docker_prefix="$(pwd)/docker/$1"
+docker_prefix="$(pwd)/docker/$g_os"
 prefix="$docker_prefix/dingofs" # /path/to/dingofs/docker/rocky9/dingofs
 mkdir -p $prefix $prefix/conf $prefix/confv2
 install_pkg $prefix
@@ -87,19 +133,19 @@ done
 cp thirdparties/etcdclient/libetcdclient.so $prefix/etcd/lib/
 
 # Add build-image parameter check with default value 'false'
-build_image=${3:-0}
+# build_image=${3:-0}
 g_docker="${DINGO_DOCKER:=docker}"
 
-case "$build_image" in
+case "$g_image_type" in
     1)
         ${g_docker} pull $g_image_base:$1
-        ${g_docker} build --no-cache -t "$2" "$docker_prefix"
+        ${g_docker} build --no-cache -t "$g_image_name" "$docker_prefix"
         success "build $2 success\n"
         ;;
     2)
         ${g_docker} pull $g_image_base:$1
-        ${g_docker} build --no-cache -t "$2" -f "$docker_prefix/Dockerfile-v2" "$docker_prefix"
-        success "build $2 success\n"
+        ${g_docker} build --no-cache -t "$g_image_name" -f "$docker_prefix/Dockerfile-v2" "$docker_prefix"
+        success "build $g_image_name success\n"
         ;;
     *)
         msg "skip build image\n"

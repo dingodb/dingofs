@@ -1,4 +1,4 @@
-FROM dingodatabase/dingo-eureka:rocky9
+FROM dingodatabase/dingo-base:rocky9
 
 COPY entrypoint.sh /
 COPY dingofs /dingofs
