@@ -235,6 +235,9 @@ static Status TransformStatus(dingodb::sdk::Status status) {
   } else if (status.IsTxnLockConflict()) {
     return Status(pb::error::ESTORE_TXN_LOCK_CONFLICT, status.ToString());
 
+  } else if (status.IsTxnMemLockConflict()) {
+    return Status(pb::error::ESTORE_TXN_MEM_LOCK_CONFLICT, status.ToString());
+
   } else {
     return Status(pb::error::EBACKEND_STORE, status.ToString());
   }

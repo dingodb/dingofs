@@ -403,7 +403,7 @@ void FsStatServiceImpl::RenderMainPage(const brpc::Server* server, FileSystemSet
   // mds stats
   auto heartbeat = Server::GetInstance().GetHeartbeat();
   std::vector<MdsEntry> mdses;
-  status = heartbeat->GetMDSList(mdses);
+  status = heartbeat->GetMDSList(ctx, mdses);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("[mdsstat] get mds list fail, error({}).", status.error_str());
     os << fmt::format(R"(<div style="color:red;">get mds list fail, error({}).</div>)", status.error_str());

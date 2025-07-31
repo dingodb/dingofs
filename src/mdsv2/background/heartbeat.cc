@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "fmt/format.h"
+#include "mdsv2/common/context.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
 #include "mdsv2/common/status.h"
@@ -62,15 +63,16 @@ void Heartbeat::SendHeartbeat() {
   auto& self_mds_meta = Server::GetInstance().GetMDSMeta();
 
   auto mds = self_mds_meta.ToProto();
-  SendHeartbeat(mds);
+  Context ctx;
+  SendHeartbeat(ctx, mds);
 }
 
-Status Heartbeat::SendHeartbeat(MdsEntry& mds) {
+Status Heartbeat::SendHeartbeat(Context& ctx, MdsEntry& mds) {
   mds.set_last_online_time_ms(Helper::TimestampMs());
 
   DINGO_LOG(DEBUG) << fmt::format("[heartbeat] mds {}.", mds.ShortDebugString());
 
-  Trace trace;
+  auto& trace = ctx.GetTrace();
   UpsertMdsOperation operation(trace, mds);
 
   auto status = operation_processor_->RunAlone(&operation);
@@ -82,12 +84,12 @@ Status Heartbeat::SendHeartbeat(MdsEntry& mds) {
   return status;
 }
 
-Status Heartbeat::SendHeartbeat(ClientEntry& client) {
+Status Heartbeat::SendHeartbeat(Context& ctx, ClientEntry& client) {
   client.set_last_online_time_ms(Helper::TimestampMs());
 
   DINGO_LOG(DEBUG) << fmt::format("[heartbeat] client {}.", client.ShortDebugString());
 
-  Trace trace;
+  auto& trace = ctx.GetTrace();
   UpsertClientOperation operation(trace, client);
 
   auto status = operation_processor_->RunAlone(&operation);
@@ -99,8 +101,8 @@ Status Heartbeat::SendHeartbeat(ClientEntry& client) {
   return status;
 }
 
-Status Heartbeat::GetMDSList(std::vector<MdsEntry>& mdses) {
-  Trace trace;
+Status Heartbeat::GetMDSList(Context& ctx, std::vector<MdsEntry>& mdses) {
+  auto& trace = ctx.GetTrace();
   ScanMdsOperation operation(trace);
 
   auto status = operation_processor_->RunAlone(&operation);
@@ -123,7 +125,8 @@ Status Heartbeat::GetMDSList(std::vector<MdsEntry>& mdses) {
 
 Status Heartbeat::GetMDSList(std::vector<MDSMeta>& mdses) {
   std::vector<MdsEntry> pb_mdses;
-  auto status = GetMDSList(pb_mdses);
+  Context ctx;
+  auto status = GetMDSList(ctx, pb_mdses);
   if (!status.ok()) {
     return status;
   }

@@ -15,6 +15,7 @@
 #ifndef DINGOFS_MDSV2_BACKGROUND_HEARTBEAT_H_
 #define DINGOFS_MDSV2_BACKGROUND_HEARTBEAT_H_
 
+#include "mdsv2/common/context.h"
 #include "mdsv2/common/runnable.h"
 #include "mdsv2/common/status.h"
 #include "mdsv2/filesystem/store_operation.h"
@@ -41,10 +42,10 @@ class Heartbeat {
   void Run();
 
   void SendHeartbeat();
-  Status SendHeartbeat(MdsEntry& mds);
-  Status SendHeartbeat(ClientEntry& client);
+  Status SendHeartbeat(Context& ctx, MdsEntry& mds);
+  Status SendHeartbeat(Context& ctx, ClientEntry& client);
 
-  Status GetMDSList(std::vector<MdsEntry>& mdses);
+  Status GetMDSList(Context& ctx, std::vector<MdsEntry>& mdses);
   Status GetMDSList(std::vector<MDSMeta>& mdses);
 
   Status GetClientList(std::vector<ClientEntry>& clients);

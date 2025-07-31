@@ -42,7 +42,7 @@ namespace mdsv2 {
 DEFINE_uint32(process_operation_batch_size, 64, "process operation batch size.");
 DEFINE_uint32(txn_max_retry_times, 5, "txn max retry times.");
 
-DEFINE_uint32(merge_operation_delay_us, 100, "merge operation delay us.");
+DEFINE_uint32(merge_operation_delay_us, 10, "merge operation delay us.");
 
 static const uint32_t kOpNameBufInitSize = 128;
 
@@ -2141,7 +2141,8 @@ Status OperationProcessor::RunAlone(Operation* operation) {
 
     status = operation->Run(txn);
     if (!status.ok()) {
-      if (status.error_code() == pb::error::ESTORE_TXN_LOCK_CONFLICT) {
+      if (status.error_code() == pb::error::ESTORE_TXN_LOCK_CONFLICT ||
+          status.error_code() == pb::error::ESTORE_TXN_MEM_LOCK_CONFLICT) {
         DINGO_LOG(WARNING) << fmt::format("[operation.{}.{}][{}][{}us] alone run lock conflict, retry({}) status({}).",
                                           fs_id, ino, txn_id, once_duration.ElapsedUs(), retry, status.error_str());
         bthread_usleep(Helper::GenerateRealRandomInteger(100, 1000));
@@ -2310,7 +2311,8 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
     std::vector<KeyValue> prefetch_kvs;
     status = txn->BatchGet(keys, prefetch_kvs);
     if (!status.ok()) {
-      if (status.error_code() == pb::error::ESTORE_TXN_LOCK_CONFLICT) {
+      if (status.error_code() == pb::error::ESTORE_TXN_LOCK_CONFLICT ||
+          status.error_code() == pb::error::ESTORE_TXN_MEM_LOCK_CONFLICT) {
         DINGO_LOG(WARNING) << fmt::format("[operation.{}.{}][{}][{}us] batch run lock conflict, retry({}) status({}).",
                                           fs_id, ino, txn_id, once_duration.ElapsedUs(), retry, status.error_str());
         bthread_usleep(Helper::GenerateRealRandomInteger(100, 1000));
@@ -2364,8 +2366,7 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
 
   DINGO_LOG(INFO) << fmt::format(
       "[operation.{}.{}][{}][{}us] batch run ({}) finish, count({}) onepc({}) retry({}) status({}) attr({}).", fs_id,
-      ino, txn_id, Helper::TimestampUs() - duration.ElapsedUs(), op_names, count, is_one_pc, retry, status.error_str(),
-      DescribeAttr(attr));
+      ino, txn_id, duration.ElapsedUs(), op_names, count, is_one_pc, retry, status.error_str(), DescribeAttr(attr));
 
   if (status.ok()) {
     SetAttr(batch_operation, attr);

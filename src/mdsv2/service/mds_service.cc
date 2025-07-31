@@ -14,9 +14,6 @@
 
 #include "mdsv2/service/mds_service.h"
 
-#include <fmt/format.h>
-
-#include <cstddef>
 #include <cstdint>
 #include <map>
 #include <string>
@@ -26,6 +23,8 @@
 #include "brpc/controller.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
+#include "fmt/format.h"
+#include "gflags/gflags.h"
 #include "mdsv2/common/context.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
@@ -41,6 +40,10 @@ namespace mdsv2 {
 
 const std::string kReadWorkerSetName = "READ_WORKER_SET";
 const std::string kWriteWorkerSetName = "WRITE_WORKER_SET";
+
+DEFINE_string(worker_set_type, "execq", "worker set type, execq or simple");
+DEFINE_validator(worker_set_type,
+                 [](const char*, const std::string& value) -> bool { return value == "execq" || value == "simple"; });
 
 template <typename T>
 static Status ValidateRequest(T* request, FileSystemSPtr file_system) {
@@ -61,16 +64,22 @@ MDSServiceImpl::MDSServiceImpl(const MetaServiceOption& option, FileSystemSetSPt
 
 bool MDSServiceImpl::Init() {
   read_worker_set_ =
-      SimpleWorkerSet::NewUnique(kReadWorkerSetName, option_.read_worker_num(), option_.read_worker_max_pending_num(),
-                                 option_.read_worker_use_pthread(), false);
+      FLAGS_worker_set_type == "simple"
+          ? SimpleWorkerSet::NewUnique(kReadWorkerSetName, option_.read_worker_num(),
+                                       option_.read_worker_max_pending_num(), option_.read_worker_use_pthread(), false)
+          : ExecqWorkerSet::NewUnique(kReadWorkerSetName, option_.read_worker_num(),
+                                      option_.read_worker_max_pending_num());
   if (!read_worker_set_->Init()) {
     DINGO_LOG(ERROR) << "init service read worker set fail!";
     return false;
   }
 
-  write_worker_set_ =
-      SimpleWorkerSet::NewUnique(kWriteWorkerSetName, option_.write_worker_num(),
-                                 option_.write_worker_max_pending_num(), option_.write_worker_use_pthread(), false);
+  write_worker_set_ = FLAGS_worker_set_type == "simple"
+                          ? SimpleWorkerSet::NewUnique(kWriteWorkerSetName, option_.write_worker_num(),
+                                                       option_.write_worker_max_pending_num(),
+                                                       option_.write_worker_use_pthread(), false)
+                          : ExecqWorkerSet::NewUnique(kWriteWorkerSetName, option_.write_worker_num(),
+                                                      option_.write_worker_max_pending_num());
   if (!write_worker_set_->Init()) {
     DINGO_LOG(ERROR) << "init service write worker set fail!";
     return false;
@@ -97,19 +106,21 @@ void MDSServiceImpl::DoHeartbeat(google::protobuf::RpcController* controller,
     return ServiceHelper::SetError(response->mutable_error(), pb::error::EINTERNAL, "heartbeat is nullptr");
   }
 
+  Context ctx;
   Status status;
   if (request->role() == pb::mdsv2::ROLE_MDS) {
     auto mds = request->mds();
-    status = heartbeat->SendHeartbeat(mds);
+    status = heartbeat->SendHeartbeat(ctx, mds);
 
   } else if (request->role() == pb::mdsv2::ROLE_CLIENT) {
     auto client = request->client();
-    status = heartbeat->SendHeartbeat(client);
+    status = heartbeat->SendHeartbeat(ctx, client);
 
   } else {
     return ServiceHelper::SetError(response->mutable_error(), pb::error::EILLEGAL_PARAMTETER, "role is illegal");
   }
 
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -141,8 +152,10 @@ void MDSServiceImpl::DoGetMDSList(google::protobuf::RpcController* controller, c
     return ServiceHelper::SetError(response->mutable_error(), pb::error::EINTERNAL, "heartbeat is nullptr");
   }
 
+  Context ctx;
   std::vector<MdsEntry> mdses;
-  auto status = heartbeat->GetMDSList(mdses);
+  auto status = heartbeat->GetMDSList(ctx, mdses);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -1795,7 +1808,7 @@ void MDSServiceImpl::WriteSlice(google::protobuf::RpcController* controller,
   auto task = std::make_shared<ServiceTask>(
       [this, controller, request, response, svr_done]() { DoWriteSlice(controller, request, response, svr_done); });
 
-  bool ret = write_worker_set_->Execute(task);
+  bool ret = write_worker_set_->ExecuteHash(request->ino(), task);
   if (BAIDU_UNLIKELY(!ret)) {
     brpc::ClosureGuard done_guard(svr_done);
     ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,

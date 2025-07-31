@@ -224,11 +224,17 @@ bool MDSV2FileSystem::UnmountFs() {
 }
 
 void MDSV2FileSystem::Heartbeat() {
+  // prevent multiple heartbeats running at the same time
+  static std::atomic<bool> is_running{false};
+  if (is_running.exchange(true)) return;
+
   auto status = mds_client_->Heartbeat();
   if (!status.IsOK()) {
     LOG(ERROR) << fmt::format("[meta.{}] heartbeat fail, error: {}.", name_,
                               status.ToString());
   }
+
+  is_running = false;
 }
 
 bool MDSV2FileSystem::InitCrontab() {

@@ -235,7 +235,7 @@ class ExecqWorkerSet : public WorkerSet {
   bool Execute(TaskRunnablePtr task) override { return ExecuteLeastQueue(task); };
   bool ExecuteRR(TaskRunnablePtr task) override;
   bool ExecuteLeastQueue(TaskRunnablePtr task) override;
-  bool ExecuteHash(int64_t region_id, TaskRunnablePtr task) override;
+  bool ExecuteHash(int64_t id, TaskRunnablePtr task) override;
 
   std::vector<std::vector<std::string>> GetPendingTaskTrace() override;
 
@@ -270,7 +270,7 @@ class SimpleWorkerSet : public WorkerSet {
   bool Execute(TaskRunnablePtr task) override;
   bool ExecuteRR(TaskRunnablePtr task) override;
   bool ExecuteLeastQueue(TaskRunnablePtr task) override;
-  bool ExecuteHash(int64_t region_id, TaskRunnablePtr task) override;
+  bool ExecuteHash(int64_t id, TaskRunnablePtr task) override;
 
  private:
   bthread_mutex_t mutex_;
@@ -300,7 +300,7 @@ class PriorWorkerSet : public WorkerSet {
   bool Execute(TaskRunnablePtr task) override;
   bool ExecuteRR(TaskRunnablePtr task) override;
   bool ExecuteLeastQueue(TaskRunnablePtr task) override;
-  bool ExecuteHash(int64_t region_id, TaskRunnablePtr task) override;
+  bool ExecuteHash(int64_t id, TaskRunnablePtr task) override;
 
  private:
   bthread_mutex_t mutex_;
