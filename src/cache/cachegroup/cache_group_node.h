@@ -86,6 +86,8 @@ class CacheGroupNodeImpl final : public CacheGroupNode {
                      PrefetchOption option = PrefetchOption()) override;
 
  private:
+  bool IsRunning();
+
   void RewriteCacheDir();
   Status InitBlockCache();
 

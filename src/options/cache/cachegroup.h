@@ -20,8 +20,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_CONFIG_CACHEGROUP_H_
-#define DINGOFS_SRC_CACHE_CONFIG_CACHEGROUP_H_
+#ifndef DINGOFS_SRC_OPTIONS_CACHE_CACHEGROUP_H_
+#define DINGOFS_SRC_OPTIONS_CACHE_CACHEGROUP_H_
 
 #include <gflags/gflags_declare.h>
 
@@ -49,11 +49,11 @@ DECLARE_uint32(listen_port);
 // Sets the weight of this cache group node, used for consistent hashing.
 DECLARE_uint32(group_weight);
 
+// Sets the ID to replace when joining the cache group.
+DECLARE_uint64(replace_id);
+
 // Retrive the whole block if length of range request is larger than this value.
 DECLARE_uint32(max_range_size_kb);
-
-// Set the filepath to store metadata of cache group node.
-DECLARE_string(metadata_filepath);
 
 // Sets the interval to send heartbeat to MDS in milliseconds.
 DECLARE_uint32(send_heartbeat_interval_ms);
@@ -65,7 +65,7 @@ struct CacheGroupNodeOption {
   std::string listen_ip;
   uint32_t listen_port;
   uint32_t group_weight;
-  std::string metadata_filepath;
+  uint64_t replace_id;
   stub::common::MdsOption mds_option;
 
   BlockCacheOption block_cache_option;
@@ -74,4 +74,4 @@ struct CacheGroupNodeOption {
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_CONFIG_CACHEGROUP_H_
+#endif  // DINGOFS_SRC_OPTIONS_CACHE_CACHEGROUP_H_

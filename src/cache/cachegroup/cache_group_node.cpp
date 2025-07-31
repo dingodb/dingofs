@@ -27,6 +27,7 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include <atomic>
 #include <memory>
 
 #include "cache/blockcache/block_cache.h"
@@ -165,6 +166,10 @@ Status CacheGroupNodeImpl::Shutdown() {
   return status;
 }
 
+bool CacheGroupNodeImpl::IsRunning() {
+  return running_.load(std::memory_order_relaxed);
+}
+
 void CacheGroupNodeImpl::RewriteCacheDir() {
   auto member_uuid = member_->GetMemberUuid();
   CHECK(!member_uuid.empty()) << "Member UUID should not be empty";
@@ -185,7 +190,9 @@ Status CacheGroupNodeImpl::InitBlockCache() {
 
 Status CacheGroupNodeImpl::Put(ContextSPtr ctx, const BlockKey& key,
                                const Block& block, PutOption option) {
-  CHECK_RUNNING("Cache group node");
+  if (!IsRunning()) {
+    return Status::Internal("cache group node is not running");
+  }
 
   Status status;
   StepTimer timer;
@@ -202,7 +209,9 @@ Status CacheGroupNodeImpl::Put(ContextSPtr ctx, const BlockKey& key,
 Status CacheGroupNodeImpl::Range(ContextSPtr ctx, const BlockKey& key,
                                  off_t offset, size_t length, IOBuffer* buffer,
                                  RangeOption option) {
-  CHECK_RUNNING("Cache group node");
+  if (!IsRunning()) {
+    return Status::Internal("cache group node is not running");
+  }
 
   Status status;
   StepTimer timer;
@@ -221,7 +230,9 @@ Status CacheGroupNodeImpl::Range(ContextSPtr ctx, const BlockKey& key,
 
 Status CacheGroupNodeImpl::Cache(ContextSPtr ctx, const BlockKey& key,
                                  const Block& block, CacheOption option) {
-  CHECK_RUNNING("Cache group node");
+  if (!IsRunning()) {
+    return Status::Internal("cache group node is not running");
+  }
 
   Status status;
   StepTimer timer;
@@ -237,7 +248,9 @@ Status CacheGroupNodeImpl::Cache(ContextSPtr ctx, const BlockKey& key,
 
 Status CacheGroupNodeImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
                                     size_t length, PrefetchOption option) {
-  CHECK_RUNNING("Cache group node");
+  if (!IsRunning()) {
+    return Status::Internal("cache group node is not running");
+  }
 
   Status status;
   StepTimer timer;
@@ -254,7 +267,10 @@ Status CacheGroupNodeImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
 void CacheGroupNodeImpl::AsyncCache(ContextSPtr ctx, const BlockKey& key,
                                     const Block& block, AsyncCallback callback,
                                     CacheOption option) {
-  CHECK_RUNNING("Cache group node");
+  if (!IsRunning()) {
+    callback(Status::Internal("cache group node is not running"));
+    return;
+  }
 
   auto timer = std::make_shared<StepTimer>();
   timer->Start();
@@ -272,7 +288,10 @@ void CacheGroupNodeImpl::AsyncCache(ContextSPtr ctx, const BlockKey& key,
 void CacheGroupNodeImpl::AsyncPrefetch(ContextSPtr ctx, const BlockKey& key,
                                        size_t length, AsyncCallback callback,
                                        PrefetchOption option) {
-  CHECK_RUNNING("Cache group node");
+  if (!IsRunning()) {
+    callback(Status::Internal("cache group node is not running"));
+    return;
+  }
 
   auto timer = std::make_shared<StepTimer>();
   timer->Start();

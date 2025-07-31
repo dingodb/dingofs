@@ -16,25 +16,43 @@
 
 /*
  * Project: DingoFS
- * Created Date: 2025-02-08
+ * Created Date: 2025-08-03
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_MDS_CACHEGROUP_CONFIG_H_
-#define DINGOFS_SRC_MDS_CACHEGROUP_CONFIG_H_
+#include "mds/cachegroup/helper.h"
 
-#include <gflags/gflags_declare.h>
+#include <absl/strings/str_format.h>
+
+#include <chrono>
+
+#include "mds/cachegroup/common.h"
 
 namespace dingofs {
 namespace mds {
 namespace cachegroup {
 
-DECLARE_uint32(heartbeat_interval_s);
-DECLARE_uint32(heartbeat_miss_timeout_s);
-DECLARE_uint32(heartbeat_offline_timeout_s);
+uint64_t Helper::TimestampMs() {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+             std::chrono::system_clock::now().time_since_epoch())
+      .count();
+}
+
+std::string Helper::EndPoint(const std::string& ip, uint32_t port) {
+  return absl::StrFormat("%s:%u", ip, port);
+}
+
+PBCacheGroupErrCode Helper::PBErr(Status status) {
+  if (status.ok()) {
+    return PBCacheGroupErrCode::CacheGroupOk;
+  } else if (status.IsNotFound()) {
+    return PBCacheGroupErrCode::CacheGroupErrNotFound;
+  } else if (status.IsInvalidParam()) {
+    return PBCacheGroupErrCode::CacheGroupErrInvalidParam;
+  }
+  return PBCacheGroupErrCode::CacheGroupErrFailure;
+}
 
 }  // namespace cachegroup
 }  // namespace mds
 }  // namespace dingofs
-
-#endif  // DINGOFS_SRC_MDS_CACHEGROUP_CONFIG_H_

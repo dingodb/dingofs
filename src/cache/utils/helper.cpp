@@ -40,6 +40,15 @@ namespace cache {
 static const uint64_t kIOAlignedBlockSize = 4096;
 static const std::string kTempFileSuffix = ".tmp";
 
+// string
+std::string Helper::ToLowerCase(const std::string& str) {
+  std::string result = str;
+  for (char& c : result) {
+    c = tolower(c);
+  }
+  return result;
+}
+
 // sys conf
 int Helper::GetProcessCores() { return sysconf(_SC_NPROCESSORS_ONLN); }
 

@@ -16,27 +16,32 @@
 
 /*
  * Project: DingoFS
- * Created Date: 2025-06-02
+ * Created Date: 2025-08-03
  * Author: Jingli Chen (Wine93)
  */
 
-#include "options/cache/cachegroup.h"
+#ifndef DINGOFS_SRC_MDS_CACHEGROUP_HELPER_H_
+#define DINGOFS_SRC_MDS_CACHEGROUP_HELPER_H_
 
-#include <absl/strings/str_split.h>
-#include <glog/logging.h>
+#include <cstdint>
+#include <string>
 
-#include "options/cache/stub.h"
+#include "common/status.h"
+#include "mds/cachegroup/common.h"
 
 namespace dingofs {
-namespace cache {
+namespace mds {
+namespace cachegroup {
 
-CacheGroupNodeOption::CacheGroupNodeOption()
-    : group_name(FLAGS_group_name),
-      listen_ip(FLAGS_listen_ip),
-      listen_port(FLAGS_listen_port),
-      group_weight(FLAGS_group_weight),
-      replace_id(FLAGS_replace_id),
-      mds_option(NewMdsOption()) {}
+class Helper {
+ public:
+  static uint64_t TimestampMs();
+  static std::string EndPoint(const std::string& ip, uint32_t port);
+  static PBCacheGroupErrCode PBErr(Status status);
+};
 
-}  // namespace cache
+}  // namespace cachegroup
+}  // namespace mds
 }  // namespace dingofs
+
+#endif  // DINGOFS_SRC_MDS_CACHEGROUP_HELPER_H_

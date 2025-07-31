@@ -28,7 +28,6 @@
 #include <butil/time.h>
 #include <glog/logging.h>
 
-#include <ostream>
 #include <string>
 
 #include "cache/utils/logging.h"

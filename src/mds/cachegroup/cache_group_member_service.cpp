@@ -24,43 +24,67 @@
 
 #include <brpc/controller.h>
 
-#include "mds/cachegroup/errno.h"
+#include "mds/cachegroup/cache_group_member_manager.h"
+#include "mds/cachegroup/helper.h"
 
 namespace dingofs {
 namespace mds {
 namespace cachegroup {
 
 CacheGroupMemberServiceImpl::CacheGroupMemberServiceImpl(
-    std::shared_ptr<CacheGroupMemberManager> member_manager)
-    : member_manager_(member_manager) {}
+    CacheGroupMemberManagerSPtr manager)
+    : manager_(manager) {}
 
-DEFINE_RPC_METHOD(CacheGroupMemberServiceImpl, RegisterMember) {
+DEFINE_RPC_METHOD(CacheGroupMemberServiceImpl, JoinCacheGroup) {
   (void)controller;
   ::brpc::ClosureGuard done_guard(done);
 
   uint64_t member_id;
-  uint64_t old_id = request->has_old_id() ? request->old_id() : 0;
-  auto rc = member_manager_->RegisterMember(old_id, &member_id);
-  response->set_status(PbErr(rc));
+  std::string member_uuid;
+  auto status = manager_->JoinCacheGroup(
+      request->group_name(), request->ip(), request->port(), request->weight(),
+      request->replace_id(), &member_id, &member_uuid);
+
+  response->set_status(Helper::PBErr(status));
   response->set_member_id(member_id);
+  response->set_member_uuid(member_uuid);
 }
 
-DEFINE_RPC_METHOD(CacheGroupMemberServiceImpl, AddMember) {
+DEFINE_RPC_METHOD(CacheGroupMemberServiceImpl, LeaveCacheGroup) {
   (void)controller;
   ::brpc::ClosureGuard done_guard(done);
 
-  auto rc =
-      member_manager_->AddMember(request->group_name(), request->member());
-  response->set_status(PbErr(rc));
+  auto status = manager_->LeaveCacheGroup(request->group_name(), request->ip(),
+                                          request->port());
+
+  response->set_status(Helper::PBErr(status));
+}
+
+DEFINE_RPC_METHOD(CacheGroupMemberServiceImpl, Heartbeat) {
+  (void)controller;
+  ::brpc::ClosureGuard done_guard(done);
+
+  auto status = manager_->Heartbeat(request->ip(), request->port());
+
+  response->set_status(Helper::PBErr(status));
+}
+
+DEFINE_RPC_METHOD(CacheGroupMemberServiceImpl, LoadGroups) {  // NOLINT
+  (void)controller;
+  ::brpc::ClosureGuard done_guard(done);
+
+  const auto& group_names = manager_->GetGroupNames();
+  *response->mutable_group_names() = {group_names.begin(), group_names.end()};
 }
 
 DEFINE_RPC_METHOD(CacheGroupMemberServiceImpl, LoadMembers) {
   (void)controller;
   ::brpc::ClosureGuard done_guard(done);
 
-  std::vector<CacheGroupMember> members;
-  auto rc = member_manager_->LoadMembers(request->group_name(), &members);
-  response->set_status(PbErr(rc));
+  std::vector<PBCacheGroupMember> members;
+  auto status = manager_->GetMembers(request->group_name(), &members);
+
+  response->set_status(Helper::PBErr(status));
   *response->mutable_members() = {members.begin(), members.end()};
 }
 
@@ -68,26 +92,9 @@ DEFINE_RPC_METHOD(CacheGroupMemberServiceImpl, ReweightMember) {
   (void)controller;
   ::brpc::ClosureGuard done_guard(done);
 
-  auto rc = member_manager_->ReweightMember(
-      request->group_name(), request->member_id(), request->weight());
-  response->set_status(PbErr(rc));
-}
-
-DEFINE_RPC_METHOD(CacheGroupMemberServiceImpl, Heartbeat) {
-  (void)controller;
-  ::brpc::ClosureGuard done_guard(done);
-
-  auto rc = member_manager_->HandleHeartbeat(
-      request->group_name(), request->member_id(), request->stat());
-  response->set_status(PbErr(rc));
-}
-
-DEFINE_RPC_METHOD(CacheGroupMemberServiceImpl, LoadGroups) {  // NOLINT
-  (void)controller;
-  ::brpc::ClosureGuard done_guard(done);
-
-  const auto& group_names = member_manager_->LoadGroups();
-  *response->mutable_group_names() = {group_names.begin(), group_names.end()};
+  auto status =
+      manager_->ReweightMember(request->member_id(), request->weight());
+  response->set_status(Helper::PBErr(status));
 }
 
 }  // namespace cachegroup

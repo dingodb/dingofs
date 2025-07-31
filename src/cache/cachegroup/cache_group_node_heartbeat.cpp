@@ -30,7 +30,7 @@
 namespace dingofs {
 namespace cache {
 
-DEFINE_uint32(send_heartbeat_interval_s, 10,
+DEFINE_uint32(send_heartbeat_interval_s, 3,
               "Interval to send heartbeat to MDS in seconds");
 
 CacheGroupNodeHeartbeatImpl::CacheGroupNodeHeartbeatImpl(
@@ -77,16 +77,15 @@ void CacheGroupNodeHeartbeatImpl::Shutdown() {
 }
 
 void CacheGroupNodeHeartbeatImpl::SendHeartbeat() {
-  PBStatistic stat;
-  stat.set_hits(GetCacheHitCount());
-  stat.set_misses(GetCacheMissCount());
-
   std::string group_name = member_->GetGroupName();
-  uint64_t member_id = member_->GetMemberId();
-  auto rc = mds_client_->SendCacheGroupHeartbeat(group_name, member_id, stat);
+  auto rc = mds_client_->SendCacheGroupHeartbeat(member_->GetListenIP(),
+                                                 member_->GetListenPort());
   if (rc != PBCacheGroupErrCode::CacheGroupOk) {
-    LOG(ERROR) << "Send heartbeat for (" << group_name << "," << member_id
-               << ") failed: rc = " << CacheGroupErrCode_Name(rc);
+    LOG(ERROR) << "Send cache group heartbeat failed, group_name = "
+               << group_name << ", ip = " << member_->GetListenIP()
+               << ", port = " << member_->GetListenPort()
+               << ", rc = " << CacheGroupErrCode_Name(rc);
+    return;
   }
 
   executor_->Schedule([this] { SendHeartbeat(); },

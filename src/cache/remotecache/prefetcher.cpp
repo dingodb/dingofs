@@ -118,9 +118,9 @@ int Prefetcher::HandleTask(void* meta, bthread::TaskIterator<Task>& iter) {
   auto* self = static_cast<Prefetcher*>(meta);
   for (; iter; iter++) {
     auto& task = *iter;
+    // Skip if the key is already being processed or exists in cache
     if (self->FilterOut(task)) {
-      continue;  // Skip if the key is already being processed or exists in
-                 // cache
+      continue;
     }
 
     self->SetBusy(task.key);

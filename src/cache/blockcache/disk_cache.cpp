@@ -55,7 +55,7 @@ DiskCache::DiskCache(DiskCacheOption option)
   layout_ = std::make_shared<DiskCacheLayout>(option.cache_dir);
 
   // health checker
-  state_machine_ = std::make_shared<StateMachineImpl>();
+  state_machine_ = std::make_shared<StateMachineImpl>(kDiskStateMachine);
   disk_state_health_checker_ = std::make_unique<DiskStateHealthChecker>(
       metric_, layout_, state_machine_);
 

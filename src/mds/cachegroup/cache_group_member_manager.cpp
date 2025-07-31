@@ -22,158 +22,250 @@
 
 #include "mds/cachegroup/cache_group_member_manager.h"
 
-#include "mds/cachegroup/errno.h"
+#include <absl/strings/str_format.h>
+
+#include <cstdint>
+
+#include "common/status.h"
+#include "mds/cachegroup/cache_group_member_storage.h"
+#include "mds/cachegroup/helper.h"
 
 namespace dingofs {
 namespace mds {
 namespace cachegroup {
 
-using ::dingofs::pb::mds::cachegroup::CacheGroupMemberState;
-
 CacheGroupMemberManagerImpl::CacheGroupMemberManagerImpl(
-    CacheGroupOption option, std::shared_ptr<KVStorageClient> kv)
-    : option_(option),
-      storage_(std::make_unique<CacheGroupMemberStorageImpl>(kv)) {}
+    kvstorage::KVStorageClientSPtr storage)
+    : running_(false),
+      members_(std::make_unique<Members>(storage)),
+      groups_(std::make_unique<Groups>(storage)) {}
 
-bool CacheGroupMemberManagerImpl::Init() { return storage_->Init(); }
-
-bool CacheGroupMemberManagerImpl::CheckId(uint64_t /*member_id*/) {
-  // TODO(Wine93): check id boundaries
-  return true;
-}
-
-Errno CacheGroupMemberManagerImpl::RegisterMember(uint64_t old_id,
-                                                  uint64_t* member_id) {
-  if (old_id == 0) {
-    return storage_->RegisterMember(member_id);
-  } else if (!CheckId(old_id)) {
-    return Errno::kInvalidMemberId;
-  }
-  *member_id = old_id;
-  return Errno::kOk;
-}
-
-Errno CacheGroupMemberManagerImpl::AddMember(const std::string& group_name,
-                                             CacheGroupMember member) {
-  uint64_t group_id;
-  auto rc = storage_->GetGroupId(group_name, &group_id);
-  if (rc == Errno::kNotFound) {
-    rc = storage_->RegisterGroup(group_name, &group_id);
-    if (rc != Errno::kOk) {
-      LOG(ERROR) << "Register group (name=" << group_name
-                 << ") failed: " << StrErr(rc);
-      return rc;
-    }
-
-    LOG(INFO) << "Register group (name=" << group_name
-              << ") success: group_id = " << group_id;
+Status CacheGroupMemberManagerImpl::Start() {
+  if (running_) {
+    return Status::OK();
   }
 
-  // rc == Errno::kOk
-  member.set_last_online_time_ms(TimestampMs());
-  rc = storage_->AddMember(group_id, member);
-  if (rc == Errno::kOk) {
-    LOG(INFO) << "Add member (id=" << member.id() << ",ip=" << member.ip()
-              << ",port=" << member.port() << ",weight=" << member.weight()
-              << ",last_online_time_ms=" << member.last_online_time_ms()
-              << ",state=" << member.state()
-              << ") to group (name=" << group_name << ",id=" << group_id
-              << ") success.";
-  } else {
-    LOG(ERROR) << "Add member (id=" << member.id() << ",ip=" << member.ip()
-               << ",port=" << member.port() << ",weight=" << member.weight()
-               << ",last_online_time_ms=" << member.last_online_time_ms()
-               << ",state=" << member.state()
-               << ") to group (name=" << group_name << ",id=" << group_id
-               << ") failed: " << StrErr(rc);
+  LOG(INFO) << "Starting cache group member manager...";
+
+  auto status = groups_->Load();
+  if (!status.ok()) {
+    LOG(ERROR) << "Load groups from storage failed: " << status.ToString();
+    return status;
   }
-  return rc;
-}
 
-void CacheGroupMemberManagerImpl::SetMembersState(
-    std::vector<CacheGroupMember>* members) {
-  auto time_now_ms = TimestampMs();
-  auto miss_timeout_ms = option_.heartbeat_miss_timeout_s * 1000;
-  auto offline_timeout_ms = option_.heartbeat_offline_timeout_s * 1000;
-
-  auto set_state = [&](CacheGroupMember* member) {
-    auto time_pass_ms = time_now_ms - member->last_online_time_ms();
-    if (time_pass_ms < miss_timeout_ms) {
-      member->set_state(CacheGroupMemberState::CacheGroupMemberStateOnline);
-    } else if (time_pass_ms < offline_timeout_ms) {
-      member->set_state(CacheGroupMemberState::CacheGroupMemberStateUnstable);
-    } else {  // TODO: we can remove offline members from group
-      member->set_state(CacheGroupMemberState::CacheGroupMemberStateOffline);
-    }
-  };
-
-  for (auto& member : *members) {
-    set_state(&member);
+  status = members_->Load();
+  if (!status.ok()) {
+    LOG(ERROR) << "Load members from storage failed: " << status.ToString();
+    return status;
   }
-}
 
-void CacheGroupMemberManagerImpl::FilterOutOfflineMember(
-    const std::vector<CacheGroupMember>& members,
-    std::vector<CacheGroupMember>* members_out) {
+  GroupSPtr group;
+  auto members = members_->GetAllMembers();
   for (const auto& member : members) {
-    if (member.state() != CacheGroupMemberState::CacheGroupMemberStateOffline) {
-      members_out->emplace_back(member);
+    auto member_info = member->GetInfo();
+    if (!member_info.has_group_name() || member_info.group_name().empty()) {
+      continue;
     }
-  }
-}
 
-Errno CacheGroupMemberManagerImpl::LoadMembers(
-    const std::string& group_name, std::vector<CacheGroupMember>* members_out) {
-  uint64_t group_id;
-  auto rc = storage_->GetGroupId(group_name, &group_id);
-  if (rc != Errno::kOk) {
-    return rc;
+    const auto& group_name = member_info.group_name();
+    CHECK_GT(group_name.size(), 0);
+    CHECK(groups_->GetGroup(group_name, group).ok());
+    group->AddMember(member);
   }
 
-  std::vector<CacheGroupMember> members;
-  storage_->LoadMembers(group_id, &members);
-  SetMembersState(&members);
-  FilterOutOfflineMember(members, members_out);
+  running_ = true;
 
-  return rc;
+  LOG(INFO) << "Cache group member manager is up.";
+
+  return Status::OK();
 }
 
-Errno CacheGroupMemberManagerImpl::ReweightMember(const std::string& group_name,
-                                                  uint64_t member_id,
-                                                  uint32_t weight) {
-  uint64_t group_id;
-  auto rc = storage_->GetGroupId(group_name, &group_id);
-  if (rc == Errno::kOk) {
-    if (CheckId(member_id)) {
-      rc = storage_->ReweightMember(group_id, member_id, weight);
-    } else {
-      rc = Errno::kFail;
+Status CacheGroupMemberManagerImpl::Shutdown() {
+  if (!running_.exchange(false)) {
+    return Status::OK();
+  }
+
+  LOG(INFO) << "Cache group member manager is shutting down...";
+
+  LOG(INFO) << "Cache group member manager is down.";
+
+  return Status::OK();
+}
+
+Status CacheGroupMemberManagerImpl::JoinCacheGroup(
+    const std::string& group_name, const std::string& ip, uint32_t port,
+    uint32_t weight, uint64_t replace_id, uint64_t* member_id,
+    std::string* member_uuid) {
+  GroupSPtr group;
+  auto status = GetOrCreateGroup(group_name, group);
+  if (!status.ok()) {
+    return status;
+  }
+
+  MemberSPtr member;
+  if (replace_id != 0) {
+    status = members_->ReplaceMember(replace_id, ip, port, member);
+    if (!status.ok()) {
+      LOG(ERROR) << "Replace member failed: replace_id = " << replace_id
+                 << ", ip = " << ip << ", port = " << port
+                 << ", status = " << status.ToString();
+      return status;
     }
+  } else {
+    status = GetOrCreateMember(ip, port, member);
   }
-  return rc;
-}
-
-Errno CacheGroupMemberManagerImpl::HandleHeartbeat(
-    const std::string& group_name, uint64_t member_id,
-    const Statistic& /*stat*/) {
-  uint64_t group_id;
-  auto rc = storage_->GetGroupId(group_name, &group_id);
-  if (rc != Errno::kOk) {
-    LOG(ERROR) << "Group not found: group_name = " << group_name;
-    return rc;
+  if (!status.ok()) {
+    return status;
   }
 
-  return storage_->SetMemberLastOnlineTime(group_id, member_id, TimestampMs());
+  status = member->JoinCacheGroup(group, weight);
+  if (status.ok()) {
+    *member_id = member->GetInfo().id();
+    *member_uuid = member->GetInfo().uuid();
+  }
+
+  if (status.ok()) {
+    LOG(INFO) << "Joined cache group success: member = "
+              << member->GetInfo().ShortDebugString();
+  } else {
+    LOG(ERROR) << "Join cache group failed: group_name = " << group_name
+               << ", replace_id = " << replace_id << ", ip = " << ip
+               << ", port = " << port << ", weight = " << weight
+               << ", status = " << status.ToString();
+  }
+  return Status::OK();
 }
 
-std::vector<std::string> CacheGroupMemberManagerImpl::LoadGroups() {
-  return storage_->GetGroups();
+Status CacheGroupMemberManagerImpl::LeaveCacheGroup(
+    const std::string& group_name, const std::string& ip, uint32_t port) {
+  GroupSPtr group;
+  auto status = groups_->GetGroup(group_name, group);
+  if (!status.ok()) {
+    LOG(ERROR) << "Get group failed: group_name = " << group_name
+               << ", status = " << status.ToString();
+    return status;
+  }
+
+  MemberSPtr member;
+  status = members_->GetMember(ip, port, member);
+  if (!status.ok()) {
+    LOG(ERROR) << "Get member failed: ip = " << ip << ", port = " << port
+               << ", status = " << status.ToString();
+    return status;
+  }
+
+  status = member->LeaveCacheGroup();
+  if (!status.ok()) {
+    LOG(ERROR) << "Leave cache group failed: group_name = " << group_name
+               << ", ip = " << ip << ", port = " << port
+               << ", status = " << status.ToString();
+    return status;
+  }
+  return Status::OK();
 }
 
-uint64_t CacheGroupMemberManagerImpl::TimestampMs() {
-  return std::chrono::duration_cast<std::chrono::milliseconds>(
-             std::chrono::system_clock::now().time_since_epoch())
-      .count();
+Status CacheGroupMemberManagerImpl::Heartbeat(const std::string& ip,
+                                              uint32_t port) {
+  MemberSPtr member;
+  auto status = members_->GetMember(ip, port, member);
+  if (!status.ok()) {
+    LOG(ERROR) << "Get member failed: ip = " << ip << ", port = " << port
+               << ", status = " << status.ToString();
+    return status;
+  }
+  return member->Heartbeat(Helper::TimestampMs());
+}
+
+std::vector<std::string> CacheGroupMemberManagerImpl::GetGroupNames() {
+  return groups_->GetAllGroupNames();
+}
+
+Status CacheGroupMemberManagerImpl::GetMembers(
+    const std::string& group_name,
+    std::vector<PBCacheGroupMember>* members_out) {
+  GroupSPtr group;
+  auto status = groups_->GetGroup(group_name, group);
+  if (!status.ok()) {
+    LOG(ERROR) << "Get group failed: group_name = " << group_name
+               << ", status = " << status.ToString();
+    return status;
+  }
+
+  std::vector<MemberSPtr> members = group->GetAllMembers();
+  for (const auto& member : members) {
+    members_out->emplace_back(member->GetInfo());
+  }
+  return Status::OK();
+}
+
+Status CacheGroupMemberManagerImpl::ReweightMember(uint64_t member_id,
+                                                   uint32_t weight) {
+  MemberSPtr member;
+  auto status = members_->GetMember(member_id, member);
+  if (!status.ok()) {
+    LOG(ERROR) << "Get member failed: member_id = " << member_id
+               << ", status = " << status.ToString();
+    return status;
+  }
+
+  status = member->Reweight(weight);
+  if (!status.ok()) {
+    LOG(ERROR) << "Reweight member failed: member_id = " << member_id
+               << ", weight = " << weight << ", status = " << status.ToString();
+  }
+  return status;
+}
+
+Status CacheGroupMemberManagerImpl::GetOrCreateGroup(
+    const std::string& group_name, GroupSPtr& group) {
+  auto status = groups_->GetGroup(group_name, group);
+  if (status.ok()) {
+    return Status::OK();
+  } else if (!status.IsNotFound()) {
+    LOG(ERROR) << "Get group failed: group_name = " << group_name
+               << ", status = " << status.ToString();
+    return status;
+  }
+
+  status = groups_->CreateGroup(group_name, group);
+  if (status.ok() || status.IsExist()) {
+    status = Status::OK();
+  }
+
+  if (status.ok()) {
+    LOG(INFO) << "Create group success: group_name = " << group_name;
+  } else {
+    LOG(ERROR) << "Create group failed: group_name = " << group_name
+               << ", status = " << status.ToString();
+  }
+  return status;
+}
+
+Status CacheGroupMemberManagerImpl::GetOrCreateMember(const std::string& ip,
+                                                      uint32_t port,
+                                                      MemberSPtr& member) {
+  auto status = members_->GetMember(ip, port, member);
+  if (status.ok()) {
+    return status;
+  } else if (!status.IsNotFound()) {
+    LOG(ERROR) << "Get member failed: ip = " << ip << ", port = " << port
+               << ", status = " << status.ToString();
+    return status;
+  }
+
+  status = members_->CreateMember(ip, port, member);
+  if (status.ok() || status.IsExist()) {
+    status = Status::OK();
+  }
+
+  if (status.ok()) {
+    LOG(INFO) << "Create member success: member = "
+              << member->GetInfo().DebugString();
+  } else {
+    LOG(ERROR) << "Create member failed: ip = " << ip << ", port = " << port
+               << ", status = " << status.ToString();
+  }
+  return status;
 }
 
 }  // namespace cachegroup

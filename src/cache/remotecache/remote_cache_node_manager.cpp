@@ -22,11 +22,11 @@
 
 #include "cache/remotecache/remote_cache_node_manager.h"
 
+#include <absl/strings/str_join.h>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
 #include "cache/common/macro.h"
-#include "cache/debug/expose.h"
 #include "options/cache/tiercache.h"
 #include "utils/executor/bthread/bthread_executor.h"
 
@@ -75,8 +75,7 @@ Status RemoteCacheNodeManager::Start() {
   executor_->Schedule([this] { BackgroudRefresh(); },
                       FLAGS_load_members_interval_ms);
 
-  ExposeMDSAddrs(option_.mds_option.rpcRetryOpt.addrs);
-  ExposeCacheGroupName(option_.cache_group);
+  // ExposeInfo();
 
   running_ = true;
 
@@ -114,7 +113,7 @@ Status RemoteCacheNodeManager::RefreshMembers() {
   PBCacheGroupMembers members;
   Status status = LoadMembers(&members);
   if (status.ok()) {
-    status = on_member_load_(members);
+    on_member_load_(members);
   }
   return status;
 }
@@ -133,6 +132,15 @@ Status RemoteCacheNodeManager::LoadMembers(PBCacheGroupMembers* members) {
 
   return Status::OK();
 }
+
+// void RemoteCacheNodeManager::ExposeInfo() const {
+//   Exporter::Expose([&](Exporter::Root& root) {
+//     auto& remote_cache = root.remote_cache;
+//     remote_cache.mds_addrs =
+//         absl::StrJoin(option_.mds_option.rpcRetryOpt.addrs, ", ");
+//     remote_cache.cache_group = option_.cache_group;
+//   });
+// }
 
 }  // namespace cache
 }  // namespace dingofs

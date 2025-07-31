@@ -47,8 +47,7 @@ struct SubRangeRequest {
 
 class RemoteCacheNodeImpl final : public RemoteCacheNode {
  public:
-  RemoteCacheNodeImpl(const PBCacheGroupMember& member,
-                      RemoteBlockCacheOption option);
+  RemoteCacheNodeImpl(const PBCacheGroupMember& member);
 
   Status Start() override;
   Status Shutdown() override;
@@ -70,8 +69,11 @@ class RemoteCacheNodeImpl final : public RemoteCacheNode {
   Status CheckHealth(ContextSPtr ctx) const;
   Status CheckStatus(Status status);
 
+  // void ExposeOnStart();
+  // void ExposeOnShutdown();
+
   std::atomic<bool> running_;
-  const PBCacheGroupMember member_info_;
+  PBCacheGroupMember member_;
   RPCClientUPtr rpc_;
   StateMachineSPtr state_machine_;
   RemoteCacheNodeHealthCheckerUPtr health_checker_;

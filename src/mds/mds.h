@@ -30,7 +30,6 @@
 
 #include "blockaccess/block_accesser_factory.h"
 #include "mds/cachegroup/cache_group_member_manager.h"
-#include "mds/cachegroup/config.h"
 #include "mds/dlock/dlock.h"
 #include "mds/fs_manager.h"
 #include "mds/heartbeat/copyset_conf_generator.h"
@@ -109,7 +108,7 @@ class MDS {
 
   void InitFsManagerOptions(FsManagerOption* fs_manager_option);
 
-  void InitCacheGroupOption(cachegroup::CacheGroupOption* option);
+  void InitCacheGroupOption();
   void InitCacheGroup();
 
   // mds configuration items

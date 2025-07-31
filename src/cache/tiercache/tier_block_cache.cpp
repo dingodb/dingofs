@@ -189,8 +189,7 @@ Status TierBlockCache::Put(ContextSPtr ctx, const BlockKey& key,
   status = storage_->Upload(ctx, key, block, opt);
 
   if (!status.ok()) {
-    LOG_ERROR("[%s] Put block failed: key = %s, length = %zu, status = %s",
-              ctx->TraceId(), key.Filename(), block.size, status.ToString());
+    GENERIC_LOG_UPLOAD_ERROR();
   }
   return status;
 }

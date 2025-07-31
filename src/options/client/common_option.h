@@ -88,13 +88,13 @@ static void InitBlockCacheOption(utils::Configuration* c,
   {  // disk state option
 
     c->GetValue("disk_state.tick_duration_second",
-                &cache::FLAGS_state_tick_duration_s);
+                &cache::FLAGS_disk_state_tick_duration_s);
     c->GetValue("disk_state.normal2unstable_io_error_num",
-                &cache::FLAGS_state_normal2unstable_error_num);
+                &cache::FLAGS_disk_state_normal2unstable_error_num);
     c->GetValue("disk_state.unstable2normal_io_succ_num",
-                &cache::FLAGS_state_unstable2normal_succ_num);
+                &cache::FLAGS_disk_state_unstable2normal_succ_num);
     c->GetValue("disk_state.unstable2down_second",
-                &cache::FLAGS_state_unstable2down_s);
+                &cache::FLAGS_disk_state_unstable2down_s);
     c->GetValue("disk_state.disk_check_duration_millsecond",
                 &cache::FLAGS_check_disk_state_duration_ms);
   }
@@ -106,6 +106,8 @@ static void InitRemoteBlockCacheOption(utils::Configuration* c,
   c->GetValue("remote_cache.cache_group", &cache::FLAGS_cache_group);
   c->GetValue("remote_cache.load_members_interval_ms",
               &cache::FLAGS_load_members_interval_ms);
+  c->GetValue("remote_cache.fill_group_cache", &cache::FLAGS_fill_group_cache);
+
   c->GetValue("remote_cache.mds_rpc_addrs", &cache::FLAGS_mds_rpc_addrs);
   c->GetValue("remote_cache.mds_rpc_retry_total_ms",
               &cache::FLAGS_mds_rpc_retry_total_ms);
@@ -129,7 +131,15 @@ static void InitRemoteBlockCacheOption(utils::Configuration* c,
               &cache::FLAGS_rpc_cache_request_timeout_ms);
   c->GetValue("remote_cache.rpc_prefetch_request_timeout_ms",
               &cache::FLAGS_rpc_prefetch_request_timeout_ms);
-  c->GetValue("remote_cache.fill_group_cache", &cache::FLAGS_fill_group_cache);
+
+  c->GetValue("remote_cache.tick_duration_second",
+              &cache::FLAGS_node_state_tick_duration_s);
+  c->GetValue("remote_cache.normal2unstable_io_error_num",
+              &cache::FLAGS_node_state_normal2unstable_error_num);
+  c->GetValue("remote_cache.unstable2normal_io_succ_num",
+              &cache::FLAGS_node_state_unstable2normal_succ_num);
+  c->GetValue("remote_cache.unstable2down_second",
+              &cache::FLAGS_node_state_unstable2down_s);
   c->GetValue("remote_cache.check_cache_node_state_duration_ms",
               &cache::FLAGS_check_cache_node_state_duration_ms);
   *option = cache::RemoteBlockCacheOption();

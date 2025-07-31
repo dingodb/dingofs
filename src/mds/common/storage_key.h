@@ -65,16 +65,11 @@ constexpr uint32_t TOPOLOGY_PREFIX_LENGTH = 7;
 const char DLOCK_KEY_PREFIX[] = "dlock_01";
 constexpr uint32_t DLOCK_PREFIX_LENGTH = 8;
 
-// member id
-const char CACHE_GROUP_MEMBER_ID_KEY_PREFIX[] = "fs_10001";
-// group id
-const char CACHE_GROUP_GROUP_ID_KEY_PREFIX[] = "fs_10002";
-// group name
-const char CACHE_GROUP_GROUP_NAME_KEY_PREFIX[] = "fs_10003";
-const char CACHE_GROUP_GROUP_NAME_KEY_END[] = "fs_10004";
-// group member
-const char CACHE_GROUP_GROUP_MEMBER_KEY_PREFIX[] = "fs_10004";
-const char CACHE_GROUP_GROUP_MEMBER_KEY_END[] = "fs_10005";
+const char CACHE_GROUP_MEMBER_ID_GENERATOR_KEY_PREFIX[] = "fs_10001";
+const char CACHE_GROUP_GROUP_NAME_KEY_PREFIX[] = "fs_10002";  // group name
+const char CACHE_GROUP_GROUP_NAME_KEY_END[] = "fs_10003";
+const char CACHE_GROUP_MEMBER_ID_KEY_PREFIX[] = "fs_10003";  // member id
+const char CACHE_GROUP_MEMBER_ID_KEY_END[] = "fs_10004";
 constexpr uint32_t CACHE_GROUP_PREFIX_LENGTH = 8;
 
 }  // namespace mds

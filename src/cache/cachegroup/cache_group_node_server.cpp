@@ -25,7 +25,6 @@
 #include "cache/cachegroup/cache_group_node.h"
 #include "cache/cachegroup/cache_group_node_service.h"
 #include "cache/common/macro.h"
-#include "cache/utils/offload_thread_pool.h"
 
 namespace dingofs {
 namespace cache {
@@ -51,20 +50,20 @@ Status CacheGroupNodeServerImpl::Start() {
   // Init signal
   InstallSignal();
 
-  // Start cache group node
-  auto status = node_->Start();
-  if (!status.ok()) {
-    LOG(ERROR) << "Start cache group node failed: " << status.ToString();
-    return status;
-  }
-
   // Start brpc server
   std::string listen_ip = option_.listen_ip;
   uint32_t listen_port = option_.listen_port;
-  status = StartRpcServer(listen_ip, listen_port);
+  auto status = StartRpcServer(listen_ip, listen_port);
   if (!status.ok()) {
     LOG(ERROR) << "Start cache group node server on addresss (" << listen_ip
                << ":" << listen_port << ") failed: " << status.ToString();
+    return status;
+  }
+
+  // Start cache group node
+  status = node_->Start();
+  if (!status.ok()) {
+    LOG(ERROR) << "Start cache group node failed: " << status.ToString();
     return status;
   }
 

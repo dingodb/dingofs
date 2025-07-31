@@ -28,22 +28,62 @@
 namespace dingofs {
 namespace cache {
 
-DEFINE_uint32(state_tick_duration_s, 60,
+// Disk state
+DEFINE_uint32(disk_state_tick_duration_s, 60,
               "Duration in seconds for the disk state tick");
-DEFINE_validator(state_tick_duration_s, brpc::PassValidate);
+DEFINE_validator(disk_state_tick_duration_s, brpc::PassValidate);
 
-DEFINE_uint32(state_normal2unstable_error_num, 3,
+DEFINE_uint32(disk_state_normal2unstable_error_num, 3,
               "Number of errors to trigger unstable state from normal state");
-DEFINE_validator(state_normal2unstable_error_num, brpc::PassValidate);
+DEFINE_validator(disk_state_normal2unstable_error_num, brpc::PassValidate);
 
-DEFINE_uint32(state_unstable2normal_succ_num, 10,
+DEFINE_uint32(disk_state_unstable2normal_succ_num, 10,
               "Number of successful operations to trigger normal state from "
               "unstable state");
-DEFINE_validator(state_unstable2normal_succ_num, brpc::PassValidate);
+DEFINE_validator(disk_state_unstable2normal_succ_num, brpc::PassValidate);
 
-DEFINE_uint32(state_unstable2down_s, 1800,
+DEFINE_uint32(disk_state_unstable2down_s, 1800,
               "Duration in seconds to trigger down state from unstable state");
-DEFINE_validator(state_unstable2down_s, brpc::PassValidate);
+DEFINE_validator(disk_state_unstable2down_s, brpc::PassValidate);
+
+// Node state
+DEFINE_uint32(node_state_tick_duration_s, 60,
+              "Duration in seconds for the node state tick");
+DEFINE_validator(node_state_tick_duration_s, brpc::PassValidate);
+
+DEFINE_uint32(node_state_normal2unstable_error_num, 3,
+              "Number of errors to trigger unstable state from normal state");
+DEFINE_validator(node_state_normal2unstable_error_num, brpc::PassValidate);
+
+DEFINE_uint32(node_state_unstable2normal_succ_num, 3,
+              "Number of successful operations to trigger normal state from "
+              "unstable state");
+DEFINE_validator(node_state_unstable2normal_succ_num, brpc::PassValidate);
+
+DEFINE_uint32(node_state_unstable2down_s, 1800,
+              "Duration in seconds to trigger down state from unstable state");
+DEFINE_validator(node_state_unstable2down_s, brpc::PassValidate);
+
+uint32_t BaseState::CfgStateNormal2UnstableErrorNum() {
+  if (state_machine->GetType() == kDiskStateMachine) {
+    return FLAGS_disk_state_normal2unstable_error_num;
+  }
+  return FLAGS_node_state_normal2unstable_error_num;
+}
+
+uint32_t BaseState::CfgStateUnstable2NormalSuccNum() {
+  if (state_machine->GetType() == kDiskStateMachine) {
+    return FLAGS_disk_state_unstable2normal_succ_num;
+  }
+  return FLAGS_node_state_unstable2normal_succ_num;
+}
+
+uint32_t BaseState::CfgStateUnstable2downS() {
+  if (state_machine->GetType() == kDiskStateMachine) {
+    return FLAGS_disk_state_unstable2down_s;
+  }
+  return FLAGS_node_state_unstable2down_s;
+}
 
 // normal
 NormalState::NormalState(StateMachine* state_machine)
@@ -51,7 +91,7 @@ NormalState::NormalState(StateMachine* state_machine)
 
 void NormalState::Error() {
   error_count_.fetch_add(1);
-  if (error_count_.load() > FLAGS_state_normal2unstable_error_num) {
+  if (error_count_.load() > CfgStateNormal2UnstableErrorNum()) {
     state_machine->OnEvent(StateEvent::kStateEventUnstable);
   }
 }
@@ -69,7 +109,7 @@ UnstableState::UnstableState(StateMachine* state_machine)
 
 void UnstableState::Success() {
   succ_count_.fetch_add(1);
-  if (succ_count_.load() > FLAGS_state_unstable2normal_succ_num) {
+  if (succ_count_.load() > CfgStateUnstable2NormalSuccNum()) {
     state_machine->OnEvent(StateEvent::kStateEventNormal);
   }
 }
@@ -78,7 +118,7 @@ void UnstableState::Tick() {
   uint64_t now = std::chrono::duration_cast<std::chrono::seconds>(
                      std::chrono::steady_clock::now().time_since_epoch())
                      .count();
-  if (now - start_time_ > (uint64_t)FLAGS_state_unstable2down_s) {
+  if (now - start_time_ > (uint64_t)CfgStateUnstable2downS()) {
     state_machine->OnEvent(StateEvent::kStateEventDown);
   }
 
@@ -93,8 +133,9 @@ DownState::DownState(StateMachine* state_machine) : BaseState(state_machine) {}
 State DownState::GetState() const { return kStateDown; }
 
 // state machine
-StateMachineImpl::StateMachineImpl()
+StateMachineImpl::StateMachineImpl(StateMachineType type)
     : running_(false),
+      type_(type),
       state_(std::make_unique<BaseState>(this)),
       executor_(std::make_unique<BthreadExecutor>()) {}
 
@@ -123,8 +164,7 @@ bool StateMachineImpl::Start(OnStateChangeFunc on_state_change) {
   running_ = true;
 
   CHECK(executor_->Start());
-  executor_->Schedule([this] { TickTock(); },
-                      FLAGS_state_tick_duration_s * 1000);
+  executor_->Schedule([this] { TickTock(); }, CfgStateTickDurationS() * 1000);
 
   LOG(INFO) << "State machine is up.";
 
@@ -187,8 +227,7 @@ void StateMachineImpl::TickTock() {
   }
 
   state_->Tick();
-  executor_->Schedule([this] { TickTock(); },
-                      FLAGS_state_tick_duration_s * 1000);
+  executor_->Schedule([this] { TickTock(); }, CfgStateTickDurationS() * 1000);
 }
 
 int StateMachineImpl::EventThread(void* meta,
@@ -241,6 +280,13 @@ void StateMachineImpl::OnStageChange() {
   if (on_state_change_) {
     on_state_change_(state_->GetState());
   }
+}
+
+uint32_t StateMachineImpl::CfgStateTickDurationS() {
+  if (type_ == kDiskStateMachine) {
+    return FLAGS_disk_state_tick_duration_s;
+  }
+  return FLAGS_node_state_tick_duration_s;
 }
 
 }  // namespace cache

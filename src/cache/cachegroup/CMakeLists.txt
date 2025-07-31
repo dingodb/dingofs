@@ -22,7 +22,6 @@ target_link_libraries(cache_cachegroup
     cache_common
     cache_utils
     cache_options
-    cache_metrics
     cache_storage
     cache_blockcache
     vfs_meta_v2_lib

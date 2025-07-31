@@ -51,6 +51,10 @@ class BaseState {
 
   virtual State GetState() const { return kStateUnknown; }
 
+  uint32_t CfgStateNormal2UnstableErrorNum();
+  uint32_t CfgStateUnstable2NormalSuccNum();
+  uint32_t CfgStateUnstable2downS();
+
  protected:
   StateMachine* state_machine;
 };
@@ -97,7 +101,7 @@ class DownState final : public BaseState {
 
 class StateMachineImpl final : public StateMachine {
  public:
-  explicit StateMachineImpl();
+  explicit StateMachineImpl(StateMachineType type);
 
   ~StateMachineImpl() override = default;
 
@@ -110,13 +114,18 @@ class StateMachineImpl final : public StateMachine {
   State GetState() const override;
   void OnEvent(StateEvent event) override;
 
+  StateMachineType GetType() const override { return type_; }
+
  private:
   static int EventThread(void* meta, bthread::TaskIterator<StateEvent>& iter);
   void ProcessEvent(StateEvent event);
   void TickTock();
   void OnStageChange();
 
+  uint32_t CfgStateTickDurationS();
+
   std::atomic<bool> running_;
+  StateMachineType type_;
   mutable BthreadMutex mutex_;  // for state_
   OnStateChangeFunc on_state_change_;
   BaseStateUPtr state_;

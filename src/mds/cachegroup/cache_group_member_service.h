@@ -23,8 +23,6 @@
 #ifndef DINGOFS_SRC_MDS_CACHEGROUP_CACHE_GROUP_MEMBER_SERVICE_H_
 #define DINGOFS_SRC_MDS_CACHEGROUP_CACHE_GROUP_MEMBER_SERVICE_H_
 
-#include <memory>
-
 #include "dingofs/cachegroup.pb.h"
 #include "mds/cachegroup/cache_group_member_manager.h"
 
@@ -48,18 +46,17 @@ namespace cachegroup {
 class CacheGroupMemberServiceImpl
     : public ::dingofs::pb::mds::cachegroup::CacheGroupMemberService {
  public:
-  explicit CacheGroupMemberServiceImpl(
-      std::shared_ptr<CacheGroupMemberManager> member_manager);
+  explicit CacheGroupMemberServiceImpl(CacheGroupMemberManagerSPtr manager);
 
-  DECLARE_RPC_METHOD(RegisterMember);
-  DECLARE_RPC_METHOD(AddMember);
-  DECLARE_RPC_METHOD(LoadMembers);
-  DECLARE_RPC_METHOD(ReweightMember);
+  DECLARE_RPC_METHOD(JoinCacheGroup);
+  DECLARE_RPC_METHOD(LeaveCacheGroup);
   DECLARE_RPC_METHOD(Heartbeat);
   DECLARE_RPC_METHOD(LoadGroups);
+  DECLARE_RPC_METHOD(LoadMembers);
+  DECLARE_RPC_METHOD(ReweightMember);
 
  private:
-  std::shared_ptr<CacheGroupMemberManager> member_manager_;
+  CacheGroupMemberManagerSPtr manager_;
 };
 
 }  // namespace cachegroup

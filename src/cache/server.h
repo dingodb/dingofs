@@ -26,6 +26,9 @@
 namespace dingofs {
 namespace cache {
 
+// DECLARE_string(v, "", "");
+// DECLARE_string(version, "", "");
+
 int Run(int argc, char** argv);
 
 }  // namespace cache

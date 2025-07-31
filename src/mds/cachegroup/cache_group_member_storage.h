@@ -20,117 +20,118 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_MDS_CACHEGROUP_CACHE_GROUP_MEMBER_STORAGE_H_
-#define DINGOFS_SRC_MDS_CACHEGROUP_CACHE_GROUP_MEMBER_STORAGE_H_
+#ifndef DINGOFS_DINGOFS_SRC_MDS_CACHEGROUP_CACHE_GROUP_MEMBER_STORAGE_H_
+#define DINGOFS_DINGOFS_SRC_MDS_CACHEGROUP_CACHE_GROUP_MEMBER_STORAGE_H_
 
 #include <memory>
 #include <string>
 #include <unordered_map>
 
-#include "dingofs/cachegroup.pb.h"
-#include "mds/cachegroup/errno.h"
+#include "common/status.h"
+#include "mds/cachegroup/common.h"
 #include "mds/idgenerator/etcd_id_generator.h"
 #include "mds/kvstorageclient/etcd_client.h"
-#include "utils/concurrent/concurrent.h"
 #include "utils/concurrent/rw_lock.h"
 
 namespace dingofs {
 namespace mds {
 namespace cachegroup {
 
-using ::dingofs::idgenerator::EtcdIdGenerator;
-using ::dingofs::kvstorage::KVStorageClient;
-using ::dingofs::pb::mds::cachegroup::CacheGroupMember;
-using ::dingofs::utils::BthreadRWLock;
+class Group;
+using GroupSPtr = std::shared_ptr<Group>;
 
-class CacheGroupMemberStorage {
+class Member : public std::enable_shared_from_this<Member> {
  public:
-  virtual ~CacheGroupMemberStorage() = default;
+  Member(const PBCacheGroupMember& member_info,
+         kvstorage::KVStorageClientSPtr storage);
 
-  virtual bool Init() = 0;
+  Status JoinCacheGroup(GroupSPtr group, uint32_t weight);
+  Status LeaveCacheGroup();
+  Status Heartbeat(uint64_t last_online_time_ms);
+  Status Reweight(uint32_t weight);
 
-  virtual Errno GetGroupId(const std::string& group_name, uint64_t* id) = 0;
-
-  virtual std::vector<std::string> GetGroups() = 0;
-
-  virtual Errno RegisterMember(uint64_t* id) = 0;
-
-  virtual Errno RegisterGroup(const std::string& group_name, uint64_t* id) = 0;
-
-  virtual Errno AddMember(uint64_t group_id,
-                          const CacheGroupMember& member) = 0;
-
-  virtual void LoadMembers(uint64_t group_id,
-                           std::vector<CacheGroupMember>* members) = 0;
-
-  virtual Errno ReweightMember(uint64_t group_id, uint64_t member_id,
-                               uint32_t weight) = 0;
-
-  virtual Errno SetMemberLastOnlineTime(uint64_t group_id, uint64_t member_id,
-                                        uint64_t last_online_time_ms) = 0;
-};
-
-class CacheGroupMemberStorageImpl : public CacheGroupMemberStorage {
-  using CacheGroupMembersType = std::unordered_map<uint64_t, CacheGroupMember>;
-
- public:
-  explicit CacheGroupMemberStorageImpl(std::shared_ptr<KVStorageClient> kv);
-
-  bool Init() override;
-
-  Errno GetGroupId(const std::string& group_name, uint64_t* group_id) override;
-
-  std::vector<std::string> GetGroups() override;
-
-  Errno RegisterMember(uint64_t* member_id) override;
-
-  Errno RegisterGroup(const std::string& group_name,
-                      uint64_t* group_id) override;
-
-  Errno AddMember(uint64_t group_id, const CacheGroupMember& member) override;
-
-  void LoadMembers(uint64_t group_id,
-                   std::vector<CacheGroupMember>* members) override;
-
-  Errno ReweightMember(uint64_t group_id, uint64_t member_id,
-                       uint32_t weight) override;
-
-  Errno SetMemberLastOnlineTime(uint64_t group_id, uint64_t member_id,
-                                uint64_t last_online_time_ms) override;
+  Status Store();
+  Status Destroy();
+  PBCacheGroupMember GetInfo();
 
  private:
-  using UpdateFunc = std::function<void(CacheGroupMember* member)>;
+  PBCacheGroupMemberState GetState() const;
 
-  bool LoadGroupNames();
+  utils::BthreadRWLock rwlock_;
+  GroupSPtr group_;
+  PBCacheGroupMember member_info_;
+  kvstorage::KVStorageClientSPtr storage_;
+};
 
-  bool LoadGroupMembers();
+using MemberSPtr = std::shared_ptr<Member>;
 
-  void AddMember2Group(uint64_t group_id, uint64_t member_id,
-                       const CacheGroupMember& member);
+class Members {
+ public:
+  explicit Members(kvstorage::KVStorageClientSPtr storage);
 
-  bool StoreGroupName(uint64_t group_id, const std::string& group_name);
+  Status Load();
 
-  bool StoreGroupMember(uint64_t group_id, uint64_t member_id,
-                        const CacheGroupMember& member);
+  Status GetMember(const std::string& ip, uint32_t port, MemberSPtr& member);
+  Status GetMember(uint64_t member_id, MemberSPtr& member);
+  Status CreateMember(const std::string& ip, uint32_t port, MemberSPtr& member);
+  Status ReplaceMember(uint64_t member_id, const std::string& ip, uint32_t port,
+                       MemberSPtr& member);
 
-  Errno UpdateMember(uint64_t group_id, uint64_t member_id,
-                     UpdateFunc update_func);
+  std::vector<MemberSPtr> GetAllMembers();
 
  private:
-  BthreadRWLock rwlock_;  // TODO(Wine93): more efficient for multi-locks
-  std::shared_ptr<KVStorageClient> kv_;
-  // member id (start with 1)
-  std::unique_ptr<EtcdIdGenerator> member_id_generator_;
-  // group id (start with 1)
-  std::unique_ptr<EtcdIdGenerator> group_id_generator_;
-  // group_name => group_id
-  std::unordered_map<std::string, uint64_t> group_names_;
-  // group_id => cache_group_members
-  std::unordered_map<uint64_t, CacheGroupMembersType> groups_;
+  PBCacheGroupMember NewMemberInfo(uint64_t member_id, const std::string& ip,
+                                   uint32_t port);
+
+  utils::BthreadRWLock rwlock_;
+  kvstorage::KVStorageClientSPtr storage_;
+  idgenerator::IdAllocatorUPtr member_id_generator_;
+  std::unordered_map<std::string, uint64_t> endpoint2id_;
+  std::unordered_map<uint64_t, MemberSPtr> id2member_;
 };
+
+using MembersUPtr = std::unique_ptr<Members>;
+
+class Group {
+ public:
+  explicit Group(const std::string& group_name);
+
+  void AddMember(MemberSPtr member);
+  void RemoveMember(uint64_t member_id);
+  std::vector<MemberSPtr> GetAllMembers();
+
+  size_t Size();
+  std::string Name() const;
+
+ private:
+  utils::BthreadRWLock rwlock_;
+  const std::string group_name_;
+  std::unordered_map<uint64_t, MemberSPtr> id2member_;
+};
+
+class Groups {
+ public:
+  explicit Groups(kvstorage::KVStorageClientSPtr storage);
+
+  Status Load();
+
+  Status GetGroup(const std::string& group_name, GroupSPtr& group);
+  Status CreateGroup(const std::string& group_name, GroupSPtr& group);
+  std::vector<std::string> GetAllGroupNames();
+
+ private:
+  Status CheckGroupName(const std::string& group_name);
+  Status StoreGroupName(const std::string& group_name);
+
+  utils::BthreadRWLock rwlock_;
+  kvstorage::KVStorageClientSPtr storage_;
+  std::unordered_map<std::string, GroupSPtr> name2group_;
+};
+
+using GroupsUPtr = std::unique_ptr<Groups>;
 
 }  // namespace cachegroup
 }  // namespace mds
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_MDS_CACHEGROUP_CACHE_GROUP_MEMBER_STORAGE_H_
+#endif  // DINGOFS_DINGOFS_SRC_MDS_CACHEGROUP_CACHE_GROUP_MEMBER_STORAGE_H_

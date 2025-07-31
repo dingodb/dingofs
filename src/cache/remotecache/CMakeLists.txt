@@ -22,7 +22,6 @@ target_link_libraries(cache_remotecache
     cache_common
     cache_utils
     cache_options
-    cache_metrics
     cache_storage
     cache_blockcache
     dingofs_executor

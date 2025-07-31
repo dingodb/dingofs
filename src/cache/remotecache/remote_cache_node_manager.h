@@ -32,7 +32,7 @@
 namespace dingofs {
 namespace cache {
 
-using OnMemberLoad = std::function<Status(const PBCacheGroupMembers& members)>;
+using OnMemberLoad = std::function<void(const PBCacheGroupMembers& members)>;
 
 class RemoteCacheNodeManager {
  public:
@@ -48,6 +48,8 @@ class RemoteCacheNodeManager {
   Status RefreshMembers();
 
   Status LoadMembers(PBCacheGroupMembers* members);
+
+  // void ExposeInfo() const;
 
   std::atomic<bool> running_;
   RemoteBlockCacheOption option_;

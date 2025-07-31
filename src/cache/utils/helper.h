@@ -52,6 +52,9 @@ class Helper {
     return Errorf(errno, format, args...);
   }
 
+  // string
+  static std::string ToLowerCase(const std::string& str);
+
   // sys conf
   static int GetProcessCores();
   static uint64_t GetSysPageSize();

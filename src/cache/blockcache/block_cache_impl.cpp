@@ -31,7 +31,7 @@
 #include "cache/blockcache/mem_cache.h"
 #include "cache/common/const.h"
 #include "cache/common/macro.h"
-#include "cache/debug/expose.h"
+#include "cache/status/cache_status.h"
 #include "cache/storage/storage.h"
 #include "cache/storage/storage_pool.h"
 #include "cache/utils/bthread.h"
@@ -99,7 +99,7 @@ Status BlockCacheImpl::Start() {
     return status;
   }
 
-  ExposeLocalCacheProperty(option_.enable_stage, option_.enable_cache);
+  // ExposeLocalCacheProperty(option_.enable_stage, option_.enable_cache);
 
   running_ = true;
 

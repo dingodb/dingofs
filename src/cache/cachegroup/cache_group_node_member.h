@@ -38,6 +38,8 @@ class CacheGroupNodeMember {
   virtual Status LeaveGroup() = 0;
 
   virtual std::string GetGroupName() const = 0;
+  virtual std::string GetListenIP() const = 0;
+  virtual uint32_t GetListenPort() const = 0;
   virtual uint64_t GetMemberId() const = 0;
   virtual std::string GetMemberUuid() const = 0;
 };
@@ -57,17 +59,12 @@ class CacheGroupNodeMemberImpl final : public CacheGroupNodeMember {
   Status LeaveGroup() override;
 
   std::string GetGroupName() const override;
+  std::string GetListenIP() const override;
+  uint32_t GetListenPort() const override;
   uint64_t GetMemberId() const override;
   std::string GetMemberUuid() const override;
 
  private:
-  Status LoadMemberId(uint64_t* member_id);
-  Status RegisterMember(uint64_t old_id, uint64_t* member_id);
-  Status AddMember2Group(const std::string& group_name, uint64_t member_id);
-  Status SaveMemberId(uint64_t member_id);
-
-  std::string GenMemberUuid();
-
   uint64_t member_id_;       // allocated by mds
   std::string member_uuid_;  // allocated by local, used for directory name
   const CacheGroupNodeOption option_;

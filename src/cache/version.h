@@ -16,27 +16,40 @@
 
 /*
  * Project: DingoFS
- * Created Date: 2025-06-02
+ * Created Date: 2025-08-02
  * Author: Jingli Chen (Wine93)
  */
 
-#include "options/cache/cachegroup.h"
+#ifndef DINGOFS_SRC_CACHE_VERSION_H_
+#define DINGOFS_SRC_CACHE_VERSION_H_
 
-#include <absl/strings/str_split.h>
-#include <glog/logging.h>
-
-#include "options/cache/stub.h"
-
+#include <string>
 namespace dingofs {
 namespace cache {
 
-CacheGroupNodeOption::CacheGroupNodeOption()
-    : group_name(FLAGS_group_name),
-      listen_ip(FLAGS_listen_ip),
-      listen_port(FLAGS_listen_port),
-      group_weight(FLAGS_group_weight),
-      replace_id(FLAGS_replace_id),
-      mds_option(NewMdsOption()) {}
+#ifndef MAJOR_VERSION
+#define MAJOR_VERSION "v4"
+#endif
+
+#ifndef MINOR_VERSION
+#define MINOR_VERSION "1"
+#endif
+
+#ifndef GIT_TAG_NAME
+#define GIT_TAG_NAME "v4.1.0"
+#endif
+
+#ifndef GIT_LAST_COMMIT_ID
+#define GIT_LAST_COMMIT_ID "unknown"
+#endif
+
+#ifndef DINGOFS_BUILD_TYPE
+#define DINGOFS_BUILD_TYPE "unknown"
+#endif
+
+std::string Version();
 
 }  // namespace cache
 }  // namespace dingofs
+
+#endif  // DINGOFS_SRC_CACHE_VERSION_H_

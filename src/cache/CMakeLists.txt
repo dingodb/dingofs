@@ -20,20 +20,24 @@ add_subdirectory(cachegroup)
 add_subdirectory(remotecache)
 add_subdirectory(tiercache)
 add_subdirectory(benchmark)
-add_subdirectory(debug)
+add_subdirectory(status)
 
-add_library(cache_lib "server.cpp")
+
+file(GLOB CACHE_LIB_SRCS
+    "server.cpp"
+    "version.cpp"
+)
+add_library(cache_lib ${CACHE_LIB_SRCS})
 target_link_libraries(cache_lib
     cache_common
     cache_utils
     cache_options
-    cache_metrics
     cache_storage
     cache_blockcache
     cache_cachegroup
     cache_remotecache
     cache_tiercache
-    cache_debug
+    cache_status
 )
 
 add_executable(dingo-cache main.cpp)
