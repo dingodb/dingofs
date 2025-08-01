@@ -452,14 +452,16 @@ Status VFSWrapper::Link(Ino ino, Ino new_parent, const std::string& new_name,
   if (new_name.length() > max_name_len) {
     LOG(WARNING) << "name too long, name: " << new_name
                  << ", maxNameLength: " << max_name_len;
-    return Status::NameTooLong("name too long, length: " +
-                               std::to_string(new_name.length()));
+    s = Status::NameTooLong("name too long, length: " +
+                            std::to_string(new_name.length()));
+    return s;
   }
 
   s = vfs_->Link(ino, new_parent, new_name, attr);
   if (!s.ok()) {
     op_metric.FailOp();
   }
+
   return s;
 }
 
@@ -660,7 +662,7 @@ Status VFSWrapper::GetXattr(Ino ino, const std::string& name,
   }
 
   if (value->empty()) {
-    return Status::NoData("no data");
+    s = Status::NoData("no data");
   }
 
   return s;

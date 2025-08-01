@@ -14,14 +14,13 @@
 
 #include "client/vfs/meta/v2/filesystem.h"
 
-#include <butil/file_util.h>
 #include <fcntl.h>
-#include <json/writer.h>
 
 #include <cstdint>
 #include <string>
 #include <vector>
 
+#include "butil/file_util.h"
 #include "client/meta/vfs_meta.h"
 #include "client/vfs/meta/v2/client_id.h"
 #include "common/status.h"
@@ -31,6 +30,7 @@
 #include "fmt/format.h"
 #include "glog/logging.h"
 #include "json/value.h"
+#include "json/writer.h"
 
 namespace dingofs {
 namespace client {
@@ -44,10 +44,7 @@ const uint32_t kMaxXAttrValueLength = 64 * 1024;
 
 const uint32_t kHeartbeatIntervalS = 5;  // seconds
 
-const std::set<std::string> kXAttrBlackList = {
-    "system.posix_acl_access", "system.posix_acl_default", "system.nfs4_acl"};
-
-std::string GetHostName() {
+static std::string GetHostName() {
   char hostname[kMaxHostNameLength];
   int ret = gethostname(hostname, kMaxHostNameLength);
   if (ret < 0) {
@@ -506,10 +503,6 @@ Status MDSV2FileSystem::SetAttr(Ino ino, int set, const Attr& attr,
 
 Status MDSV2FileSystem::GetXattr(Ino ino, const std::string& name,
                                  std::string* value) {
-  if (kXAttrBlackList.find(name) != kXAttrBlackList.end()) {
-    return Status::OK();
-  }
-
   auto status = mds_client_->GetXAttr(ino, name, *value);
   if (!status.ok()) {
     return Status::NoData(status.Errno(), status.ToString());

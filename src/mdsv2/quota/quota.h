@@ -98,7 +98,8 @@ class DirQuotaMap {
 // include cache and store
 class QuotaManager {
  public:
-  QuotaManager(uint32_t fs_id, ParentMemoSPtr parent_memo, OperationProcessorSPtr operation_processor)
+  QuotaManager(uint32_t fs_id, ParentMemoSPtr parent_memo,
+               OperationProcessorSPtr operation_processor)
       : fs_id_(fs_id),
         fs_quota_(0, {}),
         dir_quota_map_(parent_memo),
@@ -114,13 +115,14 @@ class QuotaManager {
   void Destroy();
 
   Status SetFsQuota(Trace& trace, const QuotaEntry& quota);
-  Status GetFsQuota(Trace& trace, QuotaEntry& quota);
+  Status GetFsQuota(Trace& trace, bool is_bypass_cache, QuotaEntry& quota);
   Status DeleteFsQuota(Trace& trace);
 
   Status SetDirQuota(Trace& trace, Ino ino, const QuotaEntry& quota);
   Status GetDirQuota(Trace& trace, Ino ino, QuotaEntry& quota);
   Status DeleteDirQuota(Trace& trace, Ino ino);
-  Status LoadDirQuotas(Trace& trace, std::map<Ino, QuotaEntry>& quota_entry_map);
+  Status LoadDirQuotas(Trace& trace,
+                       std::map<Ino, QuotaEntry>& quota_entry_map);
 
   void UpdateFsUsage(int64_t byte_delta, int64_t inode_delta);
   void UpdateDirUsage(Ino parent, int64_t byte_delta, int64_t inode_delta);

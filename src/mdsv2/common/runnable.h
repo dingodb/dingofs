@@ -17,8 +17,8 @@
 
 #include <atomic>
 #include <cstdint>
+#include <deque>
 #include <functional>
-#include <map>
 #include <memory>
 #include <queue>
 #include <string>
@@ -28,7 +28,9 @@
 #include "bthread/execution_queue.h"
 #include "bthread/types.h"
 #include "bvar/latency_recorder.h"
+#include "fmt/format.h"
 #include "mdsv2/common/synchronization.h"
+#include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 
@@ -46,7 +48,7 @@ class TaskRunnable {
 
   virtual void Run() = 0;
 
-  virtual std::string Trace() { return ""; }
+  virtual std::string Trace() { return fmt::format("{}[{}]", Type(), Id()); }
 
   int32_t Priority() const { return priority_; }
   void SetPriority(int32_t priority) { priority_ = priority; }
@@ -69,12 +71,14 @@ using TaskRunnablePtr = std::shared_ptr<TaskRunnable>;
 
 // Custom Comparator for priority_queue
 struct CompareTaskRunnable {
-  bool operator()(const TaskRunnablePtr& lhs, TaskRunnablePtr& rhs) const { return lhs.get() < rhs.get(); }
+  bool operator()(const TaskRunnablePtr& lhs, TaskRunnablePtr& rhs) const {
+    return lhs.get() < rhs.get();
+  }
 };
 
 int ExecuteRoutine(void*, bthread::TaskIterator<TaskRunnablePtr>& iter);
 
-enum class WorkerEventType {
+enum class WorkerEventType : uint8_t {
   kAddTask = 0,
   kFinishTask = 1,
 };
@@ -84,10 +88,14 @@ using NotifyFuncer = std::function<void(WorkerEventType)>;
 class Worker {
  public:
   Worker(NotifyFuncer notify_func);
-  ~Worker();
+  ~Worker() = default;
 
-  static std::shared_ptr<Worker> New() { return std::make_shared<Worker>(nullptr); }
-  static std::shared_ptr<Worker> New(NotifyFuncer notify_func) { return std::make_shared<Worker>(notify_func); }
+  static std::shared_ptr<Worker> New() {
+    return std::make_shared<Worker>(nullptr);
+  }
+  static std::shared_ptr<Worker> New(NotifyFuncer notify_func) {
+    return std::make_shared<Worker>(notify_func);
+  }
 
   bool Init();
   void Destroy();
@@ -103,9 +111,10 @@ class Worker {
 
   void Notify(WorkerEventType type);
 
-  void AppendPendingTaskTrace(uint64_t task_id, const std::string& trace);
-  void PopPendingTaskTrace(uint64_t task_id);
-  std::vector<std::string> GetPendingTaskTrace();
+  void PushPendingTaskTrace(const std::string& trace);
+  void PopPendingTaskTrace();
+  std::vector<std::string> TracePendingTasks();
+  std::string Trace();
 
  private:
   // Execution queue is available.
@@ -121,15 +130,16 @@ class Worker {
 
   // trace
   bool is_use_trace_;
-  bthread_mutex_t trace_mutex_;
-  std::map<uint64_t, std::string> pending_task_traces_;
+  utils::RWLock lock_;
+  std::deque<std::string> pending_task_traces_;
 };
 
 using WorkerSPtr = std::shared_ptr<Worker>;
 
 class WorkerSet {
  public:
-  WorkerSet(std::string name, uint32_t worker_num, int64_t max_pending_task_count, bool use_pthread,
+  WorkerSet(std::string name, uint32_t worker_num,
+            int64_t max_pending_task_count, bool use_pthread,
             bool is_inplace_run);
   virtual ~WorkerSet() = default;
 
@@ -142,7 +152,9 @@ class WorkerSet {
   virtual bool ExecuteHash(int64_t id, TaskRunnablePtr task) = 0;
 
   std::string Name() const { return name_; }
-  std::string GenWorkerName() { return name_ + "_" + std::to_string(GenWorkerNo()); }
+  std::string GenWorkerName() {
+    return name_ + "_" + std::to_string(GenWorkerNo());
+  }
   uint32_t GenWorkerNo() { return worker_no_generator_.fetch_add(1); }
   bool IsUsePthread() const { return use_pthread_; }
   uint32_t WorkerNum() const { return worker_num_; }
@@ -151,7 +163,9 @@ class WorkerSet {
   uint64_t TotalTaskCount() { return total_task_count_metrics_.get_value(); }
   void IncTotalTaskCount() { total_task_count_metrics_ << 1; }
 
-  int64_t PendingTaskCount() { return pending_task_count_.load(std::memory_order_relaxed); }
+  int64_t PendingTaskCount() {
+    return pending_task_count_.load(std::memory_order_relaxed);
+  }
   void IncPendingTaskCount() {
     pending_task_count_metrics_ << 1;
     pending_task_count_.fetch_add(1, std::memory_order_relaxed);
@@ -163,7 +177,7 @@ class WorkerSet {
   void QueueWaitMetrics(int64_t value) { queue_wait_metrics_ << value; }
   void QueueRunMetrics(int64_t value) { queue_run_metrics_ << value; }
 
-  virtual std::vector<std::vector<std::string>> GetPendingTaskTrace() { return {}; }
+  virtual std::string Trace() { return ""; }
 
   virtual void WatchWorker(WorkerEventType type) {
     if (type == WorkerEventType::kFinishTask) {
@@ -217,27 +231,34 @@ using WorkerSetUPtr = std::unique_ptr<WorkerSet>;
 // Use brpc ExecutionQueueId implement
 class ExecqWorkerSet : public WorkerSet {
  public:
-  ExecqWorkerSet(std::string name, uint32_t worker_num, int64_t max_pending_task_count)
+  ExecqWorkerSet(std::string name, uint32_t worker_num,
+                 int64_t max_pending_task_count)
       : WorkerSet(name, worker_num, max_pending_task_count, false, false) {}
   ~ExecqWorkerSet() override = default;
 
-  static WorkerSetSPtr New(std::string name, uint32_t worker_num, uint32_t max_pending_task_count) {
-    return std::make_shared<ExecqWorkerSet>(name, worker_num, max_pending_task_count);
+  static WorkerSetSPtr New(std::string name, uint32_t worker_num,
+                           uint32_t max_pending_task_count) {
+    return std::make_shared<ExecqWorkerSet>(name, worker_num,
+                                            max_pending_task_count);
   }
 
-  static WorkerSetUPtr NewUnique(std::string name, uint32_t worker_num, uint32_t max_pending_task_count) {
-    return std::make_unique<ExecqWorkerSet>(name, worker_num, max_pending_task_count);
+  static WorkerSetUPtr NewUnique(std::string name, uint32_t worker_num,
+                                 uint32_t max_pending_task_count) {
+    return std::make_unique<ExecqWorkerSet>(name, worker_num,
+                                            max_pending_task_count);
   }
 
   bool Init() override;
   void Destroy() override;
 
-  bool Execute(TaskRunnablePtr task) override { return ExecuteLeastQueue(task); };
+  bool Execute(TaskRunnablePtr task) override {
+    return ExecuteLeastQueue(task);
+  };
   bool ExecuteRR(TaskRunnablePtr task) override;
   bool ExecuteLeastQueue(TaskRunnablePtr task) override;
   bool ExecuteHash(int64_t id, TaskRunnablePtr task) override;
 
-  std::vector<std::vector<std::string>> GetPendingTaskTrace() override;
+  std::string Trace() override;
 
  private:
   uint32_t LeastPendingTaskWorker();
@@ -250,18 +271,23 @@ class ExecqWorkerSet : public WorkerSet {
 // Use std::queue implement
 class SimpleWorkerSet : public WorkerSet {
  public:
-  SimpleWorkerSet(std::string name, uint32_t worker_num, int64_t max_pending_task_count, bool use_pthread,
+  SimpleWorkerSet(std::string name, uint32_t worker_num,
+                  int64_t max_pending_task_count, bool use_pthread,
                   bool is_inplace_run);
   ~SimpleWorkerSet() override;
 
-  static WorkerSetSPtr New(std::string name, uint32_t worker_num, uint32_t max_pending_task_count, bool use_pthread,
+  static WorkerSetSPtr New(std::string name, uint32_t worker_num,
+                           uint32_t max_pending_task_count, bool use_pthread,
                            bool is_inplace_run) {
-    return std::make_shared<SimpleWorkerSet>(name, worker_num, max_pending_task_count, use_pthread, is_inplace_run);
+    return std::make_shared<SimpleWorkerSet>(
+        name, worker_num, max_pending_task_count, use_pthread, is_inplace_run);
   }
 
-  static WorkerSetUPtr NewUnique(std::string name, uint32_t worker_num, uint32_t max_pending_task_count,
+  static WorkerSetUPtr NewUnique(std::string name, uint32_t worker_num,
+                                 uint32_t max_pending_task_count,
                                  bool use_pthread, bool is_inplace_run) {
-    return std::make_unique<SimpleWorkerSet>(name, worker_num, max_pending_task_count, use_pthread, is_inplace_run);
+    return std::make_unique<SimpleWorkerSet>(
+        name, worker_num, max_pending_task_count, use_pthread, is_inplace_run);
   }
 
   bool Init() override;
@@ -271,6 +297,8 @@ class SimpleWorkerSet : public WorkerSet {
   bool ExecuteRR(TaskRunnablePtr task) override;
   bool ExecuteLeastQueue(TaskRunnablePtr task) override;
   bool ExecuteHash(int64_t id, TaskRunnablePtr task) override;
+
+  std::string Trace() override;
 
  private:
   bthread_mutex_t mutex_;
@@ -285,13 +313,16 @@ class SimpleWorkerSet : public WorkerSet {
 // Use std::priority_queue implement
 class PriorWorkerSet : public WorkerSet {
  public:
-  PriorWorkerSet(std::string name, uint32_t worker_num, int64_t max_pending_task_count, bool use_pthread,
+  PriorWorkerSet(std::string name, uint32_t worker_num,
+                 int64_t max_pending_task_count, bool use_pthread,
                  bool is_inplace_run);
   ~PriorWorkerSet() override;
 
-  static WorkerSetSPtr New(std::string name, uint32_t worker_num, uint32_t max_pending_task_count, bool use_pthread,
+  static WorkerSetSPtr New(std::string name, uint32_t worker_num,
+                           uint32_t max_pending_task_count, bool use_pthread,
                            bool is_inplace_run) {
-    return std::make_shared<PriorWorkerSet>(name, worker_num, max_pending_task_count, use_pthread, is_inplace_run);
+    return std::make_shared<PriorWorkerSet>(
+        name, worker_num, max_pending_task_count, use_pthread, is_inplace_run);
   }
 
   bool Init() override;
@@ -302,17 +333,20 @@ class PriorWorkerSet : public WorkerSet {
   bool ExecuteLeastQueue(TaskRunnablePtr task) override;
   bool ExecuteHash(int64_t id, TaskRunnablePtr task) override;
 
+  std::string Trace() override;
+
  private:
   bthread_mutex_t mutex_;
   bthread_cond_t cond_;
-  std::priority_queue<TaskRunnablePtr, std::vector<TaskRunnablePtr>, CompareTaskRunnable> tasks_;
+  std::priority_queue<TaskRunnablePtr, std::vector<TaskRunnablePtr>,
+                      CompareTaskRunnable>
+      tasks_;
 
   std::vector<Bthread> bthread_workers_;
   std::vector<std::thread> pthread_workers_;
 };
 
 }  // namespace mdsv2
-
 }  // namespace dingofs
 
 #endif  // DINGOFS_MDSV2_COMMON_RUNNABLE_H_

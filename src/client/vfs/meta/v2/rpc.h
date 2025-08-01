@@ -34,8 +34,8 @@
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/core.h"
 #include "mdsv2/common/helper.h"
-#include "utils/concurrent/concurrent.h"
 #include "options/client/vfs/meta/v2_dynamic_option.h"
+#include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 namespace client {
@@ -167,6 +167,10 @@ Status RPC::SendRequest(const EndPoint& endpoint,
           "[rpc][{}][{}][{}us] fail, {} {} {} request({}).",
           EndPointToStr(endpoint), api_name, elapsed_us, cntl.log_id(),
           retry_count, cntl.ErrorText(), request.ShortDebugString());
+
+      response.mutable_error()->set_errcode(pb::error::EINTERNAL);
+      response.mutable_error()->set_errmsg(
+          fmt::format("{} {}", cntl.ErrorCode(), cntl.ErrorText()));
       // if the error is timeout, we can retry
       if (cntl.ErrorCode() == brpc::ERPCTIMEDOUT) continue;
 
@@ -196,7 +200,7 @@ Status RPC::SendRequest(const EndPoint& endpoint,
       break;
     }
 
-  } while (++retry_count < FLAGS_rpc_retry_times);
+  } while (++retry_count <= FLAGS_rpc_retry_times);
 
   return TransformError(response.error());
 }

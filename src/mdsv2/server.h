@@ -90,6 +90,10 @@ class Server {
   QuotaSynchronizerSPtr GetQuotaSynchronizer();
   GcProcessorSPtr GetGcProcessor();
 
+  MDSServiceImplUPtr& GetMDSService();
+  DebugServiceImplUPtr& GetDebugService();
+  FsStatServiceImplUPtr& GetFsStatService();
+
   void Run();
 
   void Stop();
