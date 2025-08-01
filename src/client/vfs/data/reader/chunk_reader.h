@@ -38,7 +38,6 @@ class VFSHub;
 struct BlockCacheReadReq {
   cache::BlockKey key;
   cache::RangeOption option;
-//   std::unique_ptr<IOBuffer> io_buffer;
   IOBuffer io_buffer;
   char* buf_pos;
   const BlockReadReq& block_req;

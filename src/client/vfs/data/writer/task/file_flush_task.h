@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef DINGODB_CLIENT_VFS_DATA_FILE_FLUSH_TASK_H_
-#define DINGODB_CLIENT_VFS_DATA_FILE_FLUSH_TASK_H_
+#ifndef DINGODB_CLIENT_VFS_DATA_WRITER_FILE_FLUSH_TASK_H_
+#define DINGODB_CLIENT_VFS_DATA_WRITER_FILE_FLUSH_TASK_H_
 
 #include <fmt/format.h>
 #include <glog/logging.h>
@@ -24,7 +24,7 @@
 #include <cstdint>
 #include <mutex>
 
-#include "client/vfs/data/chunk.h"
+#include "client/vfs/data/writer/chunk_writer.h"
 #include "common/callback.h"
 
 namespace dingofs {
@@ -34,7 +34,7 @@ namespace vfs {
 class FileFlushTask {
  public:
   explicit FileFlushTask(uint64_t ino, uint64_t file_flush_id,
-                         std::unordered_map<uint64_t, ChunkSPtr> chunks)
+                         std::unordered_map<uint64_t, ChunkWriterSPtr> chunks)
       : ino_(ino), file_flush_id_(file_flush_id), chunks_(std::move(chunks)) {}
 
   ~FileFlushTask() = default;
@@ -54,7 +54,7 @@ class FileFlushTask {
 
   const uint64_t ino_;
   const uint64_t file_flush_id_;
-  const std::unordered_map<uint64_t, ChunkSPtr> chunks_;
+  const std::unordered_map<uint64_t, ChunkWriterSPtr> chunks_;
 
   std::atomic_uint64_t flusing_chunk_{0};
 
@@ -67,4 +67,4 @@ class FileFlushTask {
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGODB_CLIENT_VFS_DATA_FILE_FLUSH_TASK_H_
+#endif  // DINGODB_CLIENT_VFS_DATA_WRITER_FILE_FLUSH_TASK_H_

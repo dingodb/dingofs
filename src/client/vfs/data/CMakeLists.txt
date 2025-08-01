@@ -18,11 +18,13 @@ add_library(vfs_data
     common/common.cc
     flat/flat_chunk.cc
     flat/flat_file.cc
-    task/file_flush_task.cc
-    task/chunk_flush_task.cc
     reader/chunk_reader.cc
     reader/file_reader.cc
     reader/reader_common.cc
+    writer/file_writer.cc
+    writer/chunk_writer.cc
+    writer/task/file_flush_task.cc
+    writer/task/chunk_flush_task.cc
     chunk.cc
     file.cc
 )

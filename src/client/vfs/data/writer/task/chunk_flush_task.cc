@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "client/vfs/data/task/chunk_flush_task.h"
+#include "client/vfs/data/writer/task/chunk_flush_task.h"
 
 #include <fmt/format.h>
 #include <glog/logging.h>

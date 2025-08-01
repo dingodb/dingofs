@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef DINGODB_CLIENT_VFS_DATA_CHUNK_FLUSH_TASK_H_
-#define DINGODB_CLIENT_VFS_DATA_CHUNK_FLUSH_TASK_H_
+#ifndef DINGODB_CLIENT_VFS_DATA_WRITER_TASK_CHUNK_FLUSH_TASK_H_
+#define DINGODB_CLIENT_VFS_DATA_WRITER_TASK_CHUNK_FLUSH_TASK_H_
 
 #include <fmt/format.h>
 #include <glog/logging.h>
@@ -83,4 +83,4 @@ class ChunkFlushTask {
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGODB_CLIENT_VFS_DATA_CHUNK_FLUSH_TASK_H_
+#endif  // DINGODB_CLIENT_VFS_DATA_WRITER_TASK_CHUNK_FLUSH_TASK_H_

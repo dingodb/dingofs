@@ -19,9 +19,7 @@
 #include <glog/logging.h>
 
 #include <cstdint>
-#include <memory>
 #include <mutex>
-#include <unordered_map>
 #include <utility>
 
 #include "client/common/utils.h"
@@ -36,22 +34,7 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
-static std::atomic<uint64_t> file_flush_id_gen{1};
-
 uint64_t File::GetChunkSize() const { return vfs_hub_->GetFsInfo().chunk_size; }
-
-Chunk* File::GetOrCreateChunk(uint64_t chunk_index) {
-  std::lock_guard<std::mutex> lock(mutex_);
-
-  auto iter = chunks_.find(chunk_index);
-  if (iter != chunks_.end()) {
-    return iter->second.get();
-  } else {
-    auto chunk_writer = std::make_shared<Chunk>(vfs_hub_, ino_, chunk_index);
-    chunks_[chunk_index] = std::move(chunk_writer);
-    return chunks_[chunk_index].get();
-  }
-}
 
 Status File::PreCheck() {
   Status tmp;
@@ -74,95 +57,13 @@ Status File::Write(const char* buf, uint64_t size, uint64_t offset,
                    uint64_t* out_wsize) {
   DINGOFS_RETURN_NOT_OK(PreCheck());
 
-  uint64_t chunk_size = GetChunkSize();
-  CHECK(chunk_size > 0) << "chunk size not allow 0";
-
-  uint64_t chunk_index = offset / chunk_size;
-  uint64_t chunk_offset = offset % chunk_size;
-
-  VLOG(3) << "File::Write, ino: " << ino_ << ", buf: " << Char2Addr(buf)
-          << ", size: " << size << ", offset: " << offset
-          << ", chunk_size: " << chunk_size;
-
-  const char* pos = buf;
-
-  Status s;
-  uint64_t written_size = 0;
-
-  while (size > 0) {
-    uint64_t write_size = std::min(size, chunk_size - chunk_offset);
-
-    Chunk* chunk = GetOrCreateChunk(chunk_index);
-    s = chunk->Write(pos, write_size, chunk_offset);
-    if (!s.ok()) {
-      LOG(WARNING) << "Fail write chunk, ino: " << ino_
-                   << ", chunk_index: " << chunk_index
-                   << ", chunk_offset: " << chunk_offset
-                   << ", write_size: " << write_size;
-      break;
-    }
-
-    pos += write_size;
-    size -= write_size;
-
-    written_size += write_size;
-
-    offset += write_size;
-    chunk_index = offset / chunk_size;
-    chunk_offset = offset % chunk_size;
-  }
-
-  *out_wsize = written_size;
-  return s;
+  return file_writer_->Write(buf, size, offset, out_wsize);
 }
 
 Status File::Read(char* buf, uint64_t size, uint64_t offset,
                   uint64_t* out_rsize) {
-  if (FLAGS_data_single_thread_read) {
-    return DoReadWithSingleThread(buf, size, offset, out_rsize);
-  } else {
-    return file_reader_->Read(buf, size, offset, out_rsize);
-  }
-}
-
-Status File::DoReadWithSingleThread(char* buf, uint64_t size, uint64_t offset,
-                                    uint64_t* out_rsize) {
   DINGOFS_RETURN_NOT_OK(PreCheck());
-
-  Attr attr;
-  vfs_hub_->GetMetaSystem()->GetAttr(ino_, &attr);
-
-  if (attr.length <= offset) {
-    *out_rsize = 0;
-    return Status::OK();
-  }
-
-  uint64_t chunk_size = GetChunkSize();
-
-  uint64_t chunk_index = offset / chunk_size;
-  uint64_t chunk_offset = offset % chunk_size;
-
-  uint64_t total_read_size = std::min(size, attr.length - offset);
-  uint64_t has_read = 0;
-
-  while (total_read_size > 0) {
-    uint64_t read_size = std::min(total_read_size, chunk_size - chunk_offset);
-
-    Chunk* chunk = GetOrCreateChunk(chunk_index);
-    DINGOFS_RETURN_NOT_OK(chunk->Read(buf, read_size, chunk_offset));
-
-    buf += read_size;
-    total_read_size -= read_size;
-
-    has_read += read_size;
-
-    offset += read_size;
-    chunk_index = offset / chunk_size;
-    chunk_offset = offset % chunk_size;
-  }
-
-  *out_rsize = has_read;
-  return Status::OK();
+  return file_reader_->Read(buf, size, offset, out_rsize);
 }
 
 void File::FileFlushed(StatusCallback cb, Status status) {
@@ -179,47 +80,9 @@ void File::FileFlushed(StatusCallback cb, Status status) {
 }
 
 void File::AsyncFlush(StatusCallback cb) {
-  uint64_t file_flush_id = file_flush_id_gen.fetch_add(1);
-  VLOG(3) << "File::AsyncFlush start ino: " << ino_
-          << ", file_flush_id: " << file_flush_id;
-
-  FileFlushTask* flush_task{nullptr};
-  bool is_empty = false;
-
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-
-    uint64_t chunk_count = chunks_.size();
-    if (chunk_count == 0) {
-      is_empty = true;
-    } else {
-      // TODO: maybe we only need chunk index
-      // copy chunks_
-      auto flush_task_unique_ptr =
-          std::make_unique<FileFlushTask>(ino_, file_flush_id, chunks_);
-      flush_task = flush_task_unique_ptr.get();
-
-      CHECK(inflight_flush_tasks_
-                .emplace(file_flush_id, std::move(flush_task_unique_ptr))
-                .second);
-    }
-  }
-
-  if (is_empty) {
-    VLOG(1) << "File::AsyncFlush end ino: " << ino_
-            << ", file_flush_id: " << file_flush_id
-            << ", no chunks to flush, calling callback directly";
-    cb(Status::OK());
-    return;
-  }
-
-  CHECK_NOTNULL(flush_task);
-  flush_task->RunAsync([this, cb](auto&& ph1) {
+  file_writer_->AsyncFlush([this, cb](auto&& ph1) {
     FileFlushed(cb, std::forward<decltype(ph1)>(ph1));
   });
-
-  VLOG(3) << "File::AsyncFlush end ino: " << ino_
-          << ", file_flush_id: " << file_flush_id;
 }
 
 Status File::Flush() {

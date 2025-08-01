@@ -17,131 +17,37 @@
 #ifndef DINGOFS_CLIENT_VFS_DATA_CHUNK_H_
 #define DINGOFS_CLIENT_VFS_DATA_CHUNK_H_
 
-#include <condition_variable>
 #include <cstdint>
-#include <deque>
-#include <memory>
-#include <mutex>
-
-#include "cache/blockcache/block_cache.h"
-#include "cache/blockcache/cache_store.h"
-#include "client/meta/vfs_meta.h"
-#include "client/vfs/data/slice/slice_data.h"
-#include "client/vfs/data/task/chunk_flush_task.h"
-#include "common/callback.h"
-#include "common/status.h"
-#include "fmt/format.h"
-
+#include <string>
 namespace dingofs {
 namespace client {
 namespace vfs {
 
-class VFSHub;
+struct Chunk {
+  const uint64_t fs_id{0};
+  const uint64_t ino{0};
+  const uint64_t index{0};
+  const uint64_t chunk_size{0};
+  const uint64_t block_size{0};
+  const uint64_t page_size{0};
+  const uint64_t chunk_start{0};  // in file offset
+  const uint64_t chunk_end{0};    // in file offset
 
-// TOOD: separate the chunk to reader and writer
-class Chunk : public std::enable_shared_from_this<Chunk> {
- public:
-  Chunk(VFSHub* hub, uint64_t ino, uint64_t index);
+  explicit Chunk(uint64_t _fs_id, uint64_t _ino, uint64_t _index,
+                 uint64_t _chunk_size, uint64_t _block_size,
+                 uint64_t _page_size)
+      : fs_id(_fs_id),
+        ino(_ino),
+        index(_index),
+        chunk_size(_chunk_size),
+        block_size(_block_size),
+        page_size(_page_size),
+        chunk_start(_index * _chunk_size),
+        chunk_end(chunk_start + _chunk_size) {}
 
-  ~Chunk();
-
-  // chunk_offset is the offset in the chunk, not in the file
-  Status Write(const char* buf, uint64_t size, uint64_t chunk_offset);
-
-  // chunk_offset is the offset in the chunk, not in the file
-  Status Read(char* buf, uint64_t size, uint64_t chunk_offset);
-
-  // All slice data can be flushed in concurrent, but commit must be in order.
-  // If slice data is empty, the empty flush task must be submitted
-  // to ensure that the previous flush task is completed and submitted
-  void FlushAsync(StatusCallback cb);
-
-  void TriggerFlush();
-
-  std::uint64_t Start() const { return chunk_start_; }
-
-  std::uint64_t End() const { return chunk_end_; }
-
-  Status GetErrorStatus() const {
-    std::lock_guard<std::mutex> lg(mutex_);
-    return error_status_;
-  }
-
-  // This is used to mark the chunk as error when some operation fails,
-  // If the current error status is ok, it will be set to the given status.
-  // If the current error status is not ok, it will not be changed.
-  void MarkErrorStatus(const Status& status) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (error_status_.ok()) {
-      error_status_ = status;
-    }
-  }
-
- private:
-  // proteted by mutex_
-  struct FlushTask {
-    const uint64_t chunk_flush_id{0};
-    bool done{false};
-    Status status;
-    const StatusCallback cb{nullptr};
-    std::shared_ptr<Chunk> chunk{nullptr};
-    std::unique_ptr<ChunkFlushTask> chunk_flush_task{nullptr};
-
-    std::string UUID() const;
-    std::string ToString() const;
-  };
-
-  std::string UUID() const { return fmt::format("chunk-{}-{}", ino_, index_); }
-
-  // proteted by mutex_
-  Status WriteToBlockCache(const cache::BlockKey& key,
-                           const cache::Block& block, cache::PutOption option);
-
-  Status DirectWrite(const char* buf, uint64_t size, uint64_t chunk_offset);
-
-  Status BufferWrite(const char* buf, uint64_t size, uint64_t chunk_offset);
-
-  Status AllockChunkId(uint64_t* chunk_id);
-
-  Status CommitSlices(const std::vector<Slice>& slices);
-
-  void DoFlushAsync(StatusCallback cb, uint64_t chunk_flush_id);
-  void FlushTaskDone(FlushTask* flush_task, Status s);
-
-  // --------new added--------
-
-  std::unique_ptr<SliceData> FindWritableSliceUnLocked(uint64_t chunk_pos, uint64_t size);
-  std::unique_ptr<SliceData> CreateSliceUnlocked(uint64_t chunk_pos);
-  std::unique_ptr<SliceData> FindOrCreateSliceUnlocked(uint64_t chunk_pos, uint64_t size);
-
-  // --------new added--------
-
-  VFSHub* hub_{nullptr};
-
-  const uint64_t ino_{0};
-  const uint64_t index_{0};
-  const uint64_t fs_id_{0};
-  const uint64_t chunk_size_{0};
-  const uint64_t block_size_{0};
-  const uint64_t page_size_{0};
-
-  const uint64_t chunk_start_{0};  // in file offset
-  const uint64_t chunk_end_{0};    // in file offset
-
-  mutable std::mutex mutex_;
-  std::condition_variable writer_cv_;
-  std::unique_ptr<SliceData> writing_slice_{nullptr};
-  // TODO: maybe use std::vector
-  // seq_id -> slice datj
-  std::map<uint64_t, std::unique_ptr<SliceData>> slices_;
-  std::deque<FlushTask*> flush_queue_;
-  // TODO: use static 
-  FlushTask* fake_header_{nullptr};
-  // when this not ok, all write and flush should return error
-  Status error_status_;
+  std::string UUID() const;
+  std::string ToString() const;
 };
-
-using ChunkSPtr = std::shared_ptr<Chunk>;
 
 }  // namespace vfs
 }  // namespace client

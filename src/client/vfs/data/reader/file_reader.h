@@ -50,7 +50,7 @@ class FileReader {
   std::unordered_map<uint64_t, ChunkReaderUptr> chunk_readers_;
 };
 
-using FileReaderUptr = std::shared_ptr<FileReader>;
+using FileReaderUPtr = std::shared_ptr<FileReader>;
 
 }  // namespace vfs
 }  // namespace client

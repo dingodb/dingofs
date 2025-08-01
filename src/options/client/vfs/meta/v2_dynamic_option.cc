@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-
 #include "options/client/vfs/meta/v2_dynamic_option.h"
+
 #include "options/gflag_validator.h"
 
 namespace dingofs {
@@ -23,13 +23,13 @@ namespace client {
 namespace vfs {
 namespace v2 {
 
-DEFINE_uint32(rpc_timeout_ms, 5000, "rpc timeout ms");
+DEFINE_uint32(rpc_timeout_ms, 60000, "rpc timeout ms");
 DEFINE_validator(rpc_timeout_ms, &PassUint32);
 
 DEFINE_int32(rpc_retry_times, 3, "rpc retry time");
 DEFINE_validator(rpc_retry_times, &PassInt32);
 
-}  // namespace vs
+}  // namespace v2
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

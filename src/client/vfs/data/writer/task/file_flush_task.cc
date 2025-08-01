@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "client/vfs/data/task/file_flush_task.h"
+#include "client/vfs/data/writer/task/file_flush_task.h"
 
 #include <fmt/format.h>
 #include <glog/logging.h>
@@ -22,7 +22,6 @@
 #include <atomic>
 #include <cstdint>
 
-#include "client/vfs/data/chunk.h"
 #include "common/callback.h"
 
 namespace dingofs {
@@ -77,12 +76,12 @@ void FileFlushTask::RunAsync(StatusCallback cb) {
 
   for (const auto& iter : chunks_) {
     uint64_t chunk_index = iter.first;
-    ChunkSPtr chunk = iter.second;
-    CHECK_NOTNULL(chunk);
+    ChunkWriterSPtr chunk_writer = iter.second;
+    CHECK_NOTNULL(chunk_writer);
 
     VLOG(4) << fmt::format("{} Flushing chunk_index: {}", UUID(), chunk_index);
 
-    chunk->FlushAsync([this, chunk_index](Status status) {
+    chunk_writer->FlushAsync([this, chunk_index](Status status) {
       ChunkFlushed(chunk_index, status);
     });
   }

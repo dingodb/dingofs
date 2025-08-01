@@ -20,12 +20,11 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
-#include <unordered_map>
 
 #include "client/vfs/data/chunk.h"
 #include "client/vfs/data/ifile.h"
 #include "client/vfs/data/reader/file_reader.h"
-#include "client/vfs/data/task/file_flush_task.h"
+#include "client/vfs/data/writer/file_writer.h"
 #include "common/callback.h"
 #include "common/status.h"
 
@@ -40,6 +39,7 @@ class File : public IFile {
   File(VFSHub* hub, uint64_t ino)
       : vfs_hub_(hub),
         ino_(ino),
+        file_writer_(std::make_unique<FileWriter>(hub, ino)),
         file_reader_(std::make_unique<FileReader>(hub, ino)) {}
 
   ~File() override = default;
@@ -57,30 +57,17 @@ class File : public IFile {
  private:
   Status PreCheck();
   uint64_t GetChunkSize() const;
-  Chunk* GetOrCreateChunk(uint64_t chunk_index);
   void FileFlushed(StatusCallback cb, Status status);
-
-  Status DoReadWithSingleThread(char* buf, uint64_t size, uint64_t offset,
-                                uint64_t* out_rsize);
 
   VFSHub* vfs_hub_;
   const uint64_t ino_;
 
-  FileReaderUptr file_reader_;
+  FileWriterUPtr file_writer_;
+  FileReaderUPtr file_reader_;
 
   std::mutex mutex_;
   // when sync fail, we need set file status to error
   Status file_status_;
-  // chunk_index -> chunk
-  // chunk is used by file/file_flush_task/chunk_flush_task
-  // TODO: manage chunk use dec/inc ref mechanism
-  // TODO: or maybe transfer chunk ownership to file_flush_task and then
-  // transfer ownership to chunk_flush_task
-  std::unordered_map<uint64_t, ChunkSPtr> chunks_;
-  // TODO: monitor this and add a manager
-  // file_flush_id -> FileFlushTask
-  std::unordered_map<uint64_t, std::unique_ptr<FileFlushTask>>
-      inflight_flush_tasks_;
 };
 
 }  // namespace vfs
