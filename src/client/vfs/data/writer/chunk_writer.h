@@ -25,6 +25,7 @@
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
 #include "client/meta/vfs_meta.h"
+#include "client/vfs/data/chunk.h"
 #include "client/vfs/data/slice/slice_data.h"
 #include "client/vfs/data/writer/task/chunk_flush_task.h"
 #include "common/status.h"
@@ -77,9 +78,8 @@ class ChunkWriter : public std::enable_shared_from_this<ChunkWriter> {
     }
   };
 
-
   std::string UUID() const {
-    return fmt::format("chunk_reader-{}-{}", ino_, index_);
+    return fmt::format("chunk_reader-{}", chunk_.UUID());
   }
 
   Status DirectWrite(const char* buf, uint64_t size, uint64_t chunk_offset);
@@ -120,15 +120,7 @@ class ChunkWriter : public std::enable_shared_from_this<ChunkWriter> {
   }
 
   VFSHub* hub_;
-  const uint64_t ino_{0};
-  const uint64_t index_{0};
-  const uint64_t fs_id_{0};
-  const uint64_t chunk_size_{0};
-  const uint64_t block_size_{0};
-  const uint64_t page_size_{0};
-
-  const uint64_t chunk_start_{0};  // in file offset
-  const uint64_t chunk_end_{0};    // in file offset
+  const Chunk chunk_;
 
   mutable std::mutex mutex_;
   std::condition_variable writer_cv_;

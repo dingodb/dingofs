@@ -24,6 +24,7 @@
 
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
+#include "client/vfs/data/chunk.h"
 #include "client/vfs/data/common/common.h"
 #include "client/vfs/data/reader/reader_common.h"
 #include "common/callback.h"
@@ -60,19 +61,11 @@ class ChunkReader {
   uint64_t GetChunkSize() const;
 
   std::string UUID() const {
-    return fmt::format("chunk_reader-{}-{}", ino_, index_);
+    return fmt::format("chunk_reader-{}", chunk_.UUID());
   }
 
   VFSHub* hub_;
-  const uint64_t ino_{0};
-  const uint64_t index_{0};
-  const uint64_t fs_id_{0};
-  const uint64_t chunk_size_{0};
-  const uint64_t block_size_{0};
-  const uint64_t page_size_{0};
-
-  const uint64_t chunk_start_{0};  // in file offset
-  const uint64_t chunk_end_{0};    // in file offset
+  const Chunk chunk_;
 };
 
 using ChunkReaderUptr = std::shared_ptr<ChunkReader>;

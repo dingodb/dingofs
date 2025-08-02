@@ -34,14 +34,8 @@ namespace vfs {
 
 ChunkReader::ChunkReader(VFSHub* hub, uint64_t ino, uint64_t index)
     : hub_(hub),
-      ino_(ino),
-      index_(index),
-      fs_id_(hub->GetFsInfo().id),
-      chunk_size_(hub->GetFsInfo().chunk_size),
-      block_size_(hub->GetFsInfo().block_size),
-      page_size_(hub->GetPageSize()),
-      chunk_start_(index * chunk_size_),
-      chunk_end_(chunk_start_ + chunk_size_) {}
+      chunk_(hub->GetFsInfo().id, ino, index, hub->GetFsInfo().chunk_size,
+             hub->GetFsInfo().block_size, hub->GetPageSize()) {}
 
 void ChunkReader::BlockReadCallback(ChunkReader* reader,
                                     const BlockCacheReadReq& req,
@@ -86,7 +80,7 @@ void ChunkReader::DoRead(const ChunkReadReq& req, StatusCallback cb) {
   uint64_t size = req.to_read_size;
   char* buf = req.buf;
 
-  uint64_t read_file_offset = chunk_start_ + chunk_offset;
+  uint64_t read_file_offset = chunk_.chunk_start + chunk_offset;
   uint64_t end_read_file_offset = read_file_offset + size;
 
   uint64_t end_read_chunk_offet = chunk_offset + size;
@@ -97,15 +91,16 @@ void ChunkReader::DoRead(const ChunkReadReq& req, StatusCallback cb) {
       UUID(), Char2Addr(buf), size, chunk_offset, end_read_chunk_offet,
       read_file_offset, end_read_file_offset);
 
-  CHECK_GE(chunk_end_, end_read_file_offset);
+  CHECK_GE(chunk_.chunk_end, end_read_file_offset);
 
-  uint64_t block_offset = chunk_offset % block_size_;
-  uint64_t block_index = chunk_offset / block_size_;
+  uint64_t block_offset = chunk_offset % chunk_.block_size;
+  uint64_t block_index = chunk_offset / chunk_.block_size;
 
   uint64_t remain_len = size;
 
   std::vector<Slice> slices;
-  Status s = hub_->GetMetaSystem()->ReadSlice(ino_, index_, &slices);
+  Status s =
+      hub_->GetMetaSystem()->ReadSlice(chunk_.ino, chunk_.index, &slices);
   if (!s.ok()) {
     LOG(WARNING) << fmt::format("{} Read slice failed, status: {}", UUID(),
                                 s.ToString());
@@ -122,7 +117,8 @@ void ChunkReader::DoRead(const ChunkReadReq& req, StatusCallback cb) {
 
     if (slice_req.slice.has_value() && !slice_req.slice.value().is_zero) {
       std::vector<BlockReadReq> reqs = ConvertSliceReadReqToBlockReadReqs(
-          slice_req, fs_id_, ino_, chunk_size_, block_size_);
+          slice_req, chunk_.fs_id, chunk_.ino, chunk_.chunk_size,
+          chunk_.block_size);
 
       block_reqs.insert(block_reqs.end(), std::make_move_iterator(reqs.begin()),
                         std::make_move_iterator(reqs.end()));
@@ -138,7 +134,7 @@ void ChunkReader::DoRead(const ChunkReadReq& req, StatusCallback cb) {
   block_cache_reqs.reserve(block_reqs.size());
 
   for (auto& block_req : block_reqs) {
-    cache::BlockKey key(fs_id_, ino_, block_req.block.slice_id,
+    cache::BlockKey key(chunk_.fs_id, chunk_.ino, block_req.block.slice_id,
                         block_req.block.index, block_req.block.version);
 
     char* buf_pos = buf + (block_req.block.file_offset +

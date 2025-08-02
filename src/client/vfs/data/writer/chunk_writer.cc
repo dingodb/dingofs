@@ -27,14 +27,8 @@ namespace vfs {
 // protected by mutex_
 ChunkWriter::ChunkWriter(VFSHub* hub, uint64_t ino, uint64_t index)
     : hub_(hub),
-      ino_(ino),
-      index_(index),
-      fs_id_(hub->GetFsInfo().id),
-      chunk_size_(hub->GetFsInfo().chunk_size),
-      block_size_(hub->GetFsInfo().block_size),
-      page_size_(hub->GetPageSize()),
-      chunk_start_(index * chunk_size_),
-      chunk_end_(chunk_start_ + chunk_size_) {}
+      chunk_(hub->GetFsInfo().id, ino, index, hub->GetFsInfo().chunk_size,
+             hub->GetFsInfo().block_size, hub->GetPageSize()) {}
 
 ChunkWriter::~ChunkWriter() {
   VLOG(4) << fmt::format("{} Destroy Chunk addr: {}", UUID(),
@@ -52,7 +46,7 @@ Status ChunkWriter::Write(const char* buf, uint64_t size,
 
 Status ChunkWriter::DirectWrite(const char* buf, uint64_t size,
                                 uint64_t chunk_offset) {
-  uint64_t write_file_offset = chunk_start_ + chunk_offset;
+  uint64_t write_file_offset = chunk_.chunk_start + chunk_offset;
   uint64_t end_write_file_offset = write_file_offset + size;
 
   uint64_t end_write_chunk_offset = chunk_offset + size;
@@ -63,7 +57,7 @@ Status ChunkWriter::DirectWrite(const char* buf, uint64_t size,
       UUID(), Char2Addr(buf), size, chunk_offset, end_write_chunk_offset,
       write_file_offset, end_write_file_offset);
 
-  CHECK_GE(chunk_end_, end_write_file_offset);
+  CHECK_GE(chunk_.chunk_end, end_write_file_offset);
 
   const char* buf_pos = buf;
 
@@ -71,14 +65,15 @@ Status ChunkWriter::DirectWrite(const char* buf, uint64_t size,
   uint64_t chunk_id;
   DINGOFS_RETURN_NOT_OK(AllockChunkId(&chunk_id));
 
-  uint64_t block_offset = chunk_offset % block_size_;
-  uint64_t block_index = chunk_offset / block_size_;
+  uint64_t block_offset = chunk_offset % chunk_.block_size;
+  uint64_t block_index = chunk_offset / chunk_.block_size;
 
   uint64_t remain_len = size;
 
   while (remain_len > 0) {
-    uint64_t write_size = std::min(remain_len, block_size_ - block_offset);
-    cache::BlockKey key(fs_id_, ino_, chunk_id, block_index, 0);
+    uint64_t write_size =
+        std::min(remain_len, chunk_.block_size - block_offset);
+    cache::BlockKey key(chunk_.fs_id, chunk_.ino, chunk_id, block_index, 0);
     cache::Block block(buf_pos, write_size);
 
     VLOG(4) << fmt::format(
@@ -93,7 +88,8 @@ Status ChunkWriter::DirectWrite(const char* buf, uint64_t size,
     ++block_index;
   }
 
-  Slice slice{chunk_id, (chunk_start_ + chunk_offset), size, 0, false, size};
+  Slice slice{chunk_id, (chunk_.chunk_start + chunk_offset), size, 0, false,
+              size};
   VLOG(4) << fmt::format("{} DirectWrite End slice: {}", UUID(),
                          Slice2Str(slice));
 
@@ -105,7 +101,7 @@ Status ChunkWriter::DirectWrite(const char* buf, uint64_t size,
 
 Status ChunkWriter::BufferWrite(const char* buf, uint64_t size,
                                 uint64_t chunk_offset) {
-  uint64_t write_file_offset = chunk_start_ + chunk_offset;
+  uint64_t write_file_offset = chunk_.chunk_start + chunk_offset;
   uint64_t end_write_file_offset = write_file_offset + size;
 
   uint64_t end_write_chunk_offset = chunk_offset + size;
@@ -116,7 +112,7 @@ Status ChunkWriter::BufferWrite(const char* buf, uint64_t size,
       UUID(), Char2Addr(buf), size, chunk_offset, end_write_chunk_offset,
       write_file_offset, end_write_file_offset);
 
-  CHECK_GE(chunk_end_, end_write_file_offset);
+  CHECK_GE(chunk_.chunk_end, end_write_file_offset);
 
   // TODO: check mem ratio, sleep when mem is near full
 
@@ -136,7 +132,7 @@ Status ChunkWriter::BufferWrite(const char* buf, uint64_t size,
   Status s = writing_slice_->Write(buf, size, chunk_offset);
 
   bool is_full = false;
-  if (writing_slice_->Len() == chunk_size_) {
+  if (writing_slice_->Len() == chunk_.chunk_size) {
     is_full = true;
     VLOG(4) << fmt::format("{} slice_data: {} is full", UUID(),
                            writing_slice_->ToString());
@@ -196,8 +192,8 @@ std::unique_ptr<SliceData> ChunkWriter::CreateSliceUnlocked(
     uint64_t chunk_pos) {
   // Use static because chunk with same index may be deleted and recreated
   uint64_t seq = slice_seq_id_gen.fetch_add(1, std::memory_order_relaxed);
-  SliceDataContext ctx(fs_id_, ino_, index_, seq, chunk_size_, block_size_,
-                       page_size_);
+  SliceDataContext ctx(chunk_.fs_id, chunk_.ino, chunk_.index, seq,
+                       chunk_.chunk_size, chunk_.block_size, chunk_.page_size);
   return std::make_unique<SliceData>(ctx, hub_, chunk_pos);
 }
 
@@ -220,11 +216,11 @@ Status ChunkWriter::WriteToBlockCache(const cache::BlockKey& key,
 }
 
 Status ChunkWriter::AllockChunkId(uint64_t* chunk_id) {
-  return hub_->GetMetaSystem()->NewSliceId(ino_, chunk_id);
+  return hub_->GetMetaSystem()->NewSliceId(chunk_.ino, chunk_id);
 }
 
 Status ChunkWriter::CommitSlices(const std::vector<Slice>& slices) {
-  return hub_->GetMetaSystem()->WriteSlice(ino_, index_, slices);
+  return hub_->GetMetaSystem()->WriteSlice(chunk_.ino, chunk_.index, slices);
 }
 
 ChunkWriter::FlushTask ChunkWriter::fake_header_;
@@ -384,7 +380,7 @@ void ChunkWriter::DoFlushAsync(StatusCallback cb, uint64_t chunk_flush_id) {
 
       flush_task = flush_queue_.back();
       flush_task->chunk_flush_task = std::make_unique<ChunkFlushTask>(
-          ino_, index_, chunk_flush_id, std::move(slices_));
+          chunk_.ino, chunk_.index, chunk_flush_id, std::move(slices_));
     }  // end if error_status.ok()
     //  not ok pass throuth
   }
