@@ -16,8 +16,13 @@
 
 #include "client/vfs/data/writer/chunk_writer.h"
 
+#include <glog/logging.h>
+
+#include <algorithm>
+#include <boost/range/algorithm/sort.hpp>
+#include <memory>
+
 #include "absl/cleanup/cleanup.h"
-#include "client/common/utils.h"
 #include "client/vfs/hub/vfs_hub.h"
 
 namespace dingofs {
@@ -102,57 +107,121 @@ Status ChunkWriter::DirectWrite(const char* buf, uint64_t size,
 Status ChunkWriter::BufferWrite(const char* buf, uint64_t size,
                                 uint64_t chunk_offset) {
   uint64_t write_file_offset = chunk_.chunk_start + chunk_offset;
-  uint64_t end_write_file_offset = write_file_offset + size;
+  ChunkWriteInfo info(buf, size, chunk_offset, write_file_offset);
+  Writer writer;
+  writer.write_info = &info;
 
-  uint64_t end_write_chunk_offset = chunk_offset + size;
-
-  VLOG(4) << fmt::format(
-      "{} BufferWrite Start buf: {}, size: {}"
-      ", chunk_range: [{}-{}], file_range: [{}-{}]",
-      UUID(), Char2Addr(buf), size, chunk_offset, end_write_chunk_offset,
-      write_file_offset, end_write_file_offset);
-
-  CHECK_GE(chunk_.chunk_end, end_write_file_offset);
+  VLOG(4) << fmt::format("{} BufferWrite Start writer: {}", UUID(),
+                         writer.ToString());
+  CHECK_GE(chunk_.chunk_end, info.end_file_offset);
 
   // TODO: check mem ratio, sleep when mem is near full
 
-  {
-    std::unique_lock<std::mutex> lg(mutex_);
-    while (writing_slice_ != nullptr) {
-      VLOG(4) << fmt::format("{} BufferWrite wait for writing_slice: {}",
-                             UUID(), writing_slice_->ToString());
-      writer_cv_.wait(lg);
+  std::unique_lock<std::mutex> lg(mutex_);
+  writers_.push_back(&writer);
+
+  while (!writer.done && &writer != writers_.front()) {
+    VLOG(4) << fmt::format("{} BufferWrite Wait writer: {} ", UUID(),
+                           writer.ToString());
+    writer.cv.wait(lg);
+  }
+
+  if (writer.done) {
+    VLOG(4) << fmt::format(
+        "{} BufferWrite End, writer already done, writer: {}", UUID(),
+        writer.ToString());
+    return writer.status;
+  }
+
+  Writer* last_writer = &writer;
+
+  std::vector<ChunkWriteInfo*> write_batch;
+  CHECK(!writers_.empty());
+
+  auto iter = writers_.begin();
+
+  while (iter != writers_.end()) {
+    Writer* writer = *iter;
+    CHECK_NOTNULL(writer);
+
+    write_batch.push_back(writer->write_info);
+
+    last_writer = writer;
+
+    ++iter;
+  }
+
+  // TODO: merge write_batch by chunk_offset
+  boost::range::sort(write_batch,
+                     [](const ChunkWriteInfo* a, const ChunkWriteInfo* b) {
+                       return a->chunk_offset < b->chunk_offset;
+                     });
+
+  bool has_full = false;
+
+  for (const ChunkWriteInfo* write_info : write_batch) {
+    VLOG(4) << fmt::format("{} BufferWrite write_info: {}", UUID(),
+                           write_info->ToString());
+
+    std::unique_ptr<SliceData> writing_slice =
+        GetSliceUnlocked(write_info->chunk_offset, write_info->size);
+
+    lg.unlock();
+
+    CHECK_NOTNULL(writing_slice);
+
+    Status s = writing_slice->Write(write_info->buf, write_info->size,
+                                    write_info->chunk_offset);
+    CHECK(s.ok());
+
+    if (writing_slice->Len() == chunk_.chunk_size) {
+      has_full = true;
+      VLOG(4) << fmt::format("{} slice_data: {} is full", UUID(),
+                             writing_slice->ToString());
     }
 
-    writing_slice_ = FindOrCreateSliceUnlocked(chunk_offset, size);
+    lg.lock();
+
+    PutSliceUnlocked(std::move(writing_slice));
   }
 
-  CHECK_NOTNULL(writing_slice_);
-
-  Status s = writing_slice_->Write(buf, size, chunk_offset);
-
-  bool is_full = false;
-  if (writing_slice_->Len() == chunk_.chunk_size) {
-    is_full = true;
-    VLOG(4) << fmt::format("{} slice_data: {} is full", UUID(),
-                           writing_slice_->ToString());
-  }
-
-  VLOG(4) << fmt::format("{} BufferWrite End, will notity", UUID());
-
-  {
-    std::unique_lock<std::mutex> lg(mutex_);
-    slices_.emplace(writing_slice_->Seq(), std::move(writing_slice_));
-    writing_slice_ = nullptr;
-    writer_cv_.notify_all();
-  }
-
-  // TODO: only need to flush current slice
-  if (is_full) {
+  if (has_full) {
     TriggerFlush();
   }
 
-  return s;
+  while (true) {
+    Writer* ready = writers_.front();
+    writers_.pop_front();
+    if (ready != &writer) {
+      // TOOD: we need member every writer status when slice write can be fail
+      ready->status = Status::OK();
+      ready->done = true;
+      ready->cv.notify_all();
+    }
+    if (ready == last_writer) break;
+  }
+
+  if (!writers_.empty()) {
+    writers_.front()->cv.notify_all();
+  }
+
+  return Status::OK();
+}
+
+void ChunkWriter::PutSliceUnlocked(std::unique_ptr<SliceData> slice_data) {
+  slices_.emplace(slice_data->Seq(), std::move(slice_data));
+}
+
+std::unique_ptr<SliceData> ChunkWriter::GetSliceUnlocked(uint64_t chunk_pos,
+                                                         uint64_t size) {
+  std::unique_ptr<SliceData> slice = FindWritableSliceUnLocked(chunk_pos, size);
+  if (slice == nullptr) {
+    slice = CreateSliceUnlocked(chunk_pos);
+    VLOG(4) << fmt::format("{} Created new slice_data: {}", UUID(),
+                           slice->ToString());
+  }
+  DCHECK_NOTNULL(slice);
+  return slice;
 }
 
 // TODO: maybe this algorithm is not good enough
@@ -195,18 +264,6 @@ std::unique_ptr<SliceData> ChunkWriter::CreateSliceUnlocked(
   SliceDataContext ctx(chunk_.fs_id, chunk_.ino, chunk_.index, seq,
                        chunk_.chunk_size, chunk_.block_size, chunk_.page_size);
   return std::make_unique<SliceData>(ctx, hub_, chunk_pos);
-}
-
-std::unique_ptr<SliceData> ChunkWriter::FindOrCreateSliceUnlocked(
-    uint64_t chunk_pos, uint64_t size) {
-  std::unique_ptr<SliceData> slice = FindWritableSliceUnLocked(chunk_pos, size);
-  if (slice == nullptr) {
-    slice = CreateSliceUnlocked(chunk_pos);
-    VLOG(4) << fmt::format("{} Created new slice_data: {}", UUID(),
-                           slice->ToString());
-  }
-  DCHECK_NOTNULL(slice);
-  return slice;
 }
 
 Status ChunkWriter::WriteToBlockCache(const cache::BlockKey& key,

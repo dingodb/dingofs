@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#ifndef DINGOFS_CLIENT_COMMON_UTILS_H_
+#define DINGOFS_CLIENT_COMMON_UTILS_H_
+
 #include <sstream>
 
 namespace dingofs {
@@ -27,3 +30,5 @@ static std::string Char2Addr(const char* p) {
 
 }  // namespace client
 }  // namespace dingofs
+
+#endif  // DINGOFS_CLIENT_COMMON_UTILS_H_

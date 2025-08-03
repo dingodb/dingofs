@@ -19,11 +19,15 @@
 
 #include <fmt/format.h>
 
+#include <condition_variable>
 #include <cstdint>
+#include <deque>
 #include <memory>
+#include <string>
 
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
+#include "client/common/utils.h"
 #include "client/meta/vfs_meta.h"
 #include "client/vfs/data/chunk.h"
 #include "client/vfs/data/slice/slice_data.h"
@@ -38,6 +42,30 @@ static std::atomic<uint64_t> slice_seq_id_gen{1};
 static std::atomic<uint64_t> chunk_flush_id_gen{1};
 
 class VFSHub;
+struct ChunkWriteInfo {
+  const char* buf{nullptr};
+  const uint64_t size{0};
+  const uint64_t chunk_offset{0};
+  const uint64_t end_chunk_offset{0};
+  const uint64_t file_offset{0};
+  const uint64_t end_file_offset{0};
+
+  explicit ChunkWriteInfo(const char* _buf, uint64_t _size,
+                          uint64_t _chunk_offset, uint64_t _file_offset)
+      : buf(_buf),
+        size(_size),
+        chunk_offset(_chunk_offset),
+        end_chunk_offset(_chunk_offset + size),
+        file_offset(_file_offset),
+        end_file_offset(_file_offset + size) {}
+
+  std::string ToString() const {
+    return fmt::format(
+        "(buf: {}, size: {}, chunk_range: [{}-{}], file_range: [{}-{}])",
+        Char2Addr(buf), size, chunk_offset, end_chunk_offset, file_offset,
+        end_file_offset);
+  }
+};
 
 class ChunkWriter : public std::enable_shared_from_this<ChunkWriter> {
  public:
@@ -78,6 +106,18 @@ class ChunkWriter : public std::enable_shared_from_this<ChunkWriter> {
     }
   };
 
+  struct Writer {
+    ChunkWriteInfo* write_info{nullptr};
+    std::condition_variable cv;
+    Status status;
+    bool done{false};
+
+    std::string ToString() const {
+      return fmt::format("(write_info: {}, done: {})", write_info->ToString(),
+                         (done ? "true" : "false"));
+    }
+  };
+
   std::string UUID() const {
     return fmt::format("chunk_reader-{}", chunk_.UUID());
   }
@@ -98,8 +138,9 @@ class ChunkWriter : public std::enable_shared_from_this<ChunkWriter> {
   std::unique_ptr<SliceData> FindWritableSliceUnLocked(uint64_t chunk_pos,
                                                        uint64_t size);
   std::unique_ptr<SliceData> CreateSliceUnlocked(uint64_t chunk_pos);
-  std::unique_ptr<SliceData> FindOrCreateSliceUnlocked(uint64_t chunk_pos,
-                                                       uint64_t size);
+  std::unique_ptr<SliceData> GetSliceUnlocked(uint64_t chunk_pos,
+                                              uint64_t size);
+  void PutSliceUnlocked(std::unique_ptr<SliceData> slice_data);
 
   void DoFlushAsync(StatusCallback cb, uint64_t chunk_flush_id);
   void FlushTaskDone(FlushTask* flush_task, Status s);
@@ -123,13 +164,17 @@ class ChunkWriter : public std::enable_shared_from_this<ChunkWriter> {
   const Chunk chunk_;
 
   mutable std::mutex mutex_;
-  std::condition_variable writer_cv_;
-  std::unique_ptr<SliceData> writing_slice_{nullptr};
   // TODO: maybe use std::vector
   // seq_id -> slice datj
   std::map<uint64_t, std::unique_ptr<SliceData>> slices_;
+
+  // guarded by mutex_
+  std::deque<Writer*> writers_;
+
+  // guarded by mutex_
   std::deque<FlushTask*> flush_queue_;
   static FlushTask fake_header_;
+
   // when this not ok, all write and flush should return error
   Status error_status_;
 };

@@ -60,7 +60,10 @@ class SliceData {
     return chunk_offset_ + len_;
   }
 
-  uint64_t Len() const { return len_; }
+  uint64_t Len() const {
+    std::lock_guard<std::mutex> lg(write_flush_mutex_);
+    return len_;
+  }
 
   bool IsFlushed() const { return flushed_.load(std::memory_order_relaxed); }
 
