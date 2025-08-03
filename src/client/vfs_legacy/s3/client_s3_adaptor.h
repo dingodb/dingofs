@@ -31,16 +31,20 @@
 
 #include "blockaccess/block_accesser.h"
 #include "cache/blockcache/block_cache.h"
+#include "cache/blockcache/cache_store.h"
 #include "client/vfs_legacy/filesystem/error.h"
 #include "client/vfs_legacy/filesystem/filesystem.h"
 #include "client/vfs_legacy/in_time_warmup_manager.h"
 #include "client/vfs_legacy/inode_cache_manager.h"
 #include "client/vfs_legacy/s3/client_s3_cache_manager.h"
 #include "stub/rpcclient/mds_client.h"
+#include "utils/concurrent/rw_lock.h"
 #include "utils/wait_interval.h"
 
 namespace dingofs {
 namespace client {
+using BthreadRWLock = dingofs::utils::BthreadRWLock;
+using cache::BlockKey;
 
 class DiskCacheManagerImpl;
 class ChunkCacheManager;
@@ -194,22 +198,27 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
  private:
   void BackGroundFlush();
 
-  using AsyncDownloadTask = std::function<void()>;
+  struct PrefetchTask {
+    PrefetchTask(BlockKey key, size_t length) : key(key), length(length) {}
+    BlockKey key;
+    size_t length;
+  };
 
-  static int ExecAsyncDownloadTask(
-      void* meta, bthread::TaskIterator<AsyncDownloadTask>& iter);  // NOLINT
+  static int HandleAsyncPrefetchTask(
+      void* meta, bthread::TaskIterator<PrefetchTask>& iter);  // NOLINT
 
  public:
-  void PushAsyncTask(const AsyncDownloadTask& task) {
-    static thread_local unsigned int seed = time(nullptr);
+  void SubmitPrefetchTask(const BlockKey& key, size_t length);
 
-    int idx = rand_r(&seed) % downloadTaskQueues_.size();
-    int rc = bthread::execution_queue_execute(downloadTaskQueues_[idx], task);
+  void DoAsyncPrefetch(const PrefetchTask& task);
 
-    if (DINGO_UNLIKELY(rc != 0)) {
-      task();
-    }
-  }
+  bool IsBusy(const BlockKey& key);
+
+  void SetBusy(const BlockKey& key);
+
+  void SetIdle(const BlockKey& key);
+
+  bool FilterOut(const PrefetchTask& task);
 
   void Enqueue(std::shared_ptr<FlushChunkCacheContext> context);
 
@@ -239,7 +248,9 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
   std::shared_ptr<stub::rpcclient::MdsClient> mdsClient_;
   uint32_t fsId_;
   std::string fsName_;
-  std::vector<bthread::ExecutionQueueId<AsyncDownloadTask>> downloadTaskQueues_;
+  std::vector<bthread::ExecutionQueueId<PrefetchTask>> prefetchTaskQueues_;
+  std::unordered_set<std::string> busy_;
+  BthreadRWLock rwlock_;  // for protect busy_
   uint32_t pageSize_;
 
   int FlushChunkClosure(std::shared_ptr<FlushChunkCacheContext> context);
