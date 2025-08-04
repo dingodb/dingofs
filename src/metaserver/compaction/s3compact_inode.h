@@ -96,14 +96,17 @@ class CompactInodeJob {
     std::string obj_name;
     uint64_t off;
     uint64_t len;
+    // offset in os file, not used in this context ,for debug purpose
+    uint64_t in_file_offset;
 
     S3Request(uint64_t p_req_index, bool p_zero, std::string p_obj_name,
-              uint64_t p_off, uint64_t p_len)
+              uint64_t p_off, uint64_t p_len, uint64_t p_in_file_offset)
         : req_index(p_req_index),
           zero(p_zero),
           obj_name(std::move(p_obj_name)),
           off(p_off),
-          len(p_len) {}
+          len(p_len),
+          in_file_offset(p_in_file_offset) {}
   };
 
   // node for building valid list

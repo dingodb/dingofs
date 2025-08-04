@@ -22,9 +22,11 @@
 
 #include "metaserver/compaction/s3compact_inode.h"
 
+#include <glog/logging.h>
 #include <google/protobuf/descriptor.h>
 
 #include <algorithm>
+#include <cstdint>
 #include <list>
 #include <map>
 #include <memory>
@@ -220,7 +222,8 @@ void CompactInodeJob::GenS3ReadRequests(
   for (auto curr = valid_list.begin(); curr != valid_list.end();) {
     auto next = std::next(curr);
     if (curr->zero) {
-      reqs->emplace_back(req_index++, true, "", 0, curr->end - curr->begin + 1);
+      reqs->emplace_back(req_index++, true, "", 0, curr->end - curr->begin + 1,
+                         curr->begin);
       curr = next;
       continue;
     }
@@ -229,6 +232,9 @@ void CompactInodeJob::GenS3ReadRequests(
     const auto& chunk_size = ctx.chunkSize;
     uint64_t begin_round_down = (curr->begin / chunk_size) * chunk_size;
     uint64_t start_index = (curr->begin - begin_round_down) / block_size;
+
+    // this chunk data may be from more than one block
+    uint64_t curr_file_offset = curr->begin;
     for (uint64_t index = start_index;
          begin_round_down + index * block_size <= curr->end; index++) {
       // read the block obj
@@ -239,26 +245,34 @@ void CompactInodeJob::GenS3ReadRequests(
           std::max(curr->chunkoff, begin_round_down + (index * block_size));
       uint64_t obj_end =
           std::min(curr->chunkoff + curr->chunklen - 1,
-                   begin_round_down + ((index + 1) * obj_begin) - 1);
+                   begin_round_down + ((index + 1) * block_size) - 1);
+
+      uint64_t req_len = 0;
+
       if (curr->begin >= obj_begin && curr->end <= obj_end) {
         // all what we need is only part of block
+        req_len = curr->end - curr->begin + 1;
         reqs->emplace_back(req_index++, false, std::move(obj_name),
-                           curr->begin - obj_begin,
-                           curr->end - curr->begin + 1);
+                           curr->begin - obj_begin, req_len, curr_file_offset);
       } else if (curr->begin >= obj_begin && curr->end > obj_end) {
         // not last block, what we need is part of block
+        req_len = obj_end - curr->begin + 1;
         reqs->emplace_back(req_index++, false, std::move(obj_name),
-                           curr->begin - obj_begin, obj_end - curr->begin + 1);
+                           curr->begin - obj_begin, req_len, curr_file_offset);
       } else if (curr->begin < obj_begin && curr->end > obj_end) {
         // what we need is full block
-        reqs->emplace_back(req_index++, false, std::move(obj_name), 0,
-                           block_size);
+        req_len = block_size;
+        reqs->emplace_back(req_index++, false, std::move(obj_name), 0, req_len,
+                           curr_file_offset);
       } else if (curr->begin < obj_begin && curr->end <= obj_end) {
         // last block, what we need is part of block
-        reqs->emplace_back(req_index++, false, std::move(obj_name), 0,
-                           curr->end - obj_begin + 1);
+        req_len = curr->end - obj_begin + 1;
+        reqs->emplace_back(req_index++, false, std::move(obj_name), 0, req_len,
+                           curr_file_offset);
         break;
       }
+
+      curr_file_offset += req_len;
     }
 
     if (curr->chunkid >= new_chunk_id) {
@@ -268,7 +282,8 @@ void CompactInodeJob::GenS3ReadRequests(
 
     if (next != valid_list.end() && curr->end + 1 < next->begin) {
       // hole, append 0
-      reqs->emplace_back(req_index++, true, "", 0, next->begin - curr->end - 1);
+      reqs->emplace_back(req_index++, true, "", 0, next->begin - curr->end - 1,
+                         curr->end);
     }
     curr = next;
   }
@@ -293,7 +308,16 @@ int CompactInodeJob::ReadFullChunk(const struct S3CompactCtx& ctx,
   for (const auto& s3req : s3reqs) {
     VLOG(9) << "index:" << s3req.req_index << ", zero:" << s3req.zero
             << ", s3objname:" << s3req.obj_name << ", off:" << s3req.off
-            << ", len:" << s3req.len;
+            << ", len:" << s3req.len << ", file_range[" << s3req.in_file_offset
+            << "-" << s3req.in_file_offset + s3req.len - 1 << "]";
+
+    // check if s3 request is out of range
+    CHECK((s3req.off + s3req.len) <= ctx.blockSize)
+        << "s3compact: s3 request out of range, index: " << s3req.req_index
+        << ", s3objname:" << s3req.obj_name << ", off: " << s3req.off
+        << ", len: " << s3req.len << ", blockSize: " << ctx.blockSize
+        << ", file_range[" << s3req.in_file_offset << "-"
+        << s3req.in_file_offset + s3req.len - 1 << "]";
   }
 
   read_content.resize(s3reqs.size());
@@ -493,10 +517,17 @@ void CompactInodeJob::CompactChunk(
         compact_ctx.fsId);  // maybe s3info changed?
     return;
   }
+  // check chunk size
+  uint64_t expectChunkSize =
+      valid_list.back().end - valid_list.front().begin + 1;
+  CHECK(full_chunk.size() == expectChunkSize)
+      << "s3compact: ReadFullChunk size mismatch, expect: " << expectChunkSize
+      << ", actual: " << full_chunk.size();
+
   VLOG(6) << "s3compact: finish read full chunk, size: " << full_chunk.size();
   VLOG(6) << "s3compact: new s3chunk info will be id:"
           << new_chunk_info.new_chunk_id << ", off:" << new_chunk_info.new_off
-          << ", compaction:" << new_chunk_info.new_chunk_id;
+          << ", compaction:" << new_chunk_info.new_compaction;
 
   // 1.3 then write objs with newChunkid and newCompaction
   std::vector<std::string> objs_added;
