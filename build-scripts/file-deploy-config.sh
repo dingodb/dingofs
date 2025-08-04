@@ -140,12 +140,20 @@ case "$g_image_type" in
     1)
         ${g_docker} pull $g_image_base:$1
         ${g_docker} build --no-cache -t "$g_image_name" "$docker_prefix"
-        success "build $2 success\n"
+        if [ $? -ne 0 ]; then
+            die "build $g_image_name failed\n"
+        else
+            success "build $g_image_name success\n"
+        fi
         ;;
     2)
         ${g_docker} pull $g_image_base:$1
         ${g_docker} build --no-cache -t "$g_image_name" -f "$docker_prefix/Dockerfile-v2" "$docker_prefix"
-        success "build $g_image_name success\n"
+        if [ $? -ne 0 ]; then
+            die "build $g_image_name failed\n"
+        else
+            success "build $g_image_name success\n"
+        fi
         ;;
     *)
         msg "skip build image\n"
