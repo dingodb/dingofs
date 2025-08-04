@@ -116,93 +116,94 @@ Status ChunkWriter::BufferWrite(const char* buf, uint64_t size,
   CHECK_GE(chunk_.chunk_end, info.end_file_offset);
 
   // TODO: check mem ratio, sleep when mem is near full
-
-  std::unique_lock<std::mutex> lg(mutex_);
-  writers_.push_back(&writer);
-
-  while (!writer.done && &writer != writers_.front()) {
-    VLOG(4) << fmt::format("{} BufferWrite Wait writer: {} ", UUID(),
-                           writer.ToString());
-    writer.cv.wait(lg);
-  }
-
-  if (writer.done) {
-    VLOG(4) << fmt::format(
-        "{} BufferWrite End, writer already done, writer: {}", UUID(),
-        writer.ToString());
-    return writer.status;
-  }
-
-  Writer* last_writer = &writer;
-
-  std::vector<ChunkWriteInfo*> write_batch;
-  CHECK(!writers_.empty());
-
-  auto iter = writers_.begin();
-
-  while (iter != writers_.end()) {
-    Writer* writer = *iter;
-    CHECK_NOTNULL(writer);
-
-    write_batch.push_back(writer->write_info);
-
-    last_writer = writer;
-
-    ++iter;
-  }
-
-  // TODO: merge write_batch by chunk_offset
-  boost::range::sort(write_batch,
-                     [](const ChunkWriteInfo* a, const ChunkWriteInfo* b) {
-                       return a->chunk_offset < b->chunk_offset;
-                     });
-
   bool has_full = false;
 
-  for (const ChunkWriteInfo* write_info : write_batch) {
-    VLOG(4) << fmt::format("{} BufferWrite write_info: {}", UUID(),
-                           write_info->ToString());
+  {
+    std::unique_lock<std::mutex> lg(mutex_);
+    writers_.push_back(&writer);
 
-    std::unique_ptr<SliceData> writing_slice =
-        GetSliceUnlocked(write_info->chunk_offset, write_info->size);
-
-    lg.unlock();
-
-    CHECK_NOTNULL(writing_slice);
-
-    Status s = writing_slice->Write(write_info->buf, write_info->size,
-                                    write_info->chunk_offset);
-    CHECK(s.ok());
-
-    if (writing_slice->Len() == chunk_.chunk_size) {
-      has_full = true;
-      VLOG(4) << fmt::format("{} slice_data: {} is full", UUID(),
-                             writing_slice->ToString());
+    while (!writer.done && &writer != writers_.front()) {
+      VLOG(4) << fmt::format("{} BufferWrite Wait writer: {} ", UUID(),
+                             writer.ToString());
+      writer.cv.wait(lg);
     }
 
-    lg.lock();
+    if (writer.done) {
+      VLOG(4) << fmt::format(
+          "{} BufferWrite End, writer already done, writer: {}", UUID(),
+          writer.ToString());
+      return writer.status;
+    }
 
-    PutSliceUnlocked(std::move(writing_slice));
+    Writer* last_writer = &writer;
+
+    std::vector<ChunkWriteInfo*> write_batch;
+    CHECK(!writers_.empty());
+
+    auto iter = writers_.begin();
+
+    while (iter != writers_.end()) {
+      Writer* writer = *iter;
+      CHECK_NOTNULL(writer);
+
+      write_batch.push_back(writer->write_info);
+
+      last_writer = writer;
+
+      ++iter;
+    }
+
+    // TODO: merge write_batch by chunk_offset
+    boost::range::sort(write_batch,
+                       [](const ChunkWriteInfo* a, const ChunkWriteInfo* b) {
+                         return a->chunk_offset < b->chunk_offset;
+                       });
+
+    for (const ChunkWriteInfo* write_info : write_batch) {
+      VLOG(4) << fmt::format("{} BufferWrite write_info: {}", UUID(),
+                             write_info->ToString());
+
+      std::unique_ptr<SliceData> writing_slice =
+          GetSliceUnlocked(write_info->chunk_offset, write_info->size);
+
+      lg.unlock();
+
+      CHECK_NOTNULL(writing_slice);
+
+      Status s = writing_slice->Write(write_info->buf, write_info->size,
+                                      write_info->chunk_offset);
+      CHECK(s.ok());
+
+      if (writing_slice->Len() == chunk_.chunk_size) {
+        has_full = true;
+        VLOG(4) << fmt::format("{} slice_data: {} is full", UUID(),
+                               writing_slice->ToString());
+      }
+
+      lg.lock();
+
+      PutSliceUnlocked(std::move(writing_slice));
+    }
+
+    while (true) {
+      Writer* ready = writers_.front();
+      writers_.pop_front();
+      if (ready != &writer) {
+        // TOOD: we need member every writer status when slice write can be fail
+        ready->status = Status::OK();
+        ready->done = true;
+        ready->cv.notify_all();
+      }
+      if (ready == last_writer) break;
+    }
+
+    if (!writers_.empty()) {
+      writers_.front()->cv.notify_all();
+    }
   }
 
   if (has_full) {
     TriggerFlush();
-  }
-
-  while (true) {
-    Writer* ready = writers_.front();
-    writers_.pop_front();
-    if (ready != &writer) {
-      // TOOD: we need member every writer status when slice write can be fail
-      ready->status = Status::OK();
-      ready->done = true;
-      ready->cv.notify_all();
-    }
-    if (ready == last_writer) break;
-  }
-
-  if (!writers_.empty()) {
-    writers_.front()->cv.notify_all();
   }
 
   return Status::OK();
