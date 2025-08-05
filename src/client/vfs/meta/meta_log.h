@@ -50,7 +50,10 @@ class MetaLogGuard {
 
     timer_.stop();
 
-    meta_logger->info("{0} <{1:.6f}>", handler_(), timer_.u_elapsed() / 1e6);
+    int64_t duration = timer_.u_elapsed();
+    if (duration > FLAGS_vfs_meta_log_threshold_us) {
+      meta_logger->warn("{0} <{1:.6f}>", handler_(), duration / 1e6);
+    }
   }
 
  private:

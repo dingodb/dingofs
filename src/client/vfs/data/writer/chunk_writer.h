@@ -119,7 +119,7 @@ class ChunkWriter : public std::enable_shared_from_this<ChunkWriter> {
   };
 
   std::string UUID() const {
-    return fmt::format("chunk_reader-{}", chunk_.UUID());
+    return fmt::format("chunk_writer-{}", chunk_.UUID());
   }
 
   Status DirectWrite(const char* buf, uint64_t size, uint64_t chunk_offset);

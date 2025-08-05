@@ -140,6 +140,9 @@ Status ChunkWriter::BufferWrite(const char* buf, uint64_t size,
     std::vector<ChunkWriteInfo*> write_batch;
     CHECK(!writers_.empty());
 
+    VLOG(4) << fmt::format("{} BufferWrite Get write_batch size: {}", UUID(),
+                           writers_.size());
+
     auto iter = writers_.begin();
 
     while (iter != writers_.end()) {
@@ -176,7 +179,7 @@ Status ChunkWriter::BufferWrite(const char* buf, uint64_t size,
 
       if (writing_slice->Len() == chunk_.chunk_size) {
         has_full = true;
-        VLOG(4) << fmt::format("{} slice_data: {} is full", UUID(),
+        VLOG(4) << fmt::format("{} Found full slice_data: {}", UUID(),
                                writing_slice->ToString());
       }
 

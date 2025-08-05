@@ -101,15 +101,26 @@ void InitVFSOption(utils::Configuration* conf, VFSOption* option) {
                  "default to 0";
   }
 
-  if (!conf->GetBoolValue("access_logging", &FLAGS_access_logging)) {
-    LOG(INFO) << "Not found `access_logging` in conf, default: "
+  if (!conf->GetBoolValue("vfs.access_logging", &FLAGS_access_logging)) {
+    LOG(INFO) << "Not found `vfs.access_logging` in conf, default: "
               << FLAGS_access_logging;
   }
-  if (!conf->GetInt64Value("access_log_threshold_us",
+  if (!conf->GetInt64Value("vfs.access_log_threshold_us",
                            &FLAGS_access_log_threshold_us)) {
-    LOG(INFO) << "Not found `access_log_threshold_us` in conf, "
+    LOG(INFO) << "Not found `vfs.access_log_threshold_us` in conf, "
                  "default: "
               << FLAGS_access_log_threshold_us;
+  }
+
+  if (!conf->GetBoolValue("vfs.vfs_meta_logging", &FLAGS_vfs_meta_logging)) {
+    LOG(INFO) << "Not found `vfs.vfs_meta_logging` in conf, default: "
+              << FLAGS_vfs_meta_logging;
+  }
+  if (!conf->GetInt64Value("vfs.vfs_meta_log_threshold_u",
+                           &FLAGS_vfs_meta_log_threshold_us)) {
+    LOG(INFO) << "Not found `vfs.vfs_meta_log_threshold_u` in conf, "
+                 "default: "
+              << FLAGS_vfs_meta_log_threshold_us;
   }
 
   SetBrpcOpt(conf);

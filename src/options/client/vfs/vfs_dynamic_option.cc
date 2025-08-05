@@ -33,9 +33,12 @@ bool ValidateDelimiterLength(const char* flag_name, const std::string& value) {
 }
 };  // namespace
 
-// access log
+// vfs meta access log
 DEFINE_bool(vfs_meta_logging, true, "enable vfs meta system log");
 DEFINE_validator(vfs_meta_logging, &PassBool);
+
+DEFINE_int64(vfs_meta_log_threshold_us, 1000, "access log threshold");
+DEFINE_validator(vfs_meta_log_threshold_us, &PassInt64);
 
 DEFINE_int32(vfs_flush_bg_thread, 16, "Number of background flush threads");
 DEFINE_validator(vfs_flush_bg_thread, &PassInt32);

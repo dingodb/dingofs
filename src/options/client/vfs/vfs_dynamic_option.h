@@ -23,8 +23,9 @@
 namespace dingofs {
 namespace client {
 
-// meta system log
+// vfs meta system log
 DECLARE_bool(vfs_meta_logging);
+DECLARE_int64(vfs_meta_log_threshold_us);
 
 DECLARE_int32(vfs_flush_bg_thread);
 
