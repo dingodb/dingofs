@@ -69,6 +69,8 @@ class PartitionCache {
 
   void Put(Ino ino, PartitionPtr partition);
   void Delete(Ino ino);
+  void BatchDeleteInodeIf(const std::function<bool(const Ino&)>& f);
+  void Clear();
 
   PartitionPtr Get(Ino ino);
 

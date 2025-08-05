@@ -293,6 +293,9 @@ Status DingodbStorage::BatchGet(const std::vector<std::string>& keys, std::vecto
 }
 
 Status DingodbStorage::Scan(const Range& range, std::vector<KeyValue>& kvs) {
+  CHECK(range.start < range.end) << fmt::format("invalid range({}/{}).", Helper::StringToHex(range.start),
+                                                Helper::StringToHex(range.end));
+
   auto txn = NewSdkTxn();
   if (txn == nullptr) {
     return Status(pb::error::EBACKEND_STORE, "new transaction fail");
@@ -419,6 +422,9 @@ Status DingodbTxn::BatchGet(const std::vector<std::string>& keys, std::vector<Ke
 }
 
 Status DingodbTxn::Scan(const Range& range, uint64_t limit, std::vector<KeyValue>& kvs) {
+  CHECK(range.start < range.end) << fmt::format("invalid range({}/{}).", Helper::StringToHex(range.start),
+                                                Helper::StringToHex(range.end));
+
   uint64_t start_time = Helper::TimestampUs();
   ON_SCOPE_EXIT([&]() { txn_trace_.read_time_us += (Helper::TimestampUs() - start_time); });
 

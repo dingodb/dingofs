@@ -395,7 +395,9 @@ Status MDSClient::ReadDir(Ino ino, const std::string& last_name, uint32_t limit,
                           bool with_attr, std::vector<DirEntry>& entries) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
-  auto get_endpoint_fn = [this, ino]() -> EndPoint { return GetEndpoint(ino); };
+  auto get_endpoint_fn = [this, ino]() -> EndPoint {
+    return GetEndpointByParent(ino);
+  };
 
   pb::mdsv2::ReadDirRequest request;
   pb::mdsv2::ReadDirResponse response;

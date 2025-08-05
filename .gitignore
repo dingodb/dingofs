@@ -68,7 +68,6 @@ runlog/
 # history
 .gdb_history
 
-.clang-format
 .clangd
 
 # mac

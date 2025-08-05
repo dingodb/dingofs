@@ -294,13 +294,13 @@ Status FsUtils::GenDirJsonString(Ino parent, std::string& output) {
     inoes.push_back(ino);
 
     if (++count == dentries.size() || inoes.size() == kBatchGetSize) {
-      BatchGetInodeAttrOperation batch_op(trace, fs_id, inoes);
-      status = operation_processor_->RunAlone(&batch_op);
+      BatchGetInodeAttrOperation operation(trace, fs_id, inoes);
+      status = operation_processor_->RunAlone(&operation);
       if (!status.ok()) {
         DINGO_LOG(ERROR) << fmt::format("[fsutils] batch get inode attrs fail, {}.", status.error_str());
         return status;
       }
-      auto& result = batch_op.GetResult();
+      auto& result = operation.GetResult();
 
       if (result.attrs.size() != inoes.size()) {
         DINGO_LOG(WARNING) << fmt::format("[fsutils] batch get attrs size({}) not match ino size({}).",

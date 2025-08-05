@@ -122,9 +122,21 @@ PartitionCache::~PartitionCache() {}  // NOLINT
 void PartitionCache::Put(Ino ino, PartitionPtr partition) { cache_.Put(ino, partition); }
 
 void PartitionCache::Delete(Ino ino) {
-  DINGO_LOG(INFO) << fmt::format("[partition] delete partition ino({}).", ino);
+  DINGO_LOG(INFO) << fmt::format("[cache.partition.{}] delete partition ino({}).", fs_id_, ino);
 
   cache_.Remove(ino);
+}
+
+void PartitionCache::BatchDeleteInodeIf(const std::function<bool(const Ino&)>& f) {
+  DINGO_LOG(INFO) << fmt::format("[cache.partition.{}] batch delete inode.", fs_id_);
+
+  cache_.BatchRemoveIf(f);
+}
+
+void PartitionCache::Clear() {
+  DINGO_LOG(INFO) << fmt::format("[cache.partition.{}] clear.", fs_id_);
+
+  cache_.Clear();
 }
 
 PartitionPtr PartitionCache::Get(Ino ino) {

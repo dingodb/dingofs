@@ -17,6 +17,7 @@
 
 #include <sys/types.h>
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -101,7 +102,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   bool IsMonoPartition() const;
   bool IsParentHashPartition() const;
 
-  bool CanServe() const { return can_serve_; };
+  bool CanServe() const { return can_serve_.load(std::memory_order_acquire); };
 
   // create root directory
   Status CreateRoot();
@@ -208,8 +209,8 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status JoinMonoFs(Context& ctx, uint64_t mds_id, const std::string& reason);
   Status JoinHashFs(Context& ctx, const std::vector<uint64_t>& mds_ids, const std::string& reason);
   Status QuitFs(Context& ctx, const std::vector<uint64_t>& mds_ids, const std::string& reason);
-  Status QuitAndJoinFs(Context& ctx, uint32_t fs_id, const std::vector<uint64_t>& quit_mds_ids,
-                       const std::vector<uint64_t>& join_mds_ids);
+  Status QuitAndJoinFs(Context& ctx, const std::vector<uint64_t>& quit_mds_ids,
+                       const std::vector<uint64_t>& join_mds_ids, const std::string& reason);
 
   Status UpdatePartitionPolicy(const std::map<uint64_t, pb::mdsv2::HashPartition::BucketSet>& distributions);
 
@@ -264,6 +265,9 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   // delete inode from cache
   void DeleteInodeFromCache(Ino ino);
 
+  void ClearCache();
+  void BatchDeleteCache(uint32_t bucket_num, const std::set<uint32_t>& bucket_ids);
+
   // thorough delete inode
   Status DestoryInode(uint32_t fs_id, Ino ino);
 
@@ -271,7 +275,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   void UpdateParentMemo(const std::vector<Ino>& ancestors);
 
-  void NotifyBuddyRefreshFsInfo(int64_t mds_id, const FsInfoType& fs_info);
+  void NotifyBuddyRefreshFsInfo(std::vector<int64_t> mds_ids, const FsInfoType& fs_info);
   void NotifyBuddyRefreshInode(AttrType&& attr);
   void NotifyBuddyCleanPartitionCache(Ino ino);
 
@@ -281,7 +285,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   FsInfoUPtr fs_info_;
   const uint32_t fs_id_;
 
-  bool can_serve_{false};
+  std::atomic<bool> can_serve_{false};
 
   // generate inode id
   IdGeneratorUPtr ino_id_generator_;

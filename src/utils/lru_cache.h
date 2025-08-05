@@ -121,12 +121,16 @@ class LRUCacheInterface {
    */
   virtual void Remove(const K& key) = 0;
 
+  virtual void BatchRemoveIf(const std::function<bool(const K&)>& f) = 0;
+
   /*
    * @brief Get the size of the lru
    */
   virtual uint64_t Size() = 0;
 
   virtual std::map<K, V> GetAll() = 0;
+
+  virtual void Clear() = 0;
 };
 
 // LRUCache
@@ -186,6 +190,8 @@ class LRUCache : public LRUCacheInterface<K, V> {
    */
   void Remove(const K& key) override;
 
+  void BatchRemoveIf(const std::function<bool(const K&)>& f) override;
+
   /*
    * @brief Get the first key that $value = value
    *
@@ -225,6 +231,8 @@ class LRUCache : public LRUCacheInterface<K, V> {
   std::map<K, V> GetAll() override;
 
   std::shared_ptr<CacheMetrics> GetCacheMetrics() const;
+
+  void Clear() override;
 
  private:
   /*
@@ -388,6 +396,20 @@ void LRUCache<K, V, KeyTraits, ValueTraits>::Remove(const K& key) {
 }
 
 template <typename K, typename V, typename KeyTraits, typename ValueTraits>
+void LRUCache<K, V, KeyTraits, ValueTraits>::BatchRemoveIf(
+    const std::function<bool(const K&)>& f) {
+  ::dingofs::utils::WriteLockGuard guard(lock_);
+
+  for (auto it = ll_.begin(); it != ll_.end();) {
+    if (f(*(it->key))) {
+      RemoveElement(it++);
+    } else {
+      ++it;
+    }
+  }
+}
+
+template <typename K, typename V, typename KeyTraits, typename ValueTraits>
 bool LRUCache<K, V, KeyTraits, ValueTraits>::PutLocked(const K& key,
                                                        const V& value,
                                                        V* eliminated) {
@@ -462,6 +484,14 @@ LRUCache<K, V, KeyTraits, ValueTraits>::GetCacheMetrics() const {
   return cacheMetrics_;
 }
 
+template <typename K, typename V, typename KeyTraits, typename ValueTraits>
+void LRUCache<K, V, KeyTraits, ValueTraits>::Clear() {
+  ::dingofs::utils::WriteLockGuard guard(lock_);
+
+  ll_.clear();
+  cache_.clear();
+}
+
 // TimedLRUCache
 template <typename K, typename V, typename KeyTraits = CacheTraits<K>,
           typename ValueTraits = CacheTraits<V>>
@@ -491,6 +521,10 @@ class TimedLRUCache : public LRUCacheInterface<K, V> {
 
   void Remove(const K& key) override;
 
+  void BatchRemoveIf(const std::function<bool(const K&)>&) override {
+    throw std::runtime_error("TimedLRUCache not support GetAll");
+  }
+
   uint64_t Size() override;
 
   std::map<K, V> GetAll() override {
@@ -498,6 +532,10 @@ class TimedLRUCache : public LRUCacheInterface<K, V> {
   }
 
   std::shared_ptr<CacheMetrics> GetCacheMetrics() const;
+
+  void Clear() override {
+    throw std::runtime_error("TimedLRUCache not support GetAll");
+  }
 
  private:
   bool IsTimeout(const ItemWithTimestamp& elem);

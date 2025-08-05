@@ -92,12 +92,15 @@ class InodeCache {
 
   void PutInode(Ino ino, InodeSPtr inode);
   void DeleteInode(Ino ino);
+  void BatchDeleteInodeIf(const std::function<bool(const Ino&)>& f);
+  void Clear();
 
   InodeSPtr GetInode(Ino ino);
   std::vector<InodeSPtr> GetInodes(std::vector<uint64_t> inoes);
   std::map<uint64_t, InodeSPtr> GetAllInodes();
 
  private:
+  uint32_t fs_id_{0};
   // ino -> inode
   utils::LRUCache<uint64_t, InodeSPtr> cache_;
 };

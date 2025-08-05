@@ -19,8 +19,10 @@
 #include <sys/types.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <memory>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -37,6 +39,7 @@
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
 #include "mdsv2/common/status.h"
+#include "mdsv2/common/time.h"
 #include "mdsv2/common/tracing.h"
 #include "mdsv2/common/type.h"
 #include "mdsv2/filesystem/dentry.h"
@@ -418,6 +421,24 @@ Status FileSystem::GetDelFileFromStore(Ino ino, AttrType& out_attr) {
 }
 
 void FileSystem::DeleteInodeFromCache(Ino ino) { inode_cache_.DeleteInode(ino); }
+
+void FileSystem::ClearCache() {
+  partition_cache_.Clear();
+  inode_cache_.Clear();
+}
+
+void FileSystem::BatchDeleteCache(uint32_t bucket_num, const std::set<uint32_t>& bucket_ids) {
+  if (bucket_ids.empty()) return;
+
+  auto check_fn = [&](const Ino& ino) -> bool {
+    uint32_t bucket_id = ino % bucket_num;
+
+    return (bucket_ids.find(bucket_id) != bucket_ids.end());
+  };
+
+  partition_cache_.BatchDeleteInodeIf(check_fn);
+  inode_cache_.BatchDeleteInodeIf(check_fn);
+}
 
 Status FileSystem::DestoryInode(uint32_t fs_id, Ino ino) {
   DINGO_LOG(DEBUG) << fmt::format("[fs.{}] destory inode {}.", fs_id_, ino);
@@ -1481,10 +1502,12 @@ void FileSystem::UpdateParentMemo(const std::vector<Ino>& ancestors) {
   }
 }
 
-void FileSystem::NotifyBuddyRefreshFsInfo(int64_t mds_id, const FsInfoType& fs_info) {
-  if (mds_id == 0 || mds_id == self_mds_id_) return;
+void FileSystem::NotifyBuddyRefreshFsInfo(std::vector<int64_t> mds_ids, const FsInfoType& fs_info) {
+  for (auto mds_id : mds_ids) {
+    if (mds_id == 0 || mds_id == self_mds_id_) continue;
 
-  notify_buddy_->AsyncNotify(notify::RefreshFsInfoMessage::Create(mds_id, fs_info.fs_id(), fs_info.fs_name()));
+    notify_buddy_->AsyncNotify(notify::RefreshFsInfoMessage::Create(mds_id, fs_info.fs_id(), fs_info.fs_name()));
+  }
 }
 
 void FileSystem::NotifyBuddyRefreshInode(AttrType&& attr) {
@@ -1570,10 +1593,11 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
   bool is_same_parent = result.is_same_parent;
   bool is_exist_new_dentry = result.is_exist_new_dentry;
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] rename {}/{} -> {}/{} finish, state({},{}) version({},{}) status({}).",
-                                 fs_id_, ElapsedTimeUs(time_ns), old_parent, old_name, new_parent, new_name,
-                                 is_same_parent, is_exist_new_dentry, old_parent_attr.version(),
-                                 new_parent_attr.version(), status.error_str());
+  DINGO_LOG(INFO) << fmt::format(
+      "[fs.{}][{}us] rename {}/{} -> {}/{} finish, state({},{}) version({},{}) "
+      "status({}).",
+      fs_id_, ElapsedTimeUs(time_ns), old_parent, old_name, new_parent, new_name, is_same_parent, is_exist_new_dentry,
+      old_parent_attr.version(), new_parent_attr.version(), status.error_str());
 
   if (!status.ok()) {
     return status;
@@ -1819,8 +1843,10 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
 
   status = RunOperation(&operation);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[fs.{}][{}us] fallocate ino({}), mode({}), offset({}), len({}) fail, status({}).",
-                                    fs_id_, ElapsedTimeUs(time_ns), ino, mode, offset, len, status.error_str());
+    DINGO_LOG(ERROR) << fmt::format(
+        "[fs.{}][{}us] fallocate ino({}), mode({}), offset({}), len({}) fail, "
+        "status({}).",
+        fs_id_, ElapsedTimeUs(time_ns), ino, mode, offset, len, status.error_str());
     return status;
   }
 
@@ -2049,12 +2075,56 @@ Status FileSystem::RefreshFsInfo(const std::string& name) {
   return Status::OK();
 }
 
-void FileSystem::RefreshFsInfo(const FsInfoType& fs_info) {
-  fs_info_->Update(fs_info);
+static std::set<uint32_t> GetDeletedBucketIds(int64_t mds_id, const pb::mdsv2::HashPartition& old_hash,
+                                              const pb::mdsv2::HashPartition& hash) {
+  std::set<uint32_t> deleted_bucket_ids;
+  auto old_bucketset = old_hash.distributions().find(mds_id);
+  auto bucketset = hash.distributions().find(mds_id);
+  if (old_bucketset == old_hash.distributions().end() || bucketset == hash.distributions().end()) {
+    DINGO_LOG(ERROR) << fmt::format("[fs] mds_id({}) not found in old or new hash partition.", mds_id);
+    return deleted_bucket_ids;
+  }
 
-  can_serve_ = CanServe(self_mds_id_);
-  DINGO_LOG(INFO) << fmt::format("[fs.{}] update fs({}) can_serve({}).", fs_id_, fs_info.fs_name(),
-                                 can_serve_ ? "true" : "false");
+  const auto& old_bucket_ids = old_bucketset->second.bucket_ids();
+  const auto& new_bucket_ids = bucketset->second.bucket_ids();
+  for (const auto& old_bucket_id : old_bucket_ids) {
+    if (std::find(new_bucket_ids.begin(), new_bucket_ids.end(), old_bucket_id) == new_bucket_ids.end()) {
+      deleted_bucket_ids.insert(old_bucket_id);
+    }
+  }
+
+  return deleted_bucket_ids;
+}
+
+void FileSystem::RefreshFsInfo(const FsInfoType& fs_info) {
+  // clean partition and inode cache
+  auto pre_handler = [&](const FsInfoType& old_fs_info, const FsInfoType& new_fs_info) {
+    const auto& partition_policy = new_fs_info.partition_policy();
+    if (partition_policy.type() == pb::mdsv2::PartitionType::MONOLITHIC_PARTITION) {
+      if (partition_policy.mono().mds_id() != self_mds_id_) {
+        ClearCache();
+      }
+
+    } else if (partition_policy.type() == pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION) {
+      auto old_hash = old_fs_info.partition_policy().parent_hash();
+      auto new_hash = new_fs_info.partition_policy().parent_hash();
+      if (!new_hash.distributions().contains(self_mds_id_)) {
+        ClearCache();
+
+      } else {
+        BatchDeleteCache(new_hash.bucket_num(), GetDeletedBucketIds(self_mds_id_, old_hash, new_hash));
+      }
+    }
+  };
+
+  Duration duration;
+
+  fs_info_->Update(fs_info, pre_handler);
+
+  can_serve_.store(CanServe(self_mds_id_), std::memory_order_release);
+
+  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] update fs({}) can_serve({}).", fs_id_, duration.ElapsedUs(),
+                                 fs_info.fs_name(), can_serve_ ? "true" : "false");
 }
 
 Status FileSystem::JoinMonoFs(Context& ctx, uint64_t mds_id, const std::string& reason) {
@@ -2093,9 +2163,62 @@ Status FileSystem::JoinMonoFs(Context& ctx, uint64_t mds_id, const std::string& 
 
   fs_info_->Update(result.fs_info);
 
-  NotifyBuddyRefreshFsInfo(old_mds_id, result.fs_info);
+  NotifyBuddyRefreshFsInfo({old_mds_id}, result.fs_info);
 
   return Status::OK();
+}
+
+static std::vector<int64_t> GetMdsIdFromHashPartitioin(const pb::mdsv2::HashPartition& hash) {
+  std::vector<int64_t> mds_ids;
+  mds_ids.reserve(hash.distributions_size());
+  for (const auto& [mds_id, _] : hash.distributions()) {
+    mds_ids.push_back(mds_id);
+  }
+
+  return mds_ids;
+}
+
+// check whether the hash partition is valid
+// 1. bucket_ids should be unique
+// 2. bucket_ids should be in range [0, bucket_num)
+// 3. bucket_ids size should be equal to bucket_num
+// 4. bucket_ids should not be empty
+// 5. bucket_num should be greater than 0
+static bool CheckHashPartition(const pb::mdsv2::HashPartition& hash) {
+  if (hash.bucket_num() == 0) {
+    DINGO_LOG(ERROR) << "[fs] bucket_num should be greater than 0.";
+    return false;
+  }
+
+  std::set<uint32_t> bucket_ids;
+  for (const auto& [mds_id, bucket_set] : hash.distributions()) {
+    if (bucket_set.bucket_ids().empty()) {
+      DINGO_LOG(ERROR) << fmt::format("[fs] bucket_ids should not be empty for mds_id({}).", mds_id);
+      return false;
+    }
+
+    for (const auto& bucket_id : bucket_set.bucket_ids()) {
+      if (bucket_id >= hash.bucket_num()) {
+        DINGO_LOG(ERROR) << fmt::format("[fs] bucket_id({}) should be in range [0, {}).", bucket_id, hash.bucket_num());
+        return false;
+      }
+
+      if (bucket_ids.count(bucket_id) > 0) {
+        DINGO_LOG(ERROR) << fmt::format("[fs] bucket_id({}) should be unique.", bucket_id);
+        return false;
+      }
+
+      bucket_ids.insert(bucket_id);
+    }
+  }
+
+  if (bucket_ids.size() != hash.bucket_num()) {
+    DINGO_LOG(ERROR) << fmt::format("[fs] bucket_ids size({}) should be equal to bucket_num({}).", bucket_ids.size(),
+                                    hash.bucket_num());
+    return false;
+  }
+
+  return true;
 }
 
 // 按bucket_id数量平均分布
@@ -2104,9 +2227,12 @@ static void DistributeByMean(const std::vector<uint64_t>& mds_ids, pb::mdsv2::Ha
 
   std::vector<uint64_t> pending_bucket_ids;
   pending_bucket_ids.reserve(mean_num * mds_ids.size());
-  for (auto& [mds_id, bucket_set] : *hash.mutable_distributions()) {
+  for (auto& [_, bucket_set] : *hash.mutable_distributions()) {
     for (uint32_t i = mean_num; i < bucket_set.bucket_ids_size(); ++i) {
       pending_bucket_ids.push_back(bucket_set.bucket_ids(i));
+    }
+    if (bucket_set.bucket_ids_size() > mean_num) {
+      bucket_set.mutable_bucket_ids()->Resize(mean_num, 0);
     }
   }
 
@@ -2137,13 +2263,19 @@ Status FileSystem::JoinHashFs(Context& ctx, const std::vector<uint64_t>& mds_ids
     return false;
   };
 
+  std::vector<int64_t> old_mds_ids;
   auto handler = [&](PartitionPolicy& partition_policy, FsOpLog& log) -> Status {
-    if (has_mds_fn(partition_policy.parent_hash())) {
+    auto* hash = partition_policy.mutable_parent_hash();
+
+    if (has_mds_fn(*hash)) {
       return Status(pb::error::EEXISTED, "mds already exists");
     }
 
-    auto* hash = partition_policy.mutable_parent_hash();
+    old_mds_ids = GetMdsIdFromHashPartitioin(*hash);
+
     DistributeByMean(mds_ids, *hash);
+
+    CHECK(CheckHashPartition(*hash)) << "invalid hash partition bucket id size.";
 
     log.set_fs_name(FsName());
     log.set_fs_id(fs_id_);
@@ -2166,6 +2298,8 @@ Status FileSystem::JoinHashFs(Context& ctx, const std::vector<uint64_t>& mds_ids
 
   fs_info_->Update(result.fs_info);
 
+  NotifyBuddyRefreshFsInfo(old_mds_ids, result.fs_info);
+
   return Status::OK();
 }
 
@@ -2185,9 +2319,18 @@ static void ReDistributeByDeleteMds(const std::vector<uint64_t>& quit_mds_ids, p
     hash.mutable_distributions()->erase(mds_id);
   }
 
-  uint32_t index = 0;
-  for (const auto& bucket_id : pending_bucket_ids) {
-    hash.mutable_distributions()->at(index++ % hash.distributions_size()).add_bucket_ids(bucket_id);
+  if (hash.distributions().empty()) return;
+
+  const uint32_t mean_num = pending_bucket_ids.size() / hash.distributions_size();
+  uint32_t pending_offset = 0;
+  for (auto& [_, bucket_set] : *hash.mutable_distributions()) {
+    for (uint32_t i = 0; i < mean_num; ++i) {
+      bucket_set.add_bucket_ids(pending_bucket_ids[pending_offset++]);
+    }
+  }
+
+  for (uint32_t i = pending_offset; i < pending_bucket_ids.size(); ++i) {
+    hash.mutable_distributions()->begin()->second.add_bucket_ids(pending_bucket_ids[i]);
   }
 }
 
@@ -2206,12 +2349,22 @@ Status FileSystem::QuitFs(Context& ctx, const std::vector<uint64_t>& mds_ids, co
     return true;
   };
 
+  std::vector<int64_t> old_mds_ids;
   auto handler = [&](PartitionPolicy& partition_policy, FsOpLog& log) -> Status {
     auto* hash = partition_policy.mutable_parent_hash();
+
+    if (hash->distributions_size() <= 1) {
+      return Status(pb::error::EINTERNAL, "not enough mds");
+    }
     if (miss_mds_fn(*hash)) {
       return Status(pb::error::ENOT_FOUND, "not found mds");
     }
+
+    old_mds_ids = GetMdsIdFromHashPartitioin(*hash);
+
     ReDistributeByDeleteMds(mds_ids, *hash);
+
+    CHECK(CheckHashPartition(*hash)) << "invalid hash partition bucket id size.";
 
     log.set_fs_name(FsName());
     log.set_fs_id(fs_id_);
@@ -2234,11 +2387,85 @@ Status FileSystem::QuitFs(Context& ctx, const std::vector<uint64_t>& mds_ids, co
 
   fs_info_->Update(result.fs_info);
 
+  NotifyBuddyRefreshFsInfo(old_mds_ids, result.fs_info);
+
   return Status::OK();
 }
 
-Status FileSystem::QuitAndJoinFs(Context& ctx, uint32_t fs_id, const std::vector<uint64_t>& quit_mds_ids,
-                                 const std::vector<uint64_t>& join_mds_ids) {
+Status FileSystem::QuitAndJoinFs(Context& ctx, const std::vector<uint64_t>& quit_mds_ids,
+                                 const std::vector<uint64_t>& join_mds_ids, const std::string& reason) {
+  if (PartitionType() != pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION) {
+    return Status(pb::error::ENOT_SUPPORT, "not support join fs for mono partition");
+  }
+
+  auto miss_mds_fn = [&](const pb::mdsv2::HashPartition& hash) -> bool {
+    for (const auto& mds_id : quit_mds_ids) {
+      if (hash.distributions().find(mds_id) != hash.distributions().end()) {
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  auto has_mds_fn = [&](const pb::mdsv2::HashPartition& hash) -> bool {
+    for (const auto& mds_id : join_mds_ids) {
+      if (hash.distributions().find(mds_id) != hash.distributions().end()) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  std::vector<int64_t> old_mds_ids;
+  auto handler = [&](PartitionPolicy& partition_policy, FsOpLog& log) -> Status {
+    auto* hash = partition_policy.mutable_parent_hash();
+
+    if (hash->distributions_size() <= 1) {
+      return Status(pb::error::EINTERNAL, "not enough mds");
+    }
+    if (miss_mds_fn(*hash)) {
+      return Status(pb::error::ENOT_FOUND, "not found mds");
+    }
+    if (has_mds_fn(*hash)) {
+      return Status(pb::error::EEXISTED, "mds already exists");
+    }
+
+    old_mds_ids = GetMdsIdFromHashPartitioin(*hash);
+
+    ReDistributeByDeleteMds(quit_mds_ids, *hash);
+
+    CHECK(CheckHashPartition(*hash)) << "invalid hash partition bucket id size.";
+
+    DistributeByMean(join_mds_ids, *hash);
+
+    CHECK(CheckHashPartition(*hash)) << "invalid hash partition bucket id size.";
+
+    log.set_fs_name(FsName());
+    log.set_fs_id(fs_id_);
+    log.set_type(pb::mdsv2::FsOpLog::QUIT_AND_JOIN_FS);
+    Helper::VectorToPbRepeated(quit_mds_ids, log.mutable_quit_and_join_fs()->mutable_quit_mds_ids());
+    Helper::VectorToPbRepeated(join_mds_ids, log.mutable_quit_and_join_fs()->mutable_join_mds_ids());
+    log.set_comment(reason);
+
+    return Status::OK();
+  };
+
+  auto& trace = ctx.GetTrace();
+  UpdateFsPartitionOperation operation(trace, FsName(), handler);
+
+  auto status = RunOperation(&operation);
+  if (!status.ok()) {
+    return Status(pb::error::EINTERNAL, fmt::format("update fs partition policy fail, {}", status.error_str()));
+  }
+
+  auto& result = operation.GetResult();
+
+  fs_info_->Update(result.fs_info);
+
+  NotifyBuddyRefreshFsInfo(old_mds_ids, result.fs_info);
+
   return Status::OK();
 }
 
@@ -2826,7 +3053,7 @@ Status FileSystemSet::QuitFs(Context& ctx, const std::string& fs_name, const std
     return Status(pb::error::EILLEGAL_PARAMTETER, "not support mono fs quit fs");
 
   } else if (fs->PartitionType() == pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION) {
-    return fs->JoinHashFs(ctx, mds_ids, reason);
+    return fs->QuitFs(ctx, mds_ids, reason);
 
   } else {
     return Status(pb::error::ENOT_SUPPORT, reason);

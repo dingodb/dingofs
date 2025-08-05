@@ -16,6 +16,7 @@
 #define DINGOFS_SRC_MDSV2_FS_INFO_H_
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -111,10 +112,12 @@ class FsInfo {
     return fs_info_.ShortDebugString();
   }
 
-  void Update(const DataType& fs_info) {
+  void Update(const DataType& fs_info, std::function<void(const DataType&, const DataType&)> pre_handle = nullptr) {
     utils::WriteLockGuard lock(lock_);
 
     if (fs_info.version() > fs_info_.version()) {
+      if (pre_handle) pre_handle(fs_info_, fs_info);
+
       fs_info_ = fs_info;
     }
   }

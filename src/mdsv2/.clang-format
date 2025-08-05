@@ -1,0 +1,10 @@
+---
+BasedOnStyle: Google
+---
+Language:     Cpp
+ColumnLimit: 120
+DerivePointerAlignment: false
+PointerAlignment: Left
+---
+Language: Proto
+ColumnLimit: 80

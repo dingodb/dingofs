@@ -191,7 +191,8 @@ Inode::AttrType&& Inode::Move() {
 }
 
 InodeCache::InodeCache(uint32_t fs_id)
-    : cache_(FLAGS_inode_cache_max_count,
+    : fs_id_(fs_id),
+      cache_(FLAGS_inode_cache_max_count,
              std::make_shared<utils::CacheMetrics>(fmt::format(kInodeCacheMetricsPrefix, fs_id))) {}
 
 InodeCache::~InodeCache() {}  // NOLINT
@@ -200,10 +201,21 @@ void InodeCache::PutInode(Ino ino, InodeSPtr inode) { cache_.Put(ino, inode); }
 
 void InodeCache::DeleteInode(Ino ino) { cache_.Remove(ino); };
 
+void InodeCache::BatchDeleteInodeIf(const std::function<bool(const Ino&)>& f) {
+  DINGO_LOG(INFO) << fmt::format("[cache.inode.{}] batch delete inode.", fs_id_);
+
+  cache_.BatchRemoveIf(f);
+}
+
+void InodeCache::Clear() {
+  DINGO_LOG(INFO) << fmt::format("[cache.inode.{}] clear.", fs_id_);
+
+  cache_.Clear();
+}
+
 InodeSPtr InodeCache::GetInode(Ino ino) {
   InodeSPtr inode;
   if (!cache_.Get(ino, &inode)) {
-    DINGO_LOG(INFO) << fmt::format("inode({}) not found.", ino);
     return nullptr;
   }
 
