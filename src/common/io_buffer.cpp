@@ -58,7 +58,6 @@ char* IOBuffer::Fetch1() const {
 
 std::vector<iovec> IOBuffer::Fetch() const {
   std::vector<iovec> iovecs;
-  // for (int i = 0; i < iobuf_.block_count(); i++) { // FIXME
   for (int i = 0; i < iobuf_.backing_block_num(); i++) {
     const auto& string_piece = iobuf_.backing_block(i);
 

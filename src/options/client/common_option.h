@@ -81,8 +81,6 @@ static void InitBlockCacheOption(utils::Configuration* c,
     c->GetValue("disk_cache.cleanup_expire_interval_millsecond",
                 &cache::FLAGS_cleanup_expire_interval_ms);
     c->GetValue("disk_cache.ioring_iodepth", &cache::FLAGS_ioring_iodepth);
-    c->GetValue("disk_cache.ioring_blksize", &cache::FLAGS_ioring_blksize);
-    c->GetValue("disk_cache.ioring_prefetch", &cache::FLAGS_ioring_prefetch);
   }
 
   {  // disk state option

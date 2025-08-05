@@ -152,7 +152,7 @@ Status LocalFileSystem::WriteFile(ContextSPtr ctx, const std::string& path,
   auto tmppath = Helper::TempFilepath(path);
   status = MkDirs(Helper::ParentDir(tmppath));
   if (!status.ok() && !status.IsExist()) {
-    LOG(ERROR) << "[" << ctx->TraceId() << "] Mkdir failed: "
+    LOG(ERROR) << ctx->StrTraceId() << " Mkdir failed: "
                << "path = " << Helper::ParentDir(tmppath)
                << ", status = " << status.ToString();
     return CheckStatus(status);
@@ -170,7 +170,7 @@ Status LocalFileSystem::WriteFile(ContextSPtr ctx, const std::string& path,
   }
   status = Posix::Open(tmppath, flags, 0644, &fd);
   if (!status.ok()) {
-    LOG(ERROR) << "[" << ctx->TraceId() << "] Open file failed: path = " << path
+    LOG(ERROR) << ctx->StrTraceId() << " Open file failed: path = " << path
                << ", status = " << status.ToString();
     return CheckStatus(status);
   }

@@ -37,11 +37,11 @@
 namespace dingofs {
 namespace cache {
 
-LinuxIOUring::LinuxIOUring(uint32_t iodepth, std::vector<iovec> fixed_buffer)
+LinuxIOUring::LinuxIOUring(uint32_t iodepth, std::vector<iovec> fixed_buffers)
     : running_(false),
       iodepth_(iodepth),
-      fixed_buffer_(fixed_buffer),
       io_uring_(),
+      fixed_buffers_(fixed_buffers),
       epoll_fd_(-1) {}
 
 bool LinuxIOUring::Supported() {
@@ -63,7 +63,7 @@ Status LinuxIOUring::Start() {
     return Status::OK();
   }
 
-  LOG_INFO("Linux IO uring is starting...");
+  LOG(INFO) << "Linux IO uring is starting...";
 
   if (!Supported()) {
     LOG_ERROR("Current system kernel not support io_uring.");
@@ -76,8 +76,8 @@ Status LinuxIOUring::Start() {
     return Status::Internal("io_uring_queue_init() failed");
   }
 
-  rc = io_uring_register_buffers(&io_uring_, fixed_buffer_.data(),
-                                 fixed_buffer_.size());
+  rc = io_uring_register_buffers(&io_uring_, fixed_buffers_.data(),
+                                 fixed_buffers_.size());
   if (rc < 0) {
     LOG_SYSERR(-rc, "io_uring_register_buffers()");
     return Status::Internal("io_uring_register_buffers() failed");
@@ -100,7 +100,7 @@ Status LinuxIOUring::Start() {
 
   running_ = true;
 
-  LOG_INFO("Linux IO uring is up: iodepth = %d", iodepth_);
+  LOG(INFO) << "Linux IO uring is up: iodepth = " << iodepth_;
 
   CHECK_RUNNING("Linux IO uring");
   CHECK_GE(epoll_fd_, 0);
@@ -112,13 +112,13 @@ Status LinuxIOUring::Shutdown() {
     return Status::OK();
   }
 
-  LOG_INFO("Linux IO uring is shutting down...");
+  LOG(INFO) << "Linux IO uring is shutting down...";
 
   io_uring_queue_exit(&io_uring_);
   io_uring_unregister_buffers(&io_uring_);
   epoll_fd_ = -1;
 
-  LOG_INFO("Linux IO uring is down.");
+  LOG(INFO) << "Linux IO uring is down.";
 
   CHECK_DOWN("Linux IO uring");
   return Status::OK();
@@ -129,8 +129,8 @@ void LinuxIOUring::PrepWrite(io_uring_sqe* sqe, Aio* aio) {
     io_uring_prep_write_fixed(sqe, aio->fd, aio->buffer->Fetch1(), aio->length,
                               aio->offset, aio->fixed_buffer_index);
   } else {
-    auto iovecs = aio->buffer->Fetch();
-    io_uring_prep_writev(sqe, aio->fd, iovecs.data(), iovecs.size(),
+    aio->iovecs = aio->buffer->Fetch();
+    io_uring_prep_writev(sqe, aio->fd, aio->iovecs.data(), aio->iovecs.size(),
                          aio->offset);
   }
 }
@@ -196,18 +196,20 @@ Status LinuxIOUring::WaitIO(uint64_t timeout_ms,
   return Status::OK();
 }
 
-void LinuxIOUring::OnCompleted(Aio* aio, int retcode) {
+void LinuxIOUring::OnCompleted(Aio* aio, int result) {
   auto status = Status::OK();
-  if (retcode < 0) {
-    LOG_ERROR("[%s] Aio failed: aio = %s, retcode = %s", aio->ctx->TraceId(),
-              aio->ToString(), strerror(-retcode));
-    status = Status::IoError(strerror(-retcode));
-  } else if (retcode != aio->length) {
-    LOG_ERROR("[%s] Aio %s fewer than length bytes: want (%zu) but got (%u)",
-              aio->ctx->TraceId(), aio->ToString(), aio->length, retcode);
+  if (result < 0) {
+    status = Status::IoError(strerror(-result));
+    LOG(ERROR) << aio->ctx->StrTraceId()
+               << " Aio failed: aio = " << aio->ToString()
+               << ", status = " << status.ToString();
+  } else if (result != aio->length) {
     status = Status::IoError(absl::StrFormat(
-        "%s fewer than length bytes: want (%zu) but got (%u)",
-        aio->for_read ? "read" : "write", aio->length, retcode));
+        "%s bytes fewer than expect length: want (%zu) but got (%u)",
+        aio->for_read ? "read" : "write", aio->length, result));
+    LOG(ERROR) << aio->ctx->StrTraceId()
+               << " Aio failed: aio = " << aio->ToString()
+               << ", status = " << status.ToString();
   }
 
   aio->status() = status;

@@ -74,7 +74,8 @@ struct Aio : public Closure {
   size_t length;
   IOBuffer* buffer;
   bool for_read;
-  int fixed_buffer_index;
+  int fixed_buffer_index;     // for write fixed
+  std::vector<iovec> iovecs;  // for writev
   BthreadMutex mutex;
   BthreadConditionVariable cond;
 };

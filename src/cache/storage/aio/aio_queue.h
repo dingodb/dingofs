@@ -65,8 +65,8 @@ class AioQueueImpl : public AioQueue {
   static uint64_t GetTotalLength(const std::vector<Aio*>& aios);
 
   std::atomic<bool> running_;
+  InflightThrottleUPtr infights_;
   std::shared_ptr<IORing> ioring_;
-  InflightThrottleUPtr infight_throttle_;
   bthread::ExecutionQueueId<Aio*> prep_io_queue_id_;  // for prepare io
   std::vector<Aio*> prep_aios_;
   std::thread bg_wait_thread_;  // for wait io

@@ -321,6 +321,7 @@ void BlockCacheImpl::AsyncPrefetch(ContextSPtr ctx, const BlockKey& key,
 
 Status BlockCacheImpl::StorageUpload(ContextSPtr ctx, const BlockKey& key,
                                      const Block& block) {
+  // TODO: timer: get storage
   StorageSPtr storage;
   auto status = storage_pool_->GetStorage(key.fs_id, storage);
   if (!status.ok()) {

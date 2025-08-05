@@ -82,7 +82,7 @@ DECLARE_uint32(cleanup_expire_interval_ms);
 // Sets the block size for iouring operations in bytes.
 DECLARE_uint32(ioring_blksize);
 
-// Sets the I/O depth for iouring operations.
+// Sets aio queue maximum iodepth
 DECLARE_uint32(ioring_iodepth);
 
 // Sets whether to enable prefetching for iouring operations.

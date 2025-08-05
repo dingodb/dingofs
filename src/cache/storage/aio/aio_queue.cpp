@@ -40,38 +40,33 @@
 namespace dingofs {
 namespace cache {
 
-DEFINE_uint32(ioring_blksize, 1048576,
-              "Block size for iouring operations in bytes");
-DEFINE_uint32(ioring_iodepth, 128, "I/O depth for iouring operations");
-DEFINE_bool(ioring_prefetch, true,
-            "Whether to enable prefetching for iouring operations");
+DEFINE_uint32(ioring_iodepth, 128, "Aio queue maximum iodepth");
 
 const std::string kModule = kAioModule;
 
 AioQueueImpl::AioQueueImpl(std::shared_ptr<IORing> io_ring)
     : running_(false),
+      infights_(std::make_unique<InflightThrottle>(FLAGS_ioring_iodepth)),
       ioring_(io_ring),
-      infight_throttle_(
-          std::make_unique<InflightThrottle>(FLAGS_ioring_iodepth)),
       prep_io_queue_id_({0}),
       prep_aios_(kSubmitBatchSize) {}
 
 Status AioQueueImpl::Start() {
   CHECK_NOTNULL(ioring_);
-  CHECK_NOTNULL(infight_throttle_);
+  CHECK_NOTNULL(infights_);
 
   if (running_) {
     return Status::OK();
   }
 
-  LOG_INFO("Aio queue is starting...");
+  LOG(INFO) << "Aio queue is starting...";
 
   bthread::ExecutionQueueOptions options;
   options.use_pthread = true;
   int rc = bthread::execution_queue_start(&prep_io_queue_id_, &options,
                                           PrepareIO, this);
   if (rc != 0) {
-    LOG_ERROR("Start execution queue failed: rc = %d", rc);
+    LOG(ERROR) << "Start execution queue failed: rc = " << rc;
     return Status::Internal("start execution queue failed");
   }
 
@@ -79,7 +74,7 @@ Status AioQueueImpl::Start() {
 
   running_ = true;
 
-  LOG_INFO("Aio queue is up: iodepth = %d", FLAGS_ioring_iodepth);
+  LOG(INFO) << "Aio queue is up: iodepth = " << FLAGS_ioring_iodepth;
 
   CHECK_RUNNING("Aio queue");
   return Status::OK();
@@ -93,10 +88,10 @@ Status AioQueueImpl::Shutdown() {
   LOG(INFO) << "Aio queue is shutting down...";
 
   if (bthread::execution_queue_stop(prep_io_queue_id_) != 0) {
-    LOG_ERROR("Stop execution queue failed.");
+    LOG(ERROR) << "Stop execution queue failed.";
     return Status::Internal("stop execution queue failed");
   } else if (bthread::execution_queue_join(prep_io_queue_id_) != 0) {
-    LOG_ERROR("Join execution queue failed.");
+    LOG(ERROR) << "Join execution queue failed.";
     return Status::Internal("join execution queue failed");
   }
 
@@ -116,7 +111,7 @@ void AioQueueImpl::Submit(Aio* aio) {
   aio->timer.Start();
 
   NextStep(aio, kWaitThrottle);
-  infight_throttle_->Increment(1);
+  infights_->Increment(1);
 
   NextStep(aio, kCheckIo);
   CheckIO(aio);
@@ -195,26 +190,29 @@ void AioQueueImpl::BackgroundWait() {
 }
 
 void AioQueueImpl::OnError(Aio* aio, Status status) {
-  CHECK_NE(LastStep(aio), kExecuteIO) << absl::StrFormat(
-      "Aio %s it not on expected phase: got(%s) != expect(%s)", aio->ToString(),
-      LastStep(aio), kExecuteIO);
+  CHECK_NE(LastStep(aio), kExecuteIO)
+      << aio->ctx->StrTraceId() << " Aio " << aio->ToString()
+      << " is not on expected phase: got(" << LastStep(aio) << ") != expect("
+      << kExecuteIO << ")";
 
-  LOG_ERROR("[%s] Aio encountered an error in %s step: aio = %s, status = %s",
-            aio->ctx->TraceId(), LastStep(aio), aio->ToString(),
-            status.ToString());
+  LOG(ERROR) << aio->ctx->StrTraceId() << " Aio encountered an error in "
+             << LastStep(aio) << " step: aio = " << aio->ToString()
+             << ", status = " << status.ToString();
 
   aio->status() = status;
   RunClosure(aio);
 }
 
 void AioQueueImpl::OnCompleted(Aio* aio) {
-  CHECK_EQ(LastStep(aio), kExecuteIO) << absl::StrFormat(
-      "Aio %s it not on expected phase: got(%s) != expect(%s)", aio->ToString(),
-      LastStep(aio), kExecuteIO);
+  CHECK_EQ(LastStep(aio), kExecuteIO)
+      << aio->ctx->StrTraceId() << " Aio " << aio->ToString()
+      << " is not on expected phase: got(" << LastStep(aio) << ") != expect("
+      << kExecuteIO << ")";
 
   if (!aio->status().ok()) {
-    LOG_ERROR("[%s] Aio failed: aio = %s, status = %s", aio->ctx->TraceId(),
-              aio->ToString(), aio->status().ToString());
+    LOG(ERROR) << aio->ctx->StrTraceId()
+               << " Aio failed: aio = " << aio->ToString()
+               << ", status = " << aio->status().ToString();
   }
 
   RunClosure(aio);
@@ -228,7 +226,7 @@ void AioQueueImpl::RunClosure(Aio* aio) {
   NextStep(aio, kRunClosure);
   aio->Run();
 
-  infight_throttle_->Decrement(1);
+  infights_->Decrement(1);
 
   timer.Stop();
 }

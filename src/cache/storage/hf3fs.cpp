@@ -35,6 +35,9 @@
 namespace dingofs {
 namespace cache {
 
+DEFINE_uint32(ioring_blksize, 1048576,
+              "Block size for iouring operations in bytes");
+
 HF3FS::HF3FS(const std::string& mountpoint, CheckStatusFunc check_status_func)
     : BaseFileSystem(check_status_func),
       running_(false),

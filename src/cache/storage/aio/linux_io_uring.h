@@ -34,7 +34,7 @@ namespace cache {
 
 class LinuxIOUring final : public IORing {
  public:
-  LinuxIOUring(uint32_t iodepth, std::vector<iovec> fixed_buffer);
+  LinuxIOUring(uint32_t iodepth, std::vector<iovec> fixed_buffers);
 
   Status Start() override;
   Status Shutdown() override;
@@ -49,12 +49,12 @@ class LinuxIOUring final : public IORing {
 
   void PrepWrite(io_uring_sqe* sqe, Aio* aio);
   void PrepRead(io_uring_sqe* sqe, Aio* aio);
-  void OnCompleted(Aio* aio, int retcode);
+  void OnCompleted(Aio* aio, int result);
 
   std::atomic<bool> running_;
   uint32_t iodepth_;
-  std::vector<iovec> fixed_buffer_;
   io_uring io_uring_;
+  std::vector<iovec> fixed_buffers_;
   int epoll_fd_;
 };
 
