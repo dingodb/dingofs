@@ -308,15 +308,16 @@ int CompactInodeJob::ReadFullChunk(const struct S3CompactCtx& ctx,
   for (const auto& s3req : s3reqs) {
     VLOG(9) << "index:" << s3req.req_index << ", zero:" << s3req.zero
             << ", s3objname:" << s3req.obj_name << ", off:" << s3req.off
-            << ", len:" << s3req.len << ", file_range[" << s3req.in_file_offset
-            << "-" << s3req.in_file_offset + s3req.len - 1 << "]";
+            << ", len:" << s3req.len << ", file_range: ["
+            << s3req.in_file_offset << "-"
+            << s3req.in_file_offset + s3req.len - 1 << "]";
 
     // check if s3 request is out of range
     CHECK((s3req.off + s3req.len) <= ctx.blockSize)
         << "s3compact: s3 request out of range, index: " << s3req.req_index
         << ", s3objname:" << s3req.obj_name << ", off: " << s3req.off
         << ", len: " << s3req.len << ", blockSize: " << ctx.blockSize
-        << ", file_range[" << s3req.in_file_offset << "-"
+        << ", file_range: [" << s3req.in_file_offset << "-"
         << s3req.in_file_offset + s3req.len - 1 << "]";
   }
 
@@ -366,6 +367,10 @@ int CompactInodeJob::ReadFullChunk(const struct S3CompactCtx& ctx,
         continue;
       }
       for (const auto& req : reqs) {
+        CHECK((req->off + req->len) <= buf.size())
+            << "s3compact: read out of range, index: " << req->req_index
+            << ", s3objname:" << obj_name << ", off: " << req->off
+            << ", len: " << req->len << ", bufsize: " << buf.size();
         read_content[req->req_index] = buf.substr(req->off, req->len);
       }
       break;
