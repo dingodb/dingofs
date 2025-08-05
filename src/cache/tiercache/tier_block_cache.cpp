@@ -174,6 +174,8 @@ Status TierBlockCache::Put(ContextSPtr ctx, const BlockKey& key,
     } else if (EnableRemoteStage()) {
       NEXT_STEP(kRemotePut);
       status = remote_block_cache_->Put(ctx, key, block, option);
+    } else {
+      status = Status::NotFound("both local and remote block cache disabled");
     }
 
     if (status.ok()) {
