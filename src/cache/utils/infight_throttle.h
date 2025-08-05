@@ -50,7 +50,7 @@ class InflightThrottle {
   }
 
   void Decrement(uint64_t n) {
-    std::unique_lock<BthreadMutex> lock(mutex_);
+    std::lock_guard<BthreadMutex> lock(mutex_);
     CHECK_GE(inflights_, n);
     inflights_ -= n;
     cond_.notify_all();

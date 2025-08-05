@@ -23,6 +23,8 @@
 #ifndef DINGOFS_SRC_CACHE_STORAGE_STORAGE_CLOSURE_H_
 #define DINGOFS_SRC_CACHE_STORAGE_STORAGE_CLOSURE_H_
 
+#include <mutex>
+
 #include "blockaccess/block_accesser.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/common/type.h"
@@ -40,15 +42,19 @@ class StorageClosure : public Closure {
 
   void Wait() {
     std::unique_lock<BthreadMutex> lk(mutex_);
-    cond_.wait(lk);
+    while (!finish_) {
+      cond_.wait(lk);
+    }
   }
 
   void Run() override {
-    std::unique_lock<BthreadMutex> lk(mutex_);
-    cond_.notify_all();
+    std::lock_guard<BthreadMutex> lk(mutex_);
+    finish_ = true;
+    cond_.notify_one();
   }
 
  private:
+  bool finish_{false};
   BthreadMutex mutex_;
   BthreadConditionVariable cond_;
 };

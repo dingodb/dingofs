@@ -177,7 +177,8 @@ Status LinuxIOUring::WaitIO(uint64_t timeout_ms,
   struct epoll_event ev;
   int rc = epoll_wait(epoll_fd_, &ev, iodepth_, timeout_ms);
   if (rc < 0) {
-    LOG_SYSERR(-rc, "epoll_wait(%d,%lu,%lld)", epoll_fd_, iodepth_, timeout_ms);
+    LOG_SYSERR(errno, "epoll_wait(%d,%lu,%lld)", epoll_fd_, iodepth_,
+               timeout_ms);
     return Status::Internal("epoll_wait() failed");
   } else if (rc == 0) {
     return Status::OK();
@@ -197,7 +198,7 @@ Status LinuxIOUring::WaitIO(uint64_t timeout_ms,
 }
 
 void LinuxIOUring::OnCompleted(Aio* aio, int result) {
-  auto status = Status::OK();
+  Status status;
   if (result < 0) {
     status = Status::IoError(strerror(-result));
     LOG(ERROR) << aio->ctx->StrTraceId()
@@ -210,9 +211,15 @@ void LinuxIOUring::OnCompleted(Aio* aio, int result) {
     LOG(ERROR) << aio->ctx->StrTraceId()
                << " Aio failed: aio = " << aio->ToString()
                << ", status = " << status.ToString();
+  } else {
+    status = Status::OK();
   }
 
   aio->status() = status;
+
+  VLOG(9) << aio->ctx->StrTraceId()
+          << " Aio complete: aio = " << aio->ToString()
+          << ", status = " << aio->status().ToString();
 }
 
 }  // namespace cache

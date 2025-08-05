@@ -44,7 +44,7 @@ Status InflightTracker::Add(const std::string& key) {
 }
 
 void InflightTracker::Remove(const std::string& key) {
-  std::unique_lock<BthreadMutex> lk(mutex_);
+  std::lock_guard<BthreadMutex> lk(mutex_);
   CHECK_GT(inflights_, 0);
   inflights_ -= 1;
   busy_.erase(key);

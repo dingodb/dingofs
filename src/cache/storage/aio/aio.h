@@ -57,14 +57,17 @@ struct Aio : public Closure {
                            offset, length);
   }
 
-  void Run() override {
-    std::unique_lock<BthreadMutex> lk(mutex);
-    cond.notify_all();
-  }
-
   void Wait() {
     std::unique_lock<BthreadMutex> lk(mutex);
-    cond.wait(lk);
+    while (!finish_) {
+      cond.wait(lk);
+    }
+  }
+
+  void Run() override {
+    std::lock_guard<BthreadMutex> lk(mutex);
+    finish_ = true;
+    cond.notify_one();
   }
 
   ContextSPtr ctx;
@@ -76,6 +79,7 @@ struct Aio : public Closure {
   bool for_read;
   int fixed_buffer_index;     // for write fixed
   std::vector<iovec> iovecs;  // for writev
+  bool finish_{false};
   BthreadMutex mutex;
   BthreadConditionVariable cond;
 };

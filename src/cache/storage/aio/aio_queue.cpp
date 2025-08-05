@@ -110,6 +110,8 @@ void AioQueueImpl::Submit(Aio* aio) {
 
   aio->timer.Start();
 
+  // TODO: pls consider all waiting inflight bthread wakeup at the same time,
+  // it will leads all bthread fight for locks. any performance skew?
   NextStep(aio, kWaitThrottle);
   infights_->Increment(1);
 
@@ -218,6 +220,7 @@ void AioQueueImpl::OnCompleted(Aio* aio) {
   RunClosure(aio);
 }
 
+// NOTE: The aio will been freed once closure runned
 void AioQueueImpl::RunClosure(Aio* aio) {
   auto status = aio->status();
   auto timer = aio->timer;
