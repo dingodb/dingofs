@@ -20,8 +20,8 @@
  * Author: xuchaojie
  */
 
-#ifndef DINGOFS_TEST_CLIENT_RPCCLIENT_MOCK_MDS_CLIENT_H_
-#define DINGOFS_TEST_CLIENT_RPCCLIENT_MOCK_MDS_CLIENT_H_
+#ifndef DINGOFS_TEST_STUB_RPCCLIENT_MOCK_MDS_CLIENT_H_
+#define DINGOFS_TEST_STUB_RPCCLIENT_MOCK_MDS_CLIENT_H_
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -133,32 +133,30 @@ class MockMdsClient : public MdsClient {
                FSStatusCode(const std::string& fsName,
                             const pb::mds::FsStatsData& fsStatsData));
 
-  MOCK_METHOD2(RegisterCacheGroupMember,
-               CacheGroupErrCode(uint64_t old_id, uint64_t* member_id));
+  MOCK_METHOD(CacheGroupErrCode, JoinCacheGroup,
+              (const std::string& group_name, const std::string& ip,
+               uint32_t port, uint32_t weight, uint64_t replace_id,
+               uint64_t* member_id, std::string* member_uuid),
+              (override));
 
-  MOCK_METHOD2(
-      AddCacheGroupMember,
-      CacheGroupErrCode(const std::string& group_name,
-                        const pb::mds::cachegroup::CacheGroupMember& member));
+  MOCK_METHOD(CacheGroupErrCode, LeaveCacheGroup,
+              (const std::string& group_name, const std::string& ip,
+               uint32_t port),
+              (override));
 
-  MOCK_METHOD2(
-      LoadCacheGroupMembers,
-      CacheGroupErrCode(
-          const std::string& group_name,
-          std::vector<pb::mds::cachegroup::CacheGroupMember>* members));
+  MOCK_METHOD(CacheGroupErrCode, SendCacheGroupHeartbeat,
+              (const std::string& ip, uint32_t port), (override));
 
-  MOCK_METHOD3(ReweightCacheGroupMember,
-               CacheGroupErrCode(const std::string& group_name,
-                                 uint64_t member_id, uint32_t weight));
+  MOCK_METHOD(CacheGroupErrCode, LoadCacheGroupMembers,
+              (const std::string& group_name,
+               std::vector<pb::mds::cachegroup::CacheGroupMember>* members),
+              (override));
 
-  MOCK_METHOD3(
-      SendCacheGroupHeartbeat,
-      CacheGroupErrCode(
-          const std::string& group_name, uint64_t member_id,
-          const pb::mds::cachegroup::HeartbeatRequest::Statistic& stat));
+  MOCK_METHOD(CacheGroupErrCode, ReweightCacheGroupMember,
+              (uint64_t member_id, uint32_t weight), (override));
 };
 }  // namespace rpcclient
 }  // namespace stub
 }  // namespace dingofs
 
-#endif  // DINGOFS_TEST_CLIENT_RPCCLIENT_MOCK_MDS_CLIENT_H_
+#endif  // DINGOFS_TEST_STUB_RPCCLIENT_MOCK_MDS_CLIENT_H_
