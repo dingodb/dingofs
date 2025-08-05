@@ -15,6 +15,7 @@
 
 #include <bthread/bthread.h>
 #include <fcntl.h>
+#include <gflags/gflags_declare.h>
 
 #include <algorithm>
 #include <cstdint>
@@ -44,7 +45,14 @@ DEFINE_uint32(txn_max_retry_times, 5, "txn max retry times.");
 
 DEFINE_uint32(merge_operation_delay_us, 10, "merge operation delay us.");
 
+DECLARE_uint32(compact_chunk_interval_ms);
+
 static const uint32_t kOpNameBufInitSize = 128;
+
+static uint32_t CalWaitTimeUs(int retry) {
+  // exponential backoff
+  return Helper::GenerateRealRandomInteger(1000, 5000) * (1 << retry);
+}
 
 static std::string FindValue(const std::vector<KeyValue>& kvs, const std::string& key) {
   for (const auto& kv : kvs) {
@@ -1305,7 +1313,15 @@ Status RenameOperation::Run(TxnUPtr& txn) {
   return Status::OK();
 }
 
-TrashSliceList CompactChunkOperation::GenTrashSlices(Ino ino, uint64_t file_length, const ChunkType& chunk) {
+bool CompactChunkOperation::MaybeCompact(const FsInfoType& fs_info, Ino ino, uint64_t file_length,
+                                         const ChunkType& chunk) {
+  auto trash_slice_list = GenTrashSlices(fs_info, ino, file_length, chunk);
+
+  return !trash_slice_list.slices().empty();
+}
+
+TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoType& fs_info, Ino ino, uint64_t file_length,
+                                                     const ChunkType& chunk) {
   struct OffsetRange {
     uint64_t start;
     uint64_t end;
@@ -1318,7 +1334,7 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(Ino ino, uint64_t file_leng
     uint64_t size;
   };
 
-  const auto& fs_info = fs_info_;
+  // const auto& fs_info = fs_info_;
 
   const uint32_t fs_id = fs_info.fs_id();
   const uint64_t chunk_size = fs_info.chunk_size();
@@ -1328,6 +1344,7 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(Ino ino, uint64_t file_leng
   auto chunk_copy = chunk;
 
   TrashSliceList trash_slices;
+  trash_slices.set_time_ms(Helper::TimestampMs());
 
   // 1. complete out of file length slices
   // chunk offset:               |______|
@@ -1398,7 +1415,7 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(Ino ino, uint64_t file_leng
   std::set<uint64_t> reserve_slice_ids;
   for (auto& offset_range : offset_ranges) {
     // sort by id, from newest to oldest
-    std::sort(offset_range.slices.begin(), offset_range.slices.end(),
+    std::sort(offset_range.slices.begin(), offset_range.slices.end(),  // NOLINT
               [](const SliceType& a, const SliceType& b) { return a.id() > b.id(); });
     if (!offset_range.slices.empty()) {
       reserve_slice_ids.insert(offset_range.slices.front().id());
@@ -1490,6 +1507,10 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(Ino ino, uint64_t file_leng
   return trash_slices;
 }
 
+TrashSliceList CompactChunkOperation::GenTrashSlices(Ino ino, uint64_t file_length, const ChunkType& chunk) {
+  return GenTrashSlices(fs_info_, ino, file_length, chunk);
+}
+
 void CompactChunkOperation::UpdateChunk(ChunkType& chunk, const TrashSliceList& trash_slices) {
   auto gen_slice_map_fn = [](const TrashSliceList& trash_slices) {
     std::map<uint64_t, pb::mdsv2::TrashSlice> slice_map;
@@ -1554,44 +1575,27 @@ Status CompactChunkOperation::Run(TxnUPtr& txn) {
   CHECK(fs_id > 0) << "fs_id is 0";
   CHECK(ino_ > 0) << "ino is 0.";
 
-  std::vector<ChunkType> chunks;
-  if (chunk_index_ == 0) {
-    Range range = MetaCodec::GetChunkRange(fs_id, ino_);
-    auto status = txn->Scan(range, [&](const std::string& key, const std::string& value) -> bool {
-      if (!MetaCodec::IsChunkKey(key)) return true;
+  std::string key = MetaCodec::EncodeChunkKey(fs_id, ino_, chunk_index_);
+  std::string value;
+  auto status = txn->Get(key, value);
+  if (!status.ok()) return status;
 
-      chunks.push_back(MetaCodec::DecodeChunkValue(value));
-      return true;
-    });
-    if (!status.ok()) return status;
+  ChunkType chunk = MetaCodec::DecodeChunkValue(value);
 
-  } else {
-    std::string key = MetaCodec::EncodeChunkKey(fs_id, ino_, chunk_index_);
-    std::string value;
-    auto status = txn->Get(key, value);
-    if (!status.ok()) return status;
-
-    chunks.push_back(MetaCodec::DecodeChunkValue(value));
+  // reduce compact frequency
+  if (!is_force_ && chunk.last_compaction_time_ms() + FLAGS_compact_chunk_interval_ms > Helper::TimestampMs()) {
+    return Status::OK();
   }
 
-  TrashSliceList trash_slice_list;
-  std::vector<ChunkType> effected_chunks;
-  for (auto& chunk : chunks) {
-    auto part_trash_slice_list = CompactChunk(txn, fs_id, ino_, file_length_, chunk);
-    if (!part_trash_slice_list.slices().empty()) {
-      chunk.set_version(chunk.version() + 1);
-      txn->Put(MetaCodec::EncodeChunkKey(fs_id, ino_, chunk.index()), MetaCodec::EncodeChunkValue(chunk));
-      effected_chunks.push_back(chunk);
-    }
+  auto trash_slice_list = CompactChunk(txn, fs_id, ino_, file_length_, chunk);
+  if (!trash_slice_list.slices().empty()) {
+    chunk.set_version(chunk.version() + 1);
+    chunk.set_last_compaction_time_ms(Helper::TimestampMs());
+    txn->Put(MetaCodec::EncodeChunkKey(fs_id, ino_, chunk.index()), MetaCodec::EncodeChunkValue(chunk));
 
-    for (auto trash_slice = part_trash_slice_list.mutable_slices()->begin();
-         trash_slice != part_trash_slice_list.slices().end(); ++trash_slice) {
-      trash_slice_list.add_slices()->Swap(&*trash_slice);
-    }
+    result_.trash_slice_list = std::move(trash_slice_list);
+    result_.effected_chunk = std::move(chunk);
   }
-
-  result_.trash_slice_list = std::move(trash_slice_list);
-  result_.effected_chunks = std::move(effected_chunks);
 
   return Status::OK();
 }
@@ -2057,8 +2061,11 @@ Status ImportKVOperation::Run(TxnUPtr& txn) {
 }
 
 OperationProcessor::OperationProcessor(KVStorageSPtr kv_storage) : kv_storage_(kv_storage) {
-  bthread_mutex_init(&mutex_, nullptr);
-  bthread_cond_init(&cond_, nullptr);
+  CHECK(bthread_mutex_init(&mutex_, nullptr) == 0) << fmt::format("[operation] bthread_mutex_init fail.");
+  CHECK(bthread_cond_init(&cond_, nullptr) == 0) << fmt::format("[operation] bthread_cond_init fail.");
+
+  async_worker_ = Worker::New();
+  CHECK(async_worker_ != nullptr) << fmt::format("[operation] create async worker fail.");
 }
 
 OperationProcessor::~OperationProcessor() {
@@ -2091,6 +2098,11 @@ bool OperationProcessor::Init() {
     return false;
   }
 
+  if (!async_worker_->Init()) {
+    LOG(FATAL) << fmt::format("[operation] async worker init fail.");
+    return false;
+  }
+
   return true;
 }
 
@@ -2108,6 +2120,8 @@ bool OperationProcessor::Destroy() {
       LOG(ERROR) << fmt::format("[operation] bthread_join fail.");
     }
   }
+
+  async_worker_->Destroy();
 
   return true;
 }
@@ -2145,7 +2159,7 @@ Status OperationProcessor::RunAlone(Operation* operation) {
           status.error_code() == pb::error::ESTORE_TXN_MEM_LOCK_CONFLICT) {
         DINGO_LOG(WARNING) << fmt::format("[operation.{}.{}][{}][{}us] alone run lock conflict, retry({}) status({}).",
                                           fs_id, ino, txn_id, once_duration.ElapsedUs(), retry, status.error_str());
-        bthread_usleep(Helper::GenerateRealRandomInteger(100, 1000));
+        bthread_usleep(CalWaitTimeUs(retry));
         continue;
       }
       break;
@@ -2165,7 +2179,7 @@ Status OperationProcessor::RunAlone(Operation* operation) {
                                       fs_id, ino, txn_id, once_duration.ElapsedUs(), operation->OpName(), is_one_pc,
                                       retry, status.error_str());
 
-    bthread_usleep(Helper::GenerateRealRandomInteger(100, 2000));
+    bthread_usleep(CalWaitTimeUs(retry));
 
   } while (++retry < FLAGS_txn_max_retry_times);
 
@@ -2180,6 +2194,17 @@ Status OperationProcessor::RunAlone(Operation* operation) {
   }
 
   return status;
+}
+
+void OperationTask::Run() { processor_->RunAlone(operation_.get()); }
+
+bool OperationProcessor::AsyncRun(OperationSPtr operation) {
+  bool ret = async_worker_->Execute(OperationTask::New(operation, GetSelfPtr()));
+  if (!ret) {
+    DINGO_LOG(ERROR) << fmt::format("[operation] async worker execute fail, operation({}).", operation->OpName());
+  }
+
+  return ret;
 }
 
 std::map<OperationProcessor::Key, BatchOperation> OperationProcessor::Grouping(std::vector<Operation*>& operations) {
@@ -2315,7 +2340,7 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
           status.error_code() == pb::error::ESTORE_TXN_MEM_LOCK_CONFLICT) {
         DINGO_LOG(WARNING) << fmt::format("[operation.{}.{}][{}][{}us] batch run lock conflict, retry({}) status({}).",
                                           fs_id, ino, txn_id, once_duration.ElapsedUs(), retry, status.error_str());
-        bthread_usleep(Helper::GenerateRealRandomInteger(100, 1000));
+        bthread_usleep(CalWaitTimeUs(retry));
         continue;
       }
       break;
@@ -2358,7 +2383,7 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
         "[operation.{}.{}][{}][{}us] batch run ({}) fail, count({}) onepc({}) retry({}) status({}).", fs_id, ino,
         txn_id, once_duration.ElapsedUs(), op_names, count, is_one_pc, retry, status.error_str());
 
-    bthread_usleep(Helper::GenerateRealRandomInteger(100, 2000));
+    bthread_usleep(CalWaitTimeUs(retry));
 
   } while (++retry < FLAGS_txn_max_retry_times);
 

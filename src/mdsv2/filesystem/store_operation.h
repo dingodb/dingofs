@@ -26,6 +26,7 @@
 #include "butil/containers/mpsc_queue.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
+#include "mdsv2/common/runnable.h"
 #include "mdsv2/common/status.h"
 #include "mdsv2/common/tracing.h"
 #include "mdsv2/common/type.h"
@@ -35,6 +36,12 @@
 
 namespace dingofs {
 namespace mdsv2 {
+
+class Operation;
+using OperationSPtr = std::shared_ptr<Operation>;
+
+class OperationProcessor;
+using OperationProcessorSPtr = std::shared_ptr<OperationProcessor>;
 
 class Operation {
  public:
@@ -177,9 +184,7 @@ class Operation {
 
   void SetEvent(bthread::CountdownEvent* event) { event_ = event; }
   void NotifyEvent() {
-    if (event_) {
-      event_->signal();
-    }
+    if (event_) event_->signal();
   }
 
   virtual Status RunInBatch(TxnUPtr&, AttrType&, const std::vector<KeyValue>& prefetch_kvs) {  // NOLINT
@@ -856,17 +861,32 @@ class RenameOperation : public Operation {
   Result result_;
 };
 
+class CompactChunkOperation;
+using CompactChunkOperationSPtr = std::shared_ptr<CompactChunkOperation>;
+
 class CompactChunkOperation : public Operation {
  public:
   CompactChunkOperation(Trace& trace, const FsInfoType& fs_info, uint64_t ino, uint64_t chunk_index,
-                        uint64_t file_length)
-      : Operation(trace), fs_info_(fs_info), ino_(ino), chunk_index_(chunk_index), file_length_(file_length) {};
+                        uint64_t file_length, bool is_force)
+      : Operation(trace),
+        fs_info_(fs_info),
+        ino_(ino),
+        chunk_index_(chunk_index),
+        file_length_(file_length),
+        is_force_(is_force) {};
+  CompactChunkOperation(const FsInfoType& fs_info, uint64_t ino, uint64_t chunk_index, uint64_t file_length)
+      : Operation(trace_), fs_info_(fs_info), ino_(ino), chunk_index_(chunk_index), file_length_(file_length) {};
   ~CompactChunkOperation() override = default;
 
   struct Result : public Operation::Result {
     TrashSliceList trash_slice_list;
-    std::vector<ChunkType> effected_chunks;
+    ChunkType effected_chunk;
   };
+
+  static CompactChunkOperationSPtr New(const FsInfoType& fs_info, uint64_t ino, uint64_t chunk_index,
+                                       uint64_t file_length) {
+    return std::make_shared<CompactChunkOperation>(fs_info, ino, chunk_index, file_length);
+  }
 
   OpType GetOpType() const override { return OpType::kCompactChunk; }
 
@@ -884,7 +904,11 @@ class CompactChunkOperation : public Operation {
     return result_;
   }
 
+  static bool MaybeCompact(const FsInfoType& fs_info, Ino ino, uint64_t file_length, const ChunkType& chunk);
+
  private:
+  static TrashSliceList GenTrashSlices(const FsInfoType& fs_info, Ino ino, uint64_t file_length,
+                                       const ChunkType& chunk);
   TrashSliceList GenTrashSlices(Ino ino, uint64_t file_length, const ChunkType& chunk);
   static void UpdateChunk(ChunkType& chunk, const TrashSliceList& trash_slices);
   TrashSliceList DoCompactChunk(Ino ino, uint64_t file_length, ChunkType& chunk);
@@ -896,6 +920,9 @@ class CompactChunkOperation : public Operation {
   uint64_t chunk_index_{0};
   uint64_t file_length_{0};
 
+  bool is_force_{false};
+
+  Trace trace_;  // for async run
   Result result_;
 };
 
@@ -1705,10 +1732,26 @@ struct BatchOperation {
   std::vector<Operation*> create_operations;
 };
 
-class OperationProcessor;
-using OperationProcessorSPtr = std::shared_ptr<OperationProcessor>;
+class OperationTask : public TaskRunnable {
+ public:
+  OperationTask(OperationSPtr operation, OperationProcessorSPtr processor)
+      : operation_(operation), processor_(processor) {}
+  ~OperationTask() override = default;
 
-class OperationProcessor {
+  static TaskRunnablePtr New(OperationSPtr operation, OperationProcessorSPtr processor) {
+    return std::make_shared<OperationTask>(operation, processor);
+  }
+
+  std::string Type() override { return "STORE_OPERATION"; }
+
+  void Run() override;
+
+ private:
+  OperationSPtr operation_;
+  OperationProcessorSPtr processor_;
+};
+
+class OperationProcessor : public std::enable_shared_from_this<OperationProcessor> {
  public:
   OperationProcessor(KVStorageSPtr kv_storage);
   ~OperationProcessor();
@@ -1735,11 +1778,14 @@ class OperationProcessor {
     }
   };
 
+  OperationProcessorSPtr GetSelfPtr() { return shared_from_this(); }
+
   bool Init();
   bool Destroy();
 
   bool RunBatched(Operation* operation);
   Status RunAlone(Operation* operation);
+  bool AsyncRun(OperationSPtr operation);
 
   Status CheckTable(const Range& range);
   Status CreateTable(const std::string& table_name, const Range& range, int64_t& table_id);
@@ -1757,6 +1803,8 @@ class OperationProcessor {
   std::atomic<bool> is_stop_{false};
 
   butil::MPSCQueue<Operation*> operations_;
+
+  WorkerSPtr async_worker_;
 
   // persistence store
   KVStorageSPtr kv_storage_;

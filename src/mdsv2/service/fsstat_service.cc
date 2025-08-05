@@ -51,8 +51,7 @@ static std::string RenderHead(const std::string& title) {
 
   os << fmt::format(R"(<head>{})", brpc::gridtable_style());
   os << fmt::format(R"(<script src="/js/sorttable"></script>)");
-  os << fmt::format(
-      R"(<script language="javascript" type="text/javascript" src="/js/jquery_min"></script>)");
+  os << fmt::format(R"(<script language="javascript" type="text/javascript" src="/js/jquery_min"></script>)");
   os << brpc::TabsHead();
 
   os << R"(<meta charset="UTF-8">
@@ -107,8 +106,7 @@ static std::string RenderS3Info(const pb::mdsv2::S3Info& s3_info) {
   return result;
 }
 
-static std::string RenderPartitionPolicy(
-    pb::mdsv2::PartitionPolicy partition_policy) {
+static std::string RenderPartitionPolicy(pb::mdsv2::PartitionPolicy partition_policy) {
   std::string result;
 
   switch (partition_policy.type()) {
@@ -151,16 +149,13 @@ static std::string PartitionTypeName(pb::mdsv2::PartitionType partition_type) {
   }
 }
 
-static void RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes,
-                         butil::IOBufBuilder& os) {
+static void RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes, butil::IOBufBuilder& os) {
   auto render_size_func = [](const pb::mdsv2::FsInfo& fs_info) -> std::string {
     std::string result;
     result += "<div>";
-    result +=
-        fmt::format("chunk size: {}", fs_info.chunk_size() / (1024 * 1024));
+    result += fmt::format("chunk size: {}", fs_info.chunk_size() / (1024 * 1024));
     result += "<br>";
-    result +=
-        fmt::format("block size: {}", fs_info.block_size() / (1024 * 1024));
+    result += fmt::format("block size: {}", fs_info.block_size() / (1024 * 1024));
     result += "<br>";
     result += fmt::format("capacity: {}", fs_info.capacity() / (1024 * 1024));
     result += "</div>";
@@ -172,45 +167,30 @@ static void RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes,
     result += "<div>";
     result += "update time:";
     result += "<br>";
-    result += fmt::format(
-        "<span>{}</span>",
-        Helper::FormatTime(fs_info.last_update_time_ns() / 1000000000));
+    result += fmt::format("<span>{}</span>", Helper::FormatTime(fs_info.last_update_time_ns() / 1000000000));
     result += "<br>";
     result += "create time:";
     result += "<br>";
-    result += fmt::format("<span>{}</span>",
-                          Helper::FormatTime(fs_info.create_time_s()));
+    result += fmt::format("<span>{}</span>", Helper::FormatTime(fs_info.create_time_s()));
     result += "</div>";
     return result;
   };
 
-  auto render_navigation_func =
-      [](const pb::mdsv2::FsInfo& fs_info) -> std::string {
+  auto render_navigation_func = [](const pb::mdsv2::FsInfo& fs_info) -> std::string {
     std::string result;
     result += "<div>";
-    result += fmt::format(
-        R"(<a href="FsStatService/details/{}" target="_blank">details</a>)",
-        fs_info.fs_id());
+    result += fmt::format(R"(<a href="FsStatService/details/{}" target="_blank">details</a>)", fs_info.fs_id());
     result += "<br>";
-    result += fmt::format(
-        R"(<a href="FsStatService/filesession/{}" target="_blank">file session</a>)",
-        fs_info.fs_id());
+    result +=
+        fmt::format(R"(<a href="FsStatService/filesession/{}" target="_blank">file session</a>)", fs_info.fs_id());
     result += "<br>";
-    result += fmt::format(
-        R"(<a href="FsStatService/quota/{}" target="_blank">quota</a>)",
-        fs_info.fs_id());
+    result += fmt::format(R"(<a href="FsStatService/quota/{}" target="_blank">quota</a>)", fs_info.fs_id());
     result += "<br>";
-    result += fmt::format(
-        R"(<a href="FsStatService/delfiles/{}" target="_blank">delfiles</a>)",
-        fs_info.fs_id());
+    result += fmt::format(R"(<a href="FsStatService/delfiles/{}" target="_blank">delfiles</a>)", fs_info.fs_id());
     result += "<br>";
-    result += fmt::format(
-        R"(<a href="FsStatService/delslices/{}" target="_blank">delslices</a>)",
-        fs_info.fs_id());
+    result += fmt::format(R"(<a href="FsStatService/delslices/{}" target="_blank">delslices</a>)", fs_info.fs_id());
     result += "<br>";
-    result += fmt::format(
-        R"(<a href="FsStatService/oplog/{}" target="_blank">oplog</a>)",
-        fs_info.fs_id());
+    result += fmt::format(R"(<a href="FsStatService/oplog/{}" target="_blank">oplog</a>)", fs_info.fs_id());
     result += "</div>";
     return result;
   };
@@ -238,8 +218,7 @@ static void RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes,
 
     os << "<tr>";
     os << "<td>"
-       << fmt::format(R"(<a href="FsStatService/{}" target="_blank">{}</a>)",
-                      fs_info.fs_id(), fs_info.fs_id())
+       << fmt::format(R"(<a href="FsStatService/{}" target="_blank">{}</a>)", fs_info.fs_id(), fs_info.fs_id())
        << "</td>";
     os << "<td>" << fs_info.fs_name() << "</td>";
     os << "<td>" << pb::mdsv2::FsType_Name(fs_info.fs_type()) << "</td>";
@@ -260,8 +239,7 @@ static void RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes,
   os << "</div>";
 }
 
-static void RenderMdsList(const std::vector<MdsEntry>& mdses,
-                          butil::IOBufBuilder& os) {
+static void RenderMdsList(const std::vector<MdsEntry>& mdses, butil::IOBufBuilder& os) {
   os << R"(<div style="margin:12px;margin-top:64px;font-size:smaller;">)";
   os << fmt::format(R"(<h3>MDS [{}]</h3>)", mdses.size());
   os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
@@ -278,10 +256,8 @@ static void RenderMdsList(const std::vector<MdsEntry>& mdses,
   for (const auto& mds : mdses) {
     os << "<tr>";
     os << "<td>" << mds.id() << "</td>";
-    os << fmt::format(
-        R"(<td><a href="http://{}:{}/FsStatService" target="_blank">{}:{} </a></td>)",
-        mds.location().host(), mds.location().port(), mds.location().host(),
-        mds.location().port());
+    os << fmt::format(R"(<td><a href="http://{}:{}/FsStatService" target="_blank">{}:{} </a></td>)",
+                      mds.location().host(), mds.location().port(), mds.location().host(), mds.location().port());
     os << "<td>" << MdsEntry::State_Name(mds.state()) << "</td>";
     os << "<td>" << Helper::FormatMsTime(mds.last_online_time_ms()) << "</td>";
     if (mds.last_online_time_ms() + FLAGS_mds_offline_period_time_ms < now_ms) {
@@ -297,8 +273,7 @@ static void RenderMdsList(const std::vector<MdsEntry>& mdses,
   os << "</div>";
 }
 
-static void RenderClientList(const std::vector<ClientEntry>& clients,
-                             butil::IOBufBuilder& os) {
+static void RenderClientList(const std::vector<ClientEntry>& clients, butil::IOBufBuilder& os) {
   os << R"(<div style="margin:12px;margin-top:64px;font-size:smaller;">)";
   os << fmt::format(R"(<h3>Client [{}]</h3>)", clients.size());
   os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
@@ -315,13 +290,10 @@ static void RenderClientList(const std::vector<ClientEntry>& clients,
   for (const auto& client : clients) {
     os << "<tr>";
     os << "<td>" << client.id() << "</td>";
-    os << "<td>" << fmt::format("{}:{}", client.hostname(), client.port())
-       << "</td>";
+    os << "<td>" << fmt::format("{}:{}", client.hostname(), client.port()) << "</td>";
     os << "<td>" << client.mountpoint() << "</td>";
-    os << "<td>" << Helper::FormatMsTime(client.last_online_time_ms())
-       << "</td>";
-    if (client.last_online_time_ms() + FLAGS_client_offline_period_time_ms <
-        now_ms) {
+    os << "<td>" << Helper::FormatMsTime(client.last_online_time_ms()) << "</td>";
+    if (client.last_online_time_ms() + FLAGS_client_offline_period_time_ms < now_ms) {
       os << R"(<td style="color:red">NO</td>)";
     } else {
       os << "<td>YES</td>";
@@ -334,9 +306,8 @@ static void RenderClientList(const std::vector<ClientEntry>& clients,
   os << "</div>";
 }
 
-static void RenderDistributedLock(
-    const std::vector<StoreDistributionLock::LockEntry>& lock_entries,
-    butil::IOBufBuilder& os) {
+static void RenderDistributedLock(const std::vector<StoreDistributionLock::LockEntry>& lock_entries,
+                                  butil::IOBufBuilder& os) {
   os << R"(<div style="margin:12px;margin-top:64px;font-size:smaller;">)";
   os << R"(<h3>Distributed Lock</h3>)";
   os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
@@ -360,8 +331,7 @@ static void RenderDistributedLock(
   os << "</div>";
 }
 
-void FsStatServiceImpl::RenderAutoIncrementIdGenerator(
-    FileSystemSetSPtr file_system_set, butil::IOBufBuilder& os) {
+void FsStatServiceImpl::RenderAutoIncrementIdGenerator(FileSystemSetSPtr file_system_set, butil::IOBufBuilder& os) {
   os << R"(<div style="margin:12px;margin-top:64px;font-size:smaller">)";
   os << R"(<h3>Autoincrement ID Generator</h3>)";
   os << R"(<div style="font-size:smaller;">)";
@@ -403,8 +373,7 @@ static void RenderGitInfo(butil::IOBufBuilder& os) {
   os << R"(</div>)";
 }
 
-void FsStatServiceImpl::RenderMainPage(const brpc::Server* server,
-                                       FileSystemSetSPtr file_system_set,
+void FsStatServiceImpl::RenderMainPage(const brpc::Server* server, FileSystemSetSPtr file_system_set,
                                        butil::IOBufBuilder& os) {
   os << "<!DOCTYPE html><html>\n";
 
@@ -421,17 +390,12 @@ void FsStatServiceImpl::RenderMainPage(const brpc::Server* server,
   std::vector<pb::mdsv2::FsInfo> fs_infoes;
   auto status = file_system_set->GetAllFsInfo(ctx, fs_infoes);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[mdsstat] get fs list fail, error({}).",
-                                    status.error_str());
-    os << fmt::format(
-        R"(<div style="color:red;">get fs list fail, error({}).</div>)",
-        status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("[mdsstat] get fs list fail, error({}).", status.error_str());
+    os << fmt::format(R"(<div style="color:red;">get fs list fail, error({}).</div>)", status.error_str());
 
   } else {
     sort(fs_infoes.begin(), fs_infoes.end(),
-         [](const pb::mdsv2::FsInfo& a, const pb::mdsv2::FsInfo& b) {
-           return a.fs_id() < b.fs_id();
-         });
+         [](const pb::mdsv2::FsInfo& a, const pb::mdsv2::FsInfo& b) { return a.fs_id() < b.fs_id(); });
 
     RenderFsInfo(fs_infoes, os);
   }
@@ -441,15 +405,11 @@ void FsStatServiceImpl::RenderMainPage(const brpc::Server* server,
   std::vector<MdsEntry> mdses;
   status = heartbeat->GetMDSList(ctx, mdses);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[mdsstat] get mds list fail, error({}).",
-                                    status.error_str());
-    os << fmt::format(
-        R"(<div style="color:red;">get mds list fail, error({}).</div>)",
-        status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("[mdsstat] get mds list fail, error({}).", status.error_str());
+    os << fmt::format(R"(<div style="color:red;">get mds list fail, error({}).</div>)", status.error_str());
 
   } else {
-    sort(mdses.begin(), mdses.end(),
-         [](const MdsEntry& a, const MdsEntry& b) { return a.id() < b.id(); });
+    sort(mdses.begin(), mdses.end(), [](const MdsEntry& a, const MdsEntry& b) { return a.id() < b.id(); });
     RenderMdsList(mdses, os);
   }
 
@@ -458,33 +418,24 @@ void FsStatServiceImpl::RenderMainPage(const brpc::Server* server,
   std::vector<ClientEntry> clients;
   status = heartbeat->GetClientList(clients);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format(
-        "[mdsstat] get client list fail, error({}).", status.error_str());
-    os << fmt::format(
-        R"(<div style="color:red;">get client list fail, error({}).</div>)",
-        status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("[mdsstat] get client list fail, error({}).", status.error_str());
+    os << fmt::format(R"(<div style="color:red;">get client list fail, error({}).</div>)", status.error_str());
 
   } else {
     // sort by last_online_time
     sort(clients.begin(), clients.end(),
-         [](const ClientEntry& a, const ClientEntry& b) {
-           return a.last_online_time_ms() > b.last_online_time_ms();
-         });
+         [](const ClientEntry& a, const ClientEntry& b) { return a.last_online_time_ms() > b.last_online_time_ms(); });
 
     RenderClientList(clients, os);
   }
 
   // distribution lock
   std::vector<StoreDistributionLock::LockEntry> lock_entries;
-  status = StoreDistributionLock::GetAllLockInfo(
-      Server::GetInstance().GetOperationProcessor(), lock_entries);
+  status = StoreDistributionLock::GetAllLockInfo(Server::GetInstance().GetOperationProcessor(), lock_entries);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format(
-        "[mdsstat] get distributed lock info fail, error({}).",
-        status.error_str());
-    os << fmt::format(
-        R"(<div style="color:red;">get distributed lock info fail, error({}).</div>)",
-        status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("[mdsstat] get distributed lock info fail, error({}).", status.error_str());
+    os << fmt::format(R"(<div style="color:red;">get distributed lock info fail, error({}).</div>)",
+                      status.error_str());
 
   } else {
     RenderDistributedLock(lock_entries, os);
@@ -501,14 +452,12 @@ void FsStatServiceImpl::RenderMainPage(const brpc::Server* server,
 }
 
 static void RenderQuotaPage(FileSystemSPtr fs, butil::IOBufBuilder& os) {
-  auto render_bytes_func = [](int64_t bytes,
-                              const std::string& unit) -> std::string {
+  auto render_bytes_func = [](int64_t bytes, const std::string& unit) -> std::string {
     if (bytes == INT64_MAX) {
       return "unlimited";
     }
     if (unit == "GB") {
-      return fmt::format("{:.2f}",
-                         static_cast<double>(bytes) / (1024 * 1024 * 1024));
+      return fmt::format("{:.2f}", static_cast<double>(bytes) / (1024 * 1024 * 1024));
     } else if (unit == "MB") {
       return fmt::format("{:.2f}", static_cast<double>(bytes) / (1024 * 1024));
     } else if (unit == "KB") {
@@ -544,22 +493,16 @@ static void RenderQuotaPage(FileSystemSPtr fs, butil::IOBufBuilder& os) {
   os << R"(<h3>FS Quota</h3>)";
   if (status.ok()) {
     os << "<div>";
-    os << fmt::format(R"(Max Bytes: {} GB)",
-                      render_bytes_func(quota.max_bytes(), "GB"));
+    os << fmt::format(R"(Max Bytes: {} GB)", render_bytes_func(quota.max_bytes(), "GB"));
     os << "<br>";
-    os << fmt::format(R"(Used Bytes: {} KB)",
-                      render_bytes_func(quota.used_bytes(), "KB"));
+    os << fmt::format(R"(Used Bytes: {} KB)", render_bytes_func(quota.used_bytes(), "KB"));
     os << "<br>";
-    os << fmt::format(R"(Max Inode: {})",
-                      render_inode_func(quota.max_inodes()));
+    os << fmt::format(R"(Max Inode: {})", render_inode_func(quota.max_inodes()));
     os << "<br>";
-    os << fmt::format(R"(Used Inode: {})",
-                      render_inode_func(quota.used_inodes()));
+    os << fmt::format(R"(Used Inode: {})", render_inode_func(quota.used_inodes()));
     os << "</div>";
   } else {
-    os << fmt::format(
-        R"(<span class="red-text">Get fs quota fail, status({}).</span>)",
-        status.error_str());
+    os << fmt::format(R"(<span class="red-text">Get fs quota fail, status({}).</span>)", status.error_str());
   }
 
   os << "</div>";
@@ -584,23 +527,17 @@ static void RenderQuotaPage(FileSystemSPtr fs, butil::IOBufBuilder& os) {
       os << "<tr>";
 
       os << fmt::format(R"(<td>{}</td>)", ino);
-      os << fmt::format(R"(<td>{}</td>)",
-                        render_bytes_func(quota_entry.max_bytes(), "GB"));
-      os << fmt::format(R"(<td>{}</td>)",
-                        render_inode_func(quota_entry.max_inodes()));
-      os << fmt::format(R"(<td>{}</td>)",
-                        render_bytes_func(quota_entry.used_bytes(), "KB"));
-      os << fmt::format(R"(<td>{}</td>)",
-                        render_inode_func(quota_entry.used_inodes()));
+      os << fmt::format(R"(<td>{}</td>)", render_bytes_func(quota_entry.max_bytes(), "GB"));
+      os << fmt::format(R"(<td>{}</td>)", render_inode_func(quota_entry.max_inodes()));
+      os << fmt::format(R"(<td>{}</td>)", render_bytes_func(quota_entry.used_bytes(), "KB"));
+      os << fmt::format(R"(<td>{}</td>)", render_inode_func(quota_entry.used_inodes()));
 
       os << "</tr>";
     }
 
     os << "</table>";
   } else {
-    os << fmt::format(
-        R"(<span class="red-text">Load dir quota fail, status({}).</span>)",
-        status.error_str());
+    os << fmt::format(R"(<span class="red-text">Load dir quota fail, status({}).</span>)", status.error_str());
   }
   os << "</div>";
 
@@ -608,8 +545,7 @@ static void RenderQuotaPage(FileSystemSPtr fs, butil::IOBufBuilder& os) {
   os << "</html>";
 }
 
-static void RenderFsTreePage(const FsInfoType& fs_info,
-                             butil::IOBufBuilder& os) {
+static void RenderFsTreePage(const FsInfoType& fs_info, butil::IOBufBuilder& os) {
   const auto fs_id = fs_info.fs_id();
   if (fs_id == 0) {
     os << "Invalid fs_id";
@@ -995,8 +931,7 @@ body {
   os << "</html>";
 }
 
-static void RenderJsonPage(const std::string& header, const std::string& json,
-                           butil::IOBufBuilder& os) {
+static void RenderJsonPage(const std::string& header, const std::string& json, butil::IOBufBuilder& os) {
   os << R"(<!DOCTYPE html><html lang="zh-CN">)";
 
   os << R"(
@@ -1114,31 +1049,25 @@ static void RenderJsonPage(const std::string& header, const std::string& json,
   os << "</html>";
 }
 
-static void RenderFsDetailsPage(const FsInfoType& fs_info,
-                                butil::IOBufBuilder& os) {
-  std::string header =
-      fmt::format("FileSystem: {}({})", fs_info.fs_name(), fs_info.fs_id());
+static void RenderFsDetailsPage(const FsInfoType& fs_info, butil::IOBufBuilder& os) {
+  std::string header = fmt::format("FileSystem: {}({})", fs_info.fs_name(), fs_info.fs_id());
   std::string json;
   Helper::ProtoToJson(fs_info, json);
   RenderJsonPage(header, json, os);
 }
 
-static void RenderFileSessionPage(FileSystemSPtr filesystem,
-                                  butil::IOBufBuilder& os) {
+static void RenderFileSessionPage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) {
   os << "<!DOCTYPE html><html>";
 
   os << "<head>" << RenderHead("dinfofs filesession") << "</head>";
   os << "<body>";
-  os << fmt::format(
-      R"(<h1 style="text-align:center;">FileSystem({}) File Session</h1>)",
-      filesystem->FsId());
+  os << fmt::format(R"(<h1 style="text-align:center;">FileSystem({}) File Session</h1>)", filesystem->FsId());
 
   auto& file_session_manager = filesystem->GetFileSessionManager();
   std::vector<FileSessionEntry> file_sessions;
   auto status = file_session_manager.GetAll(file_sessions);
   if (!status.ok()) {
-    os << fmt::format(R"(<div>get file session fail: {}</div></body>)",
-                      status.error_str());
+    os << fmt::format(R"(<div>get file session fail: {}</div></body>)", status.error_str());
     return;
   }
 
@@ -1168,8 +1097,7 @@ static void RenderFileSessionPage(FileSystemSPtr filesystem,
   os << "</body>";
 }
 
-static void RenderDelfilePage(FileSystemSPtr filesystem,
-                              butil::IOBufBuilder& os) {
+static void RenderDelfilePage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) {
   os << "<!DOCTYPE html><html>";
 
   os << "<head>" << RenderHead("dingofs delfile") << "</head>";
@@ -1196,10 +1124,8 @@ static void RenderDelfilePage(FileSystemSPtr filesystem,
   for (const auto& delfile : delfiles) {
     os << "<tr>";
 
-    std::string url = fmt::format("/FsStatService/delfiles/{}/{}",
-                                  delfile.fs_id(), delfile.ino());
-    os << "<td><a href=\"" << url << R"(" target="_blank">)" << delfile.ino()
-       << "</a></td>";
+    std::string url = fmt::format("/FsStatService/delfiles/{}/{}", delfile.fs_id(), delfile.ino());
+    os << "<td><a href=\"" << url << R"(" target="_blank">)" << delfile.ino() << "</a></td>";
     os << "<td>" << delfile.length() << "</td>";
     os << "<td>" << Helper::FormatTime(delfile.ctime() / 1000000000) << "</td>";
     os << "<td>" << delfile.version() << "</td>";
@@ -1212,19 +1138,15 @@ static void RenderDelfilePage(FileSystemSPtr filesystem,
   os << "</body>";
 }
 
-static void RenderDelslicePage(FileSystemSPtr filesystem,
-                               butil::IOBufBuilder& os) {
-  auto render_range_func =
-      [](const pb::mdsv2::TrashSlice& slice) -> std::string {
+static void RenderDelslicePage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) {
+  auto render_range_func = [](const pb::mdsv2::TrashSlice& slice) -> std::string {
     std::string result;
     for (size_t i = 0; i < slice.ranges_size(); ++i) {
       const auto& range = slice.ranges().at(i);
       if (i + 1 < slice.ranges_size()) {
-        result += fmt::format("[{},{}),", range.offset(),
-                              range.offset() + range.len());
+        result += fmt::format("[{},{}),", range.offset(), range.offset() + range.len());
       } else {
-        result += fmt::format("[{},{})", range.offset(),
-                              range.offset() + range.len());
+        result += fmt::format("[{},{})", range.offset(), range.offset() + range.len());
       }
 
       result += "<br>";
@@ -1245,8 +1167,16 @@ static void RenderDelslicePage(FileSystemSPtr filesystem,
     return;
   }
 
+  auto get_slice_count_fn = [&]() -> size_t {
+    size_t count = 0;
+    for (const auto& delslice : delslices) {
+      count += delslice.slices_size();
+    }
+    return count;
+  };
+
   os << R"(<div style="margin: 12px;font-size:smaller">)";
-  os << fmt::format(R"(<h3>DelSlice [{}]</h3>)", delslices.size());
+  os << fmt::format(R"(<h3>DelSlice [{}] [{}]</h3>)", delslices.size(), get_slice_count_fn());
   os << R"(<table class="gridtable sortable" border=1>)";
   os << "<tr>";
   os << "<th>FsId</th>";
@@ -1255,6 +1185,7 @@ static void RenderDelslicePage(FileSystemSPtr filesystem,
   os << "<th>SliceId</th>";
   os << "<th>IsPartial</th>";
   os << "<th>Ranges</th>";
+  os << "<th>Time</th>";
   os << "</tr>";
 
   for (const auto& delslice : delslices) {
@@ -1266,6 +1197,7 @@ static void RenderDelslicePage(FileSystemSPtr filesystem,
       os << "<td>" << slice.slice_id() << "</td>";
       os << "<td>" << (slice.is_partial() ? "true" : "false") << "</td>";
       os << "<td>" << render_range_func(slice) << "</td>";
+      os << "<td>" << Helper::FormatMsTime(delslice.time_ms()) << "</td>";
       os << "</tr>";
     }
   }
@@ -1275,8 +1207,7 @@ static void RenderDelslicePage(FileSystemSPtr filesystem,
   os << "</body>";
 }
 
-static void RenderOplogPage(FileSystemSPtr filesystem,
-                            butil::IOBufBuilder& os) {
+static void RenderOplogPage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) {
   os << "<!DOCTYPE html><html>";
 
   os << "<head>" << RenderHead("dingofs fsoplog") << "</head>";
@@ -1340,8 +1271,7 @@ static void RenderInodePage(const AttrType& attr, butil::IOBufBuilder& os) {
   RenderJsonPage(header, json, os);
 }
 
-static void RenderChunk(uint64_t& count, uint64_t chunk_size, ChunkType chunk,
-                        butil::IOBufBuilder& os) {
+static void RenderChunk(uint64_t& count, uint64_t chunk_size, ChunkType chunk, butil::IOBufBuilder& os) {
   struct OffsetRange {
     uint64_t start;
     uint64_t end;
@@ -1350,9 +1280,7 @@ static void RenderChunk(uint64_t& count, uint64_t chunk_size, ChunkType chunk,
 
   // sort by offset
   std::sort(chunk.mutable_slices()->begin(), chunk.mutable_slices()->end(),
-            [](const SliceType& a, const SliceType& b) {
-              return a.offset() < b.offset();
-            });
+            [](const SliceType& a, const SliceType& b) { return a.offset() < b.offset(); });
 
   // get offset ranges
   std::set<uint64_t> offsets;
@@ -1388,9 +1316,8 @@ static void RenderChunk(uint64_t& count, uint64_t chunk_size, ChunkType chunk,
   uint64_t prev_offset = chunk_index * chunk_size;
   for (auto& offset_range : offset_ranges) {
     // sort by id, from newest to oldest
-    std::sort(
-        offset_range.slices.begin(), offset_range.slices.end(),
-        [](const SliceType& a, const SliceType& b) { return a.id() < b.id(); });
+    std::sort(offset_range.slices.begin(), offset_range.slices.end(),
+              [](const SliceType& a, const SliceType& b) { return a.id() < b.id(); });
 
     if (offset_range.start != prev_offset) {
       uncontinuous_offsets.insert(offset_range.start);
@@ -1405,32 +1332,26 @@ static void RenderChunk(uint64_t& count, uint64_t chunk_size, ChunkType chunk,
 
     os << "<td>" << ++count << "</td>";
 
-    os << ((i == 0) ? fmt::format(R"(<td>{} [{}, {})</td>)", chunk_index,
-                                  chunk_index * chunk_size,
+    os << ((i == 0) ? fmt::format(R"(<td>{} [{}, {})</td>)", chunk_index, chunk_index * chunk_size,
                                   (chunk_index + 1) * chunk_size)
                     : fmt::format(R"(<td>{}</td>)", chunk_index));
 
     os << fmt::format(R"(<td>{}</td>)", chunk.version());
 
     os << ((uncontinuous_offsets.count(offset_range.start) == 0)
-               ? fmt::format(R"(<td>[{}, {})</td>)", offset_range.start,
-                             offset_range.end)
-               : fmt::format(R"(<td style="color:red;">[{}, {})</td>)",
-                             offset_range.start, offset_range.end));
+               ? fmt::format(R"(<td>[{}, {})</td>)", offset_range.start, offset_range.end)
+               : fmt::format(R"(<td style="color:red;">[{}, {})</td>)", offset_range.start, offset_range.end));
 
     os << R"(<td><ul style="list-style:disc">)";
     const auto& slices = offset_range.slices;
     for (size_t i = 0; i < slices.size(); ++i) {
       const auto& slice = slices.at(i);
       if (i + 1 < slices.size()) {
-        os << fmt::format(R"(<li style="color:gray;">{} [{},{}) {} {} {}</li>)",
-                          slice.id(), slice.offset(),
-                          slice.offset() + slice.len(), slice.len(),
-                          slice.size(), slice.zero());
+        os << fmt::format(R"(<li style="color:gray;">{} [{},{}) {} {} {}</li>)", slice.id(), slice.offset(),
+                          slice.offset() + slice.len(), slice.len(), slice.size(), slice.zero());
 
       } else {
-        os << fmt::format(R"(<li>{} [{},{}) {} {} {}</li>)", slice.id(),
-                          slice.offset(), slice.offset() + slice.len(),
+        os << fmt::format(R"(<li>{} [{},{}) {} {} {}</li>)", slice.id(), slice.offset(), slice.offset() + slice.len(),
                           slice.len(), slice.size(), slice.zero());
       }
     }
@@ -1440,22 +1361,20 @@ static void RenderChunk(uint64_t& count, uint64_t chunk_size, ChunkType chunk,
   }
 }
 
-static void RenderChunksPage(Ino ino, const std::vector<ChunkType>& chunks,
-                             butil::IOBufBuilder& os) {
+static void RenderChunksPage(Ino ino, const std::vector<ChunkType>& chunks, butil::IOBufBuilder& os) {
   os << "<!DOCTYPE html><html>";
 
   os << "<head>" << RenderHead("dingofs chunk") << "</head>";
   os << "<body>";
-  os << fmt::format(R"(<h1 style="text-align:center;">File({}) Chunk</h1>)",
-                    ino);
+  os << fmt::format(R"(<h1 style="text-align:center;">File({}) Chunk</h1>)", ino);
 
   os << R"(<div style="margin: 12px;font-size:smaller">)";
   os << fmt::format(R"(<h3>Chunk [{}]</h3>)", chunks.size());
   if (!chunks.empty()) {
     const auto& chunk = chunks.at(0);
-    os << fmt::format(R"(<h5>ChunkSize: {}MB BlockSize: {}KB</h5>)",
-                      chunk.chunk_size() / (1024 * 1024),
-                      chunk.block_size() / 1024);
+    os << fmt::format(R"(<h5>ChunkSize: {}MB BlockSize: {}KB LastCompactTime: {}</h5>)",
+                      chunk.chunk_size() / (1024 * 1024), chunk.block_size() / 1024,
+                      Helper::FormatMsTime(chunk.last_compaction_time_ms()));
   }
   os << R"(<table class="gridtable sortable" border=1>)";
   os << "<tr>";
@@ -1476,10 +1395,8 @@ static void RenderChunksPage(Ino ino, const std::vector<ChunkType>& chunks,
   os << "</body>";
 }
 
-void FsStatServiceImpl::default_method(
-    ::google::protobuf::RpcController* controller,
-    const pb::web::FsStatRequest*, pb::web::FsStatResponse*,
-    ::google::protobuf::Closure* done) {
+void FsStatServiceImpl::default_method(::google::protobuf::RpcController* controller, const pb::web::FsStatRequest*,
+                                       pb::web::FsStatResponse*, ::google::protobuf::Closure* done) {
   brpc::ClosureGuard const done_guard(done);
   brpc::Controller* cntl = (brpc::Controller*)controller;
   const brpc::Server* server = cntl->server();
@@ -1638,8 +1555,7 @@ void FsStatServiceImpl::default_method(
     uint32_t fs_id = Helper::StringToInt32(params[1]);
     uint64_t ino = Helper::StringToInt64(params[2]);
 
-    DINGO_LOG(INFO) << fmt::format("Get dir json, fs_id: {}, ino: {}", fs_id,
-                                   ino);
+    DINGO_LOG(INFO) << fmt::format("Get dir json, fs_id: {}, ino: {}", fs_id, ino);
 
     auto file_system_set = Server::GetInstance().GetFileSystemSet();
     auto file_system = file_system_set->GetFileSystem(fs_id);
@@ -1653,8 +1569,7 @@ void FsStatServiceImpl::default_method(
         os << result;
 
       } else {
-        cntl->SetFailed(fmt::format("Get dir({}) json fail, {}.", path,
-                                    status.error_str()));
+        cntl->SetFailed(fmt::format("Get dir({}) json fail, {}.", path, status.error_str()));
       }
 
     } else {

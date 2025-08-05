@@ -64,7 +64,8 @@ static const std::string kRecyleName = ".recycle";
 DEFINE_uint32(filesystem_name_max_size, 1024, "Max size of filesystem name.");
 DEFINE_uint32(filesystem_hash_bucket_num, 1024, "Filesystem hash bucket num.");
 
-DEFINE_uint32(compact_slice_threshold_num, 64, "Compact slice threshold num.");
+DEFINE_uint32(compact_chunk_threshold_num, 64, "Compact chunk threshold num.");
+DEFINE_uint32(compact_chunk_interval_ms, 30 * 1000, "Compact chunk interval ms.");
 
 static bool IsReserveNode(Ino ino) { return ino == kRootIno; }
 
@@ -1735,8 +1736,13 @@ Status FileSystem::WriteSlice(Context& ctx, Ino parent, Ino ino, uint64_t chunk_
   inode->UpdateIf(attr);
 
   // check whether need to compact chunk
-  if (chunk.slices_size() > FLAGS_compact_slice_threshold_num) {
-    DINGO_LOG(INFO) << fmt::format("[fs.{}] need compact chunk({}) for ino({}).", fs_id_, chunk_index, ino);
+  if (chunk.slices_size() > FLAGS_compact_chunk_threshold_num &&
+      chunk.last_compaction_time_ms() + FLAGS_compact_chunk_interval_ms < Helper::TimestampMs()) {
+    auto fs_info = fs_info_->Get();
+    if (CompactChunkOperation::MaybeCompact(fs_info, ino, attr.length(), chunk)) {
+      DINGO_LOG(INFO) << fmt::format("[fs.{}] trigger compact chunk({}) for ino({}).", fs_id_, chunk_index, ino);
+      operation_processor_->AsyncRun(CompactChunkOperation::New(fs_info, ino, chunk_index, attr.length()));
+    }
   }
 
   // update chunk cache
@@ -1883,12 +1889,12 @@ Status FileSystem::CompactChunk(Context& ctx, Ino ino, uint64_t chunk_index,
   auto& trace = ctx.GetTrace();
   uint64_t time_ns = Helper::TimestampNs();
 
-  CompactChunkOperation operation(trace, GetFsInfo(), ino, chunk_index, inode->Length());
+  CompactChunkOperation operation(trace, GetFsInfo(), ino, chunk_index, inode->Length(), true);
 
   status = RunOperation(&operation);
 
   auto& result = operation.GetResult();
-  auto& effected_chunks = result.effected_chunks;
+  auto& effected_chunk = result.effected_chunk;
   trash_slices = Helper::PbRepeatedToVector(result.trash_slice_list.mutable_slices());
 
   DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] compactchunk {}/{} finish, trash_slices({}) status({}).", fs_id_,
@@ -1898,9 +1904,7 @@ Status FileSystem::CompactChunk(Context& ctx, Ino ino, uint64_t chunk_index,
   }
 
   // update chunk cache
-  for (auto& chunk : effected_chunks) {
-    chunk_cache_.PutIf(ino, std::move(chunk));
-  }
+  chunk_cache_.PutIf(ino, std::move(effected_chunk));
 
   return Status::OK();
 }

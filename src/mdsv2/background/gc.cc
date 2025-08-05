@@ -41,7 +41,7 @@ namespace mdsv2 {
 
 DECLARE_uint32(fs_scan_batch_size);
 
-DEFINE_uint32(gc_worker_num, 4, "gc worker set num");
+DEFINE_uint32(gc_worker_num, 32, "gc worker set num");
 DEFINE_uint32(gc_max_pending_task_count, 8192, "gc max pending task count");
 
 DEFINE_uint32(gc_delfile_reserve_time_s, 600, "gc del file reserve time");
@@ -95,7 +95,7 @@ Status CleanDelSliceTask::CleanDelSlice() {
 
   DINGO_LOG(INFO) << fmt::format("[gc.delslice] clean slice finish, slice({}).", slice_id_trace);
 
-  return status;
+  return Status::OK();
 }
 
 void CleanDelFileTask::Run() {
