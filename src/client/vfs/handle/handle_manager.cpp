@@ -93,9 +93,8 @@ bool HandleManager::Load(const Json::Value& value) {
   uint64_t max_fh = 0;
   for (const auto& handler : handlers) {
     // peek inode,fh,flags
-    Ino ino = handler["padding"].asUInt64();
+    Ino ino = handler["ino"].asUInt64();
     uint64_t fh = handler["fh"].asUInt64();
-    bool is_dir = handler["is_dir"].asBool();
     uint flags = handler["flags"].asUInt();
 
     {
