@@ -49,55 +49,65 @@ DiskCacheManager::DiskCacheManager(uint64_t capacity,
                                    DiskCacheLayoutSPtr layout,
                                    DiskCacheMetricSPtr metric)
     : running_(false),
-      used_bytes_(0),
       capacity_bytes_(capacity),
-      stage_full_(false),
-      cache_full_(false),
-      layout_(layout),
       cached_blocks_(std::make_unique<LRUCache>()),
-      mq_(std::make_unique<MessageQueueType>("delete_block_queue", 10)),
       thread_pool_(std::make_unique<TaskThreadPool>("disk_cache_manager")),
-      metric_(metric) {}
+      layout_(layout),
+      queue_id_({0}),
+      metric_(metric) {
+  Init();
+}
 
-void DiskCacheManager::Start() {
-  CHECK_NOTNULL(layout_);
-  CHECK_NOTNULL(cached_blocks_);
-  CHECK(staging_blocks_.empty());
-  CHECK_NOTNULL(mq_);
+// for restart
+void DiskCacheManager::Init() {
   CHECK_NOTNULL(thread_pool_);
+  CHECK_NOTNULL(layout_);
   CHECK_NOTNULL(metric_);
 
+  used_bytes_ = 0;
+  stage_full_ = false;
+  cache_full_ = false;
+  cached_blocks_->Clear();
+  staging_blocks_.clear();
+
+  CHECK_EQ(used_bytes_, 0) << "Used bytes should be zero at startup.";
+  CHECK_EQ(stage_full_, 0) << "Stage full should be false at startup.";
+  CHECK_EQ(cache_full_, 0) << "Cache full should be false at startup.";
+  CHECK_NOTNULL(cached_blocks_);
+  CHECK_EQ(cached_blocks_->Size(), 0)
+      << "Cached blocks size should be zero at startup.";
+  CHECK_EQ(staging_blocks_.size(), 0)
+      << "Staging blocks should be empty at startup.";
+}
+
+void DiskCacheManager::Start() {
   if (running_) {
     return;
   }
 
   LOG(INFO) << "Disk cache manager is starting...";
 
-  mq_->Subscribe([&](MessageType message) {
-    DeleteBlocks(message.first, message.second);
-  });
-  mq_->Start();
+  Init();
+
+  CHECK_EQ(thread_pool_->Start(2), 0);
+
+  bthread::ExecutionQueueOptions queue_options;
+  queue_options.use_pthread = true;
+  CHECK_EQ(0, bthread::execution_queue_start(&queue_id_, &queue_options,
+                                             HandleTask, this));
 
   running_ = true;
 
-  CHECK_EQ(thread_pool_->Start(2), 0);
   thread_pool_->Enqueue(&DiskCacheManager::CheckFreeSpace, this);
   thread_pool_->Enqueue(&DiskCacheManager::CleanupExpire, this);
 
   LOG(INFO) << absl::StrFormat(
-      "Disk cache manager is up: capacity = %.2lf MiB, "
+      "Disk cache manager is up: dir = %s, capacity = %.2lf MiB, "
       "free_space_ratio = %.2lf, cache_expire_s = %d",
-      capacity_bytes_ * 1.0 / kMiB, FLAGS_free_space_ratio,
+      GetRootDir(), capacity_bytes_ * 1.0 / kMiB, FLAGS_free_space_ratio,
       FLAGS_cache_expire_s);
 
   CHECK_RUNNING("Disk cache manager");
-  CHECK_EQ(used_bytes_, 0) << "Used bytes should be zero at startup.";
-  CHECK_EQ(stage_full_, 0) << "Stage full should be false at startup.";
-  CHECK_EQ(cache_full_, 0) << "Cache full should be false at startup.";
-  CHECK_EQ(cached_blocks_->Size(), 0)
-      << "Cached blocks size should be zero at startup.";
-  CHECK(staging_blocks_.empty())
-      << "Staging blocks should be empty at startup.";
 }
 
 void DiskCacheManager::Shutdown() {
@@ -108,14 +118,8 @@ void DiskCacheManager::Shutdown() {
   LOG(INFO) << "Disk cache manager is shutting down...";
 
   thread_pool_->Stop();
-  mq_->Stop();
-  cached_blocks_->Clear();
-  staging_blocks_.clear();
-
-  // Reset for disk cache restart
-  used_bytes_ = 0;
-  stage_full_ = false;
-  cache_full_ = false;
+  CHECK_EQ(bthread::execution_queue_stop(queue_id_), 0);
+  CHECK_EQ(bthread::execution_queue_join(queue_id_), 0);
 
   LOG(INFO) << "Disk cache manager is down.";
 
@@ -141,9 +145,15 @@ void DiskCacheManager::Add(const CacheKey& key, const CacheValue& value,
   }
 
   if (used_bytes_ >= capacity_bytes_) {
-    uint64_t goal_bytes = capacity_bytes_ * 0.95;
-    uint64_t goal_files = cached_blocks_->Size() * 0.95;
-    CleanupFull(goal_bytes, goal_files);
+    uint64_t want_free_bytes = used_bytes_ - (capacity_bytes_ * 0.95);
+    uint64_t want_free_files = cached_blocks_->Size() * 0.05;
+    LOG(INFO) << absl::StrFormat(
+        "Trigger delete block for size reach capacity: "
+        "used = %.2lf MiB, capacity = %.2lf MiB, "
+        "want free %.2lf MiB %llu files",
+        used_bytes_ * 1.0 / kMiB, capacity_bytes_ * 1.0 / kMiB,
+        want_free_bytes * 1.0 / kMiB, want_free_files);
+    CleanupFull(want_free_bytes, want_free_files);
   }
 }
 
@@ -174,13 +184,15 @@ void DiskCacheManager::CheckFreeSpace() {
   CHECK_RUNNING("Disk cache manager");
 
   struct FSStat stat;
+  uint64_t want_free_bytes, want_free_files;
   uint64_t goal_bytes, goal_files;
   std::string root_dir = GetRootDir();
 
   while (running_.load(std::memory_order_relaxed)) {
     auto status = Helper::StatFS(root_dir, &stat);
     if (!status.ok()) {
-      LOG(ERROR) << "Check disk free space failed: " << status.ToString();
+      LOG(ERROR) << "Check disk free space failed: dir = " << root_dir
+                 << ", status = " << status.ToString();
       std::this_thread::sleep_for(std::chrono::seconds(1));
       continue;
     }
@@ -196,36 +208,48 @@ void DiskCacheManager::CheckFreeSpace() {
     metric_->stage_full.set_value(stage_full);
 
     if (cache_full) {
-      double watermark = 1.0 - cfg;
-
       LOG_EVERY_SECOND(WARNING) << absl::StrFormat(
-          "Disk usage is so high: dir = %s, watermark = %.2f%%, "
-          "bytes_usage = %.2f%%, files_usage = %.2f%%, stop_cache = %s, "
-          "stop_stage = %s.",
-          root_dir, watermark * 100, (1.0 - br) * 100, (1.0 - fr) * 100,
-          cache_full ? "YES" : "NO", stage_full ? "YES" : "NO");
+          "Disk usage is so high: dir(%s), space%%(%.2lf/%.2lf), "
+          "inode%%(%.2lf/%.2lf), used(%.2lf MiB vs %.2lf MiB), "
+          "stop(cache=%s,stage=%s)",
+          root_dir, (1.0 - br) * 100, (1.0 - cfg) * 100, (1.0 - fr) * 100,
+          (1.0 - cfg) * 100, used_bytes_ * 1.0 / kMiB,
+          stat.total_bytes * (1.0 - br) / kMiB, cache_full ? "Y" : "N",
+          stage_full ? "Y" : "N");
 
       std::lock_guard<BthreadMutex> lk(mutex_);
-      goal_bytes = stat.total_bytes * watermark;
-      goal_files = stat.total_files * watermark;
-      CleanupFull(goal_bytes, goal_files);
+      want_free_bytes = (br < cfg) ? stat.total_bytes * (cfg - br) : 0;
+      want_free_files = (fr < cfg) ? stat.total_files * (cfg - fr) : 0;
+      LOG(INFO) << absl::StrFormat(
+          "Trigger delete block for disk full: "
+          "used = %.2lf MiB, want free %.2lf MiB %llu files",
+          used_bytes_ * 1.0 / kMiB, want_free_bytes * 1.0 / kMiB,
+          want_free_files);
+      CleanupFull(want_free_bytes, want_free_files);
     }
     std::this_thread::sleep_for(std::chrono::seconds(1));
   }
 }
 
-// Protected by mutex
-void DiskCacheManager::CleanupFull(uint64_t goal_bytes, uint64_t goal_files) {
+// protected by mutex
+void DiskCacheManager::CleanupFull(uint64_t want_free_bytes,
+                                   uint64_t want_free_files) {
+  uint64_t freed_bytes = 0;
+  uint64_t freed_files = 0;
   auto to_del = cached_blocks_->Evict([&](const CacheValue& value) {
-    if (used_bytes_ <= goal_bytes && cached_blocks_->Size() <= goal_files) {
+    if (freed_bytes >= want_free_bytes && freed_files >= want_free_files) {
       return FilterStatus::kFinish;
     }
+
+    freed_bytes += value.size;
+    freed_files++;
     UpdateUsage(-1, -value.size);
     return FilterStatus::kEvictIt;
   });
 
   if (!to_del.empty()) {
-    mq_->Publish({to_del, DeletionReason::kCacheFull});
+    CHECK_EQ(0, bthread::execution_queue_execute(queue_id_,
+                                                 ToDel{to_del, "cache full"}));
   }
 }
 
@@ -256,36 +280,52 @@ void DiskCacheManager::CleanupExpire() {
     }
 
     if (!to_del.empty()) {
-      mq_->Publish({to_del, DeletionReason::kCacheExpired});
+      CHECK_EQ(0, bthread::execution_queue_execute(
+                      queue_id_, ToDel{to_del, "cache expired"}));
     }
+
     std::this_thread::sleep_for(
         std::chrono::milliseconds(FLAGS_cleanup_expire_interval_ms));
   }
 }
 
-void DiskCacheManager::DeleteBlocks(const CacheItems& to_del,
-                                    DeletionReason reason) {
+int DiskCacheManager::HandleTask(void* meta,
+                                 bthread::TaskIterator<ToDel>& iter) {
+  if (iter.is_queue_stopped()) {
+    return 0;
+  }
+
+  auto* self = static_cast<DiskCacheManager*>(meta);
+  for (; iter; iter++) {
+    auto& to_del = *iter;
+    self->DeleteBlocks(to_del);
+  }
+  return 0;
+}
+
+void DiskCacheManager::DeleteBlocks(const ToDel& to_del) {
   butil::Timer timer;
   uint64_t num_deleted = 0, bytes_freed = 0;
 
   timer.start();
-  for (const auto& item : to_del) {
+  for (const auto& item : to_del.items) {
     CacheKey key = item.key;
     CacheValue value = item.value;
     std::string cache_path = GetCachePath(key);
     auto status = Helper::RemoveFile(cache_path);
     if (status.IsNotFound()) {
-      LOG(WARNING) << "Cache block (path=" << cache_path
-                   << ") already deleted.";
+      LOG(WARNING) << "Block file already deleted: path = " << cache_path;
       continue;
     } else if (!status.ok()) {
-      LOG(ERROR) << "Delete cache block (path=" << cache_path
-                 << ") failed: " << status.ToString();
+      LOG(ERROR) << "Delete block file failed for " << to_del.reason
+                 << ": path = " << cache_path
+                 << ", status = " << status.ToString();
       continue;
     }
 
-    VLOG(3) << "Cache block (path=" << cache_path << ") deleted for "
-            << ToString(reason) << ", free " << value.size << " bytes.";
+    VLOG(3) << "Delete block file success for " << to_del.reason
+            << ": path = " << cache_path << ", free " << value.size
+            << " bytes.";
 
     num_deleted++;
     bytes_freed += value.size;
@@ -293,8 +333,8 @@ void DiskCacheManager::DeleteBlocks(const CacheItems& to_del,
   timer.stop();
 
   LOG(INFO) << absl::StrFormat(
-      "%d cache blocks deleted for %s, free %.2f MiB, costs %.6f seconds.",
-      num_deleted, ToString(reason), static_cast<double>(bytes_freed) / kMiB,
+      "%d cache blocks deleted for %s, free %.2lf MiB, costs %.6lf seconds.",
+      num_deleted, to_del.reason, static_cast<double>(bytes_freed) / kMiB,
       timer.u_elapsed() / 1e6);
 }
 
@@ -311,17 +351,6 @@ std::string DiskCacheManager::GetRootDir() const {
 
 std::string DiskCacheManager::GetCachePath(const CacheKey& key) const {
   return layout_->GetCachePath(key);
-}
-
-std::string DiskCacheManager::ToString(DeletionReason reason) const {
-  switch (reason) {
-    case DeletionReason::kCacheFull:
-      return "cache full";
-    case DeletionReason::kCacheExpired:
-      return "cache expired";
-    default:
-      CHECK(false) << "Unknown deletion reason: " << static_cast<int>(reason);
-  }
 }
 
 }  // namespace cache

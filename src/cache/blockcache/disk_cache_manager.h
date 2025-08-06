@@ -23,12 +23,13 @@
 #ifndef DINGOFS_SRC_CACHE_BLOCKCACHE_DISK_CACHE_MANAGER_H_
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_DISK_CACHE_MANAGER_H_
 
+#include <bthread/execution_queue.h>
+
 #include "cache/blockcache/disk_cache_layout.h"
 #include "cache/blockcache/lru_cache.h"
 #include "cache/blockcache/lru_common.h"
 #include "cache/common/type.h"
 #include "metrics/cache/blockcache/disk_cache_metric.h"
-#include "utils/message_queue.h"
 
 namespace dingofs {
 namespace cache {
@@ -59,40 +60,40 @@ class DiskCacheManager {
   virtual bool CacheFull() const;
 
  private:
-  enum class DeletionReason : uint8_t {
-    kCacheFull,
-    kCacheExpired,
+  struct ToDel {
+    CacheItems items;
+    std::string reason;
   };
 
-  using MessageType = std::pair<CacheItems, DeletionReason>;
-  using MessageQueueType = utils::MessageQueue<MessageType>;
-  using MessageQueueUPtr = std::unique_ptr<MessageQueueType>;
+  void Init();
 
   void CheckFreeSpace();
-  void CleanupFull(uint64_t goal_bytes, uint64_t goal_files);
+  void CleanupFull(uint64_t want_free_bytes, uint64_t want_free_files);
   void CleanupExpire();
-  void DeleteBlocks(const CacheItems& to_del, DeletionReason reason);
+  static int HandleTask(void* meta, bthread::TaskIterator<ToDel>& iter);
+  void DeleteBlocks(const ToDel& to_del);
   void UpdateUsage(int64_t n, int64_t used_bytes);
 
   std::string GetRootDir() const;
   std::string GetCachePath(const CacheKey& key) const;
-  std::string ToString(DeletionReason reason) const;
 
+  // For cache_blocks_ and staging_blocks_:
+  // (1) cache_blocks_: Only store cached block key
+  // (2) staging_blocks_: Store stage block key which will not deleted by anyone
+  // util it uploaded to storage. It will causes io error if we delete the stage
+  // block which not uploaded for we can't get block both local disk and remote
+  // storage.
   std::atomic<bool> running_;
   BthreadMutex mutex_;
   uint64_t used_bytes_;
   const uint64_t capacity_bytes_;
   std::atomic<bool> stage_full_;
   std::atomic<bool> cache_full_;
-  DiskCacheLayoutSPtr layout_;
-  // Only store cached block key
   LRUCacheUPtr cached_blocks_;
-  // Store stage block key which will not deleted by anyone util it uploaded to
-  // storage. It will causes io error if we delete the stage block which not
-  // uploaded for we can't get block both local disk and remote storage.
   std::unordered_map<std::string, CacheValue> staging_blocks_;
-  MessageQueueUPtr mq_;
   TaskThreadPoolUPtr thread_pool_;
+  DiskCacheLayoutSPtr layout_;
+  bthread::ExecutionQueueId<ToDel> queue_id_;
   DiskCacheMetricSPtr metric_;
 };
 
