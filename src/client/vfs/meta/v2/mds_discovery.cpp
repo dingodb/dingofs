@@ -81,6 +81,10 @@ std::vector<mdsv2::MDSMeta> MDSDiscovery::GetMDSByState(
   return mdses;
 }
 
+std::vector<mdsv2::MDSMeta> MDSDiscovery::GetNormalMDS() {
+  return GetMDSByState(mdsv2::MDSMeta::State::kNormal);
+}
+
 Status MDSDiscovery::GetMDSList(std::vector<mdsv2::MDSMeta>& mdses) {
   pb::mdsv2::GetMDSListRequest request;
   pb::mdsv2::GetMDSListResponse response;
@@ -97,6 +101,14 @@ Status MDSDiscovery::GetMDSList(std::vector<mdsv2::MDSMeta>& mdses) {
   }
 
   return Status::OK();
+}
+
+void MDSDiscovery::SetAbnormalMDS(int64_t mds_id) {
+  utils::WriteLockGuard lk(lock_);
+
+  if (mdses_.find(mds_id) != mdses_.end()) {
+    mdses_[mds_id].SetState(mdsv2::MDSMeta::State::kAbnormal);
+  }
 }
 
 bool MDSDiscovery::UpdateMDSList() {

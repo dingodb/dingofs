@@ -15,6 +15,8 @@
 #ifndef DINGOFS_MDSV2_MDS_MDS_META_H_
 #define DINGOFS_MDSV2_MDS_MDS_META_H_
 
+#include <sys/types.h>
+
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -39,10 +41,11 @@ class MDSMeta {
   MDSMeta(const MDSMeta& mds_meta);
   MDSMeta& operator=(const MDSMeta& mds_meta) = default;
 
-  enum State {
+  enum State : uint8_t {
     kInit = 0,
     kNormal = 1,
     kAbnormal = 2,
+    kStop = 3,
   };
 
   static std::string StateName(State state) {
@@ -53,6 +56,8 @@ class MDSMeta {
         return "NORMAL";
       case State::kAbnormal:
         return "ABNORMAL";
+      case State::kStop:
+        return "STOP";
       default:
         return "UNKNOWN";
     }

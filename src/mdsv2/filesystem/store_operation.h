@@ -730,6 +730,10 @@ class OpenFileOperation : public Operation {
       : Operation(trace), flags_(flags), file_session_(file_session) {};
   ~OpenFileOperation() override = default;
 
+  struct Result : public Operation::Result {
+    int64_t delta_bytes{0};
+  };
+
   OpType GetOpType() const override { return OpType::kOpenFile; }
 
   uint32_t GetFsId() const override { return file_session_.fs_id(); }
@@ -737,10 +741,20 @@ class OpenFileOperation : public Operation {
 
   Status RunInBatch(TxnUPtr& txn, AttrType& attr, const std::vector<KeyValue>& prefetch_kvs) override;
 
+  template <int size = 0>
+  Result& GetResult() {
+    auto& result = Operation::GetResult();
+    result_.status = result.status;
+    result_.attr = std::move(result.attr);
+
+    return result_;
+  }
+
  private:
   uint32_t flags_;
-
   FileSessionEntry file_session_;
+
+  Result result_;
 };
 
 class CloseFileOperation : public Operation {

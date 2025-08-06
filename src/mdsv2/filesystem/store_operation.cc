@@ -1008,6 +1008,7 @@ Status FallocateOperation::RunInBatch(TxnUPtr& txn, AttrType& attr, const std::v
 
 Status OpenFileOperation::RunInBatch(TxnUPtr& txn, AttrType& attr, const std::vector<KeyValue>&) {
   if (flags_ & O_TRUNC) {
+    result_.delta_bytes = -static_cast<int64_t>(attr.length());
     attr.set_length(0);
   }
 
@@ -1391,6 +1392,7 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoType& fs_info, 
   }
 
   std::vector<OffsetRange> offset_ranges;
+  offset_ranges.reserve(offsets.size());
   for (auto it = offsets.begin(); it != offsets.end(); ++it) {
     auto next_it = std::next(it);
     if (next_it != offsets.end()) {
@@ -1460,6 +1462,8 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoType& fs_info, 
   // slice-1 is partial overlapped by slice-2 and slice-3
   std::map<uint64_t, pb::mdsv2::TrashSlice> temp_trash_slice_map;
   for (auto& offset_range : offset_ranges) {
+    if (offset_range.slices.empty()) continue;
+
     auto& slices = offset_range.slices;
     auto reserve_slice = slices.front();
     for (int i = 1; i < slices.size(); ++i) {

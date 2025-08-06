@@ -67,6 +67,7 @@ static MDSMeta SdkMDS2MDSMeta(const dingodb::sdk::MDS& sdk_mds) {
 
 static std::vector<MDSMeta> SdkMDSList2MDSes(const std::vector<dingodb::sdk::MDS>& sdk_mdses) {
   std::vector<MDSMeta> mdses;
+  mdses.reserve(sdk_mdses.size());
   for (const auto& sdk_mds : sdk_mdses) {
     mdses.push_back(SdkMDS2MDSMeta(sdk_mds));
   }

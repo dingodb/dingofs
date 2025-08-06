@@ -135,6 +135,10 @@ Status MDSClient::GetFsInfo(RPCPtr rpc, uint32_t fs_id,
 }
 
 Status MDSClient::Heartbeat() {
+  auto get_mds_fn = [this]() -> MDSMeta {
+    return GetMdsByParent(mdsv2::kRootIno);
+  };
+
   pb::mdsv2::HeartbeatRequest request;
   pb::mdsv2::HeartbeatResponse response;
 
@@ -145,7 +149,8 @@ Status MDSClient::Heartbeat() {
   client->set_port(client_id_.Port());
   client->set_mountpoint(client_id_.Mountpoint());
 
-  auto status = rpc_->SendRequest("MDSService", "Heartbeat", request, response);
+  auto status =
+      SendRequest(get_mds_fn, "MDSService", "Heartbeat", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -185,27 +190,30 @@ Status MDSClient::UmountFs(const std::string& name,
   return Status::OK();
 }
 
-EndPoint MDSClient::GetEndpoint(Ino ino) {
+MDSMeta MDSClient::GetMds(Ino ino) {
   mdsv2::MDSMeta mds_meta;
   CHECK(mds_router_->GetMDS(ino, mds_meta))
       << fmt::format("get mds fail for ino({}).", ino);
 
-  LOG(INFO) << fmt::format("[meta] query target mds({}:{}) for ino({}).",
-                           mds_meta.Host(), mds_meta.Port(), ino);
-  return StrToEndpoint(mds_meta.Host(), mds_meta.Port());
+  LOG(INFO) << fmt::format("[meta] query target mds({}:{}:{}) for ino({}).",
+                           mds_meta.ID(), mds_meta.Host(), mds_meta.Port(),
+                           ino);
+
+  return mds_meta;
 }
 
-EndPoint MDSClient::GetEndpointByParent(int64_t parent) {
+MDSMeta MDSClient::GetMdsByParent(int64_t parent) {
   mdsv2::MDSMeta mds_meta;
   CHECK(mds_router_->GetMDSByParent(parent, mds_meta))
       << fmt::format("get mds fail for parent({}).", parent);
 
-  LOG(INFO) << fmt::format("[meta] query target mds({}:{}) for parent({}).",
-                           mds_meta.Host(), mds_meta.Port(), parent);
-  return StrToEndpoint(mds_meta.Host(), mds_meta.Port());
+  LOG(INFO) << fmt::format("[meta] query target mds({}:{}:{}) for parent({}).",
+                           mds_meta.ID(), mds_meta.Host(), mds_meta.Port(),
+                           parent);
+  return mds_meta;
 }
 
-EndPoint MDSClient::GetEndpointWithFallback(Ino ino, bool& is_fallback) {
+MDSMeta MDSClient::GetMdsWithFallback(Ino ino, bool& is_fallback) {
   is_fallback = false;
   mdsv2::MDSMeta mds_meta;
   if (!mds_router_->GetMDS(ino, mds_meta)) {
@@ -214,13 +222,14 @@ EndPoint MDSClient::GetEndpointWithFallback(Ino ino, bool& is_fallback) {
     is_fallback = true;
   }
 
-  LOG(INFO) << fmt::format("[meta] query target mds({}:{}) for ino({}).",
-                           mds_meta.Host(), mds_meta.Port(), ino);
-  return StrToEndpoint(mds_meta.Host(), mds_meta.Port());
+  LOG(INFO) << fmt::format("[meta] query target mds({}:{}:{}) for ino({}).",
+                           mds_meta.ID(), mds_meta.Host(), mds_meta.Port(),
+                           ino);
+  return mds_meta;
 }
 
-EndPoint MDSClient::GetEndpointByParentWithFallback(int64_t parent,
-                                                    bool& is_fallback) {
+MDSMeta MDSClient::GetMdsByParentWithFallback(int64_t parent,
+                                              bool& is_fallback) {
   is_fallback = false;
   mdsv2::MDSMeta mds_meta;
   if (!mds_router_->GetMDSByParent(parent, mds_meta)) {
@@ -229,9 +238,10 @@ EndPoint MDSClient::GetEndpointByParentWithFallback(int64_t parent,
     is_fallback = true;
   }
 
-  LOG(INFO) << fmt::format("[meta] query target mds({}:{}) for parent({}).",
-                           mds_meta.Host(), mds_meta.Port(), parent);
-  return StrToEndpoint(mds_meta.Host(), mds_meta.Port());
+  LOG(INFO) << fmt::format("[meta] query target mds({}:{}:{}) for parent({}).",
+                           mds_meta.ID(), mds_meta.Host(), mds_meta.Port(),
+                           parent);
+  return mds_meta;
 }
 
 uint64_t MDSClient::GetInodeVersion(Ino ino) {
@@ -243,8 +253,8 @@ uint64_t MDSClient::GetInodeVersion(Ino ino) {
 Status MDSClient::Lookup(Ino parent, const std::string& name, Attr& out_attr) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
-  auto get_endpoint_fn = [this, parent]() -> EndPoint {
-    return GetEndpointByParent(parent);
+  auto get_mds_fn = [this, parent]() -> MDSMeta {
+    return GetMdsByParent(parent);
   };
 
   pb::mdsv2::LookupRequest request;
@@ -257,7 +267,7 @@ Status MDSClient::Lookup(Ino parent, const std::string& name, Attr& out_attr) {
   request.set_name(name);
 
   auto status =
-      SendRequest(get_endpoint_fn, "MDSService", "Lookup", request, response);
+      SendRequest(get_mds_fn, "MDSService", "Lookup", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -294,8 +304,8 @@ Status MDSClient::MkNod(Ino parent, const std::string& name, uint32_t uid,
                         uint32_t gid, mode_t mode, dev_t rdev, Attr& out_attr) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
-  auto get_endpoint_fn = [this, parent]() -> EndPoint {
-    return GetEndpointByParent(parent);
+  auto get_mds_fn = [this, parent]() -> MDSMeta {
+    return GetMdsByParent(parent);
   };
 
   pb::mdsv2::MkNodRequest request;
@@ -314,7 +324,7 @@ Status MDSClient::MkNod(Ino parent, const std::string& name, uint32_t uid,
   request.set_length(0);
 
   auto status =
-      SendRequest(get_endpoint_fn, "MDSService", "MkNod", request, response);
+      SendRequest(get_mds_fn, "MDSService", "MkNod", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -332,8 +342,8 @@ Status MDSClient::MkDir(Ino parent, const std::string& name, uint32_t uid,
                         uint32_t gid, mode_t mode, dev_t rdev, Attr& out_attr) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
-  auto get_endpoint_fn = [this, parent]() -> EndPoint {
-    return GetEndpointByParent(parent);
+  auto get_mds_fn = [this, parent]() -> MDSMeta {
+    return GetMdsByParent(parent);
   };
 
   pb::mdsv2::MkDirRequest request;
@@ -352,7 +362,7 @@ Status MDSClient::MkDir(Ino parent, const std::string& name, uint32_t uid,
   request.set_length(0);
 
   auto status =
-      SendRequest(get_endpoint_fn, "MDSService", "MkDir", request, response);
+      SendRequest(get_mds_fn, "MDSService", "MkDir", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -369,8 +379,8 @@ Status MDSClient::MkDir(Ino parent, const std::string& name, uint32_t uid,
 Status MDSClient::RmDir(Ino parent, const std::string& name) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
-  auto get_endpoint_fn = [this, parent]() -> EndPoint {
-    return GetEndpointByParent(parent);
+  auto get_mds_fn = [this, parent]() -> MDSMeta {
+    return GetMdsByParent(parent);
   };
 
   pb::mdsv2::RmDirRequest request;
@@ -383,7 +393,7 @@ Status MDSClient::RmDir(Ino parent, const std::string& name) {
   request.set_name(name);
 
   auto status =
-      SendRequest(get_endpoint_fn, "MDSService", "RmDir", request, response);
+      SendRequest(get_mds_fn, "MDSService", "RmDir", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -395,9 +405,7 @@ Status MDSClient::ReadDir(Ino ino, const std::string& last_name, uint32_t limit,
                           bool with_attr, std::vector<DirEntry>& entries) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
-  auto get_endpoint_fn = [this, ino]() -> EndPoint {
-    return GetEndpointByParent(ino);
-  };
+  auto get_mds_fn = [this, ino]() -> MDSMeta { return GetMdsByParent(ino); };
 
   pb::mdsv2::ReadDirRequest request;
   pb::mdsv2::ReadDirResponse response;
@@ -411,7 +419,7 @@ Status MDSClient::ReadDir(Ino ino, const std::string& last_name, uint32_t limit,
   request.set_with_attr(with_attr);
 
   auto status =
-      SendRequest(get_endpoint_fn, "MDSService", "ReadDir", request, response);
+      SendRequest(get_mds_fn, "MDSService", "ReadDir", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -428,7 +436,7 @@ Status MDSClient::ReadDir(Ino ino, const std::string& last_name, uint32_t limit,
 Status MDSClient::Open(Ino ino, int flags, std::string& session_id) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
-  auto get_endpoint_fn = [this, ino]() -> EndPoint { return GetEndpoint(ino); };
+  auto get_mds_fn = [this, ino]() -> MDSMeta { return GetMds(ino); };
 
   pb::mdsv2::OpenRequest request;
   pb::mdsv2::OpenResponse response;
@@ -438,7 +446,7 @@ Status MDSClient::Open(Ino ino, int flags, std::string& session_id) {
   request.set_flags(flags);
 
   auto status =
-      SendRequest(get_endpoint_fn, "MDSService", "Open", request, response);
+      SendRequest(get_mds_fn, "MDSService", "Open", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -453,7 +461,7 @@ Status MDSClient::Open(Ino ino, int flags, std::string& session_id) {
 Status MDSClient::Release(Ino ino, const std::string& session_id) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
-  auto get_endpoint_fn = [this, ino]() -> EndPoint { return GetEndpoint(ino); };
+  auto get_mds_fn = [this, ino]() -> MDSMeta { return GetMds(ino); };
 
   pb::mdsv2::ReleaseRequest request;
   pb::mdsv2::ReleaseResponse response;
@@ -463,7 +471,7 @@ Status MDSClient::Release(Ino ino, const std::string& session_id) {
   request.set_session_id(session_id);
 
   auto status =
-      SendRequest(get_endpoint_fn, "MDSService", "Release", request, response);
+      SendRequest(get_mds_fn, "MDSService", "Release", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -475,8 +483,8 @@ Status MDSClient::Link(Ino ino, Ino new_parent, const std::string& new_name,
                        Attr& out_attr) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
-  auto get_endpoint_fn = [this, new_parent]() -> EndPoint {
-    return GetEndpointByParent(new_parent);
+  auto get_mds_fn = [this, new_parent]() -> MDSMeta {
+    return GetMdsByParent(new_parent);
   };
 
   pb::mdsv2::LinkRequest request;
@@ -490,7 +498,7 @@ Status MDSClient::Link(Ino ino, Ino new_parent, const std::string& new_name,
   request.set_new_name(new_name);
 
   auto status =
-      SendRequest(get_endpoint_fn, "MDSService", "Link", request, response);
+      SendRequest(get_mds_fn, "MDSService", "Link", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -507,8 +515,8 @@ Status MDSClient::Link(Ino ino, Ino new_parent, const std::string& new_name,
 Status MDSClient::UnLink(Ino parent, const std::string& name) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
-  auto get_endpoint_fn = [this, parent]() -> EndPoint {
-    return GetEndpointByParent(parent);
+  auto get_mds_fn = [this, parent]() -> MDSMeta {
+    return GetMdsByParent(parent);
   };
 
   pb::mdsv2::UnLinkRequest request;
@@ -521,7 +529,7 @@ Status MDSClient::UnLink(Ino parent, const std::string& name) {
   request.set_name(name);
 
   auto status =
-      SendRequest(get_endpoint_fn, "MDSService", "UnLink", request, response);
+      SendRequest(get_mds_fn, "MDSService", "UnLink", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -534,8 +542,8 @@ Status MDSClient::Symlink(Ino parent, const std::string& name, uint32_t uid,
                           Attr& out_attr) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
-  auto get_endpoint_fn = [this, parent]() -> EndPoint {
-    return GetEndpointByParent(parent);
+  auto get_mds_fn = [this, parent]() -> MDSMeta {
+    return GetMdsByParent(parent);
   };
 
   pb::mdsv2::SymlinkRequest request;
@@ -552,7 +560,7 @@ Status MDSClient::Symlink(Ino parent, const std::string& name, uint32_t uid,
   request.set_gid(gid);
 
   auto status =
-      SendRequest(get_endpoint_fn, "MDSService", "Symlink", request, response);
+      SendRequest(get_mds_fn, "MDSService", "Symlink", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -570,7 +578,7 @@ Status MDSClient::Symlink(Ino parent, const std::string& name, uint32_t uid,
 Status MDSClient::ReadLink(Ino ino, std::string& symlink) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
-  auto get_endpoint_fn = [this, ino]() -> EndPoint { return GetEndpoint(ino); };
+  auto get_mds_fn = [this, ino]() -> MDSMeta { return GetMds(ino); };
 
   pb::mdsv2::ReadLinkRequest request;
   pb::mdsv2::ReadLinkResponse response;
@@ -581,7 +589,7 @@ Status MDSClient::ReadLink(Ino ino, std::string& symlink) {
   request.set_ino(ino);
 
   auto status =
-      SendRequest(get_endpoint_fn, "MDSService", "ReadLink", request, response);
+      SendRequest(get_mds_fn, "MDSService", "ReadLink", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -595,9 +603,9 @@ Status MDSClient::GetAttr(Ino ino, Attr& out_attr) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   bool is_fallback = false;
-  auto get_endpoint_fn = [this, ino, &is_fallback]() -> EndPoint {
-    return mdsv2::IsDir(ino) ? GetEndpointByParentWithFallback(ino, is_fallback)
-                             : GetEndpointWithFallback(ino, is_fallback);
+  auto get_mds_fn = [this, ino, &is_fallback]() -> MDSMeta {
+    return mdsv2::IsDir(ino) ? GetMdsByParentWithFallback(ino, is_fallback)
+                             : GetMdsWithFallback(ino, is_fallback);
   };
 
   pb::mdsv2::GetAttrRequest request;
@@ -611,7 +619,7 @@ Status MDSClient::GetAttr(Ino ino, Attr& out_attr) {
   request.set_ino(ino);
 
   auto status =
-      SendRequest(get_endpoint_fn, "MDSService", "GetAttr", request, response);
+      SendRequest(get_mds_fn, "MDSService", "GetAttr", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -627,8 +635,8 @@ Status MDSClient::SetAttr(Ino ino, const Attr& attr, int to_set,
                           Attr& out_attr) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
-  auto get_endpoint_fn = [this, ino]() -> EndPoint {
-    return mdsv2::IsDir(ino) ? GetEndpointByParent(ino) : GetEndpoint(ino);
+  auto get_mds_fn = [this, ino]() -> MDSMeta {
+    return mdsv2::IsDir(ino) ? GetMdsByParent(ino) : GetMds(ino);
   };
 
   pb::mdsv2::SetAttrRequest request;
@@ -688,7 +696,7 @@ Status MDSClient::SetAttr(Ino ino, const Attr& attr, int to_set,
   request.set_to_set(temp_to_set);
 
   auto status =
-      SendRequest(get_endpoint_fn, "MDSService", "SetAttr", request, response);
+      SendRequest(get_mds_fn, "MDSService", "SetAttr", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -705,9 +713,9 @@ Status MDSClient::GetXAttr(Ino ino, const std::string& name,
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   bool is_fallback = false;
-  auto get_endpoint_fn = [this, ino, &is_fallback]() -> EndPoint {
-    return mdsv2::IsDir(ino) ? GetEndpointByParentWithFallback(ino, is_fallback)
-                             : GetEndpointWithFallback(ino, is_fallback);
+  auto get_mds_fn = [this, ino, &is_fallback]() -> MDSMeta {
+    return mdsv2::IsDir(ino) ? GetMdsByParentWithFallback(ino, is_fallback)
+                             : GetMdsWithFallback(ino, is_fallback);
   };
 
   pb::mdsv2::GetXAttrRequest request;
@@ -722,7 +730,7 @@ Status MDSClient::GetXAttr(Ino ino, const std::string& name,
   request.set_name(name);
 
   auto status =
-      SendRequest(get_endpoint_fn, "MDSService", "GetXAttr", request, response);
+      SendRequest(get_mds_fn, "MDSService", "GetXAttr", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -736,8 +744,8 @@ Status MDSClient::SetXAttr(Ino ino, const std::string& name,
                            const std::string& value) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
-  auto get_endpoint_fn = [this, ino]() -> EndPoint {
-    return mdsv2::IsDir(ino) ? GetEndpointByParent(ino) : GetEndpoint(ino);
+  auto get_mds_fn = [this, ino]() -> MDSMeta {
+    return mdsv2::IsDir(ino) ? GetMdsByParent(ino) : GetMds(ino);
   };
 
   pb::mdsv2::SetXAttrRequest request;
@@ -748,7 +756,7 @@ Status MDSClient::SetXAttr(Ino ino, const std::string& name,
   request.mutable_xattrs()->insert({name, value});
 
   auto status =
-      SendRequest(get_endpoint_fn, "MDSService", "SetXAttr", request, response);
+      SendRequest(get_mds_fn, "MDSService", "SetXAttr", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -761,8 +769,8 @@ Status MDSClient::SetXAttr(Ino ino, const std::string& name,
 Status MDSClient::RemoveXAttr(Ino ino, const std::string& name) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
-  auto get_endpoint_fn = [this, ino]() -> EndPoint {
-    return mdsv2::IsDir(ino) ? GetEndpointByParent(ino) : GetEndpoint(ino);
+  auto get_mds_fn = [this, ino]() -> MDSMeta {
+    return mdsv2::IsDir(ino) ? GetMdsByParent(ino) : GetMds(ino);
   };
 
   pb::mdsv2::RemoveXAttrRequest request;
@@ -772,8 +780,8 @@ Status MDSClient::RemoveXAttr(Ino ino, const std::string& name) {
   request.set_ino(ino);
   request.set_name(name);
 
-  auto status = SendRequest(get_endpoint_fn, "MDSService", "RemoveXAttr",
-                            request, response);
+  auto status =
+      SendRequest(get_mds_fn, "MDSService", "RemoveXAttr", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -787,8 +795,8 @@ Status MDSClient::ListXAttr(Ino ino,
                             std::map<std::string, std::string>& xattrs) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
-  auto get_endpoint_fn = [this, ino]() -> EndPoint {
-    return mdsv2::IsDir(ino) ? GetEndpointByParent(ino) : GetEndpoint(ino);
+  auto get_mds_fn = [this, ino]() -> MDSMeta {
+    return mdsv2::IsDir(ino) ? GetMdsByParent(ino) : GetMds(ino);
   };
 
   pb::mdsv2::ListXAttrRequest request;
@@ -799,8 +807,8 @@ Status MDSClient::ListXAttr(Ino ino,
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
 
-  auto status = SendRequest(get_endpoint_fn, "MDSService", "ListXAttr", request,
-                            response);
+  auto status =
+      SendRequest(get_mds_fn, "MDSService", "ListXAttr", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -816,8 +824,8 @@ Status MDSClient::Rename(Ino old_parent, const std::string& old_name,
                          Ino new_parent, const std::string& new_name) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
-  auto get_endpoint_fn = [this, new_parent]() -> EndPoint {
-    return GetEndpointByParent(new_parent);
+  auto get_mds_fn = [this, new_parent]() -> MDSMeta {
+    return GetMdsByParent(new_parent);
   };
 
   pb::mdsv2::RenameRequest request;
@@ -842,7 +850,7 @@ Status MDSClient::Rename(Ino old_parent, const std::string& old_name,
   request.set_new_name(new_name);
 
   auto status =
-      SendRequest(get_endpoint_fn, "MDSService", "Rename", request, response);
+      SendRequest(get_mds_fn, "MDSService", "Rename", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -882,15 +890,15 @@ static pb::mdsv2::Slice ToSlice(const Slice& slice) {
 Status MDSClient::NewSliceId(Ino ino, uint64_t* id) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
-  auto get_endpoint_fn = [this, ino]() -> EndPoint { return GetEndpoint(ino); };
+  auto get_mds_fn = [this, ino]() -> MDSMeta { return GetMds(ino); };
 
   pb::mdsv2::AllocSliceIdRequest request;
   pb::mdsv2::AllocSliceIdResponse response;
 
   request.set_alloc_num(1);
 
-  auto status = SendRequest(get_endpoint_fn, "MDSService", "AllocSliceId",
-                            request, response);
+  auto status =
+      SendRequest(get_mds_fn, "MDSService", "AllocSliceId", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -906,8 +914,8 @@ Status MDSClient::ReadSlice(Ino ino, uint64_t index,
   CHECK(slices != nullptr) << "slices is nullptr.";
 
   bool is_fallback = false;
-  auto get_endpoint_fn = [this, ino, &is_fallback]() -> EndPoint {
-    return GetEndpointWithFallback(ino, is_fallback);
+  auto get_mds_fn = [this, ino, &is_fallback]() -> MDSMeta {
+    return GetMdsWithFallback(ino, is_fallback);
   };
 
   pb::mdsv2::ReadSliceRequest request;
@@ -921,8 +929,8 @@ Status MDSClient::ReadSlice(Ino ino, uint64_t index,
   request.set_ino(ino);
   request.set_chunk_index(index);
 
-  auto status = SendRequest(get_endpoint_fn, "MDSService", "ReadSlice", request,
-                            response);
+  auto status =
+      SendRequest(get_mds_fn, "MDSService", "ReadSlice", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -938,7 +946,7 @@ Status MDSClient::WriteSlice(Ino ino, uint64_t index,
                              const std::vector<Slice>& slices) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
-  auto get_endpoint_fn = [this, ino]() -> EndPoint { return GetEndpoint(ino); };
+  auto get_mds_fn = [this, ino]() -> MDSMeta { return GetMds(ino); };
 
   pb::mdsv2::WriteSliceRequest request;
   pb::mdsv2::WriteSliceResponse response;
@@ -958,8 +966,8 @@ Status MDSClient::WriteSlice(Ino ino, uint64_t index,
     *request.add_slices() = ToSlice(slice);
   }
 
-  auto status = SendRequest(get_endpoint_fn, "MDSService", "WriteSlice",
-                            request, response);
+  auto status =
+      SendRequest(get_mds_fn, "MDSService", "WriteSlice", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -971,7 +979,7 @@ Status MDSClient::Fallocate(Ino ino, int32_t mode, uint64_t offset,
                             uint64_t length) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
-  auto get_endpoint_fn = [this, ino]() -> EndPoint { return GetEndpoint(ino); };
+  auto get_mds_fn = [this, ino]() -> MDSMeta { return GetMds(ino); };
 
   pb::mdsv2::FallocateRequest request;
   pb::mdsv2::FallocateResponse response;
@@ -982,8 +990,8 @@ Status MDSClient::Fallocate(Ino ino, int32_t mode, uint64_t offset,
   request.set_offset(offset);
   request.set_len(length);
 
-  auto status = SendRequest(get_endpoint_fn, "MDSService", "Fallocate", request,
-                            response);
+  auto status =
+      SendRequest(get_mds_fn, "MDSService", "Fallocate", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -1051,13 +1059,17 @@ bool MDSClient::ProcessNotServe() {
   return UpdateRouter();
 }
 
-bool MDSClient::ProcessNetError(EndPoint& endpoint) {
+bool MDSClient::ProcessNetError(MDSMeta& mds_meta) {
   LOG(INFO) << "[meta] process net error.";
 
-  auto mdses = mds_discovery_->GetMDSByState(mdsv2::MDSMeta::State::kNormal);
+  // set the current mds as abnormal
+  mds_discovery_->SetAbnormalMDS(mds_meta.ID());
+
+  // get a normal mds
+  auto mdses = mds_discovery_->GetNormalMDS();
   for (auto& mds : mdses) {
-    if (mds.Host() != TakeIp(endpoint) || mds.Port() != endpoint.port) {
-      endpoint = StrToEndpoint(mds.Host(), mds.Port());
+    if (mds.ID() != mds_meta.ID()) {
+      mds_meta = mds;
       return true;
     }
   }

@@ -19,8 +19,8 @@
 #include <memory>
 #include <vector>
 
-#include "common/status.h"
 #include "client/vfs/meta/v2/rpc.h"
+#include "common/status.h"
 #include "mdsv2/mds/mds_meta.h"
 
 namespace dingofs {
@@ -47,6 +47,9 @@ class MDSDiscovery {
   bool PickFirstMDS(mdsv2::MDSMeta& mds_meta);
   std::vector<mdsv2::MDSMeta> GetAllMDS();
   std::vector<mdsv2::MDSMeta> GetMDSByState(mdsv2::MDSMeta::State state);
+  std::vector<mdsv2::MDSMeta> GetNormalMDS();
+
+  void SetAbnormalMDS(int64_t mds_id);
 
  private:
   Status GetMDSList(std::vector<mdsv2::MDSMeta>& mdses);

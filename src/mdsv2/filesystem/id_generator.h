@@ -126,7 +126,7 @@ class StoreAutoIncrementIdGenerator : public IdGenerator {
 };
 
 IdGeneratorUPtr NewFsIdGenerator(CoordinatorClientSPtr coordinator_client, KVStorageSPtr kv_storage);
-IdGeneratorUPtr NewInodeIdGenerator(CoordinatorClientSPtr coordinator_client, KVStorageSPtr kv_storage);
+IdGeneratorUPtr NewInodeIdGenerator(uint32_t fs_id, CoordinatorClientSPtr coordinator_client, KVStorageSPtr kv_storage);
 IdGeneratorSPtr NewSliceIdGenerator(CoordinatorClientSPtr coordinator_client, KVStorageSPtr kv_storage);
 
 }  // namespace mdsv2

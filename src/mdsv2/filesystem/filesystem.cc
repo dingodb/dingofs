@@ -45,7 +45,6 @@
 #include "mdsv2/filesystem/dentry.h"
 #include "mdsv2/filesystem/file_session.h"
 #include "mdsv2/filesystem/fs_info.h"
-#include "mdsv2/filesystem/id_generator.h"
 #include "mdsv2/filesystem/inode.h"
 #include "mdsv2/filesystem/notify_buddy.h"
 #include "mdsv2/filesystem/store_operation.h"
@@ -139,18 +138,18 @@ bool FileSystem::IsParentHashPartition() const {
   return fs_info_->GetPartitionType() == pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION;
 }
 
-// odd number is dir inode, even number is file inode
+// odd number is dir inode
 Status FileSystem::GenDirIno(Ino& ino) {
-  bool ret = ino_id_generator_->GenID(1, ino);
-  ino = (ino << 1) + 1;
+  bool ret = ino_id_generator_->GenID(2, ino);
+  ino = (ino & 1) ? ino : (ino + 1);  // ensure odd number for dir inode
 
   return ret ? Status::OK() : Status(pb::error::EGEN_FSID, "generate inode id fail");
 }
 
-// odd number is dir inode, even number is file inode
+// even number is file inode
 Status FileSystem::GenFileIno(Ino& ino) {
-  bool ret = ino_id_generator_->GenID(1, ino);
-  ino = ino << 1;
+  bool ret = ino_id_generator_->GenID(2, ino);
+  ino = (ino & 1) ? (ino + 1) : ino;  // ensure even number for file inode
 
   return ret ? Status::OK() : Status(pb::error::EGEN_FSID, "generate inode id fail");
 }
@@ -724,6 +723,9 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& sess
     return status;
   }
 
+  // update parent memo
+  UpdateParentMemo(ctx.GetAncestors());
+
   FileSessionPtr file_session;
   status = file_session_manager_.Create(ino, client_id, file_session);
   if (!status.ok()) {
@@ -738,12 +740,22 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& sess
   }
 
   auto& result = operation.GetResult();
+  auto& attr = result.attr;
+  int64_t delta_bytes = result.delta_bytes;
 
-  version = result.attr.version();
+  version = attr.version();
   session_id = file_session->session_id();
 
+  // update quota
+  if (delta_bytes != 0) {
+    quota_manager_.UpdateFsUsage(delta_bytes, 0);
+    for (auto parent : attr.parents()) {
+      quota_manager_.UpdateDirUsage(parent, delta_bytes, 0);
+    }
+  }
+
   // update cache
-  inode->UpdateIf(std::move(result.attr));
+  inode->UpdateIf(std::move(attr));
 
   return Status::OK();
 }
@@ -1047,15 +1059,15 @@ Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent, const std::string
   auto& parent_attr = result.attr;
   auto& child_attr = result.child_attr;
 
+  // update quota
+  quota_manager_.UpdateDirUsage(new_parent, child_attr.length(), 1);
+
   // update cache
   inode->UpdateIf(std::move(child_attr));
   parent_inode->UpdateIf(parent_attr);
 
   inode_cache_.PutInode(ino, inode);
   partition->PutChild(dentry);
-
-  // update quota
-  quota_manager_.UpdateDirUsage(new_parent, 0, 1);
 
   entry_out.attr = inode->Copy();
   entry_out.parent_version = parent_attr.version();
@@ -1122,12 +1134,12 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name) {
   }
 
   // update quota
-  int64_t byte_delta = child_attr.type() != pb::mdsv2::SYM_LINK ? child_attr.length() : 0;
+  int64_t delta_bytes = child_attr.type() != pb::mdsv2::SYM_LINK ? child_attr.length() : 0;
   if (child_attr.nlink() == 0) {
-    quota_manager_.UpdateFsUsage(-byte_delta, -1);
+    quota_manager_.UpdateFsUsage(-delta_bytes, -1);
     chunk_cache_.Delete(child_attr.ino());
   }
-  quota_manager_.UpdateDirUsage(parent, -byte_delta, -1);
+  quota_manager_.UpdateDirUsage(parent, -delta_bytes, -1);
 
   // update cache
   partition->DeleteChild(name);
@@ -1655,8 +1667,8 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
     // update quota
     if (is_exist_new_dentry) {
       quota_manager_.UpdateFsUsage(0, -1);
-      int64_t byte_delta = old_attr.type() != pb::mdsv2::SYM_LINK ? old_attr.length() : 0;
-      quota_manager_.UpdateDirUsage(old_parent, byte_delta, -1);
+      int64_t delta_bytes = old_attr.type() != pb::mdsv2::SYM_LINK ? old_attr.length() : 0;
+      quota_manager_.UpdateDirUsage(old_parent, delta_bytes, -1);
     }
 
   } else {
@@ -1710,8 +1722,8 @@ Status FileSystem::WriteSlice(Context& ctx, Ino parent, Ino ino, uint64_t chunk_
   uint64_t time_ns = Helper::TimestampNs();
 
   // check quota
-  uint64_t byte_delta = CalculateDeltaLength(inode->Length(), slices);
-  if (!quota_manager_.CheckQuota(ino, static_cast<int64_t>(byte_delta), 0)) {
+  uint64_t delta_bytes = CalculateDeltaLength(inode->Length(), slices);
+  if (!quota_manager_.CheckQuota(ino, static_cast<int64_t>(delta_bytes), 0)) {
     return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
   }
 
@@ -1750,7 +1762,9 @@ Status FileSystem::WriteSlice(Context& ctx, Ino parent, Ino ino, uint64_t chunk_
 
   // update quota
   quota_manager_.UpdateFsUsage(length_delta, 0);
-  quota_manager_.UpdateDirUsage(parent, length_delta, 0);
+  for (const auto& parent : attr.parents()) {
+    quota_manager_.UpdateDirUsage(parent, length_delta, 0);
+  }
 
   return Status::OK();
 }
@@ -2241,14 +2255,17 @@ static void DistributeByMean(const std::vector<uint64_t>& mds_ids, pb::mdsv2::Ha
   }
 
   uint32_t pending_offset = 0;
-  for (const auto& mds_id : mds_ids) {
+  for (size_t i = 0; i < mds_ids.size(); ++i) {
     pb::mdsv2::HashPartition::BucketSet bucket_set;
     while (pending_offset < pending_bucket_ids.size()) {
       bucket_set.add_bucket_ids(pending_bucket_ids[pending_offset++]);
-      if (bucket_set.bucket_ids_size() >= mean_num) break;
+      if ((i + 1) < mds_ids.size() && bucket_set.bucket_ids_size() >= mean_num) break;
     }
 
-    hash.mutable_distributions()->insert({mds_id, std::move(bucket_set)});
+    // sort bucket id
+    std::sort(bucket_set.mutable_bucket_ids()->begin(), bucket_set.mutable_bucket_ids()->end());
+
+    hash.mutable_distributions()->insert({mds_ids[i], std::move(bucket_set)});
   }
 }
 
@@ -2335,6 +2352,11 @@ static void ReDistributeByDeleteMds(const std::vector<uint64_t>& quit_mds_ids, p
 
   for (uint32_t i = pending_offset; i < pending_bucket_ids.size(); ++i) {
     hash.mutable_distributions()->begin()->second.add_bucket_ids(pending_bucket_ids[i]);
+  }
+
+  // sort bucket id
+  for (auto& [_, bucket_set] : *hash.mutable_distributions()) {
+    std::sort(bucket_set.mutable_bucket_ids()->begin(), bucket_set.mutable_bucket_ids()->end());
   }
 }
 
@@ -2756,10 +2778,10 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, FsInfoType& fs_info) 
   }
 
   // create FileSystem instance
-  auto id_generator = NewInodeIdGenerator(coordinator_client_, kv_storage_);
-  CHECK(id_generator != nullptr) << "new id generator fail.";
+  auto ino_id_generator = NewInodeIdGenerator(fs_id, coordinator_client_, kv_storage_);
+  CHECK(ino_id_generator != nullptr) << "new id generator fail.";
 
-  auto fs = FileSystem::New(self_mds_meta_.ID(), FsInfo::NewUnique(fs_info), std::move(id_generator),
+  auto fs = FileSystem::New(self_mds_meta_.ID(), FsInfo::NewUnique(fs_info), std::move(ino_id_generator),
                             slice_id_generator_, kv_storage_, operation_processor_, mds_meta_map_, notify_buddy_);
   if (!fs->Init()) {
     cleanup(dentry_table_id, fs_key, "");
@@ -3078,15 +3100,16 @@ bool FileSystemSet::LoadFileSystems() {
   }
 
   for (const auto& kv : kvs) {
-    auto id_generator = NewInodeIdGenerator(coordinator_client_, kv_storage_);
-    CHECK(id_generator != nullptr) << "new id generator fail.";
-
     auto fs_info = MetaCodec::DecodeFsValue(kv.value);
+
     auto fs = GetFileSystem(fs_info.fs_id());
     if (fs == nullptr) {
       DINGO_LOG(INFO) << fmt::format("[fsset] add fs name({}) id({}).", fs_info.fs_name(), fs_info.fs_id());
 
-      fs = FileSystem::New(self_mds_meta_.ID(), FsInfo::NewUnique(fs_info), std::move(id_generator),
+      auto ino_id_generator = NewInodeIdGenerator(fs_info.fs_id(), coordinator_client_, kv_storage_);
+      CHECK(ino_id_generator != nullptr) << "new id generator fail.";
+
+      fs = FileSystem::New(self_mds_meta_.ID(), FsInfo::NewUnique(fs_info), std::move(ino_id_generator),
                            slice_id_generator_, kv_storage_, operation_processor_, mds_meta_map_, notify_buddy_);
       if (!fs->Init()) {
         DINGO_LOG(ERROR) << fmt::format("[fsset] init FileSystem({}) fail.", fs_info.fs_id());

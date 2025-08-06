@@ -38,7 +38,9 @@ namespace v2 {
 class MDSClient;
 using MDSClientPtr = std::shared_ptr<MDSClient>;
 
-using GetEndpointFn = std::function<EndPoint()>;
+using mdsv2::MDSMeta;
+
+using GetMdsFn = std::function<MDSMeta()>;
 
 class MDSClient {
  public:
@@ -117,11 +119,11 @@ class MDSClient {
   static Status DoGetFsInfo(RPCPtr rpc, pb::mdsv2::GetFsInfoRequest& request,
                             pb::mdsv2::FsInfo& fs_info);
 
-  EndPoint GetEndpoint(Ino ino);
-  EndPoint GetEndpointByParent(int64_t parent);
+  MDSMeta GetMds(Ino ino);
+  MDSMeta GetMdsByParent(int64_t parent);
 
-  EndPoint GetEndpointWithFallback(Ino ino, bool& is_fallback);
-  EndPoint GetEndpointByParentWithFallback(int64_t parent, bool& is_fallback);
+  MDSMeta GetMdsWithFallback(Ino ino, bool& is_fallback);
+  MDSMeta GetMdsByParentWithFallback(int64_t parent, bool& is_fallback);
 
   uint64_t GetInodeVersion(Ino ino);
 
@@ -129,14 +131,13 @@ class MDSClient {
 
   bool ProcessEpochChange();
   bool ProcessNotServe();
-  bool ProcessNetError(EndPoint& endpoint);
+  bool ProcessNetError(MDSMeta& mds_meta);
 
   template <typename Request>
   void SetAncestorInContext(Request& request, Ino ino);
 
   template <typename Request, typename Response>
-  Status SendRequest(GetEndpointFn get_endpoint_fn,
-                     const std::string& service_name,
+  Status SendRequest(GetMdsFn get_mds_fn, const std::string& service_name,
                      const std::string& api_name, Request& request,
                      Response& response);
 
@@ -168,15 +169,21 @@ void MDSClient::SetAncestorInContext(Request& request, Ino ino) {
 }
 
 template <typename Request, typename Response>
-Status MDSClient::SendRequest(GetEndpointFn get_endpoint_fn,
+Status MDSClient::SendRequest(GetMdsFn get_mds_fn,
                               const std::string& service_name,
                               const std::string& api_name, Request& request,
                               Response& response) {
+  MDSMeta mds_meta;
+  bool is_refresh_mds = true;
+
   request.mutable_info()->set_request_id(mdsv2::Helper::TimestampNs());
   request.mutable_context()->set_client_id(client_id_.ID());
   for (int retry = 0; retry < FLAGS_client_send_request_retry; ++retry) {
     request.mutable_context()->set_epoch(epoch_);
-    auto endpoint = get_endpoint_fn();
+
+    if (is_refresh_mds) mds_meta = get_mds_fn();
+    auto endpoint = StrToEndpoint(mds_meta.Host(), mds_meta.Port());
+
     auto status =
         rpc_->SendRequest(endpoint, service_name, api_name, request, response);
     if (!status.ok()) {
@@ -184,18 +191,21 @@ Status MDSClient::SendRequest(GetEndpointFn get_endpoint_fn,
         if (!ProcessEpochChange()) {
           return Status::Internal("process epoch change fail");
         }
+        is_refresh_mds = true;
         continue;
 
       } else if (status.Errno() == pb::error::ENOT_SERVE) {
         if (!ProcessNotServe()) {
           return Status::Internal("process not serve fail");
         }
+        is_refresh_mds = true;
         continue;
 
       } else if (status.IsNetError()) {
-        if (!ProcessNetError(endpoint)) {
+        if (!ProcessNetError(mds_meta)) {
           return Status::Internal("process net error fail");
         }
+        is_refresh_mds = false;
         continue;
       }
     }

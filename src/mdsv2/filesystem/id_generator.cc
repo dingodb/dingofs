@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <string>
 
 #include "bthread/mutex.h"
 #include "dingofs/error.pb.h"
@@ -37,18 +38,19 @@ DEFINE_validator(id_generator_type,
 
 const std::string kFsAutoIncrementIdName = "dingofs-fs-id";
 static const int64_t kFsTableId = 1000;
-static const int64_t kFsIdBatchSize = 8;
+static const int64_t kFsIdBatchSize = 2;
 static const int64_t kFsIdStartId = 1e4;  // 10 thousand
 
-const std::string kInoAutoIncrementIdName = "dingofs-inode-id";
-static const int64_t kInoTableId = 1001;
-static const int64_t kInoBatchSize = 32;
-static const int64_t kInoStartId = 2e10;  // 20 billion
-
+// all file systems share the same slice id generator
 const std::string kSliceAutoIncrementIdName = "dingofs-slice-id";
 static const int64_t kSliceTableId = 1002;
 static const int64_t kSliceIdBatchSize = 32;
-static const int64_t kSliceIdStartId = 3e10;  // 30 billion
+static const int64_t kSliceIdStartId = 1e10;  // 10 billion
+
+// each file system has its own inode id generator
+const std::string kInoAutoIncrementIdName = "dingofs-inode-id";
+static const int64_t kInoBatchSize = 64;
+static const int64_t kInoStartId = 2e10;  // 20 billion
 
 CoorAutoIncrementIdGenerator::CoorAutoIncrementIdGenerator(CoordinatorClientSPtr client, const std::string& name,
                                                            int64_t table_id, uint64_t start_id, uint32_t batch_size)
@@ -112,8 +114,8 @@ bool CoorAutoIncrementIdGenerator::GenID(uint32_t num, uint64_t min_slice_id, ui
 }
 
 std::string CoorAutoIncrementIdGenerator::Describe() const {
-  return fmt::format("id generator[coordinator] name({}) start_id({}) batch_size({}) range[{}, {}) next_id({})", name_,
-                     start_id_, batch_size_, bundle_, bundle_end_, next_id_);
+  return fmt::format("[coordinator] name({}) start_id({}) batch_size({}) range[{}, {}) next_id({})", name_, start_id_,
+                     batch_size_, bundle_, bundle_end_, next_id_);
 }
 
 Status CoorAutoIncrementIdGenerator::IsExistAutoIncrement() {
@@ -211,7 +213,7 @@ bool StoreAutoIncrementIdGenerator::GenID(uint32_t num, uint64_t min_slice_id, u
 }
 
 std::string StoreAutoIncrementIdGenerator::Describe() const {
-  return fmt::format("id generator[store] name({}) batch_size({}) last_alloc_id({}) next_id({})", name_, batch_size_,
+  return fmt::format("[store] name({}) batch_size({}) last_alloc_id({}) next_id({})", name_, batch_size_,
                      last_alloc_id_, next_id_);
 }
 
@@ -302,13 +304,14 @@ IdGeneratorUPtr NewFsIdGenerator(CoordinatorClientSPtr coordinator_client, KVSto
   }
 }
 
-IdGeneratorUPtr NewInodeIdGenerator(CoordinatorClientSPtr coordinator_client, KVStorageSPtr kv_storage) {
+IdGeneratorUPtr NewInodeIdGenerator(uint32_t fs_id, CoordinatorClientSPtr coordinator_client,
+                                    KVStorageSPtr kv_storage) {
+  std::string name = fmt::format("{}-{}", kInoAutoIncrementIdName, fs_id);
   if (FLAGS_id_generator_type == "coor") {
-    return CoorAutoIncrementIdGenerator::New(coordinator_client, kInoAutoIncrementIdName, kInoTableId, kInoStartId,
-                                             kInoBatchSize);
+    return CoorAutoIncrementIdGenerator::New(coordinator_client, name, fs_id, kInoStartId, kInoBatchSize);
 
   } else if (FLAGS_id_generator_type == "store") {
-    return StoreAutoIncrementIdGenerator::New(kv_storage, kInoAutoIncrementIdName, kInoStartId, kInoBatchSize);
+    return StoreAutoIncrementIdGenerator::New(kv_storage, name, kInoStartId, kInoBatchSize);
 
   } else {
     CHECK(false) << fmt::format("invalid id generator type({}), use coor|store.", FLAGS_id_generator_type);
