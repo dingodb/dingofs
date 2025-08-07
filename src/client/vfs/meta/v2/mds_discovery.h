@@ -50,12 +50,13 @@ class MDSDiscovery {
   std::vector<mdsv2::MDSMeta> GetNormalMDS();
 
   void SetAbnormalMDS(int64_t mds_id);
+  bool RefreshFullyMDSList();
 
  private:
   Status GetMDSList(std::vector<mdsv2::MDSMeta>& mdses);
-  bool UpdateMDSList();
 
   utils::RWLock lock_;
+  // mds_id -> MDSMeta
   std::map<int64_t, mdsv2::MDSMeta> mdses_;
 
   RPCPtr rpc_;

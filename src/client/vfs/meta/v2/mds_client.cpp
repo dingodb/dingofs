@@ -195,7 +195,7 @@ MDSMeta MDSClient::GetMds(Ino ino) {
   CHECK(mds_router_->GetMDS(ino, mds_meta))
       << fmt::format("get mds fail for ino({}).", ino);
 
-  LOG(INFO) << fmt::format("[meta] query target mds({}:{}:{}) for ino({}).",
+  LOG(INFO) << fmt::format("[meta.client] query mds({}|{}:{}) for ino({}).",
                            mds_meta.ID(), mds_meta.Host(), mds_meta.Port(),
                            ino);
 
@@ -207,7 +207,7 @@ MDSMeta MDSClient::GetMdsByParent(int64_t parent) {
   CHECK(mds_router_->GetMDSByParent(parent, mds_meta))
       << fmt::format("get mds fail for parent({}).", parent);
 
-  LOG(INFO) << fmt::format("[meta] query target mds({}:{}:{}) for parent({}).",
+  LOG(INFO) << fmt::format("[meta.client] query mds({}|{}:{}) for parent({}).",
                            mds_meta.ID(), mds_meta.Host(), mds_meta.Port(),
                            parent);
   return mds_meta;
@@ -222,7 +222,7 @@ MDSMeta MDSClient::GetMdsWithFallback(Ino ino, bool& is_fallback) {
     is_fallback = true;
   }
 
-  LOG(INFO) << fmt::format("[meta] query target mds({}:{}:{}) for ino({}).",
+  LOG(INFO) << fmt::format("[meta.client] query mds({}|{}:{}) for ino({}).",
                            mds_meta.ID(), mds_meta.Host(), mds_meta.Port(),
                            ino);
   return mds_meta;
@@ -238,7 +238,7 @@ MDSMeta MDSClient::GetMdsByParentWithFallback(int64_t parent,
     is_fallback = true;
   }
 
-  LOG(INFO) << fmt::format("[meta] query target mds({}:{}:{}) for parent({}).",
+  LOG(INFO) << fmt::format("[meta.client] query mds({}|{}:{}) for parent({}).",
                            mds_meta.ID(), mds_meta.Host(), mds_meta.Port(),
                            parent);
   return mds_meta;
@@ -286,8 +286,8 @@ Status MDSClient::Lookup(Ino parent, const std::string& name, Attr& out_attr) {
 
       } else {
         LOG(WARNING) << fmt::format(
-            "[meta.{}] lookup({}/{}) get last inode fail, error: {}.", fs_id_,
-            parent, name, status.ToString());
+            "[meta.client.{}] lookup({}/{}) get last inode fail, error: {}.",
+            fs_id_, parent, name, status.ToString());
       }
     }
   }
@@ -1030,7 +1030,7 @@ bool MDSClient::UpdateRouter() {
   pb::mdsv2::FsInfo new_fs_info;
   auto status = MDSClient::GetFsInfo(rpc_, fs_info_->GetName(), new_fs_info);
   if (!status.ok()) {
-    LOG(ERROR) << fmt::format("[meta] get fs info fail, {}.",
+    LOG(ERROR) << fmt::format("[meta.client] get fs info fail, {}.",
                               status.ToString());
     return false;
   }
@@ -1039,8 +1039,14 @@ bool MDSClient::UpdateRouter() {
 
   fs_info_->Update(new_fs_info);
 
+  if (!mds_discovery_->RefreshFullyMDSList()) {
+    LOG(ERROR) << "[meta.client] refresh mds discovery fail.";
+    return false;
+  }
+
   if (!mds_router_->UpdateRouter(new_fs_info.partition_policy())) {
-    LOG(ERROR) << "[meta] update mds router fail.";
+    LOG(ERROR) << "[meta.client] update mds router fail.";
+    return false;
   }
 
   return true;
@@ -1050,17 +1056,18 @@ bool MDSClient::UpdateRouter() {
 // 1. updatge fs info
 // 2. update mds router
 bool MDSClient::ProcessEpochChange() {
-  LOG(INFO) << "[meta] process epoch change.";
+  LOG(INFO) << "[meta.client] process epoch change.";
   return UpdateRouter();
 }
 
 bool MDSClient::ProcessNotServe() {
-  LOG(INFO) << "[meta] process not serve.";
+  LOG(INFO) << "[meta.client] process not serve.";
   return UpdateRouter();
 }
 
 bool MDSClient::ProcessNetError(MDSMeta& mds_meta) {
-  LOG(INFO) << "[meta] process net error.";
+  LOG(INFO) << fmt::format("[meta.client] process net error, mds({}).",
+                           mds_meta.ID());
 
   // set the current mds as abnormal
   mds_discovery_->SetAbnormalMDS(mds_meta.ID());

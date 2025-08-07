@@ -142,16 +142,16 @@ Status RPC::SendRequest(const EndPoint& endpoint,
     method = dingofs::pb::mdsv2::MDSService::descriptor()->FindMethodByName(
         api_name);
   } else {
-    LOG(FATAL) << "Unknown service name: " << service_name;
+    LOG(FATAL) << "[meta.rpc] unknown service name: " << service_name;
   }
 
   if (method == nullptr) {
-    LOG(FATAL) << "Unknown api name: " << api_name;
+    LOG(FATAL) << "[meta.rpc] unknown api name: " << api_name;
   }
 
   auto* channel = GetChannel(endpoint);
-  CHECK(channel != nullptr)
-      << fmt::format("[rpc][{}] channel is null.", EndPointToStr(endpoint));
+  CHECK(channel != nullptr) << fmt::format("[meta.rpc][{}] channel is null.",
+                                           EndPointToStr(endpoint));
 
   int retry_count = 0;
   do {
@@ -164,7 +164,7 @@ Status RPC::SendRequest(const EndPoint& endpoint,
     uint64_t elapsed_us = mdsv2::Helper::TimestampUs() - start_us;
     if (cntl.Failed()) {
       LOG(ERROR) << fmt::format(
-          "[rpc][{}][{}][{}us] fail, {} {} {} request({}).",
+          "[meta.rpc][{}][{}][{}us] fail, {} {} {} request({}).",
           EndPointToStr(endpoint), api_name, elapsed_us, cntl.log_id(),
           retry_count, cntl.ErrorText(), request.ShortDebugString());
 
@@ -180,7 +180,7 @@ Status RPC::SendRequest(const EndPoint& endpoint,
 
     if (response.error().errcode() == pb::error::OK) {
       LOG(INFO) << fmt::format(
-          "[rpc][{}][{}][{}us] success, request({}) response({}).",
+          "[meta.rpc][{}][{}][{}us] success, request({}) response({}).",
           EndPointToStr(endpoint), api_name, elapsed_us,
           request.ShortDebugString(), response.ShortDebugString());
       return Status();
@@ -188,7 +188,8 @@ Status RPC::SendRequest(const EndPoint& endpoint,
 
     if (response.error().errcode() != pb::error::ENOT_FOUND) {
       LOG(ERROR) << fmt::format(
-          "[rpc][{}][{}][{}us] fail, request({}) retry_count({}) error({} {}).",
+          "[meta.rpc][{}][{}][{}us] fail, request({}) retry_count({}) error({} "
+          "{}).",
           EndPointToStr(endpoint), api_name, elapsed_us,
           request.ShortDebugString(), retry_count,
           pb::error::Errno_Name(response.error().errcode()),

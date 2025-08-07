@@ -149,7 +149,7 @@ bool ParentMemo::Load(const Json::Value& value) {
   ino_map_.clear();
   const Json::Value& items = value["parent_memo"];
   if (!items.isArray()) {
-    LOG(ERROR) << "parent_memo is not an array.";
+    LOG(ERROR) << "[meta.parent_memo] value is not an array.";
     return false;
   }
 

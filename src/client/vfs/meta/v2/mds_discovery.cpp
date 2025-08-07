@@ -14,18 +14,17 @@
 
 #include "client/vfs/meta/v2/mds_discovery.h"
 
-#include <fmt/format.h>
-#include <glog/logging.h>
-
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/core.h"
+#include "fmt/format.h"
+#include "glog/logging.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 namespace v2 {
 
-bool MDSDiscovery::Init() { return UpdateMDSList(); }
+bool MDSDiscovery::Init() { return RefreshFullyMDSList(); }
 
 void MDSDiscovery::Destroy() {}
 
@@ -106,16 +105,17 @@ Status MDSDiscovery::GetMDSList(std::vector<mdsv2::MDSMeta>& mdses) {
 void MDSDiscovery::SetAbnormalMDS(int64_t mds_id) {
   utils::WriteLockGuard lk(lock_);
 
-  if (mdses_.find(mds_id) != mdses_.end()) {
-    mdses_[mds_id].SetState(mdsv2::MDSMeta::State::kAbnormal);
+  auto it = mdses_.find(mds_id);
+  if (it != mdses_.end()) {
+    it->second.SetState(mdsv2::MDSMeta::State::kAbnormal);
   }
 }
 
-bool MDSDiscovery::UpdateMDSList() {
+bool MDSDiscovery::RefreshFullyMDSList() {
   std::vector<mdsv2::MDSMeta> mdses;
   auto status = GetMDSList(mdses);
   if (!status.ok()) {
-    LOG(ERROR) << fmt::format("get mds list fail, error: {}.",
+    LOG(ERROR) << fmt::format("[meta.discovery] get mds list fail, error: {}.",
                               status.ToString());
     return false;
   }
@@ -123,8 +123,10 @@ bool MDSDiscovery::UpdateMDSList() {
   {
     utils::WriteLockGuard lk(lock_);
 
+    mdses_.clear();
     for (const auto& mds : mdses) {
-      LOG(INFO) << fmt::format("update mds: {}.", mds.ToString());
+      LOG(INFO) << fmt::format("[meta.discovery] update mds: {}.",
+                               mds.ToString());
       CHECK(mds.ID() != 0) << "mds id is 0.";
       mdses_[mds.ID()] = mds;
     }

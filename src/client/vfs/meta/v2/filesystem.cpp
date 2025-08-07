@@ -48,7 +48,7 @@ static std::string GetHostName() {
   char hostname[kMaxHostNameLength];
   int ret = gethostname(hostname, kMaxHostNameLength);
   if (ret < 0) {
-    LOG(ERROR) << "[meta] GetHostName fail, ret=" << ret;
+    LOG(ERROR) << "[meta.filesystem] GetHostName fail, ret=" << ret;
     return "";
   }
 
@@ -68,17 +68,17 @@ MDSV2FileSystem::MDSV2FileSystem(mdsv2::FsInfoPtr fs_info,
 MDSV2FileSystem::~MDSV2FileSystem() {}  // NOLINT
 
 Status MDSV2FileSystem::Init() {
-  LOG(INFO) << fmt::format("[meta.{}] fs_info: {}.", fs_info_->GetName(),
-                           fs_info_->ToString());
+  LOG(INFO) << fmt::format("[meta.filesystem.{}] fs_info: {}.",
+                           fs_info_->GetName(), fs_info_->ToString());
   // mount fs
   if (!MountFs()) {
-    LOG(ERROR) << fmt::format("[meta.{}] mount fs fail.", name_);
+    LOG(ERROR) << fmt::format("[meta.filesystem.{}] mount fs fail.", name_);
     return Status::MountFailed("mount fs fail");
   }
 
   // init crontab
   if (!InitCrontab()) {
-    LOG(ERROR) << fmt::format("[meta.{}] init crontab fail.", name_);
+    LOG(ERROR) << fmt::format("[meta.filesystem.{}] init crontab fail.", name_);
     return Status::Internal("init crontab fail");
   }
 
@@ -195,13 +195,13 @@ bool MDSV2FileSystem::MountFs() {
   mount_point.set_path(client_id_.Mountpoint());
   mount_point.set_cto(false);
 
-  LOG(INFO) << fmt::format("[meta.{}] mount point: {}.", name_,
+  LOG(INFO) << fmt::format("[meta.filesystem.{}] mount point: {}.", name_,
                            mount_point.ShortDebugString());
 
   auto status = mds_client_->MountFs(name_, mount_point);
   if (!status.ok() && status.Errno() != pb::error::EEXISTED) {
     LOG(ERROR) << fmt::format(
-        "[meta.{}] mount fs info fail, mountpoint({}), {}.", name_,
+        "[meta.filesystem.{}] mount fs info fail, mountpoint({}), {}.", name_,
         client_id_.Mountpoint(), status.ToString());
     return false;
   }
@@ -212,8 +212,9 @@ bool MDSV2FileSystem::MountFs() {
 bool MDSV2FileSystem::UnmountFs() {
   auto status = mds_client_->UmountFs(name_, client_id_.ID());
   if (!status.ok()) {
-    LOG(ERROR) << fmt::format("[meta.{}] mount fs info fail, mountpoint({}).",
-                              name_, client_id_.Mountpoint());
+    LOG(ERROR) << fmt::format(
+        "[meta.filesystem.{}] mount fs info fail, mountpoint({}).", name_,
+        client_id_.Mountpoint());
     return false;
   }
 
@@ -227,8 +228,8 @@ void MDSV2FileSystem::Heartbeat() {
 
   auto status = mds_client_->Heartbeat();
   if (!status.IsOK()) {
-    LOG(ERROR) << fmt::format("[meta.{}] heartbeat fail, error: {}.", name_,
-                              status.ToString());
+    LOG(ERROR) << fmt::format("[meta.filesystem.{}] heartbeat fail, error: {}.",
+                              name_, status.ToString());
   }
 
   is_running = false;
@@ -299,8 +300,8 @@ Status MDSV2FileSystem::MkNod(Ino parent, const std::string& name, uint32_t uid,
 }
 
 Status MDSV2FileSystem::Open(Ino ino, int flags, uint64_t fh) {
-  LOG(INFO) << fmt::format("[meta.{}] open ino({}) flags({}).", name_, ino,
-                           flags);
+  LOG(INFO) << fmt::format("[meta.filesystem.{}] open ino({}) flags({}).",
+                           name_, ino, flags);
 
   if ((flags & O_TRUNC) && !(flags & O_WRONLY || flags & O_RDWR)) {
     return Status::NoPermission("O_TRUNC without O_WRONLY or O_RDWR");
@@ -309,8 +310,9 @@ Status MDSV2FileSystem::Open(Ino ino, int flags, uint64_t fh) {
   std::string session_id;
   auto status = mds_client_->Open(ino, flags, session_id);
   if (!status.ok()) {
-    LOG(ERROR) << fmt::format("[meta.{}] open ino({}) fail, error: {}.", name_,
-                              ino, status.ToString());
+    LOG(ERROR) << fmt::format(
+        "[meta.filesystem.{}] open ino({}) fail, error: {}.", name_, ino,
+        status.ToString());
     return status;
   }
 
@@ -321,7 +323,7 @@ Status MDSV2FileSystem::Open(Ino ino, int flags, uint64_t fh) {
 }
 
 Status MDSV2FileSystem::Close(Ino ino, uint64_t fh) {
-  LOG(INFO) << fmt::format("[meta.{}] release ino({}).", name_, ino);
+  LOG(INFO) << fmt::format("[meta.filesystem.{}] release ino({}).", name_, ino);
 
   std::string session_id = file_session_map_.Get(fh);
   CHECK(!session_id.empty())
@@ -329,8 +331,9 @@ Status MDSV2FileSystem::Close(Ino ino, uint64_t fh) {
 
   auto status = mds_client_->Release(ino, session_id);
   if (!status.ok()) {
-    LOG(ERROR) << fmt::format("[meta.{}] release ino({}) fail, error: {}.",
-                              name_, ino, status.ToString());
+    LOG(ERROR) << fmt::format(
+        "[meta.filesystem.{}] release ino({}) fail, error: {}.", name_, ino,
+        status.ToString());
     return status;
   }
 
@@ -341,8 +344,9 @@ Status MDSV2FileSystem::ReadSlice(Ino ino, uint64_t index,
                                   std::vector<Slice>* slices) {
   auto status = mds_client_->ReadSlice(ino, index, slices);
   if (!status.ok()) {
-    LOG(ERROR) << fmt::format("[meta.{}] ReeadSlice ino({}) fail, error: {}.",
-                              name_, ino, status.ToString());
+    LOG(ERROR) << fmt::format(
+        "[meta.filesystem.{}] ReeadSlice ino({}) fail, error: {}.", name_, ino,
+        status.ToString());
     return status;
   }
 
@@ -352,8 +356,9 @@ Status MDSV2FileSystem::ReadSlice(Ino ino, uint64_t index,
 Status MDSV2FileSystem::NewSliceId(Ino ino, uint64_t* id) {
   auto status = mds_client_->NewSliceId(ino, id);
   if (!status.ok()) {
-    LOG(ERROR) << fmt::format("[meta.{}] newsliceid fail, error: {}.", name_,
-                              status.ToString());
+    LOG(ERROR) << fmt::format(
+        "[meta.filesystem.{}] newsliceid fail, error: {}.", name_,
+        status.ToString());
     return status;
   }
 
@@ -364,8 +369,9 @@ Status MDSV2FileSystem::WriteSlice(Ino ino, uint64_t index,
                                    const std::vector<Slice>& slices) {
   auto status = mds_client_->WriteSlice(ino, index, slices);
   if (!status.ok()) {
-    LOG(ERROR) << fmt::format("[meta.{}] writeslice ino({}) fail, error: {}.",
-                              name_, ino, status.ToString());
+    LOG(ERROR) << fmt::format(
+        "[meta.filesystem.{}] writeslice ino({}) fail, error: {}.", name_, ino,
+        status.ToString());
     return status;
   }
 
@@ -398,8 +404,9 @@ Status MDSV2FileSystem::OpenDir(Ino ino, uint64_t fh) {
   auto dir_iterator = DirIterator::New(mds_client_, ino);
   auto status = dir_iterator->Seek();
   if (!status.ok()) {
-    LOG(ERROR) << fmt::format("[meta.{}] opendir ino({}) fail, error: {}.",
-                              name_, ino, status.ToString());
+    LOG(ERROR) << fmt::format(
+        "[meta.filesystem.{}] opendir ino({}) fail, error: {}.", name_, ino,
+        status.ToString());
     return status;
   }
 
@@ -436,8 +443,8 @@ Status MDSV2FileSystem::Link(Ino ino, Ino new_parent,
   auto status = mds_client_->Link(ino, new_parent, new_name, *attr);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
-        "[meta.{}] link({}/{}) to ino({}) fail, error: {}.", name_, new_parent,
-        new_name, ino, status.ToString());
+        "[meta.filesystem.{}] link({}/{}) to ino({}) fail, error: {}.", name_,
+        new_parent, new_name, ino, status.ToString());
     return status;
   }
 
@@ -447,8 +454,9 @@ Status MDSV2FileSystem::Link(Ino ino, Ino new_parent,
 Status MDSV2FileSystem::Unlink(Ino parent, const std::string& name) {
   auto status = mds_client_->UnLink(parent, name);
   if (!status.ok()) {
-    LOG(ERROR) << fmt::format("[meta.{}] unlink({}/{}) fail, error: {}.", name_,
-                              parent, name, status.ToString());
+    LOG(ERROR) << fmt::format(
+        "[meta.filesystem.{}] unlink({}/{}) fail, error: {}.", name_, parent,
+        name, status.ToString());
     return status;
   }
 
@@ -461,8 +469,8 @@ Status MDSV2FileSystem::Symlink(Ino parent, const std::string& name,
   auto status = mds_client_->Symlink(parent, name, uid, gid, link, *out_attr);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
-        "[meta.{}] symlink({}/{}) fail, symlink({}) error: {}.", name_, parent,
-        name, link, status.ToString());
+        "[meta.filesystem.{}] symlink({}/{}) fail, symlink({}) error: {}.",
+        name_, parent, name, link, status.ToString());
     return status;
   }
 
@@ -472,8 +480,9 @@ Status MDSV2FileSystem::Symlink(Ino parent, const std::string& name,
 Status MDSV2FileSystem::ReadLink(Ino ino, std::string* link) {
   auto status = mds_client_->ReadLink(ino, *link);
   if (!status.ok()) {
-    LOG(ERROR) << fmt::format("[meta.{}] readlink {} fail, error: {}.", name_,
-                              ino, status.ToString());
+    LOG(ERROR) << fmt::format(
+        "[meta.filesystem.{}] readlink {} fail, error: {}.", name_, ino,
+        status.ToString());
     return status;
   }
 
@@ -571,8 +580,8 @@ MDSV2FileSystemUPtr MDSV2FileSystem::Build(const std::string& fs_name,
                                            const std::string& mds_addr,
                                            const std::string& mountpoint) {
   LOG(INFO) << fmt::format(
-      "[meta.{}] build filesystem mds_addr: {}, mountpoint: {}.", fs_name,
-      mds_addr, mountpoint);
+      "[meta.filesystem.{}] build filesystem mds_addr: {}, mountpoint: {}.",
+      fs_name, mds_addr, mountpoint);
 
   CHECK(!fs_name.empty()) << "fs_name is empty.";
   CHECK(!mds_addr.empty()) << "mds_addr is empty.";
@@ -580,29 +589,33 @@ MDSV2FileSystemUPtr MDSV2FileSystem::Build(const std::string& fs_name,
 
   std::string hostname = GetHostName();
   if (hostname.empty()) {
-    LOG(ERROR) << fmt::format("[meta.{}] get hostname fail.", fs_name);
+    LOG(ERROR) << fmt::format("[meta.filesystem.{}] get hostname fail.",
+                              fs_name);
     return nullptr;
   }
 
   ClientId client_id(hostname, 0, mountpoint);
-  LOG(INFO) << fmt::format("[meta.{}] client_id: {}", fs_name, client_id.ID());
+  LOG(INFO) << fmt::format("[meta.filesystem.{}] client_id: {}", fs_name,
+                           client_id.ID());
 
   auto rpc = RPC::New(mds_addr);
   if (!rpc->Init()) {
-    LOG(ERROR) << fmt::format("[meta.{}] RPC init fail.", fs_name);
+    LOG(ERROR) << fmt::format("[meta.filesystem.{}] RPC init fail.", fs_name);
     return nullptr;
   }
 
   auto mds_discovery = MDSDiscovery::New(rpc);
   if (!mds_discovery->Init()) {
-    LOG(ERROR) << fmt::format("[meta.{}] MDSDiscovery init fail.", fs_name);
+    LOG(ERROR) << fmt::format("[meta.filesystem.{}] MDSDiscovery init fail.",
+                              fs_name);
     return nullptr;
   }
 
   dingofs::pb::mdsv2::FsInfo pb_fs_info;
   auto status = MDSClient::GetFsInfo(rpc, fs_name, pb_fs_info);
   if (!status.ok()) {
-    LOG(ERROR) << fmt::format("[meta.{}] Get fs info fail.", fs_name);
+    LOG(ERROR) << fmt::format("[meta.filesystem.{}] Get fs info fail.",
+                              fs_name);
     return nullptr;
   }
 
@@ -621,14 +634,15 @@ MDSV2FileSystemUPtr MDSV2FileSystem::Build(const std::string& fs_name,
 
   } else {
     LOG(ERROR) << fmt::format(
-        "[meta.{}] not support partition policy type({}).", fs_name,
+        "[meta.filesystem.{}] not support partition policy type({}).", fs_name,
         dingofs::pb::mdsv2::PartitionType_Name(
             pb_fs_info.partition_policy().type()));
     return nullptr;
   }
 
   if (!mds_router->Init(pb_fs_info.partition_policy())) {
-    LOG(ERROR) << fmt::format("[meta.{}] MDSRouter init fail.", fs_name);
+    LOG(ERROR) << fmt::format("[meta.filesystem.{}] MDSRouter init fail.",
+                              fs_name);
     return nullptr;
   }
 
@@ -638,7 +652,8 @@ MDSV2FileSystemUPtr MDSV2FileSystem::Build(const std::string& fs_name,
   auto mds_client = MDSClient::New(client_id, fs_info, parent_memo,
                                    mds_discovery, mds_router, rpc);
   if (!mds_client->Init()) {
-    LOG(INFO) << fmt::format("[meta.{}] MDSClient init fail.", fs_name);
+    LOG(INFO) << fmt::format("[meta.filesystem.{}] MDSClient init fail.",
+                             fs_name);
     return nullptr;
   }
 

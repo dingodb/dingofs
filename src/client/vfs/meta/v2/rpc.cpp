@@ -92,7 +92,7 @@ RPC::ChannelPtr RPC::NewChannel(const EndPoint& endpoint) {  // NOLINT
   ChannelPtr channel = std::make_shared<brpc::Channel>();
   if (channel->Init(butil::ip2str(endpoint.ip).c_str(), endpoint.port,
                     nullptr) != 0) {
-    LOG(ERROR) << fmt::format("init channel fail, addr({}).",
+    LOG(ERROR) << fmt::format("[meta.rpc] init channel fail, addr({}).",
                               EndPointToStr(endpoint));
 
     return nullptr;

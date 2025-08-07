@@ -89,7 +89,7 @@ bool DirIterator::Dump(Json::Value& value) {
 
 bool DirIterator::Load(const Json::Value& value) {
   if (!value.isObject()) {
-    LOG(ERROR) << "value is not an object.";
+    LOG(ERROR) << "[meta.dir_iterator] value is not an object.";
     return false;
   }
 
@@ -100,7 +100,7 @@ bool DirIterator::Load(const Json::Value& value) {
 
   const Json::Value& entries = value["entries"];
   if (!entries.isArray()) {
-    LOG(ERROR) << "entries is not an array.";
+    LOG(ERROR) << "[meta.dir_iterator] entries is not an array.";
     return false;
   }
 
@@ -163,7 +163,7 @@ bool DirIteratorManager::Load(MDSClientPtr mds_client,
   dir_iterator_map_.clear();
   const Json::Value& items = value["dir_iterators"];
   if (!items.isArray()) {
-    LOG(ERROR) << "dir_iterators is not an array.";
+    LOG(ERROR) << "[meta.dir_iterator] value is not an array.";
     return false;
   }
 
@@ -171,7 +171,8 @@ bool DirIteratorManager::Load(MDSClientPtr mds_client,
     Ino ino = item["ino"].asUInt64();
     auto dir_iterator = DirIterator::New(mds_client, ino);
     if (!dir_iterator->Load(item)) {
-      LOG(ERROR) << fmt::format("load dir({}) iterator fail.", ino);
+      LOG(ERROR) << fmt::format(
+          "[meta.dir_iterator] load dir({}) iterator fail.", ino);
       return false;
     }
 

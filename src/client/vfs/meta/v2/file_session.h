@@ -77,7 +77,7 @@ class FileSessionMap {
     file_session_map_.clear();
     const Json::Value& items = value["file_sessions"];
     if (!items.isArray()) {
-      LOG(ERROR) << "file_sessions is not an array.";
+      LOG(ERROR) << "[meta.filesession] value is not an array.";
       return false;
     }
 
