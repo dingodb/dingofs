@@ -179,7 +179,7 @@ class ChunkWriter : public std::enable_shared_from_this<ChunkWriter> {
   Status error_status_;
 };
 
-using ChunkWriterUPtr = std::shared_ptr<ChunkWriter>;
+using ChunkWriterUPtr = std::unique_ptr<ChunkWriter>;
 using ChunkWriterSPtr = std::shared_ptr<ChunkWriter>;
 
 }  // namespace vfs

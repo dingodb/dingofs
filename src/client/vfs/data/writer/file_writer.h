@@ -65,7 +65,7 @@ class FileWriter {
       inflight_flush_tasks_;
 };
 
-using FileWriterUPtr = std::shared_ptr<FileWriter>;
+using FileWriterUPtr = std::unique_ptr<FileWriter>;
 
 }  // namespace vfs
 }  // namespace client
