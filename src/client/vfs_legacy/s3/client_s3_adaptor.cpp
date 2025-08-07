@@ -25,6 +25,8 @@
 #include <brpc/channel.h>
 #include <brpc/controller.h>
 
+#include <cmath>
+#include <cstddef>
 #include <utility>
 
 #include "blockaccess/block_accesser.h"
@@ -44,6 +46,8 @@ using datastream::DataStream;
 using filesystem::FileSystem;
 using stub::rpcclient::MdsClient;
 using utils::Thread;
+using WriteLockGuard = dingofs::utils::WriteLockGuard;
+using ReadLockGuard = dingofs::utils::ReadLockGuard;
 
 using pb::mds::FSStatusCode;
 using pb::metaserver::S3ChunkInfo;
@@ -94,12 +98,12 @@ S3ClientAdaptorImpl::Init(const S3ClientAdaptorOption& option,
 
   if (HasDiskCache()) {
     // init rpc send exec-queue
-    downloadTaskQueues_.resize(prefetchExecQueueNum_);
-    for (auto& q : downloadTaskQueues_) {
+    prefetchTaskQueues_.resize(prefetchExecQueueNum_);
+    for (auto& q : prefetchTaskQueues_) {
       int rc = bthread::execution_queue_start(
-          &q, nullptr, &S3ClientAdaptorImpl::ExecAsyncDownloadTask, this);
+          &q, nullptr, &S3ClientAdaptorImpl::HandleAsyncPrefetchTask, this);
       if (rc != 0) {
-        LOG(ERROR) << "Init AsyncRpcQueues failed";
+        LOG(ERROR) << "Init prefetch task queues failed";
         return DINGOFS_ERROR::INTERNAL;
       }
     }
@@ -303,7 +307,7 @@ int S3ClientAdaptorImpl::Stop() {
   }
 
   if (HasDiskCache()) {
-    for (auto& q : downloadTaskQueues_) {
+    for (auto& q : prefetchTaskQueues_) {
       bthread::execution_queue_stop(q);
       bthread::execution_queue_join(q);
     }
@@ -311,22 +315,6 @@ int S3ClientAdaptorImpl::Stop() {
   }
 
   block_cache_->Shutdown();
-  return 0;
-}
-
-int S3ClientAdaptorImpl::ExecAsyncDownloadTask(
-    void* meta,
-    bthread::TaskIterator<AsyncDownloadTask>& iter) {  // NOLINT
-  (void)meta;
-  if (iter.is_queue_stopped()) {
-    return 0;
-  }
-
-  for (; iter; ++iter) {
-    auto& task = *iter;
-    task();
-  }
-
   return 0;
 }
 
@@ -360,6 +348,77 @@ int S3ClientAdaptorImpl::FlushChunkClosure(
   context->cb(context);
   VLOG(9) << "FlushChunkCacheClosure end: inodeId=" << context->inode
           << ", ret:" << ret;
+  return 0;
+}
+
+bool S3ClientAdaptorImpl::IsBusy(const BlockKey& key) {
+  ReadLockGuard lk(rwlock_);
+  return busy_.count(key.Filename()) != 0;
+}
+
+void S3ClientAdaptorImpl::SetBusy(const BlockKey& key) {
+  WriteLockGuard lk(rwlock_);
+  busy_.insert(key.Filename());
+}
+
+void S3ClientAdaptorImpl::SetIdle(const BlockKey& key) {
+  WriteLockGuard lk(rwlock_);
+  busy_.erase(key.Filename());
+}
+
+bool S3ClientAdaptorImpl::FilterOut(const PrefetchTask& task) {
+  return IsBusy(task.key) || block_cache_->IsCached(task.key);
+}
+
+void S3ClientAdaptorImpl::SubmitPrefetchTask(const BlockKey& key,
+                                             size_t length) {
+  static thread_local unsigned int seed = time(nullptr);
+
+  int idx = rand_r(&seed) % prefetchTaskQueues_.size();
+  CHECK_EQ(0, bthread::execution_queue_execute(prefetchTaskQueues_[idx],
+                                               PrefetchTask(key, length)));
+}
+
+void S3ClientAdaptorImpl::DoAsyncPrefetch(const PrefetchTask& task) {
+  cache::BlockKey key = task.key;
+  std::string name = key.StoreKey();
+  size_t read_len = task.length;
+
+  LOG(INFO) << "try to prefetch s3 obj inodeId: " << key.ino
+            << " block: " << name << ", read len: " << read_len;
+
+  block_cache_->AsyncPrefetch(
+      cache::NewContext(), key, read_len, [this, key](Status s) {
+        if (!s.ok()) {
+          LOG(WARNING) << "Prefetch block (key=" << key.Filename()
+                       << ") failed: " << s.ToString();
+        }
+        this->SetIdle(key);
+      });
+}
+
+int S3ClientAdaptorImpl::HandleAsyncPrefetchTask(
+    void* meta,
+    bthread::TaskIterator<PrefetchTask>& iter) {  // NOLINT
+
+  auto* self = static_cast<S3ClientAdaptorImpl*>(meta);
+  if (iter.is_queue_stopped()) {
+    return 0;
+  }
+
+  for (; iter; ++iter) {
+    auto& task = *iter;
+    // Skip if the key is already being processed or exists in cache
+    if (self->FilterOut(task)) {
+      VLOG(12) << "Skip block, key: " << task.key.Filename()
+               << ", length: " << task.length;
+      continue;
+    }
+
+    self->SetBusy(task.key);
+    self->DoAsyncPrefetch(task);
+  }
+
   return 0;
 }
 

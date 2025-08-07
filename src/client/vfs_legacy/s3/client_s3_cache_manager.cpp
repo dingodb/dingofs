@@ -764,18 +764,7 @@ void FileCacheManager::PrefetchForBlock(const S3ReadRequest& req,
 void FileCacheManager::PrefetchS3Objs(
     const std::vector<std::pair<cache::BlockKey, uint64_t>>& prefetch_objs) {
   for (const auto& obj : prefetch_objs) {
-    cache::BlockKey key = obj.first;
-    std::string name = key.StoreKey();
-    uint64_t read_len = obj.second;
-    VLOG(3) << "try to prefetch s3 obj inodeId=" << key.ino
-            << " block: " << name << ", read len: " << read_len;
-    s3ClientAdaptor_->GetBlockCache()->AsyncPrefetch(
-        cache::NewContext(), key, read_len, [key](Status status) {
-          if (!status.ok() && !status.IsExist()) {
-            LOG(WARNING) << "Prefetch block (key=" << key.Filename()
-                         << ") failed: " << status.ToString();
-          }
-        });
+    s3ClientAdaptor_->SubmitPrefetchTask(obj.first, obj.second);
   }
 }
 
