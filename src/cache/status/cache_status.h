@@ -59,7 +59,7 @@ class CacheStatus {
   };
 
   struct Property {
-    // std::string cache_store{"none"};
+    std::string cache_store{"none"};
     bool enable_stage{false};
     bool enable_cache{false};
   };

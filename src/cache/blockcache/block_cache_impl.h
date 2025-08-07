@@ -77,12 +77,11 @@ class BlockCacheImpl final : public BlockCache {
 
   BlockCachePtr GetSelfPtr() { return this; }
 
-  Status StorageUpload(ContextSPtr ctx, const BlockKey& key,
-                       const Block& block);
-  Status StorageDownload(ContextSPtr ctx, const BlockKey& key, off_t offset,
-                         size_t length, IOBuffer* buffer);
+  Status StoragePut(ContextSPtr ctx, const BlockKey& key, const Block& block);
+  Status StorageRange(ContextSPtr ctx, const BlockKey& key, off_t offset,
+                      size_t length, IOBuffer* buffer);
 
-  void SetStatusPage() const;
+  void DisplayStatus() const;
 
   std::atomic<bool> running_;
   BlockCacheOption option_;

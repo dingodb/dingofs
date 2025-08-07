@@ -71,7 +71,7 @@ Status DiskCacheGroup::Start(UploadFunc uploader) {
   chash_->Final();
   watcher_->Start();
 
-  SetStatusPage();
+  DisplayStatus();
 
   running_ = true;
 
@@ -200,14 +200,14 @@ DiskCacheSPtr DiskCacheGroup::GetStore(const std::string& store_id) const {
   return iter->second;
 }
 
-void DiskCacheGroup::SetStatusPage() const {
+void DiskCacheGroup::DisplayStatus() const {
   CacheStatus::Update([this](CacheStatus::Root& root) {
     auto& disks = root.local_cache.disks;
     for (int i = 0; i < options_.size(); i++) {
       disks[i] = CacheStatus::Disk{
           .dir = options_[i].cache_dir,
           .capacity = options_[i].cache_size_mb,
-          .health = "normal",
+          .health = "unknown",
       };
     }
   });

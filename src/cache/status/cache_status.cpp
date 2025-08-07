@@ -87,6 +87,7 @@ nlohmann::json CacheStatus::ToJSON(Disk disk) {
 
 nlohmann::json CacheStatus::ToJSON(Property property) {
   nlohmann::json msg;
+  msg["cache_store"] = property.cache_store;
   msg["enable_stage"] = property.enable_stage;
   msg["enable_cache"] = property.enable_cache;
   return msg;

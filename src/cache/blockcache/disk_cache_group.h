@@ -60,7 +60,7 @@ class DiskCacheGroup final : public CacheStore {
   DiskCacheSPtr GetStore(const BlockKey& key) const;
   DiskCacheSPtr GetStore(const std::string& store_id) const;
 
-  void SetStatusPage() const;
+  void DisplayStatus() const;
 
   std::atomic<bool> running_;
   const std::vector<DiskCacheOption> options_;

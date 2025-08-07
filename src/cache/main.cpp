@@ -20,6 +20,35 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "cache/server.h"
+#include <gflags/gflags.h>
 
-int main(int argc, char** argv) { return dingofs::cache::Run(argc, argv); }
+#include <cstring>
+#include <iostream>
+
+#include "cache/help.h"
+#include "cache/server.h"
+#include "cache/version.h"
+
+static int parse_option(int argc, char** argv) {
+  for (int i = 1; i < argc; i++) {
+    if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--version") == 0) {
+      std::cout << dingofs::cache::Version() << "\n";
+      return 1;
+    } else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
+      std::cout << dingofs::cache::Usage() << "\n";
+      return 1;
+    }
+  }
+
+  gflags::ParseCommandLineNonHelpFlags(&argc, &argv, false);
+  return 0;
+}
+
+int main(int argc, char** argv) {
+  int rc = parse_option(argc, argv);
+  if (rc != 0) {
+    return rc;
+  }
+
+  return dingofs::cache::Run();
+}

@@ -78,8 +78,8 @@ class DiskCacheManager {
   std::string GetCachePath(const CacheKey& key) const;
 
   // For cache_blocks_ and staging_blocks_:
-  // (1) cache_blocks_: Only store cached block key
-  // (2) staging_blocks_: Store stage block key which will not deleted by anyone
+  // (1) cache_blocks_: only store cached block key
+  // (2) staging_blocks_: store stage block key which will not deleted by anyone
   // util it uploaded to storage. It will causes io error if we delete the stage
   // block which not uploaded for we can't get block both local disk and remote
   // storage.

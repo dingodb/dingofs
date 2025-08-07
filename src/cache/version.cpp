@@ -33,8 +33,8 @@ namespace cache {
 
 std::string Version() {
   std::ostringstream os;
-  os << GIT_TAG_NAME << ", build " << GIT_LAST_COMMIT_ID << " ["
-     << Helper::ToLowerCase(DINGOFS_BUILD_TYPE) << "]";
+  os << "dingo-cache " << GIT_TAG_NAME << ", build " << GIT_LAST_COMMIT_ID
+     << " +" << Helper::ToLowerCase(DINGOFS_BUILD_TYPE);
   return os.str();
 }
 

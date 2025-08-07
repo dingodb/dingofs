@@ -24,8 +24,9 @@ add_subdirectory(status)
 
 
 file(GLOB CACHE_LIB_SRCS
-    "server.cpp"
+    "help.cpp"
     "version.cpp"
+    "server.cpp"
 )
 add_library(cache_lib ${CACHE_LIB_SRCS})
 target_link_libraries(cache_lib

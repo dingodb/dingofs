@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
+ * Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,19 +16,21 @@
 
 /*
  * Project: DingoFS
- * Created Date: 2025-06-08
+ * Created Date: 2025-08-07
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_SERVER_H_
-#define DINGOFS_SRC_CACHE_SERVER_H_
+#ifndef DINGOFS_SRC_CACHE_UTILS_USAGE_H_
+#define DINGOFS_SRC_CACHE_UTILS_USAGE_H_
+
+#include <string>
 
 namespace dingofs {
 namespace cache {
 
-int Run();
+std::string Usage();
 
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_SERVER_H_
+#endif  // DINGOFS_SRC_CACHE_UTILS_USAGE_H_

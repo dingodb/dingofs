@@ -85,7 +85,7 @@ class DiskCacheLayout {
     return Helper::PathJoin({parent, child});
   }
 
-  const std::string cache_dir_;
+  const std::string cache_dir_;  // include uuid
 };
 
 using DiskCacheLayoutSPtr = std::shared_ptr<DiskCacheLayout>;

@@ -21,11 +21,11 @@
  */
 
 #include <gflags/gflags.h>
+#include <gflags/gflags_declare.h>
 
 #include "cache/cachegroup/cache_group_node_server.h"
 #include "cache/utils/logging.h"
 #include "cache/utils/offload_thread_pool.h"
-#include "cache/version.h"
 
 namespace brpc {
 DECLARE_bool(graceful_quit_on_sigterm);
@@ -40,14 +40,8 @@ static void InitBrpcFlags() {
   brpc::FLAGS_max_connection_pool_size = 256;
 }
 
-static void InitGFlags(int argc, char** argv) {
-  gflags::SetVersionString(Version());
-  google::ParseCommandLineFlags(&argc, &argv, true);
-}
-
-static void GlobalInitOrDie(int argc, char** argv) {
-  InitGFlags(argc, argv);
-  InitLogging(argv[0]);
+static void GlobalInitOrDie() {
+  InitLogging("dingo-cache");
   InitBrpcFlags();
   OffloadThreadPool::GetInstance().Start();
 }
@@ -64,8 +58,8 @@ static Status StartServer() {
   return Status::OK();
 }
 
-int Run(int argc, char** argv) {
-  GlobalInitOrDie(argc, argv);
+int Run() {
+  GlobalInitOrDie();
   return StartServer().ok() ? 0 : -1;
 }
 

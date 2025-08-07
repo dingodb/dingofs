@@ -98,28 +98,28 @@ namespace cache {
                << ", status = " << status.ToString();                       \
   } while (0);
 
-#define GENERIC_LOG_STAGE_ERROR()                                          \
+#define GENERIC_LOG_STAGE_ERROR()                                         \
+  do {                                                                    \
+    LOG(ERROR) << ctx->StrTraceId()                                       \
+               << " Stage block to disk failed: key = " << key.Filename() \
+               << ", length = " << block.size                             \
+               << ", status = " << status.ToString();                     \
+  } while (0);
+
+#define GENERIC_LOG_LOAD_ERROR()                                           \
   do {                                                                     \
-    LOG(ERROR) << "[" << ctx->TraceId()                                    \
-               << "] Stage block to disk failed: key = " << key.Filename() \
-               << ", length = " << block.size                              \
+    LOG(ERROR) << ctx->StrTraceId()                                        \
+               << " Load block from disk failed: key = " << key.Filename() \
+               << ", offset = " << offset << ", length = " << length       \
                << ", status = " << status.ToString();                      \
   } while (0);
 
-#define GENERIC_LOG_LOAD_ERROR()                                            \
-  do {                                                                      \
-    LOG(ERROR) << "[" << ctx->TraceId()                                     \
-               << "] Load block from disk failed: key = " << key.Filename() \
-               << ", offset = " << offset << ", length = " << length        \
-               << ", status = " << status.ToString();                       \
-  } while (0);
-
-#define GENERIC_LOG_UPLOAD_ERROR()                                             \
-  do {                                                                         \
-    LOG(ERROR) << "[" << ctx->TraceId()                                        \
-               << "] Upload block to storage failed: key = " << key.Filename() \
-               << ", size = " << block.size                                    \
-               << ", status = " << status.ToString();                          \
+#define GENERIC_LOG_UPLOAD_ERROR()                                            \
+  do {                                                                        \
+    LOG(ERROR) << ctx->StrTraceId()                                           \
+               << " Upload block to storage failed: key = " << key.Filename() \
+               << ", size = " << block.size                                   \
+               << ", status = " << status.ToString();                         \
   } while (0);
 
 #define GENERIC_LOG_DOWNLOAD_ERROR()                             \

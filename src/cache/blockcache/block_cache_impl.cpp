@@ -99,7 +99,7 @@ Status BlockCacheImpl::Start() {
     return status;
   }
 
-  SetStatusPage();
+  DisplayStatus();
 
   running_ = true;
 
@@ -138,7 +138,7 @@ Status BlockCacheImpl::Put(ContextSPtr ctx, const BlockKey& key,
 
   if (!option.writeback) {
     NEXT_STEP(kS3Put);
-    status = StorageUpload(ctx, key, block);
+    status = StoragePut(ctx, key, block);
     return status;
   }
 
@@ -160,7 +160,7 @@ Status BlockCacheImpl::Put(ContextSPtr ctx, const BlockKey& key,
 
   // Stage block failed, try to upload it
   NEXT_STEP(kS3Put);
-  status = StorageUpload(ctx, key, block);
+  status = StoragePut(ctx, key, block);
   return status;
 }
 
@@ -187,7 +187,7 @@ Status BlockCacheImpl::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
   }
 
   NEXT_STEP(kS3Range);
-  status = StorageDownload(ctx, key, offset, length, buffer);
+  status = StorageRange(ctx, key, offset, length, buffer);
   return status;
 }
 
@@ -231,7 +231,7 @@ Status BlockCacheImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
 
   NEXT_STEP(kS3Range);
   IOBuffer buffer;
-  status = StorageDownload(ctx, key, 0, length, &buffer);
+  status = StorageRange(ctx, key, 0, length, &buffer);
   if (!status.ok()) {
     return status;
   }
@@ -319,8 +319,8 @@ void BlockCacheImpl::AsyncPrefetch(ContextSPtr ctx, const BlockKey& key,
   }
 }
 
-Status BlockCacheImpl::StorageUpload(ContextSPtr ctx, const BlockKey& key,
-                                     const Block& block) {
+Status BlockCacheImpl::StoragePut(ContextSPtr ctx, const BlockKey& key,
+                                  const Block& block) {
   // TODO: timer: get storage
   StorageSPtr storage;
   auto status = storage_pool_->GetStorage(key.fs_id, storage);
@@ -338,9 +338,9 @@ Status BlockCacheImpl::StorageUpload(ContextSPtr ctx, const BlockKey& key,
   return status;
 }
 
-Status BlockCacheImpl::StorageDownload(ContextSPtr ctx, const BlockKey& key,
-                                       off_t offset, size_t length,
-                                       IOBuffer* buffer) {
+Status BlockCacheImpl::StorageRange(ContextSPtr ctx, const BlockKey& key,
+                                    off_t offset, size_t length,
+                                    IOBuffer* buffer) {
   StorageSPtr storage;
   auto status = storage_pool_->GetStorage(key.fs_id, storage);
   if (!status.ok()) {
@@ -374,10 +374,12 @@ bool BlockCacheImpl::IsCached(const BlockKey& key) const {
   return store_->IsCached(key);
 }
 
-void BlockCacheImpl::SetStatusPage() const {
+void BlockCacheImpl::DisplayStatus() const {
   CacheStatus::Update([this](CacheStatus::Root& root) {
-    root.local_cache.property.enable_stage = option_.enable_stage;
-    root.local_cache.property.enable_cache = option_.enable_cache;
+    auto& property = root.local_cache.property;
+    property.cache_store = option_.cache_store;
+    property.enable_stage = option_.enable_stage;
+    property.enable_cache = option_.enable_cache;
   });
 }
 
