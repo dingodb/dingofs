@@ -77,7 +77,7 @@ static bool IsInvalidName(const std::string& name) {
 FileSystem::FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr ino_id_generator,
                        IdGeneratorSPtr slice_id_generator, KVStorageSPtr kv_storage,
                        OperationProcessorSPtr operation_processor, MDSMetaMapSPtr mds_meta_map,
-                       notify::NotifyBuddySPtr notify_buddy)
+                       WorkerSetSPtr quota_worker_set, notify::NotifyBuddySPtr notify_buddy)
     : self_mds_id_(self_mds_id),
       fs_info_(std::move(fs_info)),
       fs_id_(fs_info_->GetFsId()),
@@ -90,7 +90,7 @@ FileSystem::FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr 
       mds_meta_map_(mds_meta_map),
       parent_memo_(ParentMemo::New(fs_id_)),
       chunk_cache_(fs_id_),
-      quota_manager_(fs_id_, parent_memo_, operation_processor),
+      quota_manager_(quota::QuotaManager::New(fs_id_, parent_memo_, operation_processor, quota_worker_set)),
       notify_buddy_(notify_buddy),
       file_session_manager_(fs_id_, operation_processor) {
   can_serve_ = CanServe(self_mds_id);
@@ -98,7 +98,7 @@ FileSystem::FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr 
 
 FileSystem::~FileSystem() {
   // destroy
-  quota_manager_.Destroy();
+  quota_manager_->Destroy();
 
   renamer_.Destroy();
 }
@@ -111,7 +111,7 @@ bool FileSystem::Init() {
     return false;
   }
 
-  if (!quota_manager_.Init()) {
+  if (!quota_manager_->Init()) {
     DINGO_LOG(ERROR) << fmt::format("[fs.{}] init quota manager fail.", fs_id_);
     return false;
   }
@@ -528,7 +528,7 @@ Status FileSystem::CreateQuota() {
   quota_entry.set_max_bytes(INT64_MAX);
   quota_entry.set_used_inodes(1);
 
-  auto status = quota_manager_.SetFsQuota(trace, quota_entry);
+  auto status = quota_manager_->SetFsQuota(trace, quota_entry);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("[fs.{}] create quota fail, status({}).", fs_id_, status.error_str());
     return Status(pb::error::EBACKEND_STORE, fmt::format("create quota fail, {}", status.error_str()));
@@ -638,7 +638,7 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
   UpdateParentMemo(ctx.GetAncestors());
 
   // check quota
-  if (!quota_manager_.CheckQuota(param.parent, 0, 1)) {
+  if (!quota_manager_->CheckQuota(param.parent, 0, 1)) {
     return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
   }
 
@@ -685,8 +685,8 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
   parent_inode->UpdateIf(parent_attr);
 
   // update quota
-  quota_manager_.UpdateFsUsage(0, 1);
-  quota_manager_.UpdateDirUsage(param.parent, 0, 1);
+  quota_manager_->UpdateFsUsage(0, 1);
+  quota_manager_->AysncUpdateDirUsage(param.parent, 0, 1);
 
   parent_memo_->Remeber(attr.ino(), param.parent);
 
@@ -748,9 +748,9 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& sess
 
   // update quota
   if (delta_bytes != 0) {
-    quota_manager_.UpdateFsUsage(delta_bytes, 0);
+    quota_manager_->UpdateFsUsage(delta_bytes, 0);
     for (auto parent : attr.parents()) {
-      quota_manager_.UpdateDirUsage(parent, delta_bytes, 0);
+      quota_manager_->AysncUpdateDirUsage(parent, delta_bytes, 0);
     }
   }
 
@@ -826,7 +826,7 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
   UpdateParentMemo(ctx.GetAncestors());
 
   // check quota
-  if (!quota_manager_.CheckQuota(param.parent, 0, 1)) {
+  if (!quota_manager_->CheckQuota(param.parent, 0, 1)) {
     return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
   }
 
@@ -875,8 +875,8 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
   partition_cache_.Put(ino, Partition::New(inode));
 
   // update quota
-  quota_manager_.UpdateFsUsage(0, 1);
-  quota_manager_.UpdateDirUsage(param.parent, 0, 1);
+  quota_manager_->UpdateFsUsage(0, 1);
+  quota_manager_->AysncUpdateDirUsage(param.parent, 0, 1);
 
   parent_memo_->Remeber(attr.ino(), param.parent);
 
@@ -951,8 +951,8 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name) {
   partition_cache_.Delete(dentry.INo());
 
   // update quota
-  quota_manager_.UpdateFsUsage(0, -1);
-  quota_manager_.UpdateDirUsage(parent, 0, -1);
+  quota_manager_->UpdateFsUsage(0, -1);
+  quota_manager_->AysncUpdateDirUsage(parent, 0, -1);
 
   parent_memo_->Forget(dentry.INo());
 
@@ -1033,7 +1033,7 @@ Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent, const std::string
   UpdateParentMemo(ctx.GetAncestors());
 
   // check quota
-  if (!quota_manager_.CheckQuota(new_parent, 0, 1)) {
+  if (!quota_manager_->CheckQuota(new_parent, 0, 1)) {
     return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
   }
 
@@ -1060,7 +1060,7 @@ Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent, const std::string
   auto& child_attr = result.child_attr;
 
   // update quota
-  quota_manager_.UpdateDirUsage(new_parent, child_attr.length(), 1);
+  quota_manager_->AysncUpdateDirUsage(new_parent, child_attr.length(), 1);
 
   // update cache
   inode->UpdateIf(std::move(child_attr));
@@ -1136,10 +1136,10 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name) {
   // update quota
   int64_t delta_bytes = child_attr.type() != pb::mdsv2::SYM_LINK ? child_attr.length() : 0;
   if (child_attr.nlink() == 0) {
-    quota_manager_.UpdateFsUsage(-delta_bytes, -1);
+    quota_manager_->UpdateFsUsage(-delta_bytes, -1);
     chunk_cache_.Delete(child_attr.ino());
   }
-  quota_manager_.UpdateDirUsage(parent, -delta_bytes, -1);
+  quota_manager_->AysncUpdateDirUsage(parent, -delta_bytes, -1);
 
   // update cache
   partition->DeleteChild(name);
@@ -1193,7 +1193,7 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_par
   UpdateParentMemo(ctx.GetAncestors());
 
   // check quota
-  if (!quota_manager_.CheckQuota(new_parent, 0, 1)) {
+  if (!quota_manager_->CheckQuota(new_parent, 0, 1)) {
     return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
   }
 
@@ -1242,8 +1242,8 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_par
   partition->ParentInode()->UpdateIf(parent_attr);
 
   // update quota
-  quota_manager_.UpdateFsUsage(0, 1);
-  quota_manager_.UpdateDirUsage(new_parent, 0, 1);
+  quota_manager_->UpdateFsUsage(0, 1);
+  quota_manager_->AysncUpdateDirUsage(new_parent, 0, 1);
 
   entry_out.attr.Swap(&attr);
   entry_out.parent_version = parent_attr.version();
@@ -1317,7 +1317,7 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
   if (param.to_set & kSetAttrLength) {
     if (param.attr.length() > inode->Length()) {
       // check quota
-      if (!quota_manager_.CheckQuota(ino, param.attr.length() - inode->Length(), 0)) {
+      if (!quota_manager_->CheckQuota(ino, param.attr.length() - inode->Length(), 0)) {
         return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
       }
 
@@ -1359,10 +1359,10 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
     int64_t change_bytes = param.attr.length() > inode->Length()
                                ? param.attr.length() - inode->Length()
                                : -static_cast<int64_t>(inode->Length() - param.attr.length());
-    quota_manager_.UpdateFsUsage(change_bytes, 0);
+    quota_manager_->UpdateFsUsage(change_bytes, 0);
 
     for (const auto& parent : attr.parents()) {
-      quota_manager_.UpdateDirUsage(parent, change_bytes, 0);
+      quota_manager_->AysncUpdateDirUsage(parent, change_bytes, 0);
     }
   }
 
@@ -1583,8 +1583,8 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
   UpdateParentMemo(param.new_ancestors);
 
   // check quota
-  auto old_quota = quota_manager_.GetNearestDirQuota(old_parent);
-  auto new_quota = quota_manager_.GetNearestDirQuota(new_parent);
+  auto old_quota = quota_manager_->GetNearestDirQuota(old_parent);
+  auto new_quota = quota_manager_->GetNearestDirQuota(new_parent);
   bool can_rename = (old_quota == nullptr && new_quota == nullptr) ||
                     (old_quota != nullptr && new_quota != nullptr && old_quota->GetIno() == new_quota->GetIno());
   if (!can_rename) {
@@ -1666,9 +1666,9 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
 
     // update quota
     if (is_exist_new_dentry) {
-      quota_manager_.UpdateFsUsage(0, -1);
+      quota_manager_->UpdateFsUsage(0, -1);
       int64_t delta_bytes = old_attr.type() != pb::mdsv2::SYM_LINK ? old_attr.length() : 0;
-      quota_manager_.UpdateDirUsage(old_parent, delta_bytes, -1);
+      quota_manager_->AysncUpdateDirUsage(old_parent, delta_bytes, -1);
     }
 
   } else {
@@ -1723,7 +1723,7 @@ Status FileSystem::WriteSlice(Context& ctx, Ino parent, Ino ino, uint64_t chunk_
 
   // check quota
   uint64_t delta_bytes = CalculateDeltaLength(inode->Length(), slices);
-  if (!quota_manager_.CheckQuota(ino, static_cast<int64_t>(delta_bytes), 0)) {
+  if (!quota_manager_->CheckQuota(ino, static_cast<int64_t>(delta_bytes), 0)) {
     return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
   }
 
@@ -1761,9 +1761,9 @@ Status FileSystem::WriteSlice(Context& ctx, Ino parent, Ino ino, uint64_t chunk_
   chunk_cache_.PutIf(ino, std::move(chunk));
 
   // update quota
-  quota_manager_.UpdateFsUsage(length_delta, 0);
+  quota_manager_->UpdateFsUsage(length_delta, 0);
   for (const auto& parent : attr.parents()) {
-    quota_manager_.UpdateDirUsage(parent, length_delta, 0);
+    quota_manager_->AysncUpdateDirUsage(parent, length_delta, 0);
   }
 
   return Status::OK();
@@ -1836,7 +1836,7 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
     uint64_t new_length = offset + len;
     if (new_length > inode->Length()) {
       // check quota
-      if (!quota_manager_.CheckQuota(ino, new_length - inode->Length(), 0)) {
+      if (!quota_manager_->CheckQuota(ino, new_length - inode->Length(), 0)) {
         return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
       }
 
@@ -2106,7 +2106,7 @@ static std::set<uint32_t> GetDeletedBucketIds(int64_t mds_id, const pb::mdsv2::H
   const auto& old_bucket_ids = old_bucketset->second.bucket_ids();
   const auto& new_bucket_ids = bucketset->second.bucket_ids();
   for (const auto& old_bucket_id : old_bucket_ids) {
-    if (std::find(new_bucket_ids.begin(), new_bucket_ids.end(), old_bucket_id) == new_bucket_ids.end()) {
+    if (std::find(new_bucket_ids.begin(), new_bucket_ids.end(), old_bucket_id) == new_bucket_ids.end()) {  // NOLINT
       deleted_bucket_ids.insert(old_bucket_id);
     }
   }
@@ -2573,7 +2573,7 @@ Status FileSystem::GetFsOpLogs(std::vector<FsOpLog>& fs_op_logs) {
 FileSystemSet::FileSystemSet(CoordinatorClientSPtr coordinator_client, IdGeneratorUPtr fs_id_generator,
                              IdGeneratorSPtr slice_id_generator, KVStorageSPtr kv_storage, MDSMeta self_mds_meta,
                              MDSMetaMapSPtr mds_meta_map, OperationProcessorSPtr operation_processor,
-                             notify::NotifyBuddySPtr notify_buddy)
+                             WorkerSetSPtr quota_worker_set, notify::NotifyBuddySPtr notify_buddy)
     : coordinator_client_(coordinator_client),
       fs_id_generator_(std::move(fs_id_generator)),
       slice_id_generator_(slice_id_generator),
@@ -2581,6 +2581,7 @@ FileSystemSet::FileSystemSet(CoordinatorClientSPtr coordinator_client, IdGenerat
       self_mds_meta_(self_mds_meta),
       mds_meta_map_(mds_meta_map),
       operation_processor_(operation_processor),
+      quota_worker_set_(quota_worker_set),
       notify_buddy_(notify_buddy) {}
 
 FileSystemSet::~FileSystemSet() {}  // NOLINT
@@ -2781,8 +2782,9 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, FsInfoType& fs_info) 
   auto ino_id_generator = NewInodeIdGenerator(fs_id, coordinator_client_, kv_storage_);
   CHECK(ino_id_generator != nullptr) << "new id generator fail.";
 
-  auto fs = FileSystem::New(self_mds_meta_.ID(), FsInfo::NewUnique(fs_info), std::move(ino_id_generator),
-                            slice_id_generator_, kv_storage_, operation_processor_, mds_meta_map_, notify_buddy_);
+  auto fs =
+      FileSystem::New(self_mds_meta_.ID(), FsInfo::NewUnique(fs_info), std::move(ino_id_generator), slice_id_generator_,
+                      kv_storage_, operation_processor_, mds_meta_map_, quota_worker_set_, notify_buddy_);
   if (!fs->Init()) {
     cleanup(dentry_table_id, fs_key, "");
     return Status(pb::error::EINTERNAL, "init FileSystem fail");
@@ -3110,7 +3112,8 @@ bool FileSystemSet::LoadFileSystems() {
       CHECK(ino_id_generator != nullptr) << "new id generator fail.";
 
       fs = FileSystem::New(self_mds_meta_.ID(), FsInfo::NewUnique(fs_info), std::move(ino_id_generator),
-                           slice_id_generator_, kv_storage_, operation_processor_, mds_meta_map_, notify_buddy_);
+                           slice_id_generator_, kv_storage_, operation_processor_, mds_meta_map_, quota_worker_set_,
+                           notify_buddy_);
       if (!fs->Init()) {
         DINGO_LOG(ERROR) << fmt::format("[fsset] init FileSystem({}) fail.", fs_info.fs_id());
         continue;

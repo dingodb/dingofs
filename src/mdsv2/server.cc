@@ -15,6 +15,7 @@
 #include "mdsv2/server.h"
 
 #include <fmt/format.h>
+#include <gflags/gflags_declare.h>
 
 #include <string>
 #include <utility>
@@ -37,11 +38,16 @@
 namespace dingofs {
 namespace mdsv2 {
 
-DEFINE_string(mdsmonitor_lock_name, "/lock/mds/monitor",
-              "mds monitor lock name");
+DEFINE_string(mdsmonitor_lock_name, "/lock/mds/monitor", "mds monitor lock name");
 DEFINE_string(gc_lock_name, "/lock/mds/gc", "gc lock name");
 
 DEFINE_string(pid_file_name, "pid", "pid file name");
+
+DECLARE_string(worker_set_type);
+
+const std::string kQuotaWorkerSetName = "QUOTA_WORKER_SET";
+DEFINE_uint32(quota_worker_num, 24, "quota worker number");
+DEFINE_uint32(quota_worker_max_pending_num, 4096, "quota worker max pending number");
 
 Server::~Server() {}  // NOLINT
 
@@ -110,11 +116,9 @@ bool Server::InitLog() {
 
   const auto& log_option = app_option_.log();
 
-  DINGO_LOG(INFO) << fmt::format("Init log: {} {}", log_option.level(),
-                                 log_option.path());
+  DINGO_LOG(INFO) << fmt::format("Init log: {} {}", log_option.level(), log_option.path());
 
-  DingoLogger::InitLogger(log_option.path(), "mdsv2",
-                          GetDingoLogLevel(log_option.level()));
+  DingoLogger::InitLogger(log_option.path(), "mdsv2", GetDingoLogLevel(log_option.level()));
 
   DingoLogVersion();
   return true;
@@ -131,8 +135,7 @@ bool Server::InitMDSMeta() {
   self_mds_meta_.SetPort(server_option.port());
   self_mds_meta_.SetState(MDSMeta::State::kNormal);
 
-  DINGO_LOG(INFO) << fmt::format("init mds meta, self: {}.",
-                                 self_mds_meta_.ToString());
+  DINGO_LOG(INFO) << fmt::format("init mds meta, self: {}.", self_mds_meta_.ToString());
 
   mds_meta_map_ = MDSMetaMap::New();
   CHECK(mds_meta_map_ != nullptr) << "new MDSMetaMap fail.";
@@ -143,8 +146,7 @@ bool Server::InitMDSMeta() {
 }
 
 bool Server::InitCoordinatorClient(const std::string& coor_url) {
-  DINGO_LOG(INFO) << fmt::format("init coordinator client, addr({}).",
-                                 coor_url);
+  DINGO_LOG(INFO) << fmt::format("init coordinator client, addr({}).", coor_url);
 
   std::string coor_addrs = Helper::ParseCoorAddr(coor_url);
   if (coor_addrs.empty()) {
@@ -194,17 +196,18 @@ bool Server::InitFileSystem() {
   CHECK(fs_id_generator != nullptr) << "new fs AutoIncrementIdGenerator fail.";
   CHECK(fs_id_generator->Init()) << "init fs AutoIncrementIdGenerator fail.";
 
-  auto slice_id_generator =
-      NewSliceIdGenerator(coordinator_client_, kv_storage_);
-  CHECK(slice_id_generator != nullptr)
-      << "new slice AutoIncrementIdGenerator fail.";
-  CHECK(slice_id_generator->Init())
-      << "init slice AutoIncrementIdGenerator fail.";
+  auto slice_id_generator = NewSliceIdGenerator(coordinator_client_, kv_storage_);
+  CHECK(slice_id_generator != nullptr) << "new slice AutoIncrementIdGenerator fail.";
+  CHECK(slice_id_generator->Init()) << "init slice AutoIncrementIdGenerator fail.";
+
+  quota_worker_set_ =
+      ExecqWorkerSet::NewUnique(kQuotaWorkerSetName, FLAGS_quota_worker_num, FLAGS_quota_worker_max_pending_num);
+  CHECK(quota_worker_set_ != nullptr) << "new quota worker set fail.";
+  CHECK(quota_worker_set_->Init()) << "init service read worker set fail.";
 
   file_system_set_ =
-      FileSystemSet::New(coordinator_client_, std::move(fs_id_generator),
-                         slice_id_generator, kv_storage_, self_mds_meta_,
-                         mds_meta_map_, operation_processor_, notify_buddy_);
+      FileSystemSet::New(coordinator_client_, std::move(fs_id_generator), slice_id_generator, kv_storage_,
+                         self_mds_meta_, mds_meta_map_, operation_processor_, quota_worker_set_, notify_buddy_);
   CHECK(file_system_set_ != nullptr) << "new FileSystem fail.";
 
   return file_system_set_->Init();
@@ -236,8 +239,7 @@ bool Server::InitMonitor() {
   CHECK(kv_storage_ != nullptr) << "kv storage is nullptr.";
   CHECK(notify_buddy_ != nullptr) << "notify_buddy is nullptr.";
 
-  auto dist_lock = StoreDistributionLock::New(
-      kv_storage_, FLAGS_mdsmonitor_lock_name, self_mds_meta_.ID());
+  auto dist_lock = StoreDistributionLock::New(kv_storage_, FLAGS_mdsmonitor_lock_name, self_mds_meta_.ID());
   CHECK(dist_lock != nullptr) << "gc dist lock is nullptr.";
 
   monitor_ = Monitor::New(file_system_set_, dist_lock, notify_buddy_);
@@ -261,12 +263,10 @@ bool Server::InitGcProcessor() {
   CHECK(operation_processor_ != nullptr) << "operation_processor is nullptr.";
   CHECK(file_system_set_ != nullptr) << "file system set is nullptr.";
 
-  auto dist_lock = StoreDistributionLock::New(kv_storage_, FLAGS_gc_lock_name,
-                                              self_mds_meta_.ID());
+  auto dist_lock = StoreDistributionLock::New(kv_storage_, FLAGS_gc_lock_name, self_mds_meta_.ID());
   CHECK(dist_lock != nullptr) << "gc dist lock is nullptr.";
 
-  gc_processor_ =
-      GcProcessor::New(file_system_set_, operation_processor_, dist_lock);
+  gc_processor_ = GcProcessor::New(file_system_set_, operation_processor_, dist_lock);
 
   CHECK(gc_processor_->Init()) << "init GcProcessor fail.";
 
@@ -331,8 +331,7 @@ bool Server::InitService() {
   CHECK(fs_stats != nullptr) << "fsstats is nullptr.";
 
   const auto& mds_option = app_option_.server().service().meta();
-  mds_service_ = MDSServiceImpl::New(mds_option, file_system_set_,
-                                     gc_processor_, std::move(fs_stats));
+  mds_service_ = MDSServiceImpl::New(mds_option, file_system_set_, gc_processor_, std::move(fs_stats));
   CHECK(mds_service_ != nullptr) << "new MDSServiceImpl fail.";
 
   if (!mds_service_->Init()) {
@@ -360,9 +359,7 @@ std::string Server::GetPidFilePath() {
 std::string Server::GetListenAddr() {
   const auto& server_option = app_option_.server();
 
-  std::string host = server_option.listen_host().empty()
-                         ? server_option.host()
-                         : server_option.listen_host();
+  std::string host = server_option.listen_host().empty() ? server_option.host() : server_option.listen_host();
 
   return fmt::format("{}:{}", host, server_option.port());
 }
@@ -444,21 +441,16 @@ FsStatServiceImplUPtr& Server::GetFsStatService() {
 }
 
 void Server::Run() {
-  CHECK(brpc_server_.AddService(mds_service_.get(),
-                                brpc::SERVER_DOESNT_OWN_SERVICE) == 0)
-      << "add mds service error.";
+  CHECK(brpc_server_.AddService(mds_service_.get(), brpc::SERVER_DOESNT_OWN_SERVICE) == 0) << "add mds service error.";
 
-  CHECK(brpc_server_.AddService(debug_service_.get(),
-                                brpc::SERVER_DOESNT_OWN_SERVICE) == 0)
+  CHECK(brpc_server_.AddService(debug_service_.get(), brpc::SERVER_DOESNT_OWN_SERVICE) == 0)
       << "add debug service error.";
 
-  CHECK(brpc_server_.AddService(fs_stat_service_.get(),
-                                brpc::SERVER_DOESNT_OWN_SERVICE) == 0)
+  CHECK(brpc_server_.AddService(fs_stat_service_.get(), brpc::SERVER_DOESNT_OWN_SERVICE) == 0)
       << "add fsstat service error.";
 
   brpc::ServerOptions option;
-  CHECK(brpc_server_.Start(GetListenAddr().c_str(), &option) == 0)
-      << "start brpc server error.";
+  CHECK(brpc_server_.Start(GetListenAddr().c_str(), &option) == 0) << "start brpc server error.";
 
   while (!brpc::IsAskedToQuit() && !stop_.load()) {
     bthread_usleep(1000000L);

@@ -125,6 +125,9 @@ class Server {
   // mutation merger
   OperationProcessorSPtr operation_processor_;
 
+  // worker set for quota
+  WorkerSetSPtr quota_worker_set_;
+
   // filesystem
   FileSystemSetSPtr file_system_set_;
 

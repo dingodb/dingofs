@@ -59,14 +59,15 @@ class FileSystemSetTest : public testing::Test {
  protected:
   static void SetUpTestSuite() {
     auto coordinator_client = DummyCoordinatorClient::New();
-    ASSERT_TRUE(coordinator_client->Init("")) << "init coordinator client fail.";
+    ASSERT_TRUE(coordinator_client->Init(""))
+        << "init coordinator client fail.";
 
-    auto fs_id_generator =
-        CoorAutoIncrementIdGenerator::New(coordinator_client, kFsAutoIncrementIdName, kFsTableId, 20000, 8);
+    auto fs_id_generator = CoorAutoIncrementIdGenerator::New(
+        coordinator_client, kFsAutoIncrementIdName, kFsTableId, 20000, 8);
     ASSERT_TRUE(fs_id_generator->Init()) << "init fs id generator fail.";
 
-    auto slice_id_generator =
-        CoorAutoIncrementIdGenerator::NewShare(coordinator_client, kSliceAutoIncrementIdName, kSliceTableId, 20001, 8);
+    auto slice_id_generator = CoorAutoIncrementIdGenerator::NewShare(
+        coordinator_client, kSliceAutoIncrementIdName, kSliceTableId, 20001, 8);
     ASSERT_TRUE(slice_id_generator->Init()) << "init fs id generator fail.";
 
     auto kv_storage = DummyStorage::New();
@@ -82,8 +83,10 @@ class FileSystemSetTest : public testing::Test {
     mds_meta.SetState(MDSMeta::State::kInit);
 
     auto mds_meta_map = MDSMetaMap::New();
-    fs_set = FileSystemSet::New(coordinator_client, std::move(fs_id_generator), slice_id_generator, kv_storage,
-                                mds_meta, mds_meta_map, operation_processor, nullptr);
+    fs_set =
+        FileSystemSet::New(coordinator_client, std::move(fs_id_generator),
+                           slice_id_generator, kv_storage, mds_meta,
+                           mds_meta_map, operation_processor, nullptr, nullptr);
     ASSERT_TRUE(fs_set->Init()) << "init fs set fail.";
   }
 
@@ -105,10 +108,11 @@ class FileSystemTest : public testing::Test {
  protected:
   static void SetUpTestSuite() {
     auto coordinator_client = DummyCoordinatorClient::New();
-    ASSERT_TRUE(coordinator_client->Init("")) << "init coordinator client fail.";
+    ASSERT_TRUE(coordinator_client->Init(""))
+        << "init coordinator client fail.";
 
-    auto fs_id_generator =
-        CoorAutoIncrementIdGenerator::New(coordinator_client, kInoAutoIncrementIdName, kInodeTableId, 1000000, 8);
+    auto fs_id_generator = CoorAutoIncrementIdGenerator::New(
+        coordinator_client, kInoAutoIncrementIdName, kInodeTableId, 1000000, 8);
 
     auto kv_storage = DummyStorage::New();
     ASSERT_TRUE(kv_storage->Init("")) << "init kv storage fail.";
@@ -129,10 +133,12 @@ class FileSystemTest : public testing::Test {
     fs_info.set_recycle_time_hour(24);
     *fs_info.mutable_extra()->mutable_s3_info() = CreateS3Info();
 
-    fs = FileSystem::New(kMdsId, FsInfo::NewUnique(fs_info), std::move(fs_id_generator), nullptr, kv_storage,
-                         operation_processor, nullptr, nullptr);
+    fs = FileSystem::New(kMdsId, FsInfo::NewUnique(fs_info),
+                         std::move(fs_id_generator), nullptr, kv_storage,
+                         operation_processor, nullptr, nullptr, nullptr);
     auto status = fs->CreateRoot();
-    ASSERT_TRUE(status.ok()) << "create root fail, error: " << status.error_str();
+    ASSERT_TRUE(status.ok())
+        << "create root fail, error: " << status.error_str();
   }
 
   static void TearDownTestSuite() {}
@@ -194,10 +200,12 @@ TEST_F(FileSystemSetTest, GetFsInfo) {
   ASSERT_EQ(fs_info.fs_name(), param.fs_name) << "fs name not equal.";
   ASSERT_EQ(fs_info.fs_type(), param.fs_type) << "fs type not equal.";
   ASSERT_EQ(fs_info.block_size(), param.block_size) << "block size not equal.";
-  ASSERT_EQ(fs_info.enable_sum_in_dir(), param.enable_sum_in_dir) << "enable sum in dir not equal.";
+  ASSERT_EQ(fs_info.enable_sum_in_dir(), param.enable_sum_in_dir)
+      << "enable sum in dir not equal.";
   ASSERT_EQ(fs_info.owner(), param.owner) << "owner not equal.";
   ASSERT_EQ(fs_info.capacity(), param.capacity) << "capacity not equal.";
-  ASSERT_EQ(fs_info.recycle_time_hour(), param.recycle_time_hour) << "recycle time hour not equal.";
+  ASSERT_EQ(fs_info.recycle_time_hour(), param.recycle_time_hour)
+      << "recycle time hour not equal.";
 }
 
 TEST_F(FileSystemSetTest, DeleteFs) {
@@ -227,7 +235,8 @@ TEST_F(FileSystemSetTest, DeleteFs) {
   ASSERT_EQ(nullptr, fs_set->GetFileSystem(fs_id));
 
   status = fs_set->GetFsInfo(ctx, param.fs_name, fs_info);
-  ASSERT_TRUE(pb::error::ENOT_FOUND == status.error_code()) << "not should found fs, error: " << status.error_str();
+  ASSERT_TRUE(pb::error::ENOT_FOUND == status.error_code())
+      << "not should found fs, error: " << status.error_str();
 }
 
 TEST_F(FileSystemSetTest, MountFs) {
@@ -264,7 +273,8 @@ TEST_F(FileSystemSetTest, MountFs) {
   ASSERT_EQ(fs_info.fs_id(), fs_id) << "fs id not equal.";
   ASSERT_EQ(1, fs_info.mount_points_size()) << "mount point size not equal.";
   auto actual_mount_point = fs_info.mount_points(0);
-  ASSERT_EQ(mount_point.hostname(), actual_mount_point.hostname()) << "hostname not equal.";
+  ASSERT_EQ(mount_point.hostname(), actual_mount_point.hostname())
+      << "hostname not equal.";
   ASSERT_EQ(mount_point.port(), actual_mount_point.port()) << "port not equal.";
   ASSERT_EQ(mount_point.path(), actual_mount_point.path()) << "path not equal.";
   ASSERT_EQ(mount_point.cto(), actual_mount_point.cto()) << "cto not equal.";
@@ -305,7 +315,8 @@ TEST_F(FileSystemSetTest, UnMountFs) {
   ASSERT_EQ(fs_info.fs_id(), fs_id) << "fs id not equal.";
   ASSERT_EQ(1, fs_info.mount_points_size()) << "mount point size not equal.";
   auto actual_mount_point = fs_info.mount_points(0);
-  ASSERT_EQ(mount_point.hostname(), actual_mount_point.hostname()) << "hostname not equal.";
+  ASSERT_EQ(mount_point.hostname(), actual_mount_point.hostname())
+      << "hostname not equal.";
   ASSERT_EQ(mount_point.port(), actual_mount_point.port()) << "port not equal.";
   ASSERT_EQ(mount_point.path(), actual_mount_point.path()) << "path not equal.";
   ASSERT_EQ(mount_point.cto(), actual_mount_point.cto()) << "cto not equal.";
@@ -316,7 +327,8 @@ TEST_F(FileSystemSetTest, UnMountFs) {
   {
     pb::mdsv2::FsInfo fs_info;
     status = fs_set->GetFsInfo(ctx, param.fs_name, fs_info);
-    ASSERT_TRUE(status.ok()) << "get fs info fail, error: " << status.error_str();
+    ASSERT_TRUE(status.ok())
+        << "get fs info fail, error: " << status.error_str();
     ASSERT_EQ(fs_info.fs_id(), fs_id) << "fs id not equal.";
     ASSERT_EQ(0, fs_info.mount_points_size()) << "mount point size not equal.";
   }
@@ -371,7 +383,8 @@ TEST_F(FileSystemTest, MkNod) {
   ASSERT_EQ(param.mode, inode->Mode()) << "inode mode not equal.";
   ASSERT_EQ(param.uid, inode->Uid()) << "inode uid not equal.";
   ASSERT_EQ(param.gid, inode->Gid()) << "inode gid not equal.";
-  ASSERT_EQ(pb::mdsv2::FileType::FILE, inode->Type()) << "inode type not equal.";
+  ASSERT_EQ(pb::mdsv2::FileType::FILE, inode->Type())
+      << "inode type not equal.";
   ASSERT_EQ(0, inode->Length()) << "inode length not equal.";
   ASSERT_EQ(param.rdev, inode->Rdev()) << "inode rdev not equal.";
 }
@@ -410,7 +423,8 @@ TEST_F(FileSystemTest, MkDir) {
   ASSERT_EQ(param.mode, inode->Mode()) << "inode mode not equal.";
   ASSERT_EQ(param.uid, inode->Uid()) << "inode uid not equal.";
   ASSERT_EQ(param.gid, inode->Gid()) << "inode gid not equal.";
-  ASSERT_EQ(pb::mdsv2::FileType::DIRECTORY, inode->Type()) << "inode type not equal.";
+  ASSERT_EQ(pb::mdsv2::FileType::DIRECTORY, inode->Type())
+      << "inode type not equal.";
   ASSERT_EQ(4096, inode->Length()) << "inode length not equal.";
   ASSERT_EQ(param.rdev, inode->Rdev()) << "inode rdev not equal.";
 }
@@ -450,7 +464,8 @@ TEST_F(FileSystemTest, RmDir) {
 
   {
     status = fs->RmDir(ctx, param.parent, param.name);
-    ASSERT_TRUE(status.ok()) << "remove dir fail, error: " << status.error_str();
+    ASSERT_TRUE(status.ok())
+        << "remove dir fail, error: " << status.error_str();
 
     auto partition = partition_cache.Get(ino);
     ASSERT_TRUE(partition == nullptr) << "get partition fail.";
@@ -556,13 +571,15 @@ TEST_F(FileSystemTest, SymlinkWithFile) {
     std::string name = "symlinkwithfile";
     EntryOut entry_out;
     auto status = fs->Symlink(ctx, symlink, kRootIno, name, 1, 3, entry_out);
-    ASSERT_TRUE(status.ok()) << "create symlink fail, error: " << status.error_str();
+    ASSERT_TRUE(status.ok())
+        << "create symlink fail, error: " << status.error_str();
     ASSERT_GT(entry_out.attr.ino(), 0) << "ino is invalid.";
     ASSERT_EQ(name, entry_out.name) << "ino is invalid.";
 
     InodeSPtr sym_inode = inode_cache.GetInode(entry_out.attr.ino());
     ASSERT_TRUE(sym_inode != nullptr) << "get inode fail.";
-    ASSERT_EQ(pb::mdsv2::FileType::SYM_LINK, sym_inode->Type()) << "inode type not equal.";
+    ASSERT_EQ(pb::mdsv2::FileType::SYM_LINK, sym_inode->Type())
+        << "inode type not equal.";
     ASSERT_EQ(symlink, sym_inode->Symlink());
   }
 }
@@ -595,13 +612,15 @@ TEST_F(FileSystemTest, SymlinkWithDir) {
     std::string name = "symlinkwithdir";
     EntryOut entry_out;
     auto status = fs->Symlink(ctx, symlink, kRootIno, name, 1, 3, entry_out);
-    ASSERT_TRUE(status.ok()) << "create symlink fail, error: " << status.error_str();
+    ASSERT_TRUE(status.ok())
+        << "create symlink fail, error: " << status.error_str();
     ASSERT_GT(entry_out.attr.ino(), 0) << "ino is invalid.";
     ASSERT_EQ(name, entry_out.name) << "ino is invalid.";
 
     InodeSPtr sym_inode = inode_cache.GetInode(entry_out.attr.ino());
     ASSERT_TRUE(sym_inode != nullptr) << "get inode fail.";
-    ASSERT_EQ(pb::mdsv2::FileType::SYM_LINK, sym_inode->Type()) << "inode type not equal.";
+    ASSERT_EQ(pb::mdsv2::FileType::SYM_LINK, sym_inode->Type())
+        << "inode type not equal.";
     ASSERT_EQ(symlink, sym_inode->Symlink());
   }
 }
@@ -634,13 +653,15 @@ TEST_F(FileSystemTest, ReadLink) {
     std::string name = "symlinkwithfile";
     EntryOut entry_out;
     auto status = fs->Symlink(ctx, symlink, kRootIno, name, 1, 3, entry_out);
-    ASSERT_TRUE(status.ok()) << "create symlink fail, error: " << status.error_str();
+    ASSERT_TRUE(status.ok())
+        << "create symlink fail, error: " << status.error_str();
     ASSERT_GT(entry_out.attr.ino(), 0) << "ino is invalid.";
     ASSERT_EQ(name, entry_out.name) << "ino is invalid.";
 
     std::string actual_link;
     status = fs->ReadLink(ctx, entry_out.attr.ino(), actual_link);
-    ASSERT_TRUE(status.ok()) << "read symlink fail, error: " << status.error_str();
+    ASSERT_TRUE(status.ok())
+        << "read symlink fail, error: " << status.error_str();
     ASSERT_EQ(symlink, actual_link) << "symlink is eq.";
   }
 }
@@ -745,7 +766,8 @@ TEST_F(FileSystemTest, RenameWithSameDir) {
 
     EntryOut entry_out;
     auto status = fs->MkDir(ctx, param, entry_out);
-    ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
+    ASSERT_TRUE(status.ok())
+        << "create file fail, error: " << status.error_str();
     ASSERT_GT(entry_out.attr.ino(), 0) << "ino is invalid.";
 
     old_parent_ino = entry_out.attr.ino();
@@ -762,7 +784,8 @@ TEST_F(FileSystemTest, RenameWithSameDir) {
 
     EntryOut entry_out;
     auto status = fs->MkNod(ctx, param, entry_out);
-    ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
+    ASSERT_TRUE(status.ok())
+        << "create file fail, error: " << status.error_str();
     ASSERT_GT(entry_out.attr.ino(), 0) << "ino is invalid.";
   }
 
@@ -817,7 +840,8 @@ TEST_F(FileSystemTest, RenameWithDiffDir) {
 
     EntryOut entry_out;
     auto status = fs->MkDir(ctx, param, entry_out);
-    ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
+    ASSERT_TRUE(status.ok())
+        << "create file fail, error: " << status.error_str();
     ASSERT_GT(entry_out.attr.ino(), 0) << "ino is invalid.";
 
     old_parent_ino = entry_out.attr.ino();
@@ -834,7 +858,8 @@ TEST_F(FileSystemTest, RenameWithDiffDir) {
 
     EntryOut entry_out;
     auto status = fs->MkNod(ctx, param, entry_out);
-    ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
+    ASSERT_TRUE(status.ok())
+        << "create file fail, error: " << status.error_str();
     ASSERT_GT(entry_out.attr.ino(), 0) << "ino is invalid.";
   }
 
@@ -850,7 +875,8 @@ TEST_F(FileSystemTest, RenameWithDiffDir) {
 
     EntryOut entry_out;
     auto status = fs->MkDir(ctx, param, entry_out);
-    ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
+    ASSERT_TRUE(status.ok())
+        << "create file fail, error: " << status.error_str();
     ASSERT_GT(entry_out.attr.ino(), 0) << "ino is invalid.";
 
     new_parent_ino = entry_out.attr.ino();

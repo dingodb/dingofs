@@ -109,19 +109,12 @@ void DirQuotaMap::UpdateUsage(Ino ino, int64_t byte_delta, int64_t inode_delta) 
   Ino curr_ino = ino;
   while (true) {
     auto quota = GetQuota(curr_ino);
-    if (quota != nullptr) {
-      quota->UpdateUsage(byte_delta, inode_delta);
-    }
+    if (quota != nullptr) quota->UpdateUsage(byte_delta, inode_delta);
 
-    if (curr_ino == kRootIno) {
-      break;
-    }
+    if (curr_ino == kRootIno) break;
 
     Ino parent;
-    if (!parent_memo_->GetParent(curr_ino, parent)) {
-      DINGO_LOG(WARNING) << fmt::format("[quota] not found parent, ino({}).", curr_ino);
-      break;
-    }
+    if (!GetParent(curr_ino, parent)) break;
 
     curr_ino = parent;
   }
@@ -146,23 +139,14 @@ QuotaSPtr DirQuotaMap::GetNearestQuota(Ino ino) {
   Ino curr_ino = ino;
   while (true) {
     auto quota = GetQuota(curr_ino);
-    if (quota != nullptr) {
-      return quota;
-    }
+    if (quota != nullptr) return quota;
 
-    if (curr_ino == kRootIno) {
-      break;
-    }
+    if (curr_ino == kRootIno) break;
 
     Ino parent;
-    if (!parent_memo_->GetParent(curr_ino, parent)) {
-      break;
-    }
+    if (!GetParent(curr_ino, parent)) break;
 
     curr_ino = parent;
-  }
-  if (curr_ino != kRootIno) {
-    DINGO_LOG(WARNING) << fmt::format("[quota] not found parent, ino({}).", curr_ino);
   }
 
   return nullptr;
@@ -213,6 +197,39 @@ QuotaSPtr DirQuotaMap::GetQuota(Ino ino) {
   return (it != quota_map_.end()) ? it->second : nullptr;
 }
 
+bool DirQuotaMap::GetParent(Ino ino, Ino& parent) {
+  if (parent_memo_->GetParent(ino, parent)) {
+    return true;
+  }
+
+  // if not found, try to get parent from store
+  Trace trace;
+  GetInodeAttrOperation operation(trace, fs_id_, ino);
+  auto status = operation_processor_->RunAlone(&operation);
+  if (!status.ok()) {
+    DINGO_LOG(WARNING) << fmt::format("[quota] query parent fail, ino({}), status({}).", ino, status.error_str());
+    return false;
+  }
+
+  auto& result = operation.GetResult();
+  auto& attr = result.attr;
+
+  CHECK(attr.parents().size() == 1) << fmt::format("[quota] dir should only one parent, attr({}).", ino,
+                                                   attr.ShortDebugString());
+
+  parent = attr.parents().at(0);
+
+  parent_memo_->Remeber(ino, parent);
+
+  DINGO_LOG(INFO) << fmt::format("[quota] query parent finish, ino({}) parent({}).", ino, parent);
+
+  return true;
+}
+
+void UpdateDirUsageTask::Run() { quota_manager_->UpdateDirUsage(parent_, byte_delta_, inode_delta_); }
+
+QuotaManagerSPtr QuotaManager::GetSelfPtr() { return std::dynamic_pointer_cast<QuotaManager>(shared_from_this()); }
+
 bool QuotaManager::Init() {
   CHECK(fs_id_ > 0) << fmt::format("[quota] fs_id({}) is 0.", fs_id_);
 
@@ -238,6 +255,15 @@ void QuotaManager::UpdateFsUsage(int64_t byte_delta, int64_t inode_delta) {
 
 void QuotaManager::UpdateDirUsage(Ino parent, int64_t byte_delta, int64_t inode_delta) {
   dir_quota_map_.UpdateUsage(parent, byte_delta, inode_delta);
+}
+
+void QuotaManager::AysncUpdateDirUsage(Ino parent, int64_t byte_delta, int64_t inode_delta) {
+  auto task = UpdateDirUsageTask::New(GetSelfPtr(), parent, byte_delta, inode_delta);
+
+  if (!worker_set_->ExecuteHash(parent, task)) {
+    DINGO_LOG(ERROR) << fmt::format("[quota] async update dir usage fail, parent({}), byte_delta({}), inode_delta({}).",
+                                    parent, byte_delta, inode_delta);
+  }
 }
 
 bool QuotaManager::CheckQuota(Ino ino, int64_t byte_delta, int64_t inode_delta) {

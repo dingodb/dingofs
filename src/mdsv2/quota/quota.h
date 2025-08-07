@@ -18,11 +18,11 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
-#include <string>
 #include <unordered_map>
 #include <vector>
 
 #include "dingofs/mdsv2.pb.h"
+#include "mdsv2/common/runnable.h"
 #include "mdsv2/common/status.h"
 #include "mdsv2/common/tracing.h"
 #include "mdsv2/common/type.h"
@@ -33,6 +33,10 @@
 namespace dingofs {
 namespace mdsv2 {
 namespace quota {
+
+class QuotaManager;
+using QuotaManagerSPtr = std::shared_ptr<QuotaManager>;
+using QuotaManagerUPtr = std::unique_ptr<QuotaManager>;
 
 class Quota {
  public:
@@ -65,9 +69,11 @@ class Quota {
 };
 using QuotaSPtr = std::shared_ptr<Quota>;
 
+// manage directory quotas
 class DirQuotaMap {
  public:
-  DirQuotaMap(ParentMemoSPtr parent_memo) : parent_memo_(parent_memo) {}
+  DirQuotaMap(int32_t fs_id, ParentMemoSPtr parent_memo, OperationProcessorSPtr operation_processor)
+      : fs_id_(fs_id), parent_memo_(parent_memo), operation_processor_(operation_processor) {}
   ~DirQuotaMap() = default;
 
   void UpsertQuota(Ino ino, const QuotaEntry& quota);
@@ -86,30 +92,68 @@ class DirQuotaMap {
 
  private:
   QuotaSPtr GetQuota(Ino ino);
+  bool GetParent(Ino ino, Ino& parent);
 
+  int32_t fs_id_{0};
   ParentMemoSPtr parent_memo_;
+  OperationProcessorSPtr operation_processor_;
 
   utils::RWLock rwlock_;
   // ino -> Quota
   std::unordered_map<Ino, QuotaSPtr> quota_map_;
 };
 
+class UpdateDirUsageTask;
+using UpdateDirUsageTaskSPtr = std::shared_ptr<UpdateDirUsageTask>;
+
+class UpdateDirUsageTask : public TaskRunnable {
+ public:
+  UpdateDirUsageTask(QuotaManagerSPtr quota_manager, Ino parent, int64_t byte_delta, int64_t inode_delta)
+      : quota_manager_(quota_manager), parent_(parent), byte_delta_(byte_delta), inode_delta_(inode_delta) {}
+
+  ~UpdateDirUsageTask() override = default;
+
+  static UpdateDirUsageTaskSPtr New(QuotaManagerSPtr quota_manager, Ino parent, int64_t byte_delta,
+                                    int64_t inode_delta) {
+    return std::make_shared<UpdateDirUsageTask>(quota_manager, parent, byte_delta, inode_delta);
+  }
+
+  std::string Type() override { return "UpdateDirUsageTask"; }
+
+  void Run() override;
+
+ private:
+  QuotaManagerSPtr quota_manager_;
+
+  Ino parent_;
+  int64_t byte_delta_;
+  int64_t inode_delta_;
+};
+
 // manages filesystem and directory quotas
 // include cache and store
-class QuotaManager {
+class QuotaManager : public std::enable_shared_from_this<QuotaManager> {
  public:
-  QuotaManager(uint32_t fs_id, ParentMemoSPtr parent_memo,
-               OperationProcessorSPtr operation_processor)
+  QuotaManager(uint32_t fs_id, ParentMemoSPtr parent_memo, OperationProcessorSPtr operation_processor,
+               WorkerSetSPtr worker_set)
       : fs_id_(fs_id),
         fs_quota_(0, {}),
-        dir_quota_map_(parent_memo),
-        operation_processor_(std::move(operation_processor)) {}
+        dir_quota_map_(fs_id, parent_memo, operation_processor),
+        operation_processor_(std::move(operation_processor)),
+        worker_set_(std::move(worker_set)) {}
   ~QuotaManager() = default;
 
   QuotaManager(const QuotaManager&) = delete;
   QuotaManager& operator=(const QuotaManager&) = delete;
   QuotaManager(QuotaManager&&) = delete;
   QuotaManager& operator=(QuotaManager&&) = delete;
+
+  static QuotaManagerSPtr New(uint32_t fs_id, ParentMemoSPtr parent_memo, OperationProcessorSPtr operation_processor,
+                              WorkerSetSPtr worker_set) {
+    return std::make_shared<QuotaManager>(fs_id, parent_memo, operation_processor, worker_set);
+  }
+
+  QuotaManagerSPtr GetSelfPtr();
 
   bool Init();
   void Destroy();
@@ -121,11 +165,11 @@ class QuotaManager {
   Status SetDirQuota(Trace& trace, Ino ino, const QuotaEntry& quota);
   Status GetDirQuota(Trace& trace, Ino ino, QuotaEntry& quota);
   Status DeleteDirQuota(Trace& trace, Ino ino);
-  Status LoadDirQuotas(Trace& trace,
-                       std::map<Ino, QuotaEntry>& quota_entry_map);
+  Status LoadDirQuotas(Trace& trace, std::map<Ino, QuotaEntry>& quota_entry_map);
 
   void UpdateFsUsage(int64_t byte_delta, int64_t inode_delta);
   void UpdateDirUsage(Ino parent, int64_t byte_delta, int64_t inode_delta);
+  void AysncUpdateDirUsage(Ino parent, int64_t byte_delta, int64_t inode_delta);
 
   bool CheckQuota(Ino ino, int64_t byte_delta, int64_t inode_delta);
   QuotaSPtr GetNearestDirQuota(Ino ino);
@@ -149,10 +193,9 @@ class QuotaManager {
   DirQuotaMap dir_quota_map_;
 
   OperationProcessorSPtr operation_processor_;
-};
 
-using QuotaManagerSPtr = std::shared_ptr<QuotaManager>;
-using QuotaManagerUPtr = std::unique_ptr<QuotaManager>;
+  WorkerSetSPtr worker_set_;
+};
 
 }  // namespace quota
 }  // namespace mdsv2

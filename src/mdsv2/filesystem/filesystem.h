@@ -71,7 +71,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
  public:
   FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr ino_id_generator,
              IdGeneratorSPtr slice_id_generator, KVStorageSPtr kv_storage, OperationProcessorSPtr operation_processor,
-             MDSMetaMapSPtr mds_meta_map, notify::NotifyBuddySPtr notify_buddy);
+             MDSMetaMapSPtr mds_meta_map, WorkerSetSPtr quota_worker_set, notify::NotifyBuddySPtr notify_buddy);
   ~FileSystem();
 
   FileSystem(const FileSystem&) = delete;
@@ -82,10 +82,10 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   static FileSystemSPtr New(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr ino_id_generator,
                             IdGeneratorSPtr slice_id_generator, KVStorageSPtr kv_storage,
                             OperationProcessorSPtr operation_processor, MDSMetaMapSPtr mds_meta_map,
-                            notify::NotifyBuddySPtr notify_buddy) {
+                            WorkerSetSPtr quota_worker_set, notify::NotifyBuddySPtr notify_buddy) {
     return std::make_shared<FileSystem>(self_mds_id, std::move(fs_info), std::move(ino_id_generator),
                                         slice_id_generator, kv_storage, operation_processor, mds_meta_map,
-                                        notify_buddy);
+                                        quota_worker_set, notify_buddy);
   }
 
   FileSystemSPtr GetSelfPtr();
@@ -218,7 +218,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   PartitionCache& GetPartitionCache() { return partition_cache_; }
   InodeCache& GetInodeCache() { return inode_cache_; }
 
-  quota::QuotaManager& GetQuotaManager() { return quota_manager_; }
+  quota::QuotaManager& GetQuotaManager() { return *quota_manager_; }
 
   FileSessionManager& GetFileSessionManager() { return file_session_manager_; }
 
@@ -315,7 +315,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   ChunkCache chunk_cache_;
 
   // quota
-  quota::QuotaManager quota_manager_;
+  quota::QuotaManagerSPtr quota_manager_;
 
   // renamer
   Renamer renamer_;
@@ -331,7 +331,7 @@ class FileSystemSet {
  public:
   FileSystemSet(CoordinatorClientSPtr coordinator_client, IdGeneratorUPtr fs_id_generator,
                 IdGeneratorSPtr slice_id_generator, KVStorageSPtr kv_storage, MDSMeta self_mds_meta,
-                MDSMetaMapSPtr mds_meta_map, OperationProcessorSPtr operation_processor,
+                MDSMetaMapSPtr mds_meta_map, OperationProcessorSPtr operation_processor, WorkerSetSPtr quota_worker_set,
                 notify::NotifyBuddySPtr notify_buddy);
   ~FileSystemSet();
 
@@ -343,10 +343,10 @@ class FileSystemSet {
   static FileSystemSetSPtr New(CoordinatorClientSPtr coordinator_client, IdGeneratorUPtr fs_id_generator,
                                IdGeneratorSPtr slice_id_generator, KVStorageSPtr kv_storage, MDSMeta self_mds_meta,
                                MDSMetaMapSPtr mds_meta_map, OperationProcessorSPtr operation_processor,
-                               notify::NotifyBuddySPtr notify_buddy) {
+                               WorkerSetSPtr quota_worker_set, notify::NotifyBuddySPtr notify_buddy) {
     return std::make_shared<FileSystemSet>(coordinator_client, std::move(fs_id_generator),
                                            std::move(slice_id_generator), kv_storage, self_mds_meta, mds_meta_map,
-                                           operation_processor, notify_buddy);
+                                           operation_processor, quota_worker_set, notify_buddy);
   }
 
   bool Init();
@@ -421,6 +421,8 @@ class FileSystemSet {
   KVStorageSPtr kv_storage_;
 
   OperationProcessorSPtr operation_processor_;
+
+  WorkerSetSPtr quota_worker_set_;
 
   // notify buddy
   notify::NotifyBuddySPtr notify_buddy_;
