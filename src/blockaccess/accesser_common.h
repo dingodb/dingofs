@@ -96,7 +96,7 @@ struct PutObjectAsyncContext {
   const char* buffer;
   size_t buffer_size;
   uint64_t start_time;
-  Status ret;
+  Status status;
 
   PutObjectAsyncCallBack cb;
 };
@@ -106,10 +106,10 @@ using GetObjectAsyncCallBack =
 
 struct GetObjectAsyncContext {
   std::string key;
-  char* buf;
+  char* buf{nullptr};
   off_t offset;
   size_t len;
-  Status ret;
+  Status status;
   uint32_t retry;
   size_t actual_len;
 

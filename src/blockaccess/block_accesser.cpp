@@ -42,6 +42,8 @@ static bvar::Adder<uint64_t> block_get_sync_num("block_get_sync_num");
 
 using dingofs::utils::kMB;
 
+static const char* PrettyBool(bool b) { return b ? "true" : "false"; }
+
 Status BlockAccesserImpl::Init() {
   if (options_.type == AccesserType::kS3) {
     data_accesser_ = std::make_unique<S3Accesser>(options_.s3_options);
@@ -52,7 +54,7 @@ Status BlockAccesserImpl::Init() {
     container_name_ = options_.rados_options.pool_name;
 
   } else {
-    return Status::InvalidParam("Unsupported accesser type");
+    return Status::InvalidParam("unsupported accesser type");
   }
 
   if (!data_accesser_->Init()) {
@@ -86,16 +88,19 @@ Status BlockAccesserImpl::Destroy() {
     data_accesser_->Destroy();
     data_accesser_.reset(nullptr);
   }
+
   return Status::OK();
 }
 
 bool BlockAccesserImpl::ContainerExist() {
   bool ok = false;
   BlockAccessLogGuard log(butil::cpuwide_time_us(), [&]() {
-    return absl::StrFormat("container_exist (%s) : %s", container_name_,
-                           (ok ? "ok" : "fail"));
+    return fmt::format("container_exist ({}) : {}", container_name_,
+                       PrettyBool(ok));
   });
+
   ok = data_accesser_->ContainerExist();
+
   return ok;
 }
 
@@ -107,8 +112,8 @@ Status BlockAccesserImpl::Put(const std::string& key, const char* buffer,
                               size_t length) {
   Status s;
   BlockAccessLogGuard log(butil::cpuwide_time_us(), [&]() {
-    return absl::StrFormat("put_block (%s, %d) : %s", key, length,
-                           (s.ok() ? "ok" : "fail"));
+    return fmt::format("put_block ({}, {}) : {}", key, length,
+                       PrettyBool(s.ok()));
   });
   // write block metrics
   MetricGuard<Status> guard(&s, &BlockMetric::GetInstance().write_block, length,
@@ -136,10 +141,10 @@ void BlockAccesserImpl::AsyncPut(
   context->cb = [this, start_us,
                  origin_cb](const std::shared_ptr<PutObjectAsyncContext>& ctx) {
     BlockAccessLogGuard log(start_us, [&]() {
-      return absl::StrFormat("async_put_block (%s, %d) : %s", ctx->key,
-                             ctx->buffer_size, ctx->ret.ToString());
+      return fmt::format("async_put_block ({}, {}) : {}", ctx->key,
+                         ctx->buffer_size, ctx->status.ToString());
     });
-    MetricGuard<Status> guard(&ctx->ret,
+    MetricGuard<Status> guard(&ctx->status,
                               &BlockMetric::GetInstance().write_block,
                               ctx->buffer_size, start_us);
 
@@ -169,7 +174,7 @@ void BlockAccesserImpl::AsyncPut(const std::string& key, const char* buffer,
   put_obj_ctx->start_time = butil::cpuwide_time_us();
   put_obj_ctx->cb =
       [&, retry_cb](const std::shared_ptr<PutObjectAsyncContext>& ctx) {
-        if (retry_cb(ctx->ret) == RetryStrategy::kRetry) {
+        if (retry_cb(ctx->status) == RetryStrategy::kRetry) {
           AsyncPut(ctx);
         }
       };
@@ -180,8 +185,7 @@ void BlockAccesserImpl::AsyncPut(const std::string& key, const char* buffer,
 Status BlockAccesserImpl::Get(const std::string& key, std::string* data) {
   Status s;
   BlockAccessLogGuard log(butil::cpuwide_time_us(), [&]() {
-    return absl::StrFormat("get_block (%s) : %s", key,
-                           (s.ok() ? "ok" : "fail"));
+    return fmt::format("get_block ({}) : {}", key, PrettyBool(s.ok()));
   });
   // read block metrics
   MetricGuard<Status> guard(&s, &BlockMetric::GetInstance().read_block,
@@ -208,18 +212,17 @@ void BlockAccesserImpl::AsyncGet(
   context->cb = [this, start_us,
                  origin_cb](const std::shared_ptr<GetObjectAsyncContext>& ctx) {
     BlockAccessLogGuard log(start_us, [&]() {
-      return absl::StrFormat("async_get_block (%s, %d, %d) : %s", ctx->key,
-                             ctx->offset, ctx->len, ctx->ret.ToString());
+      return fmt::format("async_get_block ({}, {}, {}) : {}", ctx->key,
+                         ctx->offset, ctx->len, ctx->status.ToString());
     });
-    MetricGuard<Status> guard(&ctx->ret, &BlockMetric::GetInstance().read_block,
-                              ctx->len, start_us);
+    MetricGuard<Status> guard(&ctx->status,
+                              &BlockMetric::GetInstance().read_block, ctx->len,
+                              start_us);
 
     block_get_async_num << -1;
     inflight_bytes_throttle_->OnComplete(ctx->len);
 
-    // for return
-    ctx->cb = origin_cb;
-    ctx->cb(ctx);
+    origin_cb(ctx);
   };
 
   if (throttle_) {
@@ -235,8 +238,8 @@ Status BlockAccesserImpl::Range(const std::string& key, off_t offset,
                                 size_t length, char* buffer) {
   Status s;
   BlockAccessLogGuard log(butil::cpuwide_time_us(), [&]() {
-    return absl::StrFormat("range_block (%s, %d, %d) : %s", key, offset, length,
-                           (s.ok() ? "ok" : "fail"));
+    return fmt::format("range_block ({}, {}, {}) : {}", key, offset, length,
+                       PrettyBool(s.ok()));
   });
   // read s3 metrics
   MetricGuard<Status> guard(&s, &BlockMetric::GetInstance().read_block, length,
@@ -256,25 +259,26 @@ Status BlockAccesserImpl::Range(const std::string& key, off_t offset,
 void BlockAccesserImpl::AsyncRange(const std::string& key, off_t offset,
                                    size_t length, char* buffer,
                                    RetryCallback retry_cb) {
-  auto get_obj_ctx = std::make_shared<GetObjectAsyncContext>();
-  get_obj_ctx->key = key;
-  get_obj_ctx->buf = buffer;
-  get_obj_ctx->offset = offset;
-  get_obj_ctx->len = length;
-  get_obj_ctx->cb =
-      [&, retry_cb](const std::shared_ptr<GetObjectAsyncContext>& ctx) {
-        if (retry_cb(ctx->ret) == RetryStrategy::kRetry) {
-          AsyncGet(ctx);
+  auto user_ctx = std::make_shared<GetObjectAsyncContext>();
+
+  user_ctx->key = key;
+  user_ctx->buf = buffer;
+  user_ctx->offset = offset;
+  user_ctx->len = length;
+  user_ctx->cb =
+      [this, retry_cb](const std::shared_ptr<GetObjectAsyncContext>& user_ctx) {
+        if (retry_cb(user_ctx->status) == RetryStrategy::kRetry) {
+          AsyncGet(user_ctx);
         }
       };
 
-  AsyncGet(get_obj_ctx);
+  AsyncGet(user_ctx);
 }
 
 bool BlockAccesserImpl::BlockExist(const std::string& key) {
   bool ok = false;
   BlockAccessLogGuard log(butil::cpuwide_time_us(), [&]() {
-    return absl::StrFormat("block_exist (%s) : %s", key, (ok ? "ok" : "fail"));
+    return fmt::format("block_exist ({}) : {}", key, PrettyBool(ok));
   });
 
   return (ok = data_accesser_->BlockExist(key));
@@ -283,8 +287,7 @@ bool BlockAccesserImpl::BlockExist(const std::string& key) {
 Status BlockAccesserImpl::Delete(const std::string& key) {
   Status s;
   BlockAccessLogGuard log(butil::cpuwide_time_us(), [&]() {
-    return absl::StrFormat("delete_block (%s) : %s", key,
-                           (s.ok() ? "ok" : "fail"));
+    return fmt::format("delete_block ({}) : {}", key, PrettyBool(s.ok()));
   });
 
   s = data_accesser_->Delete(key);
@@ -298,8 +301,8 @@ Status BlockAccesserImpl::Delete(const std::string& key) {
 Status BlockAccesserImpl::BatchDelete(const std::list<std::string>& keys) {
   Status s;
   BlockAccessLogGuard log(butil::cpuwide_time_us(), [&]() {
-    return absl::StrFormat("delete_objects (%d) : %s", keys.size(),
-                           (s.ok() ? "ok" : "fail"));
+    return fmt::format("delete_objects ({}) : {}", keys.size(),
+                       PrettyBool(s.ok()));
   });
 
   return (s = data_accesser_->BatchDelete(keys));

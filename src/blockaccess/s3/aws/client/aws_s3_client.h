@@ -29,7 +29,6 @@ namespace aws {
 class AwsS3Client {
  public:
   AwsS3Client() = default;
-
   virtual ~AwsS3Client() = default;
 
   virtual void Init(const S3Options& options) = 0;
@@ -38,30 +37,36 @@ class AwsS3Client {
   virtual std::string GetSk() = 0;
   virtual std::string GetEndpoint() = 0;
 
-  virtual bool BucketExist(std::string bucket) = 0;
+  virtual bool BucketExist(const std::string& bucket) = 0;
 
-  virtual int PutObject(std::string bucket, const std::string& key,
+  virtual int PutObject(const std::string& bucket, const std::string& key,
                         const char* buffer, size_t buffer_size) = 0;
 
-  virtual void PutObjectAsync(
-      std::string bucket, std::shared_ptr<AwsPutObjectAsyncContext> context) = 0;
+  virtual void AsyncPutObject(
+      const std::string& bucket,
+      std::shared_ptr<AwsPutObjectAsyncContext> context) = 0;
 
-  virtual int GetObject(std::string bucket, const std::string& key,
+  virtual int GetObject(const std::string& bucket, const std::string& key,
                         std::string* data) = 0;
 
-  virtual int RangeObject(std::string bucket, const std::string& key, char* buf,
-                        off_t offset, size_t len) = 0;
+  virtual int RangeObject(const std::string& bucket, const std::string& key,
+                          char* buf, off_t offset, size_t len) = 0;
 
-  virtual void GetObjectAsync(
-      std::string bucket, std::shared_ptr<AwsGetObjectAsyncContext> context) = 0;
+  virtual void AsyncGetObject(
+      const std::string& bucket,
+      std::shared_ptr<AwsGetObjectAsyncContext> context) = 0;
 
-  virtual int DeleteObject(std::string bucket, const std::string& key) = 0;
+  virtual int DeleteObject(const std::string& bucket,
+                           const std::string& key) = 0;
 
-  virtual int DeleteObjects(std::string bucket,
+  virtual int DeleteObjects(const std::string& bucket,
                             const std::list<std::string>& key_list) = 0;
 
-  virtual bool ObjectExist(std::string bucket, const std::string& key) = 0;
+  virtual bool ObjectExist(const std::string& bucket,
+                           const std::string& key) = 0;
 };
+
+using AwsS3ClientUPtr = std::unique_ptr<AwsS3Client>;
 
 }  // namespace aws
 }  // namespace blockaccess

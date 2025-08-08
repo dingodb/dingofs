@@ -40,12 +40,11 @@ void S3Adapter::Init(const S3Options& options) {
     aws_sdk_options.loggingOptions.logLevel =
         Aws::Utils::Logging::LogLevel(options.aws_sdk_config.loglevel);
     aws_sdk_options.loggingOptions.defaultLogPrefix =
-        options.aws_sdk_config.logPrefix.c_str();
+        options.aws_sdk_config.log_prefix.c_str();
     Aws::InitAPI(aws_sdk_options);
 
-    if (std::atexit(CleanUp) != 0) {
-      LOG(FATAL) << "Failed to register cleanup function for AWS SDK";
-    }
+    CHECK(std::atexit(CleanUp) == 0)
+        << "register cleanup function for AWS SDK fail.";
   };
 
   std::call_once(s3_init_flag, init_sdk);
@@ -53,20 +52,18 @@ void S3Adapter::Init(const S3Options& options) {
   s3_options_ = options;
   bucket_ = options.s3_info.bucket_name;
 
-  if (options.aws_sdk_config.use_crt_client) {
+  if (options.aws_sdk_config.use_crt_client)
     s3_client_ = std::make_unique<AwsCrtS3Client>();
-  } else {
-    // init aws s3 client
+  else
     s3_client_ = std::make_unique<AwsLegacyS3Client>();
-  }
 
   s3_client_->Init(s3_options_);
 }
 
 void S3Adapter::Shutdown() {
-//   // one program should only call once
-//   auto shutdown_sdk = [&]() { Aws::ShutdownAPI(aws_sdk_options); };
-//   std::call_once(s3_shutdown_flag, shutdown_sdk);
+  //   // one program should only call once
+  //   auto shutdown_sdk = [&]() { Aws::ShutdownAPI(aws_sdk_options); };
+  //   std::call_once(s3_shutdown_flag, shutdown_sdk);
 }
 
 bool S3Adapter::BucketExist() { return s3_client_->BucketExist(bucket_); }
@@ -80,16 +77,18 @@ int S3Adapter::PutObject(const std::string& key, const std::string& data) {
   return PutObject(key, data.data(), data.size());
 }
 
-void S3Adapter::PutObjectAsync(std::shared_ptr<PutObjectAsyncContext> context) {
+void S3Adapter::AsyncPutObject(std::shared_ptr<PutObjectAsyncContext> context) {
   auto aws_ctx = std::make_shared<AwsPutObjectAsyncContext>();
-  aws_ctx->put_obj_ctx = context;
-  aws_ctx->cb = [this](const std::shared_ptr<AwsPutObjectAsyncContext>& ctx) {
-    // for return
-    ctx->put_obj_ctx->ret = ctx->ret;
-    ctx->put_obj_ctx->cb(ctx->put_obj_ctx);
+
+  aws_ctx->user_ctx = context;
+  aws_ctx->cb = [this](const AwsPutObjectAsyncContextSPtr& aws_ctx) {
+    auto& user_ctx = aws_ctx->user_ctx;
+
+    user_ctx->status = aws_ctx->status;
+    user_ctx->cb(user_ctx);
   };
 
-  s3_client_->PutObjectAsync(bucket_, aws_ctx);
+  s3_client_->AsyncPutObject(bucket_, aws_ctx);
 }
 
 int S3Adapter::GetObject(const std::string& key, std::string* data) {
@@ -101,18 +100,19 @@ int S3Adapter::RangeObject(const std::string& key, char* buf, off_t offset,
   return s3_client_->RangeObject(bucket_, key, buf, offset, len);
 }
 
-void S3Adapter::GetObjectAsync(std::shared_ptr<GetObjectAsyncContext> context) {
+void S3Adapter::AsyncGetObject(std::shared_ptr<GetObjectAsyncContext> context) {
   auto aws_ctx = std::make_shared<AwsGetObjectAsyncContext>();
 
-  aws_ctx->get_obj_ctx = context;
-  aws_ctx->cb = [this](const std::shared_ptr<AwsGetObjectAsyncContext>& ctx) {
-    // for return
-    ctx->get_obj_ctx->actual_len = ctx->actualLen;
-    ctx->get_obj_ctx->ret = ctx->ret;
-    ctx->get_obj_ctx->cb(ctx->get_obj_ctx);
+  aws_ctx->user_ctx = context;
+  aws_ctx->cb = [this](const AwsGetObjectAsyncContextSPtr& aws_ctx) {
+    auto& user_ctx = aws_ctx->user_ctx;
+
+    user_ctx->actual_len = aws_ctx->actual_len;
+    user_ctx->status = aws_ctx->status;
+    user_ctx->cb(user_ctx);
   };
 
-  s3_client_->GetObjectAsync(bucket_, aws_ctx);
+  s3_client_->AsyncGetObject(bucket_, aws_ctx);
 }
 
 int S3Adapter::DeleteObject(const std::string& key) {

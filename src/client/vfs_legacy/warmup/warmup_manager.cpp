@@ -517,7 +517,7 @@ void WarmupManagerS3Impl::WarmUpAllObjs(
           cond.Signal();
           return;
         }
-        if (context->ret.ok()) {
+        if (context->status.ok()) {
           VLOG(9) << "Get Object success: " << context->key;
           PutObjectToCache(ino, context);
           CollectMetrics(&warmupBlockMetric_.warmupBlockCached, context->len,

@@ -316,12 +316,12 @@ static void AsyncGetCallback(RadosAsyncIOUnit* io_unit, int ret_code) {
 
   if (ret_code < 0) {
     if (ret_code == -ENOENT) {
-      get_context->ret = Status::NotFound(strerror(-ret_code));
+      get_context->status = Status::NotFound(strerror(-ret_code));
     } else {
-      get_context->ret = Status::IoError(strerror(-ret_code));
+      get_context->status = Status::IoError(strerror(-ret_code));
     }
   } else {
-    get_context->ret = Status::OK();
+    get_context->status = Status::OK();
     get_context->actual_len = ret_code;
   }
 
@@ -354,7 +354,7 @@ static void AsyncPutCallback(RadosAsyncIOUnit* io_unit, int ret_code) {
 
   auto put_context =
       std::get<std::shared_ptr<PutObjectAsyncContext>>(io_unit->async_context);
-  put_context->ret =
+  put_context->status =
       (ret_code < 0) ? Status::IoError(strerror(-ret_code)) : Status::OK();
   put_context->cb(put_context);
 }

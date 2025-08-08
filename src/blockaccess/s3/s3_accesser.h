@@ -24,6 +24,7 @@
 
 namespace dingofs {
 namespace blockaccess {
+
 // S3Accesser is a class that provides a way to access data from a S3 data
 // source. It is a derived class of DataAccesser.
 // use aws-sdk-cpp implement
@@ -33,7 +34,6 @@ class S3Accesser : public Accesser {
   ~S3Accesser() override = default;
 
   bool Init() override;
-
   bool Destroy() override;
 
   bool ContainerExist() override;
@@ -50,14 +50,13 @@ class S3Accesser : public Accesser {
   bool BlockExist(const std::string& key) override;
 
   Status Delete(const std::string& key) override;
-
   Status BatchDelete(const std::list<std::string>& keys) override;
 
  private:
   static Aws::String S3Key(const std::string& key);
   const S3Options options_;
 
-  std::unique_ptr<blockaccess::aws::S3Adapter> client_;
+  aws::S3AdapterUPtr client_;
 };
 
 }  // namespace blockaccess

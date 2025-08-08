@@ -19,6 +19,7 @@
 
 #include <string>
 
+#include "fmt/format.h"
 #include "utils/configuration.h"
 
 namespace dingofs {
@@ -34,17 +35,22 @@ struct S3Info {
 
 struct AwsSdkConfig {
   std::string region{"us-east-1"};
+
   int loglevel{4};
-  std::string logPrefix;
-  bool verifySsl{false};
-  int maxConnections{32};
-  int connectTimeout{60000};
-  int requestTimeout{10000};
+  std::string log_prefix;
+
+  bool verify_ssl{false};
+  int max_connections{32};
+  int connect_timeout{60000};
+  int request_timeout{10000};
+
   bool use_crt_client{false};
+
   bool use_thread_pool{true};  // this only work when use_crt_client is false
-  int asyncThreadNum{16};      // this only work when use_crt_client is false
-  bool useVirtualAddressing{false};
-  bool enableTelemetry{false};
+  int async_thread_num{16};    // this only work when use_crt_client is false
+
+  bool use_virtual_addressing{false};
+  bool enable_telemetry{false};
 };
 
 struct S3Options {
@@ -56,43 +62,48 @@ inline void InitAwsSdkConfig(utils::Configuration* conf,
                              AwsSdkConfig* aws_sdk_config) {
   LOG_IF(FATAL, !conf->GetIntValue("s3.logLevel", &aws_sdk_config->loglevel));
   LOG_IF(FATAL,
-         !conf->GetStringValue("s3.logPrefix", &aws_sdk_config->logPrefix));
+         !conf->GetStringValue("s3.logPrefix", &aws_sdk_config->log_prefix));
   LOG_IF(FATAL,
-         !conf->GetBoolValue("s3.verify_SSL", &aws_sdk_config->verifySsl));
+         !conf->GetBoolValue("s3.verify_SSL", &aws_sdk_config->verify_ssl));
   LOG_IF(FATAL, !conf->GetIntValue("s3.maxConnections",
-                                   &aws_sdk_config->maxConnections));
+                                   &aws_sdk_config->max_connections));
   LOG_IF(FATAL, !conf->GetIntValue("s3.connectTimeout",
-                                   &aws_sdk_config->connectTimeout));
+                                   &aws_sdk_config->connect_timeout));
   LOG_IF(FATAL, !conf->GetIntValue("s3.requestTimeout",
-                                   &aws_sdk_config->requestTimeout));
+                                   &aws_sdk_config->request_timeout));
 
   if (!conf->GetBoolValue("s3.use_crt_client",
                           &aws_sdk_config->use_crt_client)) {
     aws_sdk_config->use_crt_client = false;
-    LOG(INFO) << "Not found s3.use_crt_client in conf, use default "
-              << (aws_sdk_config->use_crt_client ? "true" : "false");
+    LOG(INFO) << fmt::format(
+        "Not found s3.use_crt_client in conf, use default {}",
+        aws_sdk_config->use_crt_client);
   }
 
   if (!conf->GetBoolValue("s3.use_thread_pool",
                           &aws_sdk_config->use_thread_pool)) {
-    LOG(INFO) << "Not found s3.use_thread_pool in conf, use default "
-              << (aws_sdk_config->use_thread_pool ? "true" : "false");
+    aws_sdk_config->use_thread_pool = true;
+    LOG(INFO) << fmt::format(
+        "Not found s3.use_thread_pool in conf, use default {}",
+        aws_sdk_config->use_thread_pool);
   }
 
   if (!conf->GetIntValue("s3.async_thread_num_in_thread_pool",
-                         &aws_sdk_config->asyncThreadNum)) {
-    LOG(INFO)
-        << "Not found s3.async_thread_num_in_thread_pool in conf, use default"
-        << aws_sdk_config->asyncThreadNum;
+                         &aws_sdk_config->async_thread_num)) {
+    aws_sdk_config->async_thread_num = 16;
+    LOG(INFO) << fmt::format(
+        "Not found s3.async_thread_num_in_thread_pool in conf, use default {}",
+        aws_sdk_config->async_thread_num);
   }
 
   LOG_IF(FATAL, !conf->GetBoolValue("s3.useVirtualAddressing",
-                                    &aws_sdk_config->useVirtualAddressing));
+                                    &aws_sdk_config->use_virtual_addressing));
   LOG_IF(FATAL, !conf->GetStringValue("s3.region", &aws_sdk_config->region));
+
   if (!conf->GetBoolValue("s3.enableTelemetry",
-                          &aws_sdk_config->enableTelemetry)) {
-    LOG(WARNING) << "Not found s3.enableTelemetry in conf,default to false";
-    aws_sdk_config->enableTelemetry = false;
+                          &aws_sdk_config->enable_telemetry)) {
+    aws_sdk_config->enable_telemetry = false;
+    LOG(WARNING) << "Not found s3.enableTelemetry in conf, default false.";
   }
 }
 

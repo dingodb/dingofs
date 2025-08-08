@@ -17,15 +17,14 @@
 #ifndef SRC_AWS_S3_CLIENT_AWS_LEGACY_S3_CLIENT_H_
 #define SRC_AWS_S3_CLIENT_AWS_LEGACY_S3_CLIENT_H_
 
-#include <aws/s3/S3Client.h>
-#include <glog/logging.h>
-
 #include <atomic>
 #include <memory>
 
+#include "aws/s3/S3Client.h"
 #include "blockaccess/s3/aws/aws_s3_common.h"
 #include "blockaccess/s3/aws/client/aws_s3_client.h"
 #include "blockaccess/s3/s3_common.h"
+#include "glog/logging.h"
 
 namespace dingofs {
 namespace blockaccess {
@@ -34,7 +33,6 @@ namespace aws {
 class AwsLegacyS3Client : public AwsS3Client {
  public:
   explicit AwsLegacyS3Client() = default;
-
   ~AwsLegacyS3Client() override = default;
 
   void Init(const S3Options& options) override;
@@ -54,31 +52,29 @@ class AwsLegacyS3Client : public AwsS3Client {
     return s3_options_.s3_info.endpoint;
   }
 
-  bool BucketExist(std::string bucket) override;
+  bool BucketExist(const std::string& bucket) override;
 
-  int PutObject(std::string bucket, const std::string& key, const char* buffer,
-                size_t buffer_size) override;
+  int PutObject(const std::string& bucket, const std::string& key,
+                const char* buffer, size_t buffer_size) override;
 
-  void PutObjectAsync(
-      std::string bucket,
-      std::shared_ptr<AwsPutObjectAsyncContext> context) override;
+  void AsyncPutObject(const std::string& bucket,
+                      AwsPutObjectAsyncContextSPtr aws_ctx) override;
 
-  int GetObject(std::string bucket, const std::string& key,
+  int GetObject(const std::string& bucket, const std::string& key,
                 std::string* data) override;
 
-  int RangeObject(std::string bucket, const std::string& key, char* buf,
+  int RangeObject(const std::string& bucket, const std::string& key, char* buf,
                   off_t offset, size_t len) override;
 
-  void GetObjectAsync(
-      std::string bucket,
-      std::shared_ptr<AwsGetObjectAsyncContext> context) override;
+  void AsyncGetObject(const std::string& bucket,
+                      AwsGetObjectAsyncContextSPtr aws_ctx) override;
 
-  int DeleteObject(std::string bucket, const std::string& key) override;
+  int DeleteObject(const std::string& bucket, const std::string& key) override;
 
-  int DeleteObjects(std::string bucket,
+  int DeleteObjects(const std::string& bucket,
                     const std::list<std::string>& key_list) override;
 
-  bool ObjectExist(std::string bucket, const std::string& key) override;
+  bool ObjectExist(const std::string& bucket, const std::string& key) override;
 
  private:
   std::atomic<bool> initialized_{false};

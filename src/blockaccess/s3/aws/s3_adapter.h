@@ -17,6 +17,8 @@
 #ifndef DINGOFS_DATAACCESS_AWS_S3_ADAPTER_H_
 #define DINGOFS_DATAACCESS_AWS_S3_ADAPTER_H_
 
+#include <memory>
+
 #include "blockaccess/accesser_common.h"
 #include "blockaccess/s3/aws/client/aws_s3_client.h"
 #include "blockaccess/s3/s3_common.h"
@@ -28,29 +30,22 @@ namespace aws {
 class S3Adapter {
  public:
   S3Adapter() = default;
-
   ~S3Adapter() = default;
 
   void Init(const S3Options& options);
-
   static void Shutdown();
 
   bool BucketExist();
 
   int PutObject(const std::string& key, const char* buffer, size_t buffer_size);
-
   int PutObject(const std::string& key, const std::string& data);
-
-  void PutObjectAsync(std::shared_ptr<PutObjectAsyncContext> context);
+  void AsyncPutObject(std::shared_ptr<PutObjectAsyncContext> context);
 
   int GetObject(const std::string& key, std::string* data);
-
   int RangeObject(const std::string& key, char* buf, off_t offset, size_t len);
-
-  void GetObjectAsync(std::shared_ptr<GetObjectAsyncContext> context);
+  void AsyncGetObject(std::shared_ptr<GetObjectAsyncContext> context);
 
   int DeleteObject(const std::string& key);
-
   int BatchDeleteObject(const std::list<std::string>& key_list);
 
   bool ObjectExist(const std::string& key);
@@ -58,10 +53,13 @@ class S3Adapter {
  private:
   AwsSdkConfig aws_sdk_config_;
   S3Options s3_options_;
+
   std::string bucket_;
 
-  std::unique_ptr<AwsS3Client> s3_client_{nullptr};
+  AwsS3ClientUPtr s3_client_{nullptr};
 };
+
+using S3AdapterUPtr = std::unique_ptr<S3Adapter>;
 
 }  // namespace aws
 }  // namespace blockaccess
