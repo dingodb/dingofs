@@ -163,7 +163,7 @@ Status ChunkWriter::BufferWrite(const char* buf, uint64_t size,
                        });
 
     for (const ChunkWriteInfo* write_info : write_batch) {
-      VLOG(4) << fmt::format("{} BufferWrite write_info: {}", UUID(),
+      VLOG(4) << fmt::format("{} BufferWrite batch write_info: {}", UUID(),
                              write_info->ToString());
 
       std::unique_ptr<SliceData> writing_slice =

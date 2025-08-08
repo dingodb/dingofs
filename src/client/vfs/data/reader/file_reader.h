@@ -18,6 +18,7 @@
 #define DINGOFS_CLIENT_VFS_DATA_READER_FILE_READER_H_
 
 #include <cstdint>
+#include <memory>
 #include <mutex>
 #include <unordered_map>
 
@@ -50,7 +51,7 @@ class FileReader {
   std::unordered_map<uint64_t, ChunkReaderUptr> chunk_readers_;
 };
 
-using FileReaderUPtr = std::shared_ptr<FileReader>;
+using FileReaderUPtr = std::unique_ptr<FileReader>;
 
 }  // namespace vfs
 }  // namespace client
