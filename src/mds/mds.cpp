@@ -28,7 +28,6 @@
 
 #include <utility>
 
-#include "blockaccess/block_accesser_factory.h"
 #include "common/version.h"
 #include "mds/cachegroup/cache_group_member_manager.h"
 #include "mds/cachegroup/cache_group_member_service.h"
@@ -193,9 +192,6 @@ void MDS::Init() {
       std::make_shared<MetaserverClient>(options_.metaserverOptions);
   auto dlock = std::make_shared<DLock>(options_.dLockOptions, etcdClient_);
 
-  block_accesser_factory_ =
-      std::make_shared<blockaccess::BlockAccesserFactory>();
-
   // init topology
   InitTopology(options_.topologyOptions);
   InitTopologyMetricService(options_.topologyOptions);
@@ -206,7 +202,6 @@ void MDS::Init() {
 
   FsManagerOption fs_manager_option;
   InitFsManagerOptions(&fs_manager_option);
-  fs_manager_option.block_accesser_factory = block_accesser_factory_;
 
   fsManager_ =
       std::make_shared<FsManager>(fsStorage_, metaserverClient_,

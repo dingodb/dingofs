@@ -88,8 +88,11 @@ struct BlockAccessOptions {
 struct GetObjectAsyncContext;
 struct PutObjectAsyncContext;
 
+using GetObjectAsyncContextSPtr = std::shared_ptr<GetObjectAsyncContext>;
+using PutObjectAsyncContextSPtr = std::shared_ptr<PutObjectAsyncContext>;
+
 using PutObjectAsyncCallBack =
-    std::function<void(const std::shared_ptr<PutObjectAsyncContext>&)>;
+    std::function<void(const PutObjectAsyncContextSPtr&)>;
 
 struct PutObjectAsyncContext {
   std::string key;
@@ -102,7 +105,7 @@ struct PutObjectAsyncContext {
 };
 
 using GetObjectAsyncCallBack =
-    std::function<void(const std::shared_ptr<GetObjectAsyncContext>&)>;
+    std::function<void(const GetObjectAsyncContextSPtr&)>;
 
 struct GetObjectAsyncContext {
   std::string key;

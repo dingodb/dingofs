@@ -17,8 +17,6 @@
 #ifndef SRC_AWS_S3_CLIENT_AWS_S3_CLIENT_H_
 #define SRC_AWS_S3_CLIENT_AWS_S3_CLIENT_H_
 
-#include <aws/s3/S3ServiceClientModel.h>
-
 #include "blockaccess/s3/aws/aws_s3_common.h"
 #include "blockaccess/s3/s3_common.h"
 
@@ -42,9 +40,8 @@ class AwsS3Client {
   virtual int PutObject(const std::string& bucket, const std::string& key,
                         const char* buffer, size_t buffer_size) = 0;
 
-  virtual void AsyncPutObject(
-      const std::string& bucket,
-      std::shared_ptr<AwsPutObjectAsyncContext> context) = 0;
+  virtual void AsyncPutObject(const std::string& bucket,
+                              PutObjectAsyncContextSPtr user_ctx) = 0;
 
   virtual int GetObject(const std::string& bucket, const std::string& key,
                         std::string* data) = 0;
@@ -52,9 +49,8 @@ class AwsS3Client {
   virtual int RangeObject(const std::string& bucket, const std::string& key,
                           char* buf, off_t offset, size_t len) = 0;
 
-  virtual void AsyncGetObject(
-      const std::string& bucket,
-      std::shared_ptr<AwsGetObjectAsyncContext> context) = 0;
+  virtual void AsyncGetObject(const std::string& bucket,
+                              GetObjectAsyncContextSPtr user_ctx) = 0;
 
   virtual int DeleteObject(const std::string& bucket,
                            const std::string& key) = 0;

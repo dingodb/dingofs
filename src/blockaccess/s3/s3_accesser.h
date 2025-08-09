@@ -18,7 +18,7 @@
 #define DINGOFS_BLOCK_ACCESS_S3_ACCESSER_H_
 
 #include "blockaccess/accesser.h"
-#include "blockaccess/s3/aws/s3_adapter.h"
+#include "blockaccess/s3/aws/aws_s3_client.h"
 #include "blockaccess/s3/s3_common.h"
 #include "common/status.h"
 
@@ -40,12 +40,12 @@ class S3Accesser : public Accesser {
 
   Status Put(const std::string& key, const char* buffer,
              size_t length) override;
-  void AsyncPut(std::shared_ptr<PutObjectAsyncContext> context) override;
+  void AsyncPut(PutObjectAsyncContextSPtr context) override;
 
   Status Get(const std::string& key, std::string* data) override;
   Status Range(const std::string& key, off_t offset, size_t length,
                char* buffer) override;
-  void AsyncGet(std::shared_ptr<GetObjectAsyncContext> context) override;
+  void AsyncGet(GetObjectAsyncContextSPtr context) override;
 
   bool BlockExist(const std::string& key) override;
 
@@ -54,9 +54,12 @@ class S3Accesser : public Accesser {
 
  private:
   static Aws::String S3Key(const std::string& key);
+
+  std::string bucket_;
+
   const S3Options options_;
 
-  aws::S3AdapterUPtr client_;
+  aws::AwsS3ClientUPtr client_{nullptr};
 };
 
 }  // namespace blockaccess

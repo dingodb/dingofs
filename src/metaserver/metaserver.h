@@ -28,7 +28,6 @@
 #include <memory>
 #include <string>
 
-#include "blockaccess/block_accesser_factory.h"
 #include "fs/local_filesystem.h"
 #include "metaserver/copyset/config.h"
 #include "metaserver/copyset/copyset_service.h"
@@ -96,8 +95,6 @@ class Metaserver {
   bool inited_ = false;
   // running as the main MDS or not
   bool running_ = false;
-
-  std::shared_ptr<blockaccess::BlockAccesserFactory> block_accesser_factory_;
 
   std::shared_ptr<stub::rpcclient::MdsClient> mdsClient_;
   std::shared_ptr<stub::rpcclient::MetaServerClient> metaClient_;

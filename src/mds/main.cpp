@@ -26,7 +26,6 @@
 #include <csignal>
 
 #include "blockaccess/block_access_log.h"
-#include "blockaccess/s3/aws/s3_adapter.h"
 #include "common/version.h"
 #include "mds/mds.h"
 #include "options/common/dynamic_vlog.h"
@@ -104,7 +103,6 @@ int main(int argc, char** argv) {
   mds.Stop();
 
   // Ugly shutdown
-  dingofs::blockaccess::aws::S3Adapter::Shutdown();
   google::ShutdownGoogleLogging();
   return 0;
 }

@@ -13,9 +13,8 @@
 # limitations under the License.
 
 add_library(aws_s3_adapter
-    s3_adapter.cpp
-    client/aws_crt_s3_client.cpp
-    client/aws_legacy_s3_client.cpp
+    aws_crt_s3_client.cpp
+    aws_legacy_s3_client.cpp
 )
 
 target_link_libraries(aws_s3_adapter

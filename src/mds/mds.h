@@ -28,7 +28,6 @@
 #include <memory>
 #include <string>
 
-#include "blockaccess/block_accesser_factory.h"
 #include "mds/cachegroup/cache_group_member_manager.h"
 #include "mds/dlock/dlock.h"
 #include "mds/fs_manager.h"
@@ -126,7 +125,6 @@ class MDS {
   std::shared_ptr<heartbeat::Coordinator> coordinator_;
   std::shared_ptr<heartbeat::HeartbeatManager> heartbeatManager_;
   std::shared_ptr<topology::TopologyMetricService> topologyMetricService_;
-  std::shared_ptr<blockaccess::BlockAccesserFactory> block_accesser_factory_;
   MDSOptions options_;
 
   bool etcdClientInited_;

@@ -117,8 +117,6 @@ MetaStatusCode PartitionCleaner::CleanDataAndDeleteInode(const Inode& inode) {
         partition_clean_option_.s3_client_adaptor_option;
     client_adaptor_option.blockSize = fs_info.block_size();
     client_adaptor_option.chunkSize = fs_info.chunk_size();
-    client_adaptor_option.block_accesser_factory =
-        partition_clean_option_.block_accesser_factory;
 
     blockaccess::BlockAccessOptions block_access_options =
         partition_clean_option_.block_access_options;

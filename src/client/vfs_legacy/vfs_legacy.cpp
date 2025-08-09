@@ -324,8 +324,7 @@ Status VFSOld::Start(const VFSConfig& vfs_conf) {
     const auto& storage_info = fs_info_->storage_info();
     FillBlockAccessOption(storage_info, &option_.block_access_opt);
 
-    block_accesser_ = std::make_unique<blockaccess::BlockAccesserImpl>(
-        option_.block_access_opt);
+    block_accesser_ = blockaccess::NewBlockAccesser(option_.block_access_opt);
     DINGOFS_RETURN_NOT_OK(block_accesser_->Init());
   }
 

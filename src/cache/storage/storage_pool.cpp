@@ -86,8 +86,7 @@ Status StoragePoolImpl::Create(uint32_t fs_id, StorageSPtr& storage) {
   // New block accesser
   blockaccess::BlockAccessOptions block_access_opt;
   FillBlockAccessOption(storage_info, &block_access_opt);
-  block_accesseres_[fs_id] =
-      std::make_unique<blockaccess::BlockAccesserImpl>(block_access_opt);
+  block_accesseres_[fs_id] = blockaccess::NewBlockAccesser(block_access_opt);
   auto* block_accesser = block_accesseres_[fs_id].get();
   status = block_accesser->Init();
   if (!status.ok()) {

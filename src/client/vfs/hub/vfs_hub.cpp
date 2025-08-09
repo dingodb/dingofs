@@ -24,7 +24,6 @@
 #include <memory>
 
 #include "blockaccess/block_accesser.h"
-#include "blockaccess/block_accesser_factory.h"
 #include "blockaccess/rados/rados_common.h"
 #include "cache/tiercache/tier_block_cache.h"
 #include "client/meta/vfs_meta.h"
@@ -110,8 +109,7 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
                                   .cluster_name = rados_info.cluster_name};
   }
 
-  blockaccess::BlockAccesserFactory factory;
-  block_accesser_ = factory.NewBlockAccesser(vfs_option_.block_access_opt);
+  block_accesser_ = blockaccess::NewBlockAccesser(vfs_option_.block_access_opt);
   DINGOFS_RETURN_NOT_OK(block_accesser_->Init());
 
   handle_manager_ = std::make_unique<HandleManager>(this);

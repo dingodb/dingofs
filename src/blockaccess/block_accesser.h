@@ -156,6 +156,15 @@ class BlockAccesserImpl : public BlockAccesser {
 using BlockAccesserSPtr = std::shared_ptr<BlockAccesser>;
 using BlockAccesserUPtr = std::unique_ptr<BlockAccesser>;
 
+inline BlockAccesserUPtr NewBlockAccesser(const BlockAccessOptions& options) {
+  return std::make_unique<blockaccess::BlockAccesserImpl>(options);
+}
+
+inline BlockAccesserSPtr NewShareBlockAccesser(
+    const BlockAccessOptions& options) {
+  return std::make_shared<blockaccess::BlockAccesserImpl>(options);
+}
+
 }  // namespace blockaccess
 }  // namespace dingofs
 

@@ -14,18 +14,24 @@
  * limitations under the License.
  */
 
-#include "blockaccess/s3/aws/client/aws_crt_s3_client.h"
+#include "blockaccess/s3/aws/aws_legacy_s3_client.h"
 
 #include <memory>
+#include <utility>
 
-#include "aws/s3-crt/model/DeleteObjectRequest.h"
-#include "aws/s3-crt/model/DeleteObjectsRequest.h"
-#include "aws/s3-crt/model/GetObjectRequest.h"
-#include "aws/s3-crt/model/HeadBucketRequest.h"
-#include "aws/s3-crt/model/HeadObjectRequest.h"
-#include "aws/s3-crt/model/PutObjectRequest.h"
-#include "blockaccess/s3/aws/aws_s3_common.h"
-#include "fmt/format.h"
+#include "aws/core/auth/AWSCredentials.h"
+#include "aws/core/client/ClientConfiguration.h"
+#include "aws/core/utils/memory/AWSMemory.h"
+#include "aws/core/utils/memory/stl/AWSString.h"
+#include "aws/s3/S3Client.h"
+#include "aws/s3/model/Delete.h"
+#include "aws/s3/model/DeleteObjectRequest.h"
+#include "aws/s3/model/DeleteObjectsRequest.h"
+#include "aws/s3/model/GetObjectRequest.h"
+#include "aws/s3/model/HeadBucketRequest.h"
+#include "aws/s3/model/HeadObjectRequest.h"
+#include "aws/s3/model/ObjectIdentifier.h"
+#include "aws/s3/model/PutObjectRequest.h"
 #include "glog/logging.h"
 #include "opentelemetry/exporters/otlp/otlp_http_exporter_factory.h"
 #include "opentelemetry/exporters/otlp/otlp_http_metric_exporter_factory.h"
@@ -36,31 +42,39 @@ namespace dingofs {
 namespace blockaccess {
 namespace aws {
 
-using namespace Aws::S3Crt;
-using Aws::Client::AWSAuthV4Signer;
+using namespace Aws::S3;
 
-void AwsCrtS3Client::Init(const S3Options& options) {
-  CHECK(!initialized_.load()) << "aws_crt_s3_client already initialized.";
-
+void AwsLegacyS3Client::Init(const S3Options& options) {
   LOG(INFO) << fmt::format(
-      "[s3_crt] init aws_crt_s3_client ak:{} sk:{} s3_endpoint:{}.",
+      "[s3_legacy] init aws_legacy_s3_client ak:{} sk:{} s3_endpoint:{}.",
       options.s3_info.ak, options.s3_info.sk, options.s3_info.endpoint);
 
   s3_options_ = options;
 
   {
-    auto config = std::make_unique<S3CrtClientConfiguration>();
-    config->endpointOverride = options.s3_info.endpoint;
-    config->verifySSL = options.aws_sdk_config.verify_ssl;
-    config->region = options.aws_sdk_config.region;
-    config->maxConnections = options.aws_sdk_config.max_connections;
-    config->connectTimeoutMs = options.aws_sdk_config.connect_timeout;
-    config->requestTimeoutMs = options.aws_sdk_config.request_timeout;
-    config->useVirtualAddressing =
-        options.aws_sdk_config.use_virtual_addressing;
+    // init config
+    auto config = std::make_unique<Aws::Client::ClientConfiguration>();
+    config->endpointOverride = s3_options_.s3_info.endpoint;
+    // config->scheme = Aws::Http::Scheme(s3_options_.aws_sdk_config.scheme);
+    config->verifySSL = s3_options_.aws_sdk_config.verify_ssl;
+    config->userAgent = "S3 Browser";
+    config->region = s3_options_.aws_sdk_config.region;
+    config->maxConnections = s3_options_.aws_sdk_config.max_connections;
+    config->connectTimeoutMs = s3_options_.aws_sdk_config.connect_timeout;
+    config->requestTimeoutMs = s3_options_.aws_sdk_config.request_timeout;
 
-    if (options.aws_sdk_config.enable_telemetry) {
-      LOG(INFO) << "[s3_crt] enable telemetry.";
+    if (s3_options_.aws_sdk_config.use_thread_pool) {
+      LOG(INFO) << fmt::format(
+          "[s3_legacy] init async thread pool thread num({}).",
+          s3_options_.aws_sdk_config.async_thread_num);
+
+      config->executor =
+          Aws::MakeShared<Aws::Utils::Threading::PooledThreadExecutor>(
+              "AwsLegacyS3Client", s3_options_.aws_sdk_config.async_thread_num);
+    }
+
+    if (s3_options_.aws_sdk_config.enable_telemetry) {
+      LOG(INFO) << "[s3_legacy] enable telemetry.";
       using namespace ::opentelemetry::exporter::otlp;
 
       OtlpHttpExporterOptions opts;
@@ -79,22 +93,19 @@ void AwsCrtS3Client::Init(const S3Options& options) {
     cfg_ = std::move(config);
   }
 
-  client_ = std::make_unique<S3CrtClient>(
-      Aws::Auth::AWSCredentials(s3_options_.s3_info.ak, s3_options_.s3_info.sk),
-      *cfg_, AWSAuthV4Signer::PayloadSigningPolicy::Never);
-
-  initialized_.store(true);
+  client_ = std::make_unique<S3Client>(
+      Aws::Auth::AWSCredentials(options.s3_info.ak, options.s3_info.sk), *cfg_,
+      Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
+      s3_options_.aws_sdk_config.use_virtual_addressing);
 }
 
-bool AwsCrtS3Client::BucketExist(const std::string& bucket) {
-  DCHECK(initialized_.load(std::memory_order_relaxed));
-
+bool AwsLegacyS3Client::BucketExist(const std::string& bucket) {
   Model::HeadBucketRequest request;
   request.SetBucket(bucket);
-
   auto response = client_->HeadBucket(request);
+
   if (!response.IsSuccess()) {
-    LOG(ERROR) << fmt::format("[s3_crt.{}] HeadBucket fail, error({} {}).",
+    LOG(ERROR) << fmt::format("[s3_legacy.{}] HeadBucket fail, error({} {}).",
                               bucket, response.GetError().GetExceptionName(),
                               response.GetError().GetMessage());
     return false;
@@ -103,10 +114,9 @@ bool AwsCrtS3Client::BucketExist(const std::string& bucket) {
   return true;
 }
 
-int AwsCrtS3Client::PutObject(const std::string& bucket, const std::string& key,
-                              const char* buffer, size_t buffer_size) {
-  DCHECK(initialized_.load(std::memory_order_relaxed));
-
+int AwsLegacyS3Client::PutObject(const std::string& bucket,
+                                 const std::string& key, const char* buffer,
+                                 size_t buffer_size) {
   Model::PutObjectRequest request;
   request.SetBucket(bucket);
   request.SetKey(key);
@@ -114,9 +124,10 @@ int AwsCrtS3Client::PutObject(const std::string& bucket, const std::string& key,
                                                         buffer, buffer_size));
 
   auto response = client_->PutObject(request);
+
   if (!response.IsSuccess()) {
     LOG(ERROR) << fmt::format(
-        "[s3_crt.{}] PutObject error, key({}) error({} {}).", bucket, key,
+        "[s3_legacy.{}] PutObject error, key({}) error({} {}).", bucket, key,
         response.GetError().GetExceptionName(),
         response.GetError().GetMessage());
     return -1;
@@ -125,22 +136,22 @@ int AwsCrtS3Client::PutObject(const std::string& bucket, const std::string& key,
   return 0;
 }
 
-void AwsCrtS3Client::AsyncPutObject(const std::string& bucket,
-                                    AwsPutObjectAsyncContextSPtr aws_ctx) {
-  DCHECK(initialized_.load(std::memory_order_relaxed));
+void AwsLegacyS3Client::AsyncPutObject(const std::string& bucket,
+                                       PutObjectAsyncContextSPtr user_ctx) {
+  auto aws_ctx = std::make_shared<AwsPutObjectAsyncContext>();
 
-  aws_ctx->request = std::make_unique<Model::PutObjectRequest>();
+  aws_ctx->user_ctx = user_ctx;
 
-  auto& user_ctx = aws_ctx->user_ctx;
-  auto& request = *aws_ctx->request;
+  aws_ctx->request = std::make_any<Model::PutObjectRequest>();
+  auto& request = std::any_cast<Model::PutObjectRequest&>(aws_ctx->request);
   request.SetBucket(bucket);
-  request.SetKey(user_ctx->key);
+  request.SetKey(std::string{user_ctx->key.c_str(), user_ctx->key.size()});
   request.SetBody(Aws::MakeShared<PreallocatedIOStream>(
       AWS_ALLOCATE_TAG, user_ctx->buffer, user_ctx->buffer_size));
 
   PutObjectResponseReceivedHandler handler =
-      [this, bucket](
-          const S3CrtClient* /*client*/,
+      [aws_ctx, this, bucket](
+          const S3Client* /*client*/,
           const Model::PutObjectRequest& /*request*/,
           const Model::PutObjectOutcome& response,
           const std::shared_ptr<const Aws::Client::AsyncCallerContext>& ctx) {
@@ -148,32 +159,32 @@ void AwsCrtS3Client::AsyncPutObject(const std::string& bucket,
             std::const_pointer_cast<AwsPutObjectAsyncContext>(
                 std::dynamic_pointer_cast<const AwsPutObjectAsyncContext>(ctx));
 
+        auto& user_ctx = aws_ctx->user_ctx;
+
         LOG_IF(ERROR, !response.IsSuccess()) << fmt::format(
-            "[s3_crt.{}] AsyncPutObject fail, key({}) error({} {}).", bucket,
-            aws_ctx->user_ctx->key, response.GetError().GetExceptionName(),
+            "[s3_legacy.{}] AsyncPutObject fail, key({}) error({} {}).", bucket,
+            user_ctx->key, response.GetError().GetExceptionName(),
             response.GetError().GetMessage());
 
-        aws_ctx->status =
-            response.IsSuccess()
-                ? Status::OK()
-                : Status::IoError(response.GetError().GetMessage());
-        aws_ctx->cb(aws_ctx);
+        user_ctx->status =
+            (response.IsSuccess()
+                 ? Status::OK()
+                 : Status::IoError(response.GetError().GetMessage()));
+        user_ctx->cb(user_ctx);
       };
 
   client_->PutObjectAsync(request, handler, aws_ctx);
 }
 
-int AwsCrtS3Client::GetObject(const std::string& bucket, const std::string& key,
-                              std::string* data) {
-  DCHECK(initialized_.load(std::memory_order_relaxed));
-
+int AwsLegacyS3Client::GetObject(const std::string& bucket,
+                                 const std::string& key, std::string* data) {
   Model::GetObjectRequest request;
   request.SetBucket(bucket);
   request.SetKey(key);
 
   Model::GetObjectOutcome response = client_->GetObject(request);
   if (!response.IsSuccess()) {
-    LOG(ERROR) << fmt::format("[s3_crt.{}] GetObject error({} {}).", bucket,
+    LOG(ERROR) << fmt::format("[s3_legacy.{}] GetObject error({} {}).", bucket,
                               response.GetError().GetExceptionName(),
                               response.GetError().GetMessage());
     return -1;
@@ -186,15 +197,14 @@ int AwsCrtS3Client::GetObject(const std::string& bucket, const std::string& key,
   return 0;
 }
 
-int AwsCrtS3Client::RangeObject(const std::string& bucket,
-                                const std::string& key, char* buf, off_t offset,
-                                size_t len) {
-  DCHECK(initialized_.load(std::memory_order_relaxed));
-
+int AwsLegacyS3Client::RangeObject(const std::string& bucket,
+                                   const std::string& key, char* buf,
+                                   off_t offset, size_t len) {
   Model::GetObjectRequest request;
   request.SetBucket(bucket);
-  request.SetKey(key);
+  request.SetKey(std::string{key.c_str(), key.size()});
   request.SetRange(GetObjectRequestRange(offset, len));
+
   request.SetResponseStreamFactory([buf, len]() {
     return Aws::New<PreallocatedIOStream>(AWS_ALLOCATE_TAG, buf, len);
   });
@@ -202,7 +212,7 @@ int AwsCrtS3Client::RangeObject(const std::string& bucket,
   auto response = client_->GetObject(request);
   if (!response.IsSuccess()) {
     LOG(ERROR) << fmt::format(
-        "[s3_crt.{}] RangeObject fail, key({}) error({} {}).", bucket, key,
+        "[s3_legacy.{}] RangeObject fail, key({}) error({} {}).", bucket, key,
         response.GetError().GetExceptionName(),
         response.GetError().GetMessage());
     return -1;
@@ -211,16 +221,17 @@ int AwsCrtS3Client::RangeObject(const std::string& bucket,
   return 0;
 }
 
-void AwsCrtS3Client::AsyncGetObject(const std::string& bucket,
-                                    AwsGetObjectAsyncContextSPtr aws_ctx) {
-  DCHECK(initialized_.load(std::memory_order_relaxed));
+void AwsLegacyS3Client::AsyncGetObject(const std::string& bucket,
+                                       GetObjectAsyncContextSPtr user_ctx) {
+  auto aws_ctx = std::make_shared<AwsGetObjectAsyncContext>();
 
-  aws_ctx->request = std::make_unique<Model::GetObjectRequest>();
+  aws_ctx->user_ctx = user_ctx;
 
-  auto& request = *aws_ctx->request;
-  const auto& user_ctx = aws_ctx->user_ctx;
+  aws_ctx->request = std::make_any<Model::GetObjectRequest>();
+  auto& request = std::any_cast<Model::GetObjectRequest&>(aws_ctx->request);
+
   request.SetBucket(bucket);
-  request.SetKey(user_ctx->key);
+  request.SetKey(std::string{user_ctx->key.c_str(), user_ctx->key.size()});
   request.SetRange(GetObjectRequestRange(user_ctx->offset, user_ctx->len));
   request.SetResponseStreamFactory([user_ctx]() {
     return Aws::New<PreallocatedIOStream>(AWS_ALLOCATE_TAG, user_ctx->buf,
@@ -228,8 +239,8 @@ void AwsCrtS3Client::AsyncGetObject(const std::string& bucket,
   });
 
   GetObjectResponseReceivedHandler handler =
-      [this, bucket](
-          const S3CrtClient* /*client*/,
+      [this, aws_ctx, bucket](
+          const S3Client* /*client*/,
           const Model::GetObjectRequest& /*request*/,
           const Model::GetObjectOutcome& response,
           const std::shared_ptr<const Aws::Client::AsyncCallerContext>& ctx) {
@@ -237,34 +248,34 @@ void AwsCrtS3Client::AsyncGetObject(const std::string& bucket,
             std::const_pointer_cast<AwsGetObjectAsyncContext>(
                 std::dynamic_pointer_cast<const AwsGetObjectAsyncContext>(ctx));
 
-        LOG_IF(ERROR, !response.IsSuccess())
-            << fmt::format("[s3_crt.{}] AsyncGetObject error({} {}).", bucket,
-                           response.GetError().GetExceptionName(),
-                           response.GetError().GetMessage());
+        auto& user_ctx = aws_ctx->user_ctx;
 
-        aws_ctx->actual_len = response.GetResult().GetContentLength();
-        aws_ctx->status =
+        LOG_IF(ERROR, !response.IsSuccess()) << fmt::format(
+            "[s3_legacy.{}] AsyncGetObject fail, key({}) error({} {}).", bucket,
+            user_ctx->key, response.GetError().GetExceptionName(),
+            response.GetError().GetMessage());
+
+        user_ctx->actual_len = response.GetResult().GetContentLength();
+        user_ctx->status =
             response.IsSuccess()
                 ? Status::OK()
                 : Status::IoError(response.GetError().GetMessage());
-        aws_ctx->cb(aws_ctx);
+        user_ctx->cb(user_ctx);
       };
 
   client_->GetObjectAsync(request, handler, aws_ctx);
 }
 
-int AwsCrtS3Client::DeleteObject(const std::string& bucket,
-                                 const std::string& key) {
-  DCHECK(initialized_.load(std::memory_order_relaxed));
-
+int AwsLegacyS3Client::DeleteObject(const std::string& bucket,
+                                    const std::string& key) {
   Model::DeleteObjectRequest request;
   request.SetBucket(bucket);
   request.SetKey(key);
 
   auto response = client_->DeleteObject(request);
   if (!response.IsSuccess()) {
-    LOG(ERROR) << fmt::format("[s3_crt.{}] DeleteObject error({} {}).", bucket,
-                              response.GetError().GetExceptionName(),
+    LOG(ERROR) << fmt::format("[s3_legacy.{}] DeleteObject error({} {}).",
+                              bucket, response.GetError().GetExceptionName(),
                               response.GetError().GetMessage());
     return -1;
   }
@@ -272,10 +283,8 @@ int AwsCrtS3Client::DeleteObject(const std::string& bucket,
   return 0;
 }
 
-int AwsCrtS3Client::DeleteObjects(const std::string& bucket,
-                                  const std::list<std::string>& key_list) {
-  DCHECK(initialized_.load(std::memory_order_relaxed));
-
+int AwsLegacyS3Client::DeleteObjects(const std::string& bucket,
+                                     const std::list<std::string>& key_list) {
   Model::Delete delete_objects;
   delete_objects.SetQuiet(false);
   for (const auto& key : key_list) {
@@ -289,18 +298,19 @@ int AwsCrtS3Client::DeleteObjects(const std::string& bucket,
 
   auto response = client_->DeleteObjects(request);
   if (!response.IsSuccess()) {
-    LOG(ERROR) << fmt::format("[s3_crt.{}] DeleteObjects error({} {}).", bucket,
-                              response.GetError().GetExceptionName(),
+    LOG(ERROR) << fmt::format("[s3_legacy.{}] DeleteObjects error({} {}).",
+                              bucket, response.GetError().GetExceptionName(),
                               response.GetError().GetMessage());
     return -1;
   }
 
   for (const auto& del : response.GetResult().GetDeleted()) {
-    VLOG(1) << fmt::format("[s3_crt.{}] delete ok : {}", bucket, del.GetKey());
+    VLOG(1) << fmt::format("[s3_legacy.{}] delete ok : {}", bucket,
+                           del.GetKey());
   }
 
   for (const auto& err : response.GetResult().GetErrors()) {
-    LOG(WARNING) << fmt::format("[s3_crt.{}] delete fail, error({} {}).",
+    LOG(WARNING) << fmt::format("[s3_legacy.{}] delete fail, error({} {}).",
                                 bucket, err.GetKey(), err.GetMessage());
   }
 
@@ -311,17 +321,15 @@ int AwsCrtS3Client::DeleteObjects(const std::string& bucket,
   return 0;
 }
 
-bool AwsCrtS3Client::ObjectExist(const std::string& bucket,
-                                 const std::string& key) {
-  DCHECK(initialized_.load(std::memory_order_relaxed));
-
+bool AwsLegacyS3Client::ObjectExist(const std::string& bucket,
+                                    const std::string& key) {
   Model::HeadObjectRequest request;
   request.SetBucket(bucket);
   request.SetKey(key);
 
   auto response = client_->HeadObject(request);
   if (!response.IsSuccess()) {
-    LOG(ERROR) << fmt::format("[s3_crt.{}] HeadObject error({} {}).", bucket,
+    LOG(ERROR) << fmt::format("[s3_legacy.{}] HeadObject error({} {}).", bucket,
                               key, response.GetError().GetMessage());
     return false;
   }

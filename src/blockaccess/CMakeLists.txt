@@ -17,7 +17,6 @@ add_subdirectory(rados)
 
 add_library(block_accesser
     block_accesser.cpp
-    block_accesser_factory.cpp
     block_access_log.cpp
 )
 

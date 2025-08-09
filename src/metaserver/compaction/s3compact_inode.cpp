@@ -74,8 +74,7 @@ std::unique_ptr<blockaccess::BlockAccesser> SetupS3Adapter(
   blockaccess::BlockAccessOptions block_access_opts = opts->block_access_opts;
   FillBlockAccessOption(fs_info.storage_info(), &block_access_opts);
 
-  auto block_accesser =
-      opts->block_accesser_factory->NewBlockAccesser(block_access_opts);
+  auto block_accesser = blockaccess::NewBlockAccesser(block_access_opts);
 
   status = block_accesser->Init();
   if (!status.ok()) {

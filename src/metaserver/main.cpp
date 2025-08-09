@@ -25,7 +25,6 @@
 #include <glog/logging.h>
 
 #include "blockaccess/block_access_log.h"
-#include "blockaccess/s3/aws/s3_adapter.h"
 #include "common/process.h"
 #include "common/version.h"
 #include "metaserver/metaserver.h"
@@ -196,7 +195,6 @@ int main(int argc, char** argv) {
   metaserver.Stop();
 
   // Ugly shutdown
-  dingofs::blockaccess::aws::S3Adapter::Shutdown();
   google::ShutdownGoogleLogging();
   return 0;
 }

@@ -30,7 +30,6 @@
 
 #include "blockaccess/accesser_common.h"
 #include "blockaccess/block_accesser.h"
-#include "blockaccess/block_accesser_factory.h"
 #include "dingofs/metaserver.pb.h"
 
 namespace dingofs {
@@ -40,11 +39,10 @@ using pb::metaserver::S3ChunkInfo;
 using pb::metaserver::S3ChunkInfoList;
 
 struct S3ClientAdaptorOption {
-  uint64_t blockSize; // from fs info
-  uint64_t chunkSize; // from fs info
-  uint64_t batchSize; // from config
-  bool enableDeleteObjects; // from config
-  std::shared_ptr<blockaccess::BlockAccesserFactory> block_accesser_factory;
+  uint64_t blockSize;        // from fs info
+  uint64_t chunkSize;        // from fs info
+  uint64_t batchSize;        // from config
+  bool enableDeleteObjects;  // from config
 };
 
 class S3ClientAdaptor {

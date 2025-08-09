@@ -18,11 +18,16 @@
 
 #include <memory>
 
+#include "aws/core/Aws.h"
+#include "blockaccess/s3/aws/aws_crt_s3_client.h"
+#include "blockaccess/s3/aws/aws_legacy_s3_client.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
 
 namespace dingofs {
 namespace blockaccess {
+
+static Aws::SDKOptions aws_sdk_options;
 
 bool S3Accesser::Init() {
   const auto& s3_info = options_.s3_info;
@@ -37,23 +42,49 @@ bool S3Accesser::Init() {
     return false;
   }
 
-  client_ = std::make_unique<aws::S3Adapter>();
+  // only init once
+  auto init_aws_api_fn = [&]() {
+    aws_sdk_options.loggingOptions.logLevel =
+        Aws::Utils::Logging::LogLevel(options_.aws_sdk_config.loglevel);
+    aws_sdk_options.loggingOptions.defaultLogPrefix =
+        options_.aws_sdk_config.log_prefix.c_str();
+
+    Aws::InitAPI(aws_sdk_options);
+  };
+
+  static std::once_flag aws_init_flag;
+  std::call_once(aws_init_flag, init_aws_api_fn);
+
+  bucket_ = options_.s3_info.bucket_name;
+
+  if (options_.aws_sdk_config.use_crt_client)
+    client_ = std::make_unique<aws::AwsCrtS3Client>();
+  else
+    client_ = std::make_unique<aws::AwsLegacyS3Client>();
+
   client_->Init(options_);
 
   return true;
 }
 
-bool S3Accesser::Destroy() { return true; }
+bool S3Accesser::Destroy() {
+  auto shutdown_aws_api_fn = [&]() { Aws::ShutdownAPI(aws_sdk_options); };
+
+  static std::once_flag aws_shutdown_flag;
+  std::call_once(aws_shutdown_flag, shutdown_aws_api_fn);
+
+  return true;
+}
 
 Aws::String S3Accesser::S3Key(const std::string& key) {
   return Aws::String(key.c_str(), key.size());
 }
 
-bool S3Accesser::ContainerExist() { return client_->BucketExist(); }
+bool S3Accesser::ContainerExist() { return client_->BucketExist(bucket_); }
 
 Status S3Accesser::Put(const std::string& key, const char* buffer,
                        size_t length) {
-  int rc = client_->PutObject(S3Key(key), buffer, length);
+  int rc = client_->PutObject(bucket_, S3Key(key), buffer, length);
   if (rc < 0) {
     LOG(ERROR) << fmt::format("[s3_accesser] put object({}) fail, retcode:{}.",
                               key, rc);
@@ -63,16 +94,16 @@ Status S3Accesser::Put(const std::string& key, const char* buffer,
   return Status::OK();
 }
 
-void S3Accesser::AsyncPut(std::shared_ptr<PutObjectAsyncContext> context) {
+void S3Accesser::AsyncPut(PutObjectAsyncContextSPtr context) {
   CHECK(context->cb) << "AsyncPut context callback is null";
 
-  client_->AsyncPutObject(context);
+  client_->AsyncPutObject(bucket_, context);
 }
 
 Status S3Accesser::Get(const std::string& key, std::string* data) {
-  int rc = client_->GetObject(S3Key(key), data);
+  int rc = client_->GetObject(bucket_, S3Key(key), data);
   if (rc < 0) {
-    if (!client_->ObjectExist(S3Key(key))) {  // TODO: more efficient
+    if (!client_->ObjectExist(bucket_, S3Key(key))) {  // TODO: more efficient
       LOG(WARNING) << fmt::format("[s3_accesser] object({}) not found.", key);
       return Status::NotFound("object not found");
     }
@@ -87,9 +118,9 @@ Status S3Accesser::Get(const std::string& key, std::string* data) {
 
 Status S3Accesser::Range(const std::string& key, off_t offset, size_t length,
                          char* buffer) {
-  int rc = client_->RangeObject(S3Key(key), buffer, offset, length);
+  int rc = client_->RangeObject(bucket_, S3Key(key), buffer, offset, length);
   if (rc < 0) {
-    if (!client_->ObjectExist(S3Key(key))) {  // TODO: more efficient
+    if (!client_->ObjectExist(bucket_, S3Key(key))) {  // TODO: more efficient
       LOG(WARNING) << fmt::format("[s3_accesser] object({}) not found.", key);
       return Status::NotFound("object not found");
     }
@@ -102,18 +133,18 @@ Status S3Accesser::Range(const std::string& key, off_t offset, size_t length,
   return Status::OK();
 }
 
-void S3Accesser::AsyncGet(std::shared_ptr<GetObjectAsyncContext> context) {
+void S3Accesser::AsyncGet(GetObjectAsyncContextSPtr context) {
   CHECK(context->cb) << "AsyncGet context callback is null";
 
-  client_->AsyncGetObject(context);
+  client_->AsyncGetObject(bucket_, context);
 }
 
 bool S3Accesser::BlockExist(const std::string& key) {
-  return client_->ObjectExist(key);
+  return client_->ObjectExist(bucket_, key);
 }
 
 Status S3Accesser::Delete(const std::string& key) {
-  int rc = client_->DeleteObject(S3Key(key));
+  int rc = client_->DeleteObject(bucket_, S3Key(key));
   if (rc < 0) {
     LOG(ERROR) << fmt::format(
         "[s3_accesser] delete object({}) fail, retcode:{}.", key, rc);
@@ -124,7 +155,7 @@ Status S3Accesser::Delete(const std::string& key) {
 }
 
 Status S3Accesser::BatchDelete(const std::list<std::string>& keys) {
-  int rc = client_->BatchDeleteObject(keys);
+  int rc = client_->DeleteObjects(bucket_, keys);
   if (rc < 0) {
     LOG(ERROR) << fmt::format(
         "[s3_accesser] batch delete object fail, count:{} retcode:{}.",

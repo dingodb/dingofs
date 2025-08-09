@@ -35,7 +35,6 @@
 
 #include "absl/memory/memory.h"
 #include "blockaccess/accesser_common.h"
-#include "blockaccess/s3/aws/s3_adapter.h"
 #include "common/version.h"
 #include "metaserver/common/dynamic_config.h"
 #include "metaserver/common/types.h"
@@ -221,9 +220,6 @@ void Metaserver::Init() {
   // init metaserver client for recycle
   InitMetaClient();
 
-  block_accesser_factory_ =
-      std::make_shared<blockaccess::BlockAccesserFactory>();
-
   S3ClientAdaptorOption s3_client_adaptor_option;
   InitS3Option(conf_, &s3_client_adaptor_option);
 
@@ -237,7 +233,6 @@ void Metaserver::Init() {
   {
     //  related to trash
     trash_option.block_access_options = block_access_options;
-    trash_option.block_accesser_factory = block_accesser_factory_;
     trash_option.s3_client_adaptor_option = s3_client_adaptor_option;
     trash_option.mdsClient = mdsClient_;
     TrashManager::GetInstance().Init(trash_option);
@@ -266,7 +261,6 @@ void Metaserver::Init() {
     PartitionCleanOption partition_clean_option;
     InitPartitionOptionFromConf(&partition_clean_option);
     partition_clean_option.block_access_options = block_access_options;
-    partition_clean_option.block_accesser_factory = block_accesser_factory_;
     partition_clean_option.s3_client_adaptor_option = s3_client_adaptor_option;
     partition_clean_option.mdsClient = mdsClient_;
 

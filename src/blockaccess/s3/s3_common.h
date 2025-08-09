@@ -44,7 +44,7 @@ struct AwsSdkConfig {
   int connect_timeout{60000};
   int request_timeout{10000};
 
-  bool use_crt_client{false};
+  bool use_crt_client{true};
 
   bool use_thread_pool{true};  // this only work when use_crt_client is false
   int async_thread_num{16};    // this only work when use_crt_client is false
@@ -74,7 +74,7 @@ inline void InitAwsSdkConfig(utils::Configuration* conf,
 
   if (!conf->GetBoolValue("s3.use_crt_client",
                           &aws_sdk_config->use_crt_client)) {
-    aws_sdk_config->use_crt_client = false;
+    aws_sdk_config->use_crt_client = true;
     LOG(INFO) << fmt::format(
         "Not found s3.use_crt_client in conf, use default {}",
         aws_sdk_config->use_crt_client);

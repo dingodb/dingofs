@@ -45,8 +45,7 @@ Status S3ClientAdaptorImpl::Init(
   adaptor_option_ = option;
   block_access_option_ = block_access_option;
 
-  block_accesser_ = adaptor_option_.block_accesser_factory->NewBlockAccesser(
-      block_access_option);
+  block_accesser_ = blockaccess::NewBlockAccesser(block_access_option);
   Status s = block_accesser_->Init();
   if (!s.ok()) {
     LOG(ERROR) << "Fail init block accesser: " << s.ToString();

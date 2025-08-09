@@ -28,7 +28,6 @@
 #include <mutex>
 
 #include "absl/memory/memory.h"
-#include "blockaccess/block_accesser_factory.h"
 #include "blockaccess/s3/s3_common.h"
 #include "metaserver/compaction/fs_info_cache.h"
 #include "metaserver/compaction/s3compact_worker.h"
@@ -94,12 +93,9 @@ void S3CompactManager::Init(std::shared_ptr<Configuration> conf) {
     LOG(INFO) << "Metaserver address: " << opts_.metaserverIpStr << ":"
               << opts_.metaserverPort;
 
-    block_accesser_factory_ =
-        std::make_shared<blockaccess::BlockAccesserFactory>();
     fs_info_cache_ = std::make_unique<FsInfoCache>(
         opts_.fs_info_cache_size, opts_.mdsAddrs, metaserver_addr);
 
-    workerOptions_.block_accesser_factory = block_accesser_factory_;
     workerOptions_.block_access_opts = opts_.block_access_opts;
     workerOptions_.fs_info_cache = fs_info_cache_.get();
     workerOptions_.maxChunksPerCompact = opts_.maxChunksPerCompact;

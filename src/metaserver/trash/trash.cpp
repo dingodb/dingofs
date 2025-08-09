@@ -223,8 +223,6 @@ MetaStatusCode TrashImpl::DeleteInodeAndData(const TrashItem& item) {
         options_.s3_client_adaptor_option;
     client_adaptor_option.blockSize = fsInfo.block_size();
     client_adaptor_option.chunkSize = fsInfo.chunk_size();
-    client_adaptor_option.block_accesser_factory =
-        options_.block_accesser_factory;
 
     blockaccess::BlockAccessOptions block_access_options =
         options_.block_access_options;

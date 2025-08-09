@@ -19,7 +19,6 @@
 #include <string>
 #include <vector>
 
-#include "blockaccess/block_accesser_factory.h"
 #include "blockaccess/rados/rados_common.h"
 #include "blockaccess/s3/s3_common.h"
 #include "cache/blockcache/cache_store.h"
@@ -496,8 +495,7 @@ blockaccess::BlockAccesserSPtr GcProcessor::GetOrCreateDataAccesser(uint32_t fs_
                                                       .cluster_name = rados_info.cluster_name()};
   }
 
-  blockaccess::BlockAccesserFactory factory;
-  auto block_accessor = factory.NewShareBlockAccesser(options);
+  auto block_accessor = blockaccess::NewShareBlockAccesser(options);
   auto status = block_accessor->Init();
   if (!status.IsOK()) {
     DINGO_LOG(ERROR) << fmt::format("[gc] init block accesser fail, status({}).", status.ToString());

@@ -14,43 +14,31 @@
  * limitations under the License.
  */
 
-#ifndef SRC_AWS_S3_CLIENT_AWS_CRT_S3_CLIENT_H_
-#define SRC_AWS_S3_CLIENT_AWS_CRT_S3_CLIENT_H_
+#ifndef SRC_AWS_S3_CLIENT_AWS_LEGACY_S3_CLIENT_H_
+#define SRC_AWS_S3_CLIENT_AWS_LEGACY_S3_CLIENT_H_
 
-#include <atomic>
 #include <memory>
 
-#include "aws/s3-crt/S3CrtClient.h"
-#include "aws/s3-crt/S3CrtClientConfiguration.h"
-#include "blockaccess/s3/aws/aws_s3_common.h"
-#include "blockaccess/s3/aws/client/aws_s3_client.h"
-#include "glog/logging.h"
+#include "aws/s3/S3Client.h"
+#include "blockaccess/s3/aws/aws_s3_client.h"
+#include "blockaccess/s3/s3_common.h"
 
 namespace dingofs {
 namespace blockaccess {
 namespace aws {
 
-class AwsCrtS3Client : public AwsS3Client {
+class AwsLegacyS3Client : public AwsS3Client {
  public:
-  explicit AwsCrtS3Client() = default;
-  ~AwsCrtS3Client() override = default;
+  explicit AwsLegacyS3Client() = default;
+  ~AwsLegacyS3Client() override = default;
 
   void Init(const S3Options& options) override;
 
-  std::string GetAk() override {
-    DCHECK(initialized_.load(std::memory_order_relaxed));
-    return s3_options_.s3_info.ak;
-  }
+  std::string GetAk() override { return s3_options_.s3_info.ak; }
 
-  std::string GetSk() override {
-    DCHECK(initialized_.load(std::memory_order_relaxed));
-    return s3_options_.s3_info.sk;
-  }
+  std::string GetSk() override { return s3_options_.s3_info.sk; }
 
-  std::string GetEndpoint() override {
-    DCHECK(initialized_.load(std::memory_order_relaxed));
-    return s3_options_.s3_info.endpoint;
-  }
+  std::string GetEndpoint() override { return s3_options_.s3_info.endpoint; }
 
   bool BucketExist(const std::string& bucket) override;
 
@@ -58,7 +46,7 @@ class AwsCrtS3Client : public AwsS3Client {
                 const char* buffer, size_t buffer_size) override;
 
   void AsyncPutObject(const std::string& bucket,
-                      AwsPutObjectAsyncContextSPtr aws_ctx) override;
+                      PutObjectAsyncContextSPtr user_ctx) override;
 
   int GetObject(const std::string& bucket, const std::string& key,
                 std::string* data) override;
@@ -67,7 +55,7 @@ class AwsCrtS3Client : public AwsS3Client {
                   off_t offset, size_t len) override;
 
   void AsyncGetObject(const std::string& bucket,
-                      AwsGetObjectAsyncContextSPtr aws_ctx) override;
+                      GetObjectAsyncContextSPtr user_ctx) override;
 
   int DeleteObject(const std::string& bucket, const std::string& key) override;
 
@@ -77,16 +65,14 @@ class AwsCrtS3Client : public AwsS3Client {
   bool ObjectExist(const std::string& bucket, const std::string& key) override;
 
  private:
-  std::atomic<bool> initialized_{false};
-
   S3Options s3_options_;
 
-  std::unique_ptr<Aws::S3Crt::S3CrtClientConfiguration> cfg_{nullptr};
-  std::unique_ptr<Aws::S3Crt::S3CrtClient> client_{nullptr};
+  std::unique_ptr<Aws::Client::ClientConfiguration> cfg_{nullptr};
+  std::unique_ptr<Aws::S3::S3Client> client_{nullptr};
 };
 
 }  // namespace aws
 }  // namespace blockaccess
 }  // namespace dingofs
 
-#endif  // SRC_AWS_S3_CLIENT_AWS_CRT_S3_CLIENT_H_
+#endif  // SRC_AWS_S3_CLIENT_AWS_LEGACY_S3_CLIENT_H_

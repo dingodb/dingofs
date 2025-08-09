@@ -17,16 +17,14 @@
 #ifndef DATA_ACCESS_AWS_S3_COMMON_H
 #define DATA_ACCESS_AWS_S3_COMMON_H
 
+#include <any>
 #include <memory>
 #include <string>
 
 #include "aws/core/client/AsyncCallerContext.h"
 #include "aws/core/utils/memory/stl/AWSStreamFwd.h"
 #include "aws/core/utils/stream/PreallocatedStreamBuf.h"
-#include "aws/s3-crt/model/GetObjectRequest.h"
-#include "aws/s3-crt/model/PutObjectRequest.h"
 #include "blockaccess/accesser_common.h"
-#include "common/status.h"
 #include "utils/configuration.h"
 #include "utils/macros.h"
 
@@ -36,32 +34,17 @@ namespace dingofs {
 namespace blockaccess {
 namespace aws {
 
-struct AwsGetObjectAsyncContext;
-struct AwsPutObjectAsyncContext;
-
-using AwsGetObjectAsyncContextSPtr = std::shared_ptr<AwsGetObjectAsyncContext>;
-using AwsPutObjectAsyncContextSPtr = std::shared_ptr<AwsPutObjectAsyncContext>;
-
-using AwsGetObjectAsyncCallBack =
-    std::function<void(const AwsGetObjectAsyncContextSPtr&)>;
-
 struct AwsGetObjectAsyncContext : public Aws::Client::AsyncCallerContext {
-  std::unique_ptr<Aws::S3Crt::Model::GetObjectRequest> request;
-  std::shared_ptr<GetObjectAsyncContext> user_ctx;
-  AwsGetObjectAsyncCallBack cb;
-  Status status;
-  size_t actual_len;
+  std::any request;
+  GetObjectAsyncContextSPtr user_ctx;
 };
-
-using AwsPutObjectAsyncCallBack =
-    std::function<void(const AwsPutObjectAsyncContextSPtr&)>;
+using AwsGetObjectAsyncContextSPtr = std::shared_ptr<AwsGetObjectAsyncContext>;
 
 struct AwsPutObjectAsyncContext : public Aws::Client::AsyncCallerContext {
-  std::unique_ptr<Aws::S3Crt::Model::PutObjectRequest> request;
-  std::shared_ptr<PutObjectAsyncContext> user_ctx;
-  AwsPutObjectAsyncCallBack cb;
-  Status status;
+  std::any request;
+  PutObjectAsyncContextSPtr user_ctx;
 };
+using AwsPutObjectAsyncContextSPtr = std::shared_ptr<AwsPutObjectAsyncContext>;
 
 // https://github.com/aws/aws-sdk-cpp/issues/1430
 class PreallocatedIOStream : public Aws::IOStream {

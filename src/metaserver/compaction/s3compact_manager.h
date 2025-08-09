@@ -28,7 +28,6 @@
 #include <vector>
 
 #include "blockaccess/accesser_common.h"
-#include "blockaccess/block_accesser_factory.h"
 #include "metaserver/compaction/fs_info_cache.h"
 #include "metaserver/compaction/s3compact.h"
 #include "metaserver/compaction/s3compact_worker.h"
@@ -82,8 +81,6 @@ class S3CompactManager {
 
   S3CompactWorkerContext workerContext_;
   S3CompactWorkerOptions workerOptions_;
-
-  std::shared_ptr<blockaccess::BlockAccesserFactory> block_accesser_factory_;
 
   std::vector<std::unique_ptr<S3CompactWorker>> workers_;
 

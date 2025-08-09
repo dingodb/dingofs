@@ -311,8 +311,7 @@ FSStatusCode FsManager::CreateFs(const pb::mds::CreateFsRequest* request,
         option_.block_access_option;
     FillBlockAccessOption(storage_info, &block_access_opt);
 
-    std::unique_ptr<blockaccess::BlockAccesser> block_accesser =
-        option_.block_accesser_factory->NewBlockAccesser(block_access_opt);
+    auto block_accesser = blockaccess::NewBlockAccesser(block_access_opt);
     Status s = block_accesser->Init();
     if (!s.ok()) {
       LOG(ERROR) << "Fail CreateFs " << fs_name

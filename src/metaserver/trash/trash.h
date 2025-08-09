@@ -29,7 +29,6 @@
 #include <unordered_map>
 
 #include "blockaccess/accesser_common.h"
-#include "blockaccess/block_accesser_factory.h"
 #include "metaserver/inode_storage.h"
 #include "metaserver/s3/metaserver_s3_adaptor.h"
 #include "stub/rpcclient/mds_client.h"
@@ -50,7 +49,6 @@ struct TrashOption {
   uint32_t scanPeriodSec;
   uint32_t expiredAfterSec;
   blockaccess::BlockAccessOptions block_access_options;
-  std::shared_ptr<blockaccess::BlockAccesserFactory> block_accesser_factory;
   S3ClientAdaptorOption s3_client_adaptor_option;
   std::shared_ptr<stub::rpcclient::MdsClient> mdsClient;
 

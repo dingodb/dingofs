@@ -24,7 +24,6 @@
 #include <vector>
 
 #include "blockaccess/block_accesser.h"
-#include "blockaccess/block_accesser_factory.h"
 #include "dingofs/error.pb.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
@@ -154,8 +153,7 @@ static blockaccess::BlockAccesserSPtr NewBlockAccesser(const S3Info& s3_info) {
   options.s3_options.s3_info = blockaccess::S3Info{
       .ak = s3_info.ak, .sk = s3_info.sk, .endpoint = s3_info.endpoint, .bucket_name = s3_info.bucket_name};
 
-  blockaccess::BlockAccesserFactory factory;
-  auto block_accessor = factory.NewShareBlockAccesser(options);
+  auto block_accessor = blockaccess::NewShareBlockAccesser(options);
   auto status = block_accessor->Init();
   if (!status.IsOK()) {
     std::cerr << (fmt::format("init block accesser fail, error({}).", status.ToString()));

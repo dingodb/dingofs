@@ -30,7 +30,6 @@
 #include <vector>
 
 #include "blockaccess/accesser_common.h"
-#include "blockaccess/block_accesser_factory.h"
 #include "dingofs/common.pb.h"
 #include "dingofs/mds.pb.h"
 #include "dingofs/topology.pb.h"
@@ -51,7 +50,6 @@ struct FsManagerOption {
   uint32_t spaceReloadConcurrency = 10;
   uint32_t clientTimeoutSec = 20;
   blockaccess::BlockAccessOptions block_access_option;
-  std::shared_ptr<blockaccess::BlockAccesserFactory> block_accesser_factory;
 };
 
 class FsManager {
