@@ -20,8 +20,8 @@
  * Author: lixiaocui
  */
 
-#ifndef DINGOFS_SRC_CLIENT_RPCCLIENT_MDS_CLIENT_H_
-#define DINGOFS_SRC_CLIENT_RPCCLIENT_MDS_CLIENT_H_
+#ifndef DINGOFS_SRC_STUB_RPCCLIENT_MDS_CLIENT_H_
+#define DINGOFS_SRC_STUB_RPCCLIENT_MDS_CLIENT_H_
 
 #include <atomic>
 #include <cstdint>
@@ -227,8 +227,7 @@ class MdsClient {
   // cache group
   virtual pb::mds::cachegroup::CacheGroupErrCode JoinCacheGroup(
       const std::string& group_name, const std::string& ip, uint32_t port,
-      uint32_t weight, uint64_t replace_id, uint64_t* member_id,
-      std::string* member_uuid) = 0;
+      uint32_t weight, std::string* member_id) = 0;
 
   virtual pb::mds::cachegroup::CacheGroupErrCode LeaveCacheGroup(
       const std::string& group_name, const std::string& ip, uint32_t port) = 0;
@@ -236,12 +235,9 @@ class MdsClient {
   virtual pb::mds::cachegroup::CacheGroupErrCode SendCacheGroupHeartbeat(
       const std::string& ip, uint32_t port) = 0;
 
-  virtual pb::mds::cachegroup::CacheGroupErrCode LoadCacheGroupMembers(
+  virtual pb::mds::cachegroup::CacheGroupErrCode ListCacheGroupMembers(
       const std::string& group_name,
       std::vector<pb::mds::cachegroup::CacheGroupMember>* members) = 0;
-
-  virtual pb::mds::cachegroup::CacheGroupErrCode ReweightCacheGroupMember(
-      uint64_t member_id, uint32_t weight) = 0;
 };
 
 class MdsClientImpl : public MdsClient {
@@ -323,8 +319,7 @@ class MdsClientImpl : public MdsClient {
   // cache group
   pb::mds::cachegroup::CacheGroupErrCode JoinCacheGroup(
       const std::string& group_name, const std::string& ip, uint32_t port,
-      uint32_t weight, uint64_t replace_id, uint64_t* member_id,
-      std::string* member_uuid) override;
+      uint32_t weight, std::string* member_id) override;
 
   pb::mds::cachegroup::CacheGroupErrCode LeaveCacheGroup(
       const std::string& group_name, const std::string& ip,
@@ -333,12 +328,9 @@ class MdsClientImpl : public MdsClient {
   pb::mds::cachegroup::CacheGroupErrCode SendCacheGroupHeartbeat(
       const std::string& ip, uint32_t port) override;
 
-  pb::mds::cachegroup::CacheGroupErrCode LoadCacheGroupMembers(
+  pb::mds::cachegroup::CacheGroupErrCode ListCacheGroupMembers(
       const std::string& group_name,
       std::vector<pb::mds::cachegroup::CacheGroupMember>* members) override;
-
-  pb::mds::cachegroup::CacheGroupErrCode ReweightCacheGroupMember(
-      uint64_t member_id, uint32_t weight) override;
 
  private:
   pb::mds::FSStatusCode DoGetFsInfo(const std::string& fs_name,
@@ -390,4 +382,4 @@ class MdsClientImpl : public MdsClient {
 }  // namespace stub
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_RPCCLIENT_MDS_CLIENT_H_
+#endif  // DINGOFS_SRC_STUB_RPCCLIENT_MDS_CLIENT_H_

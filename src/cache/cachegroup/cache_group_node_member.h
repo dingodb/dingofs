@@ -40,8 +40,7 @@ class CacheGroupNodeMember {
   virtual std::string GetGroupName() const = 0;
   virtual std::string GetListenIP() const = 0;
   virtual uint32_t GetListenPort() const = 0;
-  virtual uint64_t GetMemberId() const = 0;
-  virtual std::string GetMemberUuid() const = 0;
+  virtual std::string GetMemberId() const = 0;
 };
 
 using CacheGroupNodeMemberSPtr = std::shared_ptr<CacheGroupNodeMember>;
@@ -61,12 +60,10 @@ class CacheGroupNodeMemberImpl final : public CacheGroupNodeMember {
   std::string GetGroupName() const override;
   std::string GetListenIP() const override;
   uint32_t GetListenPort() const override;
-  uint64_t GetMemberId() const override;
-  std::string GetMemberUuid() const override;
+  std::string GetMemberId() const override;
 
  private:
-  uint64_t member_id_;       // allocated by mds
-  std::string member_uuid_;  // allocated by local, used for directory name
+  std::string member_id_;
   const CacheGroupNodeOption option_;
   MdsClientSPtr mds_client_;
 };

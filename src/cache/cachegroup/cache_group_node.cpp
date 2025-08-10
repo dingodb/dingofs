@@ -50,8 +50,10 @@ namespace cache {
 DEFINE_string(group_name, "", "Which group this cache node belongs to");
 DEFINE_validator(group_name, Helper::NonEmptyString);
 
-DEFINE_string(listen_ip, "127.0.0.1",
+DEFINE_string(listen_ip, "",
               "IP address to listen on for this cache group node");
+DEFINE_validator(listen_ip, Helper::NonEmptyString);
+
 DEFINE_uint32(listen_port, 9300, "Port to listen on for this cache group node");
 DEFINE_uint32(group_weight, 100,
               "Weight of this cache group node, used for consistent hashing");
@@ -171,11 +173,11 @@ bool CacheGroupNodeImpl::IsRunning() {
 }
 
 void CacheGroupNodeImpl::RewriteCacheDir() {
-  auto member_uuid = member_->GetMemberUuid();
-  CHECK(!member_uuid.empty()) << "Member UUID should not be empty";
+  auto member_id = member_->GetMemberId();
+  CHECK(!member_id.empty()) << "Member id should not be empty";
   auto& disk_cache_options = option_.block_cache_option.disk_cache_options;
   for (auto& option : disk_cache_options) {
-    option.cache_dir = RealCacheDir(option.cache_dir, member_uuid);
+    option.cache_dir = RealCacheDir(option.cache_dir, member_id);
   }
 }
 

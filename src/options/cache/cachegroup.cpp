@@ -35,7 +35,6 @@ CacheGroupNodeOption::CacheGroupNodeOption()
       listen_ip(FLAGS_listen_ip),
       listen_port(FLAGS_listen_port),
       group_weight(FLAGS_group_weight),
-      replace_id(FLAGS_replace_id),
       mds_option(NewMdsOption()) {}
 
 }  // namespace cache

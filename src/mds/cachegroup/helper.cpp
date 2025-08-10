@@ -32,14 +32,16 @@ namespace dingofs {
 namespace mds {
 namespace cachegroup {
 
-uint64_t Helper::TimestampMs() {
+int64_t Helper::TimestampMs() {
   return std::chrono::duration_cast<std::chrono::milliseconds>(
              std::chrono::system_clock::now().time_since_epoch())
       .count();
 }
 
-std::string Helper::EndPoint(const std::string& ip, uint32_t port) {
-  return absl::StrFormat("%s:%u", ip, port);
+int64_t Helper::Timestamp() {
+  return std::chrono::duration_cast<std::chrono::seconds>(
+             std::chrono::system_clock::now().time_since_epoch())
+      .count();
 }
 
 PBCacheGroupErrCode Helper::PBErr(Status status) {
@@ -47,6 +49,8 @@ PBCacheGroupErrCode Helper::PBErr(Status status) {
     return PBCacheGroupErrCode::CacheGroupOk;
   } else if (status.IsNotFound()) {
     return PBCacheGroupErrCode::CacheGroupErrNotFound;
+  } else if (status.IsExist()) {
+    return PBCacheGroupErrCode::CacheGroupErrAlreadyExist;
   } else if (status.IsInvalidParam()) {
     return PBCacheGroupErrCode::CacheGroupErrInvalidParam;
   }

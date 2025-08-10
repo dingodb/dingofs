@@ -66,7 +66,7 @@ void ConsistentHash::Build(const PBCacheGroupMembers& members) {
   auto weights = CalcWeights(members);
   for (size_t i = 0; i < members.size(); i++) {
     const auto& member = members[i];
-    auto key = MemberKey(member);
+    const auto& key = member.id();
     auto node = std::make_shared<RemoteCacheNodeImpl>(member);
     nodes_[key] = node;
     chash_->AddNode(key, weights[i]);
@@ -105,10 +105,6 @@ std::vector<uint64_t> ConsistentHash::CalcWeights(
     weights[i] = members[i].weight();
   }
   return Helper::NormalizeByGcd(weights);
-}
-
-std::string ConsistentHash::MemberKey(const PBCacheGroupMember& member) const {
-  return std::to_string(member.id());
 }
 
 UpstreamImpl::UpstreamImpl() : chash_(std::make_shared<ConsistentHash>()) {}
@@ -194,7 +190,7 @@ bool UpstreamImpl::IsSame(const PBCacheGroupMembers& old_members,
     return false;
   }
 
-  std::unordered_map<uint64_t, PBCacheGroupMember> m;
+  std::unordered_map<std::string, PBCacheGroupMember> m;
   for (const auto& member : old_members) {
     m[member.id()] = member;
   }

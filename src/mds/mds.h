@@ -28,7 +28,7 @@
 #include <memory>
 #include <string>
 
-#include "mds/cachegroup/cache_group_member_manager.h"
+#include "mds/cachegroup/member_manager.h"
 #include "mds/dlock/dlock.h"
 #include "mds/fs_manager.h"
 #include "mds/heartbeat/copyset_conf_generator.h"

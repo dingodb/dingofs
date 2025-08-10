@@ -1098,7 +1098,7 @@ FSStatusCode MdsClientImpl::ReturnError(int retcode) {
 
 static CacheGroupErrCode ToCacheGroupErrCode(int err) {
   if (err < 0) {
-    return CacheGroupErrCode::CacheGroupErrUnknown;
+    return CacheGroupErrCode::CacheGroupErrNetError;
   }
 
   return static_cast<CacheGroupErrCode>(err);
@@ -1139,28 +1139,47 @@ FSStatusCode MdsClientImpl::SetFsStats(
 }
 
 // cache group
+pb::mds::cachegroup::CacheGroupErrCode MdsClientImpl::SendCacheGroupHeartbeat(
+    const std::string& ip, uint32_t port) {
+  auto task = RPCTask {
+    (void)addrindex;
+    (void)rpctimeoutMS;
+    pb::mds::cachegroup::HeartbeatResponse response;
+
+    mdsbasecli_->SendCacheGroupHeartbeat(ip, port, &response, cntl, channel);
+
+    CHECK_RPC_AND_RETRY_IF_ERROR("SendCacheGroupHeartbeat");
+
+    auto status = response.status();
+    LOG_IF(WARNING, status != CacheGroupErrCode::CacheGroupOk)
+        << "Send cache group heartbeat failed, status="
+        << CacheGroupErrCode_Name(status);
+    return status;
+  };
+
+  auto rc = rpcexcutor_.DoRPCTask(task, mdsOpt_.mdsMaxRetryMS);
+  return ToCacheGroupErrCode(rc);
+}
 
 pb::mds::cachegroup::CacheGroupErrCode MdsClientImpl::JoinCacheGroup(
     const std::string& group_name, const std::string& ip, uint32_t port,
-    uint32_t weight, uint64_t replace_id, uint64_t* member_id,
-    std::string* member_uuid) {
+    uint32_t weight, std::string* member_id) {
   auto task = RPCTask {
     (void)addrindex;
     (void)rpctimeoutMS;
     pb::mds::cachegroup::JoinCacheGroupResponse response;
 
-    mdsbasecli_->JoinCacheGroup(group_name, ip, port, weight, replace_id,
-                                &response, cntl, channel);
+    mdsbasecli_->JoinCacheGroup(group_name, ip, port, weight, &response, cntl,
+                                channel);
 
     CHECK_RPC_AND_RETRY_IF_ERROR("JoinCacheGroup");
 
     auto status = response.status();
     if (status != CacheGroupErrCode::CacheGroupOk) {
-      LOG(WARNING) << "Join cache group failed, status="
+      LOG(WARNING) << "Join cache group failed, status = "
                    << CacheGroupErrCode_Name(status);
     } else {
       *member_id = response.member_id();
-      *member_uuid = response.member_uuid();
     }
     return status;
   };
@@ -1192,75 +1211,30 @@ pb::mds::cachegroup::CacheGroupErrCode MdsClientImpl::LeaveCacheGroup(
   return ToCacheGroupErrCode(rc);
 }
 
-pb::mds::cachegroup::CacheGroupErrCode MdsClientImpl::SendCacheGroupHeartbeat(
-    const std::string& ip, uint32_t port) {
-  auto task = RPCTask {
-    (void)addrindex;
-    (void)rpctimeoutMS;
-    pb::mds::cachegroup::HeartbeatResponse response;
-
-    mdsbasecli_->SendCacheGroupHeartbeat(ip, port, &response, cntl, channel);
-
-    CHECK_RPC_AND_RETRY_IF_ERROR("SendCacheGroupHeartbeat");
-
-    auto status = response.status();
-    LOG_IF(WARNING, status != CacheGroupErrCode::CacheGroupOk)
-        << "Send cache group heartbeat failed, status="
-        << CacheGroupErrCode_Name(status);
-    return status;
-  };
-
-  auto rc = rpcexcutor_.DoRPCTask(task, mdsOpt_.mdsMaxRetryMS);
-  return ToCacheGroupErrCode(rc);
-}
-
-pb::mds::cachegroup::CacheGroupErrCode MdsClientImpl::LoadCacheGroupMembers(
+pb::mds::cachegroup::CacheGroupErrCode MdsClientImpl::ListCacheGroupMembers(
     const std::string& group_name,
     std::vector<pb::mds::cachegroup::CacheGroupMember>* members) {
   auto task = RPCTask {
     (void)addrindex;
     (void)rpctimeoutMS;
-    pb::mds::cachegroup::LoadMembersResponse response;
+    pb::mds::cachegroup::ListMembersResponse response;
 
-    mdsbasecli_->LoadCacheGroupMembers(group_name, &response, cntl, channel);
+    mdsbasecli_->ListCacheGroupMembers(group_name, &response, cntl, channel);
 
-    CHECK_RPC_AND_RETRY_IF_ERROR("LoadCacheGroupMembers");
+    CHECK_RPC_AND_RETRY_IF_ERROR("ListCacheGroupMembers");
 
     auto status = response.status();
     if (status != CacheGroupErrCode::CacheGroupOk) {
       LOG(WARNING) << "Load cache group members failed, status="
                    << CacheGroupErrCode_Name(status);
     } else {
-      VLOG(9) << "LoadCacheGroupMembers, response: "
+      VLOG(9) << "ListCacheGroupMembers, response: "
               << response.ShortDebugString();
       members->reserve(response.members_size());
       std::move(response.mutable_members()->begin(),
                 response.mutable_members()->end(),
                 std::back_inserter(*members));
     }
-    return status;
-  };
-
-  auto rc = rpcexcutor_.DoRPCTask(task, mdsOpt_.mdsMaxRetryMS);
-  return ToCacheGroupErrCode(rc);
-}
-
-pb::mds::cachegroup::CacheGroupErrCode MdsClientImpl::ReweightCacheGroupMember(
-    uint64_t member_id, uint32_t weight) {
-  auto task = RPCTask {
-    (void)addrindex;
-    (void)rpctimeoutMS;
-    pb::mds::cachegroup::ReweightMemberResponse response;
-
-    mdsbasecli_->ReweightCacheGroupMember(member_id, weight, &response, cntl,
-                                          channel);
-
-    CHECK_RPC_AND_RETRY_IF_ERROR("ReweightCacheGroupMember");
-
-    auto status = response.status();
-    LOG_IF(WARNING, status != CacheGroupErrCode::CacheGroupOk)
-        << "Reweight cache group member, err: "
-        << CacheGroupErrCode_Name(status);
     return status;
   };
 

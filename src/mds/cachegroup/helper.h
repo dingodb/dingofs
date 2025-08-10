@@ -24,7 +24,6 @@
 #define DINGOFS_SRC_MDS_CACHEGROUP_HELPER_H_
 
 #include <cstdint>
-#include <string>
 
 #include "common/status.h"
 #include "mds/cachegroup/common.h"
@@ -35,10 +34,12 @@ namespace cachegroup {
 
 class Helper {
  public:
-  static uint64_t TimestampMs();
-  static std::string EndPoint(const std::string& ip, uint32_t port);
+  static int64_t TimestampMs();
+  static int64_t Timestamp();
   static PBCacheGroupErrCode PBErr(Status status);
 };
+
+#define SCOPE_EXIT BRPC_SCOPE_EXIT
 
 }  // namespace cachegroup
 }  // namespace mds

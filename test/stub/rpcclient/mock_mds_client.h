@@ -135,8 +135,7 @@ class MockMdsClient : public MdsClient {
 
   MOCK_METHOD(CacheGroupErrCode, JoinCacheGroup,
               (const std::string& group_name, const std::string& ip,
-               uint32_t port, uint32_t weight, uint64_t replace_id,
-               uint64_t* member_id, std::string* member_uuid),
+               uint32_t port, uint32_t weight, std::string* member_id),
               (override));
 
   MOCK_METHOD(CacheGroupErrCode, LeaveCacheGroup,
@@ -147,13 +146,10 @@ class MockMdsClient : public MdsClient {
   MOCK_METHOD(CacheGroupErrCode, SendCacheGroupHeartbeat,
               (const std::string& ip, uint32_t port), (override));
 
-  MOCK_METHOD(CacheGroupErrCode, LoadCacheGroupMembers,
+  MOCK_METHOD(CacheGroupErrCode, ListCacheGroupMembers,
               (const std::string& group_name,
                std::vector<pb::mds::cachegroup::CacheGroupMember>* members),
               (override));
-
-  MOCK_METHOD(CacheGroupErrCode, ReweightCacheGroupMember,
-              (uint64_t member_id, uint32_t weight), (override));
 };
 }  // namespace rpcclient
 }  // namespace stub

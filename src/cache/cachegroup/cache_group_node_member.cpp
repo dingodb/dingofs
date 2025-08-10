@@ -27,29 +27,21 @@
 namespace dingofs {
 namespace cache {
 
-DEFINE_uint64(replace_id, 0,
-              "The ID to replace when joining the cache group. "
-              "If set to 0, no replacement will be done.");
-
 CacheGroupNodeMemberImpl::CacheGroupNodeMemberImpl(CacheGroupNodeOption option,
                                                    MdsClientSPtr mds_client)
-    : member_id_(0),
-      member_uuid_(""),
-      option_(option),
-      mds_client_(mds_client) {}
+    : option_(option), mds_client_(mds_client) {}
 
 Status CacheGroupNodeMemberImpl::JoinGroup() {
   CHECK_NOTNULL(mds_client_);
 
-  auto rc = mds_client_->JoinCacheGroup(
-      option_.group_name, option_.listen_ip, option_.listen_port,
-      option_.group_weight, option_.replace_id, &member_id_, &member_uuid_);
+  auto rc = mds_client_->JoinCacheGroup(option_.group_name, option_.listen_ip,
+                                        option_.listen_port,
+                                        option_.group_weight, &member_id_);
   if (rc != PBCacheGroupErrCode::CacheGroupOk) {
     LOG(ERROR) << "Join cache group failed: group_name = " << option_.group_name
                << ", ip = " << option_.listen_ip
                << ", port = " << option_.listen_port
                << ", weight = " << option_.group_weight
-               << ", replace_id = " << option_.replace_id
                << ", rc = " << CacheGroupErrCode_Name(rc);
     return Status::Internal("join cache group failed");
   }
@@ -58,9 +50,7 @@ Status CacheGroupNodeMemberImpl::JoinGroup() {
             << ", ip = " << option_.listen_ip
             << ", port = " << option_.listen_port
             << ", weight = " << option_.group_weight
-            << ", replace_id = " << option_.replace_id
-            << ", member_id = " << member_id_
-            << ", member_uuid = " << member_uuid_;
+            << ", member_id = " << member_id_;
 
   return Status::OK();
 }
@@ -96,11 +86,7 @@ uint32_t CacheGroupNodeMemberImpl::GetListenPort() const {
   return option_.listen_port;
 }
 
-uint64_t CacheGroupNodeMemberImpl::GetMemberId() const { return member_id_; }
-
-std::string CacheGroupNodeMemberImpl::GetMemberUuid() const {
-  return member_uuid_;
-}
+std::string CacheGroupNodeMemberImpl::GetMemberId() const { return member_id_; }
 
 }  // namespace cache
 }  // namespace dingofs

@@ -81,7 +81,7 @@ void CacheGroupNodeHeartbeatImpl::SendHeartbeat() {
   auto rc = mds_client_->SendCacheGroupHeartbeat(member_->GetListenIP(),
                                                  member_->GetListenPort());
   if (rc != PBCacheGroupErrCode::CacheGroupOk) {
-    LOG(ERROR) << "Send cache group heartbeat failed, group_name = "
+    LOG(ERROR) << "Send cache group heartbeat failed: group_name = "
                << group_name << ", ip = " << member_->GetListenIP()
                << ", port = " << member_->GetListenPort()
                << ", rc = " << CacheGroupErrCode_Name(rc);

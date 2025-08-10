@@ -51,7 +51,7 @@ class CacheStatus {
   };
 
   struct Node {
-    uint64_t id;
+    std::string id;
     std::string address;
     uint32_t weight;
     std::string state;  // online, offline
@@ -74,7 +74,7 @@ class CacheStatus {
     std::string mds_addrs;
     std::string cache_group;
     std::string last_modified;
-    std::unordered_map<uint64_t, Node> nodes;
+    std::unordered_map<std::string, Node> nodes;
   };
 
   struct Root {

@@ -32,6 +32,8 @@
 namespace dingofs {
 namespace cache {
 
+static const std::string kRequired = "\x1B[31m[required]\033[0m";
+
 struct Option {
   std::string name;
   std::string description;
@@ -71,8 +73,12 @@ static std::vector<Option> Normalize(
       option.name = flag.name + "=" + flag.type;
     }
     option.description = flag.description;
-    option.default_value = flag.default_value;
-
+    if (flag.default_value.empty()) {
+      option.default_value = kRequired;
+    } else {
+      option.default_value =
+          absl::StrFormat("(default: %s)", flag.default_value);
+    }
     options.emplace_back(option);
   }
   return options;
@@ -94,12 +100,11 @@ std::string Usage() {
 
   std::ostringstream os;
   os << "dingo-cache " << GIT_TAG_NAME << "\n";
-  os << "usage: dingo-cache --group_name=<group_name> --listen_ip=<listen_ip> "
-        "[OPTIONS]\n";
+  os << "usage: dingo-cache [OPTIONS]\n";
   for (const auto& option : options) {
     os << "  --" << std::left << std::setw(max_name_length) << option.name
-       << std::right << "  " << option.description
-       << " (default: " << option.default_value << ")\n";
+       << std::right << "  " << option.description << " "
+       << option.default_value << "\n";
   }
 
   os << "\n";

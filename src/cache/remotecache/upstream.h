@@ -49,7 +49,6 @@ class ConsistentHash {
 
  private:
   std::vector<uint64_t> CalcWeights(const PBCacheGroupMembers& members);
-  std::string MemberKey(const PBCacheGroupMember& member) const;
 
   std::unique_ptr<ConHash> chash_;
   NodesT nodes_;

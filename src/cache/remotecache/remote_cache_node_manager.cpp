@@ -121,7 +121,7 @@ Status RemoteCacheNodeManager::RefreshMembers() {
 
 Status RemoteCacheNodeManager::LoadMembers(PBCacheGroupMembers* members) {
   auto status =
-      mds_client_->LoadCacheGroupMembers(option_.cache_group, members);
+      mds_client_->ListCacheGroupMembers(option_.cache_group, members);
   if (status != PBCacheGroupErrCode::CacheGroupOk) {
     LOG(ERROR) << "Load cache group members failed: "
                << CacheGroupErrCode_Name(status);

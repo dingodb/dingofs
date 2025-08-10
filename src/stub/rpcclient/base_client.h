@@ -19,8 +19,8 @@
  * Created Date: Fri Jun 11 2021
  * Author: lixiaocui
  */
-#ifndef DINGOFS_SRC_CLIENT_RPCCLIENT_BASE_CLIENT_H_
-#define DINGOFS_SRC_CLIENT_RPCCLIENT_BASE_CLIENT_H_
+#ifndef DINGOFS_SRC_STUB_RPCCLIENT_BASE_CLIENT_H_
+#define DINGOFS_SRC_STUB_RPCCLIENT_BASE_CLIENT_H_
 
 #include <brpc/channel.h>
 #include <brpc/controller.h>
@@ -132,8 +132,7 @@ class MDSBaseClient {
   // cache group
   virtual void JoinCacheGroup(
       const std::string& group_name, const std::string& ip, uint32_t port,
-      uint32_t weight, uint64_t replace_id,
-      pb::mds::cachegroup::JoinCacheGroupResponse* response,
+      uint32_t weight, pb::mds::cachegroup::JoinCacheGroupResponse* response,
       brpc::Controller* cntl, brpc::Channel* channel);
 
   virtual void LeaveCacheGroup(
@@ -146,13 +145,13 @@ class MDSBaseClient {
       pb::mds::cachegroup::HeartbeatResponse* response, brpc::Controller* cntl,
       brpc::Channel* channel);
 
-  virtual void LoadCacheGroupMembers(
+  virtual void ListCacheGroupMembers(
       const std::string& group_name,
-      pb::mds::cachegroup::LoadMembersResponse* response,
+      pb::mds::cachegroup::ListMembersResponse* response,
       brpc::Controller* cntl, brpc::Channel* channel);
 
   virtual void ReweightCacheGroupMember(
-      uint64_t member_id, uint32_t weight,
+      const std::string& member_id, uint32_t weight,
       pb::mds::cachegroup::ReweightMemberResponse* response,
       brpc::Controller* cntl, brpc::Channel* channel);
 };
@@ -161,4 +160,4 @@ class MDSBaseClient {
 }  // namespace stub
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_RPCCLIENT_BASE_CLIENT_H_
+#endif  // DINGOFS_SRC_STUB_RPCCLIENT_BASE_CLIENT_H_

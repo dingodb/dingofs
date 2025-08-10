@@ -29,9 +29,8 @@
 #include <utility>
 
 #include "common/version.h"
-#include "mds/cachegroup/cache_group_member_manager.h"
-#include "mds/cachegroup/cache_group_member_service.h"
 #include "mds/cachegroup/config.h"
+#include "mds/cachegroup/member_service.h"
 #include "mds/heartbeat/heartbeat_service.h"
 #include "mds/mds_service.h"
 #include "mds/topology/topology_service.h"

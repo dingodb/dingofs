@@ -49,9 +49,6 @@ DECLARE_uint32(listen_port);
 // Sets the weight of this cache group node, used for consistent hashing.
 DECLARE_uint32(group_weight);
 
-// Sets the ID to replace when joining the cache group.
-DECLARE_uint64(replace_id);
-
 // Retrive the whole block if length of range request is larger than this value.
 DECLARE_uint32(max_range_size_kb);
 
@@ -65,7 +62,6 @@ struct CacheGroupNodeOption {
   std::string listen_ip;
   uint32_t listen_port;
   uint32_t group_weight;
-  uint64_t replace_id;
   stub::common::MdsOption mds_option;
 
   BlockCacheOption block_cache_option;

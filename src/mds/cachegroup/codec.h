@@ -38,8 +38,8 @@ class Codec {
   static std::string EncodeGroupBirthTime(uint64_t birth_time);
   static uint64_t DecodeGroupBirthTime(const std::string& value);
 
-  static std::string EncodeMemberId(uint64_t member_id);
-  static uint64_t DecodeMemberId(const std::string& key);
+  static std::string EncodeMemberId(const std::string& member_id);
+  static std::string DecodeMemberId(const std::string& key);
   static std::string EncodeMember(const PBCacheGroupMember& member);
   static PBCacheGroupMember DecodeMember(const std::string& value);
 };

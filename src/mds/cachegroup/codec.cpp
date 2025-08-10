@@ -55,17 +55,15 @@ uint64_t Codec::DecodeGroupBirthTime(const std::string& value) {
   return birth_time;
 }
 
-std::string Codec::EncodeMemberId(uint64_t member_id) {
+std::string Codec::EncodeMemberId(const std::string& member_id) {
   std::string key = CACHE_GROUP_MEMBER_ID_KEY_PREFIX;
-  size_t prefix_len = CACHE_GROUP_PREFIX_LENGTH;
-  key.resize(prefix_len + sizeof(uint64_t));
-  utils::EncodeBigEndian(&(key[prefix_len]), member_id);
+  key.append(member_id);
   return key;
 }
 
-uint64_t Codec::DecodeMemberId(const std::string& key) {
+std::string Codec::DecodeMemberId(const std::string& key) {
   size_t prefix_len = CACHE_GROUP_PREFIX_LENGTH;
-  return utils::DecodeBigEndian(&(key[prefix_len]));
+  return key.substr(prefix_len);
 }
 
 std::string Codec::EncodeMember(const PBCacheGroupMember& member) {

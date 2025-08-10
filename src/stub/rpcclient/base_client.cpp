@@ -56,8 +56,8 @@ using pb::mds::cachegroup::JoinCacheGroupRequest;
 using pb::mds::cachegroup::JoinCacheGroupResponse;
 using pb::mds::cachegroup::LeaveCacheGroupRequest;
 using pb::mds::cachegroup::LeaveCacheGroupResponse;
-using pb::mds::cachegroup::LoadMembersRequest;
-using pb::mds::cachegroup::LoadMembersResponse;
+using pb::mds::cachegroup::ListMembersRequest;
+using pb::mds::cachegroup::ListMembersResponse;
 using pb::mds::cachegroup::ReweightMemberRequest;
 using pb::mds::cachegroup::ReweightMemberResponse;
 
@@ -234,15 +234,13 @@ void MDSBaseClient::SetFsStats(const SetFsStatsRequest& request,
 // cache group
 void MDSBaseClient::JoinCacheGroup(
     const std::string& group_name, const std::string& ip, uint32_t port,
-    uint32_t weight, uint64_t replace_id,
-    pb::mds::cachegroup::JoinCacheGroupResponse* response,
+    uint32_t weight, pb::mds::cachegroup::JoinCacheGroupResponse* response,
     brpc::Controller* cntl, brpc::Channel* channel) {
   JoinCacheGroupRequest request;
   request.set_group_name(group_name);
   request.set_ip(ip);
   request.set_port(port);
   request.set_weight(weight);
-  request.set_replace_id(replace_id);
 
   CacheGroupMemberService_Stub stub(channel);
   stub.JoinCacheGroup(cntl, &request, response, nullptr);
@@ -273,18 +271,18 @@ void MDSBaseClient::SendCacheGroupHeartbeat(
   stub.Heartbeat(cntl, &request, response, nullptr);
 }
 
-void MDSBaseClient::LoadCacheGroupMembers(const std::string& group_name,
-                                          LoadMembersResponse* response,
+void MDSBaseClient::ListCacheGroupMembers(const std::string& group_name,
+                                          ListMembersResponse* response,
                                           brpc::Controller* cntl,
                                           brpc::Channel* channel) {
-  LoadMembersRequest request;
+  ListMembersRequest request;
   request.set_group_name(group_name);
 
   CacheGroupMemberService_Stub stub(channel);
-  stub.LoadMembers(cntl, &request, response, nullptr);
+  stub.ListMembers(cntl, &request, response, nullptr);
 }
 
-void MDSBaseClient::ReweightCacheGroupMember(uint64_t member_id,
+void MDSBaseClient::ReweightCacheGroupMember(const std::string& member_id,
                                              uint32_t weight,
                                              ReweightMemberResponse* response,
                                              brpc::Controller* cntl,
