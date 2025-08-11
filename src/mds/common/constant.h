@@ -29,6 +29,7 @@ const uint32_t kSetAttrAtime = 1 << 4;
 const uint32_t kSetAttrMtime = 1 << 5;
 const uint32_t kSetAttrCtime = 1 << 6;
 const uint32_t kSetAttrNlink = 1 << 7;
+const uint32_t kSetAttrFlags = (1 << 8);
 
 const int kEmptyDirMinLinkNum = 2;
 

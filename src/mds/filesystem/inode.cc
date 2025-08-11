@@ -133,6 +133,12 @@ uint64_t Inode::Version() {
   return attr_.version();
 }
 
+uint32_t Inode::Flags() {
+  utils::ReadLockGuard lk(lock_);
+
+  return attr_.flags();
+}
+
 Inode::XAttrMap Inode::XAttrs() {
   utils::ReadLockGuard lk(lock_);
 

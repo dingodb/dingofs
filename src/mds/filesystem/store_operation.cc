@@ -855,6 +855,10 @@ Status UpdateAttrOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std:
     attr.set_nlink(attr_.nlink());
   }
 
+  if (to_set_ & kSetAttrFlags) {
+    attr.set_flags(attr_.flags());
+  }
+
   return Status::OK();
 }
 

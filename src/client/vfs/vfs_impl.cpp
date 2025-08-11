@@ -37,10 +37,12 @@
 #include "common/status.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
+#include "linux/fs.h"
 #include "metrics/metrics_dumper.h"
 #include "options/client/option.h"
 #include "trace/context.h"
 #include "utils/configuration.h"
+#include "utils/encode.h"
 #include "utils/net_common.h"
 
 #define VFS_CHECK_HANDLE(handle, ino, fh) \
@@ -503,6 +505,107 @@ Status VFSImpl::RmDir(ContextSPtr ctx, Ino parent, const std::string& name) {
 
 Status VFSImpl::StatFs(ContextSPtr ctx, Ino ino, FsStat* fs_stat) {
   return meta_system_->StatFs(ctx, ino, fs_stat);
+}
+
+Status VFSImpl::Ioctl(ContextSPtr ctx, Ino ino, uint32_t uid, unsigned int cmd,
+                      unsigned flags, const void* in_buf, size_t in_bufsz,
+                      char* out_buf, size_t out_bufsz) {
+  (void)flags;
+  // For internal inode, ioctl is not supported
+  if (BAIDU_UNLIKELY(IsInternalNode(ino))) {
+    return Status::NotSupport("Ioctl is not supported for internal inode");
+  }
+
+  static const std::unordered_set<unsigned int> kSupportedIoctls = {
+      FS_IOC_SETFLAGS, FS_IOC32_SETFLAGS, FS_IOC_GETFLAGS, FS_IOC32_GETFLAGS,
+      FS_IOC_FSGETXATTR};
+
+  if (kSupportedIoctls.find(cmd) == kSupportedIoctls.end()) {
+    return Status::NotSupport(fmt::format("ioctl cmd({}) not supported", cmd));
+  }
+
+  Attr attr;
+  Status s = meta_system_->GetAttr(ctx, ino, &attr);
+  if (!s.ok()) {
+    return s;
+  }
+
+  auto op_code = cmd >> 30;
+  if (op_code == 1) {  // set
+    uint64_t iflag = 0;
+
+    if (in_bufsz == 8) {
+      iflag = utils::DecodeNativeEndian64(static_cast<const char*>(in_buf));
+    } else if (in_bufsz == 4) {
+      iflag = utils::DecodeNativeEndian32(static_cast<const char*>(in_buf));
+    } else {
+      return Status::InvalidParam(
+          fmt::format("out_bufsz({}) not supported", out_bufsz));
+    }
+
+    if (uid != 0) {
+      return Status::NoPermission("set flags not allowed for non-root user");
+    }
+
+    attr.flags = ((iflag & FS_IMMUTABLE_FL) ? (attr.flags | kFlagImmutable)
+                                            : (attr.flags & ~kFlagImmutable));
+    attr.flags = ((iflag & FS_APPEND_FL) ? (attr.flags | kFlagAppend)
+                                         : (attr.flags & ~kFlagAppend));
+    attr.flags = ((iflag & FS_NODUMP_FL) ? (attr.flags | kFlagNoDump)
+                                         : (attr.flags & ~kFlagNoDump));
+    attr.flags = ((iflag & FS_SYNC_FL) ? (attr.flags | kFlagSync)
+                                       : (attr.flags & ~kFlagSync));
+    // TODO: FS_NOATIME_FL iflag from fuse is 0xffffff80,  does't match
+    // FS_NOATIME_FL(0x00000080)
+
+    VLOG(1) << "ioctl ino: " << ino << ", set iflag : " << iflag
+            << ", ioctl attr: " << Attr2Str(attr);
+
+    iflag &= ~(FS_IMMUTABLE_FL | FS_APPEND_FL | FS_NODUMP_FL | FS_SYNC_FL);
+    if (iflag != 0) {
+      return Status::NotSupport(
+          fmt::format("ioctl iflag({}) not supported", iflag));
+    }
+
+    Attr out_attr;
+    return meta_system_->SetAttr(ctx, ino, kSetAttrFlags, attr, &out_attr);
+  } else {
+    uint64_t iflag = 0;
+    if (((cmd >> 8) & 0xFF) == 'f') {  // FS_IOC_GETFLAGS
+
+      iflag |= ((attr.flags & kFlagImmutable) ? FS_IMMUTABLE_FL : 0);
+      iflag |= ((attr.flags & kFlagAppend) ? FS_APPEND_FL : 0);
+      iflag |= ((attr.flags & kFlagNoDump) ? FS_NODUMP_FL : 0);
+      iflag |= ((attr.flags & kFlagSync) ? FS_SYNC_FL : 0);
+
+      if (out_bufsz == 8) {
+        utils::EncodeNativeEndian64(out_buf, iflag);
+      } else if (out_bufsz == 4) {
+        utils::EncodeNativeEndian32(out_buf, static_cast<uint32_t>(iflag));
+      } else {
+        return Status::InvalidParam(
+            fmt::format("out_bufsz({}) not supported", out_bufsz));
+      }
+    } else {  // 'X', FS_IOC_FSGETXATTR
+
+      iflag |= ((attr.flags & kFlagImmutable) ? FS_XFLAG_IMMUTABLE : 0);
+      iflag |= ((attr.flags & kFlagAppend) ? FS_XFLAG_APPEND : 0);
+      iflag |= ((attr.flags & kFlagNoDump) ? FS_XFLAG_NODUMP : 0);
+      iflag |= ((attr.flags & kFlagSync) ? FS_XFLAG_SYNC : 0);
+
+      if (out_bufsz == 28) {
+        utils::EncodeNativeEndian32(out_buf, static_cast<uint32_t>(iflag));
+        std::memset(out_buf + 4, 0, 24);  // fill rest data with zeros
+      } else {
+        return Status::InvalidParam(
+            fmt::format("out_bufsz({}) not supported", out_bufsz));
+      }
+    }
+
+    VLOG(1) << "ioctl ino: " << ino << ", get iflag: " << iflag;
+  }
+
+  return Status::OK();
 }
 
 uint64_t VFSImpl::GetFsId() { return 10; }

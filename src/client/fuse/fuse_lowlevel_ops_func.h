@@ -59,7 +59,7 @@ static const struct fuse_lowlevel_ops kFuseOp = {
     .setlk = nullptr,
     .bmap = nullptr,
 #if FUSE_VERSION >= FUSE_MAKE_VERSION(2, 8)
-    .ioctl = nullptr,
+    .ioctl = FuseOpIoctl,
     .poll = nullptr,
 #endif
 #if FUSE_VERSION >= FUSE_MAKE_VERSION(2, 9)

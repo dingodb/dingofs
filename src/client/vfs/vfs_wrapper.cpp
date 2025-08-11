@@ -862,6 +862,27 @@ Status VFSWrapper::RmDir(Ino parent, const std::string& name) {
   return s;
 }
 
+Status VFSWrapper::Ioctl(Ino ino, uint32_t uid, unsigned int cmd,
+                         unsigned flags, const void* in_buf, size_t in_bufsz,
+                         char* out_buf, size_t out_bufsz) {
+  auto span = vfs_->GetTracer()->StartSpan(kVFSWrapperMoudule, METHOD_NAME());
+
+  VLOG(1) << "VFSIoctl ino: " << ino << " cmd: " << cmd << " flags: " << flags
+          << " in_bufsz: " << in_bufsz << " out_bufsz: " << out_bufsz;
+  Status s;
+  AccessLogGuard log([&]() {
+    return absl::StrFormat("ioctl (%d,%u,%u,%zu,%zu): %s", ino, cmd, flags,
+                           in_bufsz, out_bufsz, s.ToString());
+  });
+
+  s = vfs_->Ioctl(span->GetContext(), ino, uid, cmd, flags, in_buf, in_bufsz,
+                  out_buf, out_bufsz);
+
+  VLOG(1) << "VFSIoctl end, status: " << s.ToString();
+
+  return s;
+}
+
 Status VFSWrapper::StatFs(Ino ino, FsStat* fs_stat) {
   auto span = vfs_->GetTracer()->StartSpan(kVFSWrapperMoudule, METHOD_NAME());
   VLOG(1) << "VFSStatFs ino: " << ino;

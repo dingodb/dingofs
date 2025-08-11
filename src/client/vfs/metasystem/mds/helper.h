@@ -111,6 +111,7 @@ class Helper {
     out_attr.mtime = inode.mtime();
     out_attr.ctime = inode.ctime();
     out_attr.type = ToFileType(inode.type());
+    out_attr.flags = inode.flags();
 
     for (const auto& parent : inode.parents()) {
       out_attr.parents.push_back(parent);
@@ -133,6 +134,7 @@ class Helper {
     out_attr.set_mtime(attr.mtime);
     out_attr.set_ctime(attr.ctime);
     out_attr.set_type(ToFileType(attr.type));
+    out_attr.set_flags(attr.flags);
 
     for (const auto& parent : attr.parents) {
       out_attr.add_parents(parent);

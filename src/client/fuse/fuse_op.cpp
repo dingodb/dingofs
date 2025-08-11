@@ -164,6 +164,10 @@ static void ReplyXattr(fuse_req_t req, size_t size) {
   fuse_reply_xattr(req, size);
 }
 
+static void ReplyIoctl(fuse_req_t req, const char* out_buf, size_t out_bufsz) {
+  fuse_reply_ioctl(req, 0, out_buf, out_bufsz);
+}
+
 static void ReplyStatfs(fuse_req_t req, const FsStat& stat) {
   uint64_t block_size = 4096;
 
@@ -707,6 +711,40 @@ void FuseOpCreate(fuse_req_t req, fuse_ino_t parent, const char* name,
     ReplyCreate(req, fi, attr);
   }
 }
+
+#if FUSE_USE_VERSION < 35
+void FuseOpIoctl(fuse_req_t req, fuse_ino_t ino, int cmd, void* arg,
+                 struct fuse_file_info* fi, unsigned flags, const void* in_buf,
+                 size_t in_bufsz, size_t out_bufsz) {
+  Status s = Status::NotSupported(
+      "FuseOpIoctl is not supported with fuse version lower than 3.5");
+
+  ReplyError(req, s);
+}
+#else
+void FuseOpIoctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void* arg,
+                 struct fuse_file_info* fi, unsigned flags, const void* in_buf,
+                 size_t in_bufsz, size_t out_bufsz) {
+  (void)fi;
+  (void)arg;
+  VLOG(1) << "FuseOpIoctl ino: " << ino << ", cmd: " << cmd
+          << ", flags: " << flags << ", in_bufsz: " << in_bufsz
+          << ", out_bufsz: " << out_bufsz;
+
+  const struct fuse_ctx* ctx = fuse_req_ctx(req);
+  uint32_t uid = ctx->uid;
+
+  std::string out_buf(out_bufsz, '\0');
+
+  Status s = g_vfs->Ioctl(ino, uid, cmd, flags, in_buf, in_bufsz,
+                          out_buf.data(), out_bufsz);
+  if (!s.ok()) {
+    ReplyError(req, s);
+  } else {
+    ReplyIoctl(req, out_buf.data(), out_bufsz);
+  }
+}
+#endif
 
 void FuseOpStatFs(fuse_req_t req, fuse_ino_t ino) {
   VLOG(1) << "FuseOpStatFs ino: " << ino;

@@ -63,6 +63,7 @@ class Inode {
   uint64_t Atime();
   uint32_t Openmpcount();
   uint64_t Version();
+  uint32_t Flags();
 
   XAttrMap XAttrs();
   std::string XAttr(const std::string& name);

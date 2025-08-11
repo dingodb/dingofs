@@ -1475,6 +1475,7 @@ void MDSServiceImpl::DoSetAttr(google::protobuf::RpcController*, const pb::mds::
   attr.set_uid(request->uid());
   attr.set_gid(request->gid());
   attr.set_mode(request->mode());
+  attr.set_flags(request->flags());
   param.to_set = request->to_set();
 
   const auto& req_ctx = request->context();

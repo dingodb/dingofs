@@ -40,6 +40,7 @@ constexpr int kSetAttrMtime = (1 << 5);
 constexpr int kSetAttrAtimeNow = (1 << 7);
 constexpr int kSetAttrMtimeNow = (1 << 8);
 constexpr int kSetAttrCtime = (1 << 10);
+constexpr int kSetAttrFlags = (1 << 11);
 
 enum FsStatus : uint8_t {
   kInit = 1,
@@ -96,6 +97,7 @@ struct Attr {
   FileType type;
   // TODO: refact, maybe use separate key for hardlink
   std::vector<Ino> parents;
+  uint32_t flags{0};
 };
 
 struct DirEntry {

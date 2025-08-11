@@ -114,6 +114,10 @@ class VFSWrapper {
 
   Status RmDir(Ino parent, const std::string& name);
 
+  Status Ioctl(Ino ino, uint32_t uid, unsigned int cmd, unsigned flags,
+               const void* in_buf, size_t in_bufsz, char* out_buf,
+               size_t out_bufsz);
+
   Status StatFs(Ino ino, FsStat* fs_stat);
 
   uint64_t GetFsId();

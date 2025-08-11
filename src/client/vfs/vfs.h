@@ -135,6 +135,10 @@ class VFS {
 
   virtual Status StatFs(ContextSPtr ctx, Ino ino, FsStat* fs_stat) = 0;
 
+  virtual Status Ioctl(ContextSPtr ctx, Ino ino, uint32_t uid, unsigned int cmd,
+                       unsigned flags, const void* in_buf, size_t in_bufsz,
+                       char* out_buf, size_t out_bufsz) = 0;
+
   virtual uint64_t GetFsId() = 0;
 
   virtual double GetAttrTimeout(const FileType& type) = 0;

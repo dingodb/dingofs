@@ -27,6 +27,13 @@ static const std::string kVFSMoudule = "vfs";
 static const std::string kVFSWrapperMoudule = "vfs_wrapper";
 static const std::string kVFSDataMoudule = "vfs_data";
 
+// ioctl related constants
+static const uint8_t kFlagImmutable = (1 << 0);
+static const uint8_t kFlagAppend = (1 << 1);
+static const uint8_t kFlagNoDump = (1 << 2);
+static const uint8_t kFlagNoAtime = (1 << 3);
+static const uint8_t kFlagSync = (1 << 4);
+
 }  // namespace client
 }  // namespace dingofs
 
