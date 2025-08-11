@@ -43,13 +43,11 @@
 namespace dingofs {
 namespace cache {
 
-DEFINE_uint32(rpc_put_request_timeout_ms, 5000,
-              "Timeout (ms) for put rpc request");
-DEFINE_uint32(rpc_range_request_timeout_ms, 3000,
-              "Timeout (ms) for range rpc request");
-DEFINE_uint32(rpc_cache_request_timeout_ms, 10000,
+DEFINE_uint32(put_rpc_timeout_ms, 5000, "Timeout (ms) for put rpc request");
+DEFINE_uint32(range_rpc_timeout_ms, 3000, "Timeout (ms) for range rpc request");
+DEFINE_uint32(cache_rpc_timeout_ms, 10000,
               "Timeout (ms) for cache rpc request");
-DEFINE_uint32(rpc_prefetch_request_timeout_ms, 10000,
+DEFINE_uint32(prefetch_rpc_timeout_ms, 10000,
               "Timeout (ms) for prefetch rpc request");
 DEFINE_uint32(rpc_max_retry_times, 3, "Maximum retry times for rpc request");
 DEFINE_uint32(rpc_max_timeout_ms, 10000,
@@ -198,13 +196,13 @@ uint32_t RPCClient::NextTimeoutMs(const std::string& api_name,
                                   int retry_count) const {
   uint32_t timeout_ms;
   if (api_name == kApiPut) {
-    timeout_ms = FLAGS_rpc_put_request_timeout_ms;
+    timeout_ms = FLAGS_put_rpc_timeout_ms;
   } else if (api_name == kApiRange) {
-    timeout_ms = FLAGS_rpc_range_request_timeout_ms;
+    timeout_ms = FLAGS_range_rpc_timeout_ms;
   } else if (api_name == kApiCache) {
-    timeout_ms = FLAGS_rpc_cache_request_timeout_ms;
+    timeout_ms = FLAGS_cache_rpc_timeout_ms;
   } else if (api_name == kApiPrefetch) {
-    timeout_ms = FLAGS_rpc_prefetch_request_timeout_ms;
+    timeout_ms = FLAGS_prefetch_rpc_timeout_ms;
   } else {
     CHECK(false) << "Unknown API name: " << api_name;
   }

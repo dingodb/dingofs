@@ -28,7 +28,6 @@
 #include "cache/common/macro.h"
 #include "cache/common/proto.h"
 #include "cache/status/cache_status.h"
-#include "cache/utils/helper.h"
 #include "cache/utils/state_machine.h"
 #include "utils/executor/bthread/bthread_executor.h"
 

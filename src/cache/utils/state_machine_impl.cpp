@@ -60,7 +60,7 @@ DEFINE_uint32(node_state_unstable2normal_succ_num, 3,
               "unstable state");
 DEFINE_validator(node_state_unstable2normal_succ_num, brpc::PassValidate);
 
-DEFINE_uint32(node_state_unstable2down_s, 1800,
+DEFINE_uint32(node_state_unstable2down_s, 604800,  // 7 days
               "Duration in seconds to trigger down state from unstable state");
 DEFINE_validator(node_state_unstable2down_s, brpc::PassValidate);
 

@@ -121,23 +121,24 @@ static void InitRemoteBlockCacheOption(utils::Configuration* c,
               &cache::FLAGS_mds_rpc_normal_retry_times_before_trigger_wait);
   c->GetValue("remote_cache.mds_rpc_wait_sleep_ms",
               &cache::FLAGS_mds_rpc_wait_sleep_ms);
-  c->GetValue("remote_cache.rpc_put_request_timeout_ms",
-              &cache::FLAGS_rpc_put_request_timeout_ms);
-  c->GetValue("remote_cache.rpc_range_request_timeout_ms",
-              &cache::FLAGS_rpc_range_request_timeout_ms);
-  c->GetValue("remote_cache.rpc_cache_request_timeout_ms",
-              &cache::FLAGS_rpc_cache_request_timeout_ms);
-  c->GetValue("remote_cache.rpc_prefetch_request_timeout_ms",
-              &cache::FLAGS_rpc_prefetch_request_timeout_ms);
+
+  c->GetValue("remote_cache.put_rpc_timeout_ms",
+              &cache::FLAGS_put_rpc_timeout_ms);
+  c->GetValue("remote_cache.range_rpc_timeout_ms",
+              &cache::FLAGS_range_rpc_timeout_ms);
+  c->GetValue("remote_cache.cache_rpc_timeout_ms",
+              &cache::FLAGS_cache_rpc_timeout_ms);
+  c->GetValue("remote_cache.prefetch_rpc_timeout_ms",
+              &cache::FLAGS_prefetch_rpc_timeout_ms);
+  c->GetValue("remote_cache.ping_rpc_timeout_ms",
+              &cache::FLAGS_ping_rpc_timeout_ms);
 
   c->GetValue("remote_cache.tick_duration_second",
               &cache::FLAGS_node_state_tick_duration_s);
-  c->GetValue("remote_cache.normal2unstable_io_error_num",
+  c->GetValue("remote_cache.normal2unstable_error_num",
               &cache::FLAGS_node_state_normal2unstable_error_num);
-  c->GetValue("remote_cache.unstable2normal_io_succ_num",
+  c->GetValue("remote_cache.unstable2normal_succ_num",
               &cache::FLAGS_node_state_unstable2normal_succ_num);
-  c->GetValue("remote_cache.unstable2down_second",
-              &cache::FLAGS_node_state_unstable2down_s);
   c->GetValue("remote_cache.check_cache_node_state_duration_ms",
               &cache::FLAGS_check_cache_node_state_duration_ms);
   *option = cache::RemoteBlockCacheOption();

@@ -55,16 +55,19 @@ DECLARE_bool(enable_remote_prefetch);
 DECLARE_uint32(remote_prefetch_max_buffer_size_mb);
 
 // Timeout (ms) for put rpc request
-DECLARE_uint32(rpc_put_request_timeout_ms);
+DECLARE_uint32(put_rpc_timeout_ms);
 
 // Timeout (ms) for range rpc request
-DECLARE_uint32(rpc_range_request_timeout_ms);
+DECLARE_uint32(range_rpc_timeout_ms);
 
 // Timeout (ms) for cache rpc request
-DECLARE_uint32(rpc_cache_request_timeout_ms);
+DECLARE_uint32(cache_rpc_timeout_ms);
 
 // Timeout (ms) for prefetch rpc request
-DECLARE_uint32(rpc_prefetch_request_timeout_ms);
+DECLARE_uint32(prefetch_rpc_timeout_ms);
+
+// Timeout (ms) for pinging remote cache node
+DECLARE_uint32(ping_rpc_timeout_ms);
 
 // Maximum retry times for rpc request
 DECLARE_uint32(rpc_max_retry_times);
