@@ -17,6 +17,8 @@
 #ifndef SRC_AWS_S3_CLIENT_AWS_CRT_S3_CLIENT_H_
 #define SRC_AWS_S3_CLIENT_AWS_CRT_S3_CLIENT_H_
 
+#include <aws/core/utils/logging/CRTLogSystem.h>
+
 #include <memory>
 
 #include "aws/s3-crt/S3CrtClient.h"
@@ -31,6 +33,10 @@ class AwsCrtS3Client : public AwsS3Client {
  public:
   explicit AwsCrtS3Client() = default;
   ~AwsCrtS3Client() override = default;
+
+  using CRTLogSystemInterfaceSPtr =
+      std::shared_ptr<Aws::Utils::Logging::CRTLogSystemInterface>;
+  static CRTLogSystemInterfaceSPtr CreateLogger(int log_level);
 
   void Init(const S3Options& options) override;
 

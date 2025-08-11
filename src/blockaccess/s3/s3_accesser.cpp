@@ -44,10 +44,24 @@ bool S3Accesser::Init() {
 
   // only init once
   auto init_aws_api_fn = [&]() {
-    aws_sdk_options.loggingOptions.logLevel =
+    auto& logging_options = aws_sdk_options.loggingOptions;
+
+    logging_options.logLevel =
         Aws::Utils::Logging::LogLevel(options_.aws_sdk_config.loglevel);
-    aws_sdk_options.loggingOptions.defaultLogPrefix =
+    logging_options.defaultLogPrefix =
         options_.aws_sdk_config.log_prefix.c_str();
+    if (options_.aws_sdk_config.use_crt_client) {
+      logging_options.crt_logger_create_fn =
+          [log_level = options_.aws_sdk_config.loglevel]() {
+            return aws::AwsCrtS3Client::CreateLogger(log_level);
+          };
+
+    } else {
+      logging_options.logger_create_fn =
+          [log_level = options_.aws_sdk_config.loglevel]() {
+            return aws::AwsLegacyS3Client::CreateLogger(log_level);
+          };
+    }
 
     Aws::InitAPI(aws_sdk_options);
   };

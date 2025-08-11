@@ -37,7 +37,7 @@ struct AwsSdkConfig {
   std::string region{"us-east-1"};
 
   int loglevel{4};
-  std::string log_prefix;
+  std::string log_prefix{"/tmp/aws_sdk_"};
 
   bool verify_ssl{false};
   int max_connections{32};
@@ -61,8 +61,16 @@ struct S3Options {
 inline void InitAwsSdkConfig(utils::Configuration* conf,
                              AwsSdkConfig* aws_sdk_config) {
   LOG_IF(FATAL, !conf->GetIntValue("s3.logLevel", &aws_sdk_config->loglevel));
-  LOG_IF(FATAL,
-         !conf->GetStringValue("s3.logPrefix", &aws_sdk_config->log_prefix));
+  if (!conf->GetStringValue("client.common.logDir",
+                            &aws_sdk_config->log_prefix)) {
+    LOG(INFO) << fmt::format(
+        "Not found client.common.logDir in conf, use default {}",
+        aws_sdk_config->log_prefix);
+  } else {
+    aws_sdk_config->log_prefix =
+        fmt::format("{}/aws_sdk_", aws_sdk_config->log_prefix);
+  }
+
   LOG_IF(FATAL,
          !conf->GetBoolValue("s3.verify_SSL", &aws_sdk_config->verify_ssl));
   LOG_IF(FATAL, !conf->GetIntValue("s3.maxConnections",
