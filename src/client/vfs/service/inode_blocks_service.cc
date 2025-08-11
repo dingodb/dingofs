@@ -23,6 +23,7 @@
 
 #include "client/meta/vfs_meta.h"
 #include "client/vfs/data/flat/flat_file.h"
+#include "common/context.h"
 #include "common/status.h"
 #include "options/client/vfs/vfs_dynamic_option.h"
 
@@ -31,9 +32,10 @@ namespace client {
 namespace vfs {
 
 static Status InitFlatFile(VFSHub* vfs_hub, FlatFile* flat_file) {
+  ContextSPtr ctx = NewContext();
   Attr attr;
   DINGOFS_RETURN_NOT_OK(
-      vfs_hub->GetMetaSystem()->GetAttr(flat_file->GetIno(), &attr));
+      vfs_hub->GetMetaSystem()->GetAttr(ctx, flat_file->GetIno(), &attr));
 
   uint64_t chunk_num = (attr.length / flat_file->GetChunkSize()) + 1;
 
@@ -42,8 +44,8 @@ static Status InitFlatFile(VFSHub* vfs_hub, FlatFile* flat_file) {
 
   for (uint64_t i = 0; i < chunk_num; ++i) {
     std::vector<Slice> slices;
-    DINGOFS_RETURN_NOT_OK(
-        vfs_hub->GetMetaSystem()->ReadSlice(flat_file->GetIno(), i, &slices));
+    DINGOFS_RETURN_NOT_OK(vfs_hub->GetMetaSystem()->ReadSlice(
+        ctx, flat_file->GetIno(), i, &slices));
 
     flat_file->FillChunk(i, std::move(slices));
   }

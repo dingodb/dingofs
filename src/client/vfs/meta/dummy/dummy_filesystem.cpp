@@ -25,8 +25,9 @@
 #include <vector>
 
 #include "bthread/mutex.h"
-#include "client/vfs/common/helper.h"
 #include "client/meta/vfs_meta.h"
+#include "client/vfs/common/helper.h"
+#include "common/context.h"
 #include "common/status.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
@@ -351,12 +352,12 @@ Status DummyFileSystem::Init() {
 
 void DummyFileSystem::UnInit() {}
 
-bool DummyFileSystem::Dump(Json::Value& value) {
+bool DummyFileSystem::Dump(ContextSPtr ctx, Json::Value& value) {
   // Implement your dump logic here
   return true;
 }
 
-bool DummyFileSystem::Load(const Json::Value& value) {
+bool DummyFileSystem::Load(ContextSPtr ctx, const Json::Value& value) {
   // Implement your load logic here
   return true;
 }
@@ -394,8 +395,8 @@ static Attr ToAttr(const pb::mdsv2::Inode& inode) {
   return attr;
 }
 
-Status DummyFileSystem::Lookup(Ino parent, const std::string& name,
-                               Attr* attr) {
+Status DummyFileSystem::Lookup(ContextSPtr ctx, Ino parent,
+                               const std::string& name, Attr* attr) {
   PBDentry dentry;
   if (!GetChildDentry(parent, name, dentry)) {
     return Status::NotExist("not found dentry");
@@ -411,7 +412,8 @@ Status DummyFileSystem::Lookup(Ino parent, const std::string& name,
   return Status::OK();
 }
 
-Status DummyFileSystem::MkNod(Ino parent, const std::string& name, uint32_t uid,
+Status DummyFileSystem::MkNod(ContextSPtr ctx, Ino parent,
+                              const std::string& name, uint32_t uid,
                               uint32_t gid, uint32_t mode, uint64_t rdev,
                               Attr* attr) {
   uint32_t fs_id = fs_info_.fs_id();
@@ -439,7 +441,7 @@ Status DummyFileSystem::MkNod(Ino parent, const std::string& name, uint32_t uid,
   return Status::OK();
 }
 
-Status DummyFileSystem::Open(Ino ino, int flags, uint64_t fh) {
+Status DummyFileSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
   if (open_file_memo_.IsOpened(ino)) {
     open_file_memo_.Open(ino);
     return Status::OK();
@@ -450,14 +452,15 @@ Status DummyFileSystem::Open(Ino ino, int flags, uint64_t fh) {
   return Status::OK();
 }
 
-Status DummyFileSystem::Create(Ino parent, const std::string& name,
-                               uint32_t uid, uint32_t gid, uint32_t mode,
-                               int flags, Attr* attr, uint64_t fh) {
-  DINGOFS_RETURN_NOT_OK(MkNod(parent, name, uid, gid, mode, 0, attr));
-  return Open(attr->ino, flags, fh);
+Status DummyFileSystem::Create(ContextSPtr ctx, Ino parent,
+                               const std::string& name, uint32_t uid,
+                               uint32_t gid, uint32_t mode, int flags,
+                               Attr* attr, uint64_t fh) {
+  DINGOFS_RETURN_NOT_OK(MkNod(ctx, parent, name, uid, gid, mode, 0, attr));
+  return Open(ctx, attr->ino, flags, fh);
 }
 
-Status DummyFileSystem::Close(Ino ino, uint64_t fh) {
+Status DummyFileSystem::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
   if (!open_file_memo_.IsOpened(ino)) {
     return Status::OK();
   }
@@ -467,16 +470,16 @@ Status DummyFileSystem::Close(Ino ino, uint64_t fh) {
   return Status::OK();
 }
 
-Status DummyFileSystem::ReadSlice(Ino ino, uint64_t index,
+Status DummyFileSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                                   std::vector<Slice>* slices) {
   return file_chunk_map_.Read(ino, index, slices);
 }
 
-Status DummyFileSystem::NewSliceId(Ino ino, uint64_t* id) {
+Status DummyFileSystem::NewSliceId(ContextSPtr ctx, Ino ino, uint64_t* id) {
   return file_chunk_map_.NewSliceId(id);
 }
 
-Status DummyFileSystem::WriteSlice(Ino ino, uint64_t index,
+Status DummyFileSystem::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                                    const std::vector<Slice>& slices) {
   PBInode inode;
   if (!GetInode(ino, inode)) {
@@ -507,7 +510,8 @@ Status DummyFileSystem::WriteSlice(Ino ino, uint64_t index,
   return Status::OK();
 }
 
-Status DummyFileSystem::MkDir(Ino parent, const std::string& name, uint32_t uid,
+Status DummyFileSystem::MkDir(ContextSPtr ctx, Ino parent,
+                              const std::string& name, uint32_t uid,
                               uint32_t gid, uint32_t mode, Attr* attr) {
   uint32_t fs_id = fs_info_.fs_id();
 
@@ -537,7 +541,8 @@ Status DummyFileSystem::MkDir(Ino parent, const std::string& name, uint32_t uid,
   return Status::OK();
 }
 
-Status DummyFileSystem::RmDir(Ino parent, const std::string& name) {
+Status DummyFileSystem::RmDir(ContextSPtr ctx, Ino parent,
+                              const std::string& name) {
   Dentry parent_dentry;
   if (!GetDentry(parent, parent_dentry)) {
     return Status::Internal(pb::error::ENOT_FOUND, "not found parent dentry");
@@ -566,7 +571,7 @@ Status DummyFileSystem::RmDir(Ino parent, const std::string& name) {
   return Status::OK();
 }
 
-Status DummyFileSystem::OpenDir(Ino ino, uint64_t fh) {
+Status DummyFileSystem::OpenDir(ContextSPtr ctx, Ino ino, uint64_t fh) {
   auto dir_iterator = std::make_shared<DirIterator>(this, ino);
   auto status = dir_iterator->Seek();
   if (!status.ok()) {
@@ -580,8 +585,9 @@ Status DummyFileSystem::OpenDir(Ino ino, uint64_t fh) {
   return Status::OK();
 }
 
-Status DummyFileSystem::ReadDir(Ino, uint64_t fh, uint64_t offset,
-                                bool with_attr, ReadDirHandler handler) {
+Status DummyFileSystem::ReadDir(ContextSPtr ctx, Ino, uint64_t fh,
+                                uint64_t offset, bool with_attr,
+                                ReadDirHandler handler) {
   auto dir_iterator = dir_iterator_manager_.Get(fh);
   CHECK(dir_iterator != nullptr) << "dir_iterator is null";
 
@@ -598,12 +604,12 @@ Status DummyFileSystem::ReadDir(Ino, uint64_t fh, uint64_t offset,
   return Status::OK();
 }
 
-Status DummyFileSystem::ReleaseDir(Ino, uint64_t fh) {
+Status DummyFileSystem::ReleaseDir(ContextSPtr ctx, Ino, uint64_t fh) {
   dir_iterator_manager_.Delete(fh);
   return Status::OK();
 }
 
-Status DummyFileSystem::Link(Ino ino, Ino new_parent,
+Status DummyFileSystem::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
                              const std::string& new_name, Attr* attr) {
   PBInode inode;
   if (!GetInode(ino, inode)) {
@@ -630,7 +636,8 @@ Status DummyFileSystem::Link(Ino ino, Ino new_parent,
   return Status::OK();
 }
 
-Status DummyFileSystem::Unlink(Ino parent, const std::string& name) {
+Status DummyFileSystem::Unlink(ContextSPtr ctx, Ino parent,
+                               const std::string& name) {
   Dentry dentry;
   if (!GetDentry(parent, dentry)) {
     return Status::Internal(pb::error::ENOT_FOUND, "not found parent dentry");
@@ -647,9 +654,10 @@ Status DummyFileSystem::Unlink(Ino parent, const std::string& name) {
   return Status::OK();
 }
 
-Status DummyFileSystem::Symlink(Ino parent, const std::string& name,
-                                uint32_t uid, uint32_t gid,
-                                const std::string& link, Attr* attr) {
+Status DummyFileSystem::Symlink(ContextSPtr ctx, Ino parent,
+                                const std::string& name, uint32_t uid,
+                                uint32_t gid, const std::string& link,
+                                Attr* attr) {
   Dentry dentry;
   if (!GetDentry(parent, dentry)) {
     return Status::Internal(pb::error::ENOT_FOUND, "not found parent dentry");
@@ -672,7 +680,7 @@ Status DummyFileSystem::Symlink(Ino parent, const std::string& name,
   return Status::OK();
 }
 
-Status DummyFileSystem::ReadLink(Ino ino, std::string* link) {
+Status DummyFileSystem::ReadLink(ContextSPtr ctx, Ino ino, std::string* link) {
   PBInode inode;
   if (!GetInode(ino, inode)) {
     return Status::Internal(pb::error::ENOT_FOUND, "not found inode");
@@ -687,7 +695,7 @@ Status DummyFileSystem::ReadLink(Ino ino, std::string* link) {
   return Status::OK();
 }
 
-Status DummyFileSystem::GetAttr(Ino ino, Attr* attr) {
+Status DummyFileSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
   PBInode inode;
   if (!GetInode(ino, inode)) {
     return Status::Internal(pb::error::ENOT_FOUND, "not found inode");
@@ -700,8 +708,8 @@ Status DummyFileSystem::GetAttr(Ino ino, Attr* attr) {
   return Status::OK();
 }
 
-Status DummyFileSystem::SetAttr(Ino ino, int set, const Attr& attr,
-                                Attr* out_attr) {
+Status DummyFileSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
+                                const Attr& attr, Attr* out_attr) {
   PBInode inode;
   if (!GetInode(ino, inode)) {
     return Status::Internal(pb::error::ENOT_FOUND, "not found inode");
@@ -762,8 +770,8 @@ Status DummyFileSystem::SetAttr(Ino ino, int set, const Attr& attr,
   return Status::OK();
 }
 
-Status DummyFileSystem::GetXattr(Ino ino, const std::string& name,
-                                 std::string* value) {
+Status DummyFileSystem::GetXattr(ContextSPtr ctx, Ino ino,
+                                 const std::string& name, std::string* value) {
   PBInode inode;
   if (!GetInode(ino, inode)) {
     return Status::NoData(pb::error::ENOT_FOUND, "not found inode");
@@ -778,7 +786,8 @@ Status DummyFileSystem::GetXattr(Ino ino, const std::string& name,
   return Status::OK();
 }
 
-Status DummyFileSystem::SetXattr(Ino ino, const std::string& name,
+Status DummyFileSystem::SetXattr(ContextSPtr ctx, Ino ino,
+                                 const std::string& name,
                                  const std::string& value, int flags) {
   PBInode inode;
   if (!GetInode(ino, inode)) {
@@ -790,18 +799,20 @@ Status DummyFileSystem::SetXattr(Ino ino, const std::string& name,
   return Status::OK();
 }
 
-Status DummyFileSystem::RemoveXattr(Ino ino, const std::string& name) {
+Status DummyFileSystem::RemoveXattr(ContextSPtr ctx, Ino ino,
+                                    const std::string& name) {
   PBInode inode;
   if (!GetInode(ino, inode)) {
     return Status::Internal(pb::error::ENOT_FOUND, "not found inode");
   }
 
-  RemoveXattr(ino, name);
+  RemoveXattr(ctx, ino, name);
 
   return Status::OK();
 }
 
-Status DummyFileSystem::ListXattr(Ino ino, std::vector<std::string>* xattrs) {
+Status DummyFileSystem::ListXattr(ContextSPtr ctx, Ino ino,
+                                  std::vector<std::string>* xattrs) {
   PBInode inode;
   if (!GetInode(ino, inode)) {
     return Status::Internal(pb::error::ENOT_FOUND, "not found inode");
@@ -814,12 +825,13 @@ Status DummyFileSystem::ListXattr(Ino ino, std::vector<std::string>* xattrs) {
   return Status::OK();
 }
 
-Status DummyFileSystem::Rename(Ino old_parent, const std::string& old_name,
-                               Ino new_parent, const std::string& new_name) {
+Status DummyFileSystem::Rename(ContextSPtr ctx, Ino old_parent,
+                               const std::string& old_name, Ino new_parent,
+                               const std::string& new_name) {
   return Status::Internal(pb::error::ENOT_SUPPORT, "not support");
 }
 
-Status DummyFileSystem::StatFs(Ino ino, FsStat* fs_stat) {
+Status DummyFileSystem::StatFs(ContextSPtr ctx, Ino ino, FsStat* fs_stat) {
   fs_stat->max_bytes = 500 * 1000 * 1000 * 1000ul;
   fs_stat->used_bytes = 20 * 1000 * 1000 * 1000ul;
   fs_stat->used_inodes = 100;
@@ -860,7 +872,7 @@ static RadosInfo ToRadosInfo(const pb::mdsv2::RadosInfo& rados_info) {
   return result;
 }
 
-Status DummyFileSystem::GetFsInfo(FsInfo* fs_info) {
+Status DummyFileSystem::GetFsInfo(ContextSPtr ctx, FsInfo* fs_info) {
   fs_info->name = kDefaultFsName;
   fs_info->id = fs_info_.fs_id();
   fs_info->chunk_size = fs_info_.chunk_size();
@@ -1125,7 +1137,7 @@ void DummyFileSystem::RemoveXAttr(uint64_t ino, const std::string& name) {
   auto xattr_it = mut_xattr->find(name);
   if (xattr_it != mut_xattr->end()) {
     mut_xattr->erase(xattr_it);
-  } 
+  }
 }
 
 void DummyFileSystem::UpdateInodeLength(uint64_t ino, size_t length) {

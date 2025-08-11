@@ -37,6 +37,7 @@
 #include "cache/utils/context.h"
 #include "client/vfs_legacy/common/common.h"
 #include "client/vfs_legacy/inode_wrapper.h"
+#include "common/context.h"
 #include "metrics/blockaccess/block_accesser.h"
 #include "metrics/metric.h"
 #include "metrics/metric_guard.h"
@@ -176,19 +177,20 @@ void WarmupManagerS3Impl::GetWarmupList(const WarmupFilelist& filelist,
 
   {
     uint64_t fh = 0;
-    Status s = vfs_->Open(filelist.GetKey(), flags, &fh);
+    ContextSPtr ctx = NewContext();
+    Status s = vfs_->Open(ctx, filelist.GetKey(), flags, &fh);
     if (!s.ok()) {
       LOG(ERROR) << "Fail open warmup list file, status: " << s.ToString()
                  << ", key = " << filelist.GetKey();
       return;
     }
 
-    s = vfs_->Read(filelist.GetKey(), data.get(), filelist.GetFileLen(), 0, fh,
+    s = vfs_->Read(ctx, filelist.GetKey(), data.get(), filelist.GetFileLen(), 0, fh,
                    &read_size);
     if (!s.ok()) {
       LOG(ERROR) << "Fail read warmup list file, status: " << s.ToString()
                  << ", key = " << filelist.GetKey();
-      vfs_->Release(filelist.GetKey(), fh);
+      vfs_->Release(ctx, filelist.GetKey(), fh);
       return;
     } else {
       if (read_size != filelist.GetFileLen()) {
@@ -196,7 +198,7 @@ void WarmupManagerS3Impl::GetWarmupList(const WarmupFilelist& filelist,
                      << filelist.GetKey() << ", read_size:" << read_size
                      << ", expect_size:" << filelist.GetFileLen();
       }
-      vfs_->Release(filelist.GetKey(), fh);
+      vfs_->Release(ctx, filelist.GetKey(), fh);
     }
   }
 

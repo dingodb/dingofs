@@ -23,6 +23,7 @@
 #include <string>
 
 #include "client/meta/vfs_meta.h"
+#include "common/context.h"
 #include "common/status.h"
 #include "options/client/fuse/fuse_option.h"
 
@@ -48,24 +49,26 @@ class VFS {
 
   virtual Status Stop() = 0;
 
-  virtual bool Dump(Json::Value& value) = 0;
+  virtual bool Dump(ContextSPtr ctx, Json::Value& value) = 0;
 
-  virtual bool Load(const Json::Value& value) = 0;
+  virtual bool Load(ContextSPtr ctx, const Json::Value& value) = 0;
 
-  virtual Status Lookup(Ino parent, const std::string& name, Attr* attr) = 0;
+  virtual Status Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
+                        Attr* attr) = 0;
 
-  virtual Status GetAttr(Ino ino, Attr* attr) = 0;
+  virtual Status GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) = 0;
 
-  virtual Status SetAttr(Ino ino, int set, const Attr& in_attr,
+  virtual Status SetAttr(ContextSPtr ctx, Ino ino, int set, const Attr& in_attr,
                          Attr* out_attr) = 0;
 
-  virtual Status ReadLink(Ino ino, std::string* link) = 0;
+  virtual Status ReadLink(ContextSPtr ctx, Ino ino, std::string* link) = 0;
 
-  virtual Status MkNod(Ino parent, const std::string& name, uint32_t uid,
-                       uint32_t gid, uint32_t mode, uint64_t dev,
+  virtual Status MkNod(ContextSPtr ctx, Ino parent, const std::string& name,
+                       uint32_t uid, uint32_t gid, uint32_t mode, uint64_t dev,
                        Attr* attr) = 0;
 
-  virtual Status Unlink(Ino parent, const std::string& name) = 0;
+  virtual Status Unlink(ContextSPtr ctx, Ino parent,
+                        const std::string& name) = 0;
 
   /**
    * Create a symlink in parent directory
@@ -74,56 +77,62 @@ class VFS {
    * @param link the content of the symlink
    * @param attr output
    */
-  virtual Status Symlink(Ino parent, const std::string& name, uint32_t uid,
-                         uint32_t gid, const std::string& link, Attr* attr) = 0;
+  virtual Status Symlink(ContextSPtr ctx, Ino parent, const std::string& name,
+                         uint32_t uid, uint32_t gid, const std::string& link,
+                         Attr* attr) = 0;
 
-  virtual Status Rename(Ino old_parent, const std::string& old_name,
-                        Ino new_parent, const std::string& new_name) = 0;
+  virtual Status Rename(ContextSPtr ctx, Ino old_parent,
+                        const std::string& old_name, Ino new_parent,
+                        const std::string& new_name) = 0;
 
-  virtual Status Link(Ino ino, Ino new_parent, const std::string& new_name,
-                      Attr* attr) = 0;
+  virtual Status Link(ContextSPtr ctx, Ino ino, Ino new_parent,
+                      const std::string& new_name, Attr* attr) = 0;
 
-  virtual Status Open(Ino ino, int flags, uint64_t* fh) = 0;
+  virtual Status Open(ContextSPtr ctx, Ino ino, int flags, uint64_t* fh) = 0;
 
-  virtual Status Create(Ino parent, const std::string& name, uint32_t uid,
-                        uint32_t gid, uint32_t mode, int flags, uint64_t* fh,
-                        Attr* attr) = 0;
+  virtual Status Create(ContextSPtr ctx, Ino parent, const std::string& name,
+                        uint32_t uid, uint32_t gid, uint32_t mode, int flags,
+                        uint64_t* fh, Attr* attr) = 0;
 
-  virtual Status Read(Ino ino, char* buf, uint64_t size, uint64_t offset,
-                      uint64_t fh, uint64_t* out_rsize) = 0;
+  virtual Status Read(ContextSPtr ctx, Ino ino, char* buf, uint64_t size,
+                      uint64_t offset, uint64_t fh, uint64_t* out_rsize) = 0;
 
-  virtual Status Write(Ino ino, const char* buf, uint64_t size, uint64_t offset,
-                       uint64_t fh, uint64_t* out_wsize) = 0;
+  virtual Status Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t size,
+                       uint64_t offset, uint64_t fh, uint64_t* out_wsize) = 0;
 
-  virtual Status Flush(Ino ino, uint64_t fh) = 0;
+  virtual Status Flush(ContextSPtr ctx, Ino ino, uint64_t fh) = 0;
 
-  virtual Status Release(Ino ino, uint64_t fh) = 0;
+  virtual Status Release(ContextSPtr ctx, Ino ino, uint64_t fh) = 0;
 
-  virtual Status Fsync(Ino ino, int datasync, uint64_t fh) = 0;
+  virtual Status Fsync(ContextSPtr ctx, Ino ino, int datasync, uint64_t fh) = 0;
 
-  virtual Status SetXattr(Ino ino, const std::string& name,
+  virtual Status SetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
                           const std::string& value, int flags) = 0;
 
-  virtual Status GetXattr(Ino ino, const std::string& name,
+  virtual Status GetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
                           std::string* value) = 0;
 
-  virtual Status RemoveXattr(Ino ino, const std::string& name) = 0;
+  virtual Status RemoveXattr(ContextSPtr ctx, Ino ino,
+                             const std::string& name) = 0;
 
-  virtual Status ListXattr(Ino ino, std::vector<std::string>* xattrs) = 0;
+  virtual Status ListXattr(ContextSPtr ctx, Ino ino,
+                           std::vector<std::string>* xattrs) = 0;
 
-  virtual Status MkDir(Ino parent, const std::string& name, uint32_t uid,
-                       uint32_t gid, uint32_t mode, Attr* attr) = 0;
+  virtual Status MkDir(ContextSPtr ctx, Ino parent, const std::string& name,
+                       uint32_t uid, uint32_t gid, uint32_t mode,
+                       Attr* attr) = 0;
 
-  virtual Status OpenDir(Ino ino, uint64_t* fh) = 0;
+  virtual Status OpenDir(ContextSPtr ctx, Ino ino, uint64_t* fh) = 0;
 
-  virtual Status ReadDir(Ino ino, uint64_t fh, uint64_t offset, bool with_attr,
-                         ReadDirHandler handler) = 0;
+  virtual Status ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
+                         bool with_attr, ReadDirHandler handler) = 0;
 
-  virtual Status ReleaseDir(Ino ino, uint64_t fh) = 0;
+  virtual Status ReleaseDir(ContextSPtr ctx, Ino ino, uint64_t fh) = 0;
 
-  virtual Status RmDir(Ino parent, const std::string& name) = 0;
+  virtual Status RmDir(ContextSPtr ctx, Ino parent,
+                       const std::string& name) = 0;
 
-  virtual Status StatFs(Ino ino, FsStat* fs_stat) = 0;
+  virtual Status StatFs(ContextSPtr ctx, Ino ino, FsStat* fs_stat) = 0;
 
   virtual uint64_t GetFsId() = 0;
 

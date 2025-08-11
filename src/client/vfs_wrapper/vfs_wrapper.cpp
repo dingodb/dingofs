@@ -36,6 +36,7 @@
 #include "client/vfs/vfs_impl.h"
 #include "client/vfs_legacy/vfs_legacy.h"
 #include "client/vfs_wrapper/access_log.h"
+#include "common/context.h"
 #include "common/logging.h"
 #include "common/rpc_stream.h"
 #include "common/status.h"
@@ -182,8 +183,10 @@ Status VFSWrapper::Stop() {
 }
 
 bool VFSWrapper::Dump() {
+  ContextSPtr ctx = NewContext();
+
   Json::Value root;
-  if (!vfs_->Dump(root)) {
+  if (!vfs_->Dump(ctx, root)) {
     LOG(ERROR) << "dump vfs state fail.";
     return false;
   }
@@ -223,7 +226,9 @@ bool VFSWrapper::Load() {
     return false;
   }
 
-  if (!vfs_->Load(root)) {
+  ContextSPtr ctx = NewContext();
+
+  if (!vfs_->Load(ctx, root)) {
     LOG(ERROR) << "load vfs state fail.";
     return false;
   }
@@ -252,8 +257,8 @@ double VFSWrapper::GetEntryTimeout(const FileType& type) {
 }
 
 Status VFSWrapper::Lookup(Ino parent, const std::string& name, Attr* attr) {
+  ContextSPtr ctx = NewContext();
   VLOG(1) << "VFSLookup parent: " << parent << " name: " << name;
-
   Status s;
   AccessLogGuard log([&]() {
     return absl::StrFormat("lookup (%d/%s): %s %s", parent, name, s.ToString(),
@@ -268,7 +273,7 @@ Status VFSWrapper::Lookup(Ino parent, const std::string& name, Attr* attr) {
     return s;
   }
 
-  s = vfs_->Lookup(parent, name, attr);
+  s = vfs_->Lookup(ctx, parent, name, attr);
   VLOG(1) << "VFSLookup end parent: " << parent << " name: " << name
           << " status: " << s.ToString();
   if (!s.ok()) {
@@ -278,6 +283,7 @@ Status VFSWrapper::Lookup(Ino parent, const std::string& name, Attr* attr) {
 }
 
 Status VFSWrapper::GetAttr(Ino ino, Attr* attr) {
+  ContextSPtr ctx = NewContext();
   VLOG(1) << "VFSGetAttr ino: " << ino;
   Status s;
   AccessLogGuard log([&]() {
@@ -288,7 +294,7 @@ Status VFSWrapper::GetAttr(Ino ino, Attr* attr) {
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opGetAttr, &client_op_metric_->opAll});
 
-  s = vfs_->GetAttr(ino, attr);
+  s = vfs_->GetAttr(ctx, ino, attr);
   VLOG(1) << "VFSGetAttr end ino: " << ino << " status: " << s.ToString();
   if (!s.ok()) {
     op_metric.FailOp();
@@ -298,6 +304,7 @@ Status VFSWrapper::GetAttr(Ino ino, Attr* attr) {
 
 Status VFSWrapper::SetAttr(Ino ino, int set, const Attr& in_attr,
                            Attr* out_attr) {
+  ContextSPtr ctx = NewContext();
   VLOG(1) << "VFSSetAttr ino: " << ino << " set: " << set;
   Status s;
   AccessLogGuard log([&]() {
@@ -308,7 +315,7 @@ Status VFSWrapper::SetAttr(Ino ino, int set, const Attr& in_attr,
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opSetAttr, &client_op_metric_->opAll});
 
-  s = vfs_->SetAttr(ino, set, in_attr, out_attr);
+  s = vfs_->SetAttr(ctx, ino, set, in_attr, out_attr);
   VLOG(1) << "VFSSetAttr end, status: " << s.ToString();
   if (!s.ok()) {
     op_metric.FailOp();
@@ -317,6 +324,7 @@ Status VFSWrapper::SetAttr(Ino ino, int set, const Attr& in_attr,
 }
 
 Status VFSWrapper::ReadLink(Ino ino, std::string* link) {
+  ContextSPtr ctx = NewContext();
   VLOG(1) << "VFSReadLink ino: " << ino;
   Status s;
   AccessLogGuard log([&]() {
@@ -326,7 +334,7 @@ Status VFSWrapper::ReadLink(Ino ino, std::string* link) {
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opReadLink, &client_op_metric_->opAll});
 
-  s = vfs_->ReadLink(ino, link);
+  s = vfs_->ReadLink(ctx, ino, link);
   VLOG(1) << "VFSReadLink end, status: " << s.ToString() << " link: " << *link;
   if (!s.ok()) {
     op_metric.FailOp();
@@ -337,6 +345,7 @@ Status VFSWrapper::ReadLink(Ino ino, std::string* link) {
 Status VFSWrapper::MkNod(Ino parent, const std::string& name, uint32_t uid,
                          uint32_t gid, uint32_t mode, uint64_t dev,
                          Attr* attr) {
+  ContextSPtr ctx = NewContext();
   VLOG(1) << "VFSMknod parent: " << parent << " name: " << name
           << " uid: " << uid << " gid: " << gid << " mode: " << mode
           << " dev: " << dev;
@@ -354,7 +363,7 @@ Status VFSWrapper::MkNod(Ino parent, const std::string& name, uint32_t uid,
     return s;
   }
 
-  s = vfs_->MkNod(parent, name, uid, gid, mode, dev, attr);
+  s = vfs_->MkNod(ctx, parent, name, uid, gid, mode, dev, attr);
   VLOG(1) << "VFSMknod end, status: " << s.ToString();
   if (!s.ok()) {
     op_metric.FailOp();
@@ -363,6 +372,7 @@ Status VFSWrapper::MkNod(Ino parent, const std::string& name, uint32_t uid,
 }
 
 Status VFSWrapper::Unlink(Ino parent, const std::string& name) {
+  ContextSPtr ctx = NewContext();
   VLOG(1) << "VFSUnlink parent: " << parent << " name: " << name;
   Status s;
   AccessLogGuard log([&]() {
@@ -377,7 +387,7 @@ Status VFSWrapper::Unlink(Ino parent, const std::string& name) {
     return s;
   }
 
-  s = vfs_->Unlink(parent, name);
+  s = vfs_->Unlink(ctx, parent, name);
   VLOG(1) << "VFSUnlink end, status: " << s.ToString();
   if (!s.ok()) {
     op_metric.FailOp();
@@ -387,6 +397,7 @@ Status VFSWrapper::Unlink(Ino parent, const std::string& name) {
 
 Status VFSWrapper::Symlink(Ino parent, const std::string& name, uint32_t uid,
                            uint32_t gid, const std::string& link, Attr* attr) {
+  ContextSPtr ctx = NewContext();
   VLOG(1) << "VFSSymlink parent: " << parent << " name: " << name
           << " uid: " << uid << " gid: " << gid << " link: " << link;
 
@@ -405,13 +416,14 @@ Status VFSWrapper::Symlink(Ino parent, const std::string& name, uint32_t uid,
     return s;
   }
 
-  s = vfs_->Symlink(parent, name, uid, gid, link, attr);
+  s = vfs_->Symlink(ctx, parent, name, uid, gid, link, attr);
   VLOG(1) << "VFSSymlink end, status: " << s.ToString();
   return s;
 }
 
 Status VFSWrapper::Rename(Ino old_parent, const std::string& old_name,
                           Ino new_parent, const std::string& new_name) {
+  ContextSPtr ctx = NewContext();
   VLOG(1) << "VFSRename old_parent: " << old_parent << " old_name: " << old_name
           << " new_parent: " << new_parent << " new_name: " << new_name;
   Status s;
@@ -430,7 +442,7 @@ Status VFSWrapper::Rename(Ino old_parent, const std::string& old_name,
     return s;
   }
 
-  s = vfs_->Rename(old_parent, old_name, new_parent, new_name);
+  s = vfs_->Rename(ctx, old_parent, old_name, new_parent, new_name);
   VLOG(1) << "VFSRename end, status: " << s.ToString();
   if (!s.ok()) {
     op_metric.FailOp();
@@ -440,6 +452,7 @@ Status VFSWrapper::Rename(Ino old_parent, const std::string& old_name,
 
 Status VFSWrapper::Link(Ino ino, Ino new_parent, const std::string& new_name,
                         Attr* attr) {
+  ContextSPtr ctx = NewContext();
   VLOG(1) << "VFSLink ino: " << ino << " new_parent: " << new_parent
           << " new_name: " << new_name;
   Status s;
@@ -461,7 +474,7 @@ Status VFSWrapper::Link(Ino ino, Ino new_parent, const std::string& new_name,
     return s;
   }
 
-  s = vfs_->Link(ino, new_parent, new_name, attr);
+  s = vfs_->Link(ctx, ino, new_parent, new_name, attr);
   if (!s.ok()) {
     op_metric.FailOp();
   }
@@ -470,6 +483,7 @@ Status VFSWrapper::Link(Ino ino, Ino new_parent, const std::string& new_name,
 }
 
 Status VFSWrapper::Open(Ino ino, int flags, uint64_t* fh) {
+  ContextSPtr ctx = NewContext();
   VLOG(1) << "VFSOpen ino: " << ino << " octal flags: " << std::oct << flags;
   Status s;
   AccessLogGuard log([&]() {
@@ -479,7 +493,7 @@ Status VFSWrapper::Open(Ino ino, int flags, uint64_t* fh) {
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opOpen, &client_op_metric_->opAll});
 
-  s = vfs_->Open(ino, flags, fh);
+  s = vfs_->Open(ctx, ino, flags, fh);
   VLOG(1) << "VFSOpen end, status: " << s.ToString() << " fh: " << *fh;
   if (!s.ok()) {
     op_metric.FailOp();
@@ -490,6 +504,7 @@ Status VFSWrapper::Open(Ino ino, int flags, uint64_t* fh) {
 Status VFSWrapper::Create(Ino parent, const std::string& name, uint32_t uid,
                           uint32_t gid, uint32_t mode, int flags, uint64_t* fh,
                           Attr* attr) {
+  ContextSPtr ctx = NewContext();
   VLOG(1) << "VFSCreate parent: " << parent << " name: " << name
           << " uid: " << uid << " gid: " << gid << " mode: " << mode
           << " octal flags: " << std::oct << flags;
@@ -507,7 +522,7 @@ Status VFSWrapper::Create(Ino parent, const std::string& name, uint32_t uid,
     return s;
   }
 
-  s = vfs_->Create(parent, name, uid, gid, mode, flags, fh, attr);
+  s = vfs_->Create(ctx, parent, name, uid, gid, mode, flags, fh, attr);
 
   VLOG(1) << "VFSCreate end, status: " << s.ToString()
           << " attr: " << Attr2Str(*attr);
@@ -519,6 +534,7 @@ Status VFSWrapper::Create(Ino parent, const std::string& name, uint32_t uid,
 
 Status VFSWrapper::Read(Ino ino, char* buf, uint64_t size, uint64_t offset,
                         uint64_t fh, uint64_t* out_rsize) {
+  ContextSPtr ctx = NewContext();
   VLOG(1) << "VFSRead ino: " << ino << ", buf: " << Char2Addr(buf)
           << ", size: " << size << ", offset: " << offset << ", fh: " << fh;
   Status s;
@@ -531,7 +547,7 @@ Status VFSWrapper::Read(Ino ino, char* buf, uint64_t size, uint64_t offset,
       {&client_op_metric_->opRead, &client_op_metric_->opAll});
   VFSRWMetricGuard guard(&s, &VFSRWMetric::GetInstance().read, out_rsize);
 
-  s = vfs_->Read(ino, buf, size, offset, fh, out_rsize);
+  s = vfs_->Read(ctx, ino, buf, size, offset, fh, out_rsize);
   VLOG(1) << "VFSRead end ino: " << ino << ", buf: " << Char2Addr(buf)
           << ", size: " << size << ", offset: " << offset << ", fh: " << fh
           << ", read_size: " << *out_rsize << ", status: " << s.ToString();
@@ -543,6 +559,7 @@ Status VFSWrapper::Read(Ino ino, char* buf, uint64_t size, uint64_t offset,
 
 Status VFSWrapper::Write(Ino ino, const char* buf, uint64_t size,
                          uint64_t offset, uint64_t fh, uint64_t* out_wsize) {
+  ContextSPtr ctx = NewContext();
   VLOG(1) << "VFSWrite ino: " << ino << ", buf:  " << Char2Addr(buf)
           << ", size: " << size << " offset: " << offset << " fh: " << fh;
   Status s;
@@ -556,7 +573,7 @@ Status VFSWrapper::Write(Ino ino, const char* buf, uint64_t size,
 
   VFSRWMetricGuard guard(&s, &VFSRWMetric::GetInstance().write, out_wsize);
 
-  s = vfs_->Write(ino, buf, size, offset, fh, out_wsize);
+  s = vfs_->Write(ctx, ino, buf, size, offset, fh, out_wsize);
   VLOG(1) << "VFSWrite end ino: " << ino << ", buf:  " << Char2Addr(buf)
           << ", size: " << size << " offset: " << offset << " fh: " << fh
           << ", write_size: " << *out_wsize << ", status: " << s.ToString();
@@ -567,6 +584,7 @@ Status VFSWrapper::Write(Ino ino, const char* buf, uint64_t size,
 }
 
 Status VFSWrapper::Flush(Ino ino, uint64_t fh) {
+  ContextSPtr ctx = NewContext();
   VLOG(1) << "VFSFlush ino: " << ino << " fh: " << fh;
   Status s;
   AccessLogGuard log([&]() {
@@ -576,7 +594,7 @@ Status VFSWrapper::Flush(Ino ino, uint64_t fh) {
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opFlush, &client_op_metric_->opAll});
 
-  s = vfs_->Flush(ino, fh);
+  s = vfs_->Flush(ctx, ino, fh);
   VLOG(1) << "VFSFlush end, status: " << s.ToString();
   if (!s.ok()) {
     op_metric.FailOp();
@@ -585,6 +603,7 @@ Status VFSWrapper::Flush(Ino ino, uint64_t fh) {
 }
 
 Status VFSWrapper::Release(Ino ino, uint64_t fh) {
+  ContextSPtr ctx = NewContext();
   VLOG(1) << "VFSRelease ino: " << ino << " fh: " << fh;
   Status s;
   AccessLogGuard log([&]() {
@@ -594,7 +613,7 @@ Status VFSWrapper::Release(Ino ino, uint64_t fh) {
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opRelease, &client_op_metric_->opAll});
 
-  s = vfs_->Release(ino, fh);
+  s = vfs_->Release(ctx, ino, fh);
   VLOG(1) << "VFSRelease end, status: " << s.ToString();
   if (!s.ok()) {
     op_metric.FailOp();
@@ -603,6 +622,7 @@ Status VFSWrapper::Release(Ino ino, uint64_t fh) {
 }
 
 Status VFSWrapper::Fsync(Ino ino, int datasync, uint64_t fh) {
+  ContextSPtr ctx = NewContext();
   VLOG(1) << "VFSFsync ino: " << ino << " datasync: " << datasync
           << " fh: " << fh;
   Status s;
@@ -614,7 +634,7 @@ Status VFSWrapper::Fsync(Ino ino, int datasync, uint64_t fh) {
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opFsync, &client_op_metric_->opAll});
 
-  s = vfs_->Fsync(ino, datasync, fh);
+  s = vfs_->Fsync(ctx, ino, datasync, fh);
   VLOG(1) << "VFSFsync end, status: " << s.ToString();
   if (!s.ok()) {
     op_metric.FailOp();
@@ -624,6 +644,7 @@ Status VFSWrapper::Fsync(Ino ino, int datasync, uint64_t fh) {
 
 Status VFSWrapper::SetXattr(Ino ino, const std::string& name,
                             const std::string& value, int flags) {
+  ContextSPtr ctx = NewContext();
   VLOG(1) << "VFSSetXattr ino: " << ino << " name: " << name
           << " value: " << value << " octal flags: " << std::oct << flags;
   Status s;
@@ -637,13 +658,14 @@ Status VFSWrapper::SetXattr(Ino ino, const std::string& name,
   }
 
   // NOTE: s is used by log guard
-  s = vfs_->SetXattr(ino, name, value, flags);
+  s = vfs_->SetXattr(ctx, ino, name, value, flags);
   LOG(INFO) << "VFSSetXattr end, status: " << s.ToString();
   return s;
 }
 
 Status VFSWrapper::GetXattr(Ino ino, const std::string& name,
                             std::string* value) {
+  ContextSPtr ctx = NewContext();
   VLOG(1) << "VFSGetXattr ino: " << ino << " name: " << name;
   Status s;
   AccessLogGuard log([&]() {
@@ -658,7 +680,7 @@ Status VFSWrapper::GetXattr(Ino ino, const std::string& name,
     return s;
   }
 
-  s = vfs_->GetXattr(ino, name, value);
+  s = vfs_->GetXattr(ctx, ino, name, value);
   VLOG(1) << "VFSGetXattr end, value: " << *value
           << ", status: " << s.ToString();
   if (!s.ok()) {
@@ -673,6 +695,7 @@ Status VFSWrapper::GetXattr(Ino ino, const std::string& name,
 }
 
 Status VFSWrapper::RemoveXattr(Ino ino, const std::string& name) {
+  ContextSPtr ctx = NewContext();
   VLOG(1) << "VFSRemoveXattr ino: " << ino << " name: " << name;
   Status s;
   AccessLogGuard log([&]() {
@@ -685,12 +708,13 @@ Status VFSWrapper::RemoveXattr(Ino ino, const std::string& name) {
   }
 
   // NOTE: s is used by log guard
-  s = vfs_->RemoveXattr(ino, name);
+  s = vfs_->RemoveXattr(ctx, ino, name);
   LOG(INFO) << "VFSSetXattr end, status: " << s.ToString();
   return s;
 }
 
 Status VFSWrapper::ListXattr(Ino ino, std::vector<std::string>* xattrs) {
+  ContextSPtr ctx = NewContext();
   VLOG(1) << "VFSListXattr ino: " << ino;
   Status s;
   AccessLogGuard log([&]() {
@@ -701,7 +725,7 @@ Status VFSWrapper::ListXattr(Ino ino, std::vector<std::string>* xattrs) {
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opListXattr, &client_op_metric_->opAll});
 
-  s = vfs_->ListXattr(ino, xattrs);
+  s = vfs_->ListXattr(ctx, ino, xattrs);
   VLOG(1) << "VFSListXattr end, status: " << s.ToString()
           << " xattrs: " << xattrs->size();
   if (!s.ok()) {
@@ -712,6 +736,7 @@ Status VFSWrapper::ListXattr(Ino ino, std::vector<std::string>* xattrs) {
 
 Status VFSWrapper::MkDir(Ino parent, const std::string& name, uint32_t uid,
                          uint32_t gid, uint32_t mode, Attr* attr) {
+  ContextSPtr ctx = NewContext();
   VLOG(1) << "VFSMkDir parent ino: " << parent << " name: " << name
           << " uid: " << uid << " gid: " << gid << " mode: " << mode;
   Status s;
@@ -729,7 +754,7 @@ Status VFSWrapper::MkDir(Ino parent, const std::string& name, uint32_t uid,
     return s;
   }
 
-  s = vfs_->MkDir(parent, name, uid, gid, S_IFDIR | mode, attr);
+  s = vfs_->MkDir(ctx, parent, name, uid, gid, S_IFDIR | mode, attr);
   VLOG(1) << "VFSMkdir end, status: " << s.ToString()
           << " attr: " << Attr2Str(*attr);
   if (!s.ok()) {
@@ -739,6 +764,7 @@ Status VFSWrapper::MkDir(Ino parent, const std::string& name, uint32_t uid,
 }
 
 Status VFSWrapper::OpenDir(Ino ino, uint64_t* fh) {
+  ContextSPtr ctx = NewContext();
   VLOG(1) << "VFSOpendir ino: " << ino;
   Status s;
   AccessLogGuard log([&]() {
@@ -748,7 +774,7 @@ Status VFSWrapper::OpenDir(Ino ino, uint64_t* fh) {
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opOpenDir, &client_op_metric_->opAll});
 
-  s = vfs_->OpenDir(ino, fh);
+  s = vfs_->OpenDir(ctx, ino, fh);
   VLOG(1) << "VFSOpendir end, ino: " << ino << " fh: " << *fh;
   if (!s.ok()) {
     op_metric.FailOp();
@@ -758,6 +784,7 @@ Status VFSWrapper::OpenDir(Ino ino, uint64_t* fh) {
 
 Status VFSWrapper::ReadDir(Ino ino, uint64_t fh, uint64_t offset,
                            bool with_attr, ReadDirHandler handler) {
+  ContextSPtr ctx = NewContext();
   VLOG(1) << "VFSReaddir ino: " << ino << " fh: " << fh << " offset: " << offset
           << " with_attr: " << (with_attr ? "true" : "false");
   Status s;
@@ -769,7 +796,7 @@ Status VFSWrapper::ReadDir(Ino ino, uint64_t fh, uint64_t offset,
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opReadDir, &client_op_metric_->opAll});
 
-  s = vfs_->ReadDir(ino, fh, offset, with_attr, handler);
+  s = vfs_->ReadDir(ctx, ino, fh, offset, with_attr, handler);
   VLOG(1) << "VFSReaddir end, status: " << s.ToString();
   if (!s.ok()) {
     op_metric.FailOp();
@@ -778,6 +805,7 @@ Status VFSWrapper::ReadDir(Ino ino, uint64_t fh, uint64_t offset,
 }
 
 Status VFSWrapper::ReleaseDir(Ino ino, uint64_t fh) {
+  ContextSPtr ctx = NewContext();
   VLOG(1) << "VFSReleaseDir ino: " << ino << " fh: " << fh;
   Status s;
   AccessLogGuard log([&]() {
@@ -787,7 +815,7 @@ Status VFSWrapper::ReleaseDir(Ino ino, uint64_t fh) {
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opReleaseDir, &client_op_metric_->opAll});
 
-  s = vfs_->ReleaseDir(ino, fh);
+  s = vfs_->ReleaseDir(ctx, ino, fh);
   VLOG(1) << "VFSReleaseDir end, status: " << s.ToString();
   if (!s.ok()) {
     op_metric.FailOp();
@@ -796,6 +824,7 @@ Status VFSWrapper::ReleaseDir(Ino ino, uint64_t fh) {
 }
 
 Status VFSWrapper::RmDir(Ino parent, const std::string& name) {
+  ContextSPtr ctx = NewContext();
   VLOG(1) << "VFSRmdir parent: " << parent << " name: " << name;
   Status s;
   AccessLogGuard log([&]() {
@@ -810,7 +839,7 @@ Status VFSWrapper::RmDir(Ino parent, const std::string& name) {
     return s;
   }
 
-  s = vfs_->RmDir(parent, name);
+  s = vfs_->RmDir(ctx, parent, name);
   VLOG(1) << "VFSRmdir end, status: " << s.ToString();
   if (!s.ok()) {
     op_metric.FailOp();
@@ -819,12 +848,13 @@ Status VFSWrapper::RmDir(Ino parent, const std::string& name) {
 }
 
 Status VFSWrapper::StatFs(Ino ino, FsStat* fs_stat) {
+  ContextSPtr ctx = NewContext();
   VLOG(1) << "VFSStatFs ino: " << ino;
   Status s;
   AccessLogGuard log(
       [&]() { return absl::StrFormat("statfs (%d): %s", ino, s.ToString()); });
 
-  s = vfs_->StatFs(ino, fs_stat);
+  s = vfs_->StatFs(ctx, ino, fs_stat);
   VLOG(1) << "VFSStatFs end, status: " << s.ToString()
           << " fs_stat: " << FsStat2Str(*fs_stat);
 

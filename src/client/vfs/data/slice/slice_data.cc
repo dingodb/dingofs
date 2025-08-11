@@ -28,10 +28,11 @@
 #include <mutex>
 #include <utility>
 
+#include "client/meta/vfs_meta.h"
 #include "client/vfs/data/slice/task/slice_flush_task.h"
 #include "client/vfs/hub/vfs_hub.h"
-#include "client/meta/vfs_meta.h"
 #include "common/callback.h"
+#include "common/context.h"
 #include "common/status.h"
 
 namespace dingofs {
@@ -163,10 +164,13 @@ void SliceData::SliceFlushed(Status status, SliceFlushTask* task) {
 }
 
 void SliceData::DoFlush() {
+  // TODO: get ctx from parent
+  ContextSPtr ctx = NewContext();
+
   VLOG(4) << fmt::format("{} DoFlush", UUID());
 
   uint64_t slice_id = 0;
-  Status s = vfs_hub_->GetMetaSystem()->NewSliceId(context_.ino, &slice_id);
+  Status s = vfs_hub_->GetMetaSystem()->NewSliceId(ctx, context_.ino, &slice_id);
   if (!s.ok()) {
     LOG(ERROR) << fmt::format("{} Failed to get new slice id status: {}",
                               UUID(), s.ToString());

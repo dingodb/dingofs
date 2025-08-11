@@ -52,6 +52,14 @@ class Context {
   const std::string sub_trace_id_;
 };
 
+using ContextSPtr = std::shared_ptr<Context>;
+
+inline ContextSPtr NewContext() { return std::make_shared<Context>(); }
+
+inline ContextSPtr NewContext(const std::string& trace_id) {
+  return std::make_shared<Context>(trace_id);
+}
+
 }  // namespace dingofs
 
 #endif  // DINGOFS_SRC_COMMON_CONTEXT_H_

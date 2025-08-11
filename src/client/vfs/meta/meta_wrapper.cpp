@@ -21,6 +21,7 @@
 #include "client/meta/vfs_meta.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/meta/meta_log.h"
+#include "common/context.h"
 
 namespace dingofs {
 namespace client {
@@ -40,163 +41,167 @@ void MetaWrapper::UnInit() {
   target_->UnInit();
 }
 
-bool MetaWrapper::Dump(Json::Value& value) {
+bool MetaWrapper::Dump(ContextSPtr ctx, Json::Value& value) {
   MetaLogGuard log_guard([&]() { return "dump"; });
-  return target_->Dump(value);
+  return target_->Dump(ctx, value);
 }
 
-bool MetaWrapper::Load(const Json::Value& value) {
+bool MetaWrapper::Load(ContextSPtr ctx, const Json::Value& value) {
   MetaLogGuard log_guard([&]() { return "load"; });
-  return target_->Load(value);
+  return target_->Load(ctx, value);
 }
 
-Status MetaWrapper::Lookup(Ino parent, const std::string& name, Attr* attr) {
+Status MetaWrapper::Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
+                           Attr* attr) {
   Status s;
   MetaLogGuard log_guard([&]() {
     return absl::StrFormat("lookup (%d/%s): %s %s", parent, name, s.ToString(),
                            StrAttr(attr));
   });
 
-  s = target_->Lookup(parent, name, attr);
+  s = target_->Lookup(ctx, parent, name, attr);
   return s;
 }
 
-Status MetaWrapper::MkNod(Ino parent, const std::string& name, uint32_t uid,
-                          uint32_t gid, uint32_t mode, uint64_t rdev,
-                          Attr* attr) {
+Status MetaWrapper::MkNod(ContextSPtr ctx, Ino parent, const std::string& name,
+                          uint32_t uid, uint32_t gid, uint32_t mode,
+                          uint64_t rdev, Attr* attr) {
   Status s;
   MetaLogGuard log_guard([&]() {
     return absl::StrFormat("mknod (%d,%s,%s:0%04o): (%d,%d) %s %s", parent,
                            name, StrMode(mode), mode, uid, gid, s.ToString(),
                            StrAttr(attr));
   });
-  s = target_->MkNod(parent, name, uid, gid, mode, rdev, attr);
+  s = target_->MkNod(ctx, parent, name, uid, gid, mode, rdev, attr);
   return s;
 }
 
-Status MetaWrapper::Open(Ino ino, int flags, uint64_t fh) {
+Status MetaWrapper::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
   Status s;
   MetaLogGuard log_guard([&]() {
     return absl::StrFormat("open (%d): %s [fh:%d]", ino, s.ToString(), fh);
   });
 
-  s = target_->Open(ino, flags, fh);
+  s = target_->Open(ctx, ino, flags, fh);
   return s;
 }
 
-Status MetaWrapper::Create(Ino parent, const std::string& name, uint32_t uid,
-                           uint32_t gid, uint32_t mode, int flags, Attr* attr,
-                           uint64_t fh) {
+Status MetaWrapper::Create(ContextSPtr ctx, Ino parent, const std::string& name,
+                           uint32_t uid, uint32_t gid, uint32_t mode, int flags,
+                           Attr* attr, uint64_t fh) {
   Status s;
   MetaLogGuard log_guard([&]() {
     return absl::StrFormat("create (%d,%s,%s:0%04o): (%d,%d) %s %s [fh:%d]",
                            parent, name, StrMode(mode), mode, uid, gid,
                            s.ToString(), StrAttr(attr), fh);
   });
-  s = target_->Create(parent, name, uid, gid, mode, flags, attr, fh);
+  s = target_->Create(ctx, parent, name, uid, gid, mode, flags, attr, fh);
   return s;
 }
 
-Status MetaWrapper::Close(Ino ino, uint64_t fh) {
+Status MetaWrapper::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
   Status s;
   MetaLogGuard log_guard([&]() {
     return absl::StrFormat("close (%d): %s [fh:%d]", ino, s.ToString(), fh);
   });
-  s = target_->Close(ino, fh);
+  s = target_->Close(ctx, ino, fh);
   return s;
 }
 
-Status MetaWrapper::Unlink(Ino parent, const std::string& name) {
+Status MetaWrapper::Unlink(ContextSPtr ctx, Ino parent,
+                           const std::string& name) {
   Status s;
   MetaLogGuard log_guard([&]() {
     return absl::StrFormat("unlink (%d,%s): %s", parent, name, s.ToString());
   });
 
-  s = target_->Unlink(parent, name);
+  s = target_->Unlink(ctx, parent, name);
   return s;
 }
 
-Status MetaWrapper::Rename(Ino old_parent, const std::string& old_name,
-                           Ino new_parent, const std::string& new_name) {
+Status MetaWrapper::Rename(ContextSPtr ctx, Ino old_parent,
+                           const std::string& old_name, Ino new_parent,
+                           const std::string& new_name) {
   Status s;
   MetaLogGuard log_guard([&]() {
     return absl::StrFormat("rename (%d,%s,%d,%s): %s", old_parent, old_name,
                            new_parent, new_name, s.ToString());
   });
 
-  s = target_->Rename(old_parent, old_name, new_parent, new_name);
+  s = target_->Rename(ctx, old_parent, old_name, new_parent, new_name);
   return s;
 }
 
-Status MetaWrapper::Link(Ino ino, Ino new_parent, const std::string& new_name,
-                         Attr* attr) {
+Status MetaWrapper::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
+                         const std::string& new_name, Attr* attr) {
   Status s;
   MetaLogGuard log_guard([&]() {
     return absl::StrFormat("link (%d,%d,%s): %s %s", ino, new_parent, new_name,
                            s.ToString(), StrAttr(attr));
   });
 
-  s = target_->Link(ino, new_parent, new_name, attr);
+  s = target_->Link(ctx, ino, new_parent, new_name, attr);
   return s;
 }
 
-Status MetaWrapper::Symlink(Ino parent, const std::string& name, uint32_t uid,
-                            uint32_t gid, const std::string& link, Attr* attr) {
+Status MetaWrapper::Symlink(ContextSPtr ctx, Ino parent,
+                            const std::string& name, uint32_t uid, uint32_t gid,
+                            const std::string& link, Attr* attr) {
   Status s;
   MetaLogGuard log_guard([&]() {
     return absl::StrFormat("symlink (%d,%s,%s): (%d,%d) %s %s", parent, name,
                            link, uid, gid, s.ToString(), StrAttr(attr));
   });
 
-  s = target_->Symlink(parent, name, uid, gid, link, attr);
+  s = target_->Symlink(ctx, parent, name, uid, gid, link, attr);
   return s;
 }
 
-Status MetaWrapper::ReadLink(Ino ino, std::string* link) {
+Status MetaWrapper::ReadLink(ContextSPtr ctx, Ino ino, std::string* link) {
   Status s;
   MetaLogGuard log_guard([&]() {
     return absl::StrFormat("read_link (%d): %s %s", ino, s.ToString(), *link);
   });
 
-  s = target_->ReadLink(ino, link);
+  s = target_->ReadLink(ctx, ino, link);
   return s;
 }
 
-Status MetaWrapper::GetAttr(Ino ino, Attr* attr) {
+Status MetaWrapper::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
   Status s;
   MetaLogGuard log_guard([&]() {
     return absl::StrFormat("getattr (%d): %s %s", ino, s.ToString(),
                            StrAttr(attr));
   });
 
-  s = target_->GetAttr(ino, attr);
+  s = target_->GetAttr(ctx, ino, attr);
   return s;
 }
 
-Status MetaWrapper::SetAttr(Ino ino, int set, const Attr& in_attr,
-                            Attr* out_attr) {
+Status MetaWrapper::SetAttr(ContextSPtr ctx, Ino ino, int set,
+                            const Attr& in_attr, Attr* out_attr) {
   Status s;
   MetaLogGuard log_guard([&]() {
     return absl::StrFormat("setattr (%d,0x%X): %s %s", ino, set, s.ToString(),
                            StrAttr(out_attr));
   });
 
-  s = target_->SetAttr(ino, set, in_attr, out_attr);
+  s = target_->SetAttr(ctx, ino, set, in_attr, out_attr);
   return s;
 }
 
-Status MetaWrapper::SetXattr(Ino ino, const std::string& name,
+Status MetaWrapper::SetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
                              const std::string& value, int flags) {
   Status s;
   MetaLogGuard log_guard([&]() {
     return absl::StrFormat("setxattr (%d,%s): %s", ino, name, s.ToString());
   });
 
-  s = target_->SetXattr(ino, name, value, flags);
+  s = target_->SetXattr(ctx, ino, name, value, flags);
   return s;
 }
 
-Status MetaWrapper::GetXattr(Ino ino, const std::string& name,
+Status MetaWrapper::GetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
                              std::string* value) {
   Status s;
   MetaLogGuard log_guard([&]() {
@@ -204,35 +209,38 @@ Status MetaWrapper::GetXattr(Ino ino, const std::string& name,
                            *value);
   });
 
-  s = target_->GetXattr(ino, name, value);
+  s = target_->GetXattr(ctx, ino, name, value);
 
   return s;
 }
 
-Status MetaWrapper::RemoveXattr(Ino ino, const std::string& name) {
+Status MetaWrapper::RemoveXattr(ContextSPtr ctx, Ino ino,
+                                const std::string& name) {
   Status s;
   MetaLogGuard log_guard([&]() {
     return absl::StrFormat("remotexattr (%d,%s): %s", ino, name, s.ToString());
   });
 
-  s = target_->RemoveXattr(ino, name);
+  s = target_->RemoveXattr(ctx, ino, name);
 
   return s;
 }
 
-Status MetaWrapper::ListXattr(Ino ino, std::vector<std::string>* xattrs) {
+Status MetaWrapper::ListXattr(ContextSPtr ctx, Ino ino,
+                              std::vector<std::string>* xattrs) {
   Status s;
   MetaLogGuard log_guard([&]() {
     return absl::StrFormat("listxattr (%d): %s %d", ino, s.ToString(),
                            xattrs->size());
   });
 
-  s = target_->ListXattr(ino, xattrs);
+  s = target_->ListXattr(ctx, ino, xattrs);
   return s;
 }
 
-Status MetaWrapper::MkDir(Ino parent, const std::string& name, uint32_t uid,
-                          uint32_t gid, uint32_t mode, Attr* attr) {
+Status MetaWrapper::MkDir(ContextSPtr ctx, Ino parent, const std::string& name,
+                          uint32_t uid, uint32_t gid, uint32_t mode,
+                          Attr* attr) {
   Status s;
   MetaLogGuard log_guard([&]() {
     return absl::StrFormat("mkdir (%d,%s,%s:0%04o): (%d,%d) %s %s", parent,
@@ -240,64 +248,66 @@ Status MetaWrapper::MkDir(Ino parent, const std::string& name, uint32_t uid,
                            StrAttr(attr));
   });
 
-  s = target_->MkDir(parent, name, uid, gid, mode, attr);
+  s = target_->MkDir(ctx, parent, name, uid, gid, mode, attr);
 
   return s;
 }
 
-Status MetaWrapper::RmDir(Ino parent, const std::string& name) {
+Status MetaWrapper::RmDir(ContextSPtr ctx, Ino parent,
+                          const std::string& name) {
   Status s;
   MetaLogGuard log_guard([&]() {
     return absl::StrFormat("rmdir (%d,%s): %s", parent, name, s.ToString());
   });
 
-  s = target_->RmDir(parent, name);
+  s = target_->RmDir(ctx, parent, name);
   return s;
 }
 
-Status MetaWrapper::OpenDir(Ino ino, uint64_t fh) {
+Status MetaWrapper::OpenDir(ContextSPtr ctx, Ino ino, uint64_t fh) {
   Status s;
   MetaLogGuard log_guard([&]() {
     return absl::StrFormat("opendir (%d): %d %s", ino, fh, s.ToString());
   });
 
-  s = target_->OpenDir(ino, fh);
+  s = target_->OpenDir(ctx, ino, fh);
   return s;
 }
 
-Status MetaWrapper::ReadDir(Ino ino, uint64_t fh, uint64_t offset,
-                            bool with_attr, ReadDirHandler handler) {
+Status MetaWrapper::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
+                            uint64_t offset, bool with_attr,
+                            ReadDirHandler handler) {
   Status s;
   MetaLogGuard log_guard([&]() {
     return absl::StrFormat("readdir (%d): %d %d %d %s", ino, fh, offset,
                            with_attr, s.ToString());
   });
 
-  s = target_->ReadDir(ino, fh, offset, with_attr, handler);
+  s = target_->ReadDir(ctx, ino, fh, offset, with_attr, handler);
   return s;
 }
 
-Status MetaWrapper::ReleaseDir(Ino ino, uint64_t fh) {
+Status MetaWrapper::ReleaseDir(ContextSPtr ctx, Ino ino, uint64_t fh) {
   Status s;
   MetaLogGuard log_guard([&]() {
     return absl::StrFormat("releasedir (%d): %d %s", ino, fh, s.ToString());
   });
 
-  s = target_->ReleaseDir(ino, fh);
+  s = target_->ReleaseDir(ctx, ino, fh);
   return s;
 }
 
-Status MetaWrapper::NewSliceId(Ino ino, uint64_t* id) {
+Status MetaWrapper::NewSliceId(ContextSPtr ctx, Ino ino, uint64_t* id) {
   Status s;
   MetaLogGuard log_guard([&]() {
     return absl::StrFormat("new_slice_id: (%d) %d, %s", ino, *id, s.ToString());
   });
 
-  s = target_->NewSliceId(ino, id);
+  s = target_->NewSliceId(ctx, ino, id);
   return s;
 }
 
-Status MetaWrapper::ReadSlice(Ino ino, uint64_t index,
+Status MetaWrapper::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                               std::vector<Slice>* slices) {
   Status s;
   MetaLogGuard log_guard([&]() {
@@ -305,11 +315,11 @@ Status MetaWrapper::ReadSlice(Ino ino, uint64_t index,
                            s.ToString(), slices->size());
   });
 
-  s = target_->ReadSlice(ino, index, slices);
+  s = target_->ReadSlice(ctx, ino, index, slices);
   return s;
 }
 
-Status MetaWrapper::WriteSlice(Ino ino, uint64_t index,
+Status MetaWrapper::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                                const std::vector<Slice>& slices) {
   Status s;
   MetaLogGuard log_guard([&]() {
@@ -317,25 +327,25 @@ Status MetaWrapper::WriteSlice(Ino ino, uint64_t index,
                            s.ToString(), slices.size());
   });
 
-  s = target_->WriteSlice(ino, index, slices);
+  s = target_->WriteSlice(ctx, ino, index, slices);
   return s;
 }
 
-Status MetaWrapper::StatFs(Ino ino, FsStat* fs_stat) {
+Status MetaWrapper::StatFs(ContextSPtr ctx, Ino ino, FsStat* fs_stat) {
   Status s;
   MetaLogGuard log_guard(
       [&]() { return absl::StrFormat("statfs (%d): %s", ino, s.ToString()); });
 
-  s = target_->StatFs(ino, fs_stat);
+  s = target_->StatFs(ctx, ino, fs_stat);
   return s;
 }
 
-Status MetaWrapper::GetFsInfo(FsInfo* fs_info) {
+Status MetaWrapper::GetFsInfo(ContextSPtr ctx, FsInfo* fs_info) {
   Status s;
   MetaLogGuard log_guard(
       [&]() { return absl::StrFormat("get_fsinfo %s", s.ToString()); });
 
-  s = target_->GetFsInfo(fs_info);
+  s = target_->GetFsInfo(ctx, fs_info);
   return s;
 }
 

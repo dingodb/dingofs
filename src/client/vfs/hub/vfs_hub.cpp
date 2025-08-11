@@ -33,6 +33,7 @@
 #include "client/vfs/meta/meta_system.h"
 #include "client/vfs/meta/meta_wrapper.h"
 #include "client/vfs/meta/v2/filesystem.h"
+#include "common/context.h"
 #include "common/status.h"
 #include "options/client/common_option.h"
 #include "options/client/vfs/vfs_dynamic_option.h"
@@ -48,6 +49,8 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
                          const VFSOption& vfs_option) {
   CHECK(started_.load(std::memory_order_relaxed) == false)
       << "unexpected start";
+
+  ContextSPtr ctx = NewContext();
 
   vfs_option_ = vfs_option;
 
@@ -84,7 +87,7 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
 
   DINGOFS_RETURN_NOT_OK(meta_system_->Init());
 
-  DINGOFS_RETURN_NOT_OK(meta_system_->GetFsInfo(&fs_info_));
+  DINGOFS_RETURN_NOT_OK(meta_system_->GetFsInfo(ctx, &fs_info_));
 
   LOG(INFO) << fmt::format("vfs_fs_info: {}", FsInfo2Str(fs_info_));
 

@@ -21,13 +21,14 @@
 #include <memory>
 #include <string>
 
+#include "client/meta/vfs_meta.h"
 #include "client/vfs/meta/meta_system.h"
 #include "client/vfs/meta/v2/client_id.h"
 #include "client/vfs/meta/v2/dir_iterator.h"
 #include "client/vfs/meta/v2/file_session.h"
 #include "client/vfs/meta/v2/mds_client.h"
 #include "client/vfs/meta/v2/mds_discovery.h"
-#include "client/meta/vfs_meta.h"
+#include "common/context.h"
 #include "common/status.h"
 #include "dingofs/mdsv2.pb.h"
 #include "mdsv2/common/crontab.h"
@@ -63,63 +64,70 @@ class MDSV2FileSystem : public vfs::MetaSystem {
 
   void UnInit() override;
 
-  bool Dump(Json::Value& value) override;
+  bool Dump(ContextSPtr ctx, Json::Value& value) override;
 
-  bool Load(const Json::Value& value) override;
+  bool Load(ContextSPtr ctx, const Json::Value& value) override;
 
   pb::mdsv2::FsInfo GetFsInfo() { return fs_info_->Get(); }
 
-  Status GetFsInfo(FsInfo* fs_info) override;
+  Status GetFsInfo(ContextSPtr ctx, FsInfo* fs_info) override;
 
-  Status StatFs(Ino ino, FsStat* fs_stat) override;
+  Status StatFs(ContextSPtr ctx, Ino ino, FsStat* fs_stat) override;
 
-  Status Lookup(Ino parent, const std::string& name, Attr* out_attr) override;
+  Status Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
+                Attr* out_attr) override;
 
-  Status Create(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
-                uint32_t mode, int flags, Attr* attr, uint64_t fh) override;
+  Status Create(ContextSPtr ctx, Ino parent, const std::string& name,
+                uint32_t uid, uint32_t gid, uint32_t mode, int flags,
+                Attr* attr, uint64_t fh) override;
 
-  Status MkNod(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
-               uint32_t mode, uint64_t rdev, Attr* attr) override;
+  Status MkNod(ContextSPtr ctx, Ino parent, const std::string& name,
+               uint32_t uid, uint32_t gid, uint32_t mode, uint64_t rdev,
+               Attr* attr) override;
 
-  Status Open(Ino ino, int flags, uint64_t fh) override;
-  Status Close(Ino ino, uint64_t fh) override;
+  Status Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) override;
+  Status Close(ContextSPtr ctx, Ino ino, uint64_t fh) override;
 
-  Status ReadSlice(Ino ino, uint64_t index,
+  Status ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                    std::vector<Slice>* slices) override;
-  Status NewSliceId(Ino ino, uint64_t* id) override;
-  Status WriteSlice(Ino ino, uint64_t index,
+  Status NewSliceId(ContextSPtr ctx, Ino ino, uint64_t* id) override;
+  Status WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                     const std::vector<Slice>& slices) override;
 
-  Status MkDir(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
-               uint32_t mode, Attr* attr) override;
-  Status RmDir(Ino parent, const std::string& name) override;
+  Status MkDir(ContextSPtr ctx, Ino parent, const std::string& name,
+               uint32_t uid, uint32_t gid, uint32_t mode, Attr* attr) override;
+  Status RmDir(ContextSPtr ctx, Ino parent, const std::string& name) override;
 
-  Status OpenDir(Ino ino, uint64_t fh) override;
+  Status OpenDir(ContextSPtr ctx, Ino ino, uint64_t fh) override;
 
-  Status ReadDir(Ino ino, uint64_t fh, uint64_t offset, bool with_attr,
-                 ReadDirHandler handler) override;
+  Status ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
+                 bool with_attr, ReadDirHandler handler) override;
 
-  Status ReleaseDir(Ino ino, uint64_t fh) override;
+  Status ReleaseDir(ContextSPtr ctx, Ino ino, uint64_t fh) override;
 
-  Status Link(Ino ino, Ino new_parent, const std::string& new_name,
-              Attr* attr) override;
-  Status Unlink(Ino parent, const std::string& name) override;
+  Status Link(ContextSPtr ctx, Ino ino, Ino new_parent,
+              const std::string& new_name, Attr* attr) override;
+  Status Unlink(ContextSPtr ctx, Ino parent, const std::string& name) override;
 
-  Status Symlink(Ino parent, const std::string& name, uint32_t uid,
-                 uint32_t gid, const std::string& link, Attr* attr) override;
-  Status ReadLink(Ino ino, std::string* link) override;
+  Status Symlink(ContextSPtr ctx, Ino parent, const std::string& name,
+                 uint32_t uid, uint32_t gid, const std::string& link,
+                 Attr* attr) override;
+  Status ReadLink(ContextSPtr ctx, Ino ino, std::string* link) override;
 
-  Status GetAttr(Ino ino, Attr* attr) override;
-  Status SetAttr(Ino ino, int set, const Attr& attr, Attr* out_attr) override;
-  Status GetXattr(Ino ino, const std::string& name,
+  Status GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) override;
+  Status SetAttr(ContextSPtr ctx, Ino ino, int set, const Attr& attr,
+                 Attr* out_attr) override;
+  Status GetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
                   std::string* value) override;
-  Status SetXattr(Ino ino, const std::string& name, const std::string& value,
-                  int flags) override;
-  Status RemoveXattr(Ino ino, const std::string& name) override;
-  Status ListXattr(Ino ino, std::vector<std::string>* xattrs) override;
+  Status SetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
+                  const std::string& value, int flags) override;
+  Status RemoveXattr(ContextSPtr ctx, Ino ino,
+                     const std::string& name) override;
+  Status ListXattr(ContextSPtr ctx, Ino ino,
+                   std::vector<std::string>* xattrs) override;
 
-  Status Rename(Ino old_parent, const std::string& old_name, Ino new_parent,
-                const std::string& new_name) override;
+  Status Rename(ContextSPtr ctx, Ino old_parent, const std::string& old_name,
+                Ino new_parent, const std::string& new_name) override;
 
  private:
   bool SetRandomEndpoint();

@@ -28,7 +28,7 @@
 #include "client/meta/vfs_fh.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/data/file.h"
-#include "client/vfs/hub/vfs_hub.h"
+#include "common/context.h"
 #include "common/define.h"
 #include "common/status.h"
 #include "fmt/format.h"
@@ -60,7 +60,7 @@ Status VFSImpl::Start(const VFSConfig& vfs_conf) {  // NOLINT
 
 Status VFSImpl::Stop() { return vfs_hub_->Stop(); }
 
-bool VFSImpl::Dump(Json::Value& value) {
+bool VFSImpl::Dump(ContextSPtr ctx, Json::Value& value) {
   CHECK(meta_system_ != nullptr) << "meta_system is null";
   CHECK(handle_manager_ != nullptr) << "handle_manager is null";
 
@@ -68,10 +68,10 @@ bool VFSImpl::Dump(Json::Value& value) {
     return false;
   }
 
-  return meta_system_->Dump(value);
+  return meta_system_->Dump(ctx, value);
 }
 
-bool VFSImpl::Load(const Json::Value& value) {
+bool VFSImpl::Load(ContextSPtr ctx, const Json::Value& value) {
   CHECK(meta_system_ != nullptr) << "meta_system is null";
   CHECK(handle_manager_ != nullptr) << "handle_manager is null";
 
@@ -79,14 +79,15 @@ bool VFSImpl::Load(const Json::Value& value) {
     return false;
   }
 
-  return meta_system_->Load(value);
+  return meta_system_->Load(ctx, value);
 }
 
 double VFSImpl::GetAttrTimeout(const FileType& type) { return 1; }  // NOLINT
 
 double VFSImpl::GetEntryTimeout(const FileType& type) { return 1; }  // NOLINT
 
-Status VFSImpl::Lookup(Ino parent, const std::string& name, Attr* attr) {
+Status VFSImpl::Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
+                       Attr* attr) {
   // check if parent is root inode and file name is .stats name
   if (BAIDU_UNLIKELY(parent == ROOTINODEID &&
                      name == STATSNAME)) {  // stats node
@@ -94,36 +95,38 @@ Status VFSImpl::Lookup(Ino parent, const std::string& name, Attr* attr) {
     return Status::OK();
   }
 
-  return meta_system_->Lookup(parent, name, attr);
+  return meta_system_->Lookup(ctx, parent, name, attr);
 }
 
-Status VFSImpl::GetAttr(Ino ino, Attr* attr) {
+Status VFSImpl::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
   if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
     *attr = GenerateVirtualInodeAttr(STATSINODEID);
     return Status::OK();
   }
 
-  return meta_system_->GetAttr(ino, attr);
+  return meta_system_->GetAttr(ctx, ino, attr);
 }
 
-Status VFSImpl::SetAttr(Ino ino, int set, const Attr& in_attr, Attr* out_attr) {
+Status VFSImpl::SetAttr(ContextSPtr ctx, Ino ino, int set, const Attr& in_attr,
+                        Attr* out_attr) {
   if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
     return Status::OK();
   }
 
-  return meta_system_->SetAttr(ino, set, in_attr, out_attr);
+  return meta_system_->SetAttr(ctx, ino, set, in_attr, out_attr);
 }
 
-Status VFSImpl::ReadLink(Ino ino, std::string* link) {
-  return meta_system_->ReadLink(ino, link);
+Status VFSImpl::ReadLink(ContextSPtr ctx, Ino ino, std::string* link) {
+  return meta_system_->ReadLink(ctx, ino, link);
 }
 
-Status VFSImpl::MkNod(Ino parent, const std::string& name, uint32_t uid,
-                      uint32_t gid, uint32_t mode, uint64_t dev, Attr* attr) {
-  return meta_system_->MkNod(parent, name, uid, gid, mode, dev, attr);
+Status VFSImpl::MkNod(ContextSPtr ctx, Ino parent, const std::string& name,
+                      uint32_t uid, uint32_t gid, uint32_t mode, uint64_t dev,
+                      Attr* attr) {
+  return meta_system_->MkNod(ctx, parent, name, uid, gid, mode, dev, attr);
 }
 
-Status VFSImpl::Unlink(Ino parent, const std::string& name) {
+Status VFSImpl::Unlink(ContextSPtr ctx, Ino parent, const std::string& name) {
   // check if node is recycle or recycle time dir or .stats node
   if ((IsInternalName(name) && parent == ROOTINODEID) ||
       parent == RECYCLEINODEID) {
@@ -132,11 +135,12 @@ Status VFSImpl::Unlink(Ino parent, const std::string& name) {
     return Status::NoPermitted("Can not unlink internal node");
   }
 
-  return meta_system_->Unlink(parent, name);
+  return meta_system_->Unlink(ctx, parent, name);
 }
 
-Status VFSImpl::Symlink(Ino parent, const std::string& name, uint32_t uid,
-                        uint32_t gid, const std::string& link, Attr* attr) {
+Status VFSImpl::Symlink(ContextSPtr ctx, Ino parent, const std::string& name,
+                        uint32_t uid, uint32_t gid, const std::string& link,
+                        Attr* attr) {
   {
     // internal file name can not allowed for symlink
     // cant't allow  ln -s  .stats  <file>
@@ -153,22 +157,23 @@ Status VFSImpl::Symlink(Ino parent, const std::string& name, uint32_t uid,
     }
   }
 
-  return meta_system_->Symlink(parent, name, uid, gid, link, attr);
+  return meta_system_->Symlink(ctx, parent, name, uid, gid, link, attr);
 }
 
-Status VFSImpl::Rename(Ino old_parent, const std::string& old_name,
-                       Ino new_parent, const std::string& new_name) {
+Status VFSImpl::Rename(ContextSPtr ctx, Ino old_parent,
+                       const std::string& old_name, Ino new_parent,
+                       const std::string& new_name) {
   // internel name can not be rename or rename to
   if ((IsInternalName(old_name) || IsInternalName(new_name)) &&
       old_parent == ROOTINODEID) {
     return Status::NoPermitted("Can not rename internal node");
   }
 
-  return meta_system_->Rename(old_parent, old_name, new_parent, new_name);
+  return meta_system_->Rename(ctx, old_parent, old_name, new_parent, new_name);
 }
 
-Status VFSImpl::Link(Ino ino, Ino new_parent, const std::string& new_name,
-                     Attr* attr) {
+Status VFSImpl::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
+                     const std::string& new_name, Attr* attr) {
   {
     // cant't allow  ln   <file> .stats
     // cant't allow  ln  .stats  <file>
@@ -178,10 +183,10 @@ Status VFSImpl::Link(Ino ino, Ino new_parent, const std::string& new_name,
     }
   }
 
-  return meta_system_->Link(ino, new_parent, new_name, attr);
+  return meta_system_->Link(ctx, ino, new_parent, new_name, attr);
 }
 
-Status VFSImpl::Open(Ino ino, int flags, uint64_t* fh) {  // NOLINT
+Status VFSImpl::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t* fh) {
   // check if ino is .stats inode,if true ,get metric data and generate
   // inodeattr information
   if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
@@ -208,7 +213,7 @@ Status VFSImpl::Open(Ino ino, int flags, uint64_t* fh) {  // NOLINT
 
   HandleSPtr handle = handle_manager_->NewHandle();
 
-  Status s = meta_system_->Open(ino, flags, handle->fh);
+  Status s = meta_system_->Open(ctx, ino, flags, handle->fh);
   if (!s.ok()) {
     handle_manager_->ReleaseHandler(handle->fh);
   } else {
@@ -224,13 +229,13 @@ Status VFSImpl::Open(Ino ino, int flags, uint64_t* fh) {  // NOLINT
   return s;
 }
 
-Status VFSImpl::Create(Ino parent, const std::string& name, uint32_t uid,
-                       uint32_t gid, uint32_t mode, int flags, uint64_t* fh,
-                       Attr* attr) {
+Status VFSImpl::Create(ContextSPtr ctx, Ino parent, const std::string& name,
+                       uint32_t uid, uint32_t gid, uint32_t mode, int flags,
+                       uint64_t* fh, Attr* attr) {
   auto handle = handle_manager_->NewHandle();
 
-  Status s = meta_system_->Create(parent, name, uid, gid, mode, flags, attr,
-                                  handle->fh);
+  Status s = meta_system_->Create(ctx, parent, name, uid, gid, mode, flags,
+                                  attr, handle->fh);
   if (!s.ok()) {
     handle_manager_->ReleaseHandler(handle->fh);
   } else {
@@ -249,8 +254,8 @@ Status VFSImpl::Create(Ino parent, const std::string& name, uint32_t uid,
   return s;
 }
 
-Status VFSImpl::Read(Ino ino, char* buf, uint64_t size, uint64_t offset,
-                     uint64_t fh, uint64_t* out_rsize) {
+Status VFSImpl::Read(ContextSPtr ctx, Ino ino, char* buf, uint64_t size,
+                     uint64_t offset, uint64_t fh, uint64_t* out_rsize) {
   Status s;
   auto handle = handle_manager_->FindHandler(fh);
   VFS_CHECK_HANDLE(handle, ino, fh);
@@ -284,8 +289,8 @@ Status VFSImpl::Read(Ino ino, char* buf, uint64_t size, uint64_t offset,
   return s;
 }
 
-Status VFSImpl::Write(Ino ino, const char* buf, uint64_t size, uint64_t offset,
-                      uint64_t fh, uint64_t* out_wsize) {
+Status VFSImpl::Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t size,
+                      uint64_t offset, uint64_t fh, uint64_t* out_wsize) {
   static std::atomic<int> write_count{0};
   write_count.fetch_add(1);
   Status s;
@@ -303,7 +308,7 @@ Status VFSImpl::Write(Ino ino, const char* buf, uint64_t size, uint64_t offset,
   return s;
 }
 
-Status VFSImpl::Flush(Ino ino, uint64_t fh) {
+Status VFSImpl::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {
   if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
     return Status::OK();
   }
@@ -323,7 +328,7 @@ Status VFSImpl::Flush(Ino ino, uint64_t fh) {
   return s;
 }
 
-Status VFSImpl::Release(Ino ino, uint64_t fh) {
+Status VFSImpl::Release(ContextSPtr ctx, Ino ino, uint64_t fh) {
   if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
     handle_manager_->ReleaseHandler(fh);
     return Status::OK();
@@ -339,7 +344,7 @@ Status VFSImpl::Release(Ino ino, uint64_t fh) {
 
   } else {
     // how do we return
-    s = meta_system_->Close(ino, fh);
+    s = meta_system_->Close(ctx, ino, fh);
   }
 
   handle_manager_->ReleaseHandler(fh);
@@ -348,7 +353,7 @@ Status VFSImpl::Release(Ino ino, uint64_t fh) {
 }
 
 // TODO: seperate data flush with metadata flush
-Status VFSImpl::Fsync(Ino ino, int datasync, uint64_t fh) {
+Status VFSImpl::Fsync(ContextSPtr ctx, Ino ino, int datasync, uint64_t fh) {
   Status s;
   auto handle = handle_manager_->FindHandler(fh);
   VFS_CHECK_HANDLE(handle, ino, fh);
@@ -364,52 +369,54 @@ Status VFSImpl::Fsync(Ino ino, int datasync, uint64_t fh) {
   return s;
 }
 
-Status VFSImpl::SetXattr(Ino ino, const std::string& name,
+Status VFSImpl::SetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
                          const std::string& value, int flags) {
   if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
     return Status::OK();
   }
 
-  return meta_system_->SetXattr(ino, name, value, flags);
+  return meta_system_->SetXattr(ctx, ino, name, value, flags);
 }
 
-Status VFSImpl::GetXattr(Ino ino, const std::string& name, std::string* value) {
+Status VFSImpl::GetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
+                         std::string* value) {
   if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
     return Status::NoData("No Xattr data in .stats");
   }
 
-  return meta_system_->GetXattr(ino, name, value);
+  return meta_system_->GetXattr(ctx, ino, name, value);
 }
 
-Status VFSImpl::RemoveXattr(Ino ino, const std::string& name) {
+Status VFSImpl::RemoveXattr(ContextSPtr ctx, Ino ino, const std::string& name) {
   if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
     return Status::NoData("No Xattr data in .stats");
   }
 
-  return meta_system_->RemoveXattr(ino, name);
+  return meta_system_->RemoveXattr(ctx, ino, name);
 }
 
-Status VFSImpl::ListXattr(Ino ino, std::vector<std::string>* xattrs) {
+Status VFSImpl::ListXattr(ContextSPtr ctx, Ino ino,
+                          std::vector<std::string>* xattrs) {
   if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
     return Status::NoData("No Xattr data in .stats");
   }
 
-  return meta_system_->ListXattr(ino, xattrs);
+  return meta_system_->ListXattr(ctx, ino, xattrs);
 }
 
-Status VFSImpl::MkDir(Ino parent, const std::string& name, uint32_t uid,
-                      uint32_t gid, uint32_t mode, Attr* attr) {
-  return meta_system_->MkDir(parent, name, uid, gid, mode, attr);
+Status VFSImpl::MkDir(ContextSPtr ctx, Ino parent, const std::string& name,
+                      uint32_t uid, uint32_t gid, uint32_t mode, Attr* attr) {
+  return meta_system_->MkDir(ctx, parent, name, uid, gid, mode, attr);
 }
 
-Status VFSImpl::OpenDir(Ino ino, uint64_t* fh) {
+Status VFSImpl::OpenDir(ContextSPtr ctx, Ino ino, uint64_t* fh) {
   *fh = vfs::FhGenerator::GenFh();
 
-  return meta_system_->OpenDir(ino, *fh);
+  return meta_system_->OpenDir(ctx, ino, *fh);
 }
 
-Status VFSImpl::ReadDir(Ino ino, uint64_t fh, uint64_t offset, bool with_attr,
-                        ReadDirHandler handler) {
+Status VFSImpl::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
+                        bool with_attr, ReadDirHandler handler) {
   // root dir(add .stats file)
   if (BAIDU_UNLIKELY(ino == ROOTINODEID) && offset == 0) {
     DirEntry stats_entry{STATSINODEID, STATSNAME,
@@ -420,29 +427,29 @@ Status VFSImpl::ReadDir(Ino ino, uint64_t fh, uint64_t offset, bool with_attr,
   uint64_t to_meta = (offset > 0) ? (offset - 1) : 0;
 
   return meta_system_->ReadDir(
-      ino, fh, to_meta, with_attr,
+      ctx, ino, fh, to_meta, with_attr,
       [handler](const DirEntry& entry, uint64_t meta_offset) {
         uint64_t return_off = meta_offset + 1;
         return handler(entry, return_off);
       });
 }
 
-Status VFSImpl::ReleaseDir(Ino ino, uint64_t fh) {
-  return meta_system_->ReleaseDir(ino, fh);
+Status VFSImpl::ReleaseDir(ContextSPtr ctx, Ino ino, uint64_t fh) {
+  return meta_system_->ReleaseDir(ctx, ino, fh);
 }
 
-Status VFSImpl::RmDir(Ino parent, const std::string& name) {
+Status VFSImpl::RmDir(ContextSPtr ctx, Ino parent, const std::string& name) {
   // check if node is recycle or recycle time dir or .stats node
   if ((IsInternalName(name) && parent == ROOTINODEID) ||
       parent == RECYCLEINODEID) {
     return Status::NoPermitted("not permit rmdir internal dir");
   }
 
-  return meta_system_->RmDir(parent, name);
+  return meta_system_->RmDir(ctx, parent, name);
 }
 
-Status VFSImpl::StatFs(Ino ino, FsStat* fs_stat) {
-  return meta_system_->StatFs(ino, fs_stat);
+Status VFSImpl::StatFs(ContextSPtr ctx, Ino ino, FsStat* fs_stat) {
+  return meta_system_->StatFs(ctx, ino, fs_stat);
 }
 
 uint64_t VFSImpl::GetFsId() { return 10; }

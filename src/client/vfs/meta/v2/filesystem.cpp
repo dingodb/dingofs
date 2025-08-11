@@ -23,6 +23,7 @@
 #include "butil/file_util.h"
 #include "client/meta/vfs_meta.h"
 #include "client/vfs/meta/v2/client_id.h"
+#include "common/context.h"
 #include "common/status.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
@@ -92,7 +93,7 @@ void MDSV2FileSystem::UnInit() {
   crontab_manager_.Destroy();
 }
 
-bool MDSV2FileSystem::Dump(Json::Value& value) {
+bool MDSV2FileSystem::Dump(ContextSPtr ctx, Json::Value& value) {
   if (!file_session_map_.Dump(value)) {
     return false;
   }
@@ -108,7 +109,7 @@ bool MDSV2FileSystem::Dump(Json::Value& value) {
   return true;
 }
 
-bool MDSV2FileSystem::Load(const Json::Value& value) {
+bool MDSV2FileSystem::Load(ContextSPtr ctx, const Json::Value& value) {
   if (!file_session_map_.Load(value)) {
     return false;
   }
@@ -156,7 +157,7 @@ static RadosInfo ToRadosInfo(const pb::mdsv2::RadosInfo& rados_info) {
   return result;
 }
 
-Status MDSV2FileSystem::GetFsInfo(FsInfo* fs_info) {
+Status MDSV2FileSystem::GetFsInfo(ContextSPtr ctx, FsInfo* fs_info) {
   auto temp_fs_info = fs_info_->Get();
 
   fs_info->name = name_;
@@ -249,7 +250,7 @@ bool MDSV2FileSystem::InitCrontab() {
   return true;
 }
 
-Status MDSV2FileSystem::StatFs(Ino, FsStat* fs_stat) {
+Status MDSV2FileSystem::StatFs(ContextSPtr ctx, Ino, FsStat* fs_stat) {
   auto status = mds_client_->GetFsQuota(*fs_stat);
 
   if (fs_stat->max_bytes == 0) {
@@ -263,8 +264,8 @@ Status MDSV2FileSystem::StatFs(Ino, FsStat* fs_stat) {
   return status;
 };
 
-Status MDSV2FileSystem::Lookup(Ino parent, const std::string& name,
-                               Attr* out_attr) {
+Status MDSV2FileSystem::Lookup(ContextSPtr ctx, Ino parent,
+                               const std::string& name, Attr* out_attr) {
   auto status = mds_client_->Lookup(parent, name, *out_attr);
   if (!status.ok()) {
     if (status.Errno() == pb::error::ENOT_FOUND) {
@@ -276,18 +277,20 @@ Status MDSV2FileSystem::Lookup(Ino parent, const std::string& name,
   return Status::OK();
 }
 
-Status MDSV2FileSystem::Create(Ino parent, const std::string& name,
-                               uint32_t uid, uint32_t gid, uint32_t mode,
-                               int flags, Attr* attr, uint64_t fh) {
-  auto status = MkNod(parent, name, uid, gid, mode, 0, attr);
+Status MDSV2FileSystem::Create(ContextSPtr ctx, Ino parent,
+                               const std::string& name, uint32_t uid,
+                               uint32_t gid, uint32_t mode, int flags,
+                               Attr* attr, uint64_t fh) {
+  auto status = MkNod(ctx, parent, name, uid, gid, mode, 0, attr);
   if (!status.ok()) {
     return status;
   }
 
-  return Open(attr->ino, flags, fh);
+  return Open(ctx, attr->ino, flags, fh);
 }
 
-Status MDSV2FileSystem::MkNod(Ino parent, const std::string& name, uint32_t uid,
+Status MDSV2FileSystem::MkNod(ContextSPtr ctx, Ino parent,
+                              const std::string& name, uint32_t uid,
                               uint32_t gid, uint32_t mode, uint64_t rdev,
                               Attr* out_attr) {
   auto status =
@@ -299,7 +302,7 @@ Status MDSV2FileSystem::MkNod(Ino parent, const std::string& name, uint32_t uid,
   return Status::OK();
 }
 
-Status MDSV2FileSystem::Open(Ino ino, int flags, uint64_t fh) {
+Status MDSV2FileSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
   LOG(INFO) << fmt::format("[meta.filesystem.{}] open ino({}) flags({}).",
                            name_, ino, flags);
 
@@ -322,7 +325,7 @@ Status MDSV2FileSystem::Open(Ino ino, int flags, uint64_t fh) {
   return Status::OK();
 }
 
-Status MDSV2FileSystem::Close(Ino ino, uint64_t fh) {
+Status MDSV2FileSystem::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
   LOG(INFO) << fmt::format("[meta.filesystem.{}] release ino({}).", name_, ino);
 
   std::string session_id = file_session_map_.Get(fh);
@@ -340,7 +343,7 @@ Status MDSV2FileSystem::Close(Ino ino, uint64_t fh) {
   return Status::OK();
 }
 
-Status MDSV2FileSystem::ReadSlice(Ino ino, uint64_t index,
+Status MDSV2FileSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                                   std::vector<Slice>* slices) {
   auto status = mds_client_->ReadSlice(ino, index, slices);
   if (!status.ok()) {
@@ -353,7 +356,7 @@ Status MDSV2FileSystem::ReadSlice(Ino ino, uint64_t index,
   return Status::OK();
 }
 
-Status MDSV2FileSystem::NewSliceId(Ino ino, uint64_t* id) {
+Status MDSV2FileSystem::NewSliceId(ContextSPtr ctx, Ino ino, uint64_t* id) {
   auto status = mds_client_->NewSliceId(ino, id);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
@@ -365,7 +368,7 @@ Status MDSV2FileSystem::NewSliceId(Ino ino, uint64_t* id) {
   return Status::OK();
 }
 
-Status MDSV2FileSystem::WriteSlice(Ino ino, uint64_t index,
+Status MDSV2FileSystem::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                                    const std::vector<Slice>& slices) {
   auto status = mds_client_->WriteSlice(ino, index, slices);
   if (!status.ok()) {
@@ -378,7 +381,8 @@ Status MDSV2FileSystem::WriteSlice(Ino ino, uint64_t index,
   return Status::OK();
 }
 
-Status MDSV2FileSystem::MkDir(Ino parent, const std::string& name, uint32_t uid,
+Status MDSV2FileSystem::MkDir(ContextSPtr ctx, Ino parent,
+                              const std::string& name, uint32_t uid,
                               uint32_t gid, uint32_t mode, Attr* out_attr) {
   auto status = mds_client_->MkDir(parent, name, uid, gid, mode, 0, *out_attr);
   if (!status.ok()) {
@@ -388,7 +392,8 @@ Status MDSV2FileSystem::MkDir(Ino parent, const std::string& name, uint32_t uid,
   return Status::OK();
 }
 
-Status MDSV2FileSystem::RmDir(Ino parent, const std::string& name) {
+Status MDSV2FileSystem::RmDir(ContextSPtr ctx, Ino parent,
+                              const std::string& name) {
   auto status = mds_client_->RmDir(parent, name);
   if (!status.ok()) {
     if (status.Errno() == pb::error::ENOT_EMPTY) {
@@ -400,7 +405,7 @@ Status MDSV2FileSystem::RmDir(Ino parent, const std::string& name) {
   return Status::OK();
 }
 
-Status MDSV2FileSystem::OpenDir(Ino ino, uint64_t fh) {
+Status MDSV2FileSystem::OpenDir(ContextSPtr ctx, Ino ino, uint64_t fh) {
   auto dir_iterator = DirIterator::New(mds_client_, ino);
   auto status = dir_iterator->Seek();
   if (!status.ok()) {
@@ -415,8 +420,9 @@ Status MDSV2FileSystem::OpenDir(Ino ino, uint64_t fh) {
   return Status::OK();
 }
 
-Status MDSV2FileSystem::ReadDir(Ino, uint64_t fh, uint64_t offset,
-                                bool with_attr, ReadDirHandler handler) {
+Status MDSV2FileSystem::ReadDir(ContextSPtr ctx, Ino, uint64_t fh,
+                                uint64_t offset, bool with_attr,
+                                ReadDirHandler handler) {
   auto dir_iterator = dir_iterator_manager_.Get(fh);
   CHECK(dir_iterator != nullptr) << "dir_iterator is null";
 
@@ -433,12 +439,12 @@ Status MDSV2FileSystem::ReadDir(Ino, uint64_t fh, uint64_t offset,
   return Status::OK();
 }
 
-Status MDSV2FileSystem::ReleaseDir(Ino, uint64_t fh) {
+Status MDSV2FileSystem::ReleaseDir(ContextSPtr ctx, Ino, uint64_t fh) {
   dir_iterator_manager_.Delete(fh);
   return Status::OK();
 }
 
-Status MDSV2FileSystem::Link(Ino ino, Ino new_parent,
+Status MDSV2FileSystem::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
                              const std::string& new_name, Attr* attr) {
   auto status = mds_client_->Link(ino, new_parent, new_name, *attr);
   if (!status.ok()) {
@@ -451,7 +457,8 @@ Status MDSV2FileSystem::Link(Ino ino, Ino new_parent,
   return Status::OK();
 }
 
-Status MDSV2FileSystem::Unlink(Ino parent, const std::string& name) {
+Status MDSV2FileSystem::Unlink(ContextSPtr ctx, Ino parent,
+                               const std::string& name) {
   auto status = mds_client_->UnLink(parent, name);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
@@ -463,9 +470,10 @@ Status MDSV2FileSystem::Unlink(Ino parent, const std::string& name) {
   return Status::OK();
 }
 
-Status MDSV2FileSystem::Symlink(Ino parent, const std::string& name,
-                                uint32_t uid, uint32_t gid,
-                                const std::string& link, Attr* out_attr) {
+Status MDSV2FileSystem::Symlink(ContextSPtr ctx, Ino parent,
+                                const std::string& name, uint32_t uid,
+                                uint32_t gid, const std::string& link,
+                                Attr* out_attr) {
   auto status = mds_client_->Symlink(parent, name, uid, gid, link, *out_attr);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
@@ -477,7 +485,7 @@ Status MDSV2FileSystem::Symlink(Ino parent, const std::string& name,
   return Status::OK();
 }
 
-Status MDSV2FileSystem::ReadLink(Ino ino, std::string* link) {
+Status MDSV2FileSystem::ReadLink(ContextSPtr ctx, Ino ino, std::string* link) {
   auto status = mds_client_->ReadLink(ino, *link);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
@@ -489,7 +497,7 @@ Status MDSV2FileSystem::ReadLink(Ino ino, std::string* link) {
   return Status::OK();
 }
 
-Status MDSV2FileSystem::GetAttr(Ino ino, Attr* out_attr) {
+Status MDSV2FileSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* out_attr) {
   auto status = mds_client_->GetAttr(ino, *out_attr);
   if (!status.ok()) {
     return Status::Internal(
@@ -499,8 +507,8 @@ Status MDSV2FileSystem::GetAttr(Ino ino, Attr* out_attr) {
   return Status::OK();
 }
 
-Status MDSV2FileSystem::SetAttr(Ino ino, int set, const Attr& attr,
-                                Attr* out_attr) {
+Status MDSV2FileSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
+                                const Attr& attr, Attr* out_attr) {
   auto status = mds_client_->SetAttr(ino, attr, set, *out_attr);
   if (!status.ok()) {
     return Status::Internal(fmt::format("set attr fail, ino({}) error: {}", ino,
@@ -510,8 +518,8 @@ Status MDSV2FileSystem::SetAttr(Ino ino, int set, const Attr& attr,
   return Status::OK();
 }
 
-Status MDSV2FileSystem::GetXattr(Ino ino, const std::string& name,
-                                 std::string* value) {
+Status MDSV2FileSystem::GetXattr(ContextSPtr ctx, Ino ino,
+                                 const std::string& name, std::string* value) {
   auto status = mds_client_->GetXAttr(ino, name, *value);
   if (!status.ok()) {
     return Status::NoData(status.Errno(), status.ToString());
@@ -520,7 +528,8 @@ Status MDSV2FileSystem::GetXattr(Ino ino, const std::string& name,
   return Status::OK();
 }
 
-Status MDSV2FileSystem::SetXattr(Ino ino, const std::string& name,
+Status MDSV2FileSystem::SetXattr(ContextSPtr ctx, Ino ino,
+                                 const std::string& name,
                                  const std::string& value, int) {
   auto status = mds_client_->SetXAttr(ino, name, value);
   if (!status.ok()) {
@@ -532,7 +541,8 @@ Status MDSV2FileSystem::SetXattr(Ino ino, const std::string& name,
   return Status::OK();
 }
 
-Status MDSV2FileSystem::RemoveXattr(Ino ino, const std::string& name) {
+Status MDSV2FileSystem::RemoveXattr(ContextSPtr ctx, Ino ino,
+                                    const std::string& name) {
   auto status = mds_client_->RemoveXAttr(ino, name);
   if (!status.ok()) {
     return Status::Internal(
@@ -543,7 +553,8 @@ Status MDSV2FileSystem::RemoveXattr(Ino ino, const std::string& name) {
   return Status::OK();
 }
 
-Status MDSV2FileSystem::ListXattr(Ino ino, std::vector<std::string>* xattrs) {
+Status MDSV2FileSystem::ListXattr(ContextSPtr ctx, Ino ino,
+                                  std::vector<std::string>* xattrs) {
   CHECK(xattrs != nullptr) << "xattrs is null.";
 
   std::map<std::string, std::string> xattr_map;
@@ -560,8 +571,9 @@ Status MDSV2FileSystem::ListXattr(Ino ino, std::vector<std::string>* xattrs) {
   return Status::OK();
 }
 
-Status MDSV2FileSystem::Rename(Ino old_parent, const std::string& old_name,
-                               Ino new_parent, const std::string& new_name) {
+Status MDSV2FileSystem::Rename(ContextSPtr, Ino old_parent,
+                               const std::string& old_name, Ino new_parent,
+                               const std::string& new_name) {
   auto status = mds_client_->Rename(old_parent, old_name, new_parent, new_name);
   if (!status.ok()) {
     if (status.Errno() == pb::error::ENOT_EMPTY) {

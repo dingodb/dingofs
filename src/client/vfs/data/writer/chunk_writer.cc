@@ -23,7 +23,9 @@
 #include <memory>
 
 #include "absl/cleanup/cleanup.h"
+#include "cache/utils/context.h"
 #include "client/vfs/hub/vfs_hub.h"
+#include "common/context.h"
 
 namespace dingofs {
 namespace client {
@@ -51,6 +53,8 @@ Status ChunkWriter::Write(const char* buf, uint64_t size,
 
 Status ChunkWriter::DirectWrite(const char* buf, uint64_t size,
                                 uint64_t chunk_offset) {
+  // TODO: get ctx from parent
+  ContextSPtr ctx = NewContext();
   uint64_t write_file_offset = chunk_.chunk_start + chunk_offset;
   uint64_t end_write_file_offset = write_file_offset + size;
 
@@ -68,7 +72,8 @@ Status ChunkWriter::DirectWrite(const char* buf, uint64_t size,
 
   // TODO: refact this code
   uint64_t chunk_id;
-  DINGOFS_RETURN_NOT_OK(AllockChunkId(&chunk_id));
+  DINGOFS_RETURN_NOT_OK(
+      hub_->GetMetaSystem()->NewSliceId(ctx, chunk_.ino, &chunk_id));
 
   uint64_t block_offset = chunk_offset % chunk_.block_size;
   uint64_t block_index = chunk_offset / chunk_.block_size;
@@ -101,7 +106,7 @@ Status ChunkWriter::DirectWrite(const char* buf, uint64_t size,
   std::vector<Slice> slices;
   slices.push_back(slice);
 
-  return CommitSlices(slices);
+  return CommitSlices(ctx, slices);
 }
 
 Status ChunkWriter::BufferWrite(const char* buf, uint64_t size,
@@ -276,17 +281,17 @@ Status ChunkWriter::WriteToBlockCache(const cache::BlockKey& key,
   return hub_->GetBlockCache()->Put(cache::NewContext(), key, block, option);
 }
 
-Status ChunkWriter::AllockChunkId(uint64_t* chunk_id) {
-  return hub_->GetMetaSystem()->NewSliceId(chunk_.ino, chunk_id);
-}
-
-Status ChunkWriter::CommitSlices(const std::vector<Slice>& slices) {
-  return hub_->GetMetaSystem()->WriteSlice(chunk_.ino, chunk_.index, slices);
+Status ChunkWriter::CommitSlices(ContextSPtr ctx,
+                                 const std::vector<Slice>& slices) {
+  return hub_->GetMetaSystem()->WriteSlice(ctx, chunk_.ino, chunk_.index,
+                                           slices);
 }
 
 ChunkWriter::FlushTask ChunkWriter::fake_header_;
 
 void ChunkWriter::FlushTaskDone(FlushTask* flush_task, Status s) {
+  // TODO: get ctx from parent
+  ContextSPtr ctx = NewContext();
   if (!s.ok()) {
     LOG(WARNING) << fmt::format(
         "{} FlushTaskDone Failed chunk_flush_task: {}, status: {}", UUID(),
@@ -389,7 +394,7 @@ void ChunkWriter::FlushTaskDone(FlushTask* flush_task, Status s) {
 
         if (!slices.empty()) {
           // TODO: maybe use batch commit
-          Status status = CommitSlices(slices);
+          Status status = CommitSlices(ctx, slices);
           if (!status.ok()) {
             LOG(WARNING) << fmt::format(
                 "{} FlushTaskDone header_task: {} fail commit"

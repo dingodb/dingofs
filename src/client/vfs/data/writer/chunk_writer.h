@@ -32,6 +32,7 @@
 #include "client/vfs/data/chunk.h"
 #include "client/vfs/data/slice/slice_data.h"
 #include "client/vfs/data/writer/task/chunk_flush_task.h"
+#include "common/context.h"
 #include "common/status.h"
 
 namespace dingofs {
@@ -131,9 +132,7 @@ class ChunkWriter : public std::enable_shared_from_this<ChunkWriter> {
   Status WriteToBlockCache(const cache::BlockKey& key,
                            const cache::Block& block, cache::PutOption option);
 
-  Status AllockChunkId(uint64_t* chunk_id);
-
-  Status CommitSlices(const std::vector<Slice>& slices);
+  Status CommitSlices(ContextSPtr ctx, const std::vector<Slice>& slices);
 
   std::unique_ptr<SliceData> FindWritableSliceUnLocked(uint64_t chunk_pos,
                                                        uint64_t size);

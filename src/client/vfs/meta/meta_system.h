@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "client/meta/vfs_meta.h"
+#include "common/context.h"
 #include "common/status.h"
 #include "json/value.h"
 
@@ -39,24 +40,25 @@ class MetaSystem {
 
   virtual void UnInit() = 0;
 
-  virtual bool Dump(Json::Value& value) = 0;
+  virtual bool Dump(ContextSPtr ctx, Json::Value& value) = 0;
 
-  virtual bool Load(const Json::Value& value) = 0;
+  virtual bool Load(ContextSPtr ctx, const Json::Value& value) = 0;
 
-  virtual Status Lookup(Ino parent, const std::string& name, Attr* attr) = 0;
+  virtual Status Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
+                        Attr* attr) = 0;
 
   // create a regular file in parent directory
-  virtual Status MkNod(Ino parent, const std::string& name, uint32_t uid,
-                       uint32_t gid, uint32_t mode, uint64_t rdev,
+  virtual Status MkNod(ContextSPtr ctx, Ino parent, const std::string& name,
+                       uint32_t uid, uint32_t gid, uint32_t mode, uint64_t rdev,
                        Attr* attr) = 0;
 
-  virtual Status Open(Ino ino, int flags, uint64_t fh) = 0;
+  virtual Status Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) = 0;
 
-  virtual Status Create(Ino parent, const std::string& name, uint32_t uid,
-                        uint32_t gid, uint32_t mode, int flags, Attr* attr,
-                        uint64_t fh) = 0;
+  virtual Status Create(ContextSPtr ctx, Ino parent, const std::string& name,
+                        uint32_t uid, uint32_t gid, uint32_t mode, int flags,
+                        Attr* attr, uint64_t fh) = 0;
 
-  virtual Status Close(Ino ino, uint64_t fh) = 0;
+  virtual Status Close(ContextSPtr ctx, Ino ino, uint64_t fh) = 0;
 
   /**
    * Read the slices of a file meta
@@ -64,10 +66,10 @@ class MetaSystem {
    * @param index the chunk index
    * @param slices output
    */
-  virtual Status ReadSlice(Ino ino, uint64_t index,
+  virtual Status ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                            std::vector<Slice>* slices) = 0;
 
-  virtual Status NewSliceId(Ino ino, uint64_t* id) = 0;
+  virtual Status NewSliceId(ContextSPtr ctx, Ino ino, uint64_t* id) = 0;
 
   /**
    * Write the slices of a file meta
@@ -75,7 +77,7 @@ class MetaSystem {
    * @param index the chunk index
    * @param slices the slices to be written
    */
-  virtual Status WriteSlice(Ino ino, uint64_t index,
+  virtual Status WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                             const std::vector<Slice>& slices) = 0;
 
   /**
@@ -85,10 +87,11 @@ class MetaSystem {
    * @param new_name the new name of the file
    * @param attr output
    */
-  virtual Status Link(Ino ino, Ino new_parent, const std::string& new_name,
-                      Attr* attr) = 0;
+  virtual Status Link(ContextSPtr ctx, Ino ino, Ino new_parent,
+                      const std::string& new_name, Attr* attr) = 0;
 
-  virtual Status Unlink(Ino parent, const std::string& name) = 0;
+  virtual Status Unlink(ContextSPtr ctx, Ino parent,
+                        const std::string& name) = 0;
 
   /**
    * Create a symlink in parent directory
@@ -97,45 +100,51 @@ class MetaSystem {
    * @param link the content of the symlink
    * @param attr output
    */
-  virtual Status Symlink(Ino parent, const std::string& name, uint32_t uid,
-                         uint32_t gid, const std::string& link, Attr* attr) = 0;
+  virtual Status Symlink(ContextSPtr ctx, Ino parent, const std::string& name,
+                         uint32_t uid, uint32_t gid, const std::string& link,
+                         Attr* attr) = 0;
 
-  virtual Status ReadLink(Ino ino, std::string* link) = 0;
+  virtual Status ReadLink(ContextSPtr ctx, Ino ino, std::string* link) = 0;
 
-  virtual Status GetAttr(Ino ino, Attr* attr) = 0;
+  virtual Status GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) = 0;
 
-  virtual Status SetAttr(Ino ino, int set, const Attr& in_attr,
+  virtual Status SetAttr(ContextSPtr ctx, Ino ino, int set, const Attr& in_attr,
                          Attr* out_attr) = 0;
 
-  virtual Status SetXattr(Ino ino, const std::string& name,
+  virtual Status SetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
                           const std::string& value, int flags) = 0;
 
-  virtual Status GetXattr(Ino ino, const std::string& name,
+  virtual Status GetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
                           std::string* value) = 0;
 
-  virtual Status RemoveXattr(Ino ino, const std::string& name) = 0;
+  virtual Status RemoveXattr(ContextSPtr ctx, Ino ino,
+                             const std::string& name) = 0;
 
-  virtual Status ListXattr(Ino ino, std::vector<std::string>* xattrs) = 0;
+  virtual Status ListXattr(ContextSPtr ctx, Ino ino,
+                           std::vector<std::string>* xattrs) = 0;
 
   // create a directory in parent directory
-  virtual Status MkDir(Ino parent, const std::string& name, uint32_t uid,
-                       uint32_t gid, uint32_t mode, Attr* attr) = 0;
+  virtual Status MkDir(ContextSPtr ctx, Ino parent, const std::string& name,
+                       uint32_t uid, uint32_t gid, uint32_t mode,
+                       Attr* attr) = 0;
 
-  virtual Status RmDir(Ino parent, const std::string& name) = 0;
+  virtual Status RmDir(ContextSPtr ctx, Ino parent,
+                       const std::string& name) = 0;
 
-  virtual Status OpenDir(Ino ino, uint64_t fh) = 0;
+  virtual Status OpenDir(ContextSPtr ctx, Ino ino, uint64_t fh) = 0;
 
-  virtual Status ReadDir(Ino ino, uint64_t fh, uint64_t offset, bool with_attr,
-                         ReadDirHandler handler) = 0;
+  virtual Status ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
+                         bool with_attr, ReadDirHandler handler) = 0;
 
-  virtual Status ReleaseDir(Ino ino, uint64_t fh) = 0;
+  virtual Status ReleaseDir(ContextSPtr ctx, Ino ino, uint64_t fh) = 0;
 
-  virtual Status StatFs(Ino ino, FsStat* fs_stat) = 0;
+  virtual Status StatFs(ContextSPtr ctx, Ino ino, FsStat* fs_stat) = 0;
 
-  virtual Status Rename(Ino old_parent, const std::string& old_name,
-                        Ino new_parent, const std::string& new_name) = 0;
+  virtual Status Rename(ContextSPtr ctx, Ino old_parent,
+                        const std::string& old_name, Ino new_parent,
+                        const std::string& new_name) = 0;
 
-  virtual Status GetFsInfo(FsInfo* fs_info) = 0;
+  virtual Status GetFsInfo(ContextSPtr ctx, FsInfo* fs_info) = 0;
 };
 
 using MetaSystemPtr = std::shared_ptr<MetaSystem>;

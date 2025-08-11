@@ -26,6 +26,7 @@
 #include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/meta/meta_system.h"
 #include "client/vfs/service/inode_blocks_service.h"
+#include "common/context.h"
 #include "options/client/vfs/vfs_option.h"
 
 namespace dingofs {
@@ -42,77 +43,83 @@ class VFSImpl : public VFS {
 
   Status Stop() override;
 
-  bool Dump(Json::Value& value) override;
+  bool Dump(ContextSPtr ctx, Json::Value& value) override;
 
-  bool Load(const Json::Value& value) override;
+  bool Load(ContextSPtr ctx, const Json::Value& value) override;
 
   double GetAttrTimeout(const FileType& type) override;
 
   double GetEntryTimeout(const FileType& type) override;
 
-  Status Lookup(Ino parent, const std::string& name, Attr* attr) override;
+  Status Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
+                Attr* attr) override;
 
-  Status GetAttr(Ino ino, Attr* attr) override;
+  Status GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) override;
 
-  Status SetAttr(Ino ino, int set, const Attr& in_attr,
+  Status SetAttr(ContextSPtr ctx, Ino ino, int set, const Attr& in_attr,
                  Attr* out_attr) override;
 
-  Status ReadLink(Ino ino, std::string* link) override;
+  Status ReadLink(ContextSPtr ctx, Ino ino, std::string* link) override;
 
-  Status MkNod(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
-               uint32_t mode, uint64_t dev, Attr* attr) override;
+  Status MkNod(ContextSPtr ctx, Ino parent, const std::string& name,
+               uint32_t uid, uint32_t gid, uint32_t mode, uint64_t dev,
+               Attr* attr) override;
 
-  Status Unlink(Ino parent, const std::string& name) override;
+  Status Unlink(ContextSPtr ctx, Ino parent, const std::string& name) override;
 
-  Status Symlink(Ino parent, const std::string& name, uint32_t uid,
-                 uint32_t gid, const std::string& link, Attr* attr) override;
+  Status Symlink(ContextSPtr ctx, Ino parent, const std::string& name,
+                 uint32_t uid, uint32_t gid, const std::string& link,
+                 Attr* attr) override;
 
-  Status Rename(Ino old_parent, const std::string& old_name, Ino new_parent,
-                const std::string& new_name) override;
+  Status Rename(ContextSPtr ctx, Ino old_parent, const std::string& old_name,
+                Ino new_parent, const std::string& new_name) override;
 
-  Status Link(Ino ino, Ino new_parent, const std::string& new_name,
-              Attr* attr) override;
+  Status Link(ContextSPtr ctx, Ino ino, Ino new_parent,
+              const std::string& new_name, Attr* attr) override;
 
-  Status Open(Ino ino, int flags, uint64_t* fh) override;
+  Status Open(ContextSPtr ctx, Ino ino, int flags, uint64_t* fh) override;
 
-  Status Create(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
-                uint32_t mode, int flags, uint64_t* fh, Attr* attr) override;
+  Status Create(ContextSPtr ctx, Ino parent, const std::string& name,
+                uint32_t uid, uint32_t gid, uint32_t mode, int flags,
+                uint64_t* fh, Attr* attr) override;
 
-  Status Read(Ino ino, char* buf, uint64_t size, uint64_t offset, uint64_t fh,
-              uint64_t* out_rsize) override;
+  Status Read(ContextSPtr ctx, Ino ino, char* buf, uint64_t size,
+              uint64_t offset, uint64_t fh, uint64_t* out_rsize) override;
 
-  Status Write(Ino ino, const char* buf, uint64_t size, uint64_t offset,
-               uint64_t fh, uint64_t* out_wsize) override;
+  Status Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t size,
+               uint64_t offset, uint64_t fh, uint64_t* out_wsize) override;
 
-  Status Flush(Ino ino, uint64_t fh) override;
+  Status Flush(ContextSPtr ctx, Ino ino, uint64_t fh) override;
 
-  Status Release(Ino ino, uint64_t fh) override;
+  Status Release(ContextSPtr ctx, Ino ino, uint64_t fh) override;
 
-  Status Fsync(Ino ino, int datasync, uint64_t fh) override;
+  Status Fsync(ContextSPtr ctx, Ino ino, int datasync, uint64_t fh) override;
 
-  Status SetXattr(Ino ino, const std::string& name, const std::string& value,
-                  int flags) override;
+  Status SetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
+                  const std::string& value, int flags) override;
 
-  Status GetXattr(Ino ino, const std::string& name,
+  Status GetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
                   std::string* value) override;
 
-  Status RemoveXattr(Ino ino, const std::string& name) override;
+  Status RemoveXattr(ContextSPtr ctx, Ino ino,
+                     const std::string& name) override;
 
-  Status ListXattr(Ino ino, std::vector<std::string>* xattrs) override;
+  Status ListXattr(ContextSPtr ctx, Ino ino,
+                   std::vector<std::string>* xattrs) override;
 
-  Status MkDir(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
-               uint32_t mode, Attr* attr) override;
+  Status MkDir(ContextSPtr ctx, Ino parent, const std::string& name,
+               uint32_t uid, uint32_t gid, uint32_t mode, Attr* attr) override;
 
-  Status OpenDir(Ino ino, uint64_t* fh) override;
+  Status OpenDir(ContextSPtr ctx, Ino ino, uint64_t* fh) override;
 
-  Status ReadDir(Ino ino, uint64_t fh, uint64_t offset, bool with_attr,
-                 ReadDirHandler handler) override;
+  Status ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
+                 bool with_attr, ReadDirHandler handler) override;
 
-  Status ReleaseDir(Ino ino, uint64_t fh) override;
+  Status ReleaseDir(ContextSPtr ctx, Ino ino, uint64_t fh) override;
 
-  Status RmDir(Ino parent, const std::string& name) override;
+  Status RmDir(ContextSPtr ctx, Ino parent, const std::string& name) override;
 
-  Status StatFs(Ino ino, FsStat* fs_stat) override;
+  Status StatFs(ContextSPtr ctx, Ino ino, FsStat* fs_stat) override;
 
   uint64_t GetFsId() override;
 

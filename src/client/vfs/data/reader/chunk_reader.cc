@@ -26,6 +26,7 @@
 #include "client/vfs/data/common/data_utils.h"
 #include "client/vfs/data/reader/reader_common.h"
 #include "client/vfs/hub/vfs_hub.h"
+#include "common/context.h"
 #include "common/status.h"
 
 namespace dingofs {
@@ -76,6 +77,8 @@ void ChunkReader::ReadAsync(const ChunkReadReq& req, StatusCallback cb) {
 }
 
 void ChunkReader::DoRead(const ChunkReadReq& req, StatusCallback cb) {
+  // TODO: get ctx from parent
+  ContextSPtr ctx = NewContext();
   uint64_t chunk_offset = req.offset;
   uint64_t size = req.to_read_size;
   char* buf = req.buf;
@@ -100,7 +103,7 @@ void ChunkReader::DoRead(const ChunkReadReq& req, StatusCallback cb) {
 
   std::vector<Slice> slices;
   Status s =
-      hub_->GetMetaSystem()->ReadSlice(chunk_.ino, chunk_.index, &slices);
+      hub_->GetMetaSystem()->ReadSlice(ctx, chunk_.ino, chunk_.index, &slices);
   if (!s.ok()) {
     LOG(WARNING) << fmt::format("{} Read slice failed, status: {}", UUID(),
                                 s.ToString());

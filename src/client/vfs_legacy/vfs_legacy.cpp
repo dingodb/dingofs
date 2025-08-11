@@ -43,6 +43,7 @@
 #include "client/vfs_legacy/inode_wrapper.h"
 #include "client/vfs_legacy/tools.h"
 #include "common/config_mapper.h"
+#include "common/context.h"
 #include "common/define.h"
 #include "common/status.h"
 #include "dingofs/common.pb.h"
@@ -444,9 +445,13 @@ Status VFSOld::Stop() {
   return Status::OK();
 }
 
-bool VFSOld::Dump(Json::Value& value) { return fs_->Dump(value); }
+bool VFSOld::Dump(ContextSPtr ctx, Json::Value& value) {
+  return fs_->Dump(value);
+}
 
-bool VFSOld::Load(const Json::Value& value) { return fs_->Load(value); }
+bool VFSOld::Load(ContextSPtr ctx, const Json::Value& value) {
+  return fs_->Load(value);
+}
 
 double VFSOld::GetAttrTimeout(const FileType& type) {
   if (type == FileType::kDirectory) {
@@ -464,7 +469,8 @@ double VFSOld::GetEntryTimeout(const FileType& type) {
   }
 }
 
-Status VFSOld::Lookup(Ino parent, const std::string& name, Attr* attr) {
+Status VFSOld::Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
+                      Attr* attr) {
   // check if parent is root inode and file name is .stats name
   if (BAIDU_UNLIKELY(parent == ROOTINODEID &&
                      name == STATSNAME)) {  // stats node
@@ -501,7 +507,7 @@ Status VFSOld::Lookup(Ino parent, const std::string& name, Attr* attr) {
   return filesystem::DingofsErrorToStatus(rc);
 }
 
-Status VFSOld::GetAttr(Ino ino, Attr* attr) {
+Status VFSOld::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
   if BAIDU_UNLIKELY ((ino == STATSINODEID)) {
     *attr = GenerateVirtualInodeAttr(STATSINODEID);
     return Status::OK();
@@ -552,7 +558,8 @@ Status VFSOld::Truncate(InodeWrapper* inode, uint64_t length) {
   return filesystem::DingofsErrorToStatus(rc);
 }
 
-Status VFSOld::SetAttr(Ino ino, int set, const Attr& in_attr, Attr* out_attr) {
+Status VFSOld::SetAttr(ContextSPtr ctx, Ino ino, int set, const Attr& in_attr,
+                       Attr* out_attr) {
   if BAIDU_UNLIKELY ((ino == STATSINODEID)) {
     *out_attr = GenerateVirtualInodeAttr(STATSINODEID);
     return Status::OK();
@@ -650,7 +657,7 @@ Status VFSOld::SetAttr(Ino ino, int set, const Attr& in_attr, Attr* out_attr) {
   return Status::OK();
 }
 
-Status VFSOld::ReadLink(Ino ino, std::string* link) {
+Status VFSOld::ReadLink(ContextSPtr ctx, Ino ino, std::string* link) {
   pb::metaserver::InodeAttr attr;
   DINGOFS_ERROR rc = inode_cache_manager_->GetInodeAttr(ino, &attr);
   if (rc != DINGOFS_ERROR::OK) {
@@ -715,9 +722,10 @@ DINGOFS_ERROR VFSOld::UpdateParentMCTimeAndNlink(Ino parent,
   return DINGOFS_ERROR::OK;
 }
 
-Status VFSOld::AllocNode(Ino parent, const std::string& name, uint32_t uid,
-                         uint32_t gid, pb::metaserver::FsFileType type,
-                         uint32_t mode, uint64_t dev, std::string path,
+Status VFSOld::AllocNode(ContextSPtr ctx, Ino parent, const std::string& name,
+                         uint32_t uid, uint32_t gid,
+                         pb::metaserver::FsFileType type, uint32_t mode,
+                         uint64_t dev, std::string path,
                          std::shared_ptr<InodeWrapper>* out_inode_wrapper) {
   VLOG(1) << "AllocNode parent inodeId=" << parent << ", name: " << name
           << ", uid: " << uid << ", gid: " << gid
@@ -859,16 +867,17 @@ Status VFSOld::AllocNode(Ino parent, const std::string& name, uint32_t uid,
   return Status::OK();
 }
 
-Status VFSOld::MkNod(Ino parent, const std::string& name, uint32_t uid,
-                     uint32_t gid, uint32_t mode, uint64_t dev, Attr* attr) {
+Status VFSOld::MkNod(ContextSPtr ctx, Ino parent, const std::string& name,
+                     uint32_t uid, uint32_t gid, uint32_t mode, uint64_t dev,
+                     Attr* attr) {
   if (name.length() > option_.fileSystemOption.maxNameLength) {
     return Status::NameTooLong(fmt::format("name({}) too long", name.length()));
   }
 
   std::shared_ptr<InodeWrapper> inode_wrapper;
-  Status s =
-      AllocNode(parent, name, uid, gid, pb::metaserver::FsFileType::TYPE_S3,
-                mode, dev, "", &inode_wrapper);
+  Status s = AllocNode(ctx, parent, name, uid, gid,
+                       pb::metaserver::FsFileType::TYPE_S3, mode, dev, "",
+                       &inode_wrapper);
   if (!s.ok()) {
     LOG(WARNING) << "Fail AllocNode in MkNod, parent inodeId=" << parent
                  << ", name: " << name << ", mode: " << mode << ", dev: " << dev
@@ -888,7 +897,7 @@ Status VFSOld::MkNod(Ino parent, const std::string& name, uint32_t uid,
   return Status::OK();
 }
 
-Status VFSOld::Unlink(Ino parent, const std::string& name) {
+Status VFSOld::Unlink(ContextSPtr ctx, Ino parent, const std::string& name) {
   // check if node is recycle or recycle time dir or .stats node
   if ((IsInternalName(name) && parent == ROOTINODEID) ||
       parent == RECYCLEINODEID) {
@@ -962,8 +971,9 @@ Status VFSOld::Unlink(Ino parent, const std::string& name) {
   return Status::OK();
 }
 
-Status VFSOld::Symlink(Ino parent, const std::string& name, uint32_t uid,
-                       uint32_t gid, const std::string& link, Attr* attr) {
+Status VFSOld::Symlink(ContextSPtr ctx, Ino parent, const std::string& name,
+                       uint32_t uid, uint32_t gid, const std::string& link,
+                       Attr* attr) {
   {
     // internal file name can not allowed for symlink
 
@@ -992,7 +1002,7 @@ Status VFSOld::Symlink(Ino parent, const std::string& name, uint32_t uid,
   });
 
   std::shared_ptr<InodeWrapper> inode_wrapper;
-  s = AllocNode(parent, name, uid, gid,
+  s = AllocNode(ctx, parent, name, uid, gid,
                 pb::metaserver::FsFileType::TYPE_SYM_LINK, (S_IFLNK | 0777), 0,
                 link, &inode_wrapper);
   if (!s.ok()) {
@@ -1008,8 +1018,9 @@ Status VFSOld::Symlink(Ino parent, const std::string& name, uint32_t uid,
   return Status::OK();
 }
 
-Status VFSOld::Rename(Ino old_parent, const std::string& old_name,
-                      Ino new_parent, const std::string& new_name) {
+Status VFSOld::Rename(ContextSPtr ctx, Ino old_parent,
+                      const std::string& old_name, Ino new_parent,
+                      const std::string& new_name) {
   // internel name can not be rename or rename to
   if ((IsInternalName(old_name) || IsInternalName(new_name)) &&
       old_parent == ROOTINODEID) {
@@ -1109,8 +1120,8 @@ Status VFSOld::Rename(Ino old_parent, const std::string& old_name,
   return filesystem::DingofsErrorToStatus(rc);
 }
 
-Status VFSOld::Link(Ino ino, Ino new_parent, const std::string& new_name,
-                    Attr* attr) {
+Status VFSOld::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
+                    const std::string& new_name, Attr* attr) {
   {
     // cant't allow  ln   <file> .stats
     // cant't allow  ln  .stats  <file>
@@ -1191,7 +1202,7 @@ Status VFSOld::Link(Ino ino, Ino new_parent, const std::string& new_name,
   return Status::OK();
 }
 
-Status VFSOld::HandleOpenFlags(Ino ino, int flags) {
+Status VFSOld::HandleOpenFlags(ContextSPtr ctx, Ino ino, int flags) {
   std::shared_ptr<InodeWrapper> inode_wrapper;
   // alredy opened
   DINGOFS_ERROR ret = inode_cache_manager_->GetInode(ino, inode_wrapper);
@@ -1238,7 +1249,7 @@ Status VFSOld::HandleOpenFlags(Ino ino, int flags) {
   return Status::OK();
 }
 
-Status VFSOld::Open(Ino ino, int flags, uint64_t* fh) {
+Status VFSOld::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t* fh) {
   // check if ino is .stats inode,if true ,get metric data and generate
   // inodeattr information
   if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
@@ -1272,7 +1283,7 @@ Status VFSOld::Open(Ino ino, int flags, uint64_t* fh) {
       return filesystem::DingofsErrorToStatus(rc);
     }
 
-    Status s = HandleOpenFlags(ino, flags);
+    Status s = HandleOpenFlags(ctx,ino, flags);
     if (!s.ok()) {
       LOG(ERROR) << "Fail HandleOpenFlags, inodeId=" << ino
                  << ", flags: " << flags << ", status: " << s.ToString();
@@ -1281,13 +1292,13 @@ Status VFSOld::Open(Ino ino, int flags, uint64_t* fh) {
   }
 }
 
-Status VFSOld::Create(Ino parent, const std::string& name, uint32_t uid,
-                      uint32_t gid, uint32_t mode, int flags, uint64_t* fh,
-                      Attr* attr) {
+Status VFSOld::Create(ContextSPtr ctx, Ino parent, const std::string& name,
+                      uint32_t uid, uint32_t gid, uint32_t mode, int flags,
+                      uint64_t* fh, Attr* attr) {
   std::shared_ptr<InodeWrapper> inode_wrapper;
-  Status s =
-      AllocNode(parent, name, uid, gid, pb::metaserver::FsFileType::TYPE_S3,
-                mode, 0, "", &inode_wrapper);
+  Status s = AllocNode(ctx, parent, name, uid, gid,
+                       pb::metaserver::FsFileType::TYPE_S3, mode, 0, "",
+                       &inode_wrapper);
   if (!s.ok()) {
     LOG(WARNING) << "Fail AllocNode in Create, parent inodeId=" << parent
                  << ", name: " << name << ", mode: " << mode
@@ -1317,8 +1328,8 @@ Status VFSOld::Create(Ino parent, const std::string& name, uint32_t uid,
 
 void VFSOld::ReadThrottleAdd(size_t size) { throttle_.Add(true, size); }
 
-Status VFSOld::Read(Ino ino, char* buf, uint64_t size, uint64_t offset,
-                    uint64_t fh, uint64_t* out_rsize) {
+Status VFSOld::Read(ContextSPtr ctx, Ino ino, char* buf, uint64_t size,
+                    uint64_t offset, uint64_t fh, uint64_t* out_rsize) {
   ReadThrottleAdd(size);
 
   auto read_size = [](uint64_t& size, uint64_t& off,
@@ -1383,8 +1394,8 @@ Status VFSOld::Read(Ino ino, char* buf, uint64_t size, uint64_t offset,
 
 void VFSOld::WriteThrottleAdd(uint64_t size) { throttle_.Add(false, size); }
 
-Status VFSOld::Write(Ino ino, const char* buf, uint64_t size, uint64_t offset,
-                     uint64_t fh, uint64_t* out_wsize) {
+Status VFSOld::Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t size,
+                     uint64_t offset, uint64_t fh, uint64_t* out_wsize) {
   WriteThrottleAdd(size);
 
   if (!fs_->CheckQuota(ino, size, 0)) {
@@ -1439,7 +1450,7 @@ Status VFSOld::Write(Ino ino, const char* buf, uint64_t size, uint64_t offset,
   return Status::OK();
 }
 
-Status VFSOld::Flush(Ino ino, uint64_t fh) {
+Status VFSOld::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {
   if (ino == STATSINODEID) {
     return Status::OK();
   }
@@ -1499,7 +1510,7 @@ Status VFSOld::Flush(Ino ino, uint64_t fh) {
   return Status::OK();
 }
 
-Status VFSOld::Release(Ino ino, uint64_t fh) {
+Status VFSOld::Release(ContextSPtr ctx, Ino ino, uint64_t fh) {
   if (ino == STATSINODEID) {
     fs_->ReleaseHandler(fh);
     return Status::OK();
@@ -1523,7 +1534,7 @@ Status VFSOld::Release(Ino ino, uint64_t fh) {
 
 //   If the datasync parameter is non-zero, then only the user data  should be
 //   flushed, not the meta data.
-Status VFSOld::Fsync(Ino ino, int datasync, uint64_t fh) {
+Status VFSOld::Fsync(ContextSPtr ctx, Ino ino, int datasync, uint64_t fh) {
   if (ino == STATSINODEID) {
     return Status::OK();
   }
@@ -1640,7 +1651,7 @@ Status VFSOld::Warmup(Ino key, const std::string& name,
 }
 
 // TODO: how to process the flags
-Status VFSOld::SetXattr(Ino ino, const std::string& name,
+Status VFSOld::SetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
                         const std::string& value, int flags) {
   if BAIDU_UNLIKELY ((ino == STATSINODEID)) {
     return Status::NoPermitted("Can not set xattr for .stats");
@@ -1691,7 +1702,7 @@ Status VFSOld::SetXattr(Ino ino, const std::string& name,
   return Status::OK();
 }
 
-Status VFSOld::RemoveXattr(Ino ino, const std::string& name) {
+Status VFSOld::RemoveXattr(ContextSPtr ctx, Ino ino, const std::string& name) {
   (void)ino;
   (void)name;
   return Status::NotSupport("RemoveXattr is not supported");
@@ -1711,7 +1722,8 @@ void VFSOld::QueryWarmupTask(Ino key, std::string* result) {
   VLOG(6) << "Warmup [" << key << "]" << *result;
 }
 
-Status VFSOld::GetXattr(Ino ino, const std::string& name, std::string* value) {
+Status VFSOld::GetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
+                        std::string* value) {
   if BAIDU_UNLIKELY ((ino == STATSINODEID)) {
     // NOTE: why return nodata?
     return Status::NoData("No data for .stats");
@@ -1744,7 +1756,8 @@ Status VFSOld::GetXattr(Ino ino, const std::string& name, std::string* value) {
   return Status::OK();
 }
 
-Status VFSOld::ListXattr(Ino ino, std::vector<std::string>* xattrs) {
+Status VFSOld::ListXattr(ContextSPtr ctx, Ino ino,
+                         std::vector<std::string>* xattrs) {
   pb::metaserver::InodeAttr inode_attr;
   DINGOFS_ERROR ret = inode_cache_manager_->GetInodeAttr(ino, &inode_attr);
   if (ret != DINGOFS_ERROR::OK) {
@@ -1759,10 +1772,10 @@ Status VFSOld::ListXattr(Ino ino, std::vector<std::string>* xattrs) {
   return Status::OK();
 }
 
-Status VFSOld::MkDir(Ino parent, const std::string& name, uint32_t uid,
-                     uint32_t gid, uint32_t mode, Attr* attr) {
+Status VFSOld::MkDir(ContextSPtr ctx, Ino parent, const std::string& name,
+                     uint32_t uid, uint32_t gid, uint32_t mode, Attr* attr) {
   std::shared_ptr<InodeWrapper> inode_wrapper;
-  Status s = AllocNode(parent, name, uid, gid,
+  Status s = AllocNode(ctx, parent, name, uid, gid,
                        pb::metaserver::FsFileType::TYPE_DIRECTORY, mode, 0, "",
                        &inode_wrapper);
   if (!s.ok()) {
@@ -1780,7 +1793,7 @@ Status VFSOld::MkDir(Ino parent, const std::string& name, uint32_t uid,
   return Status::OK();
 }
 
-Status VFSOld::OpenDir(Ino ino, uint64_t* fh) {
+Status VFSOld::OpenDir(ContextSPtr ctx, Ino ino, uint64_t* fh) {
   DINGOFS_ERROR rc = fs_->OpenDir(ino, fh);
   if (rc != DINGOFS_ERROR::OK) {
     LOG(ERROR) << "Fail open dir inodeId=" << ino << ", rc: " << rc;
@@ -1790,7 +1803,8 @@ Status VFSOld::OpenDir(Ino ino, uint64_t* fh) {
   return Status::OK();
 }
 
-Status VFSOld::InitDirHandle(Ino ino, uint64_t fh, bool with_attr) {
+Status VFSOld::InitDirHandle(ContextSPtr ctx, Ino ino, uint64_t fh,
+                             bool with_attr) {
   VLOG(1) << "InitDirHandle inodeId=" << ino << ", fh: " << fh;
 
   auto file_handler = fs_->FindHandler(fh);
@@ -1851,9 +1865,9 @@ Status VFSOld::InitDirHandle(Ino ino, uint64_t fh, bool with_attr) {
   return Status::OK();
 }
 
-Status VFSOld::ReadDir(Ino ino, uint64_t fh, uint64_t offset, bool with_attr,
-                       ReadDirHandler handler) {
-  Status s = InitDirHandle(ino, fh, with_attr);
+Status VFSOld::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
+                       bool with_attr, ReadDirHandler handler) {
+  Status s = InitDirHandle(ctx, ino, fh, with_attr);
   if (!s.ok()) {
     LOG(WARNING) << "Fail InitDirHandle in ReadDir, inodeId=" << ino
                  << ", fh: " << fh << ", status: " << s.ToString();
@@ -1885,7 +1899,7 @@ Status VFSOld::ReadDir(Ino ino, uint64_t fh, uint64_t offset, bool with_attr,
   return Status::OK();
 }
 
-Status VFSOld::ReleaseDir(Ino ino, uint64_t fh) {
+Status VFSOld::ReleaseDir(ContextSPtr ctx, Ino ino, uint64_t fh) {
   DINGOFS_ERROR rc = fs_->ReleaseDir(fh);
   if (rc != DINGOFS_ERROR::OK) {
     LOG(ERROR) << "Fail release dir inodeId=" << ino << ", rc: " << rc;
@@ -1895,7 +1909,7 @@ Status VFSOld::ReleaseDir(Ino ino, uint64_t fh) {
   return Status::OK();
 }
 
-Status VFSOld::RmDir(Ino parent, const std::string& name) {
+Status VFSOld::RmDir(ContextSPtr ctx, Ino parent, const std::string& name) {
   // check if node is recycle or recycle time dir or .stats node
   if ((IsInternalName(name) && parent == ROOTINODEID) ||
       parent == RECYCLEINODEID) {
@@ -1982,7 +1996,7 @@ Status VFSOld::RmDir(Ino parent, const std::string& name) {
   return Status::OK();
 }
 
-Status VFSOld::StatFs(Ino ino, FsStat* fs_stat) {
+Status VFSOld::StatFs(ContextSPtr ctx, Ino ino, FsStat* fs_stat) {
   pb::metaserver::Quota quota = fs_->GetFsQuota();
 
   uint64_t total_bytes = INT64_MAX;
