@@ -36,6 +36,7 @@
 #include "client/vfs/vfs_impl.h"
 #include "client/vfs_legacy/vfs_legacy.h"
 #include "client/vfs_wrapper/access_log.h"
+#include "common/logging.h"
 #include "common/rpc_stream.h"
 #include "common/status.h"
 #include "metrics/client/client.h"
@@ -78,6 +79,7 @@ static Status InitLog() {
   // metaserver
   bool succ = dingofs::client::InitAccessLog(FLAGS_log_dir) &&
               dingofs::cache::InitCacheTraceLog(FLAGS_log_dir) &&
+              dingofs::InitTraceLog(FLAGS_log_dir) &&
               blockaccess::InitBlockAccessLog(FLAGS_log_dir) &&
               dingofs::client::vfs::InitMetaLog(FLAGS_log_dir) &&
               dingofs::stub::InitMetaAccessLog(FLAGS_log_dir) &&
@@ -173,6 +175,8 @@ Status VFSWrapper::Stop() {
       return Status::InvalidParam("dump vfs state fail");
     }
   }
+
+  ShutdownTraceLog();
 
   return s;
 }

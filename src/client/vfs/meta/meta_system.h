@@ -29,11 +29,6 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
-struct Context {
-  uint64_t ctx_id;
-  uint64_t fh;
-};
-
 class MetaSystem {
  public:
   MetaSystem() = default;
