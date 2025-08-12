@@ -39,10 +39,10 @@ void LogTrace(const std::string& message);
 
 struct TraceLogGuard {
   template <typename... Args>
-  TraceLogGuard(Context ctx, Status& status, StepTimer& timer,
+  TraceLogGuard(ContextSPtr ctx, Status& status, StepTimer& timer,
                 const std::string module_name, const char* func_format,
                 const Args&... func_params)
-      : ctx(ctx),
+      : ctx(std::move(ctx)),
         status(status),
         timer(timer),
         module_name(module_name),
@@ -56,7 +56,7 @@ struct TraceLogGuard {
     LogTrace(message);
   }
 
-  Context ctx;
+  ContextSPtr ctx;
   Status& status;
   StepTimer& timer;
   std::string module_name;
