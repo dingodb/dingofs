@@ -159,12 +159,9 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
 
   void GetFsQuota(google::protobuf::RpcController* controller, const pb::mdsv2::GetFsQuotaRequest* request,
                   pb::mdsv2::GetFsQuotaResponse* response, google::protobuf::Closure* done) override;
-  void FlushFsUsage(google::protobuf::RpcController* controller, const pb::mdsv2::FlushFsUsageRequest* request,
-                    pb::mdsv2::FlushFsUsageResponse* response, google::protobuf::Closure* done) override;
 
   void SetDirQuota(google::protobuf::RpcController* controller, const pb::mdsv2::SetDirQuotaRequest* request,
                    pb::mdsv2::SetDirQuotaResponse* response, google::protobuf::Closure* done) override;
-
   void GetDirQuota(google::protobuf::RpcController* controller, const pb::mdsv2::GetDirQuotaRequest* request,
                    pb::mdsv2::GetDirQuotaResponse* response, google::protobuf::Closure* done) override;
   void DeleteDirQuota(google::protobuf::RpcController* controller, const pb::mdsv2::DeleteDirQuotaRequest* request,
@@ -172,8 +169,6 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
 
   void LoadDirQuotas(google::protobuf::RpcController* controller, const pb::mdsv2::LoadDirQuotasRequest* request,
                      pb::mdsv2::LoadDirQuotasResponse* response, google::protobuf::Closure* done) override;
-  void FlushDirUsages(google::protobuf::RpcController* controller, const pb::mdsv2::FlushDirUsagesRequest* request,
-                      pb::mdsv2::FlushDirUsagesResponse* response, google::protobuf::Closure* done) override;
 
   // fs statistics
   void SetFsStats(google::protobuf::RpcController* controller, const pb::mdsv2::SetFsStatsRequest* request,
@@ -316,8 +311,6 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
                     pb::mdsv2::SetFsQuotaResponse* response, TraceClosure* done);
   void DoGetFsQuota(google::protobuf::RpcController* controller, const pb::mdsv2::GetFsQuotaRequest* request,
                     pb::mdsv2::GetFsQuotaResponse* response, TraceClosure* done);
-  void DoFlushFsUsage(google::protobuf::RpcController* controller, const pb::mdsv2::FlushFsUsageRequest* request,
-                      pb::mdsv2::FlushFsUsageResponse* response, TraceClosure* done);
   void DoSetDirQuota(google::protobuf::RpcController* controller, const pb::mdsv2::SetDirQuotaRequest* request,
                      pb::mdsv2::SetDirQuotaResponse* response, TraceClosure* done);
   void DoGetDirQuota(google::protobuf::RpcController* controller, const pb::mdsv2::GetDirQuotaRequest* request,
@@ -326,8 +319,6 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
                         pb::mdsv2::DeleteDirQuotaResponse* response, TraceClosure* done);
   void DoLoadDirQuotas(google::protobuf::RpcController* controller, const pb::mdsv2::LoadDirQuotasRequest* request,
                        pb::mdsv2::LoadDirQuotasResponse* response, TraceClosure* done);
-  void DoFlushDirUsages(google::protobuf::RpcController* controller, const pb::mdsv2::FlushDirUsagesRequest* request,
-                        pb::mdsv2::FlushDirUsagesResponse* response, TraceClosure* done);
 
   // fs statistics
   void DoSetFsStats(google::protobuf::RpcController* controller, const pb::mdsv2::SetFsStatsRequest* request,

@@ -149,8 +149,8 @@ Status MDSClient::Heartbeat() {
   client->set_port(client_id_.Port());
   client->set_mountpoint(client_id_.Mountpoint());
 
-  auto status =
-      SendRequest(get_mds_fn, "MDSService", "Heartbeat", request, response);
+  auto status = SendRequest(nullptr, get_mds_fn, "MDSService", "Heartbeat",
+                            request, response);
   if (!status.ok()) {
     return status;
   }
@@ -250,7 +250,8 @@ uint64_t MDSClient::GetInodeVersion(Ino ino) {
   return version;
 }
 
-Status MDSClient::Lookup(Ino parent, const std::string& name, Attr& out_attr) {
+Status MDSClient::Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
+                         Attr& out_attr) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, parent]() -> MDSMeta {
@@ -267,7 +268,7 @@ Status MDSClient::Lookup(Ino parent, const std::string& name, Attr& out_attr) {
   request.set_name(name);
 
   auto status =
-      SendRequest(get_mds_fn, "MDSService", "Lookup", request, response);
+      SendRequest(ctx, get_mds_fn, "MDSService", "Lookup", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -279,7 +280,7 @@ Status MDSClient::Lookup(Ino parent, const std::string& name, Attr& out_attr) {
     if (parent_memo_->GetVersion(inode.ino(), last_version) &&
         inode.version() < last_version) {
       // fetch last inode
-      status = GetAttr(inode.ino(), out_attr);
+      status = GetAttr(ctx, inode.ino(), out_attr);
       if (status.ok()) {
         parent_memo_->Upsert(out_attr.ino, parent);
         return Status::OK();
@@ -300,8 +301,9 @@ Status MDSClient::Lookup(Ino parent, const std::string& name, Attr& out_attr) {
   return Status::OK();
 }
 
-Status MDSClient::MkNod(Ino parent, const std::string& name, uint32_t uid,
-                        uint32_t gid, mode_t mode, dev_t rdev, Attr& out_attr) {
+Status MDSClient::MkNod(ContextSPtr ctx, Ino parent, const std::string& name,
+                        uint32_t uid, uint32_t gid, mode_t mode, dev_t rdev,
+                        Attr& out_attr) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, parent]() -> MDSMeta {
@@ -324,7 +326,7 @@ Status MDSClient::MkNod(Ino parent, const std::string& name, uint32_t uid,
   request.set_length(0);
 
   auto status =
-      SendRequest(get_mds_fn, "MDSService", "MkNod", request, response);
+      SendRequest(ctx, get_mds_fn, "MDSService", "MkNod", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -338,8 +340,9 @@ Status MDSClient::MkNod(Ino parent, const std::string& name, uint32_t uid,
   return Status::OK();
 }
 
-Status MDSClient::MkDir(Ino parent, const std::string& name, uint32_t uid,
-                        uint32_t gid, mode_t mode, dev_t rdev, Attr& out_attr) {
+Status MDSClient::MkDir(ContextSPtr ctx, Ino parent, const std::string& name,
+                        uint32_t uid, uint32_t gid, mode_t mode, dev_t rdev,
+                        Attr& out_attr) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, parent]() -> MDSMeta {
@@ -362,7 +365,7 @@ Status MDSClient::MkDir(Ino parent, const std::string& name, uint32_t uid,
   request.set_length(0);
 
   auto status =
-      SendRequest(get_mds_fn, "MDSService", "MkDir", request, response);
+      SendRequest(ctx, get_mds_fn, "MDSService", "MkDir", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -376,7 +379,7 @@ Status MDSClient::MkDir(Ino parent, const std::string& name, uint32_t uid,
   return Status::OK();
 }
 
-Status MDSClient::RmDir(Ino parent, const std::string& name) {
+Status MDSClient::RmDir(ContextSPtr ctx, Ino parent, const std::string& name) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, parent]() -> MDSMeta {
@@ -393,7 +396,7 @@ Status MDSClient::RmDir(Ino parent, const std::string& name) {
   request.set_name(name);
 
   auto status =
-      SendRequest(get_mds_fn, "MDSService", "RmDir", request, response);
+      SendRequest(ctx, get_mds_fn, "MDSService", "RmDir", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -401,7 +404,8 @@ Status MDSClient::RmDir(Ino parent, const std::string& name) {
   return Status::OK();
 }
 
-Status MDSClient::ReadDir(Ino ino, const std::string& last_name, uint32_t limit,
+Status MDSClient::ReadDir(ContextSPtr ctx, Ino ino,
+                          const std::string& last_name, uint32_t limit,
                           bool with_attr, std::vector<DirEntry>& entries) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
@@ -419,7 +423,7 @@ Status MDSClient::ReadDir(Ino ino, const std::string& last_name, uint32_t limit,
   request.set_with_attr(with_attr);
 
   auto status =
-      SendRequest(get_mds_fn, "MDSService", "ReadDir", request, response);
+      SendRequest(ctx, get_mds_fn, "MDSService", "ReadDir", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -433,7 +437,8 @@ Status MDSClient::ReadDir(Ino ino, const std::string& last_name, uint32_t limit,
   return Status::OK();
 }
 
-Status MDSClient::Open(Ino ino, int flags, std::string& session_id) {
+Status MDSClient::Open(ContextSPtr ctx, Ino ino, int flags,
+                       std::string& session_id) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, ino]() -> MDSMeta { return GetMds(ino); };
@@ -446,7 +451,7 @@ Status MDSClient::Open(Ino ino, int flags, std::string& session_id) {
   request.set_flags(flags);
 
   auto status =
-      SendRequest(get_mds_fn, "MDSService", "Open", request, response);
+      SendRequest(ctx, get_mds_fn, "MDSService", "Open", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -458,7 +463,8 @@ Status MDSClient::Open(Ino ino, int flags, std::string& session_id) {
   return Status::OK();
 }
 
-Status MDSClient::Release(Ino ino, const std::string& session_id) {
+Status MDSClient::Release(ContextSPtr ctx, Ino ino,
+                          const std::string& session_id) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, ino]() -> MDSMeta { return GetMds(ino); };
@@ -471,7 +477,7 @@ Status MDSClient::Release(Ino ino, const std::string& session_id) {
   request.set_session_id(session_id);
 
   auto status =
-      SendRequest(get_mds_fn, "MDSService", "Release", request, response);
+      SendRequest(ctx, get_mds_fn, "MDSService", "Release", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -479,8 +485,8 @@ Status MDSClient::Release(Ino ino, const std::string& session_id) {
   return Status::OK();
 }
 
-Status MDSClient::Link(Ino ino, Ino new_parent, const std::string& new_name,
-                       Attr& out_attr) {
+Status MDSClient::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
+                       const std::string& new_name, Attr& out_attr) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, new_parent]() -> MDSMeta {
@@ -498,7 +504,7 @@ Status MDSClient::Link(Ino ino, Ino new_parent, const std::string& new_name,
   request.set_new_name(new_name);
 
   auto status =
-      SendRequest(get_mds_fn, "MDSService", "Link", request, response);
+      SendRequest(ctx, get_mds_fn, "MDSService", "Link", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -512,7 +518,7 @@ Status MDSClient::Link(Ino ino, Ino new_parent, const std::string& new_name,
   return Status::OK();
 }
 
-Status MDSClient::UnLink(Ino parent, const std::string& name) {
+Status MDSClient::UnLink(ContextSPtr ctx, Ino parent, const std::string& name) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, parent]() -> MDSMeta {
@@ -529,7 +535,7 @@ Status MDSClient::UnLink(Ino parent, const std::string& name) {
   request.set_name(name);
 
   auto status =
-      SendRequest(get_mds_fn, "MDSService", "UnLink", request, response);
+      SendRequest(ctx, get_mds_fn, "MDSService", "UnLink", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -537,9 +543,9 @@ Status MDSClient::UnLink(Ino parent, const std::string& name) {
   return Status::OK();
 }
 
-Status MDSClient::Symlink(Ino parent, const std::string& name, uint32_t uid,
-                          uint32_t gid, const std::string& symlink,
-                          Attr& out_attr) {
+Status MDSClient::Symlink(ContextSPtr ctx, Ino parent, const std::string& name,
+                          uint32_t uid, uint32_t gid,
+                          const std::string& symlink, Attr& out_attr) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, parent]() -> MDSMeta {
@@ -560,7 +566,7 @@ Status MDSClient::Symlink(Ino parent, const std::string& name, uint32_t uid,
   request.set_gid(gid);
 
   auto status =
-      SendRequest(get_mds_fn, "MDSService", "Symlink", request, response);
+      SendRequest(ctx, get_mds_fn, "MDSService", "Symlink", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -575,7 +581,7 @@ Status MDSClient::Symlink(Ino parent, const std::string& name, uint32_t uid,
   return Status::OK();
 }
 
-Status MDSClient::ReadLink(Ino ino, std::string& symlink) {
+Status MDSClient::ReadLink(ContextSPtr ctx, Ino ino, std::string& symlink) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, ino]() -> MDSMeta { return GetMds(ino); };
@@ -589,7 +595,7 @@ Status MDSClient::ReadLink(Ino ino, std::string& symlink) {
   request.set_ino(ino);
 
   auto status =
-      SendRequest(get_mds_fn, "MDSService", "ReadLink", request, response);
+      SendRequest(ctx, get_mds_fn, "MDSService", "ReadLink", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -599,7 +605,7 @@ Status MDSClient::ReadLink(Ino ino, std::string& symlink) {
   return Status::OK();
 }
 
-Status MDSClient::GetAttr(Ino ino, Attr& out_attr) {
+Status MDSClient::GetAttr(ContextSPtr ctx, Ino ino, Attr& out_attr) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   bool is_fallback = false;
@@ -611,15 +617,15 @@ Status MDSClient::GetAttr(Ino ino, Attr& out_attr) {
   pb::mdsv2::GetAttrRequest request;
   pb::mdsv2::GetAttrResponse response;
 
-  auto* ctx = request.mutable_context();
-  ctx->set_is_bypass_cache(is_fallback);
-  ctx->set_inode_version(GetInodeVersion(ino));
+  auto* mut_ctx = request.mutable_context();
+  mut_ctx->set_is_bypass_cache(is_fallback);
+  mut_ctx->set_inode_version(GetInodeVersion(ino));
 
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
 
   auto status =
-      SendRequest(get_mds_fn, "MDSService", "GetAttr", request, response);
+      SendRequest(ctx, get_mds_fn, "MDSService", "GetAttr", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -631,8 +637,8 @@ Status MDSClient::GetAttr(Ino ino, Attr& out_attr) {
   return Status::OK();
 }
 
-Status MDSClient::SetAttr(Ino ino, const Attr& attr, int to_set,
-                          Attr& out_attr) {
+Status MDSClient::SetAttr(ContextSPtr ctx, Ino ino, const Attr& attr,
+                          int to_set, Attr& out_attr) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, ino]() -> MDSMeta {
@@ -696,7 +702,7 @@ Status MDSClient::SetAttr(Ino ino, const Attr& attr, int to_set,
   request.set_to_set(temp_to_set);
 
   auto status =
-      SendRequest(get_mds_fn, "MDSService", "SetAttr", request, response);
+      SendRequest(ctx, get_mds_fn, "MDSService", "SetAttr", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -708,7 +714,7 @@ Status MDSClient::SetAttr(Ino ino, const Attr& attr, int to_set,
   return Status::OK();
 }
 
-Status MDSClient::GetXAttr(Ino ino, const std::string& name,
+Status MDSClient::GetXAttr(ContextSPtr ctx, Ino ino, const std::string& name,
                            std::string& value) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
@@ -721,16 +727,16 @@ Status MDSClient::GetXAttr(Ino ino, const std::string& name,
   pb::mdsv2::GetXAttrRequest request;
   pb::mdsv2::GetXAttrResponse response;
 
-  auto* ctx = request.mutable_context();
-  ctx->set_is_bypass_cache(is_fallback);
-  ctx->set_inode_version(GetInodeVersion(ino));
+  auto* mut_ctx = request.mutable_context();
+  mut_ctx->set_is_bypass_cache(is_fallback);
+  mut_ctx->set_inode_version(GetInodeVersion(ino));
 
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
   request.set_name(name);
 
   auto status =
-      SendRequest(get_mds_fn, "MDSService", "GetXAttr", request, response);
+      SendRequest(ctx, get_mds_fn, "MDSService", "GetXAttr", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -740,7 +746,7 @@ Status MDSClient::GetXAttr(Ino ino, const std::string& name,
   return Status::OK();
 }
 
-Status MDSClient::SetXAttr(Ino ino, const std::string& name,
+Status MDSClient::SetXAttr(ContextSPtr ctx, Ino ino, const std::string& name,
                            const std::string& value) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
@@ -756,7 +762,7 @@ Status MDSClient::SetXAttr(Ino ino, const std::string& name,
   request.mutable_xattrs()->insert({name, value});
 
   auto status =
-      SendRequest(get_mds_fn, "MDSService", "SetXAttr", request, response);
+      SendRequest(ctx, get_mds_fn, "MDSService", "SetXAttr", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -766,7 +772,8 @@ Status MDSClient::SetXAttr(Ino ino, const std::string& name,
   return Status::OK();
 }
 
-Status MDSClient::RemoveXAttr(Ino ino, const std::string& name) {
+Status MDSClient::RemoveXAttr(ContextSPtr ctx, Ino ino,
+                              const std::string& name) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, ino]() -> MDSMeta {
@@ -780,8 +787,8 @@ Status MDSClient::RemoveXAttr(Ino ino, const std::string& name) {
   request.set_ino(ino);
   request.set_name(name);
 
-  auto status =
-      SendRequest(get_mds_fn, "MDSService", "RemoveXAttr", request, response);
+  auto status = SendRequest(ctx, get_mds_fn, "MDSService", "RemoveXAttr",
+                            request, response);
   if (!status.ok()) {
     return status;
   }
@@ -791,7 +798,7 @@ Status MDSClient::RemoveXAttr(Ino ino, const std::string& name) {
   return Status::OK();
 }
 
-Status MDSClient::ListXAttr(Ino ino,
+Status MDSClient::ListXAttr(ContextSPtr ctx, Ino ino,
                             std::map<std::string, std::string>& xattrs) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
@@ -807,8 +814,8 @@ Status MDSClient::ListXAttr(Ino ino,
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
 
-  auto status =
-      SendRequest(get_mds_fn, "MDSService", "ListXAttr", request, response);
+  auto status = SendRequest(ctx, get_mds_fn, "MDSService", "ListXAttr", request,
+                            response);
   if (!status.ok()) {
     return status;
   }
@@ -820,8 +827,9 @@ Status MDSClient::ListXAttr(Ino ino,
   return Status::OK();
 }
 
-Status MDSClient::Rename(Ino old_parent, const std::string& old_name,
-                         Ino new_parent, const std::string& new_name) {
+Status MDSClient::Rename(ContextSPtr ctx, Ino old_parent,
+                         const std::string& old_name, Ino new_parent,
+                         const std::string& new_name) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, new_parent]() -> MDSMeta {
@@ -850,7 +858,7 @@ Status MDSClient::Rename(Ino old_parent, const std::string& old_name,
   request.set_new_name(new_name);
 
   auto status =
-      SendRequest(get_mds_fn, "MDSService", "Rename", request, response);
+      SendRequest(ctx, get_mds_fn, "MDSService", "Rename", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -887,7 +895,7 @@ static pb::mdsv2::Slice ToSlice(const Slice& slice) {
   return out_slice;
 }
 
-Status MDSClient::NewSliceId(Ino ino, uint64_t* id) {
+Status MDSClient::NewSliceId(ContextSPtr ctx, Ino ino, uint64_t* id) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, ino]() -> MDSMeta { return GetMds(ino); };
@@ -897,8 +905,8 @@ Status MDSClient::NewSliceId(Ino ino, uint64_t* id) {
 
   request.set_alloc_num(1);
 
-  auto status =
-      SendRequest(get_mds_fn, "MDSService", "AllocSliceId", request, response);
+  auto status = SendRequest(ctx, get_mds_fn, "MDSService", "AllocSliceId",
+                            request, response);
   if (!status.ok()) {
     return status;
   }
@@ -908,7 +916,7 @@ Status MDSClient::NewSliceId(Ino ino, uint64_t* id) {
   return Status::OK();
 }
 
-Status MDSClient::ReadSlice(Ino ino, uint64_t index,
+Status MDSClient::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                             std::vector<Slice>* slices) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
   CHECK(slices != nullptr) << "slices is nullptr.";
@@ -921,16 +929,16 @@ Status MDSClient::ReadSlice(Ino ino, uint64_t index,
   pb::mdsv2::ReadSliceRequest request;
   pb::mdsv2::ReadSliceResponse response;
 
-  auto* ctx = request.mutable_context();
-  ctx->set_is_bypass_cache(is_fallback);
-  ctx->set_inode_version(GetInodeVersion(ino));
+  auto* mut_ctx = request.mutable_context();
+  mut_ctx->set_is_bypass_cache(is_fallback);
+  mut_ctx->set_inode_version(GetInodeVersion(ino));
 
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
   request.set_chunk_index(index);
 
-  auto status =
-      SendRequest(get_mds_fn, "MDSService", "ReadSlice", request, response);
+  auto status = SendRequest(ctx, get_mds_fn, "MDSService", "ReadSlice", request,
+                            response);
   if (!status.ok()) {
     return status;
   }
@@ -942,7 +950,7 @@ Status MDSClient::ReadSlice(Ino ino, uint64_t index,
   return Status::OK();
 }
 
-Status MDSClient::WriteSlice(Ino ino, uint64_t index,
+Status MDSClient::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                              const std::vector<Slice>& slices) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
@@ -966,8 +974,8 @@ Status MDSClient::WriteSlice(Ino ino, uint64_t index,
     *request.add_slices() = ToSlice(slice);
   }
 
-  auto status =
-      SendRequest(get_mds_fn, "MDSService", "WriteSlice", request, response);
+  auto status = SendRequest(ctx, get_mds_fn, "MDSService", "WriteSlice",
+                            request, response);
   if (!status.ok()) {
     return status;
   }
@@ -975,8 +983,8 @@ Status MDSClient::WriteSlice(Ino ino, uint64_t index,
   return Status::OK();
 }
 
-Status MDSClient::Fallocate(Ino ino, int32_t mode, uint64_t offset,
-                            uint64_t length) {
+Status MDSClient::Fallocate(ContextSPtr ctx, Ino ino, int32_t mode,
+                            uint64_t offset, uint64_t length) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, ino]() -> MDSMeta { return GetMds(ino); };
@@ -990,8 +998,8 @@ Status MDSClient::Fallocate(Ino ino, int32_t mode, uint64_t offset,
   request.set_offset(offset);
   request.set_len(length);
 
-  auto status =
-      SendRequest(get_mds_fn, "MDSService", "Fallocate", request, response);
+  auto status = SendRequest(ctx, get_mds_fn, "MDSService", "Fallocate", request,
+                            response);
   if (!status.ok()) {
     return status;
   }
@@ -1003,13 +1011,14 @@ Status MDSClient::Fallocate(Ino ino, int32_t mode, uint64_t offset,
   return Status::OK();
 }
 
-Status MDSClient::GetFsQuota(FsStat& fs_stat) {
+Status MDSClient::GetFsQuota(ContextSPtr ctx, FsStat& fs_stat) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   pb::mdsv2::GetFsQuotaRequest request;
   pb::mdsv2::GetFsQuotaResponse response;
 
   request.set_fs_id(fs_id_);
+  request.mutable_info()->set_request_id(ctx->TraceId());
 
   auto status =
       rpc_->SendRequest("MDSService", "GetFsQuota", request, response);

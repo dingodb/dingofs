@@ -53,7 +53,7 @@ DEFINE_uint32(mds_quota_worker_max_pending_num, 4096, "quota worker max pending 
 DEFINE_uint32(mds_crontab_heartbeat_interval_s, 5, "heartbeat interval seconds");
 DEFINE_uint32(mds_crontab_fsinfosync_interval_s, 10, "fs info sync interval seconds");
 DEFINE_uint32(mds_crontab_mdsmonitor_interval_s, 5, "mds monitor interval seconds");
-DEFINE_uint32(mds_crontab_quota_sync_interval_s, 6, "quota sync interval seconds");
+DEFINE_uint32(mds_crontab_quota_sync_interval_s, 5, "quota sync interval seconds");
 DEFINE_uint32(mds_crontab_gc_interval_s, 60, "gc interval seconds");
 
 // log config

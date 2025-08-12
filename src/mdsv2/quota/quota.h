@@ -131,6 +131,28 @@ class UpdateDirUsageTask : public TaskRunnable {
   int64_t inode_delta_;
 };
 
+class DeleteDirQuotaTask;
+using DeleteDirQuotaTaskSPtr = std::shared_ptr<DeleteDirQuotaTask>;
+
+class DeleteDirQuotaTask : public TaskRunnable {
+ public:
+  DeleteDirQuotaTask(QuotaManagerSPtr quota_manager, Ino ino) : quota_manager_(quota_manager), ino_(ino) {}
+
+  ~DeleteDirQuotaTask() override = default;
+
+  static DeleteDirQuotaTaskSPtr New(QuotaManagerSPtr quota_manager, Ino ino) {
+    return std::make_shared<DeleteDirQuotaTask>(quota_manager, ino);
+  }
+
+  std::string Type() override { return "DeleteDirQuotaTask"; }
+
+  void Run() override;
+
+ private:
+  QuotaManagerSPtr quota_manager_;
+  Ino ino_;
+};
+
 // manages filesystem and directory quotas
 // include cache and store
 class QuotaManager : public std::enable_shared_from_this<QuotaManager> {
@@ -166,11 +188,12 @@ class QuotaManager : public std::enable_shared_from_this<QuotaManager> {
   Status SetDirQuota(Trace& trace, Ino ino, const QuotaEntry& quota);
   Status GetDirQuota(Trace& trace, Ino ino, QuotaEntry& quota);
   Status DeleteDirQuota(Trace& trace, Ino ino);
+  void AsyncDeleteDirQuota(Ino ino);
   Status LoadDirQuotas(Trace& trace, std::map<Ino, QuotaEntry>& quota_entry_map);
 
   void UpdateFsUsage(int64_t byte_delta, int64_t inode_delta);
   void UpdateDirUsage(Ino parent, int64_t byte_delta, int64_t inode_delta);
-  void AysncUpdateDirUsage(Ino parent, int64_t byte_delta, int64_t inode_delta);
+  void AsyncUpdateDirUsage(Ino parent, int64_t byte_delta, int64_t inode_delta);
 
   bool CheckQuota(Ino ino, int64_t byte_delta, int64_t inode_delta);
   QuotaSPtr GetNearestDirQuota(Ino ino);

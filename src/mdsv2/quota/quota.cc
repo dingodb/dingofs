@@ -247,6 +247,11 @@ bool DirQuotaMap::HasQuota() {
 
 void UpdateDirUsageTask::Run() { quota_manager_->UpdateDirUsage(parent_, byte_delta_, inode_delta_); }
 
+void DeleteDirQuotaTask::Run() {
+  class Trace trace;
+  quota_manager_->DeleteDirQuota(trace, ino_);
+}
+
 QuotaManagerSPtr QuotaManager::GetSelfPtr() { return std::dynamic_pointer_cast<QuotaManager>(shared_from_this()); }
 
 bool QuotaManager::Init() {
@@ -276,7 +281,7 @@ void QuotaManager::UpdateDirUsage(Ino parent, int64_t byte_delta, int64_t inode_
   dir_quota_map_.UpdateUsage(parent, byte_delta, inode_delta);
 }
 
-void QuotaManager::AysncUpdateDirUsage(Ino parent, int64_t byte_delta, int64_t inode_delta) {
+void QuotaManager::AsyncUpdateDirUsage(Ino parent, int64_t byte_delta, int64_t inode_delta) {
   auto task = UpdateDirUsageTask::New(GetSelfPtr(), parent, byte_delta, inode_delta);
 
   if (!worker_set_->ExecuteHash(parent, task)) {
@@ -382,6 +387,14 @@ Status QuotaManager::DeleteDirQuota(Trace& trace, Ino ino) {
   dir_quota_map_.DeleteQuota(ino);
 
   return Status::OK();
+}
+
+void QuotaManager::AsyncDeleteDirQuota(Ino ino) {
+  auto task = DeleteDirQuotaTask::New(GetSelfPtr(), ino);
+
+  if (!worker_set_->ExecuteHash(ino, task)) {
+    DINGO_LOG(ERROR) << fmt::format("[quota] async delete dir quota fail, ino({}).", ino);
+  }
 }
 
 Status QuotaManager::LoadDirQuotas(Trace& trace, std::map<Ino, QuotaEntry>& quota_entry_map) {  // NOLINT

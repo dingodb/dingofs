@@ -38,8 +38,9 @@ class Context {
   Context(const std::string& trace_id, const std::string& sub_trace_id = "")
       : trace_id_(trace_id), sub_trace_id_(sub_trace_id) {}
 
-  std::string TraceId() const { return trace_id_; }
-  std::string SubTraceId() const { return sub_trace_id_; }
+  const std::string& TraceId() const { return trace_id_; }
+  const std::string& SubTraceId() const { return sub_trace_id_; }
+
   std::string StrTraceId() const {
     if (sub_trace_id_.empty()) {
       return absl::StrFormat("[%s]", trace_id_);

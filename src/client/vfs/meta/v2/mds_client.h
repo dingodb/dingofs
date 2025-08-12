@@ -23,6 +23,7 @@
 #include "client/vfs/meta/v2/client_id.h"
 #include "client/vfs/meta/v2/mds_router.h"
 #include "client/vfs/meta/v2/rpc.h"
+#include "common/context.h"
 #include "common/status.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
@@ -76,44 +77,56 @@ class MDSClient {
                  const pb::mdsv2::MountPoint& mount_point);
   Status UmountFs(const std::string& name, const std::string& client_id);
 
-  Status Lookup(Ino parent, const std::string& name, Attr& out_attr);
+  Status Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
+                Attr& out_attr);
 
-  Status MkNod(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
-               mode_t mode, dev_t rdev, Attr& out_attr);
-  Status MkDir(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
-               mode_t mode, dev_t rdev, Attr& out_attr);
-  Status RmDir(Ino parent, const std::string& name);
+  Status MkNod(ContextSPtr ctx, Ino parent, const std::string& name,
+               uint32_t uid, uint32_t gid, mode_t mode, dev_t rdev,
+               Attr& out_attr);
+  Status MkDir(ContextSPtr ctx, Ino parent, const std::string& name,
+               uint32_t uid, uint32_t gid, mode_t mode, dev_t rdev,
+               Attr& out_attr);
+  Status RmDir(ContextSPtr ctx, Ino parent, const std::string& name);
 
-  Status ReadDir(Ino ino, const std::string& last_name, uint32_t limit,
-                 bool with_attr, std::vector<DirEntry>& entries);
+  Status ReadDir(ContextSPtr ctx, Ino ino, const std::string& last_name,
+                 uint32_t limit, bool with_attr,
+                 std::vector<DirEntry>& entries);
 
-  Status Open(Ino ino, int flags, std::string& session_id);
-  Status Release(Ino ino, const std::string& session_id);
+  Status Open(ContextSPtr ctx, Ino ino, int flags, std::string& session_id);
+  Status Release(ContextSPtr ctx, Ino ino, const std::string& session_id);
 
-  Status Link(Ino ino, Ino new_parent, const std::string& new_name,
-              Attr& out_attr);
-  Status UnLink(Ino parent, const std::string& name);
-  Status Symlink(Ino parent, const std::string& name, uint32_t uid,
-                 uint32_t gid, const std::string& symlink, Attr& out_attr);
-  Status ReadLink(Ino ino, std::string& symlink);
+  Status Link(ContextSPtr ctx, Ino ino, Ino new_parent,
+              const std::string& new_name, Attr& out_attr);
+  Status UnLink(ContextSPtr ctx, Ino parent, const std::string& name);
+  Status Symlink(ContextSPtr ctx, Ino parent, const std::string& name,
+                 uint32_t uid, uint32_t gid, const std::string& symlink,
+                 Attr& out_attr);
+  Status ReadLink(ContextSPtr ctx, Ino ino, std::string& symlink);
 
-  Status GetAttr(Ino ino, Attr& out_attr);
-  Status SetAttr(Ino ino, const Attr& attr, int to_set, Attr& out_attr);
-  Status GetXAttr(Ino ino, const std::string& name, std::string& value);
-  Status SetXAttr(Ino ino, const std::string& name, const std::string& value);
-  Status RemoveXAttr(Ino ino, const std::string& name);
-  Status ListXAttr(Ino ino, std::map<std::string, std::string>& xattrs);
+  Status GetAttr(ContextSPtr ctx, Ino ino, Attr& out_attr);
+  Status SetAttr(ContextSPtr ctx, Ino ino, const Attr& attr, int to_set,
+                 Attr& out_attr);
+  Status GetXAttr(ContextSPtr ctx, Ino ino, const std::string& name,
+                  std::string& value);
+  Status SetXAttr(ContextSPtr ctx, Ino ino, const std::string& name,
+                  const std::string& value);
+  Status RemoveXAttr(ContextSPtr ctx, Ino ino, const std::string& name);
+  Status ListXAttr(ContextSPtr ctx, Ino ino,
+                   std::map<std::string, std::string>& xattrs);
 
-  Status Rename(Ino old_parent, const std::string& old_name, Ino new_parent,
-                const std::string& new_name);
+  Status Rename(ContextSPtr ctx, Ino old_parent, const std::string& old_name,
+                Ino new_parent, const std::string& new_name);
 
-  Status NewSliceId(Ino ino, uint64_t* id);
-  Status ReadSlice(Ino ino, uint64_t index, std::vector<Slice>* slices);
-  Status WriteSlice(Ino ino, uint64_t index, const std::vector<Slice>& slices);
+  Status NewSliceId(ContextSPtr ctx, Ino ino, uint64_t* id);
+  Status ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
+                   std::vector<Slice>* slices);
+  Status WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
+                    const std::vector<Slice>& slices);
 
-  Status Fallocate(Ino ino, int32_t mode, uint64_t offset, uint64_t length);
+  Status Fallocate(ContextSPtr ctx, Ino ino, int32_t mode, uint64_t offset,
+                   uint64_t length);
 
-  Status GetFsQuota(FsStat& fs_stat);
+  Status GetFsQuota(ContextSPtr ctx, FsStat& fs_stat);
 
  private:
   static Status DoGetFsInfo(RPCPtr rpc, pb::mdsv2::GetFsInfoRequest& request,
@@ -137,7 +150,8 @@ class MDSClient {
   void SetAncestorInContext(Request& request, Ino ino);
 
   template <typename Request, typename Response>
-  Status SendRequest(GetMdsFn get_mds_fn, const std::string& service_name,
+  Status SendRequest(ContextSPtr ctx, GetMdsFn get_mds_fn,
+                     const std::string& service_name,
                      const std::string& api_name, Request& request,
                      Response& response);
 
@@ -169,14 +183,16 @@ void MDSClient::SetAncestorInContext(Request& request, Ino ino) {
 }
 
 template <typename Request, typename Response>
-Status MDSClient::SendRequest(GetMdsFn get_mds_fn,
+Status MDSClient::SendRequest(ContextSPtr ctx, GetMdsFn get_mds_fn,
                               const std::string& service_name,
                               const std::string& api_name, Request& request,
                               Response& response) {
   MDSMeta mds_meta;
   bool is_refresh_mds = true;
 
-  request.mutable_info()->set_request_id(mdsv2::Helper::TimestampNs());
+  request.mutable_info()->set_request_id(
+      ctx ? ctx->TraceId() : std::to_string(mdsv2::Helper::TimestampNs()));
+
   request.mutable_context()->set_client_id(client_id_.ID());
   for (int retry = 0; retry < FLAGS_client_send_request_retry; ++retry) {
     request.mutable_context()->set_epoch(epoch_);

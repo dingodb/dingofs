@@ -25,7 +25,7 @@ namespace v2 {
 
 Status DirIterator::Seek() {
   std::vector<DirEntry> entries;
-  auto status = mds_client_->ReadDir(ino_, last_name_,
+  auto status = mds_client_->ReadDir(ctx_, ino_, last_name_,
                                      FLAGS_read_dir_batch_size, true, entries);
   if (!status.ok()) {
     return status;
@@ -56,7 +56,7 @@ void DirIterator::Next() {
 
   std::vector<DirEntry> entries;
   auto status = mds_client_->ReadDir(
-      ino_, last_name_, FLAGS_read_dir_batch_size, with_attr_, entries);
+      ctx_, ino_, last_name_, FLAGS_read_dir_batch_size, with_attr_, entries);
   if (!status.ok()) {
     return;
   }
@@ -169,7 +169,7 @@ bool DirIteratorManager::Load(MDSClientPtr mds_client,
 
   for (const auto& item : items) {
     Ino ino = item["ino"].asUInt64();
-    auto dir_iterator = DirIterator::New(mds_client, ino);
+    auto dir_iterator = DirIterator::New(nullptr, mds_client, ino);
     if (!dir_iterator->Load(item)) {
       LOG(ERROR) << fmt::format(
           "[meta.dir_iterator] load dir({}) iterator fail.", ino);

@@ -251,7 +251,7 @@ bool MDSV2FileSystem::InitCrontab() {
 }
 
 Status MDSV2FileSystem::StatFs(ContextSPtr ctx, Ino, FsStat* fs_stat) {
-  auto status = mds_client_->GetFsQuota(*fs_stat);
+  auto status = mds_client_->GetFsQuota(ctx, *fs_stat);
 
   if (fs_stat->max_bytes == 0) {
     fs_stat->max_bytes = INT64_MAX;
@@ -266,7 +266,7 @@ Status MDSV2FileSystem::StatFs(ContextSPtr ctx, Ino, FsStat* fs_stat) {
 
 Status MDSV2FileSystem::Lookup(ContextSPtr ctx, Ino parent,
                                const std::string& name, Attr* out_attr) {
-  auto status = mds_client_->Lookup(parent, name, *out_attr);
+  auto status = mds_client_->Lookup(ctx, parent, name, *out_attr);
   if (!status.ok()) {
     if (status.Errno() == pb::error::ENOT_FOUND) {
       return Status::NotExist("not found dentry");
@@ -294,7 +294,7 @@ Status MDSV2FileSystem::MkNod(ContextSPtr ctx, Ino parent,
                               uint32_t gid, uint32_t mode, uint64_t rdev,
                               Attr* out_attr) {
   auto status =
-      mds_client_->MkNod(parent, name, uid, gid, mode, rdev, *out_attr);
+      mds_client_->MkNod(ctx, parent, name, uid, gid, mode, rdev, *out_attr);
   if (!status.ok()) {
     return status;
   }
@@ -311,7 +311,7 @@ Status MDSV2FileSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
   }
 
   std::string session_id;
-  auto status = mds_client_->Open(ino, flags, session_id);
+  auto status = mds_client_->Open(ctx, ino, flags, session_id);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[meta.filesystem.{}] open ino({}) fail, error: {}.", name_, ino,
@@ -332,7 +332,7 @@ Status MDSV2FileSystem::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
   CHECK(!session_id.empty())
       << fmt::format("get file session fail, ino({}) fh({}).", ino, fh);
 
-  auto status = mds_client_->Release(ino, session_id);
+  auto status = mds_client_->Release(ctx, ino, session_id);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[meta.filesystem.{}] release ino({}) fail, error: {}.", name_, ino,
@@ -345,7 +345,7 @@ Status MDSV2FileSystem::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
 
 Status MDSV2FileSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                                   std::vector<Slice>* slices) {
-  auto status = mds_client_->ReadSlice(ino, index, slices);
+  auto status = mds_client_->ReadSlice(ctx, ino, index, slices);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[meta.filesystem.{}] ReeadSlice ino({}) fail, error: {}.", name_, ino,
@@ -357,7 +357,7 @@ Status MDSV2FileSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
 }
 
 Status MDSV2FileSystem::NewSliceId(ContextSPtr ctx, Ino ino, uint64_t* id) {
-  auto status = mds_client_->NewSliceId(ino, id);
+  auto status = mds_client_->NewSliceId(ctx, ino, id);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[meta.filesystem.{}] newsliceid fail, error: {}.", name_,
@@ -370,7 +370,7 @@ Status MDSV2FileSystem::NewSliceId(ContextSPtr ctx, Ino ino, uint64_t* id) {
 
 Status MDSV2FileSystem::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                                    const std::vector<Slice>& slices) {
-  auto status = mds_client_->WriteSlice(ino, index, slices);
+  auto status = mds_client_->WriteSlice(ctx, ino, index, slices);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[meta.filesystem.{}] writeslice ino({}) fail, error: {}.", name_, ino,
@@ -384,7 +384,8 @@ Status MDSV2FileSystem::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
 Status MDSV2FileSystem::MkDir(ContextSPtr ctx, Ino parent,
                               const std::string& name, uint32_t uid,
                               uint32_t gid, uint32_t mode, Attr* out_attr) {
-  auto status = mds_client_->MkDir(parent, name, uid, gid, mode, 0, *out_attr);
+  auto status =
+      mds_client_->MkDir(ctx, parent, name, uid, gid, mode, 0, *out_attr);
   if (!status.ok()) {
     return status;
   }
@@ -394,7 +395,7 @@ Status MDSV2FileSystem::MkDir(ContextSPtr ctx, Ino parent,
 
 Status MDSV2FileSystem::RmDir(ContextSPtr ctx, Ino parent,
                               const std::string& name) {
-  auto status = mds_client_->RmDir(parent, name);
+  auto status = mds_client_->RmDir(ctx, parent, name);
   if (!status.ok()) {
     if (status.Errno() == pb::error::ENOT_EMPTY) {
       return Status::NotEmpty("dir not empty");
@@ -406,7 +407,7 @@ Status MDSV2FileSystem::RmDir(ContextSPtr ctx, Ino parent,
 }
 
 Status MDSV2FileSystem::OpenDir(ContextSPtr ctx, Ino ino, uint64_t fh) {
-  auto dir_iterator = DirIterator::New(mds_client_, ino);
+  auto dir_iterator = DirIterator::New(ctx, mds_client_, ino);
   auto status = dir_iterator->Seek();
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
@@ -420,9 +421,8 @@ Status MDSV2FileSystem::OpenDir(ContextSPtr ctx, Ino ino, uint64_t fh) {
   return Status::OK();
 }
 
-Status MDSV2FileSystem::ReadDir(ContextSPtr ctx, Ino, uint64_t fh,
-                                uint64_t offset, bool with_attr,
-                                ReadDirHandler handler) {
+Status MDSV2FileSystem::ReadDir(ContextSPtr, Ino, uint64_t fh, uint64_t offset,
+                                bool with_attr, ReadDirHandler handler) {
   auto dir_iterator = dir_iterator_manager_.Get(fh);
   CHECK(dir_iterator != nullptr) << "dir_iterator is null";
 
@@ -439,14 +439,14 @@ Status MDSV2FileSystem::ReadDir(ContextSPtr ctx, Ino, uint64_t fh,
   return Status::OK();
 }
 
-Status MDSV2FileSystem::ReleaseDir(ContextSPtr ctx, Ino, uint64_t fh) {
+Status MDSV2FileSystem::ReleaseDir(ContextSPtr, Ino, uint64_t fh) {
   dir_iterator_manager_.Delete(fh);
   return Status::OK();
 }
 
 Status MDSV2FileSystem::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
                              const std::string& new_name, Attr* attr) {
-  auto status = mds_client_->Link(ino, new_parent, new_name, *attr);
+  auto status = mds_client_->Link(ctx, ino, new_parent, new_name, *attr);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[meta.filesystem.{}] link({}/{}) to ino({}) fail, error: {}.", name_,
@@ -459,7 +459,7 @@ Status MDSV2FileSystem::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
 
 Status MDSV2FileSystem::Unlink(ContextSPtr ctx, Ino parent,
                                const std::string& name) {
-  auto status = mds_client_->UnLink(parent, name);
+  auto status = mds_client_->UnLink(ctx, parent, name);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[meta.filesystem.{}] unlink({}/{}) fail, error: {}.", name_, parent,
@@ -474,7 +474,8 @@ Status MDSV2FileSystem::Symlink(ContextSPtr ctx, Ino parent,
                                 const std::string& name, uint32_t uid,
                                 uint32_t gid, const std::string& link,
                                 Attr* out_attr) {
-  auto status = mds_client_->Symlink(parent, name, uid, gid, link, *out_attr);
+  auto status =
+      mds_client_->Symlink(ctx, parent, name, uid, gid, link, *out_attr);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[meta.filesystem.{}] symlink({}/{}) fail, symlink({}) error: {}.",
@@ -486,7 +487,7 @@ Status MDSV2FileSystem::Symlink(ContextSPtr ctx, Ino parent,
 }
 
 Status MDSV2FileSystem::ReadLink(ContextSPtr ctx, Ino ino, std::string* link) {
-  auto status = mds_client_->ReadLink(ino, *link);
+  auto status = mds_client_->ReadLink(ctx, ino, *link);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[meta.filesystem.{}] readlink {} fail, error: {}.", name_, ino,
@@ -498,7 +499,7 @@ Status MDSV2FileSystem::ReadLink(ContextSPtr ctx, Ino ino, std::string* link) {
 }
 
 Status MDSV2FileSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* out_attr) {
-  auto status = mds_client_->GetAttr(ino, *out_attr);
+  auto status = mds_client_->GetAttr(ctx, ino, *out_attr);
   if (!status.ok()) {
     return Status::Internal(
         fmt::format("get attr fail, error: {}", ino, status.ToString()));
@@ -509,7 +510,7 @@ Status MDSV2FileSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* out_attr) {
 
 Status MDSV2FileSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
                                 const Attr& attr, Attr* out_attr) {
-  auto status = mds_client_->SetAttr(ino, attr, set, *out_attr);
+  auto status = mds_client_->SetAttr(ctx, ino, attr, set, *out_attr);
   if (!status.ok()) {
     return Status::Internal(fmt::format("set attr fail, ino({}) error: {}", ino,
                                         status.ToString()));
@@ -520,7 +521,7 @@ Status MDSV2FileSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
 
 Status MDSV2FileSystem::GetXattr(ContextSPtr ctx, Ino ino,
                                  const std::string& name, std::string* value) {
-  auto status = mds_client_->GetXAttr(ino, name, *value);
+  auto status = mds_client_->GetXAttr(ctx, ino, name, *value);
   if (!status.ok()) {
     return Status::NoData(status.Errno(), status.ToString());
   }
@@ -531,7 +532,7 @@ Status MDSV2FileSystem::GetXattr(ContextSPtr ctx, Ino ino,
 Status MDSV2FileSystem::SetXattr(ContextSPtr ctx, Ino ino,
                                  const std::string& name,
                                  const std::string& value, int) {
-  auto status = mds_client_->SetXAttr(ino, name, value);
+  auto status = mds_client_->SetXAttr(ctx, ino, name, value);
   if (!status.ok()) {
     return Status::Internal(
         fmt::format("set xattr({}/{}) fail, ino({}) error: {}", name, value,
@@ -543,7 +544,7 @@ Status MDSV2FileSystem::SetXattr(ContextSPtr ctx, Ino ino,
 
 Status MDSV2FileSystem::RemoveXattr(ContextSPtr ctx, Ino ino,
                                     const std::string& name) {
-  auto status = mds_client_->RemoveXAttr(ino, name);
+  auto status = mds_client_->RemoveXAttr(ctx, ino, name);
   if (!status.ok()) {
     return Status::Internal(
         fmt::format("remove xattr({}) fail, ino({}) error: {}", name, ino,
@@ -558,7 +559,7 @@ Status MDSV2FileSystem::ListXattr(ContextSPtr ctx, Ino ino,
   CHECK(xattrs != nullptr) << "xattrs is null.";
 
   std::map<std::string, std::string> xattr_map;
-  auto status = mds_client_->ListXAttr(ino, xattr_map);
+  auto status = mds_client_->ListXAttr(ctx, ino, xattr_map);
   if (!status.ok()) {
     return Status::Internal(fmt::format("list xattr fail, ino({}) error: {}",
                                         ino, status.ToString()));
@@ -571,10 +572,11 @@ Status MDSV2FileSystem::ListXattr(ContextSPtr ctx, Ino ino,
   return Status::OK();
 }
 
-Status MDSV2FileSystem::Rename(ContextSPtr, Ino old_parent,
+Status MDSV2FileSystem::Rename(ContextSPtr ctx, Ino old_parent,
                                const std::string& old_name, Ino new_parent,
                                const std::string& new_name) {
-  auto status = mds_client_->Rename(old_parent, old_name, new_parent, new_name);
+  auto status =
+      mds_client_->Rename(ctx, old_parent, old_name, new_parent, new_name);
   if (!status.ok()) {
     if (status.Errno() == pb::error::ENOT_EMPTY) {
       return Status::NotEmpty("dist dir not empty");

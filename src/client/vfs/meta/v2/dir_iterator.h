@@ -19,8 +19,8 @@
 
 #include <cstdint>
 
-#include "client/vfs/meta/v2/mds_client.h"
 #include "client/meta/vfs_meta.h"
+#include "client/vfs/meta/v2/mds_client.h"
 #include "common/status.h"
 #include "utils/concurrent/concurrent.h"
 
@@ -35,11 +35,12 @@ using DirIteratorSPtr = std::shared_ptr<DirIterator>;
 // used by read dir
 class DirIterator {
  public:
-  DirIterator(MDSClientPtr mds_client, Ino ino)
-      : mds_client_(mds_client), ino_(ino) {}
+  DirIterator(ContextSPtr ctx, MDSClientPtr mds_client, Ino ino)
+      : ctx_(ctx), mds_client_(mds_client), ino_(ino) {}
 
-  static DirIteratorSPtr New(MDSClientPtr mds_client, Ino ino) {
-    return std::make_shared<DirIterator>(mds_client, ino);
+  static DirIteratorSPtr New(ContextSPtr ctx, MDSClientPtr mds_client,
+                             Ino ino) {
+    return std::make_shared<DirIterator>(ctx, mds_client, ino);
   }
 
   Status Seek();
@@ -51,6 +52,8 @@ class DirIterator {
   bool Load(const Json::Value& value);
 
  private:
+  ContextSPtr ctx_;
+
   Ino ino_;
   // last file/dir name, used to read next batch
   std::string last_name_;

@@ -2204,48 +2204,6 @@ void MDSServiceImpl::GetFsQuota(google::protobuf::RpcController* controller,
   }
 }
 
-void MDSServiceImpl::DoFlushFsUsage(google::protobuf::RpcController* controller,
-                                    const pb::mdsv2::FlushFsUsageRequest* request,
-                                    pb::mdsv2::FlushFsUsageResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
-  brpc::ClosureGuard done_guard(done);
-  done->SetQueueWaitTime();
-
-  //   auto file_system = GetFileSystem(request->fs_id());
-  // if (file_system == nullptr) {
-  //   return ServiceHelper::SetError(response->mutable_error(),
-  //   pb::error::ENOT_FOUND, "fs not found");
-  // }
-  // auto& quota_manager = file_system->GetQuotaManager();
-
-  // const auto& req_ctx = request->context();
-  // Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
-
-  // auto status = quota_manager->FlushFsUsage(ctx, request->fs_id(),
-  // request->usage()); ServiceHelper::SetResponseInfo(ctx.GetTrace(),
-  // response->mutable_info()); if (BAIDU_UNLIKELY(!status.ok())) {
-  //   return ServiceHelper::SetError(response->mutable_error(),
-  //   status.error_code(), status.error_str());
-  // }
-}
-
-void MDSServiceImpl::FlushFsUsage(google::protobuf::RpcController* controller,
-                                  const pb::mdsv2::FlushFsUsageRequest* request,
-                                  pb::mdsv2::FlushFsUsageResponse* response, google::protobuf::Closure* done) {
-  auto* svr_done = new ServiceClosure(__func__, done, request, response);
-
-  // Run in queue.
-  auto task = std::make_shared<ServiceTask>(
-      [this, controller, request, response, svr_done]() { DoFlushFsUsage(controller, request, response, svr_done); });
-
-  bool ret = write_worker_set_->Execute(task);
-  if (BAIDU_UNLIKELY(!ret)) {
-    brpc::ClosureGuard done_guard(svr_done);
-    ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
-                            "WorkerSet queue is full, please wait and retry");
-  }
-}
-
 void MDSServiceImpl::DoSetDirQuota(google::protobuf::RpcController* controller,
                                    const pb::mdsv2::SetDirQuotaRequest* request,
                                    pb::mdsv2::SetDirQuotaResponse* response, TraceClosure* done) {
@@ -2405,46 +2363,6 @@ void MDSServiceImpl::LoadDirQuotas(google::protobuf::RpcController* controller,
   // Run in queue.
   auto task = std::make_shared<ServiceTask>(
       [this, controller, request, response, svr_done]() { DoLoadDirQuotas(controller, request, response, svr_done); });
-
-  bool ret = write_worker_set_->Execute(task);
-  if (BAIDU_UNLIKELY(!ret)) {
-    brpc::ClosureGuard done_guard(svr_done);
-    ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
-                            "WorkerSet queue is full, please wait and retry");
-  }
-}
-
-void MDSServiceImpl::DoFlushDirUsages(google::protobuf::RpcController* controller,
-                                      const pb::mdsv2::FlushDirUsagesRequest* request,
-                                      pb::mdsv2::FlushDirUsagesResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
-  brpc::ClosureGuard done_guard(done);
-  done->SetQueueWaitTime();
-
-  // const auto& req_ctx = request->context();
-  // Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
-
-  // std::map<uint64_t, pb::mdsv2::Usage> usages;
-  // for (const auto& [ino, usage] : request->usages()) {
-  //   usages[ino] = usage;
-  // }
-
-  // auto status = quota_processor_->FlushDirUsages(ctx, request->fs_id(),
-  // usages); ServiceHelper::SetResponseInfo(ctx.GetTrace(),
-  // response->mutable_info()); if (BAIDU_UNLIKELY(!status.ok())) {
-  //   return ServiceHelper::SetError(response->mutable_error(),
-  //   status.error_code(), status.error_str());
-  // }
-}
-
-void MDSServiceImpl::FlushDirUsages(google::protobuf::RpcController* controller,
-                                    const pb::mdsv2::FlushDirUsagesRequest* request,
-                                    pb::mdsv2::FlushDirUsagesResponse* response, google::protobuf::Closure* done) {
-  auto* svr_done = new ServiceClosure(__func__, done, request, response);
-
-  // Run in queue.
-  auto task = std::make_shared<ServiceTask>(
-      [this, controller, request, response, svr_done]() { DoFlushDirUsages(controller, request, response, svr_done); });
 
   bool ret = write_worker_set_->Execute(task);
   if (BAIDU_UNLIKELY(!ret)) {

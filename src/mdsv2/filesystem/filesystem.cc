@@ -686,7 +686,7 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
 
   // update quota
   quota_manager_->UpdateFsUsage(0, 1);
-  quota_manager_->AysncUpdateDirUsage(param.parent, 0, 1);
+  quota_manager_->AsyncUpdateDirUsage(param.parent, 0, 1);
 
   parent_memo_->Remeber(attr.ino(), param.parent);
 
@@ -750,7 +750,7 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& sess
   if (delta_bytes != 0) {
     quota_manager_->UpdateFsUsage(delta_bytes, 0);
     for (auto parent : attr.parents()) {
-      quota_manager_->AysncUpdateDirUsage(parent, delta_bytes, 0);
+      quota_manager_->AsyncUpdateDirUsage(parent, delta_bytes, 0);
     }
   }
 
@@ -876,7 +876,7 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
 
   // update quota
   quota_manager_->UpdateFsUsage(0, 1);
-  quota_manager_->AysncUpdateDirUsage(param.parent, 0, 1);
+  quota_manager_->AsyncUpdateDirUsage(param.parent, 0, 1);
 
   parent_memo_->Remeber(attr.ino(), param.parent);
 
@@ -911,19 +911,15 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name) {
     return Status(pb::error::ENOT_FOUND, fmt::format("child dentry({}) not found.", name));
   }
 
-  PartitionPtr partition = GetPartitionFromCache(dentry.INo());
-  if (partition != nullptr) {
-    InodeSPtr inode = partition->ParentInode();
-    if (inode->Nlink() > kEmptyDirMinLinkNum) {
-      return Status(pb::error::ENOT_EMPTY,
-                    fmt::format("dir({}/{}) is not empty, nlink({}).", parent, name, inode->Nlink()));
+  if (IsMonoPartition()) {
+    PartitionPtr partition = GetPartitionFromCache(dentry.INo());
+    if (partition != nullptr) {
+      InodeSPtr inode = partition->ParentInode();
+      if (inode->Nlink() > kEmptyDirMinLinkNum) {
+        return Status(pb::error::ENOT_EMPTY,
+                      fmt::format("dir({}/{}) is not empty, nlink({}).", parent, name, inode->Nlink()));
+      }
     }
-  }
-
-  // check directory is empty
-  if (partition->HasChild()) {
-    return Status(pb::error::ENOT_EMPTY,
-                  fmt::format("dir({}/{}) is not empty, nlink({}).", parent, name, dentry.Inode()->Nlink()));
   }
 
   // update parent memo
@@ -943,7 +939,7 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name) {
   }
 
   auto& result = operation.GetResult();
-  auto& parent_attr = result.attr;
+  auto& parent_attr = result.attr;  // parent
 
   // update cache
   parent_partition->DeleteChild(name);
@@ -952,12 +948,14 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name) {
 
   // update quota
   quota_manager_->UpdateFsUsage(0, -1);
-  quota_manager_->AysncUpdateDirUsage(parent, 0, -1);
+  quota_manager_->AsyncUpdateDirUsage(parent, 0, -1);
+  quota_manager_->AsyncDeleteDirQuota(dentry.INo());
 
   parent_memo_->Forget(dentry.INo());
 
   if (IsParentHashPartition()) {
     NotifyBuddyRefreshInode(std::move(parent_attr));
+    NotifyBuddyCleanPartitionCache(dentry.INo());
   }
 
   return Status::OK();
@@ -1060,7 +1058,7 @@ Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent, const std::string
   auto& child_attr = result.child_attr;
 
   // update quota
-  quota_manager_->AysncUpdateDirUsage(new_parent, child_attr.length(), 1);
+  quota_manager_->AsyncUpdateDirUsage(new_parent, child_attr.length(), 1);
 
   // update cache
   inode->UpdateIf(std::move(child_attr));
@@ -1139,7 +1137,7 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name) {
     quota_manager_->UpdateFsUsage(-delta_bytes, -1);
     chunk_cache_.Delete(child_attr.ino());
   }
-  quota_manager_->AysncUpdateDirUsage(parent, -delta_bytes, -1);
+  quota_manager_->AsyncUpdateDirUsage(parent, -delta_bytes, -1);
 
   // update cache
   partition->DeleteChild(name);
@@ -1243,7 +1241,7 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_par
 
   // update quota
   quota_manager_->UpdateFsUsage(0, 1);
-  quota_manager_->AysncUpdateDirUsage(new_parent, 0, 1);
+  quota_manager_->AsyncUpdateDirUsage(new_parent, 0, 1);
 
   entry_out.attr.Swap(&attr);
   entry_out.parent_version = parent_attr.version();
@@ -1362,7 +1360,7 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
     quota_manager_->UpdateFsUsage(change_bytes, 0);
 
     for (const auto& parent : attr.parents()) {
-      quota_manager_->AysncUpdateDirUsage(parent, change_bytes, 0);
+      quota_manager_->AsyncUpdateDirUsage(parent, change_bytes, 0);
     }
   }
 
@@ -1664,13 +1662,6 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
       }
     }
 
-    // update quota
-    if (is_exist_new_dentry) {
-      quota_manager_->UpdateFsUsage(0, -1);
-      int64_t delta_bytes = old_attr.type() != pb::mdsv2::SYM_LINK ? old_attr.length() : 0;
-      quota_manager_->AysncUpdateDirUsage(old_parent, delta_bytes, -1);
-    }
-
   } else {
     // clean partition cache
     NotifyBuddyCleanPartitionCache(old_parent);
@@ -1679,6 +1670,23 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
     // refresh parent of parent inode cache
     NotifyBuddyRefreshInode(std::move(old_parent_attr));
     if (!is_same_parent) NotifyBuddyRefreshInode(std::move(new_parent_attr));
+  }
+
+  // update quota
+  if (is_exist_new_dentry) {
+    // update fs quota
+    int64_t fs_delta_bytes = 0;
+    if (prev_new_attr.type() == pb::mdsv2::FileType::FILE && prev_new_attr.nlink() == 0) {
+      fs_delta_bytes -= prev_new_attr.length();
+    }
+    quota_manager_->UpdateFsUsage(fs_delta_bytes, -1);
+
+    // update dir quota
+    if (old_quota != nullptr && new_quota != nullptr) {
+      int64_t delta_bytes = 0;
+      if (prev_new_attr.type() == pb::mdsv2::FileType::FILE) delta_bytes -= prev_new_attr.length();
+      quota_manager_->AsyncUpdateDirUsage(old_parent, delta_bytes, -1);
+    }
   }
 
   return Status::OK();
@@ -1763,7 +1771,7 @@ Status FileSystem::WriteSlice(Context& ctx, Ino parent, Ino ino, uint64_t chunk_
   // update quota
   quota_manager_->UpdateFsUsage(length_delta, 0);
   for (const auto& parent : attr.parents()) {
-    quota_manager_->AysncUpdateDirUsage(parent, length_delta, 0);
+    quota_manager_->AsyncUpdateDirUsage(parent, length_delta, 0);
   }
 
   return Status::OK();

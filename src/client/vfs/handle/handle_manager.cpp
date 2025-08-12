@@ -50,6 +50,8 @@ void HandleManager::ReleaseHandler(uint64_t fh) {
 void HandleManager::FlushAll() {
   std::lock_guard<std::mutex> lock(mutex_);
   for (auto& [fh, handle] : handles_) {
+    if (handle->file == nullptr) continue;
+
     Status s = handle->file->Flush();
     if (!s.ok()) {
       LOG(ERROR) << "Failed to flush file handle: " << fh
