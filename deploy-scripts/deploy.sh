@@ -65,8 +65,8 @@ function deploy_server() {
 
   if [ "${FLAGS_replace_conf}" == "0" ]; then
     # conf file
-    dist_conf="${dstpath}/conf/${server_name}.toml"
-    cp $srcpath/confv2/${server_name}.template.toml $dist_conf
+    dist_conf="${dstpath}/conf/${server_name}.conf"
+    cp $srcpath/confv2/${server_name}.template.conf $dist_conf
 
     sed  -i 's,\$INSTANCE_ID\$,'"$instance_id"',g'                  $dist_conf
     sed  -i 's,\$SERVER_HOST\$,'"$SERVER_HOST"',g'                  $dist_conf

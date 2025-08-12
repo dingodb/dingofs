@@ -166,6 +166,7 @@ jobs:
         images: dingodatabase/dingofs
         tags: |
           type=raw,enable=${{ env.EVENT == 'tag' }},value=${{ env.TAG_NAME }}
+          type=raw,value=mdsv2-latest,enable=${{ env.BRANCH_NAME == 'main' && env.EVENT != 'tag'}}
           type=sha,prefix=mdsv2-,format=short,enable=${{ env.EVENT != 'tag' && env.BRANCH_NAME == 'main' }}
 
     - name: Build and push mdsv2
