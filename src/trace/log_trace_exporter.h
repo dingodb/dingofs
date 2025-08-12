@@ -14,35 +14,29 @@
  * limitations under the License.
  */
 
-#ifndef DINGODB_CLIENT_VFS_DATA_IFILE_H_
-#define DINGODB_CLIENT_VFS_DATA_IFILE_H_
+#ifndef DINGOFS_SRC_TRACE_LOG_TRACE_EXPORTER_H_
+#define DINGOFS_SRC_TRACE_LOG_TRACE_EXPORTER_H_
 
-#include <cstdint>
+#include <memory>
 
-#include "common/callback.h"
-#include "common/status.h"
+#include "trace/trace_exporter.h"
+#include "trace/trace_span.h"
 
 namespace dingofs {
-namespace client {
-namespace vfs {
 
-class IFile {
+class LogTraceExporter : public TraceExporter {
  public:
-  virtual ~IFile() = default;
+  explicit LogTraceExporter(const std::string& name,
+                            const std::string& log_dir);
 
-  virtual Status Write(const char* buf, uint64_t size, uint64_t offset,
-                       uint64_t* out_wsize) = 0;
+  ~LogTraceExporter() override;
 
-  virtual Status Read(char* buf, uint64_t size,
-                      uint64_t offset, uint64_t* out_rsize) = 0;
+  void Export(const TraceSpan& span) override;
 
-  virtual Status Flush() = 0;
-
-  virtual void AsyncFlush(StatusCallback cb) = 0;
+ private:
+  std::shared_ptr<spdlog::logger> logger_;
 };
 
-}  // namespace vfs
-}  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGODB_CLIENT_VFS_DATA_IFILE_H_
+#endif  // DINGOFS_SRC_TRACE_LOG_TRACE_EXPORTER_H_

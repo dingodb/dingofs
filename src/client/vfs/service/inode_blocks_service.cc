@@ -22,20 +22,21 @@
 #include <memory>
 
 #include "client/meta/vfs_meta.h"
+#include "client/vfs/const.h"
 #include "client/vfs/data/flat/flat_file.h"
-#include "common/context.h"
 #include "common/status.h"
 #include "options/client/vfs/vfs_dynamic_option.h"
+#include "trace/tracer.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 
 static Status InitFlatFile(VFSHub* vfs_hub, FlatFile* flat_file) {
-  ContextSPtr ctx = NewContext();
+  auto span = vfs_hub->GetTracer()->StartSpan(kVFSDataMoudule, __func__);
   Attr attr;
-  DINGOFS_RETURN_NOT_OK(
-      vfs_hub->GetMetaSystem()->GetAttr(ctx, flat_file->GetIno(), &attr));
+  DINGOFS_RETURN_NOT_OK(vfs_hub->GetMetaSystem()->GetAttr(
+      span->GetContext(), flat_file->GetIno(), &attr));
 
   uint64_t chunk_num = (attr.length / flat_file->GetChunkSize()) + 1;
 
@@ -45,7 +46,7 @@ static Status InitFlatFile(VFSHub* vfs_hub, FlatFile* flat_file) {
   for (uint64_t i = 0; i < chunk_num; ++i) {
     std::vector<Slice> slices;
     DINGOFS_RETURN_NOT_OK(vfs_hub->GetMetaSystem()->ReadSlice(
-        ctx, flat_file->GetIno(), i, &slices));
+        span->GetContext(), flat_file->GetIno(), i, &slices));
 
     flat_file->FillChunk(i, std::move(slices));
   }

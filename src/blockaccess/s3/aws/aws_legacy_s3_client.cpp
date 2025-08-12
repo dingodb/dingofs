@@ -16,7 +16,6 @@
 
 #include "blockaccess/s3/aws/aws_legacy_s3_client.h"
 
-#include <format>
 #include <memory>
 #include <string>
 #include <utility>

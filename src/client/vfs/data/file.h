@@ -21,7 +21,6 @@
 #include <memory>
 #include <mutex>
 
-#include "client/vfs/data/chunk.h"
 #include "client/vfs/data/ifile.h"
 #include "client/vfs/data/reader/file_reader.h"
 #include "client/vfs/data/writer/file_writer.h"

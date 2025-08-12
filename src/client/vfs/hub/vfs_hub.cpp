@@ -29,15 +29,17 @@
 #include "client/meta/vfs_meta.h"
 #include "client/vfs.h"
 #include "client/vfs/background/periodic_flush_manager.h"
+#include "client/vfs/const.h"
 #include "client/vfs/meta/dummy/dummy_filesystem.h"
 #include "client/vfs/meta/meta_system.h"
 #include "client/vfs/meta/meta_wrapper.h"
 #include "client/vfs/meta/v2/filesystem.h"
-#include "common/context.h"
 #include "common/status.h"
 #include "options/client/common_option.h"
 #include "options/client/vfs/vfs_dynamic_option.h"
 #include "options/client/vfs/vfs_option.h"
+#include "trace/log_trace_exporter.h"
+#include "trace/tracer.h"
 #include "utils/configuration.h"
 #include "utils/executor/thread/executor_impl.h"
 
@@ -49,8 +51,6 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
                          const VFSOption& vfs_option) {
   CHECK(started_.load(std::memory_order_relaxed) == false)
       << "unexpected start";
-
-  ContextSPtr ctx = NewContext();
 
   vfs_option_ = vfs_option;
 
@@ -83,11 +83,15 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
     return Status::Internal("build meta system fail");
   }
 
+  tracer_ = std::make_unique<Tracer>(
+      std::make_unique<LogTraceExporter>(kVFSMoudule, FLAGS_log_dir));
+  auto span = tracer_->StartSpan(kVFSMoudule, "start");
+
   meta_system_ = std::make_unique<MetaWrapper>(std::move(rela_meta_system));
 
   DINGOFS_RETURN_NOT_OK(meta_system_->Init());
 
-  DINGOFS_RETURN_NOT_OK(meta_system_->GetFsInfo(ctx, &fs_info_));
+  DINGOFS_RETURN_NOT_OK(meta_system_->GetFsInfo(span->GetContext(), &fs_info_));
 
   LOG(INFO) << fmt::format("vfs_fs_info: {}", FsInfo2Str(fs_info_));
 
@@ -123,10 +127,7 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
     auto remote_block_cache_option = vfs_option_.remote_block_cache_option;
     RewriteCacheDir(&block_cache_option, fs_info_.uuid);
 
-    // block_cache_ = std::make_unique<cache::TierBlockCache>(
-    //     block_cache_option, remote_block_cache_option,
-    //     block_accesser_.get());
-    block_cache_ = std::make_shared<cache::TierBlockCache>(
+    block_cache_ = std::make_unique<cache::TierBlockCache>(
         block_cache_option, remote_block_cache_option, block_accesser_.get());
 
     DINGOFS_RETURN_NOT_OK(block_cache_->Start());

@@ -32,10 +32,10 @@
 #include "client/vfs_legacy/lease/lease_excutor.h"
 #include "client/vfs_legacy/service/inode_objects_service.h"
 #include "client/vfs_legacy/warmup/warmup_manager.h"
-#include "common/context.h"
 #include "common/status.h"
 #include "dingofs/mds.pb.h"
 #include "options/client/vfs_legacy/vfs_legacy_option.h"
+#include "trace/tracer.h"
 
 namespace dingofs {
 namespace client {
@@ -135,6 +135,8 @@ class VFSOld : public VFS {
 
   FuseOption GetFuseOption() override { return option_.fuse_option; }
 
+  Tracer* GetTracer() override { return tracer_.get(); }
+
   void InitQosParam();
 
  private:
@@ -208,6 +210,8 @@ class VFSOld : public VFS {
 
   brpc::Server server_;
   InodeObjectsService inode_object_service_;
+
+  std::unique_ptr<Tracer> tracer_;
 
   dingofs::utils::Mutex rename_mutex_;
 };

@@ -37,11 +37,9 @@
 #include "cache/utils/context.h"
 #include "client/vfs_legacy/common/common.h"
 #include "client/vfs_legacy/inode_wrapper.h"
-#include "common/context.h"
-#include "metrics/blockaccess/block_accesser.h"
 #include "metrics/metric.h"
-#include "metrics/metric_guard.h"
 #include "options/client/vfs_legacy/vfs_legacy_option.h"
+#include "trace/tracer.h"
 #include "utils/concurrent/concurrent.h"
 #include "utils/executor/bthread/bthread_executor.h"
 #include "utils/executor/executor.h"
@@ -175,22 +173,23 @@ void WarmupManagerS3Impl::GetWarmupList(const WarmupFilelist& filelist,
   std::memset(data.get(), 0, filelist.GetFileLen());
   data[filelist.GetFileLen()] = '\n';
 
+  auto span = vfs_->GetTracer()->StartSpan("vfs_legacy", __func__);
   {
     uint64_t fh = 0;
-    ContextSPtr ctx = NewContext();
-    Status s = vfs_->Open(ctx, filelist.GetKey(), flags, &fh);
+
+    Status s = vfs_->Open(span->GetContext(), filelist.GetKey(), flags, &fh);
     if (!s.ok()) {
       LOG(ERROR) << "Fail open warmup list file, status: " << s.ToString()
                  << ", key = " << filelist.GetKey();
       return;
     }
 
-    s = vfs_->Read(ctx, filelist.GetKey(), data.get(), filelist.GetFileLen(), 0, fh,
-                   &read_size);
+    s = vfs_->Read(span->GetContext(), filelist.GetKey(), data.get(),
+                   filelist.GetFileLen(), 0, fh, &read_size);
     if (!s.ok()) {
       LOG(ERROR) << "Fail read warmup list file, status: " << s.ToString()
                  << ", key = " << filelist.GetKey();
-      vfs_->Release(ctx, filelist.GetKey(), fh);
+      vfs_->Release(span->GetContext(), filelist.GetKey(), fh);
       return;
     } else {
       if (read_size != filelist.GetFileLen()) {
@@ -198,7 +197,7 @@ void WarmupManagerS3Impl::GetWarmupList(const WarmupFilelist& filelist,
                      << filelist.GetKey() << ", read_size:" << read_size
                      << ", expect_size:" << filelist.GetFileLen();
       }
-      vfs_->Release(ctx, filelist.GetKey(), fh);
+      vfs_->Release(span->GetContext(), filelist.GetKey(), fh);
     }
   }
 

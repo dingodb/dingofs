@@ -23,13 +23,17 @@
 #include <string>
 
 #include "client/meta/vfs_meta.h"
-#include "common/context.h"
 #include "common/status.h"
 #include "options/client/fuse/fuse_option.h"
+#include "trace/context.h"
 
 namespace dingofs {
+
+class Tracer;
+
 namespace client {
 namespace vfs {
+
 
 struct VFSConfig {
   std::string mount_point;
@@ -145,6 +149,8 @@ class VFS {
   // TODO: refactor this interface
   // used for fuse
   virtual FuseOption GetFuseOption() = 0;
+
+  virtual Tracer* GetTracer() = 0;
 };
 
 }  // namespace vfs

@@ -20,6 +20,7 @@ add_subdirectory(common)
 file(GLOB DINGOFS_OPTIONS_LIB_SRCS
     "cache/*.cpp"
     "mdsv2/*.cpp"
+    "trace/*.cc"
     "options.cpp"
 )
 

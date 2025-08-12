@@ -22,12 +22,14 @@
 
 #include "cache/utils/context.h"
 #include "client/common/utils.h"
+#include "client/vfs/const.h"
 #include "client/vfs/data/common/common.h"
 #include "client/vfs/data/common/data_utils.h"
 #include "client/vfs/data/reader/reader_common.h"
 #include "client/vfs/hub/vfs_hub.h"
-#include "common/context.h"
 #include "common/status.h"
+#include "trace/context.h"
+#include "trace/tracer.h"
 
 namespace dingofs {
 namespace client {
@@ -78,7 +80,7 @@ void ChunkReader::ReadAsync(const ChunkReadReq& req, StatusCallback cb) {
 
 void ChunkReader::DoRead(const ChunkReadReq& req, StatusCallback cb) {
   // TODO: get ctx from parent
-  ContextSPtr ctx = NewContext();
+  auto span = hub_->GetTracer()->StartSpan(kVFSDataMoudule, __func__);
   uint64_t chunk_offset = req.offset;
   uint64_t size = req.to_read_size;
   char* buf = req.buf;
@@ -102,8 +104,8 @@ void ChunkReader::DoRead(const ChunkReadReq& req, StatusCallback cb) {
   uint64_t remain_len = size;
 
   std::vector<Slice> slices;
-  Status s =
-      hub_->GetMetaSystem()->ReadSlice(ctx, chunk_.ino, chunk_.index, &slices);
+  Status s = hub_->GetMetaSystem()->ReadSlice(span->GetContext(), chunk_.ino,
+                                              chunk_.index, &slices);
   if (!s.ok()) {
     LOG(WARNING) << fmt::format("{} Read slice failed, status: {}", UUID(),
                                 s.ToString());

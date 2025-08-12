@@ -33,6 +33,7 @@
 #include "client/vfs/meta/meta_system.h"
 #include "common/status.h"
 #include "options/client/vfs/vfs_option.h"
+#include "trace/tracer.h"
 #include "utils/executor/executor.h"
 
 namespace dingofs {
@@ -54,8 +55,7 @@ class VFSHub {
 
   virtual HandleManager* GetHandleManager() = 0;
 
-  //   virtual cache::BlockCache* GetBlockCache() = 0;
-  virtual std::shared_ptr<cache::BlockCache> GetBlockCache() = 0;
+  virtual cache::BlockCache* GetBlockCache() = 0;
 
   virtual blockaccess::BlockAccesser* GetBlockAccesser() = 0;
 
@@ -66,6 +66,8 @@ class VFSHub {
   virtual IPeriodicFlushManager* GetPeriodicFlushManger() = 0;
 
   virtual PageAllocator* GetPageAllocator() = 0;
+
+  virtual Tracer* GetTracer() = 0;
 
   virtual FsInfo GetFsInfo() = 0;
 
@@ -94,16 +96,10 @@ class VFSHubImpl : public VFSHub {
     return handle_manager_.get();
   }
 
-  std::shared_ptr<cache::BlockCache> GetBlockCache() override {
-    CHECK_NOTNULL(handle_manager_);
-    return block_cache_;
-    // return block_cache_.get();
+  cache::BlockCache* GetBlockCache() override {
+    CHECK_NOTNULL(block_cache_);
+    return block_cache_.get();
   }
-
-  //   cache::BlockCache* GetBlockCache() override {
-  //     CHECK_NOTNULL(handle_manager_);
-  //     return block_cache_.get();
-  //   }
 
   blockaccess::BlockAccesser* GetBlockAccesser() override {
     CHECK_NOTNULL(block_accesser_);
@@ -128,6 +124,11 @@ class VFSHubImpl : public VFSHub {
   PageAllocator* GetPageAllocator() override {
     CHECK_NOTNULL(page_allocator_);
     return page_allocator_.get();
+  }
+
+  Tracer* GetTracer() override {
+    CHECK_NOTNULL(tracer_);
+    return tracer_.get();
   }
 
   FsInfo GetFsInfo() override {
@@ -160,6 +161,7 @@ class VFSHubImpl : public VFSHub {
   std::unique_ptr<Executor> read_executor_;
   std::unique_ptr<IPeriodicFlushManager> priodic_flush_manager_;
   std::shared_ptr<PageAllocator> page_allocator_;
+  std::unique_ptr<Tracer> tracer_;
 };
 
 }  // namespace vfs

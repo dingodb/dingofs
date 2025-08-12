@@ -25,6 +25,7 @@
 #include "options/client/common_option.h"
 #include "options/client/vfs_legacy/vfs_legacy_dynamic_config.h"
 #include "options/stub/dynamic_option.h"
+#include "options/trace/trace_dynamic_option.h"
 #include "stub/common/config.h"
 
 namespace dingofs {
@@ -295,6 +296,11 @@ void InitVFSLegacyOption(utils::Configuration* conf, VFSLegacyOption* option) {
     LOG(INFO) << "Not found `meta_access_log_threshold_us` in conf, "
                  "default: "
               << stub::FLAGS_meta_access_log_threshold_us;
+  }
+
+  if (!conf->GetBoolValue("trace_logging", &FLAGS_trace_logging)) {
+    LOG(INFO) << "Not found `trace_logging` in conf, default: "
+              << FLAGS_trace_logging;
   }
 
   SetBrpcOpt(conf);

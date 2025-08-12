@@ -14,35 +14,15 @@
  * limitations under the License.
  */
 
-#ifndef DINGODB_CLIENT_VFS_DATA_IFILE_H_
-#define DINGODB_CLIENT_VFS_DATA_IFILE_H_
+#ifndef DINGOFS_OPTIONS_TRACE_DYNAMIC_OPTION_H_
+#define DINGOFS_OPTIONS_TRACE_DYNAMIC_OPTION_H_
 
-#include <cstdint>
-
-#include "common/callback.h"
-#include "common/status.h"
+#include <gflags/gflags.h>
 
 namespace dingofs {
-namespace client {
-namespace vfs {
 
-class IFile {
- public:
-  virtual ~IFile() = default;
+DECLARE_bool(trace_logging);
 
-  virtual Status Write(const char* buf, uint64_t size, uint64_t offset,
-                       uint64_t* out_wsize) = 0;
-
-  virtual Status Read(char* buf, uint64_t size,
-                      uint64_t offset, uint64_t* out_rsize) = 0;
-
-  virtual Status Flush() = 0;
-
-  virtual void AsyncFlush(StatusCallback cb) = 0;
-};
-
-}  // namespace vfs
-}  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGODB_CLIENT_VFS_DATA_IFILE_H_
+#endif  // DINGOFS_OPTIONS_TRACE_DYNAMIC_OPTION_H_

@@ -28,7 +28,7 @@
 #include "bthread/types.h"
 #include "client/meta/vfs_meta.h"
 #include "client/vfs/meta/meta_system.h"
-#include "common/context.h"
+#include "trace/context.h"
 #include "dingofs/mdsv2.pb.h"
 
 namespace dingofs {

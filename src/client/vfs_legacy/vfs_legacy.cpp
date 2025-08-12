@@ -43,7 +43,6 @@
 #include "client/vfs_legacy/inode_wrapper.h"
 #include "client/vfs_legacy/tools.h"
 #include "common/config_mapper.h"
-#include "common/context.h"
 #include "common/define.h"
 #include "common/status.h"
 #include "dingofs/common.pb.h"
@@ -58,6 +57,9 @@
 #include "stub/rpcclient/cli2_client.h"
 #include "stub/rpcclient/mds_client.h"
 #include "stub/rpcclient/metacache.h"
+#include "trace/context.h"
+#include "trace/log_trace_exporter.h"
+#include "trace/tracer.h"
 #include "utils/configuration.h"
 #include "utils/net_common.h"
 #include "utils/string_util.h"
@@ -175,6 +177,8 @@ int VFSOld::InitBrpcServer() {
 Status VFSOld::Start(const VFSConfig& vfs_conf) {
   vfs_conf_ = vfs_conf;
 
+  tracer_ = std::make_unique<Tracer>(
+      std::make_unique<LogTraceExporter>("vfs_legacy", FLAGS_log_dir));
   {
     // init mds client
     mds_base_ = std::make_shared<stub::rpcclient::MDSBaseClient>();
@@ -1283,7 +1287,7 @@ Status VFSOld::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t* fh) {
       return filesystem::DingofsErrorToStatus(rc);
     }
 
-    Status s = HandleOpenFlags(ctx,ino, flags);
+    Status s = HandleOpenFlags(ctx, ino, flags);
     if (!s.ok()) {
       LOG(ERROR) << "Fail HandleOpenFlags, inodeId=" << ino
                  << ", flags: " << flags << ", status: " << s.ToString();

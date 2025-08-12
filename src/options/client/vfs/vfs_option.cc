@@ -20,6 +20,7 @@
 #include "options/client/common_option.h"
 #include "options/client/memory/page_option.h"
 #include "options/client/vfs/vfs_dynamic_option.h"
+#include "options/trace/trace_dynamic_option.h"
 #include "utils/configuration.h"
 
 namespace dingofs {
@@ -121,6 +122,11 @@ void InitVFSOption(utils::Configuration* conf, VFSOption* option) {
     LOG(INFO) << "Not found `vfs.vfs_meta_log_threshold_u` in conf, "
                  "default: "
               << FLAGS_vfs_meta_log_threshold_us;
+  }
+
+  if (!conf->GetBoolValue("vfs.trace_logging", &FLAGS_trace_logging)) {
+    LOG(INFO) << "Not found `vfs.trace_logging` in conf, default: "
+              << FLAGS_trace_logging;
   }
 
   SetBrpcOpt(conf);

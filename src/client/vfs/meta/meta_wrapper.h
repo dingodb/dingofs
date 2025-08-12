@@ -24,7 +24,7 @@
 #include <vector>
 
 #include "client/vfs/meta/meta_system.h"
-#include "common/context.h"
+#include "trace/context.h"
 
 namespace dingofs {
 namespace client {

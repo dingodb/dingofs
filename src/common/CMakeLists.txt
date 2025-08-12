@@ -16,8 +16,6 @@ add_library(dingofs_common
     process.cpp
     rpc_stream.cpp
     io_buffer.cpp
-    step_timer.cpp
-    logging.cpp
     version.cpp
 )
 target_link_libraries(dingofs_common

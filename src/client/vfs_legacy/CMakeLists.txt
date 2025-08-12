@@ -29,10 +29,12 @@ add_library(vfs_legacy_lib ${VFS_OLD_SRC_LIB})
 
 target_link_libraries(vfs_legacy_lib
     PROTO_OBJS
-    vfs_legacy_common
     dingofs_executor
-    rpcclient
     dingofs_common
+    dingofs_trace
+    dingofs_options
+    rpcclient
+    vfs_legacy_common
     client_lease
     client_options
     client_memcached_client

@@ -22,7 +22,7 @@
 #include <vector>
 
 #include "client/meta/vfs_meta.h"
-#include "common/context.h"
+#include "trace/context.h"
 #include "common/status.h"
 #include "json/value.h"
 

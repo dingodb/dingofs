@@ -12,29 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(background)
-add_subdirectory(data)
-add_subdirectory(handle)
-add_subdirectory(hub)
-add_subdirectory(meta)
-add_subdirectory(service)
-
-add_library(vfs_lib
-    vfs_impl.cpp
+add_library(dingofs_trace
+    log_trace_exporter.cc
+    trace_span.cc
+    tracer.cc
 )
 
-target_link_libraries(vfs_lib
-    PROTO_OBJS
-    dingofs_common
-    dingofs_trace
-    vfs_meta_system
-    vfs_data
-    vfs_meta
-    vfs_hub
-    vfs_handle
-    vfs_service
+target_link_libraries(dingofs_trace
+    dingofs_options
     glog::glog
     gflags::gflags
+    spdlog::spdlog
     fmt::fmt
     absl::str_format
 )

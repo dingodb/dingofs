@@ -24,8 +24,9 @@
 
 #include "absl/cleanup/cleanup.h"
 #include "cache/utils/context.h"
+#include "client/vfs/const.h"
 #include "client/vfs/hub/vfs_hub.h"
-#include "common/context.h"
+#include "trace/tracer.h"
 
 namespace dingofs {
 namespace client {
@@ -54,7 +55,8 @@ Status ChunkWriter::Write(const char* buf, uint64_t size,
 Status ChunkWriter::DirectWrite(const char* buf, uint64_t size,
                                 uint64_t chunk_offset) {
   // TODO: get ctx from parent
-  ContextSPtr ctx = NewContext();
+  auto span = hub_->GetTracer()->StartSpan(kVFSDataMoudule, __func__);
+
   uint64_t write_file_offset = chunk_.chunk_start + chunk_offset;
   uint64_t end_write_file_offset = write_file_offset + size;
 
@@ -72,8 +74,8 @@ Status ChunkWriter::DirectWrite(const char* buf, uint64_t size,
 
   // TODO: refact this code
   uint64_t chunk_id;
-  DINGOFS_RETURN_NOT_OK(
-      hub_->GetMetaSystem()->NewSliceId(ctx, chunk_.ino, &chunk_id));
+  DINGOFS_RETURN_NOT_OK(hub_->GetMetaSystem()->NewSliceId(
+      span->GetContext(), chunk_.ino, &chunk_id));
 
   uint64_t block_offset = chunk_offset % chunk_.block_size;
   uint64_t block_index = chunk_offset / chunk_.block_size;
@@ -106,7 +108,7 @@ Status ChunkWriter::DirectWrite(const char* buf, uint64_t size,
   std::vector<Slice> slices;
   slices.push_back(slice);
 
-  return CommitSlices(ctx, slices);
+  return CommitSlices(span->GetContext(), slices);
 }
 
 Status ChunkWriter::BufferWrite(const char* buf, uint64_t size,
@@ -291,7 +293,7 @@ ChunkWriter::FlushTask ChunkWriter::fake_header_;
 
 void ChunkWriter::FlushTaskDone(FlushTask* flush_task, Status s) {
   // TODO: get ctx from parent
-  ContextSPtr ctx = NewContext();
+  auto span = hub_->GetTracer()->StartSpan(kVFSDataMoudule, __func__);
   if (!s.ok()) {
     LOG(WARNING) << fmt::format(
         "{} FlushTaskDone Failed chunk_flush_task: {}, status: {}", UUID(),
@@ -394,7 +396,7 @@ void ChunkWriter::FlushTaskDone(FlushTask* flush_task, Status s) {
 
         if (!slices.empty()) {
           // TODO: maybe use batch commit
-          Status status = CommitSlices(ctx, slices);
+          Status status = CommitSlices(span->GetContext(), slices);
           if (!status.ok()) {
             LOG(WARNING) << fmt::format(
                 "{} FlushTaskDone header_task: {} fail commit"

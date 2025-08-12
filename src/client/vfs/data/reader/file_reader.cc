@@ -22,10 +22,12 @@
 #include <vector>
 
 #include "client/meta/vfs_meta.h"
+#include "client/vfs/const.h"
 #include "client/vfs/data/reader/chunk_reader.h"
 #include "client/vfs/data/reader/reader_common.h"
 #include "client/vfs/hub/vfs_hub.h"
-#include "common/context.h"
+#include "trace/context.h"
+#include "trace/tracer.h"
 
 namespace dingofs {
 namespace client {
@@ -81,9 +83,9 @@ ChunkReader* FileReader::GetOrCreateChunkReader(uint64_t chunk_index) {
 Status FileReader::Read(char* buf, uint64_t size, uint64_t offset,
                         uint64_t* out_rsize) {
   // TODO: get ctx from parent
-  ContextSPtr ctx = NewContext();
+  auto span = vfs_hub_->GetTracer()->StartSpan(kVFSDataMoudule, __func__);
   Attr attr;
-  vfs_hub_->GetMetaSystem()->GetAttr(ctx, ino_, &attr);
+  vfs_hub_->GetMetaSystem()->GetAttr(span->GetContext(), ino_, &attr);
 
   if (attr.length <= offset) {
     *out_rsize = 0;
