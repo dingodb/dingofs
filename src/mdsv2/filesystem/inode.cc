@@ -33,7 +33,7 @@ namespace mdsv2 {
 static const std::string kInodeCacheMetricsPrefix = "dingofs_{}_inode_cache_";
 
 // 0: no limit
-DEFINE_uint32(inode_cache_max_count, 0, "inode cache max count");
+DEFINE_uint32(mds_inode_cache_max_count, 0, "inode cache max count");
 
 uint32_t Inode::FsId() {
   utils::ReadLockGuard lk(lock_);
@@ -192,7 +192,7 @@ Inode::AttrType&& Inode::Move() {
 
 InodeCache::InodeCache(uint32_t fs_id)
     : fs_id_(fs_id),
-      cache_(FLAGS_inode_cache_max_count,
+      cache_(FLAGS_mds_inode_cache_max_count,
              std::make_shared<utils::CacheMetrics>(fmt::format(kInodeCacheMetricsPrefix, fs_id))) {}
 
 InodeCache::~InodeCache() {}  // NOLINT

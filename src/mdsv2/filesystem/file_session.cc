@@ -31,8 +31,8 @@
 namespace dingofs {
 namespace mdsv2 {
 
-DECLARE_uint32(fs_scan_batch_size);
-DECLARE_uint32(txn_max_retry_times);
+DECLARE_uint32(mds_scan_batch_size);
+DECLARE_uint32(mds_txn_max_retry_times);
 
 static const std::string kFileSessionCacheCountMetricsName = "dingofs_{}_file_session_cache_count";
 

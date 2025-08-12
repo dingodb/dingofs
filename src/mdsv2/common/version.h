@@ -54,6 +54,7 @@ namespace mdsv2 {
 #define DINGOFS_BUILD_TYPE "unknown"
 #endif
 
+std::string DingoVersionString();
 void DingoShowVersion();
 void DingoLogVersion();
 std::vector<std::pair<std::string, std::string>> DingoVersion();

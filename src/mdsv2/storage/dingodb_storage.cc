@@ -30,11 +30,11 @@ namespace dingofs {
 
 namespace mdsv2 {
 
-DEFINE_int32(dingodb_replica_num, 3, "backend store replicas");
+DEFINE_int32(mds_storage_dingodb_replica_num, 3, "backend store replicas");
 
-DEFINE_int32(dingodb_scan_batch_size, 100000, "dingodb scan batch size");
+DEFINE_int32(mds_storage_dingodb_scan_batch_size, 100000, "dingodb scan batch size");
 
-DECLARE_uint32(fs_scan_batch_size);
+DECLARE_uint32(mds_scan_batch_size);
 
 const uint32_t kTxnKeepAliveMs = 10 * 1000;
 
@@ -95,7 +95,7 @@ Status DingodbStorage::CreateTable(const std::string& name, const TableOption& o
   int64_t region_id = 0;
   status = creator->SetRegionName(name)
                .SetRange(option.start_key, option.end_key)
-               .SetReplicaNum(FLAGS_dingodb_replica_num)
+               .SetReplicaNum(FLAGS_mds_storage_dingodb_replica_num)
                .Wait(true)
                .Create(region_id);
   if (!status.ok()) {
@@ -302,7 +302,7 @@ Status DingodbStorage::Scan(const Range& range, std::vector<KeyValue>& kvs) {
   }
 
   std::vector<dingodb::sdk::KVPair> kv_pairs;
-  auto status = txn->Scan(range.start, range.end, FLAGS_dingodb_scan_batch_size, kv_pairs);
+  auto status = txn->Scan(range.start, range.end, FLAGS_mds_storage_dingodb_scan_batch_size, kv_pairs);
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, status.ToString());
   }
@@ -444,7 +444,7 @@ Status DingodbTxn::Scan(const Range& range, ScanHandlerType handler) {
   std::vector<KeyValue> kvs;
   do {
     kvs.clear();
-    status = Scan(range, FLAGS_fs_scan_batch_size, kvs);
+    status = Scan(range, FLAGS_mds_scan_batch_size, kvs);
     if (!status.ok()) {
       break;
     }
@@ -459,7 +459,7 @@ Status DingodbTxn::Scan(const Range& range, ScanHandlerType handler) {
 
     if (is_exit) break;
 
-  } while (kvs.size() >= FLAGS_fs_scan_batch_size);
+  } while (kvs.size() >= FLAGS_mds_scan_batch_size);
 
   return status;
 }

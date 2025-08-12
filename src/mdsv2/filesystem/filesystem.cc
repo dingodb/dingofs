@@ -60,18 +60,18 @@ static const std::string kFsTableName = "dingofs";
 static const std::string kStatsName = ".stats";
 static const std::string kRecyleName = ".recycle";
 
-DEFINE_uint32(filesystem_name_max_size, 1024, "Max size of filesystem name.");
-DEFINE_uint32(filesystem_hash_bucket_num, 1024, "Filesystem hash bucket num.");
+DEFINE_uint32(mds_filesystem_name_max_size, 1024, "Max size of filesystem name.");
+DEFINE_uint32(mds_filesystem_hash_bucket_num, 1024, "Filesystem hash bucket num.");
 
-DEFINE_uint32(compact_chunk_threshold_num, 64, "Compact chunk threshold num.");
-DEFINE_uint32(compact_chunk_interval_ms, 30 * 1000, "Compact chunk interval ms.");
+DEFINE_uint32(mds_compact_chunk_threshold_num, 64, "Compact chunk threshold num.");
+DEFINE_uint32(mds_compact_chunk_interval_ms, 30 * 1000, "Compact chunk interval ms.");
 
 static bool IsReserveNode(Ino ino) { return ino == kRootIno; }
 
 static bool IsReserveName(const std::string& name) { return name == kStatsName || name == kRecyleName; }
 
 static bool IsInvalidName(const std::string& name) {
-  return name.empty() || name.size() > FLAGS_filesystem_name_max_size;
+  return name.empty() || name.size() > FLAGS_mds_filesystem_name_max_size;
 }
 
 FileSystem::FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr ino_id_generator,
@@ -1570,7 +1570,7 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
   uint64_t time_ns = Helper::TimestampNs();
 
   // check name is valid
-  if (new_name.size() > FLAGS_filesystem_name_max_size) {
+  if (new_name.size() > FLAGS_mds_filesystem_name_max_size) {
     return Status(pb::error::EILLEGAL_PARAMTETER, "new name is too long.");
   }
 
@@ -1748,8 +1748,8 @@ Status FileSystem::WriteSlice(Context& ctx, Ino parent, Ino ino, uint64_t chunk_
   inode->UpdateIf(attr);
 
   // check whether need to compact chunk
-  if (chunk.slices_size() > FLAGS_compact_chunk_threshold_num &&
-      chunk.last_compaction_time_ms() + FLAGS_compact_chunk_interval_ms < Helper::TimestampMs()) {
+  if (chunk.slices_size() > FLAGS_mds_compact_chunk_threshold_num &&
+      chunk.last_compaction_time_ms() + FLAGS_mds_compact_chunk_interval_ms < Helper::TimestampMs()) {
     auto fs_info = fs_info_->Get();
     if (CompactChunkOperation::MaybeCompact(fs_info, ino, attr.length(), chunk)) {
       DINGO_LOG(INFO) << fmt::format("[fs.{}] trigger compact chunk({}) for ino({}).", fs_id_, chunk_index, ino);
@@ -2654,9 +2654,9 @@ FsInfoType FileSystemSet::GenFsInfo(int64_t fs_id, const CreateFsParam& param) {
 
   } else if (param.partition_type == pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION) {
     auto* parent_hash = partition_policy->mutable_parent_hash();
-    parent_hash->set_bucket_num(FLAGS_filesystem_hash_bucket_num);
+    parent_hash->set_bucket_num(FLAGS_mds_filesystem_hash_bucket_num);
 
-    auto mds_bucket_map = GenParentHashDistribution(mds_metas, FLAGS_filesystem_hash_bucket_num);
+    auto mds_bucket_map = GenParentHashDistribution(mds_metas, FLAGS_mds_filesystem_hash_bucket_num);
     for (const auto& [mds_id, bucket_set] : mds_bucket_map) {
       parent_hash->mutable_distributions()->insert({mds_id, bucket_set});
     }

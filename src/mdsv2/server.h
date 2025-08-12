@@ -33,7 +33,6 @@
 #include "mdsv2/service/fsstat_service.h"
 #include "mdsv2/service/mds_service.h"
 #include "mdsv2/storage/storage.h"
-#include "options/mdsv2/app.h"
 #include "utils/configuration.h"
 
 namespace dingofs {
@@ -103,8 +102,6 @@ class Server {
   ~Server();
 
   std::atomic<bool> stop_{false};
-
-  options::mdsv2::AppOption app_option_;
 
   // mds self info
   MDSMeta self_mds_meta_;

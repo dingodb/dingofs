@@ -127,12 +127,25 @@ void DirQuotaMap::DeleteQuota(Ino ino) {
 }
 
 bool DirQuotaMap::CheckQuota(Ino ino, int64_t byte_delta, int64_t inode_delta) {
-  auto quota = GetNearestQuota(ino);
-  if (quota == nullptr) {
-    return true;
+  // not check quota if fs has no quota
+  if (!HasQuota()) return true;
+
+  Ino curr_ino = ino;
+  while (true) {
+    auto quota = GetQuota(curr_ino);
+    if (quota != nullptr) {
+      if (!quota->Check(byte_delta, inode_delta)) return false;
+    }
+
+    if (curr_ino == kRootIno) break;
+
+    Ino parent;
+    if (!GetParent(curr_ino, parent)) break;
+
+    curr_ino = parent;
   }
 
-  return quota->Check(byte_delta, inode_delta);
+  return true;
 }
 
 QuotaSPtr DirQuotaMap::GetNearestQuota(Ino ino) {
@@ -224,6 +237,12 @@ bool DirQuotaMap::GetParent(Ino ino, Ino& parent) {
   DINGO_LOG(INFO) << fmt::format("[quota] query parent finish, ino({}) parent({}).", ino, parent);
 
   return true;
+}
+
+bool DirQuotaMap::HasQuota() {
+  utils::ReadLockGuard lk(rwlock_);
+
+  return !quota_map_.empty();
 }
 
 void UpdateDirUsageTask::Run() { quota_manager_->UpdateDirUsage(parent_, byte_delta_, inode_delta_); }

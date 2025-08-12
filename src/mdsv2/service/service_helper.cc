@@ -20,11 +20,11 @@
 namespace dingofs {
 namespace mdsv2 {
 
-DEFINE_int64(service_log_threshold_time_us, 1000L, "service log threshold time us");
-BRPC_VALIDATE_GFLAG(service_log_threshold_time_us, brpc::PositiveInteger);
+DEFINE_int64(mds_service_log_threshold_time_us, 1000L, "service log threshold time us");
+BRPC_VALIDATE_GFLAG(mds_service_log_threshold_time_us, brpc::PositiveInteger);
 
-DEFINE_int32(log_print_max_length, 512, "log print max length");
-BRPC_VALIDATE_GFLAG(log_print_max_length, brpc::PositiveInteger);
+DEFINE_int32(mds_service_log_print_max_length, 512, "log print max length");
+BRPC_VALIDATE_GFLAG(mds_service_log_print_max_length, brpc::PositiveInteger);
 
 void ServiceHelper::SetError(pb::error::Error* error, const Status& status) {
   SetError(error, status.error_code(), status.error_str());

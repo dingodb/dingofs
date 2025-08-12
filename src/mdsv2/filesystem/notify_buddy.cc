@@ -25,8 +25,8 @@ namespace dingofs {
 namespace mdsv2 {
 namespace notify {
 
-DEFINE_uint32(notify_message_batch_size, 64, "notify message batch size.");
-DEFINE_uint32(wait_message_delay_us, 100, "wait message delay us.");
+DEFINE_uint32(mds_notify_message_batch_size, 64, "notify message batch size.");
+DEFINE_uint32(mds_wait_message_delay_us, 100, "wait message delay us.");
 
 NotifyBuddy::NotifyBuddy(MDSMetaMapSPtr mds_meta_map, uint64_t self_mds_id)
     : mds_meta_map_(mds_meta_map), self_mds_id_(self_mds_id) {
@@ -124,7 +124,7 @@ std::map<uint64_t, NotifyBuddy::BatchMessage> NotifyBuddy::GroupingByMdsID(const
 
 void NotifyBuddy::DispatchMessage() {
   std::vector<MessageSPtr> messages;
-  messages.reserve(FLAGS_notify_message_batch_size);
+  messages.reserve(FLAGS_mds_notify_message_batch_size);
 
   while (true) {
     messages.clear();
@@ -140,8 +140,8 @@ void NotifyBuddy::DispatchMessage() {
       break;
     }
 
-    if (FLAGS_wait_message_delay_us > 0) {
-      bthread_usleep(FLAGS_wait_message_delay_us);
+    if (FLAGS_mds_wait_message_delay_us > 0) {
+      bthread_usleep(FLAGS_mds_wait_message_delay_us);
     }
 
     do {

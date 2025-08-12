@@ -93,6 +93,7 @@ class DirQuotaMap {
  private:
   QuotaSPtr GetQuota(Ino ino);
   bool GetParent(Ino ino, Ino& parent);
+  bool HasQuota();
 
   int32_t fs_id_{0};
   ParentMemoSPtr parent_memo_;

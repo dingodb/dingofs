@@ -43,8 +43,8 @@
 namespace dingofs {
 namespace mdsv2 {
 
-DECLARE_uint32(mds_offline_period_time_ms);
-DECLARE_uint32(client_offline_period_time_ms);
+DECLARE_uint32(mds_heartbeat_mds_offline_period_time_ms);
+DECLARE_uint32(mds_heartbeat_client_offline_period_ms);
 
 static std::string RenderHead(const std::string& title) {
   butil::IOBufBuilder os;
@@ -260,7 +260,7 @@ static void RenderMdsList(const std::vector<MdsEntry>& mdses, butil::IOBufBuilde
                       mds.location().host(), mds.location().port(), mds.location().host(), mds.location().port());
     os << "<td>" << MdsEntry::State_Name(mds.state()) << "</td>";
     os << "<td>" << Helper::FormatMsTime(mds.last_online_time_ms()) << "</td>";
-    if (mds.last_online_time_ms() + FLAGS_mds_offline_period_time_ms < now_ms) {
+    if (mds.last_online_time_ms() + FLAGS_mds_heartbeat_mds_offline_period_time_ms < now_ms) {
       os << "<td style=\"color:red\">NO</td>";
     } else {
       os << "<td>YES</td>";
@@ -293,7 +293,7 @@ static void RenderClientList(const std::vector<ClientEntry>& clients, butil::IOB
     os << "<td>" << fmt::format("{}:{}", client.hostname(), client.port()) << "</td>";
     os << "<td>" << client.mountpoint() << "</td>";
     os << "<td>" << Helper::FormatMsTime(client.last_online_time_ms()) << "</td>";
-    if (client.last_online_time_ms() + FLAGS_client_offline_period_time_ms < now_ms) {
+    if (client.last_online_time_ms() + FLAGS_mds_heartbeat_client_offline_period_ms < now_ms) {
       os << R"(<td style="color:red">NO</td>)";
     } else {
       os << "<td>YES</td>";

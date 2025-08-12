@@ -34,11 +34,11 @@
 namespace dingofs {
 namespace mdsv2 {
 
-DEFINE_uint32(mds_offline_period_time_ms, 30 * 1000, "mds offline period time ms");
+DEFINE_uint32(mds_heartbeat_mds_offline_period_time_ms, 30 * 1000, "mds offline period time ms");
 
-DEFINE_uint32(client_offline_period_time_ms, 30 * 1000, "client offline period time ms");
+DEFINE_uint32(mds_heartbeat_client_offline_period_ms, 30 * 1000, "client offline period time ms");
 
-DEFINE_uint32(client_clean_period_time_s, 600, "client clean period time s");
+DEFINE_uint32(mds_monitor_client_clean_period_time_s, 600, "client clean period time s");
 
 static void GetOfflineMDS(const std::vector<MDSMeta>& mdses, std::vector<MDSMeta>& online_mdses,
                           std::vector<MDSMeta>& offline_mdses) {
@@ -46,8 +46,8 @@ static void GetOfflineMDS(const std::vector<MDSMeta>& mdses, std::vector<MDSMeta
 
   for (const auto& mds : mdses) {
     // DINGO_LOG(INFO) << fmt::format("[monitor] mds: {}, last online time: {}, now: {}, offline period: {}", mds.ID(),
-    //   mds.LastOnlineTimeMs(), now_ms, FLAGS_mds_offline_period_time_ms);
-    if (mds.LastOnlineTimeMs() + FLAGS_mds_offline_period_time_ms < now_ms) {
+    //   mds.LastOnlineTimeMs(), now_ms, FLAGS_mds_heartbeat_mds_offline_period_time_ms);
+    if (mds.LastOnlineTimeMs() + FLAGS_mds_heartbeat_mds_offline_period_time_ms < now_ms) {
       offline_mdses.push_back(mds);
     } else {
       online_mdses.push_back(mds);
@@ -316,7 +316,7 @@ Status Monitor::MonitorClient() {
 
   // umount all offline clients
   for (const auto& client : clients) {
-    if (client.last_online_time_ms() + FLAGS_client_offline_period_time_ms > now_ms) {
+    if (client.last_online_time_ms() + FLAGS_mds_heartbeat_client_offline_period_ms > now_ms) {
       // client is online
       continue;
     }
@@ -335,7 +335,7 @@ Status Monitor::MonitorClient() {
 
     } else {
       // clean client
-      if (client.last_online_time_ms() + FLAGS_client_clean_period_time_s * 1000 < now_ms) {
+      if (client.last_online_time_ms() + FLAGS_mds_monitor_client_clean_period_time_s * 1000 < now_ms) {
         auto status = heartbeat->CleanClient(client.id());
         DINGO_LOG(INFO) << fmt::format("[monitor] clean client({}) finish, status({}).", client.id(),
                                        status.error_str());

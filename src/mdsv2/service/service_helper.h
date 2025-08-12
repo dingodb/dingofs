@@ -30,8 +30,8 @@
 namespace dingofs {
 namespace mdsv2 {
 
-DECLARE_int64(service_log_threshold_time_us);
-DECLARE_int32(log_print_max_length);
+DECLARE_int64(mds_service_log_threshold_time_us);
+DECLARE_int32(mds_service_log_print_max_length);
 
 class ServiceHelper {
  public:
@@ -175,20 +175,20 @@ void ServiceClosure<T, U>::Run() {
     if (response_->error().errcode() != pb::error::ENOT_FOUND) {
       LOG(ERROR) << fmt::format("[service.{}][request_id({})][{}us] Request fail, request({}) response({})",
                                 method_name_, request_->info().request_id(), elapsed_time_us,
-                                request_->ShortDebugString().substr(0, FLAGS_log_print_max_length),
-                                response_->ShortDebugString().substr(0, FLAGS_log_print_max_length));
+                                request_->ShortDebugString().substr(0, FLAGS_mds_service_log_print_max_length),
+                                response_->ShortDebugString().substr(0, FLAGS_mds_service_log_print_max_length));
     }
   } else {
-    if (BAIDU_UNLIKELY(elapsed_time_us >= FLAGS_service_log_threshold_time_us)) {
+    if (BAIDU_UNLIKELY(elapsed_time_us >= FLAGS_mds_service_log_threshold_time_us)) {
       LOG(INFO) << fmt::format("[service.{}][request_id({})][{}us] Request finish, request({}) response({})",
                                method_name_, request_->info().request_id(), elapsed_time_us,
-                               request_->ShortDebugString().substr(0, FLAGS_log_print_max_length),
-                               response_->ShortDebugString().substr(0, FLAGS_log_print_max_length));
+                               request_->ShortDebugString().substr(0, FLAGS_mds_service_log_print_max_length),
+                               response_->ShortDebugString().substr(0, FLAGS_mds_service_log_print_max_length));
     } else {
       LOG(INFO) << fmt::format("[service.{}][request_id({})][{}us] Request finish, request({}) response({})",
                                method_name_, request_->info().request_id(), elapsed_time_us,
-                               request_->ShortDebugString().substr(0, FLAGS_log_print_max_length),
-                               response_->ShortDebugString().substr(0, FLAGS_log_print_max_length));
+                               request_->ShortDebugString().substr(0, FLAGS_mds_service_log_print_max_length),
+                               response_->ShortDebugString().substr(0, FLAGS_mds_service_log_print_max_length));
     }
   }
 }

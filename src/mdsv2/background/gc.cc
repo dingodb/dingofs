@@ -38,14 +38,14 @@
 namespace dingofs {
 namespace mdsv2 {
 
-DECLARE_uint32(fs_scan_batch_size);
+DECLARE_uint32(mds_scan_batch_size);
 
-DEFINE_uint32(gc_worker_num, 32, "gc worker set num");
-DEFINE_uint32(gc_max_pending_task_count, 8192, "gc max pending task count");
+DEFINE_uint32(mds_gc_worker_num, 32, "gc worker set num");
+DEFINE_uint32(mds_gc_max_pending_task_count, 8192, "gc max pending task count");
 
-DEFINE_uint32(gc_delfile_reserve_time_s, 600, "gc del file reserve time");
+DEFINE_uint32(mds_gc_delfile_reserve_time_s, 600, "gc del file reserve time");
 
-DEFINE_uint32(gc_filesession_reserve_time_s, 86400, "gc file session reserve time");
+DEFINE_uint32(mds_gc_filesession_reserve_time_s, 86400, "gc file session reserve time");
 
 static const std::string kWorkerSetName = "GC";
 
@@ -188,7 +188,7 @@ bool GcProcessor::Init() {
     return false;
   }
 
-  worker_set_ = ExecqWorkerSet::New(kWorkerSetName, FLAGS_gc_worker_num, FLAGS_gc_max_pending_task_count);
+  worker_set_ = ExecqWorkerSet::New(kWorkerSetName, FLAGS_mds_gc_worker_num, FLAGS_mds_gc_max_pending_task_count);
   return worker_set_->Init();
 }
 
@@ -412,7 +412,7 @@ void GcProcessor::ScanExpiredFileSession(uint32_t fs_id) {
       file_sessions.push_back(file_session);
     }
 
-    if (file_sessions.size() >= FLAGS_fs_scan_batch_size) {
+    if (file_sessions.size() >= FLAGS_mds_scan_batch_size) {
       exec_count += file_sessions.size();
       if (!Execute(CleanExpiredFileSessionTask::New(operation_processor_, file_sessions))) {
         file_sessions.clear();
@@ -437,7 +437,7 @@ void GcProcessor::ScanExpiredFileSession(uint32_t fs_id) {
 
 bool GcProcessor::ShouldDeleteFile(const AttrType& attr) {
   uint64_t now_s = Helper::Timestamp();
-  return (attr.ctime() / 1000000000 + FLAGS_gc_delfile_reserve_time_s) < now_s;
+  return (attr.ctime() / 1000000000 + FLAGS_mds_gc_delfile_reserve_time_s) < now_s;
 }
 
 bool GcProcessor::ShouldCleanFileSession(const FileSessionEntry& file_session,
@@ -448,7 +448,7 @@ bool GcProcessor::ShouldCleanFileSession(const FileSessionEntry& file_session,
   }
 
   uint64_t now_s = Helper::Timestamp();
-  return file_session.create_time_s() + FLAGS_gc_filesession_reserve_time_s < now_s;
+  return file_session.create_time_s() + FLAGS_mds_gc_filesession_reserve_time_s < now_s;
 }
 
 blockaccess::BlockAccesserSPtr GcProcessor::GetOrCreateDataAccesser(uint32_t fs_id) {

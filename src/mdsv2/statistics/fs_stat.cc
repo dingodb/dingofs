@@ -28,8 +28,8 @@
 namespace dingofs {
 namespace mdsv2 {
 
-DEFINE_uint32(fs_stats_compact_interval_s, 3600, "compact fs stats interval seconds.");
-DEFINE_uint32(fs_stats_duration_s, 60, "get per seconds fs stats duration.");
+DEFINE_uint32(mds_fsstats_compact_interval_s, 3600, "compact fs stats interval seconds.");
+DEFINE_uint32(mds_fsstats_duration_s, 60, "get per seconds fs stats duration.");
 
 const uint64_t kNsPerSecond = 1000 * 1000 * 1000;
 
@@ -55,7 +55,7 @@ static void SumFsStats(const FsStatsDataEntry& src_stats, FsStatsDataEntry& dst_
 Status FsStats::GetFsStat(Context& ctx, uint32_t fs_id, FsStatsDataEntry& stats) {
   auto& trace = ctx.GetTrace();
 
-  uint64_t mark_time_ns = Helper::TimestampNs() - FLAGS_fs_stats_duration_s * kNsPerSecond;
+  uint64_t mark_time_ns = Helper::TimestampNs() - FLAGS_mds_fsstats_duration_s * kNsPerSecond;
   GetAndCompactFsStatsOperation operation(trace, fs_id, mark_time_ns);
 
   auto status = operation_processor_->RunAlone(&operation);
@@ -75,7 +75,7 @@ Status FsStats::GetFsStatsPerSecond(Context& ctx, uint32_t fs_id,
   auto& trace = ctx.GetTrace();
 
   FsStatsDataEntry sum_stats;
-  uint64_t mark_time_s = Helper::Timestamp() - FLAGS_fs_stats_duration_s;
+  uint64_t mark_time_s = Helper::Timestamp() - FLAGS_mds_fsstats_duration_s;
   ScanFsStatsOperation operation(trace, fs_id, mark_time_s * kNsPerSecond,
                                  [&](const std::string& key, const std::string& value) -> bool {
                                    uint32_t fs_id = 0;

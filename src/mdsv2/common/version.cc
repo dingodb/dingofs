@@ -15,6 +15,7 @@
 #include "mdsv2/common/version.h"
 
 #include <iostream>
+#include <sstream>
 
 #include "fmt/format.h"
 #include "mdsv2/common/logging.h"
@@ -57,13 +58,18 @@ static std::string GetBuildFlag() {
                      kUseTcmalloc ? "ON" : "OFF", kUseProfiler ? "ON" : "OFF", kUseSanitizer ? "ON" : "OFF");
 }
 
-void DingoShowVersion() {
-  std::cout << fmt::format("DINGOFS VERSION:[{}-{}]\n", kMajorVersion.c_str(), kMinorVersion.c_str());
-  std::cout << fmt::format("DINGOFS GIT_TAG_VERSION:[{}]\n", kGitTagName.c_str());
-  std::cout << fmt::format("DINGOFS GIT_COMMIT_HASH:[{}]\n", kGitCommitHash.c_str());
-  std::cout << fmt::format("DINGOFS BUILD_TYPE:[{}]\n", kDingoFsBuildType.c_str());
-  std::cout << GetBuildFlag() << "\n";
+std::string DingoVersionString() {
+  std::ostringstream oss;
+  oss << fmt::format("DINGOFS VERSION:[{}-{}]\n", kMajorVersion.c_str(), kMinorVersion.c_str());
+  oss << fmt::format("DINGOFS GIT_TAG_VERSION:[{}]\n", kGitTagName.c_str());
+  oss << fmt::format("DINGOFS GIT_COMMIT_HASH:[{}]\n", kGitCommitHash.c_str());
+  oss << fmt::format("DINGOFS BUILD_TYPE:[{}]\n", kDingoFsBuildType.c_str());
+  oss << GetBuildFlag() << "\n";
+
+  return oss.str();
 }
+
+void DingoShowVersion() { std::cout << DingoVersionString(); }
 
 void DingoLogVersion() {
   DINGO_LOG(INFO) << "DINGOFS VERSION:[" << kMajorVersion << "-" << kMinorVersion << "]";

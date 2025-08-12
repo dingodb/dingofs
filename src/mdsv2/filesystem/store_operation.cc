@@ -40,12 +40,12 @@
 namespace dingofs {
 namespace mdsv2 {
 
-DEFINE_uint32(process_operation_batch_size, 64, "process operation batch size.");
-DEFINE_uint32(txn_max_retry_times, 5, "txn max retry times.");
+DEFINE_uint32(mds_store_operation_batch_size, 64, "process operation batch size.");
+DEFINE_uint32(mds_txn_max_retry_times, 5, "txn max retry times.");
 
-DEFINE_uint32(merge_operation_delay_us, 10, "merge operation delay us.");
+DEFINE_uint32(mds_store_operation_merge_delay_us, 10, "merge operation delay us.");
 
-DECLARE_uint32(compact_chunk_interval_ms);
+DECLARE_uint32(mds_compact_chunk_interval_ms);
 
 static const uint32_t kOpNameBufInitSize = 128;
 
@@ -1587,7 +1587,7 @@ Status CompactChunkOperation::Run(TxnUPtr& txn) {
   ChunkType chunk = MetaCodec::DecodeChunkValue(value);
 
   // reduce compact frequency
-  if (!is_force_ && chunk.last_compaction_time_ms() + FLAGS_compact_chunk_interval_ms > Helper::TimestampMs()) {
+  if (!is_force_ && chunk.last_compaction_time_ms() + FLAGS_mds_compact_chunk_interval_ms > Helper::TimestampMs()) {
     return Status::OK();
   }
 
@@ -2185,7 +2185,7 @@ Status OperationProcessor::RunAlone(Operation* operation) {
 
     bthread_usleep(CalWaitTimeUs(retry));
 
-  } while (++retry < FLAGS_txn_max_retry_times);
+  } while (++retry < FLAGS_mds_txn_max_retry_times);
 
   trace.RecordElapsedTime("store_operate");
 
@@ -2249,7 +2249,7 @@ std::map<OperationProcessor::Key, BatchOperation> OperationProcessor::Grouping(s
 
 void OperationProcessor::ProcessOperation() {
   std::vector<Operation*> stage_operations;
-  stage_operations.reserve(FLAGS_process_operation_batch_size);
+  stage_operations.reserve(FLAGS_mds_store_operation_batch_size);
 
   while (true) {
     stage_operations.clear();
@@ -2265,8 +2265,8 @@ void OperationProcessor::ProcessOperation() {
       break;
     }
 
-    if (FLAGS_merge_operation_delay_us > 0) {
-      bthread_usleep(FLAGS_merge_operation_delay_us);
+    if (FLAGS_mds_store_operation_merge_delay_us > 0) {
+      bthread_usleep(FLAGS_mds_store_operation_merge_delay_us);
     }
 
     do {
@@ -2389,7 +2389,7 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
 
     bthread_usleep(CalWaitTimeUs(retry));
 
-  } while (++retry < FLAGS_txn_max_retry_times);
+  } while (++retry < FLAGS_mds_txn_max_retry_times);
 
   SetElapsedTime(batch_operation, "store_operate");
 

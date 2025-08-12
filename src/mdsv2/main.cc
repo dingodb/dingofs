@@ -12,24 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <algorithm>
 #include <csignal>
 #include <iostream>
+#include <sstream>
 #include <string>
 
 #include "backtrace.h"
 #include "dlfcn.h"
 #include "fmt/format.h"
+#include "gflags/gflags.h"
 #include "glog/logging.h"
 #include "libunwind.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/version.h"
 #include "mdsv2/server.h"
+#include "options/mdsv2/option.h"
 
-DEFINE_string(conf, "./conf/dingo-mdsv2.toml", "mdsv2 config path");
-DEFINE_string(gflag_conf, "./conf/dingo-mdsv2.gflags", "mdsv2 gflags config path");
-DEFINE_string(coor_url, "file://./conf/coor_list", "coor service url, e.g. file://<path> or list://<addr1>,<addr2>");
-
-DEFINE_bool(show_version, false, "show version and exit");
+DEFINE_string(conf, "./conf/dingo-mdsv2.conf", "mdsv2 config path");
+DEFINE_string(coor_url, "file://./conf/coor_list", "coor service url, e.g. file://<path> or list://<addr1>");
 
 const int kMaxStacktraceSize = 128;
 
@@ -211,25 +212,120 @@ static bool GeneratePidFile(const std::string& filepath) {
   return dingofs::mdsv2::Helper::SaveFile(filepath, std::to_string(pid));
 }
 
+static std::vector<gflags::CommandLineFlagInfo> GetFlags(const std::string& prefix) {
+  std::vector<gflags::CommandLineFlagInfo> dist_flags;
+
+  gflags::CommandLineFlagInfo conf_flag;
+  if (gflags::GetCommandLineFlagInfo("conf", &conf_flag)) dist_flags.push_back(conf_flag);
+  gflags::CommandLineFlagInfo coor_url_flag;
+  if (gflags::GetCommandLineFlagInfo("coor_url", &coor_url_flag)) dist_flags.push_back(coor_url_flag);
+
+  std::vector<gflags::CommandLineFlagInfo> flags;
+  gflags::GetAllFlags(&flags);
+  for (const auto& flag : flags) {
+    if (flag.name.find(prefix) != std::string::npos) {
+      dist_flags.push_back(flag);
+    }
+  }
+
+  return dist_flags;
+}
+static size_t GetFlagMaxWidth(const std::vector<gflags::CommandLineFlagInfo>& flags) {
+  size_t max_width = 0;
+  for (const auto& flag : flags) {
+    max_width = std::max(flag.name.size() + flag.type.size(), max_width);
+  }
+  return max_width;
+}
+
+static std::string GetUsage(char* program_name) {
+  std::ostringstream oss;
+  oss << "Usage: \n";
+  oss << fmt::format("\t{} --version\n", program_name);
+  oss << fmt::format("\t{} --help\n", program_name);
+  oss << fmt::format("\t{} --mds_server_port=7801", program_name);
+  oss << fmt::format("\t{} --conf=./conf/dingo-mdsv2.conf", program_name);
+  oss << fmt::format("\t{} --conf=./conf/dingo-mdsv2.conf --coor_url=file://./conf/coor_list\n", program_name);
+  oss << fmt::format("\t{} --conf=./conf/dingo-mdsv2.conf --coor_url=list://127.0.0.1:22001\n", program_name);
+  oss << fmt::format("\t{} [OPTIONS]\n", program_name);
+
+  auto flags = GetFlags("mds_");
+
+  auto get_name_max_width_fn = [&flags]() {
+    size_t max_width = 0;
+    for (const auto& flag : flags) {
+      max_width = std::max(flag.name.size() + flag.type.size(), max_width);
+    }
+    return max_width;
+  };
+
+  auto get_default_value_width_fn = [&flags]() {
+    size_t max_width = 0;
+    for (const auto& flag : flags) {
+      max_width = std::max(flag.default_value.size(), max_width);
+    }
+    return max_width;
+  };
+
+  size_t max_width = get_name_max_width_fn() + 2;
+  size_t default_value_width = get_default_value_width_fn() + 2;
+  for (const auto& flag : flags) {
+    std::string name_type = fmt::format("{}={}", flag.name, flag.type);
+    std::string default_value = fmt::format("[{}]", flag.default_value);
+    oss << fmt::format("\t--{:<{}} {:<{}} {}\n", name_type, max_width, default_value, default_value_width,
+                       flag.description);
+  }
+
+  return oss.str();
+}
+
+static bool ParseOption(int argc, char** argv) {
+  for (int i = 1; i < argc; i++) {
+    if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--version") == 0) {
+      std::cout << dingofs::mdsv2::DingoVersionString();
+      return true;
+
+    } else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
+      std::cout << GetUsage(argv[0]);
+      return true;
+    }
+  }
+
+  return false;
+}
+
+static bool CheckCoorUrl(const std::string& coor_url) {
+  if (coor_url.empty()) {
+    std::cerr << "coor url is empty.\n";
+    return false;
+  }
+
+  if (coor_url.substr(0, 7) != "file://" && coor_url.substr(0, 7) != "list://") {
+    std::cerr << "coor url must start with file:// or list://\n";
+    return false;
+  }
+
+  auto coor_addr = dingofs::mdsv2::Helper::ParseCoorAddr(coor_url);
+  if (coor_addr.empty()) {
+    std::cerr << "coor addr is invalid, please check your coor url: " << coor_url << '\n';
+    return false;
+  }
+
+  return true;
+}
+
 int main(int argc, char* argv[]) {
-  if (dingofs::mdsv2::Helper::IsExistPath(FLAGS_gflag_conf)) {
-    google::SetCommandLineOption("flagfile", FLAGS_gflag_conf.c_str());
+  if (ParseOption(argc, argv)) return 0;
+
+  if (dingofs::mdsv2::Helper::IsExistPath(FLAGS_conf)) {
+    google::SetCommandLineOption("flagfile", FLAGS_conf.c_str());
   }
 
-  google::ParseCommandLineFlags(&argc, &argv, true);
+  std::cout << fmt::format("mds server id: {}\n", dingofs::mdsv2::FLAGS_mds_server_id);
 
-  if (FLAGS_show_version) {
-    dingofs::mdsv2::DingoShowVersion();
+  gflags::ParseCommandLineNonHelpFlags(&argc, &argv, false);
 
-    std::cout << '\n';
-    std::cout << fmt::format("Usage: {} --conf ./conf/dingo-mdsv2.toml --coor_url=[file://./conf/coor_list]\n",
-                             argv[0]);
-    std::cout << "Example: \n";
-    std::cout << "\tbin/dingofs_mdsv2 --show_version\n";
-    std::cout << "\tbin/dingofs_mdsv2 --conf ./conf/dingo-mdsv2.toml --coor_url=file://./conf/coor_list\n";
-
-    exit(-1);
-  }
+  if (!CheckCoorUrl(FLAGS_coor_url)) return -1;
 
   SetupSignalHandler();
 

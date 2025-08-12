@@ -32,10 +32,10 @@
 namespace dingofs {
 namespace mdsv2 {
 
-DEFINE_uint64(distribution_lock_lease_ttl_ms, 18000, "distribution lock lease ttl.");
-DEFINE_uint32(distribution_lock_scan_size, 1024, "distribution lock scan size.");
+DEFINE_uint64(mds_distribution_lock_lease_ttl_ms, 18000, "distribution lock lease ttl.");
+DEFINE_uint32(mds_distribution_lock_scan_size, 1024, "distribution lock scan size.");
 
-DECLARE_uint32(txn_max_retry_times);
+DECLARE_uint32(mds_txn_max_retry_times);
 
 CoorDistributionLock::CoorDistributionLock(CoordinatorClientSPtr coordinator_client, const std::string& lock_prefix,
                                            int64_t mds_id)
@@ -100,7 +100,7 @@ std::string CoorDistributionLock::LockKey() { return fmt::format("{}/{}", lock_p
 
 Status CoorDistributionLock::CreateLease(int64_t& lease_id) {
   int64_t ttl = 0;
-  auto status = coordinator_client_->LeaseGrant(0, FLAGS_distribution_lock_lease_ttl_ms, lease_id, ttl);
+  auto status = coordinator_client_->LeaseGrant(0, FLAGS_mds_distribution_lock_lease_ttl_ms, lease_id, ttl);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("[dlock.{}] lease grant fail, error: {}", LockKey(), status.error_str());
     return Status(pb::error::ECOORDINATOR, status.error_str());
@@ -184,7 +184,7 @@ Status CoorDistributionLock::CheckLock(std::string& watch_key, int64_t& watch_re
   std::vector<CoordinatorClient::KVWithExt> kvs;
   bool more;
   int64_t count;
-  auto status = coordinator_client_->KvRange(options, range, FLAGS_distribution_lock_scan_size, kvs, more, count);
+  auto status = coordinator_client_->KvRange(options, range, FLAGS_mds_distribution_lock_scan_size, kvs, more, count);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("[dlock.{}] scan range fail, error: {}", LockKey(), status.error_str());
     return Status(pb::error::ECOORDINATOR, status.error_str());
@@ -277,7 +277,7 @@ bool CoorDistributionLock::LaunchRenewLease() {
 
               self->RenewLease(self->lease_id_);
 
-              bthread_usleep(FLAGS_distribution_lock_lease_ttl_ms * 1000 / 2);
+              bthread_usleep(FLAGS_mds_distribution_lock_lease_ttl_ms * 1000 / 2);
             }
 
             delete param;
@@ -355,7 +355,7 @@ void CoorDistributionLock::CheckLock() {
       DINGO_LOG(INFO) << fmt::format("[dlock.{}] mds({}) own lock.", lock_key, mds_id_);
 
       is_locked_.store(true);
-      bthread_usleep(FLAGS_distribution_lock_lease_ttl_ms * 1000 / 3);
+      bthread_usleep(FLAGS_mds_distribution_lock_lease_ttl_ms * 1000 / 3);
 
     } else {
       // not own lock, watch key
@@ -411,7 +411,7 @@ bool StoreDistributionLock::IsLocked() {
 
   // silence period, avoid multi-owner
   uint64_t now_ms = Helper::TimestampMs();
-  if (now_ms < last_lock_time_ms_.load() + FLAGS_distribution_lock_lease_ttl_ms) {
+  if (now_ms < last_lock_time_ms_.load() + FLAGS_mds_distribution_lock_lease_ttl_ms) {
     return false;
   }
 
@@ -446,7 +446,7 @@ Status StoreDistributionLock::RenewLease() {
       // self is lock owner
       if (owner_mds_id == mds_id_) {
         is_locked_.store(true);
-        expire_time_ms = now_ms + FLAGS_distribution_lock_lease_ttl_ms;
+        expire_time_ms = now_ms + FLAGS_mds_distribution_lock_lease_ttl_ms;
         state = "OwnLock";
 
       } else {
@@ -458,7 +458,7 @@ Status StoreDistributionLock::RenewLease() {
 
         } else {
           // self is not lock owner, but lock is expired
-          expire_time_ms = now_ms + FLAGS_distribution_lock_lease_ttl_ms;
+          expire_time_ms = now_ms + FLAGS_mds_distribution_lock_lease_ttl_ms;
           need_update_last_lock_time = true;
           state = "ExpiredLock";
         }
@@ -466,7 +466,7 @@ Status StoreDistributionLock::RenewLease() {
 
     } else if (status.error_code() != pb::error::ENOT_FOUND) {
       // not exist lock owner
-      expire_time_ms = now_ms + FLAGS_distribution_lock_lease_ttl_ms;
+      expire_time_ms = now_ms + FLAGS_mds_distribution_lock_lease_ttl_ms;
       need_update_last_lock_time = true;
       state = "NotExistLockOwner";
     }
@@ -484,7 +484,7 @@ Status StoreDistributionLock::RenewLease() {
       break;
     }
 
-  } while (++retry < FLAGS_txn_max_retry_times);
+  } while (++retry < FLAGS_mds_txn_max_retry_times);
 
   DINGO_LOG(INFO) << fmt::format("[dlock.{}] renew lease finish, owner({}) state({}) retry({}) {}.", LockKey(),
                                  owner_mds_id, state, retry, status.error_str());
@@ -514,7 +514,7 @@ bool StoreDistributionLock::LaunchRenewLease() {
 
               self->RenewLease();
 
-              bthread_usleep(FLAGS_distribution_lock_lease_ttl_ms * 1000 / 3);
+              bthread_usleep(FLAGS_mds_distribution_lock_lease_ttl_ms * 1000 / 3);
             }
 
             delete param;

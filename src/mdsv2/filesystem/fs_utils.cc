@@ -36,7 +36,7 @@
 namespace dingofs {
 namespace mdsv2 {
 
-DEFINE_uint32(fs_scan_batch_size, 10000, "fs scan batch size");
+DEFINE_uint32(mds_scan_batch_size, 10000, "fs scan batch size");
 
 static const uint32_t kBatchGetSize = 1000;
 

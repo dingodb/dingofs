@@ -30,10 +30,10 @@
 namespace dingofs {
 namespace mdsv2 {
 
-DECLARE_uint32(txn_max_retry_times);
+DECLARE_uint32(mds_txn_max_retry_times);
 
-DEFINE_string(id_generator_type, "coor", "id generator type, coor or store");
-DEFINE_validator(id_generator_type,
+DEFINE_string(mds_id_generator_type, "coor", "id generator type, coor or store");
+DEFINE_validator(mds_id_generator_type,
                  [](const char*, const std::string& value) -> bool { return value == "coor" || value == "store"; });
 
 const std::string kFsAutoIncrementIdName = "dingofs-fs-id";
@@ -245,7 +245,7 @@ Status StoreAutoIncrementIdGenerator::GetOrPutAllocId(uint64_t& alloc_id) {
       break;
     }
 
-  } while (++retry < FLAGS_txn_max_retry_times);
+  } while (++retry < FLAGS_mds_txn_max_retry_times);
 
   return status;
 }
@@ -278,7 +278,7 @@ Status StoreAutoIncrementIdGenerator::AllocateIds(uint32_t size) {
       break;
     }
 
-  } while (++retry < FLAGS_txn_max_retry_times);
+  } while (++retry < FLAGS_mds_txn_max_retry_times);
 
   if (status.ok()) {
     last_alloc_id_ = start_alloc_id + size;
@@ -292,43 +292,43 @@ Status StoreAutoIncrementIdGenerator::AllocateIds(uint32_t size) {
 }
 
 IdGeneratorUPtr NewFsIdGenerator(CoordinatorClientSPtr coordinator_client, KVStorageSPtr kv_storage) {
-  if (FLAGS_id_generator_type == "coor") {
+  if (FLAGS_mds_id_generator_type == "coor") {
     return CoorAutoIncrementIdGenerator::New(coordinator_client, kFsAutoIncrementIdName, kFsTableId, kFsIdStartId,
                                              kFsIdBatchSize);
 
-  } else if (FLAGS_id_generator_type == "store") {
+  } else if (FLAGS_mds_id_generator_type == "store") {
     return StoreAutoIncrementIdGenerator::New(kv_storage, kFsAutoIncrementIdName, kFsIdStartId, kFsIdBatchSize);
 
   } else {
-    CHECK(false) << fmt::format("invalid id generator type({}), use coor|store.", FLAGS_id_generator_type);
+    CHECK(false) << fmt::format("invalid id generator type({}), use coor|store.", FLAGS_mds_id_generator_type);
   }
 }
 
 IdGeneratorUPtr NewInodeIdGenerator(uint32_t fs_id, CoordinatorClientSPtr coordinator_client,
                                     KVStorageSPtr kv_storage) {
   std::string name = fmt::format("{}-{}", kInoAutoIncrementIdName, fs_id);
-  if (FLAGS_id_generator_type == "coor") {
+  if (FLAGS_mds_id_generator_type == "coor") {
     return CoorAutoIncrementIdGenerator::New(coordinator_client, name, fs_id, kInoStartId, kInoBatchSize);
 
-  } else if (FLAGS_id_generator_type == "store") {
+  } else if (FLAGS_mds_id_generator_type == "store") {
     return StoreAutoIncrementIdGenerator::New(kv_storage, name, kInoStartId, kInoBatchSize);
 
   } else {
-    CHECK(false) << fmt::format("invalid id generator type({}), use coor|store.", FLAGS_id_generator_type);
+    CHECK(false) << fmt::format("invalid id generator type({}), use coor|store.", FLAGS_mds_id_generator_type);
   }
 }
 
 IdGeneratorSPtr NewSliceIdGenerator(CoordinatorClientSPtr coordinator_client, KVStorageSPtr kv_storage) {
-  if (FLAGS_id_generator_type == "coor") {
+  if (FLAGS_mds_id_generator_type == "coor") {
     return CoorAutoIncrementIdGenerator::NewShare(coordinator_client, kSliceAutoIncrementIdName, kSliceTableId,
                                                   kSliceIdStartId, kSliceIdBatchSize);
 
-  } else if (FLAGS_id_generator_type == "store") {
+  } else if (FLAGS_mds_id_generator_type == "store") {
     return StoreAutoIncrementIdGenerator::NewShare(kv_storage, kSliceAutoIncrementIdName, kSliceIdStartId,
                                                    kSliceIdBatchSize);
 
   } else {
-    CHECK(false) << fmt::format("invalid id generator type({}), use coor|store.", FLAGS_id_generator_type);
+    CHECK(false) << fmt::format("invalid id generator type({}), use coor|store.", FLAGS_mds_id_generator_type);
   }
 }
 

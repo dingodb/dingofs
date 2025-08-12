@@ -14,14 +14,13 @@
 
 #include "mdsv2/server.h"
 
-#include <fmt/format.h>
-#include <gflags/gflags_declare.h>
-
 #include <string>
 #include <utility>
 
 #include "fmt/core.h"
+#include "fmt/format.h"
 #include "gflags/gflags.h"
+#include "gflags/gflags_declare.h"
 #include "glog/logging.h"
 #include "mdsv2/background/fsinfo_sync.h"
 #include "mdsv2/background/heartbeat.h"
@@ -34,20 +33,38 @@
 #include "mdsv2/service/mds_service.h"
 #include "mdsv2/statistics/fs_stat.h"
 #include "mdsv2/storage/dingodb_storage.h"
+#include "options/mdsv2/option.h"
 
 namespace dingofs {
 namespace mdsv2 {
 
-DEFINE_string(mdsmonitor_lock_name, "/lock/mds/monitor", "mds monitor lock name");
-DEFINE_string(gc_lock_name, "/lock/mds/gc", "gc lock name");
+DEFINE_string(mds_monitor_lock_name, "/lock/mds/monitor", "mds monitor lock name");
+DEFINE_string(mds_gc_lock_name, "/lock/mds/gc", "gc lock name");
 
-DEFINE_string(pid_file_name, "pid", "pid file name");
+DEFINE_string(mds_pid_file_name, "pid", "pid file name");
 
-DECLARE_string(worker_set_type);
+DECLARE_string(mds_service_worker_set_type);
 
 const std::string kQuotaWorkerSetName = "QUOTA_WORKER_SET";
-DEFINE_uint32(quota_worker_num, 24, "quota worker number");
-DEFINE_uint32(quota_worker_max_pending_num, 4096, "quota worker max pending number");
+DEFINE_uint32(mds_quota_worker_num, 24, "quota worker number");
+DEFINE_uint32(mds_quota_worker_max_pending_num, 4096, "quota worker max pending number");
+
+// crontab config
+DEFINE_uint32(mds_crontab_heartbeat_interval_s, 5, "heartbeat interval seconds");
+DEFINE_uint32(mds_crontab_fsinfosync_interval_s, 10, "fs info sync interval seconds");
+DEFINE_uint32(mds_crontab_mdsmonitor_interval_s, 5, "mds monitor interval seconds");
+DEFINE_uint32(mds_crontab_quota_sync_interval_s, 6, "quota sync interval seconds");
+DEFINE_uint32(mds_crontab_gc_interval_s, 60, "gc interval seconds");
+
+// log config
+DEFINE_string(mds_log_level, "INFO", "log level, DEBUG, INFO, WARNING, ERROR, FATAL");
+DEFINE_string(mds_log_path, "./log", "log path, if empty, use default log path");
+
+// service config
+DEFINE_uint32(mds_server_id, 1001, "server id, must be unique in the cluster");
+DEFINE_string(mds_server_host, "127.0.0.1", "server host");
+DEFINE_string(mds_server_listen_host, "0.0.0.0", "server listen host");
+DEFINE_uint32(mds_server_port, 7801, "server port");
 
 Server::~Server() {}  // NOLINT
 
@@ -75,35 +92,28 @@ static LogLevel GetDingoLogLevel(const std::string& log_level) {
 bool Server::InitConfig(const std::string& path) {
   DINGO_LOG(INFO) << "Init config: " << path;
 
-  if (!app_option_.Parse(path)) {
-    DINGO_LOG(ERROR) << "parse config file fail.";
-    return false;
-  }
-
-  const auto& server_option = app_option_.server();
-  if (server_option.id() == 0) {
+  if (FLAGS_mds_server_id == 0) {
     DINGO_LOG(ERROR) << "mds server id is 0, please set a valid id.";
     return false;
   }
-  if (server_option.host().empty()) {
+  if (FLAGS_mds_server_host.empty()) {
     DINGO_LOG(ERROR) << "mds server host is empty, please set a valid host.";
     return false;
   }
-  if (server_option.host() == "0.0.0.0") {
+  if (FLAGS_mds_server_host == "0.0.0.0") {
     DINGO_LOG(ERROR) << "mds server host is 0.0.0.0, can't set it.";
     return false;
   }
-  if (server_option.port() == 0) {
+  if (FLAGS_mds_server_port == 0) {
     DINGO_LOG(ERROR) << "mds server port is 0, please set a valid port.";
     return false;
   }
 
-  const auto& log_option = app_option_.log();
-  if (log_option.level().empty()) {
+  if (FLAGS_mds_log_level.empty()) {
     DINGO_LOG(ERROR) << "mds log level is empty, please set a valid log level.";
     return false;
   }
-  if (log_option.path().empty()) {
+  if (FLAGS_mds_log_path.empty()) {
     DINGO_LOG(ERROR) << "mds log path is empty, please set a valid log path.";
     return false;
   }
@@ -114,11 +124,9 @@ bool Server::InitConfig(const std::string& path) {
 bool Server::InitLog() {
   DINGO_LOG(INFO) << "init log.";
 
-  const auto& log_option = app_option_.log();
+  DINGO_LOG(INFO) << fmt::format("Init log: {} {}", FLAGS_mds_log_level, FLAGS_mds_log_path);
 
-  DINGO_LOG(INFO) << fmt::format("Init log: {} {}", log_option.level(), log_option.path());
-
-  DingoLogger::InitLogger(log_option.path(), "mdsv2", GetDingoLogLevel(log_option.level()));
+  DingoLogger::InitLogger(FLAGS_mds_log_path, "mdsv2", GetDingoLogLevel(FLAGS_mds_log_level));
 
   DingoLogVersion();
   return true;
@@ -127,12 +135,10 @@ bool Server::InitLog() {
 bool Server::InitMDSMeta() {
   DINGO_LOG(INFO) << "init mds meta.";
 
-  const auto& server_option = app_option_.server();
+  self_mds_meta_.SetID(FLAGS_mds_server_id);
 
-  self_mds_meta_.SetID(server_option.id());
-
-  self_mds_meta_.SetHost(server_option.host());
-  self_mds_meta_.SetPort(server_option.port());
+  self_mds_meta_.SetHost(FLAGS_mds_server_host);
+  self_mds_meta_.SetPort(FLAGS_mds_server_port);
   self_mds_meta_.SetState(MDSMeta::State::kNormal);
 
   DINGO_LOG(INFO) << fmt::format("init mds meta, self: {}.", self_mds_meta_.ToString());
@@ -200,8 +206,8 @@ bool Server::InitFileSystem() {
   CHECK(slice_id_generator != nullptr) << "new slice AutoIncrementIdGenerator fail.";
   CHECK(slice_id_generator->Init()) << "init slice AutoIncrementIdGenerator fail.";
 
-  quota_worker_set_ =
-      ExecqWorkerSet::NewUnique(kQuotaWorkerSetName, FLAGS_quota_worker_num, FLAGS_quota_worker_max_pending_num);
+  quota_worker_set_ = ExecqWorkerSet::NewUnique(kQuotaWorkerSetName, FLAGS_mds_quota_worker_num,
+                                                FLAGS_mds_quota_worker_max_pending_num);
   CHECK(quota_worker_set_ != nullptr) << "new quota worker set fail.";
   CHECK(quota_worker_set_->Init()) << "init service read worker set fail.";
 
@@ -239,7 +245,7 @@ bool Server::InitMonitor() {
   CHECK(kv_storage_ != nullptr) << "kv storage is nullptr.";
   CHECK(notify_buddy_ != nullptr) << "notify_buddy is nullptr.";
 
-  auto dist_lock = StoreDistributionLock::New(kv_storage_, FLAGS_mdsmonitor_lock_name, self_mds_meta_.ID());
+  auto dist_lock = StoreDistributionLock::New(kv_storage_, FLAGS_mds_monitor_lock_name, self_mds_meta_.ID());
   CHECK(dist_lock != nullptr) << "gc dist lock is nullptr.";
 
   monitor_ = Monitor::New(file_system_set_, dist_lock, notify_buddy_);
@@ -263,7 +269,7 @@ bool Server::InitGcProcessor() {
   CHECK(operation_processor_ != nullptr) << "operation_processor is nullptr.";
   CHECK(file_system_set_ != nullptr) << "file system set is nullptr.";
 
-  auto dist_lock = StoreDistributionLock::New(kv_storage_, FLAGS_gc_lock_name, self_mds_meta_.ID());
+  auto dist_lock = StoreDistributionLock::New(kv_storage_, FLAGS_mds_gc_lock_name, self_mds_meta_.ID());
   CHECK(dist_lock != nullptr) << "gc dist lock is nullptr.";
 
   gc_processor_ = GcProcessor::New(file_system_set_, operation_processor_, dist_lock);
@@ -276,12 +282,10 @@ bool Server::InitGcProcessor() {
 bool Server::InitCrontab() {
   DINGO_LOG(INFO) << "init crontab.";
 
-  const auto& crontab_option = app_option_.crontab();
-
   // Add heartbeat crontab
   crontab_configs_.push_back({
-      "HEARTBEA",
-      crontab_option.heartbeat_interval_s() * 1000,
+      "HEARTBEAT",
+      FLAGS_mds_crontab_heartbeat_interval_s * 1000,
       true,
       [](void*) { Server::GetInstance().GetHeartbeat()->Run(); },
   });
@@ -289,7 +293,7 @@ bool Server::InitCrontab() {
   // Add fs info sync crontab
   crontab_configs_.push_back({
       "FSINFO_SYNC",
-      crontab_option.fsinfosync_interval_s() * 1000,
+      FLAGS_mds_crontab_fsinfosync_interval_s * 1000,
       true,
       [](void*) { FsInfoSync::TriggerFsInfoSync(); },
   });
@@ -297,7 +301,7 @@ bool Server::InitCrontab() {
   // Add fs info sync crontab
   crontab_configs_.push_back({
       "MDS_MONITOR",
-      crontab_option.mdsmonitor_interval_s() * 1000,
+      FLAGS_mds_crontab_mdsmonitor_interval_s * 1000,
       true,
       [](void*) { Server::GetInstance().GetMonitor()->Run(); },
   });
@@ -305,7 +309,7 @@ bool Server::InitCrontab() {
   // Add quota sync crontab
   crontab_configs_.push_back({
       "QUOTA_SYNC",
-      crontab_option.quota_sync_interval_s() * 1000,
+      FLAGS_mds_crontab_quota_sync_interval_s * 1000,
       true,
       [](void*) { Server::GetInstance().GetQuotaSynchronizer()->Run(); },
   });
@@ -313,7 +317,7 @@ bool Server::InitCrontab() {
   // Add fs info sync crontab
   crontab_configs_.push_back({
       "GC",
-      crontab_option.gc_interval_s() * 1000,
+      FLAGS_mds_crontab_gc_interval_s * 1000,
       true,
       [](void*) { Server::GetInstance().GetGcProcessor()->Run(); },
   });
@@ -330,8 +334,7 @@ bool Server::InitService() {
   auto fs_stats = FsStats::New(operation_processor_);
   CHECK(fs_stats != nullptr) << "fsstats is nullptr.";
 
-  const auto& mds_option = app_option_.server().service().meta();
-  mds_service_ = MDSServiceImpl::New(mds_option, file_system_set_, gc_processor_, std::move(fs_stats));
+  mds_service_ = MDSServiceImpl::New(file_system_set_, gc_processor_, std::move(fs_stats));
   CHECK(mds_service_ != nullptr) << "new MDSServiceImpl fail.";
 
   if (!mds_service_->Init()) {
@@ -350,18 +353,12 @@ bool Server::InitService() {
   return true;
 }
 
-std::string Server::GetPidFilePath() {
-  const auto& log_option = app_option_.log();
-
-  return log_option.path() + "/" + FLAGS_pid_file_name;
-}
+std::string Server::GetPidFilePath() { return FLAGS_mds_log_path + "/" + FLAGS_mds_pid_file_name; }
 
 std::string Server::GetListenAddr() {
-  const auto& server_option = app_option_.server();
+  std::string host = FLAGS_mds_server_listen_host.empty() ? FLAGS_mds_server_host : FLAGS_mds_server_listen_host;
 
-  std::string host = server_option.listen_host().empty() ? server_option.host() : server_option.listen_host();
-
-  return fmt::format("{}:{}", host, server_option.port());
+  return fmt::format("{}:{}", host, FLAGS_mds_server_port);
 }
 
 MDSMeta& Server::GetMDSMeta() { return self_mds_meta_; }
