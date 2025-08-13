@@ -285,7 +285,8 @@ Status Members::RegisterMember(const EndPoint& endpoint,
   return Status::OK();
 }
 
-Status Members::DeregisterMember(const EndPoint& endpoint, MemberSPtr& member) {
+Status Members::DeregisterMember(const EndPoint& endpoint,
+                                 PBCacheGroupMember* old_info) {
   auto ep = endpoint.ToString();
   if (endpoint2id_.count(ep) == 0) {
     return Status::NotFound("member not found");
@@ -296,7 +297,9 @@ Status Members::DeregisterMember(const EndPoint& endpoint, MemberSPtr& member) {
     return Status::NotFound("member not found");
   }
 
-  member = iter->second;
+  auto member = iter->second;
+  *old_info = member->Info();
+
   auto status = member->ClearAll();
   if (!status.ok()) {
     LOG(ERROR) << "Deregister member failed: member = "

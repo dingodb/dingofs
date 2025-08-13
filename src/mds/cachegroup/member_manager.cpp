@@ -132,16 +132,16 @@ Status CacheGroupMemberManagerImpl::RegisterMember(const EndPoint& endpoint,
 
 Status CacheGroupMemberManagerImpl::DeregisterMember(const EndPoint& endpoint) {
   WriteLockGuard lock(rwlock_);
-  MemberSPtr old_member;
-  auto status = members_->DeregisterMember(endpoint, old_member);
+  PBCacheGroupMember old_info;
+  auto status = members_->DeregisterMember(endpoint, &old_info);
   if (!status.ok()) {
     LOG(ERROR) << "Deregister member failed: endpoint = " << endpoint.ToString()
                << ", status = " << status.ToString();
     return status;
   }
 
-  auto member_id = old_member->Info().id();
-  auto group_name = old_member->Info().group_name();
+  auto member_id = old_info.id();
+  auto group_name = old_info.group_name();
   LeaveGroup(group_name, member_id);
 
   LOG(INFO) << "Deregister member success: endpoint = " << endpoint.ToString();

@@ -32,7 +32,6 @@
 #include "common/status.h"
 #include "mds/cachegroup/common.h"
 #include "mds/kvstorageclient/etcd_client.h"
-#include "utils/concurrent/concurrent.h"
 #include "utils/concurrent/rw_lock.h"
 
 namespace dingofs {
@@ -87,7 +86,8 @@ class Members {
   Status RegisterMember(const EndPoint& endpoint, MemberSPtr& member);
   Status RegisterMember(const EndPoint& endpoint, const std::string& want_id,
                         MemberSPtr& member);
-  Status DeregisterMember(const EndPoint& endpoint, MemberSPtr& member);
+  Status DeregisterMember(const EndPoint& endpoint,
+                          PBCacheGroupMember* old_info);
   std::vector<MemberSPtr> GetAllMembers();
   std::vector<PBCacheGroupMember> GetAllInfos();  // include deregistered info
 
