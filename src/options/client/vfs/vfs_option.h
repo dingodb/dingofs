@@ -39,6 +39,7 @@ struct VFSMetaOption {
 
 struct VFSDataOption {
   bool writeback{false};  // whether to use writeback
+  std::string writeback_suffix;
 };
 
 struct VFSOption {

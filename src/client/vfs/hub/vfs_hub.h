@@ -29,6 +29,7 @@
 #include "client/meta/vfs_meta.h"
 #include "client/vfs.h"
 #include "client/vfs/background/iperiodic_flush_manager.h"
+#include "client/vfs/components/file_suffix_watcher.h"
 #include "client/vfs/handle/handle_manager.h"
 #include "client/vfs/meta/meta_system.h"
 #include "common/status.h"
@@ -66,6 +67,8 @@ class VFSHub {
   virtual IPeriodicFlushManager* GetPeriodicFlushManger() = 0;
 
   virtual PageAllocator* GetPageAllocator() = 0;
+
+  virtual FileSuffixWatcher* GetFileSuffixWatcher() = 0;
 
   virtual Tracer* GetTracer() = 0;
 
@@ -126,6 +129,11 @@ class VFSHubImpl : public VFSHub {
     return page_allocator_.get();
   }
 
+  FileSuffixWatcher* GetFileSuffixWatcher() override {
+    CHECK_NOTNULL(file_suffix_watcher_);
+    return file_suffix_watcher_.get();
+  }
+
   Tracer* GetTracer() override {
     CHECK_NOTNULL(tracer_);
     return tracer_.get();
@@ -155,12 +163,12 @@ class VFSHubImpl : public VFSHub {
   std::unique_ptr<MetaSystem> meta_system_;
   std::unique_ptr<HandleManager> handle_manager_;
   std::unique_ptr<blockaccess::BlockAccesser> block_accesser_;
-  //   std::unique_ptr<cache::BlockCache> block_cache_;
-  std::shared_ptr<cache::BlockCache> block_cache_;
+  std::unique_ptr<cache::BlockCache> block_cache_;
   std::unique_ptr<Executor> flush_executor_;
   std::unique_ptr<Executor> read_executor_;
   std::unique_ptr<IPeriodicFlushManager> priodic_flush_manager_;
   std::shared_ptr<PageAllocator> page_allocator_;
+  std::unique_ptr<FileSuffixWatcher> file_suffix_watcher_;
   std::unique_ptr<Tracer> tracer_;
 };
 

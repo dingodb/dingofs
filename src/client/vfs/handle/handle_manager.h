@@ -63,7 +63,7 @@ class HandleManager {
   HandleManager(VFSHub* hub) : vfs_hub_(hub) {};
   ~HandleManager() = default;
 
-  HandleSPtr NewHandle();
+  HandleSPtr NewHandle(uint64_t fh);
 
   HandleSPtr FindHandler(uint64_t fh);
 

@@ -12,31 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(background)
-add_subdirectory(data)
-add_subdirectory(handle)
-add_subdirectory(hub)
-add_subdirectory(meta)
-add_subdirectory(service)
-add_subdirectory(components)
-
-add_library(vfs_lib
-    vfs_impl.cpp
+add_library(vfs_components
+    file_suffix_watcher.cc
 )
 
-target_link_libraries(vfs_lib
-    PROTO_OBJS
-    dingofs_common
-    dingofs_trace
-    vfs_meta_system
-    vfs_data
-    vfs_meta
-    vfs_hub
-    vfs_handle
-    vfs_service
-    vfs_components
+target_link_libraries(vfs_components
     glog::glog
-    gflags::gflags
-    fmt::fmt
     absl::str_format
 )

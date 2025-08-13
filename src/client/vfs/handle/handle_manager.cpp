@@ -26,10 +26,10 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
-HandleSPtr HandleManager::NewHandle() {
+HandleSPtr HandleManager::NewHandle(uint64_t fh) {
   auto handle = std::make_shared<Handle>();
   std::lock_guard<std::mutex> lock(mutex_);
-  handle->fh = vfs::FhGenerator::GenFh();
+  handle->fh = fh;
   handles_[handle->fh] = handle;
 
   return handle;
@@ -50,8 +50,7 @@ void HandleManager::ReleaseHandler(uint64_t fh) {
 void HandleManager::FlushAll() {
   std::lock_guard<std::mutex> lock(mutex_);
   for (auto& [fh, handle] : handles_) {
-    if (handle->file == nullptr) continue;
-
+    CHECK_NOTNULL(handle->file);
     Status s = handle->file->Flush();
     if (!s.ok()) {
       LOG(ERROR) << "Failed to flush file handle: " << fh

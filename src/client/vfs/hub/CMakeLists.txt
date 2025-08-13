@@ -24,5 +24,6 @@ target_link_libraries(vfs_hub
     vfs_meta_system
     block_accesser
     vfs_handle
+    vfs_components
     absl::str_format
 )

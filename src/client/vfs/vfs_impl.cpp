@@ -95,7 +95,11 @@ Status VFSImpl::Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
     return Status::OK();
   }
 
-  return meta_system_->Lookup(ctx, parent, name, attr);
+  Status s = meta_system_->Lookup(ctx, parent, name, attr);
+  if (s.ok()) {
+    vfs_hub_->GetFileSuffixWatcher()->Remeber(*attr, name);
+  }
+  return s;
 }
 
 Status VFSImpl::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
@@ -123,7 +127,11 @@ Status VFSImpl::ReadLink(ContextSPtr ctx, Ino ino, std::string* link) {
 Status VFSImpl::MkNod(ContextSPtr ctx, Ino parent, const std::string& name,
                       uint32_t uid, uint32_t gid, uint32_t mode, uint64_t dev,
                       Attr* attr) {
-  return meta_system_->MkNod(ctx, parent, name, uid, gid, mode, dev, attr);
+  Status s = meta_system_->MkNod(ctx, parent, name, uid, gid, mode, dev, attr);
+  if (s.ok()) {
+    vfs_hub_->GetFileSuffixWatcher()->Remeber(*attr, name);
+  }
+  return s;
 }
 
 Status VFSImpl::Unlink(ContextSPtr ctx, Ino parent, const std::string& name) {
@@ -169,6 +177,7 @@ Status VFSImpl::Rename(ContextSPtr ctx, Ino old_parent,
     return Status::NoPermitted("Can not rename internal node");
   }
 
+  // TODO: maybe call file suffix watcher to forget old name?
   return meta_system_->Rename(ctx, old_parent, old_name, new_parent, new_name);
 }
 
@@ -183,15 +192,19 @@ Status VFSImpl::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
     }
   }
 
-  return meta_system_->Link(ctx, ino, new_parent, new_name, attr);
+  Status s = meta_system_->Link(ctx, ino, new_parent, new_name, attr);
+  if (s.ok()) {
+    vfs_hub_->GetFileSuffixWatcher()->Forget(ino);
+  }
+  return s;
 }
 
 Status VFSImpl::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t* fh) {
   // check if ino is .stats inode,if true ,get metric data and generate
   // inodeattr information
   if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
-    auto handler = handle_manager_->NewHandle();
-    *fh = handler->fh;
+    uint64_t gfh = vfs::FhGenerator::GenFh();
+    auto handler = handle_manager_->NewHandle(gfh);
 
     MetricsDumper metrics_dumper;
     bvar::DumpOptions opts;
@@ -208,15 +221,14 @@ Status VFSImpl::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t* fh) {
     handler->file_buffer.size = len;
     handler->file_buffer.data = std::move(file_data_ptr);
 
+    *fh = handler->fh;
     return Status::OK();
   }
 
-  HandleSPtr handle = handle_manager_->NewHandle();
-
-  Status s = meta_system_->Open(ctx, ino, flags, handle->fh);
-  if (!s.ok()) {
-    handle_manager_->ReleaseHandler(handle->fh);
-  } else {
+  uint64_t gfh = vfs::FhGenerator::GenFh();
+  Status s = meta_system_->Open(ctx, ino, flags, gfh);
+  if (s.ok()) {
+    HandleSPtr handle = handle_manager_->NewHandle(gfh);
     handle->ino = ino;
     handle->flags = flags;
     handle->file = std::make_unique<File>(vfs_hub_.get(), ino);
@@ -232,20 +244,20 @@ Status VFSImpl::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t* fh) {
 Status VFSImpl::Create(ContextSPtr ctx, Ino parent, const std::string& name,
                        uint32_t uid, uint32_t gid, uint32_t mode, int flags,
                        uint64_t* fh, Attr* attr) {
-  auto handle = handle_manager_->NewHandle();
-
-  Status s = meta_system_->Create(ctx, parent, name, uid, gid, mode, flags,
-                                  attr, handle->fh);
-  if (!s.ok()) {
-    handle_manager_->ReleaseHandler(handle->fh);
-  } else {
+  uint64_t gfh = vfs::FhGenerator::GenFh();
+  Status s =
+      meta_system_->Create(ctx, parent, name, uid, gid, mode, flags, attr, gfh);
+  if (s.ok()) {
     CHECK_GT(attr->ino, 0) << "ino in attr is null";
     Ino ino = attr->ino;
 
+    auto handle = handle_manager_->NewHandle(gfh);
     handle->ino = ino;
     handle->flags = flags;
     handle->file = std::make_unique<File>(vfs_hub_.get(), ino);
     *fh = handle->fh;
+
+    vfs_hub_->GetFileSuffixWatcher()->Remeber(*attr, name);
 
     // TOOD: if flags is O_RDONLY, no need schedule flush
     vfs_hub_->GetPeriodicFlushManger()->SubmitToFlush(handle);

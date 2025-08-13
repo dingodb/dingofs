@@ -164,6 +164,11 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
     }
   }
 
+  {
+    file_suffix_watcher_ = std::make_unique<FileSuffixWatcher>(
+        vfs_option_.data_option.writeback_suffix);
+  }
+
   started_.store(true, std::memory_order_relaxed);
   return Status::OK();
 }

@@ -62,6 +62,12 @@ void InitVFSOption(utils::Configuration* conf, VFSOption* option) {
               << (option->data_option.writeback ? "true" : "false");
   }
 
+  if(!conf->GetStringValue("vfs.data.writeback_suffix",
+                           &option->data_option.writeback_suffix)) {
+    LOG(INFO) << "Not found `vfs.data.writeback_suffix` in conf, "
+                 "default to: " << option->data_option.writeback_suffix;
+  }
+
   if (!conf->GetIntValue("vfs.data.flush_bg_thread",
                          &FLAGS_vfs_flush_bg_thread)) {
     LOG(INFO) << "Not found `vfs.data.flush_bg_thread` in conf, "

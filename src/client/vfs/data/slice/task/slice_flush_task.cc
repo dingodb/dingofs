@@ -87,18 +87,23 @@ void SliceFlushTask::RunAsync(StatusCallback cb) {
 
   flush_block_data_count_.store(to_flush.size(), std::memory_order_relaxed);
 
+  bool writeback = vfs_hub_->GetVFSOption().data_option.writeback;
+  if (!writeback) {
+    writeback = vfs_hub_->GetFileSuffixWatcher()->ShouldWriteback(
+        slice_data_context_.ino);
+  }
+
   for (const auto& [block_index, block_data_ptr] : to_flush) {
     BlockData* block_data = block_data_ptr.get();
     std::string block_uuid = block_data->UUID();
 
-    VLOG(6) << fmt::format("{} flush block_data: {}", UUID(), block_uuid);
+    VLOG(6) << fmt::format("{} flush block_data: {}, writeback: {}", UUID(),
+                           block_uuid, (writeback ? "true" : "false"));
     DCHECK_EQ(block_data->BlockIndex(), block_index);
 
     IOBuffer io_buffer = block_data->ToIOBuffer();
 
-    // TODO: read write back option from somewhere, currently using default
-    cache::PutOption option{.writeback =
-                                vfs_hub_->GetVFSOption().data_option.writeback};
+    cache::PutOption option{.writeback = writeback};
     // TODO: Block should  take own the iobuf
     cache::BlockKey key(slice_data_context_.fs_id, slice_data_context_.ino,
                         slice_id_, block_index, 0);
