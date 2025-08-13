@@ -1761,7 +1761,16 @@ Status FileSystem::WriteSlice(Context& ctx, Ino parent, Ino ino, uint64_t chunk_
     auto fs_info = fs_info_->Get();
     if (CompactChunkOperation::MaybeCompact(fs_info, ino, attr.length(), chunk)) {
       DINGO_LOG(INFO) << fmt::format("[fs.{}] trigger compact chunk({}) for ino({}).", fs_id_, chunk_index, ino);
-      operation_processor_->AsyncRun(CompactChunkOperation::New(fs_info, ino, chunk_index, attr.length()));
+
+      auto post_handler = [&](OperationSPtr operation) {
+        auto origin_operation = std::dynamic_pointer_cast<CompactChunkOperation>(operation);
+        auto& result = origin_operation->GetResult();
+        auto& attr = result.attr;
+        // update chunk cache
+        chunk_cache_.PutIf(attr.ino(), std::move(result.effected_chunk));
+      };
+      operation_processor_->AsyncRun(CompactChunkOperation::New(fs_info, ino, chunk_index, attr.length()),
+                                     post_handler);
     }
   }
 

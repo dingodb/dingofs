@@ -2200,10 +2200,14 @@ Status OperationProcessor::RunAlone(Operation* operation) {
   return status;
 }
 
-void OperationTask::Run() { processor_->RunAlone(operation_.get()); }
+void OperationTask::Run() {
+  auto status = processor_->RunAlone(operation_.get());
 
-bool OperationProcessor::AsyncRun(OperationSPtr operation) {
-  bool ret = async_worker_->Execute(OperationTask::New(operation, GetSelfPtr()));
+  if (status.ok() && post_handler_) post_handler_(operation_);
+}
+
+bool OperationProcessor::AsyncRun(OperationSPtr operation, OperationTask::PostHandler post_handler) {
+  bool ret = async_worker_->Execute(OperationTask::New(operation, GetSelfPtr(), post_handler));
   if (!ret) {
     DINGO_LOG(ERROR) << fmt::format("[operation] async worker execute fail, operation({}).", operation->OpName());
   }

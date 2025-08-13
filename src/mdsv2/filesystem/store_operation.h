@@ -1748,12 +1748,14 @@ struct BatchOperation {
 
 class OperationTask : public TaskRunnable {
  public:
-  OperationTask(OperationSPtr operation, OperationProcessorSPtr processor)
-      : operation_(operation), processor_(processor) {}
+  using PostHandler = std::function<void(OperationSPtr operation)>;
+
+  OperationTask(OperationSPtr operation, OperationProcessorSPtr processor, PostHandler post_handler)
+      : operation_(operation), processor_(processor), post_handler_(post_handler) {}
   ~OperationTask() override = default;
 
-  static TaskRunnablePtr New(OperationSPtr operation, OperationProcessorSPtr processor) {
-    return std::make_shared<OperationTask>(operation, processor);
+  static TaskRunnablePtr New(OperationSPtr operation, OperationProcessorSPtr processor, PostHandler post_handler) {
+    return std::make_shared<OperationTask>(operation, processor, post_handler);
   }
 
   std::string Type() override { return "STORE_OPERATION"; }
@@ -1763,6 +1765,8 @@ class OperationTask : public TaskRunnable {
  private:
   OperationSPtr operation_;
   OperationProcessorSPtr processor_;
+
+  PostHandler post_handler_{nullptr};
 };
 
 class OperationProcessor : public std::enable_shared_from_this<OperationProcessor> {
@@ -1799,7 +1803,7 @@ class OperationProcessor : public std::enable_shared_from_this<OperationProcesso
 
   bool RunBatched(Operation* operation);
   Status RunAlone(Operation* operation);
-  bool AsyncRun(OperationSPtr operation);
+  bool AsyncRun(OperationSPtr operation, OperationTask::PostHandler post_handler);
 
   Status CheckTable(const Range& range);
   Status CreateTable(const std::string& table_name, const Range& range, int64_t& table_id);

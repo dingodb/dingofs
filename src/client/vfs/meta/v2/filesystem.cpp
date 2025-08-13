@@ -582,9 +582,7 @@ Status MDSV2FileSystem::Rename(ContextSPtr ctx, Ino old_parent,
       return Status::NotEmpty("dist dir not empty");
     }
 
-    return Status::Internal(
-        fmt::format("rename fail, {}/{} -> {}/{}, error: {}", old_parent,
-                    old_name, new_parent, new_name, status.ToString()));
+    return status;
   }
 
   return Status::OK();
