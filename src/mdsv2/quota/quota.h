@@ -46,7 +46,7 @@ class Quota {
   using QuotaEntry = pb::mdsv2::Quota;
   using UsageEntry = pb::mdsv2::Usage;
 
-  Ino GetIno() const { return ino_; }
+  Ino INo() const { return ino_; }
 
   void UpdateUsage(int64_t byte_delta, int64_t inode_delta);
 
@@ -195,7 +195,7 @@ class QuotaManager : public std::enable_shared_from_this<QuotaManager> {
   void UpdateDirUsage(Ino parent, int64_t byte_delta, int64_t inode_delta);
   void AsyncUpdateDirUsage(Ino parent, int64_t byte_delta, int64_t inode_delta);
 
-  bool CheckQuota(Ino ino, int64_t byte_delta, int64_t inode_delta);
+  bool CheckQuota(Trace& trace, Ino ino, int64_t byte_delta, int64_t inode_delta);
   QuotaSPtr GetNearestDirQuota(Ino ino);
 
   Status LoadQuota();

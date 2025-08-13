@@ -314,6 +314,9 @@ const char* Operation::OpName() const {
     case OpType::kBatchGetInodeAttr:
       return "BatchGetInodeAttr";
 
+    case OpType::KGetDentry:
+      return "GetDentry";
+
     case OpType::kImportKV:
       return "ImportKV";
 
@@ -2047,6 +2050,20 @@ Status BatchGetInodeAttrOperation::Run(TxnUPtr& txn) {
 
     result_.attrs.push_back(MetaCodec::DecodeInodeValue(kv.value));
   }
+
+  return Status::OK();
+}
+
+Status GetDentryOperation::Run(TxnUPtr& txn) {
+  CHECK(fs_id_ > 0) << "fs_id is 0";
+  CHECK(parent_ > 0) << "parent is 0";
+  CHECK(!name_.empty()) << "name is empty";
+
+  std::string value;
+  auto status = txn->Get(MetaCodec::EncodeDentryKey(fs_id_, parent_, name_), value);
+  if (!status.ok()) return status;
+
+  result_.dentry = MetaCodec::DecodeDentryValue(value);
 
   return Status::OK();
 }

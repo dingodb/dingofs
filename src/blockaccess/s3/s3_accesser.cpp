@@ -16,6 +16,7 @@
 
 #include "blockaccess/s3/s3_accesser.h"
 
+#include <cstdlib>
 #include <memory>
 
 #include "aws/core/Aws.h"
@@ -64,6 +65,10 @@ bool S3Accesser::Init() {
     }
 
     Aws::InitAPI(aws_sdk_options);
+
+    if (std::atexit([]() { Aws::ShutdownAPI(aws_sdk_options); }) != 0) {
+      LOG(FATAL) << "[s3_accesser] register shutdown function fail.";
+    }
   };
 
   static std::once_flag aws_init_flag;
@@ -81,14 +86,7 @@ bool S3Accesser::Init() {
   return true;
 }
 
-bool S3Accesser::Destroy() {
-  auto shutdown_aws_api_fn = [&]() { Aws::ShutdownAPI(aws_sdk_options); };
-
-  static std::once_flag aws_shutdown_flag;
-  std::call_once(aws_shutdown_flag, shutdown_aws_api_fn);
-
-  return true;
-}
+bool S3Accesser::Destroy() { return true; }
 
 Aws::String S3Accesser::S3Key(const std::string& key) {
   return Aws::String(key.c_str(), key.size());

@@ -118,6 +118,7 @@ class Operation {
 
     kGetInodeAttr = 90,
     kBatchGetInodeAttr = 91,
+    KGetDentry = 92,
 
     kImportKV = 100,
   };
@@ -1716,6 +1717,40 @@ class BatchGetInodeAttrOperation : public Operation {
  private:
   uint32_t fs_id_;
   std::vector<Ino> inoes_;
+
+  Result result_;
+};
+
+class GetDentryOperation : public Operation {
+ public:
+  GetDentryOperation(Trace& trace, uint32_t fs_id, Ino parent, const std::string& name)
+      : Operation(trace), fs_id_(fs_id), parent_(parent), name_(name) {};
+  ~GetDentryOperation() override = default;
+
+  struct Result : public Operation::Result {
+    DentryType dentry;
+  };
+
+  OpType GetOpType() const override { return OpType::KGetDentry; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+  template <int size = 0>
+  Result& GetResult() {
+    auto& result = Operation::GetResult();
+    result_.status = result.status;
+    result_.attr = std::move(result.attr);
+
+    return result_;
+  }
+
+ private:
+  uint32_t fs_id_;
+  Ino parent_;
+  std::string name_;
 
   Result result_;
 };

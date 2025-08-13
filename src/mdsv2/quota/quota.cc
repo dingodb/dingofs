@@ -290,12 +290,16 @@ void QuotaManager::AsyncUpdateDirUsage(Ino parent, int64_t byte_delta, int64_t i
   }
 }
 
-bool QuotaManager::CheckQuota(Ino ino, int64_t byte_delta, int64_t inode_delta) {
+bool QuotaManager::CheckQuota(Trace& trace, Ino ino, int64_t byte_delta, int64_t inode_delta) {
   if (!fs_quota_.Check(byte_delta, inode_delta)) {
     return false;
   }
 
-  return dir_quota_map_.CheckQuota(ino, byte_delta, inode_delta);
+  bool ret = dir_quota_map_.CheckQuota(ino, byte_delta, inode_delta);
+
+  trace.RecordElapsedTime("check_quota");
+
+  return ret;
 }
 
 QuotaSPtr QuotaManager::GetNearestDirQuota(Ino ino) { return dir_quota_map_.GetNearestQuota(ino); }
@@ -400,7 +404,7 @@ void QuotaManager::AsyncDeleteDirQuota(Ino ino) {
 Status QuotaManager::LoadDirQuotas(Trace& trace, std::map<Ino, QuotaEntry>& quota_entry_map) {  // NOLINT
   auto quotas = dir_quota_map_.GetAllQuota();
   for (auto& quota : quotas) {
-    quota_entry_map[quota->GetIno()] = quota->GetQuotaAndDelta();
+    quota_entry_map[quota->INo()] = quota->GetQuotaAndDelta();
   }
 
   return Status::OK();
@@ -471,13 +475,13 @@ Status QuotaManager::FlushDirUsage() {
   std::map<uint64_t, UsageEntry> usages;
   for (auto& quota : quotas) {
     auto usage = quota->GetUsage();
-    DINGO_LOG(INFO) << fmt::format("[quota] flush dir usage, ino({}), bytes({}), inodes({}).", quota->GetIno(),
+    DINGO_LOG(INFO) << fmt::format("[quota] flush dir usage, ino({}), bytes({}), inodes({}).", quota->INo(),
                                    usage.bytes(), usage.inodes());
     if (usage.bytes() == 0 && usage.inodes() == 0) {
       continue;
     }
 
-    usages[quota->GetIno()] = usage;
+    usages[quota->INo()] = usage;
   }
 
   if (usages.empty()) {
@@ -495,7 +499,7 @@ Status QuotaManager::FlushDirUsage() {
   auto& result = operation.GetResult();
 
   for (auto& quota : quotas) {
-    Ino ino = quota->GetIno();
+    Ino ino = quota->INo();
     auto it = result.quotas.find(ino);
     if (it == result.quotas.end()) {
       continue;

@@ -253,15 +253,15 @@ Status FileSystem::GetPartitionFromStore(Ino parent, const std::string& reason, 
 }
 
 Status FileSystem::GetDentryFromStore(Ino parent, const std::string& name, Dentry& dentry) {
-  std::string value;
-  auto status = kv_storage_->Get(MetaCodec::EncodeDentryKey(fs_id_, parent, name), value);
-  if (!status.ok()) {
-    return Status(pb::error::ENOT_FOUND, fmt::format("not found dentry({}/{}), {}", parent, name, status.error_str()));
-  }
+  Trace trace;
+  GetDentryOperation operation(trace, fs_id_, parent, name);
 
+  auto status = RunOperation(&operation);
+  if (!status.ok()) return status;
   DINGO_LOG(INFO) << fmt::format("[fs.{}] fetch dentry({}/{}).", fs_id_, parent, name);
 
-  dentry = Dentry(MetaCodec::DecodeDentryValue(value));
+  auto& result = operation.GetResult();
+  dentry = Dentry(result.dentry);
 
   return Status::OK();
 }
@@ -454,8 +454,6 @@ Status FileSystem::DestoryInode(uint32_t fs_id, Ino ino) {
   return Status::OK();
 }
 
-static uint64_t ElapsedTimeUs(uint64_t start_time_ns) { return (Helper::TimestampNs() - start_time_ns) / 1000; }
-
 Status FileSystem::RunOperation(Operation* operation) {
   CHECK(operation != nullptr) << "operation is null.";
 
@@ -479,7 +477,7 @@ Status FileSystem::RunOperation(Operation* operation) {
 Status FileSystem::CreateRoot() {
   CHECK(fs_id_ > 0) << "fs_id is invalid.";
 
-  uint64_t time_ns = Helper::TimestampNs();
+  Duration duration;
 
   AttrType attr;
   attr.set_fs_id(fs_id_);
@@ -492,9 +490,9 @@ Status FileSystem::CreateRoot() {
   attr.set_type(pb::mdsv2::FileType::DIRECTORY);
   attr.set_rdev(0);
 
-  attr.set_ctime(time_ns);
-  attr.set_mtime(time_ns);
-  attr.set_atime(time_ns);
+  attr.set_ctime(duration.StartNs());
+  attr.set_mtime(duration.StartNs());
+  attr.set_atime(duration.StartNs());
 
   attr.add_parents(kRootParentIno);
 
@@ -508,7 +506,7 @@ Status FileSystem::CreateRoot() {
 
   auto status = RunOperation(&operation);
   auto& result = operation.GetResult();
-  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] create root finish, status({}).", fs_id_, ElapsedTimeUs(time_ns),
+  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] create root finish, status({}).", fs_id_, duration.ElapsedUs(),
                                  status.error_str());
 
   if (!status.ok()) {
@@ -544,7 +542,7 @@ Status FileSystem::Lookup(Context& ctx, Ino parent, const std::string& name, Ent
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
-  uint64_t time_ns = Helper::TimestampNs();
+  Duration duration;
 
   PartitionPtr partition;
   auto status = GetPartition(ctx, parent, partition);
@@ -568,7 +566,7 @@ Status FileSystem::Lookup(Context& ctx, Ino parent, const std::string& name, Ent
   entry_out.attr = inode->Copy();
 
   DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] lookup parent({}), name({}) version({}) ptr({}).", fs_id_,
-                                 ElapsedTimeUs(time_ns), parent, name, entry_out.attr.version(), (void*)inode.get());
+                                 duration.ElapsedUs(), parent, name, entry_out.attr.version(), (void*)inode.get());
 
   return Status::OK();
 }
@@ -638,20 +636,20 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
   UpdateParentMemo(ctx.GetAncestors());
 
   // check quota
-  if (!quota_manager_->CheckQuota(param.parent, 0, 1)) {
+  if (!quota_manager_->CheckQuota(trace, param.parent, 0, 1)) {
     return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
   }
 
-  uint64_t time_ns = Helper::TimestampNs();
+  Duration duration;
 
   // build inode
   Inode::AttrType attr;
   attr.set_fs_id(fs_id_);
   attr.set_ino(ino);
   attr.set_length(0);
-  attr.set_ctime(time_ns);
-  attr.set_mtime(time_ns);
-  attr.set_atime(time_ns);
+  attr.set_ctime(duration.StartUs());
+  attr.set_mtime(duration.StartUs());
+  attr.set_atime(duration.StartUs());
   attr.set_uid(param.uid);
   attr.set_gid(param.gid);
   attr.set_mode(param.mode);
@@ -669,8 +667,8 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
   MkNodOperation operation(trace, dentry, attr);
   status = RunOperation(&operation);
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] mknod {} finish, status({}).", fs_id_, ElapsedTimeUs(time_ns),
-                                 param.name, status.error_str());
+  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] mknod {} finish, status({}).", fs_id_, duration.ElapsedUs(), param.name,
+                                 status.error_str());
 
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put inode/dentry fail, {}", status.error_str()));
@@ -826,20 +824,20 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
   UpdateParentMemo(ctx.GetAncestors());
 
   // check quota
-  if (!quota_manager_->CheckQuota(param.parent, 0, 1)) {
+  if (!quota_manager_->CheckQuota(trace, param.parent, 0, 1)) {
     return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
   }
 
   // build inode
-  uint64_t time_ns = Helper::TimestampNs();
+  Duration duration;
 
   Inode::AttrType attr;
   attr.set_fs_id(fs_id_);
   attr.set_ino(ino);
   attr.set_length(4096);
-  attr.set_ctime(time_ns);
-  attr.set_mtime(time_ns);
-  attr.set_atime(time_ns);
+  attr.set_ctime(duration.StartNs());
+  attr.set_mtime(duration.StartNs());
+  attr.set_atime(duration.StartNs());
   attr.set_uid(param.uid);
   attr.set_gid(param.gid);
   attr.set_mode(S_IFDIR | param.mode);
@@ -858,8 +856,8 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
 
   status = RunOperation(&operation);
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] mkdir {} finish, status({}).", fs_id_, ElapsedTimeUs(time_ns),
-                                 param.name, status.error_str());
+  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] mkdir {} finish, status({}).", fs_id_, duration.ElapsedUs(), param.name,
+                                 status.error_str());
 
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put inode/dentry fail, {}", status.error_str()));
@@ -925,14 +923,14 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name) {
   // update parent memo
   UpdateParentMemo(ctx.GetAncestors());
 
-  uint64_t time_ns = Helper::TimestampNs();
+  Duration duration;
 
   // update backend store
   RmDirOperation operation(trace, dentry);
 
   status = RunOperation(&operation);
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] rmdir {} finish, status({}).", fs_id_, ElapsedTimeUs(time_ns), name,
+  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] rmdir {} finish, status({}).", fs_id_, duration.ElapsedUs(), name,
                                  status.error_str());
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("delete inode/dentry fail, {}", status.error_str()));
@@ -1031,7 +1029,7 @@ Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent, const std::string
   UpdateParentMemo(ctx.GetAncestors());
 
   // check quota
-  if (!quota_manager_->CheckQuota(new_parent, 0, 1)) {
+  if (!quota_manager_->CheckQuota(trace, new_parent, 0, 1)) {
     return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
   }
 
@@ -1041,12 +1039,12 @@ Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent, const std::string
   Dentry dentry(fs_id, new_name, new_parent, ino, pb::mdsv2::FileType::FILE, 0, inode);
 
   // update backend store
-  uint64_t time_ns = Helper::TimestampNs();
+  Duration duration;
 
   HardLinkOperation operation(trace, dentry);
   status = RunOperation(&operation);
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] link {} -> {}/{} finish, status({}).", fs_id_, ElapsedTimeUs(time_ns),
+  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] link {} -> {}/{} finish, status({}).", fs_id_, duration.ElapsedUs(),
                                  ino, new_parent, new_name, status.error_str());
 
   if (!status.ok()) {
@@ -1113,7 +1111,7 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name) {
   // update parent memo
   UpdateParentMemo(ctx.GetAncestors());
 
-  uint64_t time_ns = Helper::TimestampNs();
+  Duration duration;
 
   // update backend store
   UnlinkOperation operation(trace, dentry);
@@ -1125,7 +1123,7 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name) {
   auto& child_attr = result.child_attr;
 
   DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] unlink {}/{} finish, nlink({}) status({}).", fs_id_,
-                                 ElapsedTimeUs(time_ns), parent, name, child_attr.nlink(), status.error_str());
+                                 duration.ElapsedUs(), parent, name, child_attr.nlink(), status.error_str());
 
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put inode/dentry fail, {}", status.error_str()));
@@ -1191,21 +1189,21 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_par
   UpdateParentMemo(ctx.GetAncestors());
 
   // check quota
-  if (!quota_manager_->CheckQuota(new_parent, 0, 1)) {
+  if (!quota_manager_->CheckQuota(trace, new_parent, 0, 1)) {
     return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
   }
 
   // build inode
-  uint64_t time_ns = Helper::TimestampNs();
+  Duration duration;
 
   Inode::AttrType attr;
   attr.set_fs_id(fs_id_);
   attr.set_ino(ino);
   attr.set_symlink(symlink);
   attr.set_length(symlink.size());
-  attr.set_ctime(time_ns);
-  attr.set_mtime(time_ns);
-  attr.set_atime(time_ns);
+  attr.set_ctime(duration.StartNs());
+  attr.set_mtime(duration.StartNs());
+  attr.set_atime(duration.StartNs());
   attr.set_uid(uid);
   attr.set_gid(gid);
   attr.set_mode(S_IFLNK | 0777);
@@ -1224,7 +1222,7 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_par
 
   status = RunOperation(&operation);
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] symlink {}/{} finish,  status({}).", fs_id_, ElapsedTimeUs(time_ns),
+  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] symlink {}/{} finish,  status({}).", fs_id_, duration.ElapsedUs(),
                                  new_parent, new_name, status.error_str());
 
   if (!status.ok()) {
@@ -1302,7 +1300,7 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
 
   auto& trace = ctx.GetTrace();
 
-  uint64_t time_ns = Helper::TimestampNs();
+  Duration duration;
 
   InodeSPtr inode;
   auto status = GetInode(ctx, ino, inode);
@@ -1315,7 +1313,7 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
   if (param.to_set & kSetAttrLength) {
     if (param.attr.length() > inode->Length()) {
       // check quota
-      if (!quota_manager_->CheckQuota(ino, param.attr.length() - inode->Length(), 0)) {
+      if (!quota_manager_->CheckQuota(trace, ino, param.attr.length() - inode->Length(), 0)) {
         return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
       }
 
@@ -1341,7 +1339,7 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
   status = RunOperation(&operation);
 
   DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] setattr {} finish, slice({}/{}) status({}).", fs_id_,
-                                 ElapsedTimeUs(time_ns), ino, slice_id, slice_num, status.error_str());
+                                 duration.ElapsedUs(), ino, slice_id, slice_num, status.error_str());
 
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put inode fail, {}", status.error_str()));
@@ -1426,14 +1424,14 @@ Status FileSystem::SetXAttr(Context& ctx, Ino ino, const Inode::XAttrMap& xattrs
     return status;
   }
 
-  uint64_t time_ns = Helper::TimestampNs();
+  Duration duration;
 
   // update backend store
   UpdateXAttrOperation operation(trace, fs_id_, ino, xattrs);
 
   status = RunOperation(&operation);
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] setxattr {} finish, status({}).", fs_id_, ElapsedTimeUs(time_ns), ino,
+  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] setxattr {} finish, status({}).", fs_id_, duration.ElapsedUs(), ino,
                                  status.error_str());
 
   if (!status.ok()) {
@@ -1471,15 +1469,15 @@ Status FileSystem::RemoveXAttr(Context& ctx, Ino ino, const std::string& name, u
     return status;
   }
 
-  uint64_t time_ns = Helper::TimestampNs();
+  Duration duration;
 
   // update backend store
   RemoveXAttrOperation operation(trace, fs_id_, ino, name);
 
   status = RunOperation(&operation);
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] removexattr {} finish, status({}).", fs_id_, ElapsedTimeUs(time_ns),
-                                 ino, status.error_str());
+  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] removexattr {} finish, status({}).", fs_id_, duration.ElapsedUs(), ino,
+                                 status.error_str());
 
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put inode fail, {}", status.error_str()));
@@ -1565,7 +1563,7 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
   auto& trace = ctx.GetTrace();
   const bool bypass_cache = ctx.IsBypassCache();
 
-  uint64_t time_ns = Helper::TimestampNs();
+  Duration duration;
 
   // check name is valid
   if (new_name.size() > FLAGS_mds_filesystem_name_max_size) {
@@ -1576,22 +1574,30 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
     return Status(pb::error::EILLEGAL_PARAMTETER, "not allow same name");
   }
 
+  Dentry dentry;
+  auto status = GetDentryFromStore(old_parent, old_name, dentry);
+  if (!status.ok()) return status;
+
   // update parent memo
   UpdateParentMemo(param.old_ancestors);
   UpdateParentMemo(param.new_ancestors);
 
   // check quota
-  auto old_quota = quota_manager_->GetNearestDirQuota(old_parent);
-  auto new_quota = quota_manager_->GetNearestDirQuota(new_parent);
-  bool can_rename = (old_quota == nullptr && new_quota == nullptr) ||
-                    (old_quota != nullptr && new_quota != nullptr && old_quota->GetIno() == new_quota->GetIno());
-  if (!can_rename) {
-    return Status(pb::error::ENOT_SUPPORT, "not support rename between quota directory");
+  bool is_exist_quota = false;
+  if (dentry.Type() == pb::mdsv2::FileType::DIRECTORY) {
+    auto old_quota = quota_manager_->GetNearestDirQuota(old_parent);
+    auto new_quota = quota_manager_->GetNearestDirQuota(new_parent);
+    bool can_rename = (old_quota == nullptr && new_quota == nullptr) ||
+                      (old_quota != nullptr && new_quota != nullptr && old_quota->INo() == new_quota->INo());
+    if (!can_rename) {
+      return Status(pb::error::ENOT_SUPPORT, "not support rename between quota directory");
+    }
+    if (old_quota) is_exist_quota = true;
   }
 
   RenameOperation operation(trace, fs_id_, old_parent, old_name, new_parent, new_name);
 
-  auto status = RunOperation(&operation);
+  status = RunOperation(&operation);
 
   auto& result = operation.GetResult();
   auto& old_parent_attr = result.old_parent_attr;
@@ -1607,7 +1613,7 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
   DINGO_LOG(INFO) << fmt::format(
       "[fs.{}][{}us] rename {}/{} -> {}/{} finish, state({},{}) version({},{}) "
       "status({}).",
-      fs_id_, ElapsedTimeUs(time_ns), old_parent, old_name, new_parent, new_name, is_same_parent, is_exist_new_dentry,
+      fs_id_, duration.ElapsedUs(), old_parent, old_name, new_parent, new_name, is_same_parent, is_exist_new_dentry,
       old_parent_attr.version(), new_parent_attr.version(), status.error_str());
 
   if (!status.ok()) {
@@ -1672,20 +1678,25 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
     if (!is_same_parent) NotifyBuddyRefreshInode(std::move(new_parent_attr));
   }
 
-  // update quota
+  // update fs quota
   if (is_exist_new_dentry) {
-    // update fs quota
     int64_t fs_delta_bytes = 0;
     if (prev_new_attr.type() == pb::mdsv2::FileType::FILE && prev_new_attr.nlink() == 0) {
       fs_delta_bytes -= prev_new_attr.length();
     }
     quota_manager_->UpdateFsUsage(fs_delta_bytes, -1);
+  }
 
-    // update dir quota
-    if (old_quota != nullptr && new_quota != nullptr) {
-      int64_t delta_bytes = 0;
-      if (prev_new_attr.type() == pb::mdsv2::FileType::FILE) delta_bytes -= prev_new_attr.length();
-      quota_manager_->AsyncUpdateDirUsage(old_parent, delta_bytes, -1);
+  // update dir quota
+  if (dentry.Type() == pb::mdsv2::FileType::FILE) {
+    if (!is_same_parent) {
+      quota_manager_->AsyncUpdateDirUsage(old_parent, -old_attr.length(), -1);
+      quota_manager_->AsyncUpdateDirUsage(new_parent, old_attr.length(), 1);
+    }
+
+  } else if (dentry.Type() == pb::mdsv2::FileType::DIRECTORY) {
+    if (is_exist_new_dentry && is_exist_quota) {
+      quota_manager_->AsyncUpdateDirUsage(old_parent, 0, -1);
     }
   }
 
@@ -1727,11 +1738,11 @@ Status FileSystem::WriteSlice(Context& ctx, Ino parent, Ino ino, uint64_t chunk_
 
   auto& trace = ctx.GetTrace();
 
-  uint64_t time_ns = Helper::TimestampNs();
+  Duration duration;
 
   // check quota
   uint64_t delta_bytes = CalculateDeltaLength(inode->Length(), slices);
-  if (!quota_manager_->CheckQuota(ino, static_cast<int64_t>(delta_bytes), 0)) {
+  if (!quota_manager_->CheckQuota(trace, ino, static_cast<int64_t>(delta_bytes), 0)) {
     return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
   }
 
@@ -1740,7 +1751,7 @@ Status FileSystem::WriteSlice(Context& ctx, Ino parent, Ino ino, uint64_t chunk_
 
   status = RunOperation(&operation);
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] writeslice {}/{} finish, status({}).", fs_id_, ElapsedTimeUs(time_ns),
+  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] writeslice {}/{} finish, status({}).", fs_id_, duration.ElapsedUs(),
                                  ino, chunk_index, status.error_str());
 
   if (!status.ok()) {
@@ -1795,7 +1806,7 @@ Status FileSystem::ReadSlice(Context& ctx, Ino ino, uint64_t chunk_index, std::v
 
   auto& trace = ctx.GetTrace();
 
-  uint64_t time_ns = Helper::TimestampNs();
+  Duration duration;
 
   InodeSPtr inode;
   auto status = GetInode(ctx, ino, inode);
@@ -1815,8 +1826,8 @@ Status FileSystem::ReadSlice(Context& ctx, Ino ino, uint64_t chunk_index, std::v
 
   status = RunOperation(&operation);
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] readslice {}/{} finish, status({}).", fs_id_, ElapsedTimeUs(time_ns),
-                                 ino, chunk_index, status.error_str());
+  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] readslice {}/{} finish, status({}).", fs_id_, duration.ElapsedUs(), ino,
+                                 chunk_index, status.error_str());
 
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("get chunk fail, {}", status.error_str()));
@@ -1845,7 +1856,7 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
     return status;
   }
 
-  uint64_t time_ns = Helper::TimestampNs();
+  Duration duration;
 
   uint64_t slice_num = 0;
   uint64_t slice_id = 0;
@@ -1853,7 +1864,7 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
     uint64_t new_length = offset + len;
     if (new_length > inode->Length()) {
       // check quota
-      if (!quota_manager_->CheckQuota(ino, new_length - inode->Length(), 0)) {
+      if (!quota_manager_->CheckQuota(trace, ino, new_length - inode->Length(), 0)) {
         return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
       }
 
@@ -1883,7 +1894,7 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
     DINGO_LOG(ERROR) << fmt::format(
         "[fs.{}][{}us] fallocate ino({}), mode({}), offset({}), len({}) fail, "
         "status({}).",
-        fs_id_, ElapsedTimeUs(time_ns), ino, mode, offset, len, status.error_str());
+        fs_id_, duration.ElapsedUs(), ino, mode, offset, len, status.error_str());
     return status;
   }
 
@@ -1918,7 +1929,7 @@ Status FileSystem::CompactChunk(Context& ctx, Ino ino, uint64_t chunk_index,
   }
 
   auto& trace = ctx.GetTrace();
-  uint64_t time_ns = Helper::TimestampNs();
+  Duration duration;
 
   CompactChunkOperation operation(trace, GetFsInfo(), ino, chunk_index, inode->Length(), true);
 
@@ -1929,7 +1940,7 @@ Status FileSystem::CompactChunk(Context& ctx, Ino ino, uint64_t chunk_index,
   trash_slices = Helper::PbRepeatedToVector(result.trash_slice_list.mutable_slices());
 
   DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] compactchunk {}/{} finish, trash_slices({}) status({}).", fs_id_,
-                                 ElapsedTimeUs(time_ns), ino, chunk_index, trash_slices.size(), status.error_str());
+                                 duration.ElapsedUs(), ino, chunk_index, trash_slices.size(), status.error_str());
   if (!status.ok()) {
     return status;
   }
