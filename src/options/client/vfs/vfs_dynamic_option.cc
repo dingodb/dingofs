@@ -46,6 +46,9 @@ DEFINE_validator(vfs_flush_bg_thread, &PassInt32);
 DEFINE_int32(vfs_read_executor_thread, 8, "Number of read executor threads");
 DEFINE_validator(vfs_read_executor_thread, &PassInt32);
 
+DEFINE_int32(vfs_read_max_retry_block_not_found, 10, "Max retry when block not found");
+DEFINE_validator(vfs_read_max_retry_block_not_found, &PassInt32);
+
 DEFINE_uint32(vfs_periodic_flush_interval_ms, 10 * 1000,
               "Periodic flush interval in milliseconds");
 DEFINE_validator(vfs_periodic_flush_interval_ms, &PassUint32);

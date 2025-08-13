@@ -27,10 +27,12 @@ namespace client {
 DECLARE_bool(vfs_meta_logging);
 DECLARE_int64(vfs_meta_log_threshold_us);
 
-DECLARE_int32(vfs_flush_bg_thread);
-
+// read 
 DECLARE_int32(vfs_read_executor_thread);
+DECLARE_int32(vfs_read_max_retry_block_not_found);
 
+// flush
+DECLARE_int32(vfs_flush_bg_thread);
 DECLARE_uint32(vfs_periodic_flush_interval_ms);
 
 // begin used in inode_blocks_service

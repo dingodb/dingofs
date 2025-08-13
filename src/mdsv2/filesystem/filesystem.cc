@@ -63,8 +63,8 @@ static const std::string kRecyleName = ".recycle";
 DEFINE_uint32(mds_filesystem_name_max_size, 1024, "Max size of filesystem name.");
 DEFINE_uint32(mds_filesystem_hash_bucket_num, 1024, "Filesystem hash bucket num.");
 
-DEFINE_uint32(mds_compact_chunk_threshold_num, 64, "Compact chunk threshold num.");
-DEFINE_uint32(mds_compact_chunk_interval_ms, 30 * 1000, "Compact chunk interval ms.");
+DEFINE_uint32(mds_compact_chunk_threshold_num, 10, "Compact chunk threshold num.");
+DEFINE_uint32(mds_compact_chunk_interval_ms, 3 * 1000, "Compact chunk interval ms.");
 
 static bool IsReserveNode(Ino ino) { return ino == kRootIno; }
 
