@@ -349,7 +349,7 @@ Status CacheGroupNodeImpl::RangeStorage(ContextSPtr ctx, StepTimer& timer,
   // Retrive the whole block
   NEXT_STEP(kS3Get)
   IOBuffer block;
-  status = storage->Download(ctx, key, offset, block_size, &block);
+  status = storage->Download(ctx, key, 0, block_size, &block);
   if (!status.ok()) {
     return status;
   }
