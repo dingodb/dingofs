@@ -28,8 +28,14 @@
 namespace dingofs {
 namespace cache {
 
-DEFINE_string(mds_rpc_addrs, "127.0.0.1:6700,127.0.0.1:6701,127.0.0.1:6702",
-              "");
+static bool CheckMdsAddrs(const char* /*name*/, const std::string& value) {
+  return !value.empty();
+}
+
+DEFINE_string(mds_rpc_addrs, "",
+              "Cache group member manager service rpc addresses");
+DEFINE_validator(mds_rpc_addrs, CheckMdsAddrs);
+
 DEFINE_uint64(mds_rpc_retry_total_ms, 16000, "");
 DEFINE_uint64(mds_rpc_max_timeout_ms, 2000, "");
 DEFINE_uint64(mds_rpc_timeout_ms, 500, "");

@@ -41,7 +41,7 @@
 namespace dingofs {
 namespace cache {
 
-DEFINE_string(cache_dir, "/var/run/dingofs/", "Directory to store blocks");
+DEFINE_string(cache_dir, ".", "Directory to store blocks");
 DEFINE_uint32(cache_size_mb, 102400, "Maximum size of the cache in MB");
 
 static const std::string kModule = kDiskCacheMoudule;

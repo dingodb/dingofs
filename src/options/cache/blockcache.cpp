@@ -25,6 +25,8 @@
 #include <absl/strings/str_split.h>
 #include <glog/logging.h>
 
+#include <filesystem>
+
 #include "utils/string.h"
 
 namespace dingofs {
@@ -45,7 +47,7 @@ static void SplitDiskCacheOption(std::vector<DiskCacheOption>* options) {
     DiskCacheOption o;
     o.cache_store = FLAGS_cache_store;
     o.cache_index = i;
-    o.cache_dir = items[0];
+    o.cache_dir = std::filesystem::absolute(items[0]);
     o.cache_size_mb = cache_size_mb;
     options->emplace_back(o);
   }

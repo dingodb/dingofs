@@ -57,8 +57,7 @@ DEFINE_validator(listen_ip, Helper::NonEmptyString);
 DEFINE_uint32(listen_port, 9300, "Port to listen on for this cache group node");
 DEFINE_uint32(group_weight, 100,
               "Weight of this cache group node, used for consistent hashing");
-DEFINE_string(metadata_filepath, "/var/log/cache_group_meta",
-              "Filepath to store metadata of cache group node");  // Use dir
+
 DEFINE_uint32(max_range_size_kb, 128,
               "Retrive the whole block if length of range request is larger "
               "than this value");

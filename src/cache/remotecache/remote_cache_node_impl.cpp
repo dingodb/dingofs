@@ -25,6 +25,7 @@
 #include <absl/strings/str_format.h>
 #include <butil/iobuf.h>
 #include <butil/logging.h>
+#include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <sys/types.h>
 
@@ -50,6 +51,8 @@ namespace cache {
 
 DEFINE_bool(subrequest_ranges, true,
             "Whether split range request into subrequests");
+DEFINE_validator(subrequest_ranges, brpc::PassValidate);
+
 DEFINE_uint32(subrequest_range_size, 262144, "Range size for each subrequest");
 DEFINE_validator(subrequest_range_size, brpc::PassValidate);
 
