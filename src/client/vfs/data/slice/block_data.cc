@@ -150,6 +150,8 @@ Status BlockData::Write(const char* buf, uint64_t size, uint64_t block_offset) {
   return Status::OK();
 }
 
+static void NoopDeleter(void* data) {  }
+
 IOBuffer BlockData::ToIOBuffer() const {
   butil::IOBuf iobuf;
 
@@ -161,7 +163,7 @@ IOBuffer BlockData::ToIOBuffer() const {
     uint64_t data_size = page_data_ptr->data_len;
     char* data_ptr = page_data_ptr->page + page_data_ptr->data_offset;
 
-    iobuf.append(data_ptr, data_size);
+    iobuf.append_user_data(data_ptr, data_size, NoopDeleter);
 
     remain_len -= data_size;
 
