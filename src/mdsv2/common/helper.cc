@@ -22,6 +22,7 @@
 #include <fstream>
 #include <random>
 #include <string>
+#include <thread>
 
 #include "butil/strings/string_split.h"
 #include "fmt/core.h"
@@ -34,6 +35,12 @@ int64_t Helper::GetPid() {
   pid_t pid = getpid();
 
   return static_cast<int64_t>(pid);
+}
+
+int64_t Helper::GetThreadID() {
+  auto thread_id = std::this_thread::get_id();
+
+  return *(std::thread::native_handle_type*)(&thread_id);
 }
 
 int64_t Helper::TimestampNs() {

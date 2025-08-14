@@ -15,6 +15,7 @@
 #ifndef DINGOFS_MDSV2_COMMON_HELPER_H_
 #define DINGOFS_MDSV2_COMMON_HELPER_H_
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -28,6 +29,7 @@ namespace mdsv2 {
 class Helper {
  public:
   static int64_t GetPid();
+  static int64_t GetThreadID();
 
   // nanosecond timestamp
   static int64_t TimestampNs();

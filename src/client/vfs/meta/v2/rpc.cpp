@@ -14,6 +14,7 @@
 
 #include "client/vfs/meta/v2/rpc.h"
 
+#include <brpc/channel.h>
 #include <butil/endpoint.h>
 #include <fmt/format.h>
 #include <glog/logging.h>
@@ -24,6 +25,8 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 namespace v2 {
+
+const int32_t kConnectTimeoutMs = 200;  // milliseconds
 
 RPC::RPC(const std::string& addr) {
   EndPoint endpoint;
@@ -90,8 +93,12 @@ RPC::ChannelPtr RPC::NewChannel(const EndPoint& endpoint) {  // NOLINT
   CHECK(endpoint.port > 0) << "port is invalid.";
 
   ChannelPtr channel = std::make_shared<brpc::Channel>();
+  brpc::ChannelOptions options;
+  options.connect_timeout_ms = kConnectTimeoutMs;
+  options.timeout_ms = FLAGS_rpc_timeout_ms;
+  options.max_retry = FLAGS_rpc_retry_times;
   if (channel->Init(butil::ip2str(endpoint.ip).c_str(), endpoint.port,
-                    nullptr) != 0) {
+                    &options) != 0) {
     LOG(ERROR) << fmt::format("[meta.rpc] init channel fail, addr({}).",
                               EndPointToStr(endpoint));
 

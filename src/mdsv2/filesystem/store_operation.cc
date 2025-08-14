@@ -618,73 +618,7 @@ static Status ScanChunk(TxnUPtr& txn, uint32_t fs_id, Ino ino, std::map<uint64_t
   return status;
 }
 
-Status UpdateAttrOperation::ExpandChunk(TxnUPtr& txn, AttrType& attr, ChunkType& max_chunk, uint64_t new_length) const {
-  uint64_t length = attr.length();
-  const uint64_t chunk_size_ = extra_param_.chunk_size;
-  const uint64_t block_size_ = extra_param_.block_size;
-  uint64_t slice_id = extra_param_.slice_id;
-  const uint32_t slice_num = extra_param_.slice_num;
-
-  uint32_t count = 0;
-  while (length < new_length) {
-    uint64_t chunk_pos = length % chunk_size_;
-    uint64_t chunk_index = length / chunk_size_;
-    uint64_t delta_size = new_length - length;
-    uint64_t delta_chunk_size = (chunk_pos + delta_size > chunk_size_) ? (chunk_size_ - chunk_pos) : delta_size;
-
-    SliceType slice;
-    slice.set_id(slice_id++);
-    slice.set_offset(chunk_pos);
-    slice.set_len(delta_chunk_size);
-    slice.set_size(delta_chunk_size);
-    slice.set_zero(true);
-
-    CHECK(chunk_index >= max_chunk.index()) << fmt::format(
-        "chunk_index({}) should be greater than or equal to max_chunk.index({}).", chunk_index, max_chunk.index());
-
-    if (chunk_index > max_chunk.index()) {
-      ChunkType chunk;
-      chunk.set_index(chunk_index);
-      chunk.set_chunk_size(chunk_size_);
-      chunk.set_block_size(block_size_);
-      chunk.set_version(0);
-      chunk.add_slices()->Swap(&slice);
-
-      txn->Put(MetaCodec::EncodeChunkKey(attr.fs_id(), attr.ino(), chunk_index), MetaCodec::EncodeChunkValue(chunk));
-
-    } else {
-      max_chunk.add_slices()->Swap(&slice);
-      txn->Put(MetaCodec::EncodeChunkKey(attr.fs_id(), attr.ino(), chunk_index),
-               MetaCodec::EncodeChunkValue(max_chunk));
-    }
-
-    length += delta_chunk_size;
-    ++count;
-    if (count > slice_num) {
-      return Status(pb::error::EINTERNAL, fmt::format("beyond slice num({}).", slice_num));
-    }
-  }
-
-  return Status::OK();
-}
-
-Status UpdateAttrOperation::Truncate(TxnUPtr& txn, AttrType& attr) {
-  if (attr_.length() > attr.length()) {
-    ChunkType max_chunk;
-    uint64_t chunk_index = attr.length() / extra_param_.chunk_size;
-    auto status = GetChunk(txn, attr.fs_id(), attr.ino(), chunk_index, max_chunk);
-    if (!status.ok()) return status;
-
-    status = ExpandChunk(txn, attr, max_chunk, attr_.length());
-    if (!status.ok()) return status;
-  }
-
-  attr.set_length(attr_.length());
-
-  return Status::OK();
-}
-
-Status UpdateAttrOperation::RunInBatch(TxnUPtr& txn, AttrType& attr, const std::vector<KeyValue>&) {
+Status UpdateAttrOperation::RunInBatch(TxnUPtr&, AttrType& attr, const std::vector<KeyValue>&) {
   const uint32_t fs_id = attr.fs_id();
 
   if (to_set_ & kSetAttrMode) {
@@ -700,10 +634,7 @@ Status UpdateAttrOperation::RunInBatch(TxnUPtr& txn, AttrType& attr, const std::
   }
 
   if (to_set_ & kSetAttrLength) {
-    auto status = Truncate(txn, attr);
-    if (!status.ok()) {
-      return Status(pb::error::EINTERNAL, fmt::format("truncate file fail {}.", status.error_str()));
-    }
+    attr.set_length(attr_.length());
   }
 
   if (to_set_ & kSetAttrAtime) {

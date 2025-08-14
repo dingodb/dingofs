@@ -148,8 +148,8 @@ Status CoorAutoIncrementIdGenerator::AllocateIds(uint32_t num) {
     bundle_end_ = bundle_end;
   }
 
-  DINGO_LOG(INFO) << fmt::format("[idalloc.{}][{}us] take bundle id, bundle[{}, {}) status({}).", name_,
-                                 duration.ElapsedUs(), bundle_, bundle_end_, status.error_str());
+  DINGO_LOG(INFO) << fmt::format("[idalloc.{}][{}us] take bundle id, bundle[{},{}) num({}) status({}).", name_,
+                                 duration.ElapsedUs(), bundle_, bundle_end_, num, status.error_str());
 
   return status;
 }
@@ -285,8 +285,8 @@ Status StoreAutoIncrementIdGenerator::AllocateIds(uint32_t size) {
     next_id_ = start_alloc_id;
   }
 
-  DINGO_LOG(INFO) << fmt::format("[idalloc.{}][{}us] take bundle id, bundle[{}, {}) status({}).", name_,
-                                 duration.ElapsedUs(), next_id_, last_alloc_id_, status.error_str());
+  DINGO_LOG(INFO) << fmt::format("[idalloc.{}][{}us] take bundle id, bundle[{},{}) size({}) status({}).", name_,
+                                 duration.ElapsedUs(), next_id_, last_alloc_id_, size, status.error_str());
 
   return status;
 }

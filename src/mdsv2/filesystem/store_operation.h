@@ -483,16 +483,8 @@ class SmyLinkOperation : public Operation {
 
 class UpdateAttrOperation : public Operation {
  public:
-  struct ExtraParam {
-    uint64_t slice_id{0};
-    uint32_t slice_num{0};
-
-    uint64_t chunk_size{0};
-    uint64_t block_size{0};
-  };
-
-  UpdateAttrOperation(Trace& trace, uint64_t ino, uint32_t to_set, const AttrType& attr, const ExtraParam& extra_param)
-      : Operation(trace), ino_(ino), to_set_(to_set), attr_(attr), extra_param_(extra_param) {};
+  UpdateAttrOperation(Trace& trace, uint64_t ino, uint32_t to_set, const AttrType& attr)
+      : Operation(trace), ino_(ino), to_set_(to_set), attr_(attr) {};
   ~UpdateAttrOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kUpdateAttr; }
@@ -500,18 +492,12 @@ class UpdateAttrOperation : public Operation {
   uint32_t GetFsId() const override { return attr_.fs_id(); }
   Ino GetIno() const override { return ino_; }
 
-  // todo: optimization, prefetch max chunk key
   Status RunInBatch(TxnUPtr& txn, AttrType& attr, const std::vector<KeyValue>& prefetch_kvs) override;
 
  private:
-  Status ExpandChunk(TxnUPtr& txn, AttrType& attr, ChunkType& max_chunk, uint64_t new_length) const;
-  Status Truncate(TxnUPtr& txn, AttrType& attr);
-
   uint64_t ino_;
   const uint32_t to_set_;
   const AttrType& attr_;
-
-  const ExtraParam extra_param_;
 };
 
 class UpdateXAttrOperation : public Operation {

@@ -1308,38 +1308,22 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
     return status;
   }
 
-  uint64_t slice_num = 0;
-  uint64_t slice_id = 0;
   if (param.to_set & kSetAttrLength) {
     if (param.attr.length() > inode->Length()) {
       // check quota
       if (!quota_manager_->CheckQuota(trace, ino, param.attr.length() - inode->Length(), 0)) {
         return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
       }
-
-      // prealloc slice id
-      slice_num = (param.attr.length() - inode->Length()) / fs_info_->GetChunkSize() + 1;
-      if (!slice_id_generator_->GenID(slice_num, 0, slice_id)) {
-        return Status(pb::error::EINTERNAL, "generate slice id fail");
-      }
     }
   }
 
   // update backend store
-  UpdateAttrOperation::ExtraParam extra_param;
-  if (slice_id > 0) {
-    extra_param.block_size = fs_info_->GetBlockSize();
-    extra_param.chunk_size = fs_info_->GetChunkSize();
-    extra_param.slice_id = slice_id;
-    extra_param.slice_num = slice_num;
-  }
-
-  UpdateAttrOperation operation(trace, ino, param.to_set, param.attr, extra_param);
+  UpdateAttrOperation operation(trace, ino, param.to_set, param.attr);
 
   status = RunOperation(&operation);
 
   DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] setattr {} finish, slice({}/{}) status({}).", fs_id_,
-                                 duration.ElapsedUs(), ino, slice_id, slice_num, status.error_str());
+                                 duration.ElapsedUs(), ino, status.error_str());
 
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put inode fail, {}", status.error_str()));
@@ -1694,6 +1678,10 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
       quota_manager_->AsyncUpdateDirUsage(new_parent, old_attr.length(), 1);
     }
 
+    if (is_exist_new_dentry) {
+      quota_manager_->AsyncUpdateDirUsage(new_parent, -prev_new_attr.length(), -1);
+    }
+
   } else if (dentry.Type() == pb::mdsv2::FileType::DIRECTORY) {
     if (is_exist_new_dentry && is_exist_quota) {
       quota_manager_->AsyncUpdateDirUsage(old_parent, 0, -1);
@@ -1829,16 +1817,18 @@ Status FileSystem::ReadSlice(Context& ctx, Ino ino, uint64_t chunk_index, std::v
   DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] readslice {}/{} finish, status({}).", fs_id_, duration.ElapsedUs(), ino,
                                  chunk_index, status.error_str());
 
-  if (!status.ok()) {
+  if (!status.ok() && status.error_code() != pb::error::ENOT_FOUND) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("get chunk fail, {}", status.error_str()));
   }
 
-  auto& result = operation.GetResult();
+  if (status.ok()) {
+    auto& result = operation.GetResult();
 
-  slices = Helper::PbRepeatedToVector(result.chunk.slices());
+    slices = Helper::PbRepeatedToVector(result.chunk.slices());
 
-  // update chunk cache
-  chunk_cache_.PutIf(ino, std::move(result.chunk));
+    // update chunk cache
+    chunk_cache_.PutIf(ino, std::move(result.chunk));
+  }
 
   return Status::OK();
 }
