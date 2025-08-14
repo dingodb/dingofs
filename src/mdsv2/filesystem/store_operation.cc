@@ -1206,8 +1206,10 @@ Status RenameOperation::Run(TxnUPtr& txn) {
 
   // update old inode attr
   old_attr.set_ctime(std::max(old_attr.ctime(), time_ns));
-  AddParentIno(old_attr, new_parent_);
-  DelParentIno(old_attr, old_parent_);
+  if (!is_same_parent) {
+    DelParentIno(old_attr, old_parent_);
+    AddParentIno(old_attr, new_parent_);
+  }
   old_attr.set_version(old_attr.version() + 1);
 
   txn->Put(old_inode_key, MetaCodec::EncodeInodeValue(old_attr));
