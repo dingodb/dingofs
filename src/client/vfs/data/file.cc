@@ -88,11 +88,9 @@ void File::AsyncFlush(StatusCallback cb) {
 Status File::Flush() {
   Status s;
 
-  if (!FLAGS_data_use_direct_write) {
-    Synchronizer sync;
-    AsyncFlush(sync.AsStatusCallBack(s));
-    sync.Wait();
-  }
+  Synchronizer sync;
+  AsyncFlush(sync.AsStatusCallBack(s));
+  sync.Wait();
 
   return s;
 }

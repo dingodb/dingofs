@@ -20,6 +20,7 @@
 #include <glog/logging.h>
 
 #include <algorithm>
+#include <boost/range/algorithm/sort.hpp>
 #include <cstdint>
 #include <optional>
 #include <utility>
@@ -134,7 +135,7 @@ static inline std::vector<SliceReadReq> ProcessReadRequest(
   }
 
   // sort the results by file offset
-  std::sort(results.begin(), results.end(),
+  boost::range::sort(results,
             [](const SliceReadReq& a, const SliceReadReq& b) {
               return a.file_offset < b.file_offset;
             });

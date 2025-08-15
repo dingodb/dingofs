@@ -123,10 +123,6 @@ class ChunkWriter : public std::enable_shared_from_this<ChunkWriter> {
     return fmt::format("chunk_writer-{}", chunk_.UUID());
   }
 
-  Status DirectWrite(const char* buf, uint64_t size, uint64_t chunk_offset);
-
-  Status BufferWrite(const char* buf, uint64_t size, uint64_t chunk_offset);
-
   uint64_t GetChunkSize() const;
 
   Status WriteToBlockCache(const cache::BlockKey& key,

@@ -30,7 +30,6 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
-DECLARE_bool(data_use_direct_write);
 DECLARE_bool(data_single_thread_read);
 
 struct VFSMetaOption {

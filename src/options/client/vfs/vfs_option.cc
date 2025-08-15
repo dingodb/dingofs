@@ -27,10 +27,6 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
-DEFINE_bool(data_use_direct_write, false,
-            "Use direct write to chunk, If true, use direct write to block "
-            "cache, otherwise use buffer write");
-
 DEFINE_bool(data_single_thread_read, false,
             "Use single thread read to chunk, If true, use single thread read "
             "to block cache, otherwise use executor read with async");
@@ -49,13 +45,6 @@ void InitVFSOption(utils::Configuration* conf, VFSOption* option) {
   InitFuseOption(conf, &option->fuse_option);
 
   // vfs data related
-  if (!conf->GetBoolValue("vfs.data.use_direct_write",
-                          &FLAGS_data_use_direct_write)) {
-    LOG(INFO) << "Not found `vfs.data.use_direct_write` in conf, "
-                 "default to "
-              << (FLAGS_data_use_direct_write ? "true" : "false");
-  }
-
   if (!conf->GetBoolValue("vfs.data.writeback",
                           &option->data_option.writeback)) {
     LOG(INFO) << "Not found `vfs.data.writeback` in conf, default:"

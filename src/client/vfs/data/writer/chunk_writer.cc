@@ -18,7 +18,6 @@
 
 #include <glog/logging.h>
 
-#include <algorithm>
 #include <boost/range/algorithm/sort.hpp>
 #include <memory>
 
@@ -45,74 +44,6 @@ ChunkWriter::~ChunkWriter() {
 
 Status ChunkWriter::Write(const char* buf, uint64_t size,
                           uint64_t chunk_offset) {
-  if (FLAGS_data_use_direct_write) {
-    return DirectWrite(buf, size, chunk_offset);
-  } else {
-    return BufferWrite(buf, size, chunk_offset);
-  }
-}
-
-Status ChunkWriter::DirectWrite(const char* buf, uint64_t size,
-                                uint64_t chunk_offset) {
-  // TODO: get ctx from parent
-  auto span = hub_->GetTracer()->StartSpan(kVFSDataMoudule, __func__);
-
-  uint64_t write_file_offset = chunk_.chunk_start + chunk_offset;
-  uint64_t end_write_file_offset = write_file_offset + size;
-
-  uint64_t end_write_chunk_offset = chunk_offset + size;
-
-  VLOG(4) << fmt::format(
-      "{} DirectWrite Start buf: {}, size: {}, chunk_range: [{}-{}], "
-      "file_range: [{}-{}])",
-      UUID(), Char2Addr(buf), size, chunk_offset, end_write_chunk_offset,
-      write_file_offset, end_write_file_offset);
-
-  CHECK_GE(chunk_.chunk_end, end_write_file_offset);
-
-  const char* buf_pos = buf;
-
-  // TODO: refact this code
-  uint64_t chunk_id;
-  DINGOFS_RETURN_NOT_OK(hub_->GetMetaSystem()->NewSliceId(
-      span->GetContext(), chunk_.ino, &chunk_id));
-
-  uint64_t block_offset = chunk_offset % chunk_.block_size;
-  uint64_t block_index = chunk_offset / chunk_.block_size;
-
-  uint64_t remain_len = size;
-
-  while (remain_len > 0) {
-    uint64_t write_size =
-        std::min(remain_len, chunk_.block_size - block_offset);
-    cache::BlockKey key(chunk_.fs_id, chunk_.ino, chunk_id, block_index, 0);
-    cache::Block block(buf_pos, write_size);
-
-    VLOG(4) << fmt::format(
-        "{} DirectWrite block_key: {}, buf: {}, write_size: {}", UUID(),
-        key.StoreKey(), Char2Addr(buf_pos), write_size);
-    WriteToBlockCache(key, block,
-                      cache::PutOption());  // TODO: consider writeback
-
-    remain_len -= write_size;
-    buf_pos += write_size;
-    block_offset = 0;
-    ++block_index;
-  }
-
-  Slice slice{chunk_id, (chunk_.chunk_start + chunk_offset), size, 0, false,
-              size};
-  VLOG(4) << fmt::format("{} DirectWrite End slice: {}", UUID(),
-                         Slice2Str(slice));
-
-  std::vector<Slice> slices;
-  slices.push_back(slice);
-
-  return CommitSlices(span->GetContext(), slices);
-}
-
-Status ChunkWriter::BufferWrite(const char* buf, uint64_t size,
-                                uint64_t chunk_offset) {
   uint64_t write_file_offset = chunk_.chunk_start + chunk_offset;
   ChunkWriteInfo info(buf, size, chunk_offset, write_file_offset);
   Writer writer;
