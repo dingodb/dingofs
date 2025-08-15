@@ -14,24 +14,17 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_SRC_TRACE_TRACE_SAMPLER_H_
-#define DINGOFS_SRC_TRACE_TRACE_SAMPLER_H_
-
-#include "options/trace/trace_dynamic_option.h"
+#ifndef DINGOFS_TRACE_ITRACE_SAMPLER_H_
+#define DINGOFS_TRACE_ITRACE_SAMPLER_H_
 
 namespace dingofs {
 
-class TraceSampler {
+class ITraceSampler {
  public:
-  virtual ~TraceSampler() = default;
+  virtual ~ITraceSampler() = default;
   virtual bool ShouldSample() const = 0;
-};
-
-class AlwaysOnSampler : public TraceSampler {
- public:
-  bool ShouldSample() const override { return FLAGS_trace_logging; }
 };
 
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_TRACE_TRACE_SAMPLER_H_
+#endif  // DINGOFS_TRACE_ITRACE_SAMPLER_H_

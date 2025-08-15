@@ -34,7 +34,7 @@
 #include "client/vfs/meta/meta_system.h"
 #include "common/status.h"
 #include "options/client/vfs/vfs_option.h"
-#include "trace/tracer.h"
+#include "trace/itracer.h"
 #include "utils/executor/executor.h"
 
 namespace dingofs {
@@ -70,7 +70,7 @@ class VFSHub {
 
   virtual FileSuffixWatcher* GetFileSuffixWatcher() = 0;
 
-  virtual Tracer* GetTracer() = 0;
+  virtual ITracer* GetTracer() = 0;
 
   virtual FsInfo GetFsInfo() = 0;
 
@@ -134,7 +134,7 @@ class VFSHubImpl : public VFSHub {
     return file_suffix_watcher_.get();
   }
 
-  Tracer* GetTracer() override {
+  ITracer* GetTracer() override {
     CHECK_NOTNULL(tracer_);
     return tracer_.get();
   }
@@ -169,7 +169,7 @@ class VFSHubImpl : public VFSHub {
   std::unique_ptr<IPeriodicFlushManager> priodic_flush_manager_;
   std::shared_ptr<PageAllocator> page_allocator_;
   std::unique_ptr<FileSuffixWatcher> file_suffix_watcher_;
-  std::unique_ptr<Tracer> tracer_;
+  std::unique_ptr<ITracer> tracer_;
 };
 
 }  // namespace vfs

@@ -14,28 +14,21 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_TRACE_LOG_TRACE_EXPORTER_H_
-#define DINGOFS_TRACE_LOG_TRACE_EXPORTER_H_
+#ifndef DINGOFS_ITRACE_EXPORTER_H_
+#define DINGOFS_ITRACE_EXPORTER_H_
 
-#include <memory>
+#include <spdlog/logger.h>
 
-#include "trace/itrace_exporter.h"
+#include "trace/itrace_span.h"
 
 namespace dingofs {
 
-class LogTraceExporter : public ITraceExporter {
+class ITraceExporter {
  public:
-  explicit LogTraceExporter(const std::string& name,
-                            const std::string& log_dir);
-
-  ~LogTraceExporter() override;
-
-  void Export(const ITraceSpan& span) override;
-
- private:
-  std::shared_ptr<spdlog::logger> logger_;
+  virtual ~ITraceExporter() = default;
+  virtual void Export(const ITraceSpan& span) = 0;
 };
 
 }  // namespace dingofs
 
-#endif  // DINGOFS_TRACE_LOG_TRACE_EXPORTER_H_
+#endif  // DINGOFS_ITRACE_EXPORTER_H_

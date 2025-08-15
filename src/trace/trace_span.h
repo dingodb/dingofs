@@ -14,50 +14,46 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_SRC_TRACE_SPAN_H_
-#define DINGOFS_SRC_TRACE_SPAN_H_
+#ifndef DINGOFS_TRACE_TRACE_SPAN_H_
+#define DINGOFS_TRACE_TRACE_SPAN_H_
 
 #include <atomic>
-#include <map>
 #include <memory>
 #include <string>
 
 #include "common/status.h"
 #include "trace/context.h"
+#include "trace/itrace_span.h"
 
 namespace dingofs {
 
 class Tracer;
 
-class TraceSpan {
+class TraceSpan : public ITraceSpan {
  public:
-  using AttributeMap = std::map<std::string, std::string>;
-
-  ~TraceSpan();
+  ~TraceSpan() override;
 
   TraceSpan(const TraceSpan&) = delete;
   TraceSpan& operator=(const TraceSpan&) = delete;
 
-  const std::string& GetName() const;
+  const std::string& GetName() const override;
 
-  std::shared_ptr<Context> GetContext() const;
+  std::shared_ptr<Context> GetContext() const override;
 
-  void AddAttribute(const std::string& key, const std::string& value);
+  void AddAttribute(const std::string& key, const std::string& value) override;
 
-  const AttributeMap& GetAttributes() const;
+  const AttributeMap& GetAttributes() const override;
 
   // TODO :  to be implemented
-  void AddEvent(const std::string& name) {}
+  void AddEvent(const std::string& name) override {}
 
-  void SetStatus(const Status& status);
+  void SetStatus(const Status& status) override;
 
-  const Status& GetStatus() const;
+  const Status& GetStatus() const override;
 
-  void End();
+  void End() override;
 
-  bool IsEnded() const;
-
-  int64_t UElapsed() const;
+  int64_t UElapsed() const override;
 
  private:
   friend class Tracer;
@@ -75,4 +71,4 @@ class TraceSpan {
 
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_TRACE_SPAN_H_
+#endif  // DINGOFS_TRACE_TRACE_SPAN_H_

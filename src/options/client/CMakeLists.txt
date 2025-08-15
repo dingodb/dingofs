@@ -30,6 +30,7 @@ target_link_libraries(client_options
     stub_common
     stub_options
     cache_options
+    trace_options
     cache_lib # TODO: remove this
     brpc::brpc
     fmt::fmt

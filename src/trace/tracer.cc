@@ -18,80 +18,43 @@
 
 #include <butil/time.h>
 
-#include <random>
-
 #include "trace/context.h"
+#include "trace/trace_span.h"
+#include "trace/utils.h"
 
 namespace dingofs {
 
-constexpr size_t kTraceIdLength = 8;
-constexpr size_t kSpanIdLength = 4;
-
-std::unique_ptr<TraceSpan> Tracer::StartSpan(const std::string& module,
-                                             const std::string& name) {
-  auto trace_id = GenerateId(kTraceIdLength);
-  auto span_id = GenerateId(kSpanIdLength);
-
-  auto context = std::make_shared<Context>(module, trace_id, span_id);
-
-  return std::unique_ptr<TraceSpan>(new TraceSpan(this, name, context));
+std::unique_ptr<ITraceSpan> Tracer::StartSpan(const std::string& module,
+                                              const std::string& name) {
+  auto context =
+      std::make_shared<Context>(module, GenerateTraceId(), GenerateSpanId());
+  return std::unique_ptr<ITraceSpan>(new TraceSpan(this, name, context));
 }
 
-std::unique_ptr<TraceSpan> Tracer::StartSpanWithParent(
+std::unique_ptr<ITraceSpan> Tracer::StartSpanWithParent(
     const std::string& module, const std::string& name,
-    const TraceSpan& parent) {
+    const ITraceSpan& parent) {
   const auto& parent_ctx = parent.GetContext();
-  auto span_id = GenerateId(kSpanIdLength);
+  auto span_id = GenerateSpanId();
   auto context = std::make_shared<Context>(module, parent_ctx->trace_id,
-                                                span_id, parent_ctx->span_id);
+                                           span_id, parent_ctx->span_id);
 
   return std::unique_ptr<TraceSpan>(new TraceSpan(this, name, context));
 }
 
-std::unique_ptr<TraceSpan> Tracer::StartSpanWithContext(
+std::unique_ptr<ITraceSpan> Tracer::StartSpanWithContext(
     const std::string& module, const std::string& name, ContextSPtr ctx) {
-  auto span_id = GenerateId(kSpanIdLength);
-  auto context = std::make_shared<Context>(module, ctx->trace_id, span_id,
-                                                ctx->span_id);
+  auto span_id = GenerateSpanId();
+  auto context =
+      std::make_shared<Context>(module, ctx->trace_id, span_id, ctx->span_id);
 
   return std::unique_ptr<TraceSpan>(new TraceSpan(this, name, context));
 }
 
-void Tracer::EndSpan(const TraceSpan& span) {
+void Tracer::EndSpan(const ITraceSpan& span) {
   if (sampler_->ShouldSample()) {
     exporter_->Export(span);
   }
-}
-
-void Tracer::SetSampler(std::unique_ptr<TraceSampler> sampler) {
-  sampler_ = std::move(sampler);
-}
-
-std::string Tracer::GenerateId(size_t length) {
-  static thread_local std::random_device rd;
-  static thread_local std::mt19937_64 gen(rd());
-  static thread_local std::uniform_int_distribution<uint64_t> dis;
-
-  static constexpr char hex_lut[] = {'0', '1', '2', '3', '4', '5', '6', '7',
-                                     '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
-
-  std::string id;
-  id.reserve(length * 2);
-
-  const size_t chunks = (length + 7) / 8;
-  for (size_t i = 0; i < chunks; ++i) {
-    uint64_t num = dis(gen);
-    char buf[16];
-
-    for (int j = 15; j >= 0; --j) {
-      buf[j] = hex_lut[num & 0xF];
-      num >>= 4;
-    }
-
-    id.append(buf, 16);
-  }
-
-  return id.substr(0, length * 2);
 }
 
 }  // namespace dingofs

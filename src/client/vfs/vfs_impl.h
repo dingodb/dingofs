@@ -127,7 +127,7 @@ class VFSImpl : public VFS {
 
   FuseOption GetFuseOption() override { return vfs_option_.fuse_option; }
 
-  Tracer* GetTracer() override { return vfs_hub_->GetTracer(); }
+  ITracer* GetTracer() override { return vfs_hub_->GetTracer(); }
 
  private:
   Status StartBrpcServer();

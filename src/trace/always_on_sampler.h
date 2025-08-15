@@ -14,21 +14,18 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_SRC_TRACE_EXPORTER_H_
-#define DINGOFS_SRC_TRACE_EXPORTER_H_
+#ifndef DINGOFS_TRACE_ALWASY_ON_SAMPLER_H_
+#define DINGOFS_TRACE_ALWASY_ON_SAMPLER_H_
 
-#include <spdlog/logger.h>
-
-#include "trace/trace_span.h"
+#include "trace/itrace_sampler.h"
 
 namespace dingofs {
 
-class TraceExporter {
+class AlwaysOnSampler : public ITraceSampler {
  public:
-  virtual ~TraceExporter() = default;
-  virtual void Export(const TraceSpan& span) = 0;
+  bool ShouldSample() const override { return true; }
 };
 
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_TRACE_EXPORTER_H_
+#endif  // DINGOFS_TRACE_ALWASY_ON_SAMPLER_H_

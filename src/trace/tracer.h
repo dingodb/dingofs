@@ -14,48 +14,45 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_SRC_TRACE_TRACER_H_
-#define DINGOFS_SRC_TRACE_TRACER_H_
+#ifndef DINGOFS_TRACE_TRACER_H_
+#define DINGOFS_TRACE_TRACER_H_
 
 #include <butil/time.h>
 
 #include <memory>
 
+#include "trace/always_on_sampler.h"
 #include "trace/context.h"
-#include "trace/sampler.h"
-#include "trace/trace_exporter.h"
-#include "trace/trace_span.h"
+#include "trace/itrace_exporter.h"
+#include "trace/itrace_sampler.h"
+#include "trace/itracer.h"
 
 namespace dingofs {
 
-class Tracer {
+class Tracer : public ITracer {
  public:
-  Tracer(std::unique_ptr<TraceExporter> exporter)
+  Tracer(std::unique_ptr<ITraceExporter> exporter)
       : exporter_(std::move(exporter)),
         sampler_(std::make_unique<AlwaysOnSampler>()) {}
 
-  std::unique_ptr<TraceSpan> StartSpan(const std::string& module,
-                                       const std::string& name);
+  std::unique_ptr<ITraceSpan> StartSpan(const std::string& module,
+                                        const std::string& name) override;
 
-  std::unique_ptr<TraceSpan> StartSpanWithParent(const std::string& module,
-                                                 const std::string& name,
-                                                 const TraceSpan& parent);
+  std::unique_ptr<ITraceSpan> StartSpanWithParent(
+      const std::string& module, const std::string& name,
+      const ITraceSpan& parent) override;
 
-  std::unique_ptr<TraceSpan> StartSpanWithContext(const std::string& module,
-                                                  const std::string& name,
-                                                  ContextSPtr ctx);
+  std::unique_ptr<ITraceSpan> StartSpanWithContext(const std::string& module,
+                                                   const std::string& name,
+                                                   ContextSPtr ctx) override;
 
-  void EndSpan(const TraceSpan& span);
-
-  void SetSampler(std::unique_ptr<TraceSampler> sampler);
+  void EndSpan(const ITraceSpan& span);
 
  private:
-  std::string GenerateId(size_t length);
-
-  std::unique_ptr<TraceExporter> exporter_;
-  std::unique_ptr<TraceSampler> sampler_;
+  std::unique_ptr<ITraceExporter> exporter_;
+  std::unique_ptr<ITraceSampler> sampler_;
 };
 
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_TRACE_TRACER_H_
+#endif  // DINGOFS_TRACE_TRACER_H_

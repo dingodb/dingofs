@@ -26,10 +26,9 @@
 #include "common/status.h"
 #include "options/client/fuse/fuse_option.h"
 #include "trace/context.h"
+#include "trace/itracer.h"
 
 namespace dingofs {
-
-class Tracer;
 
 namespace client {
 namespace vfs {
@@ -150,7 +149,7 @@ class VFS {
   // used for fuse
   virtual FuseOption GetFuseOption() = 0;
 
-  virtual Tracer* GetTracer() = 0;
+  virtual ITracer* GetTracer() = 0;
 };
 
 }  // namespace vfs

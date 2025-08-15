@@ -42,7 +42,7 @@ void TraceSpan::AddAttribute(const std::string& key, const std::string& value) {
   attributes_[key] = value;
 }
 
-const TraceSpan::AttributeMap& TraceSpan::GetAttributes() const {
+const AttributeMap& TraceSpan::GetAttributes() const {
   return attributes_;
 }
 
@@ -58,8 +58,6 @@ void TraceSpan::End() {
   timer_.stop();
   tracer_->EndSpan(*this);
 }
-
-bool TraceSpan::IsEnded() const { return ended_; }
 
 int64_t TraceSpan::UElapsed() const {
   CHECK(ended_.load()) << "Span must be ended before getting elapsed time.";

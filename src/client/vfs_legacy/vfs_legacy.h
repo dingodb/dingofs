@@ -135,7 +135,7 @@ class VFSOld : public VFS {
 
   FuseOption GetFuseOption() override { return option_.fuse_option; }
 
-  Tracer* GetTracer() override { return tracer_.get(); }
+  ITracer* GetTracer() override { return tracer_.get(); }
 
   void InitQosParam();
 

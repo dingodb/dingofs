@@ -38,7 +38,9 @@
 #include "options/client/common_option.h"
 #include "options/client/vfs/vfs_dynamic_option.h"
 #include "options/client/vfs/vfs_option.h"
+#include "options/trace/trace_dynamic_option.h"
 #include "trace/log_trace_exporter.h"
+#include "trace/noop_tracer.h"
 #include "trace/tracer.h"
 #include "utils/configuration.h"
 #include "utils/executor/thread/executor_impl.h"
@@ -83,8 +85,13 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
     return Status::Internal("build meta system fail");
   }
 
-  tracer_ = std::make_unique<Tracer>(
-      std::make_unique<LogTraceExporter>(kVFSMoudule, FLAGS_log_dir));
+  if (FLAGS_trace_logging) {
+    tracer_ = std::make_unique<Tracer>(
+        std::make_unique<LogTraceExporter>(kVFSMoudule, FLAGS_log_dir));
+  } else {
+    tracer_ = std::make_unique<NoopTracer>();
+  }
+
   auto span = tracer_->StartSpan(kVFSMoudule, "start");
 
   meta_system_ = std::make_unique<MetaWrapper>(std::move(rela_meta_system));

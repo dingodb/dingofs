@@ -37,7 +37,7 @@ LogTraceExporter::LogTraceExporter(const std::string& name,
 
 LogTraceExporter::~LogTraceExporter() { logger_->flush(); }
 
-void LogTraceExporter::Export(const TraceSpan& span) {
+void LogTraceExporter::Export(const ITraceSpan& span) {
   std::ostringstream oss;
   bool first = true;
   for (const auto& [key, value] : span.GetAttributes()) {

@@ -1,4 +1,4 @@
-# Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
+# Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,24 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# Define the BASE_FLAGS and DINGO_DEFAULT_COPTS variables
 
-add_subdirectory(stub)
-add_subdirectory(cache)
-add_subdirectory(client)
-add_subdirectory(common)
-add_subdirectory(trace)
-
-file(GLOB DINGOFS_OPTIONS_LIB_SRCS
-    "cache/*.cpp"
-    "mdsv2/*.cpp"
-    "trace/*.cc"
-    "options.cpp"
+add_library(trace_options
+    trace_dynamic_option.cc
 )
 
-add_library(dingofs_options ${DINGOFS_OPTIONS_LIB_SRCS})
-
-target_link_libraries(dingofs_options
-    toml11::toml11
+target_link_libraries(trace_options
     gflags::gflags
-    glog::glog
 )
