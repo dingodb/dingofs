@@ -43,6 +43,7 @@ void SliceFlushTask::FlushDone(Status s) {
 
 // callback from block cache, maybe in bthread
 // Add callback pool to exec thi callback
+// take ownership of block_data
 void SliceFlushTask::BlockDataFlushed(BlockData* block_data, Status status) {
   VLOG(6) << fmt::format("{} BlockDataFlushed block_data: {}, status: {} ",
                          UUID(), block_data->UUID(), status.ToString());
@@ -64,6 +65,8 @@ void SliceFlushTask::BlockDataFlushed(BlockData* block_data, Status status) {
     }
     FlushDone(flush_status);
   }
+
+  delete block_data;
 }
 
 void SliceFlushTask::RunAsync(StatusCallback cb) {
@@ -93,12 +96,9 @@ void SliceFlushTask::RunAsync(StatusCallback cb) {
         slice_data_context_.ino);
   }
 
-  for (const auto& [block_index, block_data_ptr] : to_flush) {
-    BlockData* block_data = block_data_ptr.get();
-    std::string block_uuid = block_data->UUID();
+  for (auto& [block_index, block_data_ptr] : to_flush) {
+    BlockData* block_data = block_data_ptr.release();
 
-    VLOG(6) << fmt::format("{} flush block_data: {}, writeback: {}", UUID(),
-                           block_uuid, (writeback ? "true" : "false"));
     DCHECK_EQ(block_data->BlockIndex(), block_index);
 
     IOBuffer io_buffer = block_data->ToIOBuffer();
@@ -107,6 +107,12 @@ void SliceFlushTask::RunAsync(StatusCallback cb) {
     // TODO: Block should  take own the iobuf
     cache::BlockKey key(slice_data_context_.fs_id, slice_data_context_.ino,
                         slice_id_, block_index, 0);
+
+    VLOG(6) << fmt::format(
+        "{} flush block_key: {}, writeback: {}, block_data: {}, ", UUID(),
+        key.StoreKey(), (writeback ? "true" : "false"), block_data->ToString());
+
+    // transfer ownership of block_data to BlockDataFlushed
     vfs_hub_->GetBlockCache()->AsyncPut(
         cache::NewContext(), key, cache::Block(io_buffer),
         [this, block_data](auto&& ph1) {

@@ -38,6 +38,7 @@ void PageData::Write(const char* buf, uint64_t size, uint64_t page_offset) {
   uint64_t write_page_end = page_offset + size;
   VLOG(8) << fmt::format("{} Write Start page_range: [{}-{}], size: {}",
                          ToString(), page_offset, write_page_end, size);
+
   CHECK_LE(page_offset + size, page_size);
   CHECK(page_offset == DataEnd() || write_page_end == data_offset)
       << fmt::format("{} Illegal write page_range: [{}-{}], size: {}",
