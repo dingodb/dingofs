@@ -21,6 +21,7 @@
 
 #include "common/callback.h"
 #include "common/status.h"
+#include "trace/context.h"
 
 namespace dingofs {
 namespace client {
@@ -33,7 +34,7 @@ class IFile {
   virtual Status Write(const char* buf, uint64_t size, uint64_t offset,
                        uint64_t* out_wsize) = 0;
 
-  virtual Status Read(char* buf, uint64_t size,
+  virtual Status Read(ContextSPtr ctx, char* buf, uint64_t size,
                       uint64_t offset, uint64_t* out_rsize) = 0;
 
   virtual Status Flush() = 0;

@@ -46,7 +46,7 @@ class File : public IFile {
   Status Write(const char* buf, uint64_t size, uint64_t offset,
                uint64_t* out_wsize) override;
 
-  Status Read(char* buf, uint64_t size, uint64_t offset,
+  Status Read(ContextSPtr ctx, char* buf, uint64_t size, uint64_t offset,
               uint64_t* out_rsize) override;
 
   Status Flush() override;

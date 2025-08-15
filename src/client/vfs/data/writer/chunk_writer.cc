@@ -23,7 +23,7 @@
 
 #include "absl/cleanup/cleanup.h"
 #include "cache/utils/context.h"
-#include "client/vfs/const.h"
+#include "client/const.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "trace/tracer.h"
 
