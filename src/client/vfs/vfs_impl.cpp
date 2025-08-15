@@ -28,8 +28,10 @@
 #include "client/const.h"
 #include "client/meta/vfs_fh.h"
 #include "client/vfs/common/helper.h"
+#include "client/vfs/components/warmup_manager.h"
 #include "client/vfs/data/file.h"
 #include "client/vfs/handle/handle_manager.h"
+#include "client/vfs/meta/vfs_xattr.h"
 #include "common/define.h"
 #include "common/status.h"
 #include "fmt/format.h"
@@ -54,6 +56,7 @@ Status VFSImpl::Start(const VFSConfig& vfs_conf) {  // NOLINT
 
   meta_system_ = vfs_hub_->GetMetaSystem();
   handle_manager_ = vfs_hub_->GetHandleManager();
+  vfs_hub_->GetWarmupManager()->SetVFS(this);
 
   DINGOFS_RETURN_NOT_OK(StartBrpcServer());
 
@@ -402,6 +405,14 @@ Status VFSImpl::SetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
     return Status::OK();
   }
 
+  if (IsWarmupXAttr(name)) {
+    WarmupInfo info(ino, value);
+
+    vfs_hub_->GetWarmupManager()->AsyncWarmupProcess(info);
+
+    return Status::OK();
+  }
+
   return meta_system_->SetXattr(ctx, ino, name, value, flags);
 }
 
@@ -409,6 +420,12 @@ Status VFSImpl::GetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
                          std::string* value) {
   if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
     return Status::NoData("No Xattr data in .stats");
+  }
+
+  if (IsWarmupXAttr(name)) {
+    vfs_hub_->GetWarmupManager()->GetWarmupStatus(ino, *value);
+
+    return Status::OK();
   }
 
   return meta_system_->GetXattr(ctx, ino, name, value);

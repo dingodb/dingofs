@@ -60,7 +60,15 @@ static void InitPrefetchOption(utils::Configuration* c) {
   c->GetValue("vfs.data.prefetch.block_cnt",
               &FLAGS_vfs_file_prefetch_block_cnt);
   c->GetValue("vfs.data.prefetch.executor_cnt",
-              &fLU::FLAGS_vfs_file_prefetch_executor_num);
+              &FLAGS_vfs_file_prefetch_executor_num);
+  c->GetValue("vfs.data.warmup.intime_warmup_enbale",
+              &FLAGS_vfs_intime_warmup_enable);
+  c->GetValue("vfs.data.warmup.executor_num",
+              &FLAGS_vfs_warmup_executor_thread);
+  c->GetValue("vfs.data.warmup.restart_mtime_interval_secs",
+              &FLAGS_vfs_warmup_mtime_restart_interval_secs);
+  c->GetValue("vfs.data.warmup.restart_trigger_interval_secs",
+              &FLAGS_vfs_warmup_trigger_restart_interval_secs);
 }
 
 static void InitBlockCacheOption(utils::Configuration* c) {

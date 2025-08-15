@@ -25,6 +25,7 @@
 
 #include "client/const.h"
 #include "client/meta/vfs_meta.h"
+#include "client/vfs/components/warmup_manager.h"
 #include "client/vfs/data/reader/chunk_reader.h"
 #include "client/vfs/data/reader/reader_common.h"
 #include "client/vfs/hub/vfs_hub.h"
@@ -98,6 +99,18 @@ Status FileReader::Read(ContextSPtr ctx, char* buf, uint64_t size,
     return Status::OK();
   }
 
+  uint64_t time_now = WarmupHelper::GetTimeSecs();
+  if (FLAGS_vfs_intime_warmup_enable &&
+      ((time_now - last_intime_warmup_trigger_) >
+           FLAGS_vfs_warmup_trigger_restart_interval_secs ||
+       (attr.mtime - last_intime_warmup_mtime_) >
+           fLI64::FLAGS_vfs_warmup_mtime_restart_interval_secs)) {
+    WarmupInfo info(ino_);
+    last_intime_warmup_trigger_ = time_now;
+    last_intime_warmup_mtime_ = attr.mtime;
+    vfs_hub_->GetWarmupManager()->AsyncWarmupProcess(info);
+  }
+
   uint64_t chunk_size = GetChunkSize();
 
   uint64_t chunk_index = offset / chunk_size;
@@ -105,10 +118,12 @@ Status FileReader::Read(ContextSPtr ctx, char* buf, uint64_t size,
 
   uint64_t total_read_size = std::min(size, attr.length - offset);
 
-  if (FLAGS_vfs_file_prefetch_block_cnt > 0 && vfs_hub_->GetBlockCache()->HasCacheStore()) {
-    vfs_hub_->GetPrefetchManager()->AsyncPrefetch(ino_, attr.length, offset + total_read_size);
+  if (FLAGS_vfs_file_prefetch_block_cnt > 0 &&
+      vfs_hub_->GetBlockCache()->HasCacheStore()) {
+    vfs_hub_->GetPrefetchManager()->AsyncPrefetch(ino_, attr.length, offset,
+                                                  total_read_size);
   }
-  
+
   std::vector<ChunkReadReq> read_reqs;
 
   while (total_read_size > 0) {

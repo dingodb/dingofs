@@ -48,6 +48,11 @@ DECLARE_string(format_delimiter);
 DECLARE_uint32(vfs_file_prefetch_block_cnt);
 DECLARE_uint32(vfs_file_prefetch_executor_num);
 
+DECLARE_int32(vfs_warmup_executor_thread);
+DECLARE_bool(vfs_intime_warmup_enable);
+DECLARE_int64(vfs_warmup_mtime_restart_interval_secs);
+DECLARE_int64(vfs_warmup_trigger_restart_interval_secs);
+
 }  // namespace client
 }  // namespace dingofs
 

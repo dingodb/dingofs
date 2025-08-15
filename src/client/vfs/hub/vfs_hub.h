@@ -30,13 +30,14 @@
 #include "client/vfs.h"
 #include "client/vfs/background/iperiodic_flush_manager.h"
 #include "client/vfs/components/file_suffix_watcher.h"
+#include "client/vfs/components/prefetch_manager.h"
+#include "client/vfs/components/warmup_manager.h"
 #include "client/vfs/handle/handle_manager.h"
 #include "client/vfs/meta/meta_system.h"
 #include "common/status.h"
 #include "options/client/vfs/vfs_option.h"
 #include "trace/itracer.h"
 #include "utils/executor/executor.h"
-#include "client/vfs/components/prefetch_manager.h"
 
 namespace dingofs {
 namespace client {
@@ -71,7 +72,9 @@ class VFSHub {
 
   virtual FileSuffixWatcher* GetFileSuffixWatcher() = 0;
 
-  virtual PrefecthManager *GetPrefetchManager() = 0;
+  virtual PrefecthManager* GetPrefetchManager() = 0;
+
+  virtual WarmupManager* GetWarmupManager() = 0;
 
   virtual ITracer* GetTracer() = 0;
 
@@ -142,11 +145,15 @@ class VFSHubImpl : public VFSHub {
     return tracer_.get();
   }
 
-  PrefecthManager *GetPrefetchManager() override {
+  PrefecthManager* GetPrefetchManager() override {
     CHECK_NOTNULL(prefetch_manager_);
     return prefetch_manager_.get();
   }
 
+  WarmupManager* GetWarmupManager() override {
+    CHECK_NOTNULL(warmup_manager_);
+    return warmup_manager_.get();
+  }
 
   FsInfo GetFsInfo() override {
     CHECK(started_.load(std::memory_order_relaxed)) << "not started";
@@ -180,6 +187,7 @@ class VFSHubImpl : public VFSHub {
   std::unique_ptr<FileSuffixWatcher> file_suffix_watcher_;
   std::unique_ptr<ITracer> tracer_;
   std::unique_ptr<PrefecthManager> prefetch_manager_;
+  std::unique_ptr<WarmupManager> warmup_manager_;
 };
 
 }  // namespace vfs

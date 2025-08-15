@@ -54,6 +54,9 @@ class FileReader {
   const uint64_t fh_;
   const uint64_t ino_;
 
+  uint64_t last_intime_warmup_mtime_{0};
+  uint64_t last_intime_warmup_trigger_{0};
+
   std::mutex mutex_;
   bool validated_{false};
   Attr attr_;

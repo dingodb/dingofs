@@ -47,7 +47,8 @@ DEFINE_validator(vfs_flush_bg_thread, &PassInt32);
 DEFINE_int32(vfs_read_executor_thread, 8, "Number of read executor threads");
 DEFINE_validator(vfs_read_executor_thread, &PassInt32);
 
-DEFINE_int32(vfs_read_max_retry_block_not_found, 10, "Max retry when block not found");
+DEFINE_int32(vfs_read_max_retry_block_not_found, 10,
+             "Max retry when block not found");
 DEFINE_validator(vfs_read_max_retry_block_not_found, &PassInt32);
 
 DEFINE_uint32(vfs_periodic_flush_interval_ms, 10 * 1000,
@@ -74,11 +75,29 @@ DEFINE_string(format_delimiter, "|", "Delimiter used in format");
 DEFINE_validator(format_delimiter, &ValidateDelimiterLength);
 // end used in inode_blocks_service
 
-//prefetch
-DEFINE_uint32(vfs_file_prefetch_block_cnt, 4, "Number of blocks to prefetch for file read");
+// prefetch
+DEFINE_uint32(vfs_file_prefetch_block_cnt, 1,
+              "Number of blocks to prefetch for file read");
 DEFINE_validator(vfs_file_prefetch_block_cnt, &PassUint32);
 
 DEFINE_uint32(vfs_file_prefetch_executor_num, 4, "Number of prefetch executor");
+
+// begin warmp params
+DEFINE_int32(vfs_warmup_executor_thread, 2,
+             "Number of warmup executor threads");
+
+DEFINE_bool(vfs_intime_warmup_enable, false,
+            "Enable intime warmup, default is false");
+DEFINE_validator(vfs_intime_warmup_enable, &PassBool);
+
+DEFINE_int64(vfs_warmup_mtime_restart_interval_secs, 120,
+             "intime warmup restart interval");
+DEFINE_validator(vfs_warmup_mtime_restart_interval_secs, &PassInt64);
+
+DEFINE_int64(vfs_warmup_trigger_restart_interval_secs, 1800,
+             "passive warmup restart interval");
+DEFINE_validator(vfs_warmup_trigger_restart_interval_secs, &PassInt64);
+// end warmp params
 
 }  // namespace client
 }  // namespace dingofs

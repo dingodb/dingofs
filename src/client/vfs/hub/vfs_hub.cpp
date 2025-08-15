@@ -31,6 +31,7 @@
 #include "client/vfs.h"
 #include "client/vfs/background/periodic_flush_manager.h"
 #include "client/vfs/components/prefetch_manager.h"
+#include "client/vfs/components/warmup_manager.h"
 #include "client/vfs/meta/dummy/dummy_filesystem.h"
 #include "client/vfs/meta/meta_system.h"
 #include "client/vfs/meta/meta_wrapper.h"
@@ -183,6 +184,15 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
     }
   }
 
+  {
+    warmup_manager_ = std::make_unique<WarmupManagerImpl>(this);
+    auto ok = warmup_manager_->Start();
+    if (!ok.ok()) {
+      LOG(ERROR) << "warmup manager start failed";
+      return ok;
+    }
+  }
+
   started_.store(true, std::memory_order_relaxed);
   return Status::OK();
 }
@@ -195,10 +205,11 @@ Status VFSHubImpl::Stop() {
   handle_manager_->FlushAll();
 
   // shutdown before block cache
-  prefetch_manager_->Stop();
   priodic_flush_manager_->Stop();
   read_executor_->Stop();
   flush_executor_->Stop();
+  warmup_manager_->Stop();
+  prefetch_manager_->Stop();
   block_cache_->Shutdown();
   meta_system_->UnInit();
 

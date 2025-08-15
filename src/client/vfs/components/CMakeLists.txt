@@ -15,6 +15,7 @@
 add_library(vfs_components
     file_suffix_watcher.cc
     prefetch_manager.cc
+    warmup_manager.cc
 )
 
 target_link_libraries(vfs_components
