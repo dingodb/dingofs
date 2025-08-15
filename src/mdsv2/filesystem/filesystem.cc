@@ -1322,8 +1322,8 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
 
   status = RunOperation(&operation);
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] setattr {} finish, slice({}/{}) status({}).", fs_id_,
-                                 duration.ElapsedUs(), ino, status.error_str());
+  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] setattr {} finish, status({}).", fs_id_, duration.ElapsedUs(), ino,
+                                 status.error_str());
 
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put inode fail, {}", status.error_str()));
