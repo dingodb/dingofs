@@ -29,7 +29,7 @@
 #include "client/meta/vfs_meta.h"
 #include "client/vfs.h"
 #include "client/vfs/background/periodic_flush_manager.h"
-#include "client/vfs/const.h"
+#include "client/const.h"
 #include "client/vfs/meta/dummy/dummy_filesystem.h"
 #include "client/vfs/meta/meta_system.h"
 #include "client/vfs/meta/meta_wrapper.h"

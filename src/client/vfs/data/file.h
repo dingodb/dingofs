@@ -35,18 +35,19 @@ class VFSHub;
 
 class File : public IFile {
  public:
-  File(VFSHub* hub, uint64_t ino)
+  File(VFSHub* hub, uint64_t fh, int64_t ino)
       : vfs_hub_(hub),
+        fh_(fh),
         ino_(ino),
-        file_writer_(std::make_unique<FileWriter>(hub, ino)),
-        file_reader_(std::make_unique<FileReader>(hub, ino)) {}
+        file_writer_(std::make_unique<FileWriter>(hub, fh_, ino)),
+        file_reader_(std::make_unique<FileReader>(hub, fh_, ino)) {}
 
   ~File() override = default;
 
   Status Write(const char* buf, uint64_t size, uint64_t offset,
                uint64_t* out_wsize) override;
 
-  Status Read(char* buf, uint64_t size, uint64_t offset,
+  Status Read(ContextSPtr ctx, char* buf, uint64_t size, uint64_t offset,
               uint64_t* out_rsize) override;
 
   Status Flush() override;
@@ -59,6 +60,7 @@ class File : public IFile {
   void FileFlushed(StatusCallback cb, Status status);
 
   VFSHub* vfs_hub_;
+  const uint64_t fh_;
   const uint64_t ino_;
 
   FileWriterUPtr file_writer_;

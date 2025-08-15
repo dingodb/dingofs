@@ -1,4 +1,4 @@
-# Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
+# Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,36 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-
-set(TEST_DEPS
-    GTest::gtest
-    GTest::gmock
-    GTest::gtest_main
-    brpc::brpc
+set(TEST_TRACE_DEPS
+    dingofs_trace
     glog::glog
-    gflags::gflags
-    dl
-)
-
-set(TEST_DEPS_WITHOUT_MAIN
-    GTest::gtest
-    GTest::gmock
     brpc::brpc
-    glog::glog
-    gflags::gflags
-    dl
+    ${TEST_DEPS}
 )
+message("TEST_TRACE_DEPS: ${TEST_TRACE_DEPS}")
 
-add_subdirectory(fs)
-add_subdirectory(stub)
-add_subdirectory(utils)
+function(add_trace_test test_name)
+    add_executable(${test_name} ${ARGN})
+    target_link_libraries(${test_name} ${TEST_TRACE_DEPS})
+    set_target_properties(${test_name} PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${TEST_EXECUTABLE_OUTPUT_PATH}
+    )
+endfunction()
 
-add_subdirectory(mds)
-add_subdirectory(metaserver)
-add_subdirectory(cache)
-add_subdirectory(client)
-add_subdirectory(mdsv2)
-add_subdirectory(metrics)
-
-add_subdirectory(trace)
+add_trace_test(test_utils test_utils.cc)
+add_trace_test(test_tracer test_tracer.cc)

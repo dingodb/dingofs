@@ -84,7 +84,7 @@ ChunkWriter* FileWriter::GetOrCreateChunkWriter(uint64_t chunk_index) {
     return iter->second.get();
   } else {
     auto chunk_writer =
-        std::make_shared<ChunkWriter>(vfs_hub_, ino_, chunk_index);
+        std::make_shared<ChunkWriter>(vfs_hub_, fh_, ino_, chunk_index);
     chunk_writers_[chunk_index] = std::move(chunk_writer);
     return chunk_writers_[chunk_index].get();
   }

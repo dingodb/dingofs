@@ -23,17 +23,17 @@
 
 #include "absl/cleanup/cleanup.h"
 #include "cache/utils/context.h"
-#include "client/vfs/const.h"
+#include "client/const.h"
 #include "client/vfs/hub/vfs_hub.h"
-#include "trace/tracer.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 
 // protected by mutex_
-ChunkWriter::ChunkWriter(VFSHub* hub, uint64_t ino, uint64_t index)
+ChunkWriter::ChunkWriter(VFSHub* hub, uint64_t fh, uint64_t ino, uint64_t index)
     : hub_(hub),
+      fh_(fh),
       chunk_(hub->GetFsInfo().id, ino, index, hub->GetFsInfo().chunk_size,
              hub->GetFsInfo().block_size, hub->GetPageSize()) {}
 

@@ -29,7 +29,7 @@
 #include <utility>
 
 #include "client/meta/vfs_meta.h"
-#include "client/vfs/const.h"
+#include "client/const.h"
 #include "client/vfs/data/slice/task/slice_flush_task.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "common/callback.h"

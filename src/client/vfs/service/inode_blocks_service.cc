@@ -22,11 +22,10 @@
 #include <memory>
 
 #include "client/meta/vfs_meta.h"
-#include "client/vfs/const.h"
+#include "client/const.h"
 #include "client/vfs/data/flat/flat_file.h"
 #include "common/status.h"
 #include "options/client/vfs/vfs_dynamic_option.h"
-#include "trace/tracer.h"
 
 namespace dingofs {
 namespace client {

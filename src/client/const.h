@@ -21,13 +21,12 @@
 
 namespace dingofs {
 namespace client {
-namespace vfs {
 
 // module name
 static const std::string kVFSMoudule = "vfs";
+static const std::string kVFSWrapperMoudule = "vfs_wrapper";
 static const std::string kVFSDataMoudule = "vfs_data";
 
-}  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
 

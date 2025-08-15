@@ -33,20 +33,29 @@ class VFSHub;
 
 class FileReader {
  public:
-  FileReader(VFSHub* hub, uint64_t ino) : vfs_hub_(hub), ino_(ino) {}
+  FileReader(VFSHub* hub, uint64_t fh, uint64_t ino)
+      : vfs_hub_(hub), fh_(fh), ino_(ino) {}
 
   ~FileReader() = default;
 
-  Status Read(char* buf, uint64_t size, uint64_t offset, uint64_t* out_rsize);
+  Status Read(ContextSPtr ctx, char* buf, uint64_t size, uint64_t offset,
+              uint64_t* out_rsize);
+
+  void Invalidate();
 
  private:
+  Status GetAttr(ContextSPtr ctx, Attr* attr);
+
   uint64_t GetChunkSize() const;
   ChunkReader* GetOrCreateChunkReader(uint64_t chunk_index);
 
   VFSHub* vfs_hub_;
+  const uint64_t fh_;
   const uint64_t ino_;
 
   std::mutex mutex_;
+  bool validated_{false};
+  Attr attr_;
   // chunk index -> chunk reader
   std::unordered_map<uint64_t, ChunkReaderUptr> chunk_readers_;
 };

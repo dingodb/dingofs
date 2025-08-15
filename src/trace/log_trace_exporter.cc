@@ -30,7 +30,7 @@ LogTraceExporter::LogTraceExporter(const std::string& name,
                                    const std::string& log_dir) {
   std::string filename =
       absl::StrFormat("%s/%s_trace_%d.log", log_dir, name, getpid());
-  logger_ = spdlog::daily_logger_mt("client", filename, 0, 0);
+  logger_ = spdlog::daily_logger_mt(name, filename, 0, 0);
   logger_->set_level(spdlog::level::trace);
   spdlog::flush_every(std::chrono::seconds(1));
 }
@@ -50,7 +50,7 @@ void LogTraceExporter::Export(const ITraceSpan& span) {
 
   auto ctx = span.GetContext();
   auto message =
-      absl::StrFormat("[%s] [%.6lf] [%s] %s: %s [%s.%s] (%s)", ctx->trace_id,
+      absl::StrFormat("[%s] [%.6lf] [%s] (%s) %s [%s.%s] (%s)", ctx->trace_id,
                       span.UElapsed() / 1e6, ctx->module, span.GetName(),
                       span.GetStatus().ToString(), ctx->parent_span_id,
                       ctx->span_id, oss.str());

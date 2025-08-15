@@ -21,6 +21,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <mutex>
 
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
@@ -29,12 +30,15 @@
 #include "client/vfs/data/reader/reader_common.h"
 #include "common/callback.h"
 #include "common/io_buffer.h"
+#include "trace/context.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 
 class VFSHub;
+
+static uint32_t kInvalidVersion = 0;
 
 struct BlockCacheReadReq {
   cache::BlockKey key;
@@ -44,18 +48,29 @@ struct BlockCacheReadReq {
   const BlockReadReq& block_req;
 };
 
+struct ChunkSlices {
+  uint32_t version;
+  std::vector<Slice> slices;
+};
+
 class ChunkReader {
  public:
-  ChunkReader(VFSHub* hub, uint64_t ino, uint64_t index);
+  ChunkReader(VFSHub* hub, uint64_t fh, uint64_t ino, uint64_t index);
 
   ~ChunkReader() = default;
 
-  void ReadAsync(const ChunkReadReq& req, StatusCallback cb);
+  void ReadAsync(ContextSPtr ctx, const ChunkReadReq& req, StatusCallback cb);
+
+  void Invalidate();
 
  private:
-  void DoRead(const ChunkReadReq& req, StatusCallback cb);
+  void DoRead(ContextSPtr ctx, const ChunkReadReq& req, StatusCallback cb);
 
-  static void BlockReadCallback(ChunkReader* reader,
+  Status GetSlices(ContextSPtr ctx, ChunkSlices* chunk_slices);
+
+  void InvalidateSlices(uint32_t version);
+
+  static void BlockReadCallback(ContextSPtr ctx, ChunkReader* reader,
                                 const BlockCacheReadReq& req,
                                 ReaderSharedState& shared, Status s);
   uint64_t GetChunkSize() const;
@@ -65,7 +80,14 @@ class ChunkReader {
   }
 
   VFSHub* hub_;
+  const uint64_t fh_;
   const Chunk chunk_;
+
+  std::mutex mutex_;
+  // maybe version from mds
+  uint32_t next_version_{1};  // Start from 1, 0 is invalid version
+  std::atomic<uint32_t> cversion_{kInvalidVersion};
+  std::vector<Slice> slices_;
 };
 
 using ChunkReaderUptr = std::shared_ptr<ChunkReader>;

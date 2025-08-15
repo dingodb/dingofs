@@ -33,7 +33,8 @@ class VFSHub;
 
 class FileWriter {
  public:
-  FileWriter(VFSHub* hub, uint64_t ino) : vfs_hub_(hub), ino_(ino) {}
+  FileWriter(VFSHub* hub, uint64_t fh, uint64_t ino)
+      : vfs_hub_(hub), fh_(fh), ino_(ino) {}
 
   ~FileWriter() = default;
 
@@ -48,6 +49,7 @@ class FileWriter {
   ChunkWriter* GetOrCreateChunkWriter(uint64_t chunk_index);
 
   VFSHub* vfs_hub_;
+  const uint64_t fh_;
   const uint64_t ino_;
 
   std::mutex mutex_;

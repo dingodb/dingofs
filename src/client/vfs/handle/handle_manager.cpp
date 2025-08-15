@@ -106,7 +106,7 @@ bool HandleManager::Load(const Json::Value& value) {
       file_handler->ino = ino;
       file_handler->fh = fh;
       file_handler->flags = flags;
-      file_handler->file = std::make_unique<File>(vfs_hub_, ino);
+      file_handler->file = std::make_unique<File>(vfs_hub_, fh, ino);
 
       handles_.emplace(file_handler->fh, file_handler);
     }

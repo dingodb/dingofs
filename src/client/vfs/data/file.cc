@@ -22,13 +22,11 @@
 #include <mutex>
 #include <utility>
 
-#include "client/common/utils.h"
-#include "client/vfs/data/chunk.h"
 #include "client/vfs/data/common/async_util.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "common/callback.h"
 #include "common/status.h"
-#include "options/client/vfs/vfs_option.h"
+#include "trace/context.h"
 
 namespace dingofs {
 namespace client {
@@ -57,13 +55,17 @@ Status File::Write(const char* buf, uint64_t size, uint64_t offset,
                    uint64_t* out_wsize) {
   DINGOFS_RETURN_NOT_OK(PreCheck());
 
-  return file_writer_->Write(buf, size, offset, out_wsize);
+  Status s = file_writer_->Write(buf, size, offset, out_wsize);
+  if (s.ok()) {
+    file_reader_->Invalidate();
+  }
+  return s;
 }
 
-Status File::Read(char* buf, uint64_t size, uint64_t offset,
+Status File::Read(ContextSPtr ctx, char* buf, uint64_t size, uint64_t offset,
                   uint64_t* out_rsize) {
   DINGOFS_RETURN_NOT_OK(PreCheck());
-  return file_reader_->Read(buf, size, offset, out_rsize);
+  return file_reader_->Read(ctx, buf, size, offset, out_rsize);
 }
 
 void File::FileFlushed(StatusCallback cb, Status status) {

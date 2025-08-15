@@ -21,17 +21,19 @@
 
 #include <vector>
 
+#include "client/const.h"
 #include "client/meta/vfs_meta.h"
-#include "client/vfs/const.h"
 #include "client/vfs/data/reader/chunk_reader.h"
 #include "client/vfs/data/reader/reader_common.h"
 #include "client/vfs/hub/vfs_hub.h"
+#include "common/status.h"
 #include "trace/context.h"
-#include "trace/tracer.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
+
+#define METHOD_NAME() ("FileReader::" + std::string(__FUNCTION__))
 
 static void ChunkReadCallback(const ChunkReadReq& req,
                               ReaderSharedState& shared, Status s) {
@@ -74,18 +76,19 @@ ChunkReader* FileReader::GetOrCreateChunkReader(uint64_t chunk_index) {
     return iter->second.get();
   } else {
     auto chunk_writer =
-        std::make_shared<ChunkReader>(vfs_hub_, ino_, chunk_index);
+        std::make_shared<ChunkReader>(vfs_hub_, fh_, ino_, chunk_index);
     chunk_readers_[chunk_index] = std::move(chunk_writer);
     return chunk_readers_[chunk_index].get();
   }
 }
 
-Status FileReader::Read(char* buf, uint64_t size, uint64_t offset,
-                        uint64_t* out_rsize) {
-  // TODO: get ctx from parent
-  auto span = vfs_hub_->GetTracer()->StartSpan(kVFSDataMoudule, __func__);
+Status FileReader::Read(ContextSPtr ctx, char* buf, uint64_t size,
+                        uint64_t offset, uint64_t* out_rsize) {
+  auto span = vfs_hub_->GetTracer()->StartSpanWithContext(kVFSDataMoudule,
+                                                          METHOD_NAME(), ctx);
+
   Attr attr;
-  vfs_hub_->GetMetaSystem()->GetAttr(span->GetContext(), ino_, &attr);
+  DINGOFS_RETURN_NOT_OK(GetAttr(span->GetContext(), &attr));
 
   if (attr.length <= offset) {
     *out_rsize = 0;
@@ -131,9 +134,10 @@ Status FileReader::Read(char* buf, uint64_t size, uint64_t offset,
 
   for (auto& req : read_reqs) {
     ChunkReader* chunk_reader = GetOrCreateChunkReader(req.index);
-    chunk_reader->ReadAsync(req, [this, &req, &shared](auto&& PH1) {
-      ChunkReadCallback(req, shared, std::forward<decltype(PH1)>(PH1));
-    });
+    chunk_reader->ReadAsync(
+        span->GetContext(), req, [this, &req, &shared](auto&& PH1) {
+          ChunkReadCallback(req, shared, std::forward<decltype(PH1)>(PH1));
+        });
   }
 
   Status ret;
@@ -150,6 +154,40 @@ Status FileReader::Read(char* buf, uint64_t size, uint64_t offset,
   }
 
   return ret;
+}
+
+void FileReader::Invalidate() {
+  LOG(INFO) << fmt::format("FileReader::Invalidate, ino: {}", ino_);
+
+  std::lock_guard<std::mutex> lock(mutex_);
+  validated_ = false;
+  for (auto& [index, reader] : chunk_readers_) {
+    reader->Invalidate();
+  }
+}
+
+Status FileReader::GetAttr(ContextSPtr ctx, Attr* attr) {
+  auto span = vfs_hub_->GetTracer()->StartSpanWithContext(kVFSDataMoudule,
+                                                          METHOD_NAME(), ctx);
+
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (validated_) {
+    *attr = attr_;
+    return Status::OK();
+  }
+
+  Status s =
+      vfs_hub_->GetMetaSystem()->GetAttr(span->GetContext(), ino_, &attr_);
+
+  if (s.ok()) {
+    validated_ = true;
+    *attr = attr_;
+  } else {
+    LOG(WARNING) << fmt::format(
+        "FileReader::GetAttr failed, ino: {}, status: {}", ino_, s.ToString());
+  }
+
+  return s;
 }
 
 }  // namespace vfs

@@ -32,8 +32,8 @@
 #include "client/vfs/data/chunk.h"
 #include "client/vfs/data/slice/slice_data.h"
 #include "client/vfs/data/writer/task/chunk_flush_task.h"
-#include "trace/context.h"
 #include "common/status.h"
+#include "trace/context.h"
 
 namespace dingofs {
 namespace client {
@@ -70,7 +70,7 @@ struct ChunkWriteInfo {
 
 class ChunkWriter : public std::enable_shared_from_this<ChunkWriter> {
  public:
-  ChunkWriter(VFSHub* hub, uint64_t ino, uint64_t index);
+  ChunkWriter(VFSHub* hub, uint64_t fh, uint64_t ino, uint64_t index);
 
   ~ChunkWriter();
 
@@ -156,6 +156,7 @@ class ChunkWriter : public std::enable_shared_from_this<ChunkWriter> {
   }
 
   VFSHub* hub_;
+  uint64_t fh_;
   const Chunk chunk_;
 
   mutable std::mutex mutex_;
