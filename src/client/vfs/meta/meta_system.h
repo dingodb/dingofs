@@ -22,9 +22,9 @@
 #include <vector>
 
 #include "client/meta/vfs_meta.h"
-#include "trace/context.h"
 #include "common/status.h"
 #include "json/value.h"
+#include "trace/context.h"
 
 namespace dingofs {
 namespace client {
@@ -67,7 +67,7 @@ class MetaSystem {
    * @param slices output
    */
   virtual Status ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
-                           std::vector<Slice>* slices) = 0;
+                           uint64_t fh, std::vector<Slice>* slices) = 0;
 
   virtual Status NewSliceId(ContextSPtr ctx, Ino ino, uint64_t* id) = 0;
 
@@ -78,7 +78,7 @@ class MetaSystem {
    * @param slices the slices to be written
    */
   virtual Status WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
-                            const std::vector<Slice>& slices) = 0;
+                            uint64_t fh, const std::vector<Slice>& slices) = 0;
 
   /**
    * Hard link a file to a new parent directory

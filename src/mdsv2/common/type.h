@@ -27,11 +27,11 @@ namespace dingofs {
 namespace mdsv2 {
 
 using Ino = uint64_t;
-using AttrType = pb::mdsv2::Inode;
-using DentryType = pb::mdsv2::Dentry;
-using SliceType = pb::mdsv2::Slice;
-using ChunkType = pb::mdsv2::Chunk;
-using FsInfoType = pb::mdsv2::FsInfo;
+using AttrEntry = pb::mdsv2::Inode;
+using DentryEntry = pb::mdsv2::Dentry;
+using SliceEntry = pb::mdsv2::Slice;
+using ChunkEntry = pb::mdsv2::Chunk;
+using FsInfoEntry = pb::mdsv2::FsInfo;
 using TrashSliceList = pb::mdsv2::TrashSliceList;
 using QuotaEntry = pb::mdsv2::Quota;
 using UsageEntry = pb::mdsv2::Usage;
@@ -41,6 +41,7 @@ using FileSessionEntry = pb::mdsv2::FileSession;
 using FsStatsDataEntry = pb::mdsv2::FsStatsData;
 using PartitionPolicy = pb::mdsv2::PartitionPolicy;
 using FsOpLog = pb::mdsv2::FsOpLog;
+using FileType = pb::mdsv2::FileType;
 
 struct Range {
   std::string start;
@@ -52,7 +53,7 @@ struct Range {
 inline bool IsDir(Ino ino) { return (ino & 1) == 1; }
 inline bool IsFile(Ino ino) { return (ino & 1) == 0; }
 
-inline std::string DescribeAttr(const AttrType& attr) {
+inline std::string DescribeAttr(const AttrEntry& attr) {
   auto parents_func = [](const auto& parents) {
     std::string result;
     for (const auto& parent : parents) {

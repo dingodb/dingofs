@@ -47,7 +47,7 @@ uint64_t Inode::Ino() {
   return attr_.ino();
 }
 
-pb::mdsv2::FileType Inode::Type() {
+FileType Inode::Type() {
   utils::ReadLockGuard lk(lock_);
 
   return attr_.type();
@@ -144,7 +144,7 @@ std::string Inode::XAttr(const std::string& name) {
   return (it != attr_.xattrs().end()) ? it->second : std::string();
 }
 
-bool Inode::UpdateIf(const AttrType& attr) {
+bool Inode::UpdateIf(const AttrEntry& attr) {
   utils::WriteLockGuard lk(lock_);
 
   DINGO_LOG(INFO) << fmt::format("[inode.{}] update attr,this({}) version({}->{}).", attr_.ino(), (void*)this,
@@ -161,7 +161,7 @@ bool Inode::UpdateIf(const AttrType& attr) {
   return true;
 }
 
-bool Inode::UpdateIf(AttrType&& attr) {
+bool Inode::UpdateIf(AttrEntry&& attr) {
   utils::WriteLockGuard lk(lock_);
 
   DINGO_LOG(INFO) << fmt::format("[inode.{}] update attr,this({}) version({}->{}).", attr_.ino(), (void*)this,
@@ -178,13 +178,13 @@ bool Inode::UpdateIf(AttrType&& attr) {
   return true;
 }
 
-Inode::AttrType Inode::Copy() {
+Inode::AttrEntry Inode::Copy() {
   utils::ReadLockGuard lk(lock_);
 
   return attr_;
 }
 
-Inode::AttrType&& Inode::Move() {
+Inode::AttrEntry&& Inode::Move() {
   utils::WriteLockGuard lk(lock_);
 
   return std::move(attr_);

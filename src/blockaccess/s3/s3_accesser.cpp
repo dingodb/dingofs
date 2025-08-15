@@ -51,18 +51,6 @@ bool S3Accesser::Init() {
         Aws::Utils::Logging::LogLevel(options_.aws_sdk_config.loglevel);
     logging_options.defaultLogPrefix =
         options_.aws_sdk_config.log_prefix.c_str();
-    if (options_.aws_sdk_config.use_crt_client) {
-      logging_options.crt_logger_create_fn =
-          [log_level = options_.aws_sdk_config.loglevel]() {
-            return aws::AwsCrtS3Client::CreateLogger(log_level);
-          };
-
-    } else {
-      logging_options.logger_create_fn =
-          [log_level = options_.aws_sdk_config.loglevel]() {
-            return aws::AwsLegacyS3Client::CreateLogger(log_level);
-          };
-    }
 
     Aws::InitAPI(aws_sdk_options);
 
@@ -153,8 +141,8 @@ void S3Accesser::AsyncGet(GetObjectAsyncContextSPtr context) {
                  origin_cb](const std::shared_ptr<GetObjectAsyncContext>& ctx) {
     if (!ctx->status.ok()) {
       if (!client_->ObjectExist(bucket_, S3Key(ctx->key))) {
-        LOG(WARNING) << fmt::format("[s3_accesser] object({}) not found in async get",
-                                    ctx->key);
+        LOG(WARNING) << fmt::format(
+            "[s3_accesser] object({}) not found in async get", ctx->key);
         ctx->status = Status::NotFound("object not found");
       }
     }

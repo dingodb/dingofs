@@ -81,7 +81,7 @@ static FsTreeNode* GenFsTreeStruct(OperationProcessorSPtr operation_processor, u
 
     if (MetaCodec::IsInodeKey(key)) {
       MetaCodec::DecodeInodeKey(key, fs_id, ino);
-      const AttrType attr = MetaCodec::DecodeInodeValue(value);
+      const AttrEntry attr = MetaCodec::DecodeInodeValue(value);
 
       // DINGO_LOG(INFO) << fmt::format("attr({}).", attr.ShortDebugString());
       auto it = node_map.find(ino);
@@ -274,9 +274,9 @@ Status FsUtils::GenDirJsonString(Ino parent, std::string& output) {
 
   const uint32_t fs_id = fs_info_.fs_id();
 
-  std::map<Ino, DentryType> dentries;
+  std::map<Ino, DentryEntry> dentries;
   Trace trace;
-  ScanDentryOperation operation(trace, fs_id, parent, [&](const DentryType& dentry) -> bool {
+  ScanDentryOperation operation(trace, fs_id, parent, [&](const DentryEntry& dentry) -> bool {
     dentries.insert(std::make_pair(dentry.ino(), dentry));
 
     return true;
@@ -286,7 +286,7 @@ Status FsUtils::GenDirJsonString(Ino parent, std::string& output) {
   if (!status.ok()) return status;
 
   // batch get inode attrs
-  std::map<Ino, AttrType> attrs;
+  std::map<Ino, AttrEntry> attrs;
   uint32_t count = 0;
   std::vector<Ino> inoes;
   inoes.reserve(kBatchGetSize);
@@ -351,7 +351,7 @@ Status FsUtils::GenDirJsonString(Ino parent, std::string& output) {
   return Status::OK();
 }
 
-Status FsUtils::GetChunks(uint32_t fs_id, Ino ino, std::vector<ChunkType>& chunks) {
+Status FsUtils::GetChunks(uint32_t fs_id, Ino ino, std::vector<ChunkEntry>& chunks) {
   Trace trace;
   ScanChunkOperation operation(trace, fs_id, ino);
   Status status = operation_processor_->RunAlone(&operation);

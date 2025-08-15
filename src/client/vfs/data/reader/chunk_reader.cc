@@ -15,6 +15,7 @@
  */
 
 #include "client/vfs/data/reader/chunk_reader.h"
+
 #include <glog/logging.h>
 
 #include <cstdint>
@@ -113,7 +114,7 @@ void ChunkReader::DoRead(const ChunkReadReq& req, StatusCallback cb) {
 
     std::vector<Slice> slices;
     Status s = hub_->GetMetaSystem()->ReadSlice(span->GetContext(), chunk_.ino,
-                                                chunk_.index, &slices);
+                                                chunk_.index, 0, &slices);
     if (!s.ok()) {
       LOG(WARNING) << fmt::format("{} Read slice failed, status: {}", UUID(),
                                   s.ToString());
@@ -196,9 +197,9 @@ void ChunkReader::DoRead(const ChunkReadReq& req, StatusCallback cb) {
 
     LOG_IF(WARNING, !ret.ok()) << fmt::format(
         "{} ChunkReader Read failed, status: {}, retry: {}, "
-        "chunk_range: [{}-{}], file_range: [{}-{}]", UUID(), ret.ToString(),
-        retry, chunk_offset, end_read_chunk_offet, read_file_offset,
-        end_read_file_offset);
+        "chunk_range: [{}-{}], file_range: [{}-{}]",
+        UUID(), ret.ToString(), retry, chunk_offset, end_read_chunk_offet,
+        read_file_offset, end_read_file_offset);
 
   } while (ret.IsNotFound() &&
            retry++ < FLAGS_vfs_read_max_retry_block_not_found);

@@ -271,7 +271,7 @@ Status FileSystem::ListDentryFromStore(Ino parent, const std::string& last_name,
   limit = limit > 0 ? limit : UINT32_MAX;
 
   Trace trace;
-  ScanDentryOperation operation(trace, fs_id_, parent, last_name, [&](DentryType dentry) -> bool {
+  ScanDentryOperation operation(trace, fs_id_, parent, last_name, [&](DentryEntry dentry) -> bool {
     if (is_only_dir && dentry.type() != pb::mdsv2::FileType::DIRECTORY) {
       return true;  // skip non-directory entries
     }
@@ -408,7 +408,7 @@ Status FileSystem::BatchGetInodeFromStore(std::vector<uint64_t> inoes, std::vect
   return Status::OK();
 }
 
-Status FileSystem::GetDelFileFromStore(Ino ino, AttrType& out_attr) {
+Status FileSystem::GetDelFileFromStore(Ino ino, AttrEntry& out_attr) {
   std::string key = MetaCodec::EncodeDelFileKey(fs_id_, ino);
   std::string value;
   auto status = kv_storage_->Get(key, value);
@@ -479,7 +479,7 @@ Status FileSystem::CreateRoot() {
 
   Duration duration;
 
-  AttrType attr;
+  AttrEntry attr;
   attr.set_fs_id(fs_id_);
   attr.set_ino(kRootIno);
   attr.set_length(0);
@@ -643,7 +643,7 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
   Duration duration;
 
   // build inode
-  Inode::AttrType attr;
+  Inode::AttrEntry attr;
   attr.set_fs_id(fs_id_);
   attr.set_ino(ino);
   attr.set_length(0);
@@ -698,13 +698,37 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
   return Status::OK();
 }
 
-Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& session_id, uint64_t& version) {
-  DINGO_LOG(INFO) << fmt::format("[fs.{}] open ino({}).", fs_id_, ino);
+Status FileSystem::GetChunksFromStore(Ino ino, std::vector<ChunkEntry>& chunks) {
+  Trace trace;
+  ScanChunkOperation operation(trace, fs_id_, ino);
+  auto status = RunOperation(&operation);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[fs.{}] fetch chunks fail, status({}).", fs_id_, ino, status.error_str());
+    return status;
+  }
 
+  auto& result = operation.GetResult();
+  chunks = std::move(result.chunks);
+
+  return Status::OK();
+}
+
+Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& session_id, EntryOut& entry_out,
+                        std::vector<ChunkEntry>& chunks) {
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
+  // O_ACCMODE	         0003
+  // O_RDONLY	             00
+  // O_WRONLY	             01
+  // O_RDWR		             02
+  // O_CREAT		         0100
+  // O_TRUNC		        01000
+  // O_APPEND		        02000
+  // O_NONBLOCK	        04000
+  // O_SYNC	         04010000
+  // O_ASYNC	         020000
   if ((flags & O_TRUNC) && !(flags & O_WRONLY || flags & O_RDWR)) {
     return Status(pb::error::ENO_PERMISSION, "O_TRUNC without O_WRONLY or O_RDWR");
   }
@@ -713,7 +737,7 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& sess
   const bool bypass_cache = ctx.IsBypassCache();
   const std::string& client_id = ctx.ClientId();
 
-  uint64_t time_ns = Helper::TimestampNs();
+  Duration duration;
 
   InodeSPtr inode;
   auto status = GetInode(ctx, ino, inode);
@@ -741,8 +765,8 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& sess
   auto& attr = result.attr;
   int64_t delta_bytes = result.delta_bytes;
 
-  version = attr.version();
   session_id = file_session->session_id();
+  entry_out.attr = attr;
 
   // update quota
   if (delta_bytes != 0) {
@@ -752,15 +776,46 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& sess
     }
   }
 
+  auto file_length = attr.length();
   // update cache
   inode->UpdateIf(std::move(attr));
+
+  auto get_chunks_from_cache_fn = [&](std::vector<ChunkEntry>& chunks) {
+    auto chunk_ptrs = chunk_cache_.Get(ino);
+    for (auto& chunk_ptr : chunk_ptrs) {
+      chunks.push_back(*chunk_ptr);
+    }
+  };
+
+  uint64_t chunk_size = fs_info_->GetChunkSize();
+  auto is_completely_fn = [&](const std::vector<ChunkEntry>& chunks) -> bool {
+    uint64_t chunk_num = file_length % chunk_size == 0 ? file_length / chunk_size : (file_length / chunk_size) + 1;
+    return chunks.size() >= chunk_num;
+  };
+
+  bool is_completely = false;
+  if ((flags & O_ACCMODE) == O_RDONLY || flags & O_WRONLY || flags & O_RDWR) {
+    get_chunks_from_cache_fn(chunks);
+
+    is_completely = is_completely_fn(chunks);
+    // if not enough then fetch from store
+    if (!is_completely) {
+      auto status = GetChunksFromStore(ino, chunks);
+      if (status.ok()) {
+        CHECK(is_completely_fn(chunks)) << fmt::format(
+            "[fs.{}] chunks is not completely, ino({}) length({}) chunks({}).", fs_id_, ino, file_length,
+            chunks.size());
+      }
+    }
+  }
+
+  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] open {} finish, flags({:o}) cache_chunk({}) status({}).", fs_id_,
+                                 duration.ElapsedUs(), ino, flags, is_completely, status.error_str());
 
   return Status::OK();
 }
 
 Status FileSystem::Release(Context& ctx, Ino ino, const std::string& session_id) {
-  DINGO_LOG(INFO) << fmt::format("[fs.{}] release ino({}).", fs_id_, ino);
-
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -775,6 +830,9 @@ Status FileSystem::Release(Context& ctx, Ino ino, const std::string& session_id)
   }
 
   auto& result = operation.GetResult();
+
+  DINGO_LOG(INFO) << fmt::format("[fs.{}] release finish, ino({}) session_id({}) status({}).", fs_id_, ino, session_id,
+                                 status.error_str());
 
   // delete cache
   file_session_manager_.Delete(ino, session_id);
@@ -831,7 +889,7 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
   // build inode
   Duration duration;
 
-  Inode::AttrType attr;
+  Inode::AttrEntry attr;
   attr.set_fs_id(fs_id_);
   attr.set_ino(ino);
   attr.set_length(4096);
@@ -1196,7 +1254,7 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_par
   // build inode
   Duration duration;
 
-  Inode::AttrType attr;
+  Inode::AttrEntry attr;
   attr.set_fs_id(fs_id_);
   attr.set_ino(ino);
   attr.set_symlink(symlink);
@@ -1318,7 +1376,10 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
   }
 
   // update backend store
-  UpdateAttrOperation operation(trace, ino, param.to_set, param.attr);
+  UpdateAttrOperation::ExtraParam extra_param;
+  extra_param.block_size = fs_info_->GetBlockSize();
+  extra_param.chunk_size = fs_info_->GetChunkSize();
+  UpdateAttrOperation operation(trace, ino, param.to_set, param.attr, extra_param);
 
   status = RunOperation(&operation);
 
@@ -1495,7 +1556,7 @@ void FileSystem::UpdateParentMemo(const std::vector<Ino>& ancestors) {
   }
 }
 
-void FileSystem::NotifyBuddyRefreshFsInfo(std::vector<int64_t> mds_ids, const FsInfoType& fs_info) {
+void FileSystem::NotifyBuddyRefreshFsInfo(std::vector<int64_t> mds_ids, const FsInfoEntry& fs_info) {
   for (auto mds_id : mds_ids) {
     if (mds_id == 0 || mds_id == self_mds_id_) continue;
 
@@ -1503,7 +1564,7 @@ void FileSystem::NotifyBuddyRefreshFsInfo(std::vector<int64_t> mds_ids, const Fs
   }
 }
 
-void FileSystem::NotifyBuddyRefreshInode(AttrType&& attr) {
+void FileSystem::NotifyBuddyRefreshInode(AttrEntry&& attr) {
   if (notify_buddy_ == nullptr) return;
 
   Ino parent = kRootParentIno;
@@ -2084,7 +2145,7 @@ Status FileSystem::RefreshInode(const std::vector<uint64_t>& inoes) {
   return Status::OK();
 }
 
-void FileSystem::RefreshInode(AttrType& attr) {
+void FileSystem::RefreshInode(AttrEntry& attr) {
   auto inode = inode_cache_.GetInode(attr.ino());
   if (inode != nullptr) {
     inode->UpdateIf(attr);
@@ -2132,9 +2193,9 @@ static std::set<uint32_t> GetDeletedBucketIds(int64_t mds_id, const pb::mdsv2::H
   return deleted_bucket_ids;
 }
 
-void FileSystem::RefreshFsInfo(const FsInfoType& fs_info) {
+void FileSystem::RefreshFsInfo(const FsInfoEntry& fs_info) {
   // clean partition and inode cache
-  auto pre_handler = [&](const FsInfoType& old_fs_info, const FsInfoType& new_fs_info) {
+  auto pre_handler = [&](const FsInfoEntry& old_fs_info, const FsInfoEntry& new_fs_info) {
     const auto& partition_policy = new_fs_info.partition_policy();
     if (partition_policy.type() == pb::mdsv2::PartitionType::MONOLITHIC_PARTITION) {
       if (partition_policy.mono().mds_id() != self_mds_id_) {
@@ -2523,7 +2584,7 @@ Status FileSystem::UpdatePartitionPolicy(const std::map<uint64_t, pb::mdsv2::Has
     return Status(pb::error::EBACKEND_STORE, fmt::format("get fs info fail, {}", status.error_str()));
   }
 
-  FsInfoType fs_info = MetaCodec::DecodeFsValue(value);
+  FsInfoEntry fs_info = MetaCodec::DecodeFsValue(value);
   CHECK(fs_info.partition_policy().type() == pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION)
       << "invalid partition polocy type.";
 
@@ -2552,7 +2613,7 @@ Status FileSystem::UpdatePartitionPolicy(const std::map<uint64_t, pb::mdsv2::Has
   return Status::OK();
 }
 
-Status FileSystem::GetDelFiles(std::vector<AttrType>& delfiles) {
+Status FileSystem::GetDelFiles(std::vector<AttrEntry>& delfiles) {
   Trace trace;
   uint32_t count = 0;
   ScanDelFileOperation operation(trace, fs_id_, [&](const std::string&, const std::string& value) -> bool {
@@ -2646,8 +2707,8 @@ static std::map<uint64_t, pb::mdsv2::HashPartition::BucketSet> GenParentHashDist
   return mds_bucket_map;
 }
 
-FsInfoType FileSystemSet::GenFsInfo(int64_t fs_id, const CreateFsParam& param) {
-  FsInfoType fs_info;
+FsInfoEntry FileSystemSet::GenFsInfo(int64_t fs_id, const CreateFsParam& param) {
+  FsInfoEntry fs_info;
   fs_info.set_fs_id(fs_id);
   fs_info.set_fs_name(param.fs_name);
   fs_info.set_fs_type(param.fs_type);
@@ -2718,7 +2779,7 @@ static Status ValidateCreateFsParam(const FileSystemSet::CreateFsParam& param) {
 }
 
 // todo: create fs/dentry/inode table
-Status FileSystemSet::CreateFs(const CreateFsParam& param, FsInfoType& fs_info) {
+Status FileSystemSet::CreateFs(const CreateFsParam& param, FsInfoEntry& fs_info) {
   auto status = ValidateCreateFsParam(param);
   if (!status.ok()) {
     return status;
@@ -2879,7 +2940,7 @@ Status FileSystemSet::DeleteFs(Context& ctx, const std::string& fs_name, bool is
   return status;
 }
 
-Status FileSystemSet::UpdateFsInfo(Context& ctx, const std::string& fs_name, const FsInfoType& fs_info) {
+Status FileSystemSet::UpdateFsInfo(Context& ctx, const std::string& fs_name, const FsInfoEntry& fs_info) {
   auto trace = ctx.GetTrace();
 
   UpdateFsOperation operation(trace, fs_name, fs_info);
@@ -2893,7 +2954,7 @@ Status FileSystemSet::UpdateFsInfo(Context& ctx, const std::string& fs_name, con
   return Status::OK();
 }
 
-Status FileSystemSet::GetFsInfo(Context& ctx, const std::string& fs_name, FsInfoType& fs_info) {
+Status FileSystemSet::GetFsInfo(Context& ctx, const std::string& fs_name, FsInfoEntry& fs_info) {
   auto& trace = ctx.GetTrace();
 
   std::string fs_key = MetaCodec::EncodeFsKey(fs_name);
@@ -2910,7 +2971,7 @@ Status FileSystemSet::GetFsInfo(Context& ctx, const std::string& fs_name, FsInfo
   return Status::OK();
 }
 
-Status FileSystemSet::GetAllFsInfo(Context& ctx, std::vector<FsInfoType>& fs_infoes) {
+Status FileSystemSet::GetAllFsInfo(Context& ctx, std::vector<FsInfoEntry>& fs_infoes) {
   auto& trace = ctx.GetTrace();
 
   ScanFsOperation operation(trace);

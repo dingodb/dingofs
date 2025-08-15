@@ -68,7 +68,7 @@ inline void InitAwsSdkConfig(utils::Configuration* conf,
         aws_sdk_config->log_prefix);
   } else {
     aws_sdk_config->log_prefix =
-        fmt::format("{}/aws_sdk_", aws_sdk_config->log_prefix);
+        fmt::format("{}/aws_sdk_{}_", aws_sdk_config->log_prefix, getpid());
   }
 
   LOG_IF(FATAL,

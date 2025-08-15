@@ -49,8 +49,8 @@ DEFINE_uint64(parent, 0, "parent");
 DEFINE_string(parents, "", "parents");
 DEFINE_uint32(num, 1, "num");
 
-DEFINE_uint32(max_bytes, 1024 * 1024 * 1024, "max bytes");
-DEFINE_uint32(max_inodes, 1000000, "max inodes");
+DEFINE_uint64(max_bytes, 1024 * 1024 * 1024, "max bytes");
+DEFINE_uint64(max_inodes, 1000000, "max inodes");
 
 DEFINE_bool(is_force, false, "is force");
 

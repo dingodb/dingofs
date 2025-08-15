@@ -46,7 +46,7 @@ static Status InitFlatFile(VFSHub* vfs_hub, FlatFile* flat_file) {
   for (uint64_t i = 0; i < chunk_num; ++i) {
     std::vector<Slice> slices;
     DINGOFS_RETURN_NOT_OK(vfs_hub->GetMetaSystem()->ReadSlice(
-        span->GetContext(), flat_file->GetIno(), i, &slices));
+        span->GetContext(), flat_file->GetIno(), i, 0, &slices));
 
     flat_file->FillChunk(i, std::move(slices));
   }

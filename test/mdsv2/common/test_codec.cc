@@ -107,10 +107,10 @@ TEST_F(MetaDataCodecTest, FSKey) {
     MetaCodec::DecodeFsKey(key, actual_name);
     EXPECT_EQ(expected_name, actual_name);
 
-    FsInfoType fs_info;
+    FsInfoEntry fs_info;
     fs_info.set_fs_name(expected_name);
     std::string value = MetaCodec::EncodeFsValue(fs_info);
-    FsInfoType actual_fs_info = MetaCodec::DecodeFsValue(value);
+    FsInfoEntry actual_fs_info = MetaCodec::DecodeFsValue(value);
     EXPECT_EQ(expected_name, actual_fs_info.fs_name());
   }
 }
@@ -136,14 +136,15 @@ TEST_F(MetaDataCodecTest, FsQuotaKey) {
 
 // static bool IsInodeKey(const std::string& key);
 // static std::string EncodeInodeKey(uint32_t fs_id, Ino ino);
-// static void DecodeInodeKey(const std::string& key, uint32_t& fs_id, uint64_t& ino);
-// static std::string EncodeInodeValue(const AttrType& attr);
-// static AttrType DecodeInodeValue(const std::string& value);
+// static void DecodeInodeKey(const std::string& key, uint32_t& fs_id, uint64_t&
+// ino); static std::string EncodeInodeValue(const AttrEntry& attr); static
+// AttrEntry DecodeInodeValue(const std::string& value);
 
 TEST_F(MetaDataCodecTest, InodeKey) {
   uint32_t expected_fs_id = 1;
   uint64_t expected_inode_id = 12345;
-  std::string key = MetaCodec::EncodeInodeKey(expected_fs_id, expected_inode_id);
+  std::string key =
+      MetaCodec::EncodeInodeKey(expected_fs_id, expected_inode_id);
 
   EXPECT_TRUE(MetaCodec::IsInodeKey(key));
 
@@ -153,13 +154,13 @@ TEST_F(MetaDataCodecTest, InodeKey) {
   EXPECT_EQ(expected_fs_id, actual_fs_id);
   EXPECT_EQ(expected_inode_id, actual_inode_id);
 
-  AttrType attr;
+  AttrEntry attr;
   attr.set_mode(0755);
   attr.set_uid(1000);
   attr.set_gid(1000);
   attr.set_length(1024);
   std::string value = MetaCodec::EncodeInodeValue(attr);
-  AttrType actual_attr = MetaCodec::DecodeInodeValue(value);
+  AttrEntry actual_attr = MetaCodec::DecodeInodeValue(value);
   EXPECT_EQ(attr.mode(), actual_attr.mode());
   EXPECT_EQ(attr.uid(), actual_attr.uid());
   EXPECT_EQ(attr.gid(), actual_attr.gid());
@@ -171,7 +172,8 @@ TEST_F(MetaDataCodecTest, DentryKey) {
     int expected_fs_id = 1;
     uint64_t expected_inode_id = 12345;
     std::string expected_name = "test121232";
-    std::string key = MetaCodec::EncodeDentryKey(expected_fs_id, expected_inode_id, expected_name);
+    std::string key = MetaCodec::EncodeDentryKey(
+        expected_fs_id, expected_inode_id, expected_name);
 
     EXPECT_TRUE(MetaCodec::IsDentryKey(key));
 
@@ -183,11 +185,11 @@ TEST_F(MetaDataCodecTest, DentryKey) {
     EXPECT_EQ(expected_inode_id, actual_inode_id);
     EXPECT_EQ(expected_name, actual_name);
 
-    DentryType dentry;
+    DentryEntry dentry;
     dentry.set_name(expected_name);
     dentry.set_ino(expected_inode_id);
     std::string value = MetaCodec::EncodeDentryValue(dentry);
-    DentryType actual_dentry = MetaCodec::DecodeDentryValue(value);
+    DentryEntry actual_dentry = MetaCodec::DecodeDentryValue(value);
     EXPECT_EQ(dentry.name(), actual_dentry.name());
     EXPECT_EQ(dentry.ino(), actual_dentry.ino());
   }
@@ -197,24 +199,26 @@ TEST_F(MetaDataCodecTest, ChunkKey) {
   uint32_t expected_fs_id = 1;
   Ino expected_inode_id = 12345;
   uint64_t expected_chunk_index = 67890;
-  std::string key = MetaCodec::EncodeChunkKey(expected_fs_id, expected_inode_id, expected_chunk_index);
+  std::string key = MetaCodec::EncodeChunkKey(expected_fs_id, expected_inode_id,
+                                              expected_chunk_index);
 
   EXPECT_TRUE(MetaCodec::IsChunkKey(key));
 
   uint32_t actual_fs_id;
   uint64_t actual_inode_id;
   uint64_t actual_chunk_index;
-  MetaCodec::DecodeChunkKey(key, actual_fs_id, actual_inode_id, actual_chunk_index);
+  MetaCodec::DecodeChunkKey(key, actual_fs_id, actual_inode_id,
+                            actual_chunk_index);
   EXPECT_EQ(expected_fs_id, actual_fs_id);
   EXPECT_EQ(expected_inode_id, actual_inode_id);
   EXPECT_EQ(expected_chunk_index, actual_chunk_index);
 
-  ChunkType chunk;
+  ChunkEntry chunk;
   chunk.set_index(expected_chunk_index);
   chunk.set_block_size(4096);
   chunk.set_version(12);
   std::string value = MetaCodec::EncodeChunkValue(chunk);
-  ChunkType actual_chunk = MetaCodec::DecodeChunkValue(value);
+  ChunkEntry actual_chunk = MetaCodec::DecodeChunkValue(value);
   EXPECT_EQ(chunk.index(), actual_chunk.index());
   EXPECT_EQ(chunk.block_size(), actual_chunk.block_size());
   EXPECT_EQ(chunk.version(), actual_chunk.version());
@@ -224,12 +228,14 @@ TEST_F(MetaDataCodecTest, FileSessionKey) {
   uint32_t expected_fs_id = 1;
   Ino expected_inode_id = 12345;
   std::string expected_session_id = "123e4567-e89b-12d3-a456-426614174000";
-  std::string key = MetaCodec::EncodeFileSessionKey(expected_fs_id, expected_inode_id, expected_session_id);
+  std::string key = MetaCodec::EncodeFileSessionKey(
+      expected_fs_id, expected_inode_id, expected_session_id);
   EXPECT_TRUE(MetaCodec::IsFileSessionKey(key));
   uint32_t actual_fs_id;
   uint64_t actual_inode_id;
   std::string actual_session_id;
-  MetaCodec::DecodeFileSessionKey(key, actual_fs_id, actual_inode_id, actual_session_id);
+  MetaCodec::DecodeFileSessionKey(key, actual_fs_id, actual_inode_id,
+                                  actual_session_id);
   EXPECT_EQ(expected_fs_id, actual_fs_id);
   EXPECT_EQ(expected_inode_id, actual_inode_id);
   EXPECT_EQ(expected_session_id, actual_session_id);
@@ -239,7 +245,8 @@ TEST_F(MetaDataCodecTest, FileSessionKey) {
   file_session.set_fs_id(expected_fs_id);
   file_session.set_ino(expected_inode_id);
   std::string value = MetaCodec::EncodeFileSessionValue(file_session);
-  FileSessionEntry actual_file_session = MetaCodec::DecodeFileSessionValue(value);
+  FileSessionEntry actual_file_session =
+      MetaCodec::DecodeFileSessionValue(value);
   EXPECT_EQ(file_session.session_id(), actual_file_session.session_id());
   EXPECT_EQ(file_session.fs_id(), actual_file_session.fs_id());
   EXPECT_EQ(file_session.ino(), actual_file_session.ino());
@@ -248,7 +255,8 @@ TEST_F(MetaDataCodecTest, FileSessionKey) {
 TEST_F(MetaDataCodecTest, DirQuotaKey) {
   uint32_t expected_fs_id = 1;
   Ino expected_inode_id = 12345;
-  std::string key = MetaCodec::EncodeDirQuotaKey(expected_fs_id, expected_inode_id);
+  std::string key =
+      MetaCodec::EncodeDirQuotaKey(expected_fs_id, expected_inode_id);
 
   EXPECT_TRUE(MetaCodec::IsDirQuotaKey(key));
 
@@ -273,7 +281,8 @@ TEST_F(MetaDataCodecTest, DelSliceKey) {
   uint64_t expected_chunk_index = 67890;
   uint64_t expected_time_ns = 1234567890;
   std::string key =
-      MetaCodec::EncodeDelSliceKey(expected_fs_id, expected_inode_id, expected_chunk_index, expected_time_ns);
+      MetaCodec::EncodeDelSliceKey(expected_fs_id, expected_inode_id,
+                                   expected_chunk_index, expected_time_ns);
 
   EXPECT_TRUE(MetaCodec::IsDelSliceKey(key));
 
@@ -281,7 +290,8 @@ TEST_F(MetaDataCodecTest, DelSliceKey) {
   uint64_t actual_inode_id;
   uint64_t actual_chunk_index;
   uint64_t actual_time_ns;
-  MetaCodec::DecodeDelSliceKey(key, actual_fs_id, actual_inode_id, actual_chunk_index, actual_time_ns);
+  MetaCodec::DecodeDelSliceKey(key, actual_fs_id, actual_inode_id,
+                               actual_chunk_index, actual_time_ns);
   EXPECT_EQ(expected_fs_id, actual_fs_id);
   EXPECT_EQ(expected_inode_id, actual_inode_id);
   EXPECT_EQ(expected_chunk_index, actual_chunk_index);
@@ -298,18 +308,23 @@ TEST_F(MetaDataCodecTest, DelSliceKey) {
   TrashSliceList actual_slice_list = MetaCodec::DecodeDelSliceValue(value);
   EXPECT_EQ(slice_list.slices_size(), actual_slice_list.slices_size());
   for (int i = 0; i < slice_list.slices_size(); ++i) {
-    EXPECT_EQ(slice_list.slices(i).fs_id(), actual_slice_list.slices(i).fs_id());
+    EXPECT_EQ(slice_list.slices(i).fs_id(),
+              actual_slice_list.slices(i).fs_id());
     EXPECT_EQ(slice_list.slices(i).ino(), actual_slice_list.slices(i).ino());
-    EXPECT_EQ(slice_list.slices(i).chunk_index(), actual_slice_list.slices(i).chunk_index());
-    EXPECT_EQ(slice_list.slices(i).slice_id(), actual_slice_list.slices(i).slice_id());
-    EXPECT_EQ(slice_list.slices(i).chunk_size(), actual_slice_list.slices(i).chunk_size());
+    EXPECT_EQ(slice_list.slices(i).chunk_index(),
+              actual_slice_list.slices(i).chunk_index());
+    EXPECT_EQ(slice_list.slices(i).slice_id(),
+              actual_slice_list.slices(i).slice_id());
+    EXPECT_EQ(slice_list.slices(i).chunk_size(),
+              actual_slice_list.slices(i).chunk_size());
   }
 }
 
 TEST_F(MetaDataCodecTest, DelFileKey) {
   uint32_t expected_fs_id = 1;
   Ino expected_inode_id = 12345;
-  std::string key = MetaCodec::EncodeDelFileKey(expected_fs_id, expected_inode_id);
+  std::string key =
+      MetaCodec::EncodeDelFileKey(expected_fs_id, expected_inode_id);
   EXPECT_TRUE(MetaCodec::IsDelFileKey(key));
   uint32_t actual_fs_id;
   Ino actual_inode_id;
@@ -317,13 +332,13 @@ TEST_F(MetaDataCodecTest, DelFileKey) {
   EXPECT_EQ(expected_fs_id, actual_fs_id);
   EXPECT_EQ(expected_inode_id, actual_inode_id);
 
-  AttrType attr;
+  AttrEntry attr;
   attr.set_mode(0755);
   attr.set_uid(1000);
   attr.set_gid(1000);
   attr.set_length(1024);
   std::string value = MetaCodec::EncodeDelFileValue(attr);
-  AttrType actual_attr = MetaCodec::DecodeDelFileValue(value);
+  AttrEntry actual_attr = MetaCodec::DecodeDelFileValue(value);
   EXPECT_EQ(attr.mode(), actual_attr.mode());
   EXPECT_EQ(attr.uid(), actual_attr.uid());
   EXPECT_EQ(attr.gid(), actual_attr.gid());
@@ -333,7 +348,8 @@ TEST_F(MetaDataCodecTest, DelFileKey) {
 TEST_F(MetaDataCodecTest, FsStatsKey) {
   uint32_t expected_fs_id = 1;
   uint64_t expected_time_ns = 1234567890;
-  std::string key = MetaCodec::EncodeFsStatsKey(expected_fs_id, expected_time_ns);
+  std::string key =
+      MetaCodec::EncodeFsStatsKey(expected_fs_id, expected_time_ns);
 
   EXPECT_TRUE(MetaCodec::IsFsStatsKey(key));
 

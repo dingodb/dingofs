@@ -104,7 +104,7 @@ void CleanDelFileTask::Run() {
   }
 }
 
-Status CleanDelFileTask::GetChunks(uint32_t fs_id, Ino ino, std::vector<ChunkType>& chunks) {
+Status CleanDelFileTask::GetChunks(uint32_t fs_id, Ino ino, std::vector<ChunkEntry>& chunks) {
   class Trace trace;
   ScanChunkOperation operation(trace, fs_id, ino);
 
@@ -120,11 +120,11 @@ Status CleanDelFileTask::GetChunks(uint32_t fs_id, Ino ino, std::vector<ChunkTyp
   return Status::OK();
 }
 
-Status CleanDelFileTask::CleanDelFile(const AttrType& attr) {
+Status CleanDelFileTask::CleanDelFile(const AttrEntry& attr) {
   DINGO_LOG(INFO) << fmt::format("[gc.delfile] clean delfile, ino({}) nlink({}) len({}) version({}).", attr.ino(),
                                  attr.nlink(), attr.length(), attr.version());
   // get file chunks
-  std::vector<ChunkType> chunks;
+  std::vector<ChunkEntry> chunks;
   auto status = GetChunks(attr.fs_id(), attr.ino(), chunks);
   if (!status.ok()) {
     return status;
@@ -136,7 +136,7 @@ Status CleanDelFileTask::CleanDelFile(const AttrType& attr) {
     for (const auto& slice : chunk.slices()) {
       for (uint64_t len = 0; len < slice.len(); len += chunk.block_size()) {
         uint64_t block_index = (slice.offset() - chunk_offset + len) / chunk.block_size();
-        cache::BlockKey block_key(attr.fs_id(), attr.ino(), slice.id(), block_index, chunk.version());
+        cache::BlockKey block_key(attr.fs_id(), attr.ino(), slice.id(), block_index, 0);
 
         DINGO_LOG(INFO) << fmt::format("[gc.delfile] delete block filename({}) key({}).", block_key.Filename(),
                                        block_key.StoreKey());
@@ -435,7 +435,7 @@ void GcProcessor::ScanExpiredFileSession(uint32_t fs_id) {
                                  status.error_str());
 }
 
-bool GcProcessor::ShouldDeleteFile(const AttrType& attr) {
+bool GcProcessor::ShouldDeleteFile(const AttrEntry& attr) {
   uint64_t now_s = Helper::Timestamp();
   return (attr.ctime() / 1000000000 + FLAGS_mds_gc_delfile_reserve_time_s) < now_s;
 }

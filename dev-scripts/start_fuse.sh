@@ -67,10 +67,9 @@ if [ ! -d "$FUSE_LOG_DIR" ]; then
     mkdir -p $FUSE_LOG_DIR
 fi
 
-
 function gen_conf() {
     index=$1
-    dist_conf="${FUSE_CONF_DIR}/client-${index}.conf"
+    dist_conf="${FUSE_CONF_DIR}/client-${FLAGS_fsname}-${index}.conf"
 
     if [ ! -f "$FUSE_CONF_TEMPLATE" ]; then
         echo "fuse conf template(${FUSE_CONF_TEMPLATE}) already exist."
@@ -81,9 +80,12 @@ function gen_conf() {
 
     cache_dir=$FUSE_CACHE_DIR/$index
     log_dir=$FUSE_LOG_DIR/$index
+    dummy_port=$(($RANDOM%20000 + 10000))
 
     sed  -i 's,\$CACHE_DIR\$,'"$cache_dir"',g'              $dist_conf
     sed  -i 's,\$LOG_DIR\$,'"$log_dir"',g'                  $dist_conf
+
+    sed  -i 's,\$DUMMY_PORT\$,'"$dummy_port"',g'            $dist_conf
 }
 
 
@@ -105,7 +107,7 @@ wait_for_process_exit() {
 
 
 function stop() {
-    process_no=$(pgrep -f "${FUSE_BASE_DIR}" -U `id -u` | xargs)
+    process_no=$(ps -ef | grep ${FUSE_BASE_DIR} | grep $FLAGS_fsname | awk '{print $2}' | xargs)
 
     if [ "${process_no}" != "" ]; then
         echo "pid to kill: ${process_no}"
@@ -132,7 +134,7 @@ function umount() {
 
 function start() {
     index=$1
-    fuse_conf_path="${FUSE_CONF_DIR}/client-${index}.conf"
+    fuse_conf_path="${FUSE_CONF_DIR}/client-${FLAGS_fsname}-${index}.conf"
     log_dir=$FUSE_LOG_DIR/$index
     mountpoint_dir=${FLAGS_mountpoint}/${FLAGS_fsname}-${index}
 

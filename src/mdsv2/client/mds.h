@@ -226,8 +226,8 @@ class MdsCommandRunner {
     std::string prefix;
     std::string mds_id_list;
     uint32_t num;
-    uint32_t max_bytes;
-    uint32_t max_inodes;
+    uint64_t max_bytes;
+    uint64_t max_inodes;
     bool is_force{false};
 
     std::string fs_partition_type;

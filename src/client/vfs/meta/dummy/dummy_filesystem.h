@@ -28,8 +28,8 @@
 #include "bthread/types.h"
 #include "client/meta/vfs_meta.h"
 #include "client/vfs/meta/meta_system.h"
-#include "trace/context.h"
 #include "dingofs/mdsv2.pb.h"
+#include "trace/context.h"
 
 namespace dingofs {
 namespace client {
@@ -218,10 +218,10 @@ class DummyFileSystem : public vfs::MetaSystem {
 
   Status Close(ContextSPtr ctx, Ino ino, uint64_t fh) override;
 
-  Status ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
+  Status ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index, uint64_t fh,
                    std::vector<Slice>* slices) override;
   Status NewSliceId(ContextSPtr ctx, Ino ino, uint64_t* id) override;
-  Status WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
+  Status WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index, uint64_t fh,
                     const std::vector<Slice>& slices) override;
 
   Status MkDir(ContextSPtr ctx, Ino parent, const std::string& name,

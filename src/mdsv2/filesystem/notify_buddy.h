@@ -60,14 +60,14 @@ struct RefreshFsInfoMessage : public Message {
 };
 
 struct RefreshInodeMessage : public Message {
-  RefreshInodeMessage(uint64_t mds_id, uint32_t fs_id, AttrType&& attr)
+  RefreshInodeMessage(uint64_t mds_id, uint32_t fs_id, AttrEntry&& attr)
       : Message{Type::kRefreshInode, mds_id, fs_id}, attr(std::move(attr)) {}
 
-  static MessageSPtr Create(uint64_t mds_id, uint32_t fs_id, AttrType&& attr) {
+  static MessageSPtr Create(uint64_t mds_id, uint32_t fs_id, AttrEntry&& attr) {
     return std::make_shared<RefreshInodeMessage>(mds_id, fs_id, std::move(attr));
   }
 
-  AttrType attr;
+  AttrEntry attr;
 };
 
 struct CleanPartitionCacheMessage : public Message {

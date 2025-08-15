@@ -545,7 +545,7 @@ static void RenderQuotaPage(FileSystemSPtr fs, butil::IOBufBuilder& os) {
   os << "</html>";
 }
 
-static void RenderFsTreePage(const FsInfoType& fs_info, butil::IOBufBuilder& os) {
+static void RenderFsTreePage(const FsInfoEntry& fs_info, butil::IOBufBuilder& os) {
   const auto fs_id = fs_info.fs_id();
   if (fs_id == 0) {
     os << "Invalid fs_id";
@@ -1049,7 +1049,7 @@ static void RenderJsonPage(const std::string& header, const std::string& json, b
   os << "</html>";
 }
 
-static void RenderFsDetailsPage(const FsInfoType& fs_info, butil::IOBufBuilder& os) {
+static void RenderFsDetailsPage(const FsInfoEntry& fs_info, butil::IOBufBuilder& os) {
   std::string header = fmt::format("FileSystem: {}({})", fs_info.fs_name(), fs_info.fs_id());
   std::string json;
   Helper::ProtoToJson(fs_info, json);
@@ -1104,7 +1104,7 @@ static void RenderDelfilePage(FileSystemSPtr filesystem, butil::IOBufBuilder& os
   os << "<body>";
   os << R"(<h1 style="text-align:center;">Deleted File</h1>)";
 
-  std::vector<AttrType> delfiles;
+  std::vector<AttrEntry> delfiles;
   auto status = filesystem->GetDelFiles(delfiles);
   if (!status.ok()) {
     os << "Get delfiles fail: " << status.error_str();
@@ -1264,29 +1264,34 @@ static void RenderOplogPage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) 
   os << "</body>";
 }
 
-static void RenderInodePage(const AttrType& attr, butil::IOBufBuilder& os) {
+static void RenderInodePage(const AttrEntry& attr, butil::IOBufBuilder& os) {
   std::string header = fmt::format("Inode: {}", attr.ino());
   std::string json;
   Helper::ProtoToJson(attr, json);
   RenderJsonPage(header, json, os);
 }
 
-static void RenderChunk(uint64_t& count, uint64_t chunk_size, ChunkType chunk, butil::IOBufBuilder& os) {
+static void RenderChunk(uint64_t& count, uint64_t chunk_size, ChunkEntry chunk, butil::IOBufBuilder& os) {
   struct OffsetRange {
     uint64_t start;
     uint64_t end;
-    std::vector<SliceType> slices;
+    std::vector<SliceEntry> slices;
   };
 
   // sort by offset
   std::sort(chunk.mutable_slices()->begin(), chunk.mutable_slices()->end(),
-            [](const SliceType& a, const SliceType& b) { return a.offset() < b.offset(); });
+            [](const SliceEntry& a, const SliceEntry& b) { return a.offset() < b.offset(); });
 
   // get offset ranges
   std::set<uint64_t> offsets;
-  for (const auto& slice : chunk.slices()) {
-    offsets.insert(slice.offset());
-    offsets.insert(slice.offset() + slice.len());
+  if (!chunk.slices().empty()) {
+    for (const auto& slice : chunk.slices()) {
+      offsets.insert(slice.offset());
+      offsets.insert(slice.offset() + slice.len());
+    }
+  } else {
+    offsets.insert(chunk.index() * chunk_size);
+    offsets.insert((chunk.index() + 1) * chunk_size);
   }
 
   std::vector<OffsetRange> offset_ranges;
@@ -1316,8 +1321,8 @@ static void RenderChunk(uint64_t& count, uint64_t chunk_size, ChunkType chunk, b
   uint64_t prev_offset = chunk_index * chunk_size;
   for (auto& offset_range : offset_ranges) {
     // sort by id, from newest to oldest
-    std::sort(offset_range.slices.begin(), offset_range.slices.end(),
-              [](const SliceType& a, const SliceType& b) { return a.id() < b.id(); });
+    std::sort(offset_range.slices.begin(), offset_range.slices.end(),  // NOLINT
+              [](const SliceEntry& a, const SliceEntry& b) { return a.id() < b.id(); });
 
     if (offset_range.start != prev_offset) {
       uncontinuous_offsets.insert(offset_range.start);
@@ -1361,7 +1366,7 @@ static void RenderChunk(uint64_t& count, uint64_t chunk_size, ChunkType chunk, b
   }
 }
 
-static void RenderChunksPage(Ino ino, const std::vector<ChunkType>& chunks, butil::IOBufBuilder& os) {
+static void RenderChunksPage(Ino ino, const std::vector<ChunkEntry>& chunks, butil::IOBufBuilder& os) {
   os << "<!DOCTYPE html><html>";
 
   os << "<head>" << RenderHead("dingofs chunk") << "</head>";
@@ -1490,7 +1495,7 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
     auto file_system_set = Server::GetInstance().GetFileSystemSet();
     auto file_system = file_system_set->GetFileSystem(fs_id);
     if (file_system != nullptr) {
-      AttrType attr;
+      AttrEntry attr;
       auto status = file_system->GetDelFileFromStore(ino, attr);
       if (status.ok()) {
         RenderInodePage(attr, os);
@@ -1584,7 +1589,7 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
 
     FsUtils fs_utils(Server::GetInstance().GetOperationProcessor());
 
-    std::vector<ChunkType> chunks;
+    std::vector<ChunkEntry> chunks;
     auto status = fs_utils.GetChunks(fs_id, ino, chunks);
     if (status.ok()) {
       RenderChunksPage(ino, chunks, os);

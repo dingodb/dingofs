@@ -47,8 +47,8 @@ class Monitor {
  private:
   Status MonitorMDS();
   Status ProcessFaultMDS(std::vector<MDSMeta>& mdses);
-  void NotifyRefreshFs(const MDSMeta& mds, const FsInfoType& fs_info);
-  void NotifyRefreshFs(const std::vector<MDSMeta>& mdses, const FsInfoType& fs_info);
+  void NotifyRefreshFs(const MDSMeta& mds, const FsInfoEntry& fs_info);
+  void NotifyRefreshFs(const std::vector<MDSMeta>& mdses, const FsInfoEntry& fs_info);
 
   Status MonitorClient();
 

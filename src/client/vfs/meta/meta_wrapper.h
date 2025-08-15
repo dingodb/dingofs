@@ -99,15 +99,15 @@ class MetaWrapper : public MetaSystem {
   Status ListXattr(ContextSPtr ctx, Ino ino,
                    std::vector<std::string>* xattrs) override;
 
-  Status Rename(ContextSPtr ctx, Ino old_parent, const std::string& old_name, Ino new_parent,
-                const std::string& new_name) override;
+  Status Rename(ContextSPtr ctx, Ino old_parent, const std::string& old_name,
+                Ino new_parent, const std::string& new_name) override;
 
-  Status ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
+  Status ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index, uint64_t fh,
                    std::vector<Slice>* slices) override;
 
   Status NewSliceId(ContextSPtr ctx, Ino ino, uint64_t* id) override;
 
-  Status WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
+  Status WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index, uint64_t fh,
                     const std::vector<Slice>& slices) override;
 
   Status StatFs(ContextSPtr ctx, Ino ino, FsStat* fs_stat) override;

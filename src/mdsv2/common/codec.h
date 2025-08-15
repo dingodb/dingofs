@@ -109,8 +109,8 @@ class MetaCodec {
   static bool IsFsKey(const std::string& key);
   static std::string EncodeFsKey(const std::string& name);
   static void DecodeFsKey(const std::string& key, std::string& name);
-  static std::string EncodeFsValue(const FsInfoType& fs_info);
-  static FsInfoType DecodeFsValue(const std::string& value);
+  static std::string EncodeFsValue(const FsInfoEntry& fs_info);
+  static FsInfoEntry DecodeFsValue(const std::string& value);
 
   // fs quota format: ${prefix} kTableMeta kMetaFsQuota {fs_id}
   static bool IsFsQuotaKey(const std::string& key);
@@ -130,22 +130,22 @@ class MetaCodec {
   static bool IsInodeKey(const std::string& key);
   static std::string EncodeInodeKey(uint32_t fs_id, Ino ino);
   static void DecodeInodeKey(const std::string& key, uint32_t& fs_id, uint64_t& ino);
-  static std::string EncodeInodeValue(const AttrType& attr);
-  static AttrType DecodeInodeValue(const std::string& value);
+  static std::string EncodeInodeValue(const AttrEntry& attr);
+  static AttrEntry DecodeInodeValue(const std::string& value);
 
   // dentry format: ${prefix} kTableFsMeta {fs_id} kMetaFsInode {ino} kFsInodeDentry {name}
   static bool IsDentryKey(const std::string& key);
   static std::string EncodeDentryKey(uint32_t fs_id, Ino ino, const std::string& name);
   static void DecodeDentryKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, std::string& name);
-  static std::string EncodeDentryValue(const DentryType& dentry);
-  static DentryType DecodeDentryValue(const std::string& value);
+  static std::string EncodeDentryValue(const DentryEntry& dentry);
+  static DentryEntry DecodeDentryValue(const std::string& value);
 
   // inode chunk format: ${prefix} kTableFsMeta {fs_id} kMetaFsInode {ino} kFsInodeChunk {chunk_index}
   static bool IsChunkKey(const std::string& key);
   static std::string EncodeChunkKey(uint32_t fs_id, Ino ino, uint64_t chunk_index);
   static void DecodeChunkKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, uint64_t& chunk_index);
-  static std::string EncodeChunkValue(const ChunkType& chunk);
-  static ChunkType DecodeChunkValue(const std::string& value);
+  static std::string EncodeChunkValue(const ChunkEntry& chunk);
+  static ChunkEntry DecodeChunkValue(const std::string& value);
 
   // inode file session format: ${prefix} kTableFsMeta {fs_id} kMetaFsFileSession {ino} {session_id}
   static bool IsFileSessionKey(const std::string& key);
@@ -173,8 +173,8 @@ class MetaCodec {
   static bool IsDelFileKey(const std::string& key);
   static std::string EncodeDelFileKey(uint32_t fs_id, Ino ino);
   static void DecodeDelFileKey(const std::string& key, uint32_t& fs_id, Ino& ino);
-  static std::string EncodeDelFileValue(const AttrType& attr);
-  static AttrType DecodeDelFileValue(const std::string& value);
+  static std::string EncodeDelFileValue(const AttrEntry& attr);
+  static AttrEntry DecodeDelFileValue(const std::string& value);
 
   // fs stats format: ${prefix} kTableFsStats kMetaFsStats {fs_id} {time_ns}
   static bool IsFsStatsKey(const std::string& key);

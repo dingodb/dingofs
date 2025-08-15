@@ -15,7 +15,13 @@
 #ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_FILE_SESSION_H_
 #define DINGOFS_SRC_CLIENT_VFS_META_V2_FILE_SESSION_H_
 
+#include <cstdint>
+#include <memory>
+#include <vector>
+
+#include "client/meta/vfs_meta.h"
 #include "json/value.h"
+#include "mdsv2/common/type.h"
 #include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
@@ -23,76 +29,70 @@ namespace client {
 namespace vfs {
 namespace v2 {
 
+class FileSession;
+using FileSessionSPtr = std::shared_ptr<FileSession>;
+
+class FileSession {
+ public:
+  struct Chunk;
+  using ChunkSPtr = std::shared_ptr<Chunk>;
+
+  struct Chunk {
+    uint64_t index{0};
+    uint64_t chunk_size{0};
+    uint64_t block_size{0};
+
+    std::vector<Slice> slices;
+
+    uint64_t version{0};
+    uint64_t last_compaction_time_ms{0};
+
+    static ChunkSPtr From(const mdsv2::ChunkEntry& chunk);
+    static mdsv2::ChunkEntry To(ChunkSPtr chunk);
+  };
+
+  FileSession() = default;
+  ~FileSession() = default;
+
+  static FileSessionSPtr New() { return std::make_shared<FileSession>(); }
+
+  void SetSessionId(const std::string& session_id) { session_id_ = session_id; }
+  const std::string& GetSessionID() const { return session_id_; }
+
+  void AddChunk(ChunkSPtr chunk);
+  void AppendSlice(int64_t index, const std::vector<Slice>& slices);
+
+  ChunkSPtr GetChunk(int64_t index);
+  std::vector<ChunkSPtr> GetAllChunk();
+
+ private:
+  std::string session_id_;
+
+  utils::RWLock lock_;
+  // index -> chunk
+  std::map<int64_t, ChunkSPtr> chunk_map_;
+};
+
 // used by open file
 class FileSessionMap {
  public:
   FileSessionMap() = default;
   ~FileSessionMap() = default;
 
-  bool Put(uint64_t fh, std::string session_id) {
-    utils::WriteLockGuard lk(lock_);
+  bool Put(uint64_t fh, FileSessionSPtr file_session);
+  void Delete(uint64_t fh);
 
-    auto it = file_session_map_.find(fh);
-    if (it != file_session_map_.end()) {
-      return false;
-    }
-
-    file_session_map_.insert(std::make_pair(fh, session_id));
-
-    return true;
-  }
-
-  void Delete(uint64_t fh) {
-    utils::WriteLockGuard lk(lock_);
-
-    file_session_map_.erase(fh);
-  }
-  std::string Get(uint64_t fh) {
-    utils::ReadLockGuard lk(lock_);
-
-    auto it = file_session_map_.find(fh);
-    return (it != file_session_map_.end()) ? it->second : "";
-  }
+  std::string GetSessionID(uint64_t fh);
+  FileSessionSPtr GetSession(uint64_t fh);
 
   // output json format string
-  bool Dump(Json::Value& value) {
-    utils::ReadLockGuard lk(lock_);
-
-    Json::Value items = Json::arrayValue;
-    for (const auto& [fh, session_id] : file_session_map_) {
-      Json::Value item;
-      item["fh"] = fh;
-      item["session_id"] = session_id;
-      items.append(item);
-    }
-
-    value["file_sessions"] = items;
-
-    return true;
-  }
-
-  bool Load(const Json::Value& value) {
-    utils::WriteLockGuard lk(lock_);
-
-    file_session_map_.clear();
-    const Json::Value& items = value["file_sessions"];
-    if (!items.isArray()) {
-      LOG(ERROR) << "[meta.filesession] value is not an array.";
-      return false;
-    }
-
-    for (const auto& item : items) {
-      uint64_t fh = item["fh"].asUInt64();
-      file_session_map_[fh] = item["session_id"].asString();
-    }
-
-    return true;
-  }
+  bool Dump(Json::Value& value);
+  bool Load(const Json::Value& value);
 
  private:
   utils::RWLock lock_;
-  // fh -> session id
-  std::map<uint64_t, std::string> file_session_map_;
+  // fh -> FileSession
+  std::map<uint64_t, FileSessionSPtr> file_session_map_;
 };
 
 }  // namespace v2

@@ -28,10 +28,10 @@
 #include "client/vfs/meta/v2/file_session.h"
 #include "client/vfs/meta/v2/mds_client.h"
 #include "client/vfs/meta/v2/mds_discovery.h"
-#include "trace/context.h"
 #include "common/status.h"
-#include "dingofs/mdsv2.pb.h"
 #include "mdsv2/common/crontab.h"
+#include "mdsv2/common/type.h"
+#include "trace/context.h"
 
 namespace dingofs {
 namespace client {
@@ -68,7 +68,7 @@ class MDSV2FileSystem : public vfs::MetaSystem {
 
   bool Load(ContextSPtr ctx, const Json::Value& value) override;
 
-  pb::mdsv2::FsInfo GetFsInfo() { return fs_info_->Get(); }
+  mdsv2::FsInfoEntry GetFsInfo() { return fs_info_->Get(); }
 
   Status GetFsInfo(ContextSPtr ctx, FsInfo* fs_info) override;
 
@@ -88,10 +88,10 @@ class MDSV2FileSystem : public vfs::MetaSystem {
   Status Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) override;
   Status Close(ContextSPtr ctx, Ino ino, uint64_t fh) override;
 
-  Status ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
+  Status ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index, uint64_t fh,
                    std::vector<Slice>* slices) override;
   Status NewSliceId(ContextSPtr ctx, Ino ino, uint64_t* id) override;
-  Status WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
+  Status WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index, uint64_t fh,
                     const std::vector<Slice>& slices) override;
 
   Status MkDir(ContextSPtr ctx, Ino parent, const std::string& name,
@@ -138,6 +138,9 @@ class MDSV2FileSystem : public vfs::MetaSystem {
   void Heartbeat();
 
   bool InitCrontab();
+
+  bool GetSliceFromCache(uint64_t fh, uint64_t index,
+                         std::vector<Slice>* slices);
 
   const std::string name_;
   const ClientId client_id_;

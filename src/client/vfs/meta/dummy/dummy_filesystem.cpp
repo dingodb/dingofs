@@ -27,12 +27,12 @@
 #include "bthread/mutex.h"
 #include "client/meta/vfs_meta.h"
 #include "client/vfs/common/helper.h"
-#include "trace/context.h"
 #include "common/status.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
+#include "trace/context.h"
 
 static const uint32_t kFsID = 10000;
 static const uint64_t kRootIno = 1;
@@ -471,7 +471,7 @@ Status DummyFileSystem::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
 }
 
 Status DummyFileSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
-                                  std::vector<Slice>* slices) {
+                                  uint64_t fh, std::vector<Slice>* slices) {
   return file_chunk_map_.Read(ino, index, slices);
 }
 
@@ -480,6 +480,7 @@ Status DummyFileSystem::NewSliceId(ContextSPtr ctx, Ino ino, uint64_t* id) {
 }
 
 Status DummyFileSystem::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
+                                   uint64_t fh,
                                    const std::vector<Slice>& slices) {
   PBInode inode;
   if (!GetInode(ino, inode)) {

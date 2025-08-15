@@ -33,7 +33,7 @@ using FsInfoUPtr = std::unique_ptr<FsInfo>;
 
 class FsInfo {
  public:
-  using DataType = FsInfoType;
+  using DataType = FsInfoEntry;
 
   explicit FsInfo(const DataType& fs_info) : fs_info_(fs_info) {}
   ~FsInfo() = default;

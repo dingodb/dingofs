@@ -78,12 +78,12 @@ class CleanDelSliceTask : public TaskRunnable {
 class CleanDelFileTask : public TaskRunnable {
  public:
   CleanDelFileTask(OperationProcessorSPtr operation_processor, blockaccess::BlockAccesserSPtr block_accessor,
-                   const AttrType& attr)
+                   const AttrEntry& attr)
       : operation_processor_(operation_processor), data_accessor_(block_accessor), attr_(attr) {}
   ~CleanDelFileTask() override = default;
 
   static CleanDelFileTaskSPtr New(OperationProcessorSPtr operation_processor,
-                                  blockaccess::BlockAccesserSPtr block_accessor, const AttrType& attr) {
+                                  blockaccess::BlockAccesserSPtr block_accessor, const AttrEntry& attr) {
     return std::make_shared<CleanDelFileTask>(operation_processor, block_accessor, attr);
   }
 
@@ -94,11 +94,11 @@ class CleanDelFileTask : public TaskRunnable {
  private:
   friend class GcProcessor;
 
-  Status GetChunks(uint32_t fs_id, Ino ino, std::vector<ChunkType>& chunks);
+  Status GetChunks(uint32_t fs_id, Ino ino, std::vector<ChunkEntry>& chunks);
 
-  Status CleanDelFile(const AttrType& attr);
+  Status CleanDelFile(const AttrEntry& attr);
 
-  AttrType attr_;
+  AttrEntry attr_;
 
   OperationProcessorSPtr operation_processor_;
 
@@ -162,7 +162,7 @@ class GcProcessor {
   void ScanDelFile(uint32_t fs_id);
   void ScanExpiredFileSession(uint32_t fs_id);
 
-  static bool ShouldDeleteFile(const AttrType& attr);
+  static bool ShouldDeleteFile(const AttrEntry& attr);
   static bool ShouldCleanFileSession(const FileSessionEntry& file_session, const std::set<std::string>& alive_clients);
 
   blockaccess::BlockAccesserSPtr GetOrCreateDataAccesser(uint32_t fs_id);

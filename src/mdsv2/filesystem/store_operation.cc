@@ -64,14 +64,14 @@ static std::string FindValue(const std::vector<KeyValue>& kvs, const std::string
   return "";
 }
 
-static void AddParentIno(AttrType& attr, Ino parent) {
+static void AddParentIno(AttrEntry& attr, Ino parent) {
   auto it = std::find(attr.parents().begin(), attr.parents().end(), parent);
   if (it == attr.parents().end()) {
     attr.add_parents(parent);
   }
 }
 
-static void DelParentIno(AttrType& attr, Ino parent) {
+static void DelParentIno(AttrEntry& attr, Ino parent) {
   auto it = std::find(attr.parents().begin(), attr.parents().end(), parent);
   if (it != attr.parents().end()) {
     attr.mutable_parents()->erase(it);
@@ -88,7 +88,7 @@ static void SetError(BatchOperation& batch_operation, Status& status) {
   }
 }
 
-static void SetAttr(BatchOperation& batch_operation, AttrType& attr) {
+static void SetAttr(BatchOperation& batch_operation, AttrEntry& attr) {
   for (auto* operation : batch_operation.setattr_operations) {
     operation->SetAttr(attr);
   }
@@ -128,7 +128,7 @@ static void SetElapsedTime(BatchOperation& batch_operation, const std::string& n
   }
 }
 
-static bool IsExistMountPoint(const FsInfoType& fs_info, const pb::mdsv2::MountPoint& mountpoint) {
+static bool IsExistMountPoint(const FsInfoEntry& fs_info, const pb::mdsv2::MountPoint& mountpoint) {
   for (const auto& mp : fs_info.mount_points()) {
     if (mp.client_id() == mountpoint.client_id()) {
       return true;
@@ -369,7 +369,7 @@ Status MountFsOperation::Run(TxnUPtr& txn) {
   return Status::OK();
 }
 
-static void RemoveMountPoint(FsInfoType& fs_info, const std::string& client_id) {
+static void RemoveMountPoint(FsInfoEntry& fs_info, const std::string& client_id) {
   for (int i = 0; i < fs_info.mount_points_size(); i++) {
     if (fs_info.mount_points(i).client_id() == client_id) {
       fs_info.mutable_mount_points()->SwapElements(i, fs_info.mount_points_size() - 1);
@@ -489,7 +489,7 @@ Status CreateRootOperation::Run(TxnUPtr& txn) {
   return Status::OK();
 }
 
-Status MkDirOperation::RunInBatch(TxnUPtr& txn, AttrType& parent_attr, const std::vector<KeyValue>&) {
+Status MkDirOperation::RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const std::vector<KeyValue>&) {
   const uint32_t fs_id = parent_attr.fs_id();
   const Ino parent = parent_attr.ino();
 
@@ -507,7 +507,7 @@ Status MkDirOperation::RunInBatch(TxnUPtr& txn, AttrType& parent_attr, const std
   return Status::OK();
 }
 
-Status MkNodOperation::RunInBatch(TxnUPtr& txn, AttrType& parent_attr, const std::vector<KeyValue>&) {
+Status MkNodOperation::RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const std::vector<KeyValue>&) {
   const uint32_t fs_id = parent_attr.fs_id();
   const Ino parent = parent_attr.ino();
 
@@ -541,7 +541,7 @@ Status HardLinkOperation::Run(TxnUPtr& txn) {
     return Status(pb::error::ENOT_FOUND, fmt::format("get parent/child inode fail, count({})", kvs.size()));
   }
 
-  AttrType parent_attr, attr;
+  AttrEntry parent_attr, attr;
   for (auto& kv : kvs) {
     if (kv.key == parent_key) {
       parent_attr = MetaCodec::DecodeInodeValue(kv.value);
@@ -576,7 +576,7 @@ Status HardLinkOperation::Run(TxnUPtr& txn) {
   return status;
 }
 
-Status SmyLinkOperation::RunInBatch(TxnUPtr& txn, AttrType& parent_attr, const std::vector<KeyValue>&) {
+Status SmyLinkOperation::RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const std::vector<KeyValue>&) {
   const uint32_t fs_id = parent_attr.fs_id();
   const Ino parent = parent_attr.ino();
 
@@ -593,7 +593,7 @@ Status SmyLinkOperation::RunInBatch(TxnUPtr& txn, AttrType& parent_attr, const s
   return Status::OK();
 }
 
-static Status GetChunk(TxnUPtr& txn, uint32_t fs_id, Ino ino, uint64_t chunk_index, ChunkType& chunk) {
+static Status GetChunk(TxnUPtr& txn, uint32_t fs_id, Ino ino, uint64_t chunk_index, ChunkEntry& chunk) {
   std::string value;
   auto status = txn->Get(MetaCodec::EncodeChunkKey(fs_id, ino, chunk_index), value);
   if (!status.ok()) return status;
@@ -603,7 +603,7 @@ static Status GetChunk(TxnUPtr& txn, uint32_t fs_id, Ino ino, uint64_t chunk_ind
   return Status::OK();
 }
 
-static Status ScanChunk(TxnUPtr& txn, uint32_t fs_id, Ino ino, std::map<uint64_t, ChunkType>& chunks) {
+static Status ScanChunk(TxnUPtr& txn, uint32_t fs_id, Ino ino, std::map<uint64_t, ChunkEntry>& chunks) {
   Range range = MetaCodec::GetChunkRange(fs_id, ino);
 
   auto status = txn->Scan(range, [&](const std::string& key, const std::string& value) -> bool {
@@ -618,7 +618,28 @@ static Status ScanChunk(TxnUPtr& txn, uint32_t fs_id, Ino ino, std::map<uint64_t
   return status;
 }
 
-Status UpdateAttrOperation::RunInBatch(TxnUPtr&, AttrType& attr, const std::vector<KeyValue>&) {
+void UpdateAttrOperation::ExpandChunk(TxnUPtr& txn, AttrEntry& attr, uint64_t new_length) const {
+  if (new_length <= attr.length()) return;
+
+  const uint64_t chunk_size = extra_param_.chunk_size;
+  const uint64_t block_size = extra_param_.block_size;
+
+  uint64_t start_index =
+      attr.length() % chunk_size == 0 ? attr.length() / chunk_size : (attr.length() / chunk_size) + 1;
+  uint64_t end_index = new_length % chunk_size == 0 ? new_length / chunk_size : (new_length / chunk_size) + 1;
+
+  for (; start_index < end_index; ++start_index) {
+    ChunkEntry chunk;
+    chunk.set_index(start_index);
+    chunk.set_chunk_size(chunk_size);
+    chunk.set_block_size(block_size);
+    chunk.set_version(0);
+
+    txn->Put(MetaCodec::EncodeChunkKey(attr.fs_id(), attr.ino(), start_index), MetaCodec::EncodeChunkValue(chunk));
+  }
+}
+
+Status UpdateAttrOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>&) {
   const uint32_t fs_id = attr.fs_id();
 
   if (to_set_ & kSetAttrMode) {
@@ -634,6 +655,7 @@ Status UpdateAttrOperation::RunInBatch(TxnUPtr&, AttrType& attr, const std::vect
   }
 
   if (to_set_ & kSetAttrLength) {
+    ExpandChunk(txn, attr, attr_.length());
     attr.set_length(attr_.length());
   }
 
@@ -656,7 +678,7 @@ Status UpdateAttrOperation::RunInBatch(TxnUPtr&, AttrType& attr, const std::vect
   return Status::OK();
 }
 
-Status UpdateXAttrOperation::RunInBatch(TxnUPtr&, AttrType& attr, const std::vector<KeyValue>&) {
+Status UpdateXAttrOperation::RunInBatch(TxnUPtr&, AttrEntry& attr, const std::vector<KeyValue>&) {
   for (const auto& [key, value] : xattrs_) {
     (*attr.mutable_xattrs())[key] = value;
   }
@@ -669,7 +691,7 @@ Status UpdateXAttrOperation::RunInBatch(TxnUPtr&, AttrType& attr, const std::vec
   return Status::OK();
 }
 
-Status RemoveXAttrOperation::RunInBatch(TxnUPtr&, AttrType& attr, const std::vector<KeyValue>&) {
+Status RemoveXAttrOperation::RunInBatch(TxnUPtr&, AttrEntry& attr, const std::vector<KeyValue>&) {
   attr.mutable_xattrs()->erase(name_);
 
   // update attr
@@ -684,8 +706,8 @@ std::string UpsertChunkOperation::PrefetchKey() {
   return MetaCodec::EncodeChunkKey(fs_info_.fs_id(), ino_, chunk_index_);
 }
 
-Status UpsertChunkOperation::RunInBatch(TxnUPtr& txn, AttrType& attr, const std::vector<KeyValue>& prefetch_kvs) {
-  ChunkType chunk;
+Status UpsertChunkOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>& prefetch_kvs) {
+  ChunkEntry chunk;
 
   const std::string key = MetaCodec::EncodeChunkKey(fs_info_.fs_id(), ino_, chunk_index_);
   auto value = FindValue(prefetch_kvs, key);
@@ -701,7 +723,7 @@ Status UpsertChunkOperation::RunInBatch(TxnUPtr& txn, AttrType& attr, const std:
   } else {
     // exist chunk, update slice
     // check if slice already exist
-    auto is_exist_fn = [&](const SliceType& slice) -> bool {
+    auto is_exist_fn = [&](const SliceEntry& slice) -> bool {
       for (const auto& exist_slice : chunk.slices()) {
         if (exist_slice.id() == slice.id()) {
           return true;
@@ -770,7 +792,7 @@ Status CleanChunkOperation::Run(TxnUPtr& txn) {
   return Status::OK();
 }
 
-Status FallocateOperation::PreAlloc(TxnUPtr& txn, AttrType& attr, uint64_t offset, uint32_t len) {
+Status FallocateOperation::PreAlloc(TxnUPtr& txn, AttrEntry& attr, uint64_t offset, uint32_t len) {
   uint64_t length = attr.length();
   const uint64_t new_length = offset + len;
 
@@ -783,11 +805,11 @@ Status FallocateOperation::PreAlloc(TxnUPtr& txn, AttrType& attr, uint64_t offse
   uint64_t slice_id = param_.slice_id;
   const uint32_t slice_num = param_.slice_num;
 
-  ChunkType max_chunk;
+  ChunkEntry max_chunk;
   auto status = GetChunk(txn, fs_id, ino, length / chunk_size, max_chunk);
   if (!status.ok()) return status;
 
-  std::vector<ChunkType> effected_chunks;
+  std::vector<ChunkEntry> effected_chunks;
   uint32_t count = 0;
   while (length < new_length) {
     uint64_t chunk_pos = length % chunk_size;
@@ -795,7 +817,7 @@ Status FallocateOperation::PreAlloc(TxnUPtr& txn, AttrType& attr, uint64_t offse
     uint64_t delta_size = new_length - length;
     uint64_t delta_chunk_size = (chunk_pos + delta_size > chunk_size) ? (chunk_size - chunk_pos) : delta_size;
 
-    SliceType slice;
+    SliceEntry slice;
     slice.set_id(slice_id++);
     slice.set_offset(chunk_pos);
     slice.set_len(delta_chunk_size);
@@ -806,7 +828,7 @@ Status FallocateOperation::PreAlloc(TxnUPtr& txn, AttrType& attr, uint64_t offse
         "chunk_index({}) should be greater than or equal to max_chunk.index({}).", chunk_index, max_chunk.index());
 
     if (chunk_index > max_chunk.index()) {
-      ChunkType chunk;
+      ChunkEntry chunk;
       chunk.set_index(chunk_index);
       chunk.set_chunk_size(chunk_size);
       chunk.set_block_size(block_size);
@@ -839,7 +861,7 @@ Status FallocateOperation::PreAlloc(TxnUPtr& txn, AttrType& attr, uint64_t offse
 // 1. [offset, len)    |-----|
 // 2. [offset, len)    |-------------|
 // 3. [offset, len)                |-----|
-Status FallocateOperation::SetZero(TxnUPtr& txn, AttrType& attr, uint64_t offset, uint64_t len, bool keep_size) {
+Status FallocateOperation::SetZero(TxnUPtr& txn, AttrEntry& attr, uint64_t offset, uint64_t len, bool keep_size) {
   const uint32_t fs_id = attr.fs_id();
   const Ino ino = attr.ino();
   const uint64_t chunk_size = param_.chunk_size;
@@ -850,11 +872,11 @@ Status FallocateOperation::SetZero(TxnUPtr& txn, AttrType& attr, uint64_t offset
   uint64_t end_offset = keep_size ? std::min(attr.length(), offset + len) : (offset + len);
 
   // scan chunks
-  std::map<uint64_t, ChunkType> chunks;
+  std::map<uint64_t, ChunkEntry> chunks;
   auto status = ScanChunk(txn, fs_id, ino, chunks);
   if (!status.ok()) return status;
 
-  std::vector<ChunkType> effected_chunks;
+  std::vector<ChunkEntry> effected_chunks;
   uint32_t count = 0;
   while (offset < end_offset) {
     uint64_t chunk_pos = offset % chunk_size;
@@ -862,7 +884,7 @@ Status FallocateOperation::SetZero(TxnUPtr& txn, AttrType& attr, uint64_t offset
 
     uint64_t delta_chunk_size = chunk_size - chunk_pos;
 
-    SliceType slice;
+    SliceEntry slice;
     slice.set_id(slice_id++);
     slice.set_offset(chunk_pos);
     slice.set_len(delta_chunk_size);
@@ -872,7 +894,7 @@ Status FallocateOperation::SetZero(TxnUPtr& txn, AttrType& attr, uint64_t offset
     // todo
     auto it = chunks.find(chunk_index);
     if (it == chunks.end()) {
-      ChunkType chunk;
+      ChunkEntry chunk;
       chunk.set_index(chunk_index);
       chunk.set_chunk_size(chunk_size);
       chunk.set_block_size(block_size);
@@ -905,7 +927,7 @@ Status FallocateOperation::SetZero(TxnUPtr& txn, AttrType& attr, uint64_t offset
   return Status::OK();
 }
 
-Status FallocateOperation::RunInBatch(TxnUPtr& txn, AttrType& attr, const std::vector<KeyValue>&) {
+Status FallocateOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>&) {
   const int32_t mode_ = param_.mode;
   const uint64_t offset = param_.offset;
   const uint64_t len = param_.len;
@@ -940,7 +962,7 @@ Status FallocateOperation::RunInBatch(TxnUPtr& txn, AttrType& attr, const std::v
   return Status::OK();
 }
 
-Status OpenFileOperation::RunInBatch(TxnUPtr& txn, AttrType& attr, const std::vector<KeyValue>&) {
+Status OpenFileOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>&) {
   if (flags_ & O_TRUNC) {
     result_.delta_bytes = -static_cast<int64_t>(attr.length());
     attr.set_length(0);
@@ -1035,7 +1057,7 @@ Status UnlinkOperation::Run(TxnUPtr& txn) {
     return Status(pb::error::ENOT_FOUND, fmt::format("get parent/child inode fail, count({})", kvs.size()));
   }
 
-  AttrType parent_attr, attr;
+  AttrEntry parent_attr, attr;
   for (auto& kv : kvs) {
     if (kv.key == parent_key) {
       parent_attr = MetaCodec::DecodeInodeValue(kv.value);
@@ -1107,8 +1129,8 @@ Status RenameOperation::Run(TxnUPtr& txn) {
     return Status(pb::error::ENOT_FOUND, "not found old parent inode/old dentry");
   }
 
-  AttrType old_parent_attr, new_parent_attr;
-  DentryType old_dentry, prev_new_dentry;
+  AttrEntry old_parent_attr, new_parent_attr;
+  DentryEntry old_dentry, prev_new_dentry;
   for (const auto& kv : kvs) {
     if (kv.key == old_parent_key) {
       old_parent_attr = MetaCodec::DecodeInodeValue(kv.value);
@@ -1144,7 +1166,7 @@ Status RenameOperation::Run(TxnUPtr& txn) {
     return Status(pb::error::ENOT_FOUND, fmt::format("not found old inode({})", old_dentry.ino()));
   }
 
-  AttrType old_attr, prev_new_attr;
+  AttrEntry old_attr, prev_new_attr;
   for (const auto& kv : kvs) {
     if (kv.key == old_inode_key) {
       old_attr = MetaCodec::DecodeInodeValue(kv.value);
@@ -1195,7 +1217,7 @@ Status RenameOperation::Run(TxnUPtr& txn) {
   txn->Delete(old_dentry_key);
 
   // add new dentry
-  DentryType new_dentry;
+  DentryEntry new_dentry;
   new_dentry.set_fs_id(fs_id_);
   new_dentry.set_name(new_name_);
   new_dentry.set_ino(old_dentry.ino());
@@ -1250,19 +1272,19 @@ Status RenameOperation::Run(TxnUPtr& txn) {
   return Status::OK();
 }
 
-bool CompactChunkOperation::MaybeCompact(const FsInfoType& fs_info, Ino ino, uint64_t file_length,
-                                         const ChunkType& chunk) {
+bool CompactChunkOperation::MaybeCompact(const FsInfoEntry& fs_info, Ino ino, uint64_t file_length,
+                                         const ChunkEntry& chunk) {
   auto trash_slice_list = GenTrashSlices(fs_info, ino, file_length, chunk);
 
   return !trash_slice_list.slices().empty();
 }
 
-TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoType& fs_info, Ino ino, uint64_t file_length,
-                                                     const ChunkType& chunk) {
+TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoEntry& fs_info, Ino ino, uint64_t file_length,
+                                                     const ChunkEntry& chunk) {
   struct OffsetRange {
     uint64_t start;
     uint64_t end;
-    std::vector<SliceType> slices;
+    std::vector<SliceEntry> slices;
   };
 
   struct Block {
@@ -1318,7 +1340,7 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoType& fs_info, 
   // slice-2 is complete overlapped by slice-4
   // sort by offset
   std::sort(chunk_copy.mutable_slices()->begin(), chunk_copy.mutable_slices()->end(),
-            [](const SliceType& a, const SliceType& b) { return a.offset() < b.offset(); });
+            [](const SliceEntry& a, const SliceEntry& b) { return a.offset() < b.offset(); });
 
   // get offset ranges
   std::set<uint64_t> offsets;
@@ -1354,7 +1376,7 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoType& fs_info, 
   for (auto& offset_range : offset_ranges) {
     // sort by id, from newest to oldest
     std::sort(offset_range.slices.begin(), offset_range.slices.end(),  // NOLINT
-              [](const SliceType& a, const SliceType& b) { return a.id() > b.id(); });
+              [](const SliceEntry& a, const SliceEntry& b) { return a.id() > b.id(); });
     if (!offset_range.slices.empty()) {
       reserve_slice_ids.insert(offset_range.slices.front().id());
     }
@@ -1447,11 +1469,11 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoType& fs_info, 
   return trash_slices;
 }
 
-TrashSliceList CompactChunkOperation::GenTrashSlices(Ino ino, uint64_t file_length, const ChunkType& chunk) {
+TrashSliceList CompactChunkOperation::GenTrashSlices(Ino ino, uint64_t file_length, const ChunkEntry& chunk) {
   return GenTrashSlices(fs_info_, ino, file_length, chunk);
 }
 
-void CompactChunkOperation::UpdateChunk(ChunkType& chunk, const TrashSliceList& trash_slices) {
+void CompactChunkOperation::UpdateChunk(ChunkEntry& chunk, const TrashSliceList& trash_slices) {
   auto gen_slice_map_fn = [](const TrashSliceList& trash_slices) {
     std::map<uint64_t, pb::mdsv2::TrashSlice> slice_map;
     for (const auto& slice : trash_slices.slices()) {
@@ -1471,7 +1493,7 @@ void CompactChunkOperation::UpdateChunk(ChunkType& chunk, const TrashSliceList& 
   }
 }
 
-pb::mdsv2::TrashSliceList CompactChunkOperation::DoCompactChunk(Ino ino, uint64_t file_length, ChunkType& chunk) {
+pb::mdsv2::TrashSliceList CompactChunkOperation::DoCompactChunk(Ino ino, uint64_t file_length, ChunkEntry& chunk) {
   auto trash_slice_list = GenTrashSlices(ino, file_length, chunk);
   if (trash_slice_list.slices().empty()) {
     return {};
@@ -1483,7 +1505,7 @@ pb::mdsv2::TrashSliceList CompactChunkOperation::DoCompactChunk(Ino ino, uint64_
 }
 
 TrashSliceList CompactChunkOperation::CompactChunk(TxnUPtr& txn, uint32_t fs_id, Ino ino, uint64_t file_length,
-                                                   ChunkType& chunk) {
+                                                   ChunkEntry& chunk) {
   auto trash_slice_list = DoCompactChunk(ino, file_length, chunk);
   if (trash_slice_list.slices().empty()) {
     return {};
@@ -1520,7 +1542,7 @@ Status CompactChunkOperation::Run(TxnUPtr& txn) {
   auto status = txn->Get(key, value);
   if (!status.ok()) return status;
 
-  ChunkType chunk = MetaCodec::DecodeChunkValue(value);
+  ChunkEntry chunk = MetaCodec::DecodeChunkValue(value);
 
   // reduce compact frequency
   if (!is_force_ && chunk.last_compaction_time_ms() + FLAGS_mds_compact_chunk_interval_ms > Helper::TimestampMs()) {
@@ -2277,7 +2299,7 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
 
   SetElapsedTime(batch_operation, "store_pending");
 
-  AttrType attr;
+  AttrEntry attr;
   Status status;
   int retry = 0;
   int count = 0;

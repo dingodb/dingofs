@@ -26,9 +26,9 @@ static const std::string kChunkCacheCountMetricsName = "dingofs_{}_chunk_cache_c
 ChunkCache::ChunkCache(uint32_t fs_id)
     : fs_id_(fs_id), count_metrics_(fmt::format(kChunkCacheCountMetricsName, fs_id)) {}
 
-static ChunkCache::ChunkSPtr NewChunk(ChunkType&& chunk) { return std::make_shared<ChunkType>(std::move(chunk)); }
+static ChunkCache::ChunkSPtr NewChunk(ChunkEntry&& chunk) { return std::make_shared<ChunkEntry>(std::move(chunk)); }
 
-bool ChunkCache::PutIf(uint64_t ino, ChunkType chunk) {
+bool ChunkCache::PutIf(uint64_t ino, ChunkEntry chunk) {
   utils::WriteLockGuard lk(lock_);
 
   auto key = Key{.ino = ino, .chunk_index = chunk.index()};

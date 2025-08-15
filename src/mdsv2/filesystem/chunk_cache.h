@@ -36,12 +36,12 @@ class ChunkCache {
   ChunkCache(uint32_t fs_id);
   ~ChunkCache() = default;
 
-  using ChunkSPtr = std::shared_ptr<ChunkType>;
+  using ChunkSPtr = std::shared_ptr<ChunkEntry>;
 
   static ChunkCacheUPtr New(uint32_t fs_id) { return std::make_unique<ChunkCache>(fs_id); }
 
   // if version is newer then put
-  bool PutIf(uint64_t ino, ChunkType chunk);
+  bool PutIf(uint64_t ino, ChunkEntry chunk);
   void Delete(uint64_t ino, uint64_t chunk_index);
   void Delete(uint64_t ino);
   ChunkSPtr Get(uint64_t ino, uint64_t chunk_index);
@@ -63,7 +63,7 @@ class ChunkCache {
   uint32_t fs_id_{0};
   utils::RWLock lock_;
 
-  // ino/chunk_index -> ChunkType
+  // ino/chunk_index -> ChunkEntry
   std::map<Key, ChunkSPtr> chunk_map_;
 
   // statistics

@@ -23,7 +23,7 @@
 #include "butil/file_util.h"
 #include "client/meta/vfs_meta.h"
 #include "client/vfs/meta/v2/client_id.h"
-#include "trace/context.h"
+#include "client/vfs/meta/v2/helper.h"
 #include "common/status.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
@@ -32,6 +32,7 @@
 #include "glog/logging.h"
 #include "json/value.h"
 #include "json/writer.h"
+#include "trace/context.h"
 
 namespace dingofs {
 namespace client {
@@ -310,8 +311,8 @@ Status MDSV2FileSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
     return Status::NoPermission("O_TRUNC without O_WRONLY or O_RDWR");
   }
 
-  std::string session_id;
-  auto status = mds_client_->Open(ctx, ino, flags, session_id);
+  auto file_session = FileSession::New();
+  auto status = mds_client_->Open(ctx, ino, flags, *file_session);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[meta.filesystem.{}] open ino({}) fail, error: {}.", name_, ino,
@@ -319,7 +320,7 @@ Status MDSV2FileSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
     return status;
   }
 
-  CHECK(file_session_map_.Put(fh, session_id))
+  CHECK(file_session_map_.Put(fh, file_session))
       << fmt::format("put file session fail, ino: {}.", ino);
 
   return Status::OK();
@@ -328,7 +329,7 @@ Status MDSV2FileSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
 Status MDSV2FileSystem::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
   LOG(INFO) << fmt::format("[meta.filesystem.{}] release ino({}).", name_, ino);
 
-  std::string session_id = file_session_map_.Get(fh);
+  std::string session_id = file_session_map_.GetSessionID(fh);
   CHECK(!session_id.empty())
       << fmt::format("get file session fail, ino({}) fh({}).", ino, fh);
 
@@ -343,8 +344,25 @@ Status MDSV2FileSystem::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
   return Status::OK();
 }
 
+bool MDSV2FileSystem::GetSliceFromCache(uint64_t fh, uint64_t index,
+                                        std::vector<Slice>* slices) {
+  auto file_session = file_session_map_.GetSession(fh);
+  if (file_session == nullptr) return false;
+
+  auto chunk = file_session->GetChunk(index);
+  if (chunk == nullptr) return false;
+
+  *slices = chunk->slices;
+
+  return true;
+}
+
 Status MDSV2FileSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
-                                  std::vector<Slice>* slices) {
+                                  uint64_t fh, std::vector<Slice>* slices) {
+  if (GetSliceFromCache(fh, index, slices)) {
+    return Status::OK();
+  }
+
   auto status = mds_client_->ReadSlice(ctx, ino, index, slices);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
@@ -369,7 +387,7 @@ Status MDSV2FileSystem::NewSliceId(ContextSPtr ctx, Ino ino, uint64_t* id) {
 }
 
 Status MDSV2FileSystem::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
-                                   const std::vector<Slice>& slices) {
+                                   uint64_t, const std::vector<Slice>& slices) {
   auto status = mds_client_->WriteSlice(ctx, ino, index, slices);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
@@ -501,8 +519,7 @@ Status MDSV2FileSystem::ReadLink(ContextSPtr ctx, Ino ino, std::string* link) {
 Status MDSV2FileSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* out_attr) {
   auto status = mds_client_->GetAttr(ctx, ino, *out_attr);
   if (!status.ok()) {
-    return Status::Internal(
-        fmt::format("get attr fail, error: {}", ino, status.ToString()));
+    return status;
   }
 
   return Status::OK();
@@ -512,8 +529,7 @@ Status MDSV2FileSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
                                 const Attr& attr, Attr* out_attr) {
   auto status = mds_client_->SetAttr(ctx, ino, attr, set, *out_attr);
   if (!status.ok()) {
-    return Status::Internal(fmt::format("set attr fail, ino({}) error: {}", ino,
-                                        status.ToString()));
+    return status;
   }
 
   return Status::OK();
@@ -534,9 +550,7 @@ Status MDSV2FileSystem::SetXattr(ContextSPtr ctx, Ino ino,
                                  const std::string& value, int) {
   auto status = mds_client_->SetXAttr(ctx, ino, name, value);
   if (!status.ok()) {
-    return Status::Internal(
-        fmt::format("set xattr({}/{}) fail, ino({}) error: {}", name, value,
-                    ino, status.ToString()));
+    return status;
   }
 
   return Status::OK();
@@ -546,9 +560,7 @@ Status MDSV2FileSystem::RemoveXattr(ContextSPtr ctx, Ino ino,
                                     const std::string& name) {
   auto status = mds_client_->RemoveXAttr(ctx, ino, name);
   if (!status.ok()) {
-    return Status::Internal(
-        fmt::format("remove xattr({}) fail, ino({}) error: {}", name, ino,
-                    status.ToString()));
+    return status;
   }
 
   return Status::OK();
@@ -561,8 +573,7 @@ Status MDSV2FileSystem::ListXattr(ContextSPtr ctx, Ino ino,
   std::map<std::string, std::string> xattr_map;
   auto status = mds_client_->ListXAttr(ctx, ino, xattr_map);
   if (!status.ok()) {
-    return Status::Internal(fmt::format("list xattr fail, ino({}) error: {}",
-                                        ino, status.ToString()));
+    return status;
   }
 
   for (auto& [key, _] : xattr_map) {
@@ -623,7 +634,7 @@ MDSV2FileSystemUPtr MDSV2FileSystem::Build(const std::string& fs_name,
     return nullptr;
   }
 
-  dingofs::pb::mdsv2::FsInfo pb_fs_info;
+  mdsv2::FsInfoEntry pb_fs_info;
   auto status = MDSClient::GetFsInfo(rpc, fs_name, pb_fs_info);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("[meta.filesystem.{}] Get fs info fail.",

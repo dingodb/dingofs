@@ -114,7 +114,7 @@ class Restore {
   Status CreateMetaTable();
   Status CreateFsMetaTable(uint32_t fs_id, const std::string& fs_name);
 
-  Status GetFsInfo(uint32_t fs_id, FsInfoType& fs_info);
+  Status GetFsInfo(uint32_t fs_id, FsInfoEntry& fs_info);
 
   Status RestoreMetaTable(InputUPtr input);
   Status RestoreFsMetaTable(uint32_t fs_id, InputUPtr input);

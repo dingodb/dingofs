@@ -58,12 +58,12 @@ using GcProcessorSPtr = std::shared_ptr<GcProcessor>;
 
 struct EntryOut {
   EntryOut() = default;
-  using AttrType = Inode::AttrType;
+  using AttrEntry = Inode::AttrEntry;
 
-  explicit EntryOut(const AttrType& attr) : attr(attr) {}
+  explicit EntryOut(const AttrEntry& attr) : attr(attr) {}
 
   std::string name;
-  AttrType attr;
+  AttrEntry attr;
   uint64_t parent_version{0};
 };
 
@@ -97,7 +97,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   uint64_t Epoch() const;
 
-  FsInfoType GetFsInfo() const { return fs_info_->Get(); }
+  FsInfoEntry GetFsInfo() const { return fs_info_->Get(); }
 
   pb::mdsv2::PartitionType PartitionType() const;
   bool IsMonoPartition() const;
@@ -124,7 +124,8 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
     uint64_t rdev{0};
   };
   Status MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_out);
-  Status Open(Context& ctx, Ino ino, uint32_t flags, std::string& session_id, uint64_t& version);
+  Status Open(Context& ctx, Ino ino, uint32_t flags, std::string& session_id, EntryOut& entry_out,
+              std::vector<ChunkEntry>& chunks);
   Status Release(Context& ctx, Ino ino, const std::string& session_id);
 
   // directory
@@ -155,7 +156,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   // attr
   struct SetAttrParam {
     uint32_t to_set{0};
-    AttrType attr;
+    AttrEntry attr;
   };
 
   Status SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, EntryOut& entry_out);
@@ -201,11 +202,11 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status BatchGetXAttr(Context& ctx, const std::vector<uint64_t>& inoes, std::vector<pb::mdsv2::XAttr>& out_xattrs);
 
   Status RefreshInode(const std::vector<uint64_t>& inoes);
-  void RefreshInode(AttrType& attr);
+  void RefreshInode(AttrEntry& attr);
 
   Status RefreshFsInfo();
   Status RefreshFsInfo(const std::string& name);
-  void RefreshFsInfo(const FsInfoType& fs_info);
+  void RefreshFsInfo(const FsInfoEntry& fs_info);
 
   Status JoinMonoFs(Context& ctx, uint64_t mds_id, const std::string& reason);
   Status JoinHashFs(Context& ctx, const std::vector<uint64_t>& mds_ids, const std::string& reason);
@@ -222,7 +223,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   FileSessionManager& GetFileSessionManager() { return file_session_manager_; }
 
-  Status GetDelFiles(std::vector<AttrType>& delfiles);
+  Status GetDelFiles(std::vector<AttrEntry>& delfiles);
   Status GetDelSlices(std::vector<TrashSliceList>& delslices);
   Status GetFsOpLogs(std::vector<FsOpLog>& fs_op_logs);
 
@@ -261,7 +262,9 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status GetInodeFromStore(Ino ino, const std::string& reason, bool is_cache, InodeSPtr& out_inode);
   Status BatchGetInodeFromStore(std::vector<uint64_t> inoes, std::vector<InodeSPtr>& out_inodes);
 
-  Status GetDelFileFromStore(Ino ino, AttrType& out_attr);
+  Status GetDelFileFromStore(Ino ino, AttrEntry& out_attr);
+
+  Status GetChunksFromStore(Ino ino, std::vector<ChunkEntry>& chunks);
 
   // delete inode from cache
   void DeleteInodeFromCache(Ino ino);
@@ -276,8 +279,8 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   void UpdateParentMemo(const std::vector<Ino>& ancestors);
 
-  void NotifyBuddyRefreshFsInfo(std::vector<int64_t> mds_ids, const FsInfoType& fs_info);
-  void NotifyBuddyRefreshInode(AttrType&& attr);
+  void NotifyBuddyRefreshFsInfo(std::vector<int64_t> mds_ids, const FsInfoEntry& fs_info);
+  void NotifyBuddyRefreshInode(AttrEntry&& attr);
   void NotifyBuddyCleanPartitionCache(Ino ino);
 
   uint64_t self_mds_id_;
@@ -365,13 +368,13 @@ class FileSystemSet {
     pb::mdsv2::PartitionType partition_type;
   };
 
-  Status CreateFs(const CreateFsParam& param, FsInfoType& fs_info);
+  Status CreateFs(const CreateFsParam& param, FsInfoEntry& fs_info);
   Status MountFs(Context& ctx, const std::string& fs_name, const pb::mdsv2::MountPoint& mountpoint);
   Status UmountFs(Context& ctx, const std::string& fs_name, const std::string& client_id);
   Status DeleteFs(Context& ctx, const std::string& fs_name, bool is_force);
-  Status UpdateFsInfo(Context& ctx, const std::string& fs_name, const FsInfoType& fs_info);
-  Status GetFsInfo(Context& ctx, const std::string& fs_name, FsInfoType& fs_info);
-  Status GetAllFsInfo(Context& ctx, std::vector<FsInfoType>& fs_infoes);
+  Status UpdateFsInfo(Context& ctx, const std::string& fs_name, const FsInfoEntry& fs_info);
+  Status GetFsInfo(Context& ctx, const std::string& fs_name, FsInfoEntry& fs_info);
+  Status GetAllFsInfo(Context& ctx, std::vector<FsInfoEntry>& fs_infoes);
   Status RefreshFsInfo(const std::string& fs_name);
   Status RefreshFsInfo(uint32_t fs_id);
 
@@ -402,7 +405,7 @@ class FileSystemSet {
   IdGenerator& GetSliceIdGenerator() { return *slice_id_generator_; }
 
   Status GenFsId(uint32_t& fs_id);
-  FsInfoType GenFsInfo(int64_t fs_id, const CreateFsParam& param);
+  FsInfoEntry GenFsInfo(int64_t fs_id, const CreateFsParam& param);
 
   bool IsExistFsTable();
 

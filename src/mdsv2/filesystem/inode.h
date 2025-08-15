@@ -23,7 +23,6 @@
 #include <string>
 #include <vector>
 
-#include "dingofs/mdsv2.pb.h"
 #include "mdsv2/common/type.h"
 #include "utils/concurrent/concurrent.h"
 #include "utils/lru_cache.h"
@@ -37,19 +36,19 @@ using InodeWPtr = std::weak_ptr<Inode>;
 
 class Inode {
  public:
-  using AttrType = mdsv2::AttrType;
+  using AttrEntry = mdsv2::AttrEntry;
   using XAttrMap = ::google::protobuf::Map<std::string, std::string>;
-  using ChunkMap = ::google::protobuf::Map<uint64_t, ChunkType>;
+  using ChunkMap = ::google::protobuf::Map<uint64_t, ChunkEntry>;
 
-  Inode(const AttrType& attr) { attr_ = attr; }
-  Inode(AttrType&& attr) { attr_ = std::move(attr); }
+  Inode(const AttrEntry& attr) { attr_ = attr; }
+  Inode(AttrEntry&& attr) { attr_ = std::move(attr); }
   ~Inode() = default;
 
-  static InodeSPtr New(const AttrType& inode) { return std::make_shared<Inode>(inode); }
+  static InodeSPtr New(const AttrEntry& inode) { return std::make_shared<Inode>(inode); }
 
   uint32_t FsId();
   uint64_t Ino();
-  pb::mdsv2::FileType Type();
+  FileType Type();
   uint64_t Length();
   uint32_t Uid();
   uint32_t Gid();
@@ -67,16 +66,16 @@ class Inode {
   XAttrMap XAttrs();
   std::string XAttr(const std::string& name);
 
-  bool UpdateIf(const AttrType& attr);
-  bool UpdateIf(AttrType&& attr);
+  bool UpdateIf(const AttrEntry& attr);
+  bool UpdateIf(AttrEntry&& attr);
 
-  AttrType Copy();
-  AttrType&& Move();
+  AttrEntry Copy();
+  AttrEntry&& Move();
 
  private:
   utils::RWLock lock_;
 
-  AttrType attr_;
+  AttrEntry attr_;
 };
 
 // cache all file/dir inode

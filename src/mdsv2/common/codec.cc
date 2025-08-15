@@ -680,10 +680,10 @@ void MetaCodec::DecodeFsKey(const std::string& key, std::string& name) {
   name = key.substr(kFsKeyHeaderSize);
 }
 
-std::string MetaCodec::EncodeFsValue(const FsInfoType& fs_info) { return fs_info.SerializeAsString(); }
+std::string MetaCodec::EncodeFsValue(const FsInfoEntry& fs_info) { return fs_info.SerializeAsString(); }
 
-FsInfoType MetaCodec::DecodeFsValue(const std::string& value) {
-  FsInfoType fs_info;
+FsInfoEntry MetaCodec::DecodeFsValue(const std::string& value) {
+  FsInfoEntry fs_info;
   CHECK(fs_info.ParseFromString(value)) << "parse fs info fail.";
 
   return std::move(fs_info);
@@ -817,10 +817,10 @@ void MetaCodec::DecodeInodeKey(const std::string& key, uint32_t& fs_id, uint64_t
   ino = SerialHelper::ReadULong(key.substr(kPrefixSize + 1 + 4 + 1));
 }
 
-std::string MetaCodec::EncodeInodeValue(const AttrType& attr) { return attr.SerializeAsString(); }
+std::string MetaCodec::EncodeInodeValue(const AttrEntry& attr) { return attr.SerializeAsString(); }
 
-AttrType MetaCodec::DecodeInodeValue(const std::string& value) {
-  AttrType attr;
+AttrEntry MetaCodec::DecodeInodeValue(const std::string& value) {
+  AttrEntry attr;
   CHECK(attr.ParseFromString(value)) << "parse inode attr fail.";
 
   return std::move(attr);
@@ -871,10 +871,10 @@ void MetaCodec::DecodeDentryKey(const std::string& key, uint32_t& fs_id, uint64_
   name = key.substr(kDentryKeyHeaderSize);
 }
 
-std::string MetaCodec::EncodeDentryValue(const DentryType& dentry) { return dentry.SerializeAsString(); }
+std::string MetaCodec::EncodeDentryValue(const DentryEntry& dentry) { return dentry.SerializeAsString(); }
 
-DentryType MetaCodec::DecodeDentryValue(const std::string& value) {
-  DentryType dentry;
+DentryEntry MetaCodec::DecodeDentryValue(const std::string& value) {
+  DentryEntry dentry;
   CHECK(dentry.ParseFromString(value)) << "parse dentry fail.";
 
   return std::move(dentry);
@@ -924,10 +924,10 @@ void MetaCodec::DecodeChunkKey(const std::string& key, uint32_t& fs_id, uint64_t
   chunk_index = SerialHelper::ReadULong(key.substr(kChunkKeySize - 8));
 }
 
-std::string MetaCodec::EncodeChunkValue(const ChunkType& chunk) { return chunk.SerializeAsString(); }
+std::string MetaCodec::EncodeChunkValue(const ChunkEntry& chunk) { return chunk.SerializeAsString(); }
 
-ChunkType MetaCodec::DecodeChunkValue(const std::string& value) {
-  ChunkType chunk;
+ChunkEntry MetaCodec::DecodeChunkValue(const std::string& value) {
+  ChunkEntry chunk;
   CHECK(chunk.ParseFromString(value)) << "parse chunk fail.";
 
   return std::move(chunk);
@@ -1111,10 +1111,10 @@ void MetaCodec::DecodeDelFileKey(const std::string& key, uint32_t& fs_id, Ino& i
   ino = SerialHelper::ReadULong(key.substr(kPrefixSize + 1 + 4 + 1));
 }
 
-std::string MetaCodec::EncodeDelFileValue(const AttrType& attr) { return attr.SerializeAsString(); }
+std::string MetaCodec::EncodeDelFileValue(const AttrEntry& attr) { return attr.SerializeAsString(); }
 
-AttrType MetaCodec::DecodeDelFileValue(const std::string& value) {
-  AttrType attr;
+AttrEntry MetaCodec::DecodeDelFileValue(const std::string& value) {
+  AttrEntry attr;
   CHECK(attr.ParseFromString(value)) << "parse del file attr fail.";
 
   return std::move(attr);

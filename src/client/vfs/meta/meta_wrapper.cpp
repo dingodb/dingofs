@@ -79,7 +79,8 @@ Status MetaWrapper::MkNod(ContextSPtr ctx, Ino parent, const std::string& name,
 Status MetaWrapper::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
   Status s;
   MetaLogGuard log_guard([&]() {
-    return absl::StrFormat("open (%d): %s [fh:%d]", ino, s.ToString(), fh);
+    return absl::StrFormat("open (%d) %o: %s [fh:%d]", ino, flags, s.ToString(),
+                           fh);
   });
 
   s = target_->Open(ctx, ino, flags, fh);
@@ -308,26 +309,26 @@ Status MetaWrapper::NewSliceId(ContextSPtr ctx, Ino ino, uint64_t* id) {
 }
 
 Status MetaWrapper::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
-                              std::vector<Slice>* slices) {
+                              uint64_t fh, std::vector<Slice>* slices) {
   Status s;
   MetaLogGuard log_guard([&]() {
     return absl::StrFormat("read_slice (%d,%d): %s %d", ino, index,
                            s.ToString(), slices->size());
   });
 
-  s = target_->ReadSlice(ctx, ino, index, slices);
+  s = target_->ReadSlice(ctx, ino, index, fh, slices);
   return s;
 }
 
 Status MetaWrapper::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
-                               const std::vector<Slice>& slices) {
+                               uint64_t fh, const std::vector<Slice>& slices) {
   Status s;
   MetaLogGuard log_guard([&]() {
-    return absl::StrFormat("write_slice (%d,%d): %s %d", ino, index,
+    return absl::StrFormat("write_slice (%d,%d,%d): %s %d", ino, index, fh,
                            s.ToString(), slices.size());
   });
 
-  s = target_->WriteSlice(ctx, ino, index, slices);
+  s = target_->WriteSlice(ctx, ino, index, fh, slices);
   return s;
 }
 

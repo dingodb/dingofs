@@ -552,7 +552,7 @@ Status Restore::CreateFsMetaTable(uint32_t fs_id, const std::string& fs_name) {
   return Status::OK();
 }
 
-Status Restore::GetFsInfo(uint32_t fs_id, FsInfoType& fs_info) {
+Status Restore::GetFsInfo(uint32_t fs_id, FsInfoEntry& fs_info) {
   Trace trace;
   ScanFsOperation operation(trace);
 
@@ -646,7 +646,7 @@ Status Restore::RestoreMetaTable(InputUPtr input) {
 
 Status Restore::RestoreFsMetaTable(uint32_t fs_id, InputUPtr input) {
   // get fs info
-  FsInfoType fs_info;
+  FsInfoEntry fs_info;
   auto status = GetFsInfo(fs_id, fs_info);
   if (!status.ok()) return status;
 

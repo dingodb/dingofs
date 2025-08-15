@@ -21,15 +21,17 @@
 
 #include "client/meta/vfs_meta.h"
 #include "client/vfs/meta/v2/client_id.h"
+#include "client/vfs/meta/v2/file_session.h"
 #include "client/vfs/meta/v2/mds_router.h"
 #include "client/vfs/meta/v2/rpc.h"
-#include "trace/context.h"
 #include "common/status.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
 #include "mdsv2/common/helper.h"
+#include "mdsv2/common/type.h"
 #include "mdsv2/filesystem/fs_info.h"
 #include "options/client/vfs/meta/v2_option.h"
+#include "trace/context.h"
 
 namespace dingofs {
 namespace client {
@@ -67,9 +69,9 @@ class MDSClient {
   bool SetEndpoint(const std::string& ip, int port, bool is_default);
 
   static Status GetFsInfo(RPCPtr rpc, const std::string& name,
-                          pb::mdsv2::FsInfo& fs_info);
+                          mdsv2::FsInfoEntry& fs_info);
   static Status GetFsInfo(RPCPtr rpc, uint32_t fs_id,
-                          pb::mdsv2::FsInfo& fs_info);
+                          mdsv2::FsInfoEntry& fs_info);
 
   Status Heartbeat();
 
@@ -92,7 +94,7 @@ class MDSClient {
                  uint32_t limit, bool with_attr,
                  std::vector<DirEntry>& entries);
 
-  Status Open(ContextSPtr ctx, Ino ino, int flags, std::string& session_id);
+  Status Open(ContextSPtr ctx, Ino ino, int flags, FileSession& file_session);
   Status Release(ContextSPtr ctx, Ino ino, const std::string& session_id);
 
   Status Link(ContextSPtr ctx, Ino ino, Ino new_parent,
@@ -130,7 +132,7 @@ class MDSClient {
 
  private:
   static Status DoGetFsInfo(RPCPtr rpc, pb::mdsv2::GetFsInfoRequest& request,
-                            pb::mdsv2::FsInfo& fs_info);
+                            mdsv2::FsInfoEntry& fs_info);
 
   MDSMeta GetMds(Ino ino);
   MDSMeta GetMdsByParent(int64_t parent);

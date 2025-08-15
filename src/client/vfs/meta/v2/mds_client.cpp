@@ -20,6 +20,7 @@
 
 #include "client/meta/vfs_meta.h"
 #include "client/vfs/common/helper.h"
+#include "client/vfs/meta/v2/helper.h"
 #include "client/vfs/meta/v2/rpc.h"
 #include "dingofs/mdsv2.pb.h"
 #include "dingofs/metaserver.pb.h"
@@ -110,7 +111,7 @@ bool MDSClient::SetEndpoint(const std::string& ip, int port, bool is_default) {
 }
 
 Status MDSClient::DoGetFsInfo(RPCPtr rpc, pb::mdsv2::GetFsInfoRequest& request,
-                              pb::mdsv2::FsInfo& fs_info) {
+                              mdsv2::FsInfoEntry& fs_info) {
   pb::mdsv2::GetFsInfoResponse response;
 
   auto status = rpc->SendRequest("MDSService", "GetFsInfo", request, response);
@@ -121,14 +122,14 @@ Status MDSClient::DoGetFsInfo(RPCPtr rpc, pb::mdsv2::GetFsInfoRequest& request,
 }
 
 Status MDSClient::GetFsInfo(RPCPtr rpc, const std::string& name,
-                            pb::mdsv2::FsInfo& fs_info) {
+                            mdsv2::FsInfoEntry& fs_info) {
   pb::mdsv2::GetFsInfoRequest request;
   request.set_fs_name(name);
   return DoGetFsInfo(rpc, request, fs_info);
 }
 
 Status MDSClient::GetFsInfo(RPCPtr rpc, uint32_t fs_id,
-                            pb::mdsv2::FsInfo& fs_info) {
+                            mdsv2::FsInfoEntry& fs_info) {
   pb::mdsv2::GetFsInfoRequest request;
   request.set_fs_id(fs_id);
   return DoGetFsInfo(rpc, request, fs_info);
@@ -438,7 +439,7 @@ Status MDSClient::ReadDir(ContextSPtr ctx, Ino ino,
 }
 
 Status MDSClient::Open(ContextSPtr ctx, Ino ino, int flags,
-                       std::string& session_id) {
+                       FileSession& file_session) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, ino]() -> MDSMeta { return GetMds(ino); };
@@ -456,9 +457,12 @@ Status MDSClient::Open(ContextSPtr ctx, Ino ino, int flags,
     return status;
   }
 
-  session_id = response.session_id();
+  file_session.SetSessionId(response.session_id());
+  for (const auto& chunk : response.chunks()) {
+    file_session.AddChunk(FileSession::Chunk::From(chunk));
+  }
 
-  parent_memo_->UpsertVersion(ino, response.version());
+  parent_memo_->UpsertVersion(ino, response.inode().version());
 
   return Status::OK();
 }
@@ -869,32 +873,6 @@ Status MDSClient::Rename(ContextSPtr ctx, Ino old_parent,
   return Status::OK();
 }
 
-static Slice ToSlice(const pb::mdsv2::Slice& slice) {
-  Slice out_slice;
-
-  out_slice.id = slice.id();
-  out_slice.offset = slice.offset();
-  out_slice.length = slice.len();
-  out_slice.compaction = slice.compaction_version();
-  out_slice.is_zero = slice.zero();
-  out_slice.size = slice.size();
-
-  return out_slice;
-}
-
-static pb::mdsv2::Slice ToSlice(const Slice& slice) {
-  pb::mdsv2::Slice out_slice;
-
-  out_slice.set_id(slice.id);
-  out_slice.set_offset(slice.offset);
-  out_slice.set_len(slice.length);
-  out_slice.set_compaction_version(slice.compaction);
-  out_slice.set_zero(slice.is_zero);
-  out_slice.set_size(slice.size);
-
-  return out_slice;
-}
-
 Status MDSClient::NewSliceId(ContextSPtr ctx, Ino ino, uint64_t* id) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
@@ -944,7 +922,7 @@ Status MDSClient::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
   }
 
   for (const auto& slice : response.slices()) {
-    slices->push_back(ToSlice(slice));
+    slices->push_back(Helper::ToSlice(slice));
   }
 
   return Status::OK();
@@ -971,7 +949,7 @@ Status MDSClient::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
   request.set_chunk_index(index);
 
   for (const auto& slice : slices) {
-    *request.add_slices() = ToSlice(slice);
+    *request.add_slices() = Helper::ToSlice(slice);
   }
 
   auto status = SendRequest(ctx, get_mds_fn, "MDSService", "WriteSlice",
@@ -1036,7 +1014,7 @@ Status MDSClient::GetFsQuota(ContextSPtr ctx, FsStat& fs_stat) {
 }
 
 bool MDSClient::UpdateRouter() {
-  pb::mdsv2::FsInfo new_fs_info;
+  mdsv2::FsInfoEntry new_fs_info;
   auto status = MDSClient::GetFsInfo(rpc_, fs_info_->GetName(), new_fs_info);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("[meta.client] get fs info fail, {}.",
