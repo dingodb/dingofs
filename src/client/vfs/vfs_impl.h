@@ -132,7 +132,7 @@ class VFSImpl : public VFS {
  private:
   Status StartBrpcServer();
 
-  void StopBrpcServer();
+  HandleSPtr NewHandle(uint64_t fh, Ino ino, int flags, IFileUPtr file);
 
   VFSOption vfs_option_;
 

@@ -28,6 +28,7 @@
 #include "client/meta/vfs_fh.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/data/file.h"
+#include "client/vfs/handle/handle_manager.h"
 #include "common/define.h"
 #include "common/status.h"
 #include "fmt/format.h"
@@ -202,10 +203,10 @@ Status VFSImpl::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
 Status VFSImpl::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t* fh) {
   // check if ino is .stats inode,if true ,get metric data and generate
   // inodeattr information
-  if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
-    uint64_t gfh = vfs::FhGenerator::GenFh();
-    auto handler = handle_manager_->NewHandle(gfh);
+  uint64_t gfh = vfs::FhGenerator::GenFh();
 
+  if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
+    // uint64_t gfh = vfs::FhGenerator::GenFh();
     MetricsDumper metrics_dumper;
     bvar::DumpOptions opts;
     int ret = bvar::Variable::dump_exposed(&metrics_dumper, &opts);
@@ -218,20 +219,24 @@ Status VFSImpl::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t* fh) {
 
     auto file_data_ptr = std::make_unique<char[]>(len);
     std::memcpy(file_data_ptr.get(), contents.c_str(), len);
+
+    auto handler = std::make_shared<Handle>();
+    handler->fh = gfh;
+    handler->ino = STATSINODEID;
     handler->file_buffer.size = len;
     handler->file_buffer.data = std::move(file_data_ptr);
 
+    handle_manager_->AddHandle(handler);
+
     *fh = handler->fh;
+
     return Status::OK();
   }
 
-  uint64_t gfh = vfs::FhGenerator::GenFh();
   Status s = meta_system_->Open(ctx, ino, flags, gfh);
   if (s.ok()) {
-    HandleSPtr handle = handle_manager_->NewHandle(gfh);
-    handle->ino = ino;
-    handle->flags = flags;
-    handle->file = std::make_unique<File>(vfs_hub_.get(), ino);
+    auto handle =
+        NewHandle(gfh, ino, flags, std::make_unique<File>(vfs_hub_.get(), ino));
     *fh = handle->fh;
 
     // TOOD: if flags is O_RDONLY, no need schedule flush
@@ -251,10 +256,8 @@ Status VFSImpl::Create(ContextSPtr ctx, Ino parent, const std::string& name,
     CHECK_GT(attr->ino, 0) << "ino in attr is null";
     Ino ino = attr->ino;
 
-    auto handle = handle_manager_->NewHandle(gfh);
-    handle->ino = ino;
-    handle->flags = flags;
-    handle->file = std::make_unique<File>(vfs_hub_.get(), ino);
+    auto handle =
+        NewHandle(gfh, ino, flags, std::make_unique<File>(vfs_hub_.get(), ino));
     *fh = handle->fh;
 
     vfs_hub_->GetFileSuffixWatcher()->Remeber(*attr, name);
@@ -528,6 +531,17 @@ Status VFSImpl::StartBrpcServer() {
   ClientDummyServerInfo::GetInstance().SetIP(local_ip);
 
   return Status::OK();
+}
+
+HandleSPtr VFSImpl::NewHandle(uint64_t fh, Ino ino, int flags, IFileUPtr file) {
+  auto handle = std::make_shared<Handle>();
+  handle->fh = fh;
+  handle->ino = ino;
+  handle->flags = flags;
+  handle->file = std::move(file);
+
+  handle_manager_->AddHandle(handle);
+  return handle;
 }
 
 }  // namespace vfs

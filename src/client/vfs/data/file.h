@@ -69,6 +69,8 @@ class File : public IFile {
   Status file_status_;
 };
 
+using FileUPtr = std::unique_ptr<File>;
+
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

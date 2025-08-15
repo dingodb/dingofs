@@ -41,6 +41,8 @@ class IFile {
   virtual void AsyncFlush(StatusCallback cb) = 0;
 };
 
+using IFileUPtr = std::unique_ptr<IFile>;
+
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

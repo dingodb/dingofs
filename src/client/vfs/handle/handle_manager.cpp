@@ -20,19 +20,16 @@
 
 #include "client/meta/vfs_fh.h"
 #include "client/vfs/data/file.h"
+#include "common/define.h"
 #include "glog/logging.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 
-HandleSPtr HandleManager::NewHandle(uint64_t fh) {
-  auto handle = std::make_shared<Handle>();
+void HandleManager::AddHandle(HandleSPtr handle) {
   std::lock_guard<std::mutex> lock(mutex_);
-  handle->fh = fh;
-  handles_[handle->fh] = handle;
-
-  return handle;
+  handles_[handle->fh] = std::move(handle);
 }
 
 HandleSPtr HandleManager::FindHandler(uint64_t fh) {
@@ -47,9 +44,14 @@ void HandleManager::ReleaseHandler(uint64_t fh) {
   handles_.erase(fh);
 }
 
+// TODO: concurrent flush
 void HandleManager::FlushAll() {
   std::lock_guard<std::mutex> lock(mutex_);
   for (auto& [fh, handle] : handles_) {
+    if (handle->ino == STATSINODEID) {
+      continue;
+    }
+
     CHECK_NOTNULL(handle->file);
     Status s = handle->file->Flush();
     if (!s.ok()) {
