@@ -46,7 +46,7 @@ struct Range {
   std::string start;
   std::string end;
 
-  std::string ToString() const { return fmt::format("[{}, {})", start, end); }
+  std::string ToString() const { return fmt::format("[{}, {}]", start, end); }
 };
 
 inline bool IsDir(Ino ino) { return (ino & 1) == 1; }
