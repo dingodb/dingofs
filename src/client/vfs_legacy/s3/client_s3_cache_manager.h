@@ -381,8 +381,8 @@ class FileCacheManager {
 
   // GetBlockLoc: get block info according to offset
   void GetBlockLoc(const S3ReadRequest& req, uint64_t* chunkIndex,
-                   uint64_t* chunkPos, uint64_t* blockIndex, uint64_t* blockPos,
-                   uint64_t* block_whole_length);
+                   uint64_t* chunkPos, uint64_t* blockIndex,
+                   uint64_t* blockPos);
 
   // read data from memory read/write cache
   void ReadFromMemCache(uint64_t offset, uint64_t length, char* dataBuf,
