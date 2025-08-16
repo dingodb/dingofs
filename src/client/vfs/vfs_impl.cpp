@@ -27,6 +27,7 @@
 #include "client/common/client_dummy_server_info.h"
 #include "client/meta/vfs_fh.h"
 #include "client/vfs/common/helper.h"
+#include "client/const.h"
 #include "client/vfs/data/file.h"
 #include "client/vfs/handle/handle_manager.h"
 #include "common/define.h"
@@ -275,8 +276,8 @@ Status VFSImpl::Read(ContextSPtr ctx, Ino ino, char* buf, uint64_t size,
   auto handle = handle_manager_->FindHandler(fh);
   VFS_CHECK_HANDLE(handle, ino, fh);
 
-  auto span = vfs_hub_->GetTracer()->StartSpan("data", "read");
-
+  auto span = vfs_hub_->GetTracer()->StartSpanWithContext(kVFSDataMoudule,
+                                                          "VFSImpl::Read", ctx);
   // read .stats file data
   if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
     size_t file_size = handle->file_buffer.size;
@@ -297,8 +298,8 @@ Status VFSImpl::Read(ContextSPtr ctx, Ino ino, char* buf, uint64_t size,
   }
 
   {
-    auto f_span =
-        vfs_hub_->GetTracer()->StartSpanWithParent("data", "read.flush", *span);
+    auto f_span = vfs_hub_->GetTracer()->StartSpanWithParent(
+        kVFSDataMoudule, "VFSImpl::Read.Flush", *span);
     s = handle->file->Flush();
     if (!s.ok()) {
       f_span->SetStatus(s);
@@ -306,11 +307,7 @@ Status VFSImpl::Read(ContextSPtr ctx, Ino ino, char* buf, uint64_t size,
     }
   }
 
-  {
-    auto r_span = vfs_hub_->GetTracer()->StartSpanWithContext(
-        "data", "read.read", span->GetContext());
-    s = handle->file->Read(buf, size, offset, out_rsize);
-  }
+  s = handle->file->Read(span->GetContext(), buf, size, offset, out_rsize);
 
   return s;
 }
