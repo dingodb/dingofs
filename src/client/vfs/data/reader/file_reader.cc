@@ -21,11 +21,12 @@
 
 #include <vector>
 
-#include "client/meta/vfs_meta.h"
 #include "client/const.h"
+#include "client/meta/vfs_meta.h"
 #include "client/vfs/data/reader/chunk_reader.h"
 #include "client/vfs/data/reader/reader_common.h"
 #include "client/vfs/hub/vfs_hub.h"
+#include "common/status.h"
 #include "trace/context.h"
 
 namespace dingofs {
@@ -87,11 +88,7 @@ Status FileReader::Read(ContextSPtr ctx, char* buf, uint64_t size,
                                                           METHOD_NAME(), ctx);
 
   Attr attr;
-  {
-    auto attr_span = vfs_hub_->GetTracer()->StartSpanWithParent(
-        kVFSDataMoudule, "FileReader::Read.GetAttr", *span);
-    vfs_hub_->GetMetaSystem()->GetAttr(span->GetContext(), ino_, &attr);
-  }
+  DINGOFS_RETURN_NOT_OK(GetAttr(span->GetContext(), &attr));
 
   if (attr.length <= offset) {
     *out_rsize = 0;
@@ -157,6 +154,40 @@ Status FileReader::Read(ContextSPtr ctx, char* buf, uint64_t size,
   }
 
   return ret;
+}
+
+void FileReader::Invalidate() {
+  LOG(INFO) << fmt::format("FileReader::Invalidate, ino: {}", ino_);
+
+  std::lock_guard<std::mutex> lock(mutex_);
+  validated_ = false;
+  for (auto& [index, reader] : chunk_readers_) {
+    reader->Invalidate();
+  }
+}
+
+Status FileReader::GetAttr(ContextSPtr ctx, Attr* attr) {
+  auto span = vfs_hub_->GetTracer()->StartSpanWithContext(kVFSDataMoudule,
+                                                          METHOD_NAME(), ctx);
+
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (validated_) {
+    *attr = attr_;
+    return Status::OK();
+  }
+
+  Status s =
+      vfs_hub_->GetMetaSystem()->GetAttr(span->GetContext(), ino_, &attr_);
+
+  if (s.ok()) {
+    validated_ = true;
+    *attr = attr_;
+  } else {
+    LOG(WARNING) << fmt::format(
+        "FileReader::GetAttr failed, ino: {}, status: {}", ino_, s.ToString());
+  }
+
+  return s;
 }
 
 }  // namespace vfs
