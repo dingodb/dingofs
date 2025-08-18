@@ -25,20 +25,17 @@
 
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/block_cache_uploader.h"
-#include "cache/blockcache/cache_store.h"
 #include "cache/storage/storage.h"
 #include "cache/storage/storage_pool.h"
-#include "cache/utils/bthread.h"
 #include "cache/utils/context.h"
-#include "options/cache/blockcache.h"
 
 namespace dingofs {
 namespace cache {
 
 class BlockCacheImpl final : public BlockCache {
  public:
-  BlockCacheImpl(BlockCacheOption option, StorageSPtr storage);
-  BlockCacheImpl(BlockCacheOption option, StoragePoolSPtr storage_pool);
+  explicit BlockCacheImpl(StorageSPtr storage);
+  explicit BlockCacheImpl(StoragePoolSPtr storage_pool);
 
   ~BlockCacheImpl() override;
 
@@ -84,7 +81,6 @@ class BlockCacheImpl final : public BlockCache {
   void DisplayStatus() const;
 
   std::atomic<bool> running_;
-  BlockCacheOption option_;
   StoragePoolSPtr storage_pool_;
   CacheStoreSPtr store_;
   BlockCacheUploaderSPtr uploader_;

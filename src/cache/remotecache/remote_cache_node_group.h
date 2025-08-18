@@ -24,19 +24,18 @@
 #define DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_CACHE_NODE_GROUP_H_
 
 #include "cache/blockcache/block_cache.h"
+#include "cache/metric//remote_cache_node_group_metric.h"
 #include "cache/remotecache/remote_cache_node.h"
 #include "cache/remotecache/remote_cache_node_manager.h"
 #include "cache/remotecache/upstream.h"
 #include "cache/utils/context.h"
-#include "metrics/cache/remotecache/remote_cache_node_group_metric.h"
-#include "options/cache/tiercache.h"
 
 namespace dingofs {
 namespace cache {
 
 class RemoteCacheNodeGroup final : public RemoteCacheNode {
  public:
-  explicit RemoteCacheNodeGroup(RemoteBlockCacheOption option);
+  RemoteCacheNodeGroup();
 
   Status Start() override;
   Status Shutdown() override;
@@ -50,7 +49,6 @@ class RemoteCacheNodeGroup final : public RemoteCacheNode {
 
  private:
   std::atomic<bool> running_;
-  RemoteBlockCacheOption option_;
   UpstreamUPtr upstream_;
   RemoteCacheNodeManagerUPtr node_manager_;
   RemoteCacheCacheNodeGroupMetricSPtr metric_;

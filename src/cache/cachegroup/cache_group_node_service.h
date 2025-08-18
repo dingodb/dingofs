@@ -25,11 +25,12 @@
 
 #include "cache/cachegroup/cache_group_node.h"
 #include "cache/common/macro.h"
+#include "dingofs/blockcache.pb.h"
 
 namespace dingofs {
 namespace cache {
 
-class CacheGroupNodeServiceImpl final : public PBBlockCacheService {
+class CacheGroupNodeServiceImpl final : public pb::cache::BlockCacheService {
  public:
   explicit CacheGroupNodeServiceImpl(CacheGroupNodeSPtr node);
 

@@ -26,15 +26,16 @@
 #include "blockaccess/block_accesser.h"
 #include "blockaccess/rados/rados_common.h"
 #include "cache/tiercache/tier_block_cache.h"
+#include "client/const.h"
 #include "client/meta/vfs_meta.h"
 #include "client/vfs.h"
 #include "client/vfs/background/periodic_flush_manager.h"
-#include "client/const.h"
 #include "client/vfs/meta/dummy/dummy_filesystem.h"
 #include "client/vfs/meta/meta_system.h"
 #include "client/vfs/meta/meta_wrapper.h"
 #include "client/vfs/meta/v2/filesystem.h"
 #include "common/status.h"
+#include "options/cache/option.h"
 #include "options/client/common_option.h"
 #include "options/client/vfs/vfs_dynamic_option.h"
 #include "options/client/vfs/vfs_option.h"
@@ -130,13 +131,9 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
 
   {
     // related to block cache
-    auto block_cache_option = vfs_option_.block_cache_option;
-    auto remote_block_cache_option = vfs_option_.remote_block_cache_option;
-    RewriteCacheDir(&block_cache_option, fs_info_.uuid);
-
-    block_cache_ = std::make_unique<cache::TierBlockCache>(
-        block_cache_option, remote_block_cache_option, block_accesser_.get());
-
+    cache::FLAGS_cache_dir_uuid = fs_info_.uuid;
+    block_cache_ =
+        std::make_unique<cache::TierBlockCache>(block_accesser_.get());
     DINGOFS_RETURN_NOT_OK(block_cache_->Start());
   }
 

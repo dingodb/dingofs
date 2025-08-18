@@ -39,8 +39,8 @@ void InitVFSOption(utils::Configuration* conf, VFSOption* option) {
 
   InitMemoryPageOption(conf, &option->page_option);
 
-  InitBlockCacheOption(conf, &option->block_cache_option);
-  InitRemoteBlockCacheOption(conf, &option->remote_block_cache_option);
+  InitBlockCacheOption(conf);
+  InitRemoteBlockCacheOption(conf);
 
   InitFuseOption(conf, &option->fuse_option);
 
@@ -51,10 +51,11 @@ void InitVFSOption(utils::Configuration* conf, VFSOption* option) {
               << (option->data_option.writeback ? "true" : "false");
   }
 
-  if(!conf->GetStringValue("vfs.data.writeback_suffix",
-                           &option->data_option.writeback_suffix)) {
+  if (!conf->GetStringValue("vfs.data.writeback_suffix",
+                            &option->data_option.writeback_suffix)) {
     LOG(INFO) << "Not found `vfs.data.writeback_suffix` in conf, "
-                 "default to: " << option->data_option.writeback_suffix;
+                 "default to: "
+              << option->data_option.writeback_suffix;
   }
 
   if (!conf->GetIntValue("vfs.data.flush_bg_thread",

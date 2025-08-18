@@ -33,7 +33,7 @@
 #include "cache/utils/bthread.h"
 #include "cache/utils/context.h"
 #include "cache/utils/infight_throttle.h"
-#include "options/cache/blockcache.h"
+#include "options/cache/option.h"
 
 namespace dingofs {
 namespace cache {
@@ -42,7 +42,7 @@ DEFINE_uint32(
     upload_stage_max_inflights, 32,
     "Maximum inflight requests for uploading stage blocks to storage");
 
-static const std::string kModule = kBlockCacheUploaderMoudule;
+static const std::string kModule = "uploader";
 
 BlockCacheUploader::BlockCacheUploader(CacheStoreSPtr store,
                                        StoragePoolSPtr storage_pool)
@@ -154,9 +154,8 @@ void BlockCacheUploader::PostUploading(const StagingBlock& staging_block,
   if (status.ok() || status.IsNotFound()) {
     return;
   } else if (status.IsCacheDown()) {
-    LOG(ERROR)
-        << ctx->StrTraceId()
-        << " Uploading staging block failed for cache is down, it will "
+    LOG_CTX(ERROR)
+        << "Uploading staging block failed for cache is down, it will "
            "re-upload after cache restart if the block still exist: key = "
         << key.Filename();
     return;
@@ -164,10 +163,9 @@ void BlockCacheUploader::PostUploading(const StagingBlock& staging_block,
 
   // error
   static const int sleep_ms = 100;
-  LOG(ERROR) << ctx->StrTraceId()
-             << " Uploading staging block failed, it will retry in " << sleep_ms
-             << " millisecond: key =" << key.Filename()
-             << ", status = " << status.ToString();
+  LOG_CTX(ERROR) << "Uploading staging block failed, it will retry in "
+                 << sleep_ms << " millisecond: key =" << key.Filename()
+                 << ", status = " << status.ToString();
 
   if (IsRunning()) {
     bthread_usleep(sleep_ms * 1000);
@@ -183,20 +181,20 @@ Status BlockCacheUploader::Uploading(const StagingBlock& staging_block) {
                     staging_block.key.Filename(), staging_block.length);
   StepTimerGuard guard(timer);
 
-  NEXT_STEP(kLoadBlock);
+  NEXT_STEP("load");
   IOBuffer buffer;
   status = Load(staging_block, &buffer);  // FIXME
   if (!status.ok()) {
     return status;
   }
 
-  NEXT_STEP(kS3Put);
+  NEXT_STEP("s3_put");
   status = Upload(staging_block, buffer);
   if (!status.ok()) {
     return status;
   }
 
-  NEXT_STEP(kRemoveStageBlock);
+  NEXT_STEP("remove_stage");
   status = RemoveStage(staging_block);
   return status;
 }
@@ -209,15 +207,13 @@ Status BlockCacheUploader::Load(const StagingBlock& staging_block,
   auto status =
       store_->Load(staging_block.ctx, key, 0, staging_block.length, buffer);
   if (status.IsNotFound()) {
-    LOG(ERROR) << ctx->StrTraceId()
-               << " Load staging block failed which already deleted, "
-                  "abort upload: key = "
-               << key.Filename() << ", status = " << status.ToString();
+    LOG_CTX(ERROR) << "Load staging block failed which already deleted, "
+                      "abort upload: key = "
+                   << key.Filename() << ", status = " << status.ToString();
     return status;
   } else if (!status.ok()) {
-    LOG(ERROR) << ctx->StrTraceId()
-               << " Load staging block failed: key = " << key.Filename()
-               << ", status = " << status.ToString();
+    LOG_CTX(ERROR) << "Load staging block failed: key = " << key.Filename()
+                   << ", status = " << status.ToString();
     return status;
   }
 
@@ -232,17 +228,15 @@ Status BlockCacheUploader::Upload(const StagingBlock& staging_block,
   StorageSPtr storage;
   auto status = storage_pool_->GetStorage(key.fs_id, storage);
   if (!status.ok()) {
-    LOG(ERROR) << ctx->StrTraceId()
-               << " Get storage failed: key = " << key.Filename()
-               << ", status = " << status.ToString();
+    LOG_CTX(ERROR) << "Get storage failed: key = " << key.Filename()
+                   << ", status = " << status.ToString();
     return status;
   }
 
   status = storage->Upload(staging_block.ctx, key, Block(buffer));
   if (!status.ok()) {
-    LOG(ERROR) << ctx->StrTraceId()
-               << " Upload staging block failed: key = " << key.Filename()
-               << ", status = " << status.ToString();
+    LOG_CTX(ERROR) << "Upload staging block failed: key = " << key.Filename()
+                   << ", status = " << status.ToString();
     return status;
   }
 
@@ -257,9 +251,8 @@ Status BlockCacheUploader::RemoveStage(const StagingBlock& staging_block) {
   option.block_ctx = staging_block.block_ctx;
   auto status = store_->RemoveStage(staging_block.ctx, key, option);
   if (!status.ok()) {
-    LOG(WARNING) << ctx->StrTraceId()
-                 << " Remove staging block failed: key = " << key.Filename()
-                 << ", status = " << status.ToString();
+    LOG_CTX(WARNING) << "Remove staging block failed: key = " << key.Filename()
+                     << ", status = " << status.ToString();
     status = Status::OK();  // ignore removestage error
   }
 

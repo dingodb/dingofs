@@ -32,7 +32,6 @@
 
 #include "blockaccess/block_accesser.h"
 #include "cache/blockcache/cache_store.h"
-#include "cache/common/const.h"
 #include "cache/common/macro.h"
 #include "cache/storage/storage.h"
 #include "cache/storage/storage_closure.h"
@@ -42,7 +41,7 @@
 namespace dingofs {
 namespace cache {
 
-const std::string kModule = kStorageMoudule;
+const std::string kModule = "storage";
 
 StorageImpl::StorageImpl(blockaccess::BlockAccesser* block_accesser)
     : running_(false), block_accesser_(block_accesser), queue_id_({0}) {}
@@ -54,20 +53,20 @@ Status StorageImpl::Start() {
     return Status::OK();
   }
 
-  LOG_INFO("Storage is starting...");
+  LOG(INFO) << "Storage is starting...";
 
   bthread::ExecutionQueueOptions queue_options;
   queue_options.use_pthread = true;
   int rc = bthread::execution_queue_start(&queue_id_, &queue_options,
                                           HandleClosure, this);
   if (rc != 0) {
-    LOG_ERROR("Start execution queue failed: rc = %d", rc);
+    LOG(ERROR) << "Start execution queue failed: rc = " << rc;
     return Status::Internal("start execution queue fail");
   }
 
   running_ = true;
 
-  LOG_INFO("Storage is up.");
+  LOG(INFO) << "Storage is up.";
 
   CHECK_RUNNING("Storage");
   return Status::OK();
@@ -78,17 +77,17 @@ Status StorageImpl::Shutdown() {
     return Status::OK();
   }
 
-  LOG_INFO("Storage is shutting down...");
+  LOG(INFO) << "Storage is shutting down...";
 
   if (bthread::execution_queue_stop(queue_id_) != 0) {
-    LOG_ERROR("Stop execution queue failed.");
+    LOG(ERROR) << "Stop execution queue failed.";
     return Status::Internal("stop execution queue failed");
   } else if (bthread::execution_queue_join(queue_id_) != 0) {
-    LOG_ERROR("Join execution queue failed");
+    LOG(ERROR) << "Join execution queue failed";
     return Status::Internal("join execution queue failed");
   }
 
-  LOG_INFO("Storage is down.");
+  LOG(INFO) << "Storage is down.";
 
   CHECK_DOWN("Storage");
   return Status::OK();
@@ -104,11 +103,11 @@ Status StorageImpl::Upload(ContextSPtr ctx, const BlockKey& key,
                     block.size);
   StepTimerGuard guard(timer);
 
-  NEXT_STEP(kEnqueue);
+  NEXT_STEP("enqueue");
   auto closure = UploadClosure(ctx, key, block, option, block_accesser_);
   CHECK_EQ(0, bthread::execution_queue_execute(queue_id_, &closure));
 
-  NEXT_STEP(kS3Put);
+  NEXT_STEP("s3_put");
   closure.Wait();
 
   status = closure.status();
@@ -130,12 +129,12 @@ Status StorageImpl::Download(ContextSPtr ctx, const BlockKey& key, off_t offset,
                     key.Filename(), offset, length);
   StepTimerGuard guard(timer);
 
-  NEXT_STEP(kEnqueue);
+  NEXT_STEP("enqueue");
   auto closure = DownloadClosure(ctx, key, offset, length, buffer, option,
                                  block_accesser_);
   CHECK_EQ(0, bthread::execution_queue_execute(queue_id_, &closure));
 
-  NEXT_STEP(kS3Range);
+  NEXT_STEP("s3_range");
   closure.Wait();
 
   status = closure.status();

@@ -105,7 +105,6 @@ class BlockCacheBuilder {
   using Callback = std::function<void(BlockCacheOption* option)>;
 
   static BlockCacheOption DefaultOption() {
-    auto option = BlockCacheOption();
     option.logging() = false;
     option.upload_stage_workers() = 2;
     option.upload_stage_queue_size() = 10;

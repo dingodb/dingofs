@@ -24,21 +24,18 @@
 
 #include <memory>
 
-#include "cache/cachegroup/stub.h"
+#include "cache/benchmark/option.h"
+#include "cache/common/mds_client.h"
 #include "cache/common/type.h"
 #include "cache/storage/storage_pool.h"
 #include "cache/tiercache/tier_block_cache.h"
-#include "options/cache/benchmark.h"
-#include "options/cache/stub.h"
 
 namespace dingofs {
 namespace cache {
 
 Benchmarker::Benchmarker()
-    : mds_base_(std::make_unique<stub::rpcclient::MDSBaseClient>()),
-      mds_client_(std::make_shared<stub::rpcclient::MdsClientImpl>()),
-      storage_pool_(std::make_shared<StoragePoolImpl>(
-          NewV1GetStorageInfoFunc(mds_client_))),
+    : mds_client_(BuildSharedMDSClient()),
+      storage_pool_(std::make_shared<StoragePoolImpl>(mds_client_)),
       collector_(std::make_unique<Collector>()),
       reporter_(std::make_shared<Reporter>(collector_)),
       thread_pool_(std::make_unique<TaskThreadPool>("benchmarker_worker")) {
@@ -92,13 +89,7 @@ void Benchmarker::StopAll() {
 }
 
 // init
-Status Benchmarker::InitMdsClient() {
-  auto rc = mds_client_->Init(NewMdsOption(), mds_base_.get());
-  if (rc != PBFSStatusCode::OK) {
-    return Status::Internal("init mds client failed");
-  }
-  return Status::OK();
-}
+Status Benchmarker::InitMdsClient() { return mds_client_->Start(); }
 
 Status Benchmarker::InitStorage() {
   auto status = storage_pool_->GetStorage(FLAGS_fsid, storage_);
@@ -110,9 +101,7 @@ Status Benchmarker::InitStorage() {
 }
 
 Status Benchmarker::InitBlockCache() {
-  block_cache_ = std::make_shared<TierBlockCache>(
-      BlockCacheOption(), RemoteBlockCacheOption(), storage_);
-
+  block_cache_ = std::make_shared<TierBlockCache>(storage_);
   auto status = block_cache_->Start();
   if (!status.ok()) {
     LOG(ERROR) << "Init block cache failed: " << status.ToString();

@@ -35,31 +35,42 @@
 #include <cstdint>
 
 #include "cache/blockcache/block_cache.h"
-#include "cache/common/const.h"
 #include "cache/common/type.h"
 #include "common/io_buffer.h"
-#include "options/cache/tiercache.h"
+#include "dingofs/blockcache.pb.h"
+#include "options/cache/option.h"
 
 namespace dingofs {
 namespace cache {
 
-DEFINE_uint32(put_rpc_timeout_ms, 5000, "Timeout (ms) for put rpc request");
-DEFINE_uint32(range_rpc_timeout_ms, 3000, "Timeout (ms) for range rpc request");
-DEFINE_uint32(cache_rpc_timeout_ms, 10000,
-              "Timeout (ms) for cache rpc request");
-DEFINE_uint32(prefetch_rpc_timeout_ms, 10000,
-              "Timeout (ms) for prefetch rpc request");
+DEFINE_uint32(put_rpc_timeout_ms, 30000,
+              "Timeout for put rpc request in milliseconds");
+DEFINE_validator(put_rpc_timeout_ms, brpc::PassValidate);
+
+DEFINE_uint32(range_rpc_timeout_ms, 30000,
+              "Timeout for range rpc request in milliseconds");
+DEFINE_validator(range_rpc_timeout_ms, brpc::PassValidate);
+
+DEFINE_uint32(cache_rpc_timeout_ms, 30000,
+              "Timeout for cache rpc request in milliseconds");
+DEFINE_validator(cache_rpc_timeout_ms, brpc::PassValidate);
+
+DEFINE_uint32(prefetch_rpc_timeout_ms, 3000,
+              "Timeout for prefetch rpc request in milliseconds");
+DEFINE_validator(prefetch_rpc_timeout_ms, brpc::PassValidate);
+
 DEFINE_uint32(rpc_max_retry_times, 3, "Maximum retry times for rpc request");
-DEFINE_uint32(rpc_max_timeout_ms, 10000,
-              "Maximum rpc timeout (ms) for rpc request");
+DEFINE_validator(rpc_max_retry_times, brpc::PassValidate);
 
-static const std::string kModule = kRPCMoudule;
-static const std::string kApiPut = "Put";
-static const std::string kApiRange = "Range";
-static const std::string kApiCache = "Cache";
-static const std::string kApiPrefetch = "Prefetch";
+DEFINE_uint32(rpc_max_timeout_ms, 60000,
+              "Maximum timeout for rpc request in milliseconds");
+DEFINE_validator(rpc_max_timeout_ms, brpc::PassValidate);
 
-using pb::cache::blockcache::BlockCacheErrCode_Name;
+static const std::string kModule = "rpc";
+static const std::string kPutApiName = "Put";
+static const std::string kRangeApiName = "Range";
+static const std::string kCacheApiName = "Cache";
+static const std::string kPrefecthApiName = "Prefetch";
 
 RPCClient::RPCClient(const std::string& server_ip, uint32_t server_port)
     : inited_(false),
@@ -77,13 +88,14 @@ Status RPCClient::Put(ContextSPtr ctx, const BlockKey& key,
                     block.size);
   StepTimerGuard guard(timer);
 
-  PBPutRequest request;
-  PBPutResponse response;
+  pb::cache::PutRequest request;
+  pb::cache::PutResponse response;
   IOBuffer buffer = block.buffer;
   *request.mutable_block_key() = key.ToPB();
   request.set_block_size(buffer.Size());
 
-  status = SendRequest(ctx, kApiPut, request, buffer.ConstIOBuf(), response);
+  status =
+      SendRequest(ctx, kPutApiName, request, buffer.ConstIOBuf(), response);
   return status;
 }
 
@@ -96,15 +108,16 @@ Status RPCClient::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
                     offset, length);
   StepTimerGuard guard(timer);
 
-  PBRangeRequest request;
-  PBRangeResponse response;
+  pb::cache::RangeRequest request;
+  pb::cache::RangeResponse response;
   butil::IOBuf response_attachment;
   *request.mutable_block_key() = key.ToPB();
   request.set_offset(offset);
   request.set_length(length);
   request.set_block_size(option.block_size);
 
-  status = SendRequest(ctx, kApiRange, request, response, response_attachment);
+  status =
+      SendRequest(ctx, kRangeApiName, request, response, response_attachment);
   if (status.ok()) {
     *buffer = IOBuffer(response_attachment);
     ctx->SetCacheHit(response.has_cache_hit() ? response.cache_hit() : false);
@@ -120,13 +133,15 @@ Status RPCClient::Cache(ContextSPtr ctx, const BlockKey& key,
                     key.Filename(), block.size);
   StepTimerGuard guard(timer);
 
-  PBCacheRequest request;
-  PBCacheResponse response;
+  pb::cache::CacheRequest request;
+  pb::cache::CacheResponse response;
+
   auto buffer = block.buffer;
   *request.mutable_block_key() = key.ToPB();
   request.set_block_size(buffer.Size());
 
-  status = SendRequest(ctx, kApiCache, request, buffer.ConstIOBuf(), response);
+  status =
+      SendRequest(ctx, kCacheApiName, request, buffer.ConstIOBuf(), response);
   return status;
 }
 
@@ -138,12 +153,13 @@ Status RPCClient::Prefetch(ContextSPtr ctx, const BlockKey& key,
                     key.Filename(), length);
   StepTimerGuard guard(timer);
 
-  PBPrefetchRequest request;
-  PBPrefetchResponse response;
+  pb::cache::PrefetchRequest request;
+  pb::cache::PrefetchResponse response;
+
   *request.mutable_block_key() = key.ToPB();
   request.set_block_size(length);
 
-  status = SendRequest(ctx, kApiPrefetch, request, response);
+  status = SendRequest(ctx, kPrefecthApiName, request, response);
   return status;
 }
 
@@ -161,8 +177,8 @@ Status RPCClient::InitChannel(const std::string& server_ip,
   options.connection_type = brpc::CONNECTION_TYPE_POOLED;
   rc = channel_->Init(ep, &options);
   if (rc != 0) {
-    LOG(INFO) << "Init channel for " << server_ip << ":" << server_port
-              << " failed: rc = " << rc;
+    LOG(ERROR) << "Init channel for " << server_ip << ":" << server_port
+               << " failed: rc = " << rc;
     return Status::Internal("Init channel failed");
   }
 
@@ -185,7 +201,7 @@ Status RPCClient::ResetChannel() {
 
 // TODO: consider retcode
 bool RPCClient::ShouldRetry(const std::string& api_name, int /*retcode*/) {
-  return api_name == kApiRange;
+  return api_name == kRangeApiName;
 }
 
 bool RPCClient::ShouldReset(int retcode) {
@@ -195,13 +211,13 @@ bool RPCClient::ShouldReset(int retcode) {
 uint32_t RPCClient::NextTimeoutMs(const std::string& api_name,
                                   int retry_count) const {
   uint32_t timeout_ms;
-  if (api_name == kApiPut) {
+  if (api_name == kPutApiName) {
     timeout_ms = FLAGS_put_rpc_timeout_ms;
-  } else if (api_name == kApiRange) {
+  } else if (api_name == kRangeApiName) {
     timeout_ms = FLAGS_range_rpc_timeout_ms;
-  } else if (api_name == kApiCache) {
+  } else if (api_name == kCacheApiName) {
     timeout_ms = FLAGS_cache_rpc_timeout_ms;
-  } else if (api_name == kApiPrefetch) {
+  } else if (api_name == kPrefecthApiName) {
     timeout_ms = FLAGS_prefetch_rpc_timeout_ms;
   } else {
     CHECK(false) << "Unknown API name: " << api_name;
@@ -245,7 +261,7 @@ Status RPCClient::SendRequest(ContextSPtr ctx, const std::string& api_name,
                               Response& response,
                               butil::IOBuf& response_attachment) {
   const auto* method =
-      PBBlockCacheService::descriptor()->FindMethodByName(api_name);
+      pb::cache::BlockCacheService::descriptor()->FindMethodByName(api_name);
 
   if (method == nullptr) {
     LOG(FATAL) << "Unknown api name: " << api_name;
@@ -265,14 +281,15 @@ Status RPCClient::SendRequest(ContextSPtr ctx, const std::string& api_name,
     auto* channel = GetChannel();
     if (channel == nullptr) {
       LOG(ERROR) << absl::StrFormat(
-          "[rpc][%s][%s:%d] channel is not inited, retrying...", api_name,
-          server_ip_, server_port_);
+          "[%s][rpc][%s][%s:%d] channel is not inited, retrying...",
+          ctx->StrTraceId(), api_name, server_ip_, server_port_);
       ResetChannel();
       continue;
     }
 
-    // network error
     channel->CallMethod(method, &cntl, &request, &response, nullptr);
+
+    // network error
     if (cntl.Failed()) {
       LOG(ERROR) << absl::StrFormat(
           "[%s][rpc][%s][%s:%d][%.6lf] failed: request(%s) cntl_code(%d) "
@@ -285,22 +302,22 @@ Status RPCClient::SendRequest(ContextSPtr ctx, const std::string& api_name,
         return Status::NetError(cntl.ErrorCode(), cntl.ErrorText());
       }
 
-      ResetChannel();
+      ResetChannel();  // FIXME: don't reset channel if raise net error?
       continue;
     }
 
     // response status is ok
-    if (response.status() == PBBlockCacheErrCode::BlockCacheOk) {
+    if (response.status() == pb::cache::BlockCacheOk) {
       response_attachment = cntl.response_attachment();
       return Status::OK();
     } else {
       LOG(ERROR) << absl::StrFormat(
-          "[rpc][%s][%s:%d][%.6lf][%s] failed: request(%s) response(%s) "
+          "[%s][rpc][%s][%s:%d][%.6lf] failed: request(%s) response(%s) "
           "status(%s)",
-          api_name, server_ip_, server_port_, cntl.latency_us() / 1e6,
-          ctx->TraceId(), request.ShortDebugString(),
+          ctx->TraceId(), api_name, server_ip_, server_port_,
+          cntl.latency_us() / 1e6, request.ShortDebugString(),
           response.ShortDebugString(),
-          BlockCacheErrCode_Name(response.status()));
+          pb::cache::BlockCacheErrCode_Name(response.status()));
 
       return ToStatus(response.status());
     }

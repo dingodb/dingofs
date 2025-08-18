@@ -24,9 +24,11 @@
 #define DINGOFS_SRC_CACHE_CACHEGROUP_CACHE_GROUP_NODE_H_
 
 #include "cache/blockcache/block_cache.h"
+#include "cache/blockcache/disk_cache.h"
 #include "cache/cachegroup/async_cacher.h"
 #include "cache/cachegroup/cache_group_node_heartbeat.h"
 #include "cache/cachegroup/cache_group_node_member.h"
+#include "cache/common/mds_client.h"
 #include "cache/storage/storage_pool.h"
 #include "cache/utils/context.h"
 #include "cache/utils/step_timer.h"
@@ -63,7 +65,7 @@ using CacheGroupNodeSPtr = std::shared_ptr<CacheGroupNode>;
 
 class CacheGroupNodeImpl final : public CacheGroupNode {
  public:
-  explicit CacheGroupNodeImpl(CacheGroupNodeOption option);
+  CacheGroupNodeImpl();
 
   Status Start() override;
   Status Shutdown() override;
@@ -86,10 +88,9 @@ class CacheGroupNodeImpl final : public CacheGroupNode {
                      PrefetchOption option = PrefetchOption()) override;
 
  private:
-  bool IsRunning();
+  Status StartBlockCache();
 
-  void RewriteCacheDir();
-  Status InitBlockCache();
+  bool IsRunning();
 
   Status RangeCachedBlock(ContextSPtr ctx, StepTimer& timer,
                           const BlockKey& key, off_t offset, size_t length,
@@ -103,9 +104,7 @@ class CacheGroupNodeImpl final : public CacheGroupNode {
 
  private:
   std::atomic<bool> running_;
-  CacheGroupNodeOption option_;
-  std::shared_ptr<stub::rpcclient::MDSBaseClient> mds_base_;
-  std::shared_ptr<stub::rpcclient::MdsClient> mds_client_;
+  MDSClientSPtr mds_client_;
   CacheGroupNodeMemberSPtr member_;
   BlockCacheSPtr block_cache_;
   AsyncCacherUPtr async_cacher_;

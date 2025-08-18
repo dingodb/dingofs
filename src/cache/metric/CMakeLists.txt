@@ -13,11 +13,14 @@
 # limitations under the License.
 # Define the BASE_FLAGS and DINGO_DEFAULT_COPTS variables
 
-file(GLOB CACHE_CONFIG_LIB_SRCS
+file(GLOB CACHE_METRIC_LIB_SRCS
     "*.cpp"
 )
-add_library(cache_options ${CACHE_CONFIG_LIB_SRCS})
 
-target_link_libraries(cache_options
-    gflags::gflags
+add_library(cache_metric ${CACHE_METRIC_LIB_SRCS})
+target_link_libraries(cache_metric
+    PROTO_OBJS
+
+    brpc::brpc
+    nlohmann_json
 )

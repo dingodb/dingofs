@@ -20,8 +20,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_METRICS_CACHE_BLOCK_CACHE_METRIC_H_
-#define DINGOFS_SRC_METRICS_CACHE_BLOCK_CACHE_METRIC_H_
+#ifndef DINGOFS_SRC_CACHE_METRIC_BLOCK_CACHE_METRIC_H_
+#define DINGOFS_SRC_CACHE_METRIC_BLOCK_CACHE_METRIC_H_
 
 #include <bvar/passive_status.h>
 
@@ -38,4 +38,4 @@ struct BlockCacheMetric {
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_METRICS_CACHE_BLOCK_CACHE_METRIC_H_
+#endif  // DINGOFS_SRC_CACHE_METRIC_BLOCK_CACHE_METRIC_H_

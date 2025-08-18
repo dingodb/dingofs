@@ -16,26 +16,30 @@
 
 /*
  * Project: DingoFS
- * Created Date: 2025-06-02
+ * Created Date: 2025-08-20
  * Author: Jingli Chen (Wine93)
  */
 
-#include "options/cache/cachegroup.h"
+#include "cache/benchmark/option.h"
 
-#include <absl/strings/str_split.h>
-#include <glog/logging.h>
-
-#include "options/cache/stub.h"
+#include <brpc/reloadable_flags.h>
 
 namespace dingofs {
 namespace cache {
 
-CacheGroupNodeOption::CacheGroupNodeOption()
-    : group_name(FLAGS_group_name),
-      listen_ip(FLAGS_listen_ip),
-      listen_port(FLAGS_listen_port),
-      group_weight(FLAGS_group_weight),
-      mds_option(NewMdsOption()) {}
+DEFINE_uint32(threads, 1, "");
+DEFINE_string(op, "put", "");
+DEFINE_uint64(fsid, 1, "");
+DEFINE_uint64(ino, 0, "");
+DEFINE_uint64(blksize, 4194304, "");
+DEFINE_uint64(blocks, 1, "");
+DEFINE_uint64(offset, 0, "");
+DEFINE_uint64(length, 4194304, "");
+DEFINE_bool(writeback, false, "");
+DEFINE_bool(retrive, true, "");
+DEFINE_uint32(async_max_inflight, 128, "");
+DEFINE_uint32(runtime, 300, "");
+DEFINE_bool(time_based, false, "");
 
 }  // namespace cache
 }  // namespace dingofs

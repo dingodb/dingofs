@@ -30,7 +30,7 @@
 #include "cache/utils/helper.h"
 #include "cache/utils/posix.h"
 #include "common/io_buffer.h"
-#include "options/cache/blockcache.h"
+#include "options/cache/option.h"
 
 namespace dingofs {
 namespace cache {
@@ -79,7 +79,7 @@ Status HF3FS::WriteFile(ContextSPtr ctx, const std::string& path,
     return CheckStatus(status);
   }
 
-  SCOPE_EXIT {
+  ON_SCOPE_EXIT {
     Posix::Close(fd);
     if (!status.ok()) {
       Posix::Unlink(tmpfile);
@@ -98,7 +98,7 @@ Status HF3FS::ReadFile(ContextSPtr ctx, const std::string& path, off_t offset,
   int fd;
   auto status = Posix::Open(path, O_RDONLY, &fd);
   if (status.ok()) {
-    SCOPE_EXIT { Posix::Close(fd); };
+    ON_SCOPE_EXIT { Posix::Close(fd); };
     status = AioRead(ctx, fd, offset, length, buffer);
   }
   return CheckStatus(status);

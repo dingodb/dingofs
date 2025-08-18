@@ -24,22 +24,26 @@
 
 #include <absl/strings/str_format.h>
 
+#include <filesystem>
 #include <memory>
+#include <utility>
 
 #include "cache/blockcache/cache_store.h"
+#include "cache/blockcache/disk_cache.h"
 #include "cache/blockcache/disk_cache_group.h"
+#include "cache/blockcache/disk_cache_layout.h"
 #include "cache/blockcache/mem_cache.h"
-#include "cache/common/const.h"
 #include "cache/common/macro.h"
-#include "cache/status/cache_status.h"
+#include "cache/metric/cache_status.h"
 #include "cache/storage/storage.h"
 #include "cache/storage/storage_pool.h"
 #include "cache/utils/bthread.h"
 #include "cache/utils/context.h"
+#include "cache/utils/helper.h"
 #include "cache/utils/step_timer.h"
 #include "common/io_buffer.h"
 #include "common/status.h"
-#include "options/cache/blockcache.h"
+#include "options/cache/option.h"
 
 namespace dingofs {
 namespace cache {
@@ -49,19 +53,37 @@ DEFINE_string(cache_store, "disk",
 DEFINE_bool(enable_stage, true, "Whether to enable stage block for writeback");
 DEFINE_bool(enable_cache, true, "Whether to enable cache block");
 
-static const std::string kModule = kBlockCacheMoudule;
+static const std::string kModule = "blockcache";
 
-BlockCacheImpl::BlockCacheImpl(BlockCacheOption option, StorageSPtr storage)
-    : BlockCacheImpl(option, std::make_shared<SingleStorage>(storage)) {}
+static std::vector<DiskCacheOption> ParseDiskCacheOption() {
+  std::vector<std::pair<std::string, uint64_t>> cache_dirs;
 
-BlockCacheImpl::BlockCacheImpl(BlockCacheOption option,
-                               StoragePoolSPtr storage_pool)
+  Helper::SplitUniteCacheDir(FLAGS_cache_dir, FLAGS_cache_size_mb, &cache_dirs);
+  CHECK(!FLAGS_cache_dir_uuid.empty())
+      << "cache_dir_uuid MUST be set for disk cache";
+
+  std::vector<DiskCacheOption> disk_cache_options;
+  DiskCacheOption option;
+  for (auto i = 0; i < cache_dirs.size(); i++) {
+    option.cache_store = FLAGS_cache_store;
+    option.cache_index = disk_cache_options.size();
+    option.cache_dir = cache::RealCacheDir(
+        std::filesystem::absolute(cache_dirs[i].first), FLAGS_cache_dir_uuid);
+    option.cache_size_mb = cache_dirs[i].second;
+    disk_cache_options.emplace_back(option);
+  }
+  return disk_cache_options;
+}
+
+BlockCacheImpl::BlockCacheImpl(StorageSPtr storage)
+    : BlockCacheImpl(std::make_shared<SingleStorage>(storage)) {}
+
+BlockCacheImpl::BlockCacheImpl(StoragePoolSPtr storage_pool)
     : running_(false),
-      option_(option),
       storage_pool_(storage_pool),
       joiner_(std::make_unique<BthreadJoiner>()) {
   if (HasCacheStore()) {
-    store_ = std::make_shared<DiskCacheGroup>(option.disk_cache_options);
+    store_ = std::make_shared<DiskCacheGroup>(ParseDiskCacheOption());
   } else {
     store_ = std::make_shared<MemStore>();
   }
@@ -137,29 +159,28 @@ Status BlockCacheImpl::Put(ContextSPtr ctx, const BlockKey& key,
   StepTimerGuard guard(timer);
 
   if (!option.writeback) {
-    NEXT_STEP(kS3Put);
+    NEXT_STEP("s3_put");
     status = StoragePut(ctx, key, block);
     return status;
   }
 
   // writeback: stage block
-  NEXT_STEP(kStageBlock);
+  NEXT_STEP("stage");
   CacheStore::StageOption opt;
   opt.block_ctx = option.block_ctx;
   status = store_->Stage(ctx, key, block, opt);
   if (status.ok()) {
     return status;
   } else if (status.IsCacheFull()) {
-    LOG_EVERY_SECOND(WARNING)
-        << ctx->StrTraceId() << " Stage block failed: "
-        << "key = " << key.Filename() << ", length = " << block.size
-        << ", status = " << status.ToString();
+    LOG_EVERY_SECOND_CTX(WARNING)
+        << "Stage block failed:  key = " << key.Filename()
+        << ", length = " << block.size << ", status = " << status.ToString();
   } else {
     GENERIC_LOG_STAGE_ERROR();
   }
 
   // Stage block failed, try to upload it
-  NEXT_STEP(kS3Put);
+  NEXT_STEP("s3_put");
   status = StoragePut(ctx, key, block);
   return status;
 }
@@ -175,7 +196,7 @@ Status BlockCacheImpl::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
                     key.Filename(), offset, length);
   StepTimerGuard guard(timer);
 
-  NEXT_STEP(kLoadBlock);
+  NEXT_STEP("load");
   status = store_->Load(ctx, key, offset, length, buffer);
   if (status.ok()) {  // success
     return status;
@@ -186,7 +207,7 @@ Status BlockCacheImpl::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
     return status;
   }
 
-  NEXT_STEP(kS3Range);
+  NEXT_STEP("s3_range");
   status = StorageRange(ctx, key, offset, length, buffer);
   return status;
 }
@@ -201,13 +222,12 @@ Status BlockCacheImpl::Cache(ContextSPtr ctx, const BlockKey& key,
                     key.Filename(), block.size);
   StepTimerGuard guard(timer);
 
-  NEXT_STEP(kCacheBlock);
+  NEXT_STEP("cache");
   status = store_->Cache(ctx, key, block);
   if (status.IsCacheFull()) {
-    LOG_EVERY_SECOND(WARNING)
-        << ctx->StrTraceId() << " Cache block failed: "
-        << "key = " << key.Filename() << ", length = " << block.size
-        << ", status = " << status.ToString();
+    LOG_EVERY_SECOND_CTX(WARNING)
+        << "Cache block failed: key = " << key.Filename()
+        << ", length = " << block.size << ", status = " << status.ToString();
   } else if (!status.ok()) {
     GENERIC_LOG_CACHE_ERROR("disk");
   }
@@ -229,14 +249,14 @@ Status BlockCacheImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
     return Status::OK();
   }
 
-  NEXT_STEP(kS3Range);
+  NEXT_STEP("s3_range");
   IOBuffer buffer;
   status = StorageRange(ctx, key, 0, length, &buffer);
   if (!status.ok()) {
     return status;
   }
 
-  NEXT_STEP(kCacheBlock);
+  NEXT_STEP("cache");
   status = store_->Cache(ctx, key, Block(buffer));
   if (!status.ok()) {
     GENERIC_LOG_PREFETCH_ERROR("local block cache");
@@ -325,9 +345,8 @@ Status BlockCacheImpl::StoragePut(ContextSPtr ctx, const BlockKey& key,
   StorageSPtr storage;
   auto status = storage_pool_->GetStorage(key.fs_id, storage);
   if (!status.ok()) {
-    LOG(ERROR) << ctx->StrTraceId()
-               << " Get storage failed: key = " << key.Filename()
-               << ", status = " << status.ToString();
+    LOG_CTX(ERROR) << "Get storage failed: key = " << key.Filename()
+                   << ", status = " << status.ToString();
     return status;
   }
 
@@ -344,10 +363,9 @@ Status BlockCacheImpl::StorageRange(ContextSPtr ctx, const BlockKey& key,
   StorageSPtr storage;
   auto status = storage_pool_->GetStorage(key.fs_id, storage);
   if (!status.ok()) {
-    LOG(ERROR) << ctx->StrTraceId()
-               << " Get storage failed: key = " << key.Filename()
-               << ", offset = " << offset << ", length = " << length
-               << ", status = " << status.ToString();
+    LOG_CTX(ERROR) << "Get storage failed: key = " << key.Filename()
+                   << ", offset = " << offset << ", length = " << length
+                   << ", status = " << status.ToString();
     return status;
   }
 
@@ -359,15 +377,15 @@ Status BlockCacheImpl::StorageRange(ContextSPtr ctx, const BlockKey& key,
 }
 
 bool BlockCacheImpl::HasCacheStore() const {
-  return option_.cache_store != "none";
+  return FLAGS_cache_store != "none";
 }
 
 bool BlockCacheImpl::EnableStage() const {
-  return HasCacheStore() && option_.enable_stage;
+  return HasCacheStore() && FLAGS_enable_stage;
 }
 
 bool BlockCacheImpl::EnableCache() const {
-  return HasCacheStore() && option_.enable_cache;
+  return HasCacheStore() && FLAGS_enable_cache;
 }
 
 bool BlockCacheImpl::IsCached(const BlockKey& key) const {
@@ -377,9 +395,9 @@ bool BlockCacheImpl::IsCached(const BlockKey& key) const {
 void BlockCacheImpl::DisplayStatus() const {
   CacheStatus::Update([this](CacheStatus::Root& root) {
     auto& property = root.local_cache.property;
-    property.cache_store = option_.cache_store;
-    property.enable_stage = option_.enable_stage;
-    property.enable_cache = option_.enable_cache;
+    property.cache_store = FLAGS_cache_store;
+    property.enable_stage = FLAGS_enable_stage;
+    property.enable_cache = FLAGS_enable_cache;
   });
 }
 

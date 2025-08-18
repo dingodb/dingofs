@@ -28,10 +28,11 @@
 #include <memory>
 #include <mutex>
 
-#include "cache/common/proto.h"
+#include "cache/common/mds_client.h"
 #include "cache/common/type.h"
 #include "cache/storage/storage_impl.h"
 #include "common/config_mapper.h"
+#include "dingofs/common.pb.h"
 
 namespace dingofs {
 namespace cache {
@@ -45,9 +46,9 @@ Status SingleStorage::GetStorage(uint32_t /*fs_id*/, StorageSPtr& storage) {
   return Status::OK();
 }
 
-StoragePoolImpl::StoragePoolImpl(GetStorageInfoFunc get_storage_info_func)
-    : get_storage_info_func_(get_storage_info_func) {
-  CHECK_NOTNULL(get_storage_info_func_);
+StoragePoolImpl::StoragePoolImpl(MDSClientSPtr mds_client)
+    : mds_client_(mds_client) {
+  CHECK_NOTNULL(mds_client);
 }
 
 Status StoragePoolImpl::GetStorage(uint32_t fs_id, StorageSPtr& storage) {
@@ -75,8 +76,8 @@ bool StoragePoolImpl::Get(uint32_t fs_id, StorageSPtr& storage) {
 
 Status StoragePoolImpl::Create(uint32_t fs_id, StorageSPtr& storage) {
   // Get storage information
-  PBStorageInfo storage_info;
-  auto status = get_storage_info_func_(fs_id, &storage_info);
+  pb::common::StorageInfo storage_info;
+  auto status = mds_client_->GetFSInfo(fs_id, &storage_info);
   if (!status.ok()) {
     LOG(ERROR) << "Get filesystem storage information failed: fs_id = " << fs_id
                << ", status = " << status.ToString();

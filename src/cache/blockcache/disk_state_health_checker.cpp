@@ -19,11 +19,11 @@
 #include <memory>
 
 #include "cache/common/macro.h"
-#include "cache/status/cache_status.h"
+#include "cache/common/state_machine.h"
+#include "cache/metric/cache_status.h"
+#include "cache/metric/disk_cache_metric.h"
 #include "cache/utils/helper.h"
-#include "cache/utils/state_machine.h"
-#include "metrics/cache/blockcache/disk_cache_metric.h"
-#include "options/cache/blockcache.h"
+#include "options/cache/option.h"
 #include "utils/executor/bthread/bthread_executor.h"
 
 namespace dingofs {
@@ -115,8 +115,7 @@ std::string DiskStateHealthChecker::GetProbeFilepath() const {
 
 void DiskStateHealthChecker::SetStatusPage(State state) const {
   CacheStatus::Update([&](CacheStatus::Root& root) {
-    root.local_cache.disks[metric_->GetCacheIndex()].health =
-        StateToString(state);
+    root.local_cache.disks[metric_->cache_index].health = StateToString(state);
   });
 }
 

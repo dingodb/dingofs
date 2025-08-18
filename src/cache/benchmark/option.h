@@ -1,3 +1,4 @@
+
 /*
  * Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
  *
@@ -16,21 +17,33 @@
 
 /*
  * Project: DingoFS
- * Created Date: 2025-06-02
+ * Created Date: 2025-08-20
  * Author: Jingli Chen (Wine93)
  */
 
-#include "options/cache/tiercache.h"
+#ifndef DINGOFS_SRC_CACHE_BENCHMARK_OPTION_H_
+#define DINGOFS_SRC_CACHE_BENCHMARK_OPTION_H_
 
-#include "options/cache/stub.h"
+#include <gflags/gflags_declare.h>
 
 namespace dingofs {
 namespace cache {
 
-RemoteBlockCacheOption::RemoteBlockCacheOption()
-    : cache_group(FLAGS_cache_group),
-      load_members_interval_ms(FLAGS_load_members_interval_ms),
-      mds_option(NewMdsOption()) {}
+DECLARE_uint32(threads);
+DECLARE_string(op);
+DECLARE_uint64(fsid);
+DECLARE_uint64(ino);
+DECLARE_uint64(blksize);
+DECLARE_uint64(blocks);
+DECLARE_uint64(offset);
+DECLARE_uint64(length);
+DECLARE_bool(writeback);
+DECLARE_bool(retrive);
+DECLARE_uint32(async_max_inflight);
+DECLARE_uint32(runtime);
+DECLARE_bool(time_based);
 
 }  // namespace cache
 }  // namespace dingofs
+
+#endif  // DINGOFS_SRC_CACHE_BENCHMARK_OPTION_H_

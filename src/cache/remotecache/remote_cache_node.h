@@ -28,7 +28,6 @@
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/utils/context.h"
-#include "cache/utils/state_machine.h"
 #include "common/status.h"
 
 namespace dingofs {

@@ -20,8 +20,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_METRICS_CACHE_COMMON_H_
-#define DINGOFS_SRC_METRICS_CACHE_COMMON_H_
+#ifndef DINGOFS_SRC_CACHE_METRIC_COMMON_H_
+#define DINGOFS_SRC_CACHE_METRIC_COMMON_H_
 
 #include <bvar/latency_recorder.h>
 #include <bvar/reducer.h>
@@ -63,4 +63,4 @@ struct OpMetric {
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_METRICS_CACHE_COMMON_H_
+#endif  // DINGOFS_SRC_CACHE_METRIC_COMMON_H_

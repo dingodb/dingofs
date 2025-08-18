@@ -25,11 +25,12 @@
 #include <cstring>
 #include <iostream>
 
-#include "cache/help.h"
 #include "cache/server.h"
+#include "cache/usage.h"
 #include "cache/version.h"
+#include "options/cache/option.h"
 
-static int parse_option(int argc, char** argv) {
+static int ParseOption(int argc, char** argv) {
   for (int i = 1; i < argc; i++) {
     if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--version") == 0) {
       std::cout << dingofs::cache::Version() << "\n";
@@ -44,8 +45,27 @@ static int parse_option(int argc, char** argv) {
   return 0;
 }
 
+static int CheckOption() {
+  if (dingofs::cache::FLAGS_mds_version == "v1" &&
+      !dingofs::cache::FLAGS_id.empty()) {
+    std::cerr << "MDS v1 does not support cache node id, please remove the "
+                 "--id flag.\n";
+    return -1;
+  } else if (dingofs::cache::FLAGS_mds_version == "v2" &&
+             dingofs::cache::FLAGS_id.empty()) {
+    std::cerr << "MDS v2 requires cache node id, please set it by --id\n";
+    return -1;
+  }
+  return 0;
+}
+
 int main(int argc, char** argv) {
-  int rc = parse_option(argc, argv);
+  int rc = ParseOption(argc, argv);
+  if (rc != 0) {
+    return rc;
+  }
+
+  rc = CheckOption();
   if (rc != 0) {
     return rc;
   }

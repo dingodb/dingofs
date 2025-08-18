@@ -29,7 +29,6 @@
 #include "cache/blockcache/cache_store.h"
 #include "cache/cachegroup/service_closure.h"
 #include "cache/common/const.h"
-#include "cache/common/proto.h"
 #include "cache/utils/context.h"
 #include "cache/utils/step_timer.h"
 
@@ -54,7 +53,7 @@ DEFINE_RPC_METHOD(CacheGroupNodeServiceImpl, Put) {
   IOBuffer buffer(cntl->request_attachment());
   status = CheckBodySize(request->block_size(), buffer.Size());
   if (status.ok()) {
-    NEXT_STEP(kNodePut);
+    NEXT_STEP("node_put");
     PutOption option;
     option.writeback = true;
     status = node_->Put(ctx, key, Block(buffer), option);
@@ -74,7 +73,7 @@ DEFINE_RPC_METHOD(CacheGroupNodeServiceImpl, Range) {
 
   timer.Start();
 
-  NEXT_STEP(kNodeRange);
+  NEXT_STEP("node_range");
   IOBuffer buffer;
   status = node_->Range(
       ctx, BlockKey(request->block_key()), request->offset(), request->length(),
@@ -102,7 +101,7 @@ DEFINE_RPC_METHOD(CacheGroupNodeServiceImpl, Cache) {
   IOBuffer buffer(cntl->request_attachment());
   status = CheckBodySize(request->block_size(), buffer.Size());
   if (status.ok()) {
-    NEXT_STEP(kNodeAsyncCache);
+    NEXT_STEP("node_async_cache");
     node_->AsyncCache(ctx, BlockKey(request->block_key()), Block(buffer),
                       [](Status) {});
   }
@@ -121,7 +120,7 @@ DEFINE_RPC_METHOD(CacheGroupNodeServiceImpl, Prefetch) {  // NOLINT
 
   timer.Start();
 
-  NEXT_STEP(kNodeAsyncPrefetch);
+  NEXT_STEP("node_async_prefetch");
   node_->AsyncPrefetch(ctx, BlockKey(request->block_key()),
                        request->block_size(), [](Status) {});
 

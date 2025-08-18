@@ -14,31 +14,28 @@
 
 add_subdirectory(common)
 add_subdirectory(utils)
+add_subdirectory(metric)
 add_subdirectory(storage)
 add_subdirectory(blockcache)
 add_subdirectory(cachegroup)
 add_subdirectory(remotecache)
 add_subdirectory(tiercache)
 add_subdirectory(benchmark)
-add_subdirectory(status)
-
 
 file(GLOB CACHE_LIB_SRCS
-    "help.cpp"
     "version.cpp"
+    "usage.cpp"
     "server.cpp"
 )
 add_library(cache_lib ${CACHE_LIB_SRCS})
 target_link_libraries(cache_lib
     cache_common
     cache_utils
-    cache_options
     cache_storage
     cache_blockcache
     cache_cachegroup
     cache_remotecache
     cache_tiercache
-    cache_status
 )
 
 add_executable(dingo-cache main.cpp)

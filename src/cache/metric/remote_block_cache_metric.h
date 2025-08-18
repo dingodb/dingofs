@@ -20,8 +20,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_METRICS_CACHE_REMOTE_BLOCK_CACHE_METRIC_H_
-#define DINGOFS_SRC_METRICS_CACHE_REMOTE_BLOCK_CACHE_METRIC_H_
+#ifndef DINGOFS_SRC_CACHE_METRIC_REMOTE_BLOCK_CACHE_METRIC_H_
+#define DINGOFS_SRC_CACHE_METRIC_REMOTE_BLOCK_CACHE_METRIC_H_
 
 #include <bvar/passive_status.h>
 #include <bvar/reducer.h>
@@ -80,4 +80,4 @@ class RemoteBlockCacheMetric {
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_METRICS_CACHE_REMOTE_BLOCK_CACHE_METRIC_H_
+#endif  // DINGOFS_SRC_CACHE_METRIC_REMOTE_BLOCK_CACHE_METRIC_H_

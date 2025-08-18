@@ -33,18 +33,14 @@
 
 #include "cache/blockcache/block_cache.h"
 #include "cache/common/macro.h"
-#include "cache/common/proto.h"
+#include "cache/common/state_machine.h"
+#include "cache/common/state_machine_impl.h"
 #include "cache/common/type.h"
 #include "cache/remotecache/remote_cache_node_health_checker.h"
 #include "cache/remotecache/rpc_client.h"
-#include "cache/status/cache_status.h"
 #include "cache/utils/bthread.h"
 #include "cache/utils/context.h"
-#include "cache/utils/helper.h"
-#include "cache/utils/state_machine.h"
-#include "cache/utils/state_machine_impl.h"
 #include "common/status.h"
-#include "options/cache/tiercache.h"
 
 namespace dingofs {
 namespace cache {
@@ -56,10 +52,10 @@ DEFINE_validator(subrequest_ranges, brpc::PassValidate);
 DEFINE_uint32(subrequest_range_size, 262144, "Range size for each subrequest");
 DEFINE_validator(subrequest_range_size, brpc::PassValidate);
 
-RemoteCacheNodeImpl::RemoteCacheNodeImpl(const PBCacheGroupMember& member)
+RemoteCacheNodeImpl::RemoteCacheNodeImpl(const CacheGroupMember& member)
     : running_(false),
       member_(member),
-      rpc_(std::make_unique<RPCClient>(member.ip(), member.port())),
+      rpc_(std::make_unique<RPCClient>(member.ip, member.port)),
       state_machine_(std::make_shared<StateMachineImpl>(kNodeStateMachine)),
       health_checker_(std::make_unique<RemoteCacheNodeHealthChecker>(
           member, state_machine_)),
@@ -75,8 +71,7 @@ Status RemoteCacheNodeImpl::Start() {
     return Status::OK();
   }
 
-  LOG(INFO) << "Remote cache node is starting: member = "
-            << member_.ShortDebugString();
+  LOG(INFO) << "Remote cache node is starting: member = " << member_.ToString();
 
   auto status = rpc_->Init();
   if (!status.ok()) {
@@ -93,8 +88,7 @@ Status RemoteCacheNodeImpl::Start() {
 
   running_ = true;
 
-  LOG(INFO) << "Remote cache node is up: member = "
-            << member_.ShortDebugString();
+  LOG(INFO) << "Remote cache node is up: member = " << member_.ToString();
 
   CHECK_RUNNING("Remote cache node");
   return Status::OK();
@@ -105,8 +99,7 @@ Status RemoteCacheNodeImpl::Shutdown() {
     return Status::OK();
   }
 
-  LOG(INFO) << "Remote node is shutting down: member = "
-            << member_.ShortDebugString();
+  LOG(INFO) << "Remote node is shutting down: member = " << member_.ToString();
 
   if (!joiner_->Shutdown().ok()) {
     LOG(ERROR) << "Shutdown bthread joiner failed.";
@@ -118,7 +111,7 @@ Status RemoteCacheNodeImpl::Shutdown() {
     LOG(ERROR) << "State machine shutdown failed.";
   }
 
-  LOG(INFO) << "Remote node is down: member = " << member_.ShortDebugString();
+  LOG(INFO) << "Remote node is down: member = " << member_.ToString();
 
   CHECK_DOWN("Remote cache node");
   return Status::OK();
@@ -248,10 +241,9 @@ Status RemoteCacheNodeImpl::SubrequestRanges(ContextSPtr ctx,
 
 Status RemoteCacheNodeImpl::CheckHealth(ContextSPtr ctx) const {
   if (state_machine_->GetState() != State::kStateNormal) {
-    LOG_EVERY_SECOND(WARNING)
-        << ctx->StrTraceId() << " Remote cache node is unhealthy: state = "
-        << StateToString(state_machine_->GetState())
-        << ", member = " << member_.ShortDebugString();
+    LOG_EVERY_SECOND_CTX(WARNING) << "Remote cache node is unhealthy: state = "
+                                  << StateToString(state_machine_->GetState())
+                                  << ", member = " << member_.ToString();
     return Status::CacheUnhealthy("remote cache node is unhealthy");
   }
   return Status::OK();

@@ -18,8 +18,8 @@
 #include <memory>
 
 #include "cache/blockcache/disk_cache_layout.h"
-#include "cache/utils/state_machine.h"
-#include "metrics/cache/blockcache/disk_cache_metric.h"
+#include "cache/common/state_machine.h"
+#include "cache/metric/disk_cache_metric.h"
 #include "utils/executor/executor.h"
 
 namespace dingofs {

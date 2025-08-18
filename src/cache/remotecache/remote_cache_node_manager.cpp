@@ -27,8 +27,8 @@
 #include <glog/logging.h>
 
 #include "cache/common/macro.h"
-#include "cache/status/cache_status.h"
-#include "options/cache/tiercache.h"
+#include "cache/common/mds_client.h"
+#include "cache/metric/cache_status.h"
 #include "utils/executor/bthread/bthread_executor.h"
 
 namespace dingofs {
@@ -37,21 +37,14 @@ namespace cache {
 DEFINE_uint32(load_members_interval_ms, 1000,
               "Interval to load members of the cache group in milliseconds");
 
-using dingofs::pb::mds::cachegroup::CacheGroupErrCode_Name;
-
-RemoteCacheNodeManager::RemoteCacheNodeManager(RemoteBlockCacheOption option,
-                                               OnMemberLoad on_member_load)
+RemoteCacheNodeManager::RemoteCacheNodeManager(OnMemberLoadFn on_member_load_fn)
     : running_(false),
-      option_(option),
-      on_member_load_(on_member_load),
-      mds_base_(std::make_shared<stub::rpcclient::MDSBaseClient>()),
-      mds_client_(std::make_shared<stub::rpcclient::MdsClientImpl>()),
+      mds_client_(BuildUniqueMDSClient()),
+      on_member_load_fn_(on_member_load_fn),
       executor_(std::make_unique<BthreadExecutor>()) {}
 
 Status RemoteCacheNodeManager::Start() {
-  CHECK_NOTNULL(on_member_load_);
-  CHECK_NOTNULL(mds_base_);
-  CHECK_NOTNULL(mds_client_);
+  CHECK_NOTNULL(on_member_load_fn_);
   CHECK_NOTNULL(executor_);
 
   if (running_) {
@@ -59,12 +52,6 @@ Status RemoteCacheNodeManager::Start() {
   }
 
   LOG(INFO) << "Remote node manager is starting...";
-
-  auto rc = mds_client_->Init(option_.mds_option, mds_base_.get());
-  if (rc != PBFSStatusCode::OK) {
-    LOG(ERROR) << "Init MDS client failed: rc = " << rc;
-    return Status::Internal("init mds client failed");
-  }
 
   Status status = RefreshMembers();
   if (!status.ok()) {
@@ -93,7 +80,7 @@ void RemoteCacheNodeManager::Shutdown() {
 
   LOG(INFO) << "Remote node manager is shutting down...";
 
-  executor_->Stop();
+  CHECK(executor_->Stop());
 
   LOG(INFO) << "Remote node manager is down.";
 
@@ -101,30 +88,26 @@ void RemoteCacheNodeManager::Shutdown() {
 }
 
 void RemoteCacheNodeManager::BackgroudRefresh() {
-  auto status = RefreshMembers();
-  if (!status.ok()) {
-    LOG(ERROR) << "Refresh cache group members failed: " << status.ToString();
-  }
-
+  RefreshMembers();
   executor_->Schedule([this] { BackgroudRefresh(); },
                       FLAGS_load_members_interval_ms);
 }
 
 Status RemoteCacheNodeManager::RefreshMembers() {
-  PBCacheGroupMembers members;
+  std::vector<CacheGroupMember> members;
   Status status = LoadMembers(&members);
   if (status.ok()) {
-    on_member_load_(members);
+    on_member_load_fn_(members);
   }
   return status;
 }
 
-Status RemoteCacheNodeManager::LoadMembers(PBCacheGroupMembers* members) {
-  auto status =
-      mds_client_->ListCacheGroupMembers(option_.cache_group, members);
-  if (status != PBCacheGroupErrCode::CacheGroupOk) {
-    LOG(ERROR) << "Load cache group members failed: "
-               << CacheGroupErrCode_Name(status);
+Status RemoteCacheNodeManager::LoadMembers(
+    std::vector<CacheGroupMember>* members) {
+  auto status = mds_client_->ListMembers(FLAGS_cache_group, members);
+  if (!status.ok()) {
+    LOG(ERROR) << "List cache group members from mds failed: "
+               << status.ToString();
     return Status::Internal("load cache group member failed");
   }
 
@@ -137,9 +120,8 @@ Status RemoteCacheNodeManager::LoadMembers(PBCacheGroupMembers* members) {
 void RemoteCacheNodeManager::SetStatusPage() const {
   CacheStatus::Update([&](CacheStatus::Root& root) {
     auto& remote_cache = root.remote_cache;
-    remote_cache.mds_addrs =
-        absl::StrJoin(option_.mds_option.rpcRetryOpt.addrs, ", ");
-    remote_cache.cache_group = option_.cache_group;
+    remote_cache.mds_addrs = FLAGS_mds_addrs;
+    remote_cache.cache_group = FLAGS_cache_group;
   });
 }
 

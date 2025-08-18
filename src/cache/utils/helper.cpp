@@ -25,6 +25,7 @@
 #include <absl/strings/match.h>
 #include <absl/strings/str_format.h>
 #include <absl/strings/str_join.h>
+#include <absl/strings/str_split.h>
 #include <butil/file_util.h>
 #include <google/protobuf/util/json_util.h>
 
@@ -33,6 +34,7 @@
 
 #include "cache/common/const.h"
 #include "cache/storage/base_filesystem.h"
+#include "utils/string.h"
 
 namespace dingofs {
 namespace cache {
@@ -47,6 +49,10 @@ std::string Helper::ToLowerCase(const std::string& str) {
     c = tolower(c);
   }
   return result;
+}
+
+std::string Helper::RedString(const std::string& str) {
+  return absl::StrFormat("\x1B[31m%s\033[0m", str);
 }
 
 // sys conf
@@ -261,6 +267,25 @@ bool Helper::ProtoToJson(const google::protobuf::Message& message,
   options.always_print_primitive_fields = true;
   options.preserve_proto_field_names = true;
   return MessageToJsonString(message, &json, options).ok();
+}
+
+void Helper::SplitUniteCacheDir(
+    const std::string& cache_dir, uint64_t default_cache_size_mb,
+    std::vector<std::pair<std::string, uint64_t>>* cache_dirs) {
+  std::vector<std::string> dirs = absl::StrSplit(cache_dir, ";");
+
+  for (const auto& dir : dirs) {
+    uint64_t cache_size_mb = default_cache_size_mb;
+    std::vector<std::string> items = absl::StrSplit(dir, ":");
+    if (items.size() > 2 ||
+        (items.size() == 2 && !utils::Str2Int(items[1], &cache_size_mb))) {
+      CHECK(false) << "Invalid cache dir: " << dir;
+    } else if (cache_size_mb == 0) {
+      CHECK(false) << "Cache size must greater than 0.";
+    }
+
+    cache_dirs->emplace_back(items[0], cache_size_mb);
+  }
 }
 
 }  // namespace cache

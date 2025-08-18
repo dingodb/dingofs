@@ -23,7 +23,7 @@
 #include <memory>
 #include <string>
 
-#include "cache/status/cache_status.h"
+#include "cache/metric/cache_status.h"
 #include "client/common/client_dummy_server_info.h"
 #include "client/const.h"
 #include "client/meta/vfs_fh.h"

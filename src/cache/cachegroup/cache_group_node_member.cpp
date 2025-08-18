@@ -22,34 +22,32 @@
 
 #include "cache/cachegroup/cache_group_node_member.h"
 
-#include "cache/common/proto.h"
+#include "options/cache/option.h"
 
 namespace dingofs {
 namespace cache {
 
-CacheGroupNodeMemberImpl::CacheGroupNodeMemberImpl(CacheGroupNodeOption option,
-                                                   MdsClientSPtr mds_client)
-    : option_(option), mds_client_(mds_client) {}
+CacheGroupNodeMemberImpl::CacheGroupNodeMemberImpl(MDSClientSPtr mds_client)
+    : mds_client_(mds_client) {}
 
 Status CacheGroupNodeMemberImpl::JoinGroup() {
   CHECK_NOTNULL(mds_client_);
 
-  auto rc = mds_client_->JoinCacheGroup(option_.group_name, option_.listen_ip,
-                                        option_.listen_port,
-                                        option_.group_weight, &member_id_);
-  if (rc != PBCacheGroupErrCode::CacheGroupOk) {
-    LOG(ERROR) << "Join cache group failed: group_name = " << option_.group_name
-               << ", ip = " << option_.listen_ip
-               << ", port = " << option_.listen_port
-               << ", weight = " << option_.group_weight
-               << ", rc = " << CacheGroupErrCode_Name(rc);
+  auto status = mds_client_->JoinCacheGroup(FLAGS_id, FLAGS_listen_ip,
+                                            FLAGS_listen_port, FLAGS_group_name,
+                                            FLAGS_group_weight, &member_id_);
+  if (status.ok()) {
+    LOG(ERROR) << "Join cache group failed: group_name = " << FLAGS_group_name
+               << ", ip = " << FLAGS_listen_ip
+               << ", port = " << FLAGS_listen_port
+               << ", weight = " << FLAGS_group_weight
+               << ", status = " << status.ToString();
     return Status::Internal("join cache group failed");
   }
 
-  LOG(INFO) << "Join cache group success: group_name = " << option_.group_name
-            << ", ip = " << option_.listen_ip
-            << ", port = " << option_.listen_port
-            << ", weight = " << option_.group_weight
+  LOG(INFO) << "Join cache group success: group_name = " << FLAGS_group_name
+            << ", ip = " << FLAGS_listen_ip << ", port = " << FLAGS_listen_port
+            << ", weight = " << FLAGS_group_weight
             << ", member_id = " << member_id_;
 
   return Status::OK();
@@ -58,32 +56,31 @@ Status CacheGroupNodeMemberImpl::JoinGroup() {
 Status CacheGroupNodeMemberImpl::LeaveGroup() {
   CHECK_NOTNULL(mds_client_);
 
-  auto rc = mds_client_->LeaveCacheGroup(option_.group_name, option_.listen_ip,
-                                         option_.listen_port);
-  if (rc != PBCacheGroupErrCode::CacheGroupOk) {
-    LOG(ERROR) << "Leave cache group failed: group_name = "
-               << option_.group_name << ", ip = " << option_.listen_ip
-               << ", port = " << option_.listen_port
-               << ", rc = " << CacheGroupErrCode_Name(rc);
+  auto status = mds_client_->LeaveCacheGroup(
+      FLAGS_id, FLAGS_listen_ip, FLAGS_listen_port, FLAGS_group_name);
+  if (!status.ok()) {
+    LOG(ERROR) << "Leave cache group failed: group_name = " << FLAGS_group_name
+               << ", ip = " << FLAGS_listen_ip
+               << ", port = " << FLAGS_listen_port
+               << ", status = " << status.ToString();
     return Status::Internal("leave cache group failed");
   }
 
-  LOG(INFO) << "Leave cache group success: group_name = " << option_.group_name
-            << ", ip = " << option_.listen_ip
-            << ", port = " << option_.listen_port;
+  LOG(INFO) << "Leave cache group success: group_name = " << FLAGS_group_name
+            << ", ip = " << FLAGS_listen_ip << ", port = " << FLAGS_listen_port;
   return Status::OK();
 }
 
 std::string CacheGroupNodeMemberImpl::GetGroupName() const {
-  return option_.group_name;
+  return FLAGS_group_name;
 }
 
 std::string CacheGroupNodeMemberImpl::GetListenIP() const {
-  return option_.listen_ip;
+  return FLAGS_listen_ip;
 }
 
 uint32_t CacheGroupNodeMemberImpl::GetListenPort() const {
-  return option_.listen_port;
+  return FLAGS_listen_port;
 }
 
 std::string CacheGroupNodeMemberImpl::GetMemberId() const { return member_id_; }

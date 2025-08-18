@@ -30,20 +30,15 @@
 #include "cache/utils/bthread.h"
 #include "cache/utils/context.h"
 #include "cache/utils/inflight_tracker.h"
-#include "options/cache/blockcache.h"
-#include "options/cache/tiercache.h"
+#include "options/cache/option.h"
 
 namespace dingofs {
 namespace cache {
 
 class TierBlockCache final : public BlockCache {
  public:
-  TierBlockCache(BlockCacheOption local_cache_option,
-                 RemoteBlockCacheOption remote_cache_option,
-                 StorageSPtr storage);
-  TierBlockCache(BlockCacheOption local_cache_option,
-                 RemoteBlockCacheOption remote_cache_option,
-                 blockaccess::BlockAccesser* block_accesser);
+  explicit TierBlockCache(StorageSPtr storage);
+  explicit TierBlockCache(blockaccess::BlockAccesser* block_accesser);
 
   Status Start() override;
   Status Shutdown() override;

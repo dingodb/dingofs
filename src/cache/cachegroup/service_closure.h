@@ -28,35 +28,33 @@
 #include <glog/logging.h>
 
 #include "cache/blockcache/cache_store.h"
-#include "cache/common/const.h"
-#include "cache/common/proto.h"
 #include "cache/utils/context.h"
 #include "cache/utils/step_timer.h"
 
 namespace dingofs {
 namespace cache {
 
-static const std::string kModule = kServiceModule;
+static const std::string kModule = "service";
 
-inline std::string ToString(const PBPutRequest* request) {
+inline std::string ToString(const pb::cache::PutRequest* request) {
   return absl::StrFormat("put(%s,%zu)",
                          BlockKey(request->block_key()).Filename(),
                          request->block_size());
 }
 
-inline std::string ToString(const PBRangeRequest* request) {
+inline std::string ToString(const pb::cache::RangeRequest* request) {
   return absl::StrFormat("range(%s,%lld,%zu)",
                          BlockKey(request->block_key()).Filename(),
                          request->offset(), request->length());
 }
 
-inline std::string ToString(const PBCacheRequest* request) {
+inline std::string ToString(const pb::cache::CacheRequest* request) {
   return absl::StrFormat("cache(%s,%zu)",
                          BlockKey(request->block_key()).Filename(),
                          request->block_size());
 }
 
-inline std::string ToString(const PBPrefetchRequest* request) {
+inline std::string ToString(const pb::cache::PrefetchRequest* request) {
   return absl::StrFormat("prefetch(%s,%zu)",
                          BlockKey(request->block_key()).Filename(),
                          request->block_size());
@@ -81,17 +79,17 @@ class ServiceClosure : public google::protobuf::Closure {
     std::unique_ptr<ServiceClosure<T, U>> self_guard(this);
     TraceLogGuard log(ctx_, status_, timer_, kModule, "%s", ToString(request_));
 
-    if (response_->status() != PBBlockCacheErrCode::BlockCacheOk) {
+    if (response_->status() != pb::cache::BlockCacheOk) {
       LOG(ERROR) << absl::StrFormat(
           "[%s] BlockCacheService [%s] reqeust failed: request = %s, response "
           "= %s, status = %s",
           ctx_->TraceId(), ToString(request_),
           request_->ShortDebugString().substr(0, 512),
           response_->ShortDebugString().substr(0, 512),
-          pb::cache::blockcache::BlockCacheErrCode_Name(response_->status()));
+          pb::cache::BlockCacheErrCode_Name(response_->status()));
     }
 
-    timer_.NextStep(kSendResponse);
+    timer_.NextStep("send_response");
     done_->Run();
 
     timer_.Stop();

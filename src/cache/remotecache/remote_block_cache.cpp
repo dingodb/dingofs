@@ -28,15 +28,15 @@
 
 #include "cache/common/const.h"
 #include "cache/common/macro.h"
+#include "cache/metric/cache_status.h"
+#include "cache/metric/remote_block_cache_metric.h"
 #include "cache/remotecache/mem_cache.h"
 #include "cache/remotecache/remote_cache_node_group.h"
-#include "cache/status/cache_status.h"
 #include "cache/utils/bthread.h"
 #include "cache/utils/context.h"
 #include "common/io_buffer.h"
 #include "common/status.h"
-#include "metrics/cache/remotecache/remote_block_cache_metric.h"
-#include "options/cache/tiercache.h"
+#include "options/cache/option.h"
 
 namespace dingofs {
 namespace cache {
@@ -51,18 +51,16 @@ DEFINE_validator(enable_remote_prefetch, brpc::PassValidate);
 DEFINE_uint32(remote_prefetch_max_buffer_size_mb, 512,
               "Maximum buffer size for remote prefetch");
 
-static const std::string kModule = kRemoteBlockCacheMoudule;
+static const std::string kModule = "remotecache";
 
-RemoteBlockCacheImpl::RemoteBlockCacheImpl(RemoteBlockCacheOption option,
-                                           StorageSPtr storage)
+RemoteBlockCacheImpl::RemoteBlockCacheImpl(StorageSPtr storage)
     : running_(false),
-      option_(option),
       storage_(storage),
       joiner_(std::make_unique<BthreadJoiner>()),
       memcache_(std::make_shared<MemCacheImpl>(
           FLAGS_remote_prefetch_max_buffer_size_mb * kMiB)) {
   if (HasCacheStore()) {
-    remote_node_ = std::make_shared<RemoteCacheNodeGroup>(option);
+    remote_node_ = std::make_shared<RemoteCacheNodeGroup>();
   } else {
     remote_node_ = std::make_shared<NoneRemoteCacheNode>();
   }
@@ -165,20 +163,21 @@ Status RemoteBlockCacheImpl::Put(ContextSPtr ctx, const BlockKey& key,
   StepTimerGuard guard(timer);
 
   if (!option.writeback) {
-    NEXT_STEP(kS3Put);
+    NEXT_STEP("s3_put");
     status = storage_->Upload(ctx, key, block);
   } else {
-    NEXT_STEP(kRemotePut);
+    NEXT_STEP("remote_put");
     status = remote_node_->Put(ctx, key, block);
     if (!status.ok()) {
-      NEXT_STEP(kS3Put);
+      NEXT_STEP("s3_put");
       status = storage_->Upload(ctx, key, block);
     }
   }
 
   if (!status.ok()) {
-    LOG_ERROR("[%s] Put block failed: key = %s, length = %zu, status = %s",
-              ctx->TraceId(), key.Filename(), block.size, status.ToString());
+    LOG_CTX(ERROR) << "Put block failed: key = " << key.Filename()
+                   << ", length = " << block.size
+                   << ", status = " << status.ToString();
   }
   return status;
 }
@@ -193,7 +192,8 @@ Status RemoteBlockCacheImpl::Range(ContextSPtr ctx, const BlockKey& key,
   TraceLogGuard log(ctx, status, timer, kModule, "range(%s,%lld,%zu)",
                     key.Filename(), offset, length);
   StepTimerGuard guard(timer);
-  SCOPE_EXIT {
+
+  ON_SCOPE_EXIT {
     if (ctx->GetCacheHit()) {
       RemoteBlockCacheMetric::AddCacheHit(1);
     } else {
@@ -201,11 +201,11 @@ Status RemoteBlockCacheImpl::Range(ContextSPtr ctx, const BlockKey& key,
     }
   };
 
-  if (FLAGS_enable_remote_prefetch && option.block_size != 0) {
+  if (FLAGS_enable_remote_prefetch && option.block_size > length) {
     prefetcher_->Submit(ctx, key, option.block_size);
   }
 
-  NEXT_STEP(kRetrieveCache);
+  NEXT_STEP("memcache");
   Block block;
   status = memcache_->Get(key, &block);
   if (status.ok()) {
@@ -214,7 +214,7 @@ Status RemoteBlockCacheImpl::Range(ContextSPtr ctx, const BlockKey& key,
     return status;
   }
 
-  NEXT_STEP(kRemoteRange);
+  NEXT_STEP("remote_range");
   status = remote_node_->Range(ctx, key, offset, length, buffer, option);
   if (status.ok()) {
     return status;
@@ -231,7 +231,7 @@ Status RemoteBlockCacheImpl::Range(ContextSPtr ctx, const BlockKey& key,
     return status;
   }
 
-  NEXT_STEP(kS3Range);
+  NEXT_STEP("s3_range");
   status = storage_->Download(ctx, key, offset, length, buffer);
   if (!status.ok()) {
     GENERIC_LOG_DOWNLOAD_ERROR();
@@ -249,7 +249,7 @@ Status RemoteBlockCacheImpl::Cache(ContextSPtr ctx, const BlockKey& key,
                     key.Filename(), block.size);
   StepTimerGuard guard(timer);
 
-  NEXT_STEP(kRemoteCache);
+  NEXT_STEP("remote_cache");
   status = remote_node_->Cache(ctx, key, block);
 
   if (!status.ok()) {
@@ -269,7 +269,7 @@ Status RemoteBlockCacheImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
                     key.Filename(), length);
   StepTimerGuard guard(timer);
 
-  NEXT_STEP(kRemotePrefetch);
+  NEXT_STEP("remote_prefetch");
   status = remote_node_->Prefetch(ctx, key, length);
 
   if (!status.ok()) {
@@ -353,7 +353,7 @@ void RemoteBlockCacheImpl::AsyncPrefetch(ContextSPtr ctx, const BlockKey& key,
 }
 
 bool RemoteBlockCacheImpl::HasCacheStore() const {
-  return !option_.cache_group.empty();
+  return !FLAGS_cache_group.empty();
 }
 
 // We gurantee that block cache of cache group node is always enable stage
@@ -367,6 +367,7 @@ bool RemoteBlockCacheImpl::IsCached(const BlockKey& /*key*/) const {
 
 void RemoteBlockCacheImpl::SetStatusPage() const {
   CacheStatus::Update([this](CacheStatus::Root& root) {
+    root.remote_cache.property.cache_store = "disk";
     root.remote_cache.property.enable_stage = true;
     root.remote_cache.property.enable_cache = true;
   });

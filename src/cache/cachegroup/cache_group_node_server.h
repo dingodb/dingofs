@@ -28,6 +28,7 @@
 #include <csignal>
 
 #include "cache/cachegroup/cache_group_node.h"
+#include "dingofs/blockcache.pb.h"
 
 namespace dingofs {
 namespace cache {
@@ -42,7 +43,7 @@ class CacheGroupNodeServer {
 
 class CacheGroupNodeServerImpl final : public CacheGroupNodeServer {
  public:
-  explicit CacheGroupNodeServerImpl(CacheGroupNodeOption option);
+  CacheGroupNodeServerImpl();
 
   ~CacheGroupNodeServerImpl() override = default;
 
@@ -54,9 +55,8 @@ class CacheGroupNodeServerImpl final : public CacheGroupNodeServer {
   Status StartRpcServer(const std::string& listen_ip, uint32_t listen_port);
 
   std::atomic<bool> running_;
-  const CacheGroupNodeOption option_;
   CacheGroupNodeSPtr node_;
-  std::unique_ptr<PBBlockCacheService> service_;
+  std::unique_ptr<pb::cache::BlockCacheService> service_;
   std::unique_ptr<brpc::Server> server_;
 };
 

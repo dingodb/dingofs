@@ -23,8 +23,8 @@
 
 #include <memory>
 
-#include "cache/common/proto.h"
-#include "cache/utils/state_machine.h"
+#include "cache/common/mds_client.h"
+#include "cache/common/state_machine.h"
 #include "utils/executor/executor.h"
 
 namespace dingofs {
@@ -32,7 +32,7 @@ namespace cache {
 
 class RemoteCacheNodeHealthChecker {
  public:
-  RemoteCacheNodeHealthChecker(const PBCacheGroupMember& member,
+  RemoteCacheNodeHealthChecker(const CacheGroupMember& member,
                                StateMachineSPtr state_machine);
   virtual ~RemoteCacheNodeHealthChecker() = default;
 
@@ -47,9 +47,8 @@ class RemoteCacheNodeHealthChecker {
   void SetStatusPage(State new_state);
 
   std::atomic<bool> running_;
-  const PBCacheGroupMember member_;
+  const CacheGroupMember member_;
   StateMachineSPtr state_machine_;
-  State state_;
   std::unique_ptr<Executor> executor_;
 };
 

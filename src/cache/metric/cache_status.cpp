@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "cache/status/cache_status.h"
+#include "cache/metric/cache_status.h"
 
 #include <brpc/server.h>
 
@@ -48,7 +48,7 @@ void CacheServiceImpl::default_method(
 Status AddCacheService(brpc::Server* server) {
   int rc = server->AddService(&cache_service, brpc::SERVER_DOESNT_OWN_SERVICE);
   if (rc != 0) {
-    LOG(ERROR) << "Failed to add cache service";
+    LOG(ERROR) << "Failed to add cache service.";
     return Status::Internal("add cache service failed");
   }
   return Status::OK();

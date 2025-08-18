@@ -22,7 +22,7 @@
 
 #include "cache/benchmark/worker.h"
 
-#include "options/cache/benchmark.h"
+#include "cache/benchmark/option.h"
 
 namespace dingofs {
 namespace cache {

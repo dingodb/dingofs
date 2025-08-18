@@ -26,7 +26,7 @@
 #include <memory>
 
 #include "cache/blockcache/cache_store.h"
-#include "cache/common/proto.h"
+#include "cache/common/mds_client.h"
 #include "cache/common/type.h"
 #include "cache/remotecache/remote_cache_node.h"
 #include "cache/utils/con_hash.h"
@@ -40,7 +40,7 @@ class ConsistentHash {
 
   ConsistentHash();
 
-  void Build(const PBCacheGroupMembers& members);
+  void Build(const std::vector<CacheGroupMember>& members);
 
   RemoteCacheNodeSPtr GetNode(const std::string& key);
 
@@ -48,7 +48,8 @@ class ConsistentHash {
   const NodesT& GetAllNodes() const;
 
  private:
-  std::vector<uint64_t> CalcWeights(const PBCacheGroupMembers& members);
+  std::vector<uint64_t> CalcWeights(
+      const std::vector<CacheGroupMember>& members);
 
   std::unique_ptr<ConHash> chash_;
   NodesT nodes_;
@@ -60,7 +61,7 @@ class Upstream {
  public:
   virtual ~Upstream() = default;
 
-  virtual void Build(const PBCacheGroupMembers& members) = 0;
+  virtual void Build(const std::vector<CacheGroupMember>& members) = 0;
 
   virtual Status GetNode(const BlockKey& key, RemoteCacheNodeSPtr& node) = 0;
 };
@@ -69,7 +70,7 @@ class UpstreamImpl : public Upstream {
  public:
   UpstreamImpl();
 
-  void Build(const PBCacheGroupMembers& members) override;
+  void Build(const std::vector<CacheGroupMember>& members) override;
 
   Status GetNode(const BlockKey& key, RemoteCacheNodeSPtr& node) override;
 
@@ -79,10 +80,11 @@ class UpstreamImpl : public Upstream {
     std::vector<RemoteCacheNodeSPtr> remove_nodes;
   };
 
-  PBCacheGroupMembers FilterMember(const PBCacheGroupMembers& members);
+  std::vector<CacheGroupMember> FilterMember(
+      const std::vector<CacheGroupMember>& members);
 
-  bool IsSame(const PBCacheGroupMembers& old_members,
-              const PBCacheGroupMembers& new_members) const;
+  bool IsSame(const std::vector<CacheGroupMember>& old_members,
+              const std::vector<CacheGroupMember>& new_members) const;
 
   Diff ShareNodes(const ConsistentHash::NodesT& old_nodes,
                   ConsistentHash::NodesT& new_nodes);
@@ -90,13 +92,13 @@ class UpstreamImpl : public Upstream {
   void StartNodes(const std::vector<RemoteCacheNodeSPtr>& add_nodes);
   void ShutdownNodes(const std::vector<RemoteCacheNodeSPtr>& remove_nodes);
 
-  void ResetCHash(const PBCacheGroupMembers& new_members,
+  void ResetCHash(const std::vector<CacheGroupMember>& new_members,
                   ConsistentHashSPtr new_chash);
 
   void SetStatusPage() const;
 
   BthreadRWLock rwlock_;
-  PBCacheGroupMembers members_;
+  std::vector<CacheGroupMember> members_;
   ConsistentHashSPtr chash_;
 };
 

@@ -30,12 +30,20 @@
 #include "cache/blockcache/disk_cache_loader.h"
 #include "cache/blockcache/disk_cache_manager.h"
 #include "cache/blockcache/disk_state_health_checker.h"
+#include "cache/metric/disk_cache_metric.h"
 #include "cache/storage/filesystem.h"
-#include "metrics/cache/blockcache/disk_cache_metric.h"
-#include "options/cache/blockcache.h"
 
 namespace dingofs {
 namespace cache {
+
+struct DiskCacheOption {
+  DiskCacheOption();
+
+  uint32_t cache_index;
+  std::string cache_store;
+  std::string cache_dir;
+  uint64_t cache_size_mb;
+};
 
 class DiskCache final : public CacheStore {
  public:
