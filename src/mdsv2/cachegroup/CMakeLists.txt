@@ -12,22 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-file(GLOB DINGOFS_MDSV2_SERVICE_SRCS
+file(GLOB DINGOFS_MDSV2_CACHEGROUP_SRCS
     "*.cc"
 )
 
-add_library(mdsv2_service
-    ${DINGOFS_MDSV2_SERVICE_SRCS}
+add_library(mdsv2_cachegroup
+    ${DINGOFS_MDSV2_CACHEGROUP_SRCS}
 )
 
-target_link_libraries(mdsv2_service
+target_link_libraries(mdsv2_cachegroup
     mdsv2_common
     mdsv2_filesystem
-    mdsv2_coordinator
-    mdsv2_mds
-    mdsv2_statistics
-    mdsv2_quota
-    mdsv2_cachegroup
 
     PROTO_OBJS
     protobuf::libprotobuf

@@ -61,6 +61,12 @@ DEFINE_bool(is_binary, false, "is binary");
 
 DEFINE_string(mds_id_list, "", "mds id list for joinfs or quitfs, e.g. 1,2,3");
 
+DEFINE_string(member_id, "", "cache member id must be uuid");
+DEFINE_string(cache_member_ip, "", "cache member ip");
+DEFINE_uint32(cache_member_port, 0, "cache member port");
+DEFINE_string(group_name, "", "cache group name");
+DEFINE_uint32(weight, 0, "cache member weight");
+
 static std::string GetDefaultCoorAddrPath() {
   if (!FLAGS_coor_addr.empty()) {
     return FLAGS_coor_addr;
@@ -163,6 +169,13 @@ int main(int argc, char* argv[]) {
     options.fs_partition_type = FLAGS_fs_partition_type;
     options.chunk_size = FLAGS_chunk_size;
     options.block_size = FLAGS_block_size;
+
+    //cache member
+    options.member_id = FLAGS_member_id;
+    options.ip = FLAGS_cache_member_ip;
+    options.port = FLAGS_cache_member_port;
+    options.group_name = FLAGS_group_name;
+    options.weight = FLAGS_weight;
 
     auto& s3_info = options.s3_info;
     s3_info.ak = FLAGS_s3_ak;

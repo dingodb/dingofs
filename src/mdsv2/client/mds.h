@@ -131,6 +131,25 @@ using pb::mdsv2::JoinFsResponse;
 using pb::mdsv2::QuitFsRequest;
 using pb::mdsv2::QuitFsResponse;
 
+//cache member
+using pb::mdsv2::JoinCacheGroupRequest;
+using pb::mdsv2::JoinCacheGroupResponse;
+
+using pb::mdsv2::LeaveCacheGroupRequest;
+using pb::mdsv2::LeaveCacheGroupResponse;
+
+using pb::mdsv2::ListGroupsRequest;
+using pb::mdsv2::ListGroupsResponse;
+
+using pb::mdsv2::ReweightMemberRequest;
+using pb::mdsv2::ReweightMemberResponse;
+
+using pb::mdsv2::ListMembersRequest;
+using pb::mdsv2::ListMembersResponse;
+
+using pb::mdsv2::UnLockMemberRequest;
+using pb::mdsv2::UnLockMemberResponse;
+
 class MDSClient {
  public:
   MDSClient(uint32_t fs_id);
@@ -205,6 +224,14 @@ class MDSClient {
   JoinFsResponse JoinFs(const std::string& fs_name, uint32_t fs_id, const std::vector<int64_t>& mds_ids);
   QuitFsResponse QuitFs(const std::string& fs_name, uint32_t fs_id, const std::vector<int64_t>& mds_ids);
 
+  //cache member operations
+  JoinCacheGroupResponse JoinCacheGroup(const std::string& member_id, const std::string& ip, uint32_t port, const std::string& group_name, uint32_t weight);
+  LeaveCacheGroupResponse LeaveCacheGroup(const std::string& member_id, const std::string& ip, uint32_t port, const std::string& group_name);
+  ListGroupsResponse ListGroups();
+  ReweightMemberResponse ReweightMember(const std::string& member_id, const std::string& ip, uint32_t port, uint32_t weight);
+  ListMembersResponse ListMembers(const std::string& group_name);
+  UnLockMemberResponse UnlockMember(const std::string& member_id, const std::string& ip, uint32_t port);
+
  private:
   uint32_t fs_id_{0};
   uint64_t epoch_{0};
@@ -233,6 +260,13 @@ class MdsCommandRunner {
     std::string fs_partition_type;
     uint32_t chunk_size;
     uint32_t block_size;
+
+    //cache member
+    std::string member_id;
+    std::string ip;
+    uint32_t port;
+    std::string group_name;
+    uint32_t weight;
 
     S3Info s3_info;
   };

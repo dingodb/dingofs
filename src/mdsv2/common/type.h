@@ -42,6 +42,7 @@ using FsStatsDataEntry = pb::mdsv2::FsStatsData;
 using PartitionPolicy = pb::mdsv2::PartitionPolicy;
 using FsOpLog = pb::mdsv2::FsOpLog;
 using FileType = pb::mdsv2::FileType;
+using CacheMemberEntry = pb::mdsv2::CacheGroupMember;
 
 struct Range {
   std::string start;

@@ -43,6 +43,8 @@ class MetaCodec {
   static Range GetHeartbeatMdsRange();
   // format: ${prefix} kTableMeta kMetaHeartbeat kRoleClient
   static Range GetHeartbeatClientRange();
+  // format: ${prefix} kTableMeta kMetaHeartbeat KRoleCacheMember
+  static Range GetHeartbeatCacheMemberRange();
 
   // format: ${prefix} kTableMeta kMetaFs
   static Range GetFsRange();
@@ -94,16 +96,22 @@ class MetaCodec {
 
   // heartbeat(mds) format: ${prefix} kTableMeta kMetaHeartbeat kRoleMds {mds_id}
   // heartbeat(client) format: ${prefix} kTableMeta kMetaHeartbeat kRoleClient {client_id}
+  // heartbeat(client) format: ${prefix} kTableMeta kMetaHeartbeat kRoleCacheMember {member_id}
   static bool IsMdsHeartbeatKey(const std::string& key);
   static bool IsClientHeartbeatKey(const std::string& key);
+  static bool IsCacheMemberHeartbeatKey(const std::string& key);
   static std::string EncodeHeartbeatKey(int64_t mds_id);
   static std::string EncodeHeartbeatKey(const std::string& client_id);
+  static std::string EncodeHeartbeatCacheMemberKey(const std::string& member_id);
   static void DecodeHeartbeatKey(const std::string& key, int64_t& mds_id);
   static void DecodeHeartbeatKey(const std::string& key, std::string& client_id);
+  static void DecodeHeartbeatCacheMemberKey(const std::string& key, std::string& member_id);
   static std::string EncodeHeartbeatValue(const MdsEntry& mds);
   static std::string EncodeHeartbeatValue(const ClientEntry& client);
+  static std::string EncodeHeartbeatValue(const CacheMemberEntry& cache_member);
   static MdsEntry DecodeHeartbeatMdsValue(const std::string& value);
   static ClientEntry DecodeHeartbeatClientValue(const std::string& value);
+  static CacheMemberEntry DecodeHeartbeatCacheMemberValue(const std::string& value);
 
   // fs format: ${prefix} kTableMeta kMetaFs {name}
   static bool IsFsKey(const std::string& key);

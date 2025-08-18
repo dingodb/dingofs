@@ -121,6 +121,11 @@ class Operation {
     KGetDentry = 92,
 
     kImportKV = 100,
+
+    kUpsertCacheMember = 105,
+    kDeleteCacheMember = 106,
+    kScanCacheMember = 107,
+    KGetCacheMember = 108,
   };
 
   const char* OpName() const;
@@ -1856,6 +1861,102 @@ class OperationProcessor : public std::enable_shared_from_this<OperationProcesso
 
   // persistence store
   KVStorageSPtr kv_storage_;
+};
+
+class UpsertCacheMemberOperation : public Operation {
+ public:
+  using HandlerType = std::function<Status(CacheMemberEntry&, const Status&)>;
+  UpsertCacheMemberOperation(Trace& trace, const std::string& cache_member_id, HandlerType handler)
+      : Operation(trace), cache_member_id_(cache_member_id), handler_(handler) {};
+  ~UpsertCacheMemberOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kUpsertCacheMember; }
+
+  uint32_t GetFsId() const override { return 0; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  std::string cache_member_id_;
+  HandlerType handler_;
+};
+
+class DeleteCacheMemberOperation : public Operation {
+ public:
+  DeleteCacheMemberOperation(Trace& trace, const std::string& cache_member_id)
+      : Operation(trace), cache_member_id_(cache_member_id) {};
+  ~DeleteCacheMemberOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kDeleteCacheMember; }
+
+  uint32_t GetFsId() const override { return 0; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  std::string cache_member_id_;
+};
+
+class ScanCacheMemberOperation : public Operation {
+ public:
+  ScanCacheMemberOperation(Trace& trace) : Operation(trace) {};
+  ~ScanCacheMemberOperation() override = default;
+
+  struct Result : public Operation::Result {
+    std::vector<CacheMemberEntry> cache_member_entries;
+  };
+
+  OpType GetOpType() const override { return OpType::kScanCacheMember; }
+
+  uint32_t GetFsId() const override { return 0; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+  template <int size = 0>
+  Result& GetResult() {
+    auto& result = Operation::GetResult();
+    result_.status = result.status;
+    result_.attr = std::move(result.attr);
+
+    return result_;
+  }
+
+ private:
+  Result result_;
+};
+
+class GetCacheMemberOperation : public Operation {
+ public:
+  GetCacheMemberOperation(Trace& trace, const std::string& cache_member_id)
+      : Operation(trace), cache_member_id_(cache_member_id) {};
+  ~GetCacheMemberOperation() override = default;
+
+  struct Result : public Operation::Result {
+    CacheMemberEntry cache_member;
+  };
+
+  OpType GetOpType() const override { return OpType::KGetCacheMember; }
+
+  uint32_t GetFsId() const override { return 0; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+  template <int size = 0>
+  Result& GetResult() {
+    auto& result = Operation::GetResult();
+    result_.status = result.status;
+    result_.attr = std::move(result.attr);
+
+    return result_;
+  }
+
+ private:
+  std::string cache_member_id_;
+  Result result_;
 };
 
 }  // namespace mdsv2

@@ -44,11 +44,14 @@ class Heartbeat {
   void SendHeartbeat();
   Status SendHeartbeat(Context& ctx, MdsEntry& mds);
   Status SendHeartbeat(Context& ctx, ClientEntry& client);
+  Status SendHeartbeat(Context& ctx, CacheMemberEntry& heartbeat_cache_member);
 
   Status GetMDSList(Context& ctx, std::vector<MdsEntry>& mdses);
   Status GetMDSList(std::vector<MDSMeta>& mdses);
 
   Status GetClientList(std::vector<ClientEntry>& clients);
+
+  Status GetCacheMemberList(std::vector<CacheMemberEntry>& cache_members);
 
   Status CleanClient(const std::string& client_id);
 

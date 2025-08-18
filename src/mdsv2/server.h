@@ -24,6 +24,7 @@
 #include "mdsv2/background/heartbeat.h"
 #include "mdsv2/background/monitor.h"
 #include "mdsv2/background/quota_sync.h"
+#include "mdsv2/cachegroup/member_manager.h"
 #include "mdsv2/common/crontab.h"
 #include "mdsv2/coordinator/coordinator_client.h"
 #include "mdsv2/filesystem/filesystem.h"

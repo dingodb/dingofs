@@ -16,6 +16,7 @@
 
 #include <cstdint>
 #include <map>
+#include <regex>
 #include <string>
 #include <utility>
 #include <vector>
@@ -34,12 +35,14 @@
 #include "mdsv2/server.h"
 #include "mdsv2/service/service_helper.h"
 #include "mdsv2/statistics/fs_stat.h"
+#include "utils/string.h"
 
 namespace dingofs {
 namespace mdsv2 {
 
 const std::string kReadWorkerSetName = "READ_WORKER_SET";
 const std::string kWriteWorkerSetName = "WRITE_WORKER_SET";
+static const int64_t kMaxGroupNameLength = 255;
 
 DEFINE_string(mds_service_worker_set_type, "execq", "worker set type, execq or simple");
 DEFINE_validator(mds_service_worker_set_type,
@@ -66,8 +69,12 @@ static Status ValidateRequest(T* request, FileSystemSPtr file_system) {
   return Status::OK();
 }
 
-MDSServiceImpl::MDSServiceImpl(FileSystemSetSPtr file_system_set, GcProcessorSPtr gc_processor, FsStatsUPtr fs_stat)
-    : file_system_set_(file_system_set), gc_processor_(gc_processor), fs_stat_(std::move(fs_stat)) {}
+MDSServiceImpl::MDSServiceImpl(FileSystemSetSPtr file_system_set, GcProcessorSPtr gc_processor, FsStatsUPtr fs_stat,
+                               CacheGroupMemberManagerSPtr cache_group_manager)
+    : file_system_set_(file_system_set),
+      gc_processor_(gc_processor),
+      fs_stat_(std::move(fs_stat)),
+      cache_group_manager_(cache_group_manager) {}
 
 bool MDSServiceImpl::Init() {
   read_worker_set_ = FLAGS_mds_service_worker_set_type == "simple"
@@ -122,6 +129,10 @@ void MDSServiceImpl::DoHeartbeat(google::protobuf::RpcController* controller,
   } else if (request->role() == pb::mdsv2::ROLE_CLIENT) {
     auto client = request->client();
     status = heartbeat->SendHeartbeat(ctx, client);
+
+  } else if (request->role() == pb::mdsv2::ROLE_CACHE_MEMBER) {
+    auto cache_member = request->cache_group_member();
+    status = heartbeat->SendHeartbeat(ctx, cache_member);
 
   } else {
     return ServiceHelper::SetError(response->mutable_error(), pb::error::EILLEGAL_PARAMTETER, "role is illegal");
@@ -2624,6 +2635,281 @@ void MDSServiceImpl::StopMds(google::protobuf::RpcController* controller, const 
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(svr_done);
+}
+
+// cache group member
+static bool IsUuidRegex(const std::string member_id) {
+  static const std::regex uuid_pattern(
+      "^[0-9a-fA-F]{8}-"
+      "[0-9a-fA-F]{4}-"
+      "[0-9a-fA-F]{4}-"
+      "[0-9a-fA-F]{4}-"
+      "[0-9a-fA-F]{12}$");
+  return std::regex_match(member_id, uuid_pattern);
+}
+
+static Status CheckGroupName(const std::string& group_name) {
+  if (group_name.empty()) {
+    return Status(pb::error::Errno::EILLEGAL_PARAMTETER, "group name is empty");
+  } else if (group_name.size() > kMaxGroupNameLength) {
+    return Status(pb::error::Errno::EILLEGAL_PARAMTETER, "group name is too long");
+  }
+  return Status::OK();
+}
+
+void MDSServiceImpl::JoinCacheGroup(google::protobuf::RpcController* controller,
+                                    const pb::mdsv2::JoinCacheGroupRequest* request,
+                                    pb::mdsv2::JoinCacheGroupResponse* response, google::protobuf::Closure* done) {
+  auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  auto validate_fn = [&]() -> Status {
+    if (!IsUuidRegex(request->member_id())) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "member_id is not uuid");
+    }
+    return CheckGroupName(request->group_name());
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  // Run in queue.
+  auto task = std::make_shared<ServiceTask>(
+      [this, controller, request, response, svr_done]() { DoJoinCacheGroup(controller, request, response, svr_done); });
+
+  bool ret = write_worker_set_->Execute(task);
+  if (BAIDU_UNLIKELY(!ret)) {
+    brpc::ClosureGuard done_guard(svr_done);
+    ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
+                            "WorkerSet queue is full, please wait and retry");
+  }
+}
+
+void MDSServiceImpl::LeaveCacheGroup(google::protobuf::RpcController* controller,
+                                     const pb::mdsv2::LeaveCacheGroupRequest* request,
+                                     pb::mdsv2::LeaveCacheGroupResponse* response, google::protobuf::Closure* done) {
+  auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  auto validate_fn = [&]() -> Status {
+    if (!IsUuidRegex(request->member_id())) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "member_id is not uuid");
+    }
+    return CheckGroupName(request->group_name());
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  // Run in queue.
+  auto task = std::make_shared<ServiceTask>([this, controller, request, response, svr_done]() {
+    DoLeaveCacheGroup(controller, request, response, svr_done);
+  });
+
+  bool ret = write_worker_set_->Execute(task);
+  if (BAIDU_UNLIKELY(!ret)) {
+    brpc::ClosureGuard done_guard(svr_done);
+    ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
+                            "WorkerSet queue is full, please wait and retry");
+  }
+}
+
+void MDSServiceImpl::ListGroups(google::protobuf::RpcController* controller,
+                                const pb::mdsv2::ListGroupsRequest* request, pb::mdsv2::ListGroupsResponse* response,
+                                google::protobuf::Closure* done) {
+  auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // Run in queue.
+  auto task = std::make_shared<ServiceTask>(
+      [this, controller, request, response, svr_done]() { DoListGroups(controller, request, response, svr_done); });
+
+  bool ret = write_worker_set_->Execute(task);
+  if (BAIDU_UNLIKELY(!ret)) {
+    brpc::ClosureGuard done_guard(svr_done);
+    ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
+                            "WorkerSet queue is full, please wait and retry");
+  }
+}
+
+void MDSServiceImpl::ReweightMember(google::protobuf::RpcController* controller,
+                                    const pb::mdsv2::ReweightMemberRequest* request,
+                                    pb::mdsv2::ReweightMemberResponse* response, google::protobuf::Closure* done) {
+  auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  auto validate_fn = [&]() -> Status {
+    if (!IsUuidRegex(request->member_id())) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "member_id is not uuid");
+    }
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  // Run in queue.
+  auto task = std::make_shared<ServiceTask>(
+      [this, controller, request, response, svr_done]() { DoReweightMember(controller, request, response, svr_done); });
+
+  bool ret = write_worker_set_->Execute(task);
+  if (BAIDU_UNLIKELY(!ret)) {
+    brpc::ClosureGuard done_guard(svr_done);
+    ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
+                            "WorkerSet queue is full, please wait and retry");
+  }
+}
+
+void MDSServiceImpl::ListMembers(google::protobuf::RpcController* controller,
+                                 const pb::mdsv2::ListMembersRequest* request, pb::mdsv2::ListMembersResponse* response,
+                                 google::protobuf::Closure* done) {
+  auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // Run in queue.
+  auto task = std::make_shared<ServiceTask>(
+      [this, controller, request, response, svr_done]() { DoListMembers(controller, request, response, svr_done); });
+
+  bool ret = write_worker_set_->Execute(task);
+  if (BAIDU_UNLIKELY(!ret)) {
+    brpc::ClosureGuard done_guard(svr_done);
+    ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
+                            "WorkerSet queue is full, please wait and retry");
+  }
+}
+
+void MDSServiceImpl::UnlockMember(google::protobuf::RpcController* controller,
+                                  const pb::mdsv2::UnLockMemberRequest* request,
+                                  pb::mdsv2::UnLockMemberResponse* response, google::protobuf::Closure* done) {
+  auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  auto validate_fn = [&]() -> Status {
+    if (!IsUuidRegex(request->member_id())) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "member_id is not uuid");
+    }
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  // Run in queue.
+  auto task = std::make_shared<ServiceTask>(
+      [this, controller, request, response, svr_done]() { DoUnlockMember(controller, request, response, svr_done); });
+
+  bool ret = write_worker_set_->Execute(task);
+  if (BAIDU_UNLIKELY(!ret)) {
+    brpc::ClosureGuard done_guard(svr_done);
+    ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
+                            "WorkerSet queue is full, please wait and retry");
+  }
+}
+
+void MDSServiceImpl::DoJoinCacheGroup(google::protobuf::RpcController* controller,
+                                      const pb::mdsv2::JoinCacheGroupRequest* request,
+                                      pb::mdsv2::JoinCacheGroupResponse* response, TraceClosure* done) {
+  brpc::Controller* cntl = (brpc::Controller*)controller;
+  brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
+
+  Context ctx;
+  auto status = cache_group_manager_->JoinCacheGroup(ctx, request->group_name(), request->ip(), request->port(),
+                                                     request->weight(), request->member_id());
+  DINGO_LOG(ERROR) << fmt::format("yjddebug join_group_req:{}, join_group_response:{}", request->DebugString(),
+                                  response->DebugString());
+
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+}
+
+void MDSServiceImpl::DoLeaveCacheGroup(google::protobuf::RpcController* controller,
+                                       const pb::mdsv2::LeaveCacheGroupRequest* request,
+                                       pb::mdsv2::LeaveCacheGroupResponse* response, TraceClosure* done) {
+  brpc::Controller* cntl = (brpc::Controller*)controller;
+  brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
+
+  Context ctx;
+  auto status = cache_group_manager_->LeaveCacheGroup(ctx, request->group_name(), request->member_id(), request->ip(),
+                                                      request->port());
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+}
+
+void MDSServiceImpl::DoListGroups(google::protobuf::RpcController* controller,
+                                  const pb::mdsv2::ListGroupsRequest* request, pb::mdsv2::ListGroupsResponse* response,
+                                  TraceClosure* done) {
+  brpc::Controller* cntl = (brpc::Controller*)controller;
+  brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
+
+  Context ctx;
+  std::unordered_set<std::string> groups;
+  auto status = cache_group_manager_->ListGroups(ctx, groups);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+  *response->mutable_group_names() = {groups.begin(), groups.end()};
+}
+
+void MDSServiceImpl::DoReweightMember(google::protobuf::RpcController* controller,
+                                      const pb::mdsv2::ReweightMemberRequest* request,
+                                      pb::mdsv2::ReweightMemberResponse* response, TraceClosure* done) {
+  brpc::Controller* cntl = (brpc::Controller*)controller;
+  brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
+
+  Context ctx;
+  auto status = cache_group_manager_->ReweightMember(ctx, request->member_id(), request->ip(), request->port(),
+                                                     request->weight());
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+}
+
+void MDSServiceImpl::DoListMembers(google::protobuf::RpcController* controller,
+                                   const pb::mdsv2::ListMembersRequest* request,
+                                   pb::mdsv2::ListMembersResponse* response, TraceClosure* done) {
+  brpc::Controller* cntl = (brpc::Controller*)controller;
+  brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
+
+  Context ctx;
+  std::vector<CacheMemberEntry> members;
+  auto status = cache_group_manager_->ListMembers(ctx, request->group_name(), members);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+  *response->mutable_members() = {members.begin(), members.end()};
+}
+
+void MDSServiceImpl::DoUnlockMember(google::protobuf::RpcController* controller,
+                                    const pb::mdsv2::UnLockMemberRequest* request,
+                                    pb::mdsv2::UnLockMemberResponse* response, TraceClosure* done) {
+  brpc::Controller* cntl = (brpc::Controller*)controller;
+  brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
+
+  Context ctx;
+  auto status = cache_group_manager_->UnlockMember(ctx, request->member_id(), request->ip(), request->port());
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
 }
 
 }  // namespace mdsv2

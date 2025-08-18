@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "fmt/format.h"
+#include "mdsv2/cachegroup/member_manager.h"
 #include "mdsv2/common/context.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
@@ -101,6 +102,34 @@ Status Heartbeat::SendHeartbeat(Context& ctx, ClientEntry& client) {
   return status;
 }
 
+Status Heartbeat::SendHeartbeat(Context& ctx, CacheMemberEntry& heartbeat_cache_member) {
+  auto ip = heartbeat_cache_member.ip();
+  auto port = heartbeat_cache_member.port();
+  auto handler = [ip, port](CacheMemberEntry& cache_member, const Status& status) -> Status {
+    if (!status.ok()) {
+      return status;
+    }
+    if (ip != cache_member.ip() || port != cache_member.port()) {
+      return Status(pb::error::Errno::ENOT_MATCH, "cache member not match");
+    }
+    cache_member.set_last_online_time_ms(Helper::TimestampMs());
+    return Status::OK();
+  };
+
+  DINGO_LOG(DEBUG) << fmt::format("[heartbeat] heartbeat_cache_member {}.", heartbeat_cache_member.ShortDebugString());
+
+  auto& trace = ctx.GetTrace();
+  UpsertCacheMemberOperation operation(trace, heartbeat_cache_member.member_id(), handler);
+
+  auto status = operation_processor_->RunAlone(&operation);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[heartbeat] send fail, heartbeat_cache_member({}) error({}).",
+                                    heartbeat_cache_member.ShortDebugString(), status.error_str());
+  }
+
+  return status;
+}
+
 Status Heartbeat::GetMDSList(Context& ctx, std::vector<MdsEntry>& mdses) {
   auto& trace = ctx.GetTrace();
   ScanMdsOperation operation(trace);
@@ -160,6 +189,22 @@ Status Heartbeat::CleanClient(const std::string& client_id) {
   DeleteClientOperation operation(trace, client_id);
 
   return operation_processor_->RunAlone(&operation);
+}
+
+Status Heartbeat::GetCacheMemberList(std::vector<CacheMemberEntry>& cache_members) {
+  Trace trace;
+  ScanCacheMemberOperation operation(trace);
+
+  auto status = operation_processor_->RunAlone(&operation);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[heartbeat] get cache member list fail, error({}).", status.error_str());
+    return status;
+  }
+
+  auto& result = operation.GetResult();
+  cache_members = std::move(result.cache_member_entries);
+
+  return Status::OK();
 }
 
 }  // namespace mdsv2

@@ -18,6 +18,7 @@
 #include <cstdint>
 
 #include "dingofs/mdsv2.pb.h"
+#include "mdsv2/cachegroup/member_manager.h"
 #include "mdsv2/common/runnable.h"
 #include "mdsv2/filesystem/filesystem.h"
 #include "mdsv2/service/service_helper.h"
@@ -31,14 +32,15 @@ using MDSServiceImplUPtr = std::unique_ptr<MDSServiceImpl>;
 
 class MDSServiceImpl : public pb::mdsv2::MDSService {
  public:
-  MDSServiceImpl(FileSystemSetSPtr file_system, GcProcessorSPtr gc_processor, FsStatsUPtr fs_stat);
+  MDSServiceImpl(FileSystemSetSPtr file_system, GcProcessorSPtr gc_processor, FsStatsUPtr fs_stat,
+                 CacheGroupMemberManagerSPtr cache_group_manager);
   ~MDSServiceImpl() override = default;
 
   MDSServiceImpl(const MDSServiceImpl&) = delete;
   MDSServiceImpl& operator=(const MDSServiceImpl&) = delete;
 
-  static MDSServiceImplUPtr New(FileSystemSetSPtr file_system, GcProcessorSPtr gc_processor, FsStatsUPtr fs_stat) {
-    return std::make_unique<MDSServiceImpl>(file_system, gc_processor, std::move(fs_stat));
+  static MDSServiceImplUPtr New(FileSystemSetSPtr file_system, GcProcessorSPtr gc_processor, FsStatsUPtr fs_stat, CacheGroupMemberManagerSPtr cache_group_manager) {
+    return std::make_unique<MDSServiceImpl>(file_system, gc_processor, std::move(fs_stat), cache_group_manager);
   }
 
   bool Init();
@@ -195,6 +197,25 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
   void StopMds(google::protobuf::RpcController* controller, const pb::mdsv2::StopMdsRequest* request,
                pb::mdsv2::StopMdsResponse* response, google::protobuf::Closure* done) override;
 
+  // cache group member interface
+  void JoinCacheGroup(google::protobuf::RpcController* controller, const pb::mdsv2::JoinCacheGroupRequest* request,
+                      pb::mdsv2::JoinCacheGroupResponse* response, google::protobuf::Closure* done) override;
+
+  void LeaveCacheGroup(google::protobuf::RpcController* controller, const pb::mdsv2::LeaveCacheGroupRequest* request,
+                       pb::mdsv2::LeaveCacheGroupResponse* response, google::protobuf::Closure* done) override;
+
+  void ListGroups(google::protobuf::RpcController* controller, const pb::mdsv2::ListGroupsRequest* request,
+                  pb::mdsv2::ListGroupsResponse* response, google::protobuf::Closure* done) override;
+
+  void ReweightMember(google::protobuf::RpcController* controller, const pb::mdsv2::ReweightMemberRequest* request,
+                      pb::mdsv2::ReweightMemberResponse* response, google::protobuf::Closure* done) override;
+
+  void ListMembers(google::protobuf::RpcController* controller, const pb::mdsv2::ListMembersRequest* request,
+                   pb::mdsv2::ListMembersResponse* response, google::protobuf::Closure* done) override;
+
+  void UnlockMember(google::protobuf::RpcController* controller, const pb::mdsv2::UnLockMemberRequest* request,
+                    pb::mdsv2::UnLockMemberResponse* response, google::protobuf::Closure* done) override;
+
  private:
   friend class DebugServiceImpl;
   Status GenFsId(int64_t& fs_id);
@@ -329,6 +350,25 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
                              const pb::mdsv2::GetFsPerSecondStatsRequest* request,
                              pb::mdsv2::GetFsPerSecondStatsResponse* response, TraceClosure* done);
 
+  // cache group member interface
+  void DoJoinCacheGroup(google::protobuf::RpcController* controller, const pb::mdsv2::JoinCacheGroupRequest* request,
+                        pb::mdsv2::JoinCacheGroupResponse* response, TraceClosure* done);
+
+  void DoLeaveCacheGroup(google::protobuf::RpcController* controller, const pb::mdsv2::LeaveCacheGroupRequest* request,
+                         pb::mdsv2::LeaveCacheGroupResponse* response, TraceClosure* done);
+
+  void DoListGroups(google::protobuf::RpcController* controller, const pb::mdsv2::ListGroupsRequest* request,
+                    pb::mdsv2::ListGroupsResponse* response, TraceClosure* done);
+
+  void DoReweightMember(google::protobuf::RpcController* controller, const pb::mdsv2::ReweightMemberRequest* request,
+                        pb::mdsv2::ReweightMemberResponse* response, TraceClosure* done);
+
+  void DoListMembers(google::protobuf::RpcController* controller, const pb::mdsv2::ListMembersRequest* request,
+                     pb::mdsv2::ListMembersResponse* response, TraceClosure* done);
+
+  void DoUnlockMember(google::protobuf::RpcController* controller, const pb::mdsv2::UnLockMemberRequest* request,
+                      pb::mdsv2::UnLockMemberResponse* response, TraceClosure* done);
+
   // file system set
   FileSystemSetSPtr file_system_set_;
 
@@ -337,6 +377,9 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
 
   // fs stats
   FsStatsUPtr fs_stat_;
+
+  // cache group member
+  CacheGroupMemberManagerSPtr cache_group_manager_;
 
   // Run service request.
   WorkerSetUPtr read_worker_set_;

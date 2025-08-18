@@ -39,12 +39,14 @@
 #include "mdsv2/filesystem/fs_utils.h"
 #include "mdsv2/server.h"
 #include "mdsv2/storage/dingodb_storage.h"
+#include "utils/string.h"
 
 namespace dingofs {
 namespace mdsv2 {
 
 DECLARE_uint32(mds_heartbeat_mds_offline_period_time_ms);
 DECLARE_uint32(mds_heartbeat_client_offline_period_ms);
+DECLARE_uint32(cache_member_heartbeat_offline_timeout_s);
 
 static std::string RenderHead(const std::string& title) {
   butil::IOBufBuilder os;
@@ -306,6 +308,48 @@ static void RenderClientList(const std::vector<ClientEntry>& clients, butil::IOB
   os << "</div>";
 }
 
+static void RenderCacheMemberList(const std::vector<CacheMemberEntry>& cache_members, butil::IOBufBuilder& os) {
+  os << R"(<div style="margin:12px;margin-top:64px;font-size:smaller;">)";
+  os << fmt::format(R"(<h3>Cache Member[{}]</h3>)", cache_members.size());
+  os << "<td>" << fmt::format("Available UUID: {}", utils::GenUuid()) << "</td>";
+  os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
+  os << "<tr>";
+  os << "<th>Member_ID</th>";
+  os << "<th>Host</th>";
+  os << "<th>Group</th>";
+  os << "<th>Weight</th>";
+  os << "<th>Locked</th>";
+  os << "<th>Last Online Time</th>";
+  os << "<th>Online</th>";
+  os << "</tr>";
+
+  int64_t now_ms = Helper::TimestampMs();
+
+  for (const auto& member : cache_members) {
+    os << "<tr>";
+    os << "<td>" << member.member_id() << "</td>";
+    os << "<td>" << fmt::format("{}:{}", member.ip(), member.port()) << "</td>";
+    os << "<td>" << member.group_name() << "</td>";
+    os << "<td>" << member.weight() << "</td>";
+    if (member.locked()) {
+      os << "<td>YES</td>";
+    } else {
+      os << "<td>NO</td>";
+    }
+    os << "<td>" << Helper::FormatMsTime(member.last_online_time_ms()) << "</td>";
+    if (member.last_online_time_ms() + FLAGS_cache_member_heartbeat_offline_timeout_s * 1000 < now_ms) {
+      os << R"(<td style="color:red">NO</td>)";
+    } else {
+      os << "<td>YES</td>";
+    }
+
+    os << "</tr>";
+  }
+
+  os << "</table>";
+  os << "</div>";
+}
+
 static void RenderDistributedLock(const std::vector<StoreDistributionLock::LockEntry>& lock_entries,
                                   butil::IOBufBuilder& os) {
   os << R"(<div style="margin:12px;margin-top:64px;font-size:smaller;">)";
@@ -413,8 +457,23 @@ void FsStatServiceImpl::RenderMainPage(const brpc::Server* server, FileSystemSet
     RenderMdsList(mdses, os);
   }
 
+  // cache member stats
+  std::vector<CacheMemberEntry> cache_members;
+  status = heartbeat->GetCacheMemberList(cache_members);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[mdsstat] get cache member list fail, error({}).", status.error_str());
+    os << fmt::format(R"(<div style="color:red;">get cache member list fail, error({}).</div>)", status.error_str());
+
+  } else {
+    // sort by last_online_time
+    sort(cache_members.begin(), cache_members.end(), [](const CacheMemberEntry& a, const CacheMemberEntry& b) {
+      return a.last_online_time_ms() > b.last_online_time_ms();
+    });
+
+    RenderCacheMemberList(cache_members, os);
+  }
+
   // client stats
-  // auto heartbeat = Server::GetInstance().GetHeartbeat();
   std::vector<ClientEntry> clients;
   status = heartbeat->GetClientList(clients);
   if (!status.ok()) {

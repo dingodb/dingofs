@@ -320,6 +320,15 @@ const char* Operation::OpName() const {
     case OpType::kImportKV:
       return "ImportKV";
 
+    case OpType::kUpsertCacheMember:
+      return "UpsertCacheMember";
+
+    case OpType::kDeleteCacheMember:
+      return "DeleteCacheMember";
+
+    case OpType::kScanCacheMember:
+      return "ScanCacheMember";
+
     default:
       return "UnknownOperation";
   }
@@ -1765,6 +1774,53 @@ Status ScanClientOperation::Run(TxnUPtr& txn) {
     result_.client_entries.push_back(client);
     return true;
   });
+}
+
+Status UpsertCacheMemberOperation::Run(TxnUPtr& txn) {
+  std::string value;
+  CacheMemberEntry cache_member;
+  auto status = txn->Get(MetaCodec::EncodeHeartbeatCacheMemberKey(cache_member_id_), value);
+
+  if (status.ok()) {
+    cache_member = MetaCodec::DecodeHeartbeatCacheMemberValue(value);
+  }
+
+  status = handler_(cache_member, status);
+  if (!status.ok()) {
+    return status;
+  }
+
+  txn->Put(MetaCodec::EncodeHeartbeatCacheMemberKey(cache_member_id_), MetaCodec::EncodeHeartbeatValue(cache_member));
+
+  return Status::OK();
+}
+
+Status DeleteCacheMemberOperation::Run(TxnUPtr& txn) {
+  txn->Delete(MetaCodec::EncodeHeartbeatCacheMemberKey(cache_member_id_));
+
+  return Status::OK();
+}
+
+Status ScanCacheMemberOperation::Run(TxnUPtr& txn) {
+  Range range = MetaCodec::GetHeartbeatCacheMemberRange();
+
+  return txn->Scan(range, [&](const std::string& key, const std::string& value) -> bool {
+    if (!MetaCodec::IsCacheMemberHeartbeatKey(key)) return true;
+
+    CacheMemberEntry cache_member = MetaCodec::DecodeHeartbeatCacheMemberValue(value);
+    result_.cache_member_entries.push_back(cache_member);
+    return true;
+  });
+}
+
+Status GetCacheMemberOperation::Run(TxnUPtr& txn) {
+  std::string value;
+  auto status = txn->Get(MetaCodec::EncodeHeartbeatCacheMemberKey(cache_member_id_), value);
+  if (!status.ok()) return status;
+
+  result_.cache_member = MetaCodec::DecodeHeartbeatCacheMemberValue(value);
+
+  return Status::OK();
 }
 
 Status GetFileSessionOperation::Run(TxnUPtr& txn) {

@@ -45,7 +45,7 @@ enum TableID : unsigned char {
 // meta type:
 //      kMetaLock: lock, used for distributed lock
 //      kMetaAutoIncrementID: auto increment id, used for fs id, ino
-//      kMetaHeartbeat: heartbeat, used for mds/client heartbeat
+//      kMetaHeartbeat: heartbeat, used for mds/client/cache_member heartbeat
 //      kMetaFs: fs info, used for filesystem info
 //      kMetaFsQuota: fs quota, used for filesystem quota
 //      kMetaFsDirQuota: directory quota, used for directory quota
@@ -67,6 +67,7 @@ enum MetaType : unsigned char {
   kMetaFsDelFile = 19,
   kMetaFsStats = 21,
   kMetaFsOpLog = 23,
+  KMetaCacheMember = 25,
 };
 
 // inode meta type:
@@ -190,6 +191,24 @@ Range MetaCodec::GetHeartbeatClientRange() {
   end.push_back(kTableMeta);
   end.push_back(kMetaHeartbeat);
   end.push_back(pb::mdsv2::ROLE_CLIENT + 1);
+
+  return std::move(range);
+}
+
+Range MetaCodec::GetHeartbeatCacheMemberRange() {
+  Range range;
+
+  auto& start = range.start;
+  start = kPrefix;
+  start.push_back(kTableMeta);
+  start.push_back(kMetaHeartbeat);
+  start.push_back(pb::mdsv2::ROLE_CACHE_MEMBER);
+
+  auto& end = range.end;
+  end = kPrefix;
+  end.push_back(kTableMeta);
+  end.push_back(kMetaHeartbeat);
+  end.push_back(pb::mdsv2::ROLE_CACHE_MEMBER + 1);
 
   return std::move(range);
 }
@@ -561,8 +580,10 @@ void MetaCodec::DecodeAutoIncrementIDValue(const std::string& value, uint64_t& i
 
 // heartbeat(mds) format: ${prefix} kTableMeta kMetaHeartbeat kRoleMds {mds_id}
 // heartbeat(client) format: ${prefix} kTableMeta kMetaHeartbeat kRoleClient {client_id}
+// heartbeat(cache_member) format: ${prefix} kTableMeta kMetaHeartbeat KROLE_CACHE_MEMBER {member_id}
 static const uint32_t kHeartbeatKeyMdsSize = kPrefixSize + 1 + 1 + 1 + 8;
 static const uint32_t kHeartbeatClientKeySize = kPrefixSize + 1 + 1 + 1 + 36;
+static const uint32_t kHeartbeatCacheMemberKeySize = kPrefixSize + 1 + 1 + 1 + 36;
 bool MetaCodec::IsMdsHeartbeatKey(const std::string& key) {
   if (key.size() != kHeartbeatKeyMdsSize) {
     return false;
@@ -583,6 +604,19 @@ bool MetaCodec::IsClientHeartbeatKey(const std::string& key) {
 
   if (key.at(kPrefixSize) != kTableMeta || key.at(kPrefixSize + 1) != kMetaHeartbeat ||
       key.at(kPrefixSize + 2) != pb::mdsv2::ROLE_CLIENT) {
+    return false;
+  }
+
+  return true;
+}
+
+bool MetaCodec::IsCacheMemberHeartbeatKey(const std::string& key) {
+  if (key.size() != kHeartbeatCacheMemberKeySize) {
+    return false;
+  }
+
+  if (key.at(kPrefixSize) != kTableMeta || key.at(kPrefixSize + 1) != kMetaHeartbeat ||
+      key.at(kPrefixSize + 2) != pb::mdsv2::ROLE_CACHE_MEMBER) {
     return false;
   }
 
@@ -617,6 +651,21 @@ std::string MetaCodec::EncodeHeartbeatKey(const std::string& client_id) {
   return std::move(key);
 }
 
+std::string MetaCodec::EncodeHeartbeatCacheMemberKey(const std::string& member_id) {
+  CHECK(member_id.size() == 36) << fmt::format("member_id({}) length is invalid.", Helper::StringToHex(member_id));
+
+  std::string key;
+  key.reserve(kHeartbeatCacheMemberKeySize);
+
+  key.append(kPrefix);
+  key.push_back(kTableMeta);
+  key.push_back(kMetaHeartbeat);
+  key.push_back(pb::mdsv2::ROLE_CACHE_MEMBER);
+  key.append(member_id);
+
+  return std::move(key);
+}
+
 void MetaCodec::DecodeHeartbeatKey(const std::string& key, int64_t& mds_id) {
   CHECK(IsMdsHeartbeatKey(key)) << fmt::format("invalid mds heartbeat key({}).", Helper::StringToHex(key));
 
@@ -629,9 +678,20 @@ void MetaCodec::DecodeHeartbeatKey(const std::string& key, std::string& client_i
   client_id = key.substr(kPrefixSize + 1 + 1 + 1);
 }
 
+void MetaCodec::DecodeHeartbeatCacheMemberKey(const std::string& key, std::string& member_id) {
+  CHECK(IsCacheMemberHeartbeatKey(key)) << fmt::format("invalid cache_member heartbeat key({}).",
+                                                       Helper::StringToHex(key));
+
+  member_id = key.substr(kPrefixSize + 1 + 1 + 1);
+}
+
 std::string MetaCodec::EncodeHeartbeatValue(const MdsEntry& mds) { return mds.SerializeAsString(); }
 
 std::string MetaCodec::EncodeHeartbeatValue(const ClientEntry& client) { return client.SerializeAsString(); }
+
+std::string MetaCodec::EncodeHeartbeatValue(const CacheMemberEntry& cache_member) {
+  return cache_member.SerializeAsString();
+}
 
 MdsEntry MetaCodec::DecodeHeartbeatMdsValue(const std::string& value) {
   MdsEntry mds;
@@ -645,6 +705,13 @@ ClientEntry MetaCodec::DecodeHeartbeatClientValue(const std::string& value) {
   CHECK(client.ParseFromString(value)) << "parse client heartbeat value fail.";
 
   return std::move(client);
+}
+
+CacheMemberEntry MetaCodec::DecodeHeartbeatCacheMemberValue(const std::string& value) {
+  CacheMemberEntry cache_member;
+  CHECK(cache_member.ParseFromString(value)) << "parse cache_member heartbeat value fail.";
+
+  return std::move(cache_member);
 }
 
 // fs format: ${prefix} kTableMeta kMetaFs {name}
@@ -1251,6 +1318,14 @@ std::pair<std::string, std::string> MetaCodec::ParseMetaTableKey(const std::stri
 
         auto client_info = DecodeHeartbeatClientValue(value);
         value_desc = client_info.ShortDebugString();
+      } else if (role == pb::mdsv2::ROLE_CACHE_MEMBER) {
+        std::string member_id;
+        DecodeHeartbeatCacheMemberKey(key, member_id);
+
+        key_desc = fmt::format("{} kTableMeta kMetaHeartbeat kRoleCacheMember {}", kPrefix, member_id);
+
+        auto cache_member = DecodeHeartbeatCacheMemberValue(value);
+        value_desc = cache_member.ShortDebugString();
       }
 
     } break;

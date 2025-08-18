@@ -24,6 +24,7 @@
 #include "glog/logging.h"
 #include "mdsv2/background/fsinfo_sync.h"
 #include "mdsv2/background/heartbeat.h"
+#include "mdsv2/cachegroup/member_manager.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
 #include "mdsv2/common/version.h"
@@ -334,7 +335,11 @@ bool Server::InitService() {
   auto fs_stats = FsStats::New(operation_processor_);
   CHECK(fs_stats != nullptr) << "fsstats is nullptr.";
 
-  mds_service_ = MDSServiceImpl::New(file_system_set_, gc_processor_, std::move(fs_stats));
+  // cache group member
+  auto cache_group_member_manager = CacheGroupMemberManager::New(operation_processor_);
+  CHECK(cache_group_member_manager != nullptr) << "cache_group_member_manager is nullptr.";
+
+  mds_service_ = MDSServiceImpl::New(file_system_set_, gc_processor_, std::move(fs_stats), cache_group_member_manager);
   CHECK(mds_service_ != nullptr) << "new MDSServiceImpl fail.";
 
   if (!mds_service_->Init()) {
