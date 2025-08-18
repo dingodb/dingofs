@@ -19,6 +19,8 @@
 #include <absl/synchronization/blocking_counter.h>
 #include <glog/logging.h>
 
+#include <algorithm>
+#include <cmath>
 #include <vector>
 
 #include "client/const.h"
@@ -27,6 +29,7 @@
 #include "client/vfs/data/reader/reader_common.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "common/status.h"
+#include "options/client/vfs/vfs_dynamic_option.h"
 #include "trace/context.h"
 
 namespace dingofs {
@@ -102,6 +105,10 @@ Status FileReader::Read(ContextSPtr ctx, char* buf, uint64_t size,
 
   uint64_t total_read_size = std::min(size, attr.length - offset);
 
+  if (FLAGS_vfs_file_prefetch_block_cnt > 0 && vfs_hub_->GetBlockCache()->HasCacheStore()) {
+    vfs_hub_->GetPrefetchManager()->AsyncPrefetch(ino_, attr.length, offset + total_read_size);
+  }
+  
   std::vector<ChunkReadReq> read_reqs;
 
   while (total_read_size > 0) {

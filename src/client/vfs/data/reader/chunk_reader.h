@@ -19,6 +19,7 @@
 
 #include <fmt/format.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <mutex>

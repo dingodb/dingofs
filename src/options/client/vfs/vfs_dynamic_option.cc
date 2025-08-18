@@ -16,6 +16,7 @@
 
 #include "options/client/vfs/vfs_dynamic_option.h"
 
+#include <fmt/format.h>
 #include <gflags/gflags.h>
 
 #include "options/gflag_validator.h"
@@ -72,6 +73,12 @@ DEFINE_validator(format_block_len_width, &PassUint32);
 DEFINE_string(format_delimiter, "|", "Delimiter used in format");
 DEFINE_validator(format_delimiter, &ValidateDelimiterLength);
 // end used in inode_blocks_service
+
+//prefetch
+DEFINE_uint32(vfs_file_prefetch_block_cnt, 4, "Number of blocks to prefetch for file read");
+DEFINE_validator(vfs_file_prefetch_block_cnt, &PassUint32);
+
+DEFINE_uint32(vfs_file_prefetch_executor_num, 4, "Number of prefetch executor");
 
 }  // namespace client
 }  // namespace dingofs

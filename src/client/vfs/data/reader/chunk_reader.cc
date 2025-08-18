@@ -28,6 +28,7 @@
 #include "cache/utils/context.h"
 #include "client/common/utils.h"
 #include "client/const.h"
+#include "client/meta/vfs_meta.h"
 #include "client/vfs/data/common/common.h"
 #include "client/vfs/data/common/data_utils.h"
 #include "client/vfs/data/reader/reader_common.h"

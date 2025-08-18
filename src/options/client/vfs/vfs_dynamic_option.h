@@ -44,6 +44,10 @@ DECLARE_uint32(format_block_len_width);
 DECLARE_string(format_delimiter);
 // end used in inode_blocks_service
 
+//prefetch
+DECLARE_uint32(vfs_file_prefetch_block_cnt);
+DECLARE_uint32(vfs_file_prefetch_executor_num);
+
 }  // namespace client
 }  // namespace dingofs
 

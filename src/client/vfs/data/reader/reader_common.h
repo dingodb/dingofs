@@ -33,6 +33,7 @@ struct ChunkReadReq {
   const uint64_t index;         // chunk index
   const uint64_t offset;        // offset in the chunk
   const uint64_t to_read_size;  // how many bytes to read
+
   char* buf;
 
   std::string ToString() const;

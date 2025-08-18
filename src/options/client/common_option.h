@@ -23,6 +23,7 @@
 #include "options/cache/blockcache.h"
 #include "options/cache/stub.h"
 #include "options/cache/tiercache.h"
+#include "options/client/vfs/vfs_dynamic_option.h"
 #include "utils/configuration.h"
 #include "utils/gflags_helper.h"
 
@@ -142,6 +143,11 @@ static void InitRemoteBlockCacheOption(utils::Configuration* c,
   c->GetValue("remote_cache.check_cache_node_state_duration_ms",
               &cache::FLAGS_check_cache_node_state_duration_ms);
   *option = cache::RemoteBlockCacheOption();
+}
+
+static void InitPrefetchOption(utils::Configuration* c) {
+  c->GetValue("vfs.data.prefetch.block_cnt", &FLAGS_vfs_file_prefetch_block_cnt);
+  c->GetValue("vfs.data.prefetch.executor_cnt", &fLU::FLAGS_vfs_file_prefetch_executor_num);
 }
 
 static void RewriteCacheDir(cache::BlockCacheOption* option, std::string uuid) {

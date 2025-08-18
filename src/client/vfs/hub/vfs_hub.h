@@ -36,6 +36,7 @@
 #include "options/client/vfs/vfs_option.h"
 #include "trace/itracer.h"
 #include "utils/executor/executor.h"
+#include "client/vfs/components/prefetch_manager.h"
 
 namespace dingofs {
 namespace client {
@@ -69,6 +70,8 @@ class VFSHub {
   virtual PageAllocator* GetPageAllocator() = 0;
 
   virtual FileSuffixWatcher* GetFileSuffixWatcher() = 0;
+
+  virtual PrefecthManager *GetPrefetchManager() = 0;
 
   virtual ITracer* GetTracer() = 0;
 
@@ -139,6 +142,12 @@ class VFSHubImpl : public VFSHub {
     return tracer_.get();
   }
 
+  PrefecthManager *GetPrefetchManager() override {
+    CHECK_NOTNULL(prefetch_manager_);
+    return prefetch_manager_.get();
+  }
+
+
   FsInfo GetFsInfo() override {
     CHECK(started_.load(std::memory_order_relaxed)) << "not started";
     return fs_info_;
@@ -170,6 +179,7 @@ class VFSHubImpl : public VFSHub {
   std::shared_ptr<PageAllocator> page_allocator_;
   std::unique_ptr<FileSuffixWatcher> file_suffix_watcher_;
   std::unique_ptr<ITracer> tracer_;
+  std::unique_ptr<PrefecthManager> prefetch_manager_;
 };
 
 }  // namespace vfs

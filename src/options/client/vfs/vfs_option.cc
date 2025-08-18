@@ -43,6 +43,7 @@ void InitVFSOption(utils::Configuration* conf, VFSOption* option) {
   InitRemoteBlockCacheOption(conf, &option->remote_block_cache_option);
 
   InitFuseOption(conf, &option->fuse_option);
+  InitPrefetchOption(conf);
 
   // vfs data related
   if (!conf->GetBoolValue("vfs.data.writeback",

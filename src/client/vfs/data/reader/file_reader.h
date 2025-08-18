@@ -47,6 +47,7 @@ class FileReader {
   Status GetAttr(ContextSPtr ctx, Attr* attr);
 
   uint64_t GetChunkSize() const;
+
   ChunkReader* GetOrCreateChunkReader(uint64_t chunk_index);
 
   VFSHub* vfs_hub_;

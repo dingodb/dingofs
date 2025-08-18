@@ -30,6 +30,7 @@
 #include "client/vfs.h"
 #include "client/vfs/background/periodic_flush_manager.h"
 #include "client/const.h"
+#include "client/vfs/components/prefetch_manager.h"
 #include "client/vfs/meta/dummy/dummy_filesystem.h"
 #include "client/vfs/meta/meta_system.h"
 #include "client/vfs/meta/meta_wrapper.h"
@@ -176,6 +177,15 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
         vfs_option_.data_option.writeback_suffix);
   }
 
+  {
+    prefetch_manager_ = std::make_unique<PrefecthManager>(this, fs_info_.id, fs_info_.chunk_size, fs_info_.block_size);
+    auto ok = prefetch_manager_->Start();
+    if (! ok.ok()) {
+      LOG(ERROR) << "prefetch manager start failed";
+      return ok;
+    }
+  }
+
   started_.store(true, std::memory_order_relaxed);
   return Status::OK();
 }
@@ -187,6 +197,8 @@ Status VFSHubImpl::Stop() {
 
   handle_manager_->FlushAll();
 
+  //shutdown before block cache
+  prefetch_manager_->Stop();
   priodic_flush_manager_->Stop();
   read_executor_->Stop();
   flush_executor_->Stop();
