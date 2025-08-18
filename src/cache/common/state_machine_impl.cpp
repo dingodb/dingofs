@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "cache/utils/state_machine_impl.h"
+#include "cache/common/state_machine_impl.h"
 
 #include <brpc/reloadable_flags.h>
+#include <gflags/gflags.h>
 #include <glog/logging.h>
 
 #include <functional>
@@ -22,7 +23,7 @@
 #include <mutex>
 
 #include "cache/common/macro.h"
-#include "cache/utils/state_machine.h"
+#include "cache/common/state_machine.h"
 #include "utils/executor/bthread/bthread_executor.h"
 
 namespace dingofs {
@@ -38,7 +39,7 @@ DEFINE_uint32(disk_state_normal2unstable_error_num, 3,
 DEFINE_validator(disk_state_normal2unstable_error_num, brpc::PassValidate);
 
 DEFINE_uint32(disk_state_unstable2normal_succ_num, 10,
-              "Number of successful operations to trigger normal state from "
+              "Number of successes to trigger normal state from "
               "unstable state");
 DEFINE_validator(disk_state_unstable2normal_succ_num, brpc::PassValidate);
 
@@ -47,42 +48,44 @@ DEFINE_uint32(disk_state_unstable2down_s, 1800,
 DEFINE_validator(disk_state_unstable2down_s, brpc::PassValidate);
 
 // Node state
-DEFINE_uint32(node_state_tick_duration_s, 60,
-              "Duration in seconds for the node state tick");
-DEFINE_validator(node_state_tick_duration_s, brpc::PassValidate);
+DEFINE_uint32(cache_node_state_tick_duration_s, 30,
+              "Duration in seconds for the cache node state tick");
+DEFINE_validator(cache_node_state_tick_duration_s, brpc::PassValidate);
 
-DEFINE_uint32(node_state_normal2unstable_error_num, 3,
-              "Number of errors to trigger unstable state from normal state");
-DEFINE_validator(node_state_normal2unstable_error_num, brpc::PassValidate);
+DEFINE_uint32(
+    cache_node_state_normal2unstable_error_num, 10,
+    "Number of errors to trigger unstable cache state from normal state");
+DEFINE_validator(cache_node_state_normal2unstable_error_num,
+                 brpc::PassValidate);
 
-DEFINE_uint32(node_state_unstable2normal_succ_num, 3,
-              "Number of successful operations to trigger normal state from "
+DEFINE_uint32(cache_node_state_unstable2normal_succ_num, 3,
+              "Number of successes to trigger normal state from "
               "unstable state");
-DEFINE_validator(node_state_unstable2normal_succ_num, brpc::PassValidate);
+DEFINE_validator(cache_node_state_unstable2normal_succ_num, brpc::PassValidate);
 
-DEFINE_uint32(node_state_unstable2down_s, 604800,  // 7 days
+DEFINE_uint32(cache_node_state_unstable2down_s, 604800,  // 7 days
               "Duration in seconds to trigger down state from unstable state");
-DEFINE_validator(node_state_unstable2down_s, brpc::PassValidate);
+DEFINE_validator(cache_node_state_unstable2down_s, brpc::PassValidate);
 
 uint32_t BaseState::CfgStateNormal2UnstableErrorNum() {
   if (state_machine->GetType() == kDiskStateMachine) {
     return FLAGS_disk_state_normal2unstable_error_num;
   }
-  return FLAGS_node_state_normal2unstable_error_num;
+  return FLAGS_cache_node_state_normal2unstable_error_num;
 }
 
 uint32_t BaseState::CfgStateUnstable2NormalSuccNum() {
   if (state_machine->GetType() == kDiskStateMachine) {
     return FLAGS_disk_state_unstable2normal_succ_num;
   }
-  return FLAGS_node_state_unstable2normal_succ_num;
+  return FLAGS_cache_node_state_unstable2normal_succ_num;
 }
 
 uint32_t BaseState::CfgStateUnstable2downS() {
   if (state_machine->GetType() == kDiskStateMachine) {
     return FLAGS_disk_state_unstable2down_s;
   }
-  return FLAGS_node_state_unstable2down_s;
+  return FLAGS_cache_node_state_unstable2down_s;
 }
 
 // normal
@@ -286,7 +289,7 @@ uint32_t StateMachineImpl::CfgStateTickDurationS() {
   if (type_ == kDiskStateMachine) {
     return FLAGS_disk_state_tick_duration_s;
   }
-  return FLAGS_node_state_tick_duration_s;
+  return FLAGS_cache_node_state_tick_duration_s;
 }
 
 }  // namespace cache

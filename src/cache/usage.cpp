@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "cache/help.h"
+#include "cache/usage.h"
 
 #include <absl/strings/str_format.h>
 #include <gflags/gflags.h>
@@ -29,10 +29,10 @@
 #include <sstream>
 #include <vector>
 
+#include "cache/utils/helper.h"
+
 namespace dingofs {
 namespace cache {
-
-static const std::string kRequired = "\x1B[31m[required]\033[0m";
 
 struct Option {
   std::string name;
@@ -41,12 +41,12 @@ struct Option {
 };
 
 static std::vector<gflags::CommandLineFlagInfo> GetCacheFlags() {
-  std::vector<gflags::CommandLineFlagInfo> flags;
+  std::vector<gflags::CommandLineFlagInfo> all_flags;
   std::vector<gflags::CommandLineFlagInfo> cache_flags;
 
-  gflags::GetAllFlags(&flags);
-  for (const auto& flag : flags) {
-    if (flag.description.empty()) {  // DEPRECATED in future
+  gflags::GetAllFlags(&all_flags);
+  for (const auto& flag : all_flags) {
+    if (flag.description.empty()) {  // hiden the flag
       continue;
     }
 
@@ -57,27 +57,21 @@ static std::vector<gflags::CommandLineFlagInfo> GetCacheFlags() {
   return cache_flags;
 }
 
-static bool CmpFlag(const gflags::CommandLineFlagInfo& a,
-                    const gflags::CommandLineFlagInfo& b) {
-  return a.name < b.name;
-}
-
 static std::vector<Option> Normalize(
     std::vector<gflags::CommandLineFlagInfo> flags) {
   std::vector<Option> options;
   Option option;
   for (auto& flag : flags) {
-    if (flag.type == "bool") {
-      option.name = flag.name;
-    } else {
-      option.name = flag.name + "=" + flag.type;
-    }
+    option.name = flag.name + "=" + flag.type;
     option.description = flag.description;
-    if (flag.default_value.empty()) {
-      option.default_value = kRequired;
-    } else {
+
+    if (flag.default_value.empty() && flag.has_validator_fn) {
+      option.default_value = Helper::RedString("[required]");
+    } else if (!flag.default_value.empty()) {
       option.default_value =
           absl::StrFormat("(default: %s)", flag.default_value);
+    } else {
+      option.default_value = "";
     }
     options.emplace_back(option);
   }
@@ -94,7 +88,10 @@ static size_t GetMaxNameLength(const std::vector<Option>& options) {
 
 std::string Usage() {
   auto flags = GetCacheFlags();
-  std::sort(flags.begin(), flags.end(), CmpFlag);
+
+  std::sort(flags.begin(), flags.end(),
+            [](const auto& a, const auto& b) { return a.name < b.name; });
+
   auto options = Normalize(flags);
   size_t max_name_length = GetMaxNameLength(options);
 

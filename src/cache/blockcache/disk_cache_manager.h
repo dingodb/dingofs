@@ -29,7 +29,7 @@
 #include "cache/blockcache/lru_cache.h"
 #include "cache/blockcache/lru_common.h"
 #include "cache/common/type.h"
-#include "metrics/cache/blockcache/disk_cache_metric.h"
+#include "cache/metric/disk_cache_metric.h"
 
 namespace dingofs {
 namespace cache {

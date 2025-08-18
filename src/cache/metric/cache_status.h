@@ -20,19 +20,19 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_DEBUG_EXPORTER_H_
-#define DINGOFS_SRC_CACHE_DEBUG_EXPORTER_H_
+#ifndef DINGOFS_SRC_CACHE_METRIC_CACHE_STATUS_H_
+#define DINGOFS_SRC_CACHE_METRIC_CACHE_STATUS_H_
 
 #include <brpc/server.h>
 
-#include "cache/common/proto.h"
-#include "cache/common/type.h"
+#include "common/status.h"
+#include "dingofs/cache.pb.h"
 #include "nlohmann/json.hpp"
 
 namespace dingofs {
 namespace cache {
 
-class CacheServiceImpl final : public PBCacheService {
+class CacheServiceImpl final : public pb::cache::cache {
  public:
   void default_method(google::protobuf::RpcController* controller,
                       const pb::cache::DebugCacheRequest* request,
@@ -98,4 +98,4 @@ class CacheStatus {
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_DEBUG_EXPORTER_H_
+#endif  // DINGOFS_SRC_CACHE_METRIC_CACHE_STATUS_H_

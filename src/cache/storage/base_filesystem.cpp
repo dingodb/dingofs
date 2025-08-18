@@ -81,7 +81,7 @@ Status BaseFileSystem::Walk(const std::string& prefix, WalkFunc func) {
 
   struct dirent* dirent;
   struct stat stat;
-  SCOPE_EXIT { Posix::CloseDir(dir); };
+  ON_SCOPE_EXIT { Posix::CloseDir(dir); };
   for (;;) {
     status = Posix::ReadDir(dir, &dirent);
     if (status.IsEndOfFile()) {

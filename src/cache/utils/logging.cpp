@@ -75,7 +75,8 @@ bool InitCacheTraceLog(const std::string& log_dir) {
   if (!initialized) {
     std::string filename =
         absl::StrFormat("%s/cache_trace_%d.log", log_dir, getpid());
-    logger = spdlog::daily_logger_mt("access", filename, 0, 0);
+    logger = spdlog::daily_logger_mt("cache", filename, 0, 0);
+    logger->set_level(spdlog::level::trace);
     spdlog::flush_every(std::chrono::seconds(1));
     initialized = true;
   }
@@ -91,7 +92,7 @@ void ShutdownCacheTraceLog() {
 
 void LogTrace(const std::string& message) {
   if (initialized && FLAGS_cache_trace_logging) {
-    logger->info(message);
+    logger->trace(message);
   }
 }
 

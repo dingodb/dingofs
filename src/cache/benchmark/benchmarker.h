@@ -27,6 +27,7 @@
 #include "cache/benchmark/reporter.h"
 #include "cache/benchmark/worker.h"
 #include "cache/blockcache/block_cache.h"
+#include "cache/common/mds_client.h"
 #include "cache/storage/storage.h"
 #include "cache/storage/storage_pool.h"
 #include "stub/rpcclient/mds_client.h"
@@ -65,8 +66,7 @@ class Benchmarker {
   void StopCollector();
 
  private:
-  std::unique_ptr<stub::rpcclient::MDSBaseClient> mds_base_;
-  std::shared_ptr<stub::rpcclient::MdsClient> mds_client_;
+  MDSClientSPtr mds_client_;
   StoragePoolSPtr storage_pool_;
   StorageSPtr storage_;
   BlockCacheSPtr block_cache_;

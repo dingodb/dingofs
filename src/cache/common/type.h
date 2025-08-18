@@ -29,6 +29,8 @@
 
 #include <memory>
 
+#include "common/status.h"
+#include "dingofs/blockcache.pb.h"
 #include "utils/concurrent/rw_lock.h"
 #include "utils/concurrent/task_thread_pool.h"
 
@@ -45,6 +47,37 @@ using WriteLockGuard = dingofs::utils::WriteLockGuard;
 using TaskThreadPool =
     dingofs::utils::TaskThreadPool<BthreadMutex, BthreadConditionVariable>;
 using TaskThreadPoolUPtr = std::unique_ptr<TaskThreadPool>;
+
+inline pb::cache::BlockCacheErrCode PBErr(Status status) {
+  if (status.ok()) {
+    return pb::cache::BlockCacheOk;
+  } else if (status.IsInvalidParam()) {
+    return pb::cache::BlockCacheErrInvalidParam;
+  } else if (status.IsNotFound()) {
+    return pb::cache::BlockCacheErrNotFound;
+  } else if (status.IsInternal()) {
+    return pb::cache::BlockCacheErrFailure;
+  } else if (status.IsIoError()) {
+    return pb::cache::BlockCacheErrIOError;
+  }
+
+  return pb::cache::BlockCacheErrUnknown;
+}
+
+inline Status ToStatus(const pb::cache::BlockCacheErrCode& code) {
+  if (code == pb::cache::BlockCacheOk) {
+    return Status::OK();
+  } else if (code == pb::cache::BlockCacheErrInvalidParam) {
+    return Status::InvalidParam("Invalid parameter");
+  } else if (code == pb::cache::BlockCacheErrNotFound) {
+    return Status::NotFound("Not found");
+  } else if (code == pb::cache::BlockCacheErrFailure) {
+    return Status::Internal("Internal error");
+  } else if (code == pb::cache::BlockCacheErrIOError) {
+    return Status::IoError("IO error");
+  }
+  return Status::Unknown("unknown error");
+}
 
 }  // namespace cache
 }  // namespace dingofs

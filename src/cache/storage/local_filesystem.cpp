@@ -42,12 +42,12 @@
 #include "cache/utils/posix.h"
 #include "common/io_buffer.h"
 #include "common/status.h"
-#include "options/cache/blockcache.h"
+#include "options/cache/option.h"
 
 namespace dingofs {
 namespace cache {
 
-static const std::string kModule = kFileSysteMoudle;
+static const std::string kModule = "filesystem";
 static const constexpr size_t kBlkSize = 4 * kMiB;
 
 LocalFileSystem::LocalFileSystem(CheckStatusFunc check_status_func)
@@ -148,18 +148,17 @@ Status LocalFileSystem::WriteFile(ContextSPtr ctx, const std::string& path,
                     Helper::Filename(path), buffer.Size());
   StepTimerGuard guard(timer);
 
-  NEXT_STEP(kMkDir);
+  NEXT_STEP("mkdir");
   auto tmppath = Helper::TempFilepath(path);
   status = MkDirs(Helper::ParentDir(tmppath));
   if (!status.ok() && !status.IsExist()) {
-    LOG(ERROR) << ctx->StrTraceId() << " Mkdir failed: "
-               << "path = " << Helper::ParentDir(tmppath)
-               << ", status = " << status.ToString();
+    LOG_CTX(ERROR) << "Mkdir failed: path = " << Helper::ParentDir(tmppath)
+                   << ", status = " << status.ToString();
     return CheckStatus(status);
   }
 
   // TODO: fallocate and split IO (1MB * 4)
-  NEXT_STEP(kOpenFile);
+  NEXT_STEP("open");
   int fd;
   int flags = Posix::kDefaultCreatFlags;
   if (option.direct_io &&
@@ -170,18 +169,18 @@ Status LocalFileSystem::WriteFile(ContextSPtr ctx, const std::string& path,
   }
   status = Posix::Open(tmppath, flags, 0644, &fd);
   if (!status.ok()) {
-    LOG(ERROR) << ctx->StrTraceId() << " Open file failed: path = " << path
-               << ", status = " << status.ToString();
+    LOG_CTX(ERROR) << "Open file failed: path = " << path
+                   << ", status = " << status.ToString();
     return CheckStatus(status);
   }
 
-  SCOPE_EXIT {
+  ON_SCOPE_EXIT {
     if (!status.ok()) {
       Unlink(ctx, tmppath);
     }
   };
 
-  NEXT_STEP(kMemcpy);
+  NEXT_STEP("memcpy");
   IOBuffer wbuf;  // write buffer
   if (option.direct_io) {
     wbuf = CopyBuffer(buffer);
@@ -190,21 +189,20 @@ Status LocalFileSystem::WriteFile(ContextSPtr ctx, const std::string& path,
     wbuf = buffer;
   }
 
-  NEXT_STEP(kAioWrite);
+  NEXT_STEP("aio_write");
   status = AioWrite(ctx, fd, &wbuf, option);
   if (!status.ok()) {
-    LOG(ERROR) << "[" << ctx->TraceId() << "] Aio write failed: "
-               << "path = " << tmppath << ", length = " << buffer.Size()
-               << ", status = " << status.ToString();
+    LOG_CTX(ERROR) << "Aio write failed: path = " << tmppath
+                   << ", length = " << wbuf.Size()
+                   << ", status = " << status.ToString();
     return CheckStatus(status);
   }
 
-  NEXT_STEP(kRenameFile);
+  NEXT_STEP("rename");
   status = Posix::Rename(tmppath, path);
   if (!status.ok()) {
-    LOG(ERROR) << "[" << ctx->TraceId() << "] Rename file failed: "
-               << "from = " << tmppath << ", to = " << path
-               << ", status = " << status.ToString();
+    LOG_CTX(ERROR) << "Rename file failed: from = " << tmppath
+                   << ", to = " << path << ", status = " << status.ToString();
   }
   return CheckStatus(status);
 }
@@ -220,34 +218,30 @@ Status LocalFileSystem::ReadFile(ContextSPtr ctx, const std::string& path,
                     Helper::Filename(path), offset, length);
   StepTimerGuard guard(timer);
 
-  NEXT_STEP(kOpenFile);
+  NEXT_STEP("open");
   int fd;
   status = Posix::Open(path, O_RDONLY, &fd);
   if (!status.ok()) {
-    LOG(ERROR) << "[" << ctx->TraceId() << "] Open file failed: path = " << path
-               << ", status = " << status.ToString();
+    LOG_CTX(ERROR) << "Open file failed: path = " << path
+                   << ", status = " << status.ToString();
     return CheckStatus(status);
   }
 
   if (Helper::IsAligned(offset, Helper::GetSysPageSize())) {
-    NEXT_STEP(kMmap);
+    NEXT_STEP("mmap");
     status = MapFile(ctx, fd, offset, length, buffer, option);
     if (!status.ok()) {
-      LOG(ERROR) << "[" << ctx->TraceId()
-                 << "] Map file failed: path = " << path
-                 << ", offset = " << offset << ", length = " << length
-                 << ", status = " << status.ToString();
-      return CheckStatus(status);
+      LOG_CTX(ERROR) << "Map file failed: path = " << path
+                     << ", offset = " << offset << ", length = " << length
+                     << ", status = " << status.ToString();
     }
   } else {
-    NEXT_STEP(kAioRead);
+    NEXT_STEP("aio_read");
     status = AioRead(ctx, fd, offset, length, buffer, option);
     if (!status.ok()) {
-      LOG(ERROR) << "[" << ctx->TraceId()
-                 << "] Aio read failed: path = " << path
-                 << ", offset = " << offset << ", length = " << length
-                 << ", status = " << status.ToString();
-      return CheckStatus(status);
+      LOG_CTX(ERROR) << "Aio read failed: path = " << path
+                     << ", offset = " << offset << ", length = " << length
+                     << ", status = " << status.ToString();
     }
   }
 
@@ -308,15 +302,17 @@ Status LocalFileSystem::MapFile(ContextSPtr ctx, int fd, off_t offset,
   auto deleter = [this, ctx, fd, offset, length, option](void* data) {
     auto status = Posix::MUnmap(data, length);
     if (!status.ok()) {
+      LOG_CTX(ERROR) << "MUnmap failed: fd = " << fd << ", offset = " << offset
+                     << ", length = " << length
+                     << ", status = " << status.ToString();
       CloseFd(ctx, fd);
-      LOG(ERROR) << "[" << ctx->TraceId() << "] MUnmap failed: fd = " << fd
-                 << ", offset = " << offset << ", length = " << length
-                 << ", status = " << status.ToString();
       return;
     }
 
     if (option.drop_page_cache) {  // it will close fd
       page_cache_manager_->AsyncDropPageCache(ctx, fd, offset, length);
+    } else {
+      CloseFd(ctx, fd);
     }
   };
 
@@ -327,17 +323,16 @@ Status LocalFileSystem::MapFile(ContextSPtr ctx, int fd, off_t offset,
 void LocalFileSystem::CloseFd(ContextSPtr ctx, int fd) {
   auto status = Posix::Close(fd);
   if (!status.ok()) {
-    LOG(ERROR) << "[" << ctx->TraceId() << "] Close fd failed: fd = " << fd
-               << ", status = " << status.ToString();
+    LOG_CTX(ERROR) << "Close fd failed: fd = " << fd
+                   << ", status = " << status.ToString();
   }
 }
 
 void LocalFileSystem::Unlink(ContextSPtr ctx, const std::string& path) {
   auto status = Posix::Unlink(path);
   if (!status.ok()) {
-    LOG(ERROR) << "[" << ctx->TraceId()
-               << "] Unlink file failed: path = " << path
-               << ", status = " << status.ToString();
+    LOG_CTX(ERROR) << "Unlink file failed: path = " << path
+                   << ", status = " << status.ToString();
   }
 }
 

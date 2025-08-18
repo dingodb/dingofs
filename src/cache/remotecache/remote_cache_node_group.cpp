@@ -29,7 +29,7 @@
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/common/macro.h"
-#include "cache/common/proto.h"
+#include "cache/common/mds_client.h"
 #include "cache/remotecache/remote_cache_node.h"
 #include "cache/remotecache/remote_cache_node_manager.h"
 #include "cache/remotecache/upstream.h"
@@ -39,13 +39,12 @@
 namespace dingofs {
 namespace cache {
 
-RemoteCacheNodeGroup::RemoteCacheNodeGroup(RemoteBlockCacheOption option)
+RemoteCacheNodeGroup::RemoteCacheNodeGroup()
     : running_(false),
-      option_(option),
       upstream_(std::make_unique<UpstreamImpl>()),
       metric_(std::make_shared<RemoteCacheCacheNodeGroupMetric>()) {
   node_manager_ = std::make_unique<RemoteCacheNodeManager>(
-      option, [this](const PBCacheGroupMembers& members) {
+      [this](const std::vector<CacheGroupMember>& members) {
         this->upstream_->Build(members);
       });
 }

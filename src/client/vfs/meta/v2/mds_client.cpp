@@ -197,8 +197,7 @@ MDSMeta MDSClient::GetMds(Ino ino) {
       << fmt::format("get mds fail for ino({}).", ino);
 
   VLOG(1) << fmt::format("[meta.client] query mds({}|{}:{}) for ino({}).",
-                           mds_meta.ID(), mds_meta.Host(), mds_meta.Port(),
-                           ino);
+                         mds_meta.ID(), mds_meta.Host(), mds_meta.Port(), ino);
 
   return mds_meta;
 }
@@ -209,8 +208,8 @@ MDSMeta MDSClient::GetMdsByParent(int64_t parent) {
       << fmt::format("get mds fail for parent({}).", parent);
 
   VLOG(1) << fmt::format("[meta.client] query mds({}|{}:{}) for parent({}).",
-                           mds_meta.ID(), mds_meta.Host(), mds_meta.Port(),
-                           parent);
+                         mds_meta.ID(), mds_meta.Host(), mds_meta.Port(),
+                         parent);
   return mds_meta;
 }
 
@@ -224,8 +223,7 @@ MDSMeta MDSClient::GetMdsWithFallback(Ino ino, bool& is_fallback) {
   }
 
   VLOG(1) << fmt::format("[meta.client] query mds({}|{}:{}) for ino({}).",
-                           mds_meta.ID(), mds_meta.Host(), mds_meta.Port(),
-                           ino);
+                         mds_meta.ID(), mds_meta.Host(), mds_meta.Port(), ino);
   return mds_meta;
 }
 
@@ -240,8 +238,8 @@ MDSMeta MDSClient::GetMdsByParentWithFallback(int64_t parent,
   }
 
   VLOG(1) << fmt::format("[meta.client] query mds({}|{}:{}) for parent({}).",
-                           mds_meta.ID(), mds_meta.Host(), mds_meta.Port(),
-                           parent);
+                         mds_meta.ID(), mds_meta.Host(), mds_meta.Port(),
+                         parent);
   return mds_meta;
 }
 

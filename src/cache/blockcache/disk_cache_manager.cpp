@@ -103,7 +103,7 @@ void DiskCacheManager::Start() {
 
   LOG(INFO) << absl::StrFormat(
       "Disk cache manager is up: dir = %s, capacity = %.2lf MiB, "
-      "free_space_ratio = %.2lf, cache_expire_s = %d",
+      "free_space_ratio = %.2lf, cache_expire_s = %lu",
       GetRootDir(), capacity_bytes_ * 1.0 / kMiB, FLAGS_free_space_ratio,
       FLAGS_cache_expire_s);
 

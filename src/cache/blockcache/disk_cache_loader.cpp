@@ -63,6 +63,7 @@ void DiskCacheLoader::Start(const std::string& disk_id,
   uploader_ = uploader;
   cache_loading_ = true;
   stage_loading_ = true;
+  metric_->load_status.set_value("loading");
 
   CHECK_EQ(thread_pool_->Start(2), 0);
   thread_pool_->Enqueue(&DiskCacheLoader::LoadAllBlocks, this,
@@ -85,9 +86,8 @@ void DiskCacheLoader::Shutdown() {
   LOG(INFO) << "Disk cache loader is shutting down...";
 
   thread_pool_->Stop();
-  cache_loading_ = false;
-  stage_loading_ = false;
-  metric_->load_status.set_value("LOADING");
+
+  metric_->load_status.set_value("stoped");
 
   LOG(INFO) << "Disk cache loader is down.";
 
@@ -137,7 +137,7 @@ void DiskCacheLoader::LoadAllBlocks(const std::string& dir, BlockType type) {
   }
 
   if (!cache_loading_ && !stage_loading_) {
-    metric_->load_status.set_value("FINISH");
+    metric_->load_status.set_value("finish");
   }
 }
 

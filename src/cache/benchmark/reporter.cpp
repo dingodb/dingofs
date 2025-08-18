@@ -25,7 +25,7 @@
 #include <absl/strings/str_format.h>
 #include <fmt/format.h>
 
-#include "options/cache/benchmark.h"
+#include "cache/benchmark/option.h"
 #include "utils/executor/bthread/bthread_executor.h"
 
 namespace dingofs {

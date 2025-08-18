@@ -29,9 +29,8 @@ add_library(client_options
 target_link_libraries(client_options
     stub_common
     stub_options
-    cache_options
     trace_options
-    cache_lib # TODO: remove this
+    cache_lib
     brpc::brpc
     fmt::fmt
     glog::glog

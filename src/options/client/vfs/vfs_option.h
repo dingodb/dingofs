@@ -20,8 +20,7 @@
 #include <cstdint>
 
 #include "blockaccess/accesser_common.h"
-#include "options/cache/blockcache.h"
-#include "options/cache/tiercache.h"
+#include "options/cache/option.h"
 #include "options/client/fuse/fuse_option.h"
 #include "options/client/memory/page_option.h"
 #include "utils/configuration.h"
@@ -44,8 +43,6 @@ struct VFSDataOption {
 struct VFSOption {
   blockaccess::BlockAccessOptions block_access_opt;  // from config
   PageOption page_option;
-  cache::BlockCacheOption block_cache_option;
-  cache::RemoteBlockCacheOption remote_block_cache_option;
   FuseOption fuse_option;
 
   VFSMetaOption meta_option;

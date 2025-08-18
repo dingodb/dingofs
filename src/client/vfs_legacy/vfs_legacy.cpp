@@ -27,7 +27,7 @@
 #include <vector>
 
 #include "blockaccess/block_accesser.h"
-#include "cache/status/cache_status.h"
+#include "cache/metric/cache_status.h"
 #include "cache/tiercache/tier_block_cache.h"
 #include "client/common/client_dummy_server_info.h"
 #include "client/meta/vfs_meta.h"
@@ -49,6 +49,7 @@
 #include "dingofs/mds.pb.h"
 #include "dingofs/metaserver.pb.h"
 #include "metrics/metrics_dumper.h"
+#include "options/cache/option.h"
 #include "options/client/common_option.h"
 #include "options/client/vfs_legacy/vfs_legacy_dynamic_config.h"
 #include "stub/filesystem/xattr.h"
@@ -353,17 +354,15 @@ Status VFSOld::Start(const VFSConfig& vfs_conf) {
         option_.s3_client_adaptor_opt.readCacheThreads, nullptr);
 
     // block cache
-    auto block_cache_option = option_.block_cache_option;
     std::string uuid =
         absl::StrFormat("%d-%s", fs_info_->fsid(), fs_info_->fsname());
     if (fs_info_->has_uuid()) {
       uuid = fs_info_->uuid();
     }
 
-    RewriteCacheDir(&block_cache_option, uuid);
-    auto block_cache = std::make_shared<cache::TierBlockCache>(
-        block_cache_option, option_.remote_block_cache_option,
-        block_accesser_.get());
+    cache::FLAGS_cache_dir_uuid = uuid;
+    auto block_cache =
+        std::make_shared<cache::TierBlockCache>(block_accesser_.get());
 
     if (s3_adapter_->Init(option_.s3_client_adaptor_opt, block_accesser_.get(),
                           inode_cache_manager_, mds_client_, fs_cache_manager,

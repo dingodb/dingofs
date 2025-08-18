@@ -47,8 +47,7 @@ static void GlobalInitOrDie() {
 }
 
 static Status StartServer() {
-  auto option = CacheGroupNodeOption();
-  CacheGroupNodeServerImpl server(option);
+  CacheGroupNodeServerImpl server;
   auto status = server.Start();
   if (!status.ok()) {
     return status;

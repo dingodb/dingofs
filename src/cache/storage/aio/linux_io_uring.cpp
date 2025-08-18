@@ -66,7 +66,7 @@ Status LinuxIOUring::Start() {
   LOG(INFO) << "Linux IO uring is starting...";
 
   if (!Supported()) {
-    LOG_ERROR("Current system kernel not support io_uring.");
+    LOG(ERROR) << "Current system kernel not support io_uring.";
     return Status::NotSupport("not support io_uring");
   }
 
@@ -199,27 +199,25 @@ Status LinuxIOUring::WaitIO(uint64_t timeout_ms,
 
 void LinuxIOUring::OnCompleted(Aio* aio, int result) {
   Status status;
+  const auto& ctx = aio->ctx;
   if (result < 0) {
     status = Status::IoError(strerror(-result));
-    LOG(ERROR) << aio->ctx->StrTraceId()
-               << " Aio failed: aio = " << aio->ToString()
-               << ", status = " << status.ToString();
+    LOG_CTX(ERROR) << "Aio failed: aio = " << aio->ToString()
+                   << ", status = " << status.ToString();
   } else if (result != aio->length) {
     status = Status::IoError(absl::StrFormat(
         "%s bytes fewer than expect length: want (%zu) but got (%u)",
         aio->for_read ? "read" : "write", aio->length, result));
-    LOG(ERROR) << aio->ctx->StrTraceId()
-               << " Aio failed: aio = " << aio->ToString()
-               << ", status = " << status.ToString();
+    LOG_CTX(ERROR) << "Aio failed: aio = " << aio->ToString()
+                   << ", status = " << status.ToString();
   } else {
     status = Status::OK();
   }
 
   aio->status() = status;
 
-  VLOG(9) << aio->ctx->StrTraceId()
-          << " Aio complete: aio = " << aio->ToString()
-          << ", status = " << aio->status().ToString();
+  VLOG_CTX(9) << "Aio complete: aio = " << aio->ToString()
+              << ", status = " << aio->status().ToString();
 }
 
 }  // namespace cache

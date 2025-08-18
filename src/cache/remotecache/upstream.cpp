@@ -31,10 +31,10 @@
 #include <unordered_map>
 
 #include "cache/blockcache/cache_store.h"
-#include "cache/common/proto.h"
+#include "cache/common/mds_client.h"
 #include "cache/common/type.h"
+#include "cache/metric/cache_status.h"
 #include "cache/remotecache/remote_cache_node_impl.h"
-#include "cache/status/cache_status.h"
 #include "cache/utils/helper.h"
 #include "cache/utils/ketama_con_hash.h"
 #include "common/status.h"
@@ -43,10 +43,10 @@ namespace dingofs {
 namespace cache {
 
 static std::ostream& operator<<(std::ostream& os,
-                                const PBCacheGroupMembers& members) {
+                                const std::vector<CacheGroupMember>& members) {
   os << "[\n";
   for (const auto& member : members) {
-    os << "  " << member.ShortDebugString() << "\n";
+    os << "  " << member.ToString() << "\n";
   }
   os << "]";
   return os;
@@ -54,7 +54,7 @@ static std::ostream& operator<<(std::ostream& os,
 
 ConsistentHash::ConsistentHash() : chash_(std::make_unique<KetamaConHash>()) {}
 
-void ConsistentHash::Build(const PBCacheGroupMembers& members) {
+void ConsistentHash::Build(const std::vector<CacheGroupMember>& members) {
   LOG(INFO) << "Building consistent hash with " << members.size()
             << " members: " << members;
 
@@ -66,12 +66,12 @@ void ConsistentHash::Build(const PBCacheGroupMembers& members) {
   auto weights = CalcWeights(members);
   for (size_t i = 0; i < members.size(); i++) {
     const auto& member = members[i];
-    const auto& key = member.id();
+    const auto& key = member.id;
     auto node = std::make_shared<RemoteCacheNodeImpl>(member);
     nodes_[key] = node;
     chash_->AddNode(key, weights[i]);
 
-    LOG(INFO) << "Add cache group member (" << member.ShortDebugString()
+    LOG(INFO) << "Add cache group member (" << member.ToString()
               << ") to consistent hash success.";
   }
 
@@ -99,17 +99,17 @@ const ConsistentHash::NodesT& ConsistentHash::GetAllNodes() const {
 }
 
 std::vector<uint64_t> ConsistentHash::CalcWeights(
-    const PBCacheGroupMembers& members) {
+    const std::vector<CacheGroupMember>& members) {
   std::vector<uint64_t> weights(members.size());
   for (int i = 0; i < members.size(); i++) {
-    weights[i] = members[i].weight();
+    weights[i] = members[i].weight;
   }
   return Helper::NormalizeByGcd(weights);
 }
 
 UpstreamImpl::UpstreamImpl() : chash_(std::make_shared<ConsistentHash>()) {}
 
-void UpstreamImpl::Build(const PBCacheGroupMembers& members) {
+void UpstreamImpl::Build(const std::vector<CacheGroupMember>& members) {
   CHECK_NOTNULL(chash_);
 
   VLOG(1) << "Build upstream with " << members.size()
@@ -159,18 +159,17 @@ Status UpstreamImpl::GetNode(const BlockKey& key, RemoteCacheNodeSPtr& node) {
   return Status::OK();
 }
 
-PBCacheGroupMembers UpstreamImpl::FilterMember(
-    const PBCacheGroupMembers& members) {
-  PBCacheGroupMembers members_out;
+std::vector<CacheGroupMember> UpstreamImpl::FilterMember(
+    const std::vector<CacheGroupMember>& members) {
+  std::vector<CacheGroupMember> members_out;
   for (const auto& member : members) {
-    if (member.state() !=
-        PBCacheGroupMemberState::CacheGroupMemberStateOnline) {
+    if (member.state != CacheGroupMemberState::kOnline) {
       LOG(INFO) << "Skip non-online cache group member: member = "
-                << member.ShortDebugString();
+                << member.ToString();
       continue;
-    } else if (member.weight() == 0) {
+    } else if (member.weight == 0) {
       LOG(INFO) << "Skip cache group member with zero weight: member = "
-                << member.ShortDebugString();
+                << member.ToString();
       continue;
     }
     members_out.emplace_back(member);
@@ -178,25 +177,20 @@ PBCacheGroupMembers UpstreamImpl::FilterMember(
   return members_out;
 }
 
-static bool operator==(const PBCacheGroupMember& lhs,
-                       const PBCacheGroupMember& rhs) {
-  return lhs.id() == rhs.id() && lhs.ip() == rhs.ip() &&
-         lhs.port() == rhs.port() && lhs.weight() == rhs.weight();
-}
-
-bool UpstreamImpl::IsSame(const PBCacheGroupMembers& old_members,
-                          const PBCacheGroupMembers& new_members) const {
+bool UpstreamImpl::IsSame(
+    const std::vector<CacheGroupMember>& old_members,
+    const std::vector<CacheGroupMember>& new_members) const {
   if (old_members.size() != new_members.size()) {
     return false;
   }
 
-  std::unordered_map<std::string, PBCacheGroupMember> m;
+  std::unordered_map<std::string, CacheGroupMember> m;
   for (const auto& member : old_members) {
-    m[member.id()] = member;
+    m[member.id] = member;
   }
 
   for (const auto& member : new_members) {
-    auto iter = m.find(member.id());
+    auto iter = m.find(member.id);
     if (iter == m.end() || !(iter->second == member)) {
       return false;
     }
@@ -251,7 +245,7 @@ void UpstreamImpl::ShutdownNodes(
   }
 }
 
-void UpstreamImpl::ResetCHash(const PBCacheGroupMembers& new_members,
+void UpstreamImpl::ResetCHash(const std::vector<CacheGroupMember>& new_members,
                               ConsistentHashSPtr new_chash) {
   WriteLockGuard lock(rwlock_);
   members_ = new_members;
@@ -263,13 +257,12 @@ void UpstreamImpl::SetStatusPage() const {
     auto& nodes = root.remote_cache.nodes;
     nodes.clear();
     for (const auto& member : members_) {
-      nodes[member.id()] = CacheStatus::Node{
-          .id = member.id(),
-          .address = absl::StrFormat("%s:%d", member.ip(), member.port()),
-          .weight = member.weight(),
-          .state = Helper::ToLowerCase(
-              pb::mds::cachegroup::CacheGroupMemberState_Name(member.state())
-                  .substr(21)),
+      nodes[member.id] = CacheStatus::Node{
+          .id = member.id,
+          .address = absl::StrFormat("%s:%d", member.ip, member.port),
+          .weight = member.weight,
+          .state =
+              Helper::ToLowerCase(CacheGroupMemberStateToString(member.state)),
           .health = "normal",  // FIXME(P0)
       };
     }

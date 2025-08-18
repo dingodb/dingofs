@@ -26,10 +26,9 @@
 #include <memory>
 
 #include "cache/common/macro.h"
-#include "cache/status/cache_status.h"
+#include "cache/metric/cache_status.h"
 #include "cache/utils/helper.h"
 #include "cache/utils/ketama_con_hash.h"
-#include "metrics/cache/blockcache/disk_cache_group_metric.h"
 
 namespace dingofs {
 namespace cache {

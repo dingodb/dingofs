@@ -23,9 +23,8 @@
 #ifndef DINGOFS_SRC_CACHE_CACHEGROUP_CACHE_GROUP_NODE_MEMBER_H_
 #define DINGOFS_SRC_CACHE_CACHEGROUP_CACHE_GROUP_NODE_MEMBER_H_
 
+#include "cache/common/mds_client.h"
 #include "common/status.h"
-#include "options/cache/cachegroup.h"
-#include "stub/rpcclient/mds_client.h"
 
 namespace dingofs {
 namespace cache {
@@ -47,10 +46,7 @@ using CacheGroupNodeMemberSPtr = std::shared_ptr<CacheGroupNodeMember>;
 
 class CacheGroupNodeMemberImpl final : public CacheGroupNodeMember {
  public:
-  using MdsClientSPtr = std::shared_ptr<stub::rpcclient::MdsClient>;
-
-  CacheGroupNodeMemberImpl(CacheGroupNodeOption option,
-                           MdsClientSPtr mds_client);
+  explicit CacheGroupNodeMemberImpl(MDSClientSPtr mds_client);
 
   ~CacheGroupNodeMemberImpl() override = default;
 
@@ -64,8 +60,7 @@ class CacheGroupNodeMemberImpl final : public CacheGroupNodeMember {
 
  private:
   std::string member_id_;
-  const CacheGroupNodeOption option_;
-  MdsClientSPtr mds_client_;
+  MDSClientSPtr mds_client_;
 };
 
 }  // namespace cache

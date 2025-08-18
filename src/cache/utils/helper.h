@@ -54,6 +54,7 @@ class Helper {
 
   // string
   static std::string ToLowerCase(const std::string& str);
+  static std::string RedString(const std::string& str);
 
   // sys conf
   static int GetProcessCores();
@@ -106,6 +107,12 @@ class Helper {
 
   static bool ProtoToJson(const google::protobuf::Message& message,
                           std::string& json);
+
+  // split "/dir1:10;/dir2:200":
+  // [ {"/dir1", 10}, {"/dir2", 200} ]
+  static void SplitUniteCacheDir(
+      const std::string& cache_dir, uint64_t default_cache_size_mb,
+      std::vector<std::pair<std::string, uint64_t>>* cache_dirs);
 };
 
 }  // namespace cache

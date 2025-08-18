@@ -23,8 +23,6 @@
 #include "cache/cachegroup/cache_group_node_heartbeat.h"
 
 #include "cache/common/macro.h"
-#include "cache/common/proto.h"
-#include "metrics/cache/cachegroup/cache_group_node_metric.h"
 #include "utils/executor/bthread/bthread_executor.h"
 
 namespace dingofs {
@@ -34,7 +32,7 @@ DEFINE_uint32(send_heartbeat_interval_s, 3,
               "Interval to send heartbeat to MDS in seconds");
 
 CacheGroupNodeHeartbeatImpl::CacheGroupNodeHeartbeatImpl(
-    CacheGroupNodeMemberSPtr member, MdsClientSPtr mds_client)
+    CacheGroupNodeMemberSPtr member, MDSClientSPtr mds_client)
     : running_(false),
       member_(member),
       mds_client_(mds_client),
@@ -78,24 +76,16 @@ void CacheGroupNodeHeartbeatImpl::Shutdown() {
 
 void CacheGroupNodeHeartbeatImpl::SendHeartbeat() {
   std::string group_name = member_->GetGroupName();
-  auto rc = mds_client_->SendCacheGroupHeartbeat(member_->GetListenIP(),
-                                                 member_->GetListenPort());
-  if (rc != PBCacheGroupErrCode::CacheGroupOk) {
-    LOG(ERROR) << "Send cache group heartbeat failed: group_name = "
+  auto status = mds_client_->Heartbeat(
+      member_->GetMemberId(), member_->GetListenIP(), member_->GetListenPort());
+  if (!status.ok()) {
+    LOG(ERROR) << "Send cache group member heartbeat failed: group_name = "
                << group_name << ", ip = " << member_->GetListenIP()
                << ", port = " << member_->GetListenPort()
-               << ", rc = " << CacheGroupErrCode_Name(rc);
+               << ", status = " << status.ToString();
   }
   executor_->Schedule([this] { SendHeartbeat(); },
                       FLAGS_send_heartbeat_interval_s * 1000);
-}
-
-int64_t CacheGroupNodeHeartbeatImpl::GetCacheHitCount() {
-  return CacheGroupNodeMetric::GetInstance().cache_hit_count.get_value();
-}
-
-int64_t CacheGroupNodeHeartbeatImpl::GetCacheMissCount() {
-  return CacheGroupNodeMetric::GetInstance().cache_miss_count.get_value();
 }
 
 }  // namespace cache

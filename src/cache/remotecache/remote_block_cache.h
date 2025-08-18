@@ -30,14 +30,13 @@
 #include "cache/storage/storage.h"
 #include "cache/utils/bthread.h"
 #include "cache/utils/context.h"
-#include "options/cache/tiercache.h"
 
 namespace dingofs {
 namespace cache {
 
 class RemoteBlockCacheImpl final : public BlockCache {
  public:
-  RemoteBlockCacheImpl(RemoteBlockCacheOption option, StorageSPtr storage);
+  explicit RemoteBlockCacheImpl(StorageSPtr storage);
 
   Status Start() override;
   Status Shutdown() override;
@@ -72,7 +71,6 @@ class RemoteBlockCacheImpl final : public BlockCache {
   void SetStatusPage() const;
 
   std::atomic<bool> running_;
-  RemoteBlockCacheOption option_;
   RemoteCacheNodeSPtr remote_node_;
   StorageSPtr storage_;
   MemCacheSPtr memcache_;

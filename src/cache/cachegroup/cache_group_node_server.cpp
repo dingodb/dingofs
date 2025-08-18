@@ -29,10 +29,9 @@
 namespace dingofs {
 namespace cache {
 
-CacheGroupNodeServerImpl::CacheGroupNodeServerImpl(CacheGroupNodeOption option)
+CacheGroupNodeServerImpl::CacheGroupNodeServerImpl()
     : running_(false),
-      option_(option),
-      node_(std::make_shared<CacheGroupNodeImpl>(option)),
+      node_(std::make_shared<CacheGroupNodeImpl>()),
       service_(std::make_unique<CacheGroupNodeServiceImpl>(node_)),
       server_(std::make_unique<::brpc::Server>()) {}
 
@@ -51,8 +50,8 @@ Status CacheGroupNodeServerImpl::Start() {
   InstallSignal();
 
   // Start brpc server
-  std::string listen_ip = option_.listen_ip;
-  uint32_t listen_port = option_.listen_port;
+  auto listen_ip = FLAGS_listen_ip;
+  auto listen_port = FLAGS_listen_port;
   auto status = StartRpcServer(listen_ip, listen_port);
   if (!status.ok()) {
     LOG(ERROR) << "Start cache group node server on addresss (" << listen_ip

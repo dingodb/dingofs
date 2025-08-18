@@ -30,18 +30,17 @@
 namespace dingofs {
 namespace cache {
 
-#define DECLARE_RPC_METHOD(method)                                   \
-  void method(google::protobuf::RpcController* controller,           \
-              const pb::cache::blockcache::method##Request* request, \
-              pb::cache::blockcache::method##Response* response,     \
+#define DECLARE_RPC_METHOD(method)                         \
+  void method(google::protobuf::RpcController* controller, \
+              const pb::cache::method##Request* request,   \
+              pb::cache::method##Response* response,       \
               google::protobuf::Closure* done) override
 
-#define DEFINE_RPC_METHOD(classname, method)                 \
-  void classname::method(                                    \
-      google::protobuf::RpcController* controller,           \
-      const pb::cache::blockcache::method##Request* request, \
-      pb::cache::blockcache::method##Response* response,     \
-      google::protobuf::Closure* done)
+#define DEFINE_RPC_METHOD(classname, method)                          \
+  void classname::method(google::protobuf::RpcController* controller, \
+                         const pb::cache::method##Request* request,   \
+                         pb::cache::method##Response* response,       \
+                         google::protobuf::Closure* done)
 
 #define CHECK_RUNNING(service_name)               \
   CHECK(running_.load(std::memory_order_relaxed)) \
@@ -58,44 +57,43 @@ namespace cache {
 #define LOG_SYSERR(code, ...) \
   LOG(ERROR) << absl::StrFormat(__VA_ARGS__) << ": " << ::strerror(code);
 
-#define LOG_INFO(...) LOG(INFO) << absl::StrFormat(__VA_ARGS__)
-#define LOG_ERROR(...) LOG(ERROR) << absl::StrFormat(__VA_ARGS__)
-#define LOG_WARNING(...) LOG(WARNING) << absl::StrFormat(__VA_ARGS__)
-#define VLOG_1(...) VLOG(1) << absl::StrFormat(__VA_ARGS__)
-#define VLOG_3(...) VLOG(3) << absl::StrFormat(__VA_ARGS__)
-#define VLOG_6(...) VLOG(6) << absl::StrFormat(__VA_ARGS__)
-#define VLOG_9(...) VLOG(9) << absl::StrFormat(__VA_ARGS__)
+#define LOG_CTX(severity) LOG(severity) << ctx->StrTraceId() << " "
+#define VLOG_CTX(verboselevel) VLOG(verboselevel) << ctx->StrTraceId() << " "
+#define LOG_EVERY_SECOND_CTX(severity) \
+  LOG_EVERY_SECOND(severity) << ctx->StrTraceId() << " "
+#define LOG_EVERY_N_CTX(severity, n) \
+  LOG_EVERY_N(severity, n) << ctx->StrTraceId() << " "
 
-#define GENERIC_LOG_PUT_ERROR(to)                                    \
-  do {                                                               \
-    LOG(ERROR) << "[" << ctx->TraceId() << "] Put block to " << (to) \
-               << " failed: key = " << key.Filename()                \
-               << ", length = " << block.size                        \
-               << ", status = " << status.ToString();                \
+#define GENERIC_LOG_PUT_ERROR(to)                               \
+  do {                                                          \
+    LOG(ERROR) << ctx->StrTraceId() << " Put block to " << (to) \
+               << " failed: key = " << key.Filename()           \
+               << ", length = " << block.size                   \
+               << ", status = " << status.ToString();           \
   } while (0);
 
-#define GENERIC_LOG_RANGE_ERROR(from)                                      \
-  do {                                                                     \
-    LOG(ERROR) << "[" << ctx->TraceId() << "] Range block from " << (from) \
-               << " failed: key = " << key.Filename()                      \
-               << ", offset = " << offset << ", length = " << length       \
-               << ", status = " << status.ToString();                      \
+#define GENERIC_LOG_RANGE_ERROR(from)                                 \
+  do {                                                                \
+    LOG(ERROR) << ctx->StrTraceId() << " Range block from " << (from) \
+               << " failed: key = " << key.Filename()                 \
+               << ", offset = " << offset << ", length = " << length  \
+               << ", status = " << status.ToString();                 \
   } while (0);
 
-#define GENERIC_LOG_CACHE_ERROR(to)                                    \
+#define GENERIC_LOG_CACHE_ERROR(to)                               \
+  do {                                                            \
+    LOG(ERROR) << ctx->StrTraceId() << " Cache block to " << (to) \
+               << " failed: key = " << key.Filename()             \
+               << ", length = " << block.size                     \
+               << ", status = " << status.ToString();             \
+  } while (0);
+
+#define GENERIC_LOG_PREFETCH_ERROR(to)                                 \
   do {                                                                 \
-    LOG(ERROR) << "[" << ctx->TraceId() << "] Cache block to " << (to) \
+    LOG(ERROR) << ctx->StrTraceId() << " Prefetch block into " << (to) \
                << " failed: key = " << key.Filename()                  \
-               << ", length = " << block.size                          \
+               << ", length = " << length                              \
                << ", status = " << status.ToString();                  \
-  } while (0);
-
-#define GENERIC_LOG_PREFETCH_ERROR(to)                                      \
-  do {                                                                      \
-    LOG(ERROR) << "[" << ctx->TraceId() << "] Prefetch block into " << (to) \
-               << " failed: key = " << key.Filename()                       \
-               << ", length = " << length                                   \
-               << ", status = " << status.ToString();                       \
   } while (0);
 
 #define GENERIC_LOG_STAGE_ERROR()                                         \
@@ -122,16 +120,16 @@ namespace cache {
                << ", status = " << status.ToString();                         \
   } while (0);
 
-#define GENERIC_LOG_DOWNLOAD_ERROR()                             \
-  do {                                                           \
-    LOG(ERROR) << "[" << ctx->TraceId()                          \
-               << "] Download block from storage failed: key = " \
-               << key.Filename() << ", offset = " << offset      \
-               << ", length = " << length                        \
-               << ", status = " << status.ToString();            \
+#define GENERIC_LOG_DOWNLOAD_ERROR()                           \
+  do {                                                         \
+    LOG(ERROR) << ctx->StrTraceId()                            \
+               << "Download block from storage failed: key = " \
+               << key.Filename() << ", offset = " << offset    \
+               << ", length = " << length                      \
+               << ", status = " << status.ToString();          \
   } while (0);
 
-#define SCOPE_EXIT BRPC_SCOPE_EXIT
+#define ON_SCOPE_EXIT BRPC_SCOPE_EXIT
 
 }  // namespace cache
 }  // namespace dingofs

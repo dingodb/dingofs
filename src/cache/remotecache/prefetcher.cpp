@@ -134,14 +134,15 @@ int Prefetcher::HandleTask(void* meta, bthread::TaskIterator<Task>& iter) {
 }
 
 void Prefetcher::DoPrefetch(const Task& task) {
+  const auto& ctx = task.ctx;
   IOBuffer buffer;
   RangeOption option;
   option.block_size = task.length;
   auto status =
-      remote_node_->Range(task.ctx, task.key, 0, task.length, &buffer, option);
+      remote_node_->Range(ctx, task.key, 0, task.length, &buffer, option);
   if (!status.ok()) {
-    LOG_EVERY_N(WARNING, 100)
-        << "[" << task.ctx->TraceId() << "] Prefetch failed: "
+    LOG_EVERY_N_CTX(WARNING, 100)
+        << "Prefetch failed: "
         << "key = " << task.key.Filename() << ", length = " << task.length
         << ", status = " << status.ToString();
     return;

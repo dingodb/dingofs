@@ -22,9 +22,9 @@
 
 #include "cache/benchmark/factory.h"
 
+#include "cache/benchmark/option.h"
 #include "cache/utils/context.h"
 #include "cache/utils/helper.h"
-#include "options/cache/benchmark.h"
 
 namespace dingofs {
 namespace cache {

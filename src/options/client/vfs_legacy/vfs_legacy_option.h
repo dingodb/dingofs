@@ -20,8 +20,6 @@
 #include <cstdint>
 
 #include "blockaccess/accesser_common.h"
-#include "options/cache/blockcache.h"
-#include "options/cache/tiercache.h"
 #include "options/client/fuse/fuse_option.h"
 #include "options/client/vfs_legacy/data_stream/data_stream_option.h"
 #include "stub/common/config.h"
@@ -128,8 +126,6 @@ struct VFSLegacyOption {
   KVClientManagerOpt kvClientManagerOpt;
   FileSystemOption fileSystemOption;
   DataStreamOption data_stream_option;
-  cache::BlockCacheOption block_cache_option;
-  cache::RemoteBlockCacheOption remote_block_cache_option;
   FuseOption fuse_option;
 
   uint32_t listDentryLimit;

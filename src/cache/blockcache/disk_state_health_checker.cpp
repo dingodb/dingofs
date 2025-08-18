@@ -19,19 +19,18 @@
 #include <memory>
 
 #include "cache/common/macro.h"
-#include "cache/status/cache_status.h"
+#include "cache/common/state_machine.h"
+#include "cache/metric/cache_status.h"
+#include "cache/metric/disk_cache_metric.h"
 #include "cache/utils/helper.h"
-#include "cache/utils/state_machine.h"
-#include "metrics/cache/blockcache/disk_cache_metric.h"
-#include "options/cache/blockcache.h"
 #include "utils/executor/bthread/bthread_executor.h"
 
 namespace dingofs {
 namespace cache {
 
-DEFINE_uint32(check_disk_state_duration_ms, 3000,
+DEFINE_uint32(disk_state_check_duration_ms, 3000,
               "Duration in milliseconds to check the disk state");
-DEFINE_validator(check_disk_state_duration_ms, brpc::PassValidate);
+DEFINE_validator(disk_state_check_duration_ms, brpc::PassValidate);
 
 DiskStateHealthChecker::DiskStateHealthChecker(DiskCacheMetricSPtr metric,
                                                DiskCacheLayoutSPtr layout,
@@ -57,7 +56,7 @@ void DiskStateHealthChecker::Start() {
 
   CHECK(executor_->Start());
   executor_->Schedule([this] { RunCheck(); },
-                      FLAGS_check_disk_state_duration_ms);
+                      FLAGS_disk_state_check_duration_ms);
 
   running_ = true;
 
@@ -75,6 +74,7 @@ void DiskStateHealthChecker::Shutdown() {
 
   executor_->Stop();
   state_machine_->Shutdown();
+  metric_->healthy_status.set_value("unknown");
 
   LOG(INFO) << "Disk state health checker is down.";
 
@@ -84,7 +84,7 @@ void DiskStateHealthChecker::Shutdown() {
 void DiskStateHealthChecker::RunCheck() {
   ProbeDisk();
   executor_->Schedule([this] { RunCheck(); },
-                      FLAGS_check_disk_state_duration_ms);
+                      FLAGS_disk_state_check_duration_ms);
 }
 
 void DiskStateHealthChecker::ProbeDisk() {
@@ -115,8 +115,7 @@ std::string DiskStateHealthChecker::GetProbeFilepath() const {
 
 void DiskStateHealthChecker::SetStatusPage(State state) const {
   CacheStatus::Update([&](CacheStatus::Root& root) {
-    root.local_cache.disks[metric_->GetCacheIndex()].health =
-        StateToString(state);
+    root.local_cache.disks[metric_->cache_index].health = StateToString(state);
   });
 }
 

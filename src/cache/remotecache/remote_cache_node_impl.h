@@ -26,12 +26,12 @@
 #include <brpc/channel.h>
 
 #include "cache/blockcache/block_cache.h"
+#include "cache/common/state_machine.h"
 #include "cache/remotecache/remote_cache_node.h"
 #include "cache/remotecache/remote_cache_node_health_checker.h"
 #include "cache/remotecache/rpc_client.h"
 #include "cache/utils/bthread.h"
 #include "cache/utils/context.h"
-#include "cache/utils/state_machine.h"
 #include "common/io_buffer.h"
 
 namespace dingofs {
@@ -46,7 +46,7 @@ struct SubRangeRequest {
 
 class RemoteCacheNodeImpl final : public RemoteCacheNode {
  public:
-  RemoteCacheNodeImpl(const PBCacheGroupMember& member);
+  RemoteCacheNodeImpl(const CacheGroupMember& member);
 
   Status Start() override;
   Status Shutdown() override;
@@ -69,7 +69,7 @@ class RemoteCacheNodeImpl final : public RemoteCacheNode {
   Status CheckStatus(Status status);
 
   std::atomic<bool> running_;
-  PBCacheGroupMember member_;
+  const CacheGroupMember member_;
   RPCClientUPtr rpc_;
   StateMachineSPtr state_machine_;
   RemoteCacheNodeHealthCheckerUPtr health_checker_;

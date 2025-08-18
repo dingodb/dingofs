@@ -19,11 +19,9 @@ file(GLOB CACHEGROUP_LIB_SRCS
 
 add_library(cache_cachegroup ${CACHEGROUP_LIB_SRCS})
 target_link_libraries(cache_cachegroup
-    cache_common
     cache_utils
-    cache_options
+    cache_common
+    cache_metric
     cache_storage
     cache_blockcache
-    vfs_meta_v2_lib
-    jsoncpp
 )

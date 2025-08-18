@@ -27,10 +27,10 @@
 #include <absl/strings/str_split.h>
 #include <glog/logging.h>
 
-#include "cache/common/proto.h"
 #include "cache/utils/context.h"
 #include "common/io_buffer.h"
 #include "common/status.h"
+#include "dingofs/blockcache.pb.h"
 #include "utils/string.h"
 
 namespace dingofs {
@@ -51,7 +51,7 @@ struct BlockKey {
            uint64_t version)
       : fs_id(fs_id), ino(ino), id(id), index(index), version(version) {}
 
-  BlockKey(PBBlockKey pb)
+  BlockKey(pb::cache::BlockKey pb)
       : fs_id(pb.fs_id()),
         ino(pb.ino()),
         id(pb.id()),
@@ -68,8 +68,8 @@ struct BlockKey {
                            Filename());
   }
 
-  PBBlockKey ToPB() const {
-    PBBlockKey pb;
+  pb::cache::BlockKey ToPB() const {
+    pb::cache::BlockKey pb;
     pb.set_fs_id(fs_id);
     pb.set_ino(ino);
     pb.set_id(id);

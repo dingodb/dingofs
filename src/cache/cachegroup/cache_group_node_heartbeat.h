@@ -26,7 +26,7 @@
 #include <memory>
 
 #include "cache/cachegroup/cache_group_node_member.h"
-#include "stub/rpcclient/mds_client.h"
+#include "cache/common/mds_client.h"
 #include "utils/executor/executor.h"
 
 namespace dingofs {
@@ -44,10 +44,8 @@ using CacheGroupNodeHeartbeatUPtr = std::unique_ptr<CacheGroupNodeHeartbeat>;
 
 class CacheGroupNodeHeartbeatImpl final : public CacheGroupNodeHeartbeat {
  public:
-  using MdsClientSPtr = std::shared_ptr<stub::rpcclient::MdsClient>;
-
   CacheGroupNodeHeartbeatImpl(CacheGroupNodeMemberSPtr member,
-                              MdsClientSPtr mds_client);
+                              MDSClientSPtr mds_client);
 
   void Start() override;
   void Shutdown() override;
@@ -55,13 +53,10 @@ class CacheGroupNodeHeartbeatImpl final : public CacheGroupNodeHeartbeat {
  private:
   void SendHeartbeat();
 
-  int64_t GetCacheHitCount();
-  int64_t GetCacheMissCount();
-
  private:
   std::atomic<bool> running_;
   CacheGroupNodeMemberSPtr member_;
-  MdsClientSPtr mds_client_;
+  MDSClientSPtr mds_client_;
   std::unique_ptr<Executor> executor_;
 };
 

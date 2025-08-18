@@ -184,8 +184,8 @@ void InitVFSLegacyOption(utils::Configuration* conf, VFSLegacyOption* option) {
   InitKVClientManagerOpt(conf, &option->kvClientManagerOpt);
   InitFileSystemOption(conf, &option->fileSystemOption);
   InitDataStreamOption(conf, &option->data_stream_option);
-  InitBlockCacheOption(conf, &option->block_cache_option);
-  InitRemoteBlockCacheOption(conf, &option->remote_block_cache_option);
+  InitBlockCacheOption(conf);
+  InitRemoteBlockCacheOption(conf);
   InitFuseOption(conf, &option->fuse_option);
 
   if (!conf->GetUInt32Value("client.fs_usage_flush_interval_second",

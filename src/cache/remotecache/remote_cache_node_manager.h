@@ -23,39 +23,33 @@
 #ifndef DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_CACHE_NODE_MANAGER_H_
 #define DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_CACHE_NODE_MANAGER_H_
 
-#include "cache/common/proto.h"
+#include "cache/common/mds_client.h"
 #include "common/status.h"
-#include "options/cache/tiercache.h"
-#include "stub/rpcclient/mds_client.h"
 #include "utils/executor/executor.h"
 
 namespace dingofs {
 namespace cache {
 
-using OnMemberLoad = std::function<void(const PBCacheGroupMembers& members)>;
+using OnMemberLoadFn =
+    std::function<void(const std::vector<CacheGroupMember>& members)>;
 
 class RemoteCacheNodeManager {
  public:
-  RemoteCacheNodeManager(RemoteBlockCacheOption option,
-                         OnMemberLoad on_member_load);
+  explicit RemoteCacheNodeManager(OnMemberLoadFn on_member_load_fn);
 
   Status Start();
   void Shutdown();
 
  private:
   void BackgroudRefresh();
-
   Status RefreshMembers();
-
-  Status LoadMembers(PBCacheGroupMembers* members);
+  Status LoadMembers(std::vector<CacheGroupMember>* members);
 
   void SetStatusPage() const;
 
   std::atomic<bool> running_;
-  RemoteBlockCacheOption option_;
-  OnMemberLoad on_member_load_;
-  std::shared_ptr<stub::rpcclient::MDSBaseClient> mds_base_;
-  std::shared_ptr<stub::rpcclient::MdsClient> mds_client_;
+  MDSClientUPtr mds_client_;
+  OnMemberLoadFn on_member_load_fn_;
   std::unique_ptr<Executor> executor_;
 };
 

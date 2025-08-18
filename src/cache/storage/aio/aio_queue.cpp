@@ -31,7 +31,6 @@
 #include <string>
 #include <thread>
 
-#include "cache/common/const.h"
 #include "cache/common/macro.h"
 #include "cache/storage/aio/aio.h"
 #include "cache/utils/infight_throttle.h"
@@ -42,7 +41,7 @@ namespace cache {
 
 DEFINE_uint32(ioring_iodepth, 128, "Aio queue maximum iodepth");
 
-const std::string kModule = kAioModule;
+const std::string kModule = "aio";
 
 AioQueueImpl::AioQueueImpl(std::shared_ptr<IORing> io_ring)
     : running_(false),
@@ -112,10 +111,10 @@ void AioQueueImpl::Submit(Aio* aio) {
 
   // TODO: pls consider all waiting inflight bthread wakeup at the same time,
   // it will leads all bthread fight for locks. any performance skew?
-  NextStep(aio, kWaitThrottle);
+  NextStep(aio, "throttle");
   infights_->Increment(1);
 
-  NextStep(aio, kCheckIo);
+  NextStep(aio, "check");
   CheckIO(aio);
 }
 
@@ -125,7 +124,7 @@ void AioQueueImpl::CheckIO(Aio* aio) {
     return;
   }
 
-  NextStep(aio, kEnqueue);
+  NextStep(aio, "enqueue");
   CHECK_EQ(0, bthread::execution_queue_execute(prep_io_queue_id_, aio));
 }
 
@@ -139,7 +138,7 @@ int AioQueueImpl::PrepareIO(void* meta, bthread::TaskIterator<Aio*>& iter) {
   auto ioring = self->ioring_;
   for (; iter; iter++) {
     auto* aio = *iter;
-    NextStep(aio, kPrepareIO);
+    NextStep(aio, "prepare");
     Status status = ioring->PrepareIO(aio);
     if (!status.ok()) {
       self->OnError(aio, status);
@@ -148,14 +147,14 @@ int AioQueueImpl::PrepareIO(void* meta, bthread::TaskIterator<Aio*>& iter) {
 
     prep_aios_.emplace_back(aio);
     if (prep_aios_.size() == kSubmitBatchSize) {
-      BatchNextStep(prep_aios_, kExecuteIO);
+      BatchNextStep(prep_aios_, "execute");
       self->BatchSubmitIO(prep_aios_);
       prep_aios_.clear();
     }
   }
 
   if (!prep_aios_.empty()) {
-    BatchNextStep(prep_aios_, kExecuteIO);
+    BatchNextStep(prep_aios_, "execute");
     self->BatchSubmitIO(prep_aios_);
   }
   return 0;
@@ -192,29 +191,31 @@ void AioQueueImpl::BackgroundWait() {
 }
 
 void AioQueueImpl::OnError(Aio* aio, Status status) {
-  CHECK_NE(LastStep(aio), kExecuteIO)
-      << aio->ctx->StrTraceId() << " Aio " << aio->ToString()
-      << " is not on expected phase: got(" << LastStep(aio) << ") != expect("
-      << kExecuteIO << ")";
+  const auto& ctx = aio->ctx;
+  CHECK_NE(LastStep(aio), "execute")
+      << ctx->StrTraceId() << " Aio " << aio->ToString()
+      << " is not on expected phase: got(" << LastStep(aio)
+      << ") != expect(execute)";
 
-  LOG(ERROR) << aio->ctx->StrTraceId() << " Aio encountered an error in "
-             << LastStep(aio) << " step: aio = " << aio->ToString()
-             << ", status = " << status.ToString();
+  LOG_CTX(ERROR) << "Aio encountered an error in " << LastStep(aio)
+                 << " step: aio = " << aio->ToString()
+                 << ", status = " << status.ToString();
 
   aio->status() = status;
   RunClosure(aio);
 }
 
 void AioQueueImpl::OnCompleted(Aio* aio) {
-  CHECK_EQ(LastStep(aio), kExecuteIO)
-      << aio->ctx->StrTraceId() << " Aio " << aio->ToString()
-      << " is not on expected phase: got(" << LastStep(aio) << ") != expect("
-      << kExecuteIO << ")";
+  const auto& ctx = aio->ctx;
+
+  CHECK_EQ(LastStep(aio), "execute")
+      << ctx->StrTraceId() << " Aio " << aio->ToString()
+      << " is not on expected phase: got(" << LastStep(aio)
+      << ") != expect(execute)";
 
   if (!aio->status().ok()) {
-    LOG(ERROR) << aio->ctx->StrTraceId()
-               << " Aio failed: aio = " << aio->ToString()
-               << ", status = " << aio->status().ToString();
+    LOG_CTX(ERROR) << "Aio failed: aio = " << aio->ToString()
+                   << ", status = " << aio->status().ToString();
   }
 
   RunClosure(aio);
@@ -226,7 +227,7 @@ void AioQueueImpl::RunClosure(Aio* aio) {
   auto timer = aio->timer;
   TraceLogGuard log(aio->ctx, status, timer, kModule, "%s", aio->ToString());
 
-  NextStep(aio, kRunClosure);
+  NextStep(aio, "closure");
   aio->Run();
 
   infights_->Decrement(1);

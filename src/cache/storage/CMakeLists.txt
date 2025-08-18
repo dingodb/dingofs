@@ -25,8 +25,8 @@ add_library(cache_storage ${STORAGE_LIB_SRCS})
 target_link_libraries(cache_storage
     uring::uring
 
-    cache_common
     cache_utils
+    cache_common
 )
 
 # now we support 3fs usrbio only for ubuntu

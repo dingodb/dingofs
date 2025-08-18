@@ -18,8 +18,8 @@
 #include <memory>
 
 #include "bthread/execution_queue.h"
+#include "cache/common/state_machine.h"
 #include "cache/common/type.h"
-#include "cache/utils/state_machine.h"
 #include "utils/executor/executor.h"
 
 namespace dingofs {
