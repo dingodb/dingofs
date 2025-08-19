@@ -808,8 +808,9 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& sess
     }
   }
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] open {} finish, flags({:o}) cache_chunk({}) status({}).", fs_id_,
-                                 duration.ElapsedUs(), ino, flags, is_completely, status.error_str());
+  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] open {} finish, flags({:o}:{}) cache_chunk({}) status({}).", fs_id_,
+                                 duration.ElapsedUs(), ino, flags, Helper::DescOpenFlags(flags), is_completely,
+                                 status.error_str());
 
   return Status::OK();
 }
@@ -1449,7 +1450,7 @@ Status FileSystem::GetXAttr(Context& ctx, Ino ino, const std::string& name, std:
   return Status::OK();
 }
 
-Status FileSystem::SetXAttr(Context& ctx, Ino ino, const Inode::XAttrMap& xattrs, uint64_t& version) {
+Status FileSystem::SetXAttr(Context& ctx, Ino ino, const Inode::XAttrMap& xattrs, EntryOut& entry_out) {
   DINGO_LOG(DEBUG) << fmt::format("[fs.{}] setxattr ino({}).", fs_id_, ino);
 
   if (!CanServe()) {
@@ -1481,7 +1482,7 @@ Status FileSystem::SetXAttr(Context& ctx, Ino ino, const Inode::XAttrMap& xattrs
   auto& result = operation.GetResult();
   auto& attr = result.attr;
 
-  version = attr.version();
+  entry_out.attr = attr;
 
   // update cache
   if (IsDir(ino) && IsParentHashPartition()) {
@@ -1494,7 +1495,7 @@ Status FileSystem::SetXAttr(Context& ctx, Ino ino, const Inode::XAttrMap& xattrs
   return Status::OK();
 }
 
-Status FileSystem::RemoveXAttr(Context& ctx, Ino ino, const std::string& name, uint64_t& version) {
+Status FileSystem::RemoveXAttr(Context& ctx, Ino ino, const std::string& name, EntryOut& entry_out) {
   DINGO_LOG(DEBUG) << fmt::format("[fs.{}] removexattr ino({}), name({}).", fs_id_, ino, name);
 
   if (!CanServe()) {
@@ -1526,7 +1527,7 @@ Status FileSystem::RemoveXAttr(Context& ctx, Ino ino, const std::string& name, u
   auto& result = operation.GetResult();
   auto& attr = result.attr;
 
-  version = attr.version();
+  entry_out.attr = attr;
 
   // update cache
   if (IsDir(ino) && IsParentHashPartition()) {
@@ -1770,7 +1771,7 @@ Status FileSystem::CommitRename(Context& ctx, const RenameParam& param, Ino& old
   return renamer_.Execute<RenameParam>(GetSelfPtr(), ctx, param, old_parent_version, new_parent_version);
 }
 
-static uint64_t CalculateDeltaLength(uint64_t length, const std::vector<pb::mdsv2::Slice>& slices) {
+static uint64_t CalculateDeltaLength(uint64_t length, const std::vector<SliceEntry>& slices) {
   uint64_t temp_length = length;
   for (const auto& slice : slices) {
     temp_length = std::max(temp_length, slice.offset() + slice.len());
@@ -1779,11 +1780,18 @@ static uint64_t CalculateDeltaLength(uint64_t length, const std::vector<pb::mdsv
   return temp_length - length;
 }
 
-Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, uint64_t chunk_index,
-                              const std::vector<pb::mdsv2::Slice>& slices) {
-  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] writeslice ino({}), chunk_index({}), slice_list.size({}).", fs_id_, ino,
-                                  chunk_index, slices.size());
+static uint64_t CalculateDeltaLength(uint64_t length, const std::vector<DeltaSliceEntry>& delta_slices) {
+  uint64_t temp_length = length;
+  for (const auto& delta_slice : delta_slices) {
+    for (const auto& slice : delta_slice.slices()) {
+      temp_length = std::max(temp_length, slice.offset() + slice.len());
+    }
+  }
 
+  return temp_length - length;
+}
+
+Status FileSystem::WriteSlice(Context& ctx, Ino parent, Ino ino, const std::vector<DeltaSliceEntry>& delta_slices) {
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -1799,18 +1807,20 @@ Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, uint64_t chunk_index,
   Duration duration;
 
   // check quota
-  uint64_t delta_bytes = CalculateDeltaLength(inode->Length(), slices);
+  uint64_t delta_bytes = CalculateDeltaLength(inode->Length(), delta_slices);
   if (!quota_manager_->CheckQuota(trace, ino, static_cast<int64_t>(delta_bytes), 0)) {
     return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
   }
 
   // update backend store
-  UpsertChunkOperation operation(trace, GetFsInfo(), ino, chunk_index, slices);
+  UpsertChunkOperation operation(trace, GetFsInfo(), ino, delta_slices);
 
   status = RunOperation(&operation);
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] writeslice {}/{} finish, status({}).", fs_id_, duration.ElapsedUs(),
-                                 ino, chunk_index, status.error_str());
+  for (const auto& delta_slice : delta_slices) {
+    DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] writeslice {}/{} finish, status({}).", fs_id_, duration.ElapsedUs(),
+                                   ino, delta_slice.chunk_index(), status.error_str());
+  }
 
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("upsert chunk fail, {}", status.error_str()));
@@ -1819,34 +1829,36 @@ Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, uint64_t chunk_index,
   auto& result = operation.GetResult();
   auto& attr = result.attr;
   int64_t length_delta = result.length_delta;
-  auto& chunk = result.chunk;
+  auto& chunks = result.effected_chunks;
 
   // update cache
   inode->UpdateIf(attr);
 
   // check whether need to compact chunk
-  const uint64_t now_ms = Helper::TimestampMs();
-  if (FLAGS_mds_compact_chunk_enable &&
-      static_cast<uint32_t>(chunk.slices_size()) > FLAGS_mds_compact_chunk_threshold_num &&
-      chunk.last_compaction_time_ms() + FLAGS_mds_compact_chunk_interval_ms < now_ms) {
-    auto fs_info = fs_info_->Get();
-    if (CompactChunkOperation::MaybeCompact(fs_info, ino, attr.length(), chunk)) {
-      DINGO_LOG(INFO) << fmt::format("[fs.{}] trigger compact chunk({}) for ino({}).", fs_id_, chunk_index, ino);
+  for (auto& chunk : chunks) {
+    if (chunk.slices_size() > FLAGS_mds_compact_chunk_threshold_num &&
+        chunk.last_compaction_time_ms() + FLAGS_mds_compact_chunk_interval_ms < Helper::TimestampMs()) {
+      auto fs_info = fs_info_->Get();
+      if (CompactChunkOperation::MaybeCompact(fs_info, ino, attr.length(), chunk)) {
+        DINGO_LOG(INFO) << fmt::format("[fs.{}] trigger compact chunk({}) for ino({}).", fs_id_, chunk.index(), ino);
 
-      auto post_handler = [&](OperationSPtr operation) {
-        auto origin_operation = std::dynamic_pointer_cast<CompactChunkOperation>(operation);
-        auto& result = origin_operation->GetResult();
-        auto& attr = result.attr;
-        // update chunk cache
-        chunk_cache_.PutIf(attr.ino(), std::move(result.effected_chunk));
-      };
-      operation_processor_->AsyncRun(CompactChunkOperation::New(fs_info, ino, chunk_index, attr.length()),
-                                     post_handler);
+        auto post_handler = [&](OperationSPtr operation) {
+          auto origin_operation = std::dynamic_pointer_cast<CompactChunkOperation>(operation);
+          auto& result = origin_operation->GetResult();
+          auto& attr = result.attr;
+          // update chunk cache
+          chunk_cache_.PutIf(attr.ino(), std::move(result.effected_chunk));
+        };
+        operation_processor_->AsyncRun(CompactChunkOperation::New(fs_info, ino, chunk.index(), attr.length()),
+                                       post_handler);
+      }
     }
   }
 
   // update chunk cache
-  chunk_cache_.PutIf(ino, std::move(chunk));
+  for (auto& chunk : chunks) {
+    chunk_cache_.PutIf(ino, std::move(chunk));
+  }
 
   // update quota
   quota_manager_->UpdateFsUsage(length_delta, 0);
@@ -1857,9 +1869,8 @@ Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, uint64_t chunk_index,
   return Status::OK();
 }
 
-Status FileSystem::ReadSlice(Context& ctx, Ino ino, uint64_t chunk_index, std::vector<pb::mdsv2::Slice>& slices) {
-  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] readslice ino({}), chunk_index({}).", fs_id_, ino, chunk_index);
-
+Status FileSystem::ReadSlice(Context& ctx, Ino ino, const std::vector<uint64_t>& chunk_indexes,
+                             std::vector<ChunkEntry>& chunks) {
   if (!ctx.IsBypassCache() && !CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -1875,19 +1886,25 @@ Status FileSystem::ReadSlice(Context& ctx, Ino ino, uint64_t chunk_index, std::v
   }
 
   // get chunk from cache
-  auto chunk = chunk_cache_.Get(ino, chunk_index);
-  if (chunk != nullptr) {
-    slices = Helper::PbRepeatedToVector(chunk->slices());
-    return Status::OK();
+  std::vector<uint32_t> miss_chunk_indexes;
+  for (const auto& chunk_index : chunk_indexes) {
+    auto chunk = chunk_cache_.Get(ino, chunk_index);
+    if (chunk != nullptr) {
+      chunks.push_back(*chunk);
+    } else {
+      miss_chunk_indexes.push_back(chunk_index);
+    }
   }
+  if (miss_chunk_indexes.empty()) return Status::OK();
 
   // get chunk from backend store
-  GetChunkOperation operation(trace, fs_id_, ino, chunk_index);
+  GetChunkOperation operation(trace, fs_id_, ino, miss_chunk_indexes);
 
   status = RunOperation(&operation);
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] readslice {}/{} finish, status({}).", fs_id_, duration.ElapsedUs(), ino,
-                                 chunk_index, status.error_str());
+  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] readslice {}/{} finish, miss({}) status({}).", fs_id_,
+                                 duration.ElapsedUs(), ino, Helper::VectorToString(chunk_indexes),
+                                 Helper::VectorToString(miss_chunk_indexes), status.error_str());
 
   if (!status.ok() && status.error_code() != pb::error::ENOT_FOUND) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("get chunk fail, {}", status.error_str()));
@@ -1896,10 +1913,11 @@ Status FileSystem::ReadSlice(Context& ctx, Ino ino, uint64_t chunk_index, std::v
   if (status.ok()) {
     auto& result = operation.GetResult();
 
-    slices = Helper::PbRepeatedToVector(result.chunk.slices());
-
-    // update chunk cache
-    chunk_cache_.PutIf(ino, std::move(result.chunk));
+    for (auto& chunk : result.chunks) {
+      chunks.push_back(chunk);
+      // update chunk cache
+      chunk_cache_.PutIf(ino, std::move(chunk));
+    }
   }
 
   return Status::OK();

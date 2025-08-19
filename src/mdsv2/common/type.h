@@ -45,6 +45,7 @@ using FsOpLog = pb::mdsv2::FsOpLog;
 using FileType = pb::mdsv2::FileType;
 using CacheMemberEntry = pb::mdsv2::CacheGroupMember;
 using BucketSetEntry = pb::mdsv2::HashPartition::BucketSet;
+using DeltaSliceEntry = pb::mdsv2::WriteSliceRequest::DeltaSlice;
 
 struct Range {
   std::string start;

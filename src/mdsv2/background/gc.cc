@@ -14,6 +14,7 @@
 
 #include "mdsv2/background/gc.h"
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -71,7 +72,8 @@ Status CleanDelSliceTask::CleanDelSlice() {
     for (const auto& range : slice.ranges()) {
       for (uint64_t len = 0; len < range.len(); len += slice.block_size()) {
         uint64_t block_index = (range.offset() - chunk_offset + len) / slice.block_size();
-        cache::BlockKey block_key(slice.fs_id(), slice.ino(), slice.slice_id(), block_index, 0);
+        cache::BlockKey block_key(slice.fs_id(), slice.ino(), slice.slice_id(), block_index,
+                                  range.compaction_version());
 
         DINGO_LOG(INFO) << fmt::format("[gc.delslice] delete block filename({}) key({}).", block_key.Filename(),
                                        block_key.StoreKey());
@@ -140,7 +142,7 @@ Status CleanDelFileTask::CleanDelFile(const AttrEntry& attr) {
     for (const auto& slice : chunk.slices()) {
       for (uint64_t len = 0; len < slice.len(); len += chunk.block_size()) {
         uint64_t block_index = (slice.offset() - chunk_offset + len) / chunk.block_size();
-        cache::BlockKey block_key(attr.fs_id(), attr.ino(), slice.id(), block_index, 0);
+        cache::BlockKey block_key(attr.fs_id(), attr.ino(), slice.id(), block_index, slice.compaction_version());
 
         DINGO_LOG(INFO) << fmt::format("[gc.delfile] delete block filename({}) key({}).", block_key.Filename(),
                                        block_key.StoreKey());

@@ -180,6 +180,8 @@ class Helper {
 
   static std::vector<uint64_t> GetMdsIds(const pb::mdsv2::HashPartition& partition);
   static std::vector<uint64_t> GetMdsIds(const std::map<uint64_t, BucketSetEntry>& distributions);
+
+  static const char* DescOpenFlags(int flags);
 };
 
 }  // namespace mdsv2

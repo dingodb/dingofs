@@ -267,7 +267,7 @@ Status ChunkReader::GetSlices(ContextSPtr ctx, ChunkSlices* chunk_slices) {
 
     std::vector<Slice> slices;
     DINGOFS_RETURN_NOT_OK(hub_->GetMetaSystem()->ReadSlice(
-        slice_span->GetContext(), chunk_.ino, chunk_.index, 0, &slices));
+        slice_span->GetContext(), chunk_.ino, chunk_.index, fh_, &slices));
 
     cversion_.store(next_version_, std::memory_order_relaxed);
     slices_ = std::move(slices);

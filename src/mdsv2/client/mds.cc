@@ -675,16 +675,20 @@ WriteSliceResponse MDSClient::WriteSlice(Ino ino, int64_t chunk_index) {
 
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
-  request.set_chunk_index(chunk_index);
+
+  mdsv2::DeltaSliceEntry delta_slice;
+  delta_slice.set_chunk_index(chunk_index);
 
   const uint64_t len = 1024;
   for (int i = 0; i < 10; i++) {
-    auto* slice = request.add_slices();
+    auto* slice = delta_slice.add_slices();
     slice->set_id(i + 100000);
     slice->set_offset(i * len);
     slice->set_len(len);
     slice->set_size(len);
   }
+
+  *request.add_delta_slices() = delta_slice;
 
   interaction_->SendRequest("MDSService", "WriteSlice", request, response);
 
@@ -701,7 +705,7 @@ ReadSliceResponse MDSClient::ReadSlice(Ino ino, int64_t chunk_index) {
 
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
-  request.set_chunk_index(chunk_index);
+  request.add_chunk_indexes(chunk_index);
 
   interaction_->SendRequest("MDSService", "ReadSlice", request, response);
 

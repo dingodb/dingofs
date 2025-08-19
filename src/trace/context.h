@@ -30,6 +30,8 @@ struct Context {
   std::string span_id;
   // when root Span, parent_span_id is empty
   std::string parent_span_id;
+  // whether hit local cache
+  bool hit_cache{false};
 
   const std::string& TraceId() const { return trace_id; }
 

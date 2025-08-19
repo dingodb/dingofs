@@ -171,8 +171,8 @@ Status MetaWrapper::ReadLink(ContextSPtr ctx, Ino ino, std::string* link) {
 Status MetaWrapper::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
   Status s;
   MetaLogGuard log_guard([&]() {
-    return absl::StrFormat("getattr (%d): %s %s", ino, s.ToString(),
-                           StrAttr(attr));
+    return absl::StrFormat("getattr (%d): %s %d %d %s", ino, s.ToString(),
+                           ctx->hit_cache, ctx->hit_cache, StrAttr(attr));
   });
 
   s = target_->GetAttr(ctx, ino, attr);
@@ -206,8 +206,8 @@ Status MetaWrapper::GetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
                              std::string* value) {
   Status s;
   MetaLogGuard log_guard([&]() {
-    return absl::StrFormat("getxattr (%d,%s): %s %s", ino, name, s.ToString(),
-                           *value);
+    return absl::StrFormat("getxattr (%d,%s): %s %d %s", ino, name,
+                           s.ToString(), ctx->hit_cache, *value);
   });
 
   s = target_->GetXattr(ctx, ino, name, value);
@@ -312,8 +312,8 @@ Status MetaWrapper::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                               uint64_t fh, std::vector<Slice>* slices) {
   Status s;
   MetaLogGuard log_guard([&]() {
-    return absl::StrFormat("read_slice (%d,%d): %s %d", ino, index,
-                           s.ToString(), slices->size());
+    return absl::StrFormat("read_slice (%d,%d): %s %d %d", ino, index,
+                           s.ToString(), ctx->hit_cache, slices->size());
   });
 
   s = target_->ReadSlice(ctx, ino, index, fh, slices);
@@ -324,8 +324,8 @@ Status MetaWrapper::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                                uint64_t fh, const std::vector<Slice>& slices) {
   Status s;
   MetaLogGuard log_guard([&]() {
-    return absl::StrFormat("write_slice (%d,%d,%d): %s %d", ino, index, fh,
-                           s.ToString(), slices.size());
+    return absl::StrFormat("write_slice (%d,%d,%d): %s %d %d", ino, index, fh,
+                           s.ToString(), ctx->hit_cache, slices.size());
   });
 
   s = target_->WriteSlice(ctx, ino, index, fh, slices);

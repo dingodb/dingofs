@@ -15,12 +15,12 @@
 #include "client/vfs/meta/v2/filesystem.h"
 
 #include <fcntl.h>
+#include <openssl/rsa.h>
 
 #include <cstdint>
 #include <string>
 #include <vector>
 
-#include "butil/file_util.h"
 #include "client/meta/vfs_meta.h"
 #include "client/vfs/meta/v2/client_id.h"
 #include "client/vfs/meta/v2/helper.h"
@@ -29,6 +29,7 @@
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/core.h"
 #include "fmt/format.h"
+#include "fmt/ranges.h"
 #include "glog/logging.h"
 #include "json/value.h"
 #include "json/writer.h"
@@ -38,8 +39,6 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 namespace v2 {
-
-const uint32_t kMaxHostNameLength = 255;
 
 const uint32_t kMaxXAttrNameLength = 255;
 const uint32_t kMaxXAttrValueLength = 64 * 1024;
@@ -58,32 +57,37 @@ static std::string GetHostName() {
 
   return std::string(hostname);
 }
+DEFINE_bool(client_meta_enable_inode_cache, true, "enable inode cache");
+DEFINE_bool(client_meta_enable_write_cache, true, "enable write cache");
 
 MDSV2FileSystem::MDSV2FileSystem(mdsv2::FsInfoPtr fs_info,
                                  const ClientId& client_id,
                                  MDSDiscoveryPtr mds_discovery,
+                                 InodeCacheSPtr inode_cache,
                                  MDSClientPtr mds_client)
     : name_(fs_info->GetName()),
       client_id_(client_id),
       fs_info_(fs_info),
       mds_discovery_(mds_discovery),
-      mds_client_(mds_client),
-      id_cache_(kSliceIdCacheName, mds_client) {}
+      id_cache_(kSliceIdCacheName, mds_client),
+      file_session_map_(fs_info),
+      inode_cache_(inode_cache),
+      mds_client_(mds_client) {}
 
 MDSV2FileSystem::~MDSV2FileSystem() {}  // NOLINT
 
 Status MDSV2FileSystem::Init() {
-  LOG(INFO) << fmt::format("[meta.filesystem.{}] fs_info: {}.",
-                           fs_info_->GetName(), fs_info_->ToString());
+  LOG(INFO) << fmt::format("[meta.filesystem] fs_info: {}.",
+                           fs_info_->ToString());
   // mount fs
   if (!MountFs()) {
-    LOG(ERROR) << fmt::format("[meta.filesystem.{}] mount fs fail.", name_);
+    LOG(ERROR) << fmt::format("[meta.filesystem] mount fs fail.");
     return Status::MountFailed("mount fs fail");
   }
 
   // init crontab
   if (!InitCrontab()) {
-    LOG(ERROR) << fmt::format("[meta.filesystem.{}] init crontab fail.", name_);
+    LOG(ERROR) << fmt::format("[meta.filesystem] init crontab fail.");
     return Status::Internal("init crontab fail");
   }
 
@@ -97,7 +101,7 @@ void MDSV2FileSystem::UnInit() {
   crontab_manager_.Destroy();
 }
 
-bool MDSV2FileSystem::Dump(ContextSPtr ctx, Json::Value& value) {
+bool MDSV2FileSystem::Dump(ContextSPtr, Json::Value& value) {
   if (!file_session_map_.Dump(value)) {
     return false;
   }
@@ -113,7 +117,7 @@ bool MDSV2FileSystem::Dump(ContextSPtr ctx, Json::Value& value) {
   return true;
 }
 
-bool MDSV2FileSystem::Load(ContextSPtr ctx, const Json::Value& value) {
+bool MDSV2FileSystem::Load(ContextSPtr, const Json::Value& value) {
   if (!file_session_map_.Load(value)) {
     return false;
   }
@@ -129,39 +133,7 @@ bool MDSV2FileSystem::Load(ContextSPtr ctx, const Json::Value& value) {
   return true;
 }
 
-static StoreType ToStoreType(pb::mdsv2::FsType fs_type) {
-  switch (fs_type) {
-    case pb::mdsv2::FsType::S3:
-      return StoreType::kS3;
-
-    case pb::mdsv2::FsType::RADOS:
-      return StoreType::kRados;
-
-    default:
-      CHECK(false) << "unknown fs type: " << pb::mdsv2::FsType_Name(fs_type);
-  }
-}
-
-static S3Info ToS3Info(const pb::mdsv2::S3Info& s3_info) {
-  S3Info result;
-  result.ak = s3_info.ak();
-  result.sk = s3_info.sk();
-  result.endpoint = s3_info.endpoint();
-  result.bucket_name = s3_info.bucketname();
-  return result;
-}
-
-static RadosInfo ToRadosInfo(const pb::mdsv2::RadosInfo& rados_info) {
-  RadosInfo result;
-  result.user_name = rados_info.user_name();
-  result.key = rados_info.key();
-  result.mon_host = rados_info.mon_host();
-  result.pool_name = rados_info.pool_name();
-  result.cluster_name = rados_info.cluster_name();
-  return result;
-}
-
-Status MDSV2FileSystem::GetFsInfo(ContextSPtr ctx, FsInfo* fs_info) {
+Status MDSV2FileSystem::GetFsInfo(ContextSPtr, FsInfo* fs_info) {
   auto temp_fs_info = fs_info_->Get();
 
   fs_info->name = name_;
@@ -170,22 +142,24 @@ Status MDSV2FileSystem::GetFsInfo(ContextSPtr ctx, FsInfo* fs_info) {
   fs_info->block_size = temp_fs_info.block_size();
   fs_info->uuid = temp_fs_info.uuid();
 
-  fs_info->storage_info.store_type = ToStoreType(temp_fs_info.fs_type());
+  fs_info->storage_info.store_type =
+      Helper::ToStoreType(temp_fs_info.fs_type());
   if (fs_info->storage_info.store_type == StoreType::kS3) {
     CHECK(temp_fs_info.extra().has_s3_info())
         << "fs type is S3, but s3 info is not set";
 
-    fs_info->storage_info.s3_info = ToS3Info(temp_fs_info.extra().s3_info());
+    fs_info->storage_info.s3_info =
+        Helper::ToS3Info(temp_fs_info.extra().s3_info());
 
   } else if (fs_info->storage_info.store_type == StoreType::kRados) {
     CHECK(temp_fs_info.extra().has_rados_info())
         << "fs type is Rados, but rados info is not set";
 
     fs_info->storage_info.rados_info =
-        ToRadosInfo(temp_fs_info.extra().rados_info());
+        Helper::ToRadosInfo(temp_fs_info.extra().rados_info());
 
   } else {
-    LOG(ERROR) << fmt::format("unknown fs type: {}.",
+    LOG(ERROR) << fmt::format("[meta.filesystem] unknown fs type: {}.",
                               pb::mdsv2::FsType_Name(temp_fs_info.fs_type()));
     return Status::InvalidParam("unknown fs type");
   }
@@ -200,13 +174,13 @@ bool MDSV2FileSystem::MountFs() {
   mount_point.set_path(client_id_.Mountpoint());
   mount_point.set_cto(false);
 
-  LOG(INFO) << fmt::format("[meta.filesystem.{}] mount point: {}.", name_,
+  LOG(INFO) << fmt::format("[meta.filesystem] mount point: {}.",
                            mount_point.ShortDebugString());
 
   auto status = mds_client_->MountFs(name_, mount_point);
   if (!status.ok() && status.Errno() != pb::error::EEXISTED) {
     LOG(ERROR) << fmt::format(
-        "[meta.filesystem.{}] mount fs info fail, mountpoint({}), {}.", name_,
+        "[meta.filesystem] mount fs info fail, mountpoint({}), {}.",
         client_id_.Mountpoint(), status.ToString());
     return false;
   }
@@ -218,7 +192,7 @@ bool MDSV2FileSystem::UnmountFs() {
   auto status = mds_client_->UmountFs(name_, client_id_.ID());
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
-        "[meta.filesystem.{}] mount fs info fail, mountpoint({}).", name_,
+        "[meta.filesystem] mount fs info fail, mountpoint({}).",
         client_id_.Mountpoint());
     return false;
   }
@@ -233,8 +207,8 @@ void MDSV2FileSystem::Heartbeat() {
 
   auto status = mds_client_->Heartbeat();
   if (!status.IsOK()) {
-    LOG(ERROR) << fmt::format("[meta.filesystem.{}] heartbeat fail, error: {}.",
-                              name_, status.ToString());
+    LOG(ERROR) << fmt::format("[meta.filesystem] heartbeat fail, error({}).",
+                              status.ToString());
   }
 
   is_running = false;
@@ -307,71 +281,98 @@ Status MDSV2FileSystem::MkNod(ContextSPtr ctx, Ino parent,
 }
 
 Status MDSV2FileSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
-  LOG(INFO) << fmt::format("[meta.filesystem.{}] open ino({}) flags({}).",
-                           name_, ino, flags);
-
   if ((flags & O_TRUNC) && !(flags & O_WRONLY || flags & O_RDWR)) {
     return Status::NoPermission("O_TRUNC without O_WRONLY or O_RDWR");
   }
 
-  auto file_session = FileSession::New();
-  auto status = mds_client_->Open(ctx, ino, flags, *file_session);
+  std::string session_id;
+  AttrEntry attr_entry;
+  std::vector<mdsv2::ChunkEntry> chunks;
+  auto status =
+      mds_client_->Open(ctx, ino, flags, session_id, attr_entry, chunks);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
-        "[meta.filesystem.{}] open ino({}) fail, error: {}.", name_, ino,
+        "[meta.filesystem.{}.{}] open file fail, error({}).", ino, fh,
         status.ToString());
     return status;
   }
 
-  CHECK(file_session_map_.Put(fh, file_session))
-      << fmt::format("put file session fail, ino: {}.", ino);
+  LOG(INFO) << fmt::format(
+      "[meta.filesystem.{}.{}] open file flags({:o}:{}) session_id({}) "
+      "chunks({}).",
+      ino, fh, flags, mdsv2::Helper::DescOpenFlags(flags), session_id,
+      chunks.size());
+
+  // add inode cache
+  InsertInodeToCache(ino, attr_entry);
+
+  // add file session and chunk
+  auto file_session = FileSession::New(ino, fh, session_id, fs_info_, chunks);
+  CHECK(file_session_map_.Put({ino, fh}, file_session))
+      << fmt::format("put file session fail, ino({}) fh({}).", ino, fh);
 
   return Status::OK();
 }
 
 Status MDSV2FileSystem::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
-  LOG(INFO) << fmt::format("[meta.filesystem.{}] release ino({}).", name_, ino);
-
-  std::string session_id = file_session_map_.GetSessionID(fh);
+  std::string session_id = file_session_map_.GetSessionID({ino, fh});
   CHECK(!session_id.empty())
       << fmt::format("get file session fail, ino({}) fh({}).", ino, fh);
 
-  auto status = mds_client_->Release(ctx, ino, session_id);
+  LOG(INFO) << fmt::format("[meta.filesystem.{}.{}] close file session_id({}).",
+                           ino, fh, session_id);
+
+  // sync delta slice
+  auto status = SyncDeltaSlice(ctx, ino, fh);
+  if (!status.ok()) return status;
+
+  status = mds_client_->Release(ctx, ino, session_id);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
-        "[meta.filesystem.{}] release ino({}) fail, error: {}.", name_, ino,
+        "[meta.filesystem.{}.{}] close file fail, error({}).", ino, fh,
         status.ToString());
-    return status;
   }
+
+  // clean cache
+  file_session_map_.Delete({ino, fh});
+  DeleteInodeFromCache(ino);
 
   return Status::OK();
 }
 
-bool MDSV2FileSystem::GetSliceFromCache(uint64_t fh, uint64_t index,
-                                        std::vector<Slice>* slices) {
-  auto file_session = file_session_map_.GetSession(fh);
-  if (file_session == nullptr) return false;
-
-  auto chunk = file_session->GetChunk(index);
-  if (chunk == nullptr) return false;
-
-  *slices = chunk->slices;
-
-  return true;
-}
-
 Status MDSV2FileSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                                   uint64_t fh, std::vector<Slice>* slices) {
-  if (GetSliceFromCache(fh, index, slices)) {
+  if (fh != 0 && GetSliceFromCache(ino, fh, index, slices)) {
+    LOG(INFO) << fmt::format(
+        "[meta.filesystem.{}.{}.{}] readslice from cache, slices{}.", ino, fh,
+        index, Helper::GetSliceIds(*slices));
     return Status::OK();
   }
 
-  auto status = mds_client_->ReadSlice(ctx, ino, index, slices);
+  std::vector<mdsv2::ChunkEntry> chunks;
+  auto status =
+      mds_client_->ReadSlice(ctx, ino, {static_cast<uint32_t>(index)}, chunks);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
-        "[meta.filesystem.{}] ReeadSlice ino({}) fail, error: {}.", name_, ino,
-        status.ToString());
+        "[meta.filesystem.{}.{}.{}] reeadslice fail, error({}).", ino, fh,
+        index, status.ToString());
     return status;
+  }
+
+  if (!chunks.empty()) {
+    const auto& chunk = chunks.front();
+    for (const auto& slice : chunk.slices()) {
+      slices->emplace_back(Helper::ToSlice(slice));
+    }
+
+    LOG(INFO) << fmt::format(
+        "[meta.filesystem.{}.{}.{}] readslice from remote, slices{}.", ino, fh,
+        index, Helper::GetSliceIds(*slices));
+  }
+
+  // add chunk cache
+  if (fh != 0) {
+    UpdateChunkToCache(ino, fh, chunks);
   }
 
   return Status::OK();
@@ -388,13 +389,35 @@ Status MDSV2FileSystem::NewSliceId(ContextSPtr, Ino ino, uint64_t* id) {
 }
 
 Status MDSV2FileSystem::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
-                                   uint64_t, const std::vector<Slice>& slices) {
-  auto status = mds_client_->WriteSlice(ctx, ino, index, slices);
-  if (!status.ok()) {
-    LOG(ERROR) << fmt::format(
-        "[meta.filesystem.{}] writeslice ino({}) fail, error: {}.", name_, ino,
-        status.ToString());
-    return status;
+                                   uint64_t fh,
+                                   const std::vector<Slice>& slices) {
+  if (FLAGS_client_meta_enable_write_cache) {
+    WriteSliceToCache(ino, index, fh, slices);
+    ctx->hit_cache = true;
+    return Status::OK();
+
+  } else {
+    LOG(INFO) << fmt::format(
+        "[meta.filesystem.{}.{}.{}] writeslice missing cache.", ino, fh, index);
+
+    mdsv2::DeltaSliceEntry delta_slice_entry;
+    delta_slice_entry.set_chunk_index(index);
+    for (const auto& slice : slices) {
+      *delta_slice_entry.add_slices() = Helper::ToSlice(slice);
+    }
+
+    auto status =
+        mds_client_->WriteSlice(ctx, ino, {std::move(delta_slice_entry)});
+    if (!status.ok()) {
+      LOG(ERROR) << fmt::format(
+          "[meta.filesystem.{}.{}.{}] writeslice fail, error({}).", ino, fh,
+          index, status.ToString());
+      return status;
+    }
+
+    // clean cache
+    DeleteInodeFromCache(ino);
+    DeleteChunkMutation(ino, fh, index);
   }
 
   return Status::OK();
@@ -430,7 +453,7 @@ Status MDSV2FileSystem::OpenDir(ContextSPtr ctx, Ino ino, uint64_t fh) {
   auto status = dir_iterator->Seek();
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
-        "[meta.filesystem.{}] opendir ino({}) fail, error: {}.", name_, ino,
+        "[meta.filesystem.{}.{}] opendir fail, error({}).", ino, fh,
         status.ToString());
     return status;
   }
@@ -468,8 +491,8 @@ Status MDSV2FileSystem::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
   auto status = mds_client_->Link(ctx, ino, new_parent, new_name, *attr);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
-        "[meta.filesystem.{}] link({}/{}) to ino({}) fail, error: {}.", name_,
-        new_parent, new_name, ino, status.ToString());
+        "[meta.filesystem.{}.{}] link to {} fail, error({}).", new_parent,
+        new_name, ino, status.ToString());
     return status;
   }
 
@@ -480,9 +503,8 @@ Status MDSV2FileSystem::Unlink(ContextSPtr ctx, Ino parent,
                                const std::string& name) {
   auto status = mds_client_->UnLink(ctx, parent, name);
   if (!status.ok()) {
-    LOG(ERROR) << fmt::format(
-        "[meta.filesystem.{}] unlink({}/{}) fail, error: {}.", name_, parent,
-        name, status.ToString());
+    LOG(ERROR) << fmt::format("[meta.filesystem.{}.{}] unlink fail, error({}).",
+                              parent, name, status.ToString());
     return status;
   }
 
@@ -497,8 +519,8 @@ Status MDSV2FileSystem::Symlink(ContextSPtr ctx, Ino parent,
       mds_client_->Symlink(ctx, parent, name, uid, gid, link, *out_attr);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
-        "[meta.filesystem.{}] symlink({}/{}) fail, symlink({}) error: {}.",
-        name_, parent, name, link, status.ToString());
+        "[meta.filesystem.{}.{}] symlink fail, symlink({}) error({}).", parent,
+        name, link, status.ToString());
     return status;
   }
 
@@ -508,9 +530,8 @@ Status MDSV2FileSystem::Symlink(ContextSPtr ctx, Ino parent,
 Status MDSV2FileSystem::ReadLink(ContextSPtr ctx, Ino ino, std::string* link) {
   auto status = mds_client_->ReadLink(ctx, ino, *link);
   if (!status.ok()) {
-    LOG(ERROR) << fmt::format(
-        "[meta.filesystem.{}] readlink {} fail, error: {}.", name_, ino,
-        status.ToString());
+    LOG(ERROR) << fmt::format("[meta.filesystem.{}] readlink fail, error({}).",
+                              ino, status.ToString());
     return status;
   }
 
@@ -518,10 +539,20 @@ Status MDSV2FileSystem::ReadLink(ContextSPtr ctx, Ino ino, std::string* link) {
 }
 
 Status MDSV2FileSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* out_attr) {
+  if (GetAttrFromCache(ino, *out_attr)) {
+    LOG(INFO) << fmt::format("[meta.filesystem.{}] get attr length({}).", ino,
+                             out_attr->length);
+    ctx->hit_cache = true;
+    return Status::OK();
+  }
+
   auto status = mds_client_->GetAttr(ctx, ino, *out_attr);
   if (!status.ok()) {
     return status;
   }
+
+  LOG(INFO) << fmt::format("[meta.filesystem.{}] get attr length({}).", ino,
+                           out_attr->length);
 
   return Status::OK();
 }
@@ -533,11 +564,18 @@ Status MDSV2FileSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
     return status;
   }
 
+  UpdateInodeToCache(ino, *out_attr);
+
   return Status::OK();
 }
 
 Status MDSV2FileSystem::GetXattr(ContextSPtr ctx, Ino ino,
                                  const std::string& name, std::string* value) {
+  if (GetXAttrFromCache(ino, name, *value)) {
+    ctx->hit_cache = true;
+    return Status::OK();
+  }
+
   auto status = mds_client_->GetXAttr(ctx, ino, name, *value);
   if (!status.ok()) {
     return Status::NoData(status.Errno(), status.ToString());
@@ -548,21 +586,27 @@ Status MDSV2FileSystem::GetXattr(ContextSPtr ctx, Ino ino,
 
 Status MDSV2FileSystem::SetXattr(ContextSPtr ctx, Ino ino,
                                  const std::string& name,
-                                 const std::string& value, int) {
-  auto status = mds_client_->SetXAttr(ctx, ino, name, value);
+                                 const std::string& value, int flags) {
+  AttrEntry attr_entry;
+  auto status = mds_client_->SetXAttr(ctx, ino, name, value, attr_entry);
   if (!status.ok()) {
     return status;
   }
+
+  UpdateInodeToCache(ino, attr_entry);
 
   return Status::OK();
 }
 
 Status MDSV2FileSystem::RemoveXattr(ContextSPtr ctx, Ino ino,
                                     const std::string& name) {
-  auto status = mds_client_->RemoveXAttr(ctx, ino, name);
+  AttrEntry attr_entry;
+  auto status = mds_client_->RemoveXAttr(ctx, ino, name, attr_entry);
   if (!status.ok()) {
     return status;
   }
+
+  UpdateInodeToCache(ino, attr_entry);
 
   return Status::OK();
 }
@@ -600,6 +644,165 @@ Status MDSV2FileSystem::Rename(ContextSPtr ctx, Ino old_parent,
   return Status::OK();
 }
 
+bool MDSV2FileSystem::GetAttrFromCache(Ino ino, Attr& out_attr) {
+  if (!FLAGS_client_meta_enable_inode_cache) return false;
+
+  auto inode = inode_cache_->GetInode(ino);
+  if (inode == nullptr) return false;
+
+  out_attr = Helper::ToAttr(inode->Copy());
+
+  return true;
+}
+
+bool MDSV2FileSystem::GetXAttrFromCache(Ino ino, const std::string& name,
+                                        std::string& value) {
+  if (!FLAGS_client_meta_enable_inode_cache) return false;
+
+  auto inode = inode_cache_->GetInode(ino);
+  if (inode == nullptr) return false;
+
+  value = inode->XAttr(name);
+
+  return true;
+}
+
+void MDSV2FileSystem::InsertInodeToCache(Ino ino, const AttrEntry& attr_entry) {
+  if (!FLAGS_client_meta_enable_inode_cache) return;
+
+  inode_cache_->UpsertInode(ino, attr_entry);
+}
+
+void MDSV2FileSystem::UpdateInodeToCache(Ino ino, const Attr& attr) {
+  if (!FLAGS_client_meta_enable_inode_cache) return;
+
+  auto inode = inode_cache_->GetInode(ino);
+  if (inode != nullptr) inode->UpdateIf(Helper::ToAttr(attr));
+}
+
+void MDSV2FileSystem::UpdateInodeToCache(Ino ino, const AttrEntry& attr_entry) {
+  if (!FLAGS_client_meta_enable_inode_cache) return;
+
+  auto inode = inode_cache_->GetInode(ino);
+  if (inode != nullptr) inode->UpdateIf(attr_entry);
+}
+
+void MDSV2FileSystem::DeleteInodeFromCache(Ino ino) {
+  inode_cache_->DeleteInode(ino);
+}
+
+bool MDSV2FileSystem::GetSliceFromCache(Ino ino, uint64_t fh, uint64_t index,
+                                        std::vector<Slice>* slices) {
+  auto file_session = file_session_map_.GetSession({ino, fh});
+  if (file_session == nullptr) return false;
+
+  auto chunk_mutation = file_session->GetChunkMutation(index);
+  if (chunk_mutation == nullptr) return false;
+  if (!chunk_mutation->HasChunk()) return false;
+
+  *slices = chunk_mutation->GetAllSlice();
+
+  return true;
+}
+
+void MDSV2FileSystem::UpdateInodeLength(Ino ino, uint64_t new_length) {
+  auto inode = inode_cache_->GetInode(ino);
+  if (inode != nullptr) {
+    inode->ExpandLength(new_length);
+  }
+}
+
+bool MDSV2FileSystem::WriteSliceToCache(Ino ino, uint64_t index, uint64_t fh,
+                                        const std::vector<Slice>& slices) {
+  auto file_session = file_session_map_.GetSession({ino, fh});
+  CHECK(file_session != nullptr) << fmt::format(
+      "file session is nullptr, ino({}) index({}) fh({}).", ino, index, fh);
+
+  file_session->AppendSlice(index, slices);
+
+  UpdateInodeLength(ino, Helper::CalLength(slices));
+
+  return true;
+}
+
+void MDSV2FileSystem::DeleteDeltaSliceFromCache(
+    Ino ino, uint64_t fh,
+    const std::vector<mdsv2::DeltaSliceEntry>& delta_slice_entries) {
+  auto file_session = file_session_map_.GetSession({ino, fh});
+
+  for (const auto& delta_slice_entry : delta_slice_entries) {
+    auto chunk_muataion =
+        file_session->GetChunkMutation(delta_slice_entry.chunk_index());
+    if (chunk_muataion != nullptr) {
+      std::vector<uint64_t> delete_slice_ids;
+      for (const auto& slice : delta_slice_entry.slices()) {
+        delete_slice_ids.push_back(slice.id());
+      }
+
+      if (!delete_slice_ids.empty()) {
+        chunk_muataion->DeleteDeltaSlice(delete_slice_ids);
+      }
+    }
+  }
+}
+
+void MDSV2FileSystem::UpdateChunkToCache(
+    Ino ino, uint64_t fh, const std::vector<mdsv2::ChunkEntry>& chunks) {
+  auto file_session = file_session_map_.GetSession({ino, fh});
+  CHECK(file_session != nullptr)
+      << fmt::format("file session {}/{} is nullptr.", ino, fh);
+
+  for (const auto& chunk : chunks) {
+    file_session->UpsertChunkMutation(chunk);
+  }
+}
+
+void MDSV2FileSystem::DeleteChunkMutation(Ino ino, uint64_t fh,
+                                          uint64_t index) {
+  auto file_session = file_session_map_.GetSession({ino, fh});
+  CHECK(file_session != nullptr) << fmt::format(
+      "file session is nullptr, ino({}) index({}) fh({}).", ino, index, fh);
+
+  file_session->DeleteChunkMutation(index);
+}
+
+Status MDSV2FileSystem::SyncDeltaSlice(ContextSPtr ctx, Ino ino, uint64_t fh) {
+  auto file_session = file_session_map_.GetSession({ino, fh});
+  CHECK(file_session != nullptr)
+      << fmt::format("get file session fail, ino({}) fh({}).", ino, fh);
+
+  auto chunk_mutations = file_session->GetAllChunkMutation();
+  std::vector<mdsv2::DeltaSliceEntry> delta_slice_entries;
+  delta_slice_entries.reserve(chunk_mutations.size());
+  for (auto& chunk_mutation : chunk_mutations) {
+    auto delta_slice = chunk_mutation->GetDeltaSlice();
+    if (!delta_slice.empty()) {
+      delta_slice_entries.push_back(
+          Helper::ToDeltaSliceEntry(chunk_mutation->GetIndex(), delta_slice));
+    }
+  }
+
+  if (delta_slice_entries.empty()) return Status::OK();
+
+  auto status = mds_client_->WriteSlice(ctx, ino, delta_slice_entries);
+  if (!status.ok()) {
+    LOG(ERROR) << fmt::format(
+        "[meta.filesystem.{}] sync delta slice fail, error({}).", ino,
+        status.ToString());
+    return status;
+  }
+
+  LOG(INFO) << fmt::format(
+      "[meta.filesystem.{}.{}] sync delta slice finish, "
+      "delta_slice_entries({}).",
+      ino, fh, delta_slice_entries.size());
+
+  // clean local cache delta slice
+  DeleteDeltaSliceFromCache(ino, fh, delta_slice_entries);
+
+  return Status::OK();
+}
+
 MDSV2FileSystemUPtr MDSV2FileSystem::Build(const std::string& fs_name,
                                            const std::string& mds_addr,
                                            const std::string& mountpoint) {
@@ -611,7 +814,7 @@ MDSV2FileSystemUPtr MDSV2FileSystem::Build(const std::string& fs_name,
   CHECK(!mds_addr.empty()) << "mds_addr is empty.";
   CHECK(!mountpoint.empty()) << "mountpoint is empty.";
 
-  std::string hostname = GetHostName();
+  std::string hostname = Helper::GetHostName();
   if (hostname.empty()) {
     LOG(ERROR) << fmt::format("[meta.filesystem.{}] get hostname fail.",
                               fs_name);
@@ -672,6 +875,8 @@ MDSV2FileSystemUPtr MDSV2FileSystem::Build(const std::string& fs_name,
 
   auto fs_info = mdsv2::FsInfo::New(pb_fs_info);
 
+  auto inode_cache = InodeCache::New(fs_info->GetFsId());
+
   // create mds client
   auto mds_client = MDSClient::New(client_id, fs_info, parent_memo,
                                    mds_discovery, mds_router, rpc);
@@ -682,7 +887,8 @@ MDSV2FileSystemUPtr MDSV2FileSystem::Build(const std::string& fs_name,
   }
 
   // create filesystem
-  return MDSV2FileSystem::New(fs_info, client_id, mds_discovery, mds_client);
+  return MDSV2FileSystem::New(fs_info, client_id, mds_discovery, inode_cache,
+                              mds_client);
 }
 
 }  // namespace v2

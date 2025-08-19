@@ -165,8 +165,8 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   // xattr
   Status GetXAttr(Context& ctx, Ino ino, Inode::XAttrMap& xattr);
   Status GetXAttr(Context& ctx, Ino ino, const std::string& name, std::string& value);
-  Status SetXAttr(Context& ctx, Ino ino, const Inode::XAttrMap& xattrs, uint64_t& version);
-  Status RemoveXAttr(Context& ctx, Ino ino, const std::string& name, uint64_t& version);
+  Status SetXAttr(Context& ctx, Ino ino, const Inode::XAttrMap& xattrs, EntryOut& entry_out);
+  Status RemoveXAttr(Context& ctx, Ino ino, const std::string& name, EntryOut& entry_out);
 
   // rename
   struct RenameParam {
@@ -183,9 +183,8 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
                       uint64_t& new_parent_version);
 
   // slice
-  Status WriteSlice(Context& ctx, Ino parent, Ino ino, uint64_t chunk_index,
-                    const std::vector<pb::mdsv2::Slice>& slices);
-  Status ReadSlice(Context& ctx, Ino ino, uint64_t chunk_index, std::vector<pb::mdsv2::Slice>& slices);
+  Status WriteSlice(Context& ctx, Ino parent, Ino ino, const std::vector<DeltaSliceEntry>& delta_slices);
+  Status ReadSlice(Context& ctx, Ino ino, const std::vector<uint64_t>& chunk_indexes, std::vector<ChunkEntry>& chunks);
 
   // fallocate
   Status Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offset, uint64_t len, EntryOut& entry_out);

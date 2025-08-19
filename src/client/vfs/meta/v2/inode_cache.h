@@ -12,30 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_MDV2_FILESYSTEM_INODE_H_
-#define DINGOFS_MDV2_FILESYSTEM_INODE_H_
+#ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_INODE_CACHE_H_
+#define DINGOFS_SRC_CLIENT_VFS_META_V2_INODE_CACHE_H_
 
 #include <sys/types.h>
 
 #include <cstdint>
-#include <map>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "mdsv2/common/type.h"
 #include "utils/concurrent/concurrent.h"
-#include "utils/lru_cache.h"
 
 namespace dingofs {
-namespace mdsv2 {
+namespace client {
+namespace vfs {
+namespace v2 {
 
 class Inode;
 using InodeSPtr = std::shared_ptr<Inode>;
-using InodeWPtr = std::weak_ptr<Inode>;
+
+using mdsv2::ChunkEntry;
+using mdsv2::Ino;
 
 class Inode {
  public:
+  using FileType = mdsv2::FileType;
   using AttrEntry = mdsv2::AttrEntry;
   using XAttrMap = ::google::protobuf::Map<std::string, std::string>;
   using ChunkMap = ::google::protobuf::Map<uint64_t, ChunkEntry>;
@@ -44,7 +48,9 @@ class Inode {
   Inode(AttrEntry&& attr) { attr_ = std::move(attr); }
   ~Inode() = default;
 
-  static InodeSPtr New(const AttrEntry& inode) { return std::make_shared<Inode>(inode); }
+  static InodeSPtr New(const AttrEntry& inode) {
+    return std::make_shared<Inode>(inode);
+  }
 
   uint32_t FsId();
   uint64_t Ino();
@@ -86,6 +92,8 @@ using InodeCacheSPtr = std::shared_ptr<InodeCache>;
 // cache all file/dir inode
 class InodeCache {
  public:
+  using AttrEntry = mdsv2::AttrEntry;
+
   InodeCache(uint32_t fs_id);
   ~InodeCache();
 
@@ -94,24 +102,28 @@ class InodeCache {
   InodeCache(InodeCache&&) = delete;
   InodeCache& operator=(InodeCache&&) = delete;
 
-  static InodeCacheSPtr New(uint32_t fs_id) { return std::make_shared<InodeCache>(fs_id); }
+  static InodeCacheSPtr New(uint32_t fs_id) {
+    return std::make_shared<InodeCache>(fs_id);
+  }
 
-  void PutInode(Ino ino, InodeSPtr inode);
+  void UpsertInode(Ino ino, const AttrEntry& attr_entry);
   void DeleteInode(Ino ino);
-  void BatchDeleteInodeIf(const std::function<bool(const Ino&)>& f);
   void Clear();
 
   InodeSPtr GetInode(Ino ino);
   std::vector<InodeSPtr> GetInodes(std::vector<uint64_t> inoes);
-  std::map<uint64_t, InodeSPtr> GetAllInodes();
 
  private:
   uint32_t fs_id_{0};
+
+  utils::RWLock lock_;
   // ino -> inode
-  utils::LRUCache<uint64_t, InodeSPtr> cache_;
+  std::unordered_map<Ino, InodeSPtr> cache_;
 };
 
-}  // namespace mdsv2
+}  // namespace v2
+}  // namespace vfs
+}  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_MDV2_FILESYSTEM_INODE_H_
+#endif  // DINGOFS_SRC_CLIENT_VFS_META_V2_INODE_CACHE_H_

@@ -294,17 +294,18 @@ Status VFSWrapper::Lookup(Ino parent, const std::string& name, Attr* attr) {
 
 Status VFSWrapper::GetAttr(Ino ino, Attr* attr) {
   auto span = vfs_->GetTracer()->StartSpan(kVFSWrapperMoudule, METHOD_NAME());
+  auto ctx = span->GetContext();
   VLOG(1) << "VFSGetAttr ino: " << ino;
   Status s;
   AccessLogGuard log([&]() {
-    return absl::StrFormat("getattr (%d): %s %s", ino, s.ToString(),
-                           StrAttr(attr));
+    return absl::StrFormat("getattr (%d): %s %d %s", ino, s.ToString(),
+                           ctx->hit_cache, StrAttr(attr));
   });
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opGetAttr, &client_op_metric_->opAll});
 
-  s = vfs_->GetAttr(span->GetContext(), ino, attr);
+  s = vfs_->GetAttr(ctx, ino, attr);
   VLOG(1) << "VFSGetAttr end ino: " << ino << " status: " << s.ToString();
   if (!s.ok()) {
     op_metric.FailOp();
@@ -686,10 +687,12 @@ Status VFSWrapper::SetXattr(Ino ino, const std::string& name,
 Status VFSWrapper::GetXattr(Ino ino, const std::string& name,
                             std::string* value) {
   auto span = vfs_->GetTracer()->StartSpan(kVFSWrapperMoudule, METHOD_NAME());
+  auto ctx = span->GetContext();
   VLOG(1) << "VFSGetXattr ino: " << ino << " name: " << name;
   Status s;
   AccessLogGuard log([&]() {
-    return absl::StrFormat("getxattr (%d,%s): %s", ino, name, s.ToString());
+    return absl::StrFormat("getxattr (%d,%s): %s %d %s", ino, name,
+                           s.ToString(), ctx->hit_cache, *value);
   });
 
   ClientOpMetricGuard op_metric(
@@ -700,7 +703,7 @@ Status VFSWrapper::GetXattr(Ino ino, const std::string& name,
     return s;
   }
 
-  s = vfs_->GetXattr(span->GetContext(), ino, name, value);
+  s = vfs_->GetXattr(ctx, ino, name, value);
   VLOG(1) << "VFSGetXattr end, value: " << *value
           << ", status: " << s.ToString();
   if (!s.ok()) {

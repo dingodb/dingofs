@@ -16,7 +16,6 @@
 
 #include <cstdint>
 #include <string>
-#include <utility>
 
 #include "client/meta/vfs_meta.h"
 #include "client/vfs/common/helper.h"
@@ -25,6 +24,7 @@
 #include "dingofs/mdsv2.pb.h"
 #include "dingofs/metaserver.pb.h"
 #include "fmt/format.h"
+#include "gflags/gflags.h"
 #include "glog/logging.h"
 #include "mdsv2/common/constant.h"
 #include "mdsv2/common/type.h"
@@ -33,49 +33,6 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 namespace v2 {
-
-static FileType ToFileType(pb::mdsv2::FileType type) {
-  switch (type) {
-    case pb::mdsv2::FileType::FILE:
-      return FileType::kFile;
-
-    case pb::mdsv2::FileType::DIRECTORY:
-      return FileType::kDirectory;
-
-    case pb::mdsv2::FileType::SYM_LINK:
-      return FileType::kSymlink;
-
-    default:
-      CHECK(false) << "unknown file type: " << type;
-  }
-}
-
-static Attr ToAttr(const pb::mdsv2::Inode& inode) {
-  Attr out_attr;
-
-  out_attr.ino = inode.ino();
-  out_attr.mode = inode.mode();
-  out_attr.nlink = inode.nlink();
-  out_attr.uid = inode.uid();
-  out_attr.gid = inode.gid();
-  out_attr.length = inode.length();
-  out_attr.rdev = inode.rdev();
-  out_attr.atime = inode.atime();
-  out_attr.mtime = inode.mtime();
-  out_attr.ctime = inode.ctime();
-  out_attr.type = ToFileType(inode.type());
-
-  return out_attr;
-}
-
-static DirEntry ToDirEntry(const pb::mdsv2::ReadDirResponse::Entry& entry) {
-  DirEntry out_entry;
-  out_entry.name = entry.name();
-  out_entry.ino = entry.ino();
-  out_entry.attr = ToAttr(entry.inode());
-
-  return std::move(out_entry);
-}
 
 MDSClient::MDSClient(const ClientId& client_id, mdsv2::FsInfoPtr fs_info,
                      ParentMemoSPtr parent_memo, MDSDiscoveryPtr mds_discovery,
@@ -297,7 +254,7 @@ Status MDSClient::Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
   // save ino to parent mapping
   parent_memo_->Upsert(inode.ino(), parent, inode.version());
 
-  out_attr = ToAttr(inode);
+  out_attr = Helper::ToAttr(inode);
 
   return Status::OK();
 }
@@ -336,7 +293,7 @@ Status MDSClient::MkNod(ContextSPtr ctx, Ino parent, const std::string& name,
                        response.inode().version());
   parent_memo_->UpsertVersion(parent, response.parent_version());
 
-  out_attr = ToAttr(response.inode());
+  out_attr = Helper::ToAttr(response.inode());
 
   return Status::OK();
 }
@@ -375,7 +332,7 @@ Status MDSClient::MkDir(ContextSPtr ctx, Ino parent, const std::string& name,
                        response.inode().version());
   parent_memo_->UpsertVersion(parent, response.parent_version());
 
-  out_attr = ToAttr(response.inode());
+  out_attr = Helper::ToAttr(response.inode());
 
   return Status::OK();
 }
@@ -432,14 +389,15 @@ Status MDSClient::ReadDir(ContextSPtr ctx, Ino ino,
   entries.reserve(response.entries_size());
   for (const auto& entry : response.entries()) {
     parent_memo_->Upsert(entry.ino(), ino, entry.inode().version());
-    entries.push_back(ToDirEntry(entry));
+    entries.push_back(Helper::ToDirEntry(entry));
   }
 
   return Status::OK();
 }
 
 Status MDSClient::Open(ContextSPtr ctx, Ino ino, int flags,
-                       FileSession& file_session) {
+                       std::string& session_id, AttrEntry& attr_entry,
+                       std::vector<mdsv2::ChunkEntry>& chunks) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, ino]() -> MDSMeta { return GetMds(ino); };
@@ -457,10 +415,9 @@ Status MDSClient::Open(ContextSPtr ctx, Ino ino, int flags,
     return status;
   }
 
-  file_session.SetSessionId(response.session_id());
-  for (const auto& chunk : response.chunks()) {
-    file_session.AddChunk(FileSession::Chunk::From(chunk));
-  }
+  session_id = response.session_id();
+  chunks = mdsv2::Helper::PbRepeatedToVector(response.chunks());
+  attr_entry.Swap(response.mutable_inode());
 
   parent_memo_->UpsertVersion(ino, response.inode().version());
 
@@ -482,11 +439,8 @@ Status MDSClient::Release(ContextSPtr ctx, Ino ino,
 
   auto status =
       SendRequest(ctx, get_mds_fn, "MDSService", "Release", request, response);
-  if (!status.ok()) {
-    return status;
-  }
 
-  return Status::OK();
+  return status;
 }
 
 Status MDSClient::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
@@ -517,7 +471,7 @@ Status MDSClient::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
                        response.inode().version());
   parent_memo_->UpsertVersion(new_parent, response.parent_version());
 
-  out_attr = ToAttr(response.inode());
+  out_attr = Helper::ToAttr(response.inode());
 
   return Status::OK();
 }
@@ -580,7 +534,7 @@ Status MDSClient::Symlink(ContextSPtr ctx, Ino parent, const std::string& name,
 
   parent_memo_->UpsertVersion(parent, response.parent_version());
 
-  out_attr = ToAttr(response.inode());
+  out_attr = Helper::ToAttr(response.inode());
 
   return Status::OK();
 }
@@ -636,7 +590,7 @@ Status MDSClient::GetAttr(ContextSPtr ctx, Ino ino, Attr& out_attr) {
 
   parent_memo_->UpsertVersion(ino, response.inode().version());
 
-  out_attr = ToAttr(response.inode());
+  out_attr = Helper::ToAttr(response.inode());
 
   return Status::OK();
 }
@@ -711,7 +665,7 @@ Status MDSClient::SetAttr(ContextSPtr ctx, Ino ino, const Attr& attr,
     return status;
   }
 
-  out_attr = ToAttr(response.inode());
+  out_attr = Helper::ToAttr(response.inode());
 
   parent_memo_->UpsertVersion(ino, response.inode().version());
 
@@ -751,7 +705,7 @@ Status MDSClient::GetXAttr(ContextSPtr ctx, Ino ino, const std::string& name,
 }
 
 Status MDSClient::SetXAttr(ContextSPtr ctx, Ino ino, const std::string& name,
-                           const std::string& value) {
+                           const std::string& value, AttrEntry& attr_entry) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, ino]() -> MDSMeta {
@@ -771,13 +725,15 @@ Status MDSClient::SetXAttr(ContextSPtr ctx, Ino ino, const std::string& name,
     return status;
   }
 
-  parent_memo_->UpsertVersion(ino, response.inode_version());
+  parent_memo_->UpsertVersion(ino, response.inode().version());
+
+  attr_entry.Swap(response.mutable_inode());
 
   return Status::OK();
 }
 
-Status MDSClient::RemoveXAttr(ContextSPtr ctx, Ino ino,
-                              const std::string& name) {
+Status MDSClient::RemoveXAttr(ContextSPtr ctx, Ino ino, const std::string& name,
+                              AttrEntry& attr_entry) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, ino]() -> MDSMeta {
@@ -797,7 +753,9 @@ Status MDSClient::RemoveXAttr(ContextSPtr ctx, Ino ino,
     return status;
   }
 
-  parent_memo_->UpsertVersion(ino, response.inode_version());
+  parent_memo_->UpsertVersion(ino, response.inode().version());
+
+  attr_entry.Swap(response.mutable_inode());
 
   return Status::OK();
 }
@@ -898,10 +856,11 @@ Status MDSClient::NewSliceId(ContextSPtr ctx, uint32_t num, uint64_t* id) {
   return Status::OK();
 }
 
-Status MDSClient::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
-                            std::vector<Slice>* slices) {
+Status MDSClient::ReadSlice(ContextSPtr ctx, Ino ino,
+                            const std::vector<uint64_t>& chunk_indexes,
+                            std::vector<mdsv2::ChunkEntry>& chunks) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
-  CHECK(slices != nullptr) << "slices is nullptr.";
+  CHECK(ino != 0) << "ino is zero.";
 
   bool is_fallback = false;
   auto get_mds_fn = [this, ino, &is_fallback]() -> MDSMeta {
@@ -917,7 +876,8 @@ Status MDSClient::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
 
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
-  request.set_chunk_index(index);
+  mdsv2::Helper::VectorToPbRepeated(chunk_indexes,
+                                    request.mutable_chunk_indexes());
 
   auto status = SendRequest(ctx, get_mds_fn, "MDSService", "ReadSlice", request,
                             response);
@@ -925,15 +885,14 @@ Status MDSClient::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
     return status;
   }
 
-  for (const auto& slice : response.slices()) {
-    slices->push_back(Helper::ToSlice(slice));
-  }
+  chunks = mdsv2::Helper::PbRepeatedToVector(*response.mutable_chunks());
 
   return Status::OK();
 }
 
-Status MDSClient::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
-                             const std::vector<Slice>& slices) {
+Status MDSClient::WriteSlice(
+    ContextSPtr ctx, Ino ino,
+    const std::vector<mdsv2::DeltaSliceEntry>& delta_slices) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, ino]() -> MDSMeta { return GetMds(ino); };
@@ -950,11 +909,8 @@ Status MDSClient::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
   request.set_fs_id(fs_id_);
   request.set_parent(parent);
   request.set_ino(ino);
-  request.set_chunk_index(index);
-
-  for (const auto& slice : slices) {
-    *request.add_slices() = Helper::ToSlice(slice);
-  }
+  mdsv2::Helper::VectorToPbRepeated(delta_slices,
+                                    request.mutable_delta_slices());
 
   auto status = SendRequest(ctx, get_mds_fn, "MDSService", "WriteSlice",
                             request, response);

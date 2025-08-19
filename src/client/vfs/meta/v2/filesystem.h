@@ -15,8 +15,6 @@
 #ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_FILESYSTEM_H_
 #define DINGOFS_SRC_CLIENT_VFS_META_V2_FILESYSTEM_H_
 
-#include <json/value.h>
-
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -27,9 +25,11 @@
 #include "client/vfs/meta/v2/dir_iterator.h"
 #include "client/vfs/meta/v2/file_session.h"
 #include "client/vfs/meta/v2/id_cache.h"
+#include "client/vfs/meta/v2/inode_cache.h"
 #include "client/vfs/meta/v2/mds_client.h"
 #include "client/vfs/meta/v2/mds_discovery.h"
 #include "common/status.h"
+#include "json/value.h"
 #include "mdsv2/common/crontab.h"
 #include "mdsv2/common/type.h"
 #include "trace/context.h"
@@ -39,6 +39,8 @@ namespace client {
 namespace vfs {
 namespace v2 {
 
+using mdsv2::AttrEntry;
+
 class MDSV2FileSystem;
 using MDSV2FileSystemPtr = std::shared_ptr<MDSV2FileSystem>;
 using MDSV2FileSystemUPtr = std::unique_ptr<MDSV2FileSystem>;
@@ -46,15 +48,17 @@ using MDSV2FileSystemUPtr = std::unique_ptr<MDSV2FileSystem>;
 class MDSV2FileSystem : public vfs::MetaSystem {
  public:
   MDSV2FileSystem(mdsv2::FsInfoPtr fs_info, const ClientId& client_id,
-                  MDSDiscoveryPtr mds_discovery, MDSClientPtr mds_client);
+                  MDSDiscoveryPtr mds_discovery, InodeCacheSPtr inode_cache,
+                  MDSClientPtr mds_client);
   ~MDSV2FileSystem() override;
 
   static MDSV2FileSystemUPtr New(mdsv2::FsInfoPtr fs_info,
                                  const ClientId& client_id,
                                  MDSDiscoveryPtr mds_discovery,
+                                 InodeCacheSPtr inode_cache,
                                  MDSClientPtr mds_client) {
     return std::make_unique<MDSV2FileSystem>(fs_info, client_id, mds_discovery,
-                                             mds_client);
+                                             inode_cache, mds_client);
   }
 
   static MDSV2FileSystemUPtr Build(const std::string& fs_name,
@@ -140,8 +144,28 @@ class MDSV2FileSystem : public vfs::MetaSystem {
 
   bool InitCrontab();
 
-  bool GetSliceFromCache(uint64_t fh, uint64_t index,
+  // inode cache
+  bool GetAttrFromCache(Ino ino, Attr& out_attr);
+  bool GetXAttrFromCache(Ino ino, const std::string& name, std::string& value);
+  void InsertInodeToCache(Ino ino, const AttrEntry& attr_entry);
+  void UpdateInodeToCache(Ino ino, const Attr& attr);
+  void UpdateInodeToCache(Ino ino, const AttrEntry& attr_entry);
+  void DeleteInodeFromCache(Ino ino);
+
+  // slice cache
+  bool GetSliceFromCache(Ino ino, uint64_t fh, uint64_t index,
                          std::vector<Slice>* slices);
+  void UpdateInodeLength(Ino ino, uint64_t new_length);
+  bool WriteSliceToCache(Ino ino, uint64_t index, uint64_t fh,
+                         const std::vector<Slice>& slices);
+  void DeleteDeltaSliceFromCache(
+      Ino ino, uint64_t fh,
+      const std::vector<mdsv2::DeltaSliceEntry>& delta_slice_entries);
+
+  void UpdateChunkToCache(Ino ino, uint64_t fh,
+                          const std::vector<mdsv2::ChunkEntry>& chunks);
+  void DeleteChunkMutation(Ino ino, uint64_t fh, uint64_t index);
+  Status SyncDeltaSlice(ContextSPtr ctx, Ino ino, uint64_t fh);
 
   const std::string name_;
   const ClientId client_id_;
@@ -157,6 +181,7 @@ class MDSV2FileSystem : public vfs::MetaSystem {
   DirIteratorManager dir_iterator_manager_;
 
   IdCache id_cache_;
+  InodeCacheSPtr inode_cache_;
 
   // Crontab config
   std::vector<mdsv2::CrontabConfig> crontab_configs_;

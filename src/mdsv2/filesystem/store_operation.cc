@@ -709,52 +709,62 @@ Status RemoveXAttrOperation::RunInBatch(TxnUPtr&, AttrEntry& attr, const std::ve
   return Status::OK();
 }
 
-std::string UpsertChunkOperation::PrefetchKey() {
-  return MetaCodec::EncodeChunkKey(fs_info_.fs_id(), ino_, chunk_index_);
+std::vector<std::string> UpsertChunkOperation::PrefetchKey() {
+  std::vector<std::string> prefetch_keys;
+  prefetch_keys.reserve(delta_slices_.size());
+  for (const auto& delta_slices : delta_slices_) {
+    prefetch_keys.push_back(MetaCodec::EncodeChunkKey(fs_info_.fs_id(), ino_, delta_slices.chunk_index()));
+  }
+
+  return std::move(prefetch_keys);
 }
 
 Status UpsertChunkOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>& prefetch_kvs) {
-  ChunkEntry chunk;
-
-  const std::string key = MetaCodec::EncodeChunkKey(fs_info_.fs_id(), ino_, chunk_index_);
-  auto value = FindValue(prefetch_kvs, key);
-  if (!value.empty()) chunk = MetaCodec::DecodeChunkValue(value);
-
-  // not exist chunk, create a new one
-  if (chunk.version() == 0) {
-    chunk.set_index(chunk_index_);
-    chunk.set_chunk_size(fs_info_.chunk_size());
-    chunk.set_block_size(fs_info_.block_size());
-    Helper::VectorToPbRepeated(slices_, chunk.mutable_slices());
-
-  } else {
-    // exist chunk, update slice
-    // check if slice already exist
-    auto is_exist_fn = [&](const SliceEntry& slice) -> bool {
-      for (const auto& exist_slice : chunk.slices()) {
-        if (exist_slice.id() == slice.id()) {
-          return true;
-        }
-      }
-      return false;
-    };
-
-    for (auto& slice : slices_) {
-      if (!is_exist_fn(slice)) *chunk.add_slices() = slice;
-    }
-  }
-
-  chunk.set_version(chunk.version() + 1);
-  txn->Put(key, MetaCodec::EncodeChunkValue(chunk));
-  result_.chunk = std::move(chunk);
-
-  // update length
   uint64_t prev_length = attr.length();
-  for (auto& slice : slices_) {
-    if (attr.length() < (slice.offset() + slice.len())) {
-      attr.set_length(slice.offset() + slice.len());
+  for (const auto& delta_slices : delta_slices_) {
+    ChunkEntry chunk;
+    const auto& chunk_index = delta_slices.chunk_index();
+
+    const std::string key = MetaCodec::EncodeChunkKey(fs_info_.fs_id(), ino_, chunk_index);
+    auto value = FindValue(prefetch_kvs, key);
+    if (!value.empty()) chunk = MetaCodec::DecodeChunkValue(value);
+
+    // not exist chunk, create a new one
+    if (chunk.version() == 0) {
+      chunk.set_index(chunk_index);
+      chunk.set_chunk_size(fs_info_.chunk_size());
+      chunk.set_block_size(fs_info_.block_size());
+      *chunk.mutable_slices() = delta_slices.slices();
+
+    } else {
+      // exist chunk, update slice
+      // check if slice already exist
+      auto is_exist_fn = [&](const SliceEntry& slice) -> bool {
+        for (const auto& exist_slice : chunk.slices()) {
+          if (exist_slice.id() == slice.id()) {
+            return true;
+          }
+        }
+        return false;
+      };
+
+      for (const auto& slice : delta_slices.slices()) {
+        if (!is_exist_fn(slice)) *chunk.add_slices() = slice;
+      }
+    }
+
+    chunk.set_version(chunk.version() + 1);
+    txn->Put(key, MetaCodec::EncodeChunkValue(chunk));
+    result_.effected_chunks.push_back(std::move(chunk));
+
+    // update length
+    for (const auto& slice : delta_slices.slices()) {
+      if (attr.length() < (slice.offset() + slice.len())) {
+        attr.set_length(slice.offset() + slice.len());
+      }
     }
   }
+
   result_.length_delta = attr.length() - prev_length;
 
   // update attr
@@ -765,11 +775,19 @@ Status UpsertChunkOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std
 }
 
 Status GetChunkOperation::Run(TxnUPtr& txn) {
-  std::string value;
-  auto status = txn->Get(MetaCodec::EncodeChunkKey(fs_id_, ino_, chunk_index_), value);
+  std::vector<std::string> keys;
+  keys.reserve(chunk_indexes_.size());
+  for (const auto& chunk_index : chunk_indexes_) {
+    keys.push_back(MetaCodec::EncodeChunkKey(fs_id_, ino_, chunk_index));
+  }
+
+  std::vector<KeyValue> kvs;
+  auto status = txn->BatchGet(keys, kvs);
   if (!status.ok()) return status;
 
-  result_.chunk = MetaCodec::DecodeChunkValue(value);
+  for (const auto& kv : kvs) {
+    result_.chunks.push_back(MetaCodec::DecodeChunkValue(kv.value));
+  }
 
   return Status::OK();
 }
@@ -1376,6 +1394,7 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoEntry& fs_info,
         auto* range = trash_slice.add_ranges();
         range->set_offset(slice.offset());
         range->set_len(slice.len());
+        range->set_compaction_version(slice.compaction_version());
 
         trash_slices.add_slices()->Swap(&trash_slice);
       }
@@ -1449,6 +1468,7 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoEntry& fs_info,
       auto* range = trash_slice.add_ranges();
       range->set_offset(slice.offset);
       range->set_len(slice.len);
+      range->set_compaction_version(slice.compaction_version);
 
       trash_slices.add_slices()->Swap(&trash_slice);
     }
@@ -1503,12 +1523,14 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoEntry& fs_info,
             auto* range = trash_slice.add_ranges();
             range->set_offset(slice.offset);
             range->set_len(slice.len);
+            range->set_compaction_version(slice.compaction_version);
 
             temp_trash_slice_map[slice.id] = trash_slice;
           } else {
             auto* range = it->second.add_ranges();
             range->set_offset(block_offset);
             range->set_len(block_size);
+            range->set_compaction_version(slice.compaction_version());
           }
         }
       }
@@ -2416,8 +2438,8 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
   std::string primary_key = MetaCodec::EncodeInodeKey(fs_id, ino);
   std::vector<std::string> keys = {primary_key};
   for (auto* operation : batch_operation.setattr_operations) {
-    std::string key = operation->PrefetchKey();
-    if (!key.empty()) keys.push_back(key);
+    auto prefetch_keys = operation->PrefetchKey();
+    if (!prefetch_keys.empty()) keys.insert(keys.end(), prefetch_keys.begin(), prefetch_keys.end());
   }
 
   SetElapsedTime(batch_operation, "store_pending");

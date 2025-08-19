@@ -12,14 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "mdsv2/filesystem/inode.h"
+#include "client/vfs/meta/v2/inode_cache.h"
 
 #include <cstdint>
 #include <memory>
 #include <string>
 #include <utility>
 
-#include "fmt/core.h"
 #include "fmt/format.h"
 #include "gflags/gflags.h"
 #include "glog/logging.h"
@@ -28,12 +27,9 @@
 #include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
-namespace mdsv2 {
-
-static const std::string kInodeCacheMetricsPrefix = "dingofs_{}_inode_cache_";
-
-// 0: no limit
-DEFINE_uint32(mds_inode_cache_max_count, 0, "inode cache max count");
+namespace client {
+namespace vfs {
+namespace v2 {
 
 uint32_t Inode::FsId() {
   utils::ReadLockGuard lk(lock_);
@@ -47,7 +43,7 @@ uint64_t Inode::Ino() {
   return attr_.ino();
 }
 
-FileType Inode::Type() {
+Inode::FileType Inode::Type() {
   utils::ReadLockGuard lk(lock_);
 
   return attr_.type();
@@ -147,12 +143,14 @@ std::string Inode::XAttr(const std::string& name) {
 bool Inode::UpdateIf(const AttrEntry& attr) {
   utils::WriteLockGuard lk(lock_);
 
-  DINGO_LOG(INFO) << fmt::format("[inode.{}] update attr,this({}) version({}->{}).", attr_.ino(), (void*)this,
-                                 attr_.version(), attr.version());
+  DINGO_LOG(INFO) << fmt::format(
+      "[meta.icache.{}] update attr,this({}) version({}->{}).", attr_.ino(),
+      (void*)this, attr_.version(), attr.version());
 
   if (attr.version() <= attr_.version()) {
-    DINGO_LOG(WARNING) << fmt::format("[inode.{}] version abnormal, old({}) new({}).", attr_.ino(), attr_.version(),
-                                      attr.version());
+    DINGO_LOG(WARNING) << fmt::format(
+        "[meta.icache.{}] version abnormal, old({}) new({}).", attr_.ino(),
+        attr_.version(), attr.version());
     return false;
   }
 
@@ -164,12 +162,14 @@ bool Inode::UpdateIf(const AttrEntry& attr) {
 bool Inode::UpdateIf(AttrEntry&& attr) {
   utils::WriteLockGuard lk(lock_);
 
-  DINGO_LOG(INFO) << fmt::format("[inode.{}] update attr,this({}) version({}->{}).", attr_.ino(), (void*)this,
-                                 attr_.version(), attr.version());
+  DINGO_LOG(INFO) << fmt::format(
+      "[meta.icache.{}] update attr, version({}->{}).", attr_.ino(),
+      attr_.version(), attr.version());
 
   if (attr.version() <= attr_.version()) {
-    DINGO_LOG(WARNING) << fmt::format("[inode.{}] version abnormal, old({}) new({}).", attr_.ino(), attr_.version(),
-                                      attr.version());
+    DINGO_LOG(WARNING) << fmt::format(
+        "[meta.icache.{}] version abnormal, old({}) new({}).", attr_.ino(),
+        attr_.version(), attr.version());
     return false;
   }
 
@@ -183,7 +183,7 @@ void Inode::ExpandLength(uint64_t length) {
 
   if (length <= attr_.length()) return;
 
-  uint64_t now_ns = Helper::TimestampNs();
+  uint64_t now_ns = mdsv2::Helper::TimestampNs();
   attr_.set_length(length);
   attr_.set_mtime(now_ns);
   attr_.set_ctime(now_ns);
@@ -202,51 +202,60 @@ Inode::AttrEntry&& Inode::Move() {
   return std::move(attr_);
 }
 
-InodeCache::InodeCache(uint32_t fs_id)
-    : fs_id_(fs_id),
-      cache_(FLAGS_mds_inode_cache_max_count,
-             std::make_shared<utils::CacheMetrics>(fmt::format(kInodeCacheMetricsPrefix, fs_id))) {}
+InodeCache::InodeCache(uint32_t fs_id) : fs_id_(fs_id) {}
 
 InodeCache::~InodeCache() {}  // NOLINT
 
-void InodeCache::PutInode(Ino ino, InodeSPtr inode) { cache_.Put(ino, inode); }
+void InodeCache::UpsertInode(Ino ino, const AttrEntry& attr_entry) {
+  LOG(INFO) << fmt::format("[meta.icache.{}.{}] upsert inode.", ino,
+                           attr_entry.version());
+  utils::WriteLockGuard lk(lock_);
 
-void InodeCache::DeleteInode(Ino ino) { cache_.Remove(ino); };
+  auto it = cache_.find(ino);
+  if (it == cache_.end()) {
+    cache_.emplace(ino, Inode::New(attr_entry));
+  } else {
+    it->second->UpdateIf(attr_entry);
+  }
+}
 
-void InodeCache::BatchDeleteInodeIf(const std::function<bool(const Ino&)>& f) {
-  DINGO_LOG(INFO) << fmt::format("[cache.inode.{}] batch delete inode.", fs_id_);
+void InodeCache::DeleteInode(Ino ino) {
+  LOG(INFO) << fmt::format("[meta.icache.{}] delete inode.", ino);
 
-  cache_.BatchRemoveIf(f);
+  utils::WriteLockGuard lk(lock_);
+
+  cache_.erase(ino);
 }
 
 void InodeCache::Clear() {
-  DINGO_LOG(INFO) << fmt::format("[cache.inode.{}] clear.", fs_id_);
+  utils::WriteLockGuard lk(lock_);
 
-  cache_.Clear();
+  cache_.clear();
 }
 
 InodeSPtr InodeCache::GetInode(Ino ino) {
-  InodeSPtr inode;
-  if (!cache_.Get(ino, &inode)) {
-    return nullptr;
-  }
+  utils::ReadLockGuard lk(lock_);
 
-  return inode;
+  auto it = cache_.find(ino);
+  return (it == cache_.end()) ? nullptr : it->second;
 }
 
 std::vector<InodeSPtr> InodeCache::GetInodes(std::vector<uint64_t> inoes) {
+  utils::ReadLockGuard lk(lock_);
+
   std::vector<InodeSPtr> inodes;
+  inodes.reserve(inoes.size());
   for (auto& ino : inoes) {
-    InodeSPtr inode;
-    if (cache_.Get(ino, &inode)) {
-      inodes.push_back(inode);
+    auto it = cache_.find(ino);
+    if (it != cache_.end()) {
+      inodes.push_back(it->second);
     }
   }
 
   return inodes;
 }
 
-std::map<uint64_t, InodeSPtr> InodeCache::GetAllInodes() { return cache_.GetAll(); }
-
-}  // namespace mdsv2
+}  // namespace v2
+}  // namespace vfs
+}  // namespace client
 }  // namespace dingofs

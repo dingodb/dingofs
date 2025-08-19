@@ -1482,14 +1482,14 @@ void MDSServiceImpl::DoSetXAttr(google::protobuf::RpcController*, const pb::mdsv
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
-  uint64_t version;
-  status = file_system->SetXAttr(ctx, request->ino(), request->xattrs(), version);
+  EntryOut entry_out;
+  status = file_system->SetXAttr(ctx, request->ino(), request->xattrs(), entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  response->set_inode_version(version);
+  response->mutable_inode()->Swap(&entry_out.attr);
 }
 
 void MDSServiceImpl::SetXAttr(google::protobuf::RpcController* controller, const pb::mdsv2::SetXAttrRequest* request,
@@ -1547,14 +1547,14 @@ void MDSServiceImpl::DoRemoveXAttr(google::protobuf::RpcController*, const pb::m
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
-  uint64_t version;
-  status = file_system->RemoveXAttr(ctx, request->ino(), request->name(), version);
+  EntryOut entry_out;
+  status = file_system->RemoveXAttr(ctx, request->ino(), request->name(), entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  response->set_inode_version(version);
+  response->mutable_inode()->Swap(&entry_out.attr);
 }
 
 void MDSServiceImpl::RemoveXAttr(google::protobuf::RpcController* controller,
@@ -1741,8 +1741,8 @@ void MDSServiceImpl::DoWriteSlice(google::protobuf::RpcController*, const pb::md
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
-  status = file_system->WriteSlice(ctx, request->parent(), request->ino(), request->chunk_index(),
-                                   Helper::PbRepeatedToVector(request->slices()));
+  status = file_system->WriteSlice(ctx, request->parent(), request->ino(),
+                                   Helper::PbRepeatedToVector(request->delta_slices()));
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -1766,8 +1766,8 @@ void MDSServiceImpl::WriteSlice(google::protobuf::RpcController* controller,
     if (request->ino() == 0) {
       return Status(pb::error::EILLEGAL_PARAMTETER, "ino is 0");
     }
-    if (request->chunk_index() < 0) {
-      return Status(pb::error::EILLEGAL_PARAMTETER, "chunk_index is negative");
+    if (request->delta_slices().empty()) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "delta_slices is empty");
     }
 
     return Status::OK();
@@ -1809,13 +1809,13 @@ void MDSServiceImpl::DoReadSlice(google::protobuf::RpcController*, const pb::mds
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
-  std::vector<pb::mdsv2::Slice> slices;
-  status = file_system->ReadSlice(ctx, request->ino(), request->chunk_index(), slices);
+  std::vector<ChunkEntry> chunks;
+  status = file_system->ReadSlice(ctx, request->ino(), Helper::PbRepeatedToVector(request->chunk_indexes()), chunks);
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  Helper::VectorToPbRepeated(slices, response->mutable_slices());
+  Helper::VectorToPbRepeated(chunks, response->mutable_chunks());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
 }
 
@@ -1831,8 +1831,9 @@ void MDSServiceImpl::ReadSlice(google::protobuf::RpcController* controller, cons
     if (request->ino() == 0) {
       return Status(pb::error::EILLEGAL_PARAMTETER, "ino is 0");
     }
-    if (request->chunk_index() < 0) {
-      return Status(pb::error::EILLEGAL_PARAMTETER, "chunk_index is negative");
+
+    if (request->chunk_indexes().empty()) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "chunk_indexes is empty");
     }
 
     return Status::OK();
@@ -1874,11 +1875,13 @@ void MDSServiceImpl::DoFallocate(google::protobuf::RpcController*, const pb::mds
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
-  EntryOut entry;
-  status = file_system->Fallocate(ctx, request->ino(), request->mode(), request->offset(), request->len(), entry);
+  EntryOut entry_out;
+  status = file_system->Fallocate(ctx, request->ino(), request->mode(), request->offset(), request->len(), entry_out);
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
+
+  response->mutable_inode()->Swap(&entry_out.attr);
 }
 
 void MDSServiceImpl::Fallocate(google::protobuf::RpcController* controller, const pb::mdsv2::FallocateRequest* request,

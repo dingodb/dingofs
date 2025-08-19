@@ -18,10 +18,10 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "client/meta/vfs_meta.h"
 #include "client/vfs/meta/v2/client_id.h"
-#include "client/vfs/meta/v2/file_session.h"
 #include "client/vfs/meta/v2/mds_router.h"
 #include "client/vfs/meta/v2/rpc.h"
 #include "common/status.h"
@@ -41,6 +41,7 @@ namespace v2 {
 class MDSClient;
 using MDSClientPtr = std::shared_ptr<MDSClient>;
 
+using mdsv2::AttrEntry;
 using mdsv2::MDSMeta;
 
 using GetMdsFn = std::function<MDSMeta()>;
@@ -54,6 +55,7 @@ class MDSClient {
 
   static MDSClientPtr New(const ClientId& client_id, mdsv2::FsInfoPtr fs_info,
                           ParentMemoSPtr parent_memo,
+
                           MDSDiscoveryPtr mds_discovery,
                           MDSRouterPtr mds_router, RPCPtr rpc) {
     return std::make_shared<MDSClient>(client_id, fs_info, parent_memo,
@@ -94,7 +96,8 @@ class MDSClient {
                  uint32_t limit, bool with_attr,
                  std::vector<DirEntry>& entries);
 
-  Status Open(ContextSPtr ctx, Ino ino, int flags, FileSession& file_session);
+  Status Open(ContextSPtr ctx, Ino ino, int flags, std::string& session_id,
+              AttrEntry& attr_entry, std::vector<mdsv2::ChunkEntry>& chunks);
   Status Release(ContextSPtr ctx, Ino ino, const std::string& session_id);
 
   Status Link(ContextSPtr ctx, Ino ino, Ino new_parent,
@@ -111,19 +114,21 @@ class MDSClient {
   Status GetXAttr(ContextSPtr ctx, Ino ino, const std::string& name,
                   std::string& value);
   Status SetXAttr(ContextSPtr ctx, Ino ino, const std::string& name,
-                  const std::string& value);
-  Status RemoveXAttr(ContextSPtr ctx, Ino ino, const std::string& name);
+                  const std::string& value, AttrEntry& attr_entry);
+  Status RemoveXAttr(ContextSPtr ctx, Ino ino, const std::string& name,
+                     AttrEntry& attr_entry);
   Status ListXAttr(ContextSPtr ctx, Ino ino,
                    std::map<std::string, std::string>& xattrs);
 
   Status Rename(ContextSPtr ctx, Ino old_parent, const std::string& old_name,
                 Ino new_parent, const std::string& new_name);
 
-  Status NewSliceId(ContextSPtr ctx, uint32_t num, uint64_t* id);
-  Status ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
-                   std::vector<Slice>* slices);
-  Status WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
-                    const std::vector<Slice>& slices);
+  Status NewSliceId(ContextSPtr ctx, Ino ino, uint64_t* id);
+  Status ReadSlice(ContextSPtr ctx, Ino ino,
+                   const std::vector<uint64_t>& chunk_indexes,
+                   std::vector<mdsv2::ChunkEntry>& chunks);
+  Status WriteSlice(ContextSPtr ctx, Ino ino,
+                    const std::vector<mdsv2::DeltaSliceEntry>& delta_slices);
 
   Status Fallocate(ContextSPtr ctx, Ino ino, int32_t mode, uint64_t offset,
                    uint64_t length);

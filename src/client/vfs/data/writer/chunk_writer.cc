@@ -216,7 +216,7 @@ Status ChunkWriter::WriteToBlockCache(const cache::BlockKey& key,
 
 Status ChunkWriter::CommitSlices(ContextSPtr ctx,
                                  const std::vector<Slice>& slices) {
-  return hub_->GetMetaSystem()->WriteSlice(ctx, chunk_.ino, chunk_.index, 0,
+  return hub_->GetMetaSystem()->WriteSlice(ctx, chunk_.ino, chunk_.index, fh_,
                                            slices);
 }
 

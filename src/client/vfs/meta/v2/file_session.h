@@ -22,6 +22,7 @@
 #include "client/meta/vfs_meta.h"
 #include "json/value.h"
 #include "mdsv2/common/type.h"
+#include "mdsv2/filesystem/fs_info.h"
 #include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
@@ -29,61 +30,44 @@ namespace client {
 namespace vfs {
 namespace v2 {
 
-class FileSession;
-using FileSessionSPtr = std::shared_ptr<FileSession>;
+struct ChunkMutation;
+using ChunkMutationSPtr = std::shared_ptr<ChunkMutation>;
 
-class FileSession {
+using mdsv2::ChunkEntry;
+
+class ChunkMutation {
  public:
-  struct Chunk;
-  using ChunkSPtr = std::shared_ptr<Chunk>;
+  ChunkMutation(Ino ino, uint64_t fh, uint64_t index, uint64_t chunk_size,
+                uint64_t block_size)
+      : ino_(ino),
+        fh_(fh),
+        index_(index),
+        chunk_size_(chunk_size),
+        block_size_(block_size) {}
+  ChunkMutation(Ino ino, uint64_t fh, const ChunkEntry& chunk)
+      : ino_(ino), fh_(fh) {
+    UpdateChunkIf(chunk);
+  }
 
-  struct Chunk {
-    uint64_t index{0};
-    uint64_t chunk_size{0};
-    uint64_t block_size{0};
+  static ChunkMutationSPtr New(Ino ino, uint64_t fh, uint64_t index,
+                               uint64_t chunk_size, uint64_t block_size) {
+    return std::make_shared<ChunkMutation>(ino, fh, index, chunk_size,
+                                           block_size);
+  }
+  static ChunkMutationSPtr New(Ino ino, uint64_t fh, const ChunkEntry& chunk) {
+    return std::make_shared<ChunkMutation>(ino, fh, chunk);
+  }
 
-    std::vector<Slice> slices;
+  int64_t GetIndex() const { return index_; }
+  bool HasChunk() const { return version_ > 0; }
+  ChunkEntry GetChunkEntry() const;
 
-    uint64_t version{0};
-    uint64_t last_compaction_time_ms{0};
+  void UpdateChunkIf(const ChunkEntry& chunk);
 
-    static ChunkSPtr From(const mdsv2::ChunkEntry& chunk);
-    static mdsv2::ChunkEntry To(ChunkSPtr chunk);
-  };
-
-  FileSession() = default;
-  ~FileSession() = default;
-
-  static FileSessionSPtr New() { return std::make_shared<FileSession>(); }
-
-  void SetSessionId(const std::string& session_id) { session_id_ = session_id; }
-  const std::string& GetSessionID() const { return session_id_; }
-
-  void AddChunk(ChunkSPtr chunk);
-  void AppendSlice(int64_t index, const std::vector<Slice>& slices);
-
-  ChunkSPtr GetChunk(int64_t index);
-  std::vector<ChunkSPtr> GetAllChunk();
-
- private:
-  std::string session_id_;
-
-  utils::RWLock lock_;
-  // index -> chunk
-  std::map<int64_t, ChunkSPtr> chunk_map_;
-};
-
-// used by open file
-class FileSessionMap {
- public:
-  FileSessionMap() = default;
-  ~FileSessionMap() = default;
-
-  bool Put(uint64_t fh, FileSessionSPtr file_session);
-  void Delete(uint64_t fh);
-
-  std::string GetSessionID(uint64_t fh);
-  FileSessionSPtr GetSession(uint64_t fh);
+  std::vector<Slice> GetAllSlice();
+  std::vector<Slice> GetDeltaSlice();
+  void AppendSlice(const std::vector<Slice>& slices);
+  void DeleteDeltaSlice(const std::vector<uint64_t>& delete_slice_ids);
 
   // output json format string
   bool Dump(Json::Value& value);
@@ -91,8 +75,98 @@ class FileSessionMap {
 
  private:
   utils::RWLock lock_;
-  // fh -> FileSession
-  std::map<uint64_t, FileSessionSPtr> file_session_map_;
+
+  Ino ino_;
+  uint64_t fh_{0};
+  uint64_t index_{0};
+  uint64_t chunk_size_{0};
+  uint64_t block_size_{0};
+
+  std::vector<Slice> slices_;
+
+  uint64_t version_{0};
+  uint64_t last_compaction_time_ms_{0};
+
+  std::vector<Slice> delta_slices_;
+};
+
+class FileSession;
+using FileSessionSPtr = std::shared_ptr<FileSession>;
+
+class FileSession {
+ public:
+  FileSession(Ino ino, uint64_t fh, const std::string& session_id,
+              mdsv2::FsInfoPtr fs_info, const std::vector<ChunkEntry>& chunks);
+  ~FileSession() = default;
+
+  static FileSessionSPtr New(Ino ino, uint64_t fh,
+                             const std::string& session_id,
+                             mdsv2::FsInfoPtr fs_info,
+                             const std::vector<ChunkEntry>& chunks) {
+    return std::make_shared<FileSession>(ino, fh, session_id, fs_info, chunks);
+  }
+
+  Ino GetIno() const { return ino_; }
+  uint64_t GetFh() const { return fh_; }
+  const std::string& GetSessionID() const { return session_id_; }
+
+  void UpsertChunkMutation(const ChunkEntry& chunk);
+  void AppendSlice(int64_t index, const std::vector<Slice>& slices);
+  void DeleteChunkMutation(int64_t index);
+
+  ChunkMutationSPtr GetChunkMutation(int64_t index);
+  std::vector<ChunkMutationSPtr> GetAllChunkMutation();
+
+ private:
+  friend class FileSessionMap;
+  void AddChunkMutation(ChunkMutationSPtr chunk_mutation);
+
+  Ino ino_;
+  uint64_t fh_;
+  const std::string session_id_;
+
+  mdsv2::FsInfoPtr fs_info_;
+
+  utils::RWLock lock_;
+
+  // index -> chunk
+  std::map<int64_t, ChunkMutationSPtr> chunk_mutation_map_;
+};
+
+// used by open file
+class FileSessionMap {
+ public:
+  FileSessionMap(mdsv2::FsInfoPtr fs_info) : fs_info_(fs_info) {}
+  ~FileSessionMap() = default;
+
+  struct Key {
+    uint64_t ino{0};
+    uint64_t fh{0};
+
+    bool operator<(const Key& other) const {
+      if (ino != other.ino) {
+        return ino < other.ino;
+      }
+      return fh < other.fh;
+    }
+  };
+
+  bool Put(const Key& key, FileSessionSPtr file_session);
+  void Delete(const Key& key);
+
+  std::string GetSessionID(const Key& key);
+  FileSessionSPtr GetSession(const Key& key);
+
+  // output json format string
+  bool Dump(Json::Value& value);
+  bool Load(const Json::Value& value);
+
+ private:
+  mdsv2::FsInfoPtr fs_info_;
+
+  utils::RWLock lock_;
+  // Key(ino, fh) -> FileSession
+  std::map<Key, FileSessionSPtr> file_session_map_;
 };
 
 }  // namespace v2

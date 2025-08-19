@@ -186,7 +186,7 @@ class Operation {
   virtual Ino GetIno() const = 0;
   virtual uint64_t GetTime() const { return time_ns_; }
 
-  virtual std::string PrefetchKey() { return ""; }
+  virtual std::vector<std::string> PrefetchKey() { return {}; }
 
   void SetEvent(bthread::CountdownEvent* event) { event_ = event; }
   void NotifyEvent() {
@@ -554,14 +554,14 @@ class RemoveXAttrOperation : public Operation {
 
 class UpsertChunkOperation : public Operation {
  public:
-  UpsertChunkOperation(Trace& trace, const FsInfoEntry fs_info, uint64_t ino, uint64_t index,
-                       const std::vector<pb::mdsv2::Slice>& slices)
-      : Operation(trace), fs_info_(fs_info), ino_(ino), chunk_index_(index), slices_(slices) {};
+  UpsertChunkOperation(Trace& trace, const FsInfoEntry fs_info, uint64_t ino,
+                       const std::vector<DeltaSliceEntry>& delta_slices)
+      : Operation(trace), fs_info_(fs_info), ino_(ino), delta_slices_(delta_slices) {};
   ~UpsertChunkOperation() override = default;
 
   struct Result : public Operation::Result {
     int64_t length_delta{0};
-    ChunkEntry chunk;
+    std::vector<ChunkEntry> effected_chunks;
   };
 
   OpType GetOpType() const override { return OpType::kUpsertChunk; }
@@ -569,7 +569,7 @@ class UpsertChunkOperation : public Operation {
   uint32_t GetFsId() const override { return fs_info_.fs_id(); }
   Ino GetIno() const override { return ino_; }
 
-  std::string PrefetchKey() override;
+  std::vector<std::string> PrefetchKey() override;
 
   Status RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>& prefetch_kvs) override;
 
@@ -585,21 +585,20 @@ class UpsertChunkOperation : public Operation {
  private:
   const FsInfoEntry fs_info_;
   uint64_t ino_;
-  uint64_t chunk_index_{0};
 
-  std::vector<pb::mdsv2::Slice> slices_;
+  std::vector<DeltaSliceEntry> delta_slices_;
 
   Result result_;
 };
 
 class GetChunkOperation : public Operation {
  public:
-  GetChunkOperation(Trace& trace, uint32_t fs_id, uint64_t ino, uint64_t index)
-      : Operation(trace), fs_id_(fs_id), ino_(ino), chunk_index_(index) {};
+  GetChunkOperation(Trace& trace, uint32_t fs_id, uint64_t ino, const std::vector<uint32_t>& chunk_indexes)
+      : Operation(trace), fs_id_(fs_id), ino_(ino), chunk_indexes_(chunk_indexes) {};
   ~GetChunkOperation() override = default;
 
   struct Result : public Operation::Result {
-    ChunkEntry chunk;
+    std::vector<ChunkEntry> chunks;
   };
 
   OpType GetOpType() const override { return OpType::kGetChunk; }
@@ -621,7 +620,7 @@ class GetChunkOperation : public Operation {
  private:
   uint32_t fs_id_;
   uint64_t ino_;
-  uint64_t chunk_index_{0};
+  std::vector<uint32_t> chunk_indexes_;
 
   Result result_;
 };

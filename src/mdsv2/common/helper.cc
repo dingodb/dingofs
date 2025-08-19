@@ -14,6 +14,7 @@
 
 #include "mdsv2/common/helper.h"
 
+#include <fcntl.h>
 #include <sys/stat.h>
 
 #include <cctype>
@@ -578,6 +579,24 @@ std::vector<uint64_t> Helper::GetMdsIds(const std::map<uint64_t, BucketSetEntry>
   }
 
   return mds_ids;
+}
+
+const char* Helper::DescOpenFlags(int flags) {
+  if ((flags & O_ACCMODE) == O_RDONLY) {
+    return "RDONLY";
+  } else if (flags & O_WRONLY) {
+    return "WRONLY";
+  } else if (flags & O_RDWR) {
+    return "RDWR";
+  } else if (flags & O_CREAT) {
+    return "CREAT";
+  } else if (flags & O_TRUNC) {
+    return "TRUNC";
+  } else if (flags & O_APPEND) {
+    return "APPEND";
+  }
+
+  return "UNKNOWN";
 }
 
 }  // namespace mdsv2
