@@ -157,7 +157,7 @@ Status FileReader::Read(ContextSPtr ctx, char* buf, uint64_t size,
 }
 
 void FileReader::Invalidate() {
-  LOG(INFO) << fmt::format("FileReader::Invalidate, ino: {}", ino_);
+  VLOG(1) << fmt::format("FileReader::Invalidate, ino: {}", ino_);
 
   std::lock_guard<std::mutex> lock(mutex_);
   validated_ = false;
