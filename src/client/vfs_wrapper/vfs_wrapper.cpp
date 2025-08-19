@@ -561,11 +561,7 @@ Status VFSWrapper::Read(Ino ino, char* buf, uint64_t size, uint64_t offset,
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opRead, &client_op_metric_->opAll});
-  {
-    auto metric_span = vfs_->GetTracer()->StartSpanWithParent(
-        kVFSWrapperMoudule, "VFSWrapper::Read.Metric", *span);
-    VFSRWMetricGuard guard(&s, &VFSRWMetric::GetInstance().read, out_rsize);
-  }
+  VFSRWMetricGuard guard(&s, &VFSRWMetric::GetInstance().read, out_rsize);
 
   s = vfs_->Read(span->GetContext(), ino, buf, size, offset, fh, out_rsize);
 
