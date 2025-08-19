@@ -39,6 +39,7 @@
 #include "client/vfs_wrapper/access_log.h"
 #include "common/rpc_stream.h"
 #include "common/status.h"
+#include "metrics/blockaccess/block_accesser.h"
 #include "metrics/client/client.h"
 #include "metrics/metric_guard.h"
 #include "options/client/common_option.h"
@@ -59,6 +60,7 @@ const std::string kFdStatePath = "/tmp/dingo-fuse-state.json";
 using ::dingofs::client::fuse::FuseUpgradeManager;
 using metrics::ClientOpMetricGuard;
 using metrics::VFSRWMetricGuard;
+using metrics::blockaccess::BlockMetric;
 using metrics::client::VFSRWMetric;
 
 #define METRIC_GUARD(REQUEST)              \
@@ -88,6 +90,14 @@ static Status InitLog() {
 
   CHECK(succ) << "Init log failed, unexpected!";
   return Status::OK();
+}
+
+// no read,write also expose metrics for test purpose
+static void InitMetricsValue() {
+  VFSRWMetric::GetInstance().read.bps.count << 0;
+  VFSRWMetric::GetInstance().write.bps.count << 0;
+  BlockMetric::GetInstance().read_block.bps.count << 0;
+  BlockMetric::GetInstance().write_block.bps.count << 0;
 }
 
 Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
@@ -128,6 +138,8 @@ Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
   if (!s.ok()) {
     return s;
   }
+
+  InitMetricsValue();
 
   int32_t bthread_worker_num = dingofs::client::FLAGS_bthread_worker_num;
   if (bthread_worker_num > 0) {
