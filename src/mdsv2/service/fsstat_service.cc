@@ -47,6 +47,7 @@ namespace mdsv2 {
 DECLARE_uint32(mds_heartbeat_mds_offline_period_time_ms);
 DECLARE_uint32(mds_heartbeat_client_offline_period_ms);
 DECLARE_uint32(cache_member_heartbeat_offline_timeout_s);
+DECLARE_uint32(cache_member_heartbeat_miss_timeout_s);
 
 static std::string RenderHead(const std::string& title) {
   butil::IOBufBuilder os;
@@ -320,7 +321,7 @@ static void RenderCacheMemberList(const std::vector<CacheMemberEntry>& cache_mem
   os << "<th>Weight</th>";
   os << "<th>Locked</th>";
   os << "<th>Last Online Time</th>";
-  os << "<th>Online</th>";
+  os << "<th>State</th>";
   os << "</tr>";
 
   int64_t now_ms = Helper::TimestampMs();
@@ -337,10 +338,14 @@ static void RenderCacheMemberList(const std::vector<CacheMemberEntry>& cache_mem
       os << "<td>NO</td>";
     }
     os << "<td>" << Helper::FormatMsTime(member.last_online_time_ms()) << "</td>";
-    if (member.last_online_time_ms() + FLAGS_cache_member_heartbeat_offline_timeout_s * 1000 < now_ms) {
-      os << R"(<td style="color:red">NO</td>)";
+    if (member.last_online_time_ms() == 0) {
+      os << R"(<td>UNKNOW</td>)";
+    } else if (member.last_online_time_ms() + FLAGS_cache_member_heartbeat_offline_timeout_s * 1000 < now_ms) {
+      os << R"(<td style="color:red">OFFLINE</td>)";
+    } else if (member.last_online_time_ms() + FLAGS_cache_member_heartbeat_miss_timeout_s * 1000 < now_ms) {
+      os << R"(<td style="color:orange">UNSTABLE</td>)";
     } else {
-      os << "<td>YES</td>";
+      os << R"(<td style="color:green">ONLINE</td>)";
     }
 
     os << "</tr>";

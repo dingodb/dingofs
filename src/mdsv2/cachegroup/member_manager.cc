@@ -59,7 +59,9 @@ static void SetMemberState(CacheMemberEntry& cache_member) {
   auto offline_timeout_ms = FLAGS_cache_member_heartbeat_offline_timeout_s * 1000;
 
   auto time_pass_ms = time_now_ms - cache_member.last_online_time_ms();
-  if (time_pass_ms < miss_timeout_ms) {
+  if (cache_member.last_online_time_ms() == 0) {
+    cache_member.set_state(pb::mdsv2::CacheGroupMemberState::CacheGroupMemberStateUnknown);
+  } else if (time_pass_ms < miss_timeout_ms) {
     cache_member.set_state(pb::mdsv2::CacheGroupMemberState::CacheGroupMemberStateOnline);
   } else if (time_pass_ms < offline_timeout_ms) {
     cache_member.set_state(pb::mdsv2::CacheGroupMemberState::CacheGroupMemberStateUnstable);

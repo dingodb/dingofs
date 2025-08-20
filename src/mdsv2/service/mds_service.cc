@@ -2852,8 +2852,6 @@ void MDSServiceImpl::DoJoinCacheGroup(google::protobuf::RpcController* controlle
   Context ctx;
   auto status = cache_group_manager_->JoinCacheGroup(ctx, request->group_name(), request->ip(), request->port(),
                                                      request->weight(), request->member_id());
-  DINGO_LOG(ERROR) << fmt::format("yjddebug join_group_req:{}, join_group_response:{}", request->DebugString(),
-                                  response->DebugString());
 
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
