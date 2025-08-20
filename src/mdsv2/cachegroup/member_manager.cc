@@ -63,8 +63,10 @@ static void SetMemberState(CacheMemberEntry& cache_member) {
     cache_member.set_state(pb::mdsv2::CacheGroupMemberState::CacheGroupMemberStateOnline);
   } else if (time_pass_ms < offline_timeout_ms) {
     cache_member.set_state(pb::mdsv2::CacheGroupMemberState::CacheGroupMemberStateUnstable);
+  } else {
+    cache_member.set_state(pb::mdsv2::CacheGroupMemberState::CacheGroupMemberStateOffline);
   }
-  cache_member.set_state(pb::mdsv2::CacheGroupMemberState::CacheGroupMemberStateOffline);
+
   return;
 }
 
