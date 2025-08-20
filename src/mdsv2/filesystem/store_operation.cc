@@ -1729,6 +1729,8 @@ Status FlushDirUsagesOperation::Run(TxnUPtr& txn) {
 }
 
 Status UpsertMdsOperation::Run(TxnUPtr& txn) {
+  CHECK(mds_meta_.id() > 0) << "mds id is 0";
+
   txn->Put(MetaCodec::EncodeHeartbeatKey(mds_meta_.id()), MetaCodec::EncodeHeartbeatValue(mds_meta_));
 
   return Status::OK();

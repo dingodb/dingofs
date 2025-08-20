@@ -69,6 +69,11 @@ void Heartbeat::SendHeartbeat() {
 }
 
 Status Heartbeat::SendHeartbeat(Context& ctx, MdsEntry& mds) {
+  if (mds.id() == 0) {
+    DINGO_LOG(ERROR) << "[heartbeat] send fail, mds id is 0.";
+    return Status(pb::error::Errno::EINTERNAL, "mds id is 0");
+  }
+
   mds.set_last_online_time_ms(Helper::TimestampMs());
 
   DINGO_LOG(DEBUG) << fmt::format("[heartbeat] mds {}.", mds.ShortDebugString());
