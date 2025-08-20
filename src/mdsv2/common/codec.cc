@@ -1318,6 +1318,7 @@ std::pair<std::string, std::string> MetaCodec::ParseMetaTableKey(const std::stri
 
         auto client_info = DecodeHeartbeatClientValue(value);
         value_desc = client_info.ShortDebugString();
+
       } else if (role == pb::mdsv2::ROLE_CACHE_MEMBER) {
         std::string member_id;
         DecodeHeartbeatCacheMemberKey(key, member_id);
@@ -1348,6 +1349,16 @@ std::pair<std::string, std::string> MetaCodec::ParseMetaTableKey(const std::stri
       auto quota = DecodeFsQuotaValue(value);
       value_desc = quota.ShortDebugString();
 
+    } break;
+
+    case kMetaFsOpLog: {
+      uint32_t fs_id;
+      uint64_t time_ns;
+      DecodeFsOpLogKey(key, fs_id, time_ns);
+      key_desc = fmt::format("{} kTableMeta kMetaFsOpLog {} {}", kPrefix, fs_id, time_ns);
+
+      auto op_log = DecodeFsOpLogValue(value);
+      value_desc = op_log.ShortDebugString();
     } break;
 
     default:

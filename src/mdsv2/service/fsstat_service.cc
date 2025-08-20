@@ -1309,6 +1309,9 @@ static void RenderOplogPage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) 
       case pb::mdsv2::FsOpLog::DELETE_FS:
         os << "<td>" << oplog.delete_fs().ShortDebugString() << "</td>";
         break;
+      case pb::mdsv2::FsOpLog::QUIT_AND_JOIN_FS:
+        os << "<td>" << oplog.quit_and_join_fs().ShortDebugString() << "</td>";
+        break;
       default:
         os << "<td>UNKNOWN</td>";
     }

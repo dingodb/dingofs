@@ -2189,8 +2189,9 @@ Status OperationProcessor::RunAlone(Operation* operation) {
     if (!status.ok()) {
       if (status.error_code() == pb::error::ESTORE_TXN_LOCK_CONFLICT ||
           status.error_code() == pb::error::ESTORE_TXN_MEM_LOCK_CONFLICT) {
-        DINGO_LOG(WARNING) << fmt::format("[operation.{}.{}][{}][{}us] alone run lock conflict, retry({}) status({}).",
-                                          fs_id, ino, txn_id, once_duration.ElapsedUs(), retry, status.error_str());
+        DINGO_LOG(WARNING) << fmt::format(
+            "[operation.{}.{}][{}][{}us] alone run {} lock conflict, retry({}) status({}).", fs_id, ino, txn_id,
+            once_duration.ElapsedUs(), operation->OpName(), retry, status.error_str());
         bthread_usleep(CalWaitTimeUs(retry));
         continue;
       }
@@ -2339,6 +2340,20 @@ void OperationProcessor::LaunchExecuteBatchOperation(const BatchOperation& batch
   }
 }
 
+static std::string GetName(const BatchOperation& batch_operation) {
+  std::string op_names;
+  op_names.reserve(kOpNameBufInitSize);
+
+  for (auto* operation : batch_operation.setattr_operations) {
+    op_names += fmt::format("{},", operation->OpName());
+  }
+  for (auto* operation : batch_operation.create_operations) {
+    op_names += fmt::format("{},", operation->OpName());
+  }
+
+  return std::move(op_names);
+}
+
 void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) {
   const uint32_t fs_id = batch_operation.fs_id;
   const uint64_t ino = batch_operation.ino;
@@ -2361,8 +2376,7 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
   int count = 0;
   int64_t txn_id = 0;
   bool is_one_pc = false;
-  std::string op_names;
-  op_names.reserve(kOpNameBufInitSize);
+  std::string op_names = GetName(batch_operation);
   do {
     Duration once_duration;
 
@@ -2374,8 +2388,9 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
     if (!status.ok()) {
       if (status.error_code() == pb::error::ESTORE_TXN_LOCK_CONFLICT ||
           status.error_code() == pb::error::ESTORE_TXN_MEM_LOCK_CONFLICT) {
-        DINGO_LOG(WARNING) << fmt::format("[operation.{}.{}][{}][{}us] batch run lock conflict, retry({}) status({}).",
-                                          fs_id, ino, txn_id, once_duration.ElapsedUs(), retry, status.error_str());
+        DINGO_LOG(WARNING) << fmt::format(
+            "[operation.{}.{}][{}][{}us] batch run {} lock conflict, retry({}) status({}).", fs_id, ino, txn_id,
+            once_duration.ElapsedUs(), op_names, retry, status.error_str());
         bthread_usleep(CalWaitTimeUs(retry));
         continue;
       }
@@ -2387,19 +2402,13 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
     // run set attr operations
     for (auto* operation : batch_operation.setattr_operations) {
       operation->RunInBatch(txn, attr, prefetch_kvs);
-      if (retry == 0) {
-        op_names += fmt::format("{},", operation->OpName());
-        ++count;
-      }
+      if (retry == 0) ++count;
     }
 
     // run create operations
     for (auto* operation : batch_operation.create_operations) {
       operation->RunInBatch(txn, attr, prefetch_kvs);
-      if (retry == 0) {
-        op_names += fmt::format("{},", operation->OpName());
-        ++count;
-      }
+      if (retry == 0) ++count;
     }
 
     attr.set_version(attr.version() + 1);

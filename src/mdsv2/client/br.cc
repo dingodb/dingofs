@@ -357,7 +357,8 @@ Status Backup::BackupMetaTable(OutputUPtr output) {
   CHECK(output != nullptr) << "output is nullptr.";
 
   uint64_t total_count = 0, lock_count = 0, auto_increment_id_count = 0;
-  uint64_t mds_heartbeat_count = 0, client_heartbeat_count = 0, fs_count = 0, fs_quota_count = 0;
+  uint64_t mds_heartbeat_count = 0, client_heartbeat_count = 0, cache_member_heartbeat_count = 0, fs_count = 0,
+           fs_quota_count = 0;
 
   Trace trace;
   ScanMetaTableOperation operation(trace, [&](const std::string& key, const std::string& value) -> bool {
@@ -371,6 +372,8 @@ Status Backup::BackupMetaTable(OutputUPtr output) {
       ++mds_heartbeat_count;
     } else if (MetaCodec::IsClientHeartbeatKey(key)) {
       ++client_heartbeat_count;
+    } else if (MetaCodec::IsCacheMemberHeartbeatKey(key)) {
+      ++cache_member_heartbeat_count;
     } else if (MetaCodec::IsFsKey(key)) {
       ++fs_count;
     } else if (MetaCodec::IsFsQuotaKey(key)) {
@@ -391,9 +394,10 @@ Status Backup::BackupMetaTable(OutputUPtr output) {
 
   std::cout << fmt::format(
       "backup meta table done.\nsummary total_count({}) lock_count({}) auto_increment_id_count({}) "
-      "mds_heartbeat_count({}) client_heartbeat_count({}) fs_count({}) fs_quota_count({}).\n",
-      total_count, lock_count, auto_increment_id_count, mds_heartbeat_count, client_heartbeat_count, fs_count,
-      fs_quota_count);
+      "mds_heartbeat_count({}) client_heartbeat_count({}) cache_member_heartbeat_count({}) fs_count({}) "
+      "fs_quota_count({}).\n",
+      total_count, lock_count, auto_increment_id_count, mds_heartbeat_count, client_heartbeat_count,
+      cache_member_heartbeat_count, fs_count, fs_quota_count);
 
   return status;
 }
@@ -592,7 +596,8 @@ Status Restore::RestoreMetaTable(InputUPtr input) {
 
   // import meta to table
   uint64_t total_count = 0, lock_count = 0, auto_increment_id_count = 0;
-  uint64_t mds_heartbeat_count = 0, client_heartbeat_count = 0, fs_count = 0, fs_quota_count = 0;
+  uint64_t mds_heartbeat_count = 0, client_heartbeat_count = 0, cache_member_heartbeat_count = 0;
+  uint64_t fs_count = 0, fs_quota_count = 0;
 
   std::vector<KeyValue> kvs;
   while (true) {
@@ -610,6 +615,8 @@ Status Restore::RestoreMetaTable(InputUPtr input) {
       ++mds_heartbeat_count;
     } else if (MetaCodec::IsClientHeartbeatKey(kv.key)) {
       ++client_heartbeat_count;
+    } else if (MetaCodec::IsCacheMemberHeartbeatKey(kv.key)) {
+      ++cache_member_heartbeat_count;
     } else if (MetaCodec::IsFsKey(kv.key)) {
       ++fs_count;
     } else if (MetaCodec::IsFsQuotaKey(kv.key)) {

@@ -1771,98 +1771,6 @@ class ImportKVOperation : public Operation {
   std::vector<KeyValue> kvs_;
 };
 
-struct BatchOperation {
-  uint32_t fs_id{0};
-  uint64_t ino{0};
-
-  // set attr/xattr/chunk
-  std::vector<Operation*> setattr_operations;
-  // mkdir/mknod/symlink/hardlink
-  std::vector<Operation*> create_operations;
-};
-
-class OperationTask : public TaskRunnable {
- public:
-  using PostHandler = std::function<void(OperationSPtr operation)>;
-
-  OperationTask(OperationSPtr operation, OperationProcessorSPtr processor, PostHandler post_handler)
-      : operation_(operation), processor_(processor), post_handler_(post_handler) {}
-  ~OperationTask() override = default;
-
-  static TaskRunnablePtr New(OperationSPtr operation, OperationProcessorSPtr processor, PostHandler post_handler) {
-    return std::make_shared<OperationTask>(operation, processor, post_handler);
-  }
-
-  std::string Type() override { return "STORE_OPERATION"; }
-
-  void Run() override;
-
- private:
-  OperationSPtr operation_;
-  OperationProcessorSPtr processor_;
-
-  PostHandler post_handler_{nullptr};
-};
-
-class OperationProcessor : public std::enable_shared_from_this<OperationProcessor> {
- public:
-  OperationProcessor(KVStorageSPtr kv_storage);
-  ~OperationProcessor();
-
-  OperationProcessor(const OperationProcessor&) = delete;
-  OperationProcessor& operator=(const OperationProcessor&) = delete;
-  OperationProcessor(OperationProcessor&&) = delete;
-  OperationProcessor& operator=(OperationProcessor&&) = delete;
-
-  static OperationProcessorSPtr New(KVStorageSPtr kv_storage) {
-    return std::make_shared<OperationProcessor>(kv_storage);
-  }
-
-  struct Key {
-    uint32_t fs_id{0};
-    uint64_t ino{0};
-
-    bool operator<(const Key& other) const {
-      if (fs_id != other.fs_id) {
-        return fs_id < other.fs_id;
-      }
-
-      return ino < other.ino;
-    }
-  };
-
-  OperationProcessorSPtr GetSelfPtr() { return shared_from_this(); }
-
-  bool Init();
-  bool Destroy();
-
-  bool RunBatched(Operation* operation);
-  Status RunAlone(Operation* operation);
-  bool AsyncRun(OperationSPtr operation, OperationTask::PostHandler post_handler);
-
-  Status CheckTable(const Range& range);
-  Status CreateTable(const std::string& table_name, const Range& range, int64_t& table_id);
-
- private:
-  static std::map<OperationProcessor::Key, BatchOperation> Grouping(std::vector<Operation*>& operations);
-  void ProcessOperation();
-  void LaunchExecuteBatchOperation(const BatchOperation& batch_operation);
-  void ExecuteBatchOperation(BatchOperation& batch_operation);
-
-  bthread_t tid_{0};
-  bthread_mutex_t mutex_;
-  bthread_cond_t cond_;
-
-  std::atomic<bool> is_stop_{false};
-
-  butil::MPSCQueue<Operation*> operations_;
-
-  WorkerSPtr async_worker_;
-
-  // persistence store
-  KVStorageSPtr kv_storage_;
-};
-
 class UpsertCacheMemberOperation : public Operation {
  public:
   using HandlerType = std::function<Status(CacheMemberEntry&, const Status&)>;
@@ -1957,6 +1865,98 @@ class GetCacheMemberOperation : public Operation {
  private:
   std::string cache_member_id_;
   Result result_;
+};
+
+struct BatchOperation {
+  uint32_t fs_id{0};
+  uint64_t ino{0};
+
+  // set attr/xattr/chunk
+  std::vector<Operation*> setattr_operations;
+  // mkdir/mknod/symlink/hardlink
+  std::vector<Operation*> create_operations;
+};
+
+class OperationTask : public TaskRunnable {
+ public:
+  using PostHandler = std::function<void(OperationSPtr operation)>;
+
+  OperationTask(OperationSPtr operation, OperationProcessorSPtr processor, PostHandler post_handler)
+      : operation_(operation), processor_(processor), post_handler_(post_handler) {}
+  ~OperationTask() override = default;
+
+  static TaskRunnablePtr New(OperationSPtr operation, OperationProcessorSPtr processor, PostHandler post_handler) {
+    return std::make_shared<OperationTask>(operation, processor, post_handler);
+  }
+
+  std::string Type() override { return "STORE_OPERATION"; }
+
+  void Run() override;
+
+ private:
+  OperationSPtr operation_;
+  OperationProcessorSPtr processor_;
+
+  PostHandler post_handler_{nullptr};
+};
+
+class OperationProcessor : public std::enable_shared_from_this<OperationProcessor> {
+ public:
+  OperationProcessor(KVStorageSPtr kv_storage);
+  ~OperationProcessor();
+
+  OperationProcessor(const OperationProcessor&) = delete;
+  OperationProcessor& operator=(const OperationProcessor&) = delete;
+  OperationProcessor(OperationProcessor&&) = delete;
+  OperationProcessor& operator=(OperationProcessor&&) = delete;
+
+  static OperationProcessorSPtr New(KVStorageSPtr kv_storage) {
+    return std::make_shared<OperationProcessor>(kv_storage);
+  }
+
+  struct Key {
+    uint32_t fs_id{0};
+    uint64_t ino{0};
+
+    bool operator<(const Key& other) const {
+      if (fs_id != other.fs_id) {
+        return fs_id < other.fs_id;
+      }
+
+      return ino < other.ino;
+    }
+  };
+
+  OperationProcessorSPtr GetSelfPtr() { return shared_from_this(); }
+
+  bool Init();
+  bool Destroy();
+
+  bool RunBatched(Operation* operation);
+  Status RunAlone(Operation* operation);
+  bool AsyncRun(OperationSPtr operation, OperationTask::PostHandler post_handler);
+
+  Status CheckTable(const Range& range);
+  Status CreateTable(const std::string& table_name, const Range& range, int64_t& table_id);
+
+ private:
+  static std::map<OperationProcessor::Key, BatchOperation> Grouping(std::vector<Operation*>& operations);
+  void ProcessOperation();
+  void LaunchExecuteBatchOperation(const BatchOperation& batch_operation);
+  void ExecuteBatchOperation(BatchOperation& batch_operation);
+
+  bthread_t tid_{0};
+  bthread_mutex_t mutex_;
+  bthread_cond_t cond_;
+
+  std::atomic<bool> is_stop_{false};
+
+  butil::MPSCQueue<Operation*> operations_;
+
+  WorkerSPtr async_worker_;
+
+  // persistence store
+  KVStorageSPtr kv_storage_;
 };
 
 }  // namespace mdsv2

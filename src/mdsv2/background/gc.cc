@@ -43,6 +43,10 @@ DECLARE_uint32(mds_scan_batch_size);
 DEFINE_uint32(mds_gc_worker_num, 32, "gc worker set num");
 DEFINE_uint32(mds_gc_max_pending_task_count, 8192, "gc max pending task count");
 
+DEFINE_bool(mds_gc_delslice_enable, true, "gc delslice enable");
+DEFINE_bool(mds_gc_delfile_enable, true, "gc delfile enable");
+DEFINE_bool(mds_gc_filesession_enable, true, "gc filesession enable");
+
 DEFINE_uint32(mds_gc_delfile_reserve_time_s, 600, "gc del file reserve time");
 
 DEFINE_uint32(mds_gc_filesession_reserve_time_s, 86400, "gc file session reserve time");
@@ -280,19 +284,26 @@ Status GcProcessor::LaunchGc() {
   auto fses = file_system_set_->GetAllFileSystem();
 
   // delslice
-  for (auto& fs : fses) {
-    ScanDelSlice(fs->FsId());
+  if (FLAGS_mds_gc_delslice_enable) {
+    for (auto& fs : fses) {
+      ScanDelSlice(fs->FsId());
+    }
   }
 
   // delfile
-  for (auto& fs : fses) {
-    ScanDelFile(fs->FsId());
+  if (FLAGS_mds_gc_delfile_enable) {
+    for (auto& fs : fses) {
+      ScanDelFile(fs->FsId());
+    }
   }
 
   // filesession
-  for (auto& fs : fses) {
-    ScanExpiredFileSession(fs->FsId());
+  if (FLAGS_mds_gc_filesession_enable) {
+    for (auto& fs : fses) {
+      ScanExpiredFileSession(fs->FsId());
+    }
   }
+
   return Status::OK();
 }
 

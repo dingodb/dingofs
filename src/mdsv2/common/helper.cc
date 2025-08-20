@@ -558,5 +558,27 @@ bool Helper::ProtoToJson(const google::protobuf::Message& message, std::string& 
   return MessageToJsonString(message, &json, options).ok();
 }
 
+std::vector<uint64_t> Helper::GetMdsIds(const pb::mdsv2::HashPartition& partition) {
+  std::vector<uint64_t> mds_ids;
+  mds_ids.reserve(partition.distributions().size());
+
+  for (const auto& [mds_id, bucket_set] : partition.distributions()) {
+    mds_ids.push_back(mds_id);
+  }
+
+  return mds_ids;
+}
+
+std::vector<uint64_t> Helper::GetMdsIds(const std::map<uint64_t, BucketSetEntry>& distributions) {
+  std::vector<uint64_t> mds_ids;
+  mds_ids.reserve(distributions.size());
+
+  for (const auto& [mds_id, bucket_set] : distributions) {
+    mds_ids.push_back(mds_id);
+  }
+
+  return mds_ids;
+}
+
 }  // namespace mdsv2
 }  // namespace dingofs

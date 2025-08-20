@@ -20,8 +20,10 @@
 #include <vector>
 
 #include "butil/endpoint.h"
+#include "dingofs/mdsv2.pb.h"
 #include "fmt/core.h"
 #include "google/protobuf/util/json_util.h"
+#include "mdsv2/common/type.h"
 
 namespace dingofs {
 namespace mdsv2 {
@@ -175,6 +177,9 @@ class Helper {
     }
     return str;
   }
+
+  static std::vector<uint64_t> GetMdsIds(const pb::mdsv2::HashPartition& partition);
+  static std::vector<uint64_t> GetMdsIds(const std::map<uint64_t, BucketSetEntry>& distributions);
 };
 
 }  // namespace mdsv2

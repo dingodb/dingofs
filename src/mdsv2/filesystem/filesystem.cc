@@ -2335,7 +2335,7 @@ static void DistributeByMean(const std::vector<uint64_t>& mds_ids, pb::mdsv2::Ha
 
   uint32_t pending_offset = 0;
   for (size_t i = 0; i < mds_ids.size(); ++i) {
-    pb::mdsv2::HashPartition::BucketSet bucket_set;
+    BucketSetEntry bucket_set;
     while (pending_offset < pending_bucket_ids.size()) {
       bucket_set.add_bucket_ids(pending_bucket_ids[pending_offset++]);
       if ((i + 1) < mds_ids.size() && bucket_set.bucket_ids_size() >= mean_num) break;
@@ -2574,41 +2574,91 @@ Status FileSystem::QuitAndJoinFs(Context& ctx, const std::vector<uint64_t>& quit
   return Status::OK();
 }
 
-Status FileSystem::UpdatePartitionPolicy(const std::map<uint64_t, pb::mdsv2::HashPartition::BucketSet>& distributions) {
-  std::string key = MetaCodec::EncodeFsKey(fs_info_->GetName());
-
-  auto txn = kv_storage_->NewTxn();
-  std::string value;
-  auto status = txn->Get(key, value);
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("get fs info fail, {}", status.error_str()));
+static void GetQuitAndJoinMdsIds(const std::vector<uint64_t>& old_mds_ids, const std::vector<uint64_t>& new_mds_ids,
+                                 std::vector<uint64_t>& quit_mds_ids, std::vector<uint64_t>& join_mds_ids) {
+  for (const auto& mds_id : old_mds_ids) {
+    if (std::find(new_mds_ids.begin(), new_mds_ids.end(), mds_id) == new_mds_ids.end()) {
+      quit_mds_ids.push_back(mds_id);
+    }
   }
 
-  FsInfoEntry fs_info = MetaCodec::DecodeFsValue(value);
-  CHECK(fs_info.partition_policy().type() == pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION)
-      << "invalid partition polocy type.";
-
-  fs_info.mutable_partition_policy()->set_epoch(fs_info.partition_policy().epoch() + 1);
-  auto* hash = fs_info.mutable_partition_policy()->mutable_parent_hash();
-  hash->mutable_distributions()->clear();
-  for (const auto& [mds_id, bucket_set] : distributions) {
-    hash->mutable_distributions()->insert({mds_id, bucket_set});
+  for (const auto& mds_id : new_mds_ids) {
+    if (std::find(old_mds_ids.begin(), old_mds_ids.end(), mds_id) == old_mds_ids.end()) {
+      join_mds_ids.push_back(mds_id);
+    }
   }
+}
 
-  fs_info.set_last_update_time_ns(Helper::TimestampNs());
+Status FileSystem::UpdatePartitionPolicy(const std::map<uint64_t, BucketSetEntry>& distributions,
+                                         const std::string& reason) {
+  auto handler = [&](PartitionPolicy& partition_policy, FsOpLog& log) -> Status {
+    auto* hash = partition_policy.mutable_parent_hash();
 
-  KVStorage::WriteOption option;
-  status = kv_storage_->Put(option, key, MetaCodec::EncodeFsValue(fs_info));
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("put store fs fail, {}", status.error_str()));
-  }
+    auto old_mds_ids = Helper::GetMdsIds(*hash);
+    auto new_mds_ids = Helper::GetMdsIds(distributions);
 
-  status = txn->Commit();
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("commit fail, {}", status.error_str()));
-  }
+    hash->mutable_distributions()->clear();
+    for (const auto& [mds_id, bucket_set] : distributions) {
+      hash->mutable_distributions()->insert({mds_id, bucket_set});
+    }
 
-  fs_info_->Update(fs_info);
+    CHECK(CheckHashPartition(*hash)) << "invalid hash partition bucket id size.";
+
+    std::vector<uint64_t> quit_mds_ids, join_mds_ids;
+    GetQuitAndJoinMdsIds(old_mds_ids, new_mds_ids, quit_mds_ids, join_mds_ids);
+
+    log.set_fs_name(FsName());
+    log.set_fs_id(fs_id_);
+    log.set_type(pb::mdsv2::FsOpLog::QUIT_AND_JOIN_FS);
+    Helper::VectorToPbRepeated(quit_mds_ids, log.mutable_quit_and_join_fs()->mutable_quit_mds_ids());
+    Helper::VectorToPbRepeated(join_mds_ids, log.mutable_quit_and_join_fs()->mutable_join_mds_ids());
+    log.set_comment(reason);
+
+    return Status::OK();
+  };
+
+  Trace trace;
+  UpdateFsPartitionOperation operation(trace, FsName(), handler);
+
+  auto status = RunOperation(&operation);
+  if (!status.ok()) return status;
+
+  auto& result = operation.GetResult();
+
+  fs_info_->Update(result.fs_info);
+
+  // std::string key = MetaCodec::EncodeFsKey(fs_info_->GetName());
+
+  // auto txn = kv_storage_->NewTxn();
+  // std::string value;
+  // auto status = txn->Get(key, value);
+  // if (!status.ok()) {
+  //   return Status(pb::error::EBACKEND_STORE, fmt::format("get fs info fail, {}", status.error_str()));
+  // }
+
+  // FsInfoEntry fs_info = MetaCodec::DecodeFsValue(value);
+  // CHECK(fs_info.partition_policy().type() == pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION)
+  //     << "invalid partition polocy type.";
+
+  // fs_info.mutable_partition_policy()->set_epoch(fs_info.partition_policy().epoch() + 1);
+  // auto* hash = fs_info.mutable_partition_policy()->mutable_parent_hash();
+  // hash->mutable_distributions()->clear();
+  // for (const auto& [mds_id, bucket_set] : distributions) {
+  //   hash->mutable_distributions()->insert({mds_id, bucket_set});
+  // }
+
+  // fs_info.set_last_update_time_ns(Helper::TimestampNs());
+
+  // KVStorage::WriteOption option;
+  // status = kv_storage_->Put(option, key, MetaCodec::EncodeFsValue(fs_info));
+  // if (!status.ok()) {
+  //   return Status(pb::error::EBACKEND_STORE, fmt::format("put store fs fail, {}", status.error_str()));
+  // }
+
+  // status = txn->Commit();
+  // if (!status.ok()) {
+  //   return Status(pb::error::EBACKEND_STORE, fmt::format("commit fail, {}", status.error_str()));
+  // }
 
   return Status::OK();
 }
@@ -2692,11 +2742,11 @@ Status FileSystemSet::GenFsId(uint32_t& fs_id) {
 }
 
 // gerenate parent hash partition
-static std::map<uint64_t, pb::mdsv2::HashPartition::BucketSet> GenParentHashDistribution(
-    const std::vector<MDSMeta>& mds_metas, uint32_t bucket_num) {
-  std::map<uint64_t, pb::mdsv2::HashPartition::BucketSet> mds_bucket_map;
+static std::map<uint64_t, BucketSetEntry> GenParentHashDistribution(const std::vector<MDSMeta>& mds_metas,
+                                                                    uint32_t bucket_num) {
+  std::map<uint64_t, BucketSetEntry> mds_bucket_map;
   for (const auto& mds_meta : mds_metas) {
-    mds_bucket_map[mds_meta.ID()] = pb::mdsv2::HashPartition::BucketSet();
+    mds_bucket_map[mds_meta.ID()] = BucketSetEntry();
   }
 
   for (uint32_t i = 0; i < bucket_num; ++i) {

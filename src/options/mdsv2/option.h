@@ -71,6 +71,9 @@ DECLARE_uint32(mds_txn_max_retry_times);
 // gc config
 DECLARE_uint32(mds_gc_worker_num);
 DECLARE_uint32(mds_gc_max_pending_task_count);
+DECLARE_bool(mds_gc_delslice_enable);
+DECLARE_bool(mds_gc_delfile_enable);
+DECLARE_bool(mds_gc_filesession_enable);
 DECLARE_uint32(mds_gc_delfile_reserve_time_s);
 DECLARE_uint32(mds_gc_filesession_reserve_time_s);
 

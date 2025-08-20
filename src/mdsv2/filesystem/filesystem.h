@@ -214,7 +214,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status QuitAndJoinFs(Context& ctx, const std::vector<uint64_t>& quit_mds_ids,
                        const std::vector<uint64_t>& join_mds_ids, const std::string& reason);
 
-  Status UpdatePartitionPolicy(const std::map<uint64_t, pb::mdsv2::HashPartition::BucketSet>& distributions);
+  Status UpdatePartitionPolicy(const std::map<uint64_t, BucketSetEntry>& distributions, const std::string& reason);
 
   PartitionCache& GetPartitionCache() { return partition_cache_; }
   InodeCache& GetInodeCache() { return inode_cache_; }
