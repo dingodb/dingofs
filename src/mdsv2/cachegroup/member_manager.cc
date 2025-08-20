@@ -165,6 +165,9 @@ Status CacheGroupMemberManager::ListGroups(Context& ctx, std::unordered_set<std:
   }
 
   for (auto const& cache_member : cache_member_entries) {
+    if (cache_member.group_name().empty()) {
+      continue;
+    }
     groups.insert(cache_member.group_name());
   }
 
