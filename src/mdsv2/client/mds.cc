@@ -847,8 +847,9 @@ QuitFsResponse MDSClient::QuitFs(const std::string& fs_name, uint32_t fs_id, con
   return response;
 }
 
-//cache member operations
-JoinCacheGroupResponse MDSClient::JoinCacheGroup(const std::string& member_id, const std::string& ip, uint32_t port, const std::string& group_name, uint32_t weight){
+// cache member operations
+JoinCacheGroupResponse MDSClient::JoinCacheGroup(const std::string& member_id, const std::string& ip, uint32_t port,
+                                                 const std::string& group_name, uint32_t weight) {
   JoinCacheGroupRequest request;
   JoinCacheGroupResponse response;
 
@@ -868,7 +869,8 @@ JoinCacheGroupResponse MDSClient::JoinCacheGroup(const std::string& member_id, c
   return response;
 }
 
-LeaveCacheGroupResponse MDSClient::LeaveCacheGroup(const std::string& member_id, const std::string& ip, uint32_t port, const std::string& group_name){
+LeaveCacheGroupResponse MDSClient::LeaveCacheGroup(const std::string& member_id, const std::string& ip, uint32_t port,
+                                                   const std::string& group_name) {
   LeaveCacheGroupRequest request;
   LeaveCacheGroupResponse response;
 
@@ -887,15 +889,14 @@ LeaveCacheGroupResponse MDSClient::LeaveCacheGroup(const std::string& member_id,
   return response;
 }
 
-ListGroupsResponse MDSClient::ListGroups(){
+ListGroupsResponse MDSClient::ListGroups() {
   ListGroupsRequest request;
   ListGroupsResponse response;
-
 
   interaction_->SendRequest("MDSService", "ListGroups", request, response);
   if (response.error().errcode() != dingofs::pb::error::Errno::OK) {
     DINGO_LOG(ERROR) << "ListGroups fail, error: " << response.ShortDebugString();
-  } 
+  }
 
   for (const auto& group_name : response.group_names()) {
     DINGO_LOG(INFO) << "group_name: " << group_name;
@@ -904,7 +905,8 @@ ListGroupsResponse MDSClient::ListGroups(){
   return response;
 }
 
-ReweightMemberResponse MDSClient::ReweightMember(const std::string& member_id, const std::string& ip, uint32_t port, uint32_t weight){
+ReweightMemberResponse MDSClient::ReweightMember(const std::string& member_id, const std::string& ip, uint32_t port,
+                                                 uint32_t weight) {
   ReweightMemberRequest request;
   ReweightMemberResponse response;
 
@@ -923,7 +925,7 @@ ReweightMemberResponse MDSClient::ReweightMember(const std::string& member_id, c
   return response;
 }
 
-ListMembersResponse MDSClient::ListMembers(const std::string& group_name){
+ListMembersResponse MDSClient::ListMembers(const std::string& group_name) {
   ListMembersRequest request;
   ListMembersResponse response;
 
@@ -931,8 +933,8 @@ ListMembersResponse MDSClient::ListMembers(const std::string& group_name){
 
   interaction_->SendRequest("MDSService", "ListMembers", request, response);
   if (response.error().errcode() != dingofs::pb::error::Errno::OK) {
-     DINGO_LOG(ERROR) << "ListMembers fail, error: " << response.ShortDebugString();
-  } 
+    DINGO_LOG(ERROR) << "ListMembers fail, error: " << response.ShortDebugString();
+  }
 
   for (const auto& member : response.members()) {
     DINGO_LOG(INFO) << "cache_member: " << member.ShortDebugString();
@@ -941,7 +943,7 @@ ListMembersResponse MDSClient::ListMembers(const std::string& group_name){
   return response;
 }
 
-UnLockMemberResponse MDSClient::UnlockMember(const std::string& member_id, const std::string& ip, uint32_t port){
+UnLockMemberResponse MDSClient::UnlockMember(const std::string& member_id, const std::string& ip, uint32_t port) {
   UnLockMemberRequest request;
   UnLockMemberResponse response;
 
@@ -954,6 +956,22 @@ UnLockMemberResponse MDSClient::UnlockMember(const std::string& member_id, const
     DINGO_LOG(INFO) << "UnlockMember success";
   } else {
     DINGO_LOG(ERROR) << "UnlockMember fail, error: " << response.ShortDebugString();
+  }
+
+  return response;
+}
+
+DeleteMemberResponse MDSClient::DeleteMember(const std::string& member_id) {
+  DeleteMemberRequest request;
+  DeleteMemberResponse response;
+
+  request.set_member_id(member_id);
+
+  interaction_->SendRequest("MDSService", "DeleteMember", request, response);
+  if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
+    DINGO_LOG(INFO) << "DeleteMember success";
+  } else {
+    DINGO_LOG(ERROR) << "DeleteMember fail, error: " << response.ShortDebugString();
   }
 
   return response;
@@ -978,7 +996,7 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr, 
       "quitfs",          "joincachegroup",
       "leavecachegroup", "listgroups",
       "reweightmember",  "listmembers",
-      "unlockmember",          
+      "unlockmember",    "deletemember",
   };
 
   if (mds_cmd.count(cmd) == 0) return false;
@@ -1142,15 +1160,16 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr, 
     } else {
       std::cout << "quitfs fail, error: " << response.ShortDebugString() << '\n';
     }
-  }else if (cmd == Helper::ToLowerCase("JoinCacheGroup")){
-    auto response = mds_client.JoinCacheGroup(options.member_id, options.ip, options.port, options.group_name, options.weight);
+  } else if (cmd == Helper::ToLowerCase("JoinCacheGroup")) {
+    auto response =
+        mds_client.JoinCacheGroup(options.member_id, options.ip, options.port, options.group_name, options.weight);
     if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
       std::cout << "joincachegroup success." << '\n';
     } else {
       std::cout << "joincachegroup fail, error: " << response.ShortDebugString() << '\n';
     }
 
-  }else if (cmd == Helper::ToLowerCase("LeaveCacheGroup")){
+  } else if (cmd == Helper::ToLowerCase("LeaveCacheGroup")) {
     auto response = mds_client.LeaveCacheGroup(options.member_id, options.ip, options.port, options.group_name);
     if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
       std::cout << "leavecachegroup success." << '\n';
@@ -1158,7 +1177,7 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr, 
       std::cout << "leavecachegroup fail, error: " << response.ShortDebugString() << '\n';
     }
 
-  }else if (cmd == Helper::ToLowerCase("ReweightMember")){
+  } else if (cmd == Helper::ToLowerCase("ReweightMember")) {
     auto response = mds_client.ReweightMember(options.member_id, options.ip, options.port, options.weight);
     if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
       std::cout << "reweightmember success." << '\n';
@@ -1166,20 +1185,26 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr, 
       std::cout << "reweightmember fail, error: " << response.ShortDebugString() << '\n';
     }
 
-  }else if (cmd == Helper::ToLowerCase("ListGroups")){
+  } else if (cmd == Helper::ToLowerCase("ListGroups")) {
     auto response = mds_client.ListGroups();
-    
-  }else if (cmd == Helper::ToLowerCase("ListMembers")){
+
+  } else if (cmd == Helper::ToLowerCase("ListMembers")) {
     auto response = mds_client.ListMembers(options.group_name);
 
-  }else if (cmd == Helper::ToLowerCase("UnlockMember")){
+  } else if (cmd == Helper::ToLowerCase("UnlockMember")) {
     auto response = mds_client.UnlockMember(options.member_id, options.ip, options.port);
     if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
       std::cout << "unlockmember success." << '\n';
     } else {
       std::cout << "unlockmember fail, error: " << response.ShortDebugString() << '\n';
     }
-
+  } else if (cmd == Helper::ToLowerCase("DeleteMember")) {
+    auto response = mds_client.DeleteMember(options.member_id);
+    if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
+      std::cout << "deletemember success." << '\n';
+    } else {
+      std::cout << "deletemember fail, error: " << response.ShortDebugString() << '\n';
+    }
   }
 
   return true;

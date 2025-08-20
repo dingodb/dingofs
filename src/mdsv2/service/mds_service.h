@@ -39,7 +39,8 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
   MDSServiceImpl(const MDSServiceImpl&) = delete;
   MDSServiceImpl& operator=(const MDSServiceImpl&) = delete;
 
-  static MDSServiceImplUPtr New(FileSystemSetSPtr file_system, GcProcessorSPtr gc_processor, FsStatsUPtr fs_stat, CacheGroupMemberManagerSPtr cache_group_manager) {
+  static MDSServiceImplUPtr New(FileSystemSetSPtr file_system, GcProcessorSPtr gc_processor, FsStatsUPtr fs_stat,
+                                CacheGroupMemberManagerSPtr cache_group_manager) {
     return std::make_unique<MDSServiceImpl>(file_system, gc_processor, std::move(fs_stat), cache_group_manager);
   }
 
@@ -216,6 +217,9 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
   void UnlockMember(google::protobuf::RpcController* controller, const pb::mdsv2::UnLockMemberRequest* request,
                     pb::mdsv2::UnLockMemberResponse* response, google::protobuf::Closure* done) override;
 
+  void DeleteMember(google::protobuf::RpcController* controller, const pb::mdsv2::DeleteMemberRequest* request,
+                    pb::mdsv2::DeleteMemberResponse* response, google::protobuf::Closure* done) override;
+
  private:
   friend class DebugServiceImpl;
   Status GenFsId(int64_t& fs_id);
@@ -368,6 +372,9 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
 
   void DoUnlockMember(google::protobuf::RpcController* controller, const pb::mdsv2::UnLockMemberRequest* request,
                       pb::mdsv2::UnLockMemberResponse* response, TraceClosure* done);
+
+  void DoDeleteMember(google::protobuf::RpcController* controller, const pb::mdsv2::DeleteMemberRequest* request,
+                      pb::mdsv2::DeleteMemberResponse* response, TraceClosure* done);
 
   // file system set
   FileSystemSetSPtr file_system_set_;

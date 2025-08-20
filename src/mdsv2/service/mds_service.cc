@@ -2812,6 +2812,36 @@ void MDSServiceImpl::UnlockMember(google::protobuf::RpcController* controller,
   }
 }
 
+void MDSServiceImpl::DeleteMember(google::protobuf::RpcController* controller,
+                                  const pb::mdsv2::DeleteMemberRequest* request,
+                                  pb::mdsv2::DeleteMemberResponse* response, google::protobuf::Closure* done) {
+  auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  auto validate_fn = [&]() -> Status {
+    if (!IsUuidRegex(request->member_id())) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "member_id is not uuid");
+    }
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  // Run in queue.
+  auto task = std::make_shared<ServiceTask>(
+      [this, controller, request, response, svr_done]() { DoDeleteMember(controller, request, response, svr_done); });
+
+  bool ret = write_worker_set_->Execute(task);
+  if (BAIDU_UNLIKELY(!ret)) {
+    brpc::ClosureGuard done_guard(svr_done);
+    ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
+                            "WorkerSet queue is full, please wait and retry");
+  }
+}
+
 void MDSServiceImpl::DoJoinCacheGroup(google::protobuf::RpcController* controller,
                                       const pb::mdsv2::JoinCacheGroupRequest* request,
                                       pb::mdsv2::JoinCacheGroupResponse* response, TraceClosure* done) {
@@ -2906,6 +2936,21 @@ void MDSServiceImpl::DoUnlockMember(google::protobuf::RpcController* controller,
 
   Context ctx;
   auto status = cache_group_manager_->UnlockMember(ctx, request->member_id(), request->ip(), request->port());
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+}
+
+void MDSServiceImpl::DoDeleteMember(google::protobuf::RpcController* controller,
+                                    const pb::mdsv2::DeleteMemberRequest* request,
+                                    pb::mdsv2::DeleteMemberResponse* response, TraceClosure* done) {
+  brpc::Controller* cntl = (brpc::Controller*)controller;
+  brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
+
+  Context ctx;
+  auto status = cache_group_manager_->DeleteMember(ctx, request->member_id());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());

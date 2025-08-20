@@ -131,7 +131,7 @@ using pb::mdsv2::JoinFsResponse;
 using pb::mdsv2::QuitFsRequest;
 using pb::mdsv2::QuitFsResponse;
 
-//cache member
+// cache member
 using pb::mdsv2::JoinCacheGroupRequest;
 using pb::mdsv2::JoinCacheGroupResponse;
 
@@ -149,6 +149,9 @@ using pb::mdsv2::ListMembersResponse;
 
 using pb::mdsv2::UnLockMemberRequest;
 using pb::mdsv2::UnLockMemberResponse;
+
+using pb::mdsv2::DeleteMemberRequest;
+using pb::mdsv2::DeleteMemberResponse;
 
 class MDSClient {
  public:
@@ -224,13 +227,17 @@ class MDSClient {
   JoinFsResponse JoinFs(const std::string& fs_name, uint32_t fs_id, const std::vector<int64_t>& mds_ids);
   QuitFsResponse QuitFs(const std::string& fs_name, uint32_t fs_id, const std::vector<int64_t>& mds_ids);
 
-  //cache member operations
-  JoinCacheGroupResponse JoinCacheGroup(const std::string& member_id, const std::string& ip, uint32_t port, const std::string& group_name, uint32_t weight);
-  LeaveCacheGroupResponse LeaveCacheGroup(const std::string& member_id, const std::string& ip, uint32_t port, const std::string& group_name);
+  // cache member operations
+  JoinCacheGroupResponse JoinCacheGroup(const std::string& member_id, const std::string& ip, uint32_t port,
+                                        const std::string& group_name, uint32_t weight);
+  LeaveCacheGroupResponse LeaveCacheGroup(const std::string& member_id, const std::string& ip, uint32_t port,
+                                          const std::string& group_name);
   ListGroupsResponse ListGroups();
-  ReweightMemberResponse ReweightMember(const std::string& member_id, const std::string& ip, uint32_t port, uint32_t weight);
+  ReweightMemberResponse ReweightMember(const std::string& member_id, const std::string& ip, uint32_t port,
+                                        uint32_t weight);
   ListMembersResponse ListMembers(const std::string& group_name);
   UnLockMemberResponse UnlockMember(const std::string& member_id, const std::string& ip, uint32_t port);
+  DeleteMemberResponse DeleteMember(const std::string& member_id);
 
  private:
   uint32_t fs_id_{0};
@@ -261,7 +268,7 @@ class MdsCommandRunner {
     uint32_t chunk_size;
     uint32_t block_size;
 
-    //cache member
+    // cache member
     std::string member_id;
     std::string ip;
     uint32_t port;

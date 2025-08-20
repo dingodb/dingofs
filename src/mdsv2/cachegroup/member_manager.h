@@ -33,7 +33,7 @@ using CacheGroupMemberManagerSPtr = std::shared_ptr<CacheGroupMemberManager>;
 
 class CacheGroupMemberManager {
  public:
-  CacheGroupMemberManager(OperationProcessorSPtr operation_processor) : operation_processor_(operation_processor) {};
+  CacheGroupMemberManager(OperationProcessorSPtr operation_processor) : operation_processor_(operation_processor){};
   ~CacheGroupMemberManager() = default;
 
   CacheGroupMemberManager(const CacheGroupMemberManager&) = delete;
@@ -59,6 +59,8 @@ class CacheGroupMemberManager {
   Status ListMembers(Context& ctx, const std::string& group_name, std::vector<CacheMemberEntry>& members);
 
   Status UnlockMember(Context& ctx, const std::string& member_id, const std::string& ip, uint32_t port);
+
+  Status DeleteMember(Context& ctx, const std::string& member_id);
 
   Status UpsertCacheMember(Context& ctx, const std::string& member_id,
                            std::function<Status(CacheMemberEntry&, const Status&)> handler);

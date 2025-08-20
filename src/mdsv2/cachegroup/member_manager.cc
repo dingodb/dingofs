@@ -192,6 +192,19 @@ Status CacheGroupMemberManager::UnlockMember(Context& ctx, const std::string& me
   return UpsertCacheMember(ctx, member_id, handler);
 }
 
+Status CacheGroupMemberManager::DeleteMember(Context& ctx, const std::string& member_id) {
+  auto& trace = ctx.GetTrace();
+  DeleteCacheMemberOperation operation(trace, member_id);
+
+  auto status = operation_processor_->RunAlone(&operation);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[cachegroup] delete cache member fail, error({}).", status.error_str());
+    return status;
+  }
+
+  return Status::OK();
+}
+
 Status CacheGroupMemberManager::UpsertCacheMember(Context& ctx, const std::string& member_id,
                                                   std::function<Status(CacheMemberEntry&, const Status&)> handler) {
   auto& trace = ctx.GetTrace();
