@@ -168,7 +168,7 @@ Status TierBlockCache::Put(ContextSPtr ctx, const BlockKey& key,
   StepTimerGuard guard(timer);
 
   if (option.writeback) {
-    if (EnableLoadStage()) {
+    if (EnableLocalStage()) {
       NEXT_STEP(kLocalPut);
       status = local_block_cache_->Put(ctx, key, block, option);
     } else if (EnableRemoteStage()) {
@@ -208,7 +208,7 @@ Status TierBlockCache::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
   StepTimerGuard guard(timer);
 
   // Try local cache first
-  if (EnableLocaCache()) {
+  if (EnableLocalCache()) {
     NEXT_STEP(kLocalRange);
     auto opt = option;
     opt.retrive = false;
@@ -254,7 +254,7 @@ Status TierBlockCache::Cache(ContextSPtr ctx, const BlockKey& key,
                     key.Filename(), block.size);
   StepTimerGuard guard(timer);
 
-  if (EnableLocaCache()) {
+  if (EnableLocalCache()) {
     NEXT_STEP(kLocalCache);
     status = local_block_cache_->Cache(ctx, key, block, option);
   } else if (EnableRemoteCache()) {
@@ -280,7 +280,7 @@ Status TierBlockCache::Prefetch(ContextSPtr ctx, const BlockKey& key,
                     key.Filename(), length);
   StepTimerGuard guard(timer);
 
-  if (EnableLocaCache()) {
+  if (EnableLocalCache()) {
     NEXT_STEP(kLocalPrefetch);
     status = local_block_cache_->Prefetch(ctx, key, length, option);
   } else if (EnableRemoteCache()) {
@@ -396,11 +396,11 @@ TierBlockCache::FillGroupCacheCb TierBlockCache::NewFillGroupCacheCb(
   };
 }
 
-bool TierBlockCache::EnableLoadStage() const {
+bool TierBlockCache::EnableLocalStage() const {
   return local_block_cache_->EnableStage();
 }
 
-bool TierBlockCache::EnableLocaCache() const {
+bool TierBlockCache::EnableLocalCache() const {
   return local_block_cache_->EnableCache();
 }
 
@@ -412,12 +412,21 @@ bool TierBlockCache::EnableRemoteCache() const {
   return remote_block_cache_->EnableCache();
 }
 
-bool TierBlockCache::HasCacheStore() const { return true; }
-bool TierBlockCache::EnableStage() const { return true; }
-bool TierBlockCache::EnableCache() const { return true; }
+bool TierBlockCache::HasCacheStore() const {
+  return local_block_cache_->HasCacheStore() ||
+         remote_block_cache_->HasCacheStore();
+}
+
+bool TierBlockCache::EnableStage() const {
+  return EnableLocalStage() || EnableRemoteStage();
+}
+
+bool TierBlockCache::EnableCache() const {
+  return EnableLocalCache() || EnableRemoteCache();
+}
 
 bool TierBlockCache::IsCached(const BlockKey& key) const {
-  if (EnableLocaCache() && local_block_cache_->IsCached(key)) {
+  if (EnableLocalCache() && local_block_cache_->IsCached(key)) {
     return true;
   } else if (EnableRemoteCache() && remote_block_cache_->IsCached(key)) {
     return true;

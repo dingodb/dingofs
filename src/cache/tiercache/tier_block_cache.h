@@ -78,8 +78,8 @@ class TierBlockCache final : public BlockCache {
  private:
   BlockCachePtr GetSelfPtr() { return this; }
 
-  bool EnableLoadStage() const;
-  bool EnableLocaCache() const;
+  bool EnableLocalStage() const;
+  bool EnableLocalCache() const;
   bool EnableRemoteStage() const;
   bool EnableRemoteCache() const;
 
