@@ -221,8 +221,11 @@ Status CacheGroupMemberManagerImpl::JoinCacheGroup(
 
   auto info = member->Info();
   const auto& old_group_name = info.group_name();
-  if (old_group_name == group_name) {
-    LOG(INFO) << "Member already in the group: group_name = " << group_name
+  auto old_weight = info.weight();
+  if (old_group_name == group_name && old_weight == weight) {
+    LOG(INFO) << "Member already in the group with same weight: group_name = "
+              << group_name << ", endpoint = " << endpoint.ToString()
+              << ", weight = " << weight
               << ", member = " << info.ShortDebugString();
     *member_id = info.id();
     return Status::OK();
