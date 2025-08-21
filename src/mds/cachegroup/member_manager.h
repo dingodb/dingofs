@@ -48,6 +48,7 @@ class CacheGroupMemberManager {
                                 const std::string& want_id,
                                 std::string* member_id) = 0;
   virtual Status DeregisterMember(const EndPoint& endpoint) = 0;
+  virtual Status DeleteMemberId(const std::string& member_id) = 0;
   virtual Status MemberHeartbeat(const EndPoint& endpoint) = 0;
   virtual Status ReweightMember(const std::string& member_id,
                                 uint32_t weight) = 0;
@@ -80,6 +81,7 @@ class CacheGroupMemberManagerImpl : public CacheGroupMemberManager {
   Status RegisterMember(const EndPoint& endpoint, const std::string& want_id,
                         std::string* member_id) override;
   Status DeregisterMember(const EndPoint& endpoint) override;
+  Status DeleteMemberId(const std::string& member_id) override;
   Status MemberHeartbeat(const EndPoint& endpoint) override;
   Status ReweightMember(const std::string& member_id, uint32_t weight) override;
   std::vector<PBCacheGroupMember> ListAllMembers() override;

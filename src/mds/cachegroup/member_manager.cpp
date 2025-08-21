@@ -145,7 +145,21 @@ Status CacheGroupMemberManagerImpl::DeregisterMember(const EndPoint& endpoint) {
   LeaveGroup(group_name, member_id);
 
   LOG(INFO) << "Deregister member success: endpoint = " << endpoint.ToString();
-  return status;
+  return Status::OK();
+}
+
+Status CacheGroupMemberManagerImpl::DeleteMemberId(
+    const std::string& member_id) {
+  WriteLockGuard lock(rwlock_);
+  auto status = members_->DeleteMemberId(member_id);
+  if (!status.ok()) {
+    LOG(ERROR) << "Delete member id failed: member_id = " << member_id
+               << ", status = " << status.ToString();
+    return status;
+  }
+
+  LOG(INFO) << "Delete member id success: member_id = " << member_id;
+  return Status::OK();
 }
 
 Status CacheGroupMemberManagerImpl::MemberHeartbeat(const EndPoint& endpoint) {

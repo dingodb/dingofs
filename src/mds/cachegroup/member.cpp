@@ -79,7 +79,7 @@ Status Member::ClearGroup() {
 Status Member::ClearAll() {
   return DoStore([this](PBCacheGroupMember* info) {
     if (GetState() != PBCacheGroupMemberState::CacheGroupMemberStateOffline) {
-      LOG(WARNING) << "Clear all member info, but member is online: "
+      LOG(WARNING) << "Clear all member info, but member is still online: "
                    << info->ShortDebugString();
       return Status::InvalidParam("member is not offline");
     }
@@ -314,6 +314,24 @@ Status Members::DeregisterMember(const EndPoint& endpoint,
   LOG(INFO) << "Deregister member success: endpoint = " << ep
             << ", member = " << member->Info().ShortDebugString();
   return status;
+}
+
+Status Members::DeleteMemberId(const std::string& member_id) {
+  if (idset_.count(member_id) == 0) {
+    return Status::NotFound("member id not found");
+  } else if (id2member_.count(member_id) != 0) {
+    return Status::InvalidParam("member id is still registered");
+  }
+
+  auto rc = storage_->Delete(Codec::EncodeMemberId(member_id));
+  if (rc != EtcdErrCode::EtcdOK) {
+    LOG(ERROR) << "Delete member id failed: member_id = " << member_id
+               << ", rc = " << rc;
+    return Status::Internal("delete member id failed");
+  }
+
+  idset_.erase(member_id);
+  return Status::OK();
 }
 
 std::vector<MemberSPtr> Members::GetAllMembers() {

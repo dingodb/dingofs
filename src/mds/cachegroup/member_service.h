@@ -49,6 +49,7 @@ class CacheGroupMemberServiceImpl
 
   DECLARE_RPC_METHOD(RegisterMember);
   DECLARE_RPC_METHOD(DeregisterMember);
+  DECLARE_RPC_METHOD(DeleteMemberId);
   DECLARE_RPC_METHOD(Heartbeat);
   DECLARE_RPC_METHOD(ReweightMember);
   DECLARE_RPC_METHOD(ListMembers);

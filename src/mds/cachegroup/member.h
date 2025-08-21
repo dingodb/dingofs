@@ -88,6 +88,7 @@ class Members {
                         MemberSPtr& member);
   Status DeregisterMember(const EndPoint& endpoint,
                           PBCacheGroupMember* old_info);
+  Status DeleteMemberId(const std::string& member_id);
   std::vector<MemberSPtr> GetAllMembers();
   std::vector<PBCacheGroupMember> GetAllInfos();  // include deregistered info
 

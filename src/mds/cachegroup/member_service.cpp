@@ -61,6 +61,14 @@ DEFINE_RPC_METHOD(CacheGroupMemberServiceImpl, DeregisterMember) {
   response->set_status(Helper::PBErr(status));
 }
 
+DEFINE_RPC_METHOD(CacheGroupMemberServiceImpl, DeleteMemberId) {
+  (void)controller;
+  brpc::ClosureGuard done_guard(done);
+
+  auto status = manager_->DeleteMemberId(request->member_id());
+  response->set_status(Helper::PBErr(status));
+}
+
 DEFINE_RPC_METHOD(CacheGroupMemberServiceImpl, Heartbeat) {
   (void)controller;
   brpc::ClosureGuard done_guard(done);
