@@ -56,6 +56,7 @@ Status PageCacheManager::Start() {
   running_ = true;
   LOG(INFO) << "Page cache manager is up.";
 
+  CHECK_RUNNING("Page cache manager");
   return Status::OK();
 }
 
@@ -81,10 +82,16 @@ Status PageCacheManager::Shutdown() {
 }
 
 void PageCacheManager::AsyncDropPageCache(ContextSPtr ctx, int fd, off_t offset,
-                                          size_t length, bool sync) {
-  DCHECK_RUNNING("Page cache manager");
+                                          size_t length, bool sync_data) {
+  if (!IsRunning()) {
+    LOG_CTX(WARNING)
+        << "Page cache manager is not running, abort drop page cache: fd = "
+        << fd << ", offset = " << offset << ", length = " << length
+        << ", sync_data = " << sync_data;
+    return;
+  }
 
-  Task task(NewContext(ctx->TraceId()), fd, offset, length, sync);
+  Task task(ctx, fd, offset, length, sync_data);
   CHECK_EQ(0, bthread::execution_queue_execute(queue_id_, task));
 }
 
@@ -105,37 +112,38 @@ void PageCacheManager::Handle(const Task& task) {
   const auto& ctx = task.ctx;
   VLOG_CTX(9) << "Drop page cache: fd = " << task.fd
               << ", offset = " << task.offset << ", length = " << task.length
-              << ", sync = " << task.sync;
+              << ", sync = " << task.sync_data;
 
-  if (task.sync) {
-    SyncData(task.fd);
+  if (task.sync_data) {
+    SyncData(ctx, task.fd);
   }
 
-  DropCache(task.fd, task.offset, task.length);
-  CloseFd(task.fd);
+  DropCache(ctx, task.fd, task.offset, task.length);
+  CloseFd(ctx, task.fd);
 }
 
-void PageCacheManager::SyncData(int fd) {
+void PageCacheManager::SyncData(ContextSPtr ctx, int fd) {
   auto status = Posix::FSync(fd);
   if (!status.ok()) {
-    LOG(WARNING) << "Sync data failed: fd = " << fd
-                 << ", status = " << status.ToString();
+    LOG_CTX(WARNING) << "Sync data failed: fd = " << fd
+                     << ", status = " << status.ToString();
   }
 }
 
-void PageCacheManager::DropCache(int fd, off_t offset, size_t length) {
+void PageCacheManager::DropCache(ContextSPtr ctx, int fd, off_t offset,
+                                 size_t length) {
   auto status = Posix::PosixFAdvise(fd, offset, length, POSIX_FADV_DONTNEED);
   if (!status.ok()) {
-    LOG(WARNING) << "Drop page cache failed: fd = " << fd
-                 << ", status = " << status.ToString();
+    LOG_CTX(WARNING) << "Drop page cache failed: fd = " << fd
+                     << ", status = " << status.ToString();
   }
 }
 
-void PageCacheManager::CloseFd(int fd) {
+void PageCacheManager::CloseFd(ContextSPtr ctx, int fd) {
   auto status = Posix::Close(fd);
   if (!status.ok()) {
-    LOG(ERROR) << "Close file descriptor failed: fd = " << fd
-               << ", status = " << status.ToString();
+    LOG_CTX(ERROR) << "Close file descriptor failed: fd = " << fd
+                   << ", status = " << status.ToString();
   }
 }
 

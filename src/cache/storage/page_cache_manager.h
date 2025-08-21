@@ -40,26 +40,32 @@ class PageCacheManager {
   Status Shutdown();
 
   void AsyncDropPageCache(ContextSPtr ctx, int fd, off_t offset, size_t length,
-                          bool sync = false);
+                          bool sync_data = false);
 
  private:
   struct Task {  // drop task
-    Task(ContextSPtr ctx, int fd, off_t offset, size_t length, bool sync)
-        : ctx(ctx), fd(fd), offset(offset), length(length), sync(sync) {}
+    Task(ContextSPtr ctx, int fd, off_t offset, size_t length, bool sync_data)
+        : ctx(ctx),
+          fd(fd),
+          offset(offset),
+          length(length),
+          sync_data(sync_data) {}
 
     ContextSPtr ctx;
     int fd;
     off_t offset;
     size_t length;
-    bool sync;
+    bool sync_data;
   };
+
+  bool IsRunning() const { return running_.load(std::memory_order_relaxed); }
 
   static int HandleTask(void* meta, bthread::TaskIterator<Task>& iter);
   void Handle(const Task& task);
 
-  void SyncData(int fd);
-  void DropCache(int fd, off_t offset, size_t length);
-  void CloseFd(int fd);
+  void SyncData(ContextSPtr ctx, int fd);
+  void DropCache(ContextSPtr ctx, int fd, off_t offset, size_t length);
+  void CloseFd(ContextSPtr ctx, int fd);
 
   std::atomic<bool> running_;
   bthread::ExecutionQueueId<Task> queue_id_;

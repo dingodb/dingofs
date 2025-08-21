@@ -204,20 +204,16 @@ Status BlockCacheUploader::Load(const StagingBlock& staging_block,
   auto ctx = staging_block.ctx;
   const auto& key = staging_block.key;
 
-  auto status =
-      store_->Load(staging_block.ctx, key, 0, staging_block.length, buffer);
+  auto status = store_->Load(ctx, key, 0, staging_block.length, buffer);
   if (status.IsNotFound()) {
     LOG_CTX(ERROR) << "Load staging block failed which already deleted, "
                       "abort upload: key = "
                    << key.Filename() << ", status = " << status.ToString();
-    return status;
   } else if (!status.ok()) {
     LOG_CTX(ERROR) << "Load staging block failed: key = " << key.Filename()
                    << ", status = " << status.ToString();
-    return status;
   }
-
-  return Status::OK();
+  return status;
 }
 
 Status BlockCacheUploader::Upload(const StagingBlock& staging_block,
@@ -263,10 +259,6 @@ void BlockCacheUploader::WaitStoreUp() {
   while (!store_->IsRunning()) {
     bthread_usleep(1000 * 1000);
   }
-}
-
-bool BlockCacheUploader::IsRunning() {
-  return running_.load(std::memory_order_relaxed);
 }
 
 }  // namespace cache

@@ -52,6 +52,7 @@ class BlockCacheUploader {
 
  private:
   BlockCacheUploaderPtr GetSelfPtr() { return this; }
+  bool IsRunning() { return running_.load(std::memory_order_relaxed); }
 
   void UploadingWorker();
   void AsyncUploading(const StagingBlock& staging_block);
@@ -62,7 +63,6 @@ class BlockCacheUploader {
   Status Upload(const StagingBlock& staging_block, const IOBuffer& buffer);
   Status RemoveStage(const StagingBlock& staging_block);
 
-  bool IsRunning();
   void WaitStoreUp();
 
   std::atomic<bool> running_;
