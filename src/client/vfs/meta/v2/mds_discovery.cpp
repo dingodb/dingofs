@@ -14,6 +14,8 @@
 
 #include "client/vfs/meta/v2/mds_discovery.h"
 
+#include <cstdint>
+
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/core.h"
 #include "fmt/format.h"
@@ -23,6 +25,8 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 namespace v2 {
+
+static const uint32_t kWaitTimeMs = 100;
 
 bool MDSDiscovery::Init() { return RefreshFullyMDSList(); }
 
@@ -41,16 +45,24 @@ bool MDSDiscovery::GetMDS(int64_t mds_id, mdsv2::MDSMeta& mds_meta) {
   return true;
 }
 
-bool MDSDiscovery::PickFirstMDS(mdsv2::MDSMeta& mds_meta) {
-  utils::ReadLockGuard lk(lock_);
+void MDSDiscovery::PickFirstMDS(mdsv2::MDSMeta& mds_meta) {
+  do {
+    {
+      utils::ReadLockGuard lk(lock_);
 
-  if (mdses_.empty()) {
-    return false;
-  }
+      for (auto& [_, mds] : mdses_) {
+        if (mds.GetState() == mdsv2::MDSMeta::State::kNormal) {
+          mds_meta = mds;
+          return;
+        }
+      }
+    }
 
-  mds_meta = mdses_.begin()->second;
+    LOG(INFO) << "[meta.discovery] not pick normal mds, try refresh mds list.";
 
-  return true;
+    RefreshFullyMDSList();
+
+  } while (true);
 }
 
 std::vector<mdsv2::MDSMeta> MDSDiscovery::GetAllMDS() {
@@ -80,8 +92,14 @@ std::vector<mdsv2::MDSMeta> MDSDiscovery::GetMDSByState(
   return mdses;
 }
 
-std::vector<mdsv2::MDSMeta> MDSDiscovery::GetNormalMDS() {
-  return GetMDSByState(mdsv2::MDSMeta::State::kNormal);
+std::vector<mdsv2::MDSMeta> MDSDiscovery::GetNormalMDS(bool force) {
+  for (;;) {
+    auto mdses = GetMDSByState(mdsv2::MDSMeta::State::kNormal);
+    if (!force) return mdses;
+    if (!mdses.empty()) return mdses;
+
+    RefreshFullyMDSList();
+  }
 }
 
 Status MDSDiscovery::GetMDSList(std::vector<mdsv2::MDSMeta>& mdses) {
@@ -112,12 +130,19 @@ void MDSDiscovery::SetAbnormalMDS(int64_t mds_id) {
 }
 
 bool MDSDiscovery::RefreshFullyMDSList() {
+  uint64_t retries = 0;
   std::vector<mdsv2::MDSMeta> mdses;
-  auto status = GetMDSList(mdses);
-  if (!status.ok()) {
-    LOG(ERROR) << fmt::format("[meta.discovery] get mds list fail, error: {}.",
-                              status.ToString());
-    return false;
+  for (;;) {
+    auto status = GetMDSList(mdses);
+
+    LOG(INFO) << fmt::format(
+        "[meta.discovery] get mds list finish, retries({}) error({}).", retries,
+        status.ToString());
+
+    if (!mdses.empty()) break;
+
+    bthread_usleep(kWaitTimeMs * 1000);
+    ++retries;
   }
 
   {

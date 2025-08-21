@@ -358,7 +358,7 @@ Status Backup::BackupMetaTable(OutputUPtr output) {
 
   uint64_t total_count = 0, lock_count = 0, auto_increment_id_count = 0;
   uint64_t mds_heartbeat_count = 0, client_heartbeat_count = 0, cache_member_heartbeat_count = 0, fs_count = 0,
-           fs_quota_count = 0;
+           fs_quota_count = 0, fs_oplog_count = 0;
 
   Trace trace;
   ScanMetaTableOperation operation(trace, [&](const std::string& key, const std::string& value) -> bool {
@@ -378,6 +378,8 @@ Status Backup::BackupMetaTable(OutputUPtr output) {
       ++fs_count;
     } else if (MetaCodec::IsFsQuotaKey(key)) {
       ++fs_quota_count;
+    } else if (MetaCodec::IsFsOpLogKey(key)) {
+      ++fs_oplog_count;
     } else {
       std::cerr << fmt::format("unknown key({}).", Helper::StringToHex(key)) << '\n';
       return false;
@@ -395,9 +397,9 @@ Status Backup::BackupMetaTable(OutputUPtr output) {
   std::cout << fmt::format(
       "backup meta table done.\nsummary total_count({}) lock_count({}) auto_increment_id_count({}) "
       "mds_heartbeat_count({}) client_heartbeat_count({}) cache_member_heartbeat_count({}) fs_count({}) "
-      "fs_quota_count({}).\n",
+      "fs_quota_count({}) fs_oplog_count({}).\n",
       total_count, lock_count, auto_increment_id_count, mds_heartbeat_count, client_heartbeat_count,
-      cache_member_heartbeat_count, fs_count, fs_quota_count);
+      cache_member_heartbeat_count, fs_count, fs_quota_count, fs_oplog_count);
 
   return status;
 }
@@ -597,7 +599,7 @@ Status Restore::RestoreMetaTable(InputUPtr input) {
   // import meta to table
   uint64_t total_count = 0, lock_count = 0, auto_increment_id_count = 0;
   uint64_t mds_heartbeat_count = 0, client_heartbeat_count = 0, cache_member_heartbeat_count = 0;
-  uint64_t fs_count = 0, fs_quota_count = 0;
+  uint64_t fs_count = 0, fs_quota_count = 0, fs_oplog_count = 0;
 
   std::vector<KeyValue> kvs;
   while (true) {
@@ -621,6 +623,8 @@ Status Restore::RestoreMetaTable(InputUPtr input) {
       ++fs_count;
     } else if (MetaCodec::IsFsQuotaKey(kv.key)) {
       ++fs_quota_count;
+    } else if (MetaCodec::IsFsOpLogKey(kv.key)) {
+      ++fs_oplog_count;
     } else {
       status = Status(pb::error::EINTERNAL, fmt::format("unknown key({}).", Helper::StringToHex(kv.key)));
       break;
@@ -644,9 +648,10 @@ Status Restore::RestoreMetaTable(InputUPtr input) {
 
   std::cout << fmt::format(
       "restore meta table done.\nsummary total_count({}) lock_count({}) auto_increment_id_count({}) "
-      "mds_heartbeat_count({}) client_heartbeat_count({}) fs_count({}) fs_quota_count({}) status({}).\n",
+      "mds_heartbeat_count({}) client_heartbeat_count({}) fs_count({}) fs_quota_count({}) fs_oplog_count({}) "
+      "status({}).\n",
       total_count, lock_count, auto_increment_id_count, mds_heartbeat_count, client_heartbeat_count, fs_count,
-      fs_quota_count, status.error_str());
+      fs_quota_count, fs_oplog_count, status.error_str());
 
   return Status::OK();
 }

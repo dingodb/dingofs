@@ -26,6 +26,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "brpc/channel.h"
 #include "brpc/controller.h"
@@ -82,15 +83,15 @@ class RPC {
   bool Init();
   void Destory();
 
-  bool AddEndpoint(const std::string& ip, int port, bool is_default = false);
+  bool AddEndpoint(const std::string& ip, int port);
   void DeleteEndpoint(const std::string& ip, int port);
 
   template <typename Request, typename Response>
   Status SendRequest(const std::string& service_name,
                      const std::string& api_name, const Request& request,
                      Response& response) {
-    return SendRequest(default_endpoint_, service_name, api_name, request,
-                       response);
+    return SendRequest(RandomlyPickupEndPoint(), service_name, api_name,
+                       request, response);
   }
 
   template <typename Request, typename Response>
@@ -105,10 +106,13 @@ class RPC {
   ChannelPtr NewChannel(const EndPoint& endpoint);
   Channel* GetChannel(const EndPoint& endpoint);
   void DeleteChannel(const EndPoint& endpoint);
+  EndPoint RandomlyPickupEndPoint();
+  void AddFallbackEndpoint(const EndPoint& endpoint);
 
   utils::RWLock lock_;
   std::map<EndPoint, ChannelPtr> channels_;
-  EndPoint default_endpoint_;
+  EndPoint init_endpoint_;
+  std::set<EndPoint> fallback_endpoints_;
 };
 
 inline Status TransformError(const pb::error::Error& error) {
@@ -138,16 +142,12 @@ Status RPC::SendRequest(const EndPoint& endpoint,
                         Response& response) {
   const google::protobuf::MethodDescriptor* method = nullptr;
 
-  if (service_name == "MDSService") {
-    method = dingofs::pb::mdsv2::MDSService::descriptor()->FindMethodByName(
-        api_name);
-  } else {
-    LOG(FATAL) << "[meta.rpc] unknown service name: " << service_name;
-  }
+  CHECK(service_name == "MDSService")
+      << "[meta.rpc] unknown service name: " << service_name;
 
-  if (method == nullptr) {
-    LOG(FATAL) << "[meta.rpc] unknown api name: " << api_name;
-  }
+  method =
+      dingofs::pb::mdsv2::MDSService::descriptor()->FindMethodByName(api_name);
+  CHECK(method != nullptr) << "[meta.rpc] unknown api name: " << api_name;
 
   auto* channel = GetChannel(endpoint);
   CHECK(channel != nullptr) << fmt::format("[meta.rpc][{}] channel is null.",
@@ -203,6 +203,8 @@ Status RPC::SendRequest(const EndPoint& endpoint,
     }
 
   } while (++retry_count <= FLAGS_rpc_retry_times);
+
+  AddFallbackEndpoint(endpoint);
 
   return TransformError(response.error());
 }

@@ -106,8 +106,8 @@ bool MDSClient::Load(const Json::Value& value) {
   return parent_memo_->Load(value);
 }
 
-bool MDSClient::SetEndpoint(const std::string& ip, int port, bool is_default) {
-  return rpc_->AddEndpoint(ip, port, is_default);
+bool MDSClient::SetEndpoint(const std::string& ip, int port) {
+  return rpc_->AddEndpoint(ip, port);
 }
 
 Status MDSClient::DoGetFsInfo(RPCPtr rpc, pb::mdsv2::GetFsInfoRequest& request,
@@ -137,7 +137,9 @@ Status MDSClient::GetFsInfo(RPCPtr rpc, uint32_t fs_id,
 
 Status MDSClient::Heartbeat() {
   auto get_mds_fn = [this]() -> MDSMeta {
-    return GetMdsByParent(mdsv2::kRootIno);
+    mdsv2::MDSMeta mds_meta;
+    mds_discovery_->PickFirstMDS(mds_meta);
+    return mds_meta;
   };
 
   pb::mdsv2::HeartbeatRequest request;
@@ -1061,6 +1063,9 @@ bool MDSClient::ProcessNetError(MDSMeta& mds_meta) {
   auto mdses = mds_discovery_->GetNormalMDS();
   for (auto& mds : mdses) {
     if (mds.ID() != mds_meta.ID()) {
+      LOG(INFO) << fmt::format(
+          "[meta.client] process net error, transfer {}->{}.", mds_meta.ID(),
+          mds.ID());
       mds_meta = mds;
       return true;
     }

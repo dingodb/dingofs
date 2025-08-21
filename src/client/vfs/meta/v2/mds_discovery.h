@@ -44,10 +44,10 @@ class MDSDiscovery {
   void Destroy();
 
   bool GetMDS(int64_t mds_id, mdsv2::MDSMeta& mds_meta);
-  bool PickFirstMDS(mdsv2::MDSMeta& mds_meta);
+  void PickFirstMDS(mdsv2::MDSMeta& mds_meta);
   std::vector<mdsv2::MDSMeta> GetAllMDS();
   std::vector<mdsv2::MDSMeta> GetMDSByState(mdsv2::MDSMeta::State state);
-  std::vector<mdsv2::MDSMeta> GetNormalMDS();
+  std::vector<mdsv2::MDSMeta> GetNormalMDS(bool force = true);
 
   void SetAbnormalMDS(int64_t mds_id);
   bool RefreshFullyMDSList();

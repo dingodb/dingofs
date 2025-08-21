@@ -31,30 +31,30 @@ const int32_t kConnectTimeoutMs = 200;  // milliseconds
 RPC::RPC(const std::string& addr) {
   EndPoint endpoint;
   butil::str2endpoint(addr.c_str(), &endpoint);
-  default_endpoint_ = endpoint;
+  init_endpoint_ = endpoint;
 }
 
 RPC::RPC(const std::string& ip, int port) {
   EndPoint endpoint;
   butil::str2endpoint(ip.c_str(), port, &endpoint);
-  default_endpoint_ = endpoint;
+  init_endpoint_ = endpoint;
 }
 
-RPC::RPC(const EndPoint& endpoint) : default_endpoint_(endpoint) {}
+RPC::RPC(const EndPoint& endpoint) : init_endpoint_(endpoint) {}
 
 bool RPC::Init() {
-  ChannelPtr channel = NewChannel(default_endpoint_);
+  ChannelPtr channel = NewChannel(init_endpoint_);
   if (channel == nullptr) {
     return false;
   }
-  channels_.insert(std::make_pair(default_endpoint_, channel));
+  channels_.insert(std::make_pair(init_endpoint_, channel));
 
   return true;
 }
 
 void RPC::Destory() {}
 
-bool RPC::AddEndpoint(const std::string& ip, int port, bool is_default) {
+bool RPC::AddEndpoint(const std::string& ip, int port) {
   utils::WriteLockGuard lk(lock_);
 
   EndPoint endpoint;
@@ -67,10 +67,6 @@ bool RPC::AddEndpoint(const std::string& ip, int port, bool is_default) {
   ChannelPtr channel = NewChannel(endpoint);
   if (channel == nullptr) {
     return false;
-  }
-
-  if (is_default) {
-    default_endpoint_ = endpoint;
   }
 
   channels_.insert(std::make_pair(endpoint, channel));
@@ -87,6 +83,32 @@ void RPC::DeleteEndpoint(const std::string& ip, int port) {
   if (it != channels_.end()) {
     channels_.erase(it);
   }
+}
+
+EndPoint RPC::RandomlyPickupEndPoint() {
+  utils::ReadLockGuard lk(lock_);
+
+  uint32_t random_num =
+      mdsv2::Helper::GenerateRealRandomInteger(0, channels_.size());
+  if (!channels_.empty()) {
+    // priority take from active channels
+    uint32_t index = random_num % channels_.size();
+    auto it = channels_.begin();
+    std::advance(it, index);
+    return it->first;
+
+  } else {
+    // take from fallback
+    uint32_t index = random_num % fallback_endpoints_.size();
+    auto it = fallback_endpoints_.begin();
+    std::advance(it, index);
+    return *it;
+  }
+}
+
+void RPC::AddFallbackEndpoint(const EndPoint& endpoint) {
+  utils::WriteLockGuard lk(lock_);
+  fallback_endpoints_.insert(endpoint);
 }
 
 RPC::ChannelPtr RPC::NewChannel(const EndPoint& endpoint) {  // NOLINT
