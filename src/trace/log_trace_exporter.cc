@@ -31,6 +31,7 @@ LogTraceExporter::LogTraceExporter(const std::string& name,
   std::string filename =
       absl::StrFormat("%s/%s_trace_%d.log", log_dir, name, getpid());
   logger_ = spdlog::daily_logger_mt(name, filename, 0, 0);
+  logger_->set_pattern("[%Y-%m-%d %H:%M:%S.%f] [%n] [%l] %v");
   logger_->set_level(spdlog::level::trace);
   spdlog::flush_every(std::chrono::seconds(1));
 }
