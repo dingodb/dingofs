@@ -43,7 +43,7 @@ RPC::RPC(const std::string& ip, int port) {
 RPC::RPC(const EndPoint& endpoint) : init_endpoint_(endpoint) {}
 
 bool RPC::Init() {
-  ChannelPtr channel = NewChannel(init_endpoint_);
+  ChannelSPtr channel = NewChannel(init_endpoint_);
   if (channel == nullptr) {
     return false;
   }
@@ -64,7 +64,7 @@ bool RPC::AddEndpoint(const std::string& ip, int port) {
     return false;
   }
 
-  ChannelPtr channel = NewChannel(endpoint);
+  ChannelSPtr channel = NewChannel(endpoint);
   if (channel == nullptr) {
     return false;
   }
@@ -111,10 +111,10 @@ void RPC::AddFallbackEndpoint(const EndPoint& endpoint) {
   fallback_endpoints_.insert(endpoint);
 }
 
-RPC::ChannelPtr RPC::NewChannel(const EndPoint& endpoint) {  // NOLINT
+RPC::ChannelSPtr RPC::NewChannel(const EndPoint& endpoint) {  // NOLINT
   CHECK(endpoint.port > 0) << "port is invalid.";
 
-  ChannelPtr channel = std::make_shared<brpc::Channel>();
+  ChannelSPtr channel = std::make_shared<brpc::Channel>();
   brpc::ChannelOptions options;
   options.connect_timeout_ms = kConnectTimeoutMs;
   options.timeout_ms = FLAGS_rpc_timeout_ms;
@@ -130,21 +130,20 @@ RPC::ChannelPtr RPC::NewChannel(const EndPoint& endpoint) {  // NOLINT
   return channel;
 }
 
-RPC::Channel* RPC::GetChannel(const EndPoint& endpoint) {
+RPC::ChannelSPtr RPC::GetChannel(const EndPoint& endpoint) {
   utils::ReadLockGuard lk(lock_);
 
   auto it = channels_.find(endpoint);
   if (it != channels_.end()) {
-    return it->second.get();
+    return it->second;
   }
 
-  ChannelPtr channel = NewChannel(endpoint);
-  if (channel == nullptr) {
-    return nullptr;
-  }
+  ChannelSPtr channel = NewChannel(endpoint);
+  if (channel == nullptr) return nullptr;
 
-  channels_[endpoint] = std::move(channel);
-  return channels_[endpoint].get();
+  channels_[endpoint] = channel;
+
+  return channel;
 }
 
 void RPC::DeleteChannel(const EndPoint& endpoint) {

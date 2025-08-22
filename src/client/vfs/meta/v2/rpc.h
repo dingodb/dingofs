@@ -101,17 +101,17 @@ class RPC {
 
  private:
   using Channel = brpc::Channel;
-  using ChannelPtr = std::shared_ptr<Channel>;
+  using ChannelSPtr = std::shared_ptr<Channel>;
 
-  ChannelPtr NewChannel(const EndPoint& endpoint);
-  Channel* GetChannel(const EndPoint& endpoint);
+  ChannelSPtr NewChannel(const EndPoint& endpoint);
+  ChannelSPtr GetChannel(const EndPoint& endpoint);
   void DeleteChannel(const EndPoint& endpoint);
   EndPoint RandomlyPickupEndPoint();
   void AddFallbackEndpoint(const EndPoint& endpoint);
 
   utils::RWLock lock_;
-  std::map<EndPoint, ChannelPtr> channels_;
   EndPoint init_endpoint_;
+  std::map<EndPoint, ChannelSPtr> channels_;
   std::set<EndPoint> fallback_endpoints_;
 };
 
@@ -149,7 +149,7 @@ Status RPC::SendRequest(const EndPoint& endpoint,
       dingofs::pb::mdsv2::MDSService::descriptor()->FindMethodByName(api_name);
   CHECK(method != nullptr) << "[meta.rpc] unknown api name: " << api_name;
 
-  auto* channel = GetChannel(endpoint);
+  auto channel = GetChannel(endpoint);
   CHECK(channel != nullptr) << fmt::format("[meta.rpc][{}] channel is null.",
                                            EndPointToStr(endpoint));
 
