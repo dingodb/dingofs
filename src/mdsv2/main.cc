@@ -230,13 +230,6 @@ static std::vector<gflags::CommandLineFlagInfo> GetFlags(const std::string& pref
 
   return dist_flags;
 }
-static size_t GetFlagMaxWidth(const std::vector<gflags::CommandLineFlagInfo>& flags) {
-  size_t max_width = 0;
-  for (const auto& flag : flags) {
-    max_width = std::max(flag.name.size() + flag.type.size(), max_width);
-  }
-  return max_width;
-}
 
 static std::string GetUsage(char* program_name) {
   std::ostringstream oss;

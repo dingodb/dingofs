@@ -169,7 +169,7 @@ class Helper {
   template <typename T>
   static std::string VectorToString(const std::vector<T>& vec) {
     std::string str;
-    for (int i = 0; i < vec.size(); ++i) {
+    for (uint32_t i = 0; i < vec.size(); ++i) {
       str += fmt::format("{}", vec[i]);
       if (i + 1 < vec.size()) {
         str += ",";

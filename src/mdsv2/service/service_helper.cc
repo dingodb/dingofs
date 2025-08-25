@@ -20,7 +20,7 @@
 namespace dingofs {
 namespace mdsv2 {
 
-DEFINE_int64(mds_service_log_threshold_time_us, 1000L, "service log threshold time us");
+DEFINE_uint64(mds_service_log_threshold_time_us, 1000L, "service log threshold time us");
 BRPC_VALIDATE_GFLAG(mds_service_log_threshold_time_us, brpc::PositiveInteger);
 
 DEFINE_int32(mds_service_log_print_max_length, 512, "log print max length");

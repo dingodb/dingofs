@@ -148,7 +148,7 @@ class RestoreCommandRunner {
 
   struct Options {
     std::string type;
-    std::string output_type;
+    std::string input_type;
     uint32_t fs_id{0};
     std::string fs_name;
     std::string file_path;

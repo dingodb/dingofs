@@ -157,6 +157,7 @@ class GcProcessor {
   bool Execute(Ino ino, TaskRunnablePtr task);
 
   Status GetClientList(std::set<std::string>& clients);
+  bool HasFileSession(uint32_t fs_id, Ino ino);
 
   void ScanDelSlice(uint32_t fs_id);
   void ScanDelFile(uint32_t fs_id);

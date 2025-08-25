@@ -254,7 +254,7 @@ static void RenderMdsList(const std::vector<MdsEntry>& mdses, butil::IOBufBuilde
   os << "<th>Online</th>";
   os << "</tr>";
 
-  int64_t now_ms = Helper::TimestampMs();
+  uint64_t now_ms = Helper::TimestampMs();
 
   for (const auto& mds : mdses) {
     os << "<tr>";
@@ -288,7 +288,7 @@ static void RenderClientList(const std::vector<ClientEntry>& clients, butil::IOB
   os << "<th>Online</th>";
   os << "</tr>";
 
-  int64_t now_ms = Helper::TimestampMs();
+  uint64_t now_ms = Helper::TimestampMs();
 
   for (const auto& client : clients) {
     os << "<tr>";
@@ -324,7 +324,7 @@ static void RenderCacheMemberList(const std::vector<CacheMemberEntry>& cache_mem
   os << "<th>State</th>";
   os << "</tr>";
 
-  int64_t now_ms = Helper::TimestampMs();
+  uint64_t now_ms = Helper::TimestampMs();
 
   for (const auto& member : cache_members) {
     os << "<tr>";
@@ -443,8 +443,8 @@ void FsStatServiceImpl::RenderMainPage(const brpc::Server* server, FileSystemSet
     os << fmt::format(R"(<div style="color:red;">get fs list fail, error({}).</div>)", status.error_str());
 
   } else {
-    sort(fs_infoes.begin(), fs_infoes.end(),
-         [](const pb::mdsv2::FsInfo& a, const pb::mdsv2::FsInfo& b) { return a.fs_id() < b.fs_id(); });
+    std::sort(fs_infoes.begin(), fs_infoes.end(),  // NOLINT
+              [](const pb::mdsv2::FsInfo& a, const pb::mdsv2::FsInfo& b) { return a.fs_id() < b.fs_id(); });
 
     RenderFsInfo(fs_infoes, os);
   }
@@ -458,7 +458,8 @@ void FsStatServiceImpl::RenderMainPage(const brpc::Server* server, FileSystemSet
     os << fmt::format(R"(<div style="color:red;">get mds list fail, error({}).</div>)", status.error_str());
 
   } else {
-    sort(mdses.begin(), mdses.end(), [](const MdsEntry& a, const MdsEntry& b) { return a.id() < b.id(); });
+    std::sort(mdses.begin(), mdses.end(),  // NOLINT
+              [](const MdsEntry& a, const MdsEntry& b) { return a.id() < b.id(); });
     RenderMdsList(mdses, os);
   }
 
@@ -471,9 +472,10 @@ void FsStatServiceImpl::RenderMainPage(const brpc::Server* server, FileSystemSet
 
   } else {
     // sort by last_online_time
-    sort(cache_members.begin(), cache_members.end(), [](const CacheMemberEntry& a, const CacheMemberEntry& b) {
-      return a.last_online_time_ms() > b.last_online_time_ms();
-    });
+    std::sort(cache_members.begin(), cache_members.end(),  // NOLINT
+              [](const CacheMemberEntry& a, const CacheMemberEntry& b) {
+                return a.last_online_time_ms() > b.last_online_time_ms();
+              });
 
     RenderCacheMemberList(cache_members, os);
   }
@@ -487,8 +489,9 @@ void FsStatServiceImpl::RenderMainPage(const brpc::Server* server, FileSystemSet
 
   } else {
     // sort by last_online_time
-    sort(clients.begin(), clients.end(),
-         [](const ClientEntry& a, const ClientEntry& b) { return a.last_online_time_ms() > b.last_online_time_ms(); });
+    std::sort(  // NOLINT
+        clients.begin(), clients.end(),
+        [](const ClientEntry& a, const ClientEntry& b) { return a.last_online_time_ms() > b.last_online_time_ms(); });
 
     RenderClientList(clients, os);
   }
@@ -1205,7 +1208,7 @@ static void RenderDelfilePage(FileSystemSPtr filesystem, butil::IOBufBuilder& os
 static void RenderDelslicePage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) {
   auto render_range_func = [](const pb::mdsv2::TrashSlice& slice) -> std::string {
     std::string result;
-    for (size_t i = 0; i < slice.ranges_size(); ++i) {
+    for (int i = 0; i < slice.ranges_size(); ++i) {
       const auto& range = slice.ranges().at(i);
       if (i + 1 < slice.ranges_size()) {
         result += fmt::format("[{},{}),", range.offset(), range.offset() + range.len());
@@ -1346,8 +1349,8 @@ static void RenderChunk(uint64_t& count, uint64_t chunk_size, ChunkEntry chunk, 
   };
 
   // sort by offset
-  std::sort(chunk.mutable_slices()->begin(), chunk.mutable_slices()->end(),
-            [](const SliceEntry& a, const SliceEntry& b) { return a.offset() < b.offset(); });
+  std::stable_sort(chunk.mutable_slices()->begin(), chunk.mutable_slices()->end(),
+                   [](const SliceEntry& a, const SliceEntry& b) { return a.offset() < b.offset(); });
 
   // get offset ranges
   std::set<uint64_t> offsets;
@@ -1387,10 +1390,6 @@ static void RenderChunk(uint64_t& count, uint64_t chunk_size, ChunkEntry chunk, 
   std::set<uint64_t> uncontinuous_offsets;
   uint64_t prev_offset = chunk_index * chunk_size;
   for (auto& offset_range : offset_ranges) {
-    // sort by id, from newest to oldest
-    std::sort(offset_range.slices.begin(), offset_range.slices.end(),  // NOLINT
-              [](const SliceEntry& a, const SliceEntry& b) { return a.id() < b.id(); });
-
     if (offset_range.start != prev_offset) {
       uncontinuous_offsets.insert(offset_range.start);
     }
@@ -1398,7 +1397,7 @@ static void RenderChunk(uint64_t& count, uint64_t chunk_size, ChunkEntry chunk, 
     prev_offset = offset_range.end;
   }
 
-  for (int i = 0; i < offset_ranges.size(); ++i) {
+  for (size_t i = 0; i < offset_ranges.size(); ++i) {
     const auto& offset_range = offset_ranges[i];
     os << "<tr>";
 

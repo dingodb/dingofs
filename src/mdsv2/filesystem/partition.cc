@@ -97,7 +97,7 @@ std::vector<Dentry> Partition::GetChildren(const std::string& start_name, uint32
     dentries.push_back(it->second);
   }
 
-  return std::move(dentries);
+  return dentries;
 }
 
 std::vector<Dentry> Partition::GetAllChildren() {

@@ -94,7 +94,7 @@ Range MetaCodec::GetMetaTableRange() {
   end = kPrefix;
   end.push_back(kTableMeta + 1);
 
-  return std::move(range);
+  return range;
 }
 
 Range MetaCodec::GetFsStatsTableRange() {
@@ -108,7 +108,7 @@ Range MetaCodec::GetFsStatsTableRange() {
   end = kPrefix;
   end.push_back(kTableFsStats + 1);
 
-  return std::move(range);
+  return range;
 }
 
 Range MetaCodec::GetFsMetaTableRange(uint32_t fs_id) {
@@ -124,7 +124,7 @@ Range MetaCodec::GetFsMetaTableRange(uint32_t fs_id) {
   end.push_back(kTableFsMeta);
   SerialHelper::WriteInt(fs_id + 1, end);
 
-  return std::move(range);
+  return range;
 }
 
 Range MetaCodec::GetLockRange() {
@@ -140,7 +140,7 @@ Range MetaCodec::GetLockRange() {
   end.push_back(kTableMeta);
   end.push_back(kMetaLock + 1);
 
-  return std::move(range);
+  return range;
 }
 
 Range MetaCodec::GetAutoIncrementIDRange() {
@@ -156,7 +156,7 @@ Range MetaCodec::GetAutoIncrementIDRange() {
   end.push_back(kTableMeta);
   end.push_back(kMetaAutoIncrementID + 1);
 
-  return std::move(range);
+  return range;
 }
 
 Range MetaCodec::GetHeartbeatMdsRange() {
@@ -174,7 +174,7 @@ Range MetaCodec::GetHeartbeatMdsRange() {
   end.push_back(kMetaHeartbeat);
   end.push_back(pb::mdsv2::ROLE_MDS + 1);
 
-  return std::move(range);
+  return range;
 }
 
 Range MetaCodec::GetHeartbeatClientRange() {
@@ -192,7 +192,7 @@ Range MetaCodec::GetHeartbeatClientRange() {
   end.push_back(kMetaHeartbeat);
   end.push_back(pb::mdsv2::ROLE_CLIENT + 1);
 
-  return std::move(range);
+  return range;
 }
 
 Range MetaCodec::GetHeartbeatCacheMemberRange() {
@@ -210,7 +210,7 @@ Range MetaCodec::GetHeartbeatCacheMemberRange() {
   end.push_back(kMetaHeartbeat);
   end.push_back(pb::mdsv2::ROLE_CACHE_MEMBER + 1);
 
-  return std::move(range);
+  return range;
 }
 
 Range MetaCodec::GetFsRange() {
@@ -226,7 +226,7 @@ Range MetaCodec::GetFsRange() {
   end.push_back(kTableMeta);
   end.push_back(kMetaFs + 1);
 
-  return std::move(range);
+  return range;
 }
 
 Range MetaCodec::GetFsQuotaRange() {
@@ -242,7 +242,7 @@ Range MetaCodec::GetFsQuotaRange() {
   end.push_back(kTableMeta);
   end.push_back(kMetaFsQuota + 1);
 
-  return std::move(range);
+  return range;
 }
 
 Range MetaCodec::GetFsConfigLogRange(uint32_t fs_id) {
@@ -260,7 +260,7 @@ Range MetaCodec::GetFsConfigLogRange(uint32_t fs_id) {
   end.push_back(kMetaFsOpLog);
   SerialHelper::WriteInt(fs_id + 1, end);
 
-  return std::move(range);
+  return range;
 }
 
 Range MetaCodec::GetDentryRange(uint32_t fs_id, Ino ino, bool include_parent) {
@@ -286,7 +286,7 @@ Range MetaCodec::GetDentryRange(uint32_t fs_id, Ino ino, bool include_parent) {
   SerialHelper::WriteULong(ino, end);
   end.push_back(kFsInodeDentry + 1);
 
-  return std::move(range);
+  return range;
 }
 
 Range MetaCodec::GetChunkRange(uint32_t fs_id, Ino ino) {
@@ -308,7 +308,7 @@ Range MetaCodec::GetChunkRange(uint32_t fs_id, Ino ino) {
   SerialHelper::WriteULong(ino, end);
   end.push_back(kFsInodeChunk + 1);
 
-  return std::move(range);
+  return range;
 }
 
 Range MetaCodec::GetFileSessionRange(uint32_t fs_id) {
@@ -326,7 +326,7 @@ Range MetaCodec::GetFileSessionRange(uint32_t fs_id) {
   SerialHelper::WriteInt(fs_id, end);
   end.push_back(kMetaFsFileSession + 1);
 
-  return std::move(range);
+  return range;
 }
 
 Range MetaCodec::GetFileSessionRange(uint32_t fs_id, Ino ino) {
@@ -346,7 +346,7 @@ Range MetaCodec::GetFileSessionRange(uint32_t fs_id, Ino ino) {
   end.push_back(kMetaFsFileSession);
   SerialHelper::WriteULong(ino + 1, end);
 
-  return std::move(range);
+  return range;
 }
 
 Range MetaCodec::GetDirQuotaRange(uint32_t fs_id) {
@@ -364,7 +364,7 @@ Range MetaCodec::GetDirQuotaRange(uint32_t fs_id) {
   SerialHelper::WriteInt(fs_id, end);
   end.push_back(kMetaFsDirQuota + 1);
 
-  return std::move(range);
+  return range;
 }
 
 Range MetaCodec::GetDelSliceRange(uint32_t fs_id) {
@@ -382,7 +382,7 @@ Range MetaCodec::GetDelSliceRange(uint32_t fs_id) {
   SerialHelper::WriteInt(fs_id, end);
   end.push_back(kMetaFsDelSlice + 1);
 
-  return std::move(range);
+  return range;
 }
 
 Range MetaCodec::GetDelSliceRange(uint32_t fs_id, Ino ino) {
@@ -402,7 +402,7 @@ Range MetaCodec::GetDelSliceRange(uint32_t fs_id, Ino ino) {
   end.push_back(kMetaFsDelSlice);
   SerialHelper::WriteULong(ino + 1, end);
 
-  return std::move(range);
+  return range;
 }
 
 Range MetaCodec::GetDelSliceRange(uint32_t fs_id, Ino ino, uint64_t chunk_index) {
@@ -424,7 +424,7 @@ Range MetaCodec::GetDelSliceRange(uint32_t fs_id, Ino ino, uint64_t chunk_index)
   SerialHelper::WriteULong(ino, end);
   SerialHelper::WriteULong(chunk_index + 1, end);
 
-  return std::move(range);
+  return range;
 }
 
 Range MetaCodec::GetDelFileTableRange(uint32_t fs_id) {
@@ -442,7 +442,7 @@ Range MetaCodec::GetDelFileTableRange(uint32_t fs_id) {
   SerialHelper::WriteInt(fs_id, end);
   end.push_back(kMetaFsDelFile + 1);
 
-  return std::move(range);
+  return range;
 }
 
 Range MetaCodec::GetFsStatsRange() {
@@ -458,7 +458,7 @@ Range MetaCodec::GetFsStatsRange() {
   end.push_back(kTableFsStats);
   end.push_back(kMetaFsStats + 1);
 
-  return std::move(range);
+  return range;
 }
 
 Range MetaCodec::GetFsStatsRange(uint32_t fs_id) {
@@ -476,7 +476,7 @@ Range MetaCodec::GetFsStatsRange(uint32_t fs_id) {
   end.push_back(kMetaFsStats);
   SerialHelper::WriteInt(fs_id + 1, end);
 
-  return std::move(range);
+  return range;
 }
 
 // lock format: ${prefix} kTableMeta kMetaLock {name}
@@ -503,7 +503,7 @@ std::string MetaCodec::EncodeLockKey(const std::string& name) {
   key.push_back(kMetaLock);
   key.append(name);
 
-  return std::move(key);
+  return key;
 }
 
 void MetaCodec::DecodeLockKey(const std::string& key, std::string& name) {
@@ -520,7 +520,7 @@ std::string MetaCodec::EncodeLockValue(int64_t mds_id, uint64_t epoch, uint64_t 
   SerialHelper::WriteULong(epoch, value);
   SerialHelper::WriteULong(expire_time_ms, value);
 
-  return std::move(value);
+  return value;
 }
 
 void MetaCodec::DecodeLockValue(const std::string& value, int64_t& mds_id, uint64_t& epoch, uint64_t& expire_time_ms) {
@@ -555,7 +555,7 @@ std::string MetaCodec::EncodeAutoIncrementIDKey(const std::string& name) {
   key.push_back(kMetaAutoIncrementID);
   key.append(name);
 
-  return std::move(key);
+  return key;
 }
 
 void MetaCodec::DecodeAutoIncrementIDKey(const std::string& key, std::string& name) {
@@ -569,7 +569,7 @@ std::string MetaCodec::EncodeAutoIncrementIDValue(uint64_t id) {
 
   SerialHelper::WriteULong(id, value);
 
-  return std::move(value);
+  return value;
 }
 
 void MetaCodec::DecodeAutoIncrementIDValue(const std::string& value, uint64_t& id) {
@@ -633,7 +633,7 @@ std::string MetaCodec::EncodeHeartbeatKey(int64_t mds_id) {
   key.push_back(pb::mdsv2::ROLE_MDS);
   SerialHelper::WriteLong(mds_id, key);
 
-  return std::move(key);
+  return key;
 }
 
 std::string MetaCodec::EncodeHeartbeatKey(const std::string& client_id) {
@@ -648,7 +648,7 @@ std::string MetaCodec::EncodeHeartbeatKey(const std::string& client_id) {
   key.push_back(pb::mdsv2::ROLE_CLIENT);
   key.append(client_id);
 
-  return std::move(key);
+  return key;
 }
 
 std::string MetaCodec::EncodeHeartbeatCacheMemberKey(const std::string& member_id) {
@@ -663,7 +663,7 @@ std::string MetaCodec::EncodeHeartbeatCacheMemberKey(const std::string& member_i
   key.push_back(pb::mdsv2::ROLE_CACHE_MEMBER);
   key.append(member_id);
 
-  return std::move(key);
+  return key;
 }
 
 void MetaCodec::DecodeHeartbeatKey(const std::string& key, int64_t& mds_id) {
@@ -697,21 +697,21 @@ MdsEntry MetaCodec::DecodeHeartbeatMdsValue(const std::string& value) {
   MdsEntry mds;
   CHECK(mds.ParseFromString(value)) << "parse mds heartbeat value fail.";
 
-  return std::move(mds);
+  return mds;
 }
 
 ClientEntry MetaCodec::DecodeHeartbeatClientValue(const std::string& value) {
   ClientEntry client;
   CHECK(client.ParseFromString(value)) << "parse client heartbeat value fail.";
 
-  return std::move(client);
+  return client;
 }
 
 CacheMemberEntry MetaCodec::DecodeHeartbeatCacheMemberValue(const std::string& value) {
   CacheMemberEntry cache_member;
   CHECK(cache_member.ParseFromString(value)) << "parse cache_member heartbeat value fail.";
 
-  return std::move(cache_member);
+  return cache_member;
 }
 
 // fs format: ${prefix} kTableMeta kMetaFs {name}
@@ -738,7 +738,7 @@ std::string MetaCodec::EncodeFsKey(const std::string& name) {
   key.push_back(kMetaFs);
   key.append(name);
 
-  return std::move(key);
+  return key;
 }
 
 void MetaCodec::DecodeFsKey(const std::string& key, std::string& name) {
@@ -753,7 +753,7 @@ FsInfoEntry MetaCodec::DecodeFsValue(const std::string& value) {
   FsInfoEntry fs_info;
   CHECK(fs_info.ParseFromString(value)) << "parse fs info fail.";
 
-  return std::move(fs_info);
+  return fs_info;
 }
 
 // fs quota format: ${prefix} kTableMeta kMetaFsQuota {fs_id}
@@ -780,7 +780,7 @@ std::string MetaCodec::EncodeFsQuotaKey(uint32_t fs_id) {
   key.push_back(kMetaFsQuota);
   SerialHelper::WriteInt(fs_id, key);
 
-  return std::move(key);
+  return key;
 }
 
 void MetaCodec::DecodeFsQuotaKey(const std::string& key, uint32_t& fs_id) {
@@ -795,7 +795,7 @@ QuotaEntry MetaCodec::DecodeFsQuotaValue(const std::string& value) {
   QuotaEntry quota;
   CHECK(quota.ParseFromString(value)) << "parse fs quota fail.";
 
-  return std::move(quota);
+  return quota;
 }
 
 // fs config log format: ${prefix} kTableMeta kMetaFsOpLog {fs_id} {time_ns}
@@ -823,7 +823,7 @@ std::string MetaCodec::EncodeFsOpLogKey(uint32_t fs_id, uint64_t time_ns) {
   SerialHelper::WriteInt(fs_id, key);
   SerialHelper::WriteULong(time_ns, key);
 
-  return std::move(key);
+  return key;
 }
 
 void MetaCodec::DecodeFsOpLogKey(const std::string& key, uint32_t& fs_id, uint64_t& time_ns) {
@@ -839,7 +839,7 @@ FsOpLog MetaCodec::DecodeFsOpLogValue(const std::string& value) {
   FsOpLog entry;
   CHECK(entry.ParseFromString(value)) << "parse fs config log fail.";
 
-  return std::move(entry);
+  return entry;
 }
 
 // inode attr format: ${prefix} kTableFsMeta {fs_id} kMetaFsInode {ino} kFsInodeAttr
@@ -874,7 +874,7 @@ std::string MetaCodec::EncodeInodeKey(uint32_t fs_id, Ino ino) {
   SerialHelper::WriteULong(ino, key);
   key.push_back(kFsInodeAttr);
 
-  return std::move(key);
+  return key;
 }
 
 void MetaCodec::DecodeInodeKey(const std::string& key, uint32_t& fs_id, uint64_t& ino) {
@@ -890,7 +890,7 @@ AttrEntry MetaCodec::DecodeInodeValue(const std::string& value) {
   AttrEntry attr;
   CHECK(attr.ParseFromString(value)) << "parse inode attr fail.";
 
-  return std::move(attr);
+  return attr;
 }
 
 // dentry format: ${prefix} kTableFsMeta {fs_id} kMetaFsInode {ino} kFsInodeDentry {name}
@@ -926,7 +926,7 @@ std::string MetaCodec::EncodeDentryKey(uint32_t fs_id, Ino ino, const std::strin
   key.push_back(kFsInodeDentry);
   key.append(name);
 
-  return std::move(key);
+  return key;
 }
 
 void MetaCodec::DecodeDentryKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, std::string& name) {
@@ -944,7 +944,7 @@ DentryEntry MetaCodec::DecodeDentryValue(const std::string& value) {
   DentryEntry dentry;
   CHECK(dentry.ParseFromString(value)) << "parse dentry fail.";
 
-  return std::move(dentry);
+  return dentry;
 }
 
 // inode chunk format: ${prefix} kTableFsMeta  {fs_id}  kMetaFsInode {ino} kFsInodeChunk {chunk_index}
@@ -980,7 +980,7 @@ std::string MetaCodec::EncodeChunkKey(uint32_t fs_id, Ino ino, uint64_t chunk_in
   key.push_back(kFsInodeChunk);
   SerialHelper::WriteULong(chunk_index, key);
 
-  return std::move(key);
+  return key;
 }
 
 void MetaCodec::DecodeChunkKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, uint64_t& chunk_index) {
@@ -997,7 +997,7 @@ ChunkEntry MetaCodec::DecodeChunkValue(const std::string& value) {
   ChunkEntry chunk;
   CHECK(chunk.ParseFromString(value)) << "parse chunk fail.";
 
-  return std::move(chunk);
+  return chunk;
 }
 
 // inode file session format: ${prefix} kTableFsMeta {fs_id} kMetaFsFileSession {ino} {session_id}
@@ -1027,7 +1027,7 @@ std::string MetaCodec::EncodeFileSessionKey(uint32_t fs_id, Ino ino, const std::
   SerialHelper::WriteULong(ino, key);
   key.append(session_id);
 
-  return std::move(key);
+  return key;
 }
 
 void MetaCodec::DecodeFileSessionKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, std::string& session_id) {
@@ -1046,7 +1046,7 @@ FileSessionEntry MetaCodec::DecodeFileSessionValue(const std::string& value) {
   FileSessionEntry file_session;
   CHECK(file_session.ParseFromString(value)) << "parse file session fail.";
 
-  return std::move(file_session);
+  return file_session;
 }
 
 // dir quota format: ${prefix} kTableFsMeta {fs_id} kMetaFsDirQuota {ino}
@@ -1073,7 +1073,7 @@ std::string MetaCodec::EncodeDirQuotaKey(uint32_t fs_id, Ino ino) {
   key.push_back(kMetaFsDirQuota);
   SerialHelper::WriteULong(ino, key);
 
-  return std::move(key);
+  return key;
 }
 
 void MetaCodec::DecodeDirQuotaKey(const std::string& key, uint32_t& fs_id, Ino& ino) {
@@ -1089,7 +1089,7 @@ QuotaEntry MetaCodec::DecodeDirQuotaValue(const std::string& value) {
   QuotaEntry dir_quota;
   CHECK(dir_quota.ParseFromString(value)) << "parse dir quota fail.";
 
-  return std::move(dir_quota);
+  return dir_quota;
 }
 
 // inode delslice format: ${prefix} kTableFsMeta {fs_id} kMetaFsDelSlice {ino} {chunk_index} {time_ns}
@@ -1120,7 +1120,7 @@ std::string MetaCodec::EncodeDelSliceKey(uint32_t fs_id, Ino ino, uint64_t chunk
   SerialHelper::WriteULong(chunk_index, key);
   SerialHelper::WriteULong(time_ns, key);
 
-  return std::move(key);
+  return key;
 }
 
 void MetaCodec::DecodeDelSliceKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, uint64_t& chunk_index,
@@ -1139,7 +1139,7 @@ TrashSliceList MetaCodec::DecodeDelSliceValue(const std::string& value) {
   TrashSliceList slice_list;
   CHECK(slice_list.ParseFromString(value)) << "parse del slice fail.";
 
-  return std::move(slice_list);
+  return slice_list;
 }
 
 // inode delfile format: ${prefix} kTableFsMeta {fs_id} kMetaFsDelFile {ino}
@@ -1168,7 +1168,7 @@ std::string MetaCodec::EncodeDelFileKey(uint32_t fs_id, Ino ino) {
   key.push_back(kMetaFsDelFile);
   SerialHelper::WriteULong(ino, key);
 
-  return std::move(key);
+  return key;
 }
 
 void MetaCodec::DecodeDelFileKey(const std::string& key, uint32_t& fs_id, Ino& ino) {
@@ -1184,7 +1184,7 @@ AttrEntry MetaCodec::DecodeDelFileValue(const std::string& value) {
   AttrEntry attr;
   CHECK(attr.ParseFromString(value)) << "parse del file attr fail.";
 
-  return std::move(attr);
+  return attr;
 }
 
 // fs stats format: ${prefix} kTableFsStats kMetaFsStats {fs_id} {time_ns}
@@ -1213,7 +1213,7 @@ std::string MetaCodec::EncodeFsStatsKey(uint32_t fs_id, uint64_t time_ns) {
   SerialHelper::WriteInt(fs_id, key);
   SerialHelper::WriteULong(time_ns, key);
 
-  return std::move(key);
+  return key;
 }
 
 void MetaCodec::DecodeFsStatsKey(const std::string& key, uint32_t& fs_id, uint64_t& time_ns) {
@@ -1229,7 +1229,7 @@ FsStatsDataEntry MetaCodec::DecodeFsStatsValue(const std::string& value) {
   FsStatsDataEntry stats;
   CHECK(stats.ParseFromString(value)) << "parse fs stats fail.";
 
-  return std::move(stats);
+  return stats;
 }
 
 bool MetaCodec::IsMetaTableKey(const std::string& key) {

@@ -64,7 +64,7 @@ Status CleanDelSliceTask::CleanDelSlice() {
   // delete data from s3
   std::string slice_id_trace;
   auto trash_slice_list = MetaCodec::DecodeDelSliceValue(value_);
-  for (size_t i = 0; i < trash_slice_list.slices_size(); ++i) {
+  for (int i = 0; i < trash_slice_list.slices_size(); ++i) {
     const auto& slice = trash_slice_list.slices().at(i);
 
     uint64_t chunk_offset = slice.chunk_index() * slice.chunk_size();
@@ -341,6 +341,23 @@ Status GcProcessor::GetClientList(std::set<std::string>& clients) {
   return Status::OK();
 }
 
+bool GcProcessor::HasFileSession(uint32_t fs_id, Ino ino) {
+  Trace trace;
+  bool is_exist = false;
+  ScanFileSessionOperation operation(trace, fs_id, ino, [&](const FileSessionEntry&) -> bool {
+    is_exist = true;
+    return false;
+  });
+
+  auto status = operation_processor_->RunAlone(&operation);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[gc.delslice] scan file session fail, {}.", status.error_str());
+    return true;
+  }
+
+  return is_exist;
+}
+
 void GcProcessor::ScanDelSlice(uint32_t fs_id) {
   Trace trace;
   uint32_t count = 0, exec_count = 0;
@@ -353,6 +370,12 @@ void GcProcessor::ScanDelSlice(uint32_t fs_id) {
     MetaCodec::DecodeDelSliceKey(key, fs_id, ino, chunk_index, time_ns);
     CHECK(fs_id > 0) << "invalid fs id.";
     CHECK(ino > 0) << "invalid ino.";
+
+    // check file session exist
+    if (HasFileSession(fs_id, ino)) {
+      LOG(INFO) << fmt::format("[gc.delslice] exist file session so skip delslice, fs_id({}) ino({}).", fs_id, ino);
+      return true;
+    }
 
     auto block_accessor = GetOrCreateDataAccesser(fs_id);
     if (block_accessor == nullptr) {

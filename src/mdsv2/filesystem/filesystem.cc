@@ -63,18 +63,18 @@ static const std::string kRecyleName = ".recycle";
 DEFINE_uint32(mds_filesystem_name_max_size, 1024, "Max size of filesystem name.");
 DEFINE_uint32(mds_filesystem_hash_bucket_num, 1024, "Filesystem hash bucket num.");
 
-DEFINE_uint32(mds_compact_chunk_threshold_num, 1000000, "Compact chunk threshold num.");
+DEFINE_uint32(mds_compact_chunk_threshold_num, 10, "Compact chunk threshold num.");
 DEFINE_uint32(mds_compact_chunk_interval_ms, 3 * 1000, "Compact chunk interval ms.");
 
-static bool IsReserveNode(Ino ino) { return ino == kRootIno; }
+// static bool IsReserveNode(Ino ino) { return ino == kRootIno; }
 
-static bool IsReserveName(const std::string& name) { return name == kStatsName || name == kRecyleName; }
+// static bool IsReserveName(const std::string& name) { return name == kStatsName || name == kRecyleName; }
 
 static bool IsInvalidName(const std::string& name) {
   return name.empty() || name.size() > FLAGS_mds_filesystem_name_max_size;
 }
 
-FileSystem::FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr ino_id_generator,
+FileSystem::FileSystem(uint64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr ino_id_generator,
                        IdGeneratorSPtr slice_id_generator, KVStorageSPtr kv_storage,
                        OperationProcessorSPtr operation_processor, MDSMetaMapSPtr mds_meta_map,
                        WorkerSetSPtr quota_worker_set, notify::NotifyBuddySPtr notify_buddy)
@@ -154,7 +154,7 @@ Status FileSystem::GenFileIno(Ino& ino) {
   return ret ? Status::OK() : Status(pb::error::EGEN_FSID, "generate inode id fail");
 }
 
-bool FileSystem::CanServe(int64_t self_mds_id) {
+bool FileSystem::CanServe(uint64_t self_mds_id) {
   const auto& partition_policy = fs_info_->GetPartitionPolicy();
   if (partition_policy.type() == pb::mdsv2::PartitionType::MONOLITHIC_PARTITION) {
     return partition_policy.mono().mds_id() == self_mds_id;
@@ -505,7 +505,6 @@ Status FileSystem::CreateRoot() {
   CreateRootOperation operation(trace, dentry, attr);
 
   auto status = RunOperation(&operation);
-  auto& result = operation.GetResult();
   DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] create root finish, status({}).", fs_id_, duration.ElapsedUs(),
                                  status.error_str());
 
@@ -605,7 +604,6 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
   }
 
   auto& trace = ctx.GetTrace();
-  const bool bypass_cache = ctx.IsBypassCache();
   Ino parent = param.parent;
 
   // check request
@@ -734,7 +732,6 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& sess
   }
 
   auto& trace = ctx.GetTrace();
-  const bool bypass_cache = ctx.IsBypassCache();
   const std::string& client_id = ctx.ClientId();
 
   Duration duration;
@@ -830,8 +827,6 @@ Status FileSystem::Release(Context& ctx, Ino ino, const std::string& session_id)
     return status;
   }
 
-  auto& result = operation.GetResult();
-
   DINGO_LOG(INFO) << fmt::format("[fs.{}] release finish, ino({}) session_id({}) status({}).", fs_id_, ino, session_id,
                                  status.error_str());
 
@@ -852,7 +847,6 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
   }
 
   auto& trace = ctx.GetTrace();
-  const bool bypass_cache = ctx.IsBypassCache();
   Ino parent = param.parent;
 
   // check request
@@ -955,7 +949,6 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name) {
   }
 
   auto& trace = ctx.GetTrace();
-  const bool bypass_cache = ctx.IsBypassCache();
 
   PartitionPtr parent_partition;
   auto status = GetPartition(ctx, parent, parent_partition);
@@ -1557,7 +1550,7 @@ void FileSystem::UpdateParentMemo(const std::vector<Ino>& ancestors) {
   }
 }
 
-void FileSystem::NotifyBuddyRefreshFsInfo(std::vector<int64_t> mds_ids, const FsInfoEntry& fs_info) {
+void FileSystem::NotifyBuddyRefreshFsInfo(std::vector<uint64_t> mds_ids, const FsInfoEntry& fs_info) {
   for (auto mds_id : mds_ids) {
     if (mds_id == 0 || mds_id == self_mds_id_) continue;
 
@@ -1607,7 +1600,6 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
   DINGO_LOG(INFO) << fmt::format("fs.{}] rename {}/{} to {}/{}.", fs_id_, old_parent, old_name, new_parent, new_name);
 
   auto& trace = ctx.GetTrace();
-  const bool bypass_cache = ctx.IsBypassCache();
 
   Duration duration;
 
@@ -1651,7 +1643,7 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
   auto& old_dentry = result.old_dentry;
   auto& prev_new_dentry = result.prev_new_dentry;
   auto& prev_new_attr = result.prev_new_attr;
-  auto& new_dentry = result.new_dentry;
+  // auto& new_dentry = result.new_dentry;
   auto& old_attr = result.old_attr;
   bool is_same_parent = result.is_same_parent;
   bool is_exist_new_dentry = result.is_exist_new_dentry;
@@ -1771,7 +1763,7 @@ static uint64_t CalculateDeltaLength(uint64_t length, const std::vector<pb::mdsv
   return temp_length - length;
 }
 
-Status FileSystem::WriteSlice(Context& ctx, Ino parent, Ino ino, uint64_t chunk_index,
+Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, uint64_t chunk_index,
                               const std::vector<pb::mdsv2::Slice>& slices) {
   DINGO_LOG(DEBUG) << fmt::format("[fs.{}] writeslice ino({}), chunk_index({}), slice_list.size({}).", fs_id_, ino,
                                   chunk_index, slices.size());
@@ -1817,8 +1809,9 @@ Status FileSystem::WriteSlice(Context& ctx, Ino parent, Ino ino, uint64_t chunk_
   inode->UpdateIf(attr);
 
   // check whether need to compact chunk
-  if (chunk.slices_size() > FLAGS_mds_compact_chunk_threshold_num &&
-      chunk.last_compaction_time_ms() + FLAGS_mds_compact_chunk_interval_ms < Helper::TimestampMs()) {
+  const uint64_t now_ms = Helper::TimestampMs();
+  if (static_cast<uint32_t>(chunk.slices_size()) > FLAGS_mds_compact_chunk_threshold_num &&
+      chunk.last_compaction_time_ms() + FLAGS_mds_compact_chunk_interval_ms < now_ms) {
     auto fs_info = fs_info_->Get();
     if (CompactChunkOperation::MaybeCompact(fs_info, ino, attr.length(), chunk)) {
       DINGO_LOG(INFO) << fmt::format("[fs.{}] trigger compact chunk({}) for ino({}).", fs_id_, chunk_index, ino);
@@ -2060,7 +2053,6 @@ Status FileSystem::BatchGetInode(Context& ctx, const std::vector<uint64_t>& inoe
   DINGO_LOG(DEBUG) << fmt::format("[fs.{}] batchgetinode inoes({}).", fs_id_, Helper::VectorToString(inoes));
 
   bool bypass_cache = ctx.IsBypassCache();
-  auto& trace = ctx.GetTrace();
 
   out_entries.reserve(inoes.size());
   if (!bypass_cache) {
@@ -2098,7 +2090,6 @@ Status FileSystem::BatchGetXAttr(Context& ctx, const std::vector<uint64_t>& inoe
   DINGO_LOG(DEBUG) << fmt::format("[fs.{}] batchgetxattr inoes({}).", fs_id_, Helper::VectorToString(inoes));
 
   bool bypass_cache = ctx.IsBypassCache();
-  auto& trace = ctx.GetTrace();
 
   auto add_xattr_func = [&out_xattrs](const InodeSPtr& inode) {
     pb::mdsv2::XAttr xattr;
@@ -2230,7 +2221,7 @@ Status FileSystem::JoinMonoFs(Context& ctx, uint64_t mds_id, const std::string& 
     return Status(pb::error::ENOT_SUPPORT, "not support join fs for hash partition");
   }
 
-  int64_t old_mds_id = 0;
+  uint64_t old_mds_id = 0;
   auto handler = [&](PartitionPolicy& partition_policy, FsOpLog& log) -> Status {
     auto* mono = partition_policy.mutable_mono();
     if (mono->mds_id() == mds_id) {
@@ -2266,8 +2257,8 @@ Status FileSystem::JoinMonoFs(Context& ctx, uint64_t mds_id, const std::string& 
   return Status::OK();
 }
 
-static std::vector<int64_t> GetMdsIdFromHashPartitioin(const pb::mdsv2::HashPartition& hash) {
-  std::vector<int64_t> mds_ids;
+static std::vector<uint64_t> GetMdsIdFromHashPartitioin(const pb::mdsv2::HashPartition& hash) {
+  std::vector<uint64_t> mds_ids;
   mds_ids.reserve(hash.distributions_size());
   for (const auto& [mds_id, _] : hash.distributions()) {
     mds_ids.push_back(mds_id);
@@ -2326,10 +2317,10 @@ static void DistributeByMean(const std::vector<uint64_t>& mds_ids, pb::mdsv2::Ha
   std::vector<uint64_t> pending_bucket_ids;
   pending_bucket_ids.reserve(mean_num * mds_ids.size());
   for (auto& [_, bucket_set] : *hash.mutable_distributions()) {
-    for (uint32_t i = mean_num; i < bucket_set.bucket_ids_size(); ++i) {
+    for (int i = mean_num; i < bucket_set.bucket_ids_size(); ++i) {
       pending_bucket_ids.push_back(bucket_set.bucket_ids(i));
     }
-    if (bucket_set.bucket_ids_size() > mean_num) {
+    if (static_cast<uint32_t>(bucket_set.bucket_ids_size()) > mean_num) {
       bucket_set.mutable_bucket_ids()->Resize(mean_num, 0);
     }
   }
@@ -2339,7 +2330,7 @@ static void DistributeByMean(const std::vector<uint64_t>& mds_ids, pb::mdsv2::Ha
     BucketSetEntry bucket_set;
     while (pending_offset < pending_bucket_ids.size()) {
       bucket_set.add_bucket_ids(pending_bucket_ids[pending_offset++]);
-      if ((i + 1) < mds_ids.size() && bucket_set.bucket_ids_size() >= mean_num) break;
+      if ((i + 1) < mds_ids.size() && static_cast<uint32_t>(bucket_set.bucket_ids_size()) >= mean_num) break;
     }
 
     // sort bucket id
@@ -2364,7 +2355,7 @@ Status FileSystem::JoinHashFs(Context& ctx, const std::vector<uint64_t>& mds_ids
     return false;
   };
 
-  std::vector<int64_t> old_mds_ids;
+  std::vector<uint64_t> old_mds_ids;
   auto handler = [&](PartitionPolicy& partition_policy, FsOpLog& log) -> Status {
     auto* hash = partition_policy.mutable_parent_hash();
 
@@ -2455,7 +2446,7 @@ Status FileSystem::QuitFs(Context& ctx, const std::vector<uint64_t>& mds_ids, co
     return true;
   };
 
-  std::vector<int64_t> old_mds_ids;
+  std::vector<uint64_t> old_mds_ids;
   auto handler = [&](PartitionPolicy& partition_policy, FsOpLog& log) -> Status {
     auto* hash = partition_policy.mutable_parent_hash();
 
@@ -2524,7 +2515,7 @@ Status FileSystem::QuitAndJoinFs(Context& ctx, const std::vector<uint64_t>& quit
     return false;
   };
 
-  std::vector<int64_t> old_mds_ids;
+  std::vector<uint64_t> old_mds_ids;
   auto handler = [&](PartitionPolicy& partition_policy, FsOpLog& log) -> Status {
     auto* hash = partition_policy.mutable_parent_hash();
 

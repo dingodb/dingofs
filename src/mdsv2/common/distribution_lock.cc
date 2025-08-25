@@ -195,9 +195,10 @@ Status CoorDistributionLock::CheckLock(std::string& watch_key, int64_t& watch_re
   }
 
   // sort by mod_revision
-  std::sort(kvs.begin(), kvs.end(), [](const CoordinatorClient::KVWithExt& a, const CoordinatorClient::KVWithExt& b) {
-    return a.mod_revision < b.mod_revision;
-  });
+  std::sort(kvs.begin(), kvs.end(),  // NOLINT
+            [](const CoordinatorClient::KVWithExt& a, const CoordinatorClient::KVWithExt& b) {
+              return a.mod_revision < b.mod_revision;
+            });
 
   // debug log
   for (auto& kv : kvs) {
@@ -207,7 +208,7 @@ Status CoorDistributionLock::CheckLock(std::string& watch_key, int64_t& watch_re
 
   std::string lock_key = LockKey();
   size_t index = 0;
-  for (int i = 0; i < kvs.size(); ++i) {
+  for (uint32_t i = 0; i < kvs.size(); ++i) {
     auto& kv = kvs[i];
     if (kv.kv.key == lock_key) {
       index = i;
@@ -424,7 +425,7 @@ Status StoreDistributionLock::RenewLease() {
   std::string state;
   int64_t owner_mds_id = 0;
   Status status;
-  int retry = 0;
+  uint32_t retry = 0;
   do {
     auto txn = kv_storage_->NewTxn();
 

@@ -42,7 +42,7 @@ DEFINE_uint32(mds_monitor_client_clean_period_time_s, 600, "client clean period 
 
 static void GetOfflineMDS(const std::vector<MDSMeta>& mdses, std::vector<MDSMeta>& online_mdses,
                           std::vector<MDSMeta>& offline_mdses) {
-  int64_t now_ms = Helper::TimestampMs();
+  uint64_t now_ms = Helper::TimestampMs();
 
   for (const auto& mds : mdses) {
     // DINGO_LOG(INFO) << fmt::format("[monitor] mds: {}, last online time: {}, now: {}, offline period: {}", mds.ID(),
@@ -55,7 +55,7 @@ static void GetOfflineMDS(const std::vector<MDSMeta>& mdses, std::vector<MDSMeta
   }
 }
 
-static bool IsOfflineMDS(const std::vector<MDSMeta>& offline_mdses, int64_t mds_id) {
+static bool IsOfflineMDS(const std::vector<MDSMeta>& offline_mdses, uint64_t mds_id) {
   for (const auto& offline_mds : offline_mdses) {
     if (mds_id == offline_mds.ID()) {
       return true;
@@ -109,7 +109,7 @@ static std::map<uint64_t, BucketSetEntry> AdjustParentHashDistribution(
 
   std::vector<int64_t> pending_bucket_set;
   for (auto it = new_distributions.begin(); it != new_distributions.end();) {
-    int64_t mds_id = it->first;
+    uint64_t mds_id = it->first;
     const auto& bucket_set = it->second;
     if (IsOfflineMDS(offline_mdses, mds_id)) {
       pending_bucket_set.insert(pending_bucket_set.end(), bucket_set.bucket_ids().begin(),

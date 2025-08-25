@@ -109,10 +109,8 @@ void MDSServiceImpl::Destroy() {
 
 FileSystemSPtr MDSServiceImpl::GetFileSystem(uint32_t fs_id) { return file_system_set_->GetFileSystem(fs_id); }
 
-void MDSServiceImpl::DoHeartbeat(google::protobuf::RpcController* controller,
-                                 const pb::mdsv2::HeartbeatRequest* request, pb::mdsv2::HeartbeatResponse* response,
-                                 TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
+void MDSServiceImpl::DoHeartbeat(google::protobuf::RpcController*, const pb::mdsv2::HeartbeatRequest* request,
+                                 pb::mdsv2::HeartbeatResponse* response, TraceClosure* done) {
   brpc::ClosureGuard done_guard(done);
 
   auto heartbeat = Server::GetInstance().GetHeartbeat();
@@ -160,9 +158,8 @@ void MDSServiceImpl::Heartbeat(google::protobuf::RpcController* controller, cons
   }
 }
 
-void MDSServiceImpl::DoGetMDSList(google::protobuf::RpcController* controller, const pb::mdsv2::GetMDSListRequest*,
+void MDSServiceImpl::DoGetMDSList(google::protobuf::RpcController*, const pb::mdsv2::GetMDSListRequest*,
                                   pb::mdsv2::GetMDSListResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
 
   auto heartbeat = Server::GetInstance().GetHeartbeat();
@@ -198,9 +195,8 @@ void MDSServiceImpl::GetMDSList(google::protobuf::RpcController* controller,
   }
 }
 
-void MDSServiceImpl::DoCreateFs(google::protobuf::RpcController* controller, const pb::mdsv2::CreateFsRequest* request,
+void MDSServiceImpl::DoCreateFs(google::protobuf::RpcController*, const pb::mdsv2::CreateFsRequest* request,
                                 pb::mdsv2::CreateFsResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
 
   auto& mds_meta = Server::GetInstance().GetMDSMeta();
@@ -267,9 +263,8 @@ void MDSServiceImpl::CreateFs(google::protobuf::RpcController* controller, const
   }
 }
 
-void MDSServiceImpl::DoMountFs(google::protobuf::RpcController* controller, const pb::mdsv2::MountFsRequest* request,
+void MDSServiceImpl::DoMountFs(google::protobuf::RpcController*, const pb::mdsv2::MountFsRequest* request,
                                pb::mdsv2::MountFsResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
 
   Context ctx;
@@ -321,9 +316,8 @@ void MDSServiceImpl::MountFs(google::protobuf::RpcController* controller, const 
   }
 }
 
-void MDSServiceImpl::DoUmountFs(google::protobuf::RpcController* controller, const pb::mdsv2::UmountFsRequest* request,
+void MDSServiceImpl::DoUmountFs(google::protobuf::RpcController*, const pb::mdsv2::UmountFsRequest* request,
                                 pb::mdsv2::UmountFsResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
 
   Context ctx;
@@ -369,9 +363,8 @@ void MDSServiceImpl::UmountFs(google::protobuf::RpcController* controller, const
   }
 }
 
-void MDSServiceImpl::DoDeleteFs(google::protobuf::RpcController* controller, const pb::mdsv2::DeleteFsRequest* request,
+void MDSServiceImpl::DoDeleteFs(google::protobuf::RpcController*, const pb::mdsv2::DeleteFsRequest* request,
                                 pb::mdsv2::DeleteFsResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
 
   Context ctx;
@@ -413,10 +406,8 @@ void MDSServiceImpl::DeleteFs(google::protobuf::RpcController* controller, const
   }
 }
 
-void MDSServiceImpl::DoGetFsInfo(google::protobuf::RpcController* controller,
-                                 const pb::mdsv2::GetFsInfoRequest* request, pb::mdsv2::GetFsInfoResponse* response,
-                                 TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
+void MDSServiceImpl::DoGetFsInfo(google::protobuf::RpcController*, const pb::mdsv2::GetFsInfoRequest* request,
+                                 pb::mdsv2::GetFsInfoResponse* response, TraceClosure* done) {
   brpc::ClosureGuard done_guard(done);
 
   std::string fs_name = request->fs_name();
@@ -471,9 +462,8 @@ void MDSServiceImpl::GetFsInfo(google::protobuf::RpcController* controller, cons
   }
 }
 
-void MDSServiceImpl::DoListFsInfo(google::protobuf::RpcController* controller, const pb::mdsv2::ListFsInfoRequest*,
+void MDSServiceImpl::DoListFsInfo(google::protobuf::RpcController*, const pb::mdsv2::ListFsInfoRequest*,
                                   pb::mdsv2::ListFsInfoResponse* response, google::protobuf::Closure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
 
   Context ctx;
@@ -504,10 +494,8 @@ void MDSServiceImpl::ListFsInfo(google::protobuf::RpcController* controller,
   }
 }
 
-void MDSServiceImpl::DoUpdateFsInfo(google::protobuf::RpcController* controller,
-                                    const pb::mdsv2::UpdateFsInfoRequest* request,
+void MDSServiceImpl::DoUpdateFsInfo(google::protobuf::RpcController*, const pb::mdsv2::UpdateFsInfoRequest* request,
                                     pb::mdsv2::UpdateFsInfoResponse* response, google::protobuf::Closure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
 
   if (request->fs_name().empty()) {
@@ -539,10 +527,8 @@ void MDSServiceImpl::UpdateFsInfo(google::protobuf::RpcController* controller,
   }
 }
 
-void MDSServiceImpl::DoGetDentry(google::protobuf::RpcController* controller,
-                                 const pb::mdsv2::GetDentryRequest* request, pb::mdsv2::GetDentryResponse* response,
-                                 google::protobuf::Closure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
+void MDSServiceImpl::DoGetDentry(google::protobuf::RpcController*, const pb::mdsv2::GetDentryRequest* request,
+                                 pb::mdsv2::GetDentryResponse* response, google::protobuf::Closure* done) {
   brpc::ClosureGuard done_guard(done);
 
   auto file_system = GetFileSystem(request->fs_id());
@@ -580,10 +566,8 @@ void MDSServiceImpl::GetDentry(google::protobuf::RpcController* controller, cons
   }
 }
 
-void MDSServiceImpl::DoListDentry(google::protobuf::RpcController* controller,
-                                  const pb::mdsv2::ListDentryRequest* request, pb::mdsv2::ListDentryResponse* response,
-                                  google::protobuf::Closure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
+void MDSServiceImpl::DoListDentry(google::protobuf::RpcController*, const pb::mdsv2::ListDentryRequest* request,
+                                  pb::mdsv2::ListDentryResponse* response, google::protobuf::Closure* done) {
   brpc::ClosureGuard done_guard(done);
 
   auto file_system = GetFileSystem(request->fs_id());
@@ -643,9 +627,8 @@ void MDSServiceImpl::ListDentry(google::protobuf::RpcController* controller,
   }
 }
 
-void MDSServiceImpl::DoGetInode(google::protobuf::RpcController* controller, const pb::mdsv2::GetInodeRequest* request,
+void MDSServiceImpl::DoGetInode(google::protobuf::RpcController*, const pb::mdsv2::GetInodeRequest* request,
                                 pb::mdsv2::GetInodeResponse* response, google::protobuf::Closure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
 
   auto file_system = GetFileSystem(request->fs_id());
@@ -683,10 +666,8 @@ void MDSServiceImpl::GetInode(google::protobuf::RpcController* controller, const
   }
 }
 
-void MDSServiceImpl::DoBatchGetInode(google::protobuf::RpcController* controller,
-                                     const pb::mdsv2::BatchGetInodeRequest* request,
+void MDSServiceImpl::DoBatchGetInode(google::protobuf::RpcController*, const pb::mdsv2::BatchGetInodeRequest* request,
                                      pb::mdsv2::BatchGetInodeResponse* response, google::protobuf::Closure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
 
   auto file_system = GetFileSystem(request->fs_id());
@@ -726,10 +707,8 @@ void MDSServiceImpl::BatchGetInode(google::protobuf::RpcController* controller,
   }
 }
 
-void MDSServiceImpl::DoBatchGetXAttr(google::protobuf::RpcController* controller,
-                                     const pb::mdsv2::BatchGetXAttrRequest* request,
+void MDSServiceImpl::DoBatchGetXAttr(google::protobuf::RpcController*, const pb::mdsv2::BatchGetXAttrRequest* request,
                                      pb::mdsv2::BatchGetXAttrResponse* response, google::protobuf::Closure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
 
   auto file_system = GetFileSystem(request->fs_id());
@@ -772,7 +751,6 @@ void MDSServiceImpl::BatchGetXAttr(google::protobuf::RpcController* controller,
 // high level interface
 void MDSServiceImpl::DoLookup(google::protobuf::RpcController* controller, const pb::mdsv2::LookupRequest* request,
                               pb::mdsv2::LookupResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -815,9 +793,8 @@ void MDSServiceImpl::Lookup(google::protobuf::RpcController* controller, const p
   }
 }
 
-void MDSServiceImpl::DoMkNod(google::protobuf::RpcController* controller, const pb::mdsv2::MkNodRequest* request,
+void MDSServiceImpl::DoMkNod(google::protobuf::RpcController*, const pb::mdsv2::MkNodRequest* request,
                              pb::mdsv2::MkNodResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -870,9 +847,8 @@ void MDSServiceImpl::MkNod(google::protobuf::RpcController* controller, const pb
   }
 }
 
-void MDSServiceImpl::DoMkDir(google::protobuf::RpcController* controller, const pb::mdsv2::MkDirRequest* request,
+void MDSServiceImpl::DoMkDir(google::protobuf::RpcController*, const pb::mdsv2::MkDirRequest* request,
                              pb::mdsv2::MkDirResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -925,9 +901,8 @@ void MDSServiceImpl::MkDir(google::protobuf::RpcController* controller, const pb
   }
 }
 
-void MDSServiceImpl::DoRmDir(google::protobuf::RpcController* controller, const pb::mdsv2::RmDirRequest* request,
+void MDSServiceImpl::DoRmDir(google::protobuf::RpcController*, const pb::mdsv2::RmDirRequest* request,
                              pb::mdsv2::RmDirResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -967,9 +942,8 @@ void MDSServiceImpl::RmDir(google::protobuf::RpcController* controller, const pb
   }
 }
 
-void MDSServiceImpl::DoReadDir(google::protobuf::RpcController* controller, const pb::mdsv2::ReadDirRequest* request,
+void MDSServiceImpl::DoReadDir(google::protobuf::RpcController*, const pb::mdsv2::ReadDirRequest* request,
                                pb::mdsv2::ReadDirResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -1020,9 +994,8 @@ void MDSServiceImpl::ReadDir(google::protobuf::RpcController* controller, const 
   }
 }
 
-void MDSServiceImpl::DoOpen(google::protobuf::RpcController* controller, const pb::mdsv2::OpenRequest* request,
+void MDSServiceImpl::DoOpen(google::protobuf::RpcController*, const pb::mdsv2::OpenRequest* request,
                             pb::mdsv2::OpenResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -1069,9 +1042,8 @@ void MDSServiceImpl::Open(google::protobuf::RpcController* controller, const pb:
   }
 }
 
-void MDSServiceImpl::DoRelease(google::protobuf::RpcController* controller, const pb::mdsv2::ReleaseRequest* request,
+void MDSServiceImpl::DoRelease(google::protobuf::RpcController*, const pb::mdsv2::ReleaseRequest* request,
                                pb::mdsv2::ReleaseResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -1111,9 +1083,8 @@ void MDSServiceImpl::Release(google::protobuf::RpcController* controller, const 
   }
 }
 
-void MDSServiceImpl::DoLink(google::protobuf::RpcController* controller, const pb::mdsv2::LinkRequest* request,
+void MDSServiceImpl::DoLink(google::protobuf::RpcController*, const pb::mdsv2::LinkRequest* request,
                             pb::mdsv2::LinkResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -1158,9 +1129,8 @@ void MDSServiceImpl::Link(google::protobuf::RpcController* controller, const pb:
   }
 }
 
-void MDSServiceImpl::DoUnLink(google::protobuf::RpcController* controller, const pb::mdsv2::UnLinkRequest* request,
+void MDSServiceImpl::DoUnLink(google::protobuf::RpcController*, const pb::mdsv2::UnLinkRequest* request,
                               pb::mdsv2::UnLinkResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -1201,9 +1171,8 @@ void MDSServiceImpl::UnLink(google::protobuf::RpcController* controller, const p
   }
 }
 
-void MDSServiceImpl::DoSymlink(google::protobuf::RpcController* controller, const pb::mdsv2::SymlinkRequest* request,
+void MDSServiceImpl::DoSymlink(google::protobuf::RpcController*, const pb::mdsv2::SymlinkRequest* request,
                                pb::mdsv2::SymlinkResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -1249,9 +1218,8 @@ void MDSServiceImpl::Symlink(google::protobuf::RpcController* controller, const 
   }
 }
 
-void MDSServiceImpl::DoReadLink(google::protobuf::RpcController* controller, const pb::mdsv2::ReadLinkRequest* request,
+void MDSServiceImpl::DoReadLink(google::protobuf::RpcController*, const pb::mdsv2::ReadLinkRequest* request,
                                 pb::mdsv2::ReadLinkResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -1294,9 +1262,8 @@ void MDSServiceImpl::ReadLink(google::protobuf::RpcController* controller, const
   }
 }
 
-void MDSServiceImpl::DoGetAttr(google::protobuf::RpcController* controller, const pb::mdsv2::GetAttrRequest* request,
+void MDSServiceImpl::DoGetAttr(google::protobuf::RpcController*, const pb::mdsv2::GetAttrRequest* request,
                                pb::mdsv2::GetAttrResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -1357,9 +1324,8 @@ void MDSServiceImpl::GetAttr(google::protobuf::RpcController* controller, const 
   }
 }
 
-void MDSServiceImpl::DoSetAttr(google::protobuf::RpcController* controller, const pb::mdsv2::SetAttrRequest* request,
+void MDSServiceImpl::DoSetAttr(google::protobuf::RpcController*, const pb::mdsv2::SetAttrRequest* request,
                                pb::mdsv2::SetAttrResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -1433,9 +1399,8 @@ void MDSServiceImpl::SetAttr(google::protobuf::RpcController* controller, const 
   }
 }
 
-void MDSServiceImpl::DoGetXAttr(google::protobuf::RpcController* controller, const pb::mdsv2::GetXAttrRequest* request,
+void MDSServiceImpl::DoGetXAttr(google::protobuf::RpcController*, const pb::mdsv2::GetXAttrRequest* request,
                                 pb::mdsv2::GetXAttrResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -1499,9 +1464,8 @@ void MDSServiceImpl::GetXAttr(google::protobuf::RpcController* controller, const
   }
 }
 
-void MDSServiceImpl::DoSetXAttr(google::protobuf::RpcController* controller, const pb::mdsv2::SetXAttrRequest* request,
+void MDSServiceImpl::DoSetXAttr(google::protobuf::RpcController*, const pb::mdsv2::SetXAttrRequest* request,
                                 pb::mdsv2::SetXAttrResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -1565,10 +1529,8 @@ void MDSServiceImpl::SetXAttr(google::protobuf::RpcController* controller, const
   }
 }
 
-void MDSServiceImpl::DoRemoveXAttr(google::protobuf::RpcController* controller,
-                                   const pb::mdsv2::RemoveXAttrRequest* request,
+void MDSServiceImpl::DoRemoveXAttr(google::protobuf::RpcController*, const pb::mdsv2::RemoveXAttrRequest* request,
                                    pb::mdsv2::RemoveXAttrResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -1633,10 +1595,8 @@ void MDSServiceImpl::RemoveXAttr(google::protobuf::RpcController* controller,
   }
 }
 
-void MDSServiceImpl::DoListXAttr(google::protobuf::RpcController* controller,
-                                 const pb::mdsv2::ListXAttrRequest* request, pb::mdsv2::ListXAttrResponse* response,
-                                 TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
+void MDSServiceImpl::DoListXAttr(google::protobuf::RpcController*, const pb::mdsv2::ListXAttrRequest* request,
+                                 pb::mdsv2::ListXAttrResponse* response, TraceClosure* done) {
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -1679,9 +1639,8 @@ void MDSServiceImpl::ListXAttr(google::protobuf::RpcController* controller, cons
   }
 }
 
-void MDSServiceImpl::DoRename(google::protobuf::RpcController* controller, const pb::mdsv2::RenameRequest* request,
+void MDSServiceImpl::DoRename(google::protobuf::RpcController*, const pb::mdsv2::RenameRequest* request,
                               pb::mdsv2::RenameResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -1728,10 +1687,8 @@ void MDSServiceImpl::Rename(google::protobuf::RpcController* controller, const p
   }
 }
 
-void MDSServiceImpl::DoAllocSliceId(google::protobuf::RpcController* controller,
-                                    const pb::mdsv2::AllocSliceIdRequest* request,
+void MDSServiceImpl::DoAllocSliceId(google::protobuf::RpcController*, const pb::mdsv2::AllocSliceIdRequest* request,
                                     pb::mdsv2::AllocSliceIdResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -1766,10 +1723,8 @@ void MDSServiceImpl::AllocSliceId(google::protobuf::RpcController* controller,
   }
 }
 
-void MDSServiceImpl::DoWriteSlice(google::protobuf::RpcController* controller,
-                                  const pb::mdsv2::WriteSliceRequest* request, pb::mdsv2::WriteSliceResponse* response,
-                                  TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
+void MDSServiceImpl::DoWriteSlice(google::protobuf::RpcController*, const pb::mdsv2::WriteSliceRequest* request,
+                                  pb::mdsv2::WriteSliceResponse* response, TraceClosure* done) {
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -1836,10 +1791,8 @@ void MDSServiceImpl::WriteSlice(google::protobuf::RpcController* controller,
   }
 }
 
-void MDSServiceImpl::DoReadSlice(google::protobuf::RpcController* controller,
-                                 const pb::mdsv2::ReadSliceRequest* request, pb::mdsv2::ReadSliceResponse* response,
-                                 TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
+void MDSServiceImpl::DoReadSlice(google::protobuf::RpcController*, const pb::mdsv2::ReadSliceRequest* request,
+                                 pb::mdsv2::ReadSliceResponse* response, TraceClosure* done) {
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -1903,10 +1856,8 @@ void MDSServiceImpl::ReadSlice(google::protobuf::RpcController* controller, cons
   }
 }
 
-void MDSServiceImpl::DoFallocate(google::protobuf::RpcController* controller,
-                                 const pb::mdsv2::FallocateRequest* request, pb::mdsv2::FallocateResponse* response,
-                                 TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
+void MDSServiceImpl::DoFallocate(google::protobuf::RpcController*, const pb::mdsv2::FallocateRequest* request,
+                                 pb::mdsv2::FallocateResponse* response, TraceClosure* done) {
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -1967,10 +1918,8 @@ void MDSServiceImpl::Fallocate(google::protobuf::RpcController* controller, cons
   }
 }
 
-void MDSServiceImpl::DoCompactChunk(google::protobuf::RpcController* controller,
-                                    const pb::mdsv2::CompactChunkRequest* request,
+void MDSServiceImpl::DoCompactChunk(google::protobuf::RpcController*, const pb::mdsv2::CompactChunkRequest* request,
                                     pb::mdsv2::CompactChunkResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -2026,10 +1975,9 @@ void MDSServiceImpl::CompactChunk(google::protobuf::RpcController* controller,
   }
 }
 
-void MDSServiceImpl::DoCleanTrashSlice(google::protobuf::RpcController* controller,
+void MDSServiceImpl::DoCleanTrashSlice(google::protobuf::RpcController*,
                                        const pb::mdsv2::CleanTrashSliceRequest* request,
                                        pb::mdsv2::CleanTrashSliceResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -2080,10 +2028,8 @@ void MDSServiceImpl::CleanTrashSlice(google::protobuf::RpcController* controller
   }
 }
 
-void MDSServiceImpl::DoCleanDelFile(google::protobuf::RpcController* controller,
-                                    const pb::mdsv2::CleanDelFileRequest* request,
+void MDSServiceImpl::DoCleanDelFile(google::protobuf::RpcController*, const pb::mdsv2::CleanDelFileRequest* request,
                                     pb::mdsv2::CleanDelFileResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -2133,10 +2079,8 @@ void MDSServiceImpl::CleanDelFile(google::protobuf::RpcController* controller,
   }
 }
 
-void MDSServiceImpl::DoSetFsQuota(google::protobuf::RpcController* controller,
-                                  const pb::mdsv2::SetFsQuotaRequest* request, pb::mdsv2::SetFsQuotaResponse* response,
-                                  TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
+void MDSServiceImpl::DoSetFsQuota(google::protobuf::RpcController*, const pb::mdsv2::SetFsQuotaRequest* request,
+                                  pb::mdsv2::SetFsQuotaResponse* response, TraceClosure* done) {
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -2174,10 +2118,8 @@ void MDSServiceImpl::SetFsQuota(google::protobuf::RpcController* controller,
   }
 }
 
-void MDSServiceImpl::DoGetFsQuota(google::protobuf::RpcController* controller,
-                                  const pb::mdsv2::GetFsQuotaRequest* request, pb::mdsv2::GetFsQuotaResponse* response,
-                                  TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
+void MDSServiceImpl::DoGetFsQuota(google::protobuf::RpcController*, const pb::mdsv2::GetFsQuotaRequest* request,
+                                  pb::mdsv2::GetFsQuotaResponse* response, TraceClosure* done) {
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -2217,10 +2159,8 @@ void MDSServiceImpl::GetFsQuota(google::protobuf::RpcController* controller,
   }
 }
 
-void MDSServiceImpl::DoSetDirQuota(google::protobuf::RpcController* controller,
-                                   const pb::mdsv2::SetDirQuotaRequest* request,
+void MDSServiceImpl::DoSetDirQuota(google::protobuf::RpcController*, const pb::mdsv2::SetDirQuotaRequest* request,
                                    pb::mdsv2::SetDirQuotaResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -2257,10 +2197,8 @@ void MDSServiceImpl::SetDirQuota(google::protobuf::RpcController* controller,
   }
 }
 
-void MDSServiceImpl::DoGetDirQuota(google::protobuf::RpcController* controller,
-                                   const pb::mdsv2::GetDirQuotaRequest* request,
+void MDSServiceImpl::DoGetDirQuota(google::protobuf::RpcController*, const pb::mdsv2::GetDirQuotaRequest* request,
                                    pb::mdsv2::GetDirQuotaResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -2300,10 +2238,8 @@ void MDSServiceImpl::GetDirQuota(google::protobuf::RpcController* controller,
   }
 }
 
-void MDSServiceImpl::DoDeleteDirQuota(google::protobuf::RpcController* controller,
-                                      const pb::mdsv2::DeleteDirQuotaRequest* request,
+void MDSServiceImpl::DoDeleteDirQuota(google::protobuf::RpcController*, const pb::mdsv2::DeleteDirQuotaRequest* request,
                                       pb::mdsv2::DeleteDirQuotaResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -2340,10 +2276,8 @@ void MDSServiceImpl::DeleteDirQuota(google::protobuf::RpcController* controller,
   }
 }
 
-void MDSServiceImpl::DoLoadDirQuotas(google::protobuf::RpcController* controller,
-                                     const pb::mdsv2::LoadDirQuotasRequest* request,
+void MDSServiceImpl::DoLoadDirQuotas(google::protobuf::RpcController*, const pb::mdsv2::LoadDirQuotasRequest* request,
                                      pb::mdsv2::LoadDirQuotasResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -2385,10 +2319,8 @@ void MDSServiceImpl::LoadDirQuotas(google::protobuf::RpcController* controller,
   }
 }
 
-void MDSServiceImpl::DoSetFsStats(google::protobuf::RpcController* controller,
-                                  const pb::mdsv2::SetFsStatsRequest* request, pb::mdsv2::SetFsStatsResponse* response,
-                                  TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
+void MDSServiceImpl::DoSetFsStats(google::protobuf::RpcController*, const pb::mdsv2::SetFsStatsRequest* request,
+                                  pb::mdsv2::SetFsStatsResponse* response, TraceClosure* done) {
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -2422,10 +2354,8 @@ void MDSServiceImpl::SetFsStats(google::protobuf::RpcController* controller,
   }
 }
 
-void MDSServiceImpl::DoGetFsStats(google::protobuf::RpcController* controller,
-                                  const pb::mdsv2::GetFsStatsRequest* request, pb::mdsv2::GetFsStatsResponse* response,
-                                  TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
+void MDSServiceImpl::DoGetFsStats(google::protobuf::RpcController*, const pb::mdsv2::GetFsStatsRequest* request,
+                                  pb::mdsv2::GetFsStatsResponse* response, TraceClosure* done) {
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -2462,10 +2392,9 @@ void MDSServiceImpl::GetFsStats(google::protobuf::RpcController* controller,
   }
 }
 
-void MDSServiceImpl::DoGetFsPerSecondStats(google::protobuf::RpcController* controller,
+void MDSServiceImpl::DoGetFsPerSecondStats(google::protobuf::RpcController*,
                                            const pb::mdsv2::GetFsPerSecondStatsRequest* request,
                                            pb::mdsv2::GetFsPerSecondStatsResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -2510,14 +2439,12 @@ void MDSServiceImpl::CheckAlive(google::protobuf::RpcController* controller,
                                 const pb::mdsv2::CheckAliveRequest* request, pb::mdsv2::CheckAliveResponse* response,
                                 google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
-  brpc::Controller* cntl = (brpc::Controller*)controller;
+
   brpc::ClosureGuard done_guard(svr_done);
 }
 
-void MDSServiceImpl::DoNotifyBuddy(google::protobuf::RpcController* controller,
-                                   const pb::mdsv2::NotifyBuddyRequest* request,
+void MDSServiceImpl::DoNotifyBuddy(google::protobuf::RpcController*, const pb::mdsv2::NotifyBuddyRequest* request,
                                    pb::mdsv2::NotifyBuddyResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -2577,7 +2504,7 @@ void MDSServiceImpl::NotifyBuddy(google::protobuf::RpcController* controller,
 void MDSServiceImpl::JoinFs(google::protobuf::RpcController* controller, const pb::mdsv2::JoinFsRequest* request,
                             pb::mdsv2::JoinFsResponse* response, google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
-  brpc::Controller* cntl = (brpc::Controller*)controller;
+
   brpc::ClosureGuard done_guard(svr_done);
 
   if (request->fs_name().empty() && request->fs_id() == 0) {
@@ -2605,7 +2532,7 @@ void MDSServiceImpl::JoinFs(google::protobuf::RpcController* controller, const p
 void MDSServiceImpl::QuitFs(google::protobuf::RpcController* controller, const pb::mdsv2::QuitFsRequest* request,
                             pb::mdsv2::QuitFsResponse* response, google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
-  brpc::Controller* cntl = (brpc::Controller*)controller;
+
   brpc::ClosureGuard done_guard(svr_done);
 
   if (request->fs_name().empty() && request->fs_id() == 0) {
@@ -2630,10 +2557,10 @@ void MDSServiceImpl::QuitFs(google::protobuf::RpcController* controller, const p
   }
 }
 
-void MDSServiceImpl::StopMds(google::protobuf::RpcController* controller, const pb::mdsv2::StopMdsRequest* request,
+void MDSServiceImpl::StopMds(google::protobuf::RpcController*, const pb::mdsv2::StopMdsRequest* request,
                              pb::mdsv2::StopMdsResponse* response, google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
-  brpc::Controller* cntl = (brpc::Controller*)controller;
+
   brpc::ClosureGuard done_guard(svr_done);
 }
 
@@ -2845,7 +2772,6 @@ void MDSServiceImpl::DeleteMember(google::protobuf::RpcController* controller,
 void MDSServiceImpl::DoJoinCacheGroup(google::protobuf::RpcController* controller,
                                       const pb::mdsv2::JoinCacheGroupRequest* request,
                                       pb::mdsv2::JoinCacheGroupResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -2862,7 +2788,6 @@ void MDSServiceImpl::DoJoinCacheGroup(google::protobuf::RpcController* controlle
 void MDSServiceImpl::DoLeaveCacheGroup(google::protobuf::RpcController* controller,
                                        const pb::mdsv2::LeaveCacheGroupRequest* request,
                                        pb::mdsv2::LeaveCacheGroupResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -2878,7 +2803,6 @@ void MDSServiceImpl::DoLeaveCacheGroup(google::protobuf::RpcController* controll
 void MDSServiceImpl::DoListGroups(google::protobuf::RpcController* controller,
                                   const pb::mdsv2::ListGroupsRequest* request, pb::mdsv2::ListGroupsResponse* response,
                                   TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -2895,7 +2819,6 @@ void MDSServiceImpl::DoListGroups(google::protobuf::RpcController* controller,
 void MDSServiceImpl::DoReweightMember(google::protobuf::RpcController* controller,
                                       const pb::mdsv2::ReweightMemberRequest* request,
                                       pb::mdsv2::ReweightMemberResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -2911,7 +2834,6 @@ void MDSServiceImpl::DoReweightMember(google::protobuf::RpcController* controlle
 void MDSServiceImpl::DoListMembers(google::protobuf::RpcController* controller,
                                    const pb::mdsv2::ListMembersRequest* request,
                                    pb::mdsv2::ListMembersResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -2928,7 +2850,6 @@ void MDSServiceImpl::DoListMembers(google::protobuf::RpcController* controller,
 void MDSServiceImpl::DoUnlockMember(google::protobuf::RpcController* controller,
                                     const pb::mdsv2::UnLockMemberRequest* request,
                                     pb::mdsv2::UnLockMemberResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
@@ -2943,7 +2864,6 @@ void MDSServiceImpl::DoUnlockMember(google::protobuf::RpcController* controller,
 void MDSServiceImpl::DoDeleteMember(google::protobuf::RpcController* controller,
                                     const pb::mdsv2::DeleteMemberRequest* request,
                                     pb::mdsv2::DeleteMemberResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 

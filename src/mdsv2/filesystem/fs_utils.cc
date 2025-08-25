@@ -58,19 +58,6 @@ static void FreeMap(std::multimap<uint64_t, FsTreeNode*>& node_map) {
   }
 }
 
-static Status GetFsInfo(KVStorageSPtr kv_storage, const std::string& fs_name, pb::mdsv2::FsInfo& fs_info) {
-  std::string fs_key = MetaCodec::EncodeFsKey(fs_name);
-  std::string value;
-  Status status = kv_storage->Get(fs_key, value);
-  if (!status.ok()) {
-    return Status(pb::error::ENOT_FOUND, fmt::format("not found fs({}), {}.", fs_name, status.error_str()));
-  }
-
-  fs_info = MetaCodec::DecodeFsValue(value);
-
-  return Status::OK();
-}
-
 static FsTreeNode* GenFsTreeStruct(OperationProcessorSPtr operation_processor, uint32_t fs_id,
                                    std::multimap<uint64_t, FsTreeNode*>& node_map) {
   uint64_t count = 0;

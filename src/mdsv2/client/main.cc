@@ -56,6 +56,7 @@ DEFINE_bool(is_force, false, "is force");
 
 DEFINE_string(type, "", "type backup[meta|fsmeta]");
 DEFINE_string(output_type, "stdout", "output type[stdout|file|s3]");
+DEFINE_string(input_type, "stdout", "input type[stdout|file|s3]");
 DEFINE_string(out, "./output", "output file path");
 DEFINE_string(in, "./input", "input file path");
 DEFINE_bool(is_binary, false, "is binary");
@@ -136,7 +137,7 @@ int main(int argc, char* argv[]) {
   {
     dingofs::mdsv2::br::RestoreCommandRunner::Options options;
     options.type = Helper::ToLowerCase(FLAGS_type);
-    options.output_type = Helper::ToLowerCase(FLAGS_output_type);
+    options.input_type = Helper::ToLowerCase(FLAGS_input_type);
     options.fs_id = FLAGS_fs_id;
     options.fs_name = FLAGS_fs_name;
     options.file_path = FLAGS_in;

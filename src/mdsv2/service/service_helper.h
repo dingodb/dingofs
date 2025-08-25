@@ -30,7 +30,7 @@
 namespace dingofs {
 namespace mdsv2 {
 
-DECLARE_int64(mds_service_log_threshold_time_us);
+DECLARE_uint64(mds_service_log_threshold_time_us);
 DECLARE_int32(mds_service_log_print_max_length);
 
 class ServiceHelper {

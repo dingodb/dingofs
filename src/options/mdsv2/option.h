@@ -62,7 +62,7 @@ DECLARE_uint32(mds_service_write_worker_num);
 DECLARE_uint32(mds_service_write_worker_max_pending_num);
 DECLARE_bool(mds_service_write_worker_use_pthread);
 
-DECLARE_int64(mds_service_log_threshold_time_us);
+DECLARE_uint64(mds_service_log_threshold_time_us);
 DECLARE_int32(mds_service_log_print_max_length);
 
 DECLARE_uint32(mds_scan_batch_size);

@@ -85,7 +85,7 @@ MdsEntry MDSMeta::ToProto() const {
   pb_mds.set_state(ToPbMdsState(state_));
   pb_mds.set_last_online_time_ms(last_online_time_ms_);
 
-  return std::move(pb_mds);
+  return pb_mds;
 }
 
 void MDSMetaMap::UpsertMDSMeta(const MDSMeta& mds_meta) {
@@ -94,19 +94,19 @@ void MDSMetaMap::UpsertMDSMeta(const MDSMeta& mds_meta) {
   mds_meta_map_[mds_meta.ID()] = mds_meta;
 }
 
-void MDSMetaMap::DeleteMDSMeta(int64_t mds_id) {
+void MDSMetaMap::DeleteMDSMeta(uint64_t mds_id) {
   utils::WriteLockGuard lk(lock_);
 
   mds_meta_map_.erase(mds_id);
 }
 
-bool MDSMetaMap::IsExistMDSMeta(int64_t mds_id) {
+bool MDSMetaMap::IsExistMDSMeta(uint64_t mds_id) {
   utils::ReadLockGuard lk(lock_);
 
   return mds_meta_map_.find(mds_id) != mds_meta_map_.end();
 }
 
-bool MDSMetaMap::IsNormalMDSMeta(int64_t mds_id) {
+bool MDSMetaMap::IsNormalMDSMeta(uint64_t mds_id) {
   MDSMeta mds_meta;
   if (!GetMDSMeta(mds_id, mds_meta)) {
     return false;
@@ -115,7 +115,7 @@ bool MDSMetaMap::IsNormalMDSMeta(int64_t mds_id) {
   return mds_meta.GetState() == MDSMeta::State::kNormal;
 }
 
-bool MDSMetaMap::GetMDSMeta(int64_t mds_id, MDSMeta& mds_meta) {
+bool MDSMetaMap::GetMDSMeta(uint64_t mds_id, MDSMeta& mds_meta) {
   utils::ReadLockGuard lk(lock_);
 
   auto it = mds_meta_map_.find(mds_id);

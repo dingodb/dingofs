@@ -32,6 +32,7 @@ using DentryEntry = pb::mdsv2::Dentry;
 using SliceEntry = pb::mdsv2::Slice;
 using ChunkEntry = pb::mdsv2::Chunk;
 using FsInfoEntry = pb::mdsv2::FsInfo;
+using TrashSliceEntry = pb::mdsv2::TrashSlice;
 using TrashSliceList = pb::mdsv2::TrashSliceList;
 using QuotaEntry = pb::mdsv2::Quota;
 using UsageEntry = pb::mdsv2::Usage;

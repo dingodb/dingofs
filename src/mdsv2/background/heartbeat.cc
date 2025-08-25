@@ -14,6 +14,7 @@
 
 #include "mdsv2/background/heartbeat.h"
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -149,7 +150,7 @@ Status Heartbeat::GetMDSList(Context& ctx, std::vector<MdsEntry>& mdses) {
   mdses = std::move(result.mds_entries);
 
   // set online status
-  int64_t now_ms = Helper::TimestampMs();
+  uint64_t now_ms = Helper::TimestampMs();
   for (auto& mds : mdses) {
     mds.set_is_online((mds.last_online_time_ms() + FLAGS_mds_heartbeat_mds_offline_period_time_ms < now_ms) ? false
                                                                                                             : true);

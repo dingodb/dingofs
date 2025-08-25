@@ -53,7 +53,7 @@ DentryEntry Dentry::Copy() const {
   dentry.set_type(type_);
   dentry.set_flag(flag_);
 
-  return std::move(dentry);
+  return dentry;
 }
 
 }  // namespace mdsv2

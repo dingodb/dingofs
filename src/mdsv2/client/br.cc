@@ -804,7 +804,7 @@ bool RestoreCommandRunner::Run(const Options& options, const std::string& coor_a
   }
 
   Restore::Options restore_options;
-  if (options.output_type == "file") {
+  if (options.input_type == "file") {
     restore_options.type = Type::kFile;
     restore_options.file_path = options.file_path;
     if (options.file_path.empty() || !Helper::IsExistPath(options.file_path)) {
@@ -812,7 +812,7 @@ bool RestoreCommandRunner::Run(const Options& options, const std::string& coor_a
       return true;
     }
 
-  } else if (options.output_type == "s3") {
+  } else if (options.input_type == "s3") {
     restore_options.type = Type::kS3;
     restore_options.s3_info = options.s3_info;
     if (!options.s3_info.Validate()) {
@@ -821,7 +821,7 @@ bool RestoreCommandRunner::Run(const Options& options, const std::string& coor_a
     }
 
   } else {
-    std::cout << "unknown input type: " << options.output_type << '\n';
+    std::cout << "unknown input type: " << options.input_type << '\n';
     return true;
   }
 

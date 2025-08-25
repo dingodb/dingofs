@@ -649,8 +649,6 @@ void UpdateAttrOperation::ExpandChunk(TxnUPtr& txn, AttrEntry& attr, uint64_t ne
 }
 
 Status UpdateAttrOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>&) {
-  const uint32_t fs_id = attr.fs_id();
-
   if (to_set_ & kSetAttrMode) {
     attr.set_mode(attr_.mode());
   }
@@ -1290,26 +1288,70 @@ bool CompactChunkOperation::MaybeCompact(const FsInfoEntry& fs_info, Ino ino, ui
 
 TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoEntry& fs_info, Ino ino, uint64_t file_length,
                                                      const ChunkEntry& chunk) {
+  struct Slice {
+    uint32_t sort_id;
+    uint64_t id;
+    uint32_t compaction_version;
+    uint64_t offset;
+    uint32_t len;
+    uint32_t size;
+    bool zero;
+  };
+
+  struct Chunk {
+    uint64_t index;
+    uint64_t chunk_size;
+    uint64_t block_size;
+    std::vector<Slice> slices;
+    uint64_t version;
+    uint64_t last_compaction_time_ms;
+  };
+
   struct OffsetRange {
     uint64_t start;
     uint64_t end;
-    std::vector<SliceEntry> slices;
+    std::vector<Slice> slices;
   };
 
   struct Block {
     uint64_t slice_id;
     uint64_t offset;
-    uint64_t size;
+    uint32_t size;
   };
 
-  // const auto& fs_info = fs_info_;
+  // SliceEntry -> Slice
+  auto to_slice_fn = [](uint32_t sort_id, const SliceEntry& slice) {
+    return Slice{.sort_id = sort_id,
+                 .id = slice.id(),
+                 .compaction_version = slice.compaction_version(),
+                 .offset = slice.offset(),
+                 .len = slice.len(),
+                 .size = slice.size(),
+                 .zero = slice.zero()};
+  };
+
+  // ChunkEntry -> Chunk
+  auto to_chunk_fn = [to_slice_fn](const ChunkEntry& chunk_entry) {
+    Chunk chunk;
+    chunk.index = chunk_entry.index();
+    chunk.chunk_size = chunk_entry.chunk_size();
+    chunk.block_size = chunk_entry.block_size();
+    chunk.slices.reserve(chunk_entry.slices_size());
+    for (int i = 0; i < chunk_entry.slices_size(); ++i) {
+      chunk.slices.push_back(to_slice_fn(i, chunk_entry.slices(i)));
+    }
+    chunk.version = chunk_entry.version();
+    chunk.last_compaction_time_ms = chunk_entry.last_compaction_time_ms();
+
+    return chunk;
+  };
 
   const uint32_t fs_id = fs_info.fs_id();
   const uint64_t chunk_size = fs_info.chunk_size();
   const uint64_t block_size = fs_info.block_size();
   const uint64_t chunk_offset = chunk.index() * chunk_size;
 
-  auto chunk_copy = chunk;
+  auto chunk_copy = to_chunk_fn(chunk);
 
   TrashSliceList trash_slices;
   trash_slices.set_time_ms(Helper::TimestampMs());
@@ -1323,7 +1365,7 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoEntry& fs_info,
   if (chunk_offset + chunk_size > file_length) {
     for (const auto& slice : chunk.slices()) {
       if (slice.offset() >= file_length) {
-        pb::mdsv2::TrashSlice trash_slice;
+        TrashSliceEntry trash_slice;
         trash_slice.set_fs_id(fs_id);
         trash_slice.set_ino(ino);
         trash_slice.set_chunk_index(chunk.index());
@@ -1340,7 +1382,9 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoEntry& fs_info,
     }
   }
 
-  DINGO_LOG(INFO) << fmt::format("[operation.{}] trash slices size: {}", fs_id, trash_slices.slices_size());
+  size_t out_of_length_count = trash_slices.slices_size();
+  DINGO_LOG(INFO) << fmt::format("[operation.{}] out-of-file-length trash slices count({}).", fs_id,
+                                 out_of_length_count);
 
   // 3. complete overlapped slices
   //     |______4________|      slices
@@ -1348,14 +1392,14 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoEntry& fs_info,
   // |________________________| chunk
   // slice-2 is complete overlapped by slice-4
   // sort by offset
-  std::sort(chunk_copy.mutable_slices()->begin(), chunk_copy.mutable_slices()->end(),
-            [](const SliceEntry& a, const SliceEntry& b) { return a.offset() < b.offset(); });
+  std::stable_sort(chunk_copy.slices.begin(), chunk_copy.slices.end(),  // NOLINT
+                   [](const Slice& a, const Slice& b) { return a.offset < b.offset; });
 
   // get offset ranges
   std::set<uint64_t> offsets;
-  for (const auto& slice : chunk_copy.slices()) {
-    offsets.insert(slice.offset());
-    offsets.insert(slice.offset() + slice.len());
+  for (const auto& slice : chunk_copy.slices) {
+    offsets.insert(slice.offset);
+    offsets.insert(slice.offset + slice.len);
   }
 
   std::vector<OffsetRange> offset_ranges;
@@ -1368,9 +1412,9 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoEntry& fs_info,
   }
 
   for (auto& offset_range : offset_ranges) {
-    for (const auto& slice : chunk_copy.slices()) {
-      uint64_t slice_start = slice.offset();
-      uint64_t slice_end = slice.offset() + slice.len();
+    for (const auto& slice : chunk_copy.slices) {
+      uint64_t slice_start = slice.offset;
+      uint64_t slice_end = slice.offset + slice.len;
 
       // check intersect
       if (slice_end <= offset_range.start || slice_start >= offset_range.end) {
@@ -1385,32 +1429,34 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoEntry& fs_info,
   for (auto& offset_range : offset_ranges) {
     // sort by id, from newest to oldest
     std::sort(offset_range.slices.begin(), offset_range.slices.end(),  // NOLINT
-              [](const SliceEntry& a, const SliceEntry& b) { return a.id() > b.id(); });
+              [](const Slice& a, const Slice& b) { return a.sort_id > b.sort_id; });
     if (!offset_range.slices.empty()) {
-      reserve_slice_ids.insert(offset_range.slices.front().id());
+      reserve_slice_ids.insert(offset_range.slices.front().id);
     }
   }
 
   // get delete slices
-  for (const auto& slice : chunk_copy.slices()) {
-    if (reserve_slice_ids.count(slice.id()) == 0) {
-      pb::mdsv2::TrashSlice trash_slice;
+  for (const auto& slice : chunk_copy.slices) {
+    if (reserve_slice_ids.count(slice.id) == 0) {
+      TrashSliceEntry trash_slice;
       trash_slice.set_fs_id(fs_id);
       trash_slice.set_ino(ino);
       trash_slice.set_chunk_index(chunk.index());
-      trash_slice.set_slice_id(slice.id());
+      trash_slice.set_slice_id(slice.id);
       trash_slice.set_block_size(block_size);
       trash_slice.set_chunk_size(chunk_size);
       trash_slice.set_is_partial(false);
       auto* range = trash_slice.add_ranges();
-      range->set_offset(slice.offset());
-      range->set_len(slice.len());
+      range->set_offset(slice.offset);
+      range->set_len(slice.len);
 
       trash_slices.add_slices()->Swap(&trash_slice);
     }
   }
 
-  DINGO_LOG(INFO) << fmt::format("[operation.{}] trash slices size: {}", fs_id, trash_slices.slices_size());
+  size_t complete_overlapped_count = trash_slices.slices_size() - out_of_length_count;
+  DINGO_LOG(INFO) << fmt::format("[operation.{}] complete overlapped trash slice count({}).", fs_id,
+                                 complete_overlapped_count);
 
   // 4. partial overlapped slices
   //     |______4________|      slices
@@ -1427,38 +1473,38 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoEntry& fs_info,
   // |___________1____________| slices
   // |________________________| chunk
   // slice-1 is partial overlapped by slice-2 and slice-3
-  std::map<uint64_t, pb::mdsv2::TrashSlice> temp_trash_slice_map;
+  // slice id -> TrashSliceEntry
+  std::map<uint64_t, TrashSliceEntry> temp_trash_slice_map;
   for (auto& offset_range : offset_ranges) {
     if (offset_range.slices.empty()) continue;
 
     auto& slices = offset_range.slices;
-    auto reserve_slice = slices.front();
-    for (int i = 1; i < slices.size(); ++i) {
+    for (size_t i = 1; i < slices.size(); ++i) {
       auto& slice = slices[i];
-      if (reserve_slice_ids.count(slice.id()) == 0) {
+      if (reserve_slice_ids.count(slice.id) == 0) {
         continue;
       }
 
-      auto start_offset = std::max(offset_range.start, slice.offset());
-      auto end_offset = std::min(offset_range.end, slice.offset() + slice.len());
+      auto start_offset = std::max(offset_range.start, slice.offset);
+      auto end_offset = std::min(offset_range.end, slice.offset + slice.len);
 
-      for (uint64_t block_offset = slice.offset(); block_offset < end_offset; block_offset += block_size) {
+      for (uint64_t block_offset = slice.offset; block_offset < end_offset; block_offset += block_size) {
         if (block_offset >= start_offset && block_offset + block_size < end_offset) {
-          auto it = temp_trash_slice_map.find(slice.id());
+          auto it = temp_trash_slice_map.find(slice.id);
           if (it == temp_trash_slice_map.end()) {
-            pb::mdsv2::TrashSlice trash_slice;
+            TrashSliceEntry trash_slice;
             trash_slice.set_fs_id(fs_id);
             trash_slice.set_ino(ino);
             trash_slice.set_chunk_index(chunk.index());
-            trash_slice.set_slice_id(slice.id());
+            trash_slice.set_slice_id(slice.id);
             trash_slice.set_block_size(block_size);
             trash_slice.set_chunk_size(chunk_size);
             trash_slice.set_is_partial(true);
             auto* range = trash_slice.add_ranges();
-            range->set_offset(slice.offset());
-            range->set_len(slice.len());
+            range->set_offset(slice.offset);
+            range->set_len(slice.len);
 
-            temp_trash_slice_map[slice.id()] = trash_slice;
+            temp_trash_slice_map[slice.id] = trash_slice;
           } else {
             auto* range = it->second.add_ranges();
             range->set_offset(block_offset);
@@ -1473,7 +1519,9 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoEntry& fs_info,
     trash_slices.add_slices()->Swap(&trash_slice);
   }
 
-  DINGO_LOG(INFO) << fmt::format("[operation.{}] trash slices size: {}", fs_id, trash_slices.slices_size());
+  size_t partial_overlapped_count = trash_slices.slices_size() - out_of_length_count - complete_overlapped_count;
+  DINGO_LOG(INFO) << fmt::format("[operation.{}] partial overlapped trash slice count({}) total({})", fs_id,
+                                 partial_overlapped_count, trash_slices.slices_size());
 
   return trash_slices;
 }
@@ -1484,7 +1532,8 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(Ino ino, uint64_t file_leng
 
 void CompactChunkOperation::UpdateChunk(ChunkEntry& chunk, const TrashSliceList& trash_slices) {
   auto gen_slice_map_fn = [](const TrashSliceList& trash_slices) {
-    std::map<uint64_t, pb::mdsv2::TrashSlice> slice_map;
+    // slice id -> TrashSliceEntry
+    std::map<uint64_t, TrashSliceEntry> slice_map;
     for (const auto& slice : trash_slices.slices()) {
       slice_map[slice.slice_id()] = slice;
     }
@@ -1502,7 +1551,7 @@ void CompactChunkOperation::UpdateChunk(ChunkEntry& chunk, const TrashSliceList&
   }
 }
 
-pb::mdsv2::TrashSliceList CompactChunkOperation::DoCompactChunk(Ino ino, uint64_t file_length, ChunkEntry& chunk) {
+TrashSliceList CompactChunkOperation::DoCompactChunk(Ino ino, uint64_t file_length, ChunkEntry& chunk) {
   auto trash_slice_list = GenTrashSlices(ino, file_length, chunk);
   if (trash_slice_list.slices().empty()) {
     return {};
@@ -1510,7 +1559,7 @@ pb::mdsv2::TrashSliceList CompactChunkOperation::DoCompactChunk(Ino ino, uint64_
 
   UpdateChunk(chunk, trash_slice_list);
 
-  return std::move(trash_slice_list);
+  return trash_slice_list;
 }
 
 TrashSliceList CompactChunkOperation::CompactChunk(TxnUPtr& txn, uint32_t fs_id, Ino ino, uint64_t file_length,
@@ -1523,7 +1572,7 @@ TrashSliceList CompactChunkOperation::CompactChunk(TxnUPtr& txn, uint32_t fs_id,
   txn->Put(MetaCodec::EncodeDelSliceKey(fs_id, ino, chunk.index(), Helper::TimestampNs()),
            MetaCodec::EncodeDelSliceValue(trash_slice_list));
 
-  return std::move(trash_slice_list);
+  return trash_slice_list;
 }
 
 TrashSliceList CompactChunkOperation::CompactChunks(TxnUPtr& txn, uint32_t fs_id, Ino ino, uint64_t file_length,
@@ -1538,7 +1587,7 @@ TrashSliceList CompactChunkOperation::CompactChunks(TxnUPtr& txn, uint32_t fs_id
     }
   }
 
-  return std::move(trash_slice_list);
+  return trash_slice_list;
 }
 
 Status CompactChunkOperation::Run(TxnUPtr& txn) {
@@ -1554,7 +1603,8 @@ Status CompactChunkOperation::Run(TxnUPtr& txn) {
   ChunkEntry chunk = MetaCodec::DecodeChunkValue(value);
 
   // reduce compact frequency
-  if (!is_force_ && chunk.last_compaction_time_ms() + FLAGS_mds_compact_chunk_interval_ms > Helper::TimestampMs()) {
+  if (!is_force_ && chunk.last_compaction_time_ms() + FLAGS_mds_compact_chunk_interval_ms >
+                        static_cast<uint64_t>(Helper::TimestampMs())) {
     return Status::OK();
   }
 
@@ -2179,7 +2229,7 @@ Status OperationProcessor::RunAlone(Operation* operation) {
   const uint32_t fs_id = operation->GetFsId();
   const Ino ino = operation->GetIno();
   Status status;
-  int retry = 0;
+  uint32_t retry = 0;
   int64_t txn_id = 0;
   bool is_one_pc = false;
   do {
@@ -2279,7 +2329,7 @@ std::map<OperationProcessor::Key, BatchOperation> OperationProcessor::Grouping(s
     }
   }
 
-  return std::move(batch_operation_map);
+  return batch_operation_map;
 }
 
 void OperationProcessor::ProcessOperation() {
@@ -2353,7 +2403,7 @@ static std::string GetName(const BatchOperation& batch_operation) {
     op_names += fmt::format("{},", operation->OpName());
   }
 
-  return std::move(op_names);
+  return op_names;
 }
 
 void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) {
@@ -2374,7 +2424,7 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
 
   AttrEntry attr;
   Status status;
-  int retry = 0;
+  uint32_t retry = 0;
   int count = 0;
   int64_t txn_id = 0;
   bool is_one_pc = false;

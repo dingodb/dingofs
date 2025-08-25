@@ -63,8 +63,8 @@ class MDSMeta {
     }
   }
 
-  int64_t ID() const { return id_; }
-  void SetID(int64_t id) { id_ = id; }
+  uint64_t ID() const { return id_; }
+  void SetID(uint64_t id) { id_ = id; }
 
   std::string Host() const { return host_; }
   void SetHost(const std::string& host) { host_ = host; }
@@ -82,7 +82,7 @@ class MDSMeta {
   MdsEntry ToProto() const;
 
  private:
-  int64_t id_{0};
+  uint64_t id_{0};
 
   std::string host_;
   int port_{0};
@@ -103,18 +103,18 @@ class MDSMetaMap {
   static MDSMetaMapSPtr New() { return std::make_shared<MDSMetaMap>(); }
 
   void UpsertMDSMeta(const MDSMeta& mds_meta);
-  void DeleteMDSMeta(int64_t mds_id);
+  void DeleteMDSMeta(uint64_t mds_id);
 
-  bool IsExistMDSMeta(int64_t mds_id);
-  bool IsNormalMDSMeta(int64_t mds_id);
+  bool IsExistMDSMeta(uint64_t mds_id);
+  bool IsNormalMDSMeta(uint64_t mds_id);
 
-  bool GetMDSMeta(int64_t mds_id, MDSMeta& mds_meta);
+  bool GetMDSMeta(uint64_t mds_id, MDSMeta& mds_meta);
   std::vector<MDSMeta> GetAllMDSMeta();
 
  private:
   utils::RWLock lock_;
   // mds id -> MDSMeta
-  std::map<int64_t, MDSMeta> mds_meta_map_;
+  std::map<uint64_t, MDSMeta> mds_meta_map_;
 };
 
 }  // namespace mdsv2

@@ -38,28 +38,11 @@ DECLARE_uint32(mds_scan_batch_size);
 
 const uint32_t kTxnKeepAliveMs = 10 * 1000;
 
-static dingodb::sdk::KVPair ToKVPair(const KeyValue& kv) { return dingodb::sdk::KVPair{kv.key, kv.value}; }
-
-static void KvPairToKeyValue(const dingodb::sdk::KVPair& kv_pair, KeyValue& kv) {
-  kv.key = kv_pair.key;
-  kv.value = kv_pair.value;
-}
-
 static void KvPairsToKeyValues(const std::vector<dingodb::sdk::KVPair>& kv_pairs, std::vector<KeyValue>& kvs) {
   kvs.reserve(kv_pairs.size());
   for (const auto& kv_pair : kv_pairs) {
     kvs.emplace_back(KeyValue{KeyValue::OpType::kPut, kv_pair.key, kv_pair.value});
   }
-}
-
-static std::vector<dingodb::sdk::KVPair> ToKVPairs(const std::vector<KeyValue>& kvs) {
-  std::vector<dingodb::sdk::KVPair> kv_pairs;
-  kv_pairs.reserve(kvs.size());
-  for (const auto& kv : kvs) {
-    kv_pairs.emplace_back(dingodb::sdk::KVPair{kv.key, kv.value});
-  }
-
-  return kv_pairs;
 }
 
 bool DingodbStorage::Init(const std::string& addr) {

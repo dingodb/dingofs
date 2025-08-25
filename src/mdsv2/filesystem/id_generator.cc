@@ -140,12 +140,12 @@ Status CoorAutoIncrementIdGenerator::AllocateIds(uint32_t num) {
     }
 
     CHECK(bundle >= 0 && bundle_end >= 0) << "bundle id is negative.";
-  } while (bundle < next_id_);
+  } while (static_cast<uint64_t>(bundle) < next_id_);
 
   if (status.ok()) {
-    bundle_ = bundle;
-    next_id_ = bundle;
-    bundle_end_ = bundle_end;
+    bundle_ = static_cast<uint64_t>(bundle);
+    next_id_ = static_cast<uint64_t>(bundle);
+    bundle_end_ = static_cast<uint64_t>(bundle_end);
   }
 
   DINGO_LOG(INFO) << fmt::format("[idalloc.{}][{}us] take bundle id, bundle[{},{}) num({}) status({}).", name_,
@@ -219,7 +219,7 @@ std::string StoreAutoIncrementIdGenerator::Describe() const {
 
 Status StoreAutoIncrementIdGenerator::GetOrPutAllocId(uint64_t& alloc_id) {
   Status status;
-  int retry = 0;
+  uint32_t retry = 0;
   do {
     auto txn = kv_storage_->NewTxn();
 
@@ -253,7 +253,7 @@ Status StoreAutoIncrementIdGenerator::GetOrPutAllocId(uint64_t& alloc_id) {
 Status StoreAutoIncrementIdGenerator::AllocateIds(uint32_t size) {
   Duration duration;
   Status status;
-  int retry = 0;
+  uint32_t retry = 0;
   uint64_t start_alloc_id = std::max(next_id_, last_alloc_id_);
   do {
     auto txn = kv_storage_->NewTxn();

@@ -47,7 +47,7 @@ class Crontab {
   // Is immediately run
   bool immediately{false};
   // Already run count
-  int run_count{0};
+  uint32_t run_count{0};
   // Is pause crontab
   bool pause{false};
   // bthread_timer_t handler

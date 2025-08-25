@@ -69,7 +69,7 @@ struct EntryOut {
 
 class FileSystem : public std::enable_shared_from_this<FileSystem> {
  public:
-  FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr ino_id_generator,
+  FileSystem(uint64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr ino_id_generator,
              IdGeneratorSPtr slice_id_generator, KVStorageSPtr kv_storage, OperationProcessorSPtr operation_processor,
              MDSMetaMapSPtr mds_meta_map, WorkerSetSPtr quota_worker_set, notify::NotifyBuddySPtr notify_buddy);
   ~FileSystem();
@@ -79,7 +79,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   FileSystem(FileSystem&&) = delete;
   FileSystem& operator=(FileSystem&&) = delete;
 
-  static FileSystemSPtr New(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr ino_id_generator,
+  static FileSystemSPtr New(uint64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr ino_id_generator,
                             IdGeneratorSPtr slice_id_generator, KVStorageSPtr kv_storage,
                             OperationProcessorSPtr operation_processor, MDSMetaMapSPtr mds_meta_map,
                             WorkerSetSPtr quota_worker_set, notify::NotifyBuddySPtr notify_buddy) {
@@ -238,7 +238,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   // generate ino
   Status GenDirIno(Ino& ino);
   Status GenFileIno(Ino& ino);
-  bool CanServe(int64_t self_mds_id);
+  bool CanServe(uint64_t self_mds_id);
 
   // get partition
   Status GetPartition(Context& ctx, Ino parent, PartitionPtr& out_partition);
@@ -279,7 +279,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   void UpdateParentMemo(const std::vector<Ino>& ancestors);
 
-  void NotifyBuddyRefreshFsInfo(std::vector<int64_t> mds_ids, const FsInfoEntry& fs_info);
+  void NotifyBuddyRefreshFsInfo(std::vector<uint64_t> mds_ids, const FsInfoEntry& fs_info);
   void NotifyBuddyRefreshInode(AttrEntry&& attr);
   void NotifyBuddyCleanPartitionCache(Ino ino);
 

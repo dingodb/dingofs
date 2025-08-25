@@ -152,7 +152,7 @@ inline int HexStringToBuf(const char* hex_str, unsigned char* buf,
 // convert buf to hex string
 inline std::string BufToHexString(unsigned char* buf, size_t buf_size) {
   std::ostringstream oss;
-  for (int i = 0; i < buf_size; i++) {
+  for (uint32_t i = 0; i < buf_size; i++) {
     oss << std::hex << std::setw(2) << std::setfill('0') << int((buf)[i]);
   }
   return oss.str();

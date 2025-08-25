@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+add_compile_options(-Wall -Wno-reorder -Wno-overloaded-virtual)
+
 add_subdirectory(common)
 add_subdirectory(cache)
 add_subdirectory(coordinator)
@@ -28,6 +30,8 @@ add_subdirectory(cachegroup)
 add_library(mdsv2_lib
   server.cc
 )
+
+# target_compile_options(mdsv2_lib PRIVATE -Wall)
 
 target_link_libraries(mdsv2_lib
   PROTO_OBJS
