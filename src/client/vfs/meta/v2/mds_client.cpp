@@ -873,15 +873,19 @@ Status MDSClient::Rename(ContextSPtr ctx, Ino old_parent,
   return Status::OK();
 }
 
-Status MDSClient::NewSliceId(ContextSPtr ctx, Ino ino, uint64_t* id) {
+Status MDSClient::NewSliceId(ContextSPtr ctx, uint32_t num, uint64_t* id) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
-  auto get_mds_fn = [this, ino]() -> MDSMeta { return GetMds(ino); };
+  auto get_mds_fn = [this]() -> MDSMeta {
+    mdsv2::MDSMeta mds_meta;
+    mds_discovery_->PickFirstMDS(mds_meta);
+    return mds_meta;
+  };
 
   pb::mdsv2::AllocSliceIdRequest request;
   pb::mdsv2::AllocSliceIdResponse response;
 
-  request.set_alloc_num(1);
+  request.set_alloc_num(num);
 
   auto status = SendRequest(ctx, get_mds_fn, "MDSService", "AllocSliceId",
                             request, response);

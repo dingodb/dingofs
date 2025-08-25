@@ -46,6 +46,8 @@ const uint32_t kMaxXAttrValueLength = 64 * 1024;
 
 const uint32_t kHeartbeatIntervalS = 5;  // seconds
 
+const std::string kSliceIdCacheName = "slice";
+
 static std::string GetHostName() {
   char hostname[kMaxHostNameLength];
   int ret = gethostname(hostname, kMaxHostNameLength);
@@ -65,7 +67,8 @@ MDSV2FileSystem::MDSV2FileSystem(mdsv2::FsInfoPtr fs_info,
       client_id_(client_id),
       fs_info_(fs_info),
       mds_discovery_(mds_discovery),
-      mds_client_(mds_client) {}
+      mds_client_(mds_client),
+      id_cache_(kSliceIdCacheName, mds_client) {}
 
 MDSV2FileSystem::~MDSV2FileSystem() {}  // NOLINT
 
@@ -374,13 +377,11 @@ Status MDSV2FileSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
   return Status::OK();
 }
 
-Status MDSV2FileSystem::NewSliceId(ContextSPtr ctx, Ino ino, uint64_t* id) {
-  auto status = mds_client_->NewSliceId(ctx, ino, id);
-  if (!status.ok()) {
+Status MDSV2FileSystem::NewSliceId(ContextSPtr, Ino ino, uint64_t* id) {
+  if (!id_cache_.GenID(*id)) {
     LOG(ERROR) << fmt::format(
-        "[meta.filesystem.{}] newsliceid fail, error: {}.", name_,
-        status.ToString());
-    return status;
+        "[meta.filesystem.{}] newsliceid fail, ino({}) error: {}.", name_, ino);
+    return Status::Internal("gen id fail");
   }
 
   return Status::OK();

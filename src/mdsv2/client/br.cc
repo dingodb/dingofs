@@ -807,6 +807,10 @@ bool RestoreCommandRunner::Run(const Options& options, const std::string& coor_a
   if (options.output_type == "file") {
     restore_options.type = Type::kFile;
     restore_options.file_path = options.file_path;
+    if (options.file_path.empty() || !Helper::IsExistPath(options.file_path)) {
+      std::cerr << fmt::format("file path is empty or not exist.") << '\n';
+      return true;
+    }
 
   } else if (options.output_type == "s3") {
     restore_options.type = Type::kS3;

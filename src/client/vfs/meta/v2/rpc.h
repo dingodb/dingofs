@@ -179,7 +179,7 @@ Status RPC::SendRequest(const EndPoint& endpoint,
     }
 
     if (response.error().errcode() == pb::error::OK) {
-      VLOG(3) << fmt::format(
+      LOG(INFO) << fmt::format(
           "[meta.rpc][{}][{}][{}us] success, request({}) response({}).",
           EndPointToStr(endpoint), api_name, elapsed_us,
           request.ShortDebugString(), response.ShortDebugString());

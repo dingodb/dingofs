@@ -57,6 +57,7 @@ DEFINE_bool(is_force, false, "is force");
 DEFINE_string(type, "", "type backup[meta|fsmeta]");
 DEFINE_string(output_type, "stdout", "output type[stdout|file|s3]");
 DEFINE_string(out, "./output", "output file path");
+DEFINE_string(in, "./input", "input file path");
 DEFINE_bool(is_binary, false, "is binary");
 
 DEFINE_string(mds_id_list, "", "mds id list for joinfs or quitfs, e.g. 1,2,3");
@@ -138,7 +139,7 @@ int main(int argc, char* argv[]) {
     options.output_type = Helper::ToLowerCase(FLAGS_output_type);
     options.fs_id = FLAGS_fs_id;
     options.fs_name = FLAGS_fs_name;
-    options.file_path = FLAGS_out;
+    options.file_path = FLAGS_in;
 
     auto& s3_info = options.s3_info;
     s3_info.ak = FLAGS_s3_ak;
@@ -170,7 +171,7 @@ int main(int argc, char* argv[]) {
     options.chunk_size = FLAGS_chunk_size;
     options.block_size = FLAGS_block_size;
 
-    //cache member
+    // cache member
     options.member_id = FLAGS_member_id;
     options.ip = FLAGS_cache_member_ip;
     options.port = FLAGS_cache_member_port;

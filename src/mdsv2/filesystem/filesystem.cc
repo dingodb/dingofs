@@ -63,7 +63,7 @@ static const std::string kRecyleName = ".recycle";
 DEFINE_uint32(mds_filesystem_name_max_size, 1024, "Max size of filesystem name.");
 DEFINE_uint32(mds_filesystem_hash_bucket_num, 1024, "Filesystem hash bucket num.");
 
-DEFINE_uint32(mds_compact_chunk_threshold_num, 10, "Compact chunk threshold num.");
+DEFINE_uint32(mds_compact_chunk_threshold_num, 1000000, "Compact chunk threshold num.");
 DEFINE_uint32(mds_compact_chunk_interval_ms, 3 * 1000, "Compact chunk interval ms.");
 
 static bool IsReserveNode(Ino ino) { return ino == kRootIno; }
@@ -802,9 +802,10 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& sess
     if (!is_completely) {
       auto status = GetChunksFromStore(ino, chunks);
       if (status.ok()) {
-        CHECK(is_completely_fn(chunks)) << fmt::format(
-            "[fs.{}] chunks is not completely, ino({}) length({}) chunks({}).", fs_id_, ino, file_length,
-            chunks.size());
+        if (!is_completely_fn(chunks)) {
+          DINGO_LOG(WARNING) << fmt::format("[fs.{}] chunks is not completely, ino({}) length({}) chunks({}).", fs_id_,
+                                            ino, file_length, chunks.size());
+        }
       }
     }
   }
@@ -2627,39 +2628,6 @@ Status FileSystem::UpdatePartitionPolicy(const std::map<uint64_t, BucketSetEntry
 
   fs_info_->Update(result.fs_info);
 
-  // std::string key = MetaCodec::EncodeFsKey(fs_info_->GetName());
-
-  // auto txn = kv_storage_->NewTxn();
-  // std::string value;
-  // auto status = txn->Get(key, value);
-  // if (!status.ok()) {
-  //   return Status(pb::error::EBACKEND_STORE, fmt::format("get fs info fail, {}", status.error_str()));
-  // }
-
-  // FsInfoEntry fs_info = MetaCodec::DecodeFsValue(value);
-  // CHECK(fs_info.partition_policy().type() == pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION)
-  //     << "invalid partition polocy type.";
-
-  // fs_info.mutable_partition_policy()->set_epoch(fs_info.partition_policy().epoch() + 1);
-  // auto* hash = fs_info.mutable_partition_policy()->mutable_parent_hash();
-  // hash->mutable_distributions()->clear();
-  // for (const auto& [mds_id, bucket_set] : distributions) {
-  //   hash->mutable_distributions()->insert({mds_id, bucket_set});
-  // }
-
-  // fs_info.set_last_update_time_ns(Helper::TimestampNs());
-
-  // KVStorage::WriteOption option;
-  // status = kv_storage_->Put(option, key, MetaCodec::EncodeFsValue(fs_info));
-  // if (!status.ok()) {
-  //   return Status(pb::error::EBACKEND_STORE, fmt::format("put store fs fail, {}", status.error_str()));
-  // }
-
-  // status = txn->Commit();
-  // if (!status.ok()) {
-  //   return Status(pb::error::EBACKEND_STORE, fmt::format("commit fail, {}", status.error_str()));
-  // }
-
   return Status::OK();
 }
 
@@ -2933,7 +2901,7 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, FsInfoEntry& fs_info)
     return Status(pb::error::EINTERNAL, fmt::format("create root fail, {}", status.error_str()));
   }
 
-  CHECK(AddFileSystem(fs, false)) << fmt::format("add FileSystem({}) fail.", fs->FsId());
+  CHECK(AddFileSystem(fs, true)) << fmt::format("add FileSystem({}) fail, already exist.", fs->FsId());
 
   return Status::OK();
 }
@@ -3248,7 +3216,9 @@ bool FileSystemSet::LoadFileSystems() {
         continue;
       }
 
-      CHECK(AddFileSystem(fs)) << fmt::format("add FileSystem({}) fail.", fs->FsId());
+      if (!AddFileSystem(fs)) {
+        DINGO_LOG(WARNING) << fmt::format("add FileSystem({}) fail, already exist.", fs->FsId());
+      }
 
     } else {
       fs->RefreshFsInfo(fs_info);

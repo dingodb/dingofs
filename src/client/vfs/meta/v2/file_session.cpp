@@ -14,6 +14,9 @@
 
 #include "client/vfs/meta/v2/file_session.h"
 
+#include <string>
+
+#include "absl/strings/escaping.h"
 #include "client/vfs/meta/v2/helper.h"
 
 namespace dingofs {
@@ -137,7 +140,10 @@ bool FileSessionMap::Dump(Json::Value& value) {
     Json::Value chunk_items = Json::arrayValue;
     auto chunks = file_session->GetAllChunk();
     for (const auto& chunk : chunks) {
-      chunk_items.append(FileSession::Chunk::To(chunk).SerializeAsString());
+      std::string base64_str;
+      absl::Base64Escape(FileSession::Chunk::To(chunk).SerializeAsString(),
+                         &base64_str);
+      chunk_items.append(base64_str);
     }
     item["chunks"] = chunk_items;
 
@@ -166,8 +172,10 @@ bool FileSessionMap::Load(const Json::Value& value) {
     file_session->SetSessionId(item["session_id"].asString());
 
     for (const auto& chunk_item : item["chunks"]) {
+      std::string origin_str;
+      absl::Base64Unescape(chunk_item.asString(), &origin_str);
       mdsv2::ChunkEntry chunk;
-      if (!chunk.ParseFromString(chunk_item.asString())) {
+      if (!chunk.ParseFromString(origin_str)) {
         LOG(ERROR) << "[meta.filesession] parse chunk fail.";
         return false;
       }

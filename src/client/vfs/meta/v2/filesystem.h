@@ -26,6 +26,7 @@
 #include "client/vfs/meta/v2/client_id.h"
 #include "client/vfs/meta/v2/dir_iterator.h"
 #include "client/vfs/meta/v2/file_session.h"
+#include "client/vfs/meta/v2/id_cache.h"
 #include "client/vfs/meta/v2/mds_client.h"
 #include "client/vfs/meta/v2/mds_discovery.h"
 #include "common/status.h"
@@ -154,6 +155,8 @@ class MDSV2FileSystem : public vfs::MetaSystem {
   FileSessionMap file_session_map_;
 
   DirIteratorManager dir_iterator_manager_;
+
+  IdCache id_cache_;
 
   // Crontab config
   std::vector<mdsv2::CrontabConfig> crontab_configs_;
