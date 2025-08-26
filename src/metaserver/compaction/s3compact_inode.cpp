@@ -312,6 +312,9 @@ int CompactInodeJob::ReadFullChunk(const struct S3CompactCtx& ctx,
             << s3req.in_file_offset + s3req.len - 1 << "]";
 
     // check if s3 request is out of range
+    if (s3req.zero) {  // hole with 0, length may exceeds blocksize, skip check
+      continue;
+    }
     CHECK((s3req.off + s3req.len) <= ctx.blockSize)
         << "s3compact: s3 request out of range, index: " << s3req.req_index
         << ", s3objname:" << s3req.obj_name << ", off: " << s3req.off
