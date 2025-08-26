@@ -43,6 +43,10 @@
 namespace dingofs {
 namespace cache {
 
+DEFINE_uint32(rpc_connect_timeout_ms, 1000,
+              "Timeout for rpc channel connect in milliseconds");
+DEFINE_validator(rpc_connect_timeout_ms, brpc::PassValidate);
+
 DEFINE_uint32(put_rpc_timeout_ms, 30000,
               "Timeout for put rpc request in milliseconds");
 DEFINE_validator(put_rpc_timeout_ms, brpc::PassValidate);
@@ -174,12 +178,13 @@ Status RPCClient::InitChannel(const std::string& server_ip,
   }
 
   brpc::ChannelOptions options;
+  options.connect_timeout_ms = FLAGS_rpc_connect_timeout_ms;
   options.connection_type = brpc::CONNECTION_TYPE_POOLED;
   rc = channel_->Init(ep, &options);
   if (rc != 0) {
     LOG(ERROR) << "Init channel for " << server_ip << ":" << server_port
                << " failed: rc = " << rc;
-    return Status::Internal("Init channel failed");
+    return Status::Internal("init channel failed");
   }
 
   LOG(INFO) << "Create channel for address (" << server_ip << ":" << server_port

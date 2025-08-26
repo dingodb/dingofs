@@ -65,6 +65,9 @@ DECLARE_bool(enable_remote_prefetch);
 // (default is 512MB).
 DECLARE_uint32(remote_prefetch_max_buffer_size_mb);
 
+// Timeout (ms) for rpc channel connect
+DECLARE_uint32(rpc_connect_timeout_ms);
+
 // Timeout (ms) for put rpc request
 DECLARE_uint32(put_rpc_timeout_ms);
 

@@ -25,8 +25,12 @@
 #include "utils/gflags_helper.h"
 
 namespace brpc {
+
 DECLARE_int32(defer_close_second);
 DECLARE_int32(health_check_interval);
+DECLARE_int32(connect_timeout_as_unreachable);
+DECLARE_int32(max_connection_pool_size);
+
 }  // namespace brpc
 
 namespace dingofs {
@@ -109,6 +113,12 @@ static void InitRemoteBlockCacheOption(utils::Configuration* c) {
               &cache::FLAGS_load_members_interval_ms);
 
   c->GetValue("remote_cache.fill_group_cache", &cache::FLAGS_fill_group_cache);
+  c->GetValue("remote_cache.rpc_connect_timeout_ms",
+              &cache::FLAGS_rpc_connect_timeout_ms);
+  c->GetValue("remote_cache.rpc_connect_timeout_as_unreachable",
+              &brpc::FLAGS_connect_timeout_as_unreachable);
+  c->GetValue("remote_cache.rpc_max_connection_pool_size",
+              &brpc::FLAGS_max_connection_pool_size);
   c->GetValue("remote_cache.put_rpc_timeout_ms",
               &cache::FLAGS_put_rpc_timeout_ms);
   c->GetValue("remote_cache.range_rpc_timeout_ms",

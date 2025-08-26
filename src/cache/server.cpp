@@ -35,10 +35,7 @@ DECLARE_int32(max_connection_pool_size);
 namespace dingofs {
 namespace cache {
 
-static void InitBrpcFlags() {
-  brpc::FLAGS_graceful_quit_on_sigterm = true;
-  brpc::FLAGS_max_connection_pool_size = 256;
-}
+static void InitBrpcFlags() { brpc::FLAGS_graceful_quit_on_sigterm = true; }
 
 static void GlobalInitOrDie() {
   InitLogging("dingo-cache");
