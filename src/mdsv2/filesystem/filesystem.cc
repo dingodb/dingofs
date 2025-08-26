@@ -63,6 +63,7 @@ static const std::string kRecyleName = ".recycle";
 DEFINE_uint32(mds_filesystem_name_max_size, 1024, "Max size of filesystem name.");
 DEFINE_uint32(mds_filesystem_hash_bucket_num, 1024, "Filesystem hash bucket num.");
 
+DEFINE_bool(mds_compact_chunk_enable, false, "Compact chunk enable.");
 DEFINE_uint32(mds_compact_chunk_threshold_num, 10, "Compact chunk threshold num.");
 DEFINE_uint32(mds_compact_chunk_interval_ms, 3 * 1000, "Compact chunk interval ms.");
 
@@ -1825,7 +1826,8 @@ Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, uint64_t chunk_index,
 
   // check whether need to compact chunk
   const uint64_t now_ms = Helper::TimestampMs();
-  if (static_cast<uint32_t>(chunk.slices_size()) > FLAGS_mds_compact_chunk_threshold_num &&
+  if (FLAGS_mds_compact_chunk_enable &&
+      static_cast<uint32_t>(chunk.slices_size()) > FLAGS_mds_compact_chunk_threshold_num &&
       chunk.last_compaction_time_ms() + FLAGS_mds_compact_chunk_interval_ms < now_ms) {
     auto fs_info = fs_info_->Get();
     if (CompactChunkOperation::MaybeCompact(fs_info, ino, attr.length(), chunk)) {

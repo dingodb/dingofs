@@ -468,7 +468,7 @@ Status DingodbTxn::Commit() {
       txn_trace_.is_conflict = true;
       return Status(pb::error::ESTORE_MAYBE_RETRY, status.ToString());
     }
-    return Status(status.Errno(), status.ToString());
+    return Status(pb::error::EBACKEND_STORE, status.ToString());
   }
 
   status = txn_->Commit();

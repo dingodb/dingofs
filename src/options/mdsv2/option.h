@@ -91,6 +91,7 @@ DECLARE_uint32(mds_filesystem_name_max_size);
 DECLARE_uint32(mds_filesystem_hash_bucket_num);
 
 // compaction config
+DECLARE_bool(mds_compact_chunk_enable);
 DECLARE_uint32(mds_compact_chunk_threshold_num);
 DECLARE_uint32(mds_compact_chunk_interval_ms);
 
