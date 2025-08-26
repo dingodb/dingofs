@@ -123,7 +123,7 @@ class MDSClient {
   Status Rename(ContextSPtr ctx, Ino old_parent, const std::string& old_name,
                 Ino new_parent, const std::string& new_name);
 
-  Status NewSliceId(ContextSPtr ctx, Ino ino, uint64_t* id);
+  Status NewSliceId(ContextSPtr ctx, uint32_t num, uint64_t* id);
   Status ReadSlice(ContextSPtr ctx, Ino ino,
                    const std::vector<uint64_t>& chunk_indexes,
                    std::vector<mdsv2::ChunkEntry>& chunks);

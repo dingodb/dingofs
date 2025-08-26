@@ -511,6 +511,11 @@ Status DummyFileSystem::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
   return Status::OK();
 }
 
+Status DummyFileSystem::Write(ContextSPtr ctx, Ino ino, uint64_t offset,
+                              uint64_t size, uint64_t fh) {
+  return Status::OK();
+}
+
 Status DummyFileSystem::MkDir(ContextSPtr ctx, Ino parent,
                               const std::string& name, uint32_t uid,
                               uint32_t gid, uint32_t mode, Attr* attr) {

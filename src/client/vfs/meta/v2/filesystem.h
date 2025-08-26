@@ -98,6 +98,8 @@ class MDSV2FileSystem : public vfs::MetaSystem {
   Status NewSliceId(ContextSPtr ctx, Ino ino, uint64_t* id) override;
   Status WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index, uint64_t fh,
                     const std::vector<Slice>& slices) override;
+  Status Write(ContextSPtr ctx, Ino ino, uint64_t offset, uint64_t size,
+               uint64_t fh) override;
 
   Status MkDir(ContextSPtr ctx, Ino parent, const std::string& name,
                uint32_t uid, uint32_t gid, uint32_t mode, Attr* attr) override;
@@ -145,27 +147,26 @@ class MDSV2FileSystem : public vfs::MetaSystem {
   bool InitCrontab();
 
   // inode cache
-  bool GetAttrFromCache(Ino ino, Attr& out_attr);
-  bool GetXAttrFromCache(Ino ino, const std::string& name, std::string& value);
-  void InsertInodeToCache(Ino ino, const AttrEntry& attr_entry);
-  void UpdateInodeToCache(Ino ino, const Attr& attr);
-  void UpdateInodeToCache(Ino ino, const AttrEntry& attr_entry);
-  void DeleteInodeFromCache(Ino ino);
+  // bool GetAttrFromCache(Ino ino, Attr& out_attr);
+  // bool GetXAttrFromCache(Ino ino, const std::string& name, std::string&
+  // value); void InsertInodeToCache(Ino ino, const AttrEntry& attr_entry); void
+  // UpdateInodeToCache(Ino ino, const Attr& attr); void UpdateInodeToCache(Ino
+  // ino, const AttrEntry& attr_entry); void DeleteInodeFromCache(Ino ino);
 
   // slice cache
-  bool GetSliceFromCache(Ino ino, uint64_t fh, uint64_t index,
-                         std::vector<Slice>* slices);
-  void UpdateInodeLength(Ino ino, uint64_t new_length);
-  bool WriteSliceToCache(Ino ino, uint64_t index, uint64_t fh,
-                         const std::vector<Slice>& slices);
-  void DeleteDeltaSliceFromCache(
-      Ino ino, uint64_t fh,
-      const std::vector<mdsv2::DeltaSliceEntry>& delta_slice_entries);
+  // bool GetSliceFromCache(Ino ino, uint64_t fh, uint64_t index,
+  //                        std::vector<Slice>* slices);
+  // void UpdateInodeLength(Ino ino, uint64_t new_length);
+  // bool WriteSliceToCache(Ino ino, uint64_t index, uint64_t fh,
+  //                        const std::vector<Slice>& slices);
+  // void DeleteDeltaSliceFromCache(
+  //     Ino ino, uint64_t fh,
+  //     const std::vector<mdsv2::DeltaSliceEntry>& delta_slice_entries);
 
-  void UpdateChunkToCache(Ino ino, uint64_t fh,
-                          const std::vector<mdsv2::ChunkEntry>& chunks);
-  void DeleteChunkMutation(Ino ino, uint64_t fh, uint64_t index);
-  Status SyncDeltaSlice(ContextSPtr ctx, Ino ino, uint64_t fh);
+  // void UpdateChunkToCache(Ino ino, uint64_t fh,
+  //                         const std::vector<mdsv2::ChunkEntry>& chunks);
+  // void DeleteChunkMutation(Ino ino, uint64_t fh, uint64_t index);
+  // Status SyncDeltaSlice(ContextSPtr ctx, Ino ino, uint64_t fh);
 
   const std::string name_;
   const ClientId client_id_;

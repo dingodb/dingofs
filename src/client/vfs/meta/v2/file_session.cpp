@@ -22,6 +22,7 @@
 #include "client/vfs/meta/v2/helper.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
+#include "mdsv2/common/helper.h"
 
 namespace dingofs {
 namespace client {
@@ -195,135 +196,206 @@ bool ChunkMutation::Load(const Json::Value& value) {
   return true;
 }
 
-FileSession::FileSession(Ino ino, uint64_t fh, const std::string& session_id,
-                         mdsv2::FsInfoPtr fs_info,
-                         const std::vector<ChunkEntry>& chunks)
-    : ino_(ino), fh_(fh), session_id_(session_id), fs_info_(fs_info) {
-  for (const auto& chunk : chunks) {
-    auto chunk_mutation = ChunkMutation::New(ino_, fh_, chunk);
-    chunk_mutation_map_.emplace(chunk.index(), chunk_mutation);
+void WriteMemo::AddRange(uint64_t offset, uint64_t size) {
+  ranges_.emplace_back(Range{.start = offset, .end = offset + size});
+  last_time_ns_ = mdsv2::Helper::TimestampNs();
+}
+
+uint64_t WriteMemo::GetLength() {
+  uint64_t length = 0;
+  for (const auto& range : ranges_) {
+    length = std::max(length, range.end);
   }
+
+  return length;
 }
 
-void FileSession::UpsertChunkMutation(const ChunkEntry& chunk) {
-  LOG(INFO) << fmt::format("[meta.filesession.{}.{}.{}] upsert chunk mutation.",
-                           ino_, fh_, chunk.index());
-
-  utils::WriteLockGuard lk(lock_);
-
-  auto it = chunk_mutation_map_.find(chunk.index());
-  if (it == chunk_mutation_map_.end()) {
-    auto chunk_mutation = ChunkMutation::New(ino_, fh_, chunk);
-    chunk_mutation_map_.emplace(chunk.index(), chunk_mutation);
-
-  } else {
-    it->second->UpdateChunkIf(chunk);
-  }
+FileSession::FileSession(mdsv2::FsInfoPtr fs_info, Ino ino, uint64_t fh,
+                         const std::string& session_id)
+    : fs_info_(fs_info), ino_(ino) {
+  AddSession(fh, session_id);
 }
 
-void FileSession::AppendSlice(int64_t index, const std::vector<Slice>& slices) {
-  LOG(INFO) << fmt::format("[meta.filesession.{}.{}.{}] append slice.", ino_,
-                           fh_, index);
-
-  utils::WriteLockGuard lk(lock_);
-
-  auto it = chunk_mutation_map_.find(index);
-  if (it != chunk_mutation_map_.end()) {
-    auto& chunk_mutation = it->second;
-    chunk_mutation->AppendSlice(slices);
-
-  } else {
-    auto chunk_mutation = ChunkMutation::New(
-        ino_, fh_, index, fs_info_->GetChunkSize(), fs_info_->GetBlockSize());
-    chunk_mutation->AppendSlice(slices);
-    chunk_mutation_map_.insert(std::make_pair(index, chunk_mutation));
-  }
-}
-
-void FileSession::DeleteChunkMutation(int64_t index) {
-  LOG(INFO) << fmt::format("[meta.filesession.{}.{}] delete chunk mutation.",
-                           ino_, fh_, index);
-
-  utils::WriteLockGuard lk(lock_);
-
-  chunk_mutation_map_.erase(index);
-}
-
-ChunkMutationSPtr FileSession::GetChunkMutation(int64_t index) {
+std::string FileSession::GetSessionID(uint64_t fh) {
   utils::ReadLockGuard lk(lock_);
 
-  auto it = chunk_mutation_map_.find(index);
-  return (it != chunk_mutation_map_.end()) ? it->second : nullptr;
+  auto it = session_id_map_.find(fh);
+  return (it != session_id_map_.end()) ? it->second : "";
 }
 
-std::vector<ChunkMutationSPtr> FileSession::GetAllChunkMutation() {
-  utils::ReadLockGuard lk(lock_);
-
-  std::vector<ChunkMutationSPtr> chunks;
-  chunks.reserve(chunk_mutation_map_.size());
-  for (const auto& [_, chunk] : chunk_mutation_map_) {
-    chunks.push_back(chunk);
-  }
-
-  return std::move(chunks);
-}
-
-void FileSession::AddChunkMutation(ChunkMutationSPtr chunk_mutation) {
-  LOG(INFO) << fmt::format("[meta.filesession.{}.{}.{}] add chunk mutation.",
-                           ino_, fh_, chunk_mutation->GetIndex());
-
+void FileSession::AddSession(uint64_t fh, const std::string& session_id) {
   utils::WriteLockGuard lk(lock_);
 
-  chunk_mutation_map_.emplace(chunk_mutation->GetIndex(), chunk_mutation);
+  session_id_map_[fh] = session_id;
+
+  IncRef();
 }
 
-bool FileSessionMap::Put(const Key& key, FileSessionSPtr file_session) {
-  CHECK(key.ino != 0) << "ino is zero.";
-  CHECK(key.fh != 0) << "fh is zero.";
-  CHECK(file_session != nullptr) << "file_session is nullptr.";
+void FileSession::DeleteSession(uint64_t fh) {
+  utils::WriteLockGuard lk(lock_);
+
+  session_id_map_.erase(fh);
+}
+
+void FileSession::AddWriteMemo(uint64_t offset, uint64_t size) {
+  utils::WriteLockGuard lk(lock_);
+
+  write_memo_.AddRange(offset, size);
+}
+
+uint64_t FileSession::GetLength() {
+  utils::ReadLockGuard lk(lock_);
+
+  return write_memo_.GetLength();
+}
+
+uint64_t FileSession::GetLastTimeNs() {
+  utils::ReadLockGuard lk(lock_);
+
+  return write_memo_.LastTimeNs();
+}
+
+// void FileSession::UpsertChunkMutation(const ChunkEntry& chunk) {
+//   LOG(INFO) << fmt::format("[meta.filesession.{}.{}.{}] upsert chunk
+//   mutation.",
+//                            ino_, fh_, chunk.index());
+
+//   // utils::WriteLockGuard lk(lock_);
+
+//   // auto it = chunk_mutation_map_.find(chunk.index());
+//   // if (it == chunk_mutation_map_.end()) {
+//   //   auto chunk_mutation = ChunkMutation::New(ino_, fh_, chunk);
+//   //   chunk_mutation_map_.emplace(chunk.index(), chunk_mutation);
+
+//   // } else {
+//   //   it->second->UpdateChunkIf(chunk);
+//   // }
+// }
+
+// void FileSession::AppendSlice(int64_t index, const std::vector<Slice>&
+// slices) {
+//   LOG(INFO) << fmt::format("[meta.filesession.{}.{}.{}] append slice.", ino_,
+//                            fh_, index);
+
+//   utils::WriteLockGuard lk(lock_);
+
+//   // auto it = chunk_mutation_map_.find(index);
+//   // if (it != chunk_mutation_map_.end()) {
+//   //   auto& chunk_mutation = it->second;
+//   //   chunk_mutation->AppendSlice(slices);
+
+//   // } else {
+//   //   auto chunk_mutation = ChunkMutation::New(
+//   //       ino_, fh_, index, fs_info_->GetChunkSize(),
+//   //       fs_info_->GetBlockSize());
+//   //   chunk_mutation->AppendSlice(slices);
+//   //   chunk_mutation_map_.insert(std::make_pair(index, chunk_mutation));
+//   // }
+// }
+
+// void FileSession::DeleteChunkMutation(int64_t index) {
+//   LOG(INFO) << fmt::format("[meta.filesession.{}.{}] delete chunk mutation.",
+//                            ino_, fh_, index);
+
+//   utils::WriteLockGuard lk(lock_);
+
+//   chunk_mutation_map_.erase(index);
+// }
+
+// ChunkMutationSPtr FileSession::GetChunkMutation(int64_t index) {
+//   utils::ReadLockGuard lk(lock_);
+
+//   auto it = chunk_mutation_map_.find(index);
+//   return (it != chunk_mutation_map_.end()) ? it->second : nullptr;
+// }
+
+// std::vector<ChunkMutationSPtr> FileSession::GetAllChunkMutation() {
+//   utils::ReadLockGuard lk(lock_);
+
+//   std::vector<ChunkMutationSPtr> chunks;
+//   chunks.reserve(chunk_mutation_map_.size());
+//   for (const auto& [_, chunk] : chunk_mutation_map_) {
+//     chunks.push_back(chunk);
+//   }
+
+//   return std::move(chunks);
+// }
+
+// void FileSession::AddChunkMutation(ChunkMutationSPtr chunk_mutation) {
+//   LOG(INFO) << fmt::format("[meta.filesession.{}.{}.{}] add chunk mutation.",
+//                            ino_, fh_, chunk_mutation->GetIndex());
+
+//   utils::WriteLockGuard lk(lock_);
+
+//   chunk_mutation_map_.emplace(chunk_mutation->GetIndex(), chunk_mutation);
+// }
+
+FileSessionSPtr FileSessionMap::Put(Ino ino, uint64_t fh,
+                                    const std::string& session_id) {
+  CHECK(ino != 0) << "ino is zero.";
+  CHECK(fh != 0) << "fh is zero.";
+  CHECK(!session_id.empty()) << "session_id is empty.";
 
   LOG(INFO) << fmt::format(
-      "[meta.filesession.{}.{}] add file session, session_id({}).", key.ino,
-      key.fh, file_session->GetSessionID());
+      "[meta.filesession.{}.{}] add file session, session_id({}).", ino, fh,
+      session_id);
 
   utils::WriteLockGuard lk(lock_);
 
-  auto it = file_session_map_.find(key);
-  if (it != file_session_map_.end()) return false;
+  auto it = file_session_map_.find(ino);
+  if (it != file_session_map_.end()) {
+    auto file_session = it->second;
+    file_session->AddSession(fh, session_id);
+    return file_session;
+  }
 
-  file_session_map_.insert(std::make_pair(key, file_session));
+  auto file_session = FileSession::New(fs_info_, ino, fh, session_id);
+  file_session_map_.insert(std::make_pair(ino, file_session));
 
-  return true;
+  return file_session;
 }
 
-void FileSessionMap::Delete(const Key& key) {
-  CHECK(key.ino != 0) << "ino is zero.";
-  CHECK(key.fh != 0) << "fh is zero.";
-  LOG(INFO) << fmt::format("[meta.filesession.{}.{}] delete file session.",
-                           key.ino, key.fh);
+void FileSessionMap::Delete(Ino ino, uint64_t fh) {
+  CHECK(ino != 0) << "ino is zero.";
+  CHECK(fh != 0) << "fh is zero.";
 
-  utils::WriteLockGuard lk(lock_);
+  uint32_t ref_count = 0;
+  {
+    utils::WriteLockGuard lk(lock_);
 
-  file_session_map_.erase(key);
+    auto it = file_session_map_.find(ino);
+    if (it == file_session_map_.end()) return;
+
+    auto file_session = it->second;
+
+    file_session->DeleteSession(fh);
+    ref_count = file_session->DecRef();
+    if (ref_count == 0) {
+      file_session_map_.erase(it);
+    }
+  }
+
+  LOG(INFO) << fmt::format(
+      "[meta.filesession.{}.{}] delete file session, ref_count({}).", ino, fh,
+      ref_count);
 }
 
-std::string FileSessionMap::GetSessionID(const Key& key) {
-  CHECK(key.ino != 0) << "ino is zero.";
-  CHECK(key.fh != 0) << "fh is zero.";
+std::string FileSessionMap::GetSessionID(Ino ino, uint64_t fh) {
+  CHECK(ino != 0) << "ino is zero.";
+  CHECK(fh != 0) << "fh is zero.";
 
   utils::ReadLockGuard lk(lock_);
 
-  auto it = file_session_map_.find(key);
-  return (it != file_session_map_.end()) ? it->second->GetSessionID() : "";
+  auto it = file_session_map_.find(ino);
+  return (it != file_session_map_.end()) ? it->second->GetSessionID(fh) : "";
 }
 
-FileSessionSPtr FileSessionMap::GetSession(const Key& key) {
-  CHECK(key.ino != 0) << "ino is zero.";
-  CHECK(key.fh != 0) << "fh is zero.";
+FileSessionSPtr FileSessionMap::GetSession(Ino ino) {
+  CHECK(ino != 0) << "ino is zero.";
 
   utils::ReadLockGuard lk(lock_);
 
-  auto it = file_session_map_.find(key);
+  auto it = file_session_map_.find(ino);
   return (it != file_session_map_.end()) ? it->second : nullptr;
 }
 
@@ -331,26 +403,26 @@ FileSessionSPtr FileSessionMap::GetSession(const Key& key) {
 bool FileSessionMap::Dump(Json::Value& value) {
   utils::ReadLockGuard lk(lock_);
 
-  Json::Value file_session_items = Json::arrayValue;
-  for (const auto& [key, file_session] : file_session_map_) {
-    Json::Value file_session_item;
-    file_session_item["ino"] = key.ino;
-    file_session_item["fh"] = key.fh;
-    file_session_item["session_id"] = file_session->GetSessionID();
+  // Json::Value file_session_items = Json::arrayValue;
+  // for (const auto& [key, file_session] : file_session_map_) {
+  //   Json::Value file_session_item;
+  //   file_session_item["ino"] = key.ino;
+  //   file_session_item["fh"] = key.fh;
+  //   file_session_item["session_id"] = file_session->GetSessionID();
 
-    Json::Value chunk_items = Json::arrayValue;
-    auto chunk_mutations = file_session->GetAllChunkMutation();
-    for (const auto& chunk_mutation : chunk_mutations) {
-      Json::Value chunk_item;
-      chunk_mutation->Dump(chunk_item);
-      chunk_items.append(chunk_item);
-    }
-    file_session_item["chunks"] = chunk_items;
+  //   Json::Value chunk_items = Json::arrayValue;
+  //   auto chunk_mutations = file_session->GetAllChunkMutation();
+  //   for (const auto& chunk_mutation : chunk_mutations) {
+  //     Json::Value chunk_item;
+  //     chunk_mutation->Dump(chunk_item);
+  //     chunk_items.append(chunk_item);
+  //   }
+  //   file_session_item["chunks"] = chunk_items;
 
-    file_session_items.append(file_session_item);
-  }
+  //   file_session_items.append(file_session_item);
+  // }
 
-  value["file_sessions"] = file_session_items;
+  // value["file_sessions"] = file_session_items;
 
   return true;
 }
@@ -358,32 +430,32 @@ bool FileSessionMap::Dump(Json::Value& value) {
 bool FileSessionMap::Load(const Json::Value& value) {
   utils::WriteLockGuard lk(lock_);
 
-  file_session_map_.clear();
-  const Json::Value& items = value["file_sessions"];
-  if (!items.isArray()) {
-    LOG(ERROR) << "[meta.filesession] value is not an array.";
-    return false;
-  }
+  // file_session_map_.clear();
+  // const Json::Value& items = value["file_sessions"];
+  // if (!items.isArray()) {
+  //   LOG(ERROR) << "[meta.filesession] value is not an array.";
+  //   return false;
+  // }
 
-  for (const auto& filesession_item : items) {
-    uint64_t fh = filesession_item["fh"].asUInt64();
-    Ino ino = filesession_item["ino"].asUInt64();
-    std::string session_id = filesession_item["session_id"].asString();
-    CHECK(fh != 0) << "fh is zero.";
-    CHECK(ino != 0) << "ino is zero.";
-    CHECK(!session_id.empty()) << "session_id is empty.";
+  // for (const auto& filesession_item : items) {
+  //   uint64_t fh = filesession_item["fh"].asUInt64();
+  //   Ino ino = filesession_item["ino"].asUInt64();
+  //   std::string session_id = filesession_item["session_id"].asString();
+  //   CHECK(fh != 0) << "fh is zero.";
+  //   CHECK(ino != 0) << "ino is zero.";
+  //   CHECK(!session_id.empty()) << "session_id is empty.";
 
-    auto file_session = FileSession::New(ino, fh, session_id, fs_info_, {});
+  //   auto file_session = FileSession::New(ino, fh, session_id, fs_info_, {});
 
-    for (const auto& chunk_item : filesession_item["chunks"]) {
-      auto chunk_mutation = ChunkMutation::New(ino, fh, {});
-      if (chunk_mutation->Load(chunk_item)) {
-        file_session->AddChunkMutation(chunk_mutation);
-      }
-    }
+  //   for (const auto& chunk_item : filesession_item["chunks"]) {
+  //     auto chunk_mutation = ChunkMutation::New(ino, fh, {});
+  //     if (chunk_mutation->Load(chunk_item)) {
+  //       file_session->AddChunkMutation(chunk_mutation);
+  //     }
+  //   }
 
-    file_session_map_[{ino, fh}] = file_session;
-  }
+  //   file_session_map_[{ino, fh}] = file_session;
+  // }
 
   return true;
 }

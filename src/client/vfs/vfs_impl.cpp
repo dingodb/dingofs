@@ -328,6 +328,10 @@ Status VFSImpl::Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t size,
     s = handle->file->Write(buf, size, offset, out_wsize);
   }
 
+  if (s.ok()) {
+    meta_system_->Write(ctx, ino, offset, size, fh);
+  }
+
   return s;
 }
 

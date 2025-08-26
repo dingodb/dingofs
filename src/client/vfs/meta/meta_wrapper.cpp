@@ -332,6 +332,19 @@ Status MetaWrapper::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
   return s;
 }
 
+Status MetaWrapper::Write(ContextSPtr ctx, Ino ino, uint64_t offset,
+                          uint64_t size, uint64_t fh) {
+  Status s;
+  MetaLogGuard log_guard([&]() {
+    return absl::StrFormat("write (%d,%d,%d): [fh:%d] %s %d", ino, offset, size,
+                           fh, s.ToString(), ctx->hit_cache);
+  });
+
+  s = target_->Write(ctx, ino, offset, size, fh);
+
+  return s;
+}
+
 Status MetaWrapper::StatFs(ContextSPtr ctx, Ino ino, FsStat* fs_stat) {
   Status s;
   MetaLogGuard log_guard(

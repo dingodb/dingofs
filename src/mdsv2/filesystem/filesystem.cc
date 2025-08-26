@@ -63,7 +63,7 @@ static const std::string kRecyleName = ".recycle";
 DEFINE_uint32(mds_filesystem_name_max_size, 1024, "Max size of filesystem name.");
 DEFINE_uint32(mds_filesystem_hash_bucket_num, 1024, "Filesystem hash bucket num.");
 
-DEFINE_bool(mds_compact_chunk_enable, false, "Compact chunk enable.");
+DEFINE_bool(mds_compact_chunk_enable, true, "Compact chunk enable.");
 DEFINE_uint32(mds_compact_chunk_threshold_num, 10, "Compact chunk threshold num.");
 DEFINE_uint32(mds_compact_chunk_interval_ms, 3 * 1000, "Compact chunk interval ms.");
 
@@ -1771,15 +1771,6 @@ Status FileSystem::CommitRename(Context& ctx, const RenameParam& param, Ino& old
   return renamer_.Execute<RenameParam>(GetSelfPtr(), ctx, param, old_parent_version, new_parent_version);
 }
 
-static uint64_t CalculateDeltaLength(uint64_t length, const std::vector<SliceEntry>& slices) {
-  uint64_t temp_length = length;
-  for (const auto& slice : slices) {
-    temp_length = std::max(temp_length, slice.offset() + slice.len());
-  }
-
-  return temp_length - length;
-}
-
 static uint64_t CalculateDeltaLength(uint64_t length, const std::vector<DeltaSliceEntry>& delta_slices) {
   uint64_t temp_length = length;
   for (const auto& delta_slice : delta_slices) {
@@ -1791,7 +1782,7 @@ static uint64_t CalculateDeltaLength(uint64_t length, const std::vector<DeltaSli
   return temp_length - length;
 }
 
-Status FileSystem::WriteSlice(Context& ctx, Ino parent, Ino ino, const std::vector<DeltaSliceEntry>& delta_slices) {
+Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, const std::vector<DeltaSliceEntry>& delta_slices) {
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -1836,8 +1827,10 @@ Status FileSystem::WriteSlice(Context& ctx, Ino parent, Ino ino, const std::vect
 
   // check whether need to compact chunk
   for (auto& chunk : chunks) {
-    if (chunk.slices_size() > FLAGS_mds_compact_chunk_threshold_num &&
-        chunk.last_compaction_time_ms() + FLAGS_mds_compact_chunk_interval_ms < Helper::TimestampMs()) {
+    if (FLAGS_mds_compact_chunk_enable &&
+        static_cast<uint32_t>(chunk.slices_size()) > FLAGS_mds_compact_chunk_threshold_num &&
+        chunk.last_compaction_time_ms() + FLAGS_mds_compact_chunk_interval_ms <
+            static_cast<uint64_t>(Helper::TimestampMs())) {
       auto fs_info = fs_info_->Get();
       if (CompactChunkOperation::MaybeCompact(fs_info, ino, attr.length(), chunk)) {
         DINGO_LOG(INFO) << fmt::format("[fs.{}] trigger compact chunk({}) for ino({}).", fs_id_, chunk.index(), ino);
@@ -1879,12 +1872,6 @@ Status FileSystem::ReadSlice(Context& ctx, Ino ino, const std::vector<uint64_t>&
 
   Duration duration;
 
-  InodeSPtr inode;
-  auto status = GetInode(ctx, ino, inode);
-  if (!status.ok()) {
-    return status;
-  }
-
   // get chunk from cache
   std::vector<uint32_t> miss_chunk_indexes;
   for (const auto& chunk_index : chunk_indexes) {
@@ -1900,7 +1887,7 @@ Status FileSystem::ReadSlice(Context& ctx, Ino ino, const std::vector<uint64_t>&
   // get chunk from backend store
   GetChunkOperation operation(trace, fs_id_, ino, miss_chunk_indexes);
 
-  status = RunOperation(&operation);
+  auto status = RunOperation(&operation);
 
   DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] readslice {}/{} finish, miss({}) status({}).", fs_id_,
                                  duration.ElapsedUs(), ino, Helper::VectorToString(chunk_indexes),

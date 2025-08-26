@@ -15,8 +15,10 @@
 #ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_FILE_SESSION_H_
 #define DINGOFS_SRC_CLIENT_VFS_META_V2_FILE_SESSION_H_
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "client/meta/vfs_meta.h"
@@ -90,44 +92,74 @@ class ChunkMutation {
   std::vector<Slice> delta_slices_;
 };
 
+class WriteMemo {
+ public:
+  WriteMemo() = default;
+  ~WriteMemo() = default;
+
+  void AddRange(uint64_t offset, uint64_t size);
+  uint64_t GetLength();
+  uint64_t LastTimeNs() const { return last_time_ns_; }
+
+ private:
+  struct Range {
+    uint64_t start{0};
+    uint64_t end{0};  // [start, end)
+  };
+
+  std::vector<Range> ranges_;
+  uint64_t last_time_ns_{0};
+};
+
 class FileSession;
 using FileSessionSPtr = std::shared_ptr<FileSession>;
 
 class FileSession {
  public:
-  FileSession(Ino ino, uint64_t fh, const std::string& session_id,
-              mdsv2::FsInfoPtr fs_info, const std::vector<ChunkEntry>& chunks);
+  FileSession(mdsv2::FsInfoPtr fs_info, Ino ino, uint64_t fh,
+              const std::string& session_id);
   ~FileSession() = default;
 
-  static FileSessionSPtr New(Ino ino, uint64_t fh,
-                             const std::string& session_id,
-                             mdsv2::FsInfoPtr fs_info,
-                             const std::vector<ChunkEntry>& chunks) {
-    return std::make_shared<FileSession>(ino, fh, session_id, fs_info, chunks);
+  static FileSessionSPtr New(mdsv2::FsInfoPtr fs_info, Ino ino, uint64_t fh,
+                             const std::string& session_id) {
+    return std::make_shared<FileSession>(fs_info, ino, fh, session_id);
   }
 
   Ino GetIno() const { return ino_; }
-  uint64_t GetFh() const { return fh_; }
-  const std::string& GetSessionID() const { return session_id_; }
+  std::string GetSessionID(uint64_t fh);
 
-  void UpsertChunkMutation(const ChunkEntry& chunk);
-  void AppendSlice(int64_t index, const std::vector<Slice>& slices);
-  void DeleteChunkMutation(int64_t index);
+  uint32_t IncRef() { return ref_count_.fetch_add(1) + 1; }
+  uint32_t DecRef() { return ref_count_.fetch_sub(1) - 1; }
 
-  ChunkMutationSPtr GetChunkMutation(int64_t index);
-  std::vector<ChunkMutationSPtr> GetAllChunkMutation();
+  void AddSession(uint64_t fh, const std::string& session_id);
+  void DeleteSession(uint64_t fh);
+
+  void AddWriteMemo(uint64_t offset, uint64_t size);
+  uint64_t GetLength();
+  uint64_t GetLastTimeNs();
+
+  // void UpsertChunkMutation(const ChunkEntry& chunk);
+  // void AppendSlice(int64_t index, const std::vector<Slice>& slices);
+  // void DeleteChunkMutation(int64_t index);
+
+  // ChunkMutationSPtr GetChunkMutation(int64_t index);
+  // std::vector<ChunkMutationSPtr> GetAllChunkMutation();
 
  private:
   friend class FileSessionMap;
-  void AddChunkMutation(ChunkMutationSPtr chunk_mutation);
-
-  Ino ino_;
-  uint64_t fh_;
-  const std::string session_id_;
+  // void AddChunkMutation(ChunkMutationSPtr chunk_mutation);
 
   mdsv2::FsInfoPtr fs_info_;
+  Ino ino_;
+
+  std::atomic<uint32_t> ref_count_{0};
 
   utils::RWLock lock_;
+
+  // fh -> session_id
+  std::map<uint64_t, std::string> session_id_map_;
+
+  WriteMemo write_memo_;
 
   // index -> chunk
   std::map<int64_t, ChunkMutationSPtr> chunk_mutation_map_;
@@ -139,23 +171,11 @@ class FileSessionMap {
   FileSessionMap(mdsv2::FsInfoPtr fs_info) : fs_info_(fs_info) {}
   ~FileSessionMap() = default;
 
-  struct Key {
-    uint64_t ino{0};
-    uint64_t fh{0};
+  FileSessionSPtr Put(Ino ino, uint64_t fh, const std::string& session_id);
+  void Delete(Ino ino, uint64_t fh);
 
-    bool operator<(const Key& other) const {
-      if (ino != other.ino) {
-        return ino < other.ino;
-      }
-      return fh < other.fh;
-    }
-  };
-
-  bool Put(const Key& key, FileSessionSPtr file_session);
-  void Delete(const Key& key);
-
-  std::string GetSessionID(const Key& key);
-  FileSessionSPtr GetSession(const Key& key);
+  std::string GetSessionID(Ino ino, uint64_t fh);
+  FileSessionSPtr GetSession(Ino ino);
 
   // output json format string
   bool Dump(Json::Value& value);
@@ -165,8 +185,8 @@ class FileSessionMap {
   mdsv2::FsInfoPtr fs_info_;
 
   utils::RWLock lock_;
-  // Key(ino, fh) -> FileSession
-  std::map<Key, FileSessionSPtr> file_session_map_;
+  // ino -> FileSession
+  std::map<Ino, FileSessionSPtr> file_session_map_;
 };
 
 }  // namespace v2

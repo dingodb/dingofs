@@ -69,7 +69,8 @@ fi
 
 function gen_conf() {
     index=$1
-    dist_conf="${FUSE_CONF_DIR}/client-${FLAGS_fsname}-${index}.conf"
+    prefix_name=${FLAGS_fsname}-${index}
+    dist_conf="${FUSE_CONF_DIR}/client-${prefix_name}.conf"
 
     if [ ! -f "$FUSE_CONF_TEMPLATE" ]; then
         echo "fuse conf template(${FUSE_CONF_TEMPLATE}) already exist."
@@ -78,8 +79,8 @@ function gen_conf() {
 
     cp $FUSE_CONF_TEMPLATE $dist_conf
 
-    cache_dir=$FUSE_CACHE_DIR/$index
-    log_dir=$FUSE_LOG_DIR/$index
+    cache_dir=$FUSE_CACHE_DIR/${prefix_name}
+    log_dir=$FUSE_LOG_DIR/${prefix_name}
     dummy_port=$(($RANDOM%20000 + 10000))
 
     sed  -i 's,\$CACHE_DIR\$,'"$cache_dir"',g'              $dist_conf
@@ -125,7 +126,8 @@ function stop() {
 function umount() {
     for ((i=1; i<=${FLAGS_num}; i++)); do
         index=$i
-        mountpoint_dir=${FLAGS_mountpoint}/${FLAGS_fsname}-${index}
+        prefix_name=${FLAGS_fsname}-${index}
+        mountpoint_dir=${FLAGS_mountpoint}/${prefix_name}
 
         echo "umount ${mountpoint_dir}"
         fusermount -uz ${mountpoint_dir}
@@ -134,9 +136,10 @@ function umount() {
 
 function start() {
     index=$1
-    fuse_conf_path="${FUSE_CONF_DIR}/client-${FLAGS_fsname}-${index}.conf"
-    log_dir=$FUSE_LOG_DIR/$index
-    mountpoint_dir=${FLAGS_mountpoint}/${FLAGS_fsname}-${index}
+    prefix_name=${FLAGS_fsname}-${index}
+    fuse_conf_path="${FUSE_CONF_DIR}/client-${prefix_name}.conf"
+    log_dir=$FUSE_LOG_DIR/${prefix_name}
+    mountpoint_dir=${FLAGS_mountpoint}/${prefix_name}
 
     if [ ! -d "${log_dir}" ]; then
         mkdir -p ${log_dir}

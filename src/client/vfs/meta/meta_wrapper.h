@@ -110,6 +110,9 @@ class MetaWrapper : public MetaSystem {
   Status WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index, uint64_t fh,
                     const std::vector<Slice>& slices) override;
 
+  Status Write(ContextSPtr ctx, Ino ino, uint64_t offset, uint64_t size,
+               uint64_t fh) override;
+
   Status StatFs(ContextSPtr ctx, Ino ino, FsStat* fs_stat) override;
 
   Status GetFsInfo(ContextSPtr ctx, FsInfo* fs_info) override;

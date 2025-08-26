@@ -375,7 +375,7 @@ void GcProcessor::ScanDelSlice(uint32_t fs_id) {
 
     // check file session exist
     if (HasFileSession(fs_id, ino)) {
-      LOG(INFO) << fmt::format("[gc.delslice] exist file session so skip delslice, fs_id({}) ino({}).", fs_id, ino);
+      LOG(INFO) << fmt::format("[gc.delslice.{}.{}] exist file session so skip.", fs_id, ino);
       return true;
     }
 
@@ -406,6 +406,12 @@ void GcProcessor::ScanDelFile(uint32_t fs_id) {
     MetaCodec::DecodeDelFileKey(key, fs_id, ino);
     CHECK(fs_id > 0) << "invalid fs id.";
     CHECK(ino > 0) << "invalid ino.";
+
+    // check file session exist
+    if (HasFileSession(fs_id, ino)) {
+      LOG(INFO) << fmt::format("[gc.delfile.{}.{}] exist file session so skip.", fs_id, ino);
+      return true;
+    }
 
     auto block_accessor = GetOrCreateDataAccesser(fs_id);
     if (block_accessor == nullptr) {

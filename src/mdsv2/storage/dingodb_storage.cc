@@ -211,7 +211,7 @@ Status DingodbStorage::Put(WriteOption option, const std::vector<KeyValue>& kvs)
   return Status::OK();
 }
 
-static Status TransformStatus(dingodb::sdk::Status status) {
+static inline Status TransformStatus(const dingodb::sdk::Status& status) {
   if (status.IsNotFound()) {
     return Status(pb::error::ENOT_FOUND, status.ToString());
 
@@ -468,7 +468,7 @@ Status DingodbTxn::Commit() {
       txn_trace_.is_conflict = true;
       return Status(pb::error::ESTORE_MAYBE_RETRY, status.ToString());
     }
-    return Status(pb::error::EBACKEND_STORE, status.ToString());
+    return TransformStatus(status);
   }
 
   status = txn_->Commit();
@@ -478,7 +478,7 @@ Status DingodbTxn::Commit() {
       txn_trace_.is_conflict = true;
       return Status(pb::error::ESTORE_MAYBE_RETRY, status.ToString());
     }
-    return Status(pb::error::EBACKEND_STORE, status.ToString());
+    return TransformStatus(status);
   }
 
   return Status::OK();

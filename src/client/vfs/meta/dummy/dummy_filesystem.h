@@ -223,6 +223,8 @@ class DummyFileSystem : public vfs::MetaSystem {
   Status NewSliceId(ContextSPtr ctx, Ino ino, uint64_t* id) override;
   Status WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index, uint64_t fh,
                     const std::vector<Slice>& slices) override;
+  Status Write(ContextSPtr ctx, Ino ino, uint64_t offset, uint64_t size,
+               uint64_t fh) override;
 
   Status MkDir(ContextSPtr ctx, Ino parent, const std::string& name,
                uint32_t uid, uint32_t gid, uint32_t mode, Attr* attr) override;

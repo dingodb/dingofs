@@ -667,15 +667,15 @@ Status UpdateAttrOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std:
   }
 
   if (to_set_ & kSetAttrAtime) {
-    attr.set_atime(std::max(attr.atime(), attr_.atime()));
+    attr.set_atime(attr_.atime());
   }
 
   if (to_set_ & kSetAttrMtime) {
-    attr.set_mtime(std::max(attr.mtime(), attr_.mtime()));
+    attr.set_mtime(attr_.mtime());
   }
 
   if (to_set_ & kSetAttrCtime) {
-    attr.set_ctime(std::max(attr.ctime(), attr_.ctime()));
+    attr.set_ctime(attr_.ctime());
   }
 
   if (to_set_ & kSetAttrNlink) {
@@ -716,7 +716,7 @@ std::vector<std::string> UpsertChunkOperation::PrefetchKey() {
     prefetch_keys.push_back(MetaCodec::EncodeChunkKey(fs_info_.fs_id(), ino_, delta_slices.chunk_index()));
   }
 
-  return std::move(prefetch_keys);
+  return prefetch_keys;
 }
 
 Status UpsertChunkOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>& prefetch_kvs) {
@@ -1530,7 +1530,7 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoEntry& fs_info,
             auto* range = it->second.add_ranges();
             range->set_offset(block_offset);
             range->set_len(block_size);
-            range->set_compaction_version(slice.compaction_version());
+            range->set_compaction_version(slice.compaction_version);
           }
         }
       }
