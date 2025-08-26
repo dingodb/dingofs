@@ -28,7 +28,6 @@
 
 #include "cache/common/const.h"
 #include "cache/common/macro.h"
-#include "cache/metric/cache_status.h"
 #include "cache/metric/remote_block_cache_metric.h"
 #include "cache/remotecache/mem_cache.h"
 #include "cache/remotecache/remote_cache_node_group.h"
@@ -105,7 +104,6 @@ Status RemoteBlockCacheImpl::Start() {
   }
 
   RemoteBlockCacheMetric::Init();
-  SetStatusPage();
 
   running_ = true;
 
@@ -363,14 +361,6 @@ bool RemoteBlockCacheImpl::EnableCache() const { return HasCacheStore(); };
 bool RemoteBlockCacheImpl::IsCached(const BlockKey& /*key*/) const {
   return HasCacheStore();  // FIXME: using rpc request to check if the key is
                            // cached
-}
-
-void RemoteBlockCacheImpl::SetStatusPage() const {
-  CacheStatus::Update([this](CacheStatus::Root& root) {
-    root.remote_cache.property.cache_store = "disk";
-    root.remote_cache.property.enable_stage = true;
-    root.remote_cache.property.enable_cache = true;
-  });
 }
 
 }  // namespace cache

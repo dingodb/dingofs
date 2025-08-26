@@ -70,7 +70,6 @@ class CacheStatus {
   };
 
   struct RemoteCache {
-    Property property;
     std::string mds_addrs;
     std::string cache_group;
     std::string last_modified;

@@ -110,8 +110,6 @@ nlohmann::json CacheStatus::ToJSON(LocalCache cache) {
 nlohmann::json CacheStatus::ToJSON(RemoteCache cache) {
   nlohmann::json msg;
 
-  msg["property"] = ToJSON(cache.property);
-
   msg["mds_addrs"] = cache.mds_addrs;
   msg["cache_group"] = cache.cache_group;
   msg["last_modified"] = cache.last_modified;
