@@ -97,6 +97,7 @@ class Restore {
     std::string file_path;      // output file path (if type is kFile)
 
     uint32_t fs_id{0};  // file system ID
+    bool is_force{false};
 
     S3Info s3_info;
   };
@@ -117,7 +118,7 @@ class Restore {
   Status GetFsInfo(uint32_t fs_id, FsInfoEntry& fs_info);
 
   Status RestoreMetaTable(InputUPtr input);
-  Status RestoreFsMetaTable(uint32_t fs_id, InputUPtr input);
+  Status RestoreFsMetaTable(uint32_t fs_id, InputUPtr input, bool is_force);
 
   OperationProcessorSPtr operation_processor_;
 };
@@ -152,6 +153,7 @@ class RestoreCommandRunner {
     uint32_t fs_id{0};
     std::string fs_name;
     std::string file_path;
+    bool is_force{false};
 
     S3Info s3_info;  // S3 information for backup and restore
   };

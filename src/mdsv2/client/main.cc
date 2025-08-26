@@ -141,6 +141,7 @@ int main(int argc, char* argv[]) {
     options.fs_id = FLAGS_fs_id;
     options.fs_name = FLAGS_fs_name;
     options.file_path = FLAGS_in;
+    options.is_force = FLAGS_is_force;
 
     auto& s3_info = options.s3_info;
     s3_info.ak = FLAGS_s3_ak;

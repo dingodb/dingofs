@@ -523,7 +523,7 @@ Status Restore::RestoreFsMetaTable(const Options& options, uint32_t fs_id) {
     return Status(pb::error::EINTERNAL, "init input fail");
   }
 
-  return RestoreFsMetaTable(fs_id, std::move(input));
+  return RestoreFsMetaTable(fs_id, std::move(input), options.is_force);
 }
 
 Status Restore::IsExistMetaTable() {
@@ -656,7 +656,7 @@ Status Restore::RestoreMetaTable(InputUPtr input) {
   return Status::OK();
 }
 
-Status Restore::RestoreFsMetaTable(uint32_t fs_id, InputUPtr input) {
+Status Restore::RestoreFsMetaTable(uint32_t fs_id, InputUPtr input, bool is_force) {
   // get fs info
   FsInfoEntry fs_info;
   auto status = GetFsInfo(fs_id, fs_info);
@@ -672,6 +672,10 @@ Status Restore::RestoreFsMetaTable(uint32_t fs_id, InputUPtr input) {
     // if it does not exist, create it
     status = CreateFsMetaTable(fs_id, fs_info.fs_name());
     if (!status.ok()) return status;
+  } else {
+    if (!is_force) {
+      return Status(pb::error::EINTERNAL, "fs meta table exist, use --is_force to override it");
+    }
   }
 
   // import fs meta to table
@@ -804,6 +808,7 @@ bool RestoreCommandRunner::Run(const Options& options, const std::string& coor_a
   }
 
   Restore::Options restore_options;
+  restore_options.is_force = options.is_force;
   if (options.input_type == "file") {
     restore_options.type = Type::kFile;
     restore_options.file_path = options.file_path;

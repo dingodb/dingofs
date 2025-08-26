@@ -645,9 +645,9 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
   attr.set_fs_id(fs_id_);
   attr.set_ino(ino);
   attr.set_length(0);
-  attr.set_ctime(duration.StartUs());
-  attr.set_mtime(duration.StartUs());
-  attr.set_atime(duration.StartUs());
+  attr.set_ctime(duration.StartNs());
+  attr.set_mtime(duration.StartNs());
+  attr.set_atime(duration.StartNs());
   attr.set_uid(param.uid);
   attr.set_gid(param.gid);
   attr.set_mode(param.mode);
@@ -985,7 +985,7 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name) {
   DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] rmdir {} finish, status({}).", fs_id_, duration.ElapsedUs(), name,
                                  status.error_str());
   if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("delete inode/dentry fail, {}", status.error_str()));
+    return status;
   }
 
   auto& result = operation.GetResult();
@@ -1714,6 +1714,21 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
     // refresh parent of parent inode cache
     NotifyBuddyRefreshInode(std::move(old_parent_attr));
     if (!is_same_parent) NotifyBuddyRefreshInode(std::move(new_parent_attr));
+
+    // delete exist new partition
+    if (is_exist_new_dentry) {
+      if (prev_new_dentry.type() == pb::mdsv2::FileType::DIRECTORY) {
+        NotifyBuddyCleanPartitionCache(prev_new_dentry.ino());
+      } else {
+        if (prev_new_attr.nlink() <= 0) {
+          DeleteInodeFromCache(prev_new_attr.ino());
+
+        } else {
+          auto prev_new_inode = GetInodeFromCache(prev_new_attr.ino());
+          if (prev_new_inode) prev_new_inode->UpdateIf(std::move(prev_new_attr));
+        }
+      }
+    }
   }
 
   // update fs quota
