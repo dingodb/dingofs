@@ -26,12 +26,12 @@ namespace dingofs {
 namespace mdsv2 {
 namespace quota {
 
-void Quota::UpdateUsage(int64_t byte_delta, int64_t inode_delta) {
+void Quota::UpdateUsage(int64_t byte_delta, int64_t inode_delta, const std::string& reason) {
   byte_delta_.fetch_add(byte_delta, std::memory_order_release);
   inode_delta_.fetch_add(inode_delta, std::memory_order_release);
 
-  DINGO_LOG(INFO) << fmt::format("[quota.{}] update usage, byte_delta({}) inode_delta({}).", ino_, byte_delta,
-                                 inode_delta);
+  DINGO_LOG(INFO) << fmt::format("[quota.{}] update usage, byte_delta({}) inode_delta({}) reason({}).", ino_,
+                                 byte_delta, inode_delta, reason);
 }
 
 bool Quota::Check(int64_t byte_delta, int64_t inode_delta) {
@@ -105,11 +105,11 @@ void DirQuotaMap::UpsertQuota(Ino ino, const QuotaEntry& quota) {
   }
 }
 
-void DirQuotaMap::UpdateUsage(Ino ino, int64_t byte_delta, int64_t inode_delta) {
+void DirQuotaMap::UpdateUsage(Ino ino, int64_t byte_delta, int64_t inode_delta, const std::string& reason) {
   Ino curr_ino = ino;
   while (true) {
     auto quota = GetQuota(curr_ino);
-    if (quota != nullptr) quota->UpdateUsage(byte_delta, inode_delta);
+    if (quota != nullptr) quota->UpdateUsage(byte_delta, inode_delta, reason);
 
     if (curr_ino == kRootIno) break;
 
@@ -245,7 +245,7 @@ bool DirQuotaMap::HasQuota() {
   return !quota_map_.empty();
 }
 
-void UpdateDirUsageTask::Run() { quota_manager_->UpdateDirUsage(parent_, byte_delta_, inode_delta_); }
+void UpdateDirUsageTask::Run() { quota_manager_->UpdateDirUsage(parent_, byte_delta_, inode_delta_, reason_); }
 
 void DeleteDirQuotaTask::Run() {
   class Trace trace;
@@ -273,16 +273,16 @@ void QuotaManager::Destroy() {
   }
 }
 
-void QuotaManager::UpdateFsUsage(int64_t byte_delta, int64_t inode_delta) {
-  fs_quota_.UpdateUsage(byte_delta, inode_delta);
+void QuotaManager::UpdateFsUsage(int64_t byte_delta, int64_t inode_delta, const std::string& reason) {
+  fs_quota_.UpdateUsage(byte_delta, inode_delta, reason);
 }
 
-void QuotaManager::UpdateDirUsage(Ino parent, int64_t byte_delta, int64_t inode_delta) {
-  dir_quota_map_.UpdateUsage(parent, byte_delta, inode_delta);
+void QuotaManager::UpdateDirUsage(Ino parent, int64_t byte_delta, int64_t inode_delta, const std::string& reason) {
+  dir_quota_map_.UpdateUsage(parent, byte_delta, inode_delta, reason);
 }
 
-void QuotaManager::AsyncUpdateDirUsage(Ino parent, int64_t byte_delta, int64_t inode_delta) {
-  auto task = UpdateDirUsageTask::New(GetSelfPtr(), parent, byte_delta, inode_delta);
+void QuotaManager::AsyncUpdateDirUsage(Ino parent, int64_t byte_delta, int64_t inode_delta, const std::string& reason) {
+  auto task = UpdateDirUsageTask::New(GetSelfPtr(), parent, byte_delta, inode_delta, reason);
 
   if (!worker_set_->ExecuteHash(parent, task)) {
     DINGO_LOG(ERROR) << fmt::format("[quota] async update dir usage fail, parent({}), byte_delta({}), inode_delta({}).",
@@ -305,6 +305,8 @@ bool QuotaManager::CheckQuota(Trace& trace, Ino ino, int64_t byte_delta, int64_t
 QuotaSPtr QuotaManager::GetNearestDirQuota(Ino ino) { return dir_quota_map_.GetNearestQuota(ino); }
 
 Status QuotaManager::SetFsQuota(Trace& trace, const QuotaEntry& quota) {
+  DINGO_LOG(INFO) << fmt::format("[quota.{}] set fs quota, quota({}).", fs_id_, quota.ShortDebugString());
+
   SetFsQuotaOperation operation(trace, fs_id_, quota);
 
   auto status = operation_processor_->RunAlone(&operation);
@@ -339,6 +341,8 @@ Status QuotaManager::GetFsQuota(Trace& trace, bool is_bypass_cache, QuotaEntry& 
 }
 
 Status QuotaManager::DeleteFsQuota(Trace& trace) {
+  DINGO_LOG(INFO) << fmt::format("[quota.{}] delete fs quota.", fs_id_);
+
   DeleteFsQuotaOperation operation(trace, fs_id_);
 
   auto status = operation_processor_->RunAlone(&operation);
@@ -351,6 +355,8 @@ Status QuotaManager::DeleteFsQuota(Trace& trace) {
 }
 
 Status QuotaManager::SetDirQuota(Trace& trace, Ino ino, const QuotaEntry& quota) {
+  DINGO_LOG(INFO) << fmt::format("[quota.{}] set dir quota, quota({}).", ino, quota.ShortDebugString());
+
   SetDirQuotaOperation operation(trace, fs_id_, ino, quota);
 
   auto status = operation_processor_->RunAlone(&operation);
@@ -380,6 +386,8 @@ Status QuotaManager::GetDirQuota(Trace& trace, Ino ino, QuotaEntry& quota) {
 }
 
 Status QuotaManager::DeleteDirQuota(Trace& trace, Ino ino) {
+  DINGO_LOG(INFO) << fmt::format("[quota.{}] delete dir quota.", ino);
+
   DeleteDirQuotaOperation operation(trace, fs_id_, ino);
 
   auto status = operation_processor_->RunAlone(&operation);

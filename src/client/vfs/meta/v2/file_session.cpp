@@ -14,6 +14,8 @@
 
 #include "client/vfs/meta/v2/file_session.h"
 
+#include <json/value.h>
+
 #include <algorithm>
 #include <string>
 #include <vector>
@@ -126,38 +128,47 @@ bool ChunkMutation::Dump(Json::Value& value) {
   value["version"] = version_;
   value["last_compaction_time_ms"] = last_compaction_time_ms_;
 
-  Json::Value slice_array = Json::arrayValue;
+  // dump slices
+  Json::Value slice_items = Json::arrayValue;
   for (const auto& slice : slices_) {
-    Json::Value slice_value;
-    slice_value["id"] = slice.id;
-    slice_value["offset"] = slice.offset;
-    slice_value["length"] = slice.length;
-    slice_value["compaction"] = slice.compaction;
-    slice_value["is_zero"] = slice.is_zero;
-    slice_value["size"] = slice.size;
+    Json::Value slice_item;
+    slice_item["id"] = slice.id;
+    slice_item["offset"] = slice.offset;
+    slice_item["length"] = slice.length;
+    slice_item["compaction"] = slice.compaction;
+    slice_item["is_zero"] = slice.is_zero;
+    slice_item["size"] = slice.size;
 
-    slice_array.append(slice_value);
+    slice_items.append(slice_item);
   }
-  value["slices"] = slice_array;
+  value["slices"] = slice_items;
 
-  Json::Value delta_slice_array = Json::arrayValue;
+  // dump delta_slices
+  Json::Value delta_slice_items = Json::arrayValue;
   for (const auto& slice : slices_) {
-    Json::Value slice_value;
-    slice_value["id"] = slice.id;
-    slice_value["offset"] = slice.offset;
-    slice_value["length"] = slice.length;
-    slice_value["compaction"] = slice.compaction;
-    slice_value["is_zero"] = slice.is_zero;
-    slice_value["size"] = slice.size;
+    Json::Value slice_item;
+    slice_item["id"] = slice.id;
+    slice_item["offset"] = slice.offset;
+    slice_item["length"] = slice.length;
+    slice_item["compaction"] = slice.compaction;
+    slice_item["is_zero"] = slice.is_zero;
+    slice_item["size"] = slice.size;
 
-    delta_slice_array.append(slice_value);
+    delta_slice_items.append(slice_item);
   }
-  value["delta_slices"] = delta_slice_array;
+  value["delta_slices"] = delta_slice_items;
 
   return true;
 }
 
 bool ChunkMutation::Load(const Json::Value& value) {
+  if (value.isNull()) return true;
+  if (!value.isObject()) {
+    LOG(ERROR) << "[meta.filesession] chunk_mutation is not object.";
+    return false;
+  }
+
+  // load basic
   ino_ = value["ino"].asUInt64();
   fh_ = value["fh_"].asUInt64();
   index_ = value["index"].asUInt64();
@@ -166,31 +177,52 @@ bool ChunkMutation::Load(const Json::Value& value) {
   version_ = value["version"].asUInt64();
   last_compaction_time_ms_ = value["last_compaction_time_ms"].asUInt64();
 
-  if (!value["slices"].isArray()) return false;
+  CHECK(ino_ != 0) << "ino is zero.";
+  CHECK(fh_ != 0) << "fh_ is zero.";
+  CHECK(chunk_size_ != 0) << "chunk_size_ is zero.";
+  CHECK(block_size_ != 0) << "block_size_ is zero.";
 
-  for (const auto& slice_value : value["slices"]) {
-    Slice slice;
-    slice.id = slice_value["id"].asUInt64();
-    slice.offset = slice_value["offset"].asUInt64();
-    slice.length = slice_value["length"].asUInt64();
-    slice.compaction = slice_value["compaction"].asUInt64();
-    slice.is_zero = slice_value["is_zero"].asBool();
-    slice.size = slice_value["size"].asUInt64();
+  // load slices
+  if (!value["slices"].isNull()) {
+    if (!value["slices"].isArray()) {
+      LOG(ERROR) << "[meta.filesession] chunk_mutation.slices is not array.";
+      return false;
+    }
 
-    slices_.push_back(slice);
+    slices_.clear();
+    for (const auto& slice_item : value["slices"]) {
+      Slice slice;
+      slice.id = slice_item["id"].asUInt64();
+      slice.offset = slice_item["offset"].asUInt64();
+      slice.length = slice_item["length"].asUInt64();
+      slice.compaction = slice_item["compaction"].asUInt64();
+      slice.is_zero = slice_item["is_zero"].asBool();
+      slice.size = slice_item["size"].asUInt64();
+
+      slices_.push_back(slice);
+    }
   }
 
-  if (!value["delta_slices"].isArray()) return false;
-  for (const auto& slice_value : value["delta_slices"]) {
-    Slice slice;
-    slice.id = slice_value["id"].asUInt64();
-    slice.offset = slice_value["offset"].asUInt64();
-    slice.length = slice_value["length"].asUInt64();
-    slice.compaction = slice_value["compaction"].asUInt64();
-    slice.is_zero = slice_value["is_zero"].asBool();
-    slice.size = slice_value["size"].asUInt64();
+  // load delta slices
+  if (!value["delta_slices"].isNull()) {
+    if (!value["delta_slices"].isArray()) {
+      LOG(ERROR)
+          << "[meta.filesession] chunk_mutation.delta_slices is not array.";
+      return false;
+    }
 
-    delta_slices_.push_back(slice);
+    delta_slices_.clear();
+    for (const auto& slice_item : value["delta_slices"]) {
+      Slice slice;
+      slice.id = slice_item["id"].asUInt64();
+      slice.offset = slice_item["offset"].asUInt64();
+      slice.length = slice_item["length"].asUInt64();
+      slice.compaction = slice_item["compaction"].asUInt64();
+      slice.is_zero = slice_item["is_zero"].asBool();
+      slice.size = slice_item["size"].asUInt64();
+
+      delta_slices_.push_back(slice);
+    }
   }
 
   return true;
@@ -208,6 +240,53 @@ uint64_t WriteMemo::GetLength() {
   }
 
   return length;
+}
+
+// output json format string
+bool WriteMemo::Dump(Json::Value& value) {
+  // dump ranges
+  Json::Value range_items = Json::arrayValue;
+  for (const auto& range : ranges_) {
+    Json::Value range_item;
+    range_item["start"] = range.start;
+    range_item["end"] = range.end;
+    range_items.append(range_item);
+  }
+  value["ranges"] = range_items;
+
+  value["last_time_ns"] = last_time_ns_;
+
+  return true;
+}
+
+bool WriteMemo::Load(const Json::Value& value) {
+  if (value.isNull()) return true;
+  if (!value.isObject()) {
+    LOG(ERROR) << "[meta.filesession] write_memo is not object.";
+    return false;
+  }
+  if (!value["last_time_ns"].isUInt64()) {
+    LOG(ERROR) << "[meta.filesession] write_memo.last_time_ns is not uint64.";
+    return false;
+  }
+
+  if (!value["ranges"].isNull()) {
+    if (!value["ranges"].isArray()) {
+      LOG(ERROR) << "[meta.filesession] write_memo.ranges is not array.";
+      return false;
+    }
+
+    for (const auto& range_item : value["ranges"]) {
+      Range range;
+      range.start = range_item["start"].asUInt64();
+      range.end = range_item["end"].asUInt64();
+      ranges_.push_back(range);
+    }
+  }
+
+  last_time_ns_ = value["last_time_ns"].asUInt64();
+
+  return true;
 }
 
 FileSession::FileSession(mdsv2::FsInfoPtr fs_info, Ino ino, uint64_t fh,
@@ -330,6 +409,93 @@ uint64_t FileSession::GetLastTimeNs() {
 //   chunk_mutation_map_.emplace(chunk_mutation->GetIndex(), chunk_mutation);
 // }
 
+bool FileSession::Dump(Json::Value& value) {
+  value["ino"] = ino_;
+  value["ref_count"] = ref_count_.load();
+
+  // dump session_id_map
+  Json::Value session_id_map = Json::arrayValue;
+  for (const auto& [fh, session_id] : session_id_map_) {
+    Json::Value item;
+    item["fh"] = fh;
+    item["session_id"] = session_id;
+
+    session_id_map.append(item);
+  }
+  value["session_id_map"] = session_id_map;
+
+  // dump write_memo_
+  CHECK(write_memo_.Dump(value["write_memo"])) << "dump write memo fail.";
+
+  // dump chunk_mutation_map_
+  Json::Value chunk_mutation_items = Json::arrayValue;
+  for (const auto& [index, chunk_mutation] : chunk_mutation_map_) {
+    Json::Value chunk_mutation_item;
+    chunk_mutation_item["index"] = index;
+    CHECK(chunk_mutation->Dump(chunk_mutation_item))
+        << "dump chunk mutation fail.";
+
+    chunk_mutation_items.append(chunk_mutation_item);
+  }
+
+  value["chunk_mutation_map"] = chunk_mutation_items;
+
+  return true;
+}
+
+bool FileSession::Load(const Json::Value& value) {
+  if (value.isNull()) return true;
+  if (!value.isObject()) {
+    LOG(ERROR) << "[meta.filesession] file_session is not object.";
+    return false;
+  }
+  if (!value["ino"].isUInt64()) {
+    LOG(ERROR) << "[meta.filesession] file_session.ino is not uint64.";
+    return false;
+  }
+
+  ino_ = value["ino"].asUInt64();
+  ref_count_.store(value["ref_count"].asUInt());
+
+  // load session_id_map
+  if (!value["session_id_map"].isNull()) {
+    if (!value["session_id_map"].isArray()) {
+      LOG(ERROR)
+          << "[meta.filesession] file_session.session_id_map is not array.";
+      return false;
+    }
+
+    session_id_map_.clear();
+    for (const auto& item : value["session_id_map"]) {
+      uint64_t fh = item["fh"].asUInt64();
+      std::string session_id = item["session_id"].asString();
+      session_id_map_[fh] = session_id;
+    }
+  }
+
+  // load chunk_mutation_map
+  if (!value["chunk_mutation_map"].isNull()) {
+    if (!value["chunk_mutation_map"].isArray()) {
+      LOG(ERROR)
+          << "[meta.filesession] file_session.chunk_mutation_map is not array.";
+      return false;
+    }
+
+    chunk_mutation_map_.clear();
+    for (const auto& item : value["chunk_mutation_map"]) {
+      int64_t index = item["index"].asInt64();
+
+      auto chunk_mutation = ChunkMutation::New();
+      CHECK(chunk_mutation->Load(item))
+          << fmt::format("load chunk mutation fail, index({}).", index);
+
+      chunk_mutation_map_[index] = chunk_mutation;
+    }
+  }
+
+  return true;
+}
+
 FileSessionSPtr FileSessionMap::Put(Ino ino, uint64_t fh,
                                     const std::string& session_id) {
   CHECK(ino != 0) << "ino is zero.";
@@ -403,59 +569,48 @@ FileSessionSPtr FileSessionMap::GetSession(Ino ino) {
 bool FileSessionMap::Dump(Json::Value& value) {
   utils::ReadLockGuard lk(lock_);
 
-  // Json::Value file_session_items = Json::arrayValue;
-  // for (const auto& [key, file_session] : file_session_map_) {
-  //   Json::Value file_session_item;
-  //   file_session_item["ino"] = key.ino;
-  //   file_session_item["fh"] = key.fh;
-  //   file_session_item["session_id"] = file_session->GetSessionID();
+  Json::Value file_sessions_items = Json::arrayValue;
+  for (const auto& [ino, file_session] : file_session_map_) {
+    Json::Value file_session_item;
+    file_session_item["ino"] = ino;
+    CHECK(file_session->Dump(file_session_item)) << "file session dump fail.";
 
-  //   Json::Value chunk_items = Json::arrayValue;
-  //   auto chunk_mutations = file_session->GetAllChunkMutation();
-  //   for (const auto& chunk_mutation : chunk_mutations) {
-  //     Json::Value chunk_item;
-  //     chunk_mutation->Dump(chunk_item);
-  //     chunk_items.append(chunk_item);
-  //   }
-  //   file_session_item["chunks"] = chunk_items;
+    file_sessions_items.append(file_session_item);
+  }
 
-  //   file_session_items.append(file_session_item);
-  // }
-
-  // value["file_sessions"] = file_session_items;
+  value["file_sessions"] = file_sessions_items;
 
   return true;
 }
 
 bool FileSessionMap::Load(const Json::Value& value) {
+  if (value.isNull()) return true;
+  if (!value.isObject()) {
+    LOG(ERROR) << "[meta.filesession] file_session_map is not an object.";
+    return false;
+  }
+
   utils::WriteLockGuard lk(lock_);
 
-  // file_session_map_.clear();
-  // const Json::Value& items = value["file_sessions"];
-  // if (!items.isArray()) {
-  //   LOG(ERROR) << "[meta.filesession] value is not an array.";
-  //   return false;
-  // }
+  // load file_session_map
+  if (!value["file_sessions"].isNull()) {
+    if (!value["file_sessions"].isArray()) {
+      LOG(ERROR) << "[meta.filesession] file_session_map.file_sessions is not "
+                    "an array.";
+      return false;
+    }
 
-  // for (const auto& filesession_item : items) {
-  //   uint64_t fh = filesession_item["fh"].asUInt64();
-  //   Ino ino = filesession_item["ino"].asUInt64();
-  //   std::string session_id = filesession_item["session_id"].asString();
-  //   CHECK(fh != 0) << "fh is zero.";
-  //   CHECK(ino != 0) << "ino is zero.";
-  //   CHECK(!session_id.empty()) << "session_id is empty.";
+    file_session_map_.clear();
+    for (const auto& item : value["file_sessions"]) {
+      Ino ino = item["ino"].asUInt64();
 
-  //   auto file_session = FileSession::New(ino, fh, session_id, fs_info_, {});
+      auto file_session = FileSession::New(fs_info_);
+      CHECK(file_session->Load(item))
+          << fmt::format("load file session fail, ino({}).", ino);
 
-  //   for (const auto& chunk_item : filesession_item["chunks"]) {
-  //     auto chunk_mutation = ChunkMutation::New(ino, fh, {});
-  //     if (chunk_mutation->Load(chunk_item)) {
-  //       file_session->AddChunkMutation(chunk_mutation);
-  //     }
-  //   }
-
-  //   file_session_map_[{ino, fh}] = file_session;
-  // }
+      file_session_map_[ino] = file_session;
+    }
+  }
 
   return true;
 }

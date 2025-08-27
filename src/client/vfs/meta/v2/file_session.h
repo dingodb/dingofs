@@ -35,10 +35,16 @@ namespace v2 {
 struct ChunkMutation;
 using ChunkMutationSPtr = std::shared_ptr<ChunkMutation>;
 
+class FileSession;
+using FileSessionSPtr = std::shared_ptr<FileSession>;
+
+class FileSessionMap;
+
 using mdsv2::ChunkEntry;
 
 class ChunkMutation {
  public:
+  ChunkMutation() = default;
   ChunkMutation(Ino ino, uint64_t fh, uint64_t index, uint64_t chunk_size,
                 uint64_t block_size)
       : ino_(ino),
@@ -76,6 +82,10 @@ class ChunkMutation {
   bool Load(const Json::Value& value);
 
  private:
+  friend class FileSession;
+
+  static ChunkMutationSPtr New() { return std::make_shared<ChunkMutation>(); }
+
   utils::RWLock lock_;
 
   Ino ino_;
@@ -101,6 +111,10 @@ class WriteMemo {
   uint64_t GetLength();
   uint64_t LastTimeNs() const { return last_time_ns_; }
 
+  // output json format string
+  bool Dump(Json::Value& value);
+  bool Load(const Json::Value& value);
+
  private:
   struct Range {
     uint64_t start{0};
@@ -111,11 +125,9 @@ class WriteMemo {
   uint64_t last_time_ns_{0};
 };
 
-class FileSession;
-using FileSessionSPtr = std::shared_ptr<FileSession>;
-
 class FileSession {
  public:
+  FileSession(mdsv2::FsInfoPtr fs_info) : fs_info_(fs_info) {}
   FileSession(mdsv2::FsInfoPtr fs_info, Ino ino, uint64_t fh,
               const std::string& session_id);
   ~FileSession() = default;
@@ -145,8 +157,17 @@ class FileSession {
   // ChunkMutationSPtr GetChunkMutation(int64_t index);
   // std::vector<ChunkMutationSPtr> GetAllChunkMutation();
 
+  // output json format string
+  bool Dump(Json::Value& value);
+  bool Load(const Json::Value& value);
+
  private:
   friend class FileSessionMap;
+
+  static FileSessionSPtr New(mdsv2::FsInfoPtr fs_info) {
+    return std::make_shared<FileSession>(fs_info);
+  }
+
   // void AddChunkMutation(ChunkMutationSPtr chunk_mutation);
 
   mdsv2::FsInfoPtr fs_info_;

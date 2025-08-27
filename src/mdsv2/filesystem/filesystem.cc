@@ -682,8 +682,9 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
   parent_inode->UpdateIf(parent_attr);
 
   // update quota
-  quota_manager_->UpdateFsUsage(0, 1);
-  quota_manager_->AsyncUpdateDirUsage(param.parent, 0, 1);
+  std::string reason = fmt::format("mknod.{}.{}", parent, param.name);
+  quota_manager_->UpdateFsUsage(0, 1, reason);
+  quota_manager_->AsyncUpdateDirUsage(param.parent, 0, 1, reason);
 
   parent_memo_->Remeber(attr.ino(), param.parent);
 
@@ -768,9 +769,10 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& sess
 
   // update quota
   if (delta_bytes != 0) {
-    quota_manager_->UpdateFsUsage(delta_bytes, 0);
+    std::string reason = fmt::format("open.{}", ino);
+    quota_manager_->UpdateFsUsage(delta_bytes, 0, reason);
     for (auto parent : attr.parents()) {
-      quota_manager_->AsyncUpdateDirUsage(parent, delta_bytes, 0);
+      quota_manager_->AsyncUpdateDirUsage(parent, delta_bytes, 0, reason);
     }
   }
 
@@ -928,8 +930,9 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
   partition_cache_.Put(ino, Partition::New(inode));
 
   // update quota
-  quota_manager_->UpdateFsUsage(0, 1);
-  quota_manager_->AsyncUpdateDirUsage(param.parent, 0, 1);
+  std::string reason = fmt::format("mkdir.{}.{}", parent, param.name);
+  quota_manager_->UpdateFsUsage(0, 1, reason);
+  quota_manager_->AsyncUpdateDirUsage(param.parent, 0, 1, reason);
 
   parent_memo_->Remeber(attr.ino(), param.parent);
 
@@ -999,8 +1002,9 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name) {
   partition_cache_.Delete(dentry.INo());
 
   // update quota
-  quota_manager_->UpdateFsUsage(0, -1);
-  quota_manager_->AsyncUpdateDirUsage(parent, 0, -1);
+  std::string reason = fmt::format("rmdir.{}.{}", parent, name);
+  quota_manager_->UpdateFsUsage(0, -1, reason);
+  quota_manager_->AsyncUpdateDirUsage(parent, 0, -1, reason);
   quota_manager_->AsyncDeleteDirQuota(dentry.INo());
 
   parent_memo_->Forget(dentry.INo());
@@ -1110,7 +1114,8 @@ Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent, const std::string
   auto& child_attr = result.child_attr;
 
   // update quota
-  quota_manager_->AsyncUpdateDirUsage(new_parent, child_attr.length(), 1);
+  std::string reason = fmt::format("link.{}.{}.{}", ino, new_parent, new_name);
+  quota_manager_->AsyncUpdateDirUsage(new_parent, child_attr.length(), 1, reason);
 
   // update cache
   inode->UpdateIf(std::move(child_attr));
@@ -1184,12 +1189,13 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name) {
   }
 
   // update quota
+  std::string reason = fmt::format("unlink.{}.{}", parent, name);
   int64_t delta_bytes = child_attr.type() != pb::mdsv2::SYM_LINK ? child_attr.length() : 0;
   if (child_attr.nlink() == 0) {
-    quota_manager_->UpdateFsUsage(-delta_bytes, -1);
+    quota_manager_->UpdateFsUsage(-delta_bytes, -1, reason);
     chunk_cache_.Delete(child_attr.ino());
   }
-  quota_manager_->AsyncUpdateDirUsage(parent, -delta_bytes, -1);
+  quota_manager_->AsyncUpdateDirUsage(parent, -delta_bytes, -1, reason);
 
   // update cache
   partition->DeleteChild(name);
@@ -1292,8 +1298,9 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_par
   partition->ParentInode()->UpdateIf(parent_attr);
 
   // update quota
-  quota_manager_->UpdateFsUsage(0, 1);
-  quota_manager_->AsyncUpdateDirUsage(new_parent, 0, 1);
+  std::string reason = fmt::format("symlink.{}.{}", new_parent, new_name);
+  quota_manager_->UpdateFsUsage(0, 1, reason);
+  quota_manager_->AsyncUpdateDirUsage(new_parent, 0, 1, reason);
 
   entry_out.attr.Swap(&attr);
   entry_out.parent_version = parent_attr.version();
@@ -1393,13 +1400,14 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
 
   // update quota
   if (param.to_set & kSetAttrLength) {
+    std::string reason = fmt::format("setattr.{}", ino);
     int64_t change_bytes = param.attr.length() > inode->Length()
                                ? param.attr.length() - inode->Length()
                                : -static_cast<int64_t>(inode->Length() - param.attr.length());
-    quota_manager_->UpdateFsUsage(change_bytes, 0);
+    quota_manager_->UpdateFsUsage(change_bytes, 0, reason);
 
     for (const auto& parent : attr.parents()) {
-      quota_manager_->AsyncUpdateDirUsage(parent, change_bytes, 0);
+      quota_manager_->AsyncUpdateDirUsage(parent, change_bytes, 0, reason);
     }
   }
 
@@ -1734,28 +1742,29 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
   }
 
   // update fs quota
+  std::string reason = fmt::format("rename.{}.{}.to.{}.{}", old_parent, old_name, new_parent, new_name);
   if (is_exist_new_dentry) {
     int64_t fs_delta_bytes = 0;
     if (prev_new_attr.type() == pb::mdsv2::FileType::FILE && prev_new_attr.nlink() == 0) {
       fs_delta_bytes -= prev_new_attr.length();
     }
-    quota_manager_->UpdateFsUsage(fs_delta_bytes, -1);
+    quota_manager_->UpdateFsUsage(fs_delta_bytes, -1, reason);
   }
 
   // update dir quota
   if (dentry.Type() == pb::mdsv2::FileType::FILE) {
     if (!is_same_parent) {
-      quota_manager_->AsyncUpdateDirUsage(old_parent, -old_attr.length(), -1);
-      quota_manager_->AsyncUpdateDirUsage(new_parent, old_attr.length(), 1);
+      quota_manager_->AsyncUpdateDirUsage(old_parent, -old_attr.length(), -1, reason);
+      quota_manager_->AsyncUpdateDirUsage(new_parent, old_attr.length(), 1, reason);
     }
 
     if (is_exist_new_dentry) {
-      quota_manager_->AsyncUpdateDirUsage(new_parent, -prev_new_attr.length(), -1);
+      quota_manager_->AsyncUpdateDirUsage(new_parent, -prev_new_attr.length(), -1, reason);
     }
 
   } else if (dentry.Type() == pb::mdsv2::FileType::DIRECTORY) {
     if (is_exist_new_dentry && is_exist_quota) {
-      quota_manager_->AsyncUpdateDirUsage(old_parent, 0, -1);
+      quota_manager_->AsyncUpdateDirUsage(old_parent, 0, -1, reason);
     }
   }
 
@@ -1808,7 +1817,9 @@ Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, const std::vector<Delt
 
   status = RunOperation(&operation);
 
+  std::string slice_id_str;
   for (const auto& delta_slice : delta_slices) {
+    slice_id_str += std::to_string(delta_slice.chunk_index()) + ",";
     DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] writeslice {}/{} finish, status({}).", fs_id_, duration.ElapsedUs(),
                                    ino, delta_slice.chunk_index(), status.error_str());
   }
@@ -1854,9 +1865,10 @@ Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, const std::vector<Delt
   }
 
   // update quota
-  quota_manager_->UpdateFsUsage(length_delta, 0);
+  std::string reason = fmt::format("writeslice.{}.{}", ino, slice_id_str);
+  quota_manager_->UpdateFsUsage(length_delta, 0, reason);
   for (const auto& parent : attr.parents()) {
-    quota_manager_->AsyncUpdateDirUsage(parent, length_delta, 0);
+    quota_manager_->AsyncUpdateDirUsage(parent, length_delta, 0, reason);
   }
 
   return Status::OK();

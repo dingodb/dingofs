@@ -16,6 +16,7 @@
 #define DINGOFS_SRC_CLIENT_VFS_META_V2_RPC_H_
 
 #include <brpc/errno.pb.h>
+#include <bthread/bthread.h>
 #include <butil/endpoint.h>
 #include <fmt/format.h>
 #include <gflags/gflags_declare.h>
@@ -47,6 +48,12 @@ class RPC;
 using RPCPtr = std::shared_ptr<RPC>;
 
 using EndPoint = butil::EndPoint;
+
+inline uint32_t CalWaitTimeUs(int retry) {
+  // exponential backoff
+  return mdsv2::Helper::GenerateRealRandomInteger(100000, 500000) *
+         (1 << retry);
+}
 
 inline EndPoint StrToEndpoint(const std::string& ip, int port) {
   EndPoint endpoint;
@@ -201,6 +208,8 @@ Status RPC::SendRequest(const EndPoint& endpoint,
         response.error().errcode() != pb::error::EBACKEND_STORE) {
       break;
     }
+
+    bthread_usleep(CalWaitTimeUs(retry_count));
 
   } while (++retry_count <= FLAGS_rpc_retry_times);
 
