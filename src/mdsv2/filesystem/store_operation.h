@@ -86,6 +86,7 @@ class Operation {
     kDeleteDirQuota = 36,
     kLoadDirQuotas = 37,
     kFlushDirUsages = 38,
+    kGetDirQuota = 39,
 
     kUpsertMds = 40,
     kDeleteMds = 41,
@@ -264,7 +265,7 @@ class GetFsOperation : public Operation {
 class MountFsOperation : public Operation {
  public:
   MountFsOperation(Trace& trace, std::string fs_name, pb::mdsv2::MountPoint mountpoint)
-      : Operation(trace), fs_name_(fs_name), mount_point_(mountpoint) {};
+      : Operation(trace), fs_name_(fs_name), mount_point_(mountpoint){};
   ~MountFsOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kMountFs; }
@@ -282,7 +283,7 @@ class MountFsOperation : public Operation {
 class UmountFsOperation : public Operation {
  public:
   UmountFsOperation(Trace& trace, std::string fs_name, const std::string& client_id)
-      : Operation(trace), fs_name_(fs_name), client_id_(client_id) {};
+      : Operation(trace), fs_name_(fs_name), client_id_(client_id){};
   ~UmountFsOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kUmountFs; }
@@ -300,7 +301,7 @@ class UmountFsOperation : public Operation {
 class DeleteFsOperation : public Operation {
  public:
   DeleteFsOperation(Trace& trace, std::string fs_name, bool is_force)
-      : Operation(trace), fs_name_(fs_name), is_force_(is_force) {};
+      : Operation(trace), fs_name_(fs_name), is_force_(is_force){};
   ~DeleteFsOperation() override = default;
 
   struct Result : public Operation::Result {
@@ -333,7 +334,7 @@ class DeleteFsOperation : public Operation {
 class UpdateFsOperation : public Operation {
  public:
   UpdateFsOperation(Trace& trace, const std::string& fs_name, const FsInfoEntry& fs_info)
-      : Operation(trace), fs_name_(fs_name), fs_info_(fs_info) {};
+      : Operation(trace), fs_name_(fs_name), fs_info_(fs_info){};
   ~UpdateFsOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kUpdateFs; }
@@ -353,7 +354,7 @@ class UpdateFsPartitionOperation : public Operation {
   using HandlerType = std::function<Status(PartitionPolicy&, FsOpLog&)>;
 
   UpdateFsPartitionOperation(Trace& trace, const std::string& fs_name, HandlerType handler)
-      : Operation(trace), fs_name_(fs_name), handler_(handler) {};
+      : Operation(trace), fs_name_(fs_name), handler_(handler){};
   ~UpdateFsPartitionOperation() override = default;
 
   struct Result : public Operation::Result {
@@ -386,7 +387,7 @@ class UpdateFsPartitionOperation : public Operation {
 class CreateRootOperation : public Operation {
  public:
   CreateRootOperation(Trace& trace, const Dentry& dentry, const AttrEntry& attr)
-      : Operation(trace), dentry_(dentry), attr_(attr) {};
+      : Operation(trace), dentry_(dentry), attr_(attr){};
   ~CreateRootOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kCreateRoot; }
@@ -405,7 +406,7 @@ class CreateRootOperation : public Operation {
 class MkDirOperation : public Operation {
  public:
   MkDirOperation(Trace& trace, const Dentry& dentry, const AttrEntry& attr)
-      : Operation(trace), dentry_(dentry), attr_(attr) {};
+      : Operation(trace), dentry_(dentry), attr_(attr){};
   ~MkDirOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kMkDir; }
@@ -423,7 +424,7 @@ class MkDirOperation : public Operation {
 class MkNodOperation : public Operation {
  public:
   MkNodOperation(Trace& trace, const Dentry& dentry, const AttrEntry& attr)
-      : Operation(trace), dentry_(dentry), attr_(attr) {};
+      : Operation(trace), dentry_(dentry), attr_(attr){};
   ~MkNodOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kMkNod; }
@@ -440,7 +441,7 @@ class MkNodOperation : public Operation {
 
 class HardLinkOperation : public Operation {
  public:
-  HardLinkOperation(Trace& trace, const Dentry& dentry) : Operation(trace), dentry_(dentry) {};
+  HardLinkOperation(Trace& trace, const Dentry& dentry) : Operation(trace), dentry_(dentry){};
   ~HardLinkOperation() override = default;
 
   struct Result : public Operation::Result {
@@ -471,7 +472,7 @@ class HardLinkOperation : public Operation {
 class SmyLinkOperation : public Operation {
  public:
   SmyLinkOperation(Trace& trace, const Dentry& dentry, const AttrEntry& attr)
-      : Operation(trace), dentry_(dentry), attr_(attr) {};
+      : Operation(trace), dentry_(dentry), attr_(attr){};
   ~SmyLinkOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kSmyLink; }
@@ -494,7 +495,7 @@ class UpdateAttrOperation : public Operation {
   };
 
   UpdateAttrOperation(Trace& trace, uint64_t ino, uint32_t to_set, const AttrEntry& attr, ExtraParam& extra_param)
-      : Operation(trace), ino_(ino), to_set_(to_set), attr_(attr), extra_param_(extra_param) {};
+      : Operation(trace), ino_(ino), to_set_(to_set), attr_(attr), extra_param_(extra_param){};
   ~UpdateAttrOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kUpdateAttr; }
@@ -517,7 +518,7 @@ class UpdateAttrOperation : public Operation {
 class UpdateXAttrOperation : public Operation {
  public:
   UpdateXAttrOperation(Trace& trace, uint32_t fs_id, uint64_t ino, const Inode::XAttrMap& xattrs)
-      : Operation(trace), fs_id_(fs_id), ino_(ino), xattrs_(xattrs) {};
+      : Operation(trace), fs_id_(fs_id), ino_(ino), xattrs_(xattrs){};
   ~UpdateXAttrOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kUpdateXAttr; }
@@ -536,7 +537,7 @@ class UpdateXAttrOperation : public Operation {
 class RemoveXAttrOperation : public Operation {
  public:
   RemoveXAttrOperation(Trace& trace, uint32_t fs_id, uint64_t ino, const std::string& name)
-      : Operation(trace), fs_id_(fs_id), ino_(ino), name_(name) {};
+      : Operation(trace), fs_id_(fs_id), ino_(ino), name_(name){};
   ~RemoveXAttrOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kRemoveXAttr; }
@@ -556,7 +557,7 @@ class UpsertChunkOperation : public Operation {
  public:
   UpsertChunkOperation(Trace& trace, const FsInfoEntry fs_info, uint64_t ino,
                        const std::vector<DeltaSliceEntry>& delta_slices)
-      : Operation(trace), fs_info_(fs_info), ino_(ino), delta_slices_(delta_slices) {};
+      : Operation(trace), fs_info_(fs_info), ino_(ino), delta_slices_(delta_slices){};
   ~UpsertChunkOperation() override = default;
 
   struct Result : public Operation::Result {
@@ -594,7 +595,7 @@ class UpsertChunkOperation : public Operation {
 class GetChunkOperation : public Operation {
  public:
   GetChunkOperation(Trace& trace, uint32_t fs_id, uint64_t ino, const std::vector<uint32_t>& chunk_indexes)
-      : Operation(trace), fs_id_(fs_id), ino_(ino), chunk_indexes_(chunk_indexes) {};
+      : Operation(trace), fs_id_(fs_id), ino_(ino), chunk_indexes_(chunk_indexes){};
   ~GetChunkOperation() override = default;
 
   struct Result : public Operation::Result {
@@ -627,7 +628,7 @@ class GetChunkOperation : public Operation {
 
 class ScanChunkOperation : public Operation {
  public:
-  ScanChunkOperation(Trace& trace, uint32_t fs_id, uint64_t ino) : Operation(trace), fs_id_(fs_id), ino_(ino) {};
+  ScanChunkOperation(Trace& trace, uint32_t fs_id, uint64_t ino) : Operation(trace), fs_id_(fs_id), ino_(ino){};
   ~ScanChunkOperation() override = default;
 
   struct Result : public Operation::Result {
@@ -660,7 +661,7 @@ class ScanChunkOperation : public Operation {
 class CleanChunkOperation : public Operation {
  public:
   CleanChunkOperation(Trace& trace, uint32_t fs_id, uint64_t ino, const std::vector<uint64_t>& chunk_indexs)
-      : Operation(trace), fs_id_(fs_id), ino_(ino), chunk_indexs_(chunk_indexs) {};
+      : Operation(trace), fs_id_(fs_id), ino_(ino), chunk_indexs_(chunk_indexs){};
   ~CleanChunkOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kCleanChunk; }
@@ -692,7 +693,7 @@ class FallocateOperation : public Operation {
     uint64_t block_size{0};
   };
 
-  FallocateOperation(Trace& trace, const Param& param) : Operation(trace), param_(param) {};
+  FallocateOperation(Trace& trace, const Param& param) : Operation(trace), param_(param){};
   ~FallocateOperation() override = default;
 
   struct Result : public Operation::Result {
@@ -727,7 +728,7 @@ class FallocateOperation : public Operation {
 class OpenFileOperation : public Operation {
  public:
   OpenFileOperation(Trace& trace, uint32_t flags, const FileSessionEntry& file_session)
-      : Operation(trace), flags_(flags), file_session_(file_session) {};
+      : Operation(trace), flags_(flags), file_session_(file_session){};
   ~OpenFileOperation() override = default;
 
   struct Result : public Operation::Result {
@@ -760,7 +761,7 @@ class OpenFileOperation : public Operation {
 class CloseFileOperation : public Operation {
  public:
   CloseFileOperation(Trace& trace, uint32_t fs_id, Ino ino, const std::string& session_id)
-      : Operation(trace), fs_id_(fs_id), ino_(ino), session_id_(session_id) {};
+      : Operation(trace), fs_id_(fs_id), ino_(ino), session_id_(session_id){};
   ~CloseFileOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kCloseFile; }
@@ -778,7 +779,7 @@ class CloseFileOperation : public Operation {
 
 class RmDirOperation : public Operation {
  public:
-  RmDirOperation(Trace& trace, Dentry dentry) : Operation(trace), dentry_(dentry) {};
+  RmDirOperation(Trace& trace, Dentry dentry) : Operation(trace), dentry_(dentry){};
   ~RmDirOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kRmDir; }
@@ -794,7 +795,7 @@ class RmDirOperation : public Operation {
 
 class UnlinkOperation : public Operation {
  public:
-  UnlinkOperation(Trace& trace, const Dentry& dentry) : Operation(trace), dentry_(dentry) {};
+  UnlinkOperation(Trace& trace, const Dentry& dentry) : Operation(trace), dentry_(dentry){};
   ~UnlinkOperation() override = default;
 
   struct Result : public Operation::Result {
@@ -831,7 +832,7 @@ class RenameOperation : public Operation {
         old_parent_(old_parent),
         old_name_(old_name),
         new_parent_(new_parent_ino),
-        new_name_(new_name) {};
+        new_name_(new_name){};
   ~RenameOperation() override = default;
 
   struct Result : public Operation::Result {
@@ -887,9 +888,9 @@ class CompactChunkOperation : public Operation {
         ino_(ino),
         chunk_index_(chunk_index),
         file_length_(file_length),
-        is_force_(is_force) {};
+        is_force_(is_force){};
   CompactChunkOperation(const FsInfoEntry& fs_info, uint64_t ino, uint64_t chunk_index, uint64_t file_length)
-      : Operation(trace_), fs_info_(fs_info), ino_(ino), chunk_index_(chunk_index), file_length_(file_length) {};
+      : Operation(trace_), fs_info_(fs_info), ino_(ino), chunk_index_(chunk_index), file_length_(file_length){};
   ~CompactChunkOperation() override = default;
 
   struct Result : public Operation::Result {
@@ -943,7 +944,7 @@ class CompactChunkOperation : public Operation {
 class SetFsQuotaOperation : public Operation {
  public:
   SetFsQuotaOperation(Trace& trace, uint32_t fs_id, const QuotaEntry& quota)
-      : Operation(trace), fs_id_(fs_id), quota_(quota) {};
+      : Operation(trace), fs_id_(fs_id), quota_(quota){};
   ~SetFsQuotaOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kSetFsQuota; }
@@ -960,7 +961,7 @@ class SetFsQuotaOperation : public Operation {
 
 class GetFsQuotaOperation : public Operation {
  public:
-  GetFsQuotaOperation(Trace& trace, uint32_t fs_id) : Operation(trace), fs_id_(fs_id) {};
+  GetFsQuotaOperation(Trace& trace, uint32_t fs_id) : Operation(trace), fs_id_(fs_id){};
   ~GetFsQuotaOperation() override = default;
 
   struct Result : public Operation::Result {
@@ -991,7 +992,7 @@ class GetFsQuotaOperation : public Operation {
 class FlushFsUsageOperation : public Operation {
  public:
   FlushFsUsageOperation(Trace& trace, uint32_t fs_id, const UsageEntry& usage)
-      : Operation(trace), fs_id_(fs_id), usage_(usage) {};
+      : Operation(trace), fs_id_(fs_id), usage_(usage){};
   ~FlushFsUsageOperation() override = default;
 
   struct Result : public Operation::Result {
@@ -1022,7 +1023,7 @@ class FlushFsUsageOperation : public Operation {
 
 class DeleteFsQuotaOperation : public Operation {
  public:
-  DeleteFsQuotaOperation(Trace& trace, uint32_t fs_id) : Operation(trace), fs_id_(fs_id) {};
+  DeleteFsQuotaOperation(Trace& trace, uint32_t fs_id) : Operation(trace), fs_id_(fs_id){};
   ~DeleteFsQuotaOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kDeleteFsQuota; }
@@ -1039,7 +1040,7 @@ class DeleteFsQuotaOperation : public Operation {
 class SetDirQuotaOperation : public Operation {
  public:
   SetDirQuotaOperation(Trace& trace, uint32_t fs_id, uint64_t ino, const QuotaEntry& quota)
-      : Operation(trace), fs_id_(fs_id), ino_(ino), quota_(quota) {};
+      : Operation(trace), fs_id_(fs_id), ino_(ino), quota_(quota){};
   ~SetDirQuotaOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kSetDirQuota; }
@@ -1057,14 +1058,14 @@ class SetDirQuotaOperation : public Operation {
 
 class GetDirQuotaOperation : public Operation {
  public:
-  GetDirQuotaOperation(Trace& trace, uint32_t fs_id, uint64_t ino) : Operation(trace), fs_id_(fs_id), ino_(ino) {};
+  GetDirQuotaOperation(Trace& trace, uint32_t fs_id, uint64_t ino) : Operation(trace), fs_id_(fs_id), ino_(ino){};
   ~GetDirQuotaOperation() override = default;
 
   struct Result : public Operation::Result {
     QuotaEntry quota;
   };
 
-  OpType GetOpType() const override { return OpType::kSetDirQuota; }
+  OpType GetOpType() const override { return OpType::kGetDirQuota; }
 
   uint32_t GetFsId() const override { return fs_id_; }
   Ino GetIno() const override { return ino_; }
@@ -1088,7 +1089,7 @@ class GetDirQuotaOperation : public Operation {
 
 class DeleteDirQuotaOperation : public Operation {
  public:
-  DeleteDirQuotaOperation(Trace& trace, uint32_t fs_id, uint64_t ino) : Operation(trace), fs_id_(fs_id), ino_(ino) {};
+  DeleteDirQuotaOperation(Trace& trace, uint32_t fs_id, uint64_t ino) : Operation(trace), fs_id_(fs_id), ino_(ino){};
   ~DeleteDirQuotaOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kDeleteDirQuota; }
@@ -1105,7 +1106,7 @@ class DeleteDirQuotaOperation : public Operation {
 
 class LoadDirQuotasOperation : public Operation {
  public:
-  LoadDirQuotasOperation(Trace& trace, uint32_t fs_id) : Operation(trace), fs_id_(fs_id) {};
+  LoadDirQuotasOperation(Trace& trace, uint32_t fs_id) : Operation(trace), fs_id_(fs_id){};
   ~LoadDirQuotasOperation() override = default;
 
   struct Result : public Operation::Result {
@@ -1136,7 +1137,7 @@ class LoadDirQuotasOperation : public Operation {
 class FlushDirUsagesOperation : public Operation {
  public:
   FlushDirUsagesOperation(Trace& trace, uint32_t fs_id, const std::map<uint64_t, UsageEntry>& usages)
-      : Operation(trace), fs_id_(fs_id), usages_(usages) {};
+      : Operation(trace), fs_id_(fs_id), usages_(usages){};
   ~FlushDirUsagesOperation() override = default;
 
   struct Result : public Operation::Result {
@@ -1168,7 +1169,7 @@ class FlushDirUsagesOperation : public Operation {
 
 class UpsertMdsOperation : public Operation {
  public:
-  UpsertMdsOperation(Trace& trace, const MdsEntry& mds_meta) : Operation(trace), mds_meta_(mds_meta) {};
+  UpsertMdsOperation(Trace& trace, const MdsEntry& mds_meta) : Operation(trace), mds_meta_(mds_meta){};
   ~UpsertMdsOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kUpsertMds; }
@@ -1184,7 +1185,7 @@ class UpsertMdsOperation : public Operation {
 
 class DeleteMdsOperation : public Operation {
  public:
-  DeleteMdsOperation(Trace& trace, uint64_t mds_id) : Operation(trace), mds_id_(mds_id) {};
+  DeleteMdsOperation(Trace& trace, uint64_t mds_id) : Operation(trace), mds_id_(mds_id){};
   ~DeleteMdsOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kDeleteMds; }
@@ -1200,7 +1201,7 @@ class DeleteMdsOperation : public Operation {
 
 class ScanMdsOperation : public Operation {
  public:
-  ScanMdsOperation(Trace& trace) : Operation(trace) {};
+  ScanMdsOperation(Trace& trace) : Operation(trace){};
   ~ScanMdsOperation() override = default;
 
   struct Result : public Operation::Result {
@@ -1229,7 +1230,7 @@ class ScanMdsOperation : public Operation {
 
 class UpsertClientOperation : public Operation {
  public:
-  UpsertClientOperation(Trace& trace, const ClientEntry& client) : Operation(trace), client_(client) {};
+  UpsertClientOperation(Trace& trace, const ClientEntry& client) : Operation(trace), client_(client){};
   ~UpsertClientOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kUpsertClient; }
@@ -1245,7 +1246,7 @@ class UpsertClientOperation : public Operation {
 
 class DeleteClientOperation : public Operation {
  public:
-  DeleteClientOperation(Trace& trace, const std::string& client_id) : Operation(trace), client_id_(client_id) {};
+  DeleteClientOperation(Trace& trace, const std::string& client_id) : Operation(trace), client_id_(client_id){};
   ~DeleteClientOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kDeleteClient; }
@@ -1261,7 +1262,7 @@ class DeleteClientOperation : public Operation {
 
 class ScanClientOperation : public Operation {
  public:
-  ScanClientOperation(Trace& trace) : Operation(trace) {};
+  ScanClientOperation(Trace& trace) : Operation(trace){};
   ~ScanClientOperation() override = default;
 
   struct Result : public Operation::Result {
@@ -1291,7 +1292,7 @@ class ScanClientOperation : public Operation {
 class GetFileSessionOperation : public Operation {
  public:
   GetFileSessionOperation(Trace& trace, uint32_t fs_id, Ino ino, const std::string& session_id)
-      : Operation(trace), fs_id_(fs_id), ino_(ino), session_id_(session_id) {};
+      : Operation(trace), fs_id_(fs_id), ino_(ino), session_id_(session_id){};
   ~GetFileSessionOperation() override = default;
 
   struct Result : public Operation::Result {
@@ -1326,9 +1327,9 @@ class ScanFileSessionOperation : public Operation {
   using HandlerType = std::function<bool(const FileSessionEntry&)>;
 
   ScanFileSessionOperation(Trace& trace, uint32_t fs_id, Ino ino, HandlerType handler)
-      : Operation(trace), fs_id_(fs_id), ino_(ino), handler_(handler) {};
+      : Operation(trace), fs_id_(fs_id), ino_(ino), handler_(handler){};
   ScanFileSessionOperation(Trace& trace, uint32_t fs_id, HandlerType handler)
-      : Operation(trace), fs_id_(fs_id), handler_(handler) {};
+      : Operation(trace), fs_id_(fs_id), handler_(handler){};
   ~ScanFileSessionOperation() override = default;
 
   struct Result : public Operation::Result {
@@ -1361,7 +1362,7 @@ class ScanFileSessionOperation : public Operation {
 class DeleteFileSessionOperation : public Operation {
  public:
   DeleteFileSessionOperation(Trace& trace, const std::vector<FileSessionEntry>& file_sessions)
-      : Operation(trace), file_sessions_(file_sessions) {};
+      : Operation(trace), file_sessions_(file_sessions){};
   ~DeleteFileSessionOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kDeleteFileSession; }
@@ -1377,7 +1378,7 @@ class DeleteFileSessionOperation : public Operation {
 
 class CleanDelSliceOperation : public Operation {
  public:
-  CleanDelSliceOperation(Trace& trace, const std::string& key) : Operation(trace), key_(key) {};
+  CleanDelSliceOperation(Trace& trace, const std::string& key) : Operation(trace), key_(key){};
   ~CleanDelSliceOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kCleanDelSlice; }
@@ -1393,7 +1394,7 @@ class CleanDelSliceOperation : public Operation {
 
 class GetDelFileOperation : public Operation {
  public:
-  GetDelFileOperation(Trace& trace, uint32_t fs_id, Ino ino) : Operation(trace), fs_id_(fs_id), ino_(ino) {};
+  GetDelFileOperation(Trace& trace, uint32_t fs_id, Ino ino) : Operation(trace), fs_id_(fs_id), ino_(ino){};
   ~GetDelFileOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kGetDelFile; }
@@ -1410,7 +1411,7 @@ class GetDelFileOperation : public Operation {
 
 class CleanDelFileOperation : public Operation {
  public:
-  CleanDelFileOperation(Trace& trace, uint32_t fs_id, Ino ino) : Operation(trace), fs_id_(fs_id), ino_(ino) {};
+  CleanDelFileOperation(Trace& trace, uint32_t fs_id, Ino ino) : Operation(trace), fs_id_(fs_id), ino_(ino){};
   ~CleanDelFileOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kCleanDelFile; }
@@ -1427,7 +1428,7 @@ class CleanDelFileOperation : public Operation {
 
 class ScanLockOperation : public Operation {
  public:
-  ScanLockOperation(Trace& trace) : Operation(trace) {};
+  ScanLockOperation(Trace& trace) : Operation(trace){};
   ~ScanLockOperation() override = default;
 
   struct Result : public Operation::Result {
@@ -1456,7 +1457,7 @@ class ScanLockOperation : public Operation {
 
 class ScanFsOperation : public Operation {
  public:
-  ScanFsOperation(Trace& trace) : Operation(trace) {};
+  ScanFsOperation(Trace& trace) : Operation(trace){};
   ~ScanFsOperation() override = default;
 
   struct Result : public Operation::Result {
@@ -1488,9 +1489,9 @@ class ScanDentryOperation : public Operation {
   using HandlerType = std::function<bool(const DentryEntry&)>;
 
   ScanDentryOperation(Trace& trace, uint32_t fs_id, Ino ino, const std::string& last_name, HandlerType handler)
-      : Operation(trace), fs_id_(fs_id), ino_(ino), last_name_(last_name), handler_(handler) {};
+      : Operation(trace), fs_id_(fs_id), ino_(ino), last_name_(last_name), handler_(handler){};
   ScanDentryOperation(Trace& trace, uint32_t fs_id, Ino ino, HandlerType handler)
-      : Operation(trace), fs_id_(fs_id), ino_(ino), last_name_(""), handler_(handler) {};
+      : Operation(trace), fs_id_(fs_id), ino_(ino), last_name_(""), handler_(handler){};
   ~ScanDentryOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kScanDentry; }
@@ -1510,9 +1511,9 @@ class ScanDentryOperation : public Operation {
 class ScanDelSliceOperation : public Operation {
  public:
   ScanDelSliceOperation(Trace& trace, uint32_t fs_id, Ino ino, uint64_t chunk_index, Txn::ScanHandlerType handler)
-      : Operation(trace), fs_id_(fs_id), ino_(ino), chunk_index_(chunk_index), handler_(handler) {};
+      : Operation(trace), fs_id_(fs_id), ino_(ino), chunk_index_(chunk_index), handler_(handler){};
   ScanDelSliceOperation(Trace& trace, uint32_t fs_id, Txn::ScanHandlerType handler)
-      : Operation(trace), fs_id_(fs_id), handler_(handler) {};
+      : Operation(trace), fs_id_(fs_id), handler_(handler){};
   ~ScanDelSliceOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kScanDelSlice; }
@@ -1532,7 +1533,7 @@ class ScanDelSliceOperation : public Operation {
 class ScanDelFileOperation : public Operation {
  public:
   ScanDelFileOperation(Trace& trace, uint32_t fs_id, Txn::ScanHandlerType scan_handler)
-      : Operation(trace), fs_id_(fs_id), scan_handler_(scan_handler) {};
+      : Operation(trace), fs_id_(fs_id), scan_handler_(scan_handler){};
   ~ScanDelFileOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kScanDelFile; }
@@ -1550,7 +1551,7 @@ class ScanDelFileOperation : public Operation {
 class ScanMetaTableOperation : public Operation {
  public:
   ScanMetaTableOperation(Trace& trace, Txn::ScanHandlerType scan_handler)
-      : Operation(trace), scan_handler_(scan_handler) {};
+      : Operation(trace), scan_handler_(scan_handler){};
   ~ScanMetaTableOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kScanMetaTable; }
@@ -1567,7 +1568,7 @@ class ScanMetaTableOperation : public Operation {
 class ScanFsMetaTableOperation : public Operation {
  public:
   ScanFsMetaTableOperation(Trace& trace, uint32_t fs_id, Txn::ScanHandlerType scan_handler)
-      : Operation(trace), fs_id_(fs_id), scan_handler_(scan_handler) {};
+      : Operation(trace), fs_id_(fs_id), scan_handler_(scan_handler){};
   ~ScanFsMetaTableOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kScanFsMetaTable; }
@@ -1586,7 +1587,7 @@ class ScanFsOpLogOperation : public Operation {
  public:
   using HandlerType = std::function<bool(const FsOpLog&)>;
   ScanFsOpLogOperation(Trace& trace, uint32_t fs_id, HandlerType handler)
-      : Operation(trace), fs_id_(fs_id), handler_(handler) {};
+      : Operation(trace), fs_id_(fs_id), handler_(handler){};
   ~ScanFsOpLogOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kScanFsOpLog; }
@@ -1604,7 +1605,7 @@ class ScanFsOpLogOperation : public Operation {
 class SaveFsStatsOperation : public Operation {
  public:
   SaveFsStatsOperation(Trace& trace, uint32_t fs_id, const FsStatsDataEntry& fs_stats)
-      : Operation(trace), fs_id_(fs_id), fs_stats_(fs_stats) {};
+      : Operation(trace), fs_id_(fs_id), fs_stats_(fs_stats){};
   ~SaveFsStatsOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kSaveFsStats; }
@@ -1622,7 +1623,7 @@ class SaveFsStatsOperation : public Operation {
 class ScanFsStatsOperation : public Operation {
  public:
   ScanFsStatsOperation(Trace& trace, uint32_t fs_id, uint64_t start_time_ns, Txn::ScanHandlerType handler)
-      : Operation(trace), fs_id_(fs_id), start_time_ns_(start_time_ns), handler_(handler) {};
+      : Operation(trace), fs_id_(fs_id), start_time_ns_(start_time_ns), handler_(handler){};
   ~ScanFsStatsOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kScanFsStats; }
@@ -1641,7 +1642,7 @@ class ScanFsStatsOperation : public Operation {
 class GetAndCompactFsStatsOperation : public Operation {
  public:
   GetAndCompactFsStatsOperation(Trace& trace, uint32_t fs_id, uint64_t mark_time_ns)
-      : Operation(trace), fs_id_(fs_id), mark_time_ns_(mark_time_ns) {};
+      : Operation(trace), fs_id_(fs_id), mark_time_ns_(mark_time_ns){};
   ~GetAndCompactFsStatsOperation() override = default;
 
   struct Result : public Operation::Result {
@@ -1672,7 +1673,7 @@ class GetAndCompactFsStatsOperation : public Operation {
 
 class GetInodeAttrOperation : public Operation {
  public:
-  GetInodeAttrOperation(Trace& trace, uint32_t fs_id, uint64_t ino) : Operation(trace), fs_id_(fs_id), ino_(ino) {};
+  GetInodeAttrOperation(Trace& trace, uint32_t fs_id, uint64_t ino) : Operation(trace), fs_id_(fs_id), ino_(ino){};
   ~GetInodeAttrOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kGetInodeAttr; }
@@ -1690,7 +1691,7 @@ class GetInodeAttrOperation : public Operation {
 class BatchGetInodeAttrOperation : public Operation {
  public:
   BatchGetInodeAttrOperation(Trace& trace, uint32_t fs_id, const std::vector<Ino>& inoes)
-      : Operation(trace), fs_id_(fs_id), inoes_(inoes) {};
+      : Operation(trace), fs_id_(fs_id), inoes_(inoes){};
   ~BatchGetInodeAttrOperation() override = default;
 
   struct Result : public Operation::Result {
@@ -1723,7 +1724,7 @@ class BatchGetInodeAttrOperation : public Operation {
 class GetDentryOperation : public Operation {
  public:
   GetDentryOperation(Trace& trace, uint32_t fs_id, Ino parent, const std::string& name)
-      : Operation(trace), fs_id_(fs_id), parent_(parent), name_(name) {};
+      : Operation(trace), fs_id_(fs_id), parent_(parent), name_(name){};
   ~GetDentryOperation() override = default;
 
   struct Result : public Operation::Result {
@@ -1756,7 +1757,7 @@ class GetDentryOperation : public Operation {
 
 class ImportKVOperation : public Operation {
  public:
-  ImportKVOperation(Trace& trace, std::vector<KeyValue> kvs) : Operation(trace), kvs_(std::move(kvs)) {};
+  ImportKVOperation(Trace& trace, std::vector<KeyValue> kvs) : Operation(trace), kvs_(std::move(kvs)){};
   ~ImportKVOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kImportKV; }
@@ -1774,7 +1775,7 @@ class UpsertCacheMemberOperation : public Operation {
  public:
   using HandlerType = std::function<Status(CacheMemberEntry&, const Status&)>;
   UpsertCacheMemberOperation(Trace& trace, const std::string& cache_member_id, HandlerType handler)
-      : Operation(trace), cache_member_id_(cache_member_id), handler_(handler) {};
+      : Operation(trace), cache_member_id_(cache_member_id), handler_(handler){};
   ~UpsertCacheMemberOperation() override = default;
 
   struct Result : public Operation::Result {
@@ -1806,7 +1807,7 @@ class UpsertCacheMemberOperation : public Operation {
 class DeleteCacheMemberOperation : public Operation {
  public:
   DeleteCacheMemberOperation(Trace& trace, const std::string& cache_member_id)
-      : Operation(trace), cache_member_id_(cache_member_id) {};
+      : Operation(trace), cache_member_id_(cache_member_id){};
   ~DeleteCacheMemberOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kDeleteCacheMember; }
@@ -1822,7 +1823,7 @@ class DeleteCacheMemberOperation : public Operation {
 
 class ScanCacheMemberOperation : public Operation {
  public:
-  ScanCacheMemberOperation(Trace& trace) : Operation(trace) {};
+  ScanCacheMemberOperation(Trace& trace) : Operation(trace){};
   ~ScanCacheMemberOperation() override = default;
 
   struct Result : public Operation::Result {
@@ -1852,7 +1853,7 @@ class ScanCacheMemberOperation : public Operation {
 class GetCacheMemberOperation : public Operation {
  public:
   GetCacheMemberOperation(Trace& trace, const std::string& cache_member_id)
-      : Operation(trace), cache_member_id_(cache_member_id) {};
+      : Operation(trace), cache_member_id_(cache_member_id){};
   ~GetCacheMemberOperation() override = default;
 
   struct Result : public Operation::Result {
