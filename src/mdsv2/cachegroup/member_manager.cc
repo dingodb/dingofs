@@ -28,6 +28,7 @@
 #include "mdsv2/common/type.h"
 #include "mdsv2/filesystem/store_operation.h"
 #include "mdsv2/storage/storage.h"
+#include "options/mdsv2/option.h"
 
 namespace dingofs {
 namespace mdsv2 {
@@ -48,7 +49,6 @@ Status CacheGroupMemberManager::ReweightMember(Context& ctx, const std::string& 
     cache_member.set_weight(weight);
     return Status::OK();
   };
-
   return UpsertCacheMember(ctx, member_id, handler);
 }
 
@@ -68,10 +68,27 @@ static void SetMemberState(CacheMemberEntry& cache_member) {
   return;
 }
 
+Status CacheGroupMemberManager::ListMembers(Context& ctx, std::vector<CacheMemberEntry>& members) {
+  if (FLAGS_mds_cache_member_enable_cache) {
+    utils::ReadLockGuard lock(lock_);
+
+    members.reserve(member_cache_.size());
+    for (const auto& pair : member_cache_) {
+      members.push_back(pair.second);
+    }
+
+    if (members.size() > 0) {
+      return Status::OK();
+    }
+  }
+
+  return ListCacheMemberFromStore(ctx, members);
+}
+
 Status CacheGroupMemberManager::ListMembers(Context& ctx, const std::string& group_name,
                                             std::vector<CacheMemberEntry>& members) {
   std::vector<CacheMemberEntry> cache_member_entries;
-  auto status = ListCacheMemberFromStore(ctx, cache_member_entries);
+  auto status = ListMembers(ctx, cache_member_entries);
   if (!status.ok()) {
     return status;
   }
@@ -159,7 +176,7 @@ Status CacheGroupMemberManager::LeaveCacheGroup(Context& ctx, const std::string&
 
 Status CacheGroupMemberManager::ListGroups(Context& ctx, std::unordered_set<std::string>& groups) {
   std::vector<CacheMemberEntry> cache_member_entries;
-  auto status = ListCacheMemberFromStore(ctx, cache_member_entries);
+  auto status = ListMembers(ctx, cache_member_entries);
   if (!status.ok()) {
     return status;
   }
@@ -202,6 +219,8 @@ Status CacheGroupMemberManager::DeleteMember(Context& ctx, const std::string& me
     return status;
   }
 
+  DeleteCacheMemberFromCache(member_id);
+
   return Status::OK();
 }
 
@@ -216,6 +235,8 @@ Status CacheGroupMemberManager::UpsertCacheMember(Context& ctx, const std::strin
     return status;
   }
 
+  auto& result = operation.GetResult();
+  UpsertCacheMemberToCache(result.cache_member);
   return Status::OK();
 }
 
@@ -240,6 +261,53 @@ bool CacheGroupMemberManager::CheckMatchMember(std::string ip, uint32_t port, Ca
 }
 
 bool CacheGroupMemberManager::CheckMemberLocked(CacheMemberEntry& cache_member) { return cache_member.locked(); }
+
+void CacheGroupMemberManager::UpsertCacheMemberToCache(const CacheMemberEntry& cache_member) {
+  if (!FLAGS_mds_cache_member_enable_cache) {
+    return;
+  }
+  utils::WriteLockGuard lock(lock_);
+
+  auto it = member_cache_.find(cache_member.member_id());
+  if (it != member_cache_.end()) {
+    if (it->second.version() >= cache_member.version()) {
+      return;
+    }
+  }
+  member_cache_.emplace(cache_member.member_id(), std::move(cache_member));
+}
+
+void CacheGroupMemberManager::DeleteCacheMemberFromCache(const std::string& member_id) {
+  if (!FLAGS_mds_cache_member_enable_cache) {
+    return;
+  }
+
+  utils::WriteLockGuard lock(lock_);
+  member_cache_.erase(member_id);
+}
+
+bool CacheGroupMemberManager::LoadCacheMembers() {
+  if (!FLAGS_mds_cache_member_enable_cache) {
+    return true;
+  }
+
+  std::vector<CacheMemberEntry> cache_member_entries;
+  Context ctx;
+  auto status = ListCacheMemberFromStore(ctx, cache_member_entries);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[cachegroup] load cache members fail, error({}).", status.error_str());
+    return false;
+  }
+
+  utils::WriteLockGuard lock(lock_);
+
+  member_cache_.clear();
+  for (auto& member : cache_member_entries) {
+    member_cache_.emplace(member.member_id(), std::move(member));
+  }
+
+  return true;
+}
 
 }  // namespace mdsv2
 }  // namespace dingofs

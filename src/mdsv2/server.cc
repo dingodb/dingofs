@@ -22,6 +22,7 @@
 #include "gflags/gflags.h"
 #include "gflags/gflags_declare.h"
 #include "glog/logging.h"
+#include "mdsv2/background/cache_member_sync.h"
 #include "mdsv2/background/fsinfo_sync.h"
 #include "mdsv2/background/heartbeat.h"
 #include "mdsv2/cachegroup/member_manager.h"
@@ -56,6 +57,7 @@ DEFINE_uint32(mds_crontab_fsinfosync_interval_s, 10, "fs info sync interval seco
 DEFINE_uint32(mds_crontab_mdsmonitor_interval_s, 5, "mds monitor interval seconds");
 DEFINE_uint32(mds_crontab_quota_sync_interval_s, 3, "quota sync interval seconds");
 DEFINE_uint32(mds_crontab_gc_interval_s, 60, "gc interval seconds");
+DEFINE_uint32(mds_crontab_cache_member_sync_interval_s, 3, "cache member sync interval seconds");
 
 // log config
 DEFINE_string(mds_log_level, "INFO", "log level, DEBUG, INFO, WARNING, ERROR, FATAL");
@@ -66,6 +68,7 @@ DEFINE_uint32(mds_server_id, 1001, "server id, must be unique in the cluster");
 DEFINE_string(mds_server_host, "127.0.0.1", "server host");
 DEFINE_string(mds_server_listen_host, "0.0.0.0", "server listen host");
 DEFINE_uint32(mds_server_port, 7801, "server port");
+DEFINE_bool(mds_cache_member_enable_cache, true, "cache member enable cache, default:true");
 
 Server::~Server() {}  // NOLINT
 
@@ -190,6 +193,16 @@ bool Server::InitOperationProcessor() {
   return operation_processor_->Init();
 }
 
+bool Server::InitCacheGroupMemberManager() {
+  DINGO_LOG(INFO) << "init cache group member manager.";
+  CHECK(operation_processor_ != nullptr) << "operation_processor is nullptr.";
+  cache_group_member_manager_ = CacheGroupMemberManager::New(operation_processor_);
+  CHECK(cache_group_member_manager_ != nullptr) << "cache_group_member_manager is nullptr.";
+  cache_group_member_manager_->LoadCacheMembers();
+
+  return true;
+}
+
 bool Server::InitFileSystem() {
   DINGO_LOG(INFO) << "init filesystem.";
 
@@ -223,14 +236,24 @@ bool Server::InitFileSystem() {
 bool Server::InitHeartbeat() {
   DINGO_LOG(INFO) << "init heartbeat.";
   CHECK(operation_processor_ != nullptr) << "operation_processor is nullptr.";
+  CHECK(cache_group_member_manager_ != nullptr) << "cache_group_member_manager is nullptr.";
 
-  heartbeat_ = Heartbeat::New(operation_processor_);
+  heartbeat_ = Heartbeat::New(operation_processor_, cache_group_member_manager_);
   return heartbeat_->Init();
 }
 
 bool Server::InitFsInfoSync() {
   DINGO_LOG(INFO) << "init fs info sync.";
   return fs_info_sync_.Init();
+}
+
+bool Server::InitCacheMemberSynchronizer() {
+  CHECK(cache_group_member_manager_ != nullptr) << "cache_group_member_manager is nullptr.";
+
+  cache_member_synchronizer_ = CacheMemberSynchronizer::New(cache_group_member_manager_);
+  CHECK(cache_member_synchronizer_ != nullptr) << "new CacheMemberSynchronizer fail.";
+
+  return true;
 }
 
 bool Server::InitNotifyBuddy() {
@@ -323,6 +346,14 @@ bool Server::InitCrontab() {
       [](void*) { Server::GetInstance().GetGcProcessor()->Run(); },
   });
 
+  // Add cache member sync crontab
+  crontab_configs_.push_back({
+      "CACHE_MEMBER_SYNC",
+      FLAGS_mds_crontab_cache_member_sync_interval_s * 1000,
+      true,
+      [](void*) { Server::GetInstance().GetCacheMemberSynchronizer()->Run(); },
+  });
+
   crontab_manager_.AddCrontab(crontab_configs_);
 
   return true;
@@ -335,11 +366,9 @@ bool Server::InitService() {
   auto fs_stats = FsStats::New(operation_processor_);
   CHECK(fs_stats != nullptr) << "fsstats is nullptr.";
 
-  // cache group member
-  auto cache_group_member_manager = CacheGroupMemberManager::New(operation_processor_);
-  CHECK(cache_group_member_manager != nullptr) << "cache_group_member_manager is nullptr.";
+  CHECK(cache_group_member_manager_ != nullptr) << "cache_group_member_manager is nullptr.";
 
-  mds_service_ = MDSServiceImpl::New(file_system_set_, gc_processor_, std::move(fs_stats), cache_group_member_manager);
+  mds_service_ = MDSServiceImpl::New(file_system_set_, gc_processor_, std::move(fs_stats), cache_group_member_manager_);
   CHECK(mds_service_ != nullptr) << "new MDSServiceImpl fail.";
 
   if (!mds_service_->Init()) {
@@ -386,6 +415,8 @@ HeartbeatSPtr Server::GetHeartbeat() {
 
 FsInfoSync& Server::GetFsInfoSync() { return fs_info_sync_; }
 
+CacheMemberSynchronizerSPtr& Server::GetCacheMemberSynchronizer() { return cache_member_synchronizer_; }
+
 CoordinatorClientSPtr Server::GetCoordinatorClient() {
   CHECK(coordinator_client_ != nullptr) << "coordinator_client is nullptr.";
 
@@ -425,6 +456,12 @@ GcProcessorSPtr Server::GetGcProcessor() {
   CHECK(gc_processor_ != nullptr) << "gc_processor is nullptr.";
 
   return gc_processor_;
+}
+
+CacheGroupMemberManagerSPtr Server::GetCacheGroupMemberManager() {
+  CHECK(cache_group_member_manager_ != nullptr) << "cache_group_member_manager_ is nullptr.";
+
+  return cache_group_member_manager_;
 }
 
 MDSServiceImplUPtr& Server::GetMDSService() {

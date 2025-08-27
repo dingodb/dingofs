@@ -331,10 +331,12 @@ int main(int argc, char* argv[]) {
   CHECK(server.InitCoordinatorClient(FLAGS_coor_url)) << "init coordinator client error.";
   CHECK(server.InitStorage(FLAGS_coor_url)) << "init storage error.";
   CHECK(server.InitOperationProcessor()) << "init operation processor error.";
+  CHECK(server.InitCacheGroupMemberManager()) << "init cache group member manager error.";
   CHECK(server.InitNotifyBuddy()) << "init notify buddy error.";
   CHECK(server.InitFileSystem()) << "init file system set error.";
   CHECK(server.InitHeartbeat()) << "init heartbeat error.";
   CHECK(server.InitFsInfoSync()) << "init fs info sync error.";
+  CHECK(server.InitCacheMemberSynchronizer()) << "init cache member synchronizer error.";
   CHECK(server.InitMonitor()) << "init mds monitor error.";
   CHECK(server.InitGcProcessor()) << "init gc error.";
   CHECK(server.InitQuotaSynchronizer()) << "init quota synchronizer error.";

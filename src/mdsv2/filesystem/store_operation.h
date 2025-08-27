@@ -1777,6 +1777,10 @@ class UpsertCacheMemberOperation : public Operation {
       : Operation(trace), cache_member_id_(cache_member_id), handler_(handler) {};
   ~UpsertCacheMemberOperation() override = default;
 
+  struct Result : public Operation::Result {
+    CacheMemberEntry cache_member;
+  };
+
   OpType GetOpType() const override { return OpType::kUpsertCacheMember; }
 
   uint32_t GetFsId() const override { return 0; }
@@ -1784,9 +1788,19 @@ class UpsertCacheMemberOperation : public Operation {
 
   Status Run(TxnUPtr& txn) override;
 
+  template <int size = 0>
+  Result& GetResult() {
+    auto& result = Operation::GetResult();
+    result_.status = result.status;
+    result_.attr = std::move(result.attr);
+
+    return result_;
+  }
+
  private:
   std::string cache_member_id_;
   HandlerType handler_;
+  Result result_;
 };
 
 class DeleteCacheMemberOperation : public Operation {

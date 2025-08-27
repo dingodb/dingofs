@@ -111,14 +111,15 @@ Status Heartbeat::SendHeartbeat(Context& ctx, ClientEntry& client) {
 Status Heartbeat::SendHeartbeat(Context& ctx, CacheMemberEntry& heartbeat_cache_member) {
   auto ip = heartbeat_cache_member.ip();
   auto port = heartbeat_cache_member.port();
-  auto handler = [ip, port](CacheMemberEntry& cache_member, const Status& status) -> Status {
+  auto now_time = Helper::TimestampMs();
+  auto handler = [ip, port, now_time](CacheMemberEntry& cache_member, const Status& status) -> Status {
     if (!status.ok()) {
       return status;
     }
     if (ip != cache_member.ip() || port != cache_member.port()) {
       return Status(pb::error::Errno::ENOT_MATCH, "cache member not match");
     }
-    cache_member.set_last_online_time_ms(Helper::TimestampMs());
+    cache_member.set_last_online_time_ms(now_time);
     return Status::OK();
   };
 
@@ -131,7 +132,10 @@ Status Heartbeat::SendHeartbeat(Context& ctx, CacheMemberEntry& heartbeat_cache_
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("[heartbeat] send fail, heartbeat_cache_member({}) error({}).",
                                     heartbeat_cache_member.ShortDebugString(), status.error_str());
+    return status;
   }
+  auto& result = operation.GetResult();
+  cache_group_member_manager_->UpsertCacheMemberToCache(result.cache_member);
 
   return status;
 }

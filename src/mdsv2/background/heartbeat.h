@@ -15,6 +15,7 @@
 #ifndef DINGOFS_MDSV2_BACKGROUND_HEARTBEAT_H_
 #define DINGOFS_MDSV2_BACKGROUND_HEARTBEAT_H_
 
+#include "mdsv2/cachegroup/member_manager.h"
 #include "mdsv2/common/context.h"
 #include "mdsv2/common/runnable.h"
 #include "mdsv2/common/status.h"
@@ -29,11 +30,13 @@ using HeartbeatSPtr = std::shared_ptr<Heartbeat>;
 
 class Heartbeat {
  public:
-  Heartbeat(OperationProcessorSPtr operation_processor) : operation_processor_(operation_processor) {};
+  Heartbeat(OperationProcessorSPtr operation_processor, CacheGroupMemberManagerSPtr cache_group_member_manager)
+      : operation_processor_(operation_processor), cache_group_member_manager_(cache_group_member_manager){};
   ~Heartbeat() = default;
 
-  static HeartbeatSPtr New(OperationProcessorSPtr operation_processor) {
-    return std::make_shared<Heartbeat>(operation_processor);
+  static HeartbeatSPtr New(OperationProcessorSPtr operation_processor,
+                           CacheGroupMemberManagerSPtr cache_group_member_manager) {
+    return std::make_shared<Heartbeat>(operation_processor, cache_group_member_manager);
   }
 
   bool Init();
@@ -59,6 +62,8 @@ class Heartbeat {
   std::atomic<bool> is_running_{false};
 
   OperationProcessorSPtr operation_processor_;
+
+  CacheGroupMemberManagerSPtr cache_group_member_manager_;
 
   WorkerSPtr worker_;
 };

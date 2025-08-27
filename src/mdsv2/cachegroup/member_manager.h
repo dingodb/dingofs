@@ -17,6 +17,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <unordered_map>
 
 #include "dingofs/mdsv2.pb.h"
@@ -58,6 +59,8 @@ class CacheGroupMemberManager {
 
   Status ListMembers(Context& ctx, const std::string& group_name, std::vector<CacheMemberEntry>& members);
 
+  Status ListMembers(Context& ctx, std::vector<CacheMemberEntry>& members);
+
   Status UnlockMember(Context& ctx, const std::string& member_id, const std::string& ip, uint32_t port);
 
   Status DeleteMember(Context& ctx, const std::string& member_id);
@@ -71,8 +74,15 @@ class CacheGroupMemberManager {
 
   bool CheckMemberLocked(CacheMemberEntry& cache_member);
 
+  void UpsertCacheMemberToCache(const CacheMemberEntry& cache_member);
+  void DeleteCacheMemberFromCache(const std::string& member_id);
+  bool LoadCacheMembers();
+
  private:
   OperationProcessorSPtr operation_processor_;
+  utils::RWLock lock_;
+  // member_id -> member
+  std::unordered_map<std::string, CacheMemberEntry> member_cache_;
 };
 
 }  // namespace mdsv2

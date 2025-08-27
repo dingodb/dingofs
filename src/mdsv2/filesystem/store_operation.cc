@@ -1872,7 +1872,8 @@ Status UpsertCacheMemberOperation::Run(TxnUPtr& txn) {
   if (!status.ok()) {
     return status;
   }
-
+  cache_member.set_version(cache_member.version() + 1);
+  result_.cache_member = cache_member;
   txn->Put(MetaCodec::EncodeHeartbeatCacheMemberKey(cache_member_id_), MetaCodec::EncodeHeartbeatValue(cache_member));
 
   return Status::OK();

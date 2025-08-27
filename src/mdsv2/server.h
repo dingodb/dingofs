@@ -19,6 +19,7 @@
 #include <string>
 
 #include "brpc/server.h"
+#include "mdsv2/background/cache_member_sync.h"
 #include "mdsv2/background/fsinfo_sync.h"
 #include "mdsv2/background/gc.h"
 #include "mdsv2/background/heartbeat.h"
@@ -57,6 +58,8 @@ class Server {
 
   bool InitOperationProcessor();
 
+  bool InitCacheGroupMemberManager();
+
   bool InitNotifyBuddy();
 
   bool InitFileSystem();
@@ -64,6 +67,8 @@ class Server {
   bool InitHeartbeat();
 
   bool InitFsInfoSync();
+
+  bool InitCacheMemberSynchronizer();
 
   bool InitMonitor();
 
@@ -89,6 +94,8 @@ class Server {
   OperationProcessorSPtr GetOperationProcessor();
   QuotaSynchronizerSPtr GetQuotaSynchronizer();
   GcProcessorSPtr GetGcProcessor();
+  CacheGroupMemberManagerSPtr GetCacheGroupMemberManager();
+  CacheMemberSynchronizerSPtr& GetCacheMemberSynchronizer();
 
   MDSServiceImplUPtr& GetMDSService();
   DebugServiceImplUPtr& GetDebugService();
@@ -134,6 +141,12 @@ class Server {
 
   // fs info sync
   FsInfoSync fs_info_sync_;
+
+  // cache group manager
+  CacheGroupMemberManagerSPtr cache_group_member_manager_;
+
+  // cache group member sync
+  CacheMemberSynchronizerSPtr cache_member_synchronizer_;
 
   // notify buddy
   notify::NotifyBuddySPtr notify_buddy_;

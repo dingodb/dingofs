@@ -68,6 +68,8 @@ DECLARE_int32(mds_service_log_print_max_length);
 DECLARE_uint32(mds_scan_batch_size);
 DECLARE_uint32(mds_txn_max_retry_times);
 
+DECLARE_bool(mds_cache_member_enable_cache);
+
 // gc config
 DECLARE_uint32(mds_gc_worker_num);
 DECLARE_uint32(mds_gc_max_pending_task_count);
