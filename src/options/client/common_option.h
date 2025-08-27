@@ -113,6 +113,8 @@ static void InitRemoteBlockCacheOption(utils::Configuration* c) {
               &cache::FLAGS_load_members_interval_ms);
 
   c->GetValue("remote_cache.fill_group_cache", &cache::FLAGS_fill_group_cache);
+  c->GetValue("remote_cache.subrequest_range_size",
+              &cache::FLAGS_subrequest_range_size);
   c->GetValue("remote_cache.rpc_connect_timeout_ms",
               &cache::FLAGS_rpc_connect_timeout_ms);
   c->GetValue("remote_cache.rpc_connect_timeout_as_unreachable",

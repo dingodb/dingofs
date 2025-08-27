@@ -120,13 +120,13 @@ namespace cache {
                << ", status = " << status.ToString();                         \
   } while (0);
 
-#define GENERIC_LOG_DOWNLOAD_ERROR()                           \
-  do {                                                         \
-    LOG(ERROR) << ctx->StrTraceId()                            \
-               << "Download block from storage failed: key = " \
-               << key.Filename() << ", offset = " << offset    \
-               << ", length = " << length                      \
-               << ", status = " << status.ToString();          \
+#define GENERIC_LOG_DOWNLOAD_ERROR()                            \
+  do {                                                          \
+    LOG(ERROR) << ctx->StrTraceId()                             \
+               << " Download block from storage failed: key = " \
+               << key.Filename() << ", offset = " << offset     \
+               << ", length = " << length                       \
+               << ", status = " << status.ToString();           \
   } while (0);
 
 #define ON_SCOPE_EXIT BRPC_SCOPE_EXIT

@@ -52,7 +52,6 @@ DECLARE_bool(fill_group_cache);
 // (default is true)
 DECLARE_bool(subrequest_ranges);
 
-// [onfly]
 // Range size for each subrequest
 DECLARE_uint32(subrequest_range_size);
 
