@@ -171,18 +171,18 @@ function start() {
 }
 
 # stop fuse
-# stop
+stop
 
 # echo "wait for 3 seconds to stop fuse."
-# sleep 3
+sleep 3
 
 # umount fuse
-# umount
+umount
 
-# if [ ${FLAGS_just_stop} = 0 ]; then
-#     echo "just stop fuse, do not start"
-#     exit 0
-# fi
+if [ ${FLAGS_just_stop} = 0 ]; then
+    echo "just stop fuse, do not start"
+    exit 0
+fi
 
 echo "wait for 1 seconds to start fuse."
 sleep 1

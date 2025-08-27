@@ -57,8 +57,8 @@ static std::string GetHostName() {
 
   return std::string(hostname);
 }
-DEFINE_bool(client_meta_enable_inode_cache, true, "enable inode cache");
-DEFINE_bool(client_meta_enable_write_cache, true, "enable write cache");
+DEFINE_bool(client_meta_read_chunk_cache_enable, true,
+            "enable read chunk cache");
 
 MDSV2FileSystem::MDSV2FileSystem(mdsv2::FsInfoPtr fs_info,
                                  const ClientId& client_id,
@@ -288,8 +288,9 @@ Status MDSV2FileSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
   std::string session_id;
   AttrEntry attr_entry;
   std::vector<mdsv2::ChunkEntry> chunks;
-  auto status =
-      mds_client_->Open(ctx, ino, flags, session_id, attr_entry, chunks);
+  bool is_prefetch_chunk = FLAGS_client_meta_read_chunk_cache_enable;
+  auto status = mds_client_->Open(ctx, ino, flags, is_prefetch_chunk,
+                                  session_id, attr_entry, chunks);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[meta.filesystem.{}.{}] open file fail, error({}).", ino, fh,
@@ -299,12 +300,15 @@ Status MDSV2FileSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
 
   LOG(INFO) << fmt::format(
       "[meta.filesystem.{}.{}] open file flags({:o}:{}) session_id({}) "
-      "chunks({}).",
+      "is_prefetch_chunk({}) chunks({}).",
       ino, fh, flags, mdsv2::Helper::DescOpenFlags(flags), session_id,
-      chunks.size());
+      is_prefetch_chunk, chunks.size());
 
   // add file session and chunk
   auto file_session = file_session_map_.Put(ino, fh, session_id);
+  if (is_prefetch_chunk && !chunks.empty()) {
+    file_session->UpsertChunk(fh, chunks);
+  }
 
   return Status::OK();
 }
@@ -332,12 +336,13 @@ Status MDSV2FileSystem::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
 
 Status MDSV2FileSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                                   uint64_t fh, std::vector<Slice>* slices) {
-  // if (fh != 0 && GetSliceFromCache(ino, fh, index, slices)) {
-  //   LOG(INFO) << fmt::format(
-  //       "[meta.filesystem.{}.{}.{}] readslice from cache, slices{}.", ino,
-  //       fh, index, Helper::GetSliceIds(*slices));
-  //   return Status::OK();
-  // }
+  if (fh != 0 && GetSliceFromCache(ino, index, slices)) {
+    ctx->hit_cache = true;
+    LOG(INFO) << fmt::format(
+        "[meta.filesystem.{}.{}.{}] readslice from cache, slices{}.", ino, fh,
+        index, Helper::GetSliceIds(*slices));
+    return Status::OK();
+  }
 
   std::vector<mdsv2::ChunkEntry> chunks;
   auto status =
@@ -354,10 +359,6 @@ Status MDSV2FileSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
     for (const auto& slice : chunk.slices()) {
       slices->emplace_back(Helper::ToSlice(slice));
     }
-
-    LOG(INFO) << fmt::format(
-        "[meta.filesystem.{}.{}.{}] readslice from remote, slices{}.", ino, fh,
-        index, Helper::GetSliceIds(*slices));
   }
 
   return Status::OK();
@@ -392,6 +393,10 @@ Status MDSV2FileSystem::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
         "[meta.filesystem.{}.{}.{}] writeslice fail, error({}).", ino, fh,
         index, status.ToString());
     return status;
+  }
+
+  if (FLAGS_client_meta_read_chunk_cache_enable) {
+    ClearChunkCache(ino, fh, index);
   }
 
   return Status::OK();
@@ -528,12 +533,13 @@ Status MDSV2FileSystem::ReadLink(ContextSPtr ctx, Ino ino, std::string* link) {
 }
 
 Status MDSV2FileSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* out_attr) {
+  CHECK(ctx != nullptr) << "context is null";
+
   auto status = mds_client_->GetAttr(ctx, ino, *out_attr);
   if (!status.ok()) {
     return status;
   }
 
-  bool is_amend = false;
   auto file_session = file_session_map_.GetSession(ino);
   if (file_session != nullptr) {
     uint64_t write_memo_length = file_session->GetLength();
@@ -545,13 +551,13 @@ Status MDSV2FileSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* out_attr) {
       out_attr->ctime = time_ns;
       out_attr->mtime = time_ns;
 
-      is_amend = true;
+      ctx->is_amend = true;
     }
   }
 
   LOG(INFO) << fmt::format(
       "[meta.filesystem.{}] get attr length({}) is_amend({}).", ino,
-      out_attr->length, is_amend);
+      out_attr->length, ctx->is_amend);
 
   return Status::OK();
 }
@@ -681,19 +687,19 @@ Status MDSV2FileSystem::Rename(ContextSPtr ctx, Ino old_parent,
 //   inode_cache_->DeleteInode(ino);
 // }
 
-// bool MDSV2FileSystem::GetSliceFromCache(Ino ino, uint64_t fh, uint64_t index,
-//                                         std::vector<Slice>* slices) {
-//   auto file_session = file_session_map_.GetSession({ino, fh});
-//   if (file_session == nullptr) return false;
+bool MDSV2FileSystem::GetSliceFromCache(Ino ino, uint64_t index,
+                                        std::vector<Slice>* slices) {
+  auto file_session = file_session_map_.GetSession(ino);
+  if (file_session == nullptr) return false;
 
-//   auto chunk_mutation = file_session->GetChunkMutation(index);
-//   if (chunk_mutation == nullptr) return false;
-//   if (!chunk_mutation->HasChunk()) return false;
+  auto chunk_mutation = file_session->GetChunkMutation(index);
+  if (chunk_mutation == nullptr) return false;
+  if (!chunk_mutation->HasChunk()) return false;
 
-//   *slices = chunk_mutation->GetAllSlice();
+  *slices = chunk_mutation->GetAllSlice();
 
-//   return true;
-// }
+  return true;
+}
 
 // void MDSV2FileSystem::UpdateInodeLength(Ino ino, uint64_t new_length) {
 //   auto inode = inode_cache_->GetInode(ino);
@@ -747,14 +753,13 @@ Status MDSV2FileSystem::Rename(ContextSPtr ctx, Ino old_parent,
 //   }
 // }
 
-// void MDSV2FileSystem::DeleteChunkMutation(Ino ino, uint64_t fh,
-//                                           uint64_t index) {
-//   auto file_session = file_session_map_.GetSession({ino, fh});
-//   CHECK(file_session != nullptr) << fmt::format(
-//       "file session is nullptr, ino({}) index({}) fh({}).", ino, index, fh);
+void MDSV2FileSystem::ClearChunkCache(Ino ino, uint64_t fh, uint64_t index) {
+  auto file_session = file_session_map_.GetSession(ino);
+  CHECK(file_session != nullptr) << fmt::format(
+      "file session is nullptr, ino({}) index({}) fh({}).", ino, index, fh);
 
-//   file_session->DeleteChunkMutation(index);
-// }
+  file_session->DeleteChunkMutation(index);
+}
 
 // Status MDSV2FileSystem::SyncDeltaSlice(ContextSPtr ctx, Ino ino, uint64_t fh)
 // {

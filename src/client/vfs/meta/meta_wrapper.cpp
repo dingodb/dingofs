@@ -171,8 +171,8 @@ Status MetaWrapper::ReadLink(ContextSPtr ctx, Ino ino, std::string* link) {
 Status MetaWrapper::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
   Status s;
   MetaLogGuard log_guard([&]() {
-    return absl::StrFormat("getattr (%d): %s %d %d %s", ino, s.ToString(),
-                           ctx->hit_cache, ctx->hit_cache, StrAttr(attr));
+    return absl::StrFormat("getattr (%d): %s %d %s", ino, s.ToString(),
+                           ctx->is_amend, StrAttr(attr));
   });
 
   s = target_->GetAttr(ctx, ino, attr);
@@ -312,8 +312,8 @@ Status MetaWrapper::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                               uint64_t fh, std::vector<Slice>* slices) {
   Status s;
   MetaLogGuard log_guard([&]() {
-    return absl::StrFormat("read_slice (%d,%d): %s %d %d", ino, index,
-                           s.ToString(), ctx->hit_cache, slices->size());
+    return absl::StrFormat("read_slice (%d,%d): %s [fh:%d] %d %d", ino, index,
+                           s.ToString(), fh, ctx->hit_cache, slices->size());
   });
 
   s = target_->ReadSlice(ctx, ino, index, fh, slices);

@@ -1015,7 +1015,8 @@ void MDSServiceImpl::DoOpen(google::protobuf::RpcController*, const pb::mdsv2::O
   std::string session_id;
   EntryOut entry_out;
   std::vector<ChunkEntry> chunks;
-  status = file_system->Open(ctx, request->ino(), request->flags(), session_id, entry_out, chunks);
+  status = file_system->Open(ctx, request->ino(), request->flags(), request->prefetch_chunk(), session_id, entry_out,
+                             chunks);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());

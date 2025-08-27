@@ -32,6 +32,7 @@ struct Context {
   std::string parent_span_id;
   // whether hit local cache
   bool hit_cache{false};
+  bool is_amend{false};
 
   const std::string& TraceId() const { return trace_id; }
 

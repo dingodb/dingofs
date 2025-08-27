@@ -396,7 +396,8 @@ Status MDSClient::ReadDir(ContextSPtr ctx, Ino ino,
 }
 
 Status MDSClient::Open(ContextSPtr ctx, Ino ino, int flags,
-                       std::string& session_id, AttrEntry& attr_entry,
+                       bool is_prefetch_chunk, std::string& session_id,
+                       AttrEntry& attr_entry,
                        std::vector<mdsv2::ChunkEntry>& chunks) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
@@ -408,6 +409,7 @@ Status MDSClient::Open(ContextSPtr ctx, Ino ino, int flags,
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
   request.set_flags(flags);
+  request.set_prefetch_chunk(is_prefetch_chunk);
 
   auto status =
       SendRequest(ctx, get_mds_fn, "MDSService", "Open", request, response);

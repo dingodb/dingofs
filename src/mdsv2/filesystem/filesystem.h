@@ -124,8 +124,8 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
     uint64_t rdev{0};
   };
   Status MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_out);
-  Status Open(Context& ctx, Ino ino, uint32_t flags, std::string& session_id, EntryOut& entry_out,
-              std::vector<ChunkEntry>& chunks);
+  Status Open(Context& ctx, Ino ino, uint32_t flags, bool is_prefetch_chunk, std::string& session_id,
+              EntryOut& entry_out, std::vector<ChunkEntry>& chunks);
   Status Release(Context& ctx, Ino ino, const std::string& session_id);
 
   // directory

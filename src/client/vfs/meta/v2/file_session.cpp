@@ -14,8 +14,6 @@
 
 #include "client/vfs/meta/v2/file_session.h"
 
-#include <json/value.h>
-
 #include <algorithm>
 #include <string>
 #include <vector>
@@ -24,6 +22,7 @@
 #include "client/vfs/meta/v2/helper.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
+#include "json/value.h"
 #include "mdsv2/common/helper.h"
 
 namespace dingofs {
@@ -47,8 +46,8 @@ ChunkEntry ChunkMutation::GetChunkEntry() const {
 }
 
 void ChunkMutation::UpdateChunkIf(const ChunkEntry& chunk) {
-  LOG(INFO) << fmt::format("[meta.filesession.{}.{}.{}] update chunk.", ino_,
-                           fh_, chunk.index());
+  LOG(INFO) << fmt::format("[meta.filesession.{}.{}] update chunk.", ino_,
+                           chunk.index());
 
   utils::WriteLockGuard lk(lock_);
 
@@ -73,10 +72,7 @@ std::vector<Slice> ChunkMutation::GetAllSlice() {
   std::vector<Slice> slices = slices_;
 
   slices.insert(slices.end(), delta_slices_.begin(), delta_slices_.end());
-
-  // sort by id
-  std::sort(slices.begin(), slices.end(),  // NOLINT
-            [](const Slice& a, const Slice& b) { return a.id < b.id; });
+  // can't sort by slice id
 
   return std::move(slices);
 }
@@ -88,8 +84,8 @@ std::vector<Slice> ChunkMutation::GetDeltaSlice() {
 }
 
 void ChunkMutation::AppendSlice(const std::vector<Slice>& slices) {
-  LOG(INFO) << fmt::format("[meta.filesession.{}.{}.{}] append slice.", ino_,
-                           fh_, index_);
+  LOG(INFO) << fmt::format("[meta.filesession.{}.{}] append slice.", ino_,
+                           index_);
 
   utils::WriteLockGuard lk(lock_);
 
@@ -98,8 +94,8 @@ void ChunkMutation::AppendSlice(const std::vector<Slice>& slices) {
 
 void ChunkMutation::DeleteDeltaSlice(
     const std::vector<uint64_t>& delete_slice_ids) {
-  LOG(INFO) << fmt::format("[meta.filesession.{}.{}.{}] delete delta slice.",
-                           ino_, fh_, index_);
+  LOG(INFO) << fmt::format("[meta.filesession.{}.{}] delete delta slice.", ino_,
+                           index_);
 
   utils::WriteLockGuard lk(lock_);
 
@@ -121,7 +117,6 @@ void ChunkMutation::DeleteDeltaSlice(
 
 bool ChunkMutation::Dump(Json::Value& value) {
   value["ino"] = ino_;
-  value["fh_"] = fh_;
   value["index"] = index_;
   value["chunk_size"] = chunk_size_;
   value["block_size"] = block_size_;
@@ -170,7 +165,6 @@ bool ChunkMutation::Load(const Json::Value& value) {
 
   // load basic
   ino_ = value["ino"].asUInt64();
-  fh_ = value["fh_"].asUInt64();
   index_ = value["index"].asUInt64();
   chunk_size_ = value["chunk_size"].asUInt64();
   block_size_ = value["block_size"].asUInt64();
@@ -178,7 +172,6 @@ bool ChunkMutation::Load(const Json::Value& value) {
   last_compaction_time_ms_ = value["last_compaction_time_ms"].asUInt64();
 
   CHECK(ino_ != 0) << "ino is zero.";
-  CHECK(fh_ != 0) << "fh_ is zero.";
   CHECK(chunk_size_ != 0) << "chunk_size_ is zero.";
   CHECK(block_size_ != 0) << "block_size_ is zero.";
 
@@ -334,80 +327,41 @@ uint64_t FileSession::GetLastTimeNs() {
   return write_memo_.LastTimeNs();
 }
 
-// void FileSession::UpsertChunkMutation(const ChunkEntry& chunk) {
-//   LOG(INFO) << fmt::format("[meta.filesession.{}.{}.{}] upsert chunk
-//   mutation.",
-//                            ino_, fh_, chunk.index());
+void FileSession::UpsertChunk(uint64_t fh,
+                              const std::vector<ChunkEntry>& chunks) {
+  if (chunks.empty()) return;
+  LOG(INFO) << fmt::format("[meta.filesession.{}.{}] upsert chunk, chunks({}).",
+                           ino_, fh, chunks.size());
 
-//   // utils::WriteLockGuard lk(lock_);
+  utils::WriteLockGuard lk(lock_);
 
-//   // auto it = chunk_mutation_map_.find(chunk.index());
-//   // if (it == chunk_mutation_map_.end()) {
-//   //   auto chunk_mutation = ChunkMutation::New(ino_, fh_, chunk);
-//   //   chunk_mutation_map_.emplace(chunk.index(), chunk_mutation);
+  for (const auto& chunk : chunks) {
+    auto it = chunk_mutation_map_.find(chunk.index());
+    if (it == chunk_mutation_map_.end()) {
+      chunk_mutation_map_.emplace(chunk.index(),
+                                  ChunkMutation::New(ino_, chunk));
 
-//   // } else {
-//   //   it->second->UpdateChunkIf(chunk);
-//   // }
-// }
+    } else {
+      it->second->UpdateChunkIf(chunk);
+    }
+  }
+}
 
-// void FileSession::AppendSlice(int64_t index, const std::vector<Slice>&
-// slices) {
-//   LOG(INFO) << fmt::format("[meta.filesession.{}.{}.{}] append slice.", ino_,
-//                            fh_, index);
+void FileSession::DeleteChunkMutation(int64_t index) {
+  LOG(INFO) << fmt::format("[meta.filesession.{}] delete chunk mutation.", ino_,
+                           index);
 
-//   utils::WriteLockGuard lk(lock_);
+  utils::WriteLockGuard lk(lock_);
 
-//   // auto it = chunk_mutation_map_.find(index);
-//   // if (it != chunk_mutation_map_.end()) {
-//   //   auto& chunk_mutation = it->second;
-//   //   chunk_mutation->AppendSlice(slices);
+  chunk_mutation_map_.erase(index);
+}
 
-//   // } else {
-//   //   auto chunk_mutation = ChunkMutation::New(
-//   //       ino_, fh_, index, fs_info_->GetChunkSize(),
-//   //       fs_info_->GetBlockSize());
-//   //   chunk_mutation->AppendSlice(slices);
-//   //   chunk_mutation_map_.insert(std::make_pair(index, chunk_mutation));
-//   // }
-// }
+ChunkMutationSPtr FileSession::GetChunkMutation(int64_t index) {
+  utils::ReadLockGuard lk(lock_);
 
-// void FileSession::DeleteChunkMutation(int64_t index) {
-//   LOG(INFO) << fmt::format("[meta.filesession.{}.{}] delete chunk mutation.",
-//                            ino_, fh_, index);
-
-//   utils::WriteLockGuard lk(lock_);
-
-//   chunk_mutation_map_.erase(index);
-// }
-
-// ChunkMutationSPtr FileSession::GetChunkMutation(int64_t index) {
-//   utils::ReadLockGuard lk(lock_);
-
-//   auto it = chunk_mutation_map_.find(index);
-//   return (it != chunk_mutation_map_.end()) ? it->second : nullptr;
-// }
-
-// std::vector<ChunkMutationSPtr> FileSession::GetAllChunkMutation() {
-//   utils::ReadLockGuard lk(lock_);
-
-//   std::vector<ChunkMutationSPtr> chunks;
-//   chunks.reserve(chunk_mutation_map_.size());
-//   for (const auto& [_, chunk] : chunk_mutation_map_) {
-//     chunks.push_back(chunk);
-//   }
-
-//   return std::move(chunks);
-// }
-
-// void FileSession::AddChunkMutation(ChunkMutationSPtr chunk_mutation) {
-//   LOG(INFO) << fmt::format("[meta.filesession.{}.{}.{}] add chunk mutation.",
-//                            ino_, fh_, chunk_mutation->GetIndex());
-
-//   utils::WriteLockGuard lk(lock_);
-
-//   chunk_mutation_map_.emplace(chunk_mutation->GetIndex(), chunk_mutation);
-// }
+  auto it = chunk_mutation_map_.find(index);
+  return (it != chunk_mutation_map_.end()) ? it->second : nullptr;
+}
 
 bool FileSession::Dump(Json::Value& value) {
   value["ino"] = ino_;

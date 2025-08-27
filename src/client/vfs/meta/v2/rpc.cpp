@@ -43,6 +43,8 @@ RPC::RPC(const std::string& ip, int port) {
 RPC::RPC(const EndPoint& endpoint) : init_endpoint_(endpoint) {}
 
 bool RPC::Init() {
+  utils::WriteLockGuard lk(lock_);
+
   ChannelSPtr channel = NewChannel(init_endpoint_);
   if (channel == nullptr) {
     return false;
@@ -97,13 +99,15 @@ EndPoint RPC::RandomlyPickupEndPoint() {
     std::advance(it, index);
     return it->first;
 
-  } else {
+  } else if (!fallback_endpoints_.empty()) {
     // take from fallback
     uint32_t index = random_num % fallback_endpoints_.size();
     auto it = fallback_endpoints_.begin();
     std::advance(it, index);
     return *it;
   }
+
+  return init_endpoint_;
 }
 
 void RPC::AddFallbackEndpoint(const EndPoint& endpoint) {

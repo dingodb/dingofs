@@ -49,6 +49,10 @@ using RPCPtr = std::shared_ptr<RPC>;
 
 using EndPoint = butil::EndPoint;
 
+inline bool IsInvalidEndpoint(const EndPoint& endpoint) {
+  return endpoint.ip == butil::IP_NONE || endpoint.port <= 0;
+}
+
 inline uint32_t CalWaitTimeUs(int retry) {
   // exponential backoff
   return mdsv2::Helper::GenerateRealRandomInteger(100000, 500000) *
@@ -155,6 +159,12 @@ Status RPC::SendRequest(const EndPoint& endpoint,
   method =
       dingofs::pb::mdsv2::MDSService::descriptor()->FindMethodByName(api_name);
   CHECK(method != nullptr) << "[meta.rpc] unknown api name: " << api_name;
+
+  if (IsInvalidEndpoint(endpoint)) {
+    LOG(ERROR) << fmt::format("[meta.rpc][{}] endpoint is invalid.",
+                              EndPointToStr(endpoint));
+    return Status::Internal("endpoint is invalid");
+  }
 
   auto channel = GetChannel(endpoint);
   CHECK(channel != nullptr) << fmt::format("[meta.rpc][{}] channel is null.",

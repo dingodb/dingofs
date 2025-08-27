@@ -536,8 +536,6 @@ Status FileSystem::CreateQuota() {
 }
 
 Status FileSystem::Lookup(Context& ctx, Ino parent, const std::string& name, EntryOut& entry_out) {
-  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] lookup parent({}), name({}).", fs_id_, parent, name);
-
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -598,8 +596,6 @@ uint64_t FileSystem::GetMdsIdByIno(Ino ino) {
 // 1. create inode
 // 2. create dentry and update parent inode(nlink/mtime/ctime)
 Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_out) {
-  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] mknod parent({}), name({}).", fs_id_, param.parent, param.name);
-
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -713,8 +709,8 @@ Status FileSystem::GetChunksFromStore(Ino ino, std::vector<ChunkEntry>& chunks) 
   return Status::OK();
 }
 
-Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& session_id, EntryOut& entry_out,
-                        std::vector<ChunkEntry>& chunks) {
+Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, bool is_prefetch_chunk, std::string& session_id,
+                        EntryOut& entry_out, std::vector<ChunkEntry>& chunks) {
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -794,7 +790,8 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& sess
   };
 
   bool is_completely = false;
-  if ((flags & O_ACCMODE) == O_RDONLY || flags & O_WRONLY || flags & O_RDWR) {
+  if (is_prefetch_chunk && ((flags & O_ACCMODE) == O_RDONLY || flags & O_WRONLY || flags & O_RDWR)) {
+    // priority take from cache
     get_chunks_from_cache_fn(chunks);
 
     is_completely = is_completely_fn(chunks);
@@ -844,8 +841,6 @@ Status FileSystem::Release(Context& ctx, Ino ino, const std::string& session_id)
 // 1. create inode
 // 2. create dentry and update parent inode(nlink/mtime/ctime)
 Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_out) {
-  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] mkdir parent({}), name({}).", fs_id_, param.parent, param.name);
-
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -947,8 +942,6 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
 }
 
 Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name) {
-  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] rmdir parent({}), name({}).", fs_id_, parent, name);
-
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -1019,9 +1012,6 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name) {
 
 Status FileSystem::ReadDir(Context& ctx, Ino ino, const std::string& last_name, uint limit, bool with_attr,
                            std::vector<EntryOut>& entry_outs) {
-  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] readdir ino({}), last_name({}), limit({}), with_attr({}).", fs_id_, ino,
-                                  last_name, limit, with_attr);
-
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -1060,9 +1050,6 @@ Status FileSystem::ReadDir(Context& ctx, Ino ino, const std::string& last_name, 
 // 1. create dentry and update parent inode(nlink/mtime/ctime)
 // 2. update inode(mtime/ctime/nlink)
 Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent, const std::string& new_name, EntryOut& entry_out) {
-  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] link ino({}), new_parent({}), new_name({}).", fs_id_, ino, new_parent,
-                                  new_name);
-
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -1138,8 +1125,6 @@ Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent, const std::string
 // 1. delete dentry and update parent inode(nlink/mtime/ctime)
 // 3. update inode(nlink/mtime/ctime)
 Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name) {
-  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] unLink parent({}), name({}).", fs_id_, parent, name);
-
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -1216,9 +1201,6 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name) {
 // 3. update parent inode mtime/ctime/nlink
 Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_parent, const std::string& new_name,
                            uint32_t uid, uint32_t gid, EntryOut& entry_out) {
-  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] symlink new_parent({}), new_name({}) symlink({}).", fs_id_, new_parent,
-                                  new_name, symlink);
-
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -1313,8 +1295,6 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_par
 }
 
 Status FileSystem::ReadLink(Context& ctx, Ino ino, std::string& link) {
-  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] readlink ino({}).", fs_id_, ino);
-
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -1335,8 +1315,6 @@ Status FileSystem::ReadLink(Context& ctx, Ino ino, std::string& link) {
 }
 
 Status FileSystem::GetAttr(Context& ctx, Ino ino, EntryOut& entry_out) {
-  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] getattr ino({}).", fs_id_, ino);
-
   if (!ctx.IsBypassCache() && !CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -1353,8 +1331,6 @@ Status FileSystem::GetAttr(Context& ctx, Ino ino, EntryOut& entry_out) {
 }
 
 Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, EntryOut& entry_out) {
-  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] setattr ino({}).", fs_id_, ino);
-
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -1441,8 +1417,6 @@ Status FileSystem::GetXAttr(Context& ctx, Ino ino, Inode::XAttrMap& xattr) {
 }
 
 Status FileSystem::GetXAttr(Context& ctx, Ino ino, const std::string& name, std::string& value) {
-  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] getxattr ino({}), name({}).", fs_id_, ino, name);
-
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -1459,8 +1433,6 @@ Status FileSystem::GetXAttr(Context& ctx, Ino ino, const std::string& name, std:
 }
 
 Status FileSystem::SetXAttr(Context& ctx, Ino ino, const Inode::XAttrMap& xattrs, EntryOut& entry_out) {
-  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] setxattr ino({}).", fs_id_, ino);
-
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -1504,8 +1476,6 @@ Status FileSystem::SetXAttr(Context& ctx, Ino ino, const Inode::XAttrMap& xattrs
 }
 
 Status FileSystem::RemoveXAttr(Context& ctx, Ino ino, const std::string& name, EntryOut& entry_out) {
-  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] removexattr ino({}), name({}).", fs_id_, ino, name);
-
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -1995,8 +1965,6 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
 
 Status FileSystem::CompactChunk(Context& ctx, Ino ino, uint64_t chunk_index,
                                 std::vector<pb::mdsv2::TrashSlice>& trash_slices) {
-  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] compactchunk ino({}), chunk_index({}).", fs_id_, ino, chunk_index);
-
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -2031,8 +1999,6 @@ Status FileSystem::CompactChunk(Context& ctx, Ino ino, uint64_t chunk_index,
 }
 
 Status FileSystem::GetDentry(Context& ctx, Ino parent, const std::string& name, Dentry& dentry) {
-  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] getdentry name({}/{}).", fs_id_, parent, name);
-
   bool bypass_cache = ctx.IsBypassCache();
   auto& trace = ctx.GetTrace();
 
@@ -2052,8 +2018,6 @@ Status FileSystem::GetDentry(Context& ctx, Ino parent, const std::string& name, 
 
 Status FileSystem::ListDentry(Context& ctx, Ino parent, const std::string& last_name, uint32_t limit, bool is_only_dir,
                               std::vector<Dentry>& dentries) {
-  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] listdentry name({}/{}) limit({}).", fs_id_, parent, last_name, limit);
-
   bool bypass_cache = ctx.IsBypassCache();
   auto& trace = ctx.GetTrace();
 
@@ -2084,8 +2048,6 @@ Status FileSystem::GetInode(Context& ctx, Ino ino, EntryOut& entry_out) {
 }
 
 Status FileSystem::BatchGetInode(Context& ctx, const std::vector<uint64_t>& inoes, std::vector<EntryOut>& out_entries) {
-  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] batchgetinode inoes({}).", fs_id_, Helper::VectorToString(inoes));
-
   bool bypass_cache = ctx.IsBypassCache();
 
   out_entries.reserve(inoes.size());
@@ -2121,8 +2083,6 @@ Status FileSystem::BatchGetInode(Context& ctx, const std::vector<uint64_t>& inoe
 
 Status FileSystem::BatchGetXAttr(Context& ctx, const std::vector<uint64_t>& inoes,
                                  std::vector<pb::mdsv2::XAttr>& out_xattrs) {
-  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] batchgetxattr inoes({}).", fs_id_, Helper::VectorToString(inoes));
-
   bool bypass_cache = ctx.IsBypassCache();
 
   auto add_xattr_func = [&out_xattrs](const InodeSPtr& inode) {
@@ -2161,8 +2121,6 @@ Status FileSystem::BatchGetXAttr(Context& ctx, const std::vector<uint64_t>& inoe
 }
 
 Status FileSystem::RefreshInode(const std::vector<uint64_t>& inoes) {
-  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] refresh inode({}).", fs_id_, Helper::VectorToString(inoes));
-
   for (const auto& ino : inoes) {
     partition_cache_.Delete(ino);
     inode_cache_.DeleteInode(ino);

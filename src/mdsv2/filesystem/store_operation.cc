@@ -13,9 +13,7 @@
 
 #include "mdsv2/filesystem/store_operation.h"
 
-#include <bthread/bthread.h>
 #include <fcntl.h>
-#include <gflags/gflags_declare.h>
 
 #include <algorithm>
 #include <cstdint>
@@ -24,9 +22,11 @@
 #include <utility>
 #include <vector>
 
+#include "bthread/bthread.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/format.h"
+#include "gflags/gflags_declare.h"
 #include "glog/logging.h"
 #include "mdsv2/common/codec.h"
 #include "mdsv2/common/constant.h"
@@ -46,6 +46,8 @@ DEFINE_uint32(mds_txn_max_retry_times, 5, "txn max retry times.");
 DEFINE_uint32(mds_store_operation_merge_delay_us, 10, "merge operation delay us.");
 
 DECLARE_uint32(mds_compact_chunk_interval_ms);
+
+DEFINE_bool(mds_compact_chunk_detail_log_enable, true, "compact chunk detal log enable.");
 
 static const uint32_t kOpNameBufInitSize = 128;
 
@@ -1544,6 +1546,13 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoEntry& fs_info,
   size_t partial_overlapped_count = trash_slices.slices_size() - out_of_length_count - complete_overlapped_count;
   DINGO_LOG(INFO) << fmt::format("[operation.{}] partial overlapped trash slice count({}) total({})", fs_id,
                                  partial_overlapped_count, trash_slices.slices_size());
+
+  if (FLAGS_mds_compact_chunk_detail_log_enable) {
+    for (const auto& slice : trash_slices.slices()) {
+      DINGO_LOG(INFO) << fmt::format("[operation.{}] trash slice, chunk_index({}) slice_id({}), is_partial({}).", fs_id,
+                                     slice.chunk_index(), slice.slice_id(), slice.is_partial());
+    }
+  }
 
   return trash_slices;
 }

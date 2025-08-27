@@ -45,25 +45,22 @@ using mdsv2::ChunkEntry;
 class ChunkMutation {
  public:
   ChunkMutation() = default;
-  ChunkMutation(Ino ino, uint64_t fh, uint64_t index, uint64_t chunk_size,
+  ChunkMutation(Ino ino, uint64_t index, uint64_t chunk_size,
                 uint64_t block_size)
       : ino_(ino),
-        fh_(fh),
         index_(index),
         chunk_size_(chunk_size),
         block_size_(block_size) {}
-  ChunkMutation(Ino ino, uint64_t fh, const ChunkEntry& chunk)
-      : ino_(ino), fh_(fh) {
+  ChunkMutation(Ino ino, const ChunkEntry& chunk) : ino_(ino) {
     UpdateChunkIf(chunk);
   }
 
-  static ChunkMutationSPtr New(Ino ino, uint64_t fh, uint64_t index,
-                               uint64_t chunk_size, uint64_t block_size) {
-    return std::make_shared<ChunkMutation>(ino, fh, index, chunk_size,
-                                           block_size);
+  static ChunkMutationSPtr New(Ino ino, uint64_t index, uint64_t chunk_size,
+                               uint64_t block_size) {
+    return std::make_shared<ChunkMutation>(ino, index, chunk_size, block_size);
   }
-  static ChunkMutationSPtr New(Ino ino, uint64_t fh, const ChunkEntry& chunk) {
-    return std::make_shared<ChunkMutation>(ino, fh, chunk);
+  static ChunkMutationSPtr New(Ino ino, const ChunkEntry& chunk) {
+    return std::make_shared<ChunkMutation>(ino, chunk);
   }
 
   int64_t GetIndex() const { return index_; }
@@ -89,7 +86,6 @@ class ChunkMutation {
   utils::RWLock lock_;
 
   Ino ino_;
-  uint64_t fh_{0};
   uint64_t index_{0};
   uint64_t chunk_size_{0};
   uint64_t block_size_{0};
@@ -150,12 +146,10 @@ class FileSession {
   uint64_t GetLength();
   uint64_t GetLastTimeNs();
 
-  // void UpsertChunkMutation(const ChunkEntry& chunk);
-  // void AppendSlice(int64_t index, const std::vector<Slice>& slices);
-  // void DeleteChunkMutation(int64_t index);
+  void UpsertChunk(uint64_t fh, const std::vector<ChunkEntry>& chunks);
+  void DeleteChunkMutation(int64_t index);
 
-  // ChunkMutationSPtr GetChunkMutation(int64_t index);
-  // std::vector<ChunkMutationSPtr> GetAllChunkMutation();
+  ChunkMutationSPtr GetChunkMutation(int64_t index);
 
   // output json format string
   bool Dump(Json::Value& value);
@@ -167,8 +161,6 @@ class FileSession {
   static FileSessionSPtr New(mdsv2::FsInfoPtr fs_info) {
     return std::make_shared<FileSession>(fs_info);
   }
-
-  // void AddChunkMutation(ChunkMutationSPtr chunk_mutation);
 
   mdsv2::FsInfoPtr fs_info_;
   Ino ino_;

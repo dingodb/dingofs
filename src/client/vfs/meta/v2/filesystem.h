@@ -154,8 +154,7 @@ class MDSV2FileSystem : public vfs::MetaSystem {
   // ino, const AttrEntry& attr_entry); void DeleteInodeFromCache(Ino ino);
 
   // slice cache
-  // bool GetSliceFromCache(Ino ino, uint64_t fh, uint64_t index,
-  //                        std::vector<Slice>* slices);
+  bool GetSliceFromCache(Ino ino, uint64_t index, std::vector<Slice>* slices);
   // void UpdateInodeLength(Ino ino, uint64_t new_length);
   // bool WriteSliceToCache(Ino ino, uint64_t index, uint64_t fh,
   //                        const std::vector<Slice>& slices);
@@ -165,7 +164,7 @@ class MDSV2FileSystem : public vfs::MetaSystem {
 
   // void UpdateChunkToCache(Ino ino, uint64_t fh,
   //                         const std::vector<mdsv2::ChunkEntry>& chunks);
-  // void DeleteChunkMutation(Ino ino, uint64_t fh, uint64_t index);
+  void ClearChunkCache(Ino ino, uint64_t fh, uint64_t index);
   // Status SyncDeltaSlice(ContextSPtr ctx, Ino ino, uint64_t fh);
 
   const std::string name_;
