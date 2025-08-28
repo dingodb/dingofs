@@ -28,7 +28,7 @@
 #include <vector>
 
 #include "dingofs/cachegroup.pb.h"
-#include "metrics/mds/mds_client.h"
+#include "metrics/client/vfs_legacy/mds_client.h"
 #include "metrics/metric_guard.h"
 #include "stub/common/config.h"
 #include "stub/rpcclient/mds_access_log.h"
@@ -38,7 +38,7 @@ namespace dingofs {
 namespace stub {
 namespace rpcclient {
 
-using metrics::mds::MDSClientMetric;
+using metrics::client::vfs_legacy::MDSClientMetric;
 using pb::common::PartitionInfo;
 using pb::mds::CommitTxRequest;
 using pb::mds::CommitTxResponse;

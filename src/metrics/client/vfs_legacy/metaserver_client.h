@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_SRC_METRICS_METASERVER_METASERVER_CIENT_H_
-#define DINGOFS_SRC_METRICS_METASERVER_METASERVER_CIENT_H_
+#ifndef DINGOFS_SRC_METRICS_CLIENT_VFS_LEGACY_METASERVER_CIENT_H_
+#define DINGOFS_SRC_METRICS_CLIENT_VFS_LEGACY_METASERVER_CIENT_H_
 
 #include <bvar/bvar.h>
 
@@ -25,7 +25,8 @@
 
 namespace dingofs {
 namespace metrics {
-namespace metaserver {
+namespace client {
+namespace vfs_legacy {
 
 struct MetaServerClientMetric {
   inline static const std::string prefix = "dingofs_metaserver_client";
@@ -86,9 +87,9 @@ struct MetaServerClientMetric {
         flush_dir_usages(prefix, "flushDirUsages"),
         getAllOperation(prefix, "getAllopt") {}
 };
-
-}  // namespace metaserver
+}  // namespace vfs_legacy
+}  // namespace client
 }  // namespace metrics
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_METRICS_METASERVER_METASERVER_CIENT_H_
+#endif  // DINGOFS_SRC_METRICS_CLIENT_VFS_LEGACY_METASERVER_CIENT_H_

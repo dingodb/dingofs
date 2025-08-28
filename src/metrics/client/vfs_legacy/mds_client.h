@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_SRC_METRICS_MDS_MDS_CIENT_H_
-#define DINGOFS_SRC_METRICS_MDS_MDS_CIENT_H_
+#ifndef DINGOFS_SRC_METRICS_CLIENT_VFS_LEGACY_MDS_CIENT_H_
+#define DINGOFS_SRC_METRICS_CLIENT_VFS_LEGACY_MDS_CIENT_H_
 
 #include <bvar/bvar.h>
 
@@ -25,7 +25,8 @@
 
 namespace dingofs {
 namespace metrics {
-namespace mds {
+namespace client {
+namespace vfs_legacy {
 
 struct MDSClientMetric {
   inline static const std::string prefix = "dingofs_mds_client";
@@ -72,9 +73,9 @@ struct MDSClientMetric {
     return instance;
   }
 };
-
-}  // namespace mds
+}  // namespace vfs_legacy
+}  // namespace client
 }  // namespace metrics
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_METRICS_MDS_MDS_CIENT_H_
+#endif  // DINGOFS_SRC_METRICS_CLIENT_VFS_LEGACY_MDS_CIENT_H_

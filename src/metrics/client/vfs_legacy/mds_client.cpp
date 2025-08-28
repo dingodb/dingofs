@@ -16,6 +16,8 @@
 
 namespace dingofs {
 namespace metrics {
-namespace mds {}  // namespace mds
+namespace client {
+namespace vfs_legacy {}  // namespace vfs_legacy
+}  // namespace client
 }  // namespace metrics
 }  // namespace dingofs

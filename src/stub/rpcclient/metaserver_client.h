@@ -32,7 +32,7 @@
 #include "common/rpc_stream.h"
 #include "dingofs/common.pb.h"
 #include "dingofs/metaserver.pb.h"
-#include "metrics/metaserver/metaserver_client.h"
+#include "metrics/client/vfs_legacy/metaserver_client.h"
 #include "stub/rpcclient/base_client.h"
 #include "stub/rpcclient/task_excutor.h"
 
@@ -287,7 +287,7 @@ class MetaServerClientImpl : public MetaServerClient {
   std::shared_ptr<ChannelManager<common::MetaserverID>> channelManager_;
 
   dingofs::common::StreamClient streamClient_;
-  metrics::metaserver::MetaServerClientMetric metric_;
+  metrics::client::vfs_legacy::MetaServerClientMetric metric_;
 };
 }  // namespace rpcclient
 }  // namespace stub

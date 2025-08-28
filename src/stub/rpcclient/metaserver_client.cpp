@@ -38,7 +38,7 @@
 #include "common/rpc_stream.h"
 #include "dingofs/metaserver.pb.h"
 #include "fmt/core.h"
-#include "metrics/metaserver/metaserver_client.h"
+#include "metrics/client/vfs_legacy/metaserver_client.h"
 #include "metrics/metric_guard.h"
 #include "stub/common/common.h"
 #include "stub/rpcclient/meta_access_log.h"
@@ -86,7 +86,7 @@ using common::MetaserverID;
 using common::MetaServerOpType;
 using common::PartitionID;
 using metrics::MetricListGuard;
-using metrics::metaserver::MetaServerClientMetric;
+using metrics::client::vfs_legacy::MetaServerClientMetric;
 using rpcclient::ConvertToMetaStatusCode;
 using utils::StringToUll;
 

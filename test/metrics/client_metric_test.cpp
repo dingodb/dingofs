@@ -21,11 +21,11 @@
 #include "metrics/blockaccess/block_accesser.h"
 #include "metrics/client/client.h"
 #include "metrics/client/vfs_legacy/kv_client.h"
+#include "metrics/client/vfs_legacy/mds_client.h"
+#include "metrics/client/vfs_legacy/metaserver_client.h"
 #include "metrics/client/vfs_legacy/s3_cache_manager.h"
 #include "metrics/client/vfs_legacy/s3_chunk_info.h"
 #include "metrics/client/vfs_legacy/warmup.h"
-#include "metrics/mds/mds_client.h"
-#include "metrics/metaserver/metaserver_client.h"
 
 namespace dingofs {
 namespace metric {
@@ -34,11 +34,11 @@ using ::dingofs::metrics::blockaccess::BlockMetric;
 using ::dingofs::metrics::client::ClientOpMetric;
 using ::dingofs::metrics::client::VFSRWMetric;
 using ::dingofs::metrics::client::vfs_legacy::KVClientMetric;
+using ::dingofs::metrics::client::vfs_legacy::MDSClientMetric;
+using ::dingofs::metrics::client::vfs_legacy::MetaServerClientMetric;
 using ::dingofs::metrics::client::vfs_legacy::S3ChunkInfoMetric;
 using ::dingofs::metrics::client::vfs_legacy::S3MultiManagerMetric;
 using ::dingofs::metrics::client::vfs_legacy::WarmupManagerBlockMetric;
-using ::dingofs::metrics::mds::MDSClientMetric;
-using ::dingofs::metrics::metaserver::MetaServerClientMetric;
 
 class ClientMetricTest : public ::testing::Test {
  protected:
