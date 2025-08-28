@@ -21,11 +21,18 @@
 #include "client/meta/vfs_meta.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/meta/meta_log.h"
+#include "metrics/mdsv2/mds_client.h"
+#include "metrics/metric_guard.h"
 #include "trace/context.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
+
+using metrics::MetricListGuard;
+using metrics::mdsv2::MDSClientMetric;
+
+static auto& g_mds_metric = MDSClientMetric::GetInstance();
 
 Status MetaWrapper::Init() {
   Status s;
@@ -59,6 +66,10 @@ Status MetaWrapper::Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
                            StrAttr(attr));
   });
 
+  MetricListGuard mdsGuard(&s,
+                           {&g_mds_metric.Lookup, &g_mds_metric.allOperation},
+                           butil::cpuwide_time_us());
+
   s = target_->Lookup(ctx, parent, name, attr);
   return s;
 }
@@ -72,6 +83,11 @@ Status MetaWrapper::MkNod(ContextSPtr ctx, Ino parent, const std::string& name,
                            name, StrMode(mode), mode, uid, gid, s.ToString(),
                            StrAttr(attr));
   });
+
+  MetricListGuard mdsGuard(&s,
+                           {&g_mds_metric.MkNod, &g_mds_metric.allOperation},
+                           butil::cpuwide_time_us());
+
   s = target_->MkNod(ctx, parent, name, uid, gid, mode, rdev, attr);
   return s;
 }
@@ -82,6 +98,9 @@ Status MetaWrapper::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
     return absl::StrFormat("open (%d) %o: %s [fh:%d]", ino, flags, s.ToString(),
                            fh);
   });
+
+  MetricListGuard mdsGuard(&s, {&g_mds_metric.Open, &g_mds_metric.allOperation},
+                           butil::cpuwide_time_us());
 
   s = target_->Open(ctx, ino, flags, fh);
   return s;
@@ -96,6 +115,11 @@ Status MetaWrapper::Create(ContextSPtr ctx, Ino parent, const std::string& name,
                            parent, name, StrMode(mode), mode, uid, gid,
                            s.ToString(), StrAttr(attr), fh);
   });
+
+  MetricListGuard mdsGuard(&s,
+                           {&g_mds_metric.Create, &g_mds_metric.allOperation},
+                           butil::cpuwide_time_us());
+
   s = target_->Create(ctx, parent, name, uid, gid, mode, flags, attr, fh);
   return s;
 }
@@ -105,6 +129,11 @@ Status MetaWrapper::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
   MetaLogGuard log_guard([&]() {
     return absl::StrFormat("close (%d): %s [fh:%d]", ino, s.ToString(), fh);
   });
+
+  MetricListGuard mdsGuard(&s,
+                           {&g_mds_metric.Close, &g_mds_metric.allOperation},
+                           butil::cpuwide_time_us());
+
   s = target_->Close(ctx, ino, fh);
   return s;
 }
@@ -115,6 +144,10 @@ Status MetaWrapper::Unlink(ContextSPtr ctx, Ino parent,
   MetaLogGuard log_guard([&]() {
     return absl::StrFormat("unlink (%d,%s): %s", parent, name, s.ToString());
   });
+
+  MetricListGuard mdsGuard(&s,
+                           {&g_mds_metric.UnLink, &g_mds_metric.allOperation},
+                           butil::cpuwide_time_us());
 
   s = target_->Unlink(ctx, parent, name);
   return s;
@@ -129,6 +162,10 @@ Status MetaWrapper::Rename(ContextSPtr ctx, Ino old_parent,
                            new_parent, new_name, s.ToString());
   });
 
+  MetricListGuard mdsGuard(&s,
+                           {&g_mds_metric.Rename, &g_mds_metric.allOperation},
+                           butil::cpuwide_time_us());
+
   s = target_->Rename(ctx, old_parent, old_name, new_parent, new_name);
   return s;
 }
@@ -140,6 +177,9 @@ Status MetaWrapper::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
     return absl::StrFormat("link (%d,%d,%s): %s %s", ino, new_parent, new_name,
                            s.ToString(), StrAttr(attr));
   });
+
+  MetricListGuard mdsGuard(&s, {&g_mds_metric.Link, &g_mds_metric.allOperation},
+                           butil::cpuwide_time_us());
 
   s = target_->Link(ctx, ino, new_parent, new_name, attr);
   return s;
@@ -154,6 +194,10 @@ Status MetaWrapper::Symlink(ContextSPtr ctx, Ino parent,
                            link, uid, gid, s.ToString(), StrAttr(attr));
   });
 
+  MetricListGuard mdsGuard(&s,
+                           {&g_mds_metric.Symlink, &g_mds_metric.allOperation},
+                           butil::cpuwide_time_us());
+
   s = target_->Symlink(ctx, parent, name, uid, gid, link, attr);
   return s;
 }
@@ -163,6 +207,10 @@ Status MetaWrapper::ReadLink(ContextSPtr ctx, Ino ino, std::string* link) {
   MetaLogGuard log_guard([&]() {
     return absl::StrFormat("read_link (%d): %s %s", ino, s.ToString(), *link);
   });
+
+  MetricListGuard mdsGuard(&s,
+                           {&g_mds_metric.ReadLink, &g_mds_metric.allOperation},
+                           butil::cpuwide_time_us());
 
   s = target_->ReadLink(ctx, ino, link);
   return s;
@@ -174,6 +222,10 @@ Status MetaWrapper::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
     return absl::StrFormat("getattr (%d): %s %d %s", ino, s.ToString(),
                            ctx->is_amend, StrAttr(attr));
   });
+
+  MetricListGuard mdsGuard(&s,
+                           {&g_mds_metric.GetAttr, &g_mds_metric.allOperation},
+                           butil::cpuwide_time_us());
 
   s = target_->GetAttr(ctx, ino, attr);
   return s;
@@ -187,6 +239,10 @@ Status MetaWrapper::SetAttr(ContextSPtr ctx, Ino ino, int set,
                            StrAttr(out_attr));
   });
 
+  MetricListGuard mdsGuard(&s,
+                           {&g_mds_metric.SetAttr, &g_mds_metric.allOperation},
+                           butil::cpuwide_time_us());
+
   s = target_->SetAttr(ctx, ino, set, in_attr, out_attr);
   return s;
 }
@@ -197,6 +253,10 @@ Status MetaWrapper::SetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
   MetaLogGuard log_guard([&]() {
     return absl::StrFormat("setxattr (%d,%s): %s", ino, name, s.ToString());
   });
+
+  MetricListGuard mdsGuard(&s,
+                           {&g_mds_metric.SetXAttr, &g_mds_metric.allOperation},
+                           butil::cpuwide_time_us());
 
   s = target_->SetXattr(ctx, ino, name, value, flags);
   return s;
@@ -210,6 +270,10 @@ Status MetaWrapper::GetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
                            s.ToString(), ctx->hit_cache, *value);
   });
 
+  MetricListGuard mdsGuard(&s,
+                           {&g_mds_metric.GetXAttr, &g_mds_metric.allOperation},
+                           butil::cpuwide_time_us());
+
   s = target_->GetXattr(ctx, ino, name, value);
 
   return s;
@@ -221,6 +285,10 @@ Status MetaWrapper::RemoveXattr(ContextSPtr ctx, Ino ino,
   MetaLogGuard log_guard([&]() {
     return absl::StrFormat("remotexattr (%d,%s): %s", ino, name, s.ToString());
   });
+
+  MetricListGuard mdsGuard(
+      &s, {&g_mds_metric.RemoveXAttr, &g_mds_metric.allOperation},
+      butil::cpuwide_time_us());
 
   s = target_->RemoveXattr(ctx, ino, name);
 
@@ -234,6 +302,10 @@ Status MetaWrapper::ListXattr(ContextSPtr ctx, Ino ino,
     return absl::StrFormat("listxattr (%d): %s %d", ino, s.ToString(),
                            xattrs->size());
   });
+
+  MetricListGuard mdsGuard(
+      &s, {&g_mds_metric.ListXAttr, &g_mds_metric.allOperation},
+      butil::cpuwide_time_us());
 
   s = target_->ListXattr(ctx, ino, xattrs);
   return s;
@@ -249,6 +321,10 @@ Status MetaWrapper::MkDir(ContextSPtr ctx, Ino parent, const std::string& name,
                            StrAttr(attr));
   });
 
+  MetricListGuard mdsGuard(&s,
+                           {&g_mds_metric.MkDir, &g_mds_metric.allOperation},
+                           butil::cpuwide_time_us());
+
   s = target_->MkDir(ctx, parent, name, uid, gid, mode, attr);
 
   return s;
@@ -261,6 +337,10 @@ Status MetaWrapper::RmDir(ContextSPtr ctx, Ino parent,
     return absl::StrFormat("rmdir (%d,%s): %s", parent, name, s.ToString());
   });
 
+  MetricListGuard mdsGuard(&s,
+                           {&g_mds_metric.RmDir, &g_mds_metric.allOperation},
+                           butil::cpuwide_time_us());
+
   s = target_->RmDir(ctx, parent, name);
   return s;
 }
@@ -270,6 +350,10 @@ Status MetaWrapper::OpenDir(ContextSPtr ctx, Ino ino, uint64_t fh) {
   MetaLogGuard log_guard([&]() {
     return absl::StrFormat("opendir (%d): %d %s", ino, fh, s.ToString());
   });
+
+  MetricListGuard mdsGuard(&s,
+                           {&g_mds_metric.OpenDir, &g_mds_metric.allOperation},
+                           butil::cpuwide_time_us());
 
   s = target_->OpenDir(ctx, ino, fh);
   return s;
@@ -284,6 +368,10 @@ Status MetaWrapper::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
                            with_attr, s.ToString());
   });
 
+  MetricListGuard mdsGuard(&s,
+                           {&g_mds_metric.ReadDir, &g_mds_metric.allOperation},
+                           butil::cpuwide_time_us());
+
   s = target_->ReadDir(ctx, ino, fh, offset, with_attr, handler);
   return s;
 }
@@ -294,6 +382,10 @@ Status MetaWrapper::ReleaseDir(ContextSPtr ctx, Ino ino, uint64_t fh) {
     return absl::StrFormat("releasedir (%d): %d %s", ino, fh, s.ToString());
   });
 
+  MetricListGuard mdsGuard(
+      &s, {&g_mds_metric.ReleaseDir, &g_mds_metric.allOperation},
+      butil::cpuwide_time_us());
+
   s = target_->ReleaseDir(ctx, ino, fh);
   return s;
 }
@@ -303,6 +395,10 @@ Status MetaWrapper::NewSliceId(ContextSPtr ctx, Ino ino, uint64_t* id) {
   MetaLogGuard log_guard([&]() {
     return absl::StrFormat("new_slice_id: (%d) %d, %s", ino, *id, s.ToString());
   });
+
+  MetricListGuard mdsGuard(
+      &s, {&g_mds_metric.NewSliceId, &g_mds_metric.allOperation},
+      butil::cpuwide_time_us());
 
   s = target_->NewSliceId(ctx, ino, id);
   return s;
@@ -316,6 +412,10 @@ Status MetaWrapper::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                            s.ToString(), fh, ctx->hit_cache, slices->size());
   });
 
+  MetricListGuard mdsGuard(
+      &s, {&g_mds_metric.ReadSlice, &g_mds_metric.allOperation},
+      butil::cpuwide_time_us());
+
   s = target_->ReadSlice(ctx, ino, index, fh, slices);
   return s;
 }
@@ -327,6 +427,10 @@ Status MetaWrapper::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
     return absl::StrFormat("write_slice (%d,%d,%d): %s %d %d", ino, index, fh,
                            s.ToString(), ctx->hit_cache, slices.size());
   });
+
+  MetricListGuard mdsGuard(
+      &s, {&g_mds_metric.WriteSlice, &g_mds_metric.allOperation},
+      butil::cpuwide_time_us());
 
   s = target_->WriteSlice(ctx, ino, index, fh, slices);
   return s;
@@ -340,6 +444,10 @@ Status MetaWrapper::Write(ContextSPtr ctx, Ino ino, uint64_t offset,
                            fh, s.ToString(), ctx->hit_cache);
   });
 
+  MetricListGuard mdsGuard(&s,
+                           {&g_mds_metric.Write, &g_mds_metric.allOperation},
+                           butil::cpuwide_time_us());
+
   s = target_->Write(ctx, ino, offset, size, fh);
 
   return s;
@@ -350,6 +458,10 @@ Status MetaWrapper::StatFs(ContextSPtr ctx, Ino ino, FsStat* fs_stat) {
   MetaLogGuard log_guard(
       [&]() { return absl::StrFormat("statfs (%d): %s", ino, s.ToString()); });
 
+  MetricListGuard mdsGuard(&s,
+                           {&g_mds_metric.StatFs, &g_mds_metric.allOperation},
+                           butil::cpuwide_time_us());
+
   s = target_->StatFs(ctx, ino, fs_stat);
   return s;
 }
@@ -358,6 +470,10 @@ Status MetaWrapper::GetFsInfo(ContextSPtr ctx, FsInfo* fs_info) {
   Status s;
   MetaLogGuard log_guard(
       [&]() { return absl::StrFormat("get_fsinfo %s", s.ToString()); });
+
+  MetricListGuard mdsGuard(
+      &s, {&g_mds_metric.GetFsInfo, &g_mds_metric.allOperation},
+      butil::cpuwide_time_us());
 
   s = target_->GetFsInfo(ctx, fs_info);
   return s;

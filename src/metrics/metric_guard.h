@@ -63,14 +63,15 @@ struct MetricGuard {
 };
 
 // metric guard for one or more metrics collection
+template <typename T>
 struct MetricListGuard {
-  explicit MetricListGuard(bool* rc, std::list<InterfaceMetric*> metricList,
+  explicit MetricListGuard(T* rc, std::list<InterfaceMetric*> metricList,
                            uint64_t start)
       : rc_(rc), metricList_(metricList), start_(start) {}
   ~MetricListGuard() {
     for (auto& metric_ : metricList_) {
       auto duration = butil::cpuwide_time_us() - start_;
-      if (*rc_) {
+      if (IsOk()) {
         metric_->qps.count << 1;
         metric_->latency << duration;
         metric_->latTotal << duration;
@@ -79,7 +80,17 @@ struct MetricListGuard {
       }
     }
   }
-  bool* rc_;
+
+ private:
+  bool IsOk() const {
+    if constexpr (std::is_same_v<T, Status>) {
+      return rc_->ok();
+    } else if constexpr (std::is_same_v<T, bool>) {
+      return *rc_;
+    }
+    return false;
+  }
+  T* rc_;
   std::list<InterfaceMetric*> metricList_;
   uint64_t start_;
 };
