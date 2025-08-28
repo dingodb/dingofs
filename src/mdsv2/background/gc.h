@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include "blockaccess/block_accesser.h"
@@ -31,6 +32,9 @@
 namespace dingofs {
 namespace mdsv2 {
 
+class TaskMemo;
+using TaskMemoSPtr = std::shared_ptr<TaskMemo>;
+
 class CleanDelSliceTask;
 using CleanDelSliceTaskSPtr = std::shared_ptr<CleanDelSliceTask>;
 
@@ -43,18 +47,52 @@ using CleanExpiredFileSessionTaskSPtr = std::shared_ptr<CleanExpiredFileSessionT
 class GcProcessor;
 using GcProcessorSPtr = std::shared_ptr<GcProcessor>;
 
+class TaskMemo {
+ public:
+  TaskMemo() = default;
+  ~TaskMemo() = default;
+
+  static TaskMemoSPtr New() { return std::make_shared<TaskMemo>(); }
+
+  bool Remember(const std::string& key) {
+    utils::WriteLockGuard lg(lock_);
+
+    return keys_.insert(key).second;
+  }
+
+  void Forget(const std::string& key) {
+    utils::WriteLockGuard lg(lock_);
+
+    keys_.erase(key);
+  }
+
+  bool Exist(const std::string& key) {
+    utils::ReadLockGuard lg(lock_);
+
+    return keys_.find(key) != keys_.end();
+  }
+
+ private:
+  utils::RWLock lock_;
+  std::unordered_set<std::string> keys_;
+};
+
 // clean trash slice corresponding to s3 object
 class CleanDelSliceTask : public TaskRunnable {
  public:
   CleanDelSliceTask(OperationProcessorSPtr operation_processor, blockaccess::BlockAccesserSPtr block_accessor,
-                    const std::string& key, const std::string& value)
-      : operation_processor_(operation_processor), data_accessor_(block_accessor), key_(key), value_(value) {}
+                    TaskMemoSPtr task_memo, const std::string& key, const std::string& value)
+      : operation_processor_(operation_processor),
+        data_accessor_(block_accessor),
+        key_(key),
+        value_(value),
+        task_memo_(task_memo) {}
   ~CleanDelSliceTask() override = default;
 
   static CleanDelSliceTaskSPtr New(OperationProcessorSPtr operation_processor,
-                                   blockaccess::BlockAccesserSPtr block_accessor, const std::string& key,
-                                   const std::string& value) {
-    return std::make_shared<CleanDelSliceTask>(operation_processor, block_accessor, key, value);
+                                   blockaccess::BlockAccesserSPtr block_accessor, TaskMemoSPtr task_memo,
+                                   const std::string& key, const std::string& value) {
+    return std::make_shared<CleanDelSliceTask>(operation_processor, block_accessor, task_memo, key, value);
   }
   std::string Type() override { return "CLEAN_DELETED_SLICE"; }
 
@@ -72,19 +110,22 @@ class CleanDelSliceTask : public TaskRunnable {
 
   // data accessor for s3
   blockaccess::BlockAccesserSPtr data_accessor_;
+
+  TaskMemoSPtr task_memo_;
 };
 
 // clen delete file corresponding to s3 object
 class CleanDelFileTask : public TaskRunnable {
  public:
   CleanDelFileTask(OperationProcessorSPtr operation_processor, blockaccess::BlockAccesserSPtr block_accessor,
-                   const AttrEntry& attr)
-      : operation_processor_(operation_processor), data_accessor_(block_accessor), attr_(attr) {}
+                   TaskMemoSPtr task_memo, const AttrEntry& attr)
+      : operation_processor_(operation_processor), data_accessor_(block_accessor), task_memo_(task_memo), attr_(attr) {}
   ~CleanDelFileTask() override = default;
 
   static CleanDelFileTaskSPtr New(OperationProcessorSPtr operation_processor,
-                                  blockaccess::BlockAccesserSPtr block_accessor, const AttrEntry& attr) {
-    return std::make_shared<CleanDelFileTask>(operation_processor, block_accessor, attr);
+                                  blockaccess::BlockAccesserSPtr block_accessor, TaskMemoSPtr task_memo,
+                                  const AttrEntry& attr) {
+    return std::make_shared<CleanDelFileTask>(operation_processor, block_accessor, task_memo, attr);
   }
 
   std::string Type() override { return "CLEAN_DELETED_FILE"; }
@@ -104,18 +145,20 @@ class CleanDelFileTask : public TaskRunnable {
 
   // data accessor for s3
   blockaccess::BlockAccesserSPtr data_accessor_;
+
+  TaskMemoSPtr task_memo_;
 };
 
 class CleanExpiredFileSessionTask : public TaskRunnable {
  public:
-  CleanExpiredFileSessionTask(OperationProcessorSPtr operation_processor,
+  CleanExpiredFileSessionTask(OperationProcessorSPtr operation_processor, TaskMemoSPtr task_memo,
                               const std::vector<FileSessionEntry>& file_sessions)
-      : operation_processor_(operation_processor), file_sessions_(file_sessions) {}
+      : operation_processor_(operation_processor), task_memo_(task_memo), file_sessions_(file_sessions) {}
   ~CleanExpiredFileSessionTask() override = default;
 
-  static CleanExpiredFileSessionTaskSPtr New(OperationProcessorSPtr operation_processor,
+  static CleanExpiredFileSessionTaskSPtr New(OperationProcessorSPtr operation_processor, TaskMemoSPtr task_memo,
                                              const std::vector<FileSessionEntry>& file_sessions) {
-    return std::make_shared<CleanExpiredFileSessionTask>(operation_processor, file_sessions);
+    return std::make_shared<CleanExpiredFileSessionTask>(operation_processor, task_memo, file_sessions);
   }
 
   std::string Type() override { return "CLEAN_EXPIRED_FILE_SESSION"; }
@@ -128,13 +171,18 @@ class CleanExpiredFileSessionTask : public TaskRunnable {
   OperationProcessorSPtr operation_processor_;
 
   std::vector<FileSessionEntry> file_sessions_;
+
+  TaskMemoSPtr task_memo_;
 };
 
 class GcProcessor {
  public:
   GcProcessor(FileSystemSetSPtr file_system_set, OperationProcessorSPtr operation_processor,
               DistributionLockSPtr dist_lock)
-      : file_system_set_(file_system_set), operation_processor_(operation_processor), dist_lock_(dist_lock) {}
+      : file_system_set_(file_system_set),
+        operation_processor_(operation_processor),
+        dist_lock_(dist_lock),
+        task_memo_(TaskMemo::New()) {}
   ~GcProcessor() = default;
 
   static GcProcessorSPtr New(FileSystemSetSPtr file_system_set, OperationProcessorSPtr operation_processor,
@@ -159,6 +207,9 @@ class GcProcessor {
   Status GetClientList(std::set<std::string>& clients);
   bool HasFileSession(uint32_t fs_id, Ino ino);
 
+  void RememberFileSessionTask(const std::vector<FileSessionEntry>& file_sessions);
+  void ForgotFileSessionTask(const std::vector<FileSessionEntry>& file_sessions);
+
   void ScanDelSlice(uint32_t fs_id);
   void ScanDelFile(uint32_t fs_id);
   void ScanExpiredFileSession(uint32_t fs_id);
@@ -180,6 +231,8 @@ class GcProcessor {
   FileSystemSetSPtr file_system_set_;
 
   WorkerSetSPtr worker_set_;
+
+  TaskMemoSPtr task_memo_;
 };
 
 }  // namespace mdsv2

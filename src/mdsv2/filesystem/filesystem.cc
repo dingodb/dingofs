@@ -2713,6 +2713,7 @@ FsInfoEntry FileSystemSet::GenFsInfo(int64_t fs_id, const CreateFsParam& param) 
   fs_info.set_fs_id(fs_id);
   fs_info.set_fs_name(param.fs_name);
   fs_info.set_fs_type(param.fs_type);
+  fs_info.set_root_ino(kRootIno);
   fs_info.set_status(::dingofs::pb::mdsv2::FsStatus::NEW);
   fs_info.set_block_size(param.block_size);
   fs_info.set_chunk_size(param.chunk_size);

@@ -14,6 +14,8 @@
 
 #include "mdsv2/background/gc.h"
 
+#include <glog/logging.h>
+
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -59,6 +61,9 @@ void CleanDelSliceTask::Run() {
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("[gc.delslice] clean deleted slice fail, {}", status.error_str());
   }
+
+  // forget task
+  if (task_memo_ != nullptr) task_memo_->Forget(key_);
 }
 
 Status CleanDelSliceTask::CleanDelSlice() {
@@ -75,8 +80,7 @@ Status CleanDelSliceTask::CleanDelSlice() {
         cache::BlockKey block_key(slice.fs_id(), slice.ino(), slice.slice_id(), block_index,
                                   range.compaction_version());
 
-        DINGO_LOG(INFO) << fmt::format("[gc.delslice] delete block filename({}) key({}).", block_key.Filename(),
-                                       block_key.StoreKey());
+        DINGO_LOG(INFO) << fmt::format("[gc.delslice] delete block key({}).", block_key.StoreKey());
         auto status = data_accessor_->Delete(block_key.StoreKey());
         if (!status.ok()) {
           return Status(pb::error::EINTERNAL, fmt::format("delete s3 object fail, {}", status.ToString()));
@@ -107,6 +111,11 @@ void CleanDelFileTask::Run() {
   auto status = CleanDelFile(attr_);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("[gc.delfile] clean delfile fail, {}", status.error_str());
+  }
+
+  // forget task
+  if (task_memo_ != nullptr) {
+    task_memo_->Forget(MetaCodec::EncodeDelFileKey(attr_.fs_id(), attr_.ino()));
   }
 }
 
@@ -140,12 +149,11 @@ Status CleanDelFileTask::CleanDelFile(const AttrEntry& attr) {
   for (const auto& chunk : chunks) {
     uint64_t chunk_offset = chunk.index() * chunk.chunk_size();
     for (const auto& slice : chunk.slices()) {
-      for (uint64_t len = 0; len < slice.len(); len += chunk.block_size()) {
+      for (uint32_t len = 0; len < slice.len(); len += chunk.block_size()) {
         uint64_t block_index = (slice.offset() - chunk_offset + len) / chunk.block_size();
         cache::BlockKey block_key(attr.fs_id(), attr.ino(), slice.id(), block_index, slice.compaction_version());
 
-        DINGO_LOG(INFO) << fmt::format("[gc.delfile] delete block filename({}) key({}).", block_key.Filename(),
-                                       block_key.StoreKey());
+        DINGO_LOG(INFO) << fmt::format("[gc.delfile] delete block key({}).", block_key.StoreKey());
         auto status = data_accessor_->Delete(block_key.StoreKey());
         if (!status.ok()) {
           return Status(pb::error::EINTERNAL, fmt::format("delete s3 object fail, {}", status.ToString()));
@@ -172,22 +180,26 @@ void CleanExpiredFileSessionTask::Run() {
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("[gc.filesession] clean filesession fail, {}", status.error_str());
   }
+
+  // forget task
+  if (task_memo_ != nullptr) {
+    for (const auto& file_session : file_sessions_) {
+      task_memo_->Forget(
+          MetaCodec::EncodeFileSessionKey(file_session.fs_id(), file_session.ino(), file_session.session_id()));
+    }
+  }
 }
 
 Status CleanExpiredFileSessionTask::CleanExpiredFileSession() {
   class Trace trace;
   DeleteFileSessionOperation operation(trace, file_sessions_);
 
-  auto status = operation_processor_->RunAlone(&operation);
-  if (!status.ok()) {
-    return status;
-  }
-
-  return Status::OK();
+  return operation_processor_->RunAlone(&operation);
 }
 
 bool GcProcessor::Init() {
   CHECK(dist_lock_ != nullptr) << "dist lock is nullptr.";
+  CHECK(task_memo_ != nullptr) << "task memo is nullptr.";
 
   if (!dist_lock_->Init()) {
     DINGO_LOG(ERROR) << "[gc] init dist lock fail.";
@@ -224,7 +236,7 @@ Status GcProcessor::ManualCleanDelSlice(Trace& trace, uint32_t fs_id, Ino ino, u
 
   ScanDelSliceOperation operation(
       trace, fs_id, ino, chunk_index, [&](const std::string& key, const std::string& value) -> bool {
-        auto task = CleanDelSliceTask::New(operation_processor_, block_accessor, key, value);
+        auto task = CleanDelSliceTask::New(operation_processor_, block_accessor, nullptr, key, value);
         auto status = task->CleanDelSlice();
         if (!status.ok()) {
           LOG(ERROR) << fmt::format("[gc.delslice] clean delfile fail, {}.", status.error_str());
@@ -261,7 +273,7 @@ Status GcProcessor::ManualCleanDelFile(Trace& trace, uint32_t fs_id, Ino ino) {
   auto& result = operation.GetResult();
   const auto& attr = result.attr;
 
-  auto task = CleanDelFileTask::New(operation_processor_, block_accessor, attr);
+  auto task = CleanDelFileTask::New(operation_processor_, block_accessor, nullptr, attr);
   status = task->CleanDelFile(attr);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("[gc.delfile] clean delfile fail, {}.", status.error_str());
@@ -284,6 +296,10 @@ Status GcProcessor::LaunchGc() {
   }
 
   auto fses = file_system_set_->GetAllFileSystem();
+
+  if (worker_set_->IsAlmostFull()) {
+    return Status(pb::error::EINTERNAL, "worker set is almost full");
+  }
 
   // delslice
   if (FLAGS_mds_gc_delslice_enable) {
@@ -373,6 +389,11 @@ void GcProcessor::ScanDelSlice(uint32_t fs_id) {
     CHECK(fs_id > 0) << "invalid fs id.";
     CHECK(ino > 0) << "invalid ino.";
 
+    // check already exist task
+    if (task_memo_->Exist(key)) {
+      return true;
+    }
+
     // check file session exist
     if (HasFileSession(fs_id, ino)) {
       LOG(INFO) << fmt::format("[gc.delslice.{}.{}] exist file session so skip.", fs_id, ino);
@@ -385,8 +406,15 @@ void GcProcessor::ScanDelSlice(uint32_t fs_id) {
       return true;
     }
 
+    task_memo_->Remember(key);
+    if (!Execute(ino, CleanDelSliceTask::New(operation_processor_, block_accessor, task_memo_, key, value))) {
+      task_memo_->Forget(key);
+      return false;
+    }
+
     ++exec_count;
-    return Execute(ino, CleanDelSliceTask::New(operation_processor_, block_accessor, key, value));
+
+    return true;
   });
 
   auto status = operation_processor_->RunAlone(&operation);
@@ -407,6 +435,11 @@ void GcProcessor::ScanDelFile(uint32_t fs_id) {
     CHECK(fs_id > 0) << "invalid fs id.";
     CHECK(ino > 0) << "invalid ino.";
 
+    // check already exist task
+    if (task_memo_->Exist(key)) {
+      return true;
+    }
+
     // check file session exist
     if (HasFileSession(fs_id, ino)) {
       LOG(INFO) << fmt::format("[gc.delfile.{}.{}] exist file session so skip.", fs_id, ino);
@@ -421,8 +454,13 @@ void GcProcessor::ScanDelFile(uint32_t fs_id) {
 
     auto attr = MetaCodec::DecodeDelFileValue(value);
     if (ShouldDeleteFile(attr)) {
+      task_memo_->Remember(key);
+      if (!Execute(CleanDelFileTask::New(operation_processor_, block_accessor, task_memo_, attr))) {
+        task_memo_->Forget(key);
+        return false;
+      }
+
       ++exec_count;
-      return Execute(CleanDelFileTask::New(operation_processor_, block_accessor, attr));
     }
 
     return true;
@@ -432,6 +470,24 @@ void GcProcessor::ScanDelFile(uint32_t fs_id) {
 
   DINGO_LOG(INFO) << fmt::format("[gc.delfile] scan delfile count({}/{}), status({}).", exec_count, count,
                                  status.error_str());
+}
+
+void GcProcessor::RememberFileSessionTask(const std::vector<FileSessionEntry>& file_sessions) {
+  if (task_memo_ != nullptr) {
+    for (const auto& file_session : file_sessions) {
+      task_memo_->Remember(
+          MetaCodec::EncodeFileSessionKey(file_session.fs_id(), file_session.ino(), file_session.session_id()));
+    }
+  }
+}
+
+void GcProcessor::ForgotFileSessionTask(const std::vector<FileSessionEntry>& file_sessions) {
+  if (task_memo_ != nullptr) {
+    for (const auto& file_session : file_sessions) {
+      task_memo_->Forget(
+          MetaCodec::EncodeFileSessionKey(file_session.fs_id(), file_session.ino(), file_session.session_id()));
+    }
+  }
 }
 
 void GcProcessor::ScanExpiredFileSession(uint32_t fs_id) {
@@ -449,17 +505,26 @@ void GcProcessor::ScanExpiredFileSession(uint32_t fs_id) {
   std::vector<FileSessionEntry> file_sessions;
   ScanFileSessionOperation operation(trace, fs_id, [&](const FileSessionEntry& file_session) -> bool {
     ++count;
+    std::string key =
+        MetaCodec::EncodeFileSessionKey(file_session.fs_id(), file_session.ino(), file_session.session_id());
+
+    // check already exist task
+    if (task_memo_->Exist(key)) {
+      return true;
+    }
 
     if (ShouldCleanFileSession(file_session, alive_clients)) {
       file_sessions.push_back(file_session);
     }
 
     if (file_sessions.size() >= FLAGS_mds_scan_batch_size) {
-      exec_count += file_sessions.size();
-      if (!Execute(CleanExpiredFileSessionTask::New(operation_processor_, file_sessions))) {
+      RememberFileSessionTask(file_sessions);
+      if (!Execute(CleanExpiredFileSessionTask::New(operation_processor_, task_memo_, file_sessions))) {
+        ForgotFileSessionTask(file_sessions);
         file_sessions.clear();
         return false;
       }
+      exec_count += file_sessions.size();
       file_sessions.clear();
     }
 
@@ -469,8 +534,12 @@ void GcProcessor::ScanExpiredFileSession(uint32_t fs_id) {
   status = operation_processor_->RunAlone(&operation);
 
   if (!file_sessions.empty()) {
-    exec_count += file_sessions.size();
-    Execute(CleanExpiredFileSessionTask::New(operation_processor_, file_sessions));
+    RememberFileSessionTask(file_sessions);
+    if (Execute(CleanExpiredFileSessionTask::New(operation_processor_, task_memo_, file_sessions))) {
+      exec_count += file_sessions.size();
+    } else {
+      ForgotFileSessionTask(file_sessions);
+    }
   }
 
   DINGO_LOG(INFO) << fmt::format("[gc.filesession] scan file session count({}/{}), status({}).", exec_count, count,

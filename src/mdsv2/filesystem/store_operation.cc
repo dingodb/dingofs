@@ -1404,7 +1404,7 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoEntry& fs_info,
   }
 
   size_t out_of_length_count = trash_slices.slices_size();
-  DINGO_LOG(INFO) << fmt::format("[operation.{}] out-of-file-length trash slices count({}).", fs_id,
+  DINGO_LOG(INFO) << fmt::format("[operation.{}.{}] out-of-file-length trash slices count({}).", fs_id, ino,
                                  out_of_length_count);
 
   // 3. complete overlapped slices
@@ -1477,7 +1477,7 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoEntry& fs_info,
   }
 
   size_t complete_overlapped_count = trash_slices.slices_size() - out_of_length_count;
-  DINGO_LOG(INFO) << fmt::format("[operation.{}] complete overlapped trash slice count({}).", fs_id,
+  DINGO_LOG(INFO) << fmt::format("[operation.{}.{}] complete overlapped trash slice count({}).", fs_id, ino,
                                  complete_overlapped_count);
 
   // 4. partial overlapped slices
@@ -1544,13 +1544,13 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoEntry& fs_info,
   }
 
   size_t partial_overlapped_count = trash_slices.slices_size() - out_of_length_count - complete_overlapped_count;
-  DINGO_LOG(INFO) << fmt::format("[operation.{}] partial overlapped trash slice count({}) total({})", fs_id,
+  DINGO_LOG(INFO) << fmt::format("[operation.{}.{}] partial overlapped trash slice count({}) total({})", fs_id, ino,
                                  partial_overlapped_count, trash_slices.slices_size());
 
   if (FLAGS_mds_compact_chunk_detail_log_enable) {
     for (const auto& slice : trash_slices.slices()) {
-      DINGO_LOG(INFO) << fmt::format("[operation.{}] trash slice, chunk_index({}) slice_id({}), is_partial({}).", fs_id,
-                                     slice.chunk_index(), slice.slice_id(), slice.is_partial());
+      DINGO_LOG(INFO) << fmt::format("[operation.{}.{}] trash slice, chunk_index({}) slice_id({}), is_partial({}).",
+                                     fs_id, ino, slice.chunk_index(), slice.slice_id(), slice.is_partial());
     }
   }
 
