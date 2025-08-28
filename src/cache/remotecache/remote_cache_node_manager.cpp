@@ -44,6 +44,7 @@ RemoteCacheNodeManager::RemoteCacheNodeManager(OnMemberLoadFn on_member_load_fn)
       executor_(std::make_unique<BthreadExecutor>()) {}
 
 Status RemoteCacheNodeManager::Start() {
+  CHECK_NOTNULL(mds_client_);
   CHECK_NOTNULL(on_member_load_fn_);
   CHECK_NOTNULL(executor_);
 
@@ -104,6 +105,8 @@ Status RemoteCacheNodeManager::RefreshMembers() {
   Status status = LoadMembers(&members);
   if (status.ok()) {
     on_member_load_fn_(members);
+    return members.empty() ? Status::NotFound("no member in cache group")
+                           : Status::OK();
   }
   return status;
 }
