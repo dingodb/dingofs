@@ -60,8 +60,9 @@ const std::string kFdStatePath = "/tmp/dingo-fuse-state.json";
 using ::dingofs::client::fuse::FuseUpgradeManager;
 using metrics::ClientOpMetricGuard;
 using metrics::VFSRWMetricGuard;
-using metrics::blockaccess::BlockMetric;
 using metrics::client::VFSRWMetric;
+
+static auto& g_rw_metric = VFSRWMetric::GetInstance();
 
 #define METRIC_GUARD(REQUEST)              \
   ClientOpMetricGuard clientOpMetricGuard( \
@@ -90,14 +91,6 @@ static Status InitLog() {
 
   CHECK(succ) << "Init log failed, unexpected!";
   return Status::OK();
-}
-
-// no read,write also expose metrics for test purpose
-static void InitMetricsValue() {
-  VFSRWMetric::GetInstance().read.bps.count << 0;
-  VFSRWMetric::GetInstance().write.bps.count << 0;
-  BlockMetric::GetInstance().read_block.bps.count << 0;
-  BlockMetric::GetInstance().write_block.bps.count << 0;
 }
 
 Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
@@ -138,8 +131,6 @@ Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
   if (!s.ok()) {
     return s;
   }
-
-  InitMetricsValue();
 
   int32_t bthread_worker_num = dingofs::client::FLAGS_bthread_worker_num;
   if (bthread_worker_num > 0) {
@@ -562,7 +553,7 @@ Status VFSWrapper::Read(Ino ino, char* buf, uint64_t size, uint64_t offset,
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opRead, &client_op_metric_->opAll});
-  VFSRWMetricGuard guard(&s, &VFSRWMetric::GetInstance().read, out_rsize);
+  VFSRWMetricGuard guard(&s, &g_rw_metric.read, out_rsize);
 
   s = vfs_->Read(span->GetContext(), ino, buf, size, offset, fh, out_rsize);
 
@@ -592,7 +583,7 @@ Status VFSWrapper::Write(Ino ino, const char* buf, uint64_t size,
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opWrite, &client_op_metric_->opAll});
 
-  VFSRWMetricGuard guard(&s, &VFSRWMetric::GetInstance().write, out_wsize);
+  VFSRWMetricGuard guard(&s, &g_rw_metric.write, out_wsize);
 
   s = vfs_->Write(span->GetContext(), ino, buf, size, offset, fh, out_wsize);
   VLOG(1) << "VFSWrite end ino: " << ino << ", buf:  " << Char2Addr(buf)

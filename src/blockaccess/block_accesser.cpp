@@ -35,6 +35,8 @@ namespace blockaccess {
 using metrics::MetricGuard;
 using metrics::blockaccess::BlockMetric;
 
+static auto& g_block_metric = BlockMetric::GetInstance();
+
 static bvar::Adder<uint64_t> block_put_async_num("block_put_async_num");
 static bvar::Adder<uint64_t> block_put_sync_num("block_put_sync_num");
 static bvar::Adder<uint64_t> block_get_async_num("block_get_async_num");
@@ -116,7 +118,7 @@ Status BlockAccesserImpl::Put(const std::string& key, const char* buffer,
                        PrettyBool(s.ok()));
   });
   // write block metrics
-  MetricGuard<Status> guard(&s, &BlockMetric::GetInstance().write_block, length,
+  MetricGuard<Status> guard(&s, &g_block_metric.write_block, length,
                             butil::cpuwide_time_us());
 
   block_put_sync_num << 1;
@@ -144,8 +146,7 @@ void BlockAccesserImpl::AsyncPut(
       return fmt::format("async_put_block ({}, {}) : {}", ctx->key,
                          ctx->buffer_size, ctx->status.ToString());
     });
-    MetricGuard<Status> guard(&ctx->status,
-                              &BlockMetric::GetInstance().write_block,
+    MetricGuard<Status> guard(&ctx->status, &g_block_metric.write_block,
                               ctx->buffer_size, start_us);
 
     block_put_async_num << -1;
@@ -188,8 +189,8 @@ Status BlockAccesserImpl::Get(const std::string& key, std::string* data) {
     return fmt::format("get_block ({}) : {}", key, PrettyBool(s.ok()));
   });
   // read block metrics
-  MetricGuard<Status> guard(&s, &BlockMetric::GetInstance().read_block,
-                            data->length(), butil::cpuwide_time_us());
+  MetricGuard<Status> guard(&s, &g_block_metric.read_block, data->length(),
+                            butil::cpuwide_time_us());
 
   block_get_sync_num << 1;
   auto dec = ::absl::MakeCleanup([&]() { block_get_sync_num << -1; });
@@ -215,9 +216,8 @@ void BlockAccesserImpl::AsyncGet(
       return fmt::format("async_get_block ({}, {}, {}) : {}", ctx->key,
                          ctx->offset, ctx->len, ctx->status.ToString());
     });
-    MetricGuard<Status> guard(&ctx->status,
-                              &BlockMetric::GetInstance().read_block, ctx->len,
-                              start_us);
+    MetricGuard<Status> guard(&ctx->status, &g_block_metric.read_block,
+                              ctx->len, start_us);
 
     block_get_async_num << -1;
     inflight_bytes_throttle_->OnComplete(ctx->len);
@@ -242,7 +242,7 @@ Status BlockAccesserImpl::Range(const std::string& key, off_t offset,
                        PrettyBool(s.ok()));
   });
   // read s3 metrics
-  MetricGuard<Status> guard(&s, &BlockMetric::GetInstance().read_block, length,
+  MetricGuard<Status> guard(&s, &g_block_metric.read_block, length,
                             butil::cpuwide_time_us());
 
   block_get_sync_num << 1;
