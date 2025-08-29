@@ -203,6 +203,7 @@ void MDSServiceImpl::DoCreateFs(google::protobuf::RpcController*, const pb::mdsv
 
   FileSystemSet::CreateFsParam param;
   param.mds_id = mds_meta.ID();
+  param.fs_id = request->fs_id();
   param.fs_name = request->fs_name();
   param.chunk_size = request->chunk_size();
   param.block_size = request->block_size();

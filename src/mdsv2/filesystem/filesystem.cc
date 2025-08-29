@@ -2672,7 +2672,7 @@ bool FileSystemSet::Init() {
   CHECK(mds_meta_map_ != nullptr) << "mds_meta_map is null.";
   CHECK(operation_processor_ != nullptr) << "operation_processor is null.";
 
-  if (!IsExistFsTable()) {
+  if (!IsExistMetaTable()) {
     DINGO_LOG(ERROR) << "[fsset] not exist fs table.";
     return false;
   }
@@ -2708,7 +2708,7 @@ static std::map<uint64_t, BucketSetEntry> GenParentHashDistribution(const std::v
   return mds_bucket_map;
 }
 
-FsInfoEntry FileSystemSet::GenFsInfo(int64_t fs_id, const CreateFsParam& param) {
+FsInfoEntry FileSystemSet::GenFsInfo(uint32_t fs_id, const CreateFsParam& param) {
   FsInfoEntry fs_info;
   fs_info.set_fs_id(fs_id);
   fs_info.set_fs_name(param.fs_name);
@@ -2749,19 +2749,38 @@ FsInfoEntry FileSystemSet::GenFsInfo(int64_t fs_id, const CreateFsParam& param) 
   return fs_info;
 }
 
-bool FileSystemSet::IsExistFsTable() {
+bool FileSystemSet::IsExistMetaTable() {
   auto range = MetaCodec::GetMetaTableRange();
-  DINGO_LOG(DEBUG) << fmt::format("[fsset] check fs table, {}.", range.ToString());
+  DINGO_LOG(DEBUG) << fmt::format("[fsset] check meta table, {}.", range.ToString());
 
   auto status = kv_storage_->IsExistTable(range.start, range.end);
   if (!status.ok()) {
     if (status.error_code() != pb::error::ENOT_FOUND) {
-      DINGO_LOG(ERROR) << "[fsset] check fs table exist fail, error: " << status.error_str();
+      DINGO_LOG(ERROR) << "[fsset] check meta table exist fail, error: " << status.error_str();
     }
     return false;
   }
 
   return true;
+}
+
+Status FileSystemSet::CreateFsMetaTable(uint32_t fs_id, const std::string& fs_name, int64_t& table_id) {
+  auto range = MetaCodec::GetFsMetaTableRange(fs_id);
+  KVStorage::TableOption option = {.start_key = range.start, .end_key = range.end};
+  std::string table_name = GenFsMetaTableName(fs_name);
+  Status status = kv_storage_->CreateTable(table_name, option, table_id);
+  if (!status.ok()) {
+    return Status(pb::error::EINTERNAL, fmt::format("create fsmeta table fail, {}", status.error_str()));
+  }
+
+  return Status::OK();
+}
+
+Status FileSystemSet::DropFsMetaTable(uint32_t fs_id) {
+  auto range = MetaCodec::GetFsMetaTableRange(fs_id);
+  DINGO_LOG(DEBUG) << fmt::format("[fsset] drop fsmeta table, fs_id({}) {}.", fs_id, range.ToString());
+
+  return kv_storage_->DropTable(range);
 }
 
 static Status ValidateCreateFsParam(const FileSystemSet::CreateFsParam& param) {
@@ -2788,13 +2807,12 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, FsInfoEntry& fs_info)
   }
 
   // when create fs fail, clean up
-  auto cleanup = [&](int64_t dentry_table_id, const std::string& fs_key, const std::string& quota_key) {
+  auto cleanup = [&](int64_t table_id, const std::string& fs_key, const std::string& quota_key) {
     // clean dentry table
-    if (dentry_table_id > 0) {
-      auto status = kv_storage_->DropTable(dentry_table_id);
+    if (table_id > 0) {
+      auto status = kv_storage_->DropTable(table_id);
       if (!status.ok()) {
-        LOG(ERROR) << fmt::format("[fsset] clean dentry table({}) fail, error: {}", dentry_table_id,
-                                  status.error_str());
+        LOG(ERROR) << fmt::format("[fsset] clean dentry table({}) fail, error: {}", table_id, status.error_str());
       }
     }
 
@@ -2830,23 +2848,25 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, FsInfoEntry& fs_info)
   }
 
   // generate fs id
-  uint32_t fs_id = 0;
-  status = GenFsId(fs_id);
-  if (BAIDU_UNLIKELY(!status.ok())) {
-    return status;
+  uint32_t fs_id;
+  if (param.fs_id == 0) {
+    status = GenFsId(fs_id);
+    if (BAIDU_UNLIKELY(!status.ok())) {
+      return status;
+    }
+  } else {
+    fs_id = param.fs_id;
+  }
+
+  // check fs_id exist
+  if (IsExistFileSystem(fs_id)) {
+    return Status(pb::error::EEXISTED, fmt::format("fs({}) exist.", param.fs_name));
   }
 
   // create dentry/inode table
-  int64_t dentry_table_id = 0;
-  {
-    auto range = MetaCodec::GetFsMetaTableRange(fs_id);
-    KVStorage::TableOption option = {.start_key = range.start, .end_key = range.end};
-    std::string table_name = GenFsMetaTableName(param.fs_name);
-    Status status = kv_storage_->CreateTable(table_name, option, dentry_table_id);
-    if (!status.ok()) {
-      return Status(pb::error::EINTERNAL, fmt::format("create dentry table fail, {}", status.error_str()));
-    }
-  }
+  int64_t table_id = 0;
+  status = CreateFsMetaTable(fs_id, param.fs_name, table_id);
+  if (!status.ok()) return status;
 
   fs_info = GenFsInfo(fs_id, param);
 
@@ -2855,7 +2875,7 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, FsInfoEntry& fs_info)
   CreateFsOperation operation(trace, fs_info);
   status = RunOperation(&operation);
   if (!status.ok()) {
-    cleanup(dentry_table_id, "", "");
+    cleanup(table_id, "", "");
     return Status(pb::error::EBACKEND_STORE, fmt::format("put store fs fail, {}", status.error_str()));
   }
 
@@ -2867,21 +2887,21 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, FsInfoEntry& fs_info)
       FileSystem::New(self_mds_meta_.ID(), FsInfo::NewUnique(fs_info), std::move(ino_id_generator), slice_id_generator_,
                       kv_storage_, operation_processor_, mds_meta_map_, quota_worker_set_, notify_buddy_);
   if (!fs->Init()) {
-    cleanup(dentry_table_id, fs_key, "");
+    cleanup(table_id, fs_key, "");
     return Status(pb::error::EINTERNAL, "init FileSystem fail");
   }
 
   // set quota
   status = fs->CreateQuota();
   if (!status.ok()) {
-    cleanup(dentry_table_id, fs_key, "");
+    cleanup(table_id, fs_key, "");
     return Status(pb::error::EINTERNAL, fmt::format("create quota fail, {}", status.error_str()));
   }
 
   // create root inode
   status = fs->CreateRoot();
   if (!status.ok()) {
-    cleanup(dentry_table_id, fs_key, MetaCodec::EncodeFsQuotaKey(fs_id));
+    cleanup(table_id, fs_key, MetaCodec::EncodeFsQuotaKey(fs_id));
     return Status(pb::error::EINTERNAL, fmt::format("create root fail, {}", status.error_str()));
   }
 
@@ -2937,6 +2957,10 @@ Status FileSystemSet::DeleteFs(Context& ctx, const std::string& fs_name, bool is
 
   if (status.ok()) {
     DeleteFileSystem(fs_info.fs_id());
+    auto status = DropFsMetaTable(fs_info.fs_id());
+    if (!status.ok()) {
+      DINGO_LOG(ERROR) << fmt::format("[fsset.{}] drop fsmeta table fail, status({}).", fs_name, status.error_str());
+    }
   }
 
   return status;
@@ -3034,6 +3058,12 @@ void FileSystemSet::DeleteFileSystem(uint32_t fs_id) {
   utils::WriteLockGuard lk(lock_);
 
   fs_map_.erase(fs_id);
+}
+
+bool FileSystemSet::IsExistFileSystem(uint32_t fs_id) {
+  utils::ReadLockGuard lk(lock_);
+
+  return fs_map_.find(fs_id) != fs_map_.end();
 }
 
 FileSystemSPtr FileSystemSet::GetFileSystem(uint32_t fs_id) {

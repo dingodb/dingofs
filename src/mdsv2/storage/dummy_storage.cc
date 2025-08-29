@@ -45,6 +45,8 @@ Status DummyStorage::DropTable(int64_t table_id) {
   return Status::OK();
 }
 
+Status DummyStorage::DropTable(const Range& range) { return Status(pb::error::ENOT_SUPPORT, "not implemented"); }
+
 Status DummyStorage::IsExistTable(const std::string& start_key, const std::string& end_key) {
   BAIDU_SCOPED_LOCK(mutex_);
 

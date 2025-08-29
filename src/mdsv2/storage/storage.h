@@ -71,6 +71,7 @@ class KVStorage {
 
   virtual Status CreateTable(const std::string& name, const TableOption& option, int64_t& table_id) = 0;
   virtual Status DropTable(int64_t table_id) = 0;
+  virtual Status DropTable(const Range& range) = 0;
   virtual Status IsExistTable(const std::string& start_key, const std::string& end_key) = 0;
 
   virtual Status Put(WriteOption option, const std::string& key, const std::string& value) = 0;

@@ -101,6 +101,7 @@ CreateFsResponse MDSClient::CreateFs(const std::string& fs_name, const CreateFsP
     return response;
   }
 
+  request.set_fs_id(params.fs_id);
   request.set_fs_name(fs_name);
   request.set_block_size(params.block_size);
   request.set_chunk_size(params.chunk_size);
@@ -1025,6 +1026,7 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr, 
     params.chunk_size = options.chunk_size;
     params.block_size = options.block_size;
     params.s3_info = options.s3_info;
+    params.fs_id = options.fs_id;
 
     mds_client.CreateFs(options.fs_name, params);
 

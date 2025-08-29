@@ -168,6 +168,7 @@ class MDSClient {
   GetMDSListResponse GetMdsList();
 
   struct CreateFsParams {
+    uint32_t fs_id;
     std::string partition_type;
     uint32_t chunk_size;
     uint32_t block_size;

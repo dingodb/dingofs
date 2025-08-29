@@ -38,6 +38,7 @@ class DingodbStorage : public KVStorage {
 
   Status CreateTable(const std::string& name, const TableOption& option, int64_t& table_id) override;
   Status DropTable(int64_t table_id) override;
+  Status DropTable(const Range& range) override;
   Status IsExistTable(const std::string& start_key, const std::string& end_key) override;
 
   Status Put(WriteOption option, const std::string& key, const std::string& value) override;

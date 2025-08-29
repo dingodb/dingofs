@@ -578,7 +578,7 @@ Status Restore::GetFsInfo(uint32_t fs_id, FsInfoEntry& fs_info) {
     }
   }
 
-  return Status(pb::error::ENOT_FOUND, "not found fs");
+  return Status(pb::error::ENOT_FOUND, "not found fs, please create it");
 }
 
 Status Restore::RestoreMetaTable(InputUPtr input) {
@@ -648,10 +648,10 @@ Status Restore::RestoreMetaTable(InputUPtr input) {
 
   std::cout << fmt::format(
       "restore meta table done.\nsummary total_count({}) lock_count({}) auto_increment_id_count({}) "
-      "mds_heartbeat_count({}) client_heartbeat_count({}) fs_count({}) fs_quota_count({}) fs_oplog_count({}) "
-      "status({}).\n",
-      total_count, lock_count, auto_increment_id_count, mds_heartbeat_count, client_heartbeat_count, fs_count,
-      fs_quota_count, fs_oplog_count, status.error_str());
+      "mds_heartbeat_count({}) client_heartbeat_count({}) cache_member_heartbeat_count({}) fs_count({}) "
+      "fs_quota_count({}) fs_oplog_count({}) status({}).\n",
+      total_count, lock_count, auto_increment_id_count, mds_heartbeat_count, client_heartbeat_count,
+      cache_member_heartbeat_count, fs_count, fs_quota_count, fs_oplog_count, status.error_str());
 
   return Status::OK();
 }

@@ -355,6 +355,7 @@ class FileSystemSet {
 
   struct CreateFsParam {
     int64_t mds_id;
+    uint32_t fs_id;
     std::string fs_name;
     uint64_t block_size;
     uint64_t chunk_size;
@@ -379,6 +380,7 @@ class FileSystemSet {
 
   Status AllocSliceId(uint32_t num, uint64_t min_slice_id, uint64_t& slice_id);
 
+  bool IsExistFileSystem(uint32_t fs_id);
   FileSystemSPtr GetFileSystem(uint32_t fs_id);
   FileSystemSPtr GetFileSystem(const std::string& fs_name);
   uint32_t GetFsId(const std::string& fs_name);
@@ -404,9 +406,11 @@ class FileSystemSet {
   IdGenerator& GetSliceIdGenerator() { return *slice_id_generator_; }
 
   Status GenFsId(uint32_t& fs_id);
-  FsInfoEntry GenFsInfo(int64_t fs_id, const CreateFsParam& param);
+  FsInfoEntry GenFsInfo(uint32_t fs_id, const CreateFsParam& param);
 
-  bool IsExistFsTable();
+  bool IsExistMetaTable();
+  Status CreateFsMetaTable(uint32_t fs_id, const std::string& fs_name, int64_t& table_id);
+  Status DropFsMetaTable(uint32_t fs_id);
 
   bool AddFileSystem(FileSystemSPtr fs, bool is_force = false);
   void DeleteFileSystem(uint32_t fs_id);
