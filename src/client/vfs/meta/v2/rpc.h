@@ -26,6 +26,7 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -35,6 +36,7 @@
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/core.h"
+#include "fmt/ranges.h"
 #include "mdsv2/common/helper.h"
 #include "options/client/vfs/meta/v2_dynamic_option.h"
 #include "utils/concurrent/concurrent.h"
@@ -146,6 +148,25 @@ inline Status TransformError(const pb::error::Error& error) {
   }
 }
 
+// print ReadSliceResponse
+inline std::string DescribeReadSliceResponse(
+    pb::mdsv2::ReadSliceResponse& response) {
+  std::ostringstream oss;
+  oss << response.info().ShortDebugString() << " chunks[";
+  for (const auto& chunk : response.chunks()) {
+    std::vector<uint64_t> slice_ids;
+    slice_ids.reserve(chunk.slices().size());
+    for (const auto& slice : chunk.slices()) {
+      slice_ids.push_back(slice.id());
+    }
+    oss << fmt::format("({},{} slice_ids{}),", chunk.index(), chunk.version(),
+                       slice_ids);
+  }
+
+  oss << "]";
+  return oss.str();
+}
+
 template <typename Request, typename Response>
 Status RPC::SendRequest(const EndPoint& endpoint,
                         const std::string& service_name,
@@ -196,11 +217,18 @@ Status RPC::SendRequest(const EndPoint& endpoint,
     }
 
     if (response.error().errcode() == pb::error::OK) {
-      LOG(INFO) << fmt::format(
-          "[meta.rpc][{}][{}][{}us] success, request({}) response({}).",
-          EndPointToStr(endpoint), api_name, elapsed_us,
-          request.ShortDebugString(), response.ShortDebugString());
-      return Status();
+      if constexpr (!std::is_same_v<Response, pb::mdsv2::ReadSliceResponse>) {
+        LOG(INFO) << fmt::format(
+            "[meta.rpc][{}][{}][{}us] success, request({}) response({}).",
+            EndPointToStr(endpoint), api_name, elapsed_us,
+            request.ShortDebugString(), response.ShortDebugString());
+      } else {
+        LOG(INFO) << fmt::format(
+            "[meta.rpc][{}][{}][{}us] success, request({}) response({}).",
+            EndPointToStr(endpoint), api_name, elapsed_us,
+            request.ShortDebugString(), DescribeReadSliceResponse(response));
+      }
+      return Status::OK();
     }
 
     if (response.error().errcode() != pb::error::ENOT_FOUND) {

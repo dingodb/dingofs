@@ -1670,7 +1670,10 @@ Status SetFsQuotaOperation::Run(TxnUPtr& txn) {
   if (quota_.used_inodes() > 0) fs_quota.set_used_inodes(quota_.used_inodes());
   if (quota_.used_bytes() > 0) fs_quota.set_used_bytes(quota_.used_bytes());
 
+  fs_quota.set_version(fs_quota.version() + 1);
   txn->Put(key, MetaCodec::EncodeFsQuotaValue(fs_quota));
+
+  result_.quota = fs_quota;
 
   return Status::OK();
 }
@@ -1701,6 +1704,7 @@ Status FlushFsUsageOperation::Run(TxnUPtr& txn) {
   fs_quota.set_used_bytes(fs_quota.used_bytes() + usage_.bytes());
   fs_quota.set_used_inodes(fs_quota.used_inodes() + usage_.inodes());
 
+  fs_quota.set_version(fs_quota.version() + 1);
   txn->Put(key, MetaCodec::EncodeFsQuotaValue(fs_quota));
 
   result_.quota = fs_quota;
@@ -1732,7 +1736,10 @@ Status SetDirQuotaOperation::Run(TxnUPtr& txn) {
   if (quota_.used_inodes() > 0) dir_quota.set_used_inodes(quota_.used_inodes());
   if (quota_.used_bytes() > 0) dir_quota.set_used_bytes(quota_.used_bytes());
 
+  dir_quota.set_version(dir_quota.version() + 1);
   txn->Put(key, MetaCodec::EncodeDirQuotaValue(dir_quota));
+
+  result_.quota = dir_quota;
 
   return Status::OK();
 }
@@ -1800,6 +1807,7 @@ Status FlushDirUsagesOperation::Run(TxnUPtr& txn) {
       quota.set_used_bytes(quota.used_bytes() + it->second.bytes());
       quota.set_used_inodes(quota.used_inodes() + it->second.inodes());
 
+      quota.set_version(quota.version() + 1);
       txn->Put(kv.key, MetaCodec::EncodeDirQuotaValue(quota));
 
       result_.quotas[ino] = quota;

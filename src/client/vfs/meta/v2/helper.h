@@ -214,6 +214,16 @@ class Helper {
     }
     return std::move(slice_ids);
   }
+
+  static std::vector<uint64_t> GetSliceIds(
+      const std::vector<mdsv2::SliceEntry>& slices) {
+    std::vector<uint64_t> slice_ids;
+    slice_ids.reserve(slices.size());
+    for (const auto& slice : slices) {
+      slice_ids.push_back(slice.id());
+    }
+    return slice_ids;
+  }
 };
 
 }  // namespace v2

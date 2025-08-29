@@ -947,6 +947,10 @@ class SetFsQuotaOperation : public Operation {
       : Operation(trace), fs_id_(fs_id), quota_(quota){};
   ~SetFsQuotaOperation() override = default;
 
+  struct Result : public Operation::Result {
+    QuotaEntry quota;
+  };
+
   OpType GetOpType() const override { return OpType::kSetFsQuota; }
 
   uint32_t GetFsId() const override { return fs_id_; }
@@ -954,9 +958,19 @@ class SetFsQuotaOperation : public Operation {
 
   Status Run(TxnUPtr& txn) override;
 
+  template <int size = 0>
+  Result& GetResult() {
+    auto& result = Operation::GetResult();
+    result_.status = result.status;
+    result_.attr = std::move(result.attr);
+
+    return result_;
+  }
+
  private:
   uint32_t fs_id_;
   QuotaEntry quota_;
+  Result result_;
 };
 
 class GetFsQuotaOperation : public Operation {
@@ -1043,6 +1057,10 @@ class SetDirQuotaOperation : public Operation {
       : Operation(trace), fs_id_(fs_id), ino_(ino), quota_(quota){};
   ~SetDirQuotaOperation() override = default;
 
+  struct Result : public Operation::Result {
+    QuotaEntry quota;
+  };
+
   OpType GetOpType() const override { return OpType::kSetDirQuota; }
 
   uint32_t GetFsId() const override { return fs_id_; }
@@ -1050,10 +1068,21 @@ class SetDirQuotaOperation : public Operation {
 
   Status Run(TxnUPtr& txn) override;
 
+  template <int size = 0>
+  Result& GetResult() {
+    auto& result = Operation::GetResult();
+    result_.status = result.status;
+    result_.attr = std::move(result.attr);
+
+    return result_;
+  }
+
  private:
   uint32_t fs_id_;
   uint64_t ino_;
   QuotaEntry quota_;
+
+  Result result_;
 };
 
 class GetDirQuotaOperation : public Operation {
