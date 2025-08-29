@@ -20,6 +20,8 @@
 
 #include <bvar/bvar.h>
 #include <bvar/passive_status.h>
+#include <bvar/reducer.h>
+#include <bvar/status.h>
 
 #include <cstdint>
 #include <functional>
@@ -32,12 +34,16 @@ static uint64_t FreePagesWrapper(void* arg);
 
 struct PageAllocatorMetric {
   bvar::Status<bool> use_page_pool;
+  bvar::Status<uint64_t> total_bytes;
+  bvar::Adder<uint64_t> used_bytes;
   bvar::PassiveStatus<uint64_t> free_pages;
   std::function<uint64_t()> free_pages_func;
 
   PageAllocatorMetric(const std::string& p_prefix, bool p_use_pool,
                       std::function<uint64_t()> p_free_pages_func)
       : use_page_pool(p_prefix, "use_page_pool", p_use_pool),
+        total_bytes(p_prefix, "total_bytes", 0),
+        used_bytes(p_prefix, "used_bytes"),
         free_pages(p_prefix, "free_pages", &FreePagesWrapper, this),
         free_pages_func(std::move(p_free_pages_func)) {}
 };

@@ -39,6 +39,7 @@ DefaultPageAllocator::DefaultPageAllocator()
 bool DefaultPageAllocator::Init(uint64_t page_size, uint64_t num_pages) {
   page_size_ = page_size;
   num_free_pages_ = num_pages;
+  metric_->total_bytes.set_value(num_pages * page_size_);
   return true;
 }
 
@@ -51,6 +52,7 @@ char* DefaultPageAllocator::Allocate() {
   char* page = new (std::nothrow) char[page_size_];
   std::memset(page, 0, page_size_);
   num_free_pages_--;
+  metric_->used_bytes << page_size_;
   return page;
 }
 
@@ -58,6 +60,7 @@ void DefaultPageAllocator::DeAllocate(char* page) {
   std::unique_lock<std::mutex> lk(mutex_);
   delete[] page;
   num_free_pages_++;
+  metric_->used_bytes << -1 * page_size_;
   can_allocate_.notify_one();
 }
 
@@ -78,6 +81,7 @@ PagePool::~PagePool() { mem_pool_->DestroyPool(); }
 bool PagePool::Init(uint64_t page_size, uint64_t num_pages) {
   page_size_ = page_size;
   num_free_pages_ = num_pages;
+  metric_->total_bytes.set_value(num_pages * page_size_);
   return mem_pool_->CreatePool(page_size, num_pages);
 }
 
@@ -90,6 +94,7 @@ char* PagePool::Allocate() {
   void* page = mem_pool_->Allocate();
   assert(page != nullptr);
   num_free_pages_--;
+  metric_->used_bytes << page_size_;
   return reinterpret_cast<char*>(page);
 }
 
@@ -97,6 +102,7 @@ void PagePool::DeAllocate(char* page) {
   std::unique_lock<std::mutex> lk(mutex_);
   mem_pool_->DeAllocate(reinterpret_cast<void*>(page));
   num_free_pages_++;
+  metric_->used_bytes << -1 * page_size_;
   can_allocate_.notify_one();
 }
 
