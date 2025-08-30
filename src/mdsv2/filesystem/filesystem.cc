@@ -48,6 +48,7 @@
 #include "mdsv2/filesystem/inode.h"
 #include "mdsv2/filesystem/notify_buddy.h"
 #include "mdsv2/filesystem/store_operation.h"
+#include "mdsv2/mds/mds_helper.h"
 #include "mdsv2/mds/mds_meta.h"
 #include "mdsv2/storage/storage.h"
 #include "utils/uuid.h"
@@ -62,6 +63,7 @@ static const std::string kRecyleName = ".recycle";
 
 DEFINE_uint32(mds_filesystem_name_max_size, 1024, "Max size of filesystem name.");
 DEFINE_uint32(mds_filesystem_hash_bucket_num, 1024, "Filesystem hash bucket num.");
+DEFINE_uint32(mds_filesystem_hash_mds_num_default, 3, "Filesystem hash mds num.");
 
 DEFINE_bool(mds_compact_chunk_enable, true, "Compact chunk enable.");
 DEFINE_uint32(mds_compact_chunk_threshold_num, 10, "Compact chunk threshold num.");
@@ -2736,8 +2738,12 @@ FsInfoEntry FileSystemSet::GenFsInfo(uint32_t fs_id, const CreateFsParam& param)
   } else if (param.partition_type == pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION) {
     auto* parent_hash = partition_policy->mutable_parent_hash();
     parent_hash->set_bucket_num(FLAGS_mds_filesystem_hash_bucket_num);
+    parent_hash->set_expect_mds_num(param.expect_mds_num == 0 ? FLAGS_mds_filesystem_hash_mds_num_default
+                                                              : param.expect_mds_num);
 
-    auto mds_bucket_map = GenParentHashDistribution(mds_metas, FLAGS_mds_filesystem_hash_bucket_num);
+    auto candidate_mds_metas = MdsHelper::RandomSelectMds(mds_metas, parent_hash->expect_mds_num());
+    CHECK(!candidate_mds_metas.empty()) << "candidate_mds_metas is empty.";
+    auto mds_bucket_map = GenParentHashDistribution(candidate_mds_metas, FLAGS_mds_filesystem_hash_bucket_num);
     for (const auto& [mds_id, bucket_set] : mds_bucket_map) {
       parent_hash->mutable_distributions()->insert({mds_id, bucket_set});
     }

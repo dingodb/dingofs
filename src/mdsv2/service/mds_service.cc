@@ -214,6 +214,7 @@ void MDSServiceImpl::DoCreateFs(google::protobuf::RpcController*, const pb::mdsv
   param.capacity = request->capacity();
   param.recycle_time_hour = request->recycle_time_hour();
   param.partition_type = request->partition_type();
+  param.expect_mds_num = request->expect_mds_num();
 
   pb::mdsv2::FsInfo fs_info;
   auto status = file_system_set_->CreateFs(param, fs_info);

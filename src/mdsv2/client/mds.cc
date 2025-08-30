@@ -1027,6 +1027,7 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr, 
     params.block_size = options.block_size;
     params.s3_info = options.s3_info;
     params.fs_id = options.fs_id;
+    params.expect_mds_num = options.num;
 
     mds_client.CreateFs(options.fs_name, params);
 

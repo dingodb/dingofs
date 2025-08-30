@@ -172,6 +172,7 @@ class MDSClient {
     std::string partition_type;
     uint32_t chunk_size;
     uint32_t block_size;
+    uint32_t expect_mds_num;
 
     S3Info s3_info;
     std::string owner = "deng";

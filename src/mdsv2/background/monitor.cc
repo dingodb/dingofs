@@ -14,6 +14,8 @@
 
 #include "mdsv2/background/monitor.h"
 
+#include <glog/logging.h>
+
 #include <atomic>
 #include <cstdint>
 #include <vector>
@@ -25,8 +27,10 @@
 #include "fmt/format.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
+#include "mdsv2/common/partition_helper.h"
 #include "mdsv2/common/status.h"
 #include "mdsv2/common/synchronization.h"
+#include "mdsv2/mds/mds_helper.h"
 #include "mdsv2/mds/mds_meta.h"
 #include "mdsv2/server.h"
 #include "mdsv2/service/service_access.h"
@@ -53,89 +57,6 @@ static void GetOfflineMDS(const std::vector<MDSMeta>& mdses, std::vector<MDSMeta
       online_mdses.push_back(mds);
     }
   }
-}
-
-static bool IsOfflineMDS(const std::vector<MDSMeta>& offline_mdses, uint64_t mds_id) {
-  for (const auto& offline_mds : offline_mdses) {
-    if (mds_id == offline_mds.ID()) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-static std::vector<uint64_t> GetMdsIds(const std::vector<MDSMeta>& mds_metas) {
-  std::vector<uint64_t> mds_ids;
-  mds_ids.reserve(mds_metas.size());
-
-  for (const auto& mds_meta : mds_metas) {
-    mds_ids.push_back(mds_meta.ID());
-  }
-
-  return mds_ids;
-}
-
-static std::vector<MDSMeta> GetMdsMetas(const std::vector<MDSMeta>& src_mds_metas,
-                                        const std::vector<uint64_t>& mds_ids) {
-  std::vector<MDSMeta> mds_metas;
-  mds_metas.reserve(mds_ids.size());
-
-  for (const auto& mds_id : mds_ids) {
-    for (const auto& mds_meta : src_mds_metas) {
-      if (mds_meta.ID() == mds_id) {
-        mds_metas.push_back(mds_meta);
-        break;
-      }
-    }
-  }
-
-  return mds_metas;
-}
-
-static std::map<uint64_t, BucketSetEntry> GetDistributions(const pb::mdsv2::HashPartition& partition) {
-  std::map<uint64_t, BucketSetEntry> distributions;
-  for (const auto& [mds_id, bucket_set] : partition.distributions()) {
-    distributions[mds_id] = bucket_set;
-  }
-
-  return distributions;
-}
-
-static std::map<uint64_t, BucketSetEntry> AdjustParentHashDistribution(
-    const std::map<uint64_t, BucketSetEntry>& distributions, const std::vector<MDSMeta>& online_mdses,
-    const std::vector<MDSMeta>& offline_mdses) {
-  std::map<uint64_t, BucketSetEntry> new_distributions = distributions;
-
-  std::vector<int64_t> pending_bucket_set;
-  for (auto it = new_distributions.begin(); it != new_distributions.end();) {
-    uint64_t mds_id = it->first;
-    const auto& bucket_set = it->second;
-    if (IsOfflineMDS(offline_mdses, mds_id)) {
-      pending_bucket_set.insert(pending_bucket_set.end(), bucket_set.bucket_ids().begin(),
-                                bucket_set.bucket_ids().end());
-      it = new_distributions.erase(it);
-    } else {
-      ++it;
-    }
-  }
-
-  for (const auto& bucket_id : pending_bucket_set) {
-    const auto& mds = online_mdses[Helper::GenerateRandomInteger(0, 1000) % online_mdses.size()];
-    auto it = new_distributions.find(mds.ID());
-    if (it == new_distributions.end()) {
-      new_distributions.insert({mds.ID(), BucketSetEntry()});
-    }
-
-    new_distributions.at(mds.ID()).add_bucket_ids(bucket_id);
-  }
-
-  // sort bucketset
-  for (auto& [mds_id, bucket_set] : new_distributions) {
-    std::sort(bucket_set.mutable_bucket_ids()->begin(), bucket_set.mutable_bucket_ids()->end());
-  }
-
-  return new_distributions;
 }
 
 bool Monitor::Init() { return dist_lock_->Init(); }
@@ -230,8 +151,8 @@ Status Monitor::ProcessFaultMDS(std::vector<MDSMeta>& mdses) {
   // check mds offline again
   CheckMdsAlive(offline_mdses, online_mdses);
   DINGO_LOG(INFO) << fmt::format("[monitor] online mdses({}) offline mdses({}).",
-                                 Helper::VectorToString(GetMdsIds(online_mdses)),
-                                 Helper::VectorToString(GetMdsIds(offline_mdses)));
+                                 Helper::VectorToString(MdsHelper::GetMdsIds(online_mdses)),
+                                 Helper::VectorToString(MdsHelper::GetMdsIds(offline_mdses)));
 
   if (offline_mdses.empty()) {
     return Status(pb::error::EINTERNAL, "not has offline mds");
@@ -287,8 +208,8 @@ Status Monitor::ProcessFaultMDS(std::vector<MDSMeta>& mdses) {
     } else if (partition_policy.type() == pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION) {
       auto mds_ids = Helper::GetMdsIds(partition_policy.parent_hash());
       if (has_offlines_func(mds_ids)) {
-        auto new_distributions =
-            AdjustParentHashDistribution(GetDistributions(partition_policy.parent_hash()), online_mdses, offline_mdses);
+        auto new_distributions = HashPartitionHelper::AdjustDistribution(
+            partition_policy, MdsHelper::GetMdsIdSet(online_mdses), MdsHelper::GetMdsIdSet(offline_mdses));
 
         auto status = fs->UpdatePartitionPolicy(new_distributions, "fault migration by monitor");
 
@@ -298,7 +219,7 @@ Status Monitor::ProcessFaultMDS(std::vector<MDSMeta>& mdses) {
                                        status.error_str());
 
         // notify new mds to start serve partition
-        auto mds_metas = GetMdsMetas(mdses, Helper::GetMdsIds(new_distributions));
+        auto mds_metas = MdsHelper::FilterMdsMetas(mdses, Helper::GetMdsIds(new_distributions));
         NotifyRefreshFs(mds_metas, fs_info);
       }
     }

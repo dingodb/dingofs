@@ -366,6 +366,7 @@ class FileSystemSet {
     uint64_t capacity;
     uint32_t recycle_time_hour;
     pb::mdsv2::PartitionType partition_type;
+    uint32_t expect_mds_num{0};  // for hash partition
   };
 
   Status CreateFs(const CreateFsParam& param, FsInfoEntry& fs_info);
