@@ -34,7 +34,7 @@ namespace client {
 namespace vfs {
 namespace v2 {
 
-MDSClient::MDSClient(const ClientId& client_id, mdsv2::FsInfoPtr fs_info,
+MDSClient::MDSClient(const ClientId& client_id, mdsv2::FsInfoSPtr fs_info,
                      ParentMemoSPtr parent_memo, MDSDiscoveryPtr mds_discovery,
                      MDSRouterPtr mds_router, RPCPtr rpc)
     : client_id_(client_id),

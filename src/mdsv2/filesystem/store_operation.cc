@@ -36,6 +36,7 @@
 #include "mdsv2/common/time.h"
 #include "mdsv2/common/type.h"
 #include "mdsv2/storage/storage.h"
+#include "utils/uuid.h"
 
 namespace dingofs {
 namespace mdsv2 {
@@ -1653,7 +1654,6 @@ Status CompactChunkOperation::Run(TxnUPtr& txn) {
 }
 
 Status SetFsQuotaOperation::Run(TxnUPtr& txn) {
-  QuotaEntry fs_quota;
   std::string key = MetaCodec::EncodeFsQuotaKey(fs_id_);
   std::string value;
   auto status = txn->Get(key, value);
@@ -1661,8 +1661,12 @@ Status SetFsQuotaOperation::Run(TxnUPtr& txn) {
     return status;
   }
 
+  QuotaEntry fs_quota;
   if (!value.empty()) {
     fs_quota = MetaCodec::DecodeFsQuotaValue(value);
+  } else {
+    fs_quota.set_uuid(utils::UUIDGenerator::GenerateUUID());
+    fs_quota.set_create_time_ns(Helper::TimestampNs());
   }
 
   if (quota_.max_bytes() > 0) fs_quota.set_max_bytes(quota_.max_bytes());
@@ -1698,11 +1702,16 @@ Status FlushFsUsageOperation::Run(TxnUPtr& txn) {
   if (!status.ok()) {
     return status;
   }
+  CHECK(!value.empty()) << "fs quota value is empty.";
 
   auto fs_quota = MetaCodec::DecodeFsQuotaValue(value);
 
-  fs_quota.set_used_bytes(fs_quota.used_bytes() + usage_.bytes());
-  fs_quota.set_used_inodes(fs_quota.used_inodes() + usage_.inodes());
+  for (const auto& usage : usages_) {
+    if (usage.time_ns() > fs_quota.create_time_ns()) {
+      fs_quota.set_used_bytes(fs_quota.used_bytes() + usage.bytes());
+      fs_quota.set_used_inodes(fs_quota.used_inodes() + usage.inodes());
+    }
+  }
 
   fs_quota.set_version(fs_quota.version() + 1);
   txn->Put(key, MetaCodec::EncodeFsQuotaValue(fs_quota));
@@ -1729,6 +1738,9 @@ Status SetDirQuotaOperation::Run(TxnUPtr& txn) {
   QuotaEntry dir_quota;
   if (!value.empty()) {
     dir_quota = MetaCodec::DecodeDirQuotaValue(value);
+  } else {
+    dir_quota.set_uuid(utils::UUIDGenerator::GenerateUUID());
+    dir_quota.set_create_time_ns(Helper::TimestampNs());
   }
 
   if (quota_.max_bytes() > 0) dir_quota.set_max_bytes(quota_.max_bytes());
@@ -1760,6 +1772,14 @@ Status GetDirQuotaOperation::Run(TxnUPtr& txn) {
 }
 
 Status DeleteDirQuotaOperation::Run(TxnUPtr& txn) {
+  std::string value;
+  auto status = txn->Get(MetaCodec::EncodeDirQuotaKey(fs_id_, ino_), value);
+  if (!status.ok()) {
+    return status;
+  }
+
+  result_.quota = MetaCodec::DecodeDirQuotaValue(value);
+
   txn->Delete(MetaCodec::EncodeDirQuotaKey(fs_id_, ino_));
 
   return Status::OK();
@@ -1785,8 +1805,8 @@ Status LoadDirQuotasOperation::Run(TxnUPtr& txn) {
 Status FlushDirUsagesOperation::Run(TxnUPtr& txn) {
   // generate all keys
   std::vector<std::string> keys;
-  keys.reserve(usages_.size());
-  for (const auto& [ino, usage] : usages_) {
+  keys.reserve(usage_map_.size());
+  for (const auto& [ino, _] : usage_map_) {
     keys.push_back(MetaCodec::EncodeDirQuotaKey(fs_id_, ino));
   }
 
@@ -1802,13 +1822,22 @@ Status FlushDirUsagesOperation::Run(TxnUPtr& txn) {
     MetaCodec::DecodeDirQuotaKey(kv.key, fs_id, ino);
 
     auto quota = MetaCodec::DecodeDirQuotaValue(kv.value);
-    auto it = usages_.find(ino);
-    if (it != usages_.end()) {
-      quota.set_used_bytes(quota.used_bytes() + it->second.bytes());
-      quota.set_used_inodes(quota.used_inodes() + it->second.inodes());
+    auto it = usage_map_.find(ino);
+    if (it != usage_map_.end()) {
+      const auto& usages = it->second;
+      bool has_update = false;
+      for (const auto& usage : usages) {
+        if (usage.time_ns() > quota.create_time_ns()) {
+          has_update = true;
+          quota.set_used_bytes(quota.used_bytes() + usage.bytes());
+          quota.set_used_inodes(quota.used_inodes() + usage.inodes());
+        }
+      }
 
-      quota.set_version(quota.version() + 1);
-      txn->Put(kv.key, MetaCodec::EncodeDirQuotaValue(quota));
+      if (has_update) {
+        quota.set_version(quota.version() + 1);
+        txn->Put(kv.key, MetaCodec::EncodeDirQuotaValue(quota));
+      }
 
       result_.quotas[ino] = quota;
     }

@@ -33,6 +33,9 @@ class StoreClient {
 
   bool CreateMetaTable(const std::string& name);
   bool CreateFsStatsTable(const std::string& name);
+  bool DropMetaTable();
+  bool DropFsStatsTable();
+  bool DropFsMetaTable(uint32_t fs_id);
 
   // print fs dentry tree
   void PrintDentryTree(uint32_t fs_id, bool is_details);

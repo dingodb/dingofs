@@ -282,7 +282,7 @@ bool WriteMemo::Load(const Json::Value& value) {
   return true;
 }
 
-FileSession::FileSession(mdsv2::FsInfoPtr fs_info, Ino ino, uint64_t fh,
+FileSession::FileSession(mdsv2::FsInfoSPtr fs_info, Ino ino, uint64_t fh,
                          const std::string& session_id)
     : fs_info_(fs_info), ino_(ino) {
   AddSession(fh, session_id);

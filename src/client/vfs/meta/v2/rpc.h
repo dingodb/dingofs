@@ -23,6 +23,7 @@
 #include <glog/logging.h>
 #include <json/config.h>
 
+#include <atomic>
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -38,6 +39,7 @@
 #include "fmt/core.h"
 #include "fmt/ranges.h"
 #include "mdsv2/common/helper.h"
+#include "mdsv2/common/synchronization.h"
 #include "options/client/vfs/meta/v2_dynamic_option.h"
 #include "utils/concurrent/concurrent.h"
 
@@ -122,10 +124,22 @@ class RPC {
   EndPoint RandomlyPickupEndPoint();
   void AddFallbackEndpoint(const EndPoint& endpoint);
 
+  void IncDoingReqCount() {
+    doing_req_count_.fetch_add(1, std::memory_order_relaxed);
+  }
+  void DecDoingReqCount() {
+    doing_req_count_.fetch_sub(1, std::memory_order_relaxed);
+  }
+  uint64_t DoingReqCount() {
+    return doing_req_count_.load(std::memory_order_relaxed);
+  }
+
   utils::RWLock lock_;
   EndPoint init_endpoint_;
   std::map<EndPoint, ChannelSPtr> channels_;
   std::set<EndPoint> fallback_endpoints_;
+
+  std::atomic<uint64_t> doing_req_count_{0};
 };
 
 inline Status TransformError(const pb::error::Error& error) {
@@ -172,6 +186,9 @@ Status RPC::SendRequest(const EndPoint& endpoint,
                         const std::string& service_name,
                         const std::string& api_name, const Request& request,
                         Response& response) {
+  IncDoingReqCount();
+  mdsv2::DEFER(DecDoingReqCount());
+
   const google::protobuf::MethodDescriptor* method = nullptr;
 
   CHECK(service_name == "MDSService")
@@ -202,9 +219,10 @@ Status RPC::SendRequest(const EndPoint& endpoint,
     uint64_t elapsed_us = mdsv2::Helper::TimestampUs() - start_us;
     if (cntl.Failed()) {
       LOG(ERROR) << fmt::format(
-          "[meta.rpc][{}][{}][{}us] fail, {} {} {} request({}).",
+          "[meta.rpc][{}][{}][{}us] fail, {} {} {} request({}) doing({}).",
           EndPointToStr(endpoint), api_name, elapsed_us, cntl.log_id(),
-          retry_count, cntl.ErrorText(), request.ShortDebugString());
+          retry_count, cntl.ErrorText(), request.ShortDebugString(),
+          DoingReqCount());
 
       response.mutable_error()->set_errcode(pb::error::EINTERNAL);
       response.mutable_error()->set_errmsg(
@@ -219,24 +237,28 @@ Status RPC::SendRequest(const EndPoint& endpoint,
     if (response.error().errcode() == pb::error::OK) {
       if constexpr (!std::is_same_v<Response, pb::mdsv2::ReadSliceResponse>) {
         LOG(INFO) << fmt::format(
-            "[meta.rpc][{}][{}][{}us] success, request({}) response({}).",
+            "[meta.rpc][{}][{}][{}us] success, request({}) response({}) "
+            "doing({}).",
             EndPointToStr(endpoint), api_name, elapsed_us,
-            request.ShortDebugString(), response.ShortDebugString());
+            request.ShortDebugString(), response.ShortDebugString(),
+            DoingReqCount());
       } else {
         LOG(INFO) << fmt::format(
-            "[meta.rpc][{}][{}][{}us] success, request({}) response({}).",
+            "[meta.rpc][{}][{}][{}us] success, request({}) response({}) "
+            "doing({}).",
             EndPointToStr(endpoint), api_name, elapsed_us,
-            request.ShortDebugString(), DescribeReadSliceResponse(response));
+            request.ShortDebugString(), DescribeReadSliceResponse(response),
+            DoingReqCount());
       }
       return Status::OK();
     }
 
     if (response.error().errcode() != pb::error::ENOT_FOUND) {
       LOG(ERROR) << fmt::format(
-          "[meta.rpc][{}][{}][{}us] fail, request({}) retry_count({}) error({} "
-          "{}).",
+          "[meta.rpc][{}][{}][{}us] fail, request({}) retry_count({}) "
+          "doing({}) error({} {}).",
           EndPointToStr(endpoint), api_name, elapsed_us,
-          request.ShortDebugString(), retry_count,
+          request.ShortDebugString(), retry_count, DoingReqCount(),
           pb::error::Errno_Name(response.error().errcode()),
           response.error().errmsg());
     }

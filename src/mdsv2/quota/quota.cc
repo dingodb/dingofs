@@ -14,9 +14,9 @@
 
 #include "mdsv2/quota/quota.h"
 
-#include <atomic>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "fmt/format.h"
 #include "glog/logging.h"
@@ -30,38 +30,97 @@ namespace quota {
 
 static const uint32_t kMaxNotFoundCount = 30;
 
-void Quota::UpdateUsage(int64_t byte_delta, int64_t inode_delta, const std::string& reason) {
-  byte_delta_.fetch_add(byte_delta, std::memory_order_release);
-  inode_delta_.fetch_add(inode_delta, std::memory_order_release);
+Quota::Quota(uint32_t fs_id, Ino ino, const QuotaEntry& quota) : fs_id_(fs_id), ino_(ino), quota_(quota) {
+  last_time_ns_ = Helper::TimestampNs();
 
+  DINGO_LOG(INFO) << fmt::format("[quota.{}.{}] create quota, detail({}).", fs_id_, ino_, quota.ShortDebugString());
+}
+
+UsageEntry Quota::GetDeltaAccumulatedUsage(uint64_t& timepoint) {
+  int64_t bytes = 0, inodes = 0;
+  for (auto& usage : delta_usages_) {
+    bytes += usage.bytes();
+    inodes += usage.inodes();
+    timepoint = usage.time_ns();
+  }
+
+  UsageEntry usage;
+  usage.set_bytes(bytes);
+  usage.set_inodes(inodes);
+
+  return usage;
+}
+
+UsageEntry Quota::GetTotalAccumulatedUsage(uint64_t& timepoint) {
+  auto usage = GetDeltaAccumulatedUsage(timepoint);
+  usage.set_bytes(usage.bytes() + quota_.used_bytes());
+  usage.set_inodes(usage.inodes() + quota_.used_inodes());
+
+  return usage;
+}
+
+UsageEntry Quota::CompactDeltaUsage(uint64_t timepoint) {
+  UsageEntry usage;
+  while (!delta_usages_.empty()) {
+    const auto& delta_usage = delta_usages_.front();
+    if (delta_usage.time_ns() > timepoint) break;
+    usage.set_bytes(usage.bytes() + delta_usage.bytes());
+    usage.set_inodes(usage.inodes() + delta_usage.inodes());
+    delta_usages_.pop_front();
+  }
+
+  return usage;
+}
+
+void Quota::UpdateUsage(int64_t byte_delta, int64_t inode_delta, const std::string& reason) {
   DINGO_LOG(INFO) << fmt::format("[quota.{}.{}] update usage, byte_delta({}) inode_delta({}) reason({}).", fs_id_, ino_,
                                  byte_delta, inode_delta, reason);
+
+  {
+    utils::WriteLockGuard lk(rwlock_);
+
+    uint64_t now_ns = Helper::TimestampNs();
+    uint64_t time_ns = std::max({now_ns, last_time_ns_}) + 1;
+    last_time_ns_ = time_ns;
+
+    UsageEntry usage;
+    usage.set_bytes(byte_delta);
+    usage.set_inodes(inode_delta);
+    usage.set_time_ns(time_ns);
+    delta_usages_.push_back(std::move(usage));
+  }
 }
 
 bool Quota::Check(int64_t byte_delta, int64_t inode_delta) {
   utils::ReadLockGuard lk(rwlock_);
 
-  int64_t used_bytes = quota_.used_bytes() + byte_delta_.load(std::memory_order_acquire) + byte_delta;
-  int64_t used_inodes = quota_.used_inodes() + inode_delta_.load(std::memory_order_acquire) + inode_delta;
+  uint64_t timepoint;
+  auto usage = GetTotalAccumulatedUsage(timepoint);
+
+  int64_t used_bytes = usage.bytes() + byte_delta;
+  int64_t used_inodes = usage.inodes() + inode_delta;
 
   if ((quota_.max_bytes() > 0 && used_bytes > quota_.max_bytes()) ||
       (quota_.max_inodes() > 0 && used_inodes > quota_.max_inodes())) {
-    DINGO_LOG(DEBUG) << fmt::format("[quota.{}.{}] check fail, bytes({}/{}/{}), inodes({}/{}/{}).", fs_id_, ino_,
-                                    quota_.max_bytes(), quota_.used_bytes(), used_bytes, quota_.max_inodes(),
-                                    quota_.used_inodes(), used_inodes);
+    DINGO_LOG(INFO) << fmt::format("[quota.{}.{}] check fail, bytes({}/{}/{}), inodes({}/{}/{}).", fs_id_, ino_,
+                                   byte_delta, usage.bytes(), quota_.max_bytes(), inode_delta, usage.inodes(),
+                                   quota_.max_inodes());
     return false;
   }
 
   return true;
 }
 
-UsageEntry Quota::GetUsage() {
-  UsageEntry usage;
+std::vector<UsageEntry> Quota::GetUsage() {
+  utils::ReadLockGuard lk(rwlock_);
 
-  usage.set_bytes(byte_delta_.load(std::memory_order_acquire));
-  usage.set_inodes(inode_delta_.load(std::memory_order_acquire));
+  std::vector<UsageEntry> usages;
+  usages.reserve(delta_usages_.size());
+  for (auto& usage : delta_usages_) {
+    usages.push_back(usage);
+  }
 
-  return usage;
+  return usages;
 }
 
 QuotaEntry Quota::GetQuota() {
@@ -70,41 +129,51 @@ QuotaEntry Quota::GetQuota() {
   return quota_;
 }
 
-QuotaEntry Quota::GetQuotaAndDelta() {
+QuotaEntry Quota::GetAccumulatedQuota() {
   utils::ReadLockGuard lk(rwlock_);
 
+  uint64_t timepoint;
+  auto usage = GetDeltaAccumulatedUsage(timepoint);
+
   QuotaEntry quota = quota_;
-  quota.set_used_bytes(quota.used_bytes() + byte_delta_.load(std::memory_order_acquire));
-  quota.set_used_inodes(quota.used_inodes() + inode_delta_.load(std::memory_order_acquire));
+  quota.set_used_bytes(quota.used_bytes() + usage.bytes());
+  quota.set_used_inodes(quota.used_inodes() + usage.inodes());
 
   return quota;
 }
 
-void Quota::Refresh(const QuotaEntry& quota, const UsageEntry& minus_usage, const std::string& reason) {
-  utils::WriteLockGuard lk(rwlock_);
+void Quota::Refresh(const QuotaEntry& quota, uint64_t timepoint, const std::string& reason) {
+  bool is_change = false, is_change_uuid = false;
+  QuotaEntry old_quota;
+  UsageEntry compact_usage;
+  {
+    utils::WriteLockGuard lk(rwlock_);
 
-  bool is_change = false;
-  if (minus_usage.bytes() != 0) {
-    is_change = true;
-    byte_delta_.fetch_sub(minus_usage.bytes(), std::memory_order_release);
-  }
-  if (minus_usage.inodes() != 0) {
-    is_change = true;
-    inode_delta_.fetch_sub(minus_usage.inodes(), std::memory_order_release);
-  }
+    old_quota = quota_;
+    compact_usage = CompactDeltaUsage(timepoint);
+    if (compact_usage.bytes() != 0 || compact_usage.inodes() != 0) is_change = true;
 
-  uint64_t old_version = quota_.version();
-  if (quota_.version() < quota.version()) {
-    is_change = true;
-    quota_ = quota;
+    if (quota.uuid() == quota.uuid()) {
+      if (quota_.version() < quota.version()) {
+        quota_ = quota;
+        is_change = true;
+      }
+
+    } else {
+      is_change_uuid = true;
+      if (quota_.create_time_ns() < quota.create_time_ns()) {
+        quota_ = quota;
+        is_change = true;
+      }
+    }
   }
 
   if (is_change) {
     DINGO_LOG(INFO) << fmt::format(
-        "[quota.{}.{}] refresh quota({}->{}), bytes({}/{}/{}) inodes({}/{}/{}) minus_usage({}/{}) reason({}).", fs_id_,
-        ino_, old_version, quota.version(), byte_delta_.load(), quota.used_bytes(), quota.max_bytes(),
-        inode_delta_.load(), quota.used_inodes(), quota.max_inodes(), minus_usage.bytes(), minus_usage.inodes(),
-        reason);
+        "[quota.{}.{}] refresh quota({}->{}), timepoint({}) change_uuid({}) bytes({}/{}/{}) inodes({}/{}/{}) "
+        "reason({}).",
+        fs_id_, ino_, old_quota.version(), quota.version(), timepoint, is_change_uuid, compact_usage.bytes(),
+        quota.used_bytes(), quota.max_bytes(), compact_usage.inodes(), quota.used_inodes(), quota.max_inodes(), reason);
   }
 }
 
@@ -116,7 +185,7 @@ void DirQuotaMap::UpsertQuota(Ino ino, const QuotaEntry& quota, const std::strin
     quota_map_[ino] = Quota::New(fs_id_, ino, quota);
   } else {
     // update existing quota
-    it->second->Refresh(quota, {}, reason);
+    it->second->Refresh(quota, 0, reason);
   }
 }
 
@@ -135,8 +204,12 @@ void DirQuotaMap::UpdateUsage(Ino ino, int64_t byte_delta, int64_t inode_delta, 
   }
 }
 
-void DirQuotaMap::DeleteQuota(Ino ino) {
+void DirQuotaMap::DeleteQuota(Ino ino, const std::string& uuid) {
   utils::WriteLockGuard lk(rwlock_);
+
+  auto it = quota_map_.find(ino);
+  if (it == quota_map_.end()) return;
+  if (it->second->UUID() != uuid) return;
 
   quota_map_.erase(ino);
 }
@@ -192,7 +265,7 @@ std::vector<QuotaSPtr> DirQuotaMap::GetAllQuota() {
   return quotas;
 }
 
-void DirQuotaMap::RefreshAll(const std::unordered_map<Ino, QuotaEntry>& quota_map) {
+void DirQuotaMap::Refresh(const std::unordered_map<Ino, QuotaEntry>& quota_map, const std::string& reason) {
   utils::WriteLockGuard lk(rwlock_);
 
   for (auto it = quota_map_.begin(); it != quota_map_.end();) {
@@ -207,7 +280,7 @@ void DirQuotaMap::RefreshAll(const std::unordered_map<Ino, QuotaEntry>& quota_ma
       }
     } else {
       // update existing quota
-      quota->Refresh(new_it->second, {}, "refresh-all");
+      quota->Refresh(new_it->second, 0, reason);
 
       ++it;
     }
@@ -273,11 +346,12 @@ void DeleteDirQuotaTask::Run() {
 QuotaManagerSPtr QuotaManager::GetSelfPtr() { return std::dynamic_pointer_cast<QuotaManager>(shared_from_this()); }
 
 bool QuotaManager::Init() {
-  CHECK(fs_id_ > 0) << fmt::format("[quota.{}] fs_id is 0.", fs_id_);
+  CHECK(fs_info_ != nullptr) << "[quota] fs_info is nullptr.";
+  const uint32_t fs_id = fs_info_->GetFsId();
 
   auto status = LoadQuota();
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[quota.{}] init load quota fail, status({}).", fs_id_, status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("[quota.{}] init load quota fail, status({}).", fs_id, status.error_str());
     return false;
   }
 
@@ -285,9 +359,10 @@ bool QuotaManager::Init() {
 }
 
 void QuotaManager::Destroy() {
+  const uint32_t fs_id = fs_info_->GetFsId();
   auto status = FlushUsage();
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[quota.{}] destroy flush usage fail, status({}).", fs_id_, status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("[quota.{}] destroy flush usage fail, status({}).", fs_id, status.error_str());
   }
 }
 
@@ -300,11 +375,13 @@ void QuotaManager::UpdateDirUsage(Ino parent, int64_t byte_delta, int64_t inode_
 }
 
 void QuotaManager::AsyncUpdateDirUsage(Ino parent, int64_t byte_delta, int64_t inode_delta, const std::string& reason) {
+  const uint32_t fs_id = fs_info_->GetFsId();
+
   auto task = UpdateDirUsageTask::New(GetSelfPtr(), parent, byte_delta, inode_delta, reason);
 
   if (!worker_set_->ExecuteHash(parent, task)) {
     DINGO_LOG(ERROR) << fmt::format(
-        "[quota.{}] async update dir usage fail, parent({}), byte_delta({}), inode_delta({}) reason({}).", fs_id_,
+        "[quota.{}] async update dir usage fail, parent({}), byte_delta({}), inode_delta({}) reason({}).", fs_id,
         parent, byte_delta, inode_delta, reason);
   }
 }
@@ -324,65 +401,79 @@ bool QuotaManager::CheckQuota(Trace& trace, Ino ino, int64_t byte_delta, int64_t
 QuotaSPtr QuotaManager::GetNearestDirQuota(Ino ino) { return dir_quota_map_.GetNearestQuota(ino); }
 
 Status QuotaManager::SetFsQuota(Trace& trace, const QuotaEntry& quota) {
-  DINGO_LOG(INFO) << fmt::format("[quota.{}] set fs quota, quota({}).", fs_id_, quota.ShortDebugString());
+  const uint32_t fs_id = fs_info_->GetFsId();
 
-  SetFsQuotaOperation operation(trace, fs_id_, quota);
+  DINGO_LOG(INFO) << fmt::format("[quota.{}] set fs quota, quota({}).", fs_id, quota.ShortDebugString());
+
+  SetFsQuotaOperation operation(trace, fs_id, quota);
 
   auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[quota.{}] set fs quota fail, status({}).", fs_id_, status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("[quota.{}] set fs quota fail, status({}).", fs_id, status.error_str());
     return status;
   }
 
   auto& result = operation.GetResult();
 
-  fs_quota_.Refresh(result.quota, {}, "set-fs-quota");
+  fs_quota_.Refresh(result.quota, 0, "set-fs-quota");
 
   return Status::OK();
 }
 
 Status QuotaManager::GetFsQuota(Trace& trace, bool is_bypass_cache, QuotaEntry& quota) {
+  const uint32_t fs_id = fs_info_->GetFsId();
+
   if (!is_bypass_cache) {
-    quota = fs_quota_.GetQuotaAndDelta();
+    quota = fs_quota_.GetAccumulatedQuota();
 
-  } else {
-    GetFsQuotaOperation operation(trace, fs_id_);
-
-    auto status = operation_processor_->RunAlone(&operation);
-    if (!status.ok()) {
-      DINGO_LOG(ERROR) << fmt::format("[quota.{}] get fs quota fail, status({}).", fs_id_, status.error_str());
-      return status;
-    }
-
-    auto& result = operation.GetResult();
-    quota = result.quota;
+    return Status::OK();
   }
+
+  GetFsQuotaOperation operation(trace, fs_id);
+
+  auto status = operation_processor_->RunAlone(&operation);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[quota.{}] get fs quota fail, status({}).", fs_id, status.error_str());
+    return status;
+  }
+
+  auto& result = operation.GetResult();
+  quota = result.quota;
 
   return Status::OK();
 }
 
 Status QuotaManager::DeleteFsQuota(Trace& trace) {
-  DINGO_LOG(INFO) << fmt::format("[quota.{}] delete fs quota.", fs_id_);
+  const uint32_t fs_id = fs_info_->GetFsId();
 
-  DeleteFsQuotaOperation operation(trace, fs_id_);
+  DINGO_LOG(INFO) << fmt::format("[quota.{}] delete fs quota.", fs_id);
+
+  DeleteFsQuotaOperation operation(trace, fs_id);
 
   auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[quota.{}] delete fs quota fail, status({}).", fs_id_, status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("[quota.{}] delete fs quota fail, status({}).", fs_id, status.error_str());
     return status;
   }
 
   return Status::OK();
 }
 
-Status QuotaManager::SetDirQuota(Trace& trace, Ino ino, const QuotaEntry& quota) {
-  DINGO_LOG(INFO) << fmt::format("[quota.{}.{}] set dir quota, quota({}).", fs_id_, ino, quota.ShortDebugString());
+Status QuotaManager::SetDirQuota(Trace& trace, Ino ino, const QuotaEntry& quota, bool is_lead) {
+  const uint32_t fs_id = fs_info_->GetFsId();
 
-  SetDirQuotaOperation operation(trace, fs_id_, ino, quota);
+  DINGO_LOG(INFO) << fmt::format("[quota.{}.{}] set dir quota, quota({}).", fs_id, ino, quota.ShortDebugString());
+
+  if (!is_lead) {
+    dir_quota_map_.UpsertQuota(ino, quota, "follow-set-dir-quota");
+    return Status::OK();
+  }
+
+  SetDirQuotaOperation operation(trace, fs_id, ino, quota);
 
   auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[quota.{}.{}] set dir quota fail, status({}).", fs_id_, ino, status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("[quota.{}.{}] set dir quota fail, status({}).", fs_id, ino, status.error_str());
     return status;
   }
 
@@ -390,15 +481,22 @@ Status QuotaManager::SetDirQuota(Trace& trace, Ino ino, const QuotaEntry& quota)
 
   dir_quota_map_.UpsertQuota(ino, result.quota, "set-dir-quota");
 
+  auto mds_ids = fs_info_->GetMdsIds();
+  for (auto mds_id : mds_ids) {
+    notify_buddy_->AsyncNotify(notify::SetDirQuotaMessage::Create(mds_id, fs_id, ino, result.quota));
+  }
+
   return Status::OK();
 }
 
 Status QuotaManager::GetDirQuota(Trace& trace, Ino ino, QuotaEntry& quota) {
-  GetDirQuotaOperation operation(trace, fs_id_, ino);
+  const uint32_t fs_id = fs_info_->GetFsId();
+
+  GetDirQuotaOperation operation(trace, fs_id, ino);
 
   auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[quota.{}.{}] get dir quota fail, status({}).", fs_id_, ino, status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("[quota.{}.{}] get dir quota fail, status({}).", fs_id, ino, status.error_str());
     return status;
   }
 
@@ -409,51 +507,70 @@ Status QuotaManager::GetDirQuota(Trace& trace, Ino ino, QuotaEntry& quota) {
 }
 
 Status QuotaManager::DeleteDirQuota(Trace& trace, Ino ino) {
-  DINGO_LOG(INFO) << fmt::format("[quota.{}.{}] delete dir quota.", fs_id_, ino);
+  const uint32_t fs_id = fs_info_->GetFsId();
 
-  DeleteDirQuotaOperation operation(trace, fs_id_, ino);
+  DINGO_LOG(INFO) << fmt::format("[quota.{}.{}] delete dir quota.", fs_id, ino);
+
+  DeleteDirQuotaOperation operation(trace, fs_id, ino);
 
   auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[quota.{}.{}] delete dir quota fail, status({}).", fs_id_, ino,
-                                    status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("[quota.{}.{}] delete dir quota fail, status({}).", fs_id, ino, status.error_str());
     return status;
   }
 
-  dir_quota_map_.DeleteQuota(ino);
+  auto& result = operation.GetResult();
+
+  const auto& uuid = result.quota.uuid();
+  dir_quota_map_.DeleteQuota(ino, uuid);
+
+  auto mds_ids = fs_info_->GetMdsIds();
+  for (auto mds_id : mds_ids) {
+    notify_buddy_->AsyncNotify(notify::DeleteDirQuotaMessage::Create(mds_id, fs_id, ino, uuid));
+  }
+
+  return Status::OK();
+}
+
+Status QuotaManager::DeleteDirQuotaByNotified(Ino ino, const std::string& uuid) {
+  dir_quota_map_.DeleteQuota(ino, uuid);
 
   return Status::OK();
 }
 
 void QuotaManager::AsyncDeleteDirQuota(Ino ino) {
+  const uint32_t fs_id = fs_info_->GetFsId();
+
   auto task = DeleteDirQuotaTask::New(GetSelfPtr(), ino);
 
   if (!worker_set_->ExecuteHash(ino, task)) {
-    DINGO_LOG(ERROR) << fmt::format("[quota.{}.{}] async delete dir quota fail.", fs_id_, ino);
+    DINGO_LOG(ERROR) << fmt::format("[quota.{}.{}] async delete dir quota fail.", fs_id, ino);
   }
 }
 
-Status QuotaManager::LoadDirQuotas(Trace& trace, std::map<Ino, QuotaEntry>& quota_entry_map) {  // NOLINT
+Status QuotaManager::LoadDirQuotas(Trace&, std::map<Ino, QuotaEntry>& quota_entry_map) {
   auto quotas = dir_quota_map_.GetAllQuota();
   for (auto& quota : quotas) {
-    quota_entry_map[quota->INo()] = quota->GetQuotaAndDelta();
+    quota_entry_map[quota->INo()] = quota->GetAccumulatedQuota();
   }
 
   return Status::OK();
 }
 
 Status QuotaManager::LoadQuota() {
+  const uint32_t fs_id = fs_info_->GetFsId();
+
   // load fs quota
   auto status = LoadFsQuota();
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[quota.{}] load fs quota fail, status({}).", fs_id_, status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("[quota.{}] load fs quota fail, status({}).", fs_id, status.error_str());
     return status;
   }
 
   // load all dir quotas
   status = LoadAllDirQuota();
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[quota.{}] load all dir quota fail, status({}).", fs_id_, status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("[quota.{}] load all dir quota fail, status({}).", fs_id, status.error_str());
     return status;
   }
 
@@ -461,17 +578,19 @@ Status QuotaManager::LoadQuota() {
 }
 
 Status QuotaManager::FlushUsage() {
+  const uint32_t fs_id = fs_info_->GetFsId();
+
   // flush fs usage
   auto status = FlushFsUsage();
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[quota.{}] flush fs usage fail, status({}).", fs_id_, status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("[quota.{}] flush fs usage fail, status({}).", fs_id, status.error_str());
     return status;
   }
 
   // flush all dir usage
   status = FlushDirUsage();
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[quota.{}] flush all dir usage fail, status({}).", fs_id_, status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("[quota.{}] flush all dir usage fail, status({}).", fs_id, status.error_str());
     return status;
   }
 
@@ -479,52 +598,52 @@ Status QuotaManager::FlushUsage() {
 }
 
 Status QuotaManager::FlushFsUsage() {
+  const uint32_t fs_id = fs_info_->GetFsId();
+
   Trace trace;
 
-  auto usage = fs_quota_.GetUsage();
-  if (usage.bytes() == 0 && usage.inodes() == 0) {
-    return Status::OK();
-  }
+  auto usages = fs_quota_.GetUsage();
+  if (usages.empty()) return Status::OK();
 
-  FlushFsUsageOperation operation(trace, fs_id_, usage);
+  FlushFsUsageOperation operation(trace, fs_id, usages);
 
   auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[quota.{}] flush fs quota fail, status({}).", fs_id_, status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("[quota.{}] flush fs quota fail, status({}).", fs_id, status.error_str());
     return status;
   }
 
   auto& result = operation.GetResult();
 
-  fs_quota_.Refresh(result.quota, usage, "flush-fs-usage");
+  uint64_t timepoint = usages.back().time_ns();
+  fs_quota_.Refresh(result.quota, timepoint, "flush-fs-usage");
 
   return Status::OK();
 }
 
 Status QuotaManager::FlushDirUsage() {
-  auto quotas = dir_quota_map_.GetAllQuota();
+  using UsageEntrySet = std::vector<UsageEntry>;
+
+  const uint32_t fs_id = fs_info_->GetFsId();
 
   // ino->usage
-  std::map<uint64_t, UsageEntry> usages;
+  std::map<uint64_t, UsageEntrySet> usage_map;
+  auto quotas = dir_quota_map_.GetAllQuota();
   for (auto& quota : quotas) {
-    auto usage = quota->GetUsage();
-    if (usage.bytes() == 0 && usage.inodes() == 0) {
-      continue;
-    }
+    auto usages = quota->GetUsage();
+    if (usages.empty()) continue;
 
-    usages[quota->INo()] = usage;
-    DINGO_LOG(INFO) << fmt::format("[quota.{}.{}] flush dir usage, bytes({}) inodes({}).", fs_id_, quota->INo(),
-                                   usage.bytes(), usage.inodes());
+    usage_map[quota->INo()] = usages;
   }
 
-  if (usages.empty()) return Status::OK();
+  if (usage_map.empty()) return Status::OK();
 
   Trace trace;
-  FlushDirUsagesOperation operation(trace, fs_id_, usages);
+  FlushDirUsagesOperation operation(trace, fs_id, usage_map);
 
   auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[quota.{}] flush fs quota fail, status({}).", fs_id_, status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("[quota.{}] flush fs quota fail, status({}).", fs_id, status.error_str());
     return status;
   }
 
@@ -535,21 +654,22 @@ Status QuotaManager::FlushDirUsage() {
     if (it == result.quotas.end()) {
       continue;
     }
-
     auto& new_quota = it->second;
 
-    auto usage_it = usages.find(ino);
-    CHECK(usage_it != usages.end()) << fmt::format("[quota.{}.{}] not found usage.", fs_id_, ino);
+    auto usage_it = usage_map.find(ino);
+    if (usage_it == usage_map.end()) continue;
 
-    quota->Refresh(new_quota, usage_it->second, "flush-dir-usage");
+    uint64_t timepoint = usage_it->second.back().time_ns();
+    quota->Refresh(new_quota, timepoint, "flush-dir-usage");
   }
 
   return Status::OK();
 }
 
 Status QuotaManager::LoadFsQuota() {
+  const uint32_t fs_id = fs_info_->GetFsId();
   Trace trace;
-  GetFsQuotaOperation operation(trace, fs_id_);
+  GetFsQuotaOperation operation(trace, fs_id);
 
   auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
@@ -557,30 +677,31 @@ Status QuotaManager::LoadFsQuota() {
       return Status::OK();
     }
 
-    DINGO_LOG(ERROR) << fmt::format("[quota.{}] get fs quota fail, status({}).", fs_id_, status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("[quota.{}] get fs quota fail, status({}).", fs_id, status.error_str());
     return status;
   }
 
   auto& result = operation.GetResult();
 
-  fs_quota_.Refresh(result.quota, UsageEntry{}, "load-fs-quota");
+  fs_quota_.Refresh(result.quota, 0, "load-fs-quota");
 
   return Status::OK();
 }
 
 Status QuotaManager::LoadAllDirQuota() {
+  const uint32_t fs_id = fs_info_->GetFsId();
   Trace trace;
-  LoadDirQuotasOperation operation(trace, fs_id_);
+  LoadDirQuotasOperation operation(trace, fs_id);
 
   auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[quota.{}] load dir quotas fail, status({}).", fs_id_, status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("[quota.{}] load dir quotas fail, status({}).", fs_id, status.error_str());
     return status;
   }
 
   auto& result = operation.GetResult();
   if (!result.quotas.empty()) {
-    dir_quota_map_.RefreshAll(result.quotas);
+    dir_quota_map_.Refresh(result.quotas, "load-all-dir-quota");
   }
 
   return Status::OK();

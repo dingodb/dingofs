@@ -2179,7 +2179,7 @@ void MDSServiceImpl::DoSetDirQuota(google::protobuf::RpcController*, const pb::m
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
-  auto status = quota_manager.SetDirQuota(ctx.GetTrace(), request->ino(), request->quota());
+  auto status = quota_manager.SetDirQuota(ctx.GetTrace(), request->ino(), request->quota(), true);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -2482,6 +2482,21 @@ void MDSServiceImpl::DoNotifyBuddy(google::protobuf::RpcController*, const pb::m
 
         file_system->GetPartitionCache().Delete(message.clean_partition_cache().ino());
 
+      } break;
+
+      case pb::mdsv2::NotifyBuddyRequest::TYPE_SET_DIR_QUOTA: {
+        auto file_system = GetFileSystem(message.fs_id());
+        auto& quota_manager = file_system->GetQuotaManager();
+        Trace trace;
+        const auto& set_dir_quota = message.set_dir_quota();
+        quota_manager.SetDirQuota(trace, set_dir_quota.ino(), set_dir_quota.quota(), false);
+      } break;
+
+      case pb::mdsv2::NotifyBuddyRequest::TYPE_DELETE_DIR_QUOTA: {
+        auto file_system = GetFileSystem(message.fs_id());
+        auto& quota_manager = file_system->GetQuotaManager();
+        const auto& delete_dir_quota = message.delete_dir_quota();
+        quota_manager.DeleteDirQuotaByNotified(delete_dir_quota.ino(), delete_dir_quota.uuid());
       } break;
 
       default:

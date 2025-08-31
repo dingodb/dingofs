@@ -135,17 +135,22 @@ RPC::ChannelSPtr RPC::NewChannel(const EndPoint& endpoint) {  // NOLINT
 }
 
 RPC::ChannelSPtr RPC::GetChannel(const EndPoint& endpoint) {
-  utils::ReadLockGuard lk(lock_);
+  {
+    utils::ReadLockGuard lk(lock_);
 
-  auto it = channels_.find(endpoint);
-  if (it != channels_.end()) {
-    return it->second;
+    auto it = channels_.find(endpoint);
+    if (it != channels_.end()) {
+      return it->second;
+    }
   }
 
   ChannelSPtr channel = NewChannel(endpoint);
   if (channel == nullptr) return nullptr;
 
-  channels_[endpoint] = channel;
+  {
+    utils::WriteLockGuard lk(lock_);
+    channels_[endpoint] = channel;
+  }
 
   return channel;
 }

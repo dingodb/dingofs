@@ -126,9 +126,11 @@ static std::string RenderPartitionPolicy(pb::mdsv2::PartitionPolicy partition_po
       result += "<br>";
       result += fmt::format("bucket_num: {}", parent_hash.bucket_num());
       result += "<br>";
+      result += fmt::format("expect_mds_num: {}", parent_hash.expect_mds_num());
+      result += "<br>";
       result += "mds: ";
-      for (const auto& [mds_id, _] : parent_hash.distributions()) {
-        result += fmt::format("{},", mds_id);
+      for (const auto& [mds_id, bucket_set] : parent_hash.distributions()) {
+        result += fmt::format("{}[{}],", mds_id, bucket_set.bucket_ids_size());
       }
       result.resize(result.size() - 1);
     } break;

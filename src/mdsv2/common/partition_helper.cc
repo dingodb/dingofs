@@ -71,9 +71,7 @@ std::map<uint64_t, BucketSetEntry> HashPartitionHelper::AdjustDistribution(Parti
 
   // get join online/join offline/other online mds id
   std::set<uint64_t> join_onlines, join_offlines, other_onlines;
-  for (auto it = distributions.begin(); it != distributions.end();) {
-    uint64_t mds_id = it->first;
-
+  for (auto& [mds_id, _] : distributions) {
     if (MdsHelper::IsContain(offline_mds_ids, mds_id)) {
       join_offlines.insert(mds_id);
     } else {

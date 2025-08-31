@@ -69,7 +69,7 @@ struct EntryOut {
 
 class FileSystem : public std::enable_shared_from_this<FileSystem> {
  public:
-  FileSystem(uint64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr ino_id_generator,
+  FileSystem(uint64_t self_mds_id, FsInfoSPtr fs_info, IdGeneratorUPtr ino_id_generator,
              IdGeneratorSPtr slice_id_generator, KVStorageSPtr kv_storage, OperationProcessorSPtr operation_processor,
              MDSMetaMapSPtr mds_meta_map, WorkerSetSPtr quota_worker_set, notify::NotifyBuddySPtr notify_buddy);
   ~FileSystem();
@@ -79,13 +79,12 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   FileSystem(FileSystem&&) = delete;
   FileSystem& operator=(FileSystem&&) = delete;
 
-  static FileSystemSPtr New(uint64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr ino_id_generator,
+  static FileSystemSPtr New(uint64_t self_mds_id, FsInfoSPtr fs_info, IdGeneratorUPtr ino_id_generator,
                             IdGeneratorSPtr slice_id_generator, KVStorageSPtr kv_storage,
                             OperationProcessorSPtr operation_processor, MDSMetaMapSPtr mds_meta_map,
                             WorkerSetSPtr quota_worker_set, notify::NotifyBuddySPtr notify_buddy) {
-    return std::make_shared<FileSystem>(self_mds_id, std::move(fs_info), std::move(ino_id_generator),
-                                        slice_id_generator, kv_storage, operation_processor, mds_meta_map,
-                                        quota_worker_set, notify_buddy);
+    return std::make_shared<FileSystem>(self_mds_id, fs_info, std::move(ino_id_generator), slice_id_generator,
+                                        kv_storage, operation_processor, mds_meta_map, quota_worker_set, notify_buddy);
   }
 
   FileSystemSPtr GetSelfPtr();
@@ -285,7 +284,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   uint64_t self_mds_id_;
 
   // filesystem info
-  FsInfoUPtr fs_info_;
+  FsInfoSPtr fs_info_;
   const uint32_t fs_id_;
 
   std::atomic<bool> can_serve_{false};

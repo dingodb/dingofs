@@ -35,6 +35,8 @@ enum class Type : int8_t {
   kRefreshFsInfo = 0,
   kRefreshInode = 1,
   kCleanPartitionCache = 2,
+  kSetDirQuota = 3,
+  kDeleteDirQuota = 4,
 };
 
 struct Message {
@@ -79,6 +81,30 @@ struct CleanPartitionCacheMessage : public Message {
   }
 
   Ino ino{0};
+};
+
+struct SetDirQuotaMessage : public Message {
+  SetDirQuotaMessage(uint64_t mds_id, uint32_t fs_id, Ino ino, const QuotaEntry& quota)
+      : Message{Type::kSetDirQuota, mds_id, fs_id}, ino(ino), quota(quota) {}
+
+  static MessageSPtr Create(uint64_t mds_id, uint32_t fs_id, Ino ino, const QuotaEntry& quota) {
+    return std::make_shared<SetDirQuotaMessage>(mds_id, fs_id, ino, quota);
+  }
+
+  Ino ino{0};
+  QuotaEntry quota;
+};
+
+struct DeleteDirQuotaMessage : public Message {
+  DeleteDirQuotaMessage(uint64_t mds_id, uint32_t fs_id, Ino ino, const std::string& uuid)
+      : Message{Type::kDeleteDirQuota, mds_id, fs_id}, ino(ino), uuid(uuid) {}
+
+  static MessageSPtr Create(uint64_t mds_id, uint32_t fs_id, Ino ino, const std::string& uuid) {
+    return std::make_shared<DeleteDirQuotaMessage>(mds_id, fs_id, ino, uuid);
+  }
+
+  Ino ino{0};
+  std::string uuid;
 };
 
 class NotifyBuddy;

@@ -77,12 +77,12 @@ static bool IsInvalidName(const std::string& name) {
   return name.empty() || name.size() > FLAGS_mds_filesystem_name_max_size;
 }
 
-FileSystem::FileSystem(uint64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr ino_id_generator,
+FileSystem::FileSystem(uint64_t self_mds_id, FsInfoSPtr fs_info, IdGeneratorUPtr ino_id_generator,
                        IdGeneratorSPtr slice_id_generator, KVStorageSPtr kv_storage,
                        OperationProcessorSPtr operation_processor, MDSMetaMapSPtr mds_meta_map,
                        WorkerSetSPtr quota_worker_set, notify::NotifyBuddySPtr notify_buddy)
     : self_mds_id_(self_mds_id),
-      fs_info_(std::move(fs_info)),
+      fs_info_(fs_info),
       fs_id_(fs_info_->GetFsId()),
       inode_cache_(fs_id_),
       partition_cache_(fs_id_),
@@ -93,7 +93,8 @@ FileSystem::FileSystem(uint64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr
       mds_meta_map_(mds_meta_map),
       parent_memo_(ParentMemo::New(fs_id_)),
       chunk_cache_(fs_id_),
-      quota_manager_(quota::QuotaManager::New(fs_id_, parent_memo_, operation_processor, quota_worker_set)),
+      quota_manager_(
+          quota::QuotaManager::New(fs_info, parent_memo_, operation_processor, quota_worker_set, notify_buddy)),
       notify_buddy_(notify_buddy),
       file_session_manager_(fs_id_, operation_processor) {
   can_serve_ = CanServe(self_mds_id);
@@ -1837,10 +1838,12 @@ Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, const std::vector<Delt
   }
 
   // update quota
-  std::string reason = fmt::format("writeslice.{}.{}", ino, slice_id_str);
-  quota_manager_->UpdateFsUsage(length_delta, 0, reason);
-  for (const auto& parent : attr.parents()) {
-    quota_manager_->AsyncUpdateDirUsage(parent, length_delta, 0, reason);
+  if (length_delta != 0) {
+    std::string reason = fmt::format("writeslice.{}.{}", ino, slice_id_str);
+    quota_manager_->UpdateFsUsage(length_delta, 0, reason);
+    for (const auto& parent : attr.parents()) {
+      quota_manager_->AsyncUpdateDirUsage(parent, length_delta, 0, reason);
+    }
   }
 
   return Status::OK();
@@ -2202,12 +2205,12 @@ void FileSystem::RefreshFsInfo(const FsInfoEntry& fs_info) {
 
   Duration duration;
 
-  fs_info_->Update(fs_info, pre_handler);
+  if (fs_info_->Update(fs_info, pre_handler)) {
+    can_serve_.store(CanServe(self_mds_id_), std::memory_order_release);
 
-  can_serve_.store(CanServe(self_mds_id_), std::memory_order_release);
-
-  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] update fs({}) can_serve({}).", fs_id_, duration.ElapsedUs(),
-                                 fs_info.fs_name(), can_serve_ ? "true" : "false");
+    DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] update fs({}) can_serve({}).", fs_id_, duration.ElapsedUs(),
+                                   fs_info.fs_name(), can_serve_ ? "true" : "false");
+  }
 }
 
 Status FileSystem::JoinMonoFs(Context& ctx, uint64_t mds_id, const std::string& reason) {
@@ -2784,7 +2787,7 @@ Status FileSystemSet::CreateFsMetaTable(uint32_t fs_id, const std::string& fs_na
 
 Status FileSystemSet::DropFsMetaTable(uint32_t fs_id) {
   auto range = MetaCodec::GetFsMetaTableRange(fs_id);
-  DINGO_LOG(DEBUG) << fmt::format("[fsset] drop fsmeta table, fs_id({}) {}.", fs_id, range.ToString());
+  DINGO_LOG(INFO) << fmt::format("[fsset] drop fsmeta table, fs_id({}) {}.", fs_id, range.ToString());
 
   return kv_storage_->DropTable(range);
 }
@@ -2889,9 +2892,8 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, FsInfoEntry& fs_info)
   auto ino_id_generator = NewInodeIdGenerator(fs_id, coordinator_client_, kv_storage_);
   CHECK(ino_id_generator != nullptr) << "new id generator fail.";
 
-  auto fs =
-      FileSystem::New(self_mds_meta_.ID(), FsInfo::NewUnique(fs_info), std::move(ino_id_generator), slice_id_generator_,
-                      kv_storage_, operation_processor_, mds_meta_map_, quota_worker_set_, notify_buddy_);
+  auto fs = FileSystem::New(self_mds_meta_.ID(), FsInfo::New(fs_info), std::move(ino_id_generator), slice_id_generator_,
+                            kv_storage_, operation_processor_, mds_meta_map_, quota_worker_set_, notify_buddy_);
   if (!fs->Init()) {
     cleanup(table_id, fs_key, "");
     return Status(pb::error::EINTERNAL, "init FileSystem fail");
@@ -3228,9 +3230,8 @@ bool FileSystemSet::LoadFileSystems() {
       auto ino_id_generator = NewInodeIdGenerator(fs_info.fs_id(), coordinator_client_, kv_storage_);
       CHECK(ino_id_generator != nullptr) << "new id generator fail.";
 
-      fs = FileSystem::New(self_mds_meta_.ID(), FsInfo::NewUnique(fs_info), std::move(ino_id_generator),
-                           slice_id_generator_, kv_storage_, operation_processor_, mds_meta_map_, quota_worker_set_,
-                           notify_buddy_);
+      fs = FileSystem::New(self_mds_meta_.ID(), FsInfo::New(fs_info), std::move(ino_id_generator), slice_id_generator_,
+                           kv_storage_, operation_processor_, mds_meta_map_, quota_worker_set_, notify_buddy_);
       if (!fs->Init()) {
         DINGO_LOG(ERROR) << fmt::format("[fsset] init FileSystem({}) fail.", fs_info.fs_id());
         continue;

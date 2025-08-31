@@ -226,6 +226,30 @@ void NotifyBuddy::SendMessage(uint64_t mds_id, BatchMessage& batch_message) {
 
       } break;
 
+      case Type::kSetDirQuota: {
+        mut_message->set_type(pb::mdsv2::NotifyBuddyRequest::TYPE_SET_DIR_QUOTA);
+
+        auto set_dir_quota_message = std::dynamic_pointer_cast<SetDirQuotaMessage>(message);
+        mut_message->mutable_set_dir_quota()->set_ino(set_dir_quota_message->ino);
+        mut_message->mutable_set_dir_quota()->mutable_quota()->Swap(&set_dir_quota_message->quota);
+
+        DINGO_LOG(INFO) << fmt::format("[notify.{}] set dir quota, dir({}/{}) quota({}).", mds_id, message->fs_id,
+                                       set_dir_quota_message->ino, set_dir_quota_message->quota.ShortDebugString());
+
+      } break;
+
+      case Type::kDeleteDirQuota: {
+        mut_message->set_type(pb::mdsv2::NotifyBuddyRequest::TYPE_DELETE_DIR_QUOTA);
+
+        auto delete_dir_quota_message = std::dynamic_pointer_cast<DeleteDirQuotaMessage>(message);
+        mut_message->mutable_delete_dir_quota()->set_ino(delete_dir_quota_message->ino);
+        mut_message->mutable_delete_dir_quota()->set_uuid(delete_dir_quota_message->uuid);
+
+        DINGO_LOG(INFO) << fmt::format("[notify.{}] delete dir quota, dir({}/{}/{}).", mds_id, message->fs_id,
+                                       delete_dir_quota_message->ino, delete_dir_quota_message->uuid);
+
+      } break;
+
       default:
         DINGO_LOG(FATAL) << fmt::format("[notify] unknown message type: {}.", static_cast<int>(message->type));
         break;

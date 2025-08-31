@@ -19,6 +19,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "dingofs/mdsv2.pb.h"
 #include "mdsv2/common/type.h"
@@ -28,7 +29,7 @@ namespace dingofs {
 namespace mdsv2 {
 
 class FsInfo;
-using FsInfoPtr = std::shared_ptr<FsInfo>;
+using FsInfoSPtr = std::shared_ptr<FsInfo>;
 using FsInfoUPtr = std::unique_ptr<FsInfo>;
 
 class FsInfo {
@@ -38,7 +39,7 @@ class FsInfo {
   explicit FsInfo(const DataType& fs_info) : fs_info_(fs_info) {}
   ~FsInfo() = default;
 
-  static FsInfoPtr New(const DataType& fs_info) { return std::make_shared<FsInfo>(fs_info); }
+  static FsInfoSPtr New(const DataType& fs_info) { return std::make_shared<FsInfo>(fs_info); }
   static FsInfoUPtr NewUnique(const DataType& fs_info) { return std::make_unique<FsInfo>(fs_info); }
 
   DataType Get() {
@@ -106,20 +107,40 @@ class FsInfo {
     fs_info_.mutable_partition_policy()->CopyFrom(partition_policy);
   }
 
+  std::vector<uint64_t> GetMdsIds() {
+    utils::ReadLockGuard lock(lock_);
+
+    std::vector<uint64_t> mds_ids;
+    if (fs_info_.partition_policy().type() == pb::mdsv2::MONOLITHIC_PARTITION) {
+      mds_ids.push_back(fs_info_.partition_policy().mono().mds_id());
+
+    } else {
+      const auto& parent_hash = fs_info_.partition_policy().parent_hash();
+      for (const auto& [mds_id, _] : parent_hash.distributions()) {
+        mds_ids.push_back(mds_id);
+      }
+    }
+
+    return mds_ids;
+  }
+
   std::string ToString() {
     utils::ReadLockGuard lock(lock_);
 
     return fs_info_.ShortDebugString();
   }
 
-  void Update(const DataType& fs_info, std::function<void(const DataType&, const DataType&)> pre_handle = nullptr) {
+  bool Update(const DataType& fs_info, std::function<void(const DataType&, const DataType&)> pre_handle = nullptr) {
     utils::WriteLockGuard lock(lock_);
 
     if (fs_info.version() > fs_info_.version()) {
       if (pre_handle) pre_handle(fs_info_, fs_info);
 
       fs_info_ = fs_info;
+      return true;
     }
+
+    return false;
   }
 
  private:

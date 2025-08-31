@@ -60,7 +60,7 @@ static std::string GetHostName() {
 DEFINE_bool(client_meta_read_chunk_cache_enable, true,
             "enable read chunk cache");
 
-MDSV2FileSystem::MDSV2FileSystem(mdsv2::FsInfoPtr fs_info,
+MDSV2FileSystem::MDSV2FileSystem(mdsv2::FsInfoSPtr fs_info,
                                  const ClientId& client_id,
                                  MDSDiscoveryPtr mds_discovery,
                                  InodeCacheSPtr inode_cache,

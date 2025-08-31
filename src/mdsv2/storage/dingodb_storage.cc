@@ -99,7 +99,14 @@ Status DingodbStorage::DropTable(int64_t table_id) {
   return Status::OK();
 }
 
-Status DingodbStorage::DropTable(const Range& range) { return Status::OK(); }
+Status DingodbStorage::DropTable(const Range& range) {
+  auto status = client_->DropRegion(range.start, range.end);
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, status.ToString());
+  }
+
+  return Status::OK();
+}
 
 Status DingodbStorage::IsExistTable(const std::string& start_key, const std::string& end_key) {
   dingodb::sdk::Coordinator* coordinator{nullptr};

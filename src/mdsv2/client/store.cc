@@ -82,6 +82,42 @@ bool StoreClient::CreateFsStatsTable(const std::string& name) {
   return true;
 }
 
+bool StoreClient::DropMetaTable() {
+  Range range = MetaCodec::GetMetaTableRange();
+  auto status = kv_storage_->DropTable(range);
+  if (!status.ok()) {
+    std::cerr << fmt::format("drop meta table fail, error: {}.", status.error_str()) << '\n';
+    return false;
+  }
+
+  std::cout << "drop meta table success." << '\n';
+  return true;
+}
+
+bool StoreClient::DropFsStatsTable() {
+  Range range = MetaCodec::GetFsStatsTableRange();
+  auto status = kv_storage_->DropTable(range);
+  if (!status.ok()) {
+    std::cerr << fmt::format("drop fs stats table fail, error: {}.", status.error_str()) << '\n';
+    return false;
+  }
+
+  std::cout << "drop fs stats table success." << '\n';
+  return true;
+}
+
+bool StoreClient::DropFsMetaTable(uint32_t fs_id) {
+  Range range = MetaCodec::GetFsMetaTableRange(fs_id);
+  auto status = kv_storage_->DropTable(range);
+  if (!status.ok()) {
+    std::cerr << fmt::format("drop fs meta table fail, error: {}.", status.error_str()) << '\n';
+    return false;
+  }
+
+  std::cout << fmt::format("drop fs meta table success, fs_id({}).", fs_id) << '\n';
+  return true;
+}
+
 static std::string FormatTime(uint64_t time_ns) { return Helper::FormatMsTime(time_ns / 1000000, "%H:%M:%S"); }
 
 static void TraversePrint(FsTreeNode* item, bool is_details, int level) {
@@ -130,6 +166,9 @@ bool StoreCommandRunner::Run(const Options& options, const std::string& coor_add
       Helper::ToLowerCase("CreateMetaTable"),
       Helper::ToLowerCase("CreateFsStatsTable"),
       Helper::ToLowerCase("CreateAllTable"),
+      Helper::ToLowerCase("DropMetaTable"),
+      Helper::ToLowerCase("DropFsStatsTable"),
+      Helper::ToLowerCase("DropFsMetaTable"),
       "tree",
   };
 
@@ -143,7 +182,7 @@ bool StoreCommandRunner::Run(const Options& options, const std::string& coor_add
   dingofs::mdsv2::client::StoreClient store_client;
   if (!store_client.Init(coor_addr)) {
     std::cerr << "init store client fail." << '\n';
-    return -1;
+    return false;
   }
 
   if (cmd == Helper::ToLowerCase("CreateMetaTable")) {
@@ -155,6 +194,19 @@ bool StoreCommandRunner::Run(const Options& options, const std::string& coor_add
   } else if (cmd == Helper::ToLowerCase("CreateAllTable")) {
     store_client.CreateMetaTable(options.meta_table_name);
     store_client.CreateFsStatsTable(options.fsstats_table_name);
+
+  } else if (cmd == Helper::ToLowerCase("DropMetaTable")) {
+    store_client.DropMetaTable();
+
+  } else if (cmd == Helper::ToLowerCase("DropFsStatsTable")) {
+    store_client.DropFsStatsTable();
+
+  } else if (cmd == Helper::ToLowerCase("DropFsMetaTable")) {
+    if (options.fs_id == 0) {
+      std::cerr << "fs_id is invalid." << '\n';
+      return true;
+    }
+    store_client.DropFsMetaTable(options.fs_id);
 
   } else if (cmd == Helper::ToLowerCase("tree")) {
     store_client.PrintDentryTree(options.fs_id, true);

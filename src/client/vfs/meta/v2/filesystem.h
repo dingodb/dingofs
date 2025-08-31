@@ -47,12 +47,12 @@ using MDSV2FileSystemUPtr = std::unique_ptr<MDSV2FileSystem>;
 
 class MDSV2FileSystem : public vfs::MetaSystem {
  public:
-  MDSV2FileSystem(mdsv2::FsInfoPtr fs_info, const ClientId& client_id,
+  MDSV2FileSystem(mdsv2::FsInfoSPtr fs_info, const ClientId& client_id,
                   MDSDiscoveryPtr mds_discovery, InodeCacheSPtr inode_cache,
                   MDSClientPtr mds_client);
   ~MDSV2FileSystem() override;
 
-  static MDSV2FileSystemUPtr New(mdsv2::FsInfoPtr fs_info,
+  static MDSV2FileSystemUPtr New(mdsv2::FsInfoSPtr fs_info,
                                  const ClientId& client_id,
                                  MDSDiscoveryPtr mds_discovery,
                                  InodeCacheSPtr inode_cache,
@@ -170,7 +170,7 @@ class MDSV2FileSystem : public vfs::MetaSystem {
   const std::string name_;
   const ClientId client_id_;
 
-  mdsv2::FsInfoPtr fs_info_;
+  mdsv2::FsInfoSPtr fs_info_;
 
   MDSDiscoveryPtr mds_discovery_;
 

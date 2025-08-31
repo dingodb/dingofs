@@ -48,12 +48,12 @@ using GetMdsFn = std::function<MDSMeta()>;
 
 class MDSClient {
  public:
-  MDSClient(const ClientId& client_id, mdsv2::FsInfoPtr fs_info,
+  MDSClient(const ClientId& client_id, mdsv2::FsInfoSPtr fs_info,
             ParentMemoSPtr parent_memo, MDSDiscoveryPtr mds_discovery,
             MDSRouterPtr mds_router, RPCPtr rpc);
   virtual ~MDSClient() = default;
 
-  static MDSClientPtr New(const ClientId& client_id, mdsv2::FsInfoPtr fs_info,
+  static MDSClientPtr New(const ClientId& client_id, mdsv2::FsInfoSPtr fs_info,
                           ParentMemoSPtr parent_memo,
 
                           MDSDiscoveryPtr mds_discovery,
@@ -167,7 +167,7 @@ class MDSClient {
   uint64_t epoch_{0};
 
   const ClientId client_id_;
-  mdsv2::FsInfoPtr fs_info_;
+  mdsv2::FsInfoSPtr fs_info_;
 
   ParentMemoSPtr parent_memo_;
 

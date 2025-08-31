@@ -133,7 +133,7 @@ class FileSystemTest : public testing::Test {
     fs_info.set_recycle_time_hour(24);
     *fs_info.mutable_extra()->mutable_s3_info() = CreateS3Info();
 
-    fs = FileSystem::New(kMdsId, FsInfo::NewUnique(fs_info),
+    fs = FileSystem::New(kMdsId, FsInfo::New(fs_info),
                          std::move(fs_id_generator), nullptr, kv_storage,
                          operation_processor, nullptr, nullptr, nullptr);
     auto status = fs->CreateRoot();
