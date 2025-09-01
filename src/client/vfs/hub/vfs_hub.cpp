@@ -38,8 +38,7 @@
 #include "client/vfs/meta/v2/filesystem.h"
 #include "common/status.h"
 #include "options/cache/option.h"
-#include "options/client/vfs/vfs_dynamic_option.h"
-#include "options/client/vfs/vfs_option.h"
+#include "options/client/option.h"
 #include "options/trace/trace_dynamic_option.h"
 #include "trace/log_trace_exporter.h"
 #include "trace/noop_tracer.h"
@@ -139,13 +138,14 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
   }
 
   {
-    flush_executor_ = std::make_unique<ExecutorImpl>(FLAGS_vfs_flush_bg_thread);
+    flush_executor_ =
+        std::make_unique<ExecutorImpl>(FLAGS_client_vfs_flush_bg_thread);
     flush_executor_->Start();
   }
 
   {
     read_executor_ =
-        std::make_unique<ExecutorImpl>(FLAGS_vfs_read_executor_thread);
+        std::make_unique<ExecutorImpl>(FLAGS_client_vfs_read_executor_thread);
     read_executor_->Start();
   }
 

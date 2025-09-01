@@ -42,8 +42,7 @@
 #include "metrics/blockaccess/block_accesser.h"
 #include "metrics/client/client.h"
 #include "metrics/metric_guard.h"
-#include "options/client/common_option.h"
-#include "options/client/vfs/vfs_option.h"
+#include "options/client/option.h"
 #include "options/client/vfs_legacy/vfs_legacy_option.h"
 #include "stub/rpcclient/mds_access_log.h"
 #include "stub/rpcclient/meta_access_log.h"
@@ -117,7 +116,7 @@ Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
   }
 
   // init client option
-  vfs::VFSOption vfs_option;
+  VFSOption vfs_option;
   VFSLegacyOption vfs_legacy_option;
   if (vfs_conf.fs_type == "vfs" || vfs_conf.fs_type == "vfs_v1" ||
       vfs_conf.fs_type == "vfs_v2" || vfs_conf.fs_type == "vfs_dummy") {
@@ -132,7 +131,7 @@ Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
     return s;
   }
 
-  int32_t bthread_worker_num = dingofs::client::FLAGS_bthread_worker_num;
+  int32_t bthread_worker_num = dingofs::client::FLAGS_client_bthread_worker_num;
   if (bthread_worker_num > 0) {
     bthread_setconcurrency(bthread_worker_num);
     LOG(INFO) << "set bthread concurrency to " << bthread_worker_num

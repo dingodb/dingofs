@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_SRC_OPTIONS_CLIENT_COMMON_OPTION_H_
-#define DINGOFS_SRC_OPTIONS_CLIENT_COMMON_OPTION_H_
+#ifndef DINGOFS_SRC_OPTIONS_CLIENT_OPTION_H_
+#define DINGOFS_SRC_OPTIONS_CLIENT_OPTION_H_
 
-#include <gflags/gflags_declare.h>
-
+#include "blockaccess/accesser_common.h"
+#include "common/const.h"
 #include "options/cache/option.h"
-#include "options/client/vfs/vfs_dynamic_option.h"
 #include "utils/configuration.h"
 #include "utils/gflags_helper.h"
 
@@ -36,7 +35,66 @@ DECLARE_int32(max_connection_pool_size);
 namespace dingofs {
 namespace client {
 
-DECLARE_int32(bthread_worker_num);
+#define USING_FLAG(name) using ::dingofs::client::FLAGS_##name;
+
+// ############## gflags ##############
+
+DECLARE_bool(client_data_single_thread_read);
+DECLARE_int32(client_bthread_worker_num);
+
+// access log
+DECLARE_bool(client_access_logging);
+DECLARE_int64(client_access_log_threshold_us);
+
+// fuse module
+DECLARE_bool(client_fuse_file_info_direct_io);
+DECLARE_bool(client_fuse_file_info_keep_cache);
+
+// smooth upgrade
+DECLARE_uint32(client_fuse_fd_get_max_retries);
+DECLARE_uint32(client_fuse_fd_get_retry_interval_ms);
+DECLARE_uint32(client_fuse_check_alive_max_retries);
+DECLARE_uint32(client_fuse_check_alive_retry_interval_ms);
+
+// vfs meta system log
+DECLARE_bool(client_vfs_meta_logging);
+DECLARE_int64(client_vfs_meta_log_threshold_us);
+
+// vfs read
+DECLARE_int32(client_vfs_read_executor_thread);
+DECLARE_int32(client_vfs_read_max_retry_block_not_found);
+
+// vfs flush
+DECLARE_int32(client_vfs_flush_bg_thread);
+DECLARE_uint32(client_vfs_periodic_flush_interval_ms);
+
+// vfs prefetch
+DECLARE_uint32(client_vfs_file_prefetch_block_cnt);
+DECLARE_uint32(client_vfs_file_prefetch_executor_num);
+
+// vfs warmup
+DECLARE_int32(client_vfs_warmup_executor_thread);
+DECLARE_bool(client_vfs_intime_warmup_enable);
+DECLARE_int64(client_vfs_warmup_mtime_restart_interval_secs);
+DECLARE_int64(client_vfs_warmup_trigger_restart_interval_secs);
+
+// vfs meta
+DECLARE_uint32(client_vfs_read_dir_batch_size);
+DECLARE_uint32(client_vfs_rpc_timeout_ms);
+DECLARE_int32(client_vfs_rpc_retry_times);
+
+// begin used in inode_blocks_service
+DECLARE_uint32(format_file_offset_width);
+DECLARE_uint32(format_len_width);
+DECLARE_uint32(format_block_offset_width);
+DECLARE_uint32(format_block_name_width);
+DECLARE_uint32(format_block_len_width);
+DECLARE_string(format_delimiter);
+// end used in inode_blocks_service
+
+// ############## gflags end ##############
+
+// ############## options ##############
 
 struct UdsOption {
   std::string fd_comm_path;
@@ -58,17 +116,17 @@ static void InitUdsOption(utils::Configuration* conf, UdsOption* uds_opt) {
 
 static void InitPrefetchOption(utils::Configuration* c) {
   c->GetValue("vfs.data.prefetch.block_cnt",
-              &FLAGS_vfs_file_prefetch_block_cnt);
+              &FLAGS_client_vfs_file_prefetch_block_cnt);
   c->GetValue("vfs.data.prefetch.executor_cnt",
-              &FLAGS_vfs_file_prefetch_executor_num);
+              &FLAGS_client_vfs_file_prefetch_executor_num);
   c->GetValue("vfs.data.warmup.intime_warmup_enbale",
-              &FLAGS_vfs_intime_warmup_enable);
+              &FLAGS_client_vfs_intime_warmup_enable);
   c->GetValue("vfs.data.warmup.executor_num",
-              &FLAGS_vfs_warmup_executor_thread);
+              &FLAGS_client_vfs_warmup_executor_thread);
   c->GetValue("vfs.data.warmup.restart_mtime_interval_secs",
-              &FLAGS_vfs_warmup_mtime_restart_interval_secs);
+              &FLAGS_client_vfs_warmup_mtime_restart_interval_secs);
   c->GetValue("vfs.data.warmup.restart_trigger_interval_secs",
-              &FLAGS_vfs_warmup_trigger_restart_interval_secs);
+              &FLAGS_client_vfs_warmup_trigger_restart_interval_secs);
 }
 
 static void InitBlockCacheOption(utils::Configuration* c) {
@@ -154,7 +212,74 @@ static void InitRemoteBlockCacheOption(utils::Configuration* c) {
               &cache::FLAGS_cache_node_state_check_duration_ms);
 }
 
+// fuse option
+struct FuseConnInfo {
+  bool want_splice_move;
+  bool want_splice_read;
+  bool want_splice_write;
+  bool want_auto_inval_data;
+};
+
+struct FuseFileInfo {
+  bool keep_cache;
+};
+
+struct FuseOption {
+  FuseConnInfo conn_info;
+  FuseFileInfo file_info;
+};
+
+void InitFuseOption(utils::Configuration* c, FuseOption* option);
+
+// memory option
+struct PageOption {
+  uint64_t page_size;
+  uint64_t total_size;
+  bool use_pool;
+};
+
+static void InitMemoryPageOption(utils::Configuration* c, PageOption* option) {
+  // page option
+  c->GetValueFatalIfFail("data_stream.page.size", &option->page_size);
+  c->GetValueFatalIfFail("data_stream.page.total_size_mb", &option->total_size);
+  c->GetValueFatalIfFail("data_stream.page.use_pool", &option->use_pool);
+
+  if (option->page_size == 0) {
+    CHECK(false) << "page size must greater than 0.";
+  }
+
+  option->total_size = option->total_size * kMiB;
+  if (option->total_size < 64 * kMiB) {
+    CHECK(false) << "page total size must greater than 64MB.";
+  }
+}
+
+// vfs option
+struct VFSMetaOption {
+  uint32_t max_name_length{255};  // max length of file name
+};
+
+struct VFSDataOption {
+  bool writeback{false};  // whether to use writeback
+  std::string writeback_suffix;
+};
+
+struct VFSOption {
+  blockaccess::BlockAccessOptions block_access_opt;  // from config
+  PageOption page_option;
+  FuseOption fuse_option;
+
+  VFSMetaOption meta_option;
+  VFSDataOption data_option;
+
+  uint32_t dummy_server_port{10000};
+};
+
+void InitVFSOption(utils::Configuration* conf, VFSOption* option);
+
+// ############## options end ##############
+
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_OPTIONS_CLIENT_COMMON_OPTION_H_
+#endif  // DINGOFS_SRC_OPTIONS_CLIENT_OPTION_H_

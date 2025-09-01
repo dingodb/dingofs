@@ -22,7 +22,7 @@
 
 #include "client/vfs.h"
 #include "metrics/client/client.h"
-#include "options/client/fuse/fuse_option.h"
+#include "options/client/option.h"
 
 namespace dingofs {
 namespace client {

@@ -20,7 +20,7 @@
 #include <unistd.h>
 
 #include "butil/time.h"
-#include "options/client/vfs/vfs_dynamic_option.h"
+#include "options/client/option.h"
 #include "spdlog/logger.h"
 
 namespace dingofs {
@@ -36,7 +36,7 @@ class MetaLogGuard {
   using MessageHandler = std::function<std::string()>;
 
   explicit MetaLogGuard(MessageHandler handler)
-      : enabled_(FLAGS_vfs_meta_logging), handler_(std::move(handler)) {
+      : enabled_(FLAGS_client_vfs_meta_logging), handler_(std::move(handler)) {
     if (!enabled_) {
       return;
     }
@@ -51,7 +51,7 @@ class MetaLogGuard {
     timer_.stop();
 
     int64_t duration = timer_.u_elapsed();
-    if (duration > FLAGS_vfs_meta_log_threshold_us) {
+    if (duration > FLAGS_client_vfs_meta_log_threshold_us) {
       meta_logger->warn("{0} <{1:.6f}>", handler_(), duration / 1e6);
     }
   }

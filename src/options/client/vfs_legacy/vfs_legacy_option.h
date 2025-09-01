@@ -20,7 +20,7 @@
 #include <cstdint>
 
 #include "blockaccess/accesser_common.h"
-#include "options/client/fuse/fuse_option.h"
+#include "options/client/option.h"
 #include "options/client/vfs_legacy/data_stream/data_stream_option.h"
 #include "stub/common/config.h"
 #include "utils/configuration.h"

@@ -50,7 +50,7 @@
 #include "dingofs/metaserver.pb.h"
 #include "metrics/metrics_dumper.h"
 #include "options/cache/option.h"
-#include "options/client/common_option.h"
+#include "options/client/option.h"
 #include "options/client/vfs_legacy/vfs_legacy_dynamic_config.h"
 #include "stub/filesystem/xattr.h"
 #include "stub/rpcclient/base_client.h"
@@ -151,8 +151,8 @@ int VFSOld::InitBrpcServer() {
   }
 
   brpc::ServerOptions brpc_server_options;
-  if (FLAGS_bthread_worker_num > 0) {
-    brpc_server_options.num_threads = FLAGS_bthread_worker_num;
+  if (FLAGS_client_bthread_worker_num > 0) {
+    brpc_server_options.num_threads = FLAGS_client_bthread_worker_num;
   }
 
   uint32_t listen_port = 0;

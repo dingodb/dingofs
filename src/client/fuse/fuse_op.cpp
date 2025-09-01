@@ -31,13 +31,13 @@
 #include "client/vfs_wrapper/vfs_wrapper.h"
 #include "common/define.h"
 #include "common/status.h"
-#include "options/client/fuse/fuse_dynamic_option.h"
+#include "options/client/option.h"
 #include "utils/configuration.h"
 
 static dingofs::client::vfs::VFSWrapper* g_vfs = nullptr;
 
-USING_FLAG(fuse_file_info_direct_io)
-USING_FLAG(fuse_file_info_keep_cache)
+USING_FLAG(client_fuse_file_info_direct_io)
+USING_FLAG(client_fuse_file_info_keep_cache)
 
 using dingofs::Status;
 using dingofs::client::vfs::Attr;
@@ -401,8 +401,8 @@ void FuseOpOpen(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
     ReplyError(req, s);
   } else {
     fi->fh = fh;
-    fi->direct_io = FLAGS_fuse_file_info_direct_io ? 1 : 0;
-    fi->keep_cache = FLAGS_fuse_file_info_keep_cache ? 1 : 0;
+    fi->direct_io = FLAGS_client_fuse_file_info_direct_io ? 1 : 0;
+    fi->keep_cache = FLAGS_client_fuse_file_info_keep_cache ? 1 : 0;
     if (dingofs::IsInternalNode(ino)) {
       fi->direct_io = 1;
     }

@@ -40,7 +40,7 @@
 #include "fmt/ranges.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/synchronization.h"
-#include "options/client/vfs/meta/v2_dynamic_option.h"
+#include "options/client/option.h"
 #include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
@@ -211,7 +211,7 @@ Status RPC::SendRequest(const EndPoint& endpoint,
   int retry_count = 0;
   do {
     brpc::Controller cntl;
-    cntl.set_timeout_ms(FLAGS_rpc_timeout_ms);
+    cntl.set_timeout_ms(FLAGS_client_vfs_rpc_timeout_ms);
     cntl.set_log_id(butil::fast_rand());
 
     uint64_t start_us = mdsv2::Helper::TimestampUs();
@@ -271,7 +271,7 @@ Status RPC::SendRequest(const EndPoint& endpoint,
 
     bthread_usleep(CalWaitTimeUs(retry_count));
 
-  } while (++retry_count <= FLAGS_rpc_retry_times);
+  } while (++retry_count <= FLAGS_client_vfs_rpc_retry_times);
 
   AddFallbackEndpoint(endpoint);
 

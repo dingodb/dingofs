@@ -121,8 +121,8 @@ RPC::ChannelSPtr RPC::NewChannel(const EndPoint& endpoint) {  // NOLINT
   ChannelSPtr channel = std::make_shared<brpc::Channel>();
   brpc::ChannelOptions options;
   options.connect_timeout_ms = kConnectTimeoutMs;
-  options.timeout_ms = FLAGS_rpc_timeout_ms;
-  options.max_retry = FLAGS_rpc_retry_times;
+  options.timeout_ms = FLAGS_client_vfs_rpc_timeout_ms;
+  options.max_retry = FLAGS_client_vfs_rpc_retry_times;
   if (channel->Init(butil::ip2str(endpoint.ip).c_str(), endpoint.port,
                     &options) != 0) {
     LOG(ERROR) << fmt::format("[meta.rpc] init channel fail, addr({}).",

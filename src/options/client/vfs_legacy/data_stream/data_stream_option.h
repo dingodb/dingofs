@@ -18,7 +18,7 @@
 #define DINGOFS_SRC_CLIENT_OPTIONS_DATA_STREAM_OPTION_H_
 
 #include "common/const.h"
-#include "options/client/memory/page_option.h"
+#include "options/client/option.h"
 #include "utils/configuration.h"
 
 namespace dingofs {

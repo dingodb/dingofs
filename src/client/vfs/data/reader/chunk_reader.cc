@@ -34,7 +34,7 @@
 #include "client/vfs/data/reader/reader_common.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "common/status.h"
-#include "options/client/vfs/vfs_dynamic_option.h"
+#include "options/client/option.h"
 #include "trace/context.h"
 
 namespace dingofs {
@@ -241,7 +241,7 @@ void ChunkReader::DoRead(ContextSPtr ctx, const ChunkReadReq& req,
       InvalidateSlices(chunk_slices.version);
     }
   } while (ret.IsNotFound() &&
-           retry++ < FLAGS_vfs_read_max_retry_block_not_found);
+           retry++ < FLAGS_client_vfs_read_max_retry_block_not_found);
 
   VLOG(4) << fmt::format("{} ChunkReader Read End", UUID());
 

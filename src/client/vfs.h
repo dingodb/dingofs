@@ -24,7 +24,7 @@
 
 #include "client/meta/vfs_meta.h"
 #include "common/status.h"
-#include "options/client/fuse/fuse_option.h"
+#include "options/client/option.h"
 #include "trace/context.h"
 #include "trace/itracer.h"
 
@@ -32,7 +32,6 @@ namespace dingofs {
 
 namespace client {
 namespace vfs {
-
 
 struct VFSConfig {
   std::string mount_point;

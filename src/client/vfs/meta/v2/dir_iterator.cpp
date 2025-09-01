@@ -16,7 +16,7 @@
 
 #include <fmt/format.h>
 
-#include "options/client/vfs/meta/v2_option.h"
+#include "options/client/option.h"
 
 namespace dingofs {
 namespace client {
@@ -25,8 +25,9 @@ namespace v2 {
 
 Status DirIterator::Seek() {
   std::vector<DirEntry> entries;
-  auto status = mds_client_->ReadDir(ctx_, ino_, last_name_,
-                                     FLAGS_read_dir_batch_size, true, entries);
+  auto status =
+      mds_client_->ReadDir(ctx_, ino_, last_name_,
+                           FLAGS_client_vfs_read_dir_batch_size, true, entries);
   if (!status.ok()) {
     return status;
   }
@@ -55,8 +56,9 @@ void DirIterator::Next() {
   }
 
   std::vector<DirEntry> entries;
-  auto status = mds_client_->ReadDir(
-      ctx_, ino_, last_name_, FLAGS_read_dir_batch_size, with_attr_, entries);
+  auto status = mds_client_->ReadDir(ctx_, ino_, last_name_,
+                                     FLAGS_client_vfs_read_dir_batch_size,
+                                     with_attr_, entries);
   if (!status.ok()) {
     return;
   }

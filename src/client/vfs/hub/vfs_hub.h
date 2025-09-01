@@ -35,7 +35,7 @@
 #include "client/vfs/handle/handle_manager.h"
 #include "client/vfs/meta/meta_system.h"
 #include "common/status.h"
-#include "options/client/vfs/vfs_option.h"
+#include "options/client/option.h"
 #include "trace/itracer.h"
 #include "utils/executor/executor.h"
 

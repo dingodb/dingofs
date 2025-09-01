@@ -14,16 +14,9 @@
 # Define the BASE_FLAGS and DINGO_DEFAULT_COPTS variables
 
 add_library(client_options
-    fuse/fuse_dynamic_option.cc
-    fuse/fuse_option.cc
-    vfs/vfs_dynamic_option.cc
-    vfs/vfs_option.cc
-    vfs/meta/v2_dynamic_option.cc
-    vfs/meta/v2_option.cc
     vfs_legacy/vfs_legacy_dynamic_config.cc
     vfs_legacy/vfs_legacy_option.cc
-    client_dynamic_option.cc
-    common_option.cc
+    option.cc
 )
 
 target_link_libraries(client_options

@@ -21,8 +21,6 @@
 #include <string>
 
 #include "blockaccess/s3/s3_common.h"
-#include "options/client/client_dynamic_option.h"
-#include "options/client/common_option.h"
 #include "options/client/vfs_legacy/vfs_legacy_dynamic_config.h"
 #include "options/stub/dynamic_option.h"
 #include "options/trace/trace_dynamic_option.h"
@@ -132,7 +130,7 @@ static void InitFileSystemOption(utils::Configuration* c,
   c->GetValue("fs.writeback_suffix", &option->writeback_suffix);
   c->GetValueFatalIfFail("fs.disableXAttr", &option->disableXAttr);
   c->GetValueFatalIfFail("fs.maxNameLength", &option->maxNameLength);
-  c->GetValueFatalIfFail("fs.accessLogging", &FLAGS_access_logging);
+  c->GetValueFatalIfFail("fs.accessLogging", &FLAGS_client_access_logging);
   {  // kernel cache option
     auto* o = &option->kernelCacheOption;
     c->GetValueFatalIfFail("fs.kernelCache.attrTimeoutSec", &o->attrTimeoutSec);
@@ -228,8 +226,8 @@ void InitVFSLegacyOption(utils::Configuration* conf, VFSLegacyOption* option) {
   }
 
   if (!conf->GetIntValue("fuseClient.bthread_worker_num",
-                         &FLAGS_bthread_worker_num)) {
-    FLAGS_bthread_worker_num = 0;
+                         &FLAGS_client_bthread_worker_num)) {
+    FLAGS_client_bthread_worker_num = 0;
     LOG(INFO) << "Not found `fuseClient.bthread_worker_num` in conf, "
                  "default to 0";
   }
@@ -263,15 +261,15 @@ void InitVFSLegacyOption(utils::Configuration* conf, VFSLegacyOption* option) {
                             &FLAGS_fuseClientBurstReadIopsSecs);
 
   // logging
-  if (!conf->GetBoolValue("access_logging", &FLAGS_access_logging)) {
+  if (!conf->GetBoolValue("access_logging", &FLAGS_client_access_logging)) {
     LOG(INFO) << "Not found `access_logging` in conf, default: "
-              << FLAGS_access_logging;
+              << FLAGS_client_access_logging;
   }
   if (!conf->GetInt64Value("access_log_threshold_us",
-                           &FLAGS_access_log_threshold_us)) {
+                           &FLAGS_client_access_log_threshold_us)) {
     LOG(INFO) << "Not found `access_log_threshold_us` in conf, "
                  "default: "
-              << FLAGS_access_log_threshold_us;
+              << FLAGS_client_access_log_threshold_us;
   }
 
   if (!conf->GetBoolValue("mds_access_logging",

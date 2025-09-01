@@ -21,11 +21,11 @@
 #include <cstdint>
 #include <memory>
 
-#include "client/meta/vfs_meta.h"
 #include "client/const.h"
+#include "client/meta/vfs_meta.h"
 #include "client/vfs/data/flat/flat_file.h"
 #include "common/status.h"
-#include "options/client/vfs/vfs_dynamic_option.h"
+#include "options/client/option.h"
 
 namespace dingofs {
 namespace client {

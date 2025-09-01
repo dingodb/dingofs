@@ -19,7 +19,7 @@
 #include "common/status.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
-#include "options/client/vfs/vfs_dynamic_option.h"
+#include "options/client/option.h"
 #include "utils/executor/thread/executor_impl.h"
 #include "utils/string_util.h"
 
@@ -28,15 +28,16 @@ namespace client {
 namespace vfs {
 
 Status WarmupManagerImpl::Start() {
-  executor_ =
-      std::make_unique<ExecutorImpl>(fLI::FLAGS_vfs_warmup_executor_thread);
+  executor_ = std::make_unique<ExecutorImpl>(
+      fLI::FLAGS_client_vfs_warmup_executor_thread);
 
   LOG(INFO) << fmt::format(
       "warmupmanager start with params:\n executor num:{} \n \
           intime enbale:{}\n mtime interval:{} \n trigger interval {}",
-      FLAGS_vfs_warmup_executor_thread, FLAGS_vfs_intime_warmup_enable,
-      FLAGS_vfs_warmup_mtime_restart_interval_secs,
-      FLAGS_vfs_warmup_trigger_restart_interval_secs);
+      FLAGS_client_vfs_warmup_executor_thread,
+      FLAGS_client_vfs_intime_warmup_enable,
+      FLAGS_client_vfs_warmup_mtime_restart_interval_secs,
+      FLAGS_client_vfs_warmup_trigger_restart_interval_secs);
 
   if (!executor_->Start()) {
     LOG(ERROR) << "WarmupManagerImpl executor start failed";

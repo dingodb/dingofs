@@ -30,7 +30,7 @@
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/type.h"
 #include "mdsv2/filesystem/fs_info.h"
-#include "options/client/vfs/meta/v2_option.h"
+#include "options/client/option.h"
 #include "trace/context.h"
 
 namespace dingofs {
@@ -202,7 +202,7 @@ Status MDSClient::SendRequest(ContextSPtr ctx, GetMdsFn get_mds_fn,
       ctx ? ctx->TraceId() : std::to_string(mdsv2::Helper::TimestampNs()));
 
   request.mutable_context()->set_client_id(client_id_.ID());
-  for (int retry = 0; retry < FLAGS_client_send_request_retry; ++retry) {
+  for (int retry = 0; retry < FLAGS_client_vfs_rpc_retry_times; ++retry) {
     request.mutable_context()->set_epoch(epoch_);
 
     if (is_refresh_mds) mds_meta = get_mds_fn();

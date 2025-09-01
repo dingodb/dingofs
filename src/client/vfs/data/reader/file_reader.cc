@@ -30,7 +30,7 @@
 #include "client/vfs/data/reader/reader_common.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "common/status.h"
-#include "options/client/vfs/vfs_dynamic_option.h"
+#include "options/client/option.h"
 #include "trace/context.h"
 
 namespace dingofs {
@@ -100,11 +100,11 @@ Status FileReader::Read(ContextSPtr ctx, char* buf, uint64_t size,
   }
 
   uint64_t time_now = WarmupHelper::GetTimeSecs();
-  if (FLAGS_vfs_intime_warmup_enable &&
+  if (FLAGS_client_vfs_intime_warmup_enable &&
       ((time_now - last_intime_warmup_trigger_) >
-           FLAGS_vfs_warmup_trigger_restart_interval_secs ||
+           FLAGS_client_vfs_warmup_trigger_restart_interval_secs ||
        (attr.mtime - last_intime_warmup_mtime_) >
-           fLI64::FLAGS_vfs_warmup_mtime_restart_interval_secs)) {
+           fLI64::FLAGS_client_vfs_warmup_mtime_restart_interval_secs)) {
     WarmupInfo info(ino_);
     last_intime_warmup_trigger_ = time_now;
     last_intime_warmup_mtime_ = attr.mtime;
@@ -118,7 +118,7 @@ Status FileReader::Read(ContextSPtr ctx, char* buf, uint64_t size,
 
   uint64_t total_read_size = std::min(size, attr.length - offset);
 
-  if (FLAGS_vfs_file_prefetch_block_cnt > 0 &&
+  if (FLAGS_client_vfs_file_prefetch_block_cnt > 0 &&
       vfs_hub_->GetBlockCache()->HasCacheStore()) {
     vfs_hub_->GetPrefetchManager()->AsyncPrefetch(ino_, attr.length, offset,
                                                   total_read_size);

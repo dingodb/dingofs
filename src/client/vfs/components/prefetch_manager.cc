@@ -17,7 +17,7 @@
 #include "client/vfs/data/common/data_utils.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "common/status.h"
-#include "options/client/vfs/vfs_dynamic_option.h"
+#include "options/client/option.h"
 #include "utils/executor/thread/executor_impl.h"
 
 namespace dingofs {
@@ -28,8 +28,8 @@ using WriteLockGuard = dingofs::utils::WriteLockGuard;
 using ReadLockGuard = dingofs::utils::ReadLockGuard;
 
 Status PrefecthManager::Start() {
-  prefetch_executor_ =
-      std::make_unique<ExecutorImpl>(FLAGS_vfs_file_prefetch_executor_num);
+  prefetch_executor_ = std::make_unique<ExecutorImpl>(
+      FLAGS_client_vfs_file_prefetch_executor_num);
   auto ok = prefetch_executor_->Start();
   if (!ok) {
     LOG(ERROR) << "start prefetch manager executor failed.";
@@ -39,7 +39,8 @@ Status PrefecthManager::Start() {
   LOG(INFO) << fmt::format(
       "PrefetchManager started prefetch block:{} executor num:{} has cache "
       "store:{}",
-      FLAGS_vfs_file_prefetch_block_cnt, FLAGS_vfs_file_prefetch_executor_num,
+      FLAGS_client_vfs_file_prefetch_block_cnt,
+      FLAGS_client_vfs_file_prefetch_executor_num,
       hub_->GetBlockCache()->HasCacheStore());
 
   return Status::OK();
@@ -141,7 +142,7 @@ void PrefecthManager::DoPrefetch(Ino ino, uint64_t file_len, uint64_t start,
   auto span = hub_->GetTracer()->StartSpan(kVFSDataMoudule, __func__);
   std::vector<BlockPrefetch> block_keys;
   uint64_t block_size = hub_->GetFsInfo().block_size;
-  uint64_t prefecth_block_cnt = FLAGS_vfs_file_prefetch_block_cnt;
+  uint64_t prefecth_block_cnt = FLAGS_client_vfs_file_prefetch_block_cnt;
 
   if (prefecth_block_cnt == 0) {
     return;

@@ -25,7 +25,7 @@
 
 #include "client/vfs/handle/handle_manager.h"
 #include "client/vfs/hub/vfs_hub.h"
-#include "options/client/vfs/vfs_dynamic_option.h"
+#include "options/client/option.h"
 
 namespace dingofs {
 namespace client {
@@ -103,8 +103,9 @@ void PeriodicFlushManager::FlushHandle(uint64_t fh) {
   VLOG(4) << "Submitted flush for handle: " << handle->ToString()
           << " with seq_id: " << seq_id;
 
-  vfs_hub_->GetFlushExecutor()->Schedule([this, fh] { FlushHandle(fh); },
-                                         FLAGS_vfs_periodic_flush_interval_ms);
+  vfs_hub_->GetFlushExecutor()->Schedule(
+      [this, fh] { FlushHandle(fh); },
+      FLAGS_client_vfs_periodic_flush_interval_ms);
 }
 
 void PeriodicFlushManager::SubmitToFlush(HandleSPtr handle) {
@@ -126,8 +127,9 @@ void PeriodicFlushManager::SubmitToFlush(HandleSPtr handle) {
     }
   }
 
-  vfs_hub_->GetFlushExecutor()->Schedule([this, fh] { FlushHandle(fh); },
-                                         FLAGS_vfs_periodic_flush_interval_ms);
+  vfs_hub_->GetFlushExecutor()->Schedule(
+      [this, fh] { FlushHandle(fh); },
+      FLAGS_client_vfs_periodic_flush_interval_ms);
 }
 
 }  // namespace vfs

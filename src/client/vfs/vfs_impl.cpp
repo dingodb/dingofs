@@ -37,7 +37,7 @@
 #include "fmt/format.h"
 #include "glog/logging.h"
 #include "metrics/metrics_dumper.h"
-#include "options/client/common_option.h"
+#include "options/client/option.h"
 #include "trace/context.h"
 #include "utils/configuration.h"
 #include "utils/net_common.h"
@@ -520,8 +520,8 @@ Status VFSImpl::StartBrpcServer() {
   }
 
   brpc::ServerOptions brpc_server_options;
-  if (FLAGS_bthread_worker_num > 0) {
-    brpc_server_options.num_threads = FLAGS_bthread_worker_num;
+  if (FLAGS_client_bthread_worker_num > 0) {
+    brpc_server_options.num_threads = FLAGS_client_bthread_worker_num;
   }
 
   rc = brpc_server_.Start(vfs_option_.dummy_server_port, &brpc_server_options);

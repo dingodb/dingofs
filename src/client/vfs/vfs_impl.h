@@ -26,7 +26,7 @@
 #include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/meta/meta_system.h"
 #include "client/vfs/service/inode_blocks_service.h"
-#include "options/client/vfs/vfs_option.h"
+#include "options/client/option.h"
 #include "trace/context.h"
 
 namespace dingofs {
