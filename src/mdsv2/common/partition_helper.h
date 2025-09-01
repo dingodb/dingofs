@@ -28,6 +28,8 @@ class HashPartitionHelper {
   static std::map<uint64_t, BucketSetEntry> AdjustDistribution(PartitionPolicy partition_policy,
                                                                const std::set<uint64_t>& online_mds_ids,
                                                                const std::set<uint64_t>& offline_mds_ids);
+
+  static bool CheckHashPartition(const HashPartitionEntry& hash);
 };
 
 }  // namespace mdsv2

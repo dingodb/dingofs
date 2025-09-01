@@ -34,10 +34,18 @@ void InitLog(const std::string& log_dir) {
   std::string program_name = "mdsv2_unit_test";
 
   google::InitGoogleLogging(program_name.c_str());
-  google::SetLogDestination(google::GLOG_INFO, fmt::format("{}/{}.info.log.", log_dir, program_name).c_str());
-  google::SetLogDestination(google::GLOG_WARNING, fmt::format("{}/{}.warn.log.", log_dir, program_name).c_str());
-  google::SetLogDestination(google::GLOG_ERROR, fmt::format("{}/{}.error.log.", log_dir, program_name).c_str());
-  google::SetLogDestination(google::GLOG_FATAL, fmt::format("{}/{}.fatal.log.", log_dir, program_name).c_str());
+  google::SetLogDestination(
+      google::GLOG_INFO,
+      fmt::format("{}/{}.info.log.", log_dir, program_name).c_str());
+  google::SetLogDestination(
+      google::GLOG_WARNING,
+      fmt::format("{}/{}.warn.log.", log_dir, program_name).c_str());
+  google::SetLogDestination(
+      google::GLOG_ERROR,
+      fmt::format("{}/{}.error.log.", log_dir, program_name).c_str());
+  google::SetLogDestination(
+      google::GLOG_FATAL,
+      fmt::format("{}/{}.fatal.log.", log_dir, program_name).c_str());
   google::SetStderrLogging(google::GLOG_FATAL);
 }
 
@@ -60,6 +68,7 @@ int main(int argc, char** argv) {
     default_run_case += ":CoorDistributionLockTest.*";
     default_run_case += ":MutationMergerTest.*";
     default_run_case += ":MutationProcessorTest.*";
+    default_run_case += ":HashPartitionHelperTest.*";
 
     testing::GTEST_FLAG(filter) = default_run_case;
   }

@@ -44,6 +44,7 @@ using PartitionPolicy = pb::mdsv2::PartitionPolicy;
 using FsOpLog = pb::mdsv2::FsOpLog;
 using FileType = pb::mdsv2::FileType;
 using CacheMemberEntry = pb::mdsv2::CacheGroupMember;
+using HashPartitionEntry = pb::mdsv2::HashPartition;
 using BucketSetEntry = pb::mdsv2::HashPartition::BucketSet;
 using DeltaSliceEntry = pb::mdsv2::WriteSliceRequest::DeltaSlice;
 

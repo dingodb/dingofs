@@ -17,8 +17,8 @@
 #include <cstdint>
 #include <vector>
 
-#include "glog/logging.h"
 #include "mdsv2/common/helper.h"
+#include "mdsv2/common/logging.h"
 #include "mdsv2/mds/mds_helper.h"
 
 namespace dingofs {
@@ -131,6 +131,49 @@ std::map<uint64_t, BucketSetEntry> HashPartitionHelper::AdjustDistribution(Parti
   }
 
   return distributions;
+}
+
+// check whether the hash partition is valid
+// 1. bucket_ids should be unique
+// 2. bucket_ids should be in range [0, bucket_num)
+// 3. bucket_ids size should be equal to bucket_num
+// 4. bucket_ids should not be empty
+// 5. bucket_num should be greater than 0
+bool HashPartitionHelper::CheckHashPartition(const HashPartitionEntry& hash) {
+  if (hash.bucket_num() == 0) {
+    DINGO_LOG(ERROR) << "[fs] bucket_num should be greater than 0.";
+    return false;
+  }
+
+  std::set<uint32_t> bucket_ids;
+  for (const auto& [mds_id, bucket_set] : hash.distributions()) {
+    if (bucket_set.bucket_ids().empty()) {
+      DINGO_LOG(ERROR) << fmt::format("[fs] bucket_ids should not be empty for mds_id({}).", mds_id);
+      return false;
+    }
+
+    for (const auto& bucket_id : bucket_set.bucket_ids()) {
+      if (bucket_id >= hash.bucket_num()) {
+        DINGO_LOG(ERROR) << fmt::format("[fs] bucket_id({}) should be in range [0, {}).", bucket_id, hash.bucket_num());
+        return false;
+      }
+
+      if (bucket_ids.count(bucket_id) > 0) {
+        DINGO_LOG(ERROR) << fmt::format("[fs] bucket_id({}) should be unique.", bucket_id);
+        return false;
+      }
+
+      bucket_ids.insert(bucket_id);
+    }
+  }
+
+  if (bucket_ids.size() != hash.bucket_num()) {
+    DINGO_LOG(ERROR) << fmt::format("[fs] bucket_ids size({}) should be equal to bucket_num({}).", bucket_ids.size(),
+                                    hash.bucket_num());
+    return false;
+  }
+
+  return true;
 }
 
 }  // namespace mdsv2
