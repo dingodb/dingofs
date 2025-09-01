@@ -133,6 +133,7 @@ Status CacheGroupMemberManager::JoinCacheGroup(Context& ctx, const std::string& 
       if (CheckMatchMember(ip, port, cache_member)) {
         cache_member.set_weight(weight);
         cache_member.set_group_name(group_name);
+        cache_member.set_locked(true);
       } else {
         // not match and locked
         if (CheckMemberLocked(cache_member)) {
@@ -202,6 +203,10 @@ Status CacheGroupMemberManager::UnlockMember(Context& ctx, const std::string& me
       return Status(pb::error::Errno::ENOT_MATCH, "cache member not match");
     }
 
+    if (!CheckMemberOffLine(cache_member)) {
+      return Status(pb::error::Errno::EINVALID_STATE, "cache member state not offline");
+    }
+
     cache_member.set_locked(false);
     return Status::OK();
   };
@@ -209,11 +214,48 @@ Status CacheGroupMemberManager::UnlockMember(Context& ctx, const std::string& me
   return UpsertCacheMember(ctx, member_id, handler);
 }
 
+Status CacheGroupMemberManager::GetCacheMember(Context& ctx, const std::string& member_id,
+                                               CacheMemberEntry& cache_member) {
+  if (FLAGS_mds_cache_member_enable_cache) {
+    utils::ReadLockGuard lock(lock_);
+
+    auto it = member_cache_.find(member_id);
+    if (it != member_cache_.end()) {
+      cache_member = it->second;
+      return Status::OK();
+    }
+  }
+
+  auto& trace = ctx.GetTrace();
+  GetCacheMemberOperation operation(trace, member_id);
+  auto status = operation_processor_->RunAlone(&operation);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[cachegroup] get cache member fail, error({}).", status.error_str());
+    return status;
+  }
+
+  auto& result = operation.GetResult();
+  cache_member = std::move(result.cache_member);
+
+  UpsertCacheMemberToCache(cache_member);
+  return Status::OK();
+}
+
 Status CacheGroupMemberManager::DeleteMember(Context& ctx, const std::string& member_id) {
+  CacheMemberEntry cache_member;
+  auto status = GetCacheMember(ctx, member_id, cache_member);
+  if (!status.ok()) {
+    return status;
+  }
+
+  if (!CheckMemberOffLine(cache_member)) {
+    return Status(pb::error::Errno::EINVALID_STATE, "cache member state not offline");
+  }
+
   auto& trace = ctx.GetTrace();
   DeleteCacheMemberOperation operation(trace, member_id);
 
-  auto status = operation_processor_->RunAlone(&operation);
+  status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("[cachegroup] delete cache member fail, error({}).", status.error_str());
     return status;
@@ -261,6 +303,13 @@ bool CacheGroupMemberManager::CheckMatchMember(std::string ip, uint32_t port, Ca
 }
 
 bool CacheGroupMemberManager::CheckMemberLocked(CacheMemberEntry& cache_member) { return cache_member.locked(); }
+
+bool CacheGroupMemberManager::CheckMemberOffLine(CacheMemberEntry& cache_member) {
+  return cache_member.last_online_time_ms() + FLAGS_cache_member_heartbeat_offline_timeout_s * 1000 <
+                 static_cast<uint64_t>(Helper::TimestampMs())
+             ? true
+             : false;
+}
 
 void CacheGroupMemberManager::UpsertCacheMemberToCache(const CacheMemberEntry& cache_member) {
   if (!FLAGS_mds_cache_member_enable_cache) {

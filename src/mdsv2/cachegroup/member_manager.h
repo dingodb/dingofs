@@ -68,11 +68,15 @@ class CacheGroupMemberManager {
   Status UpsertCacheMember(Context& ctx, const std::string& member_id,
                            std::function<Status(CacheMemberEntry&, const Status&)> handler);
 
+  Status GetCacheMember(Context& ctx, const std::string& member_id, CacheMemberEntry& cache_member);
+
   Status ListCacheMemberFromStore(Context& ctx, std::vector<CacheMemberEntry>& cache_member_entries);
 
   bool CheckMatchMember(std::string ip, uint32_t port, CacheMemberEntry& cache_member);
 
   bool CheckMemberLocked(CacheMemberEntry& cache_member);
+
+  bool CheckMemberOffLine(CacheMemberEntry& cache_member);
 
   void UpsertCacheMemberToCache(const CacheMemberEntry& cache_member);
   void DeleteCacheMemberFromCache(const std::string& member_id);
