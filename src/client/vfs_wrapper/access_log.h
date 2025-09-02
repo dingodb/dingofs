@@ -44,8 +44,8 @@ bool InitAccessLog(const std::string& prefix);
 struct AccessLogGuard {
   using MessageHandler = std::function<std::string()>;
 
-  explicit AccessLogGuard(MessageHandler handler)
-      : enable(FLAGS_client_access_logging), handler(handler) {
+  explicit AccessLogGuard(MessageHandler handler, bool enable = true)
+      : enable(FLAGS_client_access_logging && enable), handler(handler) {
     if (!enable) {
       return;
     }
