@@ -17,6 +17,7 @@ add_library(rados_accesser
 )
 
 target_link_libraries(rados_accesser
+    block_access_options
     ceph::rados
     brpc::brpc
     absl::cleanup

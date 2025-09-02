@@ -12,23 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(blockaccess)
-add_subdirectory(stub)
-add_subdirectory(client)
-add_subdirectory(common)
-add_subdirectory(trace)
-
-file(GLOB DINGOFS_OPTIONS_LIB_SRCS
-    "cache/*.cpp"
-    "mdsv2/*.cpp"
-    "trace/*.cc"
-    "options.cpp"
+add_library(block_access_options
+    option.cc
 )
-
-add_library(dingofs_options ${DINGOFS_OPTIONS_LIB_SRCS})
-
-target_link_libraries(dingofs_options
-    toml11::toml11
+target_link_libraries(block_access_options
     gflags::gflags
-    glog::glog
 )

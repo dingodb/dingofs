@@ -16,6 +16,7 @@
 
 #include "options/client/option.h"
 
+#include "options/blockaccess/option.h"
 #include "options/gflag_validator.h"
 #include "options/trace/trace_dynamic_option.h"
 #include "utils/configuration.h"
@@ -173,6 +174,13 @@ void InitFuseOption(utils::Configuration* c, FuseOption* option) {
 }
 
 void InitVFSOption(utils::Configuration* conf, VFSOption* option) {
+  if (!conf->GetIntValue("block_access.rados.rados_op_timeout",
+                         &blockaccess::FLAGS_rados_op_timeout)) {
+    LOG(INFO) << "Not found `block_access.rados.rados_op_timeout` in conf, "
+                 "default to "
+              << blockaccess::FLAGS_rados_op_timeout;
+  }
+
   blockaccess::InitAwsSdkConfig(
       conf, &option->block_access_opt.s3_options.aws_sdk_config);
   blockaccess::InitBlockAccesserThrottleOptions(

@@ -25,9 +25,11 @@
 #include <cstring>
 #include <functional>
 #include <memory>
+#include <string>
 #include <variant>
 
 #include "common/status.h"
+#include "options/blockaccess/option.h"
 
 namespace dingofs {
 namespace blockaccess {
@@ -78,6 +80,14 @@ bool RadosAccesser::Init() {
   if (err < 0) {
     LOG(ERROR) << "Failed to set key: " << options_.key
                << ", err: " << strerror(-err);
+    return false;
+  }
+
+  err = rados_conf_set(cluster_, "rados_osd_op_timeout",
+                       std::to_string(FLAGS_rados_op_timeout).c_str());
+  if (err < 0) {
+    LOG(ERROR) << "Failed to set rados_osd_op_timeout, value: "
+               << FLAGS_rados_op_timeout << ", err: " << strerror(-err);
     return false;
   }
 
