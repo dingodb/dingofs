@@ -39,7 +39,6 @@
 #include "client/vfs_wrapper/access_log.h"
 #include "common/rpc_stream.h"
 #include "common/status.h"
-#include "metrics/blockaccess/block_accesser.h"
 #include "metrics/client/client.h"
 #include "metrics/metric_guard.h"
 #include "options/client/option.h"
@@ -79,16 +78,23 @@ static Status LoadConfig(const std::string& config_path,
 }
 
 static Status InitLog() {
-  // Todo: remove InitMetaAccessLog when vfs is ready,  used by vfs old and old
-  // metaserver
   bool succ = dingofs::client::InitAccessLog(FLAGS_log_dir) &&
               dingofs::cache::InitCacheTraceLog(FLAGS_log_dir) &&
               blockaccess::InitBlockAccessLog(FLAGS_log_dir) &&
-              dingofs::client::vfs::InitMetaLog(FLAGS_log_dir) &&
+              dingofs::client::vfs::InitMetaLog(FLAGS_log_dir);
+
+  CHECK(succ) << "init log failed, unexpected!";
+  return Status::OK();
+}
+
+static Status InitLegacyLog() {
+  bool succ = dingofs::client::InitAccessLog(FLAGS_log_dir) &&
+              dingofs::cache::InitCacheTraceLog(FLAGS_log_dir) &&
+              blockaccess::InitBlockAccessLog(FLAGS_log_dir) &&
               dingofs::stub::InitMetaAccessLog(FLAGS_log_dir) &&
               dingofs::stub::InitMdsAccessLog(FLAGS_log_dir);
 
-  CHECK(succ) << "Init log failed, unexpected!";
+  CHECK(succ) << "init log failed, unexpected!";
   return Status::OK();
 }
 
@@ -116,35 +122,37 @@ Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
   }
 
   // init client option
+  bool is_legacy = false;
   VFSOption vfs_option;
   VFSLegacyOption vfs_legacy_option;
   if (vfs_conf.fs_type == "vfs" || vfs_conf.fs_type == "vfs_v1" ||
       vfs_conf.fs_type == "vfs_v2" || vfs_conf.fs_type == "vfs_dummy") {
+    is_legacy = false;
     InitVFSOption(&conf_, &vfs_option);
+
+    s = InitLog();
+    if (!s.ok()) return s;
+
   } else {
+    is_legacy = true;
     InitVFSLegacyOption(&conf_, &vfs_legacy_option);
-  }
 
-  // init log
-  s = InitLog();
-  if (!s.ok()) {
-    return s;
+    s = InitLegacyLog();
+    if (!s.ok()) return s;
   }
-
-  int32_t bthread_worker_num = dingofs::client::FLAGS_client_bthread_worker_num;
-  if (bthread_worker_num > 0) {
-    bthread_setconcurrency(bthread_worker_num);
-    LOG(INFO) << "set bthread concurrency to " << bthread_worker_num
-              << " actual concurrency:" << bthread_getconcurrency();
-  }
-
   LOG(INFO) << "use vfs type: " << vfs_conf.fs_type;
 
-  client_op_metric_ = std::make_unique<metrics::client::ClientOpMetric>();
-  if (vfs_conf.fs_type == "vfs" || vfs_conf.fs_type == "vfs_v1" ||
-      vfs_conf.fs_type == "vfs_v2" || vfs_conf.fs_type == "vfs_dummy") {
-    vfs_ = std::make_unique<vfs::VFSImpl>(vfs_option);
+  if (FLAGS_client_bthread_worker_num > 0) {
+    bthread_setconcurrency(FLAGS_client_bthread_worker_num);
+    LOG(INFO) << fmt::format(
+        "set bthread concurrency({}) actual concurrency({}).",
+        FLAGS_client_bthread_worker_num, bthread_getconcurrency());
+  }
 
+  client_op_metric_ = std::make_unique<metrics::client::ClientOpMetric>();
+
+  if (!is_legacy) {
+    vfs_ = std::make_unique<vfs::VFSImpl>(vfs_option);
   } else {
     vfs_ = std::make_unique<vfs::VFSOld>(vfs_legacy_option);
   }
