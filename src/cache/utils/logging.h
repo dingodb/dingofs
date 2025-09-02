@@ -30,7 +30,6 @@ namespace cache {
 void InitLogging(const char* argv0);
 
 bool InitCacheTraceLog(const std::string& log_dir);
-
 void ShutdownCacheTraceLog();
 
 void LogTrace(const std::string& message);

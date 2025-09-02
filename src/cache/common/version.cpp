@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "cache/version.h"
+#include "cache/common/version.h"
 
 #include <glog/logging.h>
 

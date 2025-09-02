@@ -26,7 +26,7 @@
 namespace dingofs {
 namespace cache {
 
-int Run();
+int Run(int argc, char** argv);
 
 }  // namespace cache
 }  // namespace dingofs

@@ -24,6 +24,7 @@
 #define DINGOFS_SRC_CACHE_VERSION_H_
 
 #include <string>
+
 namespace dingofs {
 namespace cache {
 

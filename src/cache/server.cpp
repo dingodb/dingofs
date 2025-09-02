@@ -20,43 +20,89 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include <gflags/gflags.h>
-#include <gflags/gflags_declare.h>
+#include <iostream>
 
 #include "cache/cachegroup/cache_group_node_server.h"
+#include "cache/common/flag.h"
+#include "cache/common/version.h"
 #include "cache/utils/logging.h"
 #include "cache/utils/offload_thread_pool.h"
+#include "options/cache/option.h"
 
 namespace brpc {
 DECLARE_bool(graceful_quit_on_sigterm);
-DECLARE_int32(max_connection_pool_size);
 }  // namespace brpc
 
 namespace dingofs {
 namespace cache {
 
-static void InitBrpcFlags() { brpc::FLAGS_graceful_quit_on_sigterm = true; }
+static FlagsInfo flags;
 
-static void GlobalInitOrDie() {
-  InitLogging("dingo-cache");
-  InitBrpcFlags();
-  OffloadThreadPool::GetInstance().Start();
+static int HandleFlags(int argc, char** argv) {
+  flags = FlagsHelper::Parse(argc, argv);
+  if (flags.show_help) {
+    std::cout << FlagsHelper::GenHelp(flags) << "\n";
+    return 1;
+  } else if (flags.show_version) {
+    std::cout << Version() << "\n";
+    return 1;
+  } else if (flags.create_template) {
+    std::cout << FlagsHelper::GenTemplate(flags);
+    return 1;
+  }
+
+  // validate flags
+  if (FLAGS_mds_version == "v1" && !FLAGS_id.empty()) {
+    std::cerr << "MDS v1 does not support cache node id, please remove the "
+                 "--id flag.\n";
+    return -1;
+  } else if (FLAGS_mds_version == "v2" && FLAGS_id.empty()) {
+    std::cerr << "MDS v2 requires cache node id, please set it by --id\n";
+    return -1;
+  } else if (FLAGS_cache_store != "disk") {
+    std::cerr
+        << "MUST using disk cache store, please set it by --cache_store\n";
+    return -1;
+  } else if (!FLAGS_enable_stage) {
+    std::cerr << "MUST enable stage, please set it by --enable_stage\n";
+    return -1;
+  } else if (!FLAGS_enable_cache) {
+    std::cerr << "MUST enable cache, please set it by --enable_cache\n";
+    return -1;
+  }
+  return 0;
 }
 
-static Status StartServer() {
+static void InitGlog() { InitLogging("dingo-cache"); }
+static void LogFlags() { LOG(INFO) << FlagsHelper::GenCurrentFlags(flags); }
+static void InitBrpcFlags() { brpc::FLAGS_graceful_quit_on_sigterm = true; }
+static void InitThreadPool() { OffloadThreadPool::GetInstance().Start(); }
+static void GlobalInitOrDie() {
+  InitGlog();
+  LogFlags();
+  InitBrpcFlags();
+  InitThreadPool();
+}
+
+static int StartServer() {
   CacheGroupNodeServerImpl server;
   auto status = server.Start();
   if (!status.ok()) {
-    return status;
+    return -1;
   }
 
   server.Shutdown();
-  return Status::OK();
+  return 0;
 }
 
-int Run() {
+int Run(int argc, char** argv) {
+  int rc = HandleFlags(argc, argv);
+  if (rc != 0) {
+    return rc;
+  }
+
   GlobalInitOrDie();
-  return StartServer().ok() ? 0 : -1;
+  return StartServer();
 }
 
 }  // namespace cache

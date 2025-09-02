@@ -23,8 +23,6 @@ add_subdirectory(tiercache)
 add_subdirectory(benchmark)
 
 file(GLOB CACHE_LIB_SRCS
-    "usage.cpp"
-    "version.cpp"
     "server.cpp"
 )
 add_library(cache_lib ${CACHE_LIB_SRCS})
