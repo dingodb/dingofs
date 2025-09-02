@@ -133,7 +133,8 @@ void AwsLegacyS3Client::Init(const S3Options& options) {
 
   {
     // init config
-    auto config = std::make_unique<Aws::Client::ClientConfiguration>();
+    auto config = std::make_unique<Aws::Client::ClientConfiguration>(
+        Aws::Client::ClientConfigurationInitValues{.shouldDisableIMDS = true});
     config->endpointOverride = s3_options_.s3_info.endpoint;
     // config->scheme = Aws::Http::Scheme(s3_options_.aws_sdk_config.scheme);
     config->verifySSL = s3_options_.aws_sdk_config.verify_ssl;
