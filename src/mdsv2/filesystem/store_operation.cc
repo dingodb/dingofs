@@ -424,7 +424,7 @@ Status DeleteFsOperation::Run(TxnUPtr& txn) {
 
   auto fs_info = MetaCodec::DecodeFsValue(value);
   if (!is_force_ && fs_info.mount_points_size() > 0) {
-    return Status(pb::error::EEXISTED, "Fs exist mount point.");
+    return Status(pb::error::EEXISTED, "fs exist mount point.");
   }
 
   txn->Delete(fs_key);
@@ -665,7 +665,7 @@ Status UpdateAttrOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std:
   }
 
   if (to_set_ & kSetAttrLength) {
-    ExpandChunk(txn, attr, attr_.length());
+    // ExpandChunk(txn, attr, attr_.length());
     attr.set_length(attr_.length());
   }
 
@@ -2304,6 +2304,10 @@ Status OperationProcessor::RunAlone(Operation* operation) {
   do {
     Duration once_duration;
     auto txn = kv_storage_->NewTxn();
+    if (txn == nullptr) {
+      status = Status(pb::error::EBACKEND_STORE, "new transaction fail");
+      continue;
+    }
     txn_id = txn->ID();
 
     status = operation->Run(txn);
@@ -2502,6 +2506,10 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
     Duration once_duration;
 
     auto txn = kv_storage_->NewTxn();
+    if (txn == nullptr) {
+      status = Status(pb::error::EBACKEND_STORE, "new transaction fail");
+      continue;
+    }
     txn_id = txn->ID();
 
     std::vector<KeyValue> prefetch_kvs;

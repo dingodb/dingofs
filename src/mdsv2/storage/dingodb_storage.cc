@@ -27,7 +27,6 @@
 #include "mdsv2/common/synchronization.h"
 
 namespace dingofs {
-
 namespace mdsv2 {
 
 DEFINE_int32(mds_storage_dingodb_replica_num, 3, "backend store replicas");
@@ -35,6 +34,7 @@ DEFINE_int32(mds_storage_dingodb_replica_num, 3, "backend store replicas");
 DEFINE_int32(mds_storage_dingodb_scan_batch_size, 100000, "dingodb scan batch size");
 
 DECLARE_uint32(mds_scan_batch_size);
+DECLARE_uint32(mds_txn_max_retry_times);
 
 const uint32_t kTxnKeepAliveMs = 10 * 1000;
 
@@ -46,7 +46,7 @@ static void KvPairsToKeyValues(const std::vector<dingodb::sdk::KVPair>& kv_pairs
 }
 
 bool DingodbStorage::Init(const std::string& addr) {
-  DINGO_LOG(INFO) << fmt::format("init dingo storage, addr({}).", addr);
+  DINGO_LOG(INFO) << fmt::format("[storage] init dingo storage, addr({}).", addr);
 
   dingodb::sdk::ShowSdkVersion();
 
@@ -57,7 +57,7 @@ bool DingodbStorage::Init(const std::string& addr) {
 }
 
 bool DingodbStorage::Destroy() {
-  DINGO_LOG(INFO) << "destroy dingo storage.";
+  DINGO_LOG(INFO) << "[storage] destroy dingo storage.";
 
   delete client_;
 
@@ -129,8 +129,13 @@ DingodbStorage::SdkTxnUPtr DingodbStorage::NewSdkTxn() {
   options.keep_alive_ms = kTxnKeepAliveMs;
 
   dingodb::sdk::Transaction* txn = nullptr;
-  auto status = client_->NewTransaction(options, &txn);
-  CHECK(status.ok()) << fmt::format("new transaction fail, error: {}", status.ToString());
+  uint32_t retry = 0;
+  do {
+    auto status = client_->NewTransaction(options, &txn);
+    if (status.ok()) break;
+
+    DINGO_LOG(ERROR) << fmt::format("[storage] new transaction fail, retry({}) error({}).", retry, status.ToString());
+  } while (++retry <= FLAGS_mds_txn_max_retry_times);
 
   return DingodbStorage::SdkTxnUPtr(txn);
 }

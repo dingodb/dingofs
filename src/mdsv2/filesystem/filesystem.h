@@ -384,10 +384,12 @@ class FileSystemSet {
   FileSystemSPtr GetFileSystem(uint32_t fs_id);
   FileSystemSPtr GetFileSystem(const std::string& fs_name);
   uint32_t GetFsId(const std::string& fs_name);
+  std::string GetFsName(uint32_t fs_id);
   std::string GetFsName(const std::string& client_id);
   std::vector<FileSystemSPtr> GetAllFileSystem();
-
   Status CheckMdsNormal(const std::vector<uint64_t>& mds_ids);
+
+  std::vector<std::string> GetAllClientId();
 
   Status JoinFs(Context& ctx, uint32_t fs_id, const std::vector<uint64_t>& mds_ids, const std::string& reason);
   Status JoinFs(Context& ctx, const std::string& fs_name, const std::vector<uint64_t>& mds_ids,

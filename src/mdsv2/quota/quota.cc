@@ -515,7 +515,10 @@ Status QuotaManager::DeleteDirQuota(Trace& trace, Ino ino) {
 
   auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[quota.{}.{}] delete dir quota fail, status({}).", fs_id, ino, status.error_str());
+    if (status.error_code() != pb::error::ENOT_FOUND) {
+      DINGO_LOG(ERROR) << fmt::format("[quota.{}.{}] delete dir quota fail, status({}).", fs_id, ino,
+                                      status.error_str());
+    }
     return status;
   }
 

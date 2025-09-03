@@ -831,10 +831,11 @@ bool RestoreCommandRunner::Run(const Options& options, const std::string& coor_a
   }
 
   if (options.type == Helper::ToLowerCase("meta")) {
-    auto status = restore.RestoreMetaTable(restore_options);
-    if (!status.ok()) {
-      std::cerr << fmt::format("restore meta table fail, status({}).", status.error_str()) << '\n';
-    }
+    // auto status = restore.RestoreMetaTable(restore_options);
+    // if (!status.ok()) {
+    //   std::cerr << fmt::format("restore meta table fail, status({}).", status.error_str()) << '\n';
+    // }
+    std::cerr << "not support restore meta table." << '\n';
 
   } else if (options.type == Helper::ToLowerCase("fsmeta")) {
     auto status = restore.RestoreFsMetaTable(restore_options, options.fs_id);

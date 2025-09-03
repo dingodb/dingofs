@@ -2209,8 +2209,8 @@ void FileSystem::RefreshFsInfo(const FsInfoEntry& fs_info) {
   if (fs_info_->Update(fs_info, pre_handler)) {
     can_serve_.store(CanServe(self_mds_id_), std::memory_order_release);
 
-    DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] update fs({}) can_serve({}).", fs_id_, duration.ElapsedUs(),
-                                   fs_info.fs_name(), can_serve_ ? "true" : "false");
+    DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] update fs({} v{}) can_serve({}).", fs_id_, duration.ElapsedUs(),
+                                   fs_info.fs_name(), fs_info.version(), can_serve_ ? "true" : "false");
   }
 }
 
@@ -2949,16 +2949,14 @@ Status FileSystemSet::UpdateFsInfo(Context& ctx, const std::string& fs_name, con
 Status FileSystemSet::GetFsInfo(Context& ctx, const std::string& fs_name, FsInfoEntry& fs_info) {
   auto& trace = ctx.GetTrace();
 
-  std::string fs_key = MetaCodec::EncodeFsKey(fs_name);
-  std::string value;
-  Status status = kv_storage_->Get(fs_key, value);
-  if (!status.ok()) {
-    return Status(pb::error::ENOT_FOUND, fmt::format("not found fs({}), {}.", fs_name, status.error_str()));
-  }
+  GetFsOperation operation(trace, fs_name);
 
-  trace.RecordElapsedTime("store_operate");
+  auto status = RunOperation(&operation);
+  if (!status.ok()) return status;
 
-  fs_info = MetaCodec::DecodeFsValue(value);
+  auto& result = operation.GetResult();
+
+  fs_info = result.fs_info;
 
   return Status::OK();
 }
@@ -3063,6 +3061,13 @@ uint32_t FileSystemSet::GetFsId(const std::string& fs_name) {
   return 0;
 }
 
+std::string FileSystemSet::GetFsName(uint32_t fs_id) {
+  utils::ReadLockGuard lk(lock_);
+
+  auto it = fs_map_.find(fs_id);
+  return it != fs_map_.end() ? it->second->FsName() : "";
+}
+
 std::string FileSystemSet::GetFsName(const std::string& client_id) {
   utils::ReadLockGuard lk(lock_);
 
@@ -3098,6 +3103,20 @@ Status FileSystemSet::CheckMdsNormal(const std::vector<uint64_t>& mds_ids) {
   }
 
   return Status::OK();
+}
+
+std::vector<std::string> FileSystemSet::GetAllClientId() {
+  utils::ReadLockGuard lk(lock_);
+
+  std::vector<std::string> client_ids;
+  for (const auto& [fs_id, fs] : fs_map_) {
+    auto fs_info = fs->GetFsInfo();
+    for (const auto& mountpoint : fs_info.mount_points()) {
+      client_ids.push_back(mountpoint.client_id());
+    }
+  }
+
+  return client_ids;
 }
 
 Status FileSystemSet::JoinFs(Context& ctx, uint32_t fs_id, const std::vector<uint64_t>& mds_ids,
@@ -3168,19 +3187,15 @@ Status FileSystemSet::QuitFs(Context& ctx, const std::string& fs_name, const std
 }
 
 bool FileSystemSet::LoadFileSystems() {
-  Range range = MetaCodec::GetFsRange();
-
-  // scan fs table from kv storage
-  std::vector<KeyValue> kvs;
-  auto status = kv_storage_->Scan(range, kvs);
+  Context ctx;
+  std::vector<FsInfoEntry> fs_infoes;
+  auto status = GetAllFsInfo(ctx, fs_infoes);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[fsset] scan fs table fail, error: {}.", status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("[fsset] get all fs info fail, error({}).", status.error_str());
     return false;
   }
 
-  for (const auto& kv : kvs) {
-    auto fs_info = MetaCodec::DecodeFsValue(kv.value);
-
+  for (const auto& fs_info : fs_infoes) {
     auto fs = GetFileSystem(fs_info.fs_id());
     if (fs == nullptr) {
       DINGO_LOG(INFO) << fmt::format("[fsset] add fs name({}) id({}).", fs_info.fs_name(), fs_info.fs_id());

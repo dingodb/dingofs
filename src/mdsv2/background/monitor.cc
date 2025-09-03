@@ -237,6 +237,7 @@ Status Monitor::MonitorClient() {
   if (!status.ok()) {
     return Status(status.error_code(), fmt::format("get client list fail, {}", status.error_str()));
   }
+  if (clients.empty()) return Status::OK();
 
   uint64_t now_ms = Helper::TimestampMs();
 
@@ -257,6 +258,8 @@ Status Monitor::MonitorClient() {
       if (!status.ok()) {
         DINGO_LOG(ERROR) << fmt::format("[monitor] umount fs({}) from client({}) fail, {}.", fs_name, client.id(),
                                         status.error_str());
+      } else {
+        DINGO_LOG(INFO) << fmt::format("[monitor] umount fs({}) from client({}) finish.", fs_name, client.id());
       }
 
     } else {
@@ -265,6 +268,32 @@ Status Monitor::MonitorClient() {
         auto status = heartbeat->CleanClient(client.id());
         DINGO_LOG(INFO) << fmt::format("[monitor] clean client({}) finish, status({}).", client.id(),
                                        status.error_str());
+      }
+    }
+  }
+
+  // handle orphan client
+  auto client_ids = fs_set_->GetAllClientId();
+  for (const auto& client_id : client_ids) {
+    bool is_exist = false;
+    for (const auto& client : clients) {
+      if (client.id() == client_id) {
+        is_exist = true;
+        break;
+      }
+    }
+
+    if (is_exist) continue;
+
+    std::string fs_name = fs_set_->GetFsName(client_id);
+    if (!fs_name.empty()) {
+      Context ctx;
+      auto status = fs_set_->UmountFs(ctx, fs_name, client_id);
+      if (!status.ok()) {
+        DINGO_LOG(ERROR) << fmt::format("[monitor] umount fs({}) from client({}) fail, {}.", fs_name, client_id,
+                                        status.error_str());
+      } else {
+        DINGO_LOG(INFO) << fmt::format("[monitor] umount fs({}) from client({}) finish.", fs_name, client_id);
       }
     }
   }

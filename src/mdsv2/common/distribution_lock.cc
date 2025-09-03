@@ -428,6 +428,10 @@ Status StoreDistributionLock::RenewLease() {
   uint32_t retry = 0;
   do {
     auto txn = kv_storage_->NewTxn();
+    if (txn == nullptr) {
+      status = Status(pb::error::EBACKEND_STORE, "new transaction fail");
+      continue;
+    }
 
     std::string value;
     const std::string key = MetaCodec::EncodeLockKey(name_);

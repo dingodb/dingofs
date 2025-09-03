@@ -91,10 +91,30 @@ bool CoorAutoIncrementIdGenerator::Init() {
   return true;
 }
 
+bool CoorAutoIncrementIdGenerator::Destroy() {
+  BAIDU_SCOPED_LOCK(mutex_);
+
+  auto status = DeleteAutoIncrement();
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[idalloc.{}] destroy autoincrement table fail, status({}).", name_,
+                                    status.error_str());
+    return false;
+  }
+
+  is_destroyed_ = true;
+
+  return true;
+}
+
 bool CoorAutoIncrementIdGenerator::GenID(uint32_t num, uint64_t& id) { return GenID(num, 0, id); }
 
 bool CoorAutoIncrementIdGenerator::GenID(uint32_t num, uint64_t min_slice_id, uint64_t& id) {
   BAIDU_SCOPED_LOCK(mutex_);
+
+  if (is_destroyed_) {
+    DINGO_LOG(ERROR) << fmt::format("[idalloc.{}] id generator is destroyed.", name_);
+    return false;
+  }
 
   next_id_ = std::max(next_id_, min_slice_id);
 
@@ -126,6 +146,11 @@ Status CoorAutoIncrementIdGenerator::IsExistAutoIncrement() {
 Status CoorAutoIncrementIdGenerator::CreateAutoIncrement() {
   DINGO_LOG(INFO) << fmt::format("[idalloc.{}] create autoincrement table, start_id({}).", name_, start_id_);
   return client_->CreateAutoIncrement(table_id_, start_id_);
+}
+
+Status CoorAutoIncrementIdGenerator::DeleteAutoIncrement() {
+  DINGO_LOG(INFO) << fmt::format("[idalloc.{}] delete autoincrement table, start_id({}).", name_, start_id_);
+  return client_->DeleteAutoIncrement(table_id_);
 }
 
 Status CoorAutoIncrementIdGenerator::AllocateIds(uint32_t num) {
@@ -183,6 +208,19 @@ bool StoreAutoIncrementIdGenerator::Init() {
   return true;
 }
 
+bool StoreAutoIncrementIdGenerator::Destroy() {
+  BAIDU_SCOPED_LOCK(mutex_);
+
+  auto status = DestroyId();
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[idalloc.{}] destroy autoincrement table fail, status({}).", name_,
+                                    status.error_str());
+    return false;
+  }
+
+  return true;
+}
+
 bool StoreAutoIncrementIdGenerator::GenID(uint32_t num, uint64_t& id) { return GenID(num, 0, id); }
 
 bool StoreAutoIncrementIdGenerator::GenID(uint32_t num, uint64_t min_slice_id, uint64_t& id) {
@@ -222,6 +260,10 @@ Status StoreAutoIncrementIdGenerator::GetOrPutAllocId(uint64_t& alloc_id) {
   uint32_t retry = 0;
   do {
     auto txn = kv_storage_->NewTxn();
+    if (txn == nullptr) {
+      status = Status(pb::error::EBACKEND_STORE, "new transaction fail");
+      continue;
+    }
 
     std::string value;
     status = txn->Get(key_, value);
@@ -257,6 +299,10 @@ Status StoreAutoIncrementIdGenerator::AllocateIds(uint32_t size) {
   uint64_t start_alloc_id = std::max(next_id_, last_alloc_id_);
   do {
     auto txn = kv_storage_->NewTxn();
+    if (txn == nullptr) {
+      status = Status(pb::error::EBACKEND_STORE, "new transaction fail");
+      continue;
+    }
 
     uint64_t alloced_id = 0;
     std::string value;
@@ -287,6 +333,28 @@ Status StoreAutoIncrementIdGenerator::AllocateIds(uint32_t size) {
 
   DINGO_LOG(INFO) << fmt::format("[idalloc.{}][{}us] take bundle id, bundle[{},{}) size({}) status({}).", name_,
                                  duration.ElapsedUs(), next_id_, last_alloc_id_, size, status.error_str());
+
+  return status;
+}
+
+Status StoreAutoIncrementIdGenerator::DestroyId() {
+  Status status;
+  uint32_t retry = 0;
+  do {
+    auto txn = kv_storage_->NewTxn();
+    if (txn == nullptr) {
+      status = Status(pb::error::EBACKEND_STORE, "new transaction fail");
+      continue;
+    }
+
+    txn->Delete(key_);
+
+    status = txn->Commit();
+    if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
+      break;
+    }
+
+  } while (++retry < FLAGS_mds_txn_max_retry_times);
 
   return status;
 }

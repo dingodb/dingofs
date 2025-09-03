@@ -223,7 +223,8 @@ static void RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes, butil:
 
     os << "<tr>";
     os << "<td>"
-       << fmt::format(R"(<a href="FsStatService/{}" target="_blank">{}</a>)", fs_info.fs_id(), fs_info.fs_id())
+       << fmt::format(R"(<a href="FsStatService/{}" target="_blank">{}</a>[v{}])", fs_info.fs_id(), fs_info.fs_id(),
+                      fs_info.version())
        << "</td>";
     os << "<td>" << fs_info.fs_name() << "</td>";
     os << "<td>" << pb::mdsv2::FsType_Name(fs_info.fs_type()) << "</td>";

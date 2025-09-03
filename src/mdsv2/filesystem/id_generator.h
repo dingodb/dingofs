@@ -33,6 +33,7 @@ class IdGenerator {
   virtual ~IdGenerator() = default;
 
   virtual bool Init() = 0;
+  virtual bool Destroy() = 0;
 
   virtual bool GenID(uint32_t num, uint64_t& id) = 0;
   virtual bool GenID(uint32_t num, uint64_t min_slice_id, uint64_t& id) = 0;
@@ -59,6 +60,8 @@ class CoorAutoIncrementIdGenerator : public IdGenerator {
   }
 
   bool Init() override;
+  bool Destroy() override;
+
   bool GenID(uint32_t num, uint64_t& id) override;
   bool GenID(uint32_t num, uint64_t min_slice_id, uint64_t& id) override;
 
@@ -67,6 +70,7 @@ class CoorAutoIncrementIdGenerator : public IdGenerator {
  private:
   Status IsExistAutoIncrement();
   Status CreateAutoIncrement();
+  Status DeleteAutoIncrement();
 
   Status AllocateIds(uint32_t num);
 
@@ -84,6 +88,8 @@ class CoorAutoIncrementIdGenerator : public IdGenerator {
   uint64_t bundle_{0};
   uint64_t bundle_end_{0};
   uint64_t next_id_{0};
+
+  bool is_destroyed_{false};
 };
 
 class StoreAutoIncrementIdGenerator : public IdGenerator {
@@ -100,6 +106,8 @@ class StoreAutoIncrementIdGenerator : public IdGenerator {
   }
 
   bool Init() override;
+  bool Destroy() override;
+
   bool GenID(uint32_t num, uint64_t& id) override;
   bool GenID(uint32_t num, uint64_t min_slice_id, uint64_t& id) override;
 
@@ -108,6 +116,7 @@ class StoreAutoIncrementIdGenerator : public IdGenerator {
  private:
   Status GetOrPutAllocId(uint64_t& alloc_id);
   Status AllocateIds(uint32_t bundle_size);
+  Status DestroyId();
 
   KVStorageSPtr kv_storage_;
 
@@ -123,6 +132,8 @@ class StoreAutoIncrementIdGenerator : public IdGenerator {
   uint64_t last_alloc_id_;
   // get the numnber of id at a time
   const uint32_t batch_size_;
+
+  bool is_destroyed_{false};
 };
 
 IdGeneratorUPtr NewFsIdGenerator(CoordinatorClientSPtr coordinator_client, KVStorageSPtr kv_storage);
