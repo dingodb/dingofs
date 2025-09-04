@@ -26,6 +26,7 @@
 #include "cache/metric/cache_status.h"
 #include "client/common/client_dummy_server_info.h"
 #include "client/const.h"
+#include "client/memory/page_allocator.h"
 #include "client/meta/vfs_fh.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/components/warmup_manager.h"
@@ -317,8 +318,6 @@ Status VFSImpl::Read(ContextSPtr ctx, Ino ino, char* buf, uint64_t size,
 
 Status VFSImpl::Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t size,
                       uint64_t offset, uint64_t fh, uint64_t* out_wsize) {
-  static std::atomic<int> write_count{0};
-  write_count.fetch_add(1);
   Status s;
   auto handle = handle_manager_->FindHandler(fh);
   VFS_CHECK_HANDLE(handle, ino, fh);
@@ -326,13 +325,20 @@ Status VFSImpl::Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t size,
   if (handle->file == nullptr) {
     LOG(ERROR) << "file is null in handle, ino: " << ino << ", fh: " << fh;
     s = Status::BadFd(fmt::format("bad  fh:{}", fh));
-
-  } else {
-    s = handle->file->Write(buf, size, offset, out_wsize);
+    return s;
   }
 
+  PageAllocatorStat stat = vfs_hub_->GetPageAllocator()->GetStat();
+  if ((stat.free_pages / (double)stat.total_pages) <
+      FLAGS_client_vfs_trigger_flush_free_page_ratio) {
+    VLOG(1) << "trigger flush because low memory, page stat: "
+            << stat.ToString();
+    vfs_hub_->GetHandleManager()->TriggerFlushAll();
+  }
+
+  s = handle->file->Write(buf, size, offset, out_wsize);
   if (s.ok()) {
-    meta_system_->Write(ctx, ino, offset, size, fh);
+    s = meta_system_->Write(ctx, ino, offset, size, fh);
   }
 
   return s;

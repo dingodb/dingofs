@@ -69,8 +69,9 @@ class HandleManager {
 
   void ReleaseHandler(uint64_t fh);
 
-  //  only called when process exit
-  void FlushAll();
+  void Shutdown();
+
+  void TriggerFlushAll();
 
   bool Dump(Json::Value& value);
   bool Load(const Json::Value& value);

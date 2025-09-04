@@ -22,6 +22,8 @@
 
 #include "client/memory/page_allocator.h"
 
+#include <fmt/format.h>
+
 #include <cassert>
 #include <cstring>
 
@@ -30,6 +32,11 @@ namespace client {
 
 static std::string kPageMetricPrefix = "dingofs_memory";
 
+std::string PageAllocatorStat::ToString() const {
+  return fmt::format("total_pages: {}, free_pages: {}, page_size: {}",
+                     total_pages, free_pages, page_size);
+}
+
 DefaultPageAllocator::DefaultPageAllocator()
     : page_size_(0),
       num_free_pages_(0),
@@ -37,8 +44,9 @@ DefaultPageAllocator::DefaultPageAllocator()
           kPageMetricPrefix, false, [this] { return GetFreePages(); })) {}
 
 bool DefaultPageAllocator::Init(uint64_t page_size, uint64_t num_pages) {
-  page_size_ = page_size;
+  total_pages_ = num_pages;
   num_free_pages_ = num_pages;
+  page_size_ = page_size;
   metric_->total_bytes.set_value(num_pages * page_size_);
   return true;
 }
@@ -69,6 +77,13 @@ uint64_t DefaultPageAllocator::GetFreePages() {
   return num_free_pages_;
 }
 
+PageAllocatorStat DefaultPageAllocator::GetStat() {
+  std::unique_lock<std::mutex> lk(mutex_);
+  return PageAllocatorStat{.total_pages = total_pages_,
+                           .free_pages = num_free_pages_,
+                           .page_size = page_size_};
+}
+
 PagePool::PagePool()
     : page_size_(0),
       num_free_pages_(0),
@@ -79,8 +94,9 @@ PagePool::PagePool()
 PagePool::~PagePool() { mem_pool_->DestroyPool(); }
 
 bool PagePool::Init(uint64_t page_size, uint64_t num_pages) {
-  page_size_ = page_size;
+  total_pages_ = num_pages;
   num_free_pages_ = num_pages;
+  page_size_ = page_size;
   metric_->total_bytes.set_value(num_pages * page_size_);
   return mem_pool_->CreatePool(page_size, num_pages);
 }
@@ -109,6 +125,13 @@ void PagePool::DeAllocate(char* page) {
 uint64_t PagePool::GetFreePages() {
   std::unique_lock<std::mutex> lk(mutex_);
   return num_free_pages_;
+}
+
+PageAllocatorStat PagePool::GetStat() {
+  std::unique_lock<std::mutex> lk(mutex_);
+  return PageAllocatorStat{.total_pages = total_pages_,
+                           .free_pages = num_free_pages_,
+                           .page_size = page_size_};
 }
 
 }  // namespace client

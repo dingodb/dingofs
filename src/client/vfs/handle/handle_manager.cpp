@@ -16,6 +16,7 @@
 
 #include "client/vfs/handle/handle_manager.h"
 
+#include <cstdint>
 #include <memory>
 
 #include "client/meta/vfs_fh.h"
@@ -44,8 +45,26 @@ void HandleManager::ReleaseHandler(uint64_t fh) {
   handles_.erase(fh);
 }
 
+void HandleManager::TriggerFlushAll() {
+  std::lock_guard<std::mutex> lock(mutex_);
+  for (auto& [fh, handle] : handles_) {
+    if (handle->ino == STATSINODEID) {
+      continue;
+    }
+
+    CHECK_NOTNULL(handle->file);
+    uint64_t fh_copy = fh;
+    handle->file->AsyncFlush([fh_copy](const Status& status) {
+      if (!status.ok()) {
+        LOG(ERROR) << "Failed to async flush file handle, fh:" << fh_copy
+                   << ", error: " << status.ToString();
+      }
+    });
+  }
+}
+
 // TODO: concurrent flush
-void HandleManager::FlushAll() {
+void HandleManager::Shutdown() {
   std::lock_guard<std::mutex> lock(mutex_);
   for (auto& [fh, handle] : handles_) {
     if (handle->ino == STATSINODEID) {

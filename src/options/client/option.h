@@ -17,6 +17,7 @@
 #ifndef DINGOFS_SRC_OPTIONS_CLIENT_OPTION_H_
 #define DINGOFS_SRC_OPTIONS_CLIENT_OPTION_H_
 
+#include <gflags/gflags_declare.h>
 #include "blockaccess/accesser_common.h"
 #include "common/const.h"
 #include "options/cache/option.h"
@@ -67,6 +68,8 @@ DECLARE_int32(client_vfs_read_max_retry_block_not_found);
 // vfs flush
 DECLARE_int32(client_vfs_flush_bg_thread);
 DECLARE_uint32(client_vfs_periodic_flush_interval_ms);
+DECLARE_int32(client_vfs_flush_bg_thread);
+DECLARE_double(client_vfs_trigger_flush_free_page_ratio);
 
 // vfs prefetch
 DECLARE_uint32(client_vfs_file_prefetch_block_cnt);

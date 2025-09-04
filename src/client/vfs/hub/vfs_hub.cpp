@@ -202,7 +202,7 @@ Status VFSHubImpl::Stop() {
     return Status::OK();
   }
 
-  handle_manager_->FlushAll();
+  handle_manager_->Shutdown();
 
   // shutdown before block cache
   priodic_flush_manager_->Stop();

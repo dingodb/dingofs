@@ -29,12 +29,22 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <string>
 
 #include "client/memory/memory_pool.h"
 #include "metrics/client/memory/page_allocator_metric.h"
 
 namespace dingofs {
 namespace client {
+
+struct PageAllocatorStat {
+  uint64_t total_pages;
+  uint64_t free_pages;
+  uint64_t page_size;
+
+  std::string ToString() const;
+};
+
 class PageAllocator {
  public:
   virtual ~PageAllocator() = default;
@@ -46,6 +56,8 @@ class PageAllocator {
   virtual void DeAllocate(char* page) = 0;
 
   virtual uint64_t GetFreePages() = 0;
+
+  virtual PageAllocatorStat GetStat() = 0;
 };
 
 class DefaultPageAllocator : public PageAllocator {
@@ -62,13 +74,16 @@ class DefaultPageAllocator : public PageAllocator {
 
   uint64_t GetFreePages() override;
 
+  PageAllocatorStat GetStat() override;
+
  private:
   std::unique_ptr<PageAllocatorMetric> metric_;
 
   std::mutex mutex_;
   std::condition_variable can_allocate_;
-  uint64_t page_size_;
+  uint64_t total_pages_;
   uint64_t num_free_pages_;
+  uint64_t page_size_;
 };
 
 class PagePool : public PageAllocator {
@@ -85,13 +100,16 @@ class PagePool : public PageAllocator {
 
   uint64_t GetFreePages() override;
 
+  PageAllocatorStat GetStat() override;
+
  private:
   std::unique_ptr<PageAllocatorMetric> metric_;
   // TODO: use multi-slots or thread local to reduce mutex overhead
   std::mutex mutex_;
   std::condition_variable can_allocate_;
-  uint64_t page_size_;
+  uint64_t total_pages_;
   uint64_t num_free_pages_;
+  uint64_t page_size_;
   std::unique_ptr<MemoryPool> mem_pool_;
 };
 

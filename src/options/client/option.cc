@@ -75,6 +75,14 @@ DEFINE_int32(client_vfs_flush_bg_thread, 16,
              "number of background flush threads");
 DEFINE_validator(client_vfs_flush_bg_thread, &PassInt32);
 
+DEFINE_uint32(client_vfs_periodic_flush_interval_ms, 1 * 1000,
+              "periodic flush interval in milliseconds");
+DEFINE_validator(client_vfs_periodic_flush_interval_ms, &PassUint32);
+
+DEFINE_double(client_vfs_trigger_flush_free_page_ratio, 0.3,
+              "trigger flush when free page ratio is lower than this value");
+DEFINE_validator(client_vfs_trigger_flush_free_page_ratio, &PassDouble);
+
 DEFINE_int32(client_vfs_read_executor_thread, 8,
              "number of read executor threads");
 DEFINE_validator(client_vfs_read_executor_thread, &PassInt32);
@@ -82,10 +90,6 @@ DEFINE_validator(client_vfs_read_executor_thread, &PassInt32);
 DEFINE_int32(client_vfs_read_max_retry_block_not_found, 10,
              "max retry when block not found");
 DEFINE_validator(client_vfs_read_max_retry_block_not_found, &PassInt32);
-
-DEFINE_uint32(client_vfs_periodic_flush_interval_ms, 10 * 1000,
-              "periodic flush interval in milliseconds");
-DEFINE_validator(client_vfs_periodic_flush_interval_ms, &PassUint32);
 
 // prefetch
 DEFINE_uint32(client_vfs_file_prefetch_block_cnt, 1,
