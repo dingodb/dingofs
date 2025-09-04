@@ -363,6 +363,11 @@ Status MetaWrapper::GetFsInfo(ContextSPtr ctx, FsInfo* fs_info) {
   return s;
 }
 
+bool MetaWrapper::GetDescription(ContextSPtr ctx, Json::Value& value) {
+  MetaLogGuard log_guard([&]() { return "get client id description"; });
+  return target_->GetDescription(ctx, value);
+}
+
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

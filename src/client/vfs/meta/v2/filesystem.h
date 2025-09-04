@@ -63,7 +63,8 @@ class MDSV2FileSystem : public vfs::MetaSystem {
 
   static MDSV2FileSystemUPtr Build(const std::string& fs_name,
                                    const std::string& mds_addr,
-                                   const std::string& mountpoint);
+                                   const std::string& mountpoint,
+                                   uint32_t port);
 
   Status Init() override;
 
@@ -135,6 +136,8 @@ class MDSV2FileSystem : public vfs::MetaSystem {
 
   Status Rename(ContextSPtr ctx, Ino old_parent, const std::string& old_name,
                 Ino new_parent, const std::string& new_name) override;
+
+  bool GetDescription(ContextSPtr ctx, Json::Value& value) override;
 
  private:
   bool SetRandomEndpoint();

@@ -264,6 +264,8 @@ class DummyFileSystem : public vfs::MetaSystem {
   Status StatFs(ContextSPtr ctx, Ino ino, FsStat* fs_stat) override;
 
   Status GetFsInfo(ContextSPtr ctx, FsInfo* fs_info) override;
+  
+  bool GetDescription(ContextSPtr ctx, Json::Value& value) override;
 
  private:
   friend class DirIterator;

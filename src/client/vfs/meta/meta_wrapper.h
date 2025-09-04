@@ -32,7 +32,7 @@ namespace vfs {
 
 class MetaWrapper : public MetaSystem {
  public:
-  MetaWrapper(MetaSystemUPtr meta_system) : target_(std::move(meta_system)) {};
+  MetaWrapper(MetaSystemUPtr meta_system) : target_(std::move(meta_system)){};
 
   ~MetaWrapper() override = default;
 
@@ -116,6 +116,8 @@ class MetaWrapper : public MetaSystem {
   Status StatFs(ContextSPtr ctx, Ino ino, FsStat* fs_stat) override;
 
   Status GetFsInfo(ContextSPtr ctx, FsInfo* fs_info) override;
+
+  bool GetDescription(ContextSPtr ctx, Json::Value& value) override;
 
  private:
   MetaSystemUPtr target_;

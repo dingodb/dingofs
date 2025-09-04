@@ -802,7 +802,8 @@ void MDSV2FileSystem::ClearChunkCache(Ino ino, uint64_t fh, uint64_t index) {
 
 MDSV2FileSystemUPtr MDSV2FileSystem::Build(const std::string& fs_name,
                                            const std::string& mds_addr,
-                                           const std::string& mountpoint) {
+                                           const std::string& mountpoint,
+                                           uint32_t port) {
   LOG(INFO) << fmt::format(
       "[meta.filesystem.{}] build filesystem mds_addr: {}, mountpoint: {}.",
       fs_name, mds_addr, mountpoint);
@@ -818,7 +819,7 @@ MDSV2FileSystemUPtr MDSV2FileSystem::Build(const std::string& fs_name,
     return nullptr;
   }
 
-  ClientId client_id(hostname, 0, mountpoint);
+  ClientId client_id(hostname, port, mountpoint);
   LOG(INFO) << fmt::format("[meta.filesystem.{}] client_id: {}", fs_name,
                            client_id.ID());
 
@@ -886,6 +887,62 @@ MDSV2FileSystemUPtr MDSV2FileSystem::Build(const std::string& fs_name,
   // create filesystem
   return MDSV2FileSystem::New(fs_info, client_id, mds_discovery, inode_cache,
                               mds_client);
+}
+
+bool MDSV2FileSystem::GetDescription(ContextSPtr, Json::Value& value) {
+  if (!file_session_map_.Dump(value)) {
+    return false;
+  }
+
+  if (!dir_iterator_manager_.Dump(value)) {
+    return false;
+  }
+
+  if (!mds_client_->Dump(value)) {
+    return false;
+  }
+
+  // client
+  Json::Value client_id;
+  client_id["id"] = client_id_.ID();
+  client_id["host_name"] = client_id_.Hostname();
+  client_id["port"] = client_id_.Port();
+  client_id["mount_point"] = client_id_.Mountpoint();
+  client_id["mds_addr"] = mds_client_->GetRpc()->GetInitEndPoint();
+  value["client_id"] = client_id;
+
+  // fs info
+  Json::Value fs_info;
+  auto fs_info_entry = fs_info_->Get();
+  fs_info["id"] = fs_info_entry.fs_id();
+  fs_info["name"] = fs_info_entry.fs_name();
+  fs_info["owner"] = fs_info_entry.owner();
+  fs_info["type"] = pb::mdsv2::FsType_Name(fs_info_entry.fs_type());
+  fs_info["block_size"] = fs_info_entry.block_size();
+  fs_info["chunk_size"] = fs_info_entry.chunk_size();
+  fs_info["capacity"] = fs_info_entry.capacity();
+  fs_info["create_time_s"] = fs_info_entry.create_time_s();
+  fs_info["last_update_time_ns"] = fs_info_entry.last_update_time_ns();
+  fs_info["recycle_time"] = fs_info_entry.recycle_time_hour();
+  fs_info["s3_endpoint"] = fs_info_entry.extra().s3_info().endpoint();
+  fs_info["s3_bucket"] = fs_info_entry.extra().s3_info().bucketname();
+
+  value["fs_info"] = fs_info;
+
+  // mds info
+  Json::Value mds_array = Json::arrayValue;
+  auto all_mds = mds_discovery_->GetAllMDS();
+  for (const auto& mds : all_mds) {
+    Json::Value item;
+    item["id"] = mds.ID();
+    item["host"] = mds.Host();
+    item["port"] = mds.Port();
+
+    mds_array.append(item);
+  }
+  value["mds_list"] = mds_array;
+
+  return true;
 }
 
 }  // namespace v2

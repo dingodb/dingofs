@@ -520,6 +520,17 @@ Status VFSImpl::StartBrpcServer() {
     return Status::Internal(error_msg);
   }
 
+  fuse_stat_service_.Init(vfs_hub_.get());
+
+  rc = brpc_server_.AddService(&fuse_stat_service_,
+                               brpc::SERVER_DOESNT_OWN_SERVICE);
+  if (rc != 0) {
+    std::string error_msg =
+        fmt::format("Add fuse stat service to brpc server failed, rc: {}", rc);
+    LOG(ERROR) << error_msg;
+    return Status::Internal(error_msg);
+  }
+
   auto status = cache::AddCacheService(&brpc_server_);
   if (!status.ok()) {
     return status;

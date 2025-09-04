@@ -1227,6 +1227,11 @@ void DirIteratorManager::Delete(uint64_t fh) {
   dir_iterator_map_.erase(fh);
 }
 
+bool DummyFileSystem::GetDescription(ContextSPtr ctx, Json::Value& value) {
+  // Implement your get description logic here
+  return true;
+}
+
 }  // namespace dummy
 }  // namespace vfs
 }  // namespace client

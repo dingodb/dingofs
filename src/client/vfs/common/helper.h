@@ -18,12 +18,14 @@
 #define DINGODB_CLIENT_VFS_COMMON_HELPER_H
 
 #include <absl/strings/str_format.h>
+#include <glog/logging.h>
 #include <sys/stat.h>
 
 #include <cstdint>
 #include <map>
 #include <string>
 
+#include "butil/strings/string_split.h"
 #include "client/meta/vfs_meta.h"
 
 namespace dingofs {
@@ -105,6 +107,35 @@ static Attr GenerateVirtualInodeAttr(Ino ino) {
 
   return attr;
 }
+
+static void SplitString(const std::string& str, char c,
+                        std::vector<std::string>& vec) {
+  butil::SplitString(str, c, &vec);
+}
+
+static void SplitString(const std::string& str, char c,
+                        std::vector<int64_t>& vec) {
+  std::vector<std::string> strs;
+  SplitString(str, c, strs);
+  for (auto& s : strs) {
+    try {
+      vec.push_back(std::stoll(s));
+    } catch (const std::exception& e) {
+      LOG(ERROR) << "stoll exception: " << e.what();
+    }
+  }
+}
+
+static std::string FormatTime(int64_t timestamp, const std::string& format) {
+  std::chrono::time_point<std::chrono::system_clock, std::chrono::seconds> tp((std::chrono::seconds(timestamp)));
+
+  auto in_time_t = std::chrono::system_clock::to_time_t(tp);
+  std::stringstream ss;
+  ss << std::put_time(std::localtime(&in_time_t), format.c_str());
+  return ss.str();
+}
+
+static std::string FormatTime(int64_t timestamp) { return FormatTime(timestamp, "%Y-%m-%d %H:%M:%S"); }
 
 }  // namespace vfs
 }  // namespace client

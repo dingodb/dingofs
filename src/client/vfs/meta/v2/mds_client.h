@@ -74,6 +74,8 @@ class MDSClient {
                           mdsv2::FsInfoEntry& fs_info);
   static Status GetFsInfo(RPCPtr rpc, uint32_t fs_id,
                           mdsv2::FsInfoEntry& fs_info);
+                          
+  RPCPtr GetRpc();
 
   Status Heartbeat();
 

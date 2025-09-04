@@ -109,6 +109,8 @@ class RPC {
                        request, response);
   }
 
+  std::string GetInitEndPoint() { return EndPointToStr(init_endpoint_); }
+
   template <typename Request, typename Response>
   Status SendRequest(const EndPoint& endpoint, const std::string& service_name,
                      const std::string& api_name, const Request& request,

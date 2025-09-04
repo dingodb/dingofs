@@ -14,6 +14,7 @@
 
 add_library(vfs_service
     inode_blocks_service.cc
+    fuse_stat_service.cc
 )
 
 target_link_libraries(vfs_service
@@ -21,10 +22,12 @@ target_link_libraries(vfs_service
     vfs_data
     vfs_meta
     vfs_hub
+    mdsv2_common
     client_options
     dingofs_status
     brpc::brpc
     fmt::fmt
     glog::glog
     gflags::gflags
+
 )

@@ -76,7 +76,8 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
     LOG(INFO) << fmt::format("mds addr: {}.", mds_addr);
 
     rela_meta_system = v2::MDSV2FileSystem::Build(vfs_conf.fs_name, mds_addr,
-                                                  vfs_conf.mount_point);
+                                                  vfs_conf.mount_point,
+                                                  vfs_option.dummy_server_port);
   } else {
     LOG(INFO) << fmt::format("not unknown file system {}.", vfs_conf.fs_type);
     return Status::Internal("not unknown file system");

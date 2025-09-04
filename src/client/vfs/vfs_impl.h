@@ -28,6 +28,7 @@
 #include "client/vfs/service/inode_blocks_service.h"
 #include "options/client/option.h"
 #include "trace/context.h"
+#include "client/vfs/service/fuse_stat_service.h"
 
 namespace dingofs {
 namespace client {
@@ -35,7 +36,7 @@ namespace vfs {
 
 class VFSImpl : public VFS {
  public:
-  VFSImpl(const VFSOption& vfs_option) : vfs_option_(vfs_option) {};
+  VFSImpl(const VFSOption& vfs_option) : vfs_option_(vfs_option){};
 
   ~VFSImpl() override = default;
 
@@ -142,6 +143,7 @@ class VFSImpl : public VFS {
 
   brpc::Server brpc_server_;
   InodeBlocksServiceImpl inode_blocks_service_;
+  FuseStatServiceImpl fuse_stat_service_;
 };
 
 }  // namespace vfs

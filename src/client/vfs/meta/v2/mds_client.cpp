@@ -92,6 +92,8 @@ Status MDSClient::GetFsInfo(RPCPtr rpc, uint32_t fs_id,
   return DoGetFsInfo(rpc, request, fs_info);
 }
 
+RPCPtr MDSClient::GetRpc() { return rpc_; }
+
 Status MDSClient::Heartbeat() {
   auto get_mds_fn = [this]() -> MDSMeta {
     mdsv2::MDSMeta mds_meta;
