@@ -15,6 +15,7 @@
 #ifndef DINGOFS_MDV2_FILESYSTEM_H_
 #define DINGOFS_MDV2_FILESYSTEM_H_
 
+#include <json/value.h>
 #include <sys/types.h>
 
 #include <atomic>
@@ -93,6 +94,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   uint32_t FsId() const { return fs_id_; }
   std::string FsName() const { return fs_info_->GetName(); }
+  std::string UUID() const { return fs_info_->GetUUID(); }
 
   uint64_t Epoch() const;
 
@@ -225,6 +227,8 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status GetDelSlices(std::vector<TrashSliceList>& delslices);
   Status GetFsOpLogs(std::vector<FsOpLog>& fs_op_logs);
 
+  void DescribeByJson(Json::Value& value);
+
  private:
   friend class DebugServiceImpl;
   friend class FsStatServiceImpl;
@@ -269,9 +273,6 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   void ClearCache();
   void BatchDeleteCache(uint32_t bucket_num, const std::set<uint32_t>& bucket_ids);
-
-  // thorough delete inode
-  Status DestoryInode(uint32_t fs_id, Ino ino);
 
   uint64_t GetMdsIdByIno(Ino ino);
 
@@ -374,7 +375,8 @@ class FileSystemSet {
   Status DeleteFs(Context& ctx, const std::string& fs_name, bool is_force);
   Status UpdateFsInfo(Context& ctx, const std::string& fs_name, const FsInfoEntry& fs_info);
   Status GetFsInfo(Context& ctx, const std::string& fs_name, FsInfoEntry& fs_info);
-  Status GetAllFsInfo(Context& ctx, std::vector<FsInfoEntry>& fs_infoes);
+  Status GetAllFsInfo(Context& ctx, bool include_deleted, std::vector<FsInfoEntry>& fs_infoes);
+  Status GetDeletedFsInfo(Context& ctx, std::vector<FsInfoEntry>& fs_infoes);
   Status RefreshFsInfo(const std::string& fs_name);
   Status RefreshFsInfo(uint32_t fs_id);
 
@@ -401,8 +403,11 @@ class FileSystemSet {
   // load already exist filesystem
   bool LoadFileSystems();
 
+  void DescribeByJson(Json::Value& value);
+
  private:
   friend class FsStatServiceImpl;
+  friend class GcProcessor;
 
   IdGenerator& GetFsIdGenerator() { return *fs_id_generator_; }
   IdGenerator& GetSliceIdGenerator() { return *slice_id_generator_; }
@@ -416,6 +421,8 @@ class FileSystemSet {
 
   bool AddFileSystem(FileSystemSPtr fs, bool is_force = false);
   void DeleteFileSystem(uint32_t fs_id);
+
+  Status DestroyFsResource(uint32_t fs_id);
 
   Status RunOperation(Operation* operation);
 

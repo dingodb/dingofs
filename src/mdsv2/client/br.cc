@@ -661,6 +661,9 @@ Status Restore::RestoreFsMetaTable(uint32_t fs_id, InputUPtr input, bool is_forc
   FsInfoEntry fs_info;
   auto status = GetFsInfo(fs_id, fs_info);
   if (!status.ok()) return status;
+  if (fs_info.status() == pb::mdsv2::FsStatus::RECYCLING) {
+    return Status(pb::error::EINTERNAL, "fs status is recycling, can not restore fs meta table");
+  }
 
   // check fs meta table exist
   status = IsExistFsMetaTable(fs_id);

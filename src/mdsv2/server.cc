@@ -14,6 +14,8 @@
 
 #include "mdsv2/server.h"
 
+#include <json/value.h>
+
 #include <string>
 #include <utility>
 
@@ -511,6 +513,43 @@ void Server::Stop() {
   heartbeat_->Destroy();
   crontab_manager_.Destroy();
   monitor_->Destroy();
+}
+
+void Server::DescribeByJson(Json::Value& value) {
+  // self mds meta
+  Json::Value self_mds_value;
+  self_mds_meta_.DescribeByJson(self_mds_value);
+  value["self_mds_meta"] = self_mds_value;
+
+  // mds meta map
+  Json::Value mds_map_value(Json::arrayValue);
+  mds_meta_map_->DescribeByJson(mds_map_value);
+  value["mds_meta_map"] = mds_map_value;
+
+  // crontab
+  Json::Value crontab_value(Json::arrayValue);
+  crontab_manager_.DescribeByJson(crontab_value);
+  value["crontab"] = crontab_value;
+
+  // mds service
+  Json::Value mds_service_value;
+  mds_service_->DescribeByJson(mds_service_value);
+  value["mds_service"] = mds_service_value;
+
+  // file_system_set
+  Json::Value fsset_value;
+  file_system_set_->DescribeByJson(fsset_value);
+  value["file_system_set"] = fsset_value;
+
+  // gc
+
+  // monitor
+
+  // heartbeat
+
+  // quota
+
+  // operation_processor
 }
 
 }  // namespace mdsv2

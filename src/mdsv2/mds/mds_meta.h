@@ -23,6 +23,7 @@
 #include <string>
 #include <vector>
 
+#include "json/value.h"
 #include "mdsv2/common/type.h"
 #include "utils/concurrent/concurrent.h"
 
@@ -81,6 +82,8 @@ class MDSMeta {
   std::string ToString() const;
   MdsEntry ToProto() const;
 
+  void DescribeByJson(Json::Value& value);
+
  private:
   uint64_t id_{0};
 
@@ -110,6 +113,8 @@ class MDSMetaMap {
 
   bool GetMDSMeta(uint64_t mds_id, MDSMeta& mds_meta);
   std::vector<MDSMeta> GetAllMDSMeta();
+
+  void DescribeByJson(Json::Value& value);
 
  private:
   utils::RWLock lock_;

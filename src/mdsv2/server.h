@@ -19,6 +19,7 @@
 #include <string>
 
 #include "brpc/server.h"
+#include "json/value.h"
 #include "mdsv2/background/cache_member_sync.h"
 #include "mdsv2/background/fsinfo_sync.h"
 #include "mdsv2/background/gc.h"
@@ -104,6 +105,8 @@ class Server {
   void Run();
 
   void Stop();
+
+  void DescribeByJson(Json::Value& value);
 
  private:
   explicit Server() = default;

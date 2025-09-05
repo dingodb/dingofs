@@ -14,6 +14,8 @@
 
 #include "mdsv2/common/partition_helper.h"
 
+#include <gflags/gflags_declare.h>
+
 #include <cstdint>
 #include <vector>
 
@@ -23,6 +25,8 @@
 
 namespace dingofs {
 namespace mdsv2 {
+
+DECLARE_uint32(mds_filesystem_hash_mds_num_default);
 
 static std::map<uint64_t, BucketSetEntry> GetDistributions(const pb::mdsv2::HashPartition& partition) {
   std::map<uint64_t, BucketSetEntry> distributions;
@@ -64,7 +68,9 @@ static void UniformDistribute(uint32_t bucket_num, std::map<uint64_t, BucketSetE
 std::map<uint64_t, BucketSetEntry> HashPartitionHelper::AdjustDistribution(PartitionPolicy partition_policy,
                                                                            const std::set<uint64_t>& online_mds_ids,
                                                                            const std::set<uint64_t>& offline_mds_ids) {
-  const uint32_t expect_mds_num = partition_policy.parent_hash().expect_mds_num();
+  const uint32_t expect_mds_num = partition_policy.parent_hash().expect_mds_num() > 0
+                                      ? partition_policy.parent_hash().expect_mds_num()
+                                      : FLAGS_mds_filesystem_hash_mds_num_default;
   const uint32_t bucket_num = partition_policy.parent_hash().bucket_num();
 
   auto distributions = GetDistributions(partition_policy.parent_hash());

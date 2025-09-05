@@ -140,6 +140,8 @@ IdGeneratorUPtr NewFsIdGenerator(CoordinatorClientSPtr coordinator_client, KVSto
 IdGeneratorUPtr NewInodeIdGenerator(uint32_t fs_id, CoordinatorClientSPtr coordinator_client, KVStorageSPtr kv_storage);
 IdGeneratorSPtr NewSliceIdGenerator(CoordinatorClientSPtr coordinator_client, KVStorageSPtr kv_storage);
 
+void DestroyInodeIdGenerator(uint32_t fs_id, CoordinatorClientSPtr coordinator_client, KVStorageSPtr kv_storage);
+
 }  // namespace mdsv2
 }  // namespace dingofs
 

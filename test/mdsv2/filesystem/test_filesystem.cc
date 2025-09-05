@@ -124,7 +124,7 @@ class FileSystemTest : public testing::Test {
     fs_info.set_fs_id(1);
     fs_info.set_fs_name("test_fs");
     fs_info.set_fs_type(pb::mdsv2::FsType::S3);
-    fs_info.set_status(pb::mdsv2::FsStatus::NEW);
+    fs_info.set_status(pb::mdsv2::FsStatus::NORMAL);
     fs_info.set_block_size(1024 * 1024);
     fs_info.set_chunk_size(1024 * 1024 * 64);
     fs_info.set_enable_sum_in_dir(false);

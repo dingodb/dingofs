@@ -400,5 +400,20 @@ IdGeneratorSPtr NewSliceIdGenerator(CoordinatorClientSPtr coordinator_client, KV
   }
 }
 
+void DestroyInodeIdGenerator(uint32_t fs_id, CoordinatorClientSPtr coordinator_client, KVStorageSPtr kv_storage) {
+  std::string name = fmt::format("{}-{}", kInoAutoIncrementIdName, fs_id);
+  if (FLAGS_mds_id_generator_type == "coor") {
+    auto id_generator = CoorAutoIncrementIdGenerator::New(coordinator_client, name, fs_id, kInoStartId, kInoBatchSize);
+    id_generator->Destroy();
+
+  } else if (FLAGS_mds_id_generator_type == "store") {
+    auto id_generator = StoreAutoIncrementIdGenerator::New(kv_storage, name, kInoStartId, kInoBatchSize);
+    id_generator->Destroy();
+
+  } else {
+    CHECK(false) << fmt::format("invalid id generator type({}), use coor|store.", FLAGS_mds_id_generator_type);
+  }
+}
+
 }  // namespace mdsv2
 }  // namespace dingofs

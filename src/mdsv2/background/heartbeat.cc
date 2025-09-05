@@ -19,7 +19,6 @@
 #include <vector>
 
 #include "fmt/format.h"
-#include "mdsv2/cachegroup/member_manager.h"
 #include "mdsv2/common/context.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
@@ -34,8 +33,8 @@ namespace mdsv2 {
 
 DECLARE_uint32(mds_scan_batch_size);
 
-DECLARE_uint32(mds_heartbeat_mds_offline_period_time_ms);
-DECLARE_uint32(mds_heartbeat_client_offline_period_ms);
+DEFINE_uint32(mds_heartbeat_mds_offline_period_time_ms, 30 * 1000, "mds offline period time ms");
+DEFINE_uint32(mds_heartbeat_client_offline_period_ms, 30 * 1000, "client offline period time ms");
 
 bool Heartbeat::Init() {
   worker_ = Worker::New();
@@ -109,7 +108,7 @@ Status Heartbeat::SendHeartbeat(Context& ctx, ClientEntry& client) {
 }
 
 Status Heartbeat::SendHeartbeat(Context& ctx, CacheMemberEntry& heartbeat_cache_member) {
-  auto ip = heartbeat_cache_member.ip();
+  const auto& ip = heartbeat_cache_member.ip();
   auto port = heartbeat_cache_member.port();
   auto now_time = Helper::TimestampMs();
   auto handler = [ip, port, now_time](CacheMemberEntry& cache_member, const Status& status) -> Status {

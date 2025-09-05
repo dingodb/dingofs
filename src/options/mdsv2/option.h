@@ -82,6 +82,8 @@ DECLARE_uint32(mds_gc_filesession_reserve_time_s);
 // heartbeat config
 DECLARE_uint32(mds_heartbeat_mds_offline_period_time_ms);
 DECLARE_uint32(mds_heartbeat_client_offline_period_ms);
+
+// monitor config
 DECLARE_uint32(mds_monitor_client_clean_period_time_s);
 
 // distribution lock config

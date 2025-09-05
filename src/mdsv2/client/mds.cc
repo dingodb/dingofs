@@ -138,14 +138,6 @@ CreateFsResponse MDSClient::CreateFs(const std::string& fs_name, const CreateFsP
   return response;
 }
 
-// message MountPoint {
-//   string client_id = 1;
-//   string hostname = 2;
-//   uint32 port = 3;
-//   string path = 4;
-//   bool cto = 5;
-// }
-
 MountFsResponse MDSClient::MountFs(const std::string& fs_name, const std::string& client_id) {
   MountFsRequest request;
   MountFsResponse response;

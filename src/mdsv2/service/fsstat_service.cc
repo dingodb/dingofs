@@ -30,6 +30,7 @@
 #include "butil/iobuf.h"
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/format.h"
+#include "json/writer.h"
 #include "mdsv2/common/context.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
@@ -155,6 +156,19 @@ static std::string PartitionTypeName(pb::mdsv2::PartitionType partition_type) {
 }
 
 static void RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes, butil::IOBufBuilder& os) {
+  auto reader_state_fn = [](const pb::mdsv2::FsStatus& status) -> std::string {
+    auto name = pb::mdsv2::FsStatus_Name(status);
+    switch (status) {
+      case pb::mdsv2::FsStatus::INIT:
+      case pb::mdsv2::FsStatus::NORMAL:
+        return fmt::format(R"(<span style="color:green">{}</span>)", name);
+      case pb::mdsv2::FsStatus::DELETED:
+      case pb::mdsv2::FsStatus::RECYCLING:
+        return fmt::format(R"(<span style="color:red">{}</span>)", name);
+      default:
+        return fmt::format(R"(<span style="color:blue">{}</span>)", name);
+    }
+  };
   auto render_size_func = [](const pb::mdsv2::FsInfo& fs_info) -> std::string {
     std::string result;
     result += "<div>";
@@ -184,7 +198,7 @@ static void RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes, butil:
   auto render_navigation_func = [](const pb::mdsv2::FsInfo& fs_info) -> std::string {
     std::string result;
     result += "<div>";
-    result += fmt::format(R"(<a href="FsStatService/details/{}" target="_blank">details</a>)", fs_info.fs_id());
+    result += fmt::format(R"(<a href="FsStatService/details/{}" target="_blank">details</a>)", fs_info.fs_name());
     result += "<br>";
     result +=
         fmt::format(R"(<a href="FsStatService/filesession/{}" target="_blank">file session</a>)", fs_info.fs_id());
@@ -206,6 +220,7 @@ static void RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes, butil:
   os << "<tr>";
   os << "<th>ID</th>";
   os << "<th>Name</th>";
+  os << "<th>State</th>";
   os << "<th>Type</th>";
   os << "<th>PartitionType</th>";
   os << "<th>PartitionPolicy</th>";
@@ -216,6 +231,7 @@ static void RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes, butil:
   os << "<th>RecycleTime</th>";
   os << "<th>MountPoint</th>";
   os << "<th>S3</th>";
+  os << "<th>UUID</th>";
   os << "</tr>";
 
   for (const auto& fs_info : fs_infoes) {
@@ -227,6 +243,7 @@ static void RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes, butil:
                       fs_info.version())
        << "</td>";
     os << "<td>" << fs_info.fs_name() << "</td>";
+    os << "<td>" << reader_state_fn(fs_info.status()) << "</td>";
     os << "<td>" << pb::mdsv2::FsType_Name(fs_info.fs_type()) << "</td>";
     os << "<td>" << PartitionTypeName(partition_policy.type()) << "</td>";
     os << "<td>" << RenderPartitionPolicy(partition_policy) << "</td>";
@@ -235,9 +252,10 @@ static void RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes, butil:
     os << "<td>" << fs_info.owner() << "</td>";
     os << "<td>" << render_navigation_func(fs_info) << "</td>";
     os << "<td>" << render_time_func(fs_info) << "</td>";
-    os << "<td>" << fs_info.recycle_time_hour() << "</td>";
+    os << "<td>" << fmt::format("{}hour", fs_info.recycle_time_hour()) << "</td>";
     os << "<td>" << RenderMountpoint(fs_info) << "</td>";
     os << "<td>" << RenderS3Info(fs_info.extra().s3_info()) << "</td>";
+    os << "<td>" << fs_info.uuid() << "</td>";
     os << "</tr>";
   }
 
@@ -255,6 +273,7 @@ static void RenderMdsList(const std::vector<MdsEntry>& mdses, butil::IOBufBuilde
   os << "<th>State</th>";
   os << "<th>Last Online Time</th>";
   os << "<th>Online</th>";
+  os << "<th>Details</th>";
   os << "</tr>";
 
   uint64_t now_ms = Helper::TimestampMs();
@@ -269,8 +288,11 @@ static void RenderMdsList(const std::vector<MdsEntry>& mdses, butil::IOBufBuilde
     if (mds.last_online_time_ms() + FLAGS_mds_heartbeat_mds_offline_period_time_ms < now_ms) {
       os << "<td style=\"color:red\">NO</td>";
     } else {
-      os << "<td>YES</td>";
+      os << R"(<td style="color:green">YES</td>)";
     }
+
+    os << fmt::format(R"(<td><a href="http://{}:{}/FsStatService/server" target="_blank">details</a></td>)",
+                      mds.location().host(), mds.location().port());
 
     os << "</tr>";
   }
@@ -302,7 +324,7 @@ static void RenderClientList(const std::vector<ClientEntry>& clients, butil::IOB
     if (client.last_online_time_ms() + FLAGS_mds_heartbeat_client_offline_period_ms < now_ms) {
       os << R"(<td style="color:red">NO</td>)";
     } else {
-      os << "<td>YES</td>";
+      os << R"(<td style="color:green">YES</td>)";
     }
 
     os << "</tr>";
@@ -425,6 +447,124 @@ static void RenderGitInfo(butil::IOBufBuilder& os) {
   os << R"(</div>)";
 }
 
+static void RenderJsonPage(const std::string& header, const std::string& json, butil::IOBufBuilder& os) {
+  os << R"(<!DOCTYPE html><html lang="zh-CN">)";
+
+  os << R"(
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>dingofs inode details</title>
+  <style>
+    body {
+      font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
+      margin: 20px;
+      background-color: #f5f5f5;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      padding: 20px;
+    }
+
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+
+    pre {
+      background-color: #f9f9f9;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 15px;
+      overflow: auto;
+      font-family: monospace;
+      white-space: pre-wrap;
+      line-height: 1.5;
+    }
+
+    .string {
+      color: #008000;
+    }
+
+    .number {
+      color: #0000ff;
+    }
+
+    .boolean {
+      color: #b22222;
+    }
+
+    .null {
+      color: #808080;
+    }
+
+    .key {
+      color: #a52a2a;
+    }
+  </style>
+</head>)";
+
+  os << "<body>";
+  os << R"(<div class="container">)";
+  os << fmt::format("<h1>{}</h1>", header);
+  os << R"(<pre id="json-display"></pre>)";
+  os << "</div>";
+
+  os << "<script>";
+  if (!json.empty()) {
+    os << "const jsonString =`" + json + "`;";
+  } else {
+    os << "const jsonString = \"{}\";";
+  }
+
+  os << R"(
+    function syntaxHighlight(json) {
+      if (typeof json === 'string') {
+        json = JSON.parse(json);
+      }
+
+      json = JSON.stringify(json, null, 4);
+
+      json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+      return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+        let cls = 'number';
+
+        if (/^"/.test(match)) {
+          if (/:$/.test(match)) {
+            cls = 'key';
+          } else {
+            cls = 'string';
+          }
+        } else if (/true|false/.test(match)) {
+          cls = 'boolean';
+        } else if (/null/.test(match)) {
+          cls = 'null';
+        }
+
+        return '<span class="' + cls + '">' + match + '</span>';
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      try {
+        const highlighted = syntaxHighlight(jsonString);
+        document.getElementById('json-display').innerHTML = highlighted;
+      } catch (e) {
+        document.getElementById('json-display').innerHTML = 'Invalid JSON: ' + e.message;
+      }
+    });)";
+  os << "</script>";
+
+  os << "</body>";
+  os << "</html>";
+}
+
 void FsStatServiceImpl::RenderMainPage(const brpc::Server* server, FileSystemSetSPtr file_system_set,
                                        butil::IOBufBuilder& os) {
   os << "<!DOCTYPE html><html>\n";
@@ -440,7 +580,7 @@ void FsStatServiceImpl::RenderMainPage(const brpc::Server* server, FileSystemSet
   // fs stats
   Context ctx;
   std::vector<pb::mdsv2::FsInfo> fs_infoes;
-  auto status = file_system_set->GetAllFsInfo(ctx, fs_infoes);
+  auto status = file_system_set->GetAllFsInfo(ctx, true, fs_infoes);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("[mdsstat] get fs list fail, error({}).", status.error_str());
     os << fmt::format(R"(<div style="color:red;">get fs list fail, error({}).</div>)", status.error_str());
@@ -519,6 +659,20 @@ void FsStatServiceImpl::RenderMainPage(const brpc::Server* server, FileSystemSet
 
   os << "</body>";
   os << "</html>";
+}
+
+void FsStatServiceImpl::RenderServerPage(butil::IOBufBuilder& os) {
+  auto& server = Server::GetInstance();
+
+  const auto& self_mds_meta = server.GetMDSMeta();
+
+  Json::Value root(Json::objectValue);
+  server.DescribeByJson(root);
+
+  Json::StreamWriterBuilder writer;
+  std::string header = fmt::format("MDS Server({})", self_mds_meta.ID());
+
+  RenderJsonPage(header, Json::writeString(writer, root), os);
 }
 
 static void RenderQuotaPage(FileSystemSPtr fs, butil::IOBufBuilder& os) {
@@ -1001,124 +1155,6 @@ body {
   os << "</html>";
 }
 
-static void RenderJsonPage(const std::string& header, const std::string& json, butil::IOBufBuilder& os) {
-  os << R"(<!DOCTYPE html><html lang="zh-CN">)";
-
-  os << R"(
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>dingofs inode details</title>
-  <style>
-    body {
-      font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
-      margin: 20px;
-      background-color: #f5f5f5;
-    }
-
-    .container {
-      max-width: 800px;
-      margin: 0 auto;
-      background-color: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-      padding: 20px;
-    }
-
-    h1 {
-      text-align: center;
-      color: #333;
-    }
-
-    pre {
-      background-color: #f9f9f9;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      padding: 15px;
-      overflow: auto;
-      font-family: monospace;
-      white-space: pre-wrap;
-      line-height: 1.5;
-    }
-
-    .string {
-      color: #008000;
-    }
-
-    .number {
-      color: #0000ff;
-    }
-
-    .boolean {
-      color: #b22222;
-    }
-
-    .null {
-      color: #808080;
-    }
-
-    .key {
-      color: #a52a2a;
-    }
-  </style>
-</head>)";
-
-  os << "<body>";
-  os << R"(<div class="container">)";
-  os << fmt::format("<h1>{}</h1>", header);
-  os << R"(<pre id="json-display"></pre>)";
-  os << "</div>";
-
-  os << "<script>";
-  if (!json.empty()) {
-    os << "const jsonString =`" + json + "`;";
-  } else {
-    os << "const jsonString = \"{}\";";
-  }
-
-  os << R"(
-    function syntaxHighlight(json) {
-      if (typeof json === 'string') {
-        json = JSON.parse(json);
-      }
-
-      json = JSON.stringify(json, null, 4);
-
-      json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-      return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
-        let cls = 'number';
-
-        if (/^"/.test(match)) {
-          if (/:$/.test(match)) {
-            cls = 'key';
-          } else {
-            cls = 'string';
-          }
-        } else if (/true|false/.test(match)) {
-          cls = 'boolean';
-        } else if (/null/.test(match)) {
-          cls = 'null';
-        }
-
-        return '<span class="' + cls + '">' + match + '</span>';
-      });
-    }
-
-    document.addEventListener('DOMContentLoaded', function () {
-      try {
-        const highlighted = syntaxHighlight(jsonString);
-        document.getElementById('json-display').innerHTML = highlighted;
-      } catch (e) {
-        document.getElementById('json-display').innerHTML = 'Invalid JSON: ' + e.message;
-      }
-    });)";
-  os << "</script>";
-
-  os << "</body>";
-  os << "</html>";
-}
-
 static void RenderFsDetailsPage(const FsInfoEntry& fs_info, butil::IOBufBuilder& os) {
   std::string header = fmt::format("FileSystem: {}({})", fs_info.fs_name(), fs_info.fs_id());
   std::string json;
@@ -1489,6 +1525,10 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
     auto file_system_set = Server::GetInstance().GetFileSystemSet();
     RenderMainPage(server, file_system_set, os);
 
+  } else if (params.size() == 1 && params[0] == "server") {
+    // /FsStatService/server
+    RenderServerPage(os);
+
   } else if (params.size() == 1) {
     // /FsStatService/{fs_id}
     uint32_t fs_id = Helper::StringToInt32(params[0]);
@@ -1504,16 +1544,18 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
     }
 
   } else if (params.size() == 2 && params[0] == "details") {
-    // /FsStatService/details/{fs_id}
+    // /FsStatService/details/{fs_name}
 
-    uint32_t fs_id = Helper::StringToInt32(params[1]);
+    std::string fs_name = params[1];
     auto file_system_set = Server::GetInstance().GetFileSystemSet();
-    auto file_system = file_system_set->GetFileSystem(fs_id);
-    if (file_system != nullptr) {
-      RenderFsDetailsPage(file_system->GetFsInfo(), os);
+    Context ctx;
+    FsInfoEntry fs_info;
+    auto status = file_system_set->GetFsInfo(ctx, fs_name, fs_info);
+    if (status.ok()) {
+      RenderFsDetailsPage(fs_info, os);
 
     } else {
-      os << fmt::format("Not found file system {}.", fs_id);
+      os << fmt::format("Get fs({}) info fail, status({}).", fs_name, status.error_str());
     }
 
   } else if (params.size() == 2 && params[0] == "filesession") {

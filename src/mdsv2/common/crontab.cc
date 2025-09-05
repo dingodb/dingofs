@@ -14,14 +14,25 @@
 
 #include "mdsv2/common/crontab.h"
 
+#include <glog/logging.h>
+
 #include "bthread/bthread.h"
 #include "bthread/unstable.h"
 #include "fmt/core.h"
 #include "mdsv2/common/logging.h"
 
 namespace dingofs {
-
 namespace mdsv2 {
+
+void Crontab::DescribeByJson(Json::Value& value) const {
+  value["id"] = id;
+  value["name"] = name;
+  value["interval_ms"] = interval;
+  value["max_times"] = max_times;
+  value["immediately"] = immediately;
+  value["run_count"] = run_count;
+  value["pause"] = pause;
+}
 
 CrontabManager::CrontabManager() { bthread_mutex_init(&mutex_, nullptr); }
 
@@ -82,14 +93,14 @@ void CrontabManager::AddCrontab(std::vector<CrontabConfig>& crontab_configs) {
   }
 }
 
-uint32_t CrontabManager::AddAndRunCrontab(std::shared_ptr<Crontab> crontab) {
+uint32_t CrontabManager::AddAndRunCrontab(CrontabSPtr crontab) {
   uint32_t crontab_id = AddCrontab(crontab);
   StartCrontab(crontab_id);
 
   return crontab_id;
 }
 
-uint32_t CrontabManager::AddCrontab(std::shared_ptr<Crontab> crontab) {
+uint32_t CrontabManager::AddCrontab(CrontabSPtr crontab) {
   BAIDU_SCOPED_LOCK(mutex_);
 
   uint32_t crontab_id = AllocCrontabId();
@@ -160,6 +171,17 @@ void CrontabManager::Destroy() {
   }
 }
 
-}  // namespace mdsv2
+void CrontabManager::DescribeByJson(Json::Value& value) {
+  CHECK(value.isArray()) << "value is not array.";
 
+  BAIDU_SCOPED_LOCK(mutex_);
+
+  for (auto& [_, crontab] : crontabs_) {
+    Json::Value crontab_value;
+    crontab->DescribeByJson(crontab_value);
+    value.append(crontab_value);
+  }
+}
+
+}  // namespace mdsv2
 }  // namespace dingofs

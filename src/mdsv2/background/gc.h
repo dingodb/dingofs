@@ -114,7 +114,7 @@ class CleanDelSliceTask : public TaskRunnable {
   TaskMemoSPtr task_memo_;
 };
 
-// clen delete file corresponding to s3 object
+// clean delete file corresponding to s3 object
 class CleanDelFileTask : public TaskRunnable {
  public:
   CleanDelFileTask(OperationProcessorSPtr operation_processor, blockaccess::BlockAccesserSPtr block_accessor,
@@ -135,9 +135,40 @@ class CleanDelFileTask : public TaskRunnable {
  private:
   friend class GcProcessor;
 
-  Status GetChunks(uint32_t fs_id, Ino ino, std::vector<ChunkEntry>& chunks);
-
   Status CleanDelFile(const AttrEntry& attr);
+
+  AttrEntry attr_;
+
+  OperationProcessorSPtr operation_processor_;
+
+  // data accessor for s3
+  blockaccess::BlockAccesserSPtr data_accessor_;
+
+  TaskMemoSPtr task_memo_;
+};
+
+// clean file corresponding to s3 object
+class CleanFileTask : public TaskRunnable {
+ public:
+  CleanFileTask(OperationProcessorSPtr operation_processor, blockaccess::BlockAccesserSPtr block_accessor,
+                TaskMemoSPtr task_memo, const AttrEntry& attr)
+      : operation_processor_(operation_processor), data_accessor_(block_accessor), task_memo_(task_memo), attr_(attr) {}
+  ~CleanFileTask() override = default;
+
+  static CleanDelFileTaskSPtr New(OperationProcessorSPtr operation_processor,
+                                  blockaccess::BlockAccesserSPtr block_accessor, TaskMemoSPtr task_memo,
+                                  const AttrEntry& attr) {
+    return std::make_shared<CleanDelFileTask>(operation_processor, block_accessor, task_memo, attr);
+  }
+
+  std::string Type() override { return "CLEAN_FILE"; }
+
+  void Run() override;
+
+ private:
+  friend class GcProcessor;
+
+  Status CleanFile(const AttrEntry& attr);
 
   AttrEntry attr_;
 
@@ -213,9 +244,14 @@ class GcProcessor {
   void ScanDelSlice(uint32_t fs_id);
   void ScanDelFile(uint32_t fs_id);
   void ScanExpiredFileSession(uint32_t fs_id);
+  void ScanDelFs(const FsInfoEntry& fs_info);
 
   static bool ShouldDeleteFile(const AttrEntry& attr);
   static bool ShouldCleanFileSession(const FileSessionEntry& file_session, const std::set<std::string>& alive_clients);
+  static bool ShouldRecycleFs(const FsInfoEntry& fs_info);
+
+  void SetFsStateRecycle(const FsInfoEntry& fs_info);
+  Status CleanFsInfo(const std::string& fs_name);
 
   blockaccess::BlockAccesserSPtr GetOrCreateDataAccesser(uint32_t fs_id);
 

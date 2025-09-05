@@ -24,4 +24,5 @@ add_library(mdsv2_common
 target_link_libraries(mdsv2_common
     PROTO_OBJS
     protobuf::libprotobuf
+    jsoncpp
 )

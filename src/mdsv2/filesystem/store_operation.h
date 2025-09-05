@@ -54,9 +54,11 @@ class Operation {
     kMountFs = 2,
     kUmountFs = 3,
     kDeleteFs = 4,
-    kUpdateFs = 5,
-    kUpdateFsPartition = 6,
-    kCreateRoot = 7,
+    kCleanFs = 5,
+    kUpdateFs = 6,
+    kUpdateFsPartition = 7,
+    kUpdateFsState = 8,
+    kCreateRoot = 9,
     kMkDir = 11,
     kMkNod = 12,
     kHardLink = 13,
@@ -331,6 +333,22 @@ class DeleteFsOperation : public Operation {
   Result result_;
 };
 
+class CleanFsOperation : public Operation {
+ public:
+  CleanFsOperation(Trace& trace, std::string fs_name) : Operation(trace), fs_name_(fs_name) {};
+  ~CleanFsOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kCleanFs; }
+
+  uint32_t GetFsId() const override { return 0; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  std::string fs_name_;
+};
+
 class UpdateFsOperation : public Operation {
  public:
   UpdateFsOperation(Trace& trace, const std::string& fs_name, const FsInfoEntry& fs_info)
@@ -382,6 +400,24 @@ class UpdateFsPartitionOperation : public Operation {
   HandlerType handler_;
 
   Result result_;
+};
+
+class UpdateFsStateOperation : public Operation {
+ public:
+  UpdateFsStateOperation(Trace& trace, const std::string& fs_name, pb::mdsv2::FsStatus status)
+      : Operation(trace), fs_name_(fs_name), status_(status) {};
+  ~UpdateFsStateOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kUpdateFsState; }
+
+  uint32_t GetFsId() const override { return 0; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  const std::string fs_name_;
+  pb::mdsv2::FsStatus status_;
 };
 
 class CreateRootOperation : public Operation {
@@ -1615,6 +1651,9 @@ class ScanFsMetaTableOperation : public Operation {
  public:
   ScanFsMetaTableOperation(Trace& trace, uint32_t fs_id, Txn::ScanHandlerType scan_handler)
       : Operation(trace), fs_id_(fs_id), scan_handler_(scan_handler) {};
+  ScanFsMetaTableOperation(Trace& trace, uint32_t fs_id, const std::string& start_key,
+                           Txn::ScanHandlerType scan_handler)
+      : Operation(trace), fs_id_(fs_id), start_key_(start_key), scan_handler_(scan_handler) {};
   ~ScanFsMetaTableOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kScanFsMetaTable; }
@@ -1626,6 +1665,7 @@ class ScanFsMetaTableOperation : public Operation {
 
  private:
   uint32_t fs_id_{0};
+  std::string start_key_;
   Txn::ScanHandlerType scan_handler_;
 };
 

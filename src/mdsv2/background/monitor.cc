@@ -38,11 +38,10 @@
 namespace dingofs {
 namespace mdsv2 {
 
-DEFINE_uint32(mds_heartbeat_mds_offline_period_time_ms, 30 * 1000, "mds offline period time ms");
+DECLARE_uint32(mds_heartbeat_mds_offline_period_time_ms);
+DECLARE_uint32(mds_heartbeat_client_offline_period_ms);
 
-DEFINE_uint32(mds_heartbeat_client_offline_period_ms, 30 * 1000, "client offline period time ms");
-
-DEFINE_uint32(mds_monitor_client_clean_period_time_s, 600, "client clean period time s");
+DEFINE_uint32(mds_monitor_client_clean_period_time_s, 180 * 1000, "client clean period time ms");
 
 static void GetOfflineMDS(const std::vector<MDSMeta>& mdses, std::vector<MDSMeta>& online_mdses,
                           std::vector<MDSMeta>& offline_mdses) {
@@ -243,59 +242,25 @@ Status Monitor::MonitorClient() {
 
   // umount all offline clients
   for (const auto& client : clients) {
-    if (client.last_online_time_ms() + FLAGS_mds_heartbeat_client_offline_period_ms > now_ms) {
+    if (client.last_online_time_ms() + FLAGS_mds_monitor_client_clean_period_time_s > now_ms) {
       // client is online
       continue;
     }
 
-    // client is offline, umount client
-    auto fs_name = fs_set_->GetFsName(client.id());
-    if (!fs_name.empty()) {
-      // umount fs from client
+    // umount client
+    if (!client.fs_name().empty()) {
       Context ctx;
-
-      auto status = fs_set_->UmountFs(ctx, fs_name, client.id());
+      auto status = fs_set_->UmountFs(ctx, client.fs_name(), client.id());
       if (!status.ok()) {
-        DINGO_LOG(ERROR) << fmt::format("[monitor] umount fs({}) from client({}) fail, {}.", fs_name, client.id(),
-                                        status.error_str());
-      } else {
-        DINGO_LOG(INFO) << fmt::format("[monitor] umount fs({}) from client({}) finish.", fs_name, client.id());
-      }
-
-    } else {
-      // clean client
-      if (client.last_online_time_ms() + FLAGS_mds_monitor_client_clean_period_time_s * 1000 < now_ms) {
-        auto status = heartbeat->CleanClient(client.id());
-        DINGO_LOG(INFO) << fmt::format("[monitor] clean client({}) finish, status({}).", client.id(),
-                                       status.error_str());
-      }
-    }
-  }
-
-  // handle orphan client
-  auto client_ids = fs_set_->GetAllClientId();
-  for (const auto& client_id : client_ids) {
-    bool is_exist = false;
-    for (const auto& client : clients) {
-      if (client.id() == client_id) {
-        is_exist = true;
-        break;
+        DINGO_LOG(ERROR) << fmt::format("[monitor] umount fs({}) from client({}) fail, {}.", client.fs_name(),
+                                        client.id(), status.error_str());
+        continue;
       }
     }
 
-    if (is_exist) continue;
-
-    std::string fs_name = fs_set_->GetFsName(client_id);
-    if (!fs_name.empty()) {
-      Context ctx;
-      auto status = fs_set_->UmountFs(ctx, fs_name, client_id);
-      if (!status.ok()) {
-        DINGO_LOG(ERROR) << fmt::format("[monitor] umount fs({}) from client({}) fail, {}.", fs_name, client_id,
-                                        status.error_str());
-      } else {
-        DINGO_LOG(INFO) << fmt::format("[monitor] umount fs({}) from client({}) finish.", fs_name, client_id);
-      }
-    }
+    // clean client
+    status = heartbeat->CleanClient(client.id());
+    DINGO_LOG(INFO) << fmt::format("[monitor] clean client({}) finish, status({}).", client.id(), status.error_str());
   }
 
   return Status::OK();

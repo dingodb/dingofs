@@ -63,6 +63,7 @@ target_link_libraries(mdsv2_lib
   glog::glog
   backtrace
   libunwind
+  jsoncpp
 )
 
 add_executable(dingo-mdsv2 main.cc)

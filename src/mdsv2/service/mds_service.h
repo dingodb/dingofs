@@ -220,6 +220,8 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
   void DeleteMember(google::protobuf::RpcController* controller, const pb::mdsv2::DeleteMemberRequest* request,
                     pb::mdsv2::DeleteMemberResponse* response, google::protobuf::Closure* done) override;
 
+  void DescribeByJson(Json::Value& value);
+
  private:
   friend class DebugServiceImpl;
   Status GenFsId(int64_t& fs_id);

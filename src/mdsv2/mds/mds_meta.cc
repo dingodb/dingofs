@@ -14,6 +14,8 @@
 
 #include "mdsv2/mds/mds_meta.h"
 
+#include <json/value.h>
+
 #include <cstdint>
 #include <vector>
 
@@ -88,6 +90,14 @@ MdsEntry MDSMeta::ToProto() const {
   return pb_mds;
 }
 
+void MDSMeta::DescribeByJson(Json::Value& value) {
+  value["id"] = id_;
+  value["host"] = host_;
+  value["port"] = port_;
+  value["state"] = StateName(state_);
+  value["last_online_time_ms"] = last_online_time_ms_;
+}
+
 void MDSMetaMap::UpsertMDSMeta(const MDSMeta& mds_meta) {
   utils::WriteLockGuard lk(lock_);
 
@@ -137,6 +147,16 @@ std::vector<MDSMeta> MDSMetaMap::GetAllMDSMeta() {
   }
 
   return mds_metas;
+}
+
+void MDSMetaMap::DescribeByJson(Json::Value& value) {
+  utils::ReadLockGuard lk(lock_);
+
+  for (auto& [id, mds_meta] : mds_meta_map_) {
+    Json::Value mds_value;
+    mds_meta.DescribeByJson(mds_value);
+    value.append(mds_value);
+  }
 }
 
 }  // namespace mdsv2

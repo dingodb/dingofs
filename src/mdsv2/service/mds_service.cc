@@ -470,7 +470,7 @@ void MDSServiceImpl::DoListFsInfo(google::protobuf::RpcController*, const pb::md
 
   Context ctx;
   std::vector<pb::mdsv2::FsInfo> fs_infoes;
-  auto status = file_system_set_->GetAllFsInfo(ctx, fs_infoes);
+  auto status = file_system_set_->GetAllFsInfo(ctx, true, fs_infoes);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -2894,6 +2894,16 @@ void MDSServiceImpl::DoDeleteMember(google::protobuf::RpcController* controller,
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
+}
+
+void MDSServiceImpl::DescribeByJson(Json::Value& value) {
+  Json::Value read_worker_set_value;
+  read_worker_set_->DescribeByJson(read_worker_set_value);
+  value["read_worker_set"] = read_worker_set_value;
+
+  Json::Value write_worker_set_value;
+  write_worker_set_->DescribeByJson(write_worker_set_value);
+  value["write_worker_set"] = write_worker_set_value;
 }
 
 }  // namespace mdsv2

@@ -14,6 +14,8 @@
 
 #include "mdsv2/common/runnable.h"
 
+#include <json/value.h>
+
 #include <atomic>
 #include <cstdint>
 #include <sstream>
@@ -31,9 +33,7 @@ namespace mdsv2 {
 
 const int kStopSignalIntervalUs = 1000;
 
-TaskRunnable::TaskRunnable() : id_(GenId()) {
-  create_time_us_ = Helper::TimestampUs();
-}
+TaskRunnable::TaskRunnable() : id_(GenId()) { create_time_us_ = Helper::TimestampUs(); }
 TaskRunnable::~TaskRunnable() = default;
 
 uint64_t TaskRunnable::Id() const { return id_; }
@@ -56,12 +56,10 @@ int ExecuteRoutine(void* meta,
     if (BAIDU_LIKELY(!iter.is_queue_stopped())) {
       int64_t start_time = Helper::TimestampMs();
       (*iter)->Run();
-      DINGO_LOG(DEBUG) << fmt::format(
-          "[execqueue][type({})] run task elapsed time {}(ms).",
-          (*iter)->Type(), Helper::TimestampMs() - start_time);
+      DINGO_LOG(DEBUG) << fmt::format("[execqueue][type({})] run task elapsed time {}(ms).", (*iter)->Type(),
+                                      Helper::TimestampMs() - start_time);
     } else {
-      DINGO_LOG(INFO) << fmt::format("[execqueue][type({})] task is stopped.",
-                                     (*iter)->Type());
+      DINGO_LOG(INFO) << fmt::format("[execqueue][type({})] task is stopped.", (*iter)->Type());
     }
 
     if (BAIDU_LIKELY(worker != nullptr)) {
@@ -74,15 +72,13 @@ int ExecuteRoutine(void* meta,
   return 0;
 }
 
-Worker::Worker(NotifyFuncer notify_func)
-    : is_available_(false), notify_func_(notify_func) {}
+Worker::Worker(NotifyFuncer notify_func) : is_available_(false), notify_func_(notify_func) {}
 
 bool Worker::Init() {
   bthread::ExecutionQueueOptions options;
   options.bthread_attr = BTHREAD_ATTR_NORMAL;
 
-  if (bthread::execution_queue_start(&queue_id_, &options, ExecuteRoutine,
-                                     this) != 0) {
+  if (bthread::execution_queue_start(&queue_id_, &options, ExecuteRoutine, this) != 0) {
     DINGO_LOG(ERROR) << "[execqueue] start worker execution queue failed";
     return false;
   }
@@ -107,24 +103,19 @@ void Worker::Destroy() {
 
 bool Worker::Execute(TaskRunnablePtr task) {
   if (BAIDU_UNLIKELY(task == nullptr)) {
-    DINGO_LOG(ERROR) << fmt::format("[execqueue][type({})] task is nullptr.",
-                                    task->Type());
+    DINGO_LOG(ERROR) << fmt::format("[execqueue][type({})] task is nullptr.", task->Type());
     return false;
   }
 
   if (BAIDU_UNLIKELY(!is_available_.load(std::memory_order_relaxed))) {
-    DINGO_LOG(ERROR) << fmt::format(
-        "[execqueue][type({})] worker execute queue is not available.",
-        task->Type());
+    DINGO_LOG(ERROR) << fmt::format("[execqueue][type({})] worker execute queue is not available.", task->Type());
     return false;
   }
 
   PushPendingTaskTrace(task->Trace());
 
   if (BAIDU_UNLIKELY(bthread::execution_queue_execute(queue_id_, task) != 0)) {
-    DINGO_LOG(ERROR) << fmt::format(
-        "[execqueue][type({})] worker execution queue execute failed",
-        task->Type());
+    DINGO_LOG(ERROR) << fmt::format("[execqueue][type({})] worker execution queue execute failed", task->Type());
     return false;
   }
 
@@ -136,22 +127,12 @@ bool Worker::Execute(TaskRunnablePtr task) {
   return true;
 }
 
-uint64_t Worker::TotalTaskCount() {
-  return total_task_count_.load(std::memory_order_relaxed);
-}
-void Worker::IncTotalTaskCount() {
-  total_task_count_.fetch_add(1, std::memory_order_relaxed);
-}
+uint64_t Worker::TotalTaskCount() { return total_task_count_.load(std::memory_order_relaxed); }
+void Worker::IncTotalTaskCount() { total_task_count_.fetch_add(1, std::memory_order_relaxed); }
 
-int32_t Worker::PendingTaskCount() {
-  return pending_task_count_.load(std::memory_order_relaxed);
-}
-void Worker::IncPendingTaskCount() {
-  pending_task_count_.fetch_add(1, std::memory_order_relaxed);
-}
-void Worker::DecPendingTaskCount() {
-  pending_task_count_.fetch_sub(1, std::memory_order_relaxed);
-}
+int32_t Worker::PendingTaskCount() { return pending_task_count_.load(std::memory_order_relaxed); }
+void Worker::IncPendingTaskCount() { pending_task_count_.fetch_add(1, std::memory_order_relaxed); }
+void Worker::DecPendingTaskCount() { pending_task_count_.fetch_sub(1, std::memory_order_relaxed); }
 
 void Worker::Notify(WorkerEventType type) {
   if (notify_func_ != nullptr) {
@@ -201,27 +182,39 @@ std::string Worker::Trace() {
   return oss.str();
 }
 
-WorkerSet::WorkerSet(std::string name, uint32_t worker_num,
-                     int64_t max_pending_task_count, bool use_pthread,
+void Worker::DescribeByJson(Json::Value& value) {
+  value["is_available"] = is_available_.load(std::memory_order_relaxed);
+  value["queue_id"] = queue_id_.value;
+  value["total_task_count"] = TotalTaskCount();
+  value["pending_task_count"] = PendingTaskCount();
+  value["is_use_trace"] = is_use_trace_;
+
+  if (is_use_trace_) {
+    utils::ReadLockGuard guard(lock_);
+
+    Json::Value tasks(Json::arrayValue);
+    for (const auto& trace : pending_task_traces_) {
+      tasks.append(trace);
+    }
+    value["pending_task_traces"] = tasks;
+  }
+}
+
+WorkerSet::WorkerSet(std::string name, uint32_t worker_num, int64_t max_pending_task_count, bool use_pthread,
                      bool is_inplace_run)
     : name_(name),
       use_pthread_(use_pthread),
       worker_num_(worker_num),
       max_pending_task_count_(max_pending_task_count),
-      total_task_count_metrics_(
-          fmt::format("dingo_worker_set_{}_total_task_count", name)),
-      pending_task_count_metrics_(
-          fmt::format("dingo_worker_set_{}_pending_task_count", name)),
-      queue_wait_metrics_(
-          fmt::format("dingo_worker_set_{}_queue_wait_latency", name)),
-      queue_run_metrics_(
-          fmt::format("dingo_worker_set_{}_queue_run_latency", name)),
+      total_task_count_metrics_(fmt::format("dingo_worker_set_{}_total_task_count", name)),
+      pending_task_count_metrics_(fmt::format("dingo_worker_set_{}_pending_task_count", name)),
+      queue_wait_metrics_(fmt::format("dingo_worker_set_{}_queue_wait_latency", name)),
+      queue_run_metrics_(fmt::format("dingo_worker_set_{}_queue_run_latency", name)),
       is_inplace_run(is_inplace_run) {};
 
 bool ExecqWorkerSet::Init() {
   for (uint32_t i = 0; i < WorkerNum(); ++i) {
-    auto worker =
-        Worker::New([this](WorkerEventType type) { WatchWorker(type); });
+    auto worker = Worker::New([this](WorkerEventType type) { WatchWorker(type); });
     if (!worker->Init()) {
       return false;
     }
@@ -242,16 +235,13 @@ bool ExecqWorkerSet::ExecuteRR(TaskRunnablePtr task) {
   int64_t max_pending_task_count = MaxPendingTaskCount();
   int64_t pending_task_count = PendingTaskCount();
 
-  if (BAIDU_UNLIKELY(max_pending_task_count > 0 &&
-                     pending_task_count > max_pending_task_count)) {
-    DINGO_LOG(WARNING) << fmt::format(
-        "[execqueue] exceed max pending task limit, {}/{}", pending_task_count,
-        max_pending_task_count);
+  if (BAIDU_UNLIKELY(max_pending_task_count > 0 && pending_task_count > max_pending_task_count)) {
+    DINGO_LOG(WARNING) << fmt::format("[execqueue] exceed max pending task limit, {}/{}", pending_task_count,
+                                      max_pending_task_count);
     return false;
   }
 
-  auto ret =
-      workers_[active_worker_id_.fetch_add(1) % WorkerNum()]->Execute(task);
+  auto ret = workers_[active_worker_id_.fetch_add(1) % WorkerNum()]->Execute(task);
   if (ret) {
     IncPendingTaskCount();
     IncTotalTaskCount();
@@ -264,11 +254,9 @@ bool ExecqWorkerSet::ExecuteLeastQueue(TaskRunnablePtr task) {
   int64_t max_pending_task_count = MaxPendingTaskCount();
   int64_t pending_task_count = PendingTaskCount();
 
-  if (BAIDU_UNLIKELY(max_pending_task_count > 0 &&
-                     pending_task_count > max_pending_task_count)) {
-    DINGO_LOG(WARNING) << fmt::format(
-        "[execqueue] exceed max pending task limit, {}/{}", pending_task_count,
-        max_pending_task_count);
+  if (BAIDU_UNLIKELY(max_pending_task_count > 0 && pending_task_count > max_pending_task_count)) {
+    DINGO_LOG(WARNING) << fmt::format("[execqueue] exceed max pending task limit, {}/{}", pending_task_count,
+                                      max_pending_task_count);
     return false;
   }
 
@@ -285,11 +273,9 @@ bool ExecqWorkerSet::ExecuteHash(int64_t id, TaskRunnablePtr task) {
   int64_t max_pending_task_count = MaxPendingTaskCount();
   int64_t pending_task_count = PendingTaskCount();
 
-  if (BAIDU_UNLIKELY(max_pending_task_count > 0 &&
-                     pending_task_count > max_pending_task_count)) {
-    DINGO_LOG(WARNING) << fmt::format(
-        "[execqueue] exceed max pending task limit, {}/{}", pending_task_count,
-        max_pending_task_count);
+  if (BAIDU_UNLIKELY(max_pending_task_count > 0 && pending_task_count > max_pending_task_count)) {
+    DINGO_LOG(WARNING) << fmt::format("[execqueue] exceed max pending task limit, {}/{}", pending_task_count,
+                                      max_pending_task_count);
     return false;
   }
 
@@ -325,8 +311,7 @@ std::string ExecqWorkerSet::Trace() {
   oss << fmt::format(
       "workerset:(use_pthread:{},worker_num:{},total_task_count:{},pending_"
       "task_count:{}/{}),",
-      IsUsePthread(), WorkerNum(), TotalTaskCount(), PendingTaskCount(),
-      MaxPendingTaskCount());
+      IsUsePthread(), WorkerNum(), TotalTaskCount(), PendingTaskCount(), MaxPendingTaskCount());
 
   for (auto& worker : workers_) {
     oss << worker->Trace() << ";";
@@ -335,11 +320,27 @@ std::string ExecqWorkerSet::Trace() {
   return oss.str();
 }
 
-SimpleWorkerSet::SimpleWorkerSet(std::string name, uint32_t worker_num,
-                                 int64_t max_pending_task_count,
+void ExecqWorkerSet::DescribeByJson(Json::Value& value) {
+  value["use_pthread"] = IsUsePthread();
+  value["worker_num"] = WorkerNum();
+  value["total_task_count"] = TotalTaskCount();
+  value["max_pending_task_count"] = MaxPendingTaskCount();
+  value["pending_task_count"] = PendingTaskCount();
+
+  Json::Value workers(Json::arrayValue);
+  for (const auto& worker : workers_) {
+    Json::Value worker_value;
+    worker->DescribeByJson(worker_value);
+    workers.append(worker_value);
+  }
+
+  value["active_worker_id"] = active_worker_id_.load();
+  value["workers"] = workers;
+}
+
+SimpleWorkerSet::SimpleWorkerSet(std::string name, uint32_t worker_num, int64_t max_pending_task_count,
                                  bool use_pthread, bool is_inplace_run)
-    : WorkerSet(name, worker_num, max_pending_task_count, use_pthread,
-                is_inplace_run) {
+    : WorkerSet(name, worker_num, max_pending_task_count, use_pthread, is_inplace_run) {
   bthread_mutex_init(&mutex_, nullptr);
   bthread_cond_init(&cond_, nullptr);
 }
@@ -435,11 +436,9 @@ bool SimpleWorkerSet::Execute(TaskRunnablePtr task) {
   int64_t max_pending_task_count = MaxPendingTaskCount();
   int64_t pending_task_count = PendingTaskCount();
 
-  if (BAIDU_UNLIKELY(max_pending_task_count > 0 &&
-                     pending_task_count > max_pending_task_count)) {
-    DINGO_LOG(WARNING) << fmt::format(
-        "[execqueue] exceed max pending task limit, {}/{}", pending_task_count,
-        max_pending_task_count);
+  if (BAIDU_UNLIKELY(max_pending_task_count > 0 && pending_task_count > max_pending_task_count)) {
+    DINGO_LOG(WARNING) << fmt::format("[execqueue] exceed max pending task limit, {}/{}", pending_task_count,
+                                      max_pending_task_count);
     return false;
   }
 
@@ -472,13 +471,9 @@ bool SimpleWorkerSet::Execute(TaskRunnablePtr task) {
 
 bool SimpleWorkerSet::ExecuteRR(TaskRunnablePtr task) { return Execute(task); }
 
-bool SimpleWorkerSet::ExecuteLeastQueue(TaskRunnablePtr task) {
-  return Execute(task);
-}
+bool SimpleWorkerSet::ExecuteLeastQueue(TaskRunnablePtr task) { return Execute(task); }
 
-bool SimpleWorkerSet::ExecuteHash(int64_t /*id*/, TaskRunnablePtr task) {
-  return Execute(task);
-}
+bool SimpleWorkerSet::ExecuteHash(int64_t /*id*/, TaskRunnablePtr task) { return Execute(task); }
 
 std::string SimpleWorkerSet::Trace() {
   std::ostringstream oss;
@@ -486,17 +481,37 @@ std::string SimpleWorkerSet::Trace() {
   oss << fmt::format(
       "workerset:(use_pthread:{},worker_num:{},total_task_count:{},pending_"
       "task_count:{}/{}),",
-      IsUsePthread(), WorkerNum(), TotalTaskCount(), PendingTaskCount(),
-      MaxPendingTaskCount());
+      IsUsePthread(), WorkerNum(), TotalTaskCount(), PendingTaskCount(), MaxPendingTaskCount());
 
   return oss.str();
 }
 
-PriorWorkerSet::PriorWorkerSet(std::string name, uint32_t worker_num,
-                               int64_t max_pending_task_count, bool use_pthread,
+void SimpleWorkerSet::DescribeByJson(Json::Value& value) {
+  value["use_pthread"] = IsUsePthread();
+  value["worker_num"] = WorkerNum();
+  value["total_task_count"] = TotalTaskCount();
+  value["max_pending_task_count"] = MaxPendingTaskCount();
+  value["pending_task_count"] = PendingTaskCount();
+
+  if (IsUsePthread()) {
+    Json::Value threads(Json::arrayValue);
+    for (const auto& thread : pthread_workers_) {
+      std::hash<std::thread::id> hasher;
+      threads.append(hasher(thread.get_id()));
+    }
+    value["threads"] = threads;
+  } else {
+    Json::Value bthreads(Json::arrayValue);
+    for (const auto& bthread : bthread_workers_) {
+      bthreads.append(bthread.Id());
+    }
+    value["bthreads"] = bthreads;
+  }
+}
+
+PriorWorkerSet::PriorWorkerSet(std::string name, uint32_t worker_num, int64_t max_pending_task_count, bool use_pthread,
                                bool is_inplace_run)
-    : WorkerSet(name, worker_num, max_pending_task_count, use_pthread,
-                is_inplace_run) {
+    : WorkerSet(name, worker_num, max_pending_task_count, use_pthread, is_inplace_run) {
   bthread_mutex_init(&mutex_, nullptr);
   bthread_cond_init(&cond_, nullptr);
 }
@@ -593,11 +608,9 @@ bool PriorWorkerSet::Execute(TaskRunnablePtr task) {
   int64_t max_pending_task_count = MaxPendingTaskCount();
   int64_t pending_task_count = PendingTaskCount();
 
-  if (BAIDU_UNLIKELY(max_pending_task_count > 0 &&
-                     pending_task_count > max_pending_task_count)) {
-    DINGO_LOG(WARNING) << fmt::format(
-        "[execqueue] exceed max pending task limit, {}/{}", pending_task_count,
-        max_pending_task_count);
+  if (BAIDU_UNLIKELY(max_pending_task_count > 0 && pending_task_count > max_pending_task_count)) {
+    DINGO_LOG(WARNING) << fmt::format("[execqueue] exceed max pending task limit, {}/{}", pending_task_count,
+                                      max_pending_task_count);
     return false;
   }
 
@@ -630,13 +643,9 @@ bool PriorWorkerSet::Execute(TaskRunnablePtr task) {
 
 bool PriorWorkerSet::ExecuteRR(TaskRunnablePtr task) { return Execute(task); }
 
-bool PriorWorkerSet::ExecuteLeastQueue(TaskRunnablePtr task) {
-  return Execute(task);
-}
+bool PriorWorkerSet::ExecuteLeastQueue(TaskRunnablePtr task) { return Execute(task); }
 
-bool PriorWorkerSet::ExecuteHash(int64_t /*id*/, TaskRunnablePtr task) {
-  return Execute(task);
-}
+bool PriorWorkerSet::ExecuteHash(int64_t /*id*/, TaskRunnablePtr task) { return Execute(task); }
 
 std::string PriorWorkerSet::Trace() {
   std::ostringstream oss;
@@ -644,8 +653,7 @@ std::string PriorWorkerSet::Trace() {
   oss << fmt::format(
       "workerset:(use_pthread:{},worker_num:{},total_task_count:{},pending_"
       "task_count:{}/{}),",
-      IsUsePthread(), WorkerNum(), TotalTaskCount(), PendingTaskCount(),
-      MaxPendingTaskCount());
+      IsUsePthread(), WorkerNum(), TotalTaskCount(), PendingTaskCount(), MaxPendingTaskCount());
 
   return oss.str();
 }

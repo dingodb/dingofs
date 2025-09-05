@@ -33,6 +33,7 @@ target_link_libraries(vfs_meta_v2_lib
     gflags::gflags
     glog::glog
     fmt::fmt
+    jsoncpp
     spdlog::spdlog
     brpc::brpc
     absl::memory

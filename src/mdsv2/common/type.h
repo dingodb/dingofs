@@ -47,12 +47,13 @@ using CacheMemberEntry = pb::mdsv2::CacheGroupMember;
 using HashPartitionEntry = pb::mdsv2::HashPartition;
 using BucketSetEntry = pb::mdsv2::HashPartition::BucketSet;
 using DeltaSliceEntry = pb::mdsv2::WriteSliceRequest::DeltaSlice;
+using RecycleProgress = pb::mdsv2::RecycleProgress;
 
 struct Range {
   std::string start;
   std::string end;
 
-  std::string ToString() const { return fmt::format("[{}, {}]", start, end); }
+  std::string ToString() const { return fmt::format("[{}, {})", start, end); }
 };
 
 inline bool IsDir(Ino ino) { return (ino & 1) == 1; }

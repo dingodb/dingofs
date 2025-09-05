@@ -65,6 +65,7 @@ static const std::string kRecyleName = ".recycle";
 DEFINE_uint32(mds_filesystem_name_max_size, 1024, "Max size of filesystem name.");
 DEFINE_uint32(mds_filesystem_hash_bucket_num, 1024, "Filesystem hash bucket num.");
 DEFINE_uint32(mds_filesystem_hash_mds_num_default, 3, "Filesystem hash mds num.");
+DEFINE_uint32(mds_filesystem_recycle_time_hour, 1, "Filesystem recycle time hour.");
 
 DEFINE_bool(mds_compact_chunk_enable, true, "Compact chunk enable.");
 DEFINE_uint32(mds_compact_chunk_threshold_num, 10, "Compact chunk threshold num.");
@@ -390,37 +391,29 @@ Status FileSystem::GetInodeFromStore(Ino ino, const std::string& reason, bool is
 }
 
 Status FileSystem::BatchGetInodeFromStore(std::vector<uint64_t> inoes, std::vector<InodeSPtr>& out_inodes) {
-  std::vector<std::string> keys;
-  keys.reserve(inoes.size());
-  for (auto ino : inoes) {
-    keys.push_back(MetaCodec::EncodeInodeKey(fs_id_, ino));
-  }
+  Trace trace;
+  BatchGetInodeAttrOperation operation(trace, fs_id_, inoes);
 
-  std::vector<KeyValue> kvs;
-  auto status = kv_storage_->BatchGet(keys, kvs);
-  if (!status.ok()) {
-    return Status(pb::error::ENOT_FOUND,
-                  fmt::format("not found inode({}), {}", Helper::VectorToString(inoes), status.error_str()));
-  }
+  auto status = RunOperation(&operation);
+  if (!status.ok()) return status;
 
-  for (const auto& kv : kvs) {
-    uint32_t fs_id = 0;
-    Ino ino = 0;
-    MetaCodec::DecodeInodeKey(kv.key, fs_id, ino);
-    out_inodes.push_back(Inode::New(MetaCodec::DecodeInodeValue(kv.value)));
+  auto& result = operation.GetResult();
+  for (auto& attr : result.attrs) {
+    out_inodes.push_back(Inode::New(attr));
   }
 
   return Status::OK();
 }
 
 Status FileSystem::GetDelFileFromStore(Ino ino, AttrEntry& out_attr) {
-  std::string key = MetaCodec::EncodeDelFileKey(fs_id_, ino);
-  std::string value;
-  auto status = kv_storage_->Get(key, value);
-  if (!status.ok()) {
-    return Status(pb::error::ENOT_FOUND, fmt::format("not found inode({}), {}", ino, status.error_str()));
-  }
-  out_attr = MetaCodec::DecodeDelFileValue(value);
+  Trace trace;
+  GetDelFileOperation operation(trace, fs_id_, ino);
+
+  auto status = RunOperation(&operation);
+  if (!status.ok()) return status;
+
+  auto& result = operation.GetResult();
+  out_attr = result.attr;
 
   return Status::OK();
 }
@@ -443,20 +436,6 @@ void FileSystem::BatchDeleteCache(uint32_t bucket_num, const std::set<uint32_t>&
 
   partition_cache_.BatchDeleteInodeIf(check_fn);
   inode_cache_.BatchDeleteInodeIf(check_fn);
-}
-
-Status FileSystem::DestoryInode(uint32_t fs_id, Ino ino) {
-  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] destory inode {}.", fs_id_, ino);
-
-  std::string inode_key = MetaCodec::EncodeInodeKey(fs_id, ino);
-  auto status = kv_storage_->Delete(inode_key);
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("delete inode fail, {}", status.error_str()));
-  }
-
-  inode_cache_.DeleteInode(ino);
-
-  return Status::OK();
 }
 
 Status FileSystem::RunOperation(Operation* operation) {
@@ -2613,6 +2592,11 @@ Status FileSystem::GetFsOpLogs(std::vector<FsOpLog>& fs_op_logs) {
   return RunOperation(&operation);
 }
 
+void FileSystem::DescribeByJson(Json::Value& value) {
+  value["fs_id"] = fs_id_;
+  value["fs_name"] = fs_info_->GetName();
+}
+
 FileSystemSet::FileSystemSet(CoordinatorClientSPtr coordinator_client, IdGeneratorUPtr fs_id_generator,
                              IdGeneratorSPtr slice_id_generator, KVStorageSPtr kv_storage, MDSMeta self_mds_meta,
                              MDSMetaMapSPtr mds_meta_map, OperationProcessorSPtr operation_processor,
@@ -2677,13 +2661,14 @@ FsInfoEntry FileSystemSet::GenFsInfo(uint32_t fs_id, const CreateFsParam& param)
   fs_info.set_fs_name(param.fs_name);
   fs_info.set_fs_type(param.fs_type);
   fs_info.set_root_ino(kRootIno);
-  fs_info.set_status(::dingofs::pb::mdsv2::FsStatus::INITED);
+  fs_info.set_status(pb::mdsv2::FsStatus::NORMAL);
   fs_info.set_block_size(param.block_size);
   fs_info.set_chunk_size(param.chunk_size);
   fs_info.set_enable_sum_in_dir(param.enable_sum_in_dir);
   fs_info.set_owner(param.owner);
   fs_info.set_capacity(param.capacity);
-  fs_info.set_recycle_time_hour(param.recycle_time_hour);
+  fs_info.set_recycle_time_hour(param.recycle_time_hour > 0 ? param.recycle_time_hour
+                                                            : FLAGS_mds_filesystem_recycle_time_hour);
   fs_info.mutable_extra()->CopyFrom(param.fs_extra);
   fs_info.set_uuid(utils::UUIDGenerator::GenerateUUID());
 
@@ -2723,7 +2708,7 @@ bool FileSystemSet::IsExistMetaTable() {
   auto status = kv_storage_->IsExistTable(range.start, range.end);
   if (!status.ok()) {
     if (status.error_code() != pb::error::ENOT_FOUND) {
-      DINGO_LOG(ERROR) << "[fsset] check meta table exist fail, error: " << status.error_str();
+      DINGO_LOG(ERROR) << fmt::format("[fsset] check meta table exist fail, error({}).", status.error_str());
     }
     return false;
   }
@@ -2745,7 +2730,7 @@ Status FileSystemSet::CreateFsMetaTable(uint32_t fs_id, const std::string& fs_na
 
 Status FileSystemSet::DropFsMetaTable(uint32_t fs_id) {
   auto range = MetaCodec::GetFsMetaTableRange(fs_id);
-  DINGO_LOG(INFO) << fmt::format("[fsset] drop fsmeta table, fs_id({}) {}.", fs_id, range.ToString());
+  DINGO_LOG(INFO) << fmt::format("[fsset.{}] drop fsmeta table, range{}.", fs_id, range.ToString());
 
   return kv_storage_->DropTable(range);
 }
@@ -2774,12 +2759,13 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, FsInfoEntry& fs_info)
   }
 
   // when create fs fail, clean up
-  auto cleanup = [&](int64_t table_id, const std::string& fs_key, const std::string& quota_key) {
-    // clean dentry table
+  auto cleanup = [&](uint32_t fs_id, int64_t table_id, const std::string& fs_key, const std::string& quota_key) {
+    // clean fsmeta table
     if (table_id > 0) {
       auto status = kv_storage_->DropTable(table_id);
       if (!status.ok()) {
-        LOG(ERROR) << fmt::format("[fsset] clean dentry table({}) fail, error: {}", table_id, status.error_str());
+        LOG(ERROR) << fmt::format("[fsset.{}] clean fsmeta table fail, table_id({}) status({})", fs_id, table_id,
+                                  status.error_str());
       }
     }
 
@@ -2787,7 +2773,7 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, FsInfoEntry& fs_info)
     if (!fs_key.empty()) {
       auto status = kv_storage_->Delete(fs_key);
       if (!status.ok()) {
-        LOG(ERROR) << fmt::format("[fsset] clean fs info fail, error: {}", status.error_str());
+        LOG(ERROR) << fmt::format("[fsset.{}] clean fs info fail, status({})", fs_id, status.error_str());
       }
     }
 
@@ -2795,7 +2781,7 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, FsInfoEntry& fs_info)
     if (!quota_key.empty()) {
       auto status = kv_storage_->Delete(quota_key);
       if (!status.ok()) {
-        LOG(ERROR) << fmt::format("[fsset] clean quota info fail, error: {}", status.error_str());
+        LOG(ERROR) << fmt::format("[fsset.{}] clean quota info fail, status({})", fs_id, status.error_str());
       }
     }
   };
@@ -2842,7 +2828,7 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, FsInfoEntry& fs_info)
   CreateFsOperation operation(trace, fs_info);
   status = RunOperation(&operation);
   if (!status.ok()) {
-    cleanup(table_id, "", "");
+    cleanup(fs_id, table_id, "", "");
     return Status(pb::error::EBACKEND_STORE, fmt::format("put store fs fail, {}", status.error_str()));
   }
 
@@ -2853,25 +2839,25 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, FsInfoEntry& fs_info)
   auto fs = FileSystem::New(self_mds_meta_.ID(), FsInfo::New(fs_info), std::move(ino_id_generator), slice_id_generator_,
                             kv_storage_, operation_processor_, mds_meta_map_, quota_worker_set_, notify_buddy_);
   if (!fs->Init()) {
-    cleanup(table_id, fs_key, "");
+    cleanup(fs_id, table_id, fs_key, "");
     return Status(pb::error::EINTERNAL, "init FileSystem fail");
   }
 
   // set quota
   status = fs->CreateQuota();
   if (!status.ok()) {
-    cleanup(table_id, fs_key, "");
+    cleanup(fs_id, table_id, fs_key, "");
     return Status(pb::error::EINTERNAL, fmt::format("create quota fail, {}", status.error_str()));
   }
 
   // create root inode
   status = fs->CreateRoot();
   if (!status.ok()) {
-    cleanup(table_id, fs_key, MetaCodec::EncodeFsQuotaKey(fs_id));
+    cleanup(fs_id, table_id, fs_key, MetaCodec::EncodeFsQuotaKey(fs_id));
     return Status(pb::error::EINTERNAL, fmt::format("create root fail, {}", status.error_str()));
   }
 
-  CHECK(AddFileSystem(fs, true)) << fmt::format("add FileSystem({}) fail, already exist.", fs->FsId());
+  CHECK(AddFileSystem(fs, true)) << fmt::format("add filesystem({}) fail, already exist.", fs_id);
 
   return Status::OK();
 }
@@ -2885,7 +2871,7 @@ Status FileSystemSet::MountFs(Context& ctx, const std::string& fs_name, const pb
 
   auto status = RunOperation(&operation);
 
-  DINGO_LOG(INFO) << fmt::format("[fsset] mount fs({}) to {} finish, status({}).", fs_name,
+  DINGO_LOG(INFO) << fmt::format("[fsset.{}] mount fs finish, mountpoint({}) status({}).", fs_name,
                                  mountpoint.ShortDebugString(), status.error_str());
 
   return status;
@@ -2900,7 +2886,7 @@ Status FileSystemSet::UmountFs(Context& ctx, const std::string& fs_name, const s
 
   auto status = RunOperation(&operation);
 
-  DINGO_LOG(INFO) << fmt::format("[fsset] umount fs({}) to {} finish, status({}).", fs_name, client_id,
+  DINGO_LOG(INFO) << fmt::format("[fsset.{}] umount fs finish, client({}) status({}).", fs_name, client_id,
                                  status.error_str());
 
   return status;
@@ -2916,17 +2902,14 @@ Status FileSystemSet::DeleteFs(Context& ctx, const std::string& fs_name, bool is
 
   auto status = RunOperation(&operation);
 
-  DINGO_LOG(INFO) << fmt::format("[fsset] delete fs({}) finish, status({}).", fs_name, status.error_str());
+  DINGO_LOG(INFO) << fmt::format("[fsset.{}] delete fs finish, status({}).", fs_name, status.error_str());
 
   auto& result = operation.GetResult();
   auto& fs_info = result.fs_info;
 
   if (status.ok()) {
     DeleteFileSystem(fs_info.fs_id());
-    auto status = DropFsMetaTable(fs_info.fs_id());
-    if (!status.ok()) {
-      DINGO_LOG(ERROR) << fmt::format("[fsset.{}] drop fsmeta table fail, status({}).", fs_name, status.error_str());
-    }
+    DestroyFsResource(fs_info.fs_id());
   }
 
   return status;
@@ -2939,7 +2922,7 @@ Status FileSystemSet::UpdateFsInfo(Context& ctx, const std::string& fs_name, con
 
   auto status = RunOperation(&operation);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[fsset] update fs({}) info fail, status({}).", fs_name, status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("[fsset.{}] update fs info fail, status({}).", fs_name, status.error_str());
     return status;
   }
 
@@ -2961,7 +2944,7 @@ Status FileSystemSet::GetFsInfo(Context& ctx, const std::string& fs_name, FsInfo
   return Status::OK();
 }
 
-Status FileSystemSet::GetAllFsInfo(Context& ctx, std::vector<FsInfoEntry>& fs_infoes) {
+Status FileSystemSet::GetAllFsInfo(Context& ctx, bool include_deleted, std::vector<FsInfoEntry>& fs_infoes) {
   auto& trace = ctx.GetTrace();
 
   ScanFsOperation operation(trace);
@@ -2971,7 +2954,21 @@ Status FileSystemSet::GetAllFsInfo(Context& ctx, std::vector<FsInfoEntry>& fs_in
 
   auto& all_fs_infoes = operation.GetResult().fs_infoes;
   for (const auto& fs_info : all_fs_infoes) {
-    if (!fs_info.is_deleted()) {
+    if (include_deleted || !fs_info.is_deleted()) {
+      fs_infoes.push_back(fs_info);
+    }
+  }
+
+  return Status::OK();
+}
+
+Status FileSystemSet::GetDeletedFsInfo(Context& ctx, std::vector<FsInfoEntry>& fs_infoes) {
+  std::vector<FsInfoEntry> all_fs_infoes;
+  auto status = GetAllFsInfo(ctx, true, all_fs_infoes);
+  if (!status.ok()) return status;
+
+  for (auto& fs_info : all_fs_infoes) {
+    if (fs_info.is_deleted()) {
       fs_infoes.push_back(fs_info);
     }
   }
@@ -3189,37 +3186,71 @@ Status FileSystemSet::QuitFs(Context& ctx, const std::string& fs_name, const std
 bool FileSystemSet::LoadFileSystems() {
   Context ctx;
   std::vector<FsInfoEntry> fs_infoes;
-  auto status = GetAllFsInfo(ctx, fs_infoes);
+  auto status = GetAllFsInfo(ctx, true, fs_infoes);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("[fsset] get all fs info fail, error({}).", status.error_str());
     return false;
   }
 
   for (const auto& fs_info : fs_infoes) {
+    if (fs_info.is_deleted()) {
+      if (IsExistFileSystem(fs_info.fs_id())) {
+        DINGO_LOG(INFO) << fmt::format("[fsset.{}.{}] fs is deleted, clean up.", fs_info.fs_name(), fs_info.fs_id());
+
+        DeleteFileSystem(fs_info.fs_id());
+      }
+      continue;
+    }
+
     auto fs = GetFileSystem(fs_info.fs_id());
-    if (fs == nullptr) {
-      DINGO_LOG(INFO) << fmt::format("[fsset] add fs name({}) id({}).", fs_info.fs_name(), fs_info.fs_id());
-
-      auto ino_id_generator = NewInodeIdGenerator(fs_info.fs_id(), coordinator_client_, kv_storage_);
-      CHECK(ino_id_generator != nullptr) << "new id generator fail.";
-
-      fs = FileSystem::New(self_mds_meta_.ID(), FsInfo::New(fs_info), std::move(ino_id_generator), slice_id_generator_,
-                           kv_storage_, operation_processor_, mds_meta_map_, quota_worker_set_, notify_buddy_);
-      if (!fs->Init()) {
-        DINGO_LOG(ERROR) << fmt::format("[fsset] init FileSystem({}) fail.", fs_info.fs_id());
+    if (fs != nullptr) {
+      if (fs->UUID() == fs_info.uuid()) {
+        // existing fs, just refresh info
+        fs->RefreshFsInfo(fs_info);
         continue;
-      }
 
-      if (!AddFileSystem(fs)) {
-        DINGO_LOG(WARNING) << fmt::format("add FileSystem({}) fail, already exist.", fs->FsId());
+      } else {
+        // delete old fs, maybe recreated
+        DeleteFileSystem(fs_info.fs_id());
+        DINGO_LOG(INFO) << fmt::format("[fsset.{}] fs uuid not match, maybe fs deleted and recreated, uuid({}->{})",
+                                       fs_info.fs_name(), fs_info.fs_id(), fs->UUID(), fs_info.uuid());
       }
+    }
 
-    } else {
-      fs->RefreshFsInfo(fs_info);
+    // add new fs
+    DINGO_LOG(INFO) << fmt::format("[fsset.{}.{}] add new fs.", fs_info.fs_name(), fs_info.fs_id());
+
+    auto ino_id_generator = NewInodeIdGenerator(fs_info.fs_id(), coordinator_client_, kv_storage_);
+    CHECK(ino_id_generator != nullptr) << "new id generator fail.";
+
+    fs = FileSystem::New(self_mds_meta_.ID(), FsInfo::New(fs_info), std::move(ino_id_generator), slice_id_generator_,
+                         kv_storage_, operation_processor_, mds_meta_map_, quota_worker_set_, notify_buddy_);
+    if (!fs->Init()) {
+      DINGO_LOG(ERROR) << fmt::format("[fsset.{}.{}] init filesystem fail.", fs_info.fs_name(), fs_info.fs_id());
+      continue;
+    }
+
+    if (!AddFileSystem(fs)) {
+      DINGO_LOG(WARNING) << fmt::format("[fsset.{}.{}] add filesystem fail, already exist.", fs_info.fs_name(),
+                                        fs->FsId());
     }
   }
 
   return true;
+}
+
+Status FileSystemSet::DestroyFsResource(uint32_t fs_id) {
+  // fsmeta table
+  auto status = DropFsMetaTable(fs_id);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[fsset.{}] drop fsmeta table fail, status({}).", fs_id, status.error_str());
+    return status;
+  }
+
+  // inode id generator
+  DestroyInodeIdGenerator(fs_id, coordinator_client_, kv_storage_);
+
+  return Status::OK();
 }
 
 Status FileSystemSet::RunOperation(Operation* operation) {
@@ -3240,6 +3271,20 @@ Status FileSystemSet::RunOperation(Operation* operation) {
   CHECK(count_down.wait() == 0) << "count down wait fail.";
 
   return operation->GetResult().status;
+}
+
+void FileSystemSet::DescribeByJson(Json::Value& value) {
+  auto fses = GetAllFileSystem();
+
+  value["count"] = fses.size();
+
+  Json::Value fsset_value(Json::arrayValue);
+  for (const auto& fs : fses) {
+    Json::Value fs_value;
+    fs->DescribeByJson(fs_value);
+    fsset_value.append(fs_value);
+  }
+  value["filesystems"] = fsset_value;
 }
 
 }  // namespace mdsv2

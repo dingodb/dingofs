@@ -60,6 +60,12 @@ class FsInfo {
     return fs_info_.fs_name();
   }
 
+  std::string GetUUID() {
+    utils::ReadLockGuard lock(lock_);
+
+    return fs_info_.uuid();
+  }
+
   uint64_t GetBlockSize() {
     utils::ReadLockGuard lock(lock_);
 

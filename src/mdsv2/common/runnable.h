@@ -29,11 +29,11 @@
 #include "bthread/types.h"
 #include "bvar/latency_recorder.h"
 #include "fmt/format.h"
+#include "json/value.h"
 #include "mdsv2/common/synchronization.h"
 #include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
-
 namespace mdsv2 {
 
 class TaskRunnable {
@@ -109,6 +109,7 @@ class Worker {
   void PopPendingTaskTrace();
   std::vector<std::string> TracePendingTasks();
   std::string Trace();
+  void DescribeByJson(Json::Value& value);
 
  private:
   // Execution queue is available.
@@ -123,7 +124,7 @@ class Worker {
   NotifyFuncer notify_func_;
 
   // trace
-  bool is_use_trace_;
+  bool is_use_trace_{false};
   utils::RWLock lock_;
   std::deque<std::string> pending_task_traces_;
 };
@@ -170,6 +171,7 @@ class WorkerSet {
   void QueueRunMetrics(int64_t value) { queue_run_metrics_ << value; }
 
   virtual std::string Trace() { return ""; }
+  virtual void DescribeByJson(Json::Value& value) {};
 
   virtual void WatchWorker(WorkerEventType type) {
     if (type == WorkerEventType::kFinishTask) {
@@ -244,6 +246,7 @@ class ExecqWorkerSet : public WorkerSet {
   bool ExecuteHash(int64_t id, TaskRunnablePtr task) override;
 
   std::string Trace() override;
+  void DescribeByJson(Json::Value& value) override;
 
  private:
   uint32_t LeastPendingTaskWorker();
@@ -279,6 +282,7 @@ class SimpleWorkerSet : public WorkerSet {
   bool ExecuteHash(int64_t id, TaskRunnablePtr task) override;
 
   std::string Trace() override;
+  void DescribeByJson(Json::Value& value) override;
 
  private:
   bthread_mutex_t mutex_;

@@ -158,11 +158,17 @@ const char* Operation::OpName() const {
     case OpType::kDeleteFs:
       return "DeleteFs";
 
+    case OpType::kCleanFs:
+      return "CleanFs";
+
     case OpType::kUpdateFs:
       return "UpdateFs";
 
     case OpType::kUpdateFsPartition:
       return "UpdateFsPartition";
+
+    case OpType::kUpdateFsState:
+      return "UpdateFsState";
 
     case OpType::kCreateRoot:
       return "CreateRoot";
@@ -381,14 +387,16 @@ Status MountFsOperation::Run(TxnUPtr& txn) {
   return Status::OK();
 }
 
-static void RemoveMountPoint(FsInfoEntry& fs_info, const std::string& client_id) {
+static bool RemoveMountPoint(FsInfoEntry& fs_info, const std::string& client_id) {
   for (int i = 0; i < fs_info.mount_points_size(); i++) {
     if (fs_info.mount_points(i).client_id() == client_id) {
       fs_info.mutable_mount_points()->SwapElements(i, fs_info.mount_points_size() - 1);
       fs_info.mutable_mount_points()->RemoveLast();
-      return;
+      return true;
     }
   }
+
+  return false;
 }
 
 Status UmountFsOperation::Run(TxnUPtr& txn) {
@@ -401,7 +409,9 @@ Status UmountFsOperation::Run(TxnUPtr& txn) {
 
   auto fs_info = MetaCodec::DecodeFsValue(value);
 
-  RemoveMountPoint(fs_info, client_id_);
+  if (!RemoveMountPoint(fs_info, client_id_)) {
+    return Status::OK();
+  }
 
   fs_info.set_last_update_time_ns(GetTime());
   fs_info.set_version(fs_info.version() + 1);
@@ -427,13 +437,19 @@ Status DeleteFsOperation::Run(TxnUPtr& txn) {
     return Status(pb::error::EEXISTED, "fs exist mount point.");
   }
 
-  txn->Delete(fs_key);
-
+  fs_info.set_status(pb::mdsv2::FsStatus::DELETED);
   fs_info.set_is_deleted(true);
   fs_info.set_delete_time_s(Helper::Timestamp());
 
+  txn->Put(fs_key, MetaCodec::EncodeFsValue(fs_info));
+
   result_.fs_info = fs_info;
 
+  return Status::OK();
+}
+
+Status CleanFsOperation::Run(TxnUPtr& txn) {
+  txn->Delete(MetaCodec::EncodeFsKey(fs_name_));
   return Status::OK();
 }
 
@@ -486,6 +502,25 @@ Status UpdateFsPartitionOperation::Run(TxnUPtr& txn) {
   // log
   fs_config_log.set_time_ms(GetTime() / 1e6);
   txn->Put(MetaCodec::EncodeFsOpLogKey(fs_info.fs_id(), GetTime()), MetaCodec::EncodeFsOpLogValue(fs_config_log));
+
+  return Status::OK();
+}
+
+Status UpdateFsStateOperation::Run(TxnUPtr& txn) {
+  std::string fs_key = MetaCodec::EncodeFsKey(fs_name_);
+
+  std::string value;
+  auto status = txn->Get(fs_key, value);
+  if (!status.ok()) {
+    return status;
+  }
+
+  auto fs_info = MetaCodec::DecodeFsValue(value);
+
+  fs_info.set_status(status_);
+  fs_info.set_version(fs_info.version() + 1);
+
+  txn->Put(fs_key, MetaCodec::EncodeFsValue(fs_info));
 
   return Status::OK();
 }
@@ -2076,6 +2111,7 @@ Status ScanFsMetaTableOperation::Run(TxnUPtr& txn) {
   CHECK(fs_id_ > 0) << "fs_id is 0";
 
   Range range = MetaCodec::GetFsMetaTableRange(fs_id_);
+  if (!start_key_.empty()) range.start = start_key_;
 
   return txn->Scan(range, scan_handler_);
 }

@@ -24,9 +24,9 @@
 #include <vector>
 
 #include "bthread/types.h"
+#include "json/value.h"
 
 namespace dingofs {
-
 namespace mdsv2 {
 
 struct CrontabConfig {
@@ -56,7 +56,10 @@ class Crontab {
   std::function<void(void*)> func;
   // Delivery to func_'s argument
   void* arg{nullptr};
+
+  void DescribeByJson(Json::Value& value) const;
 };
+using CrontabSPtr = std::shared_ptr<Crontab>;
 
 // Manage crontab use brpc::bthread_timer_add
 class CrontabManager {
@@ -71,13 +74,15 @@ class CrontabManager {
 
   void AddCrontab(std::vector<CrontabConfig>& crontab_configs);
 
-  uint32_t AddCrontab(std::shared_ptr<Crontab> crontab);
-  uint32_t AddAndRunCrontab(std::shared_ptr<Crontab> crontab);
+  uint32_t AddCrontab(CrontabSPtr crontab);
+  uint32_t AddAndRunCrontab(CrontabSPtr crontab);
   void StartCrontab(uint32_t crontab_id);
   void PauseCrontab(uint32_t crontab_id);
   void DeleteCrontab(uint32_t crontab_id);
 
   void Destroy();
+
+  void DescribeByJson(Json::Value& value);
 
  private:
   // Allocate crontab id by auto incremental.
@@ -90,11 +95,10 @@ class CrontabManager {
   // Protect crontabs_ concurrence access.
   bthread_mutex_t mutex_;
   // Store all crontab, key(crontab_id) / value(Crontab)
-  std::map<uint32_t, std::shared_ptr<Crontab> > crontabs_;
+  std::map<uint32_t, CrontabSPtr> crontabs_;
 };
 
 }  // namespace mdsv2
-
 }  // namespace dingofs
 
 #endif  // DINGOFS_MDSV2_COMMON_CRONTAB_H_

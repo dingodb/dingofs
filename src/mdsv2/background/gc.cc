@@ -49,6 +49,7 @@ DEFINE_uint32(mds_gc_max_pending_task_count, 8192, "gc max pending task count");
 DEFINE_bool(mds_gc_delslice_enable, true, "gc delslice enable");
 DEFINE_bool(mds_gc_delfile_enable, true, "gc delfile enable");
 DEFINE_bool(mds_gc_filesession_enable, true, "gc filesession enable");
+DEFINE_bool(mds_gc_delfs_enable, true, "gc delfs enable");
 
 DEFINE_uint32(mds_gc_delfile_reserve_time_s, 600, "gc del file reserve time");
 
@@ -119,11 +120,12 @@ void CleanDelFileTask::Run() {
   }
 }
 
-Status CleanDelFileTask::GetChunks(uint32_t fs_id, Ino ino, std::vector<ChunkEntry>& chunks) {
+static Status GetChunks(OperationProcessorSPtr operation_processor, uint32_t fs_id, Ino ino,
+                        std::vector<ChunkEntry>& chunks) {
   class Trace trace;
   ScanChunkOperation operation(trace, fs_id, ino);
 
-  auto status = operation_processor_->RunAlone(&operation);
+  auto status = operation_processor->RunAlone(&operation);
   if (!status.ok()) {
     return status;
   }
@@ -140,7 +142,7 @@ Status CleanDelFileTask::CleanDelFile(const AttrEntry& attr) {
                                  attr.nlink(), attr.length(), attr.version());
   // get file chunks
   std::vector<ChunkEntry> chunks;
-  auto status = GetChunks(attr.fs_id(), attr.ino(), chunks);
+  auto status = GetChunks(operation_processor_, attr.fs_id(), attr.ino(), chunks);
   if (!status.ok()) {
     return status;
   }
@@ -171,6 +173,52 @@ Status CleanDelFileTask::CleanDelFile(const AttrEntry& attr) {
   }
 
   DINGO_LOG(INFO) << fmt::format("[gc.delfile] clean file({}/{}) finish.", attr.fs_id(), attr.ino());
+
+  return Status::OK();
+}
+
+void CleanFileTask::Run() {
+  auto status = CleanFile(attr_);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[gc.delfile] clean delfile fail, {}", status.error_str());
+  }
+
+  // forget task
+  if (task_memo_ != nullptr) {
+    task_memo_->Forget(MetaCodec::EncodeDelFileKey(attr_.fs_id(), attr_.ino()));
+  }
+}
+
+Status CleanFileTask::CleanFile(const AttrEntry& attr) {
+  DINGO_LOG(INFO) << fmt::format("[gc.file] clean delfile, ino({}) nlink({}) len({}) version({}).", attr.ino(),
+                                 attr.nlink(), attr.length(), attr.version());
+  // get file chunks
+  std::vector<ChunkEntry> chunks;
+  auto status = GetChunks(operation_processor_, attr.fs_id(), attr.ino(), chunks);
+  if (!status.ok()) {
+    return status;
+  }
+
+  // delete data from s3
+  for (const auto& chunk : chunks) {
+    uint64_t chunk_offset = chunk.index() * chunk.chunk_size();
+    for (const auto& slice : chunk.slices()) {
+      for (uint32_t len = 0; len < slice.len(); len += chunk.block_size()) {
+        uint64_t block_index = (slice.offset() - chunk_offset + len) / chunk.block_size();
+        cache::BlockKey block_key(attr.fs_id(), attr.ino(), slice.id(), block_index, slice.compaction_version());
+
+        DINGO_LOG(INFO) << fmt::format("[gc.file] delete block key({}).", block_key.StoreKey());
+        auto status = data_accessor_->Delete(block_key.StoreKey());
+        if (!status.ok()) {
+          return Status(pb::error::EINTERNAL, fmt::format("delete s3 object fail, {}", status.ToString()));
+        }
+      }
+    }
+  }
+
+  // delete inode
+
+  DINGO_LOG(INFO) << fmt::format("[gc.file] clean file({}/{}) finish.", attr.fs_id(), attr.ino());
 
   return Status::OK();
 }
@@ -322,6 +370,18 @@ Status GcProcessor::LaunchGc() {
     }
   }
 
+  // fs
+  if (FLAGS_mds_gc_delfs_enable) {
+    Context ctx;
+    std::vector<FsInfoEntry> fs_infoes;
+    file_system_set_->GetAllFsInfo(ctx, true, fs_infoes);
+    for (auto& fs_info : fs_infoes) {
+      if (fs_info.is_deleted() && ShouldRecycleFs(fs_info)) {
+        ScanDelFs(fs_info);
+      }
+    }
+  }
+
   return Status::OK();
 }
 
@@ -419,7 +479,7 @@ void GcProcessor::ScanDelSlice(uint32_t fs_id) {
 
   auto status = operation_processor_->RunAlone(&operation);
 
-  DINGO_LOG(INFO) << fmt::format("[gc.delslice] scan delslice count({}/{}), status({}).", exec_count, count,
+  DINGO_LOG(INFO) << fmt::format("[gc.delslice.{}] scan delslice count({}/{}), status({}).", fs_id, exec_count, count,
                                  status.error_str());
 }
 
@@ -468,7 +528,7 @@ void GcProcessor::ScanDelFile(uint32_t fs_id) {
 
   auto status = operation_processor_->RunAlone(&operation);
 
-  DINGO_LOG(INFO) << fmt::format("[gc.delfile] scan delfile count({}/{}), status({}).", exec_count, count,
+  DINGO_LOG(INFO) << fmt::format("[gc.delfile.{}] scan delfile count({}/{}), status({}).", fs_id, exec_count, count,
                                  status.error_str());
 }
 
@@ -542,8 +602,67 @@ void GcProcessor::ScanExpiredFileSession(uint32_t fs_id) {
     }
   }
 
-  DINGO_LOG(INFO) << fmt::format("[gc.filesession] scan file session count({}/{}), status({}).", exec_count, count,
-                                 status.error_str());
+  DINGO_LOG(INFO) << fmt::format("[gc.filesession.{}] scan file session count({}/{}), status({}).", fs_id, exec_count,
+                                 count, status.error_str());
+}
+
+void GcProcessor::ScanDelFs(const FsInfoEntry& fs_info) {
+  const uint32_t fs_id = fs_info.fs_id();
+
+  // set fs state recycle
+  if (fs_info.status() == pb::mdsv2::FsStatus::DELETED) {
+    SetFsStateRecycle(fs_info);
+  }
+
+  // const auto& recycle_progress = fs_info.recycle_progress();
+  // uint32_t count = 0, exec_count = 0;
+
+  // Trace trace;
+  // std::string start_key =
+  //     recycle_progress.last_ino() == 0 ? "" : MetaCodec::EncodeInodeKey(fs_id, recycle_progress.last_ino());
+  // ScanFsMetaTableOperation operation(
+  //     trace, fs_id, start_key, [&](const std::string& key, const std::string& value) -> bool {
+  //       ++count;
+  //       if (!MetaCodec::IsInodeKey(key)) return true;
+
+  //       // check already exist task
+  //       if (task_memo_->Exist(key)) {
+  //         return true;
+  //       }
+
+  //       auto block_accessor = GetOrCreateDataAccesser(fs_id);
+  //       if (block_accessor == nullptr) {
+  //         LOG(ERROR) << fmt::format("[gc.delfs] get data accesser fail, fs_id({}).", fs_id);
+  //         return true;
+  //       }
+
+  //       auto attr = MetaCodec::DecodeInodeValue(value);
+
+  //       task_memo_->Remember(key);
+  //       if (!Execute(CleanFileTask::New(operation_processor_, block_accessor, task_memo_, attr))) {
+  //         task_memo_->Forget(key);
+  //         return false;
+  //       }
+
+  //       ++exec_count;
+
+  //       return true;
+  //     });
+
+  // auto status = operation_processor_->RunAlone(&operation);
+
+  // DINGO_LOG(INFO) << fmt::format("[gc.delfs.{}] scan filesystem count({}/{}), status({}).", fs_id, exec_count, count,
+  //                                status.error_str());
+
+  // delete file finish
+  // if (status.ok() && count == 0) {
+  // }
+
+  auto status = file_system_set_->DestroyFsResource(fs_id);
+  DINGO_LOG(INFO) << fmt::format("[gc.delfs.{}] clean fs resource, status({}).", fs_id, status.error_str());
+
+  status = CleanFsInfo(fs_info.fs_name());
+  DINGO_LOG(INFO) << fmt::format("[gc.delfs.{}] clean fs info, status({}).", fs_id, status.error_str());
 }
 
 bool GcProcessor::ShouldDeleteFile(const AttrEntry& attr) {
@@ -560,6 +679,29 @@ bool GcProcessor::ShouldCleanFileSession(const FileSessionEntry& file_session,
 
   uint64_t now_s = Helper::Timestamp();
   return file_session.create_time_s() + FLAGS_mds_gc_filesession_reserve_time_s < now_s;
+}
+
+bool GcProcessor::ShouldRecycleFs(const FsInfoEntry& fs_info) {
+  uint32_t now_s = Helper::Timestamp();
+  return now_s > (fs_info.delete_time_s() + fs_info.recycle_time_hour() * 3600);
+}
+
+void GcProcessor::SetFsStateRecycle(const FsInfoEntry& fs_info) {
+  Trace trace;
+  UpdateFsStateOperation operation(trace, fs_info.fs_name(), pb::mdsv2::FsStatus::RECYCLING);
+
+  auto status = operation_processor_->RunAlone(&operation);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[gc.delfs.{}] set fs state recycle fail, status({}).", fs_info.fs_id(),
+                                    status.error_str());
+  }
+}
+
+Status GcProcessor::CleanFsInfo(const std::string& fs_name) {
+  Trace trace;
+  CleanFsOperation operation(trace, fs_name);
+
+  return operation_processor_->RunAlone(&operation);
 }
 
 blockaccess::BlockAccesserSPtr GcProcessor::GetOrCreateDataAccesser(uint32_t fs_id) {
