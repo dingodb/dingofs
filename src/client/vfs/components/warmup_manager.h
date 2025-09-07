@@ -124,6 +124,7 @@ class WarmupTask {
   std::atomic<size_t> total_files{0};
   std::atomic<size_t> finished_{0};
   std::atomic<size_t> errors_{0};
+  std::atomic<bool> completed_{false};
   butil::Timer timer_;
   uint64_t trigger_time_;
   std::vector<Ino>::iterator it_;

@@ -114,7 +114,7 @@ void WarmupManagerImpl::ProcessPassiveWarmup(WarmupInfo& warmInfo) {
 
   auto it = inode_2_task_.find(warmInfo.ino_);
   if (it != inode_2_task_.end()) {
-    if (!it->second->finished_.load()) {
+    if (!it->second->completed_.load()) {
       LOG(WARNING) << fmt::format("current warmup key {} is still in progress");
       return;
     }
@@ -158,7 +158,7 @@ void WarmupManagerImpl::ProcessPassiveWarmup(WarmupInfo& warmInfo) {
   WarmUpFiles(*task);
 
   task->file_inodes_.clear();
-  task->finished_.store(true);
+  task->completed_.store(true);
 }
 
 Status WarmupManagerImpl::WalkFile(WarmupTask& task, Ino ino) {
@@ -197,7 +197,6 @@ Status WarmupManagerImpl::WalkFile(WarmupTask& task, Ino ino) {
       if (!openStatus.ok()) {
         LOG(ERROR) << "Failed to open dir: " << *dirIt
                    << ", status: " << openStatus.ToString();
-        task.errors_.fetch_add(1);
         ++dirIt;
         continue;
       }
