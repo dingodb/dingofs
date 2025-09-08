@@ -151,7 +151,6 @@ static void RenderFsInfo(const Json::Value& json_value,
   os << "<th>S3</th>";
   os << "</tr>";
 
-  LOG(ERROR) << "enter RenderFsInfo";
   // get fs info
   const Json::Value& fs_info = json_value["fs_info"];
 
@@ -175,7 +174,6 @@ static void RenderFsInfo(const Json::Value& json_value,
   std::string s3_endpoint = fs_info["s3_endpoint"].asString();
   std::string s3_bucket = fs_info["s3_bucket"].asString();
 
-  LOG(INFO) << fmt::format("yjddebug RenderFsInfo id:{}, name:{}", id, name);
   auto render_size_func = [&]() -> std::string {
     std::string result;
     result += "<div>";
@@ -347,7 +345,7 @@ void FuseStatServiceImpl::RenderMainPage(const brpc::Server* server,
   auto span = vfs_hub_->GetTracer()->StartSpan(kVFSWrapperMoudule, __func__);
   if (!vfs_hub_->GetMetaSystem()->GetDescription(span->GetContext(),
                                                  meta_value)) {
-    LOG(INFO) << fmt::format("GetDescription failed.");
+    LOG(ERROR) << fmt::format("GetDescription failed.");
     os << "</body>";
     os << "</html>";
     return;
@@ -355,7 +353,7 @@ void FuseStatServiceImpl::RenderMainPage(const brpc::Server* server,
 
   Json::Value handler_value;
   if (!vfs_hub_->GetHandleManager()->Dump(handler_value)) {
-    LOG(INFO) << fmt::format("hadler manager dump failed.");
+    LOG(ERROR) << fmt::format("hadler manager dump failed.");
     os << "</body>";
     os << "</html>";
     return;
