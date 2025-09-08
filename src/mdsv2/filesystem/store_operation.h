@@ -58,7 +58,8 @@ class Operation {
     kUpdateFs = 6,
     kUpdateFsPartition = 7,
     kUpdateFsState = 8,
-    kCreateRoot = 9,
+    kUpdateFsRecycleProgress = 9,
+    kCreateRoot = 10,
     kMkDir = 11,
     kMkNod = 12,
     kHardLink = 13,
@@ -335,18 +336,20 @@ class DeleteFsOperation : public Operation {
 
 class CleanFsOperation : public Operation {
  public:
-  CleanFsOperation(Trace& trace, std::string fs_name) : Operation(trace), fs_name_(fs_name) {};
+  CleanFsOperation(Trace& trace, std::string fs_name, uint32_t fs_id)
+      : Operation(trace), fs_name_(fs_name), fs_id_(fs_id) {};
   ~CleanFsOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kCleanFs; }
 
-  uint32_t GetFsId() const override { return 0; }
+  uint32_t GetFsId() const override { return fs_id_; }
   Ino GetIno() const override { return 0; }
 
   Status Run(TxnUPtr& txn) override;
 
  private:
   std::string fs_name_;
+  uint32_t fs_id_{0};
 };
 
 class UpdateFsOperation : public Operation {
@@ -418,6 +421,24 @@ class UpdateFsStateOperation : public Operation {
  private:
   const std::string fs_name_;
   pb::mdsv2::FsStatus status_;
+};
+
+class UpdateFsRecycleProgressOperation : public Operation {
+ public:
+  UpdateFsRecycleProgressOperation(Trace& trace, const std::string& fs_name, Ino ino)
+      : Operation(trace), fs_name_(fs_name), ino_(ino) {};
+  ~UpdateFsRecycleProgressOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kUpdateFsRecycleProgress; }
+
+  uint32_t GetFsId() const override { return 0; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  const std::string fs_name_;
+  Ino ino_;
 };
 
 class CreateRootOperation : public Operation {

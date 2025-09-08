@@ -337,7 +337,7 @@ static void RenderClientList(const std::vector<ClientEntry>& clients, butil::IOB
 
 static void RenderCacheMemberList(const std::vector<CacheMemberEntry>& cache_members, butil::IOBufBuilder& os) {
   os << R"(<div style="margin:12px;margin-top:64px;font-size:smaller;">)";
-  os << fmt::format(R"(<h3>Cache Member[{}]</h3>)", cache_members.size());
+  os << fmt::format(R"(<h3>Cache [{}]</h3>)", cache_members.size());
   os << "<td>" << fmt::format("Available UUID: {}", utils::GenUuid()) << "</td>";
   os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
   os << "<tr>";
@@ -571,12 +571,12 @@ void FsStatServiceImpl::RenderMainPage(const brpc::Server* server, FileSystemSet
   os << "<!DOCTYPE html><html>\n";
 
   os << "<head>";
-  os << RenderHead("dingofs dashboard");
+  os << RenderHead("dingofs-mds dashboard");
   os << "</head>";
 
   os << "<body>";
   server->PrintTabsBody(os, "fsstat");
-  os << R"(<h1 style="text-align:center;">dingofs dashboard</h1>)";
+  os << R"(<h1 style="text-align:center;">dingofs-mds dashboard</h1>)";
 
   // fs stats
   Context ctx;
@@ -1163,20 +1163,13 @@ static void RenderFsDetailsPage(const FsInfoEntry& fs_info, butil::IOBufBuilder&
   RenderJsonPage(header, json, os);
 }
 
-static void RenderFileSessionPage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) {
+static void RenderFileSessionPage(uint32_t fs_id, const std::vector<FileSessionEntry>& file_sessions,
+                                  butil::IOBufBuilder& os) {
   os << "<!DOCTYPE html><html>";
 
   os << "<head>" << RenderHead("dinfofs filesession") << "</head>";
   os << "<body>";
-  os << fmt::format(R"(<h1 style="text-align:center;">FileSystem({}) File Session</h1>)", filesystem->FsId());
-
-  auto& file_session_manager = filesystem->GetFileSessionManager();
-  std::vector<FileSessionEntry> file_sessions;
-  auto status = file_session_manager.GetAll(file_sessions);
-  if (!status.ok()) {
-    os << fmt::format(R"(<div>get file session fail: {}</div></body>)", status.error_str());
-    return;
-  }
+  os << fmt::format(R"(<h1 style="text-align:center;">FileSystem({}) File Session</h1>)", fs_id);
 
   os << R"(<div style="margin: 12px;font-size:smaller">)";
   os << fmt::format(R"(<h3>FileSession [{}]</h3>)", file_sessions.size());
@@ -1204,19 +1197,12 @@ static void RenderFileSessionPage(FileSystemSPtr filesystem, butil::IOBufBuilder
   os << "</body>";
 }
 
-static void RenderDelfilePage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) {
+static void RenderDelfilePage(const std::vector<AttrEntry>& delfiles, butil::IOBufBuilder& os) {
   os << "<!DOCTYPE html><html>";
 
   os << "<head>" << RenderHead("dingofs delfile") << "</head>";
   os << "<body>";
   os << R"(<h1 style="text-align:center;">Deleted File</h1>)";
-
-  std::vector<AttrEntry> delfiles;
-  auto status = filesystem->GetDelFiles(delfiles);
-  if (!status.ok()) {
-    os << "Get delfiles fail: " << status.error_str();
-    return;
-  }
 
   os << R"(<div style="margin: 12px;font-size:smaller">)";
   os << fmt::format(R"(<h3>DelFile [{}]</h3>)", delfiles.size());
@@ -1245,7 +1231,7 @@ static void RenderDelfilePage(FileSystemSPtr filesystem, butil::IOBufBuilder& os
   os << "</body>";
 }
 
-static void RenderDelslicePage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) {
+static void RenderDelslicePage(const std::vector<TrashSliceList>& delslices, butil::IOBufBuilder& os) {
   auto render_range_func = [](const pb::mdsv2::TrashSlice& slice) -> std::string {
     std::string result;
     for (int i = 0; i < slice.ranges_size(); ++i) {
@@ -1266,13 +1252,6 @@ static void RenderDelslicePage(FileSystemSPtr filesystem, butil::IOBufBuilder& o
   os << "<head>" << RenderHead("dingofs delslice") << "</head>";
   os << "<body>";
   os << R"(<h1 style="text-align:center;">Deleted Slice</h1>)";
-
-  std::vector<TrashSliceList> delslices;
-  auto status = filesystem->GetDelSlices(delslices);
-  if (!status.ok()) {
-    os << "Get delslice fail: " << status.error_str();
-    return;
-  }
 
   auto get_slice_count_fn = [&]() -> size_t {
     size_t count = 0;
@@ -1314,19 +1293,12 @@ static void RenderDelslicePage(FileSystemSPtr filesystem, butil::IOBufBuilder& o
   os << "</body>";
 }
 
-static void RenderOplogPage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) {
+static void RenderOplogPage(const std::vector<FsOpLog>& oplogs, butil::IOBufBuilder& os) {
   os << "<!DOCTYPE html><html>";
 
   os << "<head>" << RenderHead("dingofs fsoplog") << "</head>";
   os << "<body>";
   os << R"(<h1 style="text-align:center;">Fs OpLog</h1>)";
-
-  std::vector<FsOpLog> oplogs;
-  auto status = filesystem->GetFsOpLogs(oplogs);
-  if (!status.ok()) {
-    os << "Get fs oplog fail: " << status.error_str();
-    return;
-  }
 
   os << R"(<div style="margin: 12px;font-size:smaller">)";
   os << fmt::format(R"(<h3>Oplog [{}]</h3>)", oplogs.size());
@@ -1359,6 +1331,9 @@ static void RenderOplogPage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) 
         break;
       case pb::mdsv2::FsOpLog::QUIT_AND_JOIN_FS:
         os << "<td>" << oplog.quit_and_join_fs().ShortDebugString() << "</td>";
+        break;
+      case pb::mdsv2::FsOpLog::UPDATE_STATE_FS:
+        os << "<td>" << oplog.update_state_fs().ShortDebugString() << "</td>";
         break;
       default:
         os << "<td>UNKNOWN</td>";
@@ -1564,12 +1539,13 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
 
     uint32_t fs_id = Helper::StringToInt32(params[1]);
     auto file_system_set = Server::GetInstance().GetFileSystemSet();
-    auto file_system = file_system_set->GetFileSystem(fs_id);
-    if (file_system != nullptr) {
-      RenderFileSessionPage(file_system, os);
+    std::vector<FileSessionEntry> file_sessions;
+    auto status = file_system_set->GetFileSessions(fs_id, file_sessions);
+    if (status.ok()) {
+      RenderFileSessionPage(fs_id, file_sessions, os);
 
     } else {
-      os << fmt::format("Not found file system {}.", fs_id);
+      os << fmt::format("Not found file system {} status({}).", fs_id, status.error_str());
     }
 
   } else if (params.size() == 2 && params[0] == "quota") {
@@ -1590,12 +1566,13 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
 
     uint32_t fs_id = Helper::StringToInt32(params[1]);
     auto file_system_set = Server::GetInstance().GetFileSystemSet();
-    auto file_system = file_system_set->GetFileSystem(fs_id);
-    if (file_system != nullptr) {
-      RenderDelfilePage(file_system, os);
+    std::vector<AttrEntry> delfiles;
+    auto status = file_system_set->GetDelFiles(fs_id, delfiles);
+    if (status.ok()) {
+      RenderDelfilePage(delfiles, os);
 
     } else {
-      os << fmt::format("Not found file system {}.", fs_id);
+      os << fmt::format("Not found file system {} status({}).", fs_id, status.error_str());
     }
 
   } else if (params.size() == 3 && params[0] == "delfiles") {
@@ -1624,12 +1601,13 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
     // /FsStatService/delslices/{fs_id}
     uint32_t fs_id = Helper::StringToInt32(params[1]);
     auto file_system_set = Server::GetInstance().GetFileSystemSet();
-    auto file_system = file_system_set->GetFileSystem(fs_id);
-    if (file_system != nullptr) {
-      RenderDelslicePage(file_system, os);
+    std::vector<TrashSliceList> delslices;
+    auto status = file_system_set->GetDelSlices(fs_id, delslices);
+    if (status.ok()) {
+      RenderDelslicePage(delslices, os);
 
     } else {
-      os << fmt::format("Not found file system {}.", fs_id);
+      os << fmt::format("Not found file system {} status({}).", fs_id, status.error_str());
     }
 
   } else if (params.size() == 2 && params[0] == "oplog") {
@@ -1637,12 +1615,14 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
 
     uint32_t fs_id = Helper::StringToInt32(params[1]);
     auto file_system_set = Server::GetInstance().GetFileSystemSet();
-    auto file_system = file_system_set->GetFileSystem(fs_id);
-    if (file_system != nullptr) {
-      RenderOplogPage(file_system, os);
+
+    std::vector<FsOpLog> oplogs;
+    auto status = file_system_set->GetFsOpLogs(fs_id, oplogs);
+    if (status.ok()) {
+      RenderOplogPage(oplogs, os);
 
     } else {
-      os << fmt::format("Not found file system {}.", fs_id);
+      os << fmt::format("Not found file system {} status({}).", fs_id, status.error_str());
     }
 
   } else if (params.size() == 2) {

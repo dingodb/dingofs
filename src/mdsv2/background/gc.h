@@ -41,12 +41,16 @@ using CleanDelSliceTaskSPtr = std::shared_ptr<CleanDelSliceTask>;
 class CleanDelFileTask;
 using CleanDelFileTaskSPtr = std::shared_ptr<CleanDelFileTask>;
 
+class CleanFileTask;
+using CleanFileTaskSPtr = std::shared_ptr<CleanFileTask>;
+
 class CleanExpiredFileSessionTask;
 using CleanExpiredFileSessionTaskSPtr = std::shared_ptr<CleanExpiredFileSessionTask>;
 
 class GcProcessor;
 using GcProcessorSPtr = std::shared_ptr<GcProcessor>;
 
+// remember already handle task
 class TaskMemo {
  public:
   TaskMemo() = default;
@@ -70,6 +74,18 @@ class TaskMemo {
     utils::ReadLockGuard lg(lock_);
 
     return keys_.find(key) != keys_.end();
+  }
+
+  void Clear(const std::string& prefix) {
+    utils::WriteLockGuard lg(lock_);
+
+    for (auto it = keys_.begin(); it != keys_.end();) {
+      if (it->find(prefix) == 0) {
+        it = keys_.erase(it);
+      } else {
+        ++it;
+      }
+    }
   }
 
  private:
@@ -151,14 +167,18 @@ class CleanDelFileTask : public TaskRunnable {
 class CleanFileTask : public TaskRunnable {
  public:
   CleanFileTask(OperationProcessorSPtr operation_processor, blockaccess::BlockAccesserSPtr block_accessor,
-                TaskMemoSPtr task_memo, const AttrEntry& attr)
-      : operation_processor_(operation_processor), data_accessor_(block_accessor), task_memo_(task_memo), attr_(attr) {}
+                TaskMemoSPtr task_memo, const std::string& fs_name, const AttrEntry& attr)
+      : operation_processor_(operation_processor),
+        data_accessor_(block_accessor),
+        task_memo_(task_memo),
+        fs_name_(fs_name),
+        attr_(attr) {}
   ~CleanFileTask() override = default;
 
-  static CleanDelFileTaskSPtr New(OperationProcessorSPtr operation_processor,
-                                  blockaccess::BlockAccesserSPtr block_accessor, TaskMemoSPtr task_memo,
-                                  const AttrEntry& attr) {
-    return std::make_shared<CleanDelFileTask>(operation_processor, block_accessor, task_memo, attr);
+  static CleanFileTaskSPtr New(OperationProcessorSPtr operation_processor,
+                               blockaccess::BlockAccesserSPtr block_accessor, TaskMemoSPtr task_memo,
+                               const std::string& fs_name, const AttrEntry& attr) {
+    return std::make_shared<CleanFileTask>(operation_processor, block_accessor, task_memo, fs_name, attr);
   }
 
   std::string Type() override { return "CLEAN_FILE"; }
@@ -170,6 +190,7 @@ class CleanFileTask : public TaskRunnable {
 
   Status CleanFile(const AttrEntry& attr);
 
+  const std::string fs_name_;
   AttrEntry attr_;
 
   OperationProcessorSPtr operation_processor_;
@@ -241,9 +262,9 @@ class GcProcessor {
   void RememberFileSessionTask(const std::vector<FileSessionEntry>& file_sessions);
   void ForgotFileSessionTask(const std::vector<FileSessionEntry>& file_sessions);
 
-  void ScanDelSlice(uint32_t fs_id);
-  void ScanDelFile(uint32_t fs_id);
-  void ScanExpiredFileSession(uint32_t fs_id);
+  void ScanDelSlice(const FsInfoEntry& fs_info);
+  void ScanDelFile(const FsInfoEntry& fs_info);
+  void ScanExpiredFileSession(const FsInfoEntry& fs_info);
   void ScanDelFs(const FsInfoEntry& fs_info);
 
   static bool ShouldDeleteFile(const AttrEntry& attr);
@@ -251,9 +272,10 @@ class GcProcessor {
   static bool ShouldRecycleFs(const FsInfoEntry& fs_info);
 
   void SetFsStateRecycle(const FsInfoEntry& fs_info);
-  Status CleanFsInfo(const std::string& fs_name);
+  Status CleanFsInfo(const FsInfoEntry& fs_info);
 
   blockaccess::BlockAccesserSPtr GetOrCreateDataAccesser(uint32_t fs_id);
+  blockaccess::BlockAccesserSPtr GetOrCreateDataAccesser(const FsInfoEntry& fs_info);
 
   std::atomic<bool> is_running_{false};
 

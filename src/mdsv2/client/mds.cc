@@ -109,7 +109,7 @@ CreateFsResponse MDSClient::CreateFs(const std::string& fs_name, const CreateFsP
   request.set_fs_type(pb::mdsv2::FsType::S3);
   request.set_owner(params.owner);
   request.set_capacity(1024 * 1024 * 1024);
-  request.set_recycle_time_hour(24);
+  request.set_recycle_time_hour(1);
 
   if (params.partition_type == "mono") {
     request.set_partition_type(::dingofs::pb::mdsv2::PartitionType::MONOLITHIC_PARTITION);

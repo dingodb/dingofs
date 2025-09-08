@@ -2556,42 +2556,6 @@ Status FileSystem::UpdatePartitionPolicy(const std::map<uint64_t, BucketSetEntry
   return Status::OK();
 }
 
-Status FileSystem::GetDelFiles(std::vector<AttrEntry>& delfiles) {
-  Trace trace;
-  uint32_t count = 0;
-  ScanDelFileOperation operation(trace, fs_id_, [&](const std::string&, const std::string& value) -> bool {
-    delfiles.push_back(MetaCodec::DecodeDelFileValue(value));
-    ++count;
-    return true;
-  });
-
-  return RunOperation(&operation);
-}
-
-Status FileSystem::GetDelSlices(std::vector<TrashSliceList>& delslices) {
-  Trace trace;
-  uint32_t count = 0;
-  ScanDelSliceOperation operation(trace, fs_id_, [&](const std::string&, const std::string& value) -> bool {
-    delslices.push_back(MetaCodec::DecodeDelSliceValue(value));
-    ++count;
-    return true;
-  });
-
-  return RunOperation(&operation);
-}
-
-Status FileSystem::GetFsOpLogs(std::vector<FsOpLog>& fs_op_logs) {
-  Trace trace;
-  uint32_t count = 0;
-  ScanFsOpLogOperation operation(trace, fs_id_, [&](const FsOpLog& oplog) -> bool {
-    fs_op_logs.push_back(oplog);
-    ++count;
-    return true;
-  });
-
-  return RunOperation(&operation);
-}
-
 void FileSystem::DescribeByJson(Json::Value& value) {
   value["fs_id"] = fs_id_;
   value["fs_name"] = fs_info_->GetName();
@@ -2909,7 +2873,6 @@ Status FileSystemSet::DeleteFs(Context& ctx, const std::string& fs_name, bool is
 
   if (status.ok()) {
     DeleteFileSystem(fs_info.fs_id());
-    DestroyFsResource(fs_info.fs_id());
   }
 
   return status;
@@ -3181,6 +3144,52 @@ Status FileSystemSet::QuitFs(Context& ctx, const std::string& fs_name, const std
   }
 
   return Status::OK();
+}
+
+Status FileSystemSet::GetFileSessions(uint32_t fs_id, std::vector<FileSessionEntry>& file_sessions) {
+  Trace trace;
+  ScanFileSessionOperation operation(trace, fs_id, [&](const FileSessionEntry& file_session) -> bool {
+    file_sessions.push_back(file_session);
+    return true;
+  });
+
+  return RunOperation(&operation);
+}
+
+Status FileSystemSet::GetDelFiles(uint32_t fs_id, std::vector<AttrEntry>& delfiles) {
+  Trace trace;
+  uint32_t count = 0;
+  ScanDelFileOperation operation(trace, fs_id, [&](const std::string&, const std::string& value) -> bool {
+    delfiles.push_back(MetaCodec::DecodeDelFileValue(value));
+    ++count;
+    return true;
+  });
+
+  return RunOperation(&operation);
+}
+
+Status FileSystemSet::GetDelSlices(uint32_t fs_id, std::vector<TrashSliceList>& delslices) {
+  Trace trace;
+  uint32_t count = 0;
+  ScanDelSliceOperation operation(trace, fs_id, [&](const std::string&, const std::string& value) -> bool {
+    delslices.push_back(MetaCodec::DecodeDelSliceValue(value));
+    ++count;
+    return true;
+  });
+
+  return RunOperation(&operation);
+}
+
+Status FileSystemSet::GetFsOpLogs(uint32_t fs_id, std::vector<FsOpLog>& fs_op_logs) {
+  Trace trace;
+  uint32_t count = 0;
+  ScanFsOpLogOperation operation(trace, fs_id, [&](const FsOpLog& oplog) -> bool {
+    fs_op_logs.push_back(oplog);
+    ++count;
+    return true;
+  });
+
+  return RunOperation(&operation);
 }
 
 bool FileSystemSet::LoadFileSystems() {

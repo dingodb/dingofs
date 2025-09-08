@@ -58,7 +58,9 @@ int main(int argc, char** argv) {
   if (testing::FLAGS_gtest_filter == "*") {
     std::string default_run_case;
     // common
+
     default_run_case += "MetaDataCodecTest.*";
+    default_run_case += ":HelperTest.*";
     default_run_case += ":AutoIncrementIdGeneratorTest.*";
     default_run_case += ":FileSystemSetTest.*";
     default_run_case += ":InodeCacheTest.*";

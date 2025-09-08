@@ -223,10 +223,6 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   FileSessionManager& GetFileSessionManager() { return file_session_manager_; }
 
-  Status GetDelFiles(std::vector<AttrEntry>& delfiles);
-  Status GetDelSlices(std::vector<TrashSliceList>& delslices);
-  Status GetFsOpLogs(std::vector<FsOpLog>& fs_op_logs);
-
   void DescribeByJson(Json::Value& value);
 
  private:
@@ -399,6 +395,11 @@ class FileSystemSet {
   Status QuitFs(Context& ctx, uint32_t fs_id, const std::vector<uint64_t>& mds_ids, const std::string& reason);
   Status QuitFs(Context& ctx, const std::string& fs_name, const std::vector<uint64_t>& mds_ids,
                 const std::string& reason);
+
+  Status GetFileSessions(uint32_t fs_id, std::vector<FileSessionEntry>& file_sessions);
+  Status GetDelFiles(uint32_t fs_id, std::vector<AttrEntry>& delfiles);
+  Status GetDelSlices(uint32_t fs_id, std::vector<TrashSliceList>& delslices);
+  Status GetFsOpLogs(uint32_t fs_id, std::vector<FsOpLog>& fs_op_logs);
 
   // load already exist filesystem
   bool LoadFileSystems();

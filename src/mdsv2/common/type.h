@@ -56,6 +56,13 @@ struct Range {
   std::string ToString() const { return fmt::format("[{}, {})", start, end); }
 };
 
+struct IntRange {
+  uint64_t start;
+  uint64_t end;
+
+  std::string ToString() const { return fmt::format("[{}, {})", start, end); }
+};
+
 inline bool IsDir(Ino ino) { return (ino & 1) == 1; }
 inline bool IsFile(Ino ino) { return (ino & 1) == 0; }
 

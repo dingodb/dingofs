@@ -170,6 +170,9 @@ const char* Operation::OpName() const {
     case OpType::kUpdateFsState:
       return "UpdateFsState";
 
+    case OpType::kUpdateFsRecycleProgress:
+      return "UpdateFsRecycleProgress";
+
     case OpType::kCreateRoot:
       return "CreateRoot";
 
@@ -349,6 +352,17 @@ Status CreateFsOperation::Run(TxnUPtr& txn) {
   fs_info_.set_version(1);
   txn->Put(MetaCodec::EncodeFsKey(fs_info_.fs_name()), MetaCodec::EncodeFsValue(fs_info_));
 
+  // add fs op log
+  FsOpLog fs_config_log;
+
+  fs_config_log.set_fs_name(fs_info_.fs_name());
+  fs_config_log.set_fs_id(fs_info_.fs_id());
+  fs_config_log.set_type(pb::mdsv2::FsOpLog_Type_CREATE_FS);
+  fs_config_log.set_comment("CreateFs");
+  fs_config_log.set_time_ms(GetTime() / 1e6);
+
+  txn->Put(MetaCodec::EncodeFsOpLogKey(fs_info_.fs_id(), GetTime()), MetaCodec::EncodeFsOpLogValue(fs_config_log));
+
   return Status::OK();
 }
 
@@ -443,13 +457,39 @@ Status DeleteFsOperation::Run(TxnUPtr& txn) {
 
   txn->Put(fs_key, MetaCodec::EncodeFsValue(fs_info));
 
+  // add fs op log
+  FsOpLog fs_config_log;
+
+  fs_config_log.set_fs_name(fs_info.fs_name());
+  fs_config_log.set_fs_id(fs_info.fs_id());
+  fs_config_log.set_type(pb::mdsv2::FsOpLog_Type_DELETE_FS);
+  fs_config_log.set_comment("DeleteFs");
+  fs_config_log.set_time_ms(GetTime() / 1e6);
+
+  txn->Put(MetaCodec::EncodeFsOpLogKey(fs_info.fs_id(), GetTime()), MetaCodec::EncodeFsOpLogValue(fs_config_log));
+
   result_.fs_info = fs_info;
 
   return Status::OK();
 }
 
 Status CleanFsOperation::Run(TxnUPtr& txn) {
+  CHECK(fs_id_ > 0) << "fs_id is zero.";
+  CHECK(!fs_name_.empty()) << "fs_name is empty.";
+
+  // clean fs op log
+  std::vector<std::string> keys;
+  Range range = MetaCodec::GetFsConfigLogRange(fs_id_);
+  auto status = txn->Scan(range, [&](const std::string& key, const std::string&) -> bool {
+    keys.push_back(key);
+    return true;
+  });
+  if (!status.ok()) return status;
+
+  for (const auto& key : keys) txn->Delete(key);
+
   txn->Delete(MetaCodec::EncodeFsKey(fs_name_));
+
   return Status::OK();
 }
 
@@ -517,8 +557,42 @@ Status UpdateFsStateOperation::Run(TxnUPtr& txn) {
 
   auto fs_info = MetaCodec::DecodeFsValue(value);
 
+  auto old_fs_status = fs_info.status();
   fs_info.set_status(status_);
   fs_info.set_version(fs_info.version() + 1);
+
+  txn->Put(fs_key, MetaCodec::EncodeFsValue(fs_info));
+
+  // add fs op log
+  FsOpLog fs_config_log;
+
+  fs_config_log.set_fs_name(fs_info.fs_name());
+  fs_config_log.set_fs_id(fs_info.fs_id());
+  fs_config_log.set_type(pb::mdsv2::FsOpLog_Type_UPDATE_STATE_FS);
+  fs_config_log.set_comment("UpdateFsState");
+  fs_config_log.set_time_ms(GetTime() / 1e6);
+  fs_config_log.mutable_update_state_fs()->set_old_status(old_fs_status);
+  fs_config_log.mutable_update_state_fs()->set_new_status(status_);
+
+  txn->Put(MetaCodec::EncodeFsOpLogKey(fs_info.fs_id(), GetTime()), MetaCodec::EncodeFsOpLogValue(fs_config_log));
+
+  return Status::OK();
+}
+
+Status UpdateFsRecycleProgressOperation::Run(TxnUPtr& txn) {
+  std::string fs_key = MetaCodec::EncodeFsKey(fs_name_);
+
+  std::string value;
+  auto status = txn->Get(fs_key, value);
+  if (!status.ok()) {
+    return status;
+  }
+
+  auto fs_info = MetaCodec::DecodeFsValue(value);
+
+  auto* recycle_progress = fs_info.mutable_recycle_progress();
+  recycle_progress->set_last_ino(ino_);
+  recycle_progress->set_last_time_ms(GetTime() / 1e6);
 
   txn->Put(fs_key, MetaCodec::EncodeFsValue(fs_info));
 
@@ -1443,7 +1517,7 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoEntry& fs_info,
   DINGO_LOG(INFO) << fmt::format("[operation.{}.{}] out-of-file-length trash slices count({}).", fs_id, ino,
                                  out_of_length_count);
 
-  // 3. complete overlapped slices
+  // 2. complete overlapped slices
   //     |______4________|      slices
   // |__1__|___2___|____3_____| slices
   // |________________________| chunk
@@ -1516,11 +1590,11 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoEntry& fs_info,
   DINGO_LOG(INFO) << fmt::format("[operation.{}.{}] complete overlapped trash slice count({}).", fs_id, ino,
                                  complete_overlapped_count);
 
-  // 4. partial overlapped slices
+  // 3. partial overlapped slices
   //     |______4________|      slices
   // |__1__|___2___|____3_____| slices
   // |________________________| chunk
-  // slice-2 and slice-3 are partial overlapped by slice-4
+  // slice-1 and slice-3 are partial overlapped by slice-4
   // or
   //     |______4________|      slices
   // |___________1____________| slices
@@ -1532,52 +1606,52 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoEntry& fs_info,
   // |________________________| chunk
   // slice-1 is partial overlapped by slice-2 and slice-3
   // slice id -> TrashSliceEntry
-  std::map<uint64_t, TrashSliceEntry> temp_trash_slice_map;
-  for (auto& offset_range : offset_ranges) {
-    if (offset_range.slices.empty()) continue;
+  // std::map<uint64_t, TrashSliceEntry> temp_trash_slice_map;
+  // for (auto& offset_range : offset_ranges) {
+  //   if (offset_range.slices.empty()) continue;
 
-    auto& slices = offset_range.slices;
-    for (size_t i = 1; i < slices.size(); ++i) {
-      auto& slice = slices[i];
-      if (reserve_slice_ids.count(slice.id) == 0) {
-        continue;
-      }
+  //   auto& slices = offset_range.slices;
+  //   for (size_t i = 1; i < slices.size(); ++i) {
+  //     auto& slice = slices[i];
+  //     if (reserve_slice_ids.count(slice.id) == 0) {
+  //       continue;
+  //     }
 
-      auto start_offset = std::max(offset_range.start, slice.offset);
-      auto end_offset = std::min(offset_range.end, slice.offset + slice.len);
+  //     auto start_offset = std::max(offset_range.start, slice.offset);
+  //     auto end_offset = std::min(offset_range.end, slice.offset + slice.len);
 
-      for (uint64_t block_offset = slice.offset; block_offset < end_offset; block_offset += block_size) {
-        if (block_offset >= start_offset && block_offset + block_size < end_offset) {
-          auto it = temp_trash_slice_map.find(slice.id);
-          if (it == temp_trash_slice_map.end()) {
-            TrashSliceEntry trash_slice;
-            trash_slice.set_fs_id(fs_id);
-            trash_slice.set_ino(ino);
-            trash_slice.set_chunk_index(chunk.index());
-            trash_slice.set_slice_id(slice.id);
-            trash_slice.set_block_size(block_size);
-            trash_slice.set_chunk_size(chunk_size);
-            trash_slice.set_is_partial(true);
-            auto* range = trash_slice.add_ranges();
-            range->set_offset(slice.offset);
-            range->set_len(slice.len);
-            range->set_compaction_version(slice.compaction_version);
+  //     for (uint64_t block_offset = slice.offset; block_offset < end_offset; block_offset += block_size) {
+  //       if (block_offset >= start_offset && block_offset + block_size < end_offset) {
+  //         auto it = temp_trash_slice_map.find(slice.id);
+  //         if (it == temp_trash_slice_map.end()) {
+  //           TrashSliceEntry trash_slice;
+  //           trash_slice.set_fs_id(fs_id);
+  //           trash_slice.set_ino(ino);
+  //           trash_slice.set_chunk_index(chunk.index());
+  //           trash_slice.set_slice_id(slice.id);
+  //           trash_slice.set_block_size(block_size);
+  //           trash_slice.set_chunk_size(chunk_size);
+  //           trash_slice.set_is_partial(true);
+  //           auto* range = trash_slice.add_ranges();
+  //           range->set_offset(slice.offset);
+  //           range->set_len(slice.len);
+  //           range->set_compaction_version(slice.compaction_version);
 
-            temp_trash_slice_map[slice.id] = trash_slice;
-          } else {
-            auto* range = it->second.add_ranges();
-            range->set_offset(block_offset);
-            range->set_len(block_size);
-            range->set_compaction_version(slice.compaction_version);
-          }
-        }
-      }
-    }
-  }
+  //           temp_trash_slice_map[slice.id] = trash_slice;
+  //         } else {
+  //           auto* range = it->second.add_ranges();
+  //           range->set_offset(block_offset);
+  //           range->set_len(block_size);
+  //           range->set_compaction_version(slice.compaction_version);
+  //         }
+  //       }
+  //     }
+  //   }
+  // }
 
-  for (auto& [_, trash_slice] : temp_trash_slice_map) {
-    trash_slices.add_slices()->Swap(&trash_slice);
-  }
+  // for (auto& [_, trash_slice] : temp_trash_slice_map) {
+  //   trash_slices.add_slices()->Swap(&trash_slice);
+  // }
 
   size_t partial_overlapped_count = trash_slices.slices_size() - out_of_length_count - complete_overlapped_count;
   DINGO_LOG(INFO) << fmt::format("[operation.{}.{}] partial overlapped trash slice count({}) total({})", fs_id, ino,
