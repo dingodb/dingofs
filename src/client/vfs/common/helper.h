@@ -127,7 +127,8 @@ static void SplitString(const std::string& str, char c,
 }
 
 static std::string FormatTime(int64_t timestamp, const std::string& format) {
-  std::chrono::time_point<std::chrono::system_clock, std::chrono::seconds> tp((std::chrono::seconds(timestamp)));
+  std::chrono::time_point<std::chrono::system_clock, std::chrono::seconds> tp(
+      (std::chrono::seconds(timestamp)));
 
   auto in_time_t = std::chrono::system_clock::to_time_t(tp);
   std::stringstream ss;
@@ -135,7 +136,9 @@ static std::string FormatTime(int64_t timestamp, const std::string& format) {
   return ss.str();
 }
 
-static std::string FormatTime(int64_t timestamp) { return FormatTime(timestamp, "%Y-%m-%d %H:%M:%S"); }
+static std::string FormatTime(int64_t timestamp) {
+  return FormatTime(timestamp, "%Y-%m-%d %H:%M:%S");
+}
 
 }  // namespace vfs
 }  // namespace client

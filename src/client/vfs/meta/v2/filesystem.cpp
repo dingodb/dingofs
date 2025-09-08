@@ -937,7 +937,8 @@ bool MDSV2FileSystem::GetDescription(ContextSPtr, Json::Value& value) {
     item["id"] = mds.ID();
     item["host"] = mds.Host();
     item["port"] = mds.Port();
-
+    item["state"] = mds.StateName(mds.GetState());
+    item["last_online_time_ms"] = mds.LastOnlineTimeMs();
     mds_array.append(item);
   }
   value["mds_list"] = mds_array;

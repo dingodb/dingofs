@@ -31,19 +31,14 @@
 #include "butil/iobuf.h"
 #include "client/const.h"
 #include "client/vfs/common/helper.h"
-//#include "client/vfs/common/version.h"
 #include "fmt/format.h"
+#include "mdsv2/common/helper.h"
 #include "mdsv2/common/version.h"
 #include "utils/string.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
-
-// DECLARE_uint32(mds_heartbeat_mds_offline_period_time_ms);
-// DECLARE_uint32(mds_heartbeat_client_offline_period_ms);
-// DECLARE_uint32(cache_member_heartbeat_offline_timeout_s);
-// DECLARE_uint32(cache_member_heartbeat_miss_timeout_s);
 
 static std::string RenderHead(const std::string& title) {
   butil::IOBufBuilder os;
@@ -101,7 +96,7 @@ static void RenderGitInfo(butil::IOBufBuilder& os) {
 static void RenderClientInfo(const Json::Value& json_value,
                              butil::IOBufBuilder& os) {
   os << R"(<div style="margin:12px;font-size:smaller;">)";
-  os << R"(<h3>Client Info</h3>)";
+  os << R"(<h3>Client </h3>)";
   os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
   os << "<tr>";
   os << "<th>ID</th>";
@@ -143,7 +138,7 @@ static void RenderClientInfo(const Json::Value& json_value,
 static void RenderFsInfo(const Json::Value& json_value,
                          butil::IOBufBuilder& os) {
   os << R"(<div style="margin:12px;font-size:smaller;">)";
-  os << R"(<h3>FS Info</h3>)";
+  os << R"(<h3>FS </h3>)";
   os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
   os << "<tr>";
   os << "<th>ID</th>";
@@ -237,11 +232,14 @@ static void RenderFsInfo(const Json::Value& json_value,
 static void RenderMdsInfo(const Json::Value& json_value,
                           butil::IOBufBuilder& os) {
   os << R"(<div style="margin:12px;font-size:smaller;">)";
-  os << R"(<h3>MDS Info</h3>)";
+  os << R"(<h3>MDS </h3>)";
   os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
   os << "<tr>";
   os << "<th>ID</th>";
   os << "<th>Addr</th>";
+  os << "<th>State</th>";
+  os << "<th>Last Online Time</th>";
+  os << "<th>Details</th>";
   os << "</tr>";
 
   // get client info
@@ -263,11 +261,19 @@ static void RenderMdsInfo(const Json::Value& json_value,
     auto id = mds["id"].asUInt64();
     auto host = mds["host"].asString();
     auto port = mds["port"].asInt();
-
+    auto state = mds["state"].asString();
+    auto last_online_time_ms = mds["last_online_time_ms"].asUInt64();
     os << "<td>" << id << "</td>";
     os << fmt::format(
         R"(<td><a href="http://{}:{}/FsStatService" target="_blank">{}:{} </a></td>)",
         host, port, host, port);
+    os << "<td>" << state << "</td>";
+    os << "<td>" << dingofs::mdsv2::Helper::FormatMsTime(last_online_time_ms)
+       << "</td>";
+
+    os << fmt::format(
+        R"(<td><a href="http://{}:{}/FsStatService/server" target="_blank">details</a></td>)",
+        host, port);
     os << "</tr>";
   }
 
@@ -280,7 +286,7 @@ static void RenderMdsInfo(const Json::Value& json_value,
 static void RenderHandlerInfo(const Json::Value& json_value,
                               butil::IOBufBuilder& os) {
   os << R"(<div style="margin:12px;font-size:smaller;">)";
-  os << R"(<h3>handler Info</h3>)";
+  os << R"(<h3>Handler </h3>)";
   os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
   os << "<tr>";
   os << "<th>Ino</th>";
@@ -288,7 +294,7 @@ static void RenderHandlerInfo(const Json::Value& json_value,
   os << "<th>Flags</th>";
   os << "</tr>";
 
-  // get client info
+  // get handlers info
   const Json::Value& handlers = json_value["handlers"];
   if (!handlers.isArray()) {
     LOG(ERROR) << "handlers is not an array.";

@@ -318,7 +318,8 @@ static void RenderClientList(const std::vector<ClientEntry>& clients, butil::IOB
   for (const auto& client : clients) {
     os << "<tr>";
     os << "<td>" << client.id() << "</td>";
-    os << "<td>" << fmt::format("{}:{}", client.hostname(), client.port()) << "</td>";
+    os << fmt::format(R"(<td><a href="http://{}:{}/FuseStatService" target="_blank">{}:{} </a></td>)", client.ip(),
+                      client.port(), client.hostname(), client.port());
     os << "<td>" << client.mountpoint() << "</td>";
     os << "<td>" << Helper::FormatMsTime(client.last_online_time_ms()) << "</td>";
     if (client.last_online_time_ms() + FLAGS_mds_heartbeat_client_offline_period_ms < now_ms) {

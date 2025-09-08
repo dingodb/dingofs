@@ -108,6 +108,7 @@ Status MDSClient::Heartbeat() {
   auto* client = request.mutable_client();
   client->set_id(client_id_.ID());
   client->set_hostname(client_id_.Hostname());
+  client->set_ip(client_id_.IP());
   client->set_port(client_id_.Port());
   client->set_mountpoint(client_id_.Mountpoint());
   client->set_fs_name(fs_info_->GetName());

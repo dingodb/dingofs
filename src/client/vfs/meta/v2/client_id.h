@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <string>
 
+#include "client/vfs/meta/v2/helper.h"
 #include "fmt/format.h"
 #include "utils/uuid.h"
 
@@ -32,6 +33,7 @@ class ClientId {
            const std::string& mountpoint)
       : uuid_(utils::UUIDGenerator::GenerateUUID()),
         hostname_(hostname),
+        ip_(Helper::HostName2IP(hostname)),
         port_(port),
         mountpoint_(mountpoint) {}
   ~ClientId() = default;
@@ -39,6 +41,7 @@ class ClientId {
   std::string ID() const { return uuid_; }
   std::string Uuid() const { return uuid_; }
   std::string Hostname() const { return hostname_; }
+  std::string IP() const { return ip_; }
   uint32_t Port() const { return port_; }
   std::string Mountpoint() const { return mountpoint_; }
   std::string Description() const {
@@ -53,6 +56,7 @@ class ClientId {
  private:
   std::string uuid_;
   std::string hostname_;
+  std::string ip_;
   uint32_t port_;
   std::string mountpoint_;
 };
