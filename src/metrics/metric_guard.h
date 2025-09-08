@@ -86,10 +86,17 @@ struct MetricListGuard {
 
 struct VFSRWMetricGuard {
   explicit VFSRWMetricGuard(Status* s, InterfaceMetric* metric, size_t* count,
-                            uint64_t start = butil::cpuwide_time_us())
-      : s_(s), metric_(metric), count_(count), start_(start) {}
+                            bool enable = true)
+      : s_(s),
+        metric_(metric),
+        count_(count),
+        enable_(enable),
+        start_(butil::cpuwide_time_us()) {}
 
   ~VFSRWMetricGuard() {
+    if (!enable_) {
+      return;
+    }
     if (s_->ok()) {
       metric_->bps.count << *count_;
       metric_->qps.count << 1;
@@ -105,22 +112,29 @@ struct VFSRWMetricGuard {
   InterfaceMetric* metric_;
   size_t* count_;
   uint64_t start_;
+  bool enable_;
 };
 
 struct ClientOpMetricGuard {
-  explicit ClientOpMetricGuard(std::list<metrics::OpMetric*> p_metric_list)
-      : metric_list(p_metric_list), start(butil::cpuwide_time_us()) {
+  explicit ClientOpMetricGuard(std::list<metrics::OpMetric*> metric_list,
+                               bool enable = true)
+      : metric_list_(metric_list),
+        enable_(enable),
+        start_(butil::cpuwide_time_us()) {
     for (auto& metric : metric_list) {
       metric->inflightOpNum << 1;
     }
   }
 
   ~ClientOpMetricGuard() {
-    for (auto& metric : metric_list) {
+    if (!enable_) {
+      return;
+    }
+    for (auto& metric : metric_list_) {
       metric->inflightOpNum << -1;
-      if (op_ok) {
+      if (op_ok_) {
         metric->qpsTotal << 1;
-        auto duration = butil::cpuwide_time_us() - start;
+        auto duration = butil::cpuwide_time_us() - start_;
         metric->latency << duration;
         metric->latTotal << duration;
       } else {
@@ -129,11 +143,12 @@ struct ClientOpMetricGuard {
     }
   }
 
-  void FailOp() { op_ok = false; }
+  void FailOp() { op_ok_ = false; }
 
-  bool op_ok{true};
-  std::list<metrics::OpMetric*> metric_list;
-  uint64_t start;
+  bool op_ok_{true};
+  std::list<metrics::OpMetric*> metric_list_;
+  uint64_t start_;
+  bool enable_;
 };
 
 struct LatencyGuard {

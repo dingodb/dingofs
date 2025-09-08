@@ -277,7 +277,8 @@ Status VFSWrapper::Lookup(Ino parent, const std::string& name, Attr* attr) {
       !IsInternalName(name));
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opLookup, &client_op_metric_->opAll});
+      {&client_op_metric_->opLookup, &client_op_metric_->opAll},
+      !IsInternalName(name));
 
   if (name.length() > vfs_->GetMaxNameLength()) {
     s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
@@ -306,7 +307,8 @@ Status VFSWrapper::GetAttr(Ino ino, Attr* attr) {
       !IsInternalNode(ino));
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opGetAttr, &client_op_metric_->opAll});
+      {&client_op_metric_->opGetAttr, &client_op_metric_->opAll},
+      !IsInternalNode(ino));
 
   s = vfs_->GetAttr(ctx, ino, attr);
   VLOG(1) << "VFSGetAttr end ino: " << ino << " status: " << s.ToString();
@@ -508,7 +510,8 @@ Status VFSWrapper::Open(Ino ino, int flags, uint64_t* fh) {
       !IsInternalNode(ino));
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opOpen, &client_op_metric_->opAll});
+      {&client_op_metric_->opOpen, &client_op_metric_->opAll},
+      !IsInternalNode(ino));
 
   s = vfs_->Open(span->GetContext(), ino, flags, fh);
   VLOG(1) << "VFSOpen end, status: " << s.ToString() << " fh: " << *fh;
@@ -568,8 +571,10 @@ Status VFSWrapper::Read(Ino ino, char* buf, uint64_t size, uint64_t offset,
       !IsInternalNode(ino));
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opRead, &client_op_metric_->opAll});
-  VFSRWMetricGuard guard(&s, &g_rw_metric.read, out_rsize);
+      {&client_op_metric_->opRead, &client_op_metric_->opAll},
+      !IsInternalNode(ino));
+  VFSRWMetricGuard guard(&s, &g_rw_metric.read, out_rsize,
+                         !IsInternalNode(ino));
 
   s = vfs_->Read(span->GetContext(), ino, buf, size, offset, fh, out_rsize);
 
@@ -622,7 +627,8 @@ Status VFSWrapper::Flush(Ino ino, uint64_t fh) {
       !IsInternalNode(ino));
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opFlush, &client_op_metric_->opAll});
+      {&client_op_metric_->opFlush, &client_op_metric_->opAll},
+      !IsInternalNode(ino));
 
   s = vfs_->Flush(span->GetContext(), ino, fh);
   VLOG(1) << "VFSFlush end, status: " << s.ToString();
@@ -644,7 +650,8 @@ Status VFSWrapper::Release(Ino ino, uint64_t fh) {
       !IsInternalNode(ino));
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opRelease, &client_op_metric_->opAll});
+      {&client_op_metric_->opRelease, &client_op_metric_->opAll},
+      !IsInternalNode(ino));
 
   s = vfs_->Release(span->GetContext(), ino, fh);
   VLOG(1) << "VFSRelease end, status: " << s.ToString();
@@ -710,7 +717,8 @@ Status VFSWrapper::GetXattr(Ino ino, const std::string& name,
       !IsInternalNode(ino));
 
   ClientOpMetricGuard op_metric(
-      {&client_op_metric_->opGetXattr, &client_op_metric_->opAll});
+      {&client_op_metric_->opGetXattr, &client_op_metric_->opAll},
+      !IsInternalNode(ino));
 
   if (name.length() > vfs_->GetMaxNameLength()) {
     s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
