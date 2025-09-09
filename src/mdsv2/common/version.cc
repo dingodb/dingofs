@@ -82,7 +82,7 @@ void DingoLogVersion() {
 
 std::vector<std::pair<std::string, std::string>> DingoVersion() {
   std::vector<std::pair<std::string, std::string>> result;
-  result.emplace_back("VERSION", fmt::format("{}-{}", kMajorVersion, kMinorVersion));
+  result.emplace_back("VERSION", fmt::format("{}.{}", kMajorVersion, kMinorVersion));
   result.emplace_back("TAG_VERSION", kGitTagName);
   result.emplace_back("COMMIT_HASH", kGitCommitHash);
   result.emplace_back("COMMIT_USER", kGitCommitUser);
@@ -92,6 +92,12 @@ std::vector<std::pair<std::string, std::string>> DingoVersion() {
 
   return result;
 }
+
+std::string GetGitVersion() { return fmt::format("{}.{}", kMajorVersion, kMinorVersion); }
+
+std::string GetGitCommitHash() { return kGitCommitHash; }
+
+std::string GetGitCommitTime() { return kGitCommitTime; }
 
 }  // namespace mdsv2
 }  // namespace dingofs

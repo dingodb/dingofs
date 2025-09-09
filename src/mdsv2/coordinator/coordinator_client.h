@@ -39,6 +39,8 @@ class CoordinatorClient {
   virtual bool Init(const std::string& addr) = 0;
   virtual bool Destroy() = 0;
 
+  virtual std::string GetAddr() = 0;
+
   virtual Status MDSHeartbeat(const MDSMeta& mds, std::vector<MDSMeta>& out_mdses) = 0;
   virtual Status GetMDSList(std::vector<MDSMeta>& mdses) = 0;
 

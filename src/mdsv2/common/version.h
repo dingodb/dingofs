@@ -59,6 +59,10 @@ void DingoShowVersion();
 void DingoLogVersion();
 std::vector<std::pair<std::string, std::string>> DingoVersion();
 
+std::string GetGitVersion();
+std::string GetGitCommitHash();
+std::string GetGitCommitTime();
+
 }  // namespace mdsv2
 }  // namespace dingofs
 

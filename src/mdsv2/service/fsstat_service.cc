@@ -566,6 +566,27 @@ static void RenderJsonPage(const std::string& header, const std::string& json, b
   os << "</html>";
 }
 
+static void RenderGitVersion(butil::IOBufBuilder& os) {
+  os << R"(<div style="margin:2px;font-size:smaller;text-align:center">)";
+  os << fmt::format(R"(<p >{} {} {}</p>)", GetGitVersion(), GetGitCommitHash(), GetGitCommitTime());
+  os << "</div>";
+}
+
+static void RenderCoordinatorAddr(const std::string& addrs, butil::IOBufBuilder& os) {
+  os << R"(<div style="margin:8px;font-size:smaller;text-align:center">)";
+  os << R"(<h3>Coordinator: )";
+
+  std::vector<std::string> addr_vec;
+  Helper::SplitString(addrs, ',', addr_vec);
+
+  for (const auto& addr : addr_vec) {
+    os << fmt::format(R"(<a href="http://{}" target="_blank">{}</a>)", addr, addr);
+  }
+
+  os << "</h3>";
+  os << "</div>";
+}
+
 void FsStatServiceImpl::RenderMainPage(const brpc::Server* server, FileSystemSetSPtr file_system_set,
                                        butil::IOBufBuilder& os) {
   os << "<!DOCTYPE html><html>\n";
@@ -577,6 +598,13 @@ void FsStatServiceImpl::RenderMainPage(const brpc::Server* server, FileSystemSet
   os << "<body>";
   server->PrintTabsBody(os, "fsstat");
   os << R"(<h1 style="text-align:center;">dingofs-mds dashboard</h1>)";
+
+  // git version
+  RenderGitVersion(os);
+
+  // coordinator addr
+  std::string coor_addr = Server::GetInstance().GetCoordinatorClient()->GetAddr();
+  RenderCoordinatorAddr(coor_addr, os);
 
   // fs stats
   Context ctx;

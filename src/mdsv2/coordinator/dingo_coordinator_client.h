@@ -34,6 +34,8 @@ class DingoCoordinatorClient : public CoordinatorClient {
   bool Init(const std::string& addr) override;
   bool Destroy() override;
 
+  std::string GetAddr() override { return coordinator_addr_; }
+
   Status MDSHeartbeat(const MDSMeta& mds, std::vector<MDSMeta>& out_mdses) override;
   Status GetMDSList(std::vector<MDSMeta>& mdses) override;
 
