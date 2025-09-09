@@ -191,7 +191,7 @@ Status RemoteBlockCacheImpl::Range(ContextSPtr ctx, const BlockKey& key,
                     key.Filename(), offset, length);
   StepTimerGuard guard(timer);
 
-  ON_SCOPE_EXIT {
+  SCOPE_EXIT {
     if (ctx->GetCacheHit()) {
       RemoteBlockCacheMetric::AddCacheHit(1);
     } else {

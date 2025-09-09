@@ -129,7 +129,7 @@ namespace cache {
                << ", status = " << status.ToString();           \
   } while (0);
 
-#define ON_SCOPE_EXIT BRPC_SCOPE_EXIT
+#define SCOPE_EXIT BRPC_SCOPE_EXIT
 
 }  // namespace cache
 }  // namespace dingofs

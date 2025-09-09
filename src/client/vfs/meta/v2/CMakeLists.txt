@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 file(GLOB VFS_META_SRC_V2_LIB
     "*.cpp"
 )
@@ -44,4 +43,18 @@ target_link_libraries(vfs_meta_v2_lib
     absl::optional
     absl::btree
     ${FUSE3_LIBRARY}
+)
+
+add_library(vfs_meta_v2_rpc_lib
+    rpc.cpp
+    mds_discovery.cpp
+)
+
+target_link_libraries(vfs_meta_v2_rpc_lib
+    PROTO_OBJS
+
+    mdsv2_mds
+
+    dingofs_common
+    client_options
 )

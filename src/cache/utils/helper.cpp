@@ -32,8 +32,6 @@
 #include <numeric>
 #include <string>
 
-#include "cache/common/const.h"
-#include "cache/storage/base_filesystem.h"
 #include "utils/string.h"
 
 namespace dingofs {
@@ -141,51 +139,6 @@ std::string Helper::TempFilepath(const std::string& filepath) {
 bool Helper::IsTempFilepath(const std::string& filepath) {
   return HasSuffix(filepath, kTempFileSuffix);
 }
-
-// filesystem
-Status Helper::Walk(const std::string& dir, WalkFunc walk_func) {
-  return BaseFileSystem::GetInstance().Walk(dir, walk_func);
-}
-
-Status Helper::MkDirs(const std::string& dir) {
-  return BaseFileSystem::GetInstance().MkDirs(dir);
-}
-
-bool Helper::FileExists(const std::string& filepath) {
-  return BaseFileSystem::GetInstance().FileExists(filepath);
-}
-
-Status Helper::ReadFile(const std::string& filepath, std::string* content) {
-  if (!FileExists(filepath)) {
-    return Status::NotFound("file not found");
-  } else if (butil::ReadFileToString(butil::FilePath(filepath), content),
-             4 * kMiB) {
-    return Status::OK();
-  }
-  return Status::IoError("read file failed");
-}
-
-Status Helper::WriteFile(const std::string& filepath,
-                         const std::string& content) {
-  int rc = butil::WriteFile(butil::FilePath(filepath), content.data(),
-                            content.size());
-  if (rc == static_cast<int>(content.size())) {
-    return Status::OK();
-  }
-  return Status::IoError("write file failed");
-}
-
-Status Helper::RemoveFile(const std::string& filepath) {
-  return BaseFileSystem::GetInstance().RemoveFile(filepath);
-}
-
-Status Helper::StatFS(const std::string& dir, FSStat* stat) {
-  return BaseFileSystem::GetInstance().StatFS(dir, stat);
-}
-
-bool Helper::IsFile(const struct stat* stat) { return S_ISREG(stat->st_mode); }
-bool Helper::IsDir(const struct stat* stat) { return S_ISDIR(stat->st_mode); }
-bool Helper::IsLink(const struct stat* stat) { return S_ISLNK(stat->st_mode); }
 
 std::string Helper::StrMode(uint16_t mode) {
   static std::unordered_map<uint16_t, char> type2char = {

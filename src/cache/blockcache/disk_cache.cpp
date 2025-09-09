@@ -31,6 +31,7 @@
 #include "cache/common/macro.h"
 #include "cache/common/state_machine_impl.h"
 #include "cache/metric/disk_cache_metric.h"
+#include "cache/storage/base_filesystem.h"
 #include "cache/storage/filesystem.h"
 #include "cache/storage/hf3fs.h"
 #include "cache/storage/local_filesystem.h"
@@ -190,7 +191,7 @@ Status DiskCache::CreateDirs() {
       GetProbeDir(),
   };
   for (const auto& dir : dirs) {
-    auto status = Helper::MkDirs(dir);
+    auto status = FSHelper::MkDirs(dir);
     if (!status.ok()) {
       LOG(ERROR) << "Create directory failed: dir = " << dir
                  << ", status = " << status.ToString();
@@ -203,12 +204,12 @@ Status DiskCache::CreateDirs() {
 Status DiskCache::LoadOrCreateLockFile() {
   std::string content;
   auto lock_path = GetLockPath();
-  auto status = Helper::ReadFile(lock_path, &content);
+  auto status = FSHelper::ReadFile(lock_path, &content);
   if (status.ok()) {
     uuid_ = utils::TrimSpace(content);
   } else if (status.IsNotFound()) {
     uuid_ = utils::GenUuid();
-    status = Helper::WriteFile(lock_path, uuid_);
+    status = FSHelper::WriteFile(lock_path, uuid_);
   }
 
   if (!status.ok()) {

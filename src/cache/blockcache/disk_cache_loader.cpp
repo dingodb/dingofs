@@ -29,6 +29,7 @@
 
 #include "cache/blockcache/cache_store.h"
 #include "cache/common/macro.h"
+#include "cache/storage/base_filesystem.h"
 #include "cache/utils/context.h"
 #include "cache/utils/helper.h"
 
@@ -102,7 +103,7 @@ void DiskCacheLoader::LoadAllBlocks(const std::string& dir, BlockType type) {
 
   timer.start();
   status =
-      Helper::Walk(dir, [&](const std::string& prefix, const FileInfo& file) {
+      FSHelper::Walk(dir, [&](const std::string& prefix, const FileInfo& file) {
         if (!running_.load(std::memory_order_relaxed)) {
           return Status::Abort("disk cache loader stopped");
         }
@@ -148,7 +149,7 @@ bool DiskCacheLoader::LoadOneBlock(const std::string& prefix,
   std::string path = Helper::PathJoin({prefix, name});
 
   if (Helper::IsTempFilepath(name) || !key.ParseFromFilename(name)) {
-    auto status = Helper::RemoveFile(path);
+    auto status = FSHelper::RemoveFile(path);
     if (status.ok()) {
       LOG(INFO) << "Remove invalid block (path=" << path << ") success.";
     } else {

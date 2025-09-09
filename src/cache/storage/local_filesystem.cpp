@@ -174,7 +174,7 @@ Status LocalFileSystem::WriteFile(ContextSPtr ctx, const std::string& path,
     return CheckStatus(status);
   }
 
-  ON_SCOPE_EXIT {
+  SCOPE_EXIT {
     if (!status.ok()) {
       Unlink(ctx, tmppath);
     }

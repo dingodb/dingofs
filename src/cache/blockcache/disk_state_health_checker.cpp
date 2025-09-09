@@ -22,6 +22,7 @@
 #include "cache/common/state_machine.h"
 #include "cache/metric/cache_status.h"
 #include "cache/metric/disk_cache_metric.h"
+#include "cache/storage/base_filesystem.h"
 #include "cache/utils/helper.h"
 #include "utils/executor/bthread/bthread_executor.h"
 
@@ -92,9 +93,9 @@ void DiskStateHealthChecker::ProbeDisk() {
   std::string content(100, '0');
   std::string filepath = GetProbeFilepath();
 
-  auto status = Helper::WriteFile(filepath, content);
+  auto status = FSHelper::WriteFile(filepath, content);
   if (status.ok()) {
-    status = Helper::ReadFile(filepath, &out);
+    status = FSHelper::ReadFile(filepath, &out);
   }
 
   if (!status.ok()) {
@@ -106,7 +107,7 @@ void DiskStateHealthChecker::ProbeDisk() {
   }
 
   SetStatusPage(state_machine_->GetState());
-  Helper::RemoveFile(filepath);
+  FSHelper::RemoveFile(filepath);
 }
 
 std::string DiskStateHealthChecker::GetProbeFilepath() const {

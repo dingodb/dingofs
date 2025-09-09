@@ -79,7 +79,7 @@ Status HF3FS::WriteFile(ContextSPtr ctx, const std::string& path,
     return CheckStatus(status);
   }
 
-  ON_SCOPE_EXIT {
+  SCOPE_EXIT {
     Posix::Close(fd);
     if (!status.ok()) {
       Posix::Unlink(tmpfile);
@@ -98,7 +98,7 @@ Status HF3FS::ReadFile(ContextSPtr ctx, const std::string& path, off_t offset,
   int fd;
   auto status = Posix::Open(path, O_RDONLY, &fd);
   if (status.ok()) {
-    ON_SCOPE_EXIT { Posix::Close(fd); };
+    SCOPE_EXIT { Posix::Close(fd); };
     status = AioRead(ctx, fd, offset, length, buffer);
   }
   return CheckStatus(status);

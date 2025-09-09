@@ -24,7 +24,6 @@
 
 #include <gflags/gflags.h>
 
-#include "absl/cleanup/cleanup.h"
 #include "cache/common/macro.h"
 #include "cache/storage/filesystem.h"
 #include "cache/utils/context.h"
@@ -34,8 +33,6 @@
 
 namespace dingofs {
 namespace cache {
-
-using dingofs::utils::TimeSpec;
 
 BaseFileSystem::BaseFileSystem(CheckStatusFunc check_status_func)
     : check_status_func_(check_status_func) {}
@@ -81,7 +78,7 @@ Status BaseFileSystem::Walk(const std::string& prefix, WalkFunc func) {
 
   struct dirent* dirent;
   struct stat stat;
-  ON_SCOPE_EXIT { Posix::CloseDir(dir); };
+  SCOPE_EXIT { Posix::CloseDir(dir); };
   for (;;) {
     status = Posix::ReadDir(dir, &dirent);
     if (status.IsEndOfFile()) {
@@ -103,7 +100,7 @@ Status BaseFileSystem::Walk(const std::string& prefix, WalkFunc func) {
     } else if (Helper::IsDir(&stat)) {
       status = Walk(path, func);
     } else {  // file
-      TimeSpec atime(stat.st_atime, 0);
+      utils::TimeSpec atime(stat.st_atime, 0);
       status = func(prefix, FileInfo(name, stat.st_nlink, stat.st_size, atime));
     }
 
@@ -153,7 +150,7 @@ Status BaseFileSystem::StatFile(const std::string& path, FileInfo* info) {
     info->name = path;
     info->nlink = stat.st_nlink;
     info->size = stat.st_size;
-    info->atime = TimeSpec(stat.st_atime, 0);
+    info->atime = utils::TimeSpec(stat.st_atime, 0);
   }
   return CheckStatus(status);
 }

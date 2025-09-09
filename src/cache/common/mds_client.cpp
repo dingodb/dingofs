@@ -26,20 +26,21 @@
 #include <brpc/reloadable_flags.h>
 #include <butil/fast_rand.h>
 #include <gflags/gflags.h>
+#include <glog/logging.h>
 #include <sys/types.h>
 
 #include <memory>
 #include <string>
 
 #include "cache/common/macro.h"
-#include "cache/common/mds_discovery.h"
-#include "cache/common/rpc.h"
 #include "cache/utils/helper.h"
+#include "client/vfs/meta/v2/mds_discovery.h"
 #include "common/status.h"
 #include "dingofs/cachegroup.pb.h"
 #include "dingofs/common.pb.h"
 #include "dingofs/mds.pb.h"
 #include "dingofs/mdsv2.pb.h"
+#include "options/client/option.h"
 
 namespace dingofs {
 namespace cache {
@@ -58,6 +59,18 @@ DEFINE_uint64(mdsv1_rpc_retry_interval_us, 50000, "");
 DEFINE_uint64(mdsv1_rpc_max_failed_times_before_change_addr, 2, "");
 DEFINE_uint64(mdsv1_rpc_normal_retry_times_before_trigger_wait, 3, "");
 DEFINE_uint64(mdsv1_rpc_wait_sleep_ms, 1000, "");
+
+DEFINE_uint32(mdsv2_rpc_timeout_ms, 60000, "mdsv2 rpc timeout");
+DEFINE_validator(mdsv2_rpc_timeout_ms, [](const char*, uint32_t v) {
+  client::FLAGS_client_vfs_rpc_timeout_ms = v;
+  return true;
+});
+
+DEFINE_uint32(mdsv2_rpc_retry_times, 3, "mdsv2 rpc retry time");
+DEFINE_validator(mdsv2_rpc_retry_times, [](const char*, uint32_t v) {
+  client::FLAGS_client_vfs_rpc_retry_times = v;
+  return true;
+});
 
 DEFINE_uint32(mdsv2_request_retry_times, 3, "");
 DEFINE_validator(mdsv2_request_retry_times, brpc::PassValidate);
@@ -223,8 +236,8 @@ CacheGroupMemberState MDSV1Client::ToMemberState(
 
 MDSV2Client::MDSV2Client(const std::string& mds_addr)
     : running_(false),
-      rpc_(RPC::New(mds_addr)),
-      mds_discovery_(MDSDiscovery::New(rpc_)) {}
+      rpc_(client::vfs::v2::RPC::New(mds_addr)),
+      mds_discovery_(std::make_unique<client::vfs::v2::MDSDiscovery>(rpc_)) {}
 
 Status MDSV2Client::Start() {
   CHECK_NOTNULL(rpc_);
@@ -257,6 +270,7 @@ Status MDSV2Client::Shutdown() {
   LOG(INFO) << "MDS v2 client is shutting down...";
 
   mds_discovery_->Destroy();
+  rpc_->Destory();
 
   LOG(INFO) << "MDS v2 client is down.";
 
@@ -272,7 +286,7 @@ Status MDSV2Client::GetFSInfo(uint64_t fs_id,
   request.set_fs_id(fs_id);
   auto status = SendRequest("MDSService", "GetFsInfo", request, response);
   if (status.ok()) {
-    ToCommonStorageInfo(response.fs_info(), storage_info);
+    *storage_info = ToCommonStorageInfo(response.fs_info());
   }
   return status;
 }
@@ -372,6 +386,71 @@ Status MDSV2Client::ListMembers(const std::string& group_name,
   return Status::OK();
 }
 
+pb::common::S3Info MDSV2Client::ToCommonS3Info(const pb::mdsv2::S3Info& in) {
+  pb::common::S3Info out;
+  out.set_ak(in.ak());
+  out.set_sk(in.sk());
+  out.set_endpoint(in.endpoint());
+  out.set_bucketname(in.bucketname());
+
+  return out;
+}
+
+pb::common::RadosInfo MDSV2Client::ToCommonRadosInfo(
+    const pb::mdsv2::RadosInfo& in) {
+  pb::common::RadosInfo out;
+  out.set_user_name(in.user_name());
+  out.set_key(in.key());
+  out.set_mon_host(in.mon_host());
+  out.set_pool_name(in.pool_name());
+  out.set_cluster_name(in.cluster_name());
+
+  return out;
+}
+
+pb::common::StorageInfo MDSV2Client::ToCommonStorageInfo(
+    const pb::mdsv2::FsInfo& fs_info) {
+  pb::common::StorageInfo out;
+  if (fs_info.fs_type() == pb::mdsv2::FsType::S3) {
+    out.set_type(pb::common::StorageType::TYPE_S3);
+    *out.mutable_s3_info() = ToCommonS3Info(fs_info.extra().s3_info());
+  } else if (fs_info.fs_type() == pb::mdsv2::FsType::RADOS) {
+    out.set_type(pb::common::StorageType::TYPE_RADOS);
+    *out.mutable_rados_info() = ToCommonRadosInfo(fs_info.extra().rados_info());
+  } else {
+    CHECK(false) << "Unsupported fs type: "
+                 << pb::mdsv2::FsType_Name(fs_info.fs_type());
+  }
+
+  return out;
+}
+
+CacheGroupMemberState MDSV2Client::ToMemberState(
+    pb::mdsv2::CacheGroupMemberState state) {
+  switch (state) {
+    case pb::mdsv2::CacheGroupMemberStateOnline:
+      return CacheGroupMemberState::kOnline;
+    case pb::mdsv2::CacheGroupMemberStateUnstable:
+      return CacheGroupMemberState::kUnstable;
+    case pb::mdsv2::CacheGroupMemberStateOffline:
+      return CacheGroupMemberState::kOffline;
+    case pb::mdsv2::CacheGroupMemberStateUnknown:
+    default:
+      return CacheGroupMemberState::kUnknown;
+  }
+}
+
+bool MDSV2Client::GetRandomlyMDS(mdsv2::MDSMeta& mds_meta) {
+  auto mdses = mds_discovery_->GetNormalMDS();
+  if (mdses.empty()) {
+    LOG(ERROR) << "No normal mds";
+    return false;
+  }
+
+  mds_meta = mdses[butil::fast_rand_less_than(mdses.size())];
+  return true;
+}
+
 bool MDSV2Client::ProcessEpochChange() {
   return mds_discovery_->RefreshFullyMDSList();
 }
@@ -391,6 +470,9 @@ bool MDSV2Client::ProcessNetError(mdsv2::MDSMeta& mds_meta) {
   auto mdses = mds_discovery_->GetNormalMDS();
   for (auto& mds : mdses) {
     if (mds.ID() != mds_meta.ID()) {
+      LOG(INFO) << fmt::format(
+          "[meta.client] process net error, transfer {}->{}.", mds_meta.ID(),
+          mds.ID());
       mds_meta = mds;
       return true;
     }
@@ -399,28 +481,22 @@ bool MDSV2Client::ProcessNetError(mdsv2::MDSMeta& mds_meta) {
   return false;
 }
 
-bool MDSV2Client::GetRandomlyMDS(mdsv2::MDSMeta& mds_meta) {
-  auto mdses = mds_discovery_->GetAllMDS();
-  if (mdses.empty()) {
-    LOG(ERROR) << "No available MDS found";
-    return false;
-  }
-
-  mds_meta = mdses[butil::fast_rand_less_than(mdses.size())];
-  return true;
-}
-
 template <typename Request, typename Response>
 Status MDSV2Client::SendRequest(const std::string& service_name,
                                 const std::string& api_name, Request& request,
                                 Response& response) {
   mdsv2::MDSMeta mds_meta;
+  bool is_refresh_mds = true;
+
   for (int retry = 0; retry < FLAGS_mdsv2_request_retry_times; ++retry) {
-    if (!GetRandomlyMDS(mds_meta)) {
-      return Status::Internal("no available mds");
+    if (is_refresh_mds) {
+      if (!GetRandomlyMDS(mds_meta)) {
+        return Status::Internal("no normal mds");
+      }
     }
 
-    auto endpoint = StrToEndpoint(mds_meta.Host(), mds_meta.Port());
+    auto endpoint =
+        client::vfs::v2::StrToEndpoint(mds_meta.Host(), mds_meta.Port());
 
     auto status =
         rpc_->SendRequest(endpoint, service_name, api_name, request, response);
@@ -429,70 +505,29 @@ Status MDSV2Client::SendRequest(const std::string& service_name,
         if (!ProcessEpochChange()) {
           return Status::Internal("process epoch change fail");
         }
+        is_refresh_mds = true;
         continue;
+
       } else if (status.Errno() == pb::error::ENOT_SERVE) {
         if (!ProcessNotServe()) {
           return Status::Internal("process not serve fail");
         }
+        is_refresh_mds = true;
         continue;
+
       } else if (status.IsNetError()) {
         if (!ProcessNetError(mds_meta)) {
           return Status::Internal("process net error fail");
         }
+        is_refresh_mds = false;
         continue;
       }
     }
+
     return status;
   }
 
   return Status::Internal("send request fail");
-}
-
-void MDSV2Client::ToCommonS3Info(const pb::mdsv2::S3Info& in,
-                                 pb::common::S3Info* out) {
-  out->set_ak(in.ak());
-  out->set_sk(in.sk());
-  out->set_endpoint(in.endpoint());
-  out->set_bucketname(in.bucketname());
-}
-
-void MDSV2Client::ToCommonRadosInfo(const pb::mdsv2::RadosInfo& in,
-                                    pb::common::RadosInfo* out) {
-  out->set_user_name(in.user_name());
-  out->set_key(in.key());
-  out->set_mon_host(in.mon_host());
-  out->set_pool_name(in.pool_name());
-  out->set_cluster_name(in.cluster_name());
-}
-
-void MDSV2Client::ToCommonStorageInfo(const pb::mdsv2::FsInfo& fs_info,
-                                      pb::common::StorageInfo* storage_info) {
-  if (fs_info.fs_type() == pb::mdsv2::FsType::S3) {
-    storage_info->set_type(pb::common::StorageType::TYPE_S3);
-    ToCommonS3Info(fs_info.extra().s3_info(), storage_info->mutable_s3_info());
-  } else if (fs_info.fs_type() == pb::mdsv2::FsType::RADOS) {
-    storage_info->set_type(pb::common::StorageType::TYPE_RADOS);
-    ToCommonRadosInfo(fs_info.extra().rados_info(),
-                      storage_info->mutable_rados_info());
-  } else {
-    CHECK(false) << "Unsupported fs type: "
-                 << pb::mdsv2::FsType_Name(fs_info.fs_type());
-  }
-}
-
-CacheGroupMemberState MDSV2Client::ToMemberState(
-    pb::mdsv2::CacheGroupMemberState state) {
-  switch (state) {
-    case pb::mdsv2::CacheGroupMemberStateOnline:
-      return CacheGroupMemberState::kOnline;
-    case pb::mdsv2::CacheGroupMemberStateUnstable:
-      return CacheGroupMemberState::kUnstable;
-    case pb::mdsv2::CacheGroupMemberStateOffline:
-      return CacheGroupMemberState::kOffline;
-    case pb::mdsv2::CacheGroupMemberStateUnknown:
-    default:
-      return CacheGroupMemberState::kUnknown;
-  }
 }
 
 MDSClientSPtr BuildSharedMDSClient() {

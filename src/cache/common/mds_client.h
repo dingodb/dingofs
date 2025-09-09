@@ -26,8 +26,8 @@
 #include <cstdint>
 #include <string>
 
-#include "cache/common/mds_discovery.h"
-#include "cache/common/rpc.h"
+#include "client/vfs/meta/v2/mds_discovery.h"
+#include "client/vfs/meta/v2/rpc.h"
 #include "common/status.h"
 #include "dingofs/cachegroup.pb.h"
 #include "dingofs/common.pb.h"
@@ -75,8 +75,8 @@ struct CacheGroupMember {
 
   std::string ToString() const {
     return absl::StrFormat(
-        "member [id = %s, ip = %s, port = %u, weight = %u, state = %s]", id, ip,
-        port, weight, CacheGroupMemberStateToString(state));
+        "[id = %s, ip = %s, port = %u, weight = %u, state = %s]", id, ip, port,
+        weight, CacheGroupMemberStateToString(state));
   }
 };
 
@@ -156,6 +156,11 @@ class MDSV2Client : public MDSClient {
                      std::vector<CacheGroupMember>* members) override;
 
  private:
+  pb::common::S3Info ToCommonS3Info(const pb::mdsv2::S3Info& info);
+  pb::common::RadosInfo ToCommonRadosInfo(const pb::mdsv2::RadosInfo& info);
+  pb::common::StorageInfo ToCommonStorageInfo(const pb::mdsv2::FsInfo& info);
+  CacheGroupMemberState ToMemberState(pb::mdsv2::CacheGroupMemberState state);
+
   bool ProcessEpochChange();
   bool ProcessNotServe();
   bool ProcessNetError(mdsv2::MDSMeta& mds_meta);
@@ -167,16 +172,9 @@ class MDSV2Client : public MDSClient {
                      const std::string& api_name, Request& request,
                      Response& response);
 
-  void ToCommonS3Info(const pb::mdsv2::S3Info& in, pb::common::S3Info* out);
-  void ToCommonRadosInfo(const pb::mdsv2::RadosInfo& in,
-                         pb::common::RadosInfo* out);
-  void ToCommonStorageInfo(const pb::mdsv2::FsInfo& fs_info,
-                           pb::common::StorageInfo* storage_info);
-  CacheGroupMemberState ToMemberState(pb::mdsv2::CacheGroupMemberState state);
-
   std::atomic<bool> running_;
-  RPCSPtr rpc_;
-  MDSDiscoveryUPtr mds_discovery_;
+  std::shared_ptr<client::vfs::v2::RPC> rpc_;
+  std::unique_ptr<client::vfs::v2::MDSDiscovery> mds_discovery_;
 };
 
 MDSClientSPtr BuildSharedMDSClient();

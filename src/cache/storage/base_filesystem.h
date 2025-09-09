@@ -23,6 +23,11 @@
 #ifndef DINGOFS_SRC_CACHE_STORAGE_FILESYSTEM_BASE_H_
 #define DINGOFS_SRC_CACHE_STORAGE_FILESYSTEM_BASE_H_
 
+#include <butil/file_util.h>
+#include <butil/files/file_path.h>
+#include <sys/stat.h>
+
+#include "cache/common/const.h"
 #include "cache/storage/filesystem.h"
 
 namespace dingofs {
@@ -68,6 +73,49 @@ class BaseFileSystem : public FileSystem {
 
  private:
   CheckStatusFunc check_status_func_;
+};
+
+class FSHelper {
+ public:
+  static Status MkDirs(const std::string& dir) {
+    return BaseFileSystem::GetInstance().MkDirs(dir);
+  }
+
+  static Status Walk(const std::string& dir, WalkFunc walk_func) {
+    return BaseFileSystem::GetInstance().Walk(dir, walk_func);
+  }
+
+  static Status WriteFile(const std::string& filepath,
+                          const std::string& content) {
+    int rc = butil::WriteFile(butil::FilePath(filepath), content.data(),
+                              content.size());
+    if (rc == static_cast<int>(content.size())) {
+      return Status::OK();
+    }
+    return Status::IoError("write file failed");
+  }
+
+  static Status ReadFile(const std::string& filepath, std::string* content) {
+    if (!FileExists(filepath)) {
+      return Status::NotFound("file not found");
+    } else if (butil::ReadFileToString(butil::FilePath(filepath), content),
+               4 * kMiB) {
+      return Status::OK();
+    }
+    return Status::IoError("read file failed");
+  }
+
+  static Status RemoveFile(const std::string& filepath) {
+    return BaseFileSystem::GetInstance().RemoveFile(filepath);
+  }
+
+  static bool FileExists(const std::string& filepath) {
+    return BaseFileSystem::GetInstance().FileExists(filepath);
+  }
+
+  static Status StatFS(const std::string& dir, FSStat* stat) {
+    return BaseFileSystem::GetInstance().StatFS(dir, stat);
+  }
 };
 
 }  // namespace cache

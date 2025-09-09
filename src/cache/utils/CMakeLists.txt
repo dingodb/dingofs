@@ -34,6 +34,4 @@ target_link_libraries(cache_utils
     dingofs_common
     dingofs_status
     dingofs_executor
-
-    cache_storage
 )

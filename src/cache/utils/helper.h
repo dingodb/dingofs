@@ -30,9 +30,7 @@
 #include <sstream>
 #include <string>
 
-#include "cache/storage/filesystem.h"
 #include "common/io_buffer.h"
-#include "common/status.h"
 
 namespace dingofs {
 namespace cache {
@@ -78,18 +76,9 @@ class Helper {
   static std::string TempFilepath(const std::string& filepath);
   static bool IsTempFilepath(const std::string& filepath);
 
-  // filesystem
-  static Status Walk(const std::string& dir, WalkFunc walk_func);
-  static Status MkDirs(const std::string& dir);
-  static bool FileExists(const std::string& filepath);
-  static Status ReadFile(const std::string& filepath, std::string* content);
-  static Status WriteFile(const std::string& filepath,
-                          const std::string& content);
-  static Status RemoveFile(const std::string& filepath);
-  static Status StatFS(const std::string& dir, FSStat* stat);
-  static bool IsFile(const struct stat* stat);
-  static bool IsDir(const struct stat* stat);
-  static bool IsLink(const struct stat* stat);
+  static bool IsFile(const struct stat* stat) { return S_ISREG(stat->st_mode); }
+  static bool IsDir(const struct stat* stat) { return S_ISDIR(stat->st_mode); }
+  static bool IsLink(const struct stat* stat) { return S_ISLNK(stat->st_mode); }
   static std::string StrMode(uint16_t mode);
 
   // validator

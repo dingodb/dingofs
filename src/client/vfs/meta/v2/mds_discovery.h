@@ -33,7 +33,7 @@ using MDSDiscoverySPtr = std::shared_ptr<MDSDiscovery>;
 
 class MDSDiscovery {
  public:
-  MDSDiscovery(RPCPtr rpc) : rpc_(rpc) {};
+  MDSDiscovery(RPCPtr rpc) : rpc_(rpc){};
   ~MDSDiscovery() = default;
 
   static MDSDiscoverySPtr New(RPCPtr rpc) {
