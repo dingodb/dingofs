@@ -24,6 +24,8 @@
 #include <string>
 #include <vector>
 
+#include "common/status.h"
+
 namespace dingofs {
 namespace client {
 namespace vfs {
@@ -205,6 +207,8 @@ std::string FsInfo2Str(const FsInfo& fs_info);
 //  next call to ReadDirHandler.
 using ReadDirHandler =
     std::function<bool(const DirEntry& dir_entry, uint64_t offset)>;
+
+using DoneClosure = std::function<void(const Status& status)>;
 
 }  // namespace vfs
 }  // namespace client

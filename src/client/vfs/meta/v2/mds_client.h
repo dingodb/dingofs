@@ -39,7 +39,7 @@ namespace vfs {
 namespace v2 {
 
 class MDSClient;
-using MDSClientPtr = std::shared_ptr<MDSClient>;
+using MDSClientSPtr = std::shared_ptr<MDSClient>;
 
 using mdsv2::AttrEntry;
 using mdsv2::MDSMeta;
@@ -49,15 +49,15 @@ using GetMdsFn = std::function<MDSMeta()>;
 class MDSClient {
  public:
   MDSClient(const ClientId& client_id, mdsv2::FsInfoSPtr fs_info,
-            ParentMemoSPtr parent_memo, MDSDiscoveryPtr mds_discovery,
+            ParentMemoSPtr parent_memo, MDSDiscoverySPtr mds_discovery,
             MDSRouterPtr mds_router, RPCPtr rpc);
   virtual ~MDSClient() = default;
 
-  static MDSClientPtr New(const ClientId& client_id, mdsv2::FsInfoSPtr fs_info,
-                          ParentMemoSPtr parent_memo,
+  static MDSClientSPtr New(const ClientId& client_id, mdsv2::FsInfoSPtr fs_info,
+                           ParentMemoSPtr parent_memo,
 
-                          MDSDiscoveryPtr mds_discovery,
-                          MDSRouterPtr mds_router, RPCPtr rpc) {
+                           MDSDiscoverySPtr mds_discovery,
+                           MDSRouterPtr mds_router, RPCPtr rpc) {
     return std::make_shared<MDSClient>(client_id, fs_info, parent_memo,
                                        mds_discovery, mds_router, rpc);
   }
@@ -74,7 +74,7 @@ class MDSClient {
                           mdsv2::FsInfoEntry& fs_info);
   static Status GetFsInfo(RPCPtr rpc, uint32_t fs_id,
                           mdsv2::FsInfoEntry& fs_info);
-                          
+
   RPCPtr GetRpc();
 
   Status Heartbeat();
@@ -175,7 +175,7 @@ class MDSClient {
 
   MDSRouterPtr mds_router_;
 
-  MDSDiscoveryPtr mds_discovery_;
+  MDSDiscoverySPtr mds_discovery_;
 
   RPCPtr rpc_;
 };

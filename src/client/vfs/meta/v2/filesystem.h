@@ -28,6 +28,7 @@
 #include "client/vfs/meta/v2/inode_cache.h"
 #include "client/vfs/meta/v2/mds_client.h"
 #include "client/vfs/meta/v2/mds_discovery.h"
+#include "client/vfs/meta/v2/write_slice_processor.h"
 #include "common/status.h"
 #include "json/value.h"
 #include "mdsv2/common/crontab.h"
@@ -48,15 +49,15 @@ using MDSV2FileSystemUPtr = std::unique_ptr<MDSV2FileSystem>;
 class MDSV2FileSystem : public vfs::MetaSystem {
  public:
   MDSV2FileSystem(mdsv2::FsInfoSPtr fs_info, const ClientId& client_id,
-                  MDSDiscoveryPtr mds_discovery, InodeCacheSPtr inode_cache,
-                  MDSClientPtr mds_client);
+                  MDSDiscoverySPtr mds_discovery, InodeCacheSPtr inode_cache,
+                  MDSClientSPtr mds_client);
   ~MDSV2FileSystem() override;
 
   static MDSV2FileSystemUPtr New(mdsv2::FsInfoSPtr fs_info,
                                  const ClientId& client_id,
-                                 MDSDiscoveryPtr mds_discovery,
+                                 MDSDiscoverySPtr mds_discovery,
                                  InodeCacheSPtr inode_cache,
-                                 MDSClientPtr mds_client) {
+                                 MDSClientSPtr mds_client) {
     return std::make_unique<MDSV2FileSystem>(fs_info, client_id, mds_discovery,
                                              inode_cache, mds_client);
   }
@@ -99,6 +100,9 @@ class MDSV2FileSystem : public vfs::MetaSystem {
   Status NewSliceId(ContextSPtr ctx, Ino ino, uint64_t* id) override;
   Status WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index, uint64_t fh,
                     const std::vector<Slice>& slices) override;
+  Status AsyncWriteSlice(ContextSPtr ctx, Ino ino, uint64_t index, uint64_t fh,
+                         const std::vector<Slice>& slices,
+                         DoneClosure done) override;
   Status Write(ContextSPtr ctx, Ino ino, uint64_t offset, uint64_t size,
                uint64_t fh) override;
 
@@ -175,9 +179,9 @@ class MDSV2FileSystem : public vfs::MetaSystem {
 
   mdsv2::FsInfoSPtr fs_info_;
 
-  MDSDiscoveryPtr mds_discovery_;
+  MDSDiscoverySPtr mds_discovery_;
 
-  MDSClientPtr mds_client_;
+  MDSClientSPtr mds_client_;
 
   FileSessionMap file_session_map_;
 
@@ -190,6 +194,8 @@ class MDSV2FileSystem : public vfs::MetaSystem {
   std::vector<mdsv2::CrontabConfig> crontab_configs_;
   // This is manage crontab, like heartbeat.
   mdsv2::CrontabManager crontab_manager_;
+
+  WriteSliceProcessorSPtr write_slice_processor_;
 };
 
 }  // namespace v2

@@ -64,11 +64,7 @@ static IntRange CalBlockIndex(uint64_t block_size, uint64_t chunk_offset, const 
   range.start = (slice.offset() - chunk_offset) / block_size;
 
   uint64_t end_offset = slice.offset() - chunk_offset + slice.len();
-  if (end_offset % block_size == 0) {
-    range.end = end_offset / block_size;
-  } else {
-    range.end = end_offset / block_size + 1;
-  }
+  range.end = (end_offset % block_size == 0) ? (end_offset / block_size) : ((end_offset / block_size) + 1);
 
   return range;
 }
@@ -79,11 +75,7 @@ static IntRange CalBlockIndex(uint64_t block_size, uint64_t chunk_offset, const 
   range.start = (slice.offset() - chunk_offset) / block_size;
 
   uint64_t end_offset = slice.offset() - chunk_offset + slice.len();
-  if (end_offset % block_size == 0) {
-    range.end = end_offset / block_size;
-  } else {
-    range.end = end_offset / block_size + 1;
-  }
+  range.end = (end_offset % block_size == 0) ? (end_offset / block_size) : ((end_offset / block_size) + 1);
 
   return range;
 }

@@ -332,6 +332,20 @@ Status MetaWrapper::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
   return s;
 }
 
+Status MetaWrapper::AsyncWriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
+                                    uint64_t fh,
+                                    const std::vector<Slice>& slices,
+                                    DoneClosure done) {
+  Status s;
+  MetaLogGuard log_guard([&]() {
+    return absl::StrFormat("async_write_slice (%d,%d,%d): %s %d %d", ino, index,
+                           fh, s.ToString(), ctx->hit_cache, slices.size());
+  });
+
+  s = target_->AsyncWriteSlice(ctx, ino, index, fh, slices, done);
+  return s;
+}
+
 Status MetaWrapper::Write(ContextSPtr ctx, Ino ino, uint64_t offset,
                           uint64_t size, uint64_t fh) {
   Status s;

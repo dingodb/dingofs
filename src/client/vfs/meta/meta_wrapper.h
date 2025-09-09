@@ -32,7 +32,7 @@ namespace vfs {
 
 class MetaWrapper : public MetaSystem {
  public:
-  MetaWrapper(MetaSystemUPtr meta_system) : target_(std::move(meta_system)){};
+  MetaWrapper(MetaSystemUPtr meta_system) : target_(std::move(meta_system)) {};
 
   ~MetaWrapper() override = default;
 
@@ -109,6 +109,10 @@ class MetaWrapper : public MetaSystem {
 
   Status WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index, uint64_t fh,
                     const std::vector<Slice>& slices) override;
+
+  Status AsyncWriteSlice(ContextSPtr ctx, Ino ino, uint64_t index, uint64_t fh,
+                         const std::vector<Slice>& slices,
+                         DoneClosure done) override;
 
   Status Write(ContextSPtr ctx, Ino ino, uint64_t offset, uint64_t size,
                uint64_t fh) override;

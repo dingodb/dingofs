@@ -35,10 +35,10 @@ using DirIteratorSPtr = std::shared_ptr<DirIterator>;
 // used by read dir
 class DirIterator {
  public:
-  DirIterator(ContextSPtr ctx, MDSClientPtr mds_client, Ino ino)
+  DirIterator(ContextSPtr ctx, MDSClientSPtr mds_client, Ino ino)
       : ctx_(ctx), mds_client_(mds_client), ino_(ino) {}
 
-  static DirIteratorSPtr New(ContextSPtr ctx, MDSClientPtr mds_client,
+  static DirIteratorSPtr New(ContextSPtr ctx, MDSClientSPtr mds_client,
                              Ino ino) {
     return std::make_shared<DirIterator>(ctx, mds_client, ino);
   }
@@ -63,7 +63,7 @@ class DirIterator {
   // stash entry for read dir
   std::vector<DirEntry> entries_;
 
-  MDSClientPtr mds_client_;
+  MDSClientSPtr mds_client_;
 };
 
 class DirIteratorManager {
@@ -76,7 +76,7 @@ class DirIteratorManager {
   void Delete(uint64_t fh);
 
   bool Dump(Json::Value& value);
-  bool Load(MDSClientPtr mds_client, const Json::Value& value);
+  bool Load(MDSClientSPtr mds_client, const Json::Value& value);
 
  private:
   utils::RWLock lock_;

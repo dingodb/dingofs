@@ -29,14 +29,14 @@ namespace vfs {
 namespace v2 {
 
 class MDSDiscovery;
-using MDSDiscoveryPtr = std::shared_ptr<MDSDiscovery>;
+using MDSDiscoverySPtr = std::shared_ptr<MDSDiscovery>;
 
 class MDSDiscovery {
  public:
   MDSDiscovery(RPCPtr rpc) : rpc_(rpc) {};
   ~MDSDiscovery() = default;
 
-  static MDSDiscoveryPtr New(RPCPtr rpc) {
+  static MDSDiscoverySPtr New(RPCPtr rpc) {
     return std::make_shared<MDSDiscovery>(rpc);
   }
 

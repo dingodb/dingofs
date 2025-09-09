@@ -50,11 +50,11 @@ using MonoMDSRouterPtr = std::shared_ptr<MonoMDSRouter>;
 
 class MonoMDSRouter : public MDSRouter {
  public:
-  MonoMDSRouter(MDSDiscoveryPtr mds_discovery)
+  MonoMDSRouter(MDSDiscoverySPtr mds_discovery)
       : mds_discovery_(mds_discovery) {};
   ~MonoMDSRouter() override = default;
 
-  static MonoMDSRouterPtr New(MDSDiscoveryPtr mds_discovery) {
+  static MonoMDSRouterPtr New(MDSDiscoverySPtr mds_discovery) {
     return std::make_shared<MonoMDSRouter>(mds_discovery);
   }
 
@@ -74,7 +74,7 @@ class MonoMDSRouter : public MDSRouter {
   utils::RWLock lock_;
   mdsv2::MDSMeta mds_meta_;
 
-  MDSDiscoveryPtr mds_discovery_;
+  MDSDiscoverySPtr mds_discovery_;
 };
 
 class ParentHashMDSRouter;
@@ -82,11 +82,12 @@ using ParentHashMDSRouterPtr = std::shared_ptr<ParentHashMDSRouter>;
 
 class ParentHashMDSRouter : public MDSRouter {
  public:
-  ParentHashMDSRouter(MDSDiscoveryPtr mds_discovery, ParentMemoSPtr parent_memo)
+  ParentHashMDSRouter(MDSDiscoverySPtr mds_discovery,
+                      ParentMemoSPtr parent_memo)
       : mds_discovery_(mds_discovery), parent_memo_(parent_memo) {}
   ~ParentHashMDSRouter() override = default;
 
-  static ParentHashMDSRouterPtr New(MDSDiscoveryPtr mds_discovery,
+  static ParentHashMDSRouterPtr New(MDSDiscoverySPtr mds_discovery,
                                     ParentMemoSPtr parent_memo) {
     return std::make_shared<ParentHashMDSRouter>(mds_discovery, parent_memo);
   }
@@ -105,7 +106,7 @@ class ParentHashMDSRouter : public MDSRouter {
  private:
   void UpdateMDSes(const pb::mdsv2::HashPartition& hash_partition);
 
-  MDSDiscoveryPtr mds_discovery_;
+  MDSDiscoverySPtr mds_discovery_;
   ParentMemoSPtr parent_memo_;
 
   utils::RWLock lock_;

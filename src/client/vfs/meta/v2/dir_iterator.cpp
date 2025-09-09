@@ -158,7 +158,7 @@ bool DirIteratorManager::Dump(Json::Value& value) {
   return true;
 }
 
-bool DirIteratorManager::Load(MDSClientPtr mds_client,
+bool DirIteratorManager::Load(MDSClientSPtr mds_client,
                               const Json::Value& value) {
   utils::WriteLockGuard lk(lock_);
 

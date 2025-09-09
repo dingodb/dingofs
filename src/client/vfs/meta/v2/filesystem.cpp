@@ -62,9 +62,9 @@ DEFINE_bool(client_meta_read_chunk_cache_enable, true,
 
 MDSV2FileSystem::MDSV2FileSystem(mdsv2::FsInfoSPtr fs_info,
                                  const ClientId& client_id,
-                                 MDSDiscoveryPtr mds_discovery,
+                                 MDSDiscoverySPtr mds_discovery,
                                  InodeCacheSPtr inode_cache,
-                                 MDSClientPtr mds_client)
+                                 MDSClientSPtr mds_client)
     : name_(fs_info->GetName()),
       client_id_(client_id),
       fs_info_(fs_info),
@@ -72,7 +72,8 @@ MDSV2FileSystem::MDSV2FileSystem(mdsv2::FsInfoSPtr fs_info,
       id_cache_(kSliceIdCacheName, mds_client),
       file_session_map_(fs_info),
       inode_cache_(inode_cache),
-      mds_client_(mds_client) {}
+      mds_client_(mds_client),
+      write_slice_processor_(WriteSliceProcessor::New(mds_client)) {}
 
 MDSV2FileSystem::~MDSV2FileSystem() {}  // NOLINT
 
@@ -83,6 +84,12 @@ Status MDSV2FileSystem::Init() {
   if (!MountFs()) {
     LOG(ERROR) << fmt::format("[meta.filesystem] mount fs fail.");
     return Status::MountFailed("mount fs fail");
+  }
+
+  if (!write_slice_processor_->Init()) {
+    LOG(ERROR) << fmt::format(
+        "[meta.filesystem] init write slice processor fail.");
+    return Status::Internal("init write slice processor fail");
   }
 
   // init crontab
@@ -99,6 +106,8 @@ void MDSV2FileSystem::UnInit() {
   UnmountFs();
 
   crontab_manager_.Destroy();
+
+  write_slice_processor_->Destroy();
 }
 
 bool MDSV2FileSystem::Dump(ContextSPtr, Json::Value& value) {
@@ -366,8 +375,7 @@ Status MDSV2FileSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
 
 Status MDSV2FileSystem::NewSliceId(ContextSPtr, Ino ino, uint64_t* id) {
   if (!id_cache_.GenID(*id)) {
-    LOG(ERROR) << fmt::format(
-        "[meta.filesystem.{}] newsliceid fail, ino({}) error: {}.", name_, ino);
+    LOG(ERROR) << fmt::format("[meta.filesystem.{}] newsliceid fail.", ino);
     return Status::Internal("gen id fail");
   }
 
@@ -397,6 +405,31 @@ Status MDSV2FileSystem::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
 
   if (FLAGS_client_meta_read_chunk_cache_enable) {
     ClearChunkCache(ino, fh, index);
+  }
+
+  return Status::OK();
+}
+
+Status MDSV2FileSystem::AsyncWriteSlice(ContextSPtr ctx, Ino ino,
+                                        uint64_t index, uint64_t fh,
+                                        const std::vector<Slice>& slices,
+                                        DoneClosure done) {
+  auto operation = std::make_shared<WriteSliceOperation>();
+  operation->ctx = ctx;
+  operation->ino = ino;
+  operation->index = index;
+  operation->fh = fh;
+  operation->slices = slices;
+  operation->done = [&, ino, fh, index, done](const Status& status) {
+    if (status.ok() && FLAGS_client_meta_read_chunk_cache_enable) {
+      ClearChunkCache(ino, fh, index);
+    }
+
+    done(status);
+  };
+
+  if (!write_slice_processor_->AsyncRun(operation)) {
+    return Status::Internal("async write slice fail");
   }
 
   return Status::OK();
@@ -755,8 +788,11 @@ bool MDSV2FileSystem::GetSliceFromCache(Ino ino, uint64_t index,
 
 void MDSV2FileSystem::ClearChunkCache(Ino ino, uint64_t fh, uint64_t index) {
   auto file_session = file_session_map_.GetSession(ino);
-  CHECK(file_session != nullptr) << fmt::format(
-      "file session is nullptr, ino({}) index({}) fh({}).", ino, index, fh);
+  if (file_session == nullptr) {
+    LOG(WARNING) << fmt::format(
+        "file session is nullptr, ino({}) index({}) fh({}).", ino, index, fh);
+    return;
+  }
 
   file_session->DeleteChunkMutation(index);
 }

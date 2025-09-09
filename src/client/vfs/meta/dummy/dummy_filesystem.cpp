@@ -511,6 +511,13 @@ Status DummyFileSystem::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
   return Status::OK();
 }
 
+Status DummyFileSystem::AsyncWriteSlice(ContextSPtr ctx, Ino ino,
+                                        uint64_t index, uint64_t fh,
+                                        const std::vector<Slice>& slices,
+                                        DoneClosure done) {
+  return Status::Internal(pb::error::ENOT_SUPPORT, "not support");
+}
+
 Status DummyFileSystem::Write(ContextSPtr ctx, Ino ino, uint64_t offset,
                               uint64_t size, uint64_t fh) {
   return Status::OK();
