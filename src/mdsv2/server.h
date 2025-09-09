@@ -87,7 +87,7 @@ class Server {
   MDSMetaMapSPtr GetMDSMetaMap();
   KVStorageSPtr GetKVStorage();
   HeartbeatSPtr GetHeartbeat();
-  FsInfoSync& GetFsInfoSync();
+  FsInfoSyncSPtr GetFsInfoSync();
   CoordinatorClientSPtr GetCoordinatorClient();
   notify::NotifyBuddySPtr GetNotifyBuddy();
   FileSystemSetSPtr GetFileSystemSet();
@@ -143,7 +143,7 @@ class Server {
   HeartbeatSPtr heartbeat_;
 
   // fs info sync
-  FsInfoSync fs_info_sync_;
+  FsInfoSyncSPtr fs_info_sync_;
 
   // cache group manager
   CacheGroupMemberManagerSPtr cache_group_member_manager_;

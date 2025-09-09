@@ -204,9 +204,9 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status RefreshInode(const std::vector<uint64_t>& inoes);
   void RefreshInode(AttrEntry& attr);
 
-  Status RefreshFsInfo();
-  Status RefreshFsInfo(const std::string& name);
-  void RefreshFsInfo(const FsInfoEntry& fs_info);
+  Status RefreshFsInfo(const std::string& reason);
+  Status RefreshFsInfo(const std::string& name, const std::string& reason);
+  void RefreshFsInfo(const FsInfoEntry& fs_info, const std::string& reason);
 
   Status JoinMonoFs(Context& ctx, uint64_t mds_id, const std::string& reason);
   Status JoinHashFs(Context& ctx, const std::vector<uint64_t>& mds_ids, const std::string& reason);
@@ -373,8 +373,8 @@ class FileSystemSet {
   Status GetFsInfo(Context& ctx, const std::string& fs_name, FsInfoEntry& fs_info);
   Status GetAllFsInfo(Context& ctx, bool include_deleted, std::vector<FsInfoEntry>& fs_infoes);
   Status GetDeletedFsInfo(Context& ctx, std::vector<FsInfoEntry>& fs_infoes);
-  Status RefreshFsInfo(const std::string& fs_name);
-  Status RefreshFsInfo(uint32_t fs_id);
+  Status RefreshFsInfo(const std::string& fs_name, const std::string& reason);
+  Status RefreshFsInfo(uint32_t fs_id, const std::string& reason);
 
   Status AllocSliceId(uint32_t num, uint64_t min_slice_id, uint64_t& slice_id);
 

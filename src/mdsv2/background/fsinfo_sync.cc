@@ -16,40 +16,23 @@
 
 #include "fmt/core.h"
 #include "mdsv2/common/logging.h"
-#include "mdsv2/server.h"
 
 namespace dingofs {
 namespace mdsv2 {
 
-void FsInfoSyncTask::Run() {
+void FsInfoSync::Run() {
+  bool running = false;
+  if (!is_running_.compare_exchange_strong(running, true)) {
+    return;
+  }
+  DEFER(is_running_.store(false));
+
+  SyncFsInfo();
+}
+
+void FsInfoSync::SyncFsInfo() {
   bool ret = file_system_set_->LoadFileSystems();
   DINGO_LOG(INFO) << fmt::format("[fs_sync] finish, load fs {}.", (ret ? "success" : "fail"));
-}
-
-bool FsInfoSync::Init() {
-  worker_ = Worker::New();
-  return worker_->Init();
-}
-
-bool FsInfoSync::Destroy() {
-  if (worker_) {
-    worker_->Destroy();
-  }
-
-  return true;
-}
-
-bool FsInfoSync::Execute(TaskRunnablePtr task) {
-  if (worker_ == nullptr) {
-    DINGO_LOG(ERROR) << "[fs_sync] fs info sync worker is nullptr.";
-    return false;
-  }
-  return worker_->Execute(task);
-}
-
-void FsInfoSync::TriggerFsInfoSync() {
-  auto task = std::make_shared<FsInfoSyncTask>(Server::GetInstance().GetFileSystemSet());
-  Server::GetInstance().GetFsInfoSync().Execute(task);
 }
 
 }  // namespace mdsv2

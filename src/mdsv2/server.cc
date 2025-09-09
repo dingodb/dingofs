@@ -246,7 +246,12 @@ bool Server::InitHeartbeat() {
 
 bool Server::InitFsInfoSync() {
   DINGO_LOG(INFO) << "init fs info sync.";
-  return fs_info_sync_.Init();
+  CHECK(file_system_set_ != nullptr) << "file_system_set is nullptr.";
+
+  fs_info_sync_ = FsInfoSync::New(file_system_set_);
+  CHECK(fs_info_sync_ != nullptr) << "new FsInfoSync fail.";
+
+  return true;
 }
 
 bool Server::InitCacheMemberSynchronizer() {
@@ -321,7 +326,7 @@ bool Server::InitCrontab() {
       "FSINFO_SYNC",
       FLAGS_mds_crontab_fsinfosync_interval_s * 1000,
       true,
-      [](void*) { FsInfoSync::TriggerFsInfoSync(); },
+      [](void*) { Server::GetInstance().GetFsInfoSync()->Run(); },
   });
 
   // Add fs info sync crontab
@@ -415,7 +420,7 @@ HeartbeatSPtr Server::GetHeartbeat() {
   return heartbeat_;
 }
 
-FsInfoSync& Server::GetFsInfoSync() { return fs_info_sync_; }
+FsInfoSyncSPtr Server::GetFsInfoSync() { return fs_info_sync_; }
 
 CacheMemberSynchronizerSPtr& Server::GetCacheMemberSynchronizer() { return cache_member_synchronizer_; }
 

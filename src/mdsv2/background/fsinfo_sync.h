@@ -15,40 +15,29 @@
 #ifndef DINGOFS_MDSV2_BACKGROUND_FSINFO_SYNC_H_
 #define DINGOFS_MDSV2_BACKGROUND_FSINFO_SYNC_H_
 
-#include "mdsv2/common/runnable.h"
 #include "mdsv2/filesystem/filesystem.h"
 
 namespace dingofs {
 namespace mdsv2 {
 
-class FsInfoSyncTask : public TaskRunnable {
- public:
-  FsInfoSyncTask(FileSystemSetSPtr file_system_set) : file_system_set_(file_system_set) {}
-
-  ~FsInfoSyncTask() override = default;
-
-  std::string Type() override { return "FSINFO_SYNC"; }
-
-  void Run() override;
-
- private:
-  FileSystemSetSPtr file_system_set_;
-};
+class FsInfoSync;
+using FsInfoSyncSPtr = std::shared_ptr<FsInfoSync>;
 
 class FsInfoSync {
  public:
-  FsInfoSync() = default;
+  FsInfoSync(FileSystemSetSPtr file_system_set) : file_system_set_(file_system_set) {};
   ~FsInfoSync() = default;
 
-  bool Init();
-  bool Destroy();
+  static FsInfoSyncSPtr New(FileSystemSetSPtr fs_set) { return std::make_shared<FsInfoSync>(fs_set); }
 
-  static void TriggerFsInfoSync();
+  void Run();
 
  private:
-  bool Execute(TaskRunnablePtr task);
+  void SyncFsInfo();
 
-  WorkerSPtr worker_;
+  std::atomic<bool> is_running_{false};
+
+  FileSystemSetSPtr file_system_set_;
 };
 
 }  // namespace mdsv2

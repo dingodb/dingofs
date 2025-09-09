@@ -63,7 +63,7 @@ static Status ValidateRequest(T* request, FileSystemSPtr file_system) {
                   fmt::format("epoch change, {}<{}", request->context().epoch(), file_system->Epoch()));
 
   } else if (request->context().epoch() > file_system->Epoch()) {
-    return file_system->RefreshFsInfo();
+    return file_system->RefreshFsInfo("request epoch is larger");
   }
 
   return Status::OK();
@@ -2457,7 +2457,7 @@ void MDSServiceImpl::DoNotifyBuddy(google::protobuf::RpcController*, const pb::m
   for (const auto& message : request->messages()) {
     switch (message.type()) {
       case pb::mdsv2::NotifyBuddyRequest::TYPE_REFRESH_FS_INFO: {
-        auto status = file_system_set_->RefreshFsInfo(message.refresh_fs_info().fs_name());
+        auto status = file_system_set_->RefreshFsInfo(message.refresh_fs_info().fs_name(), "notify buddy");
         if (!status.ok()) {
           DINGO_LOG(ERROR) << fmt::format("refresh fs info fail, status({})", status.error_str());
         }

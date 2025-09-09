@@ -2121,9 +2121,9 @@ void FileSystem::RefreshInode(AttrEntry& attr) {
   }
 }
 
-Status FileSystem::RefreshFsInfo() { return RefreshFsInfo(fs_info_->GetName()); }
+Status FileSystem::RefreshFsInfo(const std::string& reason) { return RefreshFsInfo(fs_info_->GetName(), reason); }
 
-Status FileSystem::RefreshFsInfo(const std::string& name) {
+Status FileSystem::RefreshFsInfo(const std::string& name, const std::string& reason) {
   DINGO_LOG(INFO) << fmt::format("[fs.{}] refresh fs({}) info.", fs_id_, name);
 
   Trace trace;
@@ -2136,7 +2136,7 @@ Status FileSystem::RefreshFsInfo(const std::string& name) {
 
   auto& result = operation.GetResult();
 
-  RefreshFsInfo(result.fs_info);
+  RefreshFsInfo(result.fs_info, reason);
 
   return Status::OK();
 }
@@ -2162,7 +2162,7 @@ static std::set<uint32_t> GetDeletedBucketIds(int64_t mds_id, const pb::mdsv2::H
   return deleted_bucket_ids;
 }
 
-void FileSystem::RefreshFsInfo(const FsInfoEntry& fs_info) {
+void FileSystem::RefreshFsInfo(const FsInfoEntry& fs_info, const std::string& reason) {
   // clean partition and inode cache
   auto pre_handler = [&](const FsInfoEntry& old_fs_info, const FsInfoEntry& new_fs_info) {
     const auto& partition_policy = new_fs_info.partition_policy();
@@ -2188,8 +2188,9 @@ void FileSystem::RefreshFsInfo(const FsInfoEntry& fs_info) {
   if (fs_info_->Update(fs_info, pre_handler)) {
     can_serve_.store(CanServe(self_mds_id_), std::memory_order_release);
 
-    DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] update fs({} v{}) can_serve({}).", fs_id_, duration.ElapsedUs(),
-                                   fs_info.fs_name(), fs_info.version(), can_serve_ ? "true" : "false");
+    DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] update fs({} v{}) can_serve({}) reason({}).", fs_id_,
+                                   duration.ElapsedUs(), fs_info.fs_name(), fs_info.version(),
+                                   can_serve_ ? "true" : "false", reason);
   }
 }
 
@@ -2227,7 +2228,7 @@ Status FileSystem::JoinMonoFs(Context& ctx, uint64_t mds_id, const std::string& 
 
   auto& result = operation.GetResult();
 
-  fs_info_->Update(result.fs_info);
+  RefreshFsInfo(result.fs_info, "join_mono");
 
   NotifyBuddyRefreshFsInfo({old_mds_id}, result.fs_info);
 
@@ -2322,7 +2323,7 @@ Status FileSystem::JoinHashFs(Context& ctx, const std::vector<uint64_t>& mds_ids
 
   auto& result = operation.GetResult();
 
-  fs_info_->Update(result.fs_info);
+  RefreshFsInfo(result.fs_info, "join_hash");
 
   NotifyBuddyRefreshFsInfo(old_mds_ids, result.fs_info);
 
@@ -2416,7 +2417,7 @@ Status FileSystem::QuitFs(Context& ctx, const std::vector<uint64_t>& mds_ids, co
 
   auto& result = operation.GetResult();
 
-  fs_info_->Update(result.fs_info);
+  RefreshFsInfo(result.fs_info, "quit_fs");
 
   NotifyBuddyRefreshFsInfo(old_mds_ids, result.fs_info);
 
@@ -2493,7 +2494,7 @@ Status FileSystem::QuitAndJoinFs(Context& ctx, const std::vector<uint64_t>& quit
 
   auto& result = operation.GetResult();
 
-  fs_info_->Update(result.fs_info);
+  RefreshFsInfo(result.fs_info, "quit_and_join_fs");
 
   NotifyBuddyRefreshFsInfo(old_mds_ids, result.fs_info);
 
@@ -2551,7 +2552,7 @@ Status FileSystem::UpdatePartitionPolicy(const std::map<uint64_t, BucketSetEntry
 
   auto& result = operation.GetResult();
 
-  fs_info_->Update(result.fs_info);
+  RefreshFsInfo(result.fs_info, "update_partition_policy");
 
   return Status::OK();
 }
@@ -2559,6 +2560,8 @@ Status FileSystem::UpdatePartitionPolicy(const std::map<uint64_t, BucketSetEntry
 void FileSystem::DescribeByJson(Json::Value& value) {
   value["fs_id"] = fs_id_;
   value["fs_name"] = fs_info_->GetName();
+  value["uuid"] = fs_info_->GetUUID();
+  value["version"] = fs_info_->GetVersion();
 }
 
 FileSystemSet::FileSystemSet(CoordinatorClientSPtr coordinator_client, IdGeneratorUPtr fs_id_generator,
@@ -2939,22 +2942,22 @@ Status FileSystemSet::GetDeletedFsInfo(Context& ctx, std::vector<FsInfoEntry>& f
   return Status::OK();
 }
 
-Status FileSystemSet::RefreshFsInfo(const std::string& fs_name) {
+Status FileSystemSet::RefreshFsInfo(const std::string& fs_name, const std::string& reason) {
   auto fs = GetFileSystem(fs_name);
   if (fs == nullptr) {
     return Status(pb::error::ENOT_FOUND, fmt::format("not found fs({}).", fs_name));
   }
 
-  return fs->RefreshFsInfo();
+  return fs->RefreshFsInfo(reason);
 }
 
-Status FileSystemSet::RefreshFsInfo(uint32_t fs_id) {
+Status FileSystemSet::RefreshFsInfo(uint32_t fs_id, const std::string& reason) {
   auto fs = GetFileSystem(fs_id);
   if (fs == nullptr) {
     return Status(pb::error::ENOT_FOUND, fmt::format("not found fs({}).", fs_id));
   }
 
-  return fs->RefreshFsInfo();
+  return fs->RefreshFsInfo(reason);
 }
 
 Status FileSystemSet::AllocSliceId(uint32_t num, uint64_t min_slice_id, uint64_t& slice_id) {
@@ -3215,7 +3218,7 @@ bool FileSystemSet::LoadFileSystems() {
     if (fs != nullptr) {
       if (fs->UUID() == fs_info.uuid()) {
         // existing fs, just refresh info
-        fs->RefreshFsInfo(fs_info);
+        fs->RefreshFsInfo(fs_info, "load_fs");
         continue;
 
       } else {

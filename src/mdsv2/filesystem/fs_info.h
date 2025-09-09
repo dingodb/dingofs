@@ -66,6 +66,12 @@ class FsInfo {
     return fs_info_.uuid();
   }
 
+  uint64_t GetVersion() {
+    utils::ReadLockGuard lock(lock_);
+
+    return fs_info_.version();
+  }
+
   uint64_t GetBlockSize() {
     utils::ReadLockGuard lock(lock_);
 
