@@ -157,6 +157,10 @@ bool MDSDiscovery::RefreshFullyMDSList() {
     }
   }
 
+  for (auto& mds : mdses) {
+    rpc_->AddFallbackEndpoint(StrToEndpoint(mds.Host(), mds.Port()));
+  }
+
   return true;
 }
 

@@ -101,6 +101,8 @@ class RPC {
   bool AddEndpoint(const std::string& ip, int port);
   void DeleteEndpoint(const std::string& ip, int port);
 
+  void AddFallbackEndpoint(const EndPoint& endpoint);
+
   template <typename Request, typename Response>
   Status SendRequest(const std::string& service_name,
                      const std::string& api_name, const Request& request,
@@ -124,7 +126,6 @@ class RPC {
   ChannelSPtr GetChannel(const EndPoint& endpoint);
   void DeleteChannel(const EndPoint& endpoint);
   EndPoint RandomlyPickupEndPoint();
-  void AddFallbackEndpoint(const EndPoint& endpoint);
 
   void IncDoingReqCount() {
     doing_req_count_.fetch_add(1, std::memory_order_relaxed);
@@ -274,8 +275,6 @@ Status RPC::SendRequest(const EndPoint& endpoint,
     bthread_usleep(CalWaitTimeUs(retry_count));
 
   } while (++retry_count <= FLAGS_client_vfs_rpc_retry_times);
-
-  AddFallbackEndpoint(endpoint);
 
   return TransformError(response.error());
 }

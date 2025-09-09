@@ -90,17 +90,20 @@ void RPC::DeleteEndpoint(const std::string& ip, int port) {
 EndPoint RPC::RandomlyPickupEndPoint() {
   utils::ReadLockGuard lk(lock_);
 
-  uint32_t random_num =
-      mdsv2::Helper::GenerateRealRandomInteger(0, channels_.size());
+  // priority take from active channels
   if (!channels_.empty()) {
-    // priority take from active channels
+    uint32_t random_num =
+        mdsv2::Helper::GenerateRealRandomInteger(0, channels_.size());
     uint32_t index = random_num % channels_.size();
     auto it = channels_.begin();
     std::advance(it, index);
     return it->first;
+  }
 
-  } else if (!fallback_endpoints_.empty()) {
-    // take from fallback
+  // take from fallback
+  if (!fallback_endpoints_.empty()) {
+    uint32_t random_num =
+        mdsv2::Helper::GenerateRealRandomInteger(0, fallback_endpoints_.size());
     uint32_t index = random_num % fallback_endpoints_.size();
     auto it = fallback_endpoints_.begin();
     std::advance(it, index);
