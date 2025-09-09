@@ -17,14 +17,18 @@
 #include "client/vfs/data/writer/chunk_writer.h"
 
 #include <glog/logging.h>
+#include <sys/ioctl.h>
 
 #include <boost/range/algorithm/sort.hpp>
+#include <cstdint>
 #include <memory>
 
 #include "absl/cleanup/cleanup.h"
 #include "cache/utils/context.h"
 #include "client/const.h"
+#include "client/meta/vfs_meta.h"
 #include "client/vfs/hub/vfs_hub.h"
+#include "common/callback.h"
 
 namespace dingofs {
 namespace client {
@@ -220,6 +224,14 @@ Status ChunkWriter::CommitSlices(ContextSPtr ctx,
                                            slices);
 }
 
+void ChunkWriter::AsyncCommitSlices(ContextSPtr ctx,
+                                    const std::vector<Slice>& slices,
+                                    StatusCallback cb) {
+  Status s = hub_->GetMetaSystem()->AsyncWriteSlice(
+      ctx, chunk_.ino, chunk_.index, fh_, slices, cb);
+  CHECK(s.ok());
+}
+
 ChunkWriter::FlushTask ChunkWriter::fake_header_;
 
 void ChunkWriter::FlushTaskDone(FlushTask* flush_task, Status s) {
@@ -238,18 +250,19 @@ void ChunkWriter::FlushTaskDone(FlushTask* flush_task, Status s) {
 
     CHECK(!flush_queue_.empty());
 
-    if (flush_queue_.front() != flush_task) {
+    auto* header = flush_queue_.front();
+    if (flush_task != header) {
       VLOG(4) << fmt::format(
           "{} FlushTaskDone return because flush_chunk_task: {} is not the "
-          "header of the flush_queue_, flush_queue size : {}, flush_task_addr: "
-          "{}",
+          "header of the flush_queue_, flush_queue size : {}, "
+          "header_task_addr: {}",
           UUID(), flush_task->ToString(), flush_queue_.size(),
           static_cast<const void*>(&fake_header_));
       return;
     } else {
       VLOG(4) << fmt::format(
           "{} FlushTaskDone become header_task: {} of the flush_queue_, "
-          "flush_task_addr: {}, flush_queue size: {}, insert fake header: {}",
+          "flush_task_addr: {}, flush_queue size: {}, insert fake_header: {}",
           UUID(), flush_task->ToString(), static_cast<const void*>(flush_task),
           flush_queue_.size(), static_cast<const void*>(&fake_header_));
 
@@ -260,112 +273,142 @@ void ChunkWriter::FlushTaskDone(FlushTask* flush_task, Status s) {
   // only the first flush task in the queue can be processed
   // may use another commit thread or make meta is async
 
-  std::vector<FlushTask*> to_destroy;
+  VLOG(4) << fmt::format(
+      "{} FlushTaskDone header_task: {} will commit flush_tasks", UUID(),
+      flush_task->UUID());
 
-  auto defer_destory = ::absl::MakeCleanup([&]() {
-    for (FlushTask* task : to_destroy) {
-      VLOG(4) << fmt::format(
-          "{} FlushTaskDone delete chunk_flush_task: {}, flush_task_addr: {}",
-          UUID(), task->ToString(), static_cast<const void*>(task));
-      delete task;
-    }
-  });
+  CommitFlushTasks(span->GetContext());
+}
 
-  while (true) {
-    std::vector<FlushTask*> to_commit;
+void ChunkWriter::CommitFlushTasks(ContextSPtr ctx) {
+  uint64_t commit_seq =
+      commit_seq_id_gen.fetch_add(1, std::memory_order_relaxed);
 
-    {
-      std::lock_guard<std::mutex> lg(mutex_);
-      CHECK_GT(flush_queue_.size(), 0);
+  // this will be delete in SlicesCommited
+  std::vector<FlushTask*> to_commit;
 
-      auto it = flush_queue_.begin();
-      ++it;  // from second element, first is fake header
+  {
+    std::lock_guard<std::mutex> lg(mutex_);
+    CHECK_GT(flush_queue_.size(), 0);
 
-      while (it != flush_queue_.end()) {
-        VLOG(4) << fmt::format(
-            "{} FlushTaskDone header_task: {} try to commit "
-            "chunk_flush_task: {}",
-            UUID(), flush_task->UUID(), (*it)->ToString());
+    auto it = flush_queue_.begin();
+    CHECK(*it == &fake_header_)
+        << "fake header must be the first, it: "
+        << static_cast<const void*>(*it)
+        << ", fake_header: " << static_cast<const void*>(&fake_header_);
 
-        // sequence iterate the flush queue, only pick the flush task which is
-        // done
-        if ((*it)->done) {
-          to_commit.push_back(*it);
-          // erase current element, and move to next
-          it = flush_queue_.erase(it);
-        } else {
-          break;
-        }
-      };
+    ++it;  // from second element, first is fake header
 
-      if (to_commit.empty()) {
-        VLOG(4) << fmt::format(
-            "{} FlushTaskDone header_task: {} will return because has no "
-            "flush_task to commit, fake header is removed, remain "
-            "flush_queue_size: {}",
-            UUID(), flush_task->UUID(), flush_queue_.size());
-        flush_queue_.pop_front();
-        return;
-      }
-    }  //  end lock_guard
-
-    CHECK(!to_commit.empty());
-
-    std::vector<Slice> batch_commit_slices;
-    for (FlushTask* task : to_commit) {
-      VLOG(4) << fmt::format(
-          "{} FlushTaskDone header_task: {} commit chunk_flush_task: {}",
-          UUID(), flush_task->UUID(), task->ToString());
-
-      if (task->status.ok()) {
-        std::vector<Slice> slices;
-        task->chunk_flush_task->GetCommitSlices(slices);
-        VLOG(4) << fmt::format(
-            "{} FlushTaskDone header_task: {} commit chunk_flush_task: {}, "
-            "slices_count: {}",
-            UUID(), flush_task->UUID(), task->ToString(), slices.size());
-
-        if (!slices.empty()) {
-          std::move(slices.begin(), slices.end(),
-                    std::back_inserter(batch_commit_slices));
-        }
-
+    while (it != flush_queue_.end()) {
+      // sequence iterate the flush queue, only pick the flush task which is
+      // done util meet the first not done task
+      if ((*it)->done) {
+        to_commit.push_back(*it);
+        // erase current element, and move to next
+        it = flush_queue_.erase(it);
       } else {
-        LOG(WARNING) << fmt::format(
-            "{} FlushTaskDone header_task: {} skip commit fail "
-            "chunk_flush_task: {}",
-            UUID(), flush_task->UUID(), task->ToString());
-
-        MarkErrorStatus(task->status);
+        break;
       }
+    };
 
-      to_destroy.push_back(task);
-    }  // end  for to_commit
-
-    VLOG(4) << fmt::format(
-        "{} FlushTaskDone header_task: {} will commit batch_slices_count: {}",
-        UUID(), flush_task->UUID(), batch_commit_slices.size());
-
-    Status commit_status;
-    if (!batch_commit_slices.empty()) {
-      commit_status = CommitSlices(span->GetContext(), batch_commit_slices);
-      if (!commit_status.ok()) {
-        LOG(WARNING) << fmt::format(
-            "{} FlushTaskDone header_task: {} fail commit, commit_status: {}, "
-            "batch_slices_count: {}    ",
-            UUID(), flush_task->UUID(), commit_status.ToString(),
-            batch_commit_slices.size());
-
-        MarkErrorStatus(commit_status);
-      }
+    if (to_commit.empty()) {
+      VLOG(4) << fmt::format(
+          "{} FlushTaskDone commit_seq: {} will return because has no "
+          "flush_task to commit, fake header is removed, remain "
+          "flush_queue_size: {}",
+          UUID(), commit_seq, flush_queue_.size());
+      flush_queue_.pop_front();
+      return;
     }
 
-    for (FlushTask* task : to_commit) {
-      // if one task fail, all task fail
-      task->cb(GetErrorStatus());
-    }
+  }  //  end lock_guard
 
-  }  // end while(true)
+  CHECK(!to_commit.empty());
+
+  std::vector<Slice> batch_commit_slices;
+  for (FlushTask* task : to_commit) {
+    if (task->status.ok()) {
+      std::vector<Slice> slices;
+      task->chunk_flush_task->GetCommitSlices(slices);
+      VLOG(4) << fmt::format(
+          "{} FlushTaskDone commit_seq: {} commit chunk_flush_task: {}, "
+          "slices_count: {}",
+          UUID(), commit_seq, task->ToString(), slices.size());
+
+      if (!slices.empty()) {
+        std::move(slices.begin(), slices.end(),
+                  std::back_inserter(batch_commit_slices));
+      }
+
+    } else {
+      LOG(WARNING) << fmt::format(
+          "{} FlushTaskDone commit_seq: {} skip commit fail "
+          "chunk_flush_task: {}",
+          UUID(), commit_seq, task->ToString());
+
+      MarkErrorStatus(task->status);
+    }
+  }  // end  for to_commit
+
+  // TODO: if we found some flush task fail, no need commit the slices
+
+  VLOG(4) << fmt::format(
+      "{} FlushTaskDone commit_seq: {} will commit flush_task_count: {} "
+      "batch_slices_count: {}",
+      UUID(), commit_seq, to_commit.size(), batch_commit_slices.size());
+
+  // this will be delete in SlicesCommited
+  auto* commit_context = new CommmitContext();
+  commit_context->commit_seq = commit_seq;
+  commit_context->flush_tasks = std::move(to_commit);
+  commit_context->commit_slices = std::move(batch_commit_slices);
+
+  //   Status commit_status;
+  if (!commit_context->commit_slices.empty()) {
+    AsyncCommitSlices(
+        ctx, commit_context->commit_slices,
+        [self = shared_from_this(), ctx, commit_context](auto&& ph1) {
+          self->SlicesCommited(ctx, commit_context,
+                               std::forward<decltype(ph1)>(ph1));
+        });
+  } else {
+    SlicesCommited(ctx, commit_context, GetErrorStatus());
+  }
+}
+
+void ChunkWriter::SlicesCommited(ContextSPtr ctx, CommmitContext* commit_ctx,
+                                 Status s) {
+  VLOG(4) << fmt::format(
+      "{} SlicesCommited commit_seq: {}, flush_task_count: {} "
+      "batch_slices_count: {} commit_status: {}",
+      UUID(), commit_ctx->commit_seq, commit_ctx->flush_tasks.size(),
+      commit_ctx->commit_slices.size(), s.ToString());
+
+  if (!s.ok()) {
+    LOG(WARNING) << fmt::format(
+        "{} SlicesCommited commit_seq: {} fail commit, flush_task_count: {} "
+        "batch_slices_count: {} commit_status: {}",
+        UUID(), commit_ctx->commit_seq, commit_ctx->flush_tasks.size(),
+        commit_ctx->commit_slices.size(), s.ToString());
+
+    MarkErrorStatus(s);
+  }
+
+  for (FlushTask* task : commit_ctx->flush_tasks) {
+    // if one task fail, all task fail
+    task->cb(GetErrorStatus());
+    VLOG(4) << fmt::format("{} SlicesCommited delete chunk_flush_task: {}",
+                           UUID(), task->ToString());
+    delete task;
+  }
+
+  VLOG(4) << fmt::format(
+      "{} SlicesCommited commit_seq: {} end, delete commit_ctx", UUID(),
+      commit_ctx->commit_seq);
+  delete commit_ctx;
+
+  // continue batch commit next flush task util all flush task are committed
+  CommitFlushTasks(ctx);
 }
 
 void ChunkWriter::DoFlushAsync(StatusCallback cb, uint64_t chunk_flush_id) {

@@ -18,6 +18,8 @@
 
 #include <absl/strings/str_format.h>
 
+#include <cstdint>
+
 #include "client/meta/vfs_meta.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/meta/meta_log.h"
@@ -336,14 +338,23 @@ Status MetaWrapper::AsyncWriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                                     uint64_t fh,
                                     const std::vector<Slice>& slices,
                                     DoneClosure done) {
-  Status s;
-  MetaLogGuard log_guard([&]() {
-    return absl::StrFormat("async_write_slice (%d,%d,%d): %s %d %d", ino, index,
-                           fh, s.ToString(), ctx->hit_cache, slices.size());
-  });
+  uint64_t start_us = butil::cpuwide_time_us();
+  uint64_t slice_count = slices.size();
 
-  s = target_->AsyncWriteSlice(ctx, ino, index, fh, slices, done);
-  return s;
+  auto wrapped_done = [start_us, slice_count, ctx = std::move(ctx), ino, index, fh,
+                       done = std::move(done)](const Status& status) {
+    Status s;
+    MetaLogGuard log_guard(start_us, [&]() {
+      return absl::StrFormat("async_write_slice (%d,%d,%d): %s %d %d", ino,
+                             index, fh, s.ToString(), ctx->hit_cache,
+                             slice_count);
+    });
+
+    done(status);
+  };
+
+  return target_->AsyncWriteSlice(ctx, ino, index, fh, slices,
+                                  std::move(wrapped_done));
 }
 
 Status MetaWrapper::Write(ContextSPtr ctx, Ino ino, uint64_t offset,

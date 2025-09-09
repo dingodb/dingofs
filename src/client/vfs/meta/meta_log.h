@@ -19,6 +19,8 @@
 
 #include <unistd.h>
 
+#include <cstdint>
+
 #include "butil/time.h"
 #include "options/client/option.h"
 #include "spdlog/logger.h"
@@ -35,22 +37,24 @@ class MetaLogGuard {
  public:
   using MessageHandler = std::function<std::string()>;
 
-  explicit MetaLogGuard(MessageHandler handler)
-      : enabled_(FLAGS_client_vfs_meta_logging), handler_(std::move(handler)) {
+  explicit MetaLogGuard(uint64_t start_us, MessageHandler handler)
+      : enabled_(FLAGS_client_vfs_meta_logging),
+        start_us(start_us),
+        handler_(std::move(handler)) {
     if (!enabled_) {
       return;
     }
-    timer_.start();
   }
+
+  explicit MetaLogGuard(MessageHandler handler)
+      : MetaLogGuard(butil::cpuwide_time_us(), std::move(handler)) {}
 
   ~MetaLogGuard() {
     if (!enabled_) {
       return;
     }
 
-    timer_.stop();
-
-    int64_t duration = timer_.u_elapsed();
+    int64_t duration = butil::cpuwide_time_us() - start_us;
     if (duration > FLAGS_client_vfs_meta_log_threshold_us) {
       meta_logger->warn("{0} <{1:.6f}>", handler_(), duration / 1e6);
     }
@@ -58,8 +62,8 @@ class MetaLogGuard {
 
  private:
   bool enabled_;
+  int64_t start_us = 0;
   MessageHandler handler_;
-  butil::Timer timer_;
 };
 
 }  // namespace vfs

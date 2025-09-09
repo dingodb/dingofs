@@ -41,6 +41,7 @@ namespace vfs {
 
 static std::atomic<uint64_t> slice_seq_id_gen{1};
 static std::atomic<uint64_t> chunk_flush_id_gen{1};
+static std::atomic<uint64_t> commit_seq_id_gen{1};
 
 class VFSHub;
 struct ChunkWriteInfo {
@@ -119,6 +120,12 @@ class ChunkWriter : public std::enable_shared_from_this<ChunkWriter> {
     }
   };
 
+  struct CommmitContext {
+    uint64_t commit_seq{0};
+    std::vector<FlushTask*> flush_tasks;
+    std::vector<Slice> commit_slices;
+  };
+
   std::string UUID() const {
     return fmt::format("chunk_writer-{}", chunk_.UUID());
   }
@@ -128,8 +135,6 @@ class ChunkWriter : public std::enable_shared_from_this<ChunkWriter> {
   Status WriteToBlockCache(const cache::BlockKey& key,
                            const cache::Block& block, cache::PutOption option);
 
-  Status CommitSlices(ContextSPtr ctx, const std::vector<Slice>& slices);
-
   std::unique_ptr<SliceData> FindWritableSliceUnLocked(uint64_t chunk_pos,
                                                        uint64_t size);
   std::unique_ptr<SliceData> CreateSliceUnlocked(uint64_t chunk_pos);
@@ -137,8 +142,14 @@ class ChunkWriter : public std::enable_shared_from_this<ChunkWriter> {
                                               uint64_t size);
   void PutSliceUnlocked(std::unique_ptr<SliceData> slice_data);
 
+  Status CommitSlices(ContextSPtr ctx, const std::vector<Slice>& slices);
+  void AsyncCommitSlices(ContextSPtr ctx, const std::vector<Slice>& slices,
+                         StatusCallback cb);
+  void SlicesCommited(ContextSPtr ctx, CommmitContext* commit_ctx, Status s);
+
   void DoFlushAsync(StatusCallback cb, uint64_t chunk_flush_id);
   void FlushTaskDone(FlushTask* flush_task, Status s);
+  void CommitFlushTasks(ContextSPtr ctx);
 
   Status GetErrorStatus() const {
     std::lock_guard<std::mutex> lg(mutex_);
