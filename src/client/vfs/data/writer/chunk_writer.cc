@@ -311,7 +311,7 @@ void ChunkWriter::FlushTaskDone(FlushTask* flush_task, Status s) {
 
     CHECK(!to_commit.empty());
 
-    // TODO: maybe use batch commit
+    std::vector<Slice> batch_commit_slices;
     for (FlushTask* task : to_commit) {
       VLOG(4) << fmt::format(
           "{} FlushTaskDone header_task: {} commit chunk_flush_task: {}",
@@ -326,17 +326,8 @@ void ChunkWriter::FlushTaskDone(FlushTask* flush_task, Status s) {
             UUID(), flush_task->UUID(), task->ToString(), slices.size());
 
         if (!slices.empty()) {
-          // TODO: maybe use batch commit
-          Status status = CommitSlices(span->GetContext(), slices);
-          if (!status.ok()) {
-            LOG(WARNING) << fmt::format(
-                "{} FlushTaskDone header_task: {} fail commit"
-                " chunk_flush_task: {}, commit_status: {}",
-                UUID(), flush_task->UUID(), task->ToString(),
-                status.ToString());
-
-            MarkErrorStatus(status);
-          }
+          std::move(slices.begin(), slices.end(),
+                    std::back_inserter(batch_commit_slices));
         }
 
       } else {
@@ -348,11 +339,32 @@ void ChunkWriter::FlushTaskDone(FlushTask* flush_task, Status s) {
         MarkErrorStatus(task->status);
       }
 
-      // if some error happend before
-      task->cb(GetErrorStatus());
-
       to_destroy.push_back(task);
     }  // end  for to_commit
+
+    VLOG(4) << fmt::format(
+        "{} FlushTaskDone header_task: {} will commit batch_slices_count: {}",
+        UUID(), flush_task->UUID(), batch_commit_slices.size());
+
+    Status commit_status;
+    if (!batch_commit_slices.empty()) {
+      commit_status = CommitSlices(span->GetContext(), batch_commit_slices);
+      if (!commit_status.ok()) {
+        LOG(WARNING) << fmt::format(
+            "{} FlushTaskDone header_task: {} fail commit, commit_status: {}, "
+            "batch_slices_count: {}    ",
+            UUID(), flush_task->UUID(), commit_status.ToString(),
+            batch_commit_slices.size());
+
+        MarkErrorStatus(commit_status);
+      }
+    }
+
+    for (FlushTask* task : to_commit) {
+      // if one task fail, all task fail
+      task->cb(GetErrorStatus());
+    }
+
   }  // end while(true)
 }
 

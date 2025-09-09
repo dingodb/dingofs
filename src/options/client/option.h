@@ -67,8 +67,7 @@ DECLARE_int32(client_vfs_read_max_retry_block_not_found);
 
 // vfs flush
 DECLARE_int32(client_vfs_flush_bg_thread);
-DECLARE_uint32(client_vfs_periodic_flush_interval_ms);
-DECLARE_int32(client_vfs_flush_bg_thread);
+DECLARE_int32(client_vfs_periodic_flush_interval_ms);
 DECLARE_double(client_vfs_trigger_flush_free_page_ratio);
 
 // vfs prefetch

@@ -75,9 +75,9 @@ DEFINE_int32(client_vfs_flush_bg_thread, 16,
              "number of background flush threads");
 DEFINE_validator(client_vfs_flush_bg_thread, &PassInt32);
 
-DEFINE_uint32(client_vfs_periodic_flush_interval_ms, 1 * 1000,
+DEFINE_int32(client_vfs_periodic_flush_interval_ms, 100,
               "periodic flush interval in milliseconds");
-DEFINE_validator(client_vfs_periodic_flush_interval_ms, &PassUint32);
+DEFINE_validator(client_vfs_periodic_flush_interval_ms, &PassInt32);
 
 DEFINE_double(client_vfs_trigger_flush_free_page_ratio, 0.3,
               "trigger flush when free page ratio is lower than this value");
@@ -210,6 +210,13 @@ void InitVFSOption(utils::Configuration* conf, VFSOption* option) {
     LOG(INFO) << "Not found `vfs.data.writeback_suffix` in conf, "
                  "default to: "
               << option->data_option.writeback_suffix;
+  }
+
+  if (!conf->GetIntValue("vfs.data.vfs_periodic_flush_interval_ms",
+                         &FLAGS_client_vfs_periodic_flush_interval_ms)) {
+    LOG(INFO) << "Not found `vfs.data.vfs_periodic_flush_interval_ms` in conf, "
+                 "default to "
+              << FLAGS_client_vfs_periodic_flush_interval_ms;
   }
 
   if (!conf->GetIntValue("vfs.data.flush_bg_thread",
