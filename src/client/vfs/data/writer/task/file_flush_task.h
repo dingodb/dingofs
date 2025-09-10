@@ -35,7 +35,7 @@ class FileFlushTask {
  public:
   explicit FileFlushTask(uint64_t ino, uint64_t file_flush_id,
                          std::unordered_map<uint64_t, ChunkWriterSPtr> chunks)
-      : ino_(ino), file_flush_id_(file_flush_id), chunks_(std::move(chunks)) {}
+      : ino_(ino), file_flush_id_(file_flush_id), chunk_writers_(std::move(chunks)) {}
 
   ~FileFlushTask() = default;
 
@@ -46,7 +46,7 @@ class FileFlushTask {
   }
 
   std::string ToString() const {
-    return fmt::format("(uuid: {}, chunks_size: {})", UUID(), chunks_.size());
+    return fmt::format("(uuid: {}, chunk_writers_size: {})", UUID(), chunk_writers_.size());
   }
 
  private:
@@ -54,11 +54,12 @@ class FileFlushTask {
 
   const uint64_t ino_;
   const uint64_t file_flush_id_;
-  const std::unordered_map<uint64_t, ChunkWriterSPtr> chunks_;
 
   std::atomic_uint64_t flusing_chunk_{0};
 
   mutable std::mutex mutex_;
+  // NOTICE: chunk_writers_ will be moved to local variable to_flush
+  std::unordered_map<uint64_t, ChunkWriterSPtr> chunk_writers_;
   StatusCallback cb_;
   Status status_;
 };

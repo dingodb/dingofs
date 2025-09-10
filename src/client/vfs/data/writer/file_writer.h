@@ -48,6 +48,9 @@ class FileWriter {
 
   ChunkWriter* GetOrCreateChunkWriter(uint64_t chunk_index);
 
+  void FileFlushTaskDone(uint64_t file_flush_id, StatusCallback cb,
+                         Status status);
+
   VFSHub* vfs_hub_;
   const uint64_t fh_;
   const uint64_t ino_;

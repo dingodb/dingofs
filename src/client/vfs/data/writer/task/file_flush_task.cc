@@ -31,7 +31,8 @@ namespace vfs {
 void FileFlushTask::ChunkFlushed(uint64_t chunk_index, Status status) {
   if (!status.ok()) {
     LOG(WARNING) << fmt::format(
-        "{} ChunkFlushed Failed to flush chunk_index: {}", UUID(), chunk_index);
+        "{} ChunkFlushed Failed to flush chunk_index: {}, status: {}", UUID(),
+        chunk_index, status.ToString());
     {
       std::lock_guard<std::mutex> lock(mutex_);
       if (status_.ok()) {
@@ -58,28 +59,35 @@ void FileFlushTask::ChunkFlushed(uint64_t chunk_index, Status status) {
 void FileFlushTask::RunAsync(StatusCallback cb) {
   VLOG(4) << fmt::format("{} Start file_flush_task: {}", UUID(), ToString());
 
-  if (chunks_.empty()) {
+  std::unordered_map<uint64_t, ChunkWriterSPtr> to_flush;
+
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    to_flush.swap(chunk_writers_);
+  }
+
+  if (to_flush.empty()) {
     VLOG(1) << fmt::format("{} End directly because no chunks to flush",
                            UUID());
     cb(Status::OK());
     return;
   }
 
+  flusing_chunk_.store(to_flush.size(), std::memory_order_relaxed);
+  DCHECK_GT(flusing_chunk_.load(), 0);
+
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    cb_ = std::move(cb);
+    cb_.swap(cb);
     status_ = Status::OK();
   }
 
-  flusing_chunk_.store(chunks_.size(), std::memory_order_relaxed);
-  DCHECK_GT(flusing_chunk_.load(), 0);
-
-  for (const auto& iter : chunks_) {
+  for (const auto& iter : to_flush) {
     uint64_t chunk_index = iter.first;
+    VLOG(4) << fmt::format("{} Flushing chunk_index: {}", UUID(), chunk_index);
+
     ChunkWriterSPtr chunk_writer = iter.second;
     CHECK_NOTNULL(chunk_writer);
-
-    VLOG(4) << fmt::format("{} Flushing chunk_index: {}", UUID(), chunk_index);
 
     chunk_writer->FlushAsync([this, chunk_index](Status status) {
       ChunkFlushed(chunk_index, status);

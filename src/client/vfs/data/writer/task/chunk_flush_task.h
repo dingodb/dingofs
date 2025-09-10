@@ -70,11 +70,11 @@ class ChunkFlushTask {
   const uint64_t ino_{0};
   const uint64_t chunk_index_{0};
   const uint64_t chunk_flush_id;
-  const std::map<uint64_t, std::unique_ptr<SliceData>> flush_slices_;
 
   std::atomic_uint64_t flusing_slice_{0};
 
   mutable std::mutex mutex_;
+  const std::map<uint64_t, std::unique_ptr<SliceData>> flush_slices_;
   StatusCallback cb_;
   Status status_;
 };

@@ -74,12 +74,26 @@ void ChunkFlushTask::RunAsync(StatusCallback cb) {
   VLOG(4) << fmt::format("{} Start chunk_flush_task: {} flush_slices size: {}",
                          UUID(), ToString(), flush_slices_.size());
 
-  if (flush_slices_.empty()) {
+  std::map<uint64_t, SliceData*> to_flush_slices;
+  {
+    std::lock_guard<std::mutex> lg(mutex_);
+    for (const auto& seq_slice : flush_slices_) {
+      int64_t seq = seq_slice.first;
+      SliceData* slice = seq_slice.second.get();
+
+      to_flush_slices.emplace(seq, slice);
+    }
+  }
+
+  if (to_flush_slices.empty()) {
     VLOG(1) << fmt::format(
         "{} End  because no slices to flush, return directly", UUID());
     cb(Status::OK());
     return;
   }
+
+  flusing_slice_.store(to_flush_slices.size(), std::memory_order_relaxed);
+  DCHECK_GT(flusing_slice_.load(), 0);
 
   {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -87,12 +101,9 @@ void ChunkFlushTask::RunAsync(StatusCallback cb) {
     status_ = Status::OK();
   }
 
-  flusing_slice_.store(flush_slices_.size(), std::memory_order_relaxed);
-  DCHECK_GT(flusing_slice_.load(), 0);
-
-  for (const auto& seq_slice : flush_slices_) {
+  for (const auto& seq_slice : to_flush_slices) {
     int64_t seq = seq_slice.first;
-    SliceData* slice = seq_slice.second.get();
+    SliceData* slice = seq_slice.second;
 
     VLOG(4) << fmt::format("{} will flush slice_seq: {}, slice: {}", UUID(),
                            seq, slice->UUID());

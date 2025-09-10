@@ -90,6 +90,29 @@ ChunkWriter* FileWriter::GetOrCreateChunkWriter(uint64_t chunk_index) {
   }
 }
 
+void FileWriter::FileFlushTaskDone(uint64_t file_flush_id, StatusCallback cb,
+                                   Status status) {
+  VLOG(3) << "File::AsyncFlush end ino: " << ino_
+          << ", file_flush_id: " << file_flush_id
+          << ", status: " << status.ToString();
+
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto iter = inflight_flush_tasks_.find(file_flush_id);
+    CHECK(iter != inflight_flush_tasks_.end());
+    if (!status.ok()) {
+      LOG(WARNING) << "File::AsyncFlush Failed, ino: " << ino_
+                   << ", file_flush_id: " << file_flush_id
+                   << ", flush_task: " << iter->second->ToString()
+                   << ", status: " << status.ToString();
+    }
+
+    inflight_flush_tasks_.erase(iter);
+  }
+
+  cb(status);
+}
+
 void FileWriter::AsyncFlush(StatusCallback cb) {
   uint64_t file_flush_id = file_flush_id_gen.fetch_add(1);
   VLOG(3) << "File::AsyncFlush start ino: " << ino_
@@ -117,7 +140,7 @@ void FileWriter::AsyncFlush(StatusCallback cb) {
   }
 
   if (is_empty) {
-    VLOG(1) << "File::AsyncFlush end ino: " << ino_
+    VLOG(3) << "File::AsyncFlush end ino: " << ino_
             << ", file_flush_id: " << file_flush_id
             << ", no chunks to flush, calling callback directly";
     cb(Status::OK());
@@ -125,10 +148,10 @@ void FileWriter::AsyncFlush(StatusCallback cb) {
   }
 
   CHECK_NOTNULL(flush_task);
-  flush_task->RunAsync(cb);
 
-  VLOG(3) << "File::AsyncFlush end ino: " << ino_
-          << ", file_flush_id: " << file_flush_id;
+  flush_task->RunAsync([this, file_flush_id, cb](auto&& ph1) {
+    FileFlushTaskDone(file_flush_id, cb, std::forward<decltype(ph1)>(ph1));
+  });
 }
 }  // namespace vfs
 }  // namespace client
