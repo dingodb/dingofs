@@ -18,6 +18,7 @@
 #define DINGOFS_SRC_OPTIONS_CLIENT_OPTION_H_
 
 #include <gflags/gflags_declare.h>
+
 #include "blockaccess/accesser_common.h"
 #include "common/const.h"
 #include "options/cache/option.h"
@@ -93,6 +94,10 @@ DECLARE_uint32(format_block_name_width);
 DECLARE_uint32(format_block_len_width);
 DECLARE_string(format_delimiter);
 // end used in inode_blocks_service
+
+// mds discovery
+DECLARE_uint32(mds_discovery_max_retries);
+DECLARE_uint32(mds_discovery_retry_interval_ms);
 
 // ############## gflags end ##############
 

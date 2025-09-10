@@ -76,7 +76,7 @@ DEFINE_int32(client_vfs_flush_bg_thread, 16,
 DEFINE_validator(client_vfs_flush_bg_thread, &PassInt32);
 
 DEFINE_int32(client_vfs_periodic_flush_interval_ms, 100,
-              "periodic flush interval in milliseconds");
+             "periodic flush interval in milliseconds");
 DEFINE_validator(client_vfs_periodic_flush_interval_ms, &PassInt32);
 
 DEFINE_double(client_vfs_trigger_flush_free_page_ratio, 0.3,
@@ -149,6 +149,13 @@ DEFINE_validator(format_delimiter,
                    }
                    return true;
                  });
+
+// mds discovery
+DEFINE_uint32(mds_discovery_max_retries, 120, "max retries for mds discovery");
+DEFINE_validator(mds_discovery_max_retries, &PassUint32);
+DEFINE_uint32(mds_discovery_retry_interval_ms, 100,
+              "mds discovery retry interval in milliseconds");
+DEFINE_validator(mds_discovery_retry_interval_ms, &PassUint32);
 
 // end used in inode_blocks_service
 

@@ -20,13 +20,15 @@
 #include "fmt/core.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
+#include "options/client/option.h"
+
+USING_FLAG(mds_discovery_max_retries)
+USING_FLAG(mds_discovery_retry_interval_ms)
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 namespace v2 {
-
-static const uint32_t kWaitTimeMs = 100;
 
 bool MDSDiscovery::Init() { return RefreshFullyMDSList(); }
 
@@ -141,8 +143,14 @@ bool MDSDiscovery::RefreshFullyMDSList() {
 
     if (!mdses.empty()) break;
 
-    bthread_usleep(kWaitTimeMs * 1000);
-    ++retries;
+    bthread_usleep(FLAGS_mds_discovery_retry_interval_ms * 1000);
+
+    if (++retries >= FLAGS_mds_discovery_max_retries) {
+      LOG(ERROR) << fmt::format(
+          "[meta.discovery] get mds list failed, reach max retries({}).",
+          FLAGS_mds_discovery_max_retries);
+      return false;
+    }
   }
 
   {
