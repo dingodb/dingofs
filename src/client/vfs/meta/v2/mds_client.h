@@ -15,6 +15,8 @@
 #ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_MDS_CLIENT_H_
 #define DINGOFS_SRC_CLIENT_VFS_META_V2_MDS_CLIENT_H_
 
+#include <fmt/format.h>
+
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -204,7 +206,8 @@ Status MDSClient::SendRequest(ContextSPtr ctx, GetMdsFn get_mds_fn,
       ctx ? ctx->TraceId() : std::to_string(mdsv2::Helper::TimestampNs()));
 
   request.mutable_context()->set_client_id(client_id_.ID());
-  for (int retry = 0; retry < FLAGS_client_vfs_rpc_retry_times; ++retry) {
+  int retry = 0;
+  do {
     request.mutable_context()->set_epoch(epoch_);
 
     if (is_refresh_mds) mds_meta = get_mds_fn();
@@ -213,6 +216,10 @@ Status MDSClient::SendRequest(ContextSPtr ctx, GetMdsFn get_mds_fn,
     auto status =
         rpc_->SendRequest(endpoint, service_name, api_name, request, response);
     if (!status.ok()) {
+      LOG(INFO) << fmt::format(
+          "[meta.client] send request fail, mds({}) retry({}) status({}).",
+          mds_meta.ID(), retry, status.ToString());
+
       if (status.Errno() == pb::error::EROUTER_EPOCH_CHANGE) {
         if (!ProcessEpochChange()) {
           return Status::Internal("process epoch change fail");
@@ -237,7 +244,7 @@ Status MDSClient::SendRequest(ContextSPtr ctx, GetMdsFn get_mds_fn,
     }
 
     return status;
-  }
+  } while (IsRetry(retry));
 
   return Status::Internal("send request fail");
 }

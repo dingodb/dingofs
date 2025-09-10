@@ -1008,20 +1008,11 @@ bool MDSClient::UpdateRouter() {
 // process epoch change
 // 1. updatge fs info
 // 2. update mds router
-bool MDSClient::ProcessEpochChange() {
-  LOG(INFO) << "[meta.client] process epoch change.";
-  return UpdateRouter();
-}
+bool MDSClient::ProcessEpochChange() { return UpdateRouter(); }
 
-bool MDSClient::ProcessNotServe() {
-  LOG(INFO) << "[meta.client] process not serve.";
-  return UpdateRouter();
-}
+bool MDSClient::ProcessNotServe() { return UpdateRouter(); }
 
 bool MDSClient::ProcessNetError(MDSMeta& mds_meta) {
-  LOG(INFO) << fmt::format("[meta.client] process net error, mds({}).",
-                           mds_meta.ID());
-
   // set the current mds as abnormal
   mds_discovery_->SetAbnormalMDS(mds_meta.ID());
 

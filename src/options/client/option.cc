@@ -121,7 +121,7 @@ DEFINE_uint32(client_vfs_read_dir_batch_size, 1024, "read dir batch size.");
 DEFINE_uint32(client_vfs_rpc_timeout_ms, 60000, "rpc timeout ms");
 DEFINE_validator(client_vfs_rpc_timeout_ms, &PassUint32);
 
-DEFINE_int32(client_vfs_rpc_retry_times, 10, "rpc retry time");
+DEFINE_int32(client_vfs_rpc_retry_times, 8, "rpc retry time");
 DEFINE_validator(client_vfs_rpc_retry_times, &PassInt32);
 
 // begin used in inode_blocks_service

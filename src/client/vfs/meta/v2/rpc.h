@@ -59,8 +59,15 @@ inline bool IsInvalidEndpoint(const EndPoint& endpoint) {
 
 inline uint32_t CalWaitTimeUs(int retry) {
   // exponential backoff
-  return mdsv2::Helper::GenerateRealRandomInteger(100000, 500000) *
-         (1 << retry);
+  return mdsv2::Helper::GenerateRealRandomInteger(50000, 100000) * (1 << retry);
+}
+
+inline bool IsRetry(int& retry) {
+  if (++retry <= FLAGS_client_vfs_rpc_retry_times) {
+    bthread_usleep(CalWaitTimeUs(retry));
+    return true;
+  }
+  return false;
 }
 
 inline EndPoint StrToEndpoint(const std::string& ip, int port) {
@@ -160,6 +167,9 @@ inline Status TransformError(const pb::error::Error& error) {
     case pb::error::ENOT_FOUND:
       return Status::NotExist(error.errcode(), error.errmsg());
 
+    case pb::error::ENOT_CAN_CONNECTED:
+      return Status::NetError(error.errcode(), error.errmsg());
+
     default:
       return Status::Internal(error.errcode(), error.errmsg());
   }
@@ -211,7 +221,7 @@ Status RPC::SendRequest(const EndPoint& endpoint,
   CHECK(channel != nullptr) << fmt::format("[meta.rpc][{}] channel is null.",
                                            EndPointToStr(endpoint));
 
-  int retry_count = 0;
+  int retry = 0;
   do {
     brpc::Controller cntl;
     cntl.set_timeout_ms(FLAGS_client_vfs_rpc_timeout_ms);
@@ -222,16 +232,22 @@ Status RPC::SendRequest(const EndPoint& endpoint,
     uint64_t elapsed_us = mdsv2::Helper::TimestampUs() - start_us;
     if (cntl.Failed()) {
       LOG(ERROR) << fmt::format(
-          "[meta.rpc][{}][{}][{}us] fail, {} {} {} request({}) doing({}).",
-          EndPointToStr(endpoint), api_name, elapsed_us, cntl.log_id(),
-          retry_count, cntl.ErrorText(), request.ShortDebugString(),
-          DoingReqCount());
+          "[meta.rpc][{}][{}][{}us] fail, {} retry({}) {} request({}) "
+          "doing({}).",
+          EndPointToStr(endpoint), api_name, elapsed_us, cntl.log_id(), retry,
+          cntl.ErrorText(), request.ShortDebugString(), DoingReqCount());
 
       response.mutable_error()->set_errcode(pb::error::EINTERNAL);
       response.mutable_error()->set_errmsg(
           fmt::format("{} {}", cntl.ErrorCode(), cntl.ErrorText()));
+
       // if the error is timeout, we can retry
       if (cntl.ErrorCode() == brpc::ERPCTIMEDOUT) continue;
+      if (cntl.ErrorCode() == EHOSTDOWN) {
+        response.mutable_error()->set_errcode(pb::error::ENOT_CAN_CONNECTED);
+        ++retry;
+        continue;
+      }
 
       DeleteChannel(endpoint);
       return Status::NetError(cntl.ErrorCode(), cntl.ErrorText());
@@ -240,16 +256,16 @@ Status RPC::SendRequest(const EndPoint& endpoint,
     if (response.error().errcode() == pb::error::OK) {
       if constexpr (!std::is_same_v<Response, pb::mdsv2::ReadSliceResponse>) {
         LOG(INFO) << fmt::format(
-            "[meta.rpc][{}][{}][{}us] success, request({}) response({}) "
-            "doing({}).",
-            EndPointToStr(endpoint), api_name, elapsed_us,
+            "[meta.rpc][{}][{}][{}us] success, retry({}) request({}) "
+            "response({}) doing({}).",
+            EndPointToStr(endpoint), api_name, elapsed_us, retry,
             request.ShortDebugString(), response.ShortDebugString(),
             DoingReqCount());
       } else {
         LOG(INFO) << fmt::format(
-            "[meta.rpc][{}][{}][{}us] success, request({}) response({}) "
-            "doing({}).",
-            EndPointToStr(endpoint), api_name, elapsed_us,
+            "[meta.rpc][{}][{}][{}us] success, retry({}) request({}) "
+            "response({}) doing({}).",
+            EndPointToStr(endpoint), api_name, elapsed_us, retry,
             request.ShortDebugString(), DescribeReadSliceResponse(response),
             DoingReqCount());
       }
@@ -258,10 +274,10 @@ Status RPC::SendRequest(const EndPoint& endpoint,
 
     if (response.error().errcode() != pb::error::ENOT_FOUND) {
       LOG(ERROR) << fmt::format(
-          "[meta.rpc][{}][{}][{}us] fail, request({}) retry_count({}) "
+          "[meta.rpc][{}][{}][{}us] fail, retry({}) request({}) "
           "doing({}) error({} {}).",
-          EndPointToStr(endpoint), api_name, elapsed_us,
-          request.ShortDebugString(), retry_count, DoingReqCount(),
+          EndPointToStr(endpoint), api_name, elapsed_us, retry,
+          request.ShortDebugString(), DoingReqCount(),
           pb::error::Errno_Name(response.error().errcode()),
           response.error().errmsg());
     }
@@ -272,9 +288,7 @@ Status RPC::SendRequest(const EndPoint& endpoint,
       break;
     }
 
-    bthread_usleep(CalWaitTimeUs(retry_count));
-
-  } while (++retry_count <= FLAGS_client_vfs_rpc_retry_times);
+  } while (IsRetry(retry));
 
   return TransformError(response.error());
 }

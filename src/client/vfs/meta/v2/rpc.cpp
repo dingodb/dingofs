@@ -19,6 +19,8 @@
 #include <fmt/format.h>
 #include <glog/logging.h>
 
+#include <string>
+
 #include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
@@ -90,6 +92,8 @@ void RPC::DeleteEndpoint(const std::string& ip, int port) {
 EndPoint RPC::RandomlyPickupEndPoint() {
   utils::ReadLockGuard lk(lock_);
 
+  std::string source;
+  EndPoint endpoint;
   // priority take from active channels
   if (!channels_.empty()) {
     uint32_t random_num =
@@ -97,20 +101,29 @@ EndPoint RPC::RandomlyPickupEndPoint() {
     uint32_t index = random_num % channels_.size();
     auto it = channels_.begin();
     std::advance(it, index);
-    return it->first;
-  }
+    endpoint = it->first;
+    source = "active";
 
-  // take from fallback
-  if (!fallback_endpoints_.empty()) {
+  } else if (!fallback_endpoints_.empty()) {
+    // take from fallback
     uint32_t random_num =
         mdsv2::Helper::GenerateRealRandomInteger(0, fallback_endpoints_.size());
     uint32_t index = random_num % fallback_endpoints_.size();
     auto it = fallback_endpoints_.begin();
     std::advance(it, index);
-    return *it;
+    endpoint = *it;
+    source = "fallback";
+
+  } else {
+    endpoint = init_endpoint_;
+    source = "init";
   }
 
-  return init_endpoint_;
+  LOG(INFO) << fmt::format(
+      "[meta.rpc] random pickup endpoint, addr({}) source({}).",
+      EndPointToStr(endpoint), source);
+
+  return endpoint;
 }
 
 void RPC::AddFallbackEndpoint(const EndPoint& endpoint) {
