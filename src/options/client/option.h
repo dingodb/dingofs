@@ -85,6 +85,8 @@ DECLARE_uint32(client_vfs_read_dir_batch_size);
 DECLARE_uint32(client_vfs_rpc_timeout_ms);
 DECLARE_int32(client_vfs_rpc_retry_times);
 
+DECLARE_uint32(client_write_slicce_operation_merge_delay_us);
+
 // begin used in inode_blocks_service
 DECLARE_uint32(format_file_offset_width);
 DECLARE_uint32(format_len_width);

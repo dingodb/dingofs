@@ -15,6 +15,7 @@
  */
 
 #include "options/client/option.h"
+#include <gflags/gflags.h>
 
 #include "options/blockaccess/option.h"
 #include "options/gflag_validator.h"
@@ -123,6 +124,11 @@ DEFINE_validator(client_vfs_rpc_timeout_ms, &PassUint32);
 
 DEFINE_int32(client_vfs_rpc_retry_times, 8, "rpc retry time");
 DEFINE_validator(client_vfs_rpc_retry_times, &PassInt32);
+
+DEFINE_uint32(client_write_slicce_operation_merge_delay_us, 10,
+              "write slice operation merge delay us.");
+DEFINE_validator(client_write_slicce_operation_merge_delay_us, &PassUint32);
+
 
 // begin used in inode_blocks_service
 DEFINE_uint32(format_file_offset_width, 20, "Width of file offset in format");

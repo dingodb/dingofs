@@ -20,15 +20,14 @@
 #include <cstdint>
 #include <vector>
 
+#include "options/client/option.h"
+
 namespace dingofs {
 namespace client {
 namespace vfs {
 namespace v2 {
 
 static const uint32_t kBatchOperationReserveSize = 256;
-
-DEFINE_uint32(client_write_slicce_operation_merge_delay_us, 10,
-              "write slice operation merge delay us.");
 
 WriteSliceProcessor::WriteSliceProcessor(MDSClientSPtr mds_client)
     : mds_client_(mds_client) {
