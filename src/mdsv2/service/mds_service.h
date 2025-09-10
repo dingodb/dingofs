@@ -47,6 +47,9 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
   bool Init();
   void Destroy();
 
+  void Echo(google::protobuf::RpcController* controller, const pb::mdsv2::EchoRequest* request,
+            pb::mdsv2::EchoResponse* response, google::protobuf::Closure* done) override;
+
   // mds
   void Heartbeat(google::protobuf::RpcController* controller, const pb::mdsv2::HeartbeatRequest* request,
                  pb::mdsv2::HeartbeatResponse* response, google::protobuf::Closure* done) override;

@@ -71,11 +71,11 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
 
   } else if (vfs_conf.fs_type == "vfs_v2") {
     LOG(INFO) << "use mdsv2 file system.";
-    std::string mds_addr;
-    conf.GetValueFatalIfFail("mds.addr", &mds_addr);
-    LOG(INFO) << fmt::format("mds addr: {}.", mds_addr);
+    std::string mds_addrs;
+    conf.GetValueFatalIfFail("mds.addr", &mds_addrs);
+    LOG(INFO) << fmt::format("mds addr: {}.", mds_addrs);
 
-    rela_meta_system = v2::MDSV2FileSystem::Build(vfs_conf.fs_name, mds_addr,
+    rela_meta_system = v2::MDSV2FileSystem::Build(vfs_conf.fs_name, mds_addrs,
                                                   vfs_conf.mount_point,
                                                   vfs_option.dummy_server_port);
   } else {

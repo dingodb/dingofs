@@ -58,6 +58,41 @@ bool RPC::Init() {
 
 void RPC::Destory() {}
 
+bool RPC::CheckMdsAlive(const std::string& addr) {
+  EndPoint endpoint;
+  butil::str2endpoint(addr.c_str(), &endpoint);
+
+  brpc::ChannelOptions options;
+  options.connect_timeout_ms = kConnectTimeoutMs;
+  options.timeout_ms = FLAGS_client_vfs_rpc_timeout_ms;
+  options.max_retry = FLAGS_client_vfs_rpc_retry_times;
+
+  brpc::Channel channel;
+  if (channel.Init(butil::ip2str(endpoint.ip).c_str(), endpoint.port,
+                   &options) != 0) {
+    LOG(ERROR) << fmt::format("[meta.rpc] init channel fail, addr({}).",
+                              EndPointToStr(endpoint));
+
+    return false;
+  }
+
+  pb::mdsv2::EchoRequest request;
+  pb::mdsv2::EchoResponse response;
+
+  const google::protobuf::MethodDescriptor* method =
+      dingofs::pb::mdsv2::MDSService::descriptor()->FindMethodByName("Echo");
+
+  brpc::Controller cntl;
+  channel.CallMethod(method, &cntl, &request, &response, nullptr);
+  if (cntl.Failed()) {
+    LOG(ERROR) << fmt::format("[meta.rpc] check mds addr fail, addr({}).",
+                              addr);
+    return false;
+  }
+
+  return true;
+}
+
 bool RPC::AddEndpoint(const std::string& ip, int port) {
   utils::WriteLockGuard lk(lock_);
 

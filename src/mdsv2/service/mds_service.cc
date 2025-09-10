@@ -109,6 +109,13 @@ void MDSServiceImpl::Destroy() {
 
 FileSystemSPtr MDSServiceImpl::GetFileSystem(uint32_t fs_id) { return file_system_set_->GetFileSystem(fs_id); }
 
+void MDSServiceImpl::Echo(google::protobuf::RpcController*, const pb::mdsv2::EchoRequest* request,
+                          pb::mdsv2::EchoResponse* response, google::protobuf::Closure* done) {
+  brpc::ClosureGuard done_guard(done);
+
+  response->set_message(request->message());
+}
+
 void MDSServiceImpl::DoHeartbeat(google::protobuf::RpcController*, const pb::mdsv2::HeartbeatRequest* request,
                                  pb::mdsv2::HeartbeatResponse* response, TraceClosure* done) {
   brpc::ClosureGuard done_guard(done);

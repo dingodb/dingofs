@@ -105,6 +105,8 @@ class RPC {
   bool Init();
   void Destory();
 
+  static bool CheckMdsAlive(const std::string& addr);
+
   bool AddEndpoint(const std::string& ip, int port);
   void DeleteEndpoint(const std::string& ip, int port);
 

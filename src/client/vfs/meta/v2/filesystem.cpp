@@ -33,6 +33,7 @@
 #include "glog/logging.h"
 #include "json/value.h"
 #include "json/writer.h"
+#include "mdsv2/common/helper.h"
 #include "trace/context.h"
 
 namespace dingofs {
@@ -836,16 +837,43 @@ void MDSV2FileSystem::ClearChunkCache(Ino ino, uint64_t fh, uint64_t index) {
 //   return Status::OK();
 // }
 
+static std::vector<std::string> SplitMdsAddrs(const std::string& mds_addrs) {
+  std::vector<std::string> addrs;
+
+  if (mds_addrs.find(',') != std::string::npos) {
+    mdsv2::Helper::SplitString(mds_addrs, ',', addrs);
+    return addrs;
+
+  } else if (mds_addrs.find(';') != std::string::npos) {
+    mdsv2::Helper::SplitString(mds_addrs, ';', addrs);
+    return addrs;
+  }
+
+  addrs.push_back(mds_addrs);
+  return addrs;
+}
+
+static std::string GetAliveMdsAddr(const std::string& mds_addrs) {
+  auto mds_addr_vec = SplitMdsAddrs(mds_addrs);
+  for (const auto& mds_addr : mds_addr_vec) {
+    if (RPC::CheckMdsAlive(mds_addr)) {
+      return mds_addr;
+    }
+  }
+
+  return "";
+}
+
 MDSV2FileSystemUPtr MDSV2FileSystem::Build(const std::string& fs_name,
-                                           const std::string& mds_addr,
+                                           const std::string& mds_addrs,
                                            const std::string& mountpoint,
                                            uint32_t port) {
   LOG(INFO) << fmt::format(
-      "[meta.filesystem.{}] build filesystem mds_addr: {}, mountpoint: {}.",
-      fs_name, mds_addr, mountpoint);
+      "[meta.filesystem.{}] build filesystem mds_addrs({}), mountpoint({}).",
+      fs_name, mds_addrs, mountpoint);
 
   CHECK(!fs_name.empty()) << "fs_name is empty.";
-  CHECK(!mds_addr.empty()) << "mds_addr is empty.";
+  CHECK(!mds_addrs.empty()) << "mds_addrs is empty.";
   CHECK(!mountpoint.empty()) << "mountpoint is empty.";
 
   std::string hostname = Helper::GetHostName();
@@ -859,7 +887,16 @@ MDSV2FileSystemUPtr MDSV2FileSystem::Build(const std::string& fs_name,
   LOG(INFO) << fmt::format("[meta.filesystem.{}] client_id: {}", fs_name,
                            client_id.ID());
 
-  auto rpc = RPC::New(mds_addr);
+  // check mds addr
+  std::string alive_mds_addr = GetAliveMdsAddr(mds_addrs);
+  if (alive_mds_addr.empty()) {
+    LOG(ERROR) << fmt::format(
+        "[meta.filesystem.{}] mds addr check fail, mds_addrs({}).", fs_name,
+        mds_addrs);
+    return nullptr;
+  }
+
+  auto rpc = RPC::New(alive_mds_addr);
   if (!rpc->Init()) {
     LOG(ERROR) << fmt::format("[meta.filesystem.{}] RPC init fail.", fs_name);
     return nullptr;
