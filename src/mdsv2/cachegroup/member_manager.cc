@@ -33,9 +33,9 @@
 namespace dingofs {
 namespace mdsv2 {
 
-DEFINE_uint32(cache_member_heartbeat_miss_timeout_s, 10, "Timeout for missing heartbeat in seconds");
+DEFINE_uint32(cache_member_heartbeat_miss_timeout_s, 30, "Timeout for missing heartbeat in seconds");
 
-DEFINE_uint32(cache_member_heartbeat_offline_timeout_s, 30, "Timeout for member to be considered offline in seconds");
+DEFINE_uint32(cache_member_heartbeat_offline_timeout_s, 60, "Timeout for member to be considered offline in seconds");
 
 Status CacheGroupMemberManager::ReweightMember(Context& ctx, const std::string& member_id, const std::string& ip,
                                                uint32_t port, uint32_t weight) {
