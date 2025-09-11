@@ -175,6 +175,7 @@ class MDSClient {
     uint32_t expect_mds_num;
 
     S3Info s3_info;
+    RadosInfo rados_info;
     std::string owner = "deng";
   };
 
@@ -278,6 +279,7 @@ class MdsCommandRunner {
     uint32_t weight;
 
     S3Info s3_info;
+    RadosInfo rados_info;
   };
 
   static bool Run(const Options& options, const std::string& mds_addr, const std::string& cmd, uint32_t fs_id);

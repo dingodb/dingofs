@@ -99,12 +99,29 @@ static std::string RenderMountpoint(const pb::mdsv2::FsInfo& fs_info) {
   return result;
 };
 
-static std::string RenderS3Info(const pb::mdsv2::S3Info& s3_info) {
+static std::string RenderStorageInfo(const pb::mdsv2::FsExtra& fs_extra) {
   std::string result;
+
+  const auto& s3_info = fs_extra.s3_info();
+  const auto& rados_info = fs_extra.rados_info();
+
   if (!s3_info.endpoint().empty()) {
-    result += fmt::format("{}", s3_info.endpoint());
+    result += "s3";
     result += "<br>";
-    result += fmt::format("{}", s3_info.bucketname());
+    result += fmt::format("endpoint: {}", s3_info.endpoint());
+    result += "<br>";
+    result += fmt::format("bucket: {}", s3_info.bucketname());
+
+  } else if (!rados_info.mon_host().empty()) {
+    result += "rados";
+    result += "<br>";
+    result += fmt::format("host: {}", rados_info.mon_host());
+    result += "<br>";
+    result += fmt::format("pool: {}", rados_info.pool_name());
+    result += "<br>";
+    result += fmt::format("user: {}", rados_info.user_name());
+    result += "<br>";
+    result += fmt::format("cluster: {}", rados_info.cluster_name());
   }
 
   return result;
@@ -230,7 +247,7 @@ static void RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes, butil:
   os << "<th>Time</th>";
   os << "<th>RecycleTime</th>";
   os << "<th>MountPoint</th>";
-  os << "<th>S3</th>";
+  os << "<th>Storage</th>";
   os << "<th>UUID</th>";
   os << "</tr>";
 
@@ -254,7 +271,7 @@ static void RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes, butil:
     os << "<td>" << render_time_func(fs_info) << "</td>";
     os << "<td>" << fmt::format("{}hour", fs_info.recycle_time_hour()) << "</td>";
     os << "<td>" << RenderMountpoint(fs_info) << "</td>";
-    os << "<td>" << RenderS3Info(fs_info.extra().s3_info()) << "</td>";
+    os << "<td>" << RenderStorageInfo(fs_info.extra()) << "</td>";
     os << "<td>" << fs_info.uuid() << "</td>";
     os << "</tr>";
   }

@@ -785,18 +785,22 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, bool is_prefetch_
       if (slice_num >= FLAGS_mds_transfer_max_slice_num) return true;
     }
 
+    if (file_length == 0) return true;
+
     uint64_t chunk_num = file_length % chunk_size == 0 ? file_length / chunk_size : (file_length / chunk_size) + 1;
     return chunks.size() >= chunk_num;
   };
 
-  bool is_completely = false;
+  std::string fetch_from("none");
   if (is_prefetch_chunk && ((flags & O_ACCMODE) == O_RDONLY || flags & O_RDWR)) {
+    fetch_from = "cache";
     // priority take from cache
     get_chunks_from_cache_fn(chunks);
 
-    is_completely = is_completely_fn(chunks);
+    bool is_completely = is_completely_fn(chunks);
     // if not enough then fetch from store
     if (!is_completely) {
+      fetch_from = "store";
       auto status = GetChunksFromStore(ino, chunks, FLAGS_mds_transfer_max_slice_num);
       if (status.ok() && !is_completely_fn(chunks)) {
         DINGO_LOG(WARNING) << fmt::format("[fs.{}] chunks is not completely, ino({}) length({}) chunks({}).", fs_id_,
@@ -805,8 +809,8 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, bool is_prefetch_
     }
   }
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] open {} finish, flags({:o}:{}) cache_chunk({}) status({}).", fs_id_,
-                                 duration.ElapsedUs(), ino, flags, Helper::DescOpenFlags(flags), is_completely,
+  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] open {} finish, flags({:o}:{}) fetch_chunk({}) status({}).", fs_id_,
+                                 duration.ElapsedUs(), ino, flags, Helper::DescOpenFlags(flags), fetch_from,
                                  status.error_str());
 
   return Status::OK();

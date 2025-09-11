@@ -87,8 +87,23 @@ CreateFsResponse MDSClient::CreateFs(const std::string& fs_name, const CreateFsP
   }
 
   const auto& s3_info = params.s3_info;
-  if (s3_info.endpoint.empty() || s3_info.ak.empty() || s3_info.sk.empty() || s3_info.bucket_name.empty()) {
-    DINGO_LOG(ERROR) << "s3 info is empty";
+  const auto& rados_info = params.rados_info;
+
+  if (!s3_info.endpoint.empty()) {
+    if (s3_info.ak.empty() || s3_info.sk.empty() || s3_info.bucket_name.empty()) {
+      DINGO_LOG(ERROR) << "s3 info is empty.";
+      return response;
+    }
+
+  } else if (!rados_info.mon_host.empty()) {
+    if (rados_info.user_name.empty() || rados_info.key.empty() || rados_info.pool_name.empty() ||
+        rados_info.cluster_name.empty()) {
+      DINGO_LOG(ERROR) << "rados info is empty.";
+      return response;
+    }
+
+  } else {
+    DINGO_LOG(ERROR) << "s3 info and rados info is empty.";
     return response;
   }
 
@@ -106,7 +121,6 @@ CreateFsResponse MDSClient::CreateFs(const std::string& fs_name, const CreateFsP
   request.set_block_size(params.block_size);
   request.set_chunk_size(params.chunk_size);
 
-  request.set_fs_type(pb::mdsv2::FsType::S3);
   request.set_owner(params.owner);
   request.set_capacity(1024 * 1024 * 1024);
   request.set_recycle_time_hour(1);
@@ -117,12 +131,24 @@ CreateFsResponse MDSClient::CreateFs(const std::string& fs_name, const CreateFsP
     request.set_partition_type(::dingofs::pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION);
   }
 
-  auto* mut_s3_info = request.mutable_fs_extra()->mutable_s3_info();
-  mut_s3_info->set_ak(s3_info.ak);
-  mut_s3_info->set_sk(s3_info.sk);
-  mut_s3_info->set_endpoint(s3_info.endpoint);
-  mut_s3_info->set_bucketname(s3_info.bucket_name);
-  mut_s3_info->set_object_prefix(0);
+  if (!s3_info.endpoint.empty()) {
+    request.set_fs_type(pb::mdsv2::FsType::S3);
+    auto* mut_s3_info = request.mutable_fs_extra()->mutable_s3_info();
+    mut_s3_info->set_ak(s3_info.ak);
+    mut_s3_info->set_sk(s3_info.sk);
+    mut_s3_info->set_endpoint(s3_info.endpoint);
+    mut_s3_info->set_bucketname(s3_info.bucket_name);
+    mut_s3_info->set_object_prefix(0);
+
+  } else {
+    request.set_fs_type(pb::mdsv2::FsType::RADOS);
+    auto* mut_rados_info = request.mutable_fs_extra()->mutable_rados_info();
+    mut_rados_info->set_mon_host(rados_info.mon_host);
+    mut_rados_info->set_user_name(rados_info.user_name);
+    mut_rados_info->set_key(rados_info.key);
+    mut_rados_info->set_pool_name(rados_info.pool_name);
+    mut_rados_info->set_cluster_name(rados_info.cluster_name);
+  }
 
   DINGO_LOG(INFO) << "CreateFs request: " << request.ShortDebugString();
 
@@ -1018,6 +1044,7 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr, 
     params.chunk_size = options.chunk_size;
     params.block_size = options.block_size;
     params.s3_info = options.s3_info;
+    params.rados_info = options.rados_info;
     params.fs_id = options.fs_id;
     params.expect_mds_num = options.num;
 

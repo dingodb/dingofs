@@ -102,6 +102,14 @@ struct S3Info {
   }
 };
 
+struct RadosInfo {
+  std::string mon_host;
+  std::string user_name;
+  std::string key;
+  std::string pool_name;
+  std::string cluster_name{"ceph"};
+};
+
 }  // namespace mdsv2
 }  // namespace dingofs
 

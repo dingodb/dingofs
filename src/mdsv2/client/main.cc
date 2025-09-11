@@ -34,6 +34,12 @@ DEFINE_string(s3_sk, "", "s3 sk");
 DEFINE_string(s3_bucketname, "", "s3 bucket name");
 DEFINE_string(s3_objectname, "", "s3 object name");
 
+DEFINE_string(rados_user_name, "", "s3 user name");
+DEFINE_string(rados_pool_name, "", "s3 pool name");
+DEFINE_string(rados_mon_host, "", "rados mon host");
+DEFINE_string(rados_key, "", "rados key");
+DEFINE_string(rados_cluster_name, "", "rados cluster name");
+
 DEFINE_string(fs_name, "", "fs name");
 DEFINE_uint32(fs_id, 0, "fs id");
 DEFINE_string(fs_partition_type, "mono", "fs partition type");
@@ -186,6 +192,13 @@ int main(int argc, char* argv[]) {
     s3_info.endpoint = FLAGS_s3_endpoint;
     s3_info.bucket_name = FLAGS_s3_bucketname;
     s3_info.object_name = FLAGS_s3_objectname;
+
+    auto& rados_info = options.rados_info;
+    rados_info.user_name = FLAGS_rados_user_name;
+    rados_info.pool_name = FLAGS_rados_pool_name;
+    rados_info.mon_host = FLAGS_rados_mon_host;
+    rados_info.key = FLAGS_rados_key;
+    rados_info.cluster_name = FLAGS_rados_cluster_name;
 
     if (dingofs::mdsv2::client::MdsCommandRunner::Run(options, FLAGS_mds_addr, lower_cmd, FLAGS_fs_id)) {
       return 0;

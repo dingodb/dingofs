@@ -383,6 +383,16 @@ Status GetFsOperation::Run(TxnUPtr& txn) {
 
   return Status::OK();
 }
+// message Client {
+//   string id = 1;
+//   string hostname = 2;
+//   uint32 port = 3;
+//   string mountpoint = 4;
+//   string fs_name = 5;
+//   string ip = 6;
+
+//   uint64 last_online_time_ms = 10;
+// }
 
 Status MountFsOperation::Run(TxnUPtr& txn) {
   std::string value;
@@ -403,6 +413,17 @@ Status MountFsOperation::Run(TxnUPtr& txn) {
   fs_info.set_version(fs_info.version() + 1);
 
   txn->Put(key, MetaCodec::EncodeFsValue(fs_info));
+
+  // add client heartbeat, prevent leave over mountpoint
+  ClientEntry client;
+  client.set_id(mount_point_.client_id());
+  client.set_hostname(mount_point_.hostname());
+  client.set_port(mount_point_.port());
+  client.set_mountpoint(mount_point_.path());
+  client.set_fs_name(fs_info.fs_name());
+  client.set_last_online_time_ms(Helper::TimestampMs());
+
+  txn->Put(MetaCodec::EncodeHeartbeatKey(client.id()), MetaCodec::EncodeHeartbeatValue(client));
 
   return Status::OK();
 }
