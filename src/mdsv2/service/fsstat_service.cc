@@ -665,7 +665,14 @@ void FsStatServiceImpl::RenderMainPage(const brpc::Server* server, FileSystemSet
     // sort by last_online_time
     std::sort(cache_members.begin(), cache_members.end(),  // NOLINT
               [](const CacheMemberEntry& a, const CacheMemberEntry& b) {
-                return a.last_online_time_ms() > b.last_online_time_ms();
+                butil::EndPoint endpoint_a, endpoint_b;
+                if (butil::str2endpoint(a.ip().c_str(), a.port(), &endpoint_a) != 0) {
+                  return false;
+                }
+                if (butil::str2endpoint(b.ip().c_str(), b.port(), &endpoint_b) != 0) {
+                  return false;
+                }
+                return endpoint_a > endpoint_b;
               });
 
     RenderCacheMemberList(cache_members, os);
