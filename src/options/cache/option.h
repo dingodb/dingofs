@@ -229,8 +229,8 @@ DECLARE_uint64(mdsv1_rpc_normal_retry_times_before_trigger_wait);
 DECLARE_uint64(mdsv1_rpc_wait_sleep_ms);
 
 // [onfly]
-DECLARE_uint32(mdsv2_rpc_timeout_ms);
-DECLARE_uint32(mdsv2_rpc_retry_times);
+DECLARE_uint32(mdsv2_rpc_timeout_ms);   // NOTE: only for dingo-cache
+DECLARE_uint32(mdsv2_rpc_retry_times);  // NOTE: only for dingo-cache
 DECLARE_uint32(mdsv2_request_retry_times);
 
 };  // namespace cache

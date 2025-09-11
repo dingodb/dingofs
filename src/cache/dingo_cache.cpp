@@ -20,6 +20,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
+#include "cache/dingo_cache.h"
+
 #include <iostream>
 
 #include "cache/cachegroup/cache_group_node_server.h"
@@ -29,16 +31,12 @@
 #include "cache/utils/offload_thread_pool.h"
 #include "options/cache/option.h"
 
-namespace brpc {
-DECLARE_bool(graceful_quit_on_sigterm);
-}  // namespace brpc
-
 namespace dingofs {
 namespace cache {
 
-static FlagsInfo flags;
+FlagsInfo DingoCache::flags;
 
-static int HandleFlags(int argc, char** argv) {
+int DingoCache::HandleFlags(int argc, char** argv) {
   flags = FlagsHelper::Parse(argc, argv);
   if (flags.show_help) {
     std::cout << FlagsHelper::GenHelp(flags) << "\n";
@@ -73,18 +71,21 @@ static int HandleFlags(int argc, char** argv) {
   return 0;
 }
 
-static void InitGlog() { InitLogging("dingo-cache"); }
-static void LogFlags() { LOG(INFO) << FlagsHelper::GenCurrentFlags(flags); }
-static void InitBrpcFlags() { brpc::FLAGS_graceful_quit_on_sigterm = true; }
-static void InitThreadPool() { OffloadThreadPool::GetInstance().Start(); }
-static void GlobalInitOrDie() {
+void DingoCache::InitGlog() { InitLogging("dingo-cache"); }
+
+void DingoCache::LogFlags() {
+  LOG(INFO) << FlagsHelper::GenCurrentFlags(flags);
+}
+
+void DingoCache::InitThreadPool() { OffloadThreadPool::GetInstance().Start(); }
+
+void DingoCache::GlobalInitOrDie() {
   InitGlog();
   LogFlags();
-  InitBrpcFlags();
   InitThreadPool();
 }
 
-static int StartServer() {
+int DingoCache::StartServer() {
   CacheGroupNodeServerImpl server;
   auto status = server.Start();
   if (!status.ok()) {
@@ -95,7 +96,7 @@ static int StartServer() {
   return 0;
 }
 
-int Run(int argc, char** argv) {
+int DingoCache::Run(int argc, char** argv) {
   int rc = HandleFlags(argc, argv);
   if (rc != 0) {
     return rc;

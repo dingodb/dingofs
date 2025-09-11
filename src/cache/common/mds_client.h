@@ -161,11 +161,10 @@ class MDSV2Client : public MDSClient {
   pb::common::StorageInfo ToCommonStorageInfo(const pb::mdsv2::FsInfo& info);
   CacheGroupMemberState ToMemberState(pb::mdsv2::CacheGroupMemberState state);
 
-  bool ProcessEpochChange();
-  bool ProcessNotServe();
-  bool ProcessNetError(mdsv2::MDSMeta& mds_meta);
-
-  bool GetRandomlyMDS(mdsv2::MDSMeta& mds_meta);
+  mdsv2::MDSMeta GetRandomlyMDS(const mdsv2::MDSMeta& old_mds);
+  bool ShouldRetry(Status status);
+  bool ShouldSetMDSAbormal(Status status);
+  bool ShouldRefreshMDSList(Status status);
 
   template <typename Request, typename Response>
   Status SendRequest(const std::string& service_name,

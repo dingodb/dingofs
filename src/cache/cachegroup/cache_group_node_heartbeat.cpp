@@ -31,6 +31,20 @@ namespace cache {
 DEFINE_uint32(send_heartbeat_interval_s, 3,
               "Interval to send heartbeat to MDS in seconds");
 
+// NOTE: now we use the client rpc related module, so we should set the related
+// flags. In the future, we will let the rpc module be independent.
+DEFINE_uint32(mdsv2_rpc_timeout_ms, 3000, "mdsv2 rpc timeout");
+DEFINE_validator(mdsv2_rpc_timeout_ms, [](const char*, uint32_t v) {
+  client::FLAGS_client_vfs_rpc_timeout_ms = v;
+  return true;
+});
+
+DEFINE_uint32(mdsv2_rpc_retry_times, 1, "mdsv2 rpc retry time");
+DEFINE_validator(mdsv2_rpc_retry_times, [](const char*, uint32_t v) {
+  client::FLAGS_client_vfs_rpc_retry_times = v;
+  return true;
+});
+
 CacheGroupNodeHeartbeatImpl::CacheGroupNodeHeartbeatImpl(
     CacheGroupNodeMemberSPtr member, MDSClientSPtr mds_client)
     : running_(false),

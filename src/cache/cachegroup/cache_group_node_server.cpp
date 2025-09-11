@@ -26,6 +26,10 @@
 #include "cache/cachegroup/cache_group_node_service.h"
 #include "cache/common/macro.h"
 
+namespace brpc {
+DECLARE_bool(graceful_quit_on_sigterm);
+}  // namespace brpc
+
 namespace dingofs {
 namespace cache {
 
@@ -74,6 +78,7 @@ Status CacheGroupNodeServerImpl::Start() {
 
   CHECK_RUNNING("Cache group node server");
 
+  brpc::FLAGS_graceful_quit_on_sigterm = true;
   server_->RunUntilAskedToQuit();
 
   return Status::OK();

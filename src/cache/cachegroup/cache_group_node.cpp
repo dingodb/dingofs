@@ -95,6 +95,12 @@ Status CacheGroupNodeImpl::Start() {
     return status;
   }
 
+  SCOPE_EXIT {
+    if (!status.ok()) {
+      member_->LeaveGroup();
+    }
+  };
+
   // Cache directory name depends node member uuid, so init after join group
   status = StartBlockCache();
   if (!status.ok()) {

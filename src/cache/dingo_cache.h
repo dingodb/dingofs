@@ -20,15 +20,32 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_SERVER_H_
-#define DINGOFS_SRC_CACHE_SERVER_H_
+#ifndef DINGOFS_SRC_CACHE_DINGO_CACHE_H_
+#define DINGOFS_SRC_CACHE_DINGO_CACHE_H_
+
+#include "cache/common/flag.h"
 
 namespace dingofs {
 namespace cache {
 
-int Run(int argc, char** argv);
+class DingoCache {
+ public:
+  static int Run(int argc, char** argv);
+
+ private:
+  static int HandleFlags(int argc, char** argv);
+
+  static void InitGlog();
+  static void LogFlags();
+  static void InitThreadPool();
+  static void GlobalInitOrDie();
+
+  static int StartServer();
+
+  static FlagsInfo flags;
+};
 
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_SERVER_H_
+#endif  // DINGOFS_SRC_CACHE_DINGO_CACHE_H_

@@ -31,6 +31,8 @@
 
 #include <memory>
 #include <string>
+#include <unordered_map>
+#include <utility>
 
 #include "cache/common/macro.h"
 #include "cache/utils/helper.h"
@@ -38,9 +40,10 @@
 #include "common/status.h"
 #include "dingofs/cachegroup.pb.h"
 #include "dingofs/common.pb.h"
+#include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"
 #include "dingofs/mdsv2.pb.h"
-#include "options/client/option.h"
+#include "mdsv2/mds/mds_meta.h"
 
 namespace dingofs {
 namespace cache {
@@ -59,18 +62,6 @@ DEFINE_uint64(mdsv1_rpc_retry_interval_us, 50000, "");
 DEFINE_uint64(mdsv1_rpc_max_failed_times_before_change_addr, 2, "");
 DEFINE_uint64(mdsv1_rpc_normal_retry_times_before_trigger_wait, 3, "");
 DEFINE_uint64(mdsv1_rpc_wait_sleep_ms, 1000, "");
-
-DEFINE_uint32(mdsv2_rpc_timeout_ms, 60000, "mdsv2 rpc timeout");
-DEFINE_validator(mdsv2_rpc_timeout_ms, [](const char*, uint32_t v) {
-  client::FLAGS_client_vfs_rpc_timeout_ms = v;
-  return true;
-});
-
-DEFINE_uint32(mdsv2_rpc_retry_times, 3, "mdsv2 rpc retry time");
-DEFINE_validator(mdsv2_rpc_retry_times, [](const char*, uint32_t v) {
-  client::FLAGS_client_vfs_rpc_retry_times = v;
-  return true;
-});
 
 DEFINE_uint32(mdsv2_request_retry_times, 3, "");
 DEFINE_validator(mdsv2_request_retry_times, brpc::PassValidate);
@@ -440,91 +431,73 @@ CacheGroupMemberState MDSV2Client::ToMemberState(
   }
 }
 
-bool MDSV2Client::GetRandomlyMDS(mdsv2::MDSMeta& mds_meta) {
-  auto mdses = mds_discovery_->GetNormalMDS();
-  if (mdses.empty()) {
-    LOG(ERROR) << "No normal mds";
-    return false;
-  }
+mdsv2::MDSMeta MDSV2Client::GetRandomlyMDS(const mdsv2::MDSMeta& old_mds) {
+  auto mdses = mds_discovery_->GetNormalMDS(true);
+  CHECK(!mdses.empty()) << "No normal mds found";
 
-  mds_meta = mdses[butil::fast_rand_less_than(mdses.size())];
-  return true;
-}
-
-bool MDSV2Client::ProcessEpochChange() {
-  return mds_discovery_->RefreshFullyMDSList();
-}
-
-bool MDSV2Client::ProcessNotServe() {
-  return mds_discovery_->RefreshFullyMDSList();
-}
-
-bool MDSV2Client::ProcessNetError(mdsv2::MDSMeta& mds_meta) {
-  LOG(INFO) << fmt::format("[meta.client] process net error, mds({}).",
-                           mds_meta.ID());
-
-  // set the current mds as abnormal
-  mds_discovery_->SetAbnormalMDS(mds_meta.ID());
-
-  // get a normal mds
-  auto mdses = mds_discovery_->GetNormalMDS();
-  for (auto& mds : mdses) {
-    if (mds.ID() != mds_meta.ID()) {
-      LOG(INFO) << fmt::format(
-          "[meta.client] process net error, transfer {}->{}.", mds_meta.ID(),
-          mds.ID());
-      mds_meta = mds;
-      return true;
+  std::vector<mdsv2::MDSMeta> candidates;
+  for (const auto& mds : mdses) {
+    if (mds.ID() != old_mds.ID()) {
+      candidates.emplace_back(mds);
     }
   }
 
-  return false;
+  if (!candidates.empty()) {
+    return candidates[butil::fast_rand_less_than(candidates.size())];
+  }
+  return old_mds;
+}
+
+bool MDSV2Client::ShouldRetry(Status status) {
+  static std::unordered_map<int, bool> should_retry_errnos = {
+      {pb::error::EROUTER_EPOCH_CHANGE, true},
+      {pb::error::ENOT_SERVE, true},
+      {pb::error::EINTERNAL, true},
+      {pb::error::ENOT_CAN_CONNECTED, true},
+  };
+  return status.IsNetError() || should_retry_errnos.count(status.Errno()) != 0;
+}
+
+bool MDSV2Client::ShouldSetMDSAbormal(Status status) {
+  return status.IsInternal() || status.IsNetError();
+}
+
+bool MDSV2Client::ShouldRefreshMDSList(Status status) {
+  static std::unordered_map<int, bool> should_refresh_errnos = {
+      {pb::error::EROUTER_EPOCH_CHANGE, true},
+      {pb::error::ENOT_SERVE, true},
+  };
+
+  return should_refresh_errnos.count(status.Errno()) != 0;
 }
 
 template <typename Request, typename Response>
 Status MDSV2Client::SendRequest(const std::string& service_name,
                                 const std::string& api_name, Request& request,
                                 Response& response) {
-  mdsv2::MDSMeta mds_meta;
-  bool is_refresh_mds = true;
-
+  mdsv2::MDSMeta mds, old_mds;
   for (int retry = 0; retry < FLAGS_mdsv2_request_retry_times; ++retry) {
-    if (is_refresh_mds) {
-      if (!GetRandomlyMDS(mds_meta)) {
-        return Status::Internal("no normal mds");
-      }
-    }
-
-    auto endpoint =
-        client::vfs::v2::StrToEndpoint(mds_meta.Host(), mds_meta.Port());
+    mds = GetRandomlyMDS(old_mds);
+    auto endpoint = client::vfs::v2::StrToEndpoint(mds.Host(), mds.Port());
 
     auto status =
         rpc_->SendRequest(endpoint, service_name, api_name, request, response);
-    if (!status.ok()) {
-      if (status.Errno() == pb::error::EROUTER_EPOCH_CHANGE) {
-        if (!ProcessEpochChange()) {
-          return Status::Internal("process epoch change fail");
-        }
-        is_refresh_mds = true;
-        continue;
-
-      } else if (status.Errno() == pb::error::ENOT_SERVE) {
-        if (!ProcessNotServe()) {
-          return Status::Internal("process not serve fail");
-        }
-        is_refresh_mds = true;
-        continue;
-
-      } else if (status.IsNetError()) {
-        if (!ProcessNetError(mds_meta)) {
-          return Status::Internal("process net error fail");
-        }
-        is_refresh_mds = false;
-        continue;
-      }
+    if (status.ok() || !ShouldRetry(status)) {
+      return status;
     }
 
-    return status;
+    if (ShouldSetMDSAbormal(status)) {
+      mds_discovery_->SetAbnormalMDS(mds.ID());
+      LOG(INFO) << fmt::format(
+          "[mds.client] set mds({}/{}:{}) as abnormal, status({}).", mds.ID(),
+          mds.Host(), mds.Port(), status.ToString());
+    }
+
+    if (ShouldRefreshMDSList(status)) {
+      CHECK(mds_discovery_->RefreshFullyMDSList()) << "Refresh mds list fail";
+    }
+
+    old_mds = mds;
   }
 
   return Status::Internal("send request fail");

@@ -20,6 +20,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "cache/server.h"
+#include "cache/dingo_cache.h"
 
-int main(int argc, char** argv) { return dingofs::cache::Run(argc, argv); }
+int main(int argc, char** argv) {
+  return dingofs::cache::DingoCache::Run(argc, argv);
+}
