@@ -71,10 +71,6 @@ DEFINE_uint32(rpc_max_timeout_ms, 60000,
 DEFINE_validator(rpc_max_timeout_ms, brpc::PassValidate);
 
 static const std::string kModule = "rpc";
-static const std::string kPutApiName = "Put";
-static const std::string kRangeApiName = "Range";
-static const std::string kCacheApiName = "Cache";
-static const std::string kPrefecthApiName = "Prefetch";
 
 RPCClient::RPCClient(const std::string& server_ip, uint32_t server_port)
     : inited_(false),
@@ -98,8 +94,7 @@ Status RPCClient::Put(ContextSPtr ctx, const BlockKey& key,
   *request.mutable_block_key() = key.ToPB();
   request.set_block_size(buffer.Size());
 
-  status =
-      SendRequest(ctx, kPutApiName, request, buffer.ConstIOBuf(), response);
+  status = SendRequest(ctx, "Put", request, buffer.ConstIOBuf(), response);
   return status;
 }
 
@@ -120,8 +115,7 @@ Status RPCClient::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
   request.set_length(length);
   request.set_block_size(option.block_size);
 
-  status =
-      SendRequest(ctx, kRangeApiName, request, response, response_attachment);
+  status = SendRequest(ctx, "Range", request, response, response_attachment);
   if (status.ok()) {
     *buffer = IOBuffer(response_attachment);
     ctx->SetCacheHit(response.has_cache_hit() ? response.cache_hit() : false);
@@ -144,8 +138,7 @@ Status RPCClient::Cache(ContextSPtr ctx, const BlockKey& key,
   *request.mutable_block_key() = key.ToPB();
   request.set_block_size(buffer.Size());
 
-  status =
-      SendRequest(ctx, kCacheApiName, request, buffer.ConstIOBuf(), response);
+  status = SendRequest(ctx, "Cache", request, buffer.ConstIOBuf(), response);
   return status;
 }
 
@@ -163,7 +156,7 @@ Status RPCClient::Prefetch(ContextSPtr ctx, const BlockKey& key,
   *request.mutable_block_key() = key.ToPB();
   request.set_block_size(length);
 
-  status = SendRequest(ctx, kPrefecthApiName, request, response);
+  status = SendRequest(ctx, "Prefetch", request, response);
   return status;
 }
 
@@ -179,7 +172,7 @@ Status RPCClient::InitChannel(const std::string& server_ip,
 
   brpc::ChannelOptions options;
   options.connect_timeout_ms = FLAGS_rpc_connect_timeout_ms;
-  options.connection_type = brpc::CONNECTION_TYPE_POOLED;
+  options.connection_group = "common";
   rc = channel_->Init(ep, &options);
   if (rc != 0) {
     LOG(ERROR) << "Init channel for " << server_ip << ":" << server_port
@@ -206,7 +199,7 @@ Status RPCClient::ResetChannel() {
 
 // TODO: consider retcode
 bool RPCClient::ShouldRetry(const std::string& api_name, int /*retcode*/) {
-  return api_name == kRangeApiName;
+  return api_name == "Range";
 }
 
 bool RPCClient::ShouldReset(int retcode) {
@@ -216,13 +209,13 @@ bool RPCClient::ShouldReset(int retcode) {
 uint32_t RPCClient::NextTimeoutMs(const std::string& api_name,
                                   int retry_count) const {
   uint32_t timeout_ms;
-  if (api_name == kPutApiName) {
+  if (api_name == "Put") {
     timeout_ms = FLAGS_put_rpc_timeout_ms;
-  } else if (api_name == kRangeApiName) {
+  } else if (api_name == "Range") {
     timeout_ms = FLAGS_range_rpc_timeout_ms;
-  } else if (api_name == kCacheApiName) {
+  } else if (api_name == "Cache") {
     timeout_ms = FLAGS_cache_rpc_timeout_ms;
-  } else if (api_name == kPrefecthApiName) {
+  } else if (api_name == "Prefetch") {
     timeout_ms = FLAGS_prefetch_rpc_timeout_ms;
   } else {
     CHECK(false) << "Unknown API name: " << api_name;
@@ -272,12 +265,16 @@ Status RPCClient::SendRequest(ContextSPtr ctx, const std::string& api_name,
     LOG(FATAL) << "Unknown api name: " << api_name;
   }
 
+  auto connection_type = (api_name == "Range") ? brpc::CONNECTION_TYPE_POOLED
+                                               : brpc::CONNECTION_TYPE_SINGLE;
+
   butil::Timer timer;
   timer.start();
 
   for (int retry_count = 0; retry_count < FLAGS_rpc_max_retry_times;
        ++retry_count) {
     brpc::Controller cntl;
+    cntl.set_connection_type(connection_type);
     cntl.set_timeout_ms(NextTimeoutMs(api_name, retry_count));
     cntl.set_request_id(ctx->TraceId());
     cntl.request_attachment() = request_attachment;

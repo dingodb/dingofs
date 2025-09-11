@@ -106,7 +106,9 @@ Status RemoteCacheNodeHealthChecker::SendPingrequest() {
   butil::EndPoint endpoint;
   butil::str2endpoint(member_.ip.c_str(), member_.port, &endpoint);
 
-  int rc = channel.Init(endpoint, nullptr);
+  brpc::ChannelOptions options;
+  options.connection_group = "urgent";
+  int rc = channel.Init(endpoint, &options);
   if (rc != 0) {
     LOG(ERROR) << "Initialize channel failed: endpoint = " << member_.ip << ":"
                << member_.port << ", rc = " << rc;
