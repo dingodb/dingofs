@@ -26,7 +26,10 @@ namespace mdsv2 {
 namespace notify {
 
 DEFINE_uint32(mds_notify_message_batch_size, 64, "notify message batch size.");
+DEFINE_validator(mds_notify_message_batch_size, brpc::PassValidate);
+
 DEFINE_uint32(mds_wait_message_delay_us, 100, "wait message delay us.");
+DEFINE_validator(mds_wait_message_delay_us, brpc::PassValidate);
 
 NotifyBuddy::NotifyBuddy(MDSMetaMapSPtr mds_meta_map, uint64_t self_mds_id)
     : mds_meta_map_(mds_meta_map), self_mds_id_(self_mds_id) {

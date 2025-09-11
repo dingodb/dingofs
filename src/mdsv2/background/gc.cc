@@ -25,6 +25,7 @@
 
 #include "blockaccess/rados/rados_common.h"
 #include "blockaccess/s3/s3_common.h"
+#include "brpc/reloadable_flags.h"
 #include "cache/blockcache/cache_store.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
@@ -45,16 +46,24 @@ namespace mdsv2 {
 DECLARE_uint32(mds_scan_batch_size);
 
 DEFINE_uint32(mds_gc_worker_num, 32, "gc worker set num");
+DEFINE_validator(mds_gc_worker_num, brpc::PassValidate);
 DEFINE_uint32(mds_gc_max_pending_task_count, 8192, "gc max pending task count");
+DEFINE_validator(mds_gc_max_pending_task_count, brpc::PassValidate);
 
 DEFINE_bool(mds_gc_delslice_enable, true, "gc delslice enable");
+DEFINE_validator(mds_gc_delslice_enable, brpc::PassValidate);
 DEFINE_bool(mds_gc_delfile_enable, true, "gc delfile enable");
+DEFINE_validator(mds_gc_delfile_enable, brpc::PassValidate);
 DEFINE_bool(mds_gc_filesession_enable, true, "gc filesession enable");
+DEFINE_validator(mds_gc_filesession_enable, brpc::PassValidate);
 DEFINE_bool(mds_gc_delfs_enable, true, "gc delfs enable");
+DEFINE_validator(mds_gc_delfs_enable, brpc::PassValidate);
 
 DEFINE_uint32(mds_gc_delfile_reserve_time_s, 600, "gc del file reserve time");
+DEFINE_validator(mds_gc_delfile_reserve_time_s, brpc::PassValidate);
 
 DEFINE_uint32(mds_gc_filesession_reserve_time_s, 86400, "gc file session reserve time");
+DEFINE_validator(mds_gc_filesession_reserve_time_s, brpc::PassValidate);
 
 static const std::string kWorkerSetName = "GC";
 

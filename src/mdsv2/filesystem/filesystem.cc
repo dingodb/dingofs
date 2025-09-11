@@ -14,6 +14,7 @@
 
 #include "mdsv2/filesystem/filesystem.h"
 
+#include <brpc/reloadable_flags.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -63,17 +64,23 @@ static const std::string kStatsName = ".stats";
 static const std::string kRecyleName = ".recycle";
 
 DEFINE_uint32(mds_filesystem_name_max_size, 1024, "Max size of filesystem name.");
+DEFINE_validator(mds_filesystem_name_max_size, brpc::PassValidate);
 DEFINE_uint32(mds_filesystem_hash_bucket_num, 1024, "Filesystem hash bucket num.");
+DEFINE_validator(mds_filesystem_hash_bucket_num, brpc::PassValidate);
 DEFINE_uint32(mds_filesystem_hash_mds_num_default, 3, "Filesystem hash mds num.");
+DEFINE_validator(mds_filesystem_hash_mds_num_default, brpc::PassValidate);
 DEFINE_uint32(mds_filesystem_recycle_time_hour, 1, "Filesystem recycle time hour.");
+DEFINE_validator(mds_filesystem_recycle_time_hour, brpc::PassValidate);
 
 DEFINE_bool(mds_compact_chunk_enable, true, "Compact chunk enable.");
+DEFINE_validator(mds_compact_chunk_enable, brpc::PassValidate);
 DEFINE_uint32(mds_compact_chunk_threshold_num, 10, "Compact chunk threshold num.");
+DEFINE_validator(mds_compact_chunk_threshold_num, brpc::PassValidate);
 DEFINE_uint32(mds_compact_chunk_interval_ms, 3 * 1000, "Compact chunk interval ms.");
+DEFINE_validator(mds_compact_chunk_interval_ms, brpc::PassValidate);
 
-// static bool IsReserveNode(Ino ino) { return ino == kRootIno; }
-
-// static bool IsReserveName(const std::string& name) { return name == kStatsName || name == kRecyleName; }
+DEFINE_uint32(mds_transfer_max_slice_num, 8096, "Max slice num for transfer.");
+DEFINE_validator(mds_transfer_max_slice_num, brpc::PassValidate);
 
 static bool IsInvalidName(const std::string& name) {
   return name.empty() || name.size() > FLAGS_mds_filesystem_name_max_size;
@@ -677,9 +684,9 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
   return Status::OK();
 }
 
-Status FileSystem::GetChunksFromStore(Ino ino, std::vector<ChunkEntry>& chunks) {
+Status FileSystem::GetChunksFromStore(Ino ino, std::vector<ChunkEntry>& chunks, uint32_t max_slice_num) {
   Trace trace;
-  ScanChunkOperation operation(trace, fs_id_, ino);
+  ScanChunkOperation operation(trace, fs_id_, ino, max_slice_num);
   auto status = RunOperation(&operation);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("[fs.{}] fetch chunks fail, status({}).", fs_id_, ino, status.error_str());
@@ -761,31 +768,39 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, bool is_prefetch_
 
   auto get_chunks_from_cache_fn = [&](std::vector<ChunkEntry>& chunks) {
     auto chunk_ptrs = chunk_cache_.Get(ino);
+    uint32_t slice_num = 0;
     for (auto& chunk_ptr : chunk_ptrs) {
       chunks.push_back(*chunk_ptr);
+
+      slice_num += chunk_ptr->slices_size();
+      if (slice_num >= FLAGS_mds_transfer_max_slice_num) break;
     }
   };
 
   uint64_t chunk_size = fs_info_->GetChunkSize();
   auto is_completely_fn = [&](const std::vector<ChunkEntry>& chunks) -> bool {
+    uint32_t slice_num = 0;
+    for (const auto& chunk : chunks) {
+      slice_num += chunk.slices_size();
+      if (slice_num >= FLAGS_mds_transfer_max_slice_num) return true;
+    }
+
     uint64_t chunk_num = file_length % chunk_size == 0 ? file_length / chunk_size : (file_length / chunk_size) + 1;
     return chunks.size() >= chunk_num;
   };
 
   bool is_completely = false;
-  if (is_prefetch_chunk && ((flags & O_ACCMODE) == O_RDONLY || flags & O_WRONLY || flags & O_RDWR)) {
+  if (is_prefetch_chunk && ((flags & O_ACCMODE) == O_RDONLY || flags & O_RDWR)) {
     // priority take from cache
     get_chunks_from_cache_fn(chunks);
 
     is_completely = is_completely_fn(chunks);
     // if not enough then fetch from store
     if (!is_completely) {
-      auto status = GetChunksFromStore(ino, chunks);
-      if (status.ok()) {
-        if (!is_completely_fn(chunks)) {
-          DINGO_LOG(WARNING) << fmt::format("[fs.{}] chunks is not completely, ino({}) length({}) chunks({}).", fs_id_,
-                                            ino, file_length, chunks.size());
-        }
+      auto status = GetChunksFromStore(ino, chunks, FLAGS_mds_transfer_max_slice_num);
+      if (status.ok() && !is_completely_fn(chunks)) {
+        DINGO_LOG(WARNING) << fmt::format("[fs.{}] chunks is not completely, ino({}) length({}) chunks({}).", fs_id_,
+                                          ino, file_length, chunks.size());
       }
     }
   }

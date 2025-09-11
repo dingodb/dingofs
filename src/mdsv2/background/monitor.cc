@@ -42,6 +42,7 @@ DECLARE_uint32(mds_heartbeat_mds_offline_period_time_ms);
 DECLARE_uint32(mds_heartbeat_client_offline_period_ms);
 
 DEFINE_uint32(mds_monitor_client_clean_period_time_s, 180 * 1000, "client clean period time ms");
+DEFINE_validator(mds_monitor_client_clean_period_time_s, brpc::PassValidate);
 
 static void GetOfflineMDS(const std::vector<MDSMeta>& mdses, std::vector<MDSMeta>& online_mdses,
                           std::vector<MDSMeta>& offline_mdses) {

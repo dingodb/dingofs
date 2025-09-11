@@ -22,6 +22,7 @@
 #include <utility>
 #include <vector>
 
+#include "brpc/reloadable_flags.h"
 #include "bthread/bthread.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
@@ -42,13 +43,18 @@ namespace dingofs {
 namespace mdsv2 {
 
 DEFINE_uint32(mds_store_operation_batch_size, 64, "process operation batch size.");
+DEFINE_validator(mds_store_operation_batch_size, brpc::PassValidate);
+
 DEFINE_uint32(mds_txn_max_retry_times, 5, "txn max retry times.");
+DEFINE_validator(mds_txn_max_retry_times, brpc::PassValidate);
 
 DEFINE_uint32(mds_store_operation_merge_delay_us, 10, "merge operation delay us.");
+DEFINE_validator(mds_store_operation_merge_delay_us, brpc::PassValidate);
 
 DECLARE_uint32(mds_compact_chunk_interval_ms);
 
 DEFINE_bool(mds_compact_chunk_detail_log_enable, true, "compact chunk detal log enable.");
+DEFINE_validator(mds_compact_chunk_detail_log_enable, brpc::PassValidate);
 
 static const uint32_t kOpNameBufInitSize = 128;
 
@@ -907,10 +913,15 @@ Status GetChunkOperation::Run(TxnUPtr& txn) {
 Status ScanChunkOperation::Run(TxnUPtr& txn) {
   Range range = MetaCodec::GetChunkRange(fs_id_, ino_);
 
+  uint32_t slice_num = 0;
   auto status = txn->Scan(range, [&](const std::string& key, const std::string& value) -> bool {
     if (!MetaCodec::IsChunkKey(key)) return true;
 
-    result_.chunks.push_back(MetaCodec::DecodeChunkValue(value));
+    auto chunk = MetaCodec::DecodeChunkValue(value);
+    slice_num += chunk.slices_size();
+    result_.chunks.push_back(std::move(chunk));
+
+    if (max_slice_num_ != 0 && slice_num >= max_slice_num_) return false;
 
     return true;
   });

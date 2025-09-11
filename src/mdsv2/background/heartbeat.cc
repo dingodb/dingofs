@@ -34,7 +34,9 @@ namespace mdsv2 {
 DECLARE_uint32(mds_scan_batch_size);
 
 DEFINE_uint32(mds_heartbeat_mds_offline_period_time_ms, 30 * 1000, "mds offline period time ms");
+DEFINE_validator(mds_heartbeat_mds_offline_period_time_ms, brpc::PassValidate);
 DEFINE_uint32(mds_heartbeat_client_offline_period_ms, 30 * 1000, "client offline period time ms");
+DEFINE_validator(mds_heartbeat_client_offline_period_ms, brpc::PassValidate);
 
 bool Heartbeat::Init() {
   worker_ = Worker::New();

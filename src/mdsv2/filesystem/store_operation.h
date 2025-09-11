@@ -685,7 +685,8 @@ class GetChunkOperation : public Operation {
 
 class ScanChunkOperation : public Operation {
  public:
-  ScanChunkOperation(Trace& trace, uint32_t fs_id, uint64_t ino) : Operation(trace), fs_id_(fs_id), ino_(ino) {};
+  ScanChunkOperation(Trace& trace, uint32_t fs_id, uint64_t ino, uint32_t max_slice_num = 0)
+      : Operation(trace), fs_id_(fs_id), ino_(ino), max_slice_num_(max_slice_num) {};
   ~ScanChunkOperation() override = default;
 
   struct Result : public Operation::Result {
@@ -711,6 +712,7 @@ class ScanChunkOperation : public Operation {
  private:
   uint32_t fs_id_;
   uint64_t ino_;
+  uint32_t max_slice_num_{0};
 
   Result result_;
 };

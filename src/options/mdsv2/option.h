@@ -70,6 +70,8 @@ DECLARE_uint32(mds_txn_max_retry_times);
 
 DECLARE_bool(mds_cache_member_enable_cache);
 
+DECLARE_uint32(mds_transfer_max_slice_num);
+
 // gc config
 DECLARE_uint32(mds_gc_worker_num);
 DECLARE_uint32(mds_gc_max_pending_task_count);

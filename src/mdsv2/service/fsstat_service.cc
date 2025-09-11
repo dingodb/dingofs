@@ -309,6 +309,7 @@ static void RenderClientList(const std::vector<ClientEntry>& clients, butil::IOB
   os << "<th>ID</th>";
   os << "<th>Host</th>";
   os << "<th>MountPoint</th>";
+  os << "<th>FsName</th>";
   os << "<th>Last Online Time</th>";
   os << "<th>Online</th>";
   os << "</tr>";
@@ -321,6 +322,7 @@ static void RenderClientList(const std::vector<ClientEntry>& clients, butil::IOB
     os << fmt::format(R"(<td><a href="http://{}:{}/FuseStatService" target="_blank">{}:{} </a></td>)", client.ip(),
                       client.port(), client.hostname(), client.port());
     os << "<td>" << client.mountpoint() << "</td>";
+    os << "<td>" << client.fs_name() << "</td>";
     os << "<td>" << Helper::FormatMsTime(client.last_online_time_ms()) << "</td>";
     if (client.last_online_time_ms() + FLAGS_mds_heartbeat_client_offline_period_ms < now_ms) {
       os << R"(<td style="color:red">NO</td>)";

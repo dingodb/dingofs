@@ -262,7 +262,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   Status GetDelFileFromStore(Ino ino, AttrEntry& out_attr);
 
-  Status GetChunksFromStore(Ino ino, std::vector<ChunkEntry>& chunks);
+  Status GetChunksFromStore(Ino ino, std::vector<ChunkEntry>& chunks, uint32_t max_slice_num = 0);
 
   // delete inode from cache
   void DeleteInodeFromCache(Ino ino);

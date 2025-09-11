@@ -19,6 +19,7 @@
 #include <string>
 #include <utility>
 
+#include "brpc/reloadable_flags.h"
 #include "fmt/core.h"
 #include "fmt/format.h"
 #include "gflags/gflags.h"
@@ -34,6 +35,7 @@ static const std::string kInodeCacheMetricsPrefix = "dingofs_{}_inode_cache_";
 
 // 0: no limit
 DEFINE_uint32(mds_inode_cache_max_count, 0, "inode cache max count");
+DEFINE_validator(mds_inode_cache_max_count, brpc::PassValidate);
 
 uint32_t Inode::FsId() {
   utils::ReadLockGuard lk(lock_);
