@@ -244,7 +244,7 @@ Status MDSClient::SendRequest(ContextSPtr ctx, GetMdsFn get_mds_fn,
     }
 
     return status;
-  } while (IsRetry(retry));
+  } while (IsRetry(retry, FLAGS_client_vfs_rpc_retry_times));
 
   return Status::Internal("send request fail");
 }

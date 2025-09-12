@@ -62,8 +62,8 @@ inline uint32_t CalWaitTimeUs(int retry) {
   return mdsv2::Helper::GenerateRealRandomInteger(50000, 100000) * (1 << retry);
 }
 
-inline bool IsRetry(int& retry) {
-  if (++retry <= FLAGS_client_vfs_rpc_retry_times) {
+inline bool IsRetry(int& retry, int max_retry) {
+  if (++retry <= max_retry) {
     bthread_usleep(CalWaitTimeUs(retry));
     return true;
   }
@@ -84,6 +84,15 @@ inline std::string EndPointToStr(const EndPoint& endpoint) {
 inline std::string TakeIp(const EndPoint& endpoint) {
   return std::string(butil::ip2str(endpoint.ip).c_str());
 }
+
+struct SendRequestOption {
+  SendRequestOption()
+      : timeout_ms(FLAGS_client_vfs_rpc_timeout_ms),
+        max_retry(FLAGS_client_vfs_rpc_retry_times) {}
+
+  int64_t timeout_ms;
+  int max_retry;
+};
 
 class RPC {
  public:
@@ -125,7 +134,8 @@ class RPC {
   template <typename Request, typename Response>
   Status SendRequest(const EndPoint& endpoint, const std::string& service_name,
                      const std::string& api_name, const Request& request,
-                     Response& response);
+                     Response& response,
+                     SendRequestOption option = SendRequestOption());
 
  private:
   using Channel = brpc::Channel;
@@ -200,7 +210,7 @@ template <typename Request, typename Response>
 Status RPC::SendRequest(const EndPoint& endpoint,
                         const std::string& service_name,
                         const std::string& api_name, const Request& request,
-                        Response& response) {
+                        Response& response, SendRequestOption option) {
   IncDoingReqCount();
   mdsv2::DEFER(DecDoingReqCount());
 
@@ -226,7 +236,7 @@ Status RPC::SendRequest(const EndPoint& endpoint,
   int retry = 0;
   do {
     brpc::Controller cntl;
-    cntl.set_timeout_ms(FLAGS_client_vfs_rpc_timeout_ms);
+    cntl.set_timeout_ms(option.timeout_ms);
     cntl.set_log_id(butil::fast_rand());
 
     uint64_t start_us = mdsv2::Helper::TimestampUs();
@@ -290,7 +300,7 @@ Status RPC::SendRequest(const EndPoint& endpoint,
       break;
     }
 
-  } while (IsRetry(retry));
+  } while (IsRetry(retry, option.max_retry_times));
 
   return TransformError(response.error());
 }
