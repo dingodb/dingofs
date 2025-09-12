@@ -300,7 +300,7 @@ Status RPC::SendRequest(const EndPoint& endpoint,
       break;
     }
 
-  } while (IsRetry(retry, option.max_retry_times));
+  } while (IsRetry(retry, option.max_retry));
 
   return TransformError(response.error());
 }

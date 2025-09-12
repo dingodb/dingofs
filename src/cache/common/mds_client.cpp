@@ -37,6 +37,7 @@
 #include "cache/common/macro.h"
 #include "cache/utils/helper.h"
 #include "client/vfs/meta/v2/mds_discovery.h"
+#include "client/vfs/meta/v2/rpc.h"
 #include "common/status.h"
 #include "dingofs/cachegroup.pb.h"
 #include "dingofs/common.pb.h"
@@ -63,7 +64,13 @@ DEFINE_uint64(mdsv1_rpc_max_failed_times_before_change_addr, 2, "");
 DEFINE_uint64(mdsv1_rpc_normal_retry_times_before_trigger_wait, 3, "");
 DEFINE_uint64(mdsv1_rpc_wait_sleep_ms, 1000, "");
 
-DEFINE_uint32(mdsv2_request_retry_times, 3, "");
+DEFINE_int64(mdsv2_rpc_timeout_ms, 3000, "mdsv2 rpc timeout");
+DEFINE_validator(mdsv2_rpc_timeout_ms, brpc::PassValidate);
+
+DEFINE_int32(mdsv2_rpc_retry_times, 1, "mdsv2 rpc retry time");
+DEFINE_validator(mdsv2_rpc_retry_times, brpc::PassValidate);
+
+DEFINE_uint32(mdsv2_request_retry_times, 3, "mdsv2 rpc request retry time");
 DEFINE_validator(mdsv2_request_retry_times, brpc::PassValidate);
 
 static stub::common::MdsOption NewCommonMDSOption() {
@@ -476,12 +483,16 @@ Status MDSV2Client::SendRequest(const std::string& service_name,
                                 const std::string& api_name, Request& request,
                                 Response& response) {
   mdsv2::MDSMeta mds, old_mds;
+  client::vfs::v2::SendRequestOption rpc_option;
+  rpc_option.timeout_ms = FLAGS_mdsv2_rpc_timeout_ms;
+  rpc_option.max_retry = FLAGS_mdsv2_rpc_retry_times;
+
   for (int retry = 0; retry < FLAGS_mdsv2_request_retry_times; ++retry) {
     mds = GetRandomlyMDS(old_mds);
     auto endpoint = client::vfs::v2::StrToEndpoint(mds.Host(), mds.Port());
 
-    auto status =
-        rpc_->SendRequest(endpoint, service_name, api_name, request, response);
+    auto status = rpc_->SendRequest(endpoint, service_name, api_name, request,
+                                    response, rpc_option);
     if (status.ok() || !ShouldRetry(status)) {
       return status;
     }
