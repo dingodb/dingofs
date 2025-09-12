@@ -20,7 +20,6 @@
 #include <memory>
 #include <vector>
 
-#include "dingofs/mdsv2.pb.h"
 #include "mdsv2/common/type.h"
 #include "utils/concurrent/concurrent.h"
 
@@ -46,6 +45,7 @@ class ChunkCache {
   void Delete(uint64_t ino);
   ChunkSPtr Get(uint64_t ino, uint64_t chunk_index);
   std::vector<ChunkSPtr> Get(uint64_t ino);
+  void Clear();
 
  private:
   struct Key {

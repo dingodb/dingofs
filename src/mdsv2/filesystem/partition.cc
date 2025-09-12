@@ -27,7 +27,7 @@ namespace mdsv2 {
 static const std::string kPartitionMetricsPrefix = "dingofs_{}_partition_cache_";
 
 // 0: no limit
-DEFINE_uint32(mds_partition_cache_max_count, 0, "partition cache max count");
+DEFINE_uint32(mds_partition_cache_max_count, 64 * 1024 * 1024, "partition cache max count");
 
 const uint32_t kDentryDefaultNum = 1024;
 

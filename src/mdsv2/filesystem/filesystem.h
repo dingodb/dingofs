@@ -268,6 +268,9 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   void DeleteInodeFromCache(Ino ino);
 
   void ClearCache();
+  void ClearInodeCache();
+  void ClearPartitionCache();
+  void ClearChunkCache();
   void BatchDeleteCache(uint32_t bucket_num, const std::set<uint32_t>& bucket_ids);
 
   uint64_t GetMdsIdByIno(Ino ino);

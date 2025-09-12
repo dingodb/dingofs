@@ -599,7 +599,7 @@ static void RenderCoordinatorAddr(const std::string& addrs, butil::IOBufBuilder&
   Helper::SplitString(addrs, ',', addr_vec);
 
   for (const auto& addr : addr_vec) {
-    os << fmt::format(R"(<a href="http://{}" target="_blank">{}</a>)", addr, addr);
+    os << fmt::format(R"(<a href="http://{}" target="_blank">{}</a>&nbsp)", addr, addr);
   }
 
   os << "</h3>";

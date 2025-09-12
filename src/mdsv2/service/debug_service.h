@@ -28,8 +28,7 @@ using DebugServiceImplUPtr = std::unique_ptr<DebugServiceImpl>;
 
 class DebugServiceImpl : public pb::debug::DebugService {
  public:
-  DebugServiceImpl(FileSystemSetSPtr file_system_set)
-      : file_system_set_(file_system_set) {};
+  DebugServiceImpl(FileSystemSetSPtr file_system_set) : file_system_set_(file_system_set) {};
   ~DebugServiceImpl() override = default;
 
   DebugServiceImpl(const DebugServiceImpl&) = delete;
@@ -39,39 +38,28 @@ class DebugServiceImpl : public pb::debug::DebugService {
     return std::make_unique<DebugServiceImpl>(std::move(file_system_set));
   }
 
-  void GetLogLevel(google::protobuf::RpcController* controller,
-                   const pb::debug::GetLogLevelRequest* request,
-                   pb::debug::GetLogLevelResponse* response,
-                   google::protobuf::Closure* done) override;
-  void ChangeLogLevel(google::protobuf::RpcController* controller,
-                      const pb::debug::ChangeLogLevelRequest* request,
-                      pb::debug::ChangeLogLevelResponse* response,
-                      google::protobuf::Closure* done) override;
+  void GetLogLevel(google::protobuf::RpcController* controller, const pb::debug::GetLogLevelRequest* request,
+                   pb::debug::GetLogLevelResponse* response, google::protobuf::Closure* done) override;
+  void ChangeLogLevel(google::protobuf::RpcController* controller, const pb::debug::ChangeLogLevelRequest* request,
+                      pb::debug::ChangeLogLevelResponse* response, google::protobuf::Closure* done) override;
 
-  void GetFs(google::protobuf::RpcController* controller,
-             const pb::debug::GetFsRequest* request,
-             pb::debug::GetFsResponse* response,
-             google::protobuf::Closure* done) override;
+  void GetFs(google::protobuf::RpcController* controller, const pb::debug::GetFsRequest* request,
+             pb::debug::GetFsResponse* response, google::protobuf::Closure* done) override;
 
-  void GetPartition(google::protobuf::RpcController* controller,
-                    const pb::debug::GetPartitionRequest* request,
-                    pb::debug::GetPartitionResponse* response,
-                    google::protobuf::Closure* done) override;
+  void GetPartition(google::protobuf::RpcController* controller, const pb::debug::GetPartitionRequest* request,
+                    pb::debug::GetPartitionResponse* response, google::protobuf::Closure* done) override;
 
-  void GetInode(google::protobuf::RpcController* controller,
-                const pb::debug::GetInodeRequest* request,
-                pb::debug::GetInodeResponse* response,
-                google::protobuf::Closure* done) override;
+  void GetInode(google::protobuf::RpcController* controller, const pb::debug::GetInodeRequest* request,
+                pb::debug::GetInodeResponse* response, google::protobuf::Closure* done) override;
 
-  void GetOpenFile(google::protobuf::RpcController* controller,
-                   const pb::debug::GetOpenFileRequest* request,
-                   pb::debug::GetOpenFileResponse* response,
-                   google::protobuf::Closure* done) override;
+  void GetOpenFile(google::protobuf::RpcController* controller, const pb::debug::GetOpenFileRequest* request,
+                   pb::debug::GetOpenFileResponse* response, google::protobuf::Closure* done) override;
 
-  void TraceWorkerSet(google::protobuf::RpcController* controller,
-                      const pb::debug::TraceWorkerSetRequest* request,
-                      pb::debug::TraceWorkerSetResponse* response,
-                      google::protobuf::Closure* done) override;
+  void TraceWorkerSet(google::protobuf::RpcController* controller, const pb::debug::TraceWorkerSetRequest* request,
+                      pb::debug::TraceWorkerSetResponse* response, google::protobuf::Closure* done) override;
+
+  void CleanCache(google::protobuf::RpcController* controller, const pb::debug::CleanCacheRequest* request,
+                  pb::debug::CleanCacheResponse* response, google::protobuf::Closure* done) override;
 
  private:
   FileSystemSPtr GetFileSystem(uint32_t fs_id);

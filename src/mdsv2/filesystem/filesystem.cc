@@ -432,6 +432,12 @@ void FileSystem::ClearCache() {
   inode_cache_.Clear();
 }
 
+void FileSystem::ClearInodeCache() { inode_cache_.Clear(); }
+
+void FileSystem::ClearPartitionCache() { partition_cache_.Clear(); }
+
+void FileSystem::ClearChunkCache() { chunk_cache_.Clear(); }
+
 void FileSystem::BatchDeleteCache(uint32_t bucket_num, const std::set<uint32_t>& bucket_ids) {
   if (bucket_ids.empty()) return;
 

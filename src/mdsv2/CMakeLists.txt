@@ -12,6 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
+if(USE_TCMALLOC)
+  # add_definitions(-DLINK_TCMALLOC=ON)
+
+  message(STATUS "use tcmalloc")
+
+#  if(BRPC_ENABLE_CPU_PROFILER)
+#    set(DYNAMIC_LIB ${DYNAMIC_LIB} gperftools::gperftools)
+#  else()
+#    set(DYNAMIC_LIB ${DYNAMIC_LIB} gperftools::gperftools_minimal)
+#  endif()
+endif()
+
 add_compile_options(-Wall -Wno-reorder -Wno-overloaded-virtual)
 
 add_subdirectory(common)

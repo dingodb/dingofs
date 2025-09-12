@@ -34,7 +34,7 @@ namespace mdsv2 {
 static const std::string kInodeCacheMetricsPrefix = "dingofs_{}_inode_cache_";
 
 // 0: no limit
-DEFINE_uint32(mds_inode_cache_max_count, 0, "inode cache max count");
+DEFINE_uint32(mds_inode_cache_max_count, 64 * 1024 * 1024, "inode cache max count");
 DEFINE_validator(mds_inode_cache_max_count, brpc::PassValidate);
 
 uint32_t Inode::FsId() {

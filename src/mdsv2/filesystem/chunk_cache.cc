@@ -100,5 +100,12 @@ std::vector<ChunkCache::ChunkSPtr> ChunkCache::Get(uint64_t ino) {
   return chunks;
 }
 
+void ChunkCache::Clear() {
+  utils::WriteLockGuard lk(lock_);
+
+  chunk_map_.clear();
+  count_metrics_.reset();
+}
+
 }  // namespace mdsv2
 }  // namespace dingofs
