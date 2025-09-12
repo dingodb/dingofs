@@ -18,6 +18,7 @@
 #define DINGOFS_SRC_OPTIONS_CLIENT_OPTION_H_
 
 #include <gflags/gflags_declare.h>
+
 #include "blockaccess/accesser_common.h"
 #include "common/const.h"
 #include "options/cache/option.h"
@@ -179,6 +180,12 @@ static void InitRemoteBlockCacheOption(utils::Configuration* c) {
   c->GetValue("remote_cache.cache_group", &cache::FLAGS_cache_group);
   c->GetValue("remote_cache.mds_version", &cache::FLAGS_mds_version);
   c->GetValue("remote_cache.mds_addrs", &cache::FLAGS_mds_addrs);
+  c->GetValue("remote_cache.mds_rpc_timeout_ms",
+              &cache::FLAGS_mdsv2_rpc_timeout_ms);
+  c->GetValue("remote_cache.mds_rpc_retry_times",
+              &cache::FLAGS_mdsv2_rpc_retry_times);
+  c->GetValue("remote_cache.mds_request_retry_times",
+              &cache::FLAGS_mdsv2_request_retry_times);
   c->GetValue("remote_cache.load_members_interval_ms",
               &cache::FLAGS_load_members_interval_ms);
 
