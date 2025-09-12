@@ -255,6 +255,40 @@ std::vector<InodeSPtr> InodeCache::GetInodes(std::vector<uint64_t> inoes) {
   return inodes;
 }
 
+bool InodeCache::Dump(Json::Value& value) {
+  std::vector<InodeSPtr> inodes;
+  {
+    utils::ReadLockGuard lk(lock_);
+    inodes.reserve(cache_.size());
+    for (const auto& pair : cache_) {
+      inodes.push_back(pair.second);
+    }
+  }
+  Json::Value inode_array = Json::arrayValue;
+  for (const auto& inode : inodes) {
+    Json::Value item;
+    item["fs_id"] = inode->FsId();
+    item["ino"] = inode->Ino();
+    item["type"] = pb::mdsv2::FileType_Name(inode->Type());
+    item["length"] = inode->Length();
+    item["uid"] = inode->Uid();
+    item["gid"] = inode->Gid();
+    item["mode"] = inode->Mode();
+    item["nlink"] = inode->Nlink();
+    item["symlink"] = inode->Symlink();
+    item["rdev"] = inode->Rdev();
+    item["ctime"] = inode->Ctime();
+    item["mtime"] = inode->Mtime();
+    item["atime"] = inode->Atime();
+    item["open_mp_count"] = inode->Openmpcount();
+    item["version"] = inode->Version();
+    inode_array.append(item);
+  }
+  value["inodes"] = inode_array;
+
+  return true;
+}
+
 }  // namespace v2
 }  // namespace vfs
 }  // namespace client

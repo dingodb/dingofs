@@ -79,6 +79,24 @@ bool MonoMDSRouter::UpdateRouter(
   return UpdateMds(partition_policy.mono().mds_id());
 }
 
+bool MonoMDSRouter::Dump(Json::Value& value) {
+  utils::ReadLockGuard lk(lock_);
+
+  Json::Value mds_routers = Json::arrayValue;
+  Json::Value item;
+  item["bucket_id"] = 0;
+  item["id"] = mds_meta_.ID();
+  item["host"] = mds_meta_.Host();
+  item["port"] = mds_meta_.Port();
+  item["state"] = mds_meta_.StateName(mds_meta_.GetState());
+  item["last_online_time_ms"] = mds_meta_.LastOnlineTimeMs();
+  item["type"] = "mono";
+  mds_routers.append(item);
+  value["mds_routers"] = mds_routers;
+
+  return true;
+}
+
 void ParentHashMDSRouter::UpdateMDSes(
     const pb::mdsv2::HashPartition& hash_partition) {
   utils::WriteLockGuard lk(lock_);
@@ -159,6 +177,26 @@ bool ParentHashMDSRouter::UpdateRouter(
                      pb::mdsv2::PartitionType_Name(partition_policy.type()));
 
   UpdateMDSes(partition_policy.parent_hash());
+
+  return true;
+}
+
+bool ParentHashMDSRouter::Dump(Json::Value& value) {
+  utils::ReadLockGuard lk(lock_);
+
+  Json::Value mds_routers = Json::arrayValue;
+  for (const auto& [bucket_id, mds_meta] : mds_map_) {
+    Json::Value item;
+    item["bucket_id"] = bucket_id;
+    item["id"] = mds_meta.ID();
+    item["host"] = mds_meta.Host();
+    item["port"] = mds_meta.Port();
+    item["state"] = mds_meta.StateName(mds_meta.GetState());
+    item["last_online_time_ms"] = mds_meta.LastOnlineTimeMs();
+    item["type"] = "parent_hash";
+    mds_routers.append(item);
+  }
+  value["mds_routers"] = mds_routers;
 
   return true;
 }

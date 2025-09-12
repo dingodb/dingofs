@@ -215,6 +215,31 @@ void RPC::DeleteChannel(const EndPoint& endpoint) {
   channels_.erase(endpoint);
 }
 
+bool RPC::Dump(Json::Value& value) {
+  utils::ReadLockGuard lk(lock_);
+
+  value["init_endpoint"] = EndPointToStr(init_endpoint_);
+
+  Json::Value channels = Json::arrayValue;
+  for (const auto& pair : channels_) {
+    Json::Value item;
+    item["endpoint"] = EndPointToStr(pair.first);
+    channels.append(item);
+  }
+  value["channels"] = channels;
+
+  Json::Value fallbacks = Json::arrayValue;
+  for (const auto& endpoint : fallback_endpoints_) {
+    Json::Value item;
+    item["endpoint"] = EndPointToStr(endpoint);
+    fallbacks.append(item);
+  }
+
+  value["fallbacks"] = fallbacks;
+
+  return true;
+}
+
 }  // namespace v2
 }  // namespace vfs
 }  // namespace client

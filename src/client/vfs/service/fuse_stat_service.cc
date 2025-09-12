@@ -67,6 +67,9 @@ static std::string RenderHead(const std::string& title) {
   .bold-text {
   font-weight: bold;
   }
+  a {
+    text-decoration: none;
+  }
 </style>)";
 
   os << fmt::format(R"(<title>{}</title>)", title);
@@ -93,18 +96,51 @@ static void RenderGitInfo(butil::IOBufBuilder& os) {
   os << R"(</div>)";
 }
 
-static void RenderClientInfo(const Json::Value& json_value,
+static void RenderGitVersion(butil::IOBufBuilder& os) {
+  os << R"(<div style="margin:2px;font-size:smaller;text-align:center">)";
+  os << fmt::format(R"(<p >{} {} {}</p>)", dingofs::mdsv2::GetGitVersion(),
+                    dingofs::mdsv2::GetGitCommitHash(),
+                    dingofs::mdsv2::GetGitCommitTime());
+  os << "</div>";
+}
+
+static void RenderNavigation(const Json::Value& json_value,
                              butil::IOBufBuilder& os) {
   os << R"(<div style="margin:12px;font-size:smaller;">)";
-  os << R"(<h3>Client </h3>)";
-  os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
-  os << "<tr>";
-  os << "<th>ID</th>";
-  os << "<th>Host</th>";
-  os << "<th>Port</th>";
-  os << "<th>MountPoint</th>";
-  os << "<th>MdsAddr</th>";
-  os << "</tr>";
+  os << R"(<h3>Navagation </h3>)";
+
+  auto render_navigation_func = [](std::string host,
+                                   uint32_t port) -> std::string {
+    std::string result;
+    result += fmt::format(
+        R"(<a href="FuseStatService/handler/{}/{}" target="_blank">handler</a>: show open file handler info at vfs)",
+        host, port);
+    result += "<br>";
+    result += fmt::format(
+        R"(<a href="FuseStatService/diriterator/{}/{}" target="_blank">dir iterator</a>: show dir iterator info at meta)",
+        host, port);
+    result += "<br>";
+    result += fmt::format(
+        R"(<a href="FuseStatService/filesession/{}/{}" target="_blank">file session</a>: show open file session info at meta)",
+        host, port);
+    result += "<br>";
+    result += fmt::format(
+        R"(<a href="FuseStatService/parentmemo/{}/{}" target="_blank">parent memo</a>: show parent memo info at meta)",
+        host, port);
+    result += "<br>";
+    result += fmt::format(
+        R"(<a href="FuseStatService/mdsrouter/{}/{}" target="_blank">mds router</a>: show mds router info at meta)",
+        host, port);
+    result += "<br>";
+    result += fmt::format(
+        R"(<a href="FuseStatService/inodecache/{}/{}" target="_blank">inode cache</a>: show inode cache info at meta)",
+        host, port);
+    result += "<br>";
+    result += fmt::format(
+        R"(<a href="FuseStatService/rpc/{}/{}" target="_blank">rpc</a>: show rpc info at meta)",
+        host, port);
+    return result;
+  };
 
   // get client info
   const Json::Value& client_id = json_value["client_id"];
@@ -115,23 +151,44 @@ static void RenderClientInfo(const Json::Value& json_value,
     os << "</div>";
     return;
   }
+  std::string host_name = client_id["host_name"].asString();
+  uint32_t port = client_id["port"].asUInt();
+
+  os << render_navigation_func(host_name, port);
+  os << "</div>";
+}
+
+static void RenderClientInfo(const Json::Value& json_value,
+                             butil::IOBufBuilder& os) {
+  os << R"(<div style="margin:12px;font-size:smaller;">)";
+  os << R"(<h3>Client </h3>)";
+
+  // get client info
+  const Json::Value& client_id = json_value["client_id"];
+
+  if (client_id.empty()) {
+    LOG(ERROR) << "no client to load";
+    os << "</div>";
+    return;
+  }
   std::string id = client_id["id"].asString();
   std::string host_name = client_id["host_name"].asString();
   uint32_t port = client_id["port"].asUInt();
   std::string mount_point = client_id["mount_point"].asString();
-  std::string mds_add = client_id["mds_addr"].asString();
+  std::string mds_addr = client_id["mds_addr"].asString();
 
-  os << "<tr>";
-  os << "<td>" << id << "</td>";
-  os << "<td>" << host_name << "</td>";
-  os << "<td>" << fmt::format("{}", port) << "</td>";
-  os << "<td>" << mount_point << "</td>";
-  os << "<td>" << mds_add << "</td>";
-  os << "</tr>";
+  os << fmt::format("id: {}", id);
+  os << "<br>";
+  os << fmt::format("hostname: {}", host_name);
+  os << "<br>";
+  os << fmt::format("port: {}", port);
+  os << "<br>";
+  os << fmt::format("mountpoint: {}", mount_point);
+  os << "<br>";
+  os << fmt::format("mds_addr: {}", mds_addr);
+  os << "<br>";
 
-  os << "</table>\n";
   os << "</div>";
-
   os << "<br>";
 }
 
@@ -139,24 +196,12 @@ static void RenderFsInfo(const Json::Value& json_value,
                          butil::IOBufBuilder& os) {
   os << R"(<div style="margin:12px;font-size:smaller;">)";
   os << R"(<h3>FS </h3>)";
-  os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
-  os << "<tr>";
-  os << "<th>ID</th>";
-  os << "<th>Name</th>";
-  os << "<th>Type</th>";
-  os << "<th>Size(MB)</th>";
-  os << "<th>Owner</th>";
-  os << "<th>Time</th>";
-  os << "<th>RecycleTime</th>";
-  os << "<th>S3</th>";
-  os << "</tr>";
 
   // get fs info
   const Json::Value& fs_info = json_value["fs_info"];
 
   if (fs_info.empty()) {
     LOG(ERROR) << "no fs_info to load";
-    os << "</table>\n";
     os << "</div>";
     return;
   }
@@ -164,7 +209,6 @@ static void RenderFsInfo(const Json::Value& json_value,
   std::string id = fs_info["id"].asString();
   std::string name = fs_info["name"].asString();
   std::string owner = fs_info["owner"].asString();
-  std::string type = fs_info["type"].asString();
   uint64_t block_size = fs_info["block_size"].asUInt64();
   uint64_t chunk_size = fs_info["chunk_size"].asUInt64();
   uint64_t capacity = fs_info["capacity"].asUInt64();
@@ -174,56 +218,61 @@ static void RenderFsInfo(const Json::Value& json_value,
   std::string s3_endpoint = fs_info["s3_endpoint"].asString();
   std::string s3_bucket = fs_info["s3_bucket"].asString();
 
+  std::string rados_mon_host = fs_info["rados_mon_host"].asString();
+  std::string rados_pool_name = fs_info["rados_pool_name"].asString();
+  std::string rados_user_name = fs_info["rados_user_name"].asString();
+  std::string rados_cluster_name = fs_info["rados_cluster_name"].asString();
+
   auto render_size_func = [&]() -> std::string {
     std::string result;
-    result += "<div>";
-    result += fmt::format("chunk size: {}", chunk_size / (1024 * 1024));
+    result += fmt::format("chunk size: {}MB", chunk_size / (1024 * 1024));
     result += "<br>";
-    result += fmt::format("block size: {}", block_size / (1024 * 1024));
+    result += fmt::format("block size: {}MB", block_size / (1024 * 1024));
     result += "<br>";
-    result += fmt::format("capacity: {}", capacity / (1024 * 1024));
-    result += "</div>";
+    result += fmt::format("capacity: {}MB", capacity / (1024 * 1024));
+    result += "<br>";
     return result;
   };
 
   auto render_time_func = [&]() -> std::string {
     std::string result;
-    result += "<div>";
-    result += "update time:";
+    result +=
+        fmt::format("create time: {}", FormatTime(create_time_s / 1000000000));
     result += "<br>";
-    result += fmt::format("<span>{}</span>",
+    result += fmt::format("update time: {}",
                           FormatTime(last_update_time_ns / 1000000000));
     result += "<br>";
-    result += "create time:";
-    result += "<br>";
-    result += fmt::format("<span>{}</span>", FormatTime(create_time_s));
-    result += "</div>";
     return result;
   };
 
-  auto render_s3_func = [&]() -> std::string {
+  auto render_storage_func = [&]() -> std::string {
     std::string result;
     if (!s3_endpoint.empty()) {
-      result += s3_endpoint + "<br>" + s3_bucket;
+      result +=
+          fmt::format("s3 endpoint({}) bucket({})", s3_endpoint, s3_bucket);
+      result += "<br>";
+    } else if (!rados_mon_host.empty()) {
+      result += fmt::format("rados mon_host({}) pool({}) user({}) cluster({})",
+                            rados_mon_host, rados_pool_name, rados_user_name,
+                            rados_cluster_name);
+      result += "<br>";
     }
 
     return result;
   };
 
-  os << "<tr>";
-  os << "<td>" << id << "</td>";
-  os << "<td>" << name << "</td>";
-  os << "<td>" << type << "</td>";
-  os << "<td>" << render_size_func() << "</td>";
-  os << "<td>" << owner << "</td>";
-  os << "<td>" << render_time_func() << "</td>";
-  os << "<td>" << recycle_time << "</td>";
-  os << "<td>" << render_s3_func() << "</td>";
-  os << "</tr>";
-
-  os << "</table>\n";
+  os << fmt::format("id: {}", id);
+  os << "<br>";
+  os << fmt::format("name: {}", name);
+  os << "<br>";
+  os << render_size_func();
+  os << fmt::format("owner: {}", owner);
+  os << "<br>";
+  os << render_time_func();
+  os << fmt::format("recycle time: {}hour", recycle_time);
+  os << "<br>";
+  os << fmt::format("storage: {}", render_storage_func());
   os << "</div>";
-
   os << "<br>";
 }
 
@@ -241,21 +290,21 @@ static void RenderMdsInfo(const Json::Value& json_value,
   os << "</tr>";
 
   // get client info
-  const Json::Value& mds_list = json_value["mds_list"];
-  if (!mds_list.isArray()) {
-    LOG(ERROR) << "mds_list is not an array.";
+  const Json::Value& mdses = json_value["mdses"];
+  if (!mdses.isArray()) {
+    LOG(ERROR) << "mdses is not an array.";
     os << "</table>\n";
     os << "</div>";
     return;
   }
-  if (mds_list.empty()) {
-    LOG(INFO) << "no mds_list to load";
+  if (mdses.empty()) {
+    LOG(INFO) << "no mdses to load";
     os << "</table>\n";
     os << "</div>";
     return;
   }
 
-  for (const auto& mds : mds_list) {
+  for (const auto& mds : mdses) {
     auto id = mds["id"].asUInt64();
     auto host = mds["host"].asString();
     auto port = mds["port"].asInt();
@@ -281,31 +330,35 @@ static void RenderMdsInfo(const Json::Value& json_value,
   os << "<br>";
 }
 
-static void RenderHandlerInfo(const Json::Value& json_value,
-                              butil::IOBufBuilder& os) {
+static void RenderHandlerInfoPage(const Json::Value& json_value,
+                                  butil::IOBufBuilder& os,
+                                  std::string host_name, std::string port) {
+  os << "<!DOCTYPE html><html>";
+
+  os << "<head>" << RenderHead("dinfofs dir iterator") << "</head>";
+  os << "<body>";
+  os << fmt::format(
+      R"(<h1 style="text-align:center;">Client({}:{}) Handler</h1>)", host_name,
+      port);
+
+  // get handlers info
+  const Json::Value& handlers = json_value["handlers"];
+  if (!handlers.isArray()) {
+    LOG(ERROR) << "handlers is not an array.";
+    return;
+  }
+  if (handlers.empty()) {
+    LOG(INFO) << "no handlers to load";
+  }
+
   os << R"(<div style="margin:12px;font-size:smaller;">)";
-  os << R"(<h3>Handler </h3>)";
+  os << fmt::format(R"(<h3>Handler [{}]</h3>)", handlers.size());
   os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
   os << "<tr>";
   os << "<th>Ino</th>";
   os << "<th>Fh</th>";
   os << "<th>Flags</th>";
   os << "</tr>";
-
-  // get handlers info
-  const Json::Value& handlers = json_value["handlers"];
-  if (!handlers.isArray()) {
-    LOG(ERROR) << "handlers is not an array.";
-    os << "</table>\n";
-    os << "</div>";
-    return;
-  }
-  if (handlers.empty()) {
-    LOG(INFO) << "no handlers to load";
-    os << "</table>\n";
-    os << "</div>";
-    return;
-  }
 
   for (const auto& handler : handlers) {
     Ino ino = handler["ino"].asUInt64();
@@ -328,6 +381,505 @@ static void RenderHandlerInfo(const Json::Value& json_value,
   os << "<br>";
 }
 
+static std::string RenderDirEntries(const Json::Value& entries) {
+  std::string result;
+  result += "ino,name,mode,nlink,uid,gid,length,rdev,atime,mtime,ctime,type";
+  for (const auto& entry : entries) {
+    result += "<br>";
+    // get attr info
+    uint64_t ino = entry["ino"].asUInt64();
+    std::string name = entry["name"].asString();
+    const Json::Value& attr = entry["attr"];
+
+    uint32_t mode = attr["mode"].asUInt();
+    uint32_t nlink = attr["nlink"].asUInt();
+    uint32_t uid = attr["uid"].asUInt();
+    uint32_t gid = attr["gid"].asUInt();
+    uint64_t length = attr["length"].asUInt64();
+    uint64_t rdev = attr["rdev"].asUInt64();
+    uint64_t atime = attr["atime"].asUInt64();
+    uint64_t mtime = attr["mtime"].asUInt64();
+    uint64_t ctime = attr["ctime"].asUInt64();
+    int32_t type = attr["type"].asInt();
+    result += fmt::format("{},{},{},{},{},{},{},{},{},{},{},{}", ino, name,
+                          mode, nlink, uid, gid, length, rdev,
+                          dingofs::mdsv2::Helper::FormatNsTime(atime),
+                          dingofs::mdsv2::Helper::FormatNsTime(mtime),
+                          dingofs::mdsv2::Helper::FormatNsTime(ctime), type);
+
+    result += "<br>";
+  }
+  return result;
+}
+
+static void RenderDirInfoPage(const Json::Value& json_value,
+                              butil::IOBufBuilder& os, std::string host_name,
+                              std::string port) {
+  os << "<!DOCTYPE html><html>";
+
+  os << "<head>" << RenderHead("dinfofs dir iterator") << "</head>";
+  os << "<body>";
+  os << fmt::format(
+      R"(<h1 style="text-align:center;">Client({}:{}) Dir Iterator</h1>)",
+      host_name, port);
+
+  // get dir_iterators info
+  const Json::Value& dir_iterators = json_value["dir_iterators"];
+  if (!dir_iterators.isArray()) {
+    LOG(ERROR) << "dir_iterators is not an array.";
+    return;
+  }
+  if (dir_iterators.empty()) {
+    LOG(INFO) << "no dir_iterators to load";
+  }
+
+  os << R"(<div style="margin:12px;font-size:smaller;">)";
+  os << fmt::format(R"(<h3>Dir Iterator [{}]</h3>)", dir_iterators.size());
+  os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
+  os << "<tr>";
+  os << "<th>Fh</th>";
+  os << "<th>Ino</th>";
+  os << "<th>Last name</th>";
+  os << "<th>With attr</th>";
+  os << "<th>Offset</th>";
+  os << "<th>Entries</th>";
+  os << "</tr>";
+
+  for (const auto& dir_iterator : dir_iterators) {
+    uint64_t fh = dir_iterator["fh"].asUInt64();
+    uint64_t ino = dir_iterator["ino"].asUInt64();
+    std::string last_name = dir_iterator["last_name"].asString();
+    bool with_attr = dir_iterator["with_attr"].asBool();
+    uint32_t offset = dir_iterator["offset"].asUInt();
+
+    os << "<td>" << fh << "</td>";
+    os << "<td>" << ino << "</td>";
+    os << "<td>" << last_name << "</td>";
+    os << "<td>" << with_attr << "</td>";
+    os << "<td>" << offset << "</td>";
+    os << "<td>";
+    const Json::Value& entries = dir_iterator["entries"];
+    if (!entries.isArray()) {
+      LOG(ERROR) << "entries is not an array.";
+      os << "</td>";
+      os << "</tr>";
+      continue;
+    }
+    if (entries.empty()) {
+      LOG(INFO) << "no entries to load";
+      os << "</td>";
+      os << "</tr>";
+      continue;
+    }
+    auto result = RenderDirEntries(entries);
+    os << result;
+    os << "</td>";
+    os << "</tr>";
+  }
+
+  os << "</table>\n";
+  os << "</div>";
+
+  os << "<br>";
+}
+
+static std::string RenderSessionIdMap(const Json::Value& json_value) {
+  const Json::Value& session_id_map = json_value["session_id_map"];
+  if (!session_id_map.isArray()) {
+    LOG(ERROR) << "session_id_map is not an array.";
+    return "";
+  }
+  if (session_id_map.empty()) {
+    LOG(INFO) << "no session_id_map to load";
+  }
+
+  std::string result;
+  result += "fh, session_id";
+  for (const auto& session : session_id_map) {
+    result += "<br>";
+    uint64_t fh = session["fh"].asUInt64();
+    std::string session_id = session["session_id"].asString();
+    result += fmt::format("{},{}", fh, session_id);
+    result += "<br>";
+  }
+  return result;
+}
+
+static std::string RenderWriteMemo(const Json::Value& json_value) {
+  std::string result;
+
+  if (json_value.isNull()) return "";
+  if (!json_value.isObject()) {
+    LOG(ERROR) << "write_memo is not object.";
+    return "";
+  }
+  if (!json_value["last_time_ns"].isUInt64()) {
+    LOG(ERROR) << " write_memo.last_time_ns is not uint64.";
+    return "";
+  }
+
+  if (!json_value["ranges"].isNull()) {
+    if (!json_value["ranges"].isArray()) {
+      LOG(ERROR) << "write_memo.ranges is not array.";
+      return "";
+    }
+    auto last_time_ns = json_value["last_time_ns"].asUInt64();
+    result += fmt::format("last_time_ns:{}",
+                          dingofs::mdsv2::Helper::FormatNsTime(last_time_ns));
+    result += "<br>";
+    result += "start, end";
+    for (const auto& range_item : json_value["ranges"]) {
+      auto start = range_item["start"].asUInt64();
+      auto end = range_item["end"].asUInt64();
+      result += "<br>";
+      result += fmt::format("{},{}", start, end);
+      result += "<br>";
+    }
+  }
+  return result;
+}
+
+static std::string RenderChunkMutaionMap(const Json::Value& json_value) {
+  std::string result;
+  if (json_value.isNull()) return "";
+  if (!json_value.isObject()) {
+    LOG(ERROR) << "chunk_mutation is not object.";
+    return "";
+  }
+
+  auto ino = json_value["ino"].asUInt64();
+  auto index = json_value["index"].asUInt64();
+  auto chunk_size = json_value["chunk_size"].asUInt64();
+  auto block_size = json_value["block_size"].asUInt64();
+  auto version = json_value["version"].asUInt64();
+  auto last_compaction_time_ms =
+      json_value["last_compaction_time_ms"].asUInt64();
+  result += "ino,index,chunk_size,block_size,version,last_compaction_time_ms";
+  result += "<br>";
+  result += fmt::format(
+      "{},{},{},{},{},{}", ino, index, chunk_size, block_size, version,
+      dingofs::mdsv2::Helper::FormatMsTime(last_compaction_time_ms));
+  result += "<br>";
+  return result;
+}
+
+static void RenderFileSessionPage(const Json::Value& json_value,
+                                  butil::IOBufBuilder& os,
+                                  std::string host_name, std::string port) {
+  os << "<!DOCTYPE html><html>";
+
+  os << "<head>" << RenderHead("dinfofs file session") << "</head>";
+  os << "<body>";
+  os << fmt::format(
+      R"(<h1 style="text-align:center;">Client({}:{}) File Session</h1>)",
+      host_name, port);
+
+  // get dir_iterators info
+  const Json::Value& file_sessions = json_value["file_sessions"];
+  if (!file_sessions.isArray()) {
+    LOG(ERROR) << "file_sessions is not an array.";
+    return;
+  }
+  if (file_sessions.empty()) {
+    LOG(INFO) << "no file_sessions to load";
+  }
+
+  os << R"(<div style="margin:12px;font-size:smaller;">)";
+  os << fmt::format(R"(<h3>File Session [{}]</h3>)", file_sessions.size());
+  os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
+  os << "<tr>";
+  os << "<th>Ino</th>";
+  os << "<th>Ref Count</th>";
+  os << "<th>Session Id Map</th>";
+  os << "<th>Write Memo</th>";
+  os << "<th>Chunk Mutation Map</th>";
+  os << "</tr>";
+
+  for (const auto& file_session : file_sessions) {
+    uint64_t ino = file_session["ino"].asUInt64();
+    uint32_t ref_count = file_session["ref_count"].asUInt();
+
+    os << "<td>" << ino << "</td>";
+    os << "<td>" << ref_count << "</td>";
+    os << "<td>" << RenderSessionIdMap(file_session) << "</td>";
+    os << "<td>" << RenderWriteMemo(file_session["write_memo"]) << "</td>";
+    os << "<td>" << RenderChunkMutaionMap(file_session["chunk_mutation_map"])
+       << "</td>";
+    os << "</tr>";
+  }
+
+  os << "</table>\n";
+  os << "</div>";
+
+  os << "<br>";
+}
+
+static void RenderParentMemoPage(const Json::Value& json_value,
+                                 butil::IOBufBuilder& os, std::string host_name,
+                                 std::string port) {
+  os << "<!DOCTYPE html><html>";
+
+  os << "<head>" << RenderHead("dinfofs parent memo") << "</head>";
+  os << "<body>";
+  os << fmt::format(
+      R"(<h1 style="text-align:center;">Client({}:{}) Parent Memo</h1>)",
+      host_name, port);
+
+  const Json::Value& items = json_value["parent_memo"];
+  if (!items.isArray()) {
+    LOG(ERROR) << "parent_memo value is not an array.";
+    return;
+  }
+
+  os << R"(<div style="margin:12px;font-size:smaller;">)";
+  os << fmt::format(R"(<h3>Parent Memo [{}]</h3>)", items.size());
+  os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
+  os << "<tr>";
+  os << "<th>Ino</th>";
+  os << "<th>Parent</th>";
+  os << "<th>Version</th>";
+  os << "</tr>";
+
+  for (const auto& item : items) {
+    auto ino = item["ino"].asUInt64();
+    auto parent = item["parent"].asUInt64();
+    auto version = item["version"].asUInt64();
+
+    os << "<td>" << ino << "</td>";
+    os << "<td>" << parent << "</td>";
+    os << "<td>" << version << "</td>";
+    os << "</tr>";
+  }
+  os << "</table>\n";
+  os << "</div>";
+
+  os << "<br>";
+}
+
+static void RenderMdsRouterPage(const Json::Value& json_value,
+                                butil::IOBufBuilder& os, std::string host_name,
+                                std::string port) {
+  os << "<!DOCTYPE html><html>";
+
+  os << "<head>" << RenderHead("dinfofs mds router") << "</head>";
+  os << "<body>";
+  os << fmt::format(
+      R"(<h1 style="text-align:center;">Client({}:{}) MDS Router</h1>)",
+      host_name, port);
+
+  const Json::Value& mds_routers = json_value["mds_routers"];
+  if (!mds_routers.isArray()) {
+    LOG(ERROR) << "mds_routers is not an array.";
+    return;
+  }
+  if (mds_routers.empty()) {
+    LOG(INFO) << "no mds_routers to load";
+  }
+
+  os << R"(<div style="margin:12px;font-size:smaller;">)";
+  os << fmt::format(R"(<h3>MDS Router [{}]</h3>)", mds_routers.size());
+  os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
+  os << "<tr>";
+  os << "<th>Bucket ID</th>";
+  os << "<th>ID</th>";
+  os << "<th>Addr</th>";
+  os << "<th>State</th>";
+  os << "<th>Last Online Time</th>";
+  os << "<th>Type</th>";
+  os << "</tr>";
+
+  for (const auto& mds_router : mds_routers) {
+    auto bucket_id = mds_router["bucket_id"].asInt64();
+    auto id = mds_router["id"].asUInt64();
+    auto host = mds_router["host"].asString();
+    auto port = mds_router["port"].asInt();
+    auto state = mds_router["state"].asString();
+    auto last_online_time_ms = mds_router["last_online_time_ms"].asUInt64();
+    auto type = mds_router["type"].asString();
+    os << "<td>" << bucket_id << "</td>";
+    os << "<td>" << id << "</td>";
+    os << fmt::format(
+        R"(<td><a href="http://{}:{}/FsStatService" target="_blank">{}:{} </a></td>)",
+        host, port, host, port);
+    os << "<td>" << state << "</td>";
+    os << "<td>" << dingofs::mdsv2::Helper::FormatMsTime(last_online_time_ms)
+       << "</td>";
+    os << "<td>" << type << "</td>";
+    os << "</tr>";
+  }
+
+  os << "</table>\n";
+  os << "</div>";
+
+  os << "<br>";
+}
+
+static void RenderInodeCachePage(const Json::Value& json_value,
+                                 butil::IOBufBuilder& os, std::string host_name,
+                                 std::string port) {
+  os << "<!DOCTYPE html><html>";
+
+  os << "<head>" << RenderHead("dinfofs inode cache") << "</head>";
+  os << "<body>";
+  os << fmt::format(
+      R"(<h1 style="text-align:center;">Client({}:{}) Inode Cache</h1>)",
+      host_name, port);
+
+  const Json::Value& inodes = json_value["inodes"];
+  if (!inodes.isArray()) {
+    LOG(ERROR) << "inodes is not an array.";
+    return;
+  }
+  if (inodes.empty()) {
+    LOG(INFO) << "no inodes to load";
+  }
+
+  os << R"(<div style="margin:12px;font-size:smaller;">)";
+  os << fmt::format(R"(<h3>Inode Cache [{}]</h3>)", inodes.size());
+  os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
+  os << "<tr>";
+  os << "<th>Fs ID</th>";
+  os << "<th>Ino</th>";
+  os << "<th>Type</th>";
+  os << "<th>Length</th>";
+  os << "<th>Uid</th>";
+  os << "<th>Gid</th>";
+  os << "<th>Mode</th>";
+  os << "<th>NLink</th>";
+  os << "<th>SymLink</th>";
+  os << "<th>Rdev</th>";
+  os << "<th>Ctime</th>";
+  os << "<th>Mtime</th>";
+  os << "<th>Atime</th>";
+  os << "<th>Openmpcount</th>";
+  os << "<th>Version</th>";
+  os << "</tr>";
+
+  for (const auto& inode : inodes) {
+    uint32_t fs_id = inode["fs_id"].asUInt();
+    uint64_t ino = inode["ino"].asUInt64();
+    std::string type = inode["type"].asString();
+    uint64_t length = inode["length"].asUInt64();
+    uint32_t uid = inode["uid"].asUInt();
+    uint32_t gid = inode["gid"].asUInt();
+    uint32_t mode = inode["mode"].asUInt();
+    uint32_t nlink = inode["nlink"].asUInt();
+    std::string symlink = inode["symlink"].asString();
+    uint64_t rdev = inode["rdev"].asUInt64();
+    uint64_t ctime = inode["ctime"].asUInt64();
+    uint64_t atime = inode["atime"].asUInt64();
+    uint64_t mtime = inode["mtime"].asUInt64();
+    uint32_t open_mp_count = inode["open_mp_count"].asUInt();
+    uint64_t version = inode["version"].asUInt64();
+
+    os << "<td>" << fs_id << "</td>";
+    os << "<td>" << ino << "</td>";
+    os << "<td>" << type << "</td>";
+    os << "<td>" << length << "</td>";
+    os << "<td>" << uid << "</td>";
+    os << "<td>" << gid << "</td>";
+    os << "<td>" << mode << "</td>";
+    os << "<td>" << nlink << "</td>";
+    os << "<td>" << symlink << "</td>";
+    os << "<td>" << rdev << "</td>";
+    os << "<td>" << dingofs::mdsv2::Helper::FormatNsTime(ctime) << "</td>";
+    os << "<td>" << dingofs::mdsv2::Helper::FormatNsTime(mtime) << "</td>";
+    os << "<td>" << dingofs::mdsv2::Helper::FormatNsTime(atime) << "</td>";
+    os << "<td>" << open_mp_count << "</td>";
+    os << "<td>" << version << "</td>";
+    os << "</tr>";
+  }
+
+  os << "</table>\n";
+  os << "</div>";
+
+  os << "<br>";
+}
+
+static void RenderRPCPage(const Json::Value& json_value,
+                          butil::IOBufBuilder& os, std::string host_name,
+                          std::string port) {
+  os << "<!DOCTYPE html><html>";
+
+  os << "<head>" << RenderHead("dinfofs rpc") << "</head>";
+  os << "<body>";
+  os << fmt::format(R"(<h1 style="text-align:center;">Client({}:{}) RPC</h1>)",
+                    host_name, port);
+
+  const Json::Value& endpoint = json_value["init_endpoint"];
+
+  if (endpoint.empty()) {
+    LOG(ERROR) << "no endpoint to load";
+  }
+  os << R"(<div style="margin:12px;font-size:smaller;">)";
+  os << fmt::format(R"(<div><h3>Init EndPoint: {} </h3></div>)",
+                    endpoint.asString());
+  os << "</div>";
+
+  const Json::Value& channels = json_value["channels"];
+  if (!channels.isArray()) {
+    LOG(ERROR) << "channels is not an array.";
+    return;
+  }
+  if (channels.empty()) {
+    LOG(INFO) << "no channels to load";
+  }
+
+  os << R"(<div style="margin:12px;font-size:smaller;">)";
+  os << fmt::format(R"(<h3>Channel EndPoint [{}]</h3>)", channels.size());
+  os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
+  os << "<tr>";
+  os << "<th>Channel EndPoint</th>";
+  os << "</tr>";
+  std::string channel_endpoint;
+
+  for (const auto& channel : channels) {
+    channel_endpoint += "<div>";
+    channel_endpoint += channel["endpoint"].asString();
+    channel_endpoint += "<br>";
+    channel_endpoint += "</div>";
+  }
+
+  os << "<tr>";
+  os << "<td>" << channel_endpoint << "</td>";
+  os << "</tr>";
+  os << "</table>\n";
+  os << "</div>";
+
+  const Json::Value& fallbacks = json_value["fallbacks"];
+  if (!fallbacks.isArray()) {
+    LOG(ERROR) << "fallbacks is not an array.";
+    return;
+  }
+  if (fallbacks.empty()) {
+    LOG(INFO) << "no fallbacks to load";
+  }
+
+  os << R"(<div style="margin:12px;font-size:smaller;">)";
+  os << fmt::format(R"(<h3>Fallback EndPoint [{}]</h3>)", fallbacks.size());
+  os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
+  os << "<tr>";
+  os << "<th>Fallback EndPoint</th>";
+  os << "</tr>";
+  std::string fallback_endpoint;
+
+  for (const auto& fallback : fallbacks) {
+    fallback_endpoint += "<div>";
+    fallback_endpoint += fallback["endpoint"].asString();
+    fallback_endpoint += "<br>";
+    fallback_endpoint += "</div>";
+  }
+
+  os << "<tr>";
+  os << "<td>" << fallback_endpoint << "</td>";
+  os << "</tr>";
+
+  os << "</table>\n";
+  os << "</div>";
+
+  os << "<br>";
+}
+
 void FuseStatServiceImpl::RenderMainPage(const brpc::Server* server,
                                          butil::IOBufBuilder& os) {
   os << "<!DOCTYPE html><html>\n";
@@ -340,6 +892,8 @@ void FuseStatServiceImpl::RenderMainPage(const brpc::Server* server,
   server->PrintTabsBody(os, "fusesstat");
   os << R"(<h1 style="text-align:center;">dingofs-client dashboard</h1>)";
 
+  RenderGitVersion(os);
+
   Json::Value meta_value;
 
   auto span = vfs_hub_->GetTracer()->StartSpan(kVFSWrapperMoudule, __func__);
@@ -351,21 +905,14 @@ void FuseStatServiceImpl::RenderMainPage(const brpc::Server* server,
     return;
   }
 
-  Json::Value handler_value;
-  if (!vfs_hub_->GetHandleManager()->Dump(handler_value)) {
-    LOG(ERROR) << fmt::format("hadler manager dump failed.");
-    os << "</body>";
-    os << "</html>";
-    return;
-  }
   // client info
   RenderClientInfo(meta_value, os);
   // fs info
   RenderFsInfo(meta_value, os);
   // mds info
   RenderMdsInfo(meta_value, os);
-  // handler info
-  RenderHandlerInfo(handler_value, os);
+  // navigation
+  RenderNavigation(meta_value, os);
   // git info
   RenderGitInfo(os);
 
@@ -513,6 +1060,109 @@ void FuseStatServiceImpl::default_method(
   if (params.empty()) {
     RenderMainPage(server, os);
 
+  } else if (params.size() == 3 && params[0] == "diriterator") {
+    // /FuseStatService/diriterator/host_name/port
+    std::string host_name = params[1];
+    std::string port = params[2];
+    Json::Value meta_value;
+
+    auto span = vfs_hub_->GetTracer()->StartSpan(kVFSWrapperMoudule, __func__);
+    if (!vfs_hub_->GetMetaSystem()->Dump(span->GetContext(), meta_value)) {
+      LOG(ERROR) << fmt::format(" MetaSystem Dump failed.");
+      cntl->SetFailed("MetaSystem Dump failed.");
+      os.move_to(cntl->response_attachment());
+      cntl->set_response_compress_type(brpc::COMPRESS_TYPE_GZIP);
+      return;
+    }
+    RenderDirInfoPage(meta_value, os, host_name, port);
+  } else if (params.size() == 3 && params[0] == "filesession") {
+    // /FuseStatService/filesession/host_name/port
+    std::string host_name = params[1];
+    std::string port = params[2];
+    Json::Value meta_value;
+
+    auto span = vfs_hub_->GetTracer()->StartSpan(kVFSWrapperMoudule, __func__);
+    if (!vfs_hub_->GetMetaSystem()->Dump(span->GetContext(), meta_value)) {
+      LOG(ERROR) << fmt::format(" MetaSystem Dump failed.");
+      cntl->SetFailed("MetaSystem Dump failed.");
+      os.move_to(cntl->response_attachment());
+      cntl->set_response_compress_type(brpc::COMPRESS_TYPE_GZIP);
+      return;
+    }
+    RenderFileSessionPage(meta_value, os, host_name, port);
+  } else if (params.size() == 3 && params[0] == "handler") {
+    // /FuseStatService/handler/host_name/port
+    std::string host_name = params[1];
+    std::string port = params[2];
+    Json::Value handler_value;
+    if (!vfs_hub_->GetHandleManager()->Dump(handler_value)) {
+      LOG(ERROR) << fmt::format("GetHandleManager failed.");
+      cntl->SetFailed("GetHandleManager failed.");
+      os.move_to(cntl->response_attachment());
+      cntl->set_response_compress_type(brpc::COMPRESS_TYPE_GZIP);
+      return;
+    }
+    RenderHandlerInfoPage(handler_value, os, host_name, port);
+  } else if (params.size() == 3 && params[0] == "parentmemo") {
+    // /FuseStatService/parentmemo/host_name/port
+    std::string host_name = params[1];
+    std::string port = params[2];
+    Json::Value meta_value;
+
+    auto span = vfs_hub_->GetTracer()->StartSpan(kVFSWrapperMoudule, __func__);
+    if (!vfs_hub_->GetMetaSystem()->Dump(span->GetContext(), meta_value)) {
+      LOG(ERROR) << fmt::format(" MetaSystem Dump failed.");
+      cntl->SetFailed("MetaSystem Dump failed.");
+      os.move_to(cntl->response_attachment());
+      cntl->set_response_compress_type(brpc::COMPRESS_TYPE_GZIP);
+      return;
+    }
+    RenderParentMemoPage(meta_value, os, host_name, port);
+  } else if (params.size() == 3 && params[0] == "mdsrouter") {
+    // /FuseStatService/mdsrouter/host_name/port
+    std::string host_name = params[1];
+    std::string port = params[2];
+    Json::Value meta_value;
+
+    auto span = vfs_hub_->GetTracer()->StartSpan(kVFSWrapperMoudule, __func__);
+    if (!vfs_hub_->GetMetaSystem()->Dump(span->GetContext(), meta_value)) {
+      LOG(ERROR) << fmt::format(" MetaSystem Dump failed.");
+      cntl->SetFailed("MetaSystem Dump failed.");
+      os.move_to(cntl->response_attachment());
+      cntl->set_response_compress_type(brpc::COMPRESS_TYPE_GZIP);
+      return;
+    }
+    RenderMdsRouterPage(meta_value, os, host_name, port);
+  } else if (params.size() == 3 && params[0] == "inodecache") {
+    // /FuseStatService/inodecache/host_name/port
+    std::string host_name = params[1];
+    std::string port = params[2];
+    Json::Value meta_value;
+
+    auto span = vfs_hub_->GetTracer()->StartSpan(kVFSWrapperMoudule, __func__);
+    if (!vfs_hub_->GetMetaSystem()->Dump(span->GetContext(), meta_value)) {
+      LOG(ERROR) << fmt::format(" MetaSystem Dump failed.");
+      cntl->SetFailed("MetaSystem Dump failed.");
+      os.move_to(cntl->response_attachment());
+      cntl->set_response_compress_type(brpc::COMPRESS_TYPE_GZIP);
+      return;
+    }
+    RenderInodeCachePage(meta_value, os, host_name, port);
+  } else if (params.size() == 3 && params[0] == "rpc") {
+    // /FuseStatService/rpc/host_name/port
+    std::string host_name = params[1];
+    std::string port = params[2];
+    Json::Value meta_value;
+
+    auto span = vfs_hub_->GetTracer()->StartSpan(kVFSWrapperMoudule, __func__);
+    if (!vfs_hub_->GetMetaSystem()->Dump(span->GetContext(), meta_value)) {
+      LOG(ERROR) << fmt::format(" MetaSystem Dump failed.");
+      cntl->SetFailed("MetaSystem Dump failed.");
+      os.move_to(cntl->response_attachment());
+      cntl->set_response_compress_type(brpc::COMPRESS_TYPE_GZIP);
+      return;
+    }
+    RenderRPCPage(meta_value, os, host_name, port);
   } else {
     cntl->SetFailed("unknown path: " + path);
   }

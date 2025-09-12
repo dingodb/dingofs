@@ -94,7 +94,7 @@ void HandleManager::Shutdown() {
 
 bool HandleManager::Dump(Json::Value& value) {
   std::lock_guard<std::mutex> lock(mutex_);
-  Json::Value handle_array = Json::arrayValue;
+  Json::Value handlers = Json::arrayValue;
 
   for (const auto& handle : handles_) {
     auto fileHandle = handle.second;
@@ -104,9 +104,9 @@ bool HandleManager::Dump(Json::Value& value) {
     item["fh"] = fileHandle->fh;
     item["flags"] = fileHandle->flags;
 
-    handle_array.append(item);
+    handlers.append(item);
   }
-  value["handlers"] = handle_array;
+  value["handlers"] = handlers;
 
   LOG(INFO) << "successfuly dump " << handles_.size() << " handlers";
 

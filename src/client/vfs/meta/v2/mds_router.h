@@ -41,6 +41,8 @@ class MDSRouter {
 
   virtual bool UpdateRouter(
       const pb::mdsv2::PartitionPolicy& partition_policy) = 0;
+
+  virtual bool Dump(Json::Value& value) = 0;
 };
 
 using MDSRouterPtr = std::shared_ptr<MDSRouter>;
@@ -51,7 +53,7 @@ using MonoMDSRouterPtr = std::shared_ptr<MonoMDSRouter>;
 class MonoMDSRouter : public MDSRouter {
  public:
   MonoMDSRouter(MDSDiscoverySPtr mds_discovery)
-      : mds_discovery_(mds_discovery) {};
+      : mds_discovery_(mds_discovery){};
   ~MonoMDSRouter() override = default;
 
   static MonoMDSRouterPtr New(MDSDiscoverySPtr mds_discovery) {
@@ -67,6 +69,8 @@ class MonoMDSRouter : public MDSRouter {
 
   bool UpdateRouter(
       const pb::mdsv2::PartitionPolicy& partition_policy) override;
+
+  bool Dump(Json::Value& value) override;
 
  private:
   bool UpdateMds(int64_t mds_id);
@@ -102,6 +106,8 @@ class ParentHashMDSRouter : public MDSRouter {
 
   bool UpdateRouter(
       const pb::mdsv2::PartitionPolicy& partition_policy) override;
+
+  bool Dump(Json::Value& value) override;
 
  private:
   void UpdateMDSes(const pb::mdsv2::HashPartition& hash_partition);

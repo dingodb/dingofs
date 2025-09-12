@@ -38,6 +38,7 @@
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/core.h"
 #include "fmt/ranges.h"
+#include "json/value.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/synchronization.h"
 #include "options/client/option.h"
@@ -136,6 +137,8 @@ class RPC {
                      const std::string& api_name, const Request& request,
                      Response& response,
                      SendRequestOption option = SendRequestOption());
+
+  bool Dump(Json::Value& value);
 
  private:
   using Channel = brpc::Channel;

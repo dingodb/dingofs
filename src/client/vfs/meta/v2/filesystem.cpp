@@ -125,6 +125,10 @@ bool MDSV2FileSystem::Dump(ContextSPtr, Json::Value& value) {
     return false;
   }
 
+  if (!inode_cache_->Dump(value)) {
+    return false;
+  }
+
   return true;
 }
 
@@ -967,19 +971,7 @@ MDSV2FileSystemUPtr MDSV2FileSystem::Build(const std::string& fs_name,
                               mds_client);
 }
 
-bool MDSV2FileSystem::GetDescription(ContextSPtr, Json::Value& value) {
-  if (!file_session_map_.Dump(value)) {
-    return false;
-  }
-
-  if (!dir_iterator_manager_.Dump(value)) {
-    return false;
-  }
-
-  if (!mds_client_->Dump(value)) {
-    return false;
-  }
-
+bool MDSV2FileSystem::GetDescription(ContextSPtr ctx, Json::Value& value) {
   // client
   Json::Value client_id;
   client_id["id"] = client_id_.ID();
@@ -995,7 +987,6 @@ bool MDSV2FileSystem::GetDescription(ContextSPtr, Json::Value& value) {
   fs_info["id"] = fs_info_entry.fs_id();
   fs_info["name"] = fs_info_entry.fs_name();
   fs_info["owner"] = fs_info_entry.owner();
-  fs_info["type"] = pb::mdsv2::FsType_Name(fs_info_entry.fs_type());
   fs_info["block_size"] = fs_info_entry.block_size();
   fs_info["chunk_size"] = fs_info_entry.chunk_size();
   fs_info["capacity"] = fs_info_entry.capacity();
@@ -1004,11 +995,16 @@ bool MDSV2FileSystem::GetDescription(ContextSPtr, Json::Value& value) {
   fs_info["recycle_time"] = fs_info_entry.recycle_time_hour();
   fs_info["s3_endpoint"] = fs_info_entry.extra().s3_info().endpoint();
   fs_info["s3_bucket"] = fs_info_entry.extra().s3_info().bucketname();
+  fs_info["rados_mon_host"] = fs_info_entry.extra().rados_info().mon_host();
+  fs_info["rados_pool_name"] = fs_info_entry.extra().rados_info().pool_name();
+  fs_info["rados_user_name"] = fs_info_entry.extra().rados_info().user_name();
+  fs_info["rados_cluster_name"] =
+      fs_info_entry.extra().rados_info().cluster_name();
 
   value["fs_info"] = fs_info;
 
   // mds info
-  Json::Value mds_array = Json::arrayValue;
+  Json::Value mdses = Json::arrayValue;
   auto all_mds = mds_discovery_->GetAllMDS();
   for (const auto& mds : all_mds) {
     Json::Value item;
@@ -1017,10 +1013,9 @@ bool MDSV2FileSystem::GetDescription(ContextSPtr, Json::Value& value) {
     item["port"] = mds.Port();
     item["state"] = mds.StateName(mds.GetState());
     item["last_online_time_ms"] = mds.LastOnlineTimeMs();
-    mds_array.append(item);
+    mdses.append(item);
   }
-  value["mds_list"] = mds_array;
-
+  value["mdses"] = mdses;
   return true;
 }
 

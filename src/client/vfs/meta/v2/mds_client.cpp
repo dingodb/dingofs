@@ -57,7 +57,19 @@ bool MDSClient::Init() {
 
 void MDSClient::Destory() {}
 
-bool MDSClient::Dump(Json::Value& value) { return parent_memo_->Dump(value); }
+bool MDSClient::Dump(Json::Value& value) {
+  if (!parent_memo_->Dump(value)) {
+    return false;
+  }
+  if (!mds_router_->Dump(value)) {
+    return false;
+  }
+  if (!rpc_->Dump(value)) {
+    return false;
+  }
+
+  return true;
+}
 
 bool MDSClient::Load(const Json::Value& value) {
   return parent_memo_->Load(value);
