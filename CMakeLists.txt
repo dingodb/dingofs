@@ -18,6 +18,7 @@ cmake_minimum_required(VERSION 3.25 FATAL_ERROR)
 project(dingofs C CXX)
 
 option(BUILD_UNIT_TESTS "Build unit test" OFF)
+option(USE_TCMALLOC "Use tcmalloc" ON)
 
 set(CMAKE_CXX_STANDARD 17)
 if(NOT CMAKE_BUILD_TYPE)
@@ -144,6 +145,7 @@ message("Using backtrace ${LIBBACKTRACE_VERSION}, lib:${LIBBACKTRACE_LIBRARY}")
 
 find_package(libunwind REQUIRED)
 message("Using libunwind ${LIBUNWIND_VERSION}, lib:${LIBUNWIND_LIBRARY}")
+
 
 find_package(FUSE3 REQUIRED)
 message("Using FUSE3 include_dir:${FUSE3_INCLUDE_DIR}, library:${FUSE3_LIBRARY}")

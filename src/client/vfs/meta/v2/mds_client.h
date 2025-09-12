@@ -154,9 +154,9 @@ class MDSClient {
 
   bool UpdateRouter();
 
-  bool ProcessEpochChange();
-  bool ProcessNotServe();
-  bool ProcessNetError(MDSMeta& mds_meta);
+  void ProcessEpochChange();
+  void ProcessNotServe();
+  void ProcessNetError(MDSMeta& mds_meta);
 
   template <typename Request>
   void SetAncestorInContext(Request& request, Ino ino);
@@ -204,8 +204,9 @@ Status MDSClient::SendRequest(ContextSPtr ctx, GetMdsFn get_mds_fn,
 
   request.mutable_info()->set_request_id(
       ctx ? ctx->TraceId() : std::to_string(mdsv2::Helper::TimestampNs()));
-
   request.mutable_context()->set_client_id(client_id_.ID());
+
+  Status status;
   int retry = 0;
   do {
     request.mutable_context()->set_epoch(epoch_);
@@ -213,31 +214,27 @@ Status MDSClient::SendRequest(ContextSPtr ctx, GetMdsFn get_mds_fn,
     if (is_refresh_mds) mds_meta = get_mds_fn();
     auto endpoint = StrToEndpoint(mds_meta.Host(), mds_meta.Port());
 
-    auto status =
+    status =
         rpc_->SendRequest(endpoint, service_name, api_name, request, response);
     if (!status.ok()) {
       LOG(INFO) << fmt::format(
-          "[meta.client] send request fail, mds({}) retry({}) status({}).",
-          mds_meta.ID(), retry, status.ToString());
+          "[meta.client] send request fail, {} reqid({}) mds({}) retry({}) "
+          "status({}).",
+          api_name, request.info().request_id(), mds_meta.ID(), retry,
+          status.ToString());
 
       if (status.Errno() == pb::error::EROUTER_EPOCH_CHANGE) {
-        if (!ProcessEpochChange()) {
-          return Status::Internal("process epoch change fail");
-        }
+        ProcessEpochChange();
         is_refresh_mds = true;
         continue;
 
       } else if (status.Errno() == pb::error::ENOT_SERVE) {
-        if (!ProcessNotServe()) {
-          return Status::Internal("process not serve fail");
-        }
+        ProcessNotServe();
         is_refresh_mds = true;
         continue;
 
       } else if (status.IsNetError()) {
-        if (!ProcessNetError(mds_meta)) {
-          return Status::Internal("process net error fail");
-        }
+        ProcessNetError(mds_meta);
         is_refresh_mds = false;
         continue;
       }
@@ -246,7 +243,7 @@ Status MDSClient::SendRequest(ContextSPtr ctx, GetMdsFn get_mds_fn,
     return status;
   } while (IsRetry(retry, FLAGS_client_vfs_rpc_retry_times));
 
-  return Status::Internal("send request fail");
+  return status;
 }
 
 }  // namespace v2

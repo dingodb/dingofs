@@ -14,6 +14,8 @@
 
 #include "mdsv2/service/debug_service.h"
 
+#include <fmt/chrono.h>
+
 #include "dingofs/debug.pb.h"
 #include "dingofs/error.pb.h"
 #include "mdsv2/common/context.h"
@@ -22,6 +24,10 @@
 #include "mdsv2/filesystem/partition.h"
 #include "mdsv2/server.h"
 #include "mdsv2/service/service_helper.h"
+
+#ifdef USE_TCMALLOC
+#include "gperftools/malloc_extension.h"
+#endif
 
 namespace dingofs {
 namespace mdsv2 {
@@ -256,6 +262,55 @@ void DebugServiceImpl::CleanCache(google::protobuf::RpcController* controller,
   } else if (request->cache_type() == pb::debug::CACHE_TYPE_CHUNK) {
     fs->ClearChunkCache();
   }
+}
+
+void DebugServiceImpl::GetMemoryStats(google::protobuf::RpcController*, const pb::debug::GetMemoryStatsRequest* request,
+                                      pb::debug::GetMemoryStatsResponse* response, google::protobuf::Closure* done) {
+  auto* svr_done = new ServiceClosure(__func__, done, request, response);
+  brpc::ClosureGuard done_guard(svr_done);
+
+#ifdef USE_TCMALLOC
+  auto* tcmalloc = MallocExtension::instance();
+  if (tcmalloc == nullptr) {
+    response->mutable_error()->set_errcode(pb::error::EINTERNAL);
+    response->mutable_error()->set_errmsg("No use tcmalloc");
+    return;
+  }
+
+  std::string stat_buf(4096, '\0');
+  tcmalloc->GetStats(stat_buf.data(), stat_buf.size());
+  response->set_memory_stats(stat_buf.c_str());
+
+#else
+  response->mutable_error()->set_errcode(pb::error::EINTERNAL);
+  response->mutable_error()->set_errmsg("No use tcmalloc");
+#endif
+}
+
+void DebugServiceImpl::ReleaseFreeMemory(google::protobuf::RpcController*,
+                                         const pb::debug::ReleaseFreeMemoryRequest* request,
+                                         pb::debug::ReleaseFreeMemoryResponse* response,
+                                         google::protobuf::Closure* done) {
+  auto* svr_done = new ServiceClosure(__func__, done, request, response);
+  brpc::ClosureGuard done_guard(svr_done);
+
+#ifdef USE_TCMALLOC
+  auto* tcmalloc = MallocExtension::instance();
+  if (tcmalloc == nullptr) {
+    response->mutable_error()->set_errcode(pb::error::EINTERNAL);
+    response->mutable_error()->set_errmsg("No use tcmalloc");
+    return;
+  }
+
+  if (request->is_force()) {
+    tcmalloc->ReleaseFreeMemory();
+  } else {
+    tcmalloc->SetMemoryReleaseRate(request->rate());
+  }
+#else
+  response->mutable_error()->set_errcode(pb::error::EINTERNAL);
+  response->mutable_error()->set_errmsg("No use tcmalloc");
+#endif
 }
 
 }  // namespace mdsv2

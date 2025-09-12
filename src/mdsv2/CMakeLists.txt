@@ -12,18 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
+set(tcmalloc_lib "")
 if(USE_TCMALLOC)
-  # add_definitions(-DLINK_TCMALLOC=ON)
-
   message(STATUS "use tcmalloc")
+  
+  add_definitions(-DUSE_TCMALLOC=ON)
 
-#  if(BRPC_ENABLE_CPU_PROFILER)
-#    set(DYNAMIC_LIB ${DYNAMIC_LIB} gperftools::gperftools)
-#  else()
-#    set(DYNAMIC_LIB ${DYNAMIC_LIB} gperftools::gperftools_minimal)
-#  endif()
+  set(tcmalloc_lib "-ltcmalloc")
 endif()
+
 
 add_compile_options(-Wall -Wno-reorder -Wno-overloaded-virtual)
 
@@ -80,6 +77,9 @@ target_link_libraries(mdsv2_lib
 )
 
 add_executable(dingo-mdsv2 main.cc)
+
 target_link_libraries(dingo-mdsv2
   mdsv2_lib
+
+  ${tcmalloc_lib}
 )

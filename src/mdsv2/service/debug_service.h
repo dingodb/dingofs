@@ -61,6 +61,13 @@ class DebugServiceImpl : public pb::debug::DebugService {
   void CleanCache(google::protobuf::RpcController* controller, const pb::debug::CleanCacheRequest* request,
                   pb::debug::CleanCacheResponse* response, google::protobuf::Closure* done) override;
 
+  void GetMemoryStats(google::protobuf::RpcController* controller, const pb::debug::GetMemoryStatsRequest* request,
+                      pb::debug::GetMemoryStatsResponse* response, google::protobuf::Closure* done) override;
+
+  void ReleaseFreeMemory(google::protobuf::RpcController* controller,
+                         const pb::debug::ReleaseFreeMemoryRequest* request,
+                         pb::debug::ReleaseFreeMemoryResponse* response, google::protobuf::Closure* done) override;
+
  private:
   FileSystemSPtr GetFileSystem(uint32_t fs_id);
 

@@ -185,7 +185,7 @@ RPC::ChannelSPtr RPC::NewChannel(const EndPoint& endpoint) {  // NOLINT
   return channel;
 }
 
-RPC::ChannelSPtr RPC::GetChannel(const EndPoint& endpoint) {
+RPC::ChannelSPtr RPC::GetOrAddChannel(const EndPoint& endpoint) {
   {
     utils::ReadLockGuard lk(lock_);
 

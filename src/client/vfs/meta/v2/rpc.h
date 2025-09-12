@@ -142,7 +142,7 @@ class RPC {
   using ChannelSPtr = std::shared_ptr<Channel>;
 
   ChannelSPtr NewChannel(const EndPoint& endpoint);
-  ChannelSPtr GetChannel(const EndPoint& endpoint);
+  ChannelSPtr GetOrAddChannel(const EndPoint& endpoint);
   void DeleteChannel(const EndPoint& endpoint);
   EndPoint RandomlyPickupEndPoint();
 
@@ -229,7 +229,7 @@ Status RPC::SendRequest(const EndPoint& endpoint,
     return Status::Internal("endpoint is invalid");
   }
 
-  auto channel = GetChannel(endpoint);
+  auto channel = GetOrAddChannel(endpoint);
   CHECK(channel != nullptr) << fmt::format("[meta.rpc][{}] channel is null.",
                                            EndPointToStr(endpoint));
 
@@ -255,13 +255,13 @@ Status RPC::SendRequest(const EndPoint& endpoint,
 
       // if the error is timeout, we can retry
       if (cntl.ErrorCode() == brpc::ERPCTIMEDOUT) continue;
+      DeleteChannel(endpoint);
       if (cntl.ErrorCode() == EHOSTDOWN) {
         response.mutable_error()->set_errcode(pb::error::ENOT_CAN_CONNECTED);
         ++retry;
         continue;
       }
 
-      DeleteChannel(endpoint);
       return Status::NetError(cntl.ErrorCode(), cntl.ErrorText());
     }
 

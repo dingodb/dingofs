@@ -308,6 +308,12 @@ static bool CheckCoorUrl(const std::string& coor_url) {
 }
 
 int main(int argc, char* argv[]) {
+#ifdef USE_TCMALLOC
+  std::cout << "USE_TCMALLOC is ON\n";
+#else
+  std::cout << "USE_TCMALLOC is OFF\n";
+#endif
+
   if (ParseOption(argc, argv)) return 0;
 
   if (dingofs::mdsv2::Helper::IsExistPath(FLAGS_conf)) {

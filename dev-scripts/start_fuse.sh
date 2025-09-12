@@ -160,7 +160,7 @@ function start() {
         exit -1
     fi
 
-    nohup ${FUSE_BIN_PATH} -f -d \
+    nohup ${FUSE_BIN_PATH} -f \
         -o default_permissions \
         -o allow_other \
         -o fsname=${FLAGS_fsname} \

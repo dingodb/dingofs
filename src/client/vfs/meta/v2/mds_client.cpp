@@ -1008,11 +1008,19 @@ bool MDSClient::UpdateRouter() {
 // process epoch change
 // 1. updatge fs info
 // 2. update mds router
-bool MDSClient::ProcessEpochChange() { return UpdateRouter(); }
+void MDSClient::ProcessEpochChange() {
+  if (!UpdateRouter()) {
+    LOG(ERROR) << "[meta.client] process epoch change fail.";
+  }
+}
 
-bool MDSClient::ProcessNotServe() { return UpdateRouter(); }
+void MDSClient::ProcessNotServe() {
+  if (!UpdateRouter()) {
+    LOG(ERROR) << "[meta.client] process not serve fail.";
+  }
+}
 
-bool MDSClient::ProcessNetError(MDSMeta& mds_meta) {
+void MDSClient::ProcessNetError(MDSMeta& mds_meta) {
   // set the current mds as abnormal
   mds_discovery_->SetAbnormalMDS(mds_meta.ID());
 
@@ -1024,11 +1032,9 @@ bool MDSClient::ProcessNetError(MDSMeta& mds_meta) {
           "[meta.client] process net error, transfer {}->{}.", mds_meta.ID(),
           mds.ID());
       mds_meta = mds;
-      return true;
+      break;
     }
   }
-
-  return false;
 }
 
 }  // namespace v2
