@@ -31,14 +31,14 @@ namespace cache {
 DEFINE_uint32(send_heartbeat_interval_s, 3,
               "Interval to send heartbeat to MDS in seconds");
 
-CacheGroupNodeHeartbeatImpl::CacheGroupNodeHeartbeatImpl(
+CacheGroupNodeHeartbeat::CacheGroupNodeHeartbeat(
     CacheGroupNodeMemberSPtr member, MDSClientSPtr mds_client)
     : running_(false),
       member_(member),
       mds_client_(mds_client),
       executor_(std::make_unique<BthreadExecutor>()) {}
 
-void CacheGroupNodeHeartbeatImpl::Start() {
+void CacheGroupNodeHeartbeat::Start() {
   CHECK_NOTNULL(member_);
   CHECK_NOTNULL(mds_client_);
   CHECK_NOTNULL(executor_);
@@ -60,7 +60,7 @@ void CacheGroupNodeHeartbeatImpl::Start() {
   CHECK_RUNNING("Cache group node heartbeat");
 }
 
-void CacheGroupNodeHeartbeatImpl::Shutdown() {
+void CacheGroupNodeHeartbeat::Shutdown() {
   if (!running_.exchange(false)) {
     return;
   }
@@ -74,7 +74,7 @@ void CacheGroupNodeHeartbeatImpl::Shutdown() {
   CHECK_DOWN("Cache group node heartbeat");
 }
 
-void CacheGroupNodeHeartbeatImpl::SendHeartbeat() {
+void CacheGroupNodeHeartbeat::SendHeartbeat() {
   std::string group_name = member_->GetGroupName();
   auto status = mds_client_->Heartbeat(
       member_->GetMemberId(), member_->GetListenIP(), member_->GetListenPort());

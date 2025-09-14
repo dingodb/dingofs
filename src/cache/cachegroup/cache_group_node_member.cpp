@@ -27,10 +27,10 @@
 namespace dingofs {
 namespace cache {
 
-CacheGroupNodeMemberImpl::CacheGroupNodeMemberImpl(MDSClientSPtr mds_client)
+CacheGroupNodeMember::CacheGroupNodeMember(MDSClientSPtr mds_client)
     : mds_client_(mds_client) {}
 
-Status CacheGroupNodeMemberImpl::JoinGroup() {
+Status CacheGroupNodeMember::JoinGroup() {
   CHECK_NOTNULL(mds_client_);
 
   auto status = mds_client_->JoinCacheGroup(FLAGS_id, FLAGS_listen_ip,
@@ -53,7 +53,7 @@ Status CacheGroupNodeMemberImpl::JoinGroup() {
   return Status::OK();
 }
 
-Status CacheGroupNodeMemberImpl::LeaveGroup() {
+Status CacheGroupNodeMember::LeaveGroup() {
   CHECK_NOTNULL(mds_client_);
 
   auto status = mds_client_->LeaveCacheGroup(
@@ -70,20 +70,6 @@ Status CacheGroupNodeMemberImpl::LeaveGroup() {
             << ", ip = " << FLAGS_listen_ip << ", port = " << FLAGS_listen_port;
   return Status::OK();
 }
-
-std::string CacheGroupNodeMemberImpl::GetGroupName() const {
-  return FLAGS_group_name;
-}
-
-std::string CacheGroupNodeMemberImpl::GetListenIP() const {
-  return FLAGS_listen_ip;
-}
-
-uint32_t CacheGroupNodeMemberImpl::GetListenPort() const {
-  return FLAGS_listen_port;
-}
-
-std::string CacheGroupNodeMemberImpl::GetMemberId() const { return member_id_; }
 
 }  // namespace cache
 }  // namespace dingofs

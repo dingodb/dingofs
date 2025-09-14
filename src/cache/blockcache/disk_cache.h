@@ -65,6 +65,7 @@ class DiskCache final : public CacheStore {
   std::string Id() const override;
   bool IsRunning() const override;
   bool IsCached(const BlockKey& key) const override;
+  bool IsFull(const BlockKey& key) const override;
 
  private:
   friend class Target;

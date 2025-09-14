@@ -162,13 +162,13 @@ Status RemoteBlockCacheImpl::Put(ContextSPtr ctx, const BlockKey& key,
 
   if (!option.writeback) {
     NEXT_STEP("s3_put");
-    status = storage_->Upload(ctx, key, block);
+    status = storage_->Put(ctx, key, block);
   } else {
     NEXT_STEP("remote_put");
     status = remote_node_->Put(ctx, key, block);
     if (!status.ok()) {
       NEXT_STEP("s3_put");
-      status = storage_->Upload(ctx, key, block);
+      status = storage_->Put(ctx, key, block);
     }
   }
 
@@ -230,7 +230,7 @@ Status RemoteBlockCacheImpl::Range(ContextSPtr ctx, const BlockKey& key,
   }
 
   NEXT_STEP("s3_range");
-  status = storage_->Download(ctx, key, offset, length, buffer);
+  status = storage_->Range(ctx, key, offset, length, buffer);
   if (!status.ok()) {
     GENERIC_LOG_DOWNLOAD_ERROR();
   }

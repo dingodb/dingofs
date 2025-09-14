@@ -82,7 +82,8 @@ BlockCacheImpl::BlockCacheImpl(StorageSPtr storage)
 BlockCacheImpl::BlockCacheImpl(StoragePoolSPtr storage_pool)
     : running_(false),
       storage_pool_(storage_pool),
-      joiner_(std::make_unique<BthreadJoiner>()) {
+      joiner_(std::make_unique<BthreadJoiner>()),
+      inflight_tracker_(std::make_unique<InflightTracker>(1024)) {
   if (HasCacheStore()) {
     store_ = std::make_shared<DiskCacheGroup>(ParseDiskCacheOption());
   } else {
@@ -98,6 +99,7 @@ Status BlockCacheImpl::Start() {
   CHECK_NOTNULL(store_);
   CHECK_NOTNULL(uploader_);
   CHECK_NOTNULL(joiner_);
+  CHECK_NOTNULL(inflight_tracker_);
 
   if (running_) {
     return Status::OK();
@@ -248,6 +250,8 @@ Status BlockCacheImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
 
   if (IsCached(key)) {
     return Status::OK();
+  } else if (store_->IsFull(key)) {
+    return Status::CacheFull("disk cache is full");
   }
 
   NEXT_STEP("s3_range");
@@ -327,12 +331,22 @@ void BlockCacheImpl::AsyncPrefetch(ContextSPtr ctx, const BlockKey& key,
                                    PrefetchOption option) {
   CHECK_RUNNING("Block cache");
 
+  auto status = inflight_tracker_->Add(key.Filename());
+  if (status.IsExist()) {
+    if (cb) {
+      cb(status);
+    }
+    return;
+  }
+
   auto* self = GetSelfPtr();
-  auto tid = RunInBthread([self, ctx, key, length, cb, option]() {
+  auto tid = RunInBthread([&, self, ctx, key, length, cb, option]() {
     Status status = self->Prefetch(ctx, key, length, option);
     if (cb) {
       cb(status);
     }
+
+    inflight_tracker_->Remove(key.Filename());
   });
 
   if (tid != 0) {
@@ -351,7 +365,7 @@ Status BlockCacheImpl::StoragePut(ContextSPtr ctx, const BlockKey& key,
     return status;
   }
 
-  status = storage->Upload(ctx, key, block);
+  status = storage->Put(ctx, key, block);
   if (!status.ok()) {
     GENERIC_LOG_UPLOAD_ERROR();
   }
@@ -370,7 +384,7 @@ Status BlockCacheImpl::StorageRange(ContextSPtr ctx, const BlockKey& key,
     return status;
   }
 
-  status = storage->Download(ctx, key, offset, length, buffer);
+  status = storage->Range(ctx, key, offset, length, buffer);
   if (!status.ok()) {
     GENERIC_LOG_DOWNLOAD_ERROR();
   }

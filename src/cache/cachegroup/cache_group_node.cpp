@@ -66,9 +66,9 @@ static const std::string kModule = "cachenode";
 CacheGroupNodeImpl::CacheGroupNodeImpl()
     : running_(false),
       mds_client_(BuildSharedMDSClient()),
-      member_(std::make_shared<CacheGroupNodeMemberImpl>(mds_client_)),
+      member_(std::make_shared<CacheGroupNodeMember>(mds_client_)),
       heartbeat_(
-          std::make_unique<CacheGroupNodeHeartbeatImpl>(member_, mds_client_)),
+          std::make_unique<CacheGroupNodeHeartbeat>(member_, mds_client_)),
       storage_pool_(std::make_shared<StoragePoolImpl>(mds_client_)) {}
 
 Status CacheGroupNodeImpl::Start() {
@@ -320,7 +320,7 @@ Status CacheGroupNodeImpl::RangeStorage(ContextSPtr ctx, StepTimer& timer,
   auto block_size = option.block_size;
   if (block_size == 0 || length <= FLAGS_max_range_size_kb * kKiB) {
     NEXT_STEP("s3_range")
-    status = storage->Download(ctx, key, offset, length, buffer);
+    status = storage->Range(ctx, key, offset, length, buffer);
     if (status.ok() && block_size > 0) {
       block_cache_->AsyncPrefetch(ctx, key, block_size, [](Status status) {});
     }
@@ -330,7 +330,7 @@ Status CacheGroupNodeImpl::RangeStorage(ContextSPtr ctx, StepTimer& timer,
   // Retrive the whole block
   NEXT_STEP("s3_get")
   IOBuffer block;
-  status = storage->Download(ctx, key, 0, block_size, &block);
+  status = storage->Range(ctx, key, 0, block_size, &block);
   if (!status.ok()) {
     return status;
   }

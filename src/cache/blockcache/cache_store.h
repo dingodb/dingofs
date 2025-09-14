@@ -163,6 +163,7 @@ class CacheStore {
   virtual std::string Id() const = 0;
   virtual bool IsRunning() const = 0;
   virtual bool IsCached(const BlockKey& key) const = 0;
+  virtual bool IsFull(const BlockKey& key) const = 0;
 };
 
 using CacheStoreSPtr = std::shared_ptr<CacheStore>;

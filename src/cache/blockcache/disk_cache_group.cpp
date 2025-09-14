@@ -153,6 +153,8 @@ Status DiskCacheGroup::Load(ContextSPtr ctx, const BlockKey& key, off_t offset,
   return status;
 }
 
+std::string DiskCacheGroup::Id() const { return "disk_cache_group"; }
+
 bool DiskCacheGroup::IsRunning() const {
   return running_.load(std::memory_order_relaxed);
 }
@@ -163,7 +165,11 @@ bool DiskCacheGroup::IsCached(const BlockKey& key) const {
   return GetStore(key)->IsCached(key);
 }
 
-std::string DiskCacheGroup::Id() const { return "disk_cache_group"; }
+bool DiskCacheGroup::IsFull(const BlockKey& key) const {
+  DCHECK_RUNNING("Disk cache group");
+
+  return GetStore(key)->IsFull(key);
+}
 
 std::vector<uint64_t> DiskCacheGroup::CalcWeights(
     std::vector<DiskCacheOption> options) {

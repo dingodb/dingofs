@@ -93,8 +93,8 @@ Status StorageImpl::Shutdown() {
   return Status::OK();
 }
 
-Status StorageImpl::Upload(ContextSPtr ctx, const BlockKey& key,
-                           const Block& block, UploadOption option) {
+Status StorageImpl::Put(ContextSPtr ctx, const BlockKey& key,
+                        const Block& block, PutOption option) {
   DCHECK_RUNNING("Storage");
 
   Status status;
@@ -104,7 +104,7 @@ Status StorageImpl::Upload(ContextSPtr ctx, const BlockKey& key,
   StepTimerGuard guard(timer);
 
   NEXT_STEP("enqueue");
-  auto closure = UploadClosure(ctx, key, block, option, block_accesser_);
+  auto closure = PutClosure(ctx, key, block, option, block_accesser_);
   CHECK_EQ(0, bthread::execution_queue_execute(queue_id_, &closure));
 
   NEXT_STEP("s3_put");
@@ -118,9 +118,8 @@ Status StorageImpl::Upload(ContextSPtr ctx, const BlockKey& key,
   return status;
 }
 
-Status StorageImpl::Download(ContextSPtr ctx, const BlockKey& key, off_t offset,
-                             size_t length, IOBuffer* buffer,
-                             DownloadOption option) {
+Status StorageImpl::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
+                          size_t length, IOBuffer* buffer, RangeOption option) {
   DCHECK_RUNNING("Storage");
 
   Status status;
@@ -130,8 +129,8 @@ Status StorageImpl::Download(ContextSPtr ctx, const BlockKey& key, off_t offset,
   StepTimerGuard guard(timer);
 
   NEXT_STEP("enqueue");
-  auto closure = DownloadClosure(ctx, key, offset, length, buffer, option,
-                                 block_accesser_);
+  auto closure =
+      RangeClosure(ctx, key, offset, length, buffer, option, block_accesser_);
   CHECK_EQ(0, bthread::execution_queue_execute(queue_id_, &closure));
 
   NEXT_STEP("s3_range");

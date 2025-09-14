@@ -25,43 +25,29 @@
 
 #include "cache/common/mds_client.h"
 #include "common/status.h"
+#include "options/cache/option.h"
 
 namespace dingofs {
 namespace cache {
 
 class CacheGroupNodeMember {
  public:
-  virtual ~CacheGroupNodeMember() = default;
+  explicit CacheGroupNodeMember(MDSClientSPtr mds_client);
 
-  virtual Status JoinGroup() = 0;
-  virtual Status LeaveGroup() = 0;
+  Status JoinGroup();
+  Status LeaveGroup();
 
-  virtual std::string GetGroupName() const = 0;
-  virtual std::string GetListenIP() const = 0;
-  virtual uint32_t GetListenPort() const = 0;
-  virtual std::string GetMemberId() const = 0;
-};
-
-using CacheGroupNodeMemberSPtr = std::shared_ptr<CacheGroupNodeMember>;
-
-class CacheGroupNodeMemberImpl final : public CacheGroupNodeMember {
- public:
-  explicit CacheGroupNodeMemberImpl(MDSClientSPtr mds_client);
-
-  ~CacheGroupNodeMemberImpl() override = default;
-
-  Status JoinGroup() override;
-  Status LeaveGroup() override;
-
-  std::string GetGroupName() const override;
-  std::string GetListenIP() const override;
-  uint32_t GetListenPort() const override;
-  std::string GetMemberId() const override;
+  std::string GetGroupName() const { return FLAGS_group_name; }
+  std::string GetListenIP() const { return FLAGS_listen_ip; }
+  uint32_t GetListenPort() const { return FLAGS_listen_port; }
+  std::string GetMemberId() const { return member_id_; }
 
  private:
   std::string member_id_;
   MDSClientSPtr mds_client_;
 };
+
+using CacheGroupNodeMemberSPtr = std::shared_ptr<CacheGroupNodeMember>;
 
 }  // namespace cache
 }  // namespace dingofs

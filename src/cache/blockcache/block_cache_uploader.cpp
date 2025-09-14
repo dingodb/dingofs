@@ -229,7 +229,7 @@ Status BlockCacheUploader::Upload(const StagingBlock& staging_block,
     return status;
   }
 
-  status = storage->Upload(staging_block.ctx, key, Block(buffer));
+  status = storage->Put(staging_block.ctx, key, Block(buffer));
   if (!status.ok()) {
     LOG_CTX(ERROR) << "Upload staging block failed: key = " << key.Filename()
                    << ", status = " << status.ToString();

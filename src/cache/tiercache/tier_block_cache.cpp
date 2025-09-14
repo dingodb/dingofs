@@ -176,11 +176,11 @@ Status TierBlockCache::Put(ContextSPtr ctx, const BlockKey& key,
   }
 
   NEXT_STEP("s3_put");
-  UploadOption opt;
+  Storage::PutOption opt;
   if (EnableRemoteCache() && FLAGS_fill_group_cache) {
-    opt.async_cache_func = NewFillGroupCacheCb(ctx);
+    opt.async_cache_fn = NewFillGroupCacheCb(ctx);
   }
-  status = storage_->Upload(ctx, key, block, opt);
+  status = storage_->Put(ctx, key, block, opt);
 
   if (!status.ok()) {
     GENERIC_LOG_UPLOAD_ERROR();
@@ -217,7 +217,7 @@ Status TierBlockCache::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
         remote_block_cache_->Range(ctx, key, offset, length, buffer, option);
   } else if (option.retrive) {  // No remote cache, retrive storage
     NEXT_STEP("s3_range");
-    status = storage_->Download(ctx, key, offset, length, buffer);
+    status = storage_->Range(ctx, key, offset, length, buffer);
   } else {
     status = Status::NotFound("no available cache can be tried");
   }

@@ -31,19 +31,19 @@
 namespace dingofs {
 namespace cache {
 
-UploadClosure::UploadClosure(ContextSPtr ctx, const BlockKey& key,
-                             const Block& block, UploadOption option,
-                             blockaccess::BlockAccesser* block_accesser)
+PutClosure::PutClosure(ContextSPtr ctx, const BlockKey& key, const Block& block,
+                       Storage::PutOption option,
+                       blockaccess::BlockAccesser* block_accesser)
     : ctx_(ctx),
       key_(key),
       block_(block),
       option_(option),
       block_accesser_(block_accesser) {}
 
-void UploadClosure::Run() {
+void PutClosure::Run() {
   auto block = CopyBlock();  // Copy data to continuous memory
-  if (option_.async_cache_func) {
-    option_.async_cache_func(key_, block);
+  if (option_.async_cache_fn) {
+    option_.async_cache_fn(key_, block);
   }
 
   auto retry_cb = [this, block](Status s) {
@@ -58,24 +58,24 @@ void UploadClosure::Run() {
                             retry_cb);
 }
 
-void UploadClosure::OnComplete(Status s) {
+void PutClosure::OnComplete(Status s) {
   StorageClosure::status() = s;
   StorageClosure::Run();
 }
 
-Block UploadClosure::CopyBlock() {
+Block PutClosure::CopyBlock() {
   char* data = new char[block_.size];
   block_.buffer.CopyTo(data);
 
-  butil::IOBuf iobuf;
-  iobuf.append_user_data(data, block_.size, Helper::DeleteBuffer);
-  return Block(IOBuffer(iobuf));
+  IOBuffer buffer;
+  buffer.AppendUserData(data, block_.size, Helper::DeleteBuffer);
+  return Block(buffer);
 }
 
-DownloadClosure::DownloadClosure(ContextSPtr ctx, const BlockKey& key,
-                                 off_t offset, size_t length, IOBuffer* buffer,
-                                 DownloadOption option,
-                                 blockaccess::BlockAccesser* block_accesser)
+RangeClosure::RangeClosure(ContextSPtr ctx, const BlockKey& key, off_t offset,
+                           size_t length, IOBuffer* buffer,
+                           Storage::RangeOption option,
+                           blockaccess::BlockAccesser* block_accesser)
     : ctx_(ctx),
       key_(key),
       offset_(offset),
@@ -84,11 +84,9 @@ DownloadClosure::DownloadClosure(ContextSPtr ctx, const BlockKey& key,
       option_(option),
       block_accesser_(block_accesser) {}
 
-void DownloadClosure::Run() {
+void RangeClosure::Run() {
   char* data = new char[length_];
-  butil::IOBuf iobuf;
-  iobuf.append_user_data(data, length_, Helper::DeleteBuffer);
-  *buffer_ = IOBuffer(iobuf);
+  buffer_->AppendUserData(data, length_, Helper::DeleteBuffer);
 
   auto retry_cb = [this](Status s) {
     this->OnComplete(s);
@@ -99,7 +97,7 @@ void DownloadClosure::Run() {
                               buffer_->Fetch1(), retry_cb);
 }
 
-void DownloadClosure::OnComplete(Status s) {
+void RangeClosure::OnComplete(Status s) {
   StorageClosure::status() = s;
   StorageClosure::Run();
 }
