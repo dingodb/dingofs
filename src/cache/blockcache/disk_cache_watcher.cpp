@@ -89,7 +89,7 @@ void DiskCacheWatcher::WatchingWorker() {
 DiskCacheWatcher::Should DiskCacheWatcher::CheckTarget(Target* target) {
   std::string lock_path = target->GetLockPath();
 
-  if (!FSHelper::FileExists(lock_path)) {  // cache is down
+  if (!FSUtil::FileExists(lock_path)) {  // cache is down
     return Should::kShutdown;
   } else if (target->IsRunning()) {  // cache already up
     return Should::kDoNothing;
@@ -102,7 +102,7 @@ DiskCacheWatcher::Should DiskCacheWatcher::CheckTarget(Target* target) {
 bool DiskCacheWatcher::CheckUuid(const std::string& lock_path,
                                  const std::string& uuid) {
   std::string content;
-  auto status = FSHelper::ReadFile(lock_path, &content);
+  auto status = FSUtil::ReadFile(lock_path, &content);
   if (!status.ok()) {
     LOG(ERROR) << "Read lock file failed: path = " << lock_path
                << ", status = " << status.ToString();

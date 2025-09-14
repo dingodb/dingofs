@@ -20,7 +20,7 @@ add_subdirectory(blockcache)
 add_subdirectory(cachegroup)
 add_subdirectory(remotecache)
 add_subdirectory(tiercache)
-#add_subdirectory(benchmark)
+add_subdirectory(benchmark)
 
 file(GLOB CACHE_LIB_SRCS
     "dingo_cache.cpp"

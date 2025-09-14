@@ -93,9 +93,9 @@ void DiskStateHealthChecker::ProbeDisk() {
   std::string content(100, '0');
   std::string filepath = GetProbeFilepath();
 
-  auto status = FSHelper::WriteFile(filepath, content);
+  auto status = FSUtil::WriteFile(filepath, content);
   if (status.ok()) {
-    status = FSHelper::ReadFile(filepath, &out);
+    status = FSUtil::ReadFile(filepath, &out);
   }
 
   if (!status.ok()) {
@@ -107,7 +107,7 @@ void DiskStateHealthChecker::ProbeDisk() {
   }
 
   SetStatusPage(state_machine_->GetState());
-  FSHelper::RemoveFile(filepath);
+  FSUtil::RemoveFile(filepath);
 }
 
 std::string DiskStateHealthChecker::GetProbeFilepath() const {
