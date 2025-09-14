@@ -180,5 +180,45 @@ Status BaseFileSystem::CheckStatus(Status status) {
   return status;
 }
 
+Status FSUtil::MkDirs(const std::string& dir) {
+  return BaseFileSystem::GetInstance().MkDirs(dir);
+}
+
+Status FSUtil::Walk(const std::string& dir, WalkFunc walk_func) {
+  return BaseFileSystem::GetInstance().Walk(dir, walk_func);
+}
+
+Status FSUtil::WriteFile(const std::string& filepath,
+                         const std::string& content) {
+  int rc = butil::WriteFile(butil::FilePath(filepath), content.data(),
+                            content.size());
+  if (rc == static_cast<int>(content.size())) {
+    return Status::OK();
+  }
+  return Status::IoError("write file failed");
+}
+
+Status FSUtil::ReadFile(const std::string& filepath, std::string* content) {
+  if (!FileExists(filepath)) {
+    return Status::NotFound("file not found");
+  } else if (butil::ReadFileToString(butil::FilePath(filepath), content),
+             4 * kMiB) {
+    return Status::OK();
+  }
+  return Status::IoError("read file failed");
+}
+
+Status FSUtil::RemoveFile(const std::string& filepath) {
+  return BaseFileSystem::GetInstance().RemoveFile(filepath);
+}
+
+bool FSUtil::FileExists(const std::string& filepath) {
+  return BaseFileSystem::GetInstance().FileExists(filepath);
+}
+
+Status FSUtil::StatFS(const std::string& dir, FSStat* stat) {
+  return BaseFileSystem::GetInstance().StatFS(dir, stat);
+}
+
 }  // namespace cache
 }  // namespace dingofs

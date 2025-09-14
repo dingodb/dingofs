@@ -189,7 +189,7 @@ void DiskCacheManager::CheckFreeSpace() {
   std::string root_dir = GetRootDir();
 
   while (running_.load(std::memory_order_relaxed)) {
-    auto status = FSHelper::StatFS(root_dir, &stat);
+    auto status = FSUtil::StatFS(root_dir, &stat);
     if (!status.ok()) {
       LOG(ERROR) << "Check disk free space failed: dir = " << root_dir
                  << ", status = " << status.ToString();
@@ -312,7 +312,7 @@ void DiskCacheManager::DeleteBlocks(const ToDel& to_del) {
     CacheKey key = item.key;
     CacheValue value = item.value;
     std::string cache_path = GetCachePath(key);
-    auto status = FSHelper::RemoveFile(cache_path);
+    auto status = FSUtil::RemoveFile(cache_path);
     if (status.IsNotFound()) {
       LOG(WARNING) << "Block file already deleted: path = " << cache_path;
       continue;

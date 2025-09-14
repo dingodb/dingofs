@@ -191,7 +191,7 @@ Status DiskCache::CreateDirs() {
       GetProbeDir(),
   };
   for (const auto& dir : dirs) {
-    auto status = FSHelper::MkDirs(dir);
+    auto status = FSUtil::MkDirs(dir);
     if (!status.ok()) {
       LOG(ERROR) << "Create directory failed: dir = " << dir
                  << ", status = " << status.ToString();
@@ -204,12 +204,12 @@ Status DiskCache::CreateDirs() {
 Status DiskCache::LoadOrCreateLockFile() {
   std::string content;
   auto lock_path = GetLockPath();
-  auto status = FSHelper::ReadFile(lock_path, &content);
+  auto status = FSUtil::ReadFile(lock_path, &content);
   if (status.ok()) {
     uuid_ = utils::TrimSpace(content);
   } else if (status.IsNotFound()) {
     uuid_ = utils::GenUuid();
-    status = FSHelper::WriteFile(lock_path, uuid_);
+    status = FSUtil::WriteFile(lock_path, uuid_);
   }
 
   if (!status.ok()) {

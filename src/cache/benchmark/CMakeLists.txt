@@ -13,11 +13,21 @@
 # limitations under the License.
 # Define the BASE_FLAGS and DINGO_DEFAULT_COPTS variables
 
-file(GLOB BENCHMARK_LIB_SRCS
-    "*.cpp"
+SET(BENCHMARK_LIB_SRCS
+    "benchmarker.cpp"
+    "collector.cpp"
+    "factory.cpp"
+    "option.cpp"
+    "reporter.cpp"
+    "worker.cpp"
 )
 
-add_executable(cache-bench ${BENCHMARK_LIB_SRCS})
-target_link_libraries(cache-bench
-    cache_lib
+add_library(cache_benchmark ${BENCHMARK_LIB_SRCS})
+target_link_libraries(cache_benchmark
+    cache_utils
+    cache_common
+    cache_storage
 )
+
+add_executable(cache-bench main.cpp)
+target_link_libraries(cache-bench cache_benchmark)
