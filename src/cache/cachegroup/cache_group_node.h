@@ -24,14 +24,15 @@
 #define DINGOFS_SRC_CACHE_CACHEGROUP_CACHE_GROUP_NODE_H_
 
 #include "cache/blockcache/block_cache.h"
-#include "cache/blockcache/disk_cache.h"
-#include "cache/cachegroup/async_cacher.h"
+#include "cache/blockcache/cache_store.h"
 #include "cache/cachegroup/cache_group_node_heartbeat.h"
 #include "cache/cachegroup/cache_group_node_member.h"
+#include "cache/cachegroup/task_tracker.h"
 #include "cache/common/mds_client.h"
 #include "cache/storage/storage_pool.h"
 #include "cache/utils/context.h"
 #include "cache/utils/step_timer.h"
+#include "common/io_buffer.h"
 
 namespace dingofs {
 namespace cache {
@@ -48,11 +49,6 @@ class CacheGroupNode {
   virtual Status Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
                        size_t length, IOBuffer* buffer,
                        RangeOption option = RangeOption()) = 0;
-  virtual Status Cache(ContextSPtr ctx, const BlockKey& key, const Block& block,
-                       CacheOption option = CacheOption()) = 0;
-  virtual Status Prefetch(ContextSPtr ctx, const BlockKey& key, size_t length,
-                          PrefetchOption option = PrefetchOption()) = 0;
-
   virtual void AsyncCache(ContextSPtr ctx, const BlockKey& key,
                           const Block& block, AsyncCallback callback,
                           CacheOption option = CacheOption()) = 0;
@@ -75,11 +71,6 @@ class CacheGroupNodeImpl final : public CacheGroupNode {
   Status Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
                size_t length, IOBuffer* buffer,
                RangeOption option = RangeOption()) override;
-  Status Cache(ContextSPtr ctx, const BlockKey& key, const Block& block,
-               CacheOption option = CacheOption()) override;
-  Status Prefetch(ContextSPtr ctx, const BlockKey& key, size_t length,
-                  PrefetchOption option = PrefetchOption()) override;
-
   void AsyncCache(ContextSPtr ctx, const BlockKey& key, const Block& block,
                   AsyncCallback callback,
                   CacheOption option = CacheOption()) override;
@@ -88,28 +79,39 @@ class CacheGroupNodeImpl final : public CacheGroupNode {
                      PrefetchOption option = PrefetchOption()) override;
 
  private:
+  bool IsRunning() const { return running_.load(std::memory_order_relaxed); }
+
   Status StartBlockCache();
 
-  bool IsRunning();
+  Status RetrieveCache(ContextSPtr ctx, StepTimer& timer, const BlockKey& key,
+                       off_t offset, size_t length, IOBuffer* buffer,
+                       RangeOption option);
+  Status RetrieveStorage(ContextSPtr ctx, StepTimer& timer, const BlockKey& key,
+                         off_t offset, size_t length, IOBuffer* buffer,
+                         RangeOption option);
+  Status RetrievePartBlock(ContextSPtr ctx, StepTimer& timer,
+                           StorageSPtr storage, const BlockKey& key,
+                           off_t offset, size_t length,
+                           size_t block_whole_length, IOBuffer* buffer);
+  Status RetrieveWholeBlock(ContextSPtr ctx, StepTimer& timer,
+                            StorageSPtr storage, const BlockKey& key,
+                            size_t length, IOBuffer* buffer);
 
-  Status RangeCachedBlock(ContextSPtr ctx, StepTimer& timer,
-                          const BlockKey& key, off_t offset, size_t length,
-                          IOBuffer* buffer, RangeOption option);
-  Status RangeStorage(ContextSPtr ctx, StepTimer& timer, const BlockKey& key,
-                      off_t offset, size_t length, IOBuffer* buffer,
-                      RangeOption option);
-
-  void AddCacheHitCount(int64_t count);
-  void AddCacheMissCount(int64_t count);
+  Status RunTask(StepTimer& timer, DownloadTaskSPtr task);
+  Status WaitTask(StepTimer& timer, DownloadTaskSPtr task);
+  void AsyncCache(DownloadTaskSPtr task);
 
  private:
   std::atomic<bool> running_;
   MDSClientSPtr mds_client_;
   CacheGroupNodeMemberSPtr member_;
   BlockCacheSPtr block_cache_;
-  AsyncCacherUPtr async_cacher_;
   CacheGroupNodeHeartbeatUPtr heartbeat_;
   StoragePoolSPtr storage_pool_;
+  TaskTrackerUPtr task_tracker_;
+
+  bvar::Adder<int64_t> metric_cache_hit_count_;
+  bvar::Adder<int64_t> metric_cache_miss_count_;
 };
 
 }  // namespace cache

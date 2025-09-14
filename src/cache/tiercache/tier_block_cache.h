@@ -89,7 +89,8 @@ class TierBlockCache final : public BlockCache {
   BlockCacheUPtr local_block_cache_;
   BlockCacheUPtr remote_block_cache_;
   BthreadJoinerUPtr joiner_;
-  InflightTrackerUPtr inflight_tracker_;
+  InflightTrackerSPtr inflight_cache_;
+  InflightTrackerSPtr inflight_prefetch_;
 };
 
 }  // namespace cache

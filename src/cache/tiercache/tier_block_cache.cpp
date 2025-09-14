@@ -58,8 +58,9 @@ TierBlockCache::TierBlockCache(StorageSPtr storage)
       local_block_cache_(std::make_unique<BlockCacheImpl>(storage_)),
       remote_block_cache_(std::make_unique<RemoteBlockCacheImpl>(storage_)),
       joiner_(std::make_unique<BthreadJoiner>()),
-      inflight_tracker_(
-          std::make_unique<InflightTracker>(FLAGS_prefetch_max_inflights)) {}
+      inflight_prefetch_(
+          std::make_shared<InflightTracker>(FLAGS_prefetch_max_inflights)),
+      inflight_cache_(std::make_shared<InflightTracker>(1024)) {}
 
 TierBlockCache::TierBlockCache(blockaccess::BlockAccesser* block_accesser)
     : TierBlockCache(std::make_shared<StorageImpl>(block_accesser)) {}
@@ -69,7 +70,8 @@ Status TierBlockCache::Start() {
   CHECK_NOTNULL(local_block_cache_);
   CHECK_NOTNULL(remote_block_cache_);
   CHECK_NOTNULL(joiner_);
-  CHECK_NOTNULL(inflight_tracker_);
+  CHECK_NOTNULL(inflight_prefetch_);
+  CHECK_NOTNULL(inflight_cache_);
 
   if (running_) {
     return Status::OK();
@@ -332,13 +334,26 @@ void TierBlockCache::AsyncCache(ContextSPtr ctx, const BlockKey& key,
                                 CacheOption option) {
   CHECK_RUNNING("Tier block cache");
 
-  auto* self = GetSelfPtr();
-  auto tid = RunInBthread([self, ctx, key, block, cb, option]() {
-    Status status = self->Cache(ctx, key, block, option);
+  // TODO: maybe filter out duplicate task by up-level is better
+  auto inflight_tracker = inflight_cache_;
+  auto status = inflight_tracker->Add(key.Filename());
+  if (status.IsExist()) {
     if (cb) {
       cb(status);
     }
-  });
+    return;
+  }
+
+  auto* self = GetSelfPtr();
+  auto tid =
+      RunInBthread([inflight_tracker, self, ctx, key, block, cb, option]() {
+        Status status = self->Cache(ctx, key, block, option);
+        if (cb) {
+          cb(status);
+        }
+
+        inflight_tracker->Remove(key.Filename());
+      });
 
   if (tid != 0) {
     joiner_->BackgroundJoin(tid);
@@ -351,7 +366,8 @@ void TierBlockCache::AsyncPrefetch(ContextSPtr ctx, const BlockKey& key,
   CHECK_RUNNING("Tier block cache");
 
   // TODO: maybe filter out duplicate task by up-level is better
-  auto status = inflight_tracker_->Add(key.Filename());
+  auto inflight_tracker = inflight_prefetch_;
+  auto status = inflight_tracker->Add(key.Filename());
   if (status.IsExist()) {
     if (cb) {
       cb(status);
@@ -360,14 +376,15 @@ void TierBlockCache::AsyncPrefetch(ContextSPtr ctx, const BlockKey& key,
   }
 
   auto* self = GetSelfPtr();
-  auto tid = RunInBthread([&, self, ctx, key, length, cb, option]() {
-    Status status = self->Prefetch(ctx, key, length, option);
-    if (cb) {
-      cb(status);
-    }
+  auto tid =
+      RunInBthread([inflight_tracker, self, ctx, key, length, cb, option]() {
+        Status status = self->Prefetch(ctx, key, length, option);
+        if (cb) {
+          cb(status);
+        }
 
-    inflight_tracker_->Remove(key.Filename());
-  });
+        inflight_tracker->Remove(key.Filename());
+      });
 
   if (tid != 0) {
     joiner_->BackgroundJoin(tid);

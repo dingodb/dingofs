@@ -40,6 +40,7 @@
 #include "cache/utils/bthread.h"
 #include "cache/utils/context.h"
 #include "cache/utils/helper.h"
+#include "cache/utils/inflight_tracker.h"
 #include "cache/utils/step_timer.h"
 #include "common/io_buffer.h"
 #include "common/status.h"
@@ -83,7 +84,8 @@ BlockCacheImpl::BlockCacheImpl(StoragePoolSPtr storage_pool)
     : running_(false),
       storage_pool_(storage_pool),
       joiner_(std::make_unique<BthreadJoiner>()),
-      inflight_tracker_(std::make_unique<InflightTracker>(1024)) {
+      inflight_cache_(std::make_shared<InflightTracker>(1024)),
+      inflight_prefetch_(std::make_shared<InflightTracker>(1024)) {
   if (HasCacheStore()) {
     store_ = std::make_shared<DiskCacheGroup>(ParseDiskCacheOption());
   } else {
@@ -99,7 +101,8 @@ Status BlockCacheImpl::Start() {
   CHECK_NOTNULL(store_);
   CHECK_NOTNULL(uploader_);
   CHECK_NOTNULL(joiner_);
-  CHECK_NOTNULL(inflight_tracker_);
+  CHECK_NOTNULL(inflight_cache_);
+  CHECK_NOTNULL(inflight_prefetch_);
 
   if (running_) {
     return Status::OK();
@@ -313,13 +316,25 @@ void BlockCacheImpl::AsyncCache(ContextSPtr ctx, const BlockKey& key,
                                 CacheOption option) {
   CHECK_RUNNING("Block cache");
 
-  auto* self = GetSelfPtr();
-  auto tid = RunInBthread([self, ctx, key, block, cb, option]() {
-    Status status = self->Cache(ctx, key, block, option);
+  auto inflight_tracker = inflight_cache_;
+  auto status = inflight_tracker->Add(key.Filename());
+  if (status.IsExist()) {
     if (cb) {
       cb(status);
     }
-  });
+    return;
+  }
+
+  auto* self = GetSelfPtr();
+  auto tid =
+      RunInBthread([inflight_tracker, self, ctx, key, block, cb, option]() {
+        Status status = self->Cache(ctx, key, block, option);
+        if (cb) {
+          cb(status);
+        }
+
+        inflight_tracker->Remove(key.Filename());
+      });
 
   if (tid != 0) {
     joiner_->BackgroundJoin(tid);
@@ -331,7 +346,8 @@ void BlockCacheImpl::AsyncPrefetch(ContextSPtr ctx, const BlockKey& key,
                                    PrefetchOption option) {
   CHECK_RUNNING("Block cache");
 
-  auto status = inflight_tracker_->Add(key.Filename());
+  auto inflight_tracker = inflight_prefetch_;
+  auto status = inflight_tracker->Add(key.Filename());
   if (status.IsExist()) {
     if (cb) {
       cb(status);
@@ -340,14 +356,15 @@ void BlockCacheImpl::AsyncPrefetch(ContextSPtr ctx, const BlockKey& key,
   }
 
   auto* self = GetSelfPtr();
-  auto tid = RunInBthread([&, self, ctx, key, length, cb, option]() {
-    Status status = self->Prefetch(ctx, key, length, option);
-    if (cb) {
-      cb(status);
-    }
+  auto tid =
+      RunInBthread([inflight_tracker, self, ctx, key, length, cb, option]() {
+        Status status = self->Prefetch(ctx, key, length, option);
+        if (cb) {
+          cb(status);
+        }
 
-    inflight_tracker_->Remove(key.Filename());
-  });
+        inflight_tracker->Remove(key.Filename());
+      });
 
   if (tid != 0) {
     joiner_->BackgroundJoin(tid);

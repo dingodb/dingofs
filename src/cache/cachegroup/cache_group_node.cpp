@@ -33,10 +33,11 @@
 
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/block_cache_impl.h"
+#include "cache/cachegroup/task_tracker.h"
 #include "cache/common/const.h"
 #include "cache/common/macro.h"
-#include "cache/metric/cache_group_node_metric.h"
 #include "cache/utils/context.h"
+#include "cache/utils/helper.h"
 #include "cache/utils/step_timer.h"
 #include "common/io_buffer.h"
 #include "common/status.h"
@@ -54,12 +55,19 @@ DEFINE_string(listen_ip, "",
 DEFINE_validator(listen_ip, Helper::NonEmptyString);
 
 DEFINE_uint32(listen_port, 9300, "Port to listen on for this cache group node");
+
 DEFINE_uint32(group_weight, 100,
               "Weight of this cache group node, used for consistent hashing");
 
 DEFINE_uint32(max_range_size_kb, 128,
-              "Retrive the whole block if length of range request is larger "
+              "Retrieve the whole block if length of range request is larger "
               "than this value");
+
+DEFINE_bool(retrieve_storage_lock, true, "Lock when retrieve from storage");
+
+DEFINE_uint32(retrieve_storage_lock_timeout_ms, 10000,
+              "Timeout of retrieve from storage lock");
+DEFINE_validator(retrieve_storage_lock_timeout_ms, brpc::PassValidate);
 
 static const std::string kModule = "cachenode";
 
@@ -69,7 +77,10 @@ CacheGroupNodeImpl::CacheGroupNodeImpl()
       member_(std::make_shared<CacheGroupNodeMember>(mds_client_)),
       heartbeat_(
           std::make_unique<CacheGroupNodeHeartbeat>(member_, mds_client_)),
-      storage_pool_(std::make_shared<StoragePoolImpl>(mds_client_)) {}
+      storage_pool_(std::make_shared<StoragePoolImpl>(mds_client_)),
+      task_tracker_(std::make_unique<TaskTracker>()),
+      metric_cache_hit_count_("dingofs_cache_hit_count"),
+      metric_cache_miss_count_("dingofs_cache_miss_count") {}
 
 Status CacheGroupNodeImpl::Start() {
   CHECK_NOTNULL(mds_client_);
@@ -108,13 +119,6 @@ Status CacheGroupNodeImpl::Start() {
     return status;
   }
 
-  async_cacher_ = std::make_unique<AsyncCacherImpl>(block_cache_);
-  status = async_cacher_->Start();
-  if (!status.ok()) {
-    LOG(ERROR) << "Start async cacher failed: " << status.ToString();
-    return status;
-  }
-
   heartbeat_->Start();
 
   running_ = true;
@@ -140,12 +144,6 @@ Status CacheGroupNodeImpl::Shutdown() {
     return status;
   }
 
-  status = async_cacher_->Shutdown();
-  if (!status.ok()) {
-    LOG(ERROR) << "Shutdown async cacher failed: " << status.ToString();
-    return status;
-  }
-
   status = block_cache_->Shutdown();
   if (!status.ok()) {
     LOG(ERROR) << "Shutdown block cache failed: " << status.ToString();
@@ -165,10 +163,6 @@ Status CacheGroupNodeImpl::StartBlockCache() {
 
   block_cache_ = std::make_shared<BlockCacheImpl>(storage_pool_);
   return block_cache_->Start();
-}
-
-bool CacheGroupNodeImpl::IsRunning() {
-  return running_.load(std::memory_order_relaxed);
 }
 
 Status CacheGroupNodeImpl::Put(ContextSPtr ctx, const BlockKey& key,
@@ -202,48 +196,10 @@ Status CacheGroupNodeImpl::Range(ContextSPtr ctx, const BlockKey& key,
                     key.Filename(), offset, length);
   StepTimerGuard guard(timer);
 
-  status = RangeCachedBlock(ctx, timer, key, offset, length, buffer, option);
-  if (status.ok()) {
-    // do nothing
-  } else if (status.IsNotFound()) {
-    status = RangeStorage(ctx, timer, key, offset, length, buffer, option);
+  status = RetrieveCache(ctx, timer, key, offset, length, buffer, option);
+  if (status.IsNotFound()) {
+    status = RetrieveStorage(ctx, timer, key, offset, length, buffer, option);
   }
-  return status;
-}
-
-Status CacheGroupNodeImpl::Cache(ContextSPtr ctx, const BlockKey& key,
-                                 const Block& block, CacheOption option) {
-  if (!IsRunning()) {
-    return Status::Internal("cache group node is not running");
-  }
-
-  Status status;
-  StepTimer timer;
-  TraceLogGuard log(ctx, status, timer, kModule, "cache(%s,%zu)",
-                    key.Filename(), block.size);
-  StepTimerGuard guard(timer);
-
-  NEXT_STEP("cache");
-  status = block_cache_->Cache(ctx, key, block, option);
-
-  return status;
-}
-
-Status CacheGroupNodeImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
-                                    size_t length, PrefetchOption option) {
-  if (!IsRunning()) {
-    return Status::Internal("cache group node is not running");
-  }
-
-  Status status;
-  StepTimer timer;
-  TraceLogGuard log(ctx, status, timer, kModule, "prefetch(%s,%zu)",
-                    key.Filename(), length);
-  StepTimerGuard guard(timer);
-
-  NEXT_STEP("local_prefetch");
-  status = block_cache_->Prefetch(ctx, key, length, option);
-
   return status;
 }
 
@@ -289,26 +245,26 @@ void CacheGroupNodeImpl::AsyncPrefetch(ContextSPtr ctx, const BlockKey& key,
   block_cache_->AsyncPrefetch(ctx, key, length, cb, option);
 }
 
-Status CacheGroupNodeImpl::RangeCachedBlock(ContextSPtr ctx, StepTimer& timer,
-                                            const BlockKey& key, off_t offset,
-                                            size_t length, IOBuffer* buffer,
-                                            RangeOption option) {
+Status CacheGroupNodeImpl::RetrieveCache(ContextSPtr ctx, StepTimer& timer,
+                                         const BlockKey& key, off_t offset,
+                                         size_t length, IOBuffer* buffer,
+                                         RangeOption option) {
   NEXT_STEP("local_range");
   option.retrive = false;
   auto status = block_cache_->Range(ctx, key, offset, length, buffer, option);
   if (status.ok()) {
-    AddCacheHitCount(1);
+    metric_cache_hit_count_ << 1;
     ctx->SetCacheHit(true);
   } else {
-    AddCacheMissCount(1);
+    metric_cache_miss_count_ << 1;
   }
   return status;
 }
 
-Status CacheGroupNodeImpl::RangeStorage(ContextSPtr ctx, StepTimer& timer,
-                                        const BlockKey& key, off_t offset,
-                                        size_t length, IOBuffer* buffer,
-                                        RangeOption option) {
+Status CacheGroupNodeImpl::RetrieveStorage(ContextSPtr ctx, StepTimer& timer,
+                                           const BlockKey& key, off_t offset,
+                                           size_t length, IOBuffer* buffer,
+                                           RangeOption option) {
   NEXT_STEP("get_storage")
   StorageSPtr storage;
   auto status = storage_pool_->GetStorage(key.fs_id, storage);
@@ -316,40 +272,120 @@ Status CacheGroupNodeImpl::RangeStorage(ContextSPtr ctx, StepTimer& timer,
     return status;
   }
 
-  // Retrive range of block: unknown block size or unreach max_range_size
-  auto block_size = option.block_size;
-  if (block_size == 0 || length <= FLAGS_max_range_size_kb * kKiB) {
-    NEXT_STEP("s3_range")
-    status = storage->Range(ctx, key, offset, length, buffer);
-    if (status.ok() && block_size > 0) {
-      block_cache_->AsyncPrefetch(ctx, key, block_size, [](Status status) {});
+  // Retrieve range of block: unknown block size or unreach max_range_size
+  auto block_whole_length = option.block_size;
+  if (block_whole_length == 0 || length <= FLAGS_max_range_size_kb * kKiB) {
+    return RetrievePartBlock(ctx, timer, storage, key, offset, length,
+                             block_whole_length, buffer);
+  }
+
+  // Retrieve the whole block
+  IOBuffer block;
+  status =
+      RetrieveWholeBlock(ctx, timer, storage, key, block_whole_length, &block);
+  if (status.ok()) {
+    block.AppendTo(buffer, length, offset);
+  }
+  return status;
+}
+
+Status CacheGroupNodeImpl::RetrievePartBlock(
+    ContextSPtr ctx, StepTimer& timer, StorageSPtr storage, const BlockKey& key,
+    off_t offset, size_t length, size_t block_whole_length, IOBuffer* buffer) {
+  NEXT_STEP("s3_range")
+  auto status = storage->Range(ctx, key, offset, length, buffer);
+  if (status.ok() && block_whole_length > 0) {
+    NEXT_STEP("async_prefetch")
+    block_cache_->AsyncPrefetch(ctx, key, block_whole_length,
+                                [](Status status) {});
+  }
+  return status;
+}
+
+Status CacheGroupNodeImpl::RetrieveWholeBlock(ContextSPtr ctx, StepTimer& timer,
+                                              StorageSPtr storage,
+                                              const BlockKey& key,
+                                              size_t length, IOBuffer* buffer) {
+  if (!FLAGS_retrieve_storage_lock) {
+    NEXT_STEP("s3_get")
+    return storage->Range(ctx, key, 0, length, buffer);
+  }
+
+  DownloadTaskSPtr task;
+  bool created =
+      task_tracker_->GetOrCreateTask(ctx, storage, key, length, buffer, task);
+  if (created) {
+    NEXT_STEP("s3_get")
+    auto status = task->Run(true);
+    if (!status.ok()) {
+      task_tracker_->RemoveTask(key);
+    } else {
+      block_cache_->AsyncCache(
+          task->ctx, task->key, Block(*task->buffer), [&](Status status) {
+            auto ctx = task->ctx;
+            if (!status.ok()) {
+              LOG_CTX(ERROR)
+                  << "Async cache failed: key = " << task->key.Filename()
+                  << ", status = " << status.ToString();
+            }
+            task_tracker_->RemoveTask(task->key);
+          });
     }
+
     return status;
   }
 
-  // Retrive the whole block
+  return WaitTask(timer, task);
+}
+
+Status CacheGroupNodeImpl::RunTask(StepTimer& timer, DownloadTaskSPtr task) {
   NEXT_STEP("s3_get")
-  IOBuffer block;
-  status = storage->Range(ctx, key, 0, block_size, &block);
+  auto status = task->Run(true);
   if (!status.ok()) {
+    task_tracker_->RemoveTask(task->key);
     return status;
   }
 
   NEXT_STEP("async_cache")
-  async_cacher_->AsyncCache(ctx, key, block);
+  block_cache_->AsyncCache(
+      task->ctx, task->key, Block(*task->buffer), [task](Status status) {
+        auto ctx = task->ctx;
+        if (!status.ok()) {
+          LOG_CTX(ERROR) << "Async cache failed: key = " << task->key.Filename()
+                         << ", status = " << status.ToString();
+        }
 
-  butil::IOBuf piecs;
-  block.IOBuf().append_to(&piecs, length, offset);
-  *buffer = IOBuffer(piecs);
+        // task_tracker->RemoveTask(task->key);
+      });
+  return Status::OK();
+}
+
+Status CacheGroupNodeImpl::WaitTask(DownloadTaskSPtr task) {
+  bool finished = task->Wait(FLAGS_retrieve_storage_lock_timeout_ms);
+  if (finished) {
+    auto status = task->status;
+    if (status.ok() || status.IsNotFound()) {
+      return status;
+    }
+  }
+
+  // not finished or finished with other status, so will re-run the task
+  auto status = task->Run(false);
+  if (status.ok()) {
+    AsyncCache(task);
+  }
   return status;
 }
 
-void CacheGroupNodeImpl::AddCacheHitCount(int64_t count) {
-  CacheGroupNodeMetric::GetInstance().cache_hit_count << count;
-}
-
-void CacheGroupNodeImpl::AddCacheMissCount(int64_t count) {
-  CacheGroupNodeMetric::GetInstance().cache_miss_count << count;
+void CacheGroupNodeImpl::AsyncCache(DownloadTaskSPtr task) {
+  block_cache_->AsyncCache(
+      task->ctx, task->key, Block(*task->buffer), [task](Status status) {
+        auto ctx = task->ctx;
+        if (!status.ok()) {
+          LOG_CTX(ERROR) << "Async cache failed: key = " << task->key.Filename()
+                         << ", status = " << status.ToString();
+        }
+      });
 }
 
 }  // namespace cache
