@@ -53,7 +53,7 @@ DEFINE_string(mds_addrs, "",
               "Cache group member manager service rpc addresses");
 DEFINE_validator(mds_addrs, Helper::NonEmptyString);
 
-DEFINE_string(mds_version, "v1",
+DEFINE_string(mds_version, "v2",
               "MDS version for member managment, 'v1' or 'v2'");
 
 DEFINE_uint64(mdsv1_rpc_retry_total_ms, 16000, "");
