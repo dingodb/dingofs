@@ -48,6 +48,7 @@ class InflightTracker {
 };
 
 using InflightTrackerUPtr = std::unique_ptr<InflightTracker>;
+using InflightTrackerSPtr = std::shared_ptr<InflightTracker>;
 
 }  // namespace cache
 }  // namespace dingofs

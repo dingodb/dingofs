@@ -44,11 +44,11 @@ class StorageImpl final : public Storage {
   Status Start() override;
   Status Shutdown() override;
 
-  Status Upload(ContextSPtr ctx, const BlockKey& key, const Block& block,
-                UploadOption option = UploadOption()) override;
-  Status Download(ContextSPtr ctx, const BlockKey& key, off_t offset,
-                  size_t length, IOBuffer* buffer,
-                  DownloadOption option = DownloadOption()) override;
+  Status Put(ContextSPtr ctx, const BlockKey& key, const Block& block,
+             PutOption option = PutOption()) override;
+  Status Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
+               size_t length, IOBuffer* buffer,
+               RangeOption option = RangeOption()) override;
 
  private:
   static int HandleClosure(void* meta,

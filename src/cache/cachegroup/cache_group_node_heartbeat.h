@@ -34,21 +34,11 @@ namespace cache {
 
 class CacheGroupNodeHeartbeat {
  public:
-  virtual ~CacheGroupNodeHeartbeat() = default;
+  CacheGroupNodeHeartbeat(CacheGroupNodeMemberSPtr member,
+                          MDSClientSPtr mds_client);
 
-  virtual void Start() = 0;
-  virtual void Shutdown() = 0;
-};
-
-using CacheGroupNodeHeartbeatUPtr = std::unique_ptr<CacheGroupNodeHeartbeat>;
-
-class CacheGroupNodeHeartbeatImpl final : public CacheGroupNodeHeartbeat {
- public:
-  CacheGroupNodeHeartbeatImpl(CacheGroupNodeMemberSPtr member,
-                              MDSClientSPtr mds_client);
-
-  void Start() override;
-  void Shutdown() override;
+  void Start();
+  void Shutdown();
 
  private:
   void SendHeartbeat();
@@ -59,6 +49,8 @@ class CacheGroupNodeHeartbeatImpl final : public CacheGroupNodeHeartbeat {
   MDSClientSPtr mds_client_;
   std::unique_ptr<Executor> executor_;
 };
+
+using CacheGroupNodeHeartbeatUPtr = std::unique_ptr<CacheGroupNodeHeartbeat>;
 
 }  // namespace cache
 }  // namespace dingofs

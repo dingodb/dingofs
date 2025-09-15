@@ -61,6 +61,7 @@ class MemStore final : public CacheStore {
   std::string Id() const override { return "memory_cache"; }
   bool IsRunning() const override { return true; }
   bool IsCached(const BlockKey&) const override { return false; }
+  bool IsFull(const BlockKey&) const override { return true; }
 };
 
 }  // namespace cache

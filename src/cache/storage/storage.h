@@ -30,29 +30,28 @@
 namespace dingofs {
 namespace cache {
 
-struct UploadOption {
-  using AsyncCacheFunc =
-      std::function<void(const BlockKey& key, const Block& block)>;
-
-  UploadOption() : async_cache_func(nullptr) {}
-  AsyncCacheFunc async_cache_func;
-};
-
-struct DownloadOption {};
-
 class Storage {
  public:
+  using AsyncCacheFn =
+      std::function<void(const BlockKey& key, const Block& block)>;
+
+  struct PutOption {
+    PutOption() : async_cache_fn(nullptr) {}
+    AsyncCacheFn async_cache_fn;
+  };
+
+  struct RangeOption {};
+
   virtual ~Storage() = default;
 
   virtual Status Start() = 0;
   virtual Status Shutdown() = 0;
 
-  virtual Status Upload(ContextSPtr ctx, const BlockKey& key,
-                        const Block& block,
-                        UploadOption option = UploadOption()) = 0;
-  virtual Status Download(ContextSPtr ctx, const BlockKey& key, off_t offset,
-                          size_t length, IOBuffer* buffer,
-                          DownloadOption option = DownloadOption()) = 0;
+  virtual Status Put(ContextSPtr ctx, const BlockKey& key, const Block& block,
+                     PutOption option = PutOption()) = 0;
+  virtual Status Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
+                       size_t length, IOBuffer* buffer,
+                       RangeOption option = RangeOption()) = 0;
 };
 
 using StorageUPtr = std::unique_ptr<Storage>;

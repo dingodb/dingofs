@@ -421,6 +421,8 @@ bool DiskCache::IsCached(const BlockKey& key) const {
   return false;
 }
 
+bool DiskCache::IsFull(const BlockKey& /*key*/) const { return CacheFull(); }
+
 // CheckStatus cache status:
 //   1. check running status (UP/DOWN)
 //   2. check disk healthy (HEALTHY/UNHEALTHY)

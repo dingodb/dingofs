@@ -33,7 +33,7 @@ class DingoCache {
   static int Run(int argc, char** argv);
 
  private:
-  static int HandleFlags(int argc, char** argv);
+  static int ParseFlags(int argc, char** argv);
 
   static void InitGlog();
   static void LogFlags();

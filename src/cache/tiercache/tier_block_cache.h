@@ -77,7 +77,7 @@ class TierBlockCache final : public BlockCache {
   bool EnableRemoteStage() const;
   bool EnableRemoteCache() const;
 
-  using FillGroupCacheCb = UploadOption::AsyncCacheFunc;
+  using FillGroupCacheCb = Storage::AsyncCacheFn;
   FillGroupCacheCb NewFillGroupCacheCb(ContextSPtr ctx);
 
   // The behavior of local block cache is same as remote block cache,
@@ -89,7 +89,8 @@ class TierBlockCache final : public BlockCache {
   BlockCacheUPtr local_block_cache_;
   BlockCacheUPtr remote_block_cache_;
   BthreadJoinerUPtr joiner_;
-  InflightTrackerUPtr inflight_tracker_;
+  InflightTrackerSPtr inflight_cache_;
+  InflightTrackerSPtr inflight_prefetch_;
 };
 
 }  // namespace cache

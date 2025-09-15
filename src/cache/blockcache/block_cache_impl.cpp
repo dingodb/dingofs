@@ -40,6 +40,7 @@
 #include "cache/utils/bthread.h"
 #include "cache/utils/context.h"
 #include "cache/utils/helper.h"
+#include "cache/utils/inflight_tracker.h"
 #include "cache/utils/step_timer.h"
 #include "common/io_buffer.h"
 #include "common/status.h"
@@ -82,7 +83,9 @@ BlockCacheImpl::BlockCacheImpl(StorageSPtr storage)
 BlockCacheImpl::BlockCacheImpl(StoragePoolSPtr storage_pool)
     : running_(false),
       storage_pool_(storage_pool),
-      joiner_(std::make_unique<BthreadJoiner>()) {
+      joiner_(std::make_unique<BthreadJoiner>()),
+      inflight_cache_(std::make_shared<InflightTracker>(1024)),
+      inflight_prefetch_(std::make_shared<InflightTracker>(1024)) {
   if (HasCacheStore()) {
     store_ = std::make_shared<DiskCacheGroup>(ParseDiskCacheOption());
   } else {
@@ -98,6 +101,8 @@ Status BlockCacheImpl::Start() {
   CHECK_NOTNULL(store_);
   CHECK_NOTNULL(uploader_);
   CHECK_NOTNULL(joiner_);
+  CHECK_NOTNULL(inflight_cache_);
+  CHECK_NOTNULL(inflight_prefetch_);
 
   if (running_) {
     return Status::OK();
@@ -248,6 +253,8 @@ Status BlockCacheImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
 
   if (IsCached(key)) {
     return Status::OK();
+  } else if (store_->IsFull(key)) {
+    return Status::CacheFull("disk cache is full");
   }
 
   NEXT_STEP("s3_range");
@@ -309,13 +316,25 @@ void BlockCacheImpl::AsyncCache(ContextSPtr ctx, const BlockKey& key,
                                 CacheOption option) {
   CHECK_RUNNING("Block cache");
 
-  auto* self = GetSelfPtr();
-  auto tid = RunInBthread([self, ctx, key, block, cb, option]() {
-    Status status = self->Cache(ctx, key, block, option);
+  auto inflight_tracker = inflight_cache_;
+  auto status = inflight_tracker->Add(key.Filename());
+  if (status.IsExist()) {
     if (cb) {
       cb(status);
     }
-  });
+    return;
+  }
+
+  auto* self = GetSelfPtr();
+  auto tid =
+      RunInBthread([inflight_tracker, self, ctx, key, block, cb, option]() {
+        Status status = self->Cache(ctx, key, block, option);
+        if (cb) {
+          cb(status);
+        }
+
+        inflight_tracker->Remove(key.Filename());
+      });
 
   if (tid != 0) {
     joiner_->BackgroundJoin(tid);
@@ -327,13 +346,25 @@ void BlockCacheImpl::AsyncPrefetch(ContextSPtr ctx, const BlockKey& key,
                                    PrefetchOption option) {
   CHECK_RUNNING("Block cache");
 
-  auto* self = GetSelfPtr();
-  auto tid = RunInBthread([self, ctx, key, length, cb, option]() {
-    Status status = self->Prefetch(ctx, key, length, option);
+  auto inflight_tracker = inflight_prefetch_;
+  auto status = inflight_tracker->Add(key.Filename());
+  if (status.IsExist()) {
     if (cb) {
       cb(status);
     }
-  });
+    return;
+  }
+
+  auto* self = GetSelfPtr();
+  auto tid =
+      RunInBthread([inflight_tracker, self, ctx, key, length, cb, option]() {
+        Status status = self->Prefetch(ctx, key, length, option);
+        if (cb) {
+          cb(status);
+        }
+
+        inflight_tracker->Remove(key.Filename());
+      });
 
   if (tid != 0) {
     joiner_->BackgroundJoin(tid);
@@ -351,7 +382,7 @@ Status BlockCacheImpl::StoragePut(ContextSPtr ctx, const BlockKey& key,
     return status;
   }
 
-  status = storage->Upload(ctx, key, block);
+  status = storage->Put(ctx, key, block);
   if (!status.ok()) {
     GENERIC_LOG_UPLOAD_ERROR();
   }
@@ -370,7 +401,7 @@ Status BlockCacheImpl::StorageRange(ContextSPtr ctx, const BlockKey& key,
     return status;
   }
 
-  status = storage->Download(ctx, key, offset, length, buffer);
+  status = storage->Range(ctx, key, offset, length, buffer);
   if (!status.ok()) {
     GENERIC_LOG_DOWNLOAD_ERROR();
   }

@@ -28,6 +28,7 @@
 #include "cache/storage/storage.h"
 #include "cache/storage/storage_pool.h"
 #include "cache/utils/context.h"
+#include "cache/utils/inflight_tracker.h"
 
 namespace dingofs {
 namespace cache {
@@ -85,6 +86,8 @@ class BlockCacheImpl final : public BlockCache {
   CacheStoreSPtr store_;
   BlockCacheUploaderSPtr uploader_;
   BthreadJoinerUPtr joiner_;
+  InflightTrackerSPtr inflight_cache_;
+  InflightTrackerSPtr inflight_prefetch_;
 };
 
 }  // namespace cache
