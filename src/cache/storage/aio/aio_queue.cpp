@@ -235,9 +235,6 @@ void AioQueueImpl::RunClosure(Aio* aio) {
   infights_->Decrement(1);
 
   timer.Stop();
-
-  VLOG(9) << "Aio done: aio = " << aio->ToString()
-          << ", status = " << aio->status().ToString();
 }
 
 std::string AioQueueImpl::LastStep(Aio* aio) { return aio->timer.LastStep(); }

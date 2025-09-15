@@ -177,8 +177,7 @@ Status LinuxIOUring::WaitIO(uint64_t timeout_ms,
   struct epoll_event ev;
   int rc = TEMP_FAILURE_RETRY(epoll_wait(epoll_fd_, &ev, 1, timeout_ms));
   if (rc < 0) {
-    LOG_SYSERR(errno, "epoll_wait(%d,%lu,%lld)", epoll_fd_, iodepth_,
-               timeout_ms);
+    LOG_SYSERR(errno, "epoll_wait(%d,%lu,%lld)", epoll_fd_, 1, timeout_ms);
     return Status::Internal("epoll_wait() failed");
   } else if (rc == 0) {
     return Status::OK();

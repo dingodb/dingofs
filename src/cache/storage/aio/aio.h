@@ -62,12 +62,16 @@ struct Aio : public Closure {
     while (!finish_) {
       cond.wait(lk);
     }
+
+    VLOG(9) << "Aio wait over: aio = " << ToString();
   }
 
   void Run() override {
     std::lock_guard<BthreadMutex> lk(mutex);
     finish_ = true;
     cond.notify_one();
+
+    VLOG(9) << "Aio run over: aio = " << ToString();
   }
 
   ContextSPtr ctx;
