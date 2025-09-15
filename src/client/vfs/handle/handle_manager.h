@@ -61,7 +61,8 @@ using HandleSPtr = std::shared_ptr<Handle>;
 class HandleManager {
  public:
   HandleManager(VFSHub* hub) : vfs_hub_(hub) {};
-  ~HandleManager() = default;
+
+  ~HandleManager() { Shutdown(); }
 
   void AddHandle(HandleSPtr handle);
 
@@ -78,6 +79,7 @@ class HandleManager {
 
  private:
   std::mutex mutex_;
+  bool shutdown_{false};
   std::unordered_map<uint64_t, HandleSPtr> handles_;
   VFSHub* vfs_hub_{nullptr};
 };

@@ -47,6 +47,11 @@ void HandleManager::ReleaseHandler(uint64_t fh) {
 
 void HandleManager::TriggerFlushAll() {
   std::lock_guard<std::mutex> lock(mutex_);
+  if (shutdown_) {
+    LOG(INFO) << "HandleManager already shutdown";
+    return;
+  }
+
   for (auto& [fh, handle] : handles_) {
     if (handle->ino == STATSINODEID) {
       continue;
@@ -66,6 +71,11 @@ void HandleManager::TriggerFlushAll() {
 // TODO: concurrent flush
 void HandleManager::Shutdown() {
   std::lock_guard<std::mutex> lock(mutex_);
+  if (shutdown_) {
+    LOG(INFO) << "HandleManager already shutdown";
+    return;
+  }
+
   for (auto& [fh, handle] : handles_) {
     if (handle->ino == STATSINODEID) {
       continue;
@@ -78,6 +88,8 @@ void HandleManager::Shutdown() {
                  << ", error: " << s.ToString();
     }
   }
+
+  shutdown_ = true;
 }
 
 bool HandleManager::Dump(Json::Value& value) {

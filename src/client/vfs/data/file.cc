@@ -17,6 +17,7 @@
 #include "client/vfs/data/file.h"
 
 #include <glog/logging.h>
+#include <unistd.h>
 
 #include <cstdint>
 #include <mutex>
@@ -35,6 +36,19 @@ namespace client {
 namespace vfs {
 
 #define METHOD_NAME() ("File::" + std::string(__FUNCTION__))
+
+// TODO: use condition variable to wait
+File::~File() {
+  while (inflight_flush_.load(std::memory_order_relaxed) > 0) {
+    LOG(INFO) << "File::~File wait inflight_flush_ to be 0, ino: " << ino_
+              << ", inflight_flush: "
+              << inflight_flush_.load(std::memory_order_relaxed);
+    sleep(1);
+  }
+
+  file_reader_.reset();
+  file_writer_.reset();
+}
 
 uint64_t File::GetChunkSize() const { return vfs_hub_->GetFsInfo().chunk_size; }
 
@@ -75,17 +89,24 @@ void File::FileFlushed(StatusCallback cb, Status status) {
   if (!status.ok()) {
     LOG(WARNING) << "File::FileFlushed failed, ino: " << ino_
                  << ", status: " << status.ToString();
-    file_status_ = status;
+    {
+      std::lock_guard<std::mutex> lg(mutex_);
+      file_status_ = status;
+    }
   }
 
   cb(status);
 
+  inflight_flush_.fetch_sub(1, std::memory_order_relaxed);
+
   VLOG(3) << "File::FileFlushed end ino: " << ino_
-          << ", status: " << status.ToString();
+          << ", status: " << status.ToString() << ", inflight_flush: "
+          << inflight_flush_.load(std::memory_order_relaxed);
 }
 
 void File::AsyncFlush(StatusCallback cb) {
   auto span = vfs_hub_->GetTracer()->StartSpan(kVFSDataMoudule, METHOD_NAME());
+  inflight_flush_.fetch_add(1, std::memory_order_relaxed);
   file_writer_->AsyncFlush(
       [this, span_raw_ptr = span.release(), cb](auto&& ph1) {
         std::unique_ptr<ITraceSpan> flush_span(span_raw_ptr);

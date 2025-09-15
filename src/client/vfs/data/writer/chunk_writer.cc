@@ -23,7 +23,6 @@
 #include <cstdint>
 #include <memory>
 
-#include "absl/cleanup/cleanup.h"
 #include "client/const.h"
 #include "client/meta/vfs_meta.h"
 #include "client/vfs/hub/vfs_hub.h"
@@ -368,27 +367,34 @@ void ChunkWriter::CommitFlushTasks(ContextSPtr ctx) {
   commit_context->flush_tasks = std::move(to_commit);
   commit_context->commit_slices = std::move(batch_commit_slices);
 
-  //   Status commit_status;
   if (!commit_context->commit_slices.empty()) {
     AsyncCommitSlices(
         ctx, commit_context->commit_slices,
         [self = shared_from_this(), ctx, commit_context](auto&& ph1) {
-          self->SlicesCommited(ctx, commit_context,
-                               std::forward<decltype(ph1)>(ph1));
+          self->SlicesCommitedFromMeta(ctx, commit_context,
+                                       std::forward<decltype(ph1)>(ph1));
         });
   } else {
     SlicesCommited(ctx, commit_context, GetErrorStatus());
   }
 }
 
-void ChunkWriter::SlicesCommited(ContextSPtr ctx, CommmitContext* commit_ctx,
-                                 Status s) {
+void ChunkWriter::SlicesCommitedFromMeta(ContextSPtr ctx,
+                                         CommmitContext* commit_ctx, Status s) {
   VLOG(4) << fmt::format(
-      "{} SlicesCommited commit_seq: {}, flush_task_count: {} "
+      "{} SlicesCommitedFromMeta commit_seq: {}, flush_task_count: {} "
       "batch_slices_count: {} commit_status: {}",
       UUID(), commit_ctx->commit_seq, commit_ctx->flush_tasks.size(),
       commit_ctx->commit_slices.size(), s.ToString());
 
+  hub_->GetFlushExecutor()->Execute(
+      [self = shared_from_this(), ctx, commit_ctx, s] {
+        self->SlicesCommited(ctx, commit_ctx, s);
+      });
+}
+
+void ChunkWriter::SlicesCommited(ContextSPtr ctx, CommmitContext* commit_ctx,
+                                 Status s) {
   if (!s.ok()) {
     LOG(WARNING) << fmt::format(
         "{} SlicesCommited commit_seq: {} fail commit, flush_task_count: {} "

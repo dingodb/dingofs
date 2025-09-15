@@ -56,6 +56,7 @@ class SliceFlushTask {
   }
 
  private:
+  void BlockDataFlushedFromBlockCache(BlockData* block_data, Status status);
   void BlockDataFlushed(BlockData* block_data, Status status);
   void FlushDone(Status s);
 

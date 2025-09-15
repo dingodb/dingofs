@@ -17,6 +17,7 @@
 #ifndef DINGODB_CLIENT_VFS_DATA_FILE_H_
 #define DINGODB_CLIENT_VFS_DATA_FILE_H_
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -42,7 +43,7 @@ class File : public IFile {
         file_writer_(std::make_unique<FileWriter>(hub, fh_, ino)),
         file_reader_(std::make_unique<FileReader>(hub, fh_, ino)) {}
 
-  ~File() override = default;
+  ~File() override;
 
   Status Write(ContextSPtr ctx, const char* buf, uint64_t size, uint64_t offset,
                uint64_t* out_wsize) override;
@@ -66,6 +67,7 @@ class File : public IFile {
   FileWriterUPtr file_writer_;
   FileReaderUPtr file_reader_;
 
+  std::atomic_int64_t inflight_flush_{0};
   std::mutex mutex_;
   // when sync fail, we need set file status to error
   Status file_status_;

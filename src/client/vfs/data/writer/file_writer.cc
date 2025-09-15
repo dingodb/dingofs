@@ -17,6 +17,7 @@
 #include "client/vfs/data/writer/file_writer.h"
 
 #include <glog/logging.h>
+#include <unistd.h>
 
 #include "client/common/utils.h"
 #include "client/const.h"
@@ -30,6 +31,22 @@ namespace vfs {
 #define METHOD_NAME() ("FileWriter::" + std::string(__FUNCTION__))
 
 static std::atomic<uint64_t> file_flush_id_gen{1};
+
+// TODO: use condition variable to wait
+FileWriter::~FileWriter() {
+  while (HasInflightFlushTask()) {
+    LOG(INFO) << "FileWriter::~FileWriter, waiting inflight flush tasks to "
+                 "finish, ino: "
+              << ino_ << ", inflight_flush_task_count: "
+              << inflight_flush_tasks_.size();
+    sleep(1);
+  }
+}
+
+bool FileWriter::HasInflightFlushTask() const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  return inflight_flush_tasks_.size() > 0;
+}
 
 Status FileWriter::Write(ContextSPtr ctx, const char* buf, uint64_t size,
                          uint64_t offset, uint64_t* out_wsize) {
@@ -159,6 +176,7 @@ void FileWriter::AsyncFlush(StatusCallback cb) {
     FileFlushTaskDone(file_flush_id, cb, std::forward<decltype(ph1)>(ph1));
   });
 }
+
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

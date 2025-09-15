@@ -18,6 +18,7 @@
 #define DINGOFS_CLIENT_VFS_DATA_WRITER_FILE_WRITER_H_
 
 #include <cstdint>
+#include <memory>
 #include <mutex>
 #include <unordered_map>
 
@@ -36,7 +37,7 @@ class FileWriter {
   FileWriter(VFSHub* hub, uint64_t fh, uint64_t ino)
       : vfs_hub_(hub), fh_(fh), ino_(ino) {}
 
-  ~FileWriter() = default;
+  ~FileWriter();
 
   Status Write(ContextSPtr ctx, const char* buf, uint64_t size, uint64_t offset,
                uint64_t* out_wsize);
@@ -50,12 +51,13 @@ class FileWriter {
 
   void FileFlushTaskDone(uint64_t file_flush_id, StatusCallback cb,
                          Status status);
+  bool HasInflightFlushTask() const;
 
   VFSHub* vfs_hub_;
   const uint64_t fh_;
   const uint64_t ino_;
 
-  std::mutex mutex_;
+  mutable std::mutex mutex_;
 
   // TODO: maybe move chunk_writers_ to FileFlushTask
   // chunk_index -> chunk

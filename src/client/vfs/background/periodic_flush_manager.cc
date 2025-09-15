@@ -85,7 +85,7 @@ void PeriodicFlushManager::FlushHandle(uint64_t fh) {
 
     handle = iter->second.lock();
     if (handle == nullptr) {
-      LOG(INFO) << "Handle is released for fh: " << fh;
+      VLOG(1) << "Handle is released for fh: " << fh;
       handles_.erase(iter);
       return;
     }

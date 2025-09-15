@@ -41,13 +41,18 @@ void SliceFlushTask::FlushDone(Status s) {
   VLOG(4) << fmt::format("End slice flush status: {}", s.ToString());
 }
 
-// callback from block cache, maybe in bthread
-// Add callback pool to exec thi callback
+void SliceFlushTask::BlockDataFlushedFromBlockCache(BlockData* block_data,
+                                                    Status status) {
+  VLOG(4) << fmt::format(
+      "{} BlockDataFlushedFromBlockCache block_data: {}, status: {} ", UUID(),
+      block_data->UUID(), status.ToString());
+
+  vfs_hub_->GetFlushExecutor()->Execute(
+      [this, block_data, status]() { BlockDataFlushed(block_data, status); });
+}
+
 // take ownership of block_data
 void SliceFlushTask::BlockDataFlushed(BlockData* block_data, Status status) {
-  VLOG(6) << fmt::format("{} BlockDataFlushed block_data: {}, status: {} ",
-                         UUID(), block_data->UUID(), status.ToString());
-
   if (!status.ok()) {
     LOG(WARNING) << fmt::format("{} Failed to flush block_data: {}, status: {}",
                                 UUID(), block_data->UUID(), status.ToString());
@@ -57,6 +62,8 @@ void SliceFlushTask::BlockDataFlushed(BlockData* block_data, Status status) {
     status_ = status;
   }
 
+  delete block_data;
+
   if (flush_block_data_count_.fetch_sub(1) == 1) {
     Status flush_status;
     {
@@ -65,8 +72,6 @@ void SliceFlushTask::BlockDataFlushed(BlockData* block_data, Status status) {
     }
     FlushDone(flush_status);
   }
-
-  delete block_data;
 }
 
 void SliceFlushTask::RunAsync(StatusCallback cb) {
@@ -116,7 +121,7 @@ void SliceFlushTask::RunAsync(StatusCallback cb) {
     vfs_hub_->GetBlockCache()->AsyncPut(
         cache::NewContext(), key, cache::Block(io_buffer),
         [this, block_data](auto&& ph1) {
-          BlockDataFlushed(block_data, std::forward<decltype(ph1)>(ph1));
+          BlockDataFlushedFromBlockCache(block_data, std::forward<decltype(ph1)>(ph1));
         },
         option);
   }
