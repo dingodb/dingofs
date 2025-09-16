@@ -54,5 +54,7 @@ bool ParentMemo::GetParent(Ino ino, Ino& parent) {
   return true;
 }
 
+void ParentMemo::DescribeByJson(Json::Value& value) { value["count"] = count_metrics_.get_value(); }
+
 }  // namespace mdsv2
 }  // namespace dingofs

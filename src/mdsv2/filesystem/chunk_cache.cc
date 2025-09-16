@@ -107,5 +107,7 @@ void ChunkCache::Clear() {
   count_metrics_.reset();
 }
 
+void ChunkCache::DescribeByJson(Json::Value& value) { value["count"] = count_metrics_.get_value(); }
+
 }  // namespace mdsv2
 }  // namespace dingofs

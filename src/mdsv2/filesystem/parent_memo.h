@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <unordered_map>
 
+#include "json/value.h"
 #include "mdsv2/common/type.h"
 #include "utils/concurrent/concurrent.h"
 
@@ -39,6 +40,8 @@ class ParentMemo {
   void Forget(Ino ino);
 
   bool GetParent(Ino ino, Ino& parent);
+
+  void DescribeByJson(Json::Value& value);
 
  private:
   uint64_t fs_id_{0};

@@ -250,5 +250,14 @@ std::vector<InodeSPtr> InodeCache::GetInodes(std::vector<uint64_t> inoes) {
 
 std::map<uint64_t, InodeSPtr> InodeCache::GetAllInodes() { return cache_.GetAll(); }
 
+void InodeCache::DescribeByJson(Json::Value& value) {
+  const auto metrics = cache_.GetCacheMetrics();
+
+  value["cache_count"] = metrics->cacheCount.get_value();
+  value["cache_bytes"] = metrics->cacheBytes.get_value();
+  value["cache_hit"] = metrics->cacheHit.get_value();
+  value["cache_miss"] = metrics->cacheMiss.get_value();
+}
+
 }  // namespace mdsv2
 }  // namespace dingofs

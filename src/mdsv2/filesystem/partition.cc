@@ -150,5 +150,14 @@ PartitionPtr PartitionCache::Get(Ino ino) {
 
 std::map<uint64_t, PartitionPtr> PartitionCache::GetAll() { return cache_.GetAll(); }
 
+void PartitionCache::DescribeByJson(Json::Value& value) {
+  const auto metrics = cache_.GetCacheMetrics();
+
+  value["cache_count"] = metrics->cacheCount.get_value();
+  value["cache_bytes"] = metrics->cacheBytes.get_value();
+  value["cache_hit"] = metrics->cacheHit.get_value();
+  value["cache_miss"] = metrics->cacheMiss.get_value();
+}
+
 }  // namespace mdsv2
 }  // namespace dingofs

@@ -16,6 +16,7 @@
 
 #include <brpc/reloadable_flags.h>
 #include <fcntl.h>
+#include <json/value.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
@@ -1018,7 +1019,7 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name) {
   return Status::OK();
 }
 
-Status FileSystem::ReadDir(Context& ctx, Ino ino, const std::string& last_name, uint limit, bool with_attr,
+Status FileSystem::ReadDir(Context& ctx, Ino ino, const std::string& last_name, uint32_t limit, bool with_attr,
                            std::vector<EntryOut>& entry_outs) {
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
@@ -2587,6 +2588,22 @@ void FileSystem::DescribeByJson(Json::Value& value) {
   value["fs_name"] = fs_info_->GetName();
   value["uuid"] = fs_info_->GetUUID();
   value["version"] = fs_info_->GetVersion();
+
+  Json::Value partition_cache;
+  partition_cache_.DescribeByJson(partition_cache);
+  value["partition_cache"] = partition_cache;
+
+  Json::Value inode_cache;
+  inode_cache_.DescribeByJson(inode_cache);
+  value["inode_cache"] = inode_cache;
+
+  Json::Value chunk_cache;
+  chunk_cache_.DescribeByJson(chunk_cache);
+  value["chunk_cache"] = chunk_cache;
+
+  Json::Value parent_memo;
+  parent_memo_->DescribeByJson(parent_memo);
+  value["parent_memo"] = parent_memo;
 }
 
 FileSystemSet::FileSystemSet(CoordinatorClientSPtr coordinator_client, IdGeneratorUPtr fs_id_generator,

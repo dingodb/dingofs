@@ -20,6 +20,7 @@
 #include <memory>
 #include <vector>
 
+#include "json/value.h"
 #include "mdsv2/common/type.h"
 #include "utils/concurrent/concurrent.h"
 
@@ -46,6 +47,8 @@ class ChunkCache {
   ChunkSPtr Get(uint64_t ino, uint64_t chunk_index);
   std::vector<ChunkSPtr> Get(uint64_t ino);
   void Clear();
+
+  void DescribeByJson(Json::Value& value);
 
  private:
   struct Key {

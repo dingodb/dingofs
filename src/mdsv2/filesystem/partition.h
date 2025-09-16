@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <memory>
 
+#include "json/value.h"
 #include "mdsv2/filesystem/dentry.h"
 #include "mdsv2/filesystem/inode.h"
 
@@ -75,6 +76,8 @@ class PartitionCache {
   PartitionPtr Get(Ino ino);
 
   std::map<uint64_t, PartitionPtr> GetAll();
+
+  void DescribeByJson(Json::Value& value);
 
  private:
   uint32_t fs_id_{0};

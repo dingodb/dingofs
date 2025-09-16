@@ -23,6 +23,7 @@
 #include <string>
 #include <vector>
 
+#include "json/value.h"
 #include "mdsv2/common/type.h"
 #include "utils/concurrent/concurrent.h"
 #include "utils/lru_cache.h"
@@ -104,6 +105,8 @@ class InodeCache {
   InodeSPtr GetInode(Ino ino);
   std::vector<InodeSPtr> GetInodes(std::vector<uint64_t> inoes);
   std::map<uint64_t, InodeSPtr> GetAllInodes();
+
+  void DescribeByJson(Json::Value& value);
 
  private:
   uint32_t fs_id_{0};
