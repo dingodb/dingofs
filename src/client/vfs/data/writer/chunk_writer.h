@@ -146,7 +146,6 @@ class ChunkWriter : public std::enable_shared_from_this<ChunkWriter> {
   Status CommitSlices(ContextSPtr ctx, const std::vector<Slice>& slices);
   void AsyncCommitSlices(ContextSPtr ctx, const std::vector<Slice>& slices,
                          StatusCallback cb);
-  void SlicesCommitedFromMeta(ContextSPtr ctx, CommmitContext* commit_ctx, Status s);
   void SlicesCommited(ContextSPtr ctx, CommmitContext* commit_ctx, Status s);
 
   void DoFlushAsync(StatusCallback cb, uint64_t chunk_flush_id);

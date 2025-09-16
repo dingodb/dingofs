@@ -371,30 +371,22 @@ void ChunkWriter::CommitFlushTasks(ContextSPtr ctx) {
     AsyncCommitSlices(
         ctx, commit_context->commit_slices,
         [self = shared_from_this(), ctx, commit_context](auto&& ph1) {
-          self->SlicesCommitedFromMeta(ctx, commit_context,
-                                       std::forward<decltype(ph1)>(ph1));
+          self->SlicesCommited(ctx, commit_context,
+                               std::forward<decltype(ph1)>(ph1));
         });
   } else {
     SlicesCommited(ctx, commit_context, GetErrorStatus());
   }
 }
 
-void ChunkWriter::SlicesCommitedFromMeta(ContextSPtr ctx,
-                                         CommmitContext* commit_ctx, Status s) {
+void ChunkWriter::SlicesCommited(ContextSPtr ctx, CommmitContext* commit_ctx,
+                                 Status s) {
   VLOG(4) << fmt::format(
-      "{} SlicesCommitedFromMeta commit_seq: {}, flush_task_count: {} "
+      "{} SlicesCommited commit_seq: {}, flush_task_count: {} "
       "batch_slices_count: {} commit_status: {}",
       UUID(), commit_ctx->commit_seq, commit_ctx->flush_tasks.size(),
       commit_ctx->commit_slices.size(), s.ToString());
 
-  hub_->GetFlushExecutor()->Execute(
-      [self = shared_from_this(), ctx, commit_ctx, s] {
-        self->SlicesCommited(ctx, commit_ctx, s);
-      });
-}
-
-void ChunkWriter::SlicesCommited(ContextSPtr ctx, CommmitContext* commit_ctx,
-                                 Status s) {
   if (!s.ok()) {
     LOG(WARNING) << fmt::format(
         "{} SlicesCommited commit_seq: {} fail commit, flush_task_count: {} "

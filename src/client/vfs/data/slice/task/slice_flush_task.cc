@@ -43,7 +43,7 @@ void SliceFlushTask::FlushDone(Status s) {
 
 void SliceFlushTask::BlockDataFlushedFromBlockCache(BlockData* block_data,
                                                     Status status) {
-  VLOG(4) << fmt::format(
+  VLOG(6) << fmt::format(
       "{} BlockDataFlushedFromBlockCache block_data: {}, status: {} ", UUID(),
       block_data->UUID(), status.ToString());
 
@@ -53,6 +53,10 @@ void SliceFlushTask::BlockDataFlushedFromBlockCache(BlockData* block_data,
 
 // take ownership of block_data
 void SliceFlushTask::BlockDataFlushed(BlockData* block_data, Status status) {
+  VLOG(6) << fmt::format(
+      "{} BlockDataFlushed block_data: {}, status: {} ", UUID(),
+      block_data->UUID(), status.ToString());
+
   if (!status.ok()) {
     LOG(WARNING) << fmt::format("{} Failed to flush block_data: {}, status: {}",
                                 UUID(), block_data->UUID(), status.ToString());
@@ -109,7 +113,7 @@ void SliceFlushTask::RunAsync(StatusCallback cb) {
     IOBuffer io_buffer = block_data->ToIOBuffer();
 
     cache::PutOption option{.writeback = writeback};
-    // TODO: Block should  take own the iobuf
+    // TODO: Block should take own the iobuf
     cache::BlockKey key(slice_data_context_.fs_id, slice_data_context_.ino,
                         slice_id_, block_index, 0);
 

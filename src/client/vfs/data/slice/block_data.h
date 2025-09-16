@@ -56,8 +56,6 @@ class BlockData {
 
   IOBuffer ToIOBuffer() const;
 
-  void FlushDone();
-
   uint64_t BlockIndex() const { return block_index_; }
 
   uint64_t ChunkOffset() const {

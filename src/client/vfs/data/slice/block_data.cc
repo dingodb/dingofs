@@ -53,11 +53,6 @@ void BlockData::FreePageData() {
   }
 }
 
-void BlockData::FlushDone() {
-  VLOG(6) << fmt::format("{} FlushDone", UUID());
-  FreePageData();
-}
-
 char* BlockData::AllocPage() {
   // TODO: add metric for time spent in page allocation
   butil::Timer timer;
