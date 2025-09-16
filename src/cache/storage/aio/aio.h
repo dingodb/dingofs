@@ -59,7 +59,7 @@ struct Aio : public Closure {
 
   void Wait() {
     std::unique_lock<BthreadMutex> lk(mutex);
-    while (!finish_) {
+    while (!finish) {
       cond.wait(lk);
     }
 
@@ -69,7 +69,7 @@ struct Aio : public Closure {
   void Run() override {
     std::lock_guard<BthreadMutex> lk(mutex);
     VLOG(9) << "Aio run over: aio = " << ToString();
-    finish_ = true;
+    finish = true;
     cond.notify_one();
   }
 
@@ -82,7 +82,7 @@ struct Aio : public Closure {
   bool for_read;
   int fixed_buffer_index;     // for write fixed
   std::vector<iovec> iovecs;  // for writev
-  bool finish_{false};
+  bool finish{false};
   BthreadMutex mutex;
   BthreadConditionVariable cond;
 };

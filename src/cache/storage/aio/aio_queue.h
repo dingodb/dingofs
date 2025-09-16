@@ -68,8 +68,7 @@ class AioQueueImpl : public AioQueue {
   InflightThrottleUPtr infights_;
   std::shared_ptr<IORing> ioring_;
   bthread::ExecutionQueueId<Aio*> prep_io_queue_id_;  // for prepare io
-  std::vector<Aio*> prep_aios_;
-  std::thread bg_wait_thread_;  // for wait io
+  std::thread bg_wait_thread_;                        // for wait io
 };
 
 }  // namespace cache

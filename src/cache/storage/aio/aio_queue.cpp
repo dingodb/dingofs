@@ -47,8 +47,7 @@ AioQueueImpl::AioQueueImpl(std::shared_ptr<IORing> io_ring)
     : running_(false),
       infights_(std::make_unique<InflightThrottle>(FLAGS_ioring_iodepth)),
       ioring_(io_ring),
-      prep_io_queue_id_({0}),
-      prep_aios_(kSubmitBatchSize) {}
+      prep_io_queue_id_({0}) {}
 
 Status AioQueueImpl::Start() {
   CHECK_NOTNULL(ioring_);
@@ -95,12 +94,10 @@ Status AioQueueImpl::Shutdown() {
   }
 
   bg_wait_thread_.join();
-  prep_aios_.clear();
 
   LOG(INFO) << "Aio queue is down.";
 
   CHECK_DOWN("Aio queue");
-  CHECK_EQ(prep_aios_.size(), 0);
   return Status::OK();
 }
 
@@ -135,7 +132,8 @@ int AioQueueImpl::PrepareIO(void* meta, bthread::TaskIterator<Aio*>& iter) {
     return 0;
   }
 
-  std::vector<Aio*> prep_aios_;
+  std::vector<Aio*> prep_aios;
+  prep_aios.reserve(kSubmitBatchSize);
   AioQueueImpl* self = static_cast<AioQueueImpl*>(meta);
   auto ioring = self->ioring_;
   for (; iter; iter++) {
@@ -147,17 +145,17 @@ int AioQueueImpl::PrepareIO(void* meta, bthread::TaskIterator<Aio*>& iter) {
       continue;
     }
 
-    prep_aios_.emplace_back(aio);
-    if (prep_aios_.size() == kSubmitBatchSize) {
-      BatchNextStep(prep_aios_, "execute");
-      self->BatchSubmitIO(prep_aios_);
-      prep_aios_.clear();
+    prep_aios.emplace_back(aio);
+    if (prep_aios.size() == kSubmitBatchSize) {
+      BatchNextStep(prep_aios, "execute");
+      self->BatchSubmitIO(prep_aios);
+      prep_aios.clear();
     }
   }
 
-  if (!prep_aios_.empty()) {
-    BatchNextStep(prep_aios_, "execute");
-    self->BatchSubmitIO(prep_aios_);
+  if (!prep_aios.empty()) {
+    BatchNextStep(prep_aios, "execute");
+    self->BatchSubmitIO(prep_aios);
   }
   return 0;
 }
