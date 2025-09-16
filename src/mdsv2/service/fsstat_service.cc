@@ -65,16 +65,19 @@ static std::string RenderHead(const std::string& title) {
     font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
   }
   .red-text {
-  color: red;
+    color: red;
   }
   .blue-text {
-  color: blue;
+    color: blue;
   }
   .green-text {
-  color: green;
+    color: green;
   }
   .bold-text {
-  font-weight: bold;
+    font-weight: bold;
+  }
+  a {
+    text-decoration: none;
   }
 </style>)";
 
@@ -86,18 +89,6 @@ static std::string RenderHead(const std::string& title) {
 
   return buf.to_string();
 }
-
-static std::string RenderMountpoint(const pb::mdsv2::FsInfo& fs_info) {
-  std::string result;
-  for (const auto& mountpoint : fs_info.mount_points()) {
-    result += fmt::format("{}:{}", mountpoint.hostname(), mountpoint.port());
-    result += "<br>";
-    result += mountpoint.path();
-    result += "<br>";
-  }
-
-  return result;
-};
 
 static std::string RenderStorageInfo(const pb::mdsv2::FsExtra& fs_extra) {
   std::string result;
@@ -270,7 +261,9 @@ static void RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes, butil:
     os << "<td>" << render_navigation_func(fs_info) << "</td>";
     os << "<td>" << render_time_func(fs_info) << "</td>";
     os << "<td>" << fmt::format("{}hour", fs_info.recycle_time_hour()) << "</td>";
-    os << "<td>" << RenderMountpoint(fs_info) << "</td>";
+    os << fmt::format(R"(<td><a href="FsStatService/mountpoint/{}" target="_blank">Goto</a>&nbsp;[{}]</td>)",
+                      fs_info.fs_name(), fs_info.mount_points_size());
+
     os << "<td>" << RenderStorageInfo(fs_info.extra()) << "</td>";
     os << "<td>" << fs_info.uuid() << "</td>";
     os << "</tr>";
@@ -1219,6 +1212,39 @@ static void RenderFsDetailsPage(const FsInfoEntry& fs_info, butil::IOBufBuilder&
   RenderJsonPage("dingofs fs details", header, json, os);
 }
 
+static void RenderFsMountpointPage(const FsInfoEntry& fs_info, butil::IOBufBuilder& os) {
+  os << "<!DOCTYPE html><html>";
+
+  os << "<head>" << RenderHead("dinfofs mountpoint") << "</head>";
+  os << "<body>";
+  os << fmt::format(R"(<h1 style="text-align:center;">FileSystem({}) MountPoint</h1>)", fs_info.fs_id());
+
+  os << R"(<div style="margin: 12px;font-size:smaller">)";
+  os << fmt::format(R"(<h3>Mountpoint [{}]</h3>)", fs_info.mount_points_size());
+  os << R"(<table class="gridtable sortable" border=1>)";
+  os << "<tr>";
+  os << "<th>ClientId</th>";
+  os << "<th>Hostname</th>";
+  os << "<th>Port</th>";
+  os << "<th>Path</th>";
+  os << "</tr>";
+
+  for (const auto& mountpoint : fs_info.mount_points()) {
+    os << "<tr>";
+
+    os << "<td>" << mountpoint.client_id() << "</td>";
+    os << "<td>" << mountpoint.hostname() << "</td>";
+    os << "<td>" << mountpoint.port() << "</td>";
+    os << "<td>" << mountpoint.path() << "</td>";
+
+    os << "</tr>";
+  }
+
+  os << "</table>";
+  os << "</div>";
+  os << "</body>";
+}
+
 static void RenderFileSessionPage(uint32_t fs_id, const std::vector<FileSessionEntry>& file_sessions,
                                   butil::IOBufBuilder& os) {
   os << "<!DOCTYPE html><html>";
@@ -1585,6 +1611,21 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
     auto status = file_system_set->GetFsInfo(ctx, fs_name, fs_info);
     if (status.ok()) {
       RenderFsDetailsPage(fs_info, os);
+
+    } else {
+      os << fmt::format("Get fs({}) info fail, status({}).", fs_name, status.error_str());
+    }
+
+  } else if (params.size() == 2 && params[0] == "mountpoint") {
+    // /FsStatService/mountpoint/{fs_name}
+
+    std::string fs_name = params[1];
+    auto file_system_set = Server::GetInstance().GetFileSystemSet();
+    Context ctx;
+    FsInfoEntry fs_info;
+    auto status = file_system_set->GetFsInfo(ctx, fs_name, fs_info);
+    if (status.ok()) {
+      RenderFsMountpointPage(fs_info, os);
 
     } else {
       os << fmt::format("Get fs({}) info fail, status({}).", fs_name, status.error_str());

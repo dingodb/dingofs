@@ -182,6 +182,7 @@ bool MDSV2FileSystem::MountFs() {
   pb::mdsv2::MountPoint mount_point;
   mount_point.set_client_id(client_id_.ID());
   mount_point.set_hostname(client_id_.Hostname());
+  mount_point.set_port(client_id_.Port());
   mount_point.set_path(client_id_.Mountpoint());
   mount_point.set_cto(false);
 
