@@ -144,6 +144,7 @@ Status Heartbeat::SendHeartbeat(Context& ctx, CacheMemberEntry& heartbeat_cache_
 Status Heartbeat::GetMDSList(Context& ctx, std::vector<MdsEntry>& mdses) {
   auto& trace = ctx.GetTrace();
   ScanMdsOperation operation(trace);
+  operation.SetIsolationLevel(Txn::kReadCommitted);
 
   auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
@@ -182,6 +183,7 @@ Status Heartbeat::GetMDSList(std::vector<MDSMeta>& mdses) {
 Status Heartbeat::GetClientList(std::vector<ClientEntry>& clients) {
   Trace trace;
   ScanClientOperation operation(trace);
+  operation.SetIsolationLevel(Txn::kReadCommitted);
 
   auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
@@ -205,6 +207,7 @@ Status Heartbeat::CleanClient(const std::string& client_id) {
 Status Heartbeat::GetCacheMemberList(std::vector<CacheMemberEntry>& cache_members) {
   Trace trace;
   ScanCacheMemberOperation operation(trace);
+  operation.SetIsolationLevel(Txn::kReadCommitted);
 
   auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {

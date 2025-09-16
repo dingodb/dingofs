@@ -153,8 +153,8 @@ bool Inode::UpdateIf(const AttrEntry& attr) {
                                  attr_.version(), attr.version());
 
   if (attr.version() <= attr_.version()) {
-    DINGO_LOG(WARNING) << fmt::format("[inode.{}] version abnormal, old({}) new({}).", attr_.ino(), attr_.version(),
-                                      attr.version());
+    DINGO_LOG(DEBUG) << fmt::format("[inode.{}] version abnormal, old({}) new({}).", attr_.ino(), attr_.version(),
+                                    attr.version());
     return false;
   }
 
@@ -170,8 +170,8 @@ bool Inode::UpdateIf(AttrEntry&& attr) {
                                  attr_.version(), attr.version());
 
   if (attr.version() <= attr_.version()) {
-    DINGO_LOG(WARNING) << fmt::format("[inode.{}] version abnormal, old({}) new({}).", attr_.ino(), attr_.version(),
-                                      attr.version());
+    DINGO_LOG(DEBUG) << fmt::format("[inode.{}] version abnormal, old({}) new({}).", attr_.ino(), attr_.version(),
+                                    attr.version());
     return false;
   }
 

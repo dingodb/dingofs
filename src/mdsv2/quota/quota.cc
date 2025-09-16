@@ -611,10 +611,7 @@ Status QuotaManager::FlushFsUsage() {
   FlushFsUsageOperation operation(trace, fs_id, usages);
 
   auto status = operation_processor_->RunAlone(&operation);
-  if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[quota.{}] flush fs quota fail, status({}).", fs_id, status.error_str());
-    return status;
-  }
+  if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
 
@@ -673,6 +670,7 @@ Status QuotaManager::LoadFsQuota() {
   const uint32_t fs_id = fs_info_->GetFsId();
   Trace trace;
   GetFsQuotaOperation operation(trace, fs_id);
+  operation.SetIsolationLevel(Txn::kReadCommitted);
 
   auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
@@ -695,6 +693,7 @@ Status QuotaManager::LoadAllDirQuota() {
   const uint32_t fs_id = fs_info_->GetFsId();
   Trace trace;
   LoadDirQuotasOperation operation(trace, fs_id);
+  operation.SetIsolationLevel(Txn::kReadCommitted);
 
   auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {

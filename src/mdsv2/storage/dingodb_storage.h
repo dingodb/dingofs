@@ -53,12 +53,12 @@ class DingodbStorage : public KVStorage {
   Status Delete(const std::string& key) override;
   Status Delete(const std::vector<std::string>& keys) override;
 
-  TxnUPtr NewTxn() override;
+  TxnUPtr NewTxn(Txn::IsolationLevel isolation_level = Txn::kSnapshotIsolation) override;
 
  private:
   using SdkTxnUPtr = std::unique_ptr<dingodb::sdk::Transaction>;
 
-  SdkTxnUPtr NewSdkTxn();
+  SdkTxnUPtr NewSdkTxn(Txn::IsolationLevel isolation_level = Txn::kSnapshotIsolation);
 
   dingodb::sdk::Client* client_{nullptr};
 };

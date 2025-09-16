@@ -2445,7 +2445,7 @@ Status OperationProcessor::RunAlone(Operation* operation) {
   bool is_one_pc = false;
   do {
     Duration once_duration;
-    auto txn = kv_storage_->NewTxn();
+    auto txn = kv_storage_->NewTxn(operation->GetIsolationLevel());
     if (txn == nullptr) {
       status = Status(pb::error::EBACKEND_STORE, "new transaction fail");
       continue;

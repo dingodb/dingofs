@@ -122,9 +122,11 @@ Status DingodbStorage::IsExistTable(const std::string& start_key, const std::str
   return region_ids.empty() ? Status(pb::error::ENOT_FOUND, "table not exist") : Status::OK();
 }
 
-DingodbStorage::SdkTxnUPtr DingodbStorage::NewSdkTxn() {
+DingodbStorage::SdkTxnUPtr DingodbStorage::NewSdkTxn(Txn::IsolationLevel isolation_level) {
   dingodb::sdk::TransactionOptions options;
-  options.isolation = dingodb::sdk::TransactionIsolation::kSnapshotIsolation;
+  options.isolation = (isolation_level == Txn::kSnapshotIsolation)
+                          ? dingodb::sdk::TransactionIsolation::kSnapshotIsolation
+                          : dingodb::sdk::TransactionIsolation::kReadCommitted;
   options.kind = dingodb::sdk::kOptimistic;
   options.keep_alive_ms = kTxnKeepAliveMs;
 
@@ -366,7 +368,9 @@ Status DingodbStorage::Delete(const std::vector<std::string>& keys) {
   return Status::OK();
 }
 
-TxnUPtr DingodbStorage::NewTxn() { return std::make_unique<DingodbTxn>(NewSdkTxn()); }
+TxnUPtr DingodbStorage::NewTxn(Txn::IsolationLevel isolation_level) {
+  return std::make_unique<DingodbTxn>(NewSdkTxn(isolation_level));
+}
 
 int64_t DingodbTxn::ID() const { return txn_->ID(); }
 

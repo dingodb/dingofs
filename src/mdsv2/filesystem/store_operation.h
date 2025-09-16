@@ -190,6 +190,9 @@ class Operation {
   virtual Ino GetIno() const = 0;
   virtual uint64_t GetTime() const { return time_ns_; }
 
+  void SetIsolationLevel(Txn::IsolationLevel level) { isolation_level_ = level; }
+  Txn::IsolationLevel GetIsolationLevel() const { return isolation_level_; }
+
   virtual std::vector<std::string> PrefetchKey() { return {}; }
 
   void SetEvent(bthread::CountdownEvent* event) { event_ = event; }
@@ -216,6 +219,8 @@ class Operation {
 
   bthread::CountdownEvent* event_{nullptr};
   Trace& trace_;
+
+  Txn::IsolationLevel isolation_level_{Txn::kSnapshotIsolation};
 };
 
 class CreateFsOperation : public Operation {

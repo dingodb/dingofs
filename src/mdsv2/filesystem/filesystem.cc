@@ -931,7 +931,9 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
   inode_cache_.PutInode(ino, inode);
   partition->PutChild(dentry);
   parent_inode->UpdateIf(parent_attr);
-  partition_cache_.Put(ino, Partition::New(inode));
+  if (IsMonoPartition()) {
+    partition_cache_.Put(ino, Partition::New(inode));
+  }
 
   // update quota
   std::string reason = fmt::format("mkdir.{}.{}", parent, param.name);
@@ -2578,7 +2580,7 @@ Status FileSystem::UpdatePartitionPolicy(const std::map<uint64_t, BucketSetEntry
 
   auto& result = operation.GetResult();
 
-  RefreshFsInfo(result.fs_info, "update_partition_policy");
+  RefreshFsInfo(result.fs_info, reason);
 
   return Status::OK();
 }
@@ -2956,6 +2958,7 @@ Status FileSystemSet::GetAllFsInfo(Context& ctx, bool include_deleted, std::vect
   auto& trace = ctx.GetTrace();
 
   ScanFsOperation operation(trace);
+  operation.SetIsolationLevel(Txn::kReadCommitted);
 
   auto status = RunOperation(&operation);
   if (!status.ok()) return status;
@@ -3197,6 +3200,7 @@ Status FileSystemSet::GetFileSessions(uint32_t fs_id, std::vector<FileSessionEnt
     file_sessions.push_back(file_session);
     return true;
   });
+  operation.SetIsolationLevel(Txn::kReadCommitted);
 
   return RunOperation(&operation);
 }
@@ -3209,6 +3213,7 @@ Status FileSystemSet::GetDelFiles(uint32_t fs_id, std::vector<AttrEntry>& delfil
     ++count;
     return true;
   });
+  operation.SetIsolationLevel(Txn::kReadCommitted);
 
   return RunOperation(&operation);
 }
@@ -3221,6 +3226,7 @@ Status FileSystemSet::GetDelSlices(uint32_t fs_id, std::vector<TrashSliceList>& 
     ++count;
     return true;
   });
+  operation.SetIsolationLevel(Txn::kReadCommitted);
 
   return RunOperation(&operation);
 }
@@ -3233,6 +3239,7 @@ Status FileSystemSet::GetFsOpLogs(uint32_t fs_id, std::vector<FsOpLog>& fs_op_lo
     ++count;
     return true;
   });
+  operation.SetIsolationLevel(Txn::kReadCommitted);
 
   return RunOperation(&operation);
 }

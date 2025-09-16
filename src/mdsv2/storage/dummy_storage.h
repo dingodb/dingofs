@@ -49,7 +49,7 @@ class DummyStorage : public KVStorage {
   Status Delete(const std::string& key) override;
   Status Delete(const std::vector<std::string>& keys) override;
 
-  TxnUPtr NewTxn() override;
+  TxnUPtr NewTxn(Txn::IsolationLevel isolation_level = Txn::kSnapshotIsolation) override;
 
  private:
   struct Table {
@@ -68,7 +68,7 @@ class DummyStorage : public KVStorage {
 
 class DummyTxn : public Txn {
  public:
-  DummyTxn(DummyStorage* storage);
+  DummyTxn(DummyStorage* storage, Txn::IsolationLevel isolation_level);
   ~DummyTxn() override = default;
 
   int64_t ID() const override;
@@ -89,6 +89,8 @@ class DummyTxn : public Txn {
  private:
   int64_t txn_id_{0};
   DummyStorage* storage_{nullptr};
+
+  Txn::IsolationLevel isolation_level_;
 };
 
 }  // namespace mdsv2

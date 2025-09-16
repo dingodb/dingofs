@@ -28,7 +28,7 @@ namespace dingofs {
 namespace mdsv2 {
 
 struct KeyValue {
-  enum class OpType {
+  enum class OpType : uint8_t {
     kPut = 0,
     kDelete = 1,
   };
@@ -52,6 +52,32 @@ struct KeyValue {
 class Txn;
 using TxnPtr = std::shared_ptr<Txn>;
 using TxnUPtr = std::unique_ptr<Txn>;
+
+class Txn {
+ public:
+  enum IsolationLevel : uint8_t {
+    kReadCommitted = 0,
+    kSnapshotIsolation = 1,
+  };
+
+  virtual ~Txn() = default;
+
+  virtual int64_t ID() const = 0;
+  virtual Status Put(const std::string& key, const std::string& value) = 0;
+  virtual Status PutIfAbsent(const std::string& key, const std::string& value) = 0;
+  virtual Status Delete(const std::string& key) = 0;
+
+  virtual Status Get(const std::string& key, std::string& value) = 0;
+  virtual Status BatchGet(const std::vector<std::string>& keys, std::vector<KeyValue>& kvs) = 0;
+  virtual Status Scan(const Range& range, uint64_t limit, std::vector<KeyValue>& kvs) = 0;
+
+  using ScanHandlerType = std::function<bool(const std::string& key, const std::string& value)>;
+  virtual Status Scan(const Range& range, ScanHandlerType handler) = 0;
+
+  virtual Status Commit() = 0;
+
+  virtual Trace::Txn GetTrace() = 0;
+};
 
 class KVStorage {
  public:
@@ -86,30 +112,9 @@ class KVStorage {
   virtual Status Delete(const std::string& key) = 0;
   virtual Status Delete(const std::vector<std::string>& keys) = 0;
 
-  virtual TxnUPtr NewTxn() = 0;
+  virtual TxnUPtr NewTxn(Txn::IsolationLevel isolation_level = Txn::kSnapshotIsolation) = 0;
 };
 using KVStorageSPtr = std::shared_ptr<KVStorage>;
-
-class Txn {
- public:
-  virtual ~Txn() = default;
-
-  virtual int64_t ID() const = 0;
-  virtual Status Put(const std::string& key, const std::string& value) = 0;
-  virtual Status PutIfAbsent(const std::string& key, const std::string& value) = 0;
-  virtual Status Delete(const std::string& key) = 0;
-
-  virtual Status Get(const std::string& key, std::string& value) = 0;
-  virtual Status BatchGet(const std::vector<std::string>& keys, std::vector<KeyValue>& kvs) = 0;
-  virtual Status Scan(const Range& range, uint64_t limit, std::vector<KeyValue>& kvs) = 0;
-
-  using ScanHandlerType = std::function<bool(const std::string& key, const std::string& value)>;
-  virtual Status Scan(const Range& range, ScanHandlerType handler) = 0;
-
-  virtual Status Commit() = 0;
-
-  virtual Trace::Txn GetTrace() = 0;
-};
 
 }  // namespace mdsv2
 }  // namespace dingofs

@@ -162,9 +162,14 @@ Status DummyStorage::Delete(const std::vector<std::string>& keys) {
   return Status::OK();
 }
 
-TxnUPtr DummyStorage::NewTxn() { return std::make_unique<DummyTxn>(this); }
+TxnUPtr DummyStorage::NewTxn(Txn::IsolationLevel isolation_level) {
+  return std::make_unique<DummyTxn>(this, isolation_level);
+}
 
-DummyTxn::DummyTxn(DummyStorage* storage) : storage_(storage) { txn_id_ = Helper::TimestampNs(); }
+DummyTxn::DummyTxn(DummyStorage* storage, Txn::IsolationLevel isolation_level)
+    : storage_(storage), isolation_level_(isolation_level) {
+  txn_id_ = Helper::TimestampNs();
+}
 
 int64_t DummyTxn::ID() const { return txn_id_; }
 

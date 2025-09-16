@@ -286,6 +286,7 @@ Status CacheGroupMemberManager::ListCacheMemberFromStore(Context& ctx,
                                                          std::vector<CacheMemberEntry>& cache_member_entries) {
   auto& trace = ctx.GetTrace();
   ScanCacheMemberOperation operation(trace);
+  operation.SetIsolationLevel(Txn::kReadCommitted);
 
   auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {

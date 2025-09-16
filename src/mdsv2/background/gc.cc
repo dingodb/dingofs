@@ -162,6 +162,7 @@ static Status GetChunks(OperationProcessorSPtr operation_processor, uint32_t fs_
                         std::vector<ChunkEntry>& chunks) {
   class Trace trace;
   ScanChunkOperation operation(trace, fs_id, ino);
+  operation.SetIsolationLevel(Txn::kReadCommitted);
 
   auto status = operation_processor->RunAlone(&operation);
   if (!status.ok()) {
@@ -534,6 +535,7 @@ void GcProcessor::ScanDelSlice(const FsInfoEntry& fs_info) {
 
     return true;
   });
+  operation.SetIsolationLevel(Txn::kReadCommitted);
 
   auto status = operation_processor_->RunAlone(&operation);
 
@@ -585,6 +587,7 @@ void GcProcessor::ScanDelFile(const FsInfoEntry& fs_info) {
 
     return true;
   });
+  operation.SetIsolationLevel(Txn::kReadCommitted);
 
   auto status = operation_processor_->RunAlone(&operation);
 
@@ -652,6 +655,7 @@ void GcProcessor::ScanExpiredFileSession(const FsInfoEntry& fs_info) {
 
     return true;
   });
+  operation.SetIsolationLevel(Txn::kReadCommitted);
 
   status = operation_processor_->RunAlone(&operation);
 
@@ -712,6 +716,7 @@ void GcProcessor::ScanDelFs(const FsInfoEntry& fs_info) {
 
         return true;
       });
+  operation.SetIsolationLevel(Txn::kReadCommitted);
 
   auto status = operation_processor_->RunAlone(&operation);
 
