@@ -467,14 +467,16 @@ static void RenderGitInfo(butil::IOBufBuilder& os) {
   os << R"(</div>)";
 }
 
-static void RenderJsonPage(const std::string& header, const std::string& json, butil::IOBufBuilder& os) {
+static void RenderJsonPage(const std::string& title, const std::string& header, const std::string& json,
+                           butil::IOBufBuilder& os) {
   os << R"(<!DOCTYPE html><html lang="zh-CN">)";
 
-  os << R"(
-<head>
+  os << R"(<head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>dingofs inode details</title>
+  )";
+  os << fmt::format(R"(<title>{}</title>)", title);
+  os << R"(
   <style>
     body {
       font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
@@ -727,7 +729,7 @@ void FsStatServiceImpl::RenderServerPage(butil::IOBufBuilder& os) {
   Json::StreamWriterBuilder writer;
   std::string header = fmt::format("MDS Server({})", self_mds_meta.ID());
 
-  RenderJsonPage(header, Json::writeString(writer, root), os);
+  RenderJsonPage("dingofs mds details", header, Json::writeString(writer, root), os);
 }
 
 static void RenderQuotaPage(FileSystemSPtr fs, butil::IOBufBuilder& os) {
@@ -1214,7 +1216,7 @@ static void RenderFsDetailsPage(const FsInfoEntry& fs_info, butil::IOBufBuilder&
   std::string header = fmt::format("FileSystem: {}({})", fs_info.fs_name(), fs_info.fs_id());
   std::string json;
   Helper::ProtoToJson(fs_info, json);
-  RenderJsonPage(header, json, os);
+  RenderJsonPage("dingofs fs details", header, json, os);
 }
 
 static void RenderFileSessionPage(uint32_t fs_id, const std::vector<FileSessionEntry>& file_sessions,
@@ -1407,7 +1409,7 @@ static void RenderInodePage(const AttrEntry& attr, butil::IOBufBuilder& os) {
   std::string header = fmt::format("Inode: {}", attr.ino());
   std::string json;
   Helper::ProtoToJson(attr, json);
-  RenderJsonPage(header, json, os);
+  RenderJsonPage("dingofs inode details", header, json, os);
 }
 
 static void RenderChunk(uint64_t& count, uint64_t chunk_size, ChunkEntry chunk, butil::IOBufBuilder& os) {

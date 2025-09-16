@@ -14,8 +14,6 @@
 
 #include "mdsv2/background/gc.h"
 
-#include <glog/logging.h>
-
 #include <atomic>
 #include <cmath>
 #include <cstddef>
@@ -31,6 +29,7 @@
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/format.h"
 #include "gflags/gflags.h"
+#include "glog/logging.h"
 #include "mdsv2/common/codec.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"

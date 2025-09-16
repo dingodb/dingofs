@@ -16,7 +16,6 @@
 #define DINGOFS_MDV2_BACKGROUND_MDS_MONITOR_H_
 
 #include <atomic>
-#include <map>
 #include <memory>
 
 #include "mdsv2/common/distribution_lock.h"

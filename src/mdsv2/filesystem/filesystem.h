@@ -15,7 +15,6 @@
 #ifndef DINGOFS_MDV2_FILESYSTEM_H_
 #define DINGOFS_MDV2_FILESYSTEM_H_
 
-#include <json/value.h>
 #include <sys/types.h>
 
 #include <atomic>
@@ -26,6 +25,7 @@
 #include <vector>
 
 #include "dingofs/mdsv2.pb.h"
+#include "json/value.h"
 #include "mdsv2/common/context.h"
 #include "mdsv2/common/status.h"
 #include "mdsv2/common/type.h"

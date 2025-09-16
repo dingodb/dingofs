@@ -14,8 +14,6 @@
 
 #include "mdsv2/background/monitor.h"
 
-#include <glog/logging.h>
-
 #include <atomic>
 #include <cstdint>
 #include <vector>
@@ -25,6 +23,7 @@
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/core.h"
 #include "fmt/format.h"
+#include "glog/logging.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
 #include "mdsv2/common/partition_helper.h"

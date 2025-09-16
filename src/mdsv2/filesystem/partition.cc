@@ -14,11 +14,10 @@
 
 #include "mdsv2/filesystem/partition.h"
 
-#include <fmt/format.h>
-
 #include <cstdint>
 #include <memory>
 
+#include "fmt/format.h"
 #include "mdsv2/common/logging.h"
 
 namespace dingofs {

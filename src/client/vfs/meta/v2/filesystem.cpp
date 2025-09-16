@@ -17,6 +17,7 @@
 #include <fcntl.h>
 #include <openssl/rsa.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -248,6 +249,9 @@ Status MDSV2FileSystem::StatFs(ContextSPtr ctx, Ino, FsStat* fs_stat) {
   if (fs_stat->max_inodes == 0) {
     fs_stat->max_inodes = INT64_MAX;
   }
+
+  fs_stat->used_bytes = std::max<int64_t>(fs_stat->used_bytes, 0);
+  fs_stat->used_inodes = std::max<int64_t>(fs_stat->used_inodes, 0);
 
   return status;
 };

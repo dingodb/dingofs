@@ -14,16 +14,16 @@
 
 #include "mdsv2/server.h"
 
-#include <json/value.h>
-
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "fmt/core.h"
 #include "fmt/format.h"
 #include "gflags/gflags.h"
 #include "gflags/gflags_declare.h"
 #include "glog/logging.h"
+#include "json/value.h"
 #include "mdsv2/background/cache_member_sync.h"
 #include "mdsv2/background/fsinfo_sync.h"
 #include "mdsv2/background/heartbeat.h"
@@ -38,6 +38,10 @@
 #include "mdsv2/statistics/fs_stat.h"
 #include "mdsv2/storage/dingodb_storage.h"
 #include "options/mdsv2/option.h"
+
+#ifdef USE_TCMALLOC
+#include "gperftools/malloc_extension.h"
+#endif
 
 namespace dingofs {
 namespace mdsv2 {
@@ -520,31 +524,52 @@ void Server::Stop() {
   monitor_->Destroy();
 }
 
+static void DescribeTcmallocByJson(Json::Value& value) {
+#ifdef USE_TCMALLOC
+  auto* tcmalloc = MallocExtension::instance();
+  if (tcmalloc != nullptr) {
+    std::string stat_buf(4096, '\0');
+    tcmalloc->GetStats(stat_buf.data(), stat_buf.size());
+
+    std::vector<std::string> lines;
+    Helper::SplitString(stat_buf, '\n', lines);
+    for (size_t i = 0; i < lines.size() - 1; ++i) {
+      value[fmt::format("stats-{:0>2}", i)] = lines[i];
+    }
+  }
+#endif
+}
+
 void Server::DescribeByJson(Json::Value& value) {
+  // tcmalloc
+  Json::Value tcmalloc_value(Json::objectValue);
+  DescribeTcmallocByJson(tcmalloc_value);
+  value["a-tcmalloc"] = tcmalloc_value;
+
   // self mds meta
   Json::Value self_mds_value;
   self_mds_meta_.DescribeByJson(self_mds_value);
-  value["self_mds_meta"] = self_mds_value;
+  value["b-self_mds_meta"] = self_mds_value;
 
   // mds meta map
   Json::Value mds_map_value(Json::arrayValue);
   mds_meta_map_->DescribeByJson(mds_map_value);
-  value["mds_meta_map"] = mds_map_value;
-
-  // crontab
-  Json::Value crontab_value(Json::arrayValue);
-  crontab_manager_.DescribeByJson(crontab_value);
-  value["crontab"] = crontab_value;
-
-  // mds service
-  Json::Value mds_service_value;
-  mds_service_->DescribeByJson(mds_service_value);
-  value["mds_service"] = mds_service_value;
+  value["c-mds_meta_map"] = mds_map_value;
 
   // file_system_set
   Json::Value fsset_value;
   file_system_set_->DescribeByJson(fsset_value);
-  value["file_system_set"] = fsset_value;
+  value["d-file_system_set"] = fsset_value;
+
+  // mds service
+  Json::Value mds_service_value;
+  mds_service_->DescribeByJson(mds_service_value);
+  value["e-mds_service"] = mds_service_value;
+
+  // crontab
+  Json::Value crontab_value(Json::arrayValue);
+  crontab_manager_.DescribeByJson(crontab_value);
+  value["f-crontab"] = crontab_value;
 
   // gc
 

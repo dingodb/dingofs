@@ -14,8 +14,6 @@
 
 #include "mdsv2/background/cache_member_sync.h"
 
-#include "mdsv2/server.h"
-
 namespace dingofs {
 namespace mdsv2 {
 

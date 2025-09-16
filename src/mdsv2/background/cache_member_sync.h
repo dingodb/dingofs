@@ -16,7 +16,6 @@
 #define DINGOFS_MDSV2_BACKGROUND_CACHE_MEMBER_SYNC_H_
 
 #include "mdsv2/cachegroup/member_manager.h"
-#include "mdsv2/common/runnable.h"
 
 namespace dingofs {
 namespace mdsv2 {
@@ -27,7 +26,7 @@ using CacheMemberSynchronizerSPtr = std::shared_ptr<CacheMemberSynchronizer>;
 class CacheMemberSynchronizer {
  public:
   CacheMemberSynchronizer(CacheGroupMemberManagerSPtr cache_group_member_manager)
-      : cache_group_member_manager_(cache_group_member_manager){};
+      : cache_group_member_manager_(cache_group_member_manager) {};
   ~CacheMemberSynchronizer() = default;
 
   static CacheMemberSynchronizerSPtr New(CacheGroupMemberManagerSPtr cache_group_member_manager) {

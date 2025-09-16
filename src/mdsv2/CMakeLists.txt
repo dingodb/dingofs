@@ -25,7 +25,6 @@ endif()
 add_compile_options(-Wall -Wno-reorder -Wno-overloaded-virtual)
 
 add_subdirectory(common)
-add_subdirectory(cache)
 add_subdirectory(coordinator)
 add_subdirectory(filesystem)
 add_subdirectory(mds)
@@ -47,7 +46,6 @@ target_link_libraries(mdsv2_lib
   PROTO_OBJS
 
   mdsv2_common
-  mdsv2_cache
   mdsv2_coordinator
   mdsv2_filesystem
   mdsv2_storage
