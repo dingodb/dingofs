@@ -166,23 +166,6 @@ void BlockAccesserImpl::AsyncPut(
   data_accesser_->AsyncPut(context);
 }
 
-void BlockAccesserImpl::AsyncPut(const std::string& key, const char* buffer,
-                                 size_t length, RetryCallback retry_cb) {
-  auto put_obj_ctx = std::make_shared<PutObjectAsyncContext>();
-  put_obj_ctx->key = key;
-  put_obj_ctx->buffer = buffer;
-  put_obj_ctx->buffer_size = length;
-  put_obj_ctx->start_time = butil::cpuwide_time_us();
-  put_obj_ctx->cb =
-      [&, retry_cb](const std::shared_ptr<PutObjectAsyncContext>& ctx) {
-        if (retry_cb(ctx->status) == RetryStrategy::kRetry) {
-          AsyncPut(ctx);
-        }
-      };
-
-  AsyncPut(put_obj_ctx);
-}
-
 Status BlockAccesserImpl::Get(const std::string& key, std::string* data) {
   Status s;
   BlockAccessLogGuard log(butil::cpuwide_time_us(), [&]() {
@@ -254,25 +237,6 @@ Status BlockAccesserImpl::Range(const std::string& key, off_t offset,
 
   s = data_accesser_->Range(key, offset, length, buffer);
   return s;
-}
-
-void BlockAccesserImpl::AsyncRange(const std::string& key, off_t offset,
-                                   size_t length, char* buffer,
-                                   RetryCallback retry_cb) {
-  auto user_ctx = std::make_shared<GetObjectAsyncContext>();
-
-  user_ctx->key = key;
-  user_ctx->buf = buffer;
-  user_ctx->offset = offset;
-  user_ctx->len = length;
-  user_ctx->cb =
-      [this, retry_cb](const std::shared_ptr<GetObjectAsyncContext>& user_ctx) {
-        if (retry_cb(user_ctx->status) == RetryStrategy::kRetry) {
-          AsyncGet(user_ctx);
-        }
-      };
-
-  AsyncGet(user_ctx);
 }
 
 bool BlockAccesserImpl::BlockExist(const std::string& key) {

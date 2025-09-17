@@ -18,6 +18,7 @@
 #define DINGOFS_SRC_OPTIONS_CLIENT_OPTION_H_
 
 #include <gflags/gflags_declare.h>
+
 #include "blockaccess/accesser_common.h"
 #include "common/const.h"
 #include "options/cache/option.h"
@@ -149,6 +150,8 @@ static void InitBlockCacheOption(utils::Configuration* c) {
                 &cache::FLAGS_upload_stage_max_inflights);
     c->GetValue("block_cache.prefetch_max_inflights",
                 &cache::FLAGS_prefetch_max_inflights);
+    c->GetValue("block_cache.storage_download_retry_timeout_s",
+                &cache::FLAGS_storage_download_retry_timeout_s);
   }
 
   {  // disk cache option

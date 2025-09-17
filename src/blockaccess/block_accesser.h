@@ -32,13 +32,6 @@
 namespace dingofs {
 namespace blockaccess {
 
-enum class RetryStrategy : uint8_t {
-  kRetry = 0,
-  kNotRetry = 1,
-};
-
-using RetryCallback = std::function<RetryStrategy(Status)>;
-
 // BlockAccesser is a class that provides a way to access block from a data
 // source. It is a base class for all data access classes.
 class BlockAccesser {
@@ -56,9 +49,6 @@ class BlockAccesser {
   virtual Status Put(const std::string& key, const char* buffer,
                      size_t length) = 0;
 
-  virtual void AsyncPut(const std::string& key, const char* buffer,
-                        size_t length, RetryCallback retry_cb) = 0;
-
   virtual void AsyncPut(std::shared_ptr<PutObjectAsyncContext> context) = 0;
 
   virtual Status Get(const std::string& key, std::string* data) = 0;
@@ -67,9 +57,6 @@ class BlockAccesser {
 
   virtual Status Range(const std::string& key, off_t offset, size_t length,
                        char* buffer) = 0;
-
-  virtual void AsyncRange(const std::string& key, off_t offset, size_t length,
-                          char* buffer, RetryCallback retry_cb) = 0;
 
   virtual bool BlockExist(const std::string& key) = 0;
 
@@ -95,9 +82,6 @@ class BlockAccesserImpl : public BlockAccesser {
   Status Put(const std::string& key, const char* buffer,
              size_t length) override;
 
-  void AsyncPut(const std::string& key, const char* buffer, size_t length,
-                RetryCallback retry_cb) override;
-
   void AsyncPut(std::shared_ptr<PutObjectAsyncContext> context) override;
 
   Status Get(const std::string& key, std::string* data) override;
@@ -106,9 +90,6 @@ class BlockAccesserImpl : public BlockAccesser {
 
   Status Range(const std::string& key, off_t offset, size_t length,
                char* buffer) override;
-
-  void AsyncRange(const std::string& key, off_t offset, size_t length,
-                  char* buffer, RetryCallback retry_cb) override;
 
   bool BlockExist(const std::string& key) override;
 

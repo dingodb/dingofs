@@ -57,11 +57,6 @@ class MockBlockAccesser : public BlockAccesser {
               (const std::string& key, const char* buffer, size_t length),
               (override));
 
-  MOCK_METHOD(void, AsyncPut,
-              (const std::string& key, const char* buffer, size_t length,
-               RetryCallback retry_cb),
-              (override));
-
   MOCK_METHOD(void, AsyncPut, (std::shared_ptr<PutObjectAsyncContext> context),
               (override));
 
@@ -76,20 +71,12 @@ class MockBlockAccesser : public BlockAccesser {
                char* buffer),
               (override));
 
-  MOCK_METHOD(void, AsyncRange,
-              (const std::string& key, off_t offset, size_t length,
-               char* buffer, RetryCallback retry_cb),
-              (override));
-
   MOCK_METHOD(bool, BlockExist, (const std::string& key), (override));
 
   MOCK_METHOD(Status, Delete, (const std::string& key), (override));
 
   MOCK_METHOD(Status, BatchDelete, (const std::list<std::string>& keys),
               (override));
-  MOCK_METHOD5(AsyncGet,
-               void(const std::string& key, off_t offset, size_t length,
-                    char* buffer, RetryCallback retry_cb));
 };
 
 }  // namespace blockaccess

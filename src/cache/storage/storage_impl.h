@@ -24,11 +24,16 @@
 #define DINGOFS_SRC_CACHE_STORAGE_STORAGE_IMPL_H_
 
 #include <bthread/execution_queue.h>
+#include <bvar/passive_status.h>
+#include <bvar/reducer.h>
+
+#include <cstdint>
 
 #include "blockaccess/block_accesser.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/storage/storage.h"
 #include "cache/storage/storage_closure.h"
+#include "cache/utils/execution_queue.h"
 
 namespace dingofs {
 namespace cache {
@@ -57,6 +62,10 @@ class StorageImpl final : public Storage {
   std::atomic<bool> running_;
   blockaccess::BlockAccesser* block_accesser_;
   bthread::ExecutionQueueId<StorageClosure*> queue_id_;
+  ExecutionQueueSPtr upload_retry_queue_;
+  ExecutionQueueSPtr download_retry_queue_;
+  bvar::PassiveStatus<int64_t> metric_upload_retry_count_;
+  bvar::PassiveStatus<int64_t> metric_download_retry_count_;
 };
 
 }  // namespace cache

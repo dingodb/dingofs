@@ -25,11 +25,13 @@
 
 #include <mutex>
 
+#include "blockaccess/accesser_common.h"
 #include "blockaccess/block_accesser.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/common/type.h"
 #include "cache/storage/closure.h"
 #include "cache/storage/storage.h"
+#include "cache/utils/execution_queue.h"
 #include "common/io_buffer.h"
 #include "common/status.h"
 
@@ -62,32 +64,40 @@ class StorageClosure : public Closure {
 class UploadClosure final : public StorageClosure {
  public:
   UploadClosure(ContextSPtr ctx, const BlockKey& key, const Block& block,
-                UploadOption option,
-                blockaccess::BlockAccesser* block_accesser);
+                UploadOption option, blockaccess::BlockAccesser* block_accesser,
+                ExecutionQueueSPtr retry_queue);
 
   void Run() override;
 
  private:
-  Block CopyBlock();
-
+  blockaccess::PutObjectAsyncContextSPtr OnPrepare();
+  void OnCallback(const blockaccess::PutObjectAsyncContextSPtr& ctx);
+  void OnRetry(const blockaccess::PutObjectAsyncContextSPtr& ctx);
   void OnComplete(Status s);
+
+  Block CopyBlock();
 
   ContextSPtr ctx_;
   BlockKey key_;
   Block block_;
   UploadOption option_;
   blockaccess::BlockAccesser* block_accesser_;
+  ExecutionQueueSPtr retry_queue_;
 };
 
 class DownloadClosure final : public StorageClosure {
  public:
   DownloadClosure(ContextSPtr ctx, const BlockKey& key, off_t offset,
                   size_t length, IOBuffer* buffer, DownloadOption option,
-                  blockaccess::BlockAccesser* block_accesser);
+                  blockaccess::BlockAccesser* block_accesser,
+                  ExecutionQueueSPtr retry_queue);
 
   void Run() override;
 
  private:
+  blockaccess::GetObjectAsyncContextSPtr OnPrepare();
+  void OnCallback(const blockaccess::GetObjectAsyncContextSPtr& ctx);
+  void OnRetry(const blockaccess::GetObjectAsyncContextSPtr& ctx);
   void OnComplete(Status s);
 
   ContextSPtr ctx_;
@@ -97,6 +107,7 @@ class DownloadClosure final : public StorageClosure {
   IOBuffer* buffer_;
   DownloadOption option_;
   blockaccess::BlockAccesser* block_accesser_;
+  ExecutionQueueSPtr retry_queue_;
 };
 
 }  // namespace cache

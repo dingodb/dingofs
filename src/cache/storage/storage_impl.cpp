@@ -35,6 +35,7 @@
 #include "cache/common/macro.h"
 #include "cache/storage/storage.h"
 #include "cache/storage/storage_closure.h"
+#include "cache/utils/execution_queue.h"
 #include "cache/utils/offload_thread_pool.h"
 #include "common/io_buffer.h"
 
@@ -43,11 +44,26 @@ namespace cache {
 
 const std::string kModule = "storage";
 
+static int64_t GetQueueSize(void* meta) {
+  ExecutionQueue* queue = static_cast<ExecutionQueue*>(meta);
+  return queue->Size();
+}
+
 StorageImpl::StorageImpl(blockaccess::BlockAccesser* block_accesser)
-    : running_(false), block_accesser_(block_accesser), queue_id_({0}) {}
+    : running_(false),
+      block_accesser_(block_accesser),
+      queue_id_({0}),
+      upload_retry_queue_(std::make_shared<ExecutionQueue>()),
+      download_retry_queue_(std::make_shared<ExecutionQueue>()),
+      metric_upload_retry_count_("dingofs_storage_upload_retry_count",
+                                 GetQueueSize, upload_retry_queue_.get()),
+      metric_download_retry_count_("dingofs_storage_download_retry_count",
+                                   GetQueueSize, download_retry_queue_.get()) {}
 
 Status StorageImpl::Start() {
   CHECK_NOTNULL(block_accesser_);
+  CHECK_NOTNULL(upload_retry_queue_);
+  CHECK_NOTNULL(download_retry_queue_);
 
   if (running_) {
     return Status::OK();
@@ -63,6 +79,9 @@ Status StorageImpl::Start() {
     LOG(ERROR) << "Start execution queue failed: rc = " << rc;
     return Status::Internal("start execution queue fail");
   }
+
+  upload_retry_queue_->Start();
+  download_retry_queue_->Start();
 
   running_ = true;
 
@@ -87,6 +106,9 @@ Status StorageImpl::Shutdown() {
     return Status::Internal("join execution queue failed");
   }
 
+  upload_retry_queue_->Shutdown();
+  download_retry_queue_->Shutdown();
+
   LOG(INFO) << "Storage is down.";
 
   CHECK_DOWN("Storage");
@@ -104,7 +126,8 @@ Status StorageImpl::Upload(ContextSPtr ctx, const BlockKey& key,
   StepTimerGuard guard(timer);
 
   NEXT_STEP("enqueue");
-  auto closure = UploadClosure(ctx, key, block, option, block_accesser_);
+  auto closure = UploadClosure(ctx, key, block, option, block_accesser_,
+                               upload_retry_queue_);
   CHECK_EQ(0, bthread::execution_queue_execute(queue_id_, &closure));
 
   NEXT_STEP("s3_put");
@@ -131,7 +154,7 @@ Status StorageImpl::Download(ContextSPtr ctx, const BlockKey& key, off_t offset,
 
   NEXT_STEP("enqueue");
   auto closure = DownloadClosure(ctx, key, offset, length, buffer, option,
-                                 block_accesser_);
+                                 block_accesser_, download_retry_queue_);
   CHECK_EQ(0, bthread::execution_queue_execute(queue_id_, &closure));
 
   NEXT_STEP("s3_range");

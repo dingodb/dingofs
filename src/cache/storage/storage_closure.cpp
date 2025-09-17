@@ -22,40 +22,80 @@
 
 #include "cache/storage/storage_closure.h"
 
+#include <brpc/reloadable_flags.h>
 #include <butil/iobuf.h>
+#include <bvar/reducer.h>
+#include <gflags/gflags.h>
 
+#include <cstdint>
+#include <memory>
+
+#include "blockaccess/accesser_common.h"
 #include "cache/storage/storage.h"
+#include "cache/utils/execution_queue.h"
 #include "cache/utils/helper.h"
 #include "common/io_buffer.h"
+#include "common/status.h"
 
 namespace dingofs {
 namespace cache {
 
+DEFINE_int64(storage_download_retry_timeout_s, 1800,
+             "Timeout in seconds for download retry");
+DEFINE_validator(storage_download_retry_timeout_s, brpc::PassValidate);
+
 UploadClosure::UploadClosure(ContextSPtr ctx, const BlockKey& key,
                              const Block& block, UploadOption option,
-                             blockaccess::BlockAccesser* block_accesser)
+                             blockaccess::BlockAccesser* block_accesser,
+                             ExecutionQueueSPtr retry_queue)
     : ctx_(ctx),
       key_(key),
       block_(block),
       option_(option),
-      block_accesser_(block_accesser) {}
+      block_accesser_(block_accesser),
+      retry_queue_(retry_queue) {}
 
 void UploadClosure::Run() {
+  auto ctx = OnPrepare();
+  block_accesser_->AsyncPut(ctx);
+}
+
+blockaccess::PutObjectAsyncContextSPtr UploadClosure::OnPrepare() {
   auto block = CopyBlock();  // Copy data to continuous memory
   if (option_.async_cache_func) {
     option_.async_cache_func(key_, block);
   }
 
-  auto retry_cb = [this, block](Status s) {
-    if (s.ok()) {  // Success
-      this->OnComplete(s);
-      return blockaccess::RetryStrategy::kNotRetry;
-    }
-    return blockaccess::RetryStrategy::kRetry;
+  auto ctx = std::make_shared<blockaccess::PutObjectAsyncContext>();
+  ctx->start_time = butil::gettimeofday_us();
+  ctx->key = key_.StoreKey();
+  ctx->buffer = block.buffer.Fetch1();
+  ctx->buffer_size = block.buffer.Size();
+  ctx->retry = 0;
+  ctx->cb = [this](const blockaccess::PutObjectAsyncContextSPtr& ctx) {
+    OnCallback(ctx);
   };
+  return ctx;
+}
 
-  block_accesser_->AsyncPut(key_.StoreKey(), block.buffer.Fetch1(), block_.size,
-                            retry_cb);
+void UploadClosure::OnCallback(
+    const blockaccess::PutObjectAsyncContextSPtr& ctx) {
+  auto status = ctx->status;
+  if (status.ok()) {
+    OnComplete(status);
+  } else {
+    OnRetry(ctx);
+  }
+}
+
+void UploadClosure::OnRetry(const blockaccess::PutObjectAsyncContextSPtr& ctx) {
+  ctx->retry++;
+  LOG(WARNING) << "Retry upload block: key = " << ctx->key << ", retry("
+               << ctx->retry << "), elapsed("
+               << (butil::gettimeofday_us() - ctx->start_time) / 1e6 << "s)"
+               << ",  status = " << ctx->status.ToString();
+
+  retry_queue_->Submit([this, ctx]() { block_accesser_->AsyncPut(ctx); });
 }
 
 void UploadClosure::OnComplete(Status s) {
@@ -67,36 +107,77 @@ Block UploadClosure::CopyBlock() {
   char* data = new char[block_.size];
   block_.buffer.CopyTo(data);
 
-  butil::IOBuf iobuf;
-  iobuf.append_user_data(data, block_.size, Helper::DeleteBuffer);
-  return Block(IOBuffer(iobuf));
+  IOBuffer buffer;
+  buffer.AppendUserData(data, block_.size, Helper::DeleteBuffer);
+  return Block(buffer);
 }
 
 DownloadClosure::DownloadClosure(ContextSPtr ctx, const BlockKey& key,
                                  off_t offset, size_t length, IOBuffer* buffer,
                                  DownloadOption option,
-                                 blockaccess::BlockAccesser* block_accesser)
+                                 blockaccess::BlockAccesser* block_accesser,
+                                 ExecutionQueueSPtr retry_queue)
     : ctx_(ctx),
       key_(key),
       offset_(offset),
       length_(length),
       buffer_(buffer),
       option_(option),
-      block_accesser_(block_accesser) {}
+      block_accesser_(block_accesser),
+      retry_queue_(retry_queue) {}
 
 void DownloadClosure::Run() {
-  char* data = new char[length_];
-  butil::IOBuf iobuf;
-  iobuf.append_user_data(data, length_, Helper::DeleteBuffer);
-  *buffer_ = IOBuffer(iobuf);
+  auto ctx = OnPrepare();
+  block_accesser_->AsyncGet(ctx);
+}
 
-  auto retry_cb = [this](Status s) {
-    this->OnComplete(s);
-    return blockaccess::RetryStrategy::kNotRetry;  // Never retry for range
+blockaccess::GetObjectAsyncContextSPtr DownloadClosure::OnPrepare() {
+  char* data = new char[length_];
+  buffer_->AppendUserData(data, length_, Helper::DeleteBuffer);
+
+  auto ctx = std::make_shared<blockaccess::GetObjectAsyncContext>();
+  ctx->start_time = butil::gettimeofday_us();
+  ctx->key = key_.StoreKey();
+  ctx->buf = buffer_->Fetch1();
+  ctx->offset = offset_;
+  ctx->len = length_;
+  ctx->retry = 0;
+  ctx->actual_len = 0;
+  ctx->cb = [this](const blockaccess::GetObjectAsyncContextSPtr& ctx) {
+    OnCallback(ctx);
   };
 
-  block_accesser_->AsyncRange(key_.StoreKey(), offset_, length_,
-                              buffer_->Fetch1(), retry_cb);
+  return ctx;
+}
+
+void DownloadClosure::OnCallback(
+    const blockaccess::GetObjectAsyncContextSPtr& ctx) {
+  auto status = ctx->status;
+  if (status.ok() || status.IsNotFound()) {
+    CHECK_EQ(ctx->actual_len, length_)
+        << "actual_len: " << ctx->actual_len << ", expected_len: " << length_;
+    OnComplete(status);
+  } else if (ctx->start_time + FLAGS_storage_download_retry_timeout_s * 1e6 >
+             butil::gettimeofday_us()) {
+    OnRetry(ctx);
+  } else {
+    LOG(ERROR) << "Download block exceed max retry timeout: key = " << ctx->key
+               << ", retry(" << ctx->retry << "), elapsed("
+               << (butil::gettimeofday_us() - ctx->start_time) / 1e6 << "s)"
+               << ",  status = " << ctx->status.ToString();
+    OnComplete(status);
+  }
+}
+
+void DownloadClosure::OnRetry(
+    const blockaccess::GetObjectAsyncContextSPtr& ctx) {
+  ctx->retry++;
+  LOG(WARNING) << "Retry download block: key = " << ctx->key << ", retry("
+               << ctx->retry << "), elapsed("
+               << (butil::gettimeofday_us() - ctx->start_time) / 1e6 << "s)"
+               << ",  status = " << ctx->status.ToString();
+
+  retry_queue_->Submit([this, ctx]() { block_accesser_->AsyncGet(ctx); });
 }
 
 void DownloadClosure::OnComplete(Status s) {

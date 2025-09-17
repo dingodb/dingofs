@@ -213,6 +213,9 @@ DECLARE_uint32(disk_state_unstable2down_s);
 // Sets the duration in milliseconds to check the disk state.
 DECLARE_uint32(disk_state_check_duration_ms);
 
+// Sets the maximum retry timeout in seconds for downloading block from storage.
+DECLARE_int64(storage_download_retry_timeout_s);
+
 // MDS version for member managment, 'v1' or 'v2'
 DECLARE_string(mds_version);
 

@@ -95,12 +95,15 @@ using PutObjectAsyncCallBack =
     std::function<void(const PutObjectAsyncContextSPtr&)>;
 
 struct PutObjectAsyncContext {
+  uint64_t start_time;
+
   std::string key;
   const char* buffer;
   size_t buffer_size;
-  uint64_t start_time;
+
   Status status;
 
+  uint32_t retry;
   PutObjectAsyncCallBack cb;
 };
 
@@ -108,14 +111,17 @@ using GetObjectAsyncCallBack =
     std::function<void(const GetObjectAsyncContextSPtr&)>;
 
 struct GetObjectAsyncContext {
+  uint64_t start_time;
+
   std::string key;
   char* buf{nullptr};
   off_t offset;
   size_t len;
+
   Status status;
-  uint32_t retry;
   size_t actual_len;
 
+  uint32_t retry;
   GetObjectAsyncCallBack cb;
 };
 
