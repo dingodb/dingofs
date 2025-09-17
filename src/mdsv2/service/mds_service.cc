@@ -567,7 +567,7 @@ void MDSServiceImpl::GetDentry(google::protobuf::RpcController* controller, cons
   auto task = std::make_shared<ServiceTask>(
       [this, controller, request, response, svr_done]() { DoGetDentry(controller, request, response, svr_done); });
 
-  bool ret = write_worker_set_->Execute(task);
+  bool ret = read_worker_set_->Execute(task);
   if (BAIDU_UNLIKELY(!ret)) {
     brpc::ClosureGuard done_guard(svr_done);
     ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
@@ -628,7 +628,7 @@ void MDSServiceImpl::ListDentry(google::protobuf::RpcController* controller,
   auto task = std::make_shared<ServiceTask>(
       [this, controller, request, response, svr_done]() { DoListDentry(controller, request, response, svr_done); });
 
-  bool ret = write_worker_set_->Execute(task);
+  bool ret = read_worker_set_->Execute(task);
   if (BAIDU_UNLIKELY(!ret)) {
     brpc::ClosureGuard done_guard(svr_done);
     ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
@@ -1044,7 +1044,7 @@ void MDSServiceImpl::Open(google::protobuf::RpcController* controller, const pb:
   auto task = std::make_shared<ServiceTask>(
       [this, controller, request, response, svr_done]() { DoOpen(controller, request, response, svr_done); });
 
-  bool ret = read_worker_set_->Execute(task);
+  bool ret = write_worker_set_->Execute(task);
   if (BAIDU_UNLIKELY(!ret)) {
     brpc::ClosureGuard done_guard(svr_done);
     ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
@@ -1085,7 +1085,7 @@ void MDSServiceImpl::Release(google::protobuf::RpcController* controller, const 
   auto task = std::make_shared<ServiceTask>(
       [this, controller, request, response, svr_done]() { DoRelease(controller, request, response, svr_done); });
 
-  bool ret = read_worker_set_->Execute(task);
+  bool ret = write_worker_set_->Execute(task);
   if (BAIDU_UNLIKELY(!ret)) {
     brpc::ClosureGuard done_guard(svr_done);
     ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
@@ -1923,7 +1923,7 @@ void MDSServiceImpl::Fallocate(google::protobuf::RpcController* controller, cons
   auto task = std::make_shared<ServiceTask>(
       [this, controller, request, response, svr_done]() { DoFallocate(controller, request, response, svr_done); });
 
-  bool ret = read_worker_set_->Execute(task);
+  bool ret = write_worker_set_->Execute(task);
   if (BAIDU_UNLIKELY(!ret)) {
     brpc::ClosureGuard done_guard(svr_done);
     ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
@@ -2164,7 +2164,7 @@ void MDSServiceImpl::GetFsQuota(google::protobuf::RpcController* controller,
   auto task = std::make_shared<ServiceTask>(
       [this, controller, request, response, svr_done]() { DoGetFsQuota(controller, request, response, svr_done); });
 
-  bool ret = write_worker_set_->Execute(task);
+  bool ret = read_worker_set_->Execute(task);
   if (BAIDU_UNLIKELY(!ret)) {
     brpc::ClosureGuard done_guard(svr_done);
     ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
@@ -2243,7 +2243,7 @@ void MDSServiceImpl::GetDirQuota(google::protobuf::RpcController* controller,
   auto task = std::make_shared<ServiceTask>(
       [this, controller, request, response, svr_done]() { DoGetDirQuota(controller, request, response, svr_done); });
 
-  bool ret = write_worker_set_->Execute(task);
+  bool ret = read_worker_set_->Execute(task);
   if (BAIDU_UNLIKELY(!ret)) {
     brpc::ClosureGuard done_guard(svr_done);
     ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
@@ -2324,7 +2324,7 @@ void MDSServiceImpl::LoadDirQuotas(google::protobuf::RpcController* controller,
   auto task = std::make_shared<ServiceTask>(
       [this, controller, request, response, svr_done]() { DoLoadDirQuotas(controller, request, response, svr_done); });
 
-  bool ret = write_worker_set_->Execute(task);
+  bool ret = read_worker_set_->Execute(task);
   if (BAIDU_UNLIKELY(!ret)) {
     brpc::ClosureGuard done_guard(svr_done);
     ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
@@ -2521,7 +2521,7 @@ void MDSServiceImpl::NotifyBuddy(google::protobuf::RpcController* controller,
   auto task = std::make_shared<ServiceTask>(
       [this, controller, request, response, svr_done]() { DoNotifyBuddy(controller, request, response, svr_done); });
 
-  bool ret = write_worker_set_->Execute(task);
+  bool ret = read_worker_set_->Execute(task);
   if (BAIDU_UNLIKELY(!ret)) {
     brpc::ClosureGuard done_guard(svr_done);
     ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
@@ -2682,7 +2682,7 @@ void MDSServiceImpl::ListGroups(google::protobuf::RpcController* controller,
   auto task = std::make_shared<ServiceTask>(
       [this, controller, request, response, svr_done]() { DoListGroups(controller, request, response, svr_done); });
 
-  bool ret = write_worker_set_->Execute(task);
+  bool ret = read_worker_set_->Execute(task);
   if (BAIDU_UNLIKELY(!ret)) {
     brpc::ClosureGuard done_guard(svr_done);
     ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
@@ -2729,7 +2729,7 @@ void MDSServiceImpl::ListMembers(google::protobuf::RpcController* controller,
   auto task = std::make_shared<ServiceTask>(
       [this, controller, request, response, svr_done]() { DoListMembers(controller, request, response, svr_done); });
 
-  bool ret = write_worker_set_->Execute(task);
+  bool ret = read_worker_set_->Execute(task);
   if (BAIDU_UNLIKELY(!ret)) {
     brpc::ClosureGuard done_guard(svr_done);
     ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,

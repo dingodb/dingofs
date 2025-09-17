@@ -106,6 +106,9 @@ Status MDSDiscovery::GetMDSList(std::vector<mdsv2::MDSMeta>& mdses) {
   pb::mdsv2::GetMDSListRequest request;
   pb::mdsv2::GetMDSListResponse response;
 
+  request.mutable_info()->set_request_id(
+      std::to_string(mdsv2::Helper::TimestampNs()));
+
   auto status =
       rpc_->SendRequest("MDSService", "GetMDSList", request, response);
   if (!status.ok()) {

@@ -79,6 +79,9 @@ bool RPC::CheckMdsAlive(const std::string& addr) {
   pb::mdsv2::EchoRequest request;
   pb::mdsv2::EchoResponse response;
 
+  request.mutable_info()->set_request_id(
+      std::to_string(mdsv2::Helper::TimestampNs()));
+
   const google::protobuf::MethodDescriptor* method =
       dingofs::pb::mdsv2::MDSService::descriptor()->FindMethodByName("Echo");
 
