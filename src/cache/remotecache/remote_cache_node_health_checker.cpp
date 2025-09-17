@@ -24,12 +24,16 @@
 #include <brpc/channel.h>
 #include <brpc/controller.h>
 #include <brpc/reloadable_flags.h>
+#include <glog/logging.h>
+
+#include <memory>
 
 #include "cache/common/macro.h"
 #include "cache/common/mds_client.h"
 #include "cache/common/state_machine.h"
 #include "cache/metric/cache_status.h"
 #include "dingofs/blockcache.pb.h"
+#include "options/cache/option.h"
 #include "utils/executor/bthread/bthread_executor.h"
 
 namespace dingofs {
@@ -48,15 +52,21 @@ RemoteCacheNodeHealthChecker::RemoteCacheNodeHealthChecker(
     : running_(false),
       member_(member),
       state_machine_(state_machine),
-      executor_(std::make_unique<BthreadExecutor>()) {}
+      executor_(std::make_unique<BthreadExecutor>()),
+      channel_(std::make_unique<brpc::Channel>()) {}
 
 void RemoteCacheNodeHealthChecker::Start() {
+  CHECK_NOTNULL(state_machine_);
+  CHECK_NOTNULL(executor_);
+  CHECK_NOTNULL(channel_);
+
   if (running_) {
     return;
   }
 
   LOG(INFO) << "Remote cache node health checker is starting...";
 
+  InitChannel();
   CHECK(state_machine_->Start([this](State state) { SetStatusPage(state); }));
   CHECK(executor_->Start());
   executor_->Schedule([this] { RunCheck(); },
@@ -91,7 +101,7 @@ void RemoteCacheNodeHealthChecker::RunCheck() {
 }
 
 void RemoteCacheNodeHealthChecker::PingNode() {
-  auto status = SendPingrequest();
+  auto status = SendPingRequest();
   if (!status.ok()) {
     state_machine_->Error();
   } else {
@@ -100,32 +110,40 @@ void RemoteCacheNodeHealthChecker::PingNode() {
   SetStatusPage(state_machine_->GetState());
 }
 
-Status RemoteCacheNodeHealthChecker::SendPingrequest() {
-  brpc::Channel channel;
-  brpc::Controller cntl;
+void RemoteCacheNodeHealthChecker::InitChannel() {
   butil::EndPoint endpoint;
   butil::str2endpoint(member_.ip.c_str(), member_.port, &endpoint);
 
   brpc::ChannelOptions options;
+  options.connect_timeout_ms = FLAGS_rpc_connect_timeout_ms;
   options.connection_group = "urgent";
-  int rc = channel.Init(endpoint, &options);
+
+  auto* channel = channel_.get();
+  int rc = channel->Init(endpoint, &options);
   if (rc != 0) {
     LOG(ERROR) << "Initialize channel failed: endpoint = " << member_.ip << ":"
                << member_.port << ", rc = " << rc;
-    return Status::Internal(absl::StrFormat("init channel (%s:%d) failed",
-                                            member_.ip, member_.port));
+  } else {
+    LOG(INFO) << "Initialize channel success: endpoint = " << member_.ip << ":"
+              << member_.port;
   }
+}
 
+void RemoteCacheNodeHealthChecker::ResetChannel() { InitChannel(); }
+
+Status RemoteCacheNodeHealthChecker::SendPingRequest() {
+  brpc::Controller cntl;
   cntl.ignore_eovercrowded();
   cntl.set_timeout_ms(FLAGS_ping_rpc_timeout_ms);
 
   pb::cache::PingRequest request;
   pb::cache::PingResponse reponse;
-  pb::cache::BlockCacheService_Stub stub(&channel);
+  pb::cache::BlockCacheService_Stub stub(channel_.get());
   stub.Ping(&cntl, &request, &reponse, nullptr);
   if (cntl.Failed()) {
     LOG(ERROR) << "Send ping request to cache node failed: member = "
                << member_.ToString() << ", error_text = " << cntl.ErrorText();
+    ResetChannel();
     return Status::NetError(cntl.ErrorCode(), cntl.ErrorText());
   }
   return Status::OK();

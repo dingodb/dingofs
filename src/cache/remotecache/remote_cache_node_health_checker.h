@@ -42,7 +42,10 @@ class RemoteCacheNodeHealthChecker {
  private:
   void RunCheck();
   void PingNode();
-  Status SendPingrequest();
+  Status SendPingRequest();
+
+  void InitChannel();
+  void ResetChannel();
 
   void SetStatusPage(State new_state);
 
@@ -50,6 +53,7 @@ class RemoteCacheNodeHealthChecker {
   const CacheGroupMember member_;
   StateMachineSPtr state_machine_;
   std::unique_ptr<Executor> executor_;
+  std::unique_ptr<brpc::Channel> channel_;
 };
 
 using RemoteCacheNodeHealthCheckerUPtr =
