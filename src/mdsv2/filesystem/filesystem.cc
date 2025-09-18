@@ -2899,8 +2899,11 @@ Status FileSystemSet::UmountFs(Context& ctx, const std::string& fs_name, const s
 
   DINGO_LOG(INFO) << fmt::format("[fsset.{}] umount fs finish, client({}) status({}).", fs_name, client_id,
                                  status.error_str());
+  if (!status.ok() && status.error_code() != pb::error::ENOT_FOUND) {
+    return status;
+  }
 
-  return status;
+  return Status::OK();
 }
 
 // check if fs is mounted
