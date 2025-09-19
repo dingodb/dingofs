@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef SRC_AWS_S3_CLIENT_AWS_S3_CLIENT_H_
-#define SRC_AWS_S3_CLIENT_AWS_S3_CLIENT_H_
+#ifndef DINGOFS_SRC_BLOCKACCESS_S3_AWS_AWS_S3_CLIENT_H_
+#define DINGOFS_SRC_BLOCKACCESS_S3_AWS_AWS_S3_CLIENT_H_
 
 #include "blockaccess/s3/aws/aws_s3_common.h"
 #include "blockaccess/s3/s3_common.h"
@@ -68,4 +68,4 @@ using AwsS3ClientUPtr = std::unique_ptr<AwsS3Client>;
 }  // namespace blockaccess
 }  // namespace dingofs
 
-#endif  // SRC_AWS_S3_CLIENT_AWS_S3_CLIENT_H_
+#endif  // DINGOFS_SRC_BLOCKACCESS_S3_AWS_AWS_S3_CLIENT_H_

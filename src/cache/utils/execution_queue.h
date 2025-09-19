@@ -43,7 +43,7 @@ class ExecutionQueue {
     bthread::ExecutionQueueOptions queue_options;
     queue_options.use_pthread = true;
     CHECK_EQ(0, bthread::execution_queue_start(&queue_id_, &queue_options,
-                                               HandleTask, nullptr));
+                                               HandleTask, this));
   }
 
   void Shutdown() {
