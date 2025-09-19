@@ -36,7 +36,7 @@ namespace cache {
 
 FlagsInfo DingoCache::flags;
 
-int DingoCache::HandleFlags(int argc, char** argv) {
+int DingoCache::ParseFlags(int argc, char** argv) {
   flags = FlagsHelper::Parse(argc, argv);
   if (flags.show_help) {
     std::cout << FlagsHelper::GenHelp(flags) << "\n";
@@ -97,7 +97,7 @@ int DingoCache::StartServer() {
 }
 
 int DingoCache::Run(int argc, char** argv) {
-  int rc = HandleFlags(argc, argv);
+  int rc = ParseFlags(argc, argv);
   if (rc != 0) {
     return rc;
   }
