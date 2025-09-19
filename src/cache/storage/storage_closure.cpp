@@ -72,7 +72,7 @@ blockaccess::PutObjectAsyncContextSPtr UploadClosure::OnPrepare() {
   ctx->buffer = block.buffer.Fetch1();
   ctx->buffer_size = block.buffer.Size();
   ctx->retry = 0;
-  ctx->cb = [this](const blockaccess::PutObjectAsyncContextSPtr& ctx) {
+  ctx->cb = [this, block](const blockaccess::PutObjectAsyncContextSPtr& ctx) {
     OnCallback(ctx);
   };
   return ctx;
