@@ -2454,8 +2454,7 @@ Status OperationProcessor::RunAlone(Operation* operation) {
 
     status = operation->Run(txn);
     if (!status.ok()) {
-      if (status.error_code() == pb::error::ESTORE_TXN_LOCK_CONFLICT ||
-          status.error_code() == pb::error::ESTORE_TXN_MEM_LOCK_CONFLICT) {
+      if (status.error_code() == pb::error::ESTORE_MAYBE_RETRY) {
         DINGO_LOG(WARNING) << fmt::format(
             "[operation.{}.{}][{}][{}us] alone run {} lock conflict, retry({}) status({}).", fs_id, ino, txn_id,
             once_duration.ElapsedUs(), operation->OpName(), retry, status.error_str());
@@ -2657,8 +2656,7 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
     std::vector<KeyValue> prefetch_kvs;
     status = txn->BatchGet(keys, prefetch_kvs);
     if (!status.ok()) {
-      if (status.error_code() == pb::error::ESTORE_TXN_LOCK_CONFLICT ||
-          status.error_code() == pb::error::ESTORE_TXN_MEM_LOCK_CONFLICT) {
+      if (status.error_code() == pb::error::ESTORE_MAYBE_RETRY) {
         DINGO_LOG(WARNING) << fmt::format(
             "[operation.{}.{}][{}][{}us] batch run {} lock conflict, retry({}) status({}).", fs_id, ino, txn_id,
             once_duration.ElapsedUs(), op_names, retry, status.error_str());

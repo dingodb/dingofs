@@ -88,6 +88,8 @@ class DingodbTxn : public Txn {
  private:
   using TxnUPtr = std::unique_ptr<dingodb::sdk::Transaction>;
 
+  Status TransformStatus(const dingodb::sdk::Status& status);
+
   void Rollback();
 
   SdkTxnUPtr txn_;

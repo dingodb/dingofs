@@ -38,6 +38,11 @@ DECLARE_uint32(mds_txn_max_retry_times);
 
 const uint32_t kTxnKeepAliveMs = 10 * 1000;
 
+static bvar::PerSecondEx<bvar::Adder<uint32_t>, 60> g_txn_write_conflict_per_second("txn_write_conflict_sum");
+static bvar::PerSecondEx<bvar::Adder<uint32_t>, 60> g_txn_lock_conflict_per_second("txn_lock_conflict_sum");
+static bvar::PerSecondEx<bvar::Adder<uint32_t>, 60> g_txn_memlock_conflict_per_second("txn_memlock_conflict_sum");
+static bvar::PerSecondEx<bvar::Adder<uint32_t>, 60> g_txn_total_conflict_per_second("txn_total_conflict_sum");
+
 static void KvPairsToKeyValues(const std::vector<dingodb::sdk::KVPair>& kv_pairs, std::vector<KeyValue>& kvs) {
   kvs.reserve(kv_pairs.size());
   for (const auto& kv_pair : kv_pairs) {
@@ -231,11 +236,20 @@ static inline Status TransformStatus(const dingodb::sdk::Status& status) {
   if (status.IsNotFound()) {
     return Status(pb::error::ENOT_FOUND, status.ToString());
 
+  } else if (status.IsTxnWriteConflict()) {
+    g_txn_total_conflict_per_second << 1;
+    g_txn_write_conflict_per_second << 1;
+    return Status(pb::error::ESTORE_MAYBE_RETRY, status.ToString());
+
   } else if (status.IsTxnLockConflict()) {
-    return Status(pb::error::ESTORE_TXN_LOCK_CONFLICT, status.ToString());
+    g_txn_total_conflict_per_second << 1;
+    g_txn_lock_conflict_per_second << 1;
+    return Status(pb::error::ESTORE_MAYBE_RETRY, status.ToString());
 
   } else if (status.IsTxnMemLockConflict()) {
-    return Status(pb::error::ESTORE_TXN_MEM_LOCK_CONFLICT, status.ToString());
+    g_txn_total_conflict_per_second << 1;
+    g_txn_memlock_conflict_per_second << 1;
+    return Status(pb::error::ESTORE_MAYBE_RETRY, status.ToString());
 
   } else {
     return Status(pb::error::EBACKEND_STORE, status.ToString());
@@ -465,10 +479,37 @@ Status DingodbTxn::Scan(const Range& range, ScanHandlerType handler) {
   return status;
 }
 
+Status DingodbTxn::TransformStatus(const dingodb::sdk::Status& status) {
+  if (status.IsNotFound()) {
+    return Status(pb::error::ENOT_FOUND, status.ToString());
+
+  } else if (status.IsTxnWriteConflict()) {
+    g_txn_total_conflict_per_second << 1;
+    g_txn_write_conflict_per_second << 1;
+    txn_trace_.is_conflict = true;
+    return Status(pb::error::ESTORE_MAYBE_RETRY, status.ToString());
+
+  } else if (status.IsTxnLockConflict()) {
+    g_txn_total_conflict_per_second << 1;
+    g_txn_lock_conflict_per_second << 1;
+    txn_trace_.is_conflict = true;
+    return Status(pb::error::ESTORE_MAYBE_RETRY, status.ToString());
+
+  } else if (status.IsTxnMemLockConflict()) {
+    g_txn_total_conflict_per_second << 1;
+    g_txn_memlock_conflict_per_second << 1;
+    txn_trace_.is_conflict = true;
+    return Status(pb::error::ESTORE_MAYBE_RETRY, status.ToString());
+
+  } else {
+    return Status(pb::error::EBACKEND_STORE, status.ToString());
+  }
+}
+
 void DingodbTxn::Rollback() {
   auto status = txn_->Rollback();
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("rollback fail, error: {}", status.ToString());
+    DINGO_LOG(ERROR) << fmt::format("[storage] rollback fail, status({}).", status.ToString());
   }
 }
 
@@ -482,20 +523,12 @@ Status DingodbTxn::Commit() {
   auto status = txn_->PreCommit();
   if (!status.ok()) {
     Rollback();
-    if (status.IsTxnWriteConflict()) {
-      txn_trace_.is_conflict = true;
-      return Status(pb::error::ESTORE_MAYBE_RETRY, status.ToString());
-    }
     return TransformStatus(status);
   }
 
   status = txn_->Commit();
   if (!status.ok()) {
     Rollback();
-    if (status.IsTxnWriteConflict()) {
-      txn_trace_.is_conflict = true;
-      return Status(pb::error::ESTORE_MAYBE_RETRY, status.ToString());
-    }
     return TransformStatus(status);
   }
 

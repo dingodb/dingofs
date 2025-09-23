@@ -23,8 +23,8 @@ namespace dingofs {
 namespace mdsv2 {
 
 void DingoLogger::InitLogger(const std::string& log_dir, const std::string& role, const LogLevel& level) {
-  FLAGS_logbufsecs = 0;
-  FLAGS_max_log_size = 80;
+  FLAGS_logbufsecs = 10;
+  FLAGS_max_log_size = 256;
   FLAGS_stop_logging_if_full_disk = true;
   FLAGS_minloglevel = google::GLOG_INFO;
   FLAGS_logbuflevel = google::GLOG_INFO;
