@@ -153,9 +153,13 @@ blockaccess::GetObjectAsyncContextSPtr DownloadClosure::OnPrepare() {
 void DownloadClosure::OnCallback(
     const blockaccess::GetObjectAsyncContextSPtr& ctx) {
   auto status = ctx->status;
-  if (status.ok() || status.IsNotFound()) {
+  if (status.ok()) {
     CHECK_EQ(ctx->actual_len, length_)
         << "actual_len: " << ctx->actual_len << ", expected_len: " << length_;
+    OnComplete(status);
+  } else if (status.IsNotFound()) {
+    LOG(WARNING) << "Download block failed, object not found : key = "
+                 << ctx->key << ",  status = " << ctx->status.ToString();
     OnComplete(status);
   } else if (ctx->start_time + FLAGS_storage_download_retry_timeout_s * 1e6 >
              butil::gettimeofday_us()) {
