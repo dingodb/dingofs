@@ -486,7 +486,7 @@ void FileSessionMap::Delete(Ino ino, uint64_t fh) {
     auto it = file_session_map_.find(ino);
     if (it == file_session_map_.end()) return;
 
-    auto file_session = it->second;
+    auto& file_session = it->second;
 
     file_session->DeleteSession(fh);
     ref_count = file_session->DecRef();

@@ -74,6 +74,20 @@ void ChunkCache::Delete(uint64_t ino) {
   }
 }
 
+void ChunkCache::BatchDeleteIf(const std::function<bool(const Ino&)>& f) {
+  utils::WriteLockGuard lk(lock_);
+
+  for (auto it = chunk_map_.begin(); it != chunk_map_.end();) {
+    if (f(it->first.ino)) {
+      it = chunk_map_.erase(it);
+      count_metrics_ << -1;
+
+    } else {
+      ++it;
+    }
+  }
+}
+
 ChunkCache::ChunkSPtr ChunkCache::Get(uint64_t ino, uint64_t chunk_index) {
   utils::ReadLockGuard lk(lock_);
 

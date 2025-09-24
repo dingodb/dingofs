@@ -44,6 +44,8 @@ class ChunkCache {
   bool PutIf(uint64_t ino, ChunkEntry chunk);
   void Delete(uint64_t ino, uint64_t chunk_index);
   void Delete(uint64_t ino);
+  void BatchDeleteIf(const std::function<bool(const Ino&)>& f);
+
   ChunkSPtr Get(uint64_t ino, uint64_t chunk_index);
   std::vector<ChunkSPtr> Get(uint64_t ino);
   void Clear();

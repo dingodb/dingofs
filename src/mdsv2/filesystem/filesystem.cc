@@ -431,6 +431,7 @@ void FileSystem::DeleteInodeFromCache(Ino ino) { inode_cache_.DeleteInode(ino); 
 void FileSystem::ClearCache() {
   partition_cache_.Clear();
   inode_cache_.Clear();
+  chunk_cache_.Clear();
 }
 
 void FileSystem::ClearInodeCache() { inode_cache_.Clear(); }
@@ -450,6 +451,7 @@ void FileSystem::BatchDeleteCache(uint32_t bucket_num, const std::set<uint32_t>&
 
   partition_cache_.BatchDeleteInodeIf(check_fn);
   inode_cache_.BatchDeleteInodeIf(check_fn);
+  chunk_cache_.BatchDeleteIf(check_fn);
 }
 
 Status FileSystem::RunOperation(Operation* operation) {
