@@ -27,6 +27,7 @@
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
 #include "mdsv2/common/synchronization.h"
+#include "mdsv2/common/time.h"
 
 namespace dingofs {
 namespace mdsv2 {
@@ -54,10 +55,10 @@ int ExecuteRoutine(void* meta,
     }
 
     if (BAIDU_LIKELY(!iter.is_queue_stopped())) {
-      int64_t start_time = Helper::TimestampMs();
+      Duration duration;
       (*iter)->Run();
-      DINGO_LOG(DEBUG) << fmt::format("[execqueue][type({})] run task elapsed time {}(ms).", (*iter)->Type(),
-                                      Helper::TimestampMs() - start_time);
+      DINGO_LOG(DEBUG) << fmt::format("[execqueue][type({})] run task elapsed time {}us.", (*iter)->Type(),
+                                      duration.ElapsedUs());
     } else {
       DINGO_LOG(INFO) << fmt::format("[execqueue][type({})] task is stopped.", (*iter)->Type());
     }

@@ -90,6 +90,9 @@ class MDSClient {
   Status Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
                 Attr& out_attr);
 
+  Status Create(ContextSPtr ctx, Ino parent, const std::string& name,
+                uint32_t uid, uint32_t gid, uint32_t mode, int flag,
+                Attr& out_attr, std::vector<std::string>& session_ids);
   Status MkNod(ContextSPtr ctx, Ino parent, const std::string& name,
                uint32_t uid, uint32_t gid, mode_t mode, dev_t rdev,
                Attr& out_attr);

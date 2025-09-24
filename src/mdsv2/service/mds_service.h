@@ -90,6 +90,9 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
   void Lookup(google::protobuf::RpcController* controller, const pb::mdsv2::LookupRequest* request,
               pb::mdsv2::LookupResponse* response, google::protobuf::Closure* done) override;
 
+  void BatchCreate(google::protobuf::RpcController* controller, const pb::mdsv2::BatchCreateRequest* request,
+                   pb::mdsv2::BatchCreateResponse* response, google::protobuf::Closure* done) override;
+
   void MkNod(google::protobuf::RpcController* controller, const pb::mdsv2::MkNodRequest* request,
              pb::mdsv2::MkNodResponse* response, google::protobuf::Closure* done) override;
 
@@ -272,6 +275,9 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
   // high level interface
   void DoLookup(google::protobuf::RpcController* controller, const pb::mdsv2::LookupRequest* request,
                 pb::mdsv2::LookupResponse* response, TraceClosure* done);
+
+  void DoBatchCreate(google::protobuf::RpcController* controller, const pb::mdsv2::BatchCreateRequest* request,
+                     pb::mdsv2::BatchCreateResponse* response, TraceClosure* done);
   void DoMkNod(google::protobuf::RpcController* controller, const pb::mdsv2::MkNodRequest* request,
                pb::mdsv2::MkNodResponse* response, TraceClosure* done);
   void DoMkDir(google::protobuf::RpcController* controller, const pb::mdsv2::MkDirRequest* request,

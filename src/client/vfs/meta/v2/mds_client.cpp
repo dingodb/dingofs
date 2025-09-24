@@ -292,6 +292,51 @@ Status MDSClient::Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
   return Status::OK();
 }
 
+Status MDSClient::Create(ContextSPtr ctx, Ino parent, const std::string& name,
+                         uint32_t uid, uint32_t gid, uint32_t mode, int flag,
+                         Attr& out_attr,
+                         std::vector<std::string>& session_ids) {
+  CHECK(fs_id_ != 0) << "fs_id is invalid.";
+
+  auto get_mds_fn = [this, parent]() -> MDSMeta {
+    return GetMdsByParent(parent);
+  };
+
+  pb::mdsv2::BatchCreateRequest request;
+  pb::mdsv2::BatchCreateResponse response;
+
+  SetAncestorInContext(request, parent);
+
+  request.set_fs_id(fs_id_);
+  request.set_parent(parent);
+  auto* param = request.add_params();
+
+  param->set_name(name);
+  param->set_mode(mode);
+  param->set_flag(flag);
+  param->set_uid(uid);
+  param->set_gid(gid);
+  param->set_rdev(0);
+  param->set_length(0);
+
+  auto status = SendRequest(ctx, get_mds_fn, "MDSService", "BatchCreate",
+                            request, response);
+  if (!status.ok()) {
+    return status;
+  }
+
+  CHECK(!response.inodes().empty()) << "inodes is empty.";
+  const auto& inode = response.inodes().at(0);
+
+  parent_memo_->Upsert(inode.ino(), parent, inode.version());
+  parent_memo_->UpsertVersion(parent, response.parent_version());
+
+  out_attr = Helper::ToAttr(inode);
+  session_ids = mdsv2::Helper::PbRepeatedToVector(response.session_ids());
+
+  return Status::OK();
+}
+
 Status MDSClient::MkNod(ContextSPtr ctx, Ino parent, const std::string& name,
                         uint32_t uid, uint32_t gid, mode_t mode, dev_t rdev,
                         Attr& out_attr) {

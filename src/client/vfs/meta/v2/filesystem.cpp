@@ -298,12 +298,26 @@ Status MDSV2FileSystem::Create(ContextSPtr ctx, Ino parent,
                                const std::string& name, uint32_t uid,
                                uint32_t gid, uint32_t mode, int flags,
                                Attr* attr, uint64_t fh) {
-  auto status = MkNod(ctx, parent, name, uid, gid, mode, 0, attr);
+  // auto status = MkNod(ctx, parent, name, uid, gid, mode, 0, attr);
+  // if (!status.ok()) {
+  //   return status;
+  // }
+
+  // return Open(ctx, attr->ino, flags, fh);
+
+  std::vector<std::string> session_ids;
+  auto status = mds_client_->Create(ctx, parent, name, uid, gid, mode, flags,
+                                    *attr, session_ids);
   if (!status.ok()) {
     return status;
   }
 
-  return Open(ctx, attr->ino, flags, fh);
+  // add file session
+  CHECK(!session_ids.empty()) << "session_ids is empty.";
+  const auto& session_id = session_ids.front();
+  auto file_session = file_session_map_.Put(attr->ino, fh, session_id);
+
+  return Status::OK();
 }
 
 Status MDSV2FileSystem::MkNod(ContextSPtr ctx, Ino parent,

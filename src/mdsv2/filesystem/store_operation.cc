@@ -188,6 +188,9 @@ const char* Operation::OpName() const {
     case OpType::kMkNod:
       return "MkNod";
 
+    case OpType::kBatchCreateFile:
+      return "CreateFile";
+
     case OpType::kHardLink:
       return "HardLink";
 
@@ -664,6 +667,37 @@ Status MkNodOperation::RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const st
 
   // create inode
   txn->Put(MetaCodec::EncodeInodeKey(fs_id, dentry_.INo()), MetaCodec::EncodeInodeValue(attr_));
+
+  // update parent attr
+  parent_attr.set_mtime(std::max(parent_attr.mtime(), GetTime()));
+  parent_attr.set_ctime(std::max(parent_attr.ctime(), GetTime()));
+
+  return Status::OK();
+}
+
+Status BatchCreateFileOperation::RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const std::vector<KeyValue>&) {
+  const uint32_t fs_id = parent_attr.fs_id();
+  const Ino parent = parent_attr.ino();
+  CHECK(dentries_.size() == attrs_.size())
+      << fmt::format("dentry and attr size not equal, {} {}.", dentries_.size(), attrs_.size());
+  CHECK(dentries_.size() == file_sessions_.size())
+      << fmt::format("dentry and file_session size not equal, {} {}.", dentries_.size(), file_sessions_.size());
+
+  for (size_t i = 0; i < dentries_.size(); ++i) {
+    const auto& dentry = dentries_[i];
+    const auto& attr = attrs_[i];
+    const auto& file_session = file_sessions_[i];
+
+    // create dentry
+    txn->Put(MetaCodec::EncodeDentryKey(fs_id, parent, dentry.Name()), MetaCodec::EncodeDentryValue(dentry.Copy()));
+
+    // create inode
+    txn->Put(MetaCodec::EncodeInodeKey(fs_id, dentry.INo()), MetaCodec::EncodeInodeValue(attr));
+
+    // add file session
+    txn->Put(MetaCodec::EncodeFileSessionKey(file_session->fs_id(), file_session->ino(), file_session->session_id()),
+             MetaCodec::EncodeFileSessionValue(*file_session));
+  }
 
   // update parent attr
   parent_attr.set_mtime(std::max(parent_attr.mtime(), GetTime()));
@@ -2375,7 +2409,7 @@ bool OperationProcessor::Init() {
 
   Param* param = new Param({this});
 
-  const bthread_attr_t attr = BTHREAD_ATTR_NORMAL;
+  const bthread_attr_t attr = BTHREAD_ATTR_LARGE;
   if (bthread_start_background(
           &tid_, &attr,
           [](void* arg) -> void* {
@@ -2564,13 +2598,19 @@ void OperationProcessor::ProcessOperation() {
       break;
     }
 
-    if (FLAGS_mds_store_operation_merge_delay_us > 0) {
-      bthread_usleep(FLAGS_mds_store_operation_merge_delay_us);
-    }
-
+    bool is_waited = false;
     do {
       stage_operations.push_back(operation);
-    } while (operations_.Dequeue(operation));
+      if (!operations_.Dequeue(operation)) {
+        break;
+      }
+
+      if (!is_waited && FLAGS_mds_store_operation_merge_delay_us > 0) {
+        bthread_usleep(FLAGS_mds_store_operation_merge_delay_us);
+        is_waited = true;
+      }
+
+    } while (true);
 
     auto batch_operation_map = Grouping(stage_operations);
     for (auto& [_, batch_operation] : batch_operation_map) {

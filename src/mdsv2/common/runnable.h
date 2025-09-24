@@ -190,10 +190,11 @@ class WorkerSet {
 
   std::atomic<uint32_t> worker_no_generator_{0};
 
-  bool use_pthread_;
+  const bool use_pthread_;
 
-  uint32_t worker_num_{0};
-  int64_t max_pending_task_count_{0};
+  const uint32_t worker_num_{0};
+  const int64_t max_pending_task_count_{0};
+
   std::atomic<int64_t> pending_task_count_{0};
 
   // Notify

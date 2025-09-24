@@ -28,7 +28,7 @@
 namespace dingofs {
 namespace mdsv2 {
 
-using FileSessionPtr = std::shared_ptr<FileSessionEntry>;
+using FileSessionSPtr = std::shared_ptr<FileSessionEntry>;
 
 // cache file session
 class FileSessionCache {
@@ -48,20 +48,20 @@ class FileSessionCache {
     }
   };
 
-  bool Put(FileSessionPtr file_session);
-  void Upsert(FileSessionPtr file_session);
+  bool Put(FileSessionSPtr file_session);
+  void Upsert(FileSessionSPtr file_session);
   void Delete(uint64_t ino, const std::string& session_id);
   void Delete(uint64_t ino);
 
-  FileSessionPtr Get(uint64_t ino, const std::string& session_id);
-  std::vector<FileSessionPtr> Get(uint64_t ino);
+  FileSessionSPtr Get(uint64_t ino, const std::string& session_id);
+  std::vector<FileSessionSPtr> Get(uint64_t ino);
   bool IsExist(uint64_t ino);
   bool IsExist(uint64_t ino, const std::string& session_id);
 
  private:
   utils::RWLock lock_;
   // ino/session_id -> file_session
-  std::map<Key, FileSessionPtr> file_session_map_;
+  std::map<Key, FileSessionSPtr> file_session_map_;
 
   // statistics
   bvar::Adder<int64_t> count_metrics_;
@@ -86,20 +86,21 @@ class FileSessionManager {
     return std::make_unique<FileSessionManager>(fs_id, operation_processor);
   }
 
-  Status Create(uint64_t ino, const std::string& client_id, FileSessionPtr& file_session);
+  FileSessionSPtr Create(uint64_t ino, const std::string& client_id) const;
+  void Put(FileSessionSPtr file_session);
   Status IsExist(uint64_t ino, bool just_cache, bool& is_exist);
   Status Delete(uint64_t ino, const std::string& session_id);
   Status Delete(uint64_t ino);
 
-  FileSessionPtr Get(uint64_t ino, const std::string& session_id, bool just_cache = false);
-  std::vector<FileSessionPtr> Get(uint64_t ino, bool just_cache = false);
+  FileSessionSPtr Get(uint64_t ino, const std::string& session_id, bool just_cache = false);
+  std::vector<FileSessionSPtr> Get(uint64_t ino, bool just_cache = false);
   Status GetAll(std::vector<FileSessionEntry>& file_sessions);
 
   FileSessionCache& GetFileSessionCache() { return file_session_cache_; }
 
  private:
-  Status GetFileSessionsFromStore(uint64_t ino, std::vector<FileSessionPtr>& file_sessions);
-  Status GetFileSessionFromStore(uint64_t ino, const std::string& session_id, FileSessionPtr& file_session);
+  Status GetFileSessionsFromStore(uint64_t ino, std::vector<FileSessionSPtr>& file_sessions);
+  Status GetFileSessionFromStore(uint64_t ino, const std::string& session_id, FileSessionSPtr& file_session);
   Status IsExistFromStore(uint64_t ino, bool& is_exist);
 
   uint32_t fs_id_;

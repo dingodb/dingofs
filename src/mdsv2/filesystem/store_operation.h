@@ -37,6 +37,8 @@
 namespace dingofs {
 namespace mdsv2 {
 
+using FileSessionSPtr = std::shared_ptr<FileSessionEntry>;
+
 class Operation;
 using OperationSPtr = std::shared_ptr<Operation>;
 
@@ -59,77 +61,78 @@ class Operation {
     kUpdateFsPartition = 7,
     kUpdateFsState = 8,
     kUpdateFsRecycleProgress = 9,
-    kCreateRoot = 10,
-    kMkDir = 11,
-    kMkNod = 12,
-    kHardLink = 13,
-    kSmyLink = 14,
-    kUpdateAttr = 15,
-    kUpdateXAttr = 16,
-    kRemoveXAttr = 17,
-    kFallocate = 18,
-    kOpenFile = 19,
-    kCloseFile = 20,
-    kRmDir = 21,
-    kUnlink = 22,
-    kRename = 23,
-    kCompactChunk = 24,
 
-    kUpsertChunk = 25,
-    kGetChunk = 26,
-    kScanChunk = 27,
-    kCleanChunk = 28,
+    kCreateRoot = 20,
+    kMkDir = 21,
+    kMkNod = 22,
+    kBatchCreateFile = 23,
+    kHardLink = 24,
+    kSmyLink = 25,
+    kUpdateAttr = 26,
+    kUpdateXAttr = 27,
+    kRemoveXAttr = 28,
+    kFallocate = 29,
+    kOpenFile = 30,
+    kCloseFile = 31,
+    kRmDir = 32,
+    kUnlink = 33,
+    kRename = 34,
 
-    kSetFsQuota = 30,
-    kGetFsQuota = 31,
-    kFlushFsUsage = 32,
-    kDeleteFsQuota = 33,
+    kCompactChunk = 50,
+    kUpsertChunk = 51,
+    kGetChunk = 52,
+    kScanChunk = 53,
+    kCleanChunk = 54,
 
-    kSetDirQuota = 35,
-    kDeleteDirQuota = 36,
-    kLoadDirQuotas = 37,
-    kFlushDirUsages = 38,
-    kGetDirQuota = 39,
+    kSetFsQuota = 60,
+    kGetFsQuota = 61,
+    kFlushFsUsage = 62,
+    kDeleteFsQuota = 63,
+    kSetDirQuota = 64,
+    kDeleteDirQuota = 65,
+    kLoadDirQuotas = 66,
+    kFlushDirUsages = 67,
+    kGetDirQuota = 68,
 
-    kUpsertMds = 40,
-    kDeleteMds = 41,
-    kScanMds = 42,
-    kUpsertClient = 43,
-    kDeleteClient = 44,
-    kScanClient = 45,
+    kUpsertMds = 80,
+    kDeleteMds = 81,
+    kScanMds = 82,
+    kUpsertClient = 83,
+    kDeleteClient = 84,
+    kScanClient = 85,
 
-    kGetFileSession = 50,
-    kScanFileSession = 51,
-    kDeleteFileSession = 52,
+    kGetFileSession = 100,
+    kScanFileSession = 101,
+    kDeleteFileSession = 102,
 
-    kCleanDelSlice = 60,
-    kGetDelFile = 61,
-    kCleanDelFile = 62,
+    kCleanDelSlice = 110,
+    kGetDelFile = 111,
+    kCleanDelFile = 112,
 
-    kScanLock = 70,
-    kScanFs = 71,
-    kScanDentry = 72,
-    kScanDelFile = 73,
-    kScanDelSlice = 74,
+    kScanLock = 120,
+    kScanFs = 121,
+    kScanDentry = 122,
+    kScanDelFile = 123,
+    kScanDelSlice = 124,
 
-    kScanMetaTable = 75,
-    kScanFsMetaTable = 76,
-    kScanFsOpLog = 77,
+    kScanMetaTable = 140,
+    kScanFsMetaTable = 141,
+    kScanFsOpLog = 142,
 
-    kSaveFsStats = 80,
-    kScanFsStats = 81,
-    kGetAndCompactFsStats = 82,
+    kSaveFsStats = 150,
+    kScanFsStats = 151,
+    kGetAndCompactFsStats = 152,
 
-    kGetInodeAttr = 90,
-    kBatchGetInodeAttr = 91,
-    KGetDentry = 92,
+    kGetInodeAttr = 160,
+    kBatchGetInodeAttr = 161,
+    KGetDentry = 162,
 
-    kImportKV = 100,
+    kImportKV = 170,
 
-    kUpsertCacheMember = 105,
-    kDeleteCacheMember = 106,
-    kScanCacheMember = 107,
-    KGetCacheMember = 108,
+    kUpsertCacheMember = 180,
+    kDeleteCacheMember = 181,
+    kScanCacheMember = 182,
+    KGetCacheMember = 183,
   };
 
   const char* OpName() const;
@@ -143,6 +146,7 @@ class Operation {
     switch (GetOpType()) {
       case OpType::kMkDir:
       case OpType::kMkNod:
+      case OpType::kBatchCreateFile:
       case OpType::kSmyLink:
         return true;
 
@@ -170,6 +174,7 @@ class Operation {
     switch (GetOpType()) {
       case OpType::kMkDir:
       case OpType::kMkNod:
+      case OpType::kBatchCreateFile:
       case OpType::kSmyLink:
       case OpType::kUpdateAttr:
       case OpType::kUpdateXAttr:
@@ -499,6 +504,26 @@ class MkNodOperation : public Operation {
  private:
   const Dentry dentry_;
   AttrEntry attr_;
+};
+
+class BatchCreateFileOperation : public Operation {
+ public:
+  BatchCreateFileOperation(Trace& trace, const std::vector<Dentry>& dentries, const std::vector<AttrEntry>& attrs,
+                           const std::vector<FileSessionSPtr>& file_sessions)
+      : Operation(trace), dentries_(dentries), attrs_(attrs), file_sessions_(file_sessions) {};
+  ~BatchCreateFileOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kBatchCreateFile; }
+
+  uint32_t GetFsId() const override { return dentries_.front().FsId(); }
+  Ino GetIno() const override { return dentries_.front().ParentIno(); }
+
+  Status RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const std::vector<KeyValue>& prefetch_kvs) override;
+
+ private:
+  const std::vector<Dentry>& dentries_;
+  const std::vector<AttrEntry>& attrs_;
+  const std::vector<FileSessionSPtr>& file_sessions_;
 };
 
 class HardLinkOperation : public Operation {

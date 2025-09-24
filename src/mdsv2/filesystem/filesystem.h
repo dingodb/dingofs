@@ -65,6 +65,7 @@ struct EntryOut {
 
   std::string name;
   AttrEntry attr;
+  std::vector<AttrEntry> attrs;
   uint64_t parent_version{0};
 };
 
@@ -124,6 +125,9 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
     Ino parent{0};
     uint64_t rdev{0};
   };
+
+  Status BatchCreate(Context& ctx, Ino parent, const std::vector<MkNodParam>& params, EntryOut& entry_out,
+                     std::vector<std::string>& session_ids);
   Status MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_out);
   Status Open(Context& ctx, Ino ino, uint32_t flags, bool is_prefetch_chunk, std::string& session_id,
               EntryOut& entry_out, std::vector<ChunkEntry>& chunks);

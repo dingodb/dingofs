@@ -591,6 +591,127 @@ uint64_t FileSystem::GetMdsIdByIno(Ino ino) {
   return target_mds_id;
 }
 
+Status FileSystem::BatchCreate(Context& ctx, Ino parent, const std::vector<MkNodParam>& params, EntryOut& entry_out,
+                               std::vector<std::string>& session_ids) {
+  if (!CanServe()) {
+    return Status(pb::error::ENOT_SERVE, "can not serve");
+  }
+
+  auto& trace = ctx.GetTrace();
+  const std::string& client_id = ctx.ClientId();
+
+  // get partition
+  PartitionPtr partition;
+  auto status = GetPartition(ctx, parent, partition);
+  if (!status.ok()) return status;
+  auto parent_inode = partition->ParentInode();
+
+  // update parent memo
+  UpdateParentMemo(ctx.GetAncestors());
+
+  // check quota
+  if (!quota_manager_->CheckQuota(trace, parent, 0, params.size())) {
+    return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
+  }
+
+  Duration duration;
+
+  std::vector<Inode::AttrEntry> attrs;
+  attrs.reserve(params.size());
+  std::vector<Dentry> dentries;
+  dentries.reserve(params.size());
+  std::vector<FileSessionSPtr> file_sessions;
+  file_sessions.reserve(params.size());
+
+  std::string names;
+  for (const auto& param : params) {
+    // check request
+    if (param.name.empty()) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "name is empty");
+    }
+
+    if (param.parent == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "invalid parent inode id");
+    }
+
+    Ino ino = 0;
+    auto status = GenFileIno(ino);
+    if (!status.ok()) return status;
+
+    Inode::AttrEntry attr;
+    attr.set_fs_id(fs_id_);
+    attr.set_ino(ino);
+    attr.set_length(0);
+    attr.set_ctime(duration.StartNs());
+    attr.set_mtime(duration.StartNs());
+    attr.set_atime(duration.StartNs());
+    attr.set_uid(param.uid);
+    attr.set_gid(param.gid);
+    attr.set_mode(param.mode);
+    attr.set_nlink(1);
+    attr.set_type(pb::mdsv2::FileType::FILE);
+    attr.set_rdev(param.rdev);
+    attr.add_parents(param.parent);
+
+    attrs.push_back(attr);
+
+    auto inode = Inode::New(attr);
+    dentries.emplace_back(fs_id_, param.name, param.parent, ino, pb::mdsv2::FileType::FILE, param.flag, inode);
+
+    FileSessionSPtr file_session = file_session_manager_.Create(ino, client_id);
+    file_sessions.push_back(file_session);
+
+    names += param.name + ",";
+  }
+
+  BatchCreateFileOperation operation(trace, dentries, attrs, file_sessions);
+
+  status = RunOperation(&operation);
+
+  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] create {} finish, status({}).", fs_id_, duration.ElapsedUs(), names,
+                                 status.error_str());
+
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, fmt::format("put inode/dentry fail, {}", status.error_str()));
+  }
+
+  auto& result = operation.GetResult();
+  auto& parent_attr = result.attr;
+
+  // update cache
+  session_ids.reserve(file_sessions.size());
+  for (auto& file_session : file_sessions) {
+    session_ids.push_back(file_session->session_id());
+    file_session_manager_.Put(file_session);
+  }
+
+  for (auto& dentry : dentries) {
+    partition->PutChild(dentry);
+    inode_cache_.PutInode(dentry.INo(), dentry.Inode());
+  }
+  parent_inode->UpdateIf(parent_attr);
+
+  // update quota
+  std::string reason = fmt::format("create.{}.{}", parent, names);
+  quota_manager_->UpdateFsUsage(0, params.size(), reason);
+  quota_manager_->AsyncUpdateDirUsage(parent, 0, params.size(), reason);
+
+  for (auto& dentry : dentries) {
+    parent_memo_->Remeber(dentry.INo(), parent);
+  }
+
+  // set output
+  entry_out.attrs = std::move(attrs);
+  entry_out.parent_version = parent_attr.version();
+
+  // notify buddy mds to refresh inode
+  if (IsParentHashPartition()) {
+    NotifyBuddyRefreshInode(std::move(parent_attr));
+  }
+
+  return Status::OK();
+}
+
 // create file, need below steps:
 // 1. create inode
 // 2. create dentry and update parent inode(nlink/mtime/ctime)
@@ -611,20 +732,16 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
     return Status(pb::error::EILLEGAL_PARAMTETER, "invalid parent inode id");
   }
 
-  // get dentry set
+  // get partition
   PartitionPtr partition;
   auto status = GetPartition(ctx, parent, partition);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
   auto parent_inode = partition->ParentInode();
 
   // generate inode id
   Ino ino = 0;
   status = GenFileIno(ino);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
   // update parent memo
   UpdateParentMemo(ctx.GetAncestors());
@@ -742,11 +859,7 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, bool is_prefetch_
   // update parent memo
   UpdateParentMemo(ctx.GetAncestors());
 
-  FileSessionPtr file_session;
-  status = file_session_manager_.Create(ino, client_id, file_session);
-  if (!status.ok()) {
-    return status;
-  }
+  FileSessionSPtr file_session = file_session_manager_.Create(ino, client_id);
 
   OpenFileOperation operation(trace, flags, *file_session);
 
@@ -761,6 +874,8 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, bool is_prefetch_
 
   session_id = file_session->session_id();
   entry_out.attr = attr;
+
+  file_session_manager_.Put(file_session);
 
   // update quota
   if (delta_bytes != 0) {

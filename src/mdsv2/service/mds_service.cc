@@ -802,6 +802,88 @@ void MDSServiceImpl::Lookup(google::protobuf::RpcController* controller, const p
   }
 }
 
+void MDSServiceImpl::DoBatchCreate(google::protobuf::RpcController* controller,
+                                   const pb::mdsv2::BatchCreateRequest* request,
+                                   pb::mdsv2::BatchCreateResponse* response, TraceClosure* done) {
+  brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
+
+  auto file_system = GetFileSystem(request->fs_id());
+  if (file_system == nullptr) {
+    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
+  }
+
+  auto status = ValidateRequest(request, file_system);
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  std::vector<FileSystem::MkNodParam> params;
+  params.reserve(request->params_size());
+  for (const auto& req_param : request->params()) {
+    FileSystem::MkNodParam param;
+    param.parent = request->parent();
+    param.name = req_param.name();
+    param.mode = req_param.mode();
+    param.uid = req_param.uid();
+    param.gid = req_param.gid();
+    param.rdev = req_param.rdev();
+
+    params.push_back(param);
+  }
+
+  const auto& req_ctx = request->context();
+  Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
+  ctx.SetAncestors(Helper::PbRepeatedToVector(request->context().ancestors()));
+
+  EntryOut entry_out;
+  std::vector<std::string> session_ids;
+  status = file_system->BatchCreate(ctx, request->parent(), params, entry_out, session_ids);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  for (auto& attr : entry_out.attrs) response->add_inodes()->Swap(&attr);
+  Helper::VectorToPbRepeated(session_ids, response->mutable_session_ids());
+  response->set_parent_version(entry_out.parent_version);
+}
+
+void MDSServiceImpl::BatchCreate(google::protobuf::RpcController* controller,
+                                 const pb::mdsv2::BatchCreateRequest* request, pb::mdsv2::BatchCreateResponse* response,
+                                 google::protobuf::Closure* done) {
+  auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // validate request
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_id() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs_id is empty");
+    }
+    if (request->parent() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "parent is empty");
+    }
+
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  // Run in queue.
+  auto task = std::make_shared<ServiceTask>(
+      [this, controller, request, response, svr_done]() { DoBatchCreate(controller, request, response, svr_done); });
+
+  bool ret = write_worker_set_->Execute(task);
+  if (BAIDU_UNLIKELY(!ret)) {
+    brpc::ClosureGuard done_guard(svr_done);
+    ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
+                            "WorkerSet queue is full, please wait and retry");
+  }
+}
+
 void MDSServiceImpl::DoMkNod(google::protobuf::RpcController*, const pb::mdsv2::MkNodRequest* request,
                              pb::mdsv2::MkNodResponse* response, TraceClosure* done) {
   brpc::ClosureGuard done_guard(done);
