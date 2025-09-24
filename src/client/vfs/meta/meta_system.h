@@ -29,6 +29,15 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
+struct DumpOption {
+  bool dir_iterator{false};
+  bool file_session{false};
+  bool handler{false};
+  bool parent_memo{false};
+  bool mds_router{false};
+  bool inode_cache{false};
+  bool rpc{false};
+};
 
 class MetaSystem {
  public:
@@ -41,6 +50,8 @@ class MetaSystem {
   virtual void UnInit() = 0;
 
   virtual bool Dump(ContextSPtr ctx, Json::Value& value) = 0;
+
+  virtual bool Dump(const DumpOption& options, Json::Value& value) = 0;
 
   virtual bool Load(ContextSPtr ctx, const Json::Value& value) = 0;
 
@@ -153,7 +164,7 @@ class MetaSystem {
 
   virtual Status GetFsInfo(ContextSPtr ctx, FsInfo* fs_info) = 0;
 
-  virtual bool GetDescription(ContextSPtr ctx, Json::Value& value) = 0;
+  virtual bool GetDescription(Json::Value& value) = 0;
 };
 
 using MetaSystemPtr = std::shared_ptr<MetaSystem>;

@@ -199,6 +199,7 @@ class DummyFileSystem : public vfs::MetaSystem {
   void UnInit() override;
 
   bool Dump(ContextSPtr ctx, Json::Value& value) override;
+  bool Dump(const DumpOption& options, Json::Value& value) override;
   bool Load(ContextSPtr ctx, const Json::Value& value) override;
 
   pb::mdsv2::FsInfo GetFsInfo() { return fs_info_; }
@@ -268,7 +269,7 @@ class DummyFileSystem : public vfs::MetaSystem {
 
   Status GetFsInfo(ContextSPtr ctx, FsInfo* fs_info) override;
 
-  bool GetDescription(ContextSPtr ctx, Json::Value& value) override;
+  bool GetDescription(Json::Value& value) override;
 
  private:
   friend class DirIterator;

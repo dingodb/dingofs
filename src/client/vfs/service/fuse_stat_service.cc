@@ -31,6 +31,7 @@
 #include "butil/iobuf.h"
 #include "client/const.h"
 #include "client/vfs/common/helper.h"
+#include "client/vfs/meta/meta_system.h"
 #include "fmt/format.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/version.h"
@@ -401,11 +402,11 @@ static std::string RenderDirEntries(const Json::Value& entries) {
     uint64_t mtime = attr["mtime"].asUInt64();
     uint64_t ctime = attr["ctime"].asUInt64();
     int32_t type = attr["type"].asInt();
-    result += fmt::format("{},{},{},{},{},{},{},{},{},{},{},{}", ino, name,
-                          mode, nlink, uid, gid, length, rdev,
-                          dingofs::mdsv2::Helper::FormatNsTime(atime),
-                          dingofs::mdsv2::Helper::FormatNsTime(mtime),
-                          dingofs::mdsv2::Helper::FormatNsTime(ctime), type);
+    result += fmt::format(
+        "{},{},{},{},{},{},{},{},{},{},{},{}", ino, name, mode, nlink, uid, gid,
+        length, rdev, dingofs::mdsv2::Helper::FormatMsTime(atime / 1000000),
+        dingofs::mdsv2::Helper::FormatMsTime(mtime / 1000000),
+        dingofs::mdsv2::Helper::FormatMsTime(ctime / 1000000), type);
 
     result += "<br>";
   }
@@ -524,15 +525,25 @@ static std::string RenderWriteMemo(const Json::Value& json_value) {
       return "";
     }
     auto last_time_ns = json_value["last_time_ns"].asUInt64();
-    result += fmt::format("last_time_ns:{}",
-                          dingofs::mdsv2::Helper::FormatNsTime(last_time_ns));
+    result += fmt::format(
+        "last_time_ns:{}",
+        dingofs::mdsv2::Helper::FormatMsTime(last_time_ns / 1000000));
     result += "<br>";
-    result += "start, end";
+    result += "<br>";
+    result += "range";
+    result += "<br>";
+    std::vector<Range> ranges;
     for (const auto& range_item : json_value["ranges"]) {
-      auto start = range_item["start"].asUInt64();
-      auto end = range_item["end"].asUInt64();
-      result += "<br>";
-      result += fmt::format("{},{}", start, end);
+      Range range;
+      range.start = range_item["start"].asUInt64();
+      range.end = range_item["end"].asUInt64();
+      ranges.push_back(range);
+    }
+    std::sort(ranges.begin(), ranges.end(),  // NOLINT
+              [](const Range& a, const Range& b) { return a.start < b.start; });
+
+    for (const auto& range_item : ranges) {
+      result += fmt::format("[{},{})", range_item.start, range_item.end);
       result += "<br>";
     }
   }
@@ -782,9 +793,12 @@ static void RenderInodeCachePage(const Json::Value& json_value,
     os << "<td>" << nlink << "</td>";
     os << "<td>" << symlink << "</td>";
     os << "<td>" << rdev << "</td>";
-    os << "<td>" << dingofs::mdsv2::Helper::FormatNsTime(ctime) << "</td>";
-    os << "<td>" << dingofs::mdsv2::Helper::FormatNsTime(mtime) << "</td>";
-    os << "<td>" << dingofs::mdsv2::Helper::FormatNsTime(atime) << "</td>";
+    os << "<td>" << dingofs::mdsv2::Helper::FormatMsTime(ctime / 1000000)
+       << "</td>";
+    os << "<td>" << dingofs::mdsv2::Helper::FormatMsTime(mtime / 1000000)
+       << "</td>";
+    os << "<td>" << dingofs::mdsv2::Helper::FormatMsTime(atime / 1000000)
+       << "</td>";
     os << "<td>" << open_mp_count << "</td>";
     os << "<td>" << version << "</td>";
     os << "</tr>";
@@ -896,9 +910,7 @@ void FuseStatServiceImpl::RenderMainPage(const brpc::Server* server,
 
   Json::Value meta_value;
 
-  auto span = vfs_hub_->GetTracer()->StartSpan(kVFSWrapperMoudule, __func__);
-  if (!vfs_hub_->GetMetaSystem()->GetDescription(span->GetContext(),
-                                                 meta_value)) {
+  if (!vfs_hub_->GetMetaSystem()->GetDescription(meta_value)) {
     LOG(ERROR) << fmt::format("GetDescription failed.");
     os << "</body>";
     os << "</html>";
@@ -1065,13 +1077,11 @@ void FuseStatServiceImpl::default_method(
     std::string host_name = params[1];
     std::string port = params[2];
     Json::Value meta_value;
-
-    auto span = vfs_hub_->GetTracer()->StartSpan(kVFSWrapperMoudule, __func__);
-    if (!vfs_hub_->GetMetaSystem()->Dump(span->GetContext(), meta_value)) {
+    DumpOption options;
+    options.dir_iterator = true;
+    if (!vfs_hub_->GetMetaSystem()->Dump(options, meta_value)) {
       LOG(ERROR) << fmt::format(" MetaSystem Dump failed.");
       cntl->SetFailed("MetaSystem Dump failed.");
-      os.move_to(cntl->response_attachment());
-      cntl->set_response_compress_type(brpc::COMPRESS_TYPE_GZIP);
       return;
     }
     RenderDirInfoPage(meta_value, os, host_name, port);
@@ -1081,12 +1091,12 @@ void FuseStatServiceImpl::default_method(
     std::string port = params[2];
     Json::Value meta_value;
 
-    auto span = vfs_hub_->GetTracer()->StartSpan(kVFSWrapperMoudule, __func__);
-    if (!vfs_hub_->GetMetaSystem()->Dump(span->GetContext(), meta_value)) {
+    DumpOption options;
+    options.file_session = true;
+
+    if (!vfs_hub_->GetMetaSystem()->Dump(options, meta_value)) {
       LOG(ERROR) << fmt::format(" MetaSystem Dump failed.");
       cntl->SetFailed("MetaSystem Dump failed.");
-      os.move_to(cntl->response_attachment());
-      cntl->set_response_compress_type(brpc::COMPRESS_TYPE_GZIP);
       return;
     }
     RenderFileSessionPage(meta_value, os, host_name, port);
@@ -1098,8 +1108,6 @@ void FuseStatServiceImpl::default_method(
     if (!vfs_hub_->GetHandleManager()->Dump(handler_value)) {
       LOG(ERROR) << fmt::format("GetHandleManager failed.");
       cntl->SetFailed("GetHandleManager failed.");
-      os.move_to(cntl->response_attachment());
-      cntl->set_response_compress_type(brpc::COMPRESS_TYPE_GZIP);
       return;
     }
     RenderHandlerInfoPage(handler_value, os, host_name, port);
@@ -1109,12 +1117,11 @@ void FuseStatServiceImpl::default_method(
     std::string port = params[2];
     Json::Value meta_value;
 
-    auto span = vfs_hub_->GetTracer()->StartSpan(kVFSWrapperMoudule, __func__);
-    if (!vfs_hub_->GetMetaSystem()->Dump(span->GetContext(), meta_value)) {
+    DumpOption options;
+    options.parent_memo = true;
+    if (!vfs_hub_->GetMetaSystem()->Dump(options, meta_value)) {
       LOG(ERROR) << fmt::format(" MetaSystem Dump failed.");
       cntl->SetFailed("MetaSystem Dump failed.");
-      os.move_to(cntl->response_attachment());
-      cntl->set_response_compress_type(brpc::COMPRESS_TYPE_GZIP);
       return;
     }
     RenderParentMemoPage(meta_value, os, host_name, port);
@@ -1124,12 +1131,12 @@ void FuseStatServiceImpl::default_method(
     std::string port = params[2];
     Json::Value meta_value;
 
-    auto span = vfs_hub_->GetTracer()->StartSpan(kVFSWrapperMoudule, __func__);
-    if (!vfs_hub_->GetMetaSystem()->Dump(span->GetContext(), meta_value)) {
+    DumpOption options;
+    options.mds_router = true;
+
+    if (!vfs_hub_->GetMetaSystem()->Dump(options, meta_value)) {
       LOG(ERROR) << fmt::format(" MetaSystem Dump failed.");
       cntl->SetFailed("MetaSystem Dump failed.");
-      os.move_to(cntl->response_attachment());
-      cntl->set_response_compress_type(brpc::COMPRESS_TYPE_GZIP);
       return;
     }
     RenderMdsRouterPage(meta_value, os, host_name, port);
@@ -1139,12 +1146,12 @@ void FuseStatServiceImpl::default_method(
     std::string port = params[2];
     Json::Value meta_value;
 
-    auto span = vfs_hub_->GetTracer()->StartSpan(kVFSWrapperMoudule, __func__);
-    if (!vfs_hub_->GetMetaSystem()->Dump(span->GetContext(), meta_value)) {
+    DumpOption options;
+    options.inode_cache = true;
+
+    if (!vfs_hub_->GetMetaSystem()->Dump(options, meta_value)) {
       LOG(ERROR) << fmt::format(" MetaSystem Dump failed.");
       cntl->SetFailed("MetaSystem Dump failed.");
-      os.move_to(cntl->response_attachment());
-      cntl->set_response_compress_type(brpc::COMPRESS_TYPE_GZIP);
       return;
     }
     RenderInodeCachePage(meta_value, os, host_name, port);
@@ -1154,12 +1161,12 @@ void FuseStatServiceImpl::default_method(
     std::string port = params[2];
     Json::Value meta_value;
 
-    auto span = vfs_hub_->GetTracer()->StartSpan(kVFSWrapperMoudule, __func__);
-    if (!vfs_hub_->GetMetaSystem()->Dump(span->GetContext(), meta_value)) {
+    DumpOption options;
+    options.rpc = true;
+
+    if (!vfs_hub_->GetMetaSystem()->Dump(options, meta_value)) {
       LOG(ERROR) << fmt::format(" MetaSystem Dump failed.");
       cntl->SetFailed("MetaSystem Dump failed.");
-      os.move_to(cntl->response_attachment());
-      cntl->set_response_compress_type(brpc::COMPRESS_TYPE_GZIP);
       return;
     }
     RenderRPCPage(meta_value, os, host_name, port);

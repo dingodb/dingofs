@@ -61,10 +61,28 @@ bool MDSClient::Dump(Json::Value& value) {
   if (!parent_memo_->Dump(value)) {
     return false;
   }
+
   if (!mds_router_->Dump(value)) {
     return false;
   }
+
   if (!rpc_->Dump(value)) {
+    return false;
+  }
+
+  return true;
+}
+
+bool MDSClient::Dump(const DumpOption& options, Json::Value& value) {
+  if (options.parent_memo && !parent_memo_->Dump(value)) {
+    return false;
+  }
+
+  if (options.mds_router && !mds_router_->Dump(value)) {
+    return false;
+  }
+
+  if (options.rpc && !rpc_->Dump(value)) {
     return false;
   }
 

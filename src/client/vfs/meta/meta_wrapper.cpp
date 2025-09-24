@@ -48,6 +48,11 @@ bool MetaWrapper::Dump(ContextSPtr ctx, Json::Value& value) {
   return target_->Dump(ctx, value);
 }
 
+bool MetaWrapper::Dump(const DumpOption& options, Json::Value& value) {
+  MetaLogGuard log_guard([&]() { return "dump"; });
+  return target_->Dump(options, value);
+}
+
 bool MetaWrapper::Load(ContextSPtr ctx, const Json::Value& value) {
   MetaLogGuard log_guard([&]() { return "load"; });
   return target_->Load(ctx, value);
@@ -341,8 +346,8 @@ Status MetaWrapper::AsyncWriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
   uint64_t start_us = butil::cpuwide_time_us();
   uint64_t slice_count = slices.size();
 
-  auto wrapped_done = [start_us, slice_count, ctx = std::move(ctx), ino, index, fh,
-                       done = std::move(done)](const Status& status) {
+  auto wrapped_done = [start_us, slice_count, ctx = std::move(ctx), ino, index,
+                       fh, done = std::move(done)](const Status& status) {
     Status s;
     MetaLogGuard log_guard(start_us, [&]() {
       return absl::StrFormat("async_write_slice (%d,%d,%d): %s %d %d", ino,
@@ -388,9 +393,9 @@ Status MetaWrapper::GetFsInfo(ContextSPtr ctx, FsInfo* fs_info) {
   return s;
 }
 
-bool MetaWrapper::GetDescription(ContextSPtr ctx, Json::Value& value) {
+bool MetaWrapper::GetDescription(Json::Value& value) {
   MetaLogGuard log_guard([&]() { return "get client id description"; });
-  return target_->GetDescription(ctx, value);
+  return target_->GetDescription(value);
 }
 
 }  // namespace vfs

@@ -29,9 +29,11 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
-// class FuseStatServiceImpl;
-// using FuseStatServiceImplUPtr = std::unique_ptr<FuseStatServiceImpl>;
 
+struct Range {
+  uint64_t start{0};
+  uint64_t end{0};  // [start, end)
+};
 class FuseStatServiceImpl : public pb::web::FuseStatService,
                             public brpc::Tabbed {
  public:

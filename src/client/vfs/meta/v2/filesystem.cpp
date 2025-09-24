@@ -132,6 +132,26 @@ bool MDSV2FileSystem::Dump(ContextSPtr, Json::Value& value) {
   return true;
 }
 
+bool MDSV2FileSystem::Dump(const DumpOption& options, Json::Value& value) {
+  if (options.file_session && !file_session_map_.Dump(value)) {
+    return false;
+  }
+
+  if (options.dir_iterator && !dir_iterator_manager_.Dump(value)) {
+    return false;
+  }
+
+  if (!mds_client_->Dump(options, value)) {
+    return false;
+  }
+
+  if (options.inode_cache && !inode_cache_->Dump(value)) {
+    return false;
+  }
+
+  return true;
+}
+
 bool MDSV2FileSystem::Load(ContextSPtr, const Json::Value& value) {
   if (!file_session_map_.Load(value)) {
     return false;
@@ -971,7 +991,7 @@ MDSV2FileSystemUPtr MDSV2FileSystem::Build(const std::string& fs_name,
                               mds_client);
 }
 
-bool MDSV2FileSystem::GetDescription(ContextSPtr ctx, Json::Value& value) {
+bool MDSV2FileSystem::GetDescription(Json::Value& value) {
   // client
   Json::Value client_id;
   client_id["id"] = client_id_.ID();

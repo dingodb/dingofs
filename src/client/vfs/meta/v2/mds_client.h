@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "client/meta/vfs_meta.h"
+#include "client/vfs/meta/meta_system.h"
 #include "client/vfs/meta/v2/client_id.h"
 #include "client/vfs/meta/v2/mds_router.h"
 #include "client/vfs/meta/v2/rpc.h"
@@ -68,6 +69,7 @@ class MDSClient {
   void Destory();
 
   bool Dump(Json::Value& value);
+  bool Dump(const DumpOption& options, Json::Value& value);
   bool Load(const Json::Value& value);
 
   bool SetEndpoint(const std::string& ip, int port);

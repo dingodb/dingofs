@@ -357,6 +357,11 @@ bool DummyFileSystem::Dump(ContextSPtr ctx, Json::Value& value) {
   return true;
 }
 
+bool DummyFileSystem::Dump(const DumpOption& options, Json::Value& value) {
+  // Implement your dump logic here
+  return true;
+}
+
 bool DummyFileSystem::Load(ContextSPtr ctx, const Json::Value& value) {
   // Implement your load logic here
   return true;
@@ -1234,7 +1239,7 @@ void DirIteratorManager::Delete(uint64_t fh) {
   dir_iterator_map_.erase(fh);
 }
 
-bool DummyFileSystem::GetDescription(ContextSPtr ctx, Json::Value& value) {
+bool DummyFileSystem::GetDescription(Json::Value& value) {
   // Implement your get description logic here
   return true;
 }

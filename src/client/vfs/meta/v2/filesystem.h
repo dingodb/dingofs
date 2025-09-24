@@ -73,6 +73,8 @@ class MDSV2FileSystem : public vfs::MetaSystem {
 
   bool Dump(ContextSPtr ctx, Json::Value& value) override;
 
+  bool Dump(const DumpOption& options, Json::Value& value) override;
+
   bool Load(ContextSPtr ctx, const Json::Value& value) override;
 
   mdsv2::FsInfoEntry GetFsInfo() { return fs_info_->Get(); }
@@ -141,7 +143,7 @@ class MDSV2FileSystem : public vfs::MetaSystem {
   Status Rename(ContextSPtr ctx, Ino old_parent, const std::string& old_name,
                 Ino new_parent, const std::string& new_name) override;
 
-  bool GetDescription(ContextSPtr ctx, Json::Value& value) override;
+  bool GetDescription(Json::Value& value) override;
 
  private:
   bool SetRandomEndpoint();
