@@ -23,11 +23,8 @@
 #ifndef DINGOFS_SRC_CLIENT_FUSE_COMMON_H_
 #define DINGOFS_SRC_CLIENT_FUSE_COMMON_H_
 
-#define FUSE_USE_VERSION 34
+#define FUSE_USE_VERSION 317
 
-#include <absl/strings/str_format.h>
-#include <fuse3/fuse.h>
-#include <fuse3/fuse_lowlevel.h>
 #include <poll.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
@@ -38,7 +35,10 @@
 #include <fstream>
 #include <unordered_map>
 
+#include "absl/strings/str_format.h"
 #include "common/define.h"
+#include "fuse3/fuse_lowlevel.h"
+#include "fuse3/fuse_opt.h"
 #include "utils/string.h"
 
 using dingofs::utils::TrimChars;

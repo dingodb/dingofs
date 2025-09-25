@@ -14,23 +14,24 @@
  * limitations under the License.
  */
 
+#include "fmt/format.h"
 #include "options/common/dynamic_vlog.h"
 #include "utils/configuration.h"
 #include "utils/gflags_helper.h"
 
-static int InitLog(const char* argv0, std::string conf_path) {
+static int InitLog(const char* argv0, const std::string& conf_path) {
   dingofs::utils::Configuration conf;
   conf.SetConfigPath(conf_path);
   if (!conf.LoadConfig()) {
-    LOG(ERROR) << "LoadConfig failed, confPath = " << conf_path;
+    LOG(ERROR) << "loadConfig fail, confPath=" << conf_path;
     return 1;
   }
 
   // set log dir
   if (FLAGS_log_dir.empty()) {
     if (!conf.GetStringValue("client.common.logDir", &FLAGS_log_dir)) {
-      LOG(WARNING) << "no client.common.logDir in " << conf_path
-                   << ", will log to /tmp";
+      LOG(WARNING) << fmt::format(
+          "no client.common.logDir in {}, will log to /tmp.", conf_path);
     }
   }
 
@@ -38,7 +39,7 @@ static int InitLog(const char* argv0, std::string conf_path) {
   dummy.Load(&conf, "v", "client.loglevel", &FLAGS_v);
   dingofs::common::FLAGS_vlog_level = FLAGS_v;
 
-  FLAGS_logbufsecs = 0;
+  FLAGS_logbufsecs = 4;
   // initialize logging module
   google::InitGoogleLogging(argv0);
 

@@ -17,10 +17,9 @@
 #ifndef DINGOFS_SRC_CLIENT_FUSE_FUSE_SERVER_H_
 #define DINGOFS_SRC_CLIENT_FUSE_FUSE_SERVER_H_
 
-#include <bvar/bvar.h>
-
 #include <string>
 
+#include "bvar/status.h"
 #include "client/fuse/fuse_common.h"
 #include "utils/concurrent/concurrent.h"
 
@@ -43,7 +42,7 @@ class FuseServer {
 
   int CreateSession();
 
-  void DestorySsesion();
+  void DestroySsesion();
 
   int SessionMount();
 
@@ -80,12 +79,12 @@ class FuseServer {
   const char* program_name_{nullptr};
 
   // libfuse
-  struct fuse_args args_ = {0};
-  struct fuse_cmdline_opts opts_ = {0};
-  struct fuse_session* se_;
-  struct fuse_loop_config config_;
-  struct MountOption* mount_option_ = {nullptr};
-  struct fuse_buf init_fbuf_ = {0};
+  struct fuse_args args_{0};
+  struct fuse_cmdline_opts opts_{0};
+  struct fuse_session* session_{nullptr};
+  struct fuse_loop_config* config_{nullptr};
+  struct MountOption* mount_option_{nullptr};
+  struct fuse_buf init_fbuf_{0};
 
   // Manager uds thread
   utils::Thread uds_thread_;

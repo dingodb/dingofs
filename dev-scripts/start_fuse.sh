@@ -163,6 +163,7 @@ function start() {
     nohup ${FUSE_BIN_PATH} -f \
         -o default_permissions \
         -o allow_other \
+        -o max_threads=64 \
         -o fsname=${FLAGS_fsname} \
         -o fstype=${FLAGS_fstype} \
         -o user=dengzihui \

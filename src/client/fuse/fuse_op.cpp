@@ -16,21 +16,20 @@
 
 #include "client/fuse/fuse_op.h"
 
-#include <absl/strings/str_format.h>
-#include <fmt/format.h>
-#include <glog/logging.h>
-
 #include <cstdint>
 #include <cstring>
 #include <memory>
 #include <string>
 
+#include "absl/strings/str_format.h"
 #include "client/common/utils.h"
 #include "client/meta/vfs_meta.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs_wrapper/vfs_wrapper.h"
 #include "common/define.h"
 #include "common/status.h"
+#include "fmt/format.h"
+#include "glog/logging.h"
 #include "options/client/option.h"
 #include "utils/configuration.h"
 

@@ -20,7 +20,6 @@
 #include <unordered_map>
 
 #include "client/fuse/fuse_common.h"
-#include "common/define.h"
 #include "utils/string.h"
 
 using dingofs::utils::TrimSpace;
@@ -83,5 +82,5 @@ inline void FreeParsedArgv(char** parsed_argv, int alloc_size) {
   for (int i = 0; i < alloc_size; i++) {
     free(parsed_argv[i]);
   }
-  free(parsed_argv);
+  free((char*)parsed_argv);
 }

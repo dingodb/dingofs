@@ -16,8 +16,6 @@
 
 #include "client/fuse/fuse_server.h"
 
-#include <gflags/gflags.h>
-#include <glog/logging.h>
 #include <sys/socket.h>
 
 #include <chrono>
@@ -29,6 +27,8 @@
 #include "client/fuse/fuse_passfd.h"
 #include "client/fuse/fuse_upgrade_manager.h"
 #include "common/version.h"
+#include "fmt/format.h"
+#include "glog/logging.h"
 #include "options/client/option.h"
 #include "utils/concurrent/concurrent.h"
 
@@ -62,6 +62,9 @@ int FuseServer::Init(int argc, char* argv[], struct MountOption* mount_option) {
   if (ParseCmdLine() == 1) return 1;
   if (OptParse() == 1) return 1;
 
+  config_ = fuse_loop_cfg_create();
+  CHECK(config_ != nullptr) << "fuse_loop_cfg_create fail.";
+
   return 0;
 }
 
@@ -73,11 +76,16 @@ FuseServer::~FuseServer() {
   FreeParsedArgv(parsed_argv_, argc_);
   fuse_opt_free_args(&args_);
 
+  if (config_ != nullptr) {
+    fuse_loop_cfg_destroy(config_);
+  }
+
   auto fuse_state = FuseUpgradeManager::GetInstance().GetFuseState();
   if (fuse_state == FuseUpgradeState::kFuseUpgradeOld) {
-    LOG(INFO) << "transfer dingo-fuse session to others";
+    LOG(INFO) << "transfer dingo-fuse session to others.";
   }
 }
+
 // allocate memory for fuse init message
 void FuseServer::AllocateFuseInitBuf() {
   // init message size = sizeof(struct fuse_in_header) + sizeof(struct
@@ -91,19 +99,20 @@ void FuseServer::AllocateFuseInitBuf() {
 void FuseServer::FreeFuseInitBuf() {
   if (init_fbuf_.mem != nullptr) {
     free(init_fbuf_.mem);
+
     init_fbuf_.mem = nullptr;
     init_fbuf_.mem_size = 0;
     init_fbuf_.size = 0;
   }
 }
 
-int FuseServer::GetDevFd() const { return fuse_session_fd(se_); }
+int FuseServer::GetDevFd() const { return fuse_session_fd(session_); }
 
 void FuseServer::Shutdown() {
   LOG(INFO) << "start shutdown dingo-fuse";
   FuseUpgradeManager::GetInstance().UpdateFuseState(
       FuseUpgradeState::kFuseUpgradeOld);
-  fuse_session_exit(se_);
+  fuse_session_exit(session_);
 }
 
 void FuseServer::UdsServerFunc() {
@@ -160,17 +169,20 @@ void FuseServer::UdsServerFunc() {
 
 void FuseServer::UdsServerStart() {
   if (is_running_.load()) {
-    LOG(INFO) << "dingo-fuse uds server already started ";
+    LOG(INFO) << "dingo-fuse uds server already started.";
     return;
   }
+
   uds_thread_ = utils::Thread(&FuseServer::UdsServerFunc, this);
   uds_thread_.detach();
   is_running_.store(true);
-  LOG(INFO) << "dingo-fuse uds server started";
+
+  LOG(INFO) << "dingo-fuse uds server started.";
 }
 
 int FuseServer::ParseCmdLine() {
   if (fuse_parse_cmdline(&args_, &opts_) != 0) return 1;
+
   if (opts_.show_help) {
     printf(
         "usage: %s -o conf=/etc/dingofs/client.conf -o fsname=dingofs \\\n"
@@ -183,6 +195,7 @@ int FuseServer::ParseCmdLine() {
     fuse_lowlevel_help();
     ExtraOptionsHelp();
     return 1;
+
   } else if (opts_.show_version) {
     dingofs::ShowVerion();
 
@@ -190,10 +203,12 @@ int FuseServer::ParseCmdLine() {
     fuse_lowlevel_version();
     return 1;
   }
+
   if (opts_.mountpoint == nullptr) {
-    printf("required option is missing: mountpoint\n");
+    printf("required option[mountpoint] is missing.\n");
     return 1;
   }
+
   return 0;
 }
 
@@ -205,10 +220,7 @@ int FuseServer::OptParse() {
 
   if (mount_option_->conf == nullptr || mount_option_->fs_name == nullptr ||
       mount_option_->fs_type == nullptr) {
-    printf(
-        "one of required options is missing, conf, fsname, fstype are "
-        "required.\n");
-
+    printf("one of required options[conf|fsname|fstype] is missing.\n");
     return 1;
   }
 
@@ -226,21 +238,21 @@ int FuseServer::OptParse() {
 
 int FuseServer::CreateSession() {
   // create fuse new session
-  se_ = fuse_session_new(&args_, &kFuseOp, sizeof(kFuseOp), mount_option_);
-  if (se_ == nullptr) return 1;
+  session_ = fuse_session_new(&args_, &kFuseOp, sizeof(kFuseOp), mount_option_);
+  if (session_ == nullptr) return 1;
 
   // install fuse signal
-  if (fuse_set_signal_handlers(se_) != 0) return 1;
+  if (fuse_set_signal_handlers(session_) != 0) return 1;
 
   return 0;
 }
 
-void FuseServer::DestorySsesion() {
-  LOG(INFO) << "destory dingo-fuse session";
+void FuseServer::DestroySsesion() {
+  LOG(INFO) << "destroy dingo-fuse session.";
 
-  if (se_ != nullptr) {
-    fuse_remove_signal_handlers(se_);
-    fuse_session_destroy(se_);
+  if (session_ != nullptr) {
+    fuse_remove_signal_handlers(session_);
+    fuse_session_destroy(session_);
   }
 }
 
@@ -263,12 +275,12 @@ int FuseServer::SessionMount() {
     // construct new mountpoint
     std::string mountpoint = absl::StrFormat("/dev/fd/%d", fuse_fd_);
     LOG(INFO) << "start mount on mountpoint: " << mountpoint;
-    if (fuse_session_mount(se_, mountpoint.c_str()) != 0) return 1;
+    if (fuse_session_mount(session_, mountpoint.c_str()) != 0) return 1;
 
     return 0;
   }
 
-  if (fuse_session_mount(se_, opts_.mountpoint) != 0) return 1;
+  if (fuse_session_mount(session_, opts_.mountpoint) != 0) return 1;
 
   return 0;
 }
@@ -279,27 +291,27 @@ int FuseServer::SaveOpInitMsg() {
   auto fuse_state = FuseUpgradeManager::GetInstance().GetFuseState();
   if (fuse_state == FuseUpgradeState::kFuseUpgradeNew) return 0;
 
-  int ret = 0;
   struct fuse_buf fbuf = {
       .mem = nullptr,
   };
 
-  ret = fuse_session_receive_buf(se_, &fbuf);
+  int ret = fuse_session_receive_buf(session_, &fbuf);
   if (ret > 0) {
-    LOG(INFO) << "recv dingo-fuse init message, size = " << fbuf.size;
+    LOG(INFO) << "recv dingo-fuse init message, size=" << fbuf.size;
     // save fuse init message
     CHECK(init_fbuf_.mem_size >= fbuf.size);
     init_fbuf_.size = fbuf.size;
     memcpy(init_fbuf_.mem, fbuf.mem, fbuf.size);
-    fuse_session_process_buf(se_, &fbuf);
+    fuse_session_process_buf(session_, &fbuf);
 
     return 0;
   }
+
   // here shouble call fuse_buf_free(&fbuf);
   // but function fuse_buf_free in libfuse is private, so we can not call it.
   // In special case, there may be a memory leak here,but rarely occurs and
   // can be tolerated. fuse_buf_free(&fbuf);
-  fuse_session_reset(se_);
+  fuse_session_reset(session_);
 
   return 1;
 }
@@ -309,7 +321,7 @@ void FuseServer::ProcessInitMsg() {
       BufToHexString((unsigned char*)init_fbuf_.mem, init_fbuf_.size);
   LOG(INFO) << "dingo-fuse init data size: " << init_fbuf_.size << ", data: 0x"
             << msg;
-  fuse_session_process_buf(se_, &init_fbuf_);
+  fuse_session_process_buf(session_, &init_fbuf_);
 }
 
 int FuseServer::SessionLoop() {
@@ -318,17 +330,14 @@ int FuseServer::SessionLoop() {
     ProcessInitMsg();
   }
 
-  int ret = 0;
   // process user request
   if (opts_.singlethread) {
-    ret = fuse_session_loop(se_);
-  } else {
-    config_.clone_fd = opts_.clone_fd;
-    config_.max_idle_threads = opts_.max_idle_threads;
-    ret = fuse_session_loop_mt(se_, &config_);
+    return fuse_session_loop(session_);
   }
 
-  return ret;
+  fuse_loop_cfg_set_clone_fd(config_, opts_.clone_fd);
+  fuse_loop_cfg_set_max_threads(config_, opts_.max_threads);
+  return fuse_session_loop_mt(session_, config_);
 }
 
 void FuseServer::ExportMetrics(const std::string& key,
@@ -340,14 +349,16 @@ void FuseServer::ExportMetrics(const std::string& key,
 int FuseServer::Serve(const std::string& fd_comm_path) {
   fd_comm_file_ =
       absl::StrFormat("%s/fd_comm_socket.%d", fd_comm_path, getpid());
+
   // export fd_comm_path value for new dingo-fuse use
   ExportMetrics(kFdCommPathKey, fd_comm_file_);
 
   UdsServerStart();
   fuse_daemonize(opts_.foreground);
 
-  LOG(INFO) << "dingo-fuse start loop, singlethread = " << opts_.singlethread
-            << ", max_idle_threads = " << opts_.max_idle_threads;
+  LOG(INFO) << fmt::format(
+      "dingo-fuse start loop, singlethread={} max_threads={}.",
+      opts_.singlethread, opts_.max_threads);
 
   if (SaveOpInitMsg() == 1) {
     LOG(ERROR) << "save fuse init message failed";
@@ -355,7 +366,7 @@ int FuseServer::Serve(const std::string& fd_comm_path) {
   }
   /* Block until ctrl+c or fusermount -u */
   int ret = SessionLoop();
-  LOG(INFO) << "dingo-fuse is shutdown, ret = " << ret;
+  LOG(INFO) << "dingo-fuse is shutdown, ret=" << ret;
 
   return ret;
 }
@@ -372,12 +383,12 @@ void FuseServer::SessionUnmount() {
   if (fuse_state == FuseUpgradeState::kFuseUpgradeNew) {
     // After smooth upgrade, fuse session will be umount by
     // DingoSessionUnmount instead of fuse_session_unmount because
-    // se_->mountpoint is nullptr
+    // session_->mountpoint is nullptr
     LOG(INFO) << "use DingoSessionUnmount";
     DingoSessionUnmount(opts_.mountpoint, GetDevFd());
   } else {
     LOG(INFO) << "use fuse_session_unmount";
-    fuse_session_unmount(se_);
+    fuse_session_unmount(session_);
   }
 }
 
@@ -386,25 +397,29 @@ bool FuseServer::ShutdownGracefully(const char* mountpoint) {
   // get old dingo-fuse pid
   std::string file_name =
       absl::StrFormat("%s/%s", mountpoint, dingofs::STATSNAME);
-  int pid = GetDingoFusePid(file_name);
-  for (int i = 0; i < FLAGS_client_fuse_fd_get_max_retries; i++) {
+
+  int pid = 0;
+  uint32_t retry = 0;
+  do {
+    pid = GetDingoFusePid(file_name);
     if (pid > 0) break;
+
     std::this_thread::sleep_for(
         std::chrono::milliseconds(FLAGS_client_fuse_fd_get_retry_interval_ms));
-    pid = GetDingoFusePid(file_name);
-  }
+  } while (++retry <= FLAGS_client_fuse_fd_get_max_retries);
+
   if (pid <= 0) {
-    LOG(ERROR) << "fail to get old dingo-fuse pid from " << file_name;
+    LOG(ERROR) << "get pid fail, filepath=" << file_name;
     return false;
   }
-  LOG(INFO) << "successfully get old dingo-fuse pid: " << pid;
+  LOG(INFO) << "get pid success, pid=" << pid;
 
   FuseUpgradeManager::GetInstance().SetOldFusePid(pid);
 
   // recv mount fd、fuse_init data from old dingo-fuse
   std::string comm_path = GetFdCommFileName(file_name);
   CHECK(!comm_path.empty());
-  LOG(INFO) << "successfully get old dingo-fuse socket: " << comm_path;
+  LOG(INFO) << "get socket success, comm_path=" << comm_path;
 
   fuse_fd_ = GetFuseFd(comm_path.c_str(), init_fbuf_.mem, init_fbuf_.mem_size,
                        &init_fbuf_.size);
@@ -416,7 +431,7 @@ bool FuseServer::ShutdownGracefully(const char* mountpoint) {
                          &init_fbuf_.size);
   }
   if (fuse_fd_ <= 2) {
-    LOG(ERROR) << "fail to recv mount fd from" << comm_path;
+    LOG(ERROR) << "recv mount fd fail, comm_path=" << comm_path;
     return false;
   }
   LOG(INFO) << "recv data from" << comm_path << ", mount fd = " << fuse_fd_

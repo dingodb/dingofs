@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <signal.h>
-#include <stdlib.h>
+#include <csignal>
+#include <cstdlib>
 
 #include "absl/cleanup/cleanup.h"
 #include "client/fuse/fuse_op.h"
@@ -31,11 +31,9 @@ static FuseServer* fuse_server = nullptr;
 
 // signal handler
 static void HandleSignal(int sig) {
-  printf("Received signal %d, exit...\n", sig);
-  if (sig == SIGHUP) {
-    if (fuse_server != nullptr) {
-      fuse_server->Shutdown();
-    }
+  printf("received signal %d, exit...\n", sig);
+  if (sig == SIGHUP && fuse_server != nullptr) {
+    fuse_server->Shutdown();
   }
 }
 
@@ -48,14 +46,15 @@ static int InstallSignal(int sig, void (*handler)(int)) {
   sa.sa_flags = 0;
 
   if (sigaction(sig, &sa, nullptr) == -1) {
-    perror("dingo-fuse: cannot set signal handler");
+    perror("dingo-fuse: cannot set signal handler.");
     return -1;
   }
+
   return 0;
 }
 
 int main(int argc, char* argv[]) {
-  struct MountOption mount_option = {nullptr};
+  struct MountOption mount_option{nullptr};
 
   InstallSignal(SIGHUP, HandleSignal);
 
@@ -70,10 +69,10 @@ int main(int argc, char* argv[]) {
   // init global log
   InitLog(argv[0], mount_option.conf);
 
-  // create fuse ssssion
+  // create fuse session
   if (fuse_server->CreateSession() == 1) return EXIT_FAILURE;
   auto defer_destory =
-      ::absl::MakeCleanup([&]() { fuse_server->DestorySsesion(); });
+      ::absl::MakeCleanup([&]() { fuse_server->DestroySsesion(); });
 
   // mount filesystem
   if (fuse_server->SessionMount() == 1) return EXIT_FAILURE;
@@ -82,7 +81,7 @@ int main(int argc, char* argv[]) {
 
   // init fuse client
   if (InitFuseClient(argv[0], &mount_option) != 0) {
-    LOG(ERROR) << "init fuse client fail, conf = " << mount_option.conf;
+    LOG(ERROR) << "init fuse client fail, conf=" << mount_option.conf;
     return EXIT_FAILURE;
   }
 
@@ -90,8 +89,9 @@ int main(int argc, char* argv[]) {
   Configuration conf;
   conf.SetConfigPath(mount_option.conf);
   if (!conf.LoadConfig()) {
-    LOG(ERROR) << "load config file failed: " << mount_option.conf;
+    LOG(ERROR) << "load config file fail: " << mount_option.conf;
   }
+
   dingofs::client::UdsOption uds_option;
   dingofs::client::InitUdsOption(&conf, &uds_option);
 

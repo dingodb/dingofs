@@ -17,12 +17,12 @@
 #ifndef DINGOFS_SRC_CLIENT_FUSE_PASSFD_H
 #define DINGOFS_SRC_CLIENT_FUSE_PASSFD_H
 
-#include <glog/logging.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
 
 #include "absl/cleanup/cleanup.h"
+#include "glog/logging.h"
 
 namespace dingofs {
 namespace client {

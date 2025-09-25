@@ -80,6 +80,7 @@ static const struct fuse_lowlevel_ops kFuseOp = {
 #if FUSE_VERSION >= FUSE_MAKE_VERSION(3, 8)
     .lseek = nullptr
 #endif
+
 };
 
 #endif  // DINGOFS_SRC_CLIENT_FUSE_OPS_FUNC_H_
