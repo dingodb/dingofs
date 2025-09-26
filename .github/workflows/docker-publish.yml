@@ -137,29 +137,8 @@ jobs:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    - name: Docker meta
-      if: steps.check-event.outputs.continue == 'true'
-      id: meta
-      uses: docker/metadata-action@v5
-      with:
-        images: dingodatabase/dingofs
-        tags: |
-          type=raw,enable=${{ env.EVENT == 'tag' }},value=${{ env.TAG_NAME }}
-          type=raw,value=latest,enable=${{ env.BRANCH_NAME == 'main' && env.EVENT != 'tag'}}
-          type=sha,prefix=,format=short,enable=${{ env.EVENT != 'tag' && env.BRANCH_NAME == 'main' }}
-          type=raw,prefix=${{ env.BRANCH_NAME }}-,value=${{ env.COMMIT_ID }},enable=${{ env.EVENT != 'tag' && env.BRANCH_NAME != 'main' }}
-
-    - name: Build and push
-      if: steps.check-event.outputs.continue == 'true'
-      uses: docker/build-push-action@v6
-      with:
-        context: ./docker/rocky9
-        file: ./docker/rocky9/Dockerfile
-        push: true
-        tags: ${{ steps.meta.outputs.tags }}
-
     - name: Docker meta mdsv2
-      if: ${{ steps.check-event.outputs.continue == 'true' && env.BRANCH_NAME == 'main' }}
+      if: ${{ steps.check-event.outputs.continue == 'true' && (env.BRANCH_NAME == 'main' || env.EVENT == 'tag') }}
       id: meta-v2
       uses: docker/metadata-action@v5
       with:
@@ -170,10 +149,10 @@ jobs:
           type=sha,prefix=mdsv2-,format=short,enable=${{ env.EVENT != 'tag' && env.BRANCH_NAME == 'main' }}
 
     - name: Build and push mdsv2
-      if: ${{ steps.check-event.outputs.continue == 'true' && env.BRANCH_NAME == 'main' }}
+      if: ${{ steps.check-event.outputs.continue == 'true' && (env.BRANCH_NAME == 'main' || env.EVENT == 'tag') }}
       uses: docker/build-push-action@v6
       with:
         context: ./docker/rocky9
-        file: ./docker/rocky9/Dockerfile-v2
+        file: ./docker/rocky9/Dockerfile
         push: true
         tags: ${{ steps.meta-v2.outputs.tags }}

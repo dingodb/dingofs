@@ -67,10 +67,10 @@ Usage:
     file-build.sh --list
     file-build.sh --only=target
 Examples:
-    file-build.sh --only=//src/metaserver:metaserver
+    file-build.sh --only=//src/mdsv2:mdsv2
     file-build.sh --only=src/*
     file-build.sh --only=test/*
-    file-build.sh --only=test/metaserver
+    file-build.sh --only=test/mdsv2
 _EOC_
 }
 

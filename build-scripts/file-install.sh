@@ -45,12 +45,12 @@ Usage:
     install.sh --stor=fs --prefix=PREFIX --only=TARGET
 
 Examples:
-    install.sh --stor=fs --prefix=/usr/local/dingofs --only=metaserver
+    install.sh --stor=fs --prefix=/usr/local/dingofs --only=monitor
 _EOC_
 }
 
 get_options() {
-    local long_opts="stor:,prefix:,only:,etcd_version:,help"
+    local long_opts="stor:,prefix:,only:,help"
     local args=`getopt -o povh --long $long_opts -n "$0" -- "$@"`
     eval set -- "${args}"
     while true
@@ -61,11 +61,7 @@ get_options() {
                 shift 2
                 ;;
             -o|--only)
-                g_only=$2 # etcd, monitor, or dingofs
-                shift 2
-                ;;
-            -v|--etcd_version)
-                g_etcd_version=$2
+                g_only=$2 # dingofs or monitor
                 shift 2
                 ;;
             -h|--help)
@@ -215,55 +211,6 @@ install_playground() {
     done
 }
 
-download_etcd() {
-    local now=`date +"%s%6N"`
-    local download_url="https://storage.googleapis.com/etcd"
-    local src="${download_url}/${g_etcd_version}/etcd-${g_etcd_version}-linux-amd64.tar.gz"
-    local tmpfile="/tmp/$now-etcd-${g_etcd_version}-linux-amd64.tar.gz"
-    local dst="$1"
-
-    msg "download etcd: $src to $dst\n"
-
-    # download etcd tarball and decompress to dst directory
-    mkdir -p $dst &&
-        curl -L $src -o $tmpfile &&
-        tar -zxvf $tmpfile -C $dst --strip-components=1 >/dev/null 2>&1
-
-    local ret=$?
-    rm -rf $tmpfile
-    if [ $ret -ne 0 ]; then
-        die "download etcd-$g_etcd_version failed\n"
-    else
-        success "download etcd-$g_etcd_version success\n"
-    fi
-}
-
-install_etcd() {
-    local project_name="etcd"
-    g_project_name=$project_name
-
-    # The below actions:
-    #   1) download etcd tarball from github
-    #   2) create project directory
-    #   3) copy binary to project directory
-    #   4) generate servicectl script into project directory.
-    local now=`date +"%s%6N"`
-    local dst="/tmp/$now/etcd-$g_etcd_version"
-    download_etcd $dst
-    local project_prefix="$g_prefix/etcd"
-    create_project_dir $project_prefix
-    copy_file "$dst/etcd" "$project_prefix/sbin"
-    copy_file "$dst/etcdctl" "$project_prefix/sbin"
-    # gen_servicectl \
-    #     $project_name \
-    #     "etcd" \
-    #     '--config-file=$g_project_prefix/conf/etcd.conf' \
-    #     "$project_prefix/sbin"
-
-    rm -rf "$dst"
-    success "install $project_name success\n"
-}
-
 install_monitor() {
     local project_name="monitor"
     g_project_name=$project_name
@@ -282,7 +229,7 @@ install_tools-v2() {
     mkdir -p $project_prefix/conf
     wget -O "$project_prefix/sbin/dingo" $tools_v2_dingo_file
     chmod +x "$project_prefix/sbin/dingo"
-    copy_file "conf/dingo.yaml" "$g_prefix/conf"
+    copy_file "confv2/dingo.yaml" "$g_prefix/conf"
 }
 
 install_scripts() {
@@ -297,9 +244,7 @@ main() {
     get_options "$@"
     get_build_mode
 
-    if [ "$g_only" == "etcd" ]; then
-        install_etcd
-    elif [ "$g_only" == "monitor" ]; then
+    if [ "$g_only" == "monitor" ]; then
         install_monitor
     else
         install_dingofs

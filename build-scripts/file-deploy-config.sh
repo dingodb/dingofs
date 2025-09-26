@@ -148,7 +148,7 @@ case "$g_image_type" in
         ;;
     2)
         ${g_docker} pull $g_image_base:$1
-        ${g_docker} build --no-cache -t "$g_image_name" -f "$docker_prefix/Dockerfile-v2" "$docker_prefix"
+        ${g_docker} build --no-cache -t "$g_image_name" -f "$docker_prefix/Dockerfile" "$docker_prefix"
         if [ $? -ne 0 ]; then
             die "build $g_image_name failed\n"
         else
