@@ -1,1 +1,0 @@
-{{ dingofs_topology | to_nice_json }}

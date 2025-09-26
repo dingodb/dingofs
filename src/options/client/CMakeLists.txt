@@ -14,14 +14,10 @@
 # Define the BASE_FLAGS and DINGO_DEFAULT_COPTS variables
 
 add_library(client_options
-    vfs_legacy/vfs_legacy_dynamic_config.cc
-    vfs_legacy/vfs_legacy_option.cc
     option.cc
 )
 
 target_link_libraries(client_options
-    stub_common
-    stub_options
     trace_options
     cache_lib
     brpc::brpc

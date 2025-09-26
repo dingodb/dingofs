@@ -42,7 +42,6 @@
 #include "dingofs/cachegroup.pb.h"
 #include "dingofs/common.pb.h"
 #include "dingofs/error.pb.h"
-#include "dingofs/mds.pb.h"
 #include "dingofs/mdsv2.pb.h"
 #include "mdsv2/mds/mds_meta.h"
 
@@ -72,165 +71,6 @@ DEFINE_validator(mdsv2_rpc_retry_times, brpc::PassValidate);
 
 DEFINE_uint32(mdsv2_request_retry_times, 3, "mdsv2 rpc request retry time");
 DEFINE_validator(mdsv2_request_retry_times, brpc::PassValidate);
-
-static stub::common::MdsOption NewCommonMDSOption() {
-  stub::common::MdsOption option;
-  auto& retry = option.rpcRetryOpt;
-
-  option.mdsMaxRetryMS = FLAGS_mdsv1_rpc_retry_total_ms;
-  retry.addrs = absl::StrSplit(FLAGS_mds_addrs, ',', absl::SkipEmpty());
-  retry.maxRPCTimeoutMS = FLAGS_mdsv1_rpc_max_timeout_ms;
-  retry.rpcTimeoutMs = FLAGS_mdsv1_rpc_timeout_ms;
-  retry.rpcRetryIntervalUS = FLAGS_mdsv1_rpc_retry_interval_us;
-  retry.maxFailedTimesBeforeChangeAddr =
-      FLAGS_mdsv1_rpc_max_failed_times_before_change_addr;
-  retry.normalRetryTimesBeforeTriggerWait =
-      FLAGS_mdsv1_rpc_normal_retry_times_before_trigger_wait;
-  retry.waitSleepMs = FLAGS_mdsv1_rpc_wait_sleep_ms;
-
-  return option;
-}
-
-MDSV1Client::MDSV1Client()
-    : running_(false),
-      mds_base_(std::make_unique<stub::rpcclient::MDSBaseClient>()),
-      mds_client_(std::make_unique<stub::rpcclient::MdsClientImpl>()) {}
-
-Status MDSV1Client::Start() {
-  CHECK_NOTNULL(mds_base_);
-  CHECK_NOTNULL(mds_client_);
-
-  if (running_) {
-    return Status::OK();
-  }
-
-  LOG(INFO) << "MDS v1 client is starting...";
-
-  auto rc = mds_client_->Init(NewCommonMDSOption(), mds_base_.get());
-  if (rc != pb::mds::FSStatusCode::OK) {
-    LOG(ERROR) << "Init MDS v1 client failed: rc = "
-               << pb::mds::FSStatusCode_Name(rc);
-    return Status::Internal("init mds client failed");
-  }
-
-  running_ = true;
-
-  LOG(INFO) << "MDS v1 client is up.";
-
-  CHECK_RUNNING("MDS v1 client");
-  return Status::OK();
-}
-
-Status MDSV1Client::Shutdown() {
-  if (!running_.exchange(false)) {
-    return Status::OK();
-  }
-
-  LOG(INFO) << "MDS v1 client is shutting down...";
-
-  // do nothing
-
-  LOG(INFO) << "MDS v1 client is down.";
-
-  CHECK_DOWN("MDS v1 client");
-  return Status::OK();
-}
-
-Status MDSV1Client::GetFSInfo(uint64_t fs_id,
-                              pb::common::StorageInfo* storage_info) {
-  CHECK_RUNNING("MDS v1 client");
-
-  pb::mds::FsInfo fs_info;
-  auto code = mds_client_->GetFsInfo(fs_id, &fs_info);
-  if (code != pb::mds::FSStatusCode::OK) {
-    LOG(ERROR) << "Get filesystem information failed: fs_id = " << fs_id
-               << ", rc = " << pb::mds::FSStatusCode_Name(code);
-    return Status::Internal("get filesystem information failed");
-  } else if (!fs_info.has_storage_info()) {
-    LOG(ERROR) << "The filesystem missing storage_info: fs_id = " << fs_id;
-    return Status::Internal("filesystem missing storage info");
-  }
-
-  *storage_info = fs_info.storage_info();
-  return Status::OK();
-}
-
-Status MDSV1Client::JoinCacheGroup(const std::string& id, const std::string& ip,
-                                   uint32_t port, const std::string& group_name,
-                                   uint32_t weight, std::string* member_id) {
-  auto rc =
-      mds_client_->JoinCacheGroup(group_name, ip, port, weight, member_id);
-  if (rc != pb::mds::cachegroup::CacheGroupOk) {
-    LOG(ERROR) << "Join cache group failed: group_name = " << group_name
-               << ", ip = " << ip << ", port = " << port
-               << ", weight = " << weight
-               << ", rc = " << CacheGroupErrCode_Name(rc);
-    return Status::Internal("join cache group failed");
-  }
-  return Status::OK();
-}
-
-Status MDSV1Client::LeaveCacheGroup(const std::string& /*member_id*/,
-                                    const std::string& ip, uint32_t port,
-                                    const std::string& group_name) {
-  auto rc = mds_client_->LeaveCacheGroup(group_name, ip, port);
-  if (rc != pb::mds::cachegroup::CacheGroupOk) {
-    LOG(ERROR) << "Leave cache group failed: group_name = " << group_name
-               << ", ip = " << ip << ", port = " << port
-               << ", rc = " << CacheGroupErrCode_Name(rc);
-    return Status::Internal("leave cache group failed");
-  }
-  return Status::OK();
-}
-
-Status MDSV1Client::Heartbeat(const std::string& member_id,
-                              const std::string& ip, uint32_t port) {
-  auto rc = mds_client_->SendCacheGroupHeartbeat(ip, port);
-  if (rc != pb::mds::cachegroup::CacheGroupOk) {
-    LOG(ERROR) << "Send cache group heartbeat failed: member_id = " << member_id
-               << ", ip = " << ip << ", port = " << port
-               << ", rc = " << CacheGroupErrCode_Name(rc);
-    return Status::Internal("send heartbeat failed");
-  }
-  return Status::OK();
-}
-
-Status MDSV1Client::ListMembers(const std::string& group_name,
-                                std::vector<CacheGroupMember>* members) {
-  std::vector<pb::mds::cachegroup::CacheGroupMember> pb_members;
-  auto rc = mds_client_->ListCacheGroupMembers(group_name, &pb_members);
-  if (rc != pb::mds::cachegroup::CacheGroupOk) {
-    LOG(ERROR) << "List cache group members failed: group_name = " << group_name
-               << ", rc = " << CacheGroupErrCode_Name(rc);
-    return Status::Internal("list cache group members failed");
-  }
-
-  CacheGroupMember member;
-  for (const auto& pb_member : pb_members) {
-    member.id = pb_member.id();
-    member.ip = pb_member.ip();
-    member.port = pb_member.port();
-    member.weight = pb_member.weight();
-    member.state = ToMemberState(pb_member.state());
-    members->push_back(member);
-  }
-  return Status::OK();
-}
-
-CacheGroupMemberState MDSV1Client::ToMemberState(
-    pb::mds::cachegroup::CacheGroupMemberState state) {
-  switch (state) {
-    case pb::mds::cachegroup::CacheGroupMemberStateOnline:
-      return CacheGroupMemberState::kOnline;
-    case pb::mds::cachegroup::CacheGroupMemberStateUnstable:
-      return CacheGroupMemberState::kUnstable;
-    case pb::mds::cachegroup::CacheGroupMemberStateOffline:
-      return CacheGroupMemberState::kOffline;
-    case pb::mds::cachegroup::CacheGroupMemberStateUnknown:
-    default:
-      return CacheGroupMemberState::kUnknown;
-  }
-}
 
 MDSV2Client::MDSV2Client(const std::string& mds_addr)
     : running_(false),
@@ -515,9 +355,7 @@ Status MDSV2Client::SendRequest(const std::string& service_name,
 }
 
 MDSClientSPtr BuildSharedMDSClient() {
-  if (FLAGS_mds_version == "v1") {
-    return std::make_shared<MDSV1Client>();
-  } else if (FLAGS_mds_version == "v2") {
+  if (FLAGS_mds_version == "v2") {
     return std::make_shared<MDSV2Client>(FLAGS_mds_addrs);
   } else {
     CHECK(false) << "Unsupported MDS version: " << FLAGS_mds_version;
@@ -525,9 +363,7 @@ MDSClientSPtr BuildSharedMDSClient() {
 }
 
 MDSClientUPtr BuildUniqueMDSClient() {
-  if (FLAGS_mds_version == "v1") {
-    return std::make_unique<MDSV1Client>();
-  } else if (FLAGS_mds_version == "v2") {
+  if (FLAGS_mds_version == "v2") {
     return std::make_unique<MDSV2Client>(FLAGS_mds_addrs);
   } else {
     CHECK(false) << "Unsupported MDS version: " << FLAGS_mds_version;

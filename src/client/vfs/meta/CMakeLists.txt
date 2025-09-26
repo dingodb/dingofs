@@ -13,7 +13,6 @@
 # limitations under the License.
 
 add_subdirectory(dummy)
-add_subdirectory(v1)
 add_subdirectory(v2)
 
 add_library(vfs_meta_system 

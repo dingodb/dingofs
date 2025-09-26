@@ -29,7 +29,6 @@
 
 #include "utils/concurrent/count_down_event.h"
 #include "utils/concurrent/rw_lock.h"
-#include "utils/concurrent/spinlock.h"
 #include "utils/concurrent/task_queue.h"
 #include "utils/concurrent/task_thread_pool.h"
 
@@ -47,7 +46,6 @@ using ConditionVariable = std::condition_variable;
 
 // dingo内部定义的锁组件
 using RWLock = BthreadRWLock;
-using SpinLock = SpinLock;
 using ReadLockGuard = ReadLockGuard;
 using WriteLockGuard = WriteLockGuard;
 

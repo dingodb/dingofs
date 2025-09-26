@@ -13,7 +13,6 @@
 # limitations under the License.
 
 add_subdirectory(blockaccess)
-add_subdirectory(stub)
 add_subdirectory(client)
 add_subdirectory(common)
 add_subdirectory(trace)

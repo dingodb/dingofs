@@ -34,14 +34,10 @@ set(TEST_DEPS_WITHOUT_MAIN
 )
 
 add_subdirectory(fs)
-add_subdirectory(stub)
 add_subdirectory(utils)
 
-add_subdirectory(mds)
-add_subdirectory(metaserver)
 add_subdirectory(cache)
 add_subdirectory(client)
 add_subdirectory(mdsv2)
-add_subdirectory(metrics)
 
 add_subdirectory(trace)

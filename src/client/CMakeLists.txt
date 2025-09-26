@@ -14,7 +14,6 @@
 
 add_subdirectory(memory)
 add_subdirectory(meta)
-add_subdirectory(vfs_legacy)
 add_subdirectory(vfs)
 
 file(GLOB FUSE_CLIENT_LIB_SRCS
@@ -29,7 +28,6 @@ add_library(fuse_client_lib ${FUSE_CLIENT_LIB_SRCS})
 target_link_libraries(fuse_client_lib
     PROTO_OBJS
     vfs_meta
-    vfs_legacy_lib
     vfs_lib
     block_accesser
     dingofs_metrics

@@ -29,11 +29,8 @@
 #include "client/vfs/meta/v2/mds_discovery.h"
 #include "client/vfs/meta/v2/rpc.h"
 #include "common/status.h"
-#include "dingofs/cachegroup.pb.h"
 #include "dingofs/common.pb.h"
 #include "mdsv2/mds/mds_meta.h"
-#include "stub/rpcclient/base_client.h"
-#include "stub/rpcclient/mds_client.h"
 
 namespace dingofs {
 namespace cache {
@@ -105,35 +102,6 @@ class MDSClient {
 
 using MDSClientSPtr = std::shared_ptr<MDSClient>;
 using MDSClientUPtr = std::unique_ptr<MDSClient>;
-
-class MDSV1Client : public MDSClient {
- public:
-  MDSV1Client();
-
-  Status Start() override;
-  Status Shutdown() override;
-
-  Status GetFSInfo(uint64_t fs_id,
-                   pb::common::StorageInfo* storage_info) override;
-
-  Status JoinCacheGroup(const std::string& want_id, const std::string& ip,
-                        uint32_t port, const std::string& group_name,
-                        uint32_t weight, std::string* member_id) override;
-  Status LeaveCacheGroup(const std::string& member_id, const std::string& ip,
-                         uint32_t port, const std::string& group_name) override;
-  Status Heartbeat(const std::string& member_id, const std::string& ip,
-                   uint32_t port) override;
-  Status ListMembers(const std::string& group_name,
-                     std::vector<CacheGroupMember>* members) override;
-
- private:
-  CacheGroupMemberState ToMemberState(
-      pb::mds::cachegroup::CacheGroupMemberState state);
-
-  std::atomic<bool> running_;
-  std::unique_ptr<stub::rpcclient::MDSBaseClient> mds_base_;
-  std::unique_ptr<stub::rpcclient::MdsClient> mds_client_;
-};
 
 class MDSV2Client : public MDSClient {
  public:

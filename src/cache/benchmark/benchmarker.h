@@ -30,7 +30,6 @@
 #include "cache/common/mds_client.h"
 #include "cache/storage/storage.h"
 #include "cache/storage/storage_pool.h"
-#include "stub/rpcclient/mds_client.h"
 
 namespace dingofs {
 namespace cache {

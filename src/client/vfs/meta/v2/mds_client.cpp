@@ -22,7 +22,6 @@
 #include "client/vfs/meta/v2/helper.h"
 #include "client/vfs/meta/v2/rpc.h"
 #include "dingofs/mdsv2.pb.h"
-#include "dingofs/metaserver.pb.h"
 #include "fmt/format.h"
 #include "gflags/gflags.h"
 #include "glog/logging.h"

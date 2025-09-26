@@ -35,17 +35,12 @@
 #include "client/vfs/common/helper.h"
 #include "client/vfs/meta/meta_log.h"
 #include "client/vfs/vfs_impl.h"
-#include "client/vfs_legacy/vfs_legacy.h"
 #include "client/vfs_wrapper/access_log.h"
 #include "common/define.h"
-#include "common/rpc_stream.h"
 #include "common/status.h"
 #include "metrics/client/client.h"
 #include "metrics/metric_guard.h"
 #include "options/client/option.h"
-#include "options/client/vfs_legacy/vfs_legacy_option.h"
-#include "stub/rpcclient/mds_access_log.h"
-#include "stub/rpcclient/meta_access_log.h"
 #include "utils/configuration.h"
 
 namespace dingofs {
@@ -88,17 +83,6 @@ static Status InitLog() {
   return Status::OK();
 }
 
-static Status InitLegacyLog() {
-  bool succ = dingofs::client::InitAccessLog(FLAGS_log_dir) &&
-              dingofs::cache::InitCacheTraceLog(FLAGS_log_dir) &&
-              blockaccess::InitBlockAccessLog(FLAGS_log_dir) &&
-              dingofs::stub::InitMetaAccessLog(FLAGS_log_dir) &&
-              dingofs::stub::InitMdsAccessLog(FLAGS_log_dir);
-
-  CHECK(succ) << "init log failed, unexpected!";
-  return Status::OK();
-}
-
 Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
   VLOG(1) << "VFSStart argv0: " << argv0;
 
@@ -123,24 +107,17 @@ Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
   }
 
   // init client option
-  bool is_legacy = false;
   VFSOption vfs_option;
-  VFSLegacyOption vfs_legacy_option;
   if (vfs_conf.fs_type == "vfs" || vfs_conf.fs_type == "vfs_v1" ||
       vfs_conf.fs_type == "vfs_v2" || vfs_conf.fs_type == "vfs_dummy") {
-    is_legacy = false;
     InitVFSOption(&conf_, &vfs_option);
 
-    s = InitLog();
-    if (!s.ok()) return s;
-
+    DINGOFS_RETURN_NOT_OK(InitLog());
   } else {
-    is_legacy = true;
-    InitVFSLegacyOption(&conf_, &vfs_legacy_option);
-
-    s = InitLegacyLog();
-    if (!s.ok()) return s;
+    LOG(ERROR) << "unsupported fs_type: " << vfs_conf.fs_type;
+    return Status::InvalidParam("unsupported fs_type: " + vfs_conf.fs_type);
   }
+
   LOG(INFO) << "use vfs type: " << vfs_conf.fs_type;
 
   if (FLAGS_client_bthread_worker_num > 0) {
@@ -152,16 +129,8 @@ Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
 
   client_op_metric_ = std::make_unique<metrics::client::ClientOpMetric>();
 
-  if (!is_legacy) {
-    vfs_ = std::make_unique<vfs::VFSImpl>(vfs_option);
-  } else {
-    vfs_ = std::make_unique<vfs::VFSOld>(vfs_legacy_option);
-  }
-
-  s = vfs_->Start(vfs_conf);
-  if (!s.IsOK()) {
-    return s;
-  }
+  vfs_ = std::make_unique<vfs::VFSImpl>(vfs_option);
+  DINGOFS_RETURN_NOT_OK(vfs_->Start(vfs_conf));
 
   // load vfs state
   if (FuseUpgradeManager::GetInstance().GetFuseState() ==

@@ -21,7 +21,6 @@ add_library(vfs_meta_dummy_lib ${VFS_META_SRC_DUMMY_LIB})
 
 target_link_libraries(vfs_meta_dummy_lib
     PROTO_OBJS
-    rpcclient
     dingofs_common
     gflags::gflags
     glog::glog

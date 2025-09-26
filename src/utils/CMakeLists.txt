@@ -14,25 +14,11 @@
 
 add_subdirectory(executor)
 
-add_library(dingofs_auth
-    authenticator.cpp
-)
-target_link_libraries(dingofs_auth
-    brpc::brpc
-    glog::glog
-)
-
 add_library(dingofs_utils
-    channel_pool.cpp
     configuration.cpp
     leaky_bucket.cpp
-    location_operator.cpp
     stringstatus.cpp
-    task_tracker.cpp
     throttle.cpp
-    wait_interval.cpp
-    bitmap.cpp
-    thread_util.cpp
 )
 
 target_link_libraries(dingofs_utils

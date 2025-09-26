@@ -13,7 +13,6 @@
 # limitations under the License.
 
 add_library(dingofs_common
-    process.cpp
     rpc_stream.cpp
     io_buffer.cpp
     version.cpp

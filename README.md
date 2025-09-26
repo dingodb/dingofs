@@ -99,12 +99,7 @@ git submodule sync
 git submodule update --init --recursive
 ```
 
-### 4. Build Etcd Client
-```sh
-bash build_thirdparties.sh
-```
-
-### 5. Build
+### 4. Build
 ```sh
 mkdir build
 cd build

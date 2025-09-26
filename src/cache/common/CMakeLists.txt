@@ -21,7 +21,6 @@ add_library(cache_common ${CACHE_COMMON_LIB_SRCS})
 target_link_libraries(cache_common
     PROTO_OBJS
 
-    rpcclient
     dingofs_status
     dingofs_common
     vfs_meta_v2_rpc_lib

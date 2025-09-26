@@ -34,29 +34,11 @@
 
 namespace dingofs {
 namespace utils {
-// dingo系统中共用的定义，对于各模块自己独有的放在各模块自己的define中
-using ChunkID = uint64_t;
-using CopysetID = uint32_t;
-using ChunkIndex = uint32_t;
-using LogicPoolID = uint32_t;
-using ChunkServerID = uint32_t;
-using SnapshotID = uint64_t;
-using SequenceNum = uint64_t;
-
-using FileSeqType = uint64_t;
-using PageSizeType = uint32_t;
-using ChunkSizeType = uint32_t;
-using SegmentSizeType = uint32_t;
-
-using Status = butil::Status;
-using EndPoint = butil::EndPoint;
 
 const uint32_t kKB = 1024;
 const uint32_t kMB = 1024 * kKB;
 const uint32_t kGB = 1024 * kMB;
 
-// maigic number用于FilePool_meta file计算crc
-const char kFilePoolMaigic[3] = "01";
 }  // namespace utils
 }  // namespace dingofs
 

@@ -18,11 +18,8 @@ add_subdirectory(common)
 add_subdirectory(metrics)
 add_subdirectory(options)
 add_subdirectory(fs)
-add_subdirectory(stub)
 add_subdirectory(trace)
 
-add_subdirectory(mds)
-add_subdirectory(metaserver)
 add_subdirectory(cache)
 add_subdirectory(client)
 

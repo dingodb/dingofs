@@ -27,8 +27,6 @@ target_link_libraries(cache_utils
     absl::cleanup
     brpc::brpc
 
-    rpcclient
-    stub_common
     block_accesser
     dingofs_utils
     dingofs_common

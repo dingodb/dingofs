@@ -25,5 +25,6 @@ target_link_libraries(vfs_hub
     block_accesser
     vfs_handle
     vfs_components
+    dingofs_trace
     absl::str_format
 )

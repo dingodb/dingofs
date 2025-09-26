@@ -13,10 +13,9 @@
 # limitations under the License.
 
 file(GLOB DINGOFS_METRICS_LIB_SRCS
-    "blockaccess/*.cpp"
-    "client/*.cpp"
-    "client/vfs_legacy/*.cpp"
-    "metaserver/*.cpp"
+    "blockaccess/*.h"
+    "client/*.h"
+    "metaserver/*.h"
 )
 
 add_library(dingofs_metrics ${DINGOFS_METRICS_LIB_SRCS})
