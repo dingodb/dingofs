@@ -24,7 +24,6 @@ Here you will learn about what DingoFS is, and how to install and deploy DingoFS
    :maxdepth: 2
 
    overview/index
-   architecture/index
    dingoadm/index
    deployment/index
    operation_and_maintenance/index
