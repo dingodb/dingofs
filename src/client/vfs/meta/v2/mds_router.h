@@ -21,8 +21,8 @@
 
 #include "client/vfs/meta/v2/mds_discovery.h"
 #include "client/vfs/meta/v2/parent_memo.h"
-#include "dingofs/mdsv2.pb.h"
-#include "mdsv2/mds/mds_meta.h"
+#include "dingofs/mds.pb.h"
+#include "mds/mds/mds_meta.h"
 
 namespace dingofs {
 namespace client {
@@ -33,14 +33,14 @@ class MDSRouter {
  public:
   virtual ~MDSRouter() = default;
 
-  virtual bool Init(const pb::mdsv2::PartitionPolicy& partition_policy) = 0;
+  virtual bool Init(const pb::mds::PartitionPolicy& partition_policy) = 0;
 
-  virtual bool GetMDSByParent(Ino parent, mdsv2::MDSMeta& mds_meta) = 0;
-  virtual bool GetMDS(Ino ino, mdsv2::MDSMeta& mds_meta) = 0;
-  virtual bool GetRandomlyMDS(mdsv2::MDSMeta& mds_meta) = 0;
+  virtual bool GetMDSByParent(Ino parent, mds::MDSMeta& mds_meta) = 0;
+  virtual bool GetMDS(Ino ino, mds::MDSMeta& mds_meta) = 0;
+  virtual bool GetRandomlyMDS(mds::MDSMeta& mds_meta) = 0;
 
   virtual bool UpdateRouter(
-      const pb::mdsv2::PartitionPolicy& partition_policy) = 0;
+      const pb::mds::PartitionPolicy& partition_policy) = 0;
 
   virtual bool Dump(Json::Value& value) = 0;
 };
@@ -53,22 +53,21 @@ using MonoMDSRouterPtr = std::shared_ptr<MonoMDSRouter>;
 class MonoMDSRouter : public MDSRouter {
  public:
   MonoMDSRouter(MDSDiscoverySPtr mds_discovery)
-      : mds_discovery_(mds_discovery){};
+      : mds_discovery_(mds_discovery) {};
   ~MonoMDSRouter() override = default;
 
   static MonoMDSRouterPtr New(MDSDiscoverySPtr mds_discovery) {
     return std::make_shared<MonoMDSRouter>(mds_discovery);
   }
 
-  bool Init(const pb::mdsv2::PartitionPolicy& partition_policy) override;
+  bool Init(const pb::mds::PartitionPolicy& partition_policy) override;
 
-  bool GetMDSByParent(Ino parent, mdsv2::MDSMeta& mds_meta) override;
+  bool GetMDSByParent(Ino parent, mds::MDSMeta& mds_meta) override;
 
-  bool GetMDS(Ino ino, mdsv2::MDSMeta& mds_meta) override;
-  bool GetRandomlyMDS(mdsv2::MDSMeta& mds_meta) override;
+  bool GetMDS(Ino ino, mds::MDSMeta& mds_meta) override;
+  bool GetRandomlyMDS(mds::MDSMeta& mds_meta) override;
 
-  bool UpdateRouter(
-      const pb::mdsv2::PartitionPolicy& partition_policy) override;
+  bool UpdateRouter(const pb::mds::PartitionPolicy& partition_policy) override;
 
   bool Dump(Json::Value& value) override;
 
@@ -76,7 +75,7 @@ class MonoMDSRouter : public MDSRouter {
   bool UpdateMds(int64_t mds_id);
 
   utils::RWLock lock_;
-  mdsv2::MDSMeta mds_meta_;
+  mds::MDSMeta mds_meta_;
 
   MDSDiscoverySPtr mds_discovery_;
 };
@@ -96,29 +95,28 @@ class ParentHashMDSRouter : public MDSRouter {
     return std::make_shared<ParentHashMDSRouter>(mds_discovery, parent_memo);
   }
 
-  bool Init(const pb::mdsv2::PartitionPolicy& partition_policy) override;
+  bool Init(const pb::mds::PartitionPolicy& partition_policy) override;
 
-  bool GetMDSByParent(Ino parent, mdsv2::MDSMeta& mds_meta) override;
+  bool GetMDSByParent(Ino parent, mds::MDSMeta& mds_meta) override;
 
-  bool GetMDS(Ino ino, mdsv2::MDSMeta& mds_meta) override;
+  bool GetMDS(Ino ino, mds::MDSMeta& mds_meta) override;
 
-  bool GetRandomlyMDS(mdsv2::MDSMeta& mds_meta) override;
+  bool GetRandomlyMDS(mds::MDSMeta& mds_meta) override;
 
-  bool UpdateRouter(
-      const pb::mdsv2::PartitionPolicy& partition_policy) override;
+  bool UpdateRouter(const pb::mds::PartitionPolicy& partition_policy) override;
 
   bool Dump(Json::Value& value) override;
 
  private:
-  void UpdateMDSes(const pb::mdsv2::HashPartition& hash_partition);
+  void UpdateMDSes(const pb::mds::HashPartition& hash_partition);
 
   MDSDiscoverySPtr mds_discovery_;
   ParentMemoSPtr parent_memo_;
 
   utils::RWLock lock_;
-  pb::mdsv2::HashPartition hash_partition_;
+  pb::mds::HashPartition hash_partition_;
   // bucket_id -> mds_meta
-  std::unordered_map<int64_t, mdsv2::MDSMeta> mds_map_;
+  std::unordered_map<int64_t, mds::MDSMeta> mds_map_;
 };
 
 }  // namespace v2

@@ -4,7 +4,7 @@ mydir="${BASH_SOURCE%/*}"
 if [[ ! -d "$mydir" ]]; then mydir="$PWD"; fi
 . $mydir/shflags
 
-DEFINE_string role 'mdsv2' 'server role'
+DEFINE_string role 'mds' 'server role'
 DEFINE_integer server_num 1 'server number'
 DEFINE_boolean clean_log 1 'clean log'
 DEFINE_boolean replace_conf 0 'replace conf'
@@ -55,9 +55,9 @@ function deploy_server() {
   fi
   ln "${srcpath}/build/bin/${server_name}" "${dstpath}/bin/${server_name}"
 
-  # link dingo-mdsv2-client
-  if [ "${role}" == "mdsv2" ]; then
-    client_name="dingo-mdsv2-client"
+  # link dingo-mds-client
+  if [ "${role}" == "mds" ]; then
+    client_name="dingo-mds-client"
     if [ -f "${dstpath}/bin/${client_name}" ]; then
       rm -f "${dstpath}/bin/${client_name}"
     fi
@@ -66,8 +66,8 @@ function deploy_server() {
 
   if [ "${FLAGS_replace_conf}" == "0" ]; then
     # conf file
-    dist_conf="${dstpath}/conf/${server_name}.conf"
-    cp $srcpath/confv2/${server_name}.template.conf $dist_conf
+    dist_conf="${dstpath}/conf/${role}.conf"
+    cp $srcpath/conf/${role}.template.conf $dist_conf
 
     sed  -i 's,\$INSTANCE_ID\$,'"$instance_id"',g'                  $dist_conf
     sed  -i 's,\$SERVER_HOST\$,'"$SERVER_HOST"',g'                  $dist_conf
@@ -89,8 +89,8 @@ function deploy_server() {
 for ((i=1; i<=$FLAGS_server_num; ++i)); do
   program_dir=$BASE_DIR/dist/${FLAGS_role}-${i}
 
-  if [ ${FLAGS_role} == "mdsv2" ]; then
-    deploy_server ${FLAGS_role} ${BASE_DIR} ${program_dir} `expr ${MDSV2_INSTANCE_START_ID} + ${i}` `expr ${SERVER_START_PORT} + ${i}`
+  if [ ${FLAGS_role} == "mds" ]; then
+    deploy_server ${FLAGS_role} ${BASE_DIR} ${program_dir} `expr ${MDS_INSTANCE_START_ID} + ${i}` `expr ${SERVER_START_PORT} + ${i}`
   fi
 
 done

@@ -4,7 +4,7 @@ mydir="${BASH_SOURCE%/*}"
 if [[ ! -d "$mydir" ]]; then mydir="$PWD"; fi
 . $mydir/shflags
 
-DEFINE_string role 'mdsv2' 'server role'
+DEFINE_string role 'mds' 'server role'
 DEFINE_integer server_num 1 'server number'
 DEFINE_integer force 0 'use kill -9 to stop'
 DEFINE_integer use_pgrep 0 'use pgrep to get pid'

@@ -22,7 +22,7 @@ target_link_libraries(vfs_service
     vfs_data
     vfs_meta
     vfs_hub
-    mdsv2_common
+    mds_common
     client_options
     dingofs_status
     brpc::brpc

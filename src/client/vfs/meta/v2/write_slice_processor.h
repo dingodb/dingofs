@@ -23,14 +23,14 @@
 #include "butil/containers/mpsc_queue.h"
 #include "client/meta/vfs_meta.h"
 #include "client/vfs/meta/v2/mds_client.h"
-#include "mdsv2/common/type.h"
+#include "mds/common/type.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 namespace v2 {
 
-using mdsv2::Ino;
+using mds::Ino;
 
 class WriteSliceProcessor;
 using WriteSliceProcessorSPtr = std::shared_ptr<WriteSliceProcessor>;

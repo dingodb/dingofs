@@ -33,8 +33,8 @@
 #include "client/vfs/common/helper.h"
 #include "client/vfs/meta/meta_system.h"
 #include "fmt/format.h"
-#include "mdsv2/common/helper.h"
-#include "mdsv2/common/version.h"
+#include "mds/common/helper.h"
+#include "mds/common/version.h"
 #include "utils/string.h"
 
 namespace dingofs {
@@ -87,7 +87,7 @@ static void RenderGitInfo(butil::IOBufBuilder& os) {
   os << R"(<h3>Git</h3>)";
   os << R"(<div style="font-size:smaller;">)";
 
-  auto infos = dingofs::mdsv2::DingoVersion();
+  auto infos = dingofs::mds::DingoVersion();
   for (const auto& info : infos) {
     os << fmt::format("{}: {}", info.first, info.second);
     os << "<br>";
@@ -99,9 +99,9 @@ static void RenderGitInfo(butil::IOBufBuilder& os) {
 
 static void RenderGitVersion(butil::IOBufBuilder& os) {
   os << R"(<div style="margin:2px;font-size:smaller;text-align:center">)";
-  os << fmt::format(R"(<p >{} {} {}</p>)", dingofs::mdsv2::GetGitVersion(),
-                    dingofs::mdsv2::GetGitCommitHash(),
-                    dingofs::mdsv2::GetGitCommitTime());
+  os << fmt::format(R"(<p >{} {} {}</p>)", dingofs::mds::GetGitVersion(),
+                    dingofs::mds::GetGitCommitHash(),
+                    dingofs::mds::GetGitCommitTime());
   os << "</div>";
 }
 
@@ -316,7 +316,7 @@ static void RenderMdsInfo(const Json::Value& json_value,
         R"(<td><a href="http://{}:{}/FsStatService" target="_blank">{}:{} </a></td>)",
         host, port, host, port);
     os << "<td>" << state << "</td>";
-    os << "<td>" << dingofs::mdsv2::Helper::FormatMsTime(last_online_time_ms)
+    os << "<td>" << dingofs::mds::Helper::FormatMsTime(last_online_time_ms)
        << "</td>";
 
     os << fmt::format(
@@ -404,9 +404,9 @@ static std::string RenderDirEntries(const Json::Value& entries) {
     int32_t type = attr["type"].asInt();
     result += fmt::format(
         "{},{},{},{},{},{},{},{},{},{},{},{}", ino, name, mode, nlink, uid, gid,
-        length, rdev, dingofs::mdsv2::Helper::FormatMsTime(atime / 1000000),
-        dingofs::mdsv2::Helper::FormatMsTime(mtime / 1000000),
-        dingofs::mdsv2::Helper::FormatMsTime(ctime / 1000000), type);
+        length, rdev, dingofs::mds::Helper::FormatMsTime(atime / 1000000),
+        dingofs::mds::Helper::FormatMsTime(mtime / 1000000),
+        dingofs::mds::Helper::FormatMsTime(ctime / 1000000), type);
 
     result += "<br>";
   }
@@ -525,9 +525,9 @@ static std::string RenderWriteMemo(const Json::Value& json_value) {
       return "";
     }
     auto last_time_ns = json_value["last_time_ns"].asUInt64();
-    result += fmt::format(
-        "last_time_ns:{}",
-        dingofs::mdsv2::Helper::FormatMsTime(last_time_ns / 1000000));
+    result +=
+        fmt::format("last_time_ns:{}",
+                    dingofs::mds::Helper::FormatMsTime(last_time_ns / 1000000));
     result += "<br>";
     result += "<br>";
     result += "range";
@@ -569,7 +569,7 @@ static std::string RenderChunkMutaionMap(const Json::Value& json_value) {
   result += "<br>";
   result += fmt::format(
       "{},{},{},{},{},{}", ino, index, chunk_size, block_size, version,
-      dingofs::mdsv2::Helper::FormatMsTime(last_compaction_time_ms));
+      dingofs::mds::Helper::FormatMsTime(last_compaction_time_ms));
   result += "<br>";
   return result;
 }
@@ -713,7 +713,7 @@ static void RenderMdsRouterPage(const Json::Value& json_value,
         R"(<td><a href="http://{}:{}/FsStatService" target="_blank">{}:{} </a></td>)",
         host, port, host, port);
     os << "<td>" << state << "</td>";
-    os << "<td>" << dingofs::mdsv2::Helper::FormatMsTime(last_online_time_ms)
+    os << "<td>" << dingofs::mds::Helper::FormatMsTime(last_online_time_ms)
        << "</td>";
     os << "<td>" << type << "</td>";
     os << "</tr>";
@@ -793,11 +793,11 @@ static void RenderInodeCachePage(const Json::Value& json_value,
     os << "<td>" << nlink << "</td>";
     os << "<td>" << symlink << "</td>";
     os << "<td>" << rdev << "</td>";
-    os << "<td>" << dingofs::mdsv2::Helper::FormatMsTime(ctime / 1000000)
+    os << "<td>" << dingofs::mds::Helper::FormatMsTime(ctime / 1000000)
        << "</td>";
-    os << "<td>" << dingofs::mdsv2::Helper::FormatMsTime(mtime / 1000000)
+    os << "<td>" << dingofs::mds::Helper::FormatMsTime(mtime / 1000000)
        << "</td>";
-    os << "<td>" << dingofs::mdsv2::Helper::FormatMsTime(atime / 1000000)
+    os << "<td>" << dingofs::mds::Helper::FormatMsTime(atime / 1000000)
        << "</td>";
     os << "<td>" << open_mp_count << "</td>";
     os << "<td>" << version << "</td>";

@@ -70,14 +70,14 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
     rela_meta_system = std::make_unique<dummy::DummyFileSystem>();
 
   } else if (vfs_conf.fs_type == "vfs_v2") {
-    LOG(INFO) << "use mdsv2 file system.";
+    LOG(INFO) << "use mds file system.";
     std::string mds_addrs;
     conf.GetValueFatalIfFail("mds.addr", &mds_addrs);
     LOG(INFO) << fmt::format("mds addr: {}.", mds_addrs);
 
-    rela_meta_system = v2::MDSV2FileSystem::Build(vfs_conf.fs_name, mds_addrs,
-                                                  vfs_conf.mount_point,
-                                                  vfs_option.dummy_server_port);
+    rela_meta_system = v2::MDSFileSystem::Build(vfs_conf.fs_name, mds_addrs,
+                                                vfs_conf.mount_point,
+                                                vfs_option.dummy_server_port);
   } else {
     LOG(INFO) << fmt::format("not unknown file system {}.", vfs_conf.fs_type);
     return Status::Internal("not unknown file system");

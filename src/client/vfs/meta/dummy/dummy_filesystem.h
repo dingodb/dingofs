@@ -28,7 +28,7 @@
 #include "bthread/types.h"
 #include "client/meta/vfs_meta.h"
 #include "client/vfs/meta/meta_system.h"
-#include "dingofs/mdsv2.pb.h"
+#include "dingofs/mds.pb.h"
 #include "trace/context.h"
 
 namespace dingofs {
@@ -182,8 +182,8 @@ class DummyFileSystem : public vfs::MetaSystem {
   DummyFileSystem();
   ~DummyFileSystem() override;
 
-  using PBInode = pb::mdsv2::Inode;
-  using PBDentry = pb::mdsv2::Dentry;
+  using PBInode = pb::mds::Inode;
+  using PBDentry = pb::mds::Dentry;
 
   struct Dentry {
     PBDentry dentry;
@@ -202,7 +202,7 @@ class DummyFileSystem : public vfs::MetaSystem {
   bool Dump(const DumpOption& options, Json::Value& value) override;
   bool Load(ContextSPtr ctx, const Json::Value& value) override;
 
-  pb::mdsv2::FsInfo GetFsInfo() { return fs_info_; }
+  pb::mds::FsInfo GetFsInfo() { return fs_info_; }
 
   Status Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
                 Attr* attr) override;
@@ -274,7 +274,7 @@ class DummyFileSystem : public vfs::MetaSystem {
  private:
   friend class DirIterator;
 
-  pb::mdsv2::FsInfo fs_info_;
+  pb::mds::FsInfo fs_info_;
 
   std::atomic<uint64_t> ino_generator_{1000};
   uint64_t GenIno() { return ino_generator_++; }

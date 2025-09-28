@@ -21,7 +21,7 @@
 
 #include "client/vfs/meta/v2/rpc.h"
 #include "common/status.h"
-#include "mdsv2/mds/mds_meta.h"
+#include "mds/mds/mds_meta.h"
 
 namespace dingofs {
 namespace client {
@@ -33,7 +33,7 @@ using MDSDiscoverySPtr = std::shared_ptr<MDSDiscovery>;
 
 class MDSDiscovery {
  public:
-  MDSDiscovery(RPCPtr rpc) : rpc_(rpc){};
+  MDSDiscovery(RPCPtr rpc) : rpc_(rpc) {};
   ~MDSDiscovery() = default;
 
   static MDSDiscoverySPtr New(RPCPtr rpc) {
@@ -43,21 +43,21 @@ class MDSDiscovery {
   bool Init();
   void Destroy();
 
-  bool GetMDS(int64_t mds_id, mdsv2::MDSMeta& mds_meta);
-  void PickFirstMDS(mdsv2::MDSMeta& mds_meta);
-  std::vector<mdsv2::MDSMeta> GetAllMDS();
-  std::vector<mdsv2::MDSMeta> GetMDSByState(mdsv2::MDSMeta::State state);
-  std::vector<mdsv2::MDSMeta> GetNormalMDS(bool force = true);
+  bool GetMDS(int64_t mds_id, mds::MDSMeta& mds_meta);
+  void PickFirstMDS(mds::MDSMeta& mds_meta);
+  std::vector<mds::MDSMeta> GetAllMDS();
+  std::vector<mds::MDSMeta> GetMDSByState(mds::MDSMeta::State state);
+  std::vector<mds::MDSMeta> GetNormalMDS(bool force = true);
 
   void SetAbnormalMDS(int64_t mds_id);
   bool RefreshFullyMDSList();
 
  private:
-  Status GetMDSList(std::vector<mdsv2::MDSMeta>& mdses);
+  Status GetMDSList(std::vector<mds::MDSMeta>& mdses);
 
   utils::RWLock lock_;
   // mds_id -> MDSMeta
-  std::map<int64_t, mdsv2::MDSMeta> mdses_;
+  std::map<int64_t, mds::MDSMeta> mdses_;
 
   RPCPtr rpc_;
 };

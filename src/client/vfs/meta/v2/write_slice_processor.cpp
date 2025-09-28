@@ -193,9 +193,9 @@ void WriteSliceProcessor::ExecuteBatchOperation(
   ContextSPtr ctx = batch_operation.operations.front()->ctx;
 
   // prepare delta slice entries
-  std::vector<mdsv2::DeltaSliceEntry> delta_slice_entries;
+  std::vector<mds::DeltaSliceEntry> delta_slice_entries;
   for (auto& operation : batch_operation.operations) {
-    mdsv2::DeltaSliceEntry delta_slice_entry;
+    mds::DeltaSliceEntry delta_slice_entry;
 
     delta_slice_entry.set_chunk_index(operation->index);
     for (const auto& slice : operation->slices) {

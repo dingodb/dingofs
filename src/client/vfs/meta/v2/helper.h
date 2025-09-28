@@ -21,7 +21,7 @@
 #include "butil/endpoint.h"
 #include "client/meta/vfs_meta.h"
 #include "glog/logging.h"
-#include "mdsv2/common/type.h"
+#include "mds/common/type.h"
 
 namespace dingofs {
 namespace client {
@@ -32,28 +32,28 @@ const uint32_t kMaxHostNameLength = 255;
 
 class Helper {
  public:
-  static StoreType ToStoreType(pb::mdsv2::FsType fs_type) {
+  static StoreType ToStoreType(pb::mds::FsType fs_type) {
     switch (fs_type) {
-      case pb::mdsv2::FsType::S3:
+      case pb::mds::FsType::S3:
         return StoreType::kS3;
 
-      case pb::mdsv2::FsType::RADOS:
+      case pb::mds::FsType::RADOS:
         return StoreType::kRados;
 
       default:
-        CHECK(false) << "unknown fs type: " << pb::mdsv2::FsType_Name(fs_type);
+        CHECK(false) << "unknown fs type: " << pb::mds::FsType_Name(fs_type);
     }
   }
 
-  static FileType ToFileType(pb::mdsv2::FileType type) {
+  static FileType ToFileType(pb::mds::FileType type) {
     switch (type) {
-      case pb::mdsv2::FileType::FILE:
+      case pb::mds::FileType::FILE:
         return FileType::kFile;
 
-      case pb::mdsv2::FileType::DIRECTORY:
+      case pb::mds::FileType::DIRECTORY:
         return FileType::kDirectory;
 
-      case pb::mdsv2::FileType::SYM_LINK:
+      case pb::mds::FileType::SYM_LINK:
         return FileType::kSymlink;
 
       default:
@@ -61,23 +61,23 @@ class Helper {
     }
   }
 
-  static pb::mdsv2::FileType ToFileType(FileType type) {
+  static pb::mds::FileType ToFileType(FileType type) {
     switch (type) {
       case FileType::kFile:
-        return pb::mdsv2::FileType::FILE;
+        return pb::mds::FileType::FILE;
 
       case FileType::kDirectory:
-        return pb::mdsv2::FileType::DIRECTORY;
+        return pb::mds::FileType::DIRECTORY;
 
       case FileType::kSymlink:
-        return pb::mdsv2::FileType::SYM_LINK;
+        return pb::mds::FileType::SYM_LINK;
 
       default:
         CHECK(false) << "unknown file type: " << type;
     }
   }
 
-  static Attr ToAttr(const mdsv2::AttrEntry& inode) {
+  static Attr ToAttr(const mds::AttrEntry& inode) {
     Attr out_attr;
 
     out_attr.ino = inode.ino();
@@ -99,8 +99,8 @@ class Helper {
     return out_attr;
   }
 
-  static mdsv2::AttrEntry ToAttr(const Attr& attr) {
-    mdsv2::AttrEntry out_attr;
+  static mds::AttrEntry ToAttr(const Attr& attr) {
+    mds::AttrEntry out_attr;
 
     out_attr.set_ino(attr.ino);
     out_attr.set_mode(attr.mode);
@@ -121,7 +121,7 @@ class Helper {
     return std::move(out_attr);
   }
 
-  static DirEntry ToDirEntry(const pb::mdsv2::ReadDirResponse::Entry& entry) {
+  static DirEntry ToDirEntry(const pb::mds::ReadDirResponse::Entry& entry) {
     DirEntry out_entry;
     out_entry.name = entry.name();
     out_entry.ino = entry.ino();
@@ -130,7 +130,7 @@ class Helper {
     return std::move(out_entry);
   }
 
-  static Slice ToSlice(const mdsv2::SliceEntry& slice) {
+  static Slice ToSlice(const mds::SliceEntry& slice) {
     Slice out_slice;
 
     out_slice.id = slice.id();
@@ -143,8 +143,8 @@ class Helper {
     return out_slice;
   }
 
-  static mdsv2::SliceEntry ToSlice(const Slice& slice) {
-    pb::mdsv2::Slice out_slice;
+  static mds::SliceEntry ToSlice(const Slice& slice) {
+    pb::mds::Slice out_slice;
 
     out_slice.set_id(slice.id);
     out_slice.set_offset(slice.offset);
@@ -179,7 +179,7 @@ class Helper {
     return ip_str;
   }
 
-  static S3Info ToS3Info(const pb::mdsv2::S3Info& s3_info) {
+  static S3Info ToS3Info(const pb::mds::S3Info& s3_info) {
     S3Info result;
     result.ak = s3_info.ak();
     result.sk = s3_info.sk();
@@ -188,7 +188,7 @@ class Helper {
     return result;
   }
 
-  static RadosInfo ToRadosInfo(const pb::mdsv2::RadosInfo& rados_info) {
+  static RadosInfo ToRadosInfo(const pb::mds::RadosInfo& rados_info) {
     RadosInfo result;
     result.user_name = rados_info.user_name();
     result.key = rados_info.key();
@@ -198,9 +198,9 @@ class Helper {
     return result;
   }
 
-  static mdsv2::DeltaSliceEntry ToDeltaSliceEntry(
+  static mds::DeltaSliceEntry ToDeltaSliceEntry(
       uint64_t chunk_index, const std::vector<Slice>& slices) {
-    mdsv2::DeltaSliceEntry delta_slice_entry;
+    mds::DeltaSliceEntry delta_slice_entry;
 
     delta_slice_entry.set_chunk_index(chunk_index);
     for (const auto& slice : slices) {
@@ -229,7 +229,7 @@ class Helper {
   }
 
   static std::vector<uint64_t> GetSliceIds(
-      const std::vector<mdsv2::SliceEntry>& slices) {
+      const std::vector<mds::SliceEntry>& slices) {
     std::vector<uint64_t> slice_ids;
     slice_ids.reserve(slices.size());
     for (const auto& slice : slices) {

@@ -38,6 +38,6 @@ add_subdirectory(utils)
 
 add_subdirectory(cache)
 add_subdirectory(client)
-add_subdirectory(mdsv2)
+add_subdirectory(mds)
 
 add_subdirectory(trace)

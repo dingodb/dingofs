@@ -35,12 +35,12 @@
 #include "brpc/controller.h"
 #include "common/status.h"
 #include "dingofs/error.pb.h"
-#include "dingofs/mdsv2.pb.h"
+#include "dingofs/mds.pb.h"
 #include "fmt/core.h"
 #include "fmt/ranges.h"
 #include "json/value.h"
-#include "mdsv2/common/helper.h"
-#include "mdsv2/common/synchronization.h"
+#include "mds/common/helper.h"
+#include "mds/common/synchronization.h"
 #include "options/client/option.h"
 #include "utils/concurrent/concurrent.h"
 
@@ -60,7 +60,7 @@ inline bool IsInvalidEndpoint(const EndPoint& endpoint) {
 
 inline uint32_t CalWaitTimeUs(int retry) {
   // exponential backoff
-  return mdsv2::Helper::GenerateRealRandomInteger(50000, 100000) * (1 << retry);
+  return mds::Helper::GenerateRealRandomInteger(50000, 100000) * (1 << retry);
 }
 
 inline bool IsRetry(int& retry, int max_retry) {
@@ -192,7 +192,7 @@ inline Status TransformError(const pb::error::Error& error) {
 
 // print ReadSliceResponse
 inline std::string DescribeReadSliceResponse(
-    pb::mdsv2::ReadSliceResponse& response) {
+    pb::mds::ReadSliceResponse& response) {
   std::ostringstream oss;
   oss << response.info().ShortDebugString() << " chunks[";
   for (const auto& chunk : response.chunks()) {
@@ -215,7 +215,7 @@ Status RPC::SendRequest(const EndPoint& endpoint,
                         const std::string& api_name, const Request& request,
                         Response& response, SendRequestOption option) {
   IncDoingReqCount();
-  mdsv2::DEFER(DecDoingReqCount());
+  mds::DEFER(DecDoingReqCount());
 
   const google::protobuf::MethodDescriptor* method = nullptr;
 
@@ -223,7 +223,7 @@ Status RPC::SendRequest(const EndPoint& endpoint,
       << "[meta.rpc] unknown service name: " << service_name;
 
   method =
-      dingofs::pb::mdsv2::MDSService::descriptor()->FindMethodByName(api_name);
+      dingofs::pb::mds::MDSService::descriptor()->FindMethodByName(api_name);
   CHECK(method != nullptr) << "[meta.rpc] unknown api name: " << api_name;
 
   if (IsInvalidEndpoint(endpoint)) {
@@ -242,9 +242,9 @@ Status RPC::SendRequest(const EndPoint& endpoint,
     cntl.set_timeout_ms(option.timeout_ms);
     cntl.set_log_id(butil::fast_rand());
 
-    uint64_t start_us = mdsv2::Helper::TimestampUs();
+    uint64_t start_us = mds::Helper::TimestampUs();
     channel->CallMethod(method, &cntl, &request, &response, nullptr);
-    uint64_t elapsed_us = mdsv2::Helper::TimestampUs() - start_us;
+    uint64_t elapsed_us = mds::Helper::TimestampUs() - start_us;
     if (cntl.Failed()) {
       LOG(ERROR) << fmt::format(
           "[meta.rpc][{}][{}][{}us] fail, {} retry({}) {} request({}) "
@@ -269,7 +269,7 @@ Status RPC::SendRequest(const EndPoint& endpoint,
     }
 
     if (response.error().errcode() == pb::error::OK) {
-      if constexpr (!std::is_same_v<Response, pb::mdsv2::ReadSliceResponse>) {
+      if constexpr (!std::is_same_v<Response, pb::mds::ReadSliceResponse>) {
         LOG(INFO) << fmt::format(
             "[meta.rpc][{}][{}][{}us] success, retry({}) request({}) "
             "response({}) doing({}).",

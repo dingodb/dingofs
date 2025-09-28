@@ -21,7 +21,7 @@ add_library(vfs_meta_v2_lib ${VFS_META_SRC_V2_LIB})
 target_link_libraries(vfs_meta_v2_lib
     PROTO_OBJS
 
-    mdsv2_mds
+    mds_mds
 
     dingofs_common
     dynamic_vlog
@@ -52,7 +52,7 @@ add_library(vfs_meta_v2_rpc_lib
 target_link_libraries(vfs_meta_v2_rpc_lib
     PROTO_OBJS
 
-    mdsv2_mds
+    mds_mds
 
     dingofs_common
     client_options

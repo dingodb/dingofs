@@ -42,8 +42,8 @@
 #include "dingofs/cachegroup.pb.h"
 #include "dingofs/common.pb.h"
 #include "dingofs/error.pb.h"
-#include "dingofs/mdsv2.pb.h"
-#include "mdsv2/mds/mds_meta.h"
+#include "dingofs/mds.pb.h"
+#include "mds/mds/mds_meta.h"
 
 namespace dingofs {
 namespace cache {
@@ -63,14 +63,14 @@ DEFINE_uint64(mdsv1_rpc_max_failed_times_before_change_addr, 2, "");
 DEFINE_uint64(mdsv1_rpc_normal_retry_times_before_trigger_wait, 3, "");
 DEFINE_uint64(mdsv1_rpc_wait_sleep_ms, 1000, "");
 
-DEFINE_int64(mdsv2_rpc_timeout_ms, 3000, "mdsv2 rpc timeout");
-DEFINE_validator(mdsv2_rpc_timeout_ms, brpc::PassValidate);
+DEFINE_int64(mds_rpc_timeout_ms, 3000, "mds rpc timeout");
+DEFINE_validator(mds_rpc_timeout_ms, brpc::PassValidate);
 
-DEFINE_int32(mdsv2_rpc_retry_times, 1, "mdsv2 rpc retry time");
-DEFINE_validator(mdsv2_rpc_retry_times, brpc::PassValidate);
+DEFINE_int32(mds_rpc_retry_times, 1, "mds rpc retry time");
+DEFINE_validator(mds_rpc_retry_times, brpc::PassValidate);
 
-DEFINE_uint32(mdsv2_request_retry_times, 3, "mdsv2 rpc request retry time");
-DEFINE_validator(mdsv2_request_retry_times, brpc::PassValidate);
+DEFINE_uint32(mds_request_retry_times, 3, "mds rpc request retry time");
+DEFINE_validator(mds_request_retry_times, brpc::PassValidate);
 
 MDSV2Client::MDSV2Client(const std::string& mds_addr)
     : running_(false),
@@ -118,8 +118,8 @@ Status MDSV2Client::Shutdown() {
 
 Status MDSV2Client::GetFSInfo(uint64_t fs_id,
                               pb::common::StorageInfo* storage_info) {
-  pb::mdsv2::GetFsInfoRequest request;
-  pb::mdsv2::GetFsInfoResponse response;
+  pb::mds::GetFsInfoRequest request;
+  pb::mds::GetFsInfoResponse response;
 
   request.set_fs_id(fs_id);
   auto status = SendRequest("MDSService", "GetFsInfo", request, response);
@@ -133,8 +133,8 @@ Status MDSV2Client::JoinCacheGroup(const std::string& want_id,
                                    const std::string& ip, uint32_t port,
                                    const std::string& group_name,
                                    uint32_t weight, std::string* member_id) {
-  pb::mdsv2::JoinCacheGroupRequest request;
-  pb::mdsv2::JoinCacheGroupResponse response;
+  pb::mds::JoinCacheGroupRequest request;
+  pb::mds::JoinCacheGroupResponse response;
 
   request.set_member_id(want_id);
   request.set_ip(ip);
@@ -160,8 +160,8 @@ Status MDSV2Client::JoinCacheGroup(const std::string& want_id,
 Status MDSV2Client::LeaveCacheGroup(const std::string& member_id,
                                     const std::string& ip, uint32_t port,
                                     const std::string& group_name) {
-  pb::mdsv2::LeaveCacheGroupRequest request;
-  pb::mdsv2::LeaveCacheGroupResponse response;
+  pb::mds::LeaveCacheGroupRequest request;
+  pb::mds::LeaveCacheGroupResponse response;
 
   request.set_member_id(member_id);
   request.set_ip(ip);
@@ -180,10 +180,10 @@ Status MDSV2Client::LeaveCacheGroup(const std::string& member_id,
 
 Status MDSV2Client::Heartbeat(const std::string& member_id,
                               const std::string& ip, uint32_t port) {
-  pb::mdsv2::HeartbeatRequest request;
-  pb::mdsv2::HeartbeatResponse response;
+  pb::mds::HeartbeatRequest request;
+  pb::mds::HeartbeatResponse response;
 
-  request.set_role(pb::mdsv2::ROLE_CACHE_MEMBER);
+  request.set_role(pb::mds::ROLE_CACHE_MEMBER);
   auto* member = request.mutable_cache_group_member();
   member->set_member_id(member_id);
   member->set_ip(ip);
@@ -200,8 +200,8 @@ Status MDSV2Client::Heartbeat(const std::string& member_id,
 
 Status MDSV2Client::ListMembers(const std::string& group_name,
                                 std::vector<CacheGroupMember>* members) {
-  pb::mdsv2::ListMembersRequest request;
-  pb::mdsv2::ListMembersResponse response;
+  pb::mds::ListMembersRequest request;
+  pb::mds::ListMembersResponse response;
 
   request.set_group_name(group_name);
   auto status = SendRequest("MDSService", "ListMembers", request, response);
@@ -224,7 +224,7 @@ Status MDSV2Client::ListMembers(const std::string& group_name,
   return Status::OK();
 }
 
-pb::common::S3Info MDSV2Client::ToCommonS3Info(const pb::mdsv2::S3Info& in) {
+pb::common::S3Info MDSV2Client::ToCommonS3Info(const pb::mds::S3Info& in) {
   pb::common::S3Info out;
   out.set_ak(in.ak());
   out.set_sk(in.sk());
@@ -235,7 +235,7 @@ pb::common::S3Info MDSV2Client::ToCommonS3Info(const pb::mdsv2::S3Info& in) {
 }
 
 pb::common::RadosInfo MDSV2Client::ToCommonRadosInfo(
-    const pb::mdsv2::RadosInfo& in) {
+    const pb::mds::RadosInfo& in) {
   pb::common::RadosInfo out;
   out.set_user_name(in.user_name());
   out.set_key(in.key());
@@ -247,42 +247,42 @@ pb::common::RadosInfo MDSV2Client::ToCommonRadosInfo(
 }
 
 pb::common::StorageInfo MDSV2Client::ToCommonStorageInfo(
-    const pb::mdsv2::FsInfo& fs_info) {
+    const pb::mds::FsInfo& fs_info) {
   pb::common::StorageInfo out;
-  if (fs_info.fs_type() == pb::mdsv2::FsType::S3) {
+  if (fs_info.fs_type() == pb::mds::FsType::S3) {
     out.set_type(pb::common::StorageType::TYPE_S3);
     *out.mutable_s3_info() = ToCommonS3Info(fs_info.extra().s3_info());
-  } else if (fs_info.fs_type() == pb::mdsv2::FsType::RADOS) {
+  } else if (fs_info.fs_type() == pb::mds::FsType::RADOS) {
     out.set_type(pb::common::StorageType::TYPE_RADOS);
     *out.mutable_rados_info() = ToCommonRadosInfo(fs_info.extra().rados_info());
   } else {
     CHECK(false) << "Unsupported fs type: "
-                 << pb::mdsv2::FsType_Name(fs_info.fs_type());
+                 << pb::mds::FsType_Name(fs_info.fs_type());
   }
 
   return out;
 }
 
 CacheGroupMemberState MDSV2Client::ToMemberState(
-    pb::mdsv2::CacheGroupMemberState state) {
+    pb::mds::CacheGroupMemberState state) {
   switch (state) {
-    case pb::mdsv2::CacheGroupMemberStateOnline:
+    case pb::mds::CacheGroupMemberStateOnline:
       return CacheGroupMemberState::kOnline;
-    case pb::mdsv2::CacheGroupMemberStateUnstable:
+    case pb::mds::CacheGroupMemberStateUnstable:
       return CacheGroupMemberState::kUnstable;
-    case pb::mdsv2::CacheGroupMemberStateOffline:
+    case pb::mds::CacheGroupMemberStateOffline:
       return CacheGroupMemberState::kOffline;
-    case pb::mdsv2::CacheGroupMemberStateUnknown:
+    case pb::mds::CacheGroupMemberStateUnknown:
     default:
       return CacheGroupMemberState::kUnknown;
   }
 }
 
-mdsv2::MDSMeta MDSV2Client::GetRandomlyMDS(const mdsv2::MDSMeta& old_mds) {
+mds::MDSMeta MDSV2Client::GetRandomlyMDS(const mds::MDSMeta& old_mds) {
   auto mdses = mds_discovery_->GetNormalMDS(true);
   CHECK(!mdses.empty()) << "No normal mds found";
 
-  std::vector<mdsv2::MDSMeta> candidates;
+  std::vector<mds::MDSMeta> candidates;
   for (const auto& mds : mdses) {
     if (mds.ID() != old_mds.ID()) {
       candidates.emplace_back(mds);
@@ -322,12 +322,12 @@ template <typename Request, typename Response>
 Status MDSV2Client::SendRequest(const std::string& service_name,
                                 const std::string& api_name, Request& request,
                                 Response& response) {
-  mdsv2::MDSMeta mds, old_mds;
+  mds::MDSMeta mds, old_mds;
   client::vfs::v2::SendRequestOption rpc_option;
-  rpc_option.timeout_ms = FLAGS_mdsv2_rpc_timeout_ms;
-  rpc_option.max_retry = FLAGS_mdsv2_rpc_retry_times;
+  rpc_option.timeout_ms = FLAGS_mds_rpc_timeout_ms;
+  rpc_option.max_retry = FLAGS_mds_rpc_retry_times;
 
-  for (int retry = 0; retry < FLAGS_mdsv2_request_retry_times; ++retry) {
+  for (int retry = 0; retry < FLAGS_mds_request_retry_times; ++retry) {
     mds = GetRandomlyMDS(old_mds);
     auto endpoint = client::vfs::v2::StrToEndpoint(mds.Host(), mds.Port());
 

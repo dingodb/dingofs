@@ -4,7 +4,7 @@ mydir="${BASH_SOURCE%/*}"
 if [[ ! -d "$mydir" ]]; then mydir="$PWD"; fi
 . $mydir/shflags
 
-DEFINE_string role 'mdsv2' 'server role'
+DEFINE_string role 'mds' 'server role'
 
 # parse the command-line
 FLAGS "$@" || exit 1

@@ -24,7 +24,7 @@
 #include <vector>
 
 #include "json/value.h"
-#include "mdsv2/common/type.h"
+#include "mds/common/type.h"
 #include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
@@ -35,13 +35,13 @@ namespace v2 {
 class Inode;
 using InodeSPtr = std::shared_ptr<Inode>;
 
-using mdsv2::ChunkEntry;
-using mdsv2::Ino;
+using mds::ChunkEntry;
+using mds::Ino;
 
 class Inode {
  public:
-  using FileType = mdsv2::FileType;
-  using AttrEntry = mdsv2::AttrEntry;
+  using FileType = mds::FileType;
+  using AttrEntry = mds::AttrEntry;
   using XAttrMap = ::google::protobuf::Map<std::string, std::string>;
   using ChunkMap = ::google::protobuf::Map<uint64_t, ChunkEntry>;
 
@@ -93,7 +93,7 @@ using InodeCacheSPtr = std::shared_ptr<InodeCache>;
 // cache all file/dir inode
 class InodeCache {
  public:
-  using AttrEntry = mdsv2::AttrEntry;
+  using AttrEntry = mds::AttrEntry;
 
   InodeCache(uint32_t fs_id);
   ~InodeCache();

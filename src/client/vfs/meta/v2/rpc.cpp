@@ -76,14 +76,14 @@ bool RPC::CheckMdsAlive(const std::string& addr) {
     return false;
   }
 
-  pb::mdsv2::EchoRequest request;
-  pb::mdsv2::EchoResponse response;
+  pb::mds::EchoRequest request;
+  pb::mds::EchoResponse response;
 
   request.mutable_info()->set_request_id(
-      std::to_string(mdsv2::Helper::TimestampNs()));
+      std::to_string(mds::Helper::TimestampNs()));
 
   const google::protobuf::MethodDescriptor* method =
-      dingofs::pb::mdsv2::MDSService::descriptor()->FindMethodByName("Echo");
+      dingofs::pb::mds::MDSService::descriptor()->FindMethodByName("Echo");
 
   brpc::Controller cntl;
   channel.CallMethod(method, &cntl, &request, &response, nullptr);
@@ -135,7 +135,7 @@ EndPoint RPC::RandomlyPickupEndPoint() {
   // priority take from active channels
   if (!channels_.empty()) {
     uint32_t random_num =
-        mdsv2::Helper::GenerateRealRandomInteger(0, channels_.size());
+        mds::Helper::GenerateRealRandomInteger(0, channels_.size());
     uint32_t index = random_num % channels_.size();
     auto it = channels_.begin();
     std::advance(it, index);
@@ -145,7 +145,7 @@ EndPoint RPC::RandomlyPickupEndPoint() {
   } else if (!fallback_endpoints_.empty()) {
     // take from fallback
     uint32_t random_num =
-        mdsv2::Helper::GenerateRealRandomInteger(0, fallback_endpoints_.size());
+        mds::Helper::GenerateRealRandomInteger(0, fallback_endpoints_.size());
     uint32_t index = random_num % fallback_endpoints_.size();
     auto it = fallback_endpoints_.begin();
     std::advance(it, index);

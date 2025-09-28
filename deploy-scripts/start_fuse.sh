@@ -4,7 +4,7 @@ mydir="${BASH_SOURCE%/*}"
 if [[ ! -d "$mydir" ]]; then mydir="$PWD"; fi
 . $mydir/shflags
 
-DEFINE_string fsname 'mdsv2_fs_mono' 'server role'
+DEFINE_string fsname 'mds_fs_mono' 'server role'
 DEFINE_string fstype 'vfs_v2' 'fs type'
 DEFINE_string mountpoint '' 'mount point'
 

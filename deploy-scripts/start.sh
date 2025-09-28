@@ -9,7 +9,7 @@ mydir="${BASH_SOURCE%/*}"
 if [[ ! -d "$mydir" ]]; then mydir="$PWD"; fi
 . $mydir/shflags
 
-DEFINE_string role 'mdsv2' 'server role'
+DEFINE_string role 'mds' 'server role'
 
 # parse the command-line
 FLAGS "$@" || exit 1
@@ -82,7 +82,7 @@ function start_server() {
   server_name="dingo-${role}"
   echo "start server: ${root_dir}/bin/${server_name}"
 
-  exec ${root_dir}/bin/${server_name} --conf=${root_dir}/conf/${server_name}.conf >> ${root_dir}/log/mdsv2.log 2>&1
+  exec ${root_dir}/bin/${server_name} --conf=${root_dir}/conf/${role}.conf >> ${root_dir}/log/mds.log 2>&1
 }
 
 

@@ -22,8 +22,8 @@
 #include "fmt/format.h"
 #include "gflags/gflags.h"
 #include "glog/logging.h"
-#include "mdsv2/common/helper.h"
-#include "mdsv2/common/logging.h"
+#include "mds/common/helper.h"
+#include "mds/common/logging.h"
 #include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
@@ -183,7 +183,7 @@ void Inode::ExpandLength(uint64_t length) {
 
   if (length <= attr_.length()) return;
 
-  uint64_t now_ns = mdsv2::Helper::TimestampNs();
+  uint64_t now_ns = mds::Helper::TimestampNs();
   attr_.set_length(length);
   attr_.set_mtime(now_ns);
   attr_.set_ctime(now_ns);
@@ -269,7 +269,7 @@ bool InodeCache::Dump(Json::Value& value) {
     Json::Value item;
     item["fs_id"] = inode->FsId();
     item["ino"] = inode->Ino();
-    item["type"] = pb::mdsv2::FileType_Name(inode->Type());
+    item["type"] = pb::mds::FileType_Name(inode->Type());
     item["length"] = inode->Length();
     item["uid"] = inode->Uid();
     item["gid"] = inode->Gid();

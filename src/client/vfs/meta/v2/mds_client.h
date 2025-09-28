@@ -29,10 +29,10 @@
 #include "client/vfs/meta/v2/rpc.h"
 #include "common/status.h"
 #include "dingofs/error.pb.h"
-#include "dingofs/mdsv2.pb.h"
-#include "mdsv2/common/helper.h"
-#include "mdsv2/common/type.h"
-#include "mdsv2/filesystem/fs_info.h"
+#include "dingofs/mds.pb.h"
+#include "mds/common/helper.h"
+#include "mds/common/type.h"
+#include "mds/filesystem/fs_info.h"
 #include "options/client/option.h"
 #include "trace/context.h"
 
@@ -44,19 +44,19 @@ namespace v2 {
 class MDSClient;
 using MDSClientSPtr = std::shared_ptr<MDSClient>;
 
-using mdsv2::AttrEntry;
-using mdsv2::MDSMeta;
+using mds::AttrEntry;
+using mds::MDSMeta;
 
 using GetMdsFn = std::function<MDSMeta()>;
 
 class MDSClient {
  public:
-  MDSClient(const ClientId& client_id, mdsv2::FsInfoSPtr fs_info,
+  MDSClient(const ClientId& client_id, mds::FsInfoSPtr fs_info,
             ParentMemoSPtr parent_memo, MDSDiscoverySPtr mds_discovery,
             MDSRouterPtr mds_router, RPCPtr rpc);
   virtual ~MDSClient() = default;
 
-  static MDSClientSPtr New(const ClientId& client_id, mdsv2::FsInfoSPtr fs_info,
+  static MDSClientSPtr New(const ClientId& client_id, mds::FsInfoSPtr fs_info,
                            ParentMemoSPtr parent_memo,
 
                            MDSDiscoverySPtr mds_discovery,
@@ -75,16 +75,16 @@ class MDSClient {
   bool SetEndpoint(const std::string& ip, int port);
 
   static Status GetFsInfo(RPCPtr rpc, const std::string& name,
-                          mdsv2::FsInfoEntry& fs_info);
+                          mds::FsInfoEntry& fs_info);
   static Status GetFsInfo(RPCPtr rpc, uint32_t fs_id,
-                          mdsv2::FsInfoEntry& fs_info);
+                          mds::FsInfoEntry& fs_info);
 
   RPCPtr GetRpc();
 
   Status Heartbeat();
 
   Status MountFs(const std::string& name,
-                 const pb::mdsv2::MountPoint& mount_point);
+                 const pb::mds::MountPoint& mount_point);
   Status UmountFs(const std::string& name, const std::string& client_id);
 
   Status Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
@@ -107,7 +107,7 @@ class MDSClient {
 
   Status Open(ContextSPtr ctx, Ino ino, int flags, bool is_prefetch_chunk,
               std::string& session_id, AttrEntry& attr_entry,
-              std::vector<mdsv2::ChunkEntry>& chunks);
+              std::vector<mds::ChunkEntry>& chunks);
   Status Release(ContextSPtr ctx, Ino ino, const std::string& session_id);
 
   Status Link(ContextSPtr ctx, Ino ino, Ino new_parent,
@@ -136,9 +136,9 @@ class MDSClient {
   Status NewSliceId(ContextSPtr ctx, uint32_t num, uint64_t* id);
   Status ReadSlice(ContextSPtr ctx, Ino ino,
                    const std::vector<uint64_t>& chunk_indexes,
-                   std::vector<mdsv2::ChunkEntry>& chunks);
+                   std::vector<mds::ChunkEntry>& chunks);
   Status WriteSlice(ContextSPtr ctx, Ino ino,
-                    const std::vector<mdsv2::DeltaSliceEntry>& delta_slices);
+                    const std::vector<mds::DeltaSliceEntry>& delta_slices);
 
   Status Fallocate(ContextSPtr ctx, Ino ino, int32_t mode, uint64_t offset,
                    uint64_t length);
@@ -146,8 +146,8 @@ class MDSClient {
   Status GetFsQuota(ContextSPtr ctx, FsStat& fs_stat);
 
  private:
-  static Status DoGetFsInfo(RPCPtr rpc, pb::mdsv2::GetFsInfoRequest& request,
-                            mdsv2::FsInfoEntry& fs_info);
+  static Status DoGetFsInfo(RPCPtr rpc, pb::mds::GetFsInfoRequest& request,
+                            mds::FsInfoEntry& fs_info);
 
   MDSMeta GetMds(Ino ino);
   MDSMeta GetMdsByParent(int64_t parent);
@@ -176,7 +176,7 @@ class MDSClient {
   uint64_t epoch_{0};
 
   const ClientId client_id_;
-  mdsv2::FsInfoSPtr fs_info_;
+  mds::FsInfoSPtr fs_info_;
 
   ParentMemoSPtr parent_memo_;
 
@@ -208,7 +208,7 @@ Status MDSClient::SendRequest(ContextSPtr ctx, GetMdsFn get_mds_fn,
   bool is_refresh_mds = true;
 
   request.mutable_info()->set_request_id(
-      ctx ? ctx->TraceId() : std::to_string(mdsv2::Helper::TimestampNs()));
+      ctx ? ctx->TraceId() : std::to_string(mds::Helper::TimestampNs()));
   request.mutable_context()->set_client_id(client_id_.ID());
 
   Status status;

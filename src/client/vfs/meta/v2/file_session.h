@@ -23,8 +23,8 @@
 
 #include "client/meta/vfs_meta.h"
 #include "json/value.h"
-#include "mdsv2/common/type.h"
-#include "mdsv2/filesystem/fs_info.h"
+#include "mds/common/type.h"
+#include "mds/filesystem/fs_info.h"
 #include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
@@ -40,7 +40,7 @@ using FileSessionSPtr = std::shared_ptr<FileSession>;
 
 class FileSessionMap;
 
-using mdsv2::ChunkEntry;
+using mds::ChunkEntry;
 
 class ChunkMutation {
  public:
@@ -123,12 +123,12 @@ class WriteMemo {
 
 class FileSession {
  public:
-  FileSession(mdsv2::FsInfoSPtr fs_info) : fs_info_(fs_info) {}
-  FileSession(mdsv2::FsInfoSPtr fs_info, Ino ino, uint64_t fh,
+  FileSession(mds::FsInfoSPtr fs_info) : fs_info_(fs_info) {}
+  FileSession(mds::FsInfoSPtr fs_info, Ino ino, uint64_t fh,
               const std::string& session_id);
   ~FileSession() = default;
 
-  static FileSessionSPtr New(mdsv2::FsInfoSPtr fs_info, Ino ino, uint64_t fh,
+  static FileSessionSPtr New(mds::FsInfoSPtr fs_info, Ino ino, uint64_t fh,
                              const std::string& session_id) {
     return std::make_shared<FileSession>(fs_info, ino, fh, session_id);
   }
@@ -158,11 +158,11 @@ class FileSession {
  private:
   friend class FileSessionMap;
 
-  static FileSessionSPtr New(mdsv2::FsInfoSPtr fs_info) {
+  static FileSessionSPtr New(mds::FsInfoSPtr fs_info) {
     return std::make_shared<FileSession>(fs_info);
   }
 
-  mdsv2::FsInfoSPtr fs_info_;
+  mds::FsInfoSPtr fs_info_;
   Ino ino_;
 
   std::atomic<uint32_t> ref_count_{0};
@@ -181,7 +181,7 @@ class FileSession {
 // used by open file
 class FileSessionMap {
  public:
-  FileSessionMap(mdsv2::FsInfoSPtr fs_info) : fs_info_(fs_info) {}
+  FileSessionMap(mds::FsInfoSPtr fs_info) : fs_info_(fs_info) {}
   ~FileSessionMap() = default;
 
   FileSessionSPtr Put(Ino ino, uint64_t fh, const std::string& session_id);
@@ -195,7 +195,7 @@ class FileSessionMap {
   bool Load(const Json::Value& value);
 
  private:
-  mdsv2::FsInfoSPtr fs_info_;
+  mds::FsInfoSPtr fs_info_;
 
   utils::RWLock lock_;
   // ino -> FileSession

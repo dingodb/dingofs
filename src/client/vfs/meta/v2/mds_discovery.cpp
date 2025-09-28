@@ -16,7 +16,7 @@
 
 #include <cstdint>
 
-#include "dingofs/mdsv2.pb.h"
+#include "dingofs/mds.pb.h"
 #include "fmt/core.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
@@ -32,7 +32,7 @@ bool MDSDiscovery::Init() { return RefreshFullyMDSList(); }
 
 void MDSDiscovery::Destroy() {}
 
-bool MDSDiscovery::GetMDS(int64_t mds_id, mdsv2::MDSMeta& mds_meta) {
+bool MDSDiscovery::GetMDS(int64_t mds_id, mds::MDSMeta& mds_meta) {
   utils::ReadLockGuard lk(lock_);
 
   auto it = mdses_.find(mds_id);
@@ -45,13 +45,13 @@ bool MDSDiscovery::GetMDS(int64_t mds_id, mdsv2::MDSMeta& mds_meta) {
   return true;
 }
 
-void MDSDiscovery::PickFirstMDS(mdsv2::MDSMeta& mds_meta) {
+void MDSDiscovery::PickFirstMDS(mds::MDSMeta& mds_meta) {
   do {
     {
       utils::ReadLockGuard lk(lock_);
 
       for (auto& [_, mds] : mdses_) {
-        if (mds.GetState() == mdsv2::MDSMeta::State::kNormal) {
+        if (mds.GetState() == mds::MDSMeta::State::kNormal) {
           mds_meta = mds;
           return;
         }
@@ -65,10 +65,10 @@ void MDSDiscovery::PickFirstMDS(mdsv2::MDSMeta& mds_meta) {
   } while (true);
 }
 
-std::vector<mdsv2::MDSMeta> MDSDiscovery::GetAllMDS() {
+std::vector<mds::MDSMeta> MDSDiscovery::GetAllMDS() {
   utils::ReadLockGuard lk(lock_);
 
-  std::vector<mdsv2::MDSMeta> mdses;
+  std::vector<mds::MDSMeta> mdses;
   mdses.reserve(mdses_.size());
   for (const auto& [_, mds_meta] : mdses_) {
     mdses.push_back(mds_meta);
@@ -77,11 +77,11 @@ std::vector<mdsv2::MDSMeta> MDSDiscovery::GetAllMDS() {
   return mdses;
 }
 
-std::vector<mdsv2::MDSMeta> MDSDiscovery::GetMDSByState(
-    mdsv2::MDSMeta::State state) {
+std::vector<mds::MDSMeta> MDSDiscovery::GetMDSByState(
+    mds::MDSMeta::State state) {
   utils::ReadLockGuard lk(lock_);
 
-  std::vector<mdsv2::MDSMeta> mdses;
+  std::vector<mds::MDSMeta> mdses;
   mdses.reserve(mdses_.size());
   for (const auto& [_, mds_meta] : mdses_) {
     if (mds_meta.GetState() == state) {
@@ -92,9 +92,9 @@ std::vector<mdsv2::MDSMeta> MDSDiscovery::GetMDSByState(
   return mdses;
 }
 
-std::vector<mdsv2::MDSMeta> MDSDiscovery::GetNormalMDS(bool force) {
+std::vector<mds::MDSMeta> MDSDiscovery::GetNormalMDS(bool force) {
   for (;;) {
-    auto mdses = GetMDSByState(mdsv2::MDSMeta::State::kNormal);
+    auto mdses = GetMDSByState(mds::MDSMeta::State::kNormal);
     if (!force) return mdses;
     if (!mdses.empty()) return mdses;
 
@@ -102,12 +102,12 @@ std::vector<mdsv2::MDSMeta> MDSDiscovery::GetNormalMDS(bool force) {
   }
 }
 
-Status MDSDiscovery::GetMDSList(std::vector<mdsv2::MDSMeta>& mdses) {
-  pb::mdsv2::GetMDSListRequest request;
-  pb::mdsv2::GetMDSListResponse response;
+Status MDSDiscovery::GetMDSList(std::vector<mds::MDSMeta>& mdses) {
+  pb::mds::GetMDSListRequest request;
+  pb::mds::GetMDSListResponse response;
 
   request.mutable_info()->set_request_id(
-      std::to_string(mdsv2::Helper::TimestampNs()));
+      std::to_string(mds::Helper::TimestampNs()));
 
   auto status =
       rpc_->SendRequest("MDSService", "GetMDSList", request, response);
@@ -117,7 +117,7 @@ Status MDSDiscovery::GetMDSList(std::vector<mdsv2::MDSMeta>& mdses) {
 
   mdses.reserve(response.mdses_size());
   for (const auto& mds : response.mdses()) {
-    mdses.push_back(mdsv2::MDSMeta(mds));
+    mdses.push_back(mds::MDSMeta(mds));
   }
 
   return Status::OK();
@@ -128,13 +128,13 @@ void MDSDiscovery::SetAbnormalMDS(int64_t mds_id) {
 
   auto it = mdses_.find(mds_id);
   if (it != mdses_.end()) {
-    it->second.SetState(mdsv2::MDSMeta::State::kAbnormal);
+    it->second.SetState(mds::MDSMeta::State::kAbnormal);
   }
 }
 
 bool MDSDiscovery::RefreshFullyMDSList() {
   uint64_t retries = 0;
-  std::vector<mdsv2::MDSMeta> mdses;
+  std::vector<mds::MDSMeta> mdses;
   for (;;) {
     auto status = GetMDSList(mdses);
 

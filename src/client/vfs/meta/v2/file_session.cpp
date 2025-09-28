@@ -23,7 +23,7 @@
 #include "fmt/format.h"
 #include "glog/logging.h"
 #include "json/value.h"
-#include "mdsv2/common/helper.h"
+#include "mds/common/helper.h"
 
 namespace dingofs {
 namespace client {
@@ -223,7 +223,7 @@ bool ChunkMutation::Load(const Json::Value& value) {
 
 void WriteMemo::AddRange(uint64_t offset, uint64_t size) {
   ranges_.emplace_back(Range{.start = offset, .end = offset + size});
-  last_time_ns_ = mdsv2::Helper::TimestampNs();
+  last_time_ns_ = mds::Helper::TimestampNs();
 }
 
 uint64_t WriteMemo::GetLength() {
@@ -282,7 +282,7 @@ bool WriteMemo::Load(const Json::Value& value) {
   return true;
 }
 
-FileSession::FileSession(mdsv2::FsInfoSPtr fs_info, Ino ino, uint64_t fh,
+FileSession::FileSession(mds::FsInfoSPtr fs_info, Ino ino, uint64_t fh,
                          const std::string& session_id)
     : fs_info_(fs_info), ino_(ino) {
   AddSession(fh, session_id);

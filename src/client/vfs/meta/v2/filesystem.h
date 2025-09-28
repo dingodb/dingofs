@@ -31,8 +31,8 @@
 #include "client/vfs/meta/v2/write_slice_processor.h"
 #include "common/status.h"
 #include "json/value.h"
-#include "mdsv2/common/crontab.h"
-#include "mdsv2/common/type.h"
+#include "mds/common/crontab.h"
+#include "mds/common/type.h"
 #include "trace/context.h"
 
 namespace dingofs {
@@ -40,32 +40,31 @@ namespace client {
 namespace vfs {
 namespace v2 {
 
-using mdsv2::AttrEntry;
+using mds::AttrEntry;
 
-class MDSV2FileSystem;
-using MDSV2FileSystemPtr = std::shared_ptr<MDSV2FileSystem>;
-using MDSV2FileSystemUPtr = std::unique_ptr<MDSV2FileSystem>;
+class MDSFileSystem;
+using MDSFileSystemPtr = std::shared_ptr<MDSFileSystem>;
+using MDSFileSystemUPtr = std::unique_ptr<MDSFileSystem>;
 
-class MDSV2FileSystem : public vfs::MetaSystem {
+class MDSFileSystem : public vfs::MetaSystem {
  public:
-  MDSV2FileSystem(mdsv2::FsInfoSPtr fs_info, const ClientId& client_id,
-                  MDSDiscoverySPtr mds_discovery, InodeCacheSPtr inode_cache,
-                  MDSClientSPtr mds_client);
-  ~MDSV2FileSystem() override;
+  MDSFileSystem(mds::FsInfoSPtr fs_info, const ClientId& client_id,
+                MDSDiscoverySPtr mds_discovery, InodeCacheSPtr inode_cache,
+                MDSClientSPtr mds_client);
+  ~MDSFileSystem() override;
 
-  static MDSV2FileSystemUPtr New(mdsv2::FsInfoSPtr fs_info,
-                                 const ClientId& client_id,
-                                 MDSDiscoverySPtr mds_discovery,
-                                 InodeCacheSPtr inode_cache,
-                                 MDSClientSPtr mds_client) {
-    return std::make_unique<MDSV2FileSystem>(fs_info, client_id, mds_discovery,
-                                             inode_cache, mds_client);
+  static MDSFileSystemUPtr New(mds::FsInfoSPtr fs_info,
+                               const ClientId& client_id,
+                               MDSDiscoverySPtr mds_discovery,
+                               InodeCacheSPtr inode_cache,
+                               MDSClientSPtr mds_client) {
+    return std::make_unique<MDSFileSystem>(fs_info, client_id, mds_discovery,
+                                           inode_cache, mds_client);
   }
 
-  static MDSV2FileSystemUPtr Build(const std::string& fs_name,
-                                   const std::string& mds_addrs,
-                                   const std::string& mountpoint,
-                                   uint32_t port);
+  static MDSFileSystemUPtr Build(const std::string& fs_name,
+                                 const std::string& mds_addrs,
+                                 const std::string& mountpoint, uint32_t port);
 
   Status Init() override;
 
@@ -77,7 +76,7 @@ class MDSV2FileSystem : public vfs::MetaSystem {
 
   bool Load(ContextSPtr ctx, const Json::Value& value) override;
 
-  mdsv2::FsInfoEntry GetFsInfo() { return fs_info_->Get(); }
+  mds::FsInfoEntry GetFsInfo() { return fs_info_->Get(); }
 
   Status GetFsInfo(ContextSPtr ctx, FsInfo* fs_info) override;
 
@@ -169,17 +168,17 @@ class MDSV2FileSystem : public vfs::MetaSystem {
   //                        const std::vector<Slice>& slices);
   // void DeleteDeltaSliceFromCache(
   //     Ino ino, uint64_t fh,
-  //     const std::vector<mdsv2::DeltaSliceEntry>& delta_slice_entries);
+  //     const std::vector<mds::DeltaSliceEntry>& delta_slice_entries);
 
   // void UpdateChunkToCache(Ino ino, uint64_t fh,
-  //                         const std::vector<mdsv2::ChunkEntry>& chunks);
+  //                         const std::vector<mds::ChunkEntry>& chunks);
   void ClearChunkCache(Ino ino, uint64_t fh, uint64_t index);
   // Status SyncDeltaSlice(ContextSPtr ctx, Ino ino, uint64_t fh);
 
   const std::string name_;
   const ClientId client_id_;
 
-  mdsv2::FsInfoSPtr fs_info_;
+  mds::FsInfoSPtr fs_info_;
 
   MDSDiscoverySPtr mds_discovery_;
 
@@ -193,9 +192,9 @@ class MDSV2FileSystem : public vfs::MetaSystem {
   InodeCacheSPtr inode_cache_;
 
   // Crontab config
-  std::vector<mdsv2::CrontabConfig> crontab_configs_;
+  std::vector<mds::CrontabConfig> crontab_configs_;
   // This is manage crontab, like heartbeat.
-  mdsv2::CrontabManager crontab_manager_;
+  mds::CrontabManager crontab_manager_;
 
   WriteSliceProcessorSPtr write_slice_processor_;
 };

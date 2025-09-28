@@ -30,7 +30,7 @@
 #include "client/vfs/meta/v2/rpc.h"
 #include "common/status.h"
 #include "dingofs/common.pb.h"
-#include "mdsv2/mds/mds_meta.h"
+#include "mds/mds/mds_meta.h"
 
 namespace dingofs {
 namespace cache {
@@ -124,12 +124,12 @@ class MDSV2Client : public MDSClient {
                      std::vector<CacheGroupMember>* members) override;
 
  private:
-  pb::common::S3Info ToCommonS3Info(const pb::mdsv2::S3Info& info);
-  pb::common::RadosInfo ToCommonRadosInfo(const pb::mdsv2::RadosInfo& info);
-  pb::common::StorageInfo ToCommonStorageInfo(const pb::mdsv2::FsInfo& info);
-  CacheGroupMemberState ToMemberState(pb::mdsv2::CacheGroupMemberState state);
+  pb::common::S3Info ToCommonS3Info(const pb::mds::S3Info& info);
+  pb::common::RadosInfo ToCommonRadosInfo(const pb::mds::RadosInfo& info);
+  pb::common::StorageInfo ToCommonStorageInfo(const pb::mds::FsInfo& info);
+  CacheGroupMemberState ToMemberState(pb::mds::CacheGroupMemberState state);
 
-  mdsv2::MDSMeta GetRandomlyMDS(const mdsv2::MDSMeta& old_mds);
+  mds::MDSMeta GetRandomlyMDS(const mds::MDSMeta& old_mds);
   bool ShouldRetry(Status status);
   bool ShouldSetMDSAbormal(Status status);
   bool ShouldRefreshMDSList(Status status);

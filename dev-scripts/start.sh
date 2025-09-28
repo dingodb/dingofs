@@ -9,7 +9,7 @@ mydir="${BASH_SOURCE%/*}"
 if [[ ! -d "$mydir" ]]; then mydir="$PWD"; fi
 . $mydir/shflags
 
-DEFINE_string role 'mdsv2' 'server role'
+DEFINE_string role 'mds' 'server role'
 DEFINE_integer server_num 1 'server number'
 
 # parse the command-line
@@ -83,7 +83,7 @@ function start_server() {
   server_name="dingo-${role}"
   echo "start server: ${root_dir}/bin/${server_name}"
 
-  nohup ${root_dir}/bin/${server_name} --conf=${root_dir}/conf/${server_name}.conf 2>&1 >./log/out &
+  nohup ${root_dir}/bin/${server_name} --conf=${root_dir}/conf/${role}.conf 2>&1 >./log/out &
 }
 
 

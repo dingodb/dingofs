@@ -232,9 +232,9 @@ DECLARE_uint64(mdsv1_rpc_normal_retry_times_before_trigger_wait);
 DECLARE_uint64(mdsv1_rpc_wait_sleep_ms);
 
 // [onfly]
-DECLARE_int64(mdsv2_rpc_timeout_ms);
-DECLARE_int32(mdsv2_rpc_retry_times);
-DECLARE_uint32(mdsv2_request_retry_times);
+DECLARE_int64(mds_rpc_timeout_ms);
+DECLARE_int32(mds_rpc_retry_times);
+DECLARE_uint32(mds_request_retry_times);
 
 };  // namespace cache
 };  // namespace dingofs

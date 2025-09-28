@@ -29,7 +29,7 @@
 #include "client/vfs/common/helper.h"
 #include "common/status.h"
 #include "dingofs/error.pb.h"
-#include "dingofs/mdsv2.pb.h"
+#include "dingofs/mds.pb.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
 #include "trace/context.h"
@@ -254,13 +254,13 @@ DummyFileSystem::~DummyFileSystem() {
   CHECK(bthread_mutex_destroy(&mutex_) == 0) << "destroy mutex fail.";
 }
 
-static pb::mdsv2::FsInfo GenFsInfo() {
-  pb::mdsv2::FsInfo fs_info;
+static pb::mds::FsInfo GenFsInfo() {
+  pb::mds::FsInfo fs_info;
   fs_info.set_fs_id(kFsID);
   fs_info.set_fs_name(kDefaultFsName);
   fs_info.set_block_size(kDefaultBlockSize);
   fs_info.set_chunk_size(kDefaultChunkSize);
-  fs_info.set_fs_type(pb::mdsv2::FsType::S3);
+  fs_info.set_fs_type(pb::mds::FsType::S3);
   fs_info.set_owner("dengzihui");
   fs_info.set_capacity(INT64_MAX);
   fs_info.set_recycle_time_hour(24);
@@ -285,7 +285,7 @@ static pb::mdsv2::FsInfo GenFsInfo() {
 
 // root inode mode: S_IFDIR | 01777
 static DummyFileSystem::PBInode GenInode(uint32_t fs_id, uint64_t ino,
-                                         pb::mdsv2::FileType type) {
+                                         pb::mds::FileType type) {
   DummyFileSystem::PBInode inode;
   inode.set_ino(ino);
   inode.set_fs_id(fs_id);
@@ -302,7 +302,7 @@ static DummyFileSystem::PBInode GenInode(uint32_t fs_id, uint64_t ino,
   inode.set_mtime(now_timestamp);
   inode.set_ctime(now_timestamp);
 
-  if (type == pb::mdsv2::FileType::DIRECTORY) {
+  if (type == pb::mds::FileType::DIRECTORY) {
     inode.set_length(4096);
     inode.set_nlink(2);
   } else {
@@ -316,7 +316,7 @@ static DummyFileSystem::PBInode GenInode(uint32_t fs_id, uint64_t ino,
 static DummyFileSystem::PBDentry GenDentry(uint32_t fs_id, uint64_t parent_ino,
                                            uint64_t ino,
                                            const std::string& name,
-                                           pb::mdsv2::FileType type) {
+                                           pb::mds::FileType type) {
   DummyFileSystem::PBDentry dentry;
   dentry.set_ino(ino);
   dentry.set_name(name);
@@ -333,11 +333,11 @@ Status DummyFileSystem::Init() {
 
   // create root inode
   auto inode =
-      GenInode(fs_info_.fs_id(), kRootIno, pb::mdsv2::FileType::DIRECTORY);
+      GenInode(fs_info_.fs_id(), kRootIno, pb::mds::FileType::DIRECTORY);
 
   // create root dentry
   auto pb_dentry = GenDentry(fs_info_.fs_id(), 0, inode.ino(), "/",
-                             pb::mdsv2::FileType::DIRECTORY);
+                             pb::mds::FileType::DIRECTORY);
 
   Dentry dentry;
   dentry.dentry = pb_dentry;
@@ -367,15 +367,15 @@ bool DummyFileSystem::Load(ContextSPtr ctx, const Json::Value& value) {
   return true;
 }
 
-static FileType ToFileType(pb::mdsv2::FileType type) {
+static FileType ToFileType(pb::mds::FileType type) {
   switch (type) {
-    case pb::mdsv2::FileType::FILE:
+    case pb::mds::FileType::FILE:
       return FileType::kFile;
 
-    case pb::mdsv2::FileType::DIRECTORY:
+    case pb::mds::FileType::DIRECTORY:
       return FileType::kDirectory;
 
-    case pb::mdsv2::FileType::SYM_LINK:
+    case pb::mds::FileType::SYM_LINK:
       return FileType::kSymlink;
 
     default:
@@ -383,7 +383,7 @@ static FileType ToFileType(pb::mdsv2::FileType type) {
   }
 }
 
-static Attr ToAttr(const pb::mdsv2::Inode& inode) {
+static Attr ToAttr(const pb::mds::Inode& inode) {
   Attr attr;
   attr.ino = inode.ino();
   attr.length = inode.length();
@@ -429,14 +429,13 @@ Status DummyFileSystem::MkNod(ContextSPtr ctx, Ino parent,
   }
 
   uint64_t ino = GenIno();
-  auto inode = GenInode(fs_id, ino, pb::mdsv2::FileType::FILE);
+  auto inode = GenInode(fs_id, ino, pb::mds::FileType::FILE);
   inode.set_mode(S_IFREG | mode);
   inode.set_uid(uid);
   inode.set_gid(gid);
   inode.set_rdev(rdev);
 
-  auto pb_dentry =
-      GenDentry(fs_id, parent, ino, name, pb::mdsv2::FileType::FILE);
+  auto pb_dentry = GenDentry(fs_id, parent, ino, name, pb::mds::FileType::FILE);
 
   AddChildDentry(parent, pb_dentry);
   AddInode(inode);
@@ -539,13 +538,13 @@ Status DummyFileSystem::MkDir(ContextSPtr ctx, Ino parent,
   }
 
   uint64_t ino = GenIno();
-  auto inode = GenInode(fs_id, ino, pb::mdsv2::FileType::DIRECTORY);
+  auto inode = GenInode(fs_id, ino, pb::mds::FileType::DIRECTORY);
   inode.set_mode(S_IFDIR | mode);
   inode.set_uid(uid);
   inode.set_gid(gid);
 
   auto pb_dentry =
-      GenDentry(fs_id, parent, ino, name, pb::mdsv2::FileType::DIRECTORY);
+      GenDentry(fs_id, parent, ino, name, pb::mds::FileType::DIRECTORY);
 
   Dentry dentry;
   dentry.dentry = pb_dentry;
@@ -634,7 +633,7 @@ Status DummyFileSystem::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
     return Status::Internal(pb::error::ENOT_FOUND, "not found inode");
   }
 
-  if (inode.type() != pb::mdsv2::FileType::FILE) {
+  if (inode.type() != pb::mds::FileType::FILE) {
     return Status::Internal(pb::error::ENOT_FILE, "not file type");
   }
 
@@ -644,7 +643,7 @@ Status DummyFileSystem::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
   }
 
   auto pb_dentry = GenDentry(fs_info_.fs_id(), new_parent, ino, new_name,
-                             pb::mdsv2::FileType::FILE);
+                             pb::mds::FileType::FILE);
 
   AddChildDentry(new_parent, pb_dentry);
   IncInodeNlink(inode.ino());
@@ -682,9 +681,9 @@ Status DummyFileSystem::Symlink(ContextSPtr ctx, Ino parent,
   }
 
   auto pb_dentry = GenDentry(fs_info_.fs_id(), parent, GenIno(), name,
-                             pb::mdsv2::FileType::SYM_LINK);
-  auto inode = GenInode(fs_info_.fs_id(), pb_dentry.ino(),
-                        pb::mdsv2::FileType::SYM_LINK);
+                             pb::mds::FileType::SYM_LINK);
+  auto inode =
+      GenInode(fs_info_.fs_id(), pb_dentry.ino(), pb::mds::FileType::SYM_LINK);
   inode.set_mode(S_IFLNK | 0777);
   inode.set_uid(uid);
   inode.set_gid(gid);
@@ -704,7 +703,7 @@ Status DummyFileSystem::ReadLink(ContextSPtr ctx, Ino ino, std::string* link) {
     return Status::Internal(pb::error::ENOT_FOUND, "not found inode");
   }
 
-  if (inode.type() != pb::mdsv2::FileType::SYM_LINK) {
+  if (inode.type() != pb::mds::FileType::SYM_LINK) {
     return Status::Internal(pb::error::ENOT_SYMLINK, "not symlink type");
   }
 
@@ -858,20 +857,20 @@ Status DummyFileSystem::StatFs(ContextSPtr ctx, Ino ino, FsStat* fs_stat) {
   return Status::OK();
 }
 
-static StoreType ToStoreType(pb::mdsv2::FsType fs_type) {
+static StoreType ToStoreType(pb::mds::FsType fs_type) {
   switch (fs_type) {
-    case pb::mdsv2::FsType::S3:
+    case pb::mds::FsType::S3:
       return StoreType::kS3;
 
-    case pb::mdsv2::FsType::RADOS:
+    case pb::mds::FsType::RADOS:
       return StoreType::kRados;
 
     default:
-      CHECK(false) << "unknown fs type: " << pb::mdsv2::FsType_Name(fs_type);
+      CHECK(false) << "unknown fs type: " << pb::mds::FsType_Name(fs_type);
   }
 }
 
-static S3Info ToS3Info(const pb::mdsv2::S3Info& s3_info) {
+static S3Info ToS3Info(const pb::mds::S3Info& s3_info) {
   S3Info ret;
   ret.ak = s3_info.ak();
   ret.sk = s3_info.sk();
@@ -880,7 +879,7 @@ static S3Info ToS3Info(const pb::mdsv2::S3Info& s3_info) {
   return ret;
 }
 
-static RadosInfo ToRadosInfo(const pb::mdsv2::RadosInfo& rados_info) {
+static RadosInfo ToRadosInfo(const pb::mds::RadosInfo& rados_info) {
   RadosInfo result;
   result.user_name = rados_info.user_name();
   result.key = rados_info.key();
@@ -912,7 +911,7 @@ Status DummyFileSystem::GetFsInfo(ContextSPtr ctx, FsInfo* fs_info) {
 
   } else {
     LOG(ERROR) << fmt::format("unknown fs type: {}.",
-                              pb::mdsv2::FsType_Name(fs_info_.fs_type()));
+                              pb::mds::FsType_Name(fs_info_.fs_type()));
 
     return Status::InvalidParam("unknown fs type");
   }
