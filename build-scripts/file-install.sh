@@ -229,7 +229,7 @@ install_tools-v2() {
     mkdir -p $project_prefix/conf
     wget -O "$project_prefix/sbin/dingo" $tools_v2_dingo_file
     chmod +x "$project_prefix/sbin/dingo"
-    copy_file "confv2/dingo.yaml" "$g_prefix/conf"
+    copy_file "conf/dingo.yaml" "$g_prefix/conf"
 }
 
 install_scripts() {
