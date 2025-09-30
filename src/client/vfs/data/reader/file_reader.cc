@@ -79,9 +79,9 @@ ChunkReader* FileReader::GetOrCreateChunkReader(uint64_t chunk_index) {
   if (iter != chunk_readers_.end()) {
     return iter->second.get();
   } else {
-    auto chunk_writer =
+    auto chunk_reader =
         std::make_shared<ChunkReader>(vfs_hub_, fh_, ino_, chunk_index);
-    chunk_readers_[chunk_index] = std::move(chunk_writer);
+    chunk_readers_[chunk_index] = std::move(chunk_reader);
     return chunk_readers_[chunk_index].get();
   }
 }
