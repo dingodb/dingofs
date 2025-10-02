@@ -30,6 +30,7 @@
 #include "client/vfs/meta/v2/rpc.h"
 #include "common/status.h"
 #include "dingofs/common.pb.h"
+#include "dingofs/mds.pb.h"
 #include "mds/mds/mds_meta.h"
 
 namespace dingofs {
@@ -84,8 +85,7 @@ class MDSClient {
   virtual Status Start() = 0;
   virtual Status Shutdown() = 0;
 
-  virtual Status GetFSInfo(uint64_t fs_id,
-                           pb::common::StorageInfo* storage_info) = 0;
+  virtual Status GetFSInfo(uint64_t fs_id, pb::mds::FsInfo* fs_info) = 0;
 
   virtual Status JoinCacheGroup(const std::string& want_id,
                                 const std::string& ip, uint32_t port,
@@ -103,15 +103,14 @@ class MDSClient {
 using MDSClientSPtr = std::shared_ptr<MDSClient>;
 using MDSClientUPtr = std::unique_ptr<MDSClient>;
 
-class MDSV2Client : public MDSClient {
+class MDSClientImpl : public MDSClient {
  public:
-  explicit MDSV2Client(const std::string& mds_addr);
+  explicit MDSClientImpl(const std::string& mds_addr);
 
   Status Start() override;
   Status Shutdown() override;
 
-  Status GetFSInfo(uint64_t fs_id,
-                   pb::common::StorageInfo* storage_info) override;
+  Status GetFSInfo(uint64_t fs_id, pb::mds::FsInfo* fs_info) override;
 
   Status JoinCacheGroup(const std::string& want_id, const std::string& ip,
                         uint32_t port, const std::string& group_name,
@@ -124,9 +123,6 @@ class MDSV2Client : public MDSClient {
                      std::vector<CacheGroupMember>* members) override;
 
  private:
-  pb::common::S3Info ToCommonS3Info(const pb::mds::S3Info& info);
-  pb::common::RadosInfo ToCommonRadosInfo(const pb::mds::RadosInfo& info);
-  pb::common::StorageInfo ToCommonStorageInfo(const pb::mds::FsInfo& info);
   CacheGroupMemberState ToMemberState(pb::mds::CacheGroupMemberState state);
 
   mds::MDSMeta GetRandomlyMDS(const mds::MDSMeta& old_mds);
@@ -143,9 +139,6 @@ class MDSV2Client : public MDSClient {
   std::shared_ptr<client::vfs::v2::RPC> rpc_;
   std::unique_ptr<client::vfs::v2::MDSDiscovery> mds_discovery_;
 };
-
-MDSClientSPtr BuildSharedMDSClient();
-MDSClientUPtr BuildUniqueMDSClient();
 
 }  // namespace cache
 }  // namespace dingofs

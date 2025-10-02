@@ -216,20 +216,8 @@ DECLARE_uint32(disk_state_check_duration_ms);
 // Sets the maximum retry timeout in seconds for downloading block from storage.
 DECLARE_int64(storage_download_retry_timeout_s);
 
-// MDS version for member managment, 'v1' or 'v2'
-DECLARE_string(mds_version);
-
 // Sets the MDS addresses for cache group member manager service RPC.
 DECLARE_string(mds_addrs);
-
-// [hiden]
-DECLARE_uint64(mdsv1_rpc_retry_total_ms);
-DECLARE_uint64(mdsv1_rpc_max_timeout_ms);
-DECLARE_uint64(mdsv1_rpc_timeout_ms);
-DECLARE_uint64(mdsv1_rpc_retry_interval_us);
-DECLARE_uint64(mdsv1_rpc_max_failed_times_before_change_addr);
-DECLARE_uint64(mdsv1_rpc_normal_retry_times_before_trigger_wait);
-DECLARE_uint64(mdsv1_rpc_wait_sleep_ms);
 
 // [onfly]
 DECLARE_int64(mds_rpc_timeout_ms);

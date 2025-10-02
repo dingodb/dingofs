@@ -18,40 +18,40 @@
 #define DINGOFS_COMMON_CONFIG_MAPPER_H_
 
 #include "blockaccess/accesser_common.h"
-#include "dingofs/common.pb.h"
+#include "dingofs/mds.pb.h"
 
 namespace dingofs {
 
 static inline void FillBlockAccessOption(
-    const pb::common::StorageInfo& storage_info,
+    const pb::mds::FsInfo& fs_info,
     blockaccess::BlockAccessOptions* block_access_opt) {
-  if (storage_info.type() == pb::common::StorageType::TYPE_S3) {
-    CHECK(storage_info.has_s3_info())
-        << "ilegall storage_info, S3 info not set";
-    const auto& s3_info = storage_info.s3_info();
+  if (fs_info.fs_type() == pb::mds::FsType::S3) {
+    CHECK(fs_info.extra().has_s3_info()) << "ilegall fs_info, S3 info not set";
+
+    const auto& s3_info = fs_info.extra().s3_info();
 
     block_access_opt->type = blockaccess::AccesserType::kS3;
     block_access_opt->s3_options.s3_info.ak = s3_info.ak();
     block_access_opt->s3_options.s3_info.sk = s3_info.sk();
     block_access_opt->s3_options.s3_info.endpoint = s3_info.endpoint();
     block_access_opt->s3_options.s3_info.bucket_name = s3_info.bucketname();
-
-  } else if (storage_info.type() == pb::common::StorageType::TYPE_RADOS) {
-    CHECK(storage_info.has_rados_info())
+  } else if (fs_info.fs_type() == pb::mds::FsType::RADOS) {
+    CHECK(fs_info.extra().has_rados_info())
         << "ilegall storage_info, RADOS info not set";
-    const auto& rados_info = storage_info.rados_info();
+
+    const auto& rados_info = fs_info.extra().rados_info();
 
     block_access_opt->type = blockaccess::AccesserType::kRados;
     block_access_opt->rados_options.mon_host = rados_info.mon_host();
     block_access_opt->rados_options.user_name = rados_info.user_name();
     block_access_opt->rados_options.key = rados_info.key();
     block_access_opt->rados_options.pool_name = rados_info.pool_name();
-    if (rados_info.has_cluster_name()) {
+    if (!rados_info.cluster_name().empty()) {
       block_access_opt->rados_options.cluster_name = rados_info.cluster_name();
     }
-
   } else {
-    LOG(FATAL) << "Invalid storage type: " << storage_info.type();
+    CHECK(false) << "Unsupported fs type: "
+                 << pb::mds::FsType_Name(fs_info.fs_type());
   }
 }
 

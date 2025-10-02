@@ -32,7 +32,7 @@
 #include "cache/common/type.h"
 #include "cache/storage/storage_impl.h"
 #include "common/config_mapper.h"
-#include "dingofs/common.pb.h"
+#include "dingofs/mds.pb.h"
 
 namespace dingofs {
 namespace cache {
@@ -76,8 +76,8 @@ bool StoragePoolImpl::Get(uint32_t fs_id, StorageSPtr& storage) {
 
 Status StoragePoolImpl::Create(uint32_t fs_id, StorageSPtr& storage) {
   // Get storage information
-  pb::common::StorageInfo storage_info;
-  auto status = mds_client_->GetFSInfo(fs_id, &storage_info);
+  pb::mds::FsInfo fs_info;
+  auto status = mds_client_->GetFSInfo(fs_id, &fs_info);
   if (!status.ok()) {
     LOG(ERROR) << "Get filesystem storage information failed: fs_id = " << fs_id
                << ", status = " << status.ToString();
@@ -86,7 +86,7 @@ Status StoragePoolImpl::Create(uint32_t fs_id, StorageSPtr& storage) {
 
   // New block accesser
   blockaccess::BlockAccessOptions block_access_opt;
-  FillBlockAccessOption(storage_info, &block_access_opt);
+  FillBlockAccessOption(fs_info, &block_access_opt);
   block_accesseres_[fs_id] = blockaccess::NewBlockAccesser(block_access_opt);
   auto* block_accesser = block_accesseres_[fs_id].get();
   status = block_accesser->Init();

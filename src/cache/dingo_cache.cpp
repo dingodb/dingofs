@@ -50,12 +50,8 @@ int DingoCache::ParseFlags(int argc, char** argv) {
   }
 
   // validate flags
-  if (FLAGS_mds_version == "v1" && !FLAGS_id.empty()) {
-    std::cerr << "MDS v1 does not support cache node id, please remove the "
-                 "--id flag.\n";
-    return -1;
-  } else if (FLAGS_mds_version == "v2" && FLAGS_id.empty()) {
-    std::cerr << "MDS v2 requires cache node id, please set it by --id\n";
+  if (FLAGS_mds_addrs.empty()) {
+    std::cerr << "mds_addrs is empty, please set it by --mds_addrs\n";
     return -1;
   } else if (FLAGS_cache_store != "disk") {
     std::cerr

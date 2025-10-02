@@ -26,9 +26,12 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include <memory>
+
 #include "cache/common/macro.h"
 #include "cache/common/mds_client.h"
 #include "cache/metric/cache_status.h"
+#include "options/cache/option.h"
 #include "utils/executor/bthread/bthread_executor.h"
 
 namespace dingofs {
@@ -39,7 +42,7 @@ DEFINE_uint32(load_members_interval_ms, 1000,
 
 RemoteCacheNodeManager::RemoteCacheNodeManager(OnMemberLoadFn on_member_load_fn)
     : running_(false),
-      mds_client_(BuildUniqueMDSClient()),
+      mds_client_(std::make_unique<MDSClientImpl>(FLAGS_mds_addrs)),
       on_member_load_fn_(on_member_load_fn),
       executor_(std::make_unique<BthreadExecutor>()) {}
 

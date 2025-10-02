@@ -29,12 +29,13 @@
 #include "cache/common/type.h"
 #include "cache/storage/storage_pool.h"
 #include "cache/tiercache/tier_block_cache.h"
+#include "options/cache/option.h"
 
 namespace dingofs {
 namespace cache {
 
 Benchmarker::Benchmarker()
-    : mds_client_(BuildSharedMDSClient()),
+    : mds_client_(std::make_shared<MDSClientImpl>(FLAGS_mds_addrs)),
       storage_pool_(std::make_shared<StoragePoolImpl>(mds_client_)),
       collector_(std::make_unique<Collector>()),
       reporter_(std::make_shared<Reporter>(collector_)),

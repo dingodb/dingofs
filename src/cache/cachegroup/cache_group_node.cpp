@@ -35,16 +35,19 @@
 #include "cache/blockcache/block_cache_impl.h"
 #include "cache/common/const.h"
 #include "cache/common/macro.h"
+#include "cache/common/mds_client.h"
 #include "cache/metric/cache_group_node_metric.h"
 #include "cache/utils/context.h"
 #include "cache/utils/step_timer.h"
 #include "common/io_buffer.h"
 #include "common/status.h"
+#include "options/cache/option.h"
 
 namespace dingofs {
 namespace cache {
 
-DEFINE_string(id, "", "Specified the cache node id (only mds v2 required)");
+DEFINE_string(id, "", "Specified the cache node id");
+DEFINE_validator(id, Helper::NonEmptyString);
 
 DEFINE_string(group_name, "", "Which group this cache node belongs to");
 DEFINE_validator(group_name, Helper::NonEmptyString);
@@ -65,7 +68,7 @@ static const std::string kModule = "cachenode";
 
 CacheGroupNodeImpl::CacheGroupNodeImpl()
     : running_(false),
-      mds_client_(BuildSharedMDSClient()),
+      mds_client_(std::make_shared<MDSClientImpl>(FLAGS_mds_addrs)),
       member_(std::make_shared<CacheGroupNodeMemberImpl>(mds_client_)),
       heartbeat_(
           std::make_unique<CacheGroupNodeHeartbeatImpl>(member_, mds_client_)),

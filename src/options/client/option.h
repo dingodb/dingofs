@@ -180,7 +180,6 @@ static void InitBlockCacheOption(utils::Configuration* c) {
 
 static void InitRemoteBlockCacheOption(utils::Configuration* c) {
   c->GetValue("remote_cache.cache_group", &cache::FLAGS_cache_group);
-  c->GetValue("remote_cache.mds_version", &cache::FLAGS_mds_version);
   c->GetValue("remote_cache.mds_addrs", &cache::FLAGS_mds_addrs);
   c->GetValue("remote_cache.mds_rpc_timeout_ms",
               &cache::FLAGS_mds_rpc_timeout_ms);
