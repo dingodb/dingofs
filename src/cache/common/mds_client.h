@@ -29,7 +29,6 @@
 #include "client/vfs/meta/v2/mds_discovery.h"
 #include "client/vfs/meta/v2/rpc.h"
 #include "common/status.h"
-#include "dingofs/common.pb.h"
 #include "dingofs/mds.pb.h"
 #include "mds/mds/mds_meta.h"
 

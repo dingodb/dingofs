@@ -39,7 +39,6 @@
 #include "client/vfs/meta/v2/rpc.h"
 #include "common/status.h"
 #include "dingofs/cachegroup.pb.h"
-#include "dingofs/common.pb.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"
 #include "mds/mds/mds_meta.h"
