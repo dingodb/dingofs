@@ -16,6 +16,7 @@
 
 #include "client/vfs/data/reader/chunk_reader.h"
 
+#include <fmt/format.h>
 #include <glog/logging.h>
 
 #include <atomic>
@@ -155,7 +156,8 @@ void ChunkReader::DoRead(ContextSPtr ctx, const ChunkReadReq& req,
           "ChunkReader::DoRead.ConvertSliceReadReqToBlockReadReqs", *span);
 
       for (auto& slice_req : slice_reqs) {
-        VLOG(6) << "{} Read slice_req: " << slice_req.ToString();
+        VLOG(6) << fmt::format("{} Read slice_req:", UUID(),
+                               slice_req.ToString());
 
         if (slice_req.slice.has_value() && !slice_req.slice.value().is_zero) {
           std::vector<BlockReadReq> reqs = ConvertSliceReadReqToBlockReadReqs(
@@ -256,12 +258,28 @@ void ChunkReader::Invalidate() {
   slices_.clear();
 }
 
+static std::string SlicesToString(const std::vector<Slice>& slices) {
+  std::ostringstream oss;
+  oss << "[";
+  for (size_t i = 0; i < slices.size(); ++i) {
+    oss << Slice2Str(slices[i]);
+    if (i < slices.size() - 1) {
+      oss << ", ";
+    }
+  }
+  oss << "]";
+  return oss.str();
+}
+
 Status ChunkReader::GetSlices(ContextSPtr ctx, ChunkSlices* chunk_slices) {
   auto* tracer = hub_->GetTracer();
   auto span = tracer->StartSpanWithContext(kVFSDataMoudule, METHOD_NAME(), ctx);
 
   std::lock_guard<std::mutex> lg(mutex_);
   if (cversion_ == kInvalidVersion) {
+    VLOG(3) << fmt::format("{} cached chunk_slices invalidate, read from meta",
+                           UUID());
+
     auto slice_span = tracer->StartSpanWithParent(
         kVFSDataMoudule, "ChunkReader::GetSlices.ReadSlice", *span);
 
@@ -277,6 +295,10 @@ Status ChunkReader::GetSlices(ContextSPtr ctx, ChunkSlices* chunk_slices) {
 
   chunk_slices->version = cversion_;
   chunk_slices->slices = slices_;
+
+  VLOG(9) << fmt::format("{} GetSlices, version: {}, slices: {}", UUID(),
+                         chunk_slices->version,
+                         SlicesToString(chunk_slices->slices));
 
   return Status::OK();
 }
