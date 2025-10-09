@@ -16,7 +16,7 @@ eval set -- "${FLAGS_ARGV}"
 echo "role: ${FLAGS_role}"
 echo "parameters: ${FLAGS_parameters}"
 
-BASE_DIR=$(dirname $(cd $(dirname $0); pwd))
+BASE_DIR=$(dirname $(dirname $(cd $(dirname $0); pwd)))
 DIST_DIR=$BASE_DIR/dist
 
 if [ ! -d "$DIST_DIR" ]; then

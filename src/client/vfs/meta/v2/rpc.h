@@ -209,6 +209,26 @@ inline std::string DescribeReadSliceResponse(
   return oss.str();
 }
 
+// print OpenResponse
+inline std::string DescribeOpenResponse(pb::mds::OpenResponse& response) {
+  std::ostringstream oss;
+  oss << response.info().ShortDebugString()
+      << " session_id:" << response.session_id() << " inode("
+      << response.inode().ShortDebugString() << ") chunks[";
+  for (const auto& chunk : response.chunks()) {
+    std::vector<uint64_t> slice_ids;
+    slice_ids.reserve(chunk.slices().size());
+    for (const auto& slice : chunk.slices()) {
+      slice_ids.push_back(slice.id());
+    }
+    oss << fmt::format("({},{} slice_ids{}),", chunk.index(), chunk.version(),
+                       slice_ids);
+  }
+
+  oss << "]";
+  return oss.str();
+}
+
 template <typename Request, typename Response>
 Status RPC::SendRequest(const EndPoint& endpoint,
                         const std::string& service_name,
@@ -269,21 +289,31 @@ Status RPC::SendRequest(const EndPoint& endpoint,
     }
 
     if (response.error().errcode() == pb::error::OK) {
-      if constexpr (!std::is_same_v<Response, pb::mds::ReadSliceResponse>) {
-        LOG(INFO) << fmt::format(
-            "[meta.rpc][{}][{}][{}us] success, retry({}) request({}) "
-            "response({}) doing({}).",
-            EndPointToStr(endpoint), api_name, elapsed_us, retry,
-            request.ShortDebugString(), response.ShortDebugString(),
-            DoingReqCount());
-      } else {
+      if constexpr (std::is_same_v<Response, pb::mds::ReadSliceResponse>) {
         LOG(INFO) << fmt::format(
             "[meta.rpc][{}][{}][{}us] success, retry({}) request({}) "
             "response({}) doing({}).",
             EndPointToStr(endpoint), api_name, elapsed_us, retry,
             request.ShortDebugString(), DescribeReadSliceResponse(response),
             DoingReqCount());
+
+      } else if constexpr (std::is_same_v<Response, pb::mds::OpenResponse>) {
+        LOG(INFO) << fmt::format(
+            "[meta.rpc][{}][{}][{}us] success, retry({}) request({}) "
+            "response({}) doing({}).",
+            EndPointToStr(endpoint), api_name, elapsed_us, retry,
+            request.ShortDebugString(), DescribeOpenResponse(response),
+            DoingReqCount());
+
+      } else {
+        LOG(INFO) << fmt::format(
+            "[meta.rpc][{}][{}][{}us] success, retry({}) request({}) "
+            "response({}) doing({}).",
+            EndPointToStr(endpoint), api_name, elapsed_us, retry,
+            request.ShortDebugString(), response.ShortDebugString(),
+            DoingReqCount());
       }
+
       return Status::OK();
     }
 

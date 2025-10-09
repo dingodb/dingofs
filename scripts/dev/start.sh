@@ -18,8 +18,10 @@ eval set -- "${FLAGS_ARGV}"
 
 echo "start role(${FLAGS_role}) server num(${FLAGS_server_num})"
 
-BASE_DIR=$(dirname $(cd $(dirname $0); pwd))
+BASE_DIR=$(dirname $(dirname $(cd $(dirname $0); pwd)))
 DIST_DIR=$BASE_DIR/dist
+
+
 
 function set_ulimit() {
     NUM_FILE=1048576

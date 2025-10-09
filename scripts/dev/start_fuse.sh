@@ -40,7 +40,7 @@ fi
 
 echo "start fuse fsname(${FLAGS_fsname}) fstype(${FLAGS_fstype}) mountpoint(${FLAGS_mountpoint})"
 
-BASE_DIR=$(dirname $(cd $(dirname $0); pwd))
+BASE_DIR=$(dirname $(dirname $(cd $(dirname $0); pwd)))
 FUSE_BASE_DIR=$BASE_DIR/dist/fuse
 FUSE_BIN_PATH=$FUSE_BASE_DIR/bin/dingo-fuse
 FUSE_CONF_DIR=$FUSE_BASE_DIR/conf
