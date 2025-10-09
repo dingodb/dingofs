@@ -6,10 +6,10 @@ g_prefix=""
 g_only=""
 g_project_name=""
 g_etcd_version="v3.4.10"
-g_util_dir="$(dirname $(realpath $0))" # /path/to/project/build-scripts
+g_util_dir="$(dirname $(realpath $0))" # /path/to/project/scripts/install
 g_dingo_dir="$(dirname $g_util_dir)" # /path/to/project
 g_build_dir="$g_dingo_dir/build/bin" # /path/to/project/build/bin
-g_deploy_script_dir="$g_dingo_dir/deploy-scripts" # /path/to/project/deploy-scripts
+g_deploy_script_dir="$g_dingo_dir/scripts/deploy" # /path/to/project/scripts/deploy
 g_build_release=0
 tools_v2_dingo_file="https://github.com/dingodb/dingofs-tools/releases/download/main/dingo"
 

@@ -48,29 +48,17 @@ export help_msg
 help:
 	@echo "$$help_msg"
 
-list:
-	@bash build-scripts/build.sh --stor=fs --list
-
 file_build:
-	@bash build-scripts/file-build.sh --only=$(only) --dep=$(dep) --release=$(release) --os=$(os) --unit_tests=${unit_tests}
+	@bash scripts/install/file-build.sh --only=$(only) --dep=$(dep) --release=$(release) --os=$(os) --unit_tests=${unit_tests}
 
 file_dep:
-	@bash build-scripts/file-build.sh --only="" --dep=1
+	@bash scripts/install/file-build.sh --only="" --dep=1
 
 file_install:
-	@bash build-scripts/file-install.sh --prefix=$(prefix) --only=$(only)
+	@bash scripts/install/file-install.sh --prefix=$(prefix) --only=$(only)
 
 file_deploy_config:
-	@bash build-scripts/file-deploy-config.sh --os=$(os)
+	@bash scripts/install/file-deploy-config.sh --os=$(os)
 
 file_image:
-	@bash build-scripts/file-deploy-config.sh --os=$(os) --name=$(image_name) --type=${image_type}
-
-playground:
-	@bash build-scripts/playground.sh
-
-check:
-	@bash build-scripts/check.sh fs
-
-test:
-	@bash build-scripts/test.sh fs $(only)
+	@bash scripts/install/file-deploy-config.sh --os=$(os) --name=$(image_name) --type=${image_type}
