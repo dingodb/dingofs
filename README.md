@@ -129,4 +129,4 @@ If you have any technical questions or business needs, please contact us.
 
 Attach the Wetchat QR Code
 
-![](./images/dingo_contact_Wetchat.png)
+![](./docs/images/dingo_contact_Wetchat.png)
