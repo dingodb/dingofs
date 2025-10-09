@@ -75,11 +75,9 @@ jobs:
             exit -1
         fi
 
-        tar -czvf dingofs.tar.gz -C docker/rocky9 dingofs
-        tar -czvf dingofs-latest.tar.gz --exclude='dingofs/build' --exclude='dingofs/mds'  --exclude='dingofs/metaserver' --exclude='dingofs/tools' -C docker/rocky9 dingofs
+        tar -czvf dingofs.tar.gz -C scripts/docker/rocky9 dingofs
         # check size of tar file
         ls -lh dingofs.tar.gz
-        ls -lh dingofs-latest.tar.gz
 
         echo "DingoFS Build finished"
         EOF

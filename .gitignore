@@ -81,7 +81,7 @@ thirdparties/etcdclient/tmp/
 thirdparties/etcdclient/*.h
 
 build/
-docker/rocky9/dingofs
+scripts/docker/rocky9/dingofs
 
 dist/
 .cache

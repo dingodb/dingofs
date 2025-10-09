@@ -145,8 +145,6 @@ build_requirements() {
         echo "Error: Failed to update git submodules"
         exit 1
     fi
-    g_etcdclient_root="thirdparties/etcdclient"
-    (cd ${g_etcdclient_root} && make clean && make all)
 }
 
 main() {

@@ -22,7 +22,7 @@ die() {
 }
 
 ############################ FUNCTIONS
-# usage: process_config_template  conf/client.conf /path/to/dingofs/docker/rocky9/dingofs/confg/client.conf
+# usage: process_config_template  conf/client.conf /path/to/dingofs/scripts/docker/rocky9/dingofs/confg/client.conf
 function usage() {
     echo "Usage: $0 [options]"
     echo "Options:"
@@ -100,8 +100,8 @@ get_options() {
 get_options "$@"
 
 ############################  MAIN()
-docker_prefix="$(pwd)/docker/$g_os"
-prefix="$docker_prefix/dingofs" # /path/to/dingofs/docker/rocky9/dingofs
+docker_prefix="$(pwd)/scripts/docker/$g_os"
+prefix="$docker_prefix/dingofs" # /path/to/dingofs/scripts/docker/rocky9/dingofs
 mkdir -p $prefix $prefix/conf $prefix/confv2
 install_pkg $prefix
 install_pkg $prefix etcd

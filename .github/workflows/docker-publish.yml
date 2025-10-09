@@ -124,7 +124,7 @@ jobs:
 
     - name: Extract artifact
       if: steps.check-event.outputs.continue == 'true'
-      run: tar -xzvf dingofs.tar.gz -C docker/rocky9 && rm -f dingofs.tar.gz
+      run: tar -xzvf dingofs.tar.gz -C scripts/docker/rocky9 && rm -f dingofs.tar.gz
 
     - name: Set up Docker Buildx
       if: steps.check-event.outputs.continue == 'true'
@@ -152,7 +152,7 @@ jobs:
       if: ${{ steps.check-event.outputs.continue == 'true' && (env.BRANCH_NAME == 'main' || env.EVENT == 'tag') }}
       uses: docker/build-push-action@v6
       with:
-        context: ./docker/rocky9
-        file: ./docker/rocky9/Dockerfile
+        context: ./scripts/docker/rocky9
+        file: ./scripts/docker/rocky9/Dockerfile
         push: true
         tags: ${{ steps.meta-v2.outputs.tags }}

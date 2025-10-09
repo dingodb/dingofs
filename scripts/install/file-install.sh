@@ -5,9 +5,9 @@ g_stor="fs"
 g_prefix=""
 g_only=""
 g_project_name=""
-g_etcd_version="v3.4.10"
 g_util_dir="$(dirname $(realpath $0))" # /path/to/project/scripts/install
-g_dingo_dir="$(dirname $g_util_dir)" # /path/to/project
+g_dingo_dir="$(dirname $(dirname $g_util_dir))" # /path/to/project
+echo "DingoFS project dir: $g_dingo_dir"
 g_build_dir="$g_dingo_dir/build/bin" # /path/to/project/build/bin
 g_deploy_script_dir="$g_dingo_dir/scripts/deploy" # /path/to/project/scripts/deploy
 g_build_release=0
@@ -57,7 +57,7 @@ get_options() {
     do
         case "$1" in
             -p|--prefix)
-                g_prefix=$2 # /path/to/dingofs/docker/rocky9/dingofs
+                g_prefix=$2 # /path/to/dingofs/scripts/docker/rocky9/dingofs
                 shift 2
                 ;;
             -o|--only)
@@ -165,8 +165,8 @@ install_dingofs() {
             continue
         fi
         # echo "Full match: ${BASH_REMATCH[1]}, Extracted: ${BASH_REMATCH[2]}"
-        local project_bin_filename=${BASH_REMATCH[1]}  # ex: dingo_metaserver
-        local project_name="${BASH_REMATCH[2]}"  # ex: metaserver
+        local project_bin_filename=${BASH_REMATCH[1]}  # ex: dingo-mds
+        local project_name="${BASH_REMATCH[2]}"  # ex: mds
         case "$project_name" in
             "fuse")
                 g_project_name="client"
@@ -178,7 +178,7 @@ install_dingofs() {
                 g_project_name=$project_name
                 ;;
         esac
-        local project_prefix="$g_prefix/$g_project_name"  # ex: /path/to/project/dingofs/docker/rocky9/dingofs/metaserver
+        local project_prefix="$g_prefix/$g_project_name"  # ex: /path/to/project/dingofs/scripts/docker/rocky9/dingofs/mds
         
         local binary="$g_build_dir/$project_bin_filename"
 
@@ -216,7 +216,7 @@ install_monitor() {
     g_project_name=$project_name
 
     local project_prefix="$g_prefix/monitor"
-    local dst="monitor"
+    local dst="scripts/monitor"
     copy_file $dst $g_prefix
     success "install $project_name success\n"
 }
@@ -233,7 +233,7 @@ install_tools-v2() {
 }
 
 install_scripts() {
-    local script_prefix="$g_prefix/scripts"
+    local script_prefix="$g_prefix/scripts" # /path/to/dingofs/scripts/docker/rocky9/dingofs/scripts
     mkdir -p $script_prefix
     copy_dir "$g_deploy_script_dir" "$script_prefix"
     chmod +x "$script_prefix"/*.sh

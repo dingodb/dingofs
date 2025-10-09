@@ -2,9 +2,7 @@ global:
   httpTimeout: 50000ms
   rpcTimeout: 50000ms
   rpcRetryTimes: 5
-  maxChannelSize: 4
   showError: false
-  mds_api_version: 2
 
 dingofs:
   mdsAddr: 127.0.0.1:6900,127.0.0.1:6901,127.0.0.1:6902  # __DINGOADM_TEMPLATE__ ${cluster_mdsv2_addr} __DINGOADM_TEMPLATE__
