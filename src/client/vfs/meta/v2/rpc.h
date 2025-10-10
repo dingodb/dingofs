@@ -329,6 +329,7 @@ Status RPC::SendRequest(const EndPoint& endpoint,
 
     // the errno of need retry
     if (response.error().errcode() != pb::error::EINTERNAL &&
+        response.error().errcode() != pb::error::EREQUEST_FULL &&
         response.error().errcode() != pb::error::EBACKEND_STORE) {
       break;
     }

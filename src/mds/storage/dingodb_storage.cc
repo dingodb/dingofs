@@ -251,6 +251,10 @@ static inline Status TransformStatus(const dingodb::sdk::Status& status) {
     g_txn_memlock_conflict_per_second << 1;
     return Status(pb::error::ESTORE_MAYBE_RETRY, status.ToString());
 
+  } else if (status.IsPushMinCommitTs()) {
+    g_txn_total_conflict_per_second << 1;
+    return Status(pb::error::ESTORE_MAYBE_RETRY, status.ToString());
+
   } else {
     return Status(pb::error::EBACKEND_STORE, status.ToString());
   }
@@ -498,6 +502,11 @@ Status DingodbTxn::TransformStatus(const dingodb::sdk::Status& status) {
   } else if (status.IsTxnMemLockConflict()) {
     g_txn_total_conflict_per_second << 1;
     g_txn_memlock_conflict_per_second << 1;
+    txn_trace_.is_conflict = true;
+    return Status(pb::error::ESTORE_MAYBE_RETRY, status.ToString());
+
+  } else if (status.IsPushMinCommitTs()) {
+    g_txn_total_conflict_per_second << 1;
     txn_trace_.is_conflict = true;
     return Status(pb::error::ESTORE_MAYBE_RETRY, status.ToString());
 
