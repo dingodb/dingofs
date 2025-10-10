@@ -20,7 +20,7 @@
 #include <shared_mutex>
 #include <unordered_set>
 
-#include "client/meta/vfs_meta.h"
+#include "client/vfs/vfs_meta.h"
 
 namespace dingofs {
 namespace client {

@@ -23,5 +23,5 @@ target_link_libraries(cache_common
 
     dingofs_status
     dingofs_common
-    vfs_meta_v2_rpc_lib
+    vfs_meta_mds_rpc_lib
 )

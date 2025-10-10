@@ -27,13 +27,13 @@
 #include <vector>
 
 #include "cache/utils/context.h"
+#include "client/common/const.h"
 #include "client/common/utils.h"
-#include "client/const.h"
-#include "client/meta/vfs_meta.h"
 #include "client/vfs/data/common/common.h"
 #include "client/vfs/data/common/data_utils.h"
 #include "client/vfs/data/reader/reader_common.h"
 #include "client/vfs/hub/vfs_hub.h"
+#include "client/vfs/vfs_meta.h"
 #include "common/status.h"
 #include "options/client/option.h"
 #include "trace/context.h"

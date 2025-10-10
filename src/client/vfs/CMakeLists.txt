@@ -16,21 +16,22 @@ add_subdirectory(background)
 add_subdirectory(data)
 add_subdirectory(handle)
 add_subdirectory(hub)
-add_subdirectory(meta)
+add_subdirectory(metasystem)
 add_subdirectory(service)
 add_subdirectory(components)
 
 add_library(vfs_lib
     vfs_impl.cpp
+    vfs_wrapper.cpp
+    access_log.cpp
 )
 
 target_link_libraries(vfs_lib
     PROTO_OBJS
     dingofs_common
     dingofs_trace
-    vfs_meta_system
+    vfs_metasystem
     vfs_data
-    vfs_meta
     vfs_hub
     vfs_handle
     vfs_service

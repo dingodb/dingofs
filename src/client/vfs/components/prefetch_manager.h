@@ -13,7 +13,7 @@
 #include "bthread/countdown_event.h"
 #include "bthread/mutex.h"
 #include "cache/blockcache/cache_store.h"
-#include "client/meta/vfs_meta.h"
+#include "client/vfs/vfs_meta.h"
 #include "common/status.h"
 #include "trace/context.h"
 #include "utils/concurrent/rw_lock.h"

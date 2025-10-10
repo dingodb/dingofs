@@ -26,8 +26,9 @@
 #include <utility>
 #include <vector>
 
-#include "client/meta/vfs_meta.h"
+#include "client/vfs/common/helper.h"
 #include "client/vfs/data/common/common.h"
+#include "client/vfs/vfs_meta.h"
 
 namespace dingofs {
 namespace client {
@@ -135,10 +136,9 @@ static inline std::vector<SliceReadReq> ProcessReadRequest(
   }
 
   // sort the results by file offset
-  boost::range::sort(results,
-            [](const SliceReadReq& a, const SliceReadReq& b) {
-              return a.file_offset < b.file_offset;
-            });
+  boost::range::sort(results, [](const SliceReadReq& a, const SliceReadReq& b) {
+    return a.file_offset < b.file_offset;
+  });
 
   return std::move(results);
 }

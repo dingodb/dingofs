@@ -16,9 +16,9 @@
 #include <vector>
 
 #include "butil/time.h"
-#include "client/meta/vfs_meta.h"
-#include "client/vfs.h"
 #include "client/vfs/components/prefetch_manager.h"
+#include "client/vfs/vfs.h"
+#include "client/vfs/vfs_meta.h"
 #include "common/status.h"
 #include "fmt/format.h"
 #include "utils/executor/executor.h"

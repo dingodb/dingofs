@@ -23,9 +23,9 @@
 #include <cstdint>
 #include <memory>
 
-#include "client/const.h"
-#include "client/meta/vfs_meta.h"
+#include "client/common/const.h"
 #include "client/vfs/hub/vfs_hub.h"
+#include "client/vfs/vfs_meta.h"
 #include "common/callback.h"
 
 namespace dingofs {

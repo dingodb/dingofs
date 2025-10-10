@@ -13,13 +13,9 @@
 # limitations under the License.
 
 add_subdirectory(memory)
-add_subdirectory(meta)
 add_subdirectory(vfs)
 
 file(GLOB FUSE_CLIENT_LIB_SRCS
-    "vfs_wrapper/access_log.cpp"
-    "vfs_wrapper/access_wrapper.cpp"
-    "vfs_wrapper/vfs_wrapper.cpp"
     "fuse/fuse_op.cpp"
     "fuse/fuse_server.cpp"
 )
@@ -27,7 +23,7 @@ file(GLOB FUSE_CLIENT_LIB_SRCS
 add_library(fuse_client_lib ${FUSE_CLIENT_LIB_SRCS})
 target_link_libraries(fuse_client_lib
     PROTO_OBJS
-    vfs_meta
+    
     vfs_lib
     block_accesser
     dingofs_metrics

@@ -19,8 +19,8 @@
 #include <cstdint>
 #include <memory>
 
-#include "client/meta/vfs_fh.h"
 #include "client/vfs/data/file.h"
+#include "client/vfs/vfs_fh.h"
 #include "common/define.h"
 #include "glog/logging.h"
 

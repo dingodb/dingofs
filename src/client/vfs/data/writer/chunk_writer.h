@@ -28,10 +28,10 @@
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
 #include "client/common/utils.h"
-#include "client/meta/vfs_meta.h"
 #include "client/vfs/data/chunk.h"
 #include "client/vfs/data/slice/slice_data.h"
 #include "client/vfs/data/writer/task/chunk_flush_task.h"
+#include "client/vfs/vfs_meta.h"
 #include "common/status.h"
 #include "trace/context.h"
 

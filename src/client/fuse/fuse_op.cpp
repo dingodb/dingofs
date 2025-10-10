@@ -23,9 +23,9 @@
 
 #include "absl/strings/str_format.h"
 #include "client/common/utils.h"
-#include "client/meta/vfs_meta.h"
 #include "client/vfs/common/helper.h"
-#include "client/vfs_wrapper/vfs_wrapper.h"
+#include "client/vfs/vfs_meta.h"
+#include "client/vfs/vfs_wrapper.h"
 #include "common/define.h"
 #include "common/status.h"
 #include "fmt/format.h"

@@ -16,27 +16,27 @@
 
 #include "client/vfs/hub/vfs_hub.h"
 
-#include <fmt/format.h>
-#include <gflags/gflags.h>
-#include <glog/logging.h>
-
 #include <atomic>
 #include <memory>
 
 #include "blockaccess/block_accesser.h"
 #include "blockaccess/rados/rados_common.h"
 #include "cache/tiercache/tier_block_cache.h"
-#include "client/const.h"
-#include "client/meta/vfs_meta.h"
-#include "client/vfs.h"
+#include "client/common/const.h"
 #include "client/vfs/background/periodic_flush_manager.h"
+#include "client/vfs/common/helper.h"
 #include "client/vfs/components/prefetch_manager.h"
 #include "client/vfs/components/warmup_manager.h"
-#include "client/vfs/meta/dummy/dummy_filesystem.h"
-#include "client/vfs/meta/meta_system.h"
-#include "client/vfs/meta/meta_wrapper.h"
-#include "client/vfs/meta/v2/filesystem.h"
+#include "client/vfs/metasystem/dummy/dummy_filesystem.h"
+#include "client/vfs/metasystem/mds/filesystem.h"
+#include "client/vfs/metasystem/meta_system.h"
+#include "client/vfs/metasystem/meta_wrapper.h"
+#include "client/vfs/vfs.h"
+#include "client/vfs/vfs_meta.h"
 #include "common/status.h"
+#include "fmt/format.h"
+#include "gflags/gflags.h"
+#include "glog/logging.h"
 #include "options/cache/option.h"
 #include "options/client/option.h"
 #include "options/trace/trace_dynamic_option.h"

@@ -35,8 +35,8 @@
 
 #include "cache/common/macro.h"
 #include "cache/utils/helper.h"
-#include "client/vfs/meta/v2/mds_discovery.h"
-#include "client/vfs/meta/v2/rpc.h"
+#include "client/vfs/metasystem/mds/mds_discovery.h"
+#include "client/vfs/metasystem/mds/rpc.h"
 #include "common/status.h"
 #include "dingofs/cachegroup.pb.h"
 #include "dingofs/error.pb.h"

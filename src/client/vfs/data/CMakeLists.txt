@@ -31,7 +31,6 @@ add_library(vfs_data
 
 target_link_libraries(vfs_data
     PROTO_OBJS
-    vfs_meta
     vfs_data_slice
     vfs_background
     fmt::fmt

@@ -21,7 +21,7 @@
 #include <optional>
 #include <string>
 
-#include "client/meta/vfs_meta.h"
+#include "client/vfs/vfs_meta.h"
 
 namespace dingofs {
 namespace client {
@@ -46,7 +46,7 @@ struct SliceReadReq {
 
 struct BlockDesc {
   uint64_t file_offset;
-  uint64_t block_len; // the len of the block
+  uint64_t block_len;  // the len of the block
   bool zero;
   uint64_t version;
   uint64_t slice_id;

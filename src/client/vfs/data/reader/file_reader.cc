@@ -23,12 +23,12 @@
 #include <cmath>
 #include <vector>
 
-#include "client/const.h"
-#include "client/meta/vfs_meta.h"
+#include "client/common/const.h"
 #include "client/vfs/components/warmup_manager.h"
 #include "client/vfs/data/reader/chunk_reader.h"
 #include "client/vfs/data/reader/reader_common.h"
 #include "client/vfs/hub/vfs_hub.h"
+#include "client/vfs/vfs_meta.h"
 #include "common/status.h"
 #include "options/client/option.h"
 #include "trace/context.h"

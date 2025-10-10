@@ -22,7 +22,7 @@
 #include <mutex>
 #include <shared_mutex>
 
-#include "client/meta/vfs_meta.h"
+#include "client/vfs/vfs_meta.h"
 
 namespace dingofs {
 namespace client {

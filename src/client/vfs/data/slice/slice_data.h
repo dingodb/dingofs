@@ -23,10 +23,10 @@
 #include <memory>
 #include <mutex>
 
-#include "client/meta/vfs_meta.h"
 #include "client/vfs/data/slice/block_data.h"
 #include "client/vfs/data/slice/common.h"
 #include "client/vfs/data/slice/task/slice_flush_task.h"
+#include "client/vfs/vfs_meta.h"
 #include "common/callback.h"
 #include "common/status.h"
 #include "fmt/format.h"

@@ -17,18 +17,17 @@
 #ifndef DINGOFS_CLIENT_VFS_IMPL_H_
 #define DINGOFS_CLIENT_VFS_IMPL_H_
 
-#include <brpc/server.h>
-
 #include <memory>
 
-#include "client/vfs.h"
+#include "brpc/server.h"
 #include "client/vfs/handle/handle_manager.h"
 #include "client/vfs/hub/vfs_hub.h"
-#include "client/vfs/meta/meta_system.h"
+#include "client/vfs/metasystem/meta_system.h"
+#include "client/vfs/service/fuse_stat_service.h"
 #include "client/vfs/service/inode_blocks_service.h"
+#include "client/vfs/vfs.h"
 #include "options/client/option.h"
 #include "trace/context.h"
-#include "client/vfs/service/fuse_stat_service.h"
 
 namespace dingofs {
 namespace client {
@@ -36,7 +35,7 @@ namespace vfs {
 
 class VFSImpl : public VFS {
  public:
-  VFSImpl(const VFSOption& vfs_option) : vfs_option_(vfs_option){};
+  VFSImpl(const VFSOption& vfs_option) : vfs_option_(vfs_option) {};
 
   ~VFSImpl() override = default;
 

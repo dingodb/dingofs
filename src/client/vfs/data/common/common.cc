@@ -16,7 +16,8 @@
 
 #include "client/vfs/data/common/common.h"
 
-#include <fmt/format.h>
+#include "client/vfs/common/helper.h"
+#include "fmt/format.h"
 
 namespace dingofs {
 namespace client {

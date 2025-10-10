@@ -11,11 +11,11 @@
 
 #include "cache/blockcache/cache_store.h"
 #include "cache/utils/context.h"
-#include "client/const.h"
-#include "client/meta/vfs_meta.h"
+#include "client/common/const.h"
 #include "client/vfs/data/common/common.h"
 #include "client/vfs/data/common/data_utils.h"
 #include "client/vfs/hub/vfs_hub.h"
+#include "client/vfs/vfs_meta.h"
 #include "common/status.h"
 #include "options/client/option.h"
 #include "utils/executor/thread/executor_impl.h"

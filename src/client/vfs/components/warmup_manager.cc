@@ -11,11 +11,11 @@
 #include <utility>
 #include <vector>
 
-#include "client/const.h"
-#include "client/meta/vfs_fh.h"
-#include "client/meta/vfs_meta.h"
+#include "client/common/const.h"
 #include "client/vfs/components/prefetch_manager.h"
 #include "client/vfs/hub/vfs_hub.h"
+#include "client/vfs/vfs_fh.h"
+#include "client/vfs/vfs_meta.h"
 #include "common/status.h"
 #include "fmt/format.h"
 #include "glog/logging.h"

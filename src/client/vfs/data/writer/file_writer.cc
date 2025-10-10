@@ -19,8 +19,8 @@
 #include <glog/logging.h>
 #include <unistd.h>
 
+#include "client/common/const.h"
 #include "client/common/utils.h"
-#include "client/const.h"
 #include "client/vfs/data/writer/chunk_writer.h"
 #include "client/vfs/hub/vfs_hub.h"
 

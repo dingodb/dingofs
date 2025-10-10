@@ -20,7 +20,7 @@
 #include <cstdint>
 
 #include "client/vfs/data/common/common.h"
-#include "client/meta/vfs_meta.h"
+#include "client/vfs/vfs_meta.h"
 
 namespace dingofs {
 namespace client {

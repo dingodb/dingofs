@@ -23,8 +23,8 @@
 #include <sstream>
 #include <unordered_map>
 
-#include "client/meta/vfs_meta.h"
 #include "client/vfs/data/ifile.h"
+#include "client/vfs/vfs_meta.h"
 #include "json/value.h"
 
 namespace dingofs {
