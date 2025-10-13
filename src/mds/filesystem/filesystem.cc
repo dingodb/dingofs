@@ -1944,12 +1944,11 @@ Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, const std::vector<Delt
       if (CompactChunkOperation::MaybeCompact(fs_info, ino, attr.length(), chunk)) {
         DINGO_LOG(INFO) << fmt::format("[fs.{}] trigger compact chunk({}) for ino({}).", fs_id_, chunk.index(), ino);
 
-        auto post_handler = [&](OperationSPtr operation) {
+        auto post_handler = [this](OperationSPtr operation) {
           auto origin_operation = std::dynamic_pointer_cast<CompactChunkOperation>(operation);
           auto& result = origin_operation->GetResult();
-          auto& attr = result.attr;
           // update chunk cache
-          chunk_cache_.PutIf(attr.ino(), std::move(result.effected_chunk));
+          chunk_cache_.PutIf(origin_operation->GetIno(), std::move(result.effected_chunk));
         };
         operation_processor_->AsyncRun(CompactChunkOperation::New(fs_info, ino, chunk.index(), attr.length()),
                                        post_handler);

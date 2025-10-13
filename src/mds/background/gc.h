@@ -97,18 +97,19 @@ class TaskMemo {
 class CleanDelSliceTask : public TaskRunnable {
  public:
   CleanDelSliceTask(OperationProcessorSPtr operation_processor, blockaccess::BlockAccesserSPtr block_accessor,
-                    TaskMemoSPtr task_memo, const std::string& key, const std::string& value)
+                    TaskMemoSPtr task_memo, Ino ino, const std::string& key, const std::string& value)
       : operation_processor_(operation_processor),
         data_accessor_(block_accessor),
+        ino_(ino),
         key_(key),
         value_(value),
         task_memo_(task_memo) {}
   ~CleanDelSliceTask() override = default;
 
   static CleanDelSliceTaskSPtr New(OperationProcessorSPtr operation_processor,
-                                   blockaccess::BlockAccesserSPtr block_accessor, TaskMemoSPtr task_memo,
+                                   blockaccess::BlockAccesserSPtr block_accessor, TaskMemoSPtr task_memo, Ino ino,
                                    const std::string& key, const std::string& value) {
-    return std::make_shared<CleanDelSliceTask>(operation_processor, block_accessor, task_memo, key, value);
+    return std::make_shared<CleanDelSliceTask>(operation_processor, block_accessor, task_memo, ino, key, value);
   }
   std::string Type() override { return "CLEAN_DELETED_SLICE"; }
 
@@ -118,6 +119,8 @@ class CleanDelSliceTask : public TaskRunnable {
   friend class GcProcessor;
 
   Status CleanDelSlice();
+
+  const Ino ino_;
 
   const std::string key_;
   const std::string value_;

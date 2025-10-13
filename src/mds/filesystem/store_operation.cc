@@ -893,6 +893,8 @@ std::vector<std::string> UpsertChunkOperation::PrefetchKey() {
 }
 
 Status UpsertChunkOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>& prefetch_kvs) {
+  result_.effected_chunks.clear();
+
   uint64_t prev_length = attr.length();
   for (const auto& delta_slices : delta_slices_) {
     ChunkEntry chunk;
@@ -1580,8 +1582,6 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoEntry& fs_info,
   }
 
   size_t out_of_length_count = trash_slices.slices_size();
-  DINGO_LOG(INFO) << fmt::format("[operation.{}.{}] out-of-file-length trash slices count({}).", fs_id, ino,
-                                 out_of_length_count);
 
   // 2. complete overlapped slices
   //     |______4________|      slices
@@ -1589,8 +1589,6 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoEntry& fs_info,
   // |________________________| chunk
   // slice-2 is complete overlapped by slice-4
   // sort by offset
-  std::stable_sort(chunk_copy.slices.begin(), chunk_copy.slices.end(),  // NOLINT
-                   [](const Slice& a, const Slice& b) { return a.offset < b.offset; });
 
   // get offset ranges
   std::set<uint64_t> offsets;
@@ -1653,8 +1651,6 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoEntry& fs_info,
   }
 
   size_t complete_overlapped_count = trash_slices.slices_size() - out_of_length_count;
-  DINGO_LOG(INFO) << fmt::format("[operation.{}.{}] complete overlapped trash slice count({}).", fs_id, ino,
-                                 complete_overlapped_count);
 
   // 3. partial overlapped slices
   //     |______4________|      slices
@@ -1720,15 +1716,17 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoEntry& fs_info,
   // }
 
   size_t partial_overlapped_count = trash_slices.slices_size() - out_of_length_count - complete_overlapped_count;
-  DINGO_LOG(INFO) << fmt::format("[operation.{}.{}] partial overlapped trash slice count({}) total({})", fs_id, ino,
-                                 partial_overlapped_count, trash_slices.slices_size());
 
-  if (FLAGS_mds_compact_chunk_detail_log_enable) {
-    for (const auto& slice : trash_slices.slices()) {
-      DINGO_LOG(INFO) << fmt::format("[operation.{}.{}] trash slice, chunk_index({}) slice_id({}), is_partial({}).",
-                                     fs_id, ino, slice.chunk_index(), slice.slice_id(), slice.is_partial());
-    }
+  std::string slice_id_str;
+  slice_id_str.reserve(trash_slices.slices_size() * 9);
+  for (const auto& slice : trash_slices.slices()) {
+    slice_id_str += std::to_string(slice.slice_id());
+    slice_id_str += ",";
   }
+
+  DINGO_LOG(INFO) << fmt::format("[operation.{}.{}.{}] trash slice, count({}/{}/{}/{}) slice_ids({}).", fs_id, ino,
+                                 chunk.index(), out_of_length_count, complete_overlapped_count,
+                                 partial_overlapped_count, trash_slices.slices_size(), slice_id_str);
 
   return trash_slices;
 }
@@ -1812,14 +1810,14 @@ Status CompactChunkOperation::Run(TxnUPtr& txn) {
   // reduce compact frequency
   if (!is_force_ && chunk.last_compaction_time_ms() + FLAGS_mds_compact_chunk_interval_ms >
                         static_cast<uint64_t>(Helper::TimestampMs())) {
-    return Status::OK();
+    return Status(pb::error::ENOT_MATCH, "not match compact condition");
   }
 
   auto trash_slice_list = CompactChunk(txn, fs_id, ino_, file_length_, chunk);
   if (!trash_slice_list.slices().empty()) {
     chunk.set_version(chunk.version() + 1);
     chunk.set_last_compaction_time_ms(Helper::TimestampMs());
-    txn->Put(MetaCodec::EncodeChunkKey(fs_id, ino_, chunk.index()), MetaCodec::EncodeChunkValue(chunk));
+    txn->Put(key, MetaCodec::EncodeChunkValue(chunk));
 
     result_.trash_slice_list = std::move(trash_slice_list);
     result_.effected_chunk = std::move(chunk);

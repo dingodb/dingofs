@@ -91,7 +91,7 @@ static IntRange CalBlockIndex(uint64_t block_size, uint64_t chunk_offset, const 
 void CleanDelSliceTask::Run() {
   auto status = CleanDelSlice();
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[gc.delslice] clean deleted slice fail, {}", status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("[gc.delslice.{}] clean deleted slice fail, {}", ino_, status.error_str());
   }
 
   // forget task
@@ -112,7 +112,7 @@ Status CleanDelSliceTask::CleanDelSlice() {
         cache::BlockKey block_key(slice.fs_id(), slice.ino(), slice.slice_id(), block_index,
                                   slice_range.compaction_version());
 
-        DINGO_LOG(INFO) << fmt::format("[gc.delslice] delete block key({}).", block_key.StoreKey());
+        DINGO_LOG(INFO) << fmt::format("[gc.delslice.{}] delete block key({}).", ino_, block_key.StoreKey());
         keys.push_back(block_key.StoreKey());
       }
     }
@@ -140,7 +140,7 @@ Status CleanDelSliceTask::CleanDelSlice() {
     return status;
   }
 
-  DINGO_LOG(INFO) << fmt::format("[gc.delslice] clean slice finish, slice({}).", slice_id_trace);
+  DINGO_LOG(INFO) << fmt::format("[gc.delslice.{}] clean slice finish, slice({}).", ino_, slice_id_trace);
 
   return Status::OK();
 }
@@ -148,7 +148,7 @@ Status CleanDelSliceTask::CleanDelSlice() {
 void CleanDelFileTask::Run() {
   auto status = CleanDelFile(attr_);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[gc.delfile] clean delfile fail, status({}).", status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("[gc.delfile.{}] clean delfile fail, status({}).", attr_.ino(), status.error_str());
   }
 
   // forget task
@@ -176,7 +176,7 @@ static Status GetChunks(OperationProcessorSPtr operation_processor, uint32_t fs_
 }
 
 Status CleanDelFileTask::CleanDelFile(const AttrEntry& attr) {
-  DINGO_LOG(INFO) << fmt::format("[gc.delfile] clean delfile, ino({}) nlink({}) len({}) version({}).", attr.ino(),
+  DINGO_LOG(INFO) << fmt::format("[gc.delfile.{}] clean delfile, nlink({}) len({}) version({}).", attr.ino(),
                                  attr.nlink(), attr.length(), attr.version());
   // get file chunks
   std::vector<ChunkEntry> chunks;
@@ -194,7 +194,7 @@ Status CleanDelFileTask::CleanDelFile(const AttrEntry& attr) {
       for (uint32_t block_index = range.start; block_index < range.end; ++block_index) {
         cache::BlockKey block_key(attr.fs_id(), attr.ino(), slice.id(), block_index, slice.compaction_version());
 
-        DINGO_LOG(INFO) << fmt::format("[gc.delfile] delete block key({}).", block_key.StoreKey());
+        DINGO_LOG(INFO) << fmt::format("[gc.delfile.{}] delete block key({}).", attr.ino(), block_key.StoreKey());
         keys.push_back(block_key.StoreKey());
       }
     }
@@ -216,7 +216,7 @@ Status CleanDelFileTask::CleanDelFile(const AttrEntry& attr) {
     return status;
   }
 
-  DINGO_LOG(INFO) << fmt::format("[gc.delfile] clean file({}/{}) finish.", attr.fs_id(), attr.ino());
+  DINGO_LOG(INFO) << fmt::format("[gc.delfile.{}] clean file({}/{}) finish.", attr.ino(), attr.fs_id(), attr.ino());
 
   return Status::OK();
 }
@@ -335,7 +335,7 @@ Status GcProcessor::ManualCleanDelSlice(Trace& trace, uint32_t fs_id, Ino ino, u
 
   ScanDelSliceOperation operation(
       trace, fs_id, ino, chunk_index, [&](const std::string& key, const std::string& value) -> bool {
-        auto task = CleanDelSliceTask::New(operation_processor_, block_accessor, nullptr, key, value);
+        auto task = CleanDelSliceTask::New(operation_processor_, block_accessor, nullptr, ino, key, value);
         auto status = task->CleanDelSlice();
         if (!status.ok()) {
           LOG(ERROR) << fmt::format("[gc.delslice] clean delfile fail, status({}).", status.error_str());
@@ -525,7 +525,7 @@ void GcProcessor::ScanDelSlice(const FsInfoEntry& fs_info) {
     }
 
     task_memo_->Remember(key);
-    if (!Execute(ino, CleanDelSliceTask::New(operation_processor_, block_accessor, task_memo_, key, value))) {
+    if (!Execute(ino, CleanDelSliceTask::New(operation_processor_, block_accessor, task_memo_, ino, key, value))) {
       task_memo_->Forget(key);
       return false;
     }

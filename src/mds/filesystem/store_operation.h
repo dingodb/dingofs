@@ -1010,6 +1010,11 @@ class CompactChunkOperation : public Operation {
 
   static bool MaybeCompact(const FsInfoEntry& fs_info, Ino ino, uint64_t file_length, const ChunkEntry& chunk);
 
+  static TrashSliceList TestGenTrashSlices(const FsInfoEntry& fs_info, Ino ino, uint64_t file_length,
+                                           const ChunkEntry& chunk) {
+    return GenTrashSlices(fs_info, ino, file_length, chunk);
+  }
+
  private:
   static TrashSliceList GenTrashSlices(const FsInfoEntry& fs_info, Ino ino, uint64_t file_length,
                                        const ChunkEntry& chunk);
