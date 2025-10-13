@@ -85,7 +85,7 @@ bool DingoCoordinatorClient::Init(const std::string& addr) {
   status = client_->NewCoordinator(&coordinator_);
   CHECK(status.ok()) << fmt::format("new dingo sdk coordinator fail, error: {}", status.ToString());
 
-  status = client_->NewVersion(&versoin_);
+  status = client_->NewVersion(&version_);
   CHECK(status.ok()) << fmt::format("new dingo sdk version fail, error: {}", status.ToString());
 
   return true;
@@ -95,7 +95,7 @@ bool DingoCoordinatorClient::Destroy() {
   DINGO_LOG(INFO) << fmt::format("destroy dingo coordinator client.");
 
   delete coordinator_;
-  delete versoin_;
+  delete version_;
   delete client_;
 
   return true;
@@ -242,7 +242,7 @@ Status DingoCoordinatorClient::KvRange(const Options& options, const Range& rang
                                        std::vector<KVWithExt>& out_kvs, bool& out_more, int64_t& out_count) {
   std::vector<dingodb::sdk::Version::KVWithExt> out_sdk_kvs;
   auto status =
-      versoin_->KvRange(Options2SdkOptions(options), Range2SdkRange(range), limit, out_sdk_kvs, out_more, out_count);
+      version_->KvRange(Options2SdkOptions(options), Range2SdkRange(range), limit, out_sdk_kvs, out_more, out_count);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("KvRange fail, error: {}", status.ToString());
     return Status(pb::error::ECOORDINATOR, status.ToString());
@@ -258,7 +258,7 @@ Status DingoCoordinatorClient::KvRange(const Options& options, const Range& rang
 
 Status DingoCoordinatorClient::KvPut(const Options& options, const KVPair& kv, KVWithExt& out_prev_kv) {
   dingodb::sdk::Version::KVWithExt out_sdk_prev_kv;
-  auto status = versoin_->KvPut(Options2SdkOptions(options), KVPair2SdkKVPair(kv), out_sdk_prev_kv);
+  auto status = version_->KvPut(Options2SdkOptions(options), KVPair2SdkKVPair(kv), out_sdk_prev_kv);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("KvPut fail, error: {}", status.ToString());
     return Status(pb::error::ECOORDINATOR, status.ToString());
@@ -273,7 +273,7 @@ Status DingoCoordinatorClient::KvDeleteRange(const Options& options, const Range
                                              std::vector<KVWithExt>& out_prev_kvs) {
   std::vector<dingodb::sdk::Version::KVWithExt> out_sdk_prev_kvs;
   auto status =
-      versoin_->KvDeleteRange(Options2SdkOptions(options), Range2SdkRange(range), out_deleted, out_sdk_prev_kvs);
+      version_->KvDeleteRange(Options2SdkOptions(options), Range2SdkRange(range), out_deleted, out_sdk_prev_kvs);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("KvDeleteRange fail, error: {}", status.ToString());
     return Status(pb::error::ECOORDINATOR, status.ToString());
@@ -288,7 +288,7 @@ Status DingoCoordinatorClient::KvDeleteRange(const Options& options, const Range
 }
 
 Status DingoCoordinatorClient::KvCompaction(const Range& range, int64_t revision, int64_t& out_count) {
-  auto status = versoin_->KvCompaction(Range2SdkRange(range), revision, out_count);
+  auto status = version_->KvCompaction(Range2SdkRange(range), revision, out_count);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("KvCompaction fail, error: {}", status.ToString());
     return Status(pb::error::ECOORDINATOR, status.ToString());
@@ -298,7 +298,7 @@ Status DingoCoordinatorClient::KvCompaction(const Range& range, int64_t revision
 }
 
 Status DingoCoordinatorClient::LeaseGrant(int64_t id, int64_t ttl, int64_t& out_id, int64_t& out_ttl) {
-  auto status = versoin_->LeaseGrant(id, ttl, out_id, out_ttl);
+  auto status = version_->LeaseGrant(id, ttl, out_id, out_ttl);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("LeaseGrant fail, error: {}", status.ToString());
     return Status(pb::error::ECOORDINATOR, status.ToString());
@@ -308,7 +308,7 @@ Status DingoCoordinatorClient::LeaseGrant(int64_t id, int64_t ttl, int64_t& out_
 }
 
 Status DingoCoordinatorClient::LeaseRevoke(int64_t id) {
-  auto status = versoin_->LeaseRevoke(id);
+  auto status = version_->LeaseRevoke(id);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("LeaseRevoke fail, error: {}", status.ToString());
     return Status(pb::error::ECOORDINATOR, status.ToString());
@@ -318,7 +318,7 @@ Status DingoCoordinatorClient::LeaseRevoke(int64_t id) {
 }
 
 Status DingoCoordinatorClient::LeaseRenew(int64_t id, int64_t& out_ttl) {
-  auto status = versoin_->LeaseRenew(id, out_ttl);
+  auto status = version_->LeaseRenew(id, out_ttl);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("LeaseRenew fail, error: {}", status.ToString());
     return Status(pb::error::ECOORDINATOR, status.ToString());
@@ -329,7 +329,7 @@ Status DingoCoordinatorClient::LeaseRenew(int64_t id, int64_t& out_ttl) {
 
 Status DingoCoordinatorClient::LeaseQuery(int64_t id, bool is_get_key, int64_t& out_ttl, int64_t& out_granted_ttl,
                                           std::vector<std::string>& out_keys) {
-  auto status = versoin_->LeaseQuery(id, is_get_key, out_ttl, out_granted_ttl, out_keys);
+  auto status = version_->LeaseQuery(id, is_get_key, out_ttl, out_granted_ttl, out_keys);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("LeaseQuery fail, error: {}", status.ToString());
     return Status(pb::error::ECOORDINATOR, status.ToString());
@@ -339,7 +339,7 @@ Status DingoCoordinatorClient::LeaseQuery(int64_t id, bool is_get_key, int64_t& 
 }
 
 Status DingoCoordinatorClient::ListLeases(std::vector<int64_t>& out_ids) {
-  auto status = versoin_->ListLeases(out_ids);
+  auto status = version_->ListLeases(out_ids);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("ListLeases fail, error: {}", status.ToString());
     return Status(pb::error::ECOORDINATOR, status.ToString());
@@ -394,7 +394,7 @@ Status DingoCoordinatorClient::Watch(const std::string& key, int64_t start_revis
   param.one_time_watch.wait_on_not_exist_key = false;
 
   dingodb::sdk::Version::WatchOut sdk_out;
-  auto status = versoin_->Watch(param, sdk_out);
+  auto status = version_->Watch(param, sdk_out);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("Watch fail, error: {}", status.ToString());
     return Status(pb::error::ECOORDINATOR, status.ToString());

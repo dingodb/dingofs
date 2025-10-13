@@ -68,7 +68,7 @@ class DingoCoordinatorClient : public CoordinatorClient {
   std::string coordinator_addr_;
   dingodb::sdk::Client* client_{nullptr};
   dingodb::sdk::Coordinator* coordinator_{nullptr};
-  dingodb::sdk::Version* versoin_{nullptr};
+  dingodb::sdk::Version* version_{nullptr};
 };
 
 }  // namespace mds
