@@ -42,7 +42,7 @@ jobs:
 
     - name: Pull dingodatabase/dingo-eureka:rocky9-fs
       run: |
-        docker pull dingodatabase/dingo-eureka:rocky9-fs
+        docker pull dingodatabase/dingo-eureka:rocky9-fs-1f73f45
 
     - name: Init build script
       run: |
@@ -51,7 +51,7 @@ jobs:
         set -x
         set -e
 
-        cd / && git clone https://github.com/dingodb/dingo-sdk.git && cd dingo-sdk && \
+        cd / && git clone --branch v1.0.0 --single-branch https://github.com/dingodb/dingo-sdk.git && cd dingo-sdk && \
         git submodule sync --recursive && git submodule update --init --recursive && \
         mkdir build && cd build && cmake -DTHIRD_PARTY_INSTALL_PATH=/root/.local/dingo-eureka -DCMAKE_INSTALL_PREFIX=/root/.local/dingo-sdk -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_SDK_EXAMPLE=OFF  -DBUILD_BENCHMARK=OFF -DBUILD_PYTHON_SDK=OFF -DBUILD_INTEGRATION_TESTS=OFF -DBUILD_UNIT_TESTS=OFF .. && \
         make -j16 && make install && export DINGOSDK_INSTALL_PATH=/root/.local/dingo-sdk
@@ -90,7 +90,7 @@ jobs:
         echo "$branchName" > branch_name.txt
 
         commitId="${{ github.sha }}"
-        shortCommitId=${commitId:0:8}
+        shortCommitId=${commitId:0:7}
         echo "commit id is: $shortCommitId"
         echo "$shortCommitId" > commit_id.txt
 
@@ -141,7 +141,7 @@ jobs:
     - name: Build DingoFS
       run: |
         echo "Build DingoFS"
-        docker run --name release-dingofs --rm -v /mnt/dingofs:/opt/dingofs/ dingodatabase/dingo-eureka:rocky9-fs /opt/dingofs/build.sh
+        docker run --name release-dingofs --rm -v /mnt/dingofs:/opt/dingofs/ dingodatabase/dingo-eureka:rocky9-fs-1f73f45 /opt/dingofs/build.sh
 
     - name: Copy artifactory to another workflow
       uses: actions/upload-artifact@v4
