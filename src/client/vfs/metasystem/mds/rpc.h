@@ -124,7 +124,7 @@ class RPC {
 
   template <typename Request, typename Response>
   Status SendRequest(const std::string& service_name,
-                     const std::string& api_name, const Request& request,
+                     const std::string& api_name, Request& request,
                      Response& response) {
     return SendRequest(RandomlyPickupEndPoint(), service_name, api_name,
                        request, response);
@@ -134,7 +134,7 @@ class RPC {
 
   template <typename Request, typename Response>
   Status SendRequest(const EndPoint& endpoint, const std::string& service_name,
-                     const std::string& api_name, const Request& request,
+                     const std::string& api_name, Request& request,
                      Response& response,
                      SendRequestOption option = SendRequestOption());
 
@@ -232,7 +232,7 @@ inline std::string DescribeOpenResponse(pb::mds::OpenResponse& response) {
 template <typename Request, typename Response>
 Status RPC::SendRequest(const EndPoint& endpoint,
                         const std::string& service_name,
-                        const std::string& api_name, const Request& request,
+                        const std::string& api_name, Request& request,
                         Response& response, SendRequestOption option) {
   IncDoingReqCount();
   mds::DEFER(DecDoingReqCount());
@@ -261,6 +261,8 @@ Status RPC::SendRequest(const EndPoint& endpoint,
     brpc::Controller cntl;
     cntl.set_timeout_ms(option.timeout_ms);
     cntl.set_log_id(butil::fast_rand());
+
+    request.mutable_info()->set_timeout_ms(option.timeout_ms);
 
     uint64_t start_us = mds::Helper::TimestampUs();
     channel->CallMethod(method, &cntl, &request, &response, nullptr);

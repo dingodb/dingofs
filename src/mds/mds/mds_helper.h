@@ -83,7 +83,7 @@ class MdsHelper {
       if (temp_mds_metas.empty()) break;
 
       auto it = temp_mds_metas.begin();
-      std::advance(it, Helper::GenerateRandomInteger(0, 100000) % temp_mds_metas.size());
+      std::advance(it, Helper::GenerateRealRandomInteger(0, 100000) % temp_mds_metas.size());
 
       selected_mds_metas.push_back(*it);
       temp_mds_metas.erase(it);

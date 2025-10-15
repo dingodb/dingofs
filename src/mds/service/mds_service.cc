@@ -57,7 +57,37 @@ DEFINE_uint32(mds_service_write_worker_max_pending_num, 1024, "write service wor
 DEFINE_bool(mds_service_write_worker_use_pthread, false, "write worker use pthread");
 
 template <typename T>
-static Status ValidateRequest(T* request, FileSystemSPtr file_system) {
+static Status ValidateRequest(T* request, uint64_t queue_wait_time_us) {
+  if (request->info().timeout_ms() != 0 && (queue_wait_time_us / 1000) > request->info().timeout_ms()) {
+    return Status(pb::error::ETIMEOUT, "queue wait timeout");
+  }
+
+  return Status::OK();
+}
+
+template <typename T>
+static Status SimpleValidateRequest(FileSystemSPtr& file_system, T* request, uint64_t queue_wait_time_us) {
+  if (request->info().timeout_ms() != 0 && (queue_wait_time_us / 1000) > request->info().timeout_ms()) {
+    return Status(pb::error::ETIMEOUT, "queue wait timeout");
+  }
+
+  if (file_system == nullptr) {
+    return Status(pb::error::ENOT_FOUND, "fs not found");
+  }
+
+  return Status::OK();
+}
+
+template <typename T>
+static Status ValidateRequest(FileSystemSPtr& file_system, T* request, uint64_t queue_wait_time_us) {
+  if (request->info().timeout_ms() != 0 && (queue_wait_time_us / 1000) > request->info().timeout_ms()) {
+    return Status(pb::error::ETIMEOUT, "queue wait timeout");
+  }
+
+  if (file_system == nullptr) {
+    return Status(pb::error::ENOT_FOUND, "fs not found");
+  }
+
   if (request->context().epoch() < file_system->Epoch()) {
     return Status(pb::error::EROUTER_EPOCH_CHANGE,
                   fmt::format("epoch change, {}<{}", request->context().epoch(), file_system->Epoch()));
@@ -84,7 +114,7 @@ bool MDSServiceImpl::Init() {
                          : ExecqWorkerSet::NewUnique(kReadWorkerSetName, FLAGS_mds_service_read_worker_num,
                                                      FLAGS_mds_service_read_worker_max_pending_num);
   if (!read_worker_set_->Init()) {
-    DINGO_LOG(ERROR) << "init service read worker set fail!";
+    DINGO_LOG(ERROR) << "init service read worker set fail.";
     return false;
   }
 
@@ -95,7 +125,7 @@ bool MDSServiceImpl::Init() {
                           : ExecqWorkerSet::NewUnique(kWriteWorkerSetName, FLAGS_mds_service_write_worker_num,
                                                       FLAGS_mds_service_write_worker_max_pending_num);
   if (!write_worker_set_->Init()) {
-    DINGO_LOG(ERROR) << "init service write worker set fail!";
+    DINGO_LOG(ERROR) << "init service write worker set fail.";
     return false;
   }
 
@@ -119,14 +149,16 @@ void MDSServiceImpl::Echo(google::protobuf::RpcController*, const pb::mds::EchoR
 void MDSServiceImpl::DoHeartbeat(google::protobuf::RpcController*, const pb::mds::HeartbeatRequest* request,
                                  pb::mds::HeartbeatResponse* response, TraceClosure* done) {
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
 
-  auto heartbeat = Server::GetInstance().GetHeartbeat();
-  if (BAIDU_UNLIKELY(heartbeat == nullptr)) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::EINTERNAL, "heartbeat is nullptr");
+  auto status = ValidateRequest(request, done->GetQueueWaitTimeUs());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
+  auto heartbeat = Server::GetInstance().GetHeartbeat();
+
   Context ctx;
-  Status status;
   if (request->role() == pb::mds::ROLE_MDS) {
     auto mds = request->mds();
     status = heartbeat->SendHeartbeat(ctx, mds);
@@ -155,7 +187,7 @@ void MDSServiceImpl::Heartbeat(google::protobuf::RpcController* controller, cons
 
   // Run in queue.
   auto task = std::make_shared<ServiceTask>(
-      [this, controller, request, response, svr_done]() { DoHeartbeat(controller, request, response, svr_done); });
+      [controller, request, response, svr_done]() { DoHeartbeat(controller, request, response, svr_done); });
 
   bool ret = write_worker_set_->Execute(task);
   if (BAIDU_UNLIKELY(!ret)) {
@@ -165,18 +197,21 @@ void MDSServiceImpl::Heartbeat(google::protobuf::RpcController* controller, cons
   }
 }
 
-void MDSServiceImpl::DoGetMDSList(google::protobuf::RpcController*, const pb::mds::GetMDSListRequest*,
+void MDSServiceImpl::DoGetMDSList(google::protobuf::RpcController*, const pb::mds::GetMDSListRequest* request,
                                   pb::mds::GetMDSListResponse* response, TraceClosure* done) {
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
+
+  auto status = ValidateRequest(request, done->GetQueueWaitTimeUs());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
 
   auto heartbeat = Server::GetInstance().GetHeartbeat();
-  if (BAIDU_UNLIKELY(heartbeat == nullptr)) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::EINTERNAL, "heartbeat is nullptr");
-  }
 
   Context ctx;
   std::vector<MdsEntry> mdses;
-  auto status = heartbeat->GetMDSList(ctx, mdses);
+  status = heartbeat->GetMDSList(ctx, mdses);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -191,7 +226,7 @@ void MDSServiceImpl::GetMDSList(google::protobuf::RpcController* controller, con
 
   // Run in queue.
   auto task = std::make_shared<ServiceTask>(
-      [this, controller, request, response, svr_done]() { DoGetMDSList(controller, request, response, svr_done); });
+      [controller, request, response, svr_done]() { DoGetMDSList(controller, request, response, svr_done); });
 
   bool ret = read_worker_set_->Execute(task);
   if (BAIDU_UNLIKELY(!ret)) {
@@ -204,6 +239,12 @@ void MDSServiceImpl::GetMDSList(google::protobuf::RpcController* controller, con
 void MDSServiceImpl::DoCreateFs(google::protobuf::RpcController*, const pb::mds::CreateFsRequest* request,
                                 pb::mds::CreateFsResponse* response, TraceClosure* done) {
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
+
+  auto status = ValidateRequest(request, done->GetQueueWaitTimeUs());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
 
   auto& mds_meta = Server::GetInstance().GetMDSMeta();
 
@@ -223,7 +264,7 @@ void MDSServiceImpl::DoCreateFs(google::protobuf::RpcController*, const pb::mds:
   param.expect_mds_num = request->expect_mds_num();
 
   pb::mds::FsInfo fs_info;
-  auto status = file_system_set_->CreateFs(param, fs_info);
+  status = file_system_set_->CreateFs(param, fs_info);
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -274,9 +315,15 @@ void MDSServiceImpl::CreateFs(google::protobuf::RpcController* controller, const
 void MDSServiceImpl::DoMountFs(google::protobuf::RpcController*, const pb::mds::MountFsRequest* request,
                                pb::mds::MountFsResponse* response, TraceClosure* done) {
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
+
+  auto status = ValidateRequest(request, done->GetQueueWaitTimeUs());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
 
   Context ctx;
-  auto status = file_system_set_->MountFs(ctx, request->fs_name(), request->mount_point());
+  status = file_system_set_->MountFs(ctx, request->fs_name(), request->mount_point());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -327,9 +374,15 @@ void MDSServiceImpl::MountFs(google::protobuf::RpcController* controller, const 
 void MDSServiceImpl::DoUmountFs(google::protobuf::RpcController*, const pb::mds::UmountFsRequest* request,
                                 pb::mds::UmountFsResponse* response, TraceClosure* done) {
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
+
+  auto status = ValidateRequest(request, done->GetQueueWaitTimeUs());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
 
   Context ctx;
-  auto status = file_system_set_->UmountFs(ctx, request->fs_name(), request->client_id());
+  status = file_system_set_->UmountFs(ctx, request->fs_name(), request->client_id());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -374,9 +427,15 @@ void MDSServiceImpl::UmountFs(google::protobuf::RpcController* controller, const
 void MDSServiceImpl::DoDeleteFs(google::protobuf::RpcController*, const pb::mds::DeleteFsRequest* request,
                                 pb::mds::DeleteFsResponse* response, TraceClosure* done) {
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
+
+  auto status = ValidateRequest(request, done->GetQueueWaitTimeUs());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
 
   Context ctx;
-  auto status = file_system_set_->DeleteFs(ctx, request->fs_name(), request->is_force());
+  status = file_system_set_->DeleteFs(ctx, request->fs_name(), request->is_force());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -417,12 +476,14 @@ void MDSServiceImpl::DeleteFs(google::protobuf::RpcController* controller, const
 void MDSServiceImpl::DoGetFsInfo(google::protobuf::RpcController*, const pb::mds::GetFsInfoRequest* request,
                                  pb::mds::GetFsInfoResponse* response, TraceClosure* done) {
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
 
   std::string fs_name = request->fs_name();
   if (request->fs_id() > 0) {
     auto file_system = GetFileSystem(request->fs_id());
-    if (file_system == nullptr) {
-      return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
+    auto status = SimpleValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
+    if (BAIDU_UNLIKELY(!status.ok())) {
+      return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
     }
 
     fs_name = file_system->FsName();
@@ -470,13 +531,19 @@ void MDSServiceImpl::GetFsInfo(google::protobuf::RpcController* controller, cons
   }
 }
 
-void MDSServiceImpl::DoListFsInfo(google::protobuf::RpcController*, const pb::mds::ListFsInfoRequest*,
-                                  pb::mds::ListFsInfoResponse* response, google::protobuf::Closure* done) {
+void MDSServiceImpl::DoListFsInfo(google::protobuf::RpcController*, const pb::mds::ListFsInfoRequest* request,
+                                  pb::mds::ListFsInfoResponse* response, TraceClosure* done) {
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
+
+  auto status = ValidateRequest(request, done->GetQueueWaitTimeUs());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
 
   Context ctx;
   std::vector<pb::mds::FsInfo> fs_infoes;
-  auto status = file_system_set_->GetAllFsInfo(ctx, true, fs_infoes);
+  status = file_system_set_->GetAllFsInfo(ctx, true, fs_infoes);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -502,15 +569,17 @@ void MDSServiceImpl::ListFsInfo(google::protobuf::RpcController* controller, con
 }
 
 void MDSServiceImpl::DoUpdateFsInfo(google::protobuf::RpcController*, const pb::mds::UpdateFsInfoRequest* request,
-                                    pb::mds::UpdateFsInfoResponse* response, google::protobuf::Closure* done) {
+                                    pb::mds::UpdateFsInfoResponse* response, TraceClosure* done) {
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
 
-  if (request->fs_name().empty()) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::EILLEGAL_PARAMTETER, "fs name is empty");
+  auto status = ValidateRequest(request, done->GetQueueWaitTimeUs());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
   Context ctx;
-  auto status = file_system_set_->UpdateFsInfo(ctx, request->fs_name(), request->fs_info());
+  status = file_system_set_->UpdateFsInfo(ctx, request->fs_name(), request->fs_info());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -521,6 +590,21 @@ void MDSServiceImpl::UpdateFsInfo(google::protobuf::RpcController* controller,
                                   const pb::mds::UpdateFsInfoRequest* request, pb::mds::UpdateFsInfoResponse* response,
                                   google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // validate request
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_name().empty()) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs_name is empty");
+    }
+
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
 
   // Run in queue.
   auto task = std::make_shared<ServiceTask>(
@@ -535,19 +619,21 @@ void MDSServiceImpl::UpdateFsInfo(google::protobuf::RpcController* controller,
 }
 
 void MDSServiceImpl::DoGetDentry(google::protobuf::RpcController*, const pb::mds::GetDentryRequest* request,
-                                 pb::mds::GetDentryResponse* response, google::protobuf::Closure* done) {
+                                 pb::mds::GetDentryResponse* response, TraceClosure* done) {
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
+  auto status = SimpleValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
   Dentry dentry;
-  auto status = file_system->GetDentry(ctx, request->parent(), request->name(), dentry);
+  status = file_system->GetDentry(ctx, request->parent(), request->name(), dentry);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -574,12 +660,14 @@ void MDSServiceImpl::GetDentry(google::protobuf::RpcController* controller, cons
 }
 
 void MDSServiceImpl::DoListDentry(google::protobuf::RpcController*, const pb::mds::ListDentryRequest* request,
-                                  pb::mds::ListDentryResponse* response, google::protobuf::Closure* done) {
+                                  pb::mds::ListDentryResponse* response, TraceClosure* done) {
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
+  auto status = SimpleValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
   const auto& req_ctx = request->context();
@@ -587,8 +675,7 @@ void MDSServiceImpl::DoListDentry(google::protobuf::RpcController*, const pb::md
 
   std::vector<Dentry> dentries;
   uint32_t limit = request->limit() > 0 ? request->limit() : UINT32_MAX;
-  auto status =
-      file_system->ListDentry(ctx, request->parent(), request->last(), limit, request->is_only_dir(), dentries);
+  status = file_system->ListDentry(ctx, request->parent(), request->last(), limit, request->is_only_dir(), dentries);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -634,19 +721,21 @@ void MDSServiceImpl::ListDentry(google::protobuf::RpcController* controller, con
 }
 
 void MDSServiceImpl::DoGetInode(google::protobuf::RpcController*, const pb::mds::GetInodeRequest* request,
-                                pb::mds::GetInodeResponse* response, google::protobuf::Closure* done) {
+                                pb::mds::GetInodeResponse* response, TraceClosure* done) {
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
+  auto status = SimpleValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
   EntryOut entry_out;
-  auto status = file_system->GetInode(ctx, request->ino(), entry_out);
+  status = file_system->GetInode(ctx, request->ino(), entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -673,19 +762,21 @@ void MDSServiceImpl::GetInode(google::protobuf::RpcController* controller, const
 }
 
 void MDSServiceImpl::DoBatchGetInode(google::protobuf::RpcController*, const pb::mds::BatchGetInodeRequest* request,
-                                     pb::mds::BatchGetInodeResponse* response, google::protobuf::Closure* done) {
+                                     pb::mds::BatchGetInodeResponse* response, TraceClosure* done) {
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
+  auto status = SimpleValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
   std::vector<EntryOut> entries;
-  auto status = file_system->BatchGetInode(ctx, Helper::PbRepeatedToVector(request->inoes()), entries);
+  status = file_system->BatchGetInode(ctx, Helper::PbRepeatedToVector(request->inoes()), entries);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -714,19 +805,21 @@ void MDSServiceImpl::BatchGetInode(google::protobuf::RpcController* controller,
 }
 
 void MDSServiceImpl::DoBatchGetXAttr(google::protobuf::RpcController*, const pb::mds::BatchGetXAttrRequest* request,
-                                     pb::mds::BatchGetXAttrResponse* response, google::protobuf::Closure* done) {
+                                     pb::mds::BatchGetXAttrResponse* response, TraceClosure* done) {
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
+  auto status = SimpleValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
   std::vector<pb::mds::XAttr> xattrs;
-  auto status = file_system->BatchGetXAttr(ctx, Helper::PbRepeatedToVector(request->inoes()), xattrs);
+  status = file_system->BatchGetXAttr(ctx, Helper::PbRepeatedToVector(request->inoes()), xattrs);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -761,11 +854,7 @@ void MDSServiceImpl::DoLookup(google::protobuf::RpcController* controller, const
   done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
-  }
-
-  auto status = ValidateRequest(request, file_system);
+  auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -799,18 +888,13 @@ void MDSServiceImpl::Lookup(google::protobuf::RpcController* controller, const p
   }
 }
 
-void MDSServiceImpl::DoBatchCreate(google::protobuf::RpcController* controller,
-                                   const pb::mds::BatchCreateRequest* request, pb::mds::BatchCreateResponse* response,
-                                   TraceClosure* done) {
+void MDSServiceImpl::DoBatchCreate(google::protobuf::RpcController*, const pb::mds::BatchCreateRequest* request,
+                                   pb::mds::BatchCreateResponse* response, TraceClosure* done) {
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
-  }
-
-  auto status = ValidateRequest(request, file_system);
+  auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -887,11 +971,7 @@ void MDSServiceImpl::DoMkNod(google::protobuf::RpcController*, const pb::mds::Mk
   done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
-  }
-
-  auto status = ValidateRequest(request, file_system);
+  auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -941,11 +1021,7 @@ void MDSServiceImpl::DoMkDir(google::protobuf::RpcController*, const pb::mds::Mk
   done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
-  }
-
-  auto status = ValidateRequest(request, file_system);
+  auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -995,11 +1071,7 @@ void MDSServiceImpl::DoRmDir(google::protobuf::RpcController*, const pb::mds::Rm
   done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
-  }
-
-  auto status = ValidateRequest(request, file_system);
+  auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -1036,11 +1108,7 @@ void MDSServiceImpl::DoReadDir(google::protobuf::RpcController*, const pb::mds::
   done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
-  }
-
-  auto status = ValidateRequest(request, file_system);
+  auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -1088,11 +1156,7 @@ void MDSServiceImpl::DoOpen(google::protobuf::RpcController*, const pb::mds::Ope
   done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
-  }
-
-  auto status = ValidateRequest(request, file_system);
+  auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -1137,11 +1201,7 @@ void MDSServiceImpl::DoRelease(google::protobuf::RpcController*, const pb::mds::
   done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
-  }
-
-  auto status = ValidateRequest(request, file_system);
+  auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -1178,11 +1238,7 @@ void MDSServiceImpl::DoLink(google::protobuf::RpcController*, const pb::mds::Lin
   done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
-  }
-
-  auto status = ValidateRequest(request, file_system);
+  auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -1224,11 +1280,7 @@ void MDSServiceImpl::DoUnLink(google::protobuf::RpcController*, const pb::mds::U
   done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
-  }
-
-  auto status = ValidateRequest(request, file_system);
+  auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -1270,11 +1322,7 @@ void MDSServiceImpl::DoSymlink(google::protobuf::RpcController*, const pb::mds::
   done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
-  }
-
-  auto status = ValidateRequest(request, file_system);
+  auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -1317,11 +1365,7 @@ void MDSServiceImpl::DoReadLink(google::protobuf::RpcController*, const pb::mds:
   done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
-  }
-
-  auto status = ValidateRequest(request, file_system);
+  auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -1361,11 +1405,7 @@ void MDSServiceImpl::DoGetAttr(google::protobuf::RpcController*, const pb::mds::
   done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
-  }
-
-  auto status = ValidateRequest(request, file_system);
+  auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -1423,11 +1463,7 @@ void MDSServiceImpl::DoSetAttr(google::protobuf::RpcController*, const pb::mds::
   done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
-  }
-
-  auto status = ValidateRequest(request, file_system);
+  auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -1498,11 +1534,7 @@ void MDSServiceImpl::DoGetXAttr(google::protobuf::RpcController*, const pb::mds:
   done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
-  }
-
-  auto status = ValidateRequest(request, file_system);
+  auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -1563,11 +1595,7 @@ void MDSServiceImpl::DoSetXAttr(google::protobuf::RpcController*, const pb::mds:
   done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
-  }
-
-  auto status = ValidateRequest(request, file_system);
+  auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -1628,11 +1656,7 @@ void MDSServiceImpl::DoRemoveXAttr(google::protobuf::RpcController*, const pb::m
   done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
-  }
-
-  auto status = ValidateRequest(request, file_system);
+  auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -1694,11 +1718,7 @@ void MDSServiceImpl::DoListXAttr(google::protobuf::RpcController*, const pb::mds
   done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
-  }
-
-  auto status = ValidateRequest(request, file_system);
+  auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -1738,8 +1758,9 @@ void MDSServiceImpl::DoRename(google::protobuf::RpcController*, const pb::mds::R
   done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
+  auto status = SimpleValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
   const auto& req_ctx = request->context();
@@ -1754,7 +1775,7 @@ void MDSServiceImpl::DoRename(google::protobuf::RpcController*, const pb::mds::R
   param.new_ancestors = Helper::PbRepeatedToVector(request->new_ancestors());
 
   uint64_t old_parent_version, new_parent_version;
-  auto status = file_system->CommitRename(ctx, param, old_parent_version, new_parent_version);
+  status = file_system->CommitRename(ctx, param, old_parent_version, new_parent_version);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -1822,11 +1843,7 @@ void MDSServiceImpl::DoWriteSlice(google::protobuf::RpcController*, const pb::md
   done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
-  }
-
-  auto status = ValidateRequest(request, file_system);
+  auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -1891,11 +1908,7 @@ void MDSServiceImpl::DoReadSlice(google::protobuf::RpcController*, const pb::mds
   done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
-  }
-
-  auto status = ValidateRequest(request, file_system);
+  auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -1958,11 +1971,7 @@ void MDSServiceImpl::DoFallocate(google::protobuf::RpcController*, const pb::mds
   done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
-  }
-
-  auto status = ValidateRequest(request, file_system);
+  auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -2022,20 +2031,7 @@ void MDSServiceImpl::DoCompactChunk(google::protobuf::RpcController*, const pb::
   done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
-  }
-
-  // validate request
-  auto validate_fn = [&]() -> Status {
-    if (request->ino() == 0) {
-      return Status(pb::error::EILLEGAL_PARAMTETER, "ino is 0");
-    }
-
-    return Status::OK();
-  };
-
-  auto status = validate_fn();
+  auto status = SimpleValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -2061,6 +2057,24 @@ void MDSServiceImpl::CompactChunk(google::protobuf::RpcController* controller,
                                   google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
 
+  // validate request
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_id() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs_id is 0");
+    }
+    if (request->ino() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "ino is 0");
+    }
+
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
   // Run in queue.
   auto task = std::make_shared<ServiceTask>(
       [this, controller, request, response, svr_done]() { DoCompactChunk(controller, request, response, svr_done); });
@@ -2078,6 +2092,22 @@ void MDSServiceImpl::DoCleanTrashSlice(google::protobuf::RpcController*, const p
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  const auto& req_ctx = request->context();
+  Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
+  auto& trace = ctx.GetTrace();
+
+  auto status = gc_processor_->ManualCleanDelSlice(trace, request->fs_id(), request->ino(), request->chunk_index());
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+}
+
+void MDSServiceImpl::CleanTrashSlice(google::protobuf::RpcController* controller,
+                                     const pb::mds::CleanTrashSliceRequest* request,
+                                     pb::mds::CleanTrashSliceResponse* response, google::protobuf::Closure* done) {
+  auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
   // validate request
   auto validate_fn = [&]() -> Status {
     if (request->fs_id() == 0) {
@@ -2093,24 +2123,9 @@ void MDSServiceImpl::DoCleanTrashSlice(google::protobuf::RpcController*, const p
 
   auto status = validate_fn();
   if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
-
-  const auto& req_ctx = request->context();
-  Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
-  auto& trace = ctx.GetTrace();
-
-  status = gc_processor_->ManualCleanDelSlice(trace, request->fs_id(), request->ino(), request->chunk_index());
-  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
-  if (BAIDU_UNLIKELY(!status.ok())) {
-    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
-  }
-}
-
-void MDSServiceImpl::CleanTrashSlice(google::protobuf::RpcController* controller,
-                                     const pb::mds::CleanTrashSliceRequest* request,
-                                     pb::mds::CleanTrashSliceResponse* response, google::protobuf::Closure* done) {
-  auto* svr_done = new ServiceClosure(__func__, done, request, response);
 
   // Run in queue.
   auto task = std::make_shared<ServiceTask>([this, controller, request, response, svr_done]() {
@@ -2130,6 +2145,22 @@ void MDSServiceImpl::DoCleanDelFile(google::protobuf::RpcController*, const pb::
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  const auto& req_ctx = request->context();
+  Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
+  auto& trace = ctx.GetTrace();
+
+  auto status = gc_processor_->ManualCleanDelFile(trace, request->fs_id(), request->ino());
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+}
+
+void MDSServiceImpl::CleanDelFile(google::protobuf::RpcController* controller,
+                                  const pb::mds::CleanDelFileRequest* request, pb::mds::CleanDelFileResponse* response,
+                                  google::protobuf::Closure* done) {
+  auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
   // validate request
   auto validate_fn = [&]() -> Status {
     if (request->fs_id() == 0) {
@@ -2145,24 +2176,9 @@ void MDSServiceImpl::DoCleanDelFile(google::protobuf::RpcController*, const pb::
 
   auto status = validate_fn();
   if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
-
-  const auto& req_ctx = request->context();
-  Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
-  auto& trace = ctx.GetTrace();
-
-  status = gc_processor_->ManualCleanDelFile(trace, request->fs_id(), request->ino());
-  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
-  if (BAIDU_UNLIKELY(!status.ok())) {
-    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
-  }
-}
-
-void MDSServiceImpl::CleanDelFile(google::protobuf::RpcController* controller,
-                                  const pb::mds::CleanDelFileRequest* request, pb::mds::CleanDelFileResponse* response,
-                                  google::protobuf::Closure* done) {
-  auto* svr_done = new ServiceClosure(__func__, done, request, response);
 
   // Run in queue.
   auto task = std::make_shared<ServiceTask>(
@@ -2182,15 +2198,17 @@ void MDSServiceImpl::DoSetFsQuota(google::protobuf::RpcController*, const pb::md
   done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
+  auto status = SimpleValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
+
   auto& quota_manager = file_system->GetQuotaManager();
 
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
-  auto status = quota_manager.SetFsQuota(ctx.GetTrace(), request->quota());
+  status = quota_manager.SetFsQuota(ctx.GetTrace(), request->quota());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -2201,6 +2219,21 @@ void MDSServiceImpl::DoSetFsQuota(google::protobuf::RpcController*, const pb::md
 void MDSServiceImpl::SetFsQuota(google::protobuf::RpcController* controller, const pb::mds::SetFsQuotaRequest* request,
                                 pb::mds::SetFsQuotaResponse* response, google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // validate request
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_id() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs_id is 0");
+    }
+
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
 
   // Run in queue.
   auto task = std::make_shared<ServiceTask>(
@@ -2220,16 +2253,18 @@ void MDSServiceImpl::DoGetFsQuota(google::protobuf::RpcController*, const pb::md
   done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
+  auto status = SimpleValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
+
   auto& quota_manager = file_system->GetQuotaManager();
 
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
   pb::mds::Quota quota;
-  auto status = quota_manager.GetFsQuota(ctx.GetTrace(), req_ctx.is_bypass_cache(), quota);
+  status = quota_manager.GetFsQuota(ctx.GetTrace(), req_ctx.is_bypass_cache(), quota);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -2241,6 +2276,21 @@ void MDSServiceImpl::DoGetFsQuota(google::protobuf::RpcController*, const pb::md
 void MDSServiceImpl::GetFsQuota(google::protobuf::RpcController* controller, const pb::mds::GetFsQuotaRequest* request,
                                 pb::mds::GetFsQuotaResponse* response, google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // validate request
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_id() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs_id is 0");
+    }
+
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
 
   // Run in queue.
   auto task = std::make_shared<ServiceTask>(
@@ -2260,15 +2310,17 @@ void MDSServiceImpl::DoSetDirQuota(google::protobuf::RpcController*, const pb::m
   done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
+  auto status = SimpleValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
+
   auto& quota_manager = file_system->GetQuotaManager();
 
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
-  auto status = quota_manager.SetDirQuota(ctx.GetTrace(), request->ino(), request->quota(), true);
+  status = quota_manager.SetDirQuota(ctx.GetTrace(), request->ino(), request->quota(), true);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -2279,6 +2331,21 @@ void MDSServiceImpl::SetDirQuota(google::protobuf::RpcController* controller,
                                  const pb::mds::SetDirQuotaRequest* request, pb::mds::SetDirQuotaResponse* response,
                                  google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // validate request
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_id() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs_id is 0");
+    }
+
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
 
   // Run in queue.
   auto task = std::make_shared<ServiceTask>(
@@ -2298,16 +2365,18 @@ void MDSServiceImpl::DoGetDirQuota(google::protobuf::RpcController*, const pb::m
   done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
+  auto status = SimpleValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
+
   auto& quota_manager = file_system->GetQuotaManager();
 
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
   pb::mds::Quota quota;
-  auto status = quota_manager.GetDirQuota(ctx.GetTrace(), request->ino(), quota);
+  status = quota_manager.GetDirQuota(ctx.GetTrace(), request->ino(), quota);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -2320,6 +2389,21 @@ void MDSServiceImpl::GetDirQuota(google::protobuf::RpcController* controller,
                                  const pb::mds::GetDirQuotaRequest* request, pb::mds::GetDirQuotaResponse* response,
                                  google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // validate request
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_id() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs_id is 0");
+    }
+
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
 
   // Run in queue.
   auto task = std::make_shared<ServiceTask>(
@@ -2339,15 +2423,17 @@ void MDSServiceImpl::DoDeleteDirQuota(google::protobuf::RpcController*, const pb
   done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
+  auto status = SimpleValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
+
   auto& quota_manager = file_system->GetQuotaManager();
 
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
-  auto status = quota_manager.DeleteDirQuota(ctx.GetTrace(), request->ino());
+  status = quota_manager.DeleteDirQuota(ctx.GetTrace(), request->ino());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -2358,6 +2444,21 @@ void MDSServiceImpl::DeleteDirQuota(google::protobuf::RpcController* controller,
                                     const pb::mds::DeleteDirQuotaRequest* request,
                                     pb::mds::DeleteDirQuotaResponse* response, google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // validate request
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_id() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs_id is 0");
+    }
+
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
 
   // Run in queue.
   auto task = std::make_shared<ServiceTask>(
@@ -2377,16 +2478,18 @@ void MDSServiceImpl::DoLoadDirQuotas(google::protobuf::RpcController*, const pb:
   done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
+  auto status = SimpleValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
+
   auto& quota_manager = file_system->GetQuotaManager();
 
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
   std::map<uint64_t, pb::mds::Quota> quotas;
-  auto status = quota_manager.LoadDirQuotas(ctx.GetTrace(), quotas);
+  status = quota_manager.LoadDirQuotas(ctx.GetTrace(), quotas);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -2401,6 +2504,21 @@ void MDSServiceImpl::LoadDirQuotas(google::protobuf::RpcController* controller,
                                    const pb::mds::LoadDirQuotasRequest* request,
                                    pb::mds::LoadDirQuotasResponse* response, google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // validate request
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_id() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs_id is 0");
+    }
+
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
 
   // Run in queue.
   auto task = std::make_shared<ServiceTask>(
@@ -2419,13 +2537,18 @@ void MDSServiceImpl::DoSetFsStats(google::protobuf::RpcController*, const pb::md
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto status = ValidateRequest(request, done->GetQueueWaitTimeUs());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
   uint32_t fs_id = file_system_set_->GetFsId(request->fs_name());
   if (fs_id == 0) {
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
   Context ctx;
-  auto status = fs_stat_->UploadFsStat(ctx, fs_id, request->stats());
+  status = fs_stat_->UploadFsStat(ctx, fs_id, request->stats());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -2435,6 +2558,21 @@ void MDSServiceImpl::DoSetFsStats(google::protobuf::RpcController*, const pb::md
 void MDSServiceImpl::SetFsStats(google::protobuf::RpcController* controller, const pb::mds::SetFsStatsRequest* request,
                                 pb::mds::SetFsStatsResponse* response, google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // validate request
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_name().empty()) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs_name is empty");
+    }
+
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
 
   // Run in queue.
   auto task = std::make_shared<ServiceTask>(
@@ -2453,6 +2591,10 @@ void MDSServiceImpl::DoGetFsStats(google::protobuf::RpcController*, const pb::md
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto status = ValidateRequest(request, done->GetQueueWaitTimeUs());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
   uint32_t fs_id = file_system_set_->GetFsId(request->fs_name());
   if (fs_id == 0) {
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
@@ -2460,7 +2602,7 @@ void MDSServiceImpl::DoGetFsStats(google::protobuf::RpcController*, const pb::md
 
   Context ctx;
   pb::mds::FsStatsData stats;
-  auto status = fs_stat_->GetFsStat(ctx, fs_id, stats);
+  status = fs_stat_->GetFsStat(ctx, fs_id, stats);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -2472,6 +2614,21 @@ void MDSServiceImpl::DoGetFsStats(google::protobuf::RpcController*, const pb::md
 void MDSServiceImpl::GetFsStats(google::protobuf::RpcController* controller, const pb::mds::GetFsStatsRequest* request,
                                 pb::mds::GetFsStatsResponse* response, google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // validate request
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_name().empty()) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs_name is empty");
+    }
+
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
 
   // Run in queue.
   auto task = std::make_shared<ServiceTask>(
@@ -2491,6 +2648,11 @@ void MDSServiceImpl::DoGetFsPerSecondStats(google::protobuf::RpcController*,
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto status = ValidateRequest(request, done->GetQueueWaitTimeUs());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
   uint32_t fs_id = file_system_set_->GetFsId(request->fs_name());
   if (fs_id == 0) {
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
@@ -2498,7 +2660,7 @@ void MDSServiceImpl::DoGetFsPerSecondStats(google::protobuf::RpcController*,
 
   Context ctx;
   std::map<uint64_t, pb::mds::FsStatsData> stats;
-  auto status = fs_stat_->GetFsStatsPerSecond(ctx, fs_id, stats);
+  status = fs_stat_->GetFsStatsPerSecond(ctx, fs_id, stats);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -2514,6 +2676,21 @@ void MDSServiceImpl::GetFsPerSecondStats(google::protobuf::RpcController* contro
                                          pb::mds::GetFsPerSecondStatsResponse* response,
                                          google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // validate request
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_name().empty()) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs_name is empty");
+    }
+
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
 
   // Run in queue.
   auto task = std::make_shared<ServiceTask>([this, controller, request, response, svr_done]() {

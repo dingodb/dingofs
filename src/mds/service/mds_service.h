@@ -231,6 +231,7 @@ class MDSServiceImpl : public pb::mds::MDSService {
  private:
   friend class DebugServiceImpl;
   Status GenFsId(int64_t& fs_id);
+
   inline FileSystemSPtr GetFileSystem(uint32_t fs_id);
 
   WorkerSetUPtr& GetReadWorkerSet() { return read_worker_set_; }
@@ -254,23 +255,23 @@ class MDSServiceImpl : public pb::mds::MDSService {
   void DoGetFsInfo(google::protobuf::RpcController* controller, const pb::mds::GetFsInfoRequest* request,
                    pb::mds::GetFsInfoResponse* response, TraceClosure* done);
   void DoListFsInfo(google::protobuf::RpcController* controller, const pb::mds::ListFsInfoRequest* request,
-                    pb::mds::ListFsInfoResponse* response, google::protobuf::Closure* done);
+                    pb::mds::ListFsInfoResponse* response, TraceClosure* done);
   void DoUpdateFsInfo(google::protobuf::RpcController* controller, const pb::mds::UpdateFsInfoRequest* request,
-                      pb::mds::UpdateFsInfoResponse* response, google::protobuf::Closure* done);
+                      pb::mds::UpdateFsInfoResponse* response, TraceClosure* done);
 
   // dentry interface
   void DoGetDentry(google::protobuf::RpcController* controller, const pb::mds::GetDentryRequest* request,
-                   pb::mds::GetDentryResponse* response, google::protobuf::Closure* done);
+                   pb::mds::GetDentryResponse* response, TraceClosure* done);
   void DoListDentry(google::protobuf::RpcController* controller, const pb::mds::ListDentryRequest* request,
-                    pb::mds::ListDentryResponse* response, google::protobuf::Closure* done);
+                    pb::mds::ListDentryResponse* response, TraceClosure* done);
 
   // inode interface
   void DoGetInode(google::protobuf::RpcController* controller, const pb::mds::GetInodeRequest* request,
-                  pb::mds::GetInodeResponse* response, google::protobuf::Closure* done);
+                  pb::mds::GetInodeResponse* response, TraceClosure* done);
   void DoBatchGetInode(google::protobuf::RpcController* controller, const pb::mds::BatchGetInodeRequest* request,
-                       pb::mds::BatchGetInodeResponse* response, google::protobuf::Closure* done);
+                       pb::mds::BatchGetInodeResponse* response, TraceClosure* done);
   void DoBatchGetXAttr(google::protobuf::RpcController* controller, const pb::mds::BatchGetXAttrRequest* request,
-                       pb::mds::BatchGetXAttrResponse* response, google::protobuf::Closure* done);
+                       pb::mds::BatchGetXAttrResponse* response, TraceClosure* done);
 
   // high level interface
   void DoLookup(google::protobuf::RpcController* controller, const pb::mds::LookupRequest* request,

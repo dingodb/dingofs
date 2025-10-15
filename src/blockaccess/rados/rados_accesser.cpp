@@ -233,8 +233,11 @@ Status RadosAccesser::Delete(const std::string& key) {
     if (err < 0) {
       LOG(ERROR) << "Failed to remove object, key: " << key
                  << ", err: " << strerror(-err);
-      return Status::IoError("Failed to remove object");
+      if (err != -ENOENT) {
+        return Status::IoError("Failed to remove object");
+      }
     }
+
     return Status::OK();
   });
 }
