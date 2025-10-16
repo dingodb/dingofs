@@ -34,41 +34,76 @@ def runDingofsToolCommand(command):
     return 0, output
 
 def loadMdsServer():
-    ret, output = runDingofsToolCommand(["status","mds","--format=json"])
-    mdsServers = []
+    ret, output = runDingofsToolCommand(["status", "mds", "--format=json"])
     label = lablesValue(None, "mds")
-    if ret == 0 :
+    
+    if ret != 0:
+        return unitValue(label, [])
+    
+    try:
         data = json.loads(output)
-        result = data["result"]
-        for mdsInfo in result["mdses"]:
-            location = mdsInfo["location"]
-            mdsServers.append(ipPort2Addr(location["host"],location["port"]))
+        result = data.get("result", {})
+        mds_list = result.get("mdses", [])
+        
+        mdsServers = []
+        for mdsInfo in mds_list:
+            location = mdsInfo.get("location", {})
+            host = location.get("host")
+            port = location.get("port")
+            if host and port:
+                mdsServers.append(ipPort2Addr(host, port))
+                
+    except json.JSONDecodeError:
+        mdsServers = []
+    
     return unitValue(label, mdsServers)
 
 def loadClient():
-    ret, output = runDingofsToolCommand(["list","mountpoint","--format=json"])
-    clients = []
+    ret, output = runDingofsToolCommand(["list", "mountpoint", "--format=json"])
     label = lablesValue(None, "client")
-    if ret == 0 :
+    
+    if ret != 0:
+        return unitValue(label, [])
+    
+    try:
         data = json.loads(output)
-        result = data["result"]
-        for fsinfo in result["fsInfos"]:
-            mountPoints = fsinfo.get("mountPoints")
-            if mountPoints is None:   
-                continue
-            for mountpoint in mountPoints:    
-                clients.append(ipPort2Addr(mountpoint["hostname"],mountpoint["port"]))
+        fsInfos = data.get("result", {}).get("fsInfos", [])
+
+        clients = []
+        for fsinfo in fsInfos:
+            mountPoints = fsinfo.get("mountPoints", [])
+            for mountpoint in mountPoints:
+                hostname = mountpoint.get("hostname")
+                port = mountpoint.get("port")
+                if hostname and port:
+                    clients.append(ipPort2Addr(hostname, port))
+
+    except json.JSONDecodeError:
+        clients = []
+    
     return unitValue(label, clients)
 
 def loadRemoteCacheServer():
-    ret, output = runDingofsToolCommand(["list","cachemember","--format=json"])
-    cacheServers = []
+    ret, output = runDingofsToolCommand(["list", "cachemember", "--format=json"])
     label = lablesValue(None, "remotecache")
-    if ret == 0 :
+    
+    if ret != 0:
+        return unitValue(label, [])
+    
+    try:
         data = json.loads(output)
-        result = data["result"]
-        for cacheMember in result["members"]:
-            cacheServers.append(ipPort2Addr(cacheMember["ip"],cacheMember["port"]))
+        members = data.get("result", {}).get("members", [])
+
+        cacheServers = []
+        for cacheMember in members:
+            ip = cacheMember.get("ip")
+            port = cacheMember.get("port")
+            if ip and port:
+                cacheServers.append(ipPort2Addr(ip, port))
+                
+    except json.JSONDecodeError:
+        cacheServers = []
+    
     return unitValue(label, cacheServers)
 
 def ipPort2Addr(ip, port):
