@@ -121,6 +121,9 @@ struct ClientOpMetricGuard {
       : metric_list_(metric_list),
         enable_(enable),
         start_(butil::cpuwide_time_us()) {
+    if (!enable_) {
+      return;
+    }
     for (auto& metric : metric_list) {
       metric->inflightOpNum << 1;
     }
