@@ -41,6 +41,28 @@ constexpr int kSetAttrAtimeNow = (1 << 7);
 constexpr int kSetAttrMtimeNow = (1 << 8);
 constexpr int kSetAttrCtime = (1 << 10);
 
+enum FsStatus : uint8_t {
+  kInit = 1,
+  kNormal = 2,
+  kDeleted = 3,
+  kRecycling = 4,
+};
+
+inline std::string FsStatus2Str(const FsStatus& fs_status) {
+  switch (fs_status) {
+    case kInit:
+      return "Init";
+    case kNormal:
+      return "Normal";
+    case kDeleted:
+      return "Deleted";
+    case kRecycling:
+      return "Recycling";
+    default:
+      return "Unknown";
+  }
+}
+
 enum FileType : uint8_t {
   kDirectory = 1,
   kSymlink = 2,
@@ -145,6 +167,7 @@ struct FsInfo {
   uint64_t block_size;
   std::string uuid;
   StorageInfo storage_info;
+  FsStatus status;
 };
 
 //  *off* should be any non-zero value that the vfs can use to

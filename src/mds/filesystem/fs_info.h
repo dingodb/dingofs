@@ -84,6 +84,12 @@ class FsInfo {
     return fs_info_.chunk_size();
   }
 
+  pb::mds::FsStatus GetStatus() {
+    utils::ReadLockGuard lock(lock_);
+
+    return fs_info_.status();
+  }
+
   pb::mds::PartitionType GetPartitionType() {
     utils::ReadLockGuard lock(lock_);
 

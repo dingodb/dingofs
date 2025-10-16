@@ -221,9 +221,10 @@ inline std::string Slice2Str(const Slice& slice) {
 inline std::string FsInfo2Str(const FsInfo& fs_info) {
   return fmt::format(
       "(name: {}, id: {}, chunk_size: {}, block_size: {}, uuid: {}, "
-      "store_type: {})",
+      "store_type: {}, status: {})",
       fs_info.name, fs_info.id, fs_info.chunk_size, fs_info.block_size,
-      fs_info.uuid, StoreType2Str(fs_info.storage_info.store_type));
+      fs_info.uuid, StoreType2Str(fs_info.storage_info.store_type),
+      FsStatus2Str(fs_info.status));
 }
 
 }  // namespace vfs

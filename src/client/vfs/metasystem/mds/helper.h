@@ -45,6 +45,26 @@ class Helper {
     }
   }
 
+  static FsStatus ToFsStatus(pb::mds::FsStatus fs_status) {
+    switch (fs_status) {
+      case pb::mds::FsStatus::INIT:
+        return FsStatus::kInit;
+
+      case pb::mds::FsStatus::NORMAL:
+        return FsStatus::kNormal;
+
+      case pb::mds::FsStatus::DELETED:
+        return FsStatus::kDeleted;
+
+      case pb::mds::FsStatus::RECYCLING:
+        return FsStatus::kRecycling;
+
+      default:
+        CHECK(false) << "unknown fs status: "
+                     << pb::mds::FsStatus_Name(fs_status);
+    }
+  }
+
   static FileType ToFileType(pb::mds::FileType type) {
     switch (type) {
       case pb::mds::FileType::FILE:

@@ -175,6 +175,7 @@ Status MDSFileSystem::GetFsInfo(ContextSPtr, FsInfo* fs_info) {
   fs_info->chunk_size = temp_fs_info.chunk_size();
   fs_info->block_size = temp_fs_info.block_size();
   fs_info->uuid = temp_fs_info.uuid();
+  fs_info->status = Helper::ToFsStatus(temp_fs_info.status());
 
   fs_info->storage_info.store_type =
       Helper::ToStoreType(temp_fs_info.fs_type());

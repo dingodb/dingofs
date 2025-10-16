@@ -103,6 +103,11 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
   DINGOFS_RETURN_NOT_OK(meta_system_->GetFsInfo(span->GetContext(), &fs_info_));
 
   LOG(INFO) << fmt::format("vfs_fs_info: {}", FsInfo2Str(fs_info_));
+  if (fs_info_.status != FsStatus::kNormal) {
+    LOG(ERROR) << fmt::format("fs {} is unavailable, status: {}", fs_info_.name,
+                              FsStatus2Str(fs_info_.status));
+    return Status::Internal("build meta system fail");
+  }
 
   // set s3/rados config info
   if (fs_info_.storage_info.store_type == StoreType::kS3) {
