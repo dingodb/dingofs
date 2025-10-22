@@ -38,7 +38,7 @@ class FileReader {
 
   ~FileReader() = default;
 
-  Status Read(ContextSPtr ctx, char* buf, uint64_t size, uint64_t offset,
+  Status Read(ContextSPtr ctx, IOBuffer* iobuf, uint64_t size, uint64_t offset,
               uint64_t* out_rsize);
 
   void Invalidate();

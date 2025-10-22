@@ -14,39 +14,42 @@
  * limitations under the License.
  */
 
-#ifndef DINGODB_CLIENT_VFS_DATA_IFILE_H_
-#define DINGODB_CLIENT_VFS_DATA_IFILE_H_
+#include "client/vfs/data_buffer.h"
 
-#include <cstdint>
+#include <butil/iobuf.h>
 
-#include "common/callback.h"
 #include "common/io_buffer.h"
-#include "common/status.h"
-#include "common/trace/context.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 
-class IFile {
- public:
-  virtual ~IFile() = default;
+DataBuffer::DataBuffer() : io_buffer_(new class IOBuffer()) {}
 
-  virtual Status Write(ContextSPtr ctx, const char* buf, uint64_t size,
-                       uint64_t offset, uint64_t* out_wsize) = 0;
+DataBuffer::~DataBuffer() {
+  if (io_buffer_ != nullptr) {
+    delete io_buffer_;
+    io_buffer_ = nullptr;
+  }
+}
 
-  virtual Status Read(ContextSPtr ctx, IOBuffer* iobuf, uint64_t size,
-                      uint64_t offset, uint64_t* out_rsize) = 0;
+IOBuffer* DataBuffer::RawIOBuffer() { return io_buffer_; }
 
-  virtual Status Flush() = 0;
+std::vector<IOVec> DataBuffer::GatherIOVecs() const {
+  std::vector<IOVec> iovecs;
 
-  virtual void AsyncFlush(StatusCallback cb) = 0;
-};
+  const butil::IOBuf& iobuf = io_buffer_->IOBuf();
+  for (int i = 0; i < iobuf.backing_block_num(); i++) {
+    const auto& string_piece = iobuf.backing_block(i);
 
-using IFileUPtr = std::unique_ptr<IFile>;
+    char* data = (char*)string_piece.data();
+    size_t size = string_piece.length();
+    iovecs.emplace_back(IOVec{data, size});
+  }
+
+  return iovecs;
+}
 
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
-
-#endif  // DINGODB_CLIENT_VFS_DATA_IFILE_H_
