@@ -30,6 +30,7 @@
 #include "client/vfs/common/helper.h"
 #include "client/vfs/components/warmup_manager.h"
 #include "client/vfs/data/file.h"
+#include "client/vfs/data_buffer.h"
 #include "client/vfs/handle/handle_manager.h"
 #include "client/vfs/vfs_fh.h"
 #include "client/vfs/vfs_xattr.h"
@@ -275,8 +276,9 @@ Status VFSImpl::Create(ContextSPtr ctx, Ino parent, const std::string& name,
   return s;
 }
 
-Status VFSImpl::Read(ContextSPtr ctx, Ino ino, char* buf, uint64_t size,
-                     uint64_t offset, uint64_t fh, uint64_t* out_rsize) {
+Status VFSImpl::Read(ContextSPtr ctx, Ino ino, DataBuffer* data_buffer,
+                     uint64_t size, uint64_t offset, uint64_t fh,
+                     uint64_t* out_rsize) {
   Status s;
   auto handle = handle_manager_->FindHandler(fh);
   VFS_CHECK_HANDLE(handle, ino, fh);
@@ -289,7 +291,8 @@ Status VFSImpl::Read(ContextSPtr ctx, Ino ino, char* buf, uint64_t size,
     size_t read_size =
         std::min(size, file_size > offset ? file_size - offset : 0);
     if (read_size > 0) {
-      std::memcpy(buf, handle->file_buffer.data.get() + offset, read_size);
+      data_buffer->RawIOBuffer()->AppendUserData(
+          handle->file_buffer.data.get() + offset, read_size, [](void*) {});
     }
     *out_rsize = read_size;
 
@@ -312,7 +315,8 @@ Status VFSImpl::Read(ContextSPtr ctx, Ino ino, char* buf, uint64_t size,
     }
   }
 
-  s = handle->file->Read(span->GetContext(), buf, size, offset, out_rsize);
+  s = handle->file->Read(span->GetContext(), data_buffer, size, offset,
+                         out_rsize);
 
   return s;
 }

@@ -23,6 +23,7 @@
 #include <unordered_map>
 
 #include "client/vfs/data/reader/chunk_reader.h"
+#include "client/vfs/data_buffer.h"
 #include "common/status.h"
 
 namespace dingofs {
@@ -38,8 +39,8 @@ class FileReader {
 
   ~FileReader() = default;
 
-  Status Read(ContextSPtr ctx, char* buf, uint64_t size, uint64_t offset,
-              uint64_t* out_rsize);
+  Status Read(ContextSPtr ctx, DataBuffer* data_buffer, uint64_t size,
+              uint64_t offset, uint64_t* out_rsize);
 
   void Invalidate();
 

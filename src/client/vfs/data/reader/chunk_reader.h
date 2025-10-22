@@ -42,10 +42,10 @@ class VFSHub;
 static uint32_t kInvalidVersion = 0;
 
 struct BlockCacheReadReq {
+  uint32_t req_index;
   cache::BlockKey key;
   cache::RangeOption option;
   IOBuffer io_buffer;
-  char* buf_pos;
   const BlockReadReq& block_req;
 };
 
@@ -60,12 +60,12 @@ class ChunkReader {
 
   ~ChunkReader() = default;
 
-  void ReadAsync(ContextSPtr ctx, const ChunkReadReq& req, StatusCallback cb);
+  void ReadAsync(ContextSPtr ctx, ChunkReadReq& req, StatusCallback cb);
 
   void Invalidate();
 
  private:
-  void DoRead(ContextSPtr ctx, const ChunkReadReq& req, StatusCallback cb);
+  void DoRead(ContextSPtr ctx, ChunkReadReq& req, StatusCallback cb);
 
   Status GetSlices(ContextSPtr ctx, ChunkSlices* chunk_slices);
 

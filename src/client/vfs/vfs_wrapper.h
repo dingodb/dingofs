@@ -19,7 +19,9 @@
 
 #include <cstdint>
 #include <memory>
+#include <vector>
 
+#include "client/vfs/data_buffer.h"
 #include "client/vfs/vfs.h"
 #include "common/metrics/client/client.h"
 #include "common/options/client.h"
@@ -81,8 +83,8 @@ class VFSWrapper {
   Status Create(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
                 uint32_t mode, int flags, uint64_t* fh, Attr* attr);
 
-  Status Read(Ino ino, char* buf, uint64_t size, uint64_t offset, uint64_t fh,
-              uint64_t* out_rsize);
+  Status Read(Ino ino, DataBuffer* data_buffer, uint64_t size, uint64_t offset,
+              uint64_t fh, uint64_t* out_rsize);
 
   Status Write(Ino ino, const char* buf, uint64_t size, uint64_t offset,
                uint64_t fh, uint64_t* out_wsize);

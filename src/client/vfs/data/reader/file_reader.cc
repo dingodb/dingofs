@@ -31,6 +31,7 @@
 #include "client/vfs/data/reader/reader_common.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/vfs_meta.h"
+#include "common/io_buffer.h"
 #include "common/options/client.h"
 #include "common/status.h"
 #include "common/trace/context.h"
@@ -89,7 +90,7 @@ ChunkReader* FileReader::GetOrCreateChunkReader(uint64_t chunk_index) {
   }
 }
 
-Status FileReader::Read(ContextSPtr ctx, char* buf, uint64_t size,
+Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, uint64_t size,
                         uint64_t offset, uint64_t* out_rsize) {
   auto span = vfs_hub_->GetTracer()->StartSpanWithContext(kVFSDataMoudule,
                                                           METHOD_NAME(), ctx);
@@ -123,21 +124,21 @@ Status FileReader::Read(ContextSPtr ctx, char* buf, uint64_t size,
   uint64_t total_read_size = std::min(size, attr.length - offset);
 
   std::vector<ChunkReadReq> read_reqs;
-
+  uint32_t req_index = 0;
   while (total_read_size > 0) {
     uint64_t read_size = std::min(total_read_size, chunk_size - chunk_offset);
 
     ChunkReadReq req{
+        .req_index = req_index++,
         .ino = ino_,
         .index = chunk_index,
         .offset = chunk_offset,
         .to_read_size = read_size,
-        .buf = buf,
+        .buf = IOBuffer(),
     };
 
     read_reqs.push_back(req);
 
-    buf += read_size;
     total_read_size -= read_size;
 
     offset += read_size;
@@ -169,7 +170,18 @@ Status FileReader::Read(ContextSPtr ctx, char* buf, uint64_t size,
 
     ret = shared.status;
     if (ret.ok()) {
+      auto iobuf_span = vfs_hub_->GetTracer()->StartSpanWithParent(
+          kVFSDataMoudule, "FileReader::Read.AppendIOBuf", *span);
       *out_rsize = shared.read_size;
+
+      // append all read chunk iobufs
+      for (auto& req : read_reqs) {
+        VLOG(3) << fmt::format(
+            "IOBuffer: Append chunk iobuf to file iobuf, chunk_req_index: {}, "
+            "chunk_info: {}",
+            req.req_index, req.ToString());
+        data_buffer->RawIOBuffer()->Append(&req.buf);
+      }
     }
   }
 

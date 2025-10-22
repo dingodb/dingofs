@@ -14,39 +14,46 @@
  * limitations under the License.
  */
 
-#ifndef DINGODB_CLIENT_VFS_DATA_IFILE_H_
-#define DINGODB_CLIENT_VFS_DATA_IFILE_H_
+#ifndef DINGOFS_CLIENT_VFS_DATA_BUFFER_H_
+#define DINGOFS_CLIENT_VFS_DATA_BUFFER_H_
 
 #include <cstdint>
-
-#include "client/vfs/data_buffer.h"
-#include "common/callback.h"
-#include "common/status.h"
-#include "common/trace/context.h"
+#include <string>
+#include <vector>
 
 namespace dingofs {
+
+class IOBuffer;
+
 namespace client {
 namespace vfs {
 
-class IFile {
- public:
-  virtual ~IFile() = default;
-
-  virtual Status Write(ContextSPtr ctx, const char* buf, uint64_t size,
-                       uint64_t offset, uint64_t* out_wsize) = 0;
-
-  virtual Status Read(ContextSPtr ctx, DataBuffer* data_buffer, uint64_t size,
-                      uint64_t offset, uint64_t* out_rsize) = 0;
-
-  virtual Status Flush() = 0;
-
-  virtual void AsyncFlush(StatusCallback cb) = 0;
+/* Structure for scatter/gather I/O.  */
+struct IOVec {
+  void* iov_base;   /* Pointer to data.  */
+  uint64_t iov_len; /* Length of data.  */
 };
 
-using IFileUPtr = std::unique_ptr<IFile>;
+class DataBuffer {
+ public:
+  DataBuffer();
+
+  ~DataBuffer();
+
+  IOBuffer* RawIOBuffer();
+
+  // NOTE: DataBuffer must remain alive while using the returned iovecs
+  std::vector<IOVec> GatherIOVecs() const;
+
+  std::string Describe() const;
+
+ private:
+  // takes ownership of buffer
+  IOBuffer* io_buffer_;
+};
 
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGODB_CLIENT_VFS_DATA_IFILE_H_
+#endif  // DINGOFS_CLIENT_VFS_DATA_BUFFER_H_

@@ -24,6 +24,7 @@
 #include "absl/strings/str_format.h"
 #include "client/common/utils.h"
 #include "client/vfs/common/helper.h"
+#include "client/vfs/data_buffer.h"
 #include "client/vfs/vfs_meta.h"
 #include "client/vfs/vfs_wrapper.h"
 #include "common/define.h"
@@ -149,6 +150,34 @@ static void ReplyData(fuse_req_t req, char* buffer, size_t size) {
   struct fuse_bufvec bufvec = FUSE_BUFVEC_INIT(size);
   bufvec.buf[0].mem = buffer;
   fuse_reply_data(req, &bufvec, FUSE_BUF_SPLICE_MOVE);
+}
+
+static void ReplyData(fuse_req_t req,
+                      dingofs::client::vfs::DataBuffer& data_buffer) {
+  auto iovecs = data_buffer.GatherIOVecs();
+
+  if (iovecs.empty()) {
+    fuse_reply_buf(req, nullptr, 0);
+    return;
+  }
+
+  size_t fuse_bufvec_count = iovecs.size();
+  size_t fuse_bufvec_size = sizeof(struct fuse_bufvec) +
+                            ((fuse_bufvec_count - 1) * sizeof(struct fuse_buf));
+
+  auto tmp_fuse_bufvec = std::unique_ptr<fuse_bufvec, decltype(&std::free)>(
+      static_cast<fuse_bufvec*>(std::malloc(fuse_bufvec_size)), &std::free);
+  std::memset(tmp_fuse_bufvec.get(), 0, fuse_bufvec_size);
+
+  tmp_fuse_bufvec->count = fuse_bufvec_count;
+  tmp_fuse_bufvec->idx = 0;
+  tmp_fuse_bufvec->off = 0;
+  for (size_t i = 0; i < fuse_bufvec_count; i++) {
+    tmp_fuse_bufvec->buf[i].mem = iovecs[i].iov_base;
+    tmp_fuse_bufvec->buf[i].size = iovecs[i].iov_len;
+  }
+
+  fuse_reply_data(req, tmp_fuse_bufvec.get(), FUSE_BUF_SPLICE_MOVE);
 }
 
 static void ReplyWrite(fuse_req_t req, size_t size) {
@@ -417,21 +446,31 @@ void FuseOpOpen(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
 
 void FuseOpRead(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
                 struct fuse_file_info* fi) {
+  /*
+  Data IOBuffer Chain (Zero-copy):
+  Block Cache Read
+      ↓
+  Block IOBuffers [Block1, Block2, ..., BlockN]
+      ↓ (zero-copy merge)
+  Chunk IOBuffers [Chunk1, Chunk2, ..., ChunkN]
+      ↓ (zero-copy merge)
+  File IOBuffer
+      ↓
+  FuseOpRead IOBuffer
+  */
   VLOG(1) << "FuseOpRead ino: " << ino << ", size: " << size
           << ", offset: " << off << ", fi->fh: " << fi->fh;
-  std::unique_ptr<char[]> buffer(new char[size]);
-  memset(buffer.get(), 0, size);
+  dingofs::client::vfs::DataBuffer data_buffer;
 
   uint64_t rsize = 0;
-  Status s = g_vfs->Read(ino, buffer.get(), size, off, fi->fh, &rsize);
+  Status s = g_vfs->Read(ino, &data_buffer, size, off, fi->fh, &rsize);
   VLOG(1) << "FuseOpRead ino: " << ino << ", size: " << size
           << ", offset: " << off << ", fi->fh: " << fi->fh
-          << ", rsize: " << rsize
-          << ", buf: " << dingofs::client::Char2Addr(buffer.get());
+          << ", rsize: " << rsize << ", databuf: " << data_buffer.Describe();
   if (!s.ok()) {
     ReplyError(req, s);
   } else {
-    ReplyData(req, buffer.get(), rsize);
+    ReplyData(req, data_buffer);
   }
 }
 

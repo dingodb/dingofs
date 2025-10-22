@@ -27,8 +27,8 @@
 #include <vector>
 
 #include "cache/utils/context.h"
+#include "cache/utils/helper.h"
 #include "client/common/const.h"
-#include "client/common/utils.h"
 #include "client/vfs/data/common/common.h"
 #include "client/vfs/data/common/data_utils.h"
 #include "client/vfs/data/reader/reader_common.h"
@@ -57,26 +57,19 @@ void ChunkReader::BlockReadCallback(ContextSPtr ctx, ChunkReader* reader,
   auto span = reader->hub_->GetTracer()->StartSpanWithContext(
       kVFSDataMoudule, METHOD_NAME(), ctx);
 
-  if (!s.ok()) {
-    LOG(WARNING) << fmt::format(
-        "{} ChunkReader fail read block_key: {}, buf_pos: {}, block_req: {} "
-        "status: {}",
-        reader->UUID(), req.key.StoreKey(), Char2Addr(req.buf_pos),
-        req.block_req.ToString(), s.ToString());
-  } else {
+  if (s.ok()) {
     VLOG(6) << fmt::format(
-        "{} ChunkReader success read block_key: {}, buf_pos: {}, block_req: "
-        "{}, io_buf_size: {}",
-        reader->UUID(), req.key.StoreKey(), Char2Addr(req.buf_pos),
-        req.block_req.ToString(), req.io_buffer.Size());
-  }
-
-  {
-    auto copy_span = reader->hub_->GetTracer()->StartSpanWithParent(
-        kVFSDataMoudule, "ChunkReader::BlockReadCallback.IoBufferCopy", *span);
-    if (s.ok()) {
-      req.io_buffer.CopyTo(req.buf_pos);
-    }
+        "{} ChunkReader success read block_key: {}, block_req_index: {}, "
+        "block_req: {}, iobuf: {}, io_buf_size: {}",
+        reader->UUID(), req.key.StoreKey(), req.req_index,
+        req.block_req.ToString(), req.io_buffer.Describe(),
+        req.io_buffer.Size());
+  } else {
+    LOG(WARNING) << fmt::format(
+        "{} ChunkReader fail read block_key: {}, block_req_index: {}, "
+        "block_req: {}, status: {}",
+        reader->UUID(), req.key.StoreKey(), req.req_index,
+        req.block_req.ToString(), s.ToString());
   }
 
   {
@@ -100,20 +93,19 @@ void ChunkReader::BlockReadCallback(ContextSPtr ctx, ChunkReader* reader,
   }
 }
 
-void ChunkReader::ReadAsync(ContextSPtr ctx, const ChunkReadReq& req,
+void ChunkReader::ReadAsync(ContextSPtr ctx, ChunkReadReq& req,
                             StatusCallback cb) {
   hub_->GetReadExecutor()->Execute(
       [this, ctx, &req, cb]() { DoRead(ctx, req, cb); });
 }
 
-void ChunkReader::DoRead(ContextSPtr ctx, const ChunkReadReq& req,
+void ChunkReader::DoRead(ContextSPtr ctx, ChunkReadReq& req,
                          StatusCallback cb) {
   auto* tracer = hub_->GetTracer();
   auto span = tracer->StartSpanWithContext(kVFSDataMoudule, METHOD_NAME(), ctx);
 
   uint64_t chunk_offset = req.offset;
   uint64_t size = req.to_read_size;
-  char* buf = req.buf;
 
   uint64_t read_file_offset = chunk_.chunk_start + chunk_offset;
   uint64_t end_read_file_offset = read_file_offset + size;
@@ -121,9 +113,9 @@ void ChunkReader::DoRead(ContextSPtr ctx, const ChunkReadReq& req,
   uint64_t end_read_chunk_offet = chunk_offset + size;
 
   VLOG(4) << fmt::format(
-      "{} ChunkReader Read Start buf: {}, size: {}"
+      "{} ChunkReader Read req_index {}, size: {}"
       ", chunk_range: [{}-{}], file_range: [{}-{}]",
-      UUID(), Char2Addr(buf), size, chunk_offset, end_read_chunk_offet,
+      UUID(), req.req_index, size, chunk_offset, end_read_chunk_offet,
       read_file_offset, end_read_file_offset);
 
   CHECK_GE(chunk_.chunk_end, end_read_file_offset);
@@ -161,7 +153,7 @@ void ChunkReader::DoRead(ContextSPtr ctx, const ChunkReadReq& req,
         VLOG(6) << fmt::format("{} Read slice_req:", UUID(),
                                slice_req.ToString());
 
-        if (slice_req.slice.has_value() && !slice_req.slice.value().is_zero) {
+        if (slice_req.slice.has_value()) {
           std::vector<BlockReadReq> reqs = ConvertSliceReadReqToBlockReadReqs(
               slice_req, chunk_.fs_id, chunk_.ino, chunk_.chunk_size,
               chunk_.block_size);
@@ -169,11 +161,6 @@ void ChunkReader::DoRead(ContextSPtr ctx, const ChunkReadReq& req,
           block_reqs.insert(block_reqs.end(),
                             std::make_move_iterator(reqs.begin()),
                             std::make_move_iterator(reqs.end()));
-        } else {
-          char* buf_pos = buf + (slice_req.file_offset - read_file_offset);
-          VLOG(6) << fmt::format("{} Read buf: {}, zero fill, read_size: {}",
-                                 UUID(), Char2Addr(buf_pos), slice_req.len);
-          memset(buf_pos, 0, slice_req.len);
         }
       }
     }
@@ -181,26 +168,24 @@ void ChunkReader::DoRead(ContextSPtr ctx, const ChunkReadReq& req,
     std::vector<BlockCacheReadReq> block_cache_reqs;
     block_cache_reqs.reserve(block_reqs.size());
 
+    uint32_t block_req_index = 0;
     for (auto& block_req : block_reqs) {
       cache::BlockKey key(chunk_.fs_id, chunk_.ino, block_req.block.slice_id,
                           block_req.block.index, block_req.block.version);
 
-      char* buf_pos = buf + (block_req.block.file_offset +
-                             block_req.block_offset - read_file_offset);
-
-      VLOG(6) << fmt::format("{} Read block_key: {}, buf: {}, block_req: {}",
-                             UUID(), key.StoreKey(), Char2Addr(buf_pos),
-                             block_req.ToString());
+      VLOG(6) << fmt::format("{} Read block_key: {},  block_req: {}", UUID(),
+                             key.StoreKey(), block_req.ToString());
 
       cache::RangeOption option;
       option.retrive = true;
       option.block_size = block_req.block.block_len;
 
-      block_cache_reqs.emplace_back(BlockCacheReadReq{.key = key,
-                                                      .option = option,
-                                                      .io_buffer = IOBuffer(),
-                                                      .buf_pos = buf_pos,
-                                                      .block_req = block_req});
+      block_cache_reqs.emplace_back(
+          BlockCacheReadReq{.req_index = block_req_index++,
+                            .key = key,
+                            .option = option,
+                            .io_buffer = IOBuffer(),
+                            .block_req = block_req});
     }
 
     ReaderSharedState shared;
@@ -231,6 +216,24 @@ void ChunkReader::DoRead(ContextSPtr ctx, const ChunkReadReq& req,
         BlockReadCallback(span->GetContext(), this, block_cache_req, shared, s);
       };
 
+      // check block is zero block
+      if (block_cache_req.block_req.block.zero) {
+        VLOG(6) << fmt::format(
+            "{} Read zero block, block_key: {},  block_req: {}", UUID(),
+            block_cache_req.key.StoreKey(),
+            block_cache_req.block_req.ToString());
+
+        // zero block, no need to read from block cache, just fill zero
+        char* data = new char[block_cache_req.block_req.len];
+        std::fill(data, data + block_cache_req.block_req.len, 0);
+        block_cache_req.io_buffer.AppendUserData(
+            data, block_cache_req.block_req.len, cache::Helper::DeleteBuffer);
+
+        // directly call the callback to update shared state
+        callback(Status::OK());
+        continue;
+      }
+
       hub_->GetBlockCache()->AsyncRange(
           cache::NewContext(), block_cache_req.key,
           block_cache_req.block_req.block_offset, block_cache_req.block_req.len,
@@ -245,6 +248,22 @@ void ChunkReader::DoRead(ContextSPtr ctx, const ChunkReadReq& req,
       }
 
       ret = shared.status;
+
+      // append all read block iobufs
+      if (ret.ok()) {
+        auto iobuf_span = tracer->StartSpanWithParent(
+            kVFSDataMoudule, "ChunkReader::DoRead.AppendIOBuf", *span);
+        for (auto& block_cache_req : block_cache_reqs) {
+          req.buf.Append(&block_cache_req.io_buffer);
+          VLOG(3) << fmt::format(
+              "{} IOBuffer: Append block iobuf to chunk iobuf,"
+              "block_req_index: {}, block_info: {}, block_iobuf: {}, "
+              "chunk_iobuf_size: {}",
+              UUID(), block_cache_req.req_index,
+              block_cache_req.block_req.ToString(),
+              block_cache_req.io_buffer.Describe(), req.buf.Size());
+        }
+      }
     }
 
     LOG_IF(WARNING, !ret.ok()) << fmt::format(

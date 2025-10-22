@@ -23,6 +23,7 @@ add_subdirectory(components)
 add_library(vfs_lib
     vfs_impl.cc
     vfs_wrapper.cc
+    data_buffer.cc
     access_log.cc
 )
 

@@ -22,6 +22,7 @@
 #include <cstdint>
 #include <string>
 
+#include "client/vfs/data_buffer.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/options/client.h"
 #include "common/status.h"
@@ -95,8 +96,9 @@ class VFS {
                         uint32_t uid, uint32_t gid, uint32_t mode, int flags,
                         uint64_t* fh, Attr* attr) = 0;
 
-  virtual Status Read(ContextSPtr ctx, Ino ino, char* buf, uint64_t size,
-                      uint64_t offset, uint64_t fh, uint64_t* out_rsize) = 0;
+  virtual Status Read(ContextSPtr ctx, Ino ino, DataBuffer* data_buffer,
+                      uint64_t size, uint64_t offset, uint64_t fh,
+                      uint64_t* out_rsize) = 0;
 
   virtual Status Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t size,
                        uint64_t offset, uint64_t fh, uint64_t* out_wsize) = 0;

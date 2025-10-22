@@ -79,10 +79,10 @@ Status File::Write(ContextSPtr ctx, const char* buf, uint64_t size,
   return s;
 }
 
-Status File::Read(ContextSPtr ctx, char* buf, uint64_t size, uint64_t offset,
-                  uint64_t* out_rsize) {
+Status File::Read(ContextSPtr ctx, DataBuffer* data_buffer, uint64_t size,
+                  uint64_t offset, uint64_t* out_rsize) {
   DINGOFS_RETURN_NOT_OK(PreCheck());
-  return file_reader_->Read(ctx, buf, size, offset, out_rsize);
+  return file_reader_->Read(ctx, data_buffer, size, offset, out_rsize);
 }
 
 void File::FileFlushed(StatusCallback cb, Status status) {
