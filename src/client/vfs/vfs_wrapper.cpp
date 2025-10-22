@@ -37,6 +37,7 @@
 #include "client/vfs/vfs_meta.h"
 #include "common/blockaccess/block_access_log.h"
 #include "common/define.h"
+#include "common/io_buffer.h"
 #include "common/metrics/client/client.h"
 #include "common/metrics/metric_guard.h"
 #include "common/options/client/option.h"
@@ -522,14 +523,13 @@ Status VFSWrapper::Create(Ino parent, const std::string& name, uint32_t uid,
   return s;
 }
 
-Status VFSWrapper::Read(Ino ino, char* buf, uint64_t size, uint64_t offset,
-                        uint64_t fh, uint64_t* out_rsize) {
+Status VFSWrapper::Read(Ino ino, IOBuffer* iobuf, uint64_t size,
+                        uint64_t offset, uint64_t fh, uint64_t* out_rsize) {
   auto span = vfs_->GetTracer()->StartSpan(kVFSWrapperMoudule, METHOD_NAME());
 
   std::string trace_id = span->GetContext()->TraceId();
-  VLOG(1) << fmt::format(
-      "[{}] VFSRead ino: {}, buf: {}, size: {}, offset: {}, fh: {}", trace_id,
-      ino, Char2Addr(buf), size, offset, fh);
+  VLOG(1) << fmt::format("[{}] VFSRead ino: {},  size: {}, offset: {}, fh: {}",
+                         trace_id, ino, size, offset, fh);
 
   Status s;
   AccessLogGuard log(
@@ -545,13 +545,12 @@ Status VFSWrapper::Read(Ino ino, char* buf, uint64_t size, uint64_t offset,
   VFSRWMetricGuard guard(&s, &g_rw_metric.read, out_rsize,
                          !IsInternalNode(ino));
 
-  s = vfs_->Read(span->GetContext(), ino, buf, size, offset, fh, out_rsize);
+  s = vfs_->Read(span->GetContext(), ino, iobuf, size, offset, fh, out_rsize);
 
   VLOG(1) << fmt::format(
-      "[{}] VFSRead end ino: {}, buf: {}, size: {}, offset: {}, fh: {}, "
+      "[{}] VFSRead end ino: {},  size: {}, offset: {}, fh: {}, "
       "read_size: {}, status: {}",
-      trace_id, ino, Char2Addr(buf), size, offset, fh, *out_rsize,
-      s.ToString());
+      trace_id, ino, size, offset, fh, *out_rsize, s.ToString());
 
   if (!s.ok()) {
     op_metric.FailOp();

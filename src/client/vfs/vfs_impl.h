@@ -26,6 +26,7 @@
 #include "client/vfs/service/fuse_stat_service.h"
 #include "client/vfs/service/inode_blocks_service.h"
 #include "client/vfs/vfs.h"
+#include "common/io_buffer.h"
 #include "common/options/client/option.h"
 #include "common/trace/context.h"
 
@@ -35,7 +36,7 @@ namespace vfs {
 
 class VFSImpl : public VFS {
  public:
-  VFSImpl(const VFSOption& vfs_option) : vfs_option_(vfs_option){};
+  VFSImpl(const VFSOption& vfs_option) : vfs_option_(vfs_option) {};
 
   ~VFSImpl() override = default;
 
@@ -83,7 +84,7 @@ class VFSImpl : public VFS {
                 uint32_t uid, uint32_t gid, uint32_t mode, int flags,
                 uint64_t* fh, Attr* attr) override;
 
-  Status Read(ContextSPtr ctx, Ino ino, char* buf, uint64_t size,
+  Status Read(ContextSPtr ctx, Ino ino, IOBuffer* iobuf, uint64_t size,
               uint64_t offset, uint64_t fh, uint64_t* out_rsize) override;
 
   Status Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t size,
