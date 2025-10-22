@@ -18,15 +18,14 @@
 
 #include <fmt/format.h>
 
-#include "client/common/utils.h"
-
 namespace dingofs {
 namespace client {
 namespace vfs {
 
 std::string ChunkReadReq::ToString() const {
-  return fmt::format("(chunk-{}-{}, offset: {}, to_read_size: {}, buf: {})",
-                     ino, index, offset, to_read_size, Char2Addr(buf));
+  return fmt::format(
+      "(chunk-{}-{}, offset: {}, to_read_size: {}, req_index {}, iobuf: {})",
+      ino, index, offset, to_read_size, req_index, buf.Describe());
 }
 
 }  // namespace vfs

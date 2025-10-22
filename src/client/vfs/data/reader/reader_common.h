@@ -22,6 +22,7 @@
 #include <mutex>
 #include <string>
 
+#include "common/io_buffer.h"
 #include "common/status.h"
 
 namespace dingofs {
@@ -29,12 +30,13 @@ namespace client {
 namespace vfs {
 
 struct ChunkReadReq {
+  const uint32_t req_index;     // request index
   const uint64_t ino;           // ino
   const uint64_t index;         // chunk index
   const uint64_t offset;        // offset in the chunk
   const uint64_t to_read_size;  // how many bytes to read
 
-  char* buf;
+  IOBuffer buf;  // buffer to store chunk data
 
   std::string ToString() const;
 };

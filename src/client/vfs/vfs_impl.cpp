@@ -276,7 +276,7 @@ Status VFSImpl::Create(ContextSPtr ctx, Ino parent, const std::string& name,
   return s;
 }
 
-Status VFSImpl::Read(ContextSPtr ctx, Ino ino, char* buf, uint64_t size,
+Status VFSImpl::Read(ContextSPtr ctx, Ino ino, IOBuffer* iobuf, uint64_t size,
                      uint64_t offset, uint64_t fh, uint64_t* out_rsize) {
   Status s;
   auto handle = handle_manager_->FindHandler(fh);
@@ -290,7 +290,8 @@ Status VFSImpl::Read(ContextSPtr ctx, Ino ino, char* buf, uint64_t size,
     size_t read_size =
         std::min(size, file_size > offset ? file_size - offset : 0);
     if (read_size > 0) {
-      std::memcpy(buf, handle->file_buffer.data.get() + offset, read_size);
+      iobuf->AppendUserData(handle->file_buffer.data.get() + offset, read_size,
+                            [](void*) {});
     }
     *out_rsize = read_size;
 
@@ -313,7 +314,7 @@ Status VFSImpl::Read(ContextSPtr ctx, Ino ino, char* buf, uint64_t size,
     }
   }
 
-  s = handle->file->Read(span->GetContext(), buf, size, offset, out_rsize);
+  s = handle->file->Read(span->GetContext(), iobuf, size, offset, out_rsize);
 
   return s;
 }
