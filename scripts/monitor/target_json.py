@@ -38,7 +38,10 @@ def loadMdsServer():
     mdsServers = []
     label = lablesValue(None, "mds")
     if ret == 0 :
-        data = json.loads(output)
+        try:
+            data = json.loads(output)
+        except json.JSONDecodeError:
+            return unitValue(label, mdsServers)
         result = data["result"]
         for mdsInfo in result["mdses"]:
             location = mdsInfo["location"]
@@ -52,6 +55,8 @@ def loadClient():
     if ret == 0 :
         data = json.loads(output)
         result = data["result"]
+        if "fsInfos" not in result:
+            return unitValue(label, clients)
         for fsinfo in result["fsInfos"]:
             mountPoints = fsinfo.get("mountPoints")
             if mountPoints is None:   
@@ -65,8 +70,13 @@ def loadRemoteCacheServer():
     cacheServers = []
     label = lablesValue(None, "remotecache")
     if ret == 0 :
-        data = json.loads(output)
+        try:
+            data = json.loads(output)
+        except json.JSONDecodeError:
+            return unitValue(label, cacheServers)
         result = data["result"]
+        if "members" not in result:
+            return unitValue(label, cacheServers)
         for cacheMember in result["members"]:
             cacheServers.append(ipPort2Addr(cacheMember["ip"],cacheMember["port"]))
     return unitValue(label, cacheServers)
