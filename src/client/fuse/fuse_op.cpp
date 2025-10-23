@@ -400,11 +400,12 @@ void FuseOpOpen(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
     ReplyError(req, s);
   } else {
     fi->fh = fh;
-    fi->direct_io = FLAGS_client_fuse_file_info_direct_io ? 1 : 0;
+
+    fi->direct_io =
+        (dingofs::IsInternalNode(ino) || FLAGS_client_fuse_file_info_direct_io)
+            ? 1
+            : 0;
     fi->keep_cache = FLAGS_client_fuse_file_info_keep_cache ? 1 : 0;
-    if (dingofs::IsInternalNode(ino)) {
-      fi->direct_io = 1;
-    }
 
     ReplyOpen(req, fi);
   }
@@ -478,6 +479,10 @@ void FuseOpOpenDir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
     ReplyError(req, s);
   } else {
     fi->fh = fh;
+
+    fi->cache_readdir = FLAGS_client_fuse_file_info_keep_cache ? 1 : 0;
+    fi->keep_cache = FLAGS_client_fuse_file_info_keep_cache ? 1 : 0;
+
     ReplyOpen(req, fi);
   }
 }
@@ -704,6 +709,13 @@ void FuseOpCreate(fuse_req_t req, fuse_ino_t parent, const char* name,
     ReplyError(req, s);
   } else {
     fi->fh = fh;
+
+    fi->direct_io = (dingofs::IsInternalNode(attr.ino) ||
+                     FLAGS_client_fuse_file_info_direct_io)
+                        ? 1
+                        : 0;
+    fi->keep_cache = FLAGS_client_fuse_file_info_keep_cache ? 1 : 0;
+
     ReplyCreate(req, fi, attr);
   }
 }

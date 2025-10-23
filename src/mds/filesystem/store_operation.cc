@@ -1171,11 +1171,12 @@ Status OpenFileOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::v
   if (flags_ & O_TRUNC) {
     result_.delta_bytes = -static_cast<int64_t>(attr.length());
     attr.set_length(0);
+
+    attr.set_ctime(std::max(attr.ctime(), GetTime()));
+    attr.set_mtime(std::max(attr.mtime(), GetTime()));
   }
 
   attr.set_atime(std::max(attr.atime(), GetTime()));
-  attr.set_ctime(std::max(attr.ctime(), GetTime()));
-  attr.set_mtime(std::max(attr.mtime(), GetTime()));
 
   // add file session
   txn->Put(MetaCodec::EncodeFileSessionKey(file_session_.fs_id(), file_session_.ino(), file_session_.session_id()),
