@@ -26,6 +26,8 @@
 #include <butil/iobuf.h>
 #include <glog/logging.h>
 
+#include <sstream>
+
 namespace dingofs {
 
 IOBuffer::IOBuffer(butil::IOBuf iobuf) : iobuf_(iobuf) {}
@@ -42,6 +44,12 @@ void IOBuffer::CopyTo(char* dest) const { iobuf_.copy_to(dest); }
 
 void IOBuffer::AppendTo(IOBuffer* buffer, size_t n, size_t pos) {
   iobuf_.append_to(&buffer->IOBuf(), n, pos);
+}
+
+void IOBuffer::Append(const IOBuffer* buffer) { iobuf_.append(buffer->iobuf_); }
+
+void IOBuffer::AppendVec(const std::vector<iovec>& iovs) {
+  iobuf_.appendv((const const_iovec*)iovs.data(), iovs.size());
 }
 
 void IOBuffer::AppendUserData(void* data, size_t size,
@@ -66,6 +74,29 @@ std::vector<iovec> IOBuffer::Fetch() const {
     iovecs.emplace_back(iovec{data, size});
   }
   return iovecs;
+}
+
+std::string IOBuffer::Describe() const {
+  const int block_count = iobuf_.backing_block_num();
+  if (block_count == 0) {
+    return "IOBuffer[]";
+  }
+
+  std::ostringstream oss;
+  oss << "IOBuffer[";
+  for (int i = 0; i < block_count; ++i) {
+    const auto& string_piece = iobuf_.backing_block(i);
+
+    oss << "(" << i << ", " << static_cast<const void*>(string_piece.data())
+        << ", " << string_piece.length() << ")";
+
+    if (i < block_count - 1) {
+      oss << ",";
+    }
+  }
+  oss << ", (size: " << iobuf_.length() << ")]";
+
+  return oss.str();
 }
 
 }  // namespace dingofs

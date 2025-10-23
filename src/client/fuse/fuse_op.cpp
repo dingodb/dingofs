@@ -151,6 +151,33 @@ static void ReplyData(fuse_req_t req, char* buffer, size_t size) {
   fuse_reply_data(req, &bufvec, FUSE_BUF_SPLICE_MOVE);
 }
 
+static void ReplyData(fuse_req_t req, dingofs::IOBuffer& buffer) {
+  auto buf_vector = buffer.Fetch();
+
+  if (buf_vector.empty()) {
+    fuse_reply_buf(req, nullptr, 0);
+    return;
+  }
+
+  size_t buf_count = buf_vector.size();
+  size_t buf_vector_size =
+      sizeof(struct fuse_bufvec) + ((buf_count - 1) * sizeof(struct fuse_buf));
+
+  auto bufvec = std::unique_ptr<fuse_bufvec, decltype(&std::free)>(
+      static_cast<fuse_bufvec*>(std::malloc(buf_vector_size)), &std::free);
+  std::memset(bufvec.get(), 0, buf_vector_size);
+
+  bufvec->count = buf_count;
+  bufvec->idx = 0;
+  bufvec->off = 0;
+  for (size_t i = 0; i < buf_count; i++) {
+    bufvec->buf[i].mem = buf_vector[i].iov_base;
+    bufvec->buf[i].size = buf_vector[i].iov_len;
+  }
+
+  fuse_reply_data(req, bufvec.get(), FUSE_BUF_SPLICE_MOVE);
+}
+
 static void ReplyWrite(fuse_req_t req, size_t size) {
   fuse_reply_write(req, size);
 }
@@ -417,21 +444,31 @@ void FuseOpOpen(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
 
 void FuseOpRead(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
                 struct fuse_file_info* fi) {
+  /*
+  IOBuffer Chain (Zero-copy):
+  Block Cache Read
+      ↓
+  Block IOBuffers [Block1, Block2, ..., BlockM]
+      ↓ (zero-copy merge)
+  Chunk IOBuffers [Chunk1, Chunk2, ..., ChunkN]
+      ↓ (zero-copy merge)
+  File IOBuffer
+      ↓
+  FuseOpRead IOBuffer
+  */
   VLOG(1) << "FuseOpRead ino: " << ino << ", size: " << size
           << ", offset: " << off << ", fi->fh: " << fi->fh;
-  std::unique_ptr<char[]> buffer(new char[size]);
-  memset(buffer.get(), 0, size);
+  dingofs::IOBuffer io_buffer;
 
   uint64_t rsize = 0;
-  Status s = g_vfs->Read(ino, buffer.get(), size, off, fi->fh, &rsize);
+  Status s = g_vfs->Read(ino, &io_buffer, size, off, fi->fh, &rsize);
   VLOG(1) << "FuseOpRead ino: " << ino << ", size: " << size
           << ", offset: " << off << ", fi->fh: " << fi->fh
-          << ", rsize: " << rsize
-          << ", buf: " << dingofs::client::Char2Addr(buffer.get());
+          << ", rsize: " << rsize << ", iobuf: " << io_buffer.Describe();
   if (!s.ok()) {
     ReplyError(req, s);
   } else {
-    ReplyData(req, buffer.get(), rsize);
+    ReplyData(req, io_buffer);
   }
 }
 

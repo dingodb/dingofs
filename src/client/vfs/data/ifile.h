@@ -20,6 +20,7 @@
 #include <cstdint>
 
 #include "common/callback.h"
+#include "common/io_buffer.h"
 #include "common/status.h"
 #include "trace/context.h"
 
@@ -34,7 +35,7 @@ class IFile {
   virtual Status Write(ContextSPtr ctx, const char* buf, uint64_t size,
                        uint64_t offset, uint64_t* out_wsize) = 0;
 
-  virtual Status Read(ContextSPtr ctx, char* buf, uint64_t size,
+  virtual Status Read(ContextSPtr ctx, IOBuffer* iobuf, uint64_t size,
                       uint64_t offset, uint64_t* out_rsize) = 0;
 
   virtual Status Flush() = 0;
