@@ -47,6 +47,7 @@ namespace vfs {
 ChunkReader::ChunkReader(VFSHub* hub, uint64_t fh, uint64_t ino, uint64_t index)
     : hub_(hub),
       fh_(fh),
+      block_size_(hub->GetFsInfo().block_size),
       chunk_(hub->GetFsInfo().id, ino, index, hub->GetFsInfo().chunk_size,
              hub->GetFsInfo().block_size, hub->GetPageSize()) {}
 
@@ -210,6 +211,18 @@ void ChunkReader::DoRead(ContextSPtr ctx, const ChunkReadReq& req,
       auto block_cache_range_span = tracer->StartSpanWithParent(
           kVFSDataMoudule, "ChunkReader::DoRead.AsyncRange", *span);
 
+      // Pefetch blocks if enabled
+      if (FLAGS_client_vfs_prefetch_enable &&
+          block_cache_req.block_req.block.block_len >
+              block_cache_req.block_req.len &&
+          hub_->GetBlockCache()->EnableCache()) {
+        auto* prefecth_manager = hub_->GetPrefetchManager();
+        CHECK_NOTNULL(prefecth_manager);
+
+        prefecth_manager->SubmitTask(block_cache_req.key,
+                                     block_cache_req.block_req.block.block_len);
+      }
+
       auto callback = [this, &span, &block_cache_req, &shared,
                        span_ptr = block_cache_range_span.release()](Status s) {
         std::unique_ptr<ITraceSpan> block_cache_range_span(span_ptr);
@@ -313,6 +326,8 @@ void ChunkReader::InvalidateSlices(uint32_t version) {
     slices_.clear();
   }
 }
+
+uint64_t ChunkReader::GetBlockSize() const { return block_size_; }
 
 }  // namespace vfs
 

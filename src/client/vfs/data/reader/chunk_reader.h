@@ -76,6 +76,8 @@ class ChunkReader {
                                 ReaderSharedState& shared, Status s);
   uint64_t GetChunkSize() const;
 
+  uint64_t GetBlockSize() const;
+
   std::string UUID() const {
     return fmt::format("chunk_reader-{}", chunk_.UUID());
   }
@@ -83,6 +85,7 @@ class ChunkReader {
   VFSHub* hub_;
   const uint64_t fh_;
   const Chunk chunk_;
+  const uint64_t block_size_;
 
   std::mutex mutex_;
   // maybe version from mds

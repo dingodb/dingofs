@@ -72,7 +72,7 @@ class VFSHub {
 
   virtual FileSuffixWatcher* GetFileSuffixWatcher() = 0;
 
-  virtual PrefecthManager* GetPrefetchManager() = 0;
+  virtual PrefetchManager* GetPrefetchManager() = 0;
 
   virtual WarmupManager* GetWarmupManager() = 0;
 
@@ -145,7 +145,7 @@ class VFSHubImpl : public VFSHub {
     return tracer_.get();
   }
 
-  PrefecthManager* GetPrefetchManager() override {
+  PrefetchManager* GetPrefetchManager() override {
     CHECK_NOTNULL(prefetch_manager_);
     return prefetch_manager_.get();
   }
@@ -186,7 +186,7 @@ class VFSHubImpl : public VFSHub {
   std::shared_ptr<PageAllocator> page_allocator_;
   std::unique_ptr<FileSuffixWatcher> file_suffix_watcher_;
   std::unique_ptr<ITracer> tracer_;
-  std::unique_ptr<PrefecthManager> prefetch_manager_;
+  std::unique_ptr<PrefetchManager> prefetch_manager_;
   std::unique_ptr<WarmupManager> warmup_manager_;
 };
 

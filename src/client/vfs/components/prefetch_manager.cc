@@ -1,276 +1,175 @@
+/*
+ * Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include "prefetch_manager.h"
 
 #include <fmt/format.h>
-#include <rocksdb/attribute_groups.h>
+#include <glog/logging.h>
 
-#include <cstdint>
 #include <memory>
-#include <mutex>
-#include <utility>
-#include <vector>
 
-#include "cache/blockcache/cache_store.h"
-#include "cache/utils/context.h"
-#include "client/common/const.h"
-#include "client/vfs/data/common/common.h"
-#include "client/vfs/data/common/data_utils.h"
 #include "client/vfs/hub/vfs_hub.h"
-#include "client/vfs/vfs_meta.h"
-#include "common/options/client.h"
 #include "common/status.h"
-#include "utils/executor/thread/executor_impl.h"
+#include "utils/executor/bthread/bthread_executor.h"
+#include "utils/executor/executor.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 
-static const std::string kPrefetchExecutorName = "vfs_prefetch";
-
 using WriteLockGuard = dingofs::utils::WriteLockGuard;
 using ReadLockGuard = dingofs::utils::ReadLockGuard;
 
-Status PrefecthManager::Start() {
-  prefetch_executor_ = std::make_unique<ExecutorImpl>(
-      kPrefetchExecutorName, FLAGS_client_vfs_file_prefetch_executor_num);
-  auto ok = prefetch_executor_->Start();
-  if (!ok) {
-    LOG(ERROR) << "start prefetch manager executor failed.";
-    return Status::Internal("prefetch manager executor start failed");
+Status PrefetchManager::Start(const uint32_t& threads) {
+  CHECK_GT(threads, 0);
+  CHECK_NOTNULL(metrics_);
+
+  bthread::ExecutionQueueOptions queue_options;
+  queue_options.use_pthread = true;
+  int rc = bthread::execution_queue_start(&task_queue_id_, &queue_options,
+                                          &PrefetchManager::HandlePrefetchTask,
+                                          this);
+  if (rc != 0) {
+    LOG(ERROR) << "Start execution queue failed: rc = " << rc;
+    return Status::Internal("start execution queue failed.");
   }
 
-  LOG(INFO) << fmt::format(
-      "PrefetchManager started prefetch block:{} executor num:{} has cache "
-      "store:{}",
-      FLAGS_client_vfs_file_prefetch_block_cnt,
-      FLAGS_client_vfs_file_prefetch_executor_num,
-      hub_->GetBlockCache()->HasCacheStore());
+  prefetch_executor_ = std::make_unique<BthreadExecutor>(threads);
+  auto ok = prefetch_executor_->Start();
+  if (!ok) {
+    LOG(ERROR) << "Start prefetch manager executor failed.";
+    return Status::Internal("Start prefetch manager executor failed.");
+  }
+
+  block_cache_ = vfs_hub_->GetBlockCache();
+  CHECK_NOTNULL(block_cache_);
+
+  running_.store(true, std::memory_order_relaxed);
+  LOG(INFO) << fmt::format("PrefetchManager started with {} threads.", threads);
 
   return Status::OK();
 }
 
-void PrefecthManager::Stop() { prefetch_executor_->Stop(); }
-
-std::vector<BlockPrefetch> PrefecthManager::Chunk2Block(ContextSPtr ctx,
-                                                        ChunkPrefetch& req) {
-  std::vector<Slice> slices;
-  std::vector<BlockReadReq> block_reqs;
-  std::vector<BlockPrefetch> block_keys;
-
-  Status status =
-      hub_->GetMetaSystem()->ReadSlice(ctx, req.ino, req.chunk_idx, 0, &slices);
-  if (!status.ok()) {
-    LOG(ERROR) << fmt::format(
-        "prefetch read ino:{} chunk:{} slice info failed {}", req.ino,
-        req.chunk_idx, status.ToString());
-    return block_keys;
+Status PrefetchManager::Stop() {
+  if (!running_.exchange(false)) {
+    return Status::OK();
   }
 
-  FileRange range = {req.chunk_idx * chunk_size_ + req.offset, req.len};
-  std::vector<SliceReadReq> slice_reqs = ProcessReadRequest(slices, range);
-
-  for (auto& slice_req : slice_reqs) {
-    VLOG(6) << "Read slice_req: " << slice_req.ToString();
-
-    if (slice_req.slice.has_value() && !slice_req.slice.value().is_zero) {
-      std::vector<BlockReadReq> reqs = ConvertSliceReadReqToBlockReadReqs(
-          slice_req, fs_id_, req.ino, chunk_size_, block_size_);
-
-      block_reqs.insert(block_reqs.end(), std::make_move_iterator(reqs.begin()),
-                        std::make_move_iterator(reqs.end()));
-    }
+  if (bthread::execution_queue_stop(task_queue_id_) != 0) {
+    LOG(ERROR) << "Stop execution queue failed.";
+    return Status::Internal("stop execution queue failed");
+  } else if (bthread::execution_queue_join(task_queue_id_) != 0) {
+    LOG(ERROR) << "Join execution queue failed.";
+    return Status::Internal("join execution queue failed");
   }
 
-  for (auto& block_req : block_reqs) {
-    cache::BlockKey key(fs_id_, req.ino, block_req.block.slice_id,
-                        block_req.block.index, block_req.block.version);
-
-    if (filterOut(key)) {
-      VLOG(6) << fmt::format("prefetch skip key {}", key.Filename());
-      continue;
-    }
-    block_keys.emplace_back(key, block_req.block.block_len);
+  auto ok = prefetch_executor_->Stop();
+  if (!ok) {
+    LOG(ERROR) << "Stop prefetch executor failed.";
+    return Status::Internal("Stop prefetch executor failed.");
   }
 
-  return block_keys;
+  LOG(INFO) << "PrefetchManager stopped.";
+  return Status::OK();
 }
 
-std::vector<BlockPrefetch> PrefecthManager::FileRange2BlockKey(ContextSPtr ctx,
-                                                               Ino ino,
-                                                               uint64_t offset,
-                                                               uint64_t len) {
-  std::vector<ChunkPrefetch> chunk_tasks;
-  std::vector<BlockPrefetch> block_keys;
-
-  chunk_tasks = File2Chunk(ino, offset, len);
-
-  for (auto task : chunk_tasks) {
-    std::vector<BlockPrefetch> block_keys_tmp;
-    block_keys_tmp = Chunk2Block(ctx, task);
-    block_keys.insert(block_keys.end(), block_keys_tmp.begin(),
-                      block_keys_tmp.end());
-  }
-
-  return block_keys;
+void PrefetchManager::SubmitTask(const BlockKey& key, size_t length) {
+  CHECK_GT(length, 0);
+  CHECK_EQ(0, bthread::execution_queue_execute(task_queue_id_,
+                                               PrefetchTask(key, length)));
 }
 
-std::vector<ChunkPrefetch> PrefecthManager::File2Chunk(Ino ino, uint64_t offset,
-                                                       uint64_t len) const {
-  std::vector<ChunkPrefetch> chunk_tasks;
-  VLOG(6) << fmt::format("prefetch request ino {} offset {}", ino, offset);
-
-  uint64_t chunk_idx = offset / chunk_size_;
-  uint64_t chunk_offset = offset % chunk_size_;
-  uint64_t prefetch_size;
-  prefetch_size = len;
-
-  while (prefetch_size > 0) {
-    uint64_t chunk_fetch_size =
-        std::min(prefetch_size, chunk_size_ - chunk_offset);
-    ChunkPrefetch task(ino, chunk_idx, chunk_offset, chunk_fetch_size);
-
-    VLOG(6) << task.ToString();
-    chunk_tasks.push_back(task);
-
-    chunk_idx++;
-    chunk_offset = 0;
-    prefetch_size -= chunk_fetch_size;
+int PrefetchManager::HandlePrefetchTask(
+    void* meta, bthread::TaskIterator<PrefetchTask>& iter) {
+  if (iter.is_queue_stopped()) {
+    return 0;
   }
 
-  return chunk_tasks;
-}
+  auto* self = static_cast<PrefetchManager*>(meta);
 
-void PrefecthManager::DoPrefetch(Ino ino, uint64_t file_len, uint64_t start,
-                                 uint64_t len) {
-  auto span = hub_->GetTracer()->StartSpan(kVFSDataMoudule, __func__);
-  std::vector<BlockPrefetch> block_keys;
-  uint64_t block_size = hub_->GetFsInfo().block_size;
-  uint64_t prefecth_block_cnt = FLAGS_client_vfs_file_prefetch_block_cnt;
-
-  if (prefecth_block_cnt == 0) {
-    return;
-  }
-
-  VLOG(6) << fmt::format("prefetch file {} start posted", ino);
-
-  uint64_t prefetch_start = ((start + len) / block_size) * block_size;
-  uint64_t prefetch_len =
-      std::max(prefecth_block_cnt * block_size,
-               ((start + len + block_size - 1) / block_size) * block_size -
-                   prefetch_start);
-  prefetch_len = std::min(prefetch_len, file_len - prefetch_start);
-
-  VLOG(6) << fmt::format(
-      "prefetch transform read s-l-fl:{}-{}-{} to prefetch s-l:{}-{} with "
-      "block_cnt {}",
-      start, len, file_len, prefetch_start, prefetch_len, prefecth_block_cnt);
-
-  block_keys =
-      FileRange2BlockKey(span->GetContext(), ino, prefetch_start, prefetch_len);
-
-  for (auto& key_len : block_keys) {
-    cache::BlockKey key = key_len.key;
-    uint64_t len = key_len.len;
-
-    if (filterOut(key)) {
-      VLOG(6) << fmt::format("prefetch skip block_key: {}", key.Filename());
+  for (; iter; ++iter) {
+    auto& task = *iter;
+    // Skip if the key is already being processed or exists in cache
+    if (self->FilterOut(task)) {
+      VLOG(12) << "Skip block: " << task.key.Filename()
+               << ", length: " << task.length;
       continue;
     }
 
-    addKey(key);
-
-    VLOG(6) << fmt::format("prefetch block_key:{} len {} start", key.Filename(),
-                           len);
-    hub_->GetBlockCache()->AsyncPrefetch(
-        cache::NewContext(), key, len, [this, key, len](Status status) {
-          VLOG(6) << fmt::format("prefetch block_key:{} status {} len {}",
-                                 key.Filename(), status.ToString(), len);
-          this->removeKey(key);
-          if (!status.ok() && !status.IsExist()) {
-            LOG(WARNING) << fmt::format("prefetch key:{} failed {}",
-                                        key.Filename(), status.ToString());
-          }
-        });
-  }
-}
-
-void PrefecthManager::DoPrefetch(Ino ino, AsyncPrefetchCb cb) {
-  auto span = hub_->GetTracer()->StartSpan(kVFSDataMoudule, __func__);
-
-  VLOG(6) << fmt::format("prefetch file {} start", ino);
-
-  Attr attr;
-  auto ret = hub_->GetMetaSystem()->GetAttr(span->GetContext(), ino, &attr);
-  if (!ret.ok()) {
-    LOG(ERROR) << fmt::format("prefetch ino:{} get attr failed", ino);
-    cb(ret, 0);
-    return;
+    self->SetBusy(task.key);
+    // Run in thread pool
+    self->AsyncPrefetch(task);
   }
 
-  VLOG(6) << fmt::format("prefetch get file {} len {} start", ino, attr.length);
+  return 0;
+}
 
-  std::vector<BlockPrefetch> block_keys;
-  AsyncPrefecthInternalArgs args;
-  block_keys = FileRange2BlockKey(span->GetContext(), ino, 0, attr.length);
+void PrefetchManager::AsyncPrefetch(const PrefetchTask& task) {
+  auto* self = this;
+  prefetch_executor_->Execute([self, task]() { self->DoPrefetch(task); });
+}
 
-  args.status = Status::OK();
-  args.count_down.reset(block_keys.size());
+void PrefetchManager::DoPrefetch(const PrefetchTask& task) {
+  cache::BlockKey key = task.key;
+  size_t length = task.length;
 
-  for (auto& key_len : block_keys) {
-    cache::BlockKey key = key_len.key;
-    uint64_t len = key_len.len;
+  VLOG(6) << "Try to prefetch block: " << key.Filename()
+          << ", length: " << length;
 
-    if (filterOut(key)) {
-      VLOG(6) << fmt::format("prefetch skip block_key: {}", key.Filename());
-      args.count_down.signal();
-      continue;
-    }
-
-    addKey(key);
-
-    VLOG(6) << fmt::format("prefetch block_key: {} len {}", key.Filename(),
-                           len);
-    hub_->GetBlockCache()->AsyncPrefetch(
-        cache::NewContext(), key, len, [this, key, len, &args](Status status) {
-          VLOG(6) << fmt::format("prefetch block_key: {} len {} status {}",
-                                 key.Filename(), len, status.ToString());
-          this->removeKey(key);
-          if (!status.ok() && !status.IsExist()) {
-            LOG(WARNING) << fmt::format("prefetch key:{} failed {}",
-                                        key.Filename(), status.ToString());
-            args.status = status;
-          } else {
-            args.len += len;
-          }
-          args.count_down.signal();
-        });
+  auto status = block_cache_->Prefetch(cache::NewContext(), key, length);
+  if (status.ok()) {
+    VLOG(6) << "Prefetch block: " << key.Filename()
+            << " finished, status = " << status.ToString();
+  } else {
+    LOG_EVERY_N(WARNING, 100)
+        << "Prefetch failed: "
+        << "key = " << task.key.Filename() << ", length = " << length
+        << ", status = " << status.ToString();
   }
 
-  args.count_down.wait();
-  VLOG(6) << fmt::format("prefetch file {} status {}, len {}", ino,
-                         args.status.ToString(), args.len);
-
-  cb(args.status, args.len);
+  SetIdle(key);
 }
 
-void PrefecthManager::addKey(const cache::BlockKey& key) {
-  WriteLockGuard lw(rw_lock_);
-
-  inflight_keys_.insert(key.Filename());
-}
-
-void PrefecthManager::removeKey(const cache::BlockKey& key) {
-  WriteLockGuard lw(rw_lock_);
-  inflight_keys_.erase(key.Filename());
-}
-
-bool PrefecthManager::isBusy(const cache::BlockKey& key) {
-  ReadLockGuard lr(rw_lock_);
-
+bool PrefetchManager::IsBusy(const BlockKey& key) {
+  ReadLockGuard lk(rwlock_);
   return inflight_keys_.count(key.Filename()) != 0;
 }
 
-bool PrefecthManager::filterOut(const cache::BlockKey& key) {
-  return isBusy(key) || hub_->GetBlockCache()->IsCached(key);
+void PrefetchManager::SetBusy(const BlockKey& key) {
+  WriteLockGuard lk(rwlock_);
+  inflight_keys_.insert(key.Filename());
+  IncPrefetchBlocks();
+}
+
+void PrefetchManager::SetIdle(const BlockKey& key) {
+  WriteLockGuard lk(rwlock_);
+  inflight_keys_.erase(key.Filename());
+  DecPrefetchBlocks();
+}
+
+bool PrefetchManager::FilterOut(const PrefetchTask& task) {
+  return IsBusy(task.key) || block_cache_->IsCached(task.key);
+}
+
+void PrefetchManager::IncPrefetchBlocks() {
+  metrics_->inflight_prefetch_blocks << 1;
+}
+
+void PrefetchManager::DecPrefetchBlocks() {
+  metrics_->inflight_prefetch_blocks << -1;
 }
 
 }  // namespace vfs

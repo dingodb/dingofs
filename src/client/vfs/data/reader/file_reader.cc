@@ -121,12 +121,6 @@ Status FileReader::Read(ContextSPtr ctx, char* buf, uint64_t size,
 
   uint64_t total_read_size = std::min(size, attr.length - offset);
 
-  if (FLAGS_client_vfs_file_prefetch_block_cnt > 0 &&
-      vfs_hub_->GetBlockCache()->HasCacheStore()) {
-    vfs_hub_->GetPrefetchManager()->AsyncPrefetch(ino_, attr.length, offset,
-                                                  total_read_size);
-  }
-
   std::vector<ChunkReadReq> read_reqs;
 
   while (total_read_size > 0) {

@@ -30,15 +30,13 @@
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
 #include "utils/concurrent/concurrent.h"
+#include "utils/executor/bthread/bthread_executor.h"
 #include "utils/executor/executor.h"
-#include "utils/executor/thread/executor_impl.h"
 #include "utils/string_util.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
-
-static const std::string kWarmupExecutorName = "vfs_warmup";
 
 Status WarmupManager::Start(const uint32_t& threads) {
   CHECK_GT(threads, 0);
@@ -53,8 +51,7 @@ Status WarmupManager::Start(const uint32_t& threads) {
     return Status::Internal("start execution queue failed.");
   }
 
-  warmup_executor_ =
-      std::make_unique<ExecutorImpl>(kWarmupExecutorName, threads);
+  warmup_executor_ = std::make_unique<BthreadExecutor>(threads);
 
   auto ok = warmup_executor_->Start();
   if (!ok) {

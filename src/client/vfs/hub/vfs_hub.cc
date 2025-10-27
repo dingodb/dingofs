@@ -184,12 +184,15 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
   }
 
   {
-    prefetch_manager_ = std::make_unique<PrefecthManager>(
-        this, fs_info_.id, fs_info_.chunk_size, fs_info_.block_size);
-    auto ok = prefetch_manager_->Start();
-    if (!ok.ok()) {
-      LOG(ERROR) << "prefetch manager start failed";
-      return ok;
+    if (block_cache_->EnableCache()) {
+      prefetch_manager_ = PrefetchManager::New(this);
+      auto status = prefetch_manager_->Start(FLAGS_client_vfs_prefetch_threads);
+      if (!status.ok()) {
+        LOG(ERROR) << "prefetch manager start failed.";
+        return status;
+      }
+    } else {
+      LOG(INFO) << "block cache not enable, skip prefetch manager start.";
     }
   }
 
@@ -198,7 +201,7 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
                                          fs_info_.block_size);
     auto ok = warmup_manager_->Start(FLAGS_client_vfs_warmup_threads);
     if (!ok.ok()) {
-      LOG(ERROR) << "warmup manager start failed";
+      LOG(ERROR) << "warmup manager start failed.";
       return ok;
     }
   }

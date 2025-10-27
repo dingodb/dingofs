@@ -101,12 +101,10 @@ DEFINE_int32(client_vfs_read_max_retry_block_not_found, 10,
 DEFINE_validator(client_vfs_read_max_retry_block_not_found, brpc::PassValidate);
 
 // prefetch
-DEFINE_uint32(client_vfs_file_prefetch_block_cnt, 1,
-              "number of blocks to prefetch for file read");
-DEFINE_validator(client_vfs_file_prefetch_block_cnt, brpc::PassValidate);
+DEFINE_bool(client_vfs_prefetch_enable, true, "enable vfs prefetch or not");
+DEFINE_validator(client_vfs_prefetch_enable, brpc::PassValidate);
 
-DEFINE_uint32(client_vfs_file_prefetch_executor_num, 4,
-              "number of prefetch executor");
+DEFINE_uint32(client_vfs_prefetch_threads, 8, "number of prefetch threads");
 
 // warmup
 DEFINE_int32(client_vfs_warmup_threads, 4, "number of warmup threads");
@@ -210,6 +208,7 @@ void InitVFSOption(utils::Configuration* conf, VFSOption* option) {
 
   InitFuseOption(conf, &option->fuse_option);
   InitPrefetchOption(conf);
+  InitWarmupOption(conf);
 
   // vfs data related
   if (!conf->GetBoolValue("vfs.data.writeback",
