@@ -134,6 +134,7 @@ int Prefetcher::HandleTask(void* meta, bthread::TaskIterator<Task>& iter) {
 }
 
 void Prefetcher::DoPrefetch(const Task& task) {
+  SCOPE_EXIT { SetIdle(task.key); };
   const auto& ctx = task.ctx;
   IOBuffer buffer;
   RangeOption option;
@@ -149,7 +150,6 @@ void Prefetcher::DoPrefetch(const Task& task) {
   }
 
   memcache_->Put(task.key, Block(buffer));
-  SetIdle(task.key);
 }
 
 bool Prefetcher::IsBusy(const BlockKey& key) {
