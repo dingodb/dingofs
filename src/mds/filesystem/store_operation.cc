@@ -2533,7 +2533,7 @@ Status OperationProcessor::RunAlone(Operation* operation) {
 
     bthread_usleep(CalWaitTimeUs(retry));
 
-  } while (++retry < FLAGS_mds_txn_max_retry_times);
+  } while (++retry <= FLAGS_mds_txn_max_retry_times);
 
   trace.RecordElapsedTime("store_operate");
 
@@ -2758,7 +2758,7 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
 
     bthread_usleep(CalWaitTimeUs(retry));
 
-  } while (++retry < FLAGS_mds_txn_max_retry_times);
+  } while (++retry <= FLAGS_mds_txn_max_retry_times);
 
   SetElapsedTime(batch_operation, "store_operate");
 
