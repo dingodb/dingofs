@@ -25,7 +25,7 @@
 
 #include "client/vfs/handle/handle_manager.h"
 #include "client/vfs/hub/vfs_hub.h"
-#include "common/options/client/option.h"
+#include "common/options/client.h"
 
 namespace dingofs {
 namespace client {

@@ -34,7 +34,7 @@
 #include "cache/utils/bthread.h"
 #include "cache/utils/context.h"
 #include "common/io_buffer.h"
-#include "common/options/cache/option.h"
+#include "common/options/cache.h"
 #include "common/status.h"
 
 namespace dingofs {

@@ -28,7 +28,7 @@
 #include <string>
 #include <variant>
 
-#include "common/options/blockaccess/option.h"
+#include "common/options/blockaccess.h"
 #include "common/status.h"
 
 namespace dingofs {

@@ -24,7 +24,6 @@ target_link_libraries(vfs_metasystem_mds_lib
     mds_mds
 
     dingofs_common
-    dynamic_vlog
     dingofs_utils
     client_options
 

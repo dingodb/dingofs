@@ -26,7 +26,7 @@
 #include "client/vfs/service/fuse_stat_service.h"
 #include "client/vfs/service/inode_blocks_service.h"
 #include "client/vfs/vfs.h"
-#include "common/options/client/option.h"
+#include "common/options/client.h"
 #include "common/trace/context.h"
 
 namespace dingofs {

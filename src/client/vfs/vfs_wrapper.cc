@@ -39,7 +39,7 @@
 #include "common/define.h"
 #include "common/metrics/client/client.h"
 #include "common/metrics/metric_guard.h"
-#include "common/options/client/option.h"
+#include "common/options/client.h"
 #include "common/status.h"
 #include "utils/configuration.h"
 

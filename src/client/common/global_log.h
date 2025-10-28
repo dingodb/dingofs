@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_CLIENT_COMMON_CONST_H_
-#define DINGOFS_CLIENT_COMMON_CONST_H_
+#ifndef DINGOFS_SRC_CLIENT_COMMON_GLOBAL_LOG_H_
+#define DINGOFS_SRC_CLIENT_COMMON_GLOBAL_LOG_H_
 
-#include "common/options/common/dynamic_vlog.h"
+#include "common/options/client.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
 #include "utils/configuration.h"
@@ -41,7 +41,7 @@ static int InitLog(const char* argv0, const std::string& conf_path) {
 
   dingofs::utils::GflagsLoadValueFromConfIfCmdNotSet dummy;
   dummy.Load(&conf, "v", "client.loglevel", &FLAGS_v);
-  dingofs::common::FLAGS_vlog_level = FLAGS_v;
+  dingofs::client::FLAGS_vlog_level = FLAGS_v;
 
   FLAGS_logbufsecs = 4;
   FLAGS_minloglevel = google::GLOG_INFO;
@@ -53,4 +53,4 @@ static int InitLog(const char* argv0, const std::string& conf_path) {
   return 0;
 }
 
-#endif  // DINGOFS_CLIENT_COMMON_CONST_H_
+#endif  // DINGOFS_SRC_CLIENT_COMMON_GLOBAL_LOG_H_

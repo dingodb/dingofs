@@ -33,7 +33,7 @@
 
 #include "brpc/channel.h"
 #include "brpc/controller.h"
-#include "common/options/client/option.h"
+#include "common/options/client.h"
 #include "common/status.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"

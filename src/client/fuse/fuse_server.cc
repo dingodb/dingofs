@@ -26,7 +26,7 @@
 #include "client/fuse/fuse_parse.h"
 #include "client/fuse/fuse_passfd.h"
 #include "client/fuse/fuse_upgrade_manager.h"
-#include "common/options/client/option.h"
+#include "common/options/client.h"
 #include "common/version.h"
 #include "fmt/format.h"
 #include "glog/logging.h"

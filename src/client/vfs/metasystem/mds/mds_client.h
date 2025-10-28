@@ -27,7 +27,7 @@
 #include "client/vfs/metasystem/mds/rpc.h"
 #include "client/vfs/metasystem/meta_system.h"
 #include "client/vfs/vfs_meta.h"
-#include "common/options/client/option.h"
+#include "common/options/client.h"
 #include "common/status.h"
 #include "common/trace/context.h"
 #include "dingofs/error.pb.h"

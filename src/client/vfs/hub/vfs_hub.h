@@ -34,7 +34,7 @@
 #include "client/vfs/vfs.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/blockaccess/block_accesser.h"
-#include "common/options/client/option.h"
+#include "common/options/client.h"
 #include "common/status.h"
 #include "common/trace/itracer.h"
 #include "utils/executor/executor.h"

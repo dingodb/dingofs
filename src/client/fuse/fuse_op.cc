@@ -27,7 +27,7 @@
 #include "client/vfs/vfs_meta.h"
 #include "client/vfs/vfs_wrapper.h"
 #include "common/define.h"
-#include "common/options/client/option.h"
+#include "common/options/client.h"
 #include "common/status.h"
 #include "fmt/format.h"
 #include "glog/logging.h"

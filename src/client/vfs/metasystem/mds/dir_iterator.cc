@@ -15,7 +15,7 @@
 #include "client/vfs/metasystem/mds/dir_iterator.h"
 
 #include "client/vfs/common/helper.h"
-#include "common/options/client/option.h"
+#include "common/options/client.h"
 #include "fmt/format.h"
 
 namespace dingofs {

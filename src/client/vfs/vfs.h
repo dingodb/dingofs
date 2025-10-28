@@ -23,7 +23,7 @@
 #include <string>
 
 #include "client/vfs/vfs_meta.h"
-#include "common/options/client/option.h"
+#include "common/options/client.h"
 #include "common/status.h"
 #include "common/trace/context.h"
 #include "common/trace/itracer.h"

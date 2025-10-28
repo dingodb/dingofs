@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include "common/options/blockaccess/option.h"
-
 #include <gflags/gflags.h>
+
+#include "common/options/blockaccess.h"
 
 namespace dingofs {
 namespace blockaccess {

@@ -19,7 +19,7 @@
 #include <string>
 
 #include "backtrace.h"
-#include "common/options/mds/option.h"
+#include "common/options/mds.h"
 #include "dlfcn.h"
 #include "fmt/format.h"
 #include "gflags/gflags.h"

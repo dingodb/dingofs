@@ -21,7 +21,7 @@
 #include "client/common/global_log.h"
 #include "client/fuse/fuse_op.h"
 #include "client/fuse/fuse_server.h"
-#include "common/options/client/option.h"
+#include "common/options/client.h"
 #include "utils/configuration.h"
 
 using FuseServer = dingofs::client::fuse::FuseServer;

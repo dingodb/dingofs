@@ -35,7 +35,7 @@
 #include "client/vfs/vfs_xattr.h"
 #include "common/define.h"
 #include "common/metrics/metrics_dumper.h"
-#include "common/options/client/option.h"
+#include "common/options/client.h"
 #include "common/status.h"
 #include "common/trace/context.h"
 #include "fmt/format.h"

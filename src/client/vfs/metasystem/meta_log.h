@@ -22,7 +22,7 @@
 #include <cstdint>
 
 #include "butil/time.h"
-#include "common/options/client/option.h"
+#include "common/options/client.h"
 #include "spdlog/logger.h"
 
 namespace dingofs {

@@ -42,7 +42,7 @@
 #include "cache/utils/helper.h"
 #include "cache/utils/step_timer.h"
 #include "common/io_buffer.h"
-#include "common/options/cache/option.h"
+#include "common/options/cache.h"
 #include "common/status.h"
 
 namespace dingofs {

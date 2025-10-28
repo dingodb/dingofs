@@ -41,7 +41,7 @@
 #include "cache/utils/offload_thread_pool.h"
 #include "cache/utils/posix.h"
 #include "common/io_buffer.h"
-#include "common/options/cache/option.h"
+#include "common/options/cache.h"
 #include "common/status.h"
 
 namespace dingofs {

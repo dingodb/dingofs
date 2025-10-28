@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-#include "common/options/trace/trace_dynamic_option.h"
+#include "common/options/trace.h"
 
-#include "common/options/gflag_validator.h"
+#include <brpc/reloadable_flags.h>
 
 namespace dingofs {
 
 // trace log
 DEFINE_bool(trace_logging, false, "enable trace log");
-DEFINE_validator(trace_logging, &PassBool);
+DEFINE_validator(trace_logging, &brpc::PassValidate);
 
 }  // namespace dingofs

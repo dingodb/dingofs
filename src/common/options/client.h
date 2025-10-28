@@ -14,6 +14,12 @@
  * limitations under the License.
  */
 
+#ifndef DINGOFS_SRC_COMMON_OPTIONS_CLIENT_H_
+#define DINGOFS_SRC_COMMON_OPTIONS_CLIENT_H_
+
+#ifndef DINGOFS_SRC_COMMON_OPTIONS_CLIENT_CLIENT_H_
+#define DINGOFS_SRC_COMMON_OPTIONS_CLIENT_CLIENT_H_
+
 #ifndef DINGOFS_SRC_OPTIONS_CLIENT_OPTION_H_
 #define DINGOFS_SRC_OPTIONS_CLIENT_OPTION_H_
 
@@ -21,7 +27,7 @@
 
 #include "common/blockaccess/accesser_common.h"
 #include "common/const.h"
-#include "common/options/cache/option.h"
+#include "common/options/cache.h"
 #include "utils/configuration.h"
 #include "utils/gflags_helper.h"
 
@@ -40,6 +46,16 @@ namespace client {
 #define USING_FLAG(name) using ::dingofs::client::FLAGS_##name;
 
 // ############## gflags ##############
+
+/**
+ * use vlog_level to set vlog level on the fly
+ * When vlog_level is set, CheckVLogLevel is called to check the validity of the
+ * value. Dynamically modify the vlog level by setting FLAG_v in CheckVLogLevel.
+ *
+ * You can modify the vlog level to 0 using:
+ * curl -s http://127.0.0.1:9000/flags/vlog_level?setvalue=0
+ */
+DECLARE_int32(vlog_level);
 
 DECLARE_bool(client_data_single_thread_read);
 DECLARE_int32(client_bthread_worker_num);
@@ -295,3 +311,7 @@ void InitVFSOption(utils::Configuration* conf, VFSOption* option);
 }  // namespace dingofs
 
 #endif  // DINGOFS_COMMON_OPTIONS_CLIENT_OPTION_H_
+
+#endif  // DINGOFS_SRC_COMMON_OPTIONS_CLIENT_CLIENT_H_
+
+#endif  // DINGOFS_SRC_COMMON_OPTIONS_CLIENT_H_

@@ -25,7 +25,7 @@
 #include "client/vfs/common/helper.h"
 #include "client/vfs/data/flat/flat_file.h"
 #include "client/vfs/vfs_meta.h"
-#include "common/options/client/option.h"
+#include "common/options/client.h"
 #include "common/status.h"
 
 namespace dingofs {

@@ -12,22 +12,39 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(blockaccess)
-add_subdirectory(client)
-add_subdirectory(common)
-add_subdirectory(trace)
+add_library(blockaccess_options
+    blockaccess.cc
+)
+target_link_libraries(blockaccess_options
+    gflags::gflags
+)
+
+add_library(trace_options
+    trace.cc
+)
+target_link_libraries(blockaccess_options
+    gflags::gflags
+)
+
+add_library(client_options
+    client.cc
+)
+target_link_libraries(client_options
+    trace_options
+    cache_lib
+    brpc::brpc
+    fmt::fmt
+    glog::glog
+    gflags::gflags
+)
 
 file(GLOB DINGOFS_OPTIONS_LIB_SRCS
-    "cache/*.cpp"
-    "mds/*.cpp"
-    "trace/*.cc"
-    "options.cpp"
+    "*.cc"
 )
 
 add_library(dingofs_options ${DINGOFS_OPTIONS_LIB_SRCS})
 
 target_link_libraries(dingofs_options
-    toml11::toml11
     gflags::gflags
     glog::glog
 )

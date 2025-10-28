@@ -16,7 +16,7 @@
 #include "client/vfs/data/common/data_utils.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/vfs_meta.h"
-#include "common/options/client/option.h"
+#include "common/options/client.h"
 #include "common/status.h"
 #include "utils/executor/thread/executor_impl.h"
 

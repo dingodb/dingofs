@@ -18,7 +18,7 @@
 #include <string>
 #include <utility>
 
-#include "common/options/mds/option.h"
+#include "common/options/mds.h"
 #include "gflags/gflags.h"
 #include "mds/common/codec.h"
 #include "mds/common/context.h"
