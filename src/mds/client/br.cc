@@ -23,7 +23,7 @@
 #include <string>
 #include <vector>
 
-#include "blockaccess/block_accesser.h"
+#include "common/blockaccess/block_accesser.h"
 #include "dingofs/error.pb.h"
 #include "fmt/format.h"
 #include "glog/logging.h"

@@ -20,7 +20,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "options/client/option.h"
+#include "common/options/client/option.h"
 
 namespace dingofs {
 namespace client {

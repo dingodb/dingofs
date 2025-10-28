@@ -29,7 +29,7 @@
 #include "cache/common/version.h"
 #include "cache/utils/logging.h"
 #include "cache/utils/offload_thread_pool.h"
-#include "options/cache/option.h"
+#include "common/options/cache/option.h"
 
 namespace dingofs {
 namespace cache {

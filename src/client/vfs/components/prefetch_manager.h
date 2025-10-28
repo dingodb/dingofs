@@ -15,7 +15,7 @@
 #include "cache/blockcache/cache_store.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
-#include "trace/context.h"
+#include "common/trace/context.h"
 #include "utils/concurrent/rw_lock.h"
 #include "utils/executor/executor.h"
 namespace dingofs {

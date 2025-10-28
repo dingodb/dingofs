@@ -23,7 +23,7 @@
 #include "client/vfs/common/helper.h"
 #include "client/vfs/metasystem/meta_log.h"
 #include "client/vfs/vfs_meta.h"
-#include "trace/context.h"
+#include "common/trace/context.h"
 
 namespace dingofs {
 namespace client {

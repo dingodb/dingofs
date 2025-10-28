@@ -21,7 +21,7 @@
 
 #include "common/callback.h"
 #include "common/status.h"
-#include "trace/context.h"
+#include "common/trace/context.h"
 
 namespace dingofs {
 namespace client {

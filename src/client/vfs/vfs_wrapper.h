@@ -21,8 +21,8 @@
 #include <memory>
 
 #include "client/vfs/vfs.h"
-#include "metrics/client/client.h"
-#include "options/client/option.h"
+#include "common/metrics/client/client.h"
+#include "common/options/client/option.h"
 
 namespace dingofs {
 namespace client {

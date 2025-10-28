@@ -33,6 +33,7 @@
 
 #include "brpc/channel.h"
 #include "brpc/controller.h"
+#include "common/options/client/option.h"
 #include "common/status.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"
@@ -41,7 +42,6 @@
 #include "json/value.h"
 #include "mds/common/helper.h"
 #include "mds/common/synchronization.h"
-#include "options/client/option.h"
 #include "utils/concurrent/concurrent.h"
 
 namespace dingofs {

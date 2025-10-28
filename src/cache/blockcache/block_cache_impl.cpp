@@ -42,8 +42,8 @@
 #include "cache/utils/helper.h"
 #include "cache/utils/step_timer.h"
 #include "common/io_buffer.h"
+#include "common/options/cache/option.h"
 #include "common/status.h"
-#include "options/cache/option.h"
 
 namespace dingofs {
 namespace cache {

@@ -309,7 +309,7 @@ add_subdirectory(src)
 
 if(BUILD_UNIT_TESTS)
   message(STATUS "Build unit test")
-  add_subdirectory(test)
+  add_subdirectory(test/unit)
 endif()
 
 

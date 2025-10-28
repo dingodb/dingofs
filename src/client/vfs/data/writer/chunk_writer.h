@@ -33,7 +33,7 @@
 #include "client/vfs/data/writer/task/chunk_flush_task.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
-#include "trace/context.h"
+#include "common/trace/context.h"
 
 namespace dingofs {
 namespace client {

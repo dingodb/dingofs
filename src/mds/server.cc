@@ -18,6 +18,7 @@
 #include <utility>
 #include <vector>
 
+#include "common/options/mds/option.h"
 #include "fmt/core.h"
 #include "fmt/format.h"
 #include "gflags/gflags.h"
@@ -37,7 +38,6 @@
 #include "mds/service/mds_service.h"
 #include "mds/statistics/fs_stat.h"
 #include "mds/storage/dingodb_storage.h"
-#include "options/mds/option.h"
 
 #ifdef USE_TCMALLOC
 #include "gperftools/malloc_extension.h"

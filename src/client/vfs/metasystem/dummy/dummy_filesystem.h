@@ -28,8 +28,8 @@
 #include "bthread/types.h"
 #include "client/vfs/metasystem/meta_system.h"
 #include "client/vfs/vfs_meta.h"
+#include "common/trace/context.h"
 #include "dingofs/mds.pb.h"
-#include "trace/context.h"
 
 namespace dingofs {
 namespace client {

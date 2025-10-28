@@ -30,7 +30,7 @@
 #include "cache/utils/helper.h"
 #include "cache/utils/posix.h"
 #include "common/io_buffer.h"
-#include "options/cache/option.h"
+#include "common/options/cache/option.h"
 
 namespace dingofs {
 namespace cache {

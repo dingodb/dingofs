@@ -26,7 +26,6 @@
 #include <memory>
 #include <string>
 
-#include "blockaccess/block_access_log.h"
 #include "cache/utils/logging.h"
 #include "client/common/const.h"
 #include "client/common/utils.h"
@@ -36,11 +35,12 @@
 #include "client/vfs/metasystem/meta_log.h"
 #include "client/vfs/vfs_impl.h"
 #include "client/vfs/vfs_meta.h"
+#include "common/blockaccess/block_access_log.h"
 #include "common/define.h"
+#include "common/metrics/client/client.h"
+#include "common/metrics/metric_guard.h"
+#include "common/options/client/option.h"
 #include "common/status.h"
-#include "metrics/client/client.h"
-#include "metrics/metric_guard.h"
-#include "options/client/option.h"
 #include "utils/configuration.h"
 
 namespace dingofs {

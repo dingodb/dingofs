@@ -25,13 +25,13 @@
 
 #include <mutex>
 
-#include "blockaccess/accesser_common.h"
-#include "blockaccess/block_accesser.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/common/type.h"
 #include "cache/storage/closure.h"
 #include "cache/storage/storage.h"
 #include "cache/utils/execution_queue.h"
+#include "common/blockaccess/accesser_common.h"
+#include "common/blockaccess/block_accesser.h"
 #include "common/io_buffer.h"
 #include "common/status.h"
 

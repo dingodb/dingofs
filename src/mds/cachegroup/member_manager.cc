@@ -18,6 +18,7 @@
 #include <string>
 #include <utility>
 
+#include "common/options/mds/option.h"
 #include "gflags/gflags.h"
 #include "mds/common/codec.h"
 #include "mds/common/context.h"
@@ -28,7 +29,6 @@
 #include "mds/common/type.h"
 #include "mds/filesystem/store_operation.h"
 #include "mds/storage/storage.h"
-#include "options/mds/option.h"
 
 namespace dingofs {
 namespace mds {

@@ -25,8 +25,8 @@
 #include "client/vfs/common/helper.h"
 #include "client/vfs/data/flat/flat_file.h"
 #include "client/vfs/vfs_meta.h"
+#include "common/options/client/option.h"
 #include "common/status.h"
-#include "options/client/option.h"
 
 namespace dingofs {
 namespace client {
@@ -68,7 +68,8 @@ struct FormatConfig {
 void PrintDelimitedHeader(butil::IOBufBuilder& os, const FormatConfig& config) {
   os << std::left << "file_offset" << config.delimiter << "len"
      << config.delimiter << "block_offset" << config.delimiter << "block_name"
-     << config.delimiter << "block_len" << "\n";
+     << config.delimiter << "block_len"
+     << "\n";
 }
 
 void PrintFixedWidthHeader(butil::IOBufBuilder& os,
@@ -77,7 +78,8 @@ void PrintFixedWidthHeader(butil::IOBufBuilder& os,
      << std::setw(config.len_width) << "len"
      << std::setw(config.block_offset_width) << "block_offset"
      << std::setw(config.block_name_width) << "block_name"
-     << std::setw(config.block_len_width) << "block_len" << "\n";
+     << std::setw(config.block_len_width) << "block_len"
+     << "\n";
 }
 
 void PrintDelimitedRow(butil::IOBufBuilder& os, const FormatConfig& config,

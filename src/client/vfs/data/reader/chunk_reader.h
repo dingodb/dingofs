@@ -31,7 +31,7 @@
 #include "client/vfs/data/reader/reader_common.h"
 #include "common/callback.h"
 #include "common/io_buffer.h"
-#include "trace/context.h"
+#include "common/trace/context.h"
 
 namespace dingofs {
 namespace client {

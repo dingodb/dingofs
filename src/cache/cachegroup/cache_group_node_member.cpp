@@ -22,7 +22,7 @@
 
 #include "cache/cachegroup/cache_group_node_member.h"
 
-#include "options/cache/option.h"
+#include "common/options/cache/option.h"
 
 namespace dingofs {
 namespace cache {

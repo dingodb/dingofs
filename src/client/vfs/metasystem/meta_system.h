@@ -23,8 +23,8 @@
 
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
+#include "common/trace/context.h"
 #include "json/value.h"
-#include "trace/context.h"
 
 namespace dingofs {
 namespace client {

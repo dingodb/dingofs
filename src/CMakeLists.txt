@@ -12,15 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(blockaccess)
-add_subdirectory(utils)
-add_subdirectory(common)
-add_subdirectory(metrics)
-add_subdirectory(options)
-add_subdirectory(fs)
-add_subdirectory(trace)
-
 add_subdirectory(cache)
 add_subdirectory(client)
-
+add_subdirectory(common)
 add_subdirectory(mds)
+add_subdirectory(utils)

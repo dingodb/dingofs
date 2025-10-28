@@ -12,6 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+add_subdirectory(blockaccess)
+add_subdirectory(metrics)
+add_subdirectory(options)
+add_subdirectory(trace)
+
 add_library(dingofs_common
     rpc_stream.cpp
     io_buffer.cpp

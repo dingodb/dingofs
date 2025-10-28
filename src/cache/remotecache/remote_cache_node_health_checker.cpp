@@ -32,8 +32,8 @@
 #include "cache/common/mds_client.h"
 #include "cache/common/state_machine.h"
 #include "cache/metric/cache_status.h"
+#include "common/options/cache/option.h"
 #include "dingofs/blockcache.pb.h"
-#include "options/cache/option.h"
 #include "utils/executor/bthread/bthread_executor.h"
 
 namespace dingofs {

@@ -33,7 +33,7 @@
 #include "cache/utils/bthread.h"
 #include "cache/utils/context.h"
 #include "cache/utils/infight_throttle.h"
-#include "options/cache/option.h"
+#include "common/options/cache/option.h"
 
 namespace dingofs {
 namespace cache {

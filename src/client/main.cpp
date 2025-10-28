@@ -21,7 +21,7 @@
 #include "client/common/global_log.h"
 #include "client/fuse/fuse_op.h"
 #include "client/fuse/fuse_server.h"
-#include "options/client/option.h"
+#include "common/options/client/option.h"
 #include "utils/configuration.h"
 
 using FuseServer = dingofs::client::fuse::FuseServer;
@@ -54,7 +54,9 @@ static int InstallSignal(int sig, void (*handler)(int)) {
 }
 
 int main(int argc, char* argv[]) {
-  struct MountOption mount_option{nullptr};
+  struct MountOption mount_option {
+    nullptr
+  };
 
   InstallSignal(SIGHUP, HandleSignal);
 

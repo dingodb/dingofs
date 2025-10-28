@@ -21,10 +21,10 @@
 #include <string>
 #include <vector>
 
-#include "blockaccess/rados/rados_common.h"
-#include "blockaccess/s3/s3_common.h"
 #include "brpc/reloadable_flags.h"
 #include "cache/blockcache/cache_store.h"
+#include "common/blockaccess/rados/rados_common.h"
+#include "common/blockaccess/s3/s3_common.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/format.h"

@@ -19,6 +19,7 @@
 #include <string>
 
 #include "backtrace.h"
+#include "common/options/mds/option.h"
 #include "dlfcn.h"
 #include "fmt/format.h"
 #include "gflags/gflags.h"
@@ -27,7 +28,6 @@
 #include "mds/common/helper.h"
 #include "mds/common/version.h"
 #include "mds/server.h"
-#include "options/mds/option.h"
 
 DEFINE_string(conf, "./conf/mds.conf", "mds config path");
 DEFINE_string(coor_url, "file://./conf/coor_list", "coor service url, e.g. file://<path> or list://<addr1>");

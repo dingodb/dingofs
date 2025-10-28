@@ -28,11 +28,11 @@
 #include "client/vfs/common/helper.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
+#include "common/trace/context.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
-#include "trace/context.h"
 
 static const uint32_t kFsID = 10000;
 static const uint64_t kRootIno = 1;

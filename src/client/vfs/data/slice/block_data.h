@@ -29,7 +29,7 @@
 #include "client/vfs/hub/vfs_hub.h"
 #include "common/io_buffer.h"
 #include "common/status.h"
-#include "trace/context.h"
+#include "common/trace/context.h"
 
 namespace dingofs {
 namespace client {

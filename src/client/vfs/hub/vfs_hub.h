@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_CLIENT_VFS_VFS_HUB_H_
-#define DINGOFS_CLIENT_VFS_VFS_HUB_H_
+#ifndef DINGOFS_CLIENT_VFS_HUB_VFS_HUB_H_
+#define DINGOFS_CLIENT_VFS_HUB_VFS_HUB_H_
 
 #include <glog/logging.h>
 
@@ -23,7 +23,6 @@
 #include <cstdint>
 #include <memory>
 
-#include "blockaccess/block_accesser.h"
 #include "cache/blockcache/block_cache.h"
 #include "client/memory/page_allocator.h"
 #include "client/vfs/background/iperiodic_flush_manager.h"
@@ -34,9 +33,10 @@
 #include "client/vfs/metasystem/meta_system.h"
 #include "client/vfs/vfs.h"
 #include "client/vfs/vfs_meta.h"
+#include "common/blockaccess/block_accesser.h"
+#include "common/options/client/option.h"
 #include "common/status.h"
-#include "options/client/option.h"
-#include "trace/itracer.h"
+#include "common/trace/itracer.h"
 #include "utils/executor/executor.h"
 
 namespace dingofs {
@@ -194,4 +194,4 @@ class VFSHubImpl : public VFSHub {
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_CLIENT_VFS_VFS_HUB_H_
+#endif  // DINGOFS_CLIENT_VFS_HUB_VFS_HUB_H_

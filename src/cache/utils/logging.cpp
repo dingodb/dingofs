@@ -26,7 +26,7 @@
 #include <brpc/reloadable_flags.h>
 #include <glog/logging.h>
 
-#include "blockaccess/block_access_log.h"
+#include "common/blockaccess/block_access_log.h"
 
 namespace dingofs {
 namespace cache {

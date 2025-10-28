@@ -24,7 +24,7 @@
 #include <vector>
 
 #include "client/vfs/metasystem/meta_system.h"
-#include "trace/context.h"
+#include "common/trace/context.h"
 
 namespace dingofs {
 namespace client {
@@ -32,7 +32,7 @@ namespace vfs {
 
 class MetaWrapper : public MetaSystem {
  public:
-  MetaWrapper(MetaSystemUPtr meta_system) : target_(std::move(meta_system)) {};
+  MetaWrapper(MetaSystemUPtr meta_system) : target_(std::move(meta_system)){};
 
   ~MetaWrapper() override = default;
 

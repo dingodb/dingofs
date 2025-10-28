@@ -21,7 +21,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "blockaccess/block_accesser.h"
+#include "common/blockaccess/block_accesser.h"
 #include "mds/common/distribution_lock.h"
 #include "mds/common/runnable.h"
 #include "mds/common/status.h"

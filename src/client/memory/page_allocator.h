@@ -32,7 +32,7 @@
 #include <string>
 
 #include "client/memory/memory_pool.h"
-#include "metrics/client/memory/page_allocator_metric.h"
+#include "common/metrics/client/memory/page_allocator_metric.h"
 
 namespace dingofs {
 namespace client {

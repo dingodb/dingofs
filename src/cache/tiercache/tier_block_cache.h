@@ -23,13 +23,13 @@
 #ifndef DINGOFS_SRC_CACHE_TIERCACHE_TIER_BLOCK_CACHE_H_
 #define DINGOFS_SRC_CACHE_TIERCACHE_TIER_BLOCK_CACHE_H_
 
-#include "blockaccess/block_accesser.h"
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/storage/storage.h"
 #include "cache/utils/bthread.h"
 #include "cache/utils/context.h"
 #include "cache/utils/inflight_tracker.h"
+#include "common/blockaccess/block_accesser.h"
 
 namespace dingofs {
 namespace cache {

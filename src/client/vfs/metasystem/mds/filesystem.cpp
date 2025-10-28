@@ -26,6 +26,7 @@
 #include "client/vfs/metasystem/mds/helper.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
+#include "common/trace/context.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/core.h"
@@ -35,7 +36,6 @@
 #include "json/value.h"
 #include "json/writer.h"
 #include "mds/common/helper.h"
-#include "trace/context.h"
 
 namespace dingofs {
 namespace client {

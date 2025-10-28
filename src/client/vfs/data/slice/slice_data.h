@@ -29,8 +29,8 @@
 #include "client/vfs/vfs_meta.h"
 #include "common/callback.h"
 #include "common/status.h"
+#include "common/trace/context.h"
 #include "fmt/format.h"
-#include "trace/context.h"
 
 namespace dingofs {
 namespace client {

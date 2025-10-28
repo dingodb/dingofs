@@ -16,10 +16,10 @@
 #include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/vfs_fh.h"
 #include "client/vfs/vfs_meta.h"
+#include "common/options/client/option.h"
 #include "common/status.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
-#include "options/client/option.h"
 #include "utils/executor/thread/executor_impl.h"
 #include "utils/string_util.h"
 

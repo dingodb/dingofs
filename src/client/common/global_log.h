@@ -17,9 +17,9 @@
 #ifndef DINGOFS_CLIENT_COMMON_CONST_H_
 #define DINGOFS_CLIENT_COMMON_CONST_H_
 
+#include "common/options/common/dynamic_vlog.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
-#include "options/common/dynamic_vlog.h"
 #include "utils/configuration.h"
 #include "utils/gflags_helper.h"
 

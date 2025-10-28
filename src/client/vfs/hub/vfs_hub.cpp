@@ -19,8 +19,6 @@
 #include <atomic>
 #include <memory>
 
-#include "blockaccess/block_accesser.h"
-#include "blockaccess/rados/rados_common.h"
 #include "cache/tiercache/tier_block_cache.h"
 #include "client/common/const.h"
 #include "client/vfs/background/periodic_flush_manager.h"
@@ -33,16 +31,18 @@
 #include "client/vfs/metasystem/meta_wrapper.h"
 #include "client/vfs/vfs.h"
 #include "client/vfs/vfs_meta.h"
+#include "common/blockaccess/block_accesser.h"
+#include "common/blockaccess/rados/rados_common.h"
+#include "common/options/cache/option.h"
+#include "common/options/client/option.h"
+#include "common/options/trace/trace_dynamic_option.h"
 #include "common/status.h"
+#include "common/trace/log_trace_exporter.h"
+#include "common/trace/noop_tracer.h"
+#include "common/trace/tracer.h"
 #include "fmt/format.h"
 #include "gflags/gflags.h"
 #include "glog/logging.h"
-#include "options/cache/option.h"
-#include "options/client/option.h"
-#include "options/trace/trace_dynamic_option.h"
-#include "trace/log_trace_exporter.h"
-#include "trace/noop_tracer.h"
-#include "trace/tracer.h"
 #include "utils/configuration.h"
 #include "utils/executor/thread/executor_impl.h"
 

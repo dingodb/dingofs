@@ -17,7 +17,7 @@
 #ifndef DINGOFS_COMMON_CONFIG_MAPPER_H_
 #define DINGOFS_COMMON_CONFIG_MAPPER_H_
 
-#include "blockaccess/accesser_common.h"
+#include "common/blockaccess/accesser_common.h"
 #include "dingofs/mds.pb.h"
 
 namespace dingofs {

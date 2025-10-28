@@ -23,10 +23,10 @@
 #include <string>
 
 #include "client/vfs/vfs_meta.h"
+#include "common/options/client/option.h"
 #include "common/status.h"
-#include "options/client/option.h"
-#include "trace/context.h"
-#include "trace/itracer.h"
+#include "common/trace/context.h"
+#include "common/trace/itracer.h"
 
 namespace dingofs {
 namespace client {

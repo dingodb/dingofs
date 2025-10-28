@@ -31,7 +31,7 @@
 #include "cache/common/macro.h"
 #include "cache/common/mds_client.h"
 #include "cache/metric/cache_status.h"
-#include "options/cache/option.h"
+#include "common/options/cache/option.h"
 #include "utils/executor/bthread/bthread_executor.h"
 
 namespace dingofs {

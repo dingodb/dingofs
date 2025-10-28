@@ -37,8 +37,8 @@
 #include "cache/blockcache/block_cache.h"
 #include "cache/common/type.h"
 #include "common/io_buffer.h"
+#include "common/options/cache/option.h"
 #include "dingofs/blockcache.pb.h"
-#include "options/cache/option.h"
 
 namespace dingofs {
 namespace cache {

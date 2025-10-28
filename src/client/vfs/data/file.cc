@@ -28,8 +28,8 @@
 #include "client/vfs/hub/vfs_hub.h"
 #include "common/callback.h"
 #include "common/status.h"
-#include "trace/context.h"
-#include "trace/itrace_span.h"
+#include "common/trace/context.h"
+#include "common/trace/itrace_span.h"
 
 namespace dingofs {
 namespace client {
