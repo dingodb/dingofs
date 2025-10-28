@@ -15,10 +15,10 @@
 add_subdirectory(executor)
 
 add_library(dingofs_utils
-    configuration.cpp
-    leaky_bucket.cpp
-    stringstatus.cpp
-    throttle.cpp
+    configuration.cc
+    leaky_bucket.cc
+    stringstatus.cc
+    throttle.cc
 )
 
 target_link_libraries(dingofs_utils

@@ -21,9 +21,9 @@ add_subdirectory(service)
 add_subdirectory(components)
 
 add_library(vfs_lib
-    vfs_impl.cpp
-    vfs_wrapper.cpp
-    access_log.cpp
+    vfs_impl.cc
+    vfs_wrapper.cc
+    access_log.cc
 )
 
 target_link_libraries(vfs_lib

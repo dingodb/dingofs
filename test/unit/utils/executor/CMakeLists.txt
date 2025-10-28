@@ -27,4 +27,4 @@ function(add_executor_test test_name)
     )
 endfunction()
 
-add_executor_test(test_timer_impl test_timer_impl.cpp)
+add_executor_test(test_timer_impl test_timer_impl.cc)

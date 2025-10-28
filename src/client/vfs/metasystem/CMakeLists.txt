@@ -15,9 +15,9 @@
 add_subdirectory(dummy)
 add_subdirectory(mds)
 
-add_library(vfs_metasystem 
-    meta_log.cpp
-    meta_wrapper.cpp
+add_library(vfs_metasystem
+    meta_log.cc
+    meta_wrapper.cc
 )
 
 target_link_libraries(vfs_metasystem

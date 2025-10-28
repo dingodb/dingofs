@@ -15,7 +15,7 @@
 add_subdirectory(aws)
 
 add_library(s3_accesser
-    s3_accesser.cpp
+    s3_accesser.cc
 )
 
 target_link_libraries(s3_accesser

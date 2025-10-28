@@ -13,7 +13,7 @@
 # limitations under the License.
 
 add_library(rados_accesser
-    rados_accesser.cpp
+    rados_accesser.cc
 )
 
 target_link_libraries(rados_accesser

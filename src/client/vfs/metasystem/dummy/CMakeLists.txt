@@ -14,7 +14,7 @@
 
 
 file(GLOB VFS_METASYSTEM_DUMMY_LIB_SRC
-    "*.cpp"
+    "*.cc"
 )
 
 add_library(vfs_metasystem_dummy_lib ${VFS_METASYSTEM_DUMMY_LIB_SRC})

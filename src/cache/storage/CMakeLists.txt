@@ -16,8 +16,8 @@
 option(WITH_LIBUSRBIO "Enable LIBUSRBIO feature" OFF)
 
 file(GLOB STORAGE_LIB_SRCS
-    "*.cpp"
-    "aio/*.cpp"
+    "*.cc"
+    "aio/*.cc"
 )
 
 add_library(cache_storage ${STORAGE_LIB_SRCS})

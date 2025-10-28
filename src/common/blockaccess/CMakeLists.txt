@@ -16,8 +16,8 @@ add_subdirectory(s3)
 add_subdirectory(rados)
 
 add_library(block_accesser
-    block_accesser.cpp
-    block_access_log.cpp
+    block_accesser.cc
+    block_access_log.cc
 )
 
 target_link_libraries(block_accesser

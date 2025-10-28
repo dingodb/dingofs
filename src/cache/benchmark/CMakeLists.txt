@@ -14,12 +14,12 @@
 # Define the BASE_FLAGS and DINGO_DEFAULT_COPTS variables
 
 SET(BENCHMARK_LIB_SRCS
-    "benchmarker.cpp"
-    "collector.cpp"
-    "factory.cpp"
-    "option.cpp"
-    "reporter.cpp"
-    "worker.cpp"
+    "benchmarker.cc"
+    "collector.cc"
+    "factory.cc"
+    "option.cc"
+    "reporter.cc"
+    "worker.cc"
 )
 
 add_library(cache_benchmark ${BENCHMARK_LIB_SRCS})
@@ -29,5 +29,5 @@ target_link_libraries(cache_benchmark
     cache_storage
 )
 
-add_executable(cache-bench main.cpp)
+add_executable(cache-bench main.cc)
 target_link_libraries(cache-bench cache_benchmark)

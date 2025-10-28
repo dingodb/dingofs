@@ -14,7 +14,7 @@
 # Define the BASE_FLAGS and DINGO_DEFAULT_COPTS variables
 
 file(GLOB TIERCACHE_LIB_SRCS
-    "*.cpp"
+    "*.cc"
 )
 
 add_library(cache_tiercache ${TIERCACHE_LIB_SRCS})

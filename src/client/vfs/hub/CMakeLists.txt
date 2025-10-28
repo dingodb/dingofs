@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_library(vfs_hub 
-    vfs_hub.cpp
+add_library(vfs_hub
+    vfs_hub.cc
 )
 
 target_link_libraries(vfs_hub

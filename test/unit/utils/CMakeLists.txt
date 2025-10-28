@@ -15,7 +15,7 @@
 add_subdirectory(executor)
 
 file(GLOB UTILS_TEST_SRCS
-    "*.cpp"
+    "*.cc"
 )
 
 add_executable(test_uitls ${UTILS_TEST_SRCS})

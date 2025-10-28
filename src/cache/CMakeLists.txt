@@ -23,7 +23,7 @@ add_subdirectory(tiercache)
 add_subdirectory(benchmark)
 
 file(GLOB CACHE_LIB_SRCS
-    "dingo_cache.cpp"
+    "dingo_cache.cc"
 )
 add_library(cache_lib ${CACHE_LIB_SRCS})
 target_link_libraries(cache_lib
@@ -37,5 +37,5 @@ target_link_libraries(cache_lib
     cache_tiercache
 )
 
-add_executable(dingo-cache main.cpp)
+add_executable(dingo-cache main.cc)
 target_link_libraries(dingo-cache cache_lib)

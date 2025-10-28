@@ -14,9 +14,9 @@
 # Define the BASE_FLAGS and DINGO_DEFAULT_COPTS variables
 
 # Seperate memory_pool and page_allocator from datastream
-add_library(client_memory 
-    memory_pool.cpp
-    page_allocator.cpp
+add_library(client_memory
+    memory_pool.cc
+    page_allocator.cc
 )
 target_link_libraries(client_memory
     client_options

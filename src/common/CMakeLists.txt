@@ -18,9 +18,9 @@ add_subdirectory(options)
 add_subdirectory(trace)
 
 add_library(dingofs_common
-    rpc_stream.cpp
-    io_buffer.cpp
-    version.cpp
+    rpc_stream.cc
+    io_buffer.cc
+    version.cc
 )
 target_link_libraries(dingofs_common
     dingofs_utils
@@ -29,8 +29,8 @@ target_link_libraries(dingofs_common
 )
 
 add_library(dingofs_status
-    string_slice.cpp
-    status.cpp
+    string_slice.cc
+    status.cc
 )
 target_link_libraries(dingofs_status
     fmt::fmt

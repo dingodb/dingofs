@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_library(vfs_handle 
-    handle_manager.cpp
+add_library(vfs_handle
+    handle_manager.cc
 )
 
 target_link_libraries(vfs_handle

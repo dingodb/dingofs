@@ -13,7 +13,7 @@
 # limitations under the License.
 
 file(GLOB VFS_METASYSTEM_MDS_LIB_SRC
-    "*.cpp"
+    "*.cc"
 )
 
 add_library(vfs_metasystem_mds_lib ${VFS_METASYSTEM_MDS_LIB_SRC})
@@ -45,8 +45,8 @@ target_link_libraries(vfs_metasystem_mds_lib
 )
 
 add_library(vfs_meta_mds_rpc_lib
-    rpc.cpp
-    mds_discovery.cpp
+    rpc.cc
+    mds_discovery.cc
 )
 
 target_link_libraries(vfs_meta_mds_rpc_lib

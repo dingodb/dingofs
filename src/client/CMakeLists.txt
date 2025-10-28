@@ -16,14 +16,14 @@ add_subdirectory(memory)
 add_subdirectory(vfs)
 
 file(GLOB FUSE_CLIENT_LIB_SRCS
-    "fuse/fuse_op.cpp"
-    "fuse/fuse_server.cpp"
+    "fuse/fuse_op.cc"
+    "fuse/fuse_server.cc"
 )
 
 add_library(fuse_client_lib ${FUSE_CLIENT_LIB_SRCS})
 target_link_libraries(fuse_client_lib
     PROTO_OBJS
-    
+
     vfs_lib
     block_accesser
     dingofs_metrics
@@ -33,7 +33,7 @@ target_link_libraries(fuse_client_lib
     ${FUSE3_LIBRARY}
 )
 
-add_executable(dingo-fuse main.cpp)
+add_executable(dingo-fuse main.cc)
 target_link_libraries(dingo-fuse
     fuse_client_lib
 )

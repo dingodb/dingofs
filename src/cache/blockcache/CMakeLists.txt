@@ -14,7 +14,7 @@
 # Define the BASE_FLAGS and DINGO_DEFAULT_COPTS variables
 
 file(GLOB BLOCKCACHE_LIB_SRCS
-    "*.cpp"
+    "*.cc"
 )
 
 add_library(cache_blockcache ${BLOCKCACHE_LIB_SRCS})

@@ -26,4 +26,4 @@ function(add_storage_test test_name)
     )
 endfunction()
 
-add_storage_test(test_buffer test_buffer.cpp)
+add_storage_test(test_buffer test_buffer.cc)

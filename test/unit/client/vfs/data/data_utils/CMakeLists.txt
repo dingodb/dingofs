@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_executable(test_process_read_request 
-    test_process_read_request.cpp)
-target_link_libraries(test_process_read_request 
+add_executable(test_process_read_request
+    test_process_read_request.cc)
+target_link_libraries(test_process_read_request
     vfs_data
     ${TEST_DEPS}
 )
@@ -22,9 +22,9 @@ set_target_properties(test_process_read_request PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${TEST_EXECUTABLE_OUTPUT_PATH}
 )
 
-add_executable(test_convert_slice_read_req_to_block_read_req 
-    test_convert_slice_read_req_to_block_read_req.cpp)
-target_link_libraries(test_convert_slice_read_req_to_block_read_req 
+add_executable(test_convert_slice_read_req_to_block_read_req
+    test_convert_slice_read_req_to_block_read_req.cc)
+target_link_libraries(test_convert_slice_read_req_to_block_read_req
     vfs_data
     ${TEST_DEPS}
 )
