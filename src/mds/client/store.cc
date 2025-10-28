@@ -161,6 +161,88 @@ void StoreClient::PrintDentryTree(uint32_t fs_id, bool is_details) {
   FreeFsTree(root);
 }
 
+bool StoreClient::UpdateFsS3Info(const std::string& fs_name, const S3Info& s3_info) {
+  std::string fs_key = MetaCodec::EncodeFsKey(fs_name);
+
+  auto txn = kv_storage_->NewTxn();
+  std::string value;
+  auto status = txn->Get(fs_key, value);
+  if (!status.ok()) {
+    std::cerr << fmt::format("get fs meta fail, error: {}.", status.error_str()) << '\n';
+    return false;
+  }
+
+  auto fs_info = MetaCodec::DecodeFsValue(value);
+  if (fs_info.fs_type() != pb::mds::FsType::S3) {
+    std::cerr << fmt::format("fs type({}) is not s3.", pb::mds::FsType_Name(fs_info.fs_type())) << '\n';
+    return false;
+  }
+
+  pb::mds::S3Info pb_s3_info;
+  pb_s3_info.CopyFrom(fs_info.extra().s3_info());
+  if (!s3_info.ak.empty()) pb_s3_info.set_ak(s3_info.ak);
+  if (!s3_info.sk.empty()) pb_s3_info.set_sk(s3_info.sk);
+  if (!s3_info.endpoint.empty()) pb_s3_info.set_endpoint(s3_info.endpoint);
+  if (!s3_info.bucket_name.empty()) pb_s3_info.set_bucketname(s3_info.bucket_name);
+  fs_info.mutable_extra()->mutable_s3_info()->CopyFrom(pb_s3_info);
+
+  fs_info.set_version(fs_info.version() + 1);
+
+  txn->Put(fs_key, MetaCodec::EncodeFsValue(fs_info));
+
+  status = txn->Commit();
+  if (!status.ok()) {
+    std::cerr << fmt::format("update fs s3 info fail, error: {}.", status.error_str()) << '\n';
+    return false;
+  }
+
+  std::cout << "update fs s3 info success." << '\n';
+
+  return true;
+}
+
+bool StoreClient::UpdateFsRadosInfo(const std::string& fs_name, const RadosInfo& rados_info) {
+  std::string fs_key = MetaCodec::EncodeFsKey(fs_name);
+
+  auto txn = kv_storage_->NewTxn();
+  std::string value;
+  auto status = txn->Get(fs_key, value);
+  if (!status.ok()) {
+    std::cerr << fmt::format("get fs meta fail, error: {}.", status.error_str()) << '\n';
+    return false;
+  }
+
+  auto fs_info = MetaCodec::DecodeFsValue(value);
+  if (fs_info.fs_type() != pb::mds::FsType::RADOS) {
+    std::cerr << fmt::format("fs type({}) is not rados.", pb::mds::FsType_Name(fs_info.fs_type())) << '\n';
+    return false;
+  }
+
+  pb::mds::RadosInfo pb_rados_info;
+  pb_rados_info.CopyFrom(fs_info.extra().rados_info());
+  if (!rados_info.mon_host.empty()) pb_rados_info.set_mon_host(rados_info.mon_host);
+  if (!rados_info.pool_name.empty()) pb_rados_info.set_pool_name(rados_info.pool_name);
+  if (!rados_info.key.empty()) pb_rados_info.set_key(rados_info.key);
+  if (!rados_info.cluster_name.empty()) pb_rados_info.set_cluster_name(rados_info.cluster_name);
+  if (!rados_info.user_name.empty()) pb_rados_info.set_user_name(rados_info.user_name);
+
+  fs_info.mutable_extra()->mutable_rados_info()->CopyFrom(pb_rados_info);
+
+  fs_info.set_version(fs_info.version() + 1);
+
+  txn->Put(fs_key, MetaCodec::EncodeFsValue(fs_info));
+
+  status = txn->Commit();
+  if (!status.ok()) {
+    std::cerr << fmt::format("update fs rados info fail, error: {}.", status.error_str()) << '\n';
+    return false;
+  }
+
+  std::cout << "update fs rados info success." << '\n';
+
+  return true;
+}
+
 bool StoreCommandRunner::Run(const Options& options, const std::string& coor_addr, const std::string& cmd) {
   static std::set<std::string> mds_cmd = {
       Helper::ToLowerCase("CreateMetaTable"),
@@ -169,6 +251,8 @@ bool StoreCommandRunner::Run(const Options& options, const std::string& coor_add
       Helper::ToLowerCase("DropMetaTable"),
       Helper::ToLowerCase("DropFsStatsTable"),
       Helper::ToLowerCase("DropFsMetaTable"),
+      Helper::ToLowerCase("UpdateFsS3InfoByStore"),
+      Helper::ToLowerCase("UpdateFsRadosInfoByStore"),
       "tree",
   };
 
@@ -210,6 +294,11 @@ bool StoreCommandRunner::Run(const Options& options, const std::string& coor_add
 
   } else if (cmd == Helper::ToLowerCase("tree")) {
     store_client.PrintDentryTree(options.fs_id, true);
+
+  } else if (cmd == Helper::ToLowerCase("UpdateFsS3InfoByStore")) {
+    store_client.UpdateFsS3Info(options.fs_name, options.s3_info);
+  } else if (cmd == Helper::ToLowerCase("UpdateFsRadosInfoByStore")) {
+    store_client.UpdateFsRadosInfo(options.fs_name, options.rados_info);
   }
 
   return true;

@@ -183,7 +183,7 @@ class MDSClient {
   MountFsResponse MountFs(const std::string& fs_name, const std::string& client_id);
   UmountFsResponse UmountFs(const std::string& fs_name, const std::string& client_id);
   DeleteFsResponse DeleteFs(const std::string& fs_name, bool is_force);
-  UpdateFsInfoResponse UpdateFs(const std::string& fs_name);
+  UpdateFsInfoResponse UpdateFs(const std::string& fs_name, const pb::mds::FsInfo& fs_info);
   GetFsInfoResponse GetFs(const std::string& fs_name);
   ListFsInfoResponse ListFs();
 
@@ -241,6 +241,9 @@ class MDSClient {
   ListMembersResponse ListMembers(const std::string& group_name);
   UnLockMemberResponse UnlockMember(const std::string& member_id, const std::string& ip, uint32_t port);
   DeleteMemberResponse DeleteMember(const std::string& member_id);
+
+  void UpdateFsS3Info(const std::string& fs_name, const S3Info& s3_info);
+  void UpdateFsRadosInfo(const std::string& fs_name, const RadosInfo& rados_info);
 
  private:
   uint32_t fs_id_{0};

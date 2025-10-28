@@ -40,6 +40,9 @@ class StoreClient {
   // print fs dentry tree
   void PrintDentryTree(uint32_t fs_id, bool is_details);
 
+  bool UpdateFsS3Info(const std::string& fs_name, const S3Info& s3_info);
+  bool UpdateFsRadosInfo(const std::string& fs_name, const RadosInfo& rados_info);
+
  private:
   KVStorageSPtr kv_storage_;
 };
@@ -54,6 +57,9 @@ class StoreCommandRunner {
     std::string fs_name;
     std::string meta_table_name;
     std::string fsstats_table_name;
+
+    S3Info s3_info;
+    RadosInfo rados_info;
   };
 
   static bool Run(const Options& options, const std::string& coor_addr, const std::string& cmd);
