@@ -533,10 +533,30 @@ Status UpdateFsOperation::Run(TxnUPtr& txn) {
   }
 
   auto new_fs_info = MetaCodec::DecodeFsValue(value);
-  new_fs_info.set_capacity(fs_info_.capacity());
-  new_fs_info.set_block_size(fs_info_.block_size());
-  new_fs_info.set_owner(fs_info_.owner());
-  new_fs_info.set_recycle_time_hour(fs_info_.recycle_time_hour());
+  if (fs_info_.capacity() > 0) new_fs_info.set_capacity(fs_info_.capacity());
+  if (fs_info_.block_size() > 0) new_fs_info.set_block_size(fs_info_.block_size());
+  if (!fs_info_.owner().empty()) new_fs_info.set_owner(fs_info_.owner());
+  if (fs_info_.recycle_time_hour() > 0) new_fs_info.set_recycle_time_hour(fs_info_.recycle_time_hour());
+
+  if (fs_info_.has_extra() && fs_info_.extra().has_s3_info()) {
+    const auto& s3_info = fs_info_.extra().s3_info();
+    auto* mut_s3_info = new_fs_info.mutable_extra()->mutable_s3_info();
+    if (!s3_info.ak().empty()) mut_s3_info->set_ak(s3_info.ak());
+    if (!s3_info.sk().empty()) mut_s3_info->set_sk(s3_info.sk());
+    if (!s3_info.endpoint().empty()) mut_s3_info->set_endpoint(s3_info.endpoint());
+    if (!s3_info.bucketname().empty()) mut_s3_info->set_bucketname(s3_info.bucketname());
+
+  } else if (fs_info_.has_extra() && fs_info_.extra().has_rados_info()) {
+    const auto& rados_info = fs_info_.extra().rados_info();
+    auto* mut_rados_info = new_fs_info.mutable_extra()->mutable_rados_info();
+
+    if (!rados_info.mon_host().empty()) mut_rados_info->set_mon_host(rados_info.mon_host());
+    if (!rados_info.user_name().empty()) mut_rados_info->set_user_name(rados_info.user_name());
+    if (!rados_info.key().empty()) mut_rados_info->set_key(rados_info.key());
+    if (!rados_info.cluster_name().empty()) mut_rados_info->set_cluster_name(rados_info.cluster_name());
+    if (!rados_info.pool_name().empty()) mut_rados_info->set_pool_name(rados_info.pool_name());
+  }
+
   new_fs_info.set_version(new_fs_info.version() + 1);
 
   txn->Put(fs_key, MetaCodec::EncodeFsValue(new_fs_info));

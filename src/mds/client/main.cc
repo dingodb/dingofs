@@ -212,6 +212,21 @@ int main(int argc, char* argv[]) {
     options.fs_name = FLAGS_fs_name;
     options.meta_table_name = dingofs::mds::kMetaTableName;
     options.fsstats_table_name = dingofs::mds::kFsStatsTableName;
+
+    auto& s3_info = options.s3_info;
+    s3_info.ak = FLAGS_s3_ak;
+    s3_info.sk = FLAGS_s3_sk;
+    s3_info.endpoint = FLAGS_s3_endpoint;
+    s3_info.bucket_name = FLAGS_s3_bucketname;
+    s3_info.object_name = FLAGS_s3_objectname;
+
+    auto& rados_info = options.rados_info;
+    rados_info.user_name = FLAGS_rados_user_name;
+    rados_info.pool_name = FLAGS_rados_pool_name;
+    rados_info.mon_host = FLAGS_rados_mon_host;
+    rados_info.key = FLAGS_rados_key;
+    rados_info.cluster_name = FLAGS_rados_cluster_name;
+
     dingofs::mds::client::StoreCommandRunner::Run(options, GetDefaultCoorAddrPath(), lower_cmd);
   }
 

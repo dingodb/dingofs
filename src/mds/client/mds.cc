@@ -225,14 +225,12 @@ DeleteFsResponse MDSClient::DeleteFs(const std::string& fs_name, bool is_force) 
   return response;
 }
 
-UpdateFsInfoResponse MDSClient::UpdateFs(const std::string& fs_name) {
+UpdateFsInfoResponse MDSClient::UpdateFs(const std::string& fs_name, const pb::mds::FsInfo& fs_info) {
   UpdateFsInfoRequest request;
   UpdateFsInfoResponse response;
 
   request.set_fs_name(fs_name);
 
-  pb::mds::FsInfo fs_info;
-  fs_info.set_owner("deng");
   request.mutable_fs_info()->CopyFrom(fs_info);
 
   interaction_->SendRequest("MDSService", "UpdateFsInfo", request, response);
@@ -1000,26 +998,101 @@ DeleteMemberResponse MDSClient::DeleteMember(const std::string& member_id) {
   return response;
 }
 
+void MDSClient::UpdateFsS3Info(const std::string& fs_name, const S3Info& s3_info) {
+  if (fs_name.empty()) {
+    DINGO_LOG(ERROR) << "fs_name is empty";
+    return;
+  }
+  auto fs_response = GetFs(fs_name);
+  pb::mds::FsInfo fs_info;
+  fs_info.CopyFrom(fs_response.fs_info());
+  if (fs_info.fs_id() == 0) {
+    DINGO_LOG(ERROR) << "not found fs: " << fs_name;
+    return;
+  }
+  if (fs_info.fs_type() != pb::mds::FsType::S3) {
+    DINGO_LOG(ERROR) << "fs type is not S3, fs_type: " << fs_info.fs_type();
+    return;
+  }
+
+  pb::mds::S3Info pb_s3_info;
+  pb_s3_info.set_ak(s3_info.ak);
+  pb_s3_info.set_sk(s3_info.sk);
+  pb_s3_info.set_endpoint(s3_info.endpoint);
+  pb_s3_info.set_bucketname(s3_info.bucket_name);
+  fs_info.mutable_extra()->mutable_s3_info()->CopyFrom(pb_s3_info);
+
+  UpdateFs(fs_name, fs_info);
+}
+
+void MDSClient::UpdateFsRadosInfo(const std::string& fs_name, const RadosInfo& rados_info) {
+  if (fs_name.empty()) {
+    DINGO_LOG(ERROR) << "fs_name is empty";
+    return;
+  }
+
+  auto fs_response = GetFs(fs_name);
+  pb::mds::FsInfo fs_info;
+  fs_info.CopyFrom(fs_response.fs_info());
+  if (fs_info.fs_id() == 0) {
+    DINGO_LOG(ERROR) << "not found fs: " << fs_name;
+    return;
+  }
+  if (fs_info.fs_type() != pb::mds::FsType::RADOS) {
+    DINGO_LOG(ERROR) << "fs type is not RADOS, fs_type: " << fs_info.fs_type();
+    return;
+  }
+
+  pb::mds::RadosInfo pb_rados_info;
+  pb_rados_info.set_mon_host(rados_info.mon_host);
+  pb_rados_info.set_pool_name(rados_info.pool_name);
+  pb_rados_info.set_user_name(rados_info.user_name);
+  pb_rados_info.set_key(rados_info.key);
+  pb_rados_info.set_cluster_name(rados_info.cluster_name);
+  fs_info.mutable_extra()->mutable_rados_info()->CopyFrom(pb_rados_info);
+
+  UpdateFs(fs_name, fs_info);
+}
+
 bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr, const std::string& cmd,
                            uint32_t fs_id) {
   static std::set<std::string> mds_cmd = {
-      "integrationtest", "getmdslist",
-      "createfs",        "deletefs",
-      "updatefs",        "getfs",
-      "listfs",          "mkdir",
-      "batchmkdir",      "mknod",
-      "batchmknod",      "getdentry",
-      "listdentry",      "getinode",
-      "batchgetinode",   "batchgetxattr",
-      "setfsstats",      "continuesetfsstats",
-      "getfsstats",      "getfspersecondstats",
-      "setfsquota",      "getfsquota",
-      "setdirquota",     "getdirquota",
-      "deletedirquota",  "joinfs",
-      "quitfs",          "joincachegroup",
-      "leavecachegroup", "listgroups",
-      "reweightmember",  "listmembers",
-      "unlockmember",    "deletemember",
+      "integrationtest",
+      "getmdslist",
+      "createfs",
+      "deletefs",
+      "updatefs",
+      "updatefss3info",
+      "updatefsradosinfo",
+      "getfs",
+      "listfs",
+      "mkdir",
+      "batchmkdir",
+      "mknod",
+      "batchmknod",
+      "getdentry",
+      "listdentry",
+      "getinode",
+      "batchgetinode",
+      "batchgetxattr",
+      "setfsstats",
+      "continuesetfsstats",
+      "getfsstats",
+      "getfspersecondstats",
+      "setfsquota",
+      "getfsquota",
+      "setdirquota",
+      "getdirquota",
+      "deletedirquota",
+      "joinfs",
+      "quitfs",
+      "joincachegroup",
+      "leavecachegroup",
+      "listgroups",
+      "reweightmember",
+      "listmembers",
+      "unlockmember",
+      "deletemember",
   };
 
   if (mds_cmd.count(cmd) == 0) return false;
@@ -1054,7 +1127,13 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr, 
     mds_client.DeleteFs(options.fs_name, options.is_force);
 
   } else if (cmd == Helper::ToLowerCase("UpdateFs")) {
-    mds_client.UpdateFs(options.fs_name);
+    mds_client.UpdateFs(options.fs_name, {});
+
+  } else if (cmd == Helper::ToLowerCase("UpdateFsS3Info")) {
+    mds_client.UpdateFsS3Info(options.fs_name, options.s3_info);
+
+  } else if (cmd == Helper::ToLowerCase("UpdateFsRadosInfo")) {
+    mds_client.UpdateFsRadosInfo(options.fs_name, options.rados_info);
 
   } else if (cmd == Helper::ToLowerCase("GetFs")) {
     mds_client.GetFs(options.fs_name);
