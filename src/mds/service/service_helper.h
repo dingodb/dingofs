@@ -137,8 +137,8 @@ class TraceClosure : public google::protobuf::Closure {
   void SetQueueWaitTime() { queue_wait_time_us = Helper::TimestampUs() - start_time_us; }
 
  protected:
-  uint64_t start_time_us;
-  uint64_t queue_wait_time_us;
+  uint64_t start_time_us{0};
+  uint64_t queue_wait_time_us{0};
 };
 
 // Wrapper brpc service closure for log.
