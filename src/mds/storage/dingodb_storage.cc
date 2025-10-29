@@ -158,10 +158,6 @@ Status DingodbStorage::Put(WriteOption option, const std::string& key, const std
     return Status(pb::error::EBACKEND_STORE, status.ToString());
   }
 
-  status = txn->PreCommit();
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, status.ToString());
-  }
   status = txn->Commit();
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, status.ToString());
@@ -188,11 +184,7 @@ Status DingodbStorage::Put(WriteOption option, KeyValue& kv) {
     }
   }
 
-  auto status = txn->PreCommit();
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, status.ToString());
-  }
-  status = txn->Commit();
+  auto status = txn->Commit();
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, status.ToString());
   }
@@ -220,11 +212,7 @@ Status DingodbStorage::Put(WriteOption option, const std::vector<KeyValue>& kvs)
     }
   }
 
-  auto status = txn->PreCommit();
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, status.ToString());
-  }
-  status = txn->Commit();
+  auto status = txn->Commit();
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, status.ToString());
   }
@@ -271,10 +259,6 @@ Status DingodbStorage::Get(const std::string& key, std::string& value) {
     return TransformStatus(status);
   }
 
-  status = txn->PreCommit();
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, status.ToString());
-  }
   status = txn->Commit();
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, status.ToString());
@@ -295,10 +279,6 @@ Status DingodbStorage::BatchGet(const std::vector<std::string>& keys, std::vecto
     return TransformStatus(status);
   }
 
-  status = txn->PreCommit();
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, status.ToString());
-  }
   status = txn->Commit();
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, status.ToString());
@@ -326,10 +306,6 @@ Status DingodbStorage::Scan(const Range& range, std::vector<KeyValue>& kvs) {
 
   KvPairsToKeyValues(kv_pairs, kvs);
 
-  status = txn->PreCommit();
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, status.ToString());
-  }
   status = txn->Commit();
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, status.ToString());
@@ -349,10 +325,6 @@ Status DingodbStorage::Delete(const std::string& key) {
     return Status(pb::error::EBACKEND_STORE, status.ToString());
   }
 
-  status = txn->PreCommit();
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, status.ToString());
-  }
   status = txn->Commit();
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, status.ToString());
@@ -374,11 +346,7 @@ Status DingodbStorage::Delete(const std::vector<std::string>& keys) {
     }
   }
 
-  auto status = txn->PreCommit();
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, status.ToString());
-  }
-  status = txn->Commit();
+  auto status = txn->Commit();
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, status.ToString());
   }
@@ -529,13 +497,7 @@ Status DingodbTxn::Commit() {
     txn_trace_.write_time_us += (Helper::TimestampUs() - start_time);
   });
 
-  auto status = txn_->PreCommit();
-  if (!status.ok()) {
-    Rollback();
-    return TransformStatus(status);
-  }
-
-  status = txn_->Commit();
+  auto status = txn_->Commit();
   if (!status.ok()) {
     Rollback();
     return TransformStatus(status);
