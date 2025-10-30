@@ -169,6 +169,8 @@ static void InitBlockCacheOption(utils::Configuration* c) {
                 &cache::FLAGS_upload_stage_max_inflights);
     c->GetValue("block_cache.prefetch_max_inflights",
                 &cache::FLAGS_prefetch_max_inflights);
+    c->GetValue("block_cache.storage_upload_retry_timeout_s",
+                &cache::FLAGS_storage_upload_retry_timeout_s);
     c->GetValue("block_cache.storage_download_retry_timeout_s",
                 &cache::FLAGS_storage_download_retry_timeout_s);
   }
