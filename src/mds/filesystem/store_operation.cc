@@ -984,6 +984,7 @@ Status GetChunkOperation::Run(TxnUPtr& txn) {
   auto status = txn->BatchGet(keys, kvs);
   if (!status.ok()) return status;
 
+  result_.chunks.clear();
   for (const auto& kv : kvs) {
     result_.chunks.push_back(MetaCodec::DecodeChunkValue(kv.value));
   }
@@ -994,8 +995,9 @@ Status GetChunkOperation::Run(TxnUPtr& txn) {
 Status ScanChunkOperation::Run(TxnUPtr& txn) {
   Range range = MetaCodec::GetChunkRange(fs_id_, ino_);
 
+  result_.chunks.clear();
   uint32_t slice_num = 0;
-  auto status = txn->Scan(range, [&](const std::string& key, const std::string& value) -> bool {
+  return txn->Scan(range, [&](const std::string& key, const std::string& value) -> bool {
     if (!MetaCodec::IsChunkKey(key)) return true;
 
     auto chunk = MetaCodec::DecodeChunkValue(value);
@@ -1006,8 +1008,6 @@ Status ScanChunkOperation::Run(TxnUPtr& txn) {
 
     return true;
   });
-
-  return status;
 }
 
 Status CleanChunkOperation::Run(TxnUPtr& txn) {
@@ -2061,6 +2061,7 @@ Status DeleteMdsOperation::Run(TxnUPtr& txn) {
 Status ScanMdsOperation::Run(TxnUPtr& txn) {
   Range range = MetaCodec::GetHeartbeatMdsRange();
 
+  result_.mds_entries.clear();
   return txn->Scan(range, [&](const std::string& key, const std::string& value) -> bool {
     if (!MetaCodec::IsMdsHeartbeatKey(key)) return true;
 
@@ -2085,6 +2086,7 @@ Status DeleteClientOperation::Run(TxnUPtr& txn) {
 Status ScanClientOperation::Run(TxnUPtr& txn) {
   Range range = MetaCodec::GetHeartbeatClientRange();
 
+  result_.client_entries.clear();
   return txn->Scan(range, [&](const std::string& key, const std::string& value) -> bool {
     if (!MetaCodec::IsClientHeartbeatKey(key)) return true;
 
@@ -2123,6 +2125,7 @@ Status DeleteCacheMemberOperation::Run(TxnUPtr& txn) {
 Status ScanCacheMemberOperation::Run(TxnUPtr& txn) {
   Range range = MetaCodec::GetHeartbeatCacheMemberRange();
 
+  result_.cache_member_entries.clear();
   return txn->Scan(range, [&](const std::string& key, const std::string& value) -> bool {
     if (!MetaCodec::IsCacheMemberHeartbeatKey(key)) return true;
 
@@ -2205,6 +2208,7 @@ Status CleanDelFileOperation::Run(TxnUPtr& txn) {
 Status ScanLockOperation::Run(TxnUPtr& txn) {
   Range range = MetaCodec::GetLockRange();
 
+  result_.kvs.clear();
   return txn->Scan(range, [&](const std::string& key, const std::string& value) -> bool {
     CHECK(MetaCodec::IsLockKey(key)) << fmt::format("invalid lock key({}).", key);
 
@@ -2217,6 +2221,7 @@ Status ScanLockOperation::Run(TxnUPtr& txn) {
 Status ScanFsOperation::Run(TxnUPtr& txn) {
   Range range = MetaCodec::GetFsRange();
 
+  result_.fs_infoes.clear();
   return txn->Scan(range, [&](const std::string& key, const std::string& value) -> bool {
     CHECK(MetaCodec::IsFsKey(key)) << fmt::format("invalid fs key({}).", key);
 
@@ -2376,6 +2381,7 @@ Status BatchGetInodeAttrOperation::Run(TxnUPtr& txn) {
   auto status = txn->BatchGet(keys, kvs);
   if (!status.ok()) return status;
 
+  result_.attrs.clear();
   for (auto& kv : kvs) {
     CHECK(MetaCodec::IsInodeKey(kv.key)) << fmt::format("invalid inode key({}).", kv.key);
 
