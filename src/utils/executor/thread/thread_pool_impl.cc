@@ -23,6 +23,8 @@ namespace dingofs {
 void ThreadPoolImpl::ThreadProc(size_t thread_id) {
   VLOG(12) << "Thread " << thread_id << " started.";
 
+  pthread_setname_np(pthread_self(), name_.substr(0, 15).c_str());
+
   while (true) {
     std::function<void()> task;
 
@@ -38,7 +40,7 @@ void ThreadPoolImpl::ThreadProc(size_t thread_id) {
         task = std::move(tasks_.front());
         tasks_.pop();
       }
-    } // end lock scope
+    }  // end lock scope
 
     CHECK(task);
     (task)();

@@ -20,6 +20,7 @@
 #include <condition_variable>
 #include <mutex>
 #include <queue>
+#include <string>
 #include <thread>
 
 #include "utils/executor/thread_pool.h"
@@ -28,7 +29,8 @@ namespace dingofs {
 
 class ThreadPoolImpl : public ThreadPool {
  public:
-  ThreadPoolImpl(int num_threads) : thread_num_(num_threads) {}
+  ThreadPoolImpl(const std::string& name, int num_threads)
+      : name_(name), thread_num_(num_threads) {}
 
   ~ThreadPoolImpl() override { Stop(); }
 
@@ -52,6 +54,7 @@ class ThreadPoolImpl : public ThreadPool {
   void ThreadProc(size_t thread_id);
 
   mutable std::mutex mutex_;
+  const std::string name_;
   int thread_num_{0};
   bool running_{false};
   std::condition_variable condition_;

@@ -27,9 +27,11 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
+static const std::string kWarmupExecutorName = "vfs_warmup";
+
 Status WarmupManagerImpl::Start() {
   executor_ = std::make_unique<ExecutorImpl>(
-      fLI::FLAGS_client_vfs_warmup_executor_thread);
+      kWarmupExecutorName, fLI::FLAGS_client_vfs_warmup_executor_thread);
 
   LOG(INFO) << fmt::format(
       "warmupmanager start with params:\n executor num:{} \n \

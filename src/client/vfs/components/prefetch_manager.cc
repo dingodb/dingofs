@@ -24,12 +24,14 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
+static const std::string kPrefetchExecutorName = "vfs_prefetch";
+
 using WriteLockGuard = dingofs::utils::WriteLockGuard;
 using ReadLockGuard = dingofs::utils::ReadLockGuard;
 
 Status PrefecthManager::Start() {
   prefetch_executor_ = std::make_unique<ExecutorImpl>(
-      FLAGS_client_vfs_file_prefetch_executor_num);
+      kPrefetchExecutorName, FLAGS_client_vfs_file_prefetch_executor_num);
   auto ok = prefetch_executor_->Start();
   if (!ok) {
     LOG(ERROR) << "start prefetch manager executor failed.";
