@@ -2805,8 +2805,12 @@ FsInfoEntry FileSystemSet::GenFsInfo(uint32_t fs_id, const CreateFsParam& param)
   partition_policy->set_epoch(1);
   if (param.partition_type == pb::mds::PartitionType::MONOLITHIC_PARTITION) {
     auto* mono = partition_policy->mutable_mono();
-    int select_offset = Helper::GenerateRealRandomInteger(0, 1000) % mds_metas.size();
-    mono->set_mds_id(mds_metas.at(select_offset).ID());
+    if (param.candidate_mds_ids.empty()) {
+      int select_offset = Helper::GenerateRealRandomInteger(0, 1000) % mds_metas.size();
+      mono->set_mds_id(mds_metas.at(select_offset).ID());
+    } else {
+      mono->set_mds_id(param.candidate_mds_ids.front());
+    }
 
   } else if (param.partition_type == pb::mds::PartitionType::PARENT_ID_HASH_PARTITION) {
     auto* parent_hash = partition_policy->mutable_parent_hash();

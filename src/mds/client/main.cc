@@ -17,7 +17,6 @@
 
 #include "gflags/gflags.h"
 #include "mds/client/br.h"
-#include "mds/client/integration_test.h"
 #include "mds/client/mds.h"
 #include "mds/client/store.h"
 #include "mds/common/constant.h"
@@ -109,13 +108,6 @@ int main(int argc, char* argv[]) {
   dingofs::mds::DingoLogger::InitLogger("./log", program_name, dingofs::mds::LogLevel::kINFO);
 
   std::string lower_cmd = Helper::ToLowerCase(FLAGS_cmd);
-
-  // run integration test command
-  {
-    if (dingofs::mds::client::IntegrationTestCommandRunner::Run(lower_cmd)) {
-      return 0;
-    }
-  }
 
   // run backup command
   {

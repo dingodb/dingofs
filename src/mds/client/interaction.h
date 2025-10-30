@@ -49,7 +49,7 @@ class Interaction {
   bool Init(const std::string& addr);
 
   template <typename Request, typename Response>
-  butil::Status SendRequest(const std::string& service_name, const std::string& api_name, const Request& request,
+  butil::Status SendRequest(const std::string& service_name, const std::string& api_name, Request& request,
                             Response& response);
 
  private:
@@ -57,23 +57,34 @@ class Interaction {
 };
 
 template <typename Request, typename Response>
-butil::Status Interaction::SendRequest(const std::string& service_name, const std::string& api_name,
-                                       const Request& request, Response& response) {
+butil::Status Interaction::SendRequest(const std::string& service_name, const std::string& api_name, Request& request,
+                                       Response& response) {
   const google::protobuf::MethodDescriptor* method = nullptr;
 
   if (service_name == "MDSService") {
     method = dingofs::pb::mds::MDSService::descriptor()->FindMethodByName(api_name);
   } else {
-    DINGO_LOG(FATAL) << "Unknown service name: " << service_name;
+    DINGO_LOG(FATAL) << "unknown service name: " << service_name;
   }
 
   if (method == nullptr) {
-    DINGO_LOG(FATAL) << "Unknown api name: " << api_name;
+    DINGO_LOG(FATAL) << "unknown api name: " << api_name;
   }
 
   brpc::Controller cntl;
   cntl.set_timeout_ms(FLAGS_timeout_ms);
   cntl.set_log_id(butil::fast_rand());
+
+  if constexpr (std::is_same_v<Request, pb::mds::JoinCacheGroupRequest> ||
+                std::is_same_v<Request, pb::mds::LeaveCacheGroupRequest> ||
+                std::is_same_v<Request, pb::mds::ListGroupsRequest> ||
+                std::is_same_v<Request, pb::mds::ReweightMemberRequest> ||
+                std::is_same_v<Request, pb::mds::ListMembersRequest> ||
+                std::is_same_v<Request, pb::mds::UnLockMemberRequest> ||
+                std::is_same_v<Request, pb::mds::DeleteMemberRequest>) {
+  } else {
+    request.mutable_context()->set_epoch(1);
+  }
 
   channel_.CallMethod(method, &cntl, &request, &response, nullptr);
   if (FLAGS_log_each_request) {
@@ -82,13 +93,13 @@ butil::Status Interaction::SendRequest(const std::string& service_name, const st
                                    request.ShortDebugString().substr(0, 256));
   }
   if (cntl.Failed()) {
-    DINGO_LOG(ERROR) << fmt::format("{} response failed, {} {} {}", api_name, cntl.log_id(), cntl.ErrorCode(),
+    DINGO_LOG(ERROR) << fmt::format("{} response fail, {} {} {}", api_name, cntl.log_id(), cntl.ErrorCode(),
                                     cntl.ErrorText());
     return Status(cntl.ErrorCode(), cntl.ErrorText());
   }
 
   if (response.error().errcode() != dingofs::pb::error::OK) {
-    DINGO_LOG(ERROR) << fmt::format("{} response failed, error: {} {}", api_name,
+    DINGO_LOG(ERROR) << fmt::format("{} response fail, error: {} {}", api_name,
                                     dingofs::pb::error::Errno_Name(response.error().errcode()),
                                     response.error().errmsg());
 

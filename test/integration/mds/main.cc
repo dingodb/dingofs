@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fmt/core.h"
+#include <iostream>
+#include <string>
+#include <vector>
+
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
@@ -31,7 +34,7 @@ static void InitLog(const std::string& log_dir) {
   FLAGS_logtostderr = false;
   FLAGS_alsologtostderr = false;
 
-  std::string program_name = "mds_unit_test";
+  std::string program_name = "mds_integration_test";
 
   google::InitGoogleLogging(program_name.c_str());
   google::SetLogDestination(
@@ -49,32 +52,13 @@ static void InitLog(const std::string& log_dir) {
   google::SetStderrLogging(google::GLOG_FATAL);
 }
 
-int main(int argc, char** argv) {
+int main(int argc, char* argv[]) {
   InitLog("./log");
 
   testing::InitGoogleTest(&argc, argv);
   google::ParseCommandLineFlags(&argc, &argv, true);
 
-  if (testing::FLAGS_gtest_filter == "*") {
-    std::string default_run_case;
-    // common
+  int ret = RUN_ALL_TESTS();
 
-    default_run_case += "MetaDataCodecTest.*";
-    default_run_case += ":HelperTest.*";
-    default_run_case += ":AutoIncrementIdGeneratorTest.*";
-    default_run_case += ":FileSystemSetTest.*";
-    default_run_case += ":InodeCacheTest.*";
-    default_run_case += ":DentryCacheTest.*";
-    default_run_case += ":FileSystemTest.*";
-
-    default_run_case += ":CoorDistributionLockTest.*";
-    default_run_case += ":MutationMergerTest.*";
-    default_run_case += ":MutationProcessorTest.*";
-    default_run_case += ":HashPartitionHelperTest.*";
-    default_run_case += ":OperationTest.*";
-
-    testing::GTEST_FLAG(filter) = default_run_case;
-  }
-
-  return RUN_ALL_TESTS();
+  return ret;
 }

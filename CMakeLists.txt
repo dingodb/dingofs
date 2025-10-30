@@ -18,6 +18,7 @@ cmake_minimum_required(VERSION 3.25 FATAL_ERROR)
 project(dingofs C CXX)
 
 option(BUILD_UNIT_TESTS "Build unit test" OFF)
+option(BUILD_INTEGRATION_TESTS "Build integration test" OFF)
 option(USE_TCMALLOC "Use tcmalloc" ON)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -311,6 +312,13 @@ if(BUILD_UNIT_TESTS)
   message(STATUS "Build unit test")
   add_subdirectory(test/unit)
 endif()
+
+
+if(BUILD_INTEGRATION_TESTS)
+  message(STATUS "Build integration test")
+  add_subdirectory(test/integration)
+endif()
+
 
 
 

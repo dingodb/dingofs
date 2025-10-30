@@ -13,37 +13,30 @@
 # limitations under the License.
 
 
-add_library(mds_client
-  mds.cc
-  store.cc
-  interaction.cc
-  br.cc
-)
-
-target_link_libraries(mds_client
-  PROTO_OBJS
-  protobuf::libprotobuf
-  jsoncpp
-
-  mds_common
-  mds_storage
-  mds_filesystem
-
-  dingo::sdk
-)
-
-add_executable(dingo-mds-client
+add_executable(integration_test_mds
+  test_mds.cc
   main.cc
 )
 
-target_link_libraries(dingo-mds-client
+target_link_libraries(integration_test_mds
   PROTO_OBJS
 
+  mds_common
   mds_client
+  
+  dingofs_utils
 
-  brpc::brpc
-  fmt::fmt
-  gflags::gflags
-  glog::glog
-  OpenSSL::SSL
+  absl::log_internal_message
+  absl::cleanup
+  absl::btree
+  absl::memory
+  absl::utility
+  absl::strings
+
+  protobuf::libprotobuf
+  ${TEST_INTEGRATION_DEPS_WITHOUT_MAIN}
+)
+
+set_target_properties(integration_test_mds PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY ${TEST_EXECUTABLE_OUTPUT_PATH}
 )

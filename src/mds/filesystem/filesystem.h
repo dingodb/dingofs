@@ -370,6 +370,7 @@ class FileSystemSet {
     uint32_t recycle_time_hour;
     pb::mds::PartitionType partition_type;
     uint32_t expect_mds_num{0};  // for hash partition
+    std::vector<uint64_t> candidate_mds_ids;
   };
 
   Status CreateFs(const CreateFsParam& param, FsInfoEntry& fs_info);

@@ -16,6 +16,7 @@
 
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 
 #include <cctype>
 #include <cstdint>
@@ -372,7 +373,7 @@ std::string Helper::GenerateRandomString(int length) {
   std::string chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
   std::string rand_string;
 
-  unsigned int seed = time(nullptr);  // Get seed value for rand_r()
+  uint32_t seed = GenerateRealRandomInteger(0, UINT32_MAX);
 
   for (int i = 0; i < length; i++) {
     int rand_index = rand_r(&seed) % chars.size();

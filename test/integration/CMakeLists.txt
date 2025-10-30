@@ -12,38 +12,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
-add_library(mds_client
-  mds.cc
-  store.cc
-  interaction.cc
-  br.cc
+set(TEST_INTEGRATION_DEPS
+    GTest::gtest
+    GTest::gmock
+    GTest::gtest_main
+    brpc::brpc
+    glog::glog
+    gflags::gflags
+    dl
 )
 
-target_link_libraries(mds_client
-  PROTO_OBJS
-  protobuf::libprotobuf
-  jsoncpp
-
-  mds_common
-  mds_storage
-  mds_filesystem
-
-  dingo::sdk
+set(TEST_INTEGRATION_DEPS_WITHOUT_MAIN
+    GTest::gtest
+    GTest::gmock
+    brpc::brpc
+    glog::glog
+    gflags::gflags
+    dl
 )
 
-add_executable(dingo-mds-client
-  main.cc
-)
-
-target_link_libraries(dingo-mds-client
-  PROTO_OBJS
-
-  mds_client
-
-  brpc::brpc
-  fmt::fmt
-  gflags::gflags
-  glog::glog
-  OpenSSL::SSL
-)
+add_subdirectory(mds)

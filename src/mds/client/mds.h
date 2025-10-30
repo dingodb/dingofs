@@ -17,6 +17,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "dingofs/mds.pb.h"
 #include "mds/client/interaction.h"
@@ -25,6 +26,9 @@
 namespace dingofs {
 namespace mds {
 namespace client {
+
+using pb::mds::EchoRequest;
+using pb::mds::EchoResponse;
 
 using pb::mds::HeartbeatRequest;
 using pb::mds::HeartbeatResponse;
@@ -101,6 +105,27 @@ using pb::mds::SymlinkResponse;
 using pb::mds::ReadLinkRequest;
 using pb::mds::ReadLinkResponse;
 
+using pb::mds::GetAttrRequest;
+using pb::mds::GetAttrResponse;
+
+using pb::mds::SetAttrRequest;
+using pb::mds::SetAttrResponse;
+
+using pb::mds::GetXAttrRequest;
+using pb::mds::GetXAttrResponse;
+
+using pb::mds::SetXAttrRequest;
+using pb::mds::SetXAttrResponse;
+
+using pb::mds::RemoveXAttrRequest;
+using pb::mds::RemoveXAttrResponse;
+
+using pb::mds::ListXAttrRequest;
+using pb::mds::ListXAttrResponse;
+
+using pb::mds::RenameRequest;
+using pb::mds::RenameResponse;
+
 using pb::mds::AllocSliceIdRequest;
 using pb::mds::AllocSliceIdResponse;
 
@@ -163,6 +188,8 @@ class MDSClient {
   void SetFsId(uint32_t fs_id) { fs_id_ = fs_id; }
   void SetEpoch(uint64_t epoch) { epoch_ = epoch; }
 
+  EchoResponse Echo(const std::string& message);
+
   HeartbeatResponse Heartbeat(uint32_t mds_id);
 
   GetMDSListResponse GetMdsList();
@@ -173,6 +200,7 @@ class MDSClient {
     uint32_t chunk_size;
     uint32_t block_size;
     uint32_t expect_mds_num;
+    std::vector<uint64_t> candidate_mds_ids;
 
     S3Info s3_info;
     RadosInfo rados_info;
@@ -216,8 +244,21 @@ class MDSClient {
   SymlinkResponse Symlink(Ino parent, const std::string& name, const std::string& symlink);
   ReadLinkResponse ReadLink(Ino ino);
 
+  // attribute operations
+  pb::mds::GetAttrResponse GetAttr(Ino ino);
+  pb::mds::SetAttrResponse SetAttr(Ino ino, uint32_t to_set, const pb::mds::Inode& inode);
+
+  pb::mds::GetXAttrResponse GetXAttr(Ino ino, const std::string& name);
+  pb::mds::SetXAttrResponse SetXAttr(Ino ino, const std::map<std::string, std::string>& xattrs);
+  pb::mds::RemoveXAttrResponse RemoveXAttr(Ino ino, const std::string& name);
+  pb::mds::ListXAttrResponse ListXAttr(Ino ino);
+
+  pb::mds::RenameResponse Rename(Ino old_parent, const std::string& old_name, Ino new_parent,
+                                 const std::string& new_name, const std::vector<int64_t>& old_ancestors = {},
+                                 const std::vector<int64_t>& new_ancestors = {});
+
   AllocSliceIdResponse AllocSliceId(uint32_t alloc_num, uint64_t min_slice_id);
-  WriteSliceResponse WriteSlice(Ino ino, int64_t chunk_index);
+  WriteSliceResponse WriteSlice(Ino parent, Ino ino, int64_t chunk_index);
   ReadSliceResponse ReadSlice(Ino ino, int64_t chunk_index);
 
   // quota operations
