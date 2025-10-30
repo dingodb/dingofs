@@ -152,7 +152,7 @@ void BlockAccesserImpl::AsyncPut(
     block_put_async_num << -1;
     inflight_bytes_throttle_->OnComplete(ctx->buffer_size);
 
-    // for return
+    // NOTE: this is necessary because caller reuse context when retry
     ctx->cb = origin_cb;
     ctx->cb(ctx);
   };
@@ -205,6 +205,8 @@ void BlockAccesserImpl::AsyncGet(
     block_get_async_num << -1;
     inflight_bytes_throttle_->OnComplete(ctx->len);
 
+    // NOTE: this is necessary because caller reuse context when retry
+    ctx->cb = origin_cb;
     origin_cb(ctx);
   };
 
