@@ -27,7 +27,7 @@ DEFINE_int32(executor_impl_bg_thread_num, 8,
              "background thread number for executor");
 
 bool ExecutorImpl::Start() {
-  pool_ = std::make_unique<ThreadPoolImpl>(thread_num_);
+  pool_ = std::make_unique<ThreadPoolImpl>(name_, thread_num_);
   pool_->Start();
   timer_ = std::make_unique<TimerImpl>(pool_.get());
   CHECK(timer_->Start());

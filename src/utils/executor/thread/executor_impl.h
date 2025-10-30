@@ -20,6 +20,7 @@
 #include <atomic>
 #include <functional>
 #include <memory>
+#include <string>
 
 #include "utils/executor/executor.h"
 #include "utils/executor/thread_pool.h"
@@ -31,10 +32,12 @@ DECLARE_int32(executor_impl_bg_thread_num);
 
 class ExecutorImpl final : public Executor {
  public:
-  ExecutorImpl() : ExecutorImpl(FLAGS_executor_impl_bg_thread_num) {}
+  ExecutorImpl(const std::string& name)
+      : ExecutorImpl(name, FLAGS_executor_impl_bg_thread_num) {}
 
-  ExecutorImpl(int thread_num)
-      : thread_num_(thread_num),
+  ExecutorImpl(const std::string& name, int thread_num)
+      : name_(name),
+        thread_num_(thread_num),
         timer_(nullptr),
         pool_(nullptr),
         running_(false) {}
@@ -58,6 +61,7 @@ class ExecutorImpl final : public Executor {
   static std::string InternalName() { return "ExecutorImpl"; }
 
  private:
+  const std::string name_;
   const int thread_num_;
   std::unique_ptr<Timer> timer_;
   std::unique_ptr<ThreadPool> pool_;

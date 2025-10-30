@@ -50,6 +50,9 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
+static const std::string kFlushExecutorName = "vfs_flush";
+static const std::string kReadExecutorName = "vfs_read";
+
 Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
                          const VFSOption& vfs_option) {
   CHECK(started_.load(std::memory_order_relaxed) == false)
@@ -139,14 +142,14 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
   }
 
   {
-    flush_executor_ =
-        std::make_unique<ExecutorImpl>(FLAGS_client_vfs_flush_bg_thread);
+    flush_executor_ = std::make_unique<ExecutorImpl>(
+        kFlushExecutorName, FLAGS_client_vfs_flush_bg_thread);
     flush_executor_->Start();
   }
 
   {
-    read_executor_ =
-        std::make_unique<ExecutorImpl>(FLAGS_client_vfs_read_executor_thread);
+    read_executor_ = std::make_unique<ExecutorImpl>(
+        kReadExecutorName, FLAGS_client_vfs_read_executor_thread);
     read_executor_->Start();
   }
 
