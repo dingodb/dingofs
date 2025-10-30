@@ -40,6 +40,10 @@
 namespace dingofs {
 namespace cache {
 
+DEFINE_int64(storage_upload_retry_timeout_s, 1800,
+             "Timeout in seconds for upload retry");
+DEFINE_validator(storage_upload_retry_timeout_s, brpc::PassValidate);
+
 DEFINE_int64(storage_download_retry_timeout_s, 1800,
              "Timeout in seconds for download retry");
 DEFINE_validator(storage_download_retry_timeout_s, brpc::PassValidate);
@@ -83,8 +87,15 @@ void UploadClosure::OnCallback(
   auto status = ctx->status;
   if (status.ok()) {
     OnComplete(status);
-  } else {
+  } else if (ctx->start_time + FLAGS_storage_upload_retry_timeout_s * 1e6 >
+             butil::gettimeofday_us()) {
     OnRetry(ctx);
+  } else {
+    LOG(ERROR) << "Upload block exceed max retry timeout: key = " << ctx->key
+               << ", retry(" << ctx->retry << "), elapsed("
+               << (butil::gettimeofday_us() - ctx->start_time) / 1e6 << "s)"
+               << ",  status = " << ctx->status.ToString();
+    OnComplete(status);
   }
 }
 
