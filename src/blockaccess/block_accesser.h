@@ -17,9 +17,11 @@
 #ifndef DINGOFS_BLOCK_ACCESS_BLOCK_ACCESSER_H_
 #define DINGOFS_BLOCK_ACCESS_BLOCK_ACCESSER_H_
 
+#include <glog/logging.h>
 #include <sys/types.h>
 
 #include <condition_variable>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
@@ -115,12 +117,15 @@ class BlockAccesserImpl : public BlockAccesser {
     void OnComplete(uint64_t len) {
       std::unique_lock<std::mutex> lock(mtx_);
       inflight_bytes_ -= len;
+      CHECK(inflight_bytes_ >= 0)
+          << "inflight_bytes_=" << inflight_bytes_
+          << ", max_inflight_bytes_=" << max_inflight_bytes_;
       cond_.notify_all();
     }
 
    private:
     const uint64_t max_inflight_bytes_;
-    uint64_t inflight_bytes_{0};
+    int64_t inflight_bytes_{0};
 
     std::mutex mtx_;
     std::condition_variable cond_;
