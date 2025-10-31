@@ -108,9 +108,8 @@ DEFINE_validator(client_vfs_file_prefetch_block_cnt, brpc::PassValidate);
 DEFINE_uint32(client_vfs_file_prefetch_executor_num, 4,
               "number of prefetch executor");
 
-// begin warmp params
-DEFINE_int32(client_vfs_warmup_executor_thread, 2,
-             "number of warmup executor threads");
+// warmup
+DEFINE_int32(client_vfs_warmup_threads, 4, "number of warmup threads");
 
 DEFINE_bool(client_vfs_intime_warmup_enable, false,
             "enable intime warmup, default is false");
@@ -120,12 +119,10 @@ DEFINE_int64(client_vfs_warmup_mtime_restart_interval_secs, 120,
              "intime warmup restart interval");
 DEFINE_validator(client_vfs_warmup_mtime_restart_interval_secs,
                  brpc::PassValidate);
-
 DEFINE_int64(client_vfs_warmup_trigger_restart_interval_secs, 1800,
              "passive warmup restart interval");
 DEFINE_validator(client_vfs_warmup_trigger_restart_interval_secs,
                  brpc::PassValidate);
-// end warmp params
 
 // ## vfs meta
 DEFINE_uint32(client_vfs_read_dir_batch_size, 1024, "read dir batch size.");

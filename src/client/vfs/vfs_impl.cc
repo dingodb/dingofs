@@ -59,7 +59,6 @@ Status VFSImpl::Start(const VFSConfig& vfs_conf) {  // NOLINT
 
   meta_system_ = vfs_hub_->GetMetaSystem();
   handle_manager_ = vfs_hub_->GetHandleManager();
-  vfs_hub_->GetWarmupManager()->SetVFS(this);
 
   DINGOFS_RETURN_NOT_OK(StartBrpcServer());
 
@@ -417,9 +416,9 @@ Status VFSImpl::SetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
   }
 
   if (IsWarmupXAttr(name)) {
-    WarmupInfo info(ino, value);
-
-    vfs_hub_->GetWarmupManager()->AsyncWarmupProcess(info);
+    LOG(INFO) << fmt::format(
+        "Set warmup task context: [key: {}, inodes: ({})].", ino, value);
+    vfs_hub_->GetWarmupManager()->SubmitTask(WarmupTaskContext{ino, value});
 
     return Status::OK();
   }
@@ -434,8 +433,8 @@ Status VFSImpl::GetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
   }
 
   if (IsWarmupXAttr(name)) {
-    vfs_hub_->GetWarmupManager()->GetWarmupStatus(ino, *value);
-
+    *value = vfs_hub_->GetWarmupManager()->GetWarmupTaskStatus(ino);
+    LOG(INFO) << "Get warmup task status value: " << *value;
     return Status::OK();
   }
 

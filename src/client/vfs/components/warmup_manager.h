@@ -1,191 +1,259 @@
-#ifndef DINGOFS_CLIENT_VFS_WARMUP_WARMUP_MANAGER_H_
-#define DINGOFS_CLIENT_VFS_WARMUP_WARMUP_MANAGER_H_
+// Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-#include <bthread/countdown_event.h>
-#include <utils/string.h>
-#include <utils/string_util.h>
+#ifndef DINGOFS_SRC_CLIENT_VFS_WARMUP_MANAGER_H_
+#define DINGOFS_SRC_CLIENT_VFS_WARMUP_MANAGER_H_
+
+#include <bthread/execution_queue.h>
+#include <fmt/format.h>
 
 #include <atomic>
-#include <chrono>
-#include <cstddef>
 #include <cstdint>
-#include <memory>
-#include <mutex>
-#include <string>
+#include <set>
 #include <unordered_map>
-#include <vector>
 
-#include "butil/time.h"
-#include "client/vfs/components/prefetch_manager.h"
-#include "client/vfs/vfs.h"
+#include "cache/blockcache/block_cache.h"
+#include "cache/blockcache/cache_store.h"
 #include "client/vfs/vfs_meta.h"
+#include "common/metrics/client/vfs/warmup_metric.h"
 #include "common/status.h"
-#include "fmt/format.h"
+#include "common/trace/context.h"
+#include "utils/concurrent/concurrent.h"
+#include "utils/concurrent/rw_lock.h"
 #include "utils/executor/executor.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 
-using BCountDown = bthread::CountdownEvent;
+class VFSHub;
+class WarmupManager;
 
-class WarmupManagerImpl;
+using BthreadRWLock = dingofs::utils::BthreadRWLock;
+using AsyncWarmupCb = std::function<void(Status status)>;
+using WarmupManagerUptr = std::unique_ptr<WarmupManager>;
+using WarmupMetric = metrics::client::WarmupMetric;
 
-enum WarmupTriggerType {
-  kWarmupTriggerTypeUnknown = 0,
-  kWarmupTriggerTypeIntime = 1,
-  kWarmupTriggerTypePassive = 2,
+enum class WarmupType : uint8_t {
+  kWarmupIntime = 0,
+  kWarmupManual = 1,
+  kWarmupUnknown = 2,
 };
 
-enum WarmupStatus {
-  kWarmupStatusPending = 0,
-  kWarmupStatusPrefetching = 1,
-  kWarmupStatusDone = 2
-};
+struct WarmupTaskContext {
+  WarmupTaskContext(const WarmupTaskContext& task) = default;
+  WarmupTaskContext(Ino ino) : task_key(ino), type(WarmupType::kWarmupIntime) {}
+  WarmupTaskContext(Ino ino, const std::string& xattr)
+      : task_key(ino), type(WarmupType::kWarmupManual), task_inodes(xattr) {}
 
-class WarmupHelper {
- public:
-  // Convert WarmupType to string
-  static const std::string& GetWarmupTypeString(WarmupTriggerType type) {
-    static const std::string kWarmupTriggerTypeIntimeStr = "intime";
-    static const std::string kWarmupTriggerTypePassiveStr = "passive";
-    static const std::string kWarmupTriggerTypeUnknownStr = "unknown";
-
-    switch (type) {
-      case kWarmupTriggerTypeIntime:
-        return kWarmupTriggerTypeIntimeStr;
-      case kWarmupTriggerTypePassive:
-        return kWarmupTriggerTypePassiveStr;
-      default:
-        return kWarmupTriggerTypeUnknownStr;
-    }
-  }
-
-  static uint64_t GetTimeSecs() {
-    return std::chrono::duration_cast<std::chrono::seconds>(
-               std::chrono::system_clock::now().time_since_epoch())
-        .count();
-  }
-};
-
-struct WarmupInfo {
-  WarmupInfo() = default;
-  WarmupInfo(const WarmupInfo& info) = default;
-  WarmupInfo(Ino ino)
-      : ino_(ino), type_(WarmupTriggerType::kWarmupTriggerTypeIntime) {}
-  WarmupInfo(Ino ino, const std::string& attr)
-      : ino_(ino),
-        type_(WarmupTriggerType::kWarmupTriggerTypePassive),
-        attr_value_(attr) {}
-  Ino ino_;
-  WarmupTriggerType type_;
-  std::string attr_value_;
-
-  std::string ToString() {
-    return fmt::format("warmup info inode:{} type{}", ino_,
-                       WarmupHelper::GetWarmupTypeString(type_));
-  }
+  WarmupType type;
+  Ino task_key;
+  // comma separated inodeid('1000023,10000021,...'), provide by dingo-tool
+  std::string task_inodes;
 };
 
 class WarmupTask {
  public:
-  WarmupTask() = default;
+  explicit WarmupTask(const WarmupTaskContext& context)
+      : context_(context), task_key_(context.task_key) {}
 
-  WarmupTask(Ino ino, WarmupInfo& info)
-      : ino_(ino), info_(info), trigger_time_(0) {
-    timer_.start();
+  uint64_t GetKey() const { return task_key_; }
+
+  void AddFileInode(Ino file) {
+    utils::WriteLockGuard lck(rwlock_);
+    auto [_, ok] = file_inodes_.emplace(file);
+    if (ok) {
+      IncTotal();
+    }
   }
 
-  ~WarmupTask() = default;
-
-  std::string ToStringWithoutRes() {
-    return fmt::format("warmup task ino:{} task:{} trigger_time:{}", ino_,
-                       info_.ToString(), trigger_time_);
+  const std::set<Ino>& GetFileInodes() const {
+    utils::ReadLockGuard lck(rwlock_);
+    return file_inodes_;
   }
 
-  std::string ToStringWithRes() {
-    return fmt::format(
-        "warmup task ino:{} task:{} \n \
-          finished:{} errors:{} total_len:{} cost:{}us",
-        ino_, info_.ToString(), finished_.load(), errors_.load(),
-        total_len_.load(), timer_.u_elapsed());
-  }
+  uint64_t GetFileCount() const {
+    utils::ReadLockGuard lck(rwlock_);
+    return file_inodes_.size();
+  };
 
-  std::string ToQueryInfo() {
-    return fmt::format("{}/{}/{}", finished_.load(), total_files.load(),
-                       errors_.load());
-  }
+  WarmupType GetType() const { return context_.type; };
+
+  std::string GetTaskInodes() const { return context_.task_inodes; };
+
+  void IncTotal() { progress_.total.fetch_add(1, std::memory_order_relaxed); };
+
+  void IncFinished() {
+    progress_.finish.fetch_add(1, std::memory_order_relaxed);
+  };
+
+  void IncErrors() {
+    progress_.errors.fetch_add(1, std::memory_order_relaxed);
+  };
+
+  uint64_t GetTotal() const {
+    return progress_.total.load(std::memory_order_acquire);
+  };
+  uint64_t GetFinished() const {
+    return progress_.finish.load(std::memory_order_acquire);
+  };
+  uint64_t GetErrors() const {
+    return progress_.errors.load(std::memory_order_acquire);
+  };
 
  private:
-  Ino ino_;
-  WarmupInfo info_;
-  std::vector<Ino> file_inodes_;
-  std::atomic<size_t> total_len_{0};
-  std::atomic<size_t> total_files{0};
-  std::atomic<size_t> finished_{0};
-  std::atomic<size_t> errors_{0};
-  std::atomic<bool> completed_{false};
-  butil::Timer timer_;
-  uint64_t trigger_time_;
-  std::vector<Ino>::iterator it_;
-  BCountDown count_down;
+  struct WarmupProgress {
+    std::atomic<uint64_t> total{0};
+    std::atomic<uint64_t> finish{0};
+    std::atomic<uint64_t> errors{0};
+  };
 
-  friend class WarmupManagerImpl;
+  Ino task_key_{0};
+  std::set<Ino> file_inodes_;  // all files need to warmup
+  uint64_t total_files_{0};
+  mutable BthreadRWLock rwlock_;
+  WarmupTaskContext context_;
+  WarmupProgress progress_;
+};
+
+struct BlockContext {
+  BlockContext(cache::BlockKey block_key, uint64_t block_len)
+      : key(block_key), len(block_len) {}
+  cache::BlockKey key;
+  uint64_t len;
+};
+
+struct ChunkContext {
+  ChunkContext(Ino ino, uint64_t chunk_idx, uint64_t offset, uint64_t length)
+      : ino{ino}, chunk_idx(chunk_idx), offset(offset), len(length) {}
+
+  Ino ino;
+  uint64_t chunk_idx;
+  uint64_t offset;
+  uint64_t len;
+
+  std::string ToString() const {
+    return fmt::format("Chunk context, ino: {}, chunk: {}-{}-{}", ino,
+                       chunk_idx, offset, offset + len);
+  }
 };
 
 class WarmupManager {
  public:
-  virtual ~WarmupManager() = default;
+  WarmupManager(VFSHub* vfs_hub, uint64_t fs_id, uint64_t chunk_size,
+                uint64_t block_size)
+      : vfs_hub_(vfs_hub),
+        fs_id_(fs_id),
+        chunk_size_(chunk_size),
+        block_size_(block_size),
+        metrics_(std::make_unique<WarmupMetric>()) {}
 
-  // Start the warmup manager
-  virtual Status Start() = 0;
+  ~WarmupManager() { ClearWarmupTask(); };
 
-  // Stop the warmup manager
-  virtual void Stop() = 0;
+  static WarmupManagerUptr New(VFSHub* vfs_hub, uint64_t fs_id,
+                               uint64_t chunk_size, uint64_t block_size) {
+    return std::make_unique<WarmupManager>(vfs_hub, fs_id, chunk_size,
+                                           block_size);
+  }
 
-  virtual void SetVFS(VFS* vfs) = 0;
+  Status Start(const uint32_t& threads);
 
-  virtual void AsyncWarmupProcess(WarmupInfo& warmInfo) = 0;
+  Status Stop();
 
-  virtual Status GetWarmupStatus(Ino key, std::string& warmmupStatus) = 0;
-};
+  void SubmitTask(const WarmupTaskContext& context);
 
-class WarmupManagerImpl : public WarmupManager {
- public:
-  WarmupManagerImpl(VFSHub* vfs_hub) : vfs_hub_(vfs_hub), started_(false) {}
-
-  ~WarmupManagerImpl() override = default;
-
-  Status Start() override;
-
-  void Stop() override;
-
-  void SetVFS(VFS* vfs) override { vfs_ = vfs; }
-
-  void AsyncWarmupProcess(WarmupInfo& warmInfo) override;
-
-  Status GetWarmupStatus(Ino key, std::string& warmmupStatus) override;
+  std::string GetWarmupTaskStatus(const Ino& task_key);
 
  private:
-  void WarmupProcess(WarmupInfo& warmInfo);
-  void ProcessPassiveWarmup(WarmupInfo& warmInfo);
-  void ProcessIntimeWarmup(WarmupInfo& warmInfo);
-  Status ProcessFileWarmup(const WarmupInfo& warmInfo);
-  Status WalkFile(WarmupTask& task, Ino ino);
-  Status WarmUpFiles(WarmupTask& task);
-  Status WarmUpFile(Ino ino, AsyncPrefetchCb cb);
+  static int HandleWarmupTask(void* meta,
+                              bthread::TaskIterator<WarmupTaskContext>& iter);
+  void AsyncWarmupTask(const WarmupTaskContext& context);
 
-  std::unique_ptr<Executor> executor_;
-  std::atomic<bool> started_;
-  std::unordered_map<Ino, std::unique_ptr<WarmupTask>> inode_2_task_;
-  std::mutex taskMutex_;
-  std::mutex task_mutex_;
-  VFS* vfs_;
+  void DoWarmupTask(WarmupTask* task);
+
+  void ProcessIntimeWarmup(WarmupTask* task);
+
+  void ProcessManualWarmup(WarmupTask* task);
+
+  void WarmupFiles(WarmupTask* task);
+
+  void WarmupFile(Ino ino, AsyncWarmupCb cb);
+
+  bool NewWarmupTask(const WarmupTaskContext& context);
+
+  WarmupTask* GetWarmupTask(const Ino& task_key);
+
+  void RemoveWarmupTask(const Ino& task_key);
+
+  void ClearWarmupTask();
+
+  Status WalkFile(WarmupTask* task, Ino ino);
+
+  std::vector<ChunkContext> File2Chunk(Ino ino, uint64_t offset,
+                                       uint64_t len) const;
+  std::vector<BlockContext> Chunk2Block(ContextSPtr ctx, ChunkContext& req);
+  std::vector<BlockContext> FileRange2BlockKey(ContextSPtr ctx, Ino ino,
+                                               uint64_t offset, uint64_t len);
+  std::vector<BlockContext> RemoveDuplicateBlocks(
+      const std::vector<BlockContext>& blocks);
+
+  void IncTaskMetric(uint64_t value) {
+    metrics_->inflight_warmup_tasks << value;
+  };
+
+  void DecTaskMetric(uint64_t value) {
+    metrics_->inflight_warmup_tasks << -1 * value;
+  };
+
+  void IncFileMetric(uint64_t value) {
+    metrics_->inflight_warmup_files << value;
+  };
+
+  void DecFileMetric(uint64_t value) {
+    metrics_->inflight_warmup_files << -1 * value;
+  };
+
+  void IncBlockMetric(uint64_t value) {
+    metrics_->inflight_warmup_blocks << value;
+  };
+
+  void DecBlockMetric(uint64_t value) {
+    metrics_->inflight_warmup_blocks << -1 * value;
+  };
+
+  void ResetMetrics() {
+    metrics_->inflight_warmup_tasks.reset();
+    metrics_->inflight_warmup_files.reset();
+    metrics_->inflight_warmup_blocks.reset();
+  }
+
+  uint64_t chunk_size_{0};
+  uint64_t block_size_{0};
+  uint64_t fs_id_;
+  std::atomic<bool> running_{false};
+  std::unordered_map<uint64_t, std::unique_ptr<WarmupTask>>
+      warmup_tasks_;           // task key to warmup tasks
+  BthreadRWLock task_rwlock_;  // protect warmup tasks
+  std::unique_ptr<Executor> warmup_executor_;
+  bthread::ExecutionQueueId<WarmupTaskContext> task_queue_id_;
+  cache::BlockCache* block_cache_;
   VFSHub* vfs_hub_;
+  std::unique_ptr<WarmupMetric> metrics_;
 };
 
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_CLIENT_VFS_WARMUP_WARMUP_MANAGER_H_
+#endif  // DINGOFS_SRC_CLIENT_VFS_WARMUP_MANAGER_H_

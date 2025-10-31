@@ -17,12 +17,14 @@
 #include "client/vfs/data/reader/file_reader.h"
 
 #include <absl/synchronization/blocking_counter.h>
+#include <butil/time.h>
 #include <glog/logging.h>
 
 #include <algorithm>
 #include <cmath>
 #include <vector>
 
+#include "cache/utils/helper.h"
 #include "client/common/const.h"
 #include "client/vfs/components/warmup_manager.h"
 #include "client/vfs/data/reader/chunk_reader.h"
@@ -99,16 +101,17 @@ Status FileReader::Read(ContextSPtr ctx, char* buf, uint64_t size,
     return Status::OK();
   }
 
-  uint64_t time_now = WarmupHelper::GetTimeSecs();
+  uint64_t time_now = cache::Helper::Timestamp();
   if (FLAGS_client_vfs_intime_warmup_enable &&
       ((time_now - last_intime_warmup_trigger_) >
            FLAGS_client_vfs_warmup_trigger_restart_interval_secs ||
        (attr.mtime - last_intime_warmup_mtime_) >
-           fLI64::FLAGS_client_vfs_warmup_mtime_restart_interval_secs)) {
-    WarmupInfo info(ino_);
+           FLAGS_client_vfs_warmup_mtime_restart_interval_secs)) {
+    LOG(INFO) << "Trigger intime warmup for ino: " << ino_ << ".";
     last_intime_warmup_trigger_ = time_now;
     last_intime_warmup_mtime_ = attr.mtime;
-    vfs_hub_->GetWarmupManager()->AsyncWarmupProcess(info);
+
+    vfs_hub_->GetWarmupManager()->SubmitTask(WarmupTaskContext{ino_});
   }
 
   uint64_t chunk_size = GetChunkSize();
