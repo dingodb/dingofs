@@ -14,6 +14,7 @@
 
 #include "mds/common/runnable.h"
 
+#include <glog/logging.h>
 #include <json/value.h>
 
 #include <atomic>
@@ -34,7 +35,7 @@ namespace mds {
 
 const int kStopSignalIntervalUs = 1000;
 
-TaskRunnable::TaskRunnable() : id_(GenId()) { create_time_us_ = Helper::TimestampUs(); }
+TaskRunnable::TaskRunnable() : id_(GenId()) { start_time_us_ = Helper::TimestampUs(); }
 TaskRunnable::~TaskRunnable() = default;
 
 uint64_t TaskRunnable::Id() const { return id_; }
@@ -47,12 +48,15 @@ uint64_t TaskRunnable::GenId() {
 int ExecuteRoutine(void* meta,
                    bthread::TaskIterator<TaskRunnablePtr>& iter) {  // NOLINT
   Worker* worker = static_cast<Worker*>(meta);
+  CHECK(worker != nullptr) << "[execqueue] worker is nullptr in execute routine";
 
   for (; iter; ++iter) {
     if (BAIDU_UNLIKELY(*iter == nullptr)) {
       DINGO_LOG(WARNING) << fmt::format("[execqueue][type()] task is nullptr.");
       continue;
     }
+
+    worker->Notify(*iter, WorkerEventType::kHandleTask);
 
     if (BAIDU_LIKELY(!iter.is_queue_stopped())) {
       Duration duration;
@@ -63,11 +67,9 @@ int ExecuteRoutine(void* meta,
       DINGO_LOG(INFO) << fmt::format("[execqueue][type({})] task is stopped.", (*iter)->Type());
     }
 
-    if (BAIDU_LIKELY(worker != nullptr)) {
-      worker->PopPendingTaskTrace();
-      worker->DecPendingTaskCount();
-      worker->Notify(WorkerEventType::kFinishTask);
-    }
+    worker->PopPendingTaskTrace();
+    worker->DecPendingTaskCount();
+    worker->Notify(*iter, WorkerEventType::kFinishTask);
   }
 
   return 0;
@@ -123,7 +125,7 @@ bool Worker::Execute(TaskRunnablePtr task) {
   IncPendingTaskCount();
   IncTotalTaskCount();
 
-  Notify(WorkerEventType::kAddTask);
+  Notify(task, WorkerEventType::kAddTask);
 
   return true;
 }
@@ -135,9 +137,9 @@ int32_t Worker::PendingTaskCount() { return pending_task_count_.load(std::memory
 void Worker::IncPendingTaskCount() { pending_task_count_.fetch_add(1, std::memory_order_relaxed); }
 void Worker::DecPendingTaskCount() { pending_task_count_.fetch_sub(1, std::memory_order_relaxed); }
 
-void Worker::Notify(WorkerEventType type) {
+void Worker::Notify(TaskRunnablePtr& task, WorkerEventType type) {
   if (notify_func_ != nullptr) {
-    notify_func_(type);
+    notify_func_(task, type);
   }
 }
 
@@ -213,9 +215,30 @@ WorkerSet::WorkerSet(std::string name, uint32_t worker_num, int64_t max_pending_
       queue_run_metrics_(fmt::format("dingo_worker_set_{}_queue_run_latency", name)),
       is_inplace_run(is_inplace_run) {};
 
+void WorkerSet::HandleNotify(TaskRunnablePtr& task, WorkerEventType type) {
+  switch (type) {
+    case WorkerEventType::kAddTask:
+      break;
+    case WorkerEventType::kHandleTask: {
+      int64_t now_time_us = Helper::TimestampUs();
+      QueueWaitMetrics(now_time_us - task->StartTimeUs());
+      task->SetExecuteStartTimeUs(now_time_us);
+    } break;
+
+    case WorkerEventType::kFinishTask: {
+      DecPendingTaskCount();
+      int64_t now_time_us = Helper::TimestampUs();
+      QueueRunMetrics(now_time_us - task->ExecuteStartTimeUs());
+    } break;
+
+    default:
+      break;
+  }
+}
+
 bool ExecqWorkerSet::Init() {
   for (uint32_t i = 0; i < WorkerNum(); ++i) {
-    auto worker = Worker::New([this](WorkerEventType type) { WatchWorker(type); });
+    auto worker = Worker::New([this](TaskRunnablePtr& task, WorkerEventType type) { HandleNotify(task, type); });
     if (!worker->Init()) {
       return false;
     }
@@ -378,14 +401,11 @@ bool SimpleWorkerSet::Init() {
       bthread_mutex_unlock(&mutex_);
 
       if (BAIDU_LIKELY(task != nullptr)) {
-        int64_t now_time_us = Helper::TimestampUs();
-        QueueWaitMetrics(now_time_us - task->CreateTimeUs());
+        HandleNotify(task, WorkerEventType::kHandleTask);
 
         task->Run();
 
-        QueueRunMetrics(Helper::TimestampUs() - now_time_us);
-        DecPendingTaskCount();
-        Notify(WorkerEventType::kFinishTask);
+        HandleNotify(task, WorkerEventType::kFinishTask);
       }
     }
 
@@ -451,14 +471,11 @@ bool SimpleWorkerSet::Execute(TaskRunnablePtr task) {
   // task will be decreased in the worker function and the total concurrency is
   // limited by the worker number
   if (is_inplace_run && pending_task_count < WorkerNum()) {
-    int64_t now_time_us = Helper::TimestampUs();
+    HandleNotify(task, WorkerEventType::kHandleTask);
 
     task->Run();
 
-    QueueRunMetrics(Helper::TimestampUs() - now_time_us);
-
-    DecPendingTaskCount();
-    Notify(WorkerEventType::kFinishTask);
+    HandleNotify(task, WorkerEventType::kFinishTask);
 
   } else {
     bthread_mutex_lock(&mutex_);
@@ -550,14 +567,11 @@ bool PriorWorkerSet::Init() {
       bthread_mutex_unlock(&mutex_);
 
       if (BAIDU_LIKELY(task != nullptr)) {
-        int64_t now_time_us = Helper::TimestampUs();
-        QueueWaitMetrics(now_time_us - task->CreateTimeUs());
+        HandleNotify(task, WorkerEventType::kHandleTask);
 
         task->Run();
 
-        QueueRunMetrics(Helper::TimestampUs() - now_time_us);
-        DecPendingTaskCount();
-        Notify(WorkerEventType::kFinishTask);
+        HandleNotify(task, WorkerEventType::kFinishTask);
       }
     }
 
@@ -623,14 +637,11 @@ bool PriorWorkerSet::Execute(TaskRunnablePtr task) {
   // task will be decreased in the worker function and the total concurrency is
   // limited by the worker number
   if (is_inplace_run && pending_task_count < WorkerNum()) {
-    int64_t now_time_us = Helper::TimestampUs();
+    HandleNotify(task, WorkerEventType::kHandleTask);
 
     task->Run();
 
-    QueueRunMetrics(Helper::TimestampUs() - now_time_us);
-
-    DecPendingTaskCount();
-    Notify(WorkerEventType::kFinishTask);
+    HandleNotify(task, WorkerEventType::kFinishTask);
 
   } else {
     bthread_mutex_lock(&mutex_);

@@ -841,7 +841,7 @@ void UpdateAttrOperation::ExpandChunk(TxnUPtr& txn, AttrEntry& attr, uint64_t ne
   }
 }
 
-Status UpdateAttrOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>&) {
+Status UpdateAttrOperation::RunInBatch(TxnUPtr&, AttrEntry& attr, const std::vector<KeyValue>&) {
   if (to_set_ & kSetAttrMode) {
     attr.set_mode(attr_.mode());
   }
