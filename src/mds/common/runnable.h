@@ -59,12 +59,15 @@ class TaskRunnable {
     return priority_ < other.Priority();
   }
 
-  int64_t CreateTimeUs() const { return create_time_us_; }
+  int64_t StartTimeUs() const { return start_time_us_; }
+  void SetExecuteStartTimeUs(int64_t time_us) { execute_start_time_us_ = time_us; }
+  int64_t ExecuteStartTimeUs() const { return execute_start_time_us_; }
 
  private:
   uint64_t id_{0};
   int32_t priority_{0};
-  int64_t create_time_us_{0};
+  int64_t start_time_us_{0};
+  int64_t execute_start_time_us_{0};
 };
 
 using TaskRunnablePtr = std::shared_ptr<TaskRunnable>;
@@ -78,9 +81,10 @@ int ExecuteRoutine(void*, bthread::TaskIterator<TaskRunnablePtr>& iter);
 
 enum class WorkerEventType : uint8_t {
   kAddTask = 0,
-  kFinishTask = 1,
+  kHandleTask = 1,
+  kFinishTask = 2,
 };
-using NotifyFuncer = std::function<void(WorkerEventType)>;
+using NotifyFuncer = std::function<void(TaskRunnablePtr&, WorkerEventType)>;
 
 // Run task worker
 class Worker {
@@ -103,7 +107,7 @@ class Worker {
   void IncPendingTaskCount();
   void DecPendingTaskCount();
 
-  void Notify(WorkerEventType type);
+  void Notify(TaskRunnablePtr& task, WorkerEventType type);
 
   void PushPendingTaskTrace(const std::string& trace);
   void PopPendingTaskTrace();
@@ -173,17 +177,7 @@ class WorkerSet {
   virtual std::string Trace() { return ""; }
   virtual void DescribeByJson(Json::Value& value) {};
 
-  virtual void WatchWorker(WorkerEventType type) {
-    if (type == WorkerEventType::kFinishTask) {
-      DecPendingTaskCount();
-    }
-  }
-
-  void Notify(WorkerEventType type) {
-    if (notify_func_ != nullptr) {
-      notify_func_(type);
-    }
-  }
+  virtual void HandleNotify(TaskRunnablePtr& task, WorkerEventType type);
 
  private:
   const std::string name_;
@@ -196,9 +190,6 @@ class WorkerSet {
   const int64_t max_pending_task_count_{0};
 
   std::atomic<int64_t> pending_task_count_{0};
-
-  // Notify
-  NotifyFuncer notify_func_;
 
   // Metrics
   bvar::Adder<uint64_t> total_task_count_metrics_;
