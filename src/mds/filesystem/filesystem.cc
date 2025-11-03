@@ -2648,13 +2648,13 @@ Status FileSystem::QuitAndJoinFs(Context& ctx, const std::vector<uint64_t>& quit
 static void GetQuitAndJoinMdsIds(const std::vector<uint64_t>& old_mds_ids, const std::vector<uint64_t>& new_mds_ids,
                                  std::vector<uint64_t>& quit_mds_ids, std::vector<uint64_t>& join_mds_ids) {
   for (const auto& mds_id : old_mds_ids) {
-    if (std::find(new_mds_ids.begin(), new_mds_ids.end(), mds_id) == new_mds_ids.end()) {
+    if (std::find(new_mds_ids.begin(), new_mds_ids.end(), mds_id) == new_mds_ids.end()) {  // NOLINT
       quit_mds_ids.push_back(mds_id);
     }
   }
 
   for (const auto& mds_id : new_mds_ids) {
-    if (std::find(old_mds_ids.begin(), old_mds_ids.end(), mds_id) == old_mds_ids.end()) {
+    if (std::find(old_mds_ids.begin(), old_mds_ids.end(), mds_id) == old_mds_ids.end()) {  // NOLINT
       join_mds_ids.push_back(mds_id);
     }
   }
