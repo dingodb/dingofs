@@ -27,6 +27,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <functional>
 #include <list>
 #include <map>
 #include <memory>
@@ -93,6 +94,12 @@ class LRUCacheInterface {
    */
   virtual void Put(const K& key, const V& value) = 0;
 
+  virtual void PutIf(const K& key, const V& value,
+                     std::function<bool(V&)> condition) = 0;
+
+  virtual void PutInplaceIf(const K& key, const V& value,
+                            std::function<void(V&)> updater) = 0;
+
   /**
    * @brief Store key-value to the cache, and return the eliminated one
    *
@@ -120,6 +127,8 @@ class LRUCacheInterface {
    * @param[in] key
    */
   virtual void Remove(const K& key) = 0;
+
+  virtual void RemoveIf(const K& key, std::function<bool(V&)> condition) = 0;
 
   virtual void BatchRemoveIf(const std::function<bool(const K&)>& f) = 0;
 
@@ -162,6 +171,12 @@ class LRUCache : public LRUCacheInterface<K, V> {
    */
   void Put(const K& key, const V& value) override;
 
+  void PutIf(const K& key, const V& value,
+             std::function<bool(V&)> condition) override;
+
+  void PutInplaceIf(const K& key, const V& value,
+                    std::function<void(V&)> updater) override;
+
   /**
    * @brief Store key-value to the cache, and return the eliminated one
    *
@@ -189,6 +204,8 @@ class LRUCache : public LRUCacheInterface<K, V> {
    * @param[in] key
    */
   void Remove(const K& key) override;
+
+  void RemoveIf(const K& key, std::function<bool(V&)> condition) override;
 
   void BatchRemoveIf(const std::function<bool(const K&)>& f) override;
 
@@ -244,7 +261,11 @@ class LRUCache : public LRUCacheInterface<K, V> {
    *
    * @return true if have eliminated item, false if not have
    */
-  bool PutLocked(const K& key, const V& value, V* eliminated);
+  bool PutLocked(const K& key, const V& value, V* eliminated,
+                 std::function<bool(V&)> condition = nullptr);
+
+  bool PutInplaceLocked(const K& key, const V& value, V* eliminated,
+                        std::function<void(V&)> updater);
 
   /*
    * @brief RemoveLocked Remove key-value from the cache, not thread safe
@@ -252,6 +273,8 @@ class LRUCache : public LRUCacheInterface<K, V> {
    * @param[in] key
    */
   void RemoveLocked(const K& key);
+
+  void RemoveLockedIf(const K& key, std::function<bool(V&)> condition);
 
   /*
    * @brief MoveToFront Move the element hit this to the head of the list
@@ -310,6 +333,22 @@ void LRUCache<K, V, KeyTraits, ValueTraits>::Put(const K& key, const V& value) {
   V eliminated;
   ::dingofs::utils::WriteLockGuard guard(lock_);
   PutLocked(key, value, &eliminated);
+}
+
+template <typename K, typename V, typename KeyTraits, typename ValueTraits>
+void LRUCache<K, V, KeyTraits, ValueTraits>::PutIf(
+    const K& key, const V& value, std::function<bool(V&)> condition) {
+  V eliminated;
+  ::dingofs::utils::WriteLockGuard guard(lock_);
+  PutLocked(key, value, &eliminated, condition);
+}
+
+template <typename K, typename V, typename KeyTraits, typename ValueTraits>
+void LRUCache<K, V, KeyTraits, ValueTraits>::PutInplaceIf(
+    const K& key, const V& value, std::function<void(V&)> updater) {
+  V eliminated;
+  ::dingofs::utils::WriteLockGuard guard(lock_);
+  PutInplaceLocked(key, value, &eliminated, updater);
 }
 
 template <typename K, typename V, typename KeyTraits, typename ValueTraits>
@@ -396,6 +435,13 @@ void LRUCache<K, V, KeyTraits, ValueTraits>::Remove(const K& key) {
 }
 
 template <typename K, typename V, typename KeyTraits, typename ValueTraits>
+void LRUCache<K, V, KeyTraits, ValueTraits>::RemoveIf(
+    const K& key, std::function<bool(V&)> condition) {
+  ::dingofs::utils::WriteLockGuard guard(lock_);
+  RemoveLockedIf(key, condition);
+}
+
+template <typename K, typename V, typename KeyTraits, typename ValueTraits>
 void LRUCache<K, V, KeyTraits, ValueTraits>::BatchRemoveIf(
     const std::function<bool(const K&)>& f) {
   ::dingofs::utils::WriteLockGuard guard(lock_);
@@ -410,13 +456,16 @@ void LRUCache<K, V, KeyTraits, ValueTraits>::BatchRemoveIf(
 }
 
 template <typename K, typename V, typename KeyTraits, typename ValueTraits>
-bool LRUCache<K, V, KeyTraits, ValueTraits>::PutLocked(const K& key,
-                                                       const V& value,
-                                                       V* eliminated) {
+bool LRUCache<K, V, KeyTraits, ValueTraits>::PutLocked(
+    const K& key, const V& value, V* eliminated,
+    std::function<bool(V&)> condition) {
   auto iter = cache_.find(key);
 
   // delete the old value if already exist
   if (iter != cache_.end()) {
+    if (condition != nullptr && !condition(iter->second->value)) {
+      return false;
+    }
     RemoveElement(iter->second);
   }
 
@@ -437,10 +486,51 @@ bool LRUCache<K, V, KeyTraits, ValueTraits>::PutLocked(const K& key,
 }
 
 template <typename K, typename V, typename KeyTraits, typename ValueTraits>
+bool LRUCache<K, V, KeyTraits, ValueTraits>::PutInplaceLocked(
+    const K& key, const V& value, V* eliminated,
+    std::function<void(V&)> updater) {
+  auto iter = cache_.find(key);
+
+  // delete the old value if already exist
+  if (iter != cache_.end()) {
+    updater(iter->second->value);
+    MoveToFront(iter->second);
+
+  } else {
+    // put new value
+    Item kv{nullptr, value};
+    ll_.push_front(kv);
+    cache_[key] = ll_.begin();
+    ll_.begin()->key = &(cache_.find(key)->first);
+    if (cacheMetrics_ != nullptr) {
+      cacheMetrics_->UpdateAddToCacheCount();
+      cacheMetrics_->UpdateAddToCacheBytes(KeyTraits::CountBytes(key) +
+                                           ValueTraits::CountBytes(value));
+    }
+    if (maxCount_ != 0 && ll_.size() > maxCount_) {
+      return RemoveOldest(eliminated);
+    }
+  }
+
+  return false;
+}
+
+template <typename K, typename V, typename KeyTraits, typename ValueTraits>
 void LRUCache<K, V, KeyTraits, ValueTraits>::RemoveLocked(const K& key) {
   auto iter = cache_.find(key);
   if (iter != cache_.end()) {
     RemoveElement(iter->second);
+  }
+}
+
+template <typename K, typename V, typename KeyTraits, typename ValueTraits>
+void LRUCache<K, V, KeyTraits, ValueTraits>::RemoveLockedIf(
+    const K& key, std::function<bool(V&)> condition) {
+  auto iter = cache_.find(key);
+  if (iter != cache_.end()) {
+    if (condition == nullptr || condition(iter->second->value)) {
+      RemoveElement(iter->second);
+    }
   }
 }
 
@@ -819,7 +909,6 @@ void SglLRUCache<K, KeyTraits>::PutLocked(const K& key) {
     RemoveOldest();
     VLOG(3) << "lru is full, remove the oldest.";
   }
-  return;
 }
 
 template <typename K, typename KeyTraits>
@@ -845,7 +934,6 @@ void SglLRUCache<K, KeyTraits>::RemoveOldest() {
   if (ll_.begin() != ll_.end()) {
     RemoveElement(--ll_.end());
   }
-  return;
 }
 
 template <typename K, typename KeyTraits>
