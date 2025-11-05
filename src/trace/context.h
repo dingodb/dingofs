@@ -22,6 +22,8 @@
 
 #include <string>
 
+#include "utils/time.h"
+
 namespace dingofs {
 
 struct Context {
@@ -34,6 +36,8 @@ struct Context {
   bool hit_cache{false};
   bool is_amend{false};
 
+  uint64_t start_time_ns{0};
+
   const std::string& TraceId() const { return trace_id; }
 
   Context(std::string module, std::string trace, std::string span,
@@ -41,7 +45,9 @@ struct Context {
       : module(std::move(module)),
         trace_id(std::move(trace)),
         span_id(std::move(span)),
-        parent_span_id(std::move(parent)) {}
+        parent_span_id(std::move(parent)) {
+    start_time_ns = utils::TimestampNs();
+  }
 };
 
 using ContextSPtr = std::shared_ptr<Context>;

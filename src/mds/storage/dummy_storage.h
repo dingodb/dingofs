@@ -81,6 +81,7 @@ class DummyTxn : public Txn {
   Status BatchGet(const std::vector<std::string>& keys, std::vector<KeyValue>& kvs) override;
   Status Scan(const Range& range, uint64_t limit, std::vector<KeyValue>& kvs) override;
   Status Scan(const Range& range, ScanHandlerType handler) override;
+  Status Scan(const Range& range, std::function<bool(KeyValue&)> handler) override;
 
   Status Commit() override;
 

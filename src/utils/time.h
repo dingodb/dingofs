@@ -23,6 +23,7 @@
 #ifndef DINGOFS_SRC_UTILS_TIME_H_
 #define DINGOFS_SRC_UTILS_TIME_H_
 
+#include <chrono>
 #include <cstdint>
 #include <ostream>
 
@@ -74,6 +75,30 @@ inline TimeSpec TimeNow() {
   struct timespec now;
   clock_gettime(CLOCK_REALTIME, &now);
   return TimeSpec(now.tv_sec, now.tv_nsec);
+}
+
+inline int64_t TimestampNs() {
+  return std::chrono::duration_cast<std::chrono::nanoseconds>(
+             std::chrono::system_clock::now().time_since_epoch())
+      .count();
+}
+
+inline int64_t TimestampUs() {
+  return std::chrono::duration_cast<std::chrono::microseconds>(
+             std::chrono::system_clock::now().time_since_epoch())
+      .count();
+}
+
+inline int64_t TimestampMs() {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+             std::chrono::system_clock::now().time_since_epoch())
+      .count();
+}
+
+inline int64_t Timestamp() {
+  return std::chrono::duration_cast<std::chrono::seconds>(
+             std::chrono::system_clock::now().time_since_epoch())
+      .count();
 }
 
 }  // namespace utils

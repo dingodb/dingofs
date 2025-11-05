@@ -451,6 +451,31 @@ Status DingodbTxn::Scan(const Range& range, ScanHandlerType handler) {
   return status;
 }
 
+Status DingodbTxn::Scan(const Range& range, std::function<bool(KeyValue&)> handler) {
+  Status status;
+  std::vector<KeyValue> kvs;
+  do {
+    kvs.clear();
+    status = Scan(range, FLAGS_mds_scan_batch_size, kvs);
+    if (!status.ok()) {
+      break;
+    }
+
+    bool is_exit = false;
+    for (auto& kv : kvs) {
+      if (!handler(kv)) {
+        is_exit = true;
+        break;
+      }
+    }
+
+    if (is_exit) break;
+
+  } while (kvs.size() >= FLAGS_mds_scan_batch_size);
+
+  return status;
+}
+
 Status DingodbTxn::TransformStatus(const dingodb::sdk::Status& status) {
   if (status.IsNotFound()) {
     return Status(pb::error::ENOT_FOUND, status.ToString());
