@@ -62,6 +62,7 @@ DECLARE_int32(client_bthread_worker_num);
 
 // access log
 DECLARE_bool(client_access_logging);
+DECLARE_bool(client_access_logging_verbose);
 DECLARE_int64(client_access_log_threshold_us);
 
 // fuse module

@@ -804,15 +804,36 @@ Status VFSWrapper::ReadDir(Ino ino, uint64_t fh, uint64_t offset,
           << " with_attr: " << (with_attr ? "true" : "false");
   Status s;
   AccessLogGuard log([&]() {
-    return absl::StrFormat("readdir %d: %s (%d) [fh:%d]", ino, s.ToString(),
+    return absl::StrFormat("readdir (%d): %s (%d) [fh:%d]", ino, s.ToString(),
                            offset, fh);
   });
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opReadDir, &client_op_metric_->opAll});
 
-  s = vfs_->ReadDir(span->GetContext(), ino, fh, offset, with_attr, handler);
+  if (FLAGS_client_access_logging_verbose) {
+    s = vfs_->ReadDir(span->GetContext(), ino, fh, offset, with_attr,
+                      [&](const dingofs::client::vfs::DirEntry& dir_entry,
+                          int32_t off) -> bool {
+                        (void)off;
+                        dingofs::client::AccessLogGuard log(
+                            [ino, name = std::string(dir_entry.name),
+                             attr = dir_entry.attr, fh]() {
+                              return fmt::format(
+                                  "add_direntry ({}/{}) : {} [fh:{}]", ino,
+                                  name, dingofs::client::vfs::Attr2Str(attr),
+                                  fh);
+                            });
+
+                        return handler(dir_entry, off);
+                      });
+
+  } else {
+    s = vfs_->ReadDir(span->GetContext(), ino, fh, offset, with_attr, handler);
+  }
+
   VLOG(1) << "VFSReaddir end, status: " << s.ToString();
+
   if (!s.ok()) {
     op_metric.FailOp();
   }
@@ -824,7 +845,8 @@ Status VFSWrapper::ReleaseDir(Ino ino, uint64_t fh) {
   VLOG(1) << "VFSReleaseDir ino: " << ino << " fh: " << fh;
   Status s;
   AccessLogGuard log([&]() {
-    return absl::StrFormat("releasedir %d: %s [fh:%d]", ino, s.ToString(), fh);
+    return absl::StrFormat("releasedir (%d): %s [fh:%d]", ino, s.ToString(),
+                           fh);
   });
 
   ClientOpMetricGuard op_metric(
