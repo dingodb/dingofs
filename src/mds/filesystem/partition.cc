@@ -14,6 +14,7 @@
 
 #include "mds/filesystem/partition.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <memory>
 
@@ -30,13 +31,25 @@ DEFINE_uint32(mds_partition_cache_max_count, 4 * 1024 * 1024, "partition cache m
 
 const uint32_t kDentryDefaultNum = 1024;
 
-InodeSPtr Partition::ParentInode() {
-  CHECK(parent_inode_ != nullptr) << "parent inode is null.";
+uint64_t Partition::Version() {
+  utils::ReadLockGuard lk(lock_);
 
-  return parent_inode_;
+  return version_;
 }
 
-void Partition::PutChild(const Dentry& dentry) {
+InodeSPtr Partition::ParentInode() {
+  utils::ReadLockGuard lk(lock_);
+
+  return inode_.lock();
+}
+
+void Partition::SetParentInode(InodeSPtr parent_inode) {
+  utils::WriteLockGuard lk(lock_);
+
+  inode_ = parent_inode;
+}
+
+void Partition::PutChild(const Dentry& dentry, uint64_t version) {
   utils::WriteLockGuard lk(lock_);
 
   auto it = children_.find(dentry.Name());
@@ -45,21 +58,27 @@ void Partition::PutChild(const Dentry& dentry) {
   } else {
     children_[dentry.Name()] = dentry;
   }
+
+  version_ = std::max(version, version_);
 }
 
-void Partition::DeleteChild(const std::string& name) {
+void Partition::DeleteChild(const std::string& name, uint64_t version) {
   utils::WriteLockGuard lk(lock_);
 
   children_.erase(name);
+
+  version_ = std::max(version, version_);
 }
 
-void Partition::DeleteChildIf(const std::string& name, Ino ino) {
+void Partition::DeleteChildIf(const std::string& name, Ino ino, uint64_t version) {
   utils::WriteLockGuard lk(lock_);
 
   auto it = children_.find(name);
   if (it != children_.end() && it->second.INo() == ino) {
     children_.erase(it);
   }
+
+  version_ = std::max(version, version_);
 }
 
 bool Partition::HasChild() {
@@ -118,12 +137,19 @@ PartitionCache::PartitionCache(uint32_t fs_id)
              std::make_shared<utils::CacheMetrics>(fmt::format(kPartitionMetricsPrefix, fs_id))) {}
 PartitionCache::~PartitionCache() {}  // NOLINT
 
-void PartitionCache::Put(Ino ino, PartitionPtr partition) { cache_.Put(ino, partition); }
+void PartitionCache::PutIf(Ino ino, PartitionPtr partition) {
+  cache_.PutIf(ino, partition,
+               [&](PartitionPtr& old_partition) { return old_partition->Version() < partition->Version(); });
+}
 
 void PartitionCache::Delete(Ino ino) {
   DINGO_LOG(INFO) << fmt::format("[cache.partition.{}] delete partition ino({}).", fs_id_, ino);
 
   cache_.Remove(ino);
+}
+
+void PartitionCache::DeleteIf(Ino ino, uint64_t version) {
+  cache_.RemoveIf(ino, [&](const PartitionPtr& partition) { return partition->Version() < version; });
 }
 
 void PartitionCache::BatchDeleteInodeIf(const std::function<bool(const Ino&)>& f) {
