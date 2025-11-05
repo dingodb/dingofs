@@ -61,7 +61,7 @@ struct AccessLogGuard {
     timer.stop();
     int64_t duration = timer.u_elapsed();
 
-    if (duration > FLAGS_client_access_log_threshold_us) {
+    if (duration >= FLAGS_client_access_log_threshold_us) {
       logger->info("{0} <{1:.6f}>", handler(), timer.u_elapsed() / 1e6);
     }
   }
