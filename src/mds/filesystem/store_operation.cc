@@ -302,6 +302,9 @@ const char* Operation::OpName() const {
     case OpType::kScanFs:
       return "ScanFs";
 
+    case OpType::kScanPartition:
+      return "ScanPartition";
+
     case OpType::kScanDentry:
       return "ScanDentry";
 
@@ -760,6 +763,7 @@ Status HardLinkOperation::Run(TxnUPtr& txn) {
   parent_attr.set_mtime(std::max(parent_attr.mtime(), GetTime()));
   parent_attr.set_ctime(std::max(parent_attr.ctime(), GetTime()));
   parent_attr.set_version(parent_attr.version() + 1);
+  txn->Put(parent_key, MetaCodec::EncodeInodeValue(parent_attr));
 
   // update inode nlink
   attr.set_nlink(attr.nlink() + 1);
@@ -2228,6 +2232,12 @@ Status ScanFsOperation::Run(TxnUPtr& txn) {
     result_.fs_infoes.push_back(MetaCodec::DecodeFsValue(value));
     return true;
   });
+}
+
+Status ScanPartitionOperation::Run(TxnUPtr& txn) {
+  Range range = MetaCodec::GetDentryRange(fs_id_, ino_, true);
+
+  return txn->Scan(range, [&](KeyValue& kv) -> bool { return handler_(kv); });
 }
 
 Status ScanDentryOperation::Run(TxnUPtr& txn) {

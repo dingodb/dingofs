@@ -1290,11 +1290,15 @@ void MDSServiceImpl::DoUnLink(google::protobuf::RpcController*, const pb::mds::U
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
   ctx.SetAncestors(Helper::PbRepeatedToVector(request->context().ancestors()));
 
-  status = file_system->UnLink(ctx, request->parent(), request->name());
+  EntryOut entry_out;
+  status = file_system->UnLink(ctx, request->parent(), request->name(), entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
+
+  response->mutable_inode()->Swap(&entry_out.attr);
+  response->set_parent_version(entry_out.parent_version);
 }
 
 void MDSServiceImpl::UnLink(google::protobuf::RpcController* controller, const pb::mds::UnLinkRequest* request,
@@ -2738,7 +2742,8 @@ void MDSServiceImpl::DoNotifyBuddy(google::protobuf::RpcController*, const pb::m
           return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
         }
 
-        file_system->GetPartitionCache().Delete(message.clean_partition_cache().ino());
+        file_system->GetPartitionCache().DeleteIf(message.clean_partition_cache().ino(),
+                                                  message.clean_partition_cache().version());
 
       } break;
 

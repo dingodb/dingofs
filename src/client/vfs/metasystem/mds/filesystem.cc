@@ -72,6 +72,7 @@ MDSFileSystem::MDSFileSystem(mds::FsInfoSPtr fs_info, const ClientId& client_id,
       mds_discovery_(mds_discovery),
       id_cache_(kSliceIdCacheName, mds_client),
       file_session_map_(fs_info),
+      dir_iterator_manager_(file_session_map_),
       inode_cache_(inode_cache),
       mds_client_(mds_client),
       write_slice_processor_(WriteSliceProcessor::New(mds_client)) {}
@@ -381,7 +382,7 @@ Status MDSFileSystem::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
   }
 
   // clean cache
-  file_session_map_.Delete(ino, fh);
+  // file_session_map_.Delete(ino, fh);
 
   return Status::OK();
 }
@@ -519,7 +520,8 @@ Status MDSFileSystem::RmDir(ContextSPtr ctx, Ino parent,
 }
 
 Status MDSFileSystem::OpenDir(ContextSPtr ctx, Ino ino, uint64_t fh) {
-  auto dir_iterator = DirIterator::New(ctx, mds_client_, ino);
+  auto dir_iterator =
+      DirIterator::New(ctx, mds_client_, file_session_map_, ino);
   auto status = dir_iterator->Seek();
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
@@ -623,9 +625,9 @@ Status MDSFileSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* out_attr) {
       out_attr->length = std::max(out_attr->length, write_memo_length);
 
       uint64_t time_ns = file_session->GetLastTimeNs();
-      out_attr->atime = time_ns;
-      out_attr->ctime = time_ns;
-      out_attr->mtime = time_ns;
+      out_attr->atime = std::max(out_attr->atime, time_ns);
+      out_attr->ctime = std::max(out_attr->ctime, time_ns);
+      out_attr->mtime = std::max(out_attr->mtime, time_ns);
 
       ctx->is_amend = true;
     }

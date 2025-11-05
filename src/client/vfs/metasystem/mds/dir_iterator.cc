@@ -14,6 +14,9 @@
 
 #include "client/vfs/metasystem/mds/dir_iterator.h"
 
+#include <algorithm>
+#include <cstdint>
+
 #include "client/vfs/common/helper.h"
 #include "common/options/client.h"
 #include "fmt/format.h"
@@ -28,9 +31,7 @@ Status DirIterator::Seek() {
   auto status =
       mds_client_->ReadDir(ctx_, ino_, last_name_,
                            FLAGS_client_vfs_read_dir_batch_size, true, entries);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
   offset_ = 0;
   entries_ = std::move(entries);
@@ -47,7 +48,11 @@ DirEntry DirIterator::GetValue(bool with_attr) {
   CHECK(offset_ < entries_.size()) << "offset out of range";
 
   with_attr_ = with_attr;
-  return entries_[offset_];
+
+  auto dir_entry = entries_[offset_];
+  CorrectAttr(dir_entry);
+
+  return dir_entry;
 }
 
 void DirIterator::Next() {
@@ -59,14 +64,50 @@ void DirIterator::Next() {
   auto status = mds_client_->ReadDir(ctx_, ino_, last_name_,
                                      FLAGS_client_vfs_read_dir_batch_size,
                                      with_attr_, entries);
-  if (!status.ok()) {
-    return;
-  }
+  if (!status.ok()) return;
 
   offset_ = 0;
   entries_ = std::move(entries);
   if (!entries_.empty()) {
     last_name_ = entries_.back().name;
+  }
+}
+
+void DirIterator::CorrectAttr(DirEntry& entry) {
+  auto& attr = entry.attr;
+  if (attr.type == FileType::kDirectory) return;
+
+  auto file_session = file_session_map_.GetSession(attr.ino);
+  if (file_session == nullptr) return;
+
+  uint64_t write_memo_length = file_session->GetLength();
+  if (write_memo_length == 0) return;
+
+  attr.length = std::max(attr.length, write_memo_length);
+
+  uint64_t time_ns = file_session->GetLastTimeNs();
+  attr.atime = std::max(attr.atime, time_ns);
+  attr.ctime = std::max(attr.ctime, time_ns);
+  attr.mtime = std::max(attr.mtime, time_ns);
+}
+
+void DirIterator::CorrectAttr(std::vector<DirEntry>& entries) {
+  for (auto& entry : entries) {
+    auto& attr = entry.attr;
+    if (attr.type == FileType::kDirectory) continue;
+
+    auto file_session = file_session_map_.GetSession(attr.ino);
+    if (file_session == nullptr) continue;
+
+    uint64_t write_memo_length = file_session->GetLength();
+    if (write_memo_length == 0) continue;
+
+    attr.length = std::max(attr.length, write_memo_length);
+
+    uint64_t time_ns = file_session->GetLastTimeNs();
+    attr.atime = time_ns;
+    attr.ctime = time_ns;
+    attr.mtime = time_ns;
   }
 }
 
@@ -171,7 +212,8 @@ bool DirIteratorManager::Load(MDSClientSPtr mds_client,
 
   for (const auto& item : items) {
     Ino ino = item["ino"].asUInt64();
-    auto dir_iterator = DirIterator::New(nullptr, mds_client, ino);
+    auto dir_iterator =
+        DirIterator::New(nullptr, mds_client, file_session_map_, ino);
     if (!dir_iterator->Load(item)) {
       LOG(ERROR) << fmt::format(
           "[meta.dir_iterator] load dir({}) iterator fail.", ino);

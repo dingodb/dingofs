@@ -19,6 +19,7 @@
 
 #include <cstdint>
 
+#include "client/vfs/metasystem/mds/file_session.h"
 #include "client/vfs/metasystem/mds/mds_client.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
@@ -35,12 +36,17 @@ using DirIteratorSPtr = std::shared_ptr<DirIterator>;
 // used by read dir
 class DirIterator {
  public:
-  DirIterator(ContextSPtr ctx, MDSClientSPtr mds_client, Ino ino)
-      : ctx_(ctx), mds_client_(mds_client), ino_(ino) {}
+  DirIterator(ContextSPtr ctx, MDSClientSPtr mds_client,
+              FileSessionMap& file_session_map, Ino ino)
+      : ctx_(ctx),
+        mds_client_(mds_client),
+        file_session_map_(file_session_map),
+        ino_(ino) {}
 
   static DirIteratorSPtr New(ContextSPtr ctx, MDSClientSPtr mds_client,
-                             Ino ino) {
-    return std::make_shared<DirIterator>(ctx, mds_client, ino);
+                             FileSessionMap& file_session_map, Ino ino) {
+    return std::make_shared<DirIterator>(ctx, mds_client, file_session_map,
+                                         ino);
   }
 
   Status Seek();
@@ -52,6 +58,10 @@ class DirIterator {
   bool Load(const Json::Value& value);
 
  private:
+  // correct attr with write memo
+  void CorrectAttr(DirEntry& entry);
+  void CorrectAttr(std::vector<DirEntry>& entries);
+
   ContextSPtr ctx_;
 
   Ino ino_;
@@ -64,11 +74,14 @@ class DirIterator {
   std::vector<DirEntry> entries_;
 
   MDSClientSPtr mds_client_;
+
+  FileSessionMap& file_session_map_;
 };
 
 class DirIteratorManager {
  public:
-  DirIteratorManager() = default;
+  DirIteratorManager(FileSessionMap& file_session_map)
+      : file_session_map_(file_session_map) {}
   ~DirIteratorManager() = default;
 
   void Put(uint64_t fh, DirIteratorSPtr dir_iterator);
@@ -82,6 +95,8 @@ class DirIteratorManager {
   utils::RWLock lock_;
   // fh -> DirIteratorSPtr
   std::map<uint64_t, DirIteratorSPtr> dir_iterator_map_;
+
+  FileSessionMap& file_session_map_;
 };
 
 }  // namespace v2
