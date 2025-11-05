@@ -277,7 +277,11 @@ Status RPC::SendRequest(const EndPoint& endpoint,
           fmt::format("{} {}", cntl.ErrorCode(), cntl.ErrorText()));
 
       // if the error is timeout, we can retry
-      if (cntl.ErrorCode() == brpc::ERPCTIMEDOUT) continue;
+      if (cntl.ErrorCode() == brpc::ERPCTIMEDOUT) {
+        response.mutable_error()->set_errcode(pb::error::ENOT_CAN_CONNECTED);
+        if ((retry + 1) >= option.max_retry) DeleteChannel(endpoint);
+        continue;
+      }
       DeleteChannel(endpoint);
       if (cntl.ErrorCode() == EHOSTDOWN) {
         response.mutable_error()->set_errcode(pb::error::ENOT_CAN_CONNECTED);
