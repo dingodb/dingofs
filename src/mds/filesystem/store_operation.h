@@ -111,9 +111,10 @@ class Operation {
 
     kScanLock = 120,
     kScanFs = 121,
-    kScanDentry = 122,
-    kScanDelFile = 123,
-    kScanDelSlice = 124,
+    kScanPartition = 122,
+    kScanDentry = 123,
+    kScanDelFile = 124,
+    kScanDelSlice = 125,
 
     kScanMetaTable = 140,
     kScanFsMetaTable = 141,
@@ -1622,6 +1623,27 @@ class ScanFsOperation : public Operation {
 
  private:
   Result result_;
+};
+
+class ScanPartitionOperation : public Operation {
+ public:
+  using HandlerType = std::function<bool(KeyValue&)>;
+
+  ScanPartitionOperation(Trace& trace, uint32_t fs_id, Ino ino, HandlerType handler)
+      : Operation(trace), fs_id_(fs_id), ino_(ino), handler_(handler) {};
+  ~ScanPartitionOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kScanPartition; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return ino_; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  uint32_t fs_id_{0};
+  Ino ino_{0};
+  HandlerType handler_;
 };
 
 class ScanDentryOperation : public Operation {

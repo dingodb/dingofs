@@ -217,11 +217,21 @@ InodeCache::InodeCache(uint32_t fs_id)
 
 InodeCache::~InodeCache() {}  // NOLINT
 
-void InodeCache::PutInode(Ino ino, InodeSPtr inode) { cache_.Put(ino, inode); }
+void InodeCache::PutIf(Ino ino, InodeSPtr inode) {
+  CHECK(inode != nullptr) << "old_inode is nullptr 001.";
 
-void InodeCache::DeleteInode(Ino ino) { cache_.Remove(ino); };
+  cache_.PutInplaceIf(ino, inode, [&](InodeSPtr& old_inode) {
+    if (old_inode->Version() < inode->Version()) {
+      old_inode->UpdateIf(inode->Copy());
+    }
+  });
+}
 
-void InodeCache::BatchDeleteInodeIf(const std::function<bool(const Ino&)>& f) {
+void InodeCache::PutIf(AttrEntry& attr) { PutIf(attr.ino(), Inode::New(attr)); }
+
+void InodeCache::Delete(Ino ino) { cache_.Remove(ino); };
+
+void InodeCache::BatchDeleteIf(const std::function<bool(const Ino&)>& f) {
   DINGO_LOG(INFO) << fmt::format("[cache.inode.{}] batch delete inode.", fs_id_);
 
   cache_.BatchRemoveIf(f);

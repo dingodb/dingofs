@@ -578,6 +578,10 @@ Status MDSClient::UnLink(ContextSPtr ctx, Ino parent, const std::string& name) {
     return status;
   }
 
+  const auto& inode = response.inode();
+  parent_memo_->UpsertVersion(inode.ino(), inode.version());
+  parent_memo_->UpsertVersion(parent, response.parent_version());
+
   return Status::OK();
 }
 
