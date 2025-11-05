@@ -14,6 +14,9 @@
 
 #include "client/vfs/metasystem/mds/dir_iterator.h"
 
+#include <algorithm>
+#include <cstdint>
+
 #include "client/vfs/common/helper.h"
 #include "common/options/client.h"
 #include "fmt/format.h"
@@ -24,13 +27,13 @@ namespace vfs {
 namespace v2 {
 
 Status DirIterator::Seek() {
+  last_fetch_time_ns_ = utils::TimestampNs();
+
   std::vector<DirEntry> entries;
   auto status =
       mds_client_->ReadDir(ctx_, ino_, last_name_,
                            FLAGS_client_vfs_read_dir_batch_size, true, entries);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
   offset_ = 0;
   entries_ = std::move(entries);
@@ -47,6 +50,7 @@ DirEntry DirIterator::GetValue(bool with_attr) {
   CHECK(offset_ < entries_.size()) << "offset out of range";
 
   with_attr_ = with_attr;
+
   return entries_[offset_];
 }
 
@@ -59,9 +63,7 @@ void DirIterator::Next() {
   auto status = mds_client_->ReadDir(ctx_, ino_, last_name_,
                                      FLAGS_client_vfs_read_dir_batch_size,
                                      with_attr_, entries);
-  if (!status.ok()) {
-    return;
-  }
+  if (!status.ok()) return;
 
   offset_ = 0;
   entries_ = std::move(entries);

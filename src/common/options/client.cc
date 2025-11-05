@@ -44,7 +44,8 @@ DEFINE_int32(client_bthread_worker_num, 0, "bthread worker num");
 DEFINE_bool(client_access_logging, true, "enable access log");
 DEFINE_validator(client_access_logging, brpc::PassValidate);
 
-DEFINE_bool(client_access_logging_verbose, false, "enable access log with verbose");
+DEFINE_bool(client_access_logging_verbose, false,
+            "enable access log with verbose");
 DEFINE_validator(client_access_logging_verbose, brpc::PassValidate);
 
 DEFINE_int64(client_access_log_threshold_us, 0, "access log threshold");
@@ -82,6 +83,10 @@ DEFINE_validator(client_vfs_meta_logging, brpc::PassValidate);
 
 DEFINE_int64(client_vfs_meta_log_threshold_us, 1000, "access log threshold");
 DEFINE_validator(client_vfs_meta_log_threshold_us, brpc::PassValidate);
+
+DEFINE_uint64(client_vfs_meta_modify_time_expired_s, 3600,
+              "modify time memo expired time");
+DEFINE_validator(client_vfs_meta_modify_time_expired_s, brpc::PassValidate);
 
 DEFINE_int32(client_vfs_flush_bg_thread, 16,
              "number of background flush threads");

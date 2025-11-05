@@ -32,16 +32,20 @@ using PartitionPtr = std::shared_ptr<Partition>;
 // consider locality
 class Partition {
  public:
-  Partition(InodeSPtr parent_inode) : parent_inode_(parent_inode) {};
+  Partition(InodeSPtr inode) : ino_(inode->Ino()), inode_(inode), version_(inode->Version()) {};
   ~Partition() = default;
 
-  static PartitionPtr New(InodeSPtr parent_inode) { return std::make_shared<Partition>(parent_inode); }
+  static PartitionPtr New(InodeSPtr inode) { return std::make_shared<Partition>(inode); }
 
+  Ino INo() const { return ino_; }
+
+  uint64_t Version();
   InodeSPtr ParentInode();
+  void SetParentInode(InodeSPtr parent_inode);
 
-  void PutChild(const Dentry& dentry);
-  void DeleteChild(const std::string& name);
-  void DeleteChildIf(const std::string& name, Ino ino);
+  void PutChild(const Dentry& dentry, uint64_t version = 0);
+  void DeleteChild(const std::string& name, uint64_t version = 0);
+  void DeleteChildIf(const std::string& name, Ino ino, uint64_t version = 0);
 
   bool HasChild();
   bool GetChild(const std::string& name, Dentry& dentry);
@@ -49,9 +53,12 @@ class Partition {
   std::vector<Dentry> GetAllChildren();
 
  private:
-  InodeSPtr parent_inode_;
+  const Ino ino_;
 
   utils::RWLock lock_;
+
+  InodeWPtr inode_;
+  uint64_t version_{0};
 
   // name -> dentry
   std::map<std::string, Dentry> children_;
@@ -68,8 +75,9 @@ class PartitionCache {
   PartitionCache(PartitionCache&&) = delete;
   PartitionCache& operator=(PartitionCache&&) = delete;
 
-  void Put(Ino ino, PartitionPtr partition);
+  void PutIf(Ino ino, PartitionPtr partition);
   void Delete(Ino ino);
+  void DeleteIf(Ino ino, uint64_t version);
   void BatchDeleteInodeIf(const std::function<bool(const Ino&)>& f);
   void Clear();
 

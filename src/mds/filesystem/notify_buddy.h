@@ -15,6 +15,8 @@
 #ifndef DINGOFS_MDS_FILESYSTEM_NOTIFY_BUDDY_H_
 #define DINGOFS_MDS_FILESYSTEM_NOTIFY_BUDDY_H_
 
+#include <sys/types.h>
+
 #include <atomic>
 #include <cstdint>
 #include <memory>
@@ -41,11 +43,14 @@ enum class Type : int8_t {
 
 struct Message {
   Message(Type type, uint64_t mds_id, uint32_t fs_id) : type(type), mds_id(mds_id), fs_id(fs_id) {}
+  Message(Type type, uint64_t mds_id, uint32_t fs_id, uint64_t version)
+      : type(type), mds_id(mds_id), fs_id(fs_id), version(version) {}
   virtual ~Message() = default;
 
   Type type;
-  uint64_t mds_id;
-  uint32_t fs_id;
+  uint64_t mds_id{0};
+  uint32_t fs_id{0};
+  uint64_t version{0};
 };
 
 using MessageSPtr = std::shared_ptr<Message>;
@@ -73,11 +78,11 @@ struct RefreshInodeMessage : public Message {
 };
 
 struct CleanPartitionCacheMessage : public Message {
-  CleanPartitionCacheMessage(uint64_t mds_id, uint32_t fs_id, Ino ino)
-      : Message{Type::kCleanPartitionCache, mds_id, fs_id}, ino(ino) {}
+  CleanPartitionCacheMessage(uint64_t mds_id, uint32_t fs_id, Ino ino, uint64_t version)
+      : Message{Type::kCleanPartitionCache, mds_id, fs_id, version}, ino(ino) {}
 
-  static MessageSPtr Create(uint64_t mds_id, uint32_t fs_id, Ino ino) {
-    return std::make_shared<CleanPartitionCacheMessage>(mds_id, fs_id, ino);
+  static MessageSPtr Create(uint64_t mds_id, uint32_t fs_id, Ino ino, uint64_t version) {
+    return std::make_shared<CleanPartitionCacheMessage>(mds_id, fs_id, ino, version);
   }
 
   Ino ino{0};

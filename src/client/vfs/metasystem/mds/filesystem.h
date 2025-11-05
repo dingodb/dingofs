@@ -26,6 +26,7 @@
 #include "client/vfs/metasystem/mds/inode_cache.h"
 #include "client/vfs/metasystem/mds/mds_client.h"
 #include "client/vfs/metasystem/mds/mds_discovery.h"
+#include "client/vfs/metasystem/mds/modify_time_memo.h"
 #include "client/vfs/metasystem/mds/write_slice_processor.h"
 #include "client/vfs/metasystem/meta_system.h"
 #include "client/vfs/vfs_meta.h"
@@ -151,6 +152,7 @@ class MDSFileSystem : public vfs::MetaSystem {
   bool UnmountFs();
 
   void Heartbeat();
+  void CleanExpiredModifyTimeMemo();
 
   bool InitCrontab();
 
@@ -175,6 +177,11 @@ class MDSFileSystem : public vfs::MetaSystem {
   void ClearChunkCache(Ino ino, uint64_t fh, uint64_t index);
   // Status SyncDeltaSlice(ContextSPtr ctx, Ino ino, uint64_t fh);
 
+  Status CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
+                     const std::string& caller);
+  void CorrectAttrLength(ContextSPtr ctx, Attr& attr,
+                         const std::string& caller);
+
   const std::string name_;
   const ClientId client_id_;
 
@@ -183,6 +190,8 @@ class MDSFileSystem : public vfs::MetaSystem {
   MDSDiscoverySPtr mds_discovery_;
 
   MDSClientSPtr mds_client_;
+
+  ModifyTimeMemo modify_time_memo_;
 
   FileSessionMap file_session_map_;
 

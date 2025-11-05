@@ -74,6 +74,8 @@ class Txn {
   using ScanHandlerType = std::function<bool(const std::string& key, const std::string& value)>;
   virtual Status Scan(const Range& range, ScanHandlerType handler) = 0;
 
+  virtual Status Scan(const Range& range, std::function<bool(KeyValue&)> handler) = 0;
+
   virtual Status Commit() = 0;
 
   virtual Trace::Txn GetTrace() = 0;

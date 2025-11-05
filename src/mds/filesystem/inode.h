@@ -98,9 +98,10 @@ class InodeCache {
 
   static InodeCacheSPtr New(uint32_t fs_id) { return std::make_shared<InodeCache>(fs_id); }
 
-  void PutInode(Ino ino, InodeSPtr inode);
-  void DeleteInode(Ino ino);
-  void BatchDeleteInodeIf(const std::function<bool(const Ino&)>& f);
+  void PutIf(Ino ino, InodeSPtr inode);
+  void PutIf(AttrEntry& attr);
+  void Delete(Ino ino);
+  void BatchDeleteIf(const std::function<bool(const Ino&)>& f);
   void Clear();
 
   InodeSPtr GetInode(Ino ino);

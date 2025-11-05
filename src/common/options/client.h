@@ -78,6 +78,7 @@ DECLARE_uint32(client_fuse_check_alive_retry_interval_ms);
 // vfs meta system log
 DECLARE_bool(client_vfs_meta_logging);
 DECLARE_int64(client_vfs_meta_log_threshold_us);
+DECLARE_uint64(client_vfs_meta_modify_time_expired_s);
 
 // vfs read
 DECLARE_int32(client_vfs_read_executor_thread);

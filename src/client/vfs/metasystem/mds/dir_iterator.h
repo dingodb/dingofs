@@ -17,6 +17,7 @@
 
 #include <json/value.h>
 
+#include <atomic>
 #include <cstdint>
 
 #include "client/vfs/metasystem/mds/mds_client.h"
@@ -48,6 +49,8 @@ class DirIterator {
   DirEntry GetValue(bool with_attr);
   void Next();
 
+  uint64_t LastFetchTimeNs() const { return last_fetch_time_ns_.load(); }
+
   bool Dump(Json::Value& value);
   bool Load(const Json::Value& value);
 
@@ -64,6 +67,7 @@ class DirIterator {
   std::vector<DirEntry> entries_;
 
   MDSClientSPtr mds_client_;
+  std::atomic<uint64_t> last_fetch_time_ns_{0};
 };
 
 class DirIteratorManager {

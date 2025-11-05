@@ -90,6 +90,7 @@ void Attr2FuseEntry(const Attr& attr, struct fuse_entry_param* e) {
   e->ino = attr.ino;
   e->generation = 0;
   Attr2Stat(attr, &e->attr);
+  // here
   e->attr_timeout = g_vfs->GetAttrTimeout(attr.type);
   e->entry_timeout = g_vfs->GetEntryTimeout(attr.type);
 }
@@ -525,6 +526,10 @@ void FuseOpOpenDir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
 
     fi->cache_readdir = FLAGS_client_fuse_file_info_keep_cache ? 1 : 0;
     fi->keep_cache = FLAGS_client_fuse_file_info_keep_cache ? 1 : 0;
+
+    // here
+    // fi->cache_readdir = 0;
+    // fi->keep_cache = 0;
 
     ReplyOpen(req, fi);
   }

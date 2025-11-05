@@ -25,6 +25,7 @@
 #include "client/vfs/metasystem/mds/client_id.h"
 #include "client/vfs/metasystem/mds/helper.h"
 #include "client/vfs/vfs_meta.h"
+#include "common/options/client.h"
 #include "common/status.h"
 #include "common/trace/context.h"
 #include "dingofs/error.pb.h"
@@ -45,7 +46,8 @@ namespace v2 {
 const uint32_t kMaxXAttrNameLength = 255;
 const uint32_t kMaxXAttrValueLength = 64 * 1024;
 
-const uint32_t kHeartbeatIntervalS = 5;  // seconds
+const uint32_t kHeartbeatIntervalS = 5;                    // seconds
+const uint32_t kCleanExpiredModifyTimeMemoIntervalS = 60;  // seconds
 
 const std::string kSliceIdCacheName = "slice";
 
@@ -250,13 +252,28 @@ void MDSFileSystem::Heartbeat() {
   is_running = false;
 }
 
+void MDSFileSystem::CleanExpiredModifyTimeMemo() {
+  uint64_t expired_time_s =
+      mds::Helper::Timestamp() - FLAGS_client_vfs_meta_modify_time_expired_s;
+
+  modify_time_memo_.ForgetExpired(expired_time_s);
+}
+
 bool MDSFileSystem::InitCrontab() {
-  // Add heartbeat crontab
+  // add heartbeat crontab
   crontab_configs_.push_back({
-      "HEARTBEA",
+      "HEARTBEAT",
       kHeartbeatIntervalS * 1000,
       true,
       [this](void*) { this->Heartbeat(); },
+  });
+
+  // add clean expired crontab
+  crontab_configs_.push_back({
+      "CLEAN_EXPIRED_MODIFY_TIME_MEMO",
+      kCleanExpiredModifyTimeMemoIntervalS * 1000,
+      true,
+      [this](void*) { this->CleanExpiredModifyTimeMemo(); },
   });
 
   crontab_manager_.AddCrontab(crontab_configs_);
@@ -298,13 +315,6 @@ Status MDSFileSystem::Create(ContextSPtr ctx, Ino parent,
                              const std::string& name, uint32_t uid,
                              uint32_t gid, uint32_t mode, int flags, Attr* attr,
                              uint64_t fh) {
-  // auto status = MkNod(ctx, parent, name, uid, gid, mode, 0, attr);
-  // if (!status.ok()) {
-  //   return status;
-  // }
-
-  // return Open(ctx, attr->ino, flags, fh);
-
   std::vector<std::string> session_ids;
   auto status = mds_client_->Create(ctx, parent, name, uid, gid, mode, flags,
                                     *attr, session_ids);
@@ -450,6 +460,8 @@ Status MDSFileSystem::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
     ClearChunkCache(ino, fh, index);
   }
 
+  modify_time_memo_.Remember(ino);
+
   return Status::OK();
 }
 
@@ -467,6 +479,8 @@ Status MDSFileSystem::AsyncWriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
     if (status.ok() && FLAGS_client_meta_read_chunk_cache_enable) {
       ClearChunkCache(ino, fh, index);
     }
+
+    modify_time_memo_.Remember(ino);
 
     done(status);
   };
@@ -489,6 +503,7 @@ Status MDSFileSystem::Write(ContextSPtr, Ino ino, uint64_t offset,
       offset, size);
 
   file_session->AddWriteMemo(offset, size);
+  modify_time_memo_.Remember(ino);
 
   return Status::OK();
 }
@@ -533,13 +548,16 @@ Status MDSFileSystem::OpenDir(ContextSPtr ctx, Ino ino, uint64_t fh) {
   return Status::OK();
 }
 
-Status MDSFileSystem::ReadDir(ContextSPtr, Ino, uint64_t fh, uint64_t offset,
-                              bool with_attr, ReadDirHandler handler) {
+Status MDSFileSystem::ReadDir(ContextSPtr ctx, Ino, uint64_t fh,
+                              uint64_t offset, bool with_attr,
+                              ReadDirHandler handler) {
   auto dir_iterator = dir_iterator_manager_.Get(fh);
   CHECK(dir_iterator != nullptr) << "dir_iterator is null";
 
   while (dir_iterator->Valid()) {
     DirEntry entry = dir_iterator->GetValue(with_attr);
+
+    CorrectAttr(ctx, dir_iterator->LastFetchTimeNs(), entry.attr, "readdir");
 
     if (!handler(entry, offset)) {
       break;
@@ -612,24 +630,10 @@ Status MDSFileSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* out_attr) {
   CHECK(ctx != nullptr) << "context is null";
 
   auto status = mds_client_->GetAttr(ctx, ino, *out_attr);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
-  auto file_session = file_session_map_.GetSession(ino);
-  if (file_session != nullptr) {
-    uint64_t write_memo_length = file_session->GetLength();
-    if (write_memo_length != 0) {
-      out_attr->length = std::max(out_attr->length, write_memo_length);
-
-      uint64_t time_ns = file_session->GetLastTimeNs();
-      out_attr->atime = time_ns;
-      out_attr->ctime = time_ns;
-      out_attr->mtime = time_ns;
-
-      ctx->is_amend = true;
-    }
-  }
+  status = CorrectAttr(ctx, ctx->start_time_ns, *out_attr, "getattr");
+  if (!status.ok()) return status;
 
   LOG(INFO) << fmt::format(
       "[meta.filesystem.{}] get attr length({}) is_amend({}).", ino,
@@ -644,6 +648,11 @@ Status MDSFileSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
   if (!status.ok()) {
     return status;
   }
+
+  status = CorrectAttr(ctx, ctx->start_time_ns, *out_attr, "setattr");
+  if (!status.ok()) return status;
+
+  modify_time_memo_.Remember(ino);
 
   return Status::OK();
 }
@@ -660,7 +669,7 @@ Status MDSFileSystem::GetXattr(ContextSPtr ctx, Ino ino,
 
 Status MDSFileSystem::SetXattr(ContextSPtr ctx, Ino ino,
                                const std::string& name,
-                               const std::string& value, int flags) {
+                               const std::string& value, int) {
   AttrEntry attr_entry;
   auto status = mds_client_->SetXAttr(ctx, ino, name, value, attr_entry);
   if (!status.ok()) {
@@ -878,6 +887,52 @@ void MDSFileSystem::ClearChunkCache(Ino ino, uint64_t fh, uint64_t index) {
 
 //   return Status::OK();
 // }
+
+Status MDSFileSystem::CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
+                                  const std::string& caller) {
+  if (modify_time_memo_.ModifiedSince(attr.ino, time_ns)) {
+    LOG(INFO) << fmt::format("[meta.filesystem.{}] correct attr, caller({}).",
+                             attr.ino, caller);
+    // correct attr, fetch latest attr from mds
+    Attr new_attr;
+    auto status = mds_client_->GetAttr(ctx, attr.ino, new_attr);
+    if (!status.ok()) {
+      LOG(ERROR) << fmt::format(
+          "[meta.filesystem.{}] get attr fail for correct, caller({}) "
+          "error({}).",
+          caller, status.ToString());
+      return status;
+    }
+    attr = new_attr;
+    ctx->is_amend = true;
+  }
+
+  // correct length with write memo
+  CorrectAttrLength(ctx, attr, caller);
+
+  return Status::OK();
+}
+
+void MDSFileSystem::CorrectAttrLength(ContextSPtr ctx, Attr& attr,
+                                      const std::string& caller) {
+  auto file_session = file_session_map_.GetSession(attr.ino);
+  if (file_session != nullptr) {
+    uint64_t write_memo_length = file_session->GetLength();
+    if (write_memo_length > attr.length) {
+      LOG(INFO) << fmt::format(
+          "[meta.filesystem.{}] correct length, caller({}).", attr.ino, caller);
+
+      attr.length = write_memo_length;
+
+      // uint64_t time_ns = file_session->GetLastTimeNs();
+      // attr.atime = std::max(attr.atime, time_ns);
+      // attr.ctime = std::max(attr.ctime, time_ns);
+      // attr.mtime = std::max(attr.mtime, time_ns);
+
+      ctx->is_amend = true;
+    }
+  }
+}
 
 static std::vector<std::string> SplitMdsAddrs(const std::string& mds_addrs) {
   std::vector<std::string> addrs;
