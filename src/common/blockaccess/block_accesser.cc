@@ -20,6 +20,7 @@
 #include <absl/strings/str_format.h>
 
 #include <memory>
+#include <utility>
 
 #include "common/blockaccess/block_access_log.h"
 #include "common/blockaccess/rados/rados_accesser.h"
@@ -138,10 +139,10 @@ void BlockAccesserImpl::AsyncPut(
   int64_t start_us = butil::cpuwide_time_us();
   block_put_async_num << 1;
 
-  auto origin_cb = context->cb;
+  auto origin_cb = std::move(context->cb);
 
-  context->cb = [this, start_us,
-                 origin_cb](const std::shared_ptr<PutObjectAsyncContext>& ctx) {
+  context->cb = [this, start_us, origin = std::move(origin_cb)](
+                    const std::shared_ptr<PutObjectAsyncContext>& ctx) {
     BlockAccessLogGuard log(start_us, [&]() {
       return fmt::format("async_put_block ({}, {}) : {}", ctx->key,
                          ctx->buffer_size, ctx->status.ToString());
@@ -153,7 +154,7 @@ void BlockAccesserImpl::AsyncPut(
     inflight_bytes_throttle_->OnComplete(ctx->buffer_size);
 
     // NOTE: this is necessary because caller reuse context when retry
-    ctx->cb = origin_cb;
+    ctx->cb = origin;
     ctx->cb(ctx);
   };
 
@@ -191,10 +192,10 @@ void BlockAccesserImpl::AsyncGet(
   int64_t start_us = butil::cpuwide_time_us();
   block_get_async_num << 1;
 
-  auto origin_cb = context->cb;
+  auto origin_cb = std::move(context->cb);
 
-  context->cb = [this, start_us,
-                 origin_cb](const std::shared_ptr<GetObjectAsyncContext>& ctx) {
+  context->cb = [this, start_us, origin = std::move(origin_cb)](
+                    const std::shared_ptr<GetObjectAsyncContext>& ctx) {
     BlockAccessLogGuard log(start_us, [&]() {
       return fmt::format("async_get_block ({}, {}, {}) : {}", ctx->key,
                          ctx->offset, ctx->len, ctx->status.ToString());
@@ -206,8 +207,8 @@ void BlockAccesserImpl::AsyncGet(
     inflight_bytes_throttle_->OnComplete(ctx->len);
 
     // NOTE: this is necessary because caller reuse context when retry
-    ctx->cb = origin_cb;
-    origin_cb(ctx);
+    ctx->cb = origin;
+    ctx->cb(ctx);
   };
 
   if (throttle_) {
