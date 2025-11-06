@@ -138,6 +138,7 @@ void ChunkReader::DoRead(ContextSPtr ctx, const ChunkReadReq& req,
       LOG(WARNING) << fmt::format("{} Failed GetSlices, status: {}", UUID(),
                                   s.ToString());
       cb(s);
+      return;
     }
 
     std::vector<SliceReadReq> slice_reqs;

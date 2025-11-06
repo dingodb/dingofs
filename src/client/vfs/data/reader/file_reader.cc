@@ -62,6 +62,7 @@ static void ChunkReadCallback(const ChunkReadReq& req,
     }
 
     shared.num_done++;
+    CHECK_GE(shared.total, shared.num_done);
     if (shared.num_done >= shared.total) {
       shared.cv.notify_all();
     }
