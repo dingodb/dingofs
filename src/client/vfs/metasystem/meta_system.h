@@ -35,6 +35,8 @@ struct DumpOption {
   bool file_session{false};
   bool handler{false};
   bool parent_memo{false};
+  bool modify_time_memo{false};
+  bool chunk_memo{false};
   bool mds_router{false};
   bool inode_cache{false};
   bool rpc{false};

@@ -1086,7 +1086,7 @@ ReadSliceResponse MDSClient::ReadSlice(Ino ino, int64_t chunk_index) {
 
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
-  request.add_chunk_indexes(chunk_index);
+  request.add_chunk_descriptors()->set_index(chunk_index);
 
   auto status = interaction_->SendRequest("MDSService", "ReadSlice", request, response);
   if (!status.ok()) {

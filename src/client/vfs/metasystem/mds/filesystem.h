@@ -19,6 +19,7 @@
 #include <memory>
 #include <string>
 
+#include "client/vfs/metasystem/mds/chunk_memo.h"
 #include "client/vfs/metasystem/mds/client_id.h"
 #include "client/vfs/metasystem/mds/dir_iterator.h"
 #include "client/vfs/metasystem/mds/file_session.h"
@@ -153,6 +154,7 @@ class MDSFileSystem : public vfs::MetaSystem {
 
   void Heartbeat();
   void CleanExpiredModifyTimeMemo();
+  void CleanExpiredChunkMemo();
 
   bool InitCrontab();
 
@@ -190,6 +192,8 @@ class MDSFileSystem : public vfs::MetaSystem {
   MDSDiscoverySPtr mds_discovery_;
 
   MDSClientSPtr mds_client_;
+
+  ChunkMemo chunk_memo_;
 
   ModifyTimeMemo modify_time_memo_;
 

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_MODIFY_TIME_MEMO_H_
-#define DINGOFS_SRC_CLIENT_VFS_META_V2_MODIFY_TIME_MEMO_H_
+#ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_CHUNK_MEMO_H_
+#define DINGOFS_SRC_CLIENT_VFS_META_V2_CHUNK_MEMO_H_
 
 #include <sys/types.h>
 
@@ -31,25 +31,41 @@ namespace client {
 namespace vfs {
 namespace v2 {
 
-class ModifyTimeMemo {
+class ChunkMemo {
  public:
-  ModifyTimeMemo() = default;
-  ~ModifyTimeMemo() = default;
+  ChunkMemo() = default;
+  ~ChunkMemo() = default;
 
-  void Remember(Ino ino);
-  void Forget(Ino ino);
+  struct Key {
+    Ino ino;
+    uint32_t chunk_index;
+
+    bool operator<(const Key& other) const {
+      if (ino != other.ino) {
+        return ino < other.ino;
+      }
+      return chunk_index < other.chunk_index;
+    }
+  };
+
+  struct Value {
+    uint64_t version;
+    uint64_t time_ns;
+  };
+
+  void Remember(Ino ino, uint32_t chunk_index, uint64_t version);
+  void Forget(Ino ino, uint32_t chunk_index);
   void ForgetExpired(uint64_t expire_time_ns);
 
-  uint64_t Get(Ino ino);
-  bool ModifiedSince(Ino ino, uint64_t timestamp);
+  uint64_t GetVersion(Ino ino, uint32_t chunk_index);
 
   bool Dump(Json::Value& value);
   bool Load(const Json::Value& value);
 
  private:
   utils::RWLock lock_;
-  // ino -> modify time ns
-  std::map<Ino, uint64_t> modify_time_map_;
+
+  std::map<Key, Value> chunk_map_;
 };
 
 }  // namespace v2
@@ -57,4 +73,4 @@ class ModifyTimeMemo {
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_VFS_META_V2_MODIFY_TIME_MEMO_H_
+#endif  // DINGOFS_SRC_CLIENT_VFS_META_V2_CHUNK_MEMO_H_

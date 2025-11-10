@@ -24,6 +24,7 @@
 
 #include "client/vfs/metasystem/mds/client_id.h"
 #include "client/vfs/metasystem/mds/helper.h"
+#include "client/vfs/metasystem/mds/mds_client.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/options/client.h"
 #include "common/status.h"
@@ -76,7 +77,8 @@ MDSFileSystem::MDSFileSystem(mds::FsInfoSPtr fs_info, const ClientId& client_id,
       file_session_map_(fs_info),
       inode_cache_(inode_cache),
       mds_client_(mds_client),
-      write_slice_processor_(WriteSliceProcessor::New(mds_client)) {}
+      write_slice_processor_(
+          WriteSliceProcessor::New(mds_client, chunk_memo_)) {}
 
 MDSFileSystem::~MDSFileSystem() {}  // NOLINT
 
@@ -130,6 +132,14 @@ bool MDSFileSystem::Dump(ContextSPtr, Json::Value& value) {
     return false;
   }
 
+  if (!modify_time_memo_.Dump(value)) {
+    return false;
+  }
+
+  if (!chunk_memo_.Dump(value)) {
+    return false;
+  }
+
   return true;
 }
 
@@ -150,6 +160,14 @@ bool MDSFileSystem::Dump(const DumpOption& options, Json::Value& value) {
     return false;
   }
 
+  if (options.modify_time_memo && !modify_time_memo_.Dump(value)) {
+    return false;
+  }
+
+  if (options.chunk_memo && !chunk_memo_.Dump(value)) {
+    return false;
+  }
+
   return true;
 }
 
@@ -163,6 +181,14 @@ bool MDSFileSystem::Load(ContextSPtr, const Json::Value& value) {
   }
 
   if (!mds_client_->Load(value)) {
+    return false;
+  }
+
+  if (!modify_time_memo_.Load(value)) {
+    return false;
+  }
+
+  if (!chunk_memo_.Load(value)) {
     return false;
   }
 
@@ -254,9 +280,16 @@ void MDSFileSystem::Heartbeat() {
 
 void MDSFileSystem::CleanExpiredModifyTimeMemo() {
   uint64_t expired_time_s =
-      mds::Helper::Timestamp() - FLAGS_client_vfs_meta_modify_time_expired_s;
+      mds::Helper::Timestamp() - FLAGS_client_vfs_meta_memo_expired_s;
 
   modify_time_memo_.ForgetExpired(expired_time_s);
+}
+
+void MDSFileSystem::CleanExpiredChunkMemo() {
+  uint64_t expired_time_s =
+      mds::Helper::Timestamp() - FLAGS_client_vfs_meta_memo_expired_s;
+
+  chunk_memo_.ForgetExpired(expired_time_s);
 }
 
 bool MDSFileSystem::InitCrontab() {
@@ -270,10 +303,13 @@ bool MDSFileSystem::InitCrontab() {
 
   // add clean expired crontab
   crontab_configs_.push_back({
-      "CLEAN_EXPIRED_MODIFY_TIME_MEMO",
+      "CLEAN_EXPIRED_MEMO",
       kCleanExpiredModifyTimeMemoIntervalS * 1000,
       true,
-      [this](void*) { this->CleanExpiredModifyTimeMemo(); },
+      [this](void*) {
+        this->CleanExpiredModifyTimeMemo();
+        this->CleanExpiredChunkMemo();
+      },
   });
 
   crontab_manager_.AddCrontab(crontab_configs_);
@@ -372,6 +408,17 @@ Status MDSFileSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
     file_session->UpsertChunk(fh, chunks);
   }
 
+  // update chunk memo
+  for (const auto& chunk : chunks) {
+    uint64_t memo_version = chunk_memo_.GetVersion(ino, chunk.index());
+    CHECK(chunk.version() >= memo_version) << fmt::format(
+        "[meta.filesystem.{}.{}.{}] chunk version invalid, index({}) "
+        "version({}<{}).",
+        ino, fh, session_id, chunk.index(), chunk.version(), memo_version);
+
+    chunk_memo_.Remember(ino, chunk.index(), chunk.version());
+  }
+
   return Status::OK();
 }
 
@@ -406,9 +453,13 @@ Status MDSFileSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
     return Status::OK();
   }
 
+  mds::ChunkDescriptor chunk_descriptor;
+  chunk_descriptor.set_index(static_cast<uint32_t>(index));
+  chunk_descriptor.set_version(
+      chunk_memo_.GetVersion(ino, static_cast<uint32_t>(index)));
+
   std::vector<mds::ChunkEntry> chunks;
-  auto status =
-      mds_client_->ReadSlice(ctx, ino, {static_cast<uint32_t>(index)}, chunks);
+  auto status = mds_client_->ReadSlice(ctx, ino, {chunk_descriptor}, chunks);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[meta.filesystem.{}.{}.{}] reeadslice fail, error({}).", ino, fh,
@@ -447,8 +498,9 @@ Status MDSFileSystem::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
     *delta_slice_entry.add_slices() = Helper::ToSlice(slice);
   }
 
-  auto status =
-      mds_client_->WriteSlice(ctx, ino, {std::move(delta_slice_entry)});
+  std::vector<mds::ChunkDescriptor> chunk_descriptors;
+  auto status = mds_client_->WriteSlice(
+      ctx, ino, {std::move(delta_slice_entry)}, chunk_descriptors);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[meta.filesystem.{}.{}.{}] writeslice fail, error({}).", ino, fh,
@@ -461,6 +513,12 @@ Status MDSFileSystem::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
   }
 
   modify_time_memo_.Remember(ino);
+
+  // update chunk memo
+  for (const auto& chunk_descriptor : chunk_descriptors) {
+    chunk_memo_.Remember(ino, chunk_descriptor.index(),
+                         chunk_descriptor.version());
+  }
 
   return Status::OK();
 }
