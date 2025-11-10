@@ -78,7 +78,7 @@ TEST_F(PartitionCacheTest, Put) {
   partition->PutChild(
       Dentry(kFsId, "file01", parent_ino, 100005, pb::mds::FileType::FILE, 0));
 
-  partition_cache.Put(inode->Ino(), partition);
+  partition_cache.PutIf(inode->Ino(), partition);
 
   ASSERT_TRUE(partition_cache.Get(inode->Ino()) != nullptr);
 }
@@ -104,7 +104,7 @@ TEST_F(PartitionCacheTest, Delete) {
   partition->PutChild(
       Dentry(kFsId, "file01", parent_ino, 100005, pb::mds::FileType::FILE, 0));
 
-  partition_cache.Put(inode->Ino(), partition);
+  partition_cache.PutIf(inode->Ino(), partition);
 
   ASSERT_TRUE(partition_cache.Get(inode->Ino()) != nullptr);
 
