@@ -21,6 +21,7 @@
 
 #include "bthread/countdown_event.h"
 #include "butil/containers/mpsc_queue.h"
+#include "client/vfs/metasystem/mds/chunk_memo.h"
 #include "client/vfs/metasystem/mds/mds_client.h"
 #include "client/vfs/vfs_meta.h"
 #include "mds/common/type.h"
@@ -55,7 +56,7 @@ struct BatchOperation {
 class WriteSliceProcessor
     : public std::enable_shared_from_this<WriteSliceProcessor> {
  public:
-  WriteSliceProcessor(MDSClientSPtr mds_client);
+  WriteSliceProcessor(MDSClientSPtr mds_client, ChunkMemo& chunk_memo);
   ~WriteSliceProcessor();
 
   WriteSliceProcessor(const WriteSliceProcessor&) = delete;
@@ -63,8 +64,9 @@ class WriteSliceProcessor
   WriteSliceProcessor(WriteSliceProcessor&&) = delete;
   WriteSliceProcessor& operator=(WriteSliceProcessor&&) = delete;
 
-  static WriteSliceProcessorSPtr New(MDSClientSPtr mds_client) {
-    return std::make_shared<WriteSliceProcessor>(mds_client);
+  static WriteSliceProcessorSPtr New(MDSClientSPtr mds_client,
+                                     ChunkMemo& chunk_memo) {
+    return std::make_shared<WriteSliceProcessor>(mds_client, chunk_memo);
   }
 
   WriteSliceProcessorSPtr GetSelfPtr() { return shared_from_this(); }
@@ -92,7 +94,7 @@ class WriteSliceProcessor
 
   butil::MPSCQueue<WriteSliceOperationSPtr> operations_;
 
-  //   WorkerSPtr async_worker_;
+  ChunkMemo& chunk_memo_;
 };
 
 }  // namespace v2

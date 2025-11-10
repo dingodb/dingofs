@@ -24,6 +24,9 @@
 namespace dingofs {
 namespace mds {
 
+static const uint32_t kConnectTimeoutMs = 200;
+static const uint32_t kRpcTimeoutMs = 6000;
+
 ChannelPool::ChannelPool() { bthread_mutex_init(&mutex_, nullptr); }
 ChannelPool::~ChannelPool() { bthread_mutex_destroy(&mutex_); }
 
@@ -43,9 +46,9 @@ std::shared_ptr<brpc::Channel> ChannelPool::GetChannel(const butil::EndPoint& en
   // Create new channel
   auto channel = std::make_shared<brpc::Channel>();
   brpc::ChannelOptions options;
-  options.connect_timeout_ms = 4000;
-  options.timeout_ms = 6000;
-  options.backup_request_ms = 5000;
+  options.connect_timeout_ms = kConnectTimeoutMs;
+  options.timeout_ms = kRpcTimeoutMs;
+  options.backup_request_ms = kRpcTimeoutMs;
   options.connection_type = brpc::ConnectionType::CONNECTION_TYPE_SINGLE;
   if (channel->Init(endpoint, nullptr) != 0) {
     DINGO_LOG(ERROR) << "init channel fail, endpoint: " << Helper::EndPointToString(endpoint);
@@ -65,7 +68,7 @@ Status ServiceAccess::CheckAlive(const butil::EndPoint& endpoint) {
   pb::mds::MDSService_Stub stub(channel.get());
 
   brpc::Controller cntl;
-  cntl.set_timeout_ms(1000);
+  cntl.set_timeout_ms(kRpcTimeoutMs);
 
   pb::mds::CheckAliveRequest request;
   pb::mds::CheckAliveResponse response;
@@ -88,7 +91,7 @@ Status ServiceAccess::NotifyBuddy(const butil::EndPoint& endpoint, const pb::mds
   pb::mds::MDSService_Stub stub(channel.get());
 
   brpc::Controller cntl;
-  cntl.set_timeout_ms(5000);
+  cntl.set_timeout_ms(kRpcTimeoutMs);
 
   pb::mds::NotifyBuddyResponse response;
 
