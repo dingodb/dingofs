@@ -536,7 +536,7 @@ TEST_F(FileSystemTest, UnLink) {
     ASSERT_EQ(inode->Ino(), entry_out.attr.ino()) << "ino is invalid.";
     ASSERT_EQ(2, inode->Nlink()) << "nlink not equal.";
 
-    status = fs->UnLink(ctx, kRootIno, "link_file");
+    status = fs->UnLink(ctx, kRootIno, "link_file", entry_out);
     ASSERT_TRUE(status.ok()) << "link fail, error: " << status.error_str();
     ASSERT_EQ(1, inode->Nlink()) << "nlink not equal.";
   }
