@@ -443,7 +443,8 @@ Status MDSFileSystem::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
 }
 
 Status MDSFileSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
-                                uint64_t fh, std::vector<Slice>* slices) {
+                                uint64_t fh, std::vector<Slice>* slices,
+                                uint64_t& version) {
   if (fh != 0 && GetSliceFromCache(ino, index, slices)) {
     ctx->hit_cache = true;
     LOG(INFO) << fmt::format(
@@ -471,6 +472,7 @@ Status MDSFileSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
     for (const auto& slice : chunk.slices()) {
       slices->emplace_back(Helper::ToSlice(slice));
     }
+    version = chunk.version();
   }
 
   return Status::OK();
