@@ -230,6 +230,10 @@ Status Monitor::MonitorClient() {
   auto& server = Server::GetInstance();
   auto heartbeat = server.GetHeartbeat();
 
+  if (!dist_lock_->IsLocked()) {
+    return Status(pb::error::EINTERNAL, "not own lock");
+  }
+
   std::vector<ClientEntry> clients;
   auto status = heartbeat->GetClientList(clients);
   if (!status.ok()) {

@@ -29,8 +29,9 @@ namespace v2 {
 
 static const uint32_t kBatchOperationReserveSize = 256;
 
-WriteSliceProcessor::WriteSliceProcessor(MDSClientSPtr mds_client)
-    : mds_client_(mds_client) {
+WriteSliceProcessor::WriteSliceProcessor(MDSClientSPtr mds_client,
+                                         ChunkMemo& chunk_memo)
+    : mds_client_(mds_client), chunk_memo_(chunk_memo) {
   CHECK(bthread_mutex_init(&mutex_, nullptr) == 0)
       << fmt::format("[meta.writeslice] bthread_mutex_init fail.");
   CHECK(bthread_cond_init(&cond_, nullptr) == 0)
@@ -210,11 +211,19 @@ void WriteSliceProcessor::ExecuteBatchOperation(
       "delta_slice_entries({}).",
       ino, fh, delta_slice_entries.size());
 
-  auto status = mds_client_->WriteSlice(ctx, ino, delta_slice_entries);
+  std::vector<mds::ChunkDescriptor> chunk_descriptors;
+  auto status =
+      mds_client_->WriteSlice(ctx, ino, delta_slice_entries, chunk_descriptors);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[meta.writeslice.{}.{}] writeslice fail, error({}).", ino, fh,
         status.ToString());
+  }
+
+  // update chunk memo
+  for (const auto& chunk_descriptor : chunk_descriptors) {
+    chunk_memo_.Remember(ino, chunk_descriptor.index(),
+                         chunk_descriptor.version());
   }
 
   for (auto& operation : batch_operation.operations) {

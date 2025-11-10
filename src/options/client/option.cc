@@ -82,9 +82,9 @@ DEFINE_validator(client_vfs_meta_logging, &PassBool);
 DEFINE_int64(client_vfs_meta_log_threshold_us, 1000, "access log threshold");
 DEFINE_validator(client_vfs_meta_log_threshold_us, &PassInt64);
 
-DEFINE_uint64(client_vfs_meta_modify_time_expired_s, 3600,
+DEFINE_uint64(client_vfs_meta_memo_expired_s, 3600,
               "modify time memo expired time");
-DEFINE_validator(client_vfs_meta_modify_time_expired_s, brpc::PassValidate);
+DEFINE_validator(client_vfs_meta_memo_expired_s, brpc::PassValidate);
 
 DEFINE_int32(client_vfs_flush_bg_thread, 16,
              "number of background flush threads");

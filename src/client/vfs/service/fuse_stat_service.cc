@@ -130,6 +130,14 @@ static void RenderNavigation(const Json::Value& json_value,
         host, port);
     result += "<br>";
     result += fmt::format(
+        R"(<a href="FuseStatService/modifytimememo/{}/{}" target="_blank">modify time memo</a>: show modify time memo info at meta)",
+        host, port);
+    result += "<br>";
+    result += fmt::format(
+        R"(<a href="FuseStatService/chunkmemo/{}/{}" target="_blank">chunk memo</a>: show chunk memo info at meta)",
+        host, port);
+    result += "<br>";
+    result += fmt::format(
         R"(<a href="FuseStatService/mdsrouter/{}/{}" target="_blank">mds router</a>: show mds router info at meta)",
         host, port);
     result += "<br>";
@@ -667,6 +675,91 @@ static void RenderParentMemoPage(const Json::Value& json_value,
   os << "<br>";
 }
 
+static void RenderModifyTimeMemoPage(const Json::Value& json_value,
+                                     butil::IOBufBuilder& os,
+                                     std::string host_name, std::string port) {
+  os << "<!DOCTYPE html><html>";
+
+  os << "<head>" << RenderHead("dinfofs modify time memo") << "</head>";
+  os << "<body>";
+  os << fmt::format(
+      R"(<h1 style="text-align:center;">Client({}:{}) Modify Time Memo</h1>)",
+      host_name, port);
+
+  const Json::Value& items = json_value["modify_time_memo"];
+  if (!items.isArray()) {
+    LOG(ERROR) << "modify_time_memo value is not an array.";
+    return;
+  }
+
+  os << R"(<div style="margin:12px;font-size:smaller;">)";
+  os << fmt::format(R"(<h3>Modify Time Memo [{}]</h3>)", items.size());
+  os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
+  os << "<tr>";
+  os << "<th>Ino</th>";
+  os << "<th>Modify Time</th>";
+  os << "</tr>";
+
+  for (const auto& item : items) {
+    auto ino = item["ino"].asUInt64();
+    auto modify_time_ns = item["modify_time_ns"].asUInt64();
+
+    os << "<td>" << ino << "</td>";
+    os << "<td>" << mds::Helper::FormatNsTime(modify_time_ns) << "</td>";
+    os << "</tr>";
+  }
+  os << "</table>\n";
+  os << "</div>";
+
+  os << "<br>";
+}
+
+static void RenderChunkMemoPage(const Json::Value& json_value,
+                                butil::IOBufBuilder& os, std::string host_name,
+                                std::string port) {
+  os << "<!DOCTYPE html><html>";
+
+  os << "<head>" << RenderHead("dinfofs chunk memo") << "</head>";
+  os << "<body>";
+  os << fmt::format(
+      R"(<h1 style="text-align:center;">Client({}:{}) Chunk Memo</h1>)",
+      host_name, port);
+
+  const Json::Value& items = json_value["chunk_memo"];
+  if (!items.isArray()) {
+    LOG(ERROR) << "chunk_memo value is not an array.";
+    return;
+  }
+
+  os << R"(<div style="margin:12px;font-size:smaller;">)";
+  os << fmt::format(R"(<h3>Chunk Memo [{}]</h3>)", items.size());
+  os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
+  os << "<tr>";
+  os << "<th>Ino</th>";
+  os << "<th>chunk_index</th>";
+  os << "<th>Version</th>";
+  os << "<th>Time</th>";
+  os << "</tr>";
+
+  for (const auto& item : items) {
+    auto ino = item["ino"].asUInt64();
+    auto chunk_index = item["chunk_index"].asUInt64();
+    auto version = item["version"].asUInt64();
+    auto time_ns = item["time_ns"].asUInt64();
+
+    os << "<td>" << ino << "</td>";
+    os << "<td>" << chunk_index << "</td>";
+    os << "<td>" << version << "</td>";
+    os << "<td>" << mds::Helper::FormatNsTime(time_ns) << "</td>";
+
+    os << "</tr>";
+  }
+  os << "</table>\n";
+  os << "</div>";
+
+  os << "<br>";
+}
+
 static void RenderMdsRouterPage(const Json::Value& json_value,
                                 butil::IOBufBuilder& os, std::string host_name,
                                 std::string port) {
@@ -1072,110 +1165,91 @@ void FuseStatServiceImpl::default_method(
   if (params.empty()) {
     RenderMainPage(server, os);
 
-  } else if (params.size() == 3 && params[0] == "diriterator") {
-    // /FuseStatService/diriterator/host_name/port
-    std::string host_name = params[1];
-    std::string port = params[2];
-    Json::Value meta_value;
+  } else if (params.size() == 3) {
+    const std::string& api_name = params[0];
+    const std::string& host_name = params[1];
+    const std::string& port = params[2];
+
+    Json::Value json_value;
     DumpOption options;
-    options.dir_iterator = true;
-    if (!vfs_hub_->GetMetaSystem()->Dump(options, meta_value)) {
-      LOG(ERROR) << fmt::format(" MetaSystem Dump failed.");
-      cntl->SetFailed("MetaSystem Dump failed.");
-      return;
+
+    if (api_name == "diriterator") {
+      // /FuseStatService/diriterator/host_name/port
+      options.dir_iterator = true;
+      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
+        RenderDirInfoPage(json_value, os, host_name, port);
+      }
+    } else if (api_name == "filesession") {
+      // /FuseStatService/filesession/host_name/port
+      options.file_session = true;
+      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
+        RenderFileSessionPage(json_value, os, host_name, port);
+      }
+
+    } else if (api_name == "handler") {
+      // /FuseStatService/handler/host_name/port
+      if (!vfs_hub_->GetHandleManager()->Dump(json_value)) {
+        cntl->SetFailed("GetHandleManager failed.");
+        return;
+      }
+      RenderHandlerInfoPage(json_value, os, host_name, port);
+
+    } else if (api_name == "parentmemo") {
+      // /FuseStatService/parentmemo/host_name/port
+      options.parent_memo = true;
+      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
+        RenderParentMemoPage(json_value, os, host_name, port);
+      }
+
+    } else if (api_name == "modifytimememo") {
+      // /FuseStatService/parentmemo/host_name/port
+      options.modify_time_memo = true;
+      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
+        RenderModifyTimeMemoPage(json_value, os, host_name, port);
+      }
+
+    } else if (api_name == "chunkmemo") {
+      // /FuseStatService/parentmemo/host_name/port
+      options.chunk_memo = true;
+      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
+        RenderChunkMemoPage(json_value, os, host_name, port);
+      }
+
+    } else if (api_name == "mdsrouter") {
+      // /FuseStatService/mdsrouter/host_name/port
+      options.mds_router = true;
+      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
+        RenderMdsRouterPage(json_value, os, host_name, port);
+      }
+
+    } else if (api_name == "inodecache") {
+      // /FuseStatService/inodecache/host_name/port
+      options.inode_cache = true;
+      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
+        RenderInodeCachePage(json_value, os, host_name, port);
+      }
+
+    } else if (api_name == "rpc") {
+      // /FuseStatService/rpc/host_name/port
+      options.rpc = true;
+      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
+        RenderRPCPage(json_value, os, host_name, port);
+      }
+    } else {
+      return cntl->SetFailed("unknown path: " + path);  // NOLINT
     }
-    RenderDirInfoPage(meta_value, os, host_name, port);
-  } else if (params.size() == 3 && params[0] == "filesession") {
-    // /FuseStatService/filesession/host_name/port
-    std::string host_name = params[1];
-    std::string port = params[2];
-    Json::Value meta_value;
 
-    DumpOption options;
-    options.file_session = true;
-
-    if (!vfs_hub_->GetMetaSystem()->Dump(options, meta_value)) {
-      LOG(ERROR) << fmt::format(" MetaSystem Dump failed.");
-      cntl->SetFailed("MetaSystem Dump failed.");
-      return;
-    }
-    RenderFileSessionPage(meta_value, os, host_name, port);
-  } else if (params.size() == 3 && params[0] == "handler") {
-    // /FuseStatService/handler/host_name/port
-    std::string host_name = params[1];
-    std::string port = params[2];
-    Json::Value handler_value;
-    if (!vfs_hub_->GetHandleManager()->Dump(handler_value)) {
-      LOG(ERROR) << fmt::format("GetHandleManager failed.");
-      cntl->SetFailed("GetHandleManager failed.");
-      return;
-    }
-    RenderHandlerInfoPage(handler_value, os, host_name, port);
-  } else if (params.size() == 3 && params[0] == "parentmemo") {
-    // /FuseStatService/parentmemo/host_name/port
-    std::string host_name = params[1];
-    std::string port = params[2];
-    Json::Value meta_value;
-
-    DumpOption options;
-    options.parent_memo = true;
-    if (!vfs_hub_->GetMetaSystem()->Dump(options, meta_value)) {
-      LOG(ERROR) << fmt::format(" MetaSystem Dump failed.");
-      cntl->SetFailed("MetaSystem Dump failed.");
-      return;
-    }
-    RenderParentMemoPage(meta_value, os, host_name, port);
-  } else if (params.size() == 3 && params[0] == "mdsrouter") {
-    // /FuseStatService/mdsrouter/host_name/port
-    std::string host_name = params[1];
-    std::string port = params[2];
-    Json::Value meta_value;
-
-    DumpOption options;
-    options.mds_router = true;
-
-    if (!vfs_hub_->GetMetaSystem()->Dump(options, meta_value)) {
-      LOG(ERROR) << fmt::format(" MetaSystem Dump failed.");
-      cntl->SetFailed("MetaSystem Dump failed.");
-      return;
-    }
-    RenderMdsRouterPage(meta_value, os, host_name, port);
-  } else if (params.size() == 3 && params[0] == "inodecache") {
-    // /FuseStatService/inodecache/host_name/port
-    std::string host_name = params[1];
-    std::string port = params[2];
-    Json::Value meta_value;
-
-    DumpOption options;
-    options.inode_cache = true;
-
-    if (!vfs_hub_->GetMetaSystem()->Dump(options, meta_value)) {
-      LOG(ERROR) << fmt::format(" MetaSystem Dump failed.");
-      cntl->SetFailed("MetaSystem Dump failed.");
-      return;
-    }
-    RenderInodeCachePage(meta_value, os, host_name, port);
-  } else if (params.size() == 3 && params[0] == "rpc") {
-    // /FuseStatService/rpc/host_name/port
-    std::string host_name = params[1];
-    std::string port = params[2];
-    Json::Value meta_value;
-
-    DumpOption options;
-    options.rpc = true;
-
-    if (!vfs_hub_->GetMetaSystem()->Dump(options, meta_value)) {
-      LOG(ERROR) << fmt::format(" MetaSystem Dump failed.");
-      cntl->SetFailed("MetaSystem Dump failed.");
-      return;
-    }
-    RenderRPCPage(meta_value, os, host_name, port);
   } else {
-    cntl->SetFailed("unknown path: " + path);
+    return cntl->SetFailed("unknown path: " + path);  // NOLINT
   }
 
-  os.move_to(cntl->response_attachment());
-  cntl->set_response_compress_type(brpc::COMPRESS_TYPE_GZIP);
+  if (os.buf().empty()) {
+    cntl->SetFailed("dump metasystem fail.");
+
+  } else {
+    os.move_to(cntl->response_attachment());
+    cntl->set_response_compress_type(brpc::COMPRESS_TYPE_GZIP);
+  }
 }
 
 void FuseStatServiceImpl::GetTabInfo(brpc::TabInfoList* tab_list) const {

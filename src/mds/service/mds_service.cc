@@ -1834,13 +1834,15 @@ void MDSServiceImpl::DoWriteSlice(google::protobuf::RpcController*, const pb::md
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
+  std::vector<ChunkDescriptor> chunk_descriptors;
   status = file_system->WriteSlice(ctx, request->parent(), request->ino(),
-                                   Helper::PbRepeatedToVector(request->delta_slices()));
+                                   Helper::PbRepeatedToVector(request->delta_slices()), chunk_descriptors);
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  Helper::VectorToPbRepeated(chunk_descriptors, response->mutable_chunk_descriptors());
 }
 
 void MDSServiceImpl::WriteSlice(google::protobuf::RpcController* controller, const pb::mds::WriteSliceRequest* request,
@@ -1902,7 +1904,8 @@ void MDSServiceImpl::DoReadSlice(google::protobuf::RpcController*, const pb::mds
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
   std::vector<ChunkEntry> chunks;
-  status = file_system->ReadSlice(ctx, request->ino(), Helper::PbRepeatedToVector(request->chunk_indexes()), chunks);
+  status =
+      file_system->ReadSlice(ctx, request->ino(), Helper::PbRepeatedToVector(request->chunk_descriptors()), chunks);
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -1924,8 +1927,8 @@ void MDSServiceImpl::ReadSlice(google::protobuf::RpcController* controller, cons
       return Status(pb::error::EILLEGAL_PARAMTETER, "ino is 0");
     }
 
-    if (request->chunk_indexes().empty()) {
-      return Status(pb::error::EILLEGAL_PARAMTETER, "chunk_indexes is empty");
+    if (request->chunk_descriptors().empty()) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "chunk_descriptors is empty");
     }
 
     return Status::OK();
