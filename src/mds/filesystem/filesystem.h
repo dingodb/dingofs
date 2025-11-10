@@ -105,7 +105,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   bool IsMonoPartition() const;
   bool IsParentHashPartition() const;
 
-  bool CanServe() const { return can_serve_.load(std::memory_order_acquire); };
+  bool CanServe(Context& ctx);
 
   // create root directory
   Status CreateRoot();
@@ -188,8 +188,10 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
                       uint64_t& new_parent_version);
 
   // slice
-  Status WriteSlice(Context& ctx, Ino parent, Ino ino, const std::vector<DeltaSliceEntry>& delta_slices);
-  Status ReadSlice(Context& ctx, Ino ino, const std::vector<uint64_t>& chunk_indexes, std::vector<ChunkEntry>& chunks);
+  Status WriteSlice(Context& ctx, Ino parent, Ino ino, const std::vector<DeltaSliceEntry>& delta_slices,
+                    std::vector<ChunkDescriptor>& chunk_descriptors);
+  Status ReadSlice(Context& ctx, Ino ino, const std::vector<ChunkDescriptor>& chunk_descriptors,
+                   std::vector<ChunkEntry>& chunks);
 
   // fallocate
   Status Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offset, uint64_t len, EntryOut& entry_out);

@@ -33,11 +33,11 @@ void ModifyTimeMemo::Forget(Ino ino) {
   modify_time_map_.erase(ino);
 }
 
-void ModifyTimeMemo::ForgetExpired(uint64_t expire_timestamp_ns) {
+void ModifyTimeMemo::ForgetExpired(uint64_t expire_time_ns) {
   utils::WriteLockGuard guard(lock_);
 
   for (auto it = modify_time_map_.begin(); it != modify_time_map_.end();) {
-    if (it->second < expire_timestamp_ns) {
+    if (it->second < expire_time_ns) {
       it = modify_time_map_.erase(it);
     } else {
       ++it;
@@ -54,6 +54,42 @@ uint64_t ModifyTimeMemo::Get(Ino ino) {
 
 bool ModifyTimeMemo::ModifiedSince(Ino ino, uint64_t timestamp) {
   return Get(ino) > timestamp;
+}
+
+bool ModifyTimeMemo::Dump(Json::Value& value) {
+  utils::ReadLockGuard lk(lock_);
+
+  Json::Value items = Json::arrayValue;
+  for (const auto& [ino, modify_time_ns] : modify_time_map_) {
+    Json::Value item;
+    item["ino"] = ino;
+    item["modify_time_ns"] = modify_time_ns;
+
+    items.append(item);
+  }
+  value["modify_time_memo"] = items;
+
+  return true;
+}
+
+bool ModifyTimeMemo::Load(const Json::Value& value) {
+  utils::WriteLockGuard lk(lock_);
+
+  modify_time_map_.clear();
+  const Json::Value& items = value["modify_time_memo"];
+  if (!items.isArray()) {
+    LOG(ERROR) << "[meta.modify_time_memo] value is not an array.";
+    return false;
+  }
+
+  for (const auto& item : items) {
+    Ino ino = item["ino"].asUInt64();
+    uint64_t modify_time_ns = item["modify_time_ns"].asUInt64();
+
+    modify_time_map_[ino] = modify_time_ns;
+  }
+
+  return true;
 }
 
 }  // namespace v2

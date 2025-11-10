@@ -16,6 +16,7 @@
 #define DINGOFS_MDS_COMMON_HELPER_H_
 
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 

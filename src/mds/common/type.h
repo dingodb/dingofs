@@ -31,6 +31,7 @@ using AttrEntry = pb::mds::Inode;
 using DentryEntry = pb::mds::Dentry;
 using SliceEntry = pb::mds::Slice;
 using ChunkEntry = pb::mds::Chunk;
+using ChunkDescriptor = pb::mds::ChunkDescriptor;
 using FsInfoEntry = pb::mds::FsInfo;
 using TrashSliceEntry = pb::mds::TrashSlice;
 using TrashSliceList = pb::mds::TrashSliceList;
@@ -48,6 +49,7 @@ using HashPartitionEntry = pb::mds::HashPartition;
 using BucketSetEntry = pb::mds::HashPartition::BucketSet;
 using DeltaSliceEntry = pb::mds::WriteSliceRequest::DeltaSlice;
 using RecycleProgress = pb::mds::RecycleProgress;
+using ContextEntry = pb::mds::Context;
 
 struct Range {
   std::string start;
