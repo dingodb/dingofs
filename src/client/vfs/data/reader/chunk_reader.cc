@@ -20,6 +20,7 @@
 #include <glog/logging.h>
 
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -99,6 +100,7 @@ void ChunkReader::ReadAsync(ContextSPtr ctx, ChunkReadReq& req,
       [this, ctx, &req, cb]() { DoRead(ctx, req, cb); });
 }
 
+// TODO: refact this function, too ugly now
 void ChunkReader::DoRead(ContextSPtr ctx, ChunkReadReq& req,
                          StatusCallback cb) {
   auto* tracer = hub_->GetTracer();
@@ -150,10 +152,10 @@ void ChunkReader::DoRead(ContextSPtr ctx, ChunkReadReq& req,
           "ChunkReader::DoRead.ConvertSliceReadReqToBlockReadReqs", *span);
 
       for (auto& slice_req : slice_reqs) {
-        VLOG(6) << fmt::format("{} Read slice_req:", UUID(),
+        VLOG(6) << fmt::format("{} Read slice_req: {}", UUID(),
                                slice_req.ToString());
 
-        if (slice_req.slice.has_value()) {
+        if (slice_req.slice.has_value() && !slice_req.slice.value().is_zero) {
           std::vector<BlockReadReq> reqs = ConvertSliceReadReqToBlockReadReqs(
               slice_req, chunk_.fs_id, chunk_.ino, chunk_.chunk_size,
               chunk_.block_size);
@@ -161,6 +163,15 @@ void ChunkReader::DoRead(ContextSPtr ctx, ChunkReadReq& req,
           block_reqs.insert(block_reqs.end(),
                             std::make_move_iterator(reqs.begin()),
                             std::make_move_iterator(reqs.end()));
+        } else {
+          block_reqs.insert(block_reqs.end(),
+                            BlockReadReq{
+                                .file_offset = slice_req.file_offset,
+                                .block_offset = 0,
+                                .len = slice_req.len,
+                                .block = BlockDesc{},
+                                .fake = true,
+                            });
         }
       }
     }
@@ -173,7 +184,7 @@ void ChunkReader::DoRead(ContextSPtr ctx, ChunkReadReq& req,
       cache::BlockKey key(chunk_.fs_id, chunk_.ino, block_req.block.slice_id,
                           block_req.block.index, block_req.block.version);
 
-      VLOG(6) << fmt::format("{} Read block_key: {},  block_req: {}", UUID(),
+      VLOG(6) << fmt::format("{} Read block_key: {}, block_req: {}", UUID(),
                              key.StoreKey(), block_req.ToString());
 
       cache::RangeOption option;
@@ -217,11 +228,9 @@ void ChunkReader::DoRead(ContextSPtr ctx, ChunkReadReq& req,
       };
 
       // check block is zero block
-      if (block_cache_req.block_req.block.zero) {
-        VLOG(6) << fmt::format(
-            "{} Read zero block, block_key: {},  block_req: {}", UUID(),
-            block_cache_req.key.StoreKey(),
-            block_cache_req.block_req.ToString());
+      if (block_cache_req.block_req.fake) {
+        VLOG(6) << fmt::format("{} Read fake block, block_req: {}", UUID(),
+                               block_cache_req.block_req.ToString());
 
         // zero block, no need to read from block cache, just fill zero
         char* data = new char[block_cache_req.block_req.len];
@@ -255,13 +264,11 @@ void ChunkReader::DoRead(ContextSPtr ctx, ChunkReadReq& req,
             kVFSDataMoudule, "ChunkReader::DoRead.AppendIOBuf", *span);
         for (auto& block_cache_req : block_cache_reqs) {
           req.buf.Append(&block_cache_req.io_buffer);
-          VLOG(3) << fmt::format(
-              "{} IOBuffer: Append block iobuf to chunk iobuf,"
-              "block_req_index: {}, block_info: {}, block_iobuf: {}, "
-              "chunk_iobuf_size: {}",
-              UUID(), block_cache_req.req_index,
-              block_cache_req.block_req.ToString(),
-              block_cache_req.io_buffer.Describe(), req.buf.Size());
+          VLOG(6) << fmt::format(
+              "{} IOBuffer: Append iobuf: {} to chunk_read_buf: {}"
+              "block_req_index: {}, block_req: {}",
+              UUID(), block_cache_req.io_buffer.Describe(), req.buf.Describe(),
+              block_cache_req.req_index, block_cache_req.block_req.ToString());
         }
       }
     }

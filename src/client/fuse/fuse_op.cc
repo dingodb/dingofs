@@ -155,30 +155,22 @@ static void ReplyData(fuse_req_t req, char* buffer, size_t size) {
 
 static void ReplyData(fuse_req_t req,
                       dingofs::client::vfs::DataBuffer& data_buffer) {
-  auto iovecs = data_buffer.GatherIOVecs();
+  std::vector<dingofs::client::vfs::IOVec> iovecs = data_buffer.GatherIOVecs();
 
   if (iovecs.empty()) {
     fuse_reply_buf(req, nullptr, 0);
     return;
   }
 
-  size_t fuse_bufvec_count = iovecs.size();
-  size_t fuse_bufvec_size = sizeof(struct fuse_bufvec) +
-                            ((fuse_bufvec_count - 1) * sizeof(struct fuse_buf));
+  // check when compile time
+  static_assert(sizeof(dingofs::client::vfs::IOVec) == sizeof(struct iovec));
+  static_assert(offsetof(dingofs::client::vfs::IOVec, iov_base) ==
+                offsetof(struct iovec, iov_base));
+  static_assert(offsetof(dingofs::client::vfs::IOVec, iov_len) ==
+                offsetof(struct iovec, iov_len));
 
-  auto tmp_fuse_bufvec = std::unique_ptr<fuse_bufvec, decltype(&std::free)>(
-      static_cast<fuse_bufvec*>(std::malloc(fuse_bufvec_size)), &std::free);
-  std::memset(tmp_fuse_bufvec.get(), 0, fuse_bufvec_size);
-
-  tmp_fuse_bufvec->count = fuse_bufvec_count;
-  tmp_fuse_bufvec->idx = 0;
-  tmp_fuse_bufvec->off = 0;
-  for (size_t i = 0; i < fuse_bufvec_count; i++) {
-    tmp_fuse_bufvec->buf[i].mem = iovecs[i].iov_base;
-    tmp_fuse_bufvec->buf[i].size = iovecs[i].iov_len;
-  }
-
-  fuse_reply_data(req, tmp_fuse_bufvec.get(), FUSE_BUF_SPLICE_MOVE);
+  fuse_reply_iov(req, reinterpret_cast<const struct iovec*>(iovecs.data()),
+                 static_cast<int>(iovecs.size()));
 }
 
 static void ReplyWrite(fuse_req_t req, size_t size) {

@@ -41,8 +41,11 @@ std::string BlockDesc::ToString() const {
 }
 
 std::string BlockReadReq::ToString() const {
-  return fmt::format("(block_req_range: [{}-{}], len: {}, block: {})",
-                     block_offset, End(), len, block.ToString());
+  return fmt::format(
+      "(file_range:[{}-{}], block_req_range: [{}-{}], len: {}, block: {}, "
+      "fake: {})",
+      file_offset, file_offset + len, block_offset, End(), len,
+      block.ToString(), fake ? "true" : "false");
 }
 
 }  // namespace vfs

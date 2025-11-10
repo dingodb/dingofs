@@ -140,7 +140,7 @@ static inline std::vector<SliceReadReq> ProcessReadRequest(
     return a.file_offset < b.file_offset;
   });
 
-  return std::move(results);
+  return results;
 }
 
 static inline std::vector<BlockReadReq> ConvertSliceReadReqToBlockReadReqs(
@@ -207,6 +207,7 @@ static inline std::vector<BlockReadReq> ConvertSliceReadReqToBlockReadReqs(
         std::min(remain_len, (block.block_len - read_block_offst));
 
     BlockReadReq block_read_req{
+        .file_offset = read_offset,
         .block_offset = read_block_offst,
         .len = read_block_len,
         .block = block,
@@ -224,7 +225,7 @@ static inline std::vector<BlockReadReq> ConvertSliceReadReqToBlockReadReqs(
             << read_offset << ", remain_len: " << remain_len;
   }
 
-  return std::move(block_read_reqs);
+  return block_read_reqs;
 }
 
 }  // namespace vfs

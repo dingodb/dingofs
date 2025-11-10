@@ -57,9 +57,11 @@ struct BlockDesc {
 };
 
 struct BlockReadReq {
+  uint64_t file_offset;
   uint64_t block_offset;
   uint64_t len;
   BlockDesc block;
+  bool fake{false};  // true means fake block req, used for hole
 
   // Note: this is the offset in the block, not the file offset.
   uint64_t End() const { return block_offset + len; }
