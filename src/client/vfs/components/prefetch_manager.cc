@@ -56,8 +56,9 @@ std::vector<BlockPrefetch> PrefecthManager::Chunk2Block(ContextSPtr ctx,
   std::vector<BlockReadReq> block_reqs;
   std::vector<BlockPrefetch> block_keys;
 
-  Status status =
-      hub_->GetMetaSystem()->ReadSlice(ctx, req.ino, req.chunk_idx, 0, &slices);
+  uint64_t chunk_version = 0;
+  Status status = hub_->GetMetaSystem()->ReadSlice(ctx, req.ino, req.chunk_idx,
+                                                   0, &slices, chunk_version);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "prefetch read ino:{} chunk:{} slice info failed {}", req.ino,

@@ -105,7 +105,7 @@ class MetaWrapper : public MetaSystem {
                 Ino new_parent, const std::string& new_name) override;
 
   Status ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index, uint64_t fh,
-                   std::vector<Slice>* slices) override;
+                   std::vector<Slice>* slices, uint64_t& version) override;
 
   Status NewSliceId(ContextSPtr ctx, Ino ino, uint64_t* id) override;
 

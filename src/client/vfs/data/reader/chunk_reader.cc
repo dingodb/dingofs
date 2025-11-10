@@ -285,8 +285,10 @@ Status ChunkReader::GetSlices(ContextSPtr ctx, ChunkSlices* chunk_slices) {
         kVFSDataMoudule, "ChunkReader::GetSlices.ReadSlice", *span);
 
     std::vector<Slice> slices;
+    uint64_t chunk_version = 0;
     DINGOFS_RETURN_NOT_OK(hub_->GetMetaSystem()->ReadSlice(
-        slice_span->GetContext(), chunk_.ino, chunk_.index, fh_, &slices));
+        slice_span->GetContext(), chunk_.ino, chunk_.index, fh_, &slices,
+        chunk_version));
 
     cversion_.store(next_version_, std::memory_order_relaxed);
     slices_ = std::move(slices);
