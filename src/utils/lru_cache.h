@@ -607,9 +607,23 @@ class TimedLRUCache : public LRUCacheInterface<K, V> {
 
   bool Put(const K& key, const V& value, V* eliminated) override;
 
+  void PutIf(const K& key, const V& value,
+             std::function<bool(V&)> condition) override {
+    throw std::runtime_error("TimedLRUCache not support GetAll");
+  }
+
+  void PutInplaceIf(const K& key, const V& value,
+                    std::function<void(V&)> updater) override {
+    throw std::runtime_error("TimedLRUCache not support GetAll");
+  }
+
   bool Get(const K& key, V* value) override;
 
   void Remove(const K& key) override;
+
+  void RemoveIf(const K& key, std::function<bool(V&)> condition) override {
+    throw std::runtime_error("TimedLRUCache not support GetAll");
+  }
 
   void BatchRemoveIf(const std::function<bool(const K&)>&) override {
     throw std::runtime_error("TimedLRUCache not support GetAll");
