@@ -475,7 +475,8 @@ Status DummyFileSystem::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
 }
 
 Status DummyFileSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
-                                  uint64_t fh, std::vector<Slice>* slices) {
+                                  uint64_t fh, std::vector<Slice>* slices,
+                                  uint64_t& version) {
   return file_chunk_map_.Read(ino, index, slices);
 }
 

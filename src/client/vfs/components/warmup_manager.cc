@@ -19,6 +19,7 @@
 #include <fmt/format.h>
 #include <glog/logging.h>
 
+#include <cstdint>
 #include <ctime>
 
 #include "butil/memory/scope_guard.h"
@@ -401,8 +402,9 @@ std::vector<BlockContext> WarmupManager::Chunk2Block(ContextSPtr ctx,
   std::vector<BlockReadReq> block_reqs;
   std::vector<BlockContext> block_contexts;
 
+  uint64_t chunk_version = 0;
   Status status = vfs_hub_->GetMetaSystem()->ReadSlice(
-      ctx, req.ino, req.chunk_idx, 0, &slices);
+      ctx, req.ino, req.chunk_idx, 0, &slices, chunk_version);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "Read slice failed, ino: {}, chunk: {}, status: {}.", req.ino,

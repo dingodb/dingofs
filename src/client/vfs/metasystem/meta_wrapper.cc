@@ -316,14 +316,16 @@ Status MetaWrapper::NewSliceId(ContextSPtr ctx, Ino ino, uint64_t* id) {
 }
 
 Status MetaWrapper::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
-                              uint64_t fh, std::vector<Slice>* slices) {
+                              uint64_t fh, std::vector<Slice>* slices,
+                              uint64_t& version) {
   Status s;
   MetaLogGuard log_guard([&]() {
-    return absl::StrFormat("read_slice (%d,%d): %s [fh:%d] %d %d", ino, index,
-                           s.ToString(), fh, ctx->hit_cache, slices->size());
+    return absl::StrFormat("read_slice (%d,%d): %s [fh:%d] %d %d %lu", ino,
+                           index, s.ToString(), fh, ctx->hit_cache,
+                           slices->size(), version);
   });
 
-  s = target_->ReadSlice(ctx, ino, index, fh, slices);
+  s = target_->ReadSlice(ctx, ino, index, fh, slices, version);
   return s;
 }
 
