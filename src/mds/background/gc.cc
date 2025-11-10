@@ -66,6 +66,35 @@ DEFINE_validator(mds_gc_filesession_reserve_time_s, brpc::PassValidate);
 
 static const std::string kWorkerSetName = "GC";
 
+static const uint32_t kBatchDeleteObjectSize = 1000;
+
+// batch delete s3 object
+static Status BatchDeleteBlocks(blockaccess::BlockAccesserSPtr& data_accessor, const std::list<std::string>& keys) {
+  if (keys.size() <= kBatchDeleteObjectSize) {
+    auto status = data_accessor->BatchDelete(keys);
+    if (!status.ok()) {
+      return Status(pb::error::EINTERNAL,
+                    fmt::format("delete s3 object fail, keys({}) status({}).", keys.size(), status.ToString()));
+    }
+  } else {
+    auto it = keys.begin();
+    while (it != keys.end()) {
+      std::list<std::string> batch_keys;
+      for (uint32_t i = 0; i < kBatchDeleteObjectSize && it != keys.end(); ++i, ++it) {
+        batch_keys.push_back(*it);
+      }
+
+      auto status = data_accessor->BatchDelete(batch_keys);
+      if (!status.ok()) {
+        return Status(pb::error::EINTERNAL,
+                      fmt::format("delete s3 object fail, keys({}) status({}).", batch_keys.size(), status.ToString()));
+      }
+    }
+  }
+
+  return Status::OK();
+}
+
 // range [start, end)
 static IntRange CalBlockIndex(uint64_t block_size, uint64_t chunk_offset, const SliceEntry& slice) {
   IntRange range;
@@ -125,11 +154,8 @@ Status CleanDelSliceTask::CleanDelSlice() {
 
   // delete data from s3
   if (!keys.empty()) {
-    auto status = data_accessor_->BatchDelete(keys);
-    if (!status.ok()) {
-      return Status(pb::error::EINTERNAL,
-                    fmt::format("delete s3 object fail, keys({}) status({}).", keys.size(), status.ToString()));
-    }
+    auto status = BatchDeleteBlocks(data_accessor_, keys);
+    if (!status.ok()) return status;
   }
 
   // delete slice
@@ -201,11 +227,8 @@ Status CleanDelFileTask::CleanDelFile(const AttrEntry& attr) {
   }
 
   if (!keys.empty()) {
-    auto status = data_accessor_->BatchDelete(keys);
-    if (!status.ok()) {
-      return Status(pb::error::EINTERNAL,
-                    fmt::format("delete s3 object fail, keys({}) status({}).", keys.size(), status.ToString()));
-    }
+    auto status = BatchDeleteBlocks(data_accessor_, keys);
+    if (!status.ok()) return status;
   }
 
   // delete inode
@@ -254,11 +277,8 @@ Status CleanFileTask::CleanFile(const AttrEntry& attr) {
   }
 
   if (!keys.empty()) {
-    auto status = data_accessor_->BatchDelete(keys);
-    if (!status.ok()) {
-      return Status(pb::error::EINTERNAL,
-                    fmt::format("delete s3 object fail, keys({}) status({}).", keys.size(), status.ToString()));
-    }
+    auto status = BatchDeleteBlocks(data_accessor_, keys);
+    if (!status.ok()) return status;
   }
 
   // update recyle progress
@@ -443,7 +463,7 @@ Status GcProcessor::LaunchGc() {
 
 bool GcProcessor::Execute(TaskRunnablePtr task) {
   if (!worker_set_->ExecuteLeastQueue(task)) {
-    DINGO_LOG(ERROR) << "[gc] execute task fail.";
+    DINGO_LOG(WARNING) << "[gc] execute task fail.";
     return false;
   }
   return true;
@@ -451,7 +471,7 @@ bool GcProcessor::Execute(TaskRunnablePtr task) {
 
 bool GcProcessor::Execute(Ino ino, TaskRunnablePtr task) {
   if (!worker_set_->ExecuteHash(ino, task)) {
-    DINGO_LOG(ERROR) << "[gc] execute task fail.";
+    DINGO_LOG(WARNING) << "[gc] execute task fail.";
     return false;
   }
   return true;
