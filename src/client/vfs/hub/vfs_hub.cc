@@ -197,8 +197,7 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
   }
 
   {
-    warmup_manager_ = WarmupManager::New(this, fs_info_.id, fs_info_.chunk_size,
-                                         fs_info_.block_size);
+    warmup_manager_ = WarmupManager::New(this);
     auto ok = warmup_manager_->Start(FLAGS_client_vfs_warmup_threads);
     if (!ok.ok()) {
       LOG(ERROR) << "warmup manager start failed.";

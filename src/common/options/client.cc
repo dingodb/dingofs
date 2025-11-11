@@ -109,8 +109,8 @@ DEFINE_int32(client_vfs_read_max_retry_block_not_found, 10,
 DEFINE_validator(client_vfs_read_max_retry_block_not_found, brpc::PassValidate);
 
 // prefetch
-DEFINE_bool(client_vfs_prefetch_enable, true, "enable vfs prefetch or not");
-DEFINE_validator(client_vfs_prefetch_enable, brpc::PassValidate);
+DEFINE_uint32(client_vfs_prefetch_blocks, 1, "number of blocks to prefetch");
+DEFINE_validator(client_vfs_prefetch_blocks, brpc::PassValidate);
 
 DEFINE_uint32(client_vfs_prefetch_threads, 8, "number of prefetch threads");
 

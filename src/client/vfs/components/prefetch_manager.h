@@ -46,6 +46,20 @@ class VFSHub;
 class PrefetchManager;
 using PrefetchManagerUPtr = std::unique_ptr<PrefetchManager>;
 
+struct PrefetchContext {
+  PrefetchContext(uint64_t ino, uint64_t prefetch_offset, uint64_t file_size,
+                  uint64_t prefetch_blocks)
+      : ino(ino),
+        prefetch_offset(prefetch_offset),
+        file_size(file_size),
+        prefetch_blocks(prefetch_blocks) {}
+
+  uint64_t ino;
+  uint64_t prefetch_offset;
+  uint64_t file_size;
+  uint64_t prefetch_blocks;
+};
+
 class PrefetchManager {
  public:
   PrefetchManager(VFSHub* vfs_hub)
@@ -56,6 +70,8 @@ class PrefetchManager {
   Status Stop();
 
   void SubmitTask(const BlockKey& key, size_t length);
+
+  void SubmitTask(const PrefetchContext& context);
 
   static PrefetchManagerUPtr New(VFSHub* vfs_hub) {
     return std::make_unique<PrefetchManager>(vfs_hub);

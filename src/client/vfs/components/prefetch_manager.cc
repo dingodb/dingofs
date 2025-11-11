@@ -19,8 +19,11 @@
 #include <fmt/format.h>
 #include <glog/logging.h>
 
+#include <cstdint>
 #include <memory>
 
+#include "client/common/const.h"
+#include "client/vfs/components/prefetch_utils.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "common/status.h"
 #include "utils/executor/bthread/bthread_executor.h"
@@ -90,6 +93,34 @@ void PrefetchManager::SubmitTask(const BlockKey& key, size_t length) {
   CHECK_GT(length, 0);
   CHECK_EQ(0, bthread::execution_queue_execute(task_queue_id_,
                                                PrefetchTask(key, length)));
+}
+
+void PrefetchManager::SubmitTask(const PrefetchContext& context) {
+  auto span = vfs_hub_->GetTracer()->StartSpan(kVFSDataMoudule, __func__);
+
+  const auto block_size = vfs_hub_->GetFsInfo().block_size;
+  // Prefetch include current block
+  uint32_t prefetch_offset =
+      (context.prefetch_offset / block_size) * block_size;
+  uint32_t prefetch_max_len = std::min(context.prefetch_blocks * block_size,
+                                       context.file_size - prefetch_offset);
+
+  auto block_keys =
+      FileRange2BlockKey(span->GetContext(), vfs_hub_, context.ino,
+                         prefetch_offset, prefetch_max_len);
+
+  const auto blocks = block_keys.size();
+  if (blocks > context.prefetch_blocks)
+    block_keys.erase(block_keys.end() - (blocks - context.prefetch_blocks),
+                     block_keys.end());
+
+  VLOG(9) << fmt::format(
+      "Prefetch blocks for ino: {}, offset: {}, maxlen: {}, "
+      "blocknums: {}.",
+      context.ino, prefetch_offset, prefetch_max_len, block_keys.size());
+  for (const auto& block : block_keys) {
+    SubmitTask(block.key, block.len);
+  }
 }
 
 int PrefetchManager::HandlePrefetchTask(

@@ -90,7 +90,7 @@ DECLARE_int32(client_vfs_periodic_flush_interval_ms);
 DECLARE_double(client_vfs_trigger_flush_free_page_ratio);
 
 // vfs prefetch
-DECLARE_bool(client_vfs_prefetch_enable);
+DECLARE_uint32(client_vfs_prefetch_blocks);
 DECLARE_uint32(client_vfs_prefetch_threads);
 
 // vfs warmup
@@ -138,7 +138,7 @@ static void InitUdsOption(utils::Configuration* conf, UdsOption* uds_opt) {
 }
 
 static void InitPrefetchOption(utils::Configuration* c) {
-  c->GetValue("vfs.prefetch.enable", &FLAGS_client_vfs_prefetch_enable);
+  c->GetValue("vfs.prefetch.blocks", &FLAGS_client_vfs_prefetch_blocks);
   c->GetValue("vfs.prefetch.threads", &FLAGS_client_vfs_prefetch_threads);
   c->GetValue("vfs.data.warmup.intime_warmup_enbale",
               &FLAGS_client_vfs_intime_warmup_enable);

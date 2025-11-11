@@ -26,6 +26,7 @@
 
 #include "cache/utils/helper.h"
 #include "client/common/const.h"
+#include "client/vfs/components/prefetch_manager.h"
 #include "client/vfs/components/warmup_manager.h"
 #include "client/vfs/data/reader/chunk_reader.h"
 #include "client/vfs/data/reader/reader_common.h"
@@ -122,6 +123,13 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, uint64_t size,
   uint64_t chunk_offset = offset % chunk_size;
 
   uint64_t total_read_size = std::min(size, attr.length - offset);
+
+  // Prefetch blocks if enabled
+  if (FLAGS_client_vfs_prefetch_blocks > 0 &&
+      vfs_hub_->GetBlockCache()->EnableCache()) {
+    vfs_hub_->GetPrefetchManager()->SubmitTask(PrefetchContext{
+        ino_, offset, attr.length, FLAGS_client_vfs_prefetch_blocks});
+  }
 
   std::vector<ChunkReadReq> read_reqs;
   uint32_t req_index = 0;

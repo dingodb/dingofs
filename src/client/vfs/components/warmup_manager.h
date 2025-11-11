@@ -24,11 +24,9 @@
 #include <unordered_map>
 
 #include "cache/blockcache/block_cache.h"
-#include "cache/blockcache/cache_store.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/metrics/client/vfs/warmup_metric.h"
 #include "common/status.h"
-#include "common/trace/context.h"
 #include "utils/concurrent/concurrent.h"
 #include "utils/concurrent/rw_lock.h"
 #include "utils/executor/executor.h"
@@ -127,44 +125,15 @@ class WarmupTask {
   WarmupProgress progress_;
 };
 
-struct BlockContext {
-  BlockContext(cache::BlockKey block_key, uint64_t block_len)
-      : key(block_key), len(block_len) {}
-  cache::BlockKey key;
-  uint64_t len;
-};
-
-struct ChunkContext {
-  ChunkContext(Ino ino, uint64_t chunk_idx, uint64_t offset, uint64_t length)
-      : ino{ino}, chunk_idx(chunk_idx), offset(offset), len(length) {}
-
-  Ino ino;
-  uint64_t chunk_idx;
-  uint64_t offset;
-  uint64_t len;
-
-  std::string ToString() const {
-    return fmt::format("Chunk context, ino: {}, chunk: {}-{}-{}", ino,
-                       chunk_idx, offset, offset + len);
-  }
-};
-
 class WarmupManager {
  public:
-  WarmupManager(VFSHub* vfs_hub, uint64_t fs_id, uint64_t chunk_size,
-                uint64_t block_size)
-      : vfs_hub_(vfs_hub),
-        fs_id_(fs_id),
-        chunk_size_(chunk_size),
-        block_size_(block_size),
-        metrics_(std::make_unique<WarmupMetric>()) {}
+  WarmupManager(VFSHub* vfs_hub)
+      : vfs_hub_(vfs_hub), metrics_(std::make_unique<WarmupMetric>()) {}
 
-  ~WarmupManager() { ClearWarmupTask(); };
+  ~WarmupManager() { ClearWarmupTask(); }
 
-  static WarmupManagerUptr New(VFSHub* vfs_hub, uint64_t fs_id,
-                               uint64_t chunk_size, uint64_t block_size) {
-    return std::make_unique<WarmupManager>(vfs_hub, fs_id, chunk_size,
-                                           block_size);
+  static WarmupManagerUptr New(VFSHub* vfs_hub) {
+    return std::make_unique<WarmupManager>(vfs_hub);
   }
 
   Status Start(const uint32_t& threads);
@@ -200,14 +169,6 @@ class WarmupManager {
 
   Status WalkFile(WarmupTask* task, Ino ino);
 
-  std::vector<ChunkContext> File2Chunk(Ino ino, uint64_t offset,
-                                       uint64_t len) const;
-  std::vector<BlockContext> Chunk2Block(ContextSPtr ctx, ChunkContext& req);
-  std::vector<BlockContext> FileRange2BlockKey(ContextSPtr ctx, Ino ino,
-                                               uint64_t offset, uint64_t len);
-  std::vector<BlockContext> RemoveDuplicateBlocks(
-      const std::vector<BlockContext>& blocks);
-
   void IncTaskMetric(uint64_t value) {
     metrics_->inflight_warmup_tasks << value;
   };
@@ -238,9 +199,6 @@ class WarmupManager {
     metrics_->inflight_warmup_blocks.reset();
   }
 
-  uint64_t chunk_size_{0};
-  uint64_t block_size_{0};
-  uint64_t fs_id_;
   std::atomic<bool> running_{false};
   std::unordered_map<uint64_t, std::unique_ptr<WarmupTask>>
       warmup_tasks_;           // task key to warmup tasks

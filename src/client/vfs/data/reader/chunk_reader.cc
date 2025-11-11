@@ -208,18 +208,6 @@ void ChunkReader::DoRead(ContextSPtr ctx, ChunkReadReq& req,
       auto block_cache_range_span = tracer->StartSpanWithParent(
           kVFSDataMoudule, "ChunkReader::DoRead.AsyncRange", *span);
 
-      // Pefetch blocks if enabled
-      if (FLAGS_client_vfs_prefetch_enable &&
-          block_cache_req.block_req.block.block_len >
-              block_cache_req.block_req.len &&
-          hub_->GetBlockCache()->EnableCache()) {
-        auto* prefecth_manager = hub_->GetPrefetchManager();
-        CHECK_NOTNULL(prefecth_manager);
-
-        prefecth_manager->SubmitTask(block_cache_req.key,
-                                     block_cache_req.block_req.block.block_len);
-      }
-
       auto callback = [this, &span, &block_cache_req, &shared,
                        span_ptr = block_cache_range_span.release()](Status s) {
         std::unique_ptr<ITraceSpan> block_cache_range_span(span_ptr);

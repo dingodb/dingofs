@@ -24,8 +24,7 @@
 
 #include "butil/memory/scope_guard.h"
 #include "client/common/const.h"
-#include "client/vfs/data/common/common.h"
-#include "client/vfs/data/common/data_utils.h"
+#include "client/vfs/components/prefetch_utils.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/vfs_fh.h"
 #include "client/vfs/vfs_meta.h"
@@ -298,9 +297,8 @@ void WarmupManager::WarmupFile(Ino ino, AsyncWarmupCb cb) {
     return;
   }
 
-  auto blocks = FileRange2BlockKey(span->GetContext(), ino, 0, attr.length);
-  // remove duplicate blocks
-  auto unique_blocks = RemoveDuplicateBlocks(blocks);
+  auto unique_blocks =
+      FileRange2BlockKey(span->GetContext(), vfs_hub_, ino, 0, attr.length);
   IncBlockMetric(unique_blocks.size());
 
   VLOG(6) << fmt::format("Download file: {} started, size: {}, blocks: {}.",
@@ -311,6 +309,13 @@ void WarmupManager::WarmupFile(Ino ino, AsyncWarmupCb cb) {
   for (auto& block : unique_blocks) {
     cache::BlockKey key = block.key;
     uint64_t len = block.len;
+
+    if (block_cache_->IsCached(key)) {
+      VLOG(9) << fmt::format("Skip warmup block key: {}, already in cache.",
+                             key.Filename());
+      countdown.signal();
+      continue;
+    }
 
     VLOG(6) << fmt::format("Download block {}, len {}", key.Filename(), len);
     auto* self = this;
@@ -369,114 +374,6 @@ void WarmupManager::ClearWarmupTask() {
   utils::WriteLockGuard lck(task_rwlock_);
   warmup_tasks_.clear();
   ResetMetrics();
-}
-
-std::vector<ChunkContext> WarmupManager::File2Chunk(Ino ino, uint64_t offset,
-                                                    uint64_t len) const {
-  std::vector<ChunkContext> chunk_contexts;
-
-  uint64_t chunk_idx = offset / chunk_size_;
-  uint64_t chunk_offset = offset % chunk_size_;
-  uint64_t prefetch_size;
-  prefetch_size = len;
-
-  while (prefetch_size > 0) {
-    uint64_t chunk_fetch_size =
-        std::min(prefetch_size, chunk_size_ - chunk_offset);
-    ChunkContext chunk_context(ino, chunk_idx, chunk_offset, chunk_fetch_size);
-
-    VLOG(9) << "Warmup ino: " << ino << ", " << chunk_context.ToString();
-    chunk_contexts.push_back(chunk_context);
-
-    chunk_idx++;
-    chunk_offset = 0;
-    prefetch_size -= chunk_fetch_size;
-  }
-
-  return chunk_contexts;
-}
-
-std::vector<BlockContext> WarmupManager::Chunk2Block(ContextSPtr ctx,
-                                                     ChunkContext& req) {
-  std::vector<Slice> slices;
-  std::vector<BlockReadReq> block_reqs;
-  std::vector<BlockContext> block_contexts;
-
-  uint64_t chunk_version = 0;
-  Status status = vfs_hub_->GetMetaSystem()->ReadSlice(
-      ctx, req.ino, req.chunk_idx, 0, &slices, chunk_version);
-  if (!status.ok()) {
-    LOG(ERROR) << fmt::format(
-        "Read slice failed, ino: {}, chunk: {}, status: {}.", req.ino,
-        req.chunk_idx, status.ToString());
-
-    return block_contexts;
-  }
-
-  FileRange range = {(req.chunk_idx * chunk_size_) + req.offset, req.len};
-  std::vector<SliceReadReq> slice_reqs = ProcessReadRequest(slices, range);
-
-  for (auto& slice_req : slice_reqs) {
-    VLOG(9) << "Read slice_seq : " << slice_req.ToString();
-
-    if (slice_req.slice.has_value() && !slice_req.slice.value().is_zero) {
-      std::vector<BlockReadReq> reqs = ConvertSliceReadReqToBlockReadReqs(
-          slice_req, fs_id_, req.ino, chunk_size_, block_size_);
-
-      block_reqs.insert(block_reqs.end(), std::make_move_iterator(reqs.begin()),
-                        std::make_move_iterator(reqs.end()));
-    }
-  }
-
-  for (auto& block_req : block_reqs) {
-    cache::BlockKey key(fs_id_, req.ino, block_req.block.slice_id,
-                        block_req.block.index, block_req.block.version);
-    if (block_cache_->IsCached(key)) {
-      VLOG(9) << fmt::format("Skip warmup block key: {}, already in cache.",
-                             key.Filename());
-      continue;
-    }
-
-    block_contexts.emplace_back(key, block_req.block.block_len);
-  }
-
-  return block_contexts;
-}
-
-std::vector<BlockContext> WarmupManager::FileRange2BlockKey(ContextSPtr ctx,
-                                                            Ino ino,
-                                                            uint64_t offset,
-                                                            uint64_t len) {
-  std::vector<ChunkContext> chunk_contexts = File2Chunk(ino, offset, len);
-
-  std::vector<BlockContext> block_contexts;
-  for (auto& chunk_context : chunk_contexts) {
-    std::vector<BlockContext> block_contexts_temp =
-        Chunk2Block(ctx, chunk_context);
-
-    block_contexts.insert(block_contexts.end(),
-                          std::make_move_iterator(block_contexts_temp.begin()),
-                          std::make_move_iterator(block_contexts_temp.end()));
-  }
-  return block_contexts;
-}
-
-std::vector<BlockContext> WarmupManager::RemoveDuplicateBlocks(
-    const std::vector<BlockContext>& blocks) {
-  std::unordered_set<std::string> seen_filenames;
-  std::vector<BlockContext> result;
-
-  seen_filenames.reserve(blocks.size());
-  result.reserve(blocks.size());
-
-  for (const auto& block : blocks) {
-    auto [_, ok] = seen_filenames.insert(block.key.Filename());
-    if (ok) {
-      result.push_back(block);
-    }
-  }
-
-  return result;
 }
 
 }  // namespace vfs
