@@ -136,12 +136,9 @@ class ChunkWriter : public std::enable_shared_from_this<ChunkWriter> {
   Status WriteToBlockCache(const cache::BlockKey& key,
                            const cache::Block& block, cache::PutOption option);
 
-  std::unique_ptr<SliceData> FindWritableSliceUnLocked(uint64_t chunk_pos,
-                                                       uint64_t size);
-  std::unique_ptr<SliceData> CreateSliceUnlocked(uint64_t chunk_pos);
-  std::unique_ptr<SliceData> GetSliceUnlocked(uint64_t chunk_pos,
-                                              uint64_t size);
-  void PutSliceUnlocked(std::unique_ptr<SliceData> slice_data);
+  SliceData* FindWritableSliceUnLocked(uint64_t chunk_pos, uint64_t size);
+  SliceData* CreateSliceUnlocked(uint64_t chunk_pos);
+  SliceData* GetSliceUnlocked(uint64_t chunk_pos, uint64_t size);
 
   Status CommitSlices(ContextSPtr ctx, const std::vector<Slice>& slices);
   void AsyncCommitSlices(ContextSPtr ctx, const std::vector<Slice>& slices,
@@ -153,7 +150,7 @@ class ChunkWriter : public std::enable_shared_from_this<ChunkWriter> {
   void CommitFlushTasks(ContextSPtr ctx);
 
   Status GetErrorStatus() const {
-    std::lock_guard<std::mutex> lg(mutex_);
+    std::lock_guard<std::mutex> lg(write_flush_mutex_);
     return error_status_;
   }
 
@@ -161,7 +158,7 @@ class ChunkWriter : public std::enable_shared_from_this<ChunkWriter> {
   // If the current error status is ok, it will be set to the given status.
   // If the current error status is not ok, it will not be changed.
   void MarkErrorStatus(const Status& status) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::mutex> lock(write_flush_mutex_);
     if (error_status_.ok()) {
       error_status_ = status;
     }
@@ -171,18 +168,17 @@ class ChunkWriter : public std::enable_shared_from_this<ChunkWriter> {
   uint64_t fh_;
   const Chunk chunk_;
 
-  mutable std::mutex mutex_;
+  static FlushTask fake_header_;
+
+  mutable std::mutex writer_mutex_;
+  std::deque<Writer*> writers_;
+
+  mutable std::mutex write_flush_mutex_;
   // TODO: maybe use std::vector
   // seq_id -> slice datj
   std::map<uint64_t, std::unique_ptr<SliceData>> slices_;
-
-  // guarded by mutex_
-  std::deque<Writer*> writers_;
-
-  // guarded by mutex_
   std::deque<FlushTask*> flush_queue_;
-  static FlushTask fake_header_;
-
+  // guarded by write_flush_mutex_
   // when this not ok, all write and flush should return error
   Status error_status_;
 };
