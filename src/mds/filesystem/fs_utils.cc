@@ -16,6 +16,7 @@
 
 #include <cstdint>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -261,10 +262,10 @@ Status FsUtils::GenDirJsonString(Ino parent, std::string& output) {
 
   const uint32_t fs_id = fs_info_.fs_id();
 
-  std::map<Ino, DentryEntry> dentries;
+  std::vector<DentryEntry> dentries;
   Trace trace;
   ScanDentryOperation operation(trace, fs_id, parent, [&](const DentryEntry& dentry) -> bool {
-    dentries.insert(std::make_pair(dentry.ino(), dentry));
+    dentries.push_back(dentry);
 
     return true;
   });
@@ -275,13 +276,14 @@ Status FsUtils::GenDirJsonString(Ino parent, std::string& output) {
   // batch get inode attrs
   std::map<Ino, AttrEntry> attrs;
   uint32_t count = 0;
-  std::vector<Ino> inoes;
-  inoes.reserve(kBatchGetSize);
-  for (auto& [ino, dentry] : dentries) {
-    inoes.push_back(ino);
+  std::set<Ino> inoes;
+  for (const auto& dentry : dentries) {
+    inoes.insert(dentry.ino());
 
     if (++count == dentries.size() || inoes.size() == kBatchGetSize) {
-      BatchGetInodeAttrOperation operation(trace, fs_id, inoes);
+      // take out duplicate inoes
+      std::vector<Ino> inoes_vec(inoes.begin(), inoes.end());
+      BatchGetInodeAttrOperation operation(trace, fs_id, inoes_vec);
       status = operation_processor_->RunAlone(&operation);
       if (!status.ok()) {
         DINGO_LOG(ERROR) << fmt::format("[fsutils] batch get inode attrs fail, {}.", status.error_str());
@@ -304,8 +306,8 @@ Status FsUtils::GenDirJsonString(Ino parent, std::string& output) {
 
   // gen json
   nlohmann::json doc = nlohmann::json::array();
-  for (auto& [ino, dentry] : dentries) {
-    auto it = attrs.find(ino);
+  for (const auto& dentry : dentries) {
+    auto it = attrs.find(dentry.ino());
     if (it == attrs.end()) {
       DINGO_LOG(ERROR) << fmt::format("[fsutils] not found attr for dentry({}/{})", dentry.ino(), dentry.name());
       continue;
