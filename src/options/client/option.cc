@@ -38,7 +38,7 @@ DEFINE_int32(client_bthread_worker_num, 0, "bthread worker num");
 DEFINE_bool(client_access_logging, true, "enable access log");
 DEFINE_validator(client_access_logging, &PassBool);
 
-DEFINE_bool(client_access_logging_verbose, false,
+DEFINE_bool(client_access_logging_verbose, true,
             "enable access log with verbose");
 DEFINE_validator(client_access_logging_verbose, brpc::PassValidate);
 
