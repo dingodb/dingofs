@@ -2332,7 +2332,7 @@ static std::set<uint32_t> GetDeletedBucketIds(int64_t mds_id, const pb::mds::Has
   auto old_bucketset = old_hash.distributions().find(mds_id);
   auto bucketset = hash.distributions().find(mds_id);
   if (old_bucketset == old_hash.distributions().end() || bucketset == hash.distributions().end()) {
-    DINGO_LOG(ERROR) << fmt::format("[fs] mds_id({}) not found in old or new hash partition.", mds_id);
+    DINGO_LOG(INFO) << fmt::format("[fs] mds_id({}) not found in old or new hash partition.", mds_id);
     return deleted_bucket_ids;
   }
 

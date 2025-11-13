@@ -1443,16 +1443,12 @@ static void RenderInodePage(const AttrEntry& attr, butil::IOBufBuilder& os) {
   RenderJsonPage("dingofs inode details", header, json, os);
 }
 
-static void RenderChunk(uint64_t& count, uint64_t chunk_size, ChunkEntry chunk, butil::IOBufBuilder& os) {
+static void RenderChunk(uint64_t& count, uint64_t chunk_size, const ChunkEntry& chunk, butil::IOBufBuilder& os) {
   struct OffsetRange {
     uint64_t start;
     uint64_t end;
     std::vector<SliceEntry> slices;
   };
-
-  // sort by offset
-  std::stable_sort(chunk.mutable_slices()->begin(), chunk.mutable_slices()->end(),
-                   [](const SliceEntry& a, const SliceEntry& b) { return a.offset() < b.offset(); });
 
   // get offset ranges
   std::set<uint64_t> offsets;
