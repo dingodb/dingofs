@@ -102,8 +102,8 @@ class MDSClient {
                Attr& out_attr);
   Status RmDir(ContextSPtr ctx, Ino parent, const std::string& name);
 
-  Status ReadDir(ContextSPtr ctx, Ino ino, const std::string& last_name,
-                 uint32_t limit, bool with_attr,
+  Status ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
+                 const std::string& last_name, uint32_t limit, bool with_attr,
                  std::vector<DirEntry>& entries);
 
   Status Open(ContextSPtr ctx, Ino ino, int flags, bool is_prefetch_chunk,
@@ -157,6 +157,7 @@ class MDSClient {
   MDSMeta GetMdsByParent(int64_t parent, bool& is_primary_mds);
 
   uint64_t GetInodeVersion(Ino ino);
+  int32_t GetInodeRenameRefCount(Ino ino);
 
   bool UpdateRouter();
 

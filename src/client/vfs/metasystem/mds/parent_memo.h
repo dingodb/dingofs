@@ -43,11 +43,14 @@ class ParentMemo {
   bool GetParent(Ino ino, Ino& parent);
   bool GetVersion(Ino ino, uint64_t& version);
   std::vector<uint64_t> GetAncestors(uint64_t ino);
+  bool GetRenameRefCount(Ino ino, int32_t& rename_ref_count);
 
   void Upsert(Ino ino, Ino parent);
   void UpsertVersion(Ino ino, uint64_t version);
+  void UpsertVersionAndRenameRefCount(Ino ino, uint64_t version);
   void Upsert(Ino ino, Ino parent, uint64_t version);
   void Delete(Ino ino);
+  void DecRenameRefCount(Ino ino);
 
   bool Dump(Json::Value& value);
   bool Load(const Json::Value& value);
@@ -56,6 +59,7 @@ class ParentMemo {
   struct Entry {
     Ino parent;
     uint64_t version;
+    int32_t rename_ref_count{0};
   };
 
   utils::RWLock lock_;

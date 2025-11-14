@@ -36,12 +36,12 @@ using DirIteratorSPtr = std::shared_ptr<DirIterator>;
 // used by read dir
 class DirIterator {
  public:
-  DirIterator(ContextSPtr ctx, MDSClientSPtr mds_client, Ino ino)
-      : ctx_(ctx), mds_client_(mds_client), ino_(ino) {}
+  DirIterator(ContextSPtr ctx, MDSClientSPtr mds_client, Ino ino, uint64_t fh)
+      : ctx_(ctx), mds_client_(mds_client), ino_(ino), fh_(fh) {}
 
-  static DirIteratorSPtr New(ContextSPtr ctx, MDSClientSPtr mds_client,
-                             Ino ino) {
-    return std::make_shared<DirIterator>(ctx, mds_client, ino);
+  static DirIteratorSPtr New(ContextSPtr ctx, MDSClientSPtr mds_client, Ino ino,
+                             uint64_t fh) {
+    return std::make_shared<DirIterator>(ctx, mds_client, ino, fh);
   }
 
   Status Seek();
@@ -58,11 +58,12 @@ class DirIterator {
   ContextSPtr ctx_;
 
   Ino ino_;
+  uint64_t fh_;
   // last file/dir name, used to read next batch
   std::string last_name_;
   bool with_attr_{false};
 
-  uint32_t offset_{0};
+  std::atomic<uint32_t> offset_{0};
   // stash entry for read dir
   std::vector<DirEntry> entries_;
 

@@ -142,6 +142,12 @@ uint64_t MDSClient::GetInodeVersion(Ino ino) {
   return version;
 }
 
+int32_t MDSClient::GetInodeRenameRefCount(Ino ino) {
+  int32_t rename_ref_count = 0;
+  parent_memo_->GetRenameRefCount(ino, rename_ref_count);
+  return rename_ref_count;
+}
+
 Status MDSClient::GetFsInfo(RPCPtr rpc, const std::string& name,
                             mds::FsInfoEntry& fs_info) {
   pb::mds::GetFsInfoRequest request;
@@ -280,6 +286,7 @@ Status MDSClient::Create(ContextSPtr ctx, Ino parent, const std::string& name,
   pb::mds::BatchCreateRequest request;
   pb::mds::BatchCreateResponse response;
 
+  request.mutable_context()->set_inode_version(GetInodeVersion(parent));
   SetAncestorInContext(request, parent);
 
   request.set_fs_id(fs_id_);
@@ -324,6 +331,7 @@ Status MDSClient::MkNod(ContextSPtr ctx, Ino parent, const std::string& name,
   pb::mds::MkNodRequest request;
   pb::mds::MkNodResponse response;
 
+  request.mutable_context()->set_inode_version(GetInodeVersion(parent));
   SetAncestorInContext(request, parent);
 
   request.set_fs_id(fs_id_);
@@ -363,6 +371,7 @@ Status MDSClient::MkDir(ContextSPtr ctx, Ino parent, const std::string& name,
   pb::mds::MkDirRequest request;
   pb::mds::MkDirResponse response;
 
+  request.mutable_context()->set_inode_version(GetInodeVersion(parent));
   SetAncestorInContext(request, parent);
 
   request.set_fs_id(fs_id_);
@@ -400,6 +409,7 @@ Status MDSClient::RmDir(ContextSPtr ctx, Ino parent, const std::string& name) {
   pb::mds::RmDirRequest request;
   pb::mds::RmDirResponse response;
 
+  request.mutable_context()->set_inode_version(GetInodeVersion(parent));
   SetAncestorInContext(request, parent);
 
   request.set_fs_id(fs_id_);
@@ -415,7 +425,7 @@ Status MDSClient::RmDir(ContextSPtr ctx, Ino parent, const std::string& name) {
   return Status::OK();
 }
 
-Status MDSClient::ReadDir(ContextSPtr ctx, Ino ino,
+Status MDSClient::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
                           const std::string& last_name, uint32_t limit,
                           bool with_attr, std::vector<DirEntry>& entries) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
@@ -428,18 +438,23 @@ Status MDSClient::ReadDir(ContextSPtr ctx, Ino ino,
   pb::mds::ReadDirResponse response;
 
   request.mutable_context()->set_inode_version(GetInodeVersion(ino));
+  request.mutable_context()->set_use_base_version(GetInodeRenameRefCount(ino) >
+                                                  0);
 
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
   request.set_last_name(last_name);
   request.set_limit(limit);
   request.set_with_attr(with_attr);
+  request.set_fh(fh);
 
   auto status =
       SendRequest(ctx, get_mds_fn, "MDSService", "ReadDir", request, response);
   if (!status.ok()) {
     return status;
   }
+
+  parent_memo_->DecRenameRefCount(ino);
 
   entries.reserve(response.entries_size());
   for (const auto& entry : response.entries()) {
@@ -515,6 +530,7 @@ Status MDSClient::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
   pb::mds::LinkRequest request;
   pb::mds::LinkResponse response;
 
+  request.mutable_context()->set_inode_version(GetInodeVersion(new_parent));
   SetAncestorInContext(request, new_parent);
 
   request.set_fs_id(fs_id_);
@@ -547,6 +563,8 @@ Status MDSClient::UnLink(ContextSPtr ctx, Ino parent, const std::string& name) {
   pb::mds::UnLinkRequest request;
   pb::mds::UnLinkResponse response;
 
+  request.mutable_context()->set_inode_version(GetInodeVersion(parent));
+
   SetAncestorInContext(request, parent);
 
   request.set_fs_id(fs_id_);
@@ -578,6 +596,7 @@ Status MDSClient::Symlink(ContextSPtr ctx, Ino parent, const std::string& name,
   pb::mds::SymlinkRequest request;
   pb::mds::SymlinkResponse response;
 
+  request.mutable_context()->set_inode_version(GetInodeVersion(parent));
   SetAncestorInContext(request, parent);
 
   request.set_fs_id(fs_id_);
@@ -897,8 +916,10 @@ Status MDSClient::Rename(ContextSPtr ctx, Ino old_parent,
     return status;
   }
 
-  parent_memo_->UpsertVersion(old_parent, response.old_parent_version());
-  parent_memo_->UpsertVersion(new_parent, response.new_parent_version());
+  parent_memo_->UpsertVersionAndRenameRefCount(old_parent,
+                                               response.old_parent_version());
+  parent_memo_->UpsertVersionAndRenameRefCount(new_parent,
+                                               response.new_parent_version());
 
   return Status::OK();
 }

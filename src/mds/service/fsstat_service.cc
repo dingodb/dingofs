@@ -1733,7 +1733,8 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
     auto file_system = file_system_set->GetFileSystem(fs_id);
     if (file_system != nullptr) {
       InodeSPtr inode;
-      auto status = file_system->GetInodeFromStore(ino, "Stat", false, inode);
+      Context ctx("11111111111111", "fsstatservice");
+      auto status = file_system->GetInodeFromStore(ctx, ino, "Stat", false, inode);
       if (status.ok()) {
         RenderInodePage(inode->Copy(), os);
 

@@ -812,21 +812,19 @@ Status VFSWrapper::ReadDir(Ino ino, uint64_t fh, uint64_t offset,
       {&client_op_metric_->opReadDir, &client_op_metric_->opAll});
 
   if (FLAGS_client_access_logging_verbose) {
-    s = vfs_->ReadDir(span->GetContext(), ino, fh, offset, with_attr,
-                      [&](const dingofs::client::vfs::DirEntry& dir_entry,
-                          int32_t off) -> bool {
-                        (void)off;
-                        dingofs::client::AccessLogGuard log(
-                            [ino, name = std::string(dir_entry.name),
-                             attr = dir_entry.attr, fh]() {
-                              return fmt::format(
-                                  "add_direntry ({}/{}) : {} [fh:{}]", ino,
-                                  name, dingofs::client::vfs::Attr2Str(attr),
-                                  fh);
-                            });
+    s = vfs_->ReadDir(
+        span->GetContext(), ino, fh, offset, with_attr,
+        [&](const vfs::DirEntry& dir_entry, uint64_t off) -> bool {
+          dingofs::client::AccessLogGuard log(
+              [ino, off, name = std::string(dir_entry.name),
+               attr = dir_entry.attr, fh]() {
+                return fmt::format("add_direntry ({}/{}) : {} {} [fh:{}]", ino,
+                                   name, dingofs::client::vfs::Attr2Str(attr),
+                                   off, fh);
+              });
 
-                        return handler(dir_entry, off);
-                      });
+          return handler(dir_entry, off);
+        });
 
   } else {
     s = vfs_->ReadDir(span->GetContext(), ino, fh, offset, with_attr, handler);

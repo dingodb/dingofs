@@ -34,6 +34,7 @@ using DentrySetSPtr = std::shared_ptr<DentrySet>;
 class Dentry {
  public:
   Dentry() = default;
+  Dentry(const std::string& name) : name_(name), type_(pb::mds::FileType::FILE) {};
   Dentry(uint32_t fs_id, const std::string& name, Ino parent, Ino ino, pb::mds::FileType type, uint32_t flag,
          InodeSPtr inode = nullptr);
   Dentry(const pb::mds::Dentry& dentry, InodeSPtr inode = nullptr);
@@ -53,11 +54,11 @@ class Dentry {
 
  private:
   std::string name_;
-  uint32_t fs_id_;
-  Ino ino_;
-  Ino parent_;
+  uint32_t fs_id_{0};
+  Ino ino_{0};
+  Ino parent_{0};
   pb::mds::FileType type_;
-  uint32_t flag_;
+  uint32_t flag_{0};
 
   // maybe null, just inode shortcut
   InodeWPtr inode_;

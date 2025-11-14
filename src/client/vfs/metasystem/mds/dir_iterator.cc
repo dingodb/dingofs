@@ -31,7 +31,7 @@ Status DirIterator::Seek() {
 
   std::vector<DirEntry> entries;
   auto status =
-      mds_client_->ReadDir(ctx_, ino_, last_name_,
+      mds_client_->ReadDir(ctx_, ino_, fh_, last_name_,
                            FLAGS_client_vfs_read_dir_batch_size, true, entries);
   if (!status.ok()) return status;
 
@@ -44,14 +44,14 @@ Status DirIterator::Seek() {
   return Status::OK();
 }
 
-bool DirIterator::Valid() { return offset_ < entries_.size(); }
+bool DirIterator::Valid() { return offset_.load() < entries_.size(); }
 
 DirEntry DirIterator::GetValue(bool with_attr) {
-  CHECK(offset_ < entries_.size()) << "offset out of range";
+  CHECK(offset_.load() < entries_.size()) << "offset out of range";
 
   with_attr_ = with_attr;
 
-  return entries_[offset_];
+  return entries_[offset_.load()];
 }
 
 void DirIterator::Next() {
@@ -60,7 +60,7 @@ void DirIterator::Next() {
   }
 
   std::vector<DirEntry> entries;
-  auto status = mds_client_->ReadDir(ctx_, ino_, last_name_,
+  auto status = mds_client_->ReadDir(ctx_, ino_, fh_, last_name_,
                                      FLAGS_client_vfs_read_dir_batch_size,
                                      with_attr_, entries);
   if (!status.ok()) return;
@@ -76,7 +76,7 @@ bool DirIterator::Dump(Json::Value& value) {
   value["ino"] = ino_;
   value["last_name"] = last_name_;
   value["with_attr"] = with_attr_;
-  value["offset"] = offset_;
+  value["offset"] = offset_.load();
 
   Json::Value entries = Json::arrayValue;
   for (const auto& entry : entries_) {
@@ -173,7 +173,8 @@ bool DirIteratorManager::Load(MDSClientSPtr mds_client,
 
   for (const auto& item : items) {
     Ino ino = item["ino"].asUInt64();
-    auto dir_iterator = DirIterator::New(nullptr, mds_client, ino);
+    uint64_t fh = item["fh"].asUInt64();
+    auto dir_iterator = DirIterator::New(nullptr, mds_client, ino, fh);
     if (!dir_iterator->Load(item)) {
       LOG(ERROR) << fmt::format(
           "[meta.dir_iterator] load dir({}) iterator fail.", ino);

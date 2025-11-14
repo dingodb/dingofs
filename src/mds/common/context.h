@@ -16,6 +16,7 @@
 #define DINGOFS_MDS_COMMON_CONTEXT_H_
 
 #include <cstdint>
+#include <string>
 
 #include "mds/common/tracing.h"
 #include "mds/common/type.h"
@@ -26,25 +27,38 @@ namespace mds {
 class Context {
  public:
   Context() = default;
-  Context(bool is_bypass_cache, uint64_t inode_version, const std::string& client_id = "")
-      : is_bypass_cache_(is_bypass_cache), inode_version_(inode_version), client_id_(client_id) {};
+  Context(const std::string& request_id, const std::string method_name)
+      : request_id_(request_id), method_name_(method_name) {};
+  Context(const ContextEntry& ctx, const std::string& request_id, const std::string method_name)
+      : is_bypass_cache_(ctx.is_bypass_cache()),
+        use_base_version_(ctx.use_base_version()),
+        inode_version_(ctx.inode_version()),
+        client_id_(ctx.client_id()),
+        request_id_(request_id),
+        method_name_(method_name) {
+    ancestors_ = {ctx.ancestors().begin(), ctx.ancestors().end()};
+  };
 
-  void SetBypassCache(bool is_bypass_cache) { is_bypass_cache_ = is_bypass_cache; }
   bool IsBypassCache() const { return is_bypass_cache_; }
-
+  bool UseBaseVersion() const { return use_base_version_; }
   uint64_t GetInodeVersion() const { return inode_version_; }
   const std::string& ClientId() const { return client_id_; }
+  const std::string& RequestId() const { return request_id_; }
+  const std::string& MethodName() const { return method_name_; }
   Trace& GetTrace() { return trace_; }
 
-  void SetAncestors(std::vector<Ino>&& ancestors) { ancestors_ = std::move(ancestors); }
   const std::vector<Ino>& GetAncestors() const { return ancestors_; }
 
  private:
-  bool is_bypass_cache_{false};
+  const bool is_bypass_cache_{false};
 
-  uint64_t inode_version_{0};
+  const bool use_base_version_{false};
 
-  std::string client_id_;
+  const uint64_t inode_version_{0};
+
+  const std::string client_id_;
+  const std::string request_id_;
+  const std::string method_name_;
 
   std::vector<Ino> ancestors_;
 
