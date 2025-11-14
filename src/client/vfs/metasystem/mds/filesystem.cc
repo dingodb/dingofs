@@ -594,7 +594,7 @@ Status MDSFileSystem::RmDir(ContextSPtr ctx, Ino parent,
 }
 
 Status MDSFileSystem::OpenDir(ContextSPtr ctx, Ino ino, uint64_t fh) {
-  auto dir_iterator = DirIterator::New(ctx, mds_client_, ino);
+  auto dir_iterator = DirIterator::New(ctx, mds_client_, ino, fh);
   auto status = dir_iterator->Seek();
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
@@ -619,7 +619,7 @@ Status MDSFileSystem::ReadDir(ContextSPtr ctx, Ino, uint64_t fh,
 
     CorrectAttr(ctx, dir_iterator->LastFetchTimeNs(), entry.attr, "readdir");
 
-    if (!handler(entry, offset)) {
+    if (!handler(entry, ++offset)) {
       break;
     }
 
