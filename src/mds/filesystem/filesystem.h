@@ -207,7 +207,6 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status BatchGetInode(Context& ctx, const std::vector<uint64_t>& inoes, std::vector<EntryOut>& out_entries);
   Status BatchGetXAttr(Context& ctx, const std::vector<uint64_t>& inoes, std::vector<pb::mds::XAttr>& out_xattrs);
 
-  Status RefreshInode(const std::vector<uint64_t>& inoes);
   void RefreshInode(AttrEntry& attr);
 
   Status RefreshFsInfo(const std::string& reason);
@@ -245,12 +244,15 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   bool CanServe(uint64_t self_mds_id);
 
   Status GetPartitionParentInode(Context& ctx, PartitionPtr& partition, InodeSPtr& out_inode);
+  void AddDentryToPartition(Ino parent, const Dentry& dentry, uint64_t version);
+  void DeleteDentryFromPartition(Ino parent, const std::string& name, uint64_t version);
+
   // get partition
   Status GetPartition(Context& ctx, Ino parent, PartitionPtr& out_partition);
   Status GetPartition(Context& ctx, uint64_t version, Ino parent, PartitionPtr& out_partition);
   PartitionPtr GetPartitionFromCache(Ino parent);
   std::map<uint64_t, PartitionPtr> GetAllPartitionsFromCache();
-  Status GetPartitionFromStore(Ino parent, const std::string& reason, PartitionPtr& out_partition);
+  Status GetPartitionFromStore(Context& ctx, Ino parent, const std::string& reason, PartitionPtr& out_partition);
 
   // get dentry
   Status GetDentryFromStore(Ino parent, const std::string& name, Dentry& dentry);
@@ -263,7 +265,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status GetInode(Context& ctx, Ino ino, InodeSPtr& out_inode);
   Status GetInode(Context& ctx, uint64_t version, Ino ino, InodeSPtr& out_inode);
 
-  Status GetInodeFromStore(Ino ino, const std::string& reason, bool is_cache, InodeSPtr& out_inode);
+  Status GetInodeFromStore(Context& ctx, Ino ino, const std::string& reason, bool is_cache, InodeSPtr& out_inode);
   Status BatchGetInodeFromStore(std::vector<uint64_t> inoes, std::vector<InodeSPtr>& out_inodes);
 
   Status GetDelFileFromStore(Ino ino, AttrEntry& out_attr);
@@ -290,7 +292,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   void NotifyBuddyRefreshFsInfo(std::vector<uint64_t> mds_ids, const FsInfoEntry& fs_info);
   void NotifyBuddyRefreshInode(AttrEntry&& attr);
-  void NotifyBuddyCleanPartitionCache(Ino ino, uint64_t version);
+  void NotifyBuddyCleanPartitionCache(Ino ino);
 
   uint64_t self_mds_id_;
 

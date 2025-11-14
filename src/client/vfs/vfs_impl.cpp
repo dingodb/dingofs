@@ -477,13 +477,10 @@ Status VFSImpl::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
     handler(stats_entry, 1);  // pos 0 is the offset for .stats entry
   }
 
-  uint64_t to_meta = (offset > 0) ? (offset - 1) : 0;
-
   return meta_system_->ReadDir(
-      ctx, ino, fh, to_meta, with_attr,
-      [handler](const DirEntry& entry, uint64_t meta_offset) {
-        uint64_t return_off = meta_offset + 1;
-        return handler(entry, return_off);
+      ctx, ino, fh, offset, with_attr,
+      [handler](const DirEntry& entry, uint64_t offset) {
+        return handler(entry, offset);
       });
 }
 
