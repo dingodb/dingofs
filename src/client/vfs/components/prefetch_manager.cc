@@ -16,6 +16,7 @@
 
 #include "prefetch_manager.h"
 
+#include <bthread/execution_queue.h>
 #include <fmt/format.h>
 #include <glog/logging.h>
 
@@ -89,10 +90,19 @@ Status PrefetchManager::Stop() {
   return Status::OK();
 }
 
-void PrefetchManager::SubmitTask(const BlockKey& key, size_t length) {
+void PrefetchManager::SubmitTask(const BlockKey& key, const size_t length,
+                                 const PrefetchPriority priority) {
   CHECK_GT(length, 0);
-  CHECK_EQ(0, bthread::execution_queue_execute(task_queue_id_,
-                                               PrefetchTask(key, length)));
+
+  if (priority == PrefetchPriority::kNormalPriority) {
+    CHECK_EQ(0, bthread::execution_queue_execute(
+                    task_queue_id_, PrefetchTask(key, length),
+                    &bthread::TASK_OPTIONS_NORMAL));
+  } else {
+    CHECK_EQ(0, bthread::execution_queue_execute(
+                    task_queue_id_, PrefetchTask(key, length),
+                    &bthread::TASK_OPTIONS_URGENT));
+  }
 }
 
 void PrefetchManager::SubmitTask(const PrefetchContext& context) {
@@ -119,7 +129,7 @@ void PrefetchManager::SubmitTask(const PrefetchContext& context) {
       "blocknums: {}.",
       context.ino, prefetch_offset, prefetch_max_len, block_keys.size());
   for (const auto& block : block_keys) {
-    SubmitTask(block.key, block.len);
+    SubmitTask(block.key, block.len, context.priority);
   }
 }
 

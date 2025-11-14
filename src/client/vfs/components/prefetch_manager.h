@@ -46,18 +46,27 @@ class VFSHub;
 class PrefetchManager;
 using PrefetchManagerUPtr = std::unique_ptr<PrefetchManager>;
 
+enum class PrefetchPriority : uint8_t {
+  kNormalPriority = 0,
+  kHighPriority = 1,
+};
+
 struct PrefetchContext {
-  PrefetchContext(uint64_t ino, uint64_t prefetch_offset, uint64_t file_size,
-                  uint64_t prefetch_blocks)
+  PrefetchContext(
+      uint64_t ino, uint64_t prefetch_offset, uint64_t file_size,
+      uint64_t prefetch_blocks,
+      const PrefetchPriority priority = PrefetchPriority::kNormalPriority)
       : ino(ino),
         prefetch_offset(prefetch_offset),
         file_size(file_size),
-        prefetch_blocks(prefetch_blocks) {}
+        prefetch_blocks(prefetch_blocks),
+        priority(priority) {}
 
   uint64_t ino;
   uint64_t prefetch_offset;
   uint64_t file_size;
   uint64_t prefetch_blocks;
+  PrefetchPriority priority;
 };
 
 class PrefetchManager {
@@ -69,7 +78,9 @@ class PrefetchManager {
 
   Status Stop();
 
-  void SubmitTask(const BlockKey& key, size_t length);
+  void SubmitTask(
+      const BlockKey& key, size_t length,
+      PrefetchPriority priority = PrefetchPriority::kNormalPriority);
 
   void SubmitTask(const PrefetchContext& context);
 
