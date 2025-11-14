@@ -151,7 +151,7 @@ void DebugServiceImpl::GetPartition(google::protobuf::RpcController* controller,
     return;
   }
 
-  Context ctx(false, 0);
+  Context ctx(request->context(), request->info().request_id(), __func__);
   PartitionPtr partition;
   auto status = fs->GetPartition(ctx, request->parent(), partition);
   if (!status.ok()) {
@@ -185,7 +185,7 @@ void DebugServiceImpl::GetInode(google::protobuf::RpcController*, const pb::debu
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
-  Context ctx(!request->use_cache(), 0);
+  Context ctx(request->context(), request->info().request_id(), __func__);
 
   if (request->inoes().empty() && request->use_cache()) {
     auto inode_map = fs->GetAllInodesFromCache();

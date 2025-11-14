@@ -84,6 +84,19 @@ std::vector<uint64_t> ParentMemo::GetAncestors(uint64_t ino) {
   return ancestors;
 }
 
+bool ParentMemo::GetRenameRefCount(Ino ino, int32_t& rename_ref_count) {
+  utils::ReadLockGuard lk(lock_);
+
+  auto it = ino_map_.find(ino);
+  if (it == ino_map_.end()) {
+    return false;
+  }
+
+  rename_ref_count = it->second.rename_ref_count;
+
+  return true;
+}
+
 void ParentMemo::Upsert(Ino ino, Ino parent) {
   utils::WriteLockGuard lk(lock_);
 
@@ -107,6 +120,20 @@ void ParentMemo::UpsertVersion(Ino ino, uint64_t version) {
   }
 }
 
+void ParentMemo::UpsertVersionAndRenameRefCount(Ino ino, uint64_t version) {
+  utils::WriteLockGuard lk(lock_);
+
+  auto it = ino_map_.find(ino);
+  if (it != ino_map_.end()) {
+    it->second.version = std::max(it->second.version, version);
+    ++it->second.rename_ref_count;
+
+  } else {
+    ino_map_[ino] =
+        Entry{.parent = 0, .version = version, .rename_ref_count = 1};
+  }
+}
+
 void ParentMemo::Upsert(Ino ino, Ino parent, uint64_t version) {
   utils::WriteLockGuard lk(lock_);
 
@@ -124,6 +151,17 @@ void ParentMemo::Delete(Ino ino) {
   utils::WriteLockGuard lk(lock_);
 
   ino_map_.erase(ino);
+}
+
+void ParentMemo::DecRenameRefCount(Ino ino) {
+  utils::WriteLockGuard lk(lock_);
+
+  auto it = ino_map_.find(ino);
+  if (it != ino_map_.end()) {
+    if (it->second.rename_ref_count > 0) {
+      --it->second.rename_ref_count;
+    }
+  }
 }
 
 bool ParentMemo::Dump(Json::Value& value) {

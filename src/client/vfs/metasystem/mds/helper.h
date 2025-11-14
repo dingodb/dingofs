@@ -140,7 +140,7 @@ class Helper {
       out_attr.add_parents(parent);
     }
 
-    return std::move(out_attr);
+    return out_attr;
   }
 
   static DirEntry ToDirEntry(const pb::mds::ReadDirResponse::Entry& entry) {
@@ -149,7 +149,7 @@ class Helper {
     out_entry.ino = entry.ino();
     out_entry.attr = ToAttr(entry.inode());
 
-    return std::move(out_entry);
+    return out_entry;
   }
 
   static Slice ToSlice(const mds::SliceEntry& slice) {
