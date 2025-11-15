@@ -102,13 +102,12 @@ get_options "$@"
 ############################  MAIN()
 docker_prefix="$(pwd)/scripts/docker/$g_os"
 prefix="$docker_prefix/dingofs" # /path/to/dingofs/scripts/docker/rocky9/dingofs
-mkdir -p $prefix $prefix/conf $prefix/confv2
+mkdir -p $prefix $prefix/conf
 install_pkg $prefix
-install_pkg $prefix etcd
 install_pkg $prefix monitor
 
-paths=`ls conf/* confv2/*`
-# paths="$paths tools-v2/pkg/config/dingo.yaml"
+paths=`ls conf/*`
+# paths="$paths tools/pkg/config/dingo.yaml"
 for path in $paths;
 do
     dir=`dirname $path`
@@ -116,7 +115,7 @@ do
 
     # delimiter
     dsv="="
-    if [ $file = "etcd.conf" -o $file = "dingo.yaml" ]; then
+    if [ $file = "dingo.yaml" ]; then
         dsv=": "
     fi
 
@@ -129,8 +128,6 @@ do
     process_config_template $dsv "$dir/$file" "$prefix/$dir/$dst"
     success "install $file success\n"
 done
-
-cp thirdparties/etcdclient/libetcdclient.so $prefix/etcd/lib/
 
 # Add build-image parameter check with default value 'false'
 # build_image=${3:-0}

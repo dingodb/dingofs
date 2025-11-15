@@ -11,7 +11,7 @@ echo "DingoFS project dir: $g_dingo_dir"
 g_build_dir="$g_dingo_dir/build/bin" # /path/to/project/build/bin
 g_deploy_script_dir="$g_dingo_dir/scripts/deploy" # /path/to/project/scripts/deploy
 g_build_release=0
-tools_v2_dingo_file="https://github.com/dingodb/dingofs-tools/releases/download/main/dingo"
+tools_dingo_file="https://github.com/dingodb/dingofs-tools/releases/download/main/dingo"
 
 g_color_yellow=`printf '\033[33m'`
 g_color_red=`printf '\033[31m'`
@@ -203,14 +203,6 @@ install_dingofs() {
     done
 }
 
-install_playground() {
-    for role in {"etcd","mds","chunkserver"}; do
-        for ((i=0;i<3;i++)); do
-            mkdir -p "${g_prefix}"/playground/"${role}""${i}"/{conf,data,logs}
-        done
-    done
-}
-
 install_monitor() {
     local project_name="monitor"
     g_project_name=$project_name
@@ -221,15 +213,16 @@ install_monitor() {
     success "install $project_name success\n"
 }
 
-install_tools-v2() {
+install_tools() {
     local project_name="dingofs"
     g_project_name=$project_name
-    project_prefix="$g_prefix/tools-v2"
+    project_prefix="$g_prefix/tools"
     mkdir -p $project_prefix/sbin
     mkdir -p $project_prefix/conf
-    wget -O "$project_prefix/sbin/dingo" $tools_v2_dingo_file
+    wget -O "$project_prefix/sbin/dingo" $tools_dingo_file
     chmod +x "$project_prefix/sbin/dingo"
-    copy_file "conf/dingo.yaml" "$g_prefix/conf"
+    # copy_file "conf/dingo.yaml" "$g_prefix/conf"
+    curl -o $g_prefix/conf/dingo.yaml https://raw.githubusercontent.com/dingodb/dingofs-tools/main/pkg/config/dingo.yaml
 }
 
 install_scripts() {
@@ -248,7 +241,7 @@ main() {
         install_monitor
     else
         install_dingofs
-        install_tools-v2
+        install_tools
         install_scripts
     fi
 }
