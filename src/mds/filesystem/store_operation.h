@@ -971,16 +971,10 @@ using CompactChunkOperationSPtr = std::shared_ptr<CompactChunkOperation>;
 
 class CompactChunkOperation : public Operation {
  public:
-  CompactChunkOperation(Trace& trace, const FsInfoEntry& fs_info, uint64_t ino, uint64_t chunk_index,
-                        uint64_t file_length, bool is_force)
-      : Operation(trace),
-        fs_info_(fs_info),
-        ino_(ino),
-        chunk_index_(chunk_index),
-        file_length_(file_length),
-        is_force_(is_force) {};
-  CompactChunkOperation(const FsInfoEntry& fs_info, uint64_t ino, uint64_t chunk_index, uint64_t file_length)
-      : Operation(trace_), fs_info_(fs_info), ino_(ino), chunk_index_(chunk_index), file_length_(file_length) {};
+  CompactChunkOperation(Trace& trace, const FsInfoEntry& fs_info, uint64_t ino, uint64_t chunk_index, bool is_force)
+      : Operation(trace), fs_info_(fs_info), ino_(ino), chunk_index_(chunk_index), is_force_(is_force) {};
+  CompactChunkOperation(const FsInfoEntry& fs_info, uint64_t ino, uint64_t chunk_index)
+      : Operation(trace_), fs_info_(fs_info), ino_(ino), chunk_index_(chunk_index) {};
   ~CompactChunkOperation() override = default;
 
   struct Result : public Operation::Result {
@@ -988,9 +982,8 @@ class CompactChunkOperation : public Operation {
     ChunkEntry effected_chunk;
   };
 
-  static CompactChunkOperationSPtr New(const FsInfoEntry& fs_info, uint64_t ino, uint64_t chunk_index,
-                                       uint64_t file_length) {
-    return std::make_shared<CompactChunkOperation>(fs_info, ino, chunk_index, file_length);
+  static CompactChunkOperationSPtr New(const FsInfoEntry& fs_info, uint64_t ino, uint64_t chunk_index) {
+    return std::make_shared<CompactChunkOperation>(fs_info, ino, chunk_index);
   }
 
   OpType GetOpType() const override { return OpType::kCompactChunk; }
@@ -1013,12 +1006,12 @@ class CompactChunkOperation : public Operation {
 
   static TrashSliceList TestGenTrashSlices(const FsInfoEntry& fs_info, Ino ino, uint64_t file_length,
                                            const ChunkEntry& chunk) {
-    return GenTrashSlices(fs_info, ino, file_length, chunk);
+    return GenTrashSlices(fs_info, ino, file_length, chunk, true);
   }
 
  private:
   static TrashSliceList GenTrashSlices(const FsInfoEntry& fs_info, Ino ino, uint64_t file_length,
-                                       const ChunkEntry& chunk);
+                                       const ChunkEntry& chunk, bool is_dry_run);
   TrashSliceList GenTrashSlices(Ino ino, uint64_t file_length, const ChunkEntry& chunk);
   static void UpdateChunk(ChunkEntry& chunk, const TrashSliceList& trash_slices);
   TrashSliceList DoCompactChunk(Ino ino, uint64_t file_length, ChunkEntry& chunk);
@@ -1028,7 +1021,6 @@ class CompactChunkOperation : public Operation {
   FsInfoEntry fs_info_;
   uint64_t ino_;
   uint64_t chunk_index_{0};
-  uint64_t file_length_{0};
 
   bool is_force_{false};
 
