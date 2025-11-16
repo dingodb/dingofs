@@ -196,33 +196,12 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, uint64_t size,
   return ret;
 }
 
-void FileReader::Invalidate() {
-  VLOG(1) << fmt::format("FileReader::Invalidate, ino: {}", ino_);
-
-  std::lock_guard<std::mutex> lock(mutex_);
-  validated_ = false;
-  for (auto& [index, reader] : chunk_readers_) {
-    reader->Invalidate();
-  }
-}
-
 Status FileReader::GetAttr(ContextSPtr ctx, Attr* attr) {
   auto span = vfs_hub_->GetTracer()->StartSpanWithContext(kVFSDataMoudule,
                                                           METHOD_NAME(), ctx);
 
-  std::lock_guard<std::mutex> lock(mutex_);
-  if (validated_) {
-    *attr = attr_;
-    return Status::OK();
-  }
-
-  Status s =
-      vfs_hub_->GetMetaSystem()->GetAttr(span->GetContext(), ino_, &attr_);
-
-  if (s.ok()) {
-    validated_ = true;
-    *attr = attr_;
-  } else {
+  Status s = vfs_hub_->GetMetaSystem()->GetAttr(span->GetContext(), ino_, attr);
+  if (!s.ok()) {
     LOG(WARNING) << fmt::format(
         "FileReader::GetAttr failed, ino: {}, status: {}", ino_, s.ToString());
   }

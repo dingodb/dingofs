@@ -72,11 +72,7 @@ Status File::PreCheck() {
 Status File::Write(ContextSPtr ctx, const char* buf, uint64_t size,
                    uint64_t offset, uint64_t* out_wsize) {
   DINGOFS_RETURN_NOT_OK(PreCheck());
-  Status s = file_writer_->Write(ctx, buf, size, offset, out_wsize);
-  if (s.ok()) {
-    file_reader_->Invalidate();
-  }
-  return s;
+  return  file_writer_->Write(ctx, buf, size, offset, out_wsize);
 }
 
 Status File::Read(ContextSPtr ctx, DataBuffer* data_buffer, uint64_t size,

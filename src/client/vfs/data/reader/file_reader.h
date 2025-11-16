@@ -42,8 +42,6 @@ class FileReader {
   Status Read(ContextSPtr ctx, DataBuffer* data_buffer, uint64_t size,
               uint64_t offset, uint64_t* out_rsize);
 
-  void Invalidate();
-
  private:
   Status GetAttr(ContextSPtr ctx, Attr* attr);
 
@@ -59,8 +57,6 @@ class FileReader {
   uint64_t last_intime_warmup_trigger_{0};
 
   std::mutex mutex_;
-  bool validated_{false};
-  Attr attr_;
   // chunk index -> chunk reader
   std::unordered_map<uint64_t, ChunkReaderUptr> chunk_readers_;
 };
