@@ -19,7 +19,6 @@
 #include <fmt/format.h>
 #include <glog/logging.h>
 
-#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -267,23 +266,12 @@ void ChunkReader::DoRead(ContextSPtr ctx, ChunkReadReq& req,
         UUID(), ret.ToString(), retry, chunk_offset, end_read_chunk_offet,
         read_file_offset, end_read_file_offset);
 
-    if (ret.IsNotFound()) {
-      InvalidateSlices(chunk_slices.version);
-    }
   } while (ret.IsNotFound() &&
            retry++ < FLAGS_client_vfs_read_max_retry_block_not_found);
 
   VLOG(4) << fmt::format("{} ChunkReader Read End", UUID());
 
   cb(ret);
-}
-
-void ChunkReader::Invalidate() {
-  VLOG(4) << fmt::format("{} Invalidate, cversion: {}", UUID(),
-                         cversion_.load(std::memory_order_relaxed));
-  std::lock_guard<std::mutex> lg(mutex_);
-  cversion_ = kInvalidVersion;
-  slices_.clear();
 }
 
 static std::string SlicesToString(const std::vector<Slice>& slices) {
@@ -303,45 +291,21 @@ Status ChunkReader::GetSlices(ContextSPtr ctx, ChunkSlices* chunk_slices) {
   auto* tracer = hub_->GetTracer();
   auto span = tracer->StartSpanWithContext(kVFSDataMoudule, METHOD_NAME(), ctx);
 
-  std::lock_guard<std::mutex> lg(mutex_);
-  if (cversion_ == kInvalidVersion) {
-    VLOG(3) << fmt::format("{} cached chunk_slices invalidate, read from meta",
-                           UUID());
+  std::vector<Slice> slices;
+  uint64_t chunk_version = 0;
+  DINGOFS_RETURN_NOT_OK(hub_->GetMetaSystem()->ReadSlice(
+      span->GetContext(), chunk_.ino, chunk_.index, fh_, &slices,
+      chunk_version));
 
-    auto slice_span = tracer->StartSpanWithParent(
-        kVFSDataMoudule, "ChunkReader::GetSlices.ReadSlice", *span);
+  chunk_slices->version = chunk_version;
+  chunk_slices->slices = std::move(slices);
 
-    std::vector<Slice> slices;
-    uint64_t chunk_version = 0;
-    DINGOFS_RETURN_NOT_OK(hub_->GetMetaSystem()->ReadSlice(
-        slice_span->GetContext(), chunk_.ino, chunk_.index, fh_, &slices,
-        chunk_version));
-
-    cversion_.store(next_version_, std::memory_order_relaxed);
-    slices_ = std::move(slices);
-
-    next_version_++;
-  }
-
-  chunk_slices->version = cversion_;
-  chunk_slices->slices = slices_;
-
-  VLOG(9) << fmt::format("{} GetSlices, version: {}, slices: {}", UUID(),
-                         chunk_slices->version,
+  VLOG(9) << fmt::format("{} GetSlices, version: {}, slice_num: {}, slices: {}",
+                         UUID(), chunk_slices->version,
+                         chunk_slices->slices.size(),
                          SlicesToString(chunk_slices->slices));
 
   return Status::OK();
-}
-
-void ChunkReader::InvalidateSlices(uint32_t version) {
-  VLOG(4) << fmt::format("{} InvalidateSlices, version: {}, cversion: {}",
-                         UUID(), version,
-                         cversion_.load(std::memory_order_relaxed));
-  std::lock_guard<std::mutex> lg(mutex_);
-  if (cversion_ <= version) {
-    cversion_ = kInvalidVersion;
-    slices_.clear();
-  }
 }
 
 uint64_t ChunkReader::GetBlockSize() const { return block_size_; }

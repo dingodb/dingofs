@@ -62,14 +62,10 @@ class ChunkReader {
 
   void ReadAsync(ContextSPtr ctx, ChunkReadReq& req, StatusCallback cb);
 
-  void Invalidate();
-
  private:
   void DoRead(ContextSPtr ctx, ChunkReadReq& req, StatusCallback cb);
 
   Status GetSlices(ContextSPtr ctx, ChunkSlices* chunk_slices);
-
-  void InvalidateSlices(uint32_t version);
 
   static void BlockReadCallback(ContextSPtr ctx, ChunkReader* reader,
                                 const BlockCacheReadReq& req,
@@ -86,12 +82,6 @@ class ChunkReader {
   const uint64_t fh_;
   const Chunk chunk_;
   const uint64_t block_size_;
-
-  std::mutex mutex_;
-  // maybe version from mds
-  uint32_t next_version_{1};  // Start from 1, 0 is invalid version
-  std::atomic<uint32_t> cversion_{kInvalidVersion};
-  std::vector<Slice> slices_;
 };
 
 using ChunkReaderUptr = std::shared_ptr<ChunkReader>;
