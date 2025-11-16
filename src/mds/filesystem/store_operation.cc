@@ -1508,13 +1508,13 @@ Status RenameOperation::Run(TxnUPtr& txn) {
 
 bool CompactChunkOperation::MaybeCompact(const FsInfoEntry& fs_info, Ino ino, uint64_t file_length,
                                          const ChunkEntry& chunk) {
-  auto trash_slice_list = GenTrashSlices(fs_info, ino, file_length, chunk);
+  auto trash_slice_list = GenTrashSlices(fs_info, ino, file_length, chunk, true);
 
   return !trash_slice_list.slices().empty();
 }
 
 TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoEntry& fs_info, Ino ino, uint64_t file_length,
-                                                     const ChunkEntry& chunk) {
+                                                     const ChunkEntry& chunk, bool is_dry_run) {
   struct Slice {
     uint32_t sort_id;
     uint64_t id;
@@ -1753,15 +1753,16 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoEntry& fs_info,
     slice_id_str += ",";
   }
 
-  DINGO_LOG(INFO) << fmt::format("[operation.{}.{}.{}] trash slice, count({}/{}/{}/{}) slice_ids({}).", fs_id, ino,
-                                 chunk.index(), out_of_length_count, complete_overlapped_count,
-                                 partial_overlapped_count, trash_slices.slices_size(), slice_id_str);
+  DINGO_LOG(INFO) << fmt::format(
+      "[operation.{}.{}.{}] trash slice, is_dry_run({}) length({}) count({}/{}/{}/{}) slice_ids({}).", fs_id, ino,
+      chunk.index(), is_dry_run, file_length, out_of_length_count, complete_overlapped_count, partial_overlapped_count,
+      trash_slices.slices_size(), slice_id_str);
 
   return trash_slices;
 }
 
 TrashSliceList CompactChunkOperation::GenTrashSlices(Ino ino, uint64_t file_length, const ChunkEntry& chunk) {
-  return GenTrashSlices(fs_info_, ino, file_length, chunk);
+  return GenTrashSlices(fs_info_, ino, file_length, chunk, false);
 }
 
 void CompactChunkOperation::UpdateChunk(ChunkEntry& chunk, const TrashSliceList& trash_slices) {
@@ -1829,12 +1830,29 @@ Status CompactChunkOperation::Run(TxnUPtr& txn) {
   CHECK(fs_id > 0) << "fs_id is 0";
   CHECK(ino_ > 0) << "ino is 0.";
 
-  std::string key = MetaCodec::EncodeChunkKey(fs_id, ino_, chunk_index_);
-  std::string value;
-  auto status = txn->Get(key, value);
+  std::string inode_key = MetaCodec::EncodeInodeKey(fs_id, ino_);
+  std::string chunk_key = MetaCodec::EncodeChunkKey(fs_id, ino_, chunk_index_);
+
+  std::vector<KeyValue> kvs;
+  auto status = txn->BatchGet({inode_key, chunk_key}, kvs);
   if (!status.ok()) return status;
 
-  ChunkEntry chunk = MetaCodec::DecodeChunkValue(value);
+  if (kvs.size() != 2) {
+    return Status(pb::error::ENOT_FOUND, "not found inode/chunk");
+  }
+
+  AttrEntry attr;
+  ChunkEntry chunk;
+  for (auto& kv : kvs) {
+    if (kv.key == inode_key) {
+      attr = MetaCodec::DecodeInodeValue(kv.value);
+
+    } else if (kv.key == chunk_key) {
+      chunk = MetaCodec::DecodeChunkValue(kv.value);
+    }
+  }
+  CHECK(attr.ino() > 0) << "attr is null.";
+  CHECK(chunk.index() == chunk_index_) << "chunk index not match.";
 
   // reduce compact frequency
   if (!is_force_ && chunk.last_compaction_time_ms() + FLAGS_mds_compact_chunk_interval_ms >
@@ -1842,11 +1860,11 @@ Status CompactChunkOperation::Run(TxnUPtr& txn) {
     return Status(pb::error::ENOT_MATCH, "not match compact condition");
   }
 
-  auto trash_slice_list = CompactChunk(txn, fs_id, ino_, file_length_, chunk);
+  auto trash_slice_list = CompactChunk(txn, fs_id, ino_, attr.length(), chunk);
   if (!trash_slice_list.slices().empty()) {
     chunk.set_version(chunk.version() + 1);
     chunk.set_last_compaction_time_ms(Helper::TimestampMs());
-    txn->Put(key, MetaCodec::EncodeChunkValue(chunk));
+    txn->Put(chunk_key, MetaCodec::EncodeChunkValue(chunk));
 
     result_.trash_slice_list = std::move(trash_slice_list);
     result_.effected_chunk = std::move(chunk);

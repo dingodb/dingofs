@@ -1976,8 +1976,7 @@ Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, const std::vector<Delt
           // update chunk cache
           chunk_cache_.PutIf(origin_operation->GetIno(), std::move(result.effected_chunk));
         };
-        operation_processor_->AsyncRun(CompactChunkOperation::New(fs_info, ino, chunk.index(), attr.length()),
-                                       post_handler);
+        operation_processor_->AsyncRun(CompactChunkOperation::New(fs_info, ino, chunk.index()), post_handler);
       }
     }
   }
@@ -2139,18 +2138,12 @@ Status FileSystem::CompactChunk(Context& ctx, Ino ino, uint64_t chunk_index,
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
-  InodeSPtr inode;
-  auto status = GetInode(ctx, ino, inode);
-  if (!status.ok()) {
-    return status;
-  }
-
   auto& trace = ctx.GetTrace();
   Duration duration;
 
-  CompactChunkOperation operation(trace, GetFsInfo(), ino, chunk_index, inode->Length(), true);
+  CompactChunkOperation operation(trace, GetFsInfo(), ino, chunk_index, true);
 
-  status = RunOperation(&operation);
+  auto status = RunOperation(&operation);
 
   auto& result = operation.GetResult();
   auto& effected_chunk = result.effected_chunk;
