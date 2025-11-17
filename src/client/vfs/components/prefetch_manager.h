@@ -87,6 +87,8 @@ class PrefetchManager {
   static int HandlePrefetchTask(void* meta,
                                 bthread::TaskIterator<PrefetchTask>& iter);
 
+  void DoSubmitTask(const PrefetchContext& context);
+
   void AsyncPrefetch(const PrefetchTask& task);
 
   void DoPrefetch(const PrefetchTask& task);

@@ -96,6 +96,12 @@ void PrefetchManager::SubmitTask(const BlockKey& key, size_t length) {
 }
 
 void PrefetchManager::SubmitTask(const PrefetchContext& context) {
+  auto* self = this;
+  prefetch_executor_->Execute(
+      [self, context]() { self->DoSubmitTask(context); });
+}
+
+void PrefetchManager::DoSubmitTask(const PrefetchContext& context) {
   auto span = vfs_hub_->GetTracer()->StartSpan(kVFSDataMoudule, __func__);
 
   const auto block_size = vfs_hub_->GetFsInfo().block_size;
