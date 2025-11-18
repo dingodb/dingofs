@@ -448,8 +448,9 @@ Status MDSFileSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
   if (fh != 0 && GetSliceFromCache(ino, index, slices)) {
     ctx->hit_cache = true;
     LOG(INFO) << fmt::format(
-        "[meta.filesystem.{}.{}.{}] readslice from cache, slices{}.", ino, fh,
-        index, Helper::GetSliceIds(*slices));
+        "[meta.filesystem.{}.{}.{}] readslice from cache, version({}) "
+        "slices{}.",
+        ino, fh, index, version, Helper::GetSliceIds(*slices));
     return Status::OK();
   }
 
@@ -594,7 +595,7 @@ Status MDSFileSystem::RmDir(ContextSPtr ctx, Ino parent,
 
 Status MDSFileSystem::OpenDir(ContextSPtr ctx, Ino ino, uint64_t fh) {
   auto dir_iterator = DirIterator::New(ctx, mds_client_, ino, fh);
-  auto status = dir_iterator->Seek();
+  auto status = dir_iterator->PreFetch();
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[meta.filesystem.{}.{}] opendir fail, error({}).", ino, fh,
@@ -613,16 +614,21 @@ Status MDSFileSystem::ReadDir(ContextSPtr ctx, Ino, uint64_t fh,
   auto dir_iterator = dir_iterator_manager_.Get(fh);
   CHECK(dir_iterator != nullptr) << "dir_iterator is null";
 
-  while (dir_iterator->Valid()) {
-    DirEntry entry = dir_iterator->GetValue(with_attr);
+  dir_iterator->Remember(offset);
+
+  while (true) {
+    DirEntry entry;
+    auto status = dir_iterator->GetValue(offset++, with_attr, entry);
+    if (!status.ok()) {
+      if (status.IsNoData()) break;
+      return status;
+    }
 
     CorrectAttr(ctx, dir_iterator->LastFetchTimeNs(), entry.attr, "readdir");
 
-    if (!handler(entry, ++offset)) {
+    if (!handler(entry, offset)) {
       break;
     }
-
-    dir_iterator->Next();
   }
 
   return Status::OK();

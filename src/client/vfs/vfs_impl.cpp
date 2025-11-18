@@ -88,9 +88,13 @@ bool VFSImpl::Load(ContextSPtr ctx, const Json::Value& value) {
   return meta_system_->Load(ctx, value);
 }
 
-double VFSImpl::GetAttrTimeout(const FileType& type) { return 1; }  // NOLINT
+double VFSImpl::GetAttrTimeout(const FileType& type) {  // NOLINT
+  return FLAGS_client_fuse_attr_cache_timeout_s;
+}
 
-double VFSImpl::GetEntryTimeout(const FileType& type) { return 1; }  // NOLINT
+double VFSImpl::GetEntryTimeout(const FileType& type) {  // NOLINT
+  return FLAGS_client_fuse_entry_cache_timeout_s;
+}
 
 Status VFSImpl::Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
                        Attr* attr) {
@@ -477,11 +481,7 @@ Status VFSImpl::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
     handler(stats_entry, 1);  // pos 0 is the offset for .stats entry
   }
 
-  return meta_system_->ReadDir(
-      ctx, ino, fh, offset, with_attr,
-      [handler](const DirEntry& entry, uint64_t offset) {
-        return handler(entry, offset);
-      });
+  return meta_system_->ReadDir(ctx, ino, fh, offset, with_attr, handler);
 }
 
 Status VFSImpl::ReleaseDir(ContextSPtr ctx, Ino ino, uint64_t fh) {

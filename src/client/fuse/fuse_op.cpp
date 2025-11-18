@@ -16,7 +16,11 @@
 
 #include "client/fuse/fuse_op.h"
 
+#include <sys/types.h>
+
+#include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -37,6 +41,7 @@ static dingofs::client::vfs::VFSWrapper* g_vfs = nullptr;
 
 USING_FLAG(client_fuse_file_info_direct_io)
 USING_FLAG(client_fuse_file_info_keep_cache)
+USING_FLAG(client_fuse_enable_readdir_cache)
 
 using dingofs::Status;
 using dingofs::client::vfs::Attr;
@@ -90,10 +95,8 @@ void Attr2FuseEntry(const Attr& attr, struct fuse_entry_param* e) {
   e->generation = 0;
   Attr2Stat(attr, &e->attr);
 
-  // e->attr_timeout = g_vfs->GetAttrTimeout(attr.type);
-  // e->entry_timeout = g_vfs->GetEntryTimeout(attr.type);
-  e->attr_timeout = 0;
-  e->entry_timeout = 0;
+  e->attr_timeout = g_vfs->GetAttrTimeout(attr.type);
+  e->entry_timeout = g_vfs->GetEntryTimeout(attr.type);
 }
 
 Attr Stat2Attr(struct stat* stat) {
@@ -528,11 +531,8 @@ void FuseOpOpenDir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
   } else {
     fi->fh = fh;
 
-    // fi->cache_readdir = FLAGS_client_fuse_file_info_keep_cache ? 1 : 0;
-    // fi->keep_cache = FLAGS_client_fuse_file_info_keep_cache ? 1 : 0;
-
-    fi->cache_readdir = 0;
-    fi->keep_cache = 0;
+    fi->cache_readdir = FLAGS_client_fuse_enable_readdir_cache ? 1 : 0;
+    fi->keep_cache = FLAGS_client_fuse_enable_readdir_cache ? 1 : 0;
 
     ReplyOpen(req, fi);
   }
@@ -545,13 +545,15 @@ void FuseOpReadDir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 
   CHECK_GE(off, 0) << "offset is illegal, offset: " << off;
 
+  off_t next_off = off;
   size_t writed_size = 0;
   std::string buffer(size, '\0');
   Status s = g_vfs->ReadDir(
       ino, fi->fh, off, false,
       [&](const dingofs::client::vfs::DirEntry& dir_entry, uint64_t) -> bool {
-        VLOG(1) << fmt::format("read dir({}/{}) fh({}) entry({}/{}).", ino, off,
-                               fi->fh, dir_entry.name, dir_entry.ino);
+        VLOG(1) << fmt::format("read dir({}) off[{},{}) fh({}) entry({}/{}).",
+                               ino, off, next_off, fi->fh, dir_entry.name,
+                               dir_entry.ino);
 
         struct stat stat;
         std::memset(&stat, 0, sizeof(stat));
@@ -564,9 +566,9 @@ void FuseOpReadDir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
                               dir_entry.name.c_str(), &stat, ++off);
         if (entsize > rest_size) {
           VLOG(1) << fmt::format(
-              "read dir entry is full, ino({}) fh({}) off({}) size({}/{}) "
-              "entry_size({}).",
-              ino, fi->fh, off, buffer.size(), size, entsize);
+              "read dir entry is full, ino({}) fh({}) off[{},{}) size({}) "
+              "entry_size({}) rest_size({}).",
+              ino, fi->fh, off, next_off, buffer.size(), entsize, rest_size);
           return false;
         }
 
@@ -577,14 +579,17 @@ void FuseOpReadDir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 
   if (!s.ok()) {
     LOG(ERROR) << fmt::format(
-        "read dir fail, ino({}) fh({}) off({}) size({}) error({}).", ino,
-        fi->fh, off, size, s.ToString());
+        "read dir fail, ino({}) fh({}) off[{},{}) size({}) error({}).", ino,
+        fi->fh, off, next_off, size, s.ToString());
     ReplyError(req, s);
+
   } else {
     buffer.resize(writed_size);
 
-    VLOG(1) << fmt::format("read dir success, ino({}) fh({}) off({}) size({}).",
-                           ino, fi->fh, off, buffer.size());
+    VLOG(1) << fmt::format(
+        "read dir success, ino({}) fh({}) off[{},{}) size({}).", ino, fi->fh,
+        off, next_off, writed_size);
+
     ReplyBuf(req, buffer.data(), buffer.size());
   }
 }
@@ -596,15 +601,17 @@ void FuseOpReadDirPlus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 
   CHECK_GE(off, 0) << "offset is illegal, offset: " << off;
 
+  off_t next_off = off;
   size_t writed_size = 0;
   std::string buffer(size, '\0');
   Status s = g_vfs->ReadDir(
       ino, fi->fh, off, true,
-      [&](const dingofs::client::vfs::DirEntry& dir_entry,
-          uint64_t off2) -> bool {
+      [ino, off, &next_off, &req, &fi, &buffer, &writed_size](
+          const dingofs::client::vfs::DirEntry& dir_entry, uint64_t) -> bool {
         VLOG(1) << fmt::format(
-            "read dir({}/{}/{}) fh({}) entry({}/{}) attr({}).", ino, off, off2,
-            fi->fh, dir_entry.name, dir_entry.ino, Attr2Str(dir_entry.attr));
+            "read dir({}) off[{},{}) fh({}) entry({}/{}) attr({}).", ino, off,
+            next_off, fi->fh, dir_entry.name, dir_entry.ino,
+            Attr2Str(dir_entry.attr));
 
         fuse_entry_param fuse_entry;
         memset(&fuse_entry, 0, sizeof(fuse_entry_param));
@@ -612,16 +619,17 @@ void FuseOpReadDirPlus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 
         size_t rest_size = buffer.size() - writed_size;
 
-        size_t entsize =
-            fuse_add_direntry_plus(req, buffer.data() + writed_size, rest_size,
-                                   dir_entry.name.c_str(), &fuse_entry, off2);
+        size_t entsize = fuse_add_direntry_plus(
+            req, buffer.data() + writed_size, rest_size, dir_entry.name.c_str(),
+            &fuse_entry, next_off + 1);
         if (entsize > rest_size) {
           VLOG(1) << fmt::format(
-              "read dir entry is full, ino({}) fh({}) off({}) size({}/{}) "
-              "entry_size({})",
-              ino, fi->fh, off2, buffer.size(), size, entsize);
+              "read dir entry is full, ino({}) fh({}) off[{},{}) size({}) "
+              "entry_size({}) rest_size({}).",
+              ino, fi->fh, off, next_off, buffer.size(), entsize, rest_size);
           return false;
         }
+        ++next_off;
         writed_size += entsize;
 
         return true;
@@ -629,13 +637,15 @@ void FuseOpReadDirPlus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 
   if (!s.ok()) {
     LOG(ERROR) << fmt::format(
-        "read dir fail, ino({}) fh({}) off({}) size({}) error({}).", ino,
-        fi->fh, off, size, s.ToString());
+        "read dir fail, ino({}) fh({}) off[{},{}) size({}) error({}).", ino,
+        fi->fh, off, next_off, size, s.ToString());
     ReplyError(req, s);
+
   } else {
     buffer.resize(writed_size);
-    VLOG(1) << fmt::format("read dir success, ino({}) fh({}) off({}) size({}).",
-                           ino, fi->fh, off, buffer.size());
+    VLOG(1) << fmt::format(
+        "read dir success, ino({}) fh({}) off[{},{}) size({}).", ino, fi->fh,
+        off, next_off, writed_size);
 
     ReplyBuf(req, buffer.data(), buffer.size());
   }

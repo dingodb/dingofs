@@ -46,12 +46,15 @@ DECLARE_int32(client_bthread_worker_num);
 
 // access log
 DECLARE_bool(client_access_logging);
-DECLARE_bool(client_access_logging_verbose);
 DECLARE_int64(client_access_log_threshold_us);
 
 // fuse module
 DECLARE_bool(client_fuse_file_info_direct_io);
 DECLARE_bool(client_fuse_file_info_keep_cache);
+DECLARE_bool(client_fuse_enable_readdir_cache);
+
+DECLARE_uint32(client_fuse_entry_cache_timeout_s);
+DECLARE_uint32(client_fuse_attr_cache_timeout_s);
 
 // smooth upgrade
 DECLARE_uint32(client_fuse_fd_get_max_retries);

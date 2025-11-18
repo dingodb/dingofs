@@ -17,6 +17,7 @@
 #ifndef DINGOFS_CLIENT_VFS_IMPL_H_
 #define DINGOFS_CLIENT_VFS_IMPL_H_
 
+#include <cstdint>
 #include <memory>
 
 #include "brpc/server.h"
