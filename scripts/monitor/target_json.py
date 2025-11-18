@@ -33,8 +33,12 @@ def runDingofsToolCommand(command):
         return 0, e.output
     return 0, output
 
-def loadMdsServer():
-    ret, output = runDingofsToolCommand(["status", "mds", "--format=json"])
+def loadMdsServer(mdsaddr):
+    command = ["status", "mds", "--format=json"]
+    if mdsaddr:
+        command.append(f"--mdsaddr={mdsaddr}")
+
+    ret, output = runDingofsToolCommand(command)
     label = lablesValue(None, "mds")
     
     if ret != 0:
@@ -58,8 +62,12 @@ def loadMdsServer():
     
     return unitValue(label, mdsServers)
 
-def loadClient():
-    ret, output = runDingofsToolCommand(["list", "mountpoint", "--format=json"])
+def loadClient(mdsaddr):
+    command = ["list", "mountpoint", "--format=json"]
+    if mdsaddr:
+        command.append(f"--mdsaddr={mdsaddr}")
+
+    ret, output = runDingofsToolCommand(command)
     label = lablesValue(None, "client")
     
     if ret != 0:
@@ -83,8 +91,12 @@ def loadClient():
     
     return unitValue(label, clients)
 
-def loadRemoteCacheServer():
-    ret, output = runDingofsToolCommand(["list", "cachemember", "--format=json"])
+def loadRemoteCacheServer(mdsaddr):
+    command = ["list", "cachemember", "--format=json"]
+    if mdsaddr:
+        command.append(f"--mdsaddr={mdsaddr}")
+
+    ret, output = runDingofsToolCommand(command)
     label = lablesValue(None, "remotecache")
     
     if ret != 0:
@@ -126,17 +138,17 @@ def unitValue(lables, targets):
     return unit
 
 
-def refresh(isShow=False):
+def refresh(mdsaddr,isShow=False):
     targets = []
 
     # load mds
-    mdsServers = loadMdsServer()
+    mdsServers = loadMdsServer(mdsaddr)
     targets.append(mdsServers)
     # load client
-    client = loadClient()
+    client = loadClient(mdsaddr)
     targets.append(client)
     # load cachemember
-    cachemember = loadRemoteCacheServer()   
+    cachemember = loadRemoteCacheServer(mdsaddr)
     targets.append(cachemember)
 
     with open(targetPath+'.new', 'w', 0o777) as fd:
@@ -168,20 +180,25 @@ if __name__ == '__main__':
                        type=bool,
                        default=False,
                        help='show target info, default False')
+
+    parser.add_argument('--mdsaddr',
+                    type=str,
+                    help='mds address, default None')
     
     args = parser.parse_args()
 
     interval = args.interval
     count = args.count
     isShow = args.show
+    mdsaddr = args.mdsaddr
 
-    print("Realtime update target is running, ","interval:", interval, "count:", count, "show:", isShow)
+    print("Realtime update target is running, ","interval:", interval, "count:", count, "show:", isShow, "mdsaddr:", mdsaddr)
 
     current_count = 0
     while True:
         current_count += 1
         loadConf()
-        refresh(isShow)
+        refresh(mdsaddr,isShow)
         if count is not None and current_count >= count:
             break
         time.sleep(interval)
