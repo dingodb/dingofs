@@ -44,10 +44,6 @@ DEFINE_int32(client_bthread_worker_num, 0, "bthread worker num");
 DEFINE_bool(client_access_logging, true, "enable access log");
 DEFINE_validator(client_access_logging, brpc::PassValidate);
 
-DEFINE_bool(client_access_logging_verbose, true,
-            "enable access log with verbose");
-DEFINE_validator(client_access_logging_verbose, brpc::PassValidate);
-
 DEFINE_int64(client_access_log_threshold_us, 0, "access log threshold");
 DEFINE_validator(client_access_log_threshold_us, brpc::PassValidate);
 
@@ -57,6 +53,17 @@ DEFINE_validator(client_fuse_file_info_direct_io, brpc::PassValidate);
 
 DEFINE_bool(client_fuse_file_info_keep_cache, false, "keep file page cache");
 DEFINE_validator(client_fuse_file_info_keep_cache, brpc::PassValidate);
+
+DEFINE_bool(client_fuse_enable_readdir_cache, false, "enable readdir cache");
+DEFINE_validator(client_fuse_enable_readdir_cache, brpc::PassValidate);
+
+DEFINE_uint32(client_fuse_entry_cache_timeout_s, 1,
+              "fuse entry cache timeout in seconds");
+DEFINE_validator(client_fuse_entry_cache_timeout_s, brpc::PassValidate);
+
+DEFINE_uint32(client_fuse_attr_cache_timeout_s, 1,
+              "fuse attr cache timeout in seconds");
+DEFINE_validator(client_fuse_attr_cache_timeout_s, brpc::PassValidate);
 
 // smooth upgrade
 DEFINE_uint32(client_fuse_fd_get_max_retries, 100,

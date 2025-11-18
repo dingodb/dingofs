@@ -49,9 +49,10 @@ class Partition {
   InodeSPtr ParentInode();
   void SetParentInode(InodeSPtr parent_inode);
 
-  void PutChild(const Dentry& dentry, uint64_t version = 0);
-  void DeleteChild(const std::string& name, uint64_t version = 0);
-  void DeleteChildIf(const std::string& name, Ino ino, uint64_t version = 0);
+  void PutChild(const Dentry& dentry, uint64_t version);
+  void PutChildForInode(const Dentry& dentry);
+  void DeleteChild(const std::string& name, uint64_t version);
+  void DeleteChildIf(const std::string& name, Ino ino, uint64_t version);
 
   bool HasChild();
   bool GetChild(const std::string& name, Dentry& dentry);
@@ -80,7 +81,10 @@ class Partition {
     DentryOpType op_type;
     uint64_t version;
     Dentry dentry;
+    uint64_t time_s;
   };
+  void AddDeltaDentryOp(DentryOp&& op);
+
   std::list<DentryOp> delta_dentry_ops_;
 };
 

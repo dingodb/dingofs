@@ -213,7 +213,13 @@ void FileSystem::DeleteDentryFromPartition(Ino parent, const std::string& name, 
 }
 
 Status FileSystem::GetPartition(Context& ctx, Ino parent, PartitionPtr& out_partition) {
-  return GetPartition(ctx, ctx.GetInodeVersion(), parent, out_partition);
+  auto status = GetPartition(ctx, ctx.GetInodeVersion(), parent, out_partition);
+  if (status.ok()) {
+    DINGO_LOG(DEBUG) << fmt::format("[fs.{}.{}.{}] get partition({}/{}) this({}).", fs_id_, out_partition->INo(),
+                                    ctx.RequestId(), out_partition->BaseVersion(), out_partition->DeltaVersion(),
+                                    (void*)out_partition.get());
+  }
+  return status;
 }
 
 Status FileSystem::GetPartition(Context& ctx, uint64_t version, Ino parent, PartitionPtr& out_partition) {
@@ -224,7 +230,7 @@ Status FileSystem::GetPartition(Context& ctx, uint64_t version, Ino parent, Part
   if (bypass_cache) {
     auto status = GetPartitionFromStore(ctx, parent, "Bypass", out_partition);
     if (!status.ok()) {
-      return Status(pb::error::ENOT_FOUND, fmt::format("not found partition({}), {}.", parent, status.error_str()));
+      return Status(status.error_code(), fmt::format("not found partition({}), {}.", parent, status.error_str()));
     }
 
     return status;
@@ -234,7 +240,7 @@ Status FileSystem::GetPartition(Context& ctx, uint64_t version, Ino parent, Part
   if (partition == nullptr) {
     auto status = GetPartitionFromStore(ctx, parent, "CacheMiss", out_partition);
     if (!status.ok()) {
-      return Status(pb::error::ENOT_FOUND, fmt::format("not found partition({}), {}.", parent, status.error_str()));
+      return Status(status.error_code(), fmt::format("not found partition({}), {}.", parent, status.error_str()));
     }
 
     return status;
@@ -245,7 +251,7 @@ Status FileSystem::GetPartition(Context& ctx, uint64_t version, Ino parent, Part
     std::string reason = fmt::format("OutOfDate[{},cache{},req{}]", use_base_version, check_version, version);
     auto status = GetPartitionFromStore(ctx, parent, reason, out_partition);
     if (!status.ok()) {
-      return Status(pb::error::ENOT_FOUND, fmt::format("not found partition({}), {}.", parent, status.error_str()));
+      return Status(status.error_code(), fmt::format("not found partition({}), {}.", parent, status.error_str()));
     }
 
     return status;
@@ -303,7 +309,7 @@ Status FileSystem::GetPartitionFromStore(Context& ctx, Ino parent, const std::st
   for (size_t i = 1; i < kvs.size(); ++i) {
     const auto& kv = kvs.at(i);
     auto dentry = MetaCodec::DecodeDentryValue(kv.value);
-    partition->PutChild(dentry);
+    partition->PutChild(dentry, parent_inode->Version());
   }
 
   out_partition = partition_cache_.PutIf(parent, partition);
@@ -386,7 +392,7 @@ Status FileSystem::GetInode(Context& ctx, uint64_t version, const Dentry& dentry
   } while (false);
 
   if (is_fetch && status.ok()) {
-    partition->PutChild(Dentry(dentry, out_inode));
+    partition->PutChildForInode(Dentry(dentry, out_inode));
   }
 
   return status;
@@ -1803,7 +1809,7 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
     auto status = GetPartition(ctx, old_parent, old_parent_partition);
     if (status.ok()) {
       // delete old dentry
-      old_parent_partition->DeleteChild(old_name);
+      old_parent_partition->DeleteChild(old_name, old_parent_attr.version());
       // update old parent attr
       UpsertInodeCache(old_parent_attr);
     }
@@ -1818,12 +1824,12 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
       UpsertInodeCache(new_parent_attr);
 
       // delete prev new dentry
-      if (is_exist_new_dentry) new_parent_partition->DeleteChild(new_name);
+      if (is_exist_new_dentry) new_parent_partition->DeleteChild(new_name, new_parent_attr.version());
 
       // add new dentry
       Dentry new_dentry(fs_id_, new_name, new_parent, old_dentry.ino(), old_dentry.type(), 0,
                         GetInodeFromCache(old_dentry.ino()));
-      new_parent_partition->PutChild(new_dentry);
+      new_parent_partition->PutChild(new_dentry, new_parent_attr.version());
     }
 
     // delete exist new partition
