@@ -29,7 +29,7 @@ namespace timer {
 class TimerImplTest : public ::testing::Test {
  public:
   TimerImplTest() {
-    pool = std::make_unique<ThreadPoolImpl>(2);
+    pool = std::make_unique<ThreadPoolImpl>("test", 2);
     pool->Start();
   }
 

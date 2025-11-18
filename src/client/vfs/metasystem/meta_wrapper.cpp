@@ -350,10 +350,9 @@ Status MetaWrapper::AsyncWriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
 
   auto wrapped_done = [start_us, slice_count, ctx = std::move(ctx), ino, index,
                        fh, done = std::move(done)](const Status& status) {
-    Status s;
     MetaLogGuard log_guard(start_us, [&]() {
       return absl::StrFormat("async_write_slice (%d,%d,%d): %s %d %d", ino,
-                             index, fh, s.ToString(), ctx->hit_cache,
+                             index, fh, status.ToString(), ctx->hit_cache,
                              slice_count);
     });
 
