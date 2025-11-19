@@ -660,6 +660,9 @@ Status VFSWrapper::SetXattr(Ino ino, const std::string& name,
   AccessLogGuard log([&]() {
     return absl::StrFormat("setxattr (%d,%s): %s", ino, name, s.ToString());
   });
+  ClientOpMetricGuard op_metric(
+      {&client_op_metric_->opSetAttr, &client_op_metric_->opAll},
+      !IsInternalNode(ino));
 
   if (name.length() > vfs_->GetMaxNameLength()) {
     s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
@@ -715,6 +718,9 @@ Status VFSWrapper::RemoveXattr(Ino ino, const std::string& name) {
   AccessLogGuard log([&]() {
     return absl::StrFormat("removexattr (%d,%s): %s", ino, name, s.ToString());
   });
+  ClientOpMetricGuard op_metric(
+      {&client_op_metric_->opRemoveXattr, &client_op_metric_->opAll},
+      !IsInternalNode(ino));
 
   if (name.length() > vfs_->GetMaxNameLength()) {
     s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
@@ -826,7 +832,8 @@ Status VFSWrapper::ReleaseDir(Ino ino, uint64_t fh) {
   VLOG(1) << "VFSReleaseDir ino: " << ino << " fh: " << fh;
   Status s;
   AccessLogGuard log([&]() {
-    return absl::StrFormat("releasedir (%d): %s [fh:%d]", ino, s.ToString(), fh);
+    return absl::StrFormat("releasedir (%d): %s [fh:%d]", ino, s.ToString(),
+                           fh);
   });
 
   ClientOpMetricGuard op_metric(
@@ -870,6 +877,8 @@ Status VFSWrapper::StatFs(Ino ino, FsStat* fs_stat) {
   Status s;
   AccessLogGuard log(
       [&]() { return absl::StrFormat("statfs (%d): %s", ino, s.ToString()); });
+  ClientOpMetricGuard op_metric(
+      {&client_op_metric_->opStatfs, &client_op_metric_->opAll});
 
   s = vfs_->StatFs(span->GetContext(), ino, fs_stat);
   VLOG(1) << "VFSStatFs end, status: " << s.ToString()

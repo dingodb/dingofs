@@ -46,6 +46,7 @@ struct ClientOpMetric {
   OpMetric opSetAttr;
   OpMetric opGetXattr;
   OpMetric opListXattr;
+  OpMetric opRemoveXattr;
   OpMetric opSymlink;
   OpMetric opReadLink;
   OpMetric opRelease;
@@ -53,6 +54,7 @@ struct ClientOpMetric {
   OpMetric opFlush;
   OpMetric opRead;
   OpMetric opWrite;
+  OpMetric opStatfs;
   OpMetric opAll;
 
   ClientOpMetric()
@@ -72,6 +74,7 @@ struct ClientOpMetric {
         opSetAttr(prefix, "opSetattr"),
         opGetXattr(prefix, "opGetxattr"),
         opListXattr(prefix, "opListxattr"),
+        opRemoveXattr(prefix, "opRemovexattr"),
         opSymlink(prefix, "opSymlink"),
         opReadLink(prefix, "opReadlink"),
         opRelease(prefix, "opRelease"),
@@ -79,6 +82,7 @@ struct ClientOpMetric {
         opFlush(prefix, "opFlush"),
         opRead(prefix, "opRead"),
         opWrite(prefix, "opWrite"),
+        opStatfs(prefix, "opStatfs"),
         opAll(prefix, "opAll") {}
 };
 

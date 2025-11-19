@@ -310,6 +310,8 @@ Status MetaWrapper::NewSliceId(ContextSPtr ctx, Ino ino, uint64_t* id) {
   MetaLogGuard log_guard([&]() {
     return absl::StrFormat("new_slice_id: (%d) %d, %s", ino, *id, s.ToString());
   });
+  metrics::client::SliceMetricGuard guard(&s, &slice_metric_->new_sliceid,
+                                          butil::cpuwide_time_us());
 
   s = target_->NewSliceId(ctx, ino, id);
   return s;
@@ -324,6 +326,8 @@ Status MetaWrapper::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                            index, s.ToString(), fh, ctx->hit_cache,
                            slices->size(), version);
   });
+  metrics::client::SliceMetricGuard guard(&s, &slice_metric_->read_slice,
+                                          butil::cpuwide_time_us());
 
   s = target_->ReadSlice(ctx, ino, index, fh, slices, version);
   return s;
@@ -336,6 +340,8 @@ Status MetaWrapper::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
     return absl::StrFormat("write_slice (%d,%d,%d): %s %d %d", ino, index, fh,
                            s.ToString(), ctx->hit_cache, slices.size());
   });
+  metrics::client::SliceMetricGuard guard(&s, &slice_metric_->write_slice,
+                                          butil::cpuwide_time_us());
 
   s = target_->WriteSlice(ctx, ino, index, fh, slices);
   return s;
@@ -348,13 +354,16 @@ Status MetaWrapper::AsyncWriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
   uint64_t start_us = butil::cpuwide_time_us();
   uint64_t slice_count = slices.size();
 
-  auto wrapped_done = [start_us, slice_count, ctx = std::move(ctx), ino, index,
-                       fh, done = std::move(done)](const Status& status) {
+  auto wrapped_done = [this, start_us, slice_count, ctx = std::move(ctx), ino,
+                       index, fh,
+                       done = std::move(done)](const Status& status) {
     MetaLogGuard log_guard(start_us, [&]() {
       return absl::StrFormat("async_write_slice (%d,%d,%d): %s %d %d", ino,
                              index, fh, status.ToString(), ctx->hit_cache,
                              slice_count);
     });
+    metrics::client::SliceMetricGuard guard(
+        &status, &slice_metric_->write_slice, start_us);
 
     done(status);
   };
