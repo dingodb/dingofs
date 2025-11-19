@@ -1070,6 +1070,33 @@ Status MDSClient::GetFsQuota(ContextSPtr ctx, FsStat& fs_stat) {
   return Status::OK();
 }
 
+Status MDSClient::GetDirQuota(ContextSPtr ctx, Ino ino, FsStat& fs_stat) {
+  auto get_mds_fn = [this, ino](bool& is_primary_mds) -> MDSMeta {
+    return GetMdsByParent(ino, is_primary_mds);
+  };
+
+  pb::mds::GetDirQuotaRequest request;
+  pb::mds::GetDirQuotaResponse response;
+
+  request.set_fs_id(fs_id_);
+  request.set_ino(ino);
+  request.mutable_info()->set_request_id(ctx->TraceId());
+
+  auto status = SendRequest(ctx, get_mds_fn, "MDSService", "GetDirQuota",
+                            request, response);
+  if (!status.ok()) {
+    return status;
+  }
+
+  const auto& quota = response.quota();
+  fs_stat.max_bytes = quota.max_bytes();
+  fs_stat.used_bytes = quota.used_bytes();
+  fs_stat.max_inodes = quota.max_inodes();
+  fs_stat.used_inodes = quota.used_inodes();
+
+  return Status::OK();
+}
+
 bool MDSClient::UpdateRouter() {
   mds::FsInfoEntry new_fs_info;
   auto status = MDSClient::GetFsInfo(rpc_, fs_info_->GetName(), new_fs_info);

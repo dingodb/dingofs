@@ -173,11 +173,12 @@ void ServiceClosure<T, U>::Run() {
   mut_time->set_queue_wait_time_us(queue_wait_time_us);
 
   if (response_->error().errcode() != 0) {
-    // if (response_->error().errcode() != pb::error::ENOT_FOUND) {
-    LOG(ERROR) << fmt::format("[service.{}][request_id({})][{}us] Request fail, request({}) response({})", method_name_,
-                              request_->info().request_id(), elapsed_time_us,
-                              request_->ShortDebugString().substr(0, FLAGS_mds_service_log_print_max_length),
-                              response_->ShortDebugString().substr(0, FLAGS_mds_service_log_print_max_length));
+    if (response_->error().errcode() != pb::error::ENOT_FOUND) {
+      LOG(ERROR) << fmt::format("[service.{}][request_id({})][{}us] Request fail, request({}) response({})",
+                                method_name_, request_->info().request_id(), elapsed_time_us,
+                                request_->ShortDebugString().substr(0, FLAGS_mds_service_log_print_max_length),
+                                response_->ShortDebugString().substr(0, FLAGS_mds_service_log_print_max_length));
+    }
 
   } else {
     if (BAIDU_UNLIKELY(elapsed_time_us >= FLAGS_mds_service_log_threshold_time_us)) {

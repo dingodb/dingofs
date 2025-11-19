@@ -148,6 +148,7 @@ class MDSClient {
                    uint64_t length);
 
   Status GetFsQuota(ContextSPtr ctx, FsStat& fs_stat);
+  Status GetDirQuota(ContextSPtr ctx, Ino ino, FsStat& fs_stat);
 
  private:
   static Status DoGetFsInfo(RPCPtr rpc, pb::mds::GetFsInfoRequest& request,

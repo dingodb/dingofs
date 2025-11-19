@@ -37,6 +37,7 @@
 #include "glog/logging.h"
 #include "json/value.h"
 #include "json/writer.h"
+#include "mds/common/constant.h"
 #include "mds/common/helper.h"
 
 namespace dingofs {
@@ -317,8 +318,13 @@ bool MDSFileSystem::InitCrontab() {
   return true;
 }
 
-Status MDSFileSystem::StatFs(ContextSPtr ctx, Ino, FsStat* fs_stat) {
-  auto status = mds_client_->GetFsQuota(ctx, *fs_stat);
+Status MDSFileSystem::StatFs(ContextSPtr ctx, Ino ino, FsStat* fs_stat) {
+  Status status;
+  if (ino <= mds::kRootIno) {
+    status = mds_client_->GetFsQuota(ctx, *fs_stat);
+  } else {
+    status = mds_client_->GetDirQuota(ctx, ino, *fs_stat);
+  }
 
   if (fs_stat->max_bytes == 0) {
     fs_stat->max_bytes = INT64_MAX;

@@ -490,20 +490,15 @@ Status QuotaManager::SetDirQuota(Trace& trace, Ino ino, const QuotaEntry& quota,
 }
 
 Status QuotaManager::GetDirQuota(Trace& trace, Ino ino, QuotaEntry& quota) {
-  const uint32_t fs_id = fs_info_->GetFsId();
-
-  GetDirQuotaOperation operation(trace, fs_id, ino);
-
-  auto status = operation_processor_->RunAlone(&operation);
-  if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[quota.{}.{}] get dir quota fail, status({}).", fs_id, ino, status.error_str());
-    return status;
+  // first try to get from cache
+  auto dir_quota = dir_quota_map_.GetNearestQuota(ino);
+  if (dir_quota != nullptr) {
+    quota = dir_quota->GetAccumulatedQuota();
+    return Status::OK();
   }
 
-  auto& result = operation.GetResult();
-  quota = result.quota;
-
-  return Status::OK();
+  // if not found dir quota, get fs quota
+  return GetFsQuota(trace, false, quota);
 }
 
 Status QuotaManager::DeleteDirQuota(Trace& trace, Ino ino) {

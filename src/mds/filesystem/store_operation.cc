@@ -1903,11 +1903,14 @@ Status SetFsQuotaOperation::Run(TxnUPtr& txn) {
 }
 
 Status GetFsQuotaOperation::Run(TxnUPtr& txn) {
-  std::string key = MetaCodec::EncodeFsQuotaKey(fs_id_);
   std::string value;
-  auto status = txn->Get(key, value);
+  auto status = txn->Get(MetaCodec::EncodeFsQuotaKey(fs_id_), value);
   if (!status.ok()) {
     return status;
+  }
+
+  if (value.empty()) {
+    return Status(pb::error::ENOT_FOUND, "fs quota not found");
   }
 
   result_.quota = MetaCodec::DecodeFsQuotaValue(value);
@@ -1983,10 +1986,12 @@ Status GetDirQuotaOperation::Run(TxnUPtr& txn) {
     return status;
   }
 
-  if (!value.empty()) {
-    auto dir_quota = MetaCodec::DecodeDirQuotaValue(value);
-    result_.quota = dir_quota;
+  if (value.empty()) {
+    return Status(pb::error::ENOT_FOUND, "dir quota not found");
   }
+
+  auto dir_quota = MetaCodec::DecodeDirQuotaValue(value);
+  result_.quota = dir_quota;
 
   return Status::OK();
 }
