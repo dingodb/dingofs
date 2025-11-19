@@ -27,6 +27,7 @@
 #include "common/status.h"
 #include "common/trace/context.h"
 #include "common/trace/itracer.h"
+#include "common/trace/trace_manager.h"
 #include "common/types.h"
 
 namespace dingofs {
@@ -151,6 +152,8 @@ class VFS {
   virtual uint64_t GetMaxNameLength() = 0;
 
   virtual ITracer* GetTracer() = 0;
+
+  virtual TraceManager* GetTraceManager() = 0;
 };
 
 }  // namespace vfs

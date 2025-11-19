@@ -1,4 +1,4 @@
-# Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
+# Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,25 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(blockaccess)
-add_subdirectory(metrics)
-add_subdirectory(options)
-add_subdirectory(trace)
-add_subdirectory(opentrace)
+add_subdirectory(opentelemetry)
 
-add_library(dingofs_common
-    io_buffer.cc
-    version.cc
-    flag.cc
-    string_slice.cc
-    status.cc
-    logging.cc
+file(GLOB DINGOFS_COMMON_OPEN_TRACE_SRCS
+    "*.cc"
+    "opentelemetry/*.cc"
 )
-target_link_libraries(dingofs_common
-    dingofs_utils
-    brpc::brpc
-    fmt::fmt
-    gflags::gflags
-    glog::glog
-    dingofs_open_trace
+
+
+add_library(dingofs_open_trace
+     ${DINGOFS_COMMON_OPEN_TRACE_SRCS}
 )
+
+target_link_libraries(dingofs_open_trace
+    dingofs_opentelemetry
+)
+

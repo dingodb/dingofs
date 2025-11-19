@@ -17,6 +17,7 @@
 
 #include <cstdint>
 
+#include "common/trace/trace_manager.h"
 #include "dingofs/mds.pb.h"
 #include "mds/cachegroup/member_manager.h"
 #include "mds/common/runnable.h"
@@ -403,6 +404,9 @@ class MDSServiceImpl : public pb::mds::MDSService {
   // Run service request.
   WorkerSetUPtr read_worker_set_;
   WorkerSetUPtr write_worker_set_;
+
+  // trace
+  std::shared_ptr<TraceManager> trace_manager_;
 };
 
 }  // namespace mds

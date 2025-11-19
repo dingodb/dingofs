@@ -649,6 +649,9 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
   auto span = vfs_hub_->GetTracer()->StartSpanWithContext(kVFSDataMoudule,
                                                           METHOD_NAME(), ctx);
 
+  auto open_span = vfs_hub_->GetTraceManager()->StartChildSpan(
+      "FileReader::Read", ctx->GetTraceSpan());
+
   Attr attr;
   DINGOFS_RETURN_NOT_OK(GetAttr(span->GetContext(), &attr));
 
@@ -710,6 +713,10 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
   SCOPED_CLEANUP({
     auto release_span = vfs_hub_->GetTracer()->StartSpanWithParent(
         kVFSDataMoudule, "FileReader::Read::ReleaseRequests", *span);
+
+    auto inner_span = vfs_hub_->GetTraceManager()->StartChildSpan(
+        "FileReader::Read::ReleaseRequests", open_span);
+
     for (auto& partial_req : reqs) {
       partial_req.req->ReleaseRef();
       if (partial_req.req->refs == 0 &&
@@ -725,6 +732,9 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
   {
     auto wait_span = vfs_hub_->GetTracer()->StartSpanWithParent(
         kVFSDataMoudule, "FileReader::Read::WaitRequests", *span);
+
+    auto inner_span = vfs_hub_->GetTraceManager()->StartChildSpan(
+        "FileReader::Read::WaitRequests", open_span);
 
     // TODO: support wait with timeout
     for (PartialReadRequest& partial_req : reqs) {

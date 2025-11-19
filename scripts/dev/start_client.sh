@@ -1,5 +1,5 @@
 #!/bin/bash
-
+ulimit -c unlimited 
 mydir="${BASH_SOURCE%/*}"
 if [[ ! -d "$mydir" ]]; then mydir="$PWD"; fi
 . $mydir/shflags

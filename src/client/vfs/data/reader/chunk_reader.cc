@@ -85,18 +85,20 @@ static std::string SlicesToString(const std::vector<Slice>& slices) {
 }
 
 Status ChunkReader::GetSlices(ContextSPtr ctx, ChunkSlices* chunk_slices) {
+  auto open_span = hub_->GetTraceManager()->StartChildSpan(
+      "ChunkReader::GetSlices", ctx->GetTraceSpan());
+
   auto* tracer = hub_->GetTracer();
   auto span = tracer->StartSpanWithContext(kVFSDataMoudule, METHOD_NAME(), ctx);
 
   std::vector<Slice> slices;
   uint64_t chunk_version = 0;
   DINGOFS_RETURN_NOT_OK(hub_->GetMetaSystem()->ReadSlice(
-      span->GetContext(), chunk_.ino, chunk_.index, fh_, &slices,
+      open_span->GetContext(), chunk_.ino, chunk_.index, fh_, &slices,
       chunk_version));
 
   chunk_slices->version = chunk_version;
   chunk_slices->slices = std::move(slices);
-
   VLOG(9) << fmt::format("{} GetSlices, version: {}, slice_num: {}, slices: {}",
                          UUID(), chunk_slices->version,
                          chunk_slices->slices.size(),

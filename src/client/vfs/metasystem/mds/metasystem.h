@@ -34,6 +34,7 @@
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
 #include "common/trace/context.h"
+#include "common/trace/trace_manager.h"
 #include "json/value.h"
 #include "mds/common/crontab.h"
 #include "mds/common/type.h"
@@ -65,7 +66,8 @@ class MDSMetaSystem : public vfs::MetaSystem {
 
   static MDSMetaSystemUPtr Build(const std::string& fs_name,
                                  const std::string& mds_addrs,
-                                 const ClientId& client_id);
+                                 const ClientId& client_id,
+                                 TraceManagerSPtr trace_manager);
 
   Status Init(bool upgrade) override;
 

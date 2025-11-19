@@ -133,6 +133,10 @@ class VFSImpl : public VFS {
 
   ITracer* GetTracer() override { return vfs_hub_->GetTracer(); }
 
+  TraceManager* GetTraceManager() override {
+    return vfs_hub_->GetTraceManager();
+  }
+
  private:
   Status StartBrpcServer();
 

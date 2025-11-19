@@ -39,6 +39,7 @@
 #include "common/const.h"
 #include "common/status.h"
 #include "common/trace/itracer.h"
+#include "common/trace/trace_manager.h"
 #include "utils/executor/executor.h"
 
 namespace dingofs {
@@ -86,6 +87,8 @@ class VFSHub {
   virtual FsInfo GetFsInfo() = 0;
 
   virtual uint64_t GetPageSize() = 0;
+
+  virtual TraceManager* GetTraceManager() = 0;
 };
 
 class VFSHubImpl : public VFSHub {
@@ -175,6 +178,11 @@ class VFSHubImpl : public VFSHub {
     return FLAGS_data_stream_page_size;
   }
 
+  TraceManager* GetTraceManager() override {
+    CHECK_NOTNULL(trace_manager_);
+    return trace_manager_.get();
+  }
+
  private:
   std::atomic_bool started_{false};
 
@@ -198,6 +206,7 @@ class VFSHubImpl : public VFSHub {
   std::unique_ptr<ITracer> tracer_;
   std::unique_ptr<PrefetchManager> prefetch_manager_;
   std::unique_ptr<WarmupManager> warmup_manager_;
+  std::shared_ptr<TraceManager> trace_manager_;
 };
 
 }  // namespace vfs

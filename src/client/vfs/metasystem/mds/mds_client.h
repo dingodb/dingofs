@@ -28,6 +28,7 @@
 #include "common/options/client.h"
 #include "common/status.h"
 #include "common/trace/context.h"
+#include "common/trace/trace_manager.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/format.h"
@@ -53,16 +54,19 @@ class MDSClient {
  public:
   MDSClient(const ClientId& client_id, mds::FsInfoSPtr fs_info,
             ParentMemoSPtr parent_memo, MDSDiscoverySPtr mds_discovery,
-            MDSRouterPtr mds_router, RPCPtr rpc);
+            MDSRouterPtr mds_router, RPCPtr rpc,
+            TraceManagerSPtr trace_manager);
   virtual ~MDSClient() = default;
 
   static MDSClientSPtr New(const ClientId& client_id, mds::FsInfoSPtr fs_info,
                            ParentMemoSPtr parent_memo,
 
                            MDSDiscoverySPtr mds_discovery,
-                           MDSRouterPtr mds_router, RPCPtr rpc) {
+                           MDSRouterPtr mds_router, RPCPtr rpc,
+                           TraceManagerSPtr trace_manager) {
     return std::make_shared<MDSClient>(client_id, fs_info, parent_memo,
-                                       mds_discovery, mds_router, rpc);
+                                       mds_discovery, mds_router, rpc,
+                                       trace_manager);
   }
 
   bool Init();
@@ -193,6 +197,7 @@ class MDSClient {
   MDSDiscoverySPtr mds_discovery_;
 
   RPCPtr rpc_;
+  TraceManagerSPtr trace_manager_;
 };
 
 template <typename Request>

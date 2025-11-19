@@ -290,6 +290,8 @@ Status VFSImpl::Read(ContextSPtr ctx, Ino ino, DataBuffer* data_buffer,
   Status s;
   auto handle = handle_manager_->FindHandler(fh);
   VFS_CHECK_HANDLE(handle, ino, fh);
+  auto open_span = vfs_hub_->GetTraceManager()->StartChildSpan(
+      "VFSImpl::Read", ctx->GetTraceSpan());
 
   auto span = vfs_hub_->GetTracer()->StartSpanWithContext(kVFSDataMoudule,
                                                           "VFSImpl::Read", ctx);
@@ -310,22 +312,27 @@ Status VFSImpl::Read(ContextSPtr ctx, Ino ino, DataBuffer* data_buffer,
   if (handle->file == nullptr) {
     LOG(ERROR) << "file is null in handle, ino: " << ino << ", fh: " << fh;
     s = Status::BadFd(fmt::format("bad  fh:{}", fh));
+    open_span->SetStatus(s);
     return s;
   }
 
   {
     auto f_span = vfs_hub_->GetTracer()->StartSpanWithParent(
         kVFSDataMoudule, "VFSImpl::Read.Flush", *span);
+
+    auto flush_span = vfs_hub_->GetTraceManager()->StartChildSpan(
+        "VFSImpl::Read.Flush", open_span);
     s = handle->file->Flush();
     if (!s.ok()) {
       f_span->SetStatus(s);
+      flush_span->SetStatus(s);
       return s;
     }
   }
 
-  s = handle->file->Read(span->GetContext(), data_buffer, size, offset,
+  s = handle->file->Read(open_span->GetContext(), data_buffer, size, offset,
                          out_rsize);
-
+  open_span->SetStatus(s);
   return s;
 }
 

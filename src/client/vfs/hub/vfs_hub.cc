@@ -61,6 +61,15 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf, bool upgrade) {
 
   LOG(INFO) << fmt::format("[vfs.hub] vfs hub starting, upgrade({}).", upgrade);
 
+  {
+    trace_manager_ = TraceManager::New();
+    auto ok = trace_manager_->Init();
+    if (!ok) {
+      LOG(ERROR) << "Init trace manager failed.";
+      return Status::Internal("Init trace manager failed");
+    }
+  }
+
   MetaSystemUPtr rela_meta_system;
   if (vfs_conf.metasystem_type == MetaSystemType::MEMORY) {
     rela_meta_system = std::make_unique<memory::MemoryMetaSystem>();
@@ -71,8 +80,8 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf, bool upgrade) {
         vfs_conf.storage_info);
 
   } else if (vfs_conf.metasystem_type == MetaSystemType::MDS) {
-    rela_meta_system = v2::MDSMetaSystem::Build(vfs_conf.fs_name,
-                                                vfs_conf.mds_addrs, client_id_);
+    rela_meta_system = v2::MDSMetaSystem::Build(
+        vfs_conf.fs_name, vfs_conf.mds_addrs, client_id_, trace_manager_);
   }
   CHECK(rela_meta_system != nullptr) << "build meta system fail";
 
@@ -265,6 +274,11 @@ Status VFSHubImpl::Stop(bool upgrade) {
   if (meta_system_ != nullptr) {
     meta_system_->UnInit(upgrade);
     meta_system_.reset();
+  }
+
+  if (trace_manager_ != nullptr) {
+    trace_manager_->Stop();
+    trace_manager_.reset();
   }
 
   started_.store(false, std::memory_order_relaxed);

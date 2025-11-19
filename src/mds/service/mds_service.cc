@@ -37,7 +37,6 @@
 #include "mds/server.h"
 #include "mds/service/service_helper.h"
 #include "mds/statistics/fs_stat.h"
-
 namespace dingofs {
 namespace mds {
 
@@ -149,12 +148,19 @@ bool MDSServiceImpl::Init() {
     return false;
   }
 
+  trace_manager_ = TraceManager::New();
+  if (!trace_manager_->Init()) {
+    LOG(ERROR) << "init trace mananger fail.";
+    return false;
+  }
+
   return true;
 }
 
 void MDSServiceImpl::Destroy() {
   read_worker_set_->Destroy();
   write_worker_set_->Destroy();
+  trace_manager_->Stop();
 }
 
 FileSystemSPtr MDSServiceImpl::GetFileSystem(uint32_t fs_id) { return file_system_set_->GetFileSystem(fs_id); }
@@ -1733,14 +1739,18 @@ void MDSServiceImpl::WriteSlice(google::protobuf::RpcController* controller, con
   RunInQueue(WriteSlice, controller, request, response, svr_done, write_worker_set_);
 }
 
-void MDSServiceImpl::DoReadSlice(google::protobuf::RpcController*, const pb::mds::ReadSliceRequest* request,
+void MDSServiceImpl::DoReadSlice(google::protobuf::RpcController* controller, const pb::mds::ReadSliceRequest* request,
                                  pb::mds::ReadSliceResponse* response, TraceClosure* done) {
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto open_span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoReadSlice", request->info().trace_id(), request->info().span_id());
+
   auto file_system = GetFileSystem(request->fs_id());
   auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    open_span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1751,6 +1761,7 @@ void MDSServiceImpl::DoReadSlice(google::protobuf::RpcController*, const pb::mds
       file_system->ReadSlice(ctx, request->ino(), Helper::PbRepeatedToVector(request->chunk_descriptors()), chunks);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    open_span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 

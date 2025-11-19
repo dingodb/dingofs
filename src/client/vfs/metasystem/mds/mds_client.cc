@@ -34,7 +34,8 @@ namespace v2 {
 
 MDSClient::MDSClient(const ClientId& client_id, mds::FsInfoSPtr fs_info,
                      ParentMemoSPtr parent_memo, MDSDiscoverySPtr mds_discovery,
-                     MDSRouterPtr mds_router, RPCPtr rpc)
+                     MDSRouterPtr mds_router, RPCPtr rpc,
+                     TraceManagerSPtr trace_manager)
     : client_id_(client_id),
       fs_info_(fs_info),
       fs_id_(fs_info->GetFsId()),
@@ -42,7 +43,8 @@ MDSClient::MDSClient(const ClientId& client_id, mds::FsInfoSPtr fs_info,
       parent_memo_(parent_memo),
       mds_discovery_(mds_discovery),
       mds_router_(mds_router),
-      rpc_(rpc) {}
+      rpc_(rpc),
+      trace_manager_(trace_manager) {}
 
 bool MDSClient::Init() {
   CHECK(parent_memo_ != nullptr) << "parent cache is null.";
@@ -986,6 +988,9 @@ Status MDSClient::ReadSlice(
     return GetMds(ino, is_primary_mds);
   };
 
+  auto open_span = trace_manager_->StartChildSpan("MDSClient::ReadSlice",
+                                                  ctx->GetTraceSpan());
+
   pb::mds::ReadSliceRequest request;
   pb::mds::ReadSliceResponse response;
 
@@ -994,12 +999,16 @@ Status MDSClient::ReadSlice(
 
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
+  request.mutable_info()->set_trace_id(open_span->GetTraceID());
+  request.mutable_info()->set_span_id(open_span->GetSpanID());
+
   mds::Helper::VectorToPbRepeated(chunk_descriptors,
                                   request.mutable_chunk_descriptors());
 
   auto status = SendRequest(ctx, get_mds_fn, "MDSService", "ReadSlice", request,
                             response);
   if (!status.ok()) {
+    open_span->SetStatus(status);
     return status;
   }
 

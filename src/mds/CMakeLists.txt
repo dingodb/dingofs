@@ -55,6 +55,7 @@ target_link_libraries(mds_lib
 
   dingofs_options
   dingofs_utils
+  dingofs_common
 
   absl::log_internal_message
   absl::cleanup

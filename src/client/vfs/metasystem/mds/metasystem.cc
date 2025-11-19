@@ -31,6 +31,7 @@
 #include "common/options/client.h"
 #include "common/status.h"
 #include "common/trace/context.h"
+#include "common/trace/trace_manager.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/core.h"
@@ -1152,7 +1153,8 @@ static std::string GetAliveMdsAddr(const std::string& mds_addrs) {
 
 MDSMetaSystemUPtr MDSMetaSystem::Build(const std::string& fs_name,
                                        const std::string& mds_addrs,
-                                       const ClientId& client_id) {
+                                       const ClientId& client_id,
+                                       TraceManagerSPtr trace_manager) {
   LOG(INFO) << fmt::format("[meta.fs.{}] build filesystem mds_addrs({}).",
                            fs_name, mds_addrs);
 
@@ -1215,8 +1217,9 @@ MDSMetaSystemUPtr MDSMetaSystem::Build(const std::string& fs_name,
   auto fs_info = mds::FsInfo::New(pb_fs_info);
 
   // create mds client
-  auto mds_client = MDSClient::New(client_id, fs_info, parent_memo,
-                                   mds_discovery, mds_router, rpc);
+  auto mds_client =
+      MDSClient::New(client_id, fs_info, parent_memo, mds_discovery, mds_router,
+                     rpc, trace_manager);
   if (!mds_client->Init()) {
     LOG(INFO) << fmt::format("[meta.fs.{}] MDSClient init fail.", fs_name);
     return nullptr;

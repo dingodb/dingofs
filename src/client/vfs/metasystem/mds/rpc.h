@@ -158,7 +158,6 @@ class RPC {
   uint64_t DoingReqCount() {
     return doing_req_count_.load(std::memory_order_relaxed);
   }
-
   utils::RWLock lock_;
   EndPoint init_endpoint_;
   std::map<EndPoint, ChannelSPtr> channels_;
@@ -261,7 +260,7 @@ Status RPC::SendRequest(const EndPoint& endpoint,
     brpc::Controller cntl;
     cntl.set_timeout_ms(option.timeout_ms);
     cntl.set_log_id(butil::fast_rand());
-
+    // InjectTraceHeader(&cntl);
     request.mutable_info()->set_timeout_ms(option.timeout_ms);
 
     uint64_t start_us = mds::Helper::TimestampUs();

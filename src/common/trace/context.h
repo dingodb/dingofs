@@ -26,21 +26,32 @@
 
 namespace dingofs {
 
+class SpanScope;
+using SpanScopeSptr = std::shared_ptr<SpanScope>;
+
 struct Context {
   std::string module;
-  std::string trace_id;
-  std::string span_id;
+  std::string trace_id;  // modify session id
+  std::string span_id;   // delete
   // when root Span, parent_span_id is empty
-  std::string parent_span_id;
+  std::string parent_span_id;  // delete
   // whether hit local cache
   bool hit_cache{false};
   bool is_amend{false};
 
   bool need_cache{false};
 
-  uint64_t start_time_ns{0};
+  uint64_t start_time_ns{0};  // delete
 
-  const std::string& TraceId() const { return trace_id; }
+  std::weak_ptr<SpanScope> trace_span;
+
+  const std::string& TraceId() const { return trace_id; }  // session id
+
+  SpanScopeSptr GetTraceSpan() { return trace_span.lock(); }
+
+  void SetTraceSpan(SpanScopeSptr trace_span_ptr) {
+    trace_span = trace_span_ptr;
+  }
 
   Context(std::string module, std::string trace, std::string span,
           std::string parent = "")

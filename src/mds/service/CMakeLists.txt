@@ -30,6 +30,7 @@ target_link_libraries(mds_service
     mds_cachegroup
 
     dingofs_common
+    dingofs_trace
 
     PROTO_OBJS
     protobuf::libprotobuf

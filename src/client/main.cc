@@ -137,11 +137,11 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  struct MountOption mount_option{.mount_point = argv[2],
-                                  .fs_name = fs_name,
-                                  .metasystem_type = metasystem_type,
-                                  .mds_addrs = mds_addrs,
-                                  .storage_info = storage_info};
+  struct MountOption mount_option {
+    .mount_point = argv[2], .fs_name = fs_name,
+    .metasystem_type = metasystem_type, .mds_addrs = mds_addrs,
+    .storage_info = storage_info
+  };
 
   fuse_server = new FuseServer();
   if (fuse_server == nullptr) return EXIT_FAILURE;
