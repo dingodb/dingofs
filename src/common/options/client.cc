@@ -54,14 +54,14 @@ DEFINE_validator(client_fuse_file_info_direct_io, brpc::PassValidate);
 DEFINE_bool(client_fuse_file_info_keep_cache, false, "keep file page cache");
 DEFINE_validator(client_fuse_file_info_keep_cache, brpc::PassValidate);
 
-DEFINE_bool(client_fuse_enable_readdir_cache, false, "enable readdir cache");
+DEFINE_bool(client_fuse_enable_readdir_cache, true, "enable readdir cache");
 DEFINE_validator(client_fuse_enable_readdir_cache, brpc::PassValidate);
 
-DEFINE_uint32(client_fuse_entry_cache_timeout_s, 1,
+DEFINE_uint32(client_fuse_entry_cache_timeout_s, 3600,
               "fuse entry cache timeout in seconds");
 DEFINE_validator(client_fuse_entry_cache_timeout_s, brpc::PassValidate);
 
-DEFINE_uint32(client_fuse_attr_cache_timeout_s, 1,
+DEFINE_uint32(client_fuse_attr_cache_timeout_s, 3600,
               "fuse attr cache timeout in seconds");
 DEFINE_validator(client_fuse_attr_cache_timeout_s, brpc::PassValidate);
 

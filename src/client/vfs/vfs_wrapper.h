@@ -107,7 +107,7 @@ class VFSWrapper {
   Status MkDir(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
                uint32_t mode, Attr* attr);
 
-  Status OpenDir(Ino ino, uint64_t* fh);
+  Status OpenDir(Ino ino, uint64_t* fh, bool& need_cache);
 
   Status ReadDir(Ino ino, uint64_t fh, uint64_t offset, bool with_attr,
                  ReadDirHandler handler);

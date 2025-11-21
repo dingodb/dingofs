@@ -87,7 +87,7 @@ TEST_F(DentryTest, ReadDir) {
   FileStoreSPtr file_store = std::make_shared<FileStore>();
 
   const std::string sandbox =
-      "/home/dengzihui/mount-test/dengzh_hash_01-1/test4";
+      "/home/dengzihui/mount-test/dengzh_hash_01-1/test1";
 
   // create thread readdir
   int readdir_thread_num = 10;
@@ -162,7 +162,7 @@ TEST_F(DentryTest, ReadDir) {
         file_store->AddFile(file_path);
 
         // sleep for a while
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
       }
     });
 

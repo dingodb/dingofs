@@ -36,6 +36,8 @@ struct Context {
   bool hit_cache{false};
   bool is_amend{false};
 
+  bool need_cache{false};
+
   uint64_t start_time_ns{0};
 
   const std::string& TraceId() const { return trace_id; }

@@ -601,31 +601,33 @@ Status MDSFileSystem::RmDir(ContextSPtr ctx, Ino parent,
 }
 
 Status MDSFileSystem::OpenDir(ContextSPtr ctx, Ino ino, uint64_t fh) {
-  auto dir_iterator = DirIterator::New(ctx, mds_client_, ino, fh);
-  auto status = dir_iterator->PreFetch();
-  if (!status.ok()) {
-    LOG(ERROR) << fmt::format(
-        "[meta.filesystem.{}.{}] opendir fail, error({}).", ino, fh,
-        status.ToString());
-    return status;
-  }
+  auto dir_iterator = DirIterator::New(mds_client_, ino, fh);
 
-  dir_iterator_manager_.Put(fh, dir_iterator);
+  bool need_cache = false;
+  dir_iterator_manager_.PutWithFunc(
+      ino, fh, dir_iterator,
+      [&need_cache](const std::vector<DirIteratorSPtr>& vec) {
+        if (vec.size() <= 1) {
+          need_cache = true;
+        }
+      });
+
+  ctx->need_cache = need_cache;
 
   return Status::OK();
 }
 
-Status MDSFileSystem::ReadDir(ContextSPtr ctx, Ino, uint64_t fh,
+Status MDSFileSystem::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
                               uint64_t offset, bool with_attr,
                               ReadDirHandler handler) {
-  auto dir_iterator = dir_iterator_manager_.Get(fh);
+  auto dir_iterator = dir_iterator_manager_.Get(ino, fh);
   CHECK(dir_iterator != nullptr) << "dir_iterator is null";
 
   dir_iterator->Remember(offset);
 
   while (true) {
     DirEntry entry;
-    auto status = dir_iterator->GetValue(offset++, with_attr, entry);
+    auto status = dir_iterator->GetValue(ctx, offset++, with_attr, entry);
     if (!status.ok()) {
       if (status.IsNoData()) break;
       return status;
@@ -641,8 +643,8 @@ Status MDSFileSystem::ReadDir(ContextSPtr ctx, Ino, uint64_t fh,
   return Status::OK();
 }
 
-Status MDSFileSystem::ReleaseDir(ContextSPtr, Ino, uint64_t fh) {
-  dir_iterator_manager_.Delete(fh);
+Status MDSFileSystem::ReleaseDir(ContextSPtr, Ino ino, uint64_t fh) {
+  dir_iterator_manager_.Delete(ino, fh);
   return Status::OK();
 }
 

@@ -786,7 +786,7 @@ Status VFSWrapper::MkDir(Ino parent, const std::string& name, uint32_t uid,
   return s;
 }
 
-Status VFSWrapper::OpenDir(Ino ino, uint64_t* fh) {
+Status VFSWrapper::OpenDir(Ino ino, uint64_t* fh, bool& need_cache) {
   auto span = vfs_->GetTracer()->StartSpan(kVFSWrapperMoudule, METHOD_NAME());
   VLOG(1) << "VFSOpendir ino: " << ino;
   Status s;
@@ -797,11 +797,15 @@ Status VFSWrapper::OpenDir(Ino ino, uint64_t* fh) {
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opOpenDir, &client_op_metric_->opAll});
 
-  s = vfs_->OpenDir(span->GetContext(), ino, fh);
+  auto ctx = span->GetContext();
+  s = vfs_->OpenDir(ctx, ino, fh);
   VLOG(1) << "VFSOpendir end, ino: " << ino << " fh: " << *fh;
   if (!s.ok()) {
     op_metric.FailOp();
   }
+
+  need_cache = ctx->need_cache;
+
   return s;
 }
 

@@ -576,14 +576,16 @@ void FuseOpOpenDir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
 
   uint64_t fh = 0;
   Attr attr;
-  Status s = g_vfs->OpenDir(ino, &fh);
+  bool need_cache = true;
+  Status s = g_vfs->OpenDir(ino, &fh, need_cache);
 
   if (!s.ok()) {
     ReplyError(req, s);
   } else {
     fi->fh = fh;
 
-    fi->cache_readdir = FLAGS_client_fuse_enable_readdir_cache ? 1 : 0;
+    fi->cache_readdir =
+        (need_cache && FLAGS_client_fuse_enable_readdir_cache) ? 1 : 0;
     fi->keep_cache = FLAGS_client_fuse_enable_readdir_cache ? 1 : 0;
 
     ReplyOpen(req, fi);
