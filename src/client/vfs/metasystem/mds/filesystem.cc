@@ -68,7 +68,6 @@ DEFINE_bool(client_meta_read_chunk_cache_enable, true,
 
 MDSFileSystem::MDSFileSystem(mds::FsInfoSPtr fs_info, const ClientId& client_id,
                              MDSDiscoverySPtr mds_discovery,
-                             InodeCacheSPtr inode_cache,
                              MDSClientSPtr mds_client)
     : name_(fs_info->GetName()),
       client_id_(client_id),
@@ -76,7 +75,7 @@ MDSFileSystem::MDSFileSystem(mds::FsInfoSPtr fs_info, const ClientId& client_id,
       mds_discovery_(mds_discovery),
       id_cache_(kSliceIdCacheName, mds_client),
       file_session_map_(fs_info),
-      inode_cache_(inode_cache),
+      inode_cache_(fs_info->GetFsId()),
       mds_client_(mds_client),
       write_slice_processor_(
           WriteSliceProcessor::New(mds_client, chunk_memo_)) {}
@@ -129,7 +128,7 @@ bool MDSFileSystem::Dump(ContextSPtr, Json::Value& value) {
     return false;
   }
 
-  if (!inode_cache_->Dump(value)) {
+  if (!inode_cache_.Dump(value)) {
     return false;
   }
 
@@ -157,7 +156,7 @@ bool MDSFileSystem::Dump(const DumpOption& options, Json::Value& value) {
     return false;
   }
 
-  if (options.inode_cache && !inode_cache_->Dump(value)) {
+  if (options.inode_cache && !inode_cache_.Dump(value)) {
     return false;
   }
 
@@ -293,6 +292,13 @@ void MDSFileSystem::CleanExpiredChunkMemo() {
   chunk_memo_.ForgetExpired(expired_time_s);
 }
 
+void MDSFileSystem::CleanExpiredInodeCache() {
+  uint64_t expired_time_s =
+      mds::Helper::Timestamp() - FLAGS_client_vfs_meta_inode_cache_expired_s;
+
+  inode_cache_.CleanExpired(expired_time_s);
+}
+
 bool MDSFileSystem::InitCrontab() {
   // add heartbeat crontab
   crontab_configs_.push_back({
@@ -310,6 +316,7 @@ bool MDSFileSystem::InitCrontab() {
       [this](void*) {
         this->CleanExpiredModifyTimeMemo();
         this->CleanExpiredChunkMemo();
+        this->CleanExpiredInodeCache();
       },
   });
 
@@ -341,14 +348,19 @@ Status MDSFileSystem::StatFs(ContextSPtr ctx, Ino ino, FsStat* fs_stat) {
 };
 
 Status MDSFileSystem::Lookup(ContextSPtr ctx, Ino parent,
-                             const std::string& name, Attr* out_attr) {
-  auto status = mds_client_->Lookup(ctx, parent, name, *out_attr);
+                             const std::string& name, Attr* attr) {
+  AttrEntry attr_entry;
+  auto status = mds_client_->Lookup(ctx, parent, name, attr_entry);
   if (!status.ok()) {
     if (status.Errno() == pb::error::ENOT_FOUND) {
       return Status::NotExist("not found dentry");
     }
     return status;
   }
+
+  *attr = Helper::ToAttr(attr_entry);
+
+  inode_cache_.Put(attr_entry.ino(), attr_entry);
 
   return Status::OK();
 }
@@ -357,9 +369,10 @@ Status MDSFileSystem::Create(ContextSPtr ctx, Ino parent,
                              const std::string& name, uint32_t uid,
                              uint32_t gid, uint32_t mode, int flags, Attr* attr,
                              uint64_t fh) {
+  AttrEntry attr_entry;
   std::vector<std::string> session_ids;
   auto status = mds_client_->Create(ctx, parent, name, uid, gid, mode, flags,
-                                    *attr, session_ids);
+                                    attr_entry, session_ids);
   if (!status.ok()) {
     return status;
   }
@@ -367,19 +380,28 @@ Status MDSFileSystem::Create(ContextSPtr ctx, Ino parent,
   // add file session
   CHECK(!session_ids.empty()) << "session_ids is empty.";
   const auto& session_id = session_ids.front();
-  auto file_session = file_session_map_.Put(attr->ino, fh, session_id);
+  auto file_session = file_session_map_.Put(attr_entry.ino(), fh, session_id);
+
+  *attr = Helper::ToAttr(attr_entry);
+
+  inode_cache_.Put(attr_entry.ino(), attr_entry);
 
   return Status::OK();
 }
 
 Status MDSFileSystem::MkNod(ContextSPtr ctx, Ino parent,
                             const std::string& name, uint32_t uid, uint32_t gid,
-                            uint32_t mode, uint64_t rdev, Attr* out_attr) {
+                            uint32_t mode, uint64_t rdev, Attr* attr) {
+  AttrEntry attr_entry;
   auto status =
-      mds_client_->MkNod(ctx, parent, name, uid, gid, mode, rdev, *out_attr);
+      mds_client_->MkNod(ctx, parent, name, uid, gid, mode, rdev, attr_entry);
   if (!status.ok()) {
     return status;
   }
+
+  *attr = Helper::ToAttr(attr_entry);
+
+  inode_cache_.Put(attr_entry.ino(), attr_entry);
 
   return Status::OK();
 }
@@ -424,6 +446,8 @@ Status MDSFileSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
 
     chunk_memo_.Remember(ino, chunk.index(), chunk.version());
   }
+
+  inode_cache_.Put(attr_entry.ino(), attr_entry);
 
   return Status::OK();
 }
@@ -577,25 +601,33 @@ Status MDSFileSystem::Write(ContextSPtr, Ino ino, uint64_t offset,
 
 Status MDSFileSystem::MkDir(ContextSPtr ctx, Ino parent,
                             const std::string& name, uint32_t uid, uint32_t gid,
-                            uint32_t mode, Attr* out_attr) {
+                            uint32_t mode, Attr* attr) {
+  AttrEntry attr_entry;
   auto status =
-      mds_client_->MkDir(ctx, parent, name, uid, gid, mode, 0, *out_attr);
+      mds_client_->MkDir(ctx, parent, name, uid, gid, mode, 0, attr_entry);
   if (!status.ok()) {
     return status;
   }
+
+  *attr = Helper::ToAttr(attr_entry);
+
+  inode_cache_.Put(attr_entry.ino(), attr_entry);
 
   return Status::OK();
 }
 
 Status MDSFileSystem::RmDir(ContextSPtr ctx, Ino parent,
                             const std::string& name) {
-  auto status = mds_client_->RmDir(ctx, parent, name);
+  Ino ino;
+  auto status = mds_client_->RmDir(ctx, parent, name, ino);
   if (!status.ok()) {
     if (status.Errno() == pb::error::ENOT_EMPTY) {
       return Status::NotEmpty("dir not empty");
     }
     return status;
   }
+
+  inode_cache_.Delete(ino);
 
   return Status::OK();
 }
@@ -635,6 +667,8 @@ Status MDSFileSystem::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
 
     CorrectAttr(ctx, dir_iterator->LastFetchTimeNs(), entry.attr, "readdir");
 
+    inode_cache_.Put(entry.attr.ino, Helper::ToAttr(entry.attr));
+
     if (!handler(entry, offset)) {
       break;
     }
@@ -650,7 +684,8 @@ Status MDSFileSystem::ReleaseDir(ContextSPtr, Ino ino, uint64_t fh) {
 
 Status MDSFileSystem::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
                            const std::string& new_name, Attr* attr) {
-  auto status = mds_client_->Link(ctx, ino, new_parent, new_name, *attr);
+  AttrEntry attr_entry;
+  auto status = mds_client_->Link(ctx, ino, new_parent, new_name, attr_entry);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[meta.filesystem.{}.{}] link to {} fail, error({}).", new_parent,
@@ -658,16 +693,27 @@ Status MDSFileSystem::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
     return status;
   }
 
+  *attr = Helper::ToAttr(attr_entry);
+
+  inode_cache_.Put(attr_entry.ino(), attr_entry);
+
   return Status::OK();
 }
 
 Status MDSFileSystem::Unlink(ContextSPtr ctx, Ino parent,
                              const std::string& name) {
-  auto status = mds_client_->UnLink(ctx, parent, name);
+  AttrEntry attr_entry;
+  auto status = mds_client_->UnLink(ctx, parent, name, attr_entry);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("[meta.filesystem.{}.{}] unlink fail, error({}).",
                               parent, name, status.ToString());
     return status;
+  }
+
+  if (attr_entry.nlink() == 0) {
+    inode_cache_.Delete(attr_entry.ino());
+  } else {
+    inode_cache_.Put(attr_entry.ino(), attr_entry);
   }
 
   return Status::OK();
@@ -676,15 +722,20 @@ Status MDSFileSystem::Unlink(ContextSPtr ctx, Ino parent,
 Status MDSFileSystem::Symlink(ContextSPtr ctx, Ino parent,
                               const std::string& name, uint32_t uid,
                               uint32_t gid, const std::string& link,
-                              Attr* out_attr) {
+                              Attr* attr) {
+  AttrEntry attr_entry;
   auto status =
-      mds_client_->Symlink(ctx, parent, name, uid, gid, link, *out_attr);
+      mds_client_->Symlink(ctx, parent, name, uid, gid, link, attr_entry);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[meta.filesystem.{}.{}] symlink fail, symlink({}) error({}).", parent,
         name, link, status.ToString());
     return status;
   }
+
+  *attr = Helper::ToAttr(attr_entry);
+
+  inode_cache_.Put(attr_entry.ino(), attr_entry);
 
   return Status::OK();
 }
@@ -700,28 +751,34 @@ Status MDSFileSystem::ReadLink(ContextSPtr ctx, Ino ino, std::string* link) {
   return Status::OK();
 }
 
-Status MDSFileSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* out_attr) {
+Status MDSFileSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
   CHECK(ctx != nullptr) << "context is null";
 
-  auto status = mds_client_->GetAttr(ctx, ino, *out_attr);
+  AttrEntry attr_entry;
+  auto status = mds_client_->GetAttr(ctx, ino, attr_entry);
   if (!status.ok()) return status;
 
-  status = CorrectAttr(ctx, ctx->start_time_ns, *out_attr, "getattr");
+  *attr = Helper::ToAttr(attr_entry);
+
+  status = CorrectAttr(ctx, ctx->start_time_ns, *attr, "getattr");
   if (!status.ok()) return status;
 
   LOG(INFO) << fmt::format(
       "[meta.filesystem.{}] get attr length({}) is_amend({}).", ino,
-      out_attr->length, ctx->is_amend);
+      attr->length, ctx->is_amend);
 
   return Status::OK();
 }
 
 Status MDSFileSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
                               const Attr& attr, Attr* out_attr) {
-  auto status = mds_client_->SetAttr(ctx, ino, attr, set, *out_attr);
+  AttrEntry attr_entry;
+  auto status = mds_client_->SetAttr(ctx, ino, attr, set, attr_entry);
   if (!status.ok()) {
     return status;
   }
+
+  *out_attr = Helper::ToAttr(attr_entry);
 
   status = CorrectAttr(ctx, ctx->start_time_ns, *out_attr, "setattr");
   if (!status.ok()) return status;
@@ -733,6 +790,15 @@ Status MDSFileSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
 
 Status MDSFileSystem::GetXattr(ContextSPtr ctx, Ino ino,
                                const std::string& name, std::string* value) {
+  // take out xattr cache
+  auto inode = inode_cache_.Get(ino);
+  if (inode != nullptr) {
+    *value = inode->GetXAttr(name);
+    ctx->hit_cache = true;
+    return Status::OK();
+  }
+
+  // get xattr from mds
   auto status = mds_client_->GetXAttr(ctx, ino, name, *value);
   if (!status.ok()) {
     return Status::NoData(status.Errno(), status.ToString());
@@ -750,6 +816,8 @@ Status MDSFileSystem::SetXattr(ContextSPtr ctx, Ino ino,
     return status;
   }
 
+  inode_cache_.Put(ino, attr_entry);
+
   return Status::OK();
 }
 
@@ -761,6 +829,8 @@ Status MDSFileSystem::RemoveXattr(ContextSPtr ctx, Ino ino,
     return status;
   }
 
+  inode_cache_.Put(ino, attr_entry);
+
   return Status::OK();
 }
 
@@ -768,6 +838,17 @@ Status MDSFileSystem::ListXattr(ContextSPtr ctx, Ino ino,
                                 std::vector<std::string>* xattrs) {
   CHECK(xattrs != nullptr) << "xattrs is null.";
 
+  // take out xattr cache
+  auto inode = inode_cache_.Get(ino);
+  if (inode != nullptr) {
+    for (auto& pair : inode->ListXAttrs()) {
+      xattrs->push_back(pair.first);
+    }
+    ctx->hit_cache = true;
+    return Status::OK();
+  }
+
+  // get xattr from mds
   std::map<std::string, std::string> xattr_map;
   auto status = mds_client_->ListXAttr(ctx, ino, xattr_map);
   if (!status.ok()) {
@@ -968,8 +1049,9 @@ Status MDSFileSystem::CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
     LOG(INFO) << fmt::format("[meta.filesystem.{}] correct attr, caller({}).",
                              attr.ino, caller);
     // correct attr, fetch latest attr from mds
-    Attr new_attr;
-    auto status = mds_client_->GetAttr(ctx, attr.ino, new_attr);
+    AttrEntry attr_entry;
+
+    auto status = mds_client_->GetAttr(ctx, attr.ino, attr_entry);
     if (!status.ok()) {
       LOG(ERROR) << fmt::format(
           "[meta.filesystem.{}] get attr fail for correct, caller({}) "
@@ -977,7 +1059,7 @@ Status MDSFileSystem::CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
           caller, status.ToString());
       return status;
     }
-    attr = new_attr;
+    attr = Helper::ToAttr(attr_entry);
     ctx->is_amend = true;
   }
 
@@ -1117,8 +1199,6 @@ MDSFileSystemUPtr MDSFileSystem::Build(const std::string& fs_name,
 
   auto fs_info = mds::FsInfo::New(pb_fs_info);
 
-  auto inode_cache = InodeCache::New(fs_info->GetFsId());
-
   // create mds client
   auto mds_client = MDSClient::New(client_id, fs_info, parent_memo,
                                    mds_discovery, mds_router, rpc);
@@ -1129,8 +1209,7 @@ MDSFileSystemUPtr MDSFileSystem::Build(const std::string& fs_name,
   }
 
   // create filesystem
-  return MDSFileSystem::New(fs_info, client_id, mds_discovery, inode_cache,
-                            mds_client);
+  return MDSFileSystem::New(fs_info, client_id, mds_discovery, mds_client);
 }
 
 bool MDSFileSystem::GetDescription(Json::Value& value) {

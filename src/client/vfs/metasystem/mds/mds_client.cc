@@ -223,7 +223,7 @@ Status MDSClient::UmountFs(const std::string& name,
 }
 
 Status MDSClient::Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
-                         Attr& out_attr) {
+                         AttrEntry& attr_entry) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, parent](bool& is_primary_mds) -> MDSMeta {
@@ -252,9 +252,9 @@ Status MDSClient::Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
     if (parent_memo_->GetVersion(inode.ino(), last_version) &&
         inode.version() < last_version) {
       // fetch last inode
-      status = GetAttr(ctx, inode.ino(), out_attr);
+      status = GetAttr(ctx, inode.ino(), attr_entry);
       if (status.ok()) {
-        parent_memo_->Upsert(out_attr.ino, parent);
+        parent_memo_->Upsert(inode.ino(), parent);
         return Status::OK();
 
       } else {
@@ -268,14 +268,14 @@ Status MDSClient::Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
   // save ino to parent mapping
   parent_memo_->Upsert(inode.ino(), parent, inode.version());
 
-  out_attr = Helper::ToAttr(inode);
+  attr_entry.Swap(response.mutable_inode());
 
   return Status::OK();
 }
 
 Status MDSClient::Create(ContextSPtr ctx, Ino parent, const std::string& name,
                          uint32_t uid, uint32_t gid, uint32_t mode, int flag,
-                         Attr& out_attr,
+                         AttrEntry& attr_entry,
                          std::vector<std::string>& session_ids) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
@@ -313,15 +313,16 @@ Status MDSClient::Create(ContextSPtr ctx, Ino parent, const std::string& name,
   parent_memo_->Upsert(inode.ino(), parent, inode.version());
   parent_memo_->UpsertVersion(parent, response.parent_version());
 
-  out_attr = Helper::ToAttr(inode);
   session_ids = mds::Helper::PbRepeatedToVector(response.session_ids());
+
+  attr_entry.Swap(response.mutable_inodes()->Mutable(0));
 
   return Status::OK();
 }
 
 Status MDSClient::MkNod(ContextSPtr ctx, Ino parent, const std::string& name,
                         uint32_t uid, uint32_t gid, mode_t mode, dev_t rdev,
-                        Attr& out_attr) {
+                        AttrEntry& attr_entry) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, parent](bool& is_primary_mds) -> MDSMeta {
@@ -354,14 +355,14 @@ Status MDSClient::MkNod(ContextSPtr ctx, Ino parent, const std::string& name,
                        response.inode().version());
   parent_memo_->UpsertVersion(parent, response.parent_version());
 
-  out_attr = Helper::ToAttr(response.inode());
+  attr_entry.Swap(response.mutable_inode());
 
   return Status::OK();
 }
 
 Status MDSClient::MkDir(ContextSPtr ctx, Ino parent, const std::string& name,
                         uint32_t uid, uint32_t gid, mode_t mode, dev_t rdev,
-                        Attr& out_attr) {
+                        AttrEntry& attr_entry) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, parent](bool& is_primary_mds) -> MDSMeta {
@@ -394,12 +395,13 @@ Status MDSClient::MkDir(ContextSPtr ctx, Ino parent, const std::string& name,
                        response.inode().version());
   parent_memo_->UpsertVersion(parent, response.parent_version());
 
-  out_attr = Helper::ToAttr(response.inode());
+  attr_entry.Swap(response.mutable_inode());
 
   return Status::OK();
 }
 
-Status MDSClient::RmDir(ContextSPtr ctx, Ino parent, const std::string& name) {
+Status MDSClient::RmDir(ContextSPtr ctx, Ino parent, const std::string& name,
+                        Ino& ino) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, parent](bool& is_primary_mds) -> MDSMeta {
@@ -421,6 +423,11 @@ Status MDSClient::RmDir(ContextSPtr ctx, Ino parent, const std::string& name) {
   if (!status.ok()) {
     return status;
   }
+
+  ino = response.ino();
+
+  parent_memo_->Delete(ino);
+  parent_memo_->UpsertVersion(parent, response.parent_version());
 
   return Status::OK();
 }
@@ -520,7 +527,7 @@ Status MDSClient::Release(ContextSPtr ctx, Ino ino,
 }
 
 Status MDSClient::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
-                       const std::string& new_name, Attr& out_attr) {
+                       const std::string& new_name, AttrEntry& attr_entry) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, new_parent](bool& is_primary_mds) -> MDSMeta {
@@ -548,12 +555,13 @@ Status MDSClient::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
                        response.inode().version());
   parent_memo_->UpsertVersion(new_parent, response.parent_version());
 
-  out_attr = Helper::ToAttr(response.inode());
+  attr_entry.Swap(response.mutable_inode());
 
   return Status::OK();
 }
 
-Status MDSClient::UnLink(ContextSPtr ctx, Ino parent, const std::string& name) {
+Status MDSClient::UnLink(ContextSPtr ctx, Ino parent, const std::string& name,
+                         AttrEntry& attr_entry) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, parent](bool& is_primary_mds) -> MDSMeta {
@@ -581,12 +589,14 @@ Status MDSClient::UnLink(ContextSPtr ctx, Ino parent, const std::string& name) {
   parent_memo_->UpsertVersion(inode.ino(), inode.version());
   parent_memo_->UpsertVersion(parent, response.parent_version());
 
+  attr_entry.Swap(response.mutable_inode());
+
   return Status::OK();
 }
 
 Status MDSClient::Symlink(ContextSPtr ctx, Ino parent, const std::string& name,
                           uint32_t uid, uint32_t gid,
-                          const std::string& symlink, Attr& out_attr) {
+                          const std::string& symlink, AttrEntry& attr_entry) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, parent](bool& is_primary_mds) -> MDSMeta {
@@ -618,7 +628,7 @@ Status MDSClient::Symlink(ContextSPtr ctx, Ino parent, const std::string& name,
 
   parent_memo_->UpsertVersion(parent, response.parent_version());
 
-  out_attr = Helper::ToAttr(response.inode());
+  attr_entry.Swap(response.mutable_inode());
 
   return Status::OK();
 }
@@ -649,7 +659,7 @@ Status MDSClient::ReadLink(ContextSPtr ctx, Ino ino, std::string& symlink) {
   return Status::OK();
 }
 
-Status MDSClient::GetAttr(ContextSPtr ctx, Ino ino, Attr& out_attr) {
+Status MDSClient::GetAttr(ContextSPtr ctx, Ino ino, AttrEntry& attr_entry) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, ino](bool& is_primary_mds) -> MDSMeta {
@@ -674,13 +684,13 @@ Status MDSClient::GetAttr(ContextSPtr ctx, Ino ino, Attr& out_attr) {
 
   parent_memo_->UpsertVersion(ino, response.inode().version());
 
-  out_attr = Helper::ToAttr(response.inode());
+  attr_entry.Swap(response.mutable_inode());
 
   return Status::OK();
 }
 
 Status MDSClient::SetAttr(ContextSPtr ctx, Ino ino, const Attr& attr,
-                          int to_set, Attr& out_attr) {
+                          int to_set, AttrEntry& attr_entry) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, ino](bool& is_primary_mds) -> MDSMeta {
@@ -755,9 +765,9 @@ Status MDSClient::SetAttr(ContextSPtr ctx, Ino ino, const Attr& attr,
     return status;
   }
 
-  out_attr = Helper::ToAttr(response.inode());
-
   parent_memo_->UpsertVersion(ino, response.inode().version());
+
+  attr_entry.Swap(response.mutable_inode());
 
   return Status::OK();
 }

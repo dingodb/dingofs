@@ -117,6 +117,12 @@ class Helper {
       out_attr.parents.push_back(parent);
     }
 
+    for (const auto& [key, value] : inode.xattrs()) {
+      out_attr.xattrs.emplace_back(key, value);
+    }
+
+    out_attr.version = inode.version();
+
     return out_attr;
   }
 
@@ -139,6 +145,12 @@ class Helper {
     for (const auto& parent : attr.parents) {
       out_attr.add_parents(parent);
     }
+
+    for (const auto& [key, value] : attr.xattrs) {
+      (*out_attr.mutable_xattrs())[key] = value;
+    }
+
+    out_attr.set_version(attr.version);
 
     return out_attr;
   }

@@ -15,17 +15,23 @@
 #ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_INODE_CACHE_H_
 #define DINGOFS_SRC_CLIENT_VFS_META_V2_INODE_CACHE_H_
 
+#include <absl/container/flat_hash_map.h>
 #include <sys/types.h>
 
+#include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
+#include "client/vfs/vfs_meta.h"
 #include "json/value.h"
 #include "mds/common/type.h"
 #include "utils/concurrent/concurrent.h"
+#include "utils/shards.h"
 
 namespace dingofs {
 namespace client {
@@ -35,15 +41,14 @@ namespace v2 {
 class Inode;
 using InodeSPtr = std::shared_ptr<Inode>;
 
-using mds::ChunkEntry;
 using mds::Ino;
 
 class Inode {
  public:
-  using FileType = mds::FileType;
+  using FileType = pb::mds::FileType;
   using AttrEntry = mds::AttrEntry;
   using XAttrMap = ::google::protobuf::Map<std::string, std::string>;
-  using ChunkMap = ::google::protobuf::Map<uint64_t, ChunkEntry>;
+  using XAttrSet = std::vector<std::pair<std::string, std::string>>;
 
   Inode(const AttrEntry& attr) { attr_ = attr; }
   Inode(AttrEntry&& attr) { attr_ = std::move(attr); }
@@ -53,7 +58,6 @@ class Inode {
     return std::make_shared<Inode>(inode);
   }
 
-  uint32_t FsId();
   uint64_t Ino();
   FileType Type();
   uint64_t Length();
@@ -62,65 +66,67 @@ class Inode {
   uint32_t Mode();
   uint32_t Nlink();
   std::string Symlink();
+
   uint64_t Rdev();
-  uint32_t Dtime();
   uint64_t Ctime();
   uint64_t Mtime();
   uint64_t Atime();
-  uint32_t Openmpcount();
+  uint32_t Flags();
   uint64_t Version();
 
-  XAttrMap XAttrs();
-  std::string XAttr(const std::string& name);
+  std::vector<uint64_t> Parents();
 
-  bool UpdateIf(const AttrEntry& attr);
-  bool UpdateIf(AttrEntry&& attr);
+  XAttrSet ListXAttrs();
+  std::string GetXAttr(const std::string& name);
+  void SetXAttr(const std::string& name, const std::string& value);
+  void RemoveXAttr(const std::string& name);
 
-  void ExpandLength(uint64_t length);
+  bool PutIf(const AttrEntry& attr);
+  bool PutIf(AttrEntry&& attr);
 
-  AttrEntry Copy();
-  AttrEntry&& Move();
+  Attr ToAttr();
+
+  void UpdateLastAccessTime();
+  uint64_t LastAccessTimeS();
 
  private:
   utils::RWLock lock_;
 
   AttrEntry attr_;
+
+  std::atomic<uint64_t> last_access_time_s_{0};
 };
 
-class InodeCache;
-using InodeCacheSPtr = std::shared_ptr<InodeCache>;
-
-// cache all file/dir inode
 class InodeCache {
  public:
   using AttrEntry = mds::AttrEntry;
 
-  InodeCache(uint32_t fs_id);
-  ~InodeCache();
+  InodeCache(uint32_t fs_id) : fs_id_(fs_id) {}
+  ~InodeCache() = default;
 
   InodeCache(const InodeCache&) = delete;
   InodeCache& operator=(const InodeCache&) = delete;
   InodeCache(InodeCache&&) = delete;
   InodeCache& operator=(InodeCache&&) = delete;
 
-  static InodeCacheSPtr New(uint32_t fs_id) {
-    return std::make_shared<InodeCache>(fs_id);
-  }
+  void Put(Ino ino, const AttrEntry& attr);
+  void Delete(Ino ino);
 
-  void UpsertInode(Ino ino, const AttrEntry& attr_entry);
-  void DeleteInode(Ino ino);
-  void Clear();
+  InodeSPtr Get(Ino ino);
+  std::vector<InodeSPtr> Get(const std::vector<uint64_t>& inoes);
 
-  InodeSPtr GetInode(Ino ino);
-  std::vector<InodeSPtr> GetInodes(std::vector<uint64_t> inoes);
+  void CleanExpired(uint64_t expire_s);
+
   bool Dump(Json::Value& value);
+  bool Load(const Json::Value& value);
 
  private:
-  uint32_t fs_id_{0};
+  using Map = absl::btree_map<Ino, InodeSPtr>;
 
-  utils::RWLock lock_;
-  // ino -> inode
-  std::unordered_map<Ino, InodeSPtr> cache_;
+  const uint32_t fs_id_{0};
+
+  constexpr static size_t kShardNum = 32;
+  utils::Shards<Map, kShardNum> shard_map_;
 };
 
 }  // namespace v2

@@ -462,7 +462,9 @@ TEST_F(FileSystemTest, RmDir) {
   ASSERT_TRUE(inode != nullptr) << "get inode fail.";
 
   {
-    status = fs->RmDir(ctx, param.parent, param.name);
+    Ino ino;
+    uint64_t parent_version;
+    status = fs->RmDir(ctx, param.parent, param.name, ino, parent_version);
     ASSERT_TRUE(status.ok())
         << "remove dir fail, error: " << status.error_str();
 

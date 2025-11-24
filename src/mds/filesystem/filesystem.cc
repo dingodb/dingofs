@@ -1125,7 +1125,7 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
   return Status::OK();
 }
 
-Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name) {
+Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name, Ino& ino, uint64_t& parent_version) {
   if (!CanServe(ctx)) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -1189,6 +1189,8 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name) {
   } else {
     partition_cache_.Delete(dentry.INo());
   }
+
+  ino = dentry.INo();
 
   return Status::OK();
 }

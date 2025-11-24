@@ -14,6 +14,7 @@
 
 #include "client/vfs/service/fuse_stat_service.h"
 
+#include <fmt/ranges.h>
 #include <json/json.h>
 #include <sys/types.h>
 
@@ -842,7 +843,6 @@ static void RenderInodeCachePage(const Json::Value& json_value,
   os << fmt::format(R"(<h3>Inode Cache [{}]</h3>)", inodes.size());
   os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
   os << "<tr>";
-  os << "<th>Fs ID</th>";
   os << "<th>Ino</th>";
   os << "<th>Type</th>";
   os << "<th>Length</th>";
@@ -855,45 +855,51 @@ static void RenderInodeCachePage(const Json::Value& json_value,
   os << "<th>Ctime</th>";
   os << "<th>Mtime</th>";
   os << "<th>Atime</th>";
-  os << "<th>Openmpcount</th>";
+  os << "<th>Parents</th>";
+  os << "<th>XAttr</th>";
   os << "<th>Version</th>";
   os << "</tr>";
 
   for (const auto& inode : inodes) {
-    uint32_t fs_id = inode["fs_id"].asUInt();
-    uint64_t ino = inode["ino"].asUInt64();
-    std::string type = inode["type"].asString();
-    uint64_t length = inode["length"].asUInt64();
-    uint32_t uid = inode["uid"].asUInt();
-    uint32_t gid = inode["gid"].asUInt();
-    uint32_t mode = inode["mode"].asUInt();
-    uint32_t nlink = inode["nlink"].asUInt();
-    std::string symlink = inode["symlink"].asString();
-    uint64_t rdev = inode["rdev"].asUInt64();
-    uint64_t ctime = inode["ctime"].asUInt64();
-    uint64_t atime = inode["atime"].asUInt64();
-    uint64_t mtime = inode["mtime"].asUInt64();
-    uint32_t open_mp_count = inode["open_mp_count"].asUInt();
-    uint64_t version = inode["version"].asUInt64();
+    os << "<td>" << inode["ino"].asUInt64() << "</td>";
+    os << "<td>" << inode["type"].asString() << "</td>";
+    os << "<td>" << inode["length"].asUInt64() << "</td>";
+    os << "<td>" << inode["uid"].asUInt() << "</td>";
+    os << "<td>" << inode["gid"].asUInt() << "</td>";
+    os << "<td>" << inode["mode"].asUInt() << "</td>";
+    os << "<td>" << inode["nlink"].asUInt() << "</td>";
+    os << "<td>" << inode["symlink"].asString() << "</td>";
+    os << "<td>" << inode["rdev"].asUInt64() << "</td>";
+    os << "<td>"
+       << dingofs::mds::Helper::FormatMsTime(inode["ctime"].asUInt64() /
+                                             1000000)
+       << "</td>";
+    os << "<td>"
+       << dingofs::mds::Helper::FormatMsTime(inode["mtime"].asUInt64() /
+                                             1000000)
+       << "</td>";
+    os << "<td>"
+       << dingofs::mds::Helper::FormatMsTime(inode["atime"].asUInt64() /
+                                             1000000)
+       << "</td>";
 
-    os << "<td>" << fs_id << "</td>";
-    os << "<td>" << ino << "</td>";
-    os << "<td>" << type << "</td>";
-    os << "<td>" << length << "</td>";
-    os << "<td>" << uid << "</td>";
-    os << "<td>" << gid << "</td>";
-    os << "<td>" << mode << "</td>";
-    os << "<td>" << nlink << "</td>";
-    os << "<td>" << symlink << "</td>";
-    os << "<td>" << rdev << "</td>";
-    os << "<td>" << dingofs::mds::Helper::FormatMsTime(ctime / 1000000)
-       << "</td>";
-    os << "<td>" << dingofs::mds::Helper::FormatMsTime(mtime / 1000000)
-       << "</td>";
-    os << "<td>" << dingofs::mds::Helper::FormatMsTime(atime / 1000000)
-       << "</td>";
-    os << "<td>" << open_mp_count << "</td>";
-    os << "<td>" << version << "</td>";
+    // parents
+    std::vector<uint64_t> parent_inos;
+    for (const auto& parent : inode["parents"]) {
+      parent_inos.push_back(parent.asUInt64());
+    }
+    os << "<td>" << fmt::format("{}", fmt::join(parent_inos, ",")) << "</td>";
+
+    // xattr
+    std::string xattr_str;
+    for (const auto& xattr : inode["xattrs"]) {
+      xattr_str += fmt::format("{}:{},", xattr["key"].asString(),
+                               xattr["value"].asString());
+    }
+    os << "<td>" << xattr_str << "</td>";
+
+    os << "<td>" << inode["version"].asUInt64() << "</td>";
+
     os << "</tr>";
   }
 

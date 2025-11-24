@@ -144,7 +144,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
     uint64_t rdev{0};
   };
   Status MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_out);
-  Status RmDir(Context& ctx, Ino parent, const std::string& name);
+  Status RmDir(Context& ctx, Ino parent, const std::string& name, Ino& ino, uint64_t& parent_version);
   Status ReadDir(Context& ctx, Ino ino, const std::string& last_name, uint32_t limit, bool with_attr,
                  std::vector<EntryOut>& entry_outs);
 

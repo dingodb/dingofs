@@ -14,28 +14,25 @@
 
 #include "client/vfs/metasystem/mds/inode_cache.h"
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <string>
 #include <utility>
 
+#include "client/vfs/metasystem/mds/helper.h"
 #include "fmt/format.h"
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 #include "mds/common/helper.h"
 #include "mds/common/logging.h"
 #include "utils/concurrent/concurrent.h"
+#include "utils/time.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 namespace v2 {
-
-uint32_t Inode::FsId() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_.fs_id();
-}
 
 uint64_t Inode::Ino() {
   utils::ReadLockGuard lk(lock_);
@@ -91,12 +88,6 @@ uint64_t Inode::Rdev() {
   return attr_.rdev();
 }
 
-uint32_t Inode::Dtime() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_.dtime();
-}
-
 uint64_t Inode::Ctime() {
   utils::ReadLockGuard lk(lock_);
 
@@ -115,10 +106,10 @@ uint64_t Inode::Atime() {
   return attr_.atime();
 }
 
-uint32_t Inode::Openmpcount() {
+uint32_t Inode::Flags() {
   utils::ReadLockGuard lk(lock_);
 
-  return attr_.openmpcount();
+  return attr_.flags();
 }
 
 uint64_t Inode::Version() {
@@ -127,20 +118,48 @@ uint64_t Inode::Version() {
   return attr_.version();
 }
 
-Inode::XAttrMap Inode::XAttrs() {
+std::vector<uint64_t> Inode::Parents() {
   utils::ReadLockGuard lk(lock_);
 
-  return attr_.xattrs();
+  std::vector<uint64_t> parents;
+  for (const auto& parent : attr_.parents()) {
+    parents.push_back(parent);
+  }
+
+  return parents;
 }
 
-std::string Inode::XAttr(const std::string& name) {
+Inode::XAttrSet Inode::ListXAttrs() {
+  utils::ReadLockGuard lk(lock_);
+
+  Inode::XAttrSet xattrs;
+  for (const auto& xattr : attr_.xattrs()) {
+    xattrs.push_back(std::make_pair(xattr.first, xattr.second));
+  }
+
+  return xattrs;
+}
+
+std::string Inode::GetXAttr(const std::string& name) {
   utils::ReadLockGuard lk(lock_);
 
   auto it = attr_.xattrs().find(name);
-  return (it != attr_.xattrs().end()) ? it->second : std::string();
+  return (it != attr_.xattrs().end()) ? it->second : "";
 }
 
-bool Inode::UpdateIf(const AttrEntry& attr) {
+void Inode::SetXAttr(const std::string& name, const std::string& value) {
+  utils::WriteLockGuard lk(lock_);
+
+  (*attr_.mutable_xattrs())[name] = value;
+}
+
+void Inode::RemoveXAttr(const std::string& name) {
+  utils::WriteLockGuard lk(lock_);
+
+  attr_.mutable_xattrs()->erase(name);
+}
+
+bool Inode::PutIf(const AttrEntry& attr) {
   utils::WriteLockGuard lk(lock_);
 
   DINGO_LOG(INFO) << fmt::format(
@@ -159,12 +178,12 @@ bool Inode::UpdateIf(const AttrEntry& attr) {
   return true;
 }
 
-bool Inode::UpdateIf(AttrEntry&& attr) {
+bool Inode::PutIf(AttrEntry&& attr) {
   utils::WriteLockGuard lk(lock_);
 
   DINGO_LOG(INFO) << fmt::format(
-      "[meta.icache.{}] update attr, version({}->{}).", attr_.ino(),
-      attr_.version(), attr.version());
+      "[meta.icache.{}] update attr,this({}) version({}->{}).", attr_.ino(),
+      (void*)this, attr_.version(), attr.version());
 
   if (attr.version() <= attr_.version()) {
     DINGO_LOG(WARNING) << fmt::format(
@@ -178,96 +197,102 @@ bool Inode::UpdateIf(AttrEntry&& attr) {
   return true;
 }
 
-void Inode::ExpandLength(uint64_t length) {
-  utils::WriteLockGuard lk(lock_);
-
-  if (length <= attr_.length()) return;
-
-  uint64_t now_ns = mds::Helper::TimestampNs();
-  attr_.set_length(length);
-  attr_.set_mtime(now_ns);
-  attr_.set_ctime(now_ns);
-  attr_.set_atime(now_ns);
-}
-
-Inode::AttrEntry Inode::Copy() {
+Attr Inode::ToAttr() {
   utils::ReadLockGuard lk(lock_);
 
-  return attr_;
+  return Helper::ToAttr(attr_);
 }
 
-Inode::AttrEntry&& Inode::Move() {
-  utils::WriteLockGuard lk(lock_);
-
-  return std::move(attr_);
+void Inode::UpdateLastAccessTime() {
+  last_access_time_s_.store(utils::Timestamp(), std::memory_order_relaxed);
 }
 
-InodeCache::InodeCache(uint32_t fs_id) : fs_id_(fs_id) {}
-
-InodeCache::~InodeCache() {}  // NOLINT
-
-void InodeCache::UpsertInode(Ino ino, const AttrEntry& attr_entry) {
-  LOG(INFO) << fmt::format("[meta.icache.{}.{}] upsert inode.", ino,
-                           attr_entry.version());
-  utils::WriteLockGuard lk(lock_);
-
-  auto it = cache_.find(ino);
-  if (it == cache_.end()) {
-    cache_.emplace(ino, Inode::New(attr_entry));
-  } else {
-    it->second->UpdateIf(attr_entry);
-  }
+uint64_t Inode::LastAccessTimeS() {
+  return last_access_time_s_.load(std::memory_order_relaxed);
 }
 
-void InodeCache::DeleteInode(Ino ino) {
+void InodeCache::Put(Ino ino, const AttrEntry& attr) {
+  shard_map_.withWLock(
+      [ino, &attr](Map& map) mutable {
+        auto it = map.find(ino);
+        if (it == map.end()) {
+          map.emplace(ino, Inode::New(attr));
+        } else {
+          it->second->PutIf(attr);
+        }
+      },
+      ino);
+}
+
+void InodeCache::Delete(Ino ino) {
   LOG(INFO) << fmt::format("[meta.icache.{}] delete inode.", ino);
 
-  utils::WriteLockGuard lk(lock_);
-
-  cache_.erase(ino);
+  shard_map_.withWLock([ino](Map& map) { map.erase(ino); }, ino);
 }
 
-void InodeCache::Clear() {
-  utils::WriteLockGuard lk(lock_);
+InodeSPtr InodeCache::Get(Ino ino) {
+  InodeSPtr inode;
+  shard_map_.withRLock(
+      [ino, &inode](Map& map) {
+        auto it = map.find(ino);
+        if (it != map.end()) {
+          inode = it->second;
+        }
+      },
+      ino);
 
-  cache_.clear();
+  if (inode != nullptr) inode->UpdateLastAccessTime();
+
+  return inode;
 }
 
-InodeSPtr InodeCache::GetInode(Ino ino) {
-  utils::ReadLockGuard lk(lock_);
-
-  auto it = cache_.find(ino);
-  return (it == cache_.end()) ? nullptr : it->second;
-}
-
-std::vector<InodeSPtr> InodeCache::GetInodes(std::vector<uint64_t> inoes) {
-  utils::ReadLockGuard lk(lock_);
-
+std::vector<InodeSPtr> InodeCache::Get(const std::vector<uint64_t>& inoes) {
   std::vector<InodeSPtr> inodes;
-  inodes.reserve(inoes.size());
-  for (auto& ino : inoes) {
-    auto it = cache_.find(ino);
-    if (it != cache_.end()) {
-      inodes.push_back(it->second);
-    }
+  for (const auto& ino : inoes) {
+    shard_map_.withRLock(
+        [ino, &inodes](Map& map) {
+          auto it = map.find(ino);
+          if (it != map.end()) {
+            inodes.push_back(it->second);
+          }
+        },
+        ino);
   }
+
+  for (auto& inode : inodes) inode->UpdateLastAccessTime();
 
   return inodes;
 }
 
+void InodeCache::CleanExpired(uint64_t expire_s) {
+  uint64_t now_s = utils::Timestamp();
+
+  std::vector<InodeSPtr> inodes;
+  shard_map_.iterate([&](const Map& map) {
+    for (const auto& [_, inode] : map) {
+      if (inode->LastAccessTimeS() + expire_s < now_s) {
+        inodes.push_back(inode);
+      }
+    }
+  });
+
+  for (const auto& inode : inodes) {
+    Delete(inode->Ino());
+  }
+}
+
 bool InodeCache::Dump(Json::Value& value) {
   std::vector<InodeSPtr> inodes;
-  {
-    utils::ReadLockGuard lk(lock_);
-    inodes.reserve(cache_.size());
-    for (const auto& pair : cache_) {
-      inodes.push_back(pair.second);
+
+  shard_map_.iterate([&inodes](const Map& map) {
+    for (const auto& [_, inode] : map) {
+      inodes.push_back(inode);
     }
-  }
+  });
+
   Json::Value inode_array = Json::arrayValue;
   for (const auto& inode : inodes) {
     Json::Value item;
-    item["fs_id"] = inode->FsId();
     item["ino"] = inode->Ino();
     item["type"] = pb::mds::FileType_Name(inode->Type());
     item["length"] = inode->Length();
@@ -280,11 +305,64 @@ bool InodeCache::Dump(Json::Value& value) {
     item["ctime"] = inode->Ctime();
     item["mtime"] = inode->Mtime();
     item["atime"] = inode->Atime();
-    item["open_mp_count"] = inode->Openmpcount();
     item["version"] = inode->Version();
+
+    // parents
+    Json::Value parent_array = Json::arrayValue;
+    for (const auto& parent : inode->Parents()) {
+      parent_array.append(parent);
+    }
+    item["parents"] = parent_array;
+
+    // xattrs
+    Json::Value xattr_array = Json::arrayValue;
+    for (const auto& pair : inode->ListXAttrs()) {
+      Json::Value xattr_item;
+      xattr_item["name"] = pair.first;
+      xattr_item["value"] = pair.second;
+      xattr_array.append(xattr_item);
+    }
+    item["xattrs"] = xattr_array;
+
     inode_array.append(item);
   }
   value["inodes"] = inode_array;
+
+  return true;
+}
+
+bool InodeCache::Load(const Json::Value& value) {
+  for (const auto& item : value["inodes"]) {
+    AttrEntry attr;
+    attr.set_ino(item["ino"].asUInt64());
+    Inode::FileType type;
+    pb::mds::FileType_Parse(item["type"].asString(), &type);
+    attr.set_type(type);
+    attr.set_length(item["length"].asUInt64());
+    attr.set_uid(item["uid"].asUInt());
+    attr.set_gid(item["gid"].asUInt());
+    attr.set_mode(item["mode"].asUInt());
+    attr.set_nlink(item["nlink"].asUInt());
+    attr.set_symlink(item["symlink"].asString());
+    attr.set_rdev(item["rdev"].asUInt64());
+    attr.set_ctime(item["ctime"].asUInt64());
+    attr.set_mtime(item["mtime"].asUInt64());
+    attr.set_atime(item["atime"].asUInt64());
+    attr.set_version(item["version"].asUInt64());
+
+    // parents
+    for (const auto& parent : item["parents"]) {
+      attr.add_parents(parent.asUInt64());
+    }
+
+    // xattrs
+    for (const auto& xattr_item : item["xattrs"]) {
+      (*attr.mutable_xattrs())[xattr_item["name"].asString()] =
+          xattr_item["value"].asString();
+    }
+
+    Put(attr.ino(), attr);
+  }
 
   return true;
 }

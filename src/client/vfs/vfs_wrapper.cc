@@ -684,8 +684,9 @@ Status VFSWrapper::GetXattr(Ino ino, const std::string& name,
   Status s;
   AccessLogGuard log(
       [&]() {
-        return absl::StrFormat("getxattr (%d,%s): %s %d %s", ino, name,
-                               s.ToString(), ctx->hit_cache, *value);
+        return absl::StrFormat("getxattr (%d,%s): %s %s %s", ino, name,
+                               s.ToString(), ctx->hit_cache ? "true" : "false",
+                               *value);
       },
       !IsInternalNode(ino));
 
@@ -737,11 +738,12 @@ Status VFSWrapper::RemoveXattr(Ino ino, const std::string& name) {
 
 Status VFSWrapper::ListXattr(Ino ino, std::vector<std::string>* xattrs) {
   auto span = vfs_->GetTracer()->StartSpan(kVFSWrapperMoudule, METHOD_NAME());
+  auto ctx = span->GetContext();
   VLOG(1) << "VFSListXattr ino: " << ino;
   Status s;
   AccessLogGuard log([&]() {
-    return absl::StrFormat("listxattr (%d): %s %d", ino, s.ToString(),
-                           xattrs->size());
+    return absl::StrFormat("listxattr (%d): %s %d %s", ino, s.ToString(),
+                           xattrs->size(), ctx->hit_cache ? "true" : "false");
   });
 
   ClientOpMetricGuard op_metric(

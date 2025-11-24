@@ -16,6 +16,8 @@ add_library(vfs_handle
     handle_manager.cc
 )
 
+target_compile_options(vfs_handle PUBLIC -Wno-deprecated-declarations)
+
 target_link_libraries(vfs_handle
     PROTO_OBJS
 )

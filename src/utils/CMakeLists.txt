@@ -21,6 +21,8 @@ add_library(dingofs_utils
     throttle.cc
 )
 
+target_compile_options(dingofs_utils PUBLIC -fconcepts)
+
 target_link_libraries(dingofs_utils
     uuid_static
     brpc::brpc

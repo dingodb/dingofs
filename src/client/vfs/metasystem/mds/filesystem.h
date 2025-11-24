@@ -51,17 +51,15 @@ using MDSFileSystemUPtr = std::unique_ptr<MDSFileSystem>;
 class MDSFileSystem : public vfs::MetaSystem {
  public:
   MDSFileSystem(mds::FsInfoSPtr fs_info, const ClientId& client_id,
-                MDSDiscoverySPtr mds_discovery, InodeCacheSPtr inode_cache,
-                MDSClientSPtr mds_client);
+                MDSDiscoverySPtr mds_discovery, MDSClientSPtr mds_client);
   ~MDSFileSystem() override;
 
   static MDSFileSystemUPtr New(mds::FsInfoSPtr fs_info,
                                const ClientId& client_id,
                                MDSDiscoverySPtr mds_discovery,
-                               InodeCacheSPtr inode_cache,
                                MDSClientSPtr mds_client) {
     return std::make_unique<MDSFileSystem>(fs_info, client_id, mds_discovery,
-                                           inode_cache, mds_client);
+                                           mds_client);
   }
 
   static MDSFileSystemUPtr Build(const std::string& fs_name,
@@ -85,7 +83,7 @@ class MDSFileSystem : public vfs::MetaSystem {
   Status StatFs(ContextSPtr ctx, Ino ino, FsStat* fs_stat) override;
 
   Status Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
-                Attr* out_attr) override;
+                Attr* attr) override;
 
   Status Create(ContextSPtr ctx, Ino parent, const std::string& name,
                 uint32_t uid, uint32_t gid, uint32_t mode, int flags,
@@ -155,11 +153,12 @@ class MDSFileSystem : public vfs::MetaSystem {
   void Heartbeat();
   void CleanExpiredModifyTimeMemo();
   void CleanExpiredChunkMemo();
+  void CleanExpiredInodeCache();
 
   bool InitCrontab();
 
   // inode cache
-  // bool GetAttrFromCache(Ino ino, Attr& out_attr);
+  // bool GetAttrFromCache(Ino ino, Attr& attr);
   // bool GetXAttrFromCache(Ino ino, const std::string& name, std::string&
   // value); void InsertInodeToCache(Ino ino, const AttrEntry& attr_entry); void
   // UpdateInodeToCache(Ino ino, const Attr& attr); void UpdateInodeToCache(Ino
@@ -202,7 +201,7 @@ class MDSFileSystem : public vfs::MetaSystem {
   DirIteratorManager dir_iterator_manager_;
 
   IdCache id_cache_;
-  InodeCacheSPtr inode_cache_;
+  InodeCache inode_cache_;
 
   // Crontab config
   std::vector<mds::CrontabConfig> crontab_configs_;

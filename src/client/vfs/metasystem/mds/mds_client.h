@@ -89,18 +89,18 @@ class MDSClient {
   Status UmountFs(const std::string& name, const std::string& client_id);
 
   Status Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
-                Attr& out_attr);
+                AttrEntry& attr_entry);
 
   Status Create(ContextSPtr ctx, Ino parent, const std::string& name,
                 uint32_t uid, uint32_t gid, uint32_t mode, int flag,
-                Attr& out_attr, std::vector<std::string>& session_ids);
+                AttrEntry& attr_entry, std::vector<std::string>& session_ids);
   Status MkNod(ContextSPtr ctx, Ino parent, const std::string& name,
                uint32_t uid, uint32_t gid, mode_t mode, dev_t rdev,
-               Attr& out_attr);
+               AttrEntry& attr_entry);
   Status MkDir(ContextSPtr ctx, Ino parent, const std::string& name,
                uint32_t uid, uint32_t gid, mode_t mode, dev_t rdev,
-               Attr& out_attr);
-  Status RmDir(ContextSPtr ctx, Ino parent, const std::string& name);
+               AttrEntry& attr_entry);
+  Status RmDir(ContextSPtr ctx, Ino parent, const std::string& name, Ino& ino);
 
   Status ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
                  const std::string& last_name, uint32_t limit, bool with_attr,
@@ -112,16 +112,17 @@ class MDSClient {
   Status Release(ContextSPtr ctx, Ino ino, const std::string& session_id);
 
   Status Link(ContextSPtr ctx, Ino ino, Ino new_parent,
-              const std::string& new_name, Attr& out_attr);
-  Status UnLink(ContextSPtr ctx, Ino parent, const std::string& name);
+              const std::string& new_name, AttrEntry& attr_entry);
+  Status UnLink(ContextSPtr ctx, Ino parent, const std::string& name,
+                AttrEntry& attr_entry);
   Status Symlink(ContextSPtr ctx, Ino parent, const std::string& name,
                  uint32_t uid, uint32_t gid, const std::string& symlink,
-                 Attr& out_attr);
+                 AttrEntry& attr_entry);
   Status ReadLink(ContextSPtr ctx, Ino ino, std::string& symlink);
 
-  Status GetAttr(ContextSPtr ctx, Ino ino, Attr& out_attr);
+  Status GetAttr(ContextSPtr ctx, Ino ino, AttrEntry& attr_entry);
   Status SetAttr(ContextSPtr ctx, Ino ino, const Attr& attr, int to_set,
-                 Attr& out_attr);
+                 AttrEntry& attr_entry);
   Status GetXAttr(ContextSPtr ctx, Ino ino, const std::string& name,
                   std::string& value);
   Status SetXAttr(ContextSPtr ctx, Ino ino, const std::string& name,

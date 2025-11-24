@@ -95,6 +95,10 @@ DEFINE_uint64(client_vfs_meta_memo_expired_s, 3600,
               "modify time memo expired time");
 DEFINE_validator(client_vfs_meta_memo_expired_s, brpc::PassValidate);
 
+DEFINE_uint64(client_vfs_meta_inode_cache_expired_s, 3600,
+              "inode cache expired time");
+DEFINE_validator(client_vfs_meta_inode_cache_expired_s, brpc::PassValidate);
+
 DEFINE_int32(client_vfs_flush_bg_thread, 16,
              "number of background flush threads");
 DEFINE_validator(client_vfs_flush_bg_thread, brpc::PassValidate);

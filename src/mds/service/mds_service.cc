@@ -1067,10 +1067,16 @@ void MDSServiceImpl::DoRmDir(google::protobuf::RpcController*, const pb::mds::Rm
 
   Context ctx(request->context(), request->info().request_id(), __func__);
 
-  status = file_system->RmDir(ctx, request->parent(), request->name());
+  Ino ino;
+  uint64_t parent_version;
+  status = file_system->RmDir(ctx, request->parent(), request->name(), ino, parent_version);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
+
+  response->set_ino(ino);
+  response->set_parent_version(parent_version);
 }
 
 void MDSServiceImpl::RmDir(google::protobuf::RpcController* controller, const pb::mds::RmDirRequest* request,

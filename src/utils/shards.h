@@ -21,8 +21,7 @@
 #include <mutex>
 
 #include "absl/hash/hash.h"
-
-// #include "RobinHoodUtils.h"
+#include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 namespace utils {
@@ -30,30 +29,39 @@ namespace utils {
 template <class T, std::size_t N>
 class Shards {
  public:
-  auto position(auto&&... args) {
-    return absl::HashOf(args...) % N;
+  using Func = std::function<void(T&)>;
 
-    // absl::HashState state;
-    // absl::HashState::combine(state, args...) % N;
-  }
+  auto position(auto&&... args) { return absl::HashOf(args...) % N; }
 
-  auto withLockAt(auto&& f, std::size_t pos) {
-    auto lock = std::unique_lock(locks_[pos]);
+  auto withRLockAt(Func&& f, std::size_t pos) {
+    utils::ReadLockGuard lk(locks_[pos]);
+
     return f(array_[pos]);
   }
 
-  auto withLock(auto&& f, auto&&... args) {
-    return withLockAt(f, position(args...));
+  auto withWLockAt(Func&& f, std::size_t pos) {
+    utils::WriteLockGuard lk(locks_[pos]);
+
+    return f(array_[pos]);
   }
 
-  void iterate(auto&& f) {
+  auto withRLock(Func&& f, auto&&... args) {
+    return withRLockAt(std::move(f), position(args...));
+  }
+
+  auto withWLock(Func&& f, auto&&... args) {
+    return withWLockAt(std::move(f), position(args...));
+  }
+
+  void iterate(Func&& f) {
     for (std::size_t idx = 0; idx < N; ++idx) {
-      withLockAt(f, idx);
+      Func temp_f = f;
+      withRLockAt(std::move(temp_f), idx);
     }
   }
 
  private:
-  std::array<std::mutex, N> locks_;
+  std::array<utils::RWLock, N> locks_;
   std::array<T, N> array_;
 };
 

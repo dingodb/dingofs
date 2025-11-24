@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "common/status.h"
@@ -95,9 +96,12 @@ struct Attr {
   uint64_t mtime{0};
   uint64_t ctime{0};
   FileType type;
-  // TODO: refact, maybe use separate key for hardlink
-  std::vector<Ino> parents;
   uint32_t flags{0};
+
+  std::vector<Ino> parents;
+  std::vector<std::pair<std::string, std::string>> xattrs;
+
+  uint64_t version{0};
 };
 
 struct DirEntry {
