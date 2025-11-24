@@ -26,11 +26,11 @@ DECLARE_bool(show_version);
 #endif
 
 #ifndef MAJOR_VERSION
-#define MAJOR_VERSION "v4"
+#define MAJOR_VERSION "v5"
 #endif
 
 #ifndef MINOR_VERSION
-#define MINOR_VERSION "1"
+#define MINOR_VERSION "0"
 #endif
 
 #ifndef GIT_TAG_NAME
