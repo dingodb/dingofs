@@ -51,7 +51,7 @@ jobs:
         set -x
         set -e
 
-        cd / && git clone --branch v1.0.0 --single-branch https://github.com/dingodb/dingo-sdk.git && cd dingo-sdk && git reset --hard 7f1ffb7 && \
+        cd / && git clone --branch v1.0.0 --single-branch https://github.com/dingodb/dingo-sdk.git && cd dingo-sdk && git reset --hard 64d750d && \
         git submodule sync --recursive && git submodule update --init --recursive && \
         mkdir build && cd build && cmake -DTHIRD_PARTY_INSTALL_PATH=/root/.local/dingo-eureka -DCMAKE_INSTALL_PREFIX=/root/.local/dingo-sdk -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_SDK_EXAMPLE=OFF  -DBUILD_BENCHMARK=OFF -DBUILD_PYTHON_SDK=OFF -DBUILD_INTEGRATION_TESTS=OFF -DBUILD_UNIT_TESTS=OFF .. && \
         make -j16 && make install && export DINGOSDK_INSTALL_PATH=/root/.local/dingo-sdk
