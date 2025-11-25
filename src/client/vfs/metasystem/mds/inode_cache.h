@@ -85,6 +85,7 @@ class Inode {
   bool PutIf(AttrEntry&& attr);
 
   Attr ToAttr();
+  AttrEntry ToAttrEntry();
 
   void UpdateLastAccessTime();
   uint64_t LastAccessTimeS();

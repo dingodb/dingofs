@@ -133,7 +133,8 @@ class MDSClient {
                    std::map<std::string, std::string>& xattrs);
 
   Status Rename(ContextSPtr ctx, Ino old_parent, const std::string& old_name,
-                Ino new_parent, const std::string& new_name);
+                Ino new_parent, const std::string& new_name,
+                std::vector<Ino>& effected_inos);
 
   Status NewSliceId(ContextSPtr ctx, uint32_t num, uint64_t* id);
 
@@ -143,7 +144,8 @@ class MDSClient {
 
   Status WriteSlice(ContextSPtr ctx, Ino ino,
                     const std::vector<mds::DeltaSliceEntry>& delta_slices,
-                    std::vector<ChunkDescriptor>& chunk_descriptors);
+                    std::vector<ChunkDescriptor>& chunk_descriptors,
+                    AttrEntry& attr_entry);
 
   Status Fallocate(ContextSPtr ctx, Ino ino, int32_t mode, uint64_t offset,
                    uint64_t length);

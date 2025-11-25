@@ -158,11 +158,9 @@ class MDSFileSystem : public vfs::MetaSystem {
   bool InitCrontab();
 
   // inode cache
-  // bool GetAttrFromCache(Ino ino, Attr& attr);
-  // bool GetXAttrFromCache(Ino ino, const std::string& name, std::string&
-  // value); void InsertInodeToCache(Ino ino, const AttrEntry& attr_entry); void
-  // UpdateInodeToCache(Ino ino, const Attr& attr); void UpdateInodeToCache(Ino
-  // ino, const AttrEntry& attr_entry); void DeleteInodeFromCache(Ino ino);
+  void PutInodeToCache(const AttrEntry& attr_entry);
+  void DeleteInodeFromCache(Ino ino);
+  InodeSPtr GetInodeFromCache(Ino ino);
 
   // slice cache
   bool GetSliceFromCache(Ino ino, uint64_t index, std::vector<Slice>* slices);

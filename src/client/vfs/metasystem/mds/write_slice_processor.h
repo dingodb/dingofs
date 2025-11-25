@@ -19,7 +19,6 @@
 #include <memory>
 #include <vector>
 
-#include "bthread/countdown_event.h"
 #include "butil/containers/mpsc_queue.h"
 #include "client/vfs/metasystem/mds/chunk_memo.h"
 #include "client/vfs/metasystem/mds/mds_client.h"
@@ -37,6 +36,9 @@ class WriteSliceProcessor;
 using WriteSliceProcessorSPtr = std::shared_ptr<WriteSliceProcessor>;
 
 struct WriteSliceOperation {
+  using DoneClosure =
+      std::function<void(const Status& status, const AttrEntry& attr_entry)>;
+
   ContextSPtr ctx;
   Ino ino;
   uint64_t index;

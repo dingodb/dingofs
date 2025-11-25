@@ -142,6 +142,10 @@ DEFINE_validator(client_vfs_warmup_trigger_restart_interval_secs,
                  brpc::PassValidate);
 
 // ## vfs meta
+DEFINE_bool(client_vfs_inode_cache_enable, true,
+            "enable inode cache, default is false");
+DEFINE_validator(client_vfs_inode_cache_enable, brpc::PassValidate);
+
 DEFINE_uint32(client_vfs_read_dir_batch_size, 1024, "read dir batch size.");
 DEFINE_uint32(client_vfs_rpc_timeout_ms, 10000, "rpc timeout ms");
 DEFINE_validator(client_vfs_rpc_timeout_ms, brpc::PassValidate);

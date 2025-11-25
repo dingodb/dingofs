@@ -1737,7 +1737,7 @@ void FileSystem::NotifyBuddyCleanPartitionCache(Ino ino) {
 }
 
 Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_parent_version,
-                          uint64_t& new_parent_version) {
+                          uint64_t& new_parent_version, std::vector<Ino>& effected_inos) {
   Ino old_parent = param.old_parent;
   const std::string& old_name = param.old_name;
   Ino new_parent = param.new_parent;
@@ -1804,6 +1804,11 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
 
   old_parent_version = old_parent_attr.version();
   new_parent_version = new_parent_attr.version();
+
+  effected_inos.push_back(old_parent);
+  if (!is_same_parent) effected_inos.push_back(new_parent);
+  effected_inos.push_back(old_attr.ino());
+  if (is_exist_new_dentry) effected_inos.push_back(prev_new_attr.ino());
 
   if (IsMonoPartition()) {
     // update cache
@@ -1903,12 +1908,12 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
 }
 
 Status FileSystem::CommitRename(Context& ctx, const RenameParam& param, Ino& old_parent_version,
-                                uint64_t& new_parent_version) {
+                                uint64_t& new_parent_version, std::vector<Ino>& effected_inos) {
   if (!CanServe(ctx)) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
-  return renamer_.Execute<RenameParam>(GetSelfPtr(), ctx, param, old_parent_version, new_parent_version);
+  return renamer_.Execute<RenameParam>(GetSelfPtr(), ctx, param, old_parent_version, new_parent_version, effected_inos);
 }
 
 static uint64_t CalculateDeltaLength(uint64_t length, const std::vector<DeltaSliceEntry>& delta_slices) {
@@ -1923,7 +1928,7 @@ static uint64_t CalculateDeltaLength(uint64_t length, const std::vector<DeltaSli
 }
 
 Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, const std::vector<DeltaSliceEntry>& delta_slices,
-                              std::vector<ChunkDescriptor>& chunk_descriptors) {
+                              std::vector<ChunkDescriptor>& chunk_descriptors, EntryOut& entry_out) {
   if (!CanServe(ctx)) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -2007,6 +2012,8 @@ Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, const std::vector<Delt
       quota_manager_->AsyncUpdateDirUsage(parent, length_delta, 0, reason);
     }
   }
+
+  entry_out.attr = std::move(attr);
 
   return Status::OK();
 }

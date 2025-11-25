@@ -203,6 +203,12 @@ Attr Inode::ToAttr() {
   return Helper::ToAttr(attr_);
 }
 
+Inode::AttrEntry Inode::ToAttrEntry() {
+  utils::ReadLockGuard lk(lock_);
+
+  return attr_;
+}
+
 void Inode::UpdateLastAccessTime() {
   last_access_time_s_.store(utils::Timestamp(), std::memory_order_relaxed);
 }

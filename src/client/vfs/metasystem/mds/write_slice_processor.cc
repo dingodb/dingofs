@@ -211,9 +211,10 @@ void WriteSliceProcessor::ExecuteBatchOperation(
       "delta_slice_entries({}).",
       ino, fh, delta_slice_entries.size());
 
+  AttrEntry attr_entry;
   std::vector<mds::ChunkDescriptor> chunk_descriptors;
-  auto status =
-      mds_client_->WriteSlice(ctx, ino, delta_slice_entries, chunk_descriptors);
+  auto status = mds_client_->WriteSlice(ctx, ino, delta_slice_entries,
+                                        chunk_descriptors, attr_entry);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[meta.writeslice.{}.{}] writeslice fail, error({}).", ino, fh,
@@ -227,7 +228,7 @@ void WriteSliceProcessor::ExecuteBatchOperation(
   }
 
   for (auto& operation : batch_operation.operations) {
-    operation->done(status);
+    operation->done(status, attr_entry);
   }
 }
 

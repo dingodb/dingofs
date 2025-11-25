@@ -892,7 +892,8 @@ Status MDSClient::ListXAttr(ContextSPtr ctx, Ino ino,
 
 Status MDSClient::Rename(ContextSPtr ctx, Ino old_parent,
                          const std::string& old_name, Ino new_parent,
-                         const std::string& new_name) {
+                         const std::string& new_name,
+                         std::vector<Ino>& effected_inos) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, new_parent](bool& is_primary_mds) -> MDSMeta {
@@ -930,6 +931,8 @@ Status MDSClient::Rename(ContextSPtr ctx, Ino old_parent,
                                                response.old_parent_version());
   parent_memo_->UpsertVersionAndRenameRefCount(new_parent,
                                                response.new_parent_version());
+
+  effected_inos = mds::Helper::PbRepeatedToVector(response.effected_inos());
 
   return Status::OK();
 }
@@ -993,7 +996,7 @@ Status MDSClient::ReadSlice(
 Status MDSClient::WriteSlice(
     ContextSPtr ctx, Ino ino,
     const std::vector<mds::DeltaSliceEntry>& delta_slices,
-    std::vector<ChunkDescriptor>& chunk_descriptors) {
+    std::vector<ChunkDescriptor>& chunk_descriptors, AttrEntry& attr_entry) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, ino](bool& is_primary_mds) -> MDSMeta {
@@ -1022,6 +1025,7 @@ Status MDSClient::WriteSlice(
 
   chunk_descriptors =
       mds::Helper::PbRepeatedToVector(response.chunk_descriptors());
+  attr_entry.Swap(response.mutable_inode());
 
   return Status::OK();
 }

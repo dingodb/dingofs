@@ -48,8 +48,8 @@ namespace v2 {
 const uint32_t kMaxXAttrNameLength = 255;
 const uint32_t kMaxXAttrValueLength = 64 * 1024;
 
-const uint32_t kHeartbeatIntervalS = 5;                    // seconds
-const uint32_t kCleanExpiredModifyTimeMemoIntervalS = 60;  // seconds
+const uint32_t kHeartbeatIntervalS = 5;                     // seconds
+const uint32_t kCleanExpiredModifyTimeMemoIntervalS = 300;  // seconds
 
 const std::string kSliceIdCacheName = "slice";
 
@@ -360,7 +360,7 @@ Status MDSFileSystem::Lookup(ContextSPtr ctx, Ino parent,
 
   *attr = Helper::ToAttr(attr_entry);
 
-  inode_cache_.Put(attr_entry.ino(), attr_entry);
+  PutInodeToCache(attr_entry);
 
   return Status::OK();
 }
@@ -384,7 +384,8 @@ Status MDSFileSystem::Create(ContextSPtr ctx, Ino parent,
 
   *attr = Helper::ToAttr(attr_entry);
 
-  inode_cache_.Put(attr_entry.ino(), attr_entry);
+  DeleteInodeFromCache(parent);
+  PutInodeToCache(attr_entry);
 
   return Status::OK();
 }
@@ -401,7 +402,8 @@ Status MDSFileSystem::MkNod(ContextSPtr ctx, Ino parent,
 
   *attr = Helper::ToAttr(attr_entry);
 
-  inode_cache_.Put(attr_entry.ino(), attr_entry);
+  DeleteInodeFromCache(parent);
+  PutInodeToCache(attr_entry);
 
   return Status::OK();
 }
@@ -447,7 +449,7 @@ Status MDSFileSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
     chunk_memo_.Remember(ino, chunk.index(), chunk.version());
   }
 
-  inode_cache_.Put(attr_entry.ino(), attr_entry);
+  PutInodeToCache(attr_entry);
 
   return Status::OK();
 }
@@ -531,9 +533,10 @@ Status MDSFileSystem::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
     *delta_slice_entry.add_slices() = Helper::ToSlice(slice);
   }
 
+  AttrEntry attr_entry;
   std::vector<mds::ChunkDescriptor> chunk_descriptors;
   auto status = mds_client_->WriteSlice(
-      ctx, ino, {std::move(delta_slice_entry)}, chunk_descriptors);
+      ctx, ino, {std::move(delta_slice_entry)}, chunk_descriptors, attr_entry);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[meta.filesystem.{}.{}.{}] writeslice fail, error({}).", ino, fh,
@@ -553,6 +556,8 @@ Status MDSFileSystem::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                          chunk_descriptor.version());
   }
 
+  PutInodeToCache(attr_entry);
+
   return Status::OK();
 }
 
@@ -566,12 +571,15 @@ Status MDSFileSystem::AsyncWriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
   operation->index = index;
   operation->fh = fh;
   operation->slices = slices;
-  operation->done = [&, ino, fh, index, done](const Status& status) {
+  operation->done = [&, ino, fh, index, done](const Status& status,
+                                              const AttrEntry& attr_entry) {
     if (status.ok() && FLAGS_client_meta_read_chunk_cache_enable) {
       ClearChunkCache(ino, fh, index);
     }
 
     modify_time_memo_.Remember(ino);
+
+    PutInodeToCache(attr_entry);
 
     done(status);
   };
@@ -611,7 +619,8 @@ Status MDSFileSystem::MkDir(ContextSPtr ctx, Ino parent,
 
   *attr = Helper::ToAttr(attr_entry);
 
-  inode_cache_.Put(attr_entry.ino(), attr_entry);
+  DeleteInodeFromCache(parent);
+  PutInodeToCache(attr_entry);
 
   return Status::OK();
 }
@@ -627,7 +636,8 @@ Status MDSFileSystem::RmDir(ContextSPtr ctx, Ino parent,
     return status;
   }
 
-  inode_cache_.Delete(ino);
+  DeleteInodeFromCache(parent);
+  DeleteInodeFromCache(ino);
 
   return Status::OK();
 }
@@ -667,7 +677,7 @@ Status MDSFileSystem::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
 
     CorrectAttr(ctx, dir_iterator->LastFetchTimeNs(), entry.attr, "readdir");
 
-    inode_cache_.Put(entry.attr.ino, Helper::ToAttr(entry.attr));
+    PutInodeToCache(Helper::ToAttr(entry.attr));
 
     if (!handler(entry, offset)) {
       break;
@@ -695,7 +705,8 @@ Status MDSFileSystem::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
 
   *attr = Helper::ToAttr(attr_entry);
 
-  inode_cache_.Put(attr_entry.ino(), attr_entry);
+  DeleteInodeFromCache(new_parent);
+  PutInodeToCache(attr_entry);
 
   return Status::OK();
 }
@@ -710,10 +721,12 @@ Status MDSFileSystem::Unlink(ContextSPtr ctx, Ino parent,
     return status;
   }
 
+  DeleteInodeFromCache(parent);
   if (attr_entry.nlink() == 0) {
-    inode_cache_.Delete(attr_entry.ino());
+    DeleteInodeFromCache(attr_entry.ino());
+
   } else {
-    inode_cache_.Put(attr_entry.ino(), attr_entry);
+    PutInodeToCache(attr_entry);
   }
 
   return Status::OK();
@@ -735,7 +748,8 @@ Status MDSFileSystem::Symlink(ContextSPtr ctx, Ino parent,
 
   *attr = Helper::ToAttr(attr_entry);
 
-  inode_cache_.Put(attr_entry.ino(), attr_entry);
+  DeleteInodeFromCache(parent);
+  PutInodeToCache(attr_entry);
 
   return Status::OK();
 }
@@ -755,12 +769,20 @@ Status MDSFileSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
   CHECK(ctx != nullptr) << "context is null";
 
   AttrEntry attr_entry;
-  auto status = mds_client_->GetAttr(ctx, ino, attr_entry);
-  if (!status.ok()) return status;
+
+  auto inode = GetInodeFromCache(ino);
+  if (inode != nullptr) {
+    attr_entry = inode->ToAttrEntry();
+    ctx->hit_cache = true;
+
+  } else {
+    auto status = mds_client_->GetAttr(ctx, ino, attr_entry);
+    if (!status.ok()) return status;
+  }
 
   *attr = Helper::ToAttr(attr_entry);
 
-  status = CorrectAttr(ctx, ctx->start_time_ns, *attr, "getattr");
+  auto status = CorrectAttr(ctx, ctx->start_time_ns, *attr, "getattr");
   if (!status.ok()) return status;
 
   LOG(INFO) << fmt::format(
@@ -785,13 +807,15 @@ Status MDSFileSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
 
   modify_time_memo_.Remember(ino);
 
+  PutInodeToCache(attr_entry);
+
   return Status::OK();
 }
 
 Status MDSFileSystem::GetXattr(ContextSPtr ctx, Ino ino,
                                const std::string& name, std::string* value) {
   // take out xattr cache
-  auto inode = inode_cache_.Get(ino);
+  auto inode = GetInodeFromCache(ino);
   if (inode != nullptr) {
     *value = inode->GetXAttr(name);
     ctx->hit_cache = true;
@@ -816,7 +840,7 @@ Status MDSFileSystem::SetXattr(ContextSPtr ctx, Ino ino,
     return status;
   }
 
-  inode_cache_.Put(ino, attr_entry);
+  PutInodeToCache(attr_entry);
 
   return Status::OK();
 }
@@ -829,7 +853,7 @@ Status MDSFileSystem::RemoveXattr(ContextSPtr ctx, Ino ino,
     return status;
   }
 
-  inode_cache_.Put(ino, attr_entry);
+  PutInodeToCache(attr_entry);
 
   return Status::OK();
 }
@@ -839,7 +863,7 @@ Status MDSFileSystem::ListXattr(ContextSPtr ctx, Ino ino,
   CHECK(xattrs != nullptr) << "xattrs is null.";
 
   // take out xattr cache
-  auto inode = inode_cache_.Get(ino);
+  auto inode = GetInodeFromCache(ino);
   if (inode != nullptr) {
     for (auto& pair : inode->ListXAttrs()) {
       xattrs->push_back(pair.first);
@@ -865,8 +889,9 @@ Status MDSFileSystem::ListXattr(ContextSPtr ctx, Ino ino,
 Status MDSFileSystem::Rename(ContextSPtr ctx, Ino old_parent,
                              const std::string& old_name, Ino new_parent,
                              const std::string& new_name) {
-  auto status =
-      mds_client_->Rename(ctx, old_parent, old_name, new_parent, new_name);
+  std::vector<Ino> effected_inos;
+  auto status = mds_client_->Rename(ctx, old_parent, old_name, new_parent,
+                                    new_name, effected_inos);
   if (!status.ok()) {
     if (status.Errno() == pb::error::ENOT_EMPTY) {
       return Status::NotEmpty("dist dir not empty");
@@ -875,58 +900,29 @@ Status MDSFileSystem::Rename(ContextSPtr ctx, Ino old_parent,
     return status;
   }
 
+  for (const auto& ino : effected_inos) {
+    DeleteInodeFromCache(ino);
+  }
+
   return Status::OK();
 }
 
-// bool MDSFileSystem::GetAttrFromCache(Ino ino, Attr& out_attr) {
-//   if (!FLAGS_client_meta_enable_inode_cache) return false;
+void MDSFileSystem::PutInodeToCache(const AttrEntry& attr_entry) {
+  if (FLAGS_client_vfs_inode_cache_enable) {
+    inode_cache_.Put(attr_entry.ino(), attr_entry);
+  }
+}
 
-//   auto inode = inode_cache_->GetInode(ino);
-//   if (inode == nullptr) return false;
+void MDSFileSystem::DeleteInodeFromCache(Ino ino) {
+  if (FLAGS_client_vfs_inode_cache_enable) {
+    inode_cache_.Delete(ino);
+  }
+}
 
-//   out_attr = Helper::ToAttr(inode->Copy());
-
-//   return true;
-// }
-
-// bool MDSFileSystem::GetXAttrFromCache(Ino ino, const std::string& name,
-//                                         std::string& value) {
-//   if (!FLAGS_client_meta_enable_inode_cache) return false;
-
-//   auto inode = inode_cache_->GetInode(ino);
-//   if (inode == nullptr) return false;
-
-//   value = inode->XAttr(name);
-
-//   return true;
-// }
-
-// void MDSFileSystem::InsertInodeToCache(Ino ino, const AttrEntry&
-// attr_entry) {
-//   if (!FLAGS_client_meta_enable_inode_cache) return;
-
-//   inode_cache_->UpsertInode(ino, attr_entry);
-// }
-
-// void MDSFileSystem::UpdateInodeToCache(Ino ino, const Attr& attr) {
-//   if (!FLAGS_client_meta_enable_inode_cache) return;
-
-//   auto inode = inode_cache_->GetInode(ino);
-//   if (inode != nullptr) inode->UpdateIf(Helper::ToAttr(attr));
-// }
-
-// void MDSFileSystem::UpdateInodeToCache(Ino ino, const AttrEntry&
-// attr_entry) {
-//   if (!FLAGS_client_meta_enable_inode_cache) return;
-
-//   auto inode = inode_cache_->GetInode(ino);
-//   if (inode != nullptr) inode->UpdateIf(attr_entry);
-// }
-
-// void MDSFileSystem::DeleteInodeFromCache(Ino ino) {
-//   inode_cache_->DeleteInode(ino);
-// }
-
+InodeSPtr MDSFileSystem::GetInodeFromCache(Ino ino) {
+  return (FLAGS_client_vfs_inode_cache_enable) ? inode_cache_.Get(ino)
+                                               : nullptr;
+}
 bool MDSFileSystem::GetSliceFromCache(Ino ino, uint64_t index,
                                       std::vector<Slice>* slices) {
   auto file_session = file_session_map_.GetSession(ino);

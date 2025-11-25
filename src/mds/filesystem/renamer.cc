@@ -14,6 +14,8 @@
 
 #include "mds/filesystem/renamer.h"
 
+#include <vector>
+
 #include "mds/common/logging.h"
 #include "mds/common/status.h"
 #include "mds/filesystem/filesystem.h"
@@ -27,13 +29,15 @@ template <typename T>
 void RenameTask<T>::Run() {
   uint64_t old_parent_version;
   uint64_t new_parent_version;
-  auto status = fs_->Rename(*ctx_, param_, old_parent_version, new_parent_version);
+  std::vector<Ino> effected_inos;
+  auto status = fs_->Rename(*ctx_, param_, old_parent_version, new_parent_version, effected_inos);
 
   if (cb_ != nullptr) {
     cb_(status);
   } else {
     old_parent_version_ = old_parent_version;
     new_parent_version_ = new_parent_version;
+    effected_inos_ = effected_inos;
     status_ = status;
     Signal();
   }

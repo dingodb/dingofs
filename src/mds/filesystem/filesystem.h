@@ -183,13 +183,14 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
     std::vector<Ino> old_ancestors;
     std::vector<Ino> new_ancestors;
   };
-  Status Rename(Context& ctx, const RenameParam& param, uint64_t& old_parent_version, uint64_t& new_parent_version);
+  Status Rename(Context& ctx, const RenameParam& param, uint64_t& old_parent_version, uint64_t& new_parent_version,
+                std::vector<Ino>& effected_inos);
   Status CommitRename(Context& ctx, const RenameParam& param, uint64_t& old_parent_version,
-                      uint64_t& new_parent_version);
+                      uint64_t& new_parent_version, std::vector<Ino>& effected_inos);
 
   // slice
   Status WriteSlice(Context& ctx, Ino parent, Ino ino, const std::vector<DeltaSliceEntry>& delta_slices,
-                    std::vector<ChunkDescriptor>& chunk_descriptors);
+                    std::vector<ChunkDescriptor>& chunk_descriptors, EntryOut& entry_out);
   Status ReadSlice(Context& ctx, Ino ino, const std::vector<ChunkDescriptor>& chunk_descriptors,
                    std::vector<ChunkEntry>& chunks);
 

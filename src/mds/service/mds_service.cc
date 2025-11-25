@@ -1754,7 +1754,8 @@ void MDSServiceImpl::DoRename(google::protobuf::RpcController*, const pb::mds::R
   param.new_ancestors = Helper::PbRepeatedToVector(request->new_ancestors());
 
   uint64_t old_parent_version, new_parent_version;
-  status = file_system->CommitRename(ctx, param, old_parent_version, new_parent_version);
+  std::vector<Ino> effected_inos;
+  status = file_system->CommitRename(ctx, param, old_parent_version, new_parent_version, effected_inos);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -1762,6 +1763,7 @@ void MDSServiceImpl::DoRename(google::protobuf::RpcController*, const pb::mds::R
 
   response->set_old_parent_version(old_parent_version);
   response->set_new_parent_version(new_parent_version);
+  Helper::VectorToPbRepeated(effected_inos, response->mutable_effected_inos());
 }
 
 void MDSServiceImpl::Rename(google::protobuf::RpcController* controller, const pb::mds::RenameRequest* request,
@@ -1829,14 +1831,16 @@ void MDSServiceImpl::DoWriteSlice(google::protobuf::RpcController*, const pb::md
 
   Context ctx(request->context(), request->info().request_id(), __func__);
 
+  EntryOut entry_out;
   std::vector<ChunkDescriptor> chunk_descriptors;
   status = file_system->WriteSlice(ctx, request->parent(), request->ino(),
-                                   Helper::PbRepeatedToVector(request->delta_slices()), chunk_descriptors);
+                                   Helper::PbRepeatedToVector(request->delta_slices()), chunk_descriptors, entry_out);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  response->mutable_inode()->Swap(&entry_out.attr);
   Helper::VectorToPbRepeated(chunk_descriptors, response->mutable_chunk_descriptors());
 }
 
@@ -1896,12 +1900,12 @@ void MDSServiceImpl::DoReadSlice(google::protobuf::RpcController*, const pb::mds
   std::vector<ChunkEntry> chunks;
   status =
       file_system->ReadSlice(ctx, request->ino(), Helper::PbRepeatedToVector(request->chunk_descriptors()), chunks);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
   Helper::VectorToPbRepeated(chunks, response->mutable_chunks());
-  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
 }
 
 void MDSServiceImpl::ReadSlice(google::protobuf::RpcController* controller, const pb::mds::ReadSliceRequest* request,
@@ -2016,11 +2020,10 @@ void MDSServiceImpl::DoCompactChunk(google::protobuf::RpcController*, const pb::
 
   std::vector<pb::mds::TrashSlice> trash_slices;
   status = file_system->CompactChunk(ctx, request->ino(), request->chunk_index(), trash_slices);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
-
-  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
 
   for (auto& slice : trash_slices) {
     response->add_trash_slices()->Swap(&slice);

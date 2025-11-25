@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"
@@ -798,7 +799,9 @@ TEST_F(FileSystemTest, RenameWithSameDir) {
   param.new_parent = old_parent_ino;
   param.new_name = new_name;
 
-  auto status = fs->Rename(ctx, param, old_parent_version, new_parent_version);
+  std::vector<Ino> effected_inos;
+  auto status = fs->Rename(ctx, param, old_parent_version, new_parent_version,
+                           effected_inos);
   ASSERT_TRUE(status.ok()) << "rename fail, error: " << status.error_str();
 
   auto partition = partition_cache.Get(old_parent_ino);
@@ -891,7 +894,9 @@ TEST_F(FileSystemTest, RenameWithDiffDir) {
   param.new_parent = old_parent_ino;
   param.new_name = new_name;
 
-  auto status = fs->Rename(ctx, param, old_parent_version, new_parent_version);
+  std::vector<Ino> effected_inos;
+  auto status = fs->Rename(ctx, param, old_parent_version, new_parent_version,
+                           effected_inos);
   ASSERT_TRUE(status.ok()) << "rename fail, error: " << status.error_str();
 
   {

@@ -271,8 +271,9 @@ Status VFSWrapper::GetAttr(Ino ino, Attr* attr) {
   Status s;
   AccessLogGuard log(
       [&]() {
-        return absl::StrFormat("getattr (%d): %s %d %s", ino, s.ToString(),
-                               ctx->hit_cache, StrAttr(attr));
+        return absl::StrFormat("getattr (%d): %s %s %s", ino, s.ToString(),
+                               ctx->hit_cache ? "true" : "false",
+                               StrAttr(attr));
       },
       !IsInternalNode(ino));
 
