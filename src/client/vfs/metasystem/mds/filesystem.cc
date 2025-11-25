@@ -14,6 +14,7 @@
 
 #include "client/vfs/metasystem/mds/filesystem.h"
 
+#include <bthread/types.h>
 #include <fcntl.h>
 #include <openssl/rsa.h>
 
@@ -22,6 +23,7 @@
 #include <string>
 #include <vector>
 
+#include "bthread/bthread.h"
 #include "client/vfs/metasystem/mds/client_id.h"
 #include "client/vfs/metasystem/mds/helper.h"
 #include "client/vfs/metasystem/mds/mds_client.h"
@@ -455,22 +457,54 @@ Status MDSFileSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
 }
 
 Status MDSFileSystem::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
+  struct Param {
+    MDSClientSPtr mds_client;
+    ContextSPtr ctx;
+    Ino ino;
+    uint64_t fh;
+    std::string session_id;
+  };
+
   std::string session_id = file_session_map_.GetSessionID(ino, fh);
   CHECK(!session_id.empty())
       << fmt::format("get file session fail, ino({}) fh({}).", ino, fh);
 
+  // clean cache
+  file_session_map_.Delete(ino, fh);
+
   LOG(INFO) << fmt::format("[meta.filesystem.{}.{}] close file session_id({}).",
                            ino, fh, session_id);
 
-  auto status = mds_client_->Release(ctx, ino, session_id);
-  if (!status.ok()) {
-    LOG(ERROR) << fmt::format(
-        "[meta.filesystem.{}.{}] close file fail, error({}).", ino, fh,
-        status.ToString());
-  }
+  // async close file
+  Param* param = new Param();
+  param->mds_client = mds_client_;
+  param->ctx = ctx;
+  param->ino = ino;
+  param->fh = fh;
+  param->session_id = session_id;
 
-  // clean cache
-  file_session_map_.Delete(ino, fh);
+  bthread_t tid;
+  const bthread_attr_t attr = BTHREAD_ATTR_SMALL;
+  bthread_start_background(
+      &tid, &attr,
+      [](void* arg) -> void* {
+        Param* param = static_cast<Param*>(arg);
+        auto& mds_client = param->mds_client;
+        auto& ctx = param->ctx;
+        auto& ino = param->ino;
+        auto& fh = param->fh;
+        auto& session_id = param->session_id;
+
+        auto status = mds_client->Release(ctx, ino, session_id);
+        if (!status.ok()) {
+          LOG(ERROR) << fmt::format(
+              "[meta.filesystem.{}.{}] close file fail, error({}).", ino, fh,
+              status.ToString());
+        }
+
+        return nullptr;
+      },
+      param);
 
   return Status::OK();
 }
