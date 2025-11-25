@@ -532,12 +532,6 @@ void GcProcessor::ScanDelSlice(const FsInfoEntry& fs_info) {
       return true;
     }
 
-    // check file session exist
-    if (HasFileSession(fs_id, ino)) {
-      LOG(INFO) << fmt::format("[gc.delslice.{}.{}] exist file session so skip.", fs_id, ino);
-      return true;
-    }
-
     auto block_accessor = GetOrCreateDataAccesser(fs_info);
     if (block_accessor == nullptr) {
       LOG(ERROR) << fmt::format("[gc.delslice] get data accesser fail, fs_id({}).", fs_id);
