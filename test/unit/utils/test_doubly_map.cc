@@ -26,6 +26,7 @@
 
 namespace dingofs {
 namespace utils {
+namespace unit_test {
 
 TEST(DoublyMapTest, type) {
   {
@@ -410,5 +411,6 @@ TEST(DoublyMapTest, absl_btree_map_get) {
   ASSERT_EQ(iterated_keys[6], "key0007");
 }
 
+}  // namespace unit_test
 }  // namespace utils
 }  // namespace dingofs

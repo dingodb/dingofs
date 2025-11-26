@@ -18,7 +18,7 @@
 #include <vector>
 
 #include "client/vfs/data/common/data_utils.h"
-#include "client/vfs/data/data_utils/test_data_utils_common.h"
+#include "client/vfs/data/test_data_utils_common.h"
 
 namespace dingofs {
 namespace client {
@@ -278,17 +278,3 @@ TEST(ProcessReadRequestTest, LargeRandomSlices) {
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
-
-int main(int argc, char* argv[]) {
-  testing::InitGoogleTest(&argc, argv);
-
-  FLAGS_minloglevel = google::GLOG_INFO;
-  FLAGS_logtostdout = true;
-  FLAGS_colorlogtostdout = true;
-  FLAGS_logbufsecs = 0;
-
-  google::InitGoogleLogging(argv[0]);
-  google::ParseCommandLineFlags(&argc, &argv, true);
-
-  return RUN_ALL_TESTS();
-}

@@ -21,8 +21,6 @@
  *          2018/11/23  Wenyu Zhou   Initial version
  */
 
-#include "utils/configuration.h"
-
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
@@ -32,8 +30,11 @@
 #include <string>
 #include <vector>
 
+#include "utils/configuration.h"
+
 namespace dingofs {
 namespace utils {
+namespace unit_test {
 
 class ConfigurationTest : public ::testing::Test {
  public:
@@ -366,5 +367,6 @@ TEST_F(ConfigurationTest, TestGetValueFatalIfFail) {
   ASSERT_DEATH(conf.GetValueFatalIfFail("key7", &value7), "");
 }
 
+}  // namespace unit_test
 }  // namespace utils
 }  // namespace dingofs

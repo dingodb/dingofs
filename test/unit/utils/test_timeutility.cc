@@ -14,6 +14,7 @@
 
 namespace dingofs {
 namespace utils {
+namespace unit_test {
 
 TEST(ExpiredTimeTest, CommonTest) {
   {
@@ -42,6 +43,6 @@ TEST(ExpiredTimeTest, CommonTest) {
   }
 }
 
+}  // namespace unit_test
 }  // namespace utils
-
 }  // namespace dingofs

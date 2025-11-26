@@ -20,16 +20,18 @@
  * Author: tongguangxun
  */
 
-#include "utils/net_common.h"
-
 #include <glog/logging.h>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include <string>
 
+#include "utils/net_common.h"
+
 namespace dingofs {
 namespace utils {
+namespace unit_test {
+
 TEST(Common, NetCommon) {
   std::string addr = "123.0.0.1";
   ASSERT_FALSE(NetCommon::CheckAddressValid(addr));
@@ -58,5 +60,7 @@ TEST(Common, GetLocalIP) {
   ASSERT_TRUE(NetCommon::GetLocalIP(&ip));
   LOG(INFO) << "IP = " << ip.c_str();
 }
+
+}  // namespace unit_test
 }  // namespace utils
 }  // namespace dingofs

@@ -20,17 +20,17 @@
  * Author: wudemiao
  */
 
-#include "utils/concurrent/task_thread_pool.h"
-
 #include <gtest/gtest.h>
 
 #include <atomic>
 #include <iostream>
 
 #include "utils/concurrent/count_down_event.h"
+#include "utils/concurrent/task_thread_pool.h"
 
 namespace dingofs {
 namespace utils {
+namespace unit_test {
 
 using dingofs::utils::CountDownEvent;
 
@@ -263,5 +263,6 @@ TEST(TaskThreadPool, basic) {
   }
 }
 
+}  // namespace unit_test
 }  // namespace utils
 }  // namespace dingofs

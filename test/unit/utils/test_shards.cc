@@ -16,15 +16,15 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <iostream>
 #include <string>
+#include <utility>
 
 #include "utils/shards.h"
 
 namespace dingofs {
 namespace utils {
-
-#include <iostream>
-#include <utility>
+namespace unit_test {
 
 TEST(ShardTest, position) {
   using Map = std::map<int, std::string>;
@@ -70,5 +70,6 @@ TEST(ShardTest, iterate) {
   EXPECT_EQ(count, 1000);
 }
 
+}  // namespace unit_test
 }  // namespace utils
 }  // namespace dingofs

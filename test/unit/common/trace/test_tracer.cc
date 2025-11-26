@@ -20,8 +20,11 @@
 
 #include "common/trace/log_trace_exporter.h"
 #include "common/trace/tracer.h"
+#include "common/trace/utils.h"
 
 namespace dingofs {
+namespace common {
+namespace unit_test {
 
 const size_t kTestIterations = 100000;
 
@@ -139,18 +142,43 @@ TEST_F(TracerPerformanceTest, BenchMixedSpanCreation) {
 
   PrintPerformanceResults("Mixed Creation", kTestIterations, timer);
 }
-}  // namespace dingofs
 
-int main(int argc, char* argv[]) {
-  testing::InitGoogleTest(&argc, argv);
+static void PerformanceTest(size_t id_length, size_t iterations) {
+  butil::Timer timer;
+  timer.start();
 
-  FLAGS_minloglevel = google::GLOG_INFO;
-  FLAGS_logtostdout = true;
-  FLAGS_colorlogtostdout = true;
-  FLAGS_logbufsecs = 0;
+  for (size_t i = 0; i < iterations; ++i) {
+    GenerateId(id_length);
+  }
 
-  google::InitGoogleLogging(argv[0]);
-  google::ParseCommandLineFlags(&argc, &argv, true);
+  timer.stop();
 
-  return RUN_ALL_TESTS();
+  // Calculate and print results
+  double avg_time_ns = timer.n_elapsed(0.0) / iterations;
+
+  std::cout << "Performance Test Results:\n";
+  std::cout << "========================\n";
+  std::cout << "ID Length:      " << id_length << " bytes (output will be "
+            << id_length * 2 << " chars)\n";
+  std::cout << "Iterations:     " << iterations << "\n";
+  std::cout << "Total time:     " << timer.m_elapsed(0.0) << " ms\n";
+  std::cout << "Average time:   " << avg_time_ns << " ns per call\n";
+  std::cout << "Throughput:     " << (iterations / timer.s_elapsed(0.0))
+            << " calls/second\n";
+  std::cout << "Sample output:  " << GenerateId(id_length) << "\n";
 }
+
+TEST(GenerateIdTest, Benchmark) {
+  // Test different ID lengths
+  const size_t test_lengths[] = {kTraceIdLength, kSpanIdLength};
+  const size_t iterations = 100000;
+
+  for (auto length : test_lengths) {
+    PerformanceTest(length, iterations);
+    std::cout << "\n";
+  }
+}
+
+}  // namespace unit_test
+}  // namespace common
+}  // namespace dingofs

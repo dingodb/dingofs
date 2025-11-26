@@ -28,6 +28,7 @@
 
 namespace dingofs {
 namespace utils {
+namespace unit_test {
 
 TEST(TestNameLock, TestNameLockBasic) {
   NameLock lock1, lock2, lock3;
@@ -98,5 +99,6 @@ TEST(TestNameLock, TestNameLockConcurrent) {
   }
 }
 
+}  // namespace unit_test
 }  // namespace utils
 }  // namespace dingofs

@@ -29,7 +29,8 @@
 #include <string>
 
 namespace dingofs {
-namespace test {
+namespace utils {
+namespace unit_test {
 
 using ::google::protobuf::Message;
 
@@ -142,7 +143,8 @@ inline std::unique_ptr<Message> GenerateAnDefaultInitializedMessage(
   return message;
 }
 
-}  // namespace test
+}  // namespace unit_test
+}  // namespace utils
 }  // namespace dingofs
 
 #endif  // DINGOFS_TEST_UTILS_PROTOBUF_MESSAGE_UTILS_H_

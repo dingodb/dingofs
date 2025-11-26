@@ -12,4 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(data_utils)
+
+file(GLOB TEST_DINGOFS_CLIENT_VFS_DATA_SRCS
+  "*.cc"
+)
+
+add_library(test_client_vfs_data
+  ${TEST_DINGOFS_CLIENT_VFS_DATA_SRCS}
+)
+
+target_link_libraries(test_client_vfs_data
+  vfs_data
+
+  protobuf::libprotobuf
+  ${TEST_DEPS_WITHOUT_MAIN}
+)

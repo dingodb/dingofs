@@ -20,16 +20,17 @@
  * Author: wudemiao
  */
 
-#include "utils/concurrent/count_down_event.h"
-
 #include <gtest/gtest.h>
 
 #include <atomic>
 #include <chrono>  //NOLINT
 #include <thread>  //NOLINT
 
+#include "utils/concurrent/count_down_event.h"
+
 namespace dingofs {
 namespace utils {
+namespace unit_test {
 
 TEST(CountDownEventTest, basic) {
   {
@@ -232,5 +233,6 @@ TEST(CountDownEventTest, basic) {
   }
 }
 
+}  // namespace unit_test
 }  // namespace utils
 }  // namespace dingofs

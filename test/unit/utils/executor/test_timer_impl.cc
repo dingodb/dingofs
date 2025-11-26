@@ -22,9 +22,8 @@
 #include "utils/executor/timer/timer_impl.h"
 
 namespace dingofs {
-
-namespace base {
-namespace timer {
+namespace utils {
+namespace unit_test {
 
 class TimerImplTest : public ::testing::Test {
  public:
@@ -81,6 +80,6 @@ TEST_F(TimerImplTest, Add) {
   EXPECT_EQ(count.load(), 0);
 }
 
-}  // namespace timer
-}  // namespace base
+}  // namespace unit_test
+}  // namespace utils
 }  // namespace dingofs

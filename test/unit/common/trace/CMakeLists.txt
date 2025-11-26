@@ -12,21 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set(TEST_TRACE_DEPS
+
+file(GLOB TEST_DINGOFS_COMMON_TRACE_SRCS
+  "*.cc"
+)
+
+add_library(test_common_trace
+  ${TEST_DINGOFS_COMMON_TRACE_SRCS}
+)
+
+target_link_libraries(test_common_trace
     dingofs_trace
     glog::glog
     brpc::brpc
-    ${TEST_DEPS}
+
+  ${TEST_DEPS_WITHOUT_MAIN}
 )
-message("TEST_TRACE_DEPS: ${TEST_TRACE_DEPS}")
-
-function(add_trace_test test_name)
-    add_executable(${test_name} ${ARGN})
-    target_link_libraries(${test_name} ${TEST_TRACE_DEPS})
-    set_target_properties(${test_name} PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY ${TEST_EXECUTABLE_OUTPUT_PATH}
-    )
-endfunction()
-
-add_trace_test(test_utils test_utils.cc)
-add_trace_test(test_tracer test_tracer.cc)

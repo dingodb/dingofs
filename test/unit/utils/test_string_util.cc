@@ -20,15 +20,16 @@
  * Author: hzsunjianliang
  */
 
-#include "utils/string_util.h"
-
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include <string>
 
+#include "utils/string_util.h"
+
 namespace dingofs {
 namespace utils {
+namespace unit_test {
 
 TEST(Common, SpliteString) {
   const struct {
@@ -64,5 +65,7 @@ TEST(Common, StringToUll) {
   str = "ffff";
   ASSERT_FALSE(StringToUll(str, &out));
 }
+
+}  // namespace unit_test
 }  // namespace utils
 }  // namespace dingofs

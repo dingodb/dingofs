@@ -13,3 +13,22 @@
 # limitations under the License.
 
 add_subdirectory(vfs)
+
+add_executable(test_client
+  main.cc
+)
+
+target_link_libraries(test_client
+  PROTO_OBJS
+
+  $<TARGET_OBJECTS:test_client_vfs_data>
+
+  vfs_data
+
+  protobuf::libprotobuf
+  ${TEST_DEPS_WITHOUT_MAIN}
+)
+
+set_target_properties(test_client PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY ${TEST_EXECUTABLE_OUTPUT_PATH}
+)

@@ -20,12 +20,13 @@
  * Author: wuhanqing
  */
 
-#include "utils/fast_align.h"
-
 #include <gtest/gtest.h>
+
+#include "utils/fast_align.h"
 
 namespace dingofs {
 namespace utils {
+namespace unit_test {
 
 TEST(FastAlignTest, TestAlignUp) {
   ASSERT_EQ(0, align_up(0, 512));
@@ -50,5 +51,6 @@ TEST(FastAlignTest, TestIsAligned) {
   ASSERT_FALSE(is_aligned(4095, 4096));
 }
 
+}  // namespace unit_test
 }  // namespace utils
 }  // namespace dingofs

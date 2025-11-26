@@ -20,16 +20,17 @@
  * Author: wudemiao
  */
 
-#include "utils/concurrent/rw_lock.h"
-
 #include <errno.h>
 #include <gtest/gtest.h>
 
 #include <thread>  // NOLINT
 #include <vector>
 
+#include "utils/concurrent/rw_lock.h"
+
 namespace dingofs {
 namespace utils {
+namespace unit_test {
 
 TEST(RWLockTest, basic_test) {
   PthreadRWLock rwlock;
@@ -171,5 +172,6 @@ TEST(BthreadRWLockTest, basic_test) {
   }
 }
 
+}  // namespace unit_test
 }  // namespace utils
 }  // namespace dingofs

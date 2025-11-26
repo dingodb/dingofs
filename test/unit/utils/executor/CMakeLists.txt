@@ -12,19 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set(TEST_EXECUTOR_DEPS
-    dingofs_executor
-    ${TEST_DEPS}
+
+file(GLOB TEST_DINGOFS_UTILS_EXECUTOR_SRCS
+  "*.cc"
 )
-message("TEST_EXECUTOR_DEPS: ${TEST_EXECUTOR_DEPS}")
 
-# Function to create a test target
-function(add_executor_test test_name)
-    add_executable(${test_name} ${ARGN})
-    target_link_libraries(${test_name} ${TEST_EXECUTOR_DEPS})
-    set_target_properties(${test_name} PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY ${TEST_EXECUTABLE_OUTPUT_PATH}
-    )
-endfunction()
+add_library(test_utils_executor
+  ${TEST_DINGOFS_UTILS_EXECUTOR_SRCS}
+)
 
-add_executor_test(test_timer_impl test_timer_impl.cc)
+target_link_libraries(test_utils_executor
+  dingofs_executor
+
+  ${TEST_DEPS_WITHOUT_MAIN}
+)

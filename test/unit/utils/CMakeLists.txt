@@ -18,13 +18,18 @@ file(GLOB UTILS_TEST_SRCS
     "*.cc"
 )
 
-add_executable(test_uitls ${UTILS_TEST_SRCS})
-target_link_libraries(test_uitls
+add_executable(test_utils ${UTILS_TEST_SRCS})
+
+target_link_libraries(test_utils
+    mds_common
+
     dingofs_utils
     block_accesser
+
     protobuf::libprotobuf
-    ${TEST_DEPS}
+    ${TEST_DEPS_WITHOUT_MAIN}
 )
-set_target_properties(test_uitls PROPERTIES
+
+set_target_properties(test_utils PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${TEST_EXECUTABLE_OUTPUT_PATH}
 )

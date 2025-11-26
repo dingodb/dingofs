@@ -20,12 +20,13 @@
  * Author: lixiaocui
  */
 
-#include "utils/stringstatus.h"
-
 #include <gtest/gtest.h>
+
+#include "utils/stringstatus.h"
 
 namespace dingofs {
 namespace utils {
+namespace unit_test {
 
 TEST(Common, string_status_test) {
   StringStatus status;
@@ -44,5 +45,6 @@ TEST(Common, string_status_test) {
   ASSERT_EQ("smart", status.GetValueByKey("code"));
 }
 
+}  // namespace unit_test
 }  // namespace utils
 }  // namespace dingofs

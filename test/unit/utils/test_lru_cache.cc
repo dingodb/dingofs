@@ -20,17 +20,17 @@
  * Author: xuchaojie,lixiaocui
  */
 
-#include "utils/lru_cache.h"
-
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
 #include <cstdint>
 
+#include "utils/lru_cache.h"
 #include "utils/timeutility.h"
 
 namespace dingofs {
 namespace utils {
+namespace unit_test {
 
 TEST(TestCacheMetrics, testall) {
   CacheMetrics cacheMetrics("LRUCache");
@@ -350,5 +350,6 @@ TEST(TimedCaCheTest, test_timeout) {
   ASSERT_EQ(0, cache->Size());
 }
 
+}  // namespace unit_test
 }  // namespace utils
 }  // namespace dingofs

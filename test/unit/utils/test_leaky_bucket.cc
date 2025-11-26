@@ -20,15 +20,16 @@
  * Author: wuhanqing
  */
 
-#include "utils/leaky_bucket.h"
-
 #include <gtest/gtest.h>
 
 #include <chrono>  // NOLINT
 #include <thread>  // NOLINT
 
+#include "utils/leaky_bucket.h"
+
 namespace dingofs {
 namespace utils {
+namespace unit_test {
 
 TEST(LeakyBucketTest, TestCommon) {
   uint64_t limit = 1000;
@@ -181,5 +182,6 @@ TEST(LeakyBucketTest, TestSetLimit) {
   ASSERT_FALSE(throttle.SetLimit(100, 0, 10));
 }
 
+}  // namespace unit_test
 }  // namespace utils
 }  // namespace dingofs

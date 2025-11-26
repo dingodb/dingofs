@@ -20,12 +20,22 @@
  * Author: xuchaojie
  */
 
-#include <gflags/gflags.h>
-#include <gtest/gtest.h>
+#include "gflags/gflags.h"
+#include "glog/logging.h"
+#include "gtest/gtest.h"
+
 DECLARE_int32(v);
 
 int main(int argc, char* argv[]) {
   testing::InitGoogleTest(&argc, argv);
-  FLAGS_v = 10;
+
+  FLAGS_minloglevel = google::GLOG_INFO;
+  FLAGS_logtostdout = true;
+  FLAGS_colorlogtostdout = true;
+  FLAGS_logbufsecs = 0;
+
+  google::InitGoogleLogging(argv[0]);
+  google::ParseCommandLineFlags(&argc, &argv, true);
+
   return RUN_ALL_TESTS();
 }
