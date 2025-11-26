@@ -18,15 +18,15 @@
 #include <sys/types.h>
 
 #include <cstdint>
-#include <map>
 #include <memory>
 #include <string>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "json/value.h"
 #include "mds/common/type.h"
 #include "utils/concurrent/concurrent.h"
-#include "utils/lru_cache.h"
+#include "utils/shards.h"
 
 namespace dingofs {
 namespace mds {
@@ -46,6 +46,7 @@ class Inode {
   ~Inode() = default;
 
   static InodeSPtr New(const AttrEntry& inode) { return std::make_shared<Inode>(inode); }
+  static InodeSPtr New(AttrEntry&& inode) { return std::make_shared<Inode>(std::move(inode)); }
 
   uint32_t FsId();
   uint64_t Ino();
@@ -68,18 +69,23 @@ class Inode {
   XAttrMap XAttrs();
   std::string XAttr(const std::string& name);
 
-  bool UpdateIf(const AttrEntry& attr);
-  bool UpdateIf(AttrEntry&& attr);
+  bool PutIf(const AttrEntry& attr);
+  bool PutIf(AttrEntry&& attr);
 
   void ExpandLength(uint64_t length);
 
   AttrEntry Copy();
   AttrEntry&& Move();
 
+  void UpdateLastAccessTime();
+  uint64_t LastAccessTimeS();
+
  private:
   utils::RWLock lock_;
 
   AttrEntry attr_;
+
+  std::atomic<uint64_t> last_access_time_s_{0};
 };
 
 class InodeCache;
@@ -98,22 +104,37 @@ class InodeCache {
 
   static InodeCacheSPtr New(uint32_t fs_id) { return std::make_shared<InodeCache>(fs_id); }
 
-  void PutIf(Ino ino, InodeSPtr inode);
-  void PutIf(AttrEntry& attr);
+  void PutIf(Ino ino, InodeSPtr& inode);
+  void PutIf(AttrEntry&& attr);
+  void PutIf(const AttrEntry& attr);
+
   void Delete(Ino ino);
-  void BatchDeleteIf(const std::function<bool(const Ino&)>& f);
+  void DeleteIf(std::function<bool(const Ino&)>&& f);
+
   void Clear();
 
-  InodeSPtr GetInode(Ino ino);
-  std::vector<InodeSPtr> GetInodes(std::vector<uint64_t> inoes);
-  std::map<uint64_t, InodeSPtr> GetAllInodes();
+  InodeSPtr Get(Ino ino);
+  std::vector<InodeSPtr> Get(std::vector<uint64_t> inoes);
+  std::vector<InodeSPtr> GetAll();
+
+  size_t Size();
+
+  void CleanExpired(uint64_t expire_s);
 
   void DescribeByJson(Json::Value& value);
 
  private:
-  uint32_t fs_id_{0};
-  // ino -> inode
-  utils::LRUCache<uint64_t, InodeSPtr> cache_;
+  using Map = absl::flat_hash_map<Ino, InodeSPtr>;
+
+  const uint32_t fs_id_{0};
+
+  constexpr static size_t kShardNum = 64;
+  utils::Shards<Map, kShardNum> shard_map_;
+
+  // metric
+  bvar::Adder<int64_t> access_miss_count_;
+  bvar::Adder<int64_t> access_hit_count_;
+  bvar::Adder<int64_t> clean_count_;
 };
 
 }  // namespace mds

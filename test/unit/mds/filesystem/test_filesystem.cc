@@ -344,7 +344,7 @@ TEST_F(FileSystemTest, CreateRoot) {
   auto partition = partition_cache.Get(kRootIno);
   ASSERT_TRUE(partition != nullptr);
 
-  auto inode = inode_cache.GetInode(kRootIno);
+  auto inode = inode_cache.Get(kRootIno);
   ASSERT_TRUE(inode != nullptr);
   ASSERT_EQ(kRootIno, inode->Ino());
   ASSERT_EQ(pb::mds::FileType::DIRECTORY, inode->Type());
@@ -374,12 +374,12 @@ TEST_F(FileSystemTest, MkNod) {
   ASSERT_TRUE(partition != nullptr) << "get partition fail.";
 
   Dentry dentry;
-  ASSERT_TRUE(partition->GetChild(param.name, dentry)) << "get child fail.";
+  ASSERT_TRUE(partition->Get(param.name, dentry)) << "get child fail.";
   ASSERT_EQ(param.name, dentry.Name()) << "dentry name not equal.";
   ASSERT_EQ(param.parent, dentry.ParentIno()) << "dentry parent ino not equal.";
   ASSERT_TRUE(dentry.Inode() != nullptr) << "inode is nullptr.";
 
-  InodeSPtr inode = inode_cache.GetInode(entry_out.attr.ino());
+  InodeSPtr inode = inode_cache.Get(entry_out.attr.ino());
   ASSERT_TRUE(inode != nullptr) << "get inode fail.";
   ASSERT_EQ(param.mode, inode->Mode()) << "inode mode not equal.";
   ASSERT_EQ(param.uid, inode->Uid()) << "inode uid not equal.";
@@ -413,11 +413,11 @@ TEST_F(FileSystemTest, MkDir) {
   ASSERT_TRUE(partition != nullptr) << "get partition fail.";
 
   Dentry dentry;
-  ASSERT_TRUE(partition->GetChild(param.name, dentry)) << "get child fail.";
+  ASSERT_TRUE(partition->Get(param.name, dentry)) << "get child fail.";
   ASSERT_EQ(param.name, dentry.Name()) << "dentry name not equal.";
   ASSERT_EQ(param.parent, dentry.ParentIno()) << "dentry parent ino not equal.";
 
-  InodeSPtr inode = inode_cache.GetInode(entry_out.attr.ino());
+  InodeSPtr inode = inode_cache.Get(entry_out.attr.ino());
   ASSERT_TRUE(status.ok()) << "get inode fail, error: " << status.error_str();
   ASSERT_TRUE(inode != nullptr) << "get inode fail.";
   ASSERT_EQ(param.mode, inode->Mode()) << "inode mode not equal.";
@@ -454,11 +454,11 @@ TEST_F(FileSystemTest, RmDir) {
   ASSERT_TRUE(partition != nullptr) << "get dentry fail.";
 
   Dentry dentry;
-  ASSERT_TRUE(partition->GetChild(param.name, dentry)) << "get child fail.";
+  ASSERT_TRUE(partition->Get(param.name, dentry)) << "get child fail.";
   ASSERT_EQ(param.name, dentry.Name()) << "dentry name not equal.";
   ASSERT_EQ(param.parent, dentry.ParentIno()) << "dentry parent ino not equal.";
 
-  InodeSPtr inode = inode_cache.GetInode(ino);
+  InodeSPtr inode = inode_cache.Get(ino);
   ASSERT_TRUE(status.ok()) << "get inode fail, error: " << status.error_str();
   ASSERT_TRUE(inode != nullptr) << "get inode fail.";
 
@@ -472,7 +472,7 @@ TEST_F(FileSystemTest, RmDir) {
     auto partition = partition_cache.Get(ino);
     ASSERT_TRUE(partition == nullptr) << "get partition fail.";
 
-    InodeSPtr inode = inode_cache.GetInode(ino);
+    InodeSPtr inode = inode_cache.Get(ino);
     ASSERT_TRUE(inode == nullptr) << "get inode fail.";
   }
 }
@@ -497,7 +497,7 @@ TEST_F(FileSystemTest, Link) {
   ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
   ASSERT_GT(entry_out.attr.ino(), 0) << "ino is invalid.";
 
-  InodeSPtr inode = inode_cache.GetInode(entry_out.attr.ino());
+  InodeSPtr inode = inode_cache.Get(entry_out.attr.ino());
   ASSERT_TRUE(inode != nullptr) << "get inode fail.";
 
   {
@@ -529,7 +529,7 @@ TEST_F(FileSystemTest, UnLink) {
   ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
   ASSERT_GT(entry_out.attr.ino(), 0) << "ino is invalid.";
 
-  InodeSPtr inode = inode_cache.GetInode(entry_out.attr.ino());
+  InodeSPtr inode = inode_cache.Get(entry_out.attr.ino());
   ASSERT_TRUE(inode != nullptr) << "get inode fail.";
 
   {
@@ -565,7 +565,7 @@ TEST_F(FileSystemTest, SymlinkWithFile) {
   ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
   ASSERT_GT(entry_out.attr.ino(), 0) << "ino is invalid.";
 
-  InodeSPtr inode = inode_cache.GetInode(entry_out.attr.ino());
+  InodeSPtr inode = inode_cache.Get(entry_out.attr.ino());
   ASSERT_TRUE(inode != nullptr) << "get inode fail.";
 
   {
@@ -578,7 +578,7 @@ TEST_F(FileSystemTest, SymlinkWithFile) {
     ASSERT_GT(entry_out.attr.ino(), 0) << "ino is invalid.";
     ASSERT_EQ(name, entry_out.name) << "ino is invalid.";
 
-    InodeSPtr sym_inode = inode_cache.GetInode(entry_out.attr.ino());
+    InodeSPtr sym_inode = inode_cache.Get(entry_out.attr.ino());
     ASSERT_TRUE(sym_inode != nullptr) << "get inode fail.";
     ASSERT_EQ(pb::mds::FileType::SYM_LINK, sym_inode->Type())
         << "inode type not equal.";
@@ -606,7 +606,7 @@ TEST_F(FileSystemTest, SymlinkWithDir) {
   ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
   ASSERT_GT(entry_out.attr.ino(), 0) << "ino is invalid.";
 
-  InodeSPtr inode = inode_cache.GetInode(entry_out.attr.ino());
+  InodeSPtr inode = inode_cache.Get(entry_out.attr.ino());
   ASSERT_TRUE(inode != nullptr) << "get inode fail.";
 
   {
@@ -619,7 +619,7 @@ TEST_F(FileSystemTest, SymlinkWithDir) {
     ASSERT_GT(entry_out.attr.ino(), 0) << "ino is invalid.";
     ASSERT_EQ(name, entry_out.name) << "ino is invalid.";
 
-    InodeSPtr sym_inode = inode_cache.GetInode(entry_out.attr.ino());
+    InodeSPtr sym_inode = inode_cache.Get(entry_out.attr.ino());
     ASSERT_TRUE(sym_inode != nullptr) << "get inode fail.";
     ASSERT_EQ(pb::mds::FileType::SYM_LINK, sym_inode->Type())
         << "inode type not equal.";
@@ -647,7 +647,7 @@ TEST_F(FileSystemTest, ReadLink) {
   ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
   ASSERT_GT(entry_out.attr.ino(), 0) << "ino is invalid.";
 
-  InodeSPtr inode = inode_cache.GetInode(entry_out.attr.ino());
+  InodeSPtr inode = inode_cache.Get(entry_out.attr.ino());
   ASSERT_TRUE(inode != nullptr) << "get inode fail.";
 
   {
@@ -688,7 +688,7 @@ TEST_F(FileSystemTest, SetXAttr) {
   ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
   ASSERT_GT(entry_out.attr.ino(), 0) << "ino is invalid.";
 
-  InodeSPtr inode = inode_cache.GetInode(entry_out.attr.ino());
+  InodeSPtr inode = inode_cache.Get(entry_out.attr.ino());
   ASSERT_TRUE(inode != nullptr) << "get inode fail.";
 
   Inode::XAttrMap xattr;
@@ -718,7 +718,7 @@ TEST_F(FileSystemTest, GetXAttr) {
   ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
   ASSERT_GT(entry_out.attr.ino(), 0) << "ino is invalid.";
 
-  InodeSPtr inode = inode_cache.GetInode(entry_out.attr.ino());
+  InodeSPtr inode = inode_cache.Get(entry_out.attr.ino());
   ASSERT_TRUE(inode != nullptr) << "get inode fail.";
 
   Inode::XAttrMap xattr;
@@ -806,8 +806,8 @@ TEST_F(FileSystemTest, RenameWithSameDir) {
 
   auto partition = partition_cache.Get(old_parent_ino);
   Dentry dentry;
-  ASSERT_FALSE(partition->GetChild(old_name, dentry));
-  ASSERT_TRUE(partition->GetChild(new_name, dentry));
+  ASSERT_FALSE(partition->Get(old_name, dentry));
+  ASSERT_TRUE(partition->Get(new_name, dentry));
   ASSERT_EQ(new_name, dentry.Name());
   ASSERT_EQ(old_parent_ino, dentry.ParentIno());
 }
@@ -902,13 +902,13 @@ TEST_F(FileSystemTest, RenameWithDiffDir) {
   {
     auto partition = partition_cache.Get(old_parent_ino);
     Dentry dentry;
-    ASSERT_FALSE(partition->GetChild(old_name, dentry));
+    ASSERT_FALSE(partition->Get(old_name, dentry));
   }
 
   {
     auto partition = partition_cache.Get(new_parent_ino);
     Dentry dentry;
-    ASSERT_TRUE(partition->GetChild(new_name, dentry));
+    ASSERT_TRUE(partition->Get(new_name, dentry));
     ASSERT_EQ(new_name, dentry.Name());
     ASSERT_EQ(new_parent_ino, dentry.ParentIno());
   }

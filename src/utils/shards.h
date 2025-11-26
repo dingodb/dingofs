@@ -60,6 +60,13 @@ class Shards {
     }
   }
 
+  void iterateWLock(Func&& f) {
+    for (std::size_t idx = 0; idx < N; ++idx) {
+      Func temp_f = f;
+      withWLockAt(std::move(temp_f), idx);
+    }
+  }
+
  private:
   std::array<utils::RWLock, N> locks_;
   std::array<T, N> array_;

@@ -253,7 +253,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status GetPartition(Context& ctx, Ino parent, PartitionPtr& out_partition);
   Status GetPartition(Context& ctx, uint64_t version, Ino parent, PartitionPtr& out_partition);
   PartitionPtr GetPartitionFromCache(Ino parent);
-  std::map<uint64_t, PartitionPtr> GetAllPartitionsFromCache();
+  std::vector<PartitionPtr> GetAllPartitionsFromCache();
   Status GetPartitionFromStore(Context& ctx, Ino parent, const std::string& reason, PartitionPtr& out_partition);
 
   // get dentry
@@ -276,10 +276,11 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   // inode cache
   InodeSPtr GetInodeFromCache(Ino ino);
-  std::map<uint64_t, InodeSPtr> GetAllInodesFromCache();
+  std::vector<InodeSPtr> GetAllInodesFromCache();
   void UpsertInodeCache(Ino ino, InodeSPtr inode);
   void UpsertInodeCache(InodeSPtr inode);
-  void UpsertInodeCache(AttrEntry& attr);
+  void UpsertInodeCache(AttrEntry&& attr);
+  void UpsertInodeCache(const AttrEntry& attr);
   void DeleteInodeFromCache(Ino ino);
 
   void ClearCache();

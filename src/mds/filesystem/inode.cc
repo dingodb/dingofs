@@ -31,7 +31,7 @@
 namespace dingofs {
 namespace mds {
 
-static const std::string kInodeCacheMetricsPrefix = "dingofs_{}_inode_cache_";
+static const std::string kInodeCacheMetricsPrefix = "dingofs_{}_inode_cache_{}";
 
 // 0: no limit
 DEFINE_uint32(mds_inode_cache_max_count, 4 * 1024 * 1024, "inode cache max count");
@@ -152,7 +152,7 @@ std::string Inode::XAttr(const std::string& name) {
   return (it != attr_.xattrs().end()) ? it->second : std::string();
 }
 
-bool Inode::UpdateIf(const AttrEntry& attr) {
+bool Inode::PutIf(const AttrEntry& attr) {
   utils::WriteLockGuard lk(lock_);
 
   DINGO_LOG(INFO) << fmt::format("[inode.{}] update attr,this({}) version({}->{}).", attr_.ino(), (void*)this,
@@ -169,7 +169,7 @@ bool Inode::UpdateIf(const AttrEntry& attr) {
   return true;
 }
 
-bool Inode::UpdateIf(AttrEntry&& attr) {
+bool Inode::PutIf(AttrEntry&& attr) {
   utils::WriteLockGuard lk(lock_);
 
   DINGO_LOG(INFO) << fmt::format("[inode.{}] update attr,this({}) version({}->{}).", attr_.ino(), (void*)this,
@@ -210,69 +210,172 @@ Inode::AttrEntry&& Inode::Move() {
   return std::move(attr_);
 }
 
+void Inode::UpdateLastAccessTime() { last_access_time_s_.store(Helper::Timestamp(), std::memory_order_relaxed); }
+
+uint64_t Inode::LastAccessTimeS() { return last_access_time_s_.load(std::memory_order_relaxed); }
+
 InodeCache::InodeCache(uint32_t fs_id)
     : fs_id_(fs_id),
-      cache_(FLAGS_mds_inode_cache_max_count,
-             std::make_shared<utils::CacheMetrics>(fmt::format(kInodeCacheMetricsPrefix, fs_id))) {}
+      access_miss_count_(fmt::format(kInodeCacheMetricsPrefix, fs_id, "miss_count")),
+      access_hit_count_(fmt::format(kInodeCacheMetricsPrefix, fs_id, "hit_count")),
+      clean_count_(fmt::format(kInodeCacheMetricsPrefix, fs_id, "clean_count")) {}
 
 InodeCache::~InodeCache() {}  // NOLINT
 
-void InodeCache::PutIf(Ino ino, InodeSPtr inode) {
-  CHECK(inode != nullptr) << "old_inode is nullptr 001.";
+void InodeCache::PutIf(Ino ino, InodeSPtr& inode) {
+  CHECK(inode != nullptr) << "inode is nullptr.";
 
-  cache_.PutInplaceIf(ino, inode, [&](InodeSPtr& old_inode) {
-    if (old_inode->Version() < inode->Version()) {
-      old_inode->UpdateIf(inode->Copy());
-    }
-  });
+  shard_map_.withWLock(
+      [ino, &inode](Map& map) mutable {
+        auto it = map.find(ino);
+        if (it == map.end()) {
+          map.emplace(ino, inode);
+        } else {
+          it->second->PutIf(inode->Copy());
+        }
+      },
+      ino);
 }
 
-void InodeCache::PutIf(AttrEntry& attr) { PutIf(attr.ino(), Inode::New(attr)); }
+void InodeCache::PutIf(AttrEntry&& attr) {  // NOLINT
+  shard_map_.withWLock(
+      [&](Map& map) mutable {
+        auto it = map.find(attr.ino());
+        if (it == map.end()) {
+          const Ino ino = attr.ino();
+          map.emplace(ino, Inode::New(std::move(attr)));
+        } else {
+          it->second->PutIf(std::move(attr));
+        }
+      },
+      attr.ino());
+}
 
-void InodeCache::Delete(Ino ino) { cache_.Remove(ino); };
+void InodeCache::PutIf(const AttrEntry& attr) {
+  shard_map_.withWLock(
+      [&](Map& map) mutable {
+        auto it = map.find(attr.ino());
+        if (it == map.end()) {
+          map.emplace(attr.ino(), Inode::New(attr));
+        } else {
+          it->second->PutIf(attr);
+        }
+      },
+      attr.ino());
+}
 
-void InodeCache::BatchDeleteIf(const std::function<bool(const Ino&)>& f) {
+void InodeCache::Delete(Ino ino) {
+  shard_map_.withWLock([ino](Map& map) { map.erase(ino); }, ino);
+};
+
+void InodeCache::DeleteIf(std::function<bool(const Ino&)>&& f) {  // NOLINT
   DINGO_LOG(INFO) << fmt::format("[cache.inode.{}] batch delete inode.", fs_id_);
 
-  cache_.BatchRemoveIf(f);
+  shard_map_.iterateWLock([&](Map& map) {
+    for (auto it = map.begin(); it != map.end();) {
+      if (f(it->first)) {
+        auto temp_it = it++;
+        map.erase(temp_it);
+      } else {
+        ++it;
+      }
+    }
+  });
 }
 
 void InodeCache::Clear() {
   DINGO_LOG(INFO) << fmt::format("[cache.inode.{}] clear.", fs_id_);
 
-  cache_.Clear();
+  shard_map_.iterateWLock([&](Map& map) { map.clear(); });
 }
 
-InodeSPtr InodeCache::GetInode(Ino ino) {
+InodeSPtr InodeCache::Get(Ino ino) {
   InodeSPtr inode;
-  if (!cache_.Get(ino, &inode)) {
-    return nullptr;
+  shard_map_.withRLock(
+      [ino, &inode](Map& map) {
+        auto it = map.find(ino);
+        if (it != map.end()) {
+          inode = it->second;
+        }
+      },
+      ino);
+
+  if (inode != nullptr) {
+    inode->UpdateLastAccessTime();
+    access_hit_count_ << 1;
+
+  } else {
+    access_miss_count_ << 1;
   }
 
   return inode;
 }
 
-std::vector<InodeSPtr> InodeCache::GetInodes(std::vector<uint64_t> inoes) {
+std::vector<InodeSPtr> InodeCache::Get(std::vector<uint64_t> inoes) {
   std::vector<InodeSPtr> inodes;
-  for (auto& ino : inoes) {
-    InodeSPtr inode;
-    if (cache_.Get(ino, &inode)) {
-      inodes.push_back(inode);
-    }
+
+  for (const auto& ino : inoes) {
+    shard_map_.withRLock(
+        [ino, &inodes](Map& map) {
+          auto it = map.find(ino);
+          if (it != map.end()) {
+            inodes.push_back(it->second);
+          }
+        },
+        ino);
   }
+
+  for (auto& inode : inodes) inode->UpdateLastAccessTime();
+
+  access_hit_count_ << inodes.size();
+  access_miss_count_ << (inoes.size() - inodes.size());
 
   return inodes;
 }
 
-std::map<uint64_t, InodeSPtr> InodeCache::GetAllInodes() { return cache_.GetAll(); }
+std::vector<InodeSPtr> InodeCache::GetAll() {
+  std::vector<InodeSPtr> inodes;
+
+  shard_map_.iterate([&inodes](const Map& map) {
+    for (const auto& [_, inode] : map) {
+      inodes.push_back(inode);
+    }
+  });
+
+  return inodes;
+}
+
+size_t InodeCache::Size() {
+  size_t size = 0;
+  shard_map_.iterate([&size](const Map& map) { size += map.size(); });
+
+  return size;
+}
+
+void InodeCache::CleanExpired(uint64_t expire_s) {
+  uint64_t now_s = Helper::Timestamp();
+
+  std::vector<InodeSPtr> inodes;
+  shard_map_.iterate([&](const Map& map) {
+    for (const auto& [_, inode] : map) {
+      if (inode->LastAccessTimeS() + expire_s < now_s) {
+        inodes.push_back(inode);
+      }
+    }
+  });
+
+  for (const auto& inode : inodes) {
+    Delete(inode->Ino());
+  }
+
+  clean_count_ << inodes.size();
+}
 
 void InodeCache::DescribeByJson(Json::Value& value) {
-  const auto metrics = cache_.GetCacheMetrics();
-
-  value["cache_count"] = metrics->cacheCount.get_value();
-  value["cache_bytes"] = metrics->cacheBytes.get_value();
-  value["cache_hit"] = metrics->cacheHit.get_value();
-  value["cache_miss"] = metrics->cacheMiss.get_value();
+  value["cache_count"] = Size();
+  value["cache_hit"] = access_hit_count_.get_value();
+  value["cache_miss"] = access_miss_count_.get_value();
+  value["cache_clean"] = clean_count_.get_value();
 }
 
 }  // namespace mds

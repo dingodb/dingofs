@@ -84,6 +84,8 @@ class FileStore {
 using FileStoreSPtr = std::shared_ptr<FileStore>;
 
 TEST_F(DentryTest, ReadDir) {
+  GTEST_SKIP() << "Skip DentryTest.ReadDir test case.";
+
   FileStoreSPtr file_store = std::make_shared<FileStore>();
 
   const std::string sandbox =

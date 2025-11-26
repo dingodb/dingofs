@@ -21,8 +21,7 @@ if(USE_TCMALLOC)
   set(tcmalloc_lib "-ltcmalloc")
 endif()
 
-
-add_compile_options(-Wall -Wno-reorder -Wno-overloaded-virtual)
+add_compile_options(-Wall -Wno-reorder -Wno-overloaded-virtual -fconcepts)
 
 add_subdirectory(common)
 add_subdirectory(coordinator)

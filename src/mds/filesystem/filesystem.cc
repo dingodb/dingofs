@@ -202,14 +202,14 @@ void FileSystem::AddDentryToPartition(Ino parent, const Dentry& dentry, uint64_t
   auto partition = GetPartitionFromCache(parent);
   CHECK(partition != nullptr) << fmt::format("partition({}) not exist in cache.", parent);
 
-  partition->PutChild(dentry, version);
+  partition->Put(dentry, version);
 }
 
 void FileSystem::DeleteDentryFromPartition(Ino parent, const std::string& name, uint64_t version) {
   auto partition = GetPartitionFromCache(parent);
   CHECK(partition != nullptr) << fmt::format("partition({}) not exist in cache.", parent);
 
-  partition->DeleteChild(name, version);
+  partition->Delete(name, version);
 }
 
 Status FileSystem::GetPartition(Context& ctx, Ino parent, PartitionPtr& out_partition) {
@@ -265,7 +265,7 @@ Status FileSystem::GetPartition(Context& ctx, uint64_t version, Ino parent, Part
 
 PartitionPtr FileSystem::GetPartitionFromCache(Ino parent) { return partition_cache_.Get(parent); }
 
-std::map<uint64_t, PartitionPtr> FileSystem::GetAllPartitionsFromCache() { return partition_cache_.GetAll(); }
+std::vector<PartitionPtr> FileSystem::GetAllPartitionsFromCache() { return partition_cache_.GetAll(); }
 
 Status FileSystem::GetPartitionFromStore(Context& ctx, Ino parent, const std::string& reason,
                                          PartitionPtr& out_partition) {
@@ -303,16 +303,18 @@ Status FileSystem::GetPartitionFromStore(Context& ctx, Ino parent, const std::st
     return Status::OK();
   }
 
-  auto partition = Partition::New(parent_inode);
+  // auto partition = Partition::New(parent_inode);
+
+  auto partition = Partition(parent_inode);
 
   // add child dentry
   for (size_t i = 1; i < kvs.size(); ++i) {
     const auto& kv = kvs.at(i);
     auto dentry = MetaCodec::DecodeDentryValue(kv.value);
-    partition->PutChild(dentry, parent_inode->Version());
+    partition.Put(dentry, parent_inode->Version());
   }
 
-  out_partition = partition_cache_.PutIf(parent, partition);
+  out_partition = partition_cache_.PutIf(std::move(partition));
   UpsertInodeCache(parent, parent_inode);
 
   DINGO_LOG(INFO) << fmt::format("[fs.{}.{}.{}.{}] fetch partition, size({}) version({}) reason({}).", fs_id_, parent,
@@ -392,7 +394,7 @@ Status FileSystem::GetInode(Context& ctx, uint64_t version, const Dentry& dentry
   } while (false);
 
   if (is_fetch && status.ok()) {
-    partition->PutChildForInode(Dentry(dentry, out_inode));
+    partition->PutWithInode(Dentry(dentry, out_inode));
   }
 
   return status;
@@ -482,15 +484,17 @@ Status FileSystem::GetDelFileFromStore(Ino ino, AttrEntry& out_attr) {
   return Status::OK();
 }
 
-InodeSPtr FileSystem::GetInodeFromCache(Ino ino) { return inode_cache_.GetInode(ino); }
+InodeSPtr FileSystem::GetInodeFromCache(Ino ino) { return inode_cache_.Get(ino); }
 
-std::map<uint64_t, InodeSPtr> FileSystem::GetAllInodesFromCache() { return inode_cache_.GetAllInodes(); }
+std::vector<InodeSPtr> FileSystem::GetAllInodesFromCache() { return inode_cache_.GetAll(); }
 
 void FileSystem::UpsertInodeCache(Ino ino, InodeSPtr inode) { inode_cache_.PutIf(ino, inode); }
 
 void FileSystem::UpsertInodeCache(InodeSPtr inode) { inode_cache_.PutIf(inode->Ino(), inode); }
 
-void FileSystem::UpsertInodeCache(AttrEntry& attr) { inode_cache_.PutIf(attr); }
+void FileSystem::UpsertInodeCache(AttrEntry&& attr) { inode_cache_.PutIf(std::move(attr)); }
+
+void FileSystem::UpsertInodeCache(const AttrEntry& attr) { inode_cache_.PutIf(attr); }
 
 void FileSystem::DeleteInodeFromCache(Ino ino) { inode_cache_.Delete(ino); }
 
@@ -515,8 +519,8 @@ void FileSystem::BatchDeleteCache(uint32_t bucket_num, const std::set<uint32_t>&
     return (bucket_ids.find(bucket_id) != bucket_ids.end());
   };
 
-  partition_cache_.BatchDeleteInodeIf(check_fn);
-  inode_cache_.BatchDeleteIf(check_fn);
+  partition_cache_.DeleteIf(check_fn);
+  inode_cache_.DeleteIf(check_fn);
   chunk_cache_.BatchDeleteIf(check_fn);
 }
 
@@ -579,7 +583,7 @@ Status FileSystem::CreateRoot() {
   }
 
   UpsertInodeCache(inode);
-  partition_cache_.PutIf(dentry.INo(), Partition::New(inode));
+  partition_cache_.PutIf(Partition(inode));
 
   return Status::OK();
 }
@@ -614,7 +618,7 @@ Status FileSystem::Lookup(Context& ctx, Ino parent, const std::string& name, Ent
   }
 
   Dentry dentry;
-  if (!partition->GetChild(name, dentry)) {
+  if (!partition->Get(name, dentry)) {
     return Status(pb::error::ENOT_FOUND, fmt::format("dentry({}) not found.", name));
   }
 
@@ -1105,7 +1109,7 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
   AddDentryToPartition(parent, dentry, parent_attr.version());
 
   if (IsMonoPartition()) {
-    partition_cache_.PutIf(ino, Partition::New(inode));
+    partition_cache_.PutIf(Partition(inode));
   }
 
   // update quota
@@ -1139,7 +1143,7 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name, Ino&
   }
 
   Dentry dentry;
-  if (!partition->GetChild(name, dentry)) {
+  if (!partition->Get(name, dentry)) {
     return Status(pb::error::ENOT_FOUND, fmt::format("child dentry({}) not found.", name));
   }
 
@@ -1209,7 +1213,7 @@ Status FileSystem::ReadDir(Context& ctx, Ino ino, const std::string& last_name, 
   }
 
   entry_outs.reserve(limit);
-  auto dentries = partition->GetChildren(last_name, limit, false);
+  auto dentries = partition->Scan(last_name, limit, false);
   for (auto& dentry : dentries) {
     EntryOut entry_out;
     entry_out.name = dentry.Name();
@@ -1315,7 +1319,7 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name, Ent
   }
 
   Dentry dentry;
-  if (!partition->GetChild(name, dentry)) {
+  if (!partition->Get(name, dentry)) {
     return Status(pb::error::ENOT_FOUND, fmt::format("not found dentry({}/{})", parent, name));
   }
 
@@ -1817,7 +1821,7 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
     auto status = GetPartition(ctx, old_parent, old_parent_partition);
     if (status.ok()) {
       // delete old dentry
-      old_parent_partition->DeleteChild(old_name, old_parent_attr.version());
+      old_parent_partition->Delete(old_name, old_parent_attr.version());
       // update old parent attr
       UpsertInodeCache(old_parent_attr);
     }
@@ -1832,12 +1836,12 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
       UpsertInodeCache(new_parent_attr);
 
       // delete prev new dentry
-      if (is_exist_new_dentry) new_parent_partition->DeleteChild(new_name, new_parent_attr.version());
+      if (is_exist_new_dentry) new_parent_partition->Delete(new_name, new_parent_attr.version());
 
       // add new dentry
       Dentry new_dentry(fs_id_, new_name, new_parent, old_dentry.ino(), old_dentry.type(), 0,
                         GetInodeFromCache(old_dentry.ino()));
-      new_parent_partition->PutChild(new_dentry, new_parent_attr.version());
+      new_parent_partition->Put(new_dentry, new_parent_attr.version());
     }
 
     // delete exist new partition
@@ -2185,7 +2189,7 @@ Status FileSystem::GetDentry(Context& ctx, Ino parent, const std::string& name, 
     auto partition = GetPartitionFromCache(parent);
     if (partition != nullptr) {
       trace.SetHitPartition();
-      if (partition->GetChild(name, dentry)) {
+      if (partition->Get(name, dentry)) {
         trace.SetHitDentry();
         return Status::OK();
       }
@@ -2204,7 +2208,7 @@ Status FileSystem::ListDentry(Context& ctx, Ino parent, const std::string& last_
     auto partition = GetPartitionFromCache(parent);
     if (partition != nullptr) {
       trace.SetHitPartition();
-      dentries = partition->GetChildren(last_name, limit, is_only_dir);
+      dentries = partition->Scan(last_name, limit, is_only_dir);
       return Status::OK();
     }
   }

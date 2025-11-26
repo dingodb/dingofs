@@ -15,8 +15,9 @@
 #include "mds/filesystem/partition.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
-#include <memory>
+#include <vector>
 
 #include "fmt/format.h"
 #include "glog/logging.h"
@@ -26,7 +27,7 @@
 namespace dingofs {
 namespace mds {
 
-static const std::string kPartitionMetricsPrefix = "dingofs_{}_partition_cache_";
+static const std::string kPartitionMetricsPrefix = "dingofs_{}_partition_cache_{}";
 
 // 0: no limit
 DEFINE_uint32(mds_partition_cache_max_count, 4 * 1024 * 1024, "partition cache max count");
@@ -58,7 +59,7 @@ void Partition::SetParentInode(InodeSPtr parent_inode) {
   inode_ = parent_inode;
 }
 
-void Partition::PutChild(const Dentry& dentry, uint64_t version) {
+void Partition::Put(const Dentry& dentry, uint64_t version) {
   DINGO_LOG(DEBUG) << fmt::format("[partition.{}] put child, name({}), version({}) this({}).", ino_, dentry.Name(),
                                   version, (void*)this);
 
@@ -76,7 +77,7 @@ void Partition::PutChild(const Dentry& dentry, uint64_t version) {
   delta_version_ = std::max(version, delta_version_);
 }
 
-void Partition::PutChildForInode(const Dentry& dentry) {
+void Partition::PutWithInode(const Dentry& dentry) {
   utils::WriteLockGuard lk(lock_);
 
   auto it = children_.find(dentry.Name());
@@ -85,7 +86,7 @@ void Partition::PutChildForInode(const Dentry& dentry) {
   }
 }
 
-void Partition::DeleteChild(const std::string& name, uint64_t version) {
+void Partition::Delete(const std::string& name, uint64_t version) {
   utils::WriteLockGuard lk(lock_);
 
   Dentry detry(name);
@@ -100,37 +101,29 @@ void Partition::DeleteChild(const std::string& name, uint64_t version) {
   delta_version_ = std::max(version, delta_version_);
 }
 
-void Partition::DeleteChildIf(const std::string& name, Ino ino, uint64_t version) {
-  utils::WriteLockGuard lk(lock_);
-
-  auto it = children_.find(name);
-  if (it != children_.end() && it->second.INo() == ino) {
-    AddDeltaDentryOp(DentryOp{DentryOpType::DELETE, version, it->second});
-    children_.erase(it);
-  }
-
-  delta_version_ = std::max(version, delta_version_);
-}
-
-bool Partition::HasChild() {
+bool Partition::Empty() {
   utils::ReadLockGuard lk(lock_);
 
   return !children_.empty();
 }
 
-bool Partition::GetChild(const std::string& name, Dentry& dentry) {
+size_t Partition::Size() {
+  utils::ReadLockGuard lk(lock_);
+
+  return children_.size();
+}
+
+bool Partition::Get(const std::string& name, Dentry& dentry) {
   utils::ReadLockGuard lk(lock_);
 
   auto it = children_.find(name);
-  if (it == children_.end()) {
-    return false;
-  }
+  if (it == children_.end()) return false;
 
   dentry = it->second;
   return true;
 }
 
-std::vector<Dentry> Partition::GetChildren(const std::string& start_name, uint32_t limit, bool is_only_dir) {
+std::vector<Dentry> Partition::Scan(const std::string& start_name, uint32_t limit, bool is_only_dir) {
   utils::ReadLockGuard lk(lock_);
 
   limit = limit > 0 ? limit : UINT32_MAX;
@@ -149,7 +142,7 @@ std::vector<Dentry> Partition::GetChildren(const std::string& start_name, uint32
   return dentries;
 }
 
-std::vector<Dentry> Partition::GetAllChildren() {
+std::vector<Dentry> Partition::GetAll() {
   utils::ReadLockGuard lk(lock_);
 
   std::vector<Dentry> dentries;
@@ -162,19 +155,20 @@ std::vector<Dentry> Partition::GetAllChildren() {
   return dentries;
 }
 
-bool Partition::Merge(PartitionPtr& other_partition) {
-  CHECK(other_partition->ino_ == ino_) << "merge partition error, ino not match.";
+bool Partition::Merge(PartitionPtr& other_partition) { return Merge(std::move(*other_partition)); }
+
+bool Partition::Merge(Partition&& other_partition) {  // NOLINT
+  CHECK(other_partition.ino_ == ino_) << "merge partition error, ino not match.";
 
   utils::WriteLockGuard lk(lock_);
 
-  if (other_partition->BaseVersion() <= base_version_) return false;
+  if (other_partition.BaseVersion() <= base_version_) return false;
 
   DINGO_LOG(DEBUG) << fmt::format("[partition.{}] merge, self({},{},{},{}) other({},{}).", ino_, base_version_,
                                   delta_version_, children_.size(), delta_dentry_ops_.size(),
-                                  other_partition->BaseVersion(), other_partition->children_.size());
-
-  base_version_ = other_partition->BaseVersion();
-  children_.swap(other_partition->children_);
+                                  other_partition.BaseVersion(), other_partition.children_.size());
+  base_version_ = other_partition.BaseVersion();
+  children_.swap(other_partition.children_);
 
   // apply delta ops
   delta_dentry_ops_.sort([](const DentryOp& a, const DentryOp& b) -> bool { return a.version < b.version; });
@@ -198,6 +192,10 @@ bool Partition::Merge(PartitionPtr& other_partition) {
   return true;
 }
 
+void Partition::UpdateLastAccessTime() { last_access_time_s_.store(Helper::Timestamp(), std::memory_order_relaxed); }
+
+uint64_t Partition::LastAccessTimeS() { return last_access_time_s_.load(std::memory_order_relaxed); }
+
 void Partition::AddDeltaDentryOp(DentryOp&& op) {
   op.time_s = Helper::Timestamp();
   delta_dentry_ops_.push_back(std::move(op));
@@ -215,16 +213,50 @@ void Partition::AddDeltaDentryOp(DentryOp&& op) {
 
 PartitionCache::PartitionCache(uint32_t fs_id)
     : fs_id_(fs_id),
-      cache_(FLAGS_mds_partition_cache_max_count,
-             std::make_shared<utils::CacheMetrics>(fmt::format(kPartitionMetricsPrefix, fs_id))) {}
+      access_miss_count_(fmt::format(kPartitionMetricsPrefix, fs_id, "miss_count")),
+      access_hit_count_(fmt::format(kPartitionMetricsPrefix, fs_id, "hit_count")),
+      clean_count_(fmt::format(kPartitionMetricsPrefix, fs_id, "clean_count")) {}
+
 PartitionCache::~PartitionCache() {}  // NOLINT
 
-PartitionPtr PartitionCache::PutIf(Ino ino, PartitionPtr partition) {
+PartitionPtr PartitionCache::PutIf(PartitionPtr& partition) {
+  Ino ino = partition->INo();
   PartitionPtr new_partition = partition;
-  cache_.PutInplaceIf(ino, partition, [&](PartitionPtr& old_partition) {
-    old_partition->Merge(partition);
-    new_partition = old_partition;
-  });
+
+  shard_map_.withWLock(
+      [&](Map& map) mutable {
+        auto it = map.find(ino);
+        if (it == map.end()) {
+          map.emplace(ino, partition);
+        } else {
+          it->second->Merge(partition);
+          new_partition = it->second;
+        }
+      },
+      ino);
+
+  DINGO_LOG(DEBUG) << fmt::format("[cache.partition.{}.{}] putif, this({}).", fs_id_, ino, (void*)new_partition.get());
+
+  return new_partition;
+}
+
+PartitionPtr PartitionCache::PutIf(Partition&& partition) {  // NOLINT
+  Ino ino = partition.INo();
+  PartitionPtr new_partition;
+
+  shard_map_.withWLock(
+      [&](Map& map) mutable {
+        auto it = map.find(ino);
+        if (it == map.end()) {
+          new_partition = Partition::New(std::move(partition));
+          map.insert(std::make_pair(ino, new_partition));
+
+        } else {
+          it->second->Merge(std::move(partition));
+          new_partition = it->second;
+        }
+      },
+      ino);
 
   DINGO_LOG(DEBUG) << fmt::format("[cache.partition.{}.{}] putif, this({}).", fs_id_, ino, (void*)new_partition.get());
 
@@ -234,39 +266,97 @@ PartitionPtr PartitionCache::PutIf(Ino ino, PartitionPtr partition) {
 void PartitionCache::Delete(Ino ino) {
   DINGO_LOG(INFO) << fmt::format("[cache.partition.{}] delete partition ino({}).", fs_id_, ino);
 
-  cache_.Remove(ino);
+  shard_map_.withWLock([ino](Map& map) { map.erase(ino); }, ino);
 }
 
-void PartitionCache::BatchDeleteInodeIf(const std::function<bool(const Ino&)>& f) {
+void PartitionCache::DeleteIf(std::function<bool(const Ino&)>&& f) {  // NOLINT
   DINGO_LOG(INFO) << fmt::format("[cache.partition.{}] batch delete inode.", fs_id_);
 
-  cache_.BatchRemoveIf(f);
+  shard_map_.iterateWLock([&](Map& map) {
+    for (auto it = map.begin(); it != map.end();) {
+      if (f(it->first)) {
+        auto temp_it = it++;
+        map.erase(temp_it);
+      } else {
+        ++it;
+      }
+    }
+  });
 }
 
 void PartitionCache::Clear() {
   DINGO_LOG(INFO) << fmt::format("[cache.partition.{}] clear.", fs_id_);
 
-  cache_.Clear();
+  shard_map_.iterateWLock([&](Map& map) { map.clear(); });
 }
 
 PartitionPtr PartitionCache::Get(Ino ino) {
   PartitionPtr partition;
-  if (!cache_.Get(ino, &partition)) {
-    return nullptr;
+
+  shard_map_.withRLock(
+      [ino, &partition](Map& map) {
+        auto it = map.find(ino);
+        if (it != map.end()) {
+          partition = it->second;
+        }
+      },
+      ino);
+
+  if (partition != nullptr) {
+    partition->UpdateLastAccessTime();
+    access_hit_count_ << 1;
+
+  } else {
+    access_miss_count_ << 1;
   }
 
   return partition;
 }
 
-std::map<uint64_t, PartitionPtr> PartitionCache::GetAll() { return cache_.GetAll(); }
+std::vector<PartitionPtr> PartitionCache::GetAll() {
+  std::vector<PartitionPtr> partitions;
+
+  shard_map_.iterate([&partitions](const Map& map) {
+    for (const auto& [_, partition] : map) {
+      partitions.push_back(partition);
+    }
+  });
+
+  return partitions;
+}
+
+size_t PartitionCache::Size() {
+  size_t size = 0;
+  shard_map_.iterate([&size](const Map& map) { size += map.size(); });
+
+  return size;
+}
+
+void PartitionCache::CleanExpired(uint64_t expire_s) {
+  uint64_t now_s = Helper::Timestamp();
+
+  std::vector<PartitionPtr> partitions;
+  shard_map_.iterate([&](const Map& map) {
+    for (const auto& [_, partition] : map) {
+      if (partition->LastAccessTimeS() + expire_s < now_s) {
+        partitions.push_back(partition);
+      }
+    }
+  });
+
+  for (const auto& partition : partitions) {
+    Delete(partition->INo());
+  }
+
+  clean_count_ << partitions.size();
+}
 
 void PartitionCache::DescribeByJson(Json::Value& value) {
-  const auto metrics = cache_.GetCacheMetrics();
+  value["cache_count"] = Size();
 
-  value["cache_count"] = metrics->cacheCount.get_value();
-  value["cache_bytes"] = metrics->cacheBytes.get_value();
-  value["cache_hit"] = metrics->cacheHit.get_value();
-  value["cache_miss"] = metrics->cacheMiss.get_value();
+  value["cache_hit"] = access_hit_count_.get_value();
+  value["cache_miss"] = access_miss_count_.get_value();
+  value["cache_clean"] = clean_count_.get_value();
 }
 
 }  // namespace mds
