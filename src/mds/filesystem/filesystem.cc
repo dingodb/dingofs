@@ -1171,6 +1171,9 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name, Ino&
   auto& result = operation.GetResult();
   auto& parent_attr = result.attr;  // parent
 
+  ino = dentry.INo();
+  parent_version = parent_attr.version();
+
   // update cache
   UpsertInodeCache(parent_attr);
   DeleteDentryFromPartition(parent, name, parent_attr.version());
@@ -1189,8 +1192,6 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name, Ino&
   } else {
     partition_cache_.Delete(dentry.INo());
   }
-
-  ino = dentry.INo();
 
   return Status::OK();
 }
@@ -2791,6 +2792,12 @@ bool FileSystemSet::Init() {
     return false;
   }
 
+  constexpr size_t kFsMapSize = 1024;
+  if (!fs_map_.Init(kFsMapSize)) {
+    DINGO_LOG(ERROR) << "[fsset] init fs map fail.";
+    return false;
+  }
+
   return true;
 }
 
@@ -3172,94 +3179,46 @@ Status FileSystemSet::AllocSliceId(uint32_t num, uint64_t min_slice_id, uint64_t
 }
 
 bool FileSystemSet::AddFileSystem(FileSystemSPtr fs, bool is_force) {
-  utils::WriteLockGuard lk(lock_);
-
-  auto it = fs_map_.find(fs->FsId());
-  if (it != fs_map_.end() && !is_force) {
-    return false;
-  }
-
-  fs_map_[fs->FsId()] = fs;
-
-  return true;
+  return is_force ? fs_map_.Put(fs->FsId(), fs) : fs_map_.PutIfAbsent(fs->FsId(), fs);
 }
 
-void FileSystemSet::DeleteFileSystem(uint32_t fs_id) {
-  utils::WriteLockGuard lk(lock_);
+void FileSystemSet::DeleteFileSystem(uint32_t fs_id) { fs_map_.Erase(fs_id); }
 
-  fs_map_.erase(fs_id);
-}
+bool FileSystemSet::IsExistFileSystem(uint32_t fs_id) { return fs_map_.IsExist(fs_id); }
 
-bool FileSystemSet::IsExistFileSystem(uint32_t fs_id) {
-  utils::ReadLockGuard lk(lock_);
-
-  return fs_map_.find(fs_id) != fs_map_.end();
-}
-
-FileSystemSPtr FileSystemSet::GetFileSystem(uint32_t fs_id) {
-  utils::ReadLockGuard lk(lock_);
-
-  auto it = fs_map_.find(fs_id);
-  return it != fs_map_.end() ? it->second : nullptr;
-}
+FileSystemSPtr FileSystemSet::GetFileSystem(uint32_t fs_id) { return fs_map_.Get(fs_id); }
 
 FileSystemSPtr FileSystemSet::GetFileSystem(const std::string& fs_name) {
-  utils::ReadLockGuard lk(lock_);
-
-  for (auto& [fs_id, fs] : fs_map_) {
-    if (fs->FsName() == fs_name) {
-      return fs;
-    }
-  }
-
-  return nullptr;
+  return fs_map_.Filter([&fs_name](const auto&, const auto& fs) { return fs->FsName() == fs_name; });
 }
 
 uint32_t FileSystemSet::GetFsId(const std::string& fs_name) {
-  utils::ReadLockGuard lk(lock_);
-
-  for (auto& [fs_id, fs] : fs_map_) {
-    if (fs->FsName() == fs_name) {
-      return fs_id;
-    }
-  }
-
-  return 0;
+  auto fs = GetFileSystem(fs_name);
+  return fs != nullptr ? fs->FsId() : 0;
 }
 
 std::string FileSystemSet::GetFsName(uint32_t fs_id) {
-  utils::ReadLockGuard lk(lock_);
+  auto fs = fs_map_.Filter([fs_id](const auto&, const auto& fs) { return fs->FsId() == fs_id; });
 
-  auto it = fs_map_.find(fs_id);
-  return it != fs_map_.end() ? it->second->FsName() : "";
+  return fs != nullptr ? fs->FsName() : "";
 }
 
 std::string FileSystemSet::GetFsName(const std::string& client_id) {
-  utils::ReadLockGuard lk(lock_);
-
-  for (auto& [fs_id, fs] : fs_map_) {
+  auto fs = fs_map_.Filter([client_id](const auto&, const auto& fs) {
     auto fs_info = fs->GetFsInfo();
     for (const auto& mountpoint : fs_info.mount_points()) {
       if (mountpoint.client_id() == client_id) {
-        return fs->FsName();
+        return true;
       }
     }
-  }
 
-  return "";  // not found
+    return false;
+  });
+
+  return fs != nullptr ? fs->FsName() : "";
 }
 
-std::vector<FileSystemSPtr> FileSystemSet::GetAllFileSystem() {
-  utils::ReadLockGuard lk(lock_);
-
-  std::vector<FileSystemSPtr> fses;
-  fses.reserve(fs_map_.size());
-  for (const auto& [fs_id, fs] : fs_map_) {
-    fses.push_back(fs);
-  }
-
-  return fses;
-}
+std::vector<FileSystemSPtr> FileSystemSet::GetAllFileSystem() { return fs_map_.GetAll(); }
 
 Status FileSystemSet::CheckMdsNormal(const std::vector<uint64_t>& mds_ids) {
   for (const auto& mds_id : mds_ids) {
@@ -3272,10 +3231,10 @@ Status FileSystemSet::CheckMdsNormal(const std::vector<uint64_t>& mds_ids) {
 }
 
 std::vector<std::string> FileSystemSet::GetAllClientId() {
-  utils::ReadLockGuard lk(lock_);
+  auto fses = GetAllFileSystem();
 
   std::vector<std::string> client_ids;
-  for (const auto& [fs_id, fs] : fs_map_) {
+  for (const auto& fs : fses) {
     auto fs_info = fs->GetFsInfo();
     for (const auto& mountpoint : fs_info.mount_points()) {
       client_ids.push_back(mountpoint.client_id());

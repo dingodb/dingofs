@@ -17,8 +17,8 @@
 #ifndef DINGOFS_SRC_UTILS_DOUBLY_MAP_H_
 #define DINGOFS_SRC_UTILS_DOUBLY_MAP_H_
 
+#include <cstddef>
 #include <functional>
-#include <utility>
 #include <vector>
 
 #include "butil/containers/doubly_buffered_data.h"
@@ -27,8 +27,6 @@
 
 namespace dingofs {
 namespace utils {
-
-#define RESP_OK 1
 
 template <typename M>
 class DoublyMap {
@@ -41,6 +39,8 @@ class DoublyMap {
   using IterFn =
       std::function<void(const KeyType& key, const ValueType& value)>;
   using FilterFn = std::function<bool(const KeyType&, const ValueType&)>;
+
+  static constexpr int RESP_OK = 1;
 
   DoublyMap() = default;
   ~DoublyMap() = default;
@@ -293,6 +293,8 @@ class DoublyMap<butil::FlatMap<K, V>> {
   using IterFn =
       std::function<void(const KeyType& key, const ValueType& value)>;
   using FilterFn = std::function<bool(const KeyType&, const ValueType&)>;
+
+  static constexpr int RESP_OK = 1;
 
   DoublyMap() = default;
   ~DoublyMap() { Clear(); }

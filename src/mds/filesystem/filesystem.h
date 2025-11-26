@@ -44,6 +44,7 @@
 #include "mds/quota/quota.h"
 #include "mds/storage/storage.h"
 #include "utils/concurrent/concurrent.h"
+#include "utils/doubly_map.h"
 
 namespace dingofs {
 namespace mds {
@@ -465,9 +466,12 @@ class FileSystemSet {
   MDSMetaMapSPtr mds_meta_map_;
 
   // protect fs_map_
-  utils::RWLock lock_;
+  // utils::RWLock lock_;
+  // // key: fs_id
+  // std::map<uint32_t, FileSystemSPtr> fs_map_;
+
   // key: fs_id
-  std::map<uint32_t, FileSystemSPtr> fs_map_;
+  utils::DoublyMap<butil::FlatMap<uint32_t, FileSystemSPtr>> fs_map_;
 };
 
 }  // namespace mds
