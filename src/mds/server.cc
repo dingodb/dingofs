@@ -64,6 +64,7 @@ DEFINE_uint32(mds_crontab_mdsmonitor_interval_s, 5, "mds monitor interval second
 DEFINE_uint32(mds_crontab_quota_sync_interval_s, 3, "quota sync interval seconds");
 DEFINE_uint32(mds_crontab_gc_interval_s, 60, "gc interval seconds");
 DEFINE_uint32(mds_crontab_cache_member_sync_interval_s, 3, "cache member sync interval seconds");
+DEFINE_uint32(mds_crontab_clean_expired_cache_interval_s, 600, "clean expired cache interval seconds");
 
 // log config
 DEFINE_string(mds_log_level, "INFO", "log level, DEBUG, INFO, WARNING, ERROR, FATAL");
@@ -351,6 +352,14 @@ bool Server::InitCrontab() {
       FLAGS_mds_crontab_gc_interval_s * 1000,
       true,
       [](void*) { Server::GetInstance().GetGcProcessor()->Run(); },
+  });
+
+  // Add filesystem cache crontab
+  crontab_configs_.push_back({
+      "CLEAN_EXPIRED_CACHE",
+      FLAGS_mds_crontab_clean_expired_cache_interval_s * 1000,
+      true,
+      [](void*) { Server::GetInstance().GetFileSystemSet()->CleanExpiredCache(); },
   });
 
   // Add cache member sync crontab

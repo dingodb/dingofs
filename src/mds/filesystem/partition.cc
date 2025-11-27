@@ -333,6 +333,8 @@ size_t PartitionCache::Size() {
 }
 
 void PartitionCache::CleanExpired(uint64_t expire_s) {
+  if (Size() < FLAGS_mds_partition_cache_max_count) return;
+
   uint64_t now_s = Helper::Timestamp();
 
   std::vector<PartitionPtr> partitions;
@@ -349,6 +351,9 @@ void PartitionCache::CleanExpired(uint64_t expire_s) {
   }
 
   clean_count_ << partitions.size();
+
+  DINGO_LOG(INFO) << fmt::format("[cache.partition.{}] clean expired, stat({}|{}|{}).", fs_id_, Size(),
+                                 partitions.size(), clean_count_.get_value());
 }
 
 void PartitionCache::DescribeByJson(Json::Value& value) {

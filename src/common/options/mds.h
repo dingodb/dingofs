@@ -96,6 +96,9 @@ DECLARE_uint32(mds_distribution_lock_scan_size);
 DECLARE_uint32(mds_filesystem_name_max_size);
 DECLARE_uint32(mds_filesystem_hash_bucket_num);
 
+// cache config
+DECLARE_uint32(mds_cache_expire_interval_s);
+
 // compaction config
 DECLARE_bool(mds_compact_chunk_enable);
 DECLARE_bool(mds_compact_chunk_detail_log_enable);

@@ -44,7 +44,7 @@ namespace mds {
 
 DECLARE_uint32(mds_scan_batch_size);
 
-DEFINE_uint32(mds_gc_worker_num, 128, "gc worker set num");
+DEFINE_uint32(mds_gc_worker_num, 256, "gc worker set num");
 DEFINE_validator(mds_gc_worker_num, brpc::PassValidate);
 DEFINE_uint32(mds_gc_max_pending_task_count, 8192, "gc max pending task count");
 DEFINE_validator(mds_gc_max_pending_task_count, brpc::PassValidate);

@@ -83,6 +83,9 @@ DEFINE_validator(mds_compact_chunk_interval_ms, brpc::PassValidate);
 DEFINE_uint32(mds_transfer_max_slice_num, 8096, "Max slice num for transfer.");
 DEFINE_validator(mds_transfer_max_slice_num, brpc::PassValidate);
 
+DEFINE_uint32(mds_cache_expire_interval_s, 7200, "Cache expire interval in seconds.");
+DEFINE_validator(mds_cache_expire_interval_s, brpc::PassValidate);
+
 static bool IsInvalidName(const std::string& name) {
   return name.empty() || name.size() > FLAGS_mds_filesystem_name_max_size;
 }
@@ -2741,6 +2744,11 @@ Status FileSystem::UpdatePartitionPolicy(const std::map<uint64_t, BucketSetEntry
   return Status::OK();
 }
 
+void FileSystem::CleanExpiredCache() {
+  partition_cache_.CleanExpired(FLAGS_mds_cache_expire_interval_s);
+  inode_cache_.CleanExpired(FLAGS_mds_cache_expire_interval_s);
+}
+
 void FileSystem::DescribeByJson(Json::Value& value) {
   value["fs_id"] = fs_id_;
   value["fs_name"] = fs_info_->GetName();
@@ -3419,6 +3427,13 @@ bool FileSystemSet::LoadFileSystems() {
   }
 
   return true;
+}
+
+void FileSystemSet::CleanExpiredCache() {
+  auto fses = GetAllFileSystem();
+  for (const auto& fs : fses) {
+    fs->CleanExpiredCache();
+  }
 }
 
 Status FileSystemSet::DestroyFsResource(uint32_t fs_id) {

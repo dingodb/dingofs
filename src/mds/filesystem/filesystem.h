@@ -230,6 +230,8 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   FileSessionManager& GetFileSessionManager() { return file_session_manager_; }
 
+  void CleanExpiredCache();
+
   void DescribeByJson(Json::Value& value);
 
  private:
@@ -423,6 +425,8 @@ class FileSystemSet {
 
   // load already exist filesystem
   bool LoadFileSystems();
+
+  void CleanExpiredCache();
 
   void DescribeByJson(Json::Value& value);
 

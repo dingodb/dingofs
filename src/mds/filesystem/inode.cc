@@ -353,6 +353,8 @@ size_t InodeCache::Size() {
 }
 
 void InodeCache::CleanExpired(uint64_t expire_s) {
+  if (Size() < FLAGS_mds_inode_cache_max_count) return;
+
   uint64_t now_s = Helper::Timestamp();
 
   std::vector<InodeSPtr> inodes;
@@ -369,6 +371,9 @@ void InodeCache::CleanExpired(uint64_t expire_s) {
   }
 
   clean_count_ << inodes.size();
+
+  DINGO_LOG(INFO) << fmt::format("[cache.inode.{}] clean expired, stat({}|{}|{}).", fs_id_, Size(), inodes.size(),
+                                 clean_count_.get_value());
 }
 
 void InodeCache::DescribeByJson(Json::Value& value) {
