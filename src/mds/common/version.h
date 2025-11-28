@@ -26,16 +26,8 @@ namespace mds {
 #define GIT_VERSION "unknown"
 #endif
 
-#ifndef MAJOR_VERSION
-#define MAJOR_VERSION "v4"
-#endif
-
-#ifndef MINOR_VERSION
-#define MINOR_VERSION "1"
-#endif
-
 #ifndef GIT_TAG_NAME
-#define GIT_TAG_NAME "v4.1.0"
+#define GIT_TAG_NAME "unknown"
 #endif
 
 #ifndef GIT_COMMIT_USER
@@ -52,6 +44,10 @@ namespace mds {
 
 #ifndef DINGOFS_BUILD_TYPE
 #define DINGOFS_BUILD_TYPE "unknown"
+#endif
+
+#ifndef GIT_LAST_COMMIT_ID
+#define GIT_LAST_COMMIT_ID "unknown"
 #endif
 
 std::string DingoVersionString();

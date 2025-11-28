@@ -23,13 +23,12 @@
 namespace dingofs {
 namespace mds {
 
-static const std::string kGitCommitHash = GIT_VERSION;
+static const std::string kGitVersion = GIT_VERSION;
 static const std::string kGitTagName = GIT_TAG_NAME;
+static const std::string kGitLastCommit = GIT_LAST_COMMIT_ID;
 static const std::string kGitCommitUser = GIT_COMMIT_USER;
 static const std::string kGitCommitMail = GIT_COMMIT_MAIL;
 static const std::string kGitCommitTime = GIT_COMMIT_TIME;
-static const std::string kMajorVersion = MAJOR_VERSION;
-static const std::string kMinorVersion = MINOR_VERSION;
 static const std::string kDingoFsBuildType = DINGOFS_BUILD_TYPE;
 static bool kUseTcmalloc = false;
 static bool kUseProfiler = false;
@@ -60,9 +59,9 @@ static std::string GetBuildFlag() {
 
 std::string DingoVersionString() {
   std::ostringstream oss;
-  oss << fmt::format("DINGOFS VERSION:[{}-{}]\n", kMajorVersion.c_str(), kMinorVersion.c_str());
-  oss << fmt::format("DINGOFS GIT_TAG_VERSION:[{}]\n", kGitTagName.c_str());
-  oss << fmt::format("DINGOFS GIT_COMMIT_HASH:[{}]\n", kGitCommitHash.c_str());
+  oss << fmt::format("DINGOFS VERSION:[{}]\n", kGitVersion.c_str());
+  oss << fmt::format("DINGOFS GIT_LAST_TAG:[{}]\n", kGitTagName.c_str());
+  oss << fmt::format("DINGOFS GIT_COMMIT_HASH:[{}]\n", kGitLastCommit.c_str());
   oss << fmt::format("DINGOFS BUILD_TYPE:[{}]\n", kDingoFsBuildType.c_str());
   oss << GetBuildFlag() << "\n";
 
@@ -72,9 +71,9 @@ std::string DingoVersionString() {
 void DingoShowVersion() { std::cout << DingoVersionString(); }
 
 void DingoLogVersion() {
-  DINGO_LOG(INFO) << "DINGOFS VERSION:[" << kMajorVersion << "-" << kMinorVersion << "]";
-  DINGO_LOG(INFO) << "DINGOFS GIT_TAG_VERSION:[" << kGitTagName << "]";
-  DINGO_LOG(INFO) << "DINGOFS GIT_COMMIT_HASH:[" << kGitCommitHash << "]";
+  DINGO_LOG(INFO) << "DINGOFS VERSION:[" << kGitVersion << "]";
+  DINGO_LOG(INFO) << "DINGOFS GIT_LAST_TAG:[" << kGitTagName << "]";
+  DINGO_LOG(INFO) << "DINGOFS GIT_COMMIT_HASH:[" << kGitLastCommit << "]";
   DINGO_LOG(INFO) << "DINGOFS BUILD_TYPE:[" << kDingoFsBuildType << "]";
   DINGO_LOG(INFO) << GetBuildFlag();
   DINGO_LOG(INFO) << "PID: " << getpid();
@@ -82,9 +81,8 @@ void DingoLogVersion() {
 
 std::vector<std::pair<std::string, std::string>> DingoVersion() {
   std::vector<std::pair<std::string, std::string>> result;
-  result.emplace_back("VERSION", fmt::format("{}.{}", kMajorVersion, kMinorVersion));
-  result.emplace_back("TAG_VERSION", kGitTagName);
-  result.emplace_back("COMMIT_HASH", kGitCommitHash);
+  result.emplace_back("LAST_TAG", kGitTagName);
+  result.emplace_back("COMMIT_HASH", kGitLastCommit);
   result.emplace_back("COMMIT_USER", kGitCommitUser);
   result.emplace_back("COMMIT_MAIL", kGitCommitMail);
   result.emplace_back("COMMIT_TIME", kGitCommitTime);
@@ -93,9 +91,9 @@ std::vector<std::pair<std::string, std::string>> DingoVersion() {
   return result;
 }
 
-std::string GetGitVersion() { return fmt::format("{}.{}", kMajorVersion, kMinorVersion); }
+std::string GetGitVersion() { return kGitVersion; }
 
-std::string GetGitCommitHash() { return kGitCommitHash; }
+std::string GetGitCommitHash() { return kGitLastCommit; }
 
 std::string GetGitCommitTime() { return kGitCommitTime; }
 

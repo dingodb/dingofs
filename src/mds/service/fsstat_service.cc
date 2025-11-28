@@ -594,23 +594,24 @@ static void RenderGitVersion(butil::IOBufBuilder& os) {
 }
 
 static void RenderStorageEngine(butil::IOBufBuilder& os) {
-  os << R"(<div style="margin:2px;font-size:smaller;text-align:center">)";
-  os << fmt::format(R"(<p>storage engine [{}]</p>)", FLAGS_mds_storage_engine);
-  os << "</div>";
-}
-
-static void RenderCoordinatorAddr(const std::string& addrs, butil::IOBufBuilder& os) {
   os << R"(<div style="margin:8px;font-size:smaller;text-align:center">)";
-  os << R"(<h3>coordinator: )";
+  if (FLAGS_mds_storage_engine == "dingo-store") {
+    os << fmt::format(R"(<h3>storage[{}] coordinator: )", FLAGS_mds_storage_engine);
 
-  std::vector<std::string> addr_vec;
-  Helper::SplitString(addrs, ',', addr_vec);
+    std::string coor_addr = Server::GetInstance().GetCoordinatorClient()->GetAddr();
+    std::vector<std::string> addr_vec;
+    Helper::SplitString(coor_addr, ',', addr_vec);
 
-  for (const auto& addr : addr_vec) {
-    os << fmt::format(R"(<a href="http://{}" target="_blank">{}</a>&nbsp)", addr, addr);
+    for (const auto& addr : addr_vec) {
+      os << fmt::format(R"(<a href="http://{}" target="_blank">{}</a>&nbsp)", addr, addr);
+    }
+
+    os << "</h3>";
+
+  } else {
+    os << fmt::format(R"(<h3>storage[{}]</h3>)", FLAGS_mds_storage_engine);
   }
 
-  os << "</h3>";
   os << "</div>";
 }
 
@@ -631,12 +632,6 @@ void FsStatServiceImpl::RenderMainPage(const brpc::Server* server, FileSystemSet
 
   // storage engine
   RenderStorageEngine(os);
-
-  // coordinator addr
-  if (FLAGS_mds_storage_engine == "dingo-store") {
-    std::string coor_addr = Server::GetInstance().GetCoordinatorClient()->GetAddr();
-    RenderCoordinatorAddr(coor_addr, os);
-  }
 
   // fs stats
   Context ctx;
