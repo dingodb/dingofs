@@ -14,22 +14,20 @@
 
 #include "mds/storage/dummy_storage.h"
 
-#include "bthread/mutex.h"
+#include <cstddef>
+
 #include "dingofs/error.pb.h"
 #include "mds/common/helper.h"
 
 namespace dingofs {
 namespace mds {
 
-DummyStorage::DummyStorage() { CHECK(bthread_mutex_init(&mutex_, nullptr) == 0) << "init mutex fail."; }
-DummyStorage::~DummyStorage() { CHECK(bthread_mutex_destroy(&mutex_) == 0) << "destory mutex fail."; }
-
 bool DummyStorage::Init(const std::string&) { return true; }
 
 bool DummyStorage::Destroy() { return true; }
 
 Status DummyStorage::CreateTable(const std::string& name, const TableOption& option, int64_t& table_id) {
-  BAIDU_SCOPED_LOCK(mutex_);
+  utils::WriteLockGuard lock(lock_);
 
   tables_[++next_table_id_] = Table{name, option.start_key, option.end_key};
   table_id = next_table_id_;
@@ -38,29 +36,33 @@ Status DummyStorage::CreateTable(const std::string& name, const TableOption& opt
 }
 
 Status DummyStorage::DropTable(int64_t table_id) {
-  BAIDU_SCOPED_LOCK(mutex_);
+  utils::WriteLockGuard lock(lock_);
 
   tables_.erase(table_id);
 
   return Status::OK();
 }
 
-Status DummyStorage::DropTable(const Range& range) { return Status(pb::error::ENOT_SUPPORT, "not implemented"); }
+Status DummyStorage::DropTable(const Range& range) {
+  utils::WriteLockGuard lock(lock_);
 
-Status DummyStorage::IsExistTable(const std::string& start_key, const std::string& end_key) {
-  BAIDU_SCOPED_LOCK(mutex_);
-
-  for (const auto& [table_id, table] : tables_) {
-    if (table.start_key == start_key && table.end_key == end_key) {
-      return Status::OK();
+  for (auto it = tables_.begin(); it != tables_.end();) {
+    if (it->second.start_key == range.start && it->second.end_key == range.end) {
+      it = tables_.erase(it);
+    } else {
+      ++it;
     }
   }
 
-  return Status(pb::error::ENOT_FOUND, "table not exist");
+  return Status::OK();
+}
+
+Status DummyStorage::IsExistTable(const std::string& start_key, const std::string& end_key) {  // NOLINT
+  return Status::OK();
 }
 
 Status DummyStorage::Put(WriteOption option, const std::string& key, const std::string& value) {
-  BAIDU_SCOPED_LOCK(mutex_);
+  utils::WriteLockGuard lock(lock_);
 
   if (option.is_if_absent) {
     auto it = data_.find(key);
@@ -75,7 +77,7 @@ Status DummyStorage::Put(WriteOption option, const std::string& key, const std::
 }
 
 Status DummyStorage::Put(WriteOption option, KeyValue& kv) {
-  BAIDU_SCOPED_LOCK(mutex_);
+  utils::WriteLockGuard lock(lock_);
 
   if (option.is_if_absent) {
     auto it = data_.find(kv.key);
@@ -94,7 +96,7 @@ Status DummyStorage::Put(WriteOption option, KeyValue& kv) {
 }
 
 Status DummyStorage::Put(WriteOption option, const std::vector<KeyValue>& kvs) {
-  BAIDU_SCOPED_LOCK(mutex_);
+  utils::WriteLockGuard lock(lock_);
 
   if (option.is_if_absent) {
     for (const auto& kv : kvs) {
@@ -117,7 +119,7 @@ Status DummyStorage::Put(WriteOption option, const std::vector<KeyValue>& kvs) {
 }
 
 Status DummyStorage::Get(const std::string& key, std::string& value) {
-  BAIDU_SCOPED_LOCK(mutex_);
+  utils::ReadLockGuard lock(lock_);
 
   auto it = data_.find(key);
   if (it == data_.end()) {
@@ -130,7 +132,7 @@ Status DummyStorage::Get(const std::string& key, std::string& value) {
 }
 
 Status DummyStorage::BatchGet(const std::vector<std::string>& keys, std::vector<KeyValue>& kvs) {
-  BAIDU_SCOPED_LOCK(mutex_);
+  utils::ReadLockGuard lock(lock_);
 
   for (const auto& key : keys) {
     auto it = data_.find(key);
@@ -142,10 +144,21 @@ Status DummyStorage::BatchGet(const std::vector<std::string>& keys, std::vector<
   return Status::OK();
 }
 
-Status DummyStorage::Scan(const Range& range, std::vector<KeyValue>& kvs) { return Status::OK(); }
+Status DummyStorage::Scan(const Range& range, std::vector<KeyValue>& kvs) {
+  utils::ReadLockGuard lock(lock_);
+
+  for (auto it = data_.lower_bound(range.start); it != data_.end(); ++it) {
+    if (it->first >= range.end) {
+      break;
+    }
+    kvs.push_back(KeyValue{KeyValue::OpType::kPut, it->first, it->second});
+  }
+
+  return Status::OK();
+}
 
 Status DummyStorage::Delete(const std::string& key) {
-  BAIDU_SCOPED_LOCK(mutex_);
+  utils::WriteLockGuard lock(lock_);
 
   data_.erase(key);
 
@@ -153,7 +166,7 @@ Status DummyStorage::Delete(const std::string& key) {
 }
 
 Status DummyStorage::Delete(const std::vector<std::string>& keys) {
-  BAIDU_SCOPED_LOCK(mutex_);
+  utils::WriteLockGuard lock(lock_);
 
   for (const auto& key : keys) {
     data_.erase(key);
@@ -174,7 +187,8 @@ DummyTxn::DummyTxn(DummyStorage* storage, Txn::IsolationLevel isolation_level)
 int64_t DummyTxn::ID() const { return txn_id_; }
 
 Status DummyTxn::Put(const std::string& key, const std::string& value) {
-  return storage_->Put(KVStorage::WriteOption{}, key, value);
+  stage_writes_.push_back(KeyValue{KeyValue::OpType::kPut, key, value});
+  return Status::OK();
 }
 
 Status DummyTxn::PutIfAbsent(const std::string& key, const std::string& value) {
@@ -184,16 +198,68 @@ Status DummyTxn::PutIfAbsent(const std::string& key, const std::string& value) {
   return storage_->Put(option, key, value);
 }
 
-Status DummyTxn::Delete(const std::string& key) { return storage_->Delete(key); }
+Status DummyTxn::Delete(const std::string& key) {
+  stage_writes_.push_back(KeyValue{KeyValue::OpType::kDelete, key, ""});
 
-Status DummyTxn::Get(const std::string& key, std::string& value) { return storage_->Get(key, value); }
+  return Status::OK();
+}
+
+Status DummyTxn::Get(const std::string& key, std::string& value) {
+  // check staged writes first
+  for (size_t i = stage_writes_.size(); i > 0; --i) {
+    auto& kv = stage_writes_[i - 1];
+
+    if (kv.key == key) {
+      if (kv.opt_type == KeyValue::OpType::kPut) {
+        value = kv.value;
+        return Status::OK();
+
+      } else if (kv.opt_type == KeyValue::OpType::kDelete) {
+        return Status(pb::error::ENOT_FOUND, "key not found");
+      }
+    }
+  }
+
+  return storage_->Get(key, value);
+}
 
 Status DummyTxn::BatchGet(const std::vector<std::string>& keys, std::vector<KeyValue>& kvs) {
-  return storage_->BatchGet(keys, kvs);
+  // check staged writes first
+  std::vector<std::string> rest_keys;
+  for (const auto& key : keys) {
+    bool found = false;
+    for (size_t i = stage_writes_.size(); i > 0; --i) {
+      auto& kv = stage_writes_[i - 1];
+
+      if (kv.key == key) {
+        if (kv.opt_type == KeyValue::OpType::kPut) {
+          kvs.push_back(kv);
+        }
+
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) rest_keys.push_back(key);
+  }
+
+  std::vector<KeyValue> rest_kvs;
+  auto status = storage_->BatchGet(rest_keys, rest_kvs);
+  if (!status.ok()) return status;
+
+  kvs.insert(kvs.end(), rest_kvs.begin(), rest_kvs.end());
+
+  return Status::OK();
 }
 
 Status DummyTxn::Scan(const Range& range, uint64_t limit, std::vector<KeyValue>& kvs) {
-  return storage_->Scan(range, kvs);
+  auto status = storage_->Scan(range, kvs);
+  if (!status.ok()) return status;
+
+  if (kvs.size() > limit) kvs.resize(limit);
+
+  return status;
 }
 
 Status DummyTxn::Scan(const Range& range, ScanHandlerType handler) {
@@ -228,7 +294,7 @@ Status DummyTxn::Scan(const Range& range, std::function<bool(KeyValue&)> handler
   return status;
 }
 
-Status DummyTxn::Commit() { return Status::OK(); }
+Status DummyTxn::Commit() { return storage_->Put(KVStorage::WriteOption(), stage_writes_); }
 
 Trace::Txn DummyTxn::GetTrace() { return Trace::Txn(); }
 

@@ -18,17 +18,19 @@
 #include <cstdint>
 #include <map>
 #include <string>
+#include <vector>
 
-#include "bthread/types.h"
+#include "absl/container/btree_map.h"
 #include "mds/storage/storage.h"
+#include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 namespace mds {
 
 class DummyStorage : public KVStorage {
  public:
-  DummyStorage();
-  ~DummyStorage() override;
+  DummyStorage() = default;
+  ~DummyStorage() override = default;
 
   static KVStorageSPtr New() { return std::make_shared<DummyStorage>(); }
 
@@ -58,12 +60,12 @@ class DummyStorage : public KVStorage {
     std::string end_key;
   };
 
-  bthread_mutex_t mutex_;
+  utils::RWLock lock_;
 
   int64_t next_table_id_{0};
   std::map<int64_t, Table> tables_;
 
-  std::map<std::string, std::string> data_;
+  absl::btree_map<std::string, std::string> data_;
 };
 
 class DummyTxn : public Txn {
@@ -92,6 +94,8 @@ class DummyTxn : public Txn {
   DummyStorage* storage_{nullptr};
 
   Txn::IsolationLevel isolation_level_;
+
+  std::vector<KeyValue> stage_writes_;
 };
 
 }  // namespace mds

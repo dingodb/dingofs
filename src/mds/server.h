@@ -125,6 +125,7 @@ class Server {
   std::vector<CrontabConfig> crontab_configs_;
 
   // coordinator client
+  bool need_coordinator_{true};
   CoordinatorClientSPtr coordinator_client_;
 
   // backend kv storage

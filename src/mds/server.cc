@@ -38,6 +38,7 @@
 #include "mds/service/mds_service.h"
 #include "mds/statistics/fs_stat.h"
 #include "mds/storage/dingodb_storage.h"
+#include "mds/storage/dummy_storage.h"
 
 #ifdef USE_TCMALLOC
 #include "gperftools/malloc_extension.h"
@@ -77,6 +78,9 @@ DEFINE_string(mds_server_listen_host, "0.0.0.0", "server listen host");
 DEFINE_uint32(mds_server_port, 7801, "server port");
 DEFINE_bool(mds_cache_member_enable_cache, true, "cache member enable cache, default:true");
 
+DECLARE_string(mds_storage_engine);
+DECLARE_string(mds_id_generator_type);
+
 Server::~Server() {}  // NOLINT
 
 Server& Server::GetInstance() {
@@ -101,7 +105,13 @@ static LogLevel GetDingoLogLevel(const std::string& log_level) {
 }
 
 bool Server::InitConfig(const std::string& path) {
-  DINGO_LOG(INFO) << "init config: " << path;
+  DINGO_LOG(INFO) << fmt::format("config path: {}", path);
+
+  DINGO_LOG(INFO) << fmt::format("mds_server_id: {}", FLAGS_mds_server_id);
+  DINGO_LOG(INFO) << fmt::format("mds_server_host: {}:{}", FLAGS_mds_server_host, FLAGS_mds_server_port);
+  DINGO_LOG(INFO) << fmt::format("mds_storage_engine: {}", FLAGS_mds_storage_engine);
+  DINGO_LOG(INFO) << fmt::format("mds_id_generator_type: {}", FLAGS_mds_id_generator_type);
+  DINGO_LOG(INFO) << fmt::format("mds_log_path: {}", FLAGS_mds_log_path);
 
   if (FLAGS_mds_server_id == 0) {
     DINGO_LOG(ERROR) << "mds server id is 0, please set a valid id.";
@@ -128,6 +138,16 @@ bool Server::InitConfig(const std::string& path) {
     DINGO_LOG(ERROR) << "mds log path is empty, please set a valid log path.";
     return false;
   }
+  if (FLAGS_mds_storage_engine != "dingo-store" && FLAGS_mds_storage_engine != "dummy") {
+    DINGO_LOG(ERROR) << fmt::format("unsupported mds storage engine({}).", FLAGS_mds_storage_engine);
+    return false;
+  }
+  if (FLAGS_mds_id_generator_type != "coor" && FLAGS_mds_id_generator_type != "store") {
+    DINGO_LOG(ERROR) << fmt::format("unsupported mds id generator type({}).", FLAGS_mds_id_generator_type);
+    return false;
+  }
+
+  need_coordinator_ = (FLAGS_mds_storage_engine == "dingo-store");
 
   return true;
 }
@@ -159,6 +179,10 @@ bool Server::InitMDSMeta() {
 }
 
 bool Server::InitCoordinatorClient(const std::string& coor_url) {
+  if (FLAGS_mds_storage_engine != "dingo-store") {
+    return true;
+  }
+
   DINGO_LOG(INFO) << fmt::format("init coordinator client, addr({}).", coor_url);
 
   std::string coor_addrs = Helper::ParseCoorAddr(coor_url);
@@ -173,11 +197,20 @@ bool Server::InitCoordinatorClient(const std::string& coor_url) {
 }
 
 bool Server::InitStorage(const std::string& store_url) {
-  DINGO_LOG(INFO) << fmt::format("init storage, url({}).", store_url);
+  DINGO_LOG(INFO) << fmt::format("init storage, engine({}) url({}).", FLAGS_mds_storage_engine, store_url);
   CHECK(!store_url.empty()) << "store url is empty.";
 
-  kv_storage_ = DingodbStorage::New();
-  CHECK(kv_storage_ != nullptr) << "new DingodbStorage fail.";
+  if (FLAGS_mds_storage_engine == "dingo-store") {
+    kv_storage_ = DingodbStorage::New();
+
+  } else if (FLAGS_mds_storage_engine == "dummy") {
+    kv_storage_ = DummyStorage::New();
+
+  } else {
+    DINGO_LOG(ERROR) << fmt::format("unsupported mds storage engine({}).", FLAGS_mds_storage_engine);
+    return false;
+  }
+  CHECK(kv_storage_ != nullptr) << "new dingodb storage fail.";
 
   std::string store_addrs = Helper::ParseCoorAddr(store_url);
   if (store_addrs.empty()) {
@@ -209,17 +242,29 @@ bool Server::InitCacheGroupMemberManager() {
 bool Server::InitFileSystem() {
   DINGO_LOG(INFO) << "init filesystem.";
 
-  CHECK(coordinator_client_ != nullptr) << "coordinator client is nullptr.";
+  CHECK((!need_coordinator_ || coordinator_client_ != nullptr)) << "coordinator client is nullptr.";
   CHECK(kv_storage_ != nullptr) << "kv storage is nullptr.";
   CHECK(mds_meta_map_ != nullptr) << "mds_meta_map is nullptr.";
   CHECK(operation_processor_ != nullptr) << "operation_processor is nullptr.";
   CHECK(notify_buddy_ != nullptr) << "notify_buddy is nullptr.";
 
-  auto fs_id_generator = NewFsIdGenerator(coordinator_client_, kv_storage_);
+  IdGeneratorUPtr fs_id_generator;
+  IdGeneratorSPtr slice_id_generator;
+  if (FLAGS_mds_storage_engine == "dingo-store") {
+    fs_id_generator =
+        (FLAGS_mds_id_generator_type == "coor") ? NewFsIdGenerator(coordinator_client_) : NewFsIdGenerator(kv_storage_);
+
+    slice_id_generator = (FLAGS_mds_id_generator_type == "coor") ? NewSliceIdGenerator(coordinator_client_)
+                                                                 : NewSliceIdGenerator(kv_storage_);
+
+  } else if (FLAGS_mds_storage_engine == "dummy") {
+    fs_id_generator = NewFsIdGenerator(kv_storage_);
+    slice_id_generator = NewSliceIdGenerator(kv_storage_);
+  }
+
   CHECK(fs_id_generator != nullptr) << "new fs AutoIncrementIdGenerator fail.";
   CHECK(fs_id_generator->Init()) << "init fs AutoIncrementIdGenerator fail.";
 
-  auto slice_id_generator = NewSliceIdGenerator(coordinator_client_, kv_storage_);
   CHECK(slice_id_generator != nullptr) << "new slice AutoIncrementIdGenerator fail.";
   CHECK(slice_id_generator->Init()) << "init slice AutoIncrementIdGenerator fail.";
 
@@ -272,7 +317,7 @@ bool Server::InitNotifyBuddy() {
 }
 
 bool Server::InitMonitor() {
-  CHECK(coordinator_client_ != nullptr) << "coordinator client is nullptr.";
+  CHECK((!need_coordinator_ || coordinator_client_ != nullptr)) << "coordinator client is nullptr.";
   CHECK(self_mds_meta_.ID() > 0) << "mds id is invalid.";
   CHECK(kv_storage_ != nullptr) << "kv storage is nullptr.";
   CHECK(notify_buddy_ != nullptr) << "notify_buddy is nullptr.";
@@ -434,16 +479,12 @@ FsInfoSyncSPtr Server::GetFsInfoSync() { return fs_info_sync_; }
 CacheMemberSynchronizerSPtr& Server::GetCacheMemberSynchronizer() { return cache_member_synchronizer_; }
 
 CoordinatorClientSPtr Server::GetCoordinatorClient() {
-  CHECK(coordinator_client_ != nullptr) << "coordinator_client is nullptr.";
+  CHECK((!need_coordinator_ || coordinator_client_ != nullptr)) << "coordinator client is nullptr.";
 
   return coordinator_client_;
 }
 
-FileSystemSetSPtr Server::GetFileSystemSet() {
-  CHECK(coordinator_client_ != nullptr) << "coordinator_client is nullptr.";
-
-  return file_system_set_;
-}
+FileSystemSetSPtr Server::GetFileSystemSet() { return file_system_set_; }
 
 notify::NotifyBuddySPtr Server::GetNotifyBuddy() {
   CHECK(notify_buddy_ != nullptr) << "notify_buddy is nullptr.";

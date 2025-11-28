@@ -28,7 +28,9 @@ DECLARE_string(mds_gc_lock_name);
 
 DECLARE_string(mds_pid_file_name);
 
-DECLARE_string(mds_id_generator_type);
+// storage config
+DECLARE_string(mds_storage_engine);     // e.g dingo-store|dummy
+DECLARE_string(mds_id_generator_type);  // e.g coor|store
 
 // quota config
 DECLARE_uint32(mds_quota_worker_num);

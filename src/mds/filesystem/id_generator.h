@@ -136,11 +136,17 @@ class StoreAutoIncrementIdGenerator : public IdGenerator {
   bool is_destroyed_{false};
 };
 
-IdGeneratorUPtr NewFsIdGenerator(CoordinatorClientSPtr coordinator_client, KVStorageSPtr kv_storage);
-IdGeneratorUPtr NewInodeIdGenerator(uint32_t fs_id, CoordinatorClientSPtr coordinator_client, KVStorageSPtr kv_storage);
-IdGeneratorSPtr NewSliceIdGenerator(CoordinatorClientSPtr coordinator_client, KVStorageSPtr kv_storage);
+IdGeneratorUPtr NewFsIdGenerator(CoordinatorClientSPtr coordinator_client);
+IdGeneratorUPtr NewFsIdGenerator(KVStorageSPtr kv_storage);
 
-void DestroyInodeIdGenerator(uint32_t fs_id, CoordinatorClientSPtr coordinator_client, KVStorageSPtr kv_storage);
+IdGeneratorUPtr NewInodeIdGenerator(uint32_t fs_id, CoordinatorClientSPtr coordinator_client);
+IdGeneratorUPtr NewInodeIdGenerator(uint32_t fs_id, KVStorageSPtr kv_storage);
+
+IdGeneratorSPtr NewSliceIdGenerator(CoordinatorClientSPtr coordinator_client);
+IdGeneratorSPtr NewSliceIdGenerator(KVStorageSPtr kv_storage);
+
+void DestroyInodeIdGenerator(uint32_t fs_id, CoordinatorClientSPtr coordinator_client);
+void DestroyInodeIdGenerator(uint32_t fs_id, KVStorageSPtr kv_storage);
 
 }  // namespace mds
 }  // namespace dingofs

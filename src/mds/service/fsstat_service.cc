@@ -50,6 +50,8 @@ DECLARE_uint32(mds_heartbeat_client_offline_period_ms);
 DECLARE_uint32(cache_member_heartbeat_offline_timeout_s);
 DECLARE_uint32(cache_member_heartbeat_miss_timeout_s);
 
+DECLARE_string(mds_storage_engine);
+
 static std::string RenderHead(const std::string& title) {
   butil::IOBufBuilder os;
 
@@ -587,13 +589,19 @@ static void RenderJsonPage(const std::string& title, const std::string& header, 
 
 static void RenderGitVersion(butil::IOBufBuilder& os) {
   os << R"(<div style="margin:2px;font-size:smaller;text-align:center">)";
-  os << fmt::format(R"(<p >{} {} {}</p>)", GetGitVersion(), GetGitCommitHash(), GetGitCommitTime());
+  os << fmt::format(R"(<p>{} {} {}</p>)", GetGitVersion(), GetGitCommitHash(), GetGitCommitTime());
+  os << "</div>";
+}
+
+static void RenderStorageEngine(butil::IOBufBuilder& os) {
+  os << R"(<div style="margin:2px;font-size:smaller;text-align:center">)";
+  os << fmt::format(R"(<p>storage engine [{}]</p>)", FLAGS_mds_storage_engine);
   os << "</div>";
 }
 
 static void RenderCoordinatorAddr(const std::string& addrs, butil::IOBufBuilder& os) {
   os << R"(<div style="margin:8px;font-size:smaller;text-align:center">)";
-  os << R"(<h3>Coordinator: )";
+  os << R"(<h3>coordinator: )";
 
   std::vector<std::string> addr_vec;
   Helper::SplitString(addrs, ',', addr_vec);
@@ -621,9 +629,14 @@ void FsStatServiceImpl::RenderMainPage(const brpc::Server* server, FileSystemSet
   // git version
   RenderGitVersion(os);
 
+  // storage engine
+  RenderStorageEngine(os);
+
   // coordinator addr
-  std::string coor_addr = Server::GetInstance().GetCoordinatorClient()->GetAddr();
-  RenderCoordinatorAddr(coor_addr, os);
+  if (FLAGS_mds_storage_engine == "dingo-store") {
+    std::string coor_addr = Server::GetInstance().GetCoordinatorClient()->GetAddr();
+    RenderCoordinatorAddr(coor_addr, os);
+  }
 
   // fs stats
   Context ctx;

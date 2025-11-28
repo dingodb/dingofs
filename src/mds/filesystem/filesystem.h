@@ -434,6 +434,9 @@ class FileSystemSet {
   friend class FsStatServiceImpl;
   friend class GcProcessor;
 
+  IdGeneratorUPtr NewInoGenerator(uint32_t fs_id);
+  void DestroyInoGenerator(uint32_t fs_id);
+
   IdGenerator& GetFsIdGenerator() { return *fs_id_generator_; }
   IdGenerator& GetSliceIdGenerator() { return *slice_id_generator_; }
 

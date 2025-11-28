@@ -14,6 +14,8 @@
 
 #include "mds/filesystem/id_generator.h"
 
+#include <gflags/gflags_declare.h>
+
 #include <algorithm>
 #include <cstdint>
 #include <string>
@@ -31,10 +33,6 @@ namespace dingofs {
 namespace mds {
 
 DECLARE_uint32(mds_txn_max_retry_times);
-
-DEFINE_string(mds_id_generator_type, "coor", "id generator type, coor or store");
-DEFINE_validator(mds_id_generator_type,
-                 [](const char*, const std::string& value) -> bool { return value == "coor" || value == "store"; });
 
 const std::string kFsAutoIncrementIdName = "dingofs-fs-id";
 static const int64_t kFsTableId = 1000;
@@ -359,60 +357,59 @@ Status StoreAutoIncrementIdGenerator::DestroyId() {
   return status;
 }
 
-IdGeneratorUPtr NewFsIdGenerator(CoordinatorClientSPtr coordinator_client, KVStorageSPtr kv_storage) {
-  if (FLAGS_mds_id_generator_type == "coor") {
-    return CoorAutoIncrementIdGenerator::New(coordinator_client, kFsAutoIncrementIdName, kFsTableId, kFsIdStartId,
-                                             kFsIdBatchSize);
+IdGeneratorUPtr NewFsIdGenerator(CoordinatorClientSPtr coordinator_client) {
+  CHECK(coordinator_client != nullptr) << "coordinator_client is nullptr.";
 
-  } else if (FLAGS_mds_id_generator_type == "store") {
-    return StoreAutoIncrementIdGenerator::New(kv_storage, kFsAutoIncrementIdName, kFsIdStartId, kFsIdBatchSize);
-
-  } else {
-    CHECK(false) << fmt::format("invalid id generator type({}), use coor|store.", FLAGS_mds_id_generator_type);
-  }
+  return CoorAutoIncrementIdGenerator::New(coordinator_client, kFsAutoIncrementIdName, kFsTableId, kFsIdStartId,
+                                           kFsIdBatchSize);
 }
 
-IdGeneratorUPtr NewInodeIdGenerator(uint32_t fs_id, CoordinatorClientSPtr coordinator_client,
-                                    KVStorageSPtr kv_storage) {
+IdGeneratorUPtr NewFsIdGenerator(KVStorageSPtr kv_storage) {
+  CHECK(kv_storage != nullptr) << "kv_storage is nullptr.";
+  return StoreAutoIncrementIdGenerator::New(kv_storage, kFsAutoIncrementIdName, kFsIdStartId, kFsIdBatchSize);
+}
+
+IdGeneratorUPtr NewInodeIdGenerator(uint32_t fs_id, CoordinatorClientSPtr coordinator_client) {
+  CHECK(coordinator_client != nullptr) << "coordinator_client is nullptr.";
+
   std::string name = fmt::format("{}-{}", kInoAutoIncrementIdName, fs_id);
-  if (FLAGS_mds_id_generator_type == "coor") {
-    return CoorAutoIncrementIdGenerator::New(coordinator_client, name, fs_id, kInoStartId, kInoBatchSize);
 
-  } else if (FLAGS_mds_id_generator_type == "store") {
-    return StoreAutoIncrementIdGenerator::New(kv_storage, name, kInoStartId, kInoBatchSize);
-
-  } else {
-    CHECK(false) << fmt::format("invalid id generator type({}), use coor|store.", FLAGS_mds_id_generator_type);
-  }
+  return CoorAutoIncrementIdGenerator::New(coordinator_client, name, fs_id, kInoStartId, kInoBatchSize);
 }
 
-IdGeneratorSPtr NewSliceIdGenerator(CoordinatorClientSPtr coordinator_client, KVStorageSPtr kv_storage) {
-  if (FLAGS_mds_id_generator_type == "coor") {
-    return CoorAutoIncrementIdGenerator::NewShare(coordinator_client, kSliceAutoIncrementIdName, kSliceTableId,
-                                                  kSliceIdStartId, kSliceIdBatchSize);
-
-  } else if (FLAGS_mds_id_generator_type == "store") {
-    return StoreAutoIncrementIdGenerator::NewShare(kv_storage, kSliceAutoIncrementIdName, kSliceIdStartId,
-                                                   kSliceIdBatchSize);
-
-  } else {
-    CHECK(false) << fmt::format("invalid id generator type({}), use coor|store.", FLAGS_mds_id_generator_type);
-  }
-}
-
-void DestroyInodeIdGenerator(uint32_t fs_id, CoordinatorClientSPtr coordinator_client, KVStorageSPtr kv_storage) {
+IdGeneratorUPtr NewInodeIdGenerator(uint32_t fs_id, KVStorageSPtr kv_storage) {
+  CHECK(kv_storage != nullptr) << "kv_storage is nullptr.";
   std::string name = fmt::format("{}-{}", kInoAutoIncrementIdName, fs_id);
-  if (FLAGS_mds_id_generator_type == "coor") {
-    auto id_generator = CoorAutoIncrementIdGenerator::New(coordinator_client, name, fs_id, kInoStartId, kInoBatchSize);
-    id_generator->Destroy();
 
-  } else if (FLAGS_mds_id_generator_type == "store") {
-    auto id_generator = StoreAutoIncrementIdGenerator::New(kv_storage, name, kInoStartId, kInoBatchSize);
-    id_generator->Destroy();
+  return StoreAutoIncrementIdGenerator::New(kv_storage, name, kInoStartId, kInoBatchSize);
+}
 
-  } else {
-    CHECK(false) << fmt::format("invalid id generator type({}), use coor|store.", FLAGS_mds_id_generator_type);
-  }
+IdGeneratorSPtr NewSliceIdGenerator(CoordinatorClientSPtr coordinator_client) {
+  CHECK(coordinator_client != nullptr) << "coordinator_client is nullptr.";
+  return CoorAutoIncrementIdGenerator::NewShare(coordinator_client, kSliceAutoIncrementIdName, kSliceTableId,
+                                                kSliceIdStartId, kSliceIdBatchSize);
+}
+
+IdGeneratorSPtr NewSliceIdGenerator(KVStorageSPtr kv_storage) {
+  CHECK(kv_storage != nullptr) << "kv_storage is nullptr.";
+  return StoreAutoIncrementIdGenerator::NewShare(kv_storage, kSliceAutoIncrementIdName, kSliceIdStartId,
+                                                 kSliceIdBatchSize);
+}
+
+void DestroyInodeIdGenerator(uint32_t fs_id, CoordinatorClientSPtr coordinator_client) {
+  CHECK(coordinator_client != nullptr) << "coordinator_client is nullptr.";
+  std::string name = fmt::format("{}-{}", kInoAutoIncrementIdName, fs_id);
+
+  auto id_generator = CoorAutoIncrementIdGenerator::New(coordinator_client, name, fs_id, kInoStartId, kInoBatchSize);
+  id_generator->Destroy();
+}
+
+void DestroyInodeIdGenerator(uint32_t fs_id, KVStorageSPtr kv_storage) {
+  CHECK(kv_storage != nullptr) << "kv_storage is nullptr.";
+  std::string name = fmt::format("{}-{}", kInoAutoIncrementIdName, fs_id);
+
+  auto id_generator = StoreAutoIncrementIdGenerator::New(kv_storage, name, kInoStartId, kInoBatchSize);
+  id_generator->Destroy();
 }
 
 }  // namespace mds

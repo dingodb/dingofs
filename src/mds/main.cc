@@ -330,8 +330,8 @@ int main(int argc, char* argv[]) {
 
   dingofs::mds::Server& server = dingofs::mds::Server::GetInstance();
 
-  CHECK(server.InitConfig(FLAGS_conf)) << fmt::format("init config({}) error.", FLAGS_conf);
   CHECK(server.InitLog()) << "init log error.";
+  CHECK(server.InitConfig(FLAGS_conf)) << fmt::format("init config({}) error.", FLAGS_conf);
   CHECK(GeneratePidFile(server.GetPidFilePath())) << "generate pid file error.";
   CHECK(server.InitMDSMeta()) << "init mds meta error.";
   CHECK(server.InitCoordinatorClient(FLAGS_coor_url)) << "init coordinator client error.";

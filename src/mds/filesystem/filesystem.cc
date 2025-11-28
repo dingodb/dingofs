@@ -15,6 +15,7 @@
 #include "mds/filesystem/filesystem.h"
 
 #include <fcntl.h>
+#include <gflags/gflags_declare.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
@@ -85,6 +86,9 @@ DEFINE_validator(mds_transfer_max_slice_num, brpc::PassValidate);
 
 DEFINE_uint32(mds_cache_expire_interval_s, 7200, "Cache expire interval in seconds.");
 DEFINE_validator(mds_cache_expire_interval_s, brpc::PassValidate);
+
+DEFINE_string(mds_storage_engine, "dummy", "mds storage engine, e.g dingo-store|dummy");
+DEFINE_string(mds_id_generator_type, "coor", "id generator type, e.g coor|store");
 
 static bool IsInvalidName(const std::string& name) {
   return name.empty() || name.size() > FLAGS_mds_filesystem_name_max_size;
@@ -2789,7 +2793,6 @@ FileSystemSet::FileSystemSet(CoordinatorClientSPtr coordinator_client, IdGenerat
 FileSystemSet::~FileSystemSet() {}  // NOLINT
 
 bool FileSystemSet::Init() {
-  CHECK(coordinator_client_ != nullptr) << "coordinator client is null.";
   CHECK(kv_storage_ != nullptr) << "kv_storage is null.";
   CHECK(mds_meta_map_ != nullptr) << "mds_meta_map is null.";
   CHECK(operation_processor_ != nullptr) << "operation_processor is null.";
@@ -2811,6 +2814,33 @@ bool FileSystemSet::Init() {
   }
 
   return true;
+}
+
+IdGeneratorUPtr FileSystemSet::NewInoGenerator(uint32_t fs_id) {
+  IdGeneratorUPtr ino_id_generator;
+
+  if (FLAGS_mds_storage_engine == "dingo-store") {
+    ino_id_generator = (FLAGS_mds_id_generator_type == "coor") ? NewInodeIdGenerator(fs_id, coordinator_client_)
+                                                               : NewInodeIdGenerator(fs_id, kv_storage_);
+
+  } else if (FLAGS_mds_storage_engine == "dummy") {
+    ino_id_generator = NewInodeIdGenerator(fs_id, kv_storage_);
+  }
+
+  return ino_id_generator;
+}
+
+void FileSystemSet::DestroyInoGenerator(uint32_t fs_id) {
+  if (FLAGS_mds_storage_engine == "dingo-store") {
+    if (FLAGS_mds_id_generator_type == "coor") {
+      DestroyInodeIdGenerator(fs_id, coordinator_client_);
+    } else {
+      DestroyInodeIdGenerator(fs_id, kv_storage_);
+    }
+
+  } else if (FLAGS_mds_storage_engine == "dummy") {
+    DestroyInodeIdGenerator(fs_id, kv_storage_);
+  }
 }
 
 Status FileSystemSet::GenFsId(uint32_t& fs_id) {
@@ -3018,7 +3048,7 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, FsInfoEntry& fs_info)
   }
 
   // create FileSystem instance
-  auto ino_id_generator = NewInodeIdGenerator(fs_id, coordinator_client_, kv_storage_);
+  auto ino_id_generator = NewInoGenerator(fs_id);
   CHECK(ino_id_generator != nullptr) << "new id generator fail.";
 
   auto fs = FileSystem::New(self_mds_meta_.ID(), FsInfo::New(fs_info), std::move(ino_id_generator), slice_id_generator_,
@@ -3410,7 +3440,7 @@ bool FileSystemSet::LoadFileSystems() {
     // add new fs
     DINGO_LOG(INFO) << fmt::format("[fsset.{}.{}] add new fs.", fs_info.fs_name(), fs_info.fs_id());
 
-    auto ino_id_generator = NewInodeIdGenerator(fs_info.fs_id(), coordinator_client_, kv_storage_);
+    auto ino_id_generator = NewInoGenerator(fs_info.fs_id());
     CHECK(ino_id_generator != nullptr) << "new id generator fail.";
 
     fs = FileSystem::New(self_mds_meta_.ID(), FsInfo::New(fs_info), std::move(ino_id_generator), slice_id_generator_,
@@ -3445,7 +3475,7 @@ Status FileSystemSet::DestroyFsResource(uint32_t fs_id) {
   }
 
   // inode id generator
-  DestroyInodeIdGenerator(fs_id, coordinator_client_, kv_storage_);
+  DestroyInoGenerator(fs_id);
 
   return Status::OK();
 }

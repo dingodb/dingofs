@@ -91,11 +91,11 @@ DEFINE_validator(client_vfs_meta_logging, brpc::PassValidate);
 DEFINE_int64(client_vfs_meta_log_threshold_us, 1000, "access log threshold");
 DEFINE_validator(client_vfs_meta_log_threshold_us, brpc::PassValidate);
 
-DEFINE_uint64(client_vfs_meta_memo_expired_s, 3600,
+DEFINE_uint64(client_vfs_meta_memo_expired_s, 1,
               "modify time memo expired time");
 DEFINE_validator(client_vfs_meta_memo_expired_s, brpc::PassValidate);
 
-DEFINE_uint64(client_vfs_meta_inode_cache_expired_s, 3600,
+DEFINE_uint64(client_vfs_meta_inode_cache_expired_s, 1,
               "inode cache expired time");
 DEFINE_validator(client_vfs_meta_inode_cache_expired_s, brpc::PassValidate);
 
