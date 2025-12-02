@@ -101,10 +101,6 @@ Status RemoteCacheNodeImpl::Shutdown() {
 
   LOG(INFO) << "Remote node is shutting down: member = " << member_.ToString();
 
-  if (!joiner_->Shutdown().ok()) {
-    LOG(ERROR) << "Shutdown bthread joiner failed.";
-  }
-
   health_checker_->Shutdown();
 
   if (!state_machine_->Shutdown()) {
@@ -119,7 +115,9 @@ Status RemoteCacheNodeImpl::Shutdown() {
 
 Status RemoteCacheNodeImpl::Put(ContextSPtr ctx, const BlockKey& key,
                                 const Block& block) {
-  CHECK_RUNNING("Remote cache node");
+  if (!IsRunning()) {
+    return Status::Internal("remote cache node is not running");
+  }
 
   auto status = CheckHealth(ctx);
   if (!status.ok()) {
@@ -136,7 +134,9 @@ Status RemoteCacheNodeImpl::Put(ContextSPtr ctx, const BlockKey& key,
 Status RemoteCacheNodeImpl::Range(ContextSPtr ctx, const BlockKey& key,
                                   off_t offset, size_t length, IOBuffer* buffer,
                                   RangeOption option) {
-  CHECK_RUNNING("Remote cache node");
+  if (!IsRunning()) {
+    return Status::Internal("remote cache node is not running");
+  }
 
   auto status = CheckHealth(ctx);
   if (!status.ok()) {
@@ -156,7 +156,9 @@ Status RemoteCacheNodeImpl::Range(ContextSPtr ctx, const BlockKey& key,
 
 Status RemoteCacheNodeImpl::Cache(ContextSPtr ctx, const BlockKey& key,
                                   const Block& block) {
-  CHECK_RUNNING("Remote cache node");
+  if (!IsRunning()) {
+    return Status::Internal("remote cache node is not running");
+  }
 
   auto status = CheckHealth(ctx);
   if (!status.ok()) {
@@ -172,7 +174,9 @@ Status RemoteCacheNodeImpl::Cache(ContextSPtr ctx, const BlockKey& key,
 
 Status RemoteCacheNodeImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
                                      size_t length) {
-  CHECK_RUNNING("Remote cache node");
+  if (!IsRunning()) {
+    return Status::Internal("remote cache node is not running");
+  }
 
   auto status = CheckHealth(ctx);
   if (!status.ok()) {

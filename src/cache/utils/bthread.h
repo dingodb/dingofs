@@ -40,6 +40,7 @@ bthread_t RunInBthread(std::function<void()> func);
 class BthreadJoiner {
  public:
   BthreadJoiner();
+  ~BthreadJoiner();
 
   Status Start();
   Status Shutdown();

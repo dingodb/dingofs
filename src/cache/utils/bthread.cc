@@ -65,6 +65,8 @@ bthread_t RunInBthread(std::function<void()> func) {
 
 BthreadJoiner::BthreadJoiner() : running_(false), queue_id_({0}) {}
 
+BthreadJoiner::~BthreadJoiner() { Shutdown(); }
+
 Status BthreadJoiner::Start() {
   if (running_) {
     return Status::OK();

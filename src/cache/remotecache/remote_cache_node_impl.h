@@ -59,6 +59,8 @@ class RemoteCacheNodeImpl final : public RemoteCacheNode {
   Status Prefetch(ContextSPtr ctx, const BlockKey& key, size_t length) override;
 
  private:
+  bool IsRunning() { return running_.load(std::memory_order_relaxed); }
+
   std::vector<SubRangeRequest> SplitRange(off_t offset, size_t length,
                                           size_t blksize);
   void Subrequest(std::function<void()> func);
