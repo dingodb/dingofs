@@ -23,6 +23,7 @@
 #include <filesystem>
 #include <fstream>
 #include <random>
+#include <regex>
 #include <string>
 #include <thread>
 
@@ -431,8 +432,13 @@ std::string Helper::EndPointToString(const butil::EndPoint& endpoint) {
   return std::string(butil::endpoint2str(endpoint).c_str());
 }
 
-static bool IsValidFileAddr(const std::string& coor_url) { return coor_url.substr(0, 7) == "file://"; }
-static bool IsValidListAddr(const std::string& coor_url) { return coor_url.substr(0, 7) == "list://"; }
+static bool IsValidFileAddr(const std::string& url) { return url.substr(0, 7) == "file://"; }
+static bool IsValidListAddr(const std::string& url) { return url.substr(0, 7) == "list://"; }
+static bool IsValidBareAddr(const std::string& url) {
+  // check 127.0.0.1:80 or 127.0.0.1:80,127.0.0.1:81 use regex
+  std::regex ip_port_list_regex(R"(^((\d{1,3}\.){3}\d{1,3}:\d{1,5})(,(\d{1,3}\.){3}\d{1,3}:\d{1,5})*$)");
+  return std::regex_match(url, ip_port_list_regex);
+}
 
 static std::string ParseFileUrl(const std::string& coor_url) {
   CHECK(coor_url.substr(0, 7) == "file://") << "Invalid coor_url: " << coor_url;
@@ -461,25 +467,25 @@ static std::string ParseFileUrl(const std::string& coor_url) {
   return addrs.empty() ? "" : addrs.substr(0, addrs.size() - 1);
 }
 
-static std::string ParseListUrl(const std::string& coor_url) {
-  CHECK(coor_url.substr(0, 7) == "list://") << "Invalid coor_url: " << coor_url;
+static std::string ParseListUrl(const std::string& url) {
+  CHECK(url.substr(0, 7) == "list://") << "invalid url: " << url;
 
-  return coor_url.substr(7);
+  return url.substr(7);
 }
 
-std::string Helper::ParseCoorAddr(const std::string& coor_url) {
-  std::string coor_addrs;
-  if (IsValidFileAddr(coor_url)) {
-    coor_addrs = ParseFileUrl(coor_url);
+std::string Helper::ParseStorageAddr(const std::string& url) {
+  std::string storage_addrs;
+  if (IsValidFileAddr(url)) {
+    storage_addrs = ParseFileUrl(url);
 
-  } else if (IsValidListAddr(coor_url)) {
-    coor_addrs = ParseListUrl(coor_url);
+  } else if (IsValidListAddr(url)) {
+    storage_addrs = ParseListUrl(url);
 
-  } else {
-    DINGO_LOG(ERROR) << "Invalid coor_url: " << coor_url;
+  } else if (IsValidBareAddr(url)) {
+    storage_addrs = url;
   }
 
-  return coor_addrs;
+  return storage_addrs;
 }
 
 bool Helper::SaveFile(const std::string& filepath, const std::string& data) {

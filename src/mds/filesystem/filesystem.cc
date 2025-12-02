@@ -87,8 +87,14 @@ DEFINE_validator(mds_transfer_max_slice_num, brpc::PassValidate);
 DEFINE_uint32(mds_cache_expire_interval_s, 7200, "Cache expire interval in seconds.");
 DEFINE_validator(mds_cache_expire_interval_s, brpc::PassValidate);
 
-DEFINE_string(mds_storage_engine, "dummy", "mds storage engine, e.g dingo-store|dummy");
+DEFINE_string(mds_storage_engine, "dummy", "mds storage engine, e.g dingo-store|tikv|dummy");
+DEFINE_validator(mds_storage_engine, [](const char*, const std::string& value) -> bool {
+  return value == "dingo-store" || value == "tikv" || value == "dummy";
+});
+
 DEFINE_string(mds_id_generator_type, "coor", "id generator type, e.g coor|store");
+DEFINE_validator(mds_id_generator_type,
+                 [](const char*, const std::string& value) -> bool { return value == "coor" || value == "store"; });
 
 static bool IsInvalidName(const std::string& name) {
   return name.empty() || name.size() > FLAGS_mds_filesystem_name_max_size;
@@ -2835,7 +2841,7 @@ IdGeneratorUPtr FileSystemSet::NewInoGenerator(uint32_t fs_id) {
     ino_id_generator = (FLAGS_mds_id_generator_type == "coor") ? NewInodeIdGenerator(fs_id, coordinator_client_)
                                                                : NewInodeIdGenerator(fs_id, kv_storage_);
 
-  } else if (FLAGS_mds_storage_engine == "dummy") {
+  } else {
     ino_id_generator = NewInodeIdGenerator(fs_id, kv_storage_);
   }
 
@@ -2850,7 +2856,7 @@ void FileSystemSet::DestroyInoGenerator(uint32_t fs_id) {
       DestroyInodeIdGenerator(fs_id, kv_storage_);
     }
 
-  } else if (FLAGS_mds_storage_engine == "dummy") {
+  } else {
     DestroyInodeIdGenerator(fs_id, kv_storage_);
   }
 }

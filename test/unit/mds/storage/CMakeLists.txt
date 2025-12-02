@@ -13,20 +13,19 @@
 # limitations under the License.
 
 
-file(GLOB DINGOFS_MDS_STORAGE_SRCS
+file(GLOB TEST_DINGOFS_MDS_STORAGE_SRCS
   "*.cc"
 )
 
-add_library(mds_storage
-  ${DINGOFS_MDS_STORAGE_SRCS}
+add_library(test_mds_storage
+  ${TEST_DINGOFS_MDS_STORAGE_SRCS}
 )
 
-target_link_libraries(mds_storage
-  tikvcpp
-  tikvrust
-
-  mds_common
-  
+target_link_libraries(test_mds_storage
   PROTO_OBJS
+
+  mds_storage
+
   protobuf::libprotobuf
+  ${TEST_DEPS_WITHOUT_MAIN}
 )

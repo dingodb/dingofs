@@ -13,6 +13,7 @@
 
 #include "mds/filesystem/store_operation.h"
 
+#include <bthread/types.h>
 #include <fcntl.h>
 
 #include <algorithm>
@@ -2690,7 +2691,7 @@ void OperationProcessor::LaunchExecuteBatchOperation(const BatchOperation& batch
   Params* params = new Params({.self = this, .batch_operation = batch_operation});
 
   bthread_t tid;
-  bthread_attr_t attr = BTHREAD_ATTR_SMALL;
+  bthread_attr_t attr = BTHREAD_ATTR_NORMAL;
   if (bthread_start_background(
           &tid, &attr,
           [](void* arg) -> void* {

@@ -595,10 +595,10 @@ static void RenderGitVersion(butil::IOBufBuilder& os) {
 
 static void RenderStorageEngine(butil::IOBufBuilder& os) {
   os << R"(<div style="margin:8px;font-size:smaller;text-align:center">)";
-  if (FLAGS_mds_storage_engine == "dingo-store") {
-    os << fmt::format(R"(<h3>storage[{}] coordinator: )", FLAGS_mds_storage_engine);
+  if (FLAGS_mds_storage_engine == "dingo-store" || FLAGS_mds_storage_engine == "tikv") {
+    os << fmt::format(R"(<h3>storage[{}] addr: )", FLAGS_mds_storage_engine);
 
-    std::string coor_addr = Server::GetInstance().GetCoordinatorClient()->GetAddr();
+    std::string coor_addr = Server::GetInstance().GetStoreAddr();
     std::vector<std::string> addr_vec;
     Helper::SplitString(coor_addr, ',', addr_vec);
 

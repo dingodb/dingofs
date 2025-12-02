@@ -83,6 +83,7 @@ class Server {
 
   std::string GetPidFilePath();
   std::string GetListenAddr();
+  std::string GetStoreAddr();
   MDSMeta& GetMDSMeta();
   MDSMetaMapSPtr GetMDSMetaMap();
   KVStorageSPtr GetKVStorage();
@@ -113,6 +114,8 @@ class Server {
   ~Server();
 
   std::atomic<bool> stop_{false};
+
+  std::string store_addr_;
 
   // mds self info
   MDSMeta self_mds_meta_;

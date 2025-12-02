@@ -237,6 +237,9 @@ message("Using rados: ${RADOS_LIBRARIES}")
 find_package(dingosdk REQUIRED)
 message(STATUS "Found dingosdk: ${dingosdk_VERSION}")
 
+find_package(tikvcpp REQUIRED)
+message(STATUS "Found tikvcpp: ${tikvcpp_VERSION}")
+
 # ------------------------ related to source code ------------------------
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)

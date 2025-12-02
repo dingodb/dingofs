@@ -72,6 +72,7 @@ int main(int argc, char** argv) {
     default_run_case += ":MutationProcessorTest.*";
     default_run_case += ":HashPartitionHelperTest.*";
     default_run_case += ":OperationTest.*";
+    default_run_case += ":TikvStorageTest.*";
 
     testing::GTEST_FLAG(filter) = default_run_case;
   }

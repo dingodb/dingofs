@@ -284,7 +284,7 @@ bool Backup::Init(const std::string& coor_addr) {
   auto kv_storage = DingodbStorage::New();
   CHECK(kv_storage != nullptr) << "new DingodbStorage fail.";
 
-  std::string store_addrs = Helper::ParseCoorAddr(coor_addr);
+  std::string store_addrs = Helper::ParseStorageAddr(coor_addr);
   if (store_addrs.empty()) {
     return false;
   }
@@ -458,7 +458,7 @@ bool Restore::Init(const std::string& coor_addr) {
   auto kv_storage = DingodbStorage::New();
   CHECK(kv_storage != nullptr) << "new DingodbStorage fail.";
 
-  std::string store_addrs = Helper::ParseCoorAddr(coor_addr);
+  std::string store_addrs = Helper::ParseStorageAddr(coor_addr);
   if (store_addrs.empty()) {
     return false;
   }

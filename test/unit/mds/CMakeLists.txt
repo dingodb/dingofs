@@ -15,7 +15,7 @@
 add_subdirectory(common)
 add_subdirectory(filesystem)
 add_subdirectory(service)
-
+add_subdirectory(storage)
 
 add_executable(test_mds
   main.cc
@@ -29,12 +29,14 @@ target_link_libraries(test_mds
   $<TARGET_OBJECTS:test_mds_common>
   $<TARGET_OBJECTS:test_mds_filesystem>
   $<TARGET_OBJECTS:test_mds_service>
+  $<TARGET_OBJECTS:test_mds_storage>
 
   mds_common
   mds_filesystem
   mds_storage
   mds_coordinator
   mds_mds
+  mds_storage
   
   dingofs_utils
 
@@ -46,6 +48,9 @@ target_link_libraries(test_mds
   absl::strings
 
   dingo::sdk
+
+  tikvcpp
+  tikvrust
 
   protobuf::libprotobuf
   ${TEST_DEPS_WITHOUT_MAIN}

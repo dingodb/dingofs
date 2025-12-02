@@ -100,7 +100,7 @@ class Helper {
 
   static std::string EndPointToString(const butil::EndPoint& endpoint);
 
-  static std::string ParseCoorAddr(const std::string& coor_url);
+  static std::string ParseStorageAddr(const std::string& url);
 
   static bool SaveFile(const std::string& filepath, const std::string& data);
 

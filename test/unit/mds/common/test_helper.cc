@@ -149,6 +149,35 @@ TEST_F(HelperTest, CalBlockIndex) {
   }
 }
 
+TEST_F(HelperTest, ParseStorageAddr) {
+  {
+    std::string url = "127.0.0.1:80";
+    auto addrs = Helper::ParseStorageAddr(url);
+    EXPECT_EQ(addrs, url);
+  }
+
+  {
+    std::string url =
+        "127.0.0.1:80,10.220.32.40:2379,10.220.32.40:2380,10.220.32.40:23799";
+    auto addrs = Helper::ParseStorageAddr(url);
+    EXPECT_EQ(addrs, url);
+  }
+
+  {
+    std::string url = "list://127.0.0.1:80";
+    auto addrs = Helper::ParseStorageAddr(url);
+    EXPECT_EQ(addrs, url.substr(7));
+  }
+
+  {
+    std::string url =
+        "list://"
+        "127.0.0.1:80,10.220.32.40:2379,10.220.32.40:2380,10.220.32.40:23799";
+    auto addrs = Helper::ParseStorageAddr(url);
+    EXPECT_EQ(addrs, url.substr(7));
+  }
+}
+
 }  // namespace unit_test
 }  // namespace mds
 }  // namespace dingofs

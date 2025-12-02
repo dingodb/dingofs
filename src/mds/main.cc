@@ -30,7 +30,7 @@
 #include "mds/server.h"
 
 DEFINE_string(conf, "./conf/mds.conf", "mds config path");
-DEFINE_string(coor_url, "file://./conf/coor_list", "coor service url, e.g. file://<path> or list://<addr1>");
+DEFINE_string(storage_url, "file://./conf/coor_list", "storage url, e.g. file://<path> or list://<addr1>");
 
 const int kMaxStacktraceSize = 128;
 
@@ -218,7 +218,7 @@ static std::vector<gflags::CommandLineFlagInfo> GetFlags(const std::string& pref
   gflags::CommandLineFlagInfo conf_flag;
   if (gflags::GetCommandLineFlagInfo("conf", &conf_flag)) dist_flags.push_back(conf_flag);
   gflags::CommandLineFlagInfo coor_url_flag;
-  if (gflags::GetCommandLineFlagInfo("coor_url", &coor_url_flag)) dist_flags.push_back(coor_url_flag);
+  if (gflags::GetCommandLineFlagInfo("storage_url", &coor_url_flag)) dist_flags.push_back(coor_url_flag);
 
   std::vector<gflags::CommandLineFlagInfo> flags;
   gflags::GetAllFlags(&flags);
@@ -238,8 +238,8 @@ static std::string GetUsage(char* program_name) {
   oss << fmt::format("\t{} --help\n", program_name);
   oss << fmt::format("\t{} --mds_server_port=7801", program_name);
   oss << fmt::format("\t{} --conf=./conf/mds.conf", program_name);
-  oss << fmt::format("\t{} --conf=./conf/mds.conf --coor_url=file://./conf/coor_list\n", program_name);
-  oss << fmt::format("\t{} --conf=./conf/mds.conf --coor_url=list://127.0.0.1:22001\n", program_name);
+  oss << fmt::format("\t{} --conf=./conf/mds.conf --storage_url=file://./conf/coor_list\n", program_name);
+  oss << fmt::format("\t{} --conf=./conf/mds.conf --storage_url=list://127.0.0.1:22001\n", program_name);
   oss << fmt::format("\t{} [OPTIONS]\n", program_name);
 
   auto flags = GetFlags("mds_");
@@ -287,20 +287,15 @@ static bool ParseOption(int argc, char** argv) {
   return false;
 }
 
-static bool CheckCoorUrl(const std::string& coor_url) {
-  if (coor_url.empty()) {
-    std::cerr << "coor url is empty.\n";
+static bool CheckStorageUrl(const std::string& storage_url) {
+  if (storage_url.empty()) {
+    std::cerr << "storage url is empty.\n";
     return false;
   }
 
-  if (coor_url.substr(0, 7) != "file://" && coor_url.substr(0, 7) != "list://") {
-    std::cerr << "coor url must start with file:// or list://\n";
-    return false;
-  }
-
-  auto coor_addr = dingofs::mds::Helper::ParseCoorAddr(coor_url);
-  if (coor_addr.empty()) {
-    std::cerr << "coor addr is invalid, please check your coor url: " << coor_url << '\n';
+  auto storage_addr = dingofs::mds::Helper::ParseStorageAddr(storage_url);
+  if (storage_addr.empty()) {
+    std::cerr << "storage addr is invalid, please check your storage url: " << storage_url << '\n';
     return false;
   }
 
@@ -324,7 +319,7 @@ int main(int argc, char* argv[]) {
 
   gflags::ParseCommandLineNonHelpFlags(&argc, &argv, false);
 
-  if (!CheckCoorUrl(FLAGS_coor_url)) return -1;
+  if (dingofs::mds::FLAGS_mds_storage_engine != "dummy" && !CheckStorageUrl(FLAGS_storage_url)) return -1;
 
   SetupSignalHandler();
 
@@ -334,8 +329,7 @@ int main(int argc, char* argv[]) {
   CHECK(server.InitConfig(FLAGS_conf)) << fmt::format("init config({}) error.", FLAGS_conf);
   CHECK(GeneratePidFile(server.GetPidFilePath())) << "generate pid file error.";
   CHECK(server.InitMDSMeta()) << "init mds meta error.";
-  CHECK(server.InitCoordinatorClient(FLAGS_coor_url)) << "init coordinator client error.";
-  CHECK(server.InitStorage(FLAGS_coor_url)) << "init storage error.";
+  CHECK(server.InitStorage(FLAGS_storage_url)) << "init storage error.";
   CHECK(server.InitOperationProcessor()) << "init operation processor error.";
   CHECK(server.InitCacheGroupMemberManager()) << "init cache group member manager error.";
   CHECK(server.InitNotifyBuddy()) << "init notify buddy error.";

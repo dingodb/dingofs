@@ -39,6 +39,7 @@
 #include "mds/statistics/fs_stat.h"
 #include "mds/storage/dingodb_storage.h"
 #include "mds/storage/dummy_storage.h"
+#include "mds/storage/tikv_storage.h"
 
 #ifdef USE_TCMALLOC
 #include "gperftools/malloc_extension.h"
@@ -138,14 +139,6 @@ bool Server::InitConfig(const std::string& path) {
     DINGO_LOG(ERROR) << "mds log path is empty, please set a valid log path.";
     return false;
   }
-  if (FLAGS_mds_storage_engine != "dingo-store" && FLAGS_mds_storage_engine != "dummy") {
-    DINGO_LOG(ERROR) << fmt::format("unsupported mds storage engine({}).", FLAGS_mds_storage_engine);
-    return false;
-  }
-  if (FLAGS_mds_id_generator_type != "coor" && FLAGS_mds_id_generator_type != "store") {
-    DINGO_LOG(ERROR) << fmt::format("unsupported mds id generator type({}).", FLAGS_mds_id_generator_type);
-    return false;
-  }
 
   need_coordinator_ = (FLAGS_mds_storage_engine == "dingo-store");
 
@@ -179,13 +172,9 @@ bool Server::InitMDSMeta() {
 }
 
 bool Server::InitCoordinatorClient(const std::string& coor_url) {
-  if (FLAGS_mds_storage_engine != "dingo-store") {
-    return true;
-  }
-
   DINGO_LOG(INFO) << fmt::format("init coordinator client, addr({}).", coor_url);
 
-  std::string coor_addrs = Helper::ParseCoorAddr(coor_url);
+  std::string coor_addrs = Helper::ParseStorageAddr(coor_url);
   if (coor_addrs.empty()) {
     return false;
   }
@@ -198,10 +187,16 @@ bool Server::InitCoordinatorClient(const std::string& coor_url) {
 
 bool Server::InitStorage(const std::string& store_url) {
   DINGO_LOG(INFO) << fmt::format("init storage, engine({}) url({}).", FLAGS_mds_storage_engine, store_url);
-  CHECK(!store_url.empty()) << "store url is empty.";
 
   if (FLAGS_mds_storage_engine == "dingo-store") {
+    if (!InitCoordinatorClient(store_url)) {
+      DINGO_LOG(ERROR) << "init coordinator client fail.";
+      return false;
+    }
     kv_storage_ = DingodbStorage::New();
+
+  } else if (FLAGS_mds_storage_engine == "tikv") {
+    kv_storage_ = TikvStorage::New();
 
   } else if (FLAGS_mds_storage_engine == "dummy") {
     kv_storage_ = DummyStorage::New();
@@ -212,10 +207,12 @@ bool Server::InitStorage(const std::string& store_url) {
   }
   CHECK(kv_storage_ != nullptr) << "new dingodb storage fail.";
 
-  std::string store_addrs = Helper::ParseCoorAddr(store_url);
-  if (store_addrs.empty()) {
+  std::string store_addrs = Helper::ParseStorageAddr(store_url);
+  if (FLAGS_mds_storage_engine != "dummy" && store_addrs.empty()) {
     return false;
   }
+
+  store_addr_ = store_addrs;
 
   return kv_storage_->Init(store_addrs);
 }
@@ -257,7 +254,7 @@ bool Server::InitFileSystem() {
     slice_id_generator = (FLAGS_mds_id_generator_type == "coor") ? NewSliceIdGenerator(coordinator_client_)
                                                                  : NewSliceIdGenerator(kv_storage_);
 
-  } else if (FLAGS_mds_storage_engine == "dummy") {
+  } else {
     fs_id_generator = NewFsIdGenerator(kv_storage_);
     slice_id_generator = NewSliceIdGenerator(kv_storage_);
   }
@@ -455,6 +452,8 @@ std::string Server::GetListenAddr() {
 
   return fmt::format("{}:{}", host, FLAGS_mds_server_port);
 }
+
+std::string Server::GetStoreAddr() { return store_addr_; }
 
 MDSMeta& Server::GetMDSMeta() { return self_mds_meta_; }
 

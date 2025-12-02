@@ -40,7 +40,7 @@ bool StoreClient::Init(const std::string& coor_addr) {
   kv_storage_ = DingodbStorage::New();
   CHECK(kv_storage_ != nullptr) << "new DingodbStorage fail.";
 
-  std::string store_addrs = Helper::ParseCoorAddr(coor_addr);
+  std::string store_addrs = Helper::ParseStorageAddr(coor_addr);
   if (store_addrs.empty()) {
     return false;
   }
