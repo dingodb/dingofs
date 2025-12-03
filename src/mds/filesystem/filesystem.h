@@ -130,8 +130,9 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status BatchCreate(Context& ctx, Ino parent, const std::vector<MkNodParam>& params, EntryOut& entry_out,
                      std::vector<std::string>& session_ids);
   Status MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_out);
-  Status Open(Context& ctx, Ino ino, uint32_t flags, bool is_prefetch_chunk, std::string& session_id,
-              EntryOut& entry_out, std::vector<ChunkEntry>& chunks);
+  Status Open(Context& ctx, Ino ino, uint32_t flags, std::string& session_id, bool is_prefetch_chunk,
+              const std::map<uint32_t, uint64_t>& chunk_version_map, EntryOut& entry_out,
+              std::vector<ChunkEntry>& chunks);
   Status Release(Context& ctx, Ino ino, const std::string& session_id);
 
   // directory

@@ -39,6 +39,7 @@ class Trace {
     bool is_hit_partition{false};
     bool is_hit_dentry{false};
     bool is_hit_inode{false};
+    bool is_hit_chunk{false};
   };
 
   struct Txn {
@@ -59,6 +60,7 @@ class Trace {
   void SetHitPartition() { cache_.is_hit_partition = true; }
   void SetHitDentry() { cache_.is_hit_dentry = true; }
   void SetHitInode() { cache_.is_hit_inode = true; }
+  void SetHitChunk() { cache_.is_hit_chunk = true; }
 
   void RecordElapsedTime(const std::string& name) {
     uint64_t time_us = Helper::TimestampUs();

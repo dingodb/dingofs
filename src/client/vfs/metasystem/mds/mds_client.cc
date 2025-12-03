@@ -472,10 +472,11 @@ Status MDSClient::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
   return Status::OK();
 }
 
-Status MDSClient::Open(ContextSPtr ctx, Ino ino, int flags,
-                       bool is_prefetch_chunk, std::string& session_id,
-                       AttrEntry& attr_entry,
-                       std::vector<mds::ChunkEntry>& chunks) {
+Status MDSClient::Open(
+    ContextSPtr ctx, Ino ino, int flags, std::string& session_id,
+    bool is_prefetch_chunk,
+    const std::vector<mds::ChunkDescriptor>& chunk_descriptors,
+    AttrEntry& attr_entry, std::vector<mds::ChunkEntry>& chunks) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, ino](bool& is_primary_mds) -> MDSMeta {
@@ -489,6 +490,10 @@ Status MDSClient::Open(ContextSPtr ctx, Ino ino, int flags,
   request.set_ino(ino);
   request.set_flags(flags);
   request.set_prefetch_chunk(is_prefetch_chunk);
+  if (is_prefetch_chunk) {
+    *request.mutable_chunk_descriptors() = {chunk_descriptors.begin(),
+                                            chunk_descriptors.end()};
+  }
 
   auto status =
       SendRequest(ctx, get_mds_fn, "MDSService", "Open", request, response);

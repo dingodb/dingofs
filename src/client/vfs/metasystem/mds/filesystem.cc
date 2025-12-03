@@ -419,8 +419,22 @@ Status MDSFileSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
   AttrEntry attr_entry;
   std::vector<mds::ChunkEntry> chunks;
   bool is_prefetch_chunk = FLAGS_client_meta_read_chunk_cache_enable;
-  auto status = mds_client_->Open(ctx, ino, flags, is_prefetch_chunk,
-                                  session_id, attr_entry, chunks);
+
+  // prepare chunk descriptors for expect chunk version
+  std::vector<mds::ChunkDescriptor> chunk_descriptors;
+  if (is_prefetch_chunk) {
+    auto versions = chunk_memo_.GetVersion(ino);
+    for (auto& [chunk_index, version] : versions) {
+      mds::ChunkDescriptor chunk_descriptor;
+      chunk_descriptor.set_index(chunk_index);
+      chunk_descriptor.set_version(version);
+      chunk_descriptors.push_back(chunk_descriptor);
+    }
+  }
+
+  auto status =
+      mds_client_->Open(ctx, ino, flags, session_id, is_prefetch_chunk,
+                        chunk_descriptors, attr_entry, chunks);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[meta.filesystem.{}.{}] open file fail, error({}).", ino, fh,

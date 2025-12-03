@@ -1160,8 +1160,14 @@ void MDSServiceImpl::DoOpen(google::protobuf::RpcController*, const pb::mds::Ope
   std::string session_id;
   EntryOut entry_out;
   std::vector<ChunkEntry> chunks;
-  status = file_system->Open(ctx, request->ino(), request->flags(), request->prefetch_chunk(), session_id, entry_out,
-                             chunks);
+  // index: version map for chunk validation
+  std::map<uint32_t, uint64_t> chunk_version_map;
+  for (const auto& cd : request->chunk_descriptors()) {
+    chunk_version_map.emplace(cd.index(), cd.version());
+  }
+
+  status = file_system->Open(ctx, request->ino(), request->flags(), session_id, request->prefetch_chunk(),
+                             chunk_version_map, entry_out, chunks);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());

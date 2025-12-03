@@ -60,6 +60,21 @@ uint64_t ChunkMemo::GetVersion(Ino ino, uint32_t chunk_index) {
   return (it != chunk_map_.end()) ? it->second.version : 0;
 }
 
+std::vector<std::pair<uint32_t, uint64_t>> ChunkMemo::GetVersion(Ino ino) {
+  utils::ReadLockGuard guard(lock_);
+
+  std::vector<std::pair<uint32_t, uint64_t>> versions;
+
+  auto it = chunk_map_.lower_bound({ino, 0});
+  for (; it != chunk_map_.end(); ++it) {
+    if (it->first.ino != ino) break;
+
+    versions.emplace_back(it->first.chunk_index, it->second.version);
+  }
+
+  return versions;
+}
+
 bool ChunkMemo::Dump(Json::Value& value) {
   utils::ReadLockGuard lk(lock_);
 

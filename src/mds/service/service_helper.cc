@@ -48,6 +48,7 @@ void ServiceHelper::SetResponseInfo(const Trace& trace, pb::mds::ResponseInfo* i
   const auto& cache = trace.GetCache();
   mut_cache->set_is_hit_partition(cache.is_hit_partition);
   mut_cache->set_is_hit_inode(cache.is_hit_inode);
+  mut_cache->set_is_hit_chunk(cache.is_hit_chunk);
 
   for (const auto& txn : trace.GetTxns()) {
     auto* mut_txn = info->add_txns();

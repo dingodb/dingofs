@@ -58,6 +58,7 @@ class ChunkMemo {
   void ForgetExpired(uint64_t expire_time_ns);
 
   uint64_t GetVersion(Ino ino, uint32_t chunk_index);
+  std::vector<std::pair<uint32_t, uint64_t>> GetVersion(Ino ino);
 
   bool Dump(Json::Value& value);
   bool Load(const Json::Value& value);

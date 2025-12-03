@@ -896,8 +896,9 @@ Status FileSystem::GetChunksFromStore(Ino ino, std::vector<ChunkEntry>& chunks, 
   return Status::OK();
 }
 
-Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, bool is_prefetch_chunk, std::string& session_id,
-                        EntryOut& entry_out, std::vector<ChunkEntry>& chunks) {
+Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& session_id, bool is_prefetch_chunk,
+                        const std::map<uint32_t, uint64_t>& chunk_version_map, EntryOut& entry_out,
+                        std::vector<ChunkEntry>& chunks) {
   if (!CanServe(ctx)) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -966,6 +967,12 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, bool is_prefetch_
     auto cache_chunks = chunk_cache_.Get(ino);
     uint32_t slice_num = 0;
     for (auto& chunk : cache_chunks) {
+      // check chunk version
+      auto it = chunk_version_map.find(chunk->index());
+      if (it != chunk_version_map.end() && chunk->version() < it->second) {
+        continue;
+      }
+
       chunks.push_back(*chunk);
 
       slice_num += chunk->slices_size();
@@ -1004,6 +1011,8 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, bool is_prefetch_
         DINGO_LOG(WARNING) << fmt::format("[fs.{}.{}] chunks is not completely, ino({}) length({}) chunks({}).", fs_id_,
                                           ctx.RequestId(), ino, file_length, chunks.size());
       }
+    } else {
+      trace.SetHitChunk();
     }
   }
 
@@ -2060,7 +2069,10 @@ Status FileSystem::ReadSlice(Context& ctx, Ino ino, const std::vector<ChunkDescr
 
     miss_chunk_indexes.push_back(chunk_index);
   }
-  if (miss_chunk_indexes.empty()) return Status::OK();
+  if (miss_chunk_indexes.empty()) {
+    trace.SetHitChunk();
+    return Status::OK();
+  }
 
   // get chunk from backend store
   GetChunkOperation operation(trace, fs_id_, ino, miss_chunk_indexes);

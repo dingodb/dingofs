@@ -106,9 +106,10 @@ class MDSClient {
                  const std::string& last_name, uint32_t limit, bool with_attr,
                  std::vector<DirEntry>& entries);
 
-  Status Open(ContextSPtr ctx, Ino ino, int flags, bool is_prefetch_chunk,
-              std::string& session_id, AttrEntry& attr_entry,
-              std::vector<mds::ChunkEntry>& chunks);
+  Status Open(ContextSPtr ctx, Ino ino, int flags, std::string& session_id,
+              bool is_prefetch_chunk,
+              const std::vector<mds::ChunkDescriptor>& chunk_descriptors,
+              AttrEntry& attr_entry, std::vector<mds::ChunkEntry>& chunks);
   Status Release(ContextSPtr ctx, Ino ino, const std::string& session_id);
 
   Status Link(ContextSPtr ctx, Ino ino, Ino new_parent,
