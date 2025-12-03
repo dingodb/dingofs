@@ -24,7 +24,7 @@ namespace client {
 namespace vfs {
 
 std::string FileRange::ToString() const {
-  return fmt::format("[{}-{}]", offset, End());
+  return fmt::format("(file_range: {}-{}, len: {})", offset, End(), len);
 }
 
 std::string SliceReadReq::ToString() const {

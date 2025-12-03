@@ -62,7 +62,7 @@ class IOBuffer {
 
   void CopyTo(char* dest);
   void CopyTo(char* dest) const;
-  void AppendTo(IOBuffer* buffer, size_t n = (size_t)-1L, size_t pos = 0);
+  size_t AppendTo(IOBuffer* buffer, size_t n = (size_t)-1L, size_t pos = 0);
   void Append(const IOBuffer* buffer);
   void AppendVec(const std::vector<iovec>& iovs);
   void AppendUserData(void* data, size_t size,

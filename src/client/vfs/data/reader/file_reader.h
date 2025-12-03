@@ -17,14 +17,19 @@
 #ifndef DINGOFS_CLIENT_VFS_DATA_READER_FILE_READER_H_
 #define DINGOFS_CLIENT_VFS_DATA_READER_FILE_READER_H_
 
+#include <fmt/format.h>
+
+#include <atomic>
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <mutex>
-#include <unordered_map>
 
-#include "client/vfs/data/reader/chunk_reader.h"
+#include "client/vfs/data/reader/read_request.h"
+#include "client/vfs/data/reader/readahead_policy.h"
 #include "client/vfs/data_buffer.h"
 #include "common/status.h"
+#include "common/trace/context.h"
 
 namespace dingofs {
 namespace client {
@@ -34,31 +39,83 @@ class VFSHub;
 
 class FileReader {
  public:
-  FileReader(VFSHub* hub, uint64_t fh, uint64_t ino)
-      : vfs_hub_(hub), fh_(fh), ino_(ino) {}
+  FileReader(VFSHub* hub, uint64_t fh, uint64_t ino);
 
-  ~FileReader() = default;
+  ~FileReader();
 
-  Status Read(ContextSPtr ctx, DataBuffer* data_buffer, uint64_t size,
-              uint64_t offset, uint64_t* out_rsize);
+  Status Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
+              int64_t offset, uint64_t* out_rsize);
+
+  void Close();
+
+  // NOTE: if we manage filehandle by ino,
+  // then write/commit_slice/fallocate/truncate/copyfile_range should call this
+  void Invalidate(int64_t offset, int64_t size);
+
+  void AcquireRef();
+
+  // caller should ensure ReleaseRef called outside of lock
+  void ReleaseRef();
 
  private:
   Status GetAttr(ContextSPtr ctx, Attr* attr);
 
-  uint64_t GetChunkSize() const;
+  void CheckPrefetch(ContextSPtr ctx, const Attr& attr,
+                     const FileRange& frange);
 
-  ChunkReader* GetOrCreateChunkReader(uint64_t chunk_index);
+  void TakeMem(int64_t size);
+  void ReleaseMem(int64_t size);
+  int64_t TotalMem() const;
+  int64_t UsedMem() const;
+
+  // pretected by mutex_
+  void RunReadRequest(ReadRequest* req);
+  // pretected by mutex_
+  void DoReadRequst(ReadRequest* req);
+  // pretected by mutex_
+  void ReadRequstDone(ReadRequest* req);
+
+  // pretected by mutex_
+  ReadRequest* NewReadRequest(int64_t s, int64_t e);
+  // pretected by mutex_
+  void DeleteReadRequest(ReadRequest* req);
+
+  // pretected by mutex_
+  void CheckReadahead(ContextSPtr ctx, const FileRange& frange, int64_t flen);
+  // pretected by mutex_
+  void MakeReadahead(ContextSPtr ctx, const FileRange& frange);
+
+  // pretected by mutex_
+  std::vector<int64_t> SplitRange(const FileRange& frange);
+  // pretected by mutex_
+  std::vector<PartialReadRequest> PrepareRequests(
+      ContextSPtr ctx, const std::vector<int64_t>& ranges);
+
+  // pretected by mutex_
+  bool IsProtectedReq(ReadRequest* req) const;
+  // pretected by mutex_
+  void CleanUpRequest(ContextSPtr ctx, const FileRange& frange);
+
+  Status WaitAllReadRequest(ContextSPtr ctx,
+                            std::vector<PartialReadRequest> reqs,
+                            uint64_t* out_rsize);
 
   VFSHub* vfs_hub_;
   const uint64_t fh_;
   const uint64_t ino_;
+  const uint64_t chunk_size_{0};
+  const uint64_t block_size_{0};
+
+  std::atomic<int64_t> refs_{0};
 
   uint64_t last_intime_warmup_mtime_{0};
   uint64_t last_intime_warmup_trigger_{0};
 
   std::mutex mutex_;
-  // chunk index -> chunk reader
-  std::unordered_map<uint64_t, ChunkReaderUptr> chunk_readers_;
+  bool closing_{false};
+  std::unique_ptr<ReadaheadPoclicy> policy_;
+  // seq -> ReadRequest*
+  std::map<int64_t, ReadRequestUptr> requests_;
 };
 
 using FileReaderUPtr = std::unique_ptr<FileReader>;

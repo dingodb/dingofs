@@ -28,16 +28,23 @@ namespace client {
 namespace vfs {
 
 struct FileRange {
-  uint64_t offset;
-  uint64_t len;
+  int64_t offset;
+  int64_t len;
 
-  uint64_t End() const { return offset + len; }
+  int64_t End() const { return offset + len; }
+
+  bool Overlaps(const FileRange& other) const {
+    return offset < other.End() && other.offset < End();
+  }
+
+  bool Contains(int64_t pos) const { return offset < pos && pos < End(); }
+
   std::string ToString() const;
 };
 
 struct SliceReadReq {
-  uint64_t file_offset;
-  uint64_t len;
+  int64_t file_offset;
+  int64_t len;
   std::optional<Slice> slice;
 
   uint64_t End() const { return file_offset + len; }
@@ -45,8 +52,8 @@ struct SliceReadReq {
 };
 
 struct BlockDesc {
-  uint64_t file_offset;
-  uint64_t block_len;  // the len of the block
+  int64_t file_offset;
+  int64_t block_len;  // the len of the block
   bool zero;
   uint64_t version;
   uint64_t slice_id;
@@ -57,9 +64,9 @@ struct BlockDesc {
 };
 
 struct BlockReadReq {
-  uint64_t file_offset;
-  uint64_t block_offset;
-  uint64_t len;
+  int64_t file_offset;
+  int64_t block_offset;
+  int64_t len;
   BlockDesc block;
   bool fake{false};  // true means fake block req, used for hole
 

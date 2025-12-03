@@ -50,8 +50,8 @@ class FlatFileChunk {
   const uint64_t fs_id_{0};
   const uint64_t ino_{0};
   const uint64_t index_{0};
-  const uint64_t chunk_size_{0};
-  const uint64_t block_size_{0};
+  const int64_t chunk_size_{0};
+  const int64_t block_size_{0};
   const std::vector<Slice> chunk_slices_;
 };
 

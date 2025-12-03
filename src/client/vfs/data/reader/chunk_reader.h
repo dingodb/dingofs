@@ -19,10 +19,8 @@
 
 #include <fmt/format.h>
 
-#include <cstddef>
 #include <cstdint>
 #include <memory>
-#include <mutex>
 
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
@@ -39,8 +37,6 @@ namespace vfs {
 
 class VFSHub;
 
-static uint32_t kInvalidVersion = 0;
-
 struct BlockCacheReadReq {
   uint32_t req_index;
   cache::BlockKey key;
@@ -56,14 +52,14 @@ struct ChunkSlices {
 
 class ChunkReader {
  public:
-  ChunkReader(VFSHub* hub, uint64_t fh, uint64_t ino, uint64_t index);
+  ChunkReader(VFSHub* hub, uint64_t fh, const ChunkReadReq& req);
 
   ~ChunkReader() = default;
 
-  void ReadAsync(ContextSPtr ctx, ChunkReadReq& req, StatusCallback cb);
+  Status Read(ContextSPtr ctx, IOBuffer* out_buf);
 
  private:
-  void DoRead(ContextSPtr ctx, ChunkReadReq& req, StatusCallback cb);
+  void DoRead(ContextSPtr ctx, IOBuffer* out_buf, StatusCallback cb);
 
   Status GetSlices(ContextSPtr ctx, ChunkSlices* chunk_slices);
 
@@ -75,16 +71,15 @@ class ChunkReader {
   uint64_t GetBlockSize() const;
 
   std::string UUID() const {
-    return fmt::format("chunk_reader-{}", chunk_.UUID());
+    return fmt::format("rreq-{}-chunk-{}", req_.req_id, chunk_.UUID());
   }
 
   VFSHub* hub_;
   const uint64_t fh_;
+  const ChunkReadReq req_;
   const Chunk chunk_;
   const uint64_t block_size_;
 };
-
-using ChunkReaderUptr = std::shared_ptr<ChunkReader>;
 
 }  // namespace vfs
 }  // namespace client

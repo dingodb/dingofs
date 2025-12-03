@@ -45,6 +45,27 @@ void HandleManager::ReleaseHandler(uint64_t fh) {
   handles_.erase(fh);
 }
 
+void HandleManager::Invalidate(uint64_t fh, int64_t offset, int64_t size) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (shutdown_) {
+    LOG(INFO) << "HandleManager already shutdown";
+    return;
+  }
+
+  auto it = handles_.find(fh);
+  if (it == handles_.end()) {
+    LOG(WARNING) << "Invalidate failed, fh not found:" << fh;
+    return;
+  }
+
+  auto handle = it->second;
+  if (handle->file) {
+    handle->file->Invalidate(offset, size);
+  } else {
+    LOG(WARNING) << "Invalidate failed, file is nullptr, fh:" << fh;
+  }
+}
+
 void HandleManager::TriggerFlushAll() {
   std::lock_guard<std::mutex> lock(mutex_);
   if (shutdown_) {
@@ -82,11 +103,7 @@ void HandleManager::Shutdown() {
     }
 
     CHECK_NOTNULL(handle->file);
-    Status s = handle->file->Flush();
-    if (!s.ok()) {
-      LOG(ERROR) << "Failed to flush file handle: " << fh
-                 << ", error: " << s.ToString();
-    }
+    handle->file->Close();
   }
 
   shutdown_ = true;

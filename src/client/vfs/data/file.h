@@ -36,12 +36,7 @@ class VFSHub;
 
 class File : public IFile {
  public:
-  File(VFSHub* hub, uint64_t fh, int64_t ino)
-      : vfs_hub_(hub),
-        fh_(fh),
-        ino_(ino),
-        file_writer_(std::make_unique<FileWriter>(hub, fh_, ino)),
-        file_reader_(std::make_unique<FileReader>(hub, fh_, ino)) {}
+  File(VFSHub* hub, uint64_t fh, int64_t ino);
 
   ~File() override;
 
@@ -50,6 +45,10 @@ class File : public IFile {
 
   Status Read(ContextSPtr ctx, DataBuffer* data_buffer, uint64_t size,
               uint64_t offset, uint64_t* out_rsize) override;
+
+  void Invalidate(int64_t offset, int64_t size) override;
+
+  void Close() override;
 
   Status Flush() override;
 
@@ -65,7 +64,7 @@ class File : public IFile {
   const uint64_t ino_;
 
   FileWriterUPtr file_writer_;
-  FileReaderUPtr file_reader_;
+  FileReader* file_reader_;
 
   std::atomic_int64_t inflight_flush_{0};
   std::mutex mutex_;

@@ -88,6 +88,8 @@ DECLARE_uint64(client_vfs_meta_inode_cache_expired_s);
 DECLARE_int32(client_vfs_read_executor_thread);
 DECLARE_int32(client_vfs_read_max_retry_block_not_found);
 
+DECLARE_uint32(client_read_buffer_total_mb);
+
 // vfs flush
 DECLARE_int32(client_vfs_flush_bg_thread);
 DECLARE_int32(client_vfs_periodic_flush_interval_ms);

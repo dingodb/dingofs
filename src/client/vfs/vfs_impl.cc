@@ -45,6 +45,7 @@
 #include "utils/configuration.h"
 #include "utils/encode.h"
 #include "utils/net_common.h"
+#include "vfs_meta.h"
 
 #define VFS_CHECK_HANDLE(handle, ino, fh) \
   CHECK((handle) != nullptr)              \
@@ -129,7 +130,9 @@ Status VFSImpl::SetAttr(ContextSPtr ctx, Ino ino, int set, const Attr& in_attr,
     return Status::OK();
   }
 
-  return meta_system_->SetAttr(ctx, ino, set, in_attr, out_attr);
+  Status s = meta_system_->SetAttr(ctx, ino, set, in_attr, out_attr);
+
+  return s;
 }
 
 Status VFSImpl::ReadLink(ContextSPtr ctx, Ino ino, std::string* link) {
@@ -351,6 +354,7 @@ Status VFSImpl::Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t size,
   s = handle->file->Write(ctx, buf, size, offset, out_wsize);
   if (s.ok()) {
     s = meta_system_->Write(ctx, ino, offset, size, fh);
+    handle->file->Invalidate(offset, size);
   }
 
   return s;

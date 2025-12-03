@@ -74,9 +74,10 @@ static inline std::vector<SliceReadReq> ProcessReadRequest(
       }
 
       // calculate the overlapping part
-      uint64_t overlap_start = std::max(file_range.offset, slice.offset);
-      uint64_t overlap_end = std::min(file_range.End(), slice.End());
-      uint64_t overlap_len = overlap_end - overlap_start;
+      int64_t overlap_start =
+          std::max(file_range.offset, (int64_t)slice.offset);
+      int64_t overlap_end = std::min(file_range.End(), (int64_t)slice.End());
+      int64_t overlap_len = overlap_end - overlap_start;
 
       SliceReadReq slice_read_req{
           .file_offset = overlap_start,
@@ -162,20 +163,20 @@ static inline std::vector<BlockReadReq> ConvertSliceReadReqToBlockReadReqs(
   std::vector<BlockReadReq> block_read_reqs;
 
   const auto& slice = slice_req.slice.value();
-  uint64_t slice_offset = slice.offset;
-  uint64_t slice_len = slice.length;
+  int64_t slice_offset = slice.offset;
+  int64_t slice_len = slice.length;
   uint64_t slice_id = slice.id;
 
-  uint64_t read_offset = slice_req.file_offset;
-  uint64_t remain_len = slice_req.len;
+  int64_t read_offset = slice_req.file_offset;
+  int64_t remain_len = slice_req.len;
 
   VLOG(9) << "ConvertSliceReadReqToBlockReadReqs: read from file_offset: "
           << read_offset << ", remain_len: " << remain_len;
 
   while (remain_len > 0) {
     // calculate the current block range
-    uint64_t cur_block_start = (read_offset / block_size) * block_size;
-    uint64_t cur_block_end = cur_block_start + block_size;
+    int64_t cur_block_start = (read_offset / block_size) * block_size;
+    int64_t cur_block_end = cur_block_start + block_size;
     cur_block_start = std::max(cur_block_start, slice_offset);
     cur_block_end = std::min(cur_block_end, slice_offset + slice_len);
     CHECK_LT(cur_block_start, cur_block_end)
@@ -202,8 +203,8 @@ static inline std::vector<BlockReadReq> ConvertSliceReadReqToBlockReadReqs(
         << "Illegal read_offset: " << read_offset
         << " cur_block_start: " << cur_block_start;
 
-    uint64_t read_block_offst = read_offset - cur_block_start;
-    uint64_t read_block_len =
+    int64_t read_block_offst = read_offset - cur_block_start;
+    int64_t read_block_len =
         std::min(remain_len, (block.block_len - read_block_offst));
 
     BlockReadReq block_read_req{

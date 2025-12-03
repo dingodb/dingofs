@@ -38,6 +38,10 @@ class IFile {
   virtual Status Read(ContextSPtr ctx, DataBuffer* data_buffer, uint64_t size,
                       uint64_t offset, uint64_t* out_rsize) = 0;
 
+  virtual void Invalidate(int64_t offset, int64_t size) = 0;
+
+  virtual void Close() = 0;
+
   virtual Status Flush() = 0;
 
   virtual void AsyncFlush(StatusCallback cb) = 0;

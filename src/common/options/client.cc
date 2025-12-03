@@ -119,6 +119,9 @@ DEFINE_int32(client_vfs_read_max_retry_block_not_found, 10,
              "max retry when block not found");
 DEFINE_validator(client_vfs_read_max_retry_block_not_found, brpc::PassValidate);
 
+DEFINE_uint32(client_read_buffer_total_mb, 1024,
+             "total read buffer size in MB");
+
 // prefetch
 DEFINE_uint32(client_vfs_prefetch_blocks, 1, "number of blocks to prefetch");
 DEFINE_validator(client_vfs_prefetch_blocks, brpc::PassValidate);

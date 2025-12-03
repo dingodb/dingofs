@@ -25,6 +25,7 @@
 
 #include "cache/blockcache/block_cache.h"
 #include "client/memory/page_allocator.h"
+#include "client/memory/read_buffer_manager.h"
 #include "client/vfs/background/iperiodic_flush_manager.h"
 #include "client/vfs/components/file_suffix_watcher.h"
 #include "client/vfs/components/prefetch_manager.h"
@@ -69,6 +70,8 @@ class VFSHub {
   virtual IPeriodicFlushManager* GetPeriodicFlushManger() = 0;
 
   virtual PageAllocator* GetPageAllocator() = 0;
+
+  virtual ReadBufferManager* GetReadBufferManager() = 0;
 
   virtual FileSuffixWatcher* GetFileSuffixWatcher() = 0;
 
@@ -135,6 +138,11 @@ class VFSHubImpl : public VFSHub {
     return page_allocator_.get();
   }
 
+  ReadBufferManager* GetReadBufferManager() override {
+    CHECK_NOTNULL(read_buffer_manager_); 
+    return read_buffer_manager_.get();
+  }
+
   FileSuffixWatcher* GetFileSuffixWatcher() override {
     CHECK_NOTNULL(file_suffix_watcher_);
     return file_suffix_watcher_.get();
@@ -184,6 +192,7 @@ class VFSHubImpl : public VFSHub {
   std::unique_ptr<Executor> read_executor_;
   std::unique_ptr<IPeriodicFlushManager> priodic_flush_manager_;
   std::shared_ptr<PageAllocator> page_allocator_;
+  std::unique_ptr<ReadBufferManager> read_buffer_manager_;
   std::unique_ptr<FileSuffixWatcher> file_suffix_watcher_;
   std::unique_ptr<ITracer> tracer_;
   std::unique_ptr<PrefetchManager> prefetch_manager_;

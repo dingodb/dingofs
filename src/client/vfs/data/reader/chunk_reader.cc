@@ -29,6 +29,8 @@
 #include "cache/utils/context.h"
 #include "cache/utils/helper.h"
 #include "client/common/const.h"
+#include "client/vfs/common/helper.h"
+#include "client/vfs/data/common/async_util.h"
 #include "client/vfs/data/common/common.h"
 #include "client/vfs/data/common/data_utils.h"
 #include "client/vfs/data/reader/reader_common.h"
@@ -44,12 +46,14 @@ namespace vfs {
 
 #define METHOD_NAME() ("ChunkReader::" + std::string(__FUNCTION__))
 
-ChunkReader::ChunkReader(VFSHub* hub, uint64_t fh, uint64_t ino, uint64_t index)
+ChunkReader::ChunkReader(VFSHub* hub, uint64_t fh, const ChunkReadReq& req)
     : hub_(hub),
       fh_(fh),
       block_size_(hub->GetFsInfo().block_size),
-      chunk_(hub->GetFsInfo().id, ino, index, hub->GetFsInfo().chunk_size,
-             hub->GetFsInfo().block_size, hub->GetPageSize()) {}
+      chunk_(hub->GetFsInfo().id, req.ino, req.index,
+             hub->GetFsInfo().chunk_size, hub->GetFsInfo().block_size,
+             hub->GetPageSize()),
+      req_(req) {}
 
 void ChunkReader::BlockReadCallback(ContextSPtr ctx, ChunkReader* reader,
                                     const BlockCacheReadReq& req,
@@ -93,33 +97,26 @@ void ChunkReader::BlockReadCallback(ContextSPtr ctx, ChunkReader* reader,
   }
 }
 
-void ChunkReader::ReadAsync(ContextSPtr ctx, ChunkReadReq& req,
-                            StatusCallback cb) {
-  hub_->GetReadExecutor()->Execute(
-      [this, ctx, &req, cb]() { DoRead(ctx, req, cb); });
+Status ChunkReader::Read(ContextSPtr ctx, IOBuffer* out_buf) {
+  Status s;
+  Synchronizer sync;
+  DoRead(ctx, out_buf, sync.AsStatusCallBack(s));
+  sync.Wait();
+  return s;
 }
 
 // TODO: refact this function, too ugly now
-void ChunkReader::DoRead(ContextSPtr ctx, ChunkReadReq& req,
+void ChunkReader::DoRead(ContextSPtr ctx, IOBuffer* out_buf,
                          StatusCallback cb) {
   auto* tracer = hub_->GetTracer();
   auto span = tracer->StartSpanWithContext(kVFSDataMoudule, METHOD_NAME(), ctx);
 
-  uint64_t chunk_offset = req.offset;
-  uint64_t size = req.to_read_size;
+  VLOG(4) << fmt::format("{} ChunkReader Read req: {}", UUID(),
+                         req_.ToString());
 
-  uint64_t read_file_offset = chunk_.chunk_start + chunk_offset;
-  uint64_t end_read_file_offset = read_file_offset + size;
+  CHECK_GE(chunk_.chunk_end, req_.frange.End());
 
-  uint64_t end_read_chunk_offet = chunk_offset + size;
-
-  VLOG(4) << fmt::format(
-      "{} ChunkReader Read req_index {}, size: {}"
-      ", chunk_range: [{}-{}], file_range: [{}-{}]",
-      UUID(), req.req_index, size, chunk_offset, end_read_chunk_offet,
-      read_file_offset, end_read_file_offset);
-
-  CHECK_GE(chunk_.chunk_end, end_read_file_offset);
+  int64_t size = req_.frange.len;
 
   int32_t retry = 0;
   Status ret;
@@ -136,11 +133,10 @@ void ChunkReader::DoRead(ContextSPtr ctx, ChunkReadReq& req,
     }
 
     std::vector<SliceReadReq> slice_reqs;
-    FileRange range{.offset = read_file_offset, .len = size};
     {
       auto process_slice_reqs_span = tracer->StartSpanWithParent(
           kVFSDataMoudule, "ChunkReader::DoRead.ProcessReadRequest", *span);
-      slice_reqs = ProcessReadRequest(chunk_slices.slices, range);
+      slice_reqs = ProcessReadRequest(chunk_slices.slices, req_.frange);
     }
 
     std::vector<BlockReadReq> block_reqs;
@@ -250,11 +246,11 @@ void ChunkReader::DoRead(ContextSPtr ctx, ChunkReadReq& req,
         auto iobuf_span = tracer->StartSpanWithParent(
             kVFSDataMoudule, "ChunkReader::DoRead.AppendIOBuf", *span);
         for (auto& block_cache_req : block_cache_reqs) {
-          req.buf.Append(&block_cache_req.io_buffer);
+          out_buf->Append(&block_cache_req.io_buffer);
           VLOG(6) << fmt::format(
-              "{} IOBuffer: Append iobuf: {} to chunk_read_buf: {}"
+              "{} IOBuffer: Append iobuf: {} to out_buf: {}"
               "block_req_index: {}, block_req: {}",
-              UUID(), block_cache_req.io_buffer.Describe(), req.buf.Describe(),
+              UUID(), block_cache_req.io_buffer.Describe(), out_buf->Describe(),
               block_cache_req.req_index, block_cache_req.block_req.ToString());
         }
       }
@@ -262,9 +258,8 @@ void ChunkReader::DoRead(ContextSPtr ctx, ChunkReadReq& req,
 
     LOG_IF(WARNING, !ret.ok()) << fmt::format(
         "{} ChunkReader Read failed, status: {}, retry: {}, "
-        "chunk_range: [{}-{}], file_range: [{}-{}]",
-        UUID(), ret.ToString(), retry, chunk_offset, end_read_chunk_offet,
-        read_file_offset, end_read_file_offset);
+        ", req: {}",
+        UUID(), ret.ToString(), retry, req_.ToString());
 
   } while (ret.IsNotFound() &&
            retry++ < FLAGS_client_vfs_read_max_retry_block_not_found);

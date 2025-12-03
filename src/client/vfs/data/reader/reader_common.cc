@@ -24,8 +24,10 @@ namespace vfs {
 
 std::string ChunkReadReq::ToString() const {
   return fmt::format(
-      "(chunk-{}-{}, offset: {}, to_read_size: {}, req_index {}, iobuf: {})",
-      ino, index, offset, to_read_size, req_index, buf.Describe());
+      "(chunk-rreq-{}, ino: {}, file_range: "
+      "[{}-{}), chunk_range: [{}, {}-{}), read_size: {})",
+      req_id, ino, frange.offset, frange.End(), index, offset,
+      (offset + frange.len), frange.len);
 }
 
 }  // namespace vfs

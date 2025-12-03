@@ -44,6 +44,8 @@ class FileWriter {
 
   void AsyncFlush(StatusCallback cb);
 
+  void Close();
+
  private:
   uint64_t GetChunkSize() const;
 

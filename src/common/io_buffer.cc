@@ -42,8 +42,8 @@ void IOBuffer::CopyTo(char* dest) { iobuf_.copy_to(dest); }
 
 void IOBuffer::CopyTo(char* dest) const { iobuf_.copy_to(dest); }
 
-void IOBuffer::AppendTo(IOBuffer* buffer, size_t n, size_t pos) {
-  iobuf_.append_to(&buffer->IOBuf(), n, pos);
+size_t IOBuffer::AppendTo(IOBuffer* buffer, size_t n, size_t pos) {
+  return iobuf_.append_to(&buffer->IOBuf(), n, pos);
 }
 
 void IOBuffer::Append(const IOBuffer* buffer) { iobuf_.append(buffer->iobuf_); }

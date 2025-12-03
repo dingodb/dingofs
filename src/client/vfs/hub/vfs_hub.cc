@@ -17,6 +17,7 @@
 #include "client/vfs/hub/vfs_hub.h"
 
 #include <atomic>
+#include <cstdint>
 #include <memory>
 
 #include "cache/tiercache/tier_block_cache.h"
@@ -176,6 +177,18 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
       LOG(ERROR) << "Init page allocator failed.";
       return Status::Internal("Init page allocator failed");
     }
+  }
+
+  {
+    int64_t total_mb = FLAGS_client_read_buffer_total_mb;
+    if (total_mb <= 0) {
+      LOG(ERROR) << "invalid read buffer total mb option, total_mb: "
+                 << total_mb;
+      return Status::Internal("invalid read buffer total mb option");
+    }
+
+    read_buffer_manager_ =
+        std::make_unique<ReadBufferManager>(total_mb * 1024 * 1024);
   }
 
   {

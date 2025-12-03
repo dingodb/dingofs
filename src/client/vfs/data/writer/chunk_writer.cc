@@ -24,6 +24,7 @@
 #include <memory>
 
 #include "client/common/const.h"
+#include "client/vfs/common/helper.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/callback.h"
@@ -380,20 +381,29 @@ void ChunkWriter::CommitFlushTasks(ContextSPtr ctx) {
 
 void ChunkWriter::SlicesCommited(ContextSPtr ctx, CommmitContext* commit_ctx,
                                  Status s) {
-  VLOG(4) << fmt::format(
-      "{} SlicesCommited commit_seq: {}, flush_task_count: {} "
-      "batch_slices_count: {} commit_status: {}",
-      UUID(), commit_ctx->commit_seq, commit_ctx->flush_tasks.size(),
-      commit_ctx->commit_slices.size(), s.ToString());
-
   if (!s.ok()) {
     LOG(WARNING) << fmt::format(
-        "{} SlicesCommited commit_seq: {} fail commit, flush_task_count: {} "
+        "{} SlicesCommited Fail commit_seq: {} fail commit, flush_task_count: "
+        "{} "
         "batch_slices_count: {} commit_status: {}",
         UUID(), commit_ctx->commit_seq, commit_ctx->flush_tasks.size(),
         commit_ctx->commit_slices.size(), s.ToString());
 
     MarkErrorStatus(s);
+  } else {
+    VLOG(4) << fmt::format(
+        "{} SlicesCommited commit_seq: {}, flush_task_count: {} "
+        "batch_slices_count: {} commit_status: {}",
+        UUID(), commit_ctx->commit_seq, commit_ctx->flush_tasks.size(),
+        commit_ctx->commit_slices.size(), s.ToString());
+
+    auto* manager = hub_->GetHandleManager();
+    for (const Slice& slice : commit_ctx->commit_slices) {
+      VLOG(9) << fmt::format(
+          "{} SlicesCommited commit_seq: {} committed slice: {}", UUID(),
+          commit_ctx->commit_seq, Slice2Str(slice));
+      manager->Invalidate(fh_, slice.offset, slice.length);
+    }
   }
 
   for (FlushTask* task : commit_ctx->flush_tasks) {

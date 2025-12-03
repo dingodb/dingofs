@@ -25,7 +25,8 @@ namespace vfs {
 std::vector<BlockReadReq> FlatFileChunk::GenBlockReadReqs() const {
   std::vector<BlockReadReq> block_reqs;
 
-  FileRange file_range = {.offset = index_ * chunk_size_, .len = chunk_size_};
+  FileRange file_range = {.offset = (int64_t)(index_ * chunk_size_),
+                          .len = chunk_size_};
 
   std::vector<SliceReadReq> slice_reqs =
       ProcessReadRequest(chunk_slices_, file_range);

@@ -47,7 +47,7 @@ class PrefetchManager;
 using PrefetchManagerUPtr = std::unique_ptr<PrefetchManager>;
 
 struct PrefetchContext {
-  PrefetchContext(uint64_t ino, uint64_t prefetch_offset, uint64_t file_size,
+  PrefetchContext(uint64_t ino, int64_t prefetch_offset, uint64_t file_size,
                   uint64_t prefetch_blocks)
       : ino(ino),
         prefetch_offset(prefetch_offset),
@@ -55,7 +55,7 @@ struct PrefetchContext {
         prefetch_blocks(prefetch_blocks) {}
 
   uint64_t ino;
-  uint64_t prefetch_offset;
+  int64_t prefetch_offset;
   uint64_t file_size;
   uint64_t prefetch_blocks;
 };

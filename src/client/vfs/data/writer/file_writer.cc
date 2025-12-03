@@ -21,6 +21,7 @@
 
 #include "client/common/const.h"
 #include "client/common/utils.h"
+#include "client/vfs/data/common/async_util.h"
 #include "client/vfs/data/writer/chunk_writer.h"
 #include "client/vfs/hub/vfs_hub.h"
 
@@ -40,6 +41,18 @@ FileWriter::~FileWriter() {
               << ino_ << ", inflight_flush_task_count: "
               << inflight_flush_tasks_.size();
     sleep(1);
+  }
+}
+
+void FileWriter::Close() {
+  Status s;
+  Synchronizer sync;
+  AsyncFlush(sync.AsStatusCallBack(s));
+  sync.Wait();
+
+  if (!s.ok()) {
+    LOG(ERROR) << "Failed to close file, fh: " << fh_
+               << ", error: " << s.ToString();
   }
 }
 

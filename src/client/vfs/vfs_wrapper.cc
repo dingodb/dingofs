@@ -529,7 +529,7 @@ Status VFSWrapper::Read(Ino ino, DataBuffer* data_buffer, uint64_t size,
   auto span = vfs_->GetTracer()->StartSpan(kVFSWrapperMoudule, METHOD_NAME());
 
   std::string trace_id = span->GetContext()->TraceId();
-  VLOG(1) << fmt::format("[{}] VFSRead ino: {},  size: {}, offset: {}, fh: {}",
+  VLOG(1) << fmt::format("[{}] VFSRead ino: {}, size: {}, offset: {}, fh: {}",
                          trace_id, ino, size, offset, fh);
 
   Status s;

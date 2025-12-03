@@ -70,6 +70,8 @@ class HandleManager {
 
   void ReleaseHandler(uint64_t fh);
 
+  void Invalidate(uint64_t fh, int64_t offset, int64_t size);
+
   void Shutdown();
 
   void TriggerFlushAll();

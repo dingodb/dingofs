@@ -37,8 +37,18 @@ namespace vfs {
 
 #define METHOD_NAME() ("File::" + std::string(__FUNCTION__))
 
+File::File(VFSHub* hub, uint64_t fh, int64_t ino)
+    : vfs_hub_(hub),
+      fh_(fh),
+      ino_(ino),
+      file_writer_(std::make_unique<FileWriter>(hub, fh_, ino)) {
+  file_reader_ = new FileReader(hub, fh_, ino);
+  file_reader_->AcquireRef();
+}
+
 // TODO: use condition variable to wait
 File::~File() {
+  VLOG(12) << "File::~File destroyed, ino: " << ino_ << ", fh: " << fh_;
   while (inflight_flush_.load(std::memory_order_relaxed) > 0) {
     LOG(INFO) << "File::~File wait inflight_flush_ to be 0, ino: " << ino_
               << ", inflight_flush: "
@@ -46,7 +56,9 @@ File::~File() {
     sleep(1);
   }
 
-  file_reader_.reset();
+  file_reader_->Close();
+  file_reader_->ReleaseRef();
+
   file_writer_.reset();
 }
 
@@ -72,13 +84,17 @@ Status File::PreCheck() {
 Status File::Write(ContextSPtr ctx, const char* buf, uint64_t size,
                    uint64_t offset, uint64_t* out_wsize) {
   DINGOFS_RETURN_NOT_OK(PreCheck());
-  return  file_writer_->Write(ctx, buf, size, offset, out_wsize);
+  return file_writer_->Write(ctx, buf, size, offset, out_wsize);
 }
 
 Status File::Read(ContextSPtr ctx, DataBuffer* data_buffer, uint64_t size,
                   uint64_t offset, uint64_t* out_rsize) {
   DINGOFS_RETURN_NOT_OK(PreCheck());
   return file_reader_->Read(ctx, data_buffer, size, offset, out_rsize);
+}
+
+void File::Invalidate(int64_t offset, int64_t size) {
+  file_reader_->Invalidate(offset, size);
 }
 
 void File::FileFlushed(StatusCallback cb, Status status) {
@@ -111,13 +127,16 @@ void File::AsyncFlush(StatusCallback cb) {
       });
 }
 
+void File::Close() {
+  file_reader_->Close();
+  file_writer_->Close();
+}
+
 Status File::Flush() {
   Status s;
-
   Synchronizer sync;
   AsyncFlush(sync.AsStatusCallBack(s));
   sync.Wait();
-
   return s;
 }
 

@@ -14,42 +14,36 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_CLIENT_VFS_DATA_READER_READER_COMMON_H_
-#define DINGOFS_CLIENT_VFS_DATA_READER_READER_COMMON_H_
+#ifndef DINGOFS_CLIENT_VFS_DATA_READER_READAHEAD_POLICY_H_
+#define DINGOFS_CLIENT_VFS_DATA_READER_READAHEAD_POLICY_H_
 
-#include <condition_variable>
 #include <cstdint>
-#include <mutex>
 #include <string>
 
-#include "common/status.h"
 #include "client/vfs/data/common/common.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 
-struct ChunkReadReq {
-  const uint64_t req_id{0};       // request id
-  const uint64_t ino{0};          // ino
-  const int64_t index{0};         // chunk index
-  const int64_t offset{0};        // offset in the chunk
-  const FileRange frange;
+// protected by file reader
+struct ReadaheadPoclicy {
+  const int64_t uuid;
+  int8_t level{0};
+  int32_t seqdata{0};
+  int64_t last_offset{0};
 
+  explicit ReadaheadPoclicy(int64_t p_uuid) : uuid(p_uuid) {}
+
+  int64_t ReadaheadSize() const;
+  void UpdateOnRead(const FileRange& frange, int64_t rbuffer_used,
+                    int64_t rbuffer_total);
+  std::string UUID() const;
   std::string ToString() const;
-};
-
-struct ReaderSharedState {
-  std::mutex mtx;
-  std::condition_variable cv;
-  uint64_t total;
-  uint64_t num_done;
-  Status status;
-  uint64_t read_size{0};  // total read size
 };
 
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_CLIENT_VFS_DATA_READER_READER_COMMON_H_
+#endif  // DINGOFS_CLIENT_VFS_DATA_READER_READAHEAD_POLICY_H_

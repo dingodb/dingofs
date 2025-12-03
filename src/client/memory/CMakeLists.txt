@@ -17,6 +17,7 @@
 add_library(client_memory
     memory_pool.cc
     page_allocator.cc
+    read_buffer_manager.cc
 )
 target_link_libraries(client_memory
     client_options

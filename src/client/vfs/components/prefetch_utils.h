@@ -40,8 +40,8 @@ struct BlockContext {
 };
 
 struct ChunkContext {
-  ChunkContext(uint64_t fs_id, Ino ino, uint64_t chunk_idx, uint64_t offset,
-               uint64_t length)
+  ChunkContext(uint64_t fs_id, Ino ino, int64_t chunk_idx, int64_t offset,
+               int64_t length)
       : fs_id(fs_id),
         ino{ino},
         chunk_idx(chunk_idx),
@@ -49,9 +49,9 @@ struct ChunkContext {
         len(length) {}
   uint64_t fs_id;
   Ino ino;
-  uint64_t chunk_idx;
-  uint64_t offset;
-  uint64_t len;
+  int64_t chunk_idx;
+  int64_t offset;
+  int64_t len;
 
   std::string ToString() const {
     return fmt::format("Chunk context, ino: {}, chunk: {}-{}-{}", ino,
@@ -86,8 +86,8 @@ inline std::vector<ChunkContext> File2Chunk(const uint64_t fs_id, const Ino ino,
 
 inline std::vector<BlockContext> Chunk2Block(ContextSPtr ctx, VFSHub* vfs_hub,
                                              const ChunkContext& req,
-                                             const uint64_t chunk_size,
-                                             const uint64_t block_size) {
+                                             const int64_t chunk_size,
+                                             const int64_t block_size) {
   std::vector<Slice> slices;
   uint64_t chunk_version = 0;
 
