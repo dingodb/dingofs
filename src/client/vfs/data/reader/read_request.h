@@ -107,7 +107,7 @@ struct ReadRequest {
   std::string ToString() const;
 };
 
-using ReadRequestUptr = std::shared_ptr<ReadRequest>;
+using ReadRequestUptr = std::unique_ptr<ReadRequest>;
 
 struct PartialReadRequest {
   ReadRequest* req;

@@ -96,7 +96,7 @@ void ChunkReader::BlockReadCallback(ContextSPtr ctx, ChunkReader* reader,
     }
   }
 }
-
+// TODO: refact this, support async read for not block read executor
 Status ChunkReader::Read(ContextSPtr ctx, IOBuffer* out_buf) {
   Status s;
   Synchronizer sync;

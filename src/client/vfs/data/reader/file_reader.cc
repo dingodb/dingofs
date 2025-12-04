@@ -82,6 +82,12 @@ FileReader::~FileReader() {
   for (auto* req : to_delete) {
     DeleteReadRequest(req);
   }
+
+  if (FLAGS_client_vfs_print_readahead_stats) {
+    LOG(INFO) << fmt::format(
+        "FileReader ino: {}, fh: {} done, readahead_stats: {}", ino_, fh_,
+        policy_->readahead_stats.ToString());
+  }
 }
 
 void FileReader::AcquireRef() {
@@ -683,6 +689,7 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
     auto wait_span = vfs_hub_->GetTracer()->StartSpanWithParent(
         kVFSDataMoudule, "FileReader::Read::WaitRequests", *span);
 
+    // TODO: support wait with timeout
     for (PartialReadRequest& partial_req : reqs) {
       VLOG(9) << fmt::format("Read wait req: {}", partial_req.ToString());
 

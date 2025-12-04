@@ -27,6 +27,11 @@ static const uint8_t kReadaheadMaxLevel = 4;
 static const int64_t kReadAheadBaseSize = 1 * 1024 * 1024;  // 1MB
 static const int64_t kSeqAccessWindowSize = (512 + 256) * 1024;
 
+std::string ReadAheadStats::ToString() const {
+  return fmt::format("(read_count={}, sequential_count={}, random_count={} ",
+                     read_count, sequentail_read_count, random_read_count);
+}
+
 std::string ReadaheadPoclicy::UUID() const {
   return fmt::format("policy-{}", uuid);
 }
@@ -66,8 +71,13 @@ void ReadaheadPoclicy::UpdateOnRead(const FileRange& frange,
   bool within_seq_window =
       std::abs(frange.offset - last_offset) <= kSeqAccessWindowSize;
 
+  readahead_stats.read_count++;
+
   if (within_seq_window) {
     seqdata += frange.len;
+    readahead_stats.sequentail_read_count++;
+  } else {
+    readahead_stats.random_read_count++;
   }
 
   if (frange.offset == last_offset) {

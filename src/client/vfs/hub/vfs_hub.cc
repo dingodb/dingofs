@@ -180,7 +180,7 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
   }
 
   {
-    int64_t total_mb = FLAGS_client_read_buffer_total_mb;
+    int64_t total_mb = FLAGS_client_vfs_read_buffer_total_mb;
     if (total_mb <= 0) {
       LOG(ERROR) << "invalid read buffer total mb option, total_mb: "
                  << total_mb;

@@ -26,12 +26,21 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
+struct ReadAheadStats {
+  int64_t read_count{0};
+  int64_t sequentail_read_count{0};
+  int64_t random_read_count{0};
+
+  std::string ToString() const;
+};
+
 // protected by file reader
 struct ReadaheadPoclicy {
   const int64_t uuid;
   int8_t level{0};
   int32_t seqdata{0};
   int64_t last_offset{0};
+  ReadAheadStats readahead_stats;
 
   explicit ReadaheadPoclicy(int64_t p_uuid) : uuid(p_uuid) {}
 
@@ -41,6 +50,7 @@ struct ReadaheadPoclicy {
   std::string UUID() const;
   std::string ToString() const;
 };
+
 
 }  // namespace vfs
 }  // namespace client
