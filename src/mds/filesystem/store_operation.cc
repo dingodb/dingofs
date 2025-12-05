@@ -2539,7 +2539,7 @@ Status OperationProcessor::RunAlone(Operation* operation) {
   Status status;
   uint32_t retry = 0;
   int64_t txn_id = 0;
-  bool is_one_pc = false;
+  char* commit_type = (char*)"none";
   do {
     Duration once_duration;
     auto txn = kv_storage_->NewTxn(operation->GetIsolationLevel());
@@ -2564,15 +2564,15 @@ Status OperationProcessor::RunAlone(Operation* operation) {
     status = txn->Commit();
 
     auto txn_trace = txn->GetTrace();
-    is_one_pc = txn_trace.is_one_pc;
+    commit_type = txn_trace.commit_type;
     trace.AddTxn(txn_trace);
 
     if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
       break;
     }
 
-    DINGO_LOG(WARNING) << fmt::format("[operation.{}.{}][{}][{}us] alone run {} fail, onepc({}) retry({}) status({}).",
-                                      fs_id, ino, txn_id, once_duration.ElapsedUs(), operation->OpName(), is_one_pc,
+    DINGO_LOG(WARNING) << fmt::format("[operation.{}.{}][{}][{}us] alone run {} fail, txn({}) retry({}) status({}).",
+                                      fs_id, ino, txn_id, once_duration.ElapsedUs(), operation->OpName(), commit_type,
                                       retry, status.error_str());
 
     bthread_usleep(CalWaitTimeUs(retry));
@@ -2581,8 +2581,8 @@ Status OperationProcessor::RunAlone(Operation* operation) {
 
   trace.RecordElapsedTime("store_operate");
 
-  DINGO_LOG(INFO) << fmt::format("[operation.{}.{}][{}][{}us] alone run {} finish, onepc({}) retry({}) status({}).",
-                                 fs_id, ino, txn_id, duration.ElapsedUs(), operation->OpName(), is_one_pc, retry,
+  DINGO_LOG(INFO) << fmt::format("[operation.{}.{}][{}][{}us] alone run {} finish, txn({}) retry({}) status({}).",
+                                 fs_id, ino, txn_id, duration.ElapsedUs(), operation->OpName(), commit_type, retry,
                                  status.error_str());
 
   if (!status.ok()) {
@@ -2744,7 +2744,7 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
   uint32_t retry = 0;
   int count = 0;
   int64_t txn_id = 0;
-  bool is_one_pc = false;
+  char* commit_type = (char*)"none";
   std::string op_names = GetName(batch_operation);
   do {
     Duration once_duration;
@@ -2789,7 +2789,7 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
     status = txn->Commit();
 
     auto txn_trace = txn->GetTrace();
-    is_one_pc = txn_trace.is_one_pc;
+    commit_type = txn_trace.commit_type;
     SetTrace(batch_operation, txn_trace);
 
     if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
@@ -2797,8 +2797,8 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
     }
 
     DINGO_LOG(WARNING) << fmt::format(
-        "[operation.{}.{}][{}][{}us] batch run ({}) fail, count({}) onepc({}) retry({}) status({}).", fs_id, ino,
-        txn_id, once_duration.ElapsedUs(), op_names, count, is_one_pc, retry, status.error_str());
+        "[operation.{}.{}][{}][{}us] batch run ({}) fail, count({}) txn({}) retry({}) status({}).", fs_id, ino, txn_id,
+        once_duration.ElapsedUs(), op_names, count, commit_type, retry, status.error_str());
 
     bthread_usleep(CalWaitTimeUs(retry));
 
@@ -2807,8 +2807,8 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
   SetElapsedTime(batch_operation, "store_operate");
 
   DINGO_LOG(INFO) << fmt::format(
-      "[operation.{}.{}][{}][{}us] batch run ({}) finish, count({}) onepc({}) retry({}) status({}) attr({}).", fs_id,
-      ino, txn_id, duration.ElapsedUs(), op_names, count, is_one_pc, retry, status.error_str(), DescribeAttr(attr));
+      "[operation.{}.{}][{}][{}us] batch run ({}) finish, count({}) txn({}) retry({}) status({}) attr({}).", fs_id, ino,
+      txn_id, duration.ElapsedUs(), op_names, count, commit_type, retry, status.error_str(), DescribeAttr(attr));
 
   if (status.ok()) {
     SetAttr(batch_operation, attr);

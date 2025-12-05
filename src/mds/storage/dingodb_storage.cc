@@ -476,6 +476,18 @@ Status DingodbTxn::Scan(const Range& range, std::function<bool(KeyValue&)> handl
   return status;
 }
 
+char* DingodbTxn::GetCommitType() {
+  if (txn_->IsOnePc()) {
+    return (char*)"1pc";
+
+  } else if (txn_->IsAsyncCommit()) {
+    return (char*)"async";
+
+  } else {
+    return (char*)"2pc";
+  }
+}
+
 Status DingodbTxn::TransformStatus(const dingodb::sdk::Status& status) {
   if (status.IsNotFound()) {
     return Status(pb::error::ENOT_FOUND, status.ToString());
@@ -518,7 +530,7 @@ void DingodbTxn::Rollback() {
 Status DingodbTxn::Commit() {
   uint64_t start_time = Helper::TimestampUs();
   ON_SCOPE_EXIT([&]() {
-    txn_trace_.is_one_pc = txn_->IsOnePc();
+    txn_trace_.commit_type = GetCommitType();
     txn_trace_.write_time_us += (Helper::TimestampUs() - start_time);
   });
 

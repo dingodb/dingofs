@@ -89,6 +89,7 @@ class DingodbTxn : public Txn {
  private:
   using TxnUPtr = std::unique_ptr<dingodb::sdk::Transaction>;
 
+  char* GetCommitType();
   Status TransformStatus(const dingodb::sdk::Status& status);
 
   void Rollback();

@@ -43,8 +43,10 @@ class Trace {
   };
 
   struct Txn {
+    Txn() { commit_type = (char*)"none"; }
+
     uint64_t txn_id{0};
-    bool is_one_pc{false};
+    char* commit_type{nullptr};
     bool is_conflict{false};
     uint64_t read_time_us{0};
     uint64_t write_time_us{0};

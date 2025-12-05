@@ -53,7 +53,7 @@ void ServiceHelper::SetResponseInfo(const Trace& trace, pb::mds::ResponseInfo* i
   for (const auto& txn : trace.GetTxns()) {
     auto* mut_txn = info->add_txns();
     mut_txn->set_txn_id(txn.txn_id);
-    mut_txn->set_is_one_pc(txn.is_one_pc);
+    mut_txn->set_commit_type(txn.commit_type);
     mut_txn->set_is_conflict(txn.is_conflict);
     mut_txn->set_read_time_us(txn.read_time_us);
     mut_txn->set_write_time_us(txn.write_time_us);
