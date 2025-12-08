@@ -36,12 +36,9 @@
 #include "mds/service/fsstat_service.h"
 #include "mds/service/mds_service.h"
 #include "mds/storage/storage.h"
-#include "utils/configuration.h"
 
 namespace dingofs {
 namespace mds {
-
-using ::dingofs::utils::Configuration;
 
 class Server {
  public:

@@ -22,9 +22,9 @@
 #include <cstdint>
 #include <string>
 
+#include "client/common/client_option.h"
 #include "client/vfs/data_buffer.h"
 #include "client/vfs/vfs_meta.h"
-#include "common/options/client.h"
 #include "common/status.h"
 #include "common/trace/context.h"
 #include "common/trace/itracer.h"
@@ -34,9 +34,9 @@ namespace client {
 namespace vfs {
 
 struct VFSConfig {
+  std::string mds_addrs;
   std::string mount_point;
   std::string fs_name;
-  std::string config_path;
   std::string fs_type;  // vfs_mds/vfs_memory/vfs_local
 };
 

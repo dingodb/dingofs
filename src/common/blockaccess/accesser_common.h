@@ -24,6 +24,7 @@
 
 #include "common/blockaccess/rados/rados_common.h"
 #include "common/blockaccess/s3/s3_common.h"
+#include "common/options/blockaccess.h"
 #include "common/status.h"
 
 namespace dingofs {
@@ -40,25 +41,14 @@ struct BlockAccesserThrottleOptions {
 };
 
 inline void InitBlockAccesserThrottleOptions(
-    utils::Configuration* conf, BlockAccesserThrottleOptions* options) {
-  LOG_IF(FATAL, !conf->GetUInt64Value("s3.throttle.iopsTotalLimit",
-                                      &options->iopsTotalLimit));
-  LOG_IF(FATAL, !conf->GetUInt64Value("s3.throttle.iopsReadLimit",
-                                      &options->iopsReadLimit));
-  LOG_IF(FATAL, !conf->GetUInt64Value("s3.throttle.iopsWriteLimit",
-                                      &options->iopsWriteLimit));
-  LOG_IF(FATAL,
-         !conf->GetUInt64Value("s3.throttle.bpsTotalMB", &options->bpsTotalMB));
-  LOG_IF(FATAL,
-         !conf->GetUInt64Value("s3.throttle.bpsReadMB", &options->bpsReadMB));
-  LOG_IF(FATAL,
-         !conf->GetUInt64Value("s3.throttle.bpsWriteMB", &options->bpsWriteMB));
-
-  if (!conf->GetUInt64Value("s3.maxAsyncRequestInflightBytes",
-                            &options->maxAsyncRequestInflightBytes)) {
-    LOG(WARNING) << "Not found s3.maxAsyncRequestInflightBytes in conf";
-    options->maxAsyncRequestInflightBytes = 0;
-  }
+    BlockAccesserThrottleOptions* options) {
+  options->iopsTotalLimit = FLAGS_iops_total_limit;
+  options->iopsReadLimit = FLAGS_iops_read_limit;
+  options->iopsWriteLimit = FLAGS_iops_write_limit;
+  options->bpsTotalMB = FLAGS_io_bandwidth_total_mb;
+  options->bpsReadMB = FLAGS_io_bandwidth_read_mb;
+  options->bpsWriteMB = FLAGS_io_bandwidth_write_mb;
+  options->maxAsyncRequestInflightBytes = FLAGS_io_max_inflight_async_bytes;
 }
 
 enum AccesserType : uint8_t {

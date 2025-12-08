@@ -24,6 +24,30 @@ namespace blockaccess {
 
 DECLARE_int32(rados_op_timeout);
 
+// aws option
+DECLARE_string(s3_region);
+DECLARE_int32(s3_loglevel);
+DECLARE_string(s3_log_prefix);
+DECLARE_bool(s3_verify_ssl);
+DECLARE_int32(s3_max_connections);
+DECLARE_int32(s3_connect_timeout);
+DECLARE_int32(s3_request_timeout);
+DECLARE_bool(s3_use_crt_client);
+DECLARE_bool(s3_use_thread_pool);
+DECLARE_int32(s3_async_thread_num);
+DECLARE_bool(s3_use_thread_pool);
+DECLARE_bool(s3_use_virtual_address);
+DECLARE_bool(s3_enable_telemetry);
+
+// throttle options
+DECLARE_uint32(iops_total_limit);
+DECLARE_uint32(iops_read_limit);
+DECLARE_uint32(iops_write_limit);
+DECLARE_uint32(io_bandwidth_total_mb);
+DECLARE_uint32(io_bandwidth_read_mb);
+DECLARE_uint32(io_bandwidth_write_mb);
+DECLARE_uint32(io_max_inflight_async_bytes);
+
 }  // namespace blockaccess
 }  // namespace dingofs
 #endif  // DINGOFS_COMMON_OPTIONS_BLOCK_ACCESS_OPTION_H_

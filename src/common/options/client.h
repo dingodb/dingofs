@@ -14,27 +14,12 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_SRC_COMMON_OPTIONS_CLIENT_H_
-#define DINGOFS_SRC_COMMON_OPTIONS_CLIENT_H_
-
-#ifndef DINGOFS_SRC_COMMON_OPTIONS_CLIENT_CLIENT_H_
-#define DINGOFS_SRC_COMMON_OPTIONS_CLIENT_CLIENT_H_
-
-#ifndef DINGOFS_SRC_OPTIONS_CLIENT_OPTION_H_
-#define DINGOFS_SRC_OPTIONS_CLIENT_OPTION_H_
+#ifndef DINGOFS_COMMON_OPTIONS_CLIENT_OPTION_H_
+#define DINGOFS_COMMON_OPTIONS_CLIENT_OPTION_H_
 
 #include <gflags/gflags_declare.h>
 
-#include "common/blockaccess/accesser_common.h"
-#include "common/const.h"
-#include "common/options/cache.h"
-#include "utils/configuration.h"
-#include "utils/gflags_helper.h"
-
 namespace brpc {
-
-DECLARE_int32(defer_close_second);
-DECLARE_int32(health_check_interval);
 DECLARE_int32(connect_timeout_as_unreachable);
 DECLARE_int32(max_connection_pool_size);
 
@@ -45,8 +30,6 @@ namespace client {
 
 #define USING_FLAG(name) using ::dingofs::client::FLAGS_##name;
 
-// ############## gflags ##############
-
 /**
  * use vlog_level to set vlog level on the fly
  * When vlog_level is set, CheckVLogLevel is called to check the validity of the
@@ -55,19 +38,33 @@ namespace client {
  * You can modify the vlog level to 0 using:
  * curl -s http://127.0.0.1:9000/flags/vlog_level?setvalue=0
  */
-DECLARE_int32(vlog_level);
+// log
+DECLARE_string(client_log_dir);
+DECLARE_int32(client_log_level);
 
-DECLARE_bool(client_data_single_thread_read);
+// file system
+DECLARE_string(fstype);
+
+// bthread
 DECLARE_int32(client_bthread_worker_num);
-
 // access log
 DECLARE_bool(client_access_logging);
 DECLARE_int64(client_access_log_threshold_us);
 
+// fuse mount option
+DECLARE_string(fuse_mount_options);
+DECLARE_bool(fuse_use_single_thread);
+DECLARE_bool(fuse_use_clone_fd);
+DECLARE_uint32(fuse_max_threads);
+
 // fuse module
-DECLARE_bool(client_fuse_file_info_direct_io);
-DECLARE_bool(client_fuse_file_info_keep_cache);
-DECLARE_bool(client_fuse_enable_readdir_cache);
+DECLARE_bool(fuse_file_info_direct_io);
+DECLARE_bool(fuse_file_info_keep_cache);
+DECLARE_bool(fuse_enable_readdir_cache);
+DECLARE_bool(fuse_conn_info_want_splice_move);
+DECLARE_bool(fuse_conn_info_want_splice_read);
+DECLARE_bool(fuse_conn_info_want_splice_write);
+DECLARE_bool(fuse_conn_info_want_auto_inval_data);
 
 DECLARE_uint32(client_fuse_entry_cache_timeout_s);
 DECLARE_uint32(client_fuse_attr_cache_timeout_s);
@@ -124,209 +121,24 @@ DECLARE_uint32(format_block_len_width);
 DECLARE_string(format_delimiter);
 // end used in inode_blocks_service
 
-// ############## gflags end ##############
-
-// ############## options ##############
-
-struct UdsOption {
-  std::string fd_comm_path;
-};
-
-static void SetBrpcOpt(utils::Configuration* conf) {
-  dingofs::utils::GflagsLoadValueFromConfIfCmdNotSet dummy;
-  dummy.Load(conf, "defer_close_second", "rpc.defer.close.second",
-             &brpc::FLAGS_defer_close_second);
-  dummy.Load(conf, "health_check_interval", "rpc.healthCheckIntervalSec",
-             &brpc::FLAGS_health_check_interval);
-}
-
-static void InitUdsOption(utils::Configuration* conf, UdsOption* uds_opt) {
-  if (!conf->GetValue("uds.fdCommPath", &uds_opt->fd_comm_path)) {
-    uds_opt->fd_comm_path = "/var/run";
-  }
-}
-
-static void InitPrefetchOption(utils::Configuration* c) {
-  c->GetValue("vfs.prefetch.blocks", &FLAGS_client_vfs_prefetch_blocks);
-  c->GetValue("vfs.prefetch.threads", &FLAGS_client_vfs_prefetch_threads);
-  c->GetValue("vfs.data.warmup.intime_warmup_enbale",
-              &FLAGS_client_vfs_intime_warmup_enable);
-}
-
-static void InitWarmupOption(utils::Configuration* c) {
-  c->GetValue("vfs.warmup.threads", &FLAGS_client_vfs_warmup_threads);
-  c->GetValue("vfs.intime_warmup.enbale",
-              &FLAGS_client_vfs_intime_warmup_enable);
-  c->GetValue("vfs.intime_warmup.restart_mtime_interval_secs",
-              &FLAGS_client_vfs_warmup_mtime_restart_interval_secs);
-  c->GetValue("vfs.intime_warmup.restart_trigger_interval_secs",
-              &FLAGS_client_vfs_warmup_trigger_restart_interval_secs);
-}
-
-static void InitBlockCacheOption(utils::Configuration* c) {
-  {  // block cache option
-    c->GetValue("block_cache.cache_store", &cache::FLAGS_cache_store);
-    c->GetValue("block_cache.enable_stage", &cache::FLAGS_enable_stage);
-    c->GetValue("block_cache.enable_cache", &cache::FLAGS_enable_cache);
-    c->GetValue("block_cache.trace_logging", &cache::FLAGS_cache_trace_logging);
-    c->GetValue("block_cache.upload_stage_throttle_enable",
-                &cache::FLAGS_upload_stage_throttle_enable);
-    c->GetValue("block_cache.upload_stage_throttle_bandwidth_mb",
-                &cache::FLAGS_upload_stage_throttle_bandwidth_mb);
-    c->GetValue("block_cache.upload_stage_throttle_iops",
-                &cache::FLAGS_upload_stage_throttle_iops);
-    c->GetValue("block_cache.upload_stage_max_inflights",
-                &cache::FLAGS_upload_stage_max_inflights);
-    c->GetValue("block_cache.prefetch_max_inflights",
-                &cache::FLAGS_prefetch_max_inflights);
-    c->GetValue("block_cache.storage_upload_retry_timeout_s",
-                &cache::FLAGS_storage_upload_retry_timeout_s);
-    c->GetValue("block_cache.storage_download_retry_timeout_s",
-                &cache::FLAGS_storage_download_retry_timeout_s);
-  }
-
-  {  // disk cache option
-    c->GetValue("disk_cache.cache_dir", &cache::FLAGS_cache_dir);
-    c->GetValue("disk_cache.cache_size_mb", &cache::FLAGS_cache_size_mb);
-    c->GetValue("disk_cache.free_space_ratio", &cache::FLAGS_free_space_ratio);
-    c->GetValue("disk_cache.cache_expire_s", &cache::FLAGS_cache_expire_s);
-    c->GetValue("disk_cache.cleanup_expire_interval_ms",
-                &cache::FLAGS_cleanup_expire_interval_ms);
-    c->GetValue("disk_cache.ioring_iodepth", &cache::FLAGS_ioring_iodepth);
-  }
-
-  {  // disk state option
-    c->GetValue("disk_state.tick_duration_s",
-                &cache::FLAGS_disk_state_tick_duration_s);
-    c->GetValue("disk_state.normal2unstable_error_num",
-                &cache::FLAGS_disk_state_normal2unstable_error_num);
-    c->GetValue("disk_state.unstable2normal_succ_num",
-                &cache::FLAGS_disk_state_unstable2normal_succ_num);
-    c->GetValue("disk_state.unstable2down_s",
-                &cache::FLAGS_disk_state_unstable2down_s);
-    c->GetValue("disk_state.check_duration_ms",
-                &cache::FLAGS_disk_state_check_duration_ms);
-  }
-}
-
-static void InitRemoteBlockCacheOption(utils::Configuration* c) {
-  c->GetValue("remote_cache.cache_group", &cache::FLAGS_cache_group);
-  c->GetValue("remote_cache.mds_addrs", &cache::FLAGS_mds_addrs);
-  c->GetValue("remote_cache.mds_rpc_timeout_ms",
-              &cache::FLAGS_mds_rpc_timeout_ms);
-  c->GetValue("remote_cache.mds_rpc_retry_times",
-              &cache::FLAGS_mds_rpc_retry_times);
-  c->GetValue("remote_cache.mds_request_retry_times",
-              &cache::FLAGS_mds_request_retry_times);
-  c->GetValue("remote_cache.load_members_interval_ms",
-              &cache::FLAGS_load_members_interval_ms);
-
-  c->GetValue("remote_cache.fill_group_cache", &cache::FLAGS_fill_group_cache);
-  c->GetValue("remote_cache.subrequest_range_size",
-              &cache::FLAGS_subrequest_range_size);
-  c->GetValue("remote_cache.rpc_connect_timeout_ms",
-              &cache::FLAGS_rpc_connect_timeout_ms);
-  c->GetValue("remote_cache.rpc_connect_timeout_as_unreachable",
-              &brpc::FLAGS_connect_timeout_as_unreachable);
-  c->GetValue("remote_cache.rpc_max_connection_pool_size",
-              &brpc::FLAGS_max_connection_pool_size);
-  c->GetValue("remote_cache.put_rpc_timeout_ms",
-              &cache::FLAGS_put_rpc_timeout_ms);
-  c->GetValue("remote_cache.range_rpc_timeout_ms",
-              &cache::FLAGS_range_rpc_timeout_ms);
-  c->GetValue("remote_cache.cache_rpc_timeout_ms",
-              &cache::FLAGS_cache_rpc_timeout_ms);
-  c->GetValue("remote_cache.prefetch_rpc_timeout_ms",
-              &cache::FLAGS_prefetch_rpc_timeout_ms);
-  c->GetValue("remote_cache.ping_rpc_timeout_ms",
-              &cache::FLAGS_ping_rpc_timeout_ms);
-  c->GetValue("remote_cache.rpc_max_retry_times",
-              &cache::FLAGS_rpc_max_retry_times);
-  c->GetValue("remote_cache.rpc_max_timeout_ms",
-              &cache::FLAGS_rpc_max_timeout_ms);
-
-  c->GetValue("cache_node_state.tick_duration_s",
-              &cache::FLAGS_cache_node_state_tick_duration_s);
-  c->GetValue("cache_node_state.normal2unstable_error_num",
-              &cache::FLAGS_cache_node_state_normal2unstable_error_num);
-  c->GetValue("cache_node_state.unstable2normal_succ_num",
-              &cache::FLAGS_cache_node_state_unstable2normal_succ_num);
-  c->GetValue("cache_node_state.check_duration_ms",
-              &cache::FLAGS_cache_node_state_check_duration_ms);
-}
-
-// fuse option
-struct FuseConnInfo {
-  bool want_splice_move;
-  bool want_splice_read;
-  bool want_splice_write;
-  bool want_auto_inval_data;
-};
-
-struct FuseFileInfo {
-  bool keep_cache;
-};
-
-struct FuseOption {
-  FuseConnInfo conn_info;
-  FuseFileInfo file_info;
-};
-
-void InitFuseOption(utils::Configuration* c, FuseOption* option);
-
-// memory option
-struct PageOption {
-  uint64_t page_size;
-  uint64_t total_size;
-  bool use_pool;
-};
-
-static void InitMemoryPageOption(utils::Configuration* c, PageOption* option) {
-  // page option
-  c->GetValueFatalIfFail("data_stream.page.size", &option->page_size);
-  c->GetValueFatalIfFail("data_stream.page.total_size_mb", &option->total_size);
-  c->GetValueFatalIfFail("data_stream.page.use_pool", &option->use_pool);
-
-  if (option->page_size == 0) {
-    CHECK(false) << "page size must greater than 0.";
-  }
-
-  option->total_size = option->total_size * kMiB;
-  if (option->total_size < 64 * kMiB) {
-    CHECK(false) << "page total size must greater than 64MB.";
-  }
-}
+// unix socket path
+DECLARE_string(socket_path);
 
 // vfs option
-struct VFSMetaOption {
-  uint32_t max_name_length{255};  // max length of file name
-};
+DECLARE_uint32(vfs_meta_max_name_length);
+DECLARE_bool(vfs_data_writeback);
+DECLARE_string(vfs_data_writeback_suffix);
+DECLARE_uint32(vfs_dummy_server_port);
 
-struct VFSDataOption {
-  bool writeback{false};  // whether to use writeback
-  std::string writeback_suffix;
-};
+// memory option
+DECLARE_uint32(data_stream_page_size);
+DECLARE_uint64(data_stream_page_total_size_mb);
+DECLARE_bool(data_stream_page_use_pool);
 
-struct VFSOption {
-  blockaccess::BlockAccessOptions block_access_opt;  // from config
-  PageOption page_option;
-  FuseOption fuse_option;
-
-  VFSMetaOption meta_option;
-  VFSDataOption data_option;
-
-  uint32_t dummy_server_port{10000};
-};
-
-void InitVFSOption(utils::Configuration* conf, VFSOption* option);
-
-// ############## options end ##############
+// trace log
+DECLARE_bool(trace_logging);
 
 }  // namespace client
 }  // namespace dingofs
 
 #endif  // DINGOFS_COMMON_OPTIONS_CLIENT_OPTION_H_
-
-#endif  // DINGOFS_SRC_COMMON_OPTIONS_CLIENT_CLIENT_H_
-
-#endif  // DINGOFS_SRC_COMMON_OPTIONS_CLIENT_H_

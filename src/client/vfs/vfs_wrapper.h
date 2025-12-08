@@ -24,7 +24,6 @@
 #include "client/vfs/data_buffer.h"
 #include "client/vfs/vfs.h"
 #include "common/metrics/client/client.h"
-#include "common/options/client.h"
 
 namespace dingofs {
 namespace client {
@@ -131,8 +130,6 @@ class VFSWrapper {
  private:
   bool Dump();
   bool Load();
-
-  utils::Configuration conf_;
 
   std::unique_ptr<VFS> vfs_;
   std::unique_ptr<metrics::client::ClientOpMetric> client_op_metric_;

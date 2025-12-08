@@ -25,6 +25,7 @@
 #include "cache/cachegroup/cache_group_node.h"
 #include "cache/cachegroup/cache_group_node_service.h"
 #include "cache/common/macro.h"
+#include "common/options/cache.h"
 
 namespace brpc {
 DECLARE_bool(graceful_quit_on_sigterm);

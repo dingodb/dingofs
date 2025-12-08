@@ -37,12 +37,10 @@
 #include "client/vfs/vfs_meta.h"
 #include "common/blockaccess/block_access_log.h"
 #include "common/define.h"
-#include "common/io_buffer.h"
 #include "common/metrics/client/client.h"
 #include "common/metrics/metric_guard.h"
 #include "common/options/client.h"
 #include "common/status.h"
-#include "utils/configuration.h"
 
 namespace dingofs {
 namespace client {
@@ -62,17 +60,6 @@ static auto& g_rw_metric = VFSRWMetric::GetInstance();
 #define METRIC_GUARD(REQUEST)              \
   ClientOpMetricGuard clientOpMetricGuard( \
       &rc, {&client_op_metric_->op##REQUEST, &client_op_metric_->opAll});
-
-static Status LoadConfig(const std::string& config_path,
-                         utils::Configuration& conf) {
-  conf.SetConfigPath(config_path);
-  if (!conf.LoadConfig()) {
-    return Status::InvalidParam("load config fail");
-  }
-  conf.PrintConfig();
-
-  return Status::OK();
-}
 
 static Status InitLog() {
   bool succ = dingofs::client::InitAccessLog(FLAGS_log_dir) &&
@@ -101,18 +88,12 @@ Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
   AccessLogGuard log(
       [&]() { return absl::StrFormat("start: %s", s.ToString()); });
 
-  // load config
-  s = LoadConfig(vfs_conf.config_path, conf_);
-  if (!s.ok()) {
-    return s;
-  }
-
   // init client option
   VFSOption vfs_option;
   if (vfs_conf.fs_type == "vfs" || vfs_conf.fs_type == "vfs_v2" ||
       vfs_conf.fs_type == "vfs_mds" || vfs_conf.fs_type == "vfs_local" ||
       vfs_conf.fs_type == "vfs_memory") {
-    InitVFSOption(&conf_, &vfs_option);
+    InitVFSOption(&vfs_option);
 
     DINGOFS_RETURN_NOT_OK(InitLog());
   } else {

@@ -28,6 +28,18 @@ static std::string Char2Addr(const char* p) {
   return oss.str();
 }
 
+inline bool ParseMetaURL(const std::string& meta_url, std::string& addrs,
+                         std::string& fs_name) {
+  size_t pos = meta_url.find('/');
+  if (pos == std::string::npos) {
+    return false;
+  }
+  addrs = meta_url.substr(0, pos);
+  fs_name = meta_url.substr(pos + 1);
+
+  return true;
+}
+
 }  // namespace client
 }  // namespace dingofs
 

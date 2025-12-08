@@ -21,6 +21,7 @@ add_library(dingofs_common
     rpc_stream.cc
     io_buffer.cc
     version.cc
+    flag.cc
 )
 target_link_libraries(dingofs_common
     dingofs_utils

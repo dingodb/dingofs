@@ -17,14 +17,17 @@
 #ifndef DINGOFS_BLOCK_ACCESS_S3_COMMON_H_
 #define DINGOFS_BLOCK_ACCESS_S3_COMMON_H_
 
+#include <brpc/reloadable_flags.h>
+#include <gflags/gflags.h>
+
 #include <string>
 
+#include "common/options/blockaccess.h"
 #include "fmt/format.h"
-#include "utils/configuration.h"
+#include "glog/logging.h"
 
 namespace dingofs {
 namespace blockaccess {
-
 struct S3Info {
   // should get from mds
   std::string ak;
@@ -58,61 +61,47 @@ struct S3Options {
   AwsSdkConfig aws_sdk_config;
 };
 
-inline void InitAwsSdkConfig(utils::Configuration* conf,
-                             AwsSdkConfig* aws_sdk_config) {
-  LOG_IF(FATAL, !conf->GetIntValue("s3.logLevel", &aws_sdk_config->loglevel));
-  if (!conf->GetStringValue("client.common.logDir",
-                            &aws_sdk_config->log_prefix)) {
-    LOG(INFO) << fmt::format(
-        "Not found client.common.logDir in conf, use default {}",
-        aws_sdk_config->log_prefix);
+inline void InitAwsSdkConfig(AwsSdkConfig* aws_sdk_config) {
+  aws_sdk_config->region = FLAGS_s3_region;
+  aws_sdk_config->loglevel = FLAGS_s3_loglevel;
+
+  aws_sdk_config->log_prefix = FLAGS_s3_log_prefix;
+  gflags::CommandLineFlagInfo flag;
+  gflags::GetCommandLineFlagInfo("s3_log_prefix", &flag);
+  if (flag.is_default) {
+    LOG(INFO) << fmt::format("s3_log_prefix use default value {}",
+                             aws_sdk_config->log_prefix);
   } else {
     aws_sdk_config->log_prefix =
         fmt::format("{}/aws_sdk_{}_", aws_sdk_config->log_prefix, getpid());
+    LOG(INFO) << fmt::format("s3_log_prefix: {}", aws_sdk_config->log_prefix);
   }
 
-  LOG_IF(FATAL,
-         !conf->GetBoolValue("s3.verify_SSL", &aws_sdk_config->verify_ssl));
-  LOG_IF(FATAL, !conf->GetIntValue("s3.maxConnections",
-                                   &aws_sdk_config->max_connections));
-  LOG_IF(FATAL, !conf->GetIntValue("s3.connectTimeout",
-                                   &aws_sdk_config->connect_timeout));
-  LOG_IF(FATAL, !conf->GetIntValue("s3.requestTimeout",
-                                   &aws_sdk_config->request_timeout));
+  aws_sdk_config->verify_ssl = FLAGS_s3_verify_ssl;
+  aws_sdk_config->max_connections = FLAGS_s3_max_connections;
+  aws_sdk_config->connect_timeout = FLAGS_s3_connect_timeout;
+  aws_sdk_config->request_timeout = FLAGS_s3_request_timeout;
 
-  if (!conf->GetBoolValue("s3.use_crt_client",
-                          &aws_sdk_config->use_crt_client)) {
-    aws_sdk_config->use_crt_client = true;
-    LOG(INFO) << fmt::format(
-        "Not found s3.use_crt_client in conf, use default {}",
-        aws_sdk_config->use_crt_client);
+  aws_sdk_config->use_crt_client = FLAGS_s3_use_crt_client;
+  if (aws_sdk_config->use_crt_client) {
+    LOG(INFO) << "s3 use crt client.";
+  }
+  aws_sdk_config->use_thread_pool = FLAGS_s3_use_thread_pool;
+  if (aws_sdk_config->use_thread_pool) {
+    LOG(INFO) << "s3 use thread pool.";
   }
 
-  if (!conf->GetBoolValue("s3.use_thread_pool",
-                          &aws_sdk_config->use_thread_pool)) {
-    aws_sdk_config->use_thread_pool = true;
-    LOG(INFO) << fmt::format(
-        "Not found s3.use_thread_pool in conf, use default {}",
-        aws_sdk_config->use_thread_pool);
-  }
+  aws_sdk_config->async_thread_num = FLAGS_s3_async_thread_num;
+  LOG(INFO) << fmt::format("s3 async thread num in thread pool: {}.",
+                           aws_sdk_config->async_thread_num);
 
-  if (!conf->GetIntValue("s3.async_thread_num_in_thread_pool",
-                         &aws_sdk_config->async_thread_num)) {
-    aws_sdk_config->async_thread_num = 16;
-    LOG(INFO) << fmt::format(
-        "Not found s3.async_thread_num_in_thread_pool in conf, use default {}",
-        aws_sdk_config->async_thread_num);
-  }
+  aws_sdk_config->use_virtual_addressing = FLAGS_s3_use_virtual_address;
+  LOG(INFO) << fmt::format("s3 use virtual addressing: {}.",
+                           aws_sdk_config->use_virtual_addressing);
 
-  LOG_IF(FATAL, !conf->GetBoolValue("s3.useVirtualAddressing",
-                                    &aws_sdk_config->use_virtual_addressing));
-  LOG_IF(FATAL, !conf->GetStringValue("s3.region", &aws_sdk_config->region));
-
-  if (!conf->GetBoolValue("s3.enableTelemetry",
-                          &aws_sdk_config->enable_telemetry)) {
-    aws_sdk_config->enable_telemetry = false;
-    LOG(WARNING) << "Not found s3.enableTelemetry in conf, default false.";
-  }
+  aws_sdk_config->enable_telemetry = FLAGS_s3_enable_telemetry;
+  LOG(INFO) << fmt::format("s3 enable telemetry: {}.",
+                           aws_sdk_config->enable_telemetry);
 }
 
 }  // namespace blockaccess

@@ -19,9 +19,6 @@ target_link_libraries(blockaccess_options
     gflags::gflags
 )
 
-add_library(trace_options
-    trace.cc
-)
 target_link_libraries(blockaccess_options
     gflags::gflags
 )
@@ -30,7 +27,6 @@ add_library(client_options
     client.cc
 )
 target_link_libraries(client_options
-    trace_options
     cache_lib
     brpc::brpc
     fmt::fmt

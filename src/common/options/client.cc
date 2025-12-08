@@ -18,26 +18,22 @@
 
 #include <brpc/reloadable_flags.h>
 #include <gflags/gflags.h>
-
-#include "common/options/blockaccess.h"
-#include "common/options/trace.h"
-#include "utils/configuration.h"
+#include <glog/logging.h>
 
 namespace dingofs {
 namespace client {
+DEFINE_string(client_log_dir, "/tmp", "set log directory");
 
-// ############## gflags ##############
-
-DEFINE_int32(vlog_level, 0, "set vlog level");
-DEFINE_validator(vlog_level, [](const char* /*name*/, int32_t value) {
+DEFINE_int32(client_log_level, 0, "set log level");
+DEFINE_validator(client_log_level, [](const char* /*name*/, int32_t value) {
   FLAGS_v = value;
   LOG(INFO) << "current verbose logging level is `" << FLAGS_v << "`";
   return true;
 });
 
-DEFINE_bool(client_data_single_thread_read, false,
-            "use single thread read to chunk, if true, use single thread read "
-            "to block cache, otherwise use executor read with async");
+DEFINE_string(fstype, "vfs_v2",
+              "vfs type(e.g. vfs_v2|vfs_mds|vfs_local|vfs_memory)");
+
 DEFINE_int32(client_bthread_worker_num, 0, "bthread worker num");
 
 // access log
@@ -47,15 +43,8 @@ DEFINE_validator(client_access_logging, brpc::PassValidate);
 DEFINE_int64(client_access_log_threshold_us, 0, "access log threshold");
 DEFINE_validator(client_access_log_threshold_us, brpc::PassValidate);
 
-// fuse module
-DEFINE_bool(client_fuse_file_info_direct_io, false, "use direct io for file");
-DEFINE_validator(client_fuse_file_info_direct_io, brpc::PassValidate);
-
-DEFINE_bool(client_fuse_file_info_keep_cache, false, "keep file page cache");
-DEFINE_validator(client_fuse_file_info_keep_cache, brpc::PassValidate);
-
-DEFINE_bool(client_fuse_enable_readdir_cache, true, "enable readdir cache");
-DEFINE_validator(client_fuse_enable_readdir_cache, brpc::PassValidate);
+DEFINE_bool(fuse_enable_readdir_cache, true, "enable readdir cache");
+DEFINE_validator(fuse_enable_readdir_cache, brpc::PassValidate);
 
 DEFINE_uint32(client_fuse_entry_cache_timeout_s, 3600,
               "fuse entry cache timeout in seconds");
@@ -147,7 +136,7 @@ DEFINE_int64(client_vfs_warmup_trigger_restart_interval_secs, 1800,
 DEFINE_validator(client_vfs_warmup_trigger_restart_interval_secs,
                  brpc::PassValidate);
 
-// ## vfs meta
+// vfs meta
 DEFINE_bool(client_vfs_inode_cache_enable, true,
             "enable inode cache, default is false");
 DEFINE_validator(client_vfs_inode_cache_enable, brpc::PassValidate);
@@ -164,7 +153,7 @@ DEFINE_uint32(client_write_slicce_operation_merge_delay_us, 10,
 DEFINE_validator(client_write_slicce_operation_merge_delay_us,
                  brpc::PassValidate);
 
-// begin used in inode_blocks_service
+//  inode_blocks_service
 DEFINE_uint32(format_file_offset_width, 20, "Width of file offset in format");
 DEFINE_validator(format_file_offset_width, brpc::PassValidate);
 
@@ -190,149 +179,50 @@ DEFINE_validator(format_delimiter,
                    return true;
                  });
 
-// end used in inode_blocks_service
+// fuse module
+DEFINE_bool(fuse_file_info_direct_io, false, "use direct io for file");
+DEFINE_validator(fuse_file_info_direct_io, brpc::PassValidate);
+DEFINE_bool(fuse_file_info_keep_cache, true, "keep file page cache");
+DEFINE_validator(fuse_file_info_keep_cache, brpc::PassValidate);
+DEFINE_bool(fuse_conn_info_want_splice_move, false,
+            "the fuse device try to move pages instead of copying them");
+DEFINE_validator(fuse_conn_info_want_splice_move, brpc::PassValidate);
+DEFINE_bool(fuse_conn_info_want_splice_read, false,
+            "use splice when reading from the fuse device");
+DEFINE_validator(fuse_conn_info_want_splice_read, brpc::PassValidate);
+DEFINE_bool(fuse_conn_info_want_splice_write, false,
+            "use splice when writing to the fuse device");
+DEFINE_validator(fuse_conn_info_want_splice_write, brpc::PassValidate);
+DEFINE_bool(fuse_conn_info_want_auto_inval_data, true,
+            "fuse will check the validity of the attributes on every read");
+DEFINE_validator(fuse_conn_info_want_auto_inval_data, brpc::PassValidate);
 
-// ############## gflags end ##############
+// memory page allocator
+DEFINE_uint32(data_stream_page_size, 65536, "memory page size for datastream");
+DEFINE_validator(data_stream_page_size, brpc::PassValidate);
+DEFINE_uint64(data_stream_page_total_size_mb, 1024,
+              "total memory size for data stream");
+DEFINE_validator(data_stream_page_total_size_mb, brpc::PassValidate);
+DEFINE_bool(data_stream_page_use_pool, true,
+            "whether to use memory pool for data stream");
+DEFINE_validator(data_stream_page_use_pool, brpc::PassValidate);
 
-// ############## options ##############
+// vfs meta
+DEFINE_uint32(vfs_meta_max_name_length, 255, "max file name length");
+DEFINE_validator(vfs_meta_max_name_length, brpc::PassValidate);
 
-void InitFuseOption(utils::Configuration* c, FuseOption* option) {
-  {  // fuse conn info
-    auto* o = &option->conn_info;
-    c->GetValueFatalIfFail("fuse.conn_info.want_splice_move",
-                           &o->want_splice_move);
-    c->GetValueFatalIfFail("fuse.conn_info.want_splice_read",
-                           &o->want_splice_read);
-    c->GetValueFatalIfFail("fuse.conn_info.want_splice_write",
-                           &o->want_splice_write);
-    c->GetValueFatalIfFail("fuse.conn_info.want_auto_inval_data",
-                           &o->want_auto_inval_data);
-  }
+// vfs data
+DEFINE_bool(vfs_data_writeback, false, "whether to use writeback");
+DEFINE_validator(vfs_data_writeback, brpc::PassValidate);
+DEFINE_string(vfs_data_writeback_suffix, "",
+              "file name with suffix for writeback");
 
-  {  // fuse file info
-    c->GetValueFatalIfFail("fuse.file_info.direct_io",
-                           &FLAGS_client_fuse_file_info_direct_io);
-    c->GetValueFatalIfFail("fuse.file_info.keep_cache",
-                           &FLAGS_client_fuse_file_info_keep_cache);
-  }
-}
+DEFINE_uint32(vfs_dummy_server_port, 10000, "dummy server port");
+DEFINE_validator(vfs_dummy_server_port, brpc::PassValidate);
 
-void InitVFSOption(utils::Configuration* conf, VFSOption* option) {
-  if (!conf->GetIntValue("block_access.rados.rados_op_timeout",
-                         &blockaccess::FLAGS_rados_op_timeout)) {
-    LOG(INFO) << "Not found `block_access.rados.rados_op_timeout` in conf, "
-                 "default to "
-              << blockaccess::FLAGS_rados_op_timeout;
-  }
-
-  blockaccess::InitAwsSdkConfig(
-      conf, &option->block_access_opt.s3_options.aws_sdk_config);
-  blockaccess::InitBlockAccesserThrottleOptions(
-      conf, &option->block_access_opt.throttle_options);
-
-  InitMemoryPageOption(conf, &option->page_option);
-
-  InitBlockCacheOption(conf);
-  InitRemoteBlockCacheOption(conf);
-
-  InitFuseOption(conf, &option->fuse_option);
-  InitPrefetchOption(conf);
-  InitWarmupOption(conf);
-
-  // vfs data related
-  if (!conf->GetBoolValue("vfs.data.writeback",
-                          &option->data_option.writeback)) {
-    LOG(INFO) << "Not found `vfs.data.writeback` in conf, default:"
-              << (option->data_option.writeback ? "true" : "false");
-  }
-
-  if (!conf->GetStringValue("vfs.data.writeback_suffix",
-                            &option->data_option.writeback_suffix)) {
-    LOG(INFO) << "Not found `vfs.data.writeback_suffix` in conf, "
-                 "default to: "
-              << option->data_option.writeback_suffix;
-  }
-
-  if (!conf->GetIntValue("vfs.data.vfs_periodic_flush_interval_ms",
-                         &FLAGS_client_vfs_periodic_flush_interval_ms)) {
-    LOG(INFO) << "Not found `vfs.data.vfs_periodic_flush_interval_ms` in conf, "
-                 "default to "
-              << FLAGS_client_vfs_periodic_flush_interval_ms;
-  }
-
-  if (!conf->GetIntValue("vfs.data.flush_bg_thread",
-                         &FLAGS_client_vfs_flush_bg_thread)) {
-    LOG(INFO) << "Not found `vfs.data.flush_bg_thread` in conf, "
-                 "default to "
-              << FLAGS_client_vfs_flush_bg_thread;
-  }
-
-  if (!conf->GetBoolValue("vfs.data.single_tread_read",
-                          &FLAGS_client_data_single_thread_read)) {
-    LOG(INFO) << "Not found `vfs.data.single_tread_read` in conf, "
-                 "default to "
-              << (FLAGS_client_data_single_thread_read ? "true" : "false");
-  }
-
-  if (!conf->GetIntValue("vfs.data.read_executor_thread",
-                         &FLAGS_client_vfs_read_executor_thread)) {
-    LOG(INFO) << "Not found `vfs.data.read_executor_thread` in conf, "
-                 "default to "
-              << FLAGS_client_vfs_read_executor_thread;
-  }
-
-  // vfs meta related
-  if (!conf->GetUInt32Value("vfs.meta.max_name_length",
-                            &option->meta_option.max_name_length)) {
-    LOG(INFO) << "Not found `vfs.meta.max_name_length` in conf, default to "
-              << option->meta_option.max_name_length;
-  }
-
-  if (!conf->GetUInt32Value("vfs.dummy_server.port",
-                            &option->dummy_server_port)) {
-    LOG(INFO) << "Not found `vfs.dummy_server.port` in conf, default to "
-              << option->dummy_server_port;
-  }
-
-  if (!conf->GetIntValue("vfs.bthread_worker_num",
-                         &FLAGS_client_bthread_worker_num)) {
-    FLAGS_client_bthread_worker_num = 0;
-    LOG(INFO) << "Not found `vfs.bthread_worker_num` in conf, "
-                 "default to 0";
-  }
-
-  if (!conf->GetBoolValue("vfs.access_logging", &FLAGS_client_access_logging)) {
-    LOG(INFO) << "Not found `vfs.access_logging` in conf, default: "
-              << FLAGS_client_access_logging;
-  }
-  if (!conf->GetInt64Value("vfs.access_log_threshold_us",
-                           &FLAGS_client_access_log_threshold_us)) {
-    LOG(INFO) << "Not found `vfs.access_log_threshold_us` in conf, "
-                 "default: "
-              << FLAGS_client_access_log_threshold_us;
-  }
-
-  if (!conf->GetBoolValue("vfs.vfs_meta_logging",
-                          &FLAGS_client_vfs_meta_logging)) {
-    LOG(INFO) << "Not found `vfs.vfs_meta_logging` in conf, default: "
-              << FLAGS_client_vfs_meta_logging;
-  }
-  if (!conf->GetInt64Value("vfs.vfs_meta_log_threshold_u",
-                           &FLAGS_client_vfs_meta_log_threshold_us)) {
-    LOG(INFO) << "Not found `vfs.vfs_meta_log_threshold_u` in conf, "
-                 "default: "
-              << FLAGS_client_vfs_meta_log_threshold_us;
-  }
-
-  if (!conf->GetBoolValue("vfs.trace_logging", &FLAGS_trace_logging)) {
-    LOG(INFO) << "Not found `vfs.trace_logging` in conf, default: "
-              << FLAGS_trace_logging;
-  }
-
-  SetBrpcOpt(conf);
-}
-
-// ############## options end ##############
+// trace log
+DEFINE_bool(trace_logging, false, "enable trace log");
+DEFINE_validator(trace_logging, &brpc::PassValidate);
 
 }  // namespace client
 }  // namespace dingofs

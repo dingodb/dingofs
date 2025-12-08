@@ -34,11 +34,9 @@ class FuseServer {
   FuseServer(const FuseServer&) = delete;
   FuseServer& operator=(const FuseServer&) = delete;
 
-  int Init(int argc, char* argv[], struct MountOption* mount_option);
+  int Init(const std::string& program_name, struct MountOption* mount_option);
 
-  int ParseCmdLine();
-
-  int OptParse();
+  int AddMountOptions();
 
   int CreateSession();
 
@@ -48,7 +46,7 @@ class FuseServer {
 
   void SessionUnmount();
 
-  int Serve(const std::string& fd_comm_path);
+  int Serve();
 
   void Shutdown();
 
@@ -67,20 +65,16 @@ class FuseServer {
 
   int SessionLoop();
 
-  bool ShutdownGracefully(const char* mountpoint);
+  bool ShutdownGracefully(const std::string& mountpoint);
 
   void UdsServerStart();
 
   void ExportMetrics(const std::string& key, const std::string& value);
 
-  int argc_{0};
-  char** argv_ = {nullptr};
-  char** parsed_argv_ = {nullptr};
-  const char* program_name_{nullptr};
+  std::string program_name_;
 
   // libfuse
-  struct fuse_args args_{0};
-  struct fuse_cmdline_opts opts_{0};
+  struct fuse_args args_{0, nullptr, 0};
   struct fuse_session* session_{nullptr};
   struct fuse_loop_config* config_{nullptr};
   struct MountOption* mount_option_{nullptr};

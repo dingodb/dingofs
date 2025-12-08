@@ -26,7 +26,6 @@
 #include <string>
 
 #include "absl/strings/str_format.h"
-#include "client/common/utils.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/data_buffer.h"
 #include "client/vfs/vfs_meta.h"
@@ -36,13 +35,12 @@
 #include "common/status.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
-#include "utils/configuration.h"
 
 static dingofs::client::vfs::VFSWrapper* g_vfs = nullptr;
 
-USING_FLAG(client_fuse_file_info_direct_io)
-USING_FLAG(client_fuse_file_info_keep_cache)
-USING_FLAG(client_fuse_enable_readdir_cache)
+USING_FLAG(fuse_file_info_direct_io)
+USING_FLAG(fuse_file_info_keep_cache)
+USING_FLAG(fuse_enable_readdir_cache)
 
 using dingofs::Status;
 using dingofs::client::vfs::Attr;
@@ -310,9 +308,9 @@ static void ReplyStatfs(fuse_req_t req, const FsStat& stat) {
 
 int InitFuseClient(const char* argv0, const struct MountOption* mount_option) {
   dingofs::client::vfs::VFSConfig config = {
+      .mds_addrs = mount_option->mds_addrs,
       .mount_point = mount_option->mount_point,
       .fs_name = mount_option->fs_name,
-      .config_path = mount_option->conf,
       .fs_type = mount_option->fs_type,
   };
 
@@ -495,10 +493,9 @@ void FuseOpOpen(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
     fi->fh = fh;
 
     fi->direct_io =
-        (dingofs::IsInternalNode(ino) || FLAGS_client_fuse_file_info_direct_io)
-            ? 1
-            : 0;
-    fi->keep_cache = FLAGS_client_fuse_file_info_keep_cache ? 1 : 0;
+        (dingofs::IsInternalNode(ino) || FLAGS_fuse_file_info_direct_io) ? 1
+                                                                         : 0;
+    fi->keep_cache = FLAGS_fuse_file_info_keep_cache ? 1 : 0;
 
     ReplyOpen(req, fi);
   }
@@ -584,9 +581,8 @@ void FuseOpOpenDir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
   } else {
     fi->fh = fh;
 
-    fi->cache_readdir =
-        (need_cache && FLAGS_client_fuse_enable_readdir_cache) ? 1 : 0;
-    fi->keep_cache = FLAGS_client_fuse_enable_readdir_cache ? 1 : 0;
+    fi->cache_readdir = (need_cache && FLAGS_fuse_enable_readdir_cache) ? 1 : 0;
+    fi->keep_cache = FLAGS_fuse_enable_readdir_cache ? 1 : 0;
 
     ReplyOpen(req, fi);
   }
@@ -824,11 +820,11 @@ void FuseOpCreate(fuse_req_t req, fuse_ino_t parent, const char* name,
   } else {
     fi->fh = fh;
 
-    fi->direct_io = (dingofs::IsInternalNode(attr.ino) ||
-                     FLAGS_client_fuse_file_info_direct_io)
-                        ? 1
-                        : 0;
-    fi->keep_cache = FLAGS_client_fuse_file_info_keep_cache ? 1 : 0;
+    fi->direct_io =
+        (dingofs::IsInternalNode(attr.ino) || FLAGS_fuse_file_info_direct_io)
+            ? 1
+            : 0;
+    fi->keep_cache = FLAGS_fuse_file_info_keep_cache ? 1 : 0;
 
     ReplyCreate(req, fi, attr);
   }

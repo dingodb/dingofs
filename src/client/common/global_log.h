@@ -18,30 +18,12 @@
 #define DINGOFS_SRC_CLIENT_COMMON_GLOBAL_LOG_H_
 
 #include "common/options/client.h"
-#include "fmt/format.h"
 #include "glog/logging.h"
-#include "utils/configuration.h"
-#include "utils/gflags_helper.h"
 
-static int InitLog(const char* argv0, const std::string& conf_path) {
-  dingofs::utils::Configuration conf;
-  conf.SetConfigPath(conf_path);
-  if (!conf.LoadConfig()) {
-    LOG(ERROR) << "loadConfig fail, confPath=" << conf_path;
-    return 1;
-  }
-
+static int InitLog(const char* argv0) {
   // set log dir
-  if (FLAGS_log_dir.empty()) {
-    if (!conf.GetStringValue("client.common.logDir", &FLAGS_log_dir)) {
-      LOG(WARNING) << fmt::format(
-          "no client.common.logDir in {}, will log to /tmp.", conf_path);
-    }
-  }
-
-  dingofs::utils::GflagsLoadValueFromConfIfCmdNotSet dummy;
-  dummy.Load(&conf, "v", "client.loglevel", &FLAGS_v);
-  dingofs::client::FLAGS_vlog_level = FLAGS_v;
+  FLAGS_log_dir = dingofs::client::FLAGS_client_log_dir;
+  FLAGS_v = dingofs::client::FLAGS_client_log_level;
 
   FLAGS_logbufsecs = 0;
   FLAGS_minloglevel = google::GLOG_INFO;
@@ -49,6 +31,8 @@ static int InitLog(const char* argv0, const std::string& conf_path) {
 
   // initialize logging module
   google::InitGoogleLogging(argv0);
+  LOG(INFO) << "current verbose logging level is: " << FLAGS_v
+            << ", log dir is: " << FLAGS_log_dir;
 
   return 0;
 }

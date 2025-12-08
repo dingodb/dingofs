@@ -14,18 +14,21 @@
  * limitations under the License.
  */
 
+#include <fmt/format.h>
+
 #include <csignal>
 #include <cstdlib>
 
 #include "absl/cleanup/cleanup.h"
 #include "client/common/global_log.h"
+#include "client/common/utils.h"
 #include "client/fuse/fuse_op.h"
 #include "client/fuse/fuse_server.h"
+#include "common/flag.h"
+#include "common/options/cache.h"
 #include "common/options/client.h"
-#include "utils/configuration.h"
 
 using FuseServer = dingofs::client::fuse::FuseServer;
-using Configuration = dingofs::utils::Configuration;
 
 static FuseServer* fuse_server = nullptr;
 
@@ -53,23 +56,65 @@ static int InstallSignal(int sig, void (*handler)(int)) {
   return 0;
 }
 
-int main(int argc, char* argv[]) {
-  struct MountOption mount_option {
-    nullptr
-  };
+static dingofs::FlagExtraInfo extras = {
+    .program = "dingo-fuse",
+    .usage = "dingo-fuse [OPTIONS] <meta-url> <mountpoint>",
+    .examples =
+        R"(dingo-fuse 10.220.69.10:7400/dingofs /mnt/dingofs
+dingo-fuse --client_log_dir=/mnt/logs 10.220.32.1:6700/dingofs /mnt/dingofs
+dingo-fuse --flagfile client.conf 10.220.32.1:6700/dingofs /mnt/dingofs
+)",
+    .patterns = {"src/client", "cache/tiercache", "cache/blockcache",
+                 "cache/remotecache", "options/blockaccess", "options/client"},
+};
 
+int main(int argc, char* argv[]) {
+  // install singal handler
   InstallSignal(SIGHUP, HandleSignal);
+
+  // parse gflags
+  int rc = dingofs::ParseFlags(&argc, &argv, extras);
+  if (rc != 0) {
+    return EXIT_FAILURE;
+  }
+
+  // after parsing:
+  // argv[0] is program name
+  // argv[1] is meta url
+  // argv[2] is mount point
+  if (argc < 3) {
+    std::cerr << "missing meta url or mount point.\n";
+    std::cerr << "Usage: " << extras.usage << '\n';
+    return EXIT_FAILURE;
+  }
+
+  std::string mds_addrs;
+  std::string fs_name;
+  if (!dingofs::client::ParseMetaURL(argv[1], mds_addrs, fs_name)) {
+    std::cerr << "meta url is invalid: " << argv[1] << '\n';
+    return EXIT_FAILURE;
+  }
+  // used for remote cache
+  dingofs::cache::FLAGS_mds_addrs = mds_addrs;
+
+  struct MountOption mount_option{.mount_point = argv[2],
+                                  .fs_name = fs_name,
+                                  .fs_type = dingofs::client::FLAGS_fstype,
+                                  .mds_addrs = mds_addrs};
 
   fuse_server = new FuseServer();
   if (fuse_server == nullptr) return EXIT_FAILURE;
   auto defer_free = ::absl::MakeCleanup([&]() { delete fuse_server; });
 
   // init fuse
-  if (fuse_server->Init(argc, argv, &mount_option) == 1) return EXIT_FAILURE;
+  if (fuse_server->Init(argv[0], &mount_option) == 1) return EXIT_FAILURE;
   auto defer_uninit = ::absl::MakeCleanup([&]() { UnInitFuseClient(); });
 
   // init global log
-  InitLog(argv[0], mount_option.conf);
+  InitLog(argv[0]);
+
+  // print current gflags
+  LOG(INFO) << dingofs::GenCurrentFlags();
 
   // create fuse session
   if (fuse_server->CreateSession() == 1) return EXIT_FAILURE;
@@ -83,21 +128,11 @@ int main(int argc, char* argv[]) {
 
   // init fuse client
   if (InitFuseClient(argv[0], &mount_option) != 0) {
-    LOG(ERROR) << "init fuse client fail, conf=" << mount_option.conf;
+    LOG(ERROR) << "init fuse client fail";
     return EXIT_FAILURE;
   }
 
-  // init config
-  Configuration conf;
-  conf.SetConfigPath(mount_option.conf);
-  if (!conf.LoadConfig()) {
-    LOG(ERROR) << "load config file fail: " << mount_option.conf;
-  }
-
-  dingofs::client::UdsOption uds_option;
-  dingofs::client::InitUdsOption(&conf, &uds_option);
-
-  if (fuse_server->Serve(uds_option.fd_comm_path) == 1) return EXIT_FAILURE;
+  if (fuse_server->Serve() == 1) return EXIT_FAILURE;
 
   return EXIT_SUCCESS;
 }

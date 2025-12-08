@@ -27,6 +27,7 @@ target_link_libraries(cache_benchmark
     cache_utils
     cache_common
     cache_storage
+    cache_tiercache
 )
 
 add_executable(cache-bench main.cc)

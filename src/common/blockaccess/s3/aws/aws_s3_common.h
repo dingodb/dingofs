@@ -25,7 +25,6 @@
 #include "aws/core/utils/memory/stl/AWSStreamFwd.h"
 #include "aws/core/utils/stream/PreallocatedStreamBuf.h"
 #include "common/blockaccess/accesser_common.h"
-#include "utils/configuration.h"
 #include "utils/macros.h"
 
 #define AWS_ALLOCATE_TAG __FILE__ ":" STRINGIFY(__LINE__)

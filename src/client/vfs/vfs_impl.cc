@@ -42,7 +42,6 @@
 #include "fmt/format.h"
 #include "glog/logging.h"
 #include "linux/fs.h"
-#include "utils/configuration.h"
 #include "utils/encode.h"
 #include "utils/net_common.h"
 #include "vfs_meta.h"

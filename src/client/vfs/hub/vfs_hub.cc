@@ -37,7 +37,6 @@
 #include "common/blockaccess/rados/rados_common.h"
 #include "common/options/cache.h"
 #include "common/options/client.h"
-#include "common/options/trace.h"
 #include "common/status.h"
 #include "common/trace/log_trace_exporter.h"
 #include "common/trace/noop_tracer.h"
@@ -45,7 +44,6 @@
 #include "fmt/format.h"
 #include "gflags/gflags.h"
 #include "glog/logging.h"
-#include "utils/configuration.h"
 #include "utils/executor/thread/executor_impl.h"
 
 namespace dingofs {
@@ -62,13 +60,6 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
 
   vfs_option_ = vfs_option;
 
-  utils::Configuration conf;
-  conf.SetConfigPath(vfs_conf.config_path);
-  if (!conf.LoadConfig()) {
-    LOG(ERROR) << "load config fail, confPath = " << vfs_conf.config_path;
-    return Status::Internal("load config fail");
-  }
-
   MetaSystemUPtr rela_meta_system;
   if (vfs_conf.fs_type == "vfs_memory") {
     rela_meta_system = std::make_unique<dummy::MemoryMetaSystem>();
@@ -77,13 +68,11 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
     rela_meta_system = std::make_unique<local::LocalMetaSystem>();
 
   } else if (vfs_conf.fs_type == "vfs_v2" || vfs_conf.fs_type == "vfs_mds") {
-    std::string mds_addrs;
-    conf.GetValueFatalIfFail("mds.addr", &mds_addrs);
-    LOG(INFO) << fmt::format("mds addr: {}.", mds_addrs);
+    LOG(INFO) << fmt::format("mds addr: {}.", vfs_conf.mds_addrs);
 
-    rela_meta_system = v2::MDSMetaSystem::Build(vfs_conf.fs_name, mds_addrs,
-                                                vfs_conf.mount_point,
-                                                vfs_option.dummy_server_port);
+    rela_meta_system = v2::MDSMetaSystem::Build(
+        vfs_conf.fs_name, vfs_conf.mds_addrs, vfs_conf.mount_point,
+        vfs_option.dummy_server_port);
   } else {
     return Status::Internal("not unknown file system");
   }

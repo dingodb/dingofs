@@ -15,6 +15,7 @@
 #include "common/version.h"
 
 #include <bvar/bvar.h>
+#include <fmt/format.h>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
@@ -44,6 +45,11 @@ void ShowVerion() {
   printf("DINGOFS GIT_TAG_VERSION:[%s]\n", FLAGS_git_tag_name.c_str());
   printf("DINGOFS GIT_COMMIT_HASH:[%s]\n", FLAGS_git_commit_hash.c_str());
   printf("DINGOFS BUILD_TYPE:[%s]\n", FLAGS_dingofs_build_type.c_str());
+}
+
+std::string Version() {
+  return fmt::format("{}, build {} + {}", FLAGS_git_tag_name,
+                     FLAGS_git_last_commit_id, FLAGS_dingofs_build_type);
 }
 
 void LogVerion() {

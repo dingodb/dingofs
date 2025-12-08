@@ -46,30 +46,12 @@ using dingofs::utils::TrimSpace;
 
 const std::string kFdCommPathKey = "fd_comm_path";
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 struct MountOption {
-  const char* mount_point;
-  const char* fs_name;
-  const char* fs_type;
-  char* conf;
-  char* mds_addr;
+  std::string mount_point;
+  std::string fs_name;
+  std::string fs_type;
+  std::string mds_addrs;
 };
-
-static const struct fuse_opt kMountOpts[] = {
-    {"fsname=%s", offsetof(struct MountOption, fs_name), 0},
-
-    {"fstype=%s", offsetof(struct MountOption, fs_type), 0},
-
-    {"conf=%s", offsetof(struct MountOption, conf), 0},
-
-    FUSE_OPT_END};
-
-#ifdef __cplusplus
-}  // extern "C"
-#endif
 
 inline int FuseAddOpts(struct fuse_args* args, const char* arg_value) {
   if (fuse_opt_add_arg(args, "-o") == -1) return 1;
@@ -78,10 +60,10 @@ inline int FuseAddOpts(struct fuse_args* args, const char* arg_value) {
 }
 
 // Get file inode number
-inline int GetFileInode(const char* file_name) {
+inline int GetFileInode(const std::string& file_name) {
   struct stat file_info;
 
-  if (stat(file_name, &file_info) == 0) {
+  if (stat(file_name.c_str(), &file_info) == 0) {
     return file_info.st_ino;
   }
   return -1;
@@ -161,7 +143,7 @@ inline std::string GetFdCommFileName(const std::string& filename) {
  *
  * @param mountpoint dingo-fuse mountpoint
  */
-inline bool CanShutdownGracefully(const char* mountpoint) {
+inline bool CanShutdownGracefully(const std::string& mountpoint) {
   if (GetFileInode(mountpoint) != dingofs::ROOTINODEID) {
     return false;
   }
@@ -175,7 +157,7 @@ inline bool CanShutdownGracefully(const char* mountpoint) {
  * @param mountpoint dingo-fuse mountpoint
  * @param fd file descriptor for /dev/fuse
  */
-inline void DingoSessionUnmount(const char* mountpoint, int fd) {
+inline void DingoSessionUnmount(const std::string& mountpoint, int fd) {
   int res;
 
   if (fd != -1) {
@@ -198,7 +180,7 @@ inline void DingoSessionUnmount(const char* mountpoint, int fd) {
     if (res == 1 && (pfd.revents & POLLERR)) return;
   }
 
-  res = umount2(mountpoint, 2);
+  res = umount2(mountpoint.c_str(), 2);
   if (res == 0) return;
 }
 

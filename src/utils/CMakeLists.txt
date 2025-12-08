@@ -15,7 +15,6 @@
 add_subdirectory(executor)
 
 add_library(dingofs_utils
-    configuration.cc
     leaky_bucket.cc
     stringstatus.cc
     throttle.cc

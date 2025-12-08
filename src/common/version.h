@@ -57,6 +57,8 @@ DECLARE_bool(show_version);
 #define DINGOFS_BUILD_TYPE "unknown"
 #endif
 
+std::string Version();
+
 void ShowVerion();
 
 void LogVerion();
@@ -65,4 +67,4 @@ void ExposeDingoVersion();
 
 }  // namespace dingofs
 
-#endif // DINGOFS_COMMON_VERSION_H_
+#endif  // DINGOFS_COMMON_VERSION_H_

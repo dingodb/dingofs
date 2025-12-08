@@ -16,19 +16,20 @@
 
 #include "client/fuse/fuse_server.h"
 
+#include <brpc/reloadable_flags.h>
 #include <sys/socket.h>
 
 #include <chrono>
+#include <cstdlib>
 
 #include "absl/cleanup/cleanup.h"
 #include "client/fuse/fuse_common.h"
 #include "client/fuse/fuse_lowlevel_ops_func.h"
-#include "client/fuse/fuse_parse.h"
 #include "client/fuse/fuse_passfd.h"
 #include "client/fuse/fuse_upgrade_manager.h"
 #include "common/options/client.h"
-#include "common/version.h"
 #include "fmt/format.h"
+#include "fuse_opt.h"
 #include "glog/logging.h"
 #include "utils/concurrent/concurrent.h"
 
@@ -43,27 +44,35 @@ USING_FLAG(client_fuse_fd_get_retry_interval_ms)
 USING_FLAG(client_fuse_check_alive_max_retries)
 USING_FLAG(client_fuse_check_alive_retry_interval_ms)
 
+// fuse mount options
+DEFINE_string(fuse_mount_options, "default_permissions,allow_other",
+              "mount options for libfuse");
+DEFINE_bool(fuse_use_single_thread, false, "use single thread for libfuse");
+DEFINE_validator(fuse_use_single_thread, brpc::PassValidate);
+DEFINE_bool(fuse_use_clone_fd, false, "use clone fd for libfuse");
+DEFINE_validator(fuse_use_clone_fd, brpc::PassValidate);
+DEFINE_uint32(fuse_max_threads, 10, "max threads for libfuse");
+DEFINE_validator(fuse_max_threads, brpc::PassValidate);
+
+DEFINE_string(socket_path, "/var/run",
+              "path for store unix domain socket file");
+
 FuseServer::FuseServer() = default;
 
-int FuseServer::Init(int argc, char* argv[], struct MountOption* mount_option) {
-  argc_ = argc;
-  argv_ = argv;
+int FuseServer::Init(const std::string& program_name,
+                     struct MountOption* mount_option) {
   mount_option_ = mount_option;
-
-  program_name_ = argv[0];
-  int parsed_argc = argc_;
-  parsed_argv_ = reinterpret_cast<char**>(malloc(sizeof(char*) * argc_));
-  ParseOption(argc_, argv_, &parsed_argc, parsed_argv_, mount_option_);
-  // init fuse args
-  args_ = FUSE_ARGS_INIT(parsed_argc, parsed_argv_);
+  program_name_ = program_name;
 
   AllocateFuseInitBuf();
 
-  if (ParseCmdLine() == 1) return 1;
-  if (OptParse() == 1) return 1;
+  if (AddMountOptions() == 1) return 1;
 
   config_ = fuse_loop_cfg_create();
   CHECK(config_ != nullptr) << "fuse_loop_cfg_create fail.";
+
+  fd_comm_file_ =
+      absl::StrFormat("%s/fd_comm_socket.%d", FLAGS_socket_path, getpid());
 
   return 0;
 }
@@ -72,8 +81,6 @@ FuseServer::~FuseServer() {
   unlink(fd_comm_file_.c_str());
 
   FreeFuseInitBuf();
-  free(opts_.mountpoint);
-  FreeParsedArgv(parsed_argv_, argc_);
   fuse_opt_free_args(&args_);
 
   if (config_ != nullptr) {
@@ -180,65 +187,26 @@ void FuseServer::UdsServerStart() {
   LOG(INFO) << "dingo-fuse uds server started.";
 }
 
-int FuseServer::ParseCmdLine() {
-  if (fuse_parse_cmdline(&args_, &opts_) != 0) return 1;
-
-  if (opts_.show_help) {
-    printf(
-        "usage: %s -o conf=/etc/dingofs/client.conf -o fsname=dingofs \\\n"
-        "       -o fstype=s3 "
-        "[--mdsaddr=172.20.1.10:6700,172.20.1.11:6700,172.20.1.12:6700] \\\n"
-        "       [OPTIONS] <mountpoint>\n",
-        program_name_);
-    printf("Fuse Options:\n");
-    fuse_cmdline_help();
-    fuse_lowlevel_help();
-    ExtraOptionsHelp();
-    return 1;
-
-  } else if (opts_.show_version) {
-    dingofs::ShowVerion();
-
-    printf("FUSE library version %s\n", fuse_pkgversion());
-    fuse_lowlevel_version();
-    return 1;
-  }
-
-  if (opts_.mountpoint == nullptr) {
-    printf("required option[mountpoint] is missing.\n");
-    return 1;
-  }
-
-  return 0;
-}
-
-int FuseServer::OptParse() {
-  if (fuse_opt_parse(&args_, mount_option_, kMountOpts, nullptr) == -1) {
-    return 1;
-  }
-  mount_option_->mount_point = opts_.mountpoint;
-
-  if (mount_option_->conf == nullptr || mount_option_->fs_name == nullptr ||
-      mount_option_->fs_type == nullptr) {
-    printf("one of required options[conf|fsname|fstype] is missing.\n");
-    return 1;
-  }
+int FuseServer::AddMountOptions() {
+  CHECK(!program_name_.empty()) << "program_name_ should not be empty";
+  if (fuse_opt_add_arg(&args_, program_name_.c_str()) != 0) return 1;
 
   //  Values shown in "df -T" and friends first column "Filesystem",DindoFS +
   //  filesystem name
-  FuseAddOpts(&args_, (const char*)"subtype=dingofs");
-  std::string arg_value;
-  arg_value.append("fsname=DingoFS");
-  arg_value.append(":");
-  arg_value.append(mount_option_->fs_name);
-  FuseAddOpts(&args_, arg_value.c_str());
+  if (FuseAddOpts(&args_, (const char*)"subtype=dingofs") != 0) return 1;
+
+  std::string arg_value =
+      fmt::format("fsname=DingoFS:{}", mount_option_->fs_name);
+  if (FuseAddOpts(&args_, arg_value.c_str()) != 0) return 1;
+
+  if (FuseAddOpts(&args_, "default_permissions,allow_other") != 0) return 1;
 
   return 0;
 }
 
 int FuseServer::CreateSession() {
   // create fuse new session
-  session_ = fuse_session_new(&args_, &kFuseOp, sizeof(kFuseOp), mount_option_);
+  session_ = fuse_session_new(&args_, &kFuseOp, sizeof(kFuseOp), nullptr);
   if (session_ == nullptr) return 1;
 
   // install fuse signal
@@ -257,14 +225,16 @@ void FuseServer::DestroySsesion() {
 }
 
 int FuseServer::SessionMount() {
-  printf("Begin to mount fs %s to %s\n", mount_option_->fs_name,
-         mount_option_->mount_point);
+  std::cout << fmt::format("Begin to mount fs {} to {}\n",
+                           mount_option_->fs_name, mount_option_->mount_point);
+  LOG(INFO) << fmt::format("Begin to mount fs {} to {}.",
+                           mount_option_->fs_name, mount_option_->mount_point);
 
-  if (CanShutdownGracefully(opts_.mountpoint)) {
-    bool is_shutdown = ShutdownGracefully(opts_.mountpoint);
+  if (CanShutdownGracefully(mount_option_->mount_point)) {
+    bool is_shutdown = ShutdownGracefully(mount_option_->mount_point);
     if (!is_shutdown) {
       LOG(ERROR) << "smooth upgrade failed, can't mount on: "
-                 << opts_.mountpoint;
+                 << mount_option_->mount_point;
       return 1;
     }
     LOG(INFO) << "old dingo-fuse is already shutdown";
@@ -280,7 +250,8 @@ int FuseServer::SessionMount() {
     return 0;
   }
 
-  if (fuse_session_mount(session_, opts_.mountpoint) != 0) return 1;
+  if (fuse_session_mount(session_, mount_option_->mount_point.c_str()) != 0)
+    return 1;
 
   return 0;
 }
@@ -331,12 +302,12 @@ int FuseServer::SessionLoop() {
   }
 
   // process user request
-  if (opts_.singlethread) {
+  if (FLAGS_fuse_use_single_thread) {
     return fuse_session_loop(session_);
   }
 
-  fuse_loop_cfg_set_clone_fd(config_, opts_.clone_fd);
-  fuse_loop_cfg_set_max_threads(config_, opts_.max_threads);
+  fuse_loop_cfg_set_clone_fd(config_, FLAGS_fuse_use_clone_fd);
+  fuse_loop_cfg_set_max_threads(config_, FLAGS_fuse_max_threads);
   return fuse_session_loop_mt(session_, config_);
 }
 
@@ -346,19 +317,16 @@ void FuseServer::ExportMetrics(const std::string& key,
   fd_comm_metrics_.expose(butil::StringPiece(key));
 }
 
-int FuseServer::Serve(const std::string& fd_comm_path) {
-  fd_comm_file_ =
-      absl::StrFormat("%s/fd_comm_socket.%d", fd_comm_path, getpid());
-
+int FuseServer::Serve() {
   // export fd_comm_path value for new dingo-fuse use
   ExportMetrics(kFdCommPathKey, fd_comm_file_);
 
   UdsServerStart();
-  fuse_daemonize(opts_.foreground);
+  fuse_daemonize(1);
 
   LOG(INFO) << fmt::format(
       "dingo-fuse start loop, singlethread={} max_threads={}.",
-      opts_.singlethread, opts_.max_threads);
+      FLAGS_fuse_use_single_thread, FLAGS_fuse_max_threads);
 
   if (SaveOpInitMsg() == 1) {
     LOG(ERROR) << "save fuse init message failed";
@@ -385,7 +353,7 @@ void FuseServer::SessionUnmount() {
     // DingoSessionUnmount instead of fuse_session_unmount because
     // session_->mountpoint is nullptr
     LOG(INFO) << "use DingoSessionUnmount";
-    DingoSessionUnmount(opts_.mountpoint, GetDevFd());
+    DingoSessionUnmount(mount_option_->mount_point, GetDevFd());
   } else {
     LOG(INFO) << "use fuse_session_unmount";
     fuse_session_unmount(session_);
@@ -393,7 +361,7 @@ void FuseServer::SessionUnmount() {
 }
 
 // TODO: check the fstype to determain the dingo-fuse
-bool FuseServer::ShutdownGracefully(const char* mountpoint) {
+bool FuseServer::ShutdownGracefully(const std::string& mountpoint) {
   // get old dingo-fuse pid
   std::string file_name =
       absl::StrFormat("%s/%s", mountpoint, dingofs::STATSNAME);
