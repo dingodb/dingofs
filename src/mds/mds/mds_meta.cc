@@ -62,6 +62,7 @@ MDSMeta::MDSMeta(const MdsEntry& pb_mds) {
   host_ = pb_mds.location().host();
   port_ = pb_mds.location().port();
   state_ = ToMdsState(pb_mds.state());
+  create_time_ms_ = pb_mds.create_time_ms();
   last_online_time_ms_ = pb_mds.last_online_time_ms();
 }
 
@@ -70,12 +71,13 @@ MDSMeta::MDSMeta(const MDSMeta& mds_meta) {
   host_ = mds_meta.host_;
   port_ = mds_meta.port_;
   state_ = mds_meta.state_;
+  create_time_ms_ = mds_meta.create_time_ms_;
   last_online_time_ms_ = mds_meta.last_online_time_ms_;
 }
 
 std::string MDSMeta::ToString() const {
-  return fmt::format("MDSMeta[id={}, host={}, port={}, state={}, last_online_time_ms={}]", id_, host_, port_,
-                     static_cast<int>(state_), last_online_time_ms_);
+  return fmt::format("MDSMeta[id={}, host={}, port={}, state={}, create_time={} last_online_time_ms={}]", id_, host_,
+                     port_, static_cast<int>(state_), create_time_ms_, last_online_time_ms_);
 }
 
 MdsEntry MDSMeta::ToProto() const {
@@ -84,6 +86,8 @@ MdsEntry MDSMeta::ToProto() const {
   pb_mds.mutable_location()->set_host(host_);
   pb_mds.mutable_location()->set_port(port_);
   pb_mds.set_state(ToPbMdsState(state_));
+  pb_mds.mutable_location()->set_port(port_);
+  pb_mds.set_create_time_ms(create_time_ms_);
   pb_mds.set_last_online_time_ms(last_online_time_ms_);
 
   return pb_mds;

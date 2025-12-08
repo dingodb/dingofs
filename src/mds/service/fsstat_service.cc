@@ -288,6 +288,7 @@ static void RenderMdsList(const std::vector<MdsEntry>& mdses, butil::IOBufBuilde
   os << "<th>ID</th>";
   os << "<th>Addr</th>";
   os << "<th>State</th>";
+  os << "<th>Create Time</th>";
   os << "<th>Last Online Time</th>";
   os << "<th>Online</th>";
   os << "<th>Details</th>";
@@ -301,6 +302,7 @@ static void RenderMdsList(const std::vector<MdsEntry>& mdses, butil::IOBufBuilde
     os << fmt::format(R"(<td><a href="http://{}:{}/FsStatService" target="_blank">{}:{} </a></td>)",
                       mds.location().host(), mds.location().port(), mds.location().host(), mds.location().port());
     os << "<td>" << MdsEntry::State_Name(mds.state()) << "</td>";
+    os << "<td>" << Helper::FormatTime(mds.create_time_ms() / 1000) << "</td>";
     os << "<td>" << Helper::FormatMsTime(mds.last_online_time_ms()) << "</td>";
     if (mds.last_online_time_ms() + FLAGS_mds_heartbeat_mds_offline_period_time_ms < now_ms) {
       os << "<td style=\"color:red\">NO</td>";
@@ -327,6 +329,7 @@ static void RenderClientList(const std::vector<ClientEntry>& clients, butil::IOB
   os << "<th>Host</th>";
   os << "<th>MountPoint</th>";
   os << "<th>FsName</th>";
+  os << "<th>Create Time</th>";
   os << "<th>Last Online Time</th>";
   os << "<th>Online</th>";
   os << "</tr>";
@@ -340,6 +343,7 @@ static void RenderClientList(const std::vector<ClientEntry>& clients, butil::IOB
                       client.port(), client.hostname(), client.port());
     os << "<td>" << client.mountpoint() << "</td>";
     os << "<td>" << client.fs_name() << "</td>";
+    os << "<td>" << Helper::FormatTime(client.create_time_ms() / 1000) << "</td>";
     os << "<td>" << Helper::FormatMsTime(client.last_online_time_ms()) << "</td>";
     if (client.last_online_time_ms() + FLAGS_mds_heartbeat_client_offline_period_ms < now_ms) {
       os << R"(<td style="color:red">NO</td>)";

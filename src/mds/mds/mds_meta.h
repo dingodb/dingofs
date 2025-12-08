@@ -76,6 +76,9 @@ class MDSMeta {
   State GetState() const { return state_; }
   void SetState(State state) { state_ = state; }
 
+  uint64_t CreateTimeMs() const { return create_time_ms_; }
+  void SetCreateTimeMs(uint64_t time_ms) { create_time_ms_ = time_ms; }
+
   uint64_t LastOnlineTimeMs() const { return last_online_time_ms_; }
   void SetLastOnlineTimeMs(uint64_t time_ms) { last_online_time_ms_ = time_ms; }
 
@@ -92,7 +95,8 @@ class MDSMeta {
 
   State state_;
 
-  uint64_t last_online_time_ms_;
+  uint64_t create_time_ms_{0};
+  uint64_t last_online_time_ms_{0};
 };
 
 class MDSMetaMap {

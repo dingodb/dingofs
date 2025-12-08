@@ -328,13 +328,13 @@ int main(int argc, char* argv[]) {
   CHECK(server.InitLog()) << "init log error.";
   CHECK(server.InitConfig(FLAGS_conf)) << fmt::format("init config({}) error.", FLAGS_conf);
   CHECK(GeneratePidFile(server.GetPidFilePath())) << "generate pid file error.";
-  CHECK(server.InitMDSMeta()) << "init mds meta error.";
   CHECK(server.InitStorage(FLAGS_storage_url)) << "init storage error.";
   CHECK(server.InitOperationProcessor()) << "init operation processor error.";
   CHECK(server.InitCacheGroupMemberManager()) << "init cache group member manager error.";
+  CHECK(server.InitHeartbeat()) << "init heartbeat error.";
+  CHECK(server.InitMDSMeta()) << "init mds meta error.";
   CHECK(server.InitNotifyBuddy()) << "init notify buddy error.";
   CHECK(server.InitFileSystem()) << "init file system set error.";
-  CHECK(server.InitHeartbeat()) << "init heartbeat error.";
   CHECK(server.InitFsInfoSync()) << "init fs info sync error.";
   CHECK(server.InitCacheMemberSynchronizer()) << "init cache member synchronizer error.";
   CHECK(server.InitMonitor()) << "init mds monitor error.";

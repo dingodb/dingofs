@@ -111,7 +111,6 @@ static void CheckMdsAlive(std::vector<MDSMeta>& offline_mdses, std::vector<MDSMe
 Status Monitor::MonitorMDS() {
   auto& server = Server::GetInstance();
   auto heartbeat = server.GetHeartbeat();
-  auto mds_meta_map = server.GetMDSMetaMap();
 
   // get all mds meta
   std::vector<MDSMeta> mdses;
@@ -122,11 +121,6 @@ Status Monitor::MonitorMDS() {
 
   if (mdses.empty()) {
     return Status(pb::error::EINTERNAL, "mds list is empty");
-  }
-
-  for (const auto& mds_meta : mdses) {
-    DINGO_LOG(DEBUG) << "[monitor] upsert mds meta: " << mds_meta.ToString();
-    mds_meta_map->UpsertMDSMeta(mds_meta);
   }
 
   if (!dist_lock_->IsLocked()) {

@@ -82,6 +82,11 @@ DEFINE_bool(mds_cache_member_enable_cache, true, "cache member enable cache, def
 DECLARE_string(mds_storage_engine);
 DECLARE_string(mds_id_generator_type);
 
+Server::Server() {
+  mds_meta_map_ = MDSMetaMap::New();
+  CHECK(mds_meta_map_ != nullptr) << "new MDSMetaMap fail.";
+}
+
 Server::~Server() {}  // NOLINT
 
 Server& Server::GetInstance() {
@@ -155,18 +160,22 @@ bool Server::InitLog() {
 }
 
 bool Server::InitMDSMeta() {
-  self_mds_meta_.SetID(FLAGS_mds_server_id);
+  MDSMeta temp_mds_meta;
+  if (mds_meta_map_->GetMDSMeta(FLAGS_mds_server_id, temp_mds_meta)) {
+    self_mds_meta_ = temp_mds_meta;
+    DINGO_LOG(INFO) << fmt::format("old mds: {}.", self_mds_meta_.ToString());
 
-  self_mds_meta_.SetHost(FLAGS_mds_server_host);
-  self_mds_meta_.SetPort(FLAGS_mds_server_port);
-  self_mds_meta_.SetState(MDSMeta::State::kNormal);
+  } else {
+    self_mds_meta_.SetID(FLAGS_mds_server_id);
+    self_mds_meta_.SetHost(FLAGS_mds_server_host);
+    self_mds_meta_.SetPort(FLAGS_mds_server_port);
+    self_mds_meta_.SetState(MDSMeta::State::kNormal);
+    self_mds_meta_.SetCreateTimeMs(Helper::TimestampMs());
 
-  DINGO_LOG(INFO) << fmt::format("init mds meta, self: {}.", self_mds_meta_.ToString());
+    DINGO_LOG(INFO) << fmt::format("new mds: {}.", self_mds_meta_.ToString());
 
-  mds_meta_map_ = MDSMetaMap::New();
-  CHECK(mds_meta_map_ != nullptr) << "new MDSMetaMap fail.";
-
-  mds_meta_map_->UpsertMDSMeta(self_mds_meta_);
+    mds_meta_map_->UpsertMDSMeta(self_mds_meta_);
+  }
 
   return true;
 }

@@ -64,8 +64,6 @@ class Heartbeat {
   OperationProcessorSPtr operation_processor_;
 
   CacheGroupMemberManagerSPtr cache_group_member_manager_;
-
-  WorkerSPtr worker_;
 };
 
 }  // namespace mds

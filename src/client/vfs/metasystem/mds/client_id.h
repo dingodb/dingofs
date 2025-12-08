@@ -20,6 +20,7 @@
 
 #include "client/vfs/metasystem/mds/helper.h"
 #include "fmt/format.h"
+#include "utils/time.h"
 #include "utils/uuid.h"
 
 namespace dingofs {
@@ -35,7 +36,9 @@ class ClientId {
         hostname_(hostname),
         ip_(Helper::HostName2IP(hostname)),
         port_(port),
-        mountpoint_(mountpoint) {}
+        mountpoint_(mountpoint) {
+    create_time_ms_ = utils::TimestampMs();
+  }
   ~ClientId() = default;
 
   std::string ID() const { return uuid_; }
@@ -44,6 +47,8 @@ class ClientId {
   std::string IP() const { return ip_; }
   uint32_t Port() const { return port_; }
   std::string Mountpoint() const { return mountpoint_; }
+  uint64_t CreateTimeMs() const { return create_time_ms_; }
+
   std::string Description() const {
     return fmt::format("ClientId[{}]: {}:{}{}", uuid_, hostname_, port_,
                        mountpoint_);
@@ -59,6 +64,7 @@ class ClientId {
   std::string ip_;
   uint32_t port_;
   std::string mountpoint_;
+  uint64_t create_time_ms_{0};
 };
 
 }  // namespace v2

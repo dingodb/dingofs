@@ -39,17 +39,17 @@ DEFINE_uint32(mds_heartbeat_client_offline_period_ms, 30 * 1000, "client offline
 DEFINE_validator(mds_heartbeat_client_offline_period_ms, brpc::PassValidate);
 
 bool Heartbeat::Init() {
-  worker_ = Worker::New();
-  return worker_->Init();
-}
-
-bool Heartbeat::Destroy() {
-  if (worker_) {
-    worker_->Destroy();
+  std::vector<MDSMeta> mdses;
+  auto status = GetMDSList(mdses);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[heartbeat] get mds list fail, error({}).", status.error_str());
+    return false;
   }
 
   return true;
 }
+
+bool Heartbeat::Destroy() { return true; }
 
 void Heartbeat::Run() {
   bool running = false;
@@ -65,8 +65,8 @@ void Heartbeat::Run() {
 void Heartbeat::SendHeartbeat() {
   auto& self_mds_meta = Server::GetInstance().GetMDSMeta();
 
-  auto mds = self_mds_meta.ToProto();
   Context ctx;
+  auto mds = self_mds_meta.ToProto();
   SendHeartbeat(ctx, mds);
 }
 
@@ -169,12 +169,13 @@ Status Heartbeat::GetMDSList(std::vector<MDSMeta>& mdses) {
   std::vector<MdsEntry> pb_mdses;
   Context ctx;
   auto status = GetMDSList(ctx, pb_mdses);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
+  auto mds_meta_map = Server::GetInstance().GetMDSMetaMap();
   for (auto& pb_mds : pb_mdses) {
-    mdses.push_back(MDSMeta(pb_mds));
+    auto mds_meta = MDSMeta(pb_mds);
+    mds_meta_map->UpsertMDSMeta(mds_meta);
+    mdses.push_back(mds_meta);
   }
 
   return Status::OK();

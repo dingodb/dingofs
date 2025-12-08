@@ -428,6 +428,7 @@ Status MountFsOperation::Run(TxnUPtr& txn) {
   client.set_port(mount_point_.port());
   client.set_mountpoint(mount_point_.path());
   client.set_fs_name(fs_info.fs_name());
+  client.set_create_time_ms(Helper::TimestampMs());
   client.set_last_online_time_ms(Helper::TimestampMs());
 
   txn->Put(MetaCodec::EncodeHeartbeatKey(client.id()), MetaCodec::EncodeHeartbeatValue(client));

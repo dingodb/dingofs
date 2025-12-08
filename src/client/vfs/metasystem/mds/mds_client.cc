@@ -180,6 +180,7 @@ Status MDSClient::Heartbeat() {
   client->set_port(client_id_.Port());
   client->set_mountpoint(client_id_.Mountpoint());
   client->set_fs_name(fs_info_->GetName());
+  client->set_create_time_ms(client_id_.CreateTimeMs());
 
   auto status = SendRequest(nullptr, get_mds_fn, "MDSService", "Heartbeat",
                             request, response);

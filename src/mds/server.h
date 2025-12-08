@@ -110,7 +110,7 @@ class Server {
   void DescribeByJson(Json::Value& value);
 
  private:
-  explicit Server() = default;
+  explicit Server();
   ~Server();
 
   std::atomic<bool> stop_{false};
