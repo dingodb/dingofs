@@ -17,12 +17,9 @@
 #ifndef DINGOFS_CLIENT_VFS_DATA_READER_READER_COMMON_H_
 #define DINGOFS_CLIENT_VFS_DATA_READER_READER_COMMON_H_
 
-#include <condition_variable>
 #include <cstdint>
-#include <mutex>
 #include <string>
 
-#include "common/status.h"
 #include "client/vfs/data/common/common.h"
 
 namespace dingofs {
@@ -30,22 +27,13 @@ namespace client {
 namespace vfs {
 
 struct ChunkReadReq {
-  const uint64_t req_id{0};       // request id
-  const uint64_t ino{0};          // ino
-  const int64_t index{0};         // chunk index
-  const int64_t offset{0};        // offset in the chunk
+  const uint64_t req_id{0};  // request id
+  const uint64_t ino{0};     // ino
+  const int64_t index{0};    // chunk index
+  const int64_t offset{0};   // offset in the chunk
   const FileRange frange;
 
   std::string ToString() const;
-};
-
-struct ReaderSharedState {
-  std::mutex mtx;
-  std::condition_variable cv;
-  uint64_t total;
-  uint64_t num_done;
-  Status status;
-  uint64_t read_size{0};  // total read size
 };
 
 }  // namespace vfs

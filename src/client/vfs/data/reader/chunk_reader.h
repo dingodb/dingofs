@@ -21,6 +21,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <mutex>
 
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
@@ -30,6 +31,7 @@
 #include "common/callback.h"
 #include "common/io_buffer.h"
 #include "common/trace/context.h"
+#include "common/trace/itrace_span.h"
 
 namespace dingofs {
 namespace client {
@@ -38,16 +40,32 @@ namespace vfs {
 class VFSHub;
 
 struct BlockCacheReadReq {
-  uint32_t req_index;
-  cache::BlockKey key;
-  cache::RangeOption option;
+  const uint64_t req_id;
+  const uint32_t req_index;
+  const BlockReadReq block_req;
+  const cache::BlockKey key;
+  const cache::RangeOption option;
   IOBuffer io_buffer;
-  const BlockReadReq& block_req;
+  std::unique_ptr<ITraceSpan> read_span;
+
+  std::string UUID() const;
+  std::string ToString() const;
 };
+
+using BlockCacheReadReqUPtr = std::unique_ptr<BlockCacheReadReq>;
 
 struct ChunkSlices {
   uint32_t version;
   std::vector<Slice> slices;
+};
+
+struct ReaderSharedState {
+  std::mutex mtx;
+  uint64_t total;
+  uint64_t num_done;
+  Status status;
+  std::unique_ptr<ITraceSpan> read_span;
+  std::vector<BlockCacheReadReqUPtr> block_cache_reqs;
 };
 
 class ChunkReader {
@@ -56,16 +74,33 @@ class ChunkReader {
 
   ~ChunkReader() = default;
 
-  Status Read(ContextSPtr ctx, IOBuffer* out_buf);
+  void ReadAsync(ContextSPtr ctx, StatusCallback cb);
+
+  IOBuffer GetDataBuffer() const;
 
  private:
-  void DoRead(ContextSPtr ctx, IOBuffer* out_buf, StatusCallback cb);
+  void ExecuteAsyncRead();
+  void AsyncRange(ContextSPtr ctx, ReaderSharedState* shared,
+                  BlockCacheReadReq* block_cache_req);
+
+  std::vector<SliceReadReq> ConvertToSliceReadReqs(
+      ContextSPtr ctx, const std::vector<Slice>& slices,
+      const FileRange& frange);
+
+  std::vector<BlockReadReq> GetBlockReadReqs(
+      ContextSPtr ctx, const std::vector<SliceReadReq>& slice_reqs);
+
+  void ProcessBlockCacheReadReq(ContextSPtr ctx, ReaderSharedState* shared,
+                                BlockCacheReadReq* block_cache_req);
+
+  IOBuffer GatherIoBuf(ContextSPtr ctx, ReaderSharedState* shared);
+  // delete shared
+  void OnAllBlocksComplete(ReaderSharedState* shared);
+  void OnBlockReadComplete(ReaderSharedState* shared, BlockCacheReadReq* req,
+                           Status s);
 
   Status GetSlices(ContextSPtr ctx, ChunkSlices* chunk_slices);
 
-  static void BlockReadCallback(ContextSPtr ctx, ChunkReader* reader,
-                                const BlockCacheReadReq& req,
-                                ReaderSharedState& shared, Status s);
   uint64_t GetChunkSize() const;
 
   uint64_t GetBlockSize() const;
@@ -76,9 +111,14 @@ class ChunkReader {
 
   VFSHub* hub_;
   const uint64_t fh_;
-  const ChunkReadReq req_;
   const Chunk chunk_;
-  const uint64_t block_size_;
+  const ChunkReadReq req_;
+
+  mutable std::mutex mtx_;
+  StatusCallback cb_;
+  std::unique_ptr<ITraceSpan> root_span_;
+  IOBuffer data_buf_;
+  bool ready_{false};
 };
 
 }  // namespace vfs

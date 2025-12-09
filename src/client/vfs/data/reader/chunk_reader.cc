@@ -19,10 +19,12 @@
 #include <fmt/format.h>
 #include <glog/logging.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <utility>
 #include <vector>
 
@@ -30,13 +32,11 @@
 #include "cache/utils/helper.h"
 #include "client/common/const.h"
 #include "client/vfs/common/helper.h"
-#include "client/vfs/data/common/async_util.h"
 #include "client/vfs/data/common/common.h"
 #include "client/vfs/data/common/data_utils.h"
 #include "client/vfs/data/reader/reader_common.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/vfs_meta.h"
-#include "common/options/client.h"
 #include "common/status.h"
 #include "common/trace/context.h"
 
@@ -46,228 +46,22 @@ namespace vfs {
 
 #define METHOD_NAME() ("ChunkReader::" + std::string(__FUNCTION__))
 
+std::string BlockCacheReadReq::UUID() const {
+  return fmt::format("rreq-{}-breq-{}", req_id, req_index);
+}
+
+std::string BlockCacheReadReq::ToString() const {
+  return fmt::format("(uuid: {}, block_key: {}, block_req: {})", UUID(),
+                     key.StoreKey(), block_req.ToString());
+}
+
 ChunkReader::ChunkReader(VFSHub* hub, uint64_t fh, const ChunkReadReq& req)
     : hub_(hub),
       fh_(fh),
-      block_size_(hub->GetFsInfo().block_size),
       chunk_(hub->GetFsInfo().id, req.ino, req.index,
              hub->GetFsInfo().chunk_size, hub->GetFsInfo().block_size,
              hub->GetPageSize()),
       req_(req) {}
-
-void ChunkReader::BlockReadCallback(ContextSPtr ctx, ChunkReader* reader,
-                                    const BlockCacheReadReq& req,
-                                    ReaderSharedState& shared, Status s) {
-  auto span = reader->hub_->GetTracer()->StartSpanWithContext(
-      kVFSDataMoudule, METHOD_NAME(), ctx);
-
-  if (s.ok()) {
-    VLOG(6) << fmt::format(
-        "{} ChunkReader success read block_key: {}, block_req_index: {}, "
-        "block_req: {}, iobuf: {}, io_buf_size: {}",
-        reader->UUID(), req.key.StoreKey(), req.req_index,
-        req.block_req.ToString(), req.io_buffer.Describe(),
-        req.io_buffer.Size());
-  } else {
-    LOG(WARNING) << fmt::format(
-        "{} ChunkReader fail read block_key: {}, block_req_index: {}, "
-        "block_req: {}, status: {}",
-        reader->UUID(), req.key.StoreKey(), req.req_index,
-        req.block_req.ToString(), s.ToString());
-  }
-
-  {
-    std::lock_guard<std::mutex> lock(shared.mtx);
-    if (!s.ok()) {
-      // Handle read failure with error priority: other errors > NotFound
-      if (shared.status.ok()) {
-        // First error, record it directly
-        shared.status = s;
-      } else if (shared.status.IsNotFound() && !s.IsNotFound()) {
-        // If current status is NotFound but new error is not, override with
-        // higher priority error
-        shared.status = s;
-      }
-      // For all other cases, keep the first/higher priority error
-    }
-
-    if (++shared.num_done >= shared.total) {
-      shared.cv.notify_all();
-    }
-  }
-}
-// TODO: refact this, support async read for not block read executor
-Status ChunkReader::Read(ContextSPtr ctx, IOBuffer* out_buf) {
-  Status s;
-  Synchronizer sync;
-  DoRead(ctx, out_buf, sync.AsStatusCallBack(s));
-  sync.Wait();
-  return s;
-}
-
-// TODO: refact this function, too ugly now
-void ChunkReader::DoRead(ContextSPtr ctx, IOBuffer* out_buf,
-                         StatusCallback cb) {
-  auto* tracer = hub_->GetTracer();
-  auto span = tracer->StartSpanWithContext(kVFSDataMoudule, METHOD_NAME(), ctx);
-
-  VLOG(4) << fmt::format("{} ChunkReader Read req: {}", UUID(),
-                         req_.ToString());
-
-  CHECK_GE(chunk_.chunk_end, req_.frange.End());
-
-  int64_t size = req_.frange.len;
-
-  int32_t retry = 0;
-  Status ret;
-  do {
-    uint64_t remain_len = size;
-
-    ChunkSlices chunk_slices;
-    Status s = GetSlices(span->GetContext(), &chunk_slices);
-    if (!s.ok()) {
-      LOG(WARNING) << fmt::format("{} Failed GetSlices, status: {}", UUID(),
-                                  s.ToString());
-      cb(s);
-      return;
-    }
-
-    std::vector<SliceReadReq> slice_reqs;
-    {
-      auto process_slice_reqs_span = tracer->StartSpanWithParent(
-          kVFSDataMoudule, "ChunkReader::DoRead.ProcessReadRequest", *span);
-      slice_reqs = ProcessReadRequest(chunk_slices.slices, req_.frange);
-    }
-
-    std::vector<BlockReadReq> block_reqs;
-
-    {
-      auto slice_req_to_block_req_span = tracer->StartSpanWithParent(
-          kVFSDataMoudule,
-          "ChunkReader::DoRead.ConvertSliceReadReqToBlockReadReqs", *span);
-
-      for (auto& slice_req : slice_reqs) {
-        VLOG(6) << fmt::format("{} Read slice_req: {}", UUID(),
-                               slice_req.ToString());
-
-        if (slice_req.slice.has_value() && !slice_req.slice.value().is_zero) {
-          std::vector<BlockReadReq> reqs = ConvertSliceReadReqToBlockReadReqs(
-              slice_req, chunk_.fs_id, chunk_.ino, chunk_.chunk_size,
-              chunk_.block_size);
-
-          block_reqs.insert(block_reqs.end(),
-                            std::make_move_iterator(reqs.begin()),
-                            std::make_move_iterator(reqs.end()));
-        } else {
-          block_reqs.insert(block_reqs.end(),
-                            BlockReadReq{
-                                .file_offset = slice_req.file_offset,
-                                .block_offset = 0,
-                                .len = slice_req.len,
-                                .block = BlockDesc{},
-                                .fake = true,
-                            });
-        }
-      }
-    }
-
-    std::vector<BlockCacheReadReq> block_cache_reqs;
-    block_cache_reqs.reserve(block_reqs.size());
-
-    uint32_t block_req_index = 0;
-    for (auto& block_req : block_reqs) {
-      cache::BlockKey key(chunk_.fs_id, chunk_.ino, block_req.block.slice_id,
-                          block_req.block.index, block_req.block.version);
-
-      VLOG(6) << fmt::format("{} Read block_key: {}, block_req: {}", UUID(),
-                             key.StoreKey(), block_req.ToString());
-
-      cache::RangeOption option;
-      option.retrive = true;
-      option.block_size = block_req.block.block_len;
-
-      block_cache_reqs.emplace_back(
-          BlockCacheReadReq{.req_index = block_req_index++,
-                            .key = key,
-                            .option = option,
-                            .io_buffer = IOBuffer(),
-                            .block_req = block_req});
-    }
-
-    ReaderSharedState shared;
-    shared.total = block_cache_reqs.size();
-    shared.num_done = 0;
-    shared.status = Status::OK();
-
-    for (auto& block_cache_req : block_cache_reqs) {
-      auto block_cache_range_span = tracer->StartSpanWithParent(
-          kVFSDataMoudule, "ChunkReader::DoRead.AsyncRange", *span);
-
-      auto callback = [this, &span, &block_cache_req, &shared,
-                       span_ptr = block_cache_range_span.release()](Status s) {
-        std::unique_ptr<ITraceSpan> block_cache_range_span(span_ptr);
-        block_cache_range_span->End();
-        BlockReadCallback(span->GetContext(), this, block_cache_req, shared, s);
-      };
-
-      // check block is zero block
-      if (block_cache_req.block_req.fake) {
-        VLOG(6) << fmt::format("{} Read fake block, block_req: {}", UUID(),
-                               block_cache_req.block_req.ToString());
-
-        // zero block, no need to read from block cache, just fill zero
-        char* data = new char[block_cache_req.block_req.len];
-        std::fill(data, data + block_cache_req.block_req.len, 0);
-        block_cache_req.io_buffer.AppendUserData(
-            data, block_cache_req.block_req.len, cache::Helper::DeleteBuffer);
-
-        // directly call the callback to update shared state
-        callback(Status::OK());
-        continue;
-      }
-
-      hub_->GetBlockCache()->AsyncRange(
-          cache::NewContext(), block_cache_req.key,
-          block_cache_req.block_req.block_offset, block_cache_req.block_req.len,
-          &block_cache_req.io_buffer, std::move(callback),
-          block_cache_req.option);
-    }
-
-    {
-      std::unique_lock<std::mutex> lock(shared.mtx);
-      while (shared.num_done < shared.total) {
-        shared.cv.wait(lock);
-      }
-
-      ret = shared.status;
-
-      // append all read block iobufs
-      if (ret.ok()) {
-        auto iobuf_span = tracer->StartSpanWithParent(
-            kVFSDataMoudule, "ChunkReader::DoRead.AppendIOBuf", *span);
-        for (auto& block_cache_req : block_cache_reqs) {
-          out_buf->Append(&block_cache_req.io_buffer);
-          VLOG(6) << fmt::format(
-              "{} IOBuffer: Append iobuf: {} to out_buf: {}"
-              "block_req_index: {}, block_req: {}",
-              UUID(), block_cache_req.io_buffer.Describe(), out_buf->Describe(),
-              block_cache_req.req_index, block_cache_req.block_req.ToString());
-        }
-      }
-    }
-
-    LOG_IF(WARNING, !ret.ok()) << fmt::format(
-        "{} ChunkReader Read failed, status: {}, retry: {}, "
-        ", req: {}",
-        UUID(), ret.ToString(), retry, req_.ToString());
-
-  } while (ret.IsNotFound() &&
-           retry++ < FLAGS_client_vfs_read_max_retry_block_not_found);
-
-  VLOG(4) << fmt::format("{} ChunkReader Read End", UUID());
-
-  cb(ret);
-}
 
 static std::string SlicesToString(const std::vector<Slice>& slices) {
   std::ostringstream oss;
@@ -303,8 +97,297 @@ Status ChunkReader::GetSlices(ContextSPtr ctx, ChunkSlices* chunk_slices) {
   return Status::OK();
 }
 
-uint64_t ChunkReader::GetBlockSize() const { return block_size_; }
+std::vector<SliceReadReq> ChunkReader::ConvertToSliceReadReqs(
+    ContextSPtr ctx, const std::vector<Slice>& slices,
+    const FileRange& frange) {
+  auto span = hub_->GetTracer()->StartSpanWithContext(kVFSDataMoudule,
+                                                      METHOD_NAME(), ctx);
+  return ProcessReadRequest(slices, frange);
+}
 
+std::vector<BlockReadReq> ChunkReader::GetBlockReadReqs(
+    ContextSPtr ctx, const std::vector<SliceReadReq>& slice_reqs) {
+  auto span = hub_->GetTracer()->StartSpanWithContext(kVFSDataMoudule,
+                                                      METHOD_NAME(), ctx);
+  std::vector<BlockReadReq> block_reqs;
+
+  for (const auto& slice_req : slice_reqs) {
+    VLOG(6) << fmt::format("{} Read slice_req: {}", UUID(),
+                           slice_req.ToString());
+
+    if (slice_req.slice.has_value() && !slice_req.slice.value().is_zero) {
+      std::vector<BlockReadReq> reqs = ConvertSliceReadReqToBlockReadReqs(
+          slice_req, chunk_.fs_id, chunk_.ino, chunk_.chunk_size,
+          chunk_.block_size);
+
+      block_reqs.insert(block_reqs.end(), std::make_move_iterator(reqs.begin()),
+                        std::make_move_iterator(reqs.end()));
+    } else {
+      block_reqs.insert(block_reqs.end(),
+                        BlockReadReq{
+                            .file_offset = slice_req.file_offset,
+                            .block_offset = 0,
+                            .len = slice_req.len,
+                            .block = BlockDesc{},
+                            .fake = true,
+                        });
+    }
+  }
+
+  return block_reqs;
+}
+
+// protected by shared state mtx
+IOBuffer ChunkReader::GatherIoBuf(ContextSPtr ctx, ReaderSharedState* shared) {
+  auto span = hub_->GetTracer()->StartSpanWithContext(kVFSDataMoudule,
+                                                      METHOD_NAME(), ctx);
+  IOBuffer ret;
+  for (auto& block_cache_req : shared->block_cache_reqs) {
+    ret.Append(&block_cache_req->io_buffer);
+    VLOG(6) << fmt::format(
+        "{} GatherIoBuf: Append iobuf: {} to out_buf: {}"
+        "block_req_index: {}, block_req: {}",
+        UUID(), block_cache_req->io_buffer.Describe(), ret.Describe(),
+        block_cache_req->req_index, block_cache_req->block_req.ToString());
+  }
+
+  return ret;
+}
+
+void ChunkReader::OnAllBlocksComplete(ReaderSharedState* shared) {
+  // append all read block iobufs
+  Status final_status;
+  IOBuffer data;
+  {
+    std::lock_guard<std::mutex> lock(shared->mtx);
+
+    auto span = hub_->GetTracer()->StartSpanWithParent(
+        kVFSDataMoudule, METHOD_NAME(), *shared->read_span);
+
+    final_status = shared->status;
+
+    if (final_status.ok()) {
+      data = GatherIoBuf(span->GetContext(), shared);
+    } else {
+      LOG(WARNING) << fmt::format(
+          "{} ChunkReader Read failed, status: {}, req: {}", UUID(),
+          final_status.ToString(), req_.ToString());
+    }
+  }
+
+  // for final_status not found, for now no need process
+  StatusCallback cb;
+  {
+    std::lock_guard<std::mutex> lg(mtx_);
+    data_buf_ = std::move(data);
+    ready_ = true;
+    cb.swap(cb_);
+  }
+
+  delete shared;
+  root_span_->End();
+  // for final_status not found, for now no need process
+  VLOG(4) << fmt::format("{} ChunkReader Read End", UUID());
+
+  // TODO: maybe use reference count to manage chunkreader?
+  // after this callback, this maybe deleted, so no more code after this
+  cb(final_status);
+}
+
+void ChunkReader::OnBlockReadComplete(ReaderSharedState* shared,
+                                      BlockCacheReadReq* req, Status s) {
+  bool all_done = false;
+  {
+    req->read_span->End();
+
+    if (s.ok()) {
+      VLOG(6) << fmt::format(
+          "{} Success read block_req: {}, iobuf: {}, io_buf_size: {}", UUID(),
+          req->ToString(), req->io_buffer.Describe(), req->io_buffer.Size());
+    } else {
+      LOG(WARNING) << fmt::format("{} Fail read block_req: {}, status: {}",
+                                  UUID(), req->ToString(), s.ToString());
+    }
+
+    {
+      std::lock_guard<std::mutex> lock(shared->mtx);
+      if (!s.ok()) {
+        // Handle read failure with error priority: other errors > NotFound
+        if (shared->status.ok()) {
+          // First error, record it directly
+          shared->status = s;
+        } else if (shared->status.IsNotFound() && !s.IsNotFound()) {
+          // If current status is NotFound but new error is not, override with
+          // higher priority error
+          shared->status = s;
+        }
+        // For all other cases, keep the first/higher priority error
+      }
+
+      if (++shared->num_done >= shared->total) {
+        all_done = true;
+      }
+    }
+  }
+
+  // first delete span in shard, then delete self span
+  // if there no retry case, we can only save one span in future
+  if (all_done) {
+    OnAllBlocksComplete(shared);
+  }
+}
+
+void ChunkReader::AsyncRange(ContextSPtr ctx, ReaderSharedState* shared,
+                             BlockCacheReadReq* block_cache_req) {
+  auto span = hub_->GetTracer()->StartSpanWithContext(kVFSDataMoudule,
+                                                      METHOD_NAME(), ctx);
+  auto callback = [this, shared, block_cache_req,
+                   span_ptr = span.release()](Status s) {
+    // capture this ptr to extend its lifetime
+    std::unique_ptr<ITraceSpan> scoped_span(span_ptr);
+    scoped_span->End();
+    // dedicated use ctx for callback
+    OnBlockReadComplete(shared, block_cache_req, s);
+  };
+
+  hub_->GetBlockCache()->AsyncRange(
+      cache::NewContext(), block_cache_req->key,
+      block_cache_req->block_req.block_offset, block_cache_req->block_req.len,
+      &block_cache_req->io_buffer, std::move(callback),
+      block_cache_req->option);
+}
+
+void ChunkReader::ProcessBlockCacheReadReq(ContextSPtr ctx,
+                                           ReaderSharedState* shared,
+                                           BlockCacheReadReq* block_cache_req) {
+  auto span = hub_->GetTracer()->StartSpanWithContext(kVFSDataMoudule,
+                                                      METHOD_NAME(), ctx);
+  ContextSPtr span_ctx = span->GetContext();
+  block_cache_req->read_span = std::move(span);
+
+  // check block is zero block
+  if (block_cache_req->block_req.fake) {
+    VLOG(6) << fmt::format("{} Read fake block, block_req: {}", UUID(),
+                           block_cache_req->block_req.ToString());
+
+    // zero block, no need to read from block cache, just fill zero
+    char* data = new char[block_cache_req->block_req.len];
+    std::fill(data, data + block_cache_req->block_req.len, 0);
+    block_cache_req->io_buffer.AppendUserData(
+        data, block_cache_req->block_req.len, cache::Helper::DeleteBuffer);
+    Status s = Status::OK();
+    OnBlockReadComplete(shared, block_cache_req, s);
+  } else {
+    AsyncRange(span_ctx, shared, block_cache_req);
+  }
+}
+
+void ChunkReader::ExecuteAsyncRead() {
+  ITraceSpan* root;
+  {
+    std::lock_guard<std::mutex> lg(mtx_);
+    root = root_span_.get();
+  }
+
+  auto span = hub_->GetTracer()->StartSpanWithParent(kVFSDataMoudule,
+                                                     METHOD_NAME(), *root);
+
+  ChunkSlices chunk_slices;
+  Status s = GetSlices(span->GetContext(), &chunk_slices);
+  if (!s.ok()) {
+    LOG(WARNING) << fmt::format("{} Failed GetSlices, status: {}", UUID(),
+                                s.ToString());
+
+    StatusCallback cb;
+    {
+      std::lock_guard<std::mutex> lg(mtx_);
+      cb_.swap(cb);
+    }
+
+    cb(s);
+    root->End();
+
+    return;
+  }
+
+  ContextSPtr span_ctx = span->GetContext();
+
+  std::vector<SliceReadReq> slice_reqs =
+      ConvertToSliceReadReqs(span_ctx, chunk_slices.slices, req_.frange);
+  std::vector<BlockReadReq> block_reqs = GetBlockReadReqs(span_ctx, slice_reqs);
+
+  std::vector<BlockCacheReadReqUPtr> block_cache_reqs;
+  block_cache_reqs.reserve(block_reqs.size());
+
+  uint32_t block_req_index = 0;
+  for (auto& block_req : block_reqs) {
+    cache::BlockKey key(chunk_.fs_id, chunk_.ino, block_req.block.slice_id,
+                        block_req.block.index, block_req.block.version);
+
+    VLOG(6) << fmt::format("{} Read block_key: {}, block_req: {}", UUID(),
+                           key.StoreKey(), block_req.ToString());
+
+    cache::RangeOption option;
+    option.retrive = true;
+    option.block_size = block_req.block.block_len;
+
+    // TODO: optimize memory copy for block_req
+    block_cache_reqs.emplace_back(std::make_unique<BlockCacheReadReq>(
+        BlockCacheReadReq{.req_id = req_.req_id,
+                          .req_index = block_req_index++,
+                          .block_req = block_req,
+                          .key = key,
+                          .option = option,
+                          .io_buffer = IOBuffer()}));
+  }
+
+  std::vector<BlockCacheReadReq*> to_process_reqs;
+  to_process_reqs.reserve(block_cache_reqs.size());
+  for (auto& ptr : block_cache_reqs) {
+    to_process_reqs.push_back(ptr.get());
+  }
+
+  auto* shared = new ReaderSharedState();
+  {
+    std::unique_lock<std::mutex> lock(shared->mtx);
+    shared->total = block_cache_reqs.size();
+    shared->num_done = 0;
+    shared->status = Status::OK();
+    shared->read_span = std::move(span);
+    shared->block_cache_reqs = std::move(block_cache_reqs);
+  }
+
+  for (BlockCacheReadReq* block_cache_req : to_process_reqs) {
+    ProcessBlockCacheReadReq(span_ctx, shared, block_cache_req);
+  }
+}
+
+void ChunkReader::ReadAsync(ContextSPtr ctx, StatusCallback cb) {
+  VLOG(4) << fmt::format("{} ChunkReader Read req: {}", UUID(),
+                         req_.ToString());
+  CHECK_GE(chunk_.chunk_end, req_.frange.End());
+
+  auto* tracer = hub_->GetTracer();
+  auto span = tracer->StartSpanWithContext(kVFSDataMoudule, METHOD_NAME(), ctx);
+
+  {
+    std::lock_guard<std::mutex> lg(mtx_);
+    cb_.swap(cb);
+    root_span_ = std::move(span);
+  }
+
+  ExecuteAsyncRead();
+}
+
+IOBuffer ChunkReader::GetDataBuffer() const {
+  IOBuffer buf;
+  {
+    std::lock_guard<std::mutex> lg(mtx_);
+    CHECK(ready_);
+    buf = data_buf_;
+  }
+  return buf;
+}
 }  // namespace vfs
 
 }  // namespace client

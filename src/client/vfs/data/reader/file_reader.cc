@@ -242,6 +242,44 @@ void FileReader::ReadRequstDone(ReadRequest* req) {
   }
 }
 
+void FileReader::OnReadRequestComplete(ChunkReader* reader, ReadRequest* req,
+                                       Status s) {
+  {
+    std::unique_lock<std::mutex> lock(mutex_);
+    if (!s.ok()) {
+      LOG(WARNING) << fmt::format("Failed read read_req: {}, status: {}",
+                                  req->ToString(), s.ToString());
+    }
+
+    CHECK(req->state == ReadRequestState::kBusy ||
+          req->state == ReadRequestState::kRefresh);
+
+    if (req->state == ReadRequestState::kRefresh) {
+      // if state is kRefresh, continue read even previous read failed
+      req->ToState(ReadRequestState::kNew, TransitionReason::kReadDone);
+      req->status = Status::OK();
+    } else {
+      req->status = s;
+
+      if (req->status.ok()) {
+        req->buffer = reader->GetDataBuffer();
+        req->access_sec = butil::monotonic_time_s();
+        req->ToState(ReadRequestState::kReady, TransitionReason::kReadDone);
+      } else {
+        LOG(ERROR) << fmt::format(
+            "Invalid read_req: {} due to read fail, status: {}",
+            req->ToString(), req->status.ToString());
+        req->ToState(ReadRequestState::kInvalid, TransitionReason::kReadDone);
+      }
+    }
+
+    ReadRequstDone(req);
+  }
+
+  // must out of lock to avoid deadlock
+  ReleaseRef();
+}
+
 void FileReader::DoReadRequst(ReadRequest* req) {
   {
     std::unique_lock<std::mutex> lock(mutex_);
@@ -256,47 +294,15 @@ void FileReader::DoReadRequst(ReadRequest* req) {
 
   auto span =
       vfs_hub_->GetTracer()->StartSpan(kVFSWrapperMoudule, METHOD_NAME());
+  ContextSPtr span_ctx = span->GetContext();
 
-  ChunkReader reader(vfs_hub_, fh_, chunk_req);
-
-  IOBuffer read_buf;
-  Status s = reader.Read(span->GetContext(), &read_buf);
-
-  {
-    std::unique_lock<std::mutex> lock(mutex_);
-    if (!s.ok()) {
-      LOG(WARNING) << fmt::format(
-          "ProcessReadRequst Read failed req: {}, status: {}", req->ToString(),
-          s.ToString());
-    }
-
-    CHECK(req->state == ReadRequestState::kBusy ||
-          req->state == ReadRequestState::kRefresh);
-
-    if (req->state == ReadRequestState::kRefresh) {
-      // if state is kRefresh, continue read even previous read failed
-      req->ToState(ReadRequestState::kNew, TransitionReason::kReadDone);
-      req->status = Status::OK();
-    } else {
-      req->status = s;
-
-      if (req->status.ok()) {
-        req->buffer = read_buf;
-        req->access_sec = butil::monotonic_time_s();
-        req->ToState(ReadRequestState::kReady, TransitionReason::kReadDone);
-      } else {
-        LOG(ERROR) << fmt::format(
-            "ReadRequstDone mark req: {} invalid due to read fail, status: {}",
-            req->ToString(), req->status.ToString());
-        req->ToState(ReadRequestState::kInvalid, TransitionReason::kReadDone);
-      }
-    }
-
-    ReadRequstDone(req);
-  }
-
-  // must out of lock to avoid deadlock
-  ReleaseRef();
+  auto* reader = new ChunkReader(vfs_hub_, fh_, chunk_req);
+  reader->ReadAsync(span_ctx,
+                    [this, reader, req, span_ptr = span.release()](Status s) {
+                      std::unique_ptr<ITraceSpan> spoped_span(span_ptr);
+                      this->OnReadRequestComplete(reader, req, s);
+                      delete reader;
+                    });
 }
 
 void FileReader::TakeMem(int64_t size) {

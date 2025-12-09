@@ -25,6 +25,7 @@
 #include <memory>
 #include <mutex>
 
+#include "client/vfs/data/reader/chunk_reader.h"
 #include "client/vfs/data/reader/read_request.h"
 #include "client/vfs/data/reader/readahead_policy.h"
 #include "client/vfs/data_buffer.h"
@@ -70,6 +71,7 @@ class FileReader {
 
   // pretected by mutex_
   void RunReadRequest(ReadRequest* req);
+  void OnReadRequestComplete(ChunkReader* reader, ReadRequest* req, Status s);
   // pretected by mutex_
   void DoReadRequst(ReadRequest* req);
   // pretected by mutex_
