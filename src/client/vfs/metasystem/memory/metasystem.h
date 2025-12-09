@@ -15,8 +15,6 @@
 #ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_DUMMY_FILESYSTEM_H_
 #define DINGOFS_SRC_CLIENT_VFS_META_V2_DUMMY_FILESYSTEM_H_
 
-#include <json/value.h>
-
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -30,6 +28,7 @@
 #include "client/vfs/vfs_meta.h"
 #include "common/trace/context.h"
 #include "dingofs/mds.pb.h"
+#include "json/value.h"
 
 namespace dingofs {
 namespace client {
@@ -128,19 +127,19 @@ class FileChunkMap {
   std::map<uint64_t, Chunk> chunk_map_;
 };
 
-class DummyFileSystem;
+class MemoryMetaSystem;
 
 class DirIterator;
 using DirIteratorSPtr = std::shared_ptr<DirIterator>;
 
 class DirIterator {
  public:
-  DirIterator(DummyFileSystem* system, Ino ino)
+  DirIterator(MemoryMetaSystem* system, Ino ino)
       : dumy_system_(system), ino_(ino) {}
 
   ~DirIterator();
 
-  static DirIteratorSPtr New(DummyFileSystem* system, Ino ino) {
+  static DirIteratorSPtr New(MemoryMetaSystem* system, Ino ino) {
     return std::make_shared<DirIterator>(system, ino);
   }
 
@@ -159,7 +158,7 @@ class DirIterator {
   uint64_t offset_{0};
 
   std::vector<DirEntry> dir_entries_;
-  DummyFileSystem* dumy_system_{nullptr};
+  MemoryMetaSystem* dumy_system_{nullptr};
 };
 
 class DirIteratorManager {
@@ -177,10 +176,10 @@ class DirIteratorManager {
   std::map<uint64_t, DirIteratorSPtr> dir_iterator_map_;
 };
 
-class DummyFileSystem : public vfs::MetaSystem {
+class MemoryMetaSystem : public vfs::MetaSystem {
  public:
-  DummyFileSystem();
-  ~DummyFileSystem() override;
+  MemoryMetaSystem();
+  ~MemoryMetaSystem() override;
 
   using PBInode = pb::mds::Inode;
   using PBDentry = pb::mds::Dentry;

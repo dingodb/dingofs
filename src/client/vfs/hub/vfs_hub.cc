@@ -26,8 +26,9 @@
 #include "client/vfs/common/helper.h"
 #include "client/vfs/components/prefetch_manager.h"
 #include "client/vfs/components/warmup_manager.h"
-#include "client/vfs/metasystem/dummy/dummy_filesystem.h"
-#include "client/vfs/metasystem/mds/filesystem.h"
+#include "client/vfs/metasystem/local/metasystem.h"
+#include "client/vfs/metasystem/mds/metasystem.h"
+#include "client/vfs/metasystem/memory/metasystem.h"
 #include "client/vfs/metasystem/meta_system.h"
 #include "client/vfs/metasystem/meta_wrapper.h"
 #include "client/vfs/vfs.h"
@@ -68,22 +69,22 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
     return Status::Internal("load config fail");
   }
 
-  std::unique_ptr<MetaSystem> rela_meta_system;
-  if (vfs_conf.fs_type == "vfs_dummy") {
-    LOG(INFO) << "use dummy file system.";
-    rela_meta_system = std::make_unique<dummy::DummyFileSystem>();
+  MetaSystemUPtr rela_meta_system;
+  if (vfs_conf.fs_type == "vfs_memory") {
+    rela_meta_system = std::make_unique<dummy::MemoryMetaSystem>();
 
-  } else if (vfs_conf.fs_type == "vfs_v2") {
-    LOG(INFO) << "use mds file system.";
+  } else if (vfs_conf.fs_type == "vfs_local") {
+    rela_meta_system = std::make_unique<local::LocalMetaSystem>();
+
+  } else if (vfs_conf.fs_type == "vfs_v2" || vfs_conf.fs_type == "vfs_mds") {
     std::string mds_addrs;
     conf.GetValueFatalIfFail("mds.addr", &mds_addrs);
     LOG(INFO) << fmt::format("mds addr: {}.", mds_addrs);
 
-    rela_meta_system = v2::MDSFileSystem::Build(vfs_conf.fs_name, mds_addrs,
+    rela_meta_system = v2::MDSMetaSystem::Build(vfs_conf.fs_name, mds_addrs,
                                                 vfs_conf.mount_point,
                                                 vfs_option.dummy_server_port);
   } else {
-    LOG(INFO) << fmt::format("not unknown file system {}.", vfs_conf.fs_type);
     return Status::Internal("not unknown file system");
   }
 

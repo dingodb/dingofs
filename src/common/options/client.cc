@@ -88,7 +88,7 @@ DEFINE_validator(client_fuse_check_alive_retry_interval_ms, brpc::PassValidate);
 DEFINE_bool(client_vfs_meta_logging, true, "enable vfs meta system log");
 DEFINE_validator(client_vfs_meta_logging, brpc::PassValidate);
 
-DEFINE_int64(client_vfs_meta_log_threshold_us, 1000, "access log threshold");
+DEFINE_int64(client_vfs_meta_log_threshold_us, 0, "access log threshold");
 DEFINE_validator(client_vfs_meta_log_threshold_us, brpc::PassValidate);
 
 DEFINE_uint64(client_vfs_meta_memo_expired_s, 1,

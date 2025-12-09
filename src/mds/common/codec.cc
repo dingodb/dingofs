@@ -67,7 +67,7 @@ enum MetaType : unsigned char {
   kMetaFsDelFile = 19,
   kMetaFsStats = 21,
   kMetaFsOpLog = 23,
-  KMetaCacheMember = 25,
+  kMetaCacheMember = 25,
 };
 
 // inode meta type:

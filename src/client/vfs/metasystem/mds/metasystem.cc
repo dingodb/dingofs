@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "client/vfs/metasystem/mds/filesystem.h"
+#include "client/vfs/metasystem/mds/metasystem.h"
 
-#include <bthread/types.h>
 #include <fcntl.h>
 #include <openssl/rsa.h>
 
@@ -24,6 +23,7 @@
 #include <vector>
 
 #include "bthread/bthread.h"
+#include "bthread/types.h"
 #include "client/vfs/metasystem/mds/client_id.h"
 #include "client/vfs/metasystem/mds/helper.h"
 #include "client/vfs/metasystem/mds/mds_client.h"
@@ -68,7 +68,7 @@ static std::string GetHostName() {
 DEFINE_bool(client_meta_read_chunk_cache_enable, true,
             "enable read chunk cache");
 
-MDSFileSystem::MDSFileSystem(mds::FsInfoSPtr fs_info, const ClientId& client_id,
+MDSMetaSystem::MDSMetaSystem(mds::FsInfoSPtr fs_info, const ClientId& client_id,
                              MDSDiscoverySPtr mds_discovery,
                              MDSClientSPtr mds_client)
     : name_(fs_info->GetName()),
@@ -77,14 +77,14 @@ MDSFileSystem::MDSFileSystem(mds::FsInfoSPtr fs_info, const ClientId& client_id,
       mds_discovery_(mds_discovery),
       id_cache_(kSliceIdCacheName, mds_client),
       file_session_map_(fs_info),
-      inode_cache_(fs_info->GetFsId()),
+      inode_cache_(InodeCache::New(fs_info->GetFsId())),
       mds_client_(mds_client),
       write_slice_processor_(
           WriteSliceProcessor::New(mds_client, chunk_memo_)) {}
 
-MDSFileSystem::~MDSFileSystem() {}  // NOLINT
+MDSMetaSystem::~MDSMetaSystem() {}  // NOLINT
 
-Status MDSFileSystem::Init() {
+Status MDSMetaSystem::Init() {
   LOG(INFO) << fmt::format("[meta.filesystem] fs_info: {}.",
                            fs_info_->ToString());
   // mount fs
@@ -108,7 +108,7 @@ Status MDSFileSystem::Init() {
   return Status::OK();
 }
 
-void MDSFileSystem::UnInit() {
+void MDSMetaSystem::UnInit() {
   // unmount fs
   UnmountFs();
 
@@ -117,7 +117,7 @@ void MDSFileSystem::UnInit() {
   write_slice_processor_->Destroy();
 }
 
-bool MDSFileSystem::Dump(ContextSPtr, Json::Value& value) {
+bool MDSMetaSystem::Dump(ContextSPtr, Json::Value& value) {
   if (!file_session_map_.Dump(value)) {
     return false;
   }
@@ -130,7 +130,7 @@ bool MDSFileSystem::Dump(ContextSPtr, Json::Value& value) {
     return false;
   }
 
-  if (!inode_cache_.Dump(value)) {
+  if (!inode_cache_->Dump(value)) {
     return false;
   }
 
@@ -145,7 +145,7 @@ bool MDSFileSystem::Dump(ContextSPtr, Json::Value& value) {
   return true;
 }
 
-bool MDSFileSystem::Dump(const DumpOption& options, Json::Value& value) {
+bool MDSMetaSystem::Dump(const DumpOption& options, Json::Value& value) {
   if (options.file_session && !file_session_map_.Dump(value)) {
     return false;
   }
@@ -158,7 +158,7 @@ bool MDSFileSystem::Dump(const DumpOption& options, Json::Value& value) {
     return false;
   }
 
-  if (options.inode_cache && !inode_cache_.Dump(value)) {
+  if (options.inode_cache && !inode_cache_->Dump(value)) {
     return false;
   }
 
@@ -173,7 +173,7 @@ bool MDSFileSystem::Dump(const DumpOption& options, Json::Value& value) {
   return true;
 }
 
-bool MDSFileSystem::Load(ContextSPtr, const Json::Value& value) {
+bool MDSMetaSystem::Load(ContextSPtr, const Json::Value& value) {
   if (!file_session_map_.Load(value)) {
     return false;
   }
@@ -197,7 +197,7 @@ bool MDSFileSystem::Load(ContextSPtr, const Json::Value& value) {
   return true;
 }
 
-Status MDSFileSystem::GetFsInfo(ContextSPtr, FsInfo* fs_info) {
+Status MDSMetaSystem::GetFsInfo(ContextSPtr, FsInfo* fs_info) {
   auto temp_fs_info = fs_info_->Get();
 
   fs_info->name = name_;
@@ -232,7 +232,7 @@ Status MDSFileSystem::GetFsInfo(ContextSPtr, FsInfo* fs_info) {
   return Status::OK();
 }
 
-bool MDSFileSystem::MountFs() {
+bool MDSMetaSystem::MountFs() {
   pb::mds::MountPoint mount_point;
   mount_point.set_client_id(client_id_.ID());
   mount_point.set_hostname(client_id_.Hostname());
@@ -254,7 +254,7 @@ bool MDSFileSystem::MountFs() {
   return true;
 }
 
-bool MDSFileSystem::UnmountFs() {
+bool MDSMetaSystem::UnmountFs() {
   auto status = mds_client_->UmountFs(name_, client_id_.ID());
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
@@ -266,7 +266,7 @@ bool MDSFileSystem::UnmountFs() {
   return true;
 }
 
-void MDSFileSystem::Heartbeat() {
+void MDSMetaSystem::Heartbeat() {
   // prevent multiple heartbeats running at the same time
   static std::atomic<bool> is_running{false};
   if (is_running.exchange(true)) return;
@@ -280,28 +280,28 @@ void MDSFileSystem::Heartbeat() {
   is_running = false;
 }
 
-void MDSFileSystem::CleanExpiredModifyTimeMemo() {
+void MDSMetaSystem::CleanExpiredModifyTimeMemo() {
   uint64_t expired_time_s =
       mds::Helper::Timestamp() - FLAGS_client_vfs_meta_memo_expired_s;
 
   modify_time_memo_.ForgetExpired(expired_time_s);
 }
 
-void MDSFileSystem::CleanExpiredChunkMemo() {
+void MDSMetaSystem::CleanExpiredChunkMemo() {
   uint64_t expired_time_s =
       mds::Helper::Timestamp() - FLAGS_client_vfs_meta_memo_expired_s;
 
   chunk_memo_.ForgetExpired(expired_time_s);
 }
 
-void MDSFileSystem::CleanExpiredInodeCache() {
+void MDSMetaSystem::CleanExpiredInodeCache() {
   uint64_t expired_time_s =
       mds::Helper::Timestamp() - FLAGS_client_vfs_meta_inode_cache_expired_s;
 
-  inode_cache_.CleanExpired(expired_time_s);
+  inode_cache_->CleanExpired(expired_time_s);
 }
 
-bool MDSFileSystem::InitCrontab() {
+bool MDSMetaSystem::InitCrontab() {
   // add heartbeat crontab
   crontab_configs_.push_back({
       "HEARTBEAT",
@@ -327,7 +327,7 @@ bool MDSFileSystem::InitCrontab() {
   return true;
 }
 
-Status MDSFileSystem::StatFs(ContextSPtr ctx, Ino ino, FsStat* fs_stat) {
+Status MDSMetaSystem::StatFs(ContextSPtr ctx, Ino ino, FsStat* fs_stat) {
   Status status;
   if (ino <= mds::kRootIno) {
     status = mds_client_->GetFsQuota(ctx, *fs_stat);
@@ -349,7 +349,7 @@ Status MDSFileSystem::StatFs(ContextSPtr ctx, Ino ino, FsStat* fs_stat) {
   return status;
 };
 
-Status MDSFileSystem::Lookup(ContextSPtr ctx, Ino parent,
+Status MDSMetaSystem::Lookup(ContextSPtr ctx, Ino parent,
                              const std::string& name, Attr* attr) {
   AttrEntry attr_entry;
   auto status = mds_client_->Lookup(ctx, parent, name, attr_entry);
@@ -367,7 +367,7 @@ Status MDSFileSystem::Lookup(ContextSPtr ctx, Ino parent,
   return Status::OK();
 }
 
-Status MDSFileSystem::Create(ContextSPtr ctx, Ino parent,
+Status MDSMetaSystem::Create(ContextSPtr ctx, Ino parent,
                              const std::string& name, uint32_t uid,
                              uint32_t gid, uint32_t mode, int flags, Attr* attr,
                              uint64_t fh) {
@@ -392,7 +392,7 @@ Status MDSFileSystem::Create(ContextSPtr ctx, Ino parent,
   return Status::OK();
 }
 
-Status MDSFileSystem::MkNod(ContextSPtr ctx, Ino parent,
+Status MDSMetaSystem::MkNod(ContextSPtr ctx, Ino parent,
                             const std::string& name, uint32_t uid, uint32_t gid,
                             uint32_t mode, uint64_t rdev, Attr* attr) {
   AttrEntry attr_entry;
@@ -410,7 +410,7 @@ Status MDSFileSystem::MkNod(ContextSPtr ctx, Ino parent,
   return Status::OK();
 }
 
-Status MDSFileSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
+Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
   if ((flags & O_TRUNC) && !(flags & O_WRONLY || flags & O_RDWR)) {
     return Status::NoPermission("O_TRUNC without O_WRONLY or O_RDWR");
   }
@@ -470,7 +470,7 @@ Status MDSFileSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
   return Status::OK();
 }
 
-Status MDSFileSystem::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
+Status MDSMetaSystem::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
   struct Param {
     MDSClientSPtr mds_client;
     ContextSPtr ctx;
@@ -523,7 +523,7 @@ Status MDSFileSystem::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
   return Status::OK();
 }
 
-Status MDSFileSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
+Status MDSMetaSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                                 uint64_t fh, std::vector<Slice>* slices,
                                 uint64_t& version) {
   if (fh != 0 && GetSliceFromCache(ino, index, slices)) {
@@ -560,7 +560,7 @@ Status MDSFileSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
   return Status::OK();
 }
 
-Status MDSFileSystem::NewSliceId(ContextSPtr, Ino ino, uint64_t* id) {
+Status MDSMetaSystem::NewSliceId(ContextSPtr, Ino ino, uint64_t* id) {
   if (!id_cache_.GenID(*id)) {
     LOG(ERROR) << fmt::format("[meta.filesystem.{}] newsliceid fail.", ino);
     return Status::Internal("gen id fail");
@@ -569,7 +569,7 @@ Status MDSFileSystem::NewSliceId(ContextSPtr, Ino ino, uint64_t* id) {
   return Status::OK();
 }
 
-Status MDSFileSystem::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
+Status MDSMetaSystem::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                                  uint64_t fh,
                                  const std::vector<Slice>& slices) {
   LOG(INFO) << fmt::format(
@@ -609,7 +609,7 @@ Status MDSFileSystem::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
   return Status::OK();
 }
 
-Status MDSFileSystem::AsyncWriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
+Status MDSMetaSystem::AsyncWriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                                       uint64_t fh,
                                       const std::vector<Slice>& slices,
                                       DoneClosure done) {
@@ -639,7 +639,7 @@ Status MDSFileSystem::AsyncWriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
   return Status::OK();
 }
 
-Status MDSFileSystem::Write(ContextSPtr, Ino ino, uint64_t offset,
+Status MDSMetaSystem::Write(ContextSPtr, Ino ino, uint64_t offset,
                             uint64_t size, uint64_t fh) {
   auto file_session = file_session_map_.GetSession(ino);
   CHECK(file_session != nullptr)
@@ -655,7 +655,7 @@ Status MDSFileSystem::Write(ContextSPtr, Ino ino, uint64_t offset,
   return Status::OK();
 }
 
-Status MDSFileSystem::MkDir(ContextSPtr ctx, Ino parent,
+Status MDSMetaSystem::MkDir(ContextSPtr ctx, Ino parent,
                             const std::string& name, uint32_t uid, uint32_t gid,
                             uint32_t mode, Attr* attr) {
   AttrEntry attr_entry;
@@ -673,7 +673,7 @@ Status MDSFileSystem::MkDir(ContextSPtr ctx, Ino parent,
   return Status::OK();
 }
 
-Status MDSFileSystem::RmDir(ContextSPtr ctx, Ino parent,
+Status MDSMetaSystem::RmDir(ContextSPtr ctx, Ino parent,
                             const std::string& name) {
   Ino ino;
   auto status = mds_client_->RmDir(ctx, parent, name, ino);
@@ -690,7 +690,7 @@ Status MDSFileSystem::RmDir(ContextSPtr ctx, Ino parent,
   return Status::OK();
 }
 
-Status MDSFileSystem::OpenDir(ContextSPtr ctx, Ino ino, uint64_t fh) {
+Status MDSMetaSystem::OpenDir(ContextSPtr ctx, Ino ino, uint64_t fh) {
   auto dir_iterator = DirIterator::New(mds_client_, ino, fh);
 
   bool need_cache = false;
@@ -707,7 +707,7 @@ Status MDSFileSystem::OpenDir(ContextSPtr ctx, Ino ino, uint64_t fh) {
   return Status::OK();
 }
 
-Status MDSFileSystem::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
+Status MDSMetaSystem::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
                               uint64_t offset, bool with_attr,
                               ReadDirHandler handler) {
   auto dir_iterator = dir_iterator_manager_.Get(ino, fh);
@@ -735,12 +735,12 @@ Status MDSFileSystem::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
   return Status::OK();
 }
 
-Status MDSFileSystem::ReleaseDir(ContextSPtr, Ino ino, uint64_t fh) {
+Status MDSMetaSystem::ReleaseDir(ContextSPtr, Ino ino, uint64_t fh) {
   dir_iterator_manager_.Delete(ino, fh);
   return Status::OK();
 }
 
-Status MDSFileSystem::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
+Status MDSMetaSystem::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
                            const std::string& new_name, Attr* attr) {
   AttrEntry attr_entry;
   auto status = mds_client_->Link(ctx, ino, new_parent, new_name, attr_entry);
@@ -759,7 +759,7 @@ Status MDSFileSystem::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
   return Status::OK();
 }
 
-Status MDSFileSystem::Unlink(ContextSPtr ctx, Ino parent,
+Status MDSMetaSystem::Unlink(ContextSPtr ctx, Ino parent,
                              const std::string& name) {
   AttrEntry attr_entry;
   auto status = mds_client_->UnLink(ctx, parent, name, attr_entry);
@@ -780,7 +780,7 @@ Status MDSFileSystem::Unlink(ContextSPtr ctx, Ino parent,
   return Status::OK();
 }
 
-Status MDSFileSystem::Symlink(ContextSPtr ctx, Ino parent,
+Status MDSMetaSystem::Symlink(ContextSPtr ctx, Ino parent,
                               const std::string& name, uint32_t uid,
                               uint32_t gid, const std::string& link,
                               Attr* attr) {
@@ -802,7 +802,7 @@ Status MDSFileSystem::Symlink(ContextSPtr ctx, Ino parent,
   return Status::OK();
 }
 
-Status MDSFileSystem::ReadLink(ContextSPtr ctx, Ino ino, std::string* link) {
+Status MDSMetaSystem::ReadLink(ContextSPtr ctx, Ino ino, std::string* link) {
   auto status = mds_client_->ReadLink(ctx, ino, *link);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("[meta.filesystem.{}] readlink fail, error({}).",
@@ -813,7 +813,7 @@ Status MDSFileSystem::ReadLink(ContextSPtr ctx, Ino ino, std::string* link) {
   return Status::OK();
 }
 
-Status MDSFileSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
+Status MDSMetaSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
   CHECK(ctx != nullptr) << "context is null";
 
   AttrEntry attr_entry;
@@ -840,7 +840,7 @@ Status MDSFileSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
   return Status::OK();
 }
 
-Status MDSFileSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
+Status MDSMetaSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
                               const Attr& attr, Attr* out_attr) {
   AttrEntry attr_entry;
   auto status = mds_client_->SetAttr(ctx, ino, attr, set, attr_entry);
@@ -860,7 +860,7 @@ Status MDSFileSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
   return Status::OK();
 }
 
-Status MDSFileSystem::GetXattr(ContextSPtr ctx, Ino ino,
+Status MDSMetaSystem::GetXattr(ContextSPtr ctx, Ino ino,
                                const std::string& name, std::string* value) {
   // take out xattr cache
   auto inode = GetInodeFromCache(ino);
@@ -879,7 +879,7 @@ Status MDSFileSystem::GetXattr(ContextSPtr ctx, Ino ino,
   return Status::OK();
 }
 
-Status MDSFileSystem::SetXattr(ContextSPtr ctx, Ino ino,
+Status MDSMetaSystem::SetXattr(ContextSPtr ctx, Ino ino,
                                const std::string& name,
                                const std::string& value, int) {
   AttrEntry attr_entry;
@@ -893,7 +893,7 @@ Status MDSFileSystem::SetXattr(ContextSPtr ctx, Ino ino,
   return Status::OK();
 }
 
-Status MDSFileSystem::RemoveXattr(ContextSPtr ctx, Ino ino,
+Status MDSMetaSystem::RemoveXattr(ContextSPtr ctx, Ino ino,
                                   const std::string& name) {
   AttrEntry attr_entry;
   auto status = mds_client_->RemoveXAttr(ctx, ino, name, attr_entry);
@@ -906,7 +906,7 @@ Status MDSFileSystem::RemoveXattr(ContextSPtr ctx, Ino ino,
   return Status::OK();
 }
 
-Status MDSFileSystem::ListXattr(ContextSPtr ctx, Ino ino,
+Status MDSMetaSystem::ListXattr(ContextSPtr ctx, Ino ino,
                                 std::vector<std::string>* xattrs) {
   CHECK(xattrs != nullptr) << "xattrs is null.";
 
@@ -934,7 +934,7 @@ Status MDSFileSystem::ListXattr(ContextSPtr ctx, Ino ino,
   return Status::OK();
 }
 
-Status MDSFileSystem::Rename(ContextSPtr ctx, Ino old_parent,
+Status MDSMetaSystem::Rename(ContextSPtr ctx, Ino old_parent,
                              const std::string& old_name, Ino new_parent,
                              const std::string& new_name) {
   std::vector<Ino> effected_inos;
@@ -955,23 +955,23 @@ Status MDSFileSystem::Rename(ContextSPtr ctx, Ino old_parent,
   return Status::OK();
 }
 
-void MDSFileSystem::PutInodeToCache(const AttrEntry& attr_entry) {
+void MDSMetaSystem::PutInodeToCache(const AttrEntry& attr_entry) {
   if (FLAGS_client_vfs_inode_cache_enable) {
-    inode_cache_.Put(attr_entry.ino(), attr_entry);
+    inode_cache_->Put(attr_entry.ino(), attr_entry);
   }
 }
 
-void MDSFileSystem::DeleteInodeFromCache(Ino ino) {
+void MDSMetaSystem::DeleteInodeFromCache(Ino ino) {
   if (FLAGS_client_vfs_inode_cache_enable) {
-    inode_cache_.Delete(ino);
+    inode_cache_->Delete(ino);
   }
 }
 
-InodeSPtr MDSFileSystem::GetInodeFromCache(Ino ino) {
-  return (FLAGS_client_vfs_inode_cache_enable) ? inode_cache_.Get(ino)
+InodeSPtr MDSMetaSystem::GetInodeFromCache(Ino ino) {
+  return (FLAGS_client_vfs_inode_cache_enable) ? inode_cache_->Get(ino)
                                                : nullptr;
 }
-bool MDSFileSystem::GetSliceFromCache(Ino ino, uint64_t index,
+bool MDSMetaSystem::GetSliceFromCache(Ino ino, uint64_t index,
                                       std::vector<Slice>* slices) {
   auto file_session = file_session_map_.GetSession(ino);
   if (file_session == nullptr) return false;
@@ -985,14 +985,14 @@ bool MDSFileSystem::GetSliceFromCache(Ino ino, uint64_t index,
   return true;
 }
 
-// void MDSFileSystem::UpdateInodeLength(Ino ino, uint64_t new_length) {
+// void MDSMetaSystem::UpdateInodeLength(Ino ino, uint64_t new_length) {
 //   auto inode = inode_cache_->GetInode(ino);
 //   if (inode != nullptr) {
 //     inode->ExpandLength(new_length);
 //   }
 // }
 
-// bool MDSFileSystem::WriteSliceToCache(Ino ino, uint64_t index, uint64_t fh,
+// bool MDSMetaSystem::WriteSliceToCache(Ino ino, uint64_t index, uint64_t fh,
 //                                         const std::vector<Slice>& slices) {
 //   auto file_session = file_session_map_.GetSession({ino, fh});
 //   CHECK(file_session != nullptr) << fmt::format(
@@ -1005,7 +1005,7 @@ bool MDSFileSystem::GetSliceFromCache(Ino ino, uint64_t index,
 //   return true;
 // }
 
-// void MDSFileSystem::DeleteDeltaSliceFromCache(
+// void MDSMetaSystem::DeleteDeltaSliceFromCache(
 //     Ino ino, uint64_t fh,
 //     const std::vector<mds::DeltaSliceEntry>& delta_slice_entries) {
 //   auto file_session = file_session_map_.GetSession({ino, fh});
@@ -1026,7 +1026,7 @@ bool MDSFileSystem::GetSliceFromCache(Ino ino, uint64_t index,
 //   }
 // }
 
-// void MDSFileSystem::UpdateChunkToCache(
+// void MDSMetaSystem::UpdateChunkToCache(
 //     Ino ino, uint64_t fh, const std::vector<mds::ChunkEntry>& chunks) {
 //   auto file_session = file_session_map_.GetSession({ino, fh});
 //   CHECK(file_session != nullptr)
@@ -1037,7 +1037,7 @@ bool MDSFileSystem::GetSliceFromCache(Ino ino, uint64_t index,
 //   }
 // }
 
-void MDSFileSystem::ClearChunkCache(Ino ino, uint64_t fh, uint64_t index) {
+void MDSMetaSystem::ClearChunkCache(Ino ino, uint64_t fh, uint64_t index) {
   auto file_session = file_session_map_.GetSession(ino);
   if (file_session == nullptr) {
     LOG(WARNING) << fmt::format(
@@ -1048,7 +1048,7 @@ void MDSFileSystem::ClearChunkCache(Ino ino, uint64_t fh, uint64_t index) {
   file_session->DeleteChunkMutation(index);
 }
 
-// Status MDSFileSystem::SyncDeltaSlice(ContextSPtr ctx, Ino ino, uint64_t fh)
+// Status MDSMetaSystem::SyncDeltaSlice(ContextSPtr ctx, Ino ino, uint64_t fh)
 // {
 //   auto file_session = file_session_map_.GetSession({ino, fh});
 //   CHECK(file_session != nullptr)
@@ -1087,7 +1087,7 @@ void MDSFileSystem::ClearChunkCache(Ino ino, uint64_t fh, uint64_t index) {
 //   return Status::OK();
 // }
 
-Status MDSFileSystem::CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
+Status MDSMetaSystem::CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
                                   const std::string& caller) {
   if (modify_time_memo_.ModifiedSince(attr.ino, time_ns)) {
     LOG(INFO) << fmt::format("[meta.filesystem.{}] correct attr, caller({}).",
@@ -1113,7 +1113,7 @@ Status MDSFileSystem::CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
   return Status::OK();
 }
 
-void MDSFileSystem::CorrectAttrLength(ContextSPtr ctx, Attr& attr,
+void MDSMetaSystem::CorrectAttrLength(ContextSPtr ctx, Attr& attr,
                                       const std::string& caller) {
   auto file_session = file_session_map_.GetSession(attr.ino);
   if (file_session != nullptr) {
@@ -1161,7 +1161,7 @@ static std::string GetAliveMdsAddr(const std::string& mds_addrs) {
   return "";
 }
 
-MDSFileSystemUPtr MDSFileSystem::Build(const std::string& fs_name,
+MDSMetaSystemUPtr MDSMetaSystem::Build(const std::string& fs_name,
                                        const std::string& mds_addrs,
                                        const std::string& mountpoint,
                                        uint32_t port) {
@@ -1253,10 +1253,10 @@ MDSFileSystemUPtr MDSFileSystem::Build(const std::string& fs_name,
   }
 
   // create filesystem
-  return MDSFileSystem::New(fs_info, client_id, mds_discovery, mds_client);
+  return MDSMetaSystem::New(fs_info, client_id, mds_discovery, mds_client);
 }
 
-bool MDSFileSystem::GetDescription(Json::Value& value) {
+bool MDSMetaSystem::GetDescription(Json::Value& value) {
   // client
   Json::Value client_id;
   client_id["id"] = client_id_.ID();

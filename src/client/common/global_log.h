@@ -43,7 +43,7 @@ static int InitLog(const char* argv0, const std::string& conf_path) {
   dummy.Load(&conf, "v", "client.loglevel", &FLAGS_v);
   dingofs::client::FLAGS_vlog_level = FLAGS_v;
 
-  FLAGS_logbufsecs = 4;
+  FLAGS_logbufsecs = 0;
   FLAGS_minloglevel = google::GLOG_INFO;
   FLAGS_logbuflevel = google::GLOG_INFO;
 

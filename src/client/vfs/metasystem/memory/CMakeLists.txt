@@ -1,4 +1,4 @@
-# Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
+# Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,18 +12,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(mds)
-add_subdirectory(local)
-add_subdirectory(memory)
 
-add_library(vfs_metasystem
-    meta_log.cc
-    meta_wrapper.cc
+file(GLOB VFS_METASYSTEM_DUMMY_LIB_SRC
+    "*.cc"
 )
 
-target_link_libraries(vfs_metasystem
-    vfs_metasystem_memory_lib
-    vfs_metasystem_mds_lib
-    vfs_metasystem_local_lib
+add_library(vfs_metasystem_memory_lib ${VFS_METASYSTEM_DUMMY_LIB_SRC})
+
+target_link_libraries(vfs_metasystem_memory_lib
+    PROTO_OBJS
+    dingofs_common
+    gflags::gflags
+    glog::glog
+    fmt::fmt
+    spdlog::spdlog
+    brpc::brpc
+    absl::memory
+    absl::strings
+    absl::synchronization
     absl::str_format
+    absl::type_traits
+    absl::optional
+    absl::btree
+    ${FUSE3_LIBRARY}
 )

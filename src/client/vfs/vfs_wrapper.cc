@@ -109,8 +109,9 @@ Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
 
   // init client option
   VFSOption vfs_option;
-  if (vfs_conf.fs_type == "vfs" || vfs_conf.fs_type == "vfs_v1" ||
-      vfs_conf.fs_type == "vfs_v2" || vfs_conf.fs_type == "vfs_dummy") {
+  if (vfs_conf.fs_type == "vfs" || vfs_conf.fs_type == "vfs_v2" ||
+      vfs_conf.fs_type == "vfs_mds" || vfs_conf.fs_type == "vfs_local" ||
+      vfs_conf.fs_type == "vfs_memory") {
     InitVFSOption(&conf_, &vfs_option);
 
     DINGOFS_RETURN_NOT_OK(InitLog());

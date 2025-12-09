@@ -224,7 +224,7 @@ bool StoreAutoIncrementIdGenerator::GenID(uint32_t num, uint64_t& id) { return G
 bool StoreAutoIncrementIdGenerator::GenID(uint32_t num, uint64_t min_slice_id, uint64_t& id) {
   if (num == 0) {
     DINGO_LOG(ERROR) << fmt::format("[idalloc.{}] num cant not 0.", name_);
-    return -1;
+    return false;
   }
 
   BAIDU_SCOPED_LOCK(mutex_);
@@ -235,7 +235,7 @@ bool StoreAutoIncrementIdGenerator::GenID(uint32_t num, uint64_t min_slice_id, u
     auto status = AllocateIds(std::max(num, batch_size_));
     if (!status.ok()) {
       DINGO_LOG(ERROR) << fmt::format("[idalloc.{}] allocate id fail, {}.", name_, status.error_str());
-      return -1;
+      return false;
     }
   }
 

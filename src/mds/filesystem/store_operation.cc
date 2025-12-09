@@ -1317,6 +1317,7 @@ Status UnlinkOperation::Run(TxnUPtr& txn) {
 
   // decrease nlink
   attr.set_nlink(attr.nlink() - 1);
+  DelParentIno(attr, parent);
   attr.set_ctime(std::max(attr.ctime(), GetTime()));
   attr.set_version(attr.version() + 1);
   if (attr.nlink() <= 0) {

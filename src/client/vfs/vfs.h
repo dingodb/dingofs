@@ -37,7 +37,7 @@ struct VFSConfig {
   std::string mount_point;
   std::string fs_name;
   std::string config_path;
-  std::string fs_type;  // vfs_old/vfs_v1/vfs_v2/vfs_dummy
+  std::string fs_type;  // vfs_mds/vfs_memory/vfs_local
 };
 
 // NOT: all return value should sys error code in <errno.h>

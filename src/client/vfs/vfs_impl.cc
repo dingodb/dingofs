@@ -55,7 +55,7 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
-Status VFSImpl::Start(const VFSConfig& vfs_conf) {  // NOLINT
+Status VFSImpl::Start(const VFSConfig& vfs_conf) {
   vfs_hub_ = std::make_unique<VFSHubImpl>();
   DINGOFS_RETURN_NOT_OK(vfs_hub_->Start(vfs_conf, vfs_option_));
 

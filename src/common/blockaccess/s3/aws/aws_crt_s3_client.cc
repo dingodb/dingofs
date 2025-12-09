@@ -117,7 +117,8 @@ void AwsCrtS3Client::Init(const S3Options& options) {
   s3_options_ = options;
 
   {
-    auto config = std::make_unique<S3CrtClientConfiguration>();
+    auto config = std::make_unique<S3CrtClientConfiguration>(
+        Aws::Client::ClientConfigurationInitValues{.shouldDisableIMDS = true});
     config->endpointOverride = options.s3_info.endpoint;
     config->verifySSL = options.aws_sdk_config.verify_ssl;
     config->region = options.aws_sdk_config.region;

@@ -41,6 +41,9 @@ namespace v2 {
 class Inode;
 using InodeSPtr = std::shared_ptr<Inode>;
 
+class InodeCache;
+using InodeCacheUPtr = std::unique_ptr<InodeCache>;
+
 using mds::Ino;
 
 class Inode {
@@ -109,6 +112,10 @@ class InodeCache {
   InodeCache& operator=(const InodeCache&) = delete;
   InodeCache(InodeCache&&) = delete;
   InodeCache& operator=(InodeCache&&) = delete;
+
+  static InodeCacheUPtr New(uint32_t fs_id) {
+    return std::make_unique<InodeCache>(fs_id);
+  }
 
   void Put(Ino ino, const AttrEntry& attr);
   void Delete(Ino ino);

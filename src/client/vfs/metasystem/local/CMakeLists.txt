@@ -13,13 +13,13 @@
 # limitations under the License.
 
 
-file(GLOB VFS_METASYSTEM_DUMMY_LIB_SRC
+file(GLOB VFS_METASYSTEM_LOCAL_LIB_SRC
     "*.cc"
 )
 
-add_library(vfs_metasystem_dummy_lib ${VFS_METASYSTEM_DUMMY_LIB_SRC})
+add_library(vfs_metasystem_local_lib ${VFS_METASYSTEM_LOCAL_LIB_SRC})
 
-target_link_libraries(vfs_metasystem_dummy_lib
+target_link_libraries(vfs_metasystem_local_lib
     PROTO_OBJS
     dingofs_common
     gflags::gflags
@@ -34,5 +34,4 @@ target_link_libraries(vfs_metasystem_dummy_lib
     absl::type_traits
     absl::optional
     absl::btree
-    ${FUSE3_LIBRARY}
 )

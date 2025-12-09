@@ -44,25 +44,25 @@ namespace v2 {
 
 using mds::AttrEntry;
 
-class MDSFileSystem;
-using MDSFileSystemPtr = std::shared_ptr<MDSFileSystem>;
-using MDSFileSystemUPtr = std::unique_ptr<MDSFileSystem>;
+class MDSMetaSystem;
+using MDSMetaSystemPtr = std::shared_ptr<MDSMetaSystem>;
+using MDSMetaSystemUPtr = std::unique_ptr<MDSMetaSystem>;
 
-class MDSFileSystem : public vfs::MetaSystem {
+class MDSMetaSystem : public vfs::MetaSystem {
  public:
-  MDSFileSystem(mds::FsInfoSPtr fs_info, const ClientId& client_id,
+  MDSMetaSystem(mds::FsInfoSPtr fs_info, const ClientId& client_id,
                 MDSDiscoverySPtr mds_discovery, MDSClientSPtr mds_client);
-  ~MDSFileSystem() override;
+  ~MDSMetaSystem() override;
 
-  static MDSFileSystemUPtr New(mds::FsInfoSPtr fs_info,
+  static MDSMetaSystemUPtr New(mds::FsInfoSPtr fs_info,
                                const ClientId& client_id,
                                MDSDiscoverySPtr mds_discovery,
                                MDSClientSPtr mds_client) {
-    return std::make_unique<MDSFileSystem>(fs_info, client_id, mds_discovery,
+    return std::make_unique<MDSMetaSystem>(fs_info, client_id, mds_discovery,
                                            mds_client);
   }
 
-  static MDSFileSystemUPtr Build(const std::string& fs_name,
+  static MDSMetaSystemUPtr Build(const std::string& fs_name,
                                  const std::string& mds_addrs,
                                  const std::string& mountpoint, uint32_t port);
 
@@ -199,7 +199,7 @@ class MDSFileSystem : public vfs::MetaSystem {
   DirIteratorManager dir_iterator_manager_;
 
   IdCache id_cache_;
-  InodeCache inode_cache_;
+  InodeCacheUPtr inode_cache_;
 
   // Crontab config
   std::vector<mds::CrontabConfig> crontab_configs_;
