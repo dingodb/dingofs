@@ -40,6 +40,9 @@
 #include "common/status.h"
 #include "common/trace/context.h"
 
+static bvar::Adder<uint64_t> vfs_block_rreq_inflighting(
+    "vfs_block_rreq_inflighting");
+
 namespace dingofs {
 namespace client {
 namespace vfs {
@@ -243,12 +246,15 @@ void ChunkReader::AsyncRange(ContextSPtr ctx, ReaderSharedState* shared,
                                                       METHOD_NAME(), ctx);
   auto callback = [this, shared, block_cache_req,
                    span_ptr = span.release()](Status s) {
+    vfs_block_rreq_inflighting << -1;
     // capture this ptr to extend its lifetime
     std::unique_ptr<ITraceSpan> scoped_span(span_ptr);
     scoped_span->End();
     // dedicated use ctx for callback
     OnBlockReadComplete(shared, block_cache_req, s);
   };
+
+  vfs_block_rreq_inflighting << 1;
 
   hub_->GetBlockCache()->AsyncRange(
       cache::NewContext(), block_cache_req->key,

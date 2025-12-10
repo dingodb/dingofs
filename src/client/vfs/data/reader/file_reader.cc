@@ -49,6 +49,10 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
+// TODO: maybe we need rreq manager in future
+static bvar::Adder<uint64_t> vfs_rreq_in_queue("vfs_rreq_in_queue");
+static bvar::Adder<uint64_t> vfs_rreq_inflighting("vfs_rreq_inflighting");
+
 static std::atomic<uint64_t> req_id_gen{1};
 
 static const uint64_t kReqValidityTimeoutS = 30;
@@ -117,7 +121,15 @@ void FileReader::Close() {
 
 void FileReader::RunReadRequest(ReadRequest* req) {
   AcquireRef();
-  vfs_hub_->GetReadExecutor()->Execute([this, req]() { DoReadRequst(req); });
+  vfs_rreq_in_queue << 1;
+
+  vfs_hub_->GetReadExecutor()->Execute([this, req]() {
+    vfs_rreq_in_queue << -1;
+
+    vfs_rreq_inflighting << 1;
+    DoReadRequst(req);
+    vfs_rreq_inflighting << -1;
+  });
 }
 
 void FileReader::Invalidate(int64_t offset, int64_t size) {
