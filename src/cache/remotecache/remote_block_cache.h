@@ -24,9 +24,8 @@
 #define DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_BLOCK_CACHE_H_
 
 #include "cache/blockcache/block_cache.h"
-#include "cache/remotecache/mem_cache.h"
-#include "cache/remotecache/prefetcher.h"
 #include "cache/remotecache/remote_cache_node.h"
+#include "cache/remotecache/segment_fetcher.h"
 #include "cache/storage/storage.h"
 #include "cache/utils/bthread.h"
 #include "cache/utils/context.h"
@@ -71,9 +70,8 @@ class RemoteBlockCacheImpl final : public BlockCache {
   std::atomic<bool> running_;
   RemoteCacheNodeSPtr remote_node_;
   StorageSPtr storage_;
-  MemCacheSPtr memcache_;
-  PrefetcherUPtr prefetcher_;
   BthreadJoinerUPtr joiner_;
+  CacheRetrieverUPtr retriever_;
 };
 
 }  // namespace cache

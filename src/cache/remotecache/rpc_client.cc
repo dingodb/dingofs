@@ -36,6 +36,7 @@
 
 #include "cache/blockcache/block_cache.h"
 #include "cache/common/type.h"
+#include "cache/utils/context.h"
 #include "common/io_buffer.h"
 #include "common/options/cache.h"
 #include "dingofs/blockcache.pb.h"
@@ -115,8 +116,10 @@ Status RPCClient::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
   request.set_length(length);
   request.set_block_size(option.block_size);
 
+  NEXT_STEP("send_request");
   status = SendRequest(ctx, "Range", request, response, response_attachment);
   if (status.ok()) {
+    NEXT_STEP("memcpy");
     *buffer = IOBuffer(response_attachment);
     ctx->SetCacheHit(response.has_cache_hit() ? response.cache_hit() : false);
   }

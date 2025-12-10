@@ -30,4 +30,8 @@ target_link_libraries(cache_benchmark
 )
 
 add_executable(cache-bench main.cc)
-target_link_libraries(cache-bench cache_benchmark)
+target_link_libraries(cache-bench
+    cache_benchmark
+    unwind::unwind
+    gperftools::gperftools
+)

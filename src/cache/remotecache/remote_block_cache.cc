@@ -29,8 +29,8 @@
 #include "cache/common/const.h"
 #include "cache/common/macro.h"
 #include "cache/metric/remote_block_cache_metric.h"
-#include "cache/remotecache/mem_cache.h"
 #include "cache/remotecache/remote_cache_node_group.h"
+#include "cache/remotecache/segment_fetcher.h"
 #include "cache/utils/bthread.h"
 #include "cache/utils/context.h"
 #include "common/io_buffer.h"
@@ -43,34 +43,24 @@ namespace cache {
 DEFINE_string(cache_group, "",
               "Cache group name to use, empty means not use cache group");
 
-DEFINE_bool(enable_remote_prefetch, true,
-            "Whether enable remote prefetch, default is true");
-DEFINE_validator(enable_remote_prefetch, brpc::PassValidate);
-
-DEFINE_uint32(remote_prefetch_max_buffer_size_mb, 512,
-              "Maximum buffer size for remote prefetch");
-
 static const std::string kModule = "remotecache";
 
 RemoteBlockCacheImpl::RemoteBlockCacheImpl(StorageSPtr storage)
     : running_(false),
       storage_(storage),
-      joiner_(std::make_unique<BthreadJoiner>()),
-      memcache_(std::make_shared<MemCacheImpl>(
-          FLAGS_remote_prefetch_max_buffer_size_mb * kMiB)) {
+      joiner_(std::make_unique<BthreadJoiner>()) {
   if (HasCacheStore()) {
     remote_node_ = std::make_shared<RemoteCacheNodeGroup>();
   } else {
     remote_node_ = std::make_shared<NoneRemoteCacheNode>();
   }
-  prefetcher_ = std::make_unique<Prefetcher>(memcache_, remote_node_);
+
+  retriever_ = std::make_unique<CacheRetriever>(remote_node_, storage_.get());
 }
 
 Status RemoteBlockCacheImpl::Start() {
   CHECK_NOTNULL(remote_node_);
   CHECK_NOTNULL(storage_);
-  CHECK_NOTNULL(memcache_);
-  CHECK_NOTNULL(prefetcher_);
   CHECK_NOTNULL(joiner_);
 
   if (running_) {
@@ -91,18 +81,7 @@ Status RemoteBlockCacheImpl::Start() {
     return status;
   }
 
-  status = memcache_->Start();
-  if (!status.ok()) {
-    LOG(ERROR) << "Start mem cache failed: " << status.ToString();
-    return status;
-  }
-
-  status = prefetcher_->Start();
-  if (!status.ok()) {
-    LOG(ERROR) << "Start prefetcher failed: " << status.ToString();
-    return status;
-  }
-
+  retriever_->Start();
   RemoteBlockCacheMetric::Init();
 
   running_ = true;
@@ -120,19 +99,7 @@ Status RemoteBlockCacheImpl::Shutdown() {
 
   LOG(INFO) << "Remote block cache is shutting down...";
 
-  auto status = prefetcher_->Shutdown();
-  if (!status.ok()) {
-    LOG(ERROR) << "Shutdown prefetcher failed: " << status.ToString();
-    return status;
-  }
-
-  status = memcache_->Shutdown();
-  if (!status.ok()) {
-    LOG(ERROR) << "Shutdown mem cache failed: " << status.ToString();
-    return status;
-  }
-
-  status = remote_node_->Shutdown();
+  auto status = remote_node_->Shutdown();
   if (!status.ok()) {
     LOG(ERROR) << "Shutdown remote node failed: " << status.ToString();
     return status;
@@ -199,42 +166,8 @@ Status RemoteBlockCacheImpl::Range(ContextSPtr ctx, const BlockKey& key,
     }
   };
 
-  if (FLAGS_enable_remote_prefetch && option.block_size > length) {
-    prefetcher_->Submit(ctx, key, option.block_size);
-  }
-
-  NEXT_STEP("memcache");
-  Block block;
-  status = memcache_->Get(key, &block);
-  if (status.ok()) {
-    block.buffer.AppendTo(buffer, length, offset);
-    ctx->SetCacheHit(true);
-    return status;
-  }
-
-  NEXT_STEP("remote_range");
-  status = remote_node_->Range(ctx, key, offset, length, buffer, option);
-  if (status.ok()) {
-    return status;
-  } else if (!option.retrive) {
-    auto message = absl::StrFormat(
-        "[%s] Remote range block failed: key = %s, offset = %lld"
-        ", length = %zu, status = %s",
-        ctx->TraceId(), key.Filename(), offset, length, status.ToString());
-    if (status.IsCacheUnhealthy()) {
-      LOG_EVERY_SECOND(ERROR) << message;
-    } else {
-      LOG(ERROR) << message;
-    }
-    return status;
-  }
-
-  NEXT_STEP("s3_range");
-  status = storage_->Download(ctx, key, offset, length, buffer);
-  if (!status.ok()) {
-    GENERIC_LOG_DOWNLOAD_ERROR();
-  }
-  return status;
+  NEXT_STEP("retrieve");
+  return retriever_->Range(key, offset, length, option.block_size, buffer);
 }
 
 Status RemoteBlockCacheImpl::Cache(ContextSPtr ctx, const BlockKey& key,

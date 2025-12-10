@@ -11,6 +11,8 @@ int main(int argc, char** argv) {
 
   dingofs::cache::InitLogging(argv[0]);
 
+  CHECK_EQ(0, brpc::StartDummyServerAt(19301));
+
   // Init benchmarker
   dingofs::cache::Benchmarker benchmarker;
   auto status = benchmarker.Start();

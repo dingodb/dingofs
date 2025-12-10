@@ -143,11 +143,11 @@ Status RemoteCacheNodeImpl::Range(ContextSPtr ctx, const BlockKey& key,
     return status;
   }
 
-  if (FLAGS_subrequest_ranges) {
-    status = SubrequestRanges(ctx, key, offset, length, buffer, option);
-  } else {
-    status = rpc_->Range(ctx, key, offset, length, buffer, option);
-  }
+  // if (FLAGS_subrequest_ranges) {
+  //   status = SubrequestRanges(ctx, key, offset, length, buffer, option);
+  // } else {
+  status = rpc_->Range(ctx, key, offset, length, buffer, option);
+  //}
   if (!status.ok()) {
     GENERIC_LOG_RANGE_ERROR("remote cache node");
   }

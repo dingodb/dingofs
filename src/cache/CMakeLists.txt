@@ -35,7 +35,13 @@ target_link_libraries(cache_lib
     cache_cachegroup
     cache_remotecache
     cache_tiercache
+    unwind::unwind
+    gperftools::gperftools
 )
 
 add_executable(dingo-cache main.cc)
-target_link_libraries(dingo-cache cache_lib)
+target_link_libraries(dingo-cache
+    cache_lib
+    unwind::unwind
+    gperftools::gperftools
+)
