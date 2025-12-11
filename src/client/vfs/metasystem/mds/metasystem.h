@@ -19,8 +19,8 @@
 #include <memory>
 #include <string>
 
+#include "client/vfs/common/client_id.h"
 #include "client/vfs/metasystem/mds/chunk_memo.h"
-#include "client/vfs/metasystem/mds/client_id.h"
 #include "client/vfs/metasystem/mds/dir_iterator.h"
 #include "client/vfs/metasystem/mds/file_session.h"
 #include "client/vfs/metasystem/mds/id_cache.h"
@@ -64,11 +64,11 @@ class MDSMetaSystem : public vfs::MetaSystem {
 
   static MDSMetaSystemUPtr Build(const std::string& fs_name,
                                  const std::string& mds_addrs,
-                                 const std::string& mountpoint, uint32_t port);
+                                 const ClientId& client_id);
 
-  Status Init() override;
+  Status Init(bool upgrade) override;
 
-  void UnInit() override;
+  void UnInit(bool upgrade) override;
 
   bool Dump(ContextSPtr ctx, Json::Value& value) override;
 

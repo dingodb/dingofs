@@ -4,12 +4,14 @@ mydir="${BASH_SOURCE%/*}"
 if [[ ! -d "$mydir" ]]; then mydir="$PWD"; fi
 . $mydir/shflags
 
-DEFINE_string fsname '' 'server role'
-DEFINE_string fstype '' 'fs type'
+
+DEFINE_string meta '' 'meta url'
 DEFINE_string mountpoint '' 'mount point'
 DEFINE_integer num 1 'fuse number'
 DEFINE_integer force 1 'use kill -9 to stop'
-DEFINE_boolean just_stop true 'just stop fuse, do not start'
+DEFINE_boolean stop false 'just stop fuse, do not start'
+DEFINE_boolean upgrade true 'upgrade fuse'
+
 
 # parse the command-line
 FLAGS "$@" || exit 1
@@ -23,13 +25,8 @@ if [ "$USER" != "root" ]; then
   exit 1
 fi
 
-if [ -z "${FLAGS_fsname}" ]; then
-    echo "fs name is empty"
-    exit -1
-fi
-
-if [ -z "${FLAGS_fstype}" ]; then
-    echo "fs type is empty"
+if [ -z "${FLAGS_meta}" ]; then
+    echo "meta url is empty"
     exit -1
 fi
 
@@ -38,7 +35,15 @@ if [ -z "${FLAGS_mountpoint}" ]; then
     exit -1
 fi
 
-echo "start fuse fsname(${FLAGS_fsname}) fstype(${FLAGS_fstype}) mountpoint(${FLAGS_mountpoint})"
+echo "params: meta(${FLAGS_meta}) mountpoint(${FLAGS_mountpoint})"
+
+# meta url format:
+# mds://${ip}:${port}/${fsname}
+# local://${path}/${fsname}
+# memory://${fsname}
+FSNAME=$(echo ${FLAGS_meta} | awk -F'/' '{print $NF}')
+
+echo "fsname: ${FSNAME}"
 
 BASE_DIR=$(dirname $(dirname $(cd $(dirname $0); pwd)))
 FUSE_BASE_DIR=$BASE_DIR/dist/fuse
@@ -69,7 +74,7 @@ fi
 
 function gen_conf() {
     index=$1
-    prefix_name=${FLAGS_fsname}-${index}
+    prefix_name=${FSNAME}-${index}
     dist_conf="${FUSE_CONF_DIR}/client-${prefix_name}.conf"
 
     if [ ! -f "$FUSE_CONF_TEMPLATE" ]; then
@@ -108,7 +113,7 @@ wait_for_process_exit() {
 
 
 function stop() {
-    process_no=$(ps -ef | grep ${FUSE_BASE_DIR} | grep $FLAGS_fsname | awk '{print $2}' | xargs)
+    process_no=$(ps -ef | grep ${FUSE_BASE_DIR} | grep $FSNAME | awk '{print $2}' | xargs)
 
     if [ "${process_no}" != "" ]; then
         echo "pid to kill: ${process_no}"
@@ -126,7 +131,7 @@ function stop() {
 function umount() {
     for ((i=1; i<=${FLAGS_num}; i++)); do
         index=$i
-        prefix_name=${FLAGS_fsname}-${index}
+        prefix_name=${FSNAME}-${index}
         mountpoint_dir=${FLAGS_mountpoint}/${prefix_name}
 
         echo "umount ${mountpoint_dir}"
@@ -136,7 +141,7 @@ function umount() {
 
 function start() {
     index=$1
-    prefix_name=${FLAGS_fsname}-${index}
+    prefix_name=${FSNAME}-${index}
     fuse_conf_path="${FUSE_CONF_DIR}/client-${prefix_name}.conf"
     log_dir=$FUSE_LOG_DIR/${prefix_name}
     mountpoint_dir=${FLAGS_mountpoint}/${prefix_name}
@@ -160,29 +165,39 @@ function start() {
         exit -1
     fi
 
-    nohup ${FUSE_BIN_PATH} -f \
-        -o default_permissions \
-        -o allow_other \
-        -o max_threads=64 \
-        -o fsname=${FLAGS_fsname} \
-        -o fstype=${FLAGS_fstype} \
-        -o user=dengzihui \
-        -o conf=${fuse_conf_path} ${mountpoint_dir} 2>&1 > $log_dir/out &
+    nohup ${FUSE_BIN_PATH} --flagfile ${fuse_conf_path} ${FLAGS_meta} ${mountpoint_dir} 2>&1 > $log_dir/out &
 
 }
 
-# stop fuse
-stop
+if [ ${FLAGS_stop} = 0 ]; then
+    echo "# stop fuse"
 
-# echo "wait for 3 seconds to stop fuse."
-sleep 3
+    # stop fuse
+    stop
 
-# umount fuse
-umount
+    # echo "wait for 3 seconds to stop fuse."
+    sleep 3
 
-if [ ${FLAGS_just_stop} = 0 ]; then
-    echo "just stop fuse, do not start"
+    # umount fuse
+    umount
+
+    echo "# done"
     exit 0
+fi
+
+if [ ${FLAGS_upgrade} != 0 ]; then
+    echo "# restart fuse"
+
+    # stop fuse
+    stop
+
+    # echo "wait for 3 seconds to stop fuse."
+    sleep 3
+
+    # umount fuse
+    umount
+else
+    echo "# upgrade fuse"
 fi
 
 echo "wait for 1 seconds to start fuse."
@@ -202,3 +217,5 @@ for ((i=1; i<=${FLAGS_num}; i++)); do
     fi
     sleep 1
 done
+
+echo "# done"

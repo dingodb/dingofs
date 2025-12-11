@@ -129,7 +129,7 @@ class VFSWrapper {
 
  private:
   bool Dump();
-  bool Load();
+  bool Load(const Json::Value& value);
 
   std::unique_ptr<VFS> vfs_;
   std::unique_ptr<metrics::client::ClientOpMetric> client_op_metric_;

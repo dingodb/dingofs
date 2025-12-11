@@ -24,7 +24,7 @@
 
 #include "bthread/bthread.h"
 #include "bthread/types.h"
-#include "client/vfs/metasystem/mds/client_id.h"
+#include "client/vfs/common/client_id.h"
 #include "client/vfs/metasystem/mds/helper.h"
 #include "client/vfs/metasystem/mds/mds_client.h"
 #include "client/vfs/vfs_meta.h"
@@ -55,16 +55,6 @@ const uint32_t kCleanExpiredModifyTimeMemoIntervalS = 300;  // seconds
 
 const std::string kSliceIdCacheName = "slice";
 
-static std::string GetHostName() {
-  char hostname[kMaxHostNameLength];
-  int ret = gethostname(hostname, kMaxHostNameLength);
-  if (ret < 0) {
-    LOG(ERROR) << "[meta.filesystem] GetHostName fail, ret=" << ret;
-    return "";
-  }
-
-  return std::string(hostname);
-}
 DEFINE_bool(client_meta_read_chunk_cache_enable, true,
             "enable read chunk cache");
 
@@ -84,33 +74,31 @@ MDSMetaSystem::MDSMetaSystem(mds::FsInfoSPtr fs_info, const ClientId& client_id,
 
 MDSMetaSystem::~MDSMetaSystem() {}  // NOLINT
 
-Status MDSMetaSystem::Init() {
-  LOG(INFO) << fmt::format("[meta.filesystem] fs_info: {}.",
-                           fs_info_->ToString());
+Status MDSMetaSystem::Init(bool upgrade) {
+  LOG(INFO) << fmt::format("[meta.fs] init, upgrade({}).", upgrade);
+
+  LOG(INFO) << fmt::format("[meta.fs] fs_info: {}.", fs_info_->ToString());
   // mount fs
-  if (!MountFs()) {
-    LOG(ERROR) << fmt::format("[meta.filesystem] mount fs fail.");
+  if (!upgrade && !MountFs()) {
     return Status::MountFailed("mount fs fail");
   }
 
   if (!write_slice_processor_->Init()) {
-    LOG(ERROR) << fmt::format(
-        "[meta.filesystem] init write slice processor fail.");
     return Status::Internal("init write slice processor fail");
   }
 
   // init crontab
   if (!InitCrontab()) {
-    LOG(ERROR) << fmt::format("[meta.filesystem] init crontab fail.");
     return Status::Internal("init crontab fail");
   }
 
   return Status::OK();
 }
 
-void MDSMetaSystem::UnInit() {
-  // unmount fs
-  UnmountFs();
+void MDSMetaSystem::UnInit(bool upgrade) {
+  LOG(INFO) << fmt::format("[meta.fs] uninit, upgrade({}).", upgrade);
+
+  if (!upgrade) UnmountFs();
 
   crontab_manager_.Destroy();
 
@@ -146,6 +134,8 @@ bool MDSMetaSystem::Dump(ContextSPtr, Json::Value& value) {
 }
 
 bool MDSMetaSystem::Dump(const DumpOption& options, Json::Value& value) {
+  LOG(INFO) << "[meta.fs] dump...";
+
   if (options.file_session && !file_session_map_.Dump(value)) {
     return false;
   }
@@ -174,6 +164,8 @@ bool MDSMetaSystem::Dump(const DumpOption& options, Json::Value& value) {
 }
 
 bool MDSMetaSystem::Load(ContextSPtr, const Json::Value& value) {
+  LOG(INFO) << "[meta.fs] load...";
+
   if (!file_session_map_.Load(value)) {
     return false;
   }
@@ -224,7 +216,7 @@ Status MDSMetaSystem::GetFsInfo(ContextSPtr, FsInfo* fs_info) {
         Helper::ToRadosInfo(temp_fs_info.extra().rados_info());
 
   } else {
-    LOG(ERROR) << fmt::format("[meta.filesystem] unknown fs type: {}.",
+    LOG(ERROR) << fmt::format("[meta.fs] unknown fs type: {}.",
                               pb::mds::FsType_Name(temp_fs_info.fs_type()));
     return Status::InvalidParam("unknown fs type");
   }
@@ -240,13 +232,13 @@ bool MDSMetaSystem::MountFs() {
   mount_point.set_path(client_id_.Mountpoint());
   mount_point.set_cto(false);
 
-  LOG(INFO) << fmt::format("[meta.filesystem] mount point: {}.",
+  LOG(INFO) << fmt::format("[meta.fs] mount point({}).",
                            mount_point.ShortDebugString());
 
   auto status = mds_client_->MountFs(name_, mount_point);
   if (!status.ok() && status.Errno() != pb::error::EEXISTED) {
     LOG(ERROR) << fmt::format(
-        "[meta.filesystem] mount fs info fail, mountpoint({}), {}.",
+        "[meta.fs] mount fs info fail, mountpoint({}), {}.",
         client_id_.Mountpoint(), status.ToString());
     return false;
   }
@@ -257,9 +249,8 @@ bool MDSMetaSystem::MountFs() {
 bool MDSMetaSystem::UnmountFs() {
   auto status = mds_client_->UmountFs(name_, client_id_.ID());
   if (!status.ok()) {
-    LOG(ERROR) << fmt::format(
-        "[meta.filesystem] mount fs info fail, mountpoint({}).",
-        client_id_.Mountpoint());
+    LOG(ERROR) << fmt::format("[meta.fs] mount fs info fail, mountpoint({}).",
+                              client_id_.Mountpoint());
     return false;
   }
 
@@ -273,7 +264,7 @@ void MDSMetaSystem::Heartbeat() {
 
   auto status = mds_client_->Heartbeat();
   if (!status.IsOK()) {
-    LOG(ERROR) << fmt::format("[meta.filesystem] heartbeat fail, error({}).",
+    LOG(ERROR) << fmt::format("[meta.fs] heartbeat fail, error({}).",
                               status.ToString());
   }
 
@@ -436,14 +427,13 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
       mds_client_->Open(ctx, ino, flags, session_id, is_prefetch_chunk,
                         chunk_descriptors, attr_entry, chunks);
   if (!status.ok()) {
-    LOG(ERROR) << fmt::format(
-        "[meta.filesystem.{}.{}] open file fail, error({}).", ino, fh,
-        status.ToString());
+    LOG(ERROR) << fmt::format("[meta.fs.{}.{}] open file fail, error({}).", ino,
+                              fh, status.ToString());
     return status;
   }
 
   LOG(INFO) << fmt::format(
-      "[meta.filesystem.{}.{}] open file flags({:o}:{}) session_id({}) "
+      "[meta.fs.{}.{}] open file flags({:o}:{}) session_id({}) "
       "is_prefetch_chunk({}) chunks({}).",
       ino, fh, flags, mds::Helper::DescOpenFlags(flags), session_id,
       is_prefetch_chunk, chunks.size());
@@ -458,7 +448,7 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
   for (const auto& chunk : chunks) {
     uint64_t memo_version = chunk_memo_.GetVersion(ino, chunk.index());
     CHECK(chunk.version() >= memo_version) << fmt::format(
-        "[meta.filesystem.{}.{}.{}] chunk version invalid, index({}) "
+        "[meta.fs.{}.{}.{}] chunk version invalid, index({}) "
         "version({}<{}).",
         ino, fh, session_id, chunk.index(), chunk.version(), memo_version);
 
@@ -486,8 +476,8 @@ Status MDSMetaSystem::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
   // clean cache
   file_session_map_.Delete(ino, fh);
 
-  LOG(INFO) << fmt::format("[meta.filesystem.{}.{}] close file session_id({}).",
-                           ino, fh, session_id);
+  LOG(INFO) << fmt::format("[meta.fs.{}.{}] close file session_id({}).", ino,
+                           fh, session_id);
 
   // async close file
   Param* param = new Param();
@@ -512,7 +502,7 @@ Status MDSMetaSystem::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
         auto status = mds_client->Release(ctx, ino, session_id);
         if (!status.ok()) {
           LOG(ERROR) << fmt::format(
-              "[meta.filesystem.{}.{}] close file fail, error({}).", ino, fh,
+              "[meta.fs.{}.{}] close file fail, error({}).", ino, fh,
               status.ToString());
         }
 
@@ -529,7 +519,7 @@ Status MDSMetaSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
   if (fh != 0 && GetSliceFromCache(ino, index, slices)) {
     ctx->hit_cache = true;
     LOG(INFO) << fmt::format(
-        "[meta.filesystem.{}.{}.{}] readslice from cache, version({}) "
+        "[meta.fs.{}.{}.{}] readslice from cache, version({}) "
         "slices{}.",
         ino, fh, index, version, Helper::GetSliceIds(*slices));
     return Status::OK();
@@ -543,9 +533,8 @@ Status MDSMetaSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
   std::vector<mds::ChunkEntry> chunks;
   auto status = mds_client_->ReadSlice(ctx, ino, {chunk_descriptor}, chunks);
   if (!status.ok()) {
-    LOG(ERROR) << fmt::format(
-        "[meta.filesystem.{}.{}.{}] reeadslice fail, error({}).", ino, fh,
-        index, status.ToString());
+    LOG(ERROR) << fmt::format("[meta.fs.{}.{}.{}] reeadslice fail, error({}).",
+                              ino, fh, index, status.ToString());
     return status;
   }
 
@@ -562,7 +551,7 @@ Status MDSMetaSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
 
 Status MDSMetaSystem::NewSliceId(ContextSPtr, Ino ino, uint64_t* id) {
   if (!id_cache_.GenID(*id)) {
-    LOG(ERROR) << fmt::format("[meta.filesystem.{}] newsliceid fail.", ino);
+    LOG(ERROR) << fmt::format("[meta.fs.{}] newsliceid fail.", ino);
     return Status::Internal("gen id fail");
   }
 
@@ -572,8 +561,8 @@ Status MDSMetaSystem::NewSliceId(ContextSPtr, Ino ino, uint64_t* id) {
 Status MDSMetaSystem::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                                  uint64_t fh,
                                  const std::vector<Slice>& slices) {
-  LOG(INFO) << fmt::format(
-      "[meta.filesystem.{}.{}.{}] writeslice missing cache.", ino, fh, index);
+  LOG(INFO) << fmt::format("[meta.fs.{}.{}.{}] writeslice missing cache.", ino,
+                           fh, index);
 
   mds::DeltaSliceEntry delta_slice_entry;
   delta_slice_entry.set_chunk_index(index);
@@ -586,9 +575,8 @@ Status MDSMetaSystem::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
   auto status = mds_client_->WriteSlice(
       ctx, ino, {std::move(delta_slice_entry)}, chunk_descriptors, attr_entry);
   if (!status.ok()) {
-    LOG(ERROR) << fmt::format(
-        "[meta.filesystem.{}.{}.{}] writeslice fail, error({}).", ino, fh,
-        index, status.ToString());
+    LOG(ERROR) << fmt::format("[meta.fs.{}.{}.{}] writeslice fail, error({}).",
+                              ino, fh, index, status.ToString());
     return status;
   }
 
@@ -645,9 +633,8 @@ Status MDSMetaSystem::Write(ContextSPtr, Ino ino, uint64_t offset,
   CHECK(file_session != nullptr)
       << fmt::format("file session is nullptr, ino({}) fh({}).", ino, fh);
 
-  LOG(INFO) << fmt::format(
-      "[meta.filesystem.{}.{}] write memo, offset({}) size({}).", ino, fh,
-      offset, size);
+  LOG(INFO) << fmt::format("[meta.fs.{}.{}] write memo, offset({}) size({}).",
+                           ino, fh, offset, size);
 
   file_session->AddWriteMemo(offset, size);
   modify_time_memo_.Remember(ino);
@@ -745,9 +732,8 @@ Status MDSMetaSystem::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
   AttrEntry attr_entry;
   auto status = mds_client_->Link(ctx, ino, new_parent, new_name, attr_entry);
   if (!status.ok()) {
-    LOG(ERROR) << fmt::format(
-        "[meta.filesystem.{}.{}] link to {} fail, error({}).", new_parent,
-        new_name, ino, status.ToString());
+    LOG(ERROR) << fmt::format("[meta.fs.{}.{}] link to {} fail, error({}).",
+                              new_parent, new_name, ino, status.ToString());
     return status;
   }
 
@@ -764,8 +750,8 @@ Status MDSMetaSystem::Unlink(ContextSPtr ctx, Ino parent,
   AttrEntry attr_entry;
   auto status = mds_client_->UnLink(ctx, parent, name, attr_entry);
   if (!status.ok()) {
-    LOG(ERROR) << fmt::format("[meta.filesystem.{}.{}] unlink fail, error({}).",
-                              parent, name, status.ToString());
+    LOG(ERROR) << fmt::format("[meta.fs.{}.{}] unlink fail, error({}).", parent,
+                              name, status.ToString());
     return status;
   }
 
@@ -789,8 +775,8 @@ Status MDSMetaSystem::Symlink(ContextSPtr ctx, Ino parent,
       mds_client_->Symlink(ctx, parent, name, uid, gid, link, attr_entry);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
-        "[meta.filesystem.{}.{}] symlink fail, symlink({}) error({}).", parent,
-        name, link, status.ToString());
+        "[meta.fs.{}.{}] symlink fail, symlink({}) error({}).", parent, name,
+        link, status.ToString());
     return status;
   }
 
@@ -805,8 +791,8 @@ Status MDSMetaSystem::Symlink(ContextSPtr ctx, Ino parent,
 Status MDSMetaSystem::ReadLink(ContextSPtr ctx, Ino ino, std::string* link) {
   auto status = mds_client_->ReadLink(ctx, ino, *link);
   if (!status.ok()) {
-    LOG(ERROR) << fmt::format("[meta.filesystem.{}] readlink fail, error({}).",
-                              ino, status.ToString());
+    LOG(ERROR) << fmt::format("[meta.fs.{}] readlink fail, error({}).", ino,
+                              status.ToString());
     return status;
   }
 
@@ -833,9 +819,8 @@ Status MDSMetaSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
   auto status = CorrectAttr(ctx, ctx->start_time_ns, *attr, "getattr");
   if (!status.ok()) return status;
 
-  LOG(INFO) << fmt::format(
-      "[meta.filesystem.{}] get attr length({}) is_amend({}).", ino,
-      attr->length, ctx->is_amend);
+  LOG(INFO) << fmt::format("[meta.fs.{}] get attr length({}) is_amend({}).",
+                           ino, attr->length, ctx->is_amend);
 
   return Status::OK();
 }
@@ -1071,13 +1056,13 @@ void MDSMetaSystem::ClearChunkCache(Ino ino, uint64_t fh, uint64_t index) {
 //   auto status = mds_client_->WriteSlice(ctx, ino, delta_slice_entries);
 //   if (!status.ok()) {
 //     LOG(ERROR) << fmt::format(
-//         "[meta.filesystem.{}] sync delta slice fail, error({}).", ino,
+//         "[meta.fs.{}] sync delta slice fail, error({}).", ino,
 //         status.ToString());
 //     return status;
 //   }
 
 //   LOG(INFO) << fmt::format(
-//       "[meta.filesystem.{}.{}] sync delta slice finish, "
+//       "[meta.fs.{}.{}] sync delta slice finish, "
 //       "delta_slice_entries({}).",
 //       ino, fh, delta_slice_entries.size());
 
@@ -1090,15 +1075,15 @@ void MDSMetaSystem::ClearChunkCache(Ino ino, uint64_t fh, uint64_t index) {
 Status MDSMetaSystem::CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
                                   const std::string& caller) {
   if (modify_time_memo_.ModifiedSince(attr.ino, time_ns)) {
-    LOG(INFO) << fmt::format("[meta.filesystem.{}] correct attr, caller({}).",
-                             attr.ino, caller);
+    LOG(INFO) << fmt::format("[meta.fs.{}] correct attr, caller({}).", attr.ino,
+                             caller);
     // correct attr, fetch latest attr from mds
     AttrEntry attr_entry;
 
     auto status = mds_client_->GetAttr(ctx, attr.ino, attr_entry);
     if (!status.ok()) {
       LOG(ERROR) << fmt::format(
-          "[meta.filesystem.{}] get attr fail for correct, caller({}) "
+          "[meta.fs.{}] get attr fail for correct, caller({}) "
           "error({}).",
           caller, status.ToString());
       return status;
@@ -1119,8 +1104,8 @@ void MDSMetaSystem::CorrectAttrLength(ContextSPtr ctx, Attr& attr,
   if (file_session != nullptr) {
     uint64_t write_memo_length = file_session->GetLength();
     if (write_memo_length > attr.length) {
-      LOG(INFO) << fmt::format(
-          "[meta.filesystem.{}] correct length, caller({}).", attr.ino, caller);
+      LOG(INFO) << fmt::format("[meta.fs.{}] correct length, caller({}).",
+                               attr.ino, caller);
 
       attr.length = write_memo_length;
 
@@ -1163,54 +1148,37 @@ static std::string GetAliveMdsAddr(const std::string& mds_addrs) {
 
 MDSMetaSystemUPtr MDSMetaSystem::Build(const std::string& fs_name,
                                        const std::string& mds_addrs,
-                                       const std::string& mountpoint,
-                                       uint32_t port) {
-  LOG(INFO) << fmt::format(
-      "[meta.filesystem.{}] build filesystem mds_addrs({}), mountpoint({}).",
-      fs_name, mds_addrs, mountpoint);
+                                       const ClientId& client_id) {
+  LOG(INFO) << fmt::format("[meta.fs.{}] build filesystem mds_addrs({}).",
+                           fs_name, mds_addrs);
 
   CHECK(!fs_name.empty()) << "fs_name is empty.";
   CHECK(!mds_addrs.empty()) << "mds_addrs is empty.";
-  CHECK(!mountpoint.empty()) << "mountpoint is empty.";
-
-  std::string hostname = Helper::GetHostName();
-  if (hostname.empty()) {
-    LOG(ERROR) << fmt::format("[meta.filesystem.{}] get hostname fail.",
-                              fs_name);
-    return nullptr;
-  }
-
-  ClientId client_id(hostname, port, mountpoint);
-  LOG(INFO) << fmt::format("[meta.filesystem.{}] client_id: {}", fs_name,
-                           client_id.ID());
 
   // check mds addr
   std::string alive_mds_addr = GetAliveMdsAddr(mds_addrs);
   if (alive_mds_addr.empty()) {
     LOG(ERROR) << fmt::format(
-        "[meta.filesystem.{}] mds addr check fail, mds_addrs({}).", fs_name,
-        mds_addrs);
+        "[meta.fs.{}] mds addr check fail, mds_addrs({}).", fs_name, mds_addrs);
     return nullptr;
   }
 
   auto rpc = RPC::New(alive_mds_addr);
   if (!rpc->Init()) {
-    LOG(ERROR) << fmt::format("[meta.filesystem.{}] RPC init fail.", fs_name);
+    LOG(ERROR) << fmt::format("[meta.fs.{}] RPC init fail.", fs_name);
     return nullptr;
   }
 
   auto mds_discovery = MDSDiscovery::New(rpc);
   if (!mds_discovery->Init()) {
-    LOG(ERROR) << fmt::format("[meta.filesystem.{}] MDSDiscovery init fail.",
-                              fs_name);
+    LOG(ERROR) << fmt::format("[meta.fs.{}] MDSDiscovery init fail.", fs_name);
     return nullptr;
   }
 
   mds::FsInfoEntry pb_fs_info;
   auto status = MDSClient::GetFsInfo(rpc, fs_name, pb_fs_info);
   if (!status.ok()) {
-    LOG(ERROR) << fmt::format("[meta.filesystem.{}] Get fs info fail.",
-                              fs_name);
+    LOG(ERROR) << fmt::format("[meta.fs.{}] Get fs info fail.", fs_name);
     return nullptr;
   }
 
@@ -1229,15 +1197,14 @@ MDSMetaSystemUPtr MDSMetaSystem::Build(const std::string& fs_name,
 
   } else {
     LOG(ERROR) << fmt::format(
-        "[meta.filesystem.{}] not support partition policy type({}).", fs_name,
+        "[meta.fs.{}] not support partition policy type({}).", fs_name,
         dingofs::pb::mds::PartitionType_Name(
             pb_fs_info.partition_policy().type()));
     return nullptr;
   }
 
   if (!mds_router->Init(pb_fs_info.partition_policy())) {
-    LOG(ERROR) << fmt::format("[meta.filesystem.{}] MDSRouter init fail.",
-                              fs_name);
+    LOG(ERROR) << fmt::format("[meta.fs.{}] MDSRouter init fail.", fs_name);
     return nullptr;
   }
 
@@ -1247,8 +1214,7 @@ MDSMetaSystemUPtr MDSMetaSystem::Build(const std::string& fs_name,
   auto mds_client = MDSClient::New(client_id, fs_info, parent_memo,
                                    mds_discovery, mds_router, rpc);
   if (!mds_client->Init()) {
-    LOG(INFO) << fmt::format("[meta.filesystem.{}] MDSClient init fail.",
-                             fs_name);
+    LOG(INFO) << fmt::format("[meta.fs.{}] MDSClient init fail.", fs_name);
     return nullptr;
   }
 

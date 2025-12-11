@@ -44,7 +44,7 @@ static const std::string kDefaultFsName = "dummy_fs";
 namespace dingofs {
 namespace client {
 namespace vfs {
-namespace dummy {
+namespace memory {
 
 ReadDirStateMemo::ReadDirStateMemo() {
   CHECK(bthread_mutex_init(&mutex_, nullptr) == 0) << "init mutex fail.";
@@ -331,7 +331,7 @@ static MemoryMetaSystem::PBDentry GenDentry(uint32_t fs_id, uint64_t parent_ino,
   return dentry;
 }
 
-Status MemoryMetaSystem::Init() {
+Status MemoryMetaSystem::Init(bool upgrade) {
   // create fs
   fs_info_ = GenFsInfo();
 
@@ -354,7 +354,7 @@ Status MemoryMetaSystem::Init() {
   return Status::OK();
 }
 
-void MemoryMetaSystem::UnInit() {}
+void MemoryMetaSystem::UnInit(bool upgrade) {}
 
 bool MemoryMetaSystem::Dump(ContextSPtr ctx, Json::Value& value) {
   // Implement your dump logic here
@@ -1250,7 +1250,7 @@ bool MemoryMetaSystem::GetDescription(Json::Value& value) {
   return true;
 }
 
-}  // namespace dummy
+}  // namespace memory
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

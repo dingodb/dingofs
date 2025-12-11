@@ -53,33 +53,28 @@ namespace vfs {
 static const std::string kFlushExecutorName = "vfs_flush";
 static const std::string kReadExecutorName = "vfs_read";
 
-Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
-                         const VFSOption& vfs_option) {
+Status VFSHubImpl::Start(const VFSConfig& vfs_conf, const VFSOption& vfs_option,
+                         bool upgrade) {
   CHECK(started_.load(std::memory_order_relaxed) == false)
       << "unexpected start";
+
+  LOG(INFO) << fmt::format("[vfs.hub] vfs hub starting, upgrade({}).", upgrade);
 
   vfs_option_ = vfs_option;
 
   MetaSystemUPtr rela_meta_system;
   if (vfs_conf.fs_type == "vfs_memory") {
-    rela_meta_system = std::make_unique<dummy::MemoryMetaSystem>();
+    rela_meta_system = std::make_unique<memory::MemoryMetaSystem>();
 
   } else if (vfs_conf.fs_type == "vfs_local") {
-    rela_meta_system = std::make_unique<local::LocalMetaSystem>();
+    rela_meta_system =
+        std::make_unique<local::LocalMetaSystem>("", vfs_conf.fs_name);
 
   } else if (vfs_conf.fs_type == "vfs_v2" || vfs_conf.fs_type == "vfs_mds") {
-    LOG(INFO) << fmt::format("mds addr: {}.", vfs_conf.mds_addrs);
-
-    rela_meta_system = v2::MDSMetaSystem::Build(
-        vfs_conf.fs_name, vfs_conf.mds_addrs, vfs_conf.mount_point,
-        vfs_option.dummy_server_port);
-  } else {
-    return Status::Internal("not unknown file system");
+    rela_meta_system = v2::MDSMetaSystem::Build(vfs_conf.fs_name,
+                                                vfs_conf.mds_addrs, client_id_);
   }
-
-  if (rela_meta_system == nullptr) {
-    return Status::Internal("build meta system fail");
-  }
+  CHECK(rela_meta_system != nullptr) << "build meta system fail";
 
   if (FLAGS_trace_logging) {
     tracer_ = std::make_unique<Tracer>(
@@ -92,14 +87,14 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
 
   meta_system_ = std::make_unique<MetaWrapper>(std::move(rela_meta_system));
 
-  DINGOFS_RETURN_NOT_OK(meta_system_->Init());
+  DINGOFS_RETURN_NOT_OK(meta_system_->Init(upgrade));
 
   DINGOFS_RETURN_NOT_OK(meta_system_->GetFsInfo(span->GetContext(), &fs_info_));
 
-  LOG(INFO) << fmt::format("vfs_fs_info: {}", FsInfo2Str(fs_info_));
+  LOG(INFO) << fmt::format("[vfs.hub] vfs_fs_info: {}", FsInfo2Str(fs_info_));
   if (fs_info_.status != FsStatus::kNormal) {
-    LOG(ERROR) << fmt::format("fs {} is unavailable, status: {}", fs_info_.name,
-                              FsStatus2Str(fs_info_.status));
+    LOG(ERROR) << fmt::format("[vfs.hub] fs {} is unavailable, status: {}",
+                              fs_info_.name, FsStatus2Str(fs_info_.status));
     return Status::Internal("build meta system fail");
   }
 
@@ -164,15 +159,15 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
 
     auto ok = page_allocator_->Init(o.page_size, o.total_size / o.page_size);
     if (!ok) {
-      LOG(ERROR) << "Init page allocator failed.";
-      return Status::Internal("Init page allocator failed");
+      LOG(ERROR) << "[vfs.hub] init page allocator failed.";
+      return Status::Internal("init page allocator failed");
     }
   }
 
   {
     int64_t total_mb = FLAGS_client_vfs_read_buffer_total_mb;
     if (total_mb <= 0) {
-      LOG(ERROR) << "invalid read buffer total mb option, total_mb: "
+      LOG(ERROR) << "[vfs.hub] invalid read buffer total mb option, total_mb: "
                  << total_mb;
       return Status::Internal("invalid read buffer total mb option");
     }
@@ -191,11 +186,12 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
       prefetch_manager_ = PrefetchManager::New(this);
       auto status = prefetch_manager_->Start(FLAGS_client_vfs_prefetch_threads);
       if (!status.ok()) {
-        LOG(ERROR) << "prefetch manager start failed.";
+        LOG(ERROR) << "[vfs.hub] prefetch manager start failed.";
         return status;
       }
     } else {
-      LOG(INFO) << "block cache not enable, skip prefetch manager start.";
+      LOG(INFO)
+          << "[vfs.hub] block cache not enable, skip prefetch manager start.";
     }
   }
 
@@ -203,7 +199,7 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
     warmup_manager_ = WarmupManager::New(this);
     auto ok = warmup_manager_->Start(FLAGS_client_vfs_warmup_threads);
     if (!ok.ok()) {
-      LOG(ERROR) << "warmup manager start failed.";
+      LOG(ERROR) << "[vfs.hub] warmup manager start failed.";
       return ok;
     }
   }
@@ -212,21 +208,23 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
   return Status::OK();
 }
 
-Status VFSHubImpl::Stop() {
+Status VFSHubImpl::Stop(bool upgrade) {
   if (!started_.load(std::memory_order_relaxed)) {
     return Status::OK();
   }
 
-  handle_manager_->Shutdown();
+  LOG(INFO) << fmt::format("[vfs.hub] vfs hub stopping, upgrade({}).", upgrade);
+
+  if (handle_manager_ != nullptr) handle_manager_->Shutdown();
 
   // shutdown before block cache
-  priodic_flush_manager_->Stop();
-  read_executor_->Stop();
-  flush_executor_->Stop();
-  warmup_manager_->Stop();
-  prefetch_manager_->Stop();
-  block_cache_->Shutdown();
-  meta_system_->UnInit();
+  if (priodic_flush_manager_ != nullptr) priodic_flush_manager_->Stop();
+  if (read_executor_ != nullptr) read_executor_->Stop();
+  if (flush_executor_ != nullptr) flush_executor_->Stop();
+  if (warmup_manager_ != nullptr) warmup_manager_->Stop();
+  if (prefetch_manager_ != nullptr) prefetch_manager_->Stop();
+  if (block_cache_ != nullptr) block_cache_->Shutdown();
+  if (meta_system_ != nullptr) meta_system_->UnInit(upgrade);
 
   started_.store(false, std::memory_order_relaxed);
 

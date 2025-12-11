@@ -23,7 +23,6 @@
 #include "client/vfs/vfs_meta.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/format.h"
-#include "gflags/gflags.h"
 #include "glog/logging.h"
 #include "mds/common/constant.h"
 #include "mds/common/type.h"
@@ -57,22 +56,17 @@ bool MDSClient::Init() {
 void MDSClient::Destory() {}
 
 bool MDSClient::Dump(Json::Value& value) {
-  if (!parent_memo_->Dump(value)) {
-    return false;
-  }
+  DumpOption options;
+  options.parent_memo = true;
+  options.mds_router = true;
+  options.rpc = true;
 
-  if (!mds_router_->Dump(value)) {
-    return false;
-  }
-
-  if (!rpc_->Dump(value)) {
-    return false;
-  }
-
-  return true;
+  return Dump(options, value);
 }
 
 bool MDSClient::Dump(const DumpOption& options, Json::Value& value) {
+  LOG(INFO) << "[meta.client] dump...";
+
   if (options.parent_memo && !parent_memo_->Dump(value)) {
     return false;
   }
@@ -89,6 +83,7 @@ bool MDSClient::Dump(const DumpOption& options, Json::Value& value) {
 }
 
 bool MDSClient::Load(const Json::Value& value) {
+  LOG(INFO) << "[meta.client] load...";
   return parent_memo_->Load(value);
 }
 
@@ -165,6 +160,10 @@ Status MDSClient::GetFsInfo(RPCPtr rpc, uint32_t fs_id,
 RPCPtr MDSClient::GetRpc() { return rpc_; }
 
 Status MDSClient::Heartbeat() {
+  if (client_id_.ID().empty()) {
+    return Status::InvalidParam("client id is empty");
+  }
+
   auto get_mds_fn = [this](bool& is_primary_mds) -> MDSMeta {
     return GetMdsByParent(mds::kRootIno, is_primary_mds);
   };

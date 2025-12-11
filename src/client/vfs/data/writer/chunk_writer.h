@@ -27,7 +27,6 @@
 
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
-#include "client/common/utils.h"
 #include "client/vfs/data/chunk.h"
 #include "client/vfs/data/slice/slice_data.h"
 #include "client/vfs/data/writer/task/chunk_flush_task.h"
@@ -64,8 +63,8 @@ struct ChunkWriteInfo {
   std::string ToString() const {
     return fmt::format(
         "(buf: {}, size: {}, chunk_range: [{}-{}], file_range: [{}-{}])",
-        Char2Addr(buf), size, chunk_offset, end_chunk_offset, file_offset,
-        end_file_offset);
+        Helper::Char2Addr(buf), size, chunk_offset, end_chunk_offset,
+        file_offset, end_file_offset);
   }
 };
 

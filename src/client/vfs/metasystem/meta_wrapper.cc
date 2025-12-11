@@ -29,18 +29,18 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
-Status MetaWrapper::Init() {
+Status MetaWrapper::Init(bool upgrade) {
   Status s;
   MetaLogGuard log_guard(
       [&]() { return absl::StrFormat("init %s", s.ToString()); });
 
-  s = target_->Init();
+  s = target_->Init(upgrade);
   return s;
 }
 
-void MetaWrapper::UnInit() {
+void MetaWrapper::UnInit(bool upgrade) {
   MetaLogGuard log_guard([&]() { return "uninit"; });
-  target_->UnInit();
+  target_->UnInit(upgrade);
 }
 
 bool MetaWrapper::Dump(ContextSPtr ctx, Json::Value& value) {

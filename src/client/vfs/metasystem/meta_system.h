@@ -48,9 +48,9 @@ class MetaSystem {
 
   virtual ~MetaSystem() = default;
 
-  virtual Status Init() = 0;
+  virtual Status Init(bool upgrade) = 0;
 
-  virtual void UnInit() = 0;
+  virtual void UnInit(bool upgrade) = 0;
 
   virtual bool Dump(ContextSPtr ctx, Json::Value& value) = 0;
 

@@ -86,7 +86,7 @@ class OpenFileMemo {
 
 class LocalMetaSystem : public vfs::MetaSystem {
  public:
-  LocalMetaSystem();
+  LocalMetaSystem(const std::string& db_path, const std::string& fs_name);
   ~LocalMetaSystem() override = default;
 
   LocalMetaSystem& operator=(const LocalMetaSystem&) = delete;
@@ -105,8 +105,8 @@ class LocalMetaSystem : public vfs::MetaSystem {
     PBInode inode;
   };
 
-  Status Init() override;
-  void UnInit() override;
+  Status Init(bool upgrade) override;
+  void UnInit(bool upgrade) override;
 
   bool Dump(ContextSPtr ctx, Json::Value& value) override;
   bool Dump(const DumpOption& options, Json::Value& value) override;
@@ -222,6 +222,8 @@ class LocalMetaSystem : public vfs::MetaSystem {
   Status Get(const std::string& key, std::string& value);
   Status Put(std::vector<KeyValue>& kvs);
 
+  const std::string fs_name_;
+  const std::string db_path_;
   mds::FsInfoEntry fs_info_;
 
   // for generating inode id

@@ -21,6 +21,7 @@
 #include <memory>
 
 #include "brpc/server.h"
+#include "client/vfs/common/client_id.h"
 #include "client/vfs/data_buffer.h"
 #include "client/vfs/handle/handle_manager.h"
 #include "client/vfs/hub/vfs_hub.h"
@@ -37,13 +38,14 @@ namespace vfs {
 
 class VFSImpl : public VFS {
  public:
-  VFSImpl(const VFSOption& vfs_option) : vfs_option_(vfs_option) {};
+  VFSImpl(const VFSOption& vfs_option, const ClientId& client_id)
+      : vfs_option_(vfs_option), client_id_(client_id) {};
 
   ~VFSImpl() override = default;
 
-  Status Start(const VFSConfig& vfs_conf) override;
+  Status Start(const VFSConfig& vfs_conf, bool upgrade) override;
 
-  Status Stop() override;
+  Status Stop(bool upgrade) override;
 
   bool Dump(ContextSPtr ctx, Json::Value& value) override;
 
@@ -141,6 +143,8 @@ class VFSImpl : public VFS {
   HandleSPtr NewHandle(uint64_t fh, Ino ino, int flags, IFileUPtr file);
 
   VFSOption vfs_option_;
+
+  const ClientId client_id_;
 
   std::unique_ptr<VFSHub> vfs_hub_;
   MetaSystem* meta_system_;

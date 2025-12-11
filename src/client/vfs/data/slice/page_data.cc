@@ -22,7 +22,6 @@
 #include <cstdint>
 
 #include "client/common/const.h"
-#include "client/common/utils.h"
 
 namespace dingofs {
 namespace client {
@@ -34,7 +33,8 @@ std::string PageData::ToString() const {
   return fmt::format(
       "(index: {}, page_size: {}, page_range: [{}-{}], data_len: {}, page: "
       "{})",
-      index, page_size, data_offset, DataEnd(), data_len, Char2Addr(page));
+      index, page_size, data_offset, DataEnd(), data_len,
+      Helper::Char2Addr(page));
 }
 
 void PageData::Write(ContextSPtr ctx, const char* buf, uint64_t size,

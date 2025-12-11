@@ -14,17 +14,15 @@
  * limitations under the License.
  */
 
-#include <fmt/format.h>
-
 #include <csignal>
 #include <cstdlib>
 
 #include "absl/cleanup/cleanup.h"
 #include "client/common/global_log.h"
-#include "client/common/utils.h"
 #include "client/fuse/fuse_op.h"
 #include "client/fuse/fuse_server.h"
 #include "common/flag.h"
+#include "common/helper.h"
 #include "common/options/cache.h"
 #include "common/options/client.h"
 
@@ -90,7 +88,7 @@ int main(int argc, char* argv[]) {
 
   std::string mds_addrs;
   std::string fs_name;
-  if (!dingofs::client::ParseMetaURL(argv[1], mds_addrs, fs_name)) {
+  if (!dingofs::Helper::ParseMetaURL(argv[1], mds_addrs, fs_name)) {
     std::cerr << "meta url is invalid: " << argv[1] << '\n';
     return EXIT_FAILURE;
   }

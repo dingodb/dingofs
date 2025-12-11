@@ -20,7 +20,6 @@
 #include <unistd.h>
 
 #include "client/common/const.h"
-#include "client/common/utils.h"
 #include "client/vfs/data/common/async_util.h"
 #include "client/vfs/data/writer/chunk_writer.h"
 #include "client/vfs/hub/vfs_hub.h"
@@ -72,7 +71,7 @@ Status FileWriter::Write(ContextSPtr ctx, const char* buf, uint64_t size,
   uint64_t chunk_index = offset / chunk_size;
   uint64_t chunk_offset = offset % chunk_size;
 
-  VLOG(3) << "File::Write, ino: " << ino_ << ", buf: " << Char2Addr(buf)
+  VLOG(3) << "File::Write, ino: " << ino_ << ", buf: " << Helper::Char2Addr(buf)
           << ", size: " << size << ", offset: " << offset
           << ", chunk_size: " << chunk_size;
 

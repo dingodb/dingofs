@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_DUMMY_FILESYSTEM_H_
-#define DINGOFS_SRC_CLIENT_VFS_META_V2_DUMMY_FILESYSTEM_H_
+#ifndef DINGOFS_SRC_CLIENT_VFS_META_MEMORY_FILESYSTEM_H_
+#define DINGOFS_SRC_CLIENT_VFS_META_MEMORY_FILESYSTEM_H_
 
 #include <atomic>
 #include <cstddef>
@@ -33,7 +33,7 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
-namespace dummy {
+namespace memory {
 
 // for ReadDir/ReadDirPlus
 class ReadDirStateMemo {
@@ -194,8 +194,8 @@ class MemoryMetaSystem : public vfs::MetaSystem {
     PBInode inode;
   };
 
-  Status Init() override;
-  void UnInit() override;
+  Status Init(bool upgrade) override;
+  void UnInit(bool upgrade) override;
 
   bool Dump(ContextSPtr ctx, Json::Value& value) override;
   bool Dump(const DumpOption& options, Json::Value& value) override;
@@ -328,9 +328,9 @@ class MemoryMetaSystem : public vfs::MetaSystem {
   FileChunkMap file_chunk_map_;
 };
 
-}  // namespace dummy
+}  // namespace memory
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_VFS_META_V2_DUMMY_FILESYSTEM_H_
+#endif  // DINGOFS_SRC_CLIENT_VFS_META_MEMORY_FILESYSTEM_H_

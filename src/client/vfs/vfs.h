@@ -47,9 +47,9 @@ class VFS {
 
   virtual ~VFS() = default;
 
-  virtual Status Start(const VFSConfig& vfs_con) = 0;
+  virtual Status Start(const VFSConfig& vfs_conf, bool upgrade) = 0;
 
-  virtual Status Stop() = 0;
+  virtual Status Stop(bool upgrade) = 0;
 
   virtual bool Dump(ContextSPtr ctx, Json::Value& value) = 0;
 

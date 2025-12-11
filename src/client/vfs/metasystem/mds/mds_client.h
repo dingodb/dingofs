@@ -15,14 +15,12 @@
 #ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_MDS_CLIENT_H_
 #define DINGOFS_SRC_CLIENT_VFS_META_V2_MDS_CLIENT_H_
 
-#include <fmt/format.h>
-
 #include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
 
-#include "client/vfs/metasystem/mds/client_id.h"
+#include "client/vfs/common/client_id.h"
 #include "client/vfs/metasystem/mds/mds_router.h"
 #include "client/vfs/metasystem/mds/rpc.h"
 #include "client/vfs/metasystem/meta_system.h"
@@ -32,6 +30,7 @@
 #include "common/trace/context.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"
+#include "fmt/format.h"
 #include "mds/common/helper.h"
 #include "mds/common/type.h"
 #include "mds/filesystem/fs_info.h"

@@ -15,8 +15,6 @@
 #ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_DIR_ITERATOR_H_
 #define DINGOFS_SRC_CLIENT_VFS_META_V2_DIR_ITERATOR_H_
 
-#include <json/value.h>
-
 #include <atomic>
 #include <cstdint>
 #include <functional>
@@ -27,6 +25,7 @@
 #include "client/vfs/metasystem/mds/mds_client.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
+#include "json/value.h"
 #include "utils/concurrent/concurrent.h"
 
 namespace dingofs {

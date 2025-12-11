@@ -25,7 +25,7 @@ static int InitLog(const char* argv0) {
   FLAGS_log_dir = dingofs::client::FLAGS_client_log_dir;
   FLAGS_v = dingofs::client::FLAGS_client_log_level;
 
-  FLAGS_logbufsecs = 0;
+  FLAGS_logbufsecs = 4;
   FLAGS_minloglevel = google::GLOG_INFO;
   FLAGS_logbuflevel = google::GLOG_INFO;
 

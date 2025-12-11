@@ -16,11 +16,6 @@
 
 #include "client/vfs/vfs_wrapper.h"
 
-#include <fmt/format.h>
-#include <glog/logging.h>
-#include <json/reader.h>
-#include <json/writer.h>
-
 #include <cstdint>
 #include <fstream>
 #include <memory>
@@ -28,7 +23,6 @@
 
 #include "cache/utils/logging.h"
 #include "client/common/const.h"
-#include "client/common/utils.h"
 #include "client/fuse/fuse_upgrade_manager.h"
 #include "client/vfs/access_log.h"
 #include "client/vfs/common/helper.h"
@@ -41,6 +35,10 @@
 #include "common/metrics/metric_guard.h"
 #include "common/options/client.h"
 #include "common/status.h"
+#include "fmt/format.h"
+#include "glog/logging.h"
+#include "json/reader.h"
+#include "json/writer.h"
 
 namespace dingofs {
 namespace client {
@@ -71,18 +69,46 @@ static Status InitLog() {
   return Status::OK();
 }
 
+static bool LoadStateFile(Json::Value& root) {
+  int pid = FuseUpgradeManager::GetInstance().GetOldFusePid();
+
+  const std::string path = fmt::format("{}.{}", kFdStatePath, pid);
+  std::ifstream file(path);
+  if (!file.is_open()) {
+    LOG(ERROR) << fmt::format("open state file fail, file: {}", path);
+    return false;
+  }
+
+  std::string err;
+  Json::CharReaderBuilder reader;
+  if (!Json::parseFromStream(reader, file, &root, &err)) {
+    LOG(ERROR) << fmt::format("parse json fail, path({}) error({}).", path,
+                              err);
+    return false;
+  }
+
+  LOG(INFO) << fmt::format("load state success, path({}).", path);
+
+  return true;
+}
+
 Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
-  VLOG(1) << "VFSStart argv0: " << argv0;
+  VLOG(1) << "vfs start: " << argv0;
 
   if (vfs_conf.fs_name.empty()) {
-    LOG(ERROR) << "fs_name is empty";
     return Status::InvalidParam("fs_name is empty");
   }
 
   if (vfs_conf.mount_point.empty()) {
-    LOG(ERROR) << "mount_point is empty";
     return Status::InvalidParam("mount_point is empty");
   }
+  if (vfs_conf.fs_type != "vfs" && vfs_conf.fs_type != "vfs_v2" &&
+      vfs_conf.fs_type != "vfs_mds" && vfs_conf.fs_type != "vfs_local" &&
+      vfs_conf.fs_type != "vfs_memory") {
+    return Status::InvalidParam("unsupported fs_type " + vfs_conf.fs_type);
+  }
+
+  LOG(INFO) << "use vfs type: " << vfs_conf.fs_type;
 
   Status s;
   AccessLogGuard log(
@@ -90,18 +116,9 @@ Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
 
   // init client option
   VFSOption vfs_option;
-  if (vfs_conf.fs_type == "vfs" || vfs_conf.fs_type == "vfs_v2" ||
-      vfs_conf.fs_type == "vfs_mds" || vfs_conf.fs_type == "vfs_local" ||
-      vfs_conf.fs_type == "vfs_memory") {
-    InitVFSOption(&vfs_option);
+  InitVFSOption(&vfs_option);
 
-    DINGOFS_RETURN_NOT_OK(InitLog());
-  } else {
-    LOG(ERROR) << "unsupported fs_type: " << vfs_conf.fs_type;
-    return Status::InvalidParam("unsupported fs_type: " + vfs_conf.fs_type);
-  }
-
-  LOG(INFO) << "use vfs type: " << vfs_conf.fs_type;
+  DINGOFS_RETURN_NOT_OK(InitLog());
 
   if (FLAGS_client_bthread_worker_num > 0) {
     bthread_setconcurrency(FLAGS_client_bthread_worker_num);
@@ -112,15 +129,32 @@ Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
 
   client_op_metric_ = std::make_unique<metrics::client::ClientOpMetric>();
 
-  vfs_ = std::make_unique<vfs::VFSImpl>(vfs_option);
-  DINGOFS_RETURN_NOT_OK(vfs_->Start(vfs_conf));
+  bool is_upgrade = (FuseUpgradeManager::GetInstance().GetFuseState() ==
+                     fuse::FuseUpgradeState::kFuseUpgradeNew);
+
+  Json::Value root;
+  if (is_upgrade && !LoadStateFile(root)) {
+    return Status::InvalidParam("load vfs state fail");
+  }
+
+  // client id
+  const std::string hostname = Helper::GetHostName();
+  if (hostname.empty()) return Status::Internal("get hostname fail");
+
+  ClientId client_id(utils::UUIDGenerator::GenerateUUID(), hostname,
+                     vfs_option.dummy_server_port, vfs_conf.mount_point);
+  if (is_upgrade) client_id.Load(root);
+  CHECK(!client_id.ID().empty()) << "client id is empty.";
+
+  LOG(INFO) << "client id: " << client_id.Description();
+
+  // vfs start
+  vfs_ = std::make_unique<vfs::VFSImpl>(vfs_option, client_id);
+  DINGOFS_RETURN_NOT_OK(vfs_->Start(vfs_conf, is_upgrade));
 
   // load vfs state
-  if (FuseUpgradeManager::GetInstance().GetFuseState() ==
-      fuse::FuseUpgradeState::kFuseUpgradeNew) {
-    if (!Load()) {
-      return Status::InvalidParam("load vfs state fail");
-    }
+  if (is_upgrade && !Load(root)) {
+    return Status::InvalidParam("load vfs state fail");
   }
 
   return Status::OK();
@@ -128,16 +162,17 @@ Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
 
 Status VFSWrapper::Stop() {
   VLOG(1) << "VFSStop";
+
+  const bool is_upgrade = (FuseUpgradeManager::GetInstance().GetFuseState() ==
+                           fuse::FuseUpgradeState::kFuseUpgradeOld);
+
   Status s;
   AccessLogGuard log(
       [&]() { return absl::StrFormat("stop: %s", s.ToString()); });
-  s = vfs_->Stop();
+  s = vfs_->Stop(is_upgrade);
 
-  if (FuseUpgradeManager::GetInstance().GetFuseState() ==
-      fuse::FuseUpgradeState::kFuseUpgradeOld) {
-    if (!Dump()) {
-      return Status::InvalidParam("dump vfs state fail");
-    }
+  if (is_upgrade && !Dump()) {
+    return Status::InvalidParam("dump vfs state fail");
   }
 
   return s;
@@ -168,33 +203,13 @@ bool VFSWrapper::Dump() {
   return true;
 }
 
-bool VFSWrapper::Load() {
-  int pid = FuseUpgradeManager::GetInstance().GetOldFusePid();
-
-  const std::string path = fmt::format("{}.{}", kFdStatePath, pid);
-  std::ifstream file(path);
-  if (!file.is_open()) {
-    LOG(ERROR) << "load dingo-fuse state file fail, file: " << path;
-    return false;
-  }
-
-  Json::Value root;
-  Json::CharReaderBuilder reader;
-  std::string err;
-  if (!Json::parseFromStream(reader, file, &root, &err)) {
-    LOG(ERROR) << fmt::format("parse json fail, path({}) error({}).", path,
-                              err);
-    return false;
-  }
-
+bool VFSWrapper::Load(const Json::Value& value) {
   auto span = vfs_->GetTracer()->StartSpan(kVFSWrapperMoudule, METHOD_NAME());
 
-  if (!vfs_->Load(span->GetContext(), root)) {
+  if (!vfs_->Load(span->GetContext(), value)) {
     LOG(ERROR) << "load vfs state fail.";
     return false;
   }
-
-  LOG(INFO) << fmt::format("load vfs state success, path({}).", path);
 
   return true;
 }
@@ -545,7 +560,7 @@ Status VFSWrapper::Read(Ino ino, DataBuffer* data_buffer, uint64_t size,
 Status VFSWrapper::Write(Ino ino, const char* buf, uint64_t size,
                          uint64_t offset, uint64_t fh, uint64_t* out_wsize) {
   auto span = vfs_->GetTracer()->StartSpan(kVFSWrapperMoudule, METHOD_NAME());
-  VLOG(1) << "VFSWrite ino: " << ino << ", buf:  " << Char2Addr(buf)
+  VLOG(1) << "VFSWrite ino: " << ino << ", buf:  " << Helper::Char2Addr(buf)
           << ", size: " << size << " offset: " << offset << " fh: " << fh;
   Status s;
   AccessLogGuard log([&]() {
@@ -559,7 +574,7 @@ Status VFSWrapper::Write(Ino ino, const char* buf, uint64_t size,
   VFSRWMetricGuard guard(&s, &g_rw_metric.write, out_wsize);
 
   s = vfs_->Write(span->GetContext(), ino, buf, size, offset, fh, out_wsize);
-  VLOG(1) << "VFSWrite end ino: " << ino << ", buf:  " << Char2Addr(buf)
+  VLOG(1) << "VFSWrite end ino: " << ino << ", buf:  " << Helper::Char2Addr(buf)
           << ", size: " << size << " offset: " << offset << " fh: " << fh
           << ", write_size: " << *out_wsize << ", status: " << s.ToString();
   if (!s.ok()) {

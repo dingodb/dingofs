@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "client/vfs/metasystem/mds/helper.h"
 #include "common/options/client.h"
 
 namespace dingofs {

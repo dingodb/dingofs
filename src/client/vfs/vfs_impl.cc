@@ -18,13 +18,11 @@
 
 #include <fcntl.h>
 
-#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <string>
 
 #include "cache/metric/cache_status.h"
-#include "client/common/client_dummy_server_info.h"
 #include "client/common/const.h"
 #include "client/memory/page_allocator.h"
 #include "client/vfs/common/helper.h"
@@ -54,9 +52,9 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
-Status VFSImpl::Start(const VFSConfig& vfs_conf) {
-  vfs_hub_ = std::make_unique<VFSHubImpl>();
-  DINGOFS_RETURN_NOT_OK(vfs_hub_->Start(vfs_conf, vfs_option_));
+Status VFSImpl::Start(const VFSConfig& vfs_conf, bool upgrade) {
+  vfs_hub_ = std::make_unique<VFSHubImpl>(client_id_);
+  DINGOFS_RETURN_NOT_OK(vfs_hub_->Start(vfs_conf, vfs_option_, upgrade));
 
   meta_system_ = vfs_hub_->GetMetaSystem();
   handle_manager_ = vfs_hub_->GetHandleManager();
@@ -66,11 +64,15 @@ Status VFSImpl::Start(const VFSConfig& vfs_conf) {
   return Status::OK();
 }
 
-Status VFSImpl::Stop() { return vfs_hub_->Stop(); }
+Status VFSImpl::Stop(bool upgrade) { return vfs_hub_->Stop(upgrade); }
 
 bool VFSImpl::Dump(ContextSPtr ctx, Json::Value& value) {
   CHECK(meta_system_ != nullptr) << "meta_system is null";
   CHECK(handle_manager_ != nullptr) << "handle_manager is null";
+
+  if (!client_id_.Dump(value)) {
+    return false;
+  }
 
   if (!handle_manager_->Dump(value)) {
     return false;
@@ -670,9 +672,6 @@ Status VFSImpl::StartBrpcServer() {
     LOG(ERROR) << error_msg;
     return Status::Unknown(error_msg);
   }
-
-  ClientDummyServerInfo::GetInstance().SetPort(vfs_option_.dummy_server_port);
-  ClientDummyServerInfo::GetInstance().SetIP(local_ip);
 
   return Status::OK();
 }

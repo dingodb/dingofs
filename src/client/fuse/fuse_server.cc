@@ -51,7 +51,7 @@ DEFINE_bool(fuse_use_single_thread, false, "use single thread for libfuse");
 DEFINE_validator(fuse_use_single_thread, brpc::PassValidate);
 DEFINE_bool(fuse_use_clone_fd, false, "use clone fd for libfuse");
 DEFINE_validator(fuse_use_clone_fd, brpc::PassValidate);
-DEFINE_uint32(fuse_max_threads, 10, "max threads for libfuse");
+DEFINE_uint32(fuse_max_threads, 64, "max threads for libfuse");
 DEFINE_validator(fuse_max_threads, brpc::PassValidate);
 
 DEFINE_string(socket_path, "/var/run",

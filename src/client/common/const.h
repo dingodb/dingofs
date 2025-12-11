@@ -17,6 +17,7 @@
 #ifndef DINGOFS_CLIENT_VFS_CONST_H_
 #define DINGOFS_CLIENT_VFS_CONST_H_
 
+#include <cstdint>
 #include <string>
 
 namespace dingofs {

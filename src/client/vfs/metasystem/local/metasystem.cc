@@ -40,7 +40,7 @@ namespace local {
 const std::string kDbDir = "/tmp";
 
 constexpr uint32_t kFsId = 10000;
-const std::string kFsName = "local_fs";
+const std::string kFsDefaultName = "local_fs";
 constexpr Ino kRootParentIno = 0;
 constexpr Ino kRootIno = 1;
 constexpr uint32_t kBlockSize = 4 * 1024 * 1024;
@@ -154,11 +154,14 @@ bool OpenFileMemo::Load(const Json::Value& value) {
   return true;
 }
 
-LocalMetaSystem::LocalMetaSystem()
-    : inode_cache_(v2::InodeCache::New(kFsId)) {}  // NOLINT
+LocalMetaSystem::LocalMetaSystem(const std::string& db_path,
+                                 const std::string& fs_name)
+    : db_path_(db_path.empty() ? kDbDir : db_path),
+      fs_name_(fs_name.empty() ? kFsDefaultName : fs_name),
+      inode_cache_(v2::InodeCache::New(kFsId)) {}  // NOLINT
 
-Status LocalMetaSystem::Init() {
-  std::string db_path = fmt::format("{}/{}", kDbDir, kFsName);
+Status LocalMetaSystem::Init(bool upgrade) {
+  std::string db_path = fmt::format("{}/{}", db_path_, fs_name_);
   if (!OpenLevelDB(db_path)) {
     return Status::Internal("open leveldb fail.");
   }
@@ -183,7 +186,7 @@ Status LocalMetaSystem::Init() {
   return Status::OK();
 }
 
-void LocalMetaSystem::UnInit() {
+void LocalMetaSystem::UnInit(bool upgrade) {
   crontab_manager_.Destroy();
 
   CloseLevelDB();
@@ -1456,7 +1459,7 @@ mds::FsInfoEntry LocalMetaSystem::GenFsInfo() {
   mds::FsInfoEntry fs_info;
 
   fs_info.set_fs_id(kFsId);
-  fs_info.set_fs_name(kFsName);
+  fs_info.set_fs_name(fs_name_);
   fs_info.set_fs_type(pb::mds::FsType::S3);
   fs_info.set_root_ino(kRootIno);
   fs_info.set_status(pb::mds::FsStatus::NORMAL);
@@ -1485,7 +1488,7 @@ mds::FsInfoEntry LocalMetaSystem::GenFsInfo() {
 
 Status LocalMetaSystem::InitFsInfo() {
   std::string value;
-  auto status = Get(mds::MetaCodec::EncodeFsKey(kFsName), value);
+  auto status = Get(mds::MetaCodec::EncodeFsKey(fs_name_), value);
   if (!status.ok() && !status.IsNotFound()) {
     return status;
   }
@@ -1500,7 +1503,7 @@ Status LocalMetaSystem::InitFsInfo() {
 
   // write to leveldb
   std::vector<KeyValue> kvs = {
-      {KeyValue::OpType::kPut, mds::MetaCodec::EncodeFsKey(kFsName),
+      {KeyValue::OpType::kPut, mds::MetaCodec::EncodeFsKey(fs_name_),
        mds::MetaCodec::EncodeFsValue(fs_info_)},
   };
 

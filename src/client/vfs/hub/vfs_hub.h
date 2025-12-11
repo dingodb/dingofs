@@ -27,6 +27,7 @@
 #include "client/memory/page_allocator.h"
 #include "client/memory/read_buffer_manager.h"
 #include "client/vfs/background/iperiodic_flush_manager.h"
+#include "client/vfs/common/client_id.h"
 #include "client/vfs/components/file_suffix_watcher.h"
 #include "client/vfs/components/prefetch_manager.h"
 #include "client/vfs/components/warmup_manager.h"
@@ -49,10 +50,10 @@ class VFSHub {
 
   virtual ~VFSHub() = default;
 
-  virtual Status Start(const VFSConfig& vfs_conf,
-                       const VFSOption& vfs_option) = 0;
+  virtual Status Start(const VFSConfig& vfs_conf, const VFSOption& vfs_option,
+                       bool upgrade) = 0;
 
-  virtual Status Stop() = 0;
+  virtual Status Stop(bool upgrade) = 0;
 
   virtual MetaSystem* GetMetaSystem() = 0;
 
@@ -89,13 +90,14 @@ class VFSHub {
 
 class VFSHubImpl : public VFSHub {
  public:
-  VFSHubImpl() = default;
+  VFSHubImpl(ClientId client_id) : client_id_(client_id) {}
 
-  ~VFSHubImpl() override { Stop(); }
+  ~VFSHubImpl() override = default;
 
-  Status Start(const VFSConfig& vfs_conf, const VFSOption& vfs_option) override;
+  Status Start(const VFSConfig& vfs_conf, const VFSOption& vfs_option,
+               bool upgrade) override;
 
-  Status Stop() override;
+  Status Stop(bool upgrade) override;
 
   MetaSystem* GetMetaSystem() override {
     CHECK_NOTNULL(meta_system_);
@@ -138,7 +140,7 @@ class VFSHubImpl : public VFSHub {
   }
 
   ReadBufferManager* GetReadBufferManager() override {
-    CHECK_NOTNULL(read_buffer_manager_); 
+    CHECK_NOTNULL(read_buffer_manager_);
     return read_buffer_manager_.get();
   }
 
@@ -181,8 +183,12 @@ class VFSHubImpl : public VFSHub {
   std::atomic_bool started_{false};
 
   VFSOption vfs_option_;
+
+  const ClientId client_id_;
+
   FsInfo fs_info_;
   S3Info s3_info_;
+
   std::unique_ptr<MetaSystem> meta_system_;
   std::unique_ptr<HandleManager> handle_manager_;
   std::unique_ptr<blockaccess::BlockAccesser> block_accesser_;

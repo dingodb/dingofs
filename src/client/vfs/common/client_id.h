@@ -12,27 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_CLIENT_ID_H_
-#define DINGOFS_SRC_CLIENT_VFS_META_V2_CLIENT_ID_H_
+#ifndef DINGOFS_SRC_CLIENT_VFS_CLIENT_ID_H_
+#define DINGOFS_SRC_CLIENT_VFS_CLIENT_ID_H_
 
 #include <cstdint>
 #include <string>
 
-#include "client/vfs/metasystem/mds/helper.h"
+#include "common/helper.h"
 #include "fmt/format.h"
+#include "json/value.h"
 #include "utils/time.h"
-#include "utils/uuid.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
-namespace v2 {
 
 class ClientId {
  public:
-  ClientId(const std::string& hostname, uint32_t port,
+  ClientId() = default;
+  ClientId(const std::string& uuid, const std::string& hostname, uint32_t port,
            const std::string& mountpoint)
-      : uuid_(utils::UUIDGenerator::GenerateUUID()),
+      : uuid_(uuid),
         hostname_(hostname),
         ip_(Helper::HostName2IP(hostname)),
         port_(port),
@@ -54,6 +54,37 @@ class ClientId {
                        mountpoint_);
   }
 
+  bool Dump(Json::Value& value) const {
+    Json::Value item = Json::objectValue;
+
+    item["uuid"] = uuid_;
+    item["hostname"] = hostname_;
+    item["ip"] = ip_;
+    item["port"] = port_;
+    item["mountpoint"] = mountpoint_;
+    item["create_time_ms"] = create_time_ms_;
+
+    value["client_id"] = item;
+
+    return true;
+  }
+
+  bool Load(const Json::Value& value) {
+    if (!value.isMember("client_id")) return false;
+
+    const Json::Value& item = value["client_id"];
+    if (!item.isObject()) return false;
+
+    uuid_ = item.get("uuid", "").asString();
+    hostname_ = item.get("hostname", "").asString();
+    ip_ = item.get("ip", "").asString();
+    port_ = item.get("port", 0).asUInt();
+    mountpoint_ = item.get("mountpoint", "").asString();
+    create_time_ms_ = item.get("create_time_ms", 0).asUInt64();
+
+    return true;
+  }
+
   bool operator==(const ClientId& other) const { return uuid_ == other.uuid_; }
   bool operator!=(const ClientId& other) const { return uuid_ != other.uuid_; }
   bool operator<(const ClientId& other) const { return uuid_ < other.uuid_; }
@@ -67,9 +98,8 @@ class ClientId {
   uint64_t create_time_ms_{0};
 };
 
-}  // namespace v2
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_VFS_META_V2_CLIENT_ID_H_
+#endif  // DINGOFS_SRC_CLIENT_VFS_CLIENT_ID_H_

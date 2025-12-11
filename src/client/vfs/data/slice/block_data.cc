@@ -24,7 +24,6 @@
 #include <cstdint>
 
 #include "client/common/const.h"
-#include "client/common/utils.h"
 
 namespace dingofs {
 namespace client {
@@ -46,7 +45,7 @@ void BlockData::FreePageData() {
     timer.stop();
 
     VLOG(6) << fmt::format("{} Deallocating page at: {} took: <{:.6f}> ms",
-                           UUID(), Char2Addr(page_data->page),
+                           UUID(), Helper::Char2Addr(page_data->page),
                            timer.u_elapsed(0.0));
 
     it = pages_.erase(it);
@@ -61,7 +60,7 @@ char* BlockData::AllocPage() {
   timer.stop();
   VLOG(6) << fmt::format(
       "{} Allocated page at: {} allocation took: <{:.6f}> ms", UUID(),
-      Char2Addr(page), timer.u_elapsed(0.0));
+      Helper::Char2Addr(page), timer.u_elapsed(0.0));
   return page;
 }
 
@@ -172,7 +171,7 @@ IOBuffer BlockData::ToIOBuffer() const {
 
     VLOG(6) << fmt::format("{} Add page_data: {}, data_ptr: {} to IOBuffer",
                            UUID(), page_data_ptr->ToString(),
-                           Char2Addr(data_ptr));
+                           Helper::Char2Addr(data_ptr));
   }
 
   CHECK_EQ(remain_len, 0) << "BlockData::Flush Remaining len is not zero: "

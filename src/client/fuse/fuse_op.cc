@@ -318,7 +318,7 @@ int InitFuseClient(const char* argv0, const struct MountOption* mount_option) {
 
   Status s = g_vfs->Start(argv0, config);
   if (!s.ok()) {
-    LOG(ERROR) << "Start VFS failed, status: " << s.ToString();
+    LOG(ERROR) << "start vfs fail, status: " << s.ToString();
   }
 
   return s.ToSysErrNo();

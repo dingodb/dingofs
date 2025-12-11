@@ -18,7 +18,6 @@
 #include <cstdint>
 #include <vector>
 
-#include "butil/endpoint.h"
 #include "client/vfs/vfs_meta.h"
 #include "glog/logging.h"
 #include "mds/common/type.h"
@@ -27,8 +26,6 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 namespace v2 {
-
-const uint32_t kMaxHostNameLength = 255;
 
 class Helper {
  public:
@@ -188,29 +185,6 @@ class Helper {
     out_slice.set_size(slice.size);
 
     return out_slice;
-  }
-
-  static std::string GetHostName() {
-    char hostname[kMaxHostNameLength];
-    int ret = gethostname(hostname, kMaxHostNameLength);
-    if (ret < 0) {
-      LOG(ERROR) << "[meta.filesystem] get hostname fail, ret=" << ret;
-      return "";
-    }
-
-    return std::string(hostname);
-  }
-
-  static std::string HostName2IP(std::string host_name) {
-    butil::ip_t ip;
-    auto ret = butil::hostname2ip(host_name.c_str(), &ip);
-    if (ret != 0) {
-      LOG(ERROR) << "[meta.filesystem] get ip fail, ret=" << ret;
-      return "";
-    }
-
-    std::string ip_str = butil::ip2str(ip).c_str();
-    return ip_str;
   }
 
   static S3Info ToS3Info(const pb::mds::S3Info& s3_info) {
