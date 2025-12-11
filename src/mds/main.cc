@@ -315,9 +315,9 @@ int main(int argc, char* argv[]) {
     google::SetCommandLineOption("flagfile", FLAGS_conf.c_str());
   }
 
-  std::cout << fmt::format("mds server id: {}\n", dingofs::mds::FLAGS_mds_server_id);
-
   gflags::ParseCommandLineNonHelpFlags(&argc, &argv, false);
+
+  std::cout << fmt::format("mds server id: {}\n", dingofs::mds::FLAGS_mds_server_id);
 
   if (dingofs::mds::FLAGS_mds_storage_engine != "dummy" && !CheckStorageUrl(FLAGS_storage_url)) return -1;
 
