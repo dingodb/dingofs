@@ -57,6 +57,7 @@ void BlockStoreImpl::Shutdown() {
   }
 
   block_cache_.reset();
+  started_.store(false);
 }
 
 void BlockStoreImpl::RangeAsync(ContextSPtr ctx, RangeReq req,
