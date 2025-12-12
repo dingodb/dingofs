@@ -23,6 +23,7 @@
 #include <string>
 
 #include "common/options/blockaccess.h"
+#include "common/options/client.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
 
@@ -40,7 +41,7 @@ struct AwsSdkConfig {
   std::string region{"us-east-1"};
 
   int loglevel{4};
-  std::string log_prefix{"/tmp/aws_sdk_"};
+  std::string log_prefix;
 
   bool verify_ssl{false};
   int max_connections{32};
@@ -65,17 +66,9 @@ inline void InitAwsSdkConfig(AwsSdkConfig* aws_sdk_config) {
   aws_sdk_config->region = FLAGS_s3_region;
   aws_sdk_config->loglevel = FLAGS_s3_loglevel;
 
-  aws_sdk_config->log_prefix = FLAGS_s3_log_prefix;
-  gflags::CommandLineFlagInfo flag;
-  gflags::GetCommandLineFlagInfo("s3_log_prefix", &flag);
-  if (flag.is_default) {
-    LOG(INFO) << fmt::format("s3_log_prefix use default value {}",
-                             aws_sdk_config->log_prefix);
-  } else {
-    aws_sdk_config->log_prefix =
-        fmt::format("{}/aws_sdk_{}_", aws_sdk_config->log_prefix, getpid());
-    LOG(INFO) << fmt::format("s3_log_prefix: {}", aws_sdk_config->log_prefix);
-  }
+  aws_sdk_config->log_prefix =
+      fmt::format("{}/aws_sdk_{}_", client::FLAGS_client_log_dir, getpid());
+  LOG(INFO) << fmt::format("s3_log_prefix: {}", aws_sdk_config->log_prefix);
 
   aws_sdk_config->verify_ssl = FLAGS_s3_verify_ssl;
   aws_sdk_config->max_connections = FLAGS_s3_max_connections;

@@ -64,6 +64,7 @@ static dingofs::FlagExtraInfo extras = {
         R"(dingo-fuse 10.220.69.10:7400/dingofs /mnt/dingofs
 dingo-fuse --client_log_dir=/mnt/logs 10.220.32.1:6700/dingofs /mnt/dingofs
 dingo-fuse --flagfile client.conf 10.220.32.1:6700/dingofs /mnt/dingofs
+dingo-fuse --flagfile client.conf --daemonize 10.220.32.1:6700/dingofs /mnt/dingofs
 )",
     .patterns = {"src/client", "cache/tiercache", "cache/blockcache",
                  "cache/remotecache", "options/blockaccess", "options/client",
@@ -87,6 +88,7 @@ int main(int argc, char* argv[]) {
   if (argc < 3) {
     std::cerr << "missing meta url or mount point.\n";
     std::cerr << "Usage: " << extras.usage << '\n';
+    std::cerr << "For more help see: dingo-fuse --help\n";
     return EXIT_FAILURE;
   }
 

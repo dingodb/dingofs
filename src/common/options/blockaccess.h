@@ -27,7 +27,6 @@ DECLARE_int32(rados_op_timeout);
 // aws option
 DECLARE_string(s3_region);
 DECLARE_int32(s3_loglevel);
-DECLARE_string(s3_log_prefix);
 DECLARE_bool(s3_verify_ssl);
 DECLARE_int32(s3_max_connections);
 DECLARE_int32(s3_connect_timeout);

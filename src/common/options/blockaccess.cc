@@ -27,7 +27,6 @@ DEFINE_int32(rados_op_timeout, 120, "rados operation timeout in seconds");
 // aws option
 DEFINE_string(s3_region, "us-east-1", "aws s3 region");
 DEFINE_int32(s3_loglevel, 4, "aws sdk log level");
-DEFINE_string(s3_log_prefix, "/tmp/aws_sdk_", "aws sdk log prefix");
 DEFINE_bool(s3_verify_ssl, false, "whether to verify ssl");
 DEFINE_int32(s3_max_connections, 32, "max connections to s3");
 DEFINE_int32(s3_connect_timeout, 60000, "S3 connect timeout in milliseconds");
