@@ -23,8 +23,6 @@
 #include <memory>
 #include <mutex>
 
-#include "cache/blockcache/block_cache.h"
-#include "cache/blockcache/cache_store.h"
 #include "client/vfs/data/chunk.h"
 #include "client/vfs/data/common/common.h"
 #include "client/vfs/data/reader/reader_common.h"
@@ -42,11 +40,10 @@ class VFSHub;
 struct BlockCacheReadReq {
   const uint64_t req_id;
   const uint32_t req_index;
+  const uint64_t fs_id;
+  const uint64_t ino;
   const BlockReadReq block_req;
-  const cache::BlockKey key;
-  const cache::RangeOption option;
   IOBuffer io_buffer;
-  std::unique_ptr<ITraceSpan> read_span;
 
   std::string UUID() const;
   std::string ToString() const;
@@ -80,8 +77,6 @@ class ChunkReader {
 
  private:
   void ExecuteAsyncRead();
-  void AsyncRange(ContextSPtr ctx, ReaderSharedState* shared,
-                  BlockCacheReadReq* block_cache_req);
 
   std::vector<SliceReadReq> ConvertToSliceReadReqs(
       ContextSPtr ctx, const std::vector<Slice>& slices,

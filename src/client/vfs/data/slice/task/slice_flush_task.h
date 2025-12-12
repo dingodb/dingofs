@@ -56,8 +56,10 @@ class SliceFlushTask {
   }
 
  private:
-  void BlockDataFlushedFromBlockCache(BlockData* block_data, Status status);
   void BlockDataFlushed(BlockData* block_data, Status status);
+  void BlockDataFlushedFromBlockCache(BlockData* block_data, Status status);
+  void FlushBlockData(uint64_t block_index, BlockData* block_data,
+                      bool writeback);
   void FlushDone(Status s);
 
   const SliceDataContext slice_data_context_;

@@ -23,10 +23,10 @@
 #include <cstdint>
 #include <memory>
 
-#include "cache/blockcache/block_cache.h"
 #include "client/memory/page_allocator.h"
 #include "client/memory/read_buffer_manager.h"
 #include "client/vfs/background/iperiodic_flush_manager.h"
+#include "client/vfs/blockstore/block_store.h"
 #include "client/vfs/common/client_id.h"
 #include "client/vfs/components/file_suffix_watcher.h"
 #include "client/vfs/components/prefetch_manager.h"
@@ -59,7 +59,7 @@ class VFSHub {
 
   virtual HandleManager* GetHandleManager() = 0;
 
-  virtual cache::BlockCache* GetBlockCache() = 0;
+  virtual BlockStore* GetBlockStore() = 0;
 
   virtual blockaccess::BlockAccesser* GetBlockAccesser() = 0;
 
@@ -109,9 +109,9 @@ class VFSHubImpl : public VFSHub {
     return handle_manager_.get();
   }
 
-  cache::BlockCache* GetBlockCache() override {
-    CHECK_NOTNULL(block_cache_);
-    return block_cache_.get();
+  BlockStore* GetBlockStore() override {
+    CHECK_NOTNULL(block_store_);
+    return block_store_.get();
   }
 
   blockaccess::BlockAccesser* GetBlockAccesser() override {
@@ -192,7 +192,7 @@ class VFSHubImpl : public VFSHub {
   std::unique_ptr<MetaSystem> meta_system_;
   std::unique_ptr<HandleManager> handle_manager_;
   std::unique_ptr<blockaccess::BlockAccesser> block_accesser_;
-  std::unique_ptr<cache::BlockCache> block_cache_;
+  std::unique_ptr<BlockStore> block_store_;
   std::unique_ptr<Executor> flush_executor_;
   std::unique_ptr<Executor> read_executor_;
   std::unique_ptr<IPeriodicFlushManager> priodic_flush_manager_;

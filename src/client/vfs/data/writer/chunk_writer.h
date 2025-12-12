@@ -25,8 +25,6 @@
 #include <memory>
 #include <string>
 
-#include "cache/blockcache/block_cache.h"
-#include "cache/blockcache/cache_store.h"
 #include "client/vfs/data/chunk.h"
 #include "client/vfs/data/slice/slice_data.h"
 #include "client/vfs/data/writer/task/chunk_flush_task.h"
@@ -131,9 +129,6 @@ class ChunkWriter : public std::enable_shared_from_this<ChunkWriter> {
   }
 
   uint64_t GetChunkSize() const;
-
-  Status WriteToBlockCache(const cache::BlockKey& key,
-                           const cache::Block& block, cache::PutOption option);
 
   SliceData* FindWritableSliceUnLocked(uint64_t chunk_pos, uint64_t size);
   SliceData* CreateSliceUnlocked(uint64_t chunk_pos);

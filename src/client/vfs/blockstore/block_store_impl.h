@@ -1,0 +1,65 @@
+/*
+ * Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#ifndef DINGOFS_CLIENT_BLOCK_STORE_IMPL_H_
+#define DINGOFS_CLIENT_BLOCK_STORE_IMPL_H_
+
+#include <atomic>
+
+#include "cache/blockcache/block_cache.h"
+#include "client/vfs/blockstore/block_store.h"
+#include "common/blockaccess/block_accesser.h"
+
+namespace dingofs {
+namespace client {
+namespace vfs {
+
+class VFSHub;
+
+class BlockStoreImpl final : public BlockStore {
+ public:
+  BlockStoreImpl(VFSHub* hub, std::string uuid,
+                 blockaccess::BlockAccesser* block_accesser)
+      : hub_(hub), uuid_(std::move(uuid)), block_accesser_(block_accesser) {}
+
+  ~BlockStoreImpl() override { Shutdown(); }
+
+  Status Start() override;
+
+  void Shutdown() override;
+
+  void RangeAsync(ContextSPtr ctx, RangeReq req,
+                  StatusCallback callback) override;
+
+  void PutAsync(ContextSPtr ctx, PutReq req, StatusCallback callback) override;
+
+  void PrefetchAsync(ContextSPtr ctx, PrefetchReq req,
+                     StatusCallback callback) override;
+  // utility
+  bool EnableCache() const override;
+
+ private:
+  VFSHub* hub_;
+  const std::string uuid_;
+  std::atomic<bool> started_{false};
+  blockaccess::BlockAccesser* block_accesser_;
+  std::unique_ptr<cache::BlockCache> block_cache_;
+};
+
+}  // namespace vfs
+}  // namespace client
+}  // namespace dingofs
+#endif  // DINGOFS_CLIENT_BLOCK_STORE_IMPL_H_

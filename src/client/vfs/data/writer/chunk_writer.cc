@@ -216,12 +216,6 @@ SliceData* ChunkWriter::CreateSliceUnlocked(uint64_t chunk_pos) {
   return it->second.get();
 }
 
-Status ChunkWriter::WriteToBlockCache(const cache::BlockKey& key,
-                                      const cache::Block& block,
-                                      cache::PutOption option) {
-  return hub_->GetBlockCache()->Put(cache::NewContext(), key, block, option);
-}
-
 Status ChunkWriter::CommitSlices(ContextSPtr ctx,
                                  const std::vector<Slice>& slices) {
   return hub_->GetMetaSystem()->WriteSlice(ctx, chunk_.ino, chunk_.index, fh_,

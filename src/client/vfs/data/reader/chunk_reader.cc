@@ -28,7 +28,6 @@
 #include <utility>
 #include <vector>
 
-#include "cache/utils/context.h"
 #include "cache/utils/helper.h"
 #include "client/common/const.h"
 #include "client/vfs/common/helper.h"
@@ -49,13 +48,19 @@ namespace vfs {
 
 #define METHOD_NAME() ("ChunkReader::" + std::string(__FUNCTION__))
 
+static BlockKey GenerateBlockKey(const BlockCacheReadReq* req) {
+  BlockKey key(req->fs_id, req->ino, req->block_req.block.slice_id,
+               req->block_req.block.index, req->block_req.block.version);
+  return key;
+}
+
 std::string BlockCacheReadReq::UUID() const {
   return fmt::format("rreq-{}-breq-{}", req_id, req_index);
 }
 
 std::string BlockCacheReadReq::ToString() const {
   return fmt::format("(uuid: {}, block_key: {}, block_req: {})", UUID(),
-                     key.StoreKey(), block_req.ToString());
+                     GenerateBlockKey(this).StoreKey(), block_req.ToString());
 }
 
 ChunkReader::ChunkReader(VFSHub* hub, uint64_t fh, const ChunkReadReq& req)
@@ -201,8 +206,6 @@ void ChunkReader::OnBlockReadComplete(ReaderSharedState* shared,
                                       BlockCacheReadReq* req, Status s) {
   bool all_done = false;
   {
-    req->read_span->End();
-
     if (s.ok()) {
       VLOG(6) << fmt::format(
           "{} Success read block_req: {}, iobuf: {}, io_buf_size: {}", UUID(),
@@ -240,36 +243,12 @@ void ChunkReader::OnBlockReadComplete(ReaderSharedState* shared,
   }
 }
 
-void ChunkReader::AsyncRange(ContextSPtr ctx, ReaderSharedState* shared,
-                             BlockCacheReadReq* block_cache_req) {
-  auto span = hub_->GetTracer()->StartSpanWithContext(kVFSDataMoudule,
-                                                      METHOD_NAME(), ctx);
-  auto callback = [this, shared, block_cache_req,
-                   span_ptr = span.release()](Status s) {
-    vfs_block_rreq_inflighting << -1;
-    // capture this ptr to extend its lifetime
-    std::unique_ptr<ITraceSpan> scoped_span(span_ptr);
-    scoped_span->End();
-    // dedicated use ctx for callback
-    OnBlockReadComplete(shared, block_cache_req, s);
-  };
-
-  vfs_block_rreq_inflighting << 1;
-
-  hub_->GetBlockCache()->AsyncRange(
-      cache::NewContext(), block_cache_req->key,
-      block_cache_req->block_req.block_offset, block_cache_req->block_req.len,
-      &block_cache_req->io_buffer, std::move(callback),
-      block_cache_req->option);
-}
-
 void ChunkReader::ProcessBlockCacheReadReq(ContextSPtr ctx,
                                            ReaderSharedState* shared,
                                            BlockCacheReadReq* block_cache_req) {
   auto span = hub_->GetTracer()->StartSpanWithContext(kVFSDataMoudule,
                                                       METHOD_NAME(), ctx);
   ContextSPtr span_ctx = span->GetContext();
-  block_cache_req->read_span = std::move(span);
 
   // check block is zero block
   if (block_cache_req->block_req.fake) {
@@ -284,7 +263,27 @@ void ChunkReader::ProcessBlockCacheReadReq(ContextSPtr ctx,
     Status s = Status::OK();
     OnBlockReadComplete(shared, block_cache_req, s);
   } else {
-    AsyncRange(span_ctx, shared, block_cache_req);
+    vfs_block_rreq_inflighting << 1;
+
+    auto callback = [this, shared, block_cache_req,
+                     span_ptr = span.release()](Status s) {
+      vfs_block_rreq_inflighting << -1;
+
+      // capture this ptr to extend its lifetime
+      std::unique_ptr<ITraceSpan> scoped_span(span_ptr);
+      scoped_span->End();
+
+      OnBlockReadComplete(shared, block_cache_req, s);
+    };
+
+    RangeReq req;
+    req.block = GenerateBlockKey(block_cache_req);
+    req.block_size = block_cache_req->block_req.block.block_len;
+    req.offset = block_cache_req->block_req.block_offset;
+    req.length = block_cache_req->block_req.len;
+    req.data = &block_cache_req->io_buffer;
+
+    hub_->GetBlockStore()->RangeAsync(span_ctx, req, std::move(callback));
   }
 }
 
@@ -333,17 +332,13 @@ void ChunkReader::ExecuteAsyncRead() {
     VLOG(6) << fmt::format("{} Read block_key: {}, block_req: {}", UUID(),
                            key.StoreKey(), block_req.ToString());
 
-    cache::RangeOption option;
-    option.retrive = true;
-    option.block_size = block_req.block.block_len;
-
     // TODO: optimize memory copy for block_req
     block_cache_reqs.emplace_back(std::make_unique<BlockCacheReadReq>(
         BlockCacheReadReq{.req_id = req_.req_id,
                           .req_index = block_req_index++,
+                          .fs_id = chunk_.fs_id,
+                          .ino = chunk_.ino,
                           .block_req = block_req,
-                          .key = key,
-                          .option = option,
                           .io_buffer = IOBuffer()}));
   }
 

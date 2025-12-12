@@ -633,7 +633,7 @@ void FileReader::CheckPrefetch(ContextSPtr ctx, const Attr& attr,
 
   // Prefetch blocks if enabled
   if (FLAGS_client_vfs_prefetch_blocks > 0 &&
-      vfs_hub_->GetBlockCache()->EnableCache()) {
+      vfs_hub_->GetBlockStore()->EnableCache()) {
     vfs_hub_->GetPrefetchManager()->SubmitTask(PrefetchContext{
         ino_, frange.offset, attr.length, FLAGS_client_vfs_prefetch_blocks});
   }
@@ -657,6 +657,8 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
   if (frange.End() > attr.length) {
     frange.len = attr.length - frange.offset;
   }
+
+  CheckPrefetch(span->GetContext(), attr, frange);
 
   int64_t used_mem = UsedMem();
   int64_t total_mem = TotalMem();

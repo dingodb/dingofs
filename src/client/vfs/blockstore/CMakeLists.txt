@@ -12,31 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(memory)
-add_subdirectory(vfs)
-
-file(GLOB FUSE_CLIENT_LIB_SRCS
-    "fuse/fuse_op.cc"
-    "fuse/fuse_server.cc"
+add_library(vfs_block_store
+    block_store_impl.cc
 )
 
-add_library(fuse_client_lib ${FUSE_CLIENT_LIB_SRCS})
-target_link_libraries(fuse_client_lib
-    PROTO_OBJS
-    vfs_lib
-    vfs_block_store
-    block_accesser
-    dingofs_metrics
-    dingofs_common
-    client_options
-    cache_tiercache
-    jsoncpp
-    ${FUSE3_LIBRARY}
-
-    leveldb
-)
-
-add_executable(dingo-fuse main.cc)
-target_link_libraries(dingo-fuse
-    fuse_client_lib
+target_link_libraries(vfs_block_store
+    cache_blockcache
+    fmt::fmt
+    glog::glog
 )

@@ -59,8 +59,7 @@ Status WarmupManager::Start(const uint32_t& threads) {
     return Status::Internal("Start warmup manager executor failed.");
   }
 
-  block_cache_ = vfs_hub_->GetBlockCache();
-  CHECK_NOTNULL(block_cache_);
+  block_store_ = vfs_hub_->GetBlockStore();
 
   running_.store(true, std::memory_order_relaxed);
   LOG(INFO) << fmt::format("WarmupManager started with {} threads.", threads);
@@ -299,6 +298,7 @@ void WarmupManager::WarmupFile(Ino ino, AsyncWarmupCb cb) {
 
   auto unique_blocks =
       FileRange2BlockKey(span->GetContext(), vfs_hub_, ino, 0, attr.length);
+
   IncBlockMetric(unique_blocks.size());
 
   VLOG(6) << fmt::format("Download file: {} started, size: {}, blocks: {}.",
@@ -306,25 +306,20 @@ void WarmupManager::WarmupFile(Ino ino, AsyncWarmupCb cb) {
 
   Status donwload_status = Status::OK();
   bthread::CountdownEvent countdown(unique_blocks.size());
+
   for (auto& block : unique_blocks) {
-    cache::BlockKey key = block.key;
-    uint64_t len = block.len;
+    VLOG(6) << fmt::format("Download block {}, len {}", block.key.Filename(),
+                           block.len);
+    PrefetchReq req;
+    req.block = block.key;
+    req.block_size = block.len;
 
-    if (block_cache_->IsCached(key)) {
-      VLOG(9) << fmt::format("Skip warmup block key: {}, already in cache.",
-                             key.Filename());
-      countdown.signal();
-      continue;
-    }
-
-    VLOG(6) << fmt::format("Download block {}, len {}", key.Filename(), len);
-    auto* self = this;
-    block_cache_->AsyncPrefetch(
-        cache::NewContext(), key, len,
-        [self, key, len, &countdown, &donwload_status](Status status) {
+    block_store_->PrefetchAsync(
+        span->GetContext(), req,
+        [this, req, &countdown, &donwload_status](Status status) {
           VLOG(6) << fmt::format("Download block {} finished, status: {}.",
-                                 key.Filename(), status.ToString());
-          BRPC_SCOPE_EXIT { self->DecBlockMetric(1); };
+                                 req.block.Filename(), status.ToString());
+          BRPC_SCOPE_EXIT { DecBlockMetric(1); };
 
           if (!status.ok() && !status.IsExist()) {
             donwload_status = status;

@@ -18,9 +18,10 @@
 
 #include <glog/logging.h>
 
-#include "cache/blockcache/block_cache.h"
+#include <memory>
+
 #include "cache/blockcache/cache_store.h"
-#include "cache/utils/context.h"
+#include "client/common/const.h"
 #include "client/vfs/hub/vfs_hub.h"
 
 namespace dingofs {
@@ -53,9 +54,8 @@ void SliceFlushTask::BlockDataFlushedFromBlockCache(BlockData* block_data,
 
 // take ownership of block_data
 void SliceFlushTask::BlockDataFlushed(BlockData* block_data, Status status) {
-  VLOG(6) << fmt::format(
-      "{} BlockDataFlushed block_data: {}, status: {} ", UUID(),
-      block_data->UUID(), status.ToString());
+  VLOG(6) << fmt::format("{} BlockDataFlushed block_data: {}, status: {} ",
+                         UUID(), block_data->UUID(), status.ToString());
 
   if (!status.ok()) {
     LOG(WARNING) << fmt::format("{} Failed to flush block_data: {}, status: {}",
@@ -76,6 +76,34 @@ void SliceFlushTask::BlockDataFlushed(BlockData* block_data, Status status) {
     }
     FlushDone(flush_status);
   }
+}
+
+void SliceFlushTask::FlushBlockData(uint64_t block_index, BlockData* block_data,
+                                    bool writeback) {
+  auto span = vfs_hub_->GetTracer()->StartSpan(
+      kVFSDataMoudule, "SliceFlushTask::FlushBlockData");
+
+  cache::BlockKey key(slice_data_context_.fs_id, slice_data_context_.ino,
+                      slice_id_, block_index, 0);
+  PutReq req;
+  req.block = key;
+  req.data = block_data->ToIOBuffer();
+  req.write_back = writeback;
+
+  VLOG(6) << fmt::format("{} Flush block: key={}, writeback={}, block_data={}",
+                         UUID(), key.StoreKey(), (writeback ? "true" : "false"),
+                         block_data->ToString());
+
+  auto ctx = span->GetContext();
+  // Transfer ownership of block_data to the callback
+  auto on_block_flushed = [this, block_data,
+                           span_ptr = span.release()](Status status) {
+    std::unique_ptr<ITraceSpan> span_guard(span_ptr);
+    span_guard->End();
+    BlockDataFlushedFromBlockCache(block_data, std::move(status));
+  };
+
+  vfs_hub_->GetBlockStore()->PutAsync(ctx, req, std::move(on_block_flushed));
 }
 
 void SliceFlushTask::RunAsync(StatusCallback cb) {
@@ -107,27 +135,9 @@ void SliceFlushTask::RunAsync(StatusCallback cb) {
 
   for (auto& [block_index, block_data_ptr] : to_flush) {
     BlockData* block_data = block_data_ptr.release();
-
     DCHECK_EQ(block_data->BlockIndex(), block_index);
-
-    IOBuffer io_buffer = block_data->ToIOBuffer();
-
-    cache::PutOption option{.writeback = writeback};
-    // TODO: Block should take own the iobuf
-    cache::BlockKey key(slice_data_context_.fs_id, slice_data_context_.ino,
-                        slice_id_, block_index, 0);
-
-    VLOG(6) << fmt::format(
-        "{} flush block_key: {}, writeback: {}, block_data: {}, ", UUID(),
-        key.StoreKey(), (writeback ? "true" : "false"), block_data->ToString());
-
-    // transfer ownership of block_data to BlockDataFlushed
-    vfs_hub_->GetBlockCache()->AsyncPut(
-        cache::NewContext(), key, cache::Block(io_buffer),
-        [this, block_data](auto&& ph1) {
-          BlockDataFlushedFromBlockCache(block_data, std::forward<decltype(ph1)>(ph1));
-        },
-        option);
+    // Transfer ownership of block_data
+    FlushBlockData(block_index, block_data, writeback);
   }
 }
 

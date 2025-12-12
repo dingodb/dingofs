@@ -17,16 +17,12 @@
 #ifndef DINGOFS_CLIENT_VFS_COMPONENTS_PREFETCH_MANAGER_H_
 #define DINGOFS_CLIENT_VFS_COMPONENTS_PREFETCH_MANAGER_H_
 
-#include <bthread/execution_queue.h>
 #include <fmt/format.h>
 
 #include <cstdint>
 #include <memory>
 
-#include "bthread/countdown_event.h"
-#include "bthread/mutex.h"
-#include "cache/blockcache/block_cache.h"
-#include "cache/blockcache/cache_store.h"
+#include "client/vfs/blockstore/block_store.h"
 #include "common/metrics/client/vfs/prefetch_metric.h"
 #include "common/status.h"
 #include "utils/concurrent/rw_lock.h"
@@ -35,12 +31,6 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
-
-using BthreadRWLock = dingofs::utils::BthreadRWLock;
-using BthreadMutex = bthread::Mutex;
-using BCountDown = bthread::CountdownEvent;
-using BlockKey = cache::BlockKey;
-using PrefetchMetric = metrics::client::PrefetchMetric;
 
 class VFSHub;
 class PrefetchManager;
@@ -63,35 +53,22 @@ struct PrefetchContext {
 class PrefetchManager {
  public:
   PrefetchManager(VFSHub* vfs_hub)
-      : vfs_hub_(vfs_hub), metrics_(std::make_unique<PrefetchMetric>()) {}
+      : vfs_hub_(vfs_hub),
+        metrics_(std::make_unique<metrics::client::PrefetchMetric>()) {}
 
-  Status Start(const uint32_t& threads);
+  Status Start(uint32_t threads);
 
   Status Stop();
 
-  void SubmitTask(const BlockKey& key, size_t length);
-
-  void SubmitTask(const PrefetchContext& context);
+  void SubmitTask(PrefetchContext context);
 
   static PrefetchManagerUPtr New(VFSHub* vfs_hub) {
     return std::make_unique<PrefetchManager>(vfs_hub);
   }
 
  private:
-  struct PrefetchTask {
-    PrefetchTask(BlockKey key, size_t length) : key(key), length(length) {}
-    BlockKey key;
-    size_t length;
-  };
-
-  static int HandlePrefetchTask(void* meta,
-                                bthread::TaskIterator<PrefetchTask>& iter);
-
-  void DoSubmitTask(const PrefetchContext& context);
-
-  void AsyncPrefetch(const PrefetchTask& task);
-
-  void DoPrefetch(const PrefetchTask& task);
+  void ProcessPrefetch(const PrefetchContext& context);
+  void AsyncPrefetch(BlockKey key, size_t length);
 
   bool IsBusy(const BlockKey& key);
 
@@ -99,21 +76,16 @@ class PrefetchManager {
 
   void SetIdle(const BlockKey& key);
 
-  bool FilterOut(const PrefetchTask& task);
-
-  void IncPrefetchBlocks();
-
-  void DecPrefetchBlocks();
-
-  BthreadRWLock rwlock_;
+  utils::BthreadRWLock rwlock_;
   std::atomic<bool> running_{false};
   std::unordered_set<std::string> inflight_keys_;
-  bthread::ExecutionQueueId<PrefetchTask> task_queue_id_;
   std::unique_ptr<Executor> prefetch_executor_;
   VFSHub* vfs_hub_;
-  cache::BlockCache* block_cache_;
-  std::unique_ptr<PrefetchMetric> metrics_;
+  BlockStore* block_store_;
+  std::unique_ptr<metrics::client::PrefetchMetric> metrics_;
 };
+
+using PrefetchManagerUPtr = std::unique_ptr<PrefetchManager>;
 
 }  // namespace vfs
 }  // namespace client

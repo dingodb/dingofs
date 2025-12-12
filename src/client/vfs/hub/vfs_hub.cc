@@ -20,9 +20,9 @@
 #include <cstdint>
 #include <memory>
 
-#include "cache/tiercache/tier_block_cache.h"
 #include "client/common/const.h"
 #include "client/vfs/background/periodic_flush_manager.h"
+#include "client/vfs/blockstore/block_store_impl.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/components/prefetch_manager.h"
 #include "client/vfs/components/warmup_manager.h"
@@ -35,14 +35,12 @@
 #include "client/vfs/vfs_meta.h"
 #include "common/blockaccess/block_accesser.h"
 #include "common/blockaccess/rados/rados_common.h"
-#include "common/options/cache.h"
 #include "common/options/client.h"
 #include "common/status.h"
 #include "common/trace/log_trace_exporter.h"
 #include "common/trace/noop_tracer.h"
 #include "common/trace/tracer.h"
 #include "fmt/format.h"
-#include "gflags/gflags.h"
 #include "glog/logging.h"
 #include "utils/executor/thread/executor_impl.h"
 
@@ -125,11 +123,9 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf, const VFSOption& vfs_option,
   handle_manager_ = std::make_unique<HandleManager>(this);
 
   {
-    // related to block cache
-    cache::FLAGS_cache_dir_uuid = fs_info_.uuid;
-    block_cache_ =
-        std::make_unique<cache::TierBlockCache>(block_accesser_.get());
-    DINGOFS_RETURN_NOT_OK(block_cache_->Start());
+    block_store_ = std::make_unique<BlockStoreImpl>(this, fs_info_.uuid,
+                                                    block_accesser_.get());
+    DINGOFS_RETURN_NOT_OK(block_store_->Start());
   }
 
   {
@@ -182,7 +178,7 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf, const VFSOption& vfs_option,
   }
 
   {
-    if (block_cache_->EnableCache()) {
+    if (block_store_->EnableCache()) {
       prefetch_manager_ = PrefetchManager::New(this);
       auto status = prefetch_manager_->Start(FLAGS_client_vfs_prefetch_threads);
       if (!status.ok()) {
@@ -223,7 +219,7 @@ Status VFSHubImpl::Stop(bool upgrade) {
   if (flush_executor_ != nullptr) flush_executor_->Stop();
   if (warmup_manager_ != nullptr) warmup_manager_->Stop();
   if (prefetch_manager_ != nullptr) prefetch_manager_->Stop();
-  if (block_cache_ != nullptr) block_cache_->Shutdown();
+  if (block_store_ != nullptr) block_store_->Shutdown();
   if (meta_system_ != nullptr) meta_system_->UnInit(upgrade);
 
   started_.store(false, std::memory_order_relaxed);

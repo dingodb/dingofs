@@ -23,7 +23,7 @@
 #include <set>
 #include <unordered_map>
 
-#include "cache/blockcache/block_cache.h"
+#include "client/vfs/blockstore/block_store.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/metrics/client/vfs/warmup_metric.h"
 #include "common/status.h"
@@ -205,8 +205,9 @@ class WarmupManager {
   BthreadRWLock task_rwlock_;  // protect warmup tasks
   std::unique_ptr<Executor> warmup_executor_;
   bthread::ExecutionQueueId<WarmupTaskContext> task_queue_id_;
-  cache::BlockCache* block_cache_;
+
   VFSHub* vfs_hub_;
+  BlockStore* block_store_;
   std::unique_ptr<WarmupMetric> metrics_;
 };
 

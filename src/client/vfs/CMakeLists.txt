@@ -13,6 +13,7 @@
 # limitations under the License.
 
 add_subdirectory(background)
+add_subdirectory(blockstore)
 add_subdirectory(data)
 add_subdirectory(handle)
 add_subdirectory(hub)
