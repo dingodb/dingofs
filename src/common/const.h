@@ -24,6 +24,7 @@
 #define DINGOFS_SRC_COMMON_CONST_H_
 
 #include <cstdint>
+#include <string>
 
 namespace dingofs {
 
@@ -31,6 +32,9 @@ static constexpr uint64_t kKiB = 1024ULL;
 static constexpr uint64_t kMiB = 1024ULL * kKiB;
 static constexpr uint64_t kGiB = 1024ULL * kMiB;
 static constexpr uint64_t kTiB = 1024ULL * kGiB;
+
+// default dingofs runtime data dir, including cache data, log, meta, etc.
+static const std::string kDefaultRuntimeBaseDir = "~/.dingofs/";
 
 }  // namespace dingofs
 

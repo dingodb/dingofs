@@ -15,9 +15,15 @@
 #ifndef DINGOFS_SRC_COMMON_HELPER_H_
 #define DINGOFS_SRC_COMMON_HELPER_H_
 
+#include <butil/file_util.h>
+#include <butil/strings/string16.h>
+#include <butil/strings/string_util.h>
+
 #include <cstdint>
+#include <filesystem>
 
 #include "butil/endpoint.h"
+#include "common/const.h"
 #include "glog/logging.h"
 
 namespace dingofs {
@@ -67,8 +73,26 @@ class Helper {
 
     return true;
   }
-};
 
+  static void InitDefaultRuntimeBaseDir() {
+    std::string home_dir = butil::GetHomeDir().value();
+    if (home_dir.empty()) {
+      LOG(FATAL) << "get home dir fail!";
+    }
+    std::string expand_dir;
+    butil::ReplaceChars(kDefaultRuntimeBaseDir, "~", home_dir, &expand_dir);
+
+    butil::FilePath dir_path(expand_dir);
+    if (!butil::PathExists(dir_path)) {
+      if (!butil::CreateDirectory(dir_path)) {
+        LOG(FATAL) << "create default storage dir fail, path: "
+                   << dir_path.value();
+      }
+    }
+    LOG(INFO) << "default runtime base dir: " << expand_dir;
+  }
+
+};  // class Helper
 }  // namespace dingofs
 
 #endif  // DINGOFS_SRC_COMMON_HELPER_H_
