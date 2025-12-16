@@ -44,6 +44,7 @@
 #include "common/status.h"
 #include "common/trace/context.h"
 #include "read_request.h"
+#include "utils/scoped_cleanup.h"
 
 namespace dingofs {
 namespace client {
@@ -702,6 +703,16 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
 
   CheckReadahead(span->GetContext(), frange, attr.length);
 
+  SCOPED_CLEANUP({
+    for (auto& partial_req : reqs) {
+      partial_req.req->ReleaseRef();
+      if (partial_req.req->refs == 0 &&
+          partial_req.req->state == ReadRequestState::kInvalid) {
+        DeleteReadRequest(partial_req.req);
+      }
+    }
+  });
+
   uint64_t read_size{0};
   Status ret;
 
@@ -730,12 +741,6 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
                                   partial_req.req->status.ToString());
         CHECK(!partial_req.req->status.ok());
         ret = partial_req.req->status;
-
-        // release ref
-        partial_req.req->ReleaseRef();
-        if (partial_req.req->refs == 0) {
-          DeleteReadRequest(partial_req.req);
-        }
         break;
       }
 
@@ -750,8 +755,6 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
       }
 
       read_size += ret;
-
-      partial_req.req->ReleaseRef();
     }
   }
 
