@@ -15,7 +15,6 @@
 #ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_INODE_CACHE_H_
 #define DINGOFS_SRC_CLIENT_VFS_META_V2_INODE_CACHE_H_
 
-#include <absl/container/flat_hash_map.h>
 #include <sys/types.h>
 
 #include <atomic>
@@ -23,7 +22,6 @@
 #include <cstdint>
 #include <memory>
 #include <string>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 

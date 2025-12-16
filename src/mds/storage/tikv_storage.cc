@@ -265,6 +265,20 @@ Status TikvTxn::Scan(const Range& range, std::function<bool(KeyValue&)> handler)
   return Status::OK();
 }
 
+static bool IsRetryable(const std::string& err_msg) {
+  static const std::vector<std::string> kRetryableErrors = {
+      "retryable:",
+  };
+
+  for (const auto& retryable_err : kRetryableErrors) {
+    if (err_msg.find(retryable_err) != std::string::npos) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 Status TikvTxn::Commit() {
   uint64_t start_time = Helper::TimestampUs();
   ON_SCOPE_EXIT([&]() { txn_trace_.write_time_us += (Helper::TimestampUs() - start_time); });
@@ -275,7 +289,12 @@ Status TikvTxn::Commit() {
 
   } catch (const std::exception& e) {
     txn_.rollback();
-    status = Status(pb::error::EBACKEND_STORE, fmt::format("commit err({})", e.what()));
+
+    if (IsRetryable(e.what())) {
+      status = Status(pb::error::ESTORE_MAYBE_RETRY, fmt::format("commit err({})", e.what()));
+    } else {
+      status = Status(pb::error::EBACKEND_STORE, fmt::format("commit err({})", e.what()));
+    }
   }
 
   committed_.store(true, std::memory_order_relaxed);

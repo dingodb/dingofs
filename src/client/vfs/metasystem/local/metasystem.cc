@@ -40,7 +40,7 @@ namespace client {
 namespace vfs {
 namespace local {
 
-const std::string kDbDir = "/tmp";
+const std::string kDbDir = fmt::format("{}/store", kDefaultRuntimeBaseDir);
 
 constexpr uint32_t kFsId = 10000;
 const std::string kFsDefaultName = "local_fs";

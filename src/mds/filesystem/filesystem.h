@@ -43,7 +43,6 @@
 #include "mds/mds/mds_meta.h"
 #include "mds/quota/quota.h"
 #include "mds/storage/storage.h"
-#include "utils/concurrent/concurrent.h"
 #include "utils/doubly_map.h"
 
 namespace dingofs {
@@ -65,9 +64,9 @@ struct EntryOut {
   explicit EntryOut(const AttrEntry& attr) : attr(attr) {}
 
   std::string name;
+  AttrEntry parent_attr;
   AttrEntry attr;
   std::vector<AttrEntry> attrs;
-  uint64_t parent_version{0};
 };
 
 class FileSystem : public std::enable_shared_from_this<FileSystem> {
@@ -146,7 +145,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
     uint64_t rdev{0};
   };
   Status MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_out);
-  Status RmDir(Context& ctx, Ino parent, const std::string& name, Ino& ino, uint64_t& parent_version);
+  Status RmDir(Context& ctx, Ino parent, const std::string& name, Ino& ino, EntryOut& entry_out);
   Status ReadDir(Context& ctx, Ino ino, const std::string& last_name, uint32_t limit, bool with_attr,
                  std::vector<EntryOut>& entry_outs);
 

@@ -16,16 +16,12 @@
 
 #include <atomic>
 #include <cstdint>
-#include <memory>
 #include <string>
 #include <utility>
 
 #include "client/vfs/metasystem/mds/helper.h"
 #include "fmt/format.h"
-#include "gflags/gflags.h"
 #include "glog/logging.h"
-#include "mds/common/helper.h"
-#include "mds/common/logging.h"
 #include "utils/concurrent/concurrent.h"
 #include "utils/time.h"
 
@@ -162,14 +158,11 @@ void Inode::RemoveXAttr(const std::string& name) {
 bool Inode::PutIf(const AttrEntry& attr) {
   utils::WriteLockGuard lk(lock_);
 
-  DINGO_LOG(INFO) << fmt::format(
+  LOG(INFO) << fmt::format(
       "[meta.icache.{}] update attr,this({}) version({}->{}).", attr_.ino(),
       (void*)this, attr_.version(), attr.version());
 
   if (attr.version() <= attr_.version()) {
-    DINGO_LOG(WARNING) << fmt::format(
-        "[meta.icache.{}] version abnormal, old({}) new({}).", attr_.ino(),
-        attr_.version(), attr.version());
     return false;
   }
 
@@ -181,14 +174,11 @@ bool Inode::PutIf(const AttrEntry& attr) {
 bool Inode::PutIf(AttrEntry&& attr) {
   utils::WriteLockGuard lk(lock_);
 
-  DINGO_LOG(INFO) << fmt::format(
+  LOG(INFO) << fmt::format(
       "[meta.icache.{}] update attr,this({}) version({}->{}).", attr_.ino(),
       (void*)this, attr_.version(), attr.version());
 
   if (attr.version() <= attr_.version()) {
-    DINGO_LOG(WARNING) << fmt::format(
-        "[meta.icache.{}] version abnormal, old({}) new({}).", attr_.ino(),
-        attr_.version(), attr.version());
     return false;
   }
 

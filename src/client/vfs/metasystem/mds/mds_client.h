@@ -92,14 +92,16 @@ class MDSClient {
 
   Status Create(ContextSPtr ctx, Ino parent, const std::string& name,
                 uint32_t uid, uint32_t gid, uint32_t mode, int flag,
-                AttrEntry& attr_entry, std::vector<std::string>& session_ids);
+                AttrEntry& attr_entry, AttrEntry& parent_attr_entry,
+                std::vector<std::string>& session_ids);
   Status MkNod(ContextSPtr ctx, Ino parent, const std::string& name,
                uint32_t uid, uint32_t gid, mode_t mode, dev_t rdev,
-               AttrEntry& attr_entry);
+               AttrEntry& attr_entry, AttrEntry& parent_attr_entry);
   Status MkDir(ContextSPtr ctx, Ino parent, const std::string& name,
                uint32_t uid, uint32_t gid, mode_t mode, dev_t rdev,
-               AttrEntry& attr_entry);
-  Status RmDir(ContextSPtr ctx, Ino parent, const std::string& name, Ino& ino);
+               AttrEntry& attr_entry, AttrEntry& parent_attr_entry);
+  Status RmDir(ContextSPtr ctx, Ino parent, const std::string& name, Ino& ino,
+               AttrEntry& parent_attr_entry);
 
   Status ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
                  const std::string& last_name, uint32_t limit, bool with_attr,
@@ -112,12 +114,13 @@ class MDSClient {
   Status Release(ContextSPtr ctx, Ino ino, const std::string& session_id);
 
   Status Link(ContextSPtr ctx, Ino ino, Ino new_parent,
-              const std::string& new_name, AttrEntry& attr_entry);
+              const std::string& new_name, AttrEntry& attr_entry,
+              AttrEntry& parent_attr_entry);
   Status UnLink(ContextSPtr ctx, Ino parent, const std::string& name,
-                AttrEntry& attr_entry);
+                AttrEntry& attr_entry, AttrEntry& parent_attr_entry);
   Status Symlink(ContextSPtr ctx, Ino parent, const std::string& name,
                  uint32_t uid, uint32_t gid, const std::string& symlink,
-                 AttrEntry& attr_entry);
+                 AttrEntry& attr_entry, AttrEntry& parent_attr_entry);
   Status ReadLink(ContextSPtr ctx, Ino ino, std::string& symlink);
 
   Status GetAttr(ContextSPtr ctx, Ino ino, AttrEntry& attr_entry);

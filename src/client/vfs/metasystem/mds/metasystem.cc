@@ -362,10 +362,10 @@ Status MDSMetaSystem::Create(ContextSPtr ctx, Ino parent,
                              const std::string& name, uint32_t uid,
                              uint32_t gid, uint32_t mode, int flags, Attr* attr,
                              uint64_t fh) {
-  AttrEntry attr_entry;
+  AttrEntry attr_entry, parent_attr_entry;
   std::vector<std::string> session_ids;
   auto status = mds_client_->Create(ctx, parent, name, uid, gid, mode, flags,
-                                    attr_entry, session_ids);
+                                    attr_entry, parent_attr_entry, session_ids);
   if (!status.ok()) {
     return status;
   }
@@ -379,6 +379,7 @@ Status MDSMetaSystem::Create(ContextSPtr ctx, Ino parent,
 
   DeleteInodeFromCache(parent);
   PutInodeToCache(attr_entry);
+  PutInodeToCache(parent_attr_entry);
 
   return Status::OK();
 }
@@ -386,9 +387,9 @@ Status MDSMetaSystem::Create(ContextSPtr ctx, Ino parent,
 Status MDSMetaSystem::MkNod(ContextSPtr ctx, Ino parent,
                             const std::string& name, uint32_t uid, uint32_t gid,
                             uint32_t mode, uint64_t rdev, Attr* attr) {
-  AttrEntry attr_entry;
-  auto status =
-      mds_client_->MkNod(ctx, parent, name, uid, gid, mode, rdev, attr_entry);
+  AttrEntry attr_entry, parent_attr_entry;
+  auto status = mds_client_->MkNod(ctx, parent, name, uid, gid, mode, rdev,
+                                   attr_entry, parent_attr_entry);
   if (!status.ok()) {
     return status;
   }
@@ -397,6 +398,7 @@ Status MDSMetaSystem::MkNod(ContextSPtr ctx, Ino parent,
 
   DeleteInodeFromCache(parent);
   PutInodeToCache(attr_entry);
+  PutInodeToCache(parent_attr_entry);
 
   return Status::OK();
 }
@@ -645,9 +647,9 @@ Status MDSMetaSystem::Write(ContextSPtr, Ino ino, uint64_t offset,
 Status MDSMetaSystem::MkDir(ContextSPtr ctx, Ino parent,
                             const std::string& name, uint32_t uid, uint32_t gid,
                             uint32_t mode, Attr* attr) {
-  AttrEntry attr_entry;
-  auto status =
-      mds_client_->MkDir(ctx, parent, name, uid, gid, mode, 0, attr_entry);
+  AttrEntry attr_entry, parent_attr_entry;
+  auto status = mds_client_->MkDir(ctx, parent, name, uid, gid, mode, 0,
+                                   attr_entry, parent_attr_entry);
   if (!status.ok()) {
     return status;
   }
@@ -656,14 +658,16 @@ Status MDSMetaSystem::MkDir(ContextSPtr ctx, Ino parent,
 
   DeleteInodeFromCache(parent);
   PutInodeToCache(attr_entry);
+  PutInodeToCache(parent_attr_entry);
 
   return Status::OK();
 }
 
 Status MDSMetaSystem::RmDir(ContextSPtr ctx, Ino parent,
                             const std::string& name) {
+  AttrEntry parent_attr_entry;
   Ino ino;
-  auto status = mds_client_->RmDir(ctx, parent, name, ino);
+  auto status = mds_client_->RmDir(ctx, parent, name, ino, parent_attr_entry);
   if (!status.ok()) {
     if (status.Errno() == pb::error::ENOT_EMPTY) {
       return Status::NotEmpty("dir not empty");
@@ -673,6 +677,7 @@ Status MDSMetaSystem::RmDir(ContextSPtr ctx, Ino parent,
 
   DeleteInodeFromCache(parent);
   DeleteInodeFromCache(ino);
+  PutInodeToCache(parent_attr_entry);
 
   return Status::OK();
 }
@@ -729,8 +734,9 @@ Status MDSMetaSystem::ReleaseDir(ContextSPtr, Ino ino, uint64_t fh) {
 
 Status MDSMetaSystem::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
                            const std::string& new_name, Attr* attr) {
-  AttrEntry attr_entry;
-  auto status = mds_client_->Link(ctx, ino, new_parent, new_name, attr_entry);
+  AttrEntry attr_entry, parent_attr_entry;
+  auto status = mds_client_->Link(ctx, ino, new_parent, new_name, attr_entry,
+                                  parent_attr_entry);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("[meta.fs.{}.{}] link to {} fail, error({}).",
                               new_parent, new_name, ino, status.ToString());
@@ -741,14 +747,16 @@ Status MDSMetaSystem::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
 
   DeleteInodeFromCache(new_parent);
   PutInodeToCache(attr_entry);
+  PutInodeToCache(parent_attr_entry);
 
   return Status::OK();
 }
 
 Status MDSMetaSystem::Unlink(ContextSPtr ctx, Ino parent,
                              const std::string& name) {
-  AttrEntry attr_entry;
-  auto status = mds_client_->UnLink(ctx, parent, name, attr_entry);
+  AttrEntry attr_entry, parent_attr_entry;
+  auto status =
+      mds_client_->UnLink(ctx, parent, name, attr_entry, parent_attr_entry);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("[meta.fs.{}.{}] unlink fail, error({}).", parent,
                               name, status.ToString());
@@ -761,6 +769,7 @@ Status MDSMetaSystem::Unlink(ContextSPtr ctx, Ino parent,
 
   } else {
     PutInodeToCache(attr_entry);
+    PutInodeToCache(parent_attr_entry);
   }
 
   return Status::OK();
@@ -770,9 +779,9 @@ Status MDSMetaSystem::Symlink(ContextSPtr ctx, Ino parent,
                               const std::string& name, uint32_t uid,
                               uint32_t gid, const std::string& link,
                               Attr* attr) {
-  AttrEntry attr_entry;
-  auto status =
-      mds_client_->Symlink(ctx, parent, name, uid, gid, link, attr_entry);
+  AttrEntry attr_entry, parent_attr_entry;
+  auto status = mds_client_->Symlink(ctx, parent, name, uid, gid, link,
+                                     attr_entry, parent_attr_entry);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[meta.fs.{}.{}] symlink fail, symlink({}) error({}).", parent, name,
@@ -784,6 +793,7 @@ Status MDSMetaSystem::Symlink(ContextSPtr ctx, Ino parent,
 
   DeleteInodeFromCache(parent);
   PutInodeToCache(attr_entry);
+  PutInodeToCache(parent_attr_entry);
 
   return Status::OK();
 }

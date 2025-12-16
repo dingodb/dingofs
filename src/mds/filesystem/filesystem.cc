@@ -565,7 +565,7 @@ Status FileSystem::CreateRoot() {
   AttrEntry attr;
   attr.set_fs_id(fs_id_);
   attr.set_ino(kRootIno);
-  attr.set_length(0);
+  attr.set_length(4096);
   attr.set_uid(1008);
   attr.set_gid(1008);
   attr.set_mode(S_IFDIR | S_IRUSR | S_IWUSR | S_IRGRP | S_IXUSR | S_IWGRP | S_IXGRP | S_IROTH | S_IWOTH | S_IXOTH);
@@ -784,8 +784,8 @@ Status FileSystem::BatchCreate(Context& ctx, Ino parent, const std::vector<MkNod
   }
 
   // set output
-  entry_out.attrs = std::move(attrs);
-  entry_out.parent_version = parent_attr.version();
+  entry_out.parent_attr = parent_attr;
+  entry_out.attrs.swap(attrs);
 
   // notify buddy mds to refresh inode
   if (IsParentHashPartition()) {
@@ -877,8 +877,8 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
 
   parent_memo_->Remeber(attr.ino(), param.parent);
 
+  entry_out.parent_attr = parent_attr;
   entry_out.attr.Swap(&attr);
-  entry_out.parent_version = parent_attr.version();
 
   if (IsParentHashPartition()) {
     NotifyBuddyRefreshInode(std::move(parent_attr));
@@ -1141,8 +1141,8 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
 
   parent_memo_->Remeber(attr.ino(), param.parent);
 
+  entry_out.parent_attr = parent_attr;
   entry_out.attr.Swap(&attr);
-  entry_out.parent_version = parent_attr.version();
 
   if (IsParentHashPartition()) {
     NotifyBuddyRefreshInode(std::move(parent_attr));
@@ -1151,7 +1151,7 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
   return Status::OK();
 }
 
-Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name, Ino& ino, uint64_t& parent_version) {
+Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name, Ino& ino, EntryOut& entry_out) {
   if (!CanServe(ctx)) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -1198,7 +1198,7 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name, Ino&
   auto& parent_attr = result.attr;  // parent
 
   ino = dentry.INo();
-  parent_version = parent_attr.version();
+  entry_out.parent_attr = parent_attr;
 
   // update cache
   UpsertInodeCache(parent_attr);
@@ -1303,19 +1303,19 @@ Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent, const std::string
 
   auto& result = operation.GetResult();
   auto& parent_attr = result.attr;
-  auto& child_attr = result.child_attr;
+  auto& attr = result.child_attr;
 
   // update quota
   std::string reason = fmt::format("link.{}.{}.{}", ino, new_parent, new_name);
-  quota_manager_->AsyncUpdateDirUsage(new_parent, child_attr.length(), 1, reason);
+  quota_manager_->AsyncUpdateDirUsage(new_parent, attr.length(), 1, reason);
 
   // update cache
-  UpsertInodeCache(child_attr);
+  UpsertInodeCache(attr);
   UpsertInodeCache(parent_attr);
   AddDentryToPartition(parent_attr.ino(), dentry, parent_attr.version());
 
-  entry_out.attr = child_attr;
-  entry_out.parent_version = parent_attr.version();
+  entry_out.parent_attr = parent_attr;
+  entry_out.attr.Swap(&attr);
 
   if (IsParentHashPartition()) {
     NotifyBuddyRefreshInode(std::move(parent_attr));
@@ -1367,10 +1367,10 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name, Ent
 
   auto& result = operation.GetResult();
   auto& parent_attr = result.attr;
-  auto& child_attr = result.child_attr;
+  auto& attr = result.child_attr;
 
   DINGO_LOG(INFO) << fmt::format("[fs.{}.{}][{}us] unlink {}/{} finish, nlink({}) status({}).", fs_id_, ctx.RequestId(),
-                                 duration.ElapsedUs(), parent, name, child_attr.nlink(), status.error_str());
+                                 duration.ElapsedUs(), parent, name, attr.nlink(), status.error_str());
 
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put inode/dentry fail, {}", status.error_str()));
@@ -1378,20 +1378,20 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name, Ent
 
   // update quota
   std::string reason = fmt::format("unlink.{}.{}", parent, name);
-  int64_t delta_bytes = child_attr.type() != pb::mds::SYM_LINK ? child_attr.length() : 0;
-  if (child_attr.nlink() == 0) {
+  int64_t delta_bytes = attr.type() != pb::mds::SYM_LINK ? attr.length() : 0;
+  if (attr.nlink() == 0) {
     quota_manager_->UpdateFsUsage(-delta_bytes, -1, reason);
-    chunk_cache_.Delete(child_attr.ino());
+    chunk_cache_.Delete(attr.ino());
   }
   quota_manager_->AsyncUpdateDirUsage(parent, -delta_bytes, -1, reason);
 
   // update cache
   DeleteDentryFromPartition(parent, name, parent_attr.version());
   UpsertInodeCache(parent_attr);
-  UpsertInodeCache(child_attr);
+  UpsertInodeCache(attr);
 
-  entry_out.attr = child_attr;
-  entry_out.parent_version = parent_attr.version();
+  entry_out.parent_attr = parent_attr;
+  entry_out.attr.Swap(&attr);
 
   if (IsParentHashPartition()) {
     NotifyBuddyRefreshInode(std::move(parent_attr));
@@ -1483,8 +1483,8 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_par
   quota_manager_->UpdateFsUsage(0, 1, reason);
   quota_manager_->AsyncUpdateDirUsage(new_parent, 0, 1, reason);
 
+  entry_out.parent_attr = parent_attr;
   entry_out.attr.Swap(&attr);
-  entry_out.parent_version = parent_attr.version();
 
   if (IsParentHashPartition()) {
     NotifyBuddyRefreshInode(std::move(parent_attr));

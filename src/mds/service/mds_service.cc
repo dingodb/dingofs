@@ -918,9 +918,9 @@ void MDSServiceImpl::DoBatchCreate(google::protobuf::RpcController*, const pb::m
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
+  response->mutable_parent_inode()->Swap(&entry_out.parent_attr);
   for (auto& attr : entry_out.attrs) response->add_inodes()->Swap(&attr);
   Helper::VectorToPbRepeated(session_ids, response->mutable_session_ids());
-  response->set_parent_version(entry_out.parent_version);
 }
 
 void MDSServiceImpl::BatchCreate(google::protobuf::RpcController* controller,
@@ -986,8 +986,8 @@ void MDSServiceImpl::DoMkNod(google::protobuf::RpcController*, const pb::mds::Mk
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
+  response->mutable_parent_inode()->Swap(&entry_out.parent_attr);
   response->mutable_inode()->Swap(&entry_out.attr);
-  response->set_parent_version(entry_out.parent_version);
 }
 
 void MDSServiceImpl::MkNod(google::protobuf::RpcController* controller, const pb::mds::MkNodRequest* request,
@@ -1034,8 +1034,8 @@ void MDSServiceImpl::DoMkDir(google::protobuf::RpcController*, const pb::mds::Mk
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
+  response->mutable_parent_inode()->Swap(&entry_out.parent_attr);
   response->mutable_inode()->Swap(&entry_out.attr);
-  response->set_parent_version(entry_out.parent_version);
 }
 
 void MDSServiceImpl::MkDir(google::protobuf::RpcController* controller, const pb::mds::MkDirRequest* request,
@@ -1068,15 +1068,15 @@ void MDSServiceImpl::DoRmDir(google::protobuf::RpcController*, const pb::mds::Rm
   Context ctx(request->context(), request->info().request_id(), __func__);
 
   Ino ino;
-  uint64_t parent_version;
-  status = file_system->RmDir(ctx, request->parent(), request->name(), ino, parent_version);
+  EntryOut entry_out;
+  status = file_system->RmDir(ctx, request->parent(), request->name(), ino, entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
   response->set_ino(ino);
-  response->set_parent_version(parent_version);
+  response->mutable_parent_inode()->Swap(&entry_out.parent_attr);
 }
 
 void MDSServiceImpl::RmDir(google::protobuf::RpcController* controller, const pb::mds::RmDirRequest* request,
@@ -1250,8 +1250,8 @@ void MDSServiceImpl::DoLink(google::protobuf::RpcController*, const pb::mds::Lin
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
+  response->mutable_parent_inode()->Swap(&entry_out.parent_attr);
   response->mutable_inode()->Swap(&entry_out.attr);
-  response->set_parent_version(entry_out.parent_version);
 }
 
 void MDSServiceImpl::Link(google::protobuf::RpcController* controller, const pb::mds::LinkRequest* request,
@@ -1290,8 +1290,8 @@ void MDSServiceImpl::DoUnLink(google::protobuf::RpcController*, const pb::mds::U
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
+  response->mutable_parent_inode()->Swap(&entry_out.parent_attr);
   response->mutable_inode()->Swap(&entry_out.attr);
-  response->set_parent_version(entry_out.parent_version);
 }
 
 void MDSServiceImpl::UnLink(google::protobuf::RpcController* controller, const pb::mds::UnLinkRequest* request,
@@ -1331,8 +1331,8 @@ void MDSServiceImpl::DoSymlink(google::protobuf::RpcController*, const pb::mds::
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
+  response->mutable_parent_inode()->Swap(&entry_out.parent_attr);
   response->mutable_inode()->Swap(&entry_out.attr);
-  response->set_parent_version(entry_out.parent_version);
 }
 
 void MDSServiceImpl::Symlink(google::protobuf::RpcController* controller, const pb::mds::SymlinkRequest* request,
