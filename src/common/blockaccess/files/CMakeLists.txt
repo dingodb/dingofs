@@ -1,4 +1,4 @@
-# Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
+# Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,25 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(blockaccess)
-add_subdirectory(trace)
-
-add_executable(test_common
-  main.cc
+add_library(file_accesser
+    file_accesser.cc
 )
 
-target_link_libraries(test_common
-
-  $<TARGET_OBJECTS:test_common_trace>
-  dingofs_trace
-  $<TARGET_OBJECTS:test_blockaccess>
-  block_accesser
-
-  PROTO_OBJS
-  protobuf::libprotobuf
-  ${TEST_DEPS_WITHOUT_MAIN}
-)
-
-set_target_properties(test_common PROPERTIES
-  RUNTIME_OUTPUT_DIRECTORY ${TEST_EXECUTABLE_OUTPUT_PATH}
+target_link_libraries(file_accesser
+    dingofs_status
+    glog::glog
 )

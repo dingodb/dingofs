@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+add_subdirectory(files)
 add_subdirectory(s3)
 add_subdirectory(rados)
 
@@ -21,6 +22,7 @@ add_library(block_accesser
 )
 
 target_link_libraries(block_accesser
+    file_accesser
     s3_accesser
     rados_accesser
     dingofs_status
