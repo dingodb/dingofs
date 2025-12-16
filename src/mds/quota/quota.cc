@@ -489,12 +489,16 @@ Status QuotaManager::SetDirQuota(Trace& trace, Ino ino, const QuotaEntry& quota,
   return Status::OK();
 }
 
-Status QuotaManager::GetDirQuota(Trace& trace, Ino ino, QuotaEntry& quota) {
+Status QuotaManager::GetDirQuota(Trace& trace, Ino ino, bool not_use_fs_quota, QuotaEntry& quota) {
   // first try to get from cache
   auto dir_quota = dir_quota_map_.GetNearestQuota(ino);
   if (dir_quota != nullptr) {
     quota = dir_quota->GetAccumulatedQuota();
     return Status::OK();
+  }
+
+  if (not_use_fs_quota) {
+    return Status(pb::error::ENOT_FOUND, "not found dir quota");
   }
 
   // if not found dir quota, get fs quota

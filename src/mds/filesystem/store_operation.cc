@@ -1990,7 +1990,7 @@ Status GetDirQuotaOperation::Run(TxnUPtr& txn) {
   }
 
   if (value.empty()) {
-    return Status(pb::error::ENOT_FOUND, "dir quota not found");
+    return Status(pb::error::ENOT_FOUND, "not found dir quota");
   }
 
   auto dir_quota = MetaCodec::DecodeDirQuotaValue(value);

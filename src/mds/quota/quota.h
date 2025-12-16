@@ -214,7 +214,7 @@ class QuotaManager : public std::enable_shared_from_this<QuotaManager> {
   Status DeleteFsQuota(Trace& trace);
 
   Status SetDirQuota(Trace& trace, Ino ino, const QuotaEntry& quota, bool is_lead);
-  Status GetDirQuota(Trace& trace, Ino ino, QuotaEntry& quota);
+  Status GetDirQuota(Trace& trace, Ino ino, bool not_use_fs_quota, QuotaEntry& quota);
   Status DeleteDirQuota(Trace& trace, Ino ino);
   Status DeleteDirQuotaByNotified(Ino ino, const std::string& uuid);
   void AsyncDeleteDirQuota(Ino ino);

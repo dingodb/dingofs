@@ -2353,7 +2353,7 @@ void MDSServiceImpl::DoGetDirQuota(google::protobuf::RpcController*, const pb::m
   Context ctx(request->context(), request->info().request_id(), __func__);
 
   pb::mds::Quota quota;
-  status = quota_manager.GetDirQuota(ctx.GetTrace(), request->ino(), quota);
+  status = quota_manager.GetDirQuota(ctx.GetTrace(), request->ino(), request->not_use_fs_quota(), quota);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
