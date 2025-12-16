@@ -22,6 +22,7 @@
 #include "client/common/global_log.h"
 #include "client/fuse/fuse_op.h"
 #include "client/fuse/fuse_server.h"
+#include "common/const.h"
 #include "common/flag.h"
 #include "common/helper.h"
 #include "common/options/cache.h"
@@ -59,16 +60,15 @@ static int InstallSignal(int sig, void (*handler)(int)) {
 
 static dingofs::FlagExtraInfo extras = {
     .program = "dingo-fuse",
-    .usage = "dingo-fuse [OPTIONS] <meta-url> <mountpoint>",
+    .usage = "  dingo-fuse [OPTIONS] <meta-url> <mountpoint>",
     .examples =
-        R"(dingo-fuse 10.220.69.10:7400/dingofs /mnt/dingofs
-dingo-fuse --client_log_dir=/mnt/logs 10.220.32.1:6700/dingofs /mnt/dingofs
-dingo-fuse --flagfile client.conf 10.220.32.1:6700/dingofs /mnt/dingofs
-dingo-fuse --flagfile client.conf --daemonize 10.220.32.1:6700/dingofs /mnt/dingofs
+        R"(  $ dingo-fuse 10.220.69.10:7400/dingofs /mnt/dingofs
+  $ dingo-fuse --flagfile client.conf 10.220.32.1:6700/dingofs /mnt/dingofs
+  $ dingo-fuse --daemonize 10.220.32.1:6700/dingofs /mnt/dingofs
 )",
-    .patterns = {"src/client", "cache/tiercache", "cache/blockcache",
-                 "cache/remotecache", "options/blockaccess", "options/client",
-                 "options/common"},
+    .patterns = {"src/client", "cache/storage", "cache/tiercache",
+                 "cache/blockcache", "cache/remotecache", "options/blockaccess",
+                 "options/client", "options/common"},
 };
 
 int main(int argc, char* argv[]) {

@@ -27,11 +27,13 @@
 #include <glog/logging.h>
 
 #include "common/blockaccess/block_access_log.h"
+#include "common/const.h"
+#include "common/helper.h"
 
 namespace dingofs {
 namespace cache {
 
-DEFINE_string(logdir, "/tmp",
+DEFINE_string(logdir, kDefaultCacheLogDir,
               "Specified logging directory for glog and access log");
 
 DEFINE_int32(loglevel, 0, "Sets glog logging level: 0, 1, 2 and etc");
@@ -46,6 +48,11 @@ static std::shared_ptr<spdlog::logger> logger;
 static bool initialized = false;
 
 void InitLogging(const char* argv0) {
+  // create log dir if not exist
+  FLAGS_logdir = dingofs::Helper::ExpandPath(FLAGS_logdir);
+  CHECK(dingofs::Helper::CreateDirectory(FLAGS_logdir))
+      << "Create cache log dir failed.";
+
   FLAGS_log_dir = FLAGS_logdir;
   FLAGS_v = FLAGS_loglevel;
   FLAGS_logbufsecs = 0;

@@ -17,12 +17,19 @@
 #ifndef DINGOFS_SRC_CLIENT_COMMON_GLOBAL_LOG_H_
 #define DINGOFS_SRC_CLIENT_COMMON_GLOBAL_LOG_H_
 
+#include "common/helper.h"
 #include "common/options/client.h"
 #include "glog/logging.h"
 
+using dingofs::client::FLAGS_client_log_dir;
+
 static int InitLog(const char* argv0) {
   // set log dir
-  FLAGS_log_dir = dingofs::client::FLAGS_client_log_dir;
+  FLAGS_client_log_dir = dingofs::Helper::ExpandPath(FLAGS_client_log_dir);
+  CHECK(dingofs::Helper::CreateDirectory(FLAGS_client_log_dir))
+      << "Create client log dir failed.";
+
+  FLAGS_log_dir = FLAGS_client_log_dir;
   FLAGS_v = dingofs::client::FLAGS_client_log_level;
 
   FLAGS_logbufsecs = 4;

@@ -20,9 +20,11 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include "common/const.h"
+
 namespace dingofs {
 namespace client {
-DEFINE_string(client_log_dir, "/tmp", "set log directory");
+DEFINE_string(client_log_dir, kDefaultClientLogDir, "set client log directory");
 
 DEFINE_int32(client_log_level, 0, "set log level");
 DEFINE_validator(client_log_level, [](const char* /*name*/, int32_t value) {

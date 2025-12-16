@@ -20,10 +20,8 @@
 #include <butil/strings/string_util.h>
 
 #include <cstdint>
-#include <filesystem>
 
 #include "butil/endpoint.h"
-#include "common/const.h"
 #include "glog/logging.h"
 
 namespace dingofs {
@@ -74,22 +72,26 @@ class Helper {
     return true;
   }
 
-  static void InitDefaultRuntimeBaseDir() {
+  // parse ~/.dingofs/path to /home/user/.dingofs/path
+  static std::string ExpandPath(const std::string& path) {
     std::string home_dir = butil::GetHomeDir().value();
     if (home_dir.empty()) {
       LOG(FATAL) << "get home dir fail!";
     }
     std::string expand_dir;
-    butil::ReplaceChars(kDefaultRuntimeBaseDir, "~", home_dir, &expand_dir);
+    butil::ReplaceChars(path, "~", home_dir, &expand_dir);
+    return expand_dir;
+  }
 
-    butil::FilePath dir_path(expand_dir);
+  static bool CreateDirectory(const std::string& path) {
+    butil::FilePath dir_path(path);
     if (!butil::PathExists(dir_path)) {
-      if (!butil::CreateDirectory(dir_path)) {
-        LOG(FATAL) << "create default storage dir fail, path: "
-                   << dir_path.value();
+      if (!butil::CreateDirectory(dir_path, true)) {
+        return false;
       }
     }
-    LOG(INFO) << "default runtime base dir: " << expand_dir;
+
+    return true;
   }
 
 };  // class Helper

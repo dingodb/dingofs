@@ -38,12 +38,18 @@
 #include "cache/utils/context.h"
 #include "cache/utils/helper.h"
 #include "cache/utils/posix.h"
+#include "common/const.h"
+#include "common/helper.h"
 #include "common/options/cache.h"
 
 namespace dingofs {
 namespace cache {
 
-DEFINE_string(cache_dir, ".", "Directory to store blocks");
+DEFINE_string(cache_dir, kDefaultCacheDir, "Directory to store blocks");
+DEFINE_validator(cache_dir, [](const char* /*name*/, const std::string& value) {
+  FLAGS_cache_dir = dingofs::Helper::ExpandPath(value);
+  return true;
+});
 DEFINE_string(cache_dir_uuid, "", "");
 DEFINE_uint32(cache_size_mb, 102400, "Maximum size of the cache in MB");
 
