@@ -54,6 +54,7 @@ DECLARE_string(mds_server_listen_host);
 DECLARE_uint32(mds_server_port);
 
 // service config
+DECLARE_bool(mds_service_worker_enable);
 DECLARE_string(mds_service_worker_set_type);
 
 DECLARE_uint32(mds_service_read_worker_num);
