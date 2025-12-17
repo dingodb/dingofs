@@ -29,10 +29,13 @@
 #include <sstream>
 #include <vector>
 
-#include "cache/utils/helper.h"
 #include "utils/string.h"
 
 namespace dingofs {
+
+static std::string RedString(const std::string& str) {
+  return absl::StrFormat("\x1B[31m%s\033[0m", str);
+}
 
 FlagsInfo FlagsHelper::Parse(int* argc, char*** argv,
                              const FlagExtraInfo& extra_info) {
@@ -141,7 +144,7 @@ std::vector<FlagsHelper::Row> FlagsHelper::Normalize(const FlagsInfo& flags) {
     row.description = gflag.description;
 
     if (gflag.default_value.empty() && gflag.has_validator_fn) {
-      row.default_value = cache::Helper::RedString("[required]");
+      row.default_value = RedString("[required]");
     } else if (!gflag.default_value.empty()) {
       row.default_value = absl::StrFormat("(default: %s)", gflag.default_value);
     } else {
