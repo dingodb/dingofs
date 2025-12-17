@@ -37,7 +37,7 @@ DEFINE_int32(s3_async_thread_num, 16, "async thread num in thread pool");
 DEFINE_bool(s3_use_virtual_address, false, "whether to use virtual address");
 DEFINE_bool(s3_enable_telemetry, false, "whether to enable telemetry");
 
-DEFINE_bool(use_fake_block_access, true, "use fake block access");
+DEFINE_bool(use_fake_block_access, false, "use fake block access");
 
 // throttle options
 DEFINE_uint32(iops_total_limit, 0, "total iops limit(0 means no limit)");

@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_CLIENT_MEM_BLOCK_STORE_H_
-#define DINGOFS_CLIENT_MEM_BLOCK_STORE_H_
+#ifndef DINGOFS_CLIENT_FAKE_BLOCK_STORE_H_
+#define DINGOFS_CLIENT_FAKE_BLOCK_STORE_H_
 
 #include <atomic>
 
@@ -27,11 +27,11 @@ namespace vfs {
 
 class VFSHub;
 
-class MemBlockStore final : public BlockStore {
+class FakeBlockStore final : public BlockStore {
  public:
-  MemBlockStore(VFSHub* hub, std::string uuid);
+  FakeBlockStore(VFSHub* hub, std::string uuid);
 
-  ~MemBlockStore() override { Shutdown(); }
+  ~FakeBlockStore() override { Shutdown(); }
 
   Status Start() override;
 
@@ -58,4 +58,4 @@ class MemBlockStore final : public BlockStore {
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
-#endif  // DINGOFS_CLIENT_MEM_BLOCK_STORE_H_
+#endif  // DINGOFS_CLIENT_FAKE_BLOCK_STORE_H_

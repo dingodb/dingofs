@@ -226,7 +226,7 @@ DEFINE_validator(vfs_dummy_server_port, brpc::PassValidate);
 DEFINE_bool(trace_logging, false, "enable trace log");
 DEFINE_validator(trace_logging, &brpc::PassValidate);
 
-DEFINE_bool(use_mem_block_store, false, "use memory block store");
+DEFINE_bool(use_fake_block_store, false, "use fake block store");
 
 }  // namespace client
 }  // namespace dingofs

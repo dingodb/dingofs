@@ -14,7 +14,7 @@
 
 add_library(vfs_block_store
     block_store_impl.cc
-    mem_block_store.cc
+    fake_block_store.cc
 )
 
 target_link_libraries(vfs_block_store

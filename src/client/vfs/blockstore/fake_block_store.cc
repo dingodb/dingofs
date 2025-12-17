@@ -14,26 +14,28 @@
  * limitations under the License.
  */
 
-#include "client/vfs/blockstore/mem_block_store.h"
+#include "client/vfs/blockstore/fake_block_store.h"
 
 #include <google/protobuf/descriptor.pb.h>
 
 #include "client/common/const.h"
 #include "client/vfs/hub/vfs_hub.h"
-#include "common/static_mem.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 
-#define METHOD_NAME() ("MemBlockStore::" + std::string(__FUNCTION__))
+static constexpr int64_t kStaticMemSize = 4 * 1024 * 1024;  // 4MB
+const char kStaticMemory[kStaticMemSize] = {0};
+
+#define METHOD_NAME() ("FakeBlockStore::" + std::string(__FUNCTION__))
 
 static void NoopDeleter(void* data) {}
 
-MemBlockStore::MemBlockStore(VFSHub* hub, std::string uuid)
+FakeBlockStore::FakeBlockStore(VFSHub* hub, std::string uuid)
     : hub_(hub), uuid_(std::move(uuid)) {}
 
-Status MemBlockStore::Start() {
+Status FakeBlockStore::Start() {
   if (started_) {
     return Status::OK();
   }
@@ -42,7 +44,7 @@ Status MemBlockStore::Start() {
   return Status::OK();
 }
 
-void MemBlockStore::Shutdown() {
+void FakeBlockStore::Shutdown() {
   if (!started_) {
     return;
   }
@@ -50,8 +52,9 @@ void MemBlockStore::Shutdown() {
   started_.store(false);
 }
 
-void MemBlockStore::DoRangeAsync(BlockKey key, uint64_t offset, uint64_t length,
-                                 IOBuffer* buffer, StatusCallback callback) {
+void FakeBlockStore::DoRangeAsync(BlockKey key, uint64_t offset,
+                                  uint64_t length, IOBuffer* buffer,
+                                  StatusCallback callback) {
   (void)key;
   (void)offset;
   CHECK_GE(kStaticMemSize, length);
@@ -59,8 +62,8 @@ void MemBlockStore::DoRangeAsync(BlockKey key, uint64_t offset, uint64_t length,
   callback(Status::OK());
 }
 
-void MemBlockStore::RangeAsync(ContextSPtr ctx, RangeReq req,
-                               StatusCallback callback) {
+void FakeBlockStore::RangeAsync(ContextSPtr ctx, RangeReq req,
+                                StatusCallback callback) {
   auto span = hub_->GetTracer()->StartSpanWithContext(kVFSDataMoudule,
                                                       METHOD_NAME(), ctx);
   auto wrapper = [this, cb = std::move(callback),
@@ -75,8 +78,8 @@ void MemBlockStore::RangeAsync(ContextSPtr ctx, RangeReq req,
   DoRangeAsync(req.block, req.offset, req.length, req.data, std::move(wrapper));
 }
 
-void MemBlockStore::PutAsync(ContextSPtr ctx, PutReq req,
-                             StatusCallback callback) {
+void FakeBlockStore::PutAsync(ContextSPtr ctx, PutReq req,
+                              StatusCallback callback) {
   (void)req;
   auto span = hub_->GetTracer()->StartSpanWithContext(kVFSDataMoudule,
                                                       METHOD_NAME(), ctx);
@@ -91,8 +94,8 @@ void MemBlockStore::PutAsync(ContextSPtr ctx, PutReq req,
   wrapper(Status::OK());
 }
 
-void MemBlockStore::PrefetchAsync(ContextSPtr ctx, PrefetchReq req,
-                                  StatusCallback callback) {
+void FakeBlockStore::PrefetchAsync(ContextSPtr ctx, PrefetchReq req,
+                                   StatusCallback callback) {
   (void)req;
   auto span = hub_->GetTracer()->StartSpanWithContext(kVFSDataMoudule,
                                                       METHOD_NAME(), ctx);
@@ -108,7 +111,7 @@ void MemBlockStore::PrefetchAsync(ContextSPtr ctx, PrefetchReq req,
 }
 
 // utility
-bool MemBlockStore::EnableCache() const { return false; }
+bool FakeBlockStore::EnableCache() const { return false; }
 
 }  // namespace vfs
 }  // namespace client

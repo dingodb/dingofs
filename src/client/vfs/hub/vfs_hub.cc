@@ -23,7 +23,7 @@
 #include "client/common/const.h"
 #include "client/vfs/background/periodic_flush_manager.h"
 #include "client/vfs/blockstore/block_store_impl.h"
-#include "client/vfs/blockstore/mem_block_store.h"
+#include "client/vfs/blockstore/fake_block_store.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/components/prefetch_manager.h"
 #include "client/vfs/components/warmup_manager.h"
@@ -124,8 +124,8 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf, const VFSOption& vfs_option,
   handle_manager_ = std::make_unique<HandleManager>(this);
 
   {
-    if (FLAGS_use_mem_block_store) {
-      block_store_ = std::make_unique<MemBlockStore>(this, fs_info_.uuid);
+    if (FLAGS_use_fake_block_store) {
+      block_store_ = std::make_unique<FakeBlockStore>(this, fs_info_.uuid);
     } else {
       block_store_ = std::make_unique<BlockStoreImpl>(this, fs_info_.uuid,
                                                       block_accesser_.get());

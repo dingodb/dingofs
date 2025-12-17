@@ -23,7 +23,6 @@ add_library(dingofs_common
     flag.cc
     string_slice.cc
     status.cc
-    static_mem.cc
 )
 target_link_libraries(dingofs_common
     dingofs_utils
