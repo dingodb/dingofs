@@ -18,22 +18,17 @@ add_subdirectory(options)
 add_subdirectory(trace)
 
 add_library(dingofs_common
-    rpc_stream.cc
     io_buffer.cc
     version.cc
     flag.cc
+    string_slice.cc
+    status.cc
+    static_mem.cc
 )
 target_link_libraries(dingofs_common
     dingofs_utils
-    gflags::gflags
-    glog::glog
-)
-
-add_library(dingofs_status
-    string_slice.cc
-    status.cc
-)
-target_link_libraries(dingofs_status
+    brpc::brpc
     fmt::fmt
+    gflags::gflags
     glog::glog
 )

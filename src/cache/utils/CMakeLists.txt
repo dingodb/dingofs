@@ -30,6 +30,5 @@ target_link_libraries(cache_utils
     block_accesser
     dingofs_utils
     dingofs_common
-    dingofs_status
     dingofs_executor
 )

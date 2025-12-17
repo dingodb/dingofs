@@ -20,7 +20,7 @@ add_library(s3_accesser
 
 target_link_libraries(s3_accesser
     dingofs_utils
-    dingofs_status
+    dingofs_common
     aws_s3_adapter
     dingofs_metrics
     ${AWSSDK_LIBRARIES}

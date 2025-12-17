@@ -138,6 +138,9 @@ DECLARE_bool(data_stream_page_use_pool);
 // trace log
 DECLARE_bool(trace_logging);
 
+// block store
+DECLARE_bool(use_mem_block_store);
+
 }  // namespace client
 }  // namespace dingofs
 

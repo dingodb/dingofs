@@ -17,6 +17,6 @@ add_library(file_accesser
 )
 
 target_link_libraries(file_accesser
-    dingofs_status
+    dingofs_common
     glog::glog
 )

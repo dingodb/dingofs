@@ -23,7 +23,7 @@ target_link_libraries(vfs_service
     vfs_hub
     mds_common
     client_options
-    dingofs_status
+    dingofs_common
     brpc::brpc
     fmt::fmt
     glog::glog

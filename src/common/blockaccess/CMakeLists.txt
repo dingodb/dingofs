@@ -25,5 +25,5 @@ target_link_libraries(block_accesser
     file_accesser
     s3_accesser
     rados_accesser
-    dingofs_status
+    dingofs_common
 )

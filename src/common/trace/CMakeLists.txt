@@ -20,7 +20,7 @@ add_library(dingofs_trace
 
 target_link_libraries(dingofs_trace
     dingofs_options
-    dingofs_status
+    dingofs_common
     glog::glog
     gflags::gflags
     spdlog::spdlog

@@ -472,7 +472,11 @@ void FileReader::CheckReadahead(ContextSPtr ctx, const FileRange& frange,
   policy_->last_offset = std::max(frange.End(), policy_->last_offset);
 }
 
-std::vector<int64_t> FileReader::SplitRange(const FileRange& frange) {
+std::vector<int64_t> FileReader::SplitRange(ContextSPtr ctx,
+                                            const FileRange& frange) {
+  auto span = vfs_hub_->GetTracer()->StartSpanWithContext(kVFSDataMoudule,
+                                                          METHOD_NAME(), ctx);
+
   std::vector<int64_t> ranges;
   ranges.push_back(frange.offset);
   ranges.push_back(frange.End());
@@ -696,7 +700,7 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
     MakeReadahead(span->GetContext(), last);
   }
 
-  std::vector<int64_t> ranges = SplitRange(frange);
+  std::vector<int64_t> ranges = SplitRange(span->GetContext(), frange);
 
   std::vector<PartialReadRequest> reqs =
       PrepareRequests(span->GetContext(), ranges);
@@ -704,6 +708,8 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
   CheckReadahead(span->GetContext(), frange, attr.length);
 
   SCOPED_CLEANUP({
+    auto release_span = vfs_hub_->GetTracer()->StartSpanWithParent(
+        kVFSDataMoudule, "FileReader::Read::ReleaseRequests", *span);
     for (auto& partial_req : reqs) {
       partial_req.req->ReleaseRef();
       if (partial_req.req->refs == 0 &&

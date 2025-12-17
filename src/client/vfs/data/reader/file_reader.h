@@ -88,7 +88,7 @@ class FileReader {
   void MakeReadahead(ContextSPtr ctx, const FileRange& frange);
 
   // pretected by mutex_
-  std::vector<int64_t> SplitRange(const FileRange& frange);
+  std::vector<int64_t> SplitRange(ContextSPtr ctx, const FileRange& frange);
   // pretected by mutex_
   std::vector<PartialReadRequest> PrepareRequests(
       ContextSPtr ctx, const std::vector<int64_t>& ranges);
