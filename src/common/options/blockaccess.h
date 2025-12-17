@@ -38,6 +38,8 @@ DECLARE_bool(s3_use_thread_pool);
 DECLARE_bool(s3_use_virtual_address);
 DECLARE_bool(s3_enable_telemetry);
 
+DECLARE_bool(use_fake_block_access);
+
 // throttle options
 DECLARE_uint32(iops_total_limit);
 DECLARE_uint32(iops_read_limit);

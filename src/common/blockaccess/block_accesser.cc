@@ -23,6 +23,7 @@
 #include <utility>
 
 #include "common/blockaccess/block_access_log.h"
+#include "common/blockaccess/fake/fake_accesser.h"
 #include "common/blockaccess/rados/rados_accesser.h"
 #include "common/blockaccess/s3/s3_accesser.h"
 #include "common/metrics/blockaccess/block_accesser.h"
@@ -48,16 +49,20 @@ using dingofs::utils::kMB;
 static const char* PrettyBool(bool b) { return b ? "true" : "false"; }
 
 Status BlockAccesserImpl::Init() {
-  if (options_.type == AccesserType::kS3) {
-    data_accesser_ = std::make_unique<S3Accesser>(options_.s3_options);
-    container_name_ = options_.s3_options.s3_info.bucket_name;
-
-  } else if (options_.type == AccesserType::kRados) {
-    data_accesser_ = std::make_unique<RadosAccesser>(options_.rados_options);
-    container_name_ = options_.rados_options.pool_name;
-
+  if (FLAGS_use_fake_block_access) {
+    data_accesser_ = std::make_unique<FakeAccesser>();
+    container_name_ = "fake_block";
+    LOG(WARNING) << "use fake block accesser";
   } else {
-    return Status::InvalidParam("unsupported accesser type");
+    if (options_.type == AccesserType::kS3) {
+      data_accesser_ = std::make_unique<S3Accesser>(options_.s3_options);
+      container_name_ = options_.s3_options.s3_info.bucket_name;
+    } else if (options_.type == AccesserType::kRados) {
+      data_accesser_ = std::make_unique<RadosAccesser>(options_.rados_options);
+      container_name_ = options_.rados_options.pool_name;
+    } else {
+      return Status::InvalidParam("unsupported accesser type");
+    }
   }
 
   if (!data_accesser_->Init()) {
