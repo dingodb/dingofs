@@ -37,8 +37,7 @@ namespace blockaccess {
 
 namespace {
 
-DEFINE_int32(file_block_access_thread_num, 16,
-             "background thread number for file block accesser");
+namespace fs = std::filesystem;
 
 Status PosixError(const std::string context, int error_number) {
   if (error_number == ENOENT) {
@@ -131,6 +130,8 @@ bool FileAccesser::Init() {
     return false;
   }
 
+  LOG(INFO) << "FileAccesser root path: " << root_;
+
   if (!FileExistes(root_)) {
     return CreateDir(root_).ok();
   }
@@ -151,7 +152,6 @@ bool FileAccesser::Destroy() {
 bool FileAccesser::ContainerExist() { return FileExistes(root_); }
 
 std::string FileAccesser::KeyPath(const std::string& key) {
-  namespace fs = std::filesystem;
   if (root_.back() == '/') {
     return (fs::path(root_) / key).lexically_normal().string();
   } else {
@@ -164,6 +164,12 @@ Status FileAccesser::Put(const std::string& key, const char* buffer,
   CHECK_GT(length, 0);
   std::string fpath = KeyPath(key);
   std::string tmp = fpath + ".tmp";
+
+  // create parent path if not eixts
+  auto parent_path = fs::path(tmp).parent_path();
+  if (!fs::exists(parent_path)) {
+    fs::create_directories(parent_path);
+  }
 
   {
     int fd = -1;
