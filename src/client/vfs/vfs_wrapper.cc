@@ -120,11 +120,11 @@ Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
 
   DINGOFS_RETURN_NOT_OK(InitLog());
 
-  if (FLAGS_client_bthread_worker_num > 0) {
-    bthread_setconcurrency(FLAGS_client_bthread_worker_num);
+  if (FLAGS_vfs_bthread_worker_num > 0) {
+    bthread_setconcurrency(FLAGS_vfs_bthread_worker_num);
     LOG(INFO) << fmt::format(
         "set bthread concurrency({}) actual concurrency({}).",
-        FLAGS_client_bthread_worker_num, bthread_getconcurrency());
+        FLAGS_vfs_bthread_worker_num, bthread_getconcurrency());
   }
 
   client_op_metric_ = std::make_unique<metrics::client::ClientOpMetric>();

@@ -24,10 +24,10 @@
 
 namespace dingofs {
 namespace client {
-DEFINE_string(client_log_dir, kDefaultClientLogDir, "set client log directory");
+DEFINE_string(vfs_log_dir, kDefaultClientLogDir, "set client log directory");
 
-DEFINE_int32(client_log_level, 0, "set log level");
-DEFINE_validator(client_log_level, [](const char* /*name*/, int32_t value) {
+DEFINE_int32(vfs_log_level, 0, "set log level");
+DEFINE_validator(vfs_log_level, [](const char* /*name*/, int32_t value) {
   FLAGS_v = value;
   LOG(INFO) << "current verbose logging level is `" << FLAGS_v << "`";
   return true;
@@ -36,125 +36,118 @@ DEFINE_validator(client_log_level, [](const char* /*name*/, int32_t value) {
 DEFINE_string(fstype, "vfs_v2",
               "vfs type(e.g. vfs_v2|vfs_mds|vfs_local|vfs_memory)");
 
-DEFINE_int32(client_bthread_worker_num, 0, "bthread worker num");
+DEFINE_int32(vfs_bthread_worker_num, 0, "bthread worker num");
 
 // access log
-DEFINE_bool(client_access_logging, true, "enable access log");
-DEFINE_validator(client_access_logging, brpc::PassValidate);
+DEFINE_bool(vfs_access_logging, true, "enable access log");
+DEFINE_validator(vfs_access_logging, brpc::PassValidate);
 
-DEFINE_int64(client_access_log_threshold_us, 0, "access log threshold");
-DEFINE_validator(client_access_log_threshold_us, brpc::PassValidate);
+DEFINE_int64(vfs_access_log_threshold_us, 0, "access log threshold");
+DEFINE_validator(vfs_access_log_threshold_us, brpc::PassValidate);
 
 DEFINE_bool(fuse_enable_readdir_cache, true, "enable readdir cache");
 DEFINE_validator(fuse_enable_readdir_cache, brpc::PassValidate);
 
-DEFINE_uint32(client_fuse_entry_cache_timeout_s, 3600,
+DEFINE_uint32(fuse_entry_cache_timeout_s, 3600,
               "fuse entry cache timeout in seconds");
-DEFINE_validator(client_fuse_entry_cache_timeout_s, brpc::PassValidate);
+DEFINE_validator(fuse_entry_cache_timeout_s, brpc::PassValidate);
 
-DEFINE_uint32(client_fuse_attr_cache_timeout_s, 3600,
+DEFINE_uint32(fuse_attr_cache_timeout_s, 3600,
               "fuse attr cache timeout in seconds");
-DEFINE_validator(client_fuse_attr_cache_timeout_s, brpc::PassValidate);
+DEFINE_validator(fuse_attr_cache_timeout_s, brpc::PassValidate);
 
 DEFINE_bool(fuse_dryrun_bench_mode, false, "enable fuse dryrun bench mode");
 
 // smooth upgrade
-DEFINE_uint32(client_fuse_fd_get_max_retries, 100,
+DEFINE_uint32(fuse_fd_get_max_retries, 100,
               "the max retries that get fuse fd from old dingo-fuse during "
               "smooth upgrade");
-DEFINE_validator(client_fuse_fd_get_max_retries, brpc::PassValidate);
+DEFINE_validator(fuse_fd_get_max_retries, brpc::PassValidate);
 DEFINE_uint32(
-    client_fuse_fd_get_retry_interval_ms, 100,
+    fuse_fd_get_retry_interval_ms, 100,
     "the interval in millseconds that get fuse fd from old dingo-fuse "
     "during smooth upgrade");
-DEFINE_validator(client_fuse_fd_get_retry_interval_ms, brpc::PassValidate);
+DEFINE_validator(fuse_fd_get_retry_interval_ms, brpc::PassValidate);
 DEFINE_uint32(
-    client_fuse_check_alive_max_retries, 600,
+    fuse_check_alive_max_retries, 600,
     "the max retries that check old dingo-fuse is alive during smooth upgrade");
-DEFINE_validator(client_fuse_check_alive_max_retries, brpc::PassValidate);
-DEFINE_uint32(client_fuse_check_alive_retry_interval_ms, 1000,
+DEFINE_validator(fuse_check_alive_max_retries, brpc::PassValidate);
+DEFINE_uint32(fuse_check_alive_retry_interval_ms, 1000,
               "the interval in millseconds that check old dingo-fuse is alive "
               "during smooth upgrade");
-DEFINE_validator(client_fuse_check_alive_retry_interval_ms, brpc::PassValidate);
+DEFINE_validator(fuse_check_alive_retry_interval_ms, brpc::PassValidate);
 
 // vfs meta access log
-DEFINE_bool(client_vfs_meta_logging, true, "enable vfs meta system log");
-DEFINE_validator(client_vfs_meta_logging, brpc::PassValidate);
+DEFINE_bool(vfs_meta_access_logging, true, "enable vfs meta system log");
+DEFINE_validator(vfs_meta_access_logging, brpc::PassValidate);
 
-DEFINE_int64(client_vfs_meta_log_threshold_us, 0, "access log threshold");
-DEFINE_validator(client_vfs_meta_log_threshold_us, brpc::PassValidate);
+DEFINE_int64(vfs_meta_access_log_threshold_us, 0, "access log threshold");
+DEFINE_validator(vfs_meta_access_log_threshold_us, brpc::PassValidate);
 
-DEFINE_uint64(client_vfs_meta_memo_expired_s, 1,
-              "modify time memo expired time");
-DEFINE_validator(client_vfs_meta_memo_expired_s, brpc::PassValidate);
+DEFINE_uint64(vfs_meta_memo_expired_s, 1, "modify time memo expired time");
+DEFINE_validator(vfs_meta_memo_expired_s, brpc::PassValidate);
 
-DEFINE_uint64(client_vfs_meta_inode_cache_expired_s, 1,
-              "inode cache expired time");
-DEFINE_validator(client_vfs_meta_inode_cache_expired_s, brpc::PassValidate);
+DEFINE_uint64(vfs_meta_inode_cache_expired_s, 1, "inode cache expired time");
+DEFINE_validator(vfs_meta_inode_cache_expired_s, brpc::PassValidate);
 
-DEFINE_int32(client_vfs_flush_bg_thread, 16,
-             "number of background flush threads");
-DEFINE_validator(client_vfs_flush_bg_thread, brpc::PassValidate);
+DEFINE_int32(vfs_flush_bg_thread, 16, "number of background flush threads");
+DEFINE_validator(vfs_flush_bg_thread, brpc::PassValidate);
 
-DEFINE_int32(client_vfs_periodic_flush_interval_ms, 100,
+DEFINE_int32(vfs_periodic_flush_interval_ms, 100,
              "periodic flush interval in milliseconds");
-DEFINE_validator(client_vfs_periodic_flush_interval_ms, brpc::PassValidate);
+DEFINE_validator(vfs_periodic_flush_interval_ms, brpc::PassValidate);
 
-DEFINE_double(client_vfs_trigger_flush_free_page_ratio, 0.3,
+DEFINE_double(vfs_trigger_flush_free_page_ratio, 0.3,
               "trigger flush when free page ratio is lower than this value");
-DEFINE_validator(client_vfs_trigger_flush_free_page_ratio, brpc::PassValidate);
+DEFINE_validator(vfs_trigger_flush_free_page_ratio, brpc::PassValidate);
 
-DEFINE_int32(client_vfs_read_executor_thread, 8,
-             "number of read executor threads");
-DEFINE_validator(client_vfs_read_executor_thread, brpc::PassValidate);
+DEFINE_int32(vfs_read_executor_thread, 8, "number of read executor threads");
+DEFINE_validator(vfs_read_executor_thread, brpc::PassValidate);
 
-DEFINE_int32(client_vfs_read_max_retry_block_not_found, 10,
+DEFINE_int32(vfs_read_max_retry_block_not_found, 10,
              "max retry when block not found");
-DEFINE_validator(client_vfs_read_max_retry_block_not_found, brpc::PassValidate);
+DEFINE_validator(vfs_read_max_retry_block_not_found, brpc::PassValidate);
 
-DEFINE_uint32(client_vfs_read_buffer_total_mb, 1024,
-              "total read buffer size in MB");
+DEFINE_uint32(vfs_read_buffer_total_mb, 1024, "total read buffer size in MB");
 
-DEFINE_bool(client_vfs_print_readahead_stats, false, "print readahead stats");
-DEFINE_validator(client_vfs_print_readahead_stats, brpc::PassValidate);
+DEFINE_bool(vfs_print_readahead_stats, false, "print readahead stats");
+DEFINE_validator(vfs_print_readahead_stats, brpc::PassValidate);
 
 // prefetch
-DEFINE_uint32(client_vfs_prefetch_blocks, 1, "number of blocks to prefetch");
-DEFINE_validator(client_vfs_prefetch_blocks, brpc::PassValidate);
+DEFINE_uint32(vfs_prefetch_blocks, 1, "number of blocks to prefetch");
+DEFINE_validator(vfs_prefetch_blocks, brpc::PassValidate);
 
-DEFINE_uint32(client_vfs_prefetch_threads, 8, "number of prefetch threads");
+DEFINE_uint32(vfs_prefetch_threads, 8, "number of prefetch threads");
 
 // warmup
-DEFINE_int32(client_vfs_warmup_threads, 4, "number of warmup threads");
+DEFINE_int32(vfs_warmup_threads, 4, "number of warmup threads");
 
-DEFINE_bool(client_vfs_intime_warmup_enable, false,
+DEFINE_bool(vfs_intime_warmup_enable, false,
             "enable intime warmup, default is false");
-DEFINE_validator(client_vfs_intime_warmup_enable, brpc::PassValidate);
+DEFINE_validator(vfs_intime_warmup_enable, brpc::PassValidate);
 
-DEFINE_int64(client_vfs_warmup_mtime_restart_interval_secs, 120,
+DEFINE_int64(vfs_warmup_mtime_restart_interval_secs, 120,
              "intime warmup restart interval");
-DEFINE_validator(client_vfs_warmup_mtime_restart_interval_secs,
-                 brpc::PassValidate);
-DEFINE_int64(client_vfs_warmup_trigger_restart_interval_secs, 1800,
+DEFINE_validator(vfs_warmup_mtime_restart_interval_secs, brpc::PassValidate);
+DEFINE_int64(vfs_warmup_trigger_restart_interval_secs, 1800,
              "passive warmup restart interval");
-DEFINE_validator(client_vfs_warmup_trigger_restart_interval_secs,
-                 brpc::PassValidate);
+DEFINE_validator(vfs_warmup_trigger_restart_interval_secs, brpc::PassValidate);
 
 // vfs meta
-DEFINE_bool(client_vfs_inode_cache_enable, true,
+DEFINE_bool(vfs_meta_inode_cache_enable, true,
             "enable inode cache, default is false");
-DEFINE_validator(client_vfs_inode_cache_enable, brpc::PassValidate);
+DEFINE_validator(vfs_meta_inode_cache_enable, brpc::PassValidate);
 
-DEFINE_uint32(client_vfs_read_dir_batch_size, 1024, "read dir batch size.");
-DEFINE_uint32(client_vfs_rpc_timeout_ms, 10000, "rpc timeout ms");
-DEFINE_validator(client_vfs_rpc_timeout_ms, brpc::PassValidate);
+DEFINE_uint32(vfs_meta_read_dir_batch_size, 1024, "read dir batch size.");
+DEFINE_uint32(vfs_meta_rpc_timeout_ms, 10000, "rpc timeout ms");
+DEFINE_validator(vfs_meta_rpc_timeout_ms, brpc::PassValidate);
 
-DEFINE_int32(client_vfs_rpc_retry_times, 8, "rpc retry time");
-DEFINE_validator(client_vfs_rpc_retry_times, brpc::PassValidate);
+DEFINE_int32(vfs_meta_rpc_retry_times, 8, "rpc retry time");
+DEFINE_validator(vfs_meta_rpc_retry_times, brpc::PassValidate);
 
-DEFINE_uint32(client_write_slicce_operation_merge_delay_us, 10,
+DEFINE_uint32(vfs_meta_write_slice_operation_merge_delay_us, 10,
               "write slice operation merge delay us.");
-DEFINE_validator(client_write_slicce_operation_merge_delay_us,
+DEFINE_validator(vfs_meta_write_slice_operation_merge_delay_us,
                  brpc::PassValidate);
 
 //  inode_blocks_service
@@ -225,10 +218,10 @@ DEFINE_uint32(vfs_dummy_server_port, 10000, "dummy server port");
 DEFINE_validator(vfs_dummy_server_port, brpc::PassValidate);
 
 // trace log
-DEFINE_bool(trace_logging, false, "enable trace log");
-DEFINE_validator(trace_logging, &brpc::PassValidate);
+DEFINE_bool(vfs_trace_logging, false, "enable trace log");
+DEFINE_validator(vfs_trace_logging, &brpc::PassValidate);
 
-DEFINE_bool(use_fake_block_store, false, "use fake block store");
+DEFINE_bool(vfs_use_fake_block_store, false, "use fake block store");
 
 }  // namespace client
 }  // namespace dingofs

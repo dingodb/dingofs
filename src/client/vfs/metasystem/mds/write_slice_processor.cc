@@ -124,8 +124,8 @@ void WriteSliceProcessor::ProcessOperation() {
       break;
     }
 
-    if (FLAGS_client_write_slicce_operation_merge_delay_us > 0) {
-      bthread_usleep(FLAGS_client_write_slicce_operation_merge_delay_us);
+    if (FLAGS_vfs_meta_write_slice_operation_merge_delay_us > 0) {
+      bthread_usleep(FLAGS_vfs_meta_write_slice_operation_merge_delay_us);
     }
 
     do {

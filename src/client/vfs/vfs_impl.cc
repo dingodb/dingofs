@@ -93,11 +93,11 @@ bool VFSImpl::Load(ContextSPtr ctx, const Json::Value& value) {
 }
 
 double VFSImpl::GetAttrTimeout(const FileType& type) {  // NOLINT
-  return FLAGS_client_fuse_attr_cache_timeout_s;
+  return FLAGS_fuse_attr_cache_timeout_s;
 }
 
 double VFSImpl::GetEntryTimeout(const FileType& type) {  // NOLINT
-  return FLAGS_client_fuse_entry_cache_timeout_s;
+  return FLAGS_fuse_entry_cache_timeout_s;
 }
 
 Status VFSImpl::Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
@@ -346,7 +346,7 @@ Status VFSImpl::Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t size,
 
   PageAllocatorStat stat = vfs_hub_->GetPageAllocator()->GetStat();
   if ((stat.free_pages / (double)stat.total_pages) <
-      FLAGS_client_vfs_trigger_flush_free_page_ratio) {
+      FLAGS_vfs_trigger_flush_free_page_ratio) {
     VLOG(1) << "trigger flush because low memory, page stat: "
             << stat.ToString();
     vfs_hub_->GetHandleManager()->TriggerFlushAll();
@@ -648,8 +648,8 @@ Status VFSImpl::StartBrpcServer() {
   }
 
   brpc::ServerOptions brpc_server_options;
-  if (FLAGS_client_bthread_worker_num > 0) {
-    brpc_server_options.num_threads = FLAGS_client_bthread_worker_num;
+  if (FLAGS_vfs_bthread_worker_num > 0) {
+    brpc_server_options.num_threads = FLAGS_vfs_bthread_worker_num;
   }
 
   rc = brpc_server_.Start(vfs_option_.dummy_server_port, &brpc_server_options);

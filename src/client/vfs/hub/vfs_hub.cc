@@ -75,7 +75,7 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf, const VFSOption& vfs_option,
   }
   CHECK(rela_meta_system != nullptr) << "build meta system fail";
 
-  if (FLAGS_trace_logging) {
+  if (FLAGS_vfs_trace_logging) {
     tracer_ = std::make_unique<Tracer>(
         std::make_unique<LogTraceExporter>(kVFSMoudule, FLAGS_log_dir));
   } else {
@@ -124,7 +124,7 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf, const VFSOption& vfs_option,
   handle_manager_ = std::make_unique<HandleManager>(this);
 
   {
-    if (FLAGS_use_fake_block_store) {
+    if (FLAGS_vfs_use_fake_block_store) {
       block_store_ = std::make_unique<FakeBlockStore>(this, fs_info_.uuid);
     } else {
       block_store_ = std::make_unique<BlockStoreImpl>(this, fs_info_.uuid,
@@ -135,13 +135,13 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf, const VFSOption& vfs_option,
 
   {
     flush_executor_ = std::make_unique<ExecutorImpl>(
-        kFlushExecutorName, FLAGS_client_vfs_flush_bg_thread);
+        kFlushExecutorName, FLAGS_vfs_flush_bg_thread);
     flush_executor_->Start();
   }
 
   {
     read_executor_ = std::make_unique<ExecutorImpl>(
-        kReadExecutorName, FLAGS_client_vfs_read_executor_thread);
+        kReadExecutorName, FLAGS_vfs_read_executor_thread);
     read_executor_->Start();
   }
 
@@ -166,7 +166,7 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf, const VFSOption& vfs_option,
   }
 
   {
-    int64_t total_mb = FLAGS_client_vfs_read_buffer_total_mb;
+    int64_t total_mb = FLAGS_vfs_read_buffer_total_mb;
     if (total_mb <= 0) {
       LOG(ERROR) << "[vfs.hub] invalid read buffer total mb option, total_mb: "
                  << total_mb;
@@ -185,7 +185,7 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf, const VFSOption& vfs_option,
   {
     if (block_store_->EnableCache()) {
       prefetch_manager_ = PrefetchManager::New(this);
-      auto status = prefetch_manager_->Start(FLAGS_client_vfs_prefetch_threads);
+      auto status = prefetch_manager_->Start(FLAGS_vfs_prefetch_threads);
       if (!status.ok()) {
         LOG(ERROR) << "[vfs.hub] prefetch manager start failed.";
         return status;
@@ -198,7 +198,7 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf, const VFSOption& vfs_option,
 
   {
     warmup_manager_ = WarmupManager::New(this);
-    auto ok = warmup_manager_->Start(FLAGS_client_vfs_warmup_threads);
+    auto ok = warmup_manager_->Start(FLAGS_vfs_warmup_threads);
     if (!ok.ok()) {
       LOG(ERROR) << "[vfs.hub] warmup manager start failed.";
       return ok;

@@ -54,7 +54,7 @@ Status DirIterator::GetValue(ContextSPtr& ctx, uint64_t off, bool with_attr,
       return Status::OK();
     }
 
-    if (is_fetch_ && entries_.size() < FLAGS_client_vfs_read_dir_batch_size) {
+    if (is_fetch_ && entries_.size() < FLAGS_vfs_meta_read_dir_batch_size) {
       return Status::NoData("not more dentry");
     }
 
@@ -69,7 +69,7 @@ Status DirIterator::GetValue(ContextSPtr& ctx, uint64_t off, bool with_attr,
 Status DirIterator::Fetch(ContextSPtr& ctx) {
   std::vector<DirEntry> entries;
   auto status = mds_client_->ReadDir(ctx, ino_, fh_, last_name_,
-                                     FLAGS_client_vfs_read_dir_batch_size,
+                                     FLAGS_vfs_meta_read_dir_batch_size,
                                      with_attr_, entries);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(

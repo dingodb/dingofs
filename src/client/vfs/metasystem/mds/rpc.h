@@ -88,8 +88,8 @@ inline std::string TakeIp(const EndPoint& endpoint) {
 
 struct SendRequestOption {
   SendRequestOption()
-      : timeout_ms(FLAGS_client_vfs_rpc_timeout_ms),
-        max_retry(FLAGS_client_vfs_rpc_retry_times) {}
+      : timeout_ms(FLAGS_vfs_meta_rpc_timeout_ms),
+        max_retry(FLAGS_vfs_meta_rpc_retry_times) {}
 
   int64_t timeout_ms;
   int max_retry;

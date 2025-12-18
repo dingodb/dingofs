@@ -105,7 +105,7 @@ void PeriodicFlushManager::FlushHandle(uint64_t fh) {
 
   vfs_hub_->GetFlushExecutor()->Schedule(
       [this, fh] { FlushHandle(fh); },
-      FLAGS_client_vfs_periodic_flush_interval_ms);
+      FLAGS_vfs_periodic_flush_interval_ms);
 }
 
 void PeriodicFlushManager::SubmitToFlush(HandleSPtr handle) {
@@ -129,7 +129,7 @@ void PeriodicFlushManager::SubmitToFlush(HandleSPtr handle) {
 
   vfs_hub_->GetFlushExecutor()->Schedule(
       [this, fh] { FlushHandle(fh); },
-      FLAGS_client_vfs_periodic_flush_interval_ms);
+      FLAGS_vfs_periodic_flush_interval_ms);
 }
 
 }  // namespace vfs

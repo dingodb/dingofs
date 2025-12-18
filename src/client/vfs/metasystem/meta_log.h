@@ -38,7 +38,7 @@ class MetaLogGuard {
   using MessageHandler = std::function<std::string()>;
 
   explicit MetaLogGuard(uint64_t start_us, MessageHandler handler)
-      : enabled_(FLAGS_client_vfs_meta_logging),
+      : enabled_(FLAGS_vfs_meta_access_logging),
         start_us(start_us),
         handler_(std::move(handler)) {
     if (!enabled_) {
@@ -55,7 +55,7 @@ class MetaLogGuard {
     }
 
     int64_t duration = butil::cpuwide_time_us() - start_us;
-    if (duration > FLAGS_client_vfs_meta_log_threshold_us) {
+    if (duration > FLAGS_vfs_meta_access_log_threshold_us) {
       meta_logger->warn("{0} <{1:.6f}>", handler_(), duration / 1e6);
     }
   }

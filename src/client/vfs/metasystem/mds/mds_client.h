@@ -263,7 +263,7 @@ Status MDSClient::SendRequest(ContextSPtr ctx, GetMdsFn get_mds_fn,
     }
 
     return status;
-  } while (IsRetry(retry, FLAGS_client_vfs_rpc_retry_times));
+  } while (IsRetry(retry, FLAGS_vfs_meta_rpc_retry_times));
 
   return status;
 }

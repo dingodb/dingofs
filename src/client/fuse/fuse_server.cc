@@ -39,10 +39,10 @@ namespace dingofs {
 namespace client {
 namespace fuse {
 
-USING_FLAG(client_fuse_fd_get_max_retries)
-USING_FLAG(client_fuse_fd_get_retry_interval_ms)
-USING_FLAG(client_fuse_check_alive_max_retries)
-USING_FLAG(client_fuse_check_alive_retry_interval_ms)
+USING_FLAG(fuse_fd_get_max_retries)
+USING_FLAG(fuse_fd_get_retry_interval_ms)
+USING_FLAG(fuse_check_alive_max_retries)
+USING_FLAG(fuse_check_alive_retry_interval_ms)
 
 // fuse mount options
 DEFINE_string(fuse_mount_options, "default_permissions,allow_other",
@@ -373,8 +373,8 @@ bool FuseServer::ShutdownGracefully(const std::string& mountpoint) {
     if (pid > 0) break;
 
     std::this_thread::sleep_for(
-        std::chrono::milliseconds(FLAGS_client_fuse_fd_get_retry_interval_ms));
-  } while (++retry <= FLAGS_client_fuse_fd_get_max_retries);
+        std::chrono::milliseconds(FLAGS_fuse_fd_get_retry_interval_ms));
+  } while (++retry <= FLAGS_fuse_fd_get_max_retries);
 
   if (pid <= 0) {
     LOG(ERROR) << "get pid fail, filepath=" << file_name;
@@ -391,10 +391,9 @@ bool FuseServer::ShutdownGracefully(const std::string& mountpoint) {
 
   fuse_fd_ = GetFuseFd(comm_path.c_str(), init_fbuf_.mem, init_fbuf_.mem_size,
                        &init_fbuf_.size);
-  for (int i = 0; i < FLAGS_client_fuse_fd_get_max_retries && fuse_fd_ <= 2;
-       i++) {
+  for (int i = 0; i < FLAGS_fuse_fd_get_max_retries && fuse_fd_ <= 2; i++) {
     std::this_thread::sleep_for(
-        std::chrono::milliseconds(FLAGS_client_fuse_fd_get_retry_interval_ms));
+        std::chrono::milliseconds(FLAGS_fuse_fd_get_retry_interval_ms));
     fuse_fd_ = GetFuseFd(comm_path.c_str(), init_fbuf_.mem, init_fbuf_.mem_size,
                          &init_fbuf_.size);
   }
@@ -409,9 +408,9 @@ bool FuseServer::ShutdownGracefully(const std::string& mountpoint) {
   kill(pid, SIGHUP);
 
   // check old dingo-fuse is alive
-  for (int i = 0; i < FLAGS_client_fuse_check_alive_max_retries; i++) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(
-        FLAGS_client_fuse_check_alive_retry_interval_ms));
+  for (int i = 0; i < FLAGS_fuse_check_alive_max_retries; i++) {
+    std::this_thread::sleep_for(
+        std::chrono::milliseconds(FLAGS_fuse_check_alive_retry_interval_ms));
     if (!CheckProcessAlive(pid)) {
       return true;
     }

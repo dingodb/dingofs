@@ -45,7 +45,7 @@ struct AccessLogGuard {
   using MessageHandler = std::function<std::string()>;
 
   explicit AccessLogGuard(MessageHandler handler, bool enable = true)
-      : enable(FLAGS_client_access_logging && enable), handler(handler) {
+      : enable(FLAGS_vfs_access_logging && enable), handler(handler) {
     if (!enable) {
       return;
     }
@@ -61,7 +61,7 @@ struct AccessLogGuard {
     timer.stop();
     int64_t duration = timer.u_elapsed();
 
-    if (duration >= FLAGS_client_access_log_threshold_us) {
+    if (duration >= FLAGS_vfs_access_log_threshold_us) {
       logger->info("{0} <{1:.6f}>", handler(), timer.u_elapsed() / 1e6);
     }
   }

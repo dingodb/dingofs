@@ -273,21 +273,21 @@ void MDSMetaSystem::Heartbeat() {
 
 void MDSMetaSystem::CleanExpiredModifyTimeMemo() {
   uint64_t expired_time_s =
-      mds::Helper::Timestamp() - FLAGS_client_vfs_meta_memo_expired_s;
+      mds::Helper::Timestamp() - FLAGS_vfs_meta_memo_expired_s;
 
   modify_time_memo_.ForgetExpired(expired_time_s);
 }
 
 void MDSMetaSystem::CleanExpiredChunkMemo() {
   uint64_t expired_time_s =
-      mds::Helper::Timestamp() - FLAGS_client_vfs_meta_memo_expired_s;
+      mds::Helper::Timestamp() - FLAGS_vfs_meta_memo_expired_s;
 
   chunk_memo_.ForgetExpired(expired_time_s);
 }
 
 void MDSMetaSystem::CleanExpiredInodeCache() {
   uint64_t expired_time_s =
-      mds::Helper::Timestamp() - FLAGS_client_vfs_meta_inode_cache_expired_s;
+      mds::Helper::Timestamp() - FLAGS_vfs_meta_inode_cache_expired_s;
 
   inode_cache_->CleanExpired(expired_time_s);
 }
@@ -941,19 +941,19 @@ Status MDSMetaSystem::Rename(ContextSPtr ctx, Ino old_parent,
 }
 
 void MDSMetaSystem::PutInodeToCache(const AttrEntry& attr_entry) {
-  if (FLAGS_client_vfs_inode_cache_enable) {
+  if (FLAGS_vfs_meta_inode_cache_enable) {
     inode_cache_->Put(attr_entry.ino(), attr_entry);
   }
 }
 
 void MDSMetaSystem::DeleteInodeFromCache(Ino ino) {
-  if (FLAGS_client_vfs_inode_cache_enable) {
+  if (FLAGS_vfs_meta_inode_cache_enable) {
     inode_cache_->Delete(ino);
   }
 }
 
 InodeSPtr MDSMetaSystem::GetInodeFromCache(Ino ino) {
-  return (FLAGS_client_vfs_inode_cache_enable) ? inode_cache_->Get(ino)
+  return (FLAGS_vfs_meta_inode_cache_enable) ? inode_cache_->Get(ino)
                                                : nullptr;
 }
 bool MDSMetaSystem::GetSliceFromCache(Ino ino, uint64_t index,

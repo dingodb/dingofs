@@ -39,17 +39,17 @@ namespace client {
  * curl -s http://127.0.0.1:9000/flags/vlog_level?setvalue=0
  */
 // log
-DECLARE_string(client_log_dir);
-DECLARE_int32(client_log_level);
+DECLARE_string(vfs_log_dir);
+DECLARE_int32(vfs_log_level);
 
 // file system
 DECLARE_string(fstype);
 
 // bthread
-DECLARE_int32(client_bthread_worker_num);
+DECLARE_int32(vfs_bthread_worker_num);
 // access log
-DECLARE_bool(client_access_logging);
-DECLARE_int64(client_access_log_threshold_us);
+DECLARE_bool(vfs_access_logging);
+DECLARE_int64(vfs_access_log_threshold_us);
 
 // fuse mount option
 DECLARE_string(fuse_mount_options);
@@ -66,53 +66,51 @@ DECLARE_bool(fuse_conn_info_want_splice_read);
 DECLARE_bool(fuse_conn_info_want_splice_write);
 DECLARE_bool(fuse_conn_info_want_auto_inval_data);
 
-DECLARE_uint32(client_fuse_entry_cache_timeout_s);
-DECLARE_uint32(client_fuse_attr_cache_timeout_s);
+DECLARE_uint32(fuse_entry_cache_timeout_s);
+DECLARE_uint32(fuse_attr_cache_timeout_s);
 
 DECLARE_bool(fuse_dryrun_bench_mode);
 
 // smooth upgrade
-DECLARE_uint32(client_fuse_fd_get_max_retries);
-DECLARE_uint32(client_fuse_fd_get_retry_interval_ms);
-DECLARE_uint32(client_fuse_check_alive_max_retries);
-DECLARE_uint32(client_fuse_check_alive_retry_interval_ms);
+DECLARE_uint32(fuse_fd_get_max_retries);
+DECLARE_uint32(fuse_fd_get_retry_interval_ms);
+DECLARE_uint32(fuse_check_alive_max_retries);
+DECLARE_uint32(fuse_check_alive_retry_interval_ms);
 
 // vfs meta system log
-DECLARE_bool(client_vfs_meta_logging);
-DECLARE_int64(client_vfs_meta_log_threshold_us);
-DECLARE_uint64(client_vfs_meta_memo_expired_s);
-DECLARE_uint64(client_vfs_meta_inode_cache_expired_s);
+DECLARE_bool(vfs_meta_access_logging);
+DECLARE_int64(vfs_meta_access_log_threshold_us);
+DECLARE_uint64(vfs_meta_memo_expired_s);
+DECLARE_uint64(vfs_meta_inode_cache_expired_s);
 
 // vfs read
-DECLARE_int32(client_vfs_read_executor_thread);
-DECLARE_int32(client_vfs_read_max_retry_block_not_found);
-
-DECLARE_uint32(client_vfs_read_buffer_total_mb);
-
-DECLARE_bool(client_vfs_print_readahead_stats);
+DECLARE_int32(vfs_read_executor_thread);
+DECLARE_int32(vfs_read_max_retry_block_not_found);
+DECLARE_uint32(vfs_read_buffer_total_mb);
+DECLARE_bool(vfs_print_readahead_stats);
 
 // vfs flush
-DECLARE_int32(client_vfs_flush_bg_thread);
-DECLARE_int32(client_vfs_periodic_flush_interval_ms);
-DECLARE_double(client_vfs_trigger_flush_free_page_ratio);
+DECLARE_int32(vfs_flush_bg_thread);
+DECLARE_int32(vfs_periodic_flush_interval_ms);
+DECLARE_double(vfs_trigger_flush_free_page_ratio);
 
 // vfs prefetch
-DECLARE_uint32(client_vfs_prefetch_blocks);
-DECLARE_uint32(client_vfs_prefetch_threads);
+DECLARE_uint32(vfs_prefetch_blocks);
+DECLARE_uint32(vfs_prefetch_threads);
 
 // vfs warmup
-DECLARE_int32(client_vfs_warmup_threads);
-DECLARE_bool(client_vfs_intime_warmup_enable);
-DECLARE_int64(client_vfs_warmup_mtime_restart_interval_secs);
-DECLARE_int64(client_vfs_warmup_trigger_restart_interval_secs);
+DECLARE_int32(vfs_warmup_threads);
+DECLARE_bool(vfs_intime_warmup_enable);
+DECLARE_int64(vfs_warmup_mtime_restart_interval_secs);
+DECLARE_int64(vfs_warmup_trigger_restart_interval_secs);
 
 // vfs meta
-DECLARE_bool(client_vfs_inode_cache_enable);
-DECLARE_uint32(client_vfs_read_dir_batch_size);
-DECLARE_uint32(client_vfs_rpc_timeout_ms);
-DECLARE_int32(client_vfs_rpc_retry_times);
+DECLARE_bool(vfs_meta_inode_cache_enable);
+DECLARE_uint32(vfs_meta_read_dir_batch_size);
+DECLARE_uint32(vfs_meta_rpc_timeout_ms);
+DECLARE_int32(vfs_meta_rpc_retry_times);
 
-DECLARE_uint32(client_write_slicce_operation_merge_delay_us);
+DECLARE_uint32(vfs_meta_write_slice_operation_merge_delay_us);
 
 // begin used in inode_blocks_service
 DECLARE_uint32(format_file_offset_width);
@@ -138,10 +136,10 @@ DECLARE_uint64(data_stream_page_total_size_mb);
 DECLARE_bool(data_stream_page_use_pool);
 
 // trace log
-DECLARE_bool(trace_logging);
+DECLARE_bool(vfs_trace_logging);
 
 // block store
-DECLARE_bool(use_fake_block_store);
+DECLARE_bool(vfs_use_fake_block_store);
 
 }  // namespace client
 }  // namespace dingofs

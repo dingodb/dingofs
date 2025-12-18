@@ -88,7 +88,7 @@ FileReader::~FileReader() {
     DeleteReadRequest(req);
   }
 
-  if (FLAGS_client_vfs_print_readahead_stats) {
+  if (FLAGS_vfs_print_readahead_stats) {
     LOG(INFO) << fmt::format(
         "FileReader ino: {}, fh: {} done, readahead_stats: {}", ino_, fh_,
         policy_->readahead_stats.ToString());
@@ -624,11 +624,11 @@ void FileReader::CheckPrefetch(ContextSPtr ctx, const Attr& attr,
                                                           METHOD_NAME(), ctx);
 
   uint64_t time_now = butil::monotonic_time_s();
-  if (FLAGS_client_vfs_intime_warmup_enable &&
+  if (FLAGS_vfs_intime_warmup_enable &&
       ((time_now - last_intime_warmup_trigger_) >
-           FLAGS_client_vfs_warmup_trigger_restart_interval_secs ||
+           FLAGS_vfs_warmup_trigger_restart_interval_secs ||
        (attr.mtime - last_intime_warmup_mtime_) >
-           FLAGS_client_vfs_warmup_mtime_restart_interval_secs)) {
+           FLAGS_vfs_warmup_mtime_restart_interval_secs)) {
     LOG(INFO) << "Trigger intime warmup for ino: " << ino_ << ".";
     last_intime_warmup_trigger_ = time_now;
     last_intime_warmup_mtime_ = attr.mtime;
@@ -637,10 +637,10 @@ void FileReader::CheckPrefetch(ContextSPtr ctx, const Attr& attr,
   }
 
   // Prefetch blocks if enabled
-  if (FLAGS_client_vfs_prefetch_blocks > 0 &&
+  if (FLAGS_vfs_prefetch_blocks > 0 &&
       vfs_hub_->GetBlockStore()->EnableCache()) {
     vfs_hub_->GetPrefetchManager()->SubmitTask(PrefetchContext{
-        ino_, frange.offset, attr.length, FLAGS_client_vfs_prefetch_blocks});
+        ino_, frange.offset, attr.length, FLAGS_vfs_prefetch_blocks});
   }
 }
 
