@@ -41,6 +41,9 @@ static const std::string kDefaultCacheLogDir =
 static const std::string kDefaultClientLogDir =
     kDefaultRuntimeBaseDir + "log/client";
 
+static const std::string kDefaultDataDir = kDefaultRuntimeBaseDir + "data";
+static const std::string kDefaultMetaDBDir = kDefaultRuntimeBaseDir + "meta";
+
 }  // namespace dingofs
 
 #endif  // DINGOFS_SRC_COMMON_CONST_H_

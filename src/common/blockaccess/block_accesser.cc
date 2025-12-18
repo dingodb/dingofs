@@ -24,6 +24,7 @@
 
 #include "common/blockaccess/block_access_log.h"
 #include "common/blockaccess/fake/fake_accesser.h"
+#include "common/blockaccess/files/file_accesser.h"
 #include "common/blockaccess/rados/rados_accesser.h"
 #include "common/blockaccess/s3/s3_accesser.h"
 #include "common/metrics/blockaccess/block_accesser.h"
@@ -60,6 +61,10 @@ Status BlockAccesserImpl::Init() {
     } else if (options_.type == AccesserType::kRados) {
       data_accesser_ = std::make_unique<RadosAccesser>(options_.rados_options);
       container_name_ = options_.rados_options.pool_name;
+    } else if (options_.type == AccesserType::kLocalFile) {
+      data_accesser_ =
+          std::make_unique<FileAccesser>(options_.file_options.path);
+      container_name_ = options_.file_options.path;
     } else {
       return Status::InvalidParam("unsupported accesser type");
     }

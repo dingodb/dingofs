@@ -132,8 +132,10 @@ bool FileAccesser::Init() {
 
   LOG(INFO) << "FileAccesser root path: " << root_;
 
-  if (!FileExistes(root_)) {
-    return CreateDir(root_).ok();
+  // recursive create container path if not eixts
+  auto container_path = fs::path(root_);
+  if (!fs::exists(container_path)) {
+    fs::create_directories(container_path);
   }
 
   started_.store(true, std::memory_order_relaxed);
@@ -165,7 +167,7 @@ Status FileAccesser::Put(const std::string& key, const char* buffer,
   std::string fpath = KeyPath(key);
   std::string tmp = fpath + ".tmp";
 
-  // create parent path if not eixts
+  // recursive create parent path if not eixts
   auto parent_path = fs::path(tmp).parent_path();
   if (!fs::exists(parent_path)) {
     fs::create_directories(parent_path);

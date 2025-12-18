@@ -36,11 +36,13 @@
 #include "client/vfs/vfs_meta.h"
 #include "common/blockaccess/block_accesser.h"
 #include "common/blockaccess/rados/rados_common.h"
+#include "common/helper.h"
 #include "common/options/client.h"
 #include "common/status.h"
 #include "common/trace/log_trace_exporter.h"
 #include "common/trace/noop_tracer.h"
 #include "common/trace/tracer.h"
+#include "common/types.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
 #include "utils/executor/thread/executor_impl.h"
@@ -62,14 +64,15 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf, const VFSOption& vfs_option,
   vfs_option_ = vfs_option;
 
   MetaSystemUPtr rela_meta_system;
-  if (vfs_conf.fs_type == "vfs_memory") {
+  if (vfs_conf.metasystem_type == MetaSystemType::MEMORY) {
     rela_meta_system = std::make_unique<memory::MemoryMetaSystem>();
 
-  } else if (vfs_conf.fs_type == "vfs_local") {
-    rela_meta_system =
-        std::make_unique<local::LocalMetaSystem>("", vfs_conf.fs_name);
+  } else if (vfs_conf.metasystem_type == MetaSystemType::LOCAL) {
+    rela_meta_system = std::make_unique<local::LocalMetaSystem>(
+        dingofs::Helper::ExpandPath(FLAGS_meta_path), vfs_conf.fs_name,
+        vfs_conf.storage_info);
 
-  } else if (vfs_conf.fs_type == "vfs_v2" || vfs_conf.fs_type == "vfs_mds") {
+  } else if (vfs_conf.metasystem_type == MetaSystemType::MDS) {
     rela_meta_system = v2::MDSMetaSystem::Build(vfs_conf.fs_name,
                                                 vfs_conf.mds_addrs, client_id_);
   }
@@ -116,6 +119,12 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf, const VFSOption& vfs_option,
                                   .key = rados_info.key,
                                   .pool_name = rados_info.pool_name,
                                   .cluster_name = rados_info.cluster_name};
+  } else if (fs_info_.storage_info.store_type == StoreType::kLocalFile) {
+    vfs_option_.block_access_opt.type = blockaccess::AccesserType::kLocalFile;
+    vfs_option_.block_access_opt.file_options = blockaccess::LocalFileOptions{
+        .path = fs_info_.storage_info.file_info.path};
+  } else {
+    return Status::InvalidParam("unsupported store type");
   }
 
   block_accesser_ = blockaccess::NewBlockAccesser(vfs_option_.block_access_opt);

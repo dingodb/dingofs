@@ -22,12 +22,11 @@
 #include "client/common/global_log.h"
 #include "client/fuse/fuse_op.h"
 #include "client/fuse/fuse_server.h"
-#include "common/const.h"
 #include "common/flag.h"
 #include "common/helper.h"
 #include "common/options/cache.h"
-#include "common/options/client.h"
 #include "common/options/common.h"
+#include "common/types.h"
 #include "utils/daemonize.h"
 
 using FuseServer = dingofs::client::fuse::FuseServer;
@@ -62,9 +61,10 @@ static dingofs::FlagExtraInfo extras = {
     .program = "dingo-fuse",
     .usage = "  dingo-fuse [OPTIONS] <meta-url> <mountpoint>",
     .examples =
-        R"(  $ dingo-fuse 10.220.69.10:7400/dingofs /mnt/dingofs
-  $ dingo-fuse --flagfile client.conf 10.220.32.1:6700/dingofs /mnt/dingofs
-  $ dingo-fuse --daemonize 10.220.32.1:6700/dingofs /mnt/dingofs
+        R"(  $ dingo-fuse local://dingofs /mnt/dingofs
+  $ dingo-fuse mds://10.220.69.10:7400/dingofs /mnt/dingofs
+  $ dingo-fuse --flagfile client.conf mds://10.220.32.1:6700/dingofs /mnt/dingofs
+  $ dingo-fuse --daemonize mds://10.220.32.1:6700/dingofs /mnt/dingofs
 )",
     .patterns = {"src/client", "cache/storage", "cache/tiercache",
                  "cache/blockcache", "cache/remotecache", "options/blockaccess",
@@ -92,12 +92,20 @@ int main(int argc, char* argv[]) {
     return EXIT_FAILURE;
   }
 
+  dingofs::client::MetaSystemType metasystem_type;
   std::string mds_addrs;
   std::string fs_name;
-  if (!dingofs::Helper::ParseMetaURL(argv[1], mds_addrs, fs_name)) {
+  std::string storage_info;
+  if (!dingofs::Helper::ParseMetaURL(argv[1], metasystem_type, mds_addrs,
+                                     fs_name, storage_info)) {
     std::cerr << "meta url is invalid: " << argv[1] << '\n';
     return EXIT_FAILURE;
   }
+  LOG(INFO) << "meta url parsed, metasystem_type: "
+            << dingofs::client::MetaSystemTypeToString(metasystem_type)
+            << ", fs_name: " << fs_name << ", mds_addrs: " << mds_addrs
+            << ",local storage_info: " << storage_info << '\n';
+
   // used for remote cache
   dingofs::cache::FLAGS_mds_addrs = mds_addrs;
 
@@ -111,8 +119,9 @@ int main(int argc, char* argv[]) {
 
   struct MountOption mount_option{.mount_point = argv[2],
                                   .fs_name = fs_name,
-                                  .fs_type = dingofs::client::FLAGS_fstype,
-                                  .mds_addrs = mds_addrs};
+                                  .metasystem_type = metasystem_type,
+                                  .mds_addrs = mds_addrs,
+                                  .storage_info = storage_info};
 
   fuse_server = new FuseServer();
   if (fuse_server == nullptr) return EXIT_FAILURE;

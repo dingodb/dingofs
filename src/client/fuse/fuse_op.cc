@@ -313,7 +313,8 @@ int InitFuseClient(const char* argv0, const struct MountOption* mount_option) {
       .mds_addrs = mount_option->mds_addrs,
       .mount_point = mount_option->mount_point,
       .fs_name = mount_option->fs_name,
-      .fs_type = mount_option->fs_type,
+      .metasystem_type = mount_option->metasystem_type,
+      .storage_info = mount_option->storage_info,
   };
 
   g_vfs = new dingofs::client::vfs::VFSWrapper();

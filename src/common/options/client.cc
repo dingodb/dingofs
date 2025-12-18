@@ -33,8 +33,8 @@ DEFINE_validator(vfs_log_level, [](const char* /*name*/, int32_t value) {
   return true;
 });
 
-DEFINE_string(fstype, "vfs_v2",
-              "vfs type(e.g. vfs_v2|vfs_mds|vfs_local|vfs_memory)");
+DEFINE_string(meta_path, kDefaultMetaDBDir,
+              "meta db path for local metasystem");
 
 DEFINE_int32(vfs_bthread_worker_num, 0, "bthread worker num");
 

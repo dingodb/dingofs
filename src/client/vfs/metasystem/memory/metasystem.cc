@@ -873,6 +873,9 @@ static StoreType ToStoreType(pb::mds::FsType fs_type) {
     case pb::mds::FsType::RADOS:
       return StoreType::kRados;
 
+    case pb::mds::FsType::LOCALFILE:
+      return StoreType::kLocalFile;
+
     default:
       CHECK(false) << "unknown fs type: " << pb::mds::FsType_Name(fs_type);
   }
@@ -918,7 +921,15 @@ Status MemoryMetaSystem::GetFsInfo(ContextSPtr, FsInfo* fs_info) {
     fs_info->storage_info.rados_info =
         ToRadosInfo(fs_info_.extra().rados_info());
 
-  } else {
+  } else if (fs_info->storage_info.store_type == StoreType::kLocalFile) {
+    CHECK(fs_info_.extra().has_file_info())
+        << "fs type is LocalFile, but file info is not set";
+
+    fs_info->storage_info.file_info.path = fs_info_.extra().file_info().path();
+
+  }
+
+  else {
     LOG(ERROR) << fmt::format("unknown fs type: {}.",
                               pb::mds::FsType_Name(fs_info_.fs_type()));
 

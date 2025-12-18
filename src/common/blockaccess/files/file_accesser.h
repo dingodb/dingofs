@@ -28,11 +28,7 @@ namespace blockaccess {
 // TODO: use io uring  to support async io
 class FileAccesser : public Accesser {
  public:
-  FileAccesser(const std::string& base, const std::string& fsname)
-      : base_(base),
-        root_(std::filesystem::path(base + "/" + fsname)
-                  .lexically_normal()
-                  .string()) {}
+  FileAccesser(const std::string& root) : root_(root) {}
 
   ~FileAccesser() override = default;
 
@@ -65,7 +61,6 @@ class FileAccesser : public Accesser {
 
   void DoAsyncPut(PutObjectAsyncContextSPtr context);
 
-  const std::string base_;
   const std::string root_;
   std::atomic<bool> started_{false};
 };

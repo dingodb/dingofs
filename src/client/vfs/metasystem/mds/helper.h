@@ -37,6 +37,9 @@ class Helper {
       case pb::mds::FsType::RADOS:
         return StoreType::kRados;
 
+      case pb::mds::FsType::LOCALFILE:
+        return StoreType::kLocalFile;
+
       default:
         CHECK(false) << "unknown fs type: " << pb::mds::FsType_Name(fs_type);
     }
@@ -203,6 +206,13 @@ class Helper {
     result.mon_host = rados_info.mon_host();
     result.pool_name = rados_info.pool_name();
     result.cluster_name = rados_info.cluster_name();
+    return result;
+  }
+
+  static LocalFileInfo ToLocalFileInfo(
+      const pb::mds::LocalFileInfo& local_file_info) {
+    LocalFileInfo result;
+    result.path = local_file_info.path();
     return result;
   }
 

@@ -20,11 +20,14 @@
 #include <algorithm>
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include "bthread/mutex.h"
 #include "client/vfs/metasystem/mds/helper.h"
+#include "common/const.h"
+#include "common/helper.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
 #include "leveldb/options.h"
@@ -51,6 +54,12 @@ const int kFileMinLinkNum = 1;
 
 const uint32_t kCleanDelfileIntervalS = 60;
 
+const std::vector<std::string> kLocalParams = {"path"};
+const std::vector<std::string> kS3Params = {"ak", "sk", "endpoint",
+                                            "bucketname"};
+const std::vector<std::string> kRadosParams = {"key", "username", "mon", "pool",
+                                               "cluster"};
+
 static uint64_t ToTimestamp(const struct timespec& ts) {
   return (ts.tv_sec * 1000000000) + ts.tv_nsec;
 }
@@ -71,6 +80,27 @@ static void DelParentIno(mds::AttrEntry& attr, Ino parent) {
   if (it != attr.parents().end()) {
     attr.mutable_parents()->erase(it);
   }
+}
+// storage info may be like:
+// storage=file&path=/data/dingofs
+// storage=rados&key=<key>&username=<name>&pool=<pool>&cluster=<cluster-name>&mon=<mon1,mon2..>
+// storage=s3&ak=<ak>&sk=<sk>&endpoint=<endpoint>&bucketname=<bucketname>
+static std::unordered_map<std::string, std::string> ParseStorageInfo(
+    const std::string& storage_info) {
+  std::unordered_map<std::string, std::string> result;
+  std::stringstream ss(storage_info);
+  std::string token;
+
+  while (std::getline(ss, token, '&')) {
+    size_t equalsPos = token.find('=');
+    if (equalsPos != std::string::npos) {
+      std::string key = token.substr(0, equalsPos);
+      std::string value = token.substr(equalsPos + 1);
+      result[key] = value;
+    }
+  }
+
+  return result;
 }
 
 OpenFileMemo::OpenFileMemo() {
@@ -155,13 +185,21 @@ bool OpenFileMemo::Load(const Json::Value& value) {
 }
 
 LocalMetaSystem::LocalMetaSystem(const std::string& db_path,
-                                 const std::string& fs_name)
+                                 const std::string& fs_name,
+                                 const std::string& storage_info)
     : db_path_(db_path.empty() ? kDbDir : db_path),
       fs_name_(fs_name.empty() ? kFsDefaultName : fs_name),
+      storage_info_(storage_info),
       inode_cache_(v2::InodeCache::New(kFsId)) {}  // NOLINT
 
 Status LocalMetaSystem::Init(bool upgrade) {
   std::string db_path = fmt::format("{}/{}", db_path_, fs_name_);
+  // create db path if not exist
+  if (!dingofs::Helper::CreateDirectory(db_path)) {
+    return Status::Internal(
+        fmt::format("create db path dir fail, path : {}", db_path_));
+  }
+
   if (!OpenLevelDB(db_path)) {
     return Status::Internal("open leveldb fail.");
   }
@@ -1421,6 +1459,13 @@ Status LocalMetaSystem::GetFsInfo(ContextSPtr, FsInfo* fs_info) {
     fs_info->storage_info.rados_info =
         v2::Helper::ToRadosInfo(fs_info_.extra().rados_info());
 
+  } else if (fs_info->storage_info.store_type == StoreType::kLocalFile) {
+    CHECK(fs_info_.extra().has_file_info())
+        << "fs type is LocalFile, but file info is not set";
+
+    fs_info->storage_info.file_info =
+        v2::Helper::ToLocalFileInfo(fs_info_.extra().file_info());
+
   } else {
     return Status::InvalidParam("unknown fs type");
   }
@@ -1455,18 +1500,94 @@ bool LocalMetaSystem::GetDescription(Json::Value& value) {
   return true;
 }
 
+void LocalMetaSystem::SetFsStorageInfo(mds::FsInfoEntry& fs_info,
+                                       const std::string& storage_info) {
+  LOG(INFO) << "generate storage info from: " << storage_info;
+
+  auto storage_info_map = ParseStorageInfo(storage_info);
+
+  if (storage_info_map.empty()) {  // use default storage path
+    fs_info.set_fs_type(pb::mds::FsType::LOCALFILE);
+    auto* file_info = fs_info.mutable_extra()->mutable_file_info();
+    auto data_path = fmt::format(
+        "{}/{}", dingofs::Helper::ExpandPath(kDefaultDataDir), fs_name_);
+    LOG(INFO) << "use default local storage data path: " << data_path;
+
+    file_info->set_path(data_path);
+
+    return;
+  }
+
+  auto storage_it = storage_info_map.find("storage");
+  if (storage_it == storage_info_map.end()) {
+    LOG(FATAL) << "storage info missing storage type, storage_info: "
+               << storage_info_;
+  }
+
+  if (storage_it->second == "file") {  // local storage
+    for (const auto& param : kLocalParams) {
+      auto it = storage_info_map.find(param);
+      if (it == storage_info_map.end() || it->second.empty()) {
+        LOG(FATAL) << "Localfile storage missing required param: " << param
+                   << ", storage_info: " << storage_info;
+      }
+    }
+
+    fs_info.set_fs_type(pb::mds::FsType::LOCALFILE);
+    auto* file_info = fs_info.mutable_extra()->mutable_file_info();
+
+    auto data_path = fmt::format("{}/{}", storage_info_map["path"], fs_name_);
+    file_info->set_path(data_path);
+
+  } else if (storage_it->second == "s3") {  // s3 storage
+    for (const auto& param : kS3Params) {
+      auto it = storage_info_map.find(param);
+      if (it == storage_info_map.end() || it->second.empty()) {
+        LOG(FATAL) << "S3 storage missing required param: " << param
+                   << ", storage_info: " << storage_info;
+      }
+    }
+
+    fs_info.set_fs_type(pb::mds::FsType::S3);
+    auto* s3_info = fs_info.mutable_extra()->mutable_s3_info();
+    s3_info->set_ak(storage_info_map["ak"]);
+    s3_info->set_sk(storage_info_map["sk"]);
+    s3_info->set_endpoint(storage_info_map["endpoint"]);
+    s3_info->set_bucketname(storage_info_map["bucketname"]);
+
+  } else if (storage_it->second == "rados") {  // rados storage
+    for (const auto& param : kRadosParams) {
+      auto it = storage_info_map.find(param);
+      if (it == storage_info_map.end() || it->second.empty()) {
+        LOG(FATAL) << "Rados storage missing required param: " << param
+                   << ", storage_info: " << storage_info;
+      }
+    }
+
+    fs_info.set_fs_type(pb::mds::FsType::RADOS);
+    auto* rados_info = fs_info.mutable_extra()->mutable_rados_info();
+    rados_info->set_key(storage_info_map["key"]);
+    rados_info->set_user_name(storage_info_map["username"]);
+    rados_info->set_mon_host(storage_info_map["mon"]);
+    rados_info->set_pool_name(storage_info_map["pool"]);
+    rados_info->set_cluster_name(storage_info_map["cluster"]);
+  } else {
+    LOG(FATAL) << "unknown storage type: " << storage_it->second
+               << ", storage_info: " << storage_info;
+  }
+}
+
 mds::FsInfoEntry LocalMetaSystem::GenFsInfo() {
   mds::FsInfoEntry fs_info;
 
   fs_info.set_fs_id(kFsId);
   fs_info.set_fs_name(fs_name_);
-  fs_info.set_fs_type(pb::mds::FsType::S3);
   fs_info.set_root_ino(kRootIno);
   fs_info.set_status(pb::mds::FsStatus::NORMAL);
   fs_info.set_block_size(kBlockSize);
   fs_info.set_chunk_size(kChunkSize);
   fs_info.set_enable_sum_in_dir(false);
-  fs_info.set_owner("dengzihui");
+  fs_info.set_owner(std::getenv("USER"));
   fs_info.set_capacity(INT64_MAX);
   fs_info.set_recycle_time_hour(24);
   fs_info.set_create_time_s(utils::Timestamp());
@@ -1477,11 +1598,7 @@ mds::FsInfoEntry LocalMetaSystem::GenFsInfo() {
 
   fs_info.set_status(pb::mds::FsStatus::NORMAL);
 
-  auto* s3_info = fs_info.mutable_extra()->mutable_s3_info();
-  s3_info->set_ak("MM02JDCKZQA1SHYYX36O");
-  s3_info->set_sk("SkUwWXbCpCG2feDng5nSeSC5BAScBN01ls2cQYvy");
-  s3_info->set_endpoint("http://10.220.88.21:8080");
-  s3_info->set_bucketname("dengzihui-test");
+  SetFsStorageInfo(fs_info, storage_info_);
 
   return fs_info;
 }

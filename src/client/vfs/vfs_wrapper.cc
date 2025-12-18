@@ -35,6 +35,7 @@
 #include "common/metrics/metric_guard.h"
 #include "common/options/client.h"
 #include "common/status.h"
+#include "common/types.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
 #include "json/reader.h"
@@ -102,13 +103,16 @@ Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
   if (vfs_conf.mount_point.empty()) {
     return Status::InvalidParam("mount_point is empty");
   }
-  if (vfs_conf.fs_type != "vfs" && vfs_conf.fs_type != "vfs_v2" &&
-      vfs_conf.fs_type != "vfs_mds" && vfs_conf.fs_type != "vfs_local" &&
-      vfs_conf.fs_type != "vfs_memory") {
-    return Status::InvalidParam("unsupported fs_type " + vfs_conf.fs_type);
+  if (vfs_conf.metasystem_type != MetaSystemType::MDS &&
+      vfs_conf.metasystem_type != MetaSystemType::LOCAL &&
+      vfs_conf.metasystem_type != MetaSystemType::MEMORY) {
+    return Status::InvalidParam(
+        "unsupported metaystem_type " +
+        MetaSystemTypeToString(vfs_conf.metasystem_type));
   }
 
-  LOG(INFO) << "use vfs type: " << vfs_conf.fs_type;
+  LOG(INFO) << "use vfs type: "
+            << MetaSystemTypeToString(vfs_conf.metasystem_type);
 
   Status s;
   AccessLogGuard log(

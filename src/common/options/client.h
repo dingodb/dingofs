@@ -42,8 +42,8 @@ namespace client {
 DECLARE_string(vfs_log_dir);
 DECLARE_int32(vfs_log_level);
 
-// file system
-DECLARE_string(fstype);
+// meta path
+DECLARE_string(meta_path);
 
 // bthread
 DECLARE_int32(vfs_bthread_worker_num);

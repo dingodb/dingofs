@@ -22,6 +22,7 @@
 #include <cstdint>
 
 #include "butil/endpoint.h"
+#include "common/types.h"
 #include "glog/logging.h"
 
 namespace dingofs {
@@ -60,14 +61,56 @@ class Helper {
     return oss.str();
   }
 
-  static bool ParseMetaURL(const std::string& meta_url, std::string& addrs,
-                           std::string& fs_name) {
-    size_t pos = meta_url.find('/');
+  // meta-url: type://address/fs_name
+  static bool ParseMetaURL(const std::string& meta_url,
+                           client::MetaSystemType& metasystem_type,
+                           std::string& addrs, std::string& fs_name,
+                           std::string& storage_info) {
+    static const std::string kProtocolSep = "://";
+
+    size_t pos = meta_url.find(kProtocolSep);
     if (pos == std::string::npos) {
       return false;
     }
-    addrs = meta_url.substr(0, pos);
-    fs_name = meta_url.substr(pos + 1);
+    auto tmp_type = meta_url.substr(0, pos);
+    metasystem_type = client::ParseMetaSystemType(tmp_type);
+    CHECK(metasystem_type != client::MetaSystemType::UNKNOWN)
+        << "invalid metasystem type: " << tmp_type;
+
+    pos += kProtocolSep.length();
+
+    if (metasystem_type == client::MetaSystemType::MDS) {
+      // mds://127.0.0.1:7800/testfs
+      size_t slash_pos = meta_url.find('/', pos);
+      if (slash_pos == std::string::npos) {
+        return false;
+      }
+      addrs = meta_url.substr(pos, slash_pos - pos);
+      fs_name = meta_url.substr(slash_pos + 1);
+
+      return true;
+    } else if (metasystem_type == client::MetaSystemType::LOCAL) {
+      // local://dingofs?storage=file&path=/tmp/data
+      // local://dingofs?storage=s3&ak=<ak>&sk=<sk>&endpoint=<endpoint>&bucketname=<bucketname>
+      size_t question_pos = meta_url.find('?', pos);
+      if (question_pos == std::string::npos) {
+        fs_name = meta_url.substr(pos);
+        storage_info = "";
+
+        return true;
+      }
+      fs_name = meta_url.substr(pos, question_pos - pos);
+      storage_info = meta_url.substr(question_pos + 1);
+
+      return true;
+    } else if (metasystem_type == client::MetaSystemType::MEMORY) {
+      // memory://memory_fs
+      fs_name = meta_url.substr(pos);
+
+      return true;
+    } else {
+      return false;
+    }
 
     return true;
   }
@@ -85,7 +128,8 @@ class Helper {
 
   static bool CreateDirectory(const std::string& path) {
     butil::FilePath dir_path(path);
-    if (!butil::PathExists(dir_path)) {
+    if (!butil::DirectoryExists(dir_path)) {
+      LOG(INFO) << "directory not exists: " << path << ", create it now.";
       if (!butil::CreateDirectory(dir_path, true)) {
         return false;
       }

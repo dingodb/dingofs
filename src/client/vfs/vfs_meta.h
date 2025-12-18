@@ -132,6 +132,7 @@ struct Slice {
 enum StoreType : uint8_t {
   kS3 = 1,
   kRados = 2,
+  kLocalFile = 3,
 };
 
 inline std::string StoreType2Str(const StoreType& store_type) {
@@ -140,6 +141,8 @@ inline std::string StoreType2Str(const StoreType& store_type) {
       return "S3";
     case kRados:
       return "Rados";
+    case kLocalFile:
+      return "LocalFile";
     default:
       return "Unknown";
   }
@@ -160,10 +163,15 @@ struct RadosInfo {
   std::string cluster_name;
 };
 
+struct LocalFileInfo {
+  std::string path;
+};
+
 struct StorageInfo {
   StoreType store_type;
   S3Info s3_info;
   RadosInfo rados_info;
+  LocalFileInfo file_info;
 };
 
 struct FsInfo {

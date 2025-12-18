@@ -86,7 +86,8 @@ class OpenFileMemo {
 
 class LocalMetaSystem : public vfs::MetaSystem {
  public:
-  LocalMetaSystem(const std::string& db_path, const std::string& fs_name);
+  LocalMetaSystem(const std::string& db_path, const std::string& fs_name,
+                  const std::string& storage_info);
   ~LocalMetaSystem() override = default;
 
   LocalMetaSystem& operator=(const LocalMetaSystem&) = delete;
@@ -182,6 +183,9 @@ class LocalMetaSystem : public vfs::MetaSystem {
   bool GetDescription(Json::Value& value) override;
 
  private:
+  void SetFsStorageInfo(mds::FsInfoEntry& fs_info,
+                        const std::string& storage_info);
+
   mds::FsInfoEntry GenFsInfo();
 
   Status InitFsInfo();
@@ -224,6 +228,7 @@ class LocalMetaSystem : public vfs::MetaSystem {
 
   const std::string fs_name_;
   const std::string db_path_;
+  const std::string storage_info_;
   mds::FsInfoEntry fs_info_;
 
   // for generating inode id

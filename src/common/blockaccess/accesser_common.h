@@ -22,6 +22,7 @@
 #include <memory>
 #include <string>
 
+#include "common/blockaccess/files/file_common.h"
 #include "common/blockaccess/rados/rados_common.h"
 #include "common/blockaccess/s3/s3_common.h"
 #include "common/options/blockaccess.h"
@@ -54,6 +55,7 @@ inline void InitBlockAccesserThrottleOptions(
 enum AccesserType : uint8_t {
   kS3 = 0,
   kRados = 1,
+  kLocalFile = 2,
 };
 
 inline std::string AccesserType2Str(const AccesserType& type) {
@@ -62,6 +64,8 @@ inline std::string AccesserType2Str(const AccesserType& type) {
       return "S3";
     case kRados:
       return "Rados";
+    case kLocalFile:
+      return "LocalFile";
     default:
       return "Unknown";
   }
@@ -71,6 +75,7 @@ struct BlockAccessOptions {
   AccesserType type;
   S3Options s3_options;
   RadosOptions rados_options;
+  LocalFileOptions file_options;
   BlockAccesserThrottleOptions throttle_options;
 };
 

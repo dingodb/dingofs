@@ -28,6 +28,7 @@
 #include "common/status.h"
 #include "common/trace/context.h"
 #include "common/trace/itracer.h"
+#include "common/types.h"
 
 namespace dingofs {
 namespace client {
@@ -37,7 +38,8 @@ struct VFSConfig {
   std::string mds_addrs;
   std::string mount_point;
   std::string fs_name;
-  std::string fs_type;  // vfs_mds/vfs_memory/vfs_local
+  client::MetaSystemType metasystem_type;  // mds,memory,local
+  std::string storage_info;
 };
 
 // NOT: all return value should sys error code in <errno.h>

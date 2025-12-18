@@ -38,9 +38,8 @@ namespace unit_test {
 class FileAccesserTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    base_ = "/tmp";
-    fsname_ = "file_accesser_test_" + std::to_string(getpid());
-    accesser_ = std::make_unique<FileAccesser>(base_, fsname_);
+    root_ = "/tmp/dingofs" + std::to_string(getpid());
+    accesser_ = std::make_unique<FileAccesser>(root_);
     ASSERT_TRUE(accesser_->Init()) << "Failed to initialize FileAccesser";
   }
 
@@ -50,9 +49,8 @@ class FileAccesserTest : public ::testing::Test {
       accesser_.reset();
     }
 
-    std::string test_root = base_ + "/" + fsname_;
-    if (std::filesystem::exists(test_root)) {
-      std::filesystem::remove_all(test_root);
+    if (std::filesystem::exists(root_)) {
+      std::filesystem::remove_all(root_);
     }
   }
 
@@ -65,8 +63,7 @@ class FileAccesserTest : public ::testing::Test {
     return data;
   }
 
-  std::string base_;
-  std::string fsname_;
+  std::string root_;
   std::unique_ptr<FileAccesser> accesser_;
 };
 
