@@ -25,7 +25,7 @@ target_link_libraries(test_common
   dingofs_trace
   $<TARGET_OBJECTS:test_blockaccess>
   block_accesser
-
+  dingofs_open_trace
   PROTO_OBJS
   protobuf::libprotobuf
   ${TEST_DEPS_WITHOUT_MAIN}

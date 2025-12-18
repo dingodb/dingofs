@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 file(GLOB TEST_DINGOFS_COMMON_TRACE_SRCS
   "*.cc"
 )
@@ -23,6 +22,7 @@ add_library(test_common_trace
 
 target_link_libraries(test_common_trace
     dingofs_trace
+    dingofs_open_trace
     glog::glog
     brpc::brpc
 
