@@ -31,6 +31,7 @@
 #include "client/vfs/vfs_meta.h"
 #include "client/vfs/vfs_wrapper.h"
 #include "common/define.h"
+#include "common/io_buffer.h"
 #include "common/options/client.h"
 #include "common/status.h"
 #include "fmt/format.h"
@@ -41,6 +42,7 @@ static dingofs::client::vfs::VFSWrapper* g_vfs = nullptr;
 USING_FLAG(fuse_file_info_direct_io)
 USING_FLAG(fuse_file_info_keep_cache)
 USING_FLAG(fuse_enable_readdir_cache)
+USING_FLAG(fuse_dryrun_bench_mode)
 
 using dingofs::Status;
 using dingofs::client::vfs::Attr;
@@ -519,6 +521,18 @@ void FuseOpRead(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
           << ", offset: " << off << ", fi->fh: " << fi->fh;
   dingofs::client::vfs::DataBuffer data_buffer;
 
+  if (FLAGS_fuse_dryrun_bench_mode) {
+    static constexpr int64_t kStaticMemSize = 4 * 1024 * 1024;  // 4MB
+    static char kStaticMemory[kStaticMemSize] = {0};
+    CHECK_GT(kStaticMemSize, size)
+        << "dryrun static memory is not enough, size: " << size;
+
+    data_buffer.RawIOBuffer()->AppendUserData(kStaticMemory, size,
+                                              [](void*) {});
+    ReplyData(req, data_buffer);
+    return;
+  }
+
   uint64_t rsize = 0;
   Status s = g_vfs->Read(ino, &data_buffer, size, off, fi->fh, &rsize);
   VLOG(1) << "FuseOpRead ino: " << ino << ", size: " << size
@@ -535,6 +549,11 @@ void FuseOpWrite(fuse_req_t req, fuse_ino_t ino, const char* buf, size_t size,
                  off_t off, struct fuse_file_info* fi) {
   VLOG(1) << "FuseOpWrite ino: " << ino << ", size: " << size
           << ", offset: " << off << ", fi->fh: " << fi->fh;
+  if (FLAGS_fuse_dryrun_bench_mode) {
+    ReplyWrite(req, size);
+    return;
+  }
+
   uint64_t wsize = 0;
   Status s = g_vfs->Write(ino, buf, size, off, fi->fh, &wsize);
   VLOG(1) << "FuseOpWrite ino: " << ino << ", size: " << size
@@ -549,6 +568,11 @@ void FuseOpWrite(fuse_req_t req, fuse_ino_t ino, const char* buf, size_t size,
 
 void FuseOpFlush(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
   VLOG(1) << "FuseOpFlush ino: " << ino << ", fi->fh: " << fi->fh;
+  if (FLAGS_fuse_dryrun_bench_mode) {
+    ReplyError(req, Status::OK());
+    return;
+  }
+
   Status s = g_vfs->Flush(ino, fi->fh);
   ReplyError(req, s);
 }
@@ -563,6 +587,10 @@ void FuseOpFsync(fuse_req_t req, fuse_ino_t ino, int datasync,
                  struct fuse_file_info* fi) {
   VLOG(1) << "FuseOpFsync ino: " << ino << ", datasync: " << datasync
           << ", fi->fh: " << fi->fh;
+  if (FLAGS_fuse_dryrun_bench_mode) {
+    ReplyError(req, Status::OK());
+    return;
+  }
 
   Status s = g_vfs->Fsync(ino, datasync, fi->fh);
   ReplyError(req, s);

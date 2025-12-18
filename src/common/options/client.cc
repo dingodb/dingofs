@@ -56,6 +56,8 @@ DEFINE_uint32(client_fuse_attr_cache_timeout_s, 3600,
               "fuse attr cache timeout in seconds");
 DEFINE_validator(client_fuse_attr_cache_timeout_s, brpc::PassValidate);
 
+DEFINE_bool(fuse_dryrun_bench_mode, false, "enable fuse dryrun bench mode");
+
 // smooth upgrade
 DEFINE_uint32(client_fuse_fd_get_max_retries, 100,
               "the max retries that get fuse fd from old dingo-fuse during "

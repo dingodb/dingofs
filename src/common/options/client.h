@@ -69,6 +69,8 @@ DECLARE_bool(fuse_conn_info_want_auto_inval_data);
 DECLARE_uint32(client_fuse_entry_cache_timeout_s);
 DECLARE_uint32(client_fuse_attr_cache_timeout_s);
 
+DECLARE_bool(fuse_dryrun_bench_mode);
+
 // smooth upgrade
 DECLARE_uint32(client_fuse_fd_get_max_retries);
 DECLARE_uint32(client_fuse_fd_get_retry_interval_ms);

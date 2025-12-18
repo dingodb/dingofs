@@ -26,7 +26,7 @@ namespace client {
 namespace vfs {
 
 static constexpr int64_t kStaticMemSize = 4 * 1024 * 1024;  // 4MB
-const char kStaticMemory[kStaticMemSize] = {0};
+static char kStaticMemory[kStaticMemSize] = {0};
 
 #define METHOD_NAME() ("FakeBlockStore::" + std::string(__FUNCTION__))
 
@@ -58,7 +58,7 @@ void FakeBlockStore::DoRangeAsync(BlockKey key, uint64_t offset,
   (void)key;
   (void)offset;
   CHECK_GE(kStaticMemSize, length);
-  buffer->AppendUserData(const_cast<char*>(kStaticMemory), length, NoopDeleter);
+  buffer->AppendUserData(kStaticMemory, length, NoopDeleter);
   callback(Status::OK());
 }
 
