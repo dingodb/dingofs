@@ -17,6 +17,8 @@
 #ifndef DINGOFS_BLOCK_ACCESS_FILE_ACCESSER_H_
 #define DINGOFS_BLOCK_ACCESS_FILE_ACCESSER_H_
 
+#include <filesystem>
+
 #include "common/blockaccess/accesser.h"
 #include "common/status.h"
 
@@ -26,7 +28,11 @@ namespace blockaccess {
 // TODO: use io uring  to support async io
 class FileAccesser : public Accesser {
  public:
-  FileAccesser(std::string root) : root_(std::move(root)) {}
+  FileAccesser(const std::string& base, const std::string& fsname)
+      : base_(base),
+        root_(std::filesystem::path(base + "/" + fsname)
+                  .lexically_normal()
+                  .string()) {}
 
   ~FileAccesser() override = default;
 
@@ -59,6 +65,7 @@ class FileAccesser : public Accesser {
 
   void DoAsyncPut(PutObjectAsyncContextSPtr context);
 
+  const std::string base_;
   const std::string root_;
   std::atomic<bool> started_{false};
 };

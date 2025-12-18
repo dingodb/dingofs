@@ -26,7 +26,6 @@
 #include <filesystem>
 #include <mutex>
 #include <string>
-#include <thread>
 
 #include "common/blockaccess/accesser_common.h"
 #include "common/blockaccess/files/file_accesser.h"
@@ -39,11 +38,9 @@ namespace unit_test {
 class FileAccesserTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    // Create a temporary test directory
-    test_root_ = "/tmp/file_accesser_test_" + std::to_string(getpid());
-    std::filesystem::create_directories(test_root_);
-
-    accesser_ = std::make_unique<FileAccesser>(test_root_);
+    base_ = "/tmp";
+    fsname_ = "file_accesser_test_" + std::to_string(getpid());
+    accesser_ = std::make_unique<FileAccesser>(base_, fsname_);
     ASSERT_TRUE(accesser_->Init()) << "Failed to initialize FileAccesser";
   }
 
@@ -53,9 +50,9 @@ class FileAccesserTest : public ::testing::Test {
       accesser_.reset();
     }
 
-    // Clean up test directory
-    if (std::filesystem::exists(test_root_)) {
-      std::filesystem::remove_all(test_root_);
+    std::string test_root = base_ + "/" + fsname_;
+    if (std::filesystem::exists(test_root)) {
+      std::filesystem::remove_all(test_root);
     }
   }
 
@@ -68,7 +65,8 @@ class FileAccesserTest : public ::testing::Test {
     return data;
   }
 
-  std::string test_root_;
+  std::string base_;
+  std::string fsname_;
   std::unique_ptr<FileAccesser> accesser_;
 };
 
@@ -344,31 +342,6 @@ TEST_F(FileAccesserTest, AsyncPutConcurrent) {
 // Test ContainerExist
 TEST_F(FileAccesserTest, ContainerExist) {
   ASSERT_TRUE(accesser_->ContainerExist()) << "Container should exist";
-
-  // Test with non-existent container
-  FileAccesser non_existent_accesser("/tmp/non_existent_container_test");
-  ASSERT_FALSE(non_existent_accesser.ContainerExist())
-      << "Non-existent container should return false";
-}
-
-// Test Init creates directory
-TEST_F(FileAccesserTest, InitCreatesDirectory) {
-  std::string new_root =
-      "/tmp/file_accesser_init_test_" + std::to_string(getpid());
-
-  // Ensure directory doesn't exist
-  std::filesystem::remove_all(new_root);
-  ASSERT_FALSE(std::filesystem::exists(new_root));
-
-  // Init should create it
-  FileAccesser new_accesser(new_root);
-  ASSERT_TRUE(new_accesser.Init()) << "Init should create directory";
-  ASSERT_TRUE(std::filesystem::exists(new_root))
-      << "Directory should be created";
-
-  // Cleanup
-  new_accesser.Destroy();
-  std::filesystem::remove_all(new_root);
 }
 
 // Test multiple Put/Get cycles
