@@ -65,7 +65,6 @@ void ChunkFlushTask::SliceFlushed(uint64_t slice_seq, Status s) {
     }
 
     cb(tmp);
-
     VLOG(4) << fmt::format("End status: {}", tmp.ToString());
   }
 }
@@ -108,9 +107,8 @@ void ChunkFlushTask::RunAsync(StatusCallback cb) {
     VLOG(4) << fmt::format("{} will flush slice_seq: {}, slice: {}", UUID(),
                            seq, slice->UUID());
 
-    slice->FlushAsync([this, seq](auto&& ph1) {
-      SliceFlushed(seq, std::forward<decltype(ph1)>(ph1));
-    });
+    slice->FlushAsync(
+        [this, seq](Status s) { SliceFlushed(seq, std::move(s)); });
   }
 }
 

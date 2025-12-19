@@ -22,6 +22,7 @@
 #include <atomic>
 #include <cstdint>
 
+#include "client/vfs/data/writer/chunk_writer.h"
 #include "common/callback.h"
 
 namespace dingofs {
@@ -59,7 +60,7 @@ void FileFlushTask::ChunkFlushed(uint64_t chunk_index, Status status) {
 void FileFlushTask::RunAsync(StatusCallback cb) {
   VLOG(4) << fmt::format("{} Start file_flush_task: {}", UUID(), ToString());
 
-  std::unordered_map<uint64_t, ChunkWriterSPtr> to_flush;
+  std::unordered_map<uint64_t, ChunkWriter*> to_flush;
 
   {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -86,11 +87,11 @@ void FileFlushTask::RunAsync(StatusCallback cb) {
     uint64_t chunk_index = iter.first;
     VLOG(4) << fmt::format("{} Flushing chunk_index: {}", UUID(), chunk_index);
 
-    ChunkWriterSPtr chunk_writer = iter.second;
+    ChunkWriter* chunk_writer = iter.second;
     CHECK_NOTNULL(chunk_writer);
 
-    chunk_writer->FlushAsync([this, chunk_index](Status status) {
-      ChunkFlushed(chunk_index, status);
+    chunk_writer->FlushAsync([this, chunk_writer, chunk_index](Status status) {
+      ChunkFlushed(chunk_index, std::move(status));
     });
   }
 }

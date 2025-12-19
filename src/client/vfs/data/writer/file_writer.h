@@ -49,11 +49,12 @@ class FileWriter {
  private:
   uint64_t GetChunkSize() const;
 
+  ChunkWriter* CreateChunkWriter(uint64_t chunk_index);
   ChunkWriter* GetOrCreateChunkWriter(uint64_t chunk_index);
 
   void FileFlushTaskDone(uint64_t file_flush_id, StatusCallback cb,
                          Status status);
-  bool HasInflightFlushTask() const;
+  int64_t InflightFlushTaskCount() const;
 
   VFSHub* vfs_hub_;
   const uint64_t fh_;
@@ -61,13 +62,10 @@ class FileWriter {
 
   mutable std::mutex mutex_;
 
-  // TODO: maybe move chunk_writers_ to FileFlushTask
   // chunk_index -> chunk
   // chunk is used by file/file_flush_task/chunk_flush_task
-  // TODO: manage chunk use dec/inc ref mechanism
-  // TODO: or maybe transfer chunk ownership to file_flush_task and then
-  // transfer ownership to chunk_flush_task
-  std::unordered_map<uint64_t, ChunkWriterSPtr> chunk_writers_;
+  // owned by FileWriter
+  std::unordered_map<uint64_t, ChunkWriter*> chunk_writers_;
   // TODO: monitor this and add a manager
   // file_flush_id -> FileFlushTask
   std::unordered_map<uint64_t, std::unique_ptr<FileFlushTask>>

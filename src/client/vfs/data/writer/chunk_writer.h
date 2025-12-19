@@ -19,6 +19,7 @@
 
 #include <fmt/format.h>
 
+#include <atomic>
 #include <condition_variable>
 #include <cstdint>
 #include <deque>
@@ -66,11 +67,13 @@ struct ChunkWriteInfo {
   }
 };
 
-class ChunkWriter : public std::enable_shared_from_this<ChunkWriter> {
+class ChunkWriter {
  public:
   ChunkWriter(VFSHub* hub, uint64_t fh, uint64_t ino, uint64_t index);
 
   ~ChunkWriter();
+
+  void Stop();
 
   // chunk_offset is the offset in the chunk, not in the file
   Status Write(ContextSPtr ctx, const char* buf, uint64_t size,
@@ -90,7 +93,6 @@ class ChunkWriter : public std::enable_shared_from_this<ChunkWriter> {
     bool done{false};
     Status status;
     const StatusCallback cb{nullptr};
-    std::shared_ptr<ChunkWriter> chunk{nullptr};
     std::unique_ptr<ChunkFlushTask> chunk_flush_task{nullptr};
 
     std::string UUID() const {
@@ -139,6 +141,8 @@ class ChunkWriter : public std::enable_shared_from_this<ChunkWriter> {
                          StatusCallback cb);
   void SlicesCommited(ContextSPtr ctx, CommmitContext* commit_ctx, Status s);
 
+  void DoSyncFlush();
+
   void DoFlushAsync(StatusCallback cb, uint64_t chunk_flush_id);
   void FlushTaskDone(FlushTask* flush_task, Status s);
   void CommitFlushTasks(ContextSPtr ctx);
@@ -158,9 +162,20 @@ class ChunkWriter : public std::enable_shared_from_this<ChunkWriter> {
     }
   }
 
+  int64_t WritersCount() const {
+    std::lock_guard<std::mutex> lg(writer_mutex_);
+    return writers_.size();
+  }
+
+  int64_t FlushTasksCount() const {
+    std::lock_guard<std::mutex> lg(write_flush_mutex_);
+    return flush_queue_.size();
+  }
+
   VFSHub* hub_;
   uint64_t fh_;
   const Chunk chunk_;
+  std::atomic<bool> stopped_{false};
 
   static FlushTask fake_header_;
 
@@ -178,7 +193,6 @@ class ChunkWriter : public std::enable_shared_from_this<ChunkWriter> {
 };
 
 using ChunkWriterUPtr = std::unique_ptr<ChunkWriter>;
-using ChunkWriterSPtr = std::shared_ptr<ChunkWriter>;
 
 }  // namespace vfs
 }  // namespace client

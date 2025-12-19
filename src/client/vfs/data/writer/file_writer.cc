@@ -19,6 +19,9 @@
 #include <glog/logging.h>
 #include <unistd.h>
 
+#include <cstdint>
+#include <memory>
+
 #include "client/common/const.h"
 #include "client/vfs/data/common/async_util.h"
 #include "client/vfs/data/writer/chunk_writer.h"
@@ -32,14 +35,20 @@ namespace vfs {
 
 static std::atomic<uint64_t> file_flush_id_gen{1};
 
-// TODO: use condition variable to wait
 FileWriter::~FileWriter() {
-  while (HasInflightFlushTask()) {
-    LOG(INFO) << "FileWriter::~FileWriter, waiting inflight flush tasks to "
-                 "finish, ino: "
-              << ino_ << ", inflight_flush_task_count: "
-              << inflight_flush_tasks_.size();
+  int64_t inflight_flush_task_count = InflightFlushTaskCount();
+  while (inflight_flush_task_count > 0) {
+    LOG(INFO) << fmt::format(
+        "FileWriter::~FileWriter, ino: {}, inflight_flush_task_count: {}", ino_,
+        inflight_flush_task_count);
     sleep(1);
+    inflight_flush_task_count = InflightFlushTaskCount();
+  }
+
+  for (auto& pair : chunk_writers_) {
+    ChunkWriter* chunk_writer = pair.second;
+    chunk_writer->Stop();
+    delete chunk_writer;
   }
 }
 
@@ -55,9 +64,9 @@ void FileWriter::Close() {
   }
 }
 
-bool FileWriter::HasInflightFlushTask() const {
+int64_t FileWriter::InflightFlushTaskCount() const {
   std::lock_guard<std::mutex> lock(mutex_);
-  return inflight_flush_tasks_.size() > 0;
+  return inflight_flush_tasks_.size();
 }
 
 Status FileWriter::Write(ContextSPtr ctx, const char* buf, uint64_t size,
@@ -116,12 +125,11 @@ ChunkWriter* FileWriter::GetOrCreateChunkWriter(uint64_t chunk_index) {
 
   auto iter = chunk_writers_.find(chunk_index);
   if (iter != chunk_writers_.end()) {
-    return iter->second.get();
+    return iter->second;
   } else {
-    auto chunk_writer =
-        std::make_shared<ChunkWriter>(vfs_hub_, fh_, ino_, chunk_index);
-    chunk_writers_[chunk_index] = std::move(chunk_writer);
-    return chunk_writers_[chunk_index].get();
+    auto* chunk_writer = new ChunkWriter(vfs_hub_, fh_, ino_, chunk_index);
+    chunk_writers_[chunk_index] = chunk_writer;
+    return chunk_writer;
   }
 }
 
@@ -184,9 +192,10 @@ void FileWriter::AsyncFlush(StatusCallback cb) {
 
   CHECK_NOTNULL(flush_task);
 
-  flush_task->RunAsync([this, file_flush_id, cb](auto&& ph1) {
-    FileFlushTaskDone(file_flush_id, cb, std::forward<decltype(ph1)>(ph1));
-  });
+  flush_task->RunAsync(
+      [this, file_flush_id, rcb = std::move(cb)](Status status) {
+        FileFlushTaskDone(file_flush_id, rcb, std::move(status));
+      });
 }
 
 }  // namespace vfs

@@ -19,12 +19,15 @@
 #include <glog/logging.h>
 #include <sys/ioctl.h>
 
+#include <atomic>
 #include <boost/range/algorithm/sort.hpp>
 #include <cstdint>
 #include <memory>
+#include <utility>
 
 #include "client/common/const.h"
 #include "client/vfs/common/helper.h"
+#include "client/vfs/data/common/async_util.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/callback.h"
@@ -44,12 +47,43 @@ ChunkWriter::ChunkWriter(VFSHub* hub, uint64_t fh, uint64_t ino, uint64_t index)
              hub->GetFsInfo().block_size, hub->GetPageSize()) {}
 
 ChunkWriter::~ChunkWriter() {
-  VLOG(4) << fmt::format("{} Destroy Chunk addr: {}", UUID(),
-                         static_cast<const void*>(this));
+  VLOG(12) << fmt::format("{} Destroy Chunk addr: {}", UUID(),
+                          static_cast<const void*>(this));
+  Stop();
+}
+
+void ChunkWriter::Stop() {
+  if (stopped_.load(std::memory_order_relaxed)) {
+    return;
+  }
+
+  int64_t writers_count = WritersCount();
+  while (writers_count > 0) {
+    LOG(INFO) << fmt::format(
+        "{} Stop ChunkWriter waiting writers to finish, writers_count: {}",
+        UUID(), writers_count);
+    sleep(1);
+    writers_count = WritersCount();
+  }
+
+  DoSyncFlush();
+
+  int64_t flush_tasks_count = FlushTasksCount();
+  while (flush_tasks_count > 0) {
+    LOG(INFO) << fmt::format(
+        "{} Stop ChunkWriter waiting flush tasks to finish, "
+        "flush_tasks_count: {}",
+        UUID(), flush_tasks_count);
+    sleep(1);
+    flush_tasks_count = FlushTasksCount();
+  }
+
+  stopped_.store(true, std::memory_order_relaxed);
 }
 
 Status ChunkWriter::Write(ContextSPtr ctx, const char* buf, uint64_t size,
                           uint64_t chunk_offset) {
+  CHECK(!stopped_.load(std::memory_order_relaxed));
   auto* tracer = hub_->GetTracer();
   auto span = tracer->StartSpanWithContext(kVFSDataMoudule, METHOD_NAME(), ctx);
 
@@ -362,12 +396,10 @@ void ChunkWriter::CommitFlushTasks(ContextSPtr ctx) {
   commit_context->commit_slices = std::move(batch_commit_slices);
 
   if (!commit_context->commit_slices.empty()) {
-    AsyncCommitSlices(
-        ctx, commit_context->commit_slices,
-        [self = shared_from_this(), ctx, commit_context](auto&& ph1) {
-          self->SlicesCommited(ctx, commit_context,
-                               std::forward<decltype(ph1)>(ph1));
-        });
+    AsyncCommitSlices(ctx, commit_context->commit_slices,
+                      [&, ctx, commit_context](Status s) {
+                        SlicesCommited(ctx, commit_context, std::move(s));
+                      });
   } else {
     SlicesCommited(ctx, commit_context, Status::OK());
   }
@@ -435,7 +467,6 @@ void ChunkWriter::DoFlushAsync(StatusCallback cb, uint64_t chunk_flush_id) {
           .chunk_flush_id = chunk_flush_id,
           .status = Status::OK(),
           .cb = std::move(cb),
-          .chunk = shared_from_this(),
       });
 
       flush_task = flush_queue_.back();
@@ -463,14 +494,29 @@ void ChunkWriter::DoFlushAsync(StatusCallback cb, uint64_t chunk_flush_id) {
       UUID(), flush_task->ToString(), slice_count,
       static_cast<const void*>(flush_task));
 
-  flush_task->chunk_flush_task->RunAsync([this, flush_task](auto&& ph1) {
-    FlushTaskDone(flush_task, std::forward<decltype(ph1)>(ph1));
+  flush_task->chunk_flush_task->RunAsync([this, flush_task](Status s) {
+    FlushTaskDone(flush_task, std::move(s));
   });
 
   VLOG(4) << fmt::format("End FlushAsync chunk_flush_id: {}", chunk_flush_id);
 }
 
+void ChunkWriter::DoSyncFlush() {
+  uint64_t chunk_flush_id =
+      chunk_flush_id_gen.fetch_add(1, std::memory_order_relaxed);
+  Status s;
+  Synchronizer sync;
+  DoFlushAsync(sync.AsStatusCallBack(s), chunk_flush_id);
+  sync.Wait();
+  if (!s.ok()) {
+    LOG(ERROR) << fmt::format(
+        "{} DoSyncFlush failed, chunk_flush_id: {}, status: {}", UUID(),
+        chunk_flush_id, s.ToString());
+  }
+}
+
 void ChunkWriter::FlushAsync(StatusCallback cb) {
+  CHECK(!stopped_.load(std::memory_order_relaxed));
   uint64_t chunk_flush_id =
       chunk_flush_id_gen.fetch_add(1, std::memory_order_relaxed);
   VLOG(4) << fmt::format("{} FlushAsync chunk_flush_id: {}", UUID(),
@@ -480,6 +526,7 @@ void ChunkWriter::FlushAsync(StatusCallback cb) {
 }
 
 void ChunkWriter::TriggerFlush() {
+  CHECK(!stopped_.load(std::memory_order_relaxed));
   uint64_t chunk_flush_id =
       chunk_flush_id_gen.fetch_add(1, std::memory_order_relaxed);
   VLOG(4) << fmt::format("{} TriggerFlush Start chunk_flush_id: {}", UUID(),

@@ -97,14 +97,14 @@ FileReader::~FileReader() {
 
 void FileReader::AcquireRef() {
   int64_t orgin = refs_.fetch_add(1);
-  CHECK_GE(orgin, 0);
   VLOG(12) << "FileReader::AcquireRef origin refs=" << orgin;
+  CHECK_GE(orgin, 0);
 }
 
 void FileReader::ReleaseRef() {
   int64_t orgin = refs_.fetch_sub(1);
-  CHECK_GT(orgin, 0);
   VLOG(12) << "FileReader::ReleaseRef origin refs=" << orgin;
+  CHECK_GT(orgin, 0);
   if (orgin == 1) {
     delete this;
   }

@@ -46,7 +46,6 @@ File::File(VFSHub* hub, uint64_t fh, int64_t ino)
   file_reader_->AcquireRef();
 }
 
-// TODO: use condition variable to wait
 File::~File() {
   VLOG(12) << "File::~File destroyed, ino: " << ino_ << ", fh: " << fh_;
   while (inflight_flush_.load(std::memory_order_relaxed) > 0) {

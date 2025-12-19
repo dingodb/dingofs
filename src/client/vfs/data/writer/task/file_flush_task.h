@@ -24,18 +24,21 @@
 #include <cstdint>
 #include <mutex>
 
-#include "client/vfs/data/writer/chunk_writer.h"
 #include "common/callback.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 
+class ChunkWriter;
+
 class FileFlushTask {
  public:
   explicit FileFlushTask(uint64_t ino, uint64_t file_flush_id,
-                         std::unordered_map<uint64_t, ChunkWriterSPtr> chunks)
-      : ino_(ino), file_flush_id_(file_flush_id), chunk_writers_(std::move(chunks)) {}
+                         std::unordered_map<uint64_t, ChunkWriter*> chunks)
+      : ino_(ino),
+        file_flush_id_(file_flush_id),
+        chunk_writers_(std::move(chunks)) {}
 
   ~FileFlushTask() = default;
 
@@ -46,7 +49,8 @@ class FileFlushTask {
   }
 
   std::string ToString() const {
-    return fmt::format("(uuid: {}, chunk_writers_size: {})", UUID(), chunk_writers_.size());
+    return fmt::format("(uuid: {}, chunk_writers_size: {})", UUID(),
+                       chunk_writers_.size());
   }
 
  private:
@@ -59,7 +63,7 @@ class FileFlushTask {
 
   mutable std::mutex mutex_;
   // NOTICE: chunk_writers_ will be moved to local variable to_flush
-  std::unordered_map<uint64_t, ChunkWriterSPtr> chunk_writers_;
+  std::unordered_map<uint64_t, ChunkWriter*> chunk_writers_;
   StatusCallback cb_;
   Status status_;
 };
