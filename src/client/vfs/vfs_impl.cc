@@ -54,7 +54,7 @@ namespace vfs {
 
 Status VFSImpl::Start(const VFSConfig& vfs_conf, bool upgrade) {
   vfs_hub_ = std::make_unique<VFSHubImpl>(client_id_);
-  DINGOFS_RETURN_NOT_OK(vfs_hub_->Start(vfs_conf, vfs_option_, upgrade));
+  DINGOFS_RETURN_NOT_OK(vfs_hub_->Start(vfs_conf, upgrade));
 
   meta_system_ = vfs_hub_->GetMetaSystem();
   handle_manager_ = vfs_hub_->GetHandleManager();
@@ -615,9 +615,7 @@ Status VFSImpl::Ioctl(ContextSPtr ctx, Ino ino, uint32_t uid, unsigned int cmd,
 
 uint64_t VFSImpl::GetFsId() { return 10; }
 
-uint64_t VFSImpl::GetMaxNameLength() {
-  return vfs_option_.meta_option.max_name_length;
-}
+uint64_t VFSImpl::GetMaxNameLength() { return FLAGS_vfs_meta_max_name_length; }
 
 Status VFSImpl::StartBrpcServer() {
   inode_blocks_service_.Init(vfs_hub_.get());
@@ -652,18 +650,18 @@ Status VFSImpl::StartBrpcServer() {
     brpc_server_options.num_threads = FLAGS_vfs_bthread_worker_num;
   }
 
-  rc = brpc_server_.Start(vfs_option_.dummy_server_port, &brpc_server_options);
+  rc = brpc_server_.Start(FLAGS_vfs_dummy_server_port, &brpc_server_options);
   if (rc != 0) {
     std::string error_msg =
         fmt::format("Start brpc dummy server failed, port = {}, rc = {}",
-                    vfs_option_.dummy_server_port, rc);
+                    FLAGS_vfs_dummy_server_port, rc);
 
     LOG(ERROR) << error_msg;
     return Status::InvalidParam(error_msg);
   }
 
   LOG(INFO) << "Start brpc server success, listen port = "
-            << vfs_option_.dummy_server_port;
+            << FLAGS_vfs_dummy_server_port;
 
   std::string local_ip;
   if (!utils::NetCommon::GetLocalIP(&local_ip)) {

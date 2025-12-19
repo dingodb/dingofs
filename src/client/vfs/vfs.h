@@ -22,7 +22,6 @@
 #include <cstdint>
 #include <string>
 
-#include "client/common/client_option.h"
 #include "client/vfs/data_buffer.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
@@ -150,10 +149,6 @@ class VFS {
   virtual double GetEntryTimeout(const FileType& type) = 0;
 
   virtual uint64_t GetMaxNameLength() = 0;
-
-  // TODO: refactor this interface
-  // used for fuse
-  virtual FuseOption GetFuseOption() = 0;
 
   virtual ITracer* GetTracer() = 0;
 };

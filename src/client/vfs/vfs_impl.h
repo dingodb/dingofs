@@ -29,7 +29,6 @@
 #include "client/vfs/service/fuse_stat_service.h"
 #include "client/vfs/service/inode_blocks_service.h"
 #include "client/vfs/vfs.h"
-#include "common/options/client.h"
 #include "common/trace/context.h"
 
 namespace dingofs {
@@ -38,8 +37,7 @@ namespace vfs {
 
 class VFSImpl : public VFS {
  public:
-  VFSImpl(const VFSOption& vfs_option, const ClientId& client_id)
-      : vfs_option_(vfs_option), client_id_(client_id) {};
+  VFSImpl(const ClientId& client_id) : client_id_(client_id) {};
 
   ~VFSImpl() override = default;
 
@@ -133,16 +131,12 @@ class VFSImpl : public VFS {
 
   uint64_t GetMaxNameLength() override;
 
-  FuseOption GetFuseOption() override { return vfs_option_.fuse_option; }
-
   ITracer* GetTracer() override { return vfs_hub_->GetTracer(); }
 
  private:
   Status StartBrpcServer();
 
   HandleSPtr NewHandle(uint64_t fh, Ino ino, int flags, IFileUPtr file);
-
-  VFSOption vfs_option_;
 
   const ClientId client_id_;
 

@@ -118,10 +118,6 @@ Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
   AccessLogGuard log(
       [&]() { return absl::StrFormat("start: %s", s.ToString()); });
 
-  // init client option
-  VFSOption vfs_option;
-  InitVFSOption(&vfs_option);
-
   DINGOFS_RETURN_NOT_OK(InitLog());
 
   if (FLAGS_vfs_bthread_worker_num > 0) {
@@ -146,14 +142,14 @@ Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
   if (hostname.empty()) return Status::Internal("get hostname fail");
 
   ClientId client_id(utils::UUIDGenerator::GenerateUUID(), hostname,
-                     vfs_option.dummy_server_port, vfs_conf.mount_point);
+                     FLAGS_vfs_dummy_server_port, vfs_conf.mount_point);
   if (is_upgrade) client_id.Load(root);
   CHECK(!client_id.ID().empty()) << "client id is empty.";
 
   LOG(INFO) << "client id: " << client_id.Description();
 
   // vfs start
-  vfs_ = std::make_unique<vfs::VFSImpl>(vfs_option, client_id);
+  vfs_ = std::make_unique<vfs::VFSImpl>(client_id);
   DINGOFS_RETURN_NOT_OK(vfs_->Start(vfs_conf, is_upgrade));
 
   // load vfs state
@@ -930,8 +926,6 @@ uint64_t VFSWrapper::GetMaxNameLength() {
   VLOG(6) << "VFSGetMaxNameLength max_name_length: " << max_name_length;
   return max_name_length;
 }
-
-FuseOption VFSWrapper::GetFuseOption() const { return vfs_->GetFuseOption(); }
 
 }  // namespace vfs
 }  // namespace client

@@ -34,6 +34,7 @@
 #include "client/vfs/metasystem/meta_wrapper.h"
 #include "client/vfs/vfs.h"
 #include "client/vfs/vfs_meta.h"
+#include "common/blockaccess/accesser_common.h"
 #include "common/blockaccess/block_accesser.h"
 #include "common/blockaccess/rados/rados_common.h"
 #include "common/helper.h"
@@ -54,14 +55,11 @@ namespace vfs {
 static const std::string kFlushExecutorName = "vfs_flush";
 static const std::string kReadExecutorName = "vfs_read";
 
-Status VFSHubImpl::Start(const VFSConfig& vfs_conf, const VFSOption& vfs_option,
-                         bool upgrade) {
+Status VFSHubImpl::Start(const VFSConfig& vfs_conf, bool upgrade) {
   CHECK(started_.load(std::memory_order_relaxed) == false)
       << "unexpected start";
 
   LOG(INFO) << fmt::format("[vfs.hub] vfs hub starting, upgrade({}).", upgrade);
-
-  vfs_option_ = vfs_option;
 
   MetaSystemUPtr rela_meta_system;
   if (vfs_conf.metasystem_type == MetaSystemType::MEMORY) {
@@ -101,10 +99,11 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf, const VFSOption& vfs_option,
   }
 
   // set s3/rados config info
+  blockaccess::InitBlockAccessOption(&blockaccess_options_);
   if (fs_info_.storage_info.store_type == StoreType::kS3) {
     auto s3_info = fs_info_.storage_info.s3_info;
-    vfs_option_.block_access_opt.type = blockaccess::AccesserType::kS3;
-    vfs_option_.block_access_opt.s3_options.s3_info =
+    blockaccess_options_.type = blockaccess::AccesserType::kS3;
+    blockaccess_options_.s3_options.s3_info =
         blockaccess::S3Info{.ak = s3_info.ak,
                             .sk = s3_info.sk,
                             .endpoint = s3_info.endpoint,
@@ -112,22 +111,22 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf, const VFSOption& vfs_option,
 
   } else if (fs_info_.storage_info.store_type == StoreType::kRados) {
     auto rados_info = fs_info_.storage_info.rados_info;
-    vfs_option_.block_access_opt.type = blockaccess::AccesserType::kRados;
-    vfs_option_.block_access_opt.rados_options =
+    blockaccess_options_.type = blockaccess::AccesserType::kRados;
+    blockaccess_options_.rados_options =
         blockaccess::RadosOptions{.mon_host = rados_info.mon_host,
                                   .user_name = rados_info.user_name,
                                   .key = rados_info.key,
                                   .pool_name = rados_info.pool_name,
                                   .cluster_name = rados_info.cluster_name};
   } else if (fs_info_.storage_info.store_type == StoreType::kLocalFile) {
-    vfs_option_.block_access_opt.type = blockaccess::AccesserType::kLocalFile;
-    vfs_option_.block_access_opt.file_options = blockaccess::LocalFileOptions{
+    blockaccess_options_.type = blockaccess::AccesserType::kLocalFile;
+    blockaccess_options_.file_options = blockaccess::LocalFileOptions{
         .path = fs_info_.storage_info.file_info.path};
   } else {
     return Status::InvalidParam("unsupported store type");
   }
 
-  block_accesser_ = blockaccess::NewBlockAccesser(vfs_option_.block_access_opt);
+  block_accesser_ = blockaccess::NewBlockAccesser(blockaccess_options_);
   DINGOFS_RETURN_NOT_OK(block_accesser_->Init());
 
   handle_manager_ = std::make_unique<HandleManager>(this);
@@ -143,8 +142,8 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf, const VFSOption& vfs_option,
   }
 
   {
-    flush_executor_ = std::make_unique<ExecutorImpl>(
-        kFlushExecutorName, FLAGS_vfs_flush_bg_thread);
+    flush_executor_ = std::make_unique<ExecutorImpl>(kFlushExecutorName,
+                                                     FLAGS_vfs_flush_bg_thread);
     flush_executor_->Start();
   }
 
@@ -160,14 +159,16 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf, const VFSOption& vfs_option,
   }
 
   {
-    auto o = vfs_option_.page_option;
-    if (o.use_pool) {
+    if (FLAGS_data_stream_page_use_pool) {
       page_allocator_ = std::make_shared<PagePool>();
     } else {
       page_allocator_ = std::make_shared<DefaultPageAllocator>();
     }
 
-    auto ok = page_allocator_->Init(o.page_size, o.total_size / o.page_size);
+    auto ok =
+        page_allocator_->Init(FLAGS_data_stream_page_size,
+                              (FLAGS_data_stream_page_total_size_mb * kMiB) /
+                                  FLAGS_data_stream_page_size);
     if (!ok) {
       LOG(ERROR) << "[vfs.hub] init page allocator failed.";
       return Status::Internal("init page allocator failed");
@@ -187,8 +188,8 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf, const VFSOption& vfs_option,
   }
 
   {
-    file_suffix_watcher_ = std::make_unique<FileSuffixWatcher>(
-        vfs_option_.data_option.writeback_suffix);
+    file_suffix_watcher_ =
+        std::make_unique<FileSuffixWatcher>(FLAGS_vfs_data_writeback_suffix);
   }
 
   {

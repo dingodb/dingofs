@@ -23,6 +23,7 @@
 #include "cache/blockcache/cache_store.h"
 #include "client/common/const.h"
 #include "client/vfs/hub/vfs_hub.h"
+#include "common/options/client.h"
 
 namespace dingofs {
 namespace client {
@@ -127,7 +128,7 @@ void SliceFlushTask::RunAsync(StatusCallback cb) {
 
   flush_block_data_count_.store(to_flush.size(), std::memory_order_relaxed);
 
-  bool writeback = vfs_hub_->GetVFSOption().data_option.writeback;
+  bool writeback = FLAGS_vfs_data_writeback;
   if (!writeback) {
     writeback = vfs_hub_->GetFileSuffixWatcher()->ShouldWriteback(
         slice_data_context_.ino);

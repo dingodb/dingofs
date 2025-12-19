@@ -125,8 +125,6 @@ class VFSWrapper {
 
   uint64_t GetMaxNameLength();
 
-  FuseOption GetFuseOption() const;
-
  private:
   bool Dump();
   bool Load(const Json::Value& value);

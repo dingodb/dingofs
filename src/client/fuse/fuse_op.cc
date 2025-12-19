@@ -50,24 +50,23 @@ using dingofs::client::vfs::FsStat;
 
 namespace {
 
-void InitFuseConnInfo(struct fuse_conn_info* conn) {
-  auto fuse_option = g_vfs->GetFuseOption();
-  const auto& option = fuse_option.conn_info;
+using namespace dingofs::client;
 
-  if (option.want_splice_move) {
+void InitFuseConnInfo(struct fuse_conn_info* conn) {
+  if (FLAGS_fuse_conn_info_want_splice_move) {
     LOG_IF(INFO, fuse_set_feature_flag(conn, FUSE_CAP_SPLICE_MOVE))
         << "[enabled] FUSE_CAP_SPLICE_MOVE";
   }
-  if (option.want_splice_read) {
+  if (FLAGS_fuse_conn_info_want_splice_read) {
     LOG_IF(INFO, fuse_set_feature_flag(conn, FUSE_CAP_SPLICE_READ))
         << "[enabled] FUSE_CAP_SPLICE_READ";
   }
-  if (option.want_splice_write) {
+  if (FLAGS_fuse_conn_info_want_splice_write) {
     LOG_IF(INFO, fuse_set_feature_flag(conn, FUSE_CAP_SPLICE_WRITE))
         << "[enabled] FUSE_CAP_SPLICE_WRITE";
   }
   if (fuse_get_feature_flag(conn, FUSE_CAP_AUTO_INVAL_DATA) &&
-      !option.want_auto_inval_data) {
+      !FLAGS_fuse_conn_info_want_auto_inval_data) {
     fuse_unset_feature_flag(conn, FUSE_CAP_AUTO_INVAL_DATA);
     LOG(INFO) << "[disabled] FUSE_CAP_AUTO_INVAL_DATA";
   }

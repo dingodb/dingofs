@@ -36,6 +36,7 @@
 #include "client/vfs/vfs.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/blockaccess/block_accesser.h"
+#include "common/const.h"
 #include "common/status.h"
 #include "common/trace/itracer.h"
 #include "utils/executor/executor.h"
@@ -50,8 +51,7 @@ class VFSHub {
 
   virtual ~VFSHub() = default;
 
-  virtual Status Start(const VFSConfig& vfs_conf, const VFSOption& vfs_option,
-                       bool upgrade) = 0;
+  virtual Status Start(const VFSConfig& vfs_conf, bool upgrade) = 0;
 
   virtual Status Stop(bool upgrade) = 0;
 
@@ -84,8 +84,6 @@ class VFSHub {
   virtual FsInfo GetFsInfo() = 0;
 
   virtual uint64_t GetPageSize() = 0;
-
-  virtual VFSOption GetVFSOption() = 0;
 };
 
 class VFSHubImpl : public VFSHub {
@@ -94,8 +92,7 @@ class VFSHubImpl : public VFSHub {
 
   ~VFSHubImpl() override = default;
 
-  Status Start(const VFSConfig& vfs_conf, const VFSOption& vfs_option,
-               bool upgrade) override;
+  Status Start(const VFSConfig& vfs_conf, bool upgrade) override;
 
   Status Stop(bool upgrade) override;
 
@@ -171,18 +168,13 @@ class VFSHubImpl : public VFSHub {
 
   uint64_t GetPageSize() override {
     CHECK(started_.load(std::memory_order_relaxed)) << "not started";
-    return vfs_option_.page_option.page_size;
-  }
-
-  VFSOption GetVFSOption() override {
-    CHECK(started_.load(std::memory_order_relaxed)) << "not started";
-    return vfs_option_;
+    return FLAGS_data_stream_page_size;
   }
 
  private:
   std::atomic_bool started_{false};
 
-  VFSOption vfs_option_;
+  blockaccess::BlockAccessOptions blockaccess_options_;
 
   const ClientId client_id_;
 

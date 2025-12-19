@@ -196,10 +196,31 @@ DEFINE_validator(fuse_conn_info_want_auto_inval_data, brpc::PassValidate);
 
 // memory page allocator
 DEFINE_uint32(data_stream_page_size, 65536, "memory page size for datastream");
-DEFINE_validator(data_stream_page_size, brpc::PassValidate);
+DEFINE_validator(data_stream_page_size,
+                 [](const char* flag_name, uint32_t value) -> bool {
+                   if (value == 0) {
+                     LOG(ERROR) << "page size must greater than 0.";
+                     return false;
+                   }
+                   if (value % 4096 != 0) {
+                     LOG(ERROR) << "page size: " << value
+                                << " is not a multiple of 4K(4096) ";
+                     return false;
+                   }
+                   return true;
+                 });
+
 DEFINE_uint64(data_stream_page_total_size_mb, 1024,
               "total memory size for data stream");
-DEFINE_validator(data_stream_page_total_size_mb, brpc::PassValidate);
+DEFINE_validator(data_stream_page_total_size_mb,
+                 [](const char* flag_name, uint64_t value) -> bool {
+                   if (value < 64) {
+                     LOG(ERROR) << "page total size cannot be less than 64MB.";
+                     return false;
+                   }
+                   return true;
+                 });
+
 DEFINE_bool(data_stream_page_use_pool, true,
             "whether to use memory pool for data stream");
 DEFINE_validator(data_stream_page_use_pool, brpc::PassValidate);

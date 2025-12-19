@@ -49,7 +49,17 @@ static inline void FillBlockAccessOption(
     if (!rados_info.cluster_name().empty()) {
       block_access_opt->rados_options.cluster_name = rados_info.cluster_name();
     }
-  } else {
+  } else if (fs_info.fs_type() == pb::mds::FsType::LOCALFILE) {
+    CHECK(fs_info.extra().has_file_info())
+        << "ilegall fs_info, file info not set";
+
+    const auto& file_info = fs_info.extra().file_info();
+
+    block_access_opt->type = blockaccess::AccesserType::kLocalFile;
+    block_access_opt->file_options.path = file_info.path();
+  }
+
+  else {
     CHECK(false) << "Unsupported fs type: "
                  << pb::mds::FsType_Name(fs_info.fs_type());
   }

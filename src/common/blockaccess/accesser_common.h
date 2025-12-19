@@ -79,6 +79,11 @@ struct BlockAccessOptions {
   BlockAccesserThrottleOptions throttle_options;
 };
 
+inline void InitBlockAccessOption(blockaccess::BlockAccessOptions* option) {
+  blockaccess::InitAwsSdkConfig(&option->s3_options.aws_sdk_config);
+  blockaccess::InitBlockAccesserThrottleOptions(&option->throttle_options);
+}
+
 // TODO: refact this use one struct
 struct GetObjectAsyncContext;
 struct PutObjectAsyncContext;

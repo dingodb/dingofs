@@ -132,7 +132,7 @@ bool FileAccesser::Init() {
 
   LOG(INFO) << "FileAccesser root path: " << root_;
 
-  // recursive create container path if not eixts
+  // recursive create container path if not exists
   auto container_path = fs::path(root_);
   if (!fs::exists(container_path)) {
     fs::create_directories(container_path);
