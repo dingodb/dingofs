@@ -88,6 +88,9 @@ int main(int argc, char* argv[]) {
   if (argc < 3) {
     std::cerr << "missing meta url or mount point.\n";
     std::cerr << "Usage: " << extras.usage << '\n';
+    std::cerr << "\n";
+    std::cerr << "Examples:\n" << extras.examples << '\n';
+
     std::cerr << "For more help see: dingo-fuse --help\n";
     return EXIT_FAILURE;
   }
@@ -101,10 +104,14 @@ int main(int argc, char* argv[]) {
     std::cerr << "meta url is invalid: " << argv[1] << '\n';
     return EXIT_FAILURE;
   }
-  LOG(INFO) << "meta url parsed, metasystem_type: "
-            << dingofs::client::MetaSystemTypeToString(metasystem_type)
-            << ", fs_name: " << fs_name << ", mds_addrs: " << mds_addrs
-            << ",local storage_info: " << storage_info << '\n';
+  if (fs_name.empty()) {
+    std::cerr << "meta url is invalid, missing fs name. \n";
+    std::cerr << "Usage: " << extras.usage << '\n';
+    std::cerr << "\n";
+    std::cerr << "Examples:\n" << extras.examples << '\n';
+
+    return EXIT_FAILURE;
+  }
 
   // used for remote cache
   dingofs::cache::FLAGS_mds_addrs = mds_addrs;
