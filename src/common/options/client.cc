@@ -24,6 +24,7 @@
 
 namespace dingofs {
 namespace client {
+
 DEFINE_string(vfs_log_dir, kDefaultClientLogDir, "set client log directory");
 
 DEFINE_int32(vfs_log_level, 0, "set log level");
@@ -149,6 +150,10 @@ DEFINE_uint32(vfs_meta_write_slice_operation_merge_delay_us, 10,
               "write slice operation merge delay us.");
 DEFINE_validator(vfs_meta_write_slice_operation_merge_delay_us,
                  brpc::PassValidate);
+
+DEFINE_uint32(vfs_meta_commit_slice_max_num, 2048,
+              "maximum number of slices to commit at once.");
+DEFINE_validator(vfs_meta_commit_slice_max_num, brpc::PassValidate);
 
 //  inode_blocks_service
 DEFINE_uint32(format_file_offset_width, 20, "Width of file offset in format");

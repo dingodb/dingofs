@@ -14,7 +14,7 @@
 
 #include "client/vfs/metasystem/mds/modify_time_memo.h"
 
-#include "mds/common/helper.h"
+#include "utils/time.h"
 
 namespace dingofs {
 namespace client {
@@ -24,7 +24,7 @@ namespace v2 {
 void ModifyTimeMemo::Remember(Ino ino) {
   utils::WriteLockGuard guard(lock_);
 
-  modify_time_map_[ino] = mds::Helper::TimestampNs();
+  modify_time_map_[ino] = utils::TimestampNs();
 }
 
 void ModifyTimeMemo::Forget(Ino ino) {

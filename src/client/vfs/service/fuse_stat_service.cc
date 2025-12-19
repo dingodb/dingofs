@@ -345,7 +345,7 @@ static void RenderHandlerInfoPage(const Json::Value& json_value,
                                   std::string host_name, std::string port) {
   os << "<!DOCTYPE html><html>";
 
-  os << "<head>" << RenderHead("dinfofs dir iterator") << "</head>";
+  os << "<head>" << RenderHead("dingofs dir iterator") << "</head>";
   os << "<body>";
   os << fmt::format(
       R"(<h1 style="text-align:center;">Client({}:{}) Handler</h1>)", host_name,
@@ -427,7 +427,7 @@ static void RenderDirInfoPage(const Json::Value& json_value,
                               std::string port) {
   os << "<!DOCTYPE html><html>";
 
-  os << "<head>" << RenderHead("dinfofs dir iterator") << "</head>";
+  os << "<head>" << RenderHead("dingofs dir iterator") << "</head>";
   os << "<body>";
   os << fmt::format(
       R"(<h1 style="text-align:center;">Client({}:{}) Dir Iterator</h1>)",
@@ -559,27 +559,28 @@ static std::string RenderWriteMemo(const Json::Value& json_value) {
   return result;
 }
 
-static std::string RenderChunkMutaionMap(const Json::Value& json_value) {
-  std::string result;
+static std::string RenderChunkMap(const Json::Value& json_value) {
   if (json_value.isNull()) return "";
-  if (!json_value.isObject()) {
-    LOG(ERROR) << "chunk_mutation is not object.";
+  if (!json_value.isArray()) {
+    LOG(ERROR) << "chunk is not array.";
     return "";
   }
 
-  auto ino = json_value["ino"].asUInt64();
-  auto index = json_value["index"].asUInt64();
-  auto chunk_size = json_value["chunk_size"].asUInt64();
-  auto block_size = json_value["block_size"].asUInt64();
-  auto version = json_value["version"].asUInt64();
-  auto last_compaction_time_ms =
-      json_value["last_compaction_time_ms"].asUInt64();
-  result += "ino,index,chunk_size,block_size,version,last_compaction_time_ms";
-  result += "<br>";
-  result += fmt::format(
-      "{},{},{},{},{},{}", ino, index, chunk_size, block_size, version,
-      dingofs::mds::Helper::FormatMsTime(last_compaction_time_ms));
-  result += "<br>";
+  std::string result;
+  result +=
+      "index,is_completed,stage_slices_size,commiting_slices_size,commited_"
+      "slices_size,commited_version,last_compaction_time_ms";
+  for (const auto& value : json_value) {
+    result += "<br>";
+    result += fmt::format(
+        "{},{},{},{},{},{},{}", value["index"].asUInt64(),
+        value["is_completed"].asBool(), value["stage_slices"].size(),
+        value["commiting_slices"].size(), value["commited_slices"].size(),
+        value["commited_version"].asUInt64(),
+        dingofs::mds::Helper::FormatMsTime(
+            value["last_compaction_time_ms"].asUInt64()));
+  }
+
   return result;
 }
 
@@ -588,7 +589,7 @@ static void RenderFileSessionPage(const Json::Value& json_value,
                                   std::string host_name, std::string port) {
   os << "<!DOCTYPE html><html>";
 
-  os << "<head>" << RenderHead("dinfofs file session") << "</head>";
+  os << "<head>" << RenderHead("dingofs file session") << "</head>";
   os << "<body>";
   os << fmt::format(
       R"(<h1 style="text-align:center;">Client({}:{}) File Session</h1>)",
@@ -600,9 +601,6 @@ static void RenderFileSessionPage(const Json::Value& json_value,
     LOG(ERROR) << "file_sessions is not an array.";
     return;
   }
-  if (file_sessions.empty()) {
-    LOG(INFO) << "no file_sessions to load";
-  }
 
   os << R"(<div style="margin:12px;font-size:smaller;">)";
   os << fmt::format(R"(<h3>File Session [{}]</h3>)", file_sessions.size());
@@ -612,19 +610,24 @@ static void RenderFileSessionPage(const Json::Value& json_value,
   os << "<th>Ref Count</th>";
   os << "<th>Session Id Map</th>";
   os << "<th>Write Memo</th>";
-  os << "<th>Chunk Mutation Map</th>";
+  os << "<th>Chunk Map</th>";
   os << "</tr>";
 
   for (const auto& file_session : file_sessions) {
     uint64_t ino = file_session["ino"].asUInt64();
     uint32_t ref_count = file_session["ref_count"].asUInt();
+    const auto& chunk_set_value = file_session["chunk_set"];
 
     os << "<td>" << ino << "</td>";
     os << "<td>" << ref_count << "</td>";
     os << "<td>" << RenderSessionIdMap(file_session) << "</td>";
-    os << "<td>" << RenderWriteMemo(file_session["write_memo"]) << "</td>";
-    os << "<td>" << RenderChunkMutaionMap(file_session["chunk_mutation_map"])
-       << "</td>";
+    if (!chunk_set_value.isNull()) {
+      os << "<td>" << RenderWriteMemo(chunk_set_value["write_memo"]) << "</td>";
+      os << "<td>" << RenderChunkMap(chunk_set_value["chunk_map"]) << "</td>";
+    } else {
+      os << "<td></td>";
+      os << "<td></td>";
+    }
     os << "</tr>";
   }
 
@@ -639,7 +642,7 @@ static void RenderParentMemoPage(const Json::Value& json_value,
                                  std::string port) {
   os << "<!DOCTYPE html><html>";
 
-  os << "<head>" << RenderHead("dinfofs parent memo") << "</head>";
+  os << "<head>" << RenderHead("dingofs parent memo") << "</head>";
   os << "<body>";
   os << fmt::format(
       R"(<h1 style="text-align:center;">Client({}:{}) Parent Memo</h1>)",
@@ -681,7 +684,7 @@ static void RenderModifyTimeMemoPage(const Json::Value& json_value,
                                      std::string host_name, std::string port) {
   os << "<!DOCTYPE html><html>";
 
-  os << "<head>" << RenderHead("dinfofs modify time memo") << "</head>";
+  os << "<head>" << RenderHead("dingofs modify time memo") << "</head>";
   os << "<body>";
   os << fmt::format(
       R"(<h1 style="text-align:center;">Client({}:{}) Modify Time Memo</h1>)",
@@ -720,7 +723,7 @@ static void RenderChunkMemoPage(const Json::Value& json_value,
                                 std::string port) {
   os << "<!DOCTYPE html><html>";
 
-  os << "<head>" << RenderHead("dinfofs chunk memo") << "</head>";
+  os << "<head>" << RenderHead("dingofs chunk memo") << "</head>";
   os << "<body>";
   os << fmt::format(
       R"(<h1 style="text-align:center;">Client({}:{}) Chunk Memo</h1>)",
@@ -766,7 +769,7 @@ static void RenderMdsRouterPage(const Json::Value& json_value,
                                 std::string port) {
   os << "<!DOCTYPE html><html>";
 
-  os << "<head>" << RenderHead("dinfofs mds router") << "</head>";
+  os << "<head>" << RenderHead("dingofs mds router") << "</head>";
   os << "<body>";
   os << fmt::format(
       R"(<h1 style="text-align:center;">Client({}:{}) MDS Router</h1>)",
@@ -776,9 +779,6 @@ static void RenderMdsRouterPage(const Json::Value& json_value,
   if (!mds_routers.isArray()) {
     LOG(ERROR) << "mds_routers is not an array.";
     return;
-  }
-  if (mds_routers.empty()) {
-    LOG(INFO) << "no mds_routers to load";
   }
 
   os << R"(<div style="margin:12px;font-size:smaller;">)";
@@ -824,7 +824,7 @@ static void RenderInodeCachePage(const Json::Value& json_value,
                                  std::string port) {
   os << "<!DOCTYPE html><html>";
 
-  os << "<head>" << RenderHead("dinfofs inode cache") << "</head>";
+  os << "<head>" << RenderHead("dingofs inode cache") << "</head>";
   os << "<body>";
   os << fmt::format(
       R"(<h1 style="text-align:center;">Client({}:{}) Inode Cache</h1>)",
@@ -834,9 +834,6 @@ static void RenderInodeCachePage(const Json::Value& json_value,
   if (!inodes.isArray()) {
     LOG(ERROR) << "inodes is not an array.";
     return;
-  }
-  if (inodes.empty()) {
-    LOG(INFO) << "no inodes to load";
   }
 
   os << R"(<div style="margin:12px;font-size:smaller;">)";
@@ -914,7 +911,7 @@ static void RenderRPCPage(const Json::Value& json_value,
                           std::string port) {
   os << "<!DOCTYPE html><html>";
 
-  os << "<head>" << RenderHead("dinfofs rpc") << "</head>";
+  os << "<head>" << RenderHead("dingofs rpc") << "</head>";
   os << "<body>";
   os << fmt::format(R"(<h1 style="text-align:center;">Client({}:{}) RPC</h1>)",
                     host_name, port);

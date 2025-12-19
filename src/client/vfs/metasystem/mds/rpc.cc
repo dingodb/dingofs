@@ -14,14 +14,14 @@
 
 #include "client/vfs/metasystem/mds/rpc.h"
 
-#include <brpc/channel.h>
-#include <butil/endpoint.h>
-#include <fmt/format.h>
-#include <glog/logging.h>
-
 #include <string>
 
+#include "brpc/channel.h"
+#include "butil/endpoint.h"
+#include "fmt/format.h"
+#include "glog/logging.h"
 #include "utils/concurrent/concurrent.h"
+#include "utils/time.h"
 
 namespace dingofs {
 namespace client {
@@ -79,8 +79,7 @@ bool RPC::CheckMdsAlive(const std::string& addr) {
   pb::mds::EchoRequest request;
   pb::mds::EchoResponse response;
 
-  request.mutable_info()->set_request_id(
-      std::to_string(mds::Helper::TimestampNs()));
+  request.mutable_info()->set_request_id(std::to_string(utils::TimestampNs()));
 
   const google::protobuf::MethodDescriptor* method =
       dingofs::pb::mds::MDSService::descriptor()->FindMethodByName("Echo");

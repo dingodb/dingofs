@@ -1687,16 +1687,14 @@ void MDSServiceImpl::DoWriteSlice(google::protobuf::RpcController*, const pb::md
 
   Context ctx(request->context(), request->info().request_id(), __func__);
 
-  EntryOut entry_out;
   std::vector<ChunkDescriptor> chunk_descriptors;
   status = file_system->WriteSlice(ctx, request->parent(), request->ino(),
-                                   Helper::PbRepeatedToVector(request->delta_slices()), chunk_descriptors, entry_out);
+                                   Helper::PbRepeatedToVector(request->delta_slices()), chunk_descriptors);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  response->mutable_inode()->Swap(&entry_out.attr);
   Helper::VectorToPbRepeated(chunk_descriptors, response->mutable_chunk_descriptors());
 }
 
@@ -1729,7 +1727,7 @@ void MDSServiceImpl::WriteSlice(google::protobuf::RpcController* controller, con
   }
 
   // run in place.
-  // RunInPlace(WriteSlice, controller, request, response, svr_done);
+  RunInPlace(WriteSlice, controller, request, response, svr_done);
 
   // run in queue.
   RunInQueue(WriteSlice, controller, request, response, svr_done, write_worker_set_);

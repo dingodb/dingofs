@@ -147,8 +147,7 @@ class MDSClient {
 
   Status WriteSlice(ContextSPtr ctx, Ino ino,
                     const std::vector<mds::DeltaSliceEntry>& delta_slices,
-                    std::vector<ChunkDescriptor>& chunk_descriptors,
-                    AttrEntry& attr_entry);
+                    std::vector<ChunkDescriptor>& chunk_descriptors);
 
   Status Fallocate(ContextSPtr ctx, Ino ino, int32_t mode, uint64_t offset,
                    uint64_t length);
@@ -219,7 +218,7 @@ Status MDSClient::SendRequest(ContextSPtr ctx, GetMdsFn get_mds_fn,
   bool is_refresh_mds = true;
 
   request.mutable_info()->set_request_id(
-      ctx ? ctx->TraceId() : std::to_string(mds::Helper::TimestampNs()));
+      ctx ? ctx->TraceId() : std::to_string(utils::TimestampNs()));
   request.mutable_context()->set_client_id(client_id_.ID());
 
   Status status;

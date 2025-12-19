@@ -191,7 +191,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   // slice
   Status WriteSlice(Context& ctx, Ino parent, Ino ino, const std::vector<DeltaSliceEntry>& delta_slices,
-                    std::vector<ChunkDescriptor>& chunk_descriptors, EntryOut& entry_out);
+                    std::vector<ChunkDescriptor>& chunk_descriptors);
   Status ReadSlice(Context& ctx, Ino ino, const std::vector<ChunkDescriptor>& chunk_descriptors,
                    std::vector<ChunkEntry>& chunks);
 

@@ -74,11 +74,11 @@ DEFINE_validator(mds_filesystem_hash_mds_num_default, brpc::PassValidate);
 DEFINE_uint32(mds_filesystem_recycle_time_hour, 1, "Filesystem recycle time hour.");
 DEFINE_validator(mds_filesystem_recycle_time_hour, brpc::PassValidate);
 
-DEFINE_bool(mds_compact_chunk_enable, true, "Compact chunk enable.");
+DEFINE_bool(mds_compact_chunk_enable, false, "Compact chunk enable.");
 DEFINE_validator(mds_compact_chunk_enable, brpc::PassValidate);
 DEFINE_uint32(mds_compact_chunk_threshold_num, 10, "Compact chunk threshold num.");
 DEFINE_validator(mds_compact_chunk_threshold_num, brpc::PassValidate);
-DEFINE_uint32(mds_compact_chunk_interval_ms, 3 * 1000, "Compact chunk interval ms.");
+DEFINE_uint32(mds_compact_chunk_interval_ms, 30 * 1000, "Compact chunk interval ms.");
 DEFINE_validator(mds_compact_chunk_interval_ms, brpc::PassValidate);
 
 DEFINE_uint32(mds_transfer_max_slice_num, 8096, "Max slice num for transfer.");
@@ -178,7 +178,7 @@ Status FileSystem::GenDirIno(Ino& ino) {
   bool ret = ino_id_generator_->GenID(2, ino);
   ino = (ino & 1) ? ino : (ino + 1);  // ensure odd number for dir inode
 
-  return ret ? Status::OK() : Status(pb::error::EGEN_FSID, "generate inode id fail");
+  return ret ? Status::OK() : Status(pb::error::EALLOC_ID, "generate inode id fail");
 }
 
 // even number is file inode
@@ -186,7 +186,7 @@ Status FileSystem::GenFileIno(Ino& ino) {
   bool ret = ino_id_generator_->GenID(2, ino);
   ino = (ino & 1) ? (ino + 1) : ino;  // ensure even number for file inode
 
-  return ret ? Status::OK() : Status(pb::error::EGEN_FSID, "generate inode id fail");
+  return ret ? Status::OK() : Status(pb::error::EALLOC_ID, "generate inode id fail");
 }
 
 bool FileSystem::CanServe(uint64_t self_mds_id) {
@@ -927,6 +927,8 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& sess
   const std::string& client_id = ctx.ClientId();
   const bool bypass_cache = ctx.IsBypassCache();
 
+  const uint64_t chunk_size = fs_info_->GetChunkSize();
+
   Duration duration;
 
   InodeSPtr inode;
@@ -940,7 +942,7 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& sess
 
   FileSessionSPtr file_session = file_session_manager_.Create(ino, client_id);
 
-  OpenFileOperation operation(trace, flags, *file_session);
+  OpenFileOperation operation(trace, flags, *file_session, chunk_size);
 
   status = RunOperation(&operation);
   if (!status.ok()) {
@@ -969,6 +971,9 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& sess
   // update cache
   UpsertInodeCache(attr);
 
+  // clean chunk cache if O_TRUNC
+  if (flags & O_TRUNC) chunk_cache_.Delete(ino);
+
   auto get_chunks_from_cache_fn = [&](std::vector<ChunkEntry>& chunks) {
     auto cache_chunks = chunk_cache_.Get(ino);
     uint32_t slice_num = 0;
@@ -986,7 +991,6 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& sess
     }
   };
 
-  uint64_t chunk_size = fs_info_->GetChunkSize();
   auto is_completely_fn = [&](const std::vector<ChunkEntry>& chunks) -> bool {
     uint32_t slice_num = 0;
     for (const auto& chunk : chunks) {
@@ -1001,7 +1005,7 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& sess
   };
 
   std::string fetch_from("none");
-  if (is_prefetch_chunk && ((flags & O_ACCMODE) == O_RDONLY || flags & O_RDWR)) {
+  if (is_prefetch_chunk && ((flags & O_ACCMODE) == O_RDONLY || flags & O_RDWR) && !(flags & O_TRUNC)) {
     fetch_from = "cache";
     if (!bypass_cache) {
       // priority take from cache
@@ -1544,6 +1548,10 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
     return status;
   }
 
+  UpdateAttrOperation::ExtraParam extra_param;
+  extra_param.block_size = fs_info_->GetBlockSize();
+  extra_param.chunk_size = fs_info_->GetChunkSize();
+
   if (param.to_set & kSetAttrLength) {
     if (param.attr.length() > inode->Length()) {
       // check quota
@@ -1551,12 +1559,14 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
         return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
       }
     }
+
+    if (!slice_id_generator_->GenID(1, extra_param.slice_id)) {
+      return Status(pb::error::EALLOC_ID, "generate slice id fail");
+    }
   }
 
   // update backend store
-  UpdateAttrOperation::ExtraParam extra_param;
-  extra_param.block_size = fs_info_->GetBlockSize();
-  extra_param.chunk_size = fs_info_->GetChunkSize();
+
   UpdateAttrOperation operation(trace, ino, param.to_set, param.attr, extra_param);
 
   status = RunOperation(&operation);
@@ -1570,19 +1580,17 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
 
   auto& result = operation.GetResult();
   auto& attr = result.attr;
+  int64_t delta_bytes = result.delta_bytes;
 
   entry_out.attr = attr;
 
   // update quota
   if (param.to_set & kSetAttrLength) {
     std::string reason = fmt::format("setattr.{}", ino);
-    int64_t change_bytes = param.attr.length() > inode->Length()
-                               ? param.attr.length() - inode->Length()
-                               : -static_cast<int64_t>(inode->Length() - param.attr.length());
-    quota_manager_->UpdateFsUsage(change_bytes, 0, reason);
+    quota_manager_->UpdateFsUsage(delta_bytes, 0, reason);
 
     for (const auto& parent : attr.parents()) {
-      quota_manager_->AsyncUpdateDirUsage(parent, change_bytes, 0, reason);
+      quota_manager_->AsyncUpdateDirUsage(parent, delta_bytes, 0, reason);
     }
   }
 
@@ -1943,38 +1951,19 @@ Status FileSystem::CommitRename(Context& ctx, const RenameParam& param, Ino& old
   return renamer_.Execute<RenameParam>(GetSelfPtr(), ctx, param, old_parent_version, new_parent_version, effected_inos);
 }
 
-static uint64_t CalculateDeltaLength(uint64_t length, const std::vector<DeltaSliceEntry>& delta_slices) {
-  uint64_t temp_length = length;
-  for (const auto& delta_slice : delta_slices) {
-    for (const auto& slice : delta_slice.slices()) {
-      temp_length = std::max(temp_length, slice.offset() + slice.len());
-    }
-  }
-
-  return temp_length - length;
-}
-
 Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, const std::vector<DeltaSliceEntry>& delta_slices,
-                              std::vector<ChunkDescriptor>& chunk_descriptors, EntryOut& entry_out) {
+                              std::vector<ChunkDescriptor>& chunk_descriptors) {
   if (!CanServe(ctx)) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
   InodeSPtr inode;
   auto status = GetInode(ctx, ino, inode);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
   auto& trace = ctx.GetTrace();
 
   Duration duration;
-
-  // check quota
-  uint64_t delta_bytes = CalculateDeltaLength(inode->Length(), delta_slices);
-  if (!quota_manager_->CheckQuota(trace, ino, static_cast<int64_t>(delta_bytes), 0)) {
-    return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
-  }
 
   // update backend store
   UpsertChunkOperation operation(trace, GetFsInfo(), ino, delta_slices);
@@ -1993,21 +1982,22 @@ Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, const std::vector<Delt
   }
 
   auto& result = operation.GetResult();
-  auto& attr = result.attr;
-  int64_t length_delta = result.length_delta;
+  int64_t length = result.length;
   auto& chunks = result.effected_chunks;
 
-  // update cache
-  UpsertInodeCache(attr);
-
   // check whether need to compact chunk
+  auto check_compact_fn = [](const ChunkEntry& chunk) {
+    return FLAGS_mds_compact_chunk_enable &&
+           static_cast<uint32_t>(chunk.slices_size()) > FLAGS_mds_compact_chunk_threshold_num &&
+           chunk.last_check_time_ms() + FLAGS_mds_compact_chunk_interval_ms <
+               static_cast<uint64_t>(Helper::TimestampMs());
+  };
   for (auto& chunk : chunks) {
-    if (FLAGS_mds_compact_chunk_enable &&
-        static_cast<uint32_t>(chunk.slices_size()) > FLAGS_mds_compact_chunk_threshold_num &&
-        chunk.last_compaction_time_ms() + FLAGS_mds_compact_chunk_interval_ms <
-            static_cast<uint64_t>(Helper::TimestampMs())) {
+    if (check_compact_fn(chunk)) {
+      chunk.set_last_check_time_ms(Helper::TimestampMs());
+
       auto fs_info = fs_info_->Get();
-      if (CompactChunkOperation::MaybeCompact(fs_info, ino, attr.length(), chunk)) {
+      if (CompactChunkOperation::MaybeCompact(fs_info, ino, length, chunk)) {
         DINGO_LOG(INFO) << fmt::format("[fs.{}] trigger compact chunk({}) for ino({}).", fs_id_, chunk.index(), ino);
 
         auto post_handler = [this](OperationSPtr operation) {
@@ -2030,17 +2020,6 @@ Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, const std::vector<Delt
 
     chunk_cache_.PutIf(ino, std::move(chunk));
   }
-
-  // update quota
-  if (length_delta != 0) {
-    std::string reason = fmt::format("writeslice.{}.{}", ino, slice_id_str);
-    quota_manager_->UpdateFsUsage(length_delta, 0, reason);
-    for (const auto& parent : attr.parents()) {
-      quota_manager_->AsyncUpdateDirUsage(parent, length_delta, 0, reason);
-    }
-  }
-
-  entry_out.attr = std::move(attr);
 
   return Status::OK();
 }
@@ -2134,7 +2113,7 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
       // prealloc slice id
       slice_num = (new_length - inode->Length()) / fs_info_->GetChunkSize() + 1;
       if (!slice_id_generator_->GenID(slice_num, 0, slice_id)) {
-        return Status(pb::error::EINTERNAL, "generate slice id fail");
+        return Status(pb::error::EALLOC_ID, "generate slice id fail");
       }
     }
   }
@@ -2865,7 +2844,7 @@ Status FileSystemSet::GenFsId(uint32_t& fs_id) {
   uint64_t temp_fs_id;
   bool ret = fs_id_generator_->GenID(2, temp_fs_id);
   fs_id = static_cast<uint32_t>(temp_fs_id);
-  return ret ? Status::OK() : Status(pb::error::EGEN_FSID, "generate fs id fail");
+  return ret ? Status::OK() : Status(pb::error::EALLOC_ID, "generate fs id fail");
 }
 
 // gerenate parent hash partition
@@ -3232,7 +3211,7 @@ Status FileSystemSet::RefreshFsInfo(uint32_t fs_id, const std::string& reason) {
 
 Status FileSystemSet::AllocSliceId(uint32_t num, uint64_t min_slice_id, uint64_t& slice_id) {
   if (!slice_id_generator_->GenID(num, min_slice_id, slice_id)) {
-    return Status(pb::error::EINTERNAL, "generate slice id fail");
+    return Status(pb::error::EALLOC_ID, "generate slice id fail");
   }
 
   return Status::OK();

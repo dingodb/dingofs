@@ -1011,7 +1011,7 @@ Status MDSClient::ReadSlice(
 Status MDSClient::WriteSlice(
     ContextSPtr ctx, Ino ino,
     const std::vector<mds::DeltaSliceEntry>& delta_slices,
-    std::vector<ChunkDescriptor>& chunk_descriptors, AttrEntry& attr_entry) {
+    std::vector<ChunkDescriptor>& chunk_descriptors) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, ino](bool& is_primary_mds) -> MDSMeta {
@@ -1040,7 +1040,6 @@ Status MDSClient::WriteSlice(
 
   chunk_descriptors =
       mds::Helper::PbRepeatedToVector(response.chunk_descriptors());
-  attr_entry.Swap(response.mutable_inode());
 
   return Status::OK();
 }

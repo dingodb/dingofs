@@ -128,6 +128,8 @@ class LocalMetaSystem : public vfs::MetaSystem {
                 uint32_t uid, uint32_t gid, uint32_t mode, int flags,
                 Attr* attr, uint64_t fh) override;
 
+  Status Flush(ContextSPtr ctx, Ino ino, uint64_t fh) override;
+
   Status Close(ContextSPtr ctx, Ino ino, uint64_t fh) override;
 
   Status ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index, uint64_t fh,

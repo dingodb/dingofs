@@ -372,11 +372,14 @@ Status VFSImpl::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {
 
   if (handle->file == nullptr) {
     LOG(ERROR) << "file is null in handle, ino: " << ino << ", fh: " << fh;
-    s = Status::BadFd(fmt::format("bad  fh:{}", fh));
-
-  } else {
-    s = handle->file->Flush();
+    s = Status::BadFd(fmt::format("bad fh:{}", fh));
+    return s;
   }
+
+  s = handle->file->Flush();
+  if (!s.ok()) return s;
+
+  s = meta_system_->Flush(ctx, ino, fh);
 
   return s;
 }

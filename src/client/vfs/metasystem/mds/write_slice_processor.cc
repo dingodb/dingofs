@@ -30,9 +30,8 @@ namespace v2 {
 
 static const uint32_t kBatchOperationReserveSize = 256;
 
-WriteSliceProcessor::WriteSliceProcessor(MDSClientSPtr mds_client,
-                                         ChunkMemo& chunk_memo)
-    : mds_client_(mds_client), chunk_memo_(chunk_memo) {
+WriteSliceProcessor::WriteSliceProcessor(MDSClientSPtr mds_client)
+    : mds_client_(mds_client) {
   CHECK(bthread_mutex_init(&mutex_, nullptr) == 0)
       << fmt::format("[meta.writeslice] bthread_mutex_init fail.");
   CHECK(bthread_cond_init(&cond_, nullptr) == 0)
@@ -191,45 +190,39 @@ void WriteSliceProcessor::ExecuteBatchOperation(
       << fmt::format("[meta.writeslice] batch_operation.operations is empty.");
 
   const Ino ino = batch_operation.ino;
-  const uint64_t fh = batch_operation.operations.front()->fh;
-  ContextSPtr ctx = batch_operation.operations.front()->ctx;
 
   // prepare delta slice entries
   std::vector<mds::DeltaSliceEntry> delta_slice_entries;
   for (auto& operation : batch_operation.operations) {
-    mds::DeltaSliceEntry delta_slice_entry;
+    auto delta_slices = operation->task->DeltaSlices();
 
-    delta_slice_entry.set_chunk_index(operation->index);
-    for (const auto& slice : operation->slices) {
-      *delta_slice_entry.add_slices() = Helper::ToSlice(slice);
+    for (const auto& delta_slice : delta_slices) {
+      mds::DeltaSliceEntry delta_slice_entry;
+      delta_slice_entry.set_chunk_index(delta_slice.chunk_index);
+
+      for (const auto& slice : delta_slice.slices) {
+        *delta_slice_entry.add_slices() = Helper::ToSlice(slice);
+      }
+
+      delta_slice_entries.push_back(std::move(delta_slice_entry));
     }
-
-    delta_slice_entries.push_back(std::move(delta_slice_entry));
   }
 
   LOG(INFO) << fmt::format(
-      "[meta.writeslice.{}.{}] execute batch operation, "
-      "delta_slice_entries({}).",
-      ino, fh, delta_slice_entries.size());
+      "[meta.writeslice.{}] execute batch operation, delta_slice_entries({}).",
+      ino, delta_slice_entries.size());
 
-  AttrEntry attr_entry;
   std::vector<mds::ChunkDescriptor> chunk_descriptors;
-  auto status = mds_client_->WriteSlice(ctx, ino, delta_slice_entries,
-                                        chunk_descriptors, attr_entry);
+  auto status = mds_client_->WriteSlice(nullptr, ino, delta_slice_entries,
+                                        chunk_descriptors);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
-        "[meta.writeslice.{}.{}] writeslice fail, error({}).", ino, fh,
+        "[meta.writeslice.{}] writeslice fail, error({}).", ino,
         status.ToString());
   }
 
-  // update chunk memo
-  for (const auto& chunk_descriptor : chunk_descriptors) {
-    chunk_memo_.Remember(ino, chunk_descriptor.index(),
-                         chunk_descriptor.version());
-  }
-
   for (auto& operation : batch_operation.operations) {
-    operation->done(status, attr_entry);
+    operation->done(status, operation->task, chunk_descriptors);
   }
 }
 

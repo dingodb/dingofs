@@ -16,6 +16,7 @@
 #define DINGOFS_SRC_CLIENT_VFS_META_V2_FILESYSTEM_H_
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -94,6 +95,9 @@ class MDSMetaSystem : public vfs::MetaSystem {
                Attr* attr) override;
 
   Status Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) override;
+
+  Status Flush(ContextSPtr ctx, Ino ino, uint64_t fh) override;
+
   Status Close(ContextSPtr ctx, Ino ino, uint64_t fh) override;
 
   Status ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index, uint64_t fh,
@@ -162,19 +166,12 @@ class MDSMetaSystem : public vfs::MetaSystem {
   void DeleteInodeFromCache(Ino ino);
   InodeSPtr GetInodeFromCache(Ino ino);
 
-  // slice cache
-  bool GetSliceFromCache(Ino ino, uint64_t index, std::vector<Slice>* slices);
-  // void UpdateInodeLength(Ino ino, uint64_t new_length);
-  // bool WriteSliceToCache(Ino ino, uint64_t index, uint64_t fh,
-  //                        const std::vector<Slice>& slices);
-  // void DeleteDeltaSliceFromCache(
-  //     Ino ino, uint64_t fh,
-  //     const std::vector<mds::DeltaSliceEntry>& delta_slice_entries);
-
-  // void UpdateChunkToCache(Ino ino, uint64_t fh,
-  //                         const std::vector<mds::ChunkEntry>& chunks);
-  void ClearChunkCache(Ino ino, uint64_t fh, uint64_t index);
-  // Status SyncDeltaSlice(ContextSPtr ctx, Ino ino, uint64_t fh);
+  // chunk cache
+  Status SetInodeLength(ContextSPtr ctx, FileSessionSPtr file_session, Ino ino);
+  void LaunchWriteSlice(FileSessionSPtr file_session, CommitTaskSPtr task);
+  void AsyncCommitSlice(FileSessionSPtr file_session, bool is_force,
+                        bool is_wait);
+  Status CommitAllSlice(ContextSPtr ctx, Ino ino);
 
   Status CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
                      const std::string& caller);
@@ -190,9 +187,9 @@ class MDSMetaSystem : public vfs::MetaSystem {
 
   MDSClientSPtr mds_client_;
 
-  ChunkMemo chunk_memo_;
-
   ModifyTimeMemo modify_time_memo_;
+
+  ChunkMemo chunk_memo_;
 
   FileSessionMap file_session_map_;
 

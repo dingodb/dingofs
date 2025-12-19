@@ -826,28 +826,48 @@ static Status ScanChunk(TxnUPtr& txn, uint32_t fs_id, Ino ino, std::map<uint64_t
   return status;
 }
 
-void UpdateAttrOperation::ExpandChunk(TxnUPtr& txn, AttrEntry& attr, uint64_t new_length) const {
-  if (new_length <= attr.length()) return;
+Status UpdateAttrOperation::ResetFileRange(TxnUPtr& txn, uint64_t old_length, uint64_t new_length) {
+  CHECK(new_length < old_length) << "new_length should be less than old_length.";
+  CHECK(extra_param_.slice_id > 0) << "slice_id is zero.";
 
+  const uint32_t fs_id = attr_.fs_id();
+  const Ino ino = attr_.ino();
   const uint64_t chunk_size = extra_param_.chunk_size;
-  const uint64_t block_size = extra_param_.block_size;
 
-  uint64_t start_index =
-      attr.length() % chunk_size == 0 ? attr.length() / chunk_size : (attr.length() / chunk_size) + 1;
-  uint64_t end_index = new_length % chunk_size == 0 ? new_length / chunk_size : (new_length / chunk_size) + 1;
+  uint32_t old_num = (old_length / chunk_size) + ((old_length % chunk_size) != 0 ? 1 : 0);
+  uint32_t new_num = (new_length / chunk_size) + ((new_length % chunk_size) != 0 ? 1 : 0);
 
-  for (; start_index < end_index; ++start_index) {
+  SliceEntry slice;
+  if (new_length % chunk_size != 0) {
     ChunkEntry chunk;
-    chunk.set_index(start_index);
-    chunk.set_chunk_size(chunk_size);
-    chunk.set_block_size(block_size);
-    chunk.set_version(0);
+    auto status = GetChunk(txn, fs_id, ino, new_num - 1, chunk);
+    if (!status.ok() && status.error_code() != pb::error::ENOT_FOUND) {
+      return Status(status.error_code(), fmt::format("retfilerange fail({})", status.error_str()));
+    }
 
-    txn->Put(MetaCodec::EncodeChunkKey(attr.fs_id(), attr.ino(), start_index), MetaCodec::EncodeChunkValue(chunk));
+    slice.set_id(extra_param_.slice_id);
+    slice.set_offset(new_length);
+    slice.set_size(static_cast<uint64_t>(new_num * chunk_size) - new_length);
+    slice.set_len(slice.size());
+    slice.set_zero(true);
+
+    *chunk.add_slices() = slice;
+
+    chunk.set_version(chunk.version() + 1);
+    txn->Put(MetaCodec::EncodeChunkKey(fs_id, ino, new_num - 1), MetaCodec::EncodeChunkValue(chunk));
   }
+
+  for (uint32_t i = new_num; i < old_num; ++i) {
+    txn->Delete(MetaCodec::EncodeChunkKey(fs_id, ino, i));
+  }
+
+  DINGO_LOG(INFO) << fmt::format("[operation.{}.{}] reset file range, length({},{}) chunk_num({},{}) blank_slice({}).",
+                                 fs_id, ino, old_length, new_length, old_num, new_num, slice.ShortDebugString());
+
+  return Status::OK();
 }
 
-Status UpdateAttrOperation::RunInBatch(TxnUPtr&, AttrEntry& attr, const std::vector<KeyValue>&) {
+Status UpdateAttrOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>&) {
   if (to_set_ & kSetAttrMode) {
     attr.set_mode(attr_.mode());
   }
@@ -861,8 +881,13 @@ Status UpdateAttrOperation::RunInBatch(TxnUPtr&, AttrEntry& attr, const std::vec
   }
 
   if (to_set_ & kSetAttrLength) {
-    // ExpandChunk(txn, attr, attr_.length());
+    result_.delta_bytes = static_cast<int64_t>(attr_.length()) - static_cast<int64_t>(attr.length());
     attr.set_length(attr_.length());
+    // if delta_length<0 then delete chunks beyond new length
+    if (result_.delta_bytes < 0) {
+      auto status = ResetFileRange(txn, attr_.length(), attr.length());
+      if (!status.ok()) return status;
+    }
   }
 
   if (to_set_ & kSetAttrAtime) {
@@ -912,26 +937,26 @@ Status RemoveXAttrOperation::RunInBatch(TxnUPtr&, AttrEntry& attr, const std::ve
   return Status::OK();
 }
 
-std::vector<std::string> UpsertChunkOperation::PrefetchKey() {
-  std::vector<std::string> prefetch_keys;
-  prefetch_keys.reserve(delta_slices_.size());
+Status UpsertChunkOperation::Run(TxnUPtr& txn) {
+  const uint32_t fs_id = fs_info_.fs_id();
+
+  std::set<std::string> keys;
   for (const auto& delta_slices : delta_slices_) {
-    prefetch_keys.push_back(MetaCodec::EncodeChunkKey(fs_info_.fs_id(), ino_, delta_slices.chunk_index()));
+    keys.insert(MetaCodec::EncodeChunkKey(fs_id, ino_, delta_slices.chunk_index()));
   }
 
-  return prefetch_keys;
-}
+  std::vector<KeyValue> kvs;
+  auto status = txn->BatchGet(std::vector<std::string>(keys.begin(), keys.end()), kvs);
+  if (!status.ok()) return status;
 
-Status UpsertChunkOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>& prefetch_kvs) {
+  int64_t length = 0;
   result_.effected_chunks.clear();
-
-  uint64_t prev_length = attr.length();
   for (const auto& delta_slices : delta_slices_) {
     ChunkEntry chunk;
     const auto& chunk_index = delta_slices.chunk_index();
 
-    const std::string key = MetaCodec::EncodeChunkKey(fs_info_.fs_id(), ino_, chunk_index);
-    auto value = FindValue(prefetch_kvs, key);
+    const std::string key = MetaCodec::EncodeChunkKey(fs_id, ino_, chunk_index);
+    auto value = FindValue(kvs, key);
     if (!value.empty()) chunk = MetaCodec::DecodeChunkValue(value);
 
     // not exist chunk, create a new one
@@ -955,26 +980,17 @@ Status UpsertChunkOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std
 
       for (const auto& slice : delta_slices.slices()) {
         if (!is_exist_fn(slice)) *chunk.add_slices() = slice;
+        length = std::max(length, static_cast<int64_t>(slice.offset() + slice.len()));
       }
     }
 
     chunk.set_version(chunk.version() + 1);
     txn->Put(key, MetaCodec::EncodeChunkValue(chunk));
-    result_.effected_chunks.push_back(std::move(chunk));
 
-    // update length
-    for (const auto& slice : delta_slices.slices()) {
-      if (attr.length() < (slice.offset() + slice.len())) {
-        attr.set_length(slice.offset() + slice.len());
-      }
-    }
+    result_.effected_chunks.push_back(std::move(chunk));
   }
 
-  result_.length_delta = attr.length() - prev_length;
-
-  // update attr
-  attr.set_ctime(std::max(attr.ctime(), GetTime()));
-  attr.set_mtime(std::max(attr.mtime(), GetTime()));
+  result_.length = length;
 
   return Status::OK();
 }
@@ -1197,8 +1213,21 @@ Status FallocateOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::
   return Status::OK();
 }
 
+void OpenFileOperation::ResetFileRange(TxnUPtr& txn, uint64_t length) {
+  const uint32_t fs_id = file_session_.fs_id();
+  const Ino ino = file_session_.ino();
+
+  uint32_t old_num = (length / chunk_size_) + ((length % chunk_size_) != 0 ? 1 : 0);
+
+  for (uint32_t i = 0; i < old_num; ++i) {
+    txn->Delete(MetaCodec::EncodeChunkKey(fs_id, ino, i));
+  }
+}
+
 Status OpenFileOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>&) {
   if (flags_ & O_TRUNC) {
+    ResetFileRange(txn, attr.length());
+
     result_.delta_bytes = -static_cast<int64_t>(attr.length());
     attr.set_length(0);
 
@@ -1579,7 +1608,7 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoEntry& fs_info,
   const uint32_t fs_id = fs_info.fs_id();
   const uint64_t chunk_size = fs_info.chunk_size();
   const uint64_t block_size = fs_info.block_size();
-  const uint64_t chunk_offset = chunk.index() * chunk_size;
+  // const uint64_t chunk_offset = chunk.index() * chunk_size;
 
   auto chunk_copy = to_chunk_fn(chunk);
 
@@ -1592,26 +1621,26 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoEntry& fs_info,
   // 2. partial out of file length slices
   // chunk offset:          |______|
   // file length: |____________|
-  if (chunk_offset + chunk_size > file_length) {
-    for (const auto& slice : chunk.slices()) {
-      if (slice.offset() >= file_length) {
-        TrashSliceEntry trash_slice;
-        trash_slice.set_fs_id(fs_id);
-        trash_slice.set_ino(ino);
-        trash_slice.set_chunk_index(chunk.index());
-        trash_slice.set_slice_id(slice.id());
-        trash_slice.set_block_size(block_size);
-        trash_slice.set_chunk_size(chunk_size);
-        trash_slice.set_is_partial(false);
-        auto* range = trash_slice.add_ranges();
-        range->set_offset(slice.offset());
-        range->set_len(slice.len());
-        range->set_compaction_version(slice.compaction_version());
+  // if (chunk_offset + chunk_size > file_length) {
+  //   for (const auto& slice : chunk.slices()) {
+  //     if (slice.offset() >= file_length) {
+  //       TrashSliceEntry trash_slice;
+  //       trash_slice.set_fs_id(fs_id);
+  //       trash_slice.set_ino(ino);
+  //       trash_slice.set_chunk_index(chunk.index());
+  //       trash_slice.set_slice_id(slice.id());
+  //       trash_slice.set_block_size(block_size);
+  //       trash_slice.set_chunk_size(chunk_size);
+  //       trash_slice.set_is_partial(false);
+  //       auto* range = trash_slice.add_ranges();
+  //       range->set_offset(slice.offset());
+  //       range->set_len(slice.len());
+  //       range->set_compaction_version(slice.compaction_version());
 
-        trash_slices.add_slices()->Swap(&trash_slice);
-      }
-    }
-  }
+  //       trash_slices.add_slices()->Swap(&trash_slice);
+  //     }
+  //   }
+  // }
 
   size_t out_of_length_count = trash_slices.slices_size();
 

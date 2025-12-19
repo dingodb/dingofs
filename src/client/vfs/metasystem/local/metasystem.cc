@@ -425,6 +425,10 @@ Status LocalMetaSystem::Create(ContextSPtr ctx, Ino parent,
   return Status::OK();
 }
 
+Status LocalMetaSystem::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {
+  return Status::OK();
+}
+
 Status LocalMetaSystem::Close(ContextSPtr, Ino ino, uint64_t) {
   if (!open_file_memo_.IsOpened(ino)) return Status::OK();
 

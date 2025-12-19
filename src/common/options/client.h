@@ -111,6 +111,7 @@ DECLARE_uint32(vfs_meta_rpc_timeout_ms);
 DECLARE_int32(vfs_meta_rpc_retry_times);
 
 DECLARE_uint32(vfs_meta_write_slice_operation_merge_delay_us);
+DECLARE_uint32(vfs_meta_commit_slice_max_num);
 
 // begin used in inode_blocks_service
 DECLARE_uint32(format_file_offset_width);

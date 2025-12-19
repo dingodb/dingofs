@@ -16,10 +16,12 @@
 #define DINGOFS_SRC_CLIENT_VFS_META_V2_HELPER_H_
 
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include "client/vfs/vfs_meta.h"
 #include "glog/logging.h"
+#include "json/value.h"
 #include "mds/common/type.h"
 
 namespace dingofs {
@@ -225,7 +227,7 @@ class Helper {
       *delta_slice_entry.add_slices() = Helper::ToSlice(slice);
     }
 
-    return std::move(delta_slice_entry);
+    return delta_slice_entry;
   }
 
   static uint64_t CalLength(const std::vector<Slice>& slices) {
@@ -237,13 +239,23 @@ class Helper {
     return length;
   };
 
+  static std::string ToString(const std::vector<Slice>& slices) {
+    std::string result;
+    for (uint32_t i = 0; i < slices.size(); ++i) {
+      result += std::to_string(slices[i].id);
+      if (i != slices.size() - 1) result += ",";
+    }
+
+    return result;
+  }
+
   static std::vector<uint64_t> GetSliceIds(const std::vector<Slice>& slices) {
     std::vector<uint64_t> slice_ids;
     slice_ids.reserve(slices.size());
     for (const auto& slice : slices) {
       slice_ids.push_back(slice.id);
     }
-    return std::move(slice_ids);
+    return slice_ids;
   }
 
   static std::vector<uint64_t> GetSliceIds(
@@ -254,6 +266,30 @@ class Helper {
       slice_ids.push_back(slice.id());
     }
     return slice_ids;
+  }
+
+  static Json::Value DumpSlice(const Slice& slice) {
+    Json::Value item = Json::objectValue;
+    item["id"] = slice.id;
+    item["offset"] = slice.offset;
+    item["length"] = slice.length;
+    item["compaction"] = slice.compaction;
+    item["is_zero"] = slice.is_zero;
+    item["size"] = slice.size;
+
+    return item;
+  }
+
+  static Slice LoadSlice(const Json::Value& value) {
+    Slice slice;
+    slice.id = value["id"].asUInt64();
+    slice.offset = value["offset"].asUInt64();
+    slice.length = value["length"].asUInt64();
+    slice.compaction = value["compaction"].asUInt64();
+    slice.is_zero = value["is_zero"].asBool();
+    slice.size = value["size"].asUInt64();
+
+    return slice;
   }
 };
 

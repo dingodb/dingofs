@@ -24,6 +24,7 @@
 
 #include "client/vfs/vfs_meta.h"
 #include "json/value.h"
+#include "mds/common/type.h"
 #include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
@@ -53,6 +54,8 @@ class ChunkMemo {
     uint64_t time_ns;
   };
 
+  void Remember(Ino ino,
+                const std::vector<mds::ChunkDescriptor>& chunk_descriptors);
   void Remember(Ino ino, uint32_t chunk_index, uint64_t version);
   void Forget(Ino ino, uint32_t chunk_index);
   void ForgetExpired(uint64_t expire_time_ns);

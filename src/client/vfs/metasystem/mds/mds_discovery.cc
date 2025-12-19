@@ -20,6 +20,7 @@
 #include "fmt/core.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
+#include "utils/time.h"
 
 namespace dingofs {
 namespace client {
@@ -106,8 +107,7 @@ Status MDSDiscovery::GetMDSList(std::vector<mds::MDSMeta>& mdses) {
   pb::mds::GetMDSListRequest request;
   pb::mds::GetMDSListResponse response;
 
-  request.mutable_info()->set_request_id(
-      std::to_string(mds::Helper::TimestampNs()));
+  request.mutable_info()->set_request_id(std::to_string(utils::TimestampNs()));
 
   auto status =
       rpc_->SendRequest("MDSService", "GetMDSList", request, response);

@@ -180,7 +180,6 @@ class Operation {
       case OpType::kUpdateAttr:
       case OpType::kUpdateXAttr:
       case OpType::kRemoveXAttr:
-      case OpType::kUpsertChunk:
       case OpType::kOpenFile:
       case OpType::kFallocate:
         return true;
@@ -580,11 +579,16 @@ class UpdateAttrOperation : public Operation {
   struct ExtraParam {
     uint64_t chunk_size{0};
     uint64_t block_size{0};
+    uint64_t slice_id{0};
   };
 
   UpdateAttrOperation(Trace& trace, uint64_t ino, uint32_t to_set, const AttrEntry& attr, ExtraParam& extra_param)
       : Operation(trace), ino_(ino), to_set_(to_set), attr_(attr), extra_param_(extra_param) {};
   ~UpdateAttrOperation() override = default;
+
+  struct Result : public Operation::Result {
+    int64_t delta_bytes{0};
+  };
 
   OpType GetOpType() const override { return OpType::kUpdateAttr; }
 
@@ -593,14 +597,25 @@ class UpdateAttrOperation : public Operation {
 
   Status RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>& prefetch_kvs) override;
 
+  template <int size = 0>
+  Result& GetResult() {
+    auto& result = Operation::GetResult();
+    result_.status = result.status;
+    result_.attr = std::move(result.attr);
+
+    return result_;
+  }
+
  private:
-  void ExpandChunk(TxnUPtr& txn, AttrEntry& attr, uint64_t new_length) const;
+  Status ResetFileRange(TxnUPtr& txn, uint64_t old_length, uint64_t new_length);
 
   uint64_t ino_;
   const uint32_t to_set_;
   const AttrEntry& attr_;
 
   const ExtraParam extra_param_;
+
+  Result result_;
 };
 
 class UpdateXAttrOperation : public Operation {
@@ -649,7 +664,7 @@ class UpsertChunkOperation : public Operation {
   ~UpsertChunkOperation() override = default;
 
   struct Result : public Operation::Result {
-    int64_t length_delta{0};
+    int64_t length{0};
     std::vector<ChunkEntry> effected_chunks;
   };
 
@@ -658,9 +673,7 @@ class UpsertChunkOperation : public Operation {
   uint32_t GetFsId() const override { return fs_info_.fs_id(); }
   Ino GetIno() const override { return ino_; }
 
-  std::vector<std::string> PrefetchKey() override;
-
-  Status RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>& prefetch_kvs) override;
+  Status Run(TxnUPtr& txn) override;
 
   template <int size = 0>
   Result& GetResult() {
@@ -673,9 +686,9 @@ class UpsertChunkOperation : public Operation {
 
  private:
   const FsInfoEntry fs_info_;
-  uint64_t ino_;
+  const uint64_t ino_;
 
-  std::vector<DeltaSliceEntry> delta_slices_;
+  const std::vector<DeltaSliceEntry> delta_slices_;
 
   Result result_;
 };
@@ -817,8 +830,8 @@ class FallocateOperation : public Operation {
 
 class OpenFileOperation : public Operation {
  public:
-  OpenFileOperation(Trace& trace, uint32_t flags, const FileSessionEntry& file_session)
-      : Operation(trace), flags_(flags), file_session_(file_session) {};
+  OpenFileOperation(Trace& trace, uint32_t flags, const FileSessionEntry& file_session, uint64_t chunk_size)
+      : Operation(trace), flags_(flags), file_session_(file_session), chunk_size_(chunk_size) {};
   ~OpenFileOperation() override = default;
 
   struct Result : public Operation::Result {
@@ -842,8 +855,11 @@ class OpenFileOperation : public Operation {
   }
 
  private:
+  void ResetFileRange(TxnUPtr& txn, uint64_t length);
+
   uint32_t flags_;
   FileSessionEntry file_session_;
+  uint64_t chunk_size_{0};
 
   Result result_;
 };

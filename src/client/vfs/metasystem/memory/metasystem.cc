@@ -471,6 +471,10 @@ Status MemoryMetaSystem::Create(ContextSPtr ctx, Ino parent,
   return Open(ctx, attr->ino, flags, fh);
 }
 
+Status MemoryMetaSystem::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {
+  return Status::OK();
+}
+
 Status MemoryMetaSystem::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
   if (!open_file_memo_.IsOpened(ino)) {
     return Status::OK();

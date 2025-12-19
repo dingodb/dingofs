@@ -28,14 +28,16 @@
 #include "mds/common/logging.h"
 
 namespace dingofs {
-
 namespace mds {
 
 class BthreadCond {
  public:
   BthreadCond(int count = 0);
   ~BthreadCond();
+
   int Count() const;
+
+  void Reset();
 
   void Increase();
   void DecreaseSignal();

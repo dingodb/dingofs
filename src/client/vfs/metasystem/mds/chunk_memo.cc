@@ -23,6 +23,13 @@ namespace client {
 namespace vfs {
 namespace v2 {
 
+void ChunkMemo::Remember(
+    Ino ino, const std::vector<mds::ChunkDescriptor>& chunk_descriptors) {
+  for (const auto& chunk_descriptor : chunk_descriptors) {
+    Remember(ino, chunk_descriptor.index(), chunk_descriptor.version());
+  }
+}
+
 void ChunkMemo::Remember(Ino ino, uint32_t chunk_index, uint64_t version) {
   utils::WriteLockGuard guard(lock_);
 

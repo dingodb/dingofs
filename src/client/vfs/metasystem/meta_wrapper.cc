@@ -107,6 +107,16 @@ Status MetaWrapper::Create(ContextSPtr ctx, Ino parent, const std::string& name,
   return s;
 }
 
+Status MetaWrapper::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {
+  Status s;
+  MetaLogGuard log_guard([&]() {
+    return absl::StrFormat("flush (%d): %s [fh:%d]", ino, s.ToString(), fh);
+  });
+
+  s = target_->Flush(ctx, ino, fh);
+  return s;
+}
+
 Status MetaWrapper::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
   Status s;
   MetaLogGuard log_guard([&]() {

@@ -72,6 +72,8 @@ class MetaSystem {
                         uint32_t uid, uint32_t gid, uint32_t mode, int flags,
                         Attr* attr, uint64_t fh) = 0;
 
+  virtual Status Flush(ContextSPtr ctx, Ino ino, uint64_t fh) = 0;
+
   virtual Status Close(ContextSPtr ctx, Ino ino, uint64_t fh) = 0;
 
   /**
