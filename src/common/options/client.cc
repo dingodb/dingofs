@@ -223,5 +223,11 @@ DEFINE_validator(vfs_trace_logging, &brpc::PassValidate);
 
 DEFINE_bool(vfs_use_fake_block_store, false, "use fake block store");
 
+DEFINE_bool(vfs_block_store_access_log_enable, false,
+            "enable block store access log");
+DEFINE_int64(vfs_block_store_access_log_threshold_us, 10 * 1000,
+             "block store access log threshold");
+DEFINE_validator(vfs_block_store_access_log_threshold_us, brpc::PassValidate);
+
 }  // namespace client
 }  // namespace dingofs

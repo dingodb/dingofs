@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_CLIENT_VFS_META_LOG_H_
-#define DINGOFS_CLIENT_VFS_META_LOG_H_
+#ifndef DINGOFS_CLIENT_BLOCK_STORE_ACCESS_LOG_H_
+#define DINGOFS_CLIENT_BLOCK_STORE_ACCESS_LOG_H_
 
 #include <unistd.h>
 
@@ -29,16 +29,16 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
-extern std::shared_ptr<spdlog::logger> meta_logger;
+extern std::shared_ptr<spdlog::logger> block_store_logger;
 
-bool InitMetaLog(const std::string& log_dir);
+bool InitBlockStoreAccessLog(const std::string& log_dir);
 
-class MetaLogGuard {
+class BlockStoreAccessLogGuard {
  public:
   using MessageHandler = std::function<std::string()>;
 
-  explicit MetaLogGuard(uint64_t start_us, MessageHandler handler)
-      : enabled_(FLAGS_vfs_meta_access_logging),
+  explicit BlockStoreAccessLogGuard(uint64_t start_us, MessageHandler handler)
+      : enabled_(FLAGS_vfs_block_store_access_log_enable),
         start_us(start_us),
         handler_(std::move(handler)) {
     if (!enabled_) {
@@ -46,17 +46,18 @@ class MetaLogGuard {
     }
   }
 
-  explicit MetaLogGuard(MessageHandler handler)
-      : MetaLogGuard(butil::cpuwide_time_us(), std::move(handler)) {}
+  explicit BlockStoreAccessLogGuard(MessageHandler handler)
+      : BlockStoreAccessLogGuard(butil::cpuwide_time_us(), std::move(handler)) {
+  }
 
-  ~MetaLogGuard() {
+  ~BlockStoreAccessLogGuard() {
     if (!enabled_) {
       return;
     }
 
     int64_t duration = butil::cpuwide_time_us() - start_us;
-    if (duration >= FLAGS_vfs_meta_access_log_threshold_us) {
-      meta_logger->warn("{0} <{1:.6f}>", handler_(), duration / 1e6);
+    if (duration > FLAGS_vfs_meta_access_log_threshold_us) {
+      block_store_logger->warn("{0} <{1:.6f}>", handler_(), duration / 1e6);
     }
   }
 
@@ -69,5 +70,4 @@ class MetaLogGuard {
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
-
-#endif  // DINGOFS_CLIENT_VFS_META_LOG_H_
+#endif  // DINGOFS_CLIENT_BLOCK_STORE_ACCESS_LOG_H_

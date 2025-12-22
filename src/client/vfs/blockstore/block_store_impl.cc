@@ -16,10 +16,12 @@
 
 #include "client/vfs/blockstore/block_store_impl.h"
 
+#include <butil/time.h>
 #include <google/protobuf/descriptor.pb.h>
 
 #include "cache/tiercache/tier_block_cache.h"
 #include "client/common/const.h"
+#include "client/vfs/blockstore/block_store_access_log.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "common/options/cache.h"
 
@@ -64,8 +66,17 @@ void BlockStoreImpl::RangeAsync(ContextSPtr ctx, RangeReq req,
                                 StatusCallback callback) {
   auto span = hub_->GetTracer()->StartSpanWithContext(kVFSDataMoudule,
                                                       METHOD_NAME(), ctx);
-  auto wrapper = [this, cb = std::move(callback),
+
+  int64_t start_us = butil::cpuwide_time_us();
+
+  auto wrapper = [this, start_us, req, cb = std::move(callback),
                   span_ptr = span.release()](Status s) {
+    BlockStoreAccessLogGuard log(start_us, [&]() {
+      return fmt::format("range_async ({}, {}, [{}-{})) : {}",
+                         req.block.Filename(), req.length, req.offset,
+                         (req.offset + req.length), s.ToString());
+    });
+
     // capture this ptr to extend its lifetime
     std::unique_ptr<ITraceSpan> scoped_span(span_ptr);
     scoped_span->End();
@@ -85,8 +96,16 @@ void BlockStoreImpl::PutAsync(ContextSPtr ctx, PutReq req,
                               StatusCallback callback) {
   auto span = hub_->GetTracer()->StartSpanWithContext(kVFSDataMoudule,
                                                       METHOD_NAME(), ctx);
-  auto wrapper = [this, cb = std::move(callback),
+
+  int64_t start_us = butil::cpuwide_time_us();
+
+  auto wrapper = [this, start_us, req, cb = std::move(callback),
                   span_ptr = span.release()](Status s) {
+    BlockStoreAccessLogGuard log(start_us, [&]() {
+      return fmt::format("put_async ({}, {}) : {}", req.block.Filename(),
+                         req.data.Size(), s.ToString());
+    });
+
     // capture this ptr to extend its lifetime
     std::unique_ptr<ITraceSpan> scoped_span(span_ptr);
     scoped_span->End();
@@ -108,8 +127,15 @@ void BlockStoreImpl::PrefetchAsync(ContextSPtr ctx, PrefetchReq req,
     return;
   }
 
-  auto wrapper = [this, cb = std::move(callback),
+  int64_t start_us = butil::cpuwide_time_us();
+
+  auto wrapper = [this, start_us, req, cb = std::move(callback),
                   span_ptr = span.release()](Status s) {
+    BlockStoreAccessLogGuard log(start_us, [&]() {
+      return fmt::format("prefetch_async ({}, {}) : {}", req.block.Filename(),
+                         req.block_size, s.ToString());
+    });
+
     // capture this ptr to extend its lifetime
     std::unique_ptr<ITraceSpan> scoped_span(span_ptr);
     scoped_span->End();

@@ -25,6 +25,7 @@
 #include "client/common/const.h"
 #include "client/fuse/fuse_upgrade_manager.h"
 #include "client/vfs/access_log.h"
+#include "client/vfs/blockstore/block_store_access_log.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/metasystem/meta_log.h"
 #include "client/vfs/vfs_impl.h"
@@ -64,7 +65,8 @@ static Status InitLog() {
   bool succ = dingofs::client::InitAccessLog(FLAGS_log_dir) &&
               dingofs::cache::InitCacheTraceLog(FLAGS_log_dir) &&
               blockaccess::InitBlockAccessLog(FLAGS_log_dir) &&
-              dingofs::client::vfs::InitMetaLog(FLAGS_log_dir);
+              dingofs::client::vfs::InitMetaLog(FLAGS_log_dir) &&
+              dingofs::client::vfs::InitBlockStoreAccessLog(FLAGS_log_dir);
 
   CHECK(succ) << "init log failed, unexpected!";
   return Status::OK();

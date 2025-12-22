@@ -23,7 +23,7 @@
 #include "common/callback.h"
 #include "common/io_buffer.h"
 #include "common/status.h"
-#include "common/trace/itrace_span.h"
+#include "common/trace/context.h"
 
 namespace dingofs {
 namespace client {

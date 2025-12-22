@@ -14,6 +14,7 @@
 
 add_library(vfs_block_store
     block_store_impl.cc
+    block_store_access_log.cc
     fake_block_store.cc
 )
 
