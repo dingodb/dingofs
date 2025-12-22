@@ -39,8 +39,8 @@
 
 static dingofs::client::vfs::VFSWrapper* g_vfs = nullptr;
 
-USING_FLAG(fuse_file_info_direct_io)
-USING_FLAG(fuse_file_info_keep_cache)
+USING_FLAG(fuse_enable_direct_io)
+USING_FLAG(fuse_enable_keep_cache)
 USING_FLAG(fuse_enable_readdir_cache)
 USING_FLAG(fuse_dryrun_bench_mode)
 
@@ -53,20 +53,20 @@ namespace {
 using namespace dingofs::client;
 
 void InitFuseConnInfo(struct fuse_conn_info* conn) {
-  if (FLAGS_fuse_conn_info_want_splice_move) {
+  if (FLAGS_fuse_enable_splice_move) {
     LOG_IF(INFO, fuse_set_feature_flag(conn, FUSE_CAP_SPLICE_MOVE))
         << "[enabled] FUSE_CAP_SPLICE_MOVE";
   }
-  if (FLAGS_fuse_conn_info_want_splice_read) {
+  if (FLAGS_fuse_enable_splice_read) {
     LOG_IF(INFO, fuse_set_feature_flag(conn, FUSE_CAP_SPLICE_READ))
         << "[enabled] FUSE_CAP_SPLICE_READ";
   }
-  if (FLAGS_fuse_conn_info_want_splice_write) {
+  if (FLAGS_fuse_enable_splice_write) {
     LOG_IF(INFO, fuse_set_feature_flag(conn, FUSE_CAP_SPLICE_WRITE))
         << "[enabled] FUSE_CAP_SPLICE_WRITE";
   }
   if (fuse_get_feature_flag(conn, FUSE_CAP_AUTO_INVAL_DATA) &&
-      !FLAGS_fuse_conn_info_want_auto_inval_data) {
+      !FLAGS_fuse_enable_auto_inval_data) {
     fuse_unset_feature_flag(conn, FUSE_CAP_AUTO_INVAL_DATA);
     LOG(INFO) << "[disabled] FUSE_CAP_AUTO_INVAL_DATA";
   }
@@ -502,9 +502,8 @@ void FuseOpOpen(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
     fi->fh = fh;
 
     fi->direct_io =
-        (dingofs::IsInternalNode(ino) || FLAGS_fuse_file_info_direct_io) ? 1
-                                                                         : 0;
-    fi->keep_cache = FLAGS_fuse_file_info_keep_cache ? 1 : 0;
+        (dingofs::IsInternalNode(ino) || FLAGS_fuse_enable_direct_io) ? 1 : 0;
+    fi->keep_cache = FLAGS_fuse_enable_keep_cache ? 1 : 0;
 
     ReplyOpen(req, fi);
   }
@@ -859,10 +858,9 @@ void FuseOpCreate(fuse_req_t req, fuse_ino_t parent, const char* name,
     fi->fh = fh;
 
     fi->direct_io =
-        (dingofs::IsInternalNode(attr.ino) || FLAGS_fuse_file_info_direct_io)
-            ? 1
-            : 0;
-    fi->keep_cache = FLAGS_fuse_file_info_keep_cache ? 1 : 0;
+        (dingofs::IsInternalNode(attr.ino) || FLAGS_fuse_enable_direct_io) ? 1
+                                                                           : 0;
+    fi->keep_cache = FLAGS_fuse_enable_keep_cache ? 1 : 0;
 
     ReplyCreate(req, fi, attr);
   }

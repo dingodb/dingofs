@@ -58,13 +58,13 @@ DECLARE_bool(fuse_use_clone_fd);
 DECLARE_uint32(fuse_max_threads);
 
 // fuse module
-DECLARE_bool(fuse_file_info_direct_io);
-DECLARE_bool(fuse_file_info_keep_cache);
+DECLARE_bool(fuse_enable_direct_io);
+DECLARE_bool(fuse_enable_keep_cache);
 DECLARE_bool(fuse_enable_readdir_cache);
-DECLARE_bool(fuse_conn_info_want_splice_move);
-DECLARE_bool(fuse_conn_info_want_splice_read);
-DECLARE_bool(fuse_conn_info_want_splice_write);
-DECLARE_bool(fuse_conn_info_want_auto_inval_data);
+DECLARE_bool(fuse_enable_splice_move);
+DECLARE_bool(fuse_enable_splice_read);
+DECLARE_bool(fuse_enable_splice_write);
+DECLARE_bool(fuse_enable_auto_inval_data);
 
 DECLARE_uint32(fuse_entry_cache_timeout_s);
 DECLARE_uint32(fuse_attr_cache_timeout_s);

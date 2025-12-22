@@ -182,22 +182,22 @@ DEFINE_validator(format_delimiter,
                  });
 
 // fuse module
-DEFINE_bool(fuse_file_info_direct_io, false, "use direct io for file");
-DEFINE_validator(fuse_file_info_direct_io, brpc::PassValidate);
-DEFINE_bool(fuse_file_info_keep_cache, true, "keep file page cache");
-DEFINE_validator(fuse_file_info_keep_cache, brpc::PassValidate);
-DEFINE_bool(fuse_conn_info_want_splice_move, false,
+DEFINE_bool(fuse_enable_direct_io, false, "use direct io for file");
+DEFINE_validator(fuse_enable_direct_io, brpc::PassValidate);
+DEFINE_bool(fuse_enable_keep_cache, true, "keep file page cache");
+DEFINE_validator(fuse_enable_keep_cache, brpc::PassValidate);
+DEFINE_bool(fuse_enable_splice_move, false,
             "the fuse device try to move pages instead of copying them");
-DEFINE_validator(fuse_conn_info_want_splice_move, brpc::PassValidate);
-DEFINE_bool(fuse_conn_info_want_splice_read, false,
+DEFINE_validator(fuse_enable_splice_move, brpc::PassValidate);
+DEFINE_bool(fuse_enable_splice_read, false,
             "use splice when reading from the fuse device");
-DEFINE_validator(fuse_conn_info_want_splice_read, brpc::PassValidate);
-DEFINE_bool(fuse_conn_info_want_splice_write, false,
+DEFINE_validator(fuse_enable_splice_read, brpc::PassValidate);
+DEFINE_bool(fuse_enable_splice_write, false,
             "use splice when writing to the fuse device");
-DEFINE_validator(fuse_conn_info_want_splice_write, brpc::PassValidate);
-DEFINE_bool(fuse_conn_info_want_auto_inval_data, true,
+DEFINE_validator(fuse_enable_splice_write, brpc::PassValidate);
+DEFINE_bool(fuse_enable_auto_inval_data, true,
             "fuse will check the validity of the attributes on every read");
-DEFINE_validator(fuse_conn_info_want_auto_inval_data, brpc::PassValidate);
+DEFINE_validator(fuse_enable_auto_inval_data, brpc::PassValidate);
 
 // memory page allocator
 DEFINE_uint32(data_stream_page_size, 65536, "memory page size for datastream");

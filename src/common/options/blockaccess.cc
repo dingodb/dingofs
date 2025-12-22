@@ -33,7 +33,7 @@ DEFINE_int32(s3_connect_timeout, 60000, "S3 connect timeout in milliseconds");
 DEFINE_int32(s3_request_timeout, 10000, "S3 request timeout in milliseconds");
 DEFINE_bool(s3_use_crt_client, true, "whether to use crt client");
 DEFINE_bool(s3_use_thread_pool, true, "whether to use thread pool");
-DEFINE_int32(s3_async_thread_num, 16, "async thread num in thread pool");
+DEFINE_int32(s3_async_thread_num, 256, "async thread num in thread pool");
 DEFINE_bool(s3_use_virtual_address, false, "whether to use virtual address");
 DEFINE_bool(s3_enable_telemetry, false, "whether to enable telemetry");
 
