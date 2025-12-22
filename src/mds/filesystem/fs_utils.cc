@@ -20,6 +20,7 @@
 #include <string>
 #include <vector>
 
+#include "common/logging.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/format.h"
 #include "gflags/gflags.h"
@@ -27,7 +28,6 @@
 #include "mds/common/codec.h"
 #include "mds/common/constant.h"
 #include "mds/common/helper.h"
-#include "mds/common/logging.h"
 #include "mds/common/status.h"
 #include "mds/common/tracing.h"
 #include "mds/common/type.h"
@@ -71,7 +71,7 @@ static FsTreeNode* GenFsTreeStruct(OperationProcessorSPtr operation_processor, u
       MetaCodec::DecodeInodeKey(key, fs_id, ino);
       const AttrEntry attr = MetaCodec::DecodeInodeValue(value);
 
-      // DINGO_LOG(INFO) << fmt::format("attr({}).", attr.ShortDebugString());
+      // LOG(INFO) << fmt::format("attr({}).", attr.ShortDebugString());
       auto it = node_map.find(ino);
       if (it == node_map.end()) {
         node_map.insert({ino, new FsTreeNode{.attr = attr}});
@@ -88,7 +88,7 @@ static FsTreeNode* GenFsTreeStruct(OperationProcessorSPtr operation_processor, u
       MetaCodec::DecodeDentryKey(key, fs_id, parent, name);
       pb::mds::Dentry dentry = MetaCodec::DecodeDentryValue(value);
 
-      // DINGO_LOG(INFO) << fmt::format("dentry({}).", dentry.ShortDebugString());
+      // LOG(INFO) << fmt::format("dentry({}).", dentry.ShortDebugString());
 
       FsTreeNode* item = new FsTreeNode{.dentry = dentry};
       auto it = node_map.find(dentry.ino());
@@ -118,13 +118,13 @@ static FsTreeNode* GenFsTreeStruct(OperationProcessorSPtr operation_processor, u
 
   auto status = operation_processor->RunAlone(&operation);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[fsutils] scan dentry table fail, {}.", status.error_str());
+    LOG(ERROR) << fmt::format("[fsutils] scan dentry table fail, {}.", status.error_str());
     return nullptr;
   }
 
   auto it = node_map.find(kRootIno);
   if (it == node_map.end()) {
-    DINGO_LOG(ERROR) << "[fsutils] not found root node.";
+    LOG(ERROR) << "[fsutils] not found root node.";
     return nullptr;
   }
 
@@ -146,8 +146,8 @@ static void LabeledOrphan(FsTreeNode* node) {
 static void FreeOrphan(std::multimap<uint64_t, FsTreeNode*>& node_map) {
   for (auto it = node_map.begin(); it != node_map.end();) {
     if (it->second->is_orphan) {
-      DINGO_LOG(INFO) << fmt::format("free orphan dentry({}) attr({}).", it->second->dentry.ShortDebugString(),
-                                     it->second->attr.ShortDebugString());
+      LOG(INFO) << fmt::format("free orphan dentry({}) attr({}).", it->second->dentry.ShortDebugString(),
+                               it->second->attr.ShortDebugString());
       delete it->second;
       it = node_map.erase(it);
     } else {
@@ -286,14 +286,14 @@ Status FsUtils::GenDirJsonString(Ino parent, std::string& output) {
       BatchGetInodeAttrOperation operation(trace, fs_id, inoes_vec);
       status = operation_processor_->RunAlone(&operation);
       if (!status.ok()) {
-        DINGO_LOG(ERROR) << fmt::format("[fsutils] batch get inode attrs fail, {}.", status.error_str());
+        LOG(ERROR) << fmt::format("[fsutils] batch get inode attrs fail, {}.", status.error_str());
         return status;
       }
       auto& result = operation.GetResult();
 
       if (result.attrs.size() != inoes.size()) {
-        DINGO_LOG(WARNING) << fmt::format("[fsutils] batch get attrs size({}) not match ino size({}).",
-                                          result.attrs.size(), inoes.size());
+        LOG(WARNING) << fmt::format("[fsutils] batch get attrs size({}) not match ino size({}).", result.attrs.size(),
+                                    inoes.size());
       }
 
       for (const auto& attr : result.attrs) {
@@ -309,7 +309,7 @@ Status FsUtils::GenDirJsonString(Ino parent, std::string& output) {
   for (const auto& dentry : dentries) {
     auto it = attrs.find(dentry.ino());
     if (it == attrs.end()) {
-      DINGO_LOG(ERROR) << fmt::format("[fsutils] not found attr for dentry({}/{})", dentry.ino(), dentry.name());
+      LOG(ERROR) << fmt::format("[fsutils] not found attr for dentry({}/{})", dentry.ino(), dentry.name());
       continue;
     }
 

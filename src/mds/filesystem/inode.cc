@@ -20,12 +20,12 @@
 #include <utility>
 
 #include "brpc/reloadable_flags.h"
+#include "common/logging.h"
 #include "fmt/core.h"
 #include "fmt/format.h"
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 #include "mds/common/helper.h"
-#include "mds/common/logging.h"
 #include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
@@ -155,12 +155,12 @@ std::string Inode::XAttr(const std::string& name) {
 bool Inode::PutIf(const AttrEntry& attr) {
   utils::WriteLockGuard lk(lock_);
 
-  DINGO_LOG(INFO) << fmt::format("[inode.{}] update attr,this({}) version({}->{}).", attr_.ino(), (void*)this,
-                                 attr_.version(), attr.version());
+  LOG(INFO) << fmt::format("[inode.{}] update attr,this({}) version({}->{}).", attr_.ino(), (void*)this,
+                           attr_.version(), attr.version());
 
   if (attr.version() <= attr_.version()) {
-    DINGO_LOG(DEBUG) << fmt::format("[inode.{}] version abnormal, old({}) new({}).", attr_.ino(), attr_.version(),
-                                    attr.version());
+    LOG_DEBUG << fmt::format("[inode.{}] version abnormal, old({}) new({}).", attr_.ino(), attr_.version(),
+                             attr.version());
     return false;
   }
 
@@ -172,12 +172,12 @@ bool Inode::PutIf(const AttrEntry& attr) {
 bool Inode::PutIf(AttrEntry&& attr) {
   utils::WriteLockGuard lk(lock_);
 
-  DINGO_LOG(INFO) << fmt::format("[inode.{}] update attr,this({}) version({}->{}).", attr_.ino(), (void*)this,
-                                 attr_.version(), attr.version());
+  LOG(INFO) << fmt::format("[inode.{}] update attr,this({}) version({}->{}).", attr_.ino(), (void*)this,
+                           attr_.version(), attr.version());
 
   if (attr.version() <= attr_.version()) {
-    DINGO_LOG(DEBUG) << fmt::format("[inode.{}] version abnormal, old({}) new({}).", attr_.ino(), attr_.version(),
-                                    attr.version());
+    LOG_DEBUG << fmt::format("[inode.{}] version abnormal, old({}) new({}).", attr_.ino(), attr_.version(),
+                             attr.version());
     return false;
   }
 
@@ -269,7 +269,7 @@ void InodeCache::Delete(Ino ino) {
 };
 
 void InodeCache::DeleteIf(std::function<bool(const Ino&)>&& f) {  // NOLINT
-  DINGO_LOG(INFO) << fmt::format("[cache.inode.{}] batch delete inode.", fs_id_);
+  LOG(INFO) << fmt::format("[cache.inode.{}] batch delete inode.", fs_id_);
 
   shard_map_.iterateWLock([&](Map& map) {
     for (auto it = map.begin(); it != map.end();) {
@@ -284,7 +284,7 @@ void InodeCache::DeleteIf(std::function<bool(const Ino&)>&& f) {  // NOLINT
 }
 
 void InodeCache::Clear() {
-  DINGO_LOG(INFO) << fmt::format("[cache.inode.{}] clear.", fs_id_);
+  LOG(INFO) << fmt::format("[cache.inode.{}] clear.", fs_id_);
 
   shard_map_.iterateWLock([&](Map& map) { map.clear(); });
 }
@@ -372,8 +372,8 @@ void InodeCache::CleanExpired(uint64_t expire_s) {
 
   clean_count_ << inodes.size();
 
-  DINGO_LOG(INFO) << fmt::format("[cache.inode.{}] clean expired, stat({}|{}|{}).", fs_id_, Size(), inodes.size(),
-                                 clean_count_.get_value());
+  LOG(INFO) << fmt::format("[cache.inode.{}] clean expired, stat({}|{}|{}).", fs_id_, Size(), inodes.size(),
+                           clean_count_.get_value());
 }
 
 void InodeCache::DescribeByJson(Json::Value& value) {

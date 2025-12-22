@@ -24,13 +24,13 @@
 #include <vector>
 
 #include "brpc/controller.h"
+#include "common/logging.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/format.h"
 #include "gflags/gflags.h"
 #include "mds/common/context.h"
 #include "mds/common/helper.h"
-#include "mds/common/logging.h"
 #include "mds/common/status.h"
 #include "mds/filesystem/filesystem.h"
 #include "mds/filesystem/inode.h"
@@ -134,7 +134,7 @@ bool MDSServiceImpl::Init() {
                          : ExecqWorkerSet::NewUnique(kReadWorkerSetName, FLAGS_mds_service_read_worker_num,
                                                      FLAGS_mds_service_read_worker_max_pending_num);
   if (!read_worker_set_->Init()) {
-    DINGO_LOG(ERROR) << "init service read worker set fail.";
+    LOG(ERROR) << "init service read worker set fail.";
     return false;
   }
 
@@ -145,7 +145,7 @@ bool MDSServiceImpl::Init() {
                           : ExecqWorkerSet::NewUnique(kWriteWorkerSetName, FLAGS_mds_service_write_worker_num,
                                                       FLAGS_mds_service_write_worker_max_pending_num);
   if (!write_worker_set_->Init()) {
-    DINGO_LOG(ERROR) << "init service write worker set fail.";
+    LOG(ERROR) << "init service write worker set fail.";
     return false;
   }
 
@@ -2471,7 +2471,7 @@ void MDSServiceImpl::DoNotifyBuddy(google::protobuf::RpcController*, const pb::m
       case pb::mds::NotifyBuddyRequest::TYPE_REFRESH_FS_INFO: {
         auto status = file_system_set_->RefreshFsInfo(message.refresh_fs_info().fs_name(), "notify buddy");
         if (!status.ok()) {
-          DINGO_LOG(ERROR) << fmt::format("refresh fs info fail, status({})", status.error_str());
+          LOG(ERROR) << fmt::format("refresh fs info fail, status({})", status.error_str());
         }
 
       } break;
@@ -2512,7 +2512,7 @@ void MDSServiceImpl::DoNotifyBuddy(google::protobuf::RpcController*, const pb::m
       } break;
 
       default:
-        DINGO_LOG(FATAL) << "unknown message type: " << message.type();
+        LOG(FATAL) << "unknown message type: " << message.type();
     }
   }
 }

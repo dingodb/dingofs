@@ -19,7 +19,7 @@
 #include <memory>
 #include <vector>
 
-#include "mds/common/logging.h"
+#include "common/logging.h"
 #include "mds/common/synchronization.h"
 #include "tikv/lib.rs.h"
 
@@ -27,13 +27,13 @@ namespace dingofs {
 namespace mds {
 
 bool TikvStorage::Init(const std::string& addr) {
-  DINGO_LOG(INFO) << fmt::format("[storage] init tikv storage, addr({}).", addr);
+  LOG(INFO) << fmt::format("[storage] init tikv storage, addr({}).", addr);
 
   std::vector<std::string> addrs;
   Helper::SplitString(addr, ',', addrs);
   client_ = new tikv_client::TransactionClient(addrs);
 
-  DINGO_LOG(INFO) << fmt::format("[storage] init tikv storage end, addr({}).", addr);
+  LOG(INFO) << fmt::format("[storage] init tikv storage end, addr({}).", addr);
 
   return true;
 }

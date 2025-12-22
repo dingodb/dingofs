@@ -25,6 +25,7 @@
 
 #include "brpc/reloadable_flags.h"
 #include "bthread/bthread.h"
+#include "common/logging.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/format.h"
@@ -33,7 +34,6 @@
 #include "mds/common/codec.h"
 #include "mds/common/constant.h"
 #include "mds/common/helper.h"
-#include "mds/common/logging.h"
 #include "mds/common/status.h"
 #include "mds/common/time.h"
 #include "mds/common/type.h"
@@ -755,9 +755,9 @@ Status HardLinkOperation::Run(TxnUPtr& txn) {
     } else if (kv.key == key) {
       attr = MetaCodec::DecodeInodeValue(kv.value);
     } else {
-      DINGO_LOG(FATAL) << fmt::format("[operation.{}.{}] invalid key({}), parent_key({}), child_key({}).", fs_id,
-                                      dentry_.INo(), Helper::StringToHex(kv.key), Helper::StringToHex(parent_key),
-                                      Helper::StringToHex(key));
+      LOG(FATAL) << fmt::format("[operation.{}.{}] invalid key({}), parent_key({}), child_key({}).", fs_id,
+                                dentry_.INo(), Helper::StringToHex(kv.key), Helper::StringToHex(parent_key),
+                                Helper::StringToHex(key));
     }
   }
 
@@ -861,8 +861,8 @@ Status UpdateAttrOperation::ResetFileRange(TxnUPtr& txn, uint64_t old_length, ui
     txn->Delete(MetaCodec::EncodeChunkKey(fs_id, ino, i));
   }
 
-  DINGO_LOG(INFO) << fmt::format("[operation.{}.{}] reset file range, length({},{}) chunk_num({},{}) blank_slice({}).",
-                                 fs_id, ino, old_length, new_length, old_num, new_num, slice.ShortDebugString());
+  LOG(INFO) << fmt::format("[operation.{}.{}] reset file range, length({},{}) chunk_num({},{}) blank_slice({}).", fs_id,
+                           ino, old_length, new_length, old_num, new_num, slice.ShortDebugString());
 
   return Status::OK();
 }
@@ -1331,9 +1331,9 @@ Status UnlinkOperation::Run(TxnUPtr& txn) {
       attr = MetaCodec::DecodeInodeValue(kv.value);
 
     } else {
-      DINGO_LOG(FATAL) << fmt::format("[operation.{}.{}] invalid key({}), parent_key({}), child_key({}).", fs_id,
-                                      dentry_.INo(), Helper::StringToHex(kv.key), Helper::StringToHex(parent_key),
-                                      Helper::StringToHex(key));
+      LOG(FATAL) << fmt::format("[operation.{}.{}] invalid key({}), parent_key({}), child_key({}).", fs_id,
+                                dentry_.INo(), Helper::StringToHex(kv.key), Helper::StringToHex(parent_key),
+                                Helper::StringToHex(key));
     }
   }
 
@@ -1371,9 +1371,8 @@ Status UnlinkOperation::Run(TxnUPtr& txn) {
 Status RenameOperation::Run(TxnUPtr& txn) {
   uint64_t time_ns = GetTime();
 
-  DINGO_LOG(INFO) << fmt::format(
-      "[operation.{}] rename old_parent({}), old_name({}), new_parent_ino({}), new_name({}).", fs_id_, old_parent_,
-      old_name_, new_parent_, new_name_);
+  LOG(INFO) << fmt::format("[operation.{}] rename old_parent({}), old_name({}), new_parent_ino({}), new_name({}).",
+                           fs_id_, old_parent_, old_name_, new_parent_, new_name_);
 
   bool is_same_parent = (old_parent_ == new_parent_);
   // batch get old parent attr/child dentry and new parentattr/child dentry
@@ -1386,7 +1385,7 @@ Status RenameOperation::Run(TxnUPtr& txn) {
   if (!is_same_parent) keys.push_back(new_parent_key);
   std::vector<KeyValue> kvs;
   auto status = txn->BatchGet(keys, kvs);
-  DINGO_LOG(INFO) << fmt::format("[operation.{}] kvs size({})", fs_id_, kvs.size());
+  LOG(INFO) << fmt::format("[operation.{}] kvs size({})", fs_id_, kvs.size());
   if (!status.ok()) {
     return status;
   }
@@ -1785,7 +1784,7 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoEntry& fs_info,
     slice_id_str += ",";
   }
 
-  DINGO_LOG(INFO) << fmt::format(
+  LOG(INFO) << fmt::format(
       "[operation.{}.{}.{}] trash slice, is_dry_run({}) length({}) count({}/{}/{}/{}) slice_ids({}).", fs_id, ino,
       chunk.index(), is_dry_run, file_length, out_of_length_count, complete_overlapped_count, partial_overlapped_count,
       trash_slices.slices_size(), slice_id_str);
@@ -2583,9 +2582,9 @@ Status OperationProcessor::RunAlone(Operation* operation) {
     status = operation->Run(txn);
     if (!status.ok()) {
       if (status.error_code() == pb::error::ESTORE_MAYBE_RETRY) {
-        DINGO_LOG(WARNING) << fmt::format(
-            "[operation.{}.{}][{}][{}us] alone run {} lock conflict, retry({}) status({}).", fs_id, ino, txn_id,
-            once_duration.ElapsedUs(), operation->OpName(), retry, status.error_str());
+        LOG(WARNING) << fmt::format("[operation.{}.{}][{}][{}us] alone run {} lock conflict, retry({}) status({}).",
+                                    fs_id, ino, txn_id, once_duration.ElapsedUs(), operation->OpName(), retry,
+                                    status.error_str());
         bthread_usleep(CalWaitTimeUs(retry));
         continue;
       }
@@ -2602,9 +2601,9 @@ Status OperationProcessor::RunAlone(Operation* operation) {
       break;
     }
 
-    DINGO_LOG(WARNING) << fmt::format("[operation.{}.{}][{}][{}us] alone run {} fail, txn({}) retry({}) status({}).",
-                                      fs_id, ino, txn_id, once_duration.ElapsedUs(), operation->OpName(), commit_type,
-                                      retry, status.error_str());
+    LOG(WARNING) << fmt::format("[operation.{}.{}][{}][{}us] alone run {} fail, txn({}) retry({}) status({}).", fs_id,
+                                ino, txn_id, once_duration.ElapsedUs(), operation->OpName(), commit_type, retry,
+                                status.error_str());
 
     bthread_usleep(CalWaitTimeUs(retry));
 
@@ -2612,9 +2611,8 @@ Status OperationProcessor::RunAlone(Operation* operation) {
 
   trace.RecordElapsedTime("store_operate");
 
-  DINGO_LOG(INFO) << fmt::format("[operation.{}.{}][{}][{}us] alone run {} finish, txn({}) retry({}) status({}).",
-                                 fs_id, ino, txn_id, duration.ElapsedUs(), operation->OpName(), commit_type, retry,
-                                 status.error_str());
+  LOG(INFO) << fmt::format("[operation.{}.{}][{}][{}us] alone run {} finish, txn({}) retry({}) status({}).", fs_id, ino,
+                           txn_id, duration.ElapsedUs(), operation->OpName(), commit_type, retry, status.error_str());
 
   if (!status.ok()) {
     operation->SetStatus(status);
@@ -2632,7 +2630,7 @@ void OperationTask::Run() {
 bool OperationProcessor::AsyncRun(OperationSPtr operation, OperationTask::PostHandler post_handler) {
   bool ret = async_worker_->Execute(OperationTask::New(operation, GetSelfPtr(), post_handler));
   if (!ret) {
-    DINGO_LOG(ERROR) << fmt::format("[operation] async worker execute fail, operation({}).", operation->OpName());
+    LOG(ERROR) << fmt::format("[operation] async worker execute fail, operation({}).", operation->OpName());
   }
 
   return ret;
@@ -2654,7 +2652,7 @@ std::map<OperationProcessor::Key, BatchOperation> OperationProcessor::Grouping(s
         batch_operation.setattr_operations.push_back(operation);
 
       } else {
-        DINGO_LOG(FATAL) << "[operation] invalid operation type.";
+        LOG(FATAL) << "[operation] invalid operation type.";
       }
       batch_operation_map.insert(std::make_pair(key, batch_operation));
 
@@ -2666,7 +2664,7 @@ std::map<OperationProcessor::Key, BatchOperation> OperationProcessor::Grouping(s
         it->second.setattr_operations.push_back(operation);
 
       } else {
-        DINGO_LOG(FATAL) << "[operation] invalid operation type.";
+        LOG(FATAL) << "[operation] invalid operation type.";
       }
     }
   }
@@ -2791,9 +2789,8 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
     status = txn->BatchGet(keys, prefetch_kvs);
     if (!status.ok()) {
       if (status.error_code() == pb::error::ESTORE_MAYBE_RETRY) {
-        DINGO_LOG(WARNING) << fmt::format(
-            "[operation.{}.{}][{}][{}us] batch run {} lock conflict, retry({}) status({}).", fs_id, ino, txn_id,
-            once_duration.ElapsedUs(), op_names, retry, status.error_str());
+        LOG(WARNING) << fmt::format("[operation.{}.{}][{}][{}us] batch run {} lock conflict, retry({}) status({}).",
+                                    fs_id, ino, txn_id, once_duration.ElapsedUs(), op_names, retry, status.error_str());
         bthread_usleep(CalWaitTimeUs(retry));
         continue;
       }
@@ -2827,7 +2824,7 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
       break;
     }
 
-    DINGO_LOG(WARNING) << fmt::format(
+    LOG(WARNING) << fmt::format(
         "[operation.{}.{}][{}][{}us] batch run ({}) fail, count({}) txn({}) retry({}) status({}).", fs_id, ino, txn_id,
         once_duration.ElapsedUs(), op_names, count, commit_type, retry, status.error_str());
 
@@ -2837,7 +2834,7 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
 
   SetElapsedTime(batch_operation, "store_operate");
 
-  DINGO_LOG(INFO) << fmt::format(
+  LOG(INFO) << fmt::format(
       "[operation.{}.{}][{}][{}us] batch run ({}) finish, count({}) txn({}) retry({}) status({}) attr({}).", fs_id, ino,
       txn_id, duration.ElapsedUs(), op_names, count, commit_type, retry, status.error_str(), DescribeAttr(attr));
 
@@ -2856,7 +2853,7 @@ Status OperationProcessor::CheckTable(const Range& range) {
   auto status = kv_storage_->IsExistTable(range.start, range.end);
   if (!status.ok()) {
     if (status.error_code() != pb::error::ENOT_FOUND) {
-      DINGO_LOG(ERROR) << "[fsset] check fs table exist fail, error: " << status.error_str();
+      LOG(ERROR) << "[fsset] check fs table exist fail, error: " << status.error_str();
     }
   }
 

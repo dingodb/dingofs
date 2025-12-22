@@ -21,11 +21,11 @@
 #include <string>
 
 #include "bthread/mutex.h"
+#include "common/logging.h"
 #include "dingofs/error.pb.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
 #include "mds/common/codec.h"
-#include "mds/common/logging.h"
 #include "mds/common/status.h"
 #include "mds/common/time.h"
 
@@ -67,22 +67,20 @@ CoorAutoIncrementIdGenerator::~CoorAutoIncrementIdGenerator() {
 bool CoorAutoIncrementIdGenerator::Init() {
   auto status = IsExistAutoIncrement();
   if (status.ok()) {
-    DINGO_LOG(INFO) << fmt::format("[idalloc.{}] autoincrement table exist.", name_);
+    LOG(INFO) << fmt::format("[idalloc.{}] autoincrement table exist.", name_);
     return true;
   }
 
   if (status.error_code() != pb::error::ENOT_FOUND) {
-    DINGO_LOG(ERROR) << fmt::format("[idalloc.{}] check autoincrement table fail, status({}).", name_,
-                                    status.error_str());
+    LOG(ERROR) << fmt::format("[idalloc.{}] check autoincrement table fail, status({}).", name_, status.error_str());
     return false;
   }
 
-  DINGO_LOG(INFO) << fmt::format("[idalloc.{}] autoincrement table not exist.", name_);
+  LOG(INFO) << fmt::format("[idalloc.{}] autoincrement table not exist.", name_);
 
   status = CreateAutoIncrement();
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[idalloc.{}] create autoincrement table fail, error({}).", name_,
-                                    status.error_str());
+    LOG(ERROR) << fmt::format("[idalloc.{}] create autoincrement table fail, error({}).", name_, status.error_str());
     return false;
   }
 
@@ -94,8 +92,7 @@ bool CoorAutoIncrementIdGenerator::Destroy() {
 
   auto status = DeleteAutoIncrement();
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[idalloc.{}] destroy autoincrement table fail, status({}).", name_,
-                                    status.error_str());
+    LOG(ERROR) << fmt::format("[idalloc.{}] destroy autoincrement table fail, status({}).", name_, status.error_str());
     return false;
   }
 
@@ -110,7 +107,7 @@ bool CoorAutoIncrementIdGenerator::GenID(uint32_t num, uint64_t min_slice_id, ui
   BAIDU_SCOPED_LOCK(mutex_);
 
   if (is_destroyed_) {
-    DINGO_LOG(ERROR) << fmt::format("[idalloc.{}] id generator is destroyed.", name_);
+    LOG(ERROR) << fmt::format("[idalloc.{}] id generator is destroyed.", name_);
     return false;
   }
 
@@ -126,7 +123,7 @@ bool CoorAutoIncrementIdGenerator::GenID(uint32_t num, uint64_t min_slice_id, ui
   id = next_id_;
   next_id_ += num;
 
-  DINGO_LOG(INFO) << fmt::format("[idalloc.{}] alloc id {},{} bundle[{}, {}).", name_, id, num, bundle_, bundle_end_);
+  LOG(INFO) << fmt::format("[idalloc.{}] alloc id {},{} bundle[{}, {}).", name_, id, num, bundle_, bundle_end_);
 
   return true;
 }
@@ -142,12 +139,12 @@ Status CoorAutoIncrementIdGenerator::IsExistAutoIncrement() {
 }
 
 Status CoorAutoIncrementIdGenerator::CreateAutoIncrement() {
-  DINGO_LOG(INFO) << fmt::format("[idalloc.{}] create autoincrement table, start_id({}).", name_, start_id_);
+  LOG(INFO) << fmt::format("[idalloc.{}] create autoincrement table, start_id({}).", name_, start_id_);
   return client_->CreateAutoIncrement(table_id_, start_id_);
 }
 
 Status CoorAutoIncrementIdGenerator::DeleteAutoIncrement() {
-  DINGO_LOG(INFO) << fmt::format("[idalloc.{}] delete autoincrement table, start_id({}).", name_, start_id_);
+  LOG(INFO) << fmt::format("[idalloc.{}] delete autoincrement table, start_id({}).", name_, start_id_);
   return client_->DeleteAutoIncrement(table_id_);
 }
 
@@ -171,8 +168,8 @@ Status CoorAutoIncrementIdGenerator::AllocateIds(uint32_t num) {
     bundle_end_ = static_cast<uint64_t>(bundle_end);
   }
 
-  DINGO_LOG(INFO) << fmt::format("[idalloc.{}][{}us] take bundle id, bundle[{},{}) num({}) status({}).", name_,
-                                 duration.ElapsedUs(), bundle_, bundle_end_, num, status.error_str());
+  LOG(INFO) << fmt::format("[idalloc.{}][{}us] take bundle id, bundle[{},{}) num({}) status({}).", name_,
+                           duration.ElapsedUs(), bundle_, bundle_end_, num, status.error_str());
 
   return status;
 }
@@ -196,7 +193,7 @@ bool StoreAutoIncrementIdGenerator::Init() {
   uint64_t alloc_id = 0;
   auto status = GetOrPutAllocId(alloc_id);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[idalloc.{}] init get alloc id fail, status({}).", name_, status.error_cstr());
+    LOG(ERROR) << fmt::format("[idalloc.{}] init get alloc id fail, status({}).", name_, status.error_cstr());
     return false;
   }
 
@@ -211,8 +208,7 @@ bool StoreAutoIncrementIdGenerator::Destroy() {
 
   auto status = DestroyId();
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[idalloc.{}] destroy autoincrement table fail, status({}).", name_,
-                                    status.error_str());
+    LOG(ERROR) << fmt::format("[idalloc.{}] destroy autoincrement table fail, status({}).", name_, status.error_str());
     return false;
   }
 
@@ -223,7 +219,7 @@ bool StoreAutoIncrementIdGenerator::GenID(uint32_t num, uint64_t& id) { return G
 
 bool StoreAutoIncrementIdGenerator::GenID(uint32_t num, uint64_t min_slice_id, uint64_t& id) {
   if (num == 0) {
-    DINGO_LOG(ERROR) << fmt::format("[idalloc.{}] num cant not 0.", name_);
+    LOG(ERROR) << fmt::format("[idalloc.{}] num cant not 0.", name_);
     return false;
   }
 
@@ -234,7 +230,7 @@ bool StoreAutoIncrementIdGenerator::GenID(uint32_t num, uint64_t min_slice_id, u
   if (next_id_ + num > last_alloc_id_) {
     auto status = AllocateIds(std::max(num, batch_size_));
     if (!status.ok()) {
-      DINGO_LOG(ERROR) << fmt::format("[idalloc.{}] allocate id fail, {}.", name_, status.error_str());
+      LOG(ERROR) << fmt::format("[idalloc.{}] allocate id fail, {}.", name_, status.error_str());
       return false;
     }
   }
@@ -243,7 +239,7 @@ bool StoreAutoIncrementIdGenerator::GenID(uint32_t num, uint64_t min_slice_id, u
   id = next_id_;
   next_id_ += num;
 
-  DINGO_LOG(INFO) << fmt::format("[idalloc.{}] alloc id({}) num({}).", name_, id, num);
+  LOG(INFO) << fmt::format("[idalloc.{}] alloc id({}) num({}).", name_, id, num);
 
   return true;
 }
@@ -329,8 +325,8 @@ Status StoreAutoIncrementIdGenerator::AllocateIds(uint32_t size) {
     next_id_ = start_alloc_id;
   }
 
-  DINGO_LOG(INFO) << fmt::format("[idalloc.{}][{}us] take bundle id, bundle[{},{}) size({}) status({}).", name_,
-                                 duration.ElapsedUs(), next_id_, last_alloc_id_, size, status.error_str());
+  LOG(INFO) << fmt::format("[idalloc.{}][{}us] take bundle id, bundle[{},{}) size({}) status({}).", name_,
+                           duration.ElapsedUs(), next_id_, last_alloc_id_, size, status.error_str());
 
   return status;
 }

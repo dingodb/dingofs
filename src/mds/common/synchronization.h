@@ -24,8 +24,8 @@
 #include "bthread/butex.h"
 #include "bthread/types.h"
 #include "butil/scoped_lock.h"
+#include "common/logging.h"
 #include "glog/logging.h"
-#include "mds/common/logging.h"
 
 namespace dingofs {
 namespace mds {
@@ -77,7 +77,7 @@ class BthreadSemaphore {
       int curr_value = ((butil::atomic<int>*)butex_)->load(butil::memory_order_acquire);
       if (curr_value <= 0) {
         if (bthread::butex_wait(butex_, curr_value, nullptr) < 0 && errno != EWOULDBLOCK && errno != EINTR) {
-          DINGO_LOG(ERROR) << "butex_wait failed, errno: " << errno;
+          LOG(ERROR) << "butex_wait failed, errno: " << errno;
         }
       } else {
         if (((butil::atomic<int>*)butex_)

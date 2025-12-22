@@ -18,9 +18,9 @@
 #include <string>
 #include <utility>
 
+#include "common/logging.h"
 #include "gflags/gflags.h"
 #include "mds/common/codec.h"
-#include "mds/common/logging.h"
 #include "mds/common/status.h"
 #include "mds/filesystem/store_operation.h"
 #include "mds/storage/storage.h"
@@ -60,7 +60,7 @@ Status FsStats::GetFsStat(Context& ctx, uint32_t fs_id, FsStatsDataEntry& stats)
 
   auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[fsstat.{}] get fs stats fail, {}.", fs_id, status.error_str());
+    LOG(ERROR) << fmt::format("[fsstat.{}] get fs stats fail, {}.", fs_id, status.error_str());
     return status;
   }
 

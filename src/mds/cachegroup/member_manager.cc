@@ -18,12 +18,12 @@
 #include <string>
 #include <utility>
 
+#include "common/logging.h"
 #include "common/options/mds.h"
 #include "gflags/gflags.h"
 #include "mds/common/codec.h"
 #include "mds/common/context.h"
 #include "mds/common/helper.h"
-#include "mds/common/logging.h"
 #include "mds/common/runnable.h"
 #include "mds/common/status.h"
 #include "mds/common/type.h"
@@ -230,7 +230,7 @@ Status CacheGroupMemberManager::GetCacheMember(Context& ctx, const std::string& 
   GetCacheMemberOperation operation(trace, member_id);
   auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[cachegroup] get cache member fail, error({}).", status.error_str());
+    LOG(ERROR) << fmt::format("[cachegroup] get cache member fail, error({}).", status.error_str());
     return status;
   }
 
@@ -257,7 +257,7 @@ Status CacheGroupMemberManager::DeleteMember(Context& ctx, const std::string& me
 
   status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[cachegroup] delete cache member fail, error({}).", status.error_str());
+    LOG(ERROR) << fmt::format("[cachegroup] delete cache member fail, error({}).", status.error_str());
     return status;
   }
 
@@ -273,7 +273,7 @@ Status CacheGroupMemberManager::UpsertCacheMember(Context& ctx, const std::strin
 
   auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[cachegroup] upsert cache member fail, error({}).", status.error_str());
+    LOG(ERROR) << fmt::format("[cachegroup] upsert cache member fail, error({}).", status.error_str());
     return status;
   }
 
@@ -290,7 +290,7 @@ Status CacheGroupMemberManager::ListCacheMemberFromStore(Context& ctx,
 
   auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[cachegroup] list cache member fail, error({}).", status.error_str());
+    LOG(ERROR) << fmt::format("[cachegroup] list cache member fail, error({}).", status.error_str());
     return status;
   }
 
@@ -345,7 +345,7 @@ bool CacheGroupMemberManager::LoadCacheMembers() {
   Context ctx;
   auto status = ListCacheMemberFromStore(ctx, cache_member_entries);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[cachegroup] load cache members fail, error({}).", status.error_str());
+    LOG(ERROR) << fmt::format("[cachegroup] load cache members fail, error({}).", status.error_str());
     return false;
   }
 

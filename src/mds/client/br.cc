@@ -24,13 +24,13 @@
 #include <vector>
 
 #include "common/blockaccess/block_accesser.h"
+#include "common/logging.h"
 #include "dingofs/error.pb.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
 #include "mds/common/codec.h"
 #include "mds/common/constant.h"
 #include "mds/common/helper.h"
-#include "mds/common/logging.h"
 #include "mds/common/status.h"
 #include "mds/common/tracing.h"
 #include "mds/filesystem/store_operation.h"
@@ -177,7 +177,7 @@ class S3Output : public Output {
   }
 
   void Append(const std::string& key, const std::string& value) override {
-    DINGO_LOG(INFO) << fmt::format("append key({}) value({}).", Helper::StringToHex(key), Helper::StringToHex(value));
+    LOG(INFO) << fmt::format("append key({}) value({}).", Helper::StringToHex(key), Helper::StringToHex(value));
     data_.append(EncodeKeyValue(key, value));
   }
 
@@ -264,7 +264,7 @@ class S3Input : public Input {
       return Status(pb::error::EINTERNAL, "decode key/value fail");
     }
 
-    DINGO_LOG(INFO) << fmt::format("read key({}) value({}).", Helper::StringToHex(key), Helper::StringToHex(value));
+    LOG(INFO) << fmt::format("read key({}) value({}).", Helper::StringToHex(key), Helper::StringToHex(value));
 
     return Status::OK();
   }
@@ -569,7 +569,7 @@ Status Restore::GetFsInfo(uint32_t fs_id, FsInfoEntry& fs_info) {
 
   auto& result = operation.GetResult();
 
-  DINGO_LOG(INFO) << fmt::format("fs_infoes size({}).", result.fs_infoes.size());
+  LOG(INFO) << fmt::format("fs_infoes size({}).", result.fs_infoes.size());
 
   for (const auto& fs : result.fs_infoes) {
     if (fs.fs_id() == fs_id) {

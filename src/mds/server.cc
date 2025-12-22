@@ -18,6 +18,7 @@
 #include <utility>
 #include <vector>
 
+#include "common/logging.h"
 #include "common/options/mds.h"
 #include "fmt/core.h"
 #include "fmt/format.h"
@@ -30,7 +31,6 @@
 #include "mds/background/heartbeat.h"
 #include "mds/cachegroup/member_manager.h"
 #include "mds/common/helper.h"
-#include "mds/common/logging.h"
 #include "mds/common/version.h"
 #include "mds/coordinator/dingo_coordinator_client.h"
 #include "mds/service/debug_service.h"
@@ -111,37 +111,37 @@ static LogLevel GetDingoLogLevel(const std::string& log_level) {
 }
 
 bool Server::InitConfig(const std::string& path) {
-  DINGO_LOG(INFO) << fmt::format("config path: {}", path);
+  LOG(INFO) << fmt::format("config path: {}", path);
 
-  DINGO_LOG(INFO) << fmt::format("mds_server_id: {}", FLAGS_mds_server_id);
-  DINGO_LOG(INFO) << fmt::format("mds_server_host: {}:{}", FLAGS_mds_server_host, FLAGS_mds_server_port);
-  DINGO_LOG(INFO) << fmt::format("mds_storage_engine: {}", FLAGS_mds_storage_engine);
-  DINGO_LOG(INFO) << fmt::format("mds_id_generator_type: {}", FLAGS_mds_id_generator_type);
-  DINGO_LOG(INFO) << fmt::format("mds_log_path: {}", FLAGS_mds_log_path);
+  LOG(INFO) << fmt::format("mds_server_id: {}", FLAGS_mds_server_id);
+  LOG(INFO) << fmt::format("mds_server_host: {}:{}", FLAGS_mds_server_host, FLAGS_mds_server_port);
+  LOG(INFO) << fmt::format("mds_storage_engine: {}", FLAGS_mds_storage_engine);
+  LOG(INFO) << fmt::format("mds_id_generator_type: {}", FLAGS_mds_id_generator_type);
+  LOG(INFO) << fmt::format("mds_log_path: {}", FLAGS_mds_log_path);
 
   if (FLAGS_mds_server_id == 0) {
-    DINGO_LOG(ERROR) << "mds server id is 0, please set a valid id.";
+    LOG(ERROR) << "mds server id is 0, please set a valid id.";
     return false;
   }
   if (FLAGS_mds_server_host.empty()) {
-    DINGO_LOG(ERROR) << "mds server host is empty, please set a valid host.";
+    LOG(ERROR) << "mds server host is empty, please set a valid host.";
     return false;
   }
   if (FLAGS_mds_server_host == "0.0.0.0") {
-    DINGO_LOG(ERROR) << "mds server host is 0.0.0.0, can't set it.";
+    LOG(ERROR) << "mds server host is 0.0.0.0, can't set it.";
     return false;
   }
   if (FLAGS_mds_server_port == 0) {
-    DINGO_LOG(ERROR) << "mds server port is 0, please set a valid port.";
+    LOG(ERROR) << "mds server port is 0, please set a valid port.";
     return false;
   }
 
   if (FLAGS_mds_log_level.empty()) {
-    DINGO_LOG(ERROR) << "mds log level is empty, please set a valid log level.";
+    LOG(ERROR) << "mds log level is empty, please set a valid log level.";
     return false;
   }
   if (FLAGS_mds_log_path.empty()) {
-    DINGO_LOG(ERROR) << "mds log path is empty, please set a valid log path.";
+    LOG(ERROR) << "mds log path is empty, please set a valid log path.";
     return false;
   }
 
@@ -151,9 +151,9 @@ bool Server::InitConfig(const std::string& path) {
 }
 
 bool Server::InitLog() {
-  DINGO_LOG(INFO) << fmt::format("Init log: {} {}", FLAGS_mds_log_level, FLAGS_mds_log_path);
+  LOG(INFO) << fmt::format("init log: {} {}", FLAGS_mds_log_level, FLAGS_mds_log_path);
 
-  DingoLogger::InitLogger(FLAGS_mds_log_path, "mds", GetDingoLogLevel(FLAGS_mds_log_level));
+  Logger::InitLogger(FLAGS_mds_log_path, "mds", GetDingoLogLevel(FLAGS_mds_log_level));
 
   DingoLogVersion();
   return true;
@@ -163,7 +163,7 @@ bool Server::InitMDSMeta() {
   MDSMeta temp_mds_meta;
   if (mds_meta_map_->GetMDSMeta(FLAGS_mds_server_id, temp_mds_meta)) {
     self_mds_meta_ = temp_mds_meta;
-    DINGO_LOG(INFO) << fmt::format("old mds: {}.", self_mds_meta_.ToString());
+    LOG(INFO) << fmt::format("old mds: {}.", self_mds_meta_.ToString());
 
   } else {
     self_mds_meta_.SetID(FLAGS_mds_server_id);
@@ -172,7 +172,7 @@ bool Server::InitMDSMeta() {
     self_mds_meta_.SetState(MDSMeta::State::kNormal);
     self_mds_meta_.SetCreateTimeMs(Helper::TimestampMs());
 
-    DINGO_LOG(INFO) << fmt::format("new mds: {}.", self_mds_meta_.ToString());
+    LOG(INFO) << fmt::format("new mds: {}.", self_mds_meta_.ToString());
 
     mds_meta_map_->UpsertMDSMeta(self_mds_meta_);
   }
@@ -181,7 +181,7 @@ bool Server::InitMDSMeta() {
 }
 
 bool Server::InitCoordinatorClient(const std::string& coor_url) {
-  DINGO_LOG(INFO) << fmt::format("init coordinator client, addr({}).", coor_url);
+  LOG(INFO) << fmt::format("init coordinator client, addr({}).", coor_url);
 
   std::string coor_addrs = Helper::ParseStorageAddr(coor_url);
   if (coor_addrs.empty()) {
@@ -195,11 +195,11 @@ bool Server::InitCoordinatorClient(const std::string& coor_url) {
 }
 
 bool Server::InitStorage(const std::string& store_url) {
-  DINGO_LOG(INFO) << fmt::format("init storage, engine({}) url({}).", FLAGS_mds_storage_engine, store_url);
+  LOG(INFO) << fmt::format("init storage, engine({}) url({}).", FLAGS_mds_storage_engine, store_url);
 
   if (FLAGS_mds_storage_engine == "dingo-store") {
     if (!InitCoordinatorClient(store_url)) {
-      DINGO_LOG(ERROR) << "init coordinator client fail.";
+      LOG(ERROR) << "init coordinator client fail.";
       return false;
     }
     kv_storage_ = DingodbStorage::New();
@@ -211,7 +211,7 @@ bool Server::InitStorage(const std::string& store_url) {
     kv_storage_ = DummyStorage::New();
 
   } else {
-    DINGO_LOG(ERROR) << fmt::format("unsupported mds storage engine({}).", FLAGS_mds_storage_engine);
+    LOG(ERROR) << fmt::format("unsupported mds storage engine({}).", FLAGS_mds_storage_engine);
     return false;
   }
   CHECK(kv_storage_ != nullptr) << "new dingodb storage fail.";
@@ -236,7 +236,7 @@ bool Server::InitOperationProcessor() {
 }
 
 bool Server::InitCacheGroupMemberManager() {
-  DINGO_LOG(INFO) << "init cache group member manager.";
+  LOG(INFO) << "init cache group member manager.";
   CHECK(operation_processor_ != nullptr) << "operation_processor is nullptr.";
   cache_group_member_manager_ = CacheGroupMemberManager::New(operation_processor_);
   CHECK(cache_group_member_manager_ != nullptr) << "cache_group_member_manager is nullptr.";
@@ -246,7 +246,7 @@ bool Server::InitCacheGroupMemberManager() {
 }
 
 bool Server::InitFileSystem() {
-  DINGO_LOG(INFO) << "init filesystem.";
+  LOG(INFO) << "init filesystem.";
 
   CHECK((!need_coordinator_ || coordinator_client_ != nullptr)) << "coordinator client is nullptr.";
   CHECK(kv_storage_ != nullptr) << "kv storage is nullptr.";
@@ -288,7 +288,7 @@ bool Server::InitFileSystem() {
 }
 
 bool Server::InitHeartbeat() {
-  DINGO_LOG(INFO) << "init heartbeat.";
+  LOG(INFO) << "init heartbeat.";
   CHECK(operation_processor_ != nullptr) << "operation_processor is nullptr.";
   CHECK(cache_group_member_manager_ != nullptr) << "cache_group_member_manager is nullptr.";
 
@@ -297,7 +297,7 @@ bool Server::InitHeartbeat() {
 }
 
 bool Server::InitFsInfoSync() {
-  DINGO_LOG(INFO) << "init fs info sync.";
+  LOG(INFO) << "init fs info sync.";
   CHECK(file_system_set_ != nullptr) << "file_system_set is nullptr.";
 
   fs_info_sync_ = FsInfoSync::New(file_system_set_);
@@ -363,7 +363,7 @@ bool Server::InitGcProcessor() {
 }
 
 bool Server::InitCrontab() {
-  DINGO_LOG(INFO) << "init crontab.";
+  LOG(INFO) << "init crontab.";
 
   // Add heartbeat crontab
   crontab_configs_.push_back({
@@ -439,7 +439,7 @@ bool Server::InitService() {
   CHECK(mds_service_ != nullptr) << "new MDSServiceImpl fail.";
 
   if (!mds_service_->Init()) {
-    DINGO_LOG(ERROR) << "init MDSServiceImpl fail.";
+    LOG(ERROR) << "init MDSServiceImpl fail.";
     return false;
   }
 

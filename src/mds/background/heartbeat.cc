@@ -18,10 +18,10 @@
 #include <string>
 #include <vector>
 
+#include "common/logging.h"
 #include "fmt/format.h"
 #include "mds/common/context.h"
 #include "mds/common/helper.h"
-#include "mds/common/logging.h"
 #include "mds/common/status.h"
 #include "mds/common/tracing.h"
 #include "mds/filesystem/store_operation.h"
@@ -42,7 +42,7 @@ bool Heartbeat::Init() {
   std::vector<MDSMeta> mdses;
   auto status = GetMDSList(mdses);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[heartbeat] get mds list fail, error({}).", status.error_str());
+    LOG(ERROR) << fmt::format("[heartbeat] get mds list fail, error({}).", status.error_str());
     return false;
   }
 
@@ -54,7 +54,7 @@ bool Heartbeat::Destroy() { return true; }
 void Heartbeat::Run() {
   bool running = false;
   if (!is_running_.compare_exchange_strong(running, true)) {
-    DINGO_LOG(INFO) << "[heartbeat] heartbeat already running......";
+    LOG(INFO) << "[heartbeat] heartbeat already running......";
     return;
   }
   DEFER(is_running_.store(false));
@@ -72,21 +72,20 @@ void Heartbeat::SendHeartbeat() {
 
 Status Heartbeat::SendHeartbeat(Context& ctx, MdsEntry& mds) {
   if (mds.id() == 0) {
-    DINGO_LOG(ERROR) << "[heartbeat] send fail, mds id is 0.";
+    LOG(ERROR) << "[heartbeat] send fail, mds id is 0.";
     return Status(pb::error::Errno::EINTERNAL, "mds id is 0");
   }
 
   mds.set_last_online_time_ms(Helper::TimestampMs());
 
-  DINGO_LOG(DEBUG) << fmt::format("[heartbeat] mds {}.", mds.ShortDebugString());
+  LOG_DEBUG << fmt::format("[heartbeat] mds {}.", mds.ShortDebugString());
 
   auto& trace = ctx.GetTrace();
   UpsertMdsOperation operation(trace, mds);
 
   auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[heartbeat] send fail, mds({}) error({}).", mds.ShortDebugString(),
-                                    status.error_str());
+    LOG(ERROR) << fmt::format("[heartbeat] send fail, mds({}) error({}).", mds.ShortDebugString(), status.error_str());
   }
 
   return status;
@@ -95,15 +94,15 @@ Status Heartbeat::SendHeartbeat(Context& ctx, MdsEntry& mds) {
 Status Heartbeat::SendHeartbeat(Context& ctx, ClientEntry& client) {
   client.set_last_online_time_ms(Helper::TimestampMs());
 
-  DINGO_LOG(DEBUG) << fmt::format("[heartbeat] client {}.", client.ShortDebugString());
+  LOG_DEBUG << fmt::format("[heartbeat] client {}.", client.ShortDebugString());
 
   auto& trace = ctx.GetTrace();
   UpsertClientOperation operation(trace, client);
 
   auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[heartbeat] send fail, client({}) error({}).", client.ShortDebugString(),
-                                    status.error_str());
+    LOG(ERROR) << fmt::format("[heartbeat] send fail, client({}) error({}).", client.ShortDebugString(),
+                              status.error_str());
   }
 
   return status;
@@ -124,15 +123,15 @@ Status Heartbeat::SendHeartbeat(Context& ctx, CacheMemberEntry& heartbeat_cache_
     return Status::OK();
   };
 
-  DINGO_LOG(DEBUG) << fmt::format("[heartbeat] heartbeat_cache_member {}.", heartbeat_cache_member.ShortDebugString());
+  LOG_DEBUG << fmt::format("[heartbeat] heartbeat_cache_member {}.", heartbeat_cache_member.ShortDebugString());
 
   auto& trace = ctx.GetTrace();
   UpsertCacheMemberOperation operation(trace, heartbeat_cache_member.member_id(), handler);
 
   auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[heartbeat] send fail, heartbeat_cache_member({}) error({}).",
-                                    heartbeat_cache_member.ShortDebugString(), status.error_str());
+    LOG(ERROR) << fmt::format("[heartbeat] send fail, heartbeat_cache_member({}) error({}).",
+                              heartbeat_cache_member.ShortDebugString(), status.error_str());
     return status;
   }
   auto& result = operation.GetResult();
@@ -148,7 +147,7 @@ Status Heartbeat::GetMDSList(Context& ctx, std::vector<MdsEntry>& mdses) {
 
   auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[heartbeat] get mds list fail, error({}).", status.error_str());
+    LOG(ERROR) << fmt::format("[heartbeat] get mds list fail, error({}).", status.error_str());
     return status;
   }
 
@@ -188,7 +187,7 @@ Status Heartbeat::GetClientList(std::vector<ClientEntry>& clients) {
 
   auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[heartbeat] get client list fail, error({}).", status.error_str());
+    LOG(ERROR) << fmt::format("[heartbeat] get client list fail, error({}).", status.error_str());
     return status;
   }
 
@@ -212,7 +211,7 @@ Status Heartbeat::GetCacheMemberList(std::vector<CacheMemberEntry>& cache_member
 
   auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[heartbeat] get cache member list fail, error({}).", status.error_str());
+    LOG(ERROR) << fmt::format("[heartbeat] get cache member list fail, error({}).", status.error_str());
     return status;
   }
 

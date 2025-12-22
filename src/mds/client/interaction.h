@@ -21,10 +21,10 @@
 
 #include "brpc/channel.h"
 #include "brpc/controller.h"
+#include "common/logging.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/core.h"
-#include "mds/common/logging.h"
 #include "mds/common/status.h"
 
 namespace dingofs {
@@ -64,11 +64,11 @@ butil::Status Interaction::SendRequest(const std::string& service_name, const st
   if (service_name == "MDSService") {
     method = dingofs::pb::mds::MDSService::descriptor()->FindMethodByName(api_name);
   } else {
-    DINGO_LOG(FATAL) << "unknown service name: " << service_name;
+    LOG(FATAL) << "unknown service name: " << service_name;
   }
 
   if (method == nullptr) {
-    DINGO_LOG(FATAL) << "unknown api name: " << api_name;
+    LOG(FATAL) << "unknown api name: " << api_name;
   }
 
   brpc::Controller cntl;
@@ -88,20 +88,18 @@ butil::Status Interaction::SendRequest(const std::string& service_name, const st
 
   channel_.CallMethod(method, &cntl, &request, &response, nullptr);
   if (FLAGS_log_each_request) {
-    DINGO_LOG(INFO) << fmt::format("send request api {} response: {} request: {}", api_name,
-                                   response.ShortDebugString().substr(0, 256),
-                                   request.ShortDebugString().substr(0, 256));
+    LOG(INFO) << fmt::format("send request api {} response: {} request: {}", api_name,
+                             response.ShortDebugString().substr(0, 256), request.ShortDebugString().substr(0, 256));
   }
   if (cntl.Failed()) {
-    DINGO_LOG(ERROR) << fmt::format("{} response fail, {} {} {}", api_name, cntl.log_id(), cntl.ErrorCode(),
-                                    cntl.ErrorText());
+    LOG(ERROR) << fmt::format("{} response fail, {} {} {}", api_name, cntl.log_id(), cntl.ErrorCode(),
+                              cntl.ErrorText());
     return Status(cntl.ErrorCode(), cntl.ErrorText());
   }
 
   if (response.error().errcode() != dingofs::pb::error::OK) {
-    DINGO_LOG(ERROR) << fmt::format("{} response fail, error: {} {}", api_name,
-                                    dingofs::pb::error::Errno_Name(response.error().errcode()),
-                                    response.error().errmsg());
+    LOG(ERROR) << fmt::format("{} response fail, error: {} {}", api_name,
+                              dingofs::pb::error::Errno_Name(response.error().errcode()), response.error().errmsg());
 
     return Status(response.error().errcode(), response.error().errmsg());
   }

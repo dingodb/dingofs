@@ -15,8 +15,8 @@
 #include "mds/common/serial_helper.h"
 
 #include "butil/compiler_specific.h"
+#include "common/logging.h"
 #include "glog/logging.h"
-#include "mds/common/logging.h"
 
 namespace dingofs {
 

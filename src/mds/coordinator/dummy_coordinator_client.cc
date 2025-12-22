@@ -17,9 +17,9 @@
 #include <fmt/format.h>
 
 #include "bthread/mutex.h"
+#include "common/logging.h"
 #include "dingofs/error.pb.h"
 #include "fmt/core.h"
-#include "mds/common/logging.h"
 
 namespace dingofs {
 namespace mds {
@@ -33,7 +33,7 @@ DummyCoordinatorClient::~DummyCoordinatorClient() {
 }
 
 bool DummyCoordinatorClient::Init(const std::string& addr) {
-  DINGO_LOG(INFO) << fmt::format("init dummy coordinator client, addr({}).", addr);
+  LOG(INFO) << fmt::format("init dummy coordinator client, addr({}).", addr);
 
   return true;
 }

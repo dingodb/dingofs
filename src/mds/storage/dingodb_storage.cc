@@ -18,11 +18,11 @@
 #include <memory>
 #include <string>
 
+#include "common/logging.h"
 #include "dingofs/error.pb.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
 #include "mds/common/helper.h"
-#include "mds/common/logging.h"
 #include "mds/common/status.h"
 #include "mds/common/synchronization.h"
 
@@ -51,7 +51,7 @@ static void KvPairsToKeyValues(const std::vector<dingodb::sdk::KVPair>& kv_pairs
 }
 
 bool DingodbStorage::Init(const std::string& addr) {
-  DINGO_LOG(INFO) << fmt::format("[storage] init dingo storage, addr({}).", addr);
+  LOG(INFO) << fmt::format("[storage] init dingo storage, addr({}).", addr);
 
   dingodb::sdk::ShowSdkVersion();
 
@@ -62,7 +62,7 @@ bool DingodbStorage::Init(const std::string& addr) {
 }
 
 bool DingodbStorage::Destroy() {
-  DINGO_LOG(INFO) << "[storage] destroy dingo storage.";
+  LOG(INFO) << "[storage] destroy dingo storage.";
 
   delete client_;
 
@@ -141,7 +141,7 @@ DingodbStorage::SdkTxnUPtr DingodbStorage::NewSdkTxn(Txn::IsolationLevel isolati
     auto status = client_->NewTransaction(options, &txn);
     if (status.ok()) break;
 
-    DINGO_LOG(ERROR) << fmt::format("[storage] new transaction fail, retry({}) error({}).", retry, status.ToString());
+    LOG(ERROR) << fmt::format("[storage] new transaction fail, retry({}) error({}).", retry, status.ToString());
   } while (++retry <= FLAGS_mds_txn_max_retry_times);
 
   return DingodbStorage::SdkTxnUPtr(txn);
@@ -523,7 +523,7 @@ Status DingodbTxn::TransformStatus(const dingodb::sdk::Status& status) {
 void DingodbTxn::Rollback() {
   auto status = txn_->Rollback();
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[storage] rollback fail, status({}).", status.ToString());
+    LOG(ERROR) << fmt::format("[storage] rollback fail, status({}).", status.ToString());
   }
 }
 

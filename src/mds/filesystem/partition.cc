@@ -19,10 +19,10 @@
 #include <cstdint>
 #include <vector>
 
+#include "common/logging.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
 #include "mds/common/helper.h"
-#include "mds/common/logging.h"
 
 namespace dingofs {
 namespace mds {
@@ -60,8 +60,8 @@ void Partition::SetParentInode(InodeSPtr parent_inode) {
 }
 
 void Partition::Put(const Dentry& dentry, uint64_t version) {
-  DINGO_LOG(DEBUG) << fmt::format("[partition.{}] put child, name({}), version({}) this({}).", ino_, dentry.Name(),
-                                  version, (void*)this);
+  LOG_DEBUG << fmt::format("[partition.{}] put child, name({}), version({}) this({}).", ino_, dentry.Name(), version,
+                           (void*)this);
 
   utils::WriteLockGuard lk(lock_);
 
@@ -164,9 +164,9 @@ bool Partition::Merge(Partition&& other_partition) {  // NOLINT
 
   if (other_partition.BaseVersion() <= base_version_) return false;
 
-  DINGO_LOG(DEBUG) << fmt::format("[partition.{}] merge, self({},{},{},{}) other({},{}).", ino_, base_version_,
-                                  delta_version_, children_.size(), delta_dentry_ops_.size(),
-                                  other_partition.BaseVersion(), other_partition.children_.size());
+  LOG_DEBUG << fmt::format("[partition.{}] merge, self({},{},{},{}) other({},{}).", ino_, base_version_, delta_version_,
+                           children_.size(), delta_dentry_ops_.size(), other_partition.BaseVersion(),
+                           other_partition.children_.size());
   base_version_ = other_partition.BaseVersion();
   children_.swap(other_partition.children_);
 
@@ -235,7 +235,7 @@ PartitionPtr PartitionCache::PutIf(PartitionPtr& partition) {
       },
       ino);
 
-  DINGO_LOG(DEBUG) << fmt::format("[cache.partition.{}.{}] putif, this({}).", fs_id_, ino, (void*)new_partition.get());
+  LOG_DEBUG << fmt::format("[cache.partition.{}.{}] putif, this({}).", fs_id_, ino, (void*)new_partition.get());
 
   return new_partition;
 }
@@ -258,19 +258,19 @@ PartitionPtr PartitionCache::PutIf(Partition&& partition) {  // NOLINT
       },
       ino);
 
-  DINGO_LOG(DEBUG) << fmt::format("[cache.partition.{}.{}] putif, this({}).", fs_id_, ino, (void*)new_partition.get());
+  LOG_DEBUG << fmt::format("[cache.partition.{}.{}] putif, this({}).", fs_id_, ino, (void*)new_partition.get());
 
   return new_partition;
 }
 
 void PartitionCache::Delete(Ino ino) {
-  DINGO_LOG(INFO) << fmt::format("[cache.partition.{}] delete partition ino({}).", fs_id_, ino);
+  LOG(INFO) << fmt::format("[cache.partition.{}] delete partition ino({}).", fs_id_, ino);
 
   shard_map_.withWLock([ino](Map& map) { map.erase(ino); }, ino);
 }
 
 void PartitionCache::DeleteIf(std::function<bool(const Ino&)>&& f) {  // NOLINT
-  DINGO_LOG(INFO) << fmt::format("[cache.partition.{}] batch delete inode.", fs_id_);
+  LOG(INFO) << fmt::format("[cache.partition.{}] batch delete inode.", fs_id_);
 
   shard_map_.iterateWLock([&](Map& map) {
     for (auto it = map.begin(); it != map.end();) {
@@ -285,7 +285,7 @@ void PartitionCache::DeleteIf(std::function<bool(const Ino&)>&& f) {  // NOLINT
 }
 
 void PartitionCache::Clear() {
-  DINGO_LOG(INFO) << fmt::format("[cache.partition.{}] clear.", fs_id_);
+  LOG(INFO) << fmt::format("[cache.partition.{}] clear.", fs_id_);
 
   shard_map_.iterateWLock([&](Map& map) { map.clear(); });
 }
@@ -352,8 +352,8 @@ void PartitionCache::CleanExpired(uint64_t expire_s) {
 
   clean_count_ << partitions.size();
 
-  DINGO_LOG(INFO) << fmt::format("[cache.partition.{}] clean expired, stat({}|{}|{}).", fs_id_, Size(),
-                                 partitions.size(), clean_count_.get_value());
+  LOG(INFO) << fmt::format("[cache.partition.{}] clean expired, stat({}|{}|{}).", fs_id_, Size(), partitions.size(),
+                           clean_count_.get_value());
 }
 
 void PartitionCache::DescribeByJson(Json::Value& value) {

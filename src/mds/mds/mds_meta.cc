@@ -17,10 +17,10 @@
 #include <cstdint>
 #include <vector>
 
+#include "common/logging.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/core.h"
 #include "json/value.h"
-#include "mds/common/logging.h"
 
 namespace dingofs {
 namespace mds {
@@ -34,7 +34,7 @@ static MdsEntry::State ToPbMdsState(MDSMeta::State state) {
     case MDSMeta::State::kAbnormal:
       return pb::mds::MDS_State_ABNORMAL;
     default:
-      DINGO_LOG(FATAL) << "Unknown MDSMeta state: " << static_cast<int>(state);
+      LOG(FATAL) << "Unknown MDSMeta state: " << static_cast<int>(state);
       break;
   }
 
@@ -50,7 +50,7 @@ static MDSMeta::State ToMdsState(MdsEntry::State state) {
     case pb::mds::MDS_State_ABNORMAL:
       return MDSMeta::State::kAbnormal;
     default:
-      DINGO_LOG(FATAL) << "Unknown MDS state: " << static_cast<int>(state);
+      LOG(FATAL) << "Unknown MDS state: " << static_cast<int>(state);
       break;
   }
 

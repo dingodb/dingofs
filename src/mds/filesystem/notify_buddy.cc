@@ -18,7 +18,7 @@
 #include <memory>
 
 #include "bthread/bthread.h"
-#include "mds/common/logging.h"
+#include "common/logging.h"
 #include "mds/service/service_access.h"
 
 namespace dingofs {
@@ -201,8 +201,8 @@ void NotifyBuddy::SendMessage(uint64_t mds_id, BatchMessage& batch_message) {
         auto refresh_fs_info_message = std::dynamic_pointer_cast<RefreshFsInfoMessage>(message);
         mut_message->mutable_refresh_fs_info()->set_fs_name(refresh_fs_info_message->fs_name);
 
-        DINGO_LOG(INFO) << fmt::format("[notify.{}] refresh fs({}/{}) info.", mds_id, message->fs_id,
-                                       refresh_fs_info_message->fs_name);
+        LOG(INFO) << fmt::format("[notify.{}] refresh fs({}/{}) info.", mds_id, message->fs_id,
+                                 refresh_fs_info_message->fs_name);
 
       } break;
 
@@ -213,8 +213,8 @@ void NotifyBuddy::SendMessage(uint64_t mds_id, BatchMessage& batch_message) {
         auto refresh_inode_message = std::dynamic_pointer_cast<RefreshInodeMessage>(message);
         mut_refresh_inode->mutable_inode()->Swap(&refresh_inode_message->attr);
 
-        DINGO_LOG(INFO) << fmt::format("[notify.{}] refresh inode, inode({}).", mds_id,
-                                       mut_refresh_inode->inode().ShortDebugString());
+        LOG(INFO) << fmt::format("[notify.{}] refresh inode, inode({}).", mds_id,
+                                 mut_refresh_inode->inode().ShortDebugString());
 
       } break;
 
@@ -224,8 +224,8 @@ void NotifyBuddy::SendMessage(uint64_t mds_id, BatchMessage& batch_message) {
         auto clean_partition_cache_message = std::dynamic_pointer_cast<CleanPartitionCacheMessage>(message);
         mut_message->mutable_clean_partition_cache()->set_ino(clean_partition_cache_message->ino);
 
-        DINGO_LOG(INFO) << fmt::format("[notify.{}] clean partition cache({}/{}) info.", mds_id, message->fs_id,
-                                       clean_partition_cache_message->ino);
+        LOG(INFO) << fmt::format("[notify.{}] clean partition cache({}/{}) info.", mds_id, message->fs_id,
+                                 clean_partition_cache_message->ino);
 
       } break;
 
@@ -236,8 +236,8 @@ void NotifyBuddy::SendMessage(uint64_t mds_id, BatchMessage& batch_message) {
         mut_message->mutable_set_dir_quota()->set_ino(set_dir_quota_message->ino);
         mut_message->mutable_set_dir_quota()->mutable_quota()->Swap(&set_dir_quota_message->quota);
 
-        DINGO_LOG(INFO) << fmt::format("[notify.{}] set dir quota, dir({}/{}) quota({}).", mds_id, message->fs_id,
-                                       set_dir_quota_message->ino, set_dir_quota_message->quota.ShortDebugString());
+        LOG(INFO) << fmt::format("[notify.{}] set dir quota, dir({}/{}) quota({}).", mds_id, message->fs_id,
+                                 set_dir_quota_message->ino, set_dir_quota_message->quota.ShortDebugString());
 
       } break;
 
@@ -248,26 +248,26 @@ void NotifyBuddy::SendMessage(uint64_t mds_id, BatchMessage& batch_message) {
         mut_message->mutable_delete_dir_quota()->set_ino(delete_dir_quota_message->ino);
         mut_message->mutable_delete_dir_quota()->set_uuid(delete_dir_quota_message->uuid);
 
-        DINGO_LOG(INFO) << fmt::format("[notify.{}] delete dir quota, dir({}/{}/{}).", mds_id, message->fs_id,
-                                       delete_dir_quota_message->ino, delete_dir_quota_message->uuid);
+        LOG(INFO) << fmt::format("[notify.{}] delete dir quota, dir({}/{}/{}).", mds_id, message->fs_id,
+                                 delete_dir_quota_message->ino, delete_dir_quota_message->uuid);
 
       } break;
 
       default:
-        DINGO_LOG(FATAL) << fmt::format("[notify] unknown message type: {}.", static_cast<int>(message->type));
+        LOG(FATAL) << fmt::format("[notify] unknown message type: {}.", static_cast<int>(message->type));
         break;
     }
   }
 
   butil::EndPoint endpoint;
   if (!GenEndpoint(mds_id, endpoint)) {
-    DINGO_LOG(ERROR) << fmt::format("[notify.{}] gen endpoint fail.", mds_id);
+    LOG(ERROR) << fmt::format("[notify.{}] gen endpoint fail.", mds_id);
     return;
   }
 
   auto status = ServiceAccess::NotifyBuddy(endpoint, notify_message);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[notify.{}] send message fail, {}.", mds_id, status.error_str());
+    LOG(ERROR) << fmt::format("[notify.{}] send message fail, {}.", mds_id, status.error_str());
   }
 }
 

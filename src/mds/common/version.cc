@@ -17,8 +17,8 @@
 #include <iostream>
 #include <sstream>
 
+#include "common/logging.h"
 #include "fmt/format.h"
-#include "mds/common/logging.h"
 
 namespace dingofs {
 namespace mds {
@@ -71,12 +71,12 @@ std::string DingoVersionString() {
 void DingoShowVersion() { std::cout << DingoVersionString(); }
 
 void DingoLogVersion() {
-  DINGO_LOG(INFO) << "DINGOFS VERSION:[" << kGitVersion << "]";
-  DINGO_LOG(INFO) << "DINGOFS GIT_LAST_TAG:[" << kGitTagName << "]";
-  DINGO_LOG(INFO) << "DINGOFS GIT_COMMIT_HASH:[" << kGitLastCommit << "]";
-  DINGO_LOG(INFO) << "DINGOFS BUILD_TYPE:[" << kDingoFsBuildType << "]";
-  DINGO_LOG(INFO) << GetBuildFlag();
-  DINGO_LOG(INFO) << "PID: " << getpid();
+  LOG(INFO) << "DINGOFS VERSION:[" << kGitVersion << "]";
+  LOG(INFO) << "DINGOFS GIT_LAST_TAG:[" << kGitTagName << "]";
+  LOG(INFO) << "DINGOFS GIT_COMMIT_HASH:[" << kGitLastCommit << "]";
+  LOG(INFO) << "DINGOFS BUILD_TYPE:[" << kDingoFsBuildType << "]";
+  LOG(INFO) << GetBuildFlag();
+  LOG(INFO) << "PID: " << getpid();
 }
 
 std::vector<std::pair<std::string, std::string>> DingoVersion() {

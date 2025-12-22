@@ -17,9 +17,9 @@
 #include <string>
 #include <vector>
 
+#include "common/logging.h"
 #include "dingofs/error.pb.h"
 #include "fmt/core.h"
-#include "mds/common/logging.h"
 #include "mds/coordinator/coordinator_client.h"
 #include "mds/mds/mds_meta.h"
 
@@ -35,7 +35,7 @@ static dingodb::sdk::MDS::State MDSMetaStateToSdkState(MDSMeta::State state) {
     case MDSMeta::State::kAbnormal:
       return dingodb::sdk::MDS::State::kAbnormal;
     default:
-      DINGO_LOG(FATAL) << "Unknown MDSMeta state: " << static_cast<int>(state);
+      LOG(FATAL) << "Unknown MDSMeta state: " << static_cast<int>(state);
       break;
   }
 
@@ -76,7 +76,7 @@ static std::vector<MDSMeta> SdkMDSList2MDSes(const std::vector<dingodb::sdk::MDS
 }
 
 bool DingoCoordinatorClient::Init(const std::string& addr) {
-  DINGO_LOG(INFO) << fmt::format("init dingo coordinator client, addr({}).", addr);
+  LOG(INFO) << fmt::format("init dingo coordinator client, addr({}).", addr);
 
   coordinator_addr_ = addr;
   auto status = dingodb::sdk::Client::BuildFromAddrs(addr, &client_);
@@ -92,7 +92,7 @@ bool DingoCoordinatorClient::Init(const std::string& addr) {
 }
 
 bool DingoCoordinatorClient::Destroy() {
-  DINGO_LOG(INFO) << fmt::format("destroy dingo coordinator client.");
+  LOG(INFO) << fmt::format("destroy dingo coordinator client.");
 
   delete coordinator_;
   delete version_;
@@ -105,7 +105,7 @@ Status DingoCoordinatorClient::MDSHeartbeat(const MDSMeta& mds, std::vector<MDSM
   std::vector<dingodb::sdk::MDS> mdses;
   auto status = coordinator_->MDSHeartbeat(MDSMeta2SdkMDS(mds), mdses);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("MDSHeartbeat fail, error: {}", status.ToString());
+    LOG(ERROR) << fmt::format("MDSHeartbeat fail, error: {}", status.ToString());
     return Status(pb::error::ECOORDINATOR, status.ToString());
   }
 
@@ -120,7 +120,7 @@ Status DingoCoordinatorClient::GetMDSList(std::vector<MDSMeta>& mdses) {
   std::vector<dingodb::sdk::MDS> sdk_mdses;
   auto status = coordinator_->GetMDSList(sdk_mdses);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("GetMDSList fail, error: {}", status.ToString());
+    LOG(ERROR) << fmt::format("GetMDSList fail, error: {}", status.ToString());
     return Status(pb::error::ECOORDINATOR, status.ToString());
   }
 
@@ -132,7 +132,7 @@ Status DingoCoordinatorClient::GetMDSList(std::vector<MDSMeta>& mdses) {
 Status DingoCoordinatorClient::CreateAutoIncrement(int64_t table_id, int64_t start_id) {
   auto status = coordinator_->CreateAutoIncrement(table_id, start_id);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("CreateAutoIncrement fail, error: {}", status.ToString());
+    LOG(ERROR) << fmt::format("CreateAutoIncrement fail, error: {}", status.ToString());
     return Status(pb::error::ECOORDINATOR, status.ToString());
   }
 
@@ -142,7 +142,7 @@ Status DingoCoordinatorClient::CreateAutoIncrement(int64_t table_id, int64_t sta
 Status DingoCoordinatorClient::DeleteAutoIncrement(int64_t table_id) {
   auto status = coordinator_->DeleteAutoIncrement(table_id);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("DeleteAutoIncrement fail, error: {}", status.ToString());
+    LOG(ERROR) << fmt::format("DeleteAutoIncrement fail, error: {}", status.ToString());
     return Status(pb::error::ECOORDINATOR, status.ToString());
   }
 
@@ -152,7 +152,7 @@ Status DingoCoordinatorClient::DeleteAutoIncrement(int64_t table_id) {
 Status DingoCoordinatorClient::UpdateAutoIncrement(int64_t table_id, int64_t start_id) {
   auto status = coordinator_->UpdateAutoIncrement(table_id, start_id);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("UpdateAutoIncrement fail, error: {}", status.ToString());
+    LOG(ERROR) << fmt::format("UpdateAutoIncrement fail, error: {}", status.ToString());
     return Status(pb::error::ECOORDINATOR, status.ToString());
   }
 
@@ -163,7 +163,7 @@ Status DingoCoordinatorClient::GenerateAutoIncrement(int64_t table_id, int64_t c
                                                      int64_t& end_id) {
   auto status = coordinator_->GenerateAutoIncrement(table_id, count, start_id, end_id);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("GenerateAutoIncrement fail, error: {}", status.ToString());
+    LOG(ERROR) << fmt::format("GenerateAutoIncrement fail, error: {}", status.ToString());
     return Status(pb::error::ECOORDINATOR, status.ToString());
   }
 
@@ -176,7 +176,7 @@ Status DingoCoordinatorClient::GetAutoIncrement(int64_t table_id, int64_t& start
     if (status.IsNotFound()) {
       return Status(pb::error::ENOT_FOUND, status.ToString());
     }
-    DINGO_LOG(ERROR) << fmt::format("GetAutoIncrement fail, error: {}", status.ToString());
+    LOG(ERROR) << fmt::format("GetAutoIncrement fail, error: {}", status.ToString());
     return Status(pb::error::ECOORDINATOR, status.ToString());
   }
 
@@ -187,7 +187,7 @@ Status DingoCoordinatorClient::GetAutoIncrements(std::vector<AutoIncrement>& aut
   std::vector<dingodb::sdk::TableIncrement> table_increments;
   auto status = coordinator_->GetAutoIncrements(table_increments);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("GetAutoIncrements fail, error: {}", status.ToString());
+    LOG(ERROR) << fmt::format("GetAutoIncrements fail, error: {}", status.ToString());
     return Status(pb::error::ECOORDINATOR, status.ToString());
   }
 
@@ -244,7 +244,7 @@ Status DingoCoordinatorClient::KvRange(const Options& options, const Range& rang
   auto status =
       version_->KvRange(Options2SdkOptions(options), Range2SdkRange(range), limit, out_sdk_kvs, out_more, out_count);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("KvRange fail, error: {}", status.ToString());
+    LOG(ERROR) << fmt::format("KvRange fail, error: {}", status.ToString());
     return Status(pb::error::ECOORDINATOR, status.ToString());
   }
 
@@ -260,7 +260,7 @@ Status DingoCoordinatorClient::KvPut(const Options& options, const KVPair& kv, K
   dingodb::sdk::Version::KVWithExt out_sdk_prev_kv;
   auto status = version_->KvPut(Options2SdkOptions(options), KVPair2SdkKVPair(kv), out_sdk_prev_kv);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("KvPut fail, error: {}", status.ToString());
+    LOG(ERROR) << fmt::format("KvPut fail, error: {}", status.ToString());
     return Status(pb::error::ECOORDINATOR, status.ToString());
   }
 
@@ -275,7 +275,7 @@ Status DingoCoordinatorClient::KvDeleteRange(const Options& options, const Range
   auto status =
       version_->KvDeleteRange(Options2SdkOptions(options), Range2SdkRange(range), out_deleted, out_sdk_prev_kvs);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("KvDeleteRange fail, error: {}", status.ToString());
+    LOG(ERROR) << fmt::format("KvDeleteRange fail, error: {}", status.ToString());
     return Status(pb::error::ECOORDINATOR, status.ToString());
   }
 
@@ -290,7 +290,7 @@ Status DingoCoordinatorClient::KvDeleteRange(const Options& options, const Range
 Status DingoCoordinatorClient::KvCompaction(const Range& range, int64_t revision, int64_t& out_count) {
   auto status = version_->KvCompaction(Range2SdkRange(range), revision, out_count);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("KvCompaction fail, error: {}", status.ToString());
+    LOG(ERROR) << fmt::format("KvCompaction fail, error: {}", status.ToString());
     return Status(pb::error::ECOORDINATOR, status.ToString());
   }
 
@@ -300,7 +300,7 @@ Status DingoCoordinatorClient::KvCompaction(const Range& range, int64_t revision
 Status DingoCoordinatorClient::LeaseGrant(int64_t id, int64_t ttl, int64_t& out_id, int64_t& out_ttl) {
   auto status = version_->LeaseGrant(id, ttl, out_id, out_ttl);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("LeaseGrant fail, error: {}", status.ToString());
+    LOG(ERROR) << fmt::format("LeaseGrant fail, error: {}", status.ToString());
     return Status(pb::error::ECOORDINATOR, status.ToString());
   }
 
@@ -310,7 +310,7 @@ Status DingoCoordinatorClient::LeaseGrant(int64_t id, int64_t ttl, int64_t& out_
 Status DingoCoordinatorClient::LeaseRevoke(int64_t id) {
   auto status = version_->LeaseRevoke(id);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("LeaseRevoke fail, error: {}", status.ToString());
+    LOG(ERROR) << fmt::format("LeaseRevoke fail, error: {}", status.ToString());
     return Status(pb::error::ECOORDINATOR, status.ToString());
   }
 
@@ -320,7 +320,7 @@ Status DingoCoordinatorClient::LeaseRevoke(int64_t id) {
 Status DingoCoordinatorClient::LeaseRenew(int64_t id, int64_t& out_ttl) {
   auto status = version_->LeaseRenew(id, out_ttl);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("LeaseRenew fail, error: {}", status.ToString());
+    LOG(ERROR) << fmt::format("LeaseRenew fail, error: {}", status.ToString());
     return Status(pb::error::ECOORDINATOR, status.ToString());
   }
 
@@ -331,7 +331,7 @@ Status DingoCoordinatorClient::LeaseQuery(int64_t id, bool is_get_key, int64_t& 
                                           std::vector<std::string>& out_keys) {
   auto status = version_->LeaseQuery(id, is_get_key, out_ttl, out_granted_ttl, out_keys);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("LeaseQuery fail, error: {}", status.ToString());
+    LOG(ERROR) << fmt::format("LeaseQuery fail, error: {}", status.ToString());
     return Status(pb::error::ECOORDINATOR, status.ToString());
   }
 
@@ -341,7 +341,7 @@ Status DingoCoordinatorClient::LeaseQuery(int64_t id, bool is_get_key, int64_t& 
 Status DingoCoordinatorClient::ListLeases(std::vector<int64_t>& out_ids) {
   auto status = version_->ListLeases(out_ids);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("ListLeases fail, error: {}", status.ToString());
+    LOG(ERROR) << fmt::format("ListLeases fail, error: {}", status.ToString());
     return Status(pb::error::ECOORDINATOR, status.ToString());
   }
 
@@ -359,7 +359,7 @@ static CoordinatorClient::EventType SdkEventType2EventType(dingodb::sdk::Version
     case dingodb::sdk::Version::EventType::kNotExists:
       return CoordinatorClient::EventType::kNotExists;
     default:
-      DINGO_LOG(FATAL) << "Unknown sdk event type: " << static_cast<int>(sdk_event_type);
+      LOG(FATAL) << "Unknown sdk event type: " << static_cast<int>(sdk_event_type);
       break;
   }
 
@@ -396,7 +396,7 @@ Status DingoCoordinatorClient::Watch(const std::string& key, int64_t start_revis
   dingodb::sdk::Version::WatchOut sdk_out;
   auto status = version_->Watch(param, sdk_out);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("Watch fail, error: {}", status.ToString());
+    LOG(ERROR) << fmt::format("Watch fail, error: {}", status.ToString());
     return Status(pb::error::ECOORDINATOR, status.ToString());
   }
 

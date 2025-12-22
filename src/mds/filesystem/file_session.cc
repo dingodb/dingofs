@@ -18,10 +18,10 @@
 #include <string>
 #include <utility>
 
+#include "common/logging.h"
 #include "dingofs/error.pb.h"
 #include "fmt/format.h"
 #include "mds/common/helper.h"
-#include "mds/common/logging.h"
 #include "mds/common/status.h"
 #include "mds/common/type.h"
 #include "mds/filesystem/store_operation.h"
@@ -206,7 +206,7 @@ Status FileSessionManager::GetAll(std::vector<FileSessionEntry>& file_sessions) 
 
   auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[filesession] scan file session fail, status({}).", status.error_str());
+    LOG(ERROR) << fmt::format("[filesession] scan file session fail, status({}).", status.error_str());
     return status;
   }
 
@@ -249,7 +249,7 @@ Status FileSessionManager::GetFileSessionsFromStore(uint64_t ino, std::vector<Fi
 
   auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[filesession] scan file session fail, status({}).", status.error_str());
+    LOG(ERROR) << fmt::format("[filesession] scan file session fail, status({}).", status.error_str());
     return status;
   }
 
@@ -263,7 +263,7 @@ Status FileSessionManager::GetFileSessionFromStore(uint64_t ino, const std::stri
 
   auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[filesession] get file session fail, status({}).", status.error_str());
+    LOG(ERROR) << fmt::format("[filesession] get file session fail, status({}).", status.error_str());
     return status;
   }
 
@@ -283,7 +283,7 @@ Status FileSessionManager::IsExistFromStore(uint64_t ino, bool& is_exist) {
 
   auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[filesession] scan file session fail, status({}).", status.error_str());
+    LOG(ERROR) << fmt::format("[filesession] scan file session fail, status({}).", status.error_str());
     return status;
   }
 

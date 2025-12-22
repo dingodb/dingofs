@@ -19,13 +19,13 @@
 #include <vector>
 
 #include "butil/endpoint.h"
+#include "common/logging.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/core.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
 #include "mds/common/helper.h"
-#include "mds/common/logging.h"
 #include "mds/common/partition_helper.h"
 #include "mds/common/status.h"
 #include "mds/common/synchronization.h"
@@ -47,7 +47,7 @@ static void GetOfflineMDS(const std::vector<MDSMeta>& mdses, std::vector<MDSMeta
   uint64_t now_ms = Helper::TimestampMs();
 
   for (const auto& mds : mdses) {
-    // DINGO_LOG(INFO) << fmt::format("[monitor] mds: {}, last online time: {}, now: {}, offline period: {}", mds.ID(),
+    // LOG(INFO) << fmt::format("[monitor] mds: {}, last online time: {}, now: {}, offline period: {}", mds.ID(),
     //   mds.LastOnlineTimeMs(), now_ms, FLAGS_mds_heartbeat_mds_offline_period_time_ms);
     if (mds.LastOnlineTimeMs() + FLAGS_mds_heartbeat_mds_offline_period_time_ms < now_ms) {
       offline_mdses.push_back(mds);
@@ -64,16 +64,16 @@ void Monitor::Destroy() { dist_lock_->Destroy(); }
 void Monitor::Run() {
   bool running = false;
   if (!is_running_.compare_exchange_strong(running, true)) {
-    DINGO_LOG(INFO) << "[monitor] already running......";
+    LOG(INFO) << "[monitor] already running......";
     return;
   }
   DEFER(is_running_.store(false));
 
   auto status = MonitorMDS();
-  DINGO_LOG(INFO) << fmt::format("[monitor] monitor mds finish, {}.", status.error_str());
+  LOG(INFO) << fmt::format("[monitor] monitor mds finish, {}.", status.error_str());
 
   status = MonitorClient();
-  DINGO_LOG(INFO) << fmt::format("[monitor] monitor client finish, {}.", status.error_str());
+  LOG(INFO) << fmt::format("[monitor] monitor client finish, {}.", status.error_str());
 }
 
 void Monitor::NotifyRefreshFs(const MDSMeta& mds, const FsInfoEntry& fs_info) {
@@ -142,9 +142,9 @@ Status Monitor::ProcessFaultMDS(std::vector<MDSMeta>& mdses) {
 
   // check mds offline again
   CheckMdsAlive(offline_mdses, online_mdses);
-  DINGO_LOG(INFO) << fmt::format("[monitor] online mdses({}) offline mdses({}).",
-                                 Helper::VectorToString(MdsHelper::GetMdsIds(online_mdses)),
-                                 Helper::VectorToString(MdsHelper::GetMdsIds(offline_mdses)));
+  LOG(INFO) << fmt::format("[monitor] online mdses({}) offline mdses({}).",
+                           Helper::VectorToString(MdsHelper::GetMdsIds(online_mdses)),
+                           Helper::VectorToString(MdsHelper::GetMdsIds(offline_mdses)));
 
   if (offline_mdses.empty()) {
     return Status(pb::error::EINTERNAL, "not has offline mds");
@@ -186,13 +186,13 @@ Status Monitor::ProcessFaultMDS(std::vector<MDSMeta>& mdses) {
         Context ctx;
         auto status = fs->JoinMonoFs(ctx, new_mds.ID(), "fault transfer fs by monitor");
         if (!status.ok()) {
-          DINGO_LOG(ERROR) << fmt::format("[monitor] transfer fs({}) from mds({}) to mds({}) fail, {}.", fs->FsName(),
-                                          partition_policy.mono().mds_id(), new_mds.ID(), status.error_str());
+          LOG(ERROR) << fmt::format("[monitor] transfer fs({}) from mds({}) to mds({}) fail, {}.", fs->FsName(),
+                                    partition_policy.mono().mds_id(), new_mds.ID(), status.error_str());
           continue;
         }
 
-        DINGO_LOG(INFO) << fmt::format("[monitor] transfer fs({}) from mds({}) to mds({}) finish.", fs->FsName(),
-                                       partition_policy.mono().mds_id(), new_mds.ID());
+        LOG(INFO) << fmt::format("[monitor] transfer fs({}) from mds({}) to mds({}) finish.", fs->FsName(),
+                                 partition_policy.mono().mds_id(), new_mds.ID());
 
         NotifyRefreshFs(new_mds, fs_info);
       }
@@ -205,10 +205,9 @@ Status Monitor::ProcessFaultMDS(std::vector<MDSMeta>& mdses) {
 
         auto status = fs->UpdatePartitionPolicy(new_distributions, "fault migration by monitor");
 
-        DINGO_LOG(INFO) << fmt::format("[monitor] transfer fs({}) from mds({}) to mds({}) finish, status({}).",
-                                       fs->FsName(), Helper::VectorToString(mds_ids),
-                                       Helper::VectorToString(Helper::GetMdsIds(new_distributions)),
-                                       status.error_str());
+        LOG(INFO) << fmt::format("[monitor] transfer fs({}) from mds({}) to mds({}) finish, status({}).", fs->FsName(),
+                                 Helper::VectorToString(mds_ids),
+                                 Helper::VectorToString(Helper::GetMdsIds(new_distributions)), status.error_str());
 
         // notify new mds to start serve partition
         auto mds_metas = MdsHelper::FilterMdsMetas(mdses, Helper::GetMdsIds(new_distributions));
@@ -249,15 +248,15 @@ Status Monitor::MonitorClient() {
       Context ctx;
       auto status = fs_set_->UmountFs(ctx, client.fs_name(), client.id());
       if (!status.ok()) {
-        DINGO_LOG(ERROR) << fmt::format("[monitor] umount fs({}) from client({}) fail, {}.", client.fs_name(),
-                                        client.id(), status.error_str());
+        LOG(ERROR) << fmt::format("[monitor] umount fs({}) from client({}) fail, {}.", client.fs_name(), client.id(),
+                                  status.error_str());
         continue;
       }
     }
 
     // clean client
     status = heartbeat->CleanClient(client.id());
-    DINGO_LOG(INFO) << fmt::format("[monitor] clean client({}) finish, status({}).", client.id(), status.error_str());
+    LOG(INFO) << fmt::format("[monitor] clean client({}) finish, status({}).", client.id(), status.error_str());
   }
 
   return Status::OK();

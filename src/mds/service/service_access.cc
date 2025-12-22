@@ -15,11 +15,11 @@
 #include "mds/service/service_access.h"
 
 #include "butil/endpoint.h"
+#include "common/logging.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/core.h"
 #include "mds/common/helper.h"
-#include "mds/common/logging.h"
 
 namespace dingofs {
 namespace mds {
@@ -51,7 +51,7 @@ std::shared_ptr<brpc::Channel> ChannelPool::GetChannel(const butil::EndPoint& en
   options.backup_request_ms = kRpcTimeoutMs;
   options.connection_type = brpc::ConnectionType::CONNECTION_TYPE_SINGLE;
   if (channel->Init(endpoint, nullptr) != 0) {
-    DINGO_LOG(ERROR) << "init channel fail, endpoint: " << Helper::EndPointToString(endpoint);
+    LOG(ERROR) << "init channel fail, endpoint: " << Helper::EndPointToString(endpoint);
     return nullptr;
   }
 
@@ -75,7 +75,7 @@ Status ServiceAccess::CheckAlive(const butil::EndPoint& endpoint) {
 
   stub.CheckAlive(&cntl, &request, &response, nullptr);
   if (cntl.Failed()) {
-    DINGO_LOG(DEBUG) << "send request fail, " << cntl.ErrorText();
+    LOG_DEBUG << "send request fail, " << cntl.ErrorText();
     return Status(pb::error::EINTERNAL, cntl.ErrorText());
   }
 
@@ -97,7 +97,7 @@ Status ServiceAccess::NotifyBuddy(const butil::EndPoint& endpoint, const pb::mds
 
   stub.NotifyBuddy(&cntl, &request, &response, nullptr);
   if (cntl.Failed()) {
-    DINGO_LOG(ERROR) << "send request fail, " << cntl.ErrorText();
+    LOG(ERROR) << "send request fail, " << cntl.ErrorText();
     return Status(pb::error::EINTERNAL, cntl.ErrorText());
   }
 

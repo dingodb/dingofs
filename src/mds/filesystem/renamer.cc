@@ -16,7 +16,7 @@
 
 #include <vector>
 
-#include "mds/common/logging.h"
+#include "common/logging.h"
 #include "mds/common/status.h"
 #include "mds/filesystem/filesystem.h"
 
@@ -58,7 +58,7 @@ bool Renamer::Destroy() {
 
 bool Renamer::Execute(TaskRunnablePtr task) {
   if (worker_ == nullptr) {
-    DINGO_LOG(ERROR) << "renamer worker is nullptr.";
+    LOG(ERROR) << "renamer worker is nullptr.";
     return false;
   }
 

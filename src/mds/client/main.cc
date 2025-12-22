@@ -105,7 +105,7 @@ int main(int argc, char* argv[]) {
   google::ParseCommandLineFlags(&argc, &argv, true);
 
   std::string program_name = GetLastName(std::string(argv[0]));
-  dingofs::mds::DingoLogger::InitLogger("./log", program_name, dingofs::mds::LogLevel::kINFO);
+  dingofs::Logger::InitLogger("./log", program_name, dingofs::LogLevel::kINFO);
 
   std::string lower_cmd = Helper::ToLowerCase(FLAGS_cmd);
 

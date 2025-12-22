@@ -30,6 +30,7 @@
 
 #include "brpc/reloadable_flags.h"
 #include "butil/status.h"
+#include "common/logging.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/core.h"
@@ -40,7 +41,6 @@
 #include "mds/common/codec.h"
 #include "mds/common/constant.h"
 #include "mds/common/helper.h"
-#include "mds/common/logging.h"
 #include "mds/common/partition_helper.h"
 #include "mds/common/status.h"
 #include "mds/common/time.h"
@@ -134,17 +134,17 @@ FileSystemSPtr FileSystem::GetSelfPtr() { return std::dynamic_pointer_cast<FileS
 
 bool FileSystem::Init() {
   if (!ino_id_generator_->Init()) {
-    DINGO_LOG(ERROR) << fmt::format("[fs.{}] init generator fail.", fs_id_);
+    LOG(ERROR) << fmt::format("[fs.{}] init generator fail.", fs_id_);
     return false;
   }
 
   if (!quota_manager_->Init()) {
-    DINGO_LOG(ERROR) << fmt::format("[fs.{}] init quota manager fail.", fs_id_);
+    LOG(ERROR) << fmt::format("[fs.{}] init quota manager fail.", fs_id_);
     return false;
   }
 
   if (!renamer_.Init()) {
-    DINGO_LOG(ERROR) << fmt::format("[fs.{}] init renamer fail.", fs_id_);
+    LOG(ERROR) << fmt::format("[fs.{}] init renamer fail.", fs_id_);
     return false;
   }
 
@@ -228,9 +228,9 @@ void FileSystem::DeleteDentryFromPartition(Ino parent, const std::string& name, 
 Status FileSystem::GetPartition(Context& ctx, Ino parent, PartitionPtr& out_partition) {
   auto status = GetPartition(ctx, ctx.GetInodeVersion(), parent, out_partition);
   if (status.ok()) {
-    DINGO_LOG(DEBUG) << fmt::format("[fs.{}.{}.{}] get partition({}/{}) this({}).", fs_id_, out_partition->INo(),
-                                    ctx.RequestId(), out_partition->BaseVersion(), out_partition->DeltaVersion(),
-                                    (void*)out_partition.get());
+    LOG_DEBUG << fmt::format("[fs.{}.{}.{}] get partition({}/{}) this({}).", fs_id_, out_partition->INo(),
+                             ctx.RequestId(), out_partition->BaseVersion(), out_partition->DeltaVersion(),
+                             (void*)out_partition.get());
   }
   return status;
 }
@@ -310,9 +310,8 @@ Status FileSystem::GetPartitionFromStore(Context& ctx, Ino parent, const std::st
   auto old_partition = partition_cache_.Get(parent);
   if (old_partition != nullptr && parent_inode->Version() <= old_partition->BaseVersion()) {
     out_partition = old_partition;
-    DINGO_LOG(INFO) << fmt::format("[fs.{}.{}.{}.{}] exist fresh partition, version({}:{}) reason({}).", fs_id_, parent,
-                                   method_name, request_id, old_partition->BaseVersion(), parent_inode->Version(),
-                                   reason);
+    LOG(INFO) << fmt::format("[fs.{}.{}.{}.{}] exist fresh partition, version({}:{}) reason({}).", fs_id_, parent,
+                             method_name, request_id, old_partition->BaseVersion(), parent_inode->Version(), reason);
     return Status::OK();
   }
 
@@ -330,8 +329,8 @@ Status FileSystem::GetPartitionFromStore(Context& ctx, Ino parent, const std::st
   out_partition = partition_cache_.PutIf(std::move(partition));
   UpsertInodeCache(parent, parent_inode);
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}.{}.{}.{}] fetch partition, size({}) version({}) reason({}).", fs_id_, parent,
-                                 method_name, request_id, kvs.size(), parent_inode->Version(), reason);
+  LOG(INFO) << fmt::format("[fs.{}.{}.{}.{}] fetch partition, size({}) version({}) reason({}).", fs_id_, parent,
+                           method_name, request_id, kvs.size(), parent_inode->Version(), reason);
 
   return Status::OK();
 }
@@ -342,7 +341,7 @@ Status FileSystem::GetDentryFromStore(Ino parent, const std::string& name, Dentr
 
   auto status = RunOperation(&operation);
   if (!status.ok()) return status;
-  DINGO_LOG(INFO) << fmt::format("[fs.{}] fetch dentry({}/{}).", fs_id_, parent, name);
+  LOG(INFO) << fmt::format("[fs.{}] fetch dentry({}/{}).", fs_id_, parent, name);
 
   auto& result = operation.GetResult();
   dentry = Dentry(result.dentry);
@@ -451,8 +450,8 @@ Status FileSystem::GetInodeFromStore(Context& ctx, Ino ino, const std::string& r
   auto status = RunOperation(&operation);
   if (!status.ok()) {
     if (status.error_code() != pb::error::ENOT_FOUND) {
-      DINGO_LOG(ERROR) << fmt::format("[fs.{}.{}.{}.{}] fetch inode from store fail, reason({}), status({}).", fs_id_,
-                                      method_name, request_id, ino, reason, status.error_str());
+      LOG(ERROR) << fmt::format("[fs.{}.{}.{}.{}] fetch inode from store fail, reason({}), status({}).", fs_id_,
+                                method_name, request_id, ino, reason, status.error_str());
     }
     return status;
   }
@@ -463,8 +462,8 @@ Status FileSystem::GetInodeFromStore(Context& ctx, Ino ino, const std::string& r
 
   if (is_cache) UpsertInodeCache(ino, out_inode);
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}.{}.{}.{}] fetch inode, version({}) reason({}).", fs_id_, method_name,
-                                 request_id, ino, out_inode->Version(), reason);
+  LOG(INFO) << fmt::format("[fs.{}.{}.{}.{}] fetch inode, version({}) reason({}).", fs_id_, method_name, request_id,
+                           ino, out_inode->Version(), reason);
 
   return Status::OK();
 }
@@ -588,8 +587,8 @@ Status FileSystem::CreateRoot() {
   CreateRootOperation operation(trace, dentry, attr);
 
   auto status = RunOperation(&operation);
-  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] create root finish, status({}).", fs_id_, duration.ElapsedUs(),
-                                 status.error_str());
+  LOG(INFO) << fmt::format("[fs.{}][{}us] create root finish, status({}).", fs_id_, duration.ElapsedUs(),
+                           status.error_str());
 
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("create root fail, {}", status.error_str()));
@@ -610,7 +609,7 @@ Status FileSystem::CreateQuota() {
 
   auto status = quota_manager_->SetFsQuota(trace, quota_entry);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[fs.{}] create quota fail, status({}).", fs_id_, status.error_str());
+    LOG(ERROR) << fmt::format("[fs.{}] create quota fail, status({}).", fs_id_, status.error_str());
     return Status(pb::error::EBACKEND_STORE, fmt::format("create quota fail, {}", status.error_str()));
   }
 
@@ -645,9 +644,8 @@ Status FileSystem::Lookup(Context& ctx, Ino parent, const std::string& name, Ent
 
   entry_out.attr = inode->Copy();
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}.{}][{}us] lookup parent({}), name({}) version({}) ptr({}).", fs_id_,
-                                 ctx.RequestId(), duration.ElapsedUs(), parent, name, entry_out.attr.version(),
-                                 (void*)inode.get());
+  LOG(INFO) << fmt::format("[fs.{}.{}][{}us] lookup parent({}), name({}) version({}) ptr({}).", fs_id_, ctx.RequestId(),
+                           duration.ElapsedUs(), parent, name, entry_out.attr.version(), (void*)inode.get());
 
   return Status::OK();
 }
@@ -749,8 +747,8 @@ Status FileSystem::BatchCreate(Context& ctx, Ino parent, const std::vector<MkNod
 
   auto status = RunOperation(&operation);
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}.{}][{}us] create {} finish, status({}).", fs_id_, ctx.RequestId(),
-                                 duration.ElapsedUs(), names, status.error_str());
+  LOG(INFO) << fmt::format("[fs.{}.{}][{}us] create {} finish, status({}).", fs_id_, ctx.RequestId(),
+                           duration.ElapsedUs(), names, status.error_str());
 
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put inode/dentry fail, {}", status.error_str()));
@@ -855,8 +853,8 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
   MkNodOperation operation(trace, dentry, attr);
   status = RunOperation(&operation);
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}.{}][{}us] mknod {} finish, status({}).", fs_id_, ctx.RequestId(),
-                                 duration.ElapsedUs(), param.name, status.error_str());
+  LOG(INFO) << fmt::format("[fs.{}.{}][{}us] mknod {} finish, status({}).", fs_id_, ctx.RequestId(),
+                           duration.ElapsedUs(), param.name, status.error_str());
 
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put inode/dentry fail, {}", status.error_str()));
@@ -892,7 +890,7 @@ Status FileSystem::GetChunksFromStore(Ino ino, std::vector<ChunkEntry>& chunks, 
   ScanChunkOperation operation(trace, fs_id_, ino, max_slice_num);
   auto status = RunOperation(&operation);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[fs.{}] fetch chunks fail, status({}).", fs_id_, ino, status.error_str());
+    LOG(ERROR) << fmt::format("[fs.{}] fetch chunks fail, status({}).", fs_id_, ino, status.error_str());
     return status;
   }
 
@@ -1018,17 +1016,17 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& sess
       fetch_from = "store";
       auto status = GetChunksFromStore(ino, chunks, FLAGS_mds_transfer_max_slice_num);
       if (status.ok() && !is_completely_fn(chunks)) {
-        DINGO_LOG(WARNING) << fmt::format("[fs.{}.{}] chunks is not completely, ino({}) length({}) chunks({}).", fs_id_,
-                                          ctx.RequestId(), ino, file_length, chunks.size());
+        LOG(WARNING) << fmt::format("[fs.{}.{}] chunks is not completely, ino({}) length({}) chunks({}).", fs_id_,
+                                    ctx.RequestId(), ino, file_length, chunks.size());
       }
     } else {
       trace.SetHitChunk();
     }
   }
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}.{}][{}us] open {} finish, flags({:o}:{}) fetch_chunk({}) status({}).", fs_id_,
-                                 ctx.RequestId(), duration.ElapsedUs(), ino, flags, Helper::DescOpenFlags(flags),
-                                 fetch_from, status.error_str());
+  LOG(INFO) << fmt::format("[fs.{}.{}][{}us] open {} finish, flags({:o}:{}) fetch_chunk({}) status({}).", fs_id_,
+                           ctx.RequestId(), duration.ElapsedUs(), ino, flags, Helper::DescOpenFlags(flags), fetch_from,
+                           status.error_str());
 
   return Status::OK();
 }
@@ -1047,8 +1045,8 @@ Status FileSystem::Release(Context& ctx, Ino ino, const std::string& session_id)
     return status;
   }
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}.{}] release finish, ino({}) session_id({}) status({}).", fs_id_,
-                                 ctx.RequestId(), ino, session_id, status.error_str());
+  LOG(INFO) << fmt::format("[fs.{}.{}] release finish, ino({}) session_id({}) status({}).", fs_id_, ctx.RequestId(),
+                           ino, session_id, status.error_str());
 
   // delete cache
   file_session_manager_.Delete(ino, session_id);
@@ -1119,8 +1117,8 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
 
   status = RunOperation(&operation);
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}.{}][{}us] mkdir {} finish, status({}).", fs_id_, ctx.RequestId(),
-                                 duration.ElapsedUs(), param.name, status.error_str());
+  LOG(INFO) << fmt::format("[fs.{}.{}][{}us] mkdir {} finish, status({}).", fs_id_, ctx.RequestId(),
+                           duration.ElapsedUs(), param.name, status.error_str());
 
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put inode/dentry fail, {}", status.error_str()));
@@ -1192,8 +1190,8 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name, Ino&
 
   status = RunOperation(&operation);
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}.{}][{}us] rmdir {}/{} finish, status({}).", fs_id_, ctx.RequestId(),
-                                 duration.ElapsedUs(), parent, name, status.error_str());
+  LOG(INFO) << fmt::format("[fs.{}.{}][{}us] rmdir {}/{} finish, status({}).", fs_id_, ctx.RequestId(),
+                           duration.ElapsedUs(), parent, name, status.error_str());
   if (!status.ok()) {
     return status;
   }
@@ -1298,8 +1296,8 @@ Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent, const std::string
   HardLinkOperation operation(trace, dentry);
   status = RunOperation(&operation);
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}.{}][{}us] link {} -> {}/{} finish, status({}).", fs_id_, ctx.RequestId(),
-                                 duration.ElapsedUs(), ino, new_parent, new_name, status.error_str());
+  LOG(INFO) << fmt::format("[fs.{}.{}][{}us] link {} -> {}/{} finish, status({}).", fs_id_, ctx.RequestId(),
+                           duration.ElapsedUs(), ino, new_parent, new_name, status.error_str());
 
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put inode/dentry fail, {}", status.error_str()));
@@ -1373,8 +1371,8 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name, Ent
   auto& parent_attr = result.attr;
   auto& attr = result.child_attr;
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}.{}][{}us] unlink {}/{} finish, nlink({}) status({}).", fs_id_, ctx.RequestId(),
-                                 duration.ElapsedUs(), parent, name, attr.nlink(), status.error_str());
+  LOG(INFO) << fmt::format("[fs.{}.{}][{}us] unlink {}/{} finish, nlink({}) status({}).", fs_id_, ctx.RequestId(),
+                           duration.ElapsedUs(), parent, name, attr.nlink(), status.error_str());
 
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put inode/dentry fail, {}", status.error_str()));
@@ -1467,8 +1465,8 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_par
 
   status = RunOperation(&operation);
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}.{}][{}us] symlink {}/{} finish,  status({}).", fs_id_, ctx.RequestId(),
-                                 duration.ElapsedUs(), new_parent, new_name, status.error_str());
+  LOG(INFO) << fmt::format("[fs.{}.{}][{}us] symlink {}/{} finish,  status({}).", fs_id_, ctx.RequestId(),
+                           duration.ElapsedUs(), new_parent, new_name, status.error_str());
 
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put inode/dentry fail, {}", status.error_str()));
@@ -1571,8 +1569,8 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
 
   status = RunOperation(&operation);
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}.{}][{}us] setattr {} finish, status({}).", fs_id_, ctx.RequestId(),
-                                 duration.ElapsedUs(), ino, status.error_str());
+  LOG(INFO) << fmt::format("[fs.{}.{}][{}us] setattr {} finish, status({}).", fs_id_, ctx.RequestId(),
+                           duration.ElapsedUs(), ino, status.error_str());
 
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put inode fail, {}", status.error_str()));
@@ -1604,7 +1602,7 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
 }
 
 Status FileSystem::GetXAttr(Context& ctx, Ino ino, Inode::XAttrMap& xattr) {
-  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] getxattr ino({}).", fs_id_, ino);
+  LOG_DEBUG << fmt::format("[fs.{}] getxattr ino({}).", fs_id_, ino);
 
   if (!CanServe(ctx)) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
@@ -1657,8 +1655,8 @@ Status FileSystem::SetXAttr(Context& ctx, Ino ino, const Inode::XAttrMap& xattrs
 
   status = RunOperation(&operation);
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}.{}][{}us] setxattr {} finish, status({}).", fs_id_, ctx.RequestId(),
-                                 duration.ElapsedUs(), ino, status.error_str());
+  LOG(INFO) << fmt::format("[fs.{}.{}][{}us] setxattr {} finish, status({}).", fs_id_, ctx.RequestId(),
+                           duration.ElapsedUs(), ino, status.error_str());
 
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put inode fail, {}", status.error_str()));
@@ -1698,8 +1696,8 @@ Status FileSystem::RemoveXAttr(Context& ctx, Ino ino, const std::string& name, E
 
   status = RunOperation(&operation);
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}.{}][{}us] removexattr {} finish, status({}).", fs_id_, ctx.RequestId(),
-                                 duration.ElapsedUs(), ino, status.error_str());
+  LOG(INFO) << fmt::format("[fs.{}.{}][{}us] removexattr {} finish, status({}).", fs_id_, ctx.RequestId(),
+                           duration.ElapsedUs(), ino, status.error_str());
 
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put inode fail, {}", status.error_str()));
@@ -1827,7 +1825,7 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
   bool is_same_parent = result.is_same_parent;
   bool is_exist_new_dentry = result.is_exist_new_dentry;
 
-  DINGO_LOG(INFO) << fmt::format(
+  LOG(INFO) << fmt::format(
       "[fs.{}.{}][{}us] rename {}/{} -> {}/{} finish, state({},{}) version({},{}) "
       "status({}).",
       fs_id_, ctx.RequestId(), duration.ElapsedUs(), old_parent, old_name, new_parent, new_name, is_same_parent,
@@ -1973,8 +1971,8 @@ Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, const std::vector<Delt
   std::string slice_id_str;
   for (const auto& delta_slice : delta_slices) {
     slice_id_str += std::to_string(delta_slice.chunk_index()) + ",";
-    DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] writeslice {}/{} finish, status({}).", fs_id_, duration.ElapsedUs(),
-                                   ino, delta_slice.chunk_index(), status.error_str());
+    LOG(INFO) << fmt::format("[fs.{}][{}us] writeslice {}/{} finish, status({}).", fs_id_, duration.ElapsedUs(), ino,
+                             delta_slice.chunk_index(), status.error_str());
   }
 
   if (!status.ok()) {
@@ -1998,7 +1996,7 @@ Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, const std::vector<Delt
 
       auto fs_info = fs_info_->Get();
       if (CompactChunkOperation::MaybeCompact(fs_info, ino, length, chunk)) {
-        DINGO_LOG(INFO) << fmt::format("[fs.{}] trigger compact chunk({}) for ino({}).", fs_id_, chunk.index(), ino);
+        LOG(INFO) << fmt::format("[fs.{}] trigger compact chunk({}) for ino({}).", fs_id_, chunk.index(), ino);
 
         auto post_handler = [this](OperationSPtr operation) {
           auto origin_operation = std::dynamic_pointer_cast<CompactChunkOperation>(operation);
@@ -2064,9 +2062,8 @@ Status FileSystem::ReadSlice(Context& ctx, Ino ino, const std::vector<ChunkDescr
 
   auto status = RunOperation(&operation);
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] readslice {}/{} finish, miss({}) status({}).", fs_id_,
-                                 duration.ElapsedUs(), ino, param_desc, Helper::VectorToString(miss_chunk_indexes),
-                                 status.error_str());
+  LOG(INFO) << fmt::format("[fs.{}][{}us] readslice {}/{} finish, miss({}) status({}).", fs_id_, duration.ElapsedUs(),
+                           ino, param_desc, Helper::VectorToString(miss_chunk_indexes), status.error_str());
 
   if (!status.ok() && status.error_code() != pb::error::ENOT_FOUND) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("get chunk fail, {}", status.error_str()));
@@ -2133,7 +2130,7 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
 
   status = RunOperation(&operation);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format(
+    LOG(ERROR) << fmt::format(
         "[fs.{}][{}us] fallocate ino({}), mode({}), offset({}), len({}) fail, "
         "status({}).",
         fs_id_, duration.ElapsedUs(), ino, mode, offset, len, status.error_str());
@@ -2173,8 +2170,8 @@ Status FileSystem::CompactChunk(Context& ctx, Ino ino, uint64_t chunk_index,
   auto& effected_chunk = result.effected_chunk;
   trash_slices = Helper::PbRepeatedToVector(result.trash_slice_list.mutable_slices());
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] compactchunk {}/{} finish, trash_slices({}) status({}).", fs_id_,
-                                 duration.ElapsedUs(), ino, chunk_index, trash_slices.size(), status.error_str());
+  LOG(INFO) << fmt::format("[fs.{}][{}us] compactchunk {}/{} finish, trash_slices({}) status({}).", fs_id_,
+                           duration.ElapsedUs(), ino, chunk_index, trash_slices.size(), status.error_str());
   if (!status.ok()) {
     return status;
   }
@@ -2221,7 +2218,7 @@ Status FileSystem::ListDentry(Context& ctx, Ino parent, const std::string& last_
 }
 
 Status FileSystem::GetInode(Context& ctx, Ino ino, EntryOut& entry_out) {
-  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] getinode ino({}).", fs_id_, ino);
+  LOG_DEBUG << fmt::format("[fs.{}] getinode ino({}).", fs_id_, ino);
 
   InodeSPtr inode;
   auto status = GetInode(ctx, ino, inode);
@@ -2242,7 +2239,7 @@ Status FileSystem::BatchGetInode(Context& ctx, const std::vector<uint64_t>& inoe
     for (auto ino : inoes) {
       InodeSPtr inode = GetInodeFromCache(ino);
       if (inode == nullptr) {
-        DINGO_LOG(WARNING) << fmt::format("[fs.{}] not found inode({}).", fs_id_, ino);
+        LOG(WARNING) << fmt::format("[fs.{}] not found inode({}).", fs_id_, ino);
         continue;
       }
 
@@ -2285,7 +2282,7 @@ Status FileSystem::BatchGetXAttr(Context& ctx, const std::vector<uint64_t>& inoe
     for (auto ino : inoes) {
       InodeSPtr inode = GetInodeFromCache(ino);
       if (inode == nullptr) {
-        DINGO_LOG(WARNING) << fmt::format("[fs.{}] not found inode({}).", fs_id_, ino);
+        LOG(WARNING) << fmt::format("[fs.{}] not found inode({}).", fs_id_, ino);
         continue;
       }
 
@@ -2312,7 +2309,7 @@ void FileSystem::RefreshInode(AttrEntry& attr) { UpsertInodeCache(attr); }
 Status FileSystem::RefreshFsInfo(const std::string& reason) { return RefreshFsInfo(fs_info_->GetName(), reason); }
 
 Status FileSystem::RefreshFsInfo(const std::string& name, const std::string& reason) {
-  DINGO_LOG(INFO) << fmt::format("[fs.{}] refresh fs({}) info.", fs_id_, name);
+  LOG(INFO) << fmt::format("[fs.{}] refresh fs({}) info.", fs_id_, name);
 
   Trace trace;
   GetFsOperation operation(trace, name);
@@ -2335,7 +2332,7 @@ static std::set<uint32_t> GetDeletedBucketIds(int64_t mds_id, const pb::mds::Has
   auto old_bucketset = old_hash.distributions().find(mds_id);
   auto bucketset = hash.distributions().find(mds_id);
   if (old_bucketset == old_hash.distributions().end() || bucketset == hash.distributions().end()) {
-    DINGO_LOG(INFO) << fmt::format("[fs] mds_id({}) not found in old or new hash partition.", mds_id);
+    LOG(INFO) << fmt::format("[fs] mds_id({}) not found in old or new hash partition.", mds_id);
     return deleted_bucket_ids;
   }
 
@@ -2376,9 +2373,8 @@ void FileSystem::RefreshFsInfo(const FsInfoEntry& fs_info, const std::string& re
   if (fs_info_->Update(fs_info, pre_handler)) {
     can_serve_.store(CanServe(self_mds_id_), std::memory_order_release);
 
-    DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] update fs({} v{}) can_serve({}) reason({}).", fs_id_,
-                                   duration.ElapsedUs(), fs_info.fs_name(), fs_info.version(),
-                                   can_serve_ ? "true" : "false", reason);
+    LOG(INFO) << fmt::format("[fs.{}][{}us] update fs({} v{}) can_serve({}) reason({}).", fs_id_, duration.ElapsedUs(),
+                             fs_info.fs_name(), fs_info.version(), can_serve_ ? "true" : "false", reason);
   }
 }
 
@@ -2795,18 +2791,18 @@ bool FileSystemSet::Init() {
   CHECK(operation_processor_ != nullptr) << "operation_processor is null.";
 
   if (!IsExistMetaTable()) {
-    DINGO_LOG(ERROR) << "[fsset] not exist fs table.";
+    LOG(ERROR) << "[fsset] not exist fs table.";
     return false;
   }
 
   if (!LoadFileSystems()) {
-    DINGO_LOG(ERROR) << "[fsset] load already exist file systems fail.";
+    LOG(ERROR) << "[fsset] load already exist file systems fail.";
     return false;
   }
 
   constexpr size_t kFsMapSize = 1024;
   if (!fs_map_.Init(kFsMapSize)) {
-    DINGO_LOG(ERROR) << "[fsset] init fs map fail.";
+    LOG(ERROR) << "[fsset] init fs map fail.";
     return false;
   }
 
@@ -2915,12 +2911,12 @@ FsInfoEntry FileSystemSet::GenFsInfo(uint32_t fs_id, const CreateFsParam& param)
 
 bool FileSystemSet::IsExistMetaTable() {
   auto range = MetaCodec::GetMetaTableRange();
-  DINGO_LOG(DEBUG) << fmt::format("[fsset] check meta table, {}.", range.ToString());
+  LOG_DEBUG << fmt::format("[fsset] check meta table, {}.", range.ToString());
 
   auto status = kv_storage_->IsExistTable(range.start, range.end);
   if (!status.ok()) {
     if (status.error_code() != pb::error::ENOT_FOUND) {
-      DINGO_LOG(ERROR) << fmt::format("[fsset] check meta table exist fail, error({}).", status.error_str());
+      LOG(ERROR) << fmt::format("[fsset] check meta table exist fail, error({}).", status.error_str());
     }
     return false;
   }
@@ -2942,7 +2938,7 @@ Status FileSystemSet::CreateFsMetaTable(uint32_t fs_id, const std::string& fs_na
 
 Status FileSystemSet::DropFsMetaTable(uint32_t fs_id) {
   auto range = MetaCodec::GetFsMetaTableRange(fs_id);
-  DINGO_LOG(INFO) << fmt::format("[fsset.{}] drop fsmeta table, range{}.", fs_id, range.ToString());
+  LOG(INFO) << fmt::format("[fsset.{}] drop fsmeta table, range{}.", fs_id, range.ToString());
 
   return kv_storage_->DropTable(range);
 }
@@ -3083,8 +3079,8 @@ Status FileSystemSet::MountFs(Context& ctx, const std::string& fs_name, const pb
 
   auto status = RunOperation(&operation);
 
-  DINGO_LOG(INFO) << fmt::format("[fsset.{}] mount fs finish, mountpoint({}) status({}).", fs_name,
-                                 mountpoint.ShortDebugString(), status.error_str());
+  LOG(INFO) << fmt::format("[fsset.{}] mount fs finish, mountpoint({}) status({}).", fs_name,
+                           mountpoint.ShortDebugString(), status.error_str());
 
   return status;
 }
@@ -3098,8 +3094,8 @@ Status FileSystemSet::UmountFs(Context& ctx, const std::string& fs_name, const s
 
   auto status = RunOperation(&operation);
 
-  DINGO_LOG(INFO) << fmt::format("[fsset.{}] umount fs finish, client({}) status({}).", fs_name, client_id,
-                                 status.error_str());
+  LOG(INFO) << fmt::format("[fsset.{}] umount fs finish, client({}) status({}).", fs_name, client_id,
+                           status.error_str());
   if (!status.ok() && status.error_code() != pb::error::ENOT_FOUND) {
     return status;
   }
@@ -3117,7 +3113,7 @@ Status FileSystemSet::DeleteFs(Context& ctx, const std::string& fs_name, bool is
 
   auto status = RunOperation(&operation);
 
-  DINGO_LOG(INFO) << fmt::format("[fsset.{}] delete fs finish, status({}).", fs_name, status.error_str());
+  LOG(INFO) << fmt::format("[fsset.{}] delete fs finish, status({}).", fs_name, status.error_str());
 
   auto& result = operation.GetResult();
   auto& fs_info = result.fs_info;
@@ -3136,7 +3132,7 @@ Status FileSystemSet::UpdateFsInfo(Context& ctx, const std::string& fs_name, con
 
   auto status = RunOperation(&operation);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[fsset.{}] update fs info fail, status({}).", fs_name, status.error_str());
+    LOG(ERROR) << fmt::format("[fsset.{}] update fs info fail, status({}).", fs_name, status.error_str());
     return status;
   }
 
@@ -3405,14 +3401,14 @@ bool FileSystemSet::LoadFileSystems() {
   std::vector<FsInfoEntry> fs_infoes;
   auto status = GetAllFsInfo(ctx, true, fs_infoes);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[fsset] get all fs info fail, error({}).", status.error_str());
+    LOG(ERROR) << fmt::format("[fsset] get all fs info fail, error({}).", status.error_str());
     return false;
   }
 
   for (const auto& fs_info : fs_infoes) {
     if (fs_info.is_deleted()) {
       if (IsExistFileSystem(fs_info.fs_id())) {
-        DINGO_LOG(INFO) << fmt::format("[fsset.{}.{}] fs is deleted, clean up.", fs_info.fs_name(), fs_info.fs_id());
+        LOG(INFO) << fmt::format("[fsset.{}.{}] fs is deleted, clean up.", fs_info.fs_name(), fs_info.fs_id());
 
         DeleteFileSystem(fs_info.fs_id());
       }
@@ -3429,13 +3425,13 @@ bool FileSystemSet::LoadFileSystems() {
       } else {
         // delete old fs, maybe recreated
         DeleteFileSystem(fs_info.fs_id());
-        DINGO_LOG(INFO) << fmt::format("[fsset.{}] fs uuid not match, maybe fs deleted and recreated, uuid({}->{})",
-                                       fs_info.fs_name(), fs_info.fs_id(), fs->UUID(), fs_info.uuid());
+        LOG(INFO) << fmt::format("[fsset.{}] fs uuid not match, maybe fs deleted and recreated, uuid({}->{})",
+                                 fs_info.fs_name(), fs_info.fs_id(), fs->UUID(), fs_info.uuid());
       }
     }
 
     // add new fs
-    DINGO_LOG(INFO) << fmt::format("[fsset.{}.{}] add new fs.", fs_info.fs_name(), fs_info.fs_id());
+    LOG(INFO) << fmt::format("[fsset.{}.{}] add new fs.", fs_info.fs_name(), fs_info.fs_id());
 
     auto ino_id_generator = NewInoGenerator(fs_info.fs_id());
     CHECK(ino_id_generator != nullptr) << "new id generator fail.";
@@ -3443,13 +3439,12 @@ bool FileSystemSet::LoadFileSystems() {
     fs = FileSystem::New(self_mds_meta_.ID(), FsInfo::New(fs_info), std::move(ino_id_generator), slice_id_generator_,
                          kv_storage_, operation_processor_, mds_meta_map_, quota_worker_set_, notify_buddy_);
     if (!fs->Init()) {
-      DINGO_LOG(ERROR) << fmt::format("[fsset.{}.{}] init filesystem fail.", fs_info.fs_name(), fs_info.fs_id());
+      LOG(ERROR) << fmt::format("[fsset.{}.{}] init filesystem fail.", fs_info.fs_name(), fs_info.fs_id());
       continue;
     }
 
     if (!AddFileSystem(fs)) {
-      DINGO_LOG(WARNING) << fmt::format("[fsset.{}.{}] add filesystem fail, already exist.", fs_info.fs_name(),
-                                        fs->FsId());
+      LOG(WARNING) << fmt::format("[fsset.{}.{}] add filesystem fail, already exist.", fs_info.fs_name(), fs->FsId());
     }
   }
 
@@ -3467,7 +3462,7 @@ Status FileSystemSet::DestroyFsResource(uint32_t fs_id) {
   // fsmeta table
   auto status = DropFsMetaTable(fs_id);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[fsset.{}] drop fsmeta table fail, status({}).", fs_id, status.error_str());
+    LOG(ERROR) << fmt::format("[fsset.{}] drop fsmeta table fail, status({}).", fs_id, status.error_str());
     return status;
   }
 

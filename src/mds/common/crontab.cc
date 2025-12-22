@@ -18,8 +18,8 @@
 
 #include "bthread/bthread.h"
 #include "bthread/unstable.h"
+#include "common/logging.h"
 #include "fmt/core.h"
-#include "mds/common/logging.h"
 
 namespace dingofs {
 namespace mds {
@@ -47,8 +47,7 @@ void CrontabManager::Run(void* arg) {
     try {
       crontab->func(crontab->arg);
     } catch (...) {
-      DINGO_LOG(ERROR) << fmt::format("[crontab.run][id({}).name({})] crontab happen exception", crontab->id,
-                                      crontab->name);
+      LOG(ERROR) << fmt::format("[crontab.run][id({}).name({})] crontab happen exception", crontab->id, crontab->name);
     }
     ++crontab->run_count;
   } else {
@@ -64,8 +63,8 @@ uint32_t CrontabManager::AllocCrontabId() { return auinc_crontab_id_.fetch_add(1
 
 void CrontabManager::AddCrontab(std::vector<CrontabConfig>& crontab_configs) {
   for (auto& crontab_config : crontab_configs) {
-    DINGO_LOG(INFO) << fmt::format("[crontab.add][name({}).interval({}ms).async({})] add crontab task.",
-                                   crontab_config.name, crontab_config.interval, crontab_config.async);
+    LOG(INFO) << fmt::format("[crontab.add][name({}).interval({}ms).async({})] add crontab task.", crontab_config.name,
+                             crontab_config.interval, crontab_config.async);
 
     auto crontab = std::make_shared<Crontab>();
     crontab->name = crontab_config.name;
@@ -115,7 +114,7 @@ void CrontabManager::StartCrontab(uint32_t crontab_id) {
 
   auto it = crontabs_.find(crontab_id);
   if (it == crontabs_.end()) {
-    DINGO_LOG(WARNING) << fmt::format("[crontab.start][id({})] not exist crontab.", crontab_id);
+    LOG(WARNING) << fmt::format("[crontab.start][id({})] not exist crontab.", crontab_id);
     return;
   }
   auto crontab = it->second;
@@ -135,7 +134,7 @@ void CrontabManager::StartCrontab(uint32_t crontab_id) {
 void CrontabManager::InnerPauseCrontab(uint32_t crontab_id) {
   auto it = crontabs_.find(crontab_id);
   if (it == crontabs_.end()) {
-    DINGO_LOG(WARNING) << fmt::format("[crontab.pause][id({})] not exist crontab.", crontab_id);
+    LOG(WARNING) << fmt::format("[crontab.pause][id({})] not exist crontab.", crontab_id);
     return;
   }
   auto crontab = it->second;

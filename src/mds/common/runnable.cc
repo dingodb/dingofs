@@ -24,9 +24,9 @@
 
 #include "bthread/bthread.h"
 #include "butil/compiler_specific.h"
+#include "common/logging.h"
 #include "fmt/core.h"
 #include "mds/common/helper.h"
-#include "mds/common/logging.h"
 #include "mds/common/synchronization.h"
 #include "mds/common/time.h"
 
@@ -52,7 +52,7 @@ int ExecuteRoutine(void* meta,
 
   for (; iter; ++iter) {
     if (BAIDU_UNLIKELY(*iter == nullptr)) {
-      DINGO_LOG(WARNING) << fmt::format("[execqueue][type()] task is nullptr.");
+      LOG(WARNING) << fmt::format("[execqueue][type()] task is nullptr.");
       continue;
     }
 
@@ -61,10 +61,10 @@ int ExecuteRoutine(void* meta,
     if (BAIDU_LIKELY(!iter.is_queue_stopped())) {
       Duration duration;
       (*iter)->Run();
-      DINGO_LOG(DEBUG) << fmt::format("[execqueue][type({})] run task elapsed time {}us.", (*iter)->Type(),
-                                      duration.ElapsedUs());
+      LOG_DEBUG << fmt::format("[execqueue][type({})] run task elapsed time {}us.", (*iter)->Type(),
+                               duration.ElapsedUs());
     } else {
-      DINGO_LOG(INFO) << fmt::format("[execqueue][type({})] task is stopped.", (*iter)->Type());
+      LOG(INFO) << fmt::format("[execqueue][type({})] task is stopped.", (*iter)->Type());
     }
 
     worker->PopPendingTaskTrace();
@@ -82,7 +82,7 @@ bool Worker::Init() {
   options.bthread_attr = BTHREAD_ATTR_NORMAL;
 
   if (bthread::execution_queue_start(&queue_id_, &options, ExecuteRoutine, this) != 0) {
-    DINGO_LOG(ERROR) << "[execqueue] start worker execution queue failed";
+    LOG(ERROR) << "[execqueue] start worker execution queue failed";
     return false;
   }
 
@@ -95,30 +95,30 @@ void Worker::Destroy() {
   is_available_.store(false, std::memory_order_relaxed);
 
   if (bthread::execution_queue_stop(queue_id_) != 0) {
-    DINGO_LOG(ERROR) << "[execqueue] worker execution queue stop failed";
+    LOG(ERROR) << "[execqueue] worker execution queue stop failed";
     return;
   }
 
   if (bthread::execution_queue_join(queue_id_) != 0) {
-    DINGO_LOG(ERROR) << "[execqueue] worker execution queue join failed";
+    LOG(ERROR) << "[execqueue] worker execution queue join failed";
   }
 }
 
 bool Worker::Execute(TaskRunnablePtr task) {
   if (BAIDU_UNLIKELY(task == nullptr)) {
-    DINGO_LOG(ERROR) << fmt::format("[execqueue][type({})] task is nullptr.", task->Type());
+    LOG(ERROR) << fmt::format("[execqueue][type({})] task is nullptr.", task->Type());
     return false;
   }
 
   if (BAIDU_UNLIKELY(!is_available_.load(std::memory_order_relaxed))) {
-    DINGO_LOG(ERROR) << fmt::format("[execqueue][type({})] worker execute queue is not available.", task->Type());
+    LOG(ERROR) << fmt::format("[execqueue][type({})] worker execute queue is not available.", task->Type());
     return false;
   }
 
   PushPendingTaskTrace(task->Trace());
 
   if (BAIDU_UNLIKELY(bthread::execution_queue_execute(queue_id_, task) != 0)) {
-    DINGO_LOG(ERROR) << fmt::format("[execqueue][type({})] worker execution queue execute failed", task->Type());
+    LOG(ERROR) << fmt::format("[execqueue][type({})] worker execution queue execute failed", task->Type());
     return false;
   }
 
@@ -260,8 +260,8 @@ bool ExecqWorkerSet::ExecuteRR(TaskRunnablePtr task) {
   int64_t pending_task_count = PendingTaskCount();
 
   if (BAIDU_UNLIKELY(max_pending_task_count > 0 && pending_task_count > max_pending_task_count)) {
-    DINGO_LOG(WARNING) << fmt::format("[execqueue] exceed max pending task limit, {}/{}", pending_task_count,
-                                      max_pending_task_count);
+    LOG(WARNING) << fmt::format("[execqueue] exceed max pending task limit, {}/{}", pending_task_count,
+                                max_pending_task_count);
     return false;
   }
 
@@ -279,8 +279,8 @@ bool ExecqWorkerSet::ExecuteLeastQueue(TaskRunnablePtr task) {
   int64_t pending_task_count = PendingTaskCount();
 
   if (BAIDU_UNLIKELY(max_pending_task_count > 0 && pending_task_count > max_pending_task_count)) {
-    DINGO_LOG(WARNING) << fmt::format("[execqueue] exceed max pending task limit, {}/{}", pending_task_count,
-                                      max_pending_task_count);
+    LOG(WARNING) << fmt::format("[execqueue] exceed max pending task limit, {}/{}", pending_task_count,
+                                max_pending_task_count);
     return false;
   }
 
@@ -298,8 +298,8 @@ bool ExecqWorkerSet::ExecuteHash(int64_t id, TaskRunnablePtr task) {
   int64_t pending_task_count = PendingTaskCount();
 
   if (BAIDU_UNLIKELY(max_pending_task_count > 0 && pending_task_count > max_pending_task_count)) {
-    DINGO_LOG(WARNING) << fmt::format("[execqueue] exceed max pending task limit, {}/{}", pending_task_count,
-                                      max_pending_task_count);
+    LOG(WARNING) << fmt::format("[execqueue] exceed max pending task limit, {}/{}", pending_task_count,
+                                max_pending_task_count);
     return false;
   }
 
@@ -458,8 +458,8 @@ bool SimpleWorkerSet::Execute(TaskRunnablePtr task) {
   int64_t pending_task_count = PendingTaskCount();
 
   if (BAIDU_UNLIKELY(max_pending_task_count > 0 && pending_task_count > max_pending_task_count)) {
-    DINGO_LOG(WARNING) << fmt::format("[execqueue] exceed max pending task limit, {}/{}", pending_task_count,
-                                      max_pending_task_count);
+    LOG(WARNING) << fmt::format("[execqueue] exceed max pending task limit, {}/{}", pending_task_count,
+                                max_pending_task_count);
     return false;
   }
 
@@ -624,8 +624,8 @@ bool PriorWorkerSet::Execute(TaskRunnablePtr task) {
   int64_t pending_task_count = PendingTaskCount();
 
   if (BAIDU_UNLIKELY(max_pending_task_count > 0 && pending_task_count > max_pending_task_count)) {
-    DINGO_LOG(WARNING) << fmt::format("[execqueue] exceed max pending task limit, {}/{}", pending_task_count,
-                                      max_pending_task_count);
+    LOG(WARNING) << fmt::format("[execqueue] exceed max pending task limit, {}/{}", pending_task_count,
+                                max_pending_task_count);
     return false;
   }
 

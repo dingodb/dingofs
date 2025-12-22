@@ -95,8 +95,8 @@ static void SignalHandler(int signo) {
 
   std::cerr << "received signal: " << signo << '\n';
   std::cerr << "stack trace:\n";
-  DINGO_LOG(ERROR) << "received signal " << signo;
-  DINGO_LOG(ERROR) << "stack trace:";
+  LOG(ERROR) << "received signal " << signo;
+  LOG(ERROR) << "stack trace:";
 
   struct backtrace_state* state = backtrace_create_state(nullptr, 0, ErrorCallback, nullptr);
   if (state == nullptr) {
@@ -114,7 +114,7 @@ static void SignalHandler(int signo) {
 
   if (backtrace_full(state, 0, BacktraceCallback, ErrorCallback, &data) != 0) {
     std::cerr << "backtrace_full fail." << '\n';
-    DINGO_LOG(ERROR) << "backtrace_full fail.";
+    LOG(ERROR) << "backtrace_full fail.";
   }
 
   for (size_t i = 0; i < data.index; ++i) {
@@ -140,7 +140,7 @@ static void SignalHandler(int signo) {
           (uint64_t)info.dli_fbase, info.dli_sname, (uint64_t)info.dli_saddr);
     }
 
-    DINGO_LOG(ERROR) << error_msg;
+    LOG(ERROR) << error_msg;
     std::cerr << error_msg << '\n';
 
     if (demangled) {
@@ -205,11 +205,11 @@ static void SetupSignalHandler() {
 static bool GeneratePidFile(const std::string& filepath) {
   int64_t pid = dingofs::mds::Helper::GetPid();
   if (pid <= 0) {
-    DINGO_LOG(ERROR) << "get pid fail.";
+    LOG(ERROR) << "get pid fail.";
     return false;
   }
 
-  DINGO_LOG(INFO) << "pid file: " << filepath;
+  LOG(INFO) << "pid file: " << filepath;
 
   return dingofs::mds::Helper::SaveFile(filepath, std::to_string(pid));
 }
@@ -353,7 +353,7 @@ int main(int argc, char* argv[]) {
   CHECK(server.InitCrontab()) << "init crontab error.";
   CHECK(server.InitService()) << "init service error.";
 
-  DINGO_LOG(INFO) << "##################### init finish ######################";
+  LOG(INFO) << "##################### init finish ######################";
 
   server.Run();
 

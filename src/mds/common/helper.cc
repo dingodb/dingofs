@@ -28,8 +28,8 @@
 #include <thread>
 
 #include "butil/strings/string_split.h"
+#include "common/logging.h"
 #include "fmt/core.h"
-#include "mds/common/logging.h"
 
 namespace dingofs {
 namespace mds {
@@ -150,7 +150,7 @@ void Helper::SplitString(const std::string& str, char c, std::vector<int64_t>& v
     try {
       vec.push_back(std::stoll(s));
     } catch (const std::exception& e) {
-      DINGO_LOG(ERROR) << "stoll exception: " << e.what();
+      LOG(ERROR) << "stoll exception: " << e.what();
     }
   }
 }
@@ -184,10 +184,10 @@ std::string Helper::HexToString(const std::string& hex_str) {
       result += static_cast<unsigned char>(byte_value);
     }
   } catch (const std::invalid_argument& ia) {
-    DINGO_LOG(ERROR) << "HexToString error Irnvalid argument: " << ia.what() << '\n';
+    LOG(ERROR) << "HexToString error Irnvalid argument: " << ia.what() << '\n';
     return "";
   } catch (const std::out_of_range& oor) {
-    DINGO_LOG(ERROR) << "HexToString error Out of Range error: " << oor.what() << '\n';
+    LOG(ERROR) << "HexToString error Out of Range error: " << oor.what() << '\n';
     return "";
   }
 
@@ -198,7 +198,7 @@ bool Helper::ParseAddr(const std::string& addr, std::string& host, int& port) {
   std::vector<std::string> vec;
   SplitString(addr, ':', vec);
   if (vec.size() != 2) {
-    DINGO_LOG(ERROR) << "parse addr error, addr: " << addr;
+    LOG(ERROR) << "parse addr error, addr: " << addr;
     return false;
   }
 
@@ -207,7 +207,7 @@ bool Helper::ParseAddr(const std::string& addr, std::string& host, int& port) {
     port = std::stoi(vec[1]);
 
   } catch (const std::exception& e) {
-    DINGO_LOG(ERROR) << "stoi exception: " << e.what();
+    LOG(ERROR) << "stoi exception: " << e.what();
     return false;
   }
 
@@ -250,7 +250,7 @@ std::vector<std::string> Helper::TraverseDirectory(const std::string& path, cons
       }
     }
   } catch (std::filesystem::filesystem_error const& ex) {
-    DINGO_LOG(ERROR) << fmt::format("directory_iterator failed, path: {} error: {}", path, ex.what());
+    LOG(ERROR) << fmt::format("directory_iterator failed, path: {} error: {}", path, ex.what());
   }
 
   return filenames;
@@ -267,8 +267,7 @@ std::string Helper::FindFileInDirectory(const std::string& dirpath, const std::s
       }
     }
   } catch (std::filesystem::filesystem_error const& ex) {
-    DINGO_LOG(ERROR) << fmt::format("directory_iterator failed, path: {} prefix: {} error: {}", dirpath, prefix,
-                                    ex.what());
+    LOG(ERROR) << fmt::format("directory_iterator failed, path: {} prefix: {} error: {}", dirpath, prefix, ex.what());
   }
 
   return "";
@@ -277,7 +276,7 @@ std::string Helper::FindFileInDirectory(const std::string& dirpath, const std::s
 bool Helper::CreateDirectory(const std::string& path) {
   std::error_code ec;
   if (!std::filesystem::create_directories(path, ec)) {
-    DINGO_LOG(ERROR) << fmt::format("Create directory failed, error: {} {}", ec.value(), ec.message());
+    LOG(ERROR) << fmt::format("Create directory failed, error: {} {}", ec.value(), ec.message());
     return false;
   }
 
@@ -287,12 +286,12 @@ bool Helper::CreateDirectory(const std::string& path) {
 bool Helper::CreateDirectories(const std::string& path) {
   std::error_code ec;
   if (std::filesystem::exists(path)) {
-    DINGO_LOG(INFO) << fmt::format("Directory already exists, path: {}", path);
+    LOG(INFO) << fmt::format("Directory already exists, path: {}", path);
     return true;
   }
 
   if (!std::filesystem::create_directories(path, ec)) {
-    DINGO_LOG(ERROR) << fmt::format("Create directory {} failed, error: {} {}", path, ec.value(), ec.message());
+    LOG(ERROR) << fmt::format("Create directory {} failed, error: {} {}", path, ec.value(), ec.message());
     return false;
   }
 
@@ -302,7 +301,7 @@ bool Helper::CreateDirectories(const std::string& path) {
 bool Helper::RemoveFileOrDirectory(const std::string& path) {
   std::error_code ec;
   if (!std::filesystem::remove(path, ec)) {
-    DINGO_LOG(ERROR) << fmt::format("Remove directory failed, path: {} error: {} {}", path, ec.value(), ec.message());
+    LOG(ERROR) << fmt::format("Remove directory failed, path: {} error: {} {}", path, ec.value(), ec.message());
     return false;
   }
 
@@ -311,11 +310,10 @@ bool Helper::RemoveFileOrDirectory(const std::string& path) {
 
 bool Helper::RemoveAllFileOrDirectory(const std::string& path) {
   std::error_code ec;
-  DINGO_LOG(INFO) << fmt::format("Remove all file or directory, path: {}", path);
+  LOG(INFO) << fmt::format("Remove all file or directory, path: {}", path);
   auto num = std::filesystem::remove_all(path, ec);
   if (num == static_cast<std::uintmax_t>(-1)) {
-    DINGO_LOG(ERROR) << fmt::format("Remove all directory failed, path: {} error: {} {}", path, ec.value(),
-                                    ec.message());
+    LOG(ERROR) << fmt::format("Remove all directory failed, path: {} error: {} {}", path, ec.value(), ec.message());
     return false;
   }
 
@@ -330,8 +328,8 @@ bool Helper::Rename(const std::string& src_path, const std::string& dst_path, bo
   if (std::filesystem::exists(destination_path)) {
     if (!is_force) {
       // If is_force is false, return error
-      DINGO_LOG(ERROR) << fmt::format("Destination {} already exists, is_force = false, so cannot rename from {}",
-                                      dst_path, src_path);
+      LOG(ERROR) << fmt::format("Destination {} already exists, is_force = false, so cannot rename from {}", dst_path,
+                                src_path);
       return false;
     }
 
@@ -340,7 +338,7 @@ bool Helper::Rename(const std::string& src_path, const std::string& dst_path, bo
 
     // Check if the removal was successful
     if (std::filesystem::exists(destination_path)) {
-      DINGO_LOG(ERROR) << fmt::format("Failed to remove the existing destination {} ", dst_path);
+      LOG(ERROR) << fmt::format("Failed to remove the existing destination {} ", dst_path);
       return false;
     }
   }
@@ -349,8 +347,8 @@ bool Helper::Rename(const std::string& src_path, const std::string& dst_path, bo
   try {
     std::filesystem::rename(source_path, destination_path);
   } catch (const std::exception& ex) {
-    DINGO_LOG(ERROR) << fmt::format("Rename operation failed, src_path: {}, dst_path: {}, error: {}", src_path,
-                                    dst_path, ex.what());
+    LOG(ERROR) << fmt::format("Rename operation failed, src_path: {}, dst_path: {}, error: {}", src_path, dst_path,
+                              ex.what());
     return false;
   }
 
@@ -362,10 +360,10 @@ bool Helper::IsExistPath(const std::string& path) { return std::filesystem::exis
 int64_t Helper::GetFileSize(const std::string& path) {
   try {
     std::uintmax_t size = std::filesystem::file_size(path);
-    DINGO_LOG(INFO) << fmt::format("File size: {} bytes", size);
+    LOG(INFO) << fmt::format("File size: {} bytes", size);
     return size;
   } catch (const std::filesystem::filesystem_error& ex) {
-    DINGO_LOG(ERROR) << fmt::format("Get file size failed, path: {}, error: {}", path, ex.what());
+    LOG(ERROR) << fmt::format("Get file size failed, path: {}, error: {}", path, ex.what());
     return -1;
   }
 }
@@ -447,7 +445,7 @@ static std::string ParseFileUrl(const std::string& coor_url) {
 
   std::ifstream file(file_path);
   if (!file.is_open()) {
-    DINGO_LOG(ERROR) << fmt::format("Open file({}) failed, maybe not exist!", file_path);
+    LOG(ERROR) << fmt::format("Open file({}) failed, maybe not exist!", file_path);
     return {};
   }
 

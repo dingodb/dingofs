@@ -29,6 +29,8 @@ target_link_libraries(mds_service
     mds_quota
     mds_cachegroup
 
+    dingofs_common
+
     PROTO_OBJS
     protobuf::libprotobuf
 )

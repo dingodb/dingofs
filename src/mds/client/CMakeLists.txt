@@ -39,6 +39,8 @@ add_executable(dingo-mds-client
 target_link_libraries(dingo-mds-client
   PROTO_OBJS
 
+  dingofs_common
+
   mds_client
 
   brpc::brpc

@@ -23,7 +23,7 @@ DEFINE_bool(log_each_request, false, "print log each request");
 
 bool Interaction::Init(const std::string& addr) {
   if (channel_.Init(addr.c_str(), nullptr) != 0) {
-    DINGO_LOG(ERROR) << fmt::format("Init channel fail, addr({})", addr);
+    LOG(ERROR) << fmt::format("Init channel fail, addr({})", addr);
     return false;
   }
   return true;

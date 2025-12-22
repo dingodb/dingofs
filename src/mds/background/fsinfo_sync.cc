@@ -14,8 +14,8 @@
 
 #include "mds/background/fsinfo_sync.h"
 
+#include "common/logging.h"
 #include "fmt/core.h"
-#include "mds/common/logging.h"
 
 namespace dingofs {
 namespace mds {
@@ -32,7 +32,7 @@ void FsInfoSync::Run() {
 
 void FsInfoSync::SyncFsInfo() {
   bool ret = file_system_set_->LoadFileSystems();
-  DINGO_LOG(INFO) << fmt::format("[fs_sync] finish, load fs {}.", (ret ? "success" : "fail"));
+  LOG(INFO) << fmt::format("[fs_sync] finish, load fs {}.", (ret ? "success" : "fail"));
 }
 
 }  // namespace mds

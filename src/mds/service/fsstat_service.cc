@@ -28,12 +28,12 @@
 #include "brpc/controller.h"
 #include "brpc/server.h"
 #include "butil/iobuf.h"
+#include "common/logging.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/format.h"
 #include "json/writer.h"
 #include "mds/common/context.h"
 #include "mds/common/helper.h"
-#include "mds/common/logging.h"
 #include "mds/common/type.h"
 #include "mds/common/version.h"
 #include "mds/filesystem/filesystem.h"
@@ -642,7 +642,7 @@ void FsStatServiceImpl::RenderMainPage(const brpc::Server* server, FileSystemSet
   std::vector<pb::mds::FsInfo> fs_infoes;
   auto status = file_system_set->GetAllFsInfo(ctx, true, fs_infoes);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[mdsstat] get fs list fail, error({}).", status.error_str());
+    LOG(ERROR) << fmt::format("[mdsstat] get fs list fail, error({}).", status.error_str());
     os << fmt::format(R"(<div style="color:red;">get fs list fail, error({}).</div>)", status.error_str());
 
   } else {
@@ -657,7 +657,7 @@ void FsStatServiceImpl::RenderMainPage(const brpc::Server* server, FileSystemSet
   std::vector<MdsEntry> mdses;
   status = heartbeat->GetMDSList(ctx, mdses);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[mdsstat] get mds list fail, error({}).", status.error_str());
+    LOG(ERROR) << fmt::format("[mdsstat] get mds list fail, error({}).", status.error_str());
     os << fmt::format(R"(<div style="color:red;">get mds list fail, error({}).</div>)", status.error_str());
 
   } else {
@@ -670,7 +670,7 @@ void FsStatServiceImpl::RenderMainPage(const brpc::Server* server, FileSystemSet
   std::vector<CacheMemberEntry> cache_members;
   status = heartbeat->GetCacheMemberList(cache_members);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[mdsstat] get cache member list fail, error({}).", status.error_str());
+    LOG(ERROR) << fmt::format("[mdsstat] get cache member list fail, error({}).", status.error_str());
     os << fmt::format(R"(<div style="color:red;">get cache member list fail, error({}).</div>)", status.error_str());
 
   } else {
@@ -694,7 +694,7 @@ void FsStatServiceImpl::RenderMainPage(const brpc::Server* server, FileSystemSet
   std::vector<ClientEntry> clients;
   status = heartbeat->GetClientList(clients);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[mdsstat] get client list fail, error({}).", status.error_str());
+    LOG(ERROR) << fmt::format("[mdsstat] get client list fail, error({}).", status.error_str());
     os << fmt::format(R"(<div style="color:red;">get client list fail, error({}).</div>)", status.error_str());
 
   } else {
@@ -710,7 +710,7 @@ void FsStatServiceImpl::RenderMainPage(const brpc::Server* server, FileSystemSet
   std::vector<StoreDistributionLock::LockEntry> lock_entries;
   status = StoreDistributionLock::GetAllLockInfo(Server::GetInstance().GetOperationProcessor(), lock_entries);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[mdsstat] get distributed lock info fail, error({}).", status.error_str());
+    LOG(ERROR) << fmt::format("[mdsstat] get distributed lock info fail, error({}).", status.error_str());
     os << fmt::format(R"(<div style="color:red;">get distributed lock info fail, error({}).</div>)",
                       status.error_str());
 
@@ -1586,7 +1586,7 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
   cntl->http_response().set_content_type(use_html ? "text/html" : "text/plain");
   const std::string& path = cntl->http_request().unresolved_path();
 
-  DINGO_LOG(INFO) << fmt::format("FsStatService path: {}", path);
+  LOG(INFO) << fmt::format("FsStatService path: {}", path);
 
   std::vector<std::string> params;
   Helper::SplitString(path, '/', params);
@@ -1763,7 +1763,7 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
     uint32_t fs_id = Helper::StringToInt32(params[1]);
     uint64_t ino = Helper::StringToInt64(params[2]);
 
-    DINGO_LOG(INFO) << fmt::format("Get dir json, fs_id: {}, ino: {}", fs_id, ino);
+    LOG(INFO) << fmt::format("Get dir json, fs_id: {}, ino: {}", fs_id, ino);
 
     auto file_system_set = Server::GetInstance().GetFileSystemSet();
     auto file_system = file_system_set->GetFileSystem(fs_id);

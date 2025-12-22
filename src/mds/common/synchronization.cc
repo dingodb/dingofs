@@ -15,7 +15,7 @@
 #include "mds/common/synchronization.h"
 
 #include "bvar/latency_recorder.h"
-#include "mds/common/logging.h"
+#include "common/logging.h"
 
 namespace dingofs {
 
@@ -69,7 +69,7 @@ int BthreadCond::Wait(int cond) {
   while (count_ > cond) {
     ret = bthread_cond_wait(&cond_, &mutex_);
     if (ret != 0) {
-      DINGO_LOG(WARNING) << "wait timeout, ret: " << ret;
+      LOG(WARNING) << "wait timeout, ret: " << ret;
       break;
     }
   }
@@ -84,7 +84,7 @@ int BthreadCond::IncreaseWait(int cond) {
   while (count_ + 1 > cond) {
     ret = bthread_cond_wait(&cond_, &mutex_);
     if (ret != 0) {
-      DINGO_LOG(WARNING) << "wait timeout, ret: " << ret;
+      LOG(WARNING) << "wait timeout, ret: " << ret;
       break;
     }
   }
@@ -101,7 +101,7 @@ int BthreadCond::TimedWait(int64_t timeout_us, int cond) {
   while (count_ > cond) {
     ret = bthread_cond_timedwait(&cond_, &mutex_, &tm);
     if (ret != 0) {
-      DINGO_LOG(WARNING) << "wait timeout, ret: " << ret;
+      LOG(WARNING) << "wait timeout, ret: " << ret;
       break;
     }
   }
@@ -117,7 +117,7 @@ int BthreadCond::IncreaseTimedWait(int64_t timeout_us, int cond) {
   while (count_ + 1 > cond) {
     ret = bthread_cond_timedwait(&cond_, &mutex_, &tm);
     if (ret != 0) {
-      DINGO_LOG(WARNING) << "wait timeout, ret: " << ret;
+      LOG(WARNING) << "wait timeout, ret: " << ret;
       break;
     }
   }
@@ -153,7 +153,7 @@ void Bthread::Run(const std::function<void()>& call) {
       },
       func_call);
   if (ret != 0) {
-    DINGO_LOG(FATAL) << "bthread_start_background fail.";
+    LOG(FATAL) << "bthread_start_background fail.";
   }
 }
 
@@ -170,7 +170,7 @@ void Bthread::RunUrgent(const std::function<void()>& call) {
       },
       func_call);
   if (ret != 0) {
-    DINGO_LOG(FATAL) << "bthread_start_urgent fail";
+    LOG(FATAL) << "bthread_start_urgent fail";
   }
 }
 
