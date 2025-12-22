@@ -34,10 +34,6 @@ class AwsCrtS3Client : public AwsS3Client {
   explicit AwsCrtS3Client() = default;
   ~AwsCrtS3Client() override = default;
 
-  using CRTLogSystemInterfaceSPtr =
-      std::shared_ptr<Aws::Utils::Logging::CRTLogSystemInterface>;
-  static CRTLogSystemInterfaceSPtr CreateLogger(int log_level);
-
   void Init(const S3Options& options) override;
 
   std::string GetAk() override { return s3_options_.s3_info.ak; }

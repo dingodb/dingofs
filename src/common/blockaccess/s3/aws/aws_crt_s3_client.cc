@@ -46,69 +46,6 @@ using namespace Aws::Utils::Logging;
 
 static const int kLogBufferSize = 1024;
 
-class CrtLog : public CRTLogSystemInterface {
- public:
-  CrtLog(LogLevel log_level) : log_level_(log_level) {}
-
-  LogLevel GetLogLevel() const override { return log_level_; }
-  void SetLogLevel(LogLevel logLevel) override { log_level_ = logLevel; }
-
-  void Log(LogLevel logLevel, const char* subjectName, const char* formatStr,
-           va_list args) override {
-    char message[kLogBufferSize] = {0};
-    int ret = vsnprintf(message, kLogBufferSize, formatStr, args);
-    if (ret < 0) {
-      LOG(ERROR) << fmt::format("[s3_crt.aws_sdk.{}] vsnprintf error.",
-                                subjectName);
-      return;
-    } else if (ret >= kLogBufferSize) {
-      LOG(WARNING) << fmt::format(
-          "[s3_crt.aws_sdk.{}] vsnprintf truncated message, original size({}) "
-          "> buffer size({}).",
-          subjectName, ret, kLogBufferSize);
-      message[kLogBufferSize - 1] = '\0';  // Ensure null termination
-    }
-
-    switch (logLevel) {
-      case LogLevel::Off:
-        break;
-
-      case LogLevel::Fatal:
-        LOG(FATAL) << fmt::format("[s3_crt.aws_sdk.{}] {}.", subjectName,
-                                  message);
-        break;
-      case LogLevel::Error:
-        LOG(ERROR) << fmt::format("[s3_crt.aws_sdk.{}] {}.", subjectName,
-                                  message);
-        break;
-
-      case LogLevel::Warn:
-        LOG(WARNING) << fmt::format("[s3_crt.aws_sdk.{}] {}.", subjectName,
-                                    message);
-        break;
-
-      case LogLevel::Info:
-      case LogLevel::Debug:
-      case LogLevel::Trace:
-        LOG(INFO) << fmt::format("[s3_crt.aws_sdk.{}] {}.", subjectName,
-                                 message);
-        break;
-      default:
-        break;
-    }
-  }
-
-  void CleanUp() override {}
-
- private:
-  LogLevel log_level_;
-};
-
-AwsCrtS3Client::CRTLogSystemInterfaceSPtr AwsCrtS3Client::CreateLogger(
-    int log_level) {
-  return std::make_shared<CrtLog>(static_cast<LogLevel>(log_level));
-}
-
 void AwsCrtS3Client::Init(const S3Options& options) {
   LOG(INFO) << fmt::format(
       "[s3_crt] init aws_crt_s3_client ak:{} sk:{} s3_endpoint:{}.",

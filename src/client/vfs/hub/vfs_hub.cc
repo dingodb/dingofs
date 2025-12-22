@@ -67,7 +67,7 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf, bool upgrade) {
 
   } else if (vfs_conf.metasystem_type == MetaSystemType::LOCAL) {
     rela_meta_system = std::make_unique<local::LocalMetaSystem>(
-        dingofs::Helper::ExpandPath(FLAGS_meta_path), vfs_conf.fs_name,
+        dingofs::Helper::ExpandPath(kDefaultMetaDBDir), vfs_conf.fs_name,
         vfs_conf.storage_info);
 
   } else if (vfs_conf.metasystem_type == MetaSystemType::MDS) {
@@ -78,7 +78,7 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf, bool upgrade) {
 
   if (FLAGS_vfs_trace_logging) {
     tracer_ = std::make_unique<Tracer>(
-        std::make_unique<LogTraceExporter>(kVFSMoudule, FLAGS_log_dir));
+        std::make_unique<LogTraceExporter>(kVFSMoudule, Logger::LogDir()));
   } else {
     tracer_ = std::make_unique<NoopTracer>();
   }

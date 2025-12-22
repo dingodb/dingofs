@@ -32,10 +32,6 @@ class AwsLegacyS3Client : public AwsS3Client {
   explicit AwsLegacyS3Client() = default;
   ~AwsLegacyS3Client() override = default;
 
-  using LogSystemInterfaceSPtr =
-      std::shared_ptr<Aws::Utils::Logging::LogSystemInterface>;
-  static LogSystemInterfaceSPtr CreateLogger(int log_level);
-
   void Init(const S3Options& options) override;
 
   std::string GetAk() override { return s3_options_.s3_info.ak; }

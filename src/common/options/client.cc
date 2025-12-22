@@ -20,22 +20,8 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
-#include "common/const.h"
-
 namespace dingofs {
 namespace client {
-
-DEFINE_string(vfs_log_dir, kDefaultClientLogDir, "set client log directory");
-
-DEFINE_int32(vfs_log_level, 0, "set log level");
-DEFINE_validator(vfs_log_level, [](const char* /*name*/, int32_t value) {
-  FLAGS_v = value;
-  LOG(INFO) << "current verbose logging level is `" << FLAGS_v << "`";
-  return true;
-});
-
-DEFINE_string(meta_path, kDefaultMetaDBDir,
-              "meta db path for local metasystem");
 
 DEFINE_int32(vfs_bthread_worker_num, 0, "bthread worker num");
 

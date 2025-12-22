@@ -22,7 +22,11 @@
 
 namespace dingofs {
 
-enum LogLevel : uint8_t {
+DECLARE_string(log_dir);
+DECLARE_string(log_level);
+DECLARE_int32(log_v);
+
+enum class LogLevel : uint8_t {
   kDEBUG = 0,
   kINFO = 1,
   kWARNING = 2,
@@ -35,26 +39,23 @@ enum LogLevel : uint8_t {
 #define DINGO_DEBUG 79
 
 #define LOG_DEBUG VLOG(DINGO_DEBUG)
-#define LOG_INFO LOG(INFO)
-#define LOG_WARNING LOG(WARNING)
-#define LOG_ERROR LOG(ERROR)
-#define LOG_FATAL LOG(FATAL)
 
 #define LOG_IF_DEBUG(condition) VLOG_IF(DINGO_DEBUG, condition)
-#define LOG_IF_INFO(condition) LOG_IF(INFO, condition)
-#define LOG_IF_WARNING(condition) LOG_IF(WARNING, condition)
-#define LOG_IF_ERROR(condition) LOG_IF(ERROR, condition)
-#define LOG_IF_FATAL(condition) LOG_IF(FATAL, condition)
 
 class Logger {
  public:
-  static void InitLogger(const std::string& log_dir, const std::string& role,
-                         const LogLevel& level);
+  static void Init(const std::string& role);
+
+  static std::string LogDir();
+  static std::string LogLevel();
+
   // LogLevel and Log Verbose
   static void SetMinLogLevel(int level);
   static int GetMinLogLevel();
+
   static void SetMinVerboseLevel(int v);
   static int GetMinVerboseLevel();
+
   static int GetLogBuffSecs();
   static void SetLogBuffSecs(uint32_t secs);
 
@@ -63,10 +64,9 @@ class Logger {
 
   static bool GetStoppingWhenDiskFull();
   static void SetStoppingWhenDiskFull(bool is_stop);
-  static void ChangeGlogLevelUsingDingoLevel(const LogLevel& level,
-                                             uint32_t verbose);
-  // static void CustomLogFormatPrefix(std::ostream& s, const
-  // google::LogMessageInfo& l, void*);
+
+  static void ChangeGlogLevel(const std::string& level);
+  static void ChangeGlogLevel(enum LogLevel level, uint32_t verbose);
 };
 
 }  // namespace dingofs

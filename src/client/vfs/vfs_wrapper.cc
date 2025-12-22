@@ -32,6 +32,7 @@
 #include "client/vfs/vfs_meta.h"
 #include "common/blockaccess/block_access_log.h"
 #include "common/define.h"
+#include "common/logging.h"
 #include "common/metrics/client/client.h"
 #include "common/metrics/metric_guard.h"
 #include "common/options/client.h"
@@ -62,11 +63,12 @@ static auto& g_rw_metric = VFSRWMetric::GetInstance();
       &rc, {&client_op_metric_->op##REQUEST, &client_op_metric_->opAll});
 
 static Status InitLog() {
-  bool succ = dingofs::client::InitAccessLog(FLAGS_log_dir) &&
-              dingofs::cache::InitCacheTraceLog(FLAGS_log_dir) &&
-              blockaccess::InitBlockAccessLog(FLAGS_log_dir) &&
-              dingofs::client::vfs::InitMetaLog(FLAGS_log_dir) &&
-              dingofs::client::vfs::InitBlockStoreAccessLog(FLAGS_log_dir);
+  const std::string log_dir = Logger::LogDir();
+  bool succ = dingofs::client::InitAccessLog(log_dir) &&
+              dingofs::cache::InitCacheTraceLog(log_dir) &&
+              blockaccess::InitBlockAccessLog(log_dir) &&
+              dingofs::client::vfs::InitMetaLog(log_dir) &&
+              dingofs::client::vfs::InitBlockStoreAccessLog(log_dir);
 
   CHECK(succ) << "init log failed, unexpected!";
   return Status::OK();

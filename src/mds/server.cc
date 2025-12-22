@@ -68,10 +68,6 @@ DEFINE_uint32(mds_crontab_gc_interval_s, 60, "gc interval seconds");
 DEFINE_uint32(mds_crontab_cache_member_sync_interval_s, 3, "cache member sync interval seconds");
 DEFINE_uint32(mds_crontab_clean_expired_cache_interval_s, 600, "clean expired cache interval seconds");
 
-// log config
-DEFINE_string(mds_log_level, "INFO", "log level, DEBUG, INFO, WARNING, ERROR, FATAL");
-DEFINE_string(mds_log_path, "./log", "log path, if empty, use default log path");
-
 // service config
 DEFINE_uint32(mds_server_id, 1001, "server id, must be unique in the cluster");
 DEFINE_string(mds_server_host, "127.0.0.1", "server host");
@@ -94,22 +90,6 @@ Server& Server::GetInstance() {
   return instance;
 }
 
-static LogLevel GetDingoLogLevel(const std::string& log_level) {
-  if (Helper::IsEqualIgnoreCase(log_level, "DEBUG")) {
-    return LogLevel::kDEBUG;
-  } else if (Helper::IsEqualIgnoreCase(log_level, "INFO")) {
-    return LogLevel::kINFO;
-  } else if (Helper::IsEqualIgnoreCase(log_level, "WARNING")) {
-    return LogLevel::kWARNING;
-  } else if (Helper::IsEqualIgnoreCase(log_level, "ERROR")) {
-    return LogLevel::kERROR;
-  } else if (Helper::IsEqualIgnoreCase(log_level, "FATAL")) {
-    return LogLevel::kFATAL;
-  } else {
-    return LogLevel::kINFO;
-  }
-}
-
 bool Server::InitConfig(const std::string& path) {
   LOG(INFO) << fmt::format("config path: {}", path);
 
@@ -117,7 +97,7 @@ bool Server::InitConfig(const std::string& path) {
   LOG(INFO) << fmt::format("mds_server_host: {}:{}", FLAGS_mds_server_host, FLAGS_mds_server_port);
   LOG(INFO) << fmt::format("mds_storage_engine: {}", FLAGS_mds_storage_engine);
   LOG(INFO) << fmt::format("mds_id_generator_type: {}", FLAGS_mds_id_generator_type);
-  LOG(INFO) << fmt::format("mds_log_path: {}", FLAGS_mds_log_path);
+  LOG(INFO) << fmt::format("mds_log_dir: {}", Logger::LogDir());
 
   if (FLAGS_mds_server_id == 0) {
     LOG(ERROR) << "mds server id is 0, please set a valid id.";
@@ -136,11 +116,11 @@ bool Server::InitConfig(const std::string& path) {
     return false;
   }
 
-  if (FLAGS_mds_log_level.empty()) {
+  if (Logger::LogLevel().empty()) {
     LOG(ERROR) << "mds log level is empty, please set a valid log level.";
     return false;
   }
-  if (FLAGS_mds_log_path.empty()) {
+  if (Logger::LogDir().empty()) {
     LOG(ERROR) << "mds log path is empty, please set a valid log path.";
     return false;
   }
@@ -151,9 +131,9 @@ bool Server::InitConfig(const std::string& path) {
 }
 
 bool Server::InitLog() {
-  LOG(INFO) << fmt::format("init log: {} {}", FLAGS_mds_log_level, FLAGS_mds_log_path);
+  LOG(INFO) << fmt::format("init log: {} {}", Logger::LogLevel(), Logger::LogDir());
 
-  Logger::InitLogger(FLAGS_mds_log_path, "mds", GetDingoLogLevel(FLAGS_mds_log_level));
+  Logger::Init("mds");
 
   DingoLogVersion();
   return true;
@@ -454,7 +434,7 @@ bool Server::InitService() {
   return true;
 }
 
-std::string Server::GetPidFilePath() { return FLAGS_mds_log_path + "/" + FLAGS_mds_pid_file_name; }
+std::string Server::GetPidFilePath() { return Logger::LogDir() + "/" + FLAGS_mds_pid_file_name; }
 
 std::string Server::GetListenAddr() {
   std::string host = FLAGS_mds_server_listen_host.empty() ? FLAGS_mds_server_host : FLAGS_mds_server_listen_host;

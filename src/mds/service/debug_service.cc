@@ -88,7 +88,7 @@ void DebugServiceImpl::ChangeLogLevel(google::protobuf::RpcController*, const pb
   const pb::debug::LogLevel log_level = request->log_level();
   const auto& log_detail = request->log_detail();
 
-  Logger::ChangeGlogLevelUsingDingoLevel(LogLevelPB2LogLevel(log_level), log_detail.verbose());
+  Logger::ChangeGlogLevel(LogLevelPB2LogLevel(log_level), log_detail.verbose());
   Logger::SetLogBuffSecs(log_detail.log_buf_secs());
   Logger::SetMaxLogSize(log_detail.max_log_size());
   Logger::SetStoppingWhenDiskFull(log_detail.stop_logging_if_full_disk());

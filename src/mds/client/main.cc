@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <glog/logging.h>
+
 #include <string>
 #include <vector>
 
@@ -105,7 +107,8 @@ int main(int argc, char* argv[]) {
   google::ParseCommandLineFlags(&argc, &argv, true);
 
   std::string program_name = GetLastName(std::string(argv[0]));
-  dingofs::Logger::InitLogger("./log", program_name, dingofs::LogLevel::kINFO);
+  ::FLAGS_log_dir = "./log/";
+  dingofs::Logger::Init(program_name);
 
   std::string lower_cmd = Helper::ToLowerCase(FLAGS_cmd);
 

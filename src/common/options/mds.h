@@ -43,10 +43,6 @@ DECLARE_uint32(mds_crontab_mdsmonitor_interval_s);
 DECLARE_uint32(mds_crontab_quota_sync_interval_s);
 DECLARE_uint32(mds_crontab_gc_interval_s);
 
-// log config
-DECLARE_string(mds_log_level);
-DECLARE_string(mds_log_path);
-
 // server config
 DECLARE_uint32(mds_server_id);
 DECLARE_string(mds_server_host);

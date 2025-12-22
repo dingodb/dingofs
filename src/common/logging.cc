@@ -21,8 +21,50 @@
 
 namespace dingofs {
 
-void Logger::InitLogger(const std::string& log_dir, const std::string& role,
-                        const LogLevel& level) {
+DEFINE_string(log_level, "INFO", "log level");
+DEFINE_validator(log_level, [](const char* /*name*/, const std::string& value) {
+  LOG(INFO) << "current log level is `" << value << "`";
+  Logger::ChangeGlogLevel(value);
+  return true;
+});
+
+DEFINE_int32(log_v, 0, "log level");
+DEFINE_validator(log_v, [](const char* /*name*/, int32_t value) {
+  FLAGS_v = value;
+  LOG(INFO) << "current log verbose is `" << FLAGS_v << "`";
+  return true;
+});
+
+static bool IsEqualIgnoreCase(const std::string& str1,
+                              const std::string& str2) {
+  if (str1.size() != str2.size()) {
+    return false;
+  }
+  return std::equal(str1.begin(), str1.end(), str2.begin(),
+                    [](const char c1, const char c2) {
+                      return std::tolower(c1) == std::tolower(c2);
+                    });
+}
+
+static LogLevel ToLogLevel(const std::string& log_level) {
+  if (IsEqualIgnoreCase(log_level, "DEBUG")) {
+    return LogLevel::kDEBUG;
+  } else if (IsEqualIgnoreCase(log_level, "INFO")) {
+    return LogLevel::kINFO;
+  } else if (IsEqualIgnoreCase(log_level, "WARNING")) {
+    return LogLevel::kWARNING;
+  } else if (IsEqualIgnoreCase(log_level, "ERROR")) {
+    return LogLevel::kERROR;
+  } else if (IsEqualIgnoreCase(log_level, "FATAL")) {
+    return LogLevel::kFATAL;
+  } else {
+    return LogLevel::kINFO;
+  }
+}
+
+void Logger::Init(const std::string& role) {
+  const std::string log_dir = ::FLAGS_log_dir;
+
   FLAGS_logbufsecs = 10;
   FLAGS_max_log_size = 256;
   FLAGS_stop_logging_if_full_disk = true;
@@ -30,7 +72,8 @@ void Logger::InitLogger(const std::string& log_dir, const std::string& role,
   FLAGS_logbuflevel = google::GLOG_INFO;
   FLAGS_logtostdout = false;
   FLAGS_logtostderr = false;
-  ChangeGlogLevelUsingDingoLevel(level, DINGO_DEBUG);
+
+  ChangeGlogLevel(FLAGS_log_level);
 
   const std::string program_name = fmt::format("./{}", role);
   google::InitGoogleLogging(program_name.c_str());
@@ -47,6 +90,9 @@ void Logger::InitLogger(const std::string& log_dir, const std::string& role,
       google::GLOG_FATAL,
       fmt::format("{}/{}.fatal.log.", log_dir, role).c_str());
 }
+
+std::string Logger::LogDir() { return ::FLAGS_log_dir; }
+std::string Logger::LogLevel() { return FLAGS_log_level; }
 
 void Logger::SetMinLogLevel(int level) { FLAGS_minloglevel = level; }
 
@@ -73,15 +119,23 @@ void Logger::SetStoppingWhenDiskFull(bool is_stop) {
   FLAGS_stop_logging_if_full_disk = is_stop;
 }
 
-void Logger::ChangeGlogLevelUsingDingoLevel(const LogLevel& log_level,
-                                            uint32_t verbose) {
-  if (log_level == kDEBUG) {
+void Logger::ChangeGlogLevel(const std::string& level) {
+  const enum LogLevel& log_level = ToLogLevel(level);
+  if (log_level == LogLevel::kDEBUG) {
     Logger::SetMinLogLevel(0);
-    Logger::SetMinVerboseLevel(verbose == 0 ? DINGO_DEBUG : verbose);
   } else {
     Logger::SetMinLogLevel(static_cast<int>(log_level) - 1);
-    Logger::SetMinVerboseLevel(1);
   }
+}
+
+void Logger::ChangeGlogLevel(enum LogLevel level, uint32_t verbose) {
+  if (level == LogLevel::kDEBUG) {
+    Logger::SetMinLogLevel(0);
+  } else {
+    Logger::SetMinLogLevel(static_cast<int>(level) - 1);
+  }
+
+  FLAGS_v = verbose;
 }
 
 }  // namespace dingofs

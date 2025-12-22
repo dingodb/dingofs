@@ -30,21 +30,6 @@ namespace client {
 
 #define USING_FLAG(name) using ::dingofs::client::FLAGS_##name;
 
-/**
- * use vlog_level to set vlog level on the fly
- * When vlog_level is set, CheckVLogLevel is called to check the validity of the
- * value. Dynamically modify the vlog level by setting FLAG_v in CheckVLogLevel.
- *
- * You can modify the vlog level to 0 using:
- * curl -s http://127.0.0.1:9000/flags/vlog_level?setvalue=0
- */
-// log
-DECLARE_string(vfs_log_dir);
-DECLARE_int32(vfs_log_level);
-
-// meta path
-DECLARE_string(meta_path);
-
 // bthread
 DECLARE_int32(vfs_bthread_worker_num);
 // access log

@@ -22,6 +22,7 @@
 
 #include <string>
 
+#include "common/logging.h"
 #include "common/options/blockaccess.h"
 #include "common/options/client.h"
 #include "fmt/format.h"
@@ -67,7 +68,7 @@ inline void InitAwsSdkConfig(AwsSdkConfig* aws_sdk_config) {
   aws_sdk_config->loglevel = FLAGS_s3_loglevel;
 
   aws_sdk_config->log_prefix =
-      fmt::format("{}/aws_sdk_{}_", client::FLAGS_vfs_log_dir, getpid());
+      fmt::format("{}/aws_sdk_{}_", Logger::LogDir(), getpid());
   LOG(INFO) << fmt::format("s3_log_prefix: {}", aws_sdk_config->log_prefix);
 
   aws_sdk_config->verify_ssl = FLAGS_s3_verify_ssl;

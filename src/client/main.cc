@@ -19,11 +19,11 @@
 #include <iostream>
 
 #include "absl/cleanup/cleanup.h"
-#include "client/common/global_log.h"
 #include "client/fuse/fuse_op.h"
 #include "client/fuse/fuse_server.h"
 #include "common/flag.h"
 #include "common/helper.h"
+#include "common/logging.h"
 #include "common/options/cache.h"
 #include "common/options/common.h"
 #include "common/types.h"
@@ -139,7 +139,7 @@ int main(int argc, char* argv[]) {
   auto defer_uninit = ::absl::MakeCleanup([&]() { UnInitFuseClient(); });
 
   // init global log
-  InitLog(argv[0]);
+  dingofs::Logger::Init("dingo-fuse");
 
   // print current gflags
   LOG(INFO) << dingofs::GenCurrentFlags();
