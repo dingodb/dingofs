@@ -43,9 +43,9 @@ DEFINE_uint32(cache_node_state_check_duration_ms, 3000,
               "Duration in milliseconds to check the cache group node state");
 DEFINE_validator(cache_node_state_check_duration_ms, brpc::PassValidate);
 
-DEFINE_uint32(ping_rpc_timeout_ms, 1000,
+DEFINE_uint32(cache_ping_rpc_timeout_ms, 1000,
               "RPC timeout for pinging remote cache node in milliseconds");
-DEFINE_validator(ping_rpc_timeout_ms, brpc::PassValidate);
+DEFINE_validator(cache_ping_rpc_timeout_ms, brpc::PassValidate);
 
 RemoteCacheNodeHealthChecker::RemoteCacheNodeHealthChecker(
     const CacheGroupMember& member, StateMachineSPtr state_machine)
@@ -115,7 +115,7 @@ void RemoteCacheNodeHealthChecker::InitChannel() {
   butil::str2endpoint(member_.ip.c_str(), member_.port, &endpoint);
 
   brpc::ChannelOptions options;
-  options.connect_timeout_ms = FLAGS_rpc_connect_timeout_ms;
+  options.connect_timeout_ms = FLAGS_cache_rpc_connect_timeout_ms;
   options.connection_group = "urgent";
 
   auto* channel = channel_.get();
@@ -134,7 +134,7 @@ void RemoteCacheNodeHealthChecker::ResetChannel() { InitChannel(); }
 Status RemoteCacheNodeHealthChecker::SendPingRequest() {
   brpc::Controller cntl;
   cntl.ignore_eovercrowded();
-  cntl.set_timeout_ms(FLAGS_ping_rpc_timeout_ms);
+  cntl.set_timeout_ms(FLAGS_cache_ping_rpc_timeout_ms);
 
   pb::cache::PingRequest request;
   pb::cache::PingResponse reponse;

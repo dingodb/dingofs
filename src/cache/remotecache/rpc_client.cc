@@ -43,32 +43,33 @@
 namespace dingofs {
 namespace cache {
 
-DEFINE_uint32(rpc_connect_timeout_ms, 1000,
+DEFINE_uint32(cache_rpc_connect_timeout_ms, 1000,
               "Timeout for rpc channel connect in milliseconds");
-DEFINE_validator(rpc_connect_timeout_ms, brpc::PassValidate);
+DEFINE_validator(cache_rpc_connect_timeout_ms, brpc::PassValidate);
 
-DEFINE_uint32(put_rpc_timeout_ms, 30000,
+DEFINE_uint32(cache_put_rpc_timeout_ms, 30000,
               "Timeout for put rpc request in milliseconds");
-DEFINE_validator(put_rpc_timeout_ms, brpc::PassValidate);
+DEFINE_validator(cache_put_rpc_timeout_ms, brpc::PassValidate);
 
-DEFINE_uint32(range_rpc_timeout_ms, 30000,
+DEFINE_uint32(cache_range_rpc_timeout_ms, 30000,
               "Timeout for range rpc request in milliseconds");
-DEFINE_validator(range_rpc_timeout_ms, brpc::PassValidate);
+DEFINE_validator(cache_range_rpc_timeout_ms, brpc::PassValidate);
 
 DEFINE_uint32(cache_rpc_timeout_ms, 30000,
               "Timeout for cache rpc request in milliseconds");
 DEFINE_validator(cache_rpc_timeout_ms, brpc::PassValidate);
 
-DEFINE_uint32(prefetch_rpc_timeout_ms, 3000,
+DEFINE_uint32(cache_prefetch_rpc_timeout_ms, 3000,
               "Timeout for prefetch rpc request in milliseconds");
-DEFINE_validator(prefetch_rpc_timeout_ms, brpc::PassValidate);
+DEFINE_validator(cache_prefetch_rpc_timeout_ms, brpc::PassValidate);
 
-DEFINE_uint32(rpc_max_retry_times, 3, "Maximum retry times for rpc request");
-DEFINE_validator(rpc_max_retry_times, brpc::PassValidate);
+DEFINE_uint32(cache_rpc_max_retry_times, 3,
+              "Maximum retry times for rpc request");
+DEFINE_validator(cache_rpc_max_retry_times, brpc::PassValidate);
 
-DEFINE_uint32(rpc_max_timeout_ms, 60000,
+DEFINE_uint32(cache_rpc_max_timeout_ms, 60000,
               "Maximum timeout for rpc request in milliseconds");
-DEFINE_validator(rpc_max_timeout_ms, brpc::PassValidate);
+DEFINE_validator(cache_rpc_max_timeout_ms, brpc::PassValidate);
 
 static const std::string kModule = "rpc";
 
@@ -171,7 +172,7 @@ Status RPCClient::InitChannel(const std::string& server_ip,
   }
 
   brpc::ChannelOptions options;
-  options.connect_timeout_ms = FLAGS_rpc_connect_timeout_ms;
+  options.connect_timeout_ms = FLAGS_cache_rpc_connect_timeout_ms;
   options.connection_group = "common";
   rc = channel_->Init(ep, &options);
   if (rc != 0) {
@@ -210,19 +211,19 @@ uint32_t RPCClient::NextTimeoutMs(const std::string& api_name,
                                   int retry_count) const {
   uint32_t timeout_ms;
   if (api_name == "Put") {
-    timeout_ms = FLAGS_put_rpc_timeout_ms;
+    timeout_ms = FLAGS_cache_put_rpc_timeout_ms;
   } else if (api_name == "Range") {
-    timeout_ms = FLAGS_range_rpc_timeout_ms;
+    timeout_ms = FLAGS_cache_range_rpc_timeout_ms;
   } else if (api_name == "Cache") {
     timeout_ms = FLAGS_cache_rpc_timeout_ms;
   } else if (api_name == "Prefetch") {
-    timeout_ms = FLAGS_prefetch_rpc_timeout_ms;
+    timeout_ms = FLAGS_cache_prefetch_rpc_timeout_ms;
   } else {
     CHECK(false) << "Unknown API name: " << api_name;
   }
 
   timeout_ms = timeout_ms * std::pow(2, retry_count);
-  return std::min(timeout_ms, FLAGS_rpc_max_timeout_ms);
+  return std::min(timeout_ms, FLAGS_cache_rpc_max_timeout_ms);
 }
 
 template <typename Request, typename Response>
@@ -271,7 +272,7 @@ Status RPCClient::SendRequest(ContextSPtr ctx, const std::string& api_name,
   butil::Timer timer;
   timer.start();
 
-  for (int retry_count = 0; retry_count < FLAGS_rpc_max_retry_times;
+  for (int retry_count = 0; retry_count < FLAGS_cache_rpc_max_retry_times;
        ++retry_count) {
     brpc::Controller cntl;
     cntl.set_connection_type(connection_type);
@@ -332,7 +333,7 @@ Status RPCClient::SendRequest(ContextSPtr ctx, const std::string& api_name,
       "(%d).",
       ctx->TraceId(), api_name, server_ip_, server_port_,
       timer.u_elapsed(1.0) / 1e6, request.ShortDebugString(),
-      FLAGS_rpc_max_retry_times);
+      FLAGS_cache_rpc_max_retry_times);
 
   return Status::Internal("rpc failed exceed max retry times");
 };
