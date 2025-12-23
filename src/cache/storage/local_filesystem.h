@@ -50,6 +50,10 @@ class LocalFileSystem final : public BaseFileSystem {
                   size_t length, IOBuffer* buffer, ReadOption option) override;
 
  private:
+  off_t AlignOffset(off_t offset);
+  size_t AlignLength(size_t length);
+  std::pair<off_t, size_t> AlignRequest(off_t offset, size_t length);
+
   Status AioWrite(ContextSPtr ctx, int fd, IOBuffer* buffer,
                   WriteOption option);
   Status AioRead(ContextSPtr ctx, int fd, off_t offset, size_t length,

@@ -20,6 +20,13 @@ project(dingofs C CXX)
 option(BUILD_UNIT_TESTS "Build unit test" OFF)
 option(BUILD_INTEGRATION_TESTS "Build integration test" OFF)
 option(USE_TCMALLOC "Use tcmalloc" ON)
+option(BRPC_ENABLE_CPU_PROFILER "Enable brpc cpu profiler" OFF)
+
+if(BRPC_ENABLE_CPU_PROFILER)
+  message(STATUS "Enable BRPC_ENABLE_CPU_PROFILER")
+  add_definitions(-DBRPC_ENABLE_CPU_PROFILER=ON)
+  set(CPU_PROFILER_LIB gperftools::gperftools unwind::unwind)
+endif()
 
 set(CMAKE_CXX_STANDARD 17)
 if(NOT CMAKE_BUILD_TYPE)
@@ -147,7 +154,6 @@ message("Using backtrace ${LIBBACKTRACE_VERSION}, lib:${LIBBACKTRACE_LIBRARY}")
 find_package(libunwind REQUIRED)
 message("Using libunwind ${LIBUNWIND_VERSION}, lib:${LIBUNWIND_LIBRARY}")
 
-
 find_package(FUSE3 REQUIRED)
 message("Using FUSE3 include_dir:${FUSE3_INCLUDE_DIR}, library:${FUSE3_LIBRARY}")
 include_directories(${FUSE3_INCLUDE_DIR})
@@ -187,6 +193,12 @@ message("Using glog ${glog_VERSION}")
 
 find_package(GTest CONFIG REQUIRED)
 message("Using GTest ${GTest_VERSION}")
+
+find_package(unwind REQUIRED)
+message("Using unwind ${unwind_VERSION}")
+
+find_package(gperftools REQUIRED)
+message("Using gperftools ${gperftools_VERSION}")
 
 set(protobuf_MODULE_COMPATIBLE TRUE)
 find_package(Protobuf CONFIG REQUIRED)

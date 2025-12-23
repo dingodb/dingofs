@@ -36,7 +36,13 @@ target_link_libraries(cache_lib
     cache_remotecache
     cache_tiercache
     dingofs_options
+
+    ${CPU_PROFILER_LIB}
 )
 
 add_executable(dingo-cache main.cc)
-target_link_libraries(dingo-cache cache_lib)
+target_link_libraries(dingo-cache
+    cache_lib
+
+    ${CPU_PROFILER_LIB}
+)
