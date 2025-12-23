@@ -1,14 +1,11 @@
 #!/usr/bin/env bash
 
-# Copyright (C) 2021 Jingli Chen (Wine93), NetEase Inc.
-
 ############################  GLOBAL VARIABLES
 g_role=""
 g_args=""
 g_prefix=""
 g_binary=""
 g_start_args=""
-#g_preexec="/dingofs/tools-v2/sbin/daemon"
 
 ############################  BASIC FUNCTIONS
 function msg() {
@@ -32,8 +29,7 @@ Usage:
     entrypoint.sh --role=ROLE --args=ARGS
 
 Examples:
-    entrypoint.sh --role=etcd
-    entrypoint.sh --role=client --args="-o default_permissions"
+    entrypoint.sh --role=client
 _EOC_
 }
 
@@ -72,21 +68,9 @@ function prepare() {
     conf_path="$g_prefix/conf/$g_role.conf"
 
     case $g_role in
-        etcd)
-            g_binary="$g_prefix/sbin/etcd"
-            g_start_args="--config-file $conf_path"
-            ;;
-        mds)
-            g_binary="$g_prefix/sbin/dingo-mds"
-            g_start_args="--confPath $conf_path"
-            ;;
-        metaserver)
-            g_binary="$g_prefix/sbin/dingo-metaserver"
-            g_start_args="--confPath $conf_path"
-            ;;
         client)
-            g_binary="$g_prefix/sbin/dingo-fuse"
-            g_start_args="--confPath $conf_path"
+            g_binary="$g_prefix/sbin/dingo-client"
+            g_start_args="--flagfile $conf_path"
             ;;
         monitor)
             g_binary="python3"
@@ -105,11 +89,7 @@ function prepare() {
 
 function create_directory() {
     chmod 700 "$g_prefix/data"
-    if [ "$g_role" == "etcd" ]; then
-        mkdir -p "$g_prefix/data/wal"
-    elif [ "$g_role" == "metaserver" ]; then
-        mkdir -p "$g_prefix/data/storage"
-    elif [ "$g_role" == "client" ]; then
+    if [ "$g_role" == "client" ]; then
         mkdir -p "$g_prefix/mnt"
     fi
 }
@@ -121,9 +101,7 @@ function main() {
     create_directory
     [[ $(command -v crontab) ]] && cron
     #[[ ! -z $g_preexec ]] && $g_preexec &
-    if [ $g_role == "etcd" ]; then
-        exec $g_binary $g_start_args >>$g_prefix/logs/etcd.log 2>&1
-    elif [ $g_role == "monitor" ]; then
+    if [ $g_role == "monitor" ]; then
         cd $g_prefix
         exec $g_binary $g_start_args
     else
