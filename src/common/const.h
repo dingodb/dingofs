@@ -38,8 +38,7 @@ static const std::string kDefaultRuntimeBaseDir = "~/.dingofs/";
 static const std::string kDefaultCacheDir = kDefaultRuntimeBaseDir + "cache";
 static const std::string kDefaultCacheLogDir =
     kDefaultRuntimeBaseDir + "log/cache";
-static const std::string kDefaultClientLogDir =
-    kDefaultRuntimeBaseDir + "log/client";
+static const std::string kDefaultLogDir = kDefaultRuntimeBaseDir + "log";
 
 static const std::string kDefaultDataDir = kDefaultRuntimeBaseDir + "data";
 static const std::string kDefaultMetaDBDir = kDefaultRuntimeBaseDir + "meta";

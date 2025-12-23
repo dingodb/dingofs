@@ -16,6 +16,8 @@
 
 #include <cstdint>
 
+#include "common/const.h"
+#include "common/helper.h"
 #include "fmt/core.h"
 #include "glog/logging.h"
 
@@ -63,7 +65,13 @@ static LogLevel ToLogLevel(const std::string& log_level) {
 }
 
 void Logger::Init(const std::string& role) {
+  ::FLAGS_log_dir = dingofs::Helper::ExpandPath(
+      ::FLAGS_log_dir.empty() ? kDefaultLogDir : ::FLAGS_log_dir);
+
   const std::string log_dir = ::FLAGS_log_dir;
+
+  CHECK(dingofs::Helper::CreateDirectory(log_dir))
+      << fmt::format("create log directory failed, log_dir: {}", log_dir);
 
   FLAGS_logbufsecs = 10;
   FLAGS_max_log_size = 256;

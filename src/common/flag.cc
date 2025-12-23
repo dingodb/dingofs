@@ -30,6 +30,7 @@
 #include <sstream>
 #include <vector>
 
+#include "common/const.h"
 #include "utils/string.h"
 
 namespace dingofs {
@@ -120,9 +121,14 @@ std::vector<gflags::CommandLineFlagInfo> FlagsHelper::GetAllGFlags(
   std::vector<gflags::CommandLineFlagInfo> flags_out;
 
   gflags::GetAllFlags(&all_flags);
-  for (const auto& flag : all_flags) {
+  for (auto& flag : all_flags) {
     if (flag.description.empty()) {  // hiden the flag
       continue;
+    }
+
+    if (flag.name == "log_dir") {
+      flag.description = "log directory";
+      flag.default_value = kDefaultLogDir;
     }
 
     if (kGflagWhiteList.count(flag.name) > 0) {
