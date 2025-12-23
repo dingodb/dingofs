@@ -41,7 +41,7 @@ static Slice CreateSlice(uint64_t offset, uint64_t length, uint64_t id,
   };
 }
 
-static FileRange CreateFileRange(uint64_t offset, uint64_t len) {
+static FileRange CreateFileRange(int64_t offset, int64_t len) {
   return FileRange{
       .offset = offset,
       .len = len,

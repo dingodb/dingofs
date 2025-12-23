@@ -38,7 +38,7 @@ namespace vfs {
   } while (0)
 
 // Helper function to create a SliceReadReq object
-static SliceReadReq CreateSliceReadReq(uint64_t file_offset, uint64_t read_len,
+static SliceReadReq CreateSliceReadReq(int64_t file_offset, int64_t read_len,
                                        const Slice& slice) {
   return SliceReadReq{
       .file_offset = file_offset,
