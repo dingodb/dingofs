@@ -43,12 +43,12 @@ namespace dingofs {
 namespace cache {
 
 DEFINE_bool(fill_group_cache, true,
-            "Whether the data blocks uploaded to the storage are "
+            "whether the data blocks uploaded to the storage are "
             "simultaneously sent to the cache group node.");
 DEFINE_validator(fill_group_cache, brpc::PassValidate);
 
 DEFINE_uint32(prefetch_max_inflights, 16,
-              "Maximum inflight requests for prefetching blocks");
+              "maximum inflight requests for prefetching blocks");
 
 static const std::string kModule = "tiercache";
 

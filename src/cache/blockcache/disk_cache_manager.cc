@@ -35,14 +35,14 @@
 namespace dingofs {
 namespace cache {
 
-DEFINE_double(free_space_ratio, 0.1, "Ratio of free space of total disk space");
+DEFINE_double(free_space_ratio, 0.1, "ratio of free space of total disk space");
 
 DEFINE_uint32(cache_expire_s, 259200,
-              "Expiration time for cache blocks in seconds");
+              "expiration time for cache blocks in seconds");
 DEFINE_validator(cache_expire_s, brpc::PassValidate);
 
 DEFINE_uint32(cache_cleanup_expire_interval_ms, 1000,
-              "Interval for cleaning up expired cache blocks in milliseconds");
+              "interval for cleaning up expired cache blocks in milliseconds");
 DEFINE_validator(cache_cleanup_expire_interval_ms, brpc::PassValidate);
 
 DiskCacheManager::DiskCacheManager(uint64_t capacity,

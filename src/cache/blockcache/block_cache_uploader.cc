@@ -40,7 +40,7 @@ namespace cache {
 
 DEFINE_uint32(
     upload_stage_max_inflights, 32,
-    "Maximum inflight requests for uploading stage blocks to storage");
+    "maximum inflight requests for uploading stage blocks to storage");
 
 static const std::string kModule = "uploader";
 

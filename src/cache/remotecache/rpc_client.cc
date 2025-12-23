@@ -44,31 +44,31 @@ namespace dingofs {
 namespace cache {
 
 DEFINE_uint32(cache_rpc_connect_timeout_ms, 1000,
-              "Timeout for rpc channel connect in milliseconds");
+              "timeout for rpc channel connect in milliseconds");
 DEFINE_validator(cache_rpc_connect_timeout_ms, brpc::PassValidate);
 
 DEFINE_uint32(cache_put_rpc_timeout_ms, 30000,
-              "Timeout for put rpc request in milliseconds");
+              "timeout for put rpc request in milliseconds");
 DEFINE_validator(cache_put_rpc_timeout_ms, brpc::PassValidate);
 
 DEFINE_uint32(cache_range_rpc_timeout_ms, 30000,
-              "Timeout for range rpc request in milliseconds");
+              "timeout for range rpc request in milliseconds");
 DEFINE_validator(cache_range_rpc_timeout_ms, brpc::PassValidate);
 
 DEFINE_uint32(cache_rpc_timeout_ms, 30000,
-              "Timeout for cache rpc request in milliseconds");
+              "timeout for cache rpc request in milliseconds");
 DEFINE_validator(cache_rpc_timeout_ms, brpc::PassValidate);
 
 DEFINE_uint32(cache_prefetch_rpc_timeout_ms, 3000,
-              "Timeout for prefetch rpc request in milliseconds");
+              "timeout for prefetch rpc request in milliseconds");
 DEFINE_validator(cache_prefetch_rpc_timeout_ms, brpc::PassValidate);
 
 DEFINE_uint32(cache_rpc_max_retry_times, 3,
-              "Maximum retry times for rpc request");
+              "maximum retry times for rpc request");
 DEFINE_validator(cache_rpc_max_retry_times, brpc::PassValidate);
 
 DEFINE_uint32(cache_rpc_max_timeout_ms, 60000,
-              "Maximum timeout for rpc request in milliseconds");
+              "maximum timeout for rpc request in milliseconds");
 DEFINE_validator(cache_rpc_max_timeout_ms, brpc::PassValidate);
 
 static const std::string kModule = "rpc";

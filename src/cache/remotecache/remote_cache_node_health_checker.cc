@@ -40,11 +40,11 @@ namespace dingofs {
 namespace cache {
 
 DEFINE_uint32(cache_node_state_check_duration_ms, 3000,
-              "Duration in milliseconds to check the cache group node state");
+              "duration in milliseconds to check the cache group node state");
 DEFINE_validator(cache_node_state_check_duration_ms, brpc::PassValidate);
 
 DEFINE_uint32(cache_ping_rpc_timeout_ms, 1000,
-              "RPC timeout for pinging remote cache node in milliseconds");
+              "rpc timeout for pinging remote cache node in milliseconds");
 DEFINE_validator(cache_ping_rpc_timeout_ms, brpc::PassValidate);
 
 RemoteCacheNodeHealthChecker::RemoteCacheNodeHealthChecker(

@@ -30,7 +30,7 @@ namespace dingofs {
 namespace cache {
 
 DEFINE_uint32(disk_state_check_duration_ms, 3000,
-              "Duration in milliseconds to check the disk state");
+              "duration in milliseconds to check the disk state");
 DEFINE_validator(disk_state_check_duration_ms, brpc::PassValidate);
 
 DiskStateHealthChecker::DiskStateHealthChecker(DiskCacheMetricSPtr metric,

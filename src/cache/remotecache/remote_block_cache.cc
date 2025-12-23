@@ -41,14 +41,14 @@ namespace dingofs {
 namespace cache {
 
 DEFINE_string(cache_group, "",
-              "Cache group name to use, empty means not use cache group");
+              "cache group name to use, empty means not use cache group");
 
 DEFINE_bool(enable_remote_prefetch, true,
-            "Whether enable remote prefetch, default is true");
+            "whether enable remote prefetch, default is true");
 DEFINE_validator(enable_remote_prefetch, brpc::PassValidate);
 
 DEFINE_uint32(remote_prefetch_max_buffer_size_mb, 512,
-              "Maximum buffer size for remote prefetch");
+              "maximum buffer size for remote prefetch");
 
 static const std::string kModule = "remotecache";
 

@@ -49,9 +49,9 @@ namespace dingofs {
 namespace cache {
 
 DEFINE_string(cache_store, "disk",
-              "Cache store type, can be none, disk or 3fs");
-DEFINE_bool(enable_stage, true, "Whether to enable stage block for writeback");
-DEFINE_bool(enable_cache, true, "Whether to enable cache block");
+              "cache store type, can be none, disk or 3fs");
+DEFINE_bool(enable_stage, true, "whether to enable stage block for writeback");
+DEFINE_bool(enable_cache, true, "whether to enable cache block");
 
 static const std::string kModule = "blockcache";
 

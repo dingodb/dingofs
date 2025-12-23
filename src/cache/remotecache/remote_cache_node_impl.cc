@@ -46,10 +46,10 @@ namespace dingofs {
 namespace cache {
 
 DEFINE_bool(subrequest_ranges, true,
-            "Whether split range request into subrequests");
+            "whether split range request into subrequests");
 DEFINE_validator(subrequest_ranges, brpc::PassValidate);
 
-DEFINE_uint32(subrequest_range_size, 1048576, "Range size for each subrequest");
+DEFINE_uint32(subrequest_range_size, 1048576, "range size for each subrequest");
 DEFINE_validator(subrequest_range_size, brpc::PassValidate);
 
 RemoteCacheNodeImpl::RemoteCacheNodeImpl(const CacheGroupMember& member)

@@ -41,11 +41,11 @@ namespace dingofs {
 namespace cache {
 
 DEFINE_int64(storage_upload_retry_timeout_s, 1800,
-             "Timeout in seconds for upload retry");
+             "timeout in seconds for upload retry");
 DEFINE_validator(storage_upload_retry_timeout_s, brpc::PassValidate);
 
 DEFINE_int64(storage_download_retry_timeout_s, 1800,
-             "Timeout in seconds for download retry");
+             "timeout in seconds for download retry");
 DEFINE_validator(storage_download_retry_timeout_s, brpc::PassValidate);
 
 UploadClosure::UploadClosure(ContextSPtr ctx, const BlockKey& key,

@@ -34,12 +34,12 @@ namespace dingofs {
 namespace cache {
 
 DEFINE_string(logdir, kDefaultCacheLogDir,
-              "Specified logging directory for glog and access log");
+              "specified logging directory for glog and access log");
 
-DEFINE_int32(loglevel, 0, "Sets glog logging level: 0, 1, 2 and etc");
+DEFINE_int32(loglevel, 0, "sets glog logging level: 0, 1, 2 and etc");
 
 DEFINE_bool(cache_trace_logging, true,
-            "Whether to enable trace logging for cache");
+            "whether to enable trace logging for cache");
 DEFINE_validator(cache_trace_logging, brpc::PassValidate);
 
 using MessageHandler = std::function<std::string()>;

@@ -46,22 +46,22 @@
 namespace dingofs {
 namespace cache {
 
-DEFINE_string(id, "", "Specified the cache node id");
+DEFINE_string(id, "", "specified the cache node id");
 DEFINE_validator(id, Helper::NonEmptyString);
 
-DEFINE_string(group_name, "default", "Which group this cache node belongs to");
+DEFINE_string(group_name, "default", "which group this cache node belongs to");
 DEFINE_validator(group_name, Helper::NonEmptyString);
 
 DEFINE_string(listen_ip, "0.0.0.0",
-              "IP address to listen on for this cache group node");
+              "ip address to listen on for this cache group node");
 DEFINE_validator(listen_ip, Helper::NonEmptyString);
 
-DEFINE_uint32(listen_port, 9300, "Port to listen on for this cache group node");
+DEFINE_uint32(listen_port, 9300, "port to listen on for this cache group node");
 DEFINE_uint32(group_weight, 100,
-              "Weight of this cache group node, used for consistent hashing");
+              "weight of this cache group node, used for consistent hashing");
 
 DEFINE_uint32(max_range_size_kb, 128,
-              "Retrive the whole block if length of range request is larger "
+              "retrive the whole block if length of range request is larger "
               "than this value");
 
 static const std::string kModule = "cachenode";

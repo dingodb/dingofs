@@ -39,7 +39,7 @@
 namespace dingofs {
 namespace cache {
 
-DEFINE_uint32(ioring_iodepth, 128, "Aio queue maximum iodepth");
+DEFINE_uint32(ioring_iodepth, 128, "aio queue maximum iodepth");
 
 const std::string kModule = "aio";
 

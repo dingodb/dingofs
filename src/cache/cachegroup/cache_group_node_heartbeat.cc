@@ -29,7 +29,7 @@ namespace dingofs {
 namespace cache {
 
 DEFINE_uint32(send_heartbeat_interval_s, 3,
-              "Interval to send heartbeat to MDS in seconds");
+              "interval to send heartbeat to MDS in seconds");
 
 CacheGroupNodeHeartbeatImpl::CacheGroupNodeHeartbeatImpl(
     CacheGroupNodeMemberSPtr member, MDSClientSPtr mds_client)

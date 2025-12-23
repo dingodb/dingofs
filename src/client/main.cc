@@ -64,7 +64,6 @@ static dingofs::FlagExtraInfo extras = {
         R"(  $ dingo-client local://dingofs /mnt/dingofs
   $ dingo-client mds://10.220.69.10:7400/dingofs /mnt/dingofs
   $ dingo-client --flagfile client.conf mds://10.220.32.1:6700/dingofs /mnt/dingofs
-  $ dingo-client --daemonize mds://10.220.32.1:6700/dingofs /mnt/dingofs
 )",
     .patterns = {"src/client", "cache/storage", "cache/tiercache",
                  "cache/blockcache", "cache/remotecache", "options/blockaccess",

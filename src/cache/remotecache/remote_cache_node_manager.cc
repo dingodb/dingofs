@@ -38,7 +38,7 @@ namespace dingofs {
 namespace cache {
 
 DEFINE_uint32(load_members_interval_ms, 1000,
-              "Interval to load members of the cache group in milliseconds");
+              "interval to load members of the cache group in milliseconds");
 
 RemoteCacheNodeManager::RemoteCacheNodeManager(OnMemberLoadFn on_member_load_fn)
     : running_(false),

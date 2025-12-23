@@ -31,40 +31,40 @@ namespace cache {
 
 // Disk state
 DEFINE_uint32(disk_state_tick_duration_s, 60,
-              "Duration in seconds for the disk state tick");
+              "duration in seconds for the disk state tick");
 DEFINE_validator(disk_state_tick_duration_s, brpc::PassValidate);
 
 DEFINE_uint32(disk_state_normal2unstable_error_num, 3,
-              "Number of errors to trigger unstable state from normal state");
+              "number of errors to trigger unstable state from normal state");
 DEFINE_validator(disk_state_normal2unstable_error_num, brpc::PassValidate);
 
 DEFINE_uint32(disk_state_unstable2normal_succ_num, 10,
-              "Number of successes to trigger normal state from "
+              "number of successes to trigger normal state from "
               "unstable state");
 DEFINE_validator(disk_state_unstable2normal_succ_num, brpc::PassValidate);
 
 DEFINE_uint32(disk_state_unstable2down_s, 1800,
-              "Duration in seconds to trigger down state from unstable state");
+              "duration in seconds to trigger down state from unstable state");
 DEFINE_validator(disk_state_unstable2down_s, brpc::PassValidate);
 
 // Node state
 DEFINE_uint32(cache_node_state_tick_duration_s, 30,
-              "Duration in seconds for the cache node state tick");
+              "duration in seconds for the cache node state tick");
 DEFINE_validator(cache_node_state_tick_duration_s, brpc::PassValidate);
 
 DEFINE_uint32(
     cache_node_state_normal2unstable_error_num, 10,
-    "Number of errors to trigger unstable cache state from normal state");
+    "number of errors to trigger unstable cache state from normal state");
 DEFINE_validator(cache_node_state_normal2unstable_error_num,
                  brpc::PassValidate);
 
 DEFINE_uint32(cache_node_state_unstable2normal_succ_num, 3,
-              "Number of successes to trigger normal state from "
+              "number of successes to trigger normal state from "
               "unstable state");
 DEFINE_validator(cache_node_state_unstable2normal_succ_num, brpc::PassValidate);
 
 DEFINE_uint32(cache_node_state_unstable2down_s, 604800,  // 7 days
-              "Duration in seconds to trigger down state from unstable state");
+              "duration in seconds to trigger down state from unstable state");
 DEFINE_validator(cache_node_state_unstable2down_s, brpc::PassValidate);
 
 uint32_t BaseState::CfgStateNormal2UnstableErrorNum() {

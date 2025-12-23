@@ -47,7 +47,7 @@ namespace dingofs {
 namespace cache {
 
 DEFINE_string(mds_addrs, "127.0.0.1:7400",
-              "Cache group member manager service rpc addresses");
+              "cache group member manager service rpc addresses");
 DEFINE_validator(mds_addrs, Helper::NonEmptyString);
 
 DEFINE_int64(mds_rpc_timeout_ms, 3000, "mds rpc timeout");
