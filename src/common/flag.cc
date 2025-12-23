@@ -26,6 +26,7 @@
 #include <gflags/gflags.h>
 
 #include <algorithm>
+#include <set>
 #include <sstream>
 #include <vector>
 
@@ -110,6 +111,9 @@ std::string FlagsHelper::GenCurrentFlags(const FlagsInfo& flags) {
   return os.str();
 }
 
+static std::set<std::string> kGflagWhiteList = {"log_dir", "log_level",
+                                                "log_v"};
+
 std::vector<gflags::CommandLineFlagInfo> FlagsHelper::GetAllGFlags(
     const std::vector<std::string>& patterns) {
   std::vector<gflags::CommandLineFlagInfo> all_flags;
@@ -118,6 +122,11 @@ std::vector<gflags::CommandLineFlagInfo> FlagsHelper::GetAllGFlags(
   gflags::GetAllFlags(&all_flags);
   for (const auto& flag : all_flags) {
     if (flag.description.empty()) {  // hiden the flag
+      continue;
+    }
+
+    if (kGflagWhiteList.count(flag.name) > 0) {
+      flags_out.push_back(flag);
       continue;
     }
 

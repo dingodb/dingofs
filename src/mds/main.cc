@@ -214,6 +214,8 @@ static bool GeneratePidFile(const std::string& filepath) {
   return dingofs::mds::Helper::SaveFile(filepath, std::to_string(pid));
 }
 
+static std::set<std::string> kGflagWhiteList = {"log_dir", "log_level", "log_v"};
+
 static std::vector<gflags::CommandLineFlagInfo> GetFlags(const std::string& prefix) {
   std::vector<gflags::CommandLineFlagInfo> dist_flags;
 
@@ -225,7 +227,7 @@ static std::vector<gflags::CommandLineFlagInfo> GetFlags(const std::string& pref
   std::vector<gflags::CommandLineFlagInfo> flags;
   gflags::GetAllFlags(&flags);
   for (const auto& flag : flags) {
-    if (flag.name.find(prefix) != std::string::npos) {
+    if (flag.name.find(prefix) != std::string::npos || kGflagWhiteList.count(flag.name) > 0) {
       dist_flags.push_back(flag);
     }
   }

@@ -20,9 +20,9 @@
 #include <gflags/gflags_declare.h>
 
 namespace dingofs {
-namespace common {}  // namespace common
 
 DECLARE_bool(daemonize);
 
 }  // namespace dingofs
+
 #endif  // DINGOFS_COMMON_OPTIONS_COMMON_OPTION_H_

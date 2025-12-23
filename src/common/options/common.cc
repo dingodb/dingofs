@@ -17,7 +17,6 @@
 #include <gflags/gflags.h>
 
 namespace dingofs {
-namespace common {}  // namespace common
 
 DEFINE_bool(daemonize, false, "run as a daemon process");
 
