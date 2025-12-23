@@ -47,21 +47,22 @@ DEFINE_bool(fuse_dryrun_bench_mode, false, "enable fuse dryrun bench mode");
 
 // smooth upgrade
 DEFINE_uint32(fuse_fd_get_max_retries, 100,
-              "the max retries that get fuse fd from old dingo-fuse during "
+              "the max retries that get fuse fd from old dingo-client during "
               "smooth upgrade");
 DEFINE_validator(fuse_fd_get_max_retries, brpc::PassValidate);
 DEFINE_uint32(
     fuse_fd_get_retry_interval_ms, 100,
-    "the interval in millseconds that get fuse fd from old dingo-fuse "
+    "the interval in millseconds that get fuse fd from old dingo-client "
     "during smooth upgrade");
 DEFINE_validator(fuse_fd_get_retry_interval_ms, brpc::PassValidate);
-DEFINE_uint32(
-    fuse_check_alive_max_retries, 600,
-    "the max retries that check old dingo-fuse is alive during smooth upgrade");
+DEFINE_uint32(fuse_check_alive_max_retries, 600,
+              "the max retries that check old dingo-client is alive during "
+              "smooth upgrade");
 DEFINE_validator(fuse_check_alive_max_retries, brpc::PassValidate);
-DEFINE_uint32(fuse_check_alive_retry_interval_ms, 1000,
-              "the interval in millseconds that check old dingo-fuse is alive "
-              "during smooth upgrade");
+DEFINE_uint32(
+    fuse_check_alive_retry_interval_ms, 1000,
+    "the interval in millseconds that check old dingo-client is alive "
+    "during smooth upgrade");
 DEFINE_validator(fuse_check_alive_retry_interval_ms, brpc::PassValidate);
 
 // vfs meta access log

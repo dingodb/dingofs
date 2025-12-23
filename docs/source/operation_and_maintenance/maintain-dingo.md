@@ -379,5 +379,5 @@ The corresponding `id` of the client can be viewed via [dingoadm client status](
 >| -- logs      # Log directory
 >|   ` -- dingofs-client.log.INFO.20220120-142115.6
 >` -- sbin      # Binary directory
->    ` -- dingo-fuse
+>    ` -- dingo-client
 > ```

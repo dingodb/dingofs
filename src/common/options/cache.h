@@ -29,12 +29,12 @@ namespace dingofs {
 namespace cache {
 
 // Table of Contents
-//   - dingo-fuse
+//   - dingo-client
 //   - dingo-cache
 //   - common (blockcache && mds-related)
 
 // ###############################################
-// # dingo-fuse
+// # dingo-client
 // ###############################################
 
 // Sets the cache group name to use, e.g. "default", "group1" and etc.

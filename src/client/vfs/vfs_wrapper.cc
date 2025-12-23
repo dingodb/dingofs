@@ -49,7 +49,7 @@ namespace vfs {
 
 #define METHOD_NAME() ("VFSWrapper::" + std::string(__FUNCTION__))
 
-const std::string kFdStatePath = "/tmp/dingo-fuse-state.json";
+const std::string kFdStatePath = "/tmp/dingo-client-state.json";
 
 using ::dingofs::client::fuse::FuseUpgradeManager;
 using metrics::ClientOpMetricGuard;
@@ -194,7 +194,7 @@ bool VFSWrapper::Dump() {
   const std::string path = fmt::format("{}.{}", kFdStatePath, getpid());
   std::ofstream file(path);
   if (!file.is_open()) {
-    LOG(ERROR) << "open dingo-fuse state file fail, file: " << path;
+    LOG(ERROR) << "open dingo-client state file fail, file: " << path;
     return false;
   }
 

@@ -36,8 +36,8 @@ target_link_libraries(fuse_client_lib
     leveldb
 )
 
-add_executable(dingo-fuse main.cc)
-target_link_libraries(dingo-fuse
+add_executable(dingo-client main.cc)
+target_link_libraries(dingo-client
     fuse_client_lib
     glog::glog
 )

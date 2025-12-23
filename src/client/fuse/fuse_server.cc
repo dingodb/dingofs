@@ -89,7 +89,7 @@ FuseServer::~FuseServer() {
 
   auto fuse_state = FuseUpgradeManager::GetInstance().GetFuseState();
   if (fuse_state == FuseUpgradeState::kFuseUpgradeOld) {
-    LOG(INFO) << "transfer dingo-fuse session to others.";
+    LOG(INFO) << "transfer dingo-client session to others.";
   }
 }
 
@@ -116,7 +116,7 @@ void FuseServer::FreeFuseInitBuf() {
 int FuseServer::GetDevFd() const { return fuse_session_fd(session_); }
 
 void FuseServer::Shutdown() {
-  LOG(INFO) << "start shutdown dingo-fuse";
+  LOG(INFO) << "start shutdown dingo-client";
   FuseUpgradeManager::GetInstance().UpdateFuseState(
       FuseUpgradeState::kFuseUpgradeOld);
   fuse_session_exit(session_);
@@ -176,7 +176,7 @@ void FuseServer::UdsServerFunc() {
 
 void FuseServer::UdsServerStart() {
   if (is_running_.load()) {
-    LOG(INFO) << "dingo-fuse uds server already started.";
+    LOG(INFO) << "dingo-client uds server already started.";
     return;
   }
 
@@ -184,7 +184,7 @@ void FuseServer::UdsServerStart() {
   uds_thread_.detach();
   is_running_.store(true);
 
-  LOG(INFO) << "dingo-fuse uds server started.";
+  LOG(INFO) << "dingo-client uds server started.";
 }
 
 int FuseServer::AddMountOptions() {
@@ -216,7 +216,7 @@ int FuseServer::CreateSession() {
 }
 
 void FuseServer::DestroySsesion() {
-  LOG(INFO) << "destroy dingo-fuse session.";
+  LOG(INFO) << "destroy dingo-client session.";
 
   if (session_ != nullptr) {
     fuse_remove_signal_handlers(session_);
@@ -237,7 +237,7 @@ int FuseServer::SessionMount() {
                  << mount_option_->mount_point;
       return 1;
     }
-    LOG(INFO) << "old dingo-fuse is already shutdown";
+    LOG(INFO) << "old dingo-client is already shutdown";
     // new fuse processes
     FuseUpgradeManager::GetInstance().UpdateFuseState(
         FuseUpgradeState::kFuseUpgradeNew);
@@ -258,7 +258,7 @@ int FuseServer::SessionMount() {
 
 int FuseServer::SaveOpInitMsg() {
   // smooth upgrade do not save fuse init message
-  // it's recv from old dingo-fuse
+  // it's recv from old dingo-client
   auto fuse_state = FuseUpgradeManager::GetInstance().GetFuseState();
   if (fuse_state == FuseUpgradeState::kFuseUpgradeNew) return 0;
 
@@ -268,7 +268,7 @@ int FuseServer::SaveOpInitMsg() {
 
   int ret = fuse_session_receive_buf(session_, &fbuf);
   if (ret > 0) {
-    LOG(INFO) << "recv dingo-fuse init message, size=" << fbuf.size;
+    LOG(INFO) << "recv dingo-client init message, size=" << fbuf.size;
     // save fuse init message
     CHECK(init_fbuf_.mem_size >= fbuf.size);
     init_fbuf_.size = fbuf.size;
@@ -290,8 +290,8 @@ int FuseServer::SaveOpInitMsg() {
 void FuseServer::ProcessInitMsg() {
   std::string msg =
       BufToHexString((unsigned char*)init_fbuf_.mem, init_fbuf_.size);
-  LOG(INFO) << "dingo-fuse init data size: " << init_fbuf_.size << ", data: 0x"
-            << msg;
+  LOG(INFO) << "dingo-client init data size: " << init_fbuf_.size
+            << ", data: 0x" << msg;
   fuse_session_process_buf(session_, &init_fbuf_);
 }
 
@@ -318,14 +318,14 @@ void FuseServer::ExportMetrics(const std::string& key,
 }
 
 int FuseServer::Serve() {
-  // export fd_comm_path value for new dingo-fuse use
+  // export fd_comm_path value for new dingo-client use
   ExportMetrics(kFdCommPathKey, fd_comm_file_);
 
   UdsServerStart();
   fuse_daemonize(1);
 
   LOG(INFO) << fmt::format(
-      "dingo-fuse start loop, singlethread={} max_threads={}.",
+      "dingo-client start loop, singlethread={} max_threads={}.",
       FLAGS_fuse_use_single_thread, FLAGS_fuse_max_threads);
 
   if (SaveOpInitMsg() == 1) {
@@ -334,7 +334,7 @@ int FuseServer::Serve() {
   }
   /* Block until ctrl+c or fusermount -u */
   int ret = SessionLoop();
-  LOG(INFO) << "dingo-fuse is shutdown, ret=" << ret;
+  LOG(INFO) << "dingo-client is shutdown, ret=" << ret;
 
   return ret;
 }
@@ -360,9 +360,9 @@ void FuseServer::SessionUnmount() {
   }
 }
 
-// TODO: check the fstype to determain the dingo-fuse
+// TODO: check the fstype to determain the dingo-client
 bool FuseServer::ShutdownGracefully(const std::string& mountpoint) {
-  // get old dingo-fuse pid
+  // get old dingo-client pid
   std::string file_name =
       absl::StrFormat("%s/%s", mountpoint, dingofs::STATSNAME);
 
@@ -384,7 +384,7 @@ bool FuseServer::ShutdownGracefully(const std::string& mountpoint) {
 
   FuseUpgradeManager::GetInstance().SetOldFusePid(pid);
 
-  // recv mount fd、fuse_init data from old dingo-fuse
+  // recv mount fd、fuse_init data from old dingo-client
   std::string comm_path = GetFdCommFileName(file_name);
   CHECK(!comm_path.empty());
   LOG(INFO) << "get socket success, comm_path=" << comm_path;
@@ -404,10 +404,10 @@ bool FuseServer::ShutdownGracefully(const std::string& mountpoint) {
   LOG(INFO) << "recv data from" << comm_path << ", mount fd = " << fuse_fd_
             << ",data size = " << init_fbuf_.size;
 
-  // send kill signal to old dingo-fuse
+  // send kill signal to old dingo-client
   kill(pid, SIGHUP);
 
-  // check old dingo-fuse is alive
+  // check old dingo-client is alive
   for (int i = 0; i < FLAGS_fuse_check_alive_max_retries; i++) {
     std::this_thread::sleep_for(
         std::chrono::milliseconds(FLAGS_fuse_check_alive_retry_interval_ms));
@@ -415,7 +415,7 @@ bool FuseServer::ShutdownGracefully(const std::string& mountpoint) {
       return true;
     }
 
-    LOG(INFO) << "check old dingo-fuse is alive: YES";
+    LOG(INFO) << "check old dingo-client is alive: YES";
   }
 
   return false;

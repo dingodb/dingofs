@@ -72,9 +72,9 @@ inline int GetFileInode(const std::string& file_name) {
 }
 
 /**
- * Read dingo-fuse runtime information from .stats file
- * At present, the purpose is to obtain the PID of old dingo-fuse, and in the
- * Subsequent smooth upgrade, send signals old dingo-fuse
+ * Read dingo-client runtime information from .stats file
+ * At present, the purpose is to obtain the PID of old dingo-client, and in the
+ * Subsequent smooth upgrade, send signals old dingo-client
  * Returns key,value map
  *
  * @param filename path of .stats file
@@ -107,7 +107,7 @@ inline std::unordered_map<std::string, std::string> LoadDingoRunTimeData(
 }
 
 /**
- * Get dingo-fuse pid from .stats file.
+ * Get dingo-client pid from .stats file.
  * Returns pid, -1 on error.
  *
  * @param filename path of .stats file
@@ -123,7 +123,7 @@ inline int GetDingoFusePid(const std::string& filename) {
 }
 
 /**
- * Get dingo-fuse unix domain socket file from .stats file.
+ * Get dingo-client unix domain socket file from .stats file.
  * Returns filename, "" on error.
  *
  * @param filename path of .stats file
@@ -139,11 +139,11 @@ inline std::string GetFdCommFileName(const std::string& filename) {
 }
 
 /**
- * Check dingo-fuse mountpoint can support  smooth upgrade
- * Smooth upgrade requires new dingo-fuse mount at same mountpoint as old
+ * Check dingo-client mountpoint can support  smooth upgrade
+ * Smooth upgrade requires new dingo-client mount at same mountpoint as old
  * Returns true,false.
  *
- * @param mountpoint dingo-fuse mountpoint
+ * @param mountpoint dingo-client mountpoint
  */
 inline bool CanShutdownGracefully(const std::string& mountpoint) {
   if (GetFileInode(mountpoint) != dingofs::ROOTINODEID) {
@@ -156,7 +156,7 @@ inline bool CanShutdownGracefully(const std::string& mountpoint) {
  * Umount libfuse filesystem after smooth upgrade
  * Returns true,false.
  *
- * @param mountpoint dingo-fuse mountpoint
+ * @param mountpoint dingo-client mountpoint
  * @param fd file descriptor for /dev/fuse
  */
 inline void DingoSessionUnmount(const std::string& mountpoint, int fd) {

@@ -50,7 +50,7 @@ static int InstallSignal(int sig, void (*handler)(int)) {
   sa.sa_flags = 0;
 
   if (sigaction(sig, &sa, nullptr) == -1) {
-    perror("dingo-fuse: cannot set signal handler.");
+    perror("dingo-client: cannot set signal handler.");
     return -1;
   }
 
@@ -58,13 +58,13 @@ static int InstallSignal(int sig, void (*handler)(int)) {
 }
 
 static dingofs::FlagExtraInfo extras = {
-    .program = "dingo-fuse",
-    .usage = "  dingo-fuse [OPTIONS] <meta-url> <mountpoint>",
+    .program = "dingo-client",
+    .usage = "  dingo-client [OPTIONS] <meta-url> <mountpoint>",
     .examples =
-        R"(  $ dingo-fuse local://dingofs /mnt/dingofs
-  $ dingo-fuse mds://10.220.69.10:7400/dingofs /mnt/dingofs
-  $ dingo-fuse --flagfile client.conf mds://10.220.32.1:6700/dingofs /mnt/dingofs
-  $ dingo-fuse --daemonize mds://10.220.32.1:6700/dingofs /mnt/dingofs
+        R"(  $ dingo-client local://dingofs /mnt/dingofs
+  $ dingo-client mds://10.220.69.10:7400/dingofs /mnt/dingofs
+  $ dingo-client --flagfile client.conf mds://10.220.32.1:6700/dingofs /mnt/dingofs
+  $ dingo-client --daemonize mds://10.220.32.1:6700/dingofs /mnt/dingofs
 )",
     .patterns = {"src/client", "cache/storage", "cache/tiercache",
                  "cache/blockcache", "cache/remotecache", "options/blockaccess",
@@ -91,7 +91,7 @@ int main(int argc, char* argv[]) {
     std::cerr << "\n";
     std::cerr << "Examples:\n" << extras.examples << '\n';
 
-    std::cerr << "For more help see: dingo-fuse --help\n";
+    std::cerr << "For more help see: dingo-client --help\n";
     return EXIT_FAILURE;
   }
 
@@ -139,7 +139,7 @@ int main(int argc, char* argv[]) {
   auto defer_uninit = ::absl::MakeCleanup([&]() { UnInitFuseClient(); });
 
   // init global log
-  dingofs::Logger::Init("dingo-fuse");
+  dingofs::Logger::Init("dingo-client");
 
   // print current gflags
   LOG(INFO) << dingofs::GenCurrentFlags();
