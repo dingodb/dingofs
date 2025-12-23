@@ -36,4 +36,6 @@ target_link_libraries(fuse_client_lib
 add_executable(dingo-fuse main.cc)
 target_link_libraries(dingo-fuse
     fuse_client_lib
+    unwind::unwind
+    gperftools::gperftools
 )

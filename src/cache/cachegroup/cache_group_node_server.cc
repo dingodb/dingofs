@@ -56,7 +56,7 @@ Status CacheGroupNodeServerImpl::Start() {
   // Start brpc server
   auto listen_ip = FLAGS_listen_ip;
   auto listen_port = FLAGS_listen_port;
-  auto status = StartRpcServer(listen_ip, listen_port);
+  auto status = StartRpcServer("0.0.0.0", listen_port);
   if (!status.ok()) {
     LOG(ERROR) << "Start cache group node server on addresss (" << listen_ip
                << ":" << listen_port << ") failed: " << status.ToString();

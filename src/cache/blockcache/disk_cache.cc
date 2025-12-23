@@ -445,7 +445,8 @@ Status DiskCache::CheckStatus(uint8_t want) const {
 bool DiskCache::IsLoading() const { return loader_->IsLoading(); }
 
 bool DiskCache::IsHealthy() const {
-  return state_machine_->GetState() == State::kStateNormal;
+  return true;
+  // return state_machine_->GetState() == State::kStateNormal;
 }
 
 bool DiskCache::StageFull() const { return manager_->StageFull(); }

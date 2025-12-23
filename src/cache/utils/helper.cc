@@ -27,6 +27,7 @@
 #include <absl/strings/str_join.h>
 #include <absl/strings/str_split.h>
 #include <butil/file_util.h>
+#include <butil/memory/aligned_memory.h>
 #include <google/protobuf/util/json_util.h>
 
 #include <numeric>

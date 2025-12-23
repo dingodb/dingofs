@@ -211,6 +211,14 @@ Status Posix::StatFS(const std::string& path, struct statfs* statfs) {
   return Status::OK();
 }
 
+Status Posix::Fallocate(int fd, int mode, off_t offset, size_t len) {
+  if (::fallocate(fd, mode, offset, len) != 0) {
+    return PosixError(errno, "fallocate(%d,%0xd,%lld,%zu)", fd, mode, offset,
+                      len);
+  }
+  return Status::OK();
+}
+
 // NOTE:
 // 1. The dirty page cache will not dropped which means you should sync data
 // to disk before calling this function.

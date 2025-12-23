@@ -76,6 +76,8 @@ class Posix {
 
   static Status StatFS(const std::string& path, struct statfs* statfs);
 
+  static Status Fallocate(int fd, int mode, off_t offset, size_t len);
+
   static Status PosixFAdvise(int fd, off_t offset, size_t length, int advise);
 
   static Status MMap(void* addr, size_t length, int port, int flags, int fd,

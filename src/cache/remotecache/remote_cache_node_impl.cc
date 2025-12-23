@@ -244,12 +244,14 @@ Status RemoteCacheNodeImpl::SubrequestRanges(ContextSPtr ctx,
 }
 
 Status RemoteCacheNodeImpl::CheckHealth(ContextSPtr ctx) const {
-  if (state_machine_->GetState() != State::kStateNormal) {
-    LOG_EVERY_SECOND_CTX(WARNING) << "Remote cache node is unhealthy: state = "
-                                  << StateToString(state_machine_->GetState())
-                                  << ", member = " << member_.ToString();
-    return Status::CacheUnhealthy("remote cache node is unhealthy");
-  }
+  // if (state_machine_->GetState() != State::kStateNormal) {
+  //   LOG_EVERY_SECOND_CTX(WARNING) << "Remote cache node is unhealthy: state =
+  //   "
+  //                                 <<
+  //                                 StateToString(state_machine_->GetState())
+  //                                 << ", member = " << member_.ToString();
+  //   return Status::CacheUnhealthy("remote cache node is unhealthy");
+  // }
   return Status::OK();
 }
 

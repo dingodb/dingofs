@@ -166,10 +166,12 @@ void DiskCacheManager::Delete(const CacheKey& key) {
 }
 
 bool DiskCacheManager::Exist(const CacheKey& key) {
-  std::lock_guard<BthreadMutex> lk(mutex_);
-  CacheValue value;
-  return cached_blocks_->Get(key, &value) ||
-         staging_blocks_.find(key.Filename()) != staging_blocks_.end();
+  return true;
+
+  // std::lock_guard<BthreadMutex> lk(mutex_);
+  // CacheValue value;
+  // return cached_blocks_->Get(key, &value) ||
+  //        staging_blocks_.find(key.Filename()) != staging_blocks_.end();
 }
 
 bool DiskCacheManager::StageFull() const {

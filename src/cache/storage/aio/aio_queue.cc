@@ -125,6 +125,8 @@ void AioQueueImpl::CheckIO(Aio* aio) {
 
   NextStep(aio, "enqueue");
   CHECK_EQ(0, bthread::execution_queue_execute(prep_io_queue_id_, aio));
+
+  // NextStep(aio, "wait");
 }
 
 int AioQueueImpl::PrepareIO(void* meta, bthread::TaskIterator<Aio*>& iter) {

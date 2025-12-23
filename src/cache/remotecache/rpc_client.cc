@@ -35,6 +35,7 @@
 #include <cstdint>
 
 #include "cache/blockcache/block_cache.h"
+#include "cache/common/const.h"
 #include "cache/common/type.h"
 #include "cache/utils/context.h"
 #include "common/io_buffer.h"

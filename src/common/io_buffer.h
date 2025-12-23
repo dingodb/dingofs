@@ -65,8 +65,15 @@ class IOBuffer {
   size_t AppendTo(IOBuffer* buffer, size_t n = (size_t)-1L, size_t pos = 0);
   void Append(const IOBuffer* buffer);
   void AppendVec(const std::vector<iovec>& iovs);
+
   void AppendUserData(void* data, size_t size,
-                      std::function<void(void*)> deleter);
+                      std::function<void(void*)> deleter) {
+    iobuf_.append_user_data(data, size, deleter);
+  }
+
+  void PopFront(size_t n) { iobuf_.pop_front(n); }
+
+  void PopBack(size_t n) { iobuf_.pop_back(n); }
 
   size_t Size() const;
   char* Fetch1() const;

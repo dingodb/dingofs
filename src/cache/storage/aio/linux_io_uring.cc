@@ -23,6 +23,7 @@
 #include "cache/storage/aio/linux_io_uring.h"
 
 #include <absl/strings/str_format.h>
+#include <butil/memory/aligned_memory.h>
 #include <liburing.h>
 
 #include <cstdint>
@@ -70,7 +71,8 @@ Status LinuxIOUring::Start() {
     return Status::NotSupport("not support io_uring");
   }
 
-  int rc = io_uring_queue_init(iodepth_, &io_uring_, 0);
+  int flags = IORING_SETUP_SQPOLL;
+  int rc = io_uring_queue_init(iodepth_, &io_uring_, flags);
   if (rc != 0) {
     LOG_SYSERR(-rc, "io_uring_queue_init(%d)", iodepth_);
     return Status::Internal("io_uring_queue_init() failed");
@@ -136,8 +138,8 @@ void LinuxIOUring::PrepWrite(io_uring_sqe* sqe, Aio* aio) {
 }
 
 void LinuxIOUring::PrepRead(io_uring_sqe* sqe, Aio* aio) {
-  char* data = new char[aio->length];
-  aio->buffer->AppendUserData(data, aio->length, Helper::DeleteBuffer);
+  char* data = (char*)butil::AlignedAlloc(aio->length, 4096);
+  aio->buffer->AppendUserData(data, aio->length, butil::AlignedFree);
   io_uring_prep_read(sqe, aio->fd, data, aio->length, aio->offset);
 }
 

@@ -31,8 +31,20 @@
 #include "cache/utils/offload_thread_pool.h"
 #include "common/options/cache.h"
 
+namespace butil {
+namespace iobuf {
+// declared in iobuf.cpp
+extern void* (*blockmem_allocate)(size_t);
+extern void (*blockmem_deallocate)(void*);
+}  // namespace iobuf
+}  // namespace butil
+
 namespace dingofs {
 namespace cache {
+
+// Store the original IOBuf memalloc and memdealloc functions
+static void* (*g_mem_alloc)(size_t) = nullptr;
+static void (*g_mem_dealloc)(void*) = nullptr;
 
 FlagsInfo DingoCache::flags;
 
@@ -75,10 +87,54 @@ void DingoCache::LogFlags() {
 
 void DingoCache::InitThreadPool() { OffloadThreadPool::GetInstance().Start(); }
 
+void* DingoCache::BlockAllocate(size_t len) {
+  /*
+  if (len == 0) {
+    errno = EINVAL;
+    return nullptr;
+  }
+
+  if (len > 0xFFFFFFFFULL) {
+    LOG(FATAL) << "block_size=" << len << " is too large";
+    return nullptr;
+  }
+
+  char* mem = (char*)iobuf::blockmem_allocate(block_size);
+  if (mem == NULL) {
+    return NULL;
+  }
+  char* data = mem + sizeof(butil::IOBuf::Block);
+  // change data pointer & data size make align satisfied
+  size_t adder = (-reinterpret_cast<uintptr_t>(data)) & (alignment - 1);
+  size_t size = (block_size - sizeof(IOBuf::Block) - adder) & ~(alignment - 1);
+  return new (mem) IOBuf::Block(data + adder, size);
+
+  return ptr;
+  */
+  return nullptr;
+}
+
+void DingoCache::BlockDeallocate(void* buf) {
+  if (!buf) {
+    errno = EINVAL;
+    return;
+  }
+
+  // DeallocBlock(buf);
+}
+
+void DingoCache::InstallBrpcBlockAllocator() {
+  // g_mem_alloc = butil::iobuf::blockmem_allocate;
+  // g_mem_dealloc = butil::iobuf::blockmem_deallocate;
+  // butil::iobuf::blockmem_allocate = BlockAllocate;
+  // butil::iobuf::blockmem_deallocate = BlockDeallocate;
+}
+
 void DingoCache::GlobalInitOrDie() {
   InitGlog();
   LogFlags();
   InitThreadPool();
+  InstallBrpcBlockAllocator();
 }
 
 int DingoCache::StartServer() {

@@ -251,7 +251,7 @@ Status SegmentHandler::Handle(const BlockKey& key, off_t offset, size_t length,
   off_t boff_r = offset + length;
   off_t soff_l = index * kSegmentSize;  // segment offset (left bound)
   off_t soff_r = soff_l + kSegmentSize;
-  off_t off_l = std::max(boff_l, soff_l);
+  off_t off_l = std::max(boff_l, soff_l);  // offset in current request
   off_t off_r = std::min(boff_r, soff_r);
 
   auto* handle = cache_->Lookup(SegmentCacheKey(key, index));
@@ -262,13 +262,20 @@ Status SegmentHandler::Handle(const BlockKey& key, off_t offset, size_t length,
     sbuffer->AppendTo(buffer, off_r - off_l, off_l % kSegmentSize);
     return Status::OK();
   }
-  return storage_->Download(NewContext(), key, off_l, off_r - off_l, buffer);
+
+  IOBuffer piece;
+  auto status =
+      storage_->Download(NewContext(), key, off_l, off_r - off_l, &piece);
+  if (status.ok()) {
+    buffer->Append(&piece);
+  }
+  return status;
 }
 
 CacheRetriever::CacheRetriever(RemoteCacheNodeSPtr remote_node,
                                Storage* storage)
     : block_map_(std::make_unique<SharedBlockMap>()),
-      cache_(NewLRUCache(512 * kMiB)),
+      cache_(NewLRUCache(1024 * kMiB)),
       fetcher_(std::make_unique<SegmentFetcher>(cache_, remote_node)),
       storage_(storage) {}
 

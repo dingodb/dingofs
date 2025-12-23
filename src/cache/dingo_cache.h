@@ -38,6 +38,9 @@ class DingoCache {
   static void InitGlog();
   static void LogFlags();
   static void InitThreadPool();
+  static void* BlockAllocate(size_t len);
+  static void BlockDeallocate(void* buf);
+  static void InstallBrpcBlockAllocator();
   static void GlobalInitOrDie();
 
   static int StartServer();

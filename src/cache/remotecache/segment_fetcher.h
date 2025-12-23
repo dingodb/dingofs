@@ -55,7 +55,8 @@ inline std::string SegmentCacheKey(const BlockKey& key, int segment_index) {
   return key.Filename() + ":" + std::to_string(segment_index);
 }
 
-const constexpr size_t kSegmentSize = 128 * 1024;  // 128KB
+// const constexpr size_t kSegmentSize = 128 * 1024;  // 128KB
+const constexpr size_t kSegmentSize = 1024 * 1024;  // 128KB
 
 class Segment {
  public:

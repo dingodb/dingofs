@@ -52,11 +52,6 @@ void IOBuffer::AppendVec(const std::vector<iovec>& iovs) {
   iobuf_.appendv((const const_iovec*)iovs.data(), iovs.size());
 }
 
-void IOBuffer::AppendUserData(void* data, size_t size,
-                              std::function<void(void*)> deleter) {
-  iobuf_.append_user_data(data, size, deleter);
-}
-
 size_t IOBuffer::Size() const { return iobuf_.length(); }
 
 char* IOBuffer::Fetch1() const {

@@ -23,6 +23,8 @@
 #ifndef DINGOFS_SRC_CACHE_STORAGE_LOCAL_FILESYSTEM_H_
 #define DINGOFS_SRC_CACHE_STORAGE_LOCAL_FILESYSTEM_H_
 
+#include <bthread/mutex.h>
+#include <butil/containers/flat_map.h>
 #include <sys/types.h>
 
 #include <cstddef>
@@ -37,6 +39,14 @@
 namespace dingofs {
 namespace cache {
 
+class Openfile {
+ public:
+  //
+
+ private:
+  butil::FlatMap<std::string, int> openfiles_;
+};
+
 class LocalFileSystem final : public BaseFileSystem {
  public:
   explicit LocalFileSystem(CheckStatusFunc check_status_func);
@@ -50,6 +60,10 @@ class LocalFileSystem final : public BaseFileSystem {
                   size_t length, IOBuffer* buffer, ReadOption option) override;
 
  private:
+  off_t AlignOffset(off_t offset);
+  size_t AlignLength(size_t length);
+  std::pair<off_t, size_t> AlignRequest(off_t offset, size_t length);
+
   Status AioWrite(ContextSPtr ctx, int fd, IOBuffer* buffer,
                   WriteOption option);
   Status AioRead(ContextSPtr ctx, int fd, off_t offset, size_t length,

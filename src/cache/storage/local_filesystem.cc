@@ -22,10 +22,13 @@
 
 #include "cache/storage/local_filesystem.h"
 
+#include <butil/memory/aligned_memory.h>
 #include <fcntl.h>
 #include <fmt/format.h>
 
+#include <cstddef>
 #include <memory>
+#include <utility>
 
 #include "cache/common/const.h"
 #include "cache/common/macro.h"
@@ -130,6 +133,30 @@ Status LocalFileSystem::Shutdown() {
   return Status::OK();
 }
 
+off_t LocalFileSystem::AlignOffset(off_t offset) {
+  auto alignment = Helper::GetIOAlignedBlockSize();
+  if (!Helper::IsAligned(offset, alignment)) {
+    offset = offset - (offset % alignment);
+  }
+  return offset;
+}
+
+size_t LocalFileSystem::AlignLength(size_t length) {
+  auto alignment = Helper::GetIOAlignedBlockSize();
+  if (!Helper::IsAligned(length, alignment)) {
+    length = (length + alignment - 1) & ~(alignment - 1);
+  }
+  return length;
+}
+
+std::pair<off_t, size_t> LocalFileSystem::AlignRequest(off_t offset,
+                                                       size_t length) {
+  auto alignment = Helper::GetIOAlignedBlockSize();
+  off_t roffset = AlignOffset(offset);
+  size_t rlength = AlignLength(length + (offset % alignment));
+  return std::make_pair(roffset, rlength);
+}
+
 // TODO(Wine93): we should compare the peformance for below case which
 // should execute by io_uring or sync write:
 //  1. direct-io with one continuos buffer
@@ -180,6 +207,16 @@ Status LocalFileSystem::WriteFile(ContextSPtr ctx, const std::string& path,
     }
   };
 
+  if (!Helper::IsAligned(buffer.Size(), Helper::GetIOAlignedBlockSize())) {
+    NEXT_STEP("fallocate");
+    status = Posix::Fallocate(fd, 0, 0, AlignLength(buffer.Size()));
+    if (!status.ok()) {
+      LOG_CTX(ERROR) << "Fail to fallocate file=" << path
+                     << ", status=" << status.ToString();
+      return status;
+    }
+  }
+
   NEXT_STEP("memcpy");
   IOBuffer wbuf;  // write buffer
   if (option.direct_io) {
@@ -220,29 +257,29 @@ Status LocalFileSystem::ReadFile(ContextSPtr ctx, const std::string& path,
 
   NEXT_STEP("open");
   int fd;
-  status = Posix::Open(path, O_RDONLY, &fd);
+  status = Posix::Open(path, O_RDONLY | O_DIRECT, &fd);
   if (!status.ok()) {
     LOG_CTX(ERROR) << "Open file failed: path = " << path
                    << ", status = " << status.ToString();
     return CheckStatus(status);
   }
 
-  if (Helper::IsAligned(offset, Helper::GetSysPageSize())) {
-    NEXT_STEP("mmap");
-    status = MapFile(ctx, fd, offset, length, buffer, option);
-    if (!status.ok()) {
-      LOG_CTX(ERROR) << "Map file failed: path = " << path
-                     << ", offset = " << offset << ", length = " << length
-                     << ", status = " << status.ToString();
+  NEXT_STEP("aio_read");
+  auto align = AlignRequest(offset, length);
+  off_t roffset = align.first;
+  size_t rlength = align.second;
+  status = AioRead(ctx, fd, roffset, rlength, buffer, option);
+  if (status.ok()) {
+    if (roffset != offset) {
+      buffer->PopFront(offset - roffset);
+    }
+    if (rlength != length) {
+      buffer->PopBack(roffset + rlength - (offset + length));
     }
   } else {
-    NEXT_STEP("aio_read");
-    status = AioRead(ctx, fd, offset, length, buffer, option);
-    if (!status.ok()) {
-      LOG_CTX(ERROR) << "Aio read failed: path = " << path
-                     << ", offset = " << offset << ", length = " << length
-                     << ", status = " << status.ToString();
-    }
+    LOG_CTX(ERROR) << "Aio read failed: path = " << path
+                   << ", offset = " << offset << ", length = " << length
+                   << ", status = " << status.ToString();
   }
 
   return CheckStatus(status);
@@ -271,20 +308,13 @@ Status LocalFileSystem::AioWrite(ContextSPtr ctx, int fd, IOBuffer* buffer,
 
 Status LocalFileSystem::AioRead(ContextSPtr ctx, int fd, off_t offset,
                                 size_t length, IOBuffer* buffer,
-                                ReadOption option) {
+                                ReadOption /*option*/) {
   auto aio = Aio(ctx, fd, offset, length, buffer, true);
   aio_queue_->Submit(&aio);
   aio.Wait();
 
   auto status = aio.status();
-  if (!status.ok()) {
-    CloseFd(ctx, fd);
-    return status;
-  }
-
-  if (option.drop_page_cache) {
-    page_cache_manager_->AsyncDropPageCache(ctx, fd, offset, length);
-  }
+  CloseFd(ctx, fd);
   return status;
 }
 
