@@ -412,7 +412,7 @@ uint32_t Hash(const char* data, size_t n, uint32_t seed) {
   return h;
 }
 
-const int kNumShardBits = 4;
+const int kNumShardBits = 6;
 const int kNumShards = 1 << kNumShardBits;
 
 class ShardedLRUCache : public Cache {

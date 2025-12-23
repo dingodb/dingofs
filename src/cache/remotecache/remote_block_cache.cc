@@ -37,6 +37,11 @@
 #include "common/options/cache.h"
 #include "common/status.h"
 
+namespace brpc {
+DECLARE_int32(idle_timeout_second);
+DECLARE_bool(log_idle_connection_close);
+};  // namespace brpc
+
 namespace dingofs {
 namespace cache {
 
@@ -83,6 +88,8 @@ Status RemoteBlockCacheImpl::Start() {
 
   retriever_->Start();
   RemoteBlockCacheMetric::Init();
+  brpc::FLAGS_idle_timeout_second = 300;
+  brpc::FLAGS_log_idle_connection_close = true;
 
   running_ = true;
 
