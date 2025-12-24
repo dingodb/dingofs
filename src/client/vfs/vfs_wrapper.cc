@@ -21,7 +21,6 @@
 #include <memory>
 #include <string>
 
-#include "cache/utils/logging.h"
 #include "client/fuse/fuse_upgrade_manager.h"
 #include "client/vfs/access_log.h"
 #include "client/vfs/blockstore/block_store_access_log.h"
@@ -65,7 +64,6 @@ static auto& g_rw_metric = VFSRWMetric::GetInstance();
 static Status InitLog() {
   const std::string log_dir = Logger::LogDir();
   bool succ = dingofs::client::InitAccessLog(log_dir) &&
-              dingofs::cache::InitCacheTraceLog(log_dir) &&
               blockaccess::InitBlockAccessLog(log_dir) &&
               dingofs::client::vfs::InitMetaLog(log_dir) &&
               dingofs::client::vfs::InitBlockStoreAccessLog(log_dir);

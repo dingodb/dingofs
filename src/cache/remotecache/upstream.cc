@@ -16,258 +16,214 @@
 
 /*
  * Project: DingoFS
- * Created Date: 2025-07-31
+ * Created Date: 2025-01-10
  * Author: Jingli Chen (Wine93)
  */
 
 #include "cache/remotecache/upstream.h"
 
-#include <butil/time.h>
+#include <butil/logging.h>
+#include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include <atomic>
 #include <memory>
-#include <ostream>
-#include <string>
-#include <unordered_map>
 
-#include "cache/blockcache/cache_store.h"
 #include "cache/common/mds_client.h"
-#include "cache/common/type.h"
-#include "cache/metric/cache_status.h"
-#include "cache/remotecache/remote_cache_node_impl.h"
-#include "cache/utils/helper.h"
-#include "cache/utils/ketama_con_hash.h"
-#include "common/status.h"
+#include "cache/remotecache/peer_group.h"
+#include "common/options/cache.h"
+#include "dingofs/blockcache.pb.h"
+#include "utils/executor/bthread/bthread_executor.h"
 
 namespace dingofs {
 namespace cache {
 
-static std::ostream& operator<<(std::ostream& os,
-                                const std::vector<CacheGroupMember>& members) {
-  os << "[\n";
-  for (const auto& member : members) {
-    os << "  " << member.ToString() << "\n";
-  }
-  os << "]";
-  return os;
-}
+DEFINE_uint32(periodic_sync_members_ms, 3000,
+              "periodic sync members from mds in milliseconds");
 
-ConsistentHash::ConsistentHash() : chash_(std::make_unique<KetamaConHash>()) {}
+Upstream::Upstream()
+    : running_(false),
+      mds_client_(std::make_unique<MDSClientImpl>()),
+      executor_(std::make_unique<BthreadExecutor>()),
+      group_(std::make_shared<PeerGroup>()),
+      builder_(std::make_unique<PeerGroupBuilder>()),
+      vars_(std::make_unique<UpstreamVarsCollector>()) {}
 
-void ConsistentHash::Build(const std::vector<CacheGroupMember>& members) {
-  LOG(INFO) << "Building consistent hash with " << members.size()
-            << " members: " << members;
-
-  if (members.empty()) {
-    LOG(WARNING) << "No valid members provide, skip build consistent hash.";
+void Upstream::Start() {
+  if (running_.load(std::memory_order_relaxed)) {
+    LOG(WARNING) << "Upstream already started";
     return;
   }
 
-  auto weights = CalcWeights(members);
-  for (size_t i = 0; i < members.size(); i++) {
-    const auto& member = members[i];
-    const auto& key = member.id;
-    auto node = std::make_shared<RemoteCacheNodeImpl>(member);
-    nodes_[key] = node;
-    chash_->AddNode(key, weights[i]);
+  LOG(INFO) << "Upstream is starting...";
 
-    LOG(INFO) << "Add cache group member (" << member.ToString()
-              << ") to consistent hash success.";
-  }
-
-  chash_->Final();
-}
-
-RemoteCacheNodeSPtr ConsistentHash::GetNode(const std::string& key) {
-  if (nodes_.empty()) {
-    return nullptr;
-  }
-
-  ConNode cnode;
-  bool find = chash_->Lookup(key, cnode);
-  CHECK(find) << "No chash node found for key: " << key;
-
-  auto iter = nodes_.find(cnode.key);
-  CHECK(iter != nodes_.end()) << "No remote cache node found for key: " << key;
-  return iter->second;
-}
-
-ConsistentHash::NodesT& ConsistentHash::GetAllNodes() { return nodes_; }
-
-const ConsistentHash::NodesT& ConsistentHash::GetAllNodes() const {
-  return nodes_;
-}
-
-std::vector<uint64_t> ConsistentHash::CalcWeights(
-    const std::vector<CacheGroupMember>& members) {
-  std::vector<uint64_t> weights(members.size());
-  for (int i = 0; i < members.size(); i++) {
-    weights[i] = members[i].weight;
-  }
-  return Helper::NormalizeByGcd(weights);
-}
-
-UpstreamImpl::UpstreamImpl() : chash_(std::make_shared<ConsistentHash>()) {}
-
-void UpstreamImpl::Build(const std::vector<CacheGroupMember>& members) {
-  CHECK_NOTNULL(chash_);
-
-  VLOG(1) << "Build upstream with " << members.size()
-          << " members: " << members;
-
-  butil::Timer timer;
-  timer.start();
-
-  // Check change: filter out non-online members
-  const auto& old_members = members_;
-  const auto& new_members = FilterMember(members);
-  if (IsSame(old_members, new_members)) {
+  if (!SyncMembers()) {
+    LOG(FATAL)
+        << "Fail to sync members from mds, is there any member in cache group="
+        << FLAGS_cache_group << "?";
     return;
   }
 
-  // Build consistent hash with new members
-  auto old_chash = chash_;
-  auto new_chash = std::make_shared<ConsistentHash>();
-  new_chash->Build(new_members);
+  CHECK(executor_->Start());
+  executor_->Schedule([this] { PeriodicSyncMembers(); },
+                      FLAGS_periodic_sync_members_ms);
 
-  // Share nodes and start new nodes
-  const auto& old_nodes = old_chash->GetAllNodes();
-  auto& new_nodes = new_chash->GetAllNodes();
-  auto diff = ShareNodes(old_nodes, new_nodes);
-  StartNodes(diff.add_nodes);
-
-  // Reset consistent hash
-  ResetCHash(new_members, new_chash);
-
-  // Shutdown old nodes
-  ShutdownNodes(diff.remove_nodes);
-
-  SetStatusPage();
-
-  timer.stop();
-  LOG(INFO) << "Build upstream success: old_members (" << old_members.size()
-            << "), new_members (" << new_members.size() << "), cost "
-            << timer.u_elapsed() * 1.0 / 1e6 << " seconds";
+  running_.store(true, std::memory_order_relaxed);
+  LOG(INFO) << "Upstream{mds_addr=" << FLAGS_mds_addrs << "} started";
 }
 
-Status UpstreamImpl::GetNode(const BlockKey& key, RemoteCacheNodeSPtr& node) {
-  ReadLockGuard lock(rwlock_);
-  node = chash_->GetNode(key.Filename());
-  if (nullptr == node) {
-    return Status::NotFound("no remote cache node available");
+void Upstream::Shutdown() {
+  if (!running_.load(std::memory_order_relaxed)) {
+    LOG(WARNING) << "Upstream already shutdown";
+    return;
   }
-  return Status::OK();
+
+  LOG(INFO) << "Upstream is shutting down...";
+
+  CHECK(executor_->Stop());
+
+  running_.store(false, std::memory_order_relaxed);
+  LOG(INFO) << "Upstream shutdown";
 }
 
-std::vector<CacheGroupMember> UpstreamImpl::FilterMember(
-    const std::vector<CacheGroupMember>& members) {
-  std::vector<CacheGroupMember> members_out;
-  for (const auto& member : members) {
-    if (member.state != CacheGroupMemberState::kOnline) {
-      LOG(INFO) << "Skip non-online cache group member: member = "
-                << member.ToString();
-      continue;
-    } else if (member.weight == 0) {
-      LOG(INFO) << "Skip cache group member with zero weight: member = "
-                << member.ToString();
-      continue;
-    }
-    members_out.emplace_back(member);
+Status Upstream::SendPutRequest(const BlockKey& key, const Block& block) {
+  Status status;
+  UpstreamVarsRecordGuard guard("Put", block.size, status, vars_.get());
+
+  pb::cache::PutRequest raw;
+  *raw.mutable_block_key() = key.ToPB();
+  raw.set_block_size(block.buffer.Size());
+  auto request = MakeRequest("Put", raw, &block.buffer);
+
+  auto response =
+      SendRequest<pb::cache::PutRequest, pb::cache::PutResponse>(request);
+  status = response.status;
+  if (status.IsCacheUnhealthy()) {
+    LOG_EVERY_SECOND(ERROR) << "Fail to send " << request;
+  } else if (!status.ok()) {
+    LOG(ERROR) << "Fail to send " << request;
   }
-  return members_out;
+  return status;
 }
 
-bool UpstreamImpl::IsSame(
-    const std::vector<CacheGroupMember>& old_members,
-    const std::vector<CacheGroupMember>& new_members) const {
-  if (old_members.size() != new_members.size()) {
+Status Upstream::SendRangeRequest(const BlockKey& key, off_t offset,
+                                  size_t length, IOBuffer* buffer,
+                                  size_t block_whole_length) {
+  Status status;
+  UpstreamVarsRecordGuard guard("Range", length, status, vars_.get());
+
+  pb::cache::RangeRequest raw;
+  *raw.mutable_block_key() = key.ToPB();
+  raw.set_offset(offset);
+  raw.set_length(length);
+  raw.set_block_size(block_whole_length);
+  auto request = MakeRequest("Range", raw);
+
+  auto response =
+      SendRequest<pb::cache::RangeRequest, pb::cache::RangeResponse>(request);
+  status = response.status;
+  if (status.ok()) {
+    *buffer = std::move(response.body);
+  } else if (status.IsCacheUnhealthy()) {
+    LOG_EVERY_SECOND(ERROR) << "Fail to send " << request;
+  } else {
+    LOG(ERROR) << "Fail to send " << request;
+  }
+  return status;
+}
+
+Status Upstream::SendCacheRequest(const BlockKey& key, const Block& block) {
+  Status status;
+  UpstreamVarsRecordGuard guard("Cache", block.size, status, vars_.get());
+
+  pb::cache::CacheRequest raw;
+  *raw.mutable_block_key() = key.ToPB();
+  raw.set_block_size(block.buffer.Size());
+  auto request = MakeRequest("Cache", raw, &block.buffer);
+
+  auto response =
+      SendRequest<pb::cache::CacheRequest, pb::cache::CacheResponse>(request);
+  status = response.status;
+  if (status.IsCacheUnhealthy()) {
+    LOG_EVERY_SECOND(ERROR) << "Fail to send " << request;
+  } else if (!status.ok()) {
+    LOG(ERROR) << "Fail to send " << request;
+  }
+  return status;
+}
+
+Status Upstream::SendPrefetchRequest(const BlockKey& key, size_t length) {
+  Status status;
+  UpstreamVarsRecordGuard guard("Prefetch", length, status, vars_.get());
+
+  pb::cache::PrefetchRequest raw;
+  *raw.mutable_block_key() = key.ToPB();
+  raw.set_block_size(length);
+  auto request = MakeRequest("Prefetch", raw);
+
+  auto response =
+      SendRequest<pb::cache::PrefetchRequest, pb::cache::PrefetchResponse>(
+          request);
+  status = response.status;
+  if (status.IsCacheUnhealthy()) {
+    LOG_EVERY_SECOND(ERROR) << "Fail to send " << request;
+  } else if (!status.ok()) {
+    LOG(ERROR) << "Fail to send " << request;
+  }
+  return status;
+}
+
+template <typename T, typename U>
+Response<U> Upstream::SendRequest(const Request<T>& request) {
+  // FIXME: blockkey
+  auto peer_group = CHECK_NOTNULL(GetPeerGroup());
+  auto peer =
+      peer_group->SelectPeer(BlockKey(request.raw.block_key()).Filename());
+  if (nullptr == peer) {
+    LOG(ERROR) << "No peer found for " << request;
+    return Response<U>{Status::NotFound("no peer found")};
+  } else if (!peer->IsHealthy()) {
+    LOG_EVERY_SECOND(WARNING)
+        << "Fail to send request to " << peer << ", because "
+        << "peer is unhealthy";
+    return Response<U>{Status::CacheUnhealthy("peer is unhealthy")};
+  }
+
+  return peer->template SendRequest<T, U>(request);
+}
+
+bool Upstream::SendListMembersRequest(Members* members) {
+  auto group_name = FLAGS_cache_group;
+  auto status = mds_client_->ListMembers(group_name, members);
+  if (!status.ok()) {
+    LOG(ERROR) << "Fail to list cache group=" << group_name
+               << " members from mds";
     return false;
-  }
-
-  std::unordered_map<std::string, CacheGroupMember> m;
-  for (const auto& member : old_members) {
-    m[member.id] = member;
-  }
-
-  for (const auto& member : new_members) {
-    auto iter = m.find(member.id);
-    if (iter == m.end() || !(iter->second == member)) {
-      return false;
-    }
+  } else if (members->empty()) {
+    LOG(WARNING) << "No member found in cache group=" << group_name;
+    return false;
   }
   return true;
 }
 
-UpstreamImpl::Diff UpstreamImpl::ShareNodes(
-    const ConsistentHash::NodesT& old_nodes,
-    ConsistentHash::NodesT& new_nodes) {
-  Diff diff;
-  for (const auto& new_node : new_nodes) {
-    auto iter = old_nodes.find(new_node.first);
-    if (iter == old_nodes.end()) {  // not found in old nodes
-      diff.add_nodes.push_back(new_node.second);
-    } else {
-      new_nodes[new_node.first] = iter->second;  // keep old node
-    }
+bool Upstream::SyncMembers() {
+  Members members;
+  if (!SendListMembersRequest(&members)) {
+    return false;
   }
 
-  for (const auto& old_node : old_nodes) {
-    // not found in new nodes
-    if (new_nodes.find(old_node.first) == new_nodes.end()) {
-      diff.remove_nodes.push_back(old_node.second);
-    }
+  auto new_group = builder_->Build(members);
+  if (new_group != nullptr) {
+    SetPeerGroup(new_group);
+    LOG(INFO) << "Successfully rebuild upstream peer group";
   }
-  return diff;
+  return true;
 }
 
-void UpstreamImpl::StartNodes(
-    const std::vector<RemoteCacheNodeSPtr>& add_nodes) {
-  LOG(INFO) << "Start " << add_nodes.size() << " added remote cache nodes";
-
-  for (const auto& node : add_nodes) {
-    auto status = node->Start();
-    if (!status.ok()) {  // NOTE: only throw error
-      LOG(ERROR) << "Start remote cache node failed: " << status.ToString();
-    }
-  }
-}
-
-void UpstreamImpl::ShutdownNodes(
-    const std::vector<RemoteCacheNodeSPtr>& remove_nodes) {
-  LOG(INFO) << "Shutdown " << remove_nodes.size()
-            << " removed remote cache nodes";
-
-  for (const auto& node : remove_nodes) {
-    auto status = node->Shutdown();
-    if (!status.ok()) {  // NOTE: only throw error
-      LOG(ERROR) << "Shutdown remote cache node failed: " << status.ToString();
-    }
-  }
-}
-
-void UpstreamImpl::ResetCHash(const std::vector<CacheGroupMember>& new_members,
-                              ConsistentHashSPtr new_chash) {
-  WriteLockGuard lock(rwlock_);
-  members_ = new_members;
-  chash_ = new_chash;
-}
-
-void UpstreamImpl::SetStatusPage() const {
-  CacheStatus::Update([this](CacheStatus::Root& root) {
-    auto& nodes = root.remote_cache.nodes;
-    nodes.clear();
-    for (const auto& member : members_) {
-      nodes[member.id] = CacheStatus::Node{
-          .id = member.id,
-          .address = absl::StrFormat("%s:%d", member.ip, member.port),
-          .weight = member.weight,
-          .state =
-              Helper::ToLowerCase(CacheGroupMemberStateToString(member.state)),
-          .health = "normal",  // FIXME(P0)
-      };
-    }
-    root.remote_cache.last_modified = Helper::NowTime();
-  });
+void Upstream::PeriodicSyncMembers() {
+  SyncMembers();
+  executor_->Schedule([this] { PeriodicSyncMembers(); },
+                      FLAGS_periodic_sync_members_ms);
 }
 
 }  // namespace cache

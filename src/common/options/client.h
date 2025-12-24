@@ -50,6 +50,8 @@ DECLARE_bool(fuse_enable_splice_move);
 DECLARE_bool(fuse_enable_splice_read);
 DECLARE_bool(fuse_enable_splice_write);
 DECLARE_bool(fuse_enable_auto_inval_data);
+DECLARE_int32(fuse_max_readahead_kb);
+DECLARE_int32(fuse_max_background);
 
 DECLARE_uint32(fuse_entry_cache_timeout_s);
 DECLARE_uint32(fuse_attr_cache_timeout_s);

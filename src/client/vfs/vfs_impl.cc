@@ -16,13 +16,13 @@
 
 #include "client/vfs/vfs_impl.h"
 
+#include <bthread/bthread.h>
 #include <fcntl.h>
 
 #include <cstdint>
 #include <memory>
 #include <string>
 
-#include "cache/metric/cache_status.h"
 #include "client/common/const.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/components/warmup_manager.h"
@@ -650,15 +650,6 @@ Status VFSImpl::StartBrpcServer() {
           "Add fuse stat service to brpc server failed, rc: {}", rc);
       LOG(ERROR) << error_msg;
       return Status::Internal(error_msg);
-    }
-  }
-
-  {
-    auto status = cache::AddCacheService(&brpc_server_);
-    if (!status.ok()) {
-      LOG(ERROR) << "Add cache service to brpc server failed, "
-                 << status.ToString();
-      return status;
     }
   }
 

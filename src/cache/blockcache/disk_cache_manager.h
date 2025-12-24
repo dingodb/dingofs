@@ -24,15 +24,50 @@
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_DISK_CACHE_MANAGER_H_
 
 #include <bthread/execution_queue.h>
+#include <bthread/mutex.h>
 
 #include "cache/blockcache/disk_cache_layout.h"
 #include "cache/blockcache/lru_cache.h"
-#include "cache/blockcache/lru_common.h"
-#include "cache/common/type.h"
-#include "cache/metric/disk_cache_metric.h"
+#include "utils/concurrent/task_thread_pool.h"
 
 namespace dingofs {
 namespace cache {
+
+struct DiskCacheManagerVarsCollector {
+  DiskCacheManagerVarsCollector(uint64_t cache_index)
+      : prefix(absl::StrFormat("dingofs_disk_cache_%d", cache_index)),
+        used_bytes(Name("used_bytes"), 0),
+        stage_blocks(Name("stage_blocks")),
+        stage_full(Name("stage_full"), false),
+        cache_blocks(Name("cache_blocks")),
+        cache_bytes(Name("cache_bytes")),
+        cache_full(Name("cache_full"), false) {}
+
+  std::string Name(const std::string& name) const {
+    CHECK_GT(prefix.length(), 0);
+    return absl::StrFormat("%s_%s", prefix, name);
+  }
+
+  void Reset() {
+    used_bytes.set_value(0);
+    stage_blocks.reset();
+    stage_full.set_value(false);
+    cache_blocks.reset();
+    cache_bytes.reset();
+    cache_full.set_value(false);
+  }
+
+  std::string prefix;
+  bvar::Status<int64_t> used_bytes;
+  bvar::Adder<int64_t> stage_blocks;
+  bvar::Status<bool> stage_full;
+  bvar::Adder<int64_t> cache_blocks;
+  bvar::Adder<int64_t> cache_bytes;
+  bvar::Status<bool> cache_full;
+};
+
+using DiskCacheManagerVarsCollectorUPtr =
+    std::unique_ptr<DiskCacheManagerVarsCollector>;
 
 // phase: staging -> uploaded -> cached
 enum class BlockPhase : uint8_t {
@@ -44,8 +79,7 @@ enum class BlockPhase : uint8_t {
 // Manage cache items and its capacity
 class DiskCacheManager {
  public:
-  DiskCacheManager(uint64_t capacity, DiskCacheLayoutSPtr layout,
-                   DiskCacheMetricSPtr metric);
+  DiskCacheManager(uint64_t capacity, DiskCacheLayoutSPtr layout);
   virtual ~DiskCacheManager() = default;
 
   virtual void Start();
@@ -84,17 +118,17 @@ class DiskCacheManager {
   // block which not uploaded for we can't get block both local disk and remote
   // storage.
   std::atomic<bool> running_;
-  BthreadMutex mutex_;
+  bthread::Mutex mutex_;
   uint64_t used_bytes_;
   const uint64_t capacity_bytes_;
   std::atomic<bool> stage_full_;
   std::atomic<bool> cache_full_;
   LRUCacheUPtr cached_blocks_;
   std::unordered_map<std::string, CacheValue> staging_blocks_;
-  TaskThreadPoolUPtr thread_pool_;
+  utils::TaskThreadPoolUPtr thread_pool_;
   DiskCacheLayoutSPtr layout_;
   bthread::ExecutionQueueId<ToDel> queue_id_;
-  DiskCacheMetricSPtr metric_;
+  DiskCacheManagerVarsCollectorUPtr vars_;
 };
 
 using DiskCacheManagerSPtr = std::shared_ptr<DiskCacheManager>;

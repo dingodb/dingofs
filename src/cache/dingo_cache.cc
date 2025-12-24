@@ -24,42 +24,16 @@
 
 #include <iostream>
 
-#include "cache/cachegroup/cache_group_node_server.h"
-#include "cache/utils/logging.h"
-#include "cache/utils/offload_thread_pool.h"
+#include "cache/cachegroup/server.h"
 #include "common/flag.h"
 #include "common/helper.h"
+#include "common/logging.h"
 #include "common/options/cache.h"
 #include "common/options/common.h"
 #include "utils/daemonize.h"
 
 namespace dingofs {
 namespace cache {
-
-static std::vector<std::pair<std::string, std::string>> GenConfigs() {
-  std::vector<std::pair<std::string, std::string>> configs;
-  configs.emplace_back("id", fmt::format("[{}]", FLAGS_id));
-  // config
-  configs.emplace_back("config", fmt::format("[{}]", dingofs::FLAGS_conf));
-  // log
-  configs.emplace_back(
-      "log", fmt::format("[{} {} {}(verbose)]",
-                         dingofs::Helper::ExpandPath(
-                             ::FLAGS_log_dir.empty() ? dingofs::kDefaultLogDir
-                                                     : ::FLAGS_log_dir),
-                         dingofs::FLAGS_log_level, dingofs::FLAGS_log_v));
-  // mds
-  configs.emplace_back("mds", fmt::format("[{}]", FLAGS_mds_addrs));
-  // cache
-  if (dingofs::cache::FLAGS_enable_cache) {
-    configs.emplace_back(
-        "cache", fmt::format("[{} {} {}MB {}%(ratio)]", FLAGS_cache_store,
-                             FLAGS_cache_dir, FLAGS_cache_size_mb,
-                             FLAGS_free_space_ratio * 100));
-  }
-
-  return configs;
-}
 
 static dingofs::FlagExtraInfo extras = {
     .program = "dingo-cache",
@@ -92,37 +66,9 @@ int DingoCache::ParseFlags(int argc, char** argv) {
     std::cerr << "MUST enable cache, please set it by --enable_cache\n";
     return -1;
   }
-  return 0;
-}
 
-void DingoCache::InitGlog() { InitLogging("dingo-cache"); }
-
-void DingoCache::LogFlags() { LOG(INFO) << dingofs::GenCurrentFlags(); }
-
-void DingoCache::InitThreadPool() { OffloadThreadPool::GetInstance().Start(); }
-
-void DingoCache::GlobalInitOrDie() {
-  InitGlog();
-  LogFlags();
-  InitThreadPool();
-}
-
-int DingoCache::StartServer() {
-  CacheGroupNodeServerImpl server;
-  auto status = server.Start();
-  if (!status.ok()) {
-    return -1;
-  }
-
-  server.Shutdown();
-  return 0;
-}
-
-int DingoCache::Run(int argc, char** argv) {
-  int rc = ParseFlags(argc, argv);
-  if (rc != 0) {
-    return rc;
-  }
+  // TODO: so ugly implementation :(
+  // refactor ASAP!!!
 
   // read gflags from conf file
   if (!FLAGS_conf.empty()) {
@@ -142,7 +88,52 @@ int DingoCache::Run(int argc, char** argv) {
     }
   }
   // print config info
-  dingofs::Helper::PrintConfigInfo(GenConfigs());
+  std::vector<std::pair<std::string, std::string>> configs;
+  configs.emplace_back("id", fmt::format("[{}]", FLAGS_id));
+  // config
+  configs.emplace_back("config", fmt::format("[{}]", dingofs::FLAGS_conf));
+  // log
+  configs.emplace_back(
+      "log", fmt::format("[{} {} {}(verbose)]",
+                         dingofs::Helper::ExpandPath(
+                             ::FLAGS_log_dir.empty() ? dingofs::kDefaultLogDir
+                                                     : ::FLAGS_log_dir),
+                         dingofs::FLAGS_log_level, dingofs::FLAGS_log_v));
+  // mds
+  configs.emplace_back("mds", fmt::format("[{}]", FLAGS_mds_addrs));
+  // cache
+  if (dingofs::cache::FLAGS_enable_cache) {
+    configs.emplace_back(
+        "cache", fmt::format("[{} {} {}MB {}%(ratio)]", FLAGS_cache_store,
+                             FLAGS_cache_dir, FLAGS_cache_size_mb,
+                             FLAGS_free_space_ratio * 100));
+  }
+  Helper::PrintConfigInfo(configs);
+
+  return 0;
+}
+
+void DingoCache::GlobalInitOrDie() {
+  Logger::Init("dingo-cache");
+  GenCurrentFlags();
+}
+
+int DingoCache::StartServer() {
+  Server server;
+  auto status = server.Start();
+  if (!status.ok()) {
+    return -1;
+  }
+
+  server.Shutdown();
+  return 0;
+}
+
+int DingoCache::Run(int argc, char** argv) {
+  int rc = ParseFlags(argc, argv);
+  if (rc != 0) {
+    return rc;
+  }
 
   GlobalInitOrDie();
   return StartServer();

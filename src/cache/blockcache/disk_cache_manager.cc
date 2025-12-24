@@ -23,14 +23,16 @@
 #include "cache/blockcache/disk_cache_manager.h"
 
 #include <brpc/reloadable_flags.h>
+#include <bthread/mutex.h>
 #include <glog/logging.h>
 
 #include <atomic>
+#include <memory>
 
-#include "cache/common/const.h"
 #include "cache/common/macro.h"
-#include "cache/common/type.h"
-#include "cache/storage/base_filesystem.h"
+#include "cache/iutil/file_util.h"
+#include "common/const.h"
+#include "utils/concurrent/task_thread_pool.h"
 
 namespace dingofs {
 namespace cache {
@@ -46,24 +48,21 @@ DEFINE_uint32(cache_cleanup_expire_interval_ms, 1000,
 DEFINE_validator(cache_cleanup_expire_interval_ms, brpc::PassValidate);
 
 DiskCacheManager::DiskCacheManager(uint64_t capacity,
-                                   DiskCacheLayoutSPtr layout,
-                                   DiskCacheMetricSPtr metric)
+                                   DiskCacheLayoutSPtr layout)
     : running_(false),
       capacity_bytes_(capacity),
       cached_blocks_(std::make_unique<LRUCache>()),
-      thread_pool_(std::make_unique<TaskThreadPool>("disk_cache_manager")),
+      thread_pool_(
+          std::make_unique<utils::TaskThreadPool<>>("disk_cache_manager")),
       layout_(layout),
       queue_id_({0}),
-      metric_(metric) {
+      vars_(std::make_unique<DiskCacheManagerVarsCollector>(
+          layout_->CacheIndex())) {
   Init();
 }
 
 // for restart
 void DiskCacheManager::Init() {
-  CHECK_NOTNULL(thread_pool_);
-  CHECK_NOTNULL(layout_);
-  CHECK_NOTNULL(metric_);
-
   used_bytes_ = 0;
   stage_full_ = false;
   cache_full_ = false;
@@ -122,23 +121,21 @@ void DiskCacheManager::Shutdown() {
   CHECK_EQ(bthread::execution_queue_join(queue_id_), 0);
 
   LOG(INFO) << "Disk cache manager is down.";
-
-  CHECK_DOWN("Disk cache manager");
 }
 
 void DiskCacheManager::Add(const CacheKey& key, const CacheValue& value,
                            BlockPhase phase) {
-  std::lock_guard<BthreadMutex> lk(mutex_);
+  std::lock_guard<bthread::Mutex> lk(mutex_);
   if (phase == BlockPhase::kStaging) {
     staging_blocks_.emplace(key.Filename(), value);
     UpdateUsage(1, value.size);
-    metric_->stage_blocks << 1;
+    vars_->stage_blocks << 1;
   } else if (phase == BlockPhase::kUploaded) {
     auto iter = staging_blocks_.find(key.Filename());
     CHECK(iter != staging_blocks_.end());
     cached_blocks_->Add(key, iter->second);
     staging_blocks_.erase(iter);
-    metric_->stage_blocks << -1;
+    vars_->stage_blocks << -1;
   } else {  // cached
     cached_blocks_->Add(key, value);
     UpdateUsage(1, value.size);
@@ -158,15 +155,16 @@ void DiskCacheManager::Add(const CacheKey& key, const CacheValue& value,
 }
 
 void DiskCacheManager::Delete(const CacheKey& key) {
-  std::lock_guard<BthreadMutex> lk(mutex_);
+  std::lock_guard<bthread::Mutex> lk(mutex_);
   CacheValue value;
   if (cached_blocks_->Delete(key, &value)) {  // exist
     UpdateUsage(-1, -value.size);
   }
 }
 
+// FIXME: lock contention
 bool DiskCacheManager::Exist(const CacheKey& key) {
-  std::lock_guard<BthreadMutex> lk(mutex_);
+  std::lock_guard<bthread::Mutex> lk(mutex_);
   CacheValue value;
   return cached_blocks_->Get(key, &value) ||
          staging_blocks_.find(key.Filename()) != staging_blocks_.end();
@@ -183,16 +181,17 @@ bool DiskCacheManager::CacheFull() const {
 void DiskCacheManager::CheckFreeSpace() {
   CHECK_RUNNING("Disk cache manager");
 
-  struct FSStat stat;
+  struct iutil::StatFS stat;
   uint64_t want_free_bytes, want_free_files;
   uint64_t goal_bytes, goal_files;
   std::string root_dir = GetRootDir();
 
   while (running_.load(std::memory_order_relaxed)) {
-    auto status = FSUtil::StatFS(root_dir, &stat);
+    auto status = iutil::StatFS(root_dir, &stat);
     if (!status.ok()) {
-      LOG(ERROR) << "Check disk free space failed: dir = " << root_dir
-                 << ", status = " << status.ToString();
+      LOG(WARNING) << "Fail to check disk free space, dir=" << root_dir
+                   << ", status=" << status.ToString()
+                   << ", retry after 1 second...";
       std::this_thread::sleep_for(std::chrono::seconds(1));
       continue;
     }
@@ -204,8 +203,8 @@ void DiskCacheManager::CheckFreeSpace() {
     bool stage_full = (br < cfg / 2) || (fr < cfg / 2);
     cache_full_.store(cache_full, std::memory_order_release);
     stage_full_.store(stage_full, std::memory_order_release);
-    metric_->cache_full.set_value(cache_full);
-    metric_->stage_full.set_value(stage_full);
+    vars_->cache_full.set_value(cache_full);
+    vars_->stage_full.set_value(stage_full);
 
     if (cache_full) {
       LOG_EVERY_SECOND(WARNING) << absl::StrFormat(
@@ -217,7 +216,7 @@ void DiskCacheManager::CheckFreeSpace() {
           stat.total_bytes * (1.0 - br) / kMiB, cache_full ? "Y" : "N",
           stage_full ? "Y" : "N");
 
-      std::lock_guard<BthreadMutex> lk(mutex_);
+      std::lock_guard<bthread::Mutex> lk(mutex_);
       want_free_bytes = (br < cfg) ? stat.total_bytes * (cfg - br) : 0;
       want_free_files = (fr < cfg) ? stat.total_files * (cfg - fr) : 0;
       LOG(INFO) << absl::StrFormat(
@@ -259,7 +258,7 @@ void DiskCacheManager::CleanupExpire() {
   CacheItems to_del;
   while (running_.load(std::memory_order_relaxed)) {
     uint64_t num_checks = 0;
-    auto now = utils::TimeNow();
+    auto now = iutil::TimeNow();
     auto cache_expire_s = FLAGS_cache_expire_s;
     if (cache_expire_s == 0) {
       std::this_thread::sleep_for(std::chrono::seconds(3));
@@ -267,7 +266,7 @@ void DiskCacheManager::CleanupExpire() {
     }
 
     {
-      std::lock_guard<BthreadMutex> lk(mutex_);
+      std::lock_guard<bthread::Mutex> lk(mutex_);
       to_del = cached_blocks_->Evict([&](const CacheValue& value) {
         if (++num_checks > 1e3) {
           return FilterStatus::kFinish;
@@ -312,7 +311,7 @@ void DiskCacheManager::DeleteBlocks(const ToDel& to_del) {
     CacheKey key = item.key;
     CacheValue value = item.value;
     std::string cache_path = GetCachePath(key);
-    auto status = FSUtil::RemoveFile(cache_path);
+    auto status = iutil::Unlink(cache_path);
     if (status.IsNotFound()) {
       LOG(WARNING) << "Block file already deleted: path = " << cache_path;
       continue;
@@ -340,9 +339,9 @@ void DiskCacheManager::DeleteBlocks(const ToDel& to_del) {
 
 void DiskCacheManager::UpdateUsage(int64_t n, int64_t used_bytes) {
   used_bytes_ += used_bytes;
-  metric_->used_bytes.set_value(used_bytes_);
-  metric_->cache_blocks << n;
-  metric_->cache_bytes << used_bytes;
+  vars_->used_bytes.set_value(used_bytes_);
+  vars_->cache_blocks << n;
+  vars_->cache_bytes << used_bytes;
 }
 
 std::string DiskCacheManager::GetRootDir() const {

@@ -41,7 +41,7 @@ namespace cache {
 DECLARE_string(cache_group);
 
 // Sets the interval to load cache group members in milliseconds.
-DECLARE_uint32(load_members_interval_ms);
+DECLARE_uint32(periodic_sync_members_ms);
 
 // Sets whether the data blocks uploaded to the storage are
 // simultaneously sent to the cache group node.
@@ -57,7 +57,7 @@ DECLARE_uint32(subrequest_range_size);
 
 // [onfly]
 // Sets whether to enable prefetching for remote cache operations.
-DECLARE_bool(enable_remote_prefetch);
+DECLARE_bool(block_prefetch);
 
 // [onfly]
 // Sets the max buffer size for cache prefetch blocks in memory
@@ -129,7 +129,7 @@ DECLARE_uint32(group_weight);
 DECLARE_uint32(max_range_size_kb);
 
 // Sets the interval to send heartbeat to MDS in seconds.
-DECLARE_uint32(send_heartbeat_interval_s);
+DECLARE_uint32(periodic_heartbeat_interval_s);
 
 // ###############################################
 // # common
@@ -189,7 +189,7 @@ DECLARE_uint32(cache_expire_s);
 DECLARE_uint32(cleanup_expire_interval_ms);
 
 // Sets the IO depth for iouring.
-DECLARE_uint32(ioring_iodepth);
+DECLARE_uint32(iodepth);
 
 // Sets the duration in seconds for the disk state tick.
 DECLARE_uint32(disk_state_tick_duration_s);
@@ -216,10 +216,16 @@ DECLARE_int64(storage_download_retry_timeout_s);
 // Sets the MDS addresses for cache group member manager service RPC.
 DECLARE_string(mds_addrs);
 
+// Keepalive connection number per peer
+DECLARE_int32(connections);
+
 // [onfly]
 DECLARE_int64(mds_rpc_timeout_ms);
 DECLARE_int32(mds_rpc_retry_times);
 DECLARE_uint32(mds_request_retry_times);
+
+DECLARE_int32(brpc_idle_timeout_second);
+DECLARE_bool(brpc_log_idle_connection_close);
 
 };  // namespace cache
 };  // namespace dingofs

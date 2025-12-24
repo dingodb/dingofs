@@ -26,9 +26,8 @@
 #include <memory>
 
 #include "cache/common/macro.h"
-#include "cache/metric/cache_status.h"
-#include "cache/utils/helper.h"
-#include "cache/utils/ketama_con_hash.h"
+#include "cache/iutil/ketama_con_hash.h"
+#include "cache/iutil/math_util.h"
 
 namespace dingofs {
 namespace cache {
@@ -36,7 +35,7 @@ namespace cache {
 DiskCacheGroup::DiskCacheGroup(std::vector<DiskCacheOption> options)
     : running_(false),
       options_(options),
-      chash_(std::make_unique<KetamaConHash>()),
+      chash_(std::make_unique<iutil::KetamaConHash>()),
       watcher_(std::make_unique<DiskCacheWatcher>()),
       metric_(std::make_shared<DiskCacheGroupMetric>()) {}
 
@@ -70,8 +69,6 @@ Status DiskCacheGroup::Start(UploadFunc uploader) {
   chash_->Final();
   watcher_->Start();
 
-  DisplayStatus();
-
   running_ = true;
 
   LOG(INFO) << "Disk cache group is up.";
@@ -96,8 +93,6 @@ Status DiskCacheGroup::Shutdown() {
   }
 
   LOG(INFO) << "Disk cache group is down.";
-
-  CHECK_DOWN("Disk cache group");
   return Status::OK();
 }
 
@@ -115,7 +110,7 @@ Status DiskCacheGroup::RemoveStage(ContextSPtr ctx, const BlockKey& key,
   CHECK_RUNNING("Disk cache group");
 
   DiskCacheSPtr store;
-  const auto& store_id = option.block_ctx.store_id;
+  const auto& store_id = option.block_attr.store_id;
   if (!store_id.empty()) {
     store = GetStore(store_id);
   } else {
@@ -139,7 +134,7 @@ Status DiskCacheGroup::Load(ContextSPtr ctx, const BlockKey& key, off_t offset,
   CHECK_RUNNING("Disk cache group");
 
   DiskCacheSPtr store;
-  const auto& store_id = option.block_ctx.store_id;
+  const auto& store_id = option.block_attr.store_id;
   if (!store_id.empty()) {
     store = GetStore(store_id);
   } else {
@@ -153,6 +148,8 @@ Status DiskCacheGroup::Load(ContextSPtr ctx, const BlockKey& key, off_t offset,
   return status;
 }
 
+std::string DiskCacheGroup::Id() const { return "disk_cache_group"; }
+
 bool DiskCacheGroup::IsRunning() const {
   return running_.load(std::memory_order_relaxed);
 }
@@ -163,7 +160,11 @@ bool DiskCacheGroup::IsCached(const BlockKey& key) const {
   return GetStore(key)->IsCached(key);
 }
 
-std::string DiskCacheGroup::Id() const { return "disk_cache_group"; }
+bool DiskCacheGroup::IsFull(const BlockKey& key) const {
+  DCHECK_RUNNING("Disk cache group");
+
+  return GetStore(key)->IsFull(key);
+}
 
 std::vector<uint64_t> DiskCacheGroup::CalcWeights(
     std::vector<DiskCacheOption> options) {
@@ -172,11 +173,11 @@ std::vector<uint64_t> DiskCacheGroup::CalcWeights(
   for (const auto& option : options) {
     weights.push_back(option.cache_size_mb);
   }
-  return Helper::NormalizeByGcd(weights);
+  return iutil::NormalizeByGcd(weights);
 }
 
 DiskCacheSPtr DiskCacheGroup::GetStore(const BlockKey& key) const {
-  ConNode node;
+  iutil::ConNode node;
   bool find = chash_->Lookup(std::to_string(key.id), node);
   CHECK(find) << "No corresponding store found: key = " << key.Filename();
 
@@ -197,19 +198,6 @@ DiskCacheSPtr DiskCacheGroup::GetStore(const std::string& store_id) const {
   CHECK(iter != stores_.end())
       << "Specified store not found: store_id = " << store_id;
   return iter->second;
-}
-
-void DiskCacheGroup::DisplayStatus() const {
-  CacheStatus::Update([this](CacheStatus::Root& root) {
-    auto& disks = root.local_cache.disks;
-    for (int i = 0; i < options_.size(); i++) {
-      disks[i] = CacheStatus::Disk{
-          .dir = options_[i].cache_dir,
-          .capacity = options_[i].cache_size_mb,
-          .health = "unknown",
-      };
-    }
-  });
 }
 
 }  // namespace cache

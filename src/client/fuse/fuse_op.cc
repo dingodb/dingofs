@@ -74,6 +74,9 @@ void InitFuseConnInfo(struct fuse_conn_info* conn) {
     fuse_unset_feature_flag(conn, FUSE_CAP_AUTO_INVAL_DATA);
     LOG(INFO) << "[disabled] FUSE_CAP_AUTO_INVAL_DATA";
   }
+
+  conn->max_readahead = FLAGS_fuse_max_readahead_kb * 1024;
+  conn->max_background = FLAGS_fuse_max_background;
 }
 
 void Attr2Stat(const Attr& attr, struct stat* stat) {

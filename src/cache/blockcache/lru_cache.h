@@ -25,10 +25,60 @@
 
 #include <functional>
 
-#include "cache/blockcache/lru_common.h"
+#include "cache/blockcache/cache_store.h"
+#include "cache/iutil/cache.h"
+#include "cache/iutil/time_util.h"
 
 namespace dingofs {
 namespace cache {
+
+using CacheKey = BlockKey;
+
+struct CacheValue {
+  CacheValue() = default;
+  CacheValue(size_t size, iutil::TimeSpec atime) : size(size), atime(atime) {}
+
+  size_t size;
+  iutil::TimeSpec atime;  // access time
+};
+
+struct CacheItem {
+  CacheItem(CacheKey key, CacheValue value) : key(key), value(value) {}
+
+  CacheKey key;
+  CacheValue value;
+};
+
+using CacheItems = std::vector<CacheItem>;
+
+struct ListNode {
+  ListNode() = default;
+
+  ListNode(const CacheValue& value)
+      : value(value), handle(nullptr), prev(nullptr), next(nullptr) {}
+
+  CacheValue value;
+  iutil::Cache::Handle* handle;
+  struct ListNode* prev;
+  struct ListNode* next;
+};
+
+inline void ListInit(ListNode* list) {
+  list->next = list;
+  list->prev = list;
+}
+
+inline void ListAddFront(ListNode* list, ListNode* node) {
+  node->next = list;
+  node->prev = list->prev;
+  node->prev->next = node;
+  node->next->prev = node;
+}
+
+inline void ListRemove(ListNode* node) {
+  node->next->prev = node->prev;
+  node->prev->next = node->next;
+}
 
 enum class FilterStatus : uint8_t {
   kEvictIt,
@@ -66,7 +116,7 @@ class LRUCache {
   bool EvictNode(ListNode* list, FilterFunc filter, CacheItems* evicted);
   void EvictAllNodes(ListNode* list);
 
-  Cache* hash_;  // mapping: CacheKey -> ListNode*
+  iutil::Cache* hash_;  // mapping: CacheKey -> ListNode*
   ListNode active_;
   ListNode inactive_;
 };

@@ -29,16 +29,13 @@
 #include <glog/logging.h>
 #include <sys/types.h>
 
-#include <memory>
 #include <string>
 #include <unordered_map>
 
-#include "cache/common/macro.h"
-#include "cache/utils/helper.h"
+#include "cache/iutil/string_util.h"
 #include "client/vfs/metasystem/mds/mds_discovery.h"
 #include "client/vfs/metasystem/mds/rpc.h"
 #include "common/status.h"
-#include "dingofs/cachegroup.pb.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"
 #include "mds/mds/mds_meta.h"
@@ -48,7 +45,7 @@ namespace cache {
 
 DEFINE_string(mds_addrs, "127.0.0.1:7400",
               "cache group member manager service rpc addresses");
-DEFINE_validator(mds_addrs, Helper::NonEmptyString);
+DEFINE_validator(mds_addrs, iutil::StringValidator);
 
 DEFINE_int64(cache_mds_rpc_timeout_ms, 3000, "mds rpc timeout");
 DEFINE_validator(cache_mds_rpc_timeout_ms, brpc::PassValidate);
@@ -59,42 +56,38 @@ DEFINE_validator(cache_mds_rpc_retry_times, brpc::PassValidate);
 DEFINE_uint32(cache_mds_request_retry_times, 3, "mds rpc request retry time");
 DEFINE_validator(cache_mds_request_retry_times, brpc::PassValidate);
 
-MDSClientImpl::MDSClientImpl(const std::string& mds_addr)
-    : running_(false), rpc_(mds_addr), mds_discovery_(rpc_) {}
+MDSClientImpl::MDSClientImpl()
+    : running_(false), rpc_(FLAGS_mds_addrs), mds_discovery_(rpc_) {}
 
 Status MDSClientImpl::Start() {
-  if (running_) {
+  if (running_.exchange(true)) {
+    LOG(WARNING) << "MDSClientImpl is already running";
     return Status::OK();
   }
 
-  LOG(INFO) << "MDS v2 client is starting...";
+  LOG(INFO) << "MDSClientImpl is starting...";
 
   if (!mds_discovery_.Init()) {
-    LOG(ERROR) << "Init MDS v2 discovery failed";
-    return Status::Internal("init mds v2 discovery failed");
+    LOG(ERROR) << "Fail to init MDSDiscovery";
+    return Status::Internal("init mds discovery failed");
   }
 
-  running_ = true;
-
-  LOG(INFO) << "MDS v2 client is up.";
-
-  CHECK_RUNNING("MDS v2 client");
+  LOG(INFO) << "MDSClientImpl is up";
   return Status::OK();
 }
 
 Status MDSClientImpl::Shutdown() {
   if (!running_.exchange(false)) {
+    LOG(WARNING) << "MDSClientImpl is already down";
     return Status::OK();
   }
 
-  LOG(INFO) << "MDS v2 client is shutting down...";
+  LOG(INFO) << "MDSClientImpl is shutting down...";
 
   mds_discovery_.Stop();
   rpc_.Stop();
 
-  LOG(INFO) << "MDS v2 client is down.";
-
-  CHECK_DOWN("MDS v2 client");
+  LOG(INFO) << "MDSClientImpl is down";
   return Status::OK();
 }
 
@@ -110,14 +103,14 @@ Status MDSClientImpl::GetFSInfo(uint64_t fs_id, pb::mds::FsInfo* fs_info) {
   return status;
 }
 
-Status MDSClientImpl::JoinCacheGroup(const std::string& want_id,
+Status MDSClientImpl::JoinCacheGroup(const std::string& member_id,
                                      const std::string& ip, uint32_t port,
                                      const std::string& group_name,
-                                     uint32_t weight, std::string* member_id) {
+                                     uint32_t weight) {
   pb::mds::JoinCacheGroupRequest request;
   pb::mds::JoinCacheGroupResponse response;
 
-  request.set_member_id(want_id);
+  request.set_member_id(member_id);
   request.set_ip(ip);
   request.set_port(port);
   request.set_group_name(group_name);
@@ -125,16 +118,10 @@ Status MDSClientImpl::JoinCacheGroup(const std::string& want_id,
 
   auto status = SendRequest("MDSService", "JoinCacheGroup", request, response);
   if (!status.ok()) {
-    LOG(ERROR) << "Join cache group failed: group_name = " << group_name
-               << ", ip = " << ip << ", port = " << port
-               << ", weight = " << weight << ", status = " << status.ToString();
-    return Status::Internal("join cache group failed");
+    LOG(ERROR) << "Fail to send JoinCacheGroup rpc request="
+               << request.ShortDebugString()
+               << ", response=" << response.ShortDebugString();
   }
-
-  *member_id = want_id;
-  LOG(INFO) << "Join cache group success: group_name = " << group_name
-            << ", ip = " << ip << ", port = " << port << ", weight = " << weight
-            << ", member_id = " << *member_id;
   return Status::OK();
 }
 
@@ -151,10 +138,9 @@ Status MDSClientImpl::LeaveCacheGroup(const std::string& member_id,
 
   auto status = SendRequest("MDSService", "LeaveCacheGroup", request, response);
   if (!status.ok()) {
-    LOG(ERROR) << "Leave cache group failed: group_name = " << group_name
-               << ", ip = " << ip << ", port = " << port
-               << ", member_id = " << member_id
-               << ", status = " << status.ToString();
+    LOG(ERROR) << "Fail to send LeaveCacheGroup rpc request="
+               << request.ShortDebugString()
+               << ", response=" << response.ShortDebugString();
   }
   return status;
 }
@@ -172,9 +158,9 @@ Status MDSClientImpl::Heartbeat(const std::string& member_id,
 
   auto status = SendRequest("MDSService", "Heartbeat", request, response);
   if (!status.ok()) {
-    LOG(ERROR) << "Send cache group member heartbeat failed: member_id = "
-               << member_id << ", ip = " << ip << ", port = " << port
-               << ", status = " << status.ToString();
+    LOG(ERROR) << "Fail to send Heartbeat rpc request="
+               << request.ShortDebugString()
+               << ", response=" << response.ShortDebugString();
   }
   return status;
 }
@@ -187,8 +173,9 @@ Status MDSClientImpl::ListMembers(const std::string& group_name,
   request.set_group_name(group_name);
   auto status = SendRequest("MDSService", "ListMembers", request, response);
   if (!status.ok()) {
-    LOG(ERROR) << "List cache group members failed: group_name = " << group_name
-               << ", status = " << status.ToString();
+    LOG(ERROR) << "Fail to send ListMembers rpc request="
+               << request.ShortDebugString()
+               << ", response=" << response.ShortDebugString();
     return status;
   }
 
@@ -287,13 +274,20 @@ Status MDSClientImpl::SendRequest(const std::string& service_name,
     }
 
     if (ShouldRefreshMDSList(status)) {
-      CHECK(mds_discovery_.RefreshFullyMDSList()) << "Refresh mds list fail";
+      CHECK(mds_discovery_.RefreshFullyMDSList()) << "Fail to refresh mds list";
     }
 
     old_mds = mds;
   }
 
-  return Status::Internal("send request fail");
+  return Status::Internal("send rpc request fail");
+}
+
+std::ostream& operator<<(std::ostream& os, const CacheGroupMember& member) {
+  os << "CacheGroupMember{id=" << member.id << " ip=" << member.ip
+     << " port=" << member.port << " weight=" << member.weight
+     << " state=" << CacheGroupMemberStateToString(member.state) << "}";
+  return os;
 }
 
 }  // namespace cache

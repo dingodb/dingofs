@@ -25,7 +25,7 @@
 #include <mutex>
 #include <vector>
 
-#include "cache/utils/helper.h"
+#include "cache/iutil/string_util.h"
 #include "client/vfs/data/common/common.h"
 #include "client/vfs/data/common/data_utils.h"
 #include "client/vfs/data/reader/chunk_req.h"
@@ -98,7 +98,7 @@ std::vector<BlockReadReq> ChunkReqReader::GetBlockReadReqs(
 
 // protected by shared state mtx
 IOBuffer ChunkReqReader::GatherIoBuf(ContextSPtr ctx,
-                                         ReaderSharedState* shared) {
+                                     ReaderSharedState* shared) {
   auto span = hub_->GetTraceManager()->StartChildSpan(
       "ChunkReqReader::GatherIoBuf", ctx->GetTraceSpan());
   IOBuffer ret;
@@ -154,7 +154,7 @@ void ChunkReqReader::OnAllBlocksComplete(ReaderSharedState* shared) {
 }
 
 void ChunkReqReader::OnBlockReadComplete(ReaderSharedState* shared,
-                                             BlockCacheReadReq* req, Status s) {
+                                         BlockCacheReadReq* req, Status s) {
   if (s.ok()) {
     VLOG(6) << fmt::format(
         "{} Success read block_req: {}, iobuf: {}, io_buf_size: {}", UUID(),
@@ -206,7 +206,7 @@ void ChunkReqReader::ProcessBlockCacheReadReq(
     char* data = new char[block_cache_req->block_req.len];
     std::fill(data, data + block_cache_req->block_req.len, 0);
     block_cache_req->io_buffer.AppendUserData(
-        data, block_cache_req->block_req.len, cache::Helper::DeleteBuffer);
+        data, block_cache_req->block_req.len, cache::iutil::DeleteBuffer);
     Status s = Status::OK();
     OnBlockReadComplete(shared, block_cache_req, s);
   } else {
@@ -229,8 +229,8 @@ void ChunkReqReader::ProcessBlockCacheReadReq(
 }
 
 void ChunkReqReader::ReadAsync(ContextSPtr ctx,
-                                   const std::vector<Slice>& slices,
-                                   StatusCallback cb) {
+                               const std::vector<Slice>& slices,
+                               StatusCallback cb) {
   VLOG(4) << fmt::format("{} ChunkReqReader Read req: {}", UUID(),
                          req_.ToString());
   CHECK_GE(chunk_.chunk_end, req_.frange.End());

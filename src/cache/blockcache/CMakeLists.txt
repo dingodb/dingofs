@@ -19,9 +19,9 @@ file(GLOB BLOCKCACHE_LIB_SRCS
 
 add_library(cache_blockcache ${BLOCKCACHE_LIB_SRCS})
 target_link_libraries(cache_blockcache
-    cache_utils
+    uring::uring
+
     cache_common
-    cache_metric
-    cache_storage
+    cache_iutil
     dingofs_executor
 )

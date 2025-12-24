@@ -25,18 +25,19 @@
 
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/block_cache_uploader.h"
-#include "cache/storage/storage.h"
-#include "cache/storage/storage_pool.h"
-#include "cache/utils/context.h"
+#include "cache/common/context.h"
+#include "cache/common/storage_client.h"
+#include "cache/common/storage_client_pool.h"
+#include "cache/iutil/inflight_tracker.h"
+#include "common/options/cache.h"
 
 namespace dingofs {
 namespace cache {
 
 class BlockCacheImpl final : public BlockCache {
  public:
-  explicit BlockCacheImpl(StorageSPtr storage);
-  explicit BlockCacheImpl(StoragePoolSPtr storage_pool);
-
+  explicit BlockCacheImpl(StorageClient* storage_client);
+  explicit BlockCacheImpl(StorageClientPoolSPtr storage_client_pool);
   ~BlockCacheImpl() override;
 
   Status Start() override;
@@ -64,27 +65,36 @@ class BlockCacheImpl final : public BlockCache {
                      AsyncCallback cb,
                      PrefetchOption option = PrefetchOption()) override;
 
-  bool HasCacheStore() const override;
-  bool EnableStage() const override;
-  bool EnableCache() const override;
-  bool IsCached(const BlockKey& key) const override;
+  bool IsEnabled() const override { return FLAGS_cache_store != "none"; }
+
+  bool EnableStage() const override {
+    return IsEnabled() && FLAGS_enable_stage;
+  }
+
+  bool EnableCache() const override {
+    return IsEnabled() && FLAGS_enable_cache;
+  }
+
+  bool IsCached(const BlockKey& key) const override {
+    return store_->IsCached(key);
+  }
 
  private:
   friend class BlockCacheBuilder;
 
-  BlockCachePtr GetSelfPtr() { return this; }
+  BlockCache* GetSelfPtr() { return this; }
 
   Status StoragePut(ContextSPtr ctx, const BlockKey& key, const Block& block);
   Status StorageRange(ContextSPtr ctx, const BlockKey& key, off_t offset,
                       size_t length, IOBuffer* buffer);
 
-  void DisplayStatus() const;
-
   std::atomic<bool> running_;
-  StoragePoolSPtr storage_pool_;
+  StorageClientPoolSPtr storage_client_pool_;
   CacheStoreSPtr store_;
   BlockCacheUploaderSPtr uploader_;
-  BthreadJoinerUPtr joiner_;
+  iutil::BthreadJoinerUPtr joiner_;
+  iutil::InflightTrackerSPtr cache_tracker_;
+  iutil::InflightTrackerSPtr prefetch_tracker_;
 };
 
 }  // namespace cache

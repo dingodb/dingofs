@@ -26,12 +26,62 @@
 #include "cache/blockcache/cache_store.h"
 #include "cache/blockcache/disk_cache.h"
 #include "cache/blockcache/disk_cache_watcher.h"
-#include "cache/metric/disk_cache_group_metric.h"
-#include "cache/utils/con_hash.h"
-#include "cache/utils/context.h"
+#include "cache/common/bvar.h"
+#include "cache/common/context.h"
+#include "cache/iutil/con_hash.h"
 
 namespace dingofs {
 namespace cache {
+
+struct DiskCacheGroupMetric {
+  DiskCacheGroupMetric() = default;
+
+  inline static const std::string prefix = "dingofs_disk_cache_group";
+
+  OpVar op_stage{absl::StrFormat("%s_%s", prefix, "stage")};
+  OpVar op_cache{absl::StrFormat("%s_%s", prefix, "cache")};
+  OpVar op_load{absl::StrFormat("%s_%s", prefix, "load")};
+};
+
+using DiskCacheGroupMetricSPtr = std::shared_ptr<DiskCacheGroupMetric>;
+
+struct DiskCacheGroupMetricGuard {
+  DiskCacheGroupMetricGuard(const std::string& op_name, size_t bytes,
+                            Status& status, DiskCacheGroupMetricSPtr metric)
+      : op_name(op_name), bytes(bytes), status(status), metric(metric) {
+    CHECK(op_name == "Stage" || op_name == "Cache" || op_name == "Load")
+        << "Invalid operation name: " << op_name;
+    timer.start();
+  }
+
+  ~DiskCacheGroupMetricGuard() {
+    timer.stop();
+
+    OpVar* op;
+    if (op_name == "Stage") {
+      op = &metric->op_stage;
+    } else if (op_name == "Cache") {
+      op = &metric->op_cache;
+    } else if (op_name == "Load") {
+      op = &metric->op_load;
+    }
+
+    if (status.ok()) {
+      op->op_per_second.total_count << 1;
+      op->bandwidth_per_second.total_count << bytes;
+      op->latency << timer.u_elapsed();
+      op->total_latency << timer.u_elapsed();
+    } else {
+      op->error_per_second.total_count << 1;
+    }
+  }
+
+  std::string op_name;
+  size_t bytes;
+  Status& status;
+  butil::Timer timer;
+  DiskCacheGroupMetricSPtr metric;
+};
 
 class DiskCacheGroup final : public CacheStore {
  public:
@@ -53,6 +103,7 @@ class DiskCacheGroup final : public CacheStore {
   std::string Id() const override;
   bool IsRunning() const override;
   bool IsCached(const BlockKey& key) const override;
+  bool IsFull(const BlockKey& key) const override;
 
  private:
   static std::vector<uint64_t> CalcWeights(
@@ -60,11 +111,9 @@ class DiskCacheGroup final : public CacheStore {
   DiskCacheSPtr GetStore(const BlockKey& key) const;
   DiskCacheSPtr GetStore(const std::string& store_id) const;
 
-  void DisplayStatus() const;
-
   std::atomic<bool> running_;
   const std::vector<DiskCacheOption> options_;
-  std::unique_ptr<ConHash> chash_;
+  std::unique_ptr<iutil::ConHash> chash_;
   std::unordered_map<std::string, DiskCacheSPtr> stores_;
   DiskCacheWatcherUPtr watcher_;
   DiskCacheGroupMetricSPtr metric_;

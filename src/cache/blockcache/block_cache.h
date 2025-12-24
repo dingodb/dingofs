@@ -25,8 +25,10 @@
 
 #include <brpc/server.h>
 
+#include <ostream>
+
 #include "cache/blockcache/cache_store.h"
-#include "cache/utils/context.h"
+#include "cache/common/context.h"
 #include "common/io_buffer.h"
 #include "common/status.h"
 
@@ -35,17 +37,16 @@ namespace cache {
 
 struct PutOption {
   bool writeback{false};
-  BlockContext block_ctx{BlockContext::kFromUnknown};
+  BlockAttr block_attr{BlockAttr::kFromUnknown};
 };
 
 struct RangeOption {
-  bool retrive{true};
-  size_t block_size{0};
+  bool retrieve_storage{true};
+  size_t block_whole_length{0};
   bool is_subrequest{false};
 };
 
 struct CacheOption {};
-
 struct PrefetchOption {};
 
 // async callback
@@ -55,45 +56,88 @@ class BlockCache {
  public:
   virtual ~BlockCache() = default;
 
-  virtual Status Start() = 0;
-  virtual Status Shutdown() = 0;
+  virtual Status Start() { return Status::OK(); }
+  virtual Status Shutdown() { return Status::OK(); }
 
   // block operations (sync)
-  virtual Status Put(ContextSPtr ctx, const BlockKey& key, const Block& block,
-                     PutOption option = PutOption()) = 0;
-  virtual Status Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
-                       size_t length, IOBuffer* buffer,
-                       RangeOption option = RangeOption()) = 0;
-  virtual Status Cache(ContextSPtr ctx, const BlockKey& key, const Block& block,
-                       CacheOption option = CacheOption()) = 0;
-  virtual Status Prefetch(ContextSPtr ctx, const BlockKey& key, size_t length,
-                          PrefetchOption option = PrefetchOption()) = 0;
+  virtual Status Put(ContextSPtr /*ctx*/, const BlockKey& /*key*/,
+                     const Block& /*block*/,
+                     [[maybe_unused]] PutOption option = PutOption()) {
+    return Status::NotSupport("not implemented");
+  }
+
+  virtual Status Range(ContextSPtr /*ctx*/, const BlockKey& /*key*/,
+                       off_t /*offset*/, size_t /*length*/,
+                       IOBuffer* /*buffer*/,
+                       [[maybe_unused]] RangeOption option = RangeOption()) {
+    return Status::NotSupport("not implemented");
+  }
+
+  virtual Status Cache(ContextSPtr /*ctx*/, const BlockKey& /* key*/,
+                       const Block& /*block*/,
+                       [[maybe_unused]] CacheOption option = CacheOption()) {
+    return Status::NotSupport("not implemented");
+  }
+
+  virtual Status Prefetch(
+      ContextSPtr /*ctx*/, const BlockKey& /*key*/, size_t /*length*/,
+      [[maybe_unused]] PrefetchOption option = PrefetchOption()) {
+    return Status::NotSupport("not implemented");
+  }
 
   // block operations (async)
-  virtual void AsyncPut(ContextSPtr ctx, const BlockKey& key,
-                        const Block& block, AsyncCallback callback,
-                        PutOption option = PutOption()) = 0;
-  virtual void AsyncRange(ContextSPtr ctx, const BlockKey& key, off_t offset,
-                          size_t length, IOBuffer* buffer,
-                          AsyncCallback callback,
-                          RangeOption option = RangeOption()) = 0;
-  virtual void AsyncCache(ContextSPtr ctx, const BlockKey& key,
-                          const Block& block, AsyncCallback callback,
-                          CacheOption option = CacheOption()) = 0;
-  virtual void AsyncPrefetch(ContextSPtr ctx, const BlockKey& key,
-                             size_t length, AsyncCallback callback,
-                             PrefetchOption option = PrefetchOption()) = 0;
+  virtual void AsyncPut(ContextSPtr /*ctx*/, const BlockKey& /*key*/,
+                        const Block& /*block*/, AsyncCallback cb,
+                        [[maybe_unused]] PutOption option = PutOption()) {
+    if (cb) {
+      cb(Status::NotSupport("not implemented"));
+    }
+  }
+
+  virtual void AsyncRange(ContextSPtr /*ctx*/, const BlockKey& /*key*/,
+                          off_t /*offset*/, size_t /*length*/,
+                          IOBuffer* /*buffer*/, AsyncCallback cb,
+                          [[maybe_unused]] RangeOption option = RangeOption()) {
+    if (cb) {
+      cb(Status::NotSupport("not implemented"));
+    }
+  }
+
+  virtual void AsyncCache(ContextSPtr /*ctx*/, const BlockKey& /*key*/,
+                          const Block& /*block*/, AsyncCallback cb,
+                          [[maybe_unused]] CacheOption option = CacheOption()) {
+    if (cb) {
+      cb(Status::NotSupport("not implemented"));
+    }
+  }
+
+  virtual void AsyncPrefetch(
+      ContextSPtr /*ctx*/, const BlockKey& /*key*/, size_t /*length*/,
+      AsyncCallback cb,
+      [[maybe_unused]] PrefetchOption option = PrefetchOption()) {
+    if (cb) {
+      cb(Status::NotSupport("not implemented"));
+    }
+  }
 
   // utility
-  virtual bool HasCacheStore() const = 0;
-  virtual bool EnableStage() const = 0;
-  virtual bool EnableCache() const = 0;
-  virtual bool IsCached(const BlockKey& key) const = 0;
+  virtual bool IsEnabled() const { return false; }
+  virtual bool EnableStage() const { return false; }
+  virtual bool EnableCache() const { return false; }
+  virtual bool IsCached(const BlockKey& /*key*/) const { return false; }
 };
 
 using BlockCachePtr = BlockCache*;
 using BlockCacheSPtr = std::shared_ptr<BlockCache>;
 using BlockCacheUPtr = std::unique_ptr<BlockCache>;
+
+inline std::ostream& operator<<(std::ostream& os,
+                                const BlockCache& block_cache) {
+  os << "BlockCache{enable=" << block_cache.IsEnabled()
+     << " stage=" << static_cast<int>(block_cache.EnableStage())
+     << " cache=" << static_cast<int>(block_cache.EnableCache()) << "}";
+  return os;
+}
 
 }  // namespace cache
 }  // namespace dingofs

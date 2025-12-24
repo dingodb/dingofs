@@ -23,13 +23,18 @@
 #ifndef DINGOFS_SRC_CACHE_BLOCKCACHE_DISK_CACHE_LAYOUT_H_
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_DISK_CACHE_LAYOUT_H_
 
+#include <absl/strings/match.h>
+#include <absl/strings/str_join.h>
+
 #include <string>
 
 #include "cache/blockcache/cache_store.h"
-#include "cache/utils/helper.h"
+#include "utils/time.h"
 
 namespace dingofs {
 namespace cache {
+
+static const std::string kTempFileSuffix = ".tmp";
 
 /*
  * disk cache layout:
@@ -61,8 +66,10 @@ namespace cache {
  */
 class DiskCacheLayout {
  public:
-  explicit DiskCacheLayout(const std::string& cache_dir)
-      : cache_dir_(cache_dir) {}
+  DiskCacheLayout(int cache_index, const std::string& cache_dir)
+      : cache_index_(cache_index), cache_dir_(cache_dir) {}
+
+  int CacheIndex() const { return cache_index_; }
 
   std::string GetRootDir() const { return cache_dir_; }
   std::string GetStageDir() const { return PathJoin(cache_dir_, "stage"); }
@@ -82,9 +89,10 @@ class DiskCacheLayout {
  private:
   std::string PathJoin(const std::string& parent,
                        const std::string& child) const {
-    return Helper::PathJoin({parent, child});
+    return absl::StrJoin({parent, child}, "/");
   }
 
+  const int cache_index_;
   const std::string cache_dir_;  // include uuid
 };
 
@@ -92,7 +100,16 @@ using DiskCacheLayoutSPtr = std::shared_ptr<DiskCacheLayout>;
 
 inline std::string RealCacheDir(const std::string& cache_dir,
                                 const std::string& uuid) {
-  return Helper::PathJoin({cache_dir, uuid});
+  return absl::StrJoin({cache_dir, uuid}, "/");
+}
+
+inline std::string TempFilepath(const std::string& filepath) {
+  return absl::StrFormat("%s.%lld%s", filepath, utils::TimestampNs(),
+                         kTempFileSuffix);
+}
+
+inline bool IsTempFilepath(const std::string& filepath) {
+  return absl::EndsWith(filepath, kTempFileSuffix);
 }
 
 }  // namespace cache

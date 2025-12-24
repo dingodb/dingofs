@@ -53,7 +53,7 @@ inline std::string CacheGroupMemberStateToString(CacheGroupMemberState state) {
     case CacheGroupMemberState::kOffline:
       return "offline";
     default:
-      CHECK(false) << "unknown cache group member state: "
+      CHECK(false) << "unknown cache group member state="
                    << static_cast<uint8_t>(state);
   }
 }
@@ -69,27 +69,22 @@ struct CacheGroupMember {
     return id == other.id && ip == other.ip && port == other.port &&
            weight == other.weight && state == other.state;
   }
-
-  std::string ToString() const {
-    return absl::StrFormat(
-        "[id = %s, ip = %s, port = %u, weight = %u, state = %s]", id, ip, port,
-        weight, CacheGroupMemberStateToString(state));
-  }
 };
+
+using Members = std::vector<CacheGroupMember>;
 
 class MDSClient {
  public:
   virtual ~MDSClient() = default;
-
   virtual Status Start() = 0;
   virtual Status Shutdown() = 0;
 
   virtual Status GetFSInfo(uint64_t fs_id, pb::mds::FsInfo* fs_info) = 0;
 
-  virtual Status JoinCacheGroup(const std::string& want_id,
+  virtual Status JoinCacheGroup(const std::string& member_id,
                                 const std::string& ip, uint32_t port,
-                                const std::string& group_name, uint32_t weight,
-                                std::string* member_id) = 0;
+                                const std::string& group_name,
+                                uint32_t weight) = 0;
   virtual Status LeaveCacheGroup(const std::string& member_id,
                                  const std::string& ip, uint32_t port,
                                  const std::string& group_name) = 0;
@@ -104,16 +99,15 @@ using MDSClientUPtr = std::unique_ptr<MDSClient>;
 
 class MDSClientImpl : public MDSClient {
  public:
-  explicit MDSClientImpl(const std::string& mds_addr);
-
+  MDSClientImpl();
   Status Start() override;
   Status Shutdown() override;
 
   Status GetFSInfo(uint64_t fs_id, pb::mds::FsInfo* fs_info) override;
 
-  Status JoinCacheGroup(const std::string& want_id, const std::string& ip,
+  Status JoinCacheGroup(const std::string& member_id, const std::string& ip,
                         uint32_t port, const std::string& group_name,
-                        uint32_t weight, std::string* member_id) override;
+                        uint32_t weight) override;
   Status LeaveCacheGroup(const std::string& member_id, const std::string& ip,
                          uint32_t port, const std::string& group_name) override;
   Status Heartbeat(const std::string& member_id, const std::string& ip,
@@ -138,6 +132,8 @@ class MDSClientImpl : public MDSClient {
   client::vfs::meta::RPC rpc_;
   client::vfs::meta::MDSDiscovery mds_discovery_;
 };
+
+std::ostream& operator<<(std::ostream& os, const CacheGroupMember& member);
 
 }  // namespace cache
 }  // namespace dingofs

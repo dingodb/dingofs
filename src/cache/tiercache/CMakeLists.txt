@@ -20,7 +20,8 @@ file(GLOB TIERCACHE_LIB_SRCS
 add_library(cache_tiercache ${TIERCACHE_LIB_SRCS})
 
 target_link_libraries(cache_tiercache
+    cache_common
+    cache_iutil
     cache_blockcache
     cache_remotecache
-    cache_common
 )

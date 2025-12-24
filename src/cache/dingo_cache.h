@@ -32,12 +32,7 @@ class DingoCache {
 
  private:
   static int ParseFlags(int argc, char** argv);
-
-  static void InitGlog();
-  static void LogFlags();
-  static void InitThreadPool();
   static void GlobalInitOrDie();
-
   static int StartServer();
 };
 

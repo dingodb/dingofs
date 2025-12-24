@@ -28,43 +28,47 @@
 
 namespace dingofs {
 
-// for block { put,range,cache... }:
-//
-// block put/cache:
-//   butil::IOBuf iobuf;
-//   for_each_page()
-//     iobuf.append_use_data(page_addr, page_size, ...);
-//   auto buffer = IOBuffer(iobuf);
-//   block_cache->AsyncPut(..., Block(&buffer), ...);
-//
-//  block range:
-//     IOBuffer buffer;
-//     block_cache->AsyncRange(..., &buffer, ...);
-//     auto iovs = buffer.Fetch();
-//
-//     struct fuse_bufvec bufvec[iovs.size()];
-//     for (int i = 0; i < iovs.size(); i++) {
-//       bufvec[i].mem = iovs[i].data;
-//       bufvec[i].mem_size = iovs[i].size;
-//     }
-//     fuse_reply_data(..., bufvec, ...)
-//
-//   we can use direct-io if all addresses for BufferVec are aligned by
-//   BLOCK_SIZE (4k).
 class IOBuffer {
  public:
   IOBuffer() = default;
-  explicit IOBuffer(butil::IOBuf iobuf);
-  IOBuffer(const char* data, size_t size);
+  ~IOBuffer() = default;
+  IOBuffer(const IOBuffer& buffer) = default;
+  IOBuffer& operator=(const IOBuffer& buffer) = default;
+  IOBuffer(IOBuffer&& buffer) noexcept : iobuf_(buffer.iobuf_.movable()) {}
+  IOBuffer& operator=(IOBuffer&& buffer) noexcept {
+    if (this != &buffer) {
+      iobuf_ = buffer.iobuf_.movable();
+    }
+    return *this;
+  }
 
-  butil::IOBuf& IOBuf();
-  const butil::IOBuf& ConstIOBuf() const;
+  explicit IOBuffer(butil::IOBuf iobuf) : iobuf_(iobuf) {}
+  explicit IOBuffer(butil::IOBuf::Movable& iobuf) : iobuf_(iobuf) {}
+  IOBuffer(const char* data, size_t size) { iobuf_.append(data, size); }
+  butil::IOBuf& IOBuf() { return iobuf_; }
+  const butil::IOBuf& ConstIOBuf() const { return iobuf_; }
 
-  void CopyTo(char* dest);
-  void CopyTo(char* dest) const;
-  size_t AppendTo(IOBuffer* buffer, size_t n = (size_t)-1L, size_t pos = 0);
-  void Append(const IOBuffer* buffer);
-  void AppendVec(const std::vector<iovec>& iovs);
+  void CopyTo(char* dest, size_t n = (size_t)-1L, size_t pos = 0) {
+    iobuf_.copy_to(dest, n, pos);
+  }
+
+  void CopyTo(char* dest, size_t n = (size_t)-1L, size_t pos = 0) const {
+    iobuf_.copy_to(dest, n, pos);
+  }
+
+  void CopyTo(IOBuffer* dest, size_t n = (size_t)-1L, size_t pos = 0) const {
+    iobuf_.copy_to(&dest->iobuf_, n, pos);
+  }
+
+  size_t AppendTo(IOBuffer* buffer, size_t n = (size_t)-1L, size_t pos = 0) {
+    return iobuf_.append_to(&buffer->IOBuf(), n, pos);
+  }
+
+  void Append(const IOBuffer* buffer) { iobuf_.append(buffer->iobuf_); }
+
+  void AppendV(const std::vector<iovec>& iovs) {
+    iobuf_.appendv((const const_iovec*)iovs.data(), iovs.size());
+  }
 
   void AppendUserData(void* data, size_t size,
                       std::function<void(void*)> deleter) {
@@ -72,13 +76,47 @@ class IOBuffer {
   }
 
   void PopFront(size_t n) { iobuf_.pop_front(n); }
-
   void PopBack(size_t n) { iobuf_.pop_back(n); }
 
-  size_t Size() const;
-  char* Fetch1() const;
-  std::vector<iovec> Fetch() const;
-  std::string Describe() const;
+  size_t Size() const { return iobuf_.length(); }
+
+  char* Fetch1() const {
+    CHECK_EQ(iobuf_.backing_block_num(), 1);
+    return (char*)iobuf_.fetch1();
+  }
+
+  std::vector<iovec> Fetch() const {
+    std::vector<iovec> iovecs;
+    for (int i = 0; i < iobuf_.backing_block_num(); i++) {
+      const auto& string_piece = iobuf_.backing_block(i);
+
+      char* data = (char*)string_piece.data();
+      size_t size = string_piece.length();
+      iovecs.emplace_back(iovec{data, size});
+    }
+    return iovecs;
+  }
+
+  std::string Describe() const {
+    const auto& iovecs = Fetch();
+    if (iovecs.empty()) {
+      return "IOBuffer[]";
+    }
+
+    std::ostringstream oss;
+    oss << "IOBuffer[";
+    auto vec_count = iovecs.size();
+    for (int i = 0; i < vec_count; ++i) {
+      oss << "(" << i << ", " << iovecs[i].iov_base << ", " << iovecs[i].iov_len
+          << ")";
+      if (i < vec_count - 1) {
+        oss << ",";
+      }
+    }
+    oss << ", (size: " << iobuf_.length() << ")]";
+
+    return oss.str();
+  }
 
  private:
   butil::IOBuf iobuf_;

@@ -22,18 +22,18 @@
 
 #include "cache/blockcache/block_cache_uploader.h"
 
+#include <brpc/reloadable_flags.h>
 #include <bthread/bthread.h>
+#include <bthread/mutex.h>
 
 #include <atomic>
 #include <memory>
 
-#include "cache/blockcache/block_cache_upload_queue.h"
-#include "cache/common/const.h"
+#include "cache/blockcache/cache_store.h"
+#include "cache/common/context.h"
 #include "cache/common/macro.h"
-#include "cache/utils/bthread.h"
-#include "cache/utils/context.h"
-#include "cache/utils/infight_throttle.h"
-#include "common/options/cache.h"
+#include "cache/iutil/bthread.h"
+#include "cache/iutil/inflight_tracker.h"
 
 namespace dingofs {
 namespace cache {
@@ -42,102 +42,178 @@ DEFINE_uint32(
     upload_stage_max_inflights, 32,
     "maximum inflight requests for uploading stage blocks to storage");
 
-static const std::string kModule = "uploader";
+// Allow you push one element and pop a bunch of elements at once.
+template <typename T>
+class Segments {
+ public:
+  using Segment = std::vector<T>;
+  explicit Segments(size_t segment_size) : segment_size_(segment_size) {};
 
-BlockCacheUploader::BlockCacheUploader(CacheStoreSPtr store,
-                                       StoragePoolSPtr storage_pool)
+  void Push(T element) {
+    if (segments_.empty() || segments_.back().size() == segment_size_) {
+      segments_.emplace(Segment());
+    }
+    segments_.back().push_back(element);
+    size_++;
+  }
+
+  Segment Pop() {
+    if (segments_.empty()) {
+      return Segment();
+    }
+
+    auto segment = segments_.front();
+    segments_.pop();
+    CHECK_GE(size_, segment.size());
+    size_ -= segment.size();
+    return segment;
+  }
+
+  size_t Size() { return size_; }
+
+ private:
+  size_t size_{0};
+  const size_t segment_size_;
+  std::queue<Segment> segments_;
+};
+
+// PendingQueue is a priority queue for uploading staging blocks
+// which will upload writeback blocks first, then reload blocks.
+class PendingQueue {
+ public:
+  PendingQueue() = default;
+
+  void Push(const StageBlock& sblock) {
+    std::unique_lock<bthread::Mutex> lk(mutex_);
+    auto from = sblock.block_attr.from;
+    auto iter = queues_.find(from);
+    if (iter == queues_.end()) {
+      iter = queues_.emplace(from, Segments<StageBlock>(kSegmentSize)).first;
+    }
+
+    auto& queue = iter->second;
+    queue.Push(sblock);
+    count_[from]++;
+  }
+
+  std::vector<StageBlock> Pop() {
+    static std::vector<BlockAttr::BlockFrom> pop_prority{
+        BlockAttr::kFromWriteback,
+        BlockAttr::kFromReload,
+        BlockAttr::kFromUnknown,
+    };
+
+    std::unique_lock<bthread::Mutex> lk(mutex_);
+    for (const auto& from : pop_prority) {
+      auto iter = queues_.find(from);
+      if (iter != queues_.end() && iter->second.Size() != 0) {
+        auto sblocks = iter->second.Pop();
+        CHECK(count_[from] >= sblocks.size());
+        count_[from] -= sblocks.size();
+        return sblocks;
+      }
+    }
+    return std::vector<StageBlock>();
+  }
+
+  size_t Size() {
+    std::unique_lock<bthread::Mutex> lk(mutex_);
+    size_t size = 0;
+    for (auto& item : queues_) {
+      size += item.second.Size();
+    }
+    return size;
+  }
+
+  void Stat(struct StageBlockStat* stat) {
+    std::unique_lock<bthread::Mutex> lk(mutex_);
+    auto num_from_writeback = count_[BlockAttr::kFromWriteback];
+    auto num_from_reload = count_[BlockAttr::kFromReload];
+    auto num_total = num_from_writeback + num_from_reload;
+    *stat = StageBlockStat(num_total, num_from_writeback, num_from_reload);
+  }
+
+ private:
+  static constexpr size_t kSegmentSize = 100;
+
+  bthread::Mutex mutex_;
+  std::unordered_map<BlockAttr::BlockFrom, Segments<StageBlock>> queues_;
+  std::unordered_map<BlockAttr::BlockFrom, uint64_t> count_;
+};
+
+BlockCacheUploader::BlockCacheUploader(
+    CacheStoreSPtr store, StorageClientPoolSPtr storage_client_pool)
     : running_(false),
       store_(store),
-      storage_pool_(storage_pool),
+      storage_client_pool_(storage_client_pool),
       pending_queue_(std::make_unique<PendingQueue>()),
-      inflights_(
-          std::make_unique<InflightThrottle>(FLAGS_upload_stage_max_inflights)),
-      thread_pool_(std::make_unique<TaskThreadPool>("upload_stage")),
-      joiner_(std::make_unique<BthreadJoiner>()) {}
+      tracker_(std::make_unique<iutil::InflightTracker>(
+          FLAGS_upload_stage_max_inflights)),
+      joiner_(std::make_unique<iutil::BthreadJoiner>()) {}
 
 BlockCacheUploader::~BlockCacheUploader() { Shutdown(); }
 
 void BlockCacheUploader::Start() {
-  CHECK_NOTNULL(store_);
-  CHECK_NOTNULL(storage_pool_);
-  CHECK_NOTNULL(pending_queue_);
-  CHECK_NOTNULL(inflights_);
-  CHECK_NOTNULL(thread_pool_);
-  CHECK_NOTNULL(joiner_);
-
-  if (running_) {
+  if (running_.load(std::memory_order_relaxed)) {
+    LOG(WARNING) << "BlockCacheUploader is already started";
     return;
   }
 
-  LOG(INFO) << "Block cache uploader is starting...";
+  LOG(INFO) << "BlockCacheUploader is starting...";
 
-  auto status = joiner_->Start();
-  if (!status.ok()) {
-    LOG(ERROR) << "Failed to start bthread joiner: " << status.ToString();
-    return;
-  }
+  joiner_->Start();
 
-  running_ = true;
-
-  CHECK_EQ(thread_pool_->Start(1), 0) << "Failed to start thread pool.";
-  thread_pool_->Enqueue(&BlockCacheUploader::UploadingWorker, this);
-
-  LOG(INFO) << "Block cache uploader is up.";
-
-  CHECK_RUNNING("Block cache uploader");
+  running_.store(true, std::memory_order_relaxed);
+  thread_ = std::thread(&BlockCacheUploader::UploadWorker, this);
+  LOG(INFO) << "BlockCacheUploader is up.";
 }
 
 void BlockCacheUploader::Shutdown() {
-  if (!running_.exchange(false)) {
-    LOG(INFO) << "Block cache uploader is already shutting down.";
+  if (!running_.load(std::memory_order_relaxed)) {
+    LOG(INFO) << "BlockCacheUploader is already shutdown";
     return;
   }
 
-  LOG(INFO) << "Block cache uploader is shutting down...";
+  LOG(INFO) << "BlockCacheUploader is shutting down...";
 
-  thread_pool_->Stop();
   joiner_->Shutdown();
 
-  LOG(INFO) << "Block cache uploader is down.";
-
-  CHECK_DOWN("Block cache uploader");
+  running_.store(false, std::memory_order_relaxed);
+  thread_.join();
+  LOG(INFO) << "BlockCacheUploader is down";
 }
 
-void BlockCacheUploader::AddStagingBlock(const StagingBlock& block) {
-  DCHECK_RUNNING("Block cache uploader");
-
-  VLOG(9) << "Add staging block to pending queue: key = "
-          << block.key.Filename() << ", length = " << block.length
-          << ", from = " << static_cast<int>(block.block_ctx.from);
-
-  pending_queue_->Push(block);
+void BlockCacheUploader::EnterUploadQueue(const StageBlock& sblock) {
+  DCHECK_RUNNING("BlockCacheUploader");
+  pending_queue_->Push(sblock);
 }
 
-void BlockCacheUploader::UploadingWorker() {
-  CHECK_RUNNING("Block cache uploader");
+void BlockCacheUploader::UploadWorker() {
+  CHECK_RUNNING("BlockCacheUploader");
 
-  WaitStoreUp();
+  WaitStoreReady();
 
   while (IsRunning()) {
-    auto blocks = pending_queue_->Pop();
-    if (blocks.empty()) {
+    auto sblocks = pending_queue_->Pop();
+    if (sblocks.empty()) {
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
       continue;
     }
 
-    for (const auto& staging_block : blocks) {
-      AsyncUploading(staging_block);
+    for (const auto& sblock : sblocks) {
+      AsyncUpload(sblock);
     }
   }
 }
 
-void BlockCacheUploader::AsyncUploading(const StagingBlock& staging_block) {
-  inflights_->Increment(1);
+void BlockCacheUploader::AsyncUpload(const StageBlock& sblock) {
+  tracker_->Add(sblock.key.Filename());
 
   auto* self = GetSelfPtr();
-  auto tid = RunInBthread([self, staging_block]() {
-    auto status = self->Uploading(staging_block);
-    self->PostUploading(staging_block, status);
+  auto tid = iutil::RunInBthread([self, sblock]() {
+    auto status = self->DoUpload(sblock);
+    self->OnComplete(sblock, status);
+    self->tracker_->Remove(sblock.key.Filename());
   });
 
   if (tid != 0) {
@@ -145,120 +221,68 @@ void BlockCacheUploader::AsyncUploading(const StagingBlock& staging_block) {
   }
 }
 
-void BlockCacheUploader::PostUploading(const StagingBlock& staging_block,
-                                       Status status) {
-  inflights_->Decrement(1);
-
-  auto ctx = staging_block.ctx;
-  auto key = staging_block.key;
+void BlockCacheUploader::OnComplete(const StageBlock& sblock, Status status) {
+  auto key = sblock.key;
   if (status.ok() || status.IsNotFound()) {
     return;
   } else if (status.IsCacheDown()) {
-    LOG_CTX(ERROR)
-        << "Uploading staging block failed for cache is down, it will "
-           "re-upload after cache restart if the block still exist: key = "
-        << key.Filename();
+    LOG(ERROR) << "Fail to upload " << sblock
+               << " because the cache is down, it will "
+                  "re-upload after cache restart if the block still exists";
     return;
   }
 
   // error
   static const int sleep_ms = 100;
-  LOG_CTX(ERROR) << "Uploading staging block failed, it will retry in "
-                 << sleep_ms << " millisecond: key =" << key.Filename()
-                 << ", status = " << status.ToString();
+  LOG(ERROR) << "Fail to upload " << sblock << ", it will retry after "
+             << sleep_ms << " ms";
 
   if (IsRunning()) {
     bthread_usleep(sleep_ms * 1000);
-    AddStagingBlock(staging_block);
+    EnterUploadQueue(sblock);  // retry
   }
 }
 
-Status BlockCacheUploader::Uploading(const StagingBlock& staging_block) {
-  Status status;
-  auto ctx = staging_block.ctx;
-  StepTimer timer;
-  TraceLogGuard log(ctx, status, timer, kModule, "upload(%s,%zu)",
-                    staging_block.key.Filename(), staging_block.length);
-  StepTimerGuard guard(timer);
-
-  NEXT_STEP("load");
+Status BlockCacheUploader::DoUpload(const StageBlock& sblock) {
   IOBuffer buffer;
-  status = Load(staging_block, &buffer);  // FIXME
-  if (!status.ok()) {
-    return status;
-  }
-
-  NEXT_STEP("s3_put");
-  status = Upload(staging_block, buffer);
-  if (!status.ok()) {
-    return status;
-  }
-
-  NEXT_STEP("remove_stage");
-  status = RemoveStage(staging_block);
-  return status;
-}
-
-Status BlockCacheUploader::Load(const StagingBlock& staging_block,
-                                IOBuffer* buffer) {
-  auto ctx = staging_block.ctx;
-  const auto& key = staging_block.key;
-
-  auto status = store_->Load(ctx, key, 0, staging_block.length, buffer);
+  auto status = store_->Load(sblock.ctx, sblock.key, 0, sblock.length, &buffer);
   if (status.IsNotFound()) {
-    LOG_CTX(ERROR) << "Load staging block failed which already deleted, "
-                      "abort upload: key = "
-                   << key.Filename() << ", status = " << status.ToString();
+    LOG(ERROR) << "Fail to upload " << sblock
+               << " which already deleted, abort upload";
+    return status;
   } else if (!status.ok()) {
-    LOG_CTX(ERROR) << "Load staging block failed: key = " << key.Filename()
-                   << ", status = " << status.ToString();
-  }
-  return status;
-}
-
-Status BlockCacheUploader::Upload(const StagingBlock& staging_block,
-                                  const IOBuffer& buffer) {
-  auto ctx = staging_block.ctx;
-  const auto& key = staging_block.key;
-
-  StorageSPtr storage;
-  auto status = storage_pool_->GetStorage(key.fs_id, storage);
-  if (!status.ok()) {
-    LOG_CTX(ERROR) << "Get storage failed: key = " << key.Filename()
-                   << ", status = " << status.ToString();
+    LOG(ERROR) << "Fail to upload " << sblock;
     return status;
   }
 
-  status = storage->Upload(staging_block.ctx, key, Block(buffer));
+  StorageClient* storage_client;
+  status =
+      storage_client_pool_->GetStorageClient(sblock.key.fs_id, &storage_client);
   if (!status.ok()) {
-    LOG_CTX(ERROR) << "Upload staging block failed: key = " << key.Filename()
-                   << ", status = " << status.ToString();
+    LOG(ERROR) << "Fail to get storage client";
     return status;
   }
 
-  return Status::OK();
-}
-
-Status BlockCacheUploader::RemoveStage(const StagingBlock& staging_block) {
-  auto ctx = staging_block.ctx;
-  const auto& key = staging_block.key;
-
-  CacheStore::RemoveStageOption option;
-  option.block_ctx = staging_block.block_ctx;
-  auto status = store_->RemoveStage(staging_block.ctx, key, option);
+  Block block(std::move(buffer));
+  status = storage_client->Put(sblock.ctx, sblock.key, &block);
   if (!status.ok()) {
-    LOG_CTX(WARNING) << "Remove staging block failed: key = " << key.Filename()
-                     << ", status = " << status.ToString();
+    LOG(ERROR) << "Fail to put " << sblock << " to storage";
+    return status;
+  }
+
+  status = store_->RemoveStage(sblock.ctx, sblock.key,
+                               {.block_attr = sblock.block_attr});
+  if (!status.ok()) {
+    LOG(WARNING) << "Fail to remove stage block, key=" << sblock.key.Filename();
     status = Status::OK();  // ignore removestage error
   }
-
   return status;
 }
 
-void BlockCacheUploader::WaitStoreUp() {
-  while (!store_->IsRunning()) {
-    bthread_usleep(1000 * 1000);
-  }
+std::ostream& operator<<(std::ostream& os, const StageBlock& sblock) {
+  os << "StageBlock{key=" << sblock.key.Filename()
+     << " length=" << sblock.length << " attr=" << sblock.block_attr << "}";
+  return os;
 }
 
 }  // namespace cache

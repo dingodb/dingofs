@@ -19,10 +19,8 @@ file(GLOB REMOTECACHE_LIB_SRCS
 
 add_library(cache_remotecache ${REMOTECACHE_LIB_SRCS})
 target_link_libraries(cache_remotecache
-    cache_utils
     cache_common
-    cache_metric
-    cache_storage
+    cache_iutil
     cache_blockcache
     dingofs_executor
 )

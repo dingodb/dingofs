@@ -16,6 +16,7 @@
 #define DINGOFS_UTILS_EXECUTOR_H_
 
 #include <functional>
+#include <memory>
 #include <string>
 
 namespace dingofs {
@@ -38,6 +39,8 @@ class Executor {
 
   virtual std::string Name() const = 0;
 };
+
+using ExecutorUPtr = std::unique_ptr<Executor>;
 
 }  // namespace dingofs
 

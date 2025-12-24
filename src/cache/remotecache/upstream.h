@@ -1,3 +1,4 @@
+
 /*
  * Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
  *
@@ -16,95 +17,122 @@
 
 /*
  * Project: DingoFS
- * Created Date: 2025-07-31
+ * Created Date: 2026-01-08
  * Author: Jingli Chen (Wine93)
  */
 
 #ifndef DINGOFS_SRC_CACHE_REMOTECACHE_UPSTREAM_H_
 #define DINGOFS_SRC_CACHE_REMOTECACHE_UPSTREAM_H_
 
+#include <bthread/rwlock.h>
+
 #include <memory>
 
 #include "cache/blockcache/cache_store.h"
+#include "cache/common/bvar.h"
 #include "cache/common/mds_client.h"
-#include "cache/common/type.h"
-#include "cache/remotecache/remote_cache_node.h"
-#include "cache/utils/con_hash.h"
+#include "cache/remotecache/peer_group.h"
+#include "cache/remotecache/request.h"
+#include "utils/executor/executor.h"
 
 namespace dingofs {
 namespace cache {
 
-class ConsistentHash {
- public:
-  using NodesT = std::unordered_map<std::string, RemoteCacheNodeSPtr>;
+struct UpstreamVarsCollector {
+  // FIXME: dingofs_upstream
+  inline static const std::string prefix = "dingofs_remote_node_group";
 
-  ConsistentHash();
-
-  void Build(const std::vector<CacheGroupMember>& members);
-
-  RemoteCacheNodeSPtr GetNode(const std::string& key);
-
-  NodesT& GetAllNodes();
-  const NodesT& GetAllNodes() const;
-
- private:
-  std::vector<uint64_t> CalcWeights(
-      const std::vector<CacheGroupMember>& members);
-
-  std::unique_ptr<ConHash> chash_;
-  NodesT nodes_;
+  OpVar op_put{absl::StrFormat("%s_%s", prefix, "put")};
+  OpVar op_range{absl::StrFormat("%s_%s", prefix, "range")};
+  OpVar op_cache{absl::StrFormat("%s_%s", prefix, "cache")};
+  OpVar op_prefetch{absl::StrFormat("%s_%s", prefix, "prefetch")};
 };
 
-using ConsistentHashSPtr = std::shared_ptr<ConsistentHash>;
+using UpstreamVarsCollectorUPtr = std::unique_ptr<UpstreamVarsCollector>;
+
+struct UpstreamVarsRecordGuard {
+  UpstreamVarsRecordGuard(const std::string& opname, size_t bytes,
+                          Status& status, UpstreamVarsCollector* vars)
+      : opname(opname), bytes(bytes), status(status), vars(vars) {
+    CHECK(opname == "Put" || opname == "Range" || opname == "Cache" ||
+          opname == "Prefetch")
+        << "Invalid operation name=" << opname;
+    timer.start();
+  }
+
+  ~UpstreamVarsRecordGuard() {
+    timer.stop();
+
+    OpVar* op;
+    if (opname == "Put") {
+      op = &vars->op_put;
+    } else if (opname == "Range") {
+      op = &vars->op_range;
+    } else if (opname == "Cache") {
+      op = &vars->op_cache;
+    } else if (opname == "Prefetch") {
+      op = &vars->op_prefetch;
+    }
+
+    if (status.ok()) {
+      op->op_per_second.total_count << 1;
+      op->bandwidth_per_second.total_count << bytes;
+      op->latency << timer.u_elapsed();
+      op->total_latency << timer.u_elapsed();
+    } else {
+      op->error_per_second.total_count << 1;
+    }
+  }
+
+  std::string opname;
+  size_t bytes;
+  Status& status;
+  butil::Timer timer;
+  UpstreamVarsCollector* vars;
+};
 
 class Upstream {
  public:
-  virtual ~Upstream() = default;
+  Upstream();
+  void Start();
+  void Shutdown();
 
-  virtual void Build(const std::vector<CacheGroupMember>& members) = 0;
-
-  virtual Status GetNode(const BlockKey& key, RemoteCacheNodeSPtr& node) = 0;
-};
-
-class UpstreamImpl : public Upstream {
- public:
-  UpstreamImpl();
-
-  void Build(const std::vector<CacheGroupMember>& members) override;
-
-  Status GetNode(const BlockKey& key, RemoteCacheNodeSPtr& node) override;
+  Status SendPutRequest(const BlockKey& key, const Block& block);
+  Status SendRangeRequest(const BlockKey& key, off_t offset, size_t length,
+                          IOBuffer* buffer, size_t block_whole_length);
+  Status SendCacheRequest(const BlockKey& key, const Block& block);
+  Status SendPrefetchRequest(const BlockKey& key, size_t length);
 
  private:
-  struct Diff {
-    std::vector<RemoteCacheNodeSPtr> add_nodes;
-    std::vector<RemoteCacheNodeSPtr> remove_nodes;
-  };
+  PeerGroupSPtr GetPeerGroup() {
+    bthread::RWLockRdGuard guard(rwlock_);
+    return group_;
+  }
 
-  std::vector<CacheGroupMember> FilterMember(
-      const std::vector<CacheGroupMember>& members);
+  void SetPeerGroup(const PeerGroupSPtr& group) {
+    bthread::RWLockWrGuard guard(rwlock_);
+    group_ = group;
+  }
 
-  bool IsSame(const std::vector<CacheGroupMember>& old_members,
-              const std::vector<CacheGroupMember>& new_members) const;
+  template <typename T, typename U>
+  Response<U> SendRequest(const Request<T>& request);
 
-  Diff ShareNodes(const ConsistentHash::NodesT& old_nodes,
-                  ConsistentHash::NodesT& new_nodes);
+  bool SendListMembersRequest(Members* members);
+  bool SyncMembers();
+  void PeriodicSyncMembers();
 
-  void StartNodes(const std::vector<RemoteCacheNodeSPtr>& add_nodes);
-  void ShutdownNodes(const std::vector<RemoteCacheNodeSPtr>& remove_nodes);
-
-  void ResetCHash(const std::vector<CacheGroupMember>& new_members,
-                  ConsistentHashSPtr new_chash);
-
-  void SetStatusPage() const;
-
-  BthreadRWLock rwlock_;
-  std::vector<CacheGroupMember> members_;
-  ConsistentHashSPtr chash_;
+  std::atomic<bool> running_;
+  MDSClientUPtr mds_client_;
+  ExecutorUPtr executor_;
+  bthread::RWLock rwlock_;  // for group_
+  PeerGroupSPtr group_;
+  PeerGroupBuilderUPtr builder_;
+  UpstreamVarsCollectorUPtr vars_;
 };
 
-using UpstreamUPtr = std::unique_ptr<UpstreamImpl>;
+using UpstreamUPtr = std::unique_ptr<Upstream>;
 
-};  // namespace cache
-};  // namespace dingofs
+}  // namespace cache
+}  // namespace dingofs
 
 #endif  // DINGOFS_SRC_CACHE_REMOTECACHE_UPSTREAM_H_

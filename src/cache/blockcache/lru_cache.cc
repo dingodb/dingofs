@@ -34,7 +34,7 @@ static void FreeNode(const std::string_view&, void* value) {
 
 LRUCache::LRUCache() {
   // naming hash? yeah, it manage kv mapping and value's life cycle
-  hash_ = NewLRUCache(1 << 30);  // large enough
+  hash_ = iutil::NewLRUCache(1 << 30);  // large enough
   ListInit(&inactive_);
   ListInit(&active_);
 }
@@ -59,7 +59,7 @@ bool LRUCache::Get(const CacheKey& key, CacheValue* value) {
 
   ListRemove(node);
   ListAddFront(&active_, node);
-  node->value.atime = utils::TimeNow();  // update access time
+  node->value.atime = iutil::TimeNow();  // update access time
   *value = node->value;
   return true;
 }

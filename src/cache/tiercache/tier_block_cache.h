@@ -25,10 +25,10 @@
 
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
-#include "cache/storage/storage.h"
-#include "cache/utils/bthread.h"
-#include "cache/utils/context.h"
-#include "cache/utils/inflight_tracker.h"
+#include "cache/common/context.h"
+#include "cache/common/storage_client.h"
+#include "cache/iutil/bthread.h"
+#include "cache/iutil/inflight_tracker.h"
 #include "common/blockaccess/block_accesser.h"
 
 namespace dingofs {
@@ -36,7 +36,7 @@ namespace cache {
 
 class TierBlockCache final : public BlockCache {
  public:
-  explicit TierBlockCache(StorageSPtr storage);
+  explicit TierBlockCache(StorageClientUPtr storage_client);
   explicit TierBlockCache(blockaccess::BlockAccesser* block_accesser);
 
   Status Start() override;
@@ -64,32 +64,45 @@ class TierBlockCache final : public BlockCache {
                      AsyncCallback cb,
                      PrefetchOption option = PrefetchOption()) override;
 
-  bool HasCacheStore() const override;
-  bool EnableStage() const override;
-  bool EnableCache() const override;
-  bool IsCached(const BlockKey& key) const override;
+  bool IsEnabled() const override {
+    return remote_block_cache_->IsEnabled() || local_block_cache_->IsEnabled();
+  }
+
+  bool EnableStage() const override {
+    return EnableLocalStage() || EnableRemoteStage();
+  }
+
+  bool EnableCache() const override {
+    return EnableLocalCache() || EnableRemoteCache();
+  }
+
+  bool IsCached(const BlockKey& key) const override {
+    return local_block_cache_->IsCached(key) ||
+           remote_block_cache_->IsCached(key);
+  }
 
  private:
-  BlockCachePtr GetSelfPtr() { return this; }
+  BlockCache* GetSelfPtr() { return this; }
 
-  bool EnableLocalStage() const;
-  bool EnableLocalCache() const;
-  bool EnableRemoteStage() const;
-  bool EnableRemoteCache() const;
+  bool EnableLocalStage() const { return local_block_cache_->EnableStage(); }
+  bool EnableLocalCache() const { return local_block_cache_->EnableCache(); }
+  bool EnableRemoteStage() const { return remote_block_cache_->EnableStage(); }
+  bool EnableRemoteCache() const { return remote_block_cache_->EnableCache(); }
 
-  using FillGroupCacheCb = UploadOption::AsyncCacheFunc;
-  FillGroupCacheCb NewFillGroupCacheCb(ContextSPtr ctx);
+  Block CopyBlock(const Block& block);
+  void FillGroupCache(ContextSPtr ctx, const BlockKey& key, const Block& block);
 
   // The behavior of local block cache is same as remote block cache,
   // the biggest difference is that the local block cache will read/write data
   // from/to the local disk, while the remote block cache will read/write data
   // from/to the remote cache group node.
   std::atomic<bool> running_;
-  StorageSPtr storage_;
+  StorageClientUPtr storage_client_;
   BlockCacheUPtr local_block_cache_;
   BlockCacheUPtr remote_block_cache_;
-  BthreadJoinerUPtr joiner_;
-  InflightTrackerUPtr inflight_tracker_;
+  iutil::InflightTrackerSPtr cache_tracker_;
+  iutil::InflightTrackerSPtr prefetch_tracker_;
+  iutil::BthreadJoinerUPtr joiner_;
 };
 
 }  // namespace cache

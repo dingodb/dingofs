@@ -79,15 +79,16 @@ static std::vector<std::pair<std::string, std::string>> GenConfigs(
     configs.emplace_back("cache",
                          fmt::format("[{} {}]", dingofs::cache::FLAGS_mds_addrs,
                                      dingofs::cache::FLAGS_cache_group));
+  } else if (dingofs::cache::FLAGS_cache_store == "disk") {
+    configs.emplace_back(
+        "cache",
+        fmt::format("[{} {}MB {}%(ratio)]", dingofs::cache::FLAGS_cache_dir,
+                    dingofs::cache::FLAGS_cache_size_mb,
+                    dingofs::cache::FLAGS_free_space_ratio * 100));
   } else {
-    if (dingofs::cache::FLAGS_enable_cache) {
-      configs.emplace_back(
-          "cache",
-          fmt::format("[{} {}MB {}%(ratio)]", dingofs::cache::FLAGS_cache_dir,
-                      dingofs::cache::FLAGS_cache_size_mb,
-                      dingofs::cache::FLAGS_free_space_ratio * 100));
-    }
+    configs.emplace_back("cache", "[]");
   }
+
   // monitor
   auto hostname = dingofs::Helper::GetHostName();
   configs.emplace_back(

@@ -205,6 +205,11 @@ DEFINE_bool(fuse_enable_auto_inval_data, true,
             "fuse will check the validity of the attributes on every read");
 DEFINE_validator(fuse_enable_auto_inval_data, brpc::PassValidate);
 
+DEFINE_int32(fuse_max_readahead_kb, 131072,
+             "maximum number of bytes that the kernel will read ahead");
+DEFINE_int32(fuse_max_background, 128,
+             "maximum number of pending background requests");
+
 // memory page allocator
 DEFINE_uint32(vfs_write_buffer_page_size, 65536,
               "page size for vfs write buffer");

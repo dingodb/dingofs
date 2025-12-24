@@ -205,6 +205,8 @@ class TaskThreadPool : public Uncopyable {
   std::atomic<bool> running_;
 };
 
+using TaskThreadPoolUPtr = std::unique_ptr<TaskThreadPool<>>;
+
 }  // namespace utils
 }  // namespace dingofs
 

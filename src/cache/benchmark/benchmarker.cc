@@ -95,7 +95,7 @@ Status Benchmarker::InitMdsClient() { return mds_client_->Start(); }
 Status Benchmarker::InitStorage() {
   auto status = storage_pool_->GetStorage(FLAGS_fsid, storage_);
   if (!status.ok()) {
-    LOG(ERROR) << "Init storage failed: " << status.ToString();
+    LOG(ERROR) << "Fail to get storage for fsid=" << FLAGS_fsid;
     return status;
   }
   return Status::OK();

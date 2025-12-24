@@ -27,7 +27,6 @@ add_library(client_options
     client.cc
 )
 target_link_libraries(client_options
-    cache_lib
     brpc::brpc
     fmt::fmt
     glog::glog

@@ -29,5 +29,4 @@ target_link_libraries(vfs_service
     fmt::fmt
     glog::glog
     gflags::gflags
-
 )

@@ -82,8 +82,8 @@ void BlockStoreImpl::RangeAsync(ContextSPtr ctx, RangeReq req,
   };
 
   cache::RangeOption option;
-  option.retrive = true;
-  option.block_size = req.block_size;
+  option.retrieve_storage = true;
+  option.block_whole_length = req.block_size;
 
   block_cache_->AsyncRange(cache::NewContext(), req.block, req.offset,
                            req.length, req.data, std::move(wrapper), option);

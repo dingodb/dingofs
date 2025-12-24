@@ -27,7 +27,9 @@
 #include <absl/strings/str_split.h>
 #include <glog/logging.h>
 
-#include "cache/utils/context.h"
+#include <ostream>
+
+#include "cache/common/context.h"
 #include "common/io_buffer.h"
 #include "common/status.h"
 #include "dingofs/blockcache.pb.h"
@@ -93,7 +95,9 @@ struct BlockKey {
 // block
 struct Block {
   Block() = default;
-  Block(IOBuffer buffer) : buffer(buffer), size(buffer.Size()) {}
+  Block(const IOBuffer& buffer) : buffer(buffer), size(buffer.Size()) {}
+  Block(IOBuffer&& buffer)
+      : buffer(std::move(buffer)), size(this->buffer.Size()) {}
   Block(const char* data, size_t size) : buffer(data, size), size(size) {}
 
   IOBuffer buffer;
@@ -101,21 +105,21 @@ struct Block {
 };
 
 // block context
-struct BlockContext {
+struct BlockAttr {
   enum BlockFrom : uint8_t {
     kFromWriteback = 0,
     kFromReload = 1,
     kFromUnknown = 2,
   };
 
-  BlockContext() : from(kFromUnknown), store_id("") {}
+  BlockAttr() : from(kFromUnknown), store_id("") {}
 
-  BlockContext(BlockFrom from) : from(from), store_id("") {}
+  BlockAttr(BlockFrom from) : from(from), store_id("") {}
 
-  BlockContext(BlockFrom from, const std::string& store_id)
+  BlockAttr(BlockFrom from, const std::string& store_id)
       : from(from), store_id(store_id) {
     if (!store_id.empty()) {  // Only for block which from reload
-      CHECK(from == BlockContext::kFromReload);
+      CHECK(from == BlockAttr::kFromReload);
     }
   }
 
@@ -124,25 +128,44 @@ struct BlockContext {
                          // (for disk cache group changed)
 };
 
+inline std::string BlockFromToString(BlockAttr::BlockFrom from) {
+  switch (from) {
+    case BlockAttr::kFromWriteback:
+      return "writeback";
+    case BlockAttr::kFromReload:
+      return "reload";
+    case BlockAttr::kFromUnknown:
+      return "unknown";
+    default:
+      return "invalid";
+  }
+}
+
+inline std::ostream& operator<<(std::ostream& os, const BlockAttr& attr) {
+  os << "BlockAttr{from=" << BlockFromToString(attr.from)
+     << " store_id=" << attr.store_id << "}";
+  return os;
+}
+
 // cache store
 class CacheStore {
  public:
   struct StageOption {
-    BlockContext block_ctx;
+    BlockAttr block_attr;
   };
 
   struct RemoveStageOption {
-    BlockContext block_ctx;
+    BlockAttr block_attr;
   };
 
   struct CacheOption {};
 
   struct LoadOption {
-    BlockContext block_ctx;
+    BlockAttr block_attr;
   };
 
   using UploadFunc = std::function<void(ContextSPtr ctx, const BlockKey& key,
-                                        size_t length, BlockContext block_ctx)>;
+                                        size_t length, BlockAttr block_attr)>;
 
   virtual ~CacheStore() = default;
 
@@ -163,6 +186,7 @@ class CacheStore {
   virtual std::string Id() const = 0;
   virtual bool IsRunning() const = 0;
   virtual bool IsCached(const BlockKey& key) const = 0;
+  virtual bool IsFull(const BlockKey& key) const = 0;
 };
 
 using CacheStoreSPtr = std::shared_ptr<CacheStore>;

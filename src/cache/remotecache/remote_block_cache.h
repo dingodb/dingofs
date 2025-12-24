@@ -24,19 +24,41 @@
 #define DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_BLOCK_CACHE_H_
 
 #include "cache/blockcache/block_cache.h"
-#include "cache/remotecache/mem_cache.h"
-#include "cache/remotecache/prefetcher.h"
-#include "cache/remotecache/remote_cache_node.h"
-#include "cache/storage/storage.h"
-#include "cache/utils/bthread.h"
-#include "cache/utils/context.h"
+#include "cache/common/context.h"
+#include "cache/iutil/bthread.h"
+#include "cache/remotecache/block_fetcher.h"
+#include "cache/remotecache/upstream.h"
+#include "common/options/cache.h"
 
 namespace dingofs {
 namespace cache {
 
+struct RemoteBlockCacheVarsCollector {
+  static double GetCacheHitRatio(void* arg) {
+    auto* vars = reinterpret_cast<RemoteBlockCacheVarsCollector*>(arg);
+    const double hit = vars->cache_hit_count_per_second.get_value();
+    const double miss = vars->cache_miss_count_per_second.get_value();
+    const double total = hit + miss;
+    return total > 0 ? (hit * 100.0 / total) : 0.0;
+  }
+
+  inline static const std::string prefix = "dingofs_remote_cache_";
+  bvar::Adder<uint64_t> cache_hit_count{prefix, "hit_count"};
+  bvar::Adder<uint64_t> cache_miss_count{prefix, "miss_count"};
+  bvar::PerSecond<bvar::Adder<uint64_t>> cache_hit_count_per_second{
+      prefix, "hit_count_per_second", &cache_hit_count, 1};
+  bvar::PerSecond<bvar::Adder<uint64_t>> cache_miss_count_per_second{
+      prefix, "miss_count_per_second", &cache_miss_count, 1};
+  bvar::PassiveStatus<double> cache_hit_ratio{prefix, "hit_ratio",
+                                              GetCacheHitRatio, this};
+};
+
+using RemoteBlockCacheVarsCollectorUPtr =
+    std::unique_ptr<RemoteBlockCacheVarsCollector>;
+
 class RemoteBlockCacheImpl final : public BlockCache {
  public:
-  explicit RemoteBlockCacheImpl(StorageSPtr storage);
+  explicit RemoteBlockCacheImpl(StorageClient* storage_client);
 
   Status Start() override;
   Status Shutdown() override;
@@ -60,20 +82,20 @@ class RemoteBlockCacheImpl final : public BlockCache {
   void AsyncPrefetch(ContextSPtr ctx, const BlockKey& key, size_t length,
                      AsyncCallback cb, PrefetchOption option) override;
 
-  bool HasCacheStore() const override;
-  bool EnableStage() const override;
-  bool EnableCache() const override;
-  bool IsCached(const BlockKey& key) const override;
+  // We gurantee that cache node is always enable stage and cache.
+  bool IsEnabled() const override { return !FLAGS_cache_group.empty(); }
+  bool EnableStage() const override { return IsEnabled(); }
+  bool EnableCache() const override { return IsEnabled(); }
+  bool IsCached(const BlockKey&) const override { return IsEnabled(); }
 
  private:
-  BlockCachePtr GetSelfPtr() { return this; }
+  BlockCache* GetSelfPtr() { return this; }
 
   std::atomic<bool> running_;
-  RemoteCacheNodeSPtr remote_node_;
-  StorageSPtr storage_;
-  MemCacheSPtr memcache_;
-  PrefetcherUPtr prefetcher_;
-  BthreadJoinerUPtr joiner_;
+  UpstreamUPtr upstream_;
+  CacheRetrieverUPtr retriever_;
+  iutil::BthreadJoinerUPtr joiner_;
+  RemoteBlockCacheVarsCollectorUPtr vars_;
 };
 
 }  // namespace cache

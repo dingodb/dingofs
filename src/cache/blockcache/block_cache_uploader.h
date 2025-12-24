@@ -23,57 +23,84 @@
 #ifndef DINGOFS_SRC_CACHE_BLOCKCACHE_BLOCK_CACHE_UPLOADER_H_
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_BLOCK_CACHE_UPLOADER_H_
 
-#include <memory>
+#include <bthread/mutex.h>
 
-#include "cache/blockcache/block_cache_upload_queue.h"
+#include <memory>
+#include <ostream>
+
 #include "cache/blockcache/cache_store.h"
-#include "cache/storage/storage_pool.h"
-#include "cache/utils/bthread.h"
-#include "cache/utils/infight_throttle.h"
-#include "common/io_buffer.h"
+#include "cache/common/storage_client_pool.h"
+#include "cache/iutil/bthread.h"
+#include "cache/iutil/inflight_tracker.h"
 
 namespace dingofs {
 namespace cache {
 
-class BlockCacheUploader;
-using BlockCacheUploaderPtr = BlockCacheUploader*;
-using BlockCacheUploaderUPtr = std::unique_ptr<BlockCacheUploader>;
-using BlockCacheUploaderSPtr = std::shared_ptr<BlockCacheUploader>;
+struct StageBlock {
+  StageBlock(ContextSPtr ctx, const BlockKey& key, size_t length,
+             BlockAttr block_attr)
+      : ctx(ctx), key(key), length(length), block_attr(block_attr) {}
+
+  ContextSPtr ctx;
+  BlockKey key;
+  size_t length;
+  BlockAttr block_attr;
+};
+
+struct StageBlockStat {
+  StageBlockStat(uint64_t num_total, uint64_t num_from_writeback,
+                 uint64_t num_from_reload)
+      : num_total(num_total),
+        num_from_writeback(num_from_writeback),
+        num_from_reload(num_from_reload) {}
+
+  uint64_t num_total;
+  uint64_t num_from_writeback;
+  uint64_t num_from_reload;
+};
+
+class PendingQueue;
+using PendingQueueUPtr = std::unique_ptr<PendingQueue>;
 
 class BlockCacheUploader {
  public:
-  BlockCacheUploader(CacheStoreSPtr store, StoragePoolSPtr storage_pool);
-  virtual ~BlockCacheUploader();
-
+  BlockCacheUploader(CacheStoreSPtr store,
+                     StorageClientPoolSPtr storage_client_pool);
+  ~BlockCacheUploader();
   void Start();
   void Shutdown();
 
-  void AddStagingBlock(const StagingBlock& staging_block);
+  void EnterUploadQueue(const StageBlock& sblock);
 
  private:
-  BlockCacheUploaderPtr GetSelfPtr() { return this; }
+  BlockCacheUploader* GetSelfPtr() { return this; }
   bool IsRunning() { return running_.load(std::memory_order_relaxed); }
 
-  void UploadingWorker();
-  void AsyncUploading(const StagingBlock& staging_block);
-  void PostUploading(const StagingBlock& staging_block, Status status);
-  Status Uploading(const StagingBlock& staging_block);
+  void WaitStoreReady() {
+    while (!store_->IsRunning()) {
+      bthread_usleep(1000);  // 1 second
+    }
+  }
 
-  Status Load(const StagingBlock& staging_block, IOBuffer* buffer);
-  Status Upload(const StagingBlock& staging_block, const IOBuffer& buffer);
-  Status RemoveStage(const StagingBlock& staging_block);
-
-  void WaitStoreUp();
+  void UploadWorker();
+  void AsyncUpload(const StageBlock& sblock);
+  Status DoUpload(const StageBlock& sblock);
+  void OnComplete(const StageBlock& sblock, Status status);
 
   std::atomic<bool> running_;
-  BthreadMutex mutex_;
+  bthread::Mutex mutex_;
   CacheStoreSPtr store_;
-  StoragePoolSPtr storage_pool_;
+  StorageClientPoolSPtr storage_client_pool_;
   PendingQueueUPtr pending_queue_;
-  InflightThrottleUPtr inflights_;
-  TaskThreadPoolUPtr thread_pool_;  // uploading worker
-  BthreadJoinerUPtr joiner_;
+  iutil::InflightTrackerUPtr tracker_;
+  std::thread thread_;
+  iutil::BthreadJoinerUPtr joiner_;
 };
+
+using BlockCacheUploaderUPtr = std::unique_ptr<BlockCacheUploader>;
+using BlockCacheUploaderSPtr = std::shared_ptr<BlockCacheUploader>;
+
+std::ostream& operator<<(std::ostream& os, const StageBlock& sblock);
 
 }  // namespace cache
 }  // namespace dingofs
