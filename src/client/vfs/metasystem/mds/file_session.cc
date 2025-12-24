@@ -191,6 +191,13 @@ FileSessionSPtr FileSessionMap::GetSession(Ino ino) {
   return file_session;
 }
 
+bool FileSessionMap::Dump(Ino ino, Json::Value& value) {
+  auto file_session = GetSession(ino);
+
+  value["ino"] = file_session->GetIno();
+  return file_session->Dump(value);
+}
+
 // output json format string
 bool FileSessionMap::Dump(Json::Value& value) {
   std::vector<FileSessionSPtr> file_sessions;

@@ -78,7 +78,7 @@ DEFINE_bool(mds_compact_chunk_enable, false, "Compact chunk enable.");
 DEFINE_validator(mds_compact_chunk_enable, brpc::PassValidate);
 DEFINE_uint32(mds_compact_chunk_threshold_num, 10, "Compact chunk threshold num.");
 DEFINE_validator(mds_compact_chunk_threshold_num, brpc::PassValidate);
-DEFINE_uint32(mds_compact_chunk_interval_ms, 30 * 1000, "Compact chunk interval ms.");
+DEFINE_uint32(mds_compact_chunk_interval_ms, 60 * 1000, "Compact chunk interval ms.");
 DEFINE_validator(mds_compact_chunk_interval_ms, brpc::PassValidate);
 
 DEFINE_uint32(mds_transfer_max_slice_num, 8096, "Max slice num for transfer.");
@@ -965,13 +965,13 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& sess
     }
   }
 
-  auto file_length = attr.length();
   // update cache
   UpsertInodeCache(attr);
 
   // clean chunk cache if O_TRUNC
   if (flags & O_TRUNC) chunk_cache_.Delete(ino);
 
+  uint64_t file_length = attr.length();
   auto get_chunks_from_cache_fn = [&](std::vector<ChunkEntry>& chunks) {
     auto cache_chunks = chunk_cache_.Get(ino);
     uint32_t slice_num = 0;
@@ -1968,12 +1968,14 @@ Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, const std::vector<Delt
 
   status = RunOperation(&operation);
 
-  std::string slice_id_str;
-  for (const auto& delta_slice : delta_slices) {
-    slice_id_str += std::to_string(delta_slice.chunk_index()) + ",";
-    LOG(INFO) << fmt::format("[fs.{}][{}us] writeslice {}/{} finish, status({}).", fs_id_, duration.ElapsedUs(), ino,
-                             delta_slice.chunk_index(), status.error_str());
+  std::string index_str;
+  for (uint32_t i = 0; i < delta_slices.size(); ++i) {
+    index_str += std::to_string(delta_slices[i].chunk_index());
+    if ((i + 1) != delta_slices.size()) index_str += ",";
   }
+
+  LOG(INFO) << fmt::format("[fs.{}.{}.{}][{}us] writeslice {} finish, status({}).", fs_id_, ino, ctx.RequestId(),
+                           duration.ElapsedUs(), index_str, status.error_str());
 
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("upsert chunk fail, {}", status.error_str()));
@@ -1981,22 +1983,23 @@ Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, const std::vector<Delt
 
   auto& result = operation.GetResult();
   int64_t length = result.length;
-  auto& chunks = result.effected_chunks;
+  auto& effected_chunks = result.effected_chunks;
 
   // check whether need to compact chunk
-  auto check_compact_fn = [](const ChunkEntry& chunk) {
+  auto check_compact_fn = [this, ino](const ChunkEntry& chunk) {
+    uint64_t last_check_time_ms = chunk_cache_.GetLastCheckCompactTimeMs(ino, chunk.index());
     return FLAGS_mds_compact_chunk_enable &&
-           static_cast<uint32_t>(chunk.slices_size()) > FLAGS_mds_compact_chunk_threshold_num &&
-           chunk.last_check_time_ms() + FLAGS_mds_compact_chunk_interval_ms <
-               static_cast<uint64_t>(Helper::TimestampMs());
+           (static_cast<uint32_t>(chunk.slices_size()) > FLAGS_mds_compact_chunk_threshold_num) &&
+           (last_check_time_ms + FLAGS_mds_compact_chunk_interval_ms < static_cast<uint64_t>(Helper::TimestampMs()));
   };
-  for (auto& chunk : chunks) {
+
+  for (auto& chunk : effected_chunks) {
     if (check_compact_fn(chunk)) {
-      chunk.set_last_check_time_ms(Helper::TimestampMs());
+      chunk_cache_.RememberCheckCompact(ino, chunk.index());
 
       auto fs_info = fs_info_->Get();
       if (CompactChunkOperation::MaybeCompact(fs_info, ino, length, chunk)) {
-        LOG(INFO) << fmt::format("[fs.{}] trigger compact chunk({}) for ino({}).", fs_id_, chunk.index(), ino);
+        LOG(INFO) << fmt::format("[fs.{}.{}] trigger compact chunk({}).", fs_id_, ino, chunk.index());
 
         auto post_handler = [this](OperationSPtr operation) {
           auto origin_operation = std::dynamic_pointer_cast<CompactChunkOperation>(operation);
@@ -2010,7 +2013,7 @@ Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, const std::vector<Delt
   }
 
   // update chunk cache and build chunk results
-  for (auto& chunk : chunks) {
+  for (auto& chunk : effected_chunks) {
     ChunkDescriptor chunk_descriptor;
     chunk_descriptor.set_index(chunk.index());
     chunk_descriptor.set_version(chunk.version());

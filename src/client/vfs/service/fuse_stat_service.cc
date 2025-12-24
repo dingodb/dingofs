@@ -106,65 +106,162 @@ static void RenderGitVersion(butil::IOBufBuilder& os) {
   os << "</div>";
 }
 
-static void RenderNavigation(const Json::Value& json_value,
-                             butil::IOBufBuilder& os) {
+static void RenderJsonPage(const std::string& title, const std::string& header,
+                           const std::string& json, butil::IOBufBuilder& os) {
+  os << R"(<!DOCTYPE html><html lang="zh-CN">)";
+
+  os << R"(<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  )";
+  os << fmt::format(R"(<title>{}</title>)", title);
+  os << R"(
+  <style>
+    body {
+      font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
+      margin: 20px;
+      background-color: #f5f5f5;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      padding: 20px;
+    }
+
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+
+    pre {
+      background-color: #f9f9f9;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 15px;
+      overflow: auto;
+      font-family: monospace;
+      white-space: pre-wrap;
+      line-height: 1.5;
+    }
+
+    .string {
+      color: #008000;
+    }
+
+    .number {
+      color: #0000ff;
+    }
+
+    .boolean {
+      color: #b22222;
+    }
+
+    .null {
+      color: #808080;
+    }
+
+    .key {
+      color: #a52a2a;
+    }
+  </style>
+</head>)";
+
+  os << "<body>";
+  os << R"(<div class="container">)";
+  os << fmt::format("<h1>{}</h1>", header);
+  os << R"(<pre id="json-display"></pre>)";
+  os << "</div>";
+
+  os << "<script>";
+  if (!json.empty()) {
+    os << "const jsonString =`" + json + "`;";
+  } else {
+    os << "const jsonString = \"{}\";";
+  }
+
+  os << R"(
+    function syntaxHighlight(json) {
+      if (typeof json === 'string') {
+        json = JSON.parse(json);
+      }
+
+      json = JSON.stringify(json, null, 4);
+
+      json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+      return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+        let cls = 'number';
+
+        if (/^"/.test(match)) {
+          if (/:$/.test(match)) {
+            cls = 'key';
+          } else {
+            cls = 'string';
+          }
+        } else if (/true|false/.test(match)) {
+          cls = 'boolean';
+        } else if (/null/.test(match)) {
+          cls = 'null';
+        }
+
+        return '<span class="' + cls + '">' + match + '</span>';
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      try {
+        const highlighted = syntaxHighlight(jsonString);
+        document.getElementById('json-display').innerHTML = highlighted;
+      } catch (e) {
+        document.getElementById('json-display').innerHTML = 'Invalid JSON: ' + e.message;
+      }
+    });)";
+  os << "</script>";
+
+  os << "</body>";
+  os << "</html>";
+}
+
+static void RenderNavigation(butil::IOBufBuilder& os) {
   os << R"(<div style="margin:12px;font-size:smaller;">)";
   os << R"(<h3>Navagation </h3>)";
 
-  auto render_navigation_func = [](std::string host,
-                                   uint32_t port) -> std::string {
+  auto render_navigation_func = []() -> std::string {
     std::string result;
     result += fmt::format(
-        R"(<a href="FuseStatService/handler/{}/{}" target="_blank">handler</a>: show open file handler info at vfs)",
-        host, port);
+        R"(<a href="FuseStatService/handler" target="_blank">handler</a>: show open file handler info at vfs)");
     result += "<br>";
     result += fmt::format(
-        R"(<a href="FuseStatService/diriterator/{}/{}" target="_blank">dir iterator</a>: show dir iterator info at meta)",
-        host, port);
+        R"(<a href="FuseStatService/diriterator" target="_blank">dir iterator</a>: show dir iterator info at meta)");
     result += "<br>";
     result += fmt::format(
-        R"(<a href="FuseStatService/filesession/{}/{}" target="_blank">file session</a>: show open file session info at meta)",
-        host, port);
+        R"(<a href="FuseStatService/filesession" target="_blank">file session</a>: show open file session info at meta)");
     result += "<br>";
     result += fmt::format(
-        R"(<a href="FuseStatService/parentmemo/{}/{}" target="_blank">parent memo</a>: show parent memo info at meta)",
-        host, port);
+        R"(<a href="FuseStatService/parentmemo" target="_blank">parent memo</a>: show parent memo info at meta)");
     result += "<br>";
     result += fmt::format(
-        R"(<a href="FuseStatService/modifytimememo/{}/{}" target="_blank">modify time memo</a>: show modify time memo info at meta)",
-        host, port);
+        R"(<a href="FuseStatService/modifytimememo" target="_blank">modify time memo</a>: show modify time memo info at meta)");
     result += "<br>";
     result += fmt::format(
-        R"(<a href="FuseStatService/chunkmemo/{}/{}" target="_blank">chunk memo</a>: show chunk memo info at meta)",
-        host, port);
+        R"(<a href="FuseStatService/chunkmemo" target="_blank">chunk memo</a>: show chunk memo info at meta)");
     result += "<br>";
     result += fmt::format(
-        R"(<a href="FuseStatService/mdsrouter/{}/{}" target="_blank">mds router</a>: show mds router info at meta)",
-        host, port);
+        R"(<a href="FuseStatService/mdsrouter" target="_blank">mds router</a>: show mds router info at meta)");
     result += "<br>";
     result += fmt::format(
-        R"(<a href="FuseStatService/inodecache/{}/{}" target="_blank">inode cache</a>: show inode cache info at meta)",
-        host, port);
+        R"(<a href="FuseStatService/inodecache" target="_blank">inode cache</a>: show inode cache info at meta)");
     result += "<br>";
     result += fmt::format(
-        R"(<a href="FuseStatService/rpc/{}/{}" target="_blank">rpc</a>: show rpc info at meta)",
-        host, port);
+        R"(<a href="FuseStatService/rpc" target="_blank">rpc</a>: show rpc info at meta)");
     return result;
   };
 
-  // get client info
-  const Json::Value& client_id = json_value["client_id"];
-
-  if (client_id.empty()) {
-    LOG(ERROR) << "no client to load";
-    os << "</table>\n";
-    os << "</div>";
-    return;
-  }
-  std::string host_name = client_id["host_name"].asString();
-  uint32_t port = client_id["port"].asUInt();
-
-  os << render_navigation_func(host_name, port);
+  os << render_navigation_func();
   os << "</div>";
 }
 
@@ -342,14 +439,13 @@ static void RenderMdsInfo(const Json::Value& json_value,
 
 static void RenderHandlerInfoPage(const Json::Value& json_value,
                                   butil::IOBufBuilder& os,
-                                  std::string host_name, std::string port) {
+                                  std::string& client_name) {
   os << "<!DOCTYPE html><html>";
 
   os << "<head>" << RenderHead("dingofs dir iterator") << "</head>";
   os << "<body>";
-  os << fmt::format(
-      R"(<h1 style="text-align:center;">Client({}:{}) Handler</h1>)", host_name,
-      port);
+  os << fmt::format(R"(<h1 style="text-align:center;">Client({}) Handler</h1>)",
+                    client_name);
 
   // get handlers info
   const Json::Value& handlers = json_value["handlers"];
@@ -423,15 +519,15 @@ static std::string RenderDirEntries(const Json::Value& entries) {
 }
 
 static void RenderDirInfoPage(const Json::Value& json_value,
-                              butil::IOBufBuilder& os, std::string host_name,
-                              std::string port) {
+                              butil::IOBufBuilder& os,
+                              std::string& client_name) {
   os << "<!DOCTYPE html><html>";
 
   os << "<head>" << RenderHead("dingofs dir iterator") << "</head>";
   os << "<body>";
   os << fmt::format(
-      R"(<h1 style="text-align:center;">Client({}:{}) Dir Iterator</h1>)",
-      host_name, port);
+      R"(<h1 style="text-align:center;">Client({}) Dir Iterator</h1>)",
+      client_name);
 
   // get dir_iterators info
   const Json::Value& dir_iterators = json_value["dir_iterators"];
@@ -504,9 +600,7 @@ static std::string RenderSessionIdMap(const Json::Value& json_value) {
   }
 
   std::string result;
-  result += "fh, session_id";
   for (const auto& session : session_id_map) {
-    result += "<br>";
     uint64_t fh = session["fh"].asUInt64();
     std::string session_id = session["session_id"].asString();
     result += fmt::format("{},{}", fh, session_id);
@@ -515,51 +609,7 @@ static std::string RenderSessionIdMap(const Json::Value& json_value) {
   return result;
 }
 
-static std::string RenderWriteMemo(const Json::Value& json_value) {
-  std::string result;
-
-  if (json_value.isNull()) return "";
-  if (!json_value.isObject()) {
-    LOG(ERROR) << "write_memo is not object.";
-    return "";
-  }
-  if (!json_value["last_time_ns"].isUInt64()) {
-    LOG(ERROR) << " write_memo.last_time_ns is not uint64.";
-    return "";
-  }
-
-  if (!json_value["ranges"].isNull()) {
-    if (!json_value["ranges"].isArray()) {
-      LOG(ERROR) << "write_memo.ranges is not array.";
-      return "";
-    }
-    auto last_time_ns = json_value["last_time_ns"].asUInt64();
-    result +=
-        fmt::format("last_time_ns:{}",
-                    dingofs::mds::Helper::FormatMsTime(last_time_ns / 1000000));
-    result += "<br>";
-    result += "<br>";
-    result += "range";
-    result += "<br>";
-    std::vector<Range> ranges;
-    for (const auto& range_item : json_value["ranges"]) {
-      Range range;
-      range.start = range_item["start"].asUInt64();
-      range.end = range_item["end"].asUInt64();
-      ranges.push_back(range);
-    }
-    std::sort(ranges.begin(), ranges.end(),  // NOLINT
-              [](const Range& a, const Range& b) { return a.start < b.start; });
-
-    for (const auto& range_item : ranges) {
-      result += fmt::format("[{},{})", range_item.start, range_item.end);
-      result += "<br>";
-    }
-  }
-  return result;
-}
-
-static std::string RenderChunkMap(const Json::Value& json_value) {
+static std::string RenderChunkMap(Ino ino, const Json::Value& json_value) {
   if (json_value.isNull()) return "";
   if (!json_value.isArray()) {
     LOG(ERROR) << "chunk is not array.";
@@ -567,33 +617,40 @@ static std::string RenderChunkMap(const Json::Value& json_value) {
   }
 
   std::string result;
-  result +=
-      "index,is_completed,stage_slices_size,commiting_slices_size,commited_"
-      "slices_size,commited_version,last_compaction_time_ms";
+  result += "<div>";
+  result += "<div>";
   for (const auto& value : json_value) {
     result += "<br>";
     result += fmt::format(
-        "{},{},{},{},{},{},{}", value["index"].asUInt64(),
-        value["is_completed"].asBool(), value["stage_slices"].size(),
+        R"({},{},<span style="color:{}">{}</span>,<span style="color:{}">{}</span>,{},{})",
+        value["index"].asUInt64(), value["is_completed"].asBool(),
+        value["stage_slices"].size() > 0 ? "red" : "green",
+        value["stage_slices"].size(),
+        value["commiting_slices"].size() > 0 ? "red" : "green",
         value["commiting_slices"].size(), value["commited_slices"].size(),
-        value["commited_version"].asUInt64(),
-        dingofs::mds::Helper::FormatMsTime(
-            value["last_compaction_time_ms"].asUInt64()));
+        value["commited_version"].asUInt64());
   }
+  result += "</div>";
+  result += "<div>";
+  result += "<br>";
+  result += fmt::format(
+      R"(<a href="filesession/{}" target="_blank">details</a>)", ino);
+  result += "</div>";
+  result += "</div>";
 
   return result;
 }
 
 static void RenderFileSessionPage(const Json::Value& json_value,
                                   butil::IOBufBuilder& os,
-                                  std::string host_name, std::string port) {
+                                  std::string& client_name) {
   os << "<!DOCTYPE html><html>";
 
   os << "<head>" << RenderHead("dingofs file session") << "</head>";
   os << "<body>";
   os << fmt::format(
-      R"(<h1 style="text-align:center;">Client({}:{}) File Session</h1>)",
-      host_name, port);
+      R"(<h1 style="text-align:center;">Client({}) File Session</h1>)",
+      client_name);
 
   // get dir_iterators info
   const Json::Value& file_sessions = json_value["file_sessions"];
@@ -608,9 +665,8 @@ static void RenderFileSessionPage(const Json::Value& json_value,
   os << "<tr>";
   os << "<th>Ino</th>";
   os << "<th>Ref Count</th>";
-  os << "<th>Session Id Map</th>";
-  os << "<th>Write Memo</th>";
-  os << "<th>Chunk Map</th>";
+  os << "<th>Session<br>(fh, session_id)</th>";
+  os << "<th>Chunks<br>(index,completed,stage,commiting,commited,version)</th>";
   os << "</tr>";
 
   for (const auto& file_session : file_sessions) {
@@ -622,10 +678,9 @@ static void RenderFileSessionPage(const Json::Value& json_value,
     os << "<td>" << ref_count << "</td>";
     os << "<td>" << RenderSessionIdMap(file_session) << "</td>";
     if (!chunk_set_value.isNull()) {
-      os << "<td>" << RenderWriteMemo(chunk_set_value["write_memo"]) << "</td>";
-      os << "<td>" << RenderChunkMap(chunk_set_value["chunk_map"]) << "</td>";
+      os << "<td>" << RenderChunkMap(ino, chunk_set_value["chunk_map"])
+         << "</td>";
     } else {
-      os << "<td></td>";
       os << "<td></td>";
     }
     os << "</tr>";
@@ -637,16 +692,26 @@ static void RenderFileSessionPage(const Json::Value& json_value,
   os << "<br>";
 }
 
+static void RenderSingleFileSessionPage(Ino ino, const Json::Value& json_value,
+                                        butil::IOBufBuilder& os,
+                                        std::string& client_name) {
+  std::string header =
+      fmt::format("Client({}) File Session({})", client_name, ino);
+
+  RenderJsonPage("dingofs file session", header, json_value.toStyledString(),
+                 os);
+}
+
 static void RenderParentMemoPage(const Json::Value& json_value,
-                                 butil::IOBufBuilder& os, std::string host_name,
-                                 std::string port) {
+                                 butil::IOBufBuilder& os,
+                                 std::string& client_name) {
   os << "<!DOCTYPE html><html>";
 
   os << "<head>" << RenderHead("dingofs parent memo") << "</head>";
   os << "<body>";
   os << fmt::format(
-      R"(<h1 style="text-align:center;">Client({}:{}) Parent Memo</h1>)",
-      host_name, port);
+      R"(<h1 style="text-align:center;">Client({}) Parent Memo</h1>)",
+      client_name);
 
   const Json::Value& items = json_value["parent_memo"];
   if (!items.isArray()) {
@@ -681,14 +746,14 @@ static void RenderParentMemoPage(const Json::Value& json_value,
 
 static void RenderModifyTimeMemoPage(const Json::Value& json_value,
                                      butil::IOBufBuilder& os,
-                                     std::string host_name, std::string port) {
+                                     std::string& client_name) {
   os << "<!DOCTYPE html><html>";
 
   os << "<head>" << RenderHead("dingofs modify time memo") << "</head>";
   os << "<body>";
   os << fmt::format(
-      R"(<h1 style="text-align:center;">Client({}:{}) Modify Time Memo</h1>)",
-      host_name, port);
+      R"(<h1 style="text-align:center;">Client({}) Modify Time Memo</h1>)",
+      client_name);
 
   const Json::Value& items = json_value["modify_time_memo"];
   if (!items.isArray()) {
@@ -719,15 +784,15 @@ static void RenderModifyTimeMemoPage(const Json::Value& json_value,
 }
 
 static void RenderChunkMemoPage(const Json::Value& json_value,
-                                butil::IOBufBuilder& os, std::string host_name,
-                                std::string port) {
+                                butil::IOBufBuilder& os,
+                                std::string& client_name) {
   os << "<!DOCTYPE html><html>";
 
   os << "<head>" << RenderHead("dingofs chunk memo") << "</head>";
   os << "<body>";
   os << fmt::format(
-      R"(<h1 style="text-align:center;">Client({}:{}) Chunk Memo</h1>)",
-      host_name, port);
+      R"(<h1 style="text-align:center;">Client({}) Chunk Memo</h1>)",
+      client_name);
 
   const Json::Value& items = json_value["chunk_memo"];
   if (!items.isArray()) {
@@ -765,15 +830,15 @@ static void RenderChunkMemoPage(const Json::Value& json_value,
 }
 
 static void RenderMdsRouterPage(const Json::Value& json_value,
-                                butil::IOBufBuilder& os, std::string host_name,
-                                std::string port) {
+                                butil::IOBufBuilder& os,
+                                std::string& client_name) {
   os << "<!DOCTYPE html><html>";
 
   os << "<head>" << RenderHead("dingofs mds router") << "</head>";
   os << "<body>";
   os << fmt::format(
-      R"(<h1 style="text-align:center;">Client({}:{}) MDS Router</h1>)",
-      host_name, port);
+      R"(<h1 style="text-align:center;">Client({}) MDS Router</h1>)",
+      client_name);
 
   const Json::Value& mds_routers = json_value["mds_routers"];
   if (!mds_routers.isArray()) {
@@ -820,15 +885,15 @@ static void RenderMdsRouterPage(const Json::Value& json_value,
 }
 
 static void RenderInodeCachePage(const Json::Value& json_value,
-                                 butil::IOBufBuilder& os, std::string host_name,
-                                 std::string port) {
+                                 butil::IOBufBuilder& os,
+                                 std::string& client_name) {
   os << "<!DOCTYPE html><html>";
 
   os << "<head>" << RenderHead("dingofs inode cache") << "</head>";
   os << "<body>";
   os << fmt::format(
-      R"(<h1 style="text-align:center;">Client({}:{}) Inode Cache</h1>)",
-      host_name, port);
+      R"(<h1 style="text-align:center;">Client({}) Inode Cache</h1>)",
+      client_name);
 
   const Json::Value& inodes = json_value["inodes"];
   if (!inodes.isArray()) {
@@ -907,14 +972,13 @@ static void RenderInodeCachePage(const Json::Value& json_value,
 }
 
 static void RenderRPCPage(const Json::Value& json_value,
-                          butil::IOBufBuilder& os, std::string host_name,
-                          std::string port) {
+                          butil::IOBufBuilder& os, std::string& client_name) {
   os << "<!DOCTYPE html><html>";
 
   os << "<head>" << RenderHead("dingofs rpc") << "</head>";
   os << "<body>";
-  os << fmt::format(R"(<h1 style="text-align:center;">Client({}:{}) RPC</h1>)",
-                    host_name, port);
+  os << fmt::format(R"(<h1 style="text-align:center;">Client({}) RPC</h1>)",
+                    client_name);
 
   const Json::Value& endpoint = json_value["init_endpoint"];
 
@@ -1020,128 +1084,9 @@ void FuseStatServiceImpl::RenderMainPage(const brpc::Server* server,
   // mds info
   RenderMdsInfo(meta_value, os);
   // navigation
-  RenderNavigation(meta_value, os);
+  RenderNavigation(os);
   // git info
   RenderGitInfo(os);
-
-  os << "</body>";
-  os << "</html>";
-}
-
-static void RenderJsonPage(const std::string& header, const std::string& json,
-                           butil::IOBufBuilder& os) {
-  os << R"(<!DOCTYPE html><html lang="zh-CN">)";
-
-  os << R"(
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>dingofs inode details</title>
-  <style>
-    body {
-      font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
-      margin: 20px;
-      background-color: #f5f5f5;
-    }
-
-    .container {
-      max-width: 800px;
-      margin: 0 auto;
-      background-color: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-      padding: 20px;
-    }
-
-    h1 {
-      text-align: center;
-      color: #333;
-    }
-
-    pre {
-      background-color: #f9f9f9;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      padding: 15px;
-      overflow: auto;
-      font-family: monospace;
-      white-space: pre-wrap;
-      line-height: 1.5;
-    }
-
-    .string {
-      color: #008000;
-    }
-
-    .number {
-      color: #0000ff;
-    }
-
-    .boolean {
-      color: #b22222;
-    }
-
-    .null {
-      color: #808080;
-    }
-
-    .key {
-      color: #a52a2a;
-    }
-  </style>
-</head>)";
-
-  os << "<body>";
-  os << R"(<div class="container">)";
-  os << fmt::format("<h1>{}</h1>", header);
-  os << R"(<pre id="json-display"></pre>)";
-  os << "</div>";
-
-  os << "<script>";
-  if (!json.empty()) {
-    os << "const jsonString =`" + json + "`;";
-  } else {
-    os << "const jsonString = \"{}\";";
-  }
-
-  os << R"(
-    function syntaxHighlight(json) {
-      if (typeof json === 'string') {
-        json = JSON.parse(json);
-      }
-
-      json = JSON.stringify(json, null, 4);
-
-      json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-      return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
-        let cls = 'number';
-
-        if (/^"/.test(match)) {
-          if (/:$/.test(match)) {
-            cls = 'key';
-          } else {
-            cls = 'string';
-          }
-        } else if (/true|false/.test(match)) {
-          cls = 'boolean';
-        } else if (/null/.test(match)) {
-          cls = 'null';
-        }
-
-        return '<span class="' + cls + '">' + match + '</span>';
-      });
-    }
-
-    document.addEventListener('DOMContentLoaded', function () {
-      try {
-        const highlighted = syntaxHighlight(jsonString);
-        document.getElementById('json-display').innerHTML = highlighted;
-      } catch (e) {
-        document.getElementById('json-display').innerHTML = 'Invalid JSON: ' + e.message;
-      }
-    });)";
-  os << "</script>";
 
   os << "</body>";
   os << "</html>";
@@ -1168,78 +1113,99 @@ void FuseStatServiceImpl::default_method(
   if (params.empty()) {
     RenderMainPage(server, os);
 
-  } else if (params.size() == 3) {
+  } else if (params.size() == 1) {
     const std::string& api_name = params[0];
-    const std::string& host_name = params[1];
-    const std::string& port = params[2];
+    auto client_id = vfs_hub_->GetClientId();
+    std::string client_name =
+        fmt::format("{}:{}", client_id.Hostname(), client_id.Port());
 
     Json::Value json_value;
     DumpOption options;
 
     if (api_name == "diriterator") {
-      // /FuseStatService/diriterator/host_name/port
+      // /FuseStatService/diriterator
       options.dir_iterator = true;
       if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
-        RenderDirInfoPage(json_value, os, host_name, port);
+        RenderDirInfoPage(json_value, os, client_name);
       }
     } else if (api_name == "filesession") {
-      // /FuseStatService/filesession/host_name/port
+      // /FuseStatService/filesession
       options.file_session = true;
       if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
-        RenderFileSessionPage(json_value, os, host_name, port);
+        RenderFileSessionPage(json_value, os, client_name);
       }
 
     } else if (api_name == "handler") {
-      // /FuseStatService/handler/host_name/port
+      // /FuseStatService/handler
       if (!vfs_hub_->GetHandleManager()->Dump(json_value)) {
         cntl->SetFailed("GetHandleManager failed.");
         return;
       }
-      RenderHandlerInfoPage(json_value, os, host_name, port);
+      RenderHandlerInfoPage(json_value, os, client_name);
 
     } else if (api_name == "parentmemo") {
-      // /FuseStatService/parentmemo/host_name/port
+      // /FuseStatService/parentmemo
       options.parent_memo = true;
       if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
-        RenderParentMemoPage(json_value, os, host_name, port);
+        RenderParentMemoPage(json_value, os, client_name);
       }
 
     } else if (api_name == "modifytimememo") {
-      // /FuseStatService/parentmemo/host_name/port
+      // /FuseStatService/parentmemo
       options.modify_time_memo = true;
       if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
-        RenderModifyTimeMemoPage(json_value, os, host_name, port);
+        RenderModifyTimeMemoPage(json_value, os, client_name);
       }
 
     } else if (api_name == "chunkmemo") {
-      // /FuseStatService/parentmemo/host_name/port
+      // /FuseStatService/parentmemo
       options.chunk_memo = true;
       if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
-        RenderChunkMemoPage(json_value, os, host_name, port);
+        RenderChunkMemoPage(json_value, os, client_name);
       }
 
     } else if (api_name == "mdsrouter") {
-      // /FuseStatService/mdsrouter/host_name/port
+      // /FuseStatService/mdsrouter
       options.mds_router = true;
       if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
-        RenderMdsRouterPage(json_value, os, host_name, port);
+        RenderMdsRouterPage(json_value, os, client_name);
       }
 
     } else if (api_name == "inodecache") {
-      // /FuseStatService/inodecache/host_name/port
+      // /FuseStatService/inodecache
       options.inode_cache = true;
       if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
-        RenderInodeCachePage(json_value, os, host_name, port);
+        RenderInodeCachePage(json_value, os, client_name);
       }
 
     } else if (api_name == "rpc") {
-      // /FuseStatService/rpc/host_name/port
+      // /FuseStatService/rpc
       options.rpc = true;
       if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
-        RenderRPCPage(json_value, os, host_name, port);
+        RenderRPCPage(json_value, os, client_name);
       }
     } else {
       return cntl->SetFailed("unknown path: " + path);  // NOLINT
+    }
+
+  } else if (params.size() == 2) {
+    const std::string& api_name = params[0];
+    const Ino ino = strtoull(params[1].c_str(), nullptr, 10);
+
+    auto client_id = vfs_hub_->GetClientId();
+    std::string client_name =
+        fmt::format("{}:{}", client_id.Hostname(), client_id.Port());
+
+    if (api_name == "filesession") {
+      // /FuseStatService/filesession/{ino}
+      DumpOption options;
+      Json::Value json_value;
+
+      options.ino = ino;
+      options.file_session = true;
+      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
+        RenderSingleFileSessionPage(ino, json_value, os, client_name);
+      }
     }
 
   } else {

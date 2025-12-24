@@ -15,7 +15,6 @@
 #ifndef DINGOFS_SRC_CLIENT_VFS_META_CHUNK_H_
 #define DINGOFS_SRC_CLIENT_VFS_META_CHUNK_H_
 
-#include <absl/container/inlined_vector.h>
 #include <sys/types.h>
 
 #include <atomic>
@@ -132,7 +131,7 @@ class CommitTask {
   };
 
   CommitTask(uint64_t task_id, std::vector<DeltaSlice>&& delta_slices)
-      : task_id_(task_id), delta_slices_(std::move(delta_slices)), cond(0) {}
+      : task_id_(task_id), delta_slices_(std::move(delta_slices)), cond(1) {}
 
   uint64_t TaskID() const { return task_id_; }
   const std::vector<DeltaSlice>& DeltaSlices() const { return delta_slices_; }
@@ -186,7 +185,7 @@ class CommitTask {
       retries_.fetch_add(1, std::memory_order_relaxed);
       state_ = State::RUNNING;
       status_ = Status::OK();
-      cond.Reset();
+      cond.Reset(1);
 
       return true;
     }
@@ -194,9 +193,9 @@ class CommitTask {
 
   uint32_t Retries() const { return retries_.load(std::memory_order_relaxed); }
 
-  void Wait() { cond.IncreaseWait(); }
+  void Wait() { cond.Wait(); }
 
-  void Signal() { cond.DecreaseSignal(); }
+  void Signal() { cond.DecreaseBroadcast(); }
 
   // output json format string
   bool Dump(Json::Value& value);
@@ -270,7 +269,6 @@ class ChunkSet {
   // chunk index -> chunk
   absl::flat_hash_map<uint32_t, ChunkSPtr> chunk_map_;
 
-  std::atomic<uint64_t> id_generator_{10000};
   std::list<CommitTaskSPtr> commit_task_list_;
 
   std::atomic<uint64_t> last_commit_time_ms_{0};

@@ -37,7 +37,7 @@ class BthreadCond {
 
   int Count() const;
 
-  void Reset();
+  void Reset(int cond);
 
   void Increase();
   void DecreaseSignal();

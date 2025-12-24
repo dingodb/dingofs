@@ -204,6 +204,7 @@ class MDSClient {
 
     S3Info s3_info;
     RadosInfo rados_info;
+    LocalFileInfo local_file_info;
     std::string owner = "deng";
   };
 
@@ -310,6 +311,8 @@ class MdsCommandRunner {
     uint64_t max_bytes;
     uint64_t max_inodes;
     bool is_force{false};
+
+    std::string storage_path;
 
     std::string fs_partition_type;
     uint32_t chunk_size;

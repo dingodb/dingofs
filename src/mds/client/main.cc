@@ -76,6 +76,8 @@ DEFINE_uint32(cache_member_port, 0, "cache member port");
 DEFINE_string(group_name, "", "cache group name");
 DEFINE_uint32(weight, 0, "cache member weight");
 
+DEFINE_string(storage_path, "", "local storage path");
+
 static std::string GetDefaultCoorAddrPath() {
   if (!FLAGS_coor_addr.empty()) {
     return FLAGS_coor_addr;
@@ -173,6 +175,8 @@ int main(int argc, char* argv[]) {
     options.fs_partition_type = FLAGS_fs_partition_type;
     options.chunk_size = FLAGS_chunk_size;
     options.block_size = FLAGS_block_size;
+
+    options.storage_path = FLAGS_storage_path;
 
     // cache member
     options.member_id = FLAGS_member_id;

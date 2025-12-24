@@ -110,6 +110,7 @@ CreateFsResponse MDSClient::CreateFs(const std::string& fs_name, const CreateFsP
 
   const auto& s3_info = params.s3_info;
   const auto& rados_info = params.rados_info;
+  const auto& local_file_info = params.local_file_info;
 
   if (!s3_info.endpoint.empty()) {
     if (s3_info.ak.empty() || s3_info.sk.empty() || s3_info.bucket_name.empty()) {
@@ -162,7 +163,7 @@ CreateFsResponse MDSClient::CreateFs(const std::string& fs_name, const CreateFsP
     mut_s3_info->set_bucketname(s3_info.bucket_name);
     mut_s3_info->set_object_prefix(0);
 
-  } else {
+  } else if (!rados_info.mon_host.empty()) {
     request.set_fs_type(pb::mds::FsType::RADOS);
     auto* mut_rados_info = request.mutable_fs_extra()->mutable_rados_info();
     mut_rados_info->set_mon_host(rados_info.mon_host);
@@ -170,6 +171,11 @@ CreateFsResponse MDSClient::CreateFs(const std::string& fs_name, const CreateFsP
     mut_rados_info->set_key(rados_info.key);
     mut_rados_info->set_pool_name(rados_info.pool_name);
     mut_rados_info->set_cluster_name(rados_info.cluster_name);
+
+  } else if (!local_file_info.path.empty()) {
+    request.set_fs_type(pb::mds::FsType::LOCALFILE);
+    auto* mut_local_file_info = request.mutable_fs_extra()->mutable_file_info();
+    mut_local_file_info->set_path(local_file_info.path);
   }
 
   for (const auto& mds_id : params.candidate_mds_ids) {
@@ -1567,6 +1573,7 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr, 
     params.block_size = options.block_size;
     params.s3_info = options.s3_info;
     params.rados_info = options.rados_info;
+    params.local_file_info.path = options.storage_path;
     params.fs_id = options.fs_id;
     params.expect_mds_num = options.num;
 

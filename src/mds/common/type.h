@@ -112,6 +112,10 @@ struct RadosInfo {
   std::string cluster_name{"ceph"};
 };
 
+struct LocalFileInfo {
+  std::string path;
+};
+
 }  // namespace mds
 }  // namespace dingofs
 

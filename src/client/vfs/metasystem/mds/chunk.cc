@@ -14,17 +14,16 @@
 
 #include "client/vfs/metasystem/mds/chunk.h"
 
-#include <json/value.h>
-
 #include <atomic>
-#include <boost/range/algorithm/remove_if.hpp>
 #include <cstdint>
 #include <vector>
 
+#include "boost/range/algorithm/remove_if.hpp"
 #include "client/vfs/metasystem/mds/helper.h"
 #include "common/options/client.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
+#include "json/value.h"
 #include "utils/time.h"
 
 namespace dingofs {
@@ -33,6 +32,8 @@ namespace vfs {
 namespace v2 {
 
 static const uint32_t kChunkCommitIntervalMs = 1000;  // milliseconds
+
+static std::atomic<uint64_t> task_id_generator{10000};
 
 void WriteMemo::AddRange(uint64_t offset, uint64_t size) {
   ranges_.emplace_back(Range{.start = offset, .end = offset + size});
@@ -102,6 +103,8 @@ void Chunk::Put(const ChunkEntry& chunk) {
 
   utils::WriteLockGuard guard(lock_);
 
+  is_completed_ = true;
+
   if (chunk.version() <= commited_version_) return;
 
   commited_slices_.clear();
@@ -125,8 +128,6 @@ void Chunk::Put(const ChunkEntry& chunk) {
 
   commited_version_ = chunk.version();
   last_compaction_time_ms_ = chunk.last_compaction_time_ms();
-
-  is_completed_ = true;
 }
 
 void Chunk::AppendSlice(const std::vector<Slice>& slices) {
@@ -464,9 +465,8 @@ bool ChunkSet::HasCommitTask() {
 
 CommitTaskSPtr ChunkSet::CreateCommitTask(
     std::vector<CommitTask::DeltaSlice>&& delta_slices) {
-  auto task = std::make_shared<CommitTask>(
-      id_generator_.fetch_add(1, std::memory_order_relaxed),
-      std::move(delta_slices));
+  auto task = std::make_shared<CommitTask>(task_id_generator.fetch_add(1),
+                                           std::move(delta_slices));
 
   commit_task_list_.push_back(task);
 
@@ -557,7 +557,7 @@ bool ChunkSet::Dump(Json::Value& value) {
     commit_task_list_items.append(task_value);
   }
 
-  value["id_generator"] = id_generator_.load();
+  value["id_generator"] = task_id_generator.load();
   value["last_commit_time_ms"] = last_commit_time_ms_.load();
 
   return true;
@@ -633,7 +633,9 @@ bool ChunkSet::Load(const Json::Value& value) {
     commit_task_list_.push_back(task);
   }
 
-  id_generator_.store(value["id_generator"].asUInt64());
+  task_id_generator.store(
+      std::max(task_id_generator.load(), value["id_generator"].asUInt64()));
+
   last_commit_time_ms_.store(value["last_commit_time_ms"].asUInt64());
 
   return true;

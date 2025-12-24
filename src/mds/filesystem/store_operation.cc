@@ -827,7 +827,8 @@ static Status ScanChunk(TxnUPtr& txn, uint32_t fs_id, Ino ino, std::map<uint64_t
 }
 
 Status UpdateAttrOperation::ResetFileRange(TxnUPtr& txn, uint64_t old_length, uint64_t new_length) {
-  CHECK(new_length < old_length) << "new_length should be less than old_length.";
+  CHECK(new_length < old_length) << fmt::format("new_length({}) should be less than old_length({}).", new_length,
+                                                old_length);
   CHECK(extra_param_.slice_id > 0) << "slice_id is zero.";
 
   const uint32_t fs_id = attr_.fs_id();
@@ -885,7 +886,7 @@ Status UpdateAttrOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std:
     attr.set_length(attr_.length());
     // if delta_length<0 then delete chunks beyond new length
     if (result_.delta_bytes < 0) {
-      auto status = ResetFileRange(txn, attr_.length(), attr.length());
+      auto status = ResetFileRange(txn, attr.length(), attr_.length());
       if (!status.ok()) return status;
     }
   }
@@ -1779,15 +1780,16 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoEntry& fs_info,
 
   std::string slice_id_str;
   slice_id_str.reserve(trash_slices.slices_size() * 9);
-  for (const auto& slice : trash_slices.slices()) {
+  for (int i = 0; i < trash_slices.slices_size(); ++i) {
+    const auto& slice = trash_slices.slices(i);
     slice_id_str += std::to_string(slice.slice_id());
-    slice_id_str += ",";
+    if (i + 1 != trash_slices.slices_size()) slice_id_str += ",";
   }
 
   LOG(INFO) << fmt::format(
-      "[operation.{}.{}.{}] trash slice, is_dry_run({}) length({}) count({}/{}/{}/{}) slice_ids({}).", fs_id, ino,
-      chunk.index(), is_dry_run, file_length, out_of_length_count, complete_overlapped_count, partial_overlapped_count,
-      trash_slices.slices_size(), slice_id_str);
+      "[operation.{}.{}.{}] trash slice, is_dry_run({}) num({}) length({}) count({}/{}/{}/{}) slice_ids({}).", fs_id,
+      ino, chunk.index(), is_dry_run, chunk.slices().size(), file_length, out_of_length_count,
+      complete_overlapped_count, partial_overlapped_count, trash_slices.slices_size(), slice_id_str);
 
   return trash_slices;
 }

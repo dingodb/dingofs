@@ -55,6 +55,8 @@ class VFSHub {
 
   virtual Status Stop(bool upgrade) = 0;
 
+  virtual ClientId GetClientId() = 0;
+
   virtual MetaSystem* GetMetaSystem() = 0;
 
   virtual HandleManager* GetHandleManager() = 0;
@@ -95,6 +97,8 @@ class VFSHubImpl : public VFSHub {
   Status Start(const VFSConfig& vfs_conf, bool upgrade) override;
 
   Status Stop(bool upgrade) override;
+
+  ClientId GetClientId() override { return client_id_; }
 
   MetaSystem* GetMetaSystem() override {
     CHECK_NOTNULL(meta_system_);

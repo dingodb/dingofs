@@ -48,6 +48,7 @@ void ChunkMemo::Forget(Ino ino, uint32_t chunk_index) {
 
   chunk_map_.erase({ino, chunk_index});
 }
+
 void ChunkMemo::ForgetExpired(uint64_t expire_time_ns) {
   utils::WriteLockGuard guard(lock_);
 

@@ -31,6 +31,7 @@ namespace client {
 namespace vfs {
 
 struct DumpOption {
+  Ino ino{0};
   bool dir_iterator{false};
   bool file_session{false};
   bool handler{false};

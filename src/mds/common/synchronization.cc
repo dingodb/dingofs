@@ -35,9 +35,9 @@ BthreadCond::~BthreadCond() {
 
 int BthreadCond::Count() const { return count_; }
 
-void BthreadCond::Reset() {
+void BthreadCond::Reset(int cond) {
   bthread_mutex_lock(&mutex_);
-  count_ = 0;
+  count_ = cond;
   bthread_mutex_unlock(&mutex_);
 }
 

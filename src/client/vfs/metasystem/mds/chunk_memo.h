@@ -18,10 +18,9 @@
 #include <sys/types.h>
 
 #include <cstdint>
-#include <map>
-#include <memory>
 #include <vector>
 
+#include "absl/container/btree_map.h"
 #include "client/vfs/vfs_meta.h"
 #include "json/value.h"
 #include "mds/common/type.h"
@@ -69,7 +68,7 @@ class ChunkMemo {
  private:
   utils::RWLock lock_;
 
-  std::map<Key, Value> chunk_map_;
+  absl::btree_map<Key, Value> chunk_map_;
 };
 
 }  // namespace v2

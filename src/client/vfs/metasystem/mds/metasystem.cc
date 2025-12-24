@@ -117,10 +117,6 @@ bool MDSMetaSystem::Dump(ContextSPtr, Json::Value& value) {
     return false;
   }
 
-  if (!inode_cache_->Dump(value)) {
-    return false;
-  }
-
   if (!modify_time_memo_.Dump(value)) {
     return false;
   }
@@ -135,8 +131,13 @@ bool MDSMetaSystem::Dump(ContextSPtr, Json::Value& value) {
 bool MDSMetaSystem::Dump(const DumpOption& options, Json::Value& value) {
   LOG(INFO) << "[meta.fs] dump...";
 
-  if (options.file_session && !file_session_map_.Dump(value)) {
-    return false;
+  if (options.file_session) {
+    if (options.ino != 0) {
+      if (!file_session_map_.Dump(options.ino, value)) return false;
+
+    } else {
+      if (!file_session_map_.Dump(value)) return false;
+    }
   }
 
   if (options.dir_iterator && !dir_iterator_manager_.Dump(value)) {
@@ -991,34 +992,34 @@ void MDSMetaSystem::LaunchWriteSlice(FileSessionSPtr file_session,
   auto operation = std::make_shared<WriteSliceOperation>();
   operation->ino = ino;
   operation->task = task;
-  operation
-      ->done = [this, file_session, ino](
-                   const Status& status, CommitTaskSPtr task,
-                   const std::vector<mds::ChunkDescriptor>& chunk_descriptors) {
-    task->SetDone(status);
+  operation->done =
+      [this, file_session, ino](
+          const Status& status, CommitTaskSPtr task,
+          const std::vector<mds::ChunkDescriptor>& chunk_descriptors) {
+        task->SetDone(status);
 
-    if (status.ok()) {
-      LOG(INFO) << fmt::format(
-          "[meta.fs.{}] commit delta slice done, task({}) status({}).", ino,
-          task->TaskID(), status.ToString());
+        if (status.ok()) {
+          LOG(INFO) << fmt::format(
+              "[meta.fs.{}] commit delta slice done, task({}) status({}).", ino,
+              task->TaskID(), status.ToString());
 
-      auto& chunk_set = file_session->GetChunkSet();
-      chunk_set.DeleteCommitTask(task->TaskID());
-      chunk_set.MarkCommited(chunk_descriptors);
+          auto& chunk_set = file_session->GetChunkSet();
+          chunk_set.DeleteCommitTask(task->TaskID());
+          chunk_set.MarkCommited(chunk_descriptors);
 
-      chunk_memo_.Remember(ino, chunk_descriptors);
+          chunk_memo_.Remember(ino, chunk_descriptors);
 
-    } else {
-      LOG(ERROR) << fmt::format(
-          "[meta.fs.{}] commit delta slice fail, task({}) retry({}) error({}).",
-          ino, task->TaskID(), task->Retries(), status.ToString());
-    }
-  };
+        } else {
+          LOG(ERROR) << fmt::format(
+              "[meta.fs.{}] commit delta slice fail, task({}) retry({}) "
+              "status({}).",
+              ino, task->TaskID(), task->Retries(), status.ToString());
+        }
+      };
 
   if (!write_slice_processor_->AsyncRun(operation)) {
     LOG(ERROR) << fmt::format("[meta.fs.{}] commit delta slice fail.", ino);
     task->SetDone(Status::Internal("launch write slice fail"));
-    task->Signal();
   }
 }
 
@@ -1058,9 +1059,15 @@ Status MDSMetaSystem::CommitAllSlice(ContextSPtr ctx, Ino ino) {
   LOG(INFO) << fmt::format("[meta.fs.{}] commit all slice.", ino);
 
   do {
-    if (!chunk_set.HasStage() && !chunk_set.HasCommitting() &&
-        !chunk_set.HasCommitTask())
-      break;
+    bool has_stage = chunk_set.HasStage();
+    bool has_committing = chunk_set.HasCommitting();
+    bool has_commit_task = chunk_set.HasCommitTask();
+    if (!has_stage && !has_committing && !has_commit_task) break;
+
+    LOG(INFO) << fmt::format(
+        "[meta.fs.{}] commit all slice loop, has_stage({}) has_committing({}) "
+        "has_commit_task({}).",
+        ino, has_stage, has_committing, has_commit_task);
 
     AsyncCommitSlice(file_session, true, true);
 

@@ -93,6 +93,7 @@ class FileSessionMap {
   FileSessionSPtr GetSession(Ino ino);
 
   // output json format string
+  bool Dump(Ino ino, Json::Value& value);
   bool Dump(Json::Value& value);
   bool Load(const Json::Value& value);
 
