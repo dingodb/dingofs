@@ -165,7 +165,7 @@ function start() {
         exit -1
     fi
 
-    nohup ${CLIENT_BIN_PATH} --flagfile ${client_conf_path} ${FLAGS_meta} ${mountpoint_dir} 2>&1 > $log_dir/out &
+    nohup ${CLIENT_BIN_PATH} --conf ${client_conf_path} ${FLAGS_meta} ${mountpoint_dir} 2>&1 > $log_dir/out &
 
 }
 
