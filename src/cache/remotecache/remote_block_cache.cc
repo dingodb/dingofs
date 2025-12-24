@@ -174,6 +174,7 @@ Status RemoteBlockCacheImpl::Range(ContextSPtr ctx, const BlockKey& key,
   };
 
   NEXT_STEP("retrieve");
+  // return remote_node_->Range(ctx, key, offset, length, buffer, option);
   return retriever_->Range(key, offset, length, option.block_size, buffer);
 }
 

@@ -24,6 +24,7 @@
 
 #include <absl/cleanup/cleanup.h>
 #include <absl/strings/str_format.h>
+#include <butil/time.h>
 #include <glog/logging.h>
 
 #include <cstdint>
@@ -33,6 +34,7 @@
 
 #include "cache/common/macro.h"
 #include "cache/storage/aio/aio.h"
+#include "cache/utils/context.h"
 #include "cache/utils/infight_throttle.h"
 #include "common/status.h"
 
@@ -134,6 +136,10 @@ int AioQueueImpl::PrepareIO(void* meta, bthread::TaskIterator<Aio*>& iter) {
     return 0;
   }
 
+  butil::Timer timer;
+  int count = 0;
+  timer.start();
+
   std::vector<Aio*> prep_aios;
   prep_aios.reserve(kSubmitBatchSize);
   AioQueueImpl* self = static_cast<AioQueueImpl*>(meta);
@@ -142,6 +148,7 @@ int AioQueueImpl::PrepareIO(void* meta, bthread::TaskIterator<Aio*>& iter) {
     auto* aio = *iter;
     NextStep(aio, "prepare");
     Status status = ioring->PrepareIO(aio);
+    count++;
     if (!status.ok()) {
       self->OnError(aio, status);
       continue;
@@ -159,10 +166,17 @@ int AioQueueImpl::PrepareIO(void* meta, bthread::TaskIterator<Aio*>& iter) {
     BatchNextStep(prep_aios, "execute");
     self->BatchSubmitIO(prep_aios);
   }
+
+  timer.stop();
+  LOG(INFO) << count << " aios prepared, cost " << timer.u_elapsed(0) << " us.";
+
   return 0;
 }
 
 void AioQueueImpl::BatchSubmitIO(const std::vector<Aio*>& aios) {
+  butil::Timer timer;
+  timer.start();
+
   Status status = ioring_->SubmitIO();
   if (!status.ok()) {
     for (auto* aio : aios) {
@@ -170,6 +184,10 @@ void AioQueueImpl::BatchSubmitIO(const std::vector<Aio*>& aios) {
     }
     return;
   }
+
+  timer.stop();
+  LOG(INFO) << aios.size() << " aios submit, cost " << timer.u_elapsed(0)
+            << " us.";
 
   VLOG(9) << aios.size()
           << " aio[s] submitted: total length = " << GetTotalLength(aios);
@@ -183,12 +201,21 @@ void AioQueueImpl::BackgroundWait() {
       continue;
     }
 
+    butil::Timer timer;
+    timer.start();
+
+    int count = GetTotalLength(completed_aios);
+
     VLOG(9) << completed_aios.size() << " aio[s] compelted : total length = "
             << GetTotalLength(completed_aios);
 
     for (auto* aio : completed_aios) {
       OnCompleted(aio);
     }
+
+    timer.stop();
+    LOG(INFO) << count << " aios run closure, cost " << timer.u_elapsed(0)
+              << " us.";
   }
 }
 
@@ -229,7 +256,8 @@ void AioQueueImpl::RunClosure(Aio* aio) {
   auto timer = aio->timer;
   TraceLogGuard log(aio->ctx, status, timer, kModule, "%s", aio->ToString());
 
-  NextStep(aio, "closure");
+  // NextStep(aio, "closure");
+  NEXT_STEP("closure");
   aio->Run();
 
   infights_->Decrement(1);
