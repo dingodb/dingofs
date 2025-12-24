@@ -18,6 +18,7 @@
 
 namespace dingofs {
 
-DEFINE_bool(daemonize, false, "run as a daemon process");
+DEFINE_bool(daemonize, false, "run in background");
+DEFINE_string(conf, "", "config file");
 
 }  // namespace dingofs

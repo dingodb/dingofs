@@ -126,6 +126,10 @@ class Helper {
     return expand_dir;
   }
 
+  static bool IsExistPath(const std::string& path) {
+    return butil::PathExists(butil::FilePath(path));
+  }
+
   static bool CreateDirectory(const std::string& path) {
     butil::FilePath dir_path(path);
     if (!butil::DirectoryExists(dir_path)) {

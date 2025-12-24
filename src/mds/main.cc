@@ -31,7 +31,6 @@
 #include "mds/server.h"
 #include "utils/daemonize.h"
 
-DEFINE_string(conf, "./conf/mds.conf", "mds config path");
 DEFINE_string(storage_url, "file://./conf/coor_list", "storage url, e.g. file://<path> or list://<addr1>");
 
 const int kMaxStacktraceSize = 128;
@@ -307,6 +306,8 @@ static bool CheckStorageUrl(const std::string& storage_url) {
 }
 
 int main(int argc, char* argv[]) {
+  using dingofs::FLAGS_conf;
+
 #ifdef USE_TCMALLOC
   std::cout << "USE_TCMALLOC is ON\n";
 #else
@@ -315,11 +316,14 @@ int main(int argc, char* argv[]) {
 
   if (ParseOption(argc, argv)) return 0;
 
-  if (dingofs::mds::Helper::IsExistPath(FLAGS_conf)) {
-    google::SetCommandLineOption("flagfile", FLAGS_conf.c_str());
-  }
-
   gflags::ParseCommandLineNonHelpFlags(&argc, &argv, false);
+
+  // read gflags from conf file
+  if (!dingofs::FLAGS_conf.empty()) {
+    LOG(INFO) << "use config file: " << FLAGS_conf;
+    CHECK(dingofs::mds::Helper::IsExistPath(FLAGS_conf)) << fmt::format("config file {} not exist.", FLAGS_conf);
+    gflags::ReadFromFlagsFile(FLAGS_conf, argv[0], true);
+  }
 
   std::cout << fmt::format("mds server id: {}\n", dingofs::mds::FLAGS_mds_server_id);
 

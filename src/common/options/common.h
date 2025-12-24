@@ -22,6 +22,7 @@
 namespace dingofs {
 
 DECLARE_bool(daemonize);
+DECLARE_string(conf);
 
 }  // namespace dingofs
 

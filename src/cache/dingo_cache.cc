@@ -28,6 +28,7 @@
 #include "cache/utils/logging.h"
 #include "cache/utils/offload_thread_pool.h"
 #include "common/flag.h"
+#include "common/helper.h"
 #include "common/options/cache.h"
 #include "common/options/common.h"
 #include "utils/daemonize.h"
@@ -40,7 +41,7 @@ static dingofs::FlagExtraInfo extras = {
     .usage = "  dingo-cache [OPTIONS] --id <cache_node_uuid>",
     .examples =
         R"(  $ dingo-cache --id=85a4b352-4097-4868-9cd6-9ec5e53db1b6
-  $ dingo-cache --flagfile cache.conf --daemonize
+  $ dingo-cache --conf cache.conf --daemonize
 )",
     .patterns = {"src/cache", "options/common"},
 };
@@ -96,6 +97,14 @@ int DingoCache::Run(int argc, char** argv) {
   int rc = ParseFlags(argc, argv);
   if (rc != 0) {
     return rc;
+  }
+
+  // read gflags from conf file
+  if (!dingofs::FLAGS_conf.empty()) {
+    LOG(INFO) << "use config file: " << dingofs::FLAGS_conf;
+    CHECK(dingofs::Helper::IsExistPath(dingofs::FLAGS_conf))
+        << fmt::format("config file {} not exist.", dingofs::FLAGS_conf);
+    gflags::ReadFromFlagsFile(dingofs::FLAGS_conf, argv[0], true);
   }
 
   // run in daemon mode

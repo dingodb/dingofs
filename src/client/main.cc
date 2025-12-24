@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <gflags/gflags.h>
+
 #include <csignal>
 #include <cstdlib>
 #include <iostream>
@@ -25,8 +27,10 @@
 #include "common/helper.h"
 #include "common/logging.h"
 #include "common/options/cache.h"
+#include "common/options/client.h"
 #include "common/options/common.h"
 #include "common/types.h"
+#include "fmt/format.h"
 #include "utils/daemonize.h"
 
 using FuseServer = dingofs::client::fuse::FuseServer;
@@ -63,7 +67,7 @@ static dingofs::FlagExtraInfo extras = {
     .examples =
         R"(  $ dingo-client local://dingofs /mnt/dingofs
   $ dingo-client mds://10.220.69.10:7400/dingofs /mnt/dingofs
-  $ dingo-client --flagfile client.conf mds://10.220.32.1:6700/dingofs /mnt/dingofs
+  $ dingo-client --conf client.conf mds://10.220.32.1:6700/dingofs /mnt/dingofs
 )",
     .patterns = {"src/client", "cache/storage", "cache/tiercache",
                  "cache/blockcache", "cache/remotecache", "options/blockaccess",
@@ -74,10 +78,18 @@ int main(int argc, char* argv[]) {
   // install singal handler
   InstallSignal(SIGHUP, HandleSignal);
 
-  // parse gflags
+  //  parse gflags
   int rc = dingofs::ParseFlags(&argc, &argv, extras);
   if (rc != 0) {
     return EXIT_FAILURE;
+  }
+
+  // read gflags from conf file
+  if (!dingofs::FLAGS_conf.empty()) {
+    LOG(INFO) << "use config file: " << dingofs::FLAGS_conf;
+    CHECK(dingofs::Helper::IsExistPath(dingofs::FLAGS_conf))
+        << fmt::format("config file {} not exist.", dingofs::FLAGS_conf);
+    gflags::ReadFromFlagsFile(dingofs::FLAGS_conf, argv[0], true);
   }
 
   // after parsing:
