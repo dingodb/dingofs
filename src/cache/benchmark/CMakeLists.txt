@@ -33,6 +33,4 @@ target_link_libraries(cache_benchmark
 add_executable(cache-bench main.cc)
 target_link_libraries(cache-bench
     cache_benchmark
-
-    ${CPU_PROFILER_LIB}
 )

@@ -22,12 +22,6 @@ option(BUILD_INTEGRATION_TESTS "Build integration test" OFF)
 option(USE_TCMALLOC "Use tcmalloc" ON)
 option(BRPC_ENABLE_CPU_PROFILER "Enable brpc cpu profiler" OFF)
 
-if(BRPC_ENABLE_CPU_PROFILER)
-  message(STATUS "Enable BRPC_ENABLE_CPU_PROFILER")
-  add_definitions(-DBRPC_ENABLE_CPU_PROFILER=ON)
-  set(CPU_PROFILER_LIB gperftools::gperftools unwind::unwind)
-endif()
-
 set(CMAKE_CXX_STANDARD 17)
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE "Debug")
@@ -67,7 +61,6 @@ message("DINGOSDK_INSTALL_PATH:${DINGOSDK_INSTALL_PATH}")
 
 set(CMAKE_PREFIX_PATH
   ${THIRD_PARTY_INSTALL_PATH}
-  ${PROJECT_SOURCE_DIR}/thirdparties/etcdclient
   ${DINGOSDK_INSTALL_PATH}
   ${CMAKE_PREFIX_PATH}
   )
@@ -75,12 +68,10 @@ message("CMAKE_PREFIX_PATH:${CMAKE_PREFIX_PATH}")
 
 # link first lookup from THIRD_PARTY_INSTALL_PATH
 link_directories(BEFORE ${THIRD_PARTY_INSTALL_PATH}/lib)
-link_directories(BEFORE ${PROJECT_SOURCE_DIR}/thirdparties/etcdclient)
 link_directories(BEFORE ${DINGOSDK_INSTALL_PATH}/lib)
 
 # include dir
 include_directories(${THIRD_PARTY_INSTALL_PATH}/include)
-include_directories(${PROJECT_SOURCE_DIR}/thirdparties/etcdclient)
 include_directories(${DINGOSDK_INSTALL_PATH}/include)
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})

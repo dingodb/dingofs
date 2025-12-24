@@ -22,7 +22,15 @@ mark_as_advanced(
   BRPC_INCLUDE_DIRS)
 
 if(BRPC_FOUND AND NOT (TARGET brpc::brpc))
+
+  if(BRPC_ENABLE_CPU_PROFILER)
+    message(STATUS "Enable BRPC_ENABLE_CPU_PROFILER")
+    add_definitions(-DBRPC_ENABLE_CPU_PROFILER=ON)
+    set(CPU_PROFILER_LIB gperftools::gperftools unwind::unwind)
+  endif()
+
   set(BRPC_DEPS_LIBS
+      ${CPU_PROFILER_LIB}
       OpenSSL::SSL
       leveldb
       gflags
