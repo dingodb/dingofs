@@ -25,6 +25,7 @@
 
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 
 namespace dingofs {
 
@@ -42,6 +43,16 @@ static const std::string kDefaultLogDir = kDefaultRuntimeBaseDir + "log";
 
 static const std::string kDefaultDataDir = kDefaultRuntimeBaseDir + "data";
 static const std::string kDefaultMetaDBDir = kDefaultRuntimeBaseDir + "meta";
+
+// brpc flags default value
+static const std::string kDefaultBrpcConnectTimeoutAsUnreachable = "10";
+static const std::string kDefaultBrpcMaxConnectionPoolSize = "500";
+static const std::unordered_map<std::string, std::string>
+    kBrpcFlagDefaultValueMap = {
+        {"log_dir", kDefaultLogDir},
+        {"max_connection_pool_size", kDefaultBrpcMaxConnectionPoolSize},
+        {"connect_timeout_as_unreachable",
+         kDefaultBrpcConnectTimeoutAsUnreachable}};
 
 }  // namespace dingofs
 

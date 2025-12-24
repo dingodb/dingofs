@@ -27,7 +27,6 @@
 #include "common/helper.h"
 #include "common/logging.h"
 #include "common/options/cache.h"
-#include "common/options/client.h"
 #include "common/options/common.h"
 #include "common/types.h"
 #include "fmt/format.h"
@@ -69,9 +68,9 @@ static dingofs::FlagExtraInfo extras = {
   $ dingo-client mds://10.220.69.10:7400/dingofs /mnt/dingofs
   $ dingo-client --conf client.conf mds://10.220.32.1:6700/dingofs /mnt/dingofs
 )",
-    .patterns = {"src/client", "cache/storage", "cache/tiercache",
-                 "cache/blockcache", "cache/remotecache", "options/blockaccess",
-                 "options/client", "options/common"},
+    .patterns = {"src/client", "cache/common", "cache/storage",
+                 "cache/tiercache", "cache/blockcache", "cache/remotecache",
+                 "options/blockaccess", "options/client", "options/common"},
 };
 
 int main(int argc, char* argv[]) {
@@ -91,6 +90,9 @@ int main(int argc, char* argv[]) {
         << fmt::format("config file {} not exist.", dingofs::FLAGS_conf);
     gflags::ReadFromFlagsFile(dingofs::FLAGS_conf, argv[0], true);
   }
+
+  // reset brpc flag default value if not set
+  dingofs::ResetBrpcFlagDefaultValue();
 
   // after parsing:
   // argv[0] is program name

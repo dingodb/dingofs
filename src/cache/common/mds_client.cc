@@ -50,14 +50,14 @@ DEFINE_string(mds_addrs, "127.0.0.1:7400",
               "cache group member manager service rpc addresses");
 DEFINE_validator(mds_addrs, Helper::NonEmptyString);
 
-DEFINE_int64(mds_rpc_timeout_ms, 3000, "mds rpc timeout");
-DEFINE_validator(mds_rpc_timeout_ms, brpc::PassValidate);
+DEFINE_int64(cache_mds_rpc_timeout_ms, 3000, "mds rpc timeout");
+DEFINE_validator(cache_mds_rpc_timeout_ms, brpc::PassValidate);
 
-DEFINE_int32(mds_rpc_retry_times, 1, "mds rpc retry time");
-DEFINE_validator(mds_rpc_retry_times, brpc::PassValidate);
+DEFINE_int32(cache_mds_rpc_retry_times, 1, "mds rpc retry time");
+DEFINE_validator(cache_mds_rpc_retry_times, brpc::PassValidate);
 
-DEFINE_uint32(mds_request_retry_times, 3, "mds rpc request retry time");
-DEFINE_validator(mds_request_retry_times, brpc::PassValidate);
+DEFINE_uint32(cache_mds_request_retry_times, 3, "mds rpc request retry time");
+DEFINE_validator(cache_mds_request_retry_times, brpc::PassValidate);
 
 MDSClientImpl::MDSClientImpl(const std::string& mds_addr)
     : running_(false),
@@ -271,10 +271,10 @@ Status MDSClientImpl::SendRequest(const std::string& service_name,
                                   Response& response) {
   mds::MDSMeta mds, old_mds;
   client::vfs::v2::SendRequestOption rpc_option;
-  rpc_option.timeout_ms = FLAGS_mds_rpc_timeout_ms;
-  rpc_option.max_retry = FLAGS_mds_rpc_retry_times;
+  rpc_option.timeout_ms = FLAGS_cache_mds_rpc_timeout_ms;
+  rpc_option.max_retry = FLAGS_cache_mds_rpc_retry_times;
 
-  for (int retry = 0; retry < FLAGS_mds_request_retry_times; ++retry) {
+  for (int retry = 0; retry < FLAGS_cache_mds_request_retry_times; ++retry) {
     mds = GetRandomlyMDS(old_mds);
     auto endpoint = client::vfs::v2::StrToEndpoint(mds.Host(), mds.Port());
 

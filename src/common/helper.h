@@ -142,6 +142,14 @@ class Helper {
     return true;
   }
 
+  static std::string ToLowerCase(const std::string& str) {
+    std::string result = str;
+    for (char& c : result) {
+      c = tolower(c);
+    }
+    return result;
+  }
+
 };  // class Helper
 }  // namespace dingofs
 

@@ -27,6 +27,7 @@
 
 #include <iostream>
 
+#include "common/const.h"
 #include "common/version.h"
 
 namespace dingofs {
@@ -64,7 +65,7 @@ class FlagsHelper {
   };
 
   static std::vector<gflags::CommandLineFlagInfo> GetAllGFlags(
-      const std::vector<std::string>& patterns);
+      const std::string& program, const std::vector<std::string>& patterns);
   static std::vector<Row> Normalize(const FlagsInfo& flags);
 };
 
@@ -86,6 +87,18 @@ static int ParseFlags(int* argc, char*** argv, const FlagExtraInfo& extras) {
 
 static std::string GenCurrentFlags() {
   return FlagsHelper::GenCurrentFlags(g_flags);
+}
+
+static void ResetBrpcFlagDefaultValue() {
+  for (const auto& [name, value] : dingofs::kBrpcFlagDefaultValueMap) {
+    gflags::CommandLineFlagInfo flag_info;
+    if (!gflags::GetCommandLineFlagInfo(name.c_str(), &flag_info)) {
+      continue;
+    }
+    if (flag_info.is_default) {
+      gflags::SetCommandLineOption(name.c_str(), value.c_str());
+    }
+  }
 }
 
 }  // namespace dingofs

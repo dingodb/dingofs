@@ -31,6 +31,7 @@
 #include <vector>
 
 #include "common/const.h"
+#include "common/helper.h"
 #include "utils/string.h"
 
 namespace dingofs {
@@ -57,7 +58,7 @@ FlagsInfo FlagsHelper::Parse(int* argc, char*** argv,
   if (!flags.show_help && !flags.show_version && !flags.create_template) {
     gflags::ParseCommandLineNonHelpFlags(argc, argv, true);
   }
-  flags.gflags = GetAllGFlags(extra_info.patterns);
+  flags.gflags = GetAllGFlags(extra_info.program, extra_info.patterns);
   flags.extra_info = extra_info;
   return flags;
 }
@@ -112,11 +113,14 @@ std::string FlagsHelper::GenCurrentFlags(const FlagsInfo& flags) {
   return os.str();
 }
 
-static std::set<std::string> kGflagWhiteList = {"log_dir", "log_level",
-                                                "log_v"};
+static std::set<std::string> kGflagWhiteList = {
+    "log_dir", "log_level", "log_v", "connect_timeout_as_unreachable",
+    "max_connection_pool_size"};
+
+static std::set<std::string> kClientGflagBlackList = {"mds_addrs"};
 
 std::vector<gflags::CommandLineFlagInfo> FlagsHelper::GetAllGFlags(
-    const std::vector<std::string>& patterns) {
+    const std::string& program, const std::vector<std::string>& patterns) {
   std::vector<gflags::CommandLineFlagInfo> all_flags;
   std::vector<gflags::CommandLineFlagInfo> flags_out;
 
@@ -126,13 +130,19 @@ std::vector<gflags::CommandLineFlagInfo> FlagsHelper::GetAllGFlags(
       continue;
     }
 
-    if (flag.name == "log_dir") {
-      flag.description = "log directory";
-      flag.default_value = kDefaultLogDir;
+    // show brpc default value
+    auto it = kBrpcFlagDefaultValueMap.find(flag.name);
+    if (it != kBrpcFlagDefaultValueMap.end()) {
+      flag.default_value = it->second;
     }
 
     if (kGflagWhiteList.count(flag.name) > 0) {
       flags_out.push_back(flag);
+      continue;
+    }
+
+    if (kClientGflagBlackList.count(flag.name) > 0 &&
+        program == "dingo-client") {
       continue;
     }
 
@@ -154,7 +164,7 @@ std::vector<FlagsHelper::Row> FlagsHelper::Normalize(const FlagsInfo& flags) {
   std::vector<Row> rows;
   for (const auto& gflag : flags.gflags) {
     row.name = gflag.name + "=" + gflag.type;
-    row.description = gflag.description;
+    row.description = dingofs::Helper::ToLowerCase(gflag.description);
 
     if (gflag.default_value.empty() && gflag.has_validator_fn) {
       row.default_value = RedString("[required]");

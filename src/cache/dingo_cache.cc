@@ -107,6 +107,9 @@ int DingoCache::Run(int argc, char** argv) {
     gflags::ReadFromFlagsFile(dingofs::FLAGS_conf, argv[0], true);
   }
 
+  // reset brpc flag default value if not set
+  dingofs::ResetBrpcFlagDefaultValue();
+
   // run in daemon mode
   if (dingofs::FLAGS_daemonize) {
     if (!dingofs::utils::Daemonize()) {

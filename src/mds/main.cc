@@ -19,6 +19,7 @@
 #include <string>
 
 #include "backtrace.h"
+#include "common/flag.h"
 #include "common/options/common.h"
 #include "common/options/mds.h"
 #include "dlfcn.h"
@@ -324,6 +325,9 @@ int main(int argc, char* argv[]) {
     CHECK(dingofs::mds::Helper::IsExistPath(FLAGS_conf)) << fmt::format("config file {} not exist.", FLAGS_conf);
     gflags::ReadFromFlagsFile(FLAGS_conf, argv[0], true);
   }
+
+  // reset brpc flag default value if not set
+  dingofs::ResetBrpcFlagDefaultValue();
 
   std::cout << fmt::format("mds server id: {}\n", dingofs::mds::FLAGS_mds_server_id);
 
