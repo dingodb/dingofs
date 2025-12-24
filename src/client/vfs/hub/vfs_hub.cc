@@ -226,16 +226,46 @@ Status VFSHubImpl::Stop(bool upgrade) {
 
   LOG(INFO) << fmt::format("[vfs.hub] vfs hub stopping, upgrade({}).", upgrade);
 
-  if (handle_manager_ != nullptr) handle_manager_->Shutdown();
+  if (handle_manager_ != nullptr) {
+    handle_manager_->Shutdown();
+    handle_manager_.reset();
+  }
 
   // shutdown before block cache
-  if (priodic_flush_manager_ != nullptr) priodic_flush_manager_->Stop();
-  if (read_executor_ != nullptr) read_executor_->Stop();
-  if (flush_executor_ != nullptr) flush_executor_->Stop();
-  if (warmup_manager_ != nullptr) warmup_manager_->Stop();
-  if (prefetch_manager_ != nullptr) prefetch_manager_->Stop();
-  if (block_store_ != nullptr) block_store_->Shutdown();
-  if (meta_system_ != nullptr) meta_system_->UnInit(upgrade);
+  if (priodic_flush_manager_ != nullptr) {
+    priodic_flush_manager_->Stop();
+    priodic_flush_manager_.reset();
+  }
+
+  if (read_executor_ != nullptr) {
+    read_executor_->Stop();
+    read_executor_.reset();
+  }
+
+  if (flush_executor_ != nullptr) {
+    flush_executor_->Stop();
+    flush_executor_.reset();
+  }
+
+  if (warmup_manager_ != nullptr) {
+    warmup_manager_->Stop();
+    warmup_manager_.reset();
+  }
+
+  if (prefetch_manager_ != nullptr) {
+    prefetch_manager_->Stop();
+    prefetch_manager_.reset();
+  }
+
+  if (block_store_ != nullptr) {
+    block_store_->Shutdown();
+    block_store_.reset();
+  }
+
+  if (meta_system_ != nullptr) {
+    meta_system_->UnInit(upgrade);
+    meta_system_.reset();
+  }
 
   started_.store(false, std::memory_order_relaxed);
 
