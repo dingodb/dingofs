@@ -15,16 +15,21 @@
 #ifndef DINGOFS_SRC_COMMON_HELPER_H_
 #define DINGOFS_SRC_COMMON_HELPER_H_
 
+#include <arpa/inet.h>
 #include <butil/file_util.h>
 #include <butil/strings/string16.h>
 #include <butil/strings/string_util.h>
+#include <netdb.h>
 
 #include <cstdint>
+#include <iomanip>
+#include <iostream>
+#include <utility>
+#include <vector>
 
 #include "butil/endpoint.h"
 #include "common/types.h"
 #include "glog/logging.h"
-
 namespace dingofs {
 
 static const uint32_t kMaxHostNameLength = 255;
@@ -40,6 +45,18 @@ class Helper {
     }
 
     return std::string(hostname);
+  }
+
+  static std::string GetIpByHostName(const std::string& hostname) {
+    struct hostent* host_entry = gethostbyname(hostname.c_str());
+    if (host_entry == nullptr) {
+      LOG(ERROR) << "can't parse hostname:" << hostname;
+      return {};
+    }
+
+    char* ip_ptr = inet_ntoa(*((struct in_addr*)host_entry->h_addr_list[0]));
+
+    return std::string(ip_ptr);
   }
 
   static std::string HostName2IP(std::string host_name) {
@@ -148,6 +165,35 @@ class Helper {
       c = tolower(c);
     }
     return result;
+  }
+
+  static std::string RemoveHttpPrefix(const std::string& url) {
+    std::string result = ToLowerCase(url);
+
+    if (result.find("https://") == 0) {
+      result = result.substr(8);
+    } else if (result.find("http://") == 0) {
+      result = url.substr(7);
+    }
+
+    return result;
+  }
+
+  static void PrintConfigInfo(
+      const std::vector<std::pair<std::string, std::string>>& configs,
+      const uint16_t width = 20) {
+    if (configs.empty()) {
+      return;
+    }
+
+    std::cout << "current configuration:\n";
+
+    for (const auto& [key, value] : configs) {
+      std::cout << "  " << std::left << std::setw(width) << key << " " << value
+                << "\n";
+    }
+
+    std::cout << std::setw(0);
   }
 
 };  // class Helper

@@ -935,6 +935,10 @@ uint64_t VFSWrapper::GetMaxNameLength() {
   return max_name_length;
 }
 
+blockaccess::BlockAccessOptions VFSWrapper::GetBlockAccesserOptions() {
+  return vfs_->GetBlockAccesserOptions();
+}
+
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

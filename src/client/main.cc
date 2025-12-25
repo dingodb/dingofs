@@ -23,10 +23,12 @@
 #include "absl/cleanup/cleanup.h"
 #include "client/fuse/fuse_op.h"
 #include "client/fuse/fuse_server.h"
+#include "common/blockaccess/accesser_common.h"
 #include "common/flag.h"
 #include "common/helper.h"
 #include "common/logging.h"
 #include "common/options/cache.h"
+#include "common/options/client.h"
 #include "common/options/common.h"
 #include "common/types.h"
 #include "fmt/format.h"
@@ -60,6 +62,66 @@ static int InstallSignal(int sig, void (*handler)(int)) {
   return 0;
 }
 
+static std::vector<std::pair<std::string, std::string>> GenConfigs(
+    const std::string& meta,
+    const dingofs::blockaccess::BlockAccessOptions& options) {
+  using dingofs::blockaccess::AccesserType;
+
+  std::vector<std::pair<std::string, std::string>> configs;
+
+  // config
+  configs.emplace_back("config", fmt::format("[{}]", dingofs::FLAGS_conf));
+  // log
+  configs.emplace_back(
+      "log", fmt::format("[{} {} {}(verbose)]",
+                         dingofs::Helper::ExpandPath(
+                             ::FLAGS_log_dir.empty() ? dingofs::kDefaultLogDir
+                                                     : ::FLAGS_log_dir),
+                         dingofs::FLAGS_log_level, dingofs::FLAGS_log_v));
+  // meta
+  configs.emplace_back("meta", meta);
+  // storage
+  if (options.type == AccesserType::kS3) {
+    configs.emplace_back("storage",
+                         fmt::format("[s3://{}/{}]",
+                                     dingofs::Helper::RemoveHttpPrefix(
+                                         options.s3_options.s3_info.endpoint),
+                                     options.s3_options.s3_info.bucket_name));
+
+  } else if (options.type == AccesserType::kRados) {
+    configs.emplace_back(
+        "storage",
+        fmt::format("[rados://{}/{}]", options.rados_options.mon_host,
+                    options.rados_options.pool_name));
+
+  } else if (options.type == AccesserType::kLocalFile) {
+    configs.emplace_back(
+        "storage", fmt::format("[local://{}]", options.file_options.path));
+  }
+  // cache
+  if (!dingofs::cache::FLAGS_cache_group.empty()) {
+    configs.emplace_back("cache",
+                         fmt::format("[{} {}]", dingofs::cache::FLAGS_mds_addrs,
+                                     dingofs::cache::FLAGS_cache_group));
+  } else {
+    if (dingofs::cache::FLAGS_enable_cache) {
+      configs.emplace_back(
+          "cache",
+          fmt::format("[{} {}MB {}%(ratio)]", dingofs::cache::FLAGS_cache_dir,
+                      dingofs::cache::FLAGS_cache_size_mb,
+                      dingofs::cache::FLAGS_free_space_ratio * 100));
+    }
+  }
+  // monitor
+  auto hostname = dingofs::Helper::GetHostName();
+  configs.emplace_back(
+      "monitor",
+      fmt::format("[{}:{}]", dingofs::Helper::GetIpByHostName(hostname),
+                  dingofs::client::FLAGS_vfs_dummy_server_port));
+
+  return configs;
+}
+
 static dingofs::FlagExtraInfo extras = {
     .program = "dingo-client",
     .usage = "  dingo-client [OPTIONS] <meta-url> <mountpoint>",
@@ -85,7 +147,6 @@ int main(int argc, char* argv[]) {
 
   // read gflags from conf file
   if (!dingofs::FLAGS_conf.empty()) {
-    LOG(INFO) << "use config file: " << dingofs::FLAGS_conf;
     CHECK(dingofs::Helper::IsExistPath(dingofs::FLAGS_conf))
         << fmt::format("config file {} not exist.", dingofs::FLAGS_conf);
     gflags::ReadFromFlagsFile(dingofs::FLAGS_conf, argv[0], true);
@@ -137,11 +198,11 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  struct MountOption mount_option {
-    .mount_point = argv[2], .fs_name = fs_name,
-    .metasystem_type = metasystem_type, .mds_addrs = mds_addrs,
-    .storage_info = storage_info
-  };
+  struct MountOption mount_option{.mount_point = argv[2],
+                                  .fs_name = fs_name,
+                                  .metasystem_type = metasystem_type,
+                                  .mds_addrs = mds_addrs,
+                                  .storage_info = storage_info};
 
   fuse_server = new FuseServer();
   if (fuse_server == nullptr) return EXIT_FAILURE;
@@ -168,10 +229,17 @@ int main(int argc, char* argv[]) {
       ::absl::MakeCleanup([&]() { fuse_server->SessionUnmount(); });
 
   // init fuse client
-  if (InitFuseClient(argv[0], &mount_option) != 0) {
+  dingofs::blockaccess::BlockAccessOptions block_options;
+  if (InitFuseClient(argv[0], &mount_option, &block_options) != 0) {
     LOG(ERROR) << "init fuse client fail";
     return EXIT_FAILURE;
   }
+
+  // print config info
+  dingofs::Helper::PrintConfigInfo(GenConfigs(argv[1], block_options));
+
+  std::cout << fmt::format("\n{} is ready at {}\n\n", mount_option.fs_name,
+                           mount_option.mount_point);
 
   if (fuse_server->Serve() == 1) return EXIT_FAILURE;
 

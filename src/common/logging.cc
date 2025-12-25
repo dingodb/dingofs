@@ -25,7 +25,6 @@ namespace dingofs {
 
 DEFINE_string(log_level, "INFO", "log level");
 DEFINE_validator(log_level, [](const char* /*name*/, const std::string& value) {
-  LOG(INFO) << "current log level is `" << value << "`";
   Logger::ChangeGlogLevel(value);
   return true;
 });
@@ -33,7 +32,6 @@ DEFINE_validator(log_level, [](const char* /*name*/, const std::string& value) {
 DEFINE_int32(log_v, 0, "log level");
 DEFINE_validator(log_v, [](const char* /*name*/, int32_t value) {
   FLAGS_v = value;
-  LOG(INFO) << "current log verbose is `" << FLAGS_v << "`";
   return true;
 });
 

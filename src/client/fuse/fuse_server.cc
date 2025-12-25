@@ -225,8 +225,6 @@ void FuseServer::DestroySsesion() {
 }
 
 int FuseServer::SessionMount() {
-  std::cout << fmt::format("Begin to mount fs {} to {}\n",
-                           mount_option_->fs_name, mount_option_->mount_point);
   LOG(INFO) << fmt::format("Begin to mount fs {} to {}.",
                            mount_option_->fs_name, mount_option_->mount_point);
 

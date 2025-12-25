@@ -136,6 +136,9 @@ class VFSImpl : public VFS {
   TraceManager* GetTraceManager() override {
     return vfs_hub_->GetTraceManager();
   }
+  blockaccess::BlockAccessOptions GetBlockAccesserOptions() override {
+    return vfs_hub_->GetBlockAccesserOptions();
+  }
 
  private:
   Status StartBrpcServer();

@@ -36,7 +36,6 @@
 #include "client/vfs/vfs.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/blockaccess/block_accesser.h"
-#include "common/const.h"
 #include "common/status.h"
 #include "common/trace/itracer.h"
 #include "common/trace/trace_manager.h"
@@ -89,6 +88,8 @@ class VFSHub {
   virtual uint64_t GetPageSize() = 0;
 
   virtual TraceManager* GetTraceManager() = 0;
+
+  virtual blockaccess::BlockAccessOptions GetBlockAccesserOptions() = 0;
 };
 
 class VFSHubImpl : public VFSHub {
@@ -181,6 +182,11 @@ class VFSHubImpl : public VFSHub {
   TraceManager* GetTraceManager() override {
     CHECK_NOTNULL(trace_manager_);
     return trace_manager_.get();
+  }
+
+  blockaccess::BlockAccessOptions GetBlockAccesserOptions() override {
+    CHECK(started_.load(std::memory_order_relaxed)) << "not started";
+    return blockaccess_options_;
   }
 
  private:

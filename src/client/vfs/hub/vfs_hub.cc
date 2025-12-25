@@ -37,6 +37,7 @@
 #include "common/blockaccess/accesser_common.h"
 #include "common/blockaccess/block_accesser.h"
 #include "common/blockaccess/rados/rados_common.h"
+#include "common/const.h"
 #include "common/helper.h"
 #include "common/options/client.h"
 #include "common/status.h"

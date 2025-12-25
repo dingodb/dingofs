@@ -312,7 +312,8 @@ static std::string FuseCtx(fuse_req_t req) {
   return fmt::format("pid({}) uid({}) gid({})", ctx->pid, ctx->uid, ctx->gid);
 }
 
-int InitFuseClient(const char* argv0, const struct MountOption* mount_option) {
+int InitFuseClient(const char* argv0, const struct MountOption* mount_option,
+                   dingofs::blockaccess::BlockAccessOptions* options) {
   dingofs::client::vfs::VFSConfig config = {
       .mds_addrs = mount_option->mds_addrs,
       .mount_point = mount_option->mount_point,
@@ -327,6 +328,8 @@ int InitFuseClient(const char* argv0, const struct MountOption* mount_option) {
   if (!s.ok()) {
     LOG(ERROR) << "start vfs fail, status: " << s.ToString();
   }
+
+  *options = g_vfs->GetBlockAccesserOptions();
 
   return s.ToSysErrNo();
 }

@@ -125,6 +125,8 @@ class VFSWrapper {
 
   uint64_t GetMaxNameLength();
 
+  blockaccess::BlockAccessOptions GetBlockAccesserOptions();
+
  private:
   bool Dump();
   bool Load(const Json::Value& value);

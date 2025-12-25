@@ -24,6 +24,7 @@
 
 #include "client/vfs/data_buffer.h"
 #include "client/vfs/vfs_meta.h"
+#include "common/blockaccess/accesser_common.h"
 #include "common/status.h"
 #include "common/trace/context.h"
 #include "common/trace/itracer.h"
@@ -154,6 +155,8 @@ class VFS {
   virtual ITracer* GetTracer() = 0;
 
   virtual TraceManager* GetTraceManager() = 0;
+
+  virtual blockaccess::BlockAccessOptions GetBlockAccesserOptions() = 0;
 };
 
 }  // namespace vfs
