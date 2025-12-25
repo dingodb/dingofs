@@ -527,10 +527,9 @@ Status VFSWrapper::Create(Ino parent, const std::string& name, uint32_t uid,
 
 Status VFSWrapper::Read(Ino ino, DataBuffer* data_buffer, uint64_t size,
                         uint64_t offset, uint64_t fh, uint64_t* out_rsize) {
-  auto open_span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Read");
-  auto span = vfs_->GetTracer()->StartSpan(kVFSWrapperMoudule, METHOD_NAME());
+  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Read");
 
-  std::string trace_id = span->GetContext()->TraceId();
+  std::string trace_id = span->GetTraceID();
   VLOG(2) << fmt::format("[{}] VFSRead ino: {}, size: {}, offset: {}, fh: {}",
                          trace_id, ino, size, offset, fh);
 
@@ -548,7 +547,7 @@ Status VFSWrapper::Read(Ino ino, DataBuffer* data_buffer, uint64_t size,
   VFSRWMetricGuard guard(&s, &g_rw_metric.read, out_rsize,
                          !IsInternalNode(ino));
 
-  s = vfs_->Read(open_span->GetContext(), ino, data_buffer, size, offset, fh,
+  s = vfs_->Read(span->GetContext(), ino, data_buffer, size, offset, fh,
                  out_rsize);
 
   VLOG(2) << fmt::format(
@@ -560,7 +559,7 @@ Status VFSWrapper::Read(Ino ino, DataBuffer* data_buffer, uint64_t size,
     op_metric.FailOp();
   }
 
-  open_span->SetStatus(s);
+  span->SetStatus(s);
 
   return s;
 }
