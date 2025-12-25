@@ -64,13 +64,10 @@ void FakeBlockStore::DoRangeAsync(BlockKey key, uint64_t offset,
 
 void FakeBlockStore::RangeAsync(ContextSPtr ctx, RangeReq req,
                                 StatusCallback callback) {
-  auto span = hub_->GetTracer()->StartSpanWithContext(kVFSDataMoudule,
-                                                      METHOD_NAME(), ctx);
-  auto wrapper = [this, cb = std::move(callback),
-                  span_ptr = span.release()](Status s) {
-    // capture this ptr to extend its lifetime
-    std::unique_ptr<ITraceSpan> scoped_span(span_ptr);
-    scoped_span->End();
+  auto span = hub_->GetTraceManager()->StartChildSpan(
+      "FakeBlockStore::PrefetchAsync", ctx->GetTraceSpan());
+  auto wrapper = [this, cb = std::move(callback), span](Status s) {
+    span->End();
     // dedicated use ctx for callback
     cb(s);
   };
@@ -81,13 +78,10 @@ void FakeBlockStore::RangeAsync(ContextSPtr ctx, RangeReq req,
 void FakeBlockStore::PutAsync(ContextSPtr ctx, PutReq req,
                               StatusCallback callback) {
   (void)req;
-  auto span = hub_->GetTracer()->StartSpanWithContext(kVFSDataMoudule,
-                                                      METHOD_NAME(), ctx);
-  auto wrapper = [this, cb = std::move(callback),
-                  span_ptr = span.release()](Status s) {
-    // capture this ptr to extend its lifetime
-    std::unique_ptr<ITraceSpan> scoped_span(span_ptr);
-    scoped_span->End();
+  auto span = hub_->GetTraceManager()->StartChildSpan(
+      "FakeBlockStore::PutAsync", ctx->GetTraceSpan());
+  auto wrapper = [this, cb = std::move(callback), span](Status s) {
+    span->End();
     cb(s);
   };
 
@@ -97,13 +91,11 @@ void FakeBlockStore::PutAsync(ContextSPtr ctx, PutReq req,
 void FakeBlockStore::PrefetchAsync(ContextSPtr ctx, PrefetchReq req,
                                    StatusCallback callback) {
   (void)req;
-  auto span = hub_->GetTracer()->StartSpanWithContext(kVFSDataMoudule,
-                                                      METHOD_NAME(), ctx);
-  auto wrapper = [this, cb = std::move(callback),
-                  span_ptr = span.release()](Status s) {
-    // capture this ptr to extend its lifetime
-    std::unique_ptr<ITraceSpan> scoped_span(span_ptr);
-    scoped_span->End();
+
+  auto span = hub_->GetTraceManager()->StartChildSpan(
+      "FakeBlockStore::PrefetchAsync", ctx->GetTraceSpan());
+  auto wrapper = [this, cb = std::move(callback), span](Status s) {
+    span->End();
     cb(s);
   };
 

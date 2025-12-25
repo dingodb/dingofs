@@ -31,6 +31,7 @@
 #include "common/io_buffer.h"
 #include "common/trace/context.h"
 #include "common/trace/itrace_span.h"
+#include "common/trace/trace_manager.h"
 
 namespace dingofs {
 namespace client {
@@ -63,7 +64,7 @@ struct ReaderSharedState {
 
   std::mutex mtx;
   Status status;
-  std::unique_ptr<ITraceSpan> read_span;
+  SpanScopeSPtr read_span;
   std::vector<BlockCacheReadReqUPtr> block_cache_reqs;
 };
 
@@ -113,7 +114,8 @@ class ChunkReader {
 
   mutable std::mutex mtx_;
   StatusCallback cb_;
-  std::unique_ptr<ITraceSpan> root_span_;
+  // std::unique_ptr<ITraceSpan> root_span_;
+  SpanScopeSPtr root_span_;
   IOBuffer data_buf_;
   bool ready_{false};
 };

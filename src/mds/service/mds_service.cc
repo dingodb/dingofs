@@ -190,12 +190,19 @@ void MDSServiceImpl::DoHeartbeat(google::protobuf::RpcController*, const pb::mds
     status = heartbeat->SendHeartbeat(ctx, mds);
 
   } else if (request->role() == pb::mds::ROLE_CLIENT) {
+    auto span = trace_manager_->StartSpan("MDSServiceImpl::ClientSendHeartbeat", request->info().trace_id(),
+                                          request->info().span_id());
     auto client = request->client();
     status = heartbeat->SendHeartbeat(ctx, client);
+    span->SetStatus(status);
 
   } else if (request->role() == pb::mds::ROLE_CACHE_MEMBER) {
+    auto span = trace_manager_->StartSpan("MDSServiceImpl::CacheMemberSendHeartbeat", request->info().trace_id(),
+                                          request->info().span_id());
+
     auto cache_member = request->cache_group_member();
     status = heartbeat->SendHeartbeat(ctx, cache_member);
+    span->SetStatus(status);
 
   } else {
     return ServiceHelper::SetError(response->mutable_error(), pb::error::EILLEGAL_PARAMTETER, "role is illegal");
@@ -329,8 +336,12 @@ void MDSServiceImpl::DoMountFs(google::protobuf::RpcController*, const pb::mds::
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoMountFs", request->info().trace_id(), request->info().span_id());
+
   auto status = ValidateRequest(request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -338,6 +349,7 @@ void MDSServiceImpl::DoMountFs(google::protobuf::RpcController*, const pb::mds::
   status = file_system_set_->MountFs(ctx, request->fs_name(), request->mount_point());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 }
@@ -382,9 +394,12 @@ void MDSServiceImpl::DoUmountFs(google::protobuf::RpcController*, const pb::mds:
                                 pb::mds::UmountFsResponse* response, TraceClosure* done) {
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoUmountFs", request->info().trace_id(), request->info().span_id());
 
   auto status = ValidateRequest(request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -392,6 +407,7 @@ void MDSServiceImpl::DoUmountFs(google::protobuf::RpcController*, const pb::mds:
   status = file_system_set_->UmountFs(ctx, request->fs_name(), request->client_id());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 }
@@ -431,8 +447,12 @@ void MDSServiceImpl::DoDeleteFs(google::protobuf::RpcController*, const pb::mds:
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoDeleteFs", request->info().trace_id(), request->info().span_id());
+
   auto status = ValidateRequest(request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -440,6 +460,7 @@ void MDSServiceImpl::DoDeleteFs(google::protobuf::RpcController*, const pb::mds:
   status = file_system_set_->DeleteFs(ctx, request->fs_name(), request->is_force());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 }
@@ -475,11 +496,15 @@ void MDSServiceImpl::DoGetFsInfo(google::protobuf::RpcController*, const pb::mds
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoGetFsInfo", request->info().trace_id(), request->info().span_id());
+
   std::string fs_name = request->fs_name();
   if (request->fs_id() > 0) {
     auto file_system = GetFileSystem(request->fs_id());
     auto status = SimpleValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
     if (BAIDU_UNLIKELY(!status.ok())) {
+      span->SetStatus(status);
       return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
     }
 
@@ -491,6 +516,7 @@ void MDSServiceImpl::DoGetFsInfo(google::protobuf::RpcController*, const pb::mds
   auto status = file_system_set_->GetFsInfo(ctx, fs_name, fs_info);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -528,8 +554,12 @@ void MDSServiceImpl::DoListFsInfo(google::protobuf::RpcController*, const pb::md
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoListFsInfo", request->info().trace_id(), request->info().span_id());
+
   auto status = ValidateRequest(request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -538,6 +568,7 @@ void MDSServiceImpl::DoListFsInfo(google::protobuf::RpcController*, const pb::md
   status = file_system_set_->GetAllFsInfo(ctx, true, fs_infoes);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -560,8 +591,12 @@ void MDSServiceImpl::DoUpdateFsInfo(google::protobuf::RpcController*, const pb::
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span = trace_manager_->StartSpan("MDSServiceImpl::DoUpdateFsInfo", request->info().trace_id(),
+                                        request->info().span_id());
+
   auto status = ValidateRequest(request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -569,6 +604,7 @@ void MDSServiceImpl::DoUpdateFsInfo(google::protobuf::RpcController*, const pb::
   status = file_system_set_->UpdateFsInfo(ctx, request->fs_name(), request->fs_info());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 }
@@ -605,9 +641,13 @@ void MDSServiceImpl::DoGetDentry(google::protobuf::RpcController*, const pb::mds
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoGetDentry", request->info().trace_id(), request->info().span_id());
+
   auto file_system = GetFileSystem(request->fs_id());
   auto status = SimpleValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -617,6 +657,7 @@ void MDSServiceImpl::DoGetDentry(google::protobuf::RpcController*, const pb::mds
   status = file_system->GetDentry(ctx, request->parent(), request->name(), dentry);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -640,9 +681,13 @@ void MDSServiceImpl::DoListDentry(google::protobuf::RpcController*, const pb::md
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoListDentry", request->info().trace_id(), request->info().span_id());
+
   auto file_system = GetFileSystem(request->fs_id());
   auto status = SimpleValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -653,6 +698,7 @@ void MDSServiceImpl::DoListDentry(google::protobuf::RpcController*, const pb::md
   status = file_system->ListDentry(ctx, request->parent(), request->last(), limit, request->is_only_dir(), dentries);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -695,9 +741,13 @@ void MDSServiceImpl::DoGetInode(google::protobuf::RpcController*, const pb::mds:
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoGetInode", request->info().trace_id(), request->info().span_id());
+
   auto file_system = GetFileSystem(request->fs_id());
   auto status = SimpleValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -707,6 +757,7 @@ void MDSServiceImpl::DoGetInode(google::protobuf::RpcController*, const pb::mds:
   status = file_system->GetInode(ctx, request->ino(), entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -730,9 +781,13 @@ void MDSServiceImpl::DoBatchGetInode(google::protobuf::RpcController*, const pb:
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span = trace_manager_->StartSpan("MDSServiceImpl::DoBatchGetInode", request->info().trace_id(),
+                                        request->info().span_id());
+
   auto file_system = GetFileSystem(request->fs_id());
   auto status = SimpleValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -742,6 +797,7 @@ void MDSServiceImpl::DoBatchGetInode(google::protobuf::RpcController*, const pb:
   status = file_system->BatchGetInode(ctx, Helper::PbRepeatedToVector(request->inoes()), entries);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -767,9 +823,13 @@ void MDSServiceImpl::DoBatchGetXAttr(google::protobuf::RpcController*, const pb:
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span = trace_manager_->StartSpan("MDSServiceImpl::DoBatchGetXAttr", request->info().trace_id(),
+                                        request->info().span_id());
+
   auto file_system = GetFileSystem(request->fs_id());
   auto status = SimpleValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -779,6 +839,7 @@ void MDSServiceImpl::DoBatchGetXAttr(google::protobuf::RpcController*, const pb:
   status = file_system->BatchGetXAttr(ctx, Helper::PbRepeatedToVector(request->inoes()), xattrs);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -805,9 +866,13 @@ void MDSServiceImpl::DoLookup(google::protobuf::RpcController* controller, const
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoLookup", request->info().trace_id(), request->info().span_id());
+
   auto file_system = GetFileSystem(request->fs_id());
   auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -817,6 +882,7 @@ void MDSServiceImpl::DoLookup(google::protobuf::RpcController* controller, const
   status = file_system->Lookup(ctx, request->parent(), request->name(), entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -839,9 +905,13 @@ void MDSServiceImpl::DoBatchCreate(google::protobuf::RpcController*, const pb::m
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoBatchCreate", request->info().trace_id(), request->info().span_id());
+
   auto file_system = GetFileSystem(request->fs_id());
   auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -866,6 +936,7 @@ void MDSServiceImpl::DoBatchCreate(google::protobuf::RpcController*, const pb::m
   status = file_system->BatchCreate(ctx, request->parent(), params, entry_out, session_ids);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -909,9 +980,13 @@ void MDSServiceImpl::DoMkNod(google::protobuf::RpcController*, const pb::mds::Mk
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoMkNod", request->info().trace_id(), request->info().span_id());
+
   auto file_system = GetFileSystem(request->fs_id());
   auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -929,6 +1004,7 @@ void MDSServiceImpl::DoMkNod(google::protobuf::RpcController*, const pb::mds::Mk
   status = file_system->MkNod(ctx, param, entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -952,9 +1028,13 @@ void MDSServiceImpl::DoMkDir(google::protobuf::RpcController*, const pb::mds::Mk
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoMkDir", request->info().trace_id(), request->info().span_id());
+
   auto file_system = GetFileSystem(request->fs_id());
   auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -972,6 +1052,7 @@ void MDSServiceImpl::DoMkDir(google::protobuf::RpcController*, const pb::mds::Mk
   status = file_system->MkDir(ctx, param, entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -995,9 +1076,13 @@ void MDSServiceImpl::DoRmDir(google::protobuf::RpcController*, const pb::mds::Rm
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoRmDir", request->info().trace_id(), request->info().span_id());
+
   auto file_system = GetFileSystem(request->fs_id());
   auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1008,6 +1093,7 @@ void MDSServiceImpl::DoRmDir(google::protobuf::RpcController*, const pb::mds::Rm
   status = file_system->RmDir(ctx, request->parent(), request->name(), ino, entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1031,9 +1117,13 @@ void MDSServiceImpl::DoReadDir(google::protobuf::RpcController*, const pb::mds::
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoReadDir", request->info().trace_id(), request->info().span_id());
+
   auto file_system = GetFileSystem(request->fs_id());
   auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1044,6 +1134,7 @@ void MDSServiceImpl::DoReadDir(google::protobuf::RpcController*, const pb::mds::
                                 entry_outs);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1075,9 +1166,13 @@ void MDSServiceImpl::DoOpen(google::protobuf::RpcController*, const pb::mds::Ope
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoOpen", request->info().trace_id(), request->info().span_id());
+
   auto file_system = GetFileSystem(request->fs_id());
   auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1096,6 +1191,7 @@ void MDSServiceImpl::DoOpen(google::protobuf::RpcController*, const pb::mds::Ope
                              chunk_version_map, entry_out, chunks);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1120,9 +1216,13 @@ void MDSServiceImpl::DoRelease(google::protobuf::RpcController*, const pb::mds::
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoRelease", request->info().trace_id(), request->info().span_id());
+
   auto file_system = GetFileSystem(request->fs_id());
   auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1131,6 +1231,7 @@ void MDSServiceImpl::DoRelease(google::protobuf::RpcController*, const pb::mds::
   status = file_system->Release(ctx, request->ino(), request->session_id());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 }
@@ -1151,9 +1252,13 @@ void MDSServiceImpl::DoLink(google::protobuf::RpcController*, const pb::mds::Lin
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoLink", request->info().trace_id(), request->info().span_id());
+
   auto file_system = GetFileSystem(request->fs_id());
   auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1163,6 +1268,7 @@ void MDSServiceImpl::DoLink(google::protobuf::RpcController*, const pb::mds::Lin
   status = file_system->Link(ctx, request->ino(), request->new_parent(), request->new_name(), entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1186,9 +1292,13 @@ void MDSServiceImpl::DoUnLink(google::protobuf::RpcController*, const pb::mds::U
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoUnLink", request->info().trace_id(), request->info().span_id());
+
   auto file_system = GetFileSystem(request->fs_id());
   auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1198,6 +1308,7 @@ void MDSServiceImpl::DoUnLink(google::protobuf::RpcController*, const pb::mds::U
   status = file_system->UnLink(ctx, request->parent(), request->name(), entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1221,9 +1332,13 @@ void MDSServiceImpl::DoSymlink(google::protobuf::RpcController*, const pb::mds::
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoSymlink", request->info().trace_id(), request->info().span_id());
+
   auto file_system = GetFileSystem(request->fs_id());
   auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1257,9 +1372,13 @@ void MDSServiceImpl::DoReadLink(google::protobuf::RpcController*, const pb::mds:
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoReadLink", request->info().trace_id(), request->info().span_id());
+
   auto file_system = GetFileSystem(request->fs_id());
   auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1269,6 +1388,7 @@ void MDSServiceImpl::DoReadLink(google::protobuf::RpcController*, const pb::mds:
   status = file_system->ReadLink(ctx, request->ino(), symlink);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1291,9 +1411,13 @@ void MDSServiceImpl::DoGetAttr(google::protobuf::RpcController*, const pb::mds::
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoGetAttr", request->info().trace_id(), request->info().span_id());
+
   auto file_system = GetFileSystem(request->fs_id());
   auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1303,6 +1427,7 @@ void MDSServiceImpl::DoGetAttr(google::protobuf::RpcController*, const pb::mds::
   status = file_system->GetAttr(ctx, request->ino(), entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1343,9 +1468,13 @@ void MDSServiceImpl::DoSetAttr(google::protobuf::RpcController*, const pb::mds::
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoSetAttr", request->info().trace_id(), request->info().span_id());
+
   auto file_system = GetFileSystem(request->fs_id());
   auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1369,6 +1498,7 @@ void MDSServiceImpl::DoSetAttr(google::protobuf::RpcController*, const pb::mds::
   status = file_system->SetAttr(ctx, request->ino(), param, entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1410,9 +1540,13 @@ void MDSServiceImpl::DoGetXAttr(google::protobuf::RpcController*, const pb::mds:
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoGetXAttr", request->info().trace_id(), request->info().span_id());
+
   auto file_system = GetFileSystem(request->fs_id());
   auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1422,6 +1556,7 @@ void MDSServiceImpl::DoGetXAttr(google::protobuf::RpcController*, const pb::mds:
   status = file_system->GetXAttr(ctx, request->ino(), request->name(), value);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1465,9 +1600,13 @@ void MDSServiceImpl::DoSetXAttr(google::protobuf::RpcController*, const pb::mds:
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoSetXAttr", request->info().trace_id(), request->info().span_id());
+
   auto file_system = GetFileSystem(request->fs_id());
   auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1477,6 +1616,7 @@ void MDSServiceImpl::DoSetXAttr(google::protobuf::RpcController*, const pb::mds:
   status = file_system->SetXAttr(ctx, request->ino(), request->xattrs(), entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1520,9 +1660,13 @@ void MDSServiceImpl::DoRemoveXAttr(google::protobuf::RpcController*, const pb::m
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoRemoveXAttr", request->info().trace_id(), request->info().span_id());
+
   auto file_system = GetFileSystem(request->fs_id());
   auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1532,6 +1676,7 @@ void MDSServiceImpl::DoRemoveXAttr(google::protobuf::RpcController*, const pb::m
   status = file_system->RemoveXAttr(ctx, request->ino(), request->name(), entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1576,9 +1721,13 @@ void MDSServiceImpl::DoListXAttr(google::protobuf::RpcController*, const pb::mds
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoListXAttr", request->info().trace_id(), request->info().span_id());
+
   auto file_system = GetFileSystem(request->fs_id());
   auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1588,6 +1737,7 @@ void MDSServiceImpl::DoListXAttr(google::protobuf::RpcController*, const pb::mds
   status = file_system->GetXAttr(ctx, request->ino(), xattrs);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1610,9 +1760,13 @@ void MDSServiceImpl::DoRename(google::protobuf::RpcController*, const pb::mds::R
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoRename", request->info().trace_id(), request->info().span_id());
+
   auto file_system = GetFileSystem(request->fs_id());
   auto status = SimpleValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1631,6 +1785,7 @@ void MDSServiceImpl::DoRename(google::protobuf::RpcController*, const pb::mds::R
   status = file_system->CommitRename(ctx, param, old_parent_version, new_parent_version, effected_inos);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1655,6 +1810,9 @@ void MDSServiceImpl::DoAllocSliceId(google::protobuf::RpcController*, const pb::
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span = trace_manager_->StartSpan("MDSServiceImpl::DoAllocSliceId", request->info().trace_id(),
+                                        request->info().span_id());
+
   if (request->alloc_num() == 0) {
     return ServiceHelper::SetError(response->mutable_error(), pb::error::EILLEGAL_PARAMTETER,
                                    "param alloc_num is error");
@@ -1663,6 +1821,7 @@ void MDSServiceImpl::DoAllocSliceId(google::protobuf::RpcController*, const pb::
   uint64_t slice_id;
   auto status = file_system_set_->AllocSliceId(request->alloc_num(), request->min_slice_id(), slice_id);
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1686,9 +1845,13 @@ void MDSServiceImpl::DoWriteSlice(google::protobuf::RpcController*, const pb::md
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoWriteSlice", request->info().trace_id(), request->info().span_id());
+
   auto file_system = GetFileSystem(request->fs_id());
   auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1699,6 +1862,7 @@ void MDSServiceImpl::DoWriteSlice(google::protobuf::RpcController*, const pb::md
                                    Helper::PbRepeatedToVector(request->delta_slices()), chunk_descriptors);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1745,13 +1909,13 @@ void MDSServiceImpl::DoReadSlice(google::protobuf::RpcController* controller, co
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
-  auto open_span =
+  auto span =
       trace_manager_->StartSpan("MDSServiceImpl::DoReadSlice", request->info().trace_id(), request->info().span_id());
 
   auto file_system = GetFileSystem(request->fs_id());
   auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
-    open_span->SetStatus(status);
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1762,7 +1926,7 @@ void MDSServiceImpl::DoReadSlice(google::protobuf::RpcController* controller, co
       file_system->ReadSlice(ctx, request->ino(), Helper::PbRepeatedToVector(request->chunk_descriptors()), chunks);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
-    open_span->SetStatus(status);
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1807,9 +1971,13 @@ void MDSServiceImpl::DoFallocate(google::protobuf::RpcController*, const pb::mds
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoFallocate", request->info().trace_id(), request->info().span_id());
+
   auto file_system = GetFileSystem(request->fs_id());
   auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1818,6 +1986,7 @@ void MDSServiceImpl::DoFallocate(google::protobuf::RpcController*, const pb::mds
   EntryOut entry_out;
   status = file_system->Fallocate(ctx, request->ino(), request->mode(), request->offset(), request->len(), entry_out);
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1861,9 +2030,13 @@ void MDSServiceImpl::DoCompactChunk(google::protobuf::RpcController*, const pb::
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span = trace_manager_->StartSpan("MDSServiceImpl::DoCompactChunk", request->info().trace_id(),
+                                        request->info().span_id());
+
   auto file_system = GetFileSystem(request->fs_id());
   auto status = SimpleValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1873,6 +2046,7 @@ void MDSServiceImpl::DoCompactChunk(google::protobuf::RpcController*, const pb::
   status = file_system->CompactChunk(ctx, request->ino(), request->chunk_index(), trash_slices);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -1916,12 +2090,16 @@ void MDSServiceImpl::DoCleanTrashSlice(google::protobuf::RpcController*, const p
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span = trace_manager_->StartSpan("MDSServiceImpl::DoCleanTrashSlice", request->info().trace_id(),
+                                        request->info().span_id());
+
   Context ctx(request->context(), request->info().request_id(), __func__);
 
   auto status =
       gc_processor_->ManualCleanDelSlice(ctx.GetTrace(), request->fs_id(), request->ino(), request->chunk_index());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 }
@@ -1962,11 +2140,15 @@ void MDSServiceImpl::DoCleanDelFile(google::protobuf::RpcController*, const pb::
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span = trace_manager_->StartSpan("MDSServiceImpl::DoCleanDelFile", request->info().trace_id(),
+                                        request->info().span_id());
+
   Context ctx(request->context(), request->info().request_id(), __func__);
 
   auto status = gc_processor_->ManualCleanDelFile(ctx.GetTrace(), request->fs_id(), request->ino());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 }
@@ -2007,9 +2189,13 @@ void MDSServiceImpl::DoSetFsQuota(google::protobuf::RpcController*, const pb::md
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoSetFsQuota", request->info().trace_id(), request->info().span_id());
+
   auto file_system = GetFileSystem(request->fs_id());
   auto status = SimpleValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -2020,6 +2206,7 @@ void MDSServiceImpl::DoSetFsQuota(google::protobuf::RpcController*, const pb::md
   status = quota_manager.SetFsQuota(ctx.GetTrace(), request->quota());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 }
@@ -2056,9 +2243,13 @@ void MDSServiceImpl::DoGetFsQuota(google::protobuf::RpcController*, const pb::md
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoGetFsQuota", request->info().trace_id(), request->info().span_id());
+
   auto file_system = GetFileSystem(request->fs_id());
   auto status = SimpleValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -2070,6 +2261,7 @@ void MDSServiceImpl::DoGetFsQuota(google::protobuf::RpcController*, const pb::md
   status = quota_manager.GetFsQuota(ctx.GetTrace(), ctx.IsBypassCache(), quota);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -2107,9 +2299,13 @@ void MDSServiceImpl::DoSetDirQuota(google::protobuf::RpcController*, const pb::m
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoSetDirQuota", request->info().trace_id(), request->info().span_id());
+
   auto file_system = GetFileSystem(request->fs_id());
   auto status = SimpleValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -2120,6 +2316,7 @@ void MDSServiceImpl::DoSetDirQuota(google::protobuf::RpcController*, const pb::m
   status = quota_manager.SetDirQuota(ctx.GetTrace(), request->ino(), request->quota(), true);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 }
@@ -2156,9 +2353,13 @@ void MDSServiceImpl::DoGetDirQuota(google::protobuf::RpcController*, const pb::m
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoGetDirQuota", request->info().trace_id(), request->info().span_id());
+
   auto file_system = GetFileSystem(request->fs_id());
   auto status = SimpleValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -2170,6 +2371,7 @@ void MDSServiceImpl::DoGetDirQuota(google::protobuf::RpcController*, const pb::m
   status = quota_manager.GetDirQuota(ctx.GetTrace(), request->ino(), request->not_use_fs_quota(), quota);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -2208,9 +2410,13 @@ void MDSServiceImpl::DoDeleteDirQuota(google::protobuf::RpcController*, const pb
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span = trace_manager_->StartSpan("MDSServiceImpl::DoDeleteDirQuota", request->info().trace_id(),
+                                        request->info().span_id());
+
   auto file_system = GetFileSystem(request->fs_id());
   auto status = SimpleValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -2221,6 +2427,7 @@ void MDSServiceImpl::DoDeleteDirQuota(google::protobuf::RpcController*, const pb
   status = quota_manager.DeleteDirQuota(ctx.GetTrace(), request->ino());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 }
@@ -2257,9 +2464,13 @@ void MDSServiceImpl::DoLoadDirQuotas(google::protobuf::RpcController*, const pb:
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span = trace_manager_->StartSpan("MDSServiceImpl::DoLoadDirQuotas", request->info().trace_id(),
+                                        request->info().span_id());
+
   auto file_system = GetFileSystem(request->fs_id());
   auto status = SimpleValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -2271,6 +2482,7 @@ void MDSServiceImpl::DoLoadDirQuotas(google::protobuf::RpcController*, const pb:
   status = quota_manager.LoadDirQuotas(ctx.GetTrace(), quotas);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -2311,8 +2523,12 @@ void MDSServiceImpl::DoSetFsStats(google::protobuf::RpcController*, const pb::md
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoSetFsStats", request->info().trace_id(), request->info().span_id());
+
   auto status = ValidateRequest(request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -2326,6 +2542,7 @@ void MDSServiceImpl::DoSetFsStats(google::protobuf::RpcController*, const pb::md
   status = fs_stat_->UploadFsStat(ctx, fs_id, request->stats());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 }
@@ -2361,8 +2578,12 @@ void MDSServiceImpl::DoGetFsStats(google::protobuf::RpcController*, const pb::md
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoGetFsStats", request->info().trace_id(), request->info().span_id());
+
   auto status = ValidateRequest(request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
   uint32_t fs_id = file_system_set_->GetFsId(request->fs_name());
@@ -2376,6 +2597,7 @@ void MDSServiceImpl::DoGetFsStats(google::protobuf::RpcController*, const pb::md
   status = fs_stat_->GetFsStat(ctx, fs_id, stats);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -2414,8 +2636,12 @@ void MDSServiceImpl::DoGetFsPerSecondStats(google::protobuf::RpcController*,
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span = trace_manager_->StartSpan("MDSServiceImpl::DoGetFsPerSecondStats", request->info().trace_id(),
+                                        request->info().span_id());
+
   auto status = ValidateRequest(request, done->GetQueueWaitTimeUs());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -2430,6 +2656,7 @@ void MDSServiceImpl::DoGetFsPerSecondStats(google::protobuf::RpcController*,
   status = fs_stat_->GetFsStatsPerSecond(ctx, fs_id, stats);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
@@ -2547,6 +2774,9 @@ void MDSServiceImpl::JoinFs(google::protobuf::RpcController* controller, const p
 
   brpc::ClosureGuard done_guard(svr_done);
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::JoinFs", request->info().trace_id(), request->info().span_id());
+
   if (request->fs_name().empty() && request->fs_id() == 0) {
     return ServiceHelper::SetError(response->mutable_error(), pb::error::EILLEGAL_PARAMTETER,
                                    "fs_name or fs_id is empty");
@@ -2566,6 +2796,7 @@ void MDSServiceImpl::JoinFs(google::protobuf::RpcController* controller, const p
 
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 }
@@ -2575,6 +2806,9 @@ void MDSServiceImpl::QuitFs(google::protobuf::RpcController* controller, const p
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
 
   brpc::ClosureGuard done_guard(svr_done);
+
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::QuitFs", request->info().trace_id(), request->info().span_id());
 
   if (request->fs_name().empty() && request->fs_id() == 0) {
     return ServiceHelper::SetError(response->mutable_error(), pb::error::EILLEGAL_PARAMTETER,
@@ -2595,6 +2829,7 @@ void MDSServiceImpl::QuitFs(google::protobuf::RpcController* controller, const p
 
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 }
@@ -2779,12 +3014,16 @@ void MDSServiceImpl::DoJoinCacheGroup(google::protobuf::RpcController*, const pb
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span = trace_manager_->StartSpan("MDSServiceImpl::DoJoinCacheGroup", request->info().trace_id(),
+                                        request->info().span_id());
+
   Context ctx;
   auto status = cache_group_manager_->JoinCacheGroup(ctx, request->group_name(), request->ip(), request->port(),
                                                      request->weight(), request->member_id());
 
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 }
@@ -2794,11 +3033,15 @@ void MDSServiceImpl::DoLeaveCacheGroup(google::protobuf::RpcController*, const p
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span = trace_manager_->StartSpan("MDSServiceImpl::DoLeaveCacheGroup", request->info().trace_id(),
+                                        request->info().span_id());
+
   Context ctx;
   auto status = cache_group_manager_->LeaveCacheGroup(ctx, request->group_name(), request->member_id(), request->ip(),
                                                       request->port());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 }
@@ -2808,11 +3051,15 @@ void MDSServiceImpl::DoListGroups(google::protobuf::RpcController*, const pb::md
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoListGroups", request->info().trace_id(), request->info().span_id());
+
   Context ctx;
   std::unordered_set<std::string> groups;
   auto status = cache_group_manager_->ListGroups(ctx, groups);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
   *response->mutable_group_names() = {groups.begin(), groups.end()};
@@ -2823,11 +3070,15 @@ void MDSServiceImpl::DoReweightMember(google::protobuf::RpcController*, const pb
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span = trace_manager_->StartSpan("MDSServiceImpl::DoReweightMember", request->info().trace_id(),
+                                        request->info().span_id());
+
   Context ctx;
   auto status = cache_group_manager_->ReweightMember(ctx, request->member_id(), request->ip(), request->port(),
                                                      request->weight());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 }
@@ -2837,11 +3088,15 @@ void MDSServiceImpl::DoListMembers(google::protobuf::RpcController*, const pb::m
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span =
+      trace_manager_->StartSpan("MDSServiceImpl::DoListMembers", request->info().trace_id(), request->info().span_id());
+
   Context ctx;
   std::vector<CacheMemberEntry> members;
   auto status = cache_group_manager_->ListMembers(ctx, request->group_name(), members);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
   *response->mutable_members() = {members.begin(), members.end()};
@@ -2852,10 +3107,14 @@ void MDSServiceImpl::DoUnlockMember(google::protobuf::RpcController*, const pb::
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span = trace_manager_->StartSpan("MDSServiceImpl::DoUnlockMember", request->info().trace_id(),
+                                        request->info().span_id());
+
   Context ctx;
   auto status = cache_group_manager_->UnlockMember(ctx, request->member_id(), request->ip(), request->port());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 }
@@ -2865,10 +3124,14 @@ void MDSServiceImpl::DoDeleteMember(google::protobuf::RpcController*, const pb::
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto span = trace_manager_->StartSpan("MDSServiceImpl::DoDeleteMember", request->info().trace_id(),
+                                        request->info().span_id());
+
   Context ctx;
   auto status = cache_group_manager_->DeleteMember(ctx, request->member_id());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
+    span->SetStatus(status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 }

@@ -151,18 +151,21 @@ void WarmupManager::DoWarmupTask(WarmupTask* task) {
 }
 
 void WarmupManager::ProcessIntimeWarmup(WarmupTask* task) {
-  auto span = vfs_hub_->GetTracer()->StartSpan(kVFSDataMoudule, __func__);
+  auto span = vfs_hub_->GetTraceManager()->StartSpan(
+      "WarmupManager::ProcessIntimeWarmup");
   auto inode = task->GetKey();
   LOG(INFO) << "Intime warmup started for inode: " << task->GetKey();
 
-  WarmupFile(inode, [inode, task](Status s) {
+  WarmupFile(inode, [inode, task, span](Status s) {
+    span->End();
     LOG(INFO) << "Finish intime warmup file: " << inode
               << ", with status: " << s.ToString();
   });
 }
 
 void WarmupManager::ProcessManualWarmup(WarmupTask* task) {
-  auto span = vfs_hub_->GetTracer()->StartSpan(kVFSDataMoudule, __func__);
+  auto span = vfs_hub_->GetTraceManager()->StartSpan(
+      "WarmupManager::ProcessManualWarmup");
   VLOG(3) << "Process manual warmup task, key: " << task->GetKey()
           << ", inodes: " << task->GetTaskInodes();
   std::vector<std::string> warmup_inodes;
@@ -216,7 +219,7 @@ void WarmupManager::WarmupFiles(WarmupTask* task) {
 }
 
 Status WarmupManager::WalkFile(WarmupTask* task, Ino ino) {
-  auto span = vfs_hub_->GetTracer()->StartSpan(kVFSDataMoudule, __func__);
+  auto span = vfs_hub_->GetTraceManager()->StartSpan("WarmupManager::WalkFile");
 
   Attr attr;
   Status s = vfs_hub_->GetMetaSystem()->GetAttr(span->GetContext(), ino, &attr);
@@ -283,7 +286,8 @@ Status WarmupManager::WalkFile(WarmupTask* task, Ino ino) {
 }
 
 void WarmupManager::WarmupFile(Ino ino, AsyncWarmupCb cb) {
-  auto span = vfs_hub_->GetTracer()->StartSpan(kVFSDataMoudule, __func__);
+  auto span =
+      vfs_hub_->GetTraceManager()->StartSpan("WarmupManager::WarmupFile");
   IncFileMetric(1);
   BRPC_SCOPE_EXIT { DecFileMetric(1); };
 

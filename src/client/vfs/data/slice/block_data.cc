@@ -87,8 +87,8 @@ PageData* BlockData::FindOrCreatePageData(uint64_t page_index,
 
 Status BlockData::Write(ContextSPtr ctx, const char* buf, uint64_t size,
                         uint64_t block_offset) {
-  auto* tracer = vfs_hub_->GetTracer();
-  auto span = tracer->StartSpanWithContext(kVFSDataMoudule, METHOD_NAME(), ctx);
+  auto span = vfs_hub_->GetTraceManager()->StartChildSpan("BlockData::Write",
+                                                          ctx->GetTraceSpan());
 
   uint64_t end_write_block_offset = (block_offset + size);
 

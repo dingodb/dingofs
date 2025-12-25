@@ -33,7 +33,7 @@ namespace client {
 namespace vfs {
 
 static Status InitFlatFile(VFSHub* vfs_hub, FlatFile* flat_file) {
-  auto span = vfs_hub->GetTracer()->StartSpan(kVFSDataMoudule, __func__);
+  auto span = vfs_hub->GetTraceManager()->StartSpan("vfs_data::InitFlatFile");
   Attr attr;
   DINGOFS_RETURN_NOT_OK(vfs_hub->GetMetaSystem()->GetAttr(
       span->GetContext(), flat_file->GetIno(), &attr));

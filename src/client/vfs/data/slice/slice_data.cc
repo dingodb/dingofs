@@ -68,8 +68,8 @@ BlockData* SliceData::FindOrCreateBlockDataUnlocked(uint64_t block_index,
 // no overlap slice write will come here
 Status SliceData::Write(ContextSPtr ctx, const char* buf, uint64_t size,
                         uint64_t chunk_offset) {
-  auto* tracer = vfs_hub_->GetTracer();
-  auto span = tracer->StartSpanWithContext(kVFSDataMoudule, METHOD_NAME(), ctx);
+  auto span = vfs_hub_->GetTraceManager()->StartChildSpan("SliceData::Write",
+                                                          ctx->GetTraceSpan());
 
   uint64_t end_in_chunk = chunk_offset + size;
 
@@ -97,8 +97,7 @@ Status SliceData::Write(ContextSPtr ctx, const char* buf, uint64_t size,
       BlockData* block_data =
           FindOrCreateBlockDataUnlocked(block_index, block_offset);
 
-      Status s = block_data->Write(span->GetContext(), buf_pos, write_size,
-                                   block_offset);
+      Status s = block_data->Write(ctx, buf_pos, write_size, block_offset);
       CHECK(s.ok()) << fmt::format(
           "{} Failed to write data to block data, block_index: {}, "
           "chunk_range: [{}-{}], len: {}, slice: {}, status: {}",
@@ -173,7 +172,7 @@ void SliceData::SliceFlushed(Status status, SliceFlushTask* task) {
 
 void SliceData::DoFlush() {
   // TODO: get ctx from parent
-  auto span = vfs_hub_->GetTracer()->StartSpan(kVFSDataMoudule, __func__);
+  auto span = vfs_hub_->GetTraceManager()->StartSpan("SliceData::DoFlush");
 
   VLOG(4) << fmt::format("{} DoFlush", UUID());
 

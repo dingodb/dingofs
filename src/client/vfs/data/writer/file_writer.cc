@@ -71,8 +71,8 @@ int64_t FileWriter::InflightFlushTaskCount() const {
 
 Status FileWriter::Write(ContextSPtr ctx, const char* buf, uint64_t size,
                          uint64_t offset, uint64_t* out_wsize) {
-  auto span = vfs_hub_->GetTracer()->StartSpanWithContext(kVFSDataMoudule,
-                                                          METHOD_NAME(), ctx);
+  auto span = vfs_hub_->GetTraceManager()->StartChildSpan("FileWriter::Write",
+                                                          ctx->GetTraceSpan());
 
   uint64_t chunk_size = GetChunkSize();
   CHECK(chunk_size > 0) << "chunk size not allow 0";

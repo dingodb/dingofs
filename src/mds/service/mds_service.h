@@ -239,10 +239,10 @@ class MDSServiceImpl : public pb::mds::MDSService {
   WorkerSetUPtr& GetWriteWorkerSet() { return write_worker_set_; }
 
   // mds
-  static void DoHeartbeat(google::protobuf::RpcController* controller, const pb::mds::HeartbeatRequest* request,
-                          pb::mds::HeartbeatResponse* response, TraceClosure* done);
-  static void DoGetMDSList(google::protobuf::RpcController* controller, const pb::mds::GetMDSListRequest* request,
-                           pb::mds::GetMDSListResponse* response, TraceClosure* done);
+  void DoHeartbeat(google::protobuf::RpcController* controller, const pb::mds::HeartbeatRequest* request,
+                   pb::mds::HeartbeatResponse* response, TraceClosure* done);
+  void DoGetMDSList(google::protobuf::RpcController* controller, const pb::mds::GetMDSListRequest* request,
+                    pb::mds::GetMDSListResponse* response, TraceClosure* done);
 
   // fs interface
   void DoCreateFs(google::protobuf::RpcController* controller, const pb::mds::CreateFsRequest* request,

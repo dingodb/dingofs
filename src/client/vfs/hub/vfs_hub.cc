@@ -135,7 +135,7 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf, bool upgrade) {
     }
     CHECK(tracer_ != nullptr) << "tracer is nullptr.";
 
-    auto span = tracer_->StartSpan(kVFSMoudule, "start");
+    auto span = trace_manager_->StartSpan("vfs::start");
 
     DINGOFS_RETURN_NOT_OK(
         meta_system_->GetFsInfo(span->GetContext(), &fs_info_));

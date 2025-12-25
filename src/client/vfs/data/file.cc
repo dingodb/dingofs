@@ -138,14 +138,12 @@ void File::AsyncFlush(StatusCallback cb) {
     return;
   }
 
-  auto span = vfs_hub_->GetTracer()->StartSpan(kVFSDataMoudule, METHOD_NAME());
+  auto span = vfs_hub_->GetTraceManager()->StartSpan("File::AsyncFlush");
   inflight_flush_.fetch_add(1, std::memory_order_relaxed);
-  file_writer_->AsyncFlush(
-      [this, span_raw_ptr = span.release(), cb](auto&& ph1) {
-        std::unique_ptr<ITraceSpan> flush_span(span_raw_ptr);
-        FileFlushed(std::move(cb), std::forward<decltype(ph1)>(ph1));
-        flush_span->End();
-      });
+  file_writer_->AsyncFlush([this, span, cb](auto&& ph1) {
+    FileFlushed(std::move(cb), std::forward<decltype(ph1)>(ph1));
+    span->End();
+  });
 }
 
 Status File::Flush() {
