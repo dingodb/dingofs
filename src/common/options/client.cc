@@ -89,7 +89,7 @@ DEFINE_double(vfs_trigger_flush_free_page_ratio, 0.3,
               "trigger flush when free page ratio is lower than this value");
 DEFINE_validator(vfs_trigger_flush_free_page_ratio, brpc::PassValidate);
 
-DEFINE_int32(vfs_read_executor_thread, 8, "number of read executor threads");
+DEFINE_int32(vfs_read_executor_thread, 16, "number of read executor threads");
 DEFINE_validator(vfs_read_executor_thread, brpc::PassValidate);
 
 DEFINE_int32(vfs_read_max_retry_block_not_found, 10,

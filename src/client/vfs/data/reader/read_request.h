@@ -23,6 +23,7 @@
 #include <condition_variable>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 
 #include "client/vfs/data/common/common.h"
 #include "common/io_buffer.h"
@@ -39,8 +40,8 @@ enum ReadRequestState : uint8_t {
   kInvalid,
 };
 
-static std::string ReadRequestStateToString(ReadRequestState reason) {
-  switch (reason) {
+static std::string ReadRequestStateToString(ReadRequestState state) {
+  switch (state) {
     case kNew:
       return "New";
     case kBusy:
@@ -52,13 +53,14 @@ static std::string ReadRequestStateToString(ReadRequestState reason) {
     case kInvalid:
       return "Invalid";
     default:
-      return fmt::format("Unknown-{}", static_cast<uint8_t>(reason));
+      return fmt::format("Unknown-{}", static_cast<uint8_t>(state));
   }
 }
 
 enum TransitionReason : uint8_t {
   kCleanUp = 0,
   kInvalidate,
+  kReading,
   kReadDone,
 };
 
@@ -68,6 +70,8 @@ static std::string TransitionReasonToString(TransitionReason reason) {
       return "CleanUp";
     case kInvalidate:
       return "Invalidate";
+    case kReading:
+      return "Reading";
     case kReadDone:
       return "ReadDone";
     default:
@@ -75,7 +79,6 @@ static std::string TransitionReasonToString(TransitionReason reason) {
   }
 }
 
-// protected by file reader mutex
 struct ReadRequest {
   const uint64_t req_id;
   const uint64_t ino;          // ino
@@ -83,34 +86,47 @@ struct ReadRequest {
   const int64_t chunk_offset;  // offset in the chunk
   const FileRange frange;
 
+  mutable std::mutex mutex;
   std::condition_variable cv;
+  int32_t readers{0};
   ReadRequestState state;
   Status status;
   int64_t access_sec;
-  int32_t refs{0};
   IOBuffer buffer;
 
-  void AcquireRef() {
-    CHECK_GE(refs, 0);
-    ++refs;
+  ReadRequest(uint64_t req_id, uint64_t ino, int64_t chunk_index,
+              int64_t chunk_offset, FileRange frange)
+      : req_id(req_id),
+        ino(ino),
+        chunk_index(chunk_index),
+        chunk_offset(chunk_offset),
+        frange(frange) {}
+
+  void IncReader() {
+    std::unique_lock<std::mutex> lock(mutex);
+    CHECK_GE(readers, 0);
+    ++readers;
   }
 
-  void ReleaseRef() {
-    CHECK_GT(refs, 0);
-    --refs;
+  void DecReader() {
+    std::unique_lock<std::mutex> lock(mutex);
+    CHECK_GT(readers, 0);
+    --readers;
   }
 
-  void ToState(ReadRequestState new_state, TransitionReason reason);
+  void ToStateUnLock(ReadRequestState new_state, TransitionReason reason);
 
   std::string UUID() const { return fmt::format("rreq-{}", req_id); }
+
+  std::string ToStringUnlock() const;
 
   std::string ToString() const;
 };
 
-using ReadRequestUptr = std::unique_ptr<ReadRequest>;
+using ReadRequestSptr = std::shared_ptr<ReadRequest>;
 
 struct PartialReadRequest {
-  ReadRequest* req;
+  ReadRequestSptr req;
   int64_t offset{0};
   int64_t len{0};
 
