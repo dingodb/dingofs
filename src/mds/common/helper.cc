@@ -589,14 +589,27 @@ std::vector<uint64_t> Helper::GetMdsIds(const std::map<uint64_t, BucketSetEntry>
 const char* Helper::DescOpenFlags(int flags) {
   if ((flags & O_ACCMODE) == O_RDONLY) {
     return "RDONLY";
+
   } else if (flags & O_WRONLY) {
+    if (flags & O_TRUNC)
+      return "WRONLY|TRUNC";
+    else if (flags & O_APPEND)
+      return "WRONLY|APPEND";
     return "WRONLY";
+
   } else if (flags & O_RDWR) {
+    if (flags & O_TRUNC)
+      return "RDWR|TRUNC";
+    else if (flags & O_APPEND)
+      return "RDWR|APPEND";
     return "RDWR";
+
   } else if (flags & O_CREAT) {
     return "CREAT";
+
   } else if (flags & O_TRUNC) {
     return "TRUNC";
+
   } else if (flags & O_APPEND) {
     return "APPEND";
   }

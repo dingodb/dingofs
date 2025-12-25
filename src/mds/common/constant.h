@@ -41,6 +41,10 @@ const std::string kFsStatsTableName = "dingofs-fsstats";
 
 inline std::string GenFsMetaTableName(const std::string& fs_name) { return "dingofs-fsmeta[" + fs_name + "]"; }
 
+inline std::string GenFsMetaTableName(uint32_t cluster_id, const std::string& fs_name) {
+  return "dingofs-fsmeta[" + std::to_string(cluster_id) + "][" + fs_name + "]";
+}
+
 }  // namespace mds
 }  // namespace dingofs
 

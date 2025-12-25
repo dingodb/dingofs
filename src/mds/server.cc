@@ -30,6 +30,7 @@
 #include "mds/background/fsinfo_sync.h"
 #include "mds/background/heartbeat.h"
 #include "mds/cachegroup/member_manager.h"
+#include "mds/common/codec.h"
 #include "mds/common/helper.h"
 #include "mds/common/version.h"
 #include "mds/coordinator/dingo_coordinator_client.h"
@@ -92,6 +93,8 @@ Server& Server::GetInstance() {
 
 bool Server::InitConfig(const std::string& path) {
   LOG(INFO) << fmt::format("config path: {}", path);
+
+  LOG(INFO) << fmt::format("mds_cluster_id: {}", MetaCodec::GetClusterID());
 
   LOG(INFO) << fmt::format("mds_server_id: {}", FLAGS_mds_server_id);
   LOG(INFO) << fmt::format("mds_server_host: {}:{}", FLAGS_mds_server_host, FLAGS_mds_server_port);

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <fmt/format.h>
 #include <glog/logging.h>
 
 #include <string>
@@ -21,6 +22,7 @@
 #include "mds/client/br.h"
 #include "mds/client/mds.h"
 #include "mds/client/store.h"
+#include "mds/common/codec.h"
 #include "mds/common/constant.h"
 #include "mds/common/helper.h"
 
@@ -28,6 +30,8 @@ DEFINE_string(coor_addr, "", "coordinator address, etc: list://127.0.0.1:22001 o
 DEFINE_string(mds_addr, "", "mds address");
 
 DEFINE_string(cmd, "", "command");
+
+DEFINE_uint32(cluster_id, 0, "cluster id");
 
 DEFINE_string(s3_endpoint, "", "s3 endpoint");
 DEFINE_string(s3_ak, "", "s3 ak");
@@ -108,6 +112,9 @@ int main(int argc, char* argv[]) {
 
   google::ParseCommandLineFlags(&argc, &argv, true);
 
+  std::cout << "### use cluster id: " << FLAGS_cluster_id << '\n';
+  dingofs::mds::MetaCodec::SetClusterID(FLAGS_cluster_id);
+
   std::string program_name = GetLastName(std::string(argv[0]));
   ::FLAGS_log_dir = "./log/";
   dingofs::Logger::Init(program_name);
@@ -117,6 +124,7 @@ int main(int argc, char* argv[]) {
   // run backup command
   {
     dingofs::mds::br::BackupCommandRunner::Options options;
+    options.cluster_id = FLAGS_cluster_id;
     options.type = Helper::ToLowerCase(FLAGS_type);
     options.output_type = Helper::ToLowerCase(FLAGS_output_type);
     options.fs_id = FLAGS_fs_id;
@@ -139,6 +147,7 @@ int main(int argc, char* argv[]) {
   // run restore command
   {
     dingofs::mds::br::RestoreCommandRunner::Options options;
+    options.cluster_id = FLAGS_cluster_id;
     options.type = Helper::ToLowerCase(FLAGS_type);
     options.input_type = Helper::ToLowerCase(FLAGS_input_type);
     options.fs_id = FLAGS_fs_id;
@@ -161,6 +170,7 @@ int main(int argc, char* argv[]) {
   // run mds command
   {
     dingofs::mds::client::MdsCommandRunner::Options options;
+    options.cluster_id = FLAGS_cluster_id;
     options.fs_id = FLAGS_fs_id;
     options.ino = FLAGS_ino;
     options.parent = FLAGS_parent;
@@ -207,10 +217,11 @@ int main(int argc, char* argv[]) {
   // run store command
   {
     dingofs::mds::client::StoreCommandRunner::Options options;
+    options.cluster_id = FLAGS_cluster_id;
     options.fs_id = FLAGS_fs_id;
     options.fs_name = FLAGS_fs_name;
-    options.meta_table_name = dingofs::mds::kMetaTableName;
-    options.fsstats_table_name = dingofs::mds::kFsStatsTableName;
+    options.meta_table_name = fmt::format("{}[{}]", dingofs::mds::kMetaTableName, FLAGS_cluster_id);
+    options.fsstats_table_name = fmt::format("{}[{}]", dingofs::mds::kFsStatsTableName, FLAGS_cluster_id);
 
     auto& s3_info = options.s3_info;
     s3_info.ak = FLAGS_s3_ak;

@@ -53,6 +53,7 @@ class StoreCommandRunner {
   ~StoreCommandRunner() = default;
 
   struct Options {
+    uint32_t cluster_id{0};
     uint32_t fs_id{0};
     std::string fs_name;
     std::string meta_table_name;

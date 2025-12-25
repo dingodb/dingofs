@@ -32,6 +32,7 @@
 #include "dingofs/mds.pb.h"
 #include "fmt/format.h"
 #include "json/writer.h"
+#include "mds/common/codec.h"
 #include "mds/common/context.h"
 #include "mds/common/helper.h"
 #include "mds/common/type.h"
@@ -598,7 +599,7 @@ static void RenderGitVersion(butil::IOBufBuilder& os) {
 }
 
 static void RenderStorageEngine(butil::IOBufBuilder& os) {
-  os << R"(<div style="margin:8px;font-size:smaller;text-align:center">)";
+  os << R"(<div style="margin:4px;font-size:smaller;text-align:center">)";
   if (FLAGS_mds_storage_engine == "dingo-store" || FLAGS_mds_storage_engine == "tikv") {
     os << fmt::format(R"(<h3>storage[{}] addr: )", FLAGS_mds_storage_engine);
 
@@ -615,6 +616,14 @@ static void RenderStorageEngine(butil::IOBufBuilder& os) {
   } else {
     os << fmt::format(R"(<h3>storage[{}]</h3>)", FLAGS_mds_storage_engine);
   }
+
+  os << "</div>";
+}
+
+static void RenderCluster(butil::IOBufBuilder& os) {
+  os << R"(<div style="margin:4px;font-size:smaller;text-align:center">)";
+
+  os << fmt::format(R"(<h3>cluster id[{}]</h3>)", MetaCodec::GetClusterID());
 
   os << "</div>";
 }
@@ -636,6 +645,9 @@ void FsStatServiceImpl::RenderMainPage(const brpc::Server* server, FileSystemSet
 
   // storage engine
   RenderStorageEngine(os);
+
+  // cluster id
+  RenderCluster(os);
 
   // fs stats
   Context ctx;

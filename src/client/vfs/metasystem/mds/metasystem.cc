@@ -448,10 +448,15 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
 
   // update chunk memo
   for (const auto& chunk : chunks) {
-    uint64_t memo_version = chunk_memo_.GetVersion(ino, chunk.index());
-    CHECK(chunk.version() >= memo_version) << fmt::format(
-        "[meta.fs.{}.{}.{}] chunk version invalid, index({}) version({}<{}).",
-        ino, fh, session_id, chunk.index(), chunk.version(), memo_version);
+    if (!(flags & O_TRUNC)) {
+      uint64_t memo_version = chunk_memo_.GetVersion(ino, chunk.index());
+      CHECK(chunk.version() >= memo_version) << fmt::format(
+          "[meta.fs.{}.{}.{}] chunk version invalid, index({}) version({}<{}).",
+          ino, fh, session_id, chunk.index(), chunk.version(), memo_version);
+
+    } else {
+      chunk_memo_.Forget(ino, chunk.index());
+    }
 
     chunk_memo_.Remember(ino, chunk.index(), chunk.version());
   }
@@ -962,10 +967,13 @@ Status MDSMetaSystem::SetInodeLength(ContextSPtr ctx,
 
   LOG(INFO) << fmt::format("[meta.fs.{}] set inode length({}).", ino, length);
 
+  uint64_t now_ns = utils::TimestampNs();
   Attr attr;
   attr.ino = ino;
   attr.length = length;
-  int set = kSetAttrSize;
+  attr.mtime = now_ns;
+  attr.ctime = now_ns;
+  int set = kSetAttrSize | kSetAttrMtime | kSetAttrCtime;
 
   AttrEntry attr_entry;
   auto status = mds_client_->SetAttr(ctx, ino, attr, set, attr_entry);

@@ -759,9 +759,6 @@ Status MDSClient::SetAttr(ContextSPtr ctx, Ino ino, const Attr& attr,
   if (to_set & kSetAttrCtime) {
     request.set_ctime(attr.ctime);
     temp_to_set |= mds::kSetAttrCtime;
-  } else {
-    request.set_ctime(ToTimestamp(now));
-    temp_to_set |= mds::kSetAttrCtime;
   }
 
   if (to_set & kSetAttrSize) {

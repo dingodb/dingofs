@@ -1949,6 +1949,52 @@ Status FileSystem::CommitRename(Context& ctx, const RenameParam& param, Ino& old
   return renamer_.Execute<RenameParam>(GetSelfPtr(), ctx, param, old_parent_version, new_parent_version, effected_inos);
 }
 
+void FileSystem::AsyncCheckCompactChunk(Ino ino, std::vector<ChunkEntry>&& chunks) {
+  struct Params {
+    FileSystemSPtr self;
+    Ino ino;
+    std::vector<ChunkEntry> chunks;
+  };
+
+  Params* params = new Params({.self = GetSelfPtr(), .ino = ino, .chunks = std::move(chunks)});
+
+  bthread_t tid;
+  bthread_attr_t attr = BTHREAD_ATTR_NORMAL;
+  if (bthread_start_background(
+          &tid, &attr,
+          [](void* arg) -> void* {
+            Params* params = reinterpret_cast<Params*>(arg);
+
+            Ino ino = params->ino;
+            auto& chunks = params->chunks;
+            auto self = params->self;
+            auto fs_info = self->fs_info_->Get();
+
+            for (auto& chunk : chunks) {
+              if (CompactChunkOperation::MaybeCompact(fs_info, ino, 0, chunk)) {
+                LOG(INFO) << fmt::format("[fs.{}.{}] trigger compact chunk({}).", fs_info.fs_id(), ino, chunk.index());
+
+                auto post_handler = [self](OperationSPtr operation) {
+                  auto origin_operation = std::dynamic_pointer_cast<CompactChunkOperation>(operation);
+                  auto& result = origin_operation->GetResult();
+                  // update chunk cache
+                  self->chunk_cache_.PutIf(origin_operation->GetIno(), std::move(result.effected_chunk));
+                };
+                self->operation_processor_->AsyncRun(CompactChunkOperation::New(fs_info, ino, chunk.index()),
+                                                     post_handler);
+              }
+            }
+
+            delete params;
+
+            return nullptr;
+          },
+          params) != 0) {
+    delete params;
+    LOG(FATAL) << "[operation] start background thread fail.";
+  }
+}
+
 Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, const std::vector<DeltaSliceEntry>& delta_slices,
                               std::vector<ChunkDescriptor>& chunk_descriptors) {
   if (!CanServe(ctx)) {
@@ -1982,7 +2028,6 @@ Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, const std::vector<Delt
   }
 
   auto& result = operation.GetResult();
-  int64_t length = result.length;
   auto& effected_chunks = result.effected_chunks;
 
   // check whether need to compact chunk
@@ -1993,23 +2038,16 @@ Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, const std::vector<Delt
            (last_check_time_ms + FLAGS_mds_compact_chunk_interval_ms < static_cast<uint64_t>(Helper::TimestampMs()));
   };
 
+  std::vector<ChunkEntry> chunks_to_compact;
+  chunks_to_compact.reserve(effected_chunks.size());
   for (auto& chunk : effected_chunks) {
-    if (check_compact_fn(chunk)) {
-      chunk_cache_.RememberCheckCompact(ino, chunk.index());
+    if (check_compact_fn(chunk)) chunks_to_compact.push_back(chunk);
 
-      auto fs_info = fs_info_->Get();
-      if (CompactChunkOperation::MaybeCompact(fs_info, ino, length, chunk)) {
-        LOG(INFO) << fmt::format("[fs.{}.{}] trigger compact chunk({}).", fs_id_, ino, chunk.index());
+    chunk_cache_.RememberCheckCompact(ino, chunk.index());
+  }
 
-        auto post_handler = [this](OperationSPtr operation) {
-          auto origin_operation = std::dynamic_pointer_cast<CompactChunkOperation>(operation);
-          auto& result = origin_operation->GetResult();
-          // update chunk cache
-          chunk_cache_.PutIf(origin_operation->GetIno(), std::move(result.effected_chunk));
-        };
-        operation_processor_->AsyncRun(CompactChunkOperation::New(fs_info, ino, chunk.index()), post_handler);
-      }
-    }
+  if (!chunks_to_compact.empty()) {
+    AsyncCheckCompactChunk(ino, std::move(chunks_to_compact));
   }
 
   // update chunk cache and build chunk results
@@ -2930,7 +2968,8 @@ bool FileSystemSet::IsExistMetaTable() {
 Status FileSystemSet::CreateFsMetaTable(uint32_t fs_id, const std::string& fs_name, int64_t& table_id) {
   auto range = MetaCodec::GetFsMetaTableRange(fs_id);
   KVStorage::TableOption option = {.start_key = range.start, .end_key = range.end};
-  std::string table_name = GenFsMetaTableName(fs_name);
+
+  std::string table_name = GenFsMetaTableName(MetaCodec::GetClusterID(), fs_name);
   Status status = kv_storage_->CreateTable(table_name, option, table_id);
   if (!status.ok()) {
     return Status(pb::error::EINTERNAL, fmt::format("create fsmeta table fail, {}", status.error_str()));

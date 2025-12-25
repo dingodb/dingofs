@@ -28,9 +28,64 @@
 namespace dingofs {
 namespace mds {
 
-// all key prefix
-static const char* const kPrefix = "xDINGOFS:";
-static const size_t kPrefixSize = std::char_traits<char>::length(kPrefix);
+// cluster id
+static uint32_t kClusterID = 0;
+
+// old key prefix for cluster_id == 0
+static const char* const kOldFixedPrefix = "xDINGOFS:";
+static const size_t kOldFixedPrefixSize = std::char_traits<char>::length(kOldFixedPrefix);
+
+// new key prefix for cluster_id != 0
+static const char* const kFixedPrefix = "xdingofs";
+static const size_t kFixedPrefixSize = std::char_traits<char>::length(kFixedPrefix);
+
+static size_t kPrefixSize = 0;
+static std::string kPrefix;
+
+// lock key header size
+static uint32_t kLockKeyHeaderSize = 1 + 1;  // prefix + table id + meta type
+// auto increment id format: ${prefix} kTableMeta kMetaAutoIncrementID {name}
+static uint32_t kAutoIncrementIDKeyHeaderSize = 1 + 1;  // prefix + table id + meta type
+
+// heartbeat(mds) format: ${prefix} kTableMeta kMetaHeartbeat kRoleMds {mds_id}
+static uint32_t kHeartbeatKeyMdsSize = 1 + 1 + 1 + 8;
+// heartbeat(client) format: ${prefix} kTableMeta kMetaHeartbeat kRoleClient {client_id}
+static uint32_t kHeartbeatClientKeySize = 1 + 1 + 1 + 36;
+// heartbeat(cache_member) format: ${prefix} kTableMeta kMetaHeartbeat KROLE_CACHE_MEMBER {member_id}
+static uint32_t kHeartbeatCacheMemberKeySize = 1 + 1 + 1 + 36;
+
+// fs format: ${prefix} kTableMeta kMetaFs {name}
+static uint32_t kFsKeyHeaderSize = 1 + 1;
+
+// fs quota format: ${prefix} kTableMeta kMetaFsQuota {fs_id}
+static uint32_t kFsQuotaKeySize = 1 + 1 + 4;
+
+// fs config log format: ${prefix} kTableMeta kMetaFsOpLog {fs_id} {time_ns}
+static uint32_t kFsConfigLogKeySize = 1 + 1 + 4 + 8;
+
+// inode attr format: ${prefix} kTableFsMeta {fs_id} kMetaFsInode {ino} kFsInodeAttr
+static uint32_t kInodeKeySize = 1 + 4 + 1 + 8 + 1;
+
+// dentry format: ${prefix} kTableFsMeta {fs_id} kMetaFsInode {ino} kFsInodeDentry {name}
+static uint32_t kDentryKeyHeaderSize = 1 + 4 + 1 + 8 + 1;
+
+// inode chunk format: ${prefix} kTableFsMeta  {fs_id}  kMetaFsInode {ino} kFsInodeChunk {chunk_index}
+static uint32_t kChunkKeySize = 1 + 4 + 1 + 8 + 1 + 8;
+
+// inode file session format: ${prefix} kTableFsMeta {fs_id} kMetaFsFileSession {ino} {session_id}
+static uint32_t kFileSessionKeySize = 1 + 4 + 1 + 8 + 36;
+
+// dir quota format: ${prefix} kTableFsMeta {fs_id} kMetaFsDirQuota {ino}
+static uint32_t kDirQuotaKeySize = 1 + 4 + 1 + 8;
+
+// inode delslice format: ${prefix} kTableFsMeta {fs_id} kMetaFsDelSlice {ino} {chunk_index} {time_ns}
+static uint32_t kDelSliceKeySize = 1 + 4 + 1 + 8 + 8 + 8;
+
+// inode delfile format: ${prefix} kTableFsMeta {fs_id} kMetaFsDelFile {ino}
+static uint32_t kDelFileKeySize = 1 + 4 + 1 + 8;
+
+// fs stats format: ${prefix} kTableFsStats kMetaFsStats {fs_id} {time_ns}
+static uint32_t kFsStatsKeySize = 1 + 1 + 4 + 8;
 
 // table:
 //      kTableMeta: all filesystem shared
@@ -82,6 +137,41 @@ enum FsInodeType : unsigned char {
   kFsInodeDentry = 3,
   kFsInodeChunk = 5,
 };
+
+void MetaCodec::SetClusterID(uint32_t cluster_id) {
+  kClusterID = cluster_id;
+
+  if (kClusterID != 0) {
+    kPrefix = kFixedPrefix;
+    SerialHelper::WriteInt(kClusterID, kPrefix);
+    kPrefixSize = kFixedPrefixSize + sizeof(kClusterID);
+  } else {
+    kPrefix = kOldFixedPrefix;
+    kPrefixSize = kOldFixedPrefixSize;
+  }
+
+  kLockKeyHeaderSize += kPrefixSize;
+  kAutoIncrementIDKeyHeaderSize += kPrefixSize;
+  kHeartbeatKeyMdsSize += kPrefixSize;
+  kHeartbeatClientKeySize += kPrefixSize;
+  kHeartbeatCacheMemberKeySize += kPrefixSize;
+  kFsKeyHeaderSize += kPrefixSize;
+  kFsQuotaKeySize += kPrefixSize;
+  kFsConfigLogKeySize += kPrefixSize;
+  kInodeKeySize += kPrefixSize;
+  kDentryKeyHeaderSize += kPrefixSize;
+  kChunkKeySize += kPrefixSize;
+  kFileSessionKeySize += kPrefixSize;
+  kDirQuotaKeySize += kPrefixSize;
+  kDelSliceKeySize += kPrefixSize;
+  kDelFileKeySize += kPrefixSize;
+  kFsStatsKeySize += kPrefixSize;
+
+  LOG(INFO) << fmt::format("set cluster id({}), prefix({}) size({}).", kClusterID, Helper::StringToHex(kPrefix),
+                           kPrefixSize);
+}
+
+uint32_t MetaCodec::GetClusterID() { return kClusterID; }
 
 Range MetaCodec::GetMetaTableRange() {
   Range range;
@@ -480,7 +570,6 @@ Range MetaCodec::GetFsStatsRange(uint32_t fs_id) {
 }
 
 // lock format: ${prefix} kTableMeta kMetaLock {name}
-static const uint32_t kLockKeyHeaderSize = kPrefixSize + 2;  // prefix + table id + meta type
 
 bool MetaCodec::IsLockKey(const std::string& key) {
   if (key.size() <= kLockKeyHeaderSize) {
@@ -532,7 +621,6 @@ void MetaCodec::DecodeLockValue(const std::string& value, int64_t& mds_id, uint6
 }
 
 // auto increment id format: ${prefix} kTableMeta kMetaAutoIncrementID {name}
-static const uint32_t kAutoIncrementIDKeyHeaderSize = kPrefixSize + 2;  // prefix + table id + meta type
 
 bool MetaCodec::IsAutoIncrementIDKey(const std::string& key) {
   if (key.size() <= kAutoIncrementIDKeyHeaderSize) {
@@ -581,9 +669,6 @@ void MetaCodec::DecodeAutoIncrementIDValue(const std::string& value, uint64_t& i
 // heartbeat(mds) format: ${prefix} kTableMeta kMetaHeartbeat kRoleMds {mds_id}
 // heartbeat(client) format: ${prefix} kTableMeta kMetaHeartbeat kRoleClient {client_id}
 // heartbeat(cache_member) format: ${prefix} kTableMeta kMetaHeartbeat KROLE_CACHE_MEMBER {member_id}
-static const uint32_t kHeartbeatKeyMdsSize = kPrefixSize + 1 + 1 + 1 + 8;
-static const uint32_t kHeartbeatClientKeySize = kPrefixSize + 1 + 1 + 1 + 36;
-static const uint32_t kHeartbeatCacheMemberKeySize = kPrefixSize + 1 + 1 + 1 + 36;
 bool MetaCodec::IsMdsHeartbeatKey(const std::string& key) {
   if (key.size() != kHeartbeatKeyMdsSize) {
     return false;
@@ -715,8 +800,6 @@ CacheMemberEntry MetaCodec::DecodeHeartbeatCacheMemberValue(const std::string& v
 }
 
 // fs format: ${prefix} kTableMeta kMetaFs {name}
-static const uint32_t kFsKeyHeaderSize = kPrefixSize + 2;
-
 bool MetaCodec::IsFsKey(const std::string& key) {
   if (key.size() <= kFsKeyHeaderSize) {
     return false;
@@ -757,7 +840,6 @@ FsInfoEntry MetaCodec::DecodeFsValue(const std::string& value) {
 }
 
 // fs quota format: ${prefix} kTableMeta kMetaFsQuota {fs_id}
-static const uint32_t kFsQuotaKeySize = kPrefixSize + 1 + 1 + 4;
 
 bool MetaCodec::IsFsQuotaKey(const std::string& key) {
   if (key.size() != kFsQuotaKeySize) {
@@ -799,8 +881,6 @@ QuotaEntry MetaCodec::DecodeFsQuotaValue(const std::string& value) {
 }
 
 // fs config log format: ${prefix} kTableMeta kMetaFsOpLog {fs_id} {time_ns}
-static const uint32_t kFsConfigLogKeySize = kPrefixSize + 1 + 1 + 4 + 8;
-
 bool MetaCodec::IsFsOpLogKey(const std::string& key) {
   if (key.size() != kFsConfigLogKeySize) {
     return false;
@@ -843,7 +923,6 @@ FsOpLog MetaCodec::DecodeFsOpLogValue(const std::string& value) {
 }
 
 // inode attr format: ${prefix} kTableFsMeta {fs_id} kMetaFsInode {ino} kFsInodeAttr
-static const uint32_t kInodeKeySize = kPrefixSize + 1 + 4 + 1 + 8 + 1;
 
 bool MetaCodec::IsInodeKey(const std::string& key) {
   if (key.size() != kInodeKeySize) {
@@ -894,8 +973,6 @@ AttrEntry MetaCodec::DecodeInodeValue(const std::string& value) {
 }
 
 // dentry format: ${prefix} kTableFsMeta {fs_id} kMetaFsInode {ino} kFsInodeDentry {name}
-static const uint32_t kDentryKeyHeaderSize = kPrefixSize + 1 + 4 + 1 + 8 + 1;
-
 bool MetaCodec::IsDentryKey(const std::string& key) {
   if (key.size() <= kDentryKeyHeaderSize) {
     return false;
@@ -948,8 +1025,6 @@ DentryEntry MetaCodec::DecodeDentryValue(const std::string& value) {
 }
 
 // inode chunk format: ${prefix} kTableFsMeta  {fs_id}  kMetaFsInode {ino} kFsInodeChunk {chunk_index}
-static const uint32_t kChunkKeySize = kPrefixSize + 1 + 4 + 1 + 8 + 1 + 8;
-
 bool MetaCodec::IsChunkKey(const std::string& key) {
   if (key.size() != kChunkKeySize) {
     return false;
@@ -1001,8 +1076,6 @@ ChunkEntry MetaCodec::DecodeChunkValue(const std::string& value) {
 }
 
 // inode file session format: ${prefix} kTableFsMeta {fs_id} kMetaFsFileSession {ino} {session_id}
-static const uint32_t kFileSessionKeySize = kPrefixSize + 1 + 4 + 1 + 8 + 36;
-
 bool MetaCodec::IsFileSessionKey(const std::string& key) {
   if (key.size() != kFileSessionKeySize) {
     return false;
@@ -1050,8 +1123,6 @@ FileSessionEntry MetaCodec::DecodeFileSessionValue(const std::string& value) {
 }
 
 // dir quota format: ${prefix} kTableFsMeta {fs_id} kMetaFsDirQuota {ino}
-static const uint32_t kDirQuotaKeySize = kPrefixSize + 1 + 4 + 1 + 8;
-
 bool MetaCodec::IsDirQuotaKey(const std::string& key) {
   if (key.size() != kDirQuotaKeySize) {
     return false;
@@ -1093,7 +1164,6 @@ QuotaEntry MetaCodec::DecodeDirQuotaValue(const std::string& value) {
 }
 
 // inode delslice format: ${prefix} kTableFsMeta {fs_id} kMetaFsDelSlice {ino} {chunk_index} {time_ns}
-static const uint32_t kDelSliceKeySize = kPrefixSize + 1 + 4 + 1 + 8 + 8 + 8;
 
 bool MetaCodec::IsDelSliceKey(const std::string& key) {
   if (key.size() != kDelSliceKeySize) {
@@ -1143,7 +1213,6 @@ TrashSliceList MetaCodec::DecodeDelSliceValue(const std::string& value) {
 }
 
 // inode delfile format: ${prefix} kTableFsMeta {fs_id} kMetaFsDelFile {ino}
-static const uint32_t kDelFileKeySize = kPrefixSize + 1 + 4 + 1 + 8;
 
 bool MetaCodec::IsDelFileKey(const std::string& key) {
   if (key.size() != kDelFileKeySize) {
@@ -1188,8 +1257,6 @@ AttrEntry MetaCodec::DecodeDelFileValue(const std::string& value) {
 }
 
 // fs stats format: ${prefix} kTableFsStats kMetaFsStats {fs_id} {time_ns}
-static const uint32_t kFsStatsKeySize = kPrefixSize + 2 + 4 + 8;
-
 bool MetaCodec::IsFsStatsKey(const std::string& key) {
   if (key.size() != kFsStatsKeySize) {
     return false;

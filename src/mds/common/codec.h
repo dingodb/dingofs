@@ -28,6 +28,9 @@ namespace mds {
 
 class MetaCodec {
  public:
+  static void SetClusterID(uint32_t cluster_id);
+  static uint32_t GetClusterID();
+
   // format: ${prefix} kTableMeta
   static Range GetMetaTableRange();
   // format: ${prefix} kTableFsStats

@@ -49,7 +49,6 @@ class FileWriter {
  private:
   uint64_t GetChunkSize() const;
 
-  ChunkWriter* CreateChunkWriter(uint64_t chunk_index);
   ChunkWriter* GetOrCreateChunkWriter(uint64_t chunk_index);
 
   void FileFlushTaskDone(uint64_t file_flush_id, StatusCallback cb,

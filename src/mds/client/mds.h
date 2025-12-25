@@ -299,6 +299,7 @@ class MdsCommandRunner {
   ~MdsCommandRunner() = default;
 
   struct Options {
+    uint32_t cluster_id{0};
     uint32_t fs_id{0};
     Ino ino;
     Ino parent;

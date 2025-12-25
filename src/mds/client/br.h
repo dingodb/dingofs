@@ -129,6 +129,7 @@ class BackupCommandRunner {
   ~BackupCommandRunner() = default;
 
   struct Options {
+    uint32_t cluster_id{0};
     std::string type;
     std::string output_type;
     uint32_t fs_id{0};
@@ -148,6 +149,7 @@ class RestoreCommandRunner {
   ~RestoreCommandRunner() = default;
 
   struct Options {
+    uint32_t cluster_id{0};
     std::string type;
     std::string input_type;
     uint32_t fs_id{0};

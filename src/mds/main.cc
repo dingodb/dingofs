@@ -27,6 +27,7 @@
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 #include "libunwind.h"
+#include "mds/common/codec.h"
 #include "mds/common/helper.h"
 #include "mds/common/version.h"
 #include "mds/server.h"
@@ -35,6 +36,8 @@
 DEFINE_string(storage_url, "file://./conf/coor_list", "storage url, e.g. file://<path> or list://<addr1>");
 
 const int kMaxStacktraceSize = 128;
+
+DEFINE_uint32(mds_cluster_id, 0, "cluster id");
 
 struct StackTraceInfo {
   char* filename{nullptr};
@@ -324,23 +327,23 @@ int main(int argc, char* argv[]) {
     LOG(INFO) << "use config file: " << FLAGS_conf;
     CHECK(dingofs::mds::Helper::IsExistPath(FLAGS_conf)) << fmt::format("config file {} not exist.", FLAGS_conf);
     gflags::ReadFromFlagsFile(FLAGS_conf, argv[0], true);
+
+  } else {
+    // reset brpc flag default value if not set
+    dingofs::ResetBrpcFlagDefaultValue();
   }
 
-  // reset brpc flag default value if not set
-  dingofs::ResetBrpcFlagDefaultValue();
-
   std::cout << fmt::format("mds server id: {}\n", dingofs::mds::FLAGS_mds_server_id);
+  dingofs::mds::MetaCodec::SetClusterID(FLAGS_mds_cluster_id);
 
   if (dingofs::mds::FLAGS_mds_storage_engine != "dummy" && !CheckStorageUrl(FLAGS_storage_url)) return -1;
 
   SetupSignalHandler();
 
   // run in daemon mode
-  if (dingofs::FLAGS_daemonize) {
-    if (!dingofs::utils::Daemonize()) {
-      std::cerr << "failed to daemonize process.\n";
-      return 1;
-    }
+  if (dingofs::FLAGS_daemonize && !dingofs::utils::Daemonize()) {
+    std::cerr << "fail to daemonize process.\n";
+    return 1;
   }
 
   dingofs::mds::Server& server = dingofs::mds::Server::GetInstance();
