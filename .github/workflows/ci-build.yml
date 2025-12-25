@@ -42,7 +42,7 @@ jobs:
 
     - name: Pull dingodatabase/dingo-eureka:rocky9-fs
       run: |
-        docker pull dingodatabase/dingo-eureka:rocky9-fs-ac7e2b9
+        docker pull dingodatabase/dingo-eureka:rocky9-fs-99081b2
 
     - name: Init build script
       run: |
@@ -141,7 +141,7 @@ jobs:
     - name: Build DingoFS
       run: |
         echo "Build DingoFS"
-        docker run --name release-dingofs --rm -v /mnt/dingofs:/opt/dingofs/ dingodatabase/dingo-eureka:rocky9-fs-ac7e2b9 /opt/dingofs/build.sh
+        docker run --name release-dingofs --rm -v /mnt/dingofs:/opt/dingofs/ dingodatabase/dingo-eureka:rocky9-fs-99081b2 /opt/dingofs/build.sh
 
     - name: Copy artifactory to another workflow
       uses: actions/upload-artifact@v4
