@@ -23,6 +23,7 @@
 #include <boost/range/algorithm/sort.hpp>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <utility>
 
 #include "client/common/const.h"
@@ -147,7 +148,7 @@ Status ChunkWriter::Write(ContextSPtr ctx, const char* buf, uint64_t size,
                        });
 
     {
-      std::unique_lock<std::mutex> write_flush_lg(write_flush_mutex_);
+      std::unique_lock<std::mutex> write_flush_lg(slice_mutex_);
 
       for (const ChunkWriteInfo* write_info : write_batch) {
         VLOG(4) << fmt::format("{} BufferWrite batch write_info: {}", UUID(),
@@ -276,7 +277,7 @@ void ChunkWriter::FlushTaskDone(FlushTask* flush_task, Status s) {
   }
 
   {
-    std::lock_guard<std::mutex> lg(write_flush_mutex_);
+    std::lock_guard<std::mutex> lg(flush_mutex_);
     flush_task->status = s;
     flush_task->done = true;
 
@@ -309,18 +310,18 @@ void ChunkWriter::FlushTaskDone(FlushTask* flush_task, Status s) {
       "{} FlushTaskDone header_task: {} will commit flush_tasks", UUID(),
       flush_task->UUID());
 
-  CommitFlushTasks(span->GetContext());
+  TryCommitFlushTasks(span->GetContext());
 }
 
-void ChunkWriter::CommitFlushTasks(ContextSPtr ctx) {
+void ChunkWriter::TryCommitFlushTasks(ContextSPtr ctx) {
   uint64_t commit_seq =
       commit_seq_id_gen.fetch_add(1, std::memory_order_relaxed);
 
-  // this will be delete in SlicesCommited
+  // this will be delete in OnSlicesCommitDone
   std::vector<FlushTask*> to_commit;
 
   {
-    std::lock_guard<std::mutex> lg(write_flush_mutex_);
+    std::lock_guard<std::mutex> lg(flush_mutex_);
     CHECK_GT(flush_queue_.size(), 0);
 
     auto it = flush_queue_.begin();
@@ -389,7 +390,7 @@ void ChunkWriter::CommitFlushTasks(ContextSPtr ctx) {
       "batch_slices_count: {}",
       UUID(), commit_seq, to_commit.size(), batch_commit_slices.size());
 
-  // this will be delete in SlicesCommited
+  // this will be delete in OnSlicesCommitDone
   auto* commit_context = new CommmitContext();
   commit_context->commit_seq = commit_seq;
   commit_context->flush_tasks = std::move(to_commit);
@@ -398,68 +399,80 @@ void ChunkWriter::CommitFlushTasks(ContextSPtr ctx) {
   if (!commit_context->commit_slices.empty()) {
     AsyncCommitSlices(ctx, commit_context->commit_slices,
                       [&, ctx, commit_context](Status s) {
-                        SlicesCommited(ctx, commit_context, std::move(s));
+                        OnSlicesCommitDone(ctx, commit_context, std::move(s));
                       });
   } else {
-    SlicesCommited(ctx, commit_context, Status::OK());
+    OnSlicesCommitDone(ctx, commit_context, Status::OK());
   }
 }
 
-void ChunkWriter::SlicesCommited(ContextSPtr ctx, CommmitContext* commit_ctx,
-                                 Status s) {
+void ChunkWriter::OnSlicesCommitDone(ContextSPtr ctx,
+                                     CommmitContext* commit_ctx, Status s) {
+  std::string uuid = UUID();
+
   if (!s.ok()) {
     LOG(WARNING) << fmt::format(
-        "{} SlicesCommited Fail commit_seq: {} fail commit, flush_task_count: "
-        "{} "
-        "batch_slices_count: {} commit_status: {}",
-        UUID(), commit_ctx->commit_seq, commit_ctx->flush_tasks.size(),
+        "{} OnSlicesCommitDone Fail commit_seq: {} fail commit, "
+        "flush_task_count: {} batch_slices_count: {} commit_status: {}",
+        uuid, commit_ctx->commit_seq, commit_ctx->flush_tasks.size(),
         commit_ctx->commit_slices.size(), s.ToString());
 
     MarkErrorStatus(s);
   } else {
     VLOG(4) << fmt::format(
-        "{} SlicesCommited commit_seq: {}, flush_task_count: {} "
+        "{} OnSlicesCommitDone commit_seq: {}, flush_task_count: {} "
         "batch_slices_count: {} commit_status: {}",
-        UUID(), commit_ctx->commit_seq, commit_ctx->flush_tasks.size(),
+        uuid, commit_ctx->commit_seq, commit_ctx->flush_tasks.size(),
         commit_ctx->commit_slices.size(), s.ToString());
 
     auto* manager = hub_->GetHandleManager();
     for (const Slice& slice : commit_ctx->commit_slices) {
       VLOG(9) << fmt::format(
-          "{} SlicesCommited commit_seq: {} committed slice: {}", UUID(),
+          "{} OnSlicesCommitDone commit_seq: {} committed slice: {}", uuid,
           commit_ctx->commit_seq, Slice2Str(slice));
       manager->Invalidate(fh_, slice.offset, slice.length);
     }
   }
 
-  for (FlushTask* task : commit_ctx->flush_tasks) {
-    // if one task fail, all task fail
-    task->cb(GetErrorStatus());
-    VLOG(4) << fmt::format("{} SlicesCommited delete chunk_flush_task: {}",
-                           UUID(), task->ToString());
-    delete task;
-  }
+  // call all flush task callback in flush executor
+  hub_->GetFlushExecutor()->Execute([&, uuid, commit_ctx] {
+    for (FlushTask* task : commit_ctx->flush_tasks) {
+      // if one task fail, all task fail
+      task->cb(GetErrorStatus());
+      VLOG(6) << fmt::format(
+          "{} OnSlicesCommitDone delete chunk_flush_task: {}", uuid,
+          task->ToString());
+      delete task;
+    }
 
-  VLOG(4) << fmt::format(
-      "{} SlicesCommited commit_seq: {} end, delete commit_ctx", UUID(),
-      commit_ctx->commit_seq);
-  delete commit_ctx;
+    VLOG(4) << fmt::format(
+        "{} OnSlicesCommitDone commit_seq: {} end, delete commit_ctx", uuid,
+        commit_ctx->commit_seq);
+
+    delete commit_ctx;
+  });
 
   // continue batch commit next flush task util all flush task are committed
-  CommitFlushTasks(ctx);
+  TryCommitFlushTasks(ctx);
 }
 
 void ChunkWriter::DoFlushAsync(StatusCallback cb, uint64_t chunk_flush_id) {
   VLOG(4) << fmt::format("{} Start DoFlushAsync chunk_flush_id: {}", UUID(),
                          chunk_flush_id);
-
-  FlushTask* flush_task{nullptr};
-  Status error_status;
-  uint64_t slice_count = 0;
+  std::map<uint64_t, std::unique_ptr<SliceData>> to_commit;
 
   {
-    std::lock_guard<std::mutex> lg(write_flush_mutex_);
-    slice_count = slices_.size();
+    std::lock_guard<std::mutex> lg(slice_mutex_);
+    to_commit = std::move(slices_);
+  }
+
+  uint64_t slice_count = to_commit.size();
+
+  Status error_status;
+  FlushTask* flush_task{nullptr};
+
+  {
+    std::lock_guard<std::mutex> lg(flush_mutex_);
     error_status = error_status_;
 
     if (error_status.ok()) {
@@ -471,7 +484,7 @@ void ChunkWriter::DoFlushAsync(StatusCallback cb, uint64_t chunk_flush_id) {
 
       flush_task = flush_queue_.back();
       flush_task->chunk_flush_task = std::make_unique<ChunkFlushTask>(
-          chunk_.ino, chunk_.index, chunk_flush_id, std::move(slices_));
+          chunk_.ino, chunk_.index, chunk_flush_id, std::move(to_commit));
     }  // end if error_status.ok()
     //  not ok pass throuth
   }

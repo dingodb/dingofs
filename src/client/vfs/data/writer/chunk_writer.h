@@ -139,16 +139,21 @@ class ChunkWriter {
   Status CommitSlices(ContextSPtr ctx, const std::vector<Slice>& slices);
   void AsyncCommitSlices(ContextSPtr ctx, const std::vector<Slice>& slices,
                          StatusCallback cb);
-  void SlicesCommited(ContextSPtr ctx, CommmitContext* commit_ctx, Status s);
+  void OnSlicesCommitDone(ContextSPtr ctx, CommmitContext* commit_ctx, Status s);
 
   void DoSyncFlush();
 
   void DoFlushAsync(StatusCallback cb, uint64_t chunk_flush_id);
   void FlushTaskDone(FlushTask* flush_task, Status s);
-  void CommitFlushTasks(ContextSPtr ctx);
+  void TryCommitFlushTasks(ContextSPtr ctx);
+
+  int64_t WritersCount() const {
+    std::lock_guard<std::mutex> lg(writer_mutex_);
+    return writers_.size();
+  }
 
   Status GetErrorStatus() const {
-    std::lock_guard<std::mutex> lg(write_flush_mutex_);
+    std::lock_guard<std::mutex> lg(flush_mutex_);
     return error_status_;
   }
 
@@ -156,19 +161,14 @@ class ChunkWriter {
   // If the current error status is ok, it will be set to the given status.
   // If the current error status is not ok, it will not be changed.
   void MarkErrorStatus(const Status& status) {
-    std::lock_guard<std::mutex> lock(write_flush_mutex_);
+    std::lock_guard<std::mutex> lock(flush_mutex_);
     if (error_status_.ok()) {
       error_status_ = status;
     }
   }
 
-  int64_t WritersCount() const {
-    std::lock_guard<std::mutex> lg(writer_mutex_);
-    return writers_.size();
-  }
-
   int64_t FlushTasksCount() const {
-    std::lock_guard<std::mutex> lg(write_flush_mutex_);
+    std::lock_guard<std::mutex> lg(flush_mutex_);
     return flush_queue_.size();
   }
 
@@ -182,10 +182,13 @@ class ChunkWriter {
   mutable std::mutex writer_mutex_;
   std::deque<Writer*> writers_;
 
-  mutable std::mutex write_flush_mutex_;
+  // used by writer and flush
+  mutable std::mutex slice_mutex_;
+  // seq_id -> slice data
   // TODO: maybe use std::vector
-  // seq_id -> slice datj
   std::map<uint64_t, std::unique_ptr<SliceData>> slices_;
+
+  mutable std::mutex flush_mutex_;
   std::deque<FlushTask*> flush_queue_;
   // guarded by write_flush_mutex_
   // when this not ok, all write and flush should return error
