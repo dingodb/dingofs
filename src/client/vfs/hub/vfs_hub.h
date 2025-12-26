@@ -25,7 +25,6 @@
 
 #include "client/memory/page_allocator.h"
 #include "client/memory/read_buffer_manager.h"
-#include "client/vfs/background/iperiodic_flush_manager.h"
 #include "client/vfs/blockstore/block_store.h"
 #include "client/vfs/common/client_id.h"
 #include "client/vfs/components/file_suffix_watcher.h"
@@ -68,8 +67,6 @@ class VFSHub {
   virtual Executor* GetFlushExecutor() = 0;
 
   virtual Executor* GetReadExecutor() = 0;
-
-  virtual IPeriodicFlushManager* GetPeriodicFlushManger() = 0;
 
   virtual PageAllocator* GetPageAllocator() = 0;
 
@@ -132,11 +129,6 @@ class VFSHubImpl : public VFSHub {
   Executor* GetReadExecutor() override {
     CHECK_NOTNULL(read_executor_);
     return read_executor_.get();
-  }
-
-  IPeriodicFlushManager* GetPeriodicFlushManger() override {
-    CHECK_NOTNULL(priodic_flush_manager_);
-    return priodic_flush_manager_.get();
   }
 
   PageAllocator* GetPageAllocator() override {
@@ -205,7 +197,6 @@ class VFSHubImpl : public VFSHub {
   std::unique_ptr<BlockStore> block_store_;
   std::unique_ptr<Executor> flush_executor_;
   std::unique_ptr<Executor> read_executor_;
-  std::unique_ptr<IPeriodicFlushManager> priodic_flush_manager_;
   std::shared_ptr<PageAllocator> page_allocator_;
   std::unique_ptr<ReadBufferManager> read_buffer_manager_;
   std::unique_ptr<FileSuffixWatcher> file_suffix_watcher_;

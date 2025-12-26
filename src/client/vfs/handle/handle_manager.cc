@@ -16,17 +16,60 @@
 
 #include "client/vfs/handle/handle_manager.h"
 
+#include <glog/logging.h>
+
 #include <cstdint>
 #include <memory>
 
 #include "client/vfs/data/file.h"
 #include "client/vfs/vfs_fh.h"
 #include "common/define.h"
-#include "glog/logging.h"
+#include "utils/executor/thread/executor_impl.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
+
+Status HandleManager::Start() {
+  bg_executor_ = std::make_unique<ExecutorImpl>(
+      "HandleBgExecutor", FLAGS_vfs_handle_bg_executor_thread);
+  bg_executor_->Start();
+
+  bg_executor_->Schedule([&] { RunPeriodicFlush(); },
+                         FLAGS_vfs_periodic_flush_interval_ms);
+
+  bg_executor_->Schedule([&] { RunPeriodicShrinkMem(); },
+                         FLAGS_vfs_periodic_trim_mem_ms);
+
+  return Status::OK();
+}
+
+// TODO: concurrent flush
+void HandleManager::Shutdown() {
+  if (shutdown_.load()) {
+    LOG(INFO) << "HandleManager already shutdown";
+    return;
+  }
+
+  if (!bg_executor_->Stop()) {
+    LOG(ERROR) << "Failed to stop HandleManager bg executor";
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    for (auto& [fh, handle] : handles_) {
+      if (handle->ino == STATSINODEID) {
+        continue;
+      }
+
+      CHECK_NOTNULL(handle->file);
+      handle->file->Close();
+    }
+  }
+
+  shutdown_.store(true);
+}
 
 void HandleManager::AddHandle(HandleSPtr handle) {
   std::lock_guard<std::mutex> lock(mutex_);
@@ -67,13 +110,18 @@ void HandleManager::Invalidate(uint64_t fh, int64_t offset, int64_t size) {
 }
 
 void HandleManager::TriggerFlushAll() {
-  std::lock_guard<std::mutex> lock(mutex_);
-  if (shutdown_) {
+  if (shutdown_.load()) {
     LOG(INFO) << "HandleManager already shutdown";
     return;
   }
 
-  for (auto& [fh, handle] : handles_) {
+  std::unordered_map<uint64_t, HandleSPtr> to_flush_handles;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    to_flush_handles = handles_;
+  }
+
+  for (auto& [fh, handle] : to_flush_handles) {
     if (handle->ino == STATSINODEID) {
       continue;
     }
@@ -89,24 +137,41 @@ void HandleManager::TriggerFlushAll() {
   }
 }
 
-// TODO: concurrent flush
-void HandleManager::Shutdown() {
-  std::lock_guard<std::mutex> lock(mutex_);
-  if (shutdown_) {
-    LOG(INFO) << "HandleManager already shutdown";
+void HandleManager::RunPeriodicFlush() {
+  if (shutdown_.load()) {
+    LOG(INFO) << "HandleManager already shutdown, stop periodic flush";
     return;
   }
 
-  for (auto& [fh, handle] : handles_) {
+  TriggerFlushAll();
+
+  bg_executor_->Schedule([&] { RunPeriodicFlush(); },
+                         FLAGS_vfs_periodic_flush_interval_ms);
+}
+
+void HandleManager::RunPeriodicShrinkMem() {
+  if (shutdown_.load()) {
+    LOG(INFO) << "HandleManager already shutdown, stop periodic shrink mem";
+    return;
+  }
+
+  std::unordered_map<uint64_t, HandleSPtr> to_trim_handles;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    to_trim_handles = handles_;
+  }
+
+  for (auto& [fh, handle] : to_trim_handles) {
     if (handle->ino == STATSINODEID) {
       continue;
     }
 
     CHECK_NOTNULL(handle->file);
-    handle->file->Close();
+    handle->file->ShrinkMem();
   }
 
-  shutdown_ = true;
+  bg_executor_->Schedule([&] { RunPeriodicShrinkMem(); },
+                         FLAGS_vfs_periodic_trim_mem_ms);
 }
 
 bool HandleManager::Dump(Json::Value& value) {

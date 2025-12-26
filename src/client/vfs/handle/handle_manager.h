@@ -17,6 +17,7 @@
 #ifndef DINGOFS_CLIENT_VFS_HANDLE_MANAGER_H
 #define DINGOFS_CLIENT_VFS_HANDLE_MANAGER_H
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -26,6 +27,7 @@
 #include "client/vfs/data/ifile.h"
 #include "client/vfs/vfs_meta.h"
 #include "json/value.h"
+#include "utils/executor/executor.h"
 
 namespace dingofs {
 namespace client {
@@ -64,6 +66,10 @@ class HandleManager {
 
   ~HandleManager() { Shutdown(); }
 
+  Status Start();
+
+  void Shutdown();
+
   void AddHandle(HandleSPtr handle);
 
   HandleSPtr FindHandler(uint64_t fh);
@@ -72,18 +78,21 @@ class HandleManager {
 
   void Invalidate(uint64_t fh, int64_t offset, int64_t size);
 
-  void Shutdown();
-
   void TriggerFlushAll();
 
   bool Dump(Json::Value& value);
   bool Load(const Json::Value& value);
 
  private:
-  std::mutex mutex_;
-  bool shutdown_{false};
-  std::unordered_map<uint64_t, HandleSPtr> handles_;
+  void RunPeriodicFlush();
+  void RunPeriodicShrinkMem();
+
   VFSHub* vfs_hub_{nullptr};
+  std::atomic<bool> shutdown_{false};
+  std::unique_ptr<Executor> bg_executor_;
+
+  std::mutex mutex_;
+  std::unordered_map<uint64_t, HandleSPtr> handles_;
 };
 
 }  // namespace vfs

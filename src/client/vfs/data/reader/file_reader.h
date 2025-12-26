@@ -44,14 +44,16 @@ class FileReader {
 
   ~FileReader();
 
+  void Close();
+
   Status Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
               int64_t offset, uint64_t* out_rsize);
-
-  void Close();
 
   // NOTE: if we manage filehandle by ino,
   // then write/commit_slice/fallocate/truncate/copyfile_range should call this
   void Invalidate(int64_t offset, int64_t size);
+
+  void ShrinkMem();
 
   void AcquireRef();
 

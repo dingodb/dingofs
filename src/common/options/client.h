@@ -76,7 +76,6 @@ DECLARE_bool(vfs_print_readahead_stats);
 
 // vfs flush
 DECLARE_int32(vfs_flush_bg_thread);
-DECLARE_int32(vfs_periodic_flush_interval_ms);
 DECLARE_double(vfs_trigger_flush_free_page_ratio);
 
 // vfs prefetch
@@ -88,6 +87,11 @@ DECLARE_int32(vfs_warmup_threads);
 DECLARE_bool(vfs_intime_warmup_enable);
 DECLARE_int64(vfs_warmup_mtime_restart_interval_secs);
 DECLARE_int64(vfs_warmup_trigger_restart_interval_secs);
+
+// vfs handle 
+DECLARE_int32(vfs_handle_bg_executor_thread);
+DECLARE_int32(vfs_periodic_flush_interval_ms);
+DECLARE_int32(vfs_periodic_trim_mem_ms);
 
 // vfs meta
 DECLARE_bool(vfs_meta_inode_cache_enable);

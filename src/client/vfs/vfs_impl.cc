@@ -250,12 +250,12 @@ Status VFSImpl::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t* fh) {
 
   Status s = meta_system_->Open(ctx, ino, flags, gfh);
   if (s.ok()) {
-    auto handle = NewHandle(gfh, ino, flags,
-                            std::make_unique<File>(vfs_hub_.get(), gfh, ino));
-    *fh = handle->fh;
+    auto file = std::make_unique<File>(vfs_hub_.get(), gfh, ino);
+    DINGOFS_RETURN_NOT_OK(file->Open());
 
     // TOOD: if flags is O_RDONLY, no need schedule flush
-    vfs_hub_->GetPeriodicFlushManger()->SubmitToFlush(handle);
+    auto handle = NewHandle(gfh, ino, flags, std::move(file));
+    *fh = handle->fh;
   }
 
   return s;
@@ -271,14 +271,14 @@ Status VFSImpl::Create(ContextSPtr ctx, Ino parent, const std::string& name,
     CHECK_GT(attr->ino, 0) << "ino in attr is null";
     Ino ino = attr->ino;
 
-    auto handle = NewHandle(gfh, ino, flags,
-                            std::make_unique<File>(vfs_hub_.get(), gfh, ino));
+    auto file = std::make_unique<File>(vfs_hub_.get(), gfh, ino);
+    DINGOFS_RETURN_NOT_OK(file->Open());
+
+    // TOOD: if flags is O_RDONLY, no need schedule flush
+    auto handle = NewHandle(gfh, ino, flags, std::move(file));
     *fh = handle->fh;
 
     vfs_hub_->GetFileSuffixWatcher()->Remeber(*attr, name);
-
-    // TOOD: if flags is O_RDONLY, no need schedule flush
-    vfs_hub_->GetPeriodicFlushManger()->SubmitToFlush(handle);
   }
 
   return s;

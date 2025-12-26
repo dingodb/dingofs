@@ -21,7 +21,6 @@
 #include <memory>
 
 #include "client/common/const.h"
-#include "client/vfs/background/periodic_flush_manager.h"
 #include "client/vfs/blockstore/block_store_impl.h"
 #include "client/vfs/blockstore/fake_block_store.h"
 #include "client/vfs/common/helper.h"
@@ -164,11 +163,6 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf, bool upgrade) {
   }
 
   {
-    priodic_flush_manager_ = std::make_unique<PeriodicFlushManager>(this);
-    priodic_flush_manager_->Start();
-  }
-
-  {
     if (FLAGS_data_stream_page_use_pool) {
       page_allocator_ = std::make_shared<PagePool>();
     } else {
@@ -239,12 +233,6 @@ Status VFSHubImpl::Stop(bool upgrade) {
   if (handle_manager_ != nullptr) {
     handle_manager_->Shutdown();
     handle_manager_.reset();
-  }
-
-  // shutdown before block cache
-  if (priodic_flush_manager_ != nullptr) {
-    priodic_flush_manager_->Stop();
-    priodic_flush_manager_.reset();
   }
 
   if (read_executor_ != nullptr) {

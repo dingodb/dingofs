@@ -81,10 +81,6 @@ DEFINE_validator(vfs_meta_inode_cache_expired_s, brpc::PassValidate);
 DEFINE_int32(vfs_flush_bg_thread, 16, "number of background flush threads");
 DEFINE_validator(vfs_flush_bg_thread, brpc::PassValidate);
 
-DEFINE_int32(vfs_periodic_flush_interval_ms, 100,
-             "periodic flush interval in milliseconds");
-DEFINE_validator(vfs_periodic_flush_interval_ms, brpc::PassValidate);
-
 DEFINE_double(vfs_trigger_flush_free_page_ratio, 0.3,
               "trigger flush when free page ratio is lower than this value");
 DEFINE_validator(vfs_trigger_flush_free_page_ratio, brpc::PassValidate);
@@ -109,6 +105,19 @@ DEFINE_uint32(vfs_prefetch_threads, 8, "number of prefetch threads");
 
 // warmup
 DEFINE_int32(vfs_warmup_threads, 4, "number of warmup threads");
+
+// vfs handle
+DEFINE_int32(vfs_handle_bg_executor_thread, 8,
+             "number of handle backgroud threads");
+DEFINE_validator(vfs_handle_bg_executor_thread, brpc::PassValidate);
+
+DEFINE_int32(vfs_periodic_flush_interval_ms, 5000,
+             "periodic flush interval in milliseconds");
+DEFINE_validator(vfs_periodic_flush_interval_ms, brpc::PassValidate);
+
+DEFINE_int32(vfs_periodic_trim_mem_ms, 5000,
+             "periodic trim mem in milliseconds");
+DEFINE_validator(vfs_periodic_trim_mem_ms, brpc::PassValidate);
 
 DEFINE_bool(vfs_intime_warmup_enable, false,
             "enable intime warmup, default is false");

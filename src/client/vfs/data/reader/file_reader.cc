@@ -113,6 +113,15 @@ FileReader::~FileReader() {
   }
 }
 
+void FileReader::Close() {
+  if (closing_.load(std::memory_order_acquire)) {
+    return;
+  }
+
+  VLOG(9) << "FileReader Close called";
+  closing_.store(true, std::memory_order_release);
+}
+
 void FileReader::AcquireRef() {
   int64_t orgin = refs_.fetch_add(1);
   VLOG(12) << "FileReader::AcquireRef origin refs=" << orgin;
@@ -128,28 +137,58 @@ void FileReader::ReleaseRef() {
   }
 }
 
-void FileReader::Close() {
-  if (closing_.load(std::memory_order_acquire)) {
+void FileReader::ShrinkMem() {
+  int64_t used = UsedMem();
+  int64_t total = TotalMem();
+
+  if (used < total) {
+    VLOG(3) << "CheckReadBuffer skipped due to buffer not full, used=" << used
+            << " total=" << total;
     return;
   }
 
-  VLOG(9) << "FileReader Close called";
-  closing_.store(true, std::memory_order_release);
-}
+  int64_t now = butil::monotonic_time_s();
+  int64_t idle_sec = 60;
+  if (used > total && total > 0) {
+    idle_sec /= (used / total);
+  }
 
-void FileReader::RunReadRequest(ReadRequestSptr req) {
-  AcquireRef();
-  vfs_rreq_in_queue << 1;
+  std::vector<ReadRequestSptr> to_delete;
 
-  vfs_hub_->GetReadExecutor()->Execute([this, req]() {
-    vfs_rreq_in_queue << -1;
+  std::unique_lock<std::mutex> lock(mutex_);
+  for (auto& [req_id, req] : requests_) {
+    std::unique_lock<std::mutex> req_lock(req->mutex);
+    VLOG(9) << "CheckReadBuffer check req " << req->ToString();
 
-    vfs_rreq_inflighting << 1;
-    DoReadRequst(req);
-    vfs_rreq_inflighting << -1;
+    // We can only delete if no one is reading it
+    if (req->readers > 0) {
+      continue;
+    }
 
-    ReleaseRef();
-  });
+    // TODO: support delete new/busy requests
+    bool should_drop = false;
+    if (req->state == ReadRequestState::kInvalid) {
+      should_drop = true;
+    } else if (req->state == ReadRequestState::kReady) {
+      if (req->access_sec + idle_sec < now) {
+        should_drop = true;
+      } else if (!IsProtectedReq(req)) {
+        should_drop = true;
+      }
+    }
+
+    if (should_drop) {
+      if (req->state == ReadRequestState::kReady) {
+        req->ToStateUnLock(ReadRequestState::kInvalid,
+                           TransitionReason::kCleanUp);
+      }
+      to_delete.push_back(req);
+    }
+  }
+
+  for (const auto& req : to_delete) {
+    DeleteReadRequestUnlock(req);
+  }
 }
 
 void FileReader::Invalidate(int64_t offset, int64_t size) {
@@ -189,6 +228,21 @@ void FileReader::Invalidate(int64_t offset, int64_t size) {
   for (const auto& req : to_delete) {
     DeleteReadRequestUnlock(req);
   }
+}
+
+void FileReader::RunReadRequest(ReadRequestSptr req) {
+  AcquireRef();
+  vfs_rreq_in_queue << 1;
+
+  vfs_hub_->GetReadExecutor()->Execute([this, req]() {
+    vfs_rreq_in_queue << -1;
+
+    vfs_rreq_inflighting << 1;
+    DoReadRequst(req);
+    vfs_rreq_inflighting << -1;
+
+    ReleaseRef();
+  });
 }
 
 // split request by block boundary
