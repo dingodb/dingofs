@@ -17,6 +17,7 @@
 #ifndef DINGOFS_CLIENT_VFS_COMPONENTS_PREFETCH_MANAGER_H_
 #define DINGOFS_CLIENT_VFS_COMPONENTS_PREFETCH_MANAGER_H_
 
+#include <bthread/execution_queue.h>
 #include <fmt/format.h>
 
 #include <cstdint>
@@ -76,13 +77,18 @@ class PrefetchManager {
 
   void SetIdle(const BlockKey& key);
 
-  utils::BthreadRWLock rwlock_;
-  std::atomic<bool> running_{false};
-  std::unordered_set<std::string> inflight_keys_;
-  std::unique_ptr<Executor> prefetch_executor_;
+  static int HandlePrefetch(void* meta,
+                            bthread::TaskIterator<PrefetchContext>& iter);
+
   VFSHub* vfs_hub_;
   BlockStore* block_store_;
   std::unique_ptr<metrics::client::PrefetchMetric> metrics_;
+  std::atomic<bool> running_{false};
+  bthread::ExecutionQueueId<PrefetchContext> task_queue_;
+  std::unique_ptr<Executor> prefetch_executor_;
+
+  utils::BthreadRWLock rwlock_;
+  std::unordered_set<std::string> inflight_keys_;
 };
 
 using PrefetchManagerUPtr = std::unique_ptr<PrefetchManager>;
