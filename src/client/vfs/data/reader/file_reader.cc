@@ -26,6 +26,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <atomic>
 #include <boost/range/algorithm/find.hpp>
 #include <boost/range/algorithm/sort.hpp>
 #include <cmath>
@@ -61,6 +62,15 @@ static const uint32_t kMaxReadRequests = 64;
 
 #define METHOD_NAME() ("FileReader::" + std::string(__FUNCTION__))
 
+namespace {
+
+bool CanDeleteRequest(const ReadRequestSptr& req) {
+  std::unique_lock<std::mutex> req_lock(req->mutex);
+  return req->readers == 0 && req->state == ReadRequestState::kInvalid;
+}
+
+};  // namespace
+
 FileReader::FileReader(VFSHub* hub, uint64_t fh, uint64_t ino)
     : vfs_hub_(hub),
       fh_(fh),
@@ -72,20 +82,28 @@ FileReader::FileReader(VFSHub* hub, uint64_t fh, uint64_t ino)
 // when file reader destructor called,
 // meas no reader and all background read requests should be done
 FileReader::~FileReader() {
-  std::unique_lock<std::mutex> lock(mutex_);
-  CHECK(closing_) << "FileReader destructor called without Close";
+  CHECK(closing_.load(std::memory_order_acquire))
+      << "FileReader destructor called without Close";
 
-  std::vector<ReadRequest*> to_delete;
-  for (auto& [req_id, req_ptr] : requests_) {
-    VLOG(12) << fmt::format("FileReader destructor delete req: {}",
-                            req_ptr->ToString());
-    CHECK_EQ(req_ptr->refs, 0);
-    req_ptr->ToState(ReadRequestState::kInvalid, TransitionReason::kInvalidate);
-    to_delete.push_back(req_ptr.get());
-  }
+  {
+    std::vector<ReadRequestSptr> to_delete;
 
-  for (auto* req : to_delete) {
-    DeleteReadRequest(req);
+    std::unique_lock<std::mutex> lock(mutex_);
+    for (auto& [req_id, req_ptr] : requests_) {
+      {
+        std::lock_guard<std::mutex> req_lock(req_ptr->mutex);
+        VLOG(12) << fmt::format("FileReader destructor delete req: {}",
+                                req_ptr->ToStringUnlock());
+        CHECK_EQ(req_ptr->readers, 0);
+        req_ptr->ToStateUnLock(ReadRequestState::kInvalid,
+                               TransitionReason::kInvalidate);
+      }
+      to_delete.push_back(req_ptr);
+    }
+
+    for (const auto& req : to_delete) {
+      DeleteReadRequestUnlock(req);
+    }
   }
 
   if (FLAGS_vfs_print_readahead_stats) {
@@ -93,6 +111,15 @@ FileReader::~FileReader() {
         "FileReader ino: {}, fh: {} done, readahead_stats: {}", ino_, fh_,
         policy_->readahead_stats.ToString());
   }
+}
+
+void FileReader::Close() {
+  if (closing_.load(std::memory_order_acquire)) {
+    return;
+  }
+
+  VLOG(9) << "FileReader Close called";
+  closing_.store(true, std::memory_order_release);
 }
 
 void FileReader::AcquireRef() {
@@ -110,36 +137,66 @@ void FileReader::ReleaseRef() {
   }
 }
 
-void FileReader::Close() {
-  std::unique_lock<std::mutex> lock(mutex_);
-  if (closing_) {
+void FileReader::ShrinkMem() {
+  int64_t used = UsedMem();
+  int64_t total = TotalMem();
+
+  if (used < total) {
+    VLOG(3) << "CheckReadBuffer skipped due to buffer not full, used=" << used
+            << " total=" << total;
     return;
   }
 
-  VLOG(9) << "FileReader Close called";
-  closing_ = true;
-}
+  int64_t now = butil::monotonic_time_s();
+  int64_t idle_sec = 60;
+  if (used > total && total > 0) {
+    idle_sec /= (used / total);
+  }
 
-void FileReader::RunReadRequest(ReadRequest* req) {
-  AcquireRef();
-  vfs_rreq_in_queue << 1;
+  std::vector<ReadRequestSptr> to_delete;
 
-  vfs_hub_->GetReadExecutor()->Execute([this, req]() {
-    vfs_rreq_in_queue << -1;
+  std::unique_lock<std::mutex> lock(mutex_);
+  for (auto& [req_id, req] : requests_) {
+    std::unique_lock<std::mutex> req_lock(req->mutex);
+    VLOG(9) << "CheckReadBuffer check req " << req->ToString();
 
-    vfs_rreq_inflighting << 1;
-    DoReadRequst(req);
-    vfs_rreq_inflighting << -1;
-  });
+    // We can only delete if no one is reading it
+    if (req->readers > 0) {
+      continue;
+    }
+
+    // TODO: support delete new/busy requests
+    bool should_drop = false;
+    if (req->state == ReadRequestState::kInvalid) {
+      should_drop = true;
+    } else if (req->state == ReadRequestState::kReady) {
+      if (req->access_sec + idle_sec < now) {
+        should_drop = true;
+      } else if (!IsProtectedReq(req)) {
+        should_drop = true;
+      }
+    }
+
+    if (should_drop) {
+      if (req->state == ReadRequestState::kReady) {
+        req->ToStateUnLock(ReadRequestState::kInvalid,
+                           TransitionReason::kCleanUp);
+      }
+      to_delete.push_back(req);
+    }
+  }
+
+  for (const auto& req : to_delete) {
+    DeleteReadRequestUnlock(req);
+  }
 }
 
 void FileReader::Invalidate(int64_t offset, int64_t size) {
+  std::vector<ReadRequestSptr> to_delete;
+
   std::unique_lock<std::mutex> lock(mutex_);
 
-  std::vector<ReadRequest*> to_delete;
-
-  for (auto& [req_id, req_ptr] : requests_) {
-    auto* req = req_ptr.get();
+  for (auto& [req_id, req] : requests_) {
     VLOG(9) << "Invalidate check req " << req->ToString() << " for range ["
             << offset << "," << (offset + size) << ")";
 
@@ -149,27 +206,47 @@ void FileReader::Invalidate(int64_t offset, int64_t size) {
       continue;
     }
 
-    if (req->state == ReadRequestState::kBusy) {
-      req->ToState(ReadRequestState::kRefresh, TransitionReason::kInvalidate);
-    } else if (req->state == ReadRequestState::kReady) {
-      if (req->refs > 0) {
-        req->ToState(ReadRequestState::kNew, TransitionReason::kInvalidate);
-        RunReadRequest(req);
-      } else {
-        req->ToState(ReadRequestState::kInvalid, TransitionReason::kInvalidate);
-        to_delete.push_back(req);
+    {
+      std::unique_lock<std::mutex> req_lock(req->mutex);
+      if (req->state == ReadRequestState::kBusy) {
+        req->ToStateUnLock(ReadRequestState::kRefresh,
+                           TransitionReason::kInvalidate);
+      } else if (req->state == ReadRequestState::kReady) {
+        if (req->readers > 0) {
+          req->ToStateUnLock(ReadRequestState::kNew,
+                             TransitionReason::kInvalidate);
+          RunReadRequest(req);
+        } else {
+          req->ToStateUnLock(ReadRequestState::kInvalid,
+                             TransitionReason::kInvalidate);
+          to_delete.push_back(req);
+        }
       }
     }
-
   }  // end for
 
-  for (auto* req : to_delete) {
-    DeleteReadRequest(req);
+  for (const auto& req : to_delete) {
+    DeleteReadRequestUnlock(req);
   }
 }
 
+void FileReader::RunReadRequest(ReadRequestSptr req) {
+  AcquireRef();
+  vfs_rreq_in_queue << 1;
+
+  vfs_hub_->GetReadExecutor()->Execute([this, req]() {
+    vfs_rreq_in_queue << -1;
+
+    vfs_rreq_inflighting << 1;
+    DoReadRequst(req);
+    vfs_rreq_inflighting << -1;
+
+    ReleaseRef();
+  });
+}
+
 // split request by block boundary
-ReadRequest* FileReader::NewReadRequest(int64_t s, int64_t e) {
+ReadRequestSptr FileReader::NewReadRequest(int64_t s, int64_t e) {
   int64_t chunk_indx = s / chunk_size_;
   int64_t chunk_offset = s % chunk_size_;
 
@@ -183,21 +260,18 @@ ReadRequest* FileReader::NewReadRequest(int64_t s, int64_t e) {
       "actual=[{}-{}), len={}",
       s, e, block_end, s, req_end, (req_end - s));
 
-  std::unique_ptr<ReadRequest> req(
-      new ReadRequest{.req_id = req_id_gen.fetch_add(1),
-                      .ino = ino_,
-                      .chunk_index = chunk_indx,
-                      .chunk_offset = chunk_offset,
-                      .frange = FileRange{.offset = s, .len = (req_end - s)}});
+  std::shared_ptr<ReadRequest> req(
+      new ReadRequest(req_id_gen.fetch_add(1), ino_, chunk_indx, chunk_offset,
+                      FileRange{.offset = s, .len = (req_end - s)}));
 
   req->state = ReadRequestState::kNew;
   req->status = Status::OK();
   req->access_sec = butil::monotonic_time_s();
-  req->refs = 0;
+  req->readers = 0;
 
   auto [it, inserted] = requests_.emplace(req->req_id, std::move(req));
   CHECK(inserted);
-  ReadRequest* new_req = it->second.get();
+  ReadRequestSptr new_req = it->second;
   VLOG(9) << fmt::format("NewReadRequest req: {}", new_req->ToString());
 
   TakeMem(new_req->frange.len);
@@ -207,17 +281,30 @@ ReadRequest* FileReader::NewReadRequest(int64_t s, int64_t e) {
   return new_req;
 }
 
-void FileReader::DeleteReadRequest(ReadRequest* req) {
+void FileReader::DeleteReadRequestAsync(ReadRequestSptr req) {
+  AcquireRef();
+  vfs_hub_->GetReadExecutor()->Execute([&, req]() {
+    DeleteReadRequest(req);
+    ReleaseRef();
+  });
+}
+
+void FileReader::DeleteReadRequest(ReadRequestSptr req) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  DeleteReadRequestUnlock(req);
+}
+
+// out of req lock
+void FileReader::DeleteReadRequestUnlock(ReadRequestSptr req) {
   VLOG(9) << fmt::format("DeleteReadRequest req: {}", req->ToString());
-  CHECK(req->refs == 0);
-  CHECK(req->state == ReadRequestState::kInvalid);
+  CHECK(CanDeleteRequest(req));
 
   ReleaseMem(req->frange.len);
 
   CHECK(requests_.erase(req->req_id) == 1);
 }
 
-static ChunkReadReq GenChunkReqdReq(ReadRequest* req) {
+static ChunkReadReq GenChunkReqdReq(const ReadRequestSptr& req) {
   return ChunkReadReq{
       .req_id = req->req_id,
       .ino = req->ino,
@@ -227,11 +314,42 @@ static ChunkReadReq GenChunkReqdReq(ReadRequest* req) {
   };
 }
 
-void FileReader::ReadRequstDone(ReadRequest* req) {
-  if (closing_) {
+void FileReader::OnReadRequestComplete(ChunkReader* reader, ReadRequestSptr req,
+                                       Status s) {
+  std::unique_lock<std::mutex> lock(req->mutex);
+  if (!s.ok()) {
+    LOG(WARNING) << fmt::format("Failed read read_req: {}, status: {}",
+                                req->ToStringUnlock(), s.ToString());
+  }
+
+  CHECK(req->state == ReadRequestState::kBusy ||
+        req->state == ReadRequestState::kRefresh);
+
+  if (req->state == ReadRequestState::kRefresh) {
+    // if state is kRefresh, continue read even previous read failed
+    req->ToStateUnLock(ReadRequestState::kNew, TransitionReason::kReadDone);
+    req->status = Status::OK();
+  } else {
+    req->status = s;
+
+    if (req->status.ok()) {
+      req->buffer = reader->GetDataBuffer();
+      req->access_sec = butil::monotonic_time_s();
+      req->ToStateUnLock(ReadRequestState::kReady, TransitionReason::kReadDone);
+    } else {
+      LOG(ERROR) << fmt::format(
+          "Invalid read_req: {} due to read fail, status: {}",
+          req->ToStringUnlock(), req->status.ToString());
+      req->ToStateUnLock(ReadRequestState::kInvalid,
+                         TransitionReason::kReadDone);
+    }
+  }
+
+  if (closing_.load(std::memory_order_acquire)) {
     LOG(WARNING) << fmt::format(
-        "ReadRequstDone mark req: {} invalid due to closing", req->ToString());
-    req->ToState(ReadRequestState::kInvalid, TransitionReason::kReadDone);
+        "ReadRequstDone mark req: {} invalid due to closing",
+        req->ToStringUnlock());
+    req->ToStateUnLock(ReadRequestState::kInvalid, TransitionReason::kReadDone);
   }
 
   switch (req->state) {
@@ -242,8 +360,8 @@ void FileReader::ReadRequstDone(ReadRequest* req) {
       req->cv.notify_all();
       break;
     case ReadRequestState::kInvalid:
-      if (req->refs == 0) {
-        DeleteReadRequest(req);
+      if (req->readers == 0) {
+        DeleteReadRequestAsync(req);
       } else {
         // it's user's responsibility to clean up
         req->cv.notify_all();
@@ -251,54 +369,16 @@ void FileReader::ReadRequstDone(ReadRequest* req) {
       break;
     default:
       LOG(FATAL) << fmt::format("ReadRequstDone invalid state req: {}",
-                                req->ToString());
+                                req->ToStringUnlock());
   }
 }
 
-void FileReader::OnReadRequestComplete(ChunkReader* reader, ReadRequest* req,
-                                       Status s) {
+void FileReader::DoReadRequst(ReadRequestSptr req) {
   {
-    std::unique_lock<std::mutex> lock(mutex_);
-    if (!s.ok()) {
-      LOG(WARNING) << fmt::format("Failed read read_req: {}, status: {}",
-                                  req->ToString(), s.ToString());
-    }
-
-    CHECK(req->state == ReadRequestState::kBusy ||
-          req->state == ReadRequestState::kRefresh);
-
-    if (req->state == ReadRequestState::kRefresh) {
-      // if state is kRefresh, continue read even previous read failed
-      req->ToState(ReadRequestState::kNew, TransitionReason::kReadDone);
-      req->status = Status::OK();
-    } else {
-      req->status = s;
-
-      if (req->status.ok()) {
-        req->buffer = reader->GetDataBuffer();
-        req->access_sec = butil::monotonic_time_s();
-        req->ToState(ReadRequestState::kReady, TransitionReason::kReadDone);
-      } else {
-        LOG(ERROR) << fmt::format(
-            "Invalid read_req: {} due to read fail, status: {}",
-            req->ToString(), req->status.ToString());
-        req->ToState(ReadRequestState::kInvalid, TransitionReason::kReadDone);
-      }
-    }
-
-    ReadRequstDone(req);
-  }
-
-  // must out of lock to avoid deadlock
-  ReleaseRef();
-}
-
-void FileReader::DoReadRequst(ReadRequest* req) {
-  {
-    std::unique_lock<std::mutex> lock(mutex_);
-    VLOG(9) << fmt::format("DoReadRequst start req: {}", req->ToString());
+    std::unique_lock<std::mutex> req_lock(req->mutex);
+    VLOG(9) << fmt::format("DoReadRequst start req: {}", req->ToStringUnlock());
     CHECK(req->state == ReadRequestState::kNew);
-    req->state = ReadRequestState::kBusy;
+    req->ToStateUnLock(ReadRequestState::kBusy, TransitionReason::kReading);
   }
 
   // NOTE: becareful here, because related param is const, so we can do this
@@ -309,12 +389,16 @@ void FileReader::DoReadRequst(ReadRequest* req) {
       vfs_hub_->GetTracer()->StartSpan(kVFSWrapperMoudule, METHOD_NAME());
   ContextSPtr span_ctx = span->GetContext();
 
+  AcquireRef();
+
   auto* reader = new ChunkReader(vfs_hub_, fh_, chunk_req);
   reader->ReadAsync(span_ctx,
                     [this, reader, req, span_ptr = span.release()](Status s) {
                       std::unique_ptr<ITraceSpan> spoped_span(span_ptr);
                       this->OnReadRequestComplete(reader, req, s);
                       delete reader;
+
+                      ReleaseRef();
                     });
 }
 
@@ -334,14 +418,14 @@ int64_t FileReader::UsedMem() const {
   return vfs_hub_->GetReadBufferManager()->GetUsedBytes();
 }
 
-bool FileReader::IsProtectedReq(ReadRequest* req) const {
+bool FileReader::IsProtectedReq(const ReadRequestSptr& req) const {
   int64_t readahead = policy_->ReadaheadSize();
   int64_t bt = std::max(readahead / 8, (int64_t)block_size_);
 
   int64_t s = policy_->last_offset >= bt ? policy_->last_offset - bt : 0;
   int64_t e = policy_->last_offset + readahead;
 
-  VLOG(9) << "IsUsefulReq check req " << req->ToString()
+  VLOG(9) << "IsProtectedReq check req " << req->ToString()
           << " policy: " << policy_->ToString() << ", [" << s << "," << e
           << ")";
 
@@ -430,7 +514,7 @@ void FileReader::MakeReadahead(ContextSPtr ctx, const FileRange& frange) {
       VLOG(9) << fmt::format(
           "MakeReadahead create new req for range [{},{}), len: {}", s, e,
           (e - s));
-      auto* req = NewReadRequest(s, e);
+      auto req = NewReadRequest(s, e);
 
       s = req->frange.End();
     }
@@ -527,9 +611,9 @@ std::vector<PartialReadRequest> FileReader::PrepareRequests(
 
       if (req->frange.offset <= s && req->frange.End() >= e) {
         read_reqs.emplace_back(PartialReadRequest{
-            .req = req.get(), .offset = s - req->frange.offset, .len = e - s});
+            .req = req, .offset = s - req->frange.offset, .len = e - s});
         req->access_sec = butil::monotonic_time_s();
-        req->AcquireRef();
+        req->IncReader();
         added = true;
         break;
       }
@@ -539,11 +623,11 @@ std::vector<PartialReadRequest> FileReader::PrepareRequests(
       while (s < e) {
         VLOG(9) << "PrepareRequests create new req for range [" << s << "," << e
                 << "), len: " << (e - s);
-        auto* req = NewReadRequest(s, e);
+        auto req = NewReadRequest(s, e);
 
         read_reqs.emplace_back(PartialReadRequest{
             .req = req, .offset = 0, .len = req->frange.len});
-        req->AcquireRef();
+        req->IncReader();
 
         s = req->frange.End();
       }
@@ -560,7 +644,7 @@ void FileReader::CleanUpRequest(ContextSPtr ctx, const FileRange& frange) {
   const uint64_t now = butil::monotonic_time_s();
   uint32_t req_num = requests_.size();
 
-  auto can_remove = [&req_num, now, this](ReadRequest* req) -> bool {
+  auto can_remove = [&req_num, now, this](const ReadRequestSptr& req) -> bool {
     if (req->access_sec + kReqValidityTimeoutS < now) {
       VLOG(12) << "CleanUpRequest remove timeout req: " << req->ToString()
                << " req_num: " << req_num;
@@ -578,11 +662,13 @@ void FileReader::CleanUpRequest(ContextSPtr ctx, const FileRange& frange) {
 
   // TODO: if req.offset ia large than the file
   // length, can delete directly
-  auto should_delete = [&](ReadRequest* req) -> bool {
+  auto should_delete = [&](const ReadRequestSptr& req) -> bool {
+    std::unique_lock<std::mutex> req_lock(req->mutex);
+
     if (req->state == ReadRequestState::kInvalid) {
       // when invalid, if no one holds ref, can delete directly
       // if some one holds ref, it's holder's responsibility to clean up later
-      return req->refs == 0;
+      return req->readers == 0;
     }
 
     if (frange.Overlaps(req->frange)) {
@@ -593,18 +679,18 @@ void FileReader::CleanUpRequest(ContextSPtr ctx, const FileRange& frange) {
       return false;
     }
 
-    if (req->state == ReadRequestState::kReady && req->refs == 0) {
-      req->ToState(ReadRequestState::kInvalid, TransitionReason::kCleanUp);
+    if (req->state == ReadRequestState::kReady && req->readers == 0) {
+      req->ToStateUnLock(ReadRequestState::kInvalid,
+                         TransitionReason::kCleanUp);
       return true;
     }
 
     return false;
   };
 
-  std::vector<ReadRequest*> to_delete;
+  std::vector<ReadRequestSptr> to_delete;
 
-  for (auto& [req_id, req_ptr] : requests_) {
-    auto* req = req_ptr.get();
+  for (auto& [req_id, req] : requests_) {
     VLOG(9) << "CleanUpRequest check req " << req->ToString();
 
     if (should_delete(req)) {
@@ -613,8 +699,8 @@ void FileReader::CleanUpRequest(ContextSPtr ctx, const FileRange& frange) {
     }
   }
 
-  for (auto* req : to_delete) {
-    DeleteReadRequest(req);
+  for (const auto& req : to_delete) {
+    DeleteReadRequestUnlock(req);
   }
 }
 
@@ -680,35 +766,37 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
     used_mem = UsedMem();
   }
 
-  std::unique_lock<std::mutex> lock(mutex_);
-
-  if (closing_) {
+  if (closing_.load(std::memory_order_acquire)) {
     LOG(WARNING) << "Read failed due to closing";
     return Status::Abort("Read aborted due to closing");
   }
 
-  CleanUpRequest(span->GetContext(), frange);
+  std::vector<PartialReadRequest> reqs;
+  {
+    std::unique_lock<std::mutex> lock(mutex_);
 
-  uint64_t last_bs = 32 << 10;  // 32KB
-  if (frange.End() + last_bs > attr.length) {
-    FileRange last;
-    last.offset = attr.length - last_bs;
-    last.len = last_bs;
-    if (attr.length < last_bs) {
-      last.offset = 0;
-      last.len = attr.length;
+    CleanUpRequest(span->GetContext(), frange);
+
+    uint64_t last_bs = 32 << 10;  // 32KB
+    if (frange.End() + last_bs > attr.length) {
+      FileRange last;
+      last.offset = attr.length - last_bs;
+      last.len = last_bs;
+      if (attr.length < last_bs) {
+        last.offset = 0;
+        last.len = attr.length;
+      }
+
+      VLOG(9) << "Read MakeReadahead for last bs, last: " << last.ToString();
+      MakeReadahead(span->GetContext(), last);
     }
 
-    VLOG(9) << "Read MakeReadahead for last bs, last: " << last.ToString();
-    MakeReadahead(span->GetContext(), last);
+    std::vector<int64_t> ranges = SplitRange(span->GetContext(), frange);
+
+    reqs = PrepareRequests(span->GetContext(), ranges);
+
+    CheckReadahead(span->GetContext(), frange, attr.length);
   }
-
-  std::vector<int64_t> ranges = SplitRange(span->GetContext(), frange);
-
-  std::vector<PartialReadRequest> reqs =
-      PrepareRequests(span->GetContext(), ranges);
-
-  CheckReadahead(span->GetContext(), frange, attr.length);
 
   SCOPED_CLEANUP({
     auto release_span = vfs_hub_->GetTracer()->StartSpanWithParent(
@@ -717,11 +805,13 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
     auto inner_span = vfs_hub_->GetTraceManager()->StartChildSpan(
         "FileReader::Read::ReleaseRequests", open_span);
 
+    std::unique_lock<std::mutex> lock(mutex_);
+
     for (auto& partial_req : reqs) {
-      partial_req.req->ReleaseRef();
-      if (partial_req.req->refs == 0 &&
-          partial_req.req->state == ReadRequestState::kInvalid) {
-        DeleteReadRequest(partial_req.req);
+      partial_req.req->DecReader();
+
+      if (CanDeleteRequest(partial_req.req)) {
+        DeleteReadRequestUnlock(partial_req.req);
       }
     }
   });
@@ -740,12 +830,14 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
     for (PartialReadRequest& partial_req : reqs) {
       VLOG(9) << fmt::format("Read wait req: {}", partial_req.ToString());
 
+      std::unique_lock<std::mutex> req_lock(partial_req.req->mutex);
+
       while (partial_req.req->state != ReadRequestState::kReady &&
              partial_req.req->state != ReadRequestState::kInvalid) {
-        partial_req.req->cv.wait(lock);
+        partial_req.req->cv.wait(req_lock);
       }
 
-      if (closing_) {
+      if (closing_.load(std::memory_order_acquire)) {
         LOG(WARNING) << "Read aborted due to closing";
         ret = Status::Abort("Read aborted due to closing");
         break;

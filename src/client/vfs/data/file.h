@@ -40,6 +40,10 @@ class File : public IFile {
 
   ~File() override;
 
+  Status Open() override;
+
+  void Close() override;
+
   Status Write(ContextSPtr ctx, const char* buf, uint64_t size, uint64_t offset,
                uint64_t* out_wsize) override;
 
@@ -48,11 +52,11 @@ class File : public IFile {
 
   void Invalidate(int64_t offset, int64_t size) override;
 
-  void Close() override;
-
   Status Flush() override;
 
   void AsyncFlush(StatusCallback cb) override;
+
+  void ShrinkMem() override;
 
  private:
   Status PreCheck();
@@ -62,6 +66,8 @@ class File : public IFile {
   VFSHub* vfs_hub_;
   const uint64_t fh_;
   const uint64_t ino_;
+
+  std::atomic<bool> closed_{false};
 
   FileWriterUPtr file_writer_;
   FileReader* file_reader_;

@@ -19,6 +19,7 @@
 
 #include <fmt/format.h>
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -57,12 +58,21 @@ struct ChunkSlices {
 };
 
 struct ReaderSharedState {
+  const uint64_t total;
+
+  std::atomic<uint64_t> num_done{0};
+  const std::unique_ptr<ITraceSpan> read_span;
+  const std::vector<BlockCacheReadReqUPtr> block_cache_reqs;
+
   std::mutex mtx;
-  uint64_t total;
-  uint64_t num_done;
   Status status;
-  std::unique_ptr<ITraceSpan> read_span;
-  std::vector<BlockCacheReadReqUPtr> block_cache_reqs;
+
+  ReaderSharedState(uint64_t p_total, std::unique_ptr<ITraceSpan> p_span,
+                    std::vector<BlockCacheReadReqUPtr> p_reqs)
+      : total(p_total),
+        status(Status::OK()),
+        read_span(std::move(p_span)),
+        block_cache_reqs(std::move(p_reqs)) {}
 };
 
 class ChunkReader {

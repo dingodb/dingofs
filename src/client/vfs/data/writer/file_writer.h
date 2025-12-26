@@ -39,12 +39,12 @@ class FileWriter {
 
   ~FileWriter();
 
+  void Close();
+
   Status Write(ContextSPtr ctx, const char* buf, uint64_t size, uint64_t offset,
                uint64_t* out_wsize);
 
   void AsyncFlush(StatusCallback cb);
-
-  void Close();
 
  private:
   uint64_t GetChunkSize() const;

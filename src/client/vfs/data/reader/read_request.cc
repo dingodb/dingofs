@@ -16,11 +16,14 @@
 
 #include "client/vfs/data/reader/read_request.h"
 
+#include <mutex>
+
 namespace dingofs {
 namespace client {
 namespace vfs {
 
-void ReadRequest::ToState(ReadRequestState new_state, TransitionReason reason) {
+void ReadRequest::ToStateUnLock(ReadRequestState new_state,
+                                TransitionReason reason) {
   VLOG(9) << fmt::format("ReadRequest::ToState uuid: {} [{}-{}] reason: {}",
                          UUID(), ReadRequestStateToString(state),
                          ReadRequestStateToString(new_state),
@@ -28,13 +31,19 @@ void ReadRequest::ToState(ReadRequestState new_state, TransitionReason reason) {
   state = new_state;
 }
 
-std::string ReadRequest::ToString() const {
+std::string ReadRequest::ToStringUnlock() const {
+  std::unique_lock<std::mutex> lock(mutex);
   return fmt::format(
-      "(uuid: {}, state: {}, refs: {}, access_sec: {}, ino: {}, file_range: "
+      "(uuid: {}, state: {}, readers: {}, access_sec: {}, ino: {}, file_range: "
       "[{}-{}), len: {}, chunk_range: [{},{}-{}), status: {})",
-      UUID(), ReadRequestStateToString(state), refs, access_sec, ino,
+      UUID(), ReadRequestStateToString(state), readers, access_sec, ino,
       frange.offset, frange.End(), frange.len, chunk_index, chunk_offset,
       (chunk_offset + frange.len), status.ToString());
+}
+
+std::string ReadRequest::ToString() const {
+  std::unique_lock<std::mutex> lock(mutex);
+  return ToStringUnlock();
 }
 
 std::string PartialReadRequest::ToString() const {

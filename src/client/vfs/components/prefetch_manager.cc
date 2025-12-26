@@ -19,6 +19,7 @@
 #include <fmt/format.h>
 #include <glog/logging.h>
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
 
@@ -35,8 +36,30 @@ namespace vfs {
 using WriteLockGuard = dingofs::utils::WriteLockGuard;
 using ReadLockGuard = dingofs::utils::ReadLockGuard;
 
+int PrefetchManager::HandlePrefetch(
+    void* meta, bthread::TaskIterator<PrefetchContext>& iter) {
+  if (iter.is_queue_stopped()) {
+    return 0;
+  }
+
+  auto* self = static_cast<PrefetchManager*>(meta);
+  for (; iter; iter++) {
+    auto& context = *iter;
+
+    self->prefetch_executor_->Execute(
+        [self, context]() { self->ProcessPrefetch(context); });
+  }
+
+  return 0;
+}
+
 Status PrefetchManager::Start(uint32_t threads) {
   CHECK_NOTNULL(metrics_);
+
+  bthread::ExecutionQueueOptions queue_options;
+  CHECK_EQ(0, bthread::execution_queue_start(&task_queue_, &queue_options,
+                                             &PrefetchManager::HandlePrefetch,
+                                             this));
 
   prefetch_executor_ = std::make_unique<BthreadExecutor>(threads);
   auto ok = prefetch_executor_->Start();
@@ -58,14 +81,23 @@ Status PrefetchManager::Stop() {
     return Status::OK();
   }
 
+  CHECK_EQ(bthread::execution_queue_stop(task_queue_), 0);
+  CHECK_EQ(bthread::execution_queue_join(task_queue_), 0);
+
+  auto ok = prefetch_executor_->Stop();
+  if (!ok) {
+    LOG(ERROR) << "Stop prefetch executor failed.";
+    return Status::Internal("Stop prefetch executor failed.");
+  }
+
+  running_.store(false, std::memory_order_relaxed);
+
   LOG(INFO) << "PrefetchManager stopped.";
   return Status::OK();
 }
 
 void PrefetchManager::SubmitTask(PrefetchContext context) {
-  auto* self = this;
-  prefetch_executor_->Execute(
-      [self, context]() { self->ProcessPrefetch(context); });
+  CHECK_EQ(0, bthread::execution_queue_execute(task_queue_, context));
 }
 
 void PrefetchManager::ProcessPrefetch(const PrefetchContext& context) {

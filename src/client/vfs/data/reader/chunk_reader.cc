@@ -152,7 +152,7 @@ IOBuffer ChunkReader::GatherIoBuf(ContextSPtr ctx, ReaderSharedState* shared) {
   auto span = hub_->GetTracer()->StartSpanWithContext(kVFSDataMoudule,
                                                       METHOD_NAME(), ctx);
   IOBuffer ret;
-  for (auto& block_cache_req : shared->block_cache_reqs) {
+  for (const auto& block_cache_req : shared->block_cache_reqs) {
     ret.Append(&block_cache_req->io_buffer);
     VLOG(6) << fmt::format(
         "{} GatherIoBuf: Append iobuf: {} to out_buf: {}"
@@ -169,7 +169,12 @@ void ChunkReader::OnAllBlocksComplete(ReaderSharedState* shared) {
   Status final_status;
   IOBuffer data;
   {
-    std::lock_guard<std::mutex> lock(shared->mtx);
+    // No lock needed here because:
+    // 1. num_done atomic fetch_add provides happens-before relationship
+    // 2. This function is only called when all tasks are done (num_done ==
+    // total)
+    // 3. No other threads are modifying shared->status or
+    // shared->block_cache_reqs
 
     auto span = hub_->GetTracer()->StartSpanWithParent(
         kVFSDataMoudule, METHOD_NAME(), *shared->read_span);
@@ -206,41 +211,34 @@ void ChunkReader::OnAllBlocksComplete(ReaderSharedState* shared) {
 
 void ChunkReader::OnBlockReadComplete(ReaderSharedState* shared,
                                       BlockCacheReadReq* req, Status s) {
-  bool all_done = false;
-  {
-    if (s.ok()) {
-      VLOG(6) << fmt::format(
-          "{} Success read block_req: {}, iobuf: {}, io_buf_size: {}", UUID(),
-          req->ToString(), req->io_buffer.Describe(), req->io_buffer.Size());
-    } else {
-      LOG(WARNING) << fmt::format("{} Fail read block_req: {}, status: {}",
-                                  UUID(), req->ToString(), s.ToString());
-    }
+  if (s.ok()) {
+    VLOG(6) << fmt::format(
+        "{} Success read block_req: {}, iobuf: {}, io_buf_size: {}", UUID(),
+        req->ToString(), req->io_buffer.Describe(), req->io_buffer.Size());
+  } else {
+    LOG(WARNING) << fmt::format("{} Fail read block_req: {}, status: {}",
+                                UUID(), req->ToString(), s.ToString());
 
-    {
-      std::lock_guard<std::mutex> lock(shared->mtx);
-      if (!s.ok()) {
-        // Handle read failure with error priority: other errors > NotFound
-        if (shared->status.ok()) {
-          // First error, record it directly
-          shared->status = s;
-        } else if (shared->status.IsNotFound() && !s.IsNotFound()) {
-          // If current status is NotFound but new error is not, override with
-          // higher priority error
-          shared->status = s;
-        }
-        // For all other cases, keep the first/higher priority error
+    std::lock_guard<std::mutex> lock(shared->mtx);
+    if (!s.ok()) {
+      // Handle read failure with error priority: other errors > NotFound
+      if (shared->status.ok()) {
+        // First error, record it directly
+        shared->status = s;
+      } else if (shared->status.IsNotFound() && !s.IsNotFound()) {
+        // If current status is NotFound but new error is not, override with
+        // higher priority error
+        shared->status = s;
       }
-
-      if (++shared->num_done >= shared->total) {
-        all_done = true;
-      }
+      // For all other cases, keep the first/higher priority error
     }
   }
 
-  // first delete span in shard, then delete self span
-  // if there no retry case, we can only save one span in future
-  if (all_done) {
+  // NOTE: atomic fetch_add provides happens-before relationship
+  // should not use std::memory_order_relaxed here
+  uint64_t done = shared->num_done.fetch_add(1) + 1;
+
+  if (done >= shared->total) {
     OnAllBlocksComplete(shared);
   }
 }
@@ -350,15 +348,8 @@ void ChunkReader::ExecuteAsyncRead() {
     to_process_reqs.push_back(ptr.get());
   }
 
-  auto* shared = new ReaderSharedState();
-  {
-    std::unique_lock<std::mutex> lock(shared->mtx);
-    shared->total = block_cache_reqs.size();
-    shared->num_done = 0;
-    shared->status = Status::OK();
-    shared->read_span = std::move(span);
-    shared->block_cache_reqs = std::move(block_cache_reqs);
-  }
+  auto* shared = new ReaderSharedState(block_cache_reqs.size(), std::move(span),
+                                       std::move(block_cache_reqs));
 
   for (BlockCacheReadReq* block_cache_req : to_process_reqs) {
     ProcessBlockCacheReadReq(span_ctx, shared, block_cache_req);

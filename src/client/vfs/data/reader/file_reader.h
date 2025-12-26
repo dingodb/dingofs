@@ -44,14 +44,16 @@ class FileReader {
 
   ~FileReader();
 
+  void Close();
+
   Status Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
               int64_t offset, uint64_t* out_rsize);
-
-  void Close();
 
   // NOTE: if we manage filehandle by ino,
   // then write/commit_slice/fallocate/truncate/copyfile_range should call this
   void Invalidate(int64_t offset, int64_t size);
+
+  void ShrinkMem();
 
   void AcquireRef();
 
@@ -70,17 +72,18 @@ class FileReader {
   int64_t UsedMem() const;
 
   // pretected by mutex_
-  void RunReadRequest(ReadRequest* req);
-  void OnReadRequestComplete(ChunkReader* reader, ReadRequest* req, Status s);
+  void RunReadRequest(ReadRequestSptr req);
+  void OnReadRequestComplete(ChunkReader* reader, ReadRequestSptr req,
+                             Status s);
   // pretected by mutex_
-  void DoReadRequst(ReadRequest* req);
-  // pretected by mutex_
-  void ReadRequstDone(ReadRequest* req);
+  void DoReadRequst(ReadRequestSptr req);
 
   // pretected by mutex_
-  ReadRequest* NewReadRequest(int64_t s, int64_t e);
+  ReadRequestSptr NewReadRequest(int64_t s, int64_t e);
   // pretected by mutex_
-  void DeleteReadRequest(ReadRequest* req);
+  void DeleteReadRequestUnlock(ReadRequestSptr req);
+  void DeleteReadRequest(ReadRequestSptr req);
+  void DeleteReadRequestAsync(ReadRequestSptr req);
 
   // pretected by mutex_
   void CheckReadahead(ContextSPtr ctx, const FileRange& frange, int64_t flen);
@@ -94,14 +97,13 @@ class FileReader {
       ContextSPtr ctx, const std::vector<int64_t>& ranges);
 
   // pretected by mutex_
-  bool IsProtectedReq(ReadRequest* req) const;
+  bool IsProtectedReq(const ReadRequestSptr& req) const;
   // pretected by mutex_
   void CleanUpRequest(ContextSPtr ctx, const FileRange& frange);
 
   Status WaitAllReadRequest(ContextSPtr ctx,
                             std::vector<PartialReadRequest> reqs,
                             uint64_t* out_rsize);
-
   VFSHub* vfs_hub_;
   const uint64_t fh_;
   const uint64_t ino_;
@@ -113,11 +115,13 @@ class FileReader {
   uint64_t last_intime_warmup_mtime_{0};
   uint64_t last_intime_warmup_trigger_{0};
 
+  std::atomic<bool> closing_{false};
+
   std::mutex mutex_;
-  bool closing_{false};
   std::unique_ptr<ReadaheadPoclicy> policy_;
-  // seq -> ReadRequest*
-  std::map<int64_t, ReadRequestUptr> requests_;
+  // TODO : use dec/inc refs
+  // seq -> ReadRequestSptr
+  std::map<int64_t, ReadRequestSptr> requests_;
 };
 
 using FileReaderUPtr = std::unique_ptr<FileReader>;

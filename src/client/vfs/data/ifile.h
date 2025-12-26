@@ -32,6 +32,10 @@ class IFile {
  public:
   virtual ~IFile() = default;
 
+  virtual Status Open() = 0;
+
+  virtual void Close() = 0;
+
   virtual Status Write(ContextSPtr ctx, const char* buf, uint64_t size,
                        uint64_t offset, uint64_t* out_wsize) = 0;
 
@@ -40,7 +44,8 @@ class IFile {
 
   virtual void Invalidate(int64_t offset, int64_t size) = 0;
 
-  virtual void Close() = 0;
+  // TODO: remove this in future
+  virtual void ShrinkMem() = 0;
 
   virtual Status Flush() = 0;
 
