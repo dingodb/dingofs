@@ -14,7 +14,8 @@
 
 #include "client/vfs/metasystem/mds/chunk_memo.h"
 
-#include <algorithm>
+#include <utility>
+#include <vector>
 
 #include "utils/time.h"
 
@@ -31,74 +32,98 @@ void ChunkMemo::Remember(
 }
 
 void ChunkMemo::Remember(Ino ino, uint32_t chunk_index, uint64_t version) {
-  utils::WriteLockGuard guard(lock_);
-
-  auto it = chunk_map_.find({ino, chunk_index});
-  if (it == chunk_map_.end()) {
-    chunk_map_[{ino, chunk_index}] = {.version = version,
-                                      .time_ns = utils::TimestampNs()};
-  } else {
-    it->second.version = std::max(version, it->second.version);
-    it->second.time_ns = utils::TimestampNs();
-  }
+  chunk_map_.withWLock(
+      [ino, chunk_index, version](Map& map) mutable {
+        auto it = map.find({ino, chunk_index});
+        if (it == map.end()) {
+          map[{ino, chunk_index}] = {.version = version,
+                                     .time_ns = utils::TimestampNs()};
+        } else {
+          it->second.version = std::max(version, it->second.version);
+          it->second.time_ns = utils::TimestampNs();
+        }
+      },
+      ino);
 }
 
 void ChunkMemo::Forget(Ino ino) {
-  utils::WriteLockGuard guard(lock_);
+  chunk_map_.withWLock(
+      [ino](Map& map) mutable {
+        auto it = map.lower_bound({ino, 0});
+        for (; it != map.end();) {
+          if (it->first.ino != ino) break;
 
-  auto it = chunk_map_.lower_bound({ino, 0});
-  for (; it != chunk_map_.end();) {
-    if (it->first.ino != ino) break;
-
-    it = chunk_map_.erase(it);
-  }
+          it = map.erase(it);
+        }
+      },
+      ino);
 }
 
 void ChunkMemo::Forget(Ino ino, uint32_t chunk_index) {
-  utils::WriteLockGuard guard(lock_);
-
-  chunk_map_.erase({ino, chunk_index});
+  chunk_map_.withWLock(
+      [ino, chunk_index](Map& map) mutable { map.erase({ino, chunk_index}); },
+      ino);
 }
 
 void ChunkMemo::ForgetExpired(uint64_t expire_time_ns) {
-  utils::WriteLockGuard guard(lock_);
-
-  for (auto it = chunk_map_.begin(); it != chunk_map_.end();) {
-    if (it->second.time_ns < expire_time_ns) {
-      it = chunk_map_.erase(it);
-    } else {
-      ++it;
+  chunk_map_.iterateWLock([&](Map& map) {
+    for (auto it = map.begin(); it != map.end();) {
+      if (it->second.time_ns < expire_time_ns) {
+        it = map.erase(it);
+      } else {
+        ++it;
+      }
     }
-  }
+  });
 }
 
 uint64_t ChunkMemo::GetVersion(Ino ino, uint32_t chunk_index) {
-  utils::ReadLockGuard guard(lock_);
+  uint64_t version = 0;
+  chunk_map_.withRLock(
+      [ino, chunk_index, &version](Map& map) {
+        auto it = map.find({ino, chunk_index});
+        if (it != map.end()) version = it->second.version;
+      },
+      ino);
 
-  auto it = chunk_map_.find({ino, chunk_index});
-  return (it != chunk_map_.end()) ? it->second.version : 0;
+  return version;
 }
 
 std::vector<std::pair<uint32_t, uint64_t>> ChunkMemo::GetVersion(Ino ino) {
-  utils::ReadLockGuard guard(lock_);
-
   std::vector<std::pair<uint32_t, uint64_t>> versions;
 
-  auto it = chunk_map_.lower_bound({ino, 0});
-  for (; it != chunk_map_.end(); ++it) {
-    if (it->first.ino != ino) break;
+  chunk_map_.withRLock(
+      [ino, &versions, this](Map& map) {
+        auto it = map.lower_bound({ino, 0});
+        for (; it != map.end(); ++it) {
+          if (it->first.ino != ino) break;
 
-    versions.emplace_back(it->first.chunk_index, it->second.version);
-  }
+          versions.emplace_back(it->first.chunk_index, it->second.version);
+        }
+      },
+      ino);
 
   return versions;
 }
 
+size_t ChunkMemo::Size() {
+  size_t size = 0;
+  chunk_map_.iterate([&size](Map& map) { size += map.size(); });
+  return size;
+}
+
 bool ChunkMemo::Dump(Json::Value& value) {
-  utils::ReadLockGuard lk(lock_);
+  std::vector<std::pair<Key, Value>> chunk_map_copy;
+  chunk_map_copy.reserve(Size());
+
+  chunk_map_.iterate([&](Map& map) {
+    for (const auto& [key, val] : map) {
+      chunk_map_copy.emplace_back(key, val);
+    }
+  });
 
   Json::Value items = Json::arrayValue;
-  for (const auto& [key, value] : chunk_map_) {
+  for (const auto& [key, value] : chunk_map_copy) {
     Json::Value item;
     item["ino"] = key.ino;
     item["chunk_index"] = key.chunk_index;
@@ -113,9 +138,6 @@ bool ChunkMemo::Dump(Json::Value& value) {
 }
 
 bool ChunkMemo::Load(const Json::Value& value) {
-  utils::WriteLockGuard lk(lock_);
-
-  chunk_map_.clear();
   const Json::Value& items = value["chunk_memo"];
   if (!items.isArray()) {
     LOG(ERROR) << "[meta.chunk_memo] value is not an array.";
@@ -126,9 +148,8 @@ bool ChunkMemo::Load(const Json::Value& value) {
     Ino ino = item["ino"].asUInt64();
     uint32_t chunk_index = item["chunk_index"].asUInt();
     uint64_t version = item["version"].asUInt64();
-    uint64_t time_ns = item["time_ns"].asUInt64();
 
-    chunk_map_[{ino, chunk_index}] = {.version = version, .time_ns = time_ns};
+    Remember(ino, chunk_index, version);
   }
 
   return true;

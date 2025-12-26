@@ -24,7 +24,7 @@
 #include "client/vfs/vfs_meta.h"
 #include "json/value.h"
 #include "mds/common/type.h"
-#include "utils/concurrent/concurrent.h"
+#include "utils/shards.h"
 
 namespace dingofs {
 namespace client {
@@ -63,13 +63,16 @@ class ChunkMemo {
   uint64_t GetVersion(Ino ino, uint32_t chunk_index);
   std::vector<std::pair<uint32_t, uint64_t>> GetVersion(Ino ino);
 
+  size_t Size();
+
   bool Dump(Json::Value& value);
   bool Load(const Json::Value& value);
 
  private:
-  utils::RWLock lock_;
+  using Map = absl::btree_map<Key, Value>;
 
-  absl::btree_map<Key, Value> chunk_map_;
+  constexpr static size_t kShardNum = 32;
+  utils::Shards<Map, kShardNum> chunk_map_;
 };
 
 }  // namespace v2
