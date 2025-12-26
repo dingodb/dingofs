@@ -1581,6 +1581,7 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
   int64_t delta_bytes = result.delta_bytes;
 
   entry_out.attr = attr;
+  entry_out.shrink_file = (delta_bytes < 0) ? true : false;
 
   // update quota
   if (param.to_set & kSetAttrLength) {
@@ -1591,6 +1592,9 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
       quota_manager_->AsyncUpdateDirUsage(parent, delta_bytes, 0, reason);
     }
   }
+
+  // update chunk cache
+  if (delta_bytes < 0) chunk_cache_.Delete(ino);
 
   // update cache
   UpsertInodeCache(attr);

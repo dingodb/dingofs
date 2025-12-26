@@ -43,6 +43,17 @@ void ChunkMemo::Remember(Ino ino, uint32_t chunk_index, uint64_t version) {
   }
 }
 
+void ChunkMemo::Forget(Ino ino) {
+  utils::WriteLockGuard guard(lock_);
+
+  auto it = chunk_map_.lower_bound({ino, 0});
+  for (; it != chunk_map_.end();) {
+    if (it->first.ino != ino) break;
+
+    it = chunk_map_.erase(it);
+  }
+}
+
 void ChunkMemo::Forget(Ino ino, uint32_t chunk_index) {
   utils::WriteLockGuard guard(lock_);
 

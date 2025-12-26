@@ -67,6 +67,7 @@ struct EntryOut {
   AttrEntry parent_attr;
   AttrEntry attr;
   std::vector<AttrEntry> attrs;
+  bool shrink_file{false};
 };
 
 class FileSystem : public std::enable_shared_from_this<FileSystem> {

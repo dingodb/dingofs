@@ -129,7 +129,7 @@ class MDSClient {
 
   Status GetAttr(ContextSPtr ctx, Ino ino, AttrEntry& attr_entry);
   Status SetAttr(ContextSPtr ctx, Ino ino, const Attr& attr, int to_set,
-                 AttrEntry& attr_entry);
+                 AttrEntry& attr_entry, bool& shrink_file);
   Status GetXAttr(ContextSPtr ctx, Ino ino, const std::string& name,
                   std::string& value);
   Status SetXAttr(ContextSPtr ctx, Ino ino, const std::string& name,

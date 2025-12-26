@@ -1373,6 +1373,7 @@ void MDSServiceImpl::DoSetAttr(google::protobuf::RpcController*, const pb::mds::
   }
 
   response->mutable_inode()->Swap(&entry_out.attr);
+  response->set_shrink_file(entry_out.shrink_file);
 }
 
 void MDSServiceImpl::SetAttr(google::protobuf::RpcController* controller, const pb::mds::SetAttrRequest* request,

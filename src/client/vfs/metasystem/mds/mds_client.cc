@@ -707,7 +707,8 @@ Status MDSClient::GetAttr(ContextSPtr ctx, Ino ino, AttrEntry& attr_entry) {
 }
 
 Status MDSClient::SetAttr(ContextSPtr ctx, Ino ino, const Attr& attr,
-                          int to_set, AttrEntry& attr_entry) {
+                          int to_set, AttrEntry& attr_entry,
+                          bool& shrink_file) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, ino](bool& is_primary_mds) -> MDSMeta {
@@ -786,6 +787,7 @@ Status MDSClient::SetAttr(ContextSPtr ctx, Ino ino, const Attr& attr,
   parent_memo_->UpsertVersion(ino, response.inode().version());
 
   attr_entry.Swap(response.mutable_inode());
+  shrink_file = response.shrink_file();
 
   return Status::OK();
 }

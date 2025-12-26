@@ -56,6 +56,7 @@ class ChunkMemo {
   void Remember(Ino ino,
                 const std::vector<mds::ChunkDescriptor>& chunk_descriptors);
   void Remember(Ino ino, uint32_t chunk_index, uint64_t version);
+  void Forget(Ino ino);
   void Forget(Ino ino, uint32_t chunk_index);
   void ForgetExpired(uint64_t expire_time_ns);
 

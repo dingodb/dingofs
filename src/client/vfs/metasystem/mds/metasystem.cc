@@ -831,7 +831,9 @@ Status MDSMetaSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
 Status MDSMetaSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
                               const Attr& attr, Attr* out_attr) {
   AttrEntry attr_entry;
-  auto status = mds_client_->SetAttr(ctx, ino, attr, set, attr_entry);
+  bool shrink_file;
+  auto status =
+      mds_client_->SetAttr(ctx, ino, attr, set, attr_entry, shrink_file);
   if (!status.ok()) {
     return status;
   }
@@ -842,6 +844,7 @@ Status MDSMetaSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
   if (!status.ok()) return status;
 
   modify_time_memo_.Remember(ino);
+  if (shrink_file) chunk_memo_.Forget(ino);
 
   PutInodeToCache(attr_entry);
 
@@ -976,7 +979,9 @@ Status MDSMetaSystem::SetInodeLength(ContextSPtr ctx,
   int set = kSetAttrSize | kSetAttrMtime | kSetAttrCtime;
 
   AttrEntry attr_entry;
-  auto status = mds_client_->SetAttr(ctx, ino, attr, set, attr_entry);
+  bool shrink_file;
+  auto status =
+      mds_client_->SetAttr(ctx, ino, attr, set, attr_entry, shrink_file);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[meta.fs.{}] set inode length({}) fail, error({}).", ino, length,
@@ -985,6 +990,7 @@ Status MDSMetaSystem::SetInodeLength(ContextSPtr ctx,
   }
 
   modify_time_memo_.Remember(ino);
+  if (shrink_file) chunk_memo_.Forget(ino);
 
   PutInodeToCache(attr_entry);
 
