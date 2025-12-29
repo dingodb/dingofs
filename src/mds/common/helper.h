@@ -34,28 +34,6 @@ class Helper {
   static int64_t GetPid();
   static int64_t GetThreadID();
 
-  // nanosecond timestamp
-  static int64_t TimestampNs();
-  // microseconds
-  static int64_t TimestampUs();
-  // millisecond timestamp
-  static int64_t TimestampMs();
-  // second timestamp
-  static int64_t Timestamp();
-  static std::string NowTime();
-
-  // format millisecond timestamp
-  static std::string FormatMsTime(int64_t timestamp, const std::string& format);
-  static std::string FormatMsTime(int64_t timestamp);
-  // format second timestamp
-  static std::string FormatTime(int64_t timestamp, const std::string& format);
-  static std::string FormatTime(int64_t timestamp);
-
-  static std::string FormatNsTime(int64_t timestamp);
-
-  // format: "2021-01-01T00:00:00.000Z"
-  static std::string GetNowFormatMsTime();
-
   static bool IsEqualIgnoreCase(const std::string& str1, const std::string& str2);
   static std::string ToUpperCase(const std::string& str);
   static std::string ToLowerCase(const std::string& str);

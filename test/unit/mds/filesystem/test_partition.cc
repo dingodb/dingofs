@@ -16,9 +16,9 @@
 #include <cstdint>
 
 #include "gtest/gtest.h"
-#include "mds/common/helper.h"
 #include "mds/filesystem/inode.h"
 #include "mds/filesystem/partition.h"
+#include "utils/time.h"
 
 namespace dingofs {
 namespace mds {
@@ -39,7 +39,7 @@ static pb::mds::Inode GenInode(uint32_t fs_id, uint64_t ino,
   inode.set_rdev(0);
   inode.set_type(type);
 
-  auto now_ns = Helper::TimestampNs();
+  auto now_ns = utils::TimestampNs();
 
   inode.set_atime(now_ns);
   inode.set_mtime(now_ns);
@@ -51,9 +51,9 @@ static pb::mds::Inode GenInode(uint32_t fs_id, uint64_t ino,
     inode.set_nlink(1);
   }
 
-  inode.add_parents(Helper::TimestampMs());
-  inode.add_parents(Helper::TimestampMs() + 1);
-  inode.add_parents(Helper::TimestampMs() + 2);
+  inode.add_parents(utils::TimestampMs());
+  inode.add_parents(utils::TimestampMs() + 1);
+  inode.add_parents(utils::TimestampMs() + 2);
 
   inode.mutable_xattrs()->insert({"key1", "value1"});
   inode.mutable_xattrs()->insert({"key2", "value2"});

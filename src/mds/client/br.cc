@@ -24,12 +24,12 @@
 #include <vector>
 
 #include "common/blockaccess/block_accesser.h"
+#include "common/const.h"
 #include "common/logging.h"
 #include "dingofs/error.pb.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
 #include "mds/common/codec.h"
-#include "mds/common/constant.h"
 #include "mds/common/helper.h"
 #include "mds/common/status.h"
 #include "mds/common/tracing.h"

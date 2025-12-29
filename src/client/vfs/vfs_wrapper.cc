@@ -31,7 +31,7 @@
 #include "client/vfs/vfs_impl.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/blockaccess/block_access_log.h"
-#include "common/define.h"
+#include "common/const.h"
 #include "common/logging.h"
 #include "common/metrics/client/client.h"
 #include "common/metrics/metric_guard.h"

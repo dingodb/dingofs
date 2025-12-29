@@ -17,7 +17,7 @@
 #include "bthread/mutex.h"
 #include "fmt/format.h"
 #include "mds/common/codec.h"
-#include "mds/common/time.h"
+#include "utils/time.h"
 
 namespace dingofs {
 namespace client {
@@ -134,7 +134,7 @@ Status LevelIdGenerator::GetOrPutAllocId(uint64_t& alloc_id) {
 }
 
 Status LevelIdGenerator::AllocateIds(uint32_t size) {
-  mds::Duration duration;
+  utils::Duration duration;
   Status status;
   uint32_t retry = 0;
   uint64_t start_alloc_id = std::max(next_id_, last_alloc_id_);

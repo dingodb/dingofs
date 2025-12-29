@@ -15,7 +15,6 @@
 #include "mds/filesystem/inode.h"
 
 #include <cstdint>
-#include <memory>
 #include <string>
 #include <utility>
 
@@ -25,8 +24,8 @@
 #include "fmt/format.h"
 #include "gflags/gflags.h"
 #include "glog/logging.h"
-#include "mds/common/helper.h"
 #include "utils/concurrent/concurrent.h"
+#include "utils/time.h"
 
 namespace dingofs {
 namespace mds {
@@ -191,7 +190,7 @@ void Inode::ExpandLength(uint64_t length) {
 
   if (length <= attr_.length()) return;
 
-  uint64_t now_ns = Helper::TimestampNs();
+  uint64_t now_ns = utils::TimestampUs();
   attr_.set_length(length);
   attr_.set_mtime(now_ns);
   attr_.set_ctime(now_ns);
@@ -210,7 +209,7 @@ Inode::AttrEntry&& Inode::Move() {
   return std::move(attr_);
 }
 
-void Inode::UpdateLastAccessTime() { last_access_time_s_.store(Helper::Timestamp(), std::memory_order_relaxed); }
+void Inode::UpdateLastAccessTime() { last_access_time_s_.store(utils::Timestamp(), std::memory_order_relaxed); }
 
 uint64_t Inode::LastAccessTimeS() { return last_access_time_s_.load(std::memory_order_relaxed); }
 
@@ -355,7 +354,7 @@ size_t InodeCache::Size() {
 void InodeCache::CleanExpired(uint64_t expire_s) {
   if (Size() < FLAGS_mds_inode_cache_max_count) return;
 
-  uint64_t now_s = Helper::Timestamp();
+  uint64_t now_s = utils::Timestamp();
 
   std::vector<InodeSPtr> inodes;
   shard_map_.iterate([&](const Map& map) {

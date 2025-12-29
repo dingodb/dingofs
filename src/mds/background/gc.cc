@@ -748,7 +748,7 @@ void GcProcessor::ScanDelFs(const FsInfoEntry& fs_info) {
 }
 
 bool GcProcessor::ShouldDeleteFile(const AttrEntry& attr) {
-  uint64_t now_s = Helper::Timestamp();
+  uint64_t now_s = utils::Timestamp();
   return (attr.ctime() / 1000000000 + FLAGS_mds_gc_delfile_reserve_time_s) < now_s;
 }
 
@@ -759,12 +759,12 @@ bool GcProcessor::ShouldCleanFileSession(const FileSessionEntry& file_session,
     return true;
   }
 
-  uint64_t now_s = Helper::Timestamp();
+  uint64_t now_s = utils::Timestamp();
   return file_session.create_time_s() + FLAGS_mds_gc_filesession_reserve_time_s < now_s;
 }
 
 bool GcProcessor::ShouldRecycleFs(const FsInfoEntry& fs_info) {
-  uint32_t now_s = Helper::Timestamp();
+  uint32_t now_s = utils::Timestamp();
   return now_s > (fs_info.delete_time_s() + fs_info.recycle_time_hour() * 3600);
 }
 

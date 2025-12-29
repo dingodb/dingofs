@@ -18,12 +18,12 @@
 #include <string>
 #include <vector>
 
+#include "common/const.h"
 #include "gflags/gflags.h"
 #include "mds/client/br.h"
 #include "mds/client/mds.h"
 #include "mds/client/store.h"
 #include "mds/common/codec.h"
-#include "mds/common/constant.h"
 #include "mds/common/helper.h"
 
 DEFINE_string(coor_addr, "", "coordinator address, etc: list://127.0.0.1:22001 or file://./coor_list");
@@ -220,8 +220,8 @@ int main(int argc, char* argv[]) {
     options.cluster_id = FLAGS_cluster_id;
     options.fs_id = FLAGS_fs_id;
     options.fs_name = FLAGS_fs_name;
-    options.meta_table_name = fmt::format("{}[{}]", dingofs::mds::kMetaTableName, FLAGS_cluster_id);
-    options.fsstats_table_name = fmt::format("{}[{}]", dingofs::mds::kFsStatsTableName, FLAGS_cluster_id);
+    options.meta_table_name = fmt::format("{}[{}]", dingofs::kMetaTableName, FLAGS_cluster_id);
+    options.fsstats_table_name = fmt::format("{}[{}]", dingofs::kFsStatsTableName, FLAGS_cluster_id);
 
     auto& s3_info = options.s3_info;
     s3_info.ak = FLAGS_s3_ak;

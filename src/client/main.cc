@@ -169,7 +169,7 @@ int main(int argc, char* argv[]) {
     return EXIT_FAILURE;
   }
 
-  dingofs::client::MetaSystemType metasystem_type;
+  dingofs::MetaSystemType metasystem_type;
   std::string mds_addrs;
   std::string fs_name;
   std::string storage_info;

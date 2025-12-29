@@ -39,7 +39,7 @@ struct VFSConfig {
   std::string mds_addrs;
   std::string mount_point;
   std::string fs_name;
-  client::MetaSystemType metasystem_type;  // mds,memory,local
+  MetaSystemType metasystem_type;  // mds,memory,local
   std::string storage_info;
 };
 

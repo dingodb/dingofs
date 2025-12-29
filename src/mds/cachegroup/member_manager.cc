@@ -53,7 +53,7 @@ Status CacheGroupMemberManager::ReweightMember(Context& ctx, const std::string& 
 }
 
 static void SetMemberState(CacheMemberEntry& cache_member) {
-  auto now_ms = Helper::TimestampMs();
+  auto now_ms = utils::TimestampMs();
   if (cache_member.last_online_time_ms() == 0) {
     cache_member.set_state(pb::mds::CacheGroupMemberState::CacheGroupMemberStateUnknown);
   } else if (cache_member.last_online_time_ms() + FLAGS_cache_member_heartbeat_offline_timeout_s * 1000 <
@@ -124,7 +124,7 @@ Status CacheGroupMemberManager::JoinCacheGroup(Context& ctx, const std::string& 
       cache_member.set_ip(ip);
       cache_member.set_port(port);
       cache_member.set_weight(weight);
-      cache_member.set_create_time_s(Helper::Timestamp());
+      cache_member.set_create_time_s(utils::Timestamp());
       cache_member.set_last_online_time_ms(0);
       cache_member.set_group_name(group_name);
       cache_member.set_state(pb::mds::CacheGroupMemberState::CacheGroupMemberStateUnknown);
@@ -307,7 +307,7 @@ bool CacheGroupMemberManager::CheckMemberLocked(CacheMemberEntry& cache_member) 
 
 bool CacheGroupMemberManager::CheckMemberOffLine(CacheMemberEntry& cache_member) {
   return cache_member.last_online_time_ms() + FLAGS_cache_member_heartbeat_offline_timeout_s * 1000 <
-                 static_cast<uint64_t>(Helper::TimestampMs())
+                 static_cast<uint64_t>(utils::TimestampMs())
              ? true
              : false;
 }

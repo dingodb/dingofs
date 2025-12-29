@@ -21,7 +21,6 @@
 #include <string>
 
 namespace dingofs {
-namespace client {
 
 enum class MetaSystemType : uint8_t {
   MDS,
@@ -57,7 +56,6 @@ inline std::string MetaSystemTypeToString(
   }
 }
 
-}  // namespace client
 }  // namespace dingofs
 
 #endif  // DINGOFS_CLIENT_COMMON_TYPES_H_

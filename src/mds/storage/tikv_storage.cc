@@ -19,7 +19,7 @@
 #include <memory>
 #include <vector>
 
-#include "common/logging.h"
+#include "mds/common/helper.h"
 #include "mds/common/synchronization.h"
 #include "tikv/lib.rs.h"
 
@@ -160,8 +160,8 @@ Status TikvTxn::Delete(const std::string& key) {
 }
 
 Status TikvTxn::Get(const std::string& key, std::string& value) {
-  uint64_t start_time = Helper::TimestampUs();
-  ON_SCOPE_EXIT([&]() { txn_trace_.read_time_us += (Helper::TimestampUs() - start_time); });
+  uint64_t start_time = utils::TimestampUs();
+  ON_SCOPE_EXIT([&]() { txn_trace_.read_time_us += (utils::TimestampUs() - start_time); });
 
   try {
     auto result = txn_.get(key);
@@ -179,8 +179,8 @@ Status TikvTxn::Get(const std::string& key, std::string& value) {
 }
 
 Status TikvTxn::BatchGet(const std::vector<std::string>& keys, std::vector<KeyValue>& kvs) {
-  uint64_t start_time = Helper::TimestampUs();
-  ON_SCOPE_EXIT([&]() { txn_trace_.read_time_us += (Helper::TimestampUs() - start_time); });
+  uint64_t start_time = utils::TimestampUs();
+  ON_SCOPE_EXIT([&]() { txn_trace_.read_time_us += (utils::TimestampUs() - start_time); });
 
   try {
     auto kv_pairs = txn_.batch_get(keys);
@@ -201,8 +201,8 @@ Status TikvTxn::BatchGet(const std::vector<std::string>& keys, std::vector<KeyVa
 }
 
 Status TikvTxn::Scan(const Range& range, uint64_t limit, std::vector<KeyValue>& kvs) {
-  uint64_t start_time = Helper::TimestampUs();
-  ON_SCOPE_EXIT([&]() { txn_trace_.read_time_us += (Helper::TimestampUs() - start_time); });
+  uint64_t start_time = utils::TimestampUs();
+  ON_SCOPE_EXIT([&]() { txn_trace_.read_time_us += (utils::TimestampUs() - start_time); });
 
   try {
     auto kv_pairs = txn_.scan(range.start, Bound::Included, range.end, Bound::Included, limit);
@@ -223,8 +223,8 @@ Status TikvTxn::Scan(const Range& range, uint64_t limit, std::vector<KeyValue>& 
 }
 
 Status TikvTxn::Scan(const Range& range, ScanHandlerType handler) {
-  uint64_t start_time = Helper::TimestampUs();
-  ON_SCOPE_EXIT([&]() { txn_trace_.read_time_us += (Helper::TimestampUs() - start_time); });
+  uint64_t start_time = utils::TimestampUs();
+  ON_SCOPE_EXIT([&]() { txn_trace_.read_time_us += (utils::TimestampUs() - start_time); });
 
   try {
     auto kv_pairs = txn_.scan(range.start, Bound::Included, range.end, Bound::Included, UINT32_MAX);
@@ -243,8 +243,8 @@ Status TikvTxn::Scan(const Range& range, ScanHandlerType handler) {
 }
 
 Status TikvTxn::Scan(const Range& range, std::function<bool(KeyValue&)> handler) {
-  uint64_t start_time = Helper::TimestampUs();
-  ON_SCOPE_EXIT([&]() { txn_trace_.read_time_us += (Helper::TimestampUs() - start_time); });
+  uint64_t start_time = utils::TimestampUs();
+  ON_SCOPE_EXIT([&]() { txn_trace_.read_time_us += (utils::TimestampUs() - start_time); });
 
   try {
     auto kv_pairs = txn_.scan(range.start, Bound::Included, range.end, Bound::Included, UINT32_MAX);
@@ -280,8 +280,8 @@ static bool IsRetryable(const std::string& err_msg) {
 }
 
 Status TikvTxn::Commit() {
-  uint64_t start_time = Helper::TimestampUs();
-  ON_SCOPE_EXIT([&]() { txn_trace_.write_time_us += (Helper::TimestampUs() - start_time); });
+  uint64_t start_time = utils::TimestampUs();
+  ON_SCOPE_EXIT([&]() { txn_trace_.write_time_us += (utils::TimestampUs() - start_time); });
 
   Status status;
   try {

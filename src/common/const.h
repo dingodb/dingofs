@@ -29,6 +29,49 @@
 
 namespace dingofs {
 
+const uint64_t kRootIno = 1;
+const uint64_t kRootParentIno = 0;
+
+const uint64_t kRecycleIno = 2;
+const char kRecycleName[] = ".recycle";
+
+const uint64_t kStatsIno = 0x7FFFFFFF00000001;
+const char kStatsName[] = ".stats";
+
+inline bool IsInternalNode(uint64_t ino) {
+  return ino == kStatsIno || ino == kRecycleIno || ino == kRootIno;
+}
+
+inline bool IsInternalName(const std::string& name) {
+  return name == kStatsName || name == kRecycleName;
+}
+
+// set inode attribute flags
+const uint32_t kSetAttrMode = 1 << 0;
+const uint32_t kSetAttrUid = 1 << 1;
+const uint32_t kSetAttrGid = 1 << 2;
+const uint32_t kSetAttrLength = 1 << 3;
+const uint32_t kSetAttrAtime = 1 << 4;
+const uint32_t kSetAttrMtime = 1 << 5;
+const uint32_t kSetAttrCtime = 1 << 6;
+const uint32_t kSetAttrNlink = 1 << 7;
+const uint32_t kSetAttrFlags = (1 << 8);
+
+const int kEmptyDirMinLinkNum = 2;
+
+// meta table names
+const std::string kMetaTableName = "dingofs-meta";
+const std::string kFsStatsTableName = "dingofs-fsstats";
+
+inline std::string GenFsMetaTableName(const std::string& fs_name) {
+  return "dingofs-fsmeta[" + fs_name + "]";
+}
+
+inline std::string GenFsMetaTableName(uint32_t cluster_id,
+                                      const std::string& fs_name) {
+  return "dingofs-fsmeta[" + std::to_string(cluster_id) + "][" + fs_name + "]";
+}
+
 static constexpr uint64_t kKiB = 1024ULL;
 static constexpr uint64_t kMiB = 1024ULL * kKiB;
 static constexpr uint64_t kGiB = 1024ULL * kMiB;

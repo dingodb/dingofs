@@ -25,6 +25,7 @@
 
 #include "brpc/reloadable_flags.h"
 #include "bthread/bthread.h"
+#include "common/const.h"
 #include "common/logging.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"
@@ -32,12 +33,11 @@
 #include "gflags/gflags_declare.h"
 #include "glog/logging.h"
 #include "mds/common/codec.h"
-#include "mds/common/constant.h"
 #include "mds/common/helper.h"
 #include "mds/common/status.h"
-#include "mds/common/time.h"
 #include "mds/common/type.h"
 #include "mds/storage/storage.h"
+#include "utils/time.h"
 #include "utils/uuid.h"
 
 namespace dingofs {
@@ -428,8 +428,8 @@ Status MountFsOperation::Run(TxnUPtr& txn) {
   client.set_port(mount_point_.port());
   client.set_mountpoint(mount_point_.path());
   client.set_fs_name(fs_info.fs_name());
-  client.set_create_time_ms(Helper::TimestampMs());
-  client.set_last_online_time_ms(Helper::TimestampMs());
+  client.set_create_time_ms(utils::TimestampMs());
+  client.set_last_online_time_ms(utils::TimestampMs());
 
   txn->Put(MetaCodec::EncodeHeartbeatKey(client.id()), MetaCodec::EncodeHeartbeatValue(client));
 
@@ -488,7 +488,7 @@ Status DeleteFsOperation::Run(TxnUPtr& txn) {
 
   fs_info.set_status(pb::mds::FsStatus::DELETED);
   fs_info.set_is_deleted(true);
-  fs_info.set_delete_time_s(Helper::Timestamp());
+  fs_info.set_delete_time_s(utils::Timestamp());
 
   txn->Put(fs_key, MetaCodec::EncodeFsValue(fs_info));
 
@@ -1613,7 +1613,7 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoEntry& fs_info,
   auto chunk_copy = to_chunk_fn(chunk);
 
   TrashSliceList trash_slices;
-  trash_slices.set_time_ms(Helper::TimestampMs());
+  trash_slices.set_time_ms(utils::TimestampMs());
 
   // 1. complete out of file length slices
   // chunk offset:               |______|
@@ -1837,7 +1837,7 @@ TrashSliceList CompactChunkOperation::CompactChunk(TxnUPtr& txn, uint32_t fs_id,
     return {};
   }
 
-  txn->Put(MetaCodec::EncodeDelSliceKey(fs_id, ino, chunk.index(), Helper::TimestampNs()),
+  txn->Put(MetaCodec::EncodeDelSliceKey(fs_id, ino, chunk.index(), utils::TimestampUs()),
            MetaCodec::EncodeDelSliceValue(trash_slice_list));
 
   return trash_slice_list;
@@ -1889,14 +1889,14 @@ Status CompactChunkOperation::Run(TxnUPtr& txn) {
 
   // reduce compact frequency
   if (!is_force_ && chunk.last_compaction_time_ms() + FLAGS_mds_compact_chunk_interval_ms >
-                        static_cast<uint64_t>(Helper::TimestampMs())) {
+                        static_cast<uint64_t>(utils::TimestampMs())) {
     return Status(pb::error::ENOT_MATCH, "not match compact condition");
   }
 
   auto trash_slice_list = CompactChunk(txn, fs_id, ino_, attr.length(), chunk);
   if (!trash_slice_list.slices().empty()) {
     chunk.set_version(chunk.version() + 1);
-    chunk.set_last_compaction_time_ms(Helper::TimestampMs());
+    chunk.set_last_compaction_time_ms(utils::TimestampMs());
     txn->Put(chunk_key, MetaCodec::EncodeChunkValue(chunk));
 
     result_.trash_slice_list = std::move(trash_slice_list);
@@ -1919,7 +1919,7 @@ Status SetFsQuotaOperation::Run(TxnUPtr& txn) {
     fs_quota = MetaCodec::DecodeFsQuotaValue(value);
   } else {
     fs_quota.set_uuid(utils::UUIDGenerator::GenerateUUID());
-    fs_quota.set_create_time_ns(Helper::TimestampNs());
+    fs_quota.set_create_time_ns(utils::TimestampUs());
   }
 
   if (quota_.max_bytes() > 0) fs_quota.set_max_bytes(quota_.max_bytes());
@@ -1996,7 +1996,7 @@ Status SetDirQuotaOperation::Run(TxnUPtr& txn) {
     dir_quota = MetaCodec::DecodeDirQuotaValue(value);
   } else {
     dir_quota.set_uuid(utils::UUIDGenerator::GenerateUUID());
-    dir_quota.set_create_time_ns(Helper::TimestampNs());
+    dir_quota.set_create_time_ns(utils::TimestampUs());
   }
 
   if (quota_.max_bytes() > 0) dir_quota.set_max_bytes(quota_.max_bytes());
@@ -2563,7 +2563,7 @@ bool OperationProcessor::RunBatched(Operation* operation) {
 }
 
 Status OperationProcessor::RunAlone(Operation* operation) {
-  Duration duration;
+  utils::Duration duration;
 
   auto& trace = operation->GetTrace();
   const uint32_t fs_id = operation->GetFsId();
@@ -2573,7 +2573,7 @@ Status OperationProcessor::RunAlone(Operation* operation) {
   int64_t txn_id = 0;
   char* commit_type = (char*)"none";
   do {
-    Duration once_duration;
+    utils::Duration once_duration;
     auto txn = kv_storage_->NewTxn(operation->GetIsolationLevel());
     if (txn == nullptr) {
       status = Status(pb::error::EBACKEND_STORE, "new transaction fail");
@@ -2758,7 +2758,7 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
   const uint32_t fs_id = batch_operation.fs_id;
   const uint64_t ino = batch_operation.ino;
 
-  Duration duration;
+  utils::Duration duration;
 
   // get prefetch keys
   std::string primary_key = MetaCodec::EncodeInodeKey(fs_id, ino);
@@ -2778,7 +2778,7 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
   char* commit_type = (char*)"none";
   std::string op_names = GetName(batch_operation);
   do {
-    Duration once_duration;
+    utils::Duration once_duration;
 
     auto txn = kv_storage_->NewTxn();
     if (txn == nullptr) {

@@ -28,14 +28,14 @@
 #include "fmt/core.h"
 #include "mds/common/helper.h"
 #include "mds/common/synchronization.h"
-#include "mds/common/time.h"
+#include "utils/time.h"
 
 namespace dingofs {
 namespace mds {
 
 const int kStopSignalIntervalUs = 1000;
 
-TaskRunnable::TaskRunnable() : id_(GenId()) { start_time_us_ = Helper::TimestampUs(); }
+TaskRunnable::TaskRunnable() : id_(GenId()) { start_time_us_ = utils::TimestampUs(); }
 TaskRunnable::~TaskRunnable() = default;
 
 uint64_t TaskRunnable::Id() const { return id_; }
@@ -59,7 +59,7 @@ int ExecuteRoutine(void* meta,
     worker->Notify(*iter, WorkerEventType::kHandleTask);
 
     if (BAIDU_LIKELY(!iter.is_queue_stopped())) {
-      Duration duration;
+      utils::Duration duration;
       (*iter)->Run();
       LOG_DEBUG << fmt::format("[execqueue][type({})] run task elapsed time {}us.", (*iter)->Type(),
                                duration.ElapsedUs());
@@ -220,14 +220,14 @@ void WorkerSet::HandleNotify(TaskRunnablePtr& task, WorkerEventType type) {
     case WorkerEventType::kAddTask:
       break;
     case WorkerEventType::kHandleTask: {
-      int64_t now_time_us = Helper::TimestampUs();
+      int64_t now_time_us = utils::TimestampUs();
       QueueWaitMetrics(now_time_us - task->StartTimeUs());
       task->SetExecuteStartTimeUs(now_time_us);
     } break;
 
     case WorkerEventType::kFinishTask: {
       DecPendingTaskCount();
-      int64_t now_time_us = Helper::TimestampUs();
+      int64_t now_time_us = utils::TimestampUs();
       QueueRunMetrics(now_time_us - task->ExecuteStartTimeUs());
     } break;
 

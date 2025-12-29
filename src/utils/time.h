@@ -25,20 +25,95 @@
 
 #include <chrono>
 #include <cstdint>
+#include <iomanip>
 #include <ostream>
+#include <sstream>
 
 namespace dingofs {
 namespace utils {
 
+inline uint64_t TimestampNs() {
+  return std::chrono::duration_cast<std::chrono::nanoseconds>(
+             std::chrono::system_clock::now().time_since_epoch())
+      .count();
+}
+
+inline uint64_t TimestampUs() {
+  return std::chrono::duration_cast<std::chrono::microseconds>(
+             std::chrono::system_clock::now().time_since_epoch())
+      .count();
+}
+
+inline uint64_t TimestampMs() {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+             std::chrono::system_clock::now().time_since_epoch())
+      .count();
+}
+
+inline uint64_t Timestamp() {
+  return std::chrono::duration_cast<std::chrono::seconds>(
+             std::chrono::system_clock::now().time_since_epoch())
+      .count();
+}
+
+inline std::string FormatMsTime(int64_t timestamp, const std::string& format) {
+  std::chrono::time_point<std::chrono::system_clock, std::chrono::milliseconds>
+      tp((std::chrono::milliseconds(timestamp)));
+
+  auto in_time_t = std::chrono::system_clock::to_time_t(tp);
+  std::stringstream ss;
+  ss << std::put_time(std::localtime(&in_time_t), format.c_str()) << "."
+     << timestamp % 1000;
+  return ss.str();
+}
+
+inline std::string FormatMsTime(int64_t timestamp) {
+  return FormatMsTime(timestamp, "%Y-%m-%d %H:%M:%S");
+}
+
+inline std::string FormatTime(int64_t timestamp, const std::string& format) {
+  std::chrono::time_point<std::chrono::system_clock, std::chrono::seconds> tp(
+      (std::chrono::seconds(timestamp)));
+
+  auto in_time_t = std::chrono::system_clock::to_time_t(tp);
+  std::stringstream ss;
+  ss << std::put_time(std::localtime(&in_time_t), format.c_str());
+  return ss.str();
+}
+
+inline std::string FormatTime(int64_t timestamp) {
+  return FormatTime(timestamp, "%Y-%m-%d %H:%M:%S");
+}
+
+inline std::string FormatNsTime(int64_t timestamp) {
+  int64_t sec = timestamp / 1000000000;
+  int64_t ns = timestamp % 1000000000;
+  std::string result = FormatTime(sec);
+
+  return result + "." + std::to_string(ns);
+}
+
+inline std::string GetNowFormatMsTime() {
+  int64_t timestamp = TimestampMs();
+  std::chrono::time_point<std::chrono::system_clock, std::chrono::milliseconds>
+      tp((std::chrono::milliseconds(timestamp)));
+
+  auto in_time_t = std::chrono::system_clock::to_time_t(tp);
+  std::stringstream ss;
+  ss << std::put_time(std::localtime(&in_time_t), "%Y-%m-%dT%H:%M:%S.000Z");
+  return ss.str();
+}
+
+inline std::string NowTime() {
+  return FormatMsTime(TimestampMs(), "%Y-%m-%d %H:%M:%S");
+}
+
 struct TimeSpec {
   TimeSpec() : seconds(0), nanoSeconds(0) {}
-
   TimeSpec(uint64_t seconds, uint32_t nanoSeconds = 0)
       : seconds(seconds), nanoSeconds(nanoSeconds) {}
 
-  TimeSpec(const TimeSpec& time)
-      : seconds(time.seconds), nanoSeconds(time.nanoSeconds) {}
-
+  TimeSpec(const TimeSpec& time) = default;
   TimeSpec& operator=(const TimeSpec& time) = default;
 
   TimeSpec operator+(const TimeSpec& time) const {
@@ -73,33 +148,32 @@ inline std::ostream& operator<<(std::ostream& os, const TimeSpec& time) {
 
 inline TimeSpec TimeNow() {
   struct timespec now;
-  clock_gettime(CLOCK_REALTIME, &now);
+  clock_gettime(CLOCK_REALTIME, &now);  // NOLINT
   return TimeSpec(now.tv_sec, now.tv_nsec);
 }
 
-inline uint64_t TimestampNs() {
-  return std::chrono::duration_cast<std::chrono::nanoseconds>(
-             std::chrono::system_clock::now().time_since_epoch())
-      .count();
-}
+class Duration {
+ public:
+  Duration() { start_time_ns_ = TimestampNs(); }
+  ~Duration() = default;
 
-inline uint64_t TimestampUs() {
-  return std::chrono::duration_cast<std::chrono::microseconds>(
-             std::chrono::system_clock::now().time_since_epoch())
-      .count();
-}
+  int64_t StartNs() const { return start_time_ns_; }
+  int64_t StartUs() const { return start_time_ns_ / 1000; }
+  int64_t StartMs() const { return start_time_ns_ / 1000000; }
 
-inline uint64_t TimestampMs() {
-  return std::chrono::duration_cast<std::chrono::milliseconds>(
-             std::chrono::system_clock::now().time_since_epoch())
-      .count();
-}
+  // Get elapsed time in nanoseconds
+  int64_t ElapsedNs() const { return TimestampNs() - start_time_ns_; }
+  int64_t ElapsedUs() const { return (TimestampNs() - start_time_ns_) / 1000; }
+  int64_t ElapsedMs() const {
+    return (TimestampNs() - start_time_ns_) / 1000000;
+  }
+  int64_t ElapsedS() const {
+    return (TimestampNs() - start_time_ns_) / 1000000000;
+  }
 
-inline uint64_t Timestamp() {
-  return std::chrono::duration_cast<std::chrono::seconds>(
-             std::chrono::system_clock::now().time_since_epoch())
-      .count();
-}
+ private:
+  int64_t start_time_ns_ = 0;
+};
 
 }  // namespace utils
 }  // namespace dingofs

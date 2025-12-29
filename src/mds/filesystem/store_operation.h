@@ -47,7 +47,7 @@ using OperationProcessorSPtr = std::shared_ptr<OperationProcessor>;
 
 class Operation {
  public:
-  Operation(Trace& trace) : trace_(trace) { time_ns_ = Helper::TimestampNs(); }
+  Operation(Trace& trace) : trace_(trace) { time_ns_ = utils::TimestampUs(); }
   virtual ~Operation() = default;
 
   enum class OpType : uint8_t {

@@ -131,10 +131,10 @@ class ServiceTask : public TaskRunnable {
 
 class TraceClosure : public google::protobuf::Closure {
  public:
-  TraceClosure() { start_time_us = Helper::TimestampUs(); }
+  TraceClosure() { start_time_us = utils::TimestampUs(); }
   ~TraceClosure() override = default;
 
-  void SetQueueWaitTime() { queue_wait_time_us = Helper::TimestampUs() - start_time_us; }
+  void SetQueueWaitTime() { queue_wait_time_us = utils::TimestampUs() - start_time_us; }
   uint64_t GetQueueWaitTimeUs() const { return queue_wait_time_us; }
 
  protected:
@@ -166,7 +166,7 @@ void ServiceClosure<T, U>::Run() {
   std::unique_ptr<ServiceClosure<T, U>> self_guard(this);
   brpc::ClosureGuard done_guard(done_);
 
-  uint64_t elapsed_time_us = Helper::TimestampUs() - start_time_us;
+  uint64_t elapsed_time_us = utils::TimestampUs() - start_time_us;
 
   auto* mut_time = response_->mutable_info()->mutable_time();
   mut_time->set_total_time_us(elapsed_time_us);

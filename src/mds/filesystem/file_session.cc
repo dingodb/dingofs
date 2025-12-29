@@ -43,7 +43,7 @@ static FileSessionSPtr NewFileSession(uint32_t fs_id, Ino ino, const std::string
   file_session->set_ino(ino);
   file_session->set_client_id(client_id);
   file_session->set_session_id(utils::UUIDGenerator::GenerateUUID());
-  file_session->set_create_time_s(Helper::Timestamp());
+  file_session->set_create_time_s(utils::Timestamp());
 
   return file_session;
 }

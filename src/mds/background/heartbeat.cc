@@ -76,7 +76,7 @@ Status Heartbeat::SendHeartbeat(Context& ctx, MdsEntry& mds) {
     return Status(pb::error::Errno::EINTERNAL, "mds id is 0");
   }
 
-  mds.set_last_online_time_ms(Helper::TimestampMs());
+  mds.set_last_online_time_ms(utils::TimestampMs());
 
   LOG_DEBUG << fmt::format("[heartbeat] mds {}.", mds.ShortDebugString());
 
@@ -92,7 +92,7 @@ Status Heartbeat::SendHeartbeat(Context& ctx, MdsEntry& mds) {
 }
 
 Status Heartbeat::SendHeartbeat(Context& ctx, ClientEntry& client) {
-  client.set_last_online_time_ms(Helper::TimestampMs());
+  client.set_last_online_time_ms(utils::TimestampMs());
 
   LOG_DEBUG << fmt::format("[heartbeat] client {}.", client.ShortDebugString());
 
@@ -111,7 +111,7 @@ Status Heartbeat::SendHeartbeat(Context& ctx, ClientEntry& client) {
 Status Heartbeat::SendHeartbeat(Context& ctx, CacheMemberEntry& heartbeat_cache_member) {
   const auto& ip = heartbeat_cache_member.ip();
   auto port = heartbeat_cache_member.port();
-  auto now_time = Helper::TimestampMs();
+  auto now_time = utils::TimestampMs();
   auto handler = [ip, port, now_time](CacheMemberEntry& cache_member, const Status& status) -> Status {
     if (!status.ok()) {
       return status;
@@ -155,7 +155,7 @@ Status Heartbeat::GetMDSList(Context& ctx, std::vector<MdsEntry>& mdses) {
   mdses = std::move(result.mds_entries);
 
   // set online status
-  uint64_t now_ms = Helper::TimestampMs();
+  uint64_t now_ms = utils::TimestampMs();
   for (auto& mds : mdses) {
     mds.set_is_online((mds.last_online_time_ms() + FLAGS_mds_heartbeat_mds_offline_period_time_ms < now_ms) ? false
                                                                                                             : true);

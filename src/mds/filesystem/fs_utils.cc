@@ -20,13 +20,13 @@
 #include <string>
 #include <vector>
 
+#include "common/const.h"
 #include "common/logging.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/format.h"
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 #include "mds/common/codec.h"
-#include "mds/common/constant.h"
 #include "mds/common/helper.h"
 #include "mds/common/status.h"
 #include "mds/common/tracing.h"
@@ -167,7 +167,7 @@ FsTreeNode* FsUtils::GenFsTree(uint32_t fs_id) {
   return root;
 }
 
-static std::string FormatTime(uint64_t time_ns) { return Helper::FormatTime(time_ns / 1000000000, "%H:%M:%S"); }
+static std::string FormatTime(uint64_t time_ns) { return utils::FormatTime(time_ns / 1000000000, "%H:%M:%S"); }
 
 void FsUtils::GenFsTreeJson(FsTreeNode* node, nlohmann::json& doc) {
   CHECK(node != nullptr) << "node is null";

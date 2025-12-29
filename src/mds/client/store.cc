@@ -118,8 +118,6 @@ bool StoreClient::DropFsMetaTable(uint32_t fs_id) {
   return true;
 }
 
-static std::string FormatTime(uint64_t time_ns) { return Helper::FormatMsTime(time_ns / 1000000, "%H:%M:%S"); }
-
 static void TraversePrint(FsTreeNode* item, bool is_details, int level) {
   if (item == nullptr) return;
 
@@ -130,10 +128,14 @@ static void TraversePrint(FsTreeNode* item, bool is_details, int level) {
   auto& dentry = item->dentry;
   auto& attr = item->attr;
 
+  auto format_time_fn = [](uint64_t time_ns) -> std::string {
+    return utils::FormatMsTime(time_ns / 1000000, "%H:%M:%S");
+  };
+
   std::cout << fmt::format("{} [{},{},{}/{},{},{},{},{},{},{},{}]\n", dentry.name(), dentry.ino(),
                            pb::mds::FileType_Name(attr.type()), attr.mode(), Helper::FsModeToString(attr.mode()),
-                           attr.nlink(), attr.uid(), attr.gid(), attr.length(), FormatTime(attr.ctime()),
-                           FormatTime(attr.mtime()), FormatTime(attr.atime()));
+                           attr.nlink(), attr.uid(), attr.gid(), attr.length(), format_time_fn(attr.ctime()),
+                           format_time_fn(attr.mtime()), format_time_fn(attr.atime()));
 
   if (dentry.type() == pb::mds::FileType::DIRECTORY) {
     for (auto* child : item->children) {

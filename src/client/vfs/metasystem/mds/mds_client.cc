@@ -21,10 +21,10 @@
 #include "client/vfs/metasystem/mds/helper.h"
 #include "client/vfs/metasystem/mds/rpc.h"
 #include "client/vfs/vfs_meta.h"
+#include "common/const.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
-#include "mds/common/constant.h"
 #include "mds/common/type.h"
 
 namespace dingofs {
@@ -167,7 +167,7 @@ Status MDSClient::Heartbeat() {
   }
 
   auto get_mds_fn = [this](bool& is_primary_mds) -> MDSMeta {
-    return GetMdsByParent(mds::kRootIno, is_primary_mds);
+    return GetMdsByParent(kRootIno, is_primary_mds);
   };
 
   pb::mds::HeartbeatRequest request;
@@ -725,15 +725,15 @@ Status MDSClient::SetAttr(ContextSPtr ctx, Ino ino, const Attr& attr,
   uint32_t temp_to_set = 0;
   if (to_set & kSetAttrMode) {
     request.set_mode(attr.mode);
-    temp_to_set |= mds::kSetAttrMode;
+    temp_to_set |= kSetAttrMode;
   }
   if (to_set & kSetAttrUid) {
     request.set_uid(attr.uid);
-    temp_to_set |= mds::kSetAttrUid;
+    temp_to_set |= kSetAttrUid;
   }
   if (to_set & kSetAttrGid) {
     request.set_gid(attr.gid);
-    temp_to_set |= mds::kSetAttrGid;
+    temp_to_set |= kSetAttrGid;
   }
 
   struct timespec now;
@@ -741,39 +741,39 @@ Status MDSClient::SetAttr(ContextSPtr ctx, Ino ino, const Attr& attr,
 
   if (to_set & kSetAttrAtime) {
     request.set_atime(attr.atime);
-    temp_to_set |= mds::kSetAttrAtime;
+    temp_to_set |= kSetAttrAtime;
 
   } else if (to_set & kSetAttrAtimeNow) {
     request.set_atime(ToTimestamp(now));
-    temp_to_set |= mds::kSetAttrAtime;
+    temp_to_set |= kSetAttrAtime;
   }
 
   if (to_set & kSetAttrMtime) {
     request.set_mtime(attr.mtime);
-    temp_to_set |= mds::kSetAttrMtime;
+    temp_to_set |= kSetAttrMtime;
 
   } else if (to_set & kSetAttrMtimeNow) {
     request.set_mtime(ToTimestamp(now));
-    temp_to_set |= mds::kSetAttrMtime;
+    temp_to_set |= kSetAttrMtime;
   }
 
   if (to_set & kSetAttrCtime) {
     request.set_ctime(attr.ctime);
-    temp_to_set |= mds::kSetAttrCtime;
+    temp_to_set |= kSetAttrCtime;
   } else {
     // always update ctime
     request.set_ctime(ToTimestamp(now));
-    temp_to_set |= mds::kSetAttrCtime;
+    temp_to_set |= kSetAttrCtime;
   }
 
   if (to_set & kSetAttrSize) {
     request.set_length(attr.length);
-    temp_to_set |= mds::kSetAttrLength;
+    temp_to_set |= kSetAttrLength;
   }
 
   if (to_set & kSetAttrFlags) {
     request.set_flags(attr.flags);
-    temp_to_set |= mds::kSetAttrFlags;
+    temp_to_set |= kSetAttrFlags;
   }
 
   request.set_to_set(temp_to_set);
@@ -961,7 +961,7 @@ Status MDSClient::NewSliceId(ContextSPtr ctx, uint32_t num, uint64_t* id) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this](bool& is_primary_mds) -> MDSMeta {
-    return GetMdsByParent(mds::kRootIno, is_primary_mds);
+    return GetMdsByParent(kRootIno, is_primary_mds);
   };
 
   pb::mds::AllocSliceIdRequest request;

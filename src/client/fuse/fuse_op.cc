@@ -30,7 +30,7 @@
 #include "client/vfs/data_buffer.h"
 #include "client/vfs/vfs_meta.h"
 #include "client/vfs/vfs_wrapper.h"
-#include "common/define.h"
+#include "common/const.h"
 #include "common/io_buffer.h"
 #include "common/options/client.h"
 #include "common/status.h"

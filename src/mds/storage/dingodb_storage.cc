@@ -382,8 +382,8 @@ Status DingodbTxn::Delete(const std::string& key) {
 }
 
 Status DingodbTxn::Get(const std::string& key, std::string& value) {
-  uint64_t start_time = Helper::TimestampUs();
-  ON_SCOPE_EXIT([&]() { txn_trace_.read_time_us += (Helper::TimestampUs() - start_time); });
+  uint64_t start_time = utils::TimestampUs();
+  ON_SCOPE_EXIT([&]() { txn_trace_.read_time_us += (utils::TimestampUs() - start_time); });
 
   auto status = txn_->Get(key, value);
   if (!status.ok()) {
@@ -394,8 +394,8 @@ Status DingodbTxn::Get(const std::string& key, std::string& value) {
 }
 
 Status DingodbTxn::BatchGet(const std::vector<std::string>& keys, std::vector<KeyValue>& kvs) {
-  uint64_t start_time = Helper::TimestampUs();
-  ON_SCOPE_EXIT([&]() { txn_trace_.read_time_us += (Helper::TimestampUs() - start_time); });
+  uint64_t start_time = utils::TimestampUs();
+  ON_SCOPE_EXIT([&]() { txn_trace_.read_time_us += (utils::TimestampUs() - start_time); });
 
   std::vector<dingodb::sdk::KVPair> kv_pairs;
   auto status = txn_->BatchGet(keys, kv_pairs);
@@ -412,8 +412,8 @@ Status DingodbTxn::Scan(const Range& range, uint64_t limit, std::vector<KeyValue
   CHECK(range.start < range.end) << fmt::format("invalid range({}/{}).", Helper::StringToHex(range.start),
                                                 Helper::StringToHex(range.end));
 
-  uint64_t start_time = Helper::TimestampUs();
-  ON_SCOPE_EXIT([&]() { txn_trace_.read_time_us += (Helper::TimestampUs() - start_time); });
+  uint64_t start_time = utils::TimestampUs();
+  ON_SCOPE_EXIT([&]() { txn_trace_.read_time_us += (utils::TimestampUs() - start_time); });
 
   std::vector<dingodb::sdk::KVPair> kv_pairs;
   auto status = txn_->Scan(range.start, range.end, limit, kv_pairs);
@@ -528,10 +528,10 @@ void DingodbTxn::Rollback() {
 }
 
 Status DingodbTxn::Commit() {
-  uint64_t start_time = Helper::TimestampUs();
+  uint64_t start_time = utils::TimestampUs();
   ON_SCOPE_EXIT([&]() {
     txn_trace_.commit_type = GetCommitType();
-    txn_trace_.write_time_us += (Helper::TimestampUs() - start_time);
+    txn_trace_.write_time_us += (utils::TimestampUs() - start_time);
   });
 
   auto status = txn_->Commit();

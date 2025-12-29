@@ -43,6 +43,7 @@
 #include "mds/common/helper.h"
 #include "mds/common/synchronization.h"
 #include "utils/concurrent/concurrent.h"
+#include "utils/time.h"
 
 namespace dingofs {
 namespace client {
@@ -263,9 +264,9 @@ Status RPC::SendRequest(const EndPoint& endpoint,
     // InjectTraceHeader(&cntl);
     request.mutable_info()->set_timeout_ms(option.timeout_ms);
 
-    uint64_t start_us = mds::Helper::TimestampUs();
+    uint64_t start_us = utils::TimestampUs();
     channel->CallMethod(method, &cntl, &request, &response, nullptr);
-    uint64_t elapsed_us = mds::Helper::TimestampUs() - start_us;
+    uint64_t elapsed_us = utils::TimestampUs() - start_us;
     if (cntl.Failed()) {
       LOG(ERROR) << fmt::format(
           "[meta.rpc][{}][{}][{}us] fail, {} retry({}) {} request({}) "

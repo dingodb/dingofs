@@ -31,6 +31,7 @@
 #include "common/version.h"
 
 namespace dingofs {
+
 struct FlagExtraInfo {
   std::string program;                // program name
   std::string usage;                  // usage info

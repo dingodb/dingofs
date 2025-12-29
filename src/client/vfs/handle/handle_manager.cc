@@ -23,7 +23,7 @@
 
 #include "client/vfs/data/file.h"
 #include "client/vfs/vfs_fh.h"
-#include "common/define.h"
+#include "common/const.h"
 #include "utils/executor/thread/executor_impl.h"
 
 namespace dingofs {
@@ -122,7 +122,7 @@ void HandleManager::TriggerFlushAll() {
   }
 
   for (auto& [fh, handle] : to_flush_handles) {
-    if (handle->ino == STATSINODEID) {
+    if (handle->ino == kStatsIno) {
       continue;
     }
 
@@ -162,7 +162,7 @@ void HandleManager::RunPeriodicShrinkMem() {
   }
 
   for (auto& [fh, handle] : to_trim_handles) {
-    if (handle->ino == STATSINODEID) {
+    if (handle->ino == kStatsIno) {
       continue;
     }
 

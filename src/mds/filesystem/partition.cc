@@ -22,7 +22,7 @@
 #include "common/logging.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
-#include "mds/common/helper.h"
+#include "utils/time.h"
 
 namespace dingofs {
 namespace mds {
@@ -192,16 +192,16 @@ bool Partition::Merge(Partition&& other_partition) {  // NOLINT
   return true;
 }
 
-void Partition::UpdateLastAccessTime() { last_access_time_s_.store(Helper::Timestamp(), std::memory_order_relaxed); }
+void Partition::UpdateLastAccessTime() { last_access_time_s_.store(utils::Timestamp(), std::memory_order_relaxed); }
 
 uint64_t Partition::LastAccessTimeS() { return last_access_time_s_.load(std::memory_order_relaxed); }
 
 void Partition::AddDeltaDentryOp(DentryOp&& op) {
-  op.time_s = Helper::Timestamp();
+  op.time_s = utils::Timestamp();
   delta_dentry_ops_.push_back(std::move(op));
 
   // clean expired ops
-  uint64_t now_s = Helper::Timestamp();
+  uint64_t now_s = utils::Timestamp();
   for (auto it = delta_dentry_ops_.begin(); it != delta_dentry_ops_.end();) {
     if (it->time_s + FLAGS_mds_partition_dentry_op_expire_interval_s < now_s) {
       it = delta_dentry_ops_.erase(it);
@@ -335,7 +335,7 @@ size_t PartitionCache::Size() {
 void PartitionCache::CleanExpired(uint64_t expire_s) {
   if (Size() < FLAGS_mds_partition_cache_max_count) return;
 
-  uint64_t now_s = Helper::Timestamp();
+  uint64_t now_s = utils::Timestamp();
 
   std::vector<PartitionPtr> partitions;
   shard_map_.iterate([&](const Map& map) {

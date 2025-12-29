@@ -18,10 +18,10 @@
 #include <string>
 #include <vector>
 
+#include "common/const.h"
 #include "common/logging.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
-#include "mds/common/constant.h"
 #include "mds/filesystem/store_operation.h"
 
 namespace dingofs {
@@ -31,7 +31,7 @@ namespace quota {
 static const uint32_t kMaxNotFoundCount = 30;
 
 Quota::Quota(uint32_t fs_id, Ino ino, const QuotaEntry& quota) : fs_id_(fs_id), ino_(ino), quota_(quota) {
-  last_time_ns_ = Helper::TimestampNs();
+  last_time_ns_ = utils::TimestampUs();
 
   LOG(INFO) << fmt::format("[quota.{}.{}] create quota, detail({}).", fs_id_, ino_, quota.ShortDebugString());
 }
@@ -79,7 +79,7 @@ void Quota::UpdateUsage(int64_t byte_delta, int64_t inode_delta, const std::stri
   {
     utils::WriteLockGuard lk(rwlock_);
 
-    uint64_t now_ns = Helper::TimestampNs();
+    uint64_t now_ns = utils::TimestampUs();
     uint64_t time_ns = std::max({now_ns, last_time_ns_}) + 1;
     last_time_ns_ = time_ns;
 

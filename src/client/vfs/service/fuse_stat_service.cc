@@ -14,14 +14,10 @@
 
 #include "client/vfs/service/fuse_stat_service.h"
 
-#include <fmt/ranges.h>
-#include <json/json.h>
 #include <sys/types.h>
 
 #include <cmath>
-#include <cstddef>
 #include <cstdint>
-#include <map>
 #include <string>
 #include <vector>
 
@@ -30,11 +26,11 @@
 #include "brpc/controller.h"
 #include "brpc/server.h"
 #include "butil/iobuf.h"
-#include "client/common/const.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/metasystem/meta_system.h"
 #include "fmt/format.h"
-#include "mds/common/helper.h"
+#include "fmt/ranges.h"
+#include "json/json.h"
 #include "mds/common/version.h"
 #include "utils/string.h"
 
@@ -422,8 +418,7 @@ static void RenderMdsInfo(const Json::Value& json_value,
         R"(<td><a href="http://{}:{}/FsStatService" target="_blank">{}:{} </a></td>)",
         host, port, host, port);
     os << "<td>" << state << "</td>";
-    os << "<td>" << dingofs::mds::Helper::FormatMsTime(last_online_time_ms)
-       << "</td>";
+    os << "<td>" << utils::FormatMsTime(last_online_time_ms) << "</td>";
 
     os << fmt::format(
         R"(<td><a href="http://{}:{}/FsStatService/server" target="_blank">details</a></td>)",
@@ -507,11 +502,11 @@ static std::string RenderDirEntries(const Json::Value& entries) {
     uint64_t mtime = attr["mtime"].asUInt64();
     uint64_t ctime = attr["ctime"].asUInt64();
     int32_t type = attr["type"].asInt();
-    result += fmt::format(
-        "{},{},{},{},{},{},{},{},{},{},{},{}", ino, name, mode, nlink, uid, gid,
-        length, rdev, dingofs::mds::Helper::FormatMsTime(atime / 1000000),
-        dingofs::mds::Helper::FormatMsTime(mtime / 1000000),
-        dingofs::mds::Helper::FormatMsTime(ctime / 1000000), type);
+    result += fmt::format("{},{},{},{},{},{},{},{},{},{},{},{}", ino, name,
+                          mode, nlink, uid, gid, length, rdev,
+                          utils::FormatMsTime(atime / 1000000),
+                          utils::FormatMsTime(mtime / 1000000),
+                          utils::FormatMsTime(ctime / 1000000), type);
 
     result += "<br>";
   }
@@ -774,7 +769,7 @@ static void RenderModifyTimeMemoPage(const Json::Value& json_value,
     auto modify_time_ns = item["modify_time_ns"].asUInt64();
 
     os << "<td>" << ino << "</td>";
-    os << "<td>" << mds::Helper::FormatNsTime(modify_time_ns) << "</td>";
+    os << "<td>" << utils::FormatNsTime(modify_time_ns) << "</td>";
     os << "</tr>";
   }
   os << "</table>\n";
@@ -819,7 +814,7 @@ static void RenderChunkMemoPage(const Json::Value& json_value,
     os << "<td>" << ino << "</td>";
     os << "<td>" << chunk_index << "</td>";
     os << "<td>" << version << "</td>";
-    os << "<td>" << mds::Helper::FormatNsTime(time_ns) << "</td>";
+    os << "<td>" << utils::FormatNsTime(time_ns) << "</td>";
 
     os << "</tr>";
   }
@@ -872,8 +867,7 @@ static void RenderMdsRouterPage(const Json::Value& json_value,
         R"(<td><a href="http://{}:{}/FsStatService" target="_blank">{}:{} </a></td>)",
         host, port, host, port);
     os << "<td>" << state << "</td>";
-    os << "<td>" << dingofs::mds::Helper::FormatMsTime(last_online_time_ms)
-       << "</td>";
+    os << "<td>" << utils::FormatMsTime(last_online_time_ms) << "</td>";
     os << "<td>" << type << "</td>";
     os << "</tr>";
   }
@@ -932,17 +926,11 @@ static void RenderInodeCachePage(const Json::Value& json_value,
     os << "<td>" << inode["nlink"].asUInt() << "</td>";
     os << "<td>" << inode["symlink"].asString() << "</td>";
     os << "<td>" << inode["rdev"].asUInt64() << "</td>";
-    os << "<td>"
-       << dingofs::mds::Helper::FormatMsTime(inode["ctime"].asUInt64() /
-                                             1000000)
+    os << "<td>" << utils::FormatMsTime(inode["ctime"].asUInt64() / 1000000)
        << "</td>";
-    os << "<td>"
-       << dingofs::mds::Helper::FormatMsTime(inode["mtime"].asUInt64() /
-                                             1000000)
+    os << "<td>" << utils::FormatMsTime(inode["mtime"].asUInt64() / 1000000)
        << "</td>";
-    os << "<td>"
-       << dingofs::mds::Helper::FormatMsTime(inode["atime"].asUInt64() /
-                                             1000000)
+    os << "<td>" << utils::FormatMsTime(inode["atime"].asUInt64() / 1000000)
        << "</td>";
 
     // parents

@@ -362,7 +362,7 @@ void FuseServer::SessionUnmount() {
 bool FuseServer::ShutdownGracefully(const std::string& mountpoint) {
   // get old dingo-client pid
   std::string file_name =
-      absl::StrFormat("%s/%s", mountpoint, dingofs::STATSNAME);
+      absl::StrFormat("%s/%s", mountpoint, dingofs::kStatsName);
 
   int pid = 0;
   uint32_t retry = 0;

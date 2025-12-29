@@ -153,7 +153,7 @@ bool Server::InitMDSMeta() {
     self_mds_meta_.SetHost(FLAGS_mds_server_host);
     self_mds_meta_.SetPort(FLAGS_mds_server_port);
     self_mds_meta_.SetState(MDSMeta::State::kNormal);
-    self_mds_meta_.SetCreateTimeMs(Helper::TimestampMs());
+    self_mds_meta_.SetCreateTimeMs(utils::TimestampMs());
 
     LOG(INFO) << fmt::format("new mds: {}.", self_mds_meta_.ToString());
 

@@ -28,6 +28,7 @@
 #include "client/vfs/metasystem/mds/helper.h"
 #include "client/vfs/metasystem/mds/mds_client.h"
 #include "client/vfs/vfs_meta.h"
+#include "common/const.h"
 #include "common/options/client.h"
 #include "common/status.h"
 #include "common/trace/context.h"
@@ -40,7 +41,6 @@
 #include "glog/logging.h"
 #include "json/value.h"
 #include "json/writer.h"
-#include "mds/common/constant.h"
 #include "mds/common/helper.h"
 
 namespace dingofs {
@@ -273,22 +273,20 @@ void MDSMetaSystem::Heartbeat() {
 }
 
 void MDSMetaSystem::CleanExpiredModifyTimeMemo() {
-  uint64_t expired_time_s =
-      mds::Helper::Timestamp() - FLAGS_vfs_meta_memo_expired_s;
+  uint64_t expired_time_s = utils::Timestamp() - FLAGS_vfs_meta_memo_expired_s;
 
   modify_time_memo_.ForgetExpired(expired_time_s);
 }
 
 void MDSMetaSystem::CleanExpiredChunkMemo() {
-  uint64_t expired_time_s =
-      mds::Helper::Timestamp() - FLAGS_vfs_meta_memo_expired_s;
+  uint64_t expired_time_s = utils::Timestamp() - FLAGS_vfs_meta_memo_expired_s;
 
   chunk_memo_.ForgetExpired(expired_time_s);
 }
 
 void MDSMetaSystem::CleanExpiredInodeCache() {
   uint64_t expired_time_s =
-      mds::Helper::Timestamp() - FLAGS_vfs_meta_inode_cache_expired_s;
+      utils::Timestamp() - FLAGS_vfs_meta_inode_cache_expired_s;
 
   inode_cache_->CleanExpired(expired_time_s);
 }
@@ -321,7 +319,7 @@ bool MDSMetaSystem::InitCrontab() {
 
 Status MDSMetaSystem::StatFs(ContextSPtr ctx, Ino ino, FsStat* fs_stat) {
   Status status;
-  if (ino <= mds::kRootIno) {
+  if (ino <= kRootIno) {
     status = mds_client_->GetFsQuota(ctx, *fs_stat);
   } else {
     status = mds_client_->GetDirQuota(ctx, ino, *fs_stat);

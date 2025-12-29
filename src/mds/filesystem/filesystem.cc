@@ -30,6 +30,7 @@
 
 #include "brpc/reloadable_flags.h"
 #include "butil/status.h"
+#include "common/const.h"
 #include "common/logging.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"
@@ -39,11 +40,9 @@
 #include "glog/logging.h"
 #include "json/value.h"
 #include "mds/common/codec.h"
-#include "mds/common/constant.h"
 #include "mds/common/helper.h"
 #include "mds/common/partition_helper.h"
 #include "mds/common/status.h"
-#include "mds/common/time.h"
 #include "mds/common/tracing.h"
 #include "mds/common/type.h"
 #include "mds/filesystem/dentry.h"
@@ -55,6 +54,7 @@
 #include "mds/mds/mds_helper.h"
 #include "mds/mds/mds_meta.h"
 #include "mds/storage/storage.h"
+#include "utils/time.h"
 #include "utils/uuid.h"
 
 namespace dingofs {
@@ -559,7 +559,7 @@ Status FileSystem::RunOperation(Operation* operation) {
 Status FileSystem::CreateRoot() {
   CHECK(fs_id_ > 0) << "fs_id is invalid.";
 
-  Duration duration;
+  utils::Duration duration;
 
   AttrEntry attr;
   attr.set_fs_id(fs_id_);
@@ -621,7 +621,7 @@ Status FileSystem::Lookup(Context& ctx, Ino parent, const std::string& name, Ent
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
-  Duration duration;
+  utils::Duration duration;
 
   PartitionPtr partition;
   auto status = GetPartition(ctx, parent, partition);
@@ -690,7 +690,7 @@ Status FileSystem::BatchCreate(Context& ctx, Ino parent, const std::vector<MkNod
     return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
   }
 
-  Duration duration;
+  utils::Duration duration;
 
   std::vector<Inode::AttrEntry> attrs;
   attrs.reserve(params.size());
@@ -826,7 +826,7 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
     return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
   }
 
-  Duration duration;
+  utils::Duration duration;
 
   // build inode
   Inode::AttrEntry attr;
@@ -927,7 +927,7 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& sess
 
   const uint64_t chunk_size = fs_info_->GetChunkSize();
 
-  Duration duration;
+  utils::Duration duration;
 
   InodeSPtr inode;
   auto status = GetInode(ctx, ino, inode);
@@ -1090,7 +1090,7 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
   }
 
   // build inode
-  Duration duration;
+  utils::Duration duration;
 
   Inode::AttrEntry attr;
   attr.set_fs_id(fs_id_);
@@ -1183,7 +1183,7 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name, Ino&
   // update parent memo
   UpdateParentMemo(ctx.GetAncestors());
 
-  Duration duration;
+  utils::Duration duration;
 
   // update backend store
   RmDirOperation operation(trace, dentry);
@@ -1291,7 +1291,7 @@ Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent, const std::string
   Dentry dentry(fs_id, new_name, new_parent, ino, pb::mds::FileType::FILE, 0, inode);
 
   // update backend store
-  Duration duration;
+  utils::Duration duration;
 
   HardLinkOperation operation(trace, dentry);
   status = RunOperation(&operation);
@@ -1360,7 +1360,7 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name, Ent
   // update parent memo
   UpdateParentMemo(ctx.GetAncestors());
 
-  Duration duration;
+  utils::Duration duration;
 
   // update backend store
   UnlinkOperation operation(trace, dentry);
@@ -1437,7 +1437,7 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_par
   }
 
   // build inode
-  Duration duration;
+  utils::Duration duration;
 
   Inode::AttrEntry attr;
   attr.set_fs_id(fs_id_);
@@ -1538,7 +1538,7 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
 
   auto& trace = ctx.GetTrace();
 
-  Duration duration;
+  utils::Duration duration;
 
   InodeSPtr inode;
   auto status = GetInode(ctx, ino, inode);
@@ -1652,7 +1652,7 @@ Status FileSystem::SetXAttr(Context& ctx, Ino ino, const Inode::XAttrMap& xattrs
     return status;
   }
 
-  Duration duration;
+  utils::Duration duration;
 
   // update backend store
   UpdateXAttrOperation operation(trace, fs_id_, ino, xattrs);
@@ -1693,7 +1693,7 @@ Status FileSystem::RemoveXAttr(Context& ctx, Ino ino, const std::string& name, E
     return status;
   }
 
-  Duration duration;
+  utils::Duration duration;
 
   // update backend store
   RemoveXAttrOperation operation(trace, fs_id_, ino, name);
@@ -1782,7 +1782,7 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
 
   auto& trace = ctx.GetTrace();
 
-  Duration duration;
+  utils::Duration duration;
 
   // check name is valid
   if (new_name.size() > FLAGS_mds_filesystem_name_max_size) {
@@ -2011,7 +2011,7 @@ Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, const std::vector<Delt
 
   auto& trace = ctx.GetTrace();
 
-  Duration duration;
+  utils::Duration duration;
 
   // update backend store
   UpsertChunkOperation operation(trace, GetFsInfo(), ino, delta_slices);
@@ -2039,7 +2039,7 @@ Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, const std::vector<Delt
     uint64_t last_check_time_ms = chunk_cache_.GetLastCheckCompactTimeMs(ino, chunk.index());
     return FLAGS_mds_compact_chunk_enable &&
            (static_cast<uint32_t>(chunk.slices_size()) > FLAGS_mds_compact_chunk_threshold_num) &&
-           (last_check_time_ms + FLAGS_mds_compact_chunk_interval_ms < static_cast<uint64_t>(Helper::TimestampMs()));
+           (last_check_time_ms + FLAGS_mds_compact_chunk_interval_ms < static_cast<uint64_t>(utils::TimestampMs()));
   };
 
   std::vector<ChunkEntry> chunks_to_compact;
@@ -2076,7 +2076,7 @@ Status FileSystem::ReadSlice(Context& ctx, Ino ino, const std::vector<ChunkDescr
   auto& trace = ctx.GetTrace();
   const bool bypass_cache = ctx.IsBypassCache();
 
-  Duration duration;
+  utils::Duration duration;
 
   // get chunk from cache
   std::string param_desc;
@@ -2140,7 +2140,7 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
     return status;
   }
 
-  Duration duration;
+  utils::Duration duration;
 
   uint64_t slice_num = 0;
   uint64_t slice_id = 0;
@@ -2205,7 +2205,7 @@ Status FileSystem::CompactChunk(Context& ctx, Ino ino, uint64_t chunk_index,
   }
 
   auto& trace = ctx.GetTrace();
-  Duration duration;
+  utils::Duration duration;
 
   CompactChunkOperation operation(trace, GetFsInfo(), ino, chunk_index, true);
 
@@ -2413,7 +2413,7 @@ void FileSystem::RefreshFsInfo(const FsInfoEntry& fs_info, const std::string& re
     }
   };
 
-  Duration duration;
+  utils::Duration duration;
 
   if (fs_info_->Update(fs_info, pre_handler)) {
     can_serve_.store(CanServe(self_mds_id_), std::memory_order_release);
@@ -2948,8 +2948,8 @@ FsInfoEntry FileSystemSet::GenFsInfo(uint32_t fs_id, const CreateFsParam& param)
     }
   }
 
-  fs_info.set_create_time_s(Helper::Timestamp());
-  fs_info.set_last_update_time_ns(Helper::TimestampNs());
+  fs_info.set_create_time_s(utils::Timestamp());
+  fs_info.set_last_update_time_ns(utils::TimestampUs());
 
   return fs_info;
 }

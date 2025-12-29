@@ -19,7 +19,6 @@
 #include <string>
 
 namespace dingofs {
-
 namespace mds {
 
 class SerialHelper {

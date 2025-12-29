@@ -20,14 +20,14 @@
 #include <utility>
 #include <vector>
 
-#include "mds/common/helper.h"
+#include "utils/time.h"
 
 namespace dingofs {
 namespace mds {
 
 class Trace {
  public:
-  Trace() { last_time_us_ = Helper::TimestampUs(); }
+  Trace() { last_time_us_ = utils::TimestampUs(); }
 
   using ElapsedTime = std::pair<std::string, uint32_t>;
 
@@ -65,7 +65,7 @@ class Trace {
   void SetHitChunk() { cache_.is_hit_chunk = true; }
 
   void RecordElapsedTime(const std::string& name) {
-    uint64_t time_us = Helper::TimestampUs();
+    uint64_t time_us = utils::TimestampUs();
     time_.elapsed_times.emplace_back(name, time_us - last_time_us_);
     last_time_us_ = time_us;
   }

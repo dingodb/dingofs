@@ -46,69 +46,6 @@ int64_t Helper::GetThreadID() {
   return *(std::thread::native_handle_type*)(&thread_id);
 }
 
-int64_t Helper::TimestampNs() {
-  return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch())
-      .count();
-}
-
-int64_t Helper::TimestampUs() {
-  return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch())
-      .count();
-}
-
-int64_t Helper::TimestampMs() {
-  return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
-      .count();
-}
-
-int64_t Helper::Timestamp() {
-  return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-}
-
-std::string Helper::NowTime() { return FormatMsTime(TimestampMs(), "%Y-%m-%d %H:%M:%S"); }
-
-std::string Helper::FormatMsTime(int64_t timestamp, const std::string& format) {
-  std::chrono::time_point<std::chrono::system_clock, std::chrono::milliseconds> tp(
-      (std::chrono::milliseconds(timestamp)));
-
-  auto in_time_t = std::chrono::system_clock::to_time_t(tp);
-  std::stringstream ss;
-  ss << std::put_time(std::localtime(&in_time_t), format.c_str()) << "." << timestamp % 1000;
-  return ss.str();
-}
-
-std::string Helper::FormatMsTime(int64_t timestamp) { return FormatMsTime(timestamp, "%Y-%m-%d %H:%M:%S"); }
-
-std::string Helper::FormatTime(int64_t timestamp, const std::string& format) {
-  std::chrono::time_point<std::chrono::system_clock, std::chrono::seconds> tp((std::chrono::seconds(timestamp)));
-
-  auto in_time_t = std::chrono::system_clock::to_time_t(tp);
-  std::stringstream ss;
-  ss << std::put_time(std::localtime(&in_time_t), format.c_str());
-  return ss.str();
-}
-
-std::string Helper::FormatTime(int64_t timestamp) { return FormatTime(timestamp, "%Y-%m-%d %H:%M:%S"); }
-
-std::string Helper::FormatNsTime(int64_t timestamp) {
-  int64_t sec = timestamp / 1000000000;
-  int64_t ns = timestamp % 1000000000;
-  std::string result = FormatTime(sec);
-
-  return result + "." + std::to_string(ns);
-}
-
-std::string Helper::GetNowFormatMsTime() {
-  int64_t timestamp = TimestampMs();
-  std::chrono::time_point<std::chrono::system_clock, std::chrono::milliseconds> tp(
-      (std::chrono::milliseconds(timestamp)));
-
-  auto in_time_t = std::chrono::system_clock::to_time_t(tp);
-  std::stringstream ss;
-  ss << std::put_time(std::localtime(&in_time_t), "%Y-%m-%dT%H:%M:%S.000Z");
-  return ss.str();
-}
-
 bool Helper::IsEqualIgnoreCase(const std::string& str1, const std::string& str2) {
   if (str1.size() != str2.size()) {
     return false;

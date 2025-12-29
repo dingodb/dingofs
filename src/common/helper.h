@@ -16,9 +16,6 @@
 #define DINGOFS_SRC_COMMON_HELPER_H_
 
 #include <arpa/inet.h>
-#include <butil/file_util.h>
-#include <butil/strings/string16.h>
-#include <butil/strings/string_util.h>
 #include <netdb.h>
 
 #include <cstdint>
@@ -28,8 +25,11 @@
 #include <vector>
 
 #include "butil/endpoint.h"
+#include "butil/file_util.h"
+#include "butil/strings/string_util.h"
 #include "common/types.h"
 #include "glog/logging.h"
+
 namespace dingofs {
 
 static const uint32_t kMaxHostNameLength = 255;
@@ -80,9 +80,8 @@ class Helper {
 
   // meta-url: type://address/fs_name
   static bool ParseMetaURL(const std::string& meta_url,
-                           client::MetaSystemType& metasystem_type,
-                           std::string& addrs, std::string& fs_name,
-                           std::string& storage_info) {
+                           MetaSystemType& metasystem_type, std::string& addrs,
+                           std::string& fs_name, std::string& storage_info) {
     static const std::string kProtocolSep = "://";
 
     size_t pos = meta_url.find(kProtocolSep);
@@ -90,13 +89,13 @@ class Helper {
       return false;
     }
     auto tmp_type = meta_url.substr(0, pos);
-    metasystem_type = client::ParseMetaSystemType(tmp_type);
-    CHECK(metasystem_type != client::MetaSystemType::UNKNOWN)
+    metasystem_type = ParseMetaSystemType(tmp_type);
+    CHECK(metasystem_type != MetaSystemType::UNKNOWN)
         << "invalid metasystem type: " << tmp_type;
 
     pos += kProtocolSep.length();
 
-    if (metasystem_type == client::MetaSystemType::MDS) {
+    if (metasystem_type == MetaSystemType::MDS) {
       // mds://127.0.0.1:7800/testfs
       size_t slash_pos = meta_url.find('/', pos);
       if (slash_pos == std::string::npos) {
@@ -106,7 +105,7 @@ class Helper {
       fs_name = meta_url.substr(slash_pos + 1);
 
       return true;
-    } else if (metasystem_type == client::MetaSystemType::LOCAL) {
+    } else if (metasystem_type == MetaSystemType::LOCAL) {
       // local://dingofs?storage=file&path=/tmp/data
       // local://dingofs?storage=s3&ak=<ak>&sk=<sk>&endpoint=<endpoint>&bucketname=<bucketname>
       size_t question_pos = meta_url.find('?', pos);
@@ -120,7 +119,7 @@ class Helper {
       storage_info = meta_url.substr(question_pos + 1);
 
       return true;
-    } else if (metasystem_type == client::MetaSystemType::MEMORY) {
+    } else if (metasystem_type == MetaSystemType::MEMORY) {
       // memory://memory_fs
       fs_name = meta_url.substr(pos);
 
@@ -197,6 +196,7 @@ class Helper {
   }
 
 };  // class Helper
+
 }  // namespace dingofs
 
 #endif  // DINGOFS_SRC_COMMON_HELPER_H_

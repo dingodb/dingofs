@@ -411,7 +411,7 @@ bool StoreDistributionLock::IsLocked() {
   }
 
   // silence period, avoid multi-owner
-  uint64_t now_ms = Helper::TimestampMs();
+  uint64_t now_ms = utils::TimestampMs();
   if (now_ms < last_lock_time_ms_.load() + FLAGS_mds_distribution_lock_lease_ttl_ms) {
     return false;
   }
@@ -441,7 +441,7 @@ Status StoreDistributionLock::RenewLease() {
     }
 
     bool need_update_last_lock_time = false;
-    uint64_t now_ms = Helper::TimestampMs();
+    uint64_t now_ms = utils::TimestampMs();
     uint64_t epoch = 0;
     uint64_t expire_time_ms = 0;
     if (status.ok()) {

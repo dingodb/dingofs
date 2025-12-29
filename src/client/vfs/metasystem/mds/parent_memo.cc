@@ -14,6 +14,7 @@
 
 #include "client/vfs/metasystem/mds/parent_memo.h"
 
+#include "common/const.h"
 #include "fmt/core.h"
 #include "json/value.h"
 
@@ -24,7 +25,7 @@ namespace meta {
 
 ParentMemo::ParentMemo() {
   // root ino is its own parent
-  UpsertEntry(1, Entry{1, 0, 0});
+  UpsertEntry(kRootIno, Entry{kRootIno, 0, 0});
 }
 
 bool ParentMemo::GetParent(Ino ino, Ino& parent) {

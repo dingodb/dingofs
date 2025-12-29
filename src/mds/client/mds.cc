@@ -15,7 +15,6 @@
 #include "mds/client/mds.h"
 
 #include <fcntl.h>
-#include <glog/logging.h>
 #include <sys/types.h>
 
 #include <cstddef>
@@ -23,11 +22,12 @@
 #include <string>
 #include <vector>
 
-#include "common/logging.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/format.h"
+#include "glog/logging.h"
 #include "mds/common/helper.h"
+#include "utils/time.h"
 
 namespace dingofs {
 namespace mds {
@@ -69,7 +69,7 @@ HeartbeatResponse MDSClient::Heartbeat(uint32_t mds_id) {
   mds->mutable_location()->set_host("127.0.0.1");
   mds->mutable_location()->set_port(10000);
   mds->set_state(MdsEntry::NORMAL);
-  mds->set_last_online_time_ms(Helper::TimestampMs());
+  mds->set_last_online_time_ms(utils::TimestampMs());
 
   auto status = interaction_->SendRequest("MDSService", "Heartbeat", request, response);
   if (!status.ok()) {
@@ -373,7 +373,7 @@ MkDirResponse MDSClient::MkDir(Ino parent, const std::string& name) {
 void MDSClient::BatchMkDir(const std::vector<int64_t>& parents, const std::string& prefix, size_t num) {
   for (size_t i = 0; i < num; i++) {
     for (auto parent : parents) {
-      std::string name = fmt::format("{}_{}", prefix, Helper::TimestampNs());
+      std::string name = fmt::format("{}_{}", prefix, utils::TimestampUs());
       MkDir(parent, name);
     }
   }
@@ -461,7 +461,7 @@ MkNodResponse MDSClient::MkNod(Ino parent, const std::string& name) {
 void MDSClient::BatchMkNod(const std::vector<int64_t>& parents, const std::string& prefix, size_t num) {
   for (size_t i = 0; i < num; i++) {
     for (auto parent : parents) {
-      std::string name = fmt::format("{}_{}", prefix, Helper::TimestampNs());
+      std::string name = fmt::format("{}_{}", prefix, utils::TimestampUs());
       MkNod(parent, name);
     }
   }
@@ -666,7 +666,7 @@ void MDSClient::GetFsPerSecondStats(const std::string& fs_name) {
   }
 
   for (const auto& [time_s, stats] : sorted_stats) {
-    LOG(INFO) << fmt::format("time: {} stats: {}.", Helper::FormatTime(time_s), stats.ShortDebugString());
+    LOG(INFO) << fmt::format("time: {} stats: {}.", utils::FormatTime(time_s), stats.ShortDebugString());
   }
 }
 

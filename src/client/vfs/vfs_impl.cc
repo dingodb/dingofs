@@ -32,7 +32,7 @@
 #include "client/vfs/handle/handle_manager.h"
 #include "client/vfs/vfs_fh.h"
 #include "client/vfs/vfs_xattr.h"
-#include "common/define.h"
+#include "common/const.h"
 #include "common/metrics/metrics_dumper.h"
 #include "common/options/client.h"
 #include "common/status.h"
@@ -103,9 +103,8 @@ double VFSImpl::GetEntryTimeout(const FileType& type) {  // NOLINT
 Status VFSImpl::Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
                        Attr* attr) {
   // check if parent is root inode and file name is .stats name
-  if (BAIDU_UNLIKELY(parent == ROOTINODEID &&
-                     name == STATSNAME)) {  // stats node
-    *attr = GenerateVirtualInodeAttr(STATSINODEID);
+  if (BAIDU_UNLIKELY(parent == kRootIno && name == kStatsName)) {  // stats node
+    *attr = GenerateVirtualInodeAttr(kStatsIno);
     return Status::OK();
   }
 
@@ -117,8 +116,8 @@ Status VFSImpl::Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
 }
 
 Status VFSImpl::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
-  if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
-    *attr = GenerateVirtualInodeAttr(STATSINODEID);
+  if (BAIDU_UNLIKELY(ino == kStatsIno)) {
+    *attr = GenerateVirtualInodeAttr(kStatsIno);
     return Status::OK();
   }
 
@@ -127,7 +126,7 @@ Status VFSImpl::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
 
 Status VFSImpl::SetAttr(ContextSPtr ctx, Ino ino, int set, const Attr& in_attr,
                         Attr* out_attr) {
-  if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
+  if (BAIDU_UNLIKELY(ino == kStatsIno)) {
     return Status::OK();
   }
 
@@ -152,8 +151,7 @@ Status VFSImpl::MkNod(ContextSPtr ctx, Ino parent, const std::string& name,
 
 Status VFSImpl::Unlink(ContextSPtr ctx, Ino parent, const std::string& name) {
   // check if node is recycle or recycle time dir or .stats node
-  if ((IsInternalName(name) && parent == ROOTINODEID) ||
-      parent == RECYCLEINODEID) {
+  if ((IsInternalName(name) && parent == kRootIno) || parent == kRecycleIno) {
     LOG(WARNING) << "Can not unlink internal node, parent inodeId=" << parent
                  << ", name: " << name;
     return Status::NoPermitted("Can not unlink internal node");
@@ -168,13 +166,13 @@ Status VFSImpl::Symlink(ContextSPtr ctx, Ino parent, const std::string& name,
   {
     // internal file name can not allowed for symlink
     // cant't allow  ln -s  .stats  <file>
-    if (parent == ROOTINODEID && IsInternalName(name)) {
+    if (parent == kRootIno && IsInternalName(name)) {
       LOG(WARNING) << "Can not symlink internal node, parent inodeId=" << parent
                    << ", name: " << name;
       return Status::NoPermitted("Can not symlink internal node");
     }
     // cant't allow  ln -s <file> .stats
-    if (parent == ROOTINODEID && IsInternalName(link)) {
+    if (parent == kRootIno && IsInternalName(link)) {
       LOG(WARNING) << "Can not symlink to internal node, parent inodeId="
                    << parent << ", link: " << link;
       return Status::NoPermitted("Can not symlink to internal node");
@@ -189,7 +187,7 @@ Status VFSImpl::Rename(ContextSPtr ctx, Ino old_parent,
                        const std::string& new_name) {
   // internel name can not be rename or rename to
   if ((IsInternalName(old_name) || IsInternalName(new_name)) &&
-      old_parent == ROOTINODEID) {
+      old_parent == kRootIno) {
     return Status::NoPermitted("Can not rename internal node");
   }
 
@@ -203,7 +201,7 @@ Status VFSImpl::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
     // cant't allow  ln   <file> .stats
     // cant't allow  ln  .stats  <file>
     if (IsInternalNode(ino) ||
-        (new_parent == ROOTINODEID && IsInternalName(new_name))) {
+        (new_parent == kRootIno && IsInternalName(new_name))) {
       return Status::NoPermitted("Can not link internal node");
     }
   }
@@ -220,7 +218,7 @@ Status VFSImpl::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t* fh) {
   // inodeattr information
   uint64_t gfh = vfs::FhGenerator::GenFh();
 
-  if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
+  if (BAIDU_UNLIKELY(ino == kStatsIno)) {
     // uint64_t gfh = vfs::FhGenerator::GenFh();
     MetricsDumper metrics_dumper;
     bvar::DumpOptions opts;
@@ -237,7 +235,7 @@ Status VFSImpl::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t* fh) {
 
     auto handler = std::make_shared<Handle>();
     handler->fh = gfh;
-    handler->ino = STATSINODEID;
+    handler->ino = kStatsIno;
     handler->file_buffer.size = len;
     handler->file_buffer.data = std::move(file_data_ptr);
 
@@ -296,7 +294,7 @@ Status VFSImpl::Read(ContextSPtr ctx, Ino ino, DataBuffer* data_buffer,
   auto span = vfs_hub_->GetTracer()->StartSpanWithContext(kVFSDataMoudule,
                                                           "VFSImpl::Read", ctx);
   // read .stats file data
-  if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
+  if (BAIDU_UNLIKELY(ino == kStatsIno)) {
     size_t file_size = handle->file_buffer.size;
     size_t read_size =
         std::min(size, file_size > offset ? file_size - offset : 0);
@@ -369,7 +367,7 @@ Status VFSImpl::Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t size,
 }
 
 Status VFSImpl::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {
-  if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
+  if (BAIDU_UNLIKELY(ino == kStatsIno)) {
     return Status::OK();
   }
 
@@ -392,7 +390,7 @@ Status VFSImpl::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {
 }
 
 Status VFSImpl::Release(ContextSPtr ctx, Ino ino, uint64_t fh) {
-  if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
+  if (BAIDU_UNLIKELY(ino == kStatsIno)) {
     handle_manager_->ReleaseHandler(fh);
     return Status::OK();
   }
@@ -434,7 +432,7 @@ Status VFSImpl::Fsync(ContextSPtr ctx, Ino ino, int datasync, uint64_t fh) {
 
 Status VFSImpl::SetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
                          const std::string& value, int flags) {
-  if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
+  if (BAIDU_UNLIKELY(ino == kStatsIno)) {
     return Status::OK();
   }
 
@@ -451,7 +449,7 @@ Status VFSImpl::SetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
 
 Status VFSImpl::GetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
                          std::string* value) {
-  if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
+  if (BAIDU_UNLIKELY(ino == kStatsIno)) {
     return Status::NoData("No Xattr data in .stats");
   }
 
@@ -465,7 +463,7 @@ Status VFSImpl::GetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
 }
 
 Status VFSImpl::RemoveXattr(ContextSPtr ctx, Ino ino, const std::string& name) {
-  if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
+  if (BAIDU_UNLIKELY(ino == kStatsIno)) {
     return Status::NoData("No Xattr data in .stats");
   }
 
@@ -474,7 +472,7 @@ Status VFSImpl::RemoveXattr(ContextSPtr ctx, Ino ino, const std::string& name) {
 
 Status VFSImpl::ListXattr(ContextSPtr ctx, Ino ino,
                           std::vector<std::string>* xattrs) {
-  if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
+  if (BAIDU_UNLIKELY(ino == kStatsIno)) {
     return Status::NoData("No Xattr data in .stats");
   }
 
@@ -495,9 +493,9 @@ Status VFSImpl::OpenDir(ContextSPtr ctx, Ino ino, uint64_t* fh) {
 Status VFSImpl::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
                         bool with_attr, ReadDirHandler handler) {
   // root dir(add .stats file)
-  if (BAIDU_UNLIKELY(ino == ROOTINODEID) && offset == 0) {
-    DirEntry stats_entry{STATSINODEID, STATSNAME,
-                         GenerateVirtualInodeAttr(STATSINODEID)};
+  if (BAIDU_UNLIKELY(ino == kRootIno) && offset == 0) {
+    DirEntry stats_entry{kStatsIno, kStatsName,
+                         GenerateVirtualInodeAttr(kStatsIno)};
     handler(stats_entry, 1);  // pos 0 is the offset for .stats entry
   }
 
@@ -510,8 +508,7 @@ Status VFSImpl::ReleaseDir(ContextSPtr ctx, Ino ino, uint64_t fh) {
 
 Status VFSImpl::RmDir(ContextSPtr ctx, Ino parent, const std::string& name) {
   // check if node is recycle or recycle time dir or .stats node
-  if ((IsInternalName(name) && parent == ROOTINODEID) ||
-      parent == RECYCLEINODEID) {
+  if ((IsInternalName(name) && parent == kRootIno) || parent == kRecycleIno) {
     return Status::NoPermitted("not permit rmdir internal dir");
   }
 

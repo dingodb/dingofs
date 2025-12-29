@@ -202,11 +202,11 @@ static void RenderFsInfo(const std::vector<pb::mds::FsInfo>& fs_infoes, butil::I
     result += "<div>";
     result += "update time:";
     result += "<br>";
-    result += fmt::format("<span>{}</span>", Helper::FormatTime(fs_info.last_update_time_ns() / 1000000000));
+    result += fmt::format("<span>{}</span>", utils::FormatTime(fs_info.last_update_time_ns() / 1000000000));
     result += "<br>";
     result += "create time:";
     result += "<br>";
-    result += fmt::format("<span>{}</span>", Helper::FormatTime(fs_info.create_time_s()));
+    result += fmt::format("<span>{}</span>", utils::FormatTime(fs_info.create_time_s()));
     result += "</div>";
     return result;
   };
@@ -295,7 +295,7 @@ static void RenderMdsList(const std::vector<MdsEntry>& mdses, butil::IOBufBuilde
   os << "<th>Details</th>";
   os << "</tr>";
 
-  uint64_t now_ms = Helper::TimestampMs();
+  uint64_t now_ms = utils::TimestampMs();
 
   for (const auto& mds : mdses) {
     os << "<tr>";
@@ -303,8 +303,8 @@ static void RenderMdsList(const std::vector<MdsEntry>& mdses, butil::IOBufBuilde
     os << fmt::format(R"(<td><a href="http://{}:{}/FsStatService" target="_blank">{}:{} </a></td>)",
                       mds.location().host(), mds.location().port(), mds.location().host(), mds.location().port());
     os << "<td>" << MdsEntry::State_Name(mds.state()) << "</td>";
-    os << "<td>" << Helper::FormatTime(mds.create_time_ms() / 1000) << "</td>";
-    os << "<td>" << Helper::FormatMsTime(mds.last_online_time_ms()) << "</td>";
+    os << "<td>" << utils::FormatTime(mds.create_time_ms() / 1000) << "</td>";
+    os << "<td>" << utils::FormatMsTime(mds.last_online_time_ms()) << "</td>";
     if (mds.last_online_time_ms() + FLAGS_mds_heartbeat_mds_offline_period_time_ms < now_ms) {
       os << "<td style=\"color:red\">NO</td>";
     } else {
@@ -335,7 +335,7 @@ static void RenderClientList(const std::vector<ClientEntry>& clients, butil::IOB
   os << "<th>Online</th>";
   os << "</tr>";
 
-  uint64_t now_ms = Helper::TimestampMs();
+  uint64_t now_ms = utils::TimestampMs();
 
   for (const auto& client : clients) {
     os << "<tr>";
@@ -344,8 +344,8 @@ static void RenderClientList(const std::vector<ClientEntry>& clients, butil::IOB
                       client.port(), client.hostname(), client.port());
     os << "<td>" << client.mountpoint() << "</td>";
     os << "<td>" << client.fs_name() << "</td>";
-    os << "<td>" << Helper::FormatTime(client.create_time_ms() / 1000) << "</td>";
-    os << "<td>" << Helper::FormatMsTime(client.last_online_time_ms()) << "</td>";
+    os << "<td>" << utils::FormatTime(client.create_time_ms() / 1000) << "</td>";
+    os << "<td>" << utils::FormatMsTime(client.last_online_time_ms()) << "</td>";
     if (client.last_online_time_ms() + FLAGS_mds_heartbeat_client_offline_period_ms < now_ms) {
       os << R"(<td style="color:red">NO</td>)";
     } else {
@@ -374,7 +374,7 @@ static void RenderCacheMemberList(const std::vector<CacheMemberEntry>& cache_mem
   os << "<th>State</th>";
   os << "</tr>";
 
-  uint64_t now_ms = Helper::TimestampMs();
+  uint64_t now_ms = utils::TimestampMs();
 
   for (const auto& member : cache_members) {
     os << "<tr>";
@@ -387,7 +387,7 @@ static void RenderCacheMemberList(const std::vector<CacheMemberEntry>& cache_mem
     } else {
       os << "<td>NO</td>";
     }
-    os << "<td>" << Helper::FormatMsTime(member.last_online_time_ms()) << "</td>";
+    os << "<td>" << utils::FormatMsTime(member.last_online_time_ms()) << "</td>";
     if (member.last_online_time_ms() == 0) {
       os << R"(<td>UNKNOW</td>)";
     } else if (member.last_online_time_ms() + FLAGS_cache_member_heartbeat_offline_timeout_s * 1000 < now_ms) {
@@ -422,7 +422,7 @@ static void RenderDistributedLock(const std::vector<StoreDistributionLock::LockE
     os << "<td>" << lock_entry.name << "</td>";
     os << "<td>" << lock_entry.owner << "</td>";
     os << "<td>" << lock_entry.epoch << "</td>";
-    os << "<td>" << Helper::FormatMsTime(lock_entry.expire_time_ms) << "</td>";
+    os << "<td>" << utils::FormatMsTime(lock_entry.expire_time_ms) << "</td>";
     os << "</tr>";
   }
 
@@ -1298,7 +1298,7 @@ static void RenderFileSessionPage(uint32_t fs_id, const std::vector<FileSessionE
     os << "<td>" << file_session.ino() << "</td>";
     os << "<td>" << file_session.session_id() << "</td>";
     os << "<td>" << file_session.client_id() << "</td>";
-    os << "<td>" << Helper::FormatTime(file_session.create_time_s()) << "</td>";
+    os << "<td>" << utils::FormatTime(file_session.create_time_s()) << "</td>";
 
     os << "</tr>";
   }
@@ -1331,7 +1331,7 @@ static void RenderDelfilePage(const std::vector<AttrEntry>& delfiles, butil::IOB
     std::string url = fmt::format("/FsStatService/delfiles/{}/{}", delfile.fs_id(), delfile.ino());
     os << "<td><a href=\"" << url << R"(" target="_blank">)" << delfile.ino() << "</a></td>";
     os << "<td>" << delfile.length() << "</td>";
-    os << "<td>" << Helper::FormatTime(delfile.ctime() / 1000000000) << "</td>";
+    os << "<td>" << utils::FormatTime(delfile.ctime() / 1000000000) << "</td>";
     os << "<td>" << delfile.version() << "</td>";
 
     os << "</tr>";
@@ -1394,7 +1394,7 @@ static void RenderDelslicePage(const std::vector<TrashSliceList>& delslices, but
       os << "<td>" << slice.slice_id() << "</td>";
       os << "<td>" << (slice.is_partial() ? "true" : "false") << "</td>";
       os << "<td>" << render_range_func(slice) << "</td>";
-      os << "<td>" << Helper::FormatMsTime(delslice.time_ms()) << "</td>";
+      os << "<td>" << utils::FormatMsTime(delslice.time_ms()) << "</td>";
       os << "</tr>";
     }
   }
@@ -1450,7 +1450,7 @@ static void RenderOplogPage(const std::vector<FsOpLog>& oplogs, butil::IOBufBuil
         os << "<td>UNKNOWN</td>";
     }
     os << "<td>" << oplog.comment() << "</td>";
-    os << "<td>" << Helper::FormatMsTime(oplog.time_ms()) << "</td>";
+    os << "<td>" << utils::FormatMsTime(oplog.time_ms()) << "</td>";
 
     os << "</tr>";
   }
@@ -1567,7 +1567,7 @@ static void RenderChunksPage(Ino ino, const std::vector<ChunkEntry>& chunks, but
     const auto& chunk = chunks.at(0);
     os << fmt::format(R"(<h5>ChunkSize: {}MB BlockSize: {}KB LastCompactTime: {}</h5>)",
                       chunk.chunk_size() / (1024 * 1024), chunk.block_size() / 1024,
-                      Helper::FormatMsTime(chunk.last_compaction_time_ms()));
+                      utils::FormatMsTime(chunk.last_compaction_time_ms()));
   }
   os << R"(<table class="gridtable sortable" border=1>)";
   os << "<tr>";

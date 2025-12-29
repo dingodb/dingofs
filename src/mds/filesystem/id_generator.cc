@@ -14,8 +14,6 @@
 
 #include "mds/filesystem/id_generator.h"
 
-#include <gflags/gflags_declare.h>
-
 #include <algorithm>
 #include <cstdint>
 #include <string>
@@ -24,10 +22,11 @@
 #include "common/logging.h"
 #include "dingofs/error.pb.h"
 #include "fmt/format.h"
+#include "gflags/gflags_declare.h"
 #include "glog/logging.h"
 #include "mds/common/codec.h"
 #include "mds/common/status.h"
-#include "mds/common/time.h"
+#include "utils/time.h"
 
 namespace dingofs {
 namespace mds {
@@ -150,7 +149,7 @@ Status CoorAutoIncrementIdGenerator::DeleteAutoIncrement() {
 
 Status CoorAutoIncrementIdGenerator::AllocateIds(uint32_t num) {
   Status status;
-  Duration duration;
+  utils::Duration duration;
   int64_t bundle = 0;
   int64_t bundle_end = 0;
   do {
@@ -287,7 +286,7 @@ Status StoreAutoIncrementIdGenerator::GetOrPutAllocId(uint64_t& alloc_id) {
 }
 
 Status StoreAutoIncrementIdGenerator::AllocateIds(uint32_t size) {
-  Duration duration;
+  utils::Duration duration;
   Status status;
   uint32_t retry = 0;
   uint64_t start_alloc_id = std::max(next_id_, last_alloc_id_);

@@ -44,7 +44,7 @@ DEFINE_validator(mds_monitor_client_clean_period_time_s, brpc::PassValidate);
 
 static void GetOfflineMDS(const std::vector<MDSMeta>& mdses, std::vector<MDSMeta>& online_mdses,
                           std::vector<MDSMeta>& offline_mdses) {
-  uint64_t now_ms = Helper::TimestampMs();
+  uint64_t now_ms = utils::TimestampMs();
 
   for (const auto& mds : mdses) {
     // LOG(INFO) << fmt::format("[monitor] mds: {}, last online time: {}, now: {}, offline period: {}", mds.ID(),
@@ -234,7 +234,7 @@ Status Monitor::MonitorClient() {
   }
   if (clients.empty()) return Status::OK();
 
-  uint64_t now_ms = Helper::TimestampMs();
+  uint64_t now_ms = utils::TimestampMs();
 
   // umount all offline clients
   for (const auto& client : clients) {

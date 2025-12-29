@@ -36,7 +36,7 @@
 #include <unordered_map>
 
 #include "absl/strings/str_format.h"
-#include "common/define.h"
+#include "common/const.h"
 #include "common/types.h"
 #include "fuse3/fuse_lowlevel.h"
 #include "fuse3/fuse_opt.h"
@@ -50,7 +50,7 @@ const std::string kFdCommPathKey = "fd_comm_path";
 struct MountOption {
   std::string mount_point;
   std::string fs_name;
-  dingofs::client::MetaSystemType metasystem_type;
+  dingofs::MetaSystemType metasystem_type;
   std::string mds_addrs;
   std::string storage_info;
 };
@@ -146,7 +146,7 @@ inline std::string GetFdCommFileName(const std::string& filename) {
  * @param mountpoint dingo-client mountpoint
  */
 inline bool CanShutdownGracefully(const std::string& mountpoint) {
-  if (GetFileInode(mountpoint) != dingofs::ROOTINODEID) {
+  if (GetFileInode(mountpoint) != dingofs::kRootIno) {
     return false;
   }
   return true;

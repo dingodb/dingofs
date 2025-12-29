@@ -181,7 +181,7 @@ TxnUPtr DummyStorage::NewTxn(Txn::IsolationLevel isolation_level) {
 
 DummyTxn::DummyTxn(DummyStorage* storage, Txn::IsolationLevel isolation_level)
     : storage_(storage), isolation_level_(isolation_level) {
-  txn_id_ = Helper::TimestampNs();
+  txn_id_ = utils::TimestampUs();
 }
 
 int64_t DummyTxn::ID() const { return txn_id_; }
