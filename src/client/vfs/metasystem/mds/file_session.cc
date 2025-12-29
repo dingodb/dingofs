@@ -24,7 +24,7 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
-namespace v2 {
+namespace meta {
 
 FileSession::FileSession(mds::FsInfoSPtr fs_info, Ino ino)
     : fs_info_(fs_info), ino_(ino), chunk_set_(ino) {}
@@ -265,7 +265,7 @@ void FileSessionMap::Put(FileSessionSPtr file_session) {
       ino);
 }
 
-}  // namespace v2
+}  // namespace meta
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

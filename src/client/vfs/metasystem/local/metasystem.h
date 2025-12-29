@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_SRC_CLIENT_VFS_META_LOCAL_FILESYSTEM_H_
-#define DINGOFS_SRC_CLIENT_VFS_META_LOCAL_FILESYSTEM_H_
+#ifndef DINGOFS_SRC_CLIENT_VFS_META_LOCAL_H_
+#define DINGOFS_SRC_CLIENT_VFS_META_LOCAL_H_
 
 #include <atomic>
 #include <cstdint>
@@ -214,7 +214,7 @@ class LocalMetaSystem : public vfs::MetaSystem {
   // inode cache operations
   void PutInodeToCache(const mds::AttrEntry& attr_entry);
   void DeleteInodeFromCache(Ino ino);
-  v2::InodeSPtr GetInodeFromCache(Ino ino);
+  meta::InodeSPtr GetInodeFromCache(Ino ino);
 
   // quota operations
   void UpdateFsUsage(int64_t byte_delta, int64_t inode_delta,
@@ -243,7 +243,7 @@ class LocalMetaSystem : public vfs::MetaSystem {
   // for read dir
   DirIteratorManager dir_iterator_manager_;
   // for cache inode
-  v2::InodeCacheUPtr inode_cache_;
+  meta::InodeCacheUPtr inode_cache_;
 
   utils::RWLock fs_quota_lock_;
   // for fs quota
@@ -264,4 +264,4 @@ class LocalMetaSystem : public vfs::MetaSystem {
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_VFS_META_LOCAL_FILESYSTEM_H_
+#endif  // DINGOFS_SRC_CLIENT_VFS_META_LOCAL_H_

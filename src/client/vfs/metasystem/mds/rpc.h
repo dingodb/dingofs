@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_RPC_H_
-#define DINGOFS_SRC_CLIENT_VFS_META_V2_RPC_H_
+#ifndef DINGOFS_SRC_CLIENT_VFS_META_MDS_RPC_H_
+#define DINGOFS_SRC_CLIENT_VFS_META_MDS_RPC_H_
 
 #include <brpc/errno.pb.h>
 #include <bthread/bthread.h>
@@ -47,7 +47,7 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
-namespace v2 {
+namespace meta {
 
 class RPC;
 using RPCPtr = std::shared_ptr<RPC>;
@@ -346,9 +346,9 @@ Status RPC::SendRequest(const EndPoint& endpoint,
   return TransformError(response.error());
 }
 
-}  // namespace v2
+}  // namespace meta
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_VFS_META_V2_RPC_H_
+#endif  // DINGOFS_SRC_CLIENT_VFS_META_MDS_RPC_H_

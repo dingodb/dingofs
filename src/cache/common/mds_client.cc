@@ -61,8 +61,8 @@ DEFINE_validator(cache_mds_request_retry_times, brpc::PassValidate);
 
 MDSClientImpl::MDSClientImpl(const std::string& mds_addr)
     : running_(false),
-      rpc_(client::vfs::v2::RPC::New(mds_addr)),
-      mds_discovery_(std::make_unique<client::vfs::v2::MDSDiscovery>(rpc_)) {}
+      rpc_(client::vfs::meta::RPC::New(mds_addr)),
+      mds_discovery_(std::make_unique<client::vfs::meta::MDSDiscovery>(rpc_)) {}
 
 Status MDSClientImpl::Start() {
   CHECK_NOTNULL(rpc_);
@@ -270,13 +270,13 @@ Status MDSClientImpl::SendRequest(const std::string& service_name,
                                   const std::string& api_name, Request& request,
                                   Response& response) {
   mds::MDSMeta mds, old_mds;
-  client::vfs::v2::SendRequestOption rpc_option;
+  client::vfs::meta::SendRequestOption rpc_option;
   rpc_option.timeout_ms = FLAGS_cache_mds_rpc_timeout_ms;
   rpc_option.max_retry = FLAGS_cache_mds_rpc_retry_times;
 
   for (int retry = 0; retry < FLAGS_cache_mds_request_retry_times; ++retry) {
     mds = GetRandomlyMDS(old_mds);
-    auto endpoint = client::vfs::v2::StrToEndpoint(mds.Host(), mds.Port());
+    auto endpoint = client::vfs::meta::StrToEndpoint(mds.Host(), mds.Port());
 
     auto status = rpc_->SendRequest(endpoint, service_name, api_name, request,
                                     response, rpc_option);

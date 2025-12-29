@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_FILESYSTEM_H_
-#define DINGOFS_SRC_CLIENT_VFS_META_V2_FILESYSTEM_H_
+#ifndef DINGOFS_SRC_CLIENT_VFS_META_MDS_H_
+#define DINGOFS_SRC_CLIENT_VFS_META_MDS_H_
 
 #include <cstdint>
 #include <functional>
@@ -42,7 +42,7 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
-namespace v2 {
+namespace meta {
 
 using mds::AttrEntry;
 
@@ -208,9 +208,9 @@ class MDSMetaSystem : public vfs::MetaSystem {
   WriteSliceProcessorSPtr write_slice_processor_;
 };
 
-}  // namespace v2
+}  // namespace meta
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_VFS_META_V2_FILESYSTEM_H_
+#endif  // DINGOFS_SRC_CLIENT_VFS_META_MDS_H_

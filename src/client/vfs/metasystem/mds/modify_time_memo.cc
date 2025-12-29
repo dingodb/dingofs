@@ -19,7 +19,7 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
-namespace v2 {
+namespace meta {
 
 void ModifyTimeMemo::Remember(Ino ino) {
   modify_time_map_.withWLock(
@@ -98,7 +98,7 @@ bool ModifyTimeMemo::Load(const Json::Value& value) {
   return true;
 }
 
-}  // namespace v2
+}  // namespace meta
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

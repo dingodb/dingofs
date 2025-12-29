@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_SRC_CLIENT_VFS_META_MEMORY_FILESYSTEM_H_
-#define DINGOFS_SRC_CLIENT_VFS_META_MEMORY_FILESYSTEM_H_
+#ifndef DINGOFS_SRC_CLIENT_VFS_META_MEMORY_H_
+#define DINGOFS_SRC_CLIENT_VFS_META_MEMORY_H_
 
 #include <atomic>
 #include <cstddef>
@@ -335,4 +335,4 @@ class MemoryMetaSystem : public vfs::MetaSystem {
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_VFS_META_MEMORY_FILESYSTEM_H_
+#endif  // DINGOFS_SRC_CLIENT_VFS_META_MEMORY_H_

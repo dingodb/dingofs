@@ -25,7 +25,7 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
-namespace v2 {
+namespace meta {
 
 static const uint32_t kWaitTimeMs = 100;
 
@@ -167,7 +167,7 @@ bool MDSDiscovery::RefreshFullyMDSList() {
   return true;
 }
 
-}  // namespace v2
+}  // namespace meta
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

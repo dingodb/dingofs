@@ -29,7 +29,7 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
-namespace v2 {
+namespace meta {
 
 static const uint32_t kChunkCommitIntervalMs = 1000;  // milliseconds
 
@@ -641,7 +641,7 @@ bool ChunkSet::Load(const Json::Value& value) {
   return true;
 }
 
-}  // namespace v2
+}  // namespace meta
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_MDS_ROUTER_H_
-#define DINGOFS_SRC_CLIENT_VFS_META_V2_MDS_ROUTER_H_
+#ifndef DINGOFS_SRC_CLIENT_VFS_META_MDS_ROUTER_H_
+#define DINGOFS_SRC_CLIENT_VFS_META_MDS_ROUTER_H_
 
 #include <cstdint>
 #include <memory>
@@ -27,7 +27,7 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
-namespace v2 {
+namespace meta {
 
 class MDSRouter {
  public:
@@ -119,9 +119,9 @@ class ParentHashMDSRouter : public MDSRouter {
   std::unordered_map<int64_t, mds::MDSMeta> mds_map_;
 };
 
-}  // namespace v2
+}  // namespace meta
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_VFS_META_V2_MDS_ROUTER_H_
+#endif  // DINGOFS_SRC_CLIENT_VFS_META_MDS_ROUTER_H_

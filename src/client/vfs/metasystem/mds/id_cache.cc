@@ -21,7 +21,7 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
-namespace v2 {
+namespace meta {
 
 DEFINE_uint32(client_vfs_id_cache_batch_size, 100000, "id cache batch size");
 
@@ -69,7 +69,7 @@ Status IdCache::AllocateIds(uint32_t size) {
   return Status::OK();
 }
 
-}  // namespace v2
+}  // namespace meta
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

@@ -26,7 +26,7 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
-namespace v2 {
+namespace meta {
 
 const int32_t kConnectTimeoutMs = 200;  // milliseconds
 
@@ -239,7 +239,7 @@ bool RPC::Dump(Json::Value& value) {
   return true;
 }
 
-}  // namespace v2
+}  // namespace meta
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

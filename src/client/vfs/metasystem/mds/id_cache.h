@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_ID_CACHE_H_
-#define DINGOFS_SRC_CLIENT_VFS_META_V2_ID_CACHE_H_
+#ifndef DINGOFS_SRC_CLIENT_VFS_META_MDS_ID_CACHE_H_
+#define DINGOFS_SRC_CLIENT_VFS_META_MDS_ID_CACHE_H_
 
 #include <gflags/gflags_declare.h>
 
@@ -23,7 +23,7 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
-namespace v2 {
+namespace meta {
 
 DECLARE_uint32(client_vfs_id_cache_batch_size);
 
@@ -50,9 +50,9 @@ class IdCache {
   uint32_t batch_size_{0};
 };
 
-}  // namespace v2
+}  // namespace meta
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_VFS_META_V2_ID_CACHE_H_
+#endif  // DINGOFS_SRC_CLIENT_VFS_META_MDS_ID_CACHE_H_

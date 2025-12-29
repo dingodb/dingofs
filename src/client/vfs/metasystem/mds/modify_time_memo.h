@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_MODIFY_TIME_MEMO_H_
-#define DINGOFS_SRC_CLIENT_VFS_META_V2_MODIFY_TIME_MEMO_H_
+#ifndef DINGOFS_SRC_CLIENT_VFS_META_MDS_MODIFY_TIME_MEMO_H_
+#define DINGOFS_SRC_CLIENT_VFS_META_MDS_MODIFY_TIME_MEMO_H_
 
 #include <absl/container/flat_hash_map.h>
 #include <sys/types.h>
@@ -31,7 +31,7 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
-namespace v2 {
+namespace meta {
 
 class ModifyTimeMemo {
  public:
@@ -56,9 +56,9 @@ class ModifyTimeMemo {
   utils::Shards<Map, kShardNum> modify_time_map_;
 };
 
-}  // namespace v2
+}  // namespace meta
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_VFS_META_V2_MODIFY_TIME_MEMO_H_
+#endif  // DINGOFS_SRC_CLIENT_VFS_META_MDS_MODIFY_TIME_MEMO_H_

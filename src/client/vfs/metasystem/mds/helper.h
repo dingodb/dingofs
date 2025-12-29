@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_HELPER_H_
-#define DINGOFS_SRC_CLIENT_VFS_META_V2_HELPER_H_
+#ifndef DINGOFS_SRC_CLIENT_VFS_META_HELPER_H_
+#define DINGOFS_SRC_CLIENT_VFS_META_HELPER_H_
 
 #include <cstdint>
 #include <string>
@@ -27,7 +27,7 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
-namespace v2 {
+namespace meta {
 
 class Helper {
  public:
@@ -293,9 +293,9 @@ class Helper {
   }
 };
 
-}  // namespace v2
+}  // namespace meta
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_VFS_META_V2_HELPER_H_
+#endif  // DINGOFS_SRC_CLIENT_VFS_META_HELPER_H_

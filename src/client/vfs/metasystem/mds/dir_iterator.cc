@@ -27,7 +27,7 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
-namespace v2 {
+namespace meta {
 
 DirIterator::~DirIterator() {
   std::string str;
@@ -258,7 +258,7 @@ bool DirIteratorManager::Load(MDSClientSPtr mds_client,
   return true;
 }
 
-}  // namespace v2
+}  // namespace meta
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

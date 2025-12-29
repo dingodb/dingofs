@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_CHUNK_MEMO_H_
-#define DINGOFS_SRC_CLIENT_VFS_META_V2_CHUNK_MEMO_H_
+#ifndef DINGOFS_SRC_CLIENT_VFS_META_MDS_CHUNK_MEMO_H_
+#define DINGOFS_SRC_CLIENT_VFS_META_MDS_CHUNK_MEMO_H_
 
 #include <sys/types.h>
 
@@ -29,7 +29,9 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
-namespace v2 {
+namespace meta {
+
+using dingofs::mds::ChunkDescriptor;
 
 class ChunkMemo {
  public:
@@ -53,8 +55,7 @@ class ChunkMemo {
     uint64_t time_ns;
   };
 
-  void Remember(Ino ino,
-                const std::vector<mds::ChunkDescriptor>& chunk_descriptors);
+  void Remember(Ino ino, const std::vector<ChunkDescriptor>& chunk_descriptors);
   void Remember(Ino ino, uint32_t chunk_index, uint64_t version);
   void Forget(Ino ino);
   void Forget(Ino ino, uint32_t chunk_index);
@@ -75,9 +76,9 @@ class ChunkMemo {
   utils::Shards<Map, kShardNum> chunk_map_;
 };
 
-}  // namespace v2
+}  // namespace meta
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_VFS_META_V2_CHUNK_MEMO_H_
+#endif  // DINGOFS_SRC_CLIENT_VFS_META_MDS_CHUNK_MEMO_H_

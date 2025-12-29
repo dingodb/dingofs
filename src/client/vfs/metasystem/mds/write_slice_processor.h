@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_WRITE_SLICE_PROCESSOR_H_
-#define DINGOFS_SRC_CLIENT_VFS_META_V2_WRITE_SLICE_PROCESSOR_H_
+#ifndef DINGOFS_SRC_CLIENT_VFS_META_MDS_WRITE_SLICE_PROCESSOR_H_
+#define DINGOFS_SRC_CLIENT_VFS_META_MDS_WRITE_SLICE_PROCESSOR_H_
 
 #include <cstdint>
 #include <memory>
@@ -28,7 +28,7 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
-namespace v2 {
+namespace meta {
 
 using mds::Ino;
 
@@ -94,9 +94,9 @@ class WriteSliceProcessor
   butil::MPSCQueue<WriteSliceOperationSPtr> operations_;
 };
 
-}  // namespace v2
+}  // namespace meta
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_VFS_META_V2_WRITE_SLICE_PROCESSOR_H_
+#endif  // DINGOFS_SRC_CLIENT_VFS_META_MDS_WRITE_SLICE_PROCESSOR_H_

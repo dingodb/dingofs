@@ -24,7 +24,7 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
-namespace v2 {
+namespace meta {
 
 bool MonoMDSRouter::UpdateMds(int64_t mds_id) {
   CHECK(mds_id > 0) << fmt::format("invalid mds_id({}).", mds_id);
@@ -201,7 +201,7 @@ bool ParentHashMDSRouter::Dump(Json::Value& value) {
   return true;
 }
 
-}  // namespace v2
+}  // namespace meta
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

@@ -28,7 +28,7 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
-namespace v2 {
+namespace meta {
 
 uint64_t Inode::Ino() {
   utils::ReadLockGuard lk(lock_);
@@ -363,7 +363,7 @@ bool InodeCache::Load(const Json::Value& value) {
   return true;
 }
 
-}  // namespace v2
+}  // namespace meta
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

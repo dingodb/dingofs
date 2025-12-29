@@ -30,7 +30,7 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
-namespace v2 {
+namespace meta {
 
 MDSClient::MDSClient(const ClientId& client_id, mds::FsInfoSPtr fs_info,
                      ParentMemoSPtr parent_memo, MDSDiscoverySPtr mds_discovery,
@@ -1195,7 +1195,7 @@ void MDSClient::ProcessNetError(MDSMeta& mds_meta) {
   }
 }
 
-}  // namespace v2
+}  // namespace meta
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

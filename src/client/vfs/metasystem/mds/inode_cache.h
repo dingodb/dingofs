@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_INODE_CACHE_H_
-#define DINGOFS_SRC_CLIENT_VFS_META_V2_INODE_CACHE_H_
+#ifndef DINGOFS_SRC_CLIENT_VFS_META_MDS_INODE_CACHE_H_
+#define DINGOFS_SRC_CLIENT_VFS_META_MDS_INODE_CACHE_H_
 
 #include <sys/types.h>
 
@@ -34,7 +34,7 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
-namespace v2 {
+namespace meta {
 
 class Inode;
 using InodeSPtr = std::shared_ptr<Inode>;
@@ -135,9 +135,9 @@ class InodeCache {
   utils::Shards<Map, kShardNum> shard_map_;
 };
 
-}  // namespace v2
+}  // namespace meta
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_VFS_META_V2_INODE_CACHE_H_
+#endif  // DINGOFS_SRC_CLIENT_VFS_META_MDS_INODE_CACHE_H_

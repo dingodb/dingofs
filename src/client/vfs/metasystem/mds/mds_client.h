@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_MDS_CLIENT_H_
-#define DINGOFS_SRC_CLIENT_VFS_META_V2_MDS_CLIENT_H_
+#ifndef DINGOFS_SRC_CLIENT_VFS_META_MDS_CLIENT_H_
+#define DINGOFS_SRC_CLIENT_VFS_META_MDS_CLIENT_H_
 
 #include <cstdint>
 #include <memory>
@@ -39,7 +39,7 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
-namespace v2 {
+namespace meta {
 
 class MDSClient;
 using MDSClientSPtr = std::shared_ptr<MDSClient>;
@@ -275,9 +275,9 @@ Status MDSClient::SendRequest(ContextSPtr ctx, GetMdsFn get_mds_fn,
   return status;
 }
 
-}  // namespace v2
+}  // namespace meta
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_VFS_META_V2_MDS_CLIENT_H_
+#endif  // DINGOFS_SRC_CLIENT_VFS_META_MDS_CLIENT_H_

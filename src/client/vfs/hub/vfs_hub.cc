@@ -80,7 +80,7 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf, bool upgrade) {
         vfs_conf.storage_info);
 
   } else if (vfs_conf.metasystem_type == MetaSystemType::MDS) {
-    rela_meta_system = v2::MDSMetaSystem::Build(
+    rela_meta_system = meta::MDSMetaSystem::Build(
         vfs_conf.fs_name, vfs_conf.mds_addrs, client_id_, trace_manager_);
   }
   CHECK(rela_meta_system != nullptr) << "build meta system fail";

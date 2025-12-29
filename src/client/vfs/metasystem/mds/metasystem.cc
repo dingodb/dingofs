@@ -46,7 +46,7 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
-namespace v2 {
+namespace meta {
 
 const uint32_t kMaxXAttrNameLength = 255;
 const uint32_t kMaxXAttrValueLength = 64 * 1024;
@@ -1291,7 +1291,7 @@ bool MDSMetaSystem::GetDescription(Json::Value& value) {
   return true;
 }
 
-}  // namespace v2
+}  // namespace meta
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

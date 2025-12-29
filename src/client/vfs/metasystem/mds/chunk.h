@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_SRC_CLIENT_VFS_META_CHUNK_H_
-#define DINGOFS_SRC_CLIENT_VFS_META_CHUNK_H_
+#ifndef DINGOFS_SRC_CLIENT_VFS_META_MDS_CHUNK_H_
+#define DINGOFS_SRC_CLIENT_VFS_META_MDS_CHUNK_H_
 
 #include <sys/types.h>
 
@@ -35,10 +35,10 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
-namespace v2 {
+namespace meta {
 
-using mds::ChunkDescriptor;
-using mds::ChunkEntry;
+using dingofs::mds::ChunkDescriptor;
+using dingofs::mds::ChunkEntry;
 
 class Chunk;
 using ChunkSPtr = std::shared_ptr<Chunk>;
@@ -274,9 +274,9 @@ class ChunkSet {
   std::atomic<uint64_t> last_commit_time_ms_{0};
 };
 
-}  // namespace v2
+}  // namespace meta
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_VFS_META_CHUNK_H_
+#endif  // DINGOFS_SRC_CLIENT_VFS_META_MDS_CHUNK_H_

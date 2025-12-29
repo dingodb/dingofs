@@ -40,6 +40,10 @@ namespace client {
 namespace vfs {
 namespace local {
 
+using dingofs::mds::AttrEntry;
+using dingofs::mds::DentryEntry;
+using dingofs::mds::MetaCodec;
+
 const std::string kDbDir = fmt::format("{}/store", kDefaultRuntimeBaseDir);
 
 constexpr uint32_t kFsId = 10000;
@@ -68,14 +72,14 @@ static uint64_t ToTimestamp(uint64_t tv_sec, uint32_t tv_nsec) {
   return (tv_sec * 1000000000) + tv_nsec;
 }
 
-static void AddParentIno(mds::AttrEntry& attr, Ino parent) {
+static void AddParentIno(AttrEntry& attr, Ino parent) {
   auto it = std::find(attr.parents().begin(), attr.parents().end(), parent);
   if (it == attr.parents().end()) {
     attr.add_parents(parent);
   }
 }
 
-static void DelParentIno(mds::AttrEntry& attr, Ino parent) {
+static void DelParentIno(AttrEntry& attr, Ino parent) {
   auto it = std::find(attr.parents().begin(), attr.parents().end(), parent);
   if (it != attr.parents().end()) {
     attr.mutable_parents()->erase(it);
@@ -190,7 +194,7 @@ LocalMetaSystem::LocalMetaSystem(const std::string& db_path,
     : db_path_(db_path.empty() ? kDbDir : db_path),
       fs_name_(fs_name.empty() ? kFsDefaultName : fs_name),
       storage_info_(storage_info),
-      inode_cache_(v2::InodeCache::New(kFsId)) {}  // NOLINT
+      inode_cache_(meta::InodeCache::New(kFsId)) {}  // NOLINT
 
 Status LocalMetaSystem::Init(bool upgrade) {
   std::string db_path = fmt::format("{}/{}", db_path_, fs_name_);
@@ -264,18 +268,17 @@ Status LocalMetaSystem::Lookup(ContextSPtr, Ino parent, const std::string& name,
 
   // get dentry
   std::string value;
-  auto status =
-      Get(mds::MetaCodec::EncodeDentryKey(fs_id, parent, name), value);
+  auto status = Get(MetaCodec::EncodeDentryKey(fs_id, parent, name), value);
   if (!status.ok()) return status;
 
-  auto dentry_entry = mds::MetaCodec::DecodeDentryValue(value);
+  auto dentry_entry = MetaCodec::DecodeDentryValue(value);
 
   // get inode
-  mds::AttrEntry attr_entry;
+  AttrEntry attr_entry;
   status = GetAttrEntry(dentry_entry.ino(), attr_entry);
   if (!status.ok()) return status;
 
-  *attr = v2::Helper::ToAttr(attr_entry);
+  *attr = meta::Helper::ToAttr(attr_entry);
 
   return Status::OK();
 }
@@ -287,7 +290,7 @@ Status LocalMetaSystem::MkNod(ContextSPtr, Ino parent, const std::string& name,
   const uint32_t fs_id = fs_info_.fs_id();
   const Ino ino = GenFileIno();
 
-  mds::AttrEntry attr_entry;
+  AttrEntry attr_entry;
   attr_entry.set_fs_id(fs_id);
   attr_entry.set_ino(ino);
   attr_entry.set_length(0);
@@ -303,7 +306,7 @@ Status LocalMetaSystem::MkNod(ContextSPtr, Ino parent, const std::string& name,
   attr_entry.add_parents(parent);
   attr_entry.set_version(1);
 
-  mds::DentryEntry dentry_entry;
+  DentryEntry dentry_entry;
   dentry_entry.set_fs_id(fs_id);
   dentry_entry.set_ino(ino);
   dentry_entry.set_parent(parent);
@@ -311,31 +314,30 @@ Status LocalMetaSystem::MkNod(ContextSPtr, Ino parent, const std::string& name,
   dentry_entry.set_flag(0);
   dentry_entry.set_type(pb::mds::FileType::FILE);
 
-  mds::AttrEntry parent_attr_entry;
+  AttrEntry parent_attr_entry;
   {
     utils::WriteLockGuard lk(lock_);
 
     std::string value;
-    std::string parent_inode_key =
-        mds::MetaCodec::EncodeInodeKey(fs_id, parent);
+    std::string parent_inode_key = MetaCodec::EncodeInodeKey(fs_id, parent);
     auto status = Get(parent_inode_key, value);
     if (!status.ok()) return status;
     CHECK(!value.empty()) << "not found parent inode.";
 
-    parent_attr_entry = mds::MetaCodec::DecodeInodeValue(value);
+    parent_attr_entry = MetaCodec::DecodeInodeValue(value);
     parent_attr_entry.set_ctime(std::max(parent_attr_entry.ctime(), now_ns));
     parent_attr_entry.set_mtime(std::max(parent_attr_entry.mtime(), now_ns));
     parent_attr_entry.set_version(parent_attr_entry.version() + 1);
 
     // write to leveldb
     std::vector<KeyValue> kvs = {
-        {KeyValue::OpType::kPut, mds::MetaCodec::EncodeInodeKey(fs_id, ino),
-         mds::MetaCodec::EncodeInodeValue(attr_entry)},
+        {KeyValue::OpType::kPut, MetaCodec::EncodeInodeKey(fs_id, ino),
+         MetaCodec::EncodeInodeValue(attr_entry)},
         {KeyValue::OpType::kPut,
-         mds::MetaCodec::EncodeDentryKey(fs_id, parent, name),
-         mds::MetaCodec::EncodeDentryValue(dentry_entry)},
+         MetaCodec::EncodeDentryKey(fs_id, parent, name),
+         MetaCodec::EncodeDentryValue(dentry_entry)},
         {KeyValue::OpType::kPut, parent_inode_key,
-         mds::MetaCodec::EncodeInodeValue(parent_attr_entry)},
+         MetaCodec::EncodeInodeValue(parent_attr_entry)},
     };
     status = Put(kvs);
     if (!status.ok()) return status;
@@ -346,7 +348,7 @@ Status LocalMetaSystem::MkNod(ContextSPtr, Ino parent, const std::string& name,
 
   UpdateFsUsage(0, 1, "mknod");
 
-  *attr = v2::Helper::ToAttr(attr_entry);
+  *attr = meta::Helper::ToAttr(attr_entry);
 
   return Status::OK();
 }
@@ -372,17 +374,16 @@ Status LocalMetaSystem::Open(ContextSPtr, Ino ino, int flags, uint64_t) {
   open_file_memo_.Open(ino);
 
   int64_t file_length = 0;
-  mds::AttrEntry attr_entry;
+  AttrEntry attr_entry;
   {
     utils::WriteLockGuard lk(lock_);
 
     // get inode
     std::string value;
-    std::string inode_key =
-        mds::MetaCodec::EncodeInodeKey(fs_info_.fs_id(), ino);
+    std::string inode_key = MetaCodec::EncodeInodeKey(fs_info_.fs_id(), ino);
     auto status = Get(inode_key, value);
 
-    attr_entry = mds::MetaCodec::DecodeInodeValue(value);
+    attr_entry = MetaCodec::DecodeInodeValue(value);
 
     if (flags & O_TRUNC) {
       file_length = attr_entry.length();
@@ -399,7 +400,7 @@ Status LocalMetaSystem::Open(ContextSPtr, Ino ino, int flags, uint64_t) {
     // write to leveldb
     std::vector<KeyValue> kvs = {
         {KeyValue::OpType::kPut, inode_key,
-         mds::MetaCodec::EncodeInodeValue(attr_entry)},
+         MetaCodec::EncodeInodeValue(attr_entry)},
     };
     status = Put(kvs);
     if (!status.ok()) return status;
@@ -451,14 +452,14 @@ Status LocalMetaSystem::ReadSlice(ContextSPtr, Ino ino, uint64_t index,
 
   // get chunk info
   std::string value;
-  std::string chunk_key = mds::MetaCodec::EncodeChunkKey(fs_id, ino, index);
+  std::string chunk_key = MetaCodec::EncodeChunkKey(fs_id, ino, index);
   auto status = Get(chunk_key, value);
   if (!status.ok()) {
     if (status.IsNotFound()) return Status::OK();
     return status;
   }
 
-  auto chunk_entry = mds::MetaCodec::DecodeChunkValue(value);
+  auto chunk_entry = MetaCodec::DecodeChunkValue(value);
 
   for (const auto& slice_info : chunk_entry.slices()) {
     Slice slice;
@@ -489,19 +490,19 @@ Status LocalMetaSystem::WriteSlice(ContextSPtr, Ino ino, uint64_t index,
   const uint64_t now_ns = utils::TimestampNs();
 
   int64_t delta_size = 0;
-  mds::AttrEntry attr_entry;
+  AttrEntry attr_entry;
   {
     utils::WriteLockGuard lk(lock_);
     // get inode
     std::string value;
-    std::string inode_key = mds::MetaCodec::EncodeInodeKey(fs_id, ino);
+    std::string inode_key = MetaCodec::EncodeInodeKey(fs_id, ino);
     auto status = Get(inode_key, value);
     if (!status.ok() && !status.IsNotFound()) return status;
 
-    if (status.ok()) attr_entry = mds::MetaCodec::DecodeInodeValue(value);
+    if (status.ok()) attr_entry = MetaCodec::DecodeInodeValue(value);
 
     // get chunk info
-    std::string chunk_key = mds::MetaCodec::EncodeChunkKey(fs_id, ino, index);
+    std::string chunk_key = MetaCodec::EncodeChunkKey(fs_id, ino, index);
     status = Get(chunk_key, value);
 
     mds::ChunkEntry chunk_entry;
@@ -514,7 +515,7 @@ Status LocalMetaSystem::WriteSlice(ContextSPtr, Ino ino, uint64_t index,
       chunk_entry.set_version(0);
 
     } else {
-      chunk_entry = mds::MetaCodec::DecodeChunkValue(value);
+      chunk_entry = MetaCodec::DecodeChunkValue(value);
     }
 
     uint64_t new_length = 0;
@@ -536,7 +537,7 @@ Status LocalMetaSystem::WriteSlice(ContextSPtr, Ino ino, uint64_t index,
     // write to leveldb
     std::vector<KeyValue> kvs = {
         {KeyValue::OpType::kPut, chunk_key,
-         mds::MetaCodec::EncodeChunkValue(chunk_entry)},
+         MetaCodec::EncodeChunkValue(chunk_entry)},
     };
     if (attr_entry.ino() > 0 && attr_entry.length() < new_length) {
       delta_size = new_length - attr_entry.length();
@@ -546,7 +547,7 @@ Status LocalMetaSystem::WriteSlice(ContextSPtr, Ino ino, uint64_t index,
       attr_entry.set_version(attr_entry.version() + 1);
 
       kvs.push_back({KeyValue::OpType::kPut, inode_key,
-                     mds::MetaCodec::EncodeInodeValue(attr_entry)});
+                     MetaCodec::EncodeInodeValue(attr_entry)});
     }
 
     status = Put(kvs);
@@ -576,17 +577,17 @@ Status LocalMetaSystem::Write(ContextSPtr, Ino ino, uint64_t offset,
   const uint32_t fs_id = fs_info_.fs_id();
   const uint64_t now_ns = utils::TimestampNs();
 
-  mds::AttrEntry attr_entry;
+  AttrEntry attr_entry;
   {
     utils::WriteLockGuard lk(lock_);
 
     // get inode
     std::string value;
-    std::string inode_key = mds::MetaCodec::EncodeInodeKey(fs_id, ino);
+    std::string inode_key = MetaCodec::EncodeInodeKey(fs_id, ino);
     auto status = Get(inode_key, value);
     if (!status.ok()) return status;
 
-    attr_entry = mds::MetaCodec::DecodeInodeValue(value);
+    attr_entry = MetaCodec::DecodeInodeValue(value);
 
     if (attr_entry.length() < offset + size) {
       attr_entry.set_length(offset + size);
@@ -598,7 +599,7 @@ Status LocalMetaSystem::Write(ContextSPtr, Ino ino, uint64_t offset,
     // write to leveldb
     std::vector<KeyValue> kvs = {
         {KeyValue::OpType::kPut, inode_key,
-         mds::MetaCodec::EncodeInodeValue(attr_entry)},
+         MetaCodec::EncodeInodeValue(attr_entry)},
     };
     status = Put(kvs);
     if (!status.ok()) return status;
@@ -616,7 +617,7 @@ Status LocalMetaSystem::MkDir(ContextSPtr, Ino parent, const std::string& name,
   const uint32_t fs_id = fs_info_.fs_id();
   const Ino ino = GenDirIno();
 
-  mds::AttrEntry attr_entry;
+  AttrEntry attr_entry;
   attr_entry.set_fs_id(fs_id);
   attr_entry.set_ino(ino);
   attr_entry.set_length(4096);
@@ -632,7 +633,7 @@ Status LocalMetaSystem::MkDir(ContextSPtr, Ino parent, const std::string& name,
   attr_entry.add_parents(parent);
   attr_entry.set_version(1);
 
-  mds::DentryEntry dentry_entry;
+  DentryEntry dentry_entry;
   dentry_entry.set_fs_id(fs_id);
   dentry_entry.set_ino(ino);
   dentry_entry.set_parent(parent);
@@ -640,18 +641,17 @@ Status LocalMetaSystem::MkDir(ContextSPtr, Ino parent, const std::string& name,
   dentry_entry.set_flag(0);
   dentry_entry.set_type(pb::mds::FileType::DIRECTORY);
 
-  mds::AttrEntry parent_attr_entry;
+  AttrEntry parent_attr_entry;
   {
     utils::WriteLockGuard lk(lock_);
 
     std::string value;
-    std::string parent_inode_key =
-        mds::MetaCodec::EncodeInodeKey(fs_id, parent);
+    std::string parent_inode_key = MetaCodec::EncodeInodeKey(fs_id, parent);
     auto status = Get(parent_inode_key, value);
     if (!status.ok()) return status;
     CHECK(!value.empty()) << "not found parent inode.";
 
-    parent_attr_entry = mds::MetaCodec::DecodeInodeValue(value);
+    parent_attr_entry = MetaCodec::DecodeInodeValue(value);
     parent_attr_entry.set_nlink(parent_attr_entry.nlink() + 1);
     parent_attr_entry.set_ctime(std::max(parent_attr_entry.ctime(), now_ns));
     parent_attr_entry.set_mtime(std::max(parent_attr_entry.mtime(), now_ns));
@@ -659,13 +659,13 @@ Status LocalMetaSystem::MkDir(ContextSPtr, Ino parent, const std::string& name,
 
     // write to leveldb
     std::vector<KeyValue> kvs = {
-        {KeyValue::OpType::kPut, mds::MetaCodec::EncodeInodeKey(fs_id, ino),
-         mds::MetaCodec::EncodeInodeValue(attr_entry)},
+        {KeyValue::OpType::kPut, MetaCodec::EncodeInodeKey(fs_id, ino),
+         MetaCodec::EncodeInodeValue(attr_entry)},
         {KeyValue::OpType::kPut,
-         mds::MetaCodec::EncodeDentryKey(fs_id, parent, name),
-         mds::MetaCodec::EncodeDentryValue(dentry_entry)},
+         MetaCodec::EncodeDentryKey(fs_id, parent, name),
+         MetaCodec::EncodeDentryValue(dentry_entry)},
         {KeyValue::OpType::kPut, parent_inode_key,
-         mds::MetaCodec::EncodeInodeValue(parent_attr_entry)},
+         MetaCodec::EncodeInodeValue(parent_attr_entry)},
     };
     status = Put(kvs);
     if (!status.ok()) return status;
@@ -676,7 +676,7 @@ Status LocalMetaSystem::MkDir(ContextSPtr, Ino parent, const std::string& name,
 
   UpdateFsUsage(0, 1, "mkdir");
 
-  *attr = v2::Helper::ToAttr(attr_entry);
+  *attr = meta::Helper::ToAttr(attr_entry);
 
   return Status::OK();
 }
@@ -686,27 +686,26 @@ Status LocalMetaSystem::RmDir(ContextSPtr, Ino parent,
   const uint64_t now_ns = utils::TimestampNs();
   const uint32_t fs_id = fs_info_.fs_id();
 
-  mds::AttrEntry attr_entry;
-  mds::AttrEntry parent_attr_entry;
+  AttrEntry attr_entry;
+  AttrEntry parent_attr_entry;
   {
     utils::WriteLockGuard lk(lock_);
 
     // get parent/name dentry
     std::string value;
-    std::string dentry_key =
-        mds::MetaCodec::EncodeDentryKey(fs_id, parent, name);
+    std::string dentry_key = MetaCodec::EncodeDentryKey(fs_id, parent, name);
     auto status = Get(dentry_key, value);
     if (!status.ok()) return status;
 
-    auto dentry_entry = mds::MetaCodec::DecodeDentryValue(value);
+    auto dentry_entry = MetaCodec::DecodeDentryValue(value);
 
     // get parent/name inode
     std::string inode_key =
-        mds::MetaCodec::EncodeInodeKey(fs_id, dentry_entry.ino());
+        MetaCodec::EncodeInodeKey(fs_id, dentry_entry.ino());
     status = Get(inode_key, value);
     if (!status.ok()) return status;
 
-    attr_entry = mds::MetaCodec::DecodeInodeValue(value);
+    attr_entry = MetaCodec::DecodeInodeValue(value);
     CHECK(attr_entry.type() == pb::mds::FileType::DIRECTORY)
         << fmt::format("not directory type, ino({}).", attr_entry.ino());
 
@@ -716,11 +715,10 @@ Status LocalMetaSystem::RmDir(ContextSPtr, Ino parent,
     if (!is_empty) return Status::NotEmpty("directory not empty.");
 
     // get parent inode
-    std::string parent_inode_key =
-        mds::MetaCodec::EncodeInodeKey(fs_id, parent);
+    std::string parent_inode_key = MetaCodec::EncodeInodeKey(fs_id, parent);
     status = Get(parent_inode_key, value);
     if (!status.ok()) return status;
-    parent_attr_entry = mds::MetaCodec::DecodeInodeValue(value);
+    parent_attr_entry = MetaCodec::DecodeInodeValue(value);
 
     // update parent inode
     parent_attr_entry.set_nlink(parent_attr_entry.nlink() - 1);
@@ -733,7 +731,7 @@ Status LocalMetaSystem::RmDir(ContextSPtr, Ino parent,
         {KeyValue::OpType::kDelete, inode_key, ""},
         {KeyValue::OpType::kDelete, dentry_key, ""},
         {KeyValue::OpType::kPut, parent_inode_key,
-         mds::MetaCodec::EncodeInodeValue(parent_attr_entry)},
+         MetaCodec::EncodeInodeValue(parent_attr_entry)},
     };
 
     status = Put(kvs);
@@ -749,7 +747,7 @@ Status LocalMetaSystem::RmDir(ContextSPtr, Ino parent,
 }
 
 Status LocalMetaSystem::OpenDir(ContextSPtr ctx, Ino ino, uint64_t fh) {
-  std::vector<mds::DentryEntry> dentries;
+  std::vector<DentryEntry> dentries;
   auto status = GetDentries(ino, dentries);
   if (!status.ok()) return status;
 
@@ -785,11 +783,11 @@ Status LocalMetaSystem::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
       return status;
     }
 
-    mds::AttrEntry attr_entry;
+    AttrEntry attr_entry;
     status = GetAttrEntry(ino, attr_entry);
     if (!status.ok()) return status;
 
-    if (with_attr) entry.attr = v2::Helper::ToAttr(attr_entry);
+    if (with_attr) entry.attr = meta::Helper::ToAttr(attr_entry);
 
     if (!handler(entry, offset)) {
       break;
@@ -809,18 +807,18 @@ Status LocalMetaSystem::Link(ContextSPtr, Ino ino, Ino new_parent,
   const uint64_t now_ns = utils::TimestampNs();
   const uint32_t fs_id = fs_info_.fs_id();
 
-  mds::AttrEntry attr_entry;
-  mds::AttrEntry parent_attr_entry;
+  AttrEntry attr_entry;
+  AttrEntry parent_attr_entry;
   {
     utils::WriteLockGuard lk(lock_);
 
     // get inode
     std::string value;
-    std::string inode_key = mds::MetaCodec::EncodeInodeKey(fs_id, ino);
+    std::string inode_key = MetaCodec::EncodeInodeKey(fs_id, ino);
     auto status = Get(inode_key, value);
     if (!status.ok()) return status;
 
-    attr_entry = mds::MetaCodec::DecodeInodeValue(value);
+    attr_entry = MetaCodec::DecodeInodeValue(value);
     CHECK(attr_entry.type() != pb::mds::FileType::DIRECTORY)
         << fmt::format("not file type, ino({}).", attr_entry.ino());
 
@@ -831,18 +829,17 @@ Status LocalMetaSystem::Link(ContextSPtr, Ino ino, Ino new_parent,
     attr_entry.set_version(attr_entry.version() + 1);
 
     // get parent inode
-    std::string parent_inode_key =
-        mds::MetaCodec::EncodeInodeKey(fs_id, new_parent);
+    std::string parent_inode_key = MetaCodec::EncodeInodeKey(fs_id, new_parent);
     status = Get(parent_inode_key, value);
     if (!status.ok()) return status;
-    parent_attr_entry = mds::MetaCodec::DecodeInodeValue(value);
+    parent_attr_entry = MetaCodec::DecodeInodeValue(value);
 
     parent_attr_entry.set_ctime(std::max(parent_attr_entry.ctime(), now_ns));
     parent_attr_entry.set_mtime(std::max(parent_attr_entry.mtime(), now_ns));
     parent_attr_entry.set_version(parent_attr_entry.version() + 1);
 
     // create new_name dentry
-    mds::DentryEntry dentry_entry;
+    DentryEntry dentry_entry;
     dentry_entry.set_fs_id(fs_id);
     dentry_entry.set_ino(ino);
     dentry_entry.set_parent(new_parent);
@@ -853,12 +850,12 @@ Status LocalMetaSystem::Link(ContextSPtr, Ino ino, Ino new_parent,
     // write to leveldb
     std::vector<KeyValue> kvs = {
         {KeyValue::OpType::kPut, inode_key,
-         mds::MetaCodec::EncodeInodeValue(attr_entry)},
+         MetaCodec::EncodeInodeValue(attr_entry)},
         {KeyValue::OpType::kPut,
-         mds::MetaCodec::EncodeDentryKey(fs_id, new_parent, new_name),
-         mds::MetaCodec::EncodeDentryValue(dentry_entry)},
+         MetaCodec::EncodeDentryKey(fs_id, new_parent, new_name),
+         MetaCodec::EncodeDentryValue(dentry_entry)},
         {KeyValue::OpType::kPut, parent_inode_key,
-         mds::MetaCodec::EncodeInodeValue(parent_attr_entry)},
+         MetaCodec::EncodeInodeValue(parent_attr_entry)},
     };
     status = Put(kvs);
     if (!status.ok()) return status;
@@ -867,7 +864,7 @@ Status LocalMetaSystem::Link(ContextSPtr, Ino ino, Ino new_parent,
   PutInodeToCache(attr_entry);
   PutInodeToCache(parent_attr_entry);
 
-  *attr = v2::Helper::ToAttr(attr_entry);
+  *attr = meta::Helper::ToAttr(attr_entry);
 
   return Status::OK();
 }
@@ -877,18 +874,17 @@ Status LocalMetaSystem::Unlink(ContextSPtr, Ino parent,
   const uint32_t fs_id = fs_info_.fs_id();
   const uint64_t now_ns = utils::TimestampNs();
 
-  mds::AttrEntry attr_entry;
-  mds::AttrEntry parent_attr_entry;
+  AttrEntry attr_entry;
+  AttrEntry parent_attr_entry;
   {
     utils::WriteLockGuard lk(lock_);
 
     // get parent inode key
     std::string value;
-    std::string parent_inode_key =
-        mds::MetaCodec::EncodeInodeKey(fs_id, parent);
+    std::string parent_inode_key = MetaCodec::EncodeInodeKey(fs_id, parent);
     auto status = Get(parent_inode_key, value);
     if (!status.ok()) return status;
-    parent_attr_entry = mds::MetaCodec::DecodeInodeValue(value);
+    parent_attr_entry = MetaCodec::DecodeInodeValue(value);
 
     // update parent inode
     parent_attr_entry.set_ctime(std::max(parent_attr_entry.ctime(), now_ns));
@@ -896,20 +892,19 @@ Status LocalMetaSystem::Unlink(ContextSPtr, Ino parent,
     parent_attr_entry.set_version(parent_attr_entry.version() + 1);
 
     // get parent/name dentry
-    std::string dentry_key =
-        mds::MetaCodec::EncodeDentryKey(fs_id, parent, name);
+    std::string dentry_key = MetaCodec::EncodeDentryKey(fs_id, parent, name);
     status = Get(dentry_key, value);
     if (!status.ok()) return status;
 
-    auto dentry_entry = mds::MetaCodec::DecodeDentryValue(value);
+    auto dentry_entry = MetaCodec::DecodeDentryValue(value);
 
     // get parent/name inode
     std::string inode_key =
-        mds::MetaCodec::EncodeInodeKey(fs_id, dentry_entry.ino());
+        MetaCodec::EncodeInodeKey(fs_id, dentry_entry.ino());
     status = Get(inode_key, value);
     if (!status.ok()) return status;
 
-    attr_entry = mds::MetaCodec::DecodeInodeValue(value);
+    attr_entry = MetaCodec::DecodeInodeValue(value);
     CHECK(attr_entry.type() != pb::mds::FileType::DIRECTORY)
         << fmt::format("not file type, ino({}).", attr_entry.ino());
 
@@ -924,18 +919,17 @@ Status LocalMetaSystem::Unlink(ContextSPtr, Ino parent,
       kvs.push_back({KeyValue::OpType::kDelete, inode_key, ""});
 
       // save delete file info
-      kvs.push_back(
-          {KeyValue::OpType::kPut,
-           mds::MetaCodec::EncodeDelFileKey(fs_id, dentry_entry.ino()),
-           mds::MetaCodec::EncodeDelFileValue(attr_entry)});
+      kvs.push_back({KeyValue::OpType::kPut,
+                     MetaCodec::EncodeDelFileKey(fs_id, dentry_entry.ino()),
+                     MetaCodec::EncodeDelFileValue(attr_entry)});
 
     } else {
       kvs.push_back({KeyValue::OpType::kPut, inode_key,
-                     mds::MetaCodec::EncodeInodeValue(attr_entry)});
+                     MetaCodec::EncodeInodeValue(attr_entry)});
     }
     kvs.push_back({KeyValue::OpType::kDelete, dentry_key, ""});
     kvs.push_back({KeyValue::OpType::kPut, parent_inode_key,
-                   mds::MetaCodec::EncodeInodeValue(parent_attr_entry)});
+                   MetaCodec::EncodeInodeValue(parent_attr_entry)});
     status = Put(kvs);
     if (!status.ok()) return status;
   }
@@ -956,7 +950,7 @@ Status LocalMetaSystem::Symlink(ContextSPtr, Ino parent,
   const uint32_t fs_id = fs_info_.fs_id();
   const Ino ino = GenFileIno();
 
-  mds::AttrEntry attr_entry;
+  AttrEntry attr_entry;
   attr_entry.set_fs_id(fs_id);
   attr_entry.set_ino(ino);
   attr_entry.set_length(link.size());
@@ -973,7 +967,7 @@ Status LocalMetaSystem::Symlink(ContextSPtr, Ino parent,
   attr_entry.set_rdev(1);
   attr_entry.set_version(1);
 
-  mds::DentryEntry dentry_entry;
+  DentryEntry dentry_entry;
   dentry_entry.set_fs_id(fs_id);
   dentry_entry.set_ino(ino);
   dentry_entry.set_parent(parent);
@@ -981,31 +975,31 @@ Status LocalMetaSystem::Symlink(ContextSPtr, Ino parent,
   dentry_entry.set_flag(0);
   dentry_entry.set_type(pb::mds::FileType::SYM_LINK);
 
-  mds::AttrEntry parent_attr_entry;
+  AttrEntry parent_attr_entry;
   {
     utils::WriteLockGuard lk(lock_);
 
     std::string value;
     const std::string parent_inode_key =
-        mds::MetaCodec::EncodeInodeKey(fs_id, parent);
+        MetaCodec::EncodeInodeKey(fs_id, parent);
     auto status = Get(parent_inode_key, value);
     if (!status.ok()) return status;
     CHECK(!value.empty()) << "not found parent inode.";
 
-    parent_attr_entry = mds::MetaCodec::DecodeInodeValue(value);
+    parent_attr_entry = MetaCodec::DecodeInodeValue(value);
     parent_attr_entry.set_ctime(std::max(parent_attr_entry.ctime(), now_ns));
     parent_attr_entry.set_mtime(std::max(parent_attr_entry.mtime(), now_ns));
     parent_attr_entry.set_version(parent_attr_entry.version() + 1);
 
     // write to leveldb
     std::vector<KeyValue> kvs = {
-        {KeyValue::OpType::kPut, mds::MetaCodec::EncodeInodeKey(fs_id, ino),
-         mds::MetaCodec::EncodeInodeValue(attr_entry)},
+        {KeyValue::OpType::kPut, MetaCodec::EncodeInodeKey(fs_id, ino),
+         MetaCodec::EncodeInodeValue(attr_entry)},
         {KeyValue::OpType::kPut,
-         mds::MetaCodec::EncodeDentryKey(fs_id, parent, name),
-         mds::MetaCodec::EncodeDentryValue(dentry_entry)},
+         MetaCodec::EncodeDentryKey(fs_id, parent, name),
+         MetaCodec::EncodeDentryValue(dentry_entry)},
         {KeyValue::OpType::kPut, parent_inode_key,
-         mds::MetaCodec::EncodeInodeValue(parent_attr_entry)},
+         MetaCodec::EncodeInodeValue(parent_attr_entry)},
     };
     status = Put(kvs);
     if (!status.ok()) return status;
@@ -1016,7 +1010,7 @@ Status LocalMetaSystem::Symlink(ContextSPtr, Ino parent,
 
   UpdateFsUsage(0, 1, "symlink");
 
-  *attr = v2::Helper::ToAttr(attr_entry);
+  *attr = meta::Helper::ToAttr(attr_entry);
 
   return Status::OK();
 }
@@ -1025,7 +1019,7 @@ Status LocalMetaSystem::ReadLink(ContextSPtr, Ino ino, std::string* link) {
   const uint32_t fs_id = fs_info_.fs_id();
 
   // get inode
-  mds::AttrEntry attr_entry;
+  AttrEntry attr_entry;
   auto status = GetAttrEntry(ino, attr_entry);
   if (!status.ok()) return status;
 
@@ -1039,11 +1033,11 @@ Status LocalMetaSystem::ReadLink(ContextSPtr, Ino ino, std::string* link) {
 
 Status LocalMetaSystem::GetAttr(ContextSPtr, Ino ino, Attr* attr) {
   // get inode
-  mds::AttrEntry attr_entry;
+  AttrEntry attr_entry;
   auto status = GetAttrEntry(ino, attr_entry);
   if (!status.ok()) return status;
 
-  *attr = v2::Helper::ToAttr(attr_entry);
+  *attr = meta::Helper::ToAttr(attr_entry);
 
   return Status::OK();
 }
@@ -1052,17 +1046,17 @@ Status LocalMetaSystem::SetAttr(ContextSPtr, Ino ino, int to_set,
                                 const Attr& in_attr, Attr* out_attr) {
   const uint32_t fs_id = fs_info_.fs_id();
 
-  mds::AttrEntry attr_entry;
+  AttrEntry attr_entry;
   {
     utils::WriteLockGuard lk(lock_);
 
     // get inode
     std::string value;
-    std::string inode_key = mds::MetaCodec::EncodeInodeKey(fs_id, ino);
+    std::string inode_key = MetaCodec::EncodeInodeKey(fs_id, ino);
     auto status = Get(inode_key, value);
     if (!status.ok()) return status;
 
-    attr_entry = mds::MetaCodec::DecodeInodeValue(value);
+    attr_entry = MetaCodec::DecodeInodeValue(value);
 
     if (to_set & kSetAttrMode) {
       attr_entry.set_mode(in_attr.mode);
@@ -1109,7 +1103,7 @@ Status LocalMetaSystem::SetAttr(ContextSPtr, Ino ino, int to_set,
     // write to leveldb
     std::vector<KeyValue> kvs = {
         {KeyValue::OpType::kPut, inode_key,
-         mds::MetaCodec::EncodeInodeValue(attr_entry)},
+         MetaCodec::EncodeInodeValue(attr_entry)},
     };
     status = Put(kvs);
     if (!status.ok()) return status;
@@ -1117,7 +1111,7 @@ Status LocalMetaSystem::SetAttr(ContextSPtr, Ino ino, int to_set,
 
   PutInodeToCache(attr_entry);
 
-  *out_attr = v2::Helper::ToAttr(attr_entry);
+  *out_attr = meta::Helper::ToAttr(attr_entry);
 
   return Status::OK();
 }
@@ -1125,7 +1119,7 @@ Status LocalMetaSystem::SetAttr(ContextSPtr, Ino ino, int to_set,
 Status LocalMetaSystem::GetXattr(ContextSPtr, Ino ino, const std::string& name,
                                  std::string* value) {
   // get inode
-  mds::AttrEntry attr_entry;
+  AttrEntry attr_entry;
   auto status = GetAttrEntry(ino, attr_entry);
   if (!status.ok()) return status;
 
@@ -1140,17 +1134,17 @@ Status LocalMetaSystem::SetXattr(ContextSPtr, Ino ino, const std::string& name,
   const uint32_t fs_id = fs_info_.fs_id();
   const uint64_t now_ns = utils::TimestampNs();
 
-  mds::AttrEntry attr_entry;
+  AttrEntry attr_entry;
   {
     utils::WriteLockGuard lk(lock_);
 
     // get inode
     std::string inode_value;
-    std::string inode_key = mds::MetaCodec::EncodeInodeKey(fs_id, ino);
+    std::string inode_key = MetaCodec::EncodeInodeKey(fs_id, ino);
     auto status = Get(inode_key, inode_value);
     if (!status.ok()) return status;
 
-    attr_entry = mds::MetaCodec::DecodeInodeValue(inode_value);
+    attr_entry = MetaCodec::DecodeInodeValue(inode_value);
 
     (*attr_entry.mutable_xattrs())[name] = value;
     attr_entry.set_ctime(std::max(attr_entry.ctime(), now_ns));
@@ -1160,7 +1154,7 @@ Status LocalMetaSystem::SetXattr(ContextSPtr, Ino ino, const std::string& name,
     // write to leveldb
     std::vector<KeyValue> kvs = {
         {KeyValue::OpType::kPut, inode_key,
-         mds::MetaCodec::EncodeInodeValue(attr_entry)},
+         MetaCodec::EncodeInodeValue(attr_entry)},
     };
     status = Put(kvs);
     if (!status.ok()) return status;
@@ -1176,17 +1170,17 @@ Status LocalMetaSystem::RemoveXattr(ContextSPtr, Ino ino,
   const uint32_t fs_id = fs_info_.fs_id();
   const uint64_t now_ns = utils::TimestampNs();
 
-  mds::AttrEntry attr_entry;
+  AttrEntry attr_entry;
   {
     utils::WriteLockGuard lk(lock_);
 
     // get inode
-    std::string inode_key = mds::MetaCodec::EncodeInodeKey(fs_id, ino);
+    std::string inode_key = MetaCodec::EncodeInodeKey(fs_id, ino);
     std::string inode_value;
     auto status = Get(inode_key, inode_value);
     if (!status.ok()) return status;
 
-    attr_entry = mds::MetaCodec::DecodeInodeValue(inode_value);
+    attr_entry = MetaCodec::DecodeInodeValue(inode_value);
 
     (*attr_entry.mutable_xattrs()).erase(name);
     attr_entry.set_ctime(std::max(attr_entry.ctime(), now_ns));
@@ -1196,7 +1190,7 @@ Status LocalMetaSystem::RemoveXattr(ContextSPtr, Ino ino,
     // write to leveldb
     std::vector<KeyValue> kvs = {
         {KeyValue::OpType::kPut, inode_key,
-         mds::MetaCodec::EncodeInodeValue(attr_entry)},
+         MetaCodec::EncodeInodeValue(attr_entry)},
     };
     status = Put(kvs);
     if (!status.ok()) return status;
@@ -1210,7 +1204,7 @@ Status LocalMetaSystem::RemoveXattr(ContextSPtr, Ino ino,
 Status LocalMetaSystem::ListXattr(ContextSPtr, Ino ino,
                                   std::vector<std::string>* xattrs) {
   // get inode
-  mds::AttrEntry attr_entry;
+  AttrEntry attr_entry;
   auto status = GetAttrEntry(ino, attr_entry);
   if (!status.ok()) return status;
 
@@ -1229,13 +1223,13 @@ Status LocalMetaSystem::Rename(ContextSPtr, Ino old_parent,
 
   const bool is_same_parent = (old_parent == new_parent);
 
-  mds::AttrEntry old_parent_attr_entry;
-  mds::DentryEntry old_dentry;
-  mds::AttrEntry old_attr_entry;
+  AttrEntry old_parent_attr_entry;
+  DentryEntry old_dentry;
+  AttrEntry old_attr_entry;
 
-  mds::AttrEntry new_parent_attr_entry;
-  mds::DentryEntry prev_new_dentry;
-  mds::AttrEntry prev_new_attr_entry;
+  AttrEntry new_parent_attr_entry;
+  DentryEntry prev_new_dentry;
+  AttrEntry prev_new_attr_entry;
 
   bool is_exist_new_dentry = false;
   {
@@ -1246,52 +1240,52 @@ Status LocalMetaSystem::Rename(ContextSPtr, Ino old_parent,
     // get old_parent inode
     std::string value;
     std::string old_parent_inode_key =
-        mds::MetaCodec::EncodeInodeKey(fs_id, old_parent);
+        MetaCodec::EncodeInodeKey(fs_id, old_parent);
     auto status = Get(old_parent_inode_key, value);
     if (!status.ok()) return status;
-    old_parent_attr_entry = mds::MetaCodec::DecodeInodeValue(value);
+    old_parent_attr_entry = MetaCodec::DecodeInodeValue(value);
 
     // get old_parent/name dentry
     std::string old_dentry_key =
-        mds::MetaCodec::EncodeDentryKey(fs_id, old_parent, old_name);
+        MetaCodec::EncodeDentryKey(fs_id, old_parent, old_name);
     status = Get(old_dentry_key, value);
     if (!status.ok()) return status;
-    old_dentry = mds::MetaCodec::DecodeDentryValue(value);
+    old_dentry = MetaCodec::DecodeDentryValue(value);
 
     // get old_parent/name inode
     std::string old_inode_key =
-        mds::MetaCodec::EncodeInodeKey(fs_id, old_dentry.ino());
+        MetaCodec::EncodeInodeKey(fs_id, old_dentry.ino());
     status = Get(old_inode_key, value);
     if (!status.ok()) return status;
-    old_attr_entry = mds::MetaCodec::DecodeInodeValue(value);
+    old_attr_entry = MetaCodec::DecodeInodeValue(value);
 
     // get new_parent inode
     if (is_same_parent) {
       new_parent_attr_entry = old_parent_attr_entry;
     } else {
       std::string new_parent_inode_key =
-          mds::MetaCodec::EncodeInodeKey(fs_id, new_parent);
+          MetaCodec::EncodeInodeKey(fs_id, new_parent);
       status = Get(new_parent_inode_key, value);
       if (!status.ok()) return status;
-      new_parent_attr_entry = mds::MetaCodec::DecodeInodeValue(value);
+      new_parent_attr_entry = MetaCodec::DecodeInodeValue(value);
     }
 
     // get new_parent/name dentry
     std::string new_dentry_key =
-        mds::MetaCodec::EncodeDentryKey(fs_id, new_parent, new_name);
+        MetaCodec::EncodeDentryKey(fs_id, new_parent, new_name);
     status = Get(new_dentry_key, value);
     if (status.ok()) {
-      prev_new_dentry = mds::MetaCodec::DecodeDentryValue(value);
+      prev_new_dentry = MetaCodec::DecodeDentryValue(value);
     }
     is_exist_new_dentry = (prev_new_dentry.ino() != 0);
     if (is_exist_new_dentry) {
       // get pre new inode
       std::string prev_new_inode_key =
-          mds::MetaCodec::EncodeInodeKey(fs_id, prev_new_dentry.ino());
+          MetaCodec::EncodeInodeKey(fs_id, prev_new_dentry.ino());
       status = Get(prev_new_inode_key, value);
       if (!status.ok()) return status;
 
-      prev_new_attr_entry = mds::MetaCodec::DecodeInodeValue(value);
+      prev_new_attr_entry = MetaCodec::DecodeInodeValue(value);
 
       if (prev_new_dentry.type() == pb::mds::DIRECTORY) {
         // check new dentry is empty
@@ -1327,15 +1321,13 @@ Status LocalMetaSystem::Rename(ContextSPtr, Ino old_parent,
           // save delete file info
           kvs.push_back(
               {KeyValue::OpType::kPut,
-               mds::MetaCodec::EncodeDelFileKey(fs_id,
-                                                prev_new_attr_entry.ino()),
-               mds::MetaCodec::EncodeDelFileValue(prev_new_attr_entry)});
+               MetaCodec::EncodeDelFileKey(fs_id, prev_new_attr_entry.ino()),
+               MetaCodec::EncodeDelFileValue(prev_new_attr_entry)});
 
         } else {
           // update exist new inode attr
-          kvs.push_back(
-              {KeyValue::OpType::kPut, prev_new_inode_key,
-               mds::MetaCodec::EncodeInodeValue(prev_new_attr_entry)});
+          kvs.push_back({KeyValue::OpType::kPut, prev_new_inode_key,
+                         MetaCodec::EncodeInodeValue(prev_new_attr_entry)});
         }
       }
     }
@@ -1347,7 +1339,7 @@ Status LocalMetaSystem::Rename(ContextSPtr, Ino old_parent,
     });
 
     // add new dentry
-    mds::DentryEntry new_dentry;
+    DentryEntry new_dentry;
     new_dentry.set_fs_id(fs_id);
     new_dentry.set_name(new_name);
     new_dentry.set_ino(old_dentry.ino());
@@ -1355,7 +1347,7 @@ Status LocalMetaSystem::Rename(ContextSPtr, Ino old_parent,
     new_dentry.set_parent(new_parent);
 
     kvs.push_back({KeyValue::OpType::kPut, new_dentry_key,
-                   mds::MetaCodec::EncodeDentryValue(new_dentry)});
+                   MetaCodec::EncodeDentryValue(new_dentry)});
 
     // update old inode attr
     old_attr_entry.set_ctime(std::max(old_attr_entry.ctime(), now_ns));
@@ -1366,7 +1358,7 @@ Status LocalMetaSystem::Rename(ContextSPtr, Ino old_parent,
     old_attr_entry.set_version(old_attr_entry.version() + 1);
 
     kvs.push_back({KeyValue::OpType::kPut, old_inode_key,
-                   mds::MetaCodec::EncodeInodeValue(old_attr_entry)});
+                   MetaCodec::EncodeInodeValue(old_attr_entry)});
 
     // update old parent inode attr
     old_parent_attr_entry.set_ctime(
@@ -1380,7 +1372,7 @@ Status LocalMetaSystem::Rename(ContextSPtr, Ino old_parent,
     old_parent_attr_entry.set_version(old_parent_attr_entry.version() + 1);
 
     kvs.push_back({KeyValue::OpType::kPut, old_parent_inode_key,
-                   mds::MetaCodec::EncodeInodeValue(old_parent_attr_entry)});
+                   MetaCodec::EncodeInodeValue(old_parent_attr_entry)});
 
     if (!is_same_parent) {
       // update new parent inode attr
@@ -1394,8 +1386,8 @@ Status LocalMetaSystem::Rename(ContextSPtr, Ino old_parent,
       new_parent_attr_entry.set_version(new_parent_attr_entry.version() + 1);
 
       kvs.push_back({KeyValue::OpType::kPut,
-                     mds::MetaCodec::EncodeInodeKey(fs_id, new_parent),
-                     mds::MetaCodec::EncodeInodeValue(new_parent_attr_entry)});
+                     MetaCodec::EncodeInodeKey(fs_id, new_parent),
+                     MetaCodec::EncodeInodeValue(new_parent_attr_entry)});
     }
 
     // write to leveldb
@@ -1445,30 +1437,30 @@ Status LocalMetaSystem::GetFsInfo(ContextSPtr, FsInfo* fs_info) {
   fs_info->chunk_size = fs_info_.chunk_size();
   fs_info->block_size = fs_info_.block_size();
   fs_info->uuid = fs_info_.uuid();
-  fs_info->status = v2::Helper::ToFsStatus(fs_info_.status());
+  fs_info->status = meta::Helper::ToFsStatus(fs_info_.status());
 
   fs_info->storage_info.store_type =
-      v2::Helper::ToStoreType(fs_info_.fs_type());
+      meta::Helper::ToStoreType(fs_info_.fs_type());
   if (fs_info->storage_info.store_type == StoreType::kS3) {
     CHECK(fs_info_.extra().has_s3_info())
         << "fs type is S3, but s3 info is not set";
 
     fs_info->storage_info.s3_info =
-        v2::Helper::ToS3Info(fs_info_.extra().s3_info());
+        meta::Helper::ToS3Info(fs_info_.extra().s3_info());
 
   } else if (fs_info->storage_info.store_type == StoreType::kRados) {
     CHECK(fs_info_.extra().has_rados_info())
         << "fs type is Rados, but rados info is not set";
 
     fs_info->storage_info.rados_info =
-        v2::Helper::ToRadosInfo(fs_info_.extra().rados_info());
+        meta::Helper::ToRadosInfo(fs_info_.extra().rados_info());
 
   } else if (fs_info->storage_info.store_type == StoreType::kLocalFile) {
     CHECK(fs_info_.extra().has_file_info())
         << "fs type is LocalFile, but file info is not set";
 
     fs_info->storage_info.file_info =
-        v2::Helper::ToLocalFileInfo(fs_info_.extra().file_info());
+        meta::Helper::ToLocalFileInfo(fs_info_.extra().file_info());
 
   } else {
     return Status::InvalidParam("unknown fs type");
@@ -1609,13 +1601,13 @@ mds::FsInfoEntry LocalMetaSystem::GenFsInfo() {
 
 Status LocalMetaSystem::InitFsInfo() {
   std::string value;
-  auto status = Get(mds::MetaCodec::EncodeFsKey(fs_name_), value);
+  auto status = Get(MetaCodec::EncodeFsKey(fs_name_), value);
   if (!status.ok() && !status.IsNotFound()) {
     return status;
   }
 
   if (!status.IsNotFound()) {
-    fs_info_ = mds::MetaCodec::DecodeFsValue(value);
+    fs_info_ = MetaCodec::DecodeFsValue(value);
     return Status::OK();
   }
 
@@ -1624,8 +1616,8 @@ Status LocalMetaSystem::InitFsInfo() {
 
   // write to leveldb
   std::vector<KeyValue> kvs = {
-      {KeyValue::OpType::kPut, mds::MetaCodec::EncodeFsKey(fs_name_),
-       mds::MetaCodec::EncodeFsValue(fs_info_)},
+      {KeyValue::OpType::kPut, MetaCodec::EncodeFsKey(fs_name_),
+       MetaCodec::EncodeFsValue(fs_info_)},
   };
 
   status = Put(kvs);
@@ -1636,10 +1628,10 @@ Status LocalMetaSystem::InitFsInfo() {
 
 Status LocalMetaSystem::InitFsQuota() {
   std::string value;
-  auto status = Get(mds::MetaCodec::EncodeFsQuotaKey(fs_info_.fs_id()), value);
+  auto status = Get(MetaCodec::EncodeFsQuotaKey(fs_info_.fs_id()), value);
   if (!status.ok() && !status.IsNotFound()) return status;
   if (status.ok()) {
-    fs_quota_ = mds::MetaCodec::DecodeFsQuotaValue(value);
+    fs_quota_ = MetaCodec::DecodeFsQuotaValue(value);
 
   } else {
     fs_quota_.set_max_bytes(INT64_MAX);
@@ -1649,9 +1641,8 @@ Status LocalMetaSystem::InitFsQuota() {
 
     // write to leveldb
     std::vector<KeyValue> kvs = {
-        {KeyValue::OpType::kPut,
-         mds::MetaCodec::EncodeFsQuotaKey(fs_info_.fs_id()),
-         mds::MetaCodec::EncodeFsQuotaValue(fs_quota_)},
+        {KeyValue::OpType::kPut, MetaCodec::EncodeFsQuotaKey(fs_info_.fs_id()),
+         MetaCodec::EncodeFsQuotaValue(fs_quota_)},
     };
     status = Put(kvs);
     if (!status.ok()) return status;
@@ -1664,7 +1655,7 @@ Status LocalMetaSystem::InitRoot() {
   const uint32_t fs_id = fs_info_.fs_id();
   const uint64_t now_ns = utils::TimestampNs();
 
-  mds::AttrEntry attr_entry;
+  AttrEntry attr_entry;
   attr_entry.set_fs_id(fs_id);
   attr_entry.set_ino(kRootIno);
   attr_entry.set_mode(S_IFDIR | S_IRUSR | S_IWUSR | S_IRGRP | S_IXUSR |
@@ -1680,7 +1671,7 @@ Status LocalMetaSystem::InitRoot() {
   attr_entry.set_type(pb::mds::FileType::DIRECTORY);
   attr_entry.set_version(1);
 
-  mds::DentryEntry dentry_entry;
+  DentryEntry dentry_entry;
   dentry_entry.set_fs_id(fs_id);
   dentry_entry.set_ino(kRootIno);
   dentry_entry.set_parent(kRootParentIno);
@@ -1689,17 +1680,17 @@ Status LocalMetaSystem::InitRoot() {
   dentry_entry.set_type(pb::mds::FileType::DIRECTORY);
 
   // get root inode
-  mds::AttrEntry old_attr_entry;
+  AttrEntry old_attr_entry;
   auto status = GetAttrEntry(kRootIno, old_attr_entry);
   if (status.ok()) return Status::OK();
 
   // write to leveldb
   std::vector<KeyValue> kvs = {
-      {KeyValue::OpType::kPut, mds::MetaCodec::EncodeInodeKey(fs_id, kRootIno),
-       mds::MetaCodec::EncodeInodeValue(attr_entry)},
+      {KeyValue::OpType::kPut, MetaCodec::EncodeInodeKey(fs_id, kRootIno),
+       MetaCodec::EncodeInodeValue(attr_entry)},
       {KeyValue::OpType::kPut,
-       mds::MetaCodec::EncodeDentryKey(fs_id, kRootParentIno, "/"),
-       mds::MetaCodec::EncodeDentryValue(dentry_entry)},
+       MetaCodec::EncodeDentryKey(fs_id, kRootParentIno, "/"),
+       MetaCodec::EncodeDentryValue(dentry_entry)},
   };
   status = Put(kvs);
   if (!status.ok()) return status;
@@ -1767,7 +1758,7 @@ Ino LocalMetaSystem::GenFileIno() {
   return (ino & 1) ? (ino + 1) : ino;
 }
 
-Status LocalMetaSystem::GetAttrEntry(Ino ino, mds::AttrEntry& attr_entry) {
+Status LocalMetaSystem::GetAttrEntry(Ino ino, AttrEntry& attr_entry) {
   auto inode = GetInodeFromCache(ino);
   if (inode != nullptr) {
     attr_entry = inode->ToAttrEntry();
@@ -1778,34 +1769,31 @@ Status LocalMetaSystem::GetAttrEntry(Ino ino, mds::AttrEntry& attr_entry) {
     utils::ReadLockGuard lk(lock_);
 
     std::string value;
-    auto status =
-        Get(mds::MetaCodec::EncodeInodeKey(fs_info_.fs_id(), ino), value);
+    auto status = Get(MetaCodec::EncodeInodeKey(fs_info_.fs_id(), ino), value);
     if (!status.ok()) return status;
 
-    attr_entry = mds::MetaCodec::DecodeInodeValue(value);
+    attr_entry = MetaCodec::DecodeInodeValue(value);
   }
 
   return Status::OK();
 }
 
 Status LocalMetaSystem::GetDentries(Ino parent,
-                                    std::vector<mds::DentryEntry>& dentries) {
+                                    std::vector<DentryEntry>& dentries) {
   auto* iter = db_->NewIterator(leveldb::ReadOptions());
 
-  iter->Seek(mds::MetaCodec::EncodeInodeKey(fs_info_.fs_id(), parent));
+  iter->Seek(MetaCodec::EncodeInodeKey(fs_info_.fs_id(), parent));
   if (iter->Valid()) {
-    CHECK(mds::MetaCodec::IsInodeKey(iter->key().ToString()))
-        << "not inode key.";
+    CHECK(MetaCodec::IsInodeKey(iter->key().ToString())) << "not inode key.";
     iter->Next();  // skip inode key
   }
 
   while (iter->Valid()) {
-    if (!mds::MetaCodec::IsDentryKey(iter->key().ToString())) {
+    if (!MetaCodec::IsDentryKey(iter->key().ToString())) {
       break;
     }
 
-    dentries.push_back(
-        mds::MetaCodec::DecodeDentryValue(iter->value().ToString()));
+    dentries.push_back(MetaCodec::DecodeDentryValue(iter->value().ToString()));
 
     iter->Next();
   }
@@ -1817,9 +1805,9 @@ Status LocalMetaSystem::GetDentries(Ino parent,
 
 Status LocalMetaSystem::CheckDirEmpty(Ino ino, bool& is_empty) {
   auto* iter = db_->NewIterator(leveldb::ReadOptions());
-  iter->Seek(mds::MetaCodec::EncodeInodeKey(fs_info_.fs_id(), ino));
+  iter->Seek(MetaCodec::EncodeInodeKey(fs_info_.fs_id(), ino));
 
-  if (!iter->Valid() || !mds::MetaCodec::IsInodeKey(iter->key().ToString())) {
+  if (!iter->Valid() || !MetaCodec::IsInodeKey(iter->key().ToString())) {
     LOG(ERROR) << fmt::format("[meta.fs] check dir empty, not found inode {}.",
                               ino);
     delete iter;
@@ -1828,7 +1816,7 @@ Status LocalMetaSystem::CheckDirEmpty(Ino ino, bool& is_empty) {
 
   uint32_t fs_id;
   Ino temp_ino;
-  mds::MetaCodec::DecodeInodeKey(iter->key().ToString(), fs_id, temp_ino);
+  MetaCodec::DecodeInodeKey(iter->key().ToString(), fs_id, temp_ino);
   if (temp_ino != ino) {
     LOG(ERROR) << fmt::format("[meta.fs] decode ino not match, {}!={}.",
                               temp_ino, ino);
@@ -1838,7 +1826,7 @@ Status LocalMetaSystem::CheckDirEmpty(Ino ino, bool& is_empty) {
 
   iter->Next();  // skip inode key
 
-  if (iter->Valid() && mds::MetaCodec::IsDentryKey(iter->key().ToString())) {
+  if (iter->Valid() && MetaCodec::IsDentryKey(iter->key().ToString())) {
     is_empty = false;
   } else {
     is_empty = true;
@@ -1855,16 +1843,16 @@ Status LocalMetaSystem::CleanChunk(Ino ino) {
   // scan chunk keys
   std::vector<KeyValue> delete_kvs;
   auto* iter = db_->NewIterator(leveldb::ReadOptions());
-  iter->Seek(mds::MetaCodec::EncodeChunkKey(fs_id, ino, 0));
+  iter->Seek(MetaCodec::EncodeChunkKey(fs_id, ino, 0));
 
   while (iter->Valid()) {
-    if (!mds::MetaCodec::IsChunkKey(iter->key().ToString())) break;
+    if (!MetaCodec::IsChunkKey(iter->key().ToString())) break;
 
     uint32_t temp_fs_id;
     Ino temp_ino;
     uint64_t chunk_index;
-    mds::MetaCodec::DecodeChunkKey(iter->key().ToString(), temp_fs_id, temp_ino,
-                                   chunk_index);
+    MetaCodec::DecodeChunkKey(iter->key().ToString(), temp_fs_id, temp_ino,
+                              chunk_index);
     if (temp_ino != ino) break;
 
     delete_kvs.push_back({KeyValue::OpType::kDelete, iter->key().ToString()});
@@ -1899,10 +1887,10 @@ Status LocalMetaSystem::DoCleanDelfile() {
   // scan del file keys
   std::vector<std::string> keys;
   auto* iter = db_->NewIterator(leveldb::ReadOptions());
-  iter->Seek(mds::MetaCodec::EncodeDelFileKey(fs_id, 0));
+  iter->Seek(MetaCodec::EncodeDelFileKey(fs_id, 0));
 
   while (iter->Valid()) {
-    if (!mds::MetaCodec::IsDelFileKey(iter->key().ToString())) break;
+    if (!MetaCodec::IsDelFileKey(iter->key().ToString())) break;
 
     keys.push_back(iter->key().ToString());
 
@@ -1916,7 +1904,7 @@ Status LocalMetaSystem::DoCleanDelfile() {
   for (const auto& key : keys) {
     uint32_t temp_fs_id;
     Ino ino;
-    mds::MetaCodec::DecodeDelFileKey(key, temp_fs_id, ino);
+    MetaCodec::DecodeDelFileKey(key, temp_fs_id, ino);
 
     // delete chunk
     auto status = CleanChunk(ino);
@@ -1937,7 +1925,7 @@ Status LocalMetaSystem::DoCleanDelfile() {
   return Status::OK();
 }
 
-void LocalMetaSystem::PutInodeToCache(const mds::AttrEntry& attr_entry) {
+void LocalMetaSystem::PutInodeToCache(const AttrEntry& attr_entry) {
   inode_cache_->Put(attr_entry.ino(), attr_entry);
 }
 
@@ -1945,7 +1933,7 @@ void LocalMetaSystem::DeleteInodeFromCache(Ino ino) {
   inode_cache_->Delete(ino);
 }
 
-v2::InodeSPtr LocalMetaSystem::GetInodeFromCache(Ino ino) {
+meta::InodeSPtr LocalMetaSystem::GetInodeFromCache(Ino ino) {
   return inode_cache_->Get(ino);
 }
 
@@ -1958,9 +1946,8 @@ void LocalMetaSystem::UpdateFsUsage(int64_t byte_delta, int64_t inode_delta,
 
   // write to leveldb
   std::vector<KeyValue> kvs = {
-      {KeyValue::OpType::kPut,
-       mds::MetaCodec::EncodeFsQuotaKey(fs_info_.fs_id()),
-       mds::MetaCodec::EncodeFsQuotaValue(fs_quota_)},
+      {KeyValue::OpType::kPut, MetaCodec::EncodeFsQuotaKey(fs_info_.fs_id()),
+       MetaCodec::EncodeFsQuotaValue(fs_quota_)},
   };
   auto status = Put(kvs);
   if (!status.ok()) {

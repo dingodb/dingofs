@@ -26,7 +26,7 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
-namespace v2 {
+namespace meta {
 
 static const uint32_t kBatchOperationReserveSize = 256;
 
@@ -226,7 +226,7 @@ void WriteSliceProcessor::ExecuteBatchOperation(
   }
 }
 
-}  // namespace v2
+}  // namespace meta
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
