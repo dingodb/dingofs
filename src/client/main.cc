@@ -79,7 +79,7 @@ static std::vector<std::pair<std::string, std::string>> GenConfigs(
                                                      : ::FLAGS_log_dir),
                          dingofs::FLAGS_log_level, dingofs::FLAGS_log_v));
   // meta
-  configs.emplace_back("meta", meta);
+  configs.emplace_back("meta", fmt::format("[{}]", meta));
   // storage
   if (options.type == AccesserType::kS3) {
     configs.emplace_back("storage",
