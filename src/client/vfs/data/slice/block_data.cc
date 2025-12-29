@@ -44,9 +44,9 @@ void BlockData::FreePageData() {
     page_allocator_->DeAllocate(page_data->page);
     timer.stop();
 
-    VLOG(6) << fmt::format("{} Deallocating page at: {} took: <{:.6f}> ms",
-                           UUID(), Helper::Char2Addr(page_data->page),
-                           timer.u_elapsed(0.0));
+    VLOG(12) << fmt::format("{} Deallocating page at: {} took: <{:.6f}> ms",
+                            UUID(), Helper::Char2Addr(page_data->page),
+                            timer.u_elapsed(0.0));
 
     it = pages_.erase(it);
   }
@@ -58,7 +58,7 @@ char* BlockData::AllocPage() {
   timer.start();
   auto* page = page_allocator_->Allocate();
   timer.stop();
-  VLOG(6) << fmt::format(
+  VLOG(12) << fmt::format(
       "{} Allocated page at: {} allocation took: <{:.6f}> ms", UUID(),
       Helper::Char2Addr(page), timer.u_elapsed(0.0));
   return page;
@@ -79,8 +79,8 @@ PageData* BlockData::FindOrCreatePageData(uint64_t page_index,
                                  AllocPage(), page_offset));
   CHECK(inserted);
 
-  VLOG(6) << fmt::format("{} Creating new page_data: {} for page index: {}",
-                         UUID(), new_iter->second->ToString(), page_index);
+  VLOG(12) << fmt::format("{} Creating new page_data: {} for page index: {}",
+                          UUID(), new_iter->second->ToString(), page_index);
 
   return new_iter->second.get();
 }
@@ -169,9 +169,9 @@ IOBuffer BlockData::ToIOBuffer() const {
 
     remain_len -= data_size;
 
-    VLOG(6) << fmt::format("{} Add page_data: {}, data_ptr: {} to IOBuffer",
-                           UUID(), page_data_ptr->ToString(),
-                           Helper::Char2Addr(data_ptr));
+    VLOG(12) << fmt::format("{} Add page_data: {}, data_ptr: {} to IOBuffer",
+                            UUID(), page_data_ptr->ToString(),
+                            Helper::Char2Addr(data_ptr));
   }
 
   CHECK_EQ(remain_len, 0) << "BlockData::Flush Remaining len is not zero: "

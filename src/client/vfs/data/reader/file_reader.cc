@@ -615,6 +615,8 @@ std::vector<PartialReadRequest> FileReader::PrepareRequests(
         req->access_sec = butil::monotonic_time_s();
         req->IncReader();
         added = true;
+        VLOG(9) << "PrepareRequests reuse existing req: " << req->ToString()
+                << " for range [" << s << "," << e << "), len: " << (e - s);
         break;
       }
     }
@@ -751,6 +753,9 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
   if (frange.End() > attr.length) {
     frange.len = attr.length - frange.offset;
   }
+
+  VLOG(6) << fmt::format("FileReader::Read ino: {}, fh: {}, frange: {} ", ino_,
+                         fh_, frange.ToString());
 
   CheckPrefetch(span->GetContext(), attr, frange);
 

@@ -32,7 +32,6 @@ void ReadRequest::ToStateUnLock(ReadRequestState new_state,
 }
 
 std::string ReadRequest::ToStringUnlock() const {
-  std::unique_lock<std::mutex> lock(mutex);
   return fmt::format(
       "(uuid: {}, state: {}, readers: {}, access_sec: {}, ino: {}, file_range: "
       "[{}-{}), len: {}, chunk_range: [{},{}-{}), status: {})",
