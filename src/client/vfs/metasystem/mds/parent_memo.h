@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_PARENT_MEMO_H_
-#define DINGOFS_SRC_CLIENT_VFS_META_V2_PARENT_MEMO_H_
+#ifndef DINGOFS_SRC_CLIENT_VFS_META_PARENT_MEMO_H_
+#define DINGOFS_SRC_CLIENT_VFS_META_PARENT_MEMO_H_
 
 #include <sys/types.h>
 
@@ -21,14 +21,15 @@
 #include <memory>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "client/vfs/vfs_meta.h"
 #include "json/value.h"
-#include "utils/concurrent/concurrent.h"
+#include "utils/shards.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
-namespace v2 {
+namespace meta {
 
 class ParentMemo;
 using ParentMemoSPtr = std::shared_ptr<ParentMemo>;
@@ -52,6 +53,8 @@ class ParentMemo {
   void Delete(Ino ino);
   void DecRenameRefCount(Ino ino);
 
+  size_t Size();
+
   bool Dump(Json::Value& value);
   bool Load(const Json::Value& value);
 
@@ -61,15 +64,17 @@ class ParentMemo {
     uint64_t version;
     int32_t rename_ref_count{0};
   };
+  void UpsertEntry(Ino ino, const Entry& entry);
 
-  utils::RWLock lock_;
-  // ino -> entry
-  std::unordered_map<Ino, Entry> ino_map_;
+  using Map = absl::flat_hash_map<Ino, Entry>;
+
+  constexpr static size_t kShardNum = 32;
+  utils::Shards<Map, kShardNum> ino_map_;
 };
 
-}  // namespace v2
+}  // namespace meta
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_VFS_META_V2_PARENT_MEMO_H_
+#endif  // DINGOFS_SRC_CLIENT_VFS_META_PARENT_MEMO_H_

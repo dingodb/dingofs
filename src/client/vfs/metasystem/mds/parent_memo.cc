@@ -14,165 +14,183 @@
 
 #include "client/vfs/metasystem/mds/parent_memo.h"
 
-#include <json/value.h>
-
-#include <algorithm>
-
 #include "fmt/core.h"
+#include "json/value.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
-namespace v2 {
+namespace meta {
 
 ParentMemo::ParentMemo() {
   // root ino is its own parent
-  ino_map_.insert({1, Entry{1, 0}});
+  UpsertEntry(1, Entry{1, 0, 0});
 }
 
 bool ParentMemo::GetParent(Ino ino, Ino& parent) {
-  utils::ReadLockGuard lk(lock_);
+  bool found = false;
+  ino_map_.withRLock(
+      [ino, &parent, &found](Map& map) {
+        auto it = map.find(ino);
+        if (it != map.end() && it->second.parent != 0) {
+          found = true;
+          parent = it->second.parent;
+        }
+      },
+      ino);
 
-  auto it = ino_map_.find(ino);
-  if (it == ino_map_.end()) {
-    return false;
-  }
-
-  if (it->second.parent == 0) {
-    return false;
-  }
-
-  parent = it->second.parent;
-  return true;
+  return found;
 }
 
 bool ParentMemo::GetVersion(Ino ino, uint64_t& version) {
-  utils::ReadLockGuard lk(lock_);
+  bool found = false;
+  ino_map_.withRLock(
+      [ino, &version, &found](Map& map) {
+        auto it = map.find(ino);
+        if (it != map.end()) {
+          found = true;
+          version = it->second.version;
+        }
+      },
+      ino);
 
-  auto it = ino_map_.find(ino);
-  if (it == ino_map_.end()) {
-    return false;
-  }
-
-  version = it->second.version;
-  return true;
+  return found;
 }
 
 std::vector<uint64_t> ParentMemo::GetAncestors(uint64_t ino) {
-  utils::ReadLockGuard lk(lock_);
-
   std::vector<uint64_t> ancestors;
   ancestors.reserve(32);
   ancestors.push_back(ino);
 
+  Ino parent;
   do {
-    auto it = ino_map_.find(ino);
-    if (it == ino_map_.end()) {
-      break;
-    }
-    auto& entry = it->second;
+    if (!GetParent(ino, parent)) break;
+    ancestors.push_back(parent);
 
-    ancestors.push_back(entry.parent);
+    if (parent == 1) break;
 
-    if (entry.parent == 1) {
-      break;
-    }
+    ino = parent;
 
-    ino = entry.parent;
   } while (true);
 
   return ancestors;
 }
 
 bool ParentMemo::GetRenameRefCount(Ino ino, int32_t& rename_ref_count) {
-  utils::ReadLockGuard lk(lock_);
+  bool found = false;
+  ino_map_.withRLock(
+      [ino, &rename_ref_count, &found](Map& map) {
+        auto it = map.find(ino);
+        if (it != map.end()) {
+          found = true;
+          rename_ref_count = it->second.rename_ref_count;
+        }
+      },
+      ino);
 
-  auto it = ino_map_.find(ino);
-  if (it == ino_map_.end()) {
-    return false;
-  }
-
-  rename_ref_count = it->second.rename_ref_count;
-
-  return true;
+  return found;
 }
 
 void ParentMemo::Upsert(Ino ino, Ino parent) {
-  utils::WriteLockGuard lk(lock_);
-
-  auto it = ino_map_.find(ino);
-  if (it != ino_map_.end()) {
-    it->second.parent = parent;
-  } else {
-    ino_map_[ino] = Entry{.parent = parent, .version = 0};
-  }
+  ino_map_.withWLock(
+      [ino, parent](Map& map) mutable {
+        auto it = map.find(ino);
+        if (it != map.end()) {
+          it->second.parent = parent;
+        } else {
+          map[ino] = Entry{.parent = parent, .version = 0};
+        }
+      },
+      ino);
 }
 
 void ParentMemo::UpsertVersion(Ino ino, uint64_t version) {
-  utils::WriteLockGuard lk(lock_);
+  ino_map_.withWLock(
+      [ino, version](Map& map) mutable {
+        auto it = map.find(ino);
+        if (it != map.end()) {
+          it->second.version = std::max(it->second.version, version);
 
-  auto it = ino_map_.find(ino);
-  if (it != ino_map_.end()) {
-    it->second.version = std::max(it->second.version, version);
-
-  } else {
-    ino_map_[ino] = Entry{.parent = 0, .version = version};
-  }
+        } else {
+          map[ino] = Entry{.parent = 0, .version = version};
+        }
+      },
+      ino);
 }
 
 void ParentMemo::UpsertVersionAndRenameRefCount(Ino ino, uint64_t version) {
-  utils::WriteLockGuard lk(lock_);
+  ino_map_.withWLock(
+      [ino, version](Map& map) mutable {
+        auto it = map.find(ino);
+        if (it != map.end()) {
+          it->second.version = std::max(it->second.version, version);
+          ++it->second.rename_ref_count;
 
-  auto it = ino_map_.find(ino);
-  if (it != ino_map_.end()) {
-    it->second.version = std::max(it->second.version, version);
-    ++it->second.rename_ref_count;
-
-  } else {
-    ino_map_[ino] =
-        Entry{.parent = 0, .version = version, .rename_ref_count = 1};
-  }
+        } else {
+          map[ino] =
+              Entry{.parent = 0, .version = version, .rename_ref_count = 1};
+        }
+      },
+      ino);
 }
 
 void ParentMemo::Upsert(Ino ino, Ino parent, uint64_t version) {
-  utils::WriteLockGuard lk(lock_);
+  ino_map_.withWLock(
+      [ino, parent, version](Map& map) mutable {
+        auto it = map.find(ino);
+        if (it != map.end()) {
+          it->second.parent = parent;
+          it->second.version = std::max(version, it->second.version);
 
-  auto it = ino_map_.find(ino);
-  if (it != ino_map_.end()) {
-    it->second.parent = parent;
-    it->second.version = std::max(version, it->second.version);
+        } else {
+          map[ino] = Entry{.parent = parent, .version = version};
+        }
+      },
+      ino);
+}
 
-  } else {
-    ino_map_[ino] = Entry{.parent = parent, .version = version};
-  }
+void ParentMemo::UpsertEntry(Ino ino, const Entry& entry) {
+  ino_map_.withWLock([ino, &entry](Map& map) mutable { map[ino] = entry; },
+                     ino);
 }
 
 void ParentMemo::Delete(Ino ino) {
-  utils::WriteLockGuard lk(lock_);
-
-  ino_map_.erase(ino);
+  ino_map_.withWLock([ino](Map& map) mutable { map.erase(ino); }, ino);
 }
 
 void ParentMemo::DecRenameRefCount(Ino ino) {
-  utils::WriteLockGuard lk(lock_);
+  ino_map_.withWLock(
+      [ino](Map& map) mutable {
+        auto it = map.find(ino);
+        if (it != map.end() && it->second.rename_ref_count > 0) {
+          --it->second.rename_ref_count;
+        }
+      },
+      ino);
+}
 
-  auto it = ino_map_.find(ino);
-  if (it != ino_map_.end()) {
-    if (it->second.rename_ref_count > 0) {
-      --it->second.rename_ref_count;
-    }
-  }
+size_t ParentMemo::Size() {
+  size_t size = 0;
+  ino_map_.iterate([&size](Map& map) { size += map.size(); });
+  return size;
 }
 
 bool ParentMemo::Dump(Json::Value& value) {
-  utils::ReadLockGuard lk(lock_);
+  std::vector<std::pair<Ino, Entry>> ino_map_copy;
+  ino_map_copy.reserve(Size());
+  ino_map_.iterateWLock([&](Map& map) {
+    for (const auto& [ino, entry] : map) {
+      ino_map_copy.emplace_back(ino, entry);
+    }
+  });
 
   Json::Value items = Json::arrayValue;
-  for (const auto& [ino, entry] : ino_map_) {
+  for (const auto& [ino, entry] : ino_map_copy) {
     Json::Value item;
     item["ino"] = ino;
     item["parent"] = entry.parent;
     item["version"] = entry.version;
+    item["rename_ref_count"] = entry.rename_ref_count;
 
     items.append(item);
   }
@@ -182,9 +200,6 @@ bool ParentMemo::Dump(Json::Value& value) {
 }
 
 bool ParentMemo::Load(const Json::Value& value) {
-  utils::WriteLockGuard lk(lock_);
-
-  ino_map_.clear();
   const Json::Value& items = value["parent_memo"];
   if (!items.isArray()) {
     LOG(ERROR) << "[meta.parent_memo] value is not an array.";
@@ -195,14 +210,15 @@ bool ParentMemo::Load(const Json::Value& value) {
     Ino ino = item["ino"].asUInt64();
     Ino parent = item["parent"].asUInt64();
     uint64_t version = item["version"].asUInt64();
+    int32_t rename_ref_count = item["rename_ref_count"].asInt();
 
-    ino_map_[ino] = Entry{parent, version};
+    UpsertEntry(ino, Entry{parent, version, rename_ref_count});
   }
 
   return true;
 }
 
-}  // namespace v2
+}  // namespace meta
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
