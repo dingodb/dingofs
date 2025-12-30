@@ -20,7 +20,7 @@ file(GLOB UTILS_TEST_SRCS
 
 add_executable(test_utils ${UTILS_TEST_SRCS})
 
-target_compile_options(test_utils PUBLIC -fconcepts)
+target_compile_options(test_utils PUBLIC)
 
 target_link_libraries(test_utils
     mds_common

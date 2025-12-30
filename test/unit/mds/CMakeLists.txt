@@ -22,7 +22,6 @@ add_executable(test_mds
   main.cc
 )
 
-target_compile_options(test_mds PUBLIC -fconcepts)
 
 target_link_libraries(test_mds
   PROTO_OBJS

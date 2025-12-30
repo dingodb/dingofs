@@ -21,7 +21,6 @@ add_library(test_mds_common
   ${TEST_DINGOFS_MDS_COMMON_SRCS}
 )
 
-target_compile_options(test_mds_common PUBLIC -fconcepts)
 
 target_link_libraries(test_mds_common
   PROTO_OBJS

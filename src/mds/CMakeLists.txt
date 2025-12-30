@@ -22,7 +22,7 @@ if(USE_TCMALLOC)
 endif()
 
 
-add_compile_options(-Wall -Wno-reorder -Wno-overloaded-virtual -fconcepts)
+add_compile_options(-Wall -Wno-reorder -Wno-overloaded-virtual)
 
 add_subdirectory(common)
 add_subdirectory(coordinator)

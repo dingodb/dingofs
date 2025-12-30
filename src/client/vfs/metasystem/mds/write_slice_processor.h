@@ -15,14 +15,12 @@
 #ifndef DINGOFS_SRC_CLIENT_VFS_META_MDS_WRITE_SLICE_PROCESSOR_H_
 #define DINGOFS_SRC_CLIENT_VFS_META_MDS_WRITE_SLICE_PROCESSOR_H_
 
-#include <cstdint>
 #include <memory>
 #include <vector>
 
 #include "butil/containers/mpsc_queue.h"
 #include "client/vfs/metasystem/mds/chunk.h"
 #include "client/vfs/metasystem/mds/mds_client.h"
-#include "client/vfs/vfs_meta.h"
 #include "mds/common/type.h"
 
 namespace dingofs {

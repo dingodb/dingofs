@@ -18,7 +18,7 @@
 #define DINGOFS_SRC_UTILS_SHARDS_H_
 
 #include <array>
-#include <mutex>
+#include <utility>
 
 #include "absl/hash/hash.h"
 #include "utils/concurrent/concurrent.h"
@@ -26,41 +26,46 @@
 namespace dingofs {
 namespace utils {
 
-template <class T, std::size_t N>
+template <typename T, std::size_t N>
 class Shards {
  public:
   using Func = std::function<void(T&)>;
 
-  auto position(auto&&... args) { return absl::HashOf(args...) % N; }
+  template <typename... Args>
+  auto position(Args&&... args) {
+    return absl::HashOf(std::forward<Args>(args)...) % N;
+  }
 
-  auto withRLockAt(Func&& f, std::size_t pos) {
+  auto withRLockAt(Func&& f, std::size_t pos) {  // NOLINT
     utils::ReadLockGuard lk(locks_[pos]);
 
     return f(array_[pos]);
   }
 
-  auto withWLockAt(Func&& f, std::size_t pos) {
+  auto withWLockAt(Func&& f, std::size_t pos) {  // NOLINT
     utils::WriteLockGuard lk(locks_[pos]);
 
     return f(array_[pos]);
   }
 
-  auto withRLock(Func&& f, auto&&... args) {
-    return withRLockAt(std::move(f), position(args...));
+  template <typename... Args>
+  auto withRLock(Func&& f, Args&&... args) {
+    return withRLockAt(std::move(f), position(std::forward<Args>(args)...));
   }
 
-  auto withWLock(Func&& f, auto&&... args) {
-    return withWLockAt(std::move(f), position(args...));
+  template <typename... Args>
+  auto withWLock(Func&& f, Args&&... args) {
+    return withWLockAt(std::move(f), position(std::forward<Args>(args)...));
   }
 
-  void iterate(Func&& f) {
+  void iterate(Func&& f) {  // NOLINT
     for (std::size_t idx = 0; idx < N; ++idx) {
       Func temp_f = f;
       withRLockAt(std::move(temp_f), idx);
     }
   }
 
-  void iterateWLock(Func&& f) {
+  void iterateWLock(Func&& f) {  // NOLINT
     for (std::size_t idx = 0; idx < N; ++idx) {
       Func temp_f = f;
       withWLockAt(std::move(temp_f), idx);
