@@ -59,7 +59,7 @@ void HandleManager::Shutdown() {
     std::lock_guard<std::mutex> lock(mutex_);
 
     for (auto& [fh, handle] : handles_) {
-      if (handle->ino == STATSINODEID) {
+      if (handle->ino == kStatsIno) {
         continue;
       }
 

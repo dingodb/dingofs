@@ -2039,7 +2039,7 @@ Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, const std::vector<Delt
     uint64_t last_check_time_ms = chunk_cache_.GetLastCheckCompactTimeMs(ino, chunk.index());
     return FLAGS_mds_compact_chunk_enable &&
            (static_cast<uint32_t>(chunk.slices_size()) > FLAGS_mds_compact_chunk_threshold_num) &&
-           (last_check_time_ms + FLAGS_mds_compact_chunk_interval_ms < static_cast<uint64_t>(utils::TimestampMs()));
+           (last_check_time_ms + FLAGS_mds_compact_chunk_interval_ms < utils::TimestampMs());
   };
 
   std::vector<ChunkEntry> chunks_to_compact;

@@ -26,7 +26,6 @@
 #include "brpc/reloadable_flags.h"
 #include "bthread/bthread.h"
 #include "common/const.h"
-#include "common/logging.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/format.h"
@@ -58,6 +57,7 @@ DEFINE_bool(mds_compact_chunk_detail_log_enable, true, "compact chunk detal log 
 DEFINE_validator(mds_compact_chunk_detail_log_enable, brpc::PassValidate);
 
 static const uint32_t kOpNameBufInitSize = 128;
+static const uint32_t kCleanCompactedSliceIntervalS = 1200;  // 20 minutes
 
 static uint32_t CalWaitTimeUs(int retry) {
   // exponential backoff
@@ -940,6 +940,7 @@ Status RemoveXAttrOperation::RunInBatch(TxnUPtr&, AttrEntry& attr, const std::ve
 
 Status UpsertChunkOperation::Run(TxnUPtr& txn) {
   const uint32_t fs_id = fs_info_.fs_id();
+  const uint64_t now_ms = utils::TimestampMs();
 
   std::set<std::string> keys;
   for (const auto& delta_slices : delta_slices_) {
@@ -960,8 +961,10 @@ Status UpsertChunkOperation::Run(TxnUPtr& txn) {
     auto value = FindValue(kvs, key);
     if (!value.empty()) chunk = MetaCodec::DecodeChunkValue(value);
 
+    bool has_update = false;
     // not exist chunk, create a new one
     if (chunk.version() == 0) {
+      has_update = true;
       chunk.set_index(chunk_index);
       chunk.set_chunk_size(fs_info_.chunk_size());
       chunk.set_block_size(fs_info_.block_size());
@@ -976,17 +979,38 @@ Status UpsertChunkOperation::Run(TxnUPtr& txn) {
             return true;
           }
         }
+        for (const auto& compacted_slice : chunk.compacted_slices()) {
+          for (const uint64_t& compacted_slice_id : compacted_slice.slice_ids()) {
+            if (compacted_slice_id == slice.id()) {
+              return true;
+            }
+          }
+        }
         return false;
       };
 
       for (const auto& slice : delta_slices.slices()) {
         if (!is_exist_fn(slice)) *chunk.add_slices() = slice;
         length = std::max(length, static_cast<int64_t>(slice.offset() + slice.len()));
+        has_update = true;
       }
     }
 
-    chunk.set_version(chunk.version() + 1);
-    txn->Put(key, MetaCodec::EncodeChunkValue(chunk));
+    if (has_update) {
+      // clean compacted slices if expired
+      auto it = chunk.mutable_compacted_slices()->begin();
+      while (it != chunk.mutable_compacted_slices()->end()) {
+        if (it->time_ms() + (kCleanCompactedSliceIntervalS * 1000) < now_ms) {
+          it = chunk.mutable_compacted_slices()->erase(it);
+        } else {
+          ++it;
+        }
+      }
+
+      chunk.set_version(chunk.version() + 1);
+
+      txn->Put(key, MetaCodec::EncodeChunkValue(chunk));
+    }
 
     result_.effected_chunks.push_back(std::move(chunk));
   }
@@ -1668,6 +1692,7 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoEntry& fs_info,
   }
 
   for (auto& offset_range : offset_ranges) {
+    offset_range.slices.reserve(64);
     for (const auto& slice : chunk_copy.slices) {
       uint64_t slice_start = slice.offset;
       uint64_t slice_end = slice.offset + slice.len;
@@ -1779,7 +1804,7 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(const FsInfoEntry& fs_info,
   size_t partial_overlapped_count = trash_slices.slices_size() - out_of_length_count - complete_overlapped_count;
 
   std::string slice_id_str;
-  slice_id_str.reserve(trash_slices.slices_size() * 9);
+  slice_id_str.reserve(trash_slices.slices_size() * 16);
   for (int i = 0; i < trash_slices.slices_size(); ++i) {
     const auto& slice = trash_slices.slices(i);
     slice_id_str += std::to_string(slice.slice_id());
@@ -1888,8 +1913,7 @@ Status CompactChunkOperation::Run(TxnUPtr& txn) {
   CHECK(chunk.index() == chunk_index_) << "chunk index not match.";
 
   // reduce compact frequency
-  if (!is_force_ && chunk.last_compaction_time_ms() + FLAGS_mds_compact_chunk_interval_ms >
-                        static_cast<uint64_t>(utils::TimestampMs())) {
+  if (!is_force_ && chunk.last_compaction_time_ms() + FLAGS_mds_compact_chunk_interval_ms > utils::TimestampMs()) {
     return Status(pb::error::ENOT_MATCH, "not match compact condition");
   }
 
@@ -1897,6 +1921,15 @@ Status CompactChunkOperation::Run(TxnUPtr& txn) {
   if (!trash_slice_list.slices().empty()) {
     chunk.set_version(chunk.version() + 1);
     chunk.set_last_compaction_time_ms(utils::TimestampMs());
+
+    // record compacted slices
+    ChunkEntry::CompactedSlice compacted_slice;
+    compacted_slice.set_time_ms(utils::TimestampMs());
+    for (const auto& slice : trash_slice_list.slices()) {
+      compacted_slice.add_slice_ids(slice.slice_id());
+    }
+    chunk.add_compacted_slices()->Swap(&compacted_slice);
+
     txn->Put(chunk_key, MetaCodec::EncodeChunkValue(chunk));
 
     result_.trash_slice_list = std::move(trash_slice_list);

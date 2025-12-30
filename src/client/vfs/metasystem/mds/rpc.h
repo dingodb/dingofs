@@ -263,6 +263,7 @@ Status RPC::SendRequest(const EndPoint& endpoint,
     cntl.set_log_id(butil::fast_rand());
     // InjectTraceHeader(&cntl);
     request.mutable_info()->set_timeout_ms(option.timeout_ms);
+    request.mutable_info()->set_retry_times(retry);
 
     uint64_t start_us = utils::TimestampUs();
     channel->CallMethod(method, &cntl, &request, &response, nullptr);
