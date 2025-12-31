@@ -58,21 +58,13 @@ struct ChunkSlices {
 };
 
 struct ReaderSharedState {
-  const uint64_t total;
-
-  std::atomic<uint64_t> num_done{0};
-  const std::unique_ptr<ITraceSpan> read_span;
-  const std::vector<BlockCacheReadReqUPtr> block_cache_reqs;
+  std::atomic<uint64_t> total;
+  std::atomic<uint64_t> num_done;
 
   std::mutex mtx;
   Status status;
-
-  ReaderSharedState(uint64_t p_total, std::unique_ptr<ITraceSpan> p_span,
-                    std::vector<BlockCacheReadReqUPtr> p_reqs)
-      : total(p_total),
-        status(Status::OK()),
-        read_span(std::move(p_span)),
-        block_cache_reqs(std::move(p_reqs)) {}
+  std::unique_ptr<ITraceSpan> read_span;
+  std::vector<BlockCacheReadReqUPtr> block_cache_reqs;
 };
 
 class ChunkReader {

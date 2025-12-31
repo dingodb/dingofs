@@ -20,6 +20,7 @@
 #include <glog/logging.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -169,13 +170,7 @@ void ChunkReader::OnAllBlocksComplete(ReaderSharedState* shared) {
   Status final_status;
   IOBuffer data;
   {
-    // No lock needed here because:
-    // 1. num_done atomic fetch_add provides happens-before relationship
-    // 2. This function is only called when all tasks are done (num_done ==
-    // total)
-    // 3. No other threads are modifying shared->status or
-    // shared->block_cache_reqs
-
+    std::lock_guard<std::mutex> lock(shared->mtx);
     auto span = hub_->GetTracer()->StartSpanWithParent(
         kVFSDataMoudule, METHOD_NAME(), *shared->read_span);
 
@@ -234,11 +229,11 @@ void ChunkReader::OnBlockReadComplete(ReaderSharedState* shared,
     }
   }
 
-  // NOTE: atomic fetch_add provides happens-before relationship
-  // should not use std::memory_order_relaxed here
+  // whe need RMW here
   uint64_t done = shared->num_done.fetch_add(1) + 1;
-
-  if (done >= shared->total) {
+  uint64_t total = shared->total.load();
+  CHECK_GE(total, done);
+  if (done == total) {
     OnAllBlocksComplete(shared);
   }
 }
@@ -348,8 +343,16 @@ void ChunkReader::ExecuteAsyncRead() {
     to_process_reqs.push_back(ptr.get());
   }
 
-  auto* shared = new ReaderSharedState(block_cache_reqs.size(), std::move(span),
-                                       std::move(block_cache_reqs));
+  auto* shared = new ReaderSharedState();
+  shared->total.store(block_cache_reqs.size());
+  shared->num_done.store(0);
+
+  {
+    std::unique_lock<std::mutex> lock(shared->mtx);
+    shared->status = Status::OK();
+    shared->read_span = std::move(span);
+    shared->block_cache_reqs = std::move(block_cache_reqs);
+  }
 
   for (BlockCacheReadReq* block_cache_req : to_process_reqs) {
     ProcessBlockCacheReadReq(span_ctx, shared, block_cache_req);
