@@ -61,85 +61,100 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf, bool upgrade) {
 
   LOG(INFO) << fmt::format("[vfs.hub] vfs hub starting, upgrade({}).", upgrade);
 
+  // trace manager
   {
     trace_manager_ = TraceManager::New();
-    auto ok = trace_manager_->Init();
-    if (!ok) {
-      LOG(ERROR) << "Init trace manager failed.";
-      return Status::Internal("Init trace manager failed");
+    CHECK(trace_manager_ != nullptr) << "trace manager is nullptr.";
+    if (!trace_manager_->Init()) {
+      return Status::Internal("init trace manager fail");
     }
   }
 
-  MetaSystemUPtr rela_meta_system;
-  if (vfs_conf.metasystem_type == MetaSystemType::MEMORY) {
-    rela_meta_system = std::make_unique<memory::MemoryMetaSystem>();
+  // meta system
+  {
+    MetaSystemUPtr rela_meta_system;
+    if (vfs_conf.metasystem_type == MetaSystemType::MEMORY) {
+      rela_meta_system = std::make_unique<memory::MemoryMetaSystem>();
 
-  } else if (vfs_conf.metasystem_type == MetaSystemType::LOCAL) {
-    rela_meta_system = std::make_unique<local::LocalMetaSystem>(
-        dingofs::Helper::ExpandPath(kDefaultMetaDBDir), vfs_conf.fs_name,
-        vfs_conf.storage_info);
+    } else if (vfs_conf.metasystem_type == MetaSystemType::LOCAL) {
+      rela_meta_system = std::make_unique<local::LocalMetaSystem>(
+          dingofs::Helper::ExpandPath(kDefaultMetaDBDir), vfs_conf.fs_name,
+          vfs_conf.storage_info);
 
-  } else if (vfs_conf.metasystem_type == MetaSystemType::MDS) {
-    rela_meta_system = meta::MDSMetaSystem::Build(
-        vfs_conf.fs_name, vfs_conf.mds_addrs, client_id_, trace_manager_);
-  }
-  CHECK(rela_meta_system != nullptr) << "build meta system fail";
+    } else if (vfs_conf.metasystem_type == MetaSystemType::MDS) {
+      rela_meta_system = meta::MDSMetaSystem::Build(
+          vfs_conf.fs_name, vfs_conf.mds_addrs, client_id_, trace_manager_);
+    }
+    CHECK(rela_meta_system != nullptr) << "build meta system fail";
 
-  if (FLAGS_vfs_trace_logging) {
-    tracer_ = std::make_unique<Tracer>(
-        std::make_unique<LogTraceExporter>(kVFSMoudule, Logger::LogDir()));
-  } else {
-    tracer_ = std::make_unique<NoopTracer>();
-  }
-
-  auto span = tracer_->StartSpan(kVFSMoudule, "start");
-
-  meta_system_ = std::make_unique<MetaWrapper>(std::move(rela_meta_system));
-
-  DINGOFS_RETURN_NOT_OK(meta_system_->Init(upgrade));
-
-  DINGOFS_RETURN_NOT_OK(meta_system_->GetFsInfo(span->GetContext(), &fs_info_));
-
-  LOG(INFO) << fmt::format("[vfs.hub] vfs_fs_info: {}", FsInfo2Str(fs_info_));
-  if (fs_info_.status != FsStatus::kNormal) {
-    LOG(ERROR) << fmt::format("[vfs.hub] fs {} is unavailable, status: {}",
-                              fs_info_.name, FsStatus2Str(fs_info_.status));
-    return Status::Internal("build meta system fail");
+    meta_system_ = std::make_unique<MetaWrapper>(std::move(rela_meta_system));
+    DINGOFS_RETURN_NOT_OK(meta_system_->Init(upgrade));
   }
 
-  // set s3/rados config info
-  blockaccess::InitBlockAccessOption(&blockaccess_options_);
-  if (fs_info_.storage_info.store_type == StoreType::kS3) {
-    auto s3_info = fs_info_.storage_info.s3_info;
-    blockaccess_options_.type = blockaccess::AccesserType::kS3;
-    blockaccess_options_.s3_options.s3_info =
-        blockaccess::S3Info{.ak = s3_info.ak,
-                            .sk = s3_info.sk,
-                            .endpoint = s3_info.endpoint,
-                            .bucket_name = s3_info.bucket_name};
+  // load fs info
+  {
+    if (FLAGS_vfs_trace_logging) {
+      tracer_ = std::make_unique<Tracer>(
+          std::make_unique<LogTraceExporter>(kVFSMoudule, Logger::LogDir()));
+    } else {
+      tracer_ = std::make_unique<NoopTracer>();
+    }
+    CHECK(tracer_ != nullptr) << "tracer is nullptr.";
 
-  } else if (fs_info_.storage_info.store_type == StoreType::kRados) {
-    auto rados_info = fs_info_.storage_info.rados_info;
-    blockaccess_options_.type = blockaccess::AccesserType::kRados;
-    blockaccess_options_.rados_options =
-        blockaccess::RadosOptions{.mon_host = rados_info.mon_host,
-                                  .user_name = rados_info.user_name,
-                                  .key = rados_info.key,
-                                  .pool_name = rados_info.pool_name,
-                                  .cluster_name = rados_info.cluster_name};
-  } else if (fs_info_.storage_info.store_type == StoreType::kLocalFile) {
-    blockaccess_options_.type = blockaccess::AccesserType::kLocalFile;
-    blockaccess_options_.file_options = blockaccess::LocalFileOptions{
-        .path = fs_info_.storage_info.file_info.path};
-  } else {
-    return Status::InvalidParam("unsupported store type");
+    auto span = tracer_->StartSpan(kVFSMoudule, "start");
+
+    DINGOFS_RETURN_NOT_OK(
+        meta_system_->GetFsInfo(span->GetContext(), &fs_info_));
+
+    LOG(INFO) << fmt::format("[vfs.hub] vfs_fs_info: {}", FsInfo2Str(fs_info_));
+    if (fs_info_.status != FsStatus::kNormal) {
+      return Status::Internal(fmt::format("fs is unavailable, status({})",
+                                          FsStatus2Str(fs_info_.status)));
+    }
   }
 
-  block_accesser_ = blockaccess::NewBlockAccesser(blockaccess_options_);
-  DINGOFS_RETURN_NOT_OK(block_accesser_->Init());
+  // block accesser
+  {
+    // set s3/rados config info
+    blockaccess::InitBlockAccessOption(&blockaccess_options_);
+    if (fs_info_.storage_info.store_type == StoreType::kS3) {
+      auto s3_info = fs_info_.storage_info.s3_info;
+      blockaccess_options_.type = blockaccess::AccesserType::kS3;
+      blockaccess_options_.s3_options.s3_info =
+          blockaccess::S3Info{.ak = s3_info.ak,
+                              .sk = s3_info.sk,
+                              .endpoint = s3_info.endpoint,
+                              .bucket_name = s3_info.bucket_name};
 
-  handle_manager_ = std::make_unique<HandleManager>(this);
+    } else if (fs_info_.storage_info.store_type == StoreType::kRados) {
+      auto rados_info = fs_info_.storage_info.rados_info;
+      blockaccess_options_.type = blockaccess::AccesserType::kRados;
+      blockaccess_options_.rados_options =
+          blockaccess::RadosOptions{.mon_host = rados_info.mon_host,
+                                    .user_name = rados_info.user_name,
+                                    .key = rados_info.key,
+                                    .pool_name = rados_info.pool_name,
+                                    .cluster_name = rados_info.cluster_name};
+    } else if (fs_info_.storage_info.store_type == StoreType::kLocalFile) {
+      blockaccess_options_.type = blockaccess::AccesserType::kLocalFile;
+      blockaccess_options_.file_options = blockaccess::LocalFileOptions{
+          .path = fs_info_.storage_info.file_info.path};
+    } else {
+      return Status::InvalidParam("unsupported store type");
+    }
 
+    block_accesser_ = blockaccess::NewBlockAccesser(blockaccess_options_);
+    DINGOFS_RETURN_NOT_OK(block_accesser_->Init());
+  }
+
+  // handle manager
+  {
+    handle_manager_ = std::make_unique<HandleManager>(this);
+    CHECK(handle_manager_ != nullptr) << "handle manager is nullptr.";
+    DINGOFS_RETURN_NOT_OK(handle_manager_->Start());
+  }
+
+  // block store
   {
     if (FLAGS_vfs_use_fake_block_store) {
       block_store_ = std::make_unique<FakeBlockStore>(this, fs_info_.uuid);
@@ -147,79 +162,88 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf, bool upgrade) {
       block_store_ = std::make_unique<BlockStoreImpl>(this, fs_info_.uuid,
                                                       block_accesser_.get());
     }
+    CHECK(block_store_ != nullptr) << "block store is nullptr.";
     DINGOFS_RETURN_NOT_OK(block_store_->Start());
   }
 
+  // flush executor
   {
     flush_executor_ = std::make_unique<ExecutorImpl>(kFlushExecutorName,
                                                      FLAGS_vfs_flush_bg_thread);
-    flush_executor_->Start();
+    CHECK(flush_executor_ != nullptr) << "flush executor is nullptr.";
+    if (!flush_executor_->Start()) {
+      return Status::Internal("flush executor start fail");
+    }
   }
 
+  // read executor
   {
     read_executor_ = std::make_unique<ExecutorImpl>(
         kReadExecutorName, FLAGS_vfs_read_executor_thread);
-    read_executor_->Start();
+    CHECK(read_executor_ != nullptr) << "read executor is nullptr.";
+    if (!read_executor_->Start()) {
+      return Status::Internal("read executor start fail");
+    }
   }
 
+  // page allocator
   {
     if (FLAGS_data_stream_page_use_pool) {
       page_allocator_ = std::make_shared<PagePool>();
     } else {
       page_allocator_ = std::make_shared<DefaultPageAllocator>();
     }
+    CHECK(page_allocator_ != nullptr)
+        << "data stream page allocator is nullptr.";
 
-    auto ok =
-        page_allocator_->Init(FLAGS_data_stream_page_size,
-                              (FLAGS_data_stream_page_total_size_mb * kMiB) /
-                                  FLAGS_data_stream_page_size);
-    if (!ok) {
-      LOG(ERROR) << "[vfs.hub] init page allocator failed.";
-      return Status::Internal("init page allocator failed");
+    if (!page_allocator_->Init(FLAGS_data_stream_page_size,
+                               (FLAGS_data_stream_page_total_size_mb * kMiB) /
+                                   FLAGS_data_stream_page_size)) {
+      return Status::Internal("init page allocator fail");
     }
   }
 
+  // read buffer manager
   {
-    int64_t total_mb = FLAGS_vfs_read_buffer_total_mb;
-    if (total_mb <= 0) {
-      LOG(ERROR) << "[vfs.hub] invalid read buffer total mb option, total_mb: "
-                 << total_mb;
-      return Status::Internal("invalid read buffer total mb option");
+    if (FLAGS_vfs_read_buffer_total_mb <= 0) {
+      return Status::Internal("invalid vfs_read_buffer_total_mb");
     }
 
-    read_buffer_manager_ =
-        std::make_unique<ReadBufferManager>(total_mb * 1024 * 1024);
+    read_buffer_manager_ = std::make_unique<ReadBufferManager>(
+        FLAGS_vfs_read_buffer_total_mb * 1024 * 1024);
+    CHECK(read_buffer_manager_ != nullptr) << "read buffer manager is nullptr.";
   }
 
+  // file suffix watcher
   {
     file_suffix_watcher_ =
         std::make_unique<FileSuffixWatcher>(FLAGS_vfs_data_writeback_suffix);
+    CHECK(file_suffix_watcher_ != nullptr) << "file suffix watcher is nullptr.";
   }
 
+  // prefetch manager
   {
     if (block_store_->EnableCache()) {
       prefetch_manager_ = PrefetchManager::New(this);
-      auto status = prefetch_manager_->Start(FLAGS_vfs_prefetch_threads);
-      if (!status.ok()) {
-        LOG(ERROR) << "[vfs.hub] prefetch manager start failed.";
-        return status;
-      }
+      CHECK(prefetch_manager_ != nullptr) << "prefetch manager is nullptr.";
+      DINGOFS_RETURN_NOT_OK(
+          prefetch_manager_->Start(FLAGS_vfs_prefetch_threads));
+
     } else {
       LOG(INFO)
           << "[vfs.hub] block cache not enable, skip prefetch manager start.";
     }
   }
 
+  // warmup manager
   {
     warmup_manager_ = WarmupManager::New(this);
-    auto ok = warmup_manager_->Start(FLAGS_vfs_warmup_threads);
-    if (!ok.ok()) {
-      LOG(ERROR) << "[vfs.hub] warmup manager start failed.";
-      return ok;
-    }
+    CHECK(warmup_manager_ != nullptr) << "warmup manager is nullptr.";
+    DINGOFS_RETURN_NOT_OK(warmup_manager_->Start(FLAGS_vfs_warmup_threads));
   }
 
   started_.store(true, std::memory_order_relaxed);
+
   return Status::OK();
 }
 
