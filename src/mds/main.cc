@@ -324,14 +324,13 @@ int main(int argc, char* argv[]) {
 
   // read gflags from conf file
   if (!dingofs::FLAGS_conf.empty()) {
-    LOG(INFO) << "use config file: " << FLAGS_conf;
+    std::cout << "use config file: " << FLAGS_conf << '\n';
     CHECK(dingofs::mds::Helper::IsExistPath(FLAGS_conf)) << fmt::format("config file {} not exist.", FLAGS_conf);
     gflags::ReadFromFlagsFile(FLAGS_conf, argv[0], true);
-
-  } else {
-    // reset brpc flag default value if not set
-    dingofs::ResetBrpcFlagDefaultValue();
   }
+
+  // reset brpc flag default value if not set
+  dingofs::ResetBrpcFlagDefaultValue();
 
   std::cout << fmt::format("mds server id: {}\n", dingofs::mds::FLAGS_mds_server_id);
   dingofs::mds::MetaCodec::SetClusterID(FLAGS_mds_cluster_id);
@@ -341,7 +340,7 @@ int main(int argc, char* argv[]) {
   SetupSignalHandler();
 
   // run in daemon mode
-  if (dingofs::FLAGS_daemonize && !dingofs::utils::Daemonize()) {
+  if (dingofs::FLAGS_daemonize && !dingofs::utils::Daemonize(false, true)) {
     std::cerr << "fail to daemonize process.\n";
     return 1;
   }

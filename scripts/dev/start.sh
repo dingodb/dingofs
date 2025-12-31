@@ -85,7 +85,7 @@ function start_server() {
   server_name="dingo-${role}"
   echo "start server: ${root_dir}/bin/${server_name}"
 
-  nohup ${root_dir}/bin/${server_name} --conf=${root_dir}/conf/${role}.conf 2>&1 >./log/out &
+  ${root_dir}/bin/${server_name} --daemonize=true --conf=${root_dir}/conf/${role}.conf 2>&1 >./log/out &
 }
 
 

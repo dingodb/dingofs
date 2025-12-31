@@ -150,10 +150,10 @@ int main(int argc, char* argv[]) {
     CHECK(dingofs::Helper::IsExistPath(dingofs::FLAGS_conf))
         << fmt::format("config file {} not exist.", dingofs::FLAGS_conf);
     gflags::ReadFromFlagsFile(dingofs::FLAGS_conf, argv[0], true);
-  } else {
-    // reset brpc flag default value if not set
-    dingofs::ResetBrpcFlagDefaultValue();
   }
+
+  // reset brpc flag default value if not set
+  dingofs::ResetBrpcFlagDefaultValue();
 
   // after parsing:
   // argv[0] is program name
@@ -191,11 +191,9 @@ int main(int argc, char* argv[]) {
   dingofs::cache::FLAGS_mds_addrs = mds_addrs;
 
   // run in daemon mode
-  if (dingofs::FLAGS_daemonize) {
-    if (!dingofs::utils::Daemonize()) {
-      std::cerr << "failed to daemonize process.\n";
-      return EXIT_FAILURE;
-    }
+  if (dingofs::FLAGS_daemonize && !dingofs::utils::Daemonize(false, true)) {
+    std::cerr << "failed to daemonize process.\n";
+    return EXIT_FAILURE;
   }
 
   struct MountOption mount_option{.mount_point = argv[2],

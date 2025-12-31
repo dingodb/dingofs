@@ -35,6 +35,9 @@ DEFINE_validator(log_v, [](const char* /*name*/, int32_t value) {
   return true;
 });
 
+static uint32_t kLogBufSecs = 10;
+static uint32_t kMaxLogSize = 256;  // in MB
+
 static bool IsEqualIgnoreCase(const std::string& str1,
                               const std::string& str2) {
   if (str1.size() != str2.size()) {
@@ -71,8 +74,8 @@ void Logger::Init(const std::string& role) {
   CHECK(dingofs::Helper::CreateDirectory(log_dir))
       << fmt::format("create log directory failed, log_dir: {}", log_dir);
 
-  FLAGS_logbufsecs = 10;
-  FLAGS_max_log_size = 256;
+  FLAGS_logbufsecs = kLogBufSecs;
+  FLAGS_max_log_size = kMaxLogSize;
   FLAGS_stop_logging_if_full_disk = true;
   FLAGS_minloglevel = google::GLOG_INFO;
   FLAGS_logbuflevel = google::GLOG_INFO;

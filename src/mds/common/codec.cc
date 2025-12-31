@@ -166,9 +166,6 @@ void MetaCodec::SetClusterID(uint32_t cluster_id) {
   kDelSliceKeySize += kPrefixSize;
   kDelFileKeySize += kPrefixSize;
   kFsStatsKeySize += kPrefixSize;
-
-  LOG(INFO) << fmt::format("set cluster id({}), prefix({}) size({}).", kClusterID, Helper::StringToHex(kPrefix),
-                           kPrefixSize);
 }
 
 uint32_t MetaCodec::GetClusterID() { return kClusterID; }
