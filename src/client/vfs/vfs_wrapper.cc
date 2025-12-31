@@ -161,6 +161,9 @@ Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
     return Status::InvalidParam("load vfs state fail");
   }
 
+  uid_ = dingofs::Helper::GetOriginalUid();
+  gid_ = dingofs::Helper::GetOriginalGid();
+
   return Status::OK();
 }
 
@@ -287,6 +290,12 @@ Status VFSWrapper::GetAttr(Ino ino, Attr* attr) {
   if (!s.ok()) {
     op_metric.FailOp();
   }
+
+  if (ino == kRootIno) {
+    attr->uid = uid_;
+    attr->gid = gid_;
+  }
+
   return s;
 }
 

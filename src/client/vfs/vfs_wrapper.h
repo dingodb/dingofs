@@ -133,6 +133,9 @@ class VFSWrapper {
 
   std::unique_ptr<VFS> vfs_;
   std::unique_ptr<metrics::client::ClientOpMetric> client_op_metric_;
+
+  uint32_t uid_;
+  uint32_t gid_;
 };
 
 }  // namespace vfs

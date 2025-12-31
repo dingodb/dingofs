@@ -133,14 +133,36 @@ class Helper {
     return true;
   }
 
-  static std::string GetOriginalHomeDir() {
-    // get original user
+  static struct passwd* GetSudoUserInfo() {
     const char* sudo_user = std::getenv("SUDO_USER");
     if (sudo_user) {
-      struct passwd* pw = getpwnam(sudo_user);
-      if (pw) {
-        return pw->pw_dir;
-      }
+      return getpwnam(sudo_user);
+    }
+    return nullptr;
+  }
+
+  static uint32_t GetOriginalGid() {
+    struct passwd* pw = GetSudoUserInfo();
+    if (pw) {
+      return pw->pw_gid;
+    }
+
+    return getgid();
+  }
+
+  static uint32_t GetOriginalUid() {
+    struct passwd* pw = GetSudoUserInfo();
+    if (pw) {
+      return pw->pw_uid;
+    }
+
+    return getuid();
+  }
+
+  static std::string GetOriginalHomeDir() {
+    struct passwd* pw = GetSudoUserInfo();
+    if (pw) {
+      return pw->pw_dir;
     }
 
     std::string home_dir = butil::GetHomeDir().value();
