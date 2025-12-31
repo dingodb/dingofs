@@ -17,6 +17,8 @@
 
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <pwd.h>
+#include <unistd.h>
 
 #include <cstdint>
 #include <iomanip>
@@ -131,12 +133,27 @@ class Helper {
     return true;
   }
 
-  // parse ~/.dingofs/path to /home/user/.dingofs/path
-  static std::string ExpandPath(const std::string& path) {
+  static std::string GetOriginalHomeDir() {
+    // get original user
+    const char* sudo_user = std::getenv("SUDO_USER");
+    if (sudo_user) {
+      struct passwd* pw = getpwnam(sudo_user);
+      if (pw) {
+        return pw->pw_dir;
+      }
+    }
+
     std::string home_dir = butil::GetHomeDir().value();
     if (home_dir.empty()) {
       LOG(FATAL) << "get home dir fail!";
     }
+
+    return home_dir;
+  }
+
+  // parse ~/.dingofs/path to /home/user/.dingofs/path
+  static std::string ExpandPath(const std::string& path) {
+    std::string home_dir = GetOriginalHomeDir();
     std::string expand_dir;
     butil::ReplaceChars(path, "~", home_dir, &expand_dir);
     return expand_dir;
