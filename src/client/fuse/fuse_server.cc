@@ -53,6 +53,8 @@ DEFINE_bool(fuse_use_clone_fd, false, "use clone fd for libfuse");
 DEFINE_validator(fuse_use_clone_fd, brpc::PassValidate);
 DEFINE_uint32(fuse_max_threads, 64, "max threads for libfuse");
 DEFINE_validator(fuse_max_threads, brpc::PassValidate);
+DEFINE_bool(fuse_enable_debug, false, "whether to enable fuse debug");
+DEFINE_validator(fuse_enable_debug, brpc::PassValidate);
 
 DEFINE_string(socket_path, "/var/run",
               "path for store unix domain socket file");
@@ -191,15 +193,20 @@ int FuseServer::AddMountOptions() {
   CHECK(!program_name_.empty()) << "program_name_ should not be empty";
   if (fuse_opt_add_arg(&args_, program_name_.c_str()) != 0) return 1;
 
-  //  Values shown in "df -T" and friends first column "Filesystem",DindoFS +
-  //  filesystem name
+  // enable fuse debug
+  if (FLAGS_fuse_enable_debug) {
+    if (fuse_opt_add_arg(&args_, "-d") != 0) return 1;
+  }
+
+  //  Values shown in "df -T" and friends first column "Filesystem",DindoFS
+  //  + filesystem name
   if (FuseAddOpts(&args_, (const char*)"subtype=dingofs") != 0) return 1;
 
   std::string arg_value =
       fmt::format("fsname=DingoFS:{}", mount_option_->fs_name);
   if (FuseAddOpts(&args_, arg_value.c_str()) != 0) return 1;
 
-  if (FuseAddOpts(&args_, "default_permissions,allow_other") != 0) return 1;
+  if (FuseAddOpts(&args_, FLAGS_fuse_mount_options.c_str()) != 0) return 1;
 
   return 0;
 }

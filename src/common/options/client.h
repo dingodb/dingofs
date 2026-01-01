@@ -41,6 +41,7 @@ DECLARE_string(fuse_mount_options);
 DECLARE_bool(fuse_use_single_thread);
 DECLARE_bool(fuse_use_clone_fd);
 DECLARE_uint32(fuse_max_threads);
+DECLARE_bool(fuse_enable_debug);
 
 // fuse module
 DECLARE_bool(fuse_enable_direct_io);
@@ -88,7 +89,7 @@ DECLARE_bool(vfs_intime_warmup_enable);
 DECLARE_int64(vfs_warmup_mtime_restart_interval_secs);
 DECLARE_int64(vfs_warmup_trigger_restart_interval_secs);
 
-// vfs handle 
+// vfs handle
 DECLARE_int32(vfs_handle_bg_executor_thread);
 DECLARE_int32(vfs_periodic_flush_interval_ms);
 DECLARE_int32(vfs_periodic_trim_mem_ms);
