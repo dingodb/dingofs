@@ -199,7 +199,7 @@ int FuseServer::AddMountOptions() {
       fmt::format("fsname=DingoFS:{}", mount_option_->fs_name);
   if (FuseAddOpts(&args_, arg_value.c_str()) != 0) return 1;
 
-  if (FuseAddOpts(&args_, "default_permissions,allow_other") != 0) return 1;
+  if (FuseAddOpts(&args_, FLAGS_fuse_mount_options.c_str()) != 0) return 1;
 
   return 0;
 }
