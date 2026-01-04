@@ -31,7 +31,7 @@ inline bool Daemonize(const bool chdir_root = false,
   }
   if (pid > 0) {
     // parent process exit
-    std::exit(0);
+    _exit(0);
   }
 
   // child process continue, create new session, become session leader
@@ -48,7 +48,7 @@ inline bool Daemonize(const bool chdir_root = false,
   }
   if (pid > 0) {
     // first child process exit
-    std::exit(0);
+    _exit(0);
   }
 
   if (chdir_root) {
