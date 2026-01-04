@@ -93,7 +93,7 @@ class VFSHubImpl : public VFSHub {
  public:
   VFSHubImpl(ClientId client_id) : client_id_(client_id) {}
 
-  ~VFSHubImpl() override = default;
+  ~VFSHubImpl() override ;
 
   Status Start(const VFSConfig& vfs_conf, bool upgrade) override;
 

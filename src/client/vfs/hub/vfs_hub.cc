@@ -55,6 +55,40 @@ namespace vfs {
 static const std::string kFlushExecutorName = "vfs_flush";
 static const std::string kReadExecutorName = "vfs_read";
 
+VFSHubImpl::~VFSHubImpl() {
+  if (handle_manager_ != nullptr) {
+    handle_manager_.reset();
+  }
+
+  if (read_executor_ != nullptr) {
+    read_executor_.reset();
+  }
+
+  if (flush_executor_ != nullptr) {
+    flush_executor_.reset();
+  }
+
+  if (warmup_manager_ != nullptr) {
+    warmup_manager_.reset();
+  }
+
+  if (prefetch_manager_ != nullptr) {
+    prefetch_manager_.reset();
+  }
+
+  if (block_store_ != nullptr) {
+    block_store_.reset();
+  }
+
+  if (meta_system_ != nullptr) {
+    meta_system_.reset();
+  }
+
+  if (trace_manager_ != nullptr) {
+    trace_manager_.reset();
+  }
+}
+
 Status VFSHubImpl::Start(const VFSConfig& vfs_conf, bool upgrade) {
   CHECK(started_.load(std::memory_order_relaxed) == false)
       << "unexpected start";
@@ -256,42 +290,34 @@ Status VFSHubImpl::Stop(bool upgrade) {
 
   if (handle_manager_ != nullptr) {
     handle_manager_->Shutdown();
-    handle_manager_.reset();
   }
 
   if (read_executor_ != nullptr) {
     read_executor_->Stop();
-    read_executor_.reset();
   }
 
   if (flush_executor_ != nullptr) {
     flush_executor_->Stop();
-    flush_executor_.reset();
   }
 
   if (warmup_manager_ != nullptr) {
     warmup_manager_->Stop();
-    warmup_manager_.reset();
   }
 
   if (prefetch_manager_ != nullptr) {
     prefetch_manager_->Stop();
-    prefetch_manager_.reset();
   }
 
   if (block_store_ != nullptr) {
     block_store_->Shutdown();
-    block_store_.reset();
   }
 
   if (meta_system_ != nullptr) {
     meta_system_->UnInit(upgrade);
-    meta_system_.reset();
   }
 
   if (trace_manager_ != nullptr) {
     trace_manager_->Stop();
-    trace_manager_.reset();
   }
 
   started_.store(false, std::memory_order_relaxed);
