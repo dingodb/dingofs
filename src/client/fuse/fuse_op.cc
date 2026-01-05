@@ -26,6 +26,7 @@
 #include <string>
 
 #include "absl/strings/str_format.h"
+#include "client/common/const.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/data_buffer.h"
 #include "client/vfs/vfs_meta.h"
@@ -198,7 +199,20 @@ static void ReplyData(fuse_req_t req,
   if (iovecs.size() == 1) {
     struct fuse_bufvec buf = FUSE_BUFVEC_INIT(iovecs[0].iov_len);
     buf.buf[0].mem = iovecs[0].iov_base;
-    fuse_reply_data(req, &buf, FUSE_BUF_SPLICE_MOVE);
+    int ret = fuse_reply_data(req, &buf, FUSE_BUF_SPLICE_MOVE);
+    if (ret != 0) {
+      LOG(ERROR) << fmt::format("[fuse] fuse_reply_data fail, ret({}).", errno);
+    }
+    return;
+  }
+
+  if (iovecs.size() < dingofs::client::kFuseMaxIovSize) {
+    int ret = fuse_reply_iov(
+        req, reinterpret_cast<const struct iovec*>(iovecs.data()),
+        static_cast<int>(iovecs.size()));
+    if (ret != 0) {
+      LOG(ERROR) << fmt::format("[fuse] fuse_reply_data fail, ret({}).", errno);
+    }
     return;
   }
 

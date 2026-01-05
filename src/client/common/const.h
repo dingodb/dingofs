@@ -17,6 +17,7 @@
 #ifndef DINGOFS_CLIENT_VFS_CONST_H_
 #define DINGOFS_CLIENT_VFS_CONST_H_
 
+#include <climits>
 #include <cstdint>
 #include <string>
 
@@ -34,6 +35,10 @@ static const uint8_t kFlagAppend = (1 << 1);
 static const uint8_t kFlagNoDump = (1 << 2);
 static const uint8_t kFlagNoAtime = (1 << 3);
 static const uint8_t kFlagSync = (1 << 4);
+
+// reserve 24 for libfuse kernel
+static constexpr size_t kFuseReserveIovSize = 24;
+static constexpr size_t kFuseMaxIovSize = IOV_MAX - kFuseReserveIovSize;
 
 }  // namespace client
 }  // namespace dingofs
