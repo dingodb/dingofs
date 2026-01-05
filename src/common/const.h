@@ -87,6 +87,8 @@ static const std::string kDefaultLogDir = kDefaultRuntimeBaseDir + "log";
 static const std::string kDefaultDataDir = kDefaultRuntimeBaseDir + "data";
 static const std::string kDefaultMetaDBDir = kDefaultRuntimeBaseDir + "meta";
 
+static const std::string kDefaultSockDir = kDefaultRuntimeBaseDir + "run";
+
 // brpc flags default value
 static const std::string kDefaultBrpcConnectTimeoutAsUnreachable = "10";
 static const std::string kDefaultBrpcMaxConnectionPoolSize = "500";

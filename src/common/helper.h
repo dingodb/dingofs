@@ -188,7 +188,6 @@ class Helper {
   static bool CreateDirectory(const std::string& path) {
     butil::FilePath dir_path(path);
     if (!butil::DirectoryExists(dir_path)) {
-      LOG(INFO) << "directory not exists: " << path << ", create it now.";
       if (!butil::CreateDirectory(dir_path, true)) {
         return false;
       }

@@ -27,6 +27,8 @@
 #include "client/fuse/fuse_lowlevel_ops_func.h"
 #include "client/fuse/fuse_passfd.h"
 #include "client/fuse/fuse_upgrade_manager.h"
+#include "common/const.h"
+#include "common/helper.h"
 #include "common/options/client.h"
 #include "fmt/format.h"
 #include "fuse_opt.h"
@@ -45,7 +47,7 @@ USING_FLAG(fuse_check_alive_max_retries)
 USING_FLAG(fuse_check_alive_retry_interval_ms)
 
 // fuse mount options
-DEFINE_string(fuse_mount_options, "default_permissions,allow_other",
+DEFINE_string(fuse_mount_options, "default_permissions",
               "mount options for libfuse");
 DEFINE_bool(fuse_use_single_thread, false, "use single thread for libfuse");
 DEFINE_validator(fuse_use_single_thread, brpc::PassValidate);
@@ -54,8 +56,13 @@ DEFINE_validator(fuse_use_clone_fd, brpc::PassValidate);
 DEFINE_uint32(fuse_max_threads, 64, "max threads for libfuse");
 DEFINE_validator(fuse_max_threads, brpc::PassValidate);
 
-DEFINE_string(socket_path, "/var/run",
+DEFINE_string(socket_path, kDefaultSockDir,
               "path for store unix domain socket file");
+DEFINE_validator(socket_path,
+                 [](const char* /*name*/, const std::string& value) {
+                   FLAGS_socket_path = dingofs::Helper::ExpandPath(value);
+                   return true;
+                 });
 
 FuseServer::FuseServer() = default;
 
@@ -71,6 +78,8 @@ int FuseServer::Init(const std::string& program_name,
   config_ = fuse_loop_cfg_create();
   CHECK(config_ != nullptr) << "fuse_loop_cfg_create fail.";
 
+  CHECK(dingofs::Helper::CreateDirectory(FLAGS_socket_path))
+      << "create directory" << FLAGS_socket_path << " fail";
   fd_comm_file_ =
       absl::StrFormat("%s/fd_comm_socket.%d", FLAGS_socket_path, getpid());
 
@@ -200,6 +209,11 @@ int FuseServer::AddMountOptions() {
   if (FuseAddOpts(&args_, arg_value.c_str()) != 0) return 1;
 
   if (FuseAddOpts(&args_, FLAGS_fuse_mount_options.c_str()) != 0) return 1;
+
+  //  root user automatically enables the allow_other option
+  if (getuid() == 0) {
+    if (FuseAddOpts(&args_, "allow_other") != 0) return 1;
+  }
 
   return 0;
 }
