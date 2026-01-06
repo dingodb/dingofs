@@ -15,10 +15,10 @@
 #include <string>
 
 #include "client/vfs/vfs_meta.h"
+#include "common/const.h"
 #include "gflags/gflags.h"
 #include "gtest/gtest.h"
 #include "mds/client/mds.h"
-#include "mds/common/constant.h"
 #include "mds/common/helper.h"
 
 namespace dingofs {
@@ -187,13 +187,13 @@ TEST_F(MDSTest, DentryAndInodeOperations) {
       dingofs::mds::Helper::GenerateRandomString(kRandomStringLength);
   // create a directory
   {
-    auto response = mds_client_->MkDir(mds::kRootIno, dir_name);
+    auto response = mds_client_->MkDir(dingofs::kRootIno, dir_name);
     ASSERT_EQ(response.error().errcode(), dingofs::pb::error::OK);
   }
 
   // ListDentry should find it
   {
-    auto response = mds_client_->ListDentry(mds::kRootIno, false);
+    auto response = mds_client_->ListDentry(dingofs::kRootIno, false);
     ASSERT_EQ(response.error().errcode(), dingofs::pb::error::OK);
     bool dir_found = false;
     for (const auto& d : response.dentries()) {
@@ -207,14 +207,14 @@ TEST_F(MDSTest, DentryAndInodeOperations) {
 
   // get dentry
   {
-    auto response = mds_client_->GetDentry(mds::kRootIno, dir_name);
+    auto response = mds_client_->GetDentry(dingofs::kRootIno, dir_name);
     ASSERT_EQ(response.error().errcode(), dingofs::pb::error::OK);
   }
 
   // lookup
   uint64_t ino = 0;
   {
-    auto response = mds_client_->Lookup(mds::kRootIno, dir_name);
+    auto response = mds_client_->Lookup(dingofs::kRootIno, dir_name);
     ASSERT_EQ(response.error().errcode(), dingofs::pb::error::OK);
     ino = response.inode().ino();
   }
@@ -241,14 +241,14 @@ TEST_F(MDSTest, DentryAndInodeOperations) {
 
   // read dir
   {
-    auto response = mds_client_->ReadDir(mds::kRootIno, "", true, true);
+    auto response = mds_client_->ReadDir(dingofs::kRootIno, "", true, true);
     ASSERT_EQ(response.error().errcode(), dingofs::pb::error::OK);
     ASSERT_GT(response.entries_size(), 0);
   }
 
   // rm dir
   {
-    auto response = mds_client_->RmDir(mds::kRootIno, dir_name);
+    auto response = mds_client_->RmDir(dingofs::kRootIno, dir_name);
     ASSERT_EQ(response.error().errcode(), dingofs::pb::error::OK);
   }
 }
@@ -259,14 +259,14 @@ TEST_F(MDSTest, FileCreateOpenRelease) {
       dingofs::mds::Helper::GenerateRandomString(kRandomStringLength);
   // create file
   {
-    auto response = mds_client_->MkNod(mds::kRootIno, file_name);
+    auto response = mds_client_->MkNod(dingofs::kRootIno, file_name);
     ASSERT_EQ(response.error().errcode(), dingofs::pb::error::OK);
   }
 
   // lookup to get inode
   uint64_t ino = 0;
   {
-    auto response = mds_client_->Lookup(mds::kRootIno, file_name);
+    auto response = mds_client_->Lookup(dingofs::kRootIno, file_name);
     ASSERT_EQ(response.error().errcode(), dingofs::pb::error::OK);
     ino = response.inode().ino();
   }
@@ -293,14 +293,14 @@ TEST_F(MDSTest, LinkUnlinkSymlinkReadlink) {
 
   // create a file to link
   {
-    auto response = mds_client_->MkNod(mds::kRootIno, src_name);
+    auto response = mds_client_->MkNod(dingofs::kRootIno, src_name);
     ASSERT_EQ(response.error().errcode(), dingofs::pb::error::OK);
   }
 
   // lookup to get inode
   uint64_t ino = 0;
   {
-    auto response = mds_client_->Lookup(mds::kRootIno, src_name);
+    auto response = mds_client_->Lookup(dingofs::kRootIno, src_name);
     ASSERT_EQ(response.error().errcode(), dingofs::pb::error::OK);
     ino = response.inode().ino();
   }
@@ -310,20 +310,20 @@ TEST_F(MDSTest, LinkUnlinkSymlinkReadlink) {
       "linked_" +
       dingofs::mds::Helper::GenerateRandomString(kRandomStringLength);
   {
-    auto response = mds_client_->Link(ino, mds::kRootIno, link_name);
+    auto response = mds_client_->Link(ino, dingofs::kRootIno, link_name);
     ASSERT_EQ(response.error().errcode(), dingofs::pb::error::OK);
   }
 
   // verify linked dentry exists
   {
-    auto response = mds_client_->Lookup(mds::kRootIno, link_name);
+    auto response = mds_client_->Lookup(dingofs::kRootIno, link_name);
     ASSERT_EQ(response.error().errcode(), dingofs::pb::error::OK);
     ASSERT_EQ(response.inode().ino(), ino);
   }
 
   // unlink the new name
   {
-    auto response = mds_client_->UnLink(mds::kRootIno, link_name);
+    auto response = mds_client_->UnLink(dingofs::kRootIno, link_name);
     ASSERT_EQ(response.error().errcode(), dingofs::pb::error::OK);
   }
 
@@ -333,12 +333,12 @@ TEST_F(MDSTest, LinkUnlinkSymlinkReadlink) {
       dingofs::mds::Helper::GenerateRandomString(kRandomStringLength);
   std::string target_path = "/some/target/path";
   auto response =
-      mds_client_->Symlink(mds::kRootIno, symlink_name, target_path);
+      mds_client_->Symlink(dingofs::kRootIno, symlink_name, target_path);
   ASSERT_EQ(response.error().errcode(), dingofs::pb::error::OK);
 
   // lookup symlink and readlink
   {
-    auto response = mds_client_->Lookup(mds::kRootIno, symlink_name);
+    auto response = mds_client_->Lookup(dingofs::kRootIno, symlink_name);
     ASSERT_EQ(response.error().errcode(), dingofs::pb::error::OK);
 
     uint64_t sym_ino = response.inode().ino();
@@ -362,16 +362,16 @@ TEST_F(MDSTest, SliceOps) {
   std::string file_name =
       "slice_file_" +
       dingofs::mds::Helper::GenerateRandomString(kRandomStringLength);
-  auto response = mds_client_->MkNod(mds::kRootIno, file_name);
+  auto response = mds_client_->MkNod(dingofs::kRootIno, file_name);
   ASSERT_EQ(response.error().errcode(), dingofs::pb::error::OK);
 
-  auto lookup_resp = mds_client_->Lookup(mds::kRootIno, file_name);
+  auto lookup_resp = mds_client_->Lookup(dingofs::kRootIno, file_name);
   ASSERT_EQ(lookup_resp.error().errcode(), dingofs::pb::error::OK);
   uint64_t ino = lookup_resp.inode().ino();
 
   // write slice
   {
-    auto write_resp = mds_client_->WriteSlice(mds::kRootIno, ino, 0);
+    auto write_resp = mds_client_->WriteSlice(dingofs::kRootIno, ino, 0);
     ASSERT_EQ(write_resp.error().errcode(), dingofs::pb::error::OK);
 
     // read slice
@@ -387,11 +387,11 @@ TEST_F(MDSTest, AttrOperations) {
       dingofs::mds::Helper::GenerateRandomString(kRandomStringLength);
 
   // create file
-  auto mknod_resp = mds_client_->MkNod(mds::kRootIno, file_name);
+  auto mknod_resp = mds_client_->MkNod(dingofs::kRootIno, file_name);
   ASSERT_EQ(mknod_resp.error().errcode(), dingofs::pb::error::OK);
 
   // lookup to get inode
-  auto lookup_resp = mds_client_->Lookup(mds::kRootIno, file_name);
+  auto lookup_resp = mds_client_->Lookup(dingofs::kRootIno, file_name);
   ASSERT_EQ(lookup_resp.error().errcode(), dingofs::pb::error::OK);
   uint64_t ino = lookup_resp.inode().ino();
 
@@ -420,11 +420,11 @@ TEST_F(MDSTest, XAttrOperations) {
       "xattr_file_" +
       dingofs::mds::Helper::GenerateRandomString(kRandomStringLength);
   // create file
-  auto mknod_resp = mds_client_->MkNod(mds::kRootIno, file_name);
+  auto mknod_resp = mds_client_->MkNod(dingofs::kRootIno, file_name);
   ASSERT_EQ(mknod_resp.error().errcode(), dingofs::pb::error::OK);
 
   // lookup to get inode
-  auto lookup_resp = mds_client_->Lookup(mds::kRootIno, file_name);
+  auto lookup_resp = mds_client_->Lookup(dingofs::kRootIno, file_name);
   ASSERT_EQ(lookup_resp.error().errcode(), dingofs::pb::error::OK);
   uint64_t ino = lookup_resp.inode().ino();
 
