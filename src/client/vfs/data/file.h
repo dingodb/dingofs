@@ -66,13 +66,13 @@ class File : public IFile {
   VFSHub* vfs_hub_;
   const uint64_t fh_;
   const uint64_t ino_;
-
-  std::atomic<bool> closed_{false};
+  const std::string uuid_;
 
   FileWriterUPtr file_writer_;
   FileReader* file_reader_;
 
   std::atomic_int64_t inflight_flush_{0};
+
   std::mutex mutex_;
   // when sync fail, we need set file status to error
   Status file_status_;

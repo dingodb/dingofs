@@ -35,7 +35,6 @@
 #include <memory>
 #include <mutex>
 
-#include "client/common/const.h"
 #include "client/vfs/components/prefetch_manager.h"
 #include "client/vfs/components/warmup_manager.h"
 #include "client/vfs/data/common/common.h"
@@ -75,6 +74,7 @@ FileReader::FileReader(VFSHub* hub, uint64_t fh, uint64_t ino)
     : vfs_hub_(hub),
       fh_(fh),
       ino_(ino),
+      uuid_(fmt::format("file_reader-{}-{}", ino, fh)),
       chunk_size_(hub->GetFsInfo().chunk_size),
       block_size_(hub->GetFsInfo().block_size),
       policy_(new ReadaheadPoclicy(fh)) {}
@@ -83,7 +83,7 @@ FileReader::FileReader(VFSHub* hub, uint64_t fh, uint64_t ino)
 // meas no reader and all background read requests should be done
 FileReader::~FileReader() {
   CHECK(closing_.load(std::memory_order_acquire))
-      << "FileReader destructor called without Close";
+      << uuid_ << " FileReader destructor called without Close";
 
   {
     std::vector<ReadRequestSptr> to_delete;
@@ -92,8 +92,8 @@ FileReader::~FileReader() {
     for (auto& [req_id, req_ptr] : requests_) {
       {
         std::lock_guard<std::mutex> req_lock(req_ptr->mutex);
-        VLOG(12) << fmt::format("FileReader destructor delete req: {}",
-                                req_ptr->ToStringUnlock());
+        VLOG(12) << fmt::format("{} FileReader destructor delete req: {}",
+                                uuid_, req_ptr->ToStringUnlock());
         CHECK_EQ(req_ptr->readers, 0);
         req_ptr->ToStateUnLock(ReadRequestState::kInvalid,
                                TransitionReason::kInvalidate);
@@ -107,9 +107,8 @@ FileReader::~FileReader() {
   }
 
   if (FLAGS_vfs_print_readahead_stats) {
-    LOG(INFO) << fmt::format(
-        "FileReader ino: {}, fh: {} done, readahead_stats: {}", ino_, fh_,
-        policy_->readahead_stats.ToString());
+    LOG(INFO) << fmt::format("{} FileReader done, readahead_stats: {}", uuid_,
+                             policy_->readahead_stats.ToString());
   }
 }
 
@@ -118,19 +117,19 @@ void FileReader::Close() {
     return;
   }
 
-  VLOG(9) << "FileReader Close called";
   closing_.store(true, std::memory_order_release);
+  VLOG(9) << fmt::format("{} FileReader closed", uuid_);
 }
 
 void FileReader::AcquireRef() {
   int64_t orgin = refs_.fetch_add(1);
-  VLOG(12) << "FileReader::AcquireRef origin refs=" << orgin;
+  VLOG(12) << fmt::format("{} AcquireRef origin refs: {}", uuid_, orgin);
   CHECK_GE(orgin, 0);
 }
 
 void FileReader::ReleaseRef() {
   int64_t orgin = refs_.fetch_sub(1);
-  VLOG(12) << "FileReader::ReleaseRef origin refs=" << orgin;
+  VLOG(12) << fmt::format("{} ReleaseRef origin refs: {}", uuid_, orgin);
   CHECK_GT(orgin, 0);
   if (orgin == 1) {
     delete this;
@@ -142,8 +141,9 @@ void FileReader::ShrinkMem() {
   int64_t total = TotalMem();
 
   if (used < total) {
-    VLOG(3) << "CheckReadBuffer skipped due to buffer not full, used=" << used
-            << " total=" << total;
+    VLOG(3) << fmt::format(
+        "{} ShrinkMem skipped due to buffer not full, used: {}, total: {}",
+        uuid_, used, total);
     return;
   }
 
@@ -152,13 +152,17 @@ void FileReader::ShrinkMem() {
   if (used > total && total > 0) {
     idle_sec /= (used / total);
   }
+  VLOG(9) << fmt::format(
+      "{} ShrinkMem start, used: {}, total: {}, idle_sec: {}, now: {}", uuid_,
+      used, total, idle_sec, now);
 
   std::vector<ReadRequestSptr> to_delete;
 
   std::unique_lock<std::mutex> lock(mutex_);
   for (auto& [req_id, req] : requests_) {
     std::unique_lock<std::mutex> req_lock(req->mutex);
-    VLOG(9) << "CheckReadBuffer check req " << req->ToString();
+    VLOG(9) << fmt::format("{} ShrinkMem check req: {}", uuid_,
+                           req->ToStringUnlock());
 
     // We can only delete if no one is reading it
     if (req->readers > 0) {
@@ -192,13 +196,15 @@ void FileReader::ShrinkMem() {
 }
 
 void FileReader::Invalidate(int64_t offset, int64_t size) {
+  VLOG(9) << fmt::format("{} Invalidate for range [{}-{}))", uuid_, offset,
+                         offset + size);
   std::vector<ReadRequestSptr> to_delete;
 
   std::unique_lock<std::mutex> lock(mutex_);
 
   for (auto& [req_id, req] : requests_) {
-    VLOG(9) << "Invalidate check req " << req->ToString() << " for range ["
-            << offset << "," << (offset + size) << ")";
+    VLOG(9) << fmt::format("{} Invalidate check req: {}", uuid_,
+                           req->ToString());
 
     FileRange frange{.offset = offset, .len = size};
 
@@ -256,9 +262,9 @@ ReadRequestSptr FileReader::NewReadRequest(int64_t s, int64_t e) {
   int64_t req_end = std::min(e, block_end);
 
   VLOG(12) << fmt::format(
-      "NewReadRequest split: requested=[{}-{}), block_boundary={}, "
+      "{} NewReadRequest split: requested=[{}-{}), block_boundary={}, "
       "actual=[{}-{}), len={}",
-      s, e, block_end, s, req_end, (req_end - s));
+      uuid_, s, e, block_end, s, req_end, (req_end - s));
 
   std::shared_ptr<ReadRequest> req(
       new ReadRequest(req_id_gen.fetch_add(1), ino_, chunk_indx, chunk_offset,
@@ -272,7 +278,8 @@ ReadRequestSptr FileReader::NewReadRequest(int64_t s, int64_t e) {
   auto [it, inserted] = requests_.emplace(req->req_id, std::move(req));
   CHECK(inserted);
   ReadRequestSptr new_req = it->second;
-  VLOG(9) << fmt::format("NewReadRequest req: {}", new_req->ToString());
+  VLOG(9) << fmt::format("{} NewReadRequest req: {}", uuid_,
+                         new_req->ToString());
 
   TakeMem(new_req->frange.len);
 
@@ -281,6 +288,7 @@ ReadRequestSptr FileReader::NewReadRequest(int64_t s, int64_t e) {
   return new_req;
 }
 
+// NOTD: hold req lock
 void FileReader::DeleteReadRequestAsync(ReadRequestSptr req) {
   AcquireRef();
   vfs_hub_->GetReadExecutor()->Execute([&, req]() {
@@ -296,7 +304,8 @@ void FileReader::DeleteReadRequest(ReadRequestSptr req) {
 
 // out of req lock
 void FileReader::DeleteReadRequestUnlock(ReadRequestSptr req) {
-  VLOG(9) << fmt::format("DeleteReadRequest req: {}", req->ToString());
+  VLOG(9) << fmt::format("{} DeleteReadRequest req: {}", uuid_,
+                         req->ToString());
   CHECK(CanDeleteRequest(req));
 
   ReleaseMem(req->frange.len);
@@ -318,8 +327,8 @@ void FileReader::OnReadRequestComplete(ChunkReader* reader, ReadRequestSptr req,
                                        Status s) {
   std::unique_lock<std::mutex> lock(req->mutex);
   if (!s.ok()) {
-    LOG(WARNING) << fmt::format("Failed read read_req: {}, status: {}",
-                                req->ToStringUnlock(), s.ToString());
+    LOG(WARNING) << fmt::format("{} Failed read read_req: {}, status: {}",
+                                uuid_, req->ToStringUnlock(), s.ToString());
   }
 
   CHECK(req->state == ReadRequestState::kBusy ||
@@ -338,7 +347,7 @@ void FileReader::OnReadRequestComplete(ChunkReader* reader, ReadRequestSptr req,
       req->ToStateUnLock(ReadRequestState::kReady, TransitionReason::kReadDone);
     } else {
       LOG(ERROR) << fmt::format(
-          "Invalid read_req: {} due to read fail, status: {}",
+          "{} Invalid read_req: {} due to read fail, status: {}", uuid_,
           req->ToStringUnlock(), req->status.ToString());
       req->ToStateUnLock(ReadRequestState::kInvalid,
                          TransitionReason::kReadDone);
@@ -347,7 +356,7 @@ void FileReader::OnReadRequestComplete(ChunkReader* reader, ReadRequestSptr req,
 
   if (closing_.load(std::memory_order_acquire)) {
     LOG(WARNING) << fmt::format(
-        "ReadRequstDone mark req: {} invalid due to closing",
+        "{} ReadRequstDone mark req: {} invalid due to closing", uuid_,
         req->ToStringUnlock());
     req->ToStateUnLock(ReadRequestState::kInvalid, TransitionReason::kReadDone);
   }
@@ -368,15 +377,16 @@ void FileReader::OnReadRequestComplete(ChunkReader* reader, ReadRequestSptr req,
       }
       break;
     default:
-      LOG(FATAL) << fmt::format("ReadRequstDone invalid state req: {}",
-                                req->ToStringUnlock());
+      LOG(FATAL) << fmt::format("{} ReadRequstDone invalid state req: {}",
+                                uuid_, req->ToStringUnlock());
   }
 }
 
 void FileReader::DoReadRequst(ReadRequestSptr req) {
   {
     std::unique_lock<std::mutex> req_lock(req->mutex);
-    VLOG(9) << fmt::format("DoReadRequst start req: {}", req->ToStringUnlock());
+    VLOG(9) << fmt::format("{} DoReadRequst start req: {}", uuid_,
+                           req->ToStringUnlock());
     CHECK(req->state == ReadRequestState::kNew);
     req->ToStateUnLock(ReadRequestState::kBusy, TransitionReason::kReading);
   }
@@ -423,9 +433,9 @@ bool FileReader::IsProtectedReq(const ReadRequestSptr& req) const {
   int64_t s = policy_->last_offset >= bt ? policy_->last_offset - bt : 0;
   int64_t e = policy_->last_offset + readahead;
 
-  VLOG(9) << "IsProtectedReq check req " << req->ToStringUnlock()
-          << " policy: " << policy_->ToString() << ", [" << s << "," << e
-          << ")";
+  VLOG(9) << fmt::format(
+      "{} IsProtectedReq check req {} policy: {}, range: [{}-{})", uuid_,
+      req->ToStringUnlock(), policy_->ToString(), s, e);
 
   if (s >= e) {
     return false;
@@ -442,12 +452,14 @@ bool FileReader::IsProtectedReq(const ReadRequestSptr& req) const {
 void FileReader::MakeReadahead(ContextSPtr ctx, const FileRange& frange) {
   auto span = vfs_hub_->GetTraceManager()->StartChildSpan(
       "FileReader::MakeReadahead", ctx->GetTraceSpan());
-  VLOG(9) << "MakeReadahead: input frange=" << frange.ToString();
+  VLOG(9) << fmt::format("{} MakeReadahead, input frange: {}", uuid_,
+                         frange.ToString());
   CHECK_GT(frange.len, 0);
 
   if (UsedMem() > TotalMem()) {
-    LOG(INFO) << "MakeReadahead skipped due to buffer full, used=" << UsedMem()
-              << " max=" << TotalMem();
+    LOG(INFO) << fmt::format(
+        "{} MakeReadahead skipped due to buffer full, used: {}, max: {}", uuid_,
+        UsedMem(), TotalMem());
     return;
   }
 
@@ -457,8 +469,8 @@ void FileReader::MakeReadahead(ContextSPtr ctx, const FileRange& frange) {
     int64_t req_id = it->first;
     ReadRequest* req = it->second.get();
 
-    VLOG(9) << "MakeReadahead check req " << req->ToString() << " for frange "
-            << ahead.ToString();
+    VLOG(9) << fmt::format("{} MakeReadahead check req: {} for frange: {}",
+                           uuid_, req->ToString(), ahead.ToString());
 
     if (req->state == ReadRequestState::kInvalid) {
       continue;
@@ -501,8 +513,8 @@ void FileReader::MakeReadahead(ContextSPtr ctx, const FileRange& frange) {
     }
   };
 
-  VLOG(9) << fmt::format("MakeReadahead: final_ahead: {}, origin_ahead: {}",
-                         ahead.ToString(), frange.ToString());
+  VLOG(9) << fmt::format("{} MakeReadahead: final_ahead: {}, origin_ahead: {}",
+                         uuid_, ahead.ToString(), frange.ToString());
 
   if (ahead.len > 0) {
     int64_t s = ahead.offset;
@@ -510,8 +522,8 @@ void FileReader::MakeReadahead(ContextSPtr ctx, const FileRange& frange) {
 
     while (s < e) {
       VLOG(9) << fmt::format(
-          "MakeReadahead create new req for range [{},{}), len: {}", s, e,
-          (e - s));
+          "{} MakeReadahead create new req for range [{},{}), len: {}", uuid_,
+          s, e, (e - s));
       auto req = NewReadRequest(s, e);
 
       s = req->frange.End();
@@ -524,8 +536,8 @@ void FileReader::CheckReadahead(ContextSPtr ctx, const FileRange& frange,
   auto span = vfs_hub_->GetTraceManager()->StartChildSpan(
       "FileReader::CheckReadahead", ctx->GetTraceSpan());
 
-  VLOG(9) << "CheckReadahead frange: " << frange.ToString()
-          << ", policy: " << policy_->ToString() << ", flen: " << flen;
+  VLOG(9) << fmt::format("{} CheckReadahead frange: {} policy: {}, flen: {}",
+                         uuid_, frange.ToString(), policy_->ToString(), flen);
   CHECK_GT(flen, frange.offset);
 
   int64_t read_buffer_used = UsedMem();
@@ -541,10 +553,11 @@ void FileReader::CheckReadahead(ContextSPtr ctx, const FileRange& frange,
       ahead.len = flen - ahead.offset;
     }
 
-    VLOG(9) << "CheckReadahead try make readahead: " << ahead.ToString()
-            << ", for frange: " << frange.ToString() << ", flen=" << flen
-            << ", cal_ahead_size: " << ahead_size
-            << ", policy: " << policy_->ToString();
+    VLOG(9) << fmt::format(
+        "{} CheckReadahead try make readahead: {} for frange: {}, flen: {}, "
+        "cal_ahead_size: {}, policy: {}",
+        uuid_, ahead.ToString(), frange.ToString(), flen, ahead_size,
+        policy_->ToString());
 
     if (ahead.len > 0) {
       MakeReadahead(span->GetContext(), ahead);
@@ -568,8 +581,8 @@ std::vector<int64_t> FileReader::SplitRange(ContextSPtr ctx,
   };
 
   for (const auto& [uuid, req] : requests_) {
-    VLOG(9) << "SplitRange check req " << req->ToString() << " for frange "
-            << frange.ToString();
+    VLOG(9) << fmt::format("{} SplitRange check req: {} for frange: {}", uuid_,
+                           req->ToString(), frange.ToString());
 
     if (req->state == ReadRequestState::kInvalid) {
       continue;
@@ -604,8 +617,9 @@ std::vector<PartialReadRequest> FileReader::PrepareRequests(
     int64_t e = ranges[i + 1];
 
     for (const auto& [uuid, req] : requests_) {
-      VLOG(9) << "PrepareRequests check req " << req->ToString()
-              << " for range [" << s << "," << e << ")";
+      VLOG(9) << fmt::format(
+          "{} PrepareRequests check req: {} for range [{}-{}))", uuid_,
+          req->ToString(), s, e);
 
       if (req->frange.offset <= s && req->frange.End() >= e) {
         read_reqs.emplace_back(PartialReadRequest{
@@ -613,16 +627,19 @@ std::vector<PartialReadRequest> FileReader::PrepareRequests(
         req->access_sec = butil::monotonic_time_s();
         req->IncReader();
         added = true;
-        VLOG(9) << "PrepareRequests reuse existing req: " << req->ToString()
-                << " for range [" << s << "," << e << "), len: " << (e - s);
+        VLOG(9) << fmt::format(
+            "{} PrepareRequests reuse existing req: {} for range [{}-{}), "
+            "len: {}",
+            uuid_, req->ToString(), s, e, (e - s));
         break;
       }
     }
 
     if (!added) {
       while (s < e) {
-        VLOG(9) << "PrepareRequests create new req for range [" << s << "," << e
-                << "), len: " << (e - s);
+        VLOG(9) << fmt::format(
+            "{} PrepareRequests create new req for range [{}-{}), len: {}",
+            uuid_, s, e, (e - s));
         auto req = NewReadRequest(s, e);
 
         read_reqs.emplace_back(PartialReadRequest{
@@ -646,14 +663,16 @@ void FileReader::CleanUpRequest(ContextSPtr ctx, const FileRange& frange) {
 
   auto can_remove = [&req_num, now, this](const ReadRequestSptr& req) -> bool {
     if (req->access_sec + kReqValidityTimeoutS < now) {
-      VLOG(12) << "CleanUpRequest remove timeout req: " << req->ToStringUnlock()
-               << " req_num: " << req_num;
+      VLOG(12) << fmt::format(
+          "{} CleanUpRequest remove timeout req: {} req_num: {}", uuid_,
+          req->ToStringUnlock(), req_num);
       return true;
     }
 
     if (req_num > kMaxReadRequests && !IsProtectedReq(req)) {
-      VLOG(12) << "CleanUpRequest remove useless req: " << req->ToStringUnlock()
-               << " req_num: " << req_num;
+      VLOG(12) << fmt::format(
+          "{} CleanUpRequest remove useless req: {} req_num: {}", uuid_,
+          req->ToStringUnlock(), req_num);
       return true;
     }
 
@@ -691,7 +710,8 @@ void FileReader::CleanUpRequest(ContextSPtr ctx, const FileRange& frange) {
   std::vector<ReadRequestSptr> to_delete;
 
   for (auto& [req_id, req] : requests_) {
-    VLOG(9) << "CleanUpRequest check req " << req->ToString();
+    VLOG(9) << fmt::format("{} CleanUpRequest check req: {}", uuid_,
+                           req->ToString());
 
     if (should_delete(req)) {
       to_delete.push_back(req);
@@ -715,7 +735,7 @@ void FileReader::CheckPrefetch(ContextSPtr ctx, const Attr& attr,
            FLAGS_vfs_warmup_trigger_restart_interval_secs ||
        (attr.mtime - last_intime_warmup_mtime_) >
            FLAGS_vfs_warmup_mtime_restart_interval_secs)) {
-    LOG(INFO) << "Trigger intime warmup for ino: " << ino_ << ".";
+    LOG(INFO) << fmt::format("{} Trigger intime warmup", uuid_);
     last_intime_warmup_trigger_ = time_now;
     last_intime_warmup_mtime_ = attr.mtime;
 
@@ -749,8 +769,8 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
     frange.len = attr.length - frange.offset;
   }
 
-  VLOG(6) << fmt::format("FileReader::Read ino: {}, fh: {}, frange: {} ", ino_,
-                         fh_, frange.ToString());
+  VLOG(6) << fmt::format("{} FileReader::Read frange: {} ", uuid_,
+                         frange.ToString());
 
   CheckPrefetch(span->GetContext(), attr, frange);
 
@@ -759,15 +779,14 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
   while (used_mem > 2 * total_mem) {
     uint64_t wait_time = (used_mem / total_mem) * 1;
     LOG(INFO) << fmt::format(
-        "Read wait due to buffer full, ino: {}, fh: {}, used: {}, total: {}, "
-        "wait_time_s: {}",
-        ino_, fh_, used_mem, total_mem, wait_time);
+        "{} Read wait due to buffer full, used: {}, total: {}, wait_time_s: {}",
+        uuid_, used_mem, total_mem, wait_time);
     sleep(wait_time);
     used_mem = UsedMem();
   }
 
   if (closing_.load(std::memory_order_acquire)) {
-    LOG(WARNING) << "Read failed due to closing";
+    LOG(WARNING) << fmt::format("{} Read failed due to closing", uuid_);
     return Status::Abort("Read aborted due to closing");
   }
 
@@ -787,7 +806,9 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
         last.len = attr.length;
       }
 
-      VLOG(9) << "Read MakeReadahead for last bs, last: " << last.ToString();
+      VLOG(9) << fmt::format(
+          "{} Read MakeReadahead for last bs, last: {}, attr.length: {}", uuid_,
+          last.ToString(), attr.length);
       MakeReadahead(span->GetContext(), last);
     }
 
@@ -822,7 +843,8 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
 
     // TODO: support wait with timeout
     for (PartialReadRequest& partial_req : reqs) {
-      VLOG(9) << fmt::format("Read wait req: {}", partial_req.ToString());
+      VLOG(9) << fmt::format("{} Read wait req: {}", uuid_,
+                             partial_req.ToString());
 
       std::unique_lock<std::mutex> req_lock(partial_req.req->mutex);
 
@@ -832,13 +854,13 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
       }
 
       if (closing_.load(std::memory_order_acquire)) {
-        LOG(WARNING) << "Read aborted due to closing";
+        LOG(WARNING) << fmt::format("{} Read aborted due to closing", uuid_);
         ret = Status::Abort("Read aborted due to closing");
         break;
       }
 
       if (partial_req.req->state == ReadRequestState::kInvalid) {
-        LOG(ERROR) << fmt::format("Read failed req: {}, status: {}",
+        LOG(ERROR) << fmt::format("{} Read failed req: {}, status: {}", uuid_,
                                   partial_req.req->ToString(),
                                   partial_req.req->status.ToString());
         CHECK(!partial_req.req->status.ok());
@@ -851,9 +873,9 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
           data_buffer->RawIOBuffer(), partial_req.len, partial_req.offset);
       if (ret != partial_req.len) {
         LOG(FATAL) << fmt::format(
-            "Read buffer append failed req: {}, expected len: {}, actual len: "
-            "{}",
-            partial_req.req->ToString(), partial_req.len, size);
+            "{} Read buffer append failed req: {}, expected len: {}, actual "
+            "len: {}",
+            uuid_, partial_req.req->ToString(), partial_req.len, size);
       }
 
       read_size += ret;
@@ -870,8 +892,8 @@ Status FileReader::GetAttr(ContextSPtr ctx, Attr* attr) {
 
   Status s = vfs_hub_->GetMetaSystem()->GetAttr(span->GetContext(), ino_, attr);
   if (!s.ok()) {
-    LOG(WARNING) << fmt::format(
-        "FileReader::GetAttr failed, ino: {}, status: {}", ino_, s.ToString());
+    LOG(WARNING) << fmt::format("{} GetAttr failed, status: {}", uuid_,
+                                s.ToString());
   }
 
   return s;

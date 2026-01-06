@@ -115,7 +115,7 @@ DEFINE_int32(vfs_periodic_flush_interval_ms, 5000,
              "periodic flush interval in milliseconds");
 DEFINE_validator(vfs_periodic_flush_interval_ms, brpc::PassValidate);
 
-DEFINE_int32(vfs_periodic_trim_mem_ms, 5000,
+DEFINE_int32(vfs_periodic_trim_mem_ms, 3000,
              "periodic trim mem in milliseconds");
 DEFINE_validator(vfs_periodic_trim_mem_ms, brpc::PassValidate);
 

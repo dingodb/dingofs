@@ -233,15 +233,15 @@ Status VFSImpl::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t* fh) {
     auto file_data_ptr = std::make_unique<char[]>(len);
     std::memcpy(file_data_ptr.get(), contents.c_str(), len);
 
-    auto handler = std::make_shared<Handle>();
+    auto handler = std::make_unique<Handle>();
     handler->fh = gfh;
     handler->ino = kStatsIno;
     handler->file_buffer.size = len;
     handler->file_buffer.data = std::move(file_data_ptr);
 
-    handle_manager_->AddHandle(handler);
-
     *fh = handler->fh;
+
+    handle_manager_->AddHandle(std::move(handler));
 
     return Status::OK();
   }
@@ -252,7 +252,7 @@ Status VFSImpl::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t* fh) {
     DINGOFS_RETURN_NOT_OK(file->Open());
 
     // TOOD: if flags is O_RDONLY, no need schedule flush
-    auto handle = NewHandle(gfh, ino, flags, std::move(file));
+    auto* handle = NewHandle(gfh, ino, flags, std::move(file));
     *fh = handle->fh;
   }
 
@@ -273,7 +273,7 @@ Status VFSImpl::Create(ContextSPtr ctx, Ino parent, const std::string& name,
     DINGOFS_RETURN_NOT_OK(file->Open());
 
     // TOOD: if flags is O_RDONLY, no need schedule flush
-    auto handle = NewHandle(gfh, ino, flags, std::move(file));
+    auto* handle = NewHandle(gfh, ino, flags, std::move(file));
     *fh = handle->fh;
 
     vfs_hub_->GetFileSuffixWatcher()->Remeber(*attr, name);
@@ -286,7 +286,7 @@ Status VFSImpl::Read(ContextSPtr ctx, Ino ino, DataBuffer* data_buffer,
                      uint64_t size, uint64_t offset, uint64_t fh,
                      uint64_t* out_rsize) {
   Status s;
-  auto handle = handle_manager_->FindHandler(fh);
+  auto* handle = handle_manager_->FindHandler(fh);
   VFS_CHECK_HANDLE(handle, ino, fh);
   auto span = vfs_hub_->GetTraceManager()->StartChildSpan("VFSImpl::Read",
                                                           ctx->GetTraceSpan());
@@ -330,7 +330,7 @@ Status VFSImpl::Read(ContextSPtr ctx, Ino ino, DataBuffer* data_buffer,
 Status VFSImpl::Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t size,
                       uint64_t offset, uint64_t fh, uint64_t* out_wsize) {
   Status s;
-  auto handle = handle_manager_->FindHandler(fh);
+  auto* handle = handle_manager_->FindHandler(fh);
   VFS_CHECK_HANDLE(handle, ino, fh);
 
   auto span = vfs_hub_->GetTraceManager()->StartChildSpan("VFSImpl::Write",
@@ -365,7 +365,7 @@ Status VFSImpl::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {
   }
 
   Status s;
-  auto handle = handle_manager_->FindHandler(fh);
+  auto* handle = handle_manager_->FindHandler(fh);
   VFS_CHECK_HANDLE(handle, ino, fh);
 
   if (handle->file == nullptr) {
@@ -389,7 +389,7 @@ Status VFSImpl::Release(ContextSPtr ctx, Ino ino, uint64_t fh) {
   }
 
   Status s;
-  auto handle = handle_manager_->FindHandler(fh);
+  auto* handle = handle_manager_->FindHandler(fh);
   VFS_CHECK_HANDLE(handle, ino, fh);
 
   if (handle->file == nullptr) {
@@ -397,6 +397,7 @@ Status VFSImpl::Release(ContextSPtr ctx, Ino ino, uint64_t fh) {
     s = Status::BadFd(fmt::format("bad  fh:{}", fh));
 
   } else {
+    handle->file->Close();
     // how do we return
     s = meta_system_->Close(ctx, ino, fh);
   }
@@ -409,7 +410,7 @@ Status VFSImpl::Release(ContextSPtr ctx, Ino ino, uint64_t fh) {
 // TODO: seperate data flush with metadata flush
 Status VFSImpl::Fsync(ContextSPtr ctx, Ino ino, int datasync, uint64_t fh) {
   Status s;
-  auto handle = handle_manager_->FindHandler(fh);
+  auto* handle = handle_manager_->FindHandler(fh);
   VFS_CHECK_HANDLE(handle, ino, fh);
 
   if (handle->file == nullptr) {
@@ -674,15 +675,18 @@ Status VFSImpl::StartBrpcServer() {
   return Status::OK();
 }
 
-HandleSPtr VFSImpl::NewHandle(uint64_t fh, Ino ino, int flags, IFileUPtr file) {
-  auto handle = std::make_shared<Handle>();
+Handle* VFSImpl::NewHandle(uint64_t fh, Ino ino, int flags, IFileUPtr file) {
+  auto handle = std::make_unique<Handle>();
   handle->fh = fh;
   handle->ino = ino;
   handle->flags = flags;
   handle->file = std::move(file);
 
-  handle_manager_->AddHandle(handle);
-  return handle;
+  Handle* ret = handle.get();
+
+  handle_manager_->AddHandle(std::move(handle));
+
+  return ret;
 }
 
 }  // namespace vfs

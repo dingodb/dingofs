@@ -21,9 +21,7 @@
 
 #include <cstdint>
 #include <mutex>
-#include <utility>
 
-#include "client/common/const.h"
 #include "client/vfs/data/common/async_util.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "common/callback.h"
@@ -34,25 +32,20 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
-#define METHOD_NAME() ("File::" + std::string(__FUNCTION__))
-
 File::File(VFSHub* hub, uint64_t fh, int64_t ino)
-    : vfs_hub_(hub), fh_(fh), ino_(ino) {}
+    : vfs_hub_(hub),
+      fh_(fh),
+      ino_(ino),
+      uuid_(fmt::format("file-{}-{}", ino_, fh)) {}
 
 File::~File() {
-  VLOG(12) << "File::~File destroyed, ino: " << ino_ << ", fh: " << fh_;
-
   Close();
 
-  while (inflight_flush_.load(std::memory_order_relaxed) > 0) {
-    LOG(INFO) << "File::~File wait inflight_flush_ to be 0, ino: " << ino_
-              << ", inflight_flush: "
-              << inflight_flush_.load(std::memory_order_relaxed);
-    sleep(1);
-  }
-
   file_reader_->ReleaseRef();
+  file_reader_ = nullptr;
   file_writer_.reset();
+
+  VLOG(12) << fmt::format("{} File::~File destroyed", uuid_);
 }
 
 Status File::Open() {
@@ -65,14 +58,10 @@ Status File::Open() {
 }
 
 void File::Close() {
-  if (closed_.load()) {
-    return;
-  }
-
   file_reader_->Close();
   file_writer_->Close();
 
-  closed_.store(true);
+  VLOG(12) << fmt::format("{} File::Close", uuid_);
 }
 
 uint64_t File::GetChunkSize() const { return vfs_hub_->GetFsInfo().chunk_size; }
@@ -87,8 +76,9 @@ Status File::PreCheck() {
   }
 
   if (!tmp.ok()) {
-    LOG(WARNING) << "File::PreCheck failed because file already broken, ino: "
-                 << ino_ << ", status: " << tmp.ToString();
+    LOG(WARNING) << fmt::format(
+        "{} File::PreCheck failed because file already broken, status: {}",
+        uuid_, tmp.ToString());
   }
 
   return tmp;
@@ -112,8 +102,8 @@ void File::Invalidate(int64_t offset, int64_t size) {
 
 void File::FileFlushed(StatusCallback cb, Status status) {
   if (!status.ok()) {
-    LOG(WARNING) << "File::FileFlushed failed, ino: " << ino_
-                 << ", status: " << status.ToString();
+    LOG(WARNING) << fmt::format("{} File::FileFlushed failed, status: {}",
+                                uuid_, status.ToString());
     {
       std::lock_guard<std::mutex> lg(mutex_);
       file_status_ = status;
@@ -121,27 +111,22 @@ void File::FileFlushed(StatusCallback cb, Status status) {
   }
 
   cb(status);
-
-  inflight_flush_.fetch_sub(1, std::memory_order_relaxed);
-
-  VLOG(3) << "File::FileFlushed end ino: " << ino_
-          << ", status: " << status.ToString() << ", inflight_flush: "
-          << inflight_flush_.load(std::memory_order_relaxed);
 }
 
 void File::AsyncFlush(StatusCallback cb) {
-  if (closed_.load()) {
-    LOG(INFO) << "File::AsyncFlush exit because file already closed, ino: "
-              << ino_;
-    cb(Status::OK("File already closed"));
-    return;
-  }
-
   auto span = vfs_hub_->GetTraceManager()->StartSpan("File::AsyncFlush");
+
   inflight_flush_.fetch_add(1, std::memory_order_relaxed);
-  file_writer_->AsyncFlush([this, span, cb](auto&& ph1) {
-    FileFlushed(std::move(cb), std::forward<decltype(ph1)>(ph1));
+
+  file_writer_->AsyncFlush([&, span, cb](Status s) {
+    FileFlushed(cb, s);
     span->End();
+
+    inflight_flush_.fetch_sub(1, std::memory_order_relaxed);
+
+    VLOG(3) << fmt::format(
+        "{} File::FileFlushed end, status: {}, inflight_flush: {}", uuid_,
+        s.ToString(), inflight_flush_.load(std::memory_order_relaxed));
   });
 }
 
@@ -153,15 +138,7 @@ Status File::Flush() {
   return s;
 }
 
-void File::ShrinkMem() {
-  if (closed_.load()) {
-    LOG(INFO) << "File::CheckReadBuffer exit because file already closed, ino: "
-              << ino_;
-    return;
-  }
-
-  file_reader_->ShrinkMem();
-}
+void File::ShrinkMem() { file_reader_->ShrinkMem(); }
 
 }  // namespace vfs
 

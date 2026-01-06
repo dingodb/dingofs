@@ -17,6 +17,7 @@
 #ifndef DINGOFS_CLIENT_VFS_DATA_WRITER_FILE_WRITER_H_
 #define DINGOFS_CLIENT_VFS_DATA_WRITER_FILE_WRITER_H_
 
+#include <condition_variable>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -35,7 +36,10 @@ class VFSHub;
 class FileWriter {
  public:
   FileWriter(VFSHub* hub, uint64_t fh, uint64_t ino)
-      : vfs_hub_(hub), fh_(fh), ino_(ino) {}
+      : vfs_hub_(hub),
+        fh_(fh),
+        ino_(ino),
+        uuid_(fmt::format("file_writer-{}-{}", ino_, fh_)) {}
 
   ~FileWriter();
 
@@ -53,13 +57,15 @@ class FileWriter {
 
   void FileFlushTaskDone(uint64_t file_flush_id, StatusCallback cb,
                          Status status);
-  int64_t InflightFlushTaskCount() const;
-
   VFSHub* vfs_hub_;
   const uint64_t fh_;
   const uint64_t ino_;
+  const std::string uuid_;
 
   mutable std::mutex mutex_;
+  std::condition_variable cv_;
+  bool closed_{false};
+  int64_t writers_count_{0};
 
   // chunk_index -> chunk
   // chunk is used by file/file_flush_task/chunk_flush_task

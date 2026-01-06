@@ -22,7 +22,6 @@
 #include <string>
 
 #include "cache/utils/logging.h"
-#include "client/common/const.h"
 #include "client/fuse/fuse_upgrade_manager.h"
 #include "client/vfs/access_log.h"
 #include "client/vfs/blockstore/block_store_access_log.h"

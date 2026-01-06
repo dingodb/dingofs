@@ -20,7 +20,6 @@
 #include <cstdint>
 #include <memory>
 
-#include "client/common/const.h"
 #include "client/vfs/blockstore/block_store_impl.h"
 #include "client/vfs/blockstore/fake_block_store.h"
 #include "client/vfs/common/helper.h"
@@ -278,7 +277,7 @@ Status VFSHubImpl::Stop(bool upgrade) {
   LOG(INFO) << fmt::format("[vfs.hub] vfs hub stopping, upgrade({}).", upgrade);
 
   if (handle_manager_ != nullptr) {
-    handle_manager_->Shutdown();
+    handle_manager_->Stop();
   }
 
   if (read_executor_ != nullptr) {

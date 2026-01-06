@@ -141,7 +141,7 @@ class VFSImpl : public VFS {
  private:
   Status StartBrpcServer();
 
-  HandleSPtr NewHandle(uint64_t fh, Ino ino, int flags, IFileUPtr file);
+  Handle* NewHandle(uint64_t fh, Ino ino, int flags, IFileUPtr file);
 
   const ClientId client_id_;
 

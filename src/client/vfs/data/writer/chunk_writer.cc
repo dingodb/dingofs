@@ -26,7 +26,6 @@
 #include <mutex>
 #include <utility>
 
-#include "client/common/const.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/data/common/async_util.h"
 #include "client/vfs/hub/vfs_hub.h"

@@ -18,6 +18,7 @@
 #define DINGOFS_CLIENT_VFS_HANDLE_MANAGER_H
 
 #include <atomic>
+#include <condition_variable>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -58,21 +59,19 @@ struct Handle {
   }
 };
 
-using HandleSPtr = std::shared_ptr<Handle>;
-
 class HandleManager {
  public:
   HandleManager(VFSHub* hub) : vfs_hub_(hub) {};
 
-  ~HandleManager() { Shutdown(); }
+  ~HandleManager() { Stop(); }
 
   Status Start();
 
-  void Shutdown();
+  void Stop();
 
-  void AddHandle(HandleSPtr handle);
+  void AddHandle(std::unique_ptr<Handle> handle);
 
-  HandleSPtr FindHandler(uint64_t fh);
+  Handle* FindHandler(uint64_t fh);
 
   void ReleaseHandler(uint64_t fh);
 
@@ -84,15 +83,24 @@ class HandleManager {
   bool Load(const Json::Value& value);
 
  private:
+  struct TriggerFlushTask {
+    std::atomic<int64_t> inflight_flush{0};
+  };
+
   void RunPeriodicFlush();
   void RunPeriodicShrinkMem();
 
+  void TriggerFlushAllDone(TriggerFlushTask* task, uint64_t fh, Status status);
+
   VFSHub* vfs_hub_{nullptr};
-  std::atomic<bool> shutdown_{false};
   std::unique_ptr<Executor> bg_executor_;
 
   std::mutex mutex_;
-  std::unordered_map<uint64_t, HandleSPtr> handles_;
+  bool stopped_{false};
+  int bg_flush_tigger_{0};
+  int bg_shrink_mem_tigger_{0};
+  std::condition_variable cv_;
+  std::unordered_map<uint64_t, std::unique_ptr<Handle>> handles_;
 };
 
 }  // namespace vfs

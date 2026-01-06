@@ -107,6 +107,7 @@ class FileReader {
   VFSHub* vfs_hub_;
   const uint64_t fh_;
   const uint64_t ino_;
+  const std::string uuid_;
   const uint64_t chunk_size_{0};
   const uint64_t block_size_{0};
 
