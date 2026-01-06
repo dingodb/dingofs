@@ -883,12 +883,13 @@ Status UpdateAttrOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std:
 
   if (to_set_ & kSetAttrLength) {
     result_.delta_bytes = static_cast<int64_t>(attr_.length()) - static_cast<int64_t>(attr.length());
-    attr.set_length(attr_.length());
     // if delta_length<0 then delete chunks beyond new length
     if (result_.delta_bytes < 0) {
       auto status = ResetFileRange(txn, attr.length(), attr_.length());
       if (!status.ok()) return status;
     }
+
+    attr.set_length(attr_.length());
   }
 
   if (to_set_ & kSetAttrAtime) {

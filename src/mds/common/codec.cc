@@ -776,6 +776,8 @@ std::string MetaCodec::EncodeHeartbeatValue(const CacheMemberEntry& cache_member
 }
 
 MdsEntry MetaCodec::DecodeHeartbeatMdsValue(const std::string& value) {
+  CHECK(!value.empty()) << "mds heartbeat value is empty.";
+
   MdsEntry mds;
   CHECK(mds.ParseFromString(value)) << "parse mds heartbeat value fail.";
 
@@ -783,6 +785,8 @@ MdsEntry MetaCodec::DecodeHeartbeatMdsValue(const std::string& value) {
 }
 
 ClientEntry MetaCodec::DecodeHeartbeatClientValue(const std::string& value) {
+  CHECK(!value.empty()) << "client heartbeat value is empty.";
+
   ClientEntry client;
   CHECK(client.ParseFromString(value)) << "parse client heartbeat value fail.";
 
@@ -790,6 +794,8 @@ ClientEntry MetaCodec::DecodeHeartbeatClientValue(const std::string& value) {
 }
 
 CacheMemberEntry MetaCodec::DecodeHeartbeatCacheMemberValue(const std::string& value) {
+  CHECK(!value.empty()) << "cachemember heartbeat value is empty.";
+
   CacheMemberEntry cache_member;
   CHECK(cache_member.ParseFromString(value)) << "parse cache_member heartbeat value fail.";
 
@@ -871,6 +877,8 @@ void MetaCodec::DecodeFsQuotaKey(const std::string& key, uint32_t& fs_id) {
 std::string MetaCodec::EncodeFsQuotaValue(const QuotaEntry& quota) { return quota.SerializeAsString(); }
 
 QuotaEntry MetaCodec::DecodeFsQuotaValue(const std::string& value) {
+  CHECK(!value.empty()) << "fs quota value is empty.";
+
   QuotaEntry quota;
   CHECK(quota.ParseFromString(value)) << "parse fs quota fail.";
 
@@ -913,6 +921,8 @@ void MetaCodec::DecodeFsOpLogKey(const std::string& key, uint32_t& fs_id, uint64
 std::string MetaCodec::EncodeFsOpLogValue(const FsOpLog& entry) { return entry.SerializeAsString(); }
 
 FsOpLog MetaCodec::DecodeFsOpLogValue(const std::string& value) {
+  CHECK(!value.empty()) << "fs oplog value is empty.";
+
   FsOpLog entry;
   CHECK(entry.ParseFromString(value)) << "parse fs config log fail.";
 
@@ -963,6 +973,8 @@ void MetaCodec::DecodeInodeKey(const std::string& key, uint32_t& fs_id, uint64_t
 std::string MetaCodec::EncodeInodeValue(const AttrEntry& attr) { return attr.SerializeAsString(); }
 
 AttrEntry MetaCodec::DecodeInodeValue(const std::string& value) {
+  CHECK(!value.empty()) << "inode attr value is empty.";
+
   AttrEntry attr;
   CHECK(attr.ParseFromString(value)) << "parse inode attr fail.";
 
@@ -1015,6 +1027,8 @@ void MetaCodec::DecodeDentryKey(const std::string& key, uint32_t& fs_id, uint64_
 std::string MetaCodec::EncodeDentryValue(const DentryEntry& dentry) { return dentry.SerializeAsString(); }
 
 DentryEntry MetaCodec::DecodeDentryValue(const std::string& value) {
+  CHECK(!value.empty()) << "dentry value is empty.";
+
   DentryEntry dentry;
   CHECK(dentry.ParseFromString(value)) << "parse dentry fail.";
 
@@ -1066,6 +1080,8 @@ void MetaCodec::DecodeChunkKey(const std::string& key, uint32_t& fs_id, uint64_t
 std::string MetaCodec::EncodeChunkValue(const ChunkEntry& chunk) { return chunk.SerializeAsString(); }
 
 ChunkEntry MetaCodec::DecodeChunkValue(const std::string& value) {
+  CHECK(!value.empty()) << "chunk value is empty.";
+
   ChunkEntry chunk;
   CHECK(chunk.ParseFromString(value)) << "parse chunk fail.";
 
@@ -1113,6 +1129,8 @@ std::string MetaCodec::EncodeFileSessionValue(const FileSessionEntry& file_sessi
 }
 
 FileSessionEntry MetaCodec::DecodeFileSessionValue(const std::string& value) {
+  CHECK(!value.empty()) << "file session value is empty.";
+
   FileSessionEntry file_session;
   CHECK(file_session.ParseFromString(value)) << "parse file session fail.";
 
@@ -1154,6 +1172,8 @@ void MetaCodec::DecodeDirQuotaKey(const std::string& key, uint32_t& fs_id, Ino& 
 std::string MetaCodec::EncodeDirQuotaValue(const QuotaEntry& dir_quota) { return dir_quota.SerializeAsString(); }
 
 QuotaEntry MetaCodec::DecodeDirQuotaValue(const std::string& value) {
+  CHECK(!value.empty()) << "dir quota value is empty.";
+
   QuotaEntry dir_quota;
   CHECK(dir_quota.ParseFromString(value)) << "parse dir quota fail.";
 
@@ -1203,6 +1223,8 @@ void MetaCodec::DecodeDelSliceKey(const std::string& key, uint32_t& fs_id, uint6
 std::string MetaCodec::EncodeDelSliceValue(const TrashSliceList& slice_list) { return slice_list.SerializeAsString(); }
 
 TrashSliceList MetaCodec::DecodeDelSliceValue(const std::string& value) {
+  CHECK(!value.empty()) << "delslice value is empty.";
+
   TrashSliceList slice_list;
   CHECK(slice_list.ParseFromString(value)) << "parse del slice fail.";
 
@@ -1247,6 +1269,8 @@ void MetaCodec::DecodeDelFileKey(const std::string& key, uint32_t& fs_id, Ino& i
 std::string MetaCodec::EncodeDelFileValue(const AttrEntry& attr) { return attr.SerializeAsString(); }
 
 AttrEntry MetaCodec::DecodeDelFileValue(const std::string& value) {
+  CHECK(!value.empty()) << "delfile value is empty.";
+
   AttrEntry attr;
   CHECK(attr.ParseFromString(value)) << "parse del file attr fail.";
 
@@ -1290,6 +1314,8 @@ void MetaCodec::DecodeFsStatsKey(const std::string& key, uint32_t& fs_id, uint64
 std::string MetaCodec::EncodeFsStatsValue(const FsStatsDataEntry& stats) { return stats.SerializeAsString(); }
 
 FsStatsDataEntry MetaCodec::DecodeFsStatsValue(const std::string& value) {
+  CHECK(!value.empty()) << "fstats value is empty.";
+
   FsStatsDataEntry stats;
   CHECK(stats.ParseFromString(value)) << "parse fs stats fail.";
 

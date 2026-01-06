@@ -441,20 +441,18 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
 
   // add file session and chunk
   auto file_session = file_session_map_.Put(ino, fh, session_id);
-  if (is_prefetch_chunk && !chunks.empty())
+  if (is_prefetch_chunk && !chunks.empty()) {
     file_session->GetChunkSet().Put(chunks);
+  }
+
+  if (flags & O_TRUNC) chunk_memo_.Forget(ino);
 
   // update chunk memo
   for (const auto& chunk : chunks) {
-    if (!(flags & O_TRUNC)) {
-      uint64_t memo_version = chunk_memo_.GetVersion(ino, chunk.index());
-      CHECK(chunk.version() >= memo_version) << fmt::format(
-          "[meta.fs.{}.{}.{}] chunk version invalid, index({}) version({}<{}).",
-          ino, fh, session_id, chunk.index(), chunk.version(), memo_version);
-
-    } else {
-      chunk_memo_.Forget(ino, chunk.index());
-    }
+    uint64_t memo_version = chunk_memo_.GetVersion(ino, chunk.index());
+    CHECK(chunk.version() >= memo_version) << fmt::format(
+        "[meta.fs.{}.{}.{}] chunk version invalid, index({}) version({}<{}).",
+        ino, fh, session_id, chunk.index(), chunk.version(), memo_version);
 
     chunk_memo_.Remember(ino, chunk.index(), chunk.version());
   }
