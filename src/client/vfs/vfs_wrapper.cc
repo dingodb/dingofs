@@ -245,8 +245,13 @@ Status VFSWrapper::Lookup(Ino parent, const std::string& name, Attr* attr) {
   Status s;
   AccessLogGuard log(
       [&]() {
-        return absl::StrFormat("lookup (%d/%s): %s %s", parent, name,
-                               s.ToString(), StrAttr(attr));
+        if (s.ok()) {
+          return absl::StrFormat("lookup (%d/%s): %s %s", parent, name,
+                                 s.ToString(), StrAttr(attr));
+        } else {
+          return absl::StrFormat("lookup (%d/%s): %s", parent, name,
+                                 s.ToString());
+        }
       },
       !IsInternalName(name));
 
