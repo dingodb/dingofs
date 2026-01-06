@@ -323,7 +323,7 @@ int main(int argc, char* argv[]) {
   gflags::ParseCommandLineNonHelpFlags(&argc, &argv, false);
 
   // read gflags from conf file
-  if (!dingofs::FLAGS_conf.empty()) {
+  if (!FLAGS_conf.empty()) {
     std::cout << "use config file: " << FLAGS_conf << '\n';
     CHECK(dingofs::mds::Helper::IsExistPath(FLAGS_conf)) << fmt::format("config file {} not exist.", FLAGS_conf);
     gflags::ReadFromFlagsFile(FLAGS_conf, argv[0], true);

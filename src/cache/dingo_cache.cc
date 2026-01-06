@@ -100,11 +100,11 @@ int DingoCache::Run(int argc, char** argv) {
   }
 
   // read gflags from conf file
-  if (!dingofs::FLAGS_conf.empty()) {
-    LOG(INFO) << "use config file: " << dingofs::FLAGS_conf;
-    CHECK(dingofs::Helper::IsExistPath(dingofs::FLAGS_conf))
-        << fmt::format("config file {} not exist.", dingofs::FLAGS_conf);
-    gflags::ReadFromFlagsFile(dingofs::FLAGS_conf, argv[0], true);
+  if (!FLAGS_conf.empty()) {
+    LOG(INFO) << "use config file: " << FLAGS_conf;
+    CHECK(dingofs::Helper::IsExistPath(FLAGS_conf))
+        << fmt::format("config file {} not exist.", FLAGS_conf);
+    gflags::ReadFromFlagsFile(FLAGS_conf, argv[0], true);
   }
 
   // reset brpc flag default value if not set
