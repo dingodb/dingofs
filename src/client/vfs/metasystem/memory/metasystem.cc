@@ -27,6 +27,7 @@
 #include "client/vfs/common/helper.h"
 #include "client/vfs/metasystem/mds/helper.h"
 #include "client/vfs/vfs_meta.h"
+#include "common/const.h"
 #include "common/status.h"
 #include "common/trace/context.h"
 #include "dingofs/error.pb.h"

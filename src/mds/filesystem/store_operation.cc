@@ -881,7 +881,7 @@ Status UpdateAttrOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std:
     attr.set_gid(attr_.gid());
   }
 
-  if (to_set_ & kSetAttrLength) {
+  if (to_set_ & kSetAttrSize) {
     result_.delta_bytes = static_cast<int64_t>(attr_.length()) - static_cast<int64_t>(attr.length());
     // if delta_length<0 then delete chunks beyond new length
     if (result_.delta_bytes < 0) {
@@ -1251,6 +1251,8 @@ void OpenFileOperation::ResetFileRange(TxnUPtr& txn, uint64_t length) {
 }
 
 Status OpenFileOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>&) {
+  CHECK(attr.nlink() > 0) << fmt::format("open file fail, ino({}) nlink is 0.", attr.ino());
+
   if (flags_ & O_TRUNC) {
     ResetFileRange(txn, attr.length());
 
@@ -1375,14 +1377,12 @@ Status UnlinkOperation::Run(TxnUPtr& txn) {
   DelParentIno(attr, parent);
   attr.set_ctime(std::max(attr.ctime(), GetTime()));
   attr.set_version(attr.version() + 1);
+
+  txn->Put(key, MetaCodec::EncodeInodeValue(attr));
+
   if (attr.nlink() <= 0) {
-    // delete inode
-    txn->Delete(key);
     // save delete file info
     txn->Put(MetaCodec::EncodeDelFileKey(fs_id, dentry_.INo()), MetaCodec::EncodeDelFileValue(attr));
-
-  } else {
-    txn->Put(key, MetaCodec::EncodeInodeValue(attr));
   }
 
   // delete dentry
@@ -1863,7 +1863,7 @@ TrashSliceList CompactChunkOperation::CompactChunk(TxnUPtr& txn, uint32_t fs_id,
     return {};
   }
 
-  txn->Put(MetaCodec::EncodeDelSliceKey(fs_id, ino, chunk.index(), utils::TimestampUs()),
+  txn->Put(MetaCodec::EncodeDelSliceKey(fs_id, ino, chunk.index(), utils::TimestampNs()),
            MetaCodec::EncodeDelSliceValue(trash_slice_list));
 
   return trash_slice_list;
@@ -1953,7 +1953,7 @@ Status SetFsQuotaOperation::Run(TxnUPtr& txn) {
     fs_quota = MetaCodec::DecodeFsQuotaValue(value);
   } else {
     fs_quota.set_uuid(utils::UUIDGenerator::GenerateUUID());
-    fs_quota.set_create_time_ns(utils::TimestampUs());
+    fs_quota.set_create_time_ns(utils::TimestampNs());
   }
 
   if (quota_.max_bytes() > 0) fs_quota.set_max_bytes(quota_.max_bytes());
@@ -2030,7 +2030,7 @@ Status SetDirQuotaOperation::Run(TxnUPtr& txn) {
     dir_quota = MetaCodec::DecodeDirQuotaValue(value);
   } else {
     dir_quota.set_uuid(utils::UUIDGenerator::GenerateUUID());
-    dir_quota.set_create_time_ns(utils::TimestampUs());
+    dir_quota.set_create_time_ns(utils::TimestampNs());
   }
 
   if (quota_.max_bytes() > 0) dir_quota.set_max_bytes(quota_.max_bytes());
@@ -2296,6 +2296,7 @@ Status GetDelFileOperation::Run(TxnUPtr& txn) {
 
 Status CleanDelFileOperation::Run(TxnUPtr& txn) {
   txn->Delete(MetaCodec::EncodeDelFileKey(fs_id_, ino_));
+  txn->Delete(MetaCodec::EncodeInodeKey(fs_id_, ino_));
   return Status::OK();
 }
 

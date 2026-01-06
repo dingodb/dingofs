@@ -47,15 +47,17 @@ inline bool IsInternalName(const std::string& name) {
 }
 
 // set inode attribute flags
-const uint32_t kSetAttrMode = 1 << 0;
-const uint32_t kSetAttrUid = 1 << 1;
-const uint32_t kSetAttrGid = 1 << 2;
-const uint32_t kSetAttrLength = 1 << 3;
-const uint32_t kSetAttrAtime = 1 << 4;
-const uint32_t kSetAttrMtime = 1 << 5;
-const uint32_t kSetAttrCtime = 1 << 6;
-const uint32_t kSetAttrNlink = 1 << 7;
-const uint32_t kSetAttrFlags = (1 << 8);
+constexpr uint32_t kSetAttrMode = 1 << 0;
+constexpr uint32_t kSetAttrUid = 1 << 1;
+constexpr uint32_t kSetAttrGid = 1 << 2;
+constexpr uint32_t kSetAttrSize = 1 << 3;
+constexpr uint32_t kSetAttrAtime = 1 << 4;
+constexpr uint32_t kSetAttrMtime = 1 << 5;
+constexpr uint32_t kSetAttrAtimeNow = 1 << 7;
+constexpr uint32_t kSetAttrMtimeNow = 1 << 8;
+constexpr uint32_t kSetAttrCtime = 1 << 10;
+constexpr uint32_t kSetAttrFlags = 1 << 11;
+constexpr uint32_t kSetAttrNlink = 1 << 12;
 
 const int kEmptyDirMinLinkNum = 2;
 

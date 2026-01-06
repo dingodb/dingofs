@@ -934,6 +934,7 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& sess
   if (!status.ok()) {
     return status;
   }
+  CHECK(inode->Nlink() > 0) << fmt::format("open file fail, ino({}) nlink is 0.", ino);
 
   // update parent memo
   UpdateParentMemo(ctx.GetAncestors());
@@ -1050,6 +1051,13 @@ Status FileSystem::Release(Context& ctx, Ino ino, const std::string& session_id)
 
   // delete cache
   file_session_manager_.Delete(ino, session_id);
+
+  // delete inode cache if nlink == 0
+  InodeSPtr inode;
+  GetInode(ctx, ino, inode);
+  if (inode != nullptr && inode->Nlink() == 0) {
+    DeleteInodeFromCache(ino);
+  }
 
   return Status::OK();
 }
@@ -1370,7 +1378,6 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name, Ent
   auto& result = operation.GetResult();
   auto& parent_attr = result.attr;
   auto& attr = result.child_attr;
-
   LOG(INFO) << fmt::format("[fs.{}.{}][{}us] unlink {}/{} finish, nlink({}) status({}).", fs_id_, ctx.RequestId(),
                            duration.ElapsedUs(), parent, name, attr.nlink(), status.error_str());
 
@@ -1550,7 +1557,7 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
   extra_param.block_size = fs_info_->GetBlockSize();
   extra_param.chunk_size = fs_info_->GetChunkSize();
 
-  if (param.to_set & kSetAttrLength) {
+  if (param.to_set & kSetAttrSize) {
     if (param.attr.length() > inode->Length()) {
       // check quota
       if (!quota_manager_->CheckQuota(trace, ino, param.attr.length() - inode->Length(), 0)) {
@@ -1584,7 +1591,7 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
   entry_out.shrink_file = (delta_bytes < 0) ? true : false;
 
   // update quota
-  if (param.to_set & kSetAttrLength) {
+  if (param.to_set & kSetAttrSize) {
     std::string reason = fmt::format("setattr.{}", ino);
     quota_manager_->UpdateFsUsage(delta_bytes, 0, reason);
 
@@ -2949,7 +2956,7 @@ FsInfoEntry FileSystemSet::GenFsInfo(uint32_t fs_id, const CreateFsParam& param)
   }
 
   fs_info.set_create_time_s(utils::Timestamp());
-  fs_info.set_last_update_time_ns(utils::TimestampUs());
+  fs_info.set_last_update_time_ns(utils::TimestampNs());
 
   return fs_info;
 }

@@ -55,7 +55,7 @@ static void SumFsStats(const FsStatsDataEntry& src_stats, FsStatsDataEntry& dst_
 Status FsStats::GetFsStat(Context& ctx, uint32_t fs_id, FsStatsDataEntry& stats) {
   auto& trace = ctx.GetTrace();
 
-  uint64_t mark_time_ns = utils::TimestampUs() - FLAGS_mds_fsstats_duration_s * kNsPerSecond;
+  uint64_t mark_time_ns = utils::TimestampNs() - (FLAGS_mds_fsstats_duration_s * kNsPerSecond);
   GetAndCompactFsStatsOperation operation(trace, fs_id, mark_time_ns);
 
   auto status = operation_processor_->RunAlone(&operation);

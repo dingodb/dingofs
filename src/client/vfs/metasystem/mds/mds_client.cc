@@ -768,7 +768,7 @@ Status MDSClient::SetAttr(ContextSPtr ctx, Ino ino, const Attr& attr,
 
   if (to_set & kSetAttrSize) {
     request.set_length(attr.length);
-    temp_to_set |= kSetAttrLength;
+    temp_to_set |= kSetAttrSize;
   }
 
   if (to_set & kSetAttrFlags) {

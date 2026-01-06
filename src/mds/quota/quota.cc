@@ -31,7 +31,7 @@ namespace quota {
 static const uint32_t kMaxNotFoundCount = 30;
 
 Quota::Quota(uint32_t fs_id, Ino ino, const QuotaEntry& quota) : fs_id_(fs_id), ino_(ino), quota_(quota) {
-  last_time_ns_ = utils::TimestampUs();
+  last_time_ns_ = utils::TimestampNs();
 
   LOG(INFO) << fmt::format("[quota.{}.{}] create quota, detail({}).", fs_id_, ino_, quota.ShortDebugString());
 }
@@ -79,7 +79,7 @@ void Quota::UpdateUsage(int64_t byte_delta, int64_t inode_delta, const std::stri
   {
     utils::WriteLockGuard lk(rwlock_);
 
-    uint64_t now_ns = utils::TimestampUs();
+    uint64_t now_ns = utils::TimestampNs();
     uint64_t time_ns = std::max({now_ns, last_time_ns_}) + 1;
     last_time_ns_ = time_ns;
 

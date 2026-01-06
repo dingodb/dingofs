@@ -31,18 +31,6 @@ namespace vfs {
 
 using Ino = uint64_t;
 
-// 'to_set' flags in setattr
-constexpr int kSetAttrMode = (1 << 0);
-constexpr int kSetAttrUid = (1 << 1);
-constexpr int kSetAttrGid = (1 << 2);
-constexpr int kSetAttrSize = (1 << 3);
-constexpr int kSetAttrAtime = (1 << 4);
-constexpr int kSetAttrMtime = (1 << 5);
-constexpr int kSetAttrAtimeNow = (1 << 7);
-constexpr int kSetAttrMtimeNow = (1 << 8);
-constexpr int kSetAttrCtime = (1 << 10);
-constexpr int kSetAttrFlags = (1 << 11);
-
 enum FsStatus : uint8_t {
   kInit = 1,
   kNormal = 2,

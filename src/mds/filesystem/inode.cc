@@ -190,7 +190,7 @@ void Inode::ExpandLength(uint64_t length) {
 
   if (length <= attr_.length()) return;
 
-  uint64_t now_ns = utils::TimestampUs();
+  uint64_t now_ns = utils::TimestampNs();
   attr_.set_length(length);
   attr_.set_mtime(now_ns);
   attr_.set_ctime(now_ns);

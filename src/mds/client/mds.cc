@@ -373,7 +373,7 @@ MkDirResponse MDSClient::MkDir(Ino parent, const std::string& name) {
 void MDSClient::BatchMkDir(const std::vector<int64_t>& parents, const std::string& prefix, size_t num) {
   for (size_t i = 0; i < num; i++) {
     for (auto parent : parents) {
-      std::string name = fmt::format("{}_{}", prefix, utils::TimestampUs());
+      std::string name = fmt::format("{}_{}", prefix, utils::TimestampNs());
       MkDir(parent, name);
     }
   }
@@ -461,7 +461,7 @@ MkNodResponse MDSClient::MkNod(Ino parent, const std::string& name) {
 void MDSClient::BatchMkNod(const std::vector<int64_t>& parents, const std::string& prefix, size_t num) {
   for (size_t i = 0; i < num; i++) {
     for (auto parent : parents) {
-      std::string name = fmt::format("{}_{}", prefix, utils::TimestampUs());
+      std::string name = fmt::format("{}_{}", prefix, utils::TimestampNs());
       MkNod(parent, name);
     }
   }
