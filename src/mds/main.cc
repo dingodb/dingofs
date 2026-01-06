@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <algorithm>
 #include <csignal>
 #include <iostream>
-#include <sstream>
 #include <string>
 
 #include "backtrace.h"
@@ -29,7 +27,6 @@
 #include "libunwind.h"
 #include "mds/common/codec.h"
 #include "mds/common/helper.h"
-#include "mds/common/version.h"
 #include "mds/server.h"
 #include "utils/daemonize.h"
 
@@ -217,83 +214,6 @@ static bool GeneratePidFile(const std::string& filepath) {
   return dingofs::mds::Helper::SaveFile(filepath, std::to_string(pid));
 }
 
-static std::set<std::string> kGflagWhiteList = {"log_dir", "log_level", "log_v"};
-
-static std::vector<gflags::CommandLineFlagInfo> GetFlags(const std::string& prefix) {
-  std::vector<gflags::CommandLineFlagInfo> dist_flags;
-
-  gflags::CommandLineFlagInfo conf_flag;
-  if (gflags::GetCommandLineFlagInfo("conf", &conf_flag)) dist_flags.push_back(conf_flag);
-  gflags::CommandLineFlagInfo coor_url_flag;
-  if (gflags::GetCommandLineFlagInfo("storage_url", &coor_url_flag)) dist_flags.push_back(coor_url_flag);
-
-  std::vector<gflags::CommandLineFlagInfo> flags;
-  gflags::GetAllFlags(&flags);
-  for (const auto& flag : flags) {
-    if (flag.name.find(prefix) != std::string::npos || kGflagWhiteList.count(flag.name) > 0) {
-      dist_flags.push_back(flag);
-    }
-  }
-
-  return dist_flags;
-}
-
-static std::string GetUsage(char* program_name) {
-  std::ostringstream oss;
-  oss << "Usage: \n";
-  oss << fmt::format("\t{} --version\n", program_name);
-  oss << fmt::format("\t{} --help\n", program_name);
-  oss << fmt::format("\t{} --mds_server_port=7801", program_name);
-  oss << fmt::format("\t{} --conf=./conf/mds.conf", program_name);
-  oss << fmt::format("\t{} --conf=./conf/mds.conf --storage_url=file://./conf/coor_list\n", program_name);
-  oss << fmt::format("\t{} --conf=./conf/mds.conf --storage_url=list://127.0.0.1:22001\n", program_name);
-  oss << fmt::format("\t{} [OPTIONS]\n", program_name);
-
-  auto flags = GetFlags("mds_");
-
-  auto get_name_max_width_fn = [&flags]() {
-    size_t max_width = 0;
-    for (const auto& flag : flags) {
-      max_width = std::max(flag.name.size() + flag.type.size(), max_width);
-    }
-    return max_width;
-  };
-
-  auto get_default_value_width_fn = [&flags]() {
-    size_t max_width = 0;
-    for (const auto& flag : flags) {
-      max_width = std::max(flag.default_value.size(), max_width);
-    }
-    return max_width;
-  };
-
-  size_t max_width = get_name_max_width_fn() + 2;
-  size_t default_value_width = get_default_value_width_fn() + 2;
-  for (const auto& flag : flags) {
-    std::string name_type = fmt::format("{}={}", flag.name, flag.type);
-    std::string default_value = fmt::format("[{}]", flag.default_value);
-    oss << fmt::format("\t--{:<{}} {:<{}} {}\n", name_type, max_width, default_value, default_value_width,
-                       flag.description);
-  }
-
-  return oss.str();
-}
-
-static bool ParseOption(int argc, char** argv) {
-  for (int i = 1; i < argc; i++) {
-    if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--version") == 0) {
-      std::cout << dingofs::mds::DingoVersionString();
-      return true;
-
-    } else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
-      std::cout << GetUsage(argv[0]);
-      return true;
-    }
-  }
-
-  return false;
-}
-
 static bool CheckStorageUrl(const std::string& storage_url) {
   if (storage_url.empty()) {
     std::cerr << "storage url is empty.\n";
@@ -309,18 +229,32 @@ static bool CheckStorageUrl(const std::string& storage_url) {
   return true;
 }
 
+static dingofs::FlagExtraInfo extras = {
+    .program = "dingo-mds",
+    .usage = "  dingo-mds [OPTIONS]",
+    .examples =
+        R"(  $ dingo-mds --mds_server_port=7801
+  $ dingo-mds --conf=./conf/mds.conf
+  $ dingo-mds --conf=./conf/mds.conf --storage_url=file://./conf/coor_list
+  $ dingo-mds --conf=./conf/mds.conf --storage_url=list://127.0.0.1:22001
+)",
+    .patterns = {"src/mds", "options/common"},
+};
+
+
 int main(int argc, char* argv[]) {
   using dingofs::FLAGS_conf;
+
+  int rc = dingofs::ParseFlags(&argc, &argv, extras);
+  if (rc != 0) {
+    return 1;
+  }
 
 #ifdef USE_TCMALLOC
   std::cout << "USE_TCMALLOC is ON\n";
 #else
   std::cout << "USE_TCMALLOC is OFF\n";
 #endif
-
-  if (ParseOption(argc, argv)) return 0;
-
-  gflags::ParseCommandLineNonHelpFlags(&argc, &argv, false);
 
   // read gflags from conf file
   if (!FLAGS_conf.empty()) {
@@ -348,6 +282,7 @@ int main(int argc, char* argv[]) {
   dingofs::mds::Server& server = dingofs::mds::Server::GetInstance();
 
   CHECK(server.InitLog()) << "init log error.";
+  LOG(INFO) << dingofs::GenCurrentFlags();
   CHECK(server.InitConfig(FLAGS_conf)) << fmt::format("init config({}) error.", FLAGS_conf);
   CHECK(GeneratePidFile(server.GetPidFilePath())) << "generate pid file error.";
   CHECK(server.InitStorage(FLAGS_storage_url)) << "init storage error.";
