@@ -46,7 +46,7 @@ struct Aio : public Closure {
         buffer(buffer),
         for_read(for_read),
         fixed_buffer_index(fixed_buffer_index) {
-    CHECK_GT(fd, 0);
+    CHECK_GE(fd, 0);
     CHECK_GE(offset, 0);
     CHECK_GT(length, 0);
     CHECK_NOTNULL(buffer);
