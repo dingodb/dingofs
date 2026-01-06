@@ -38,7 +38,7 @@ struct ReadAheadStats {
 struct ReadaheadPoclicy {
   const int64_t uuid;
   int8_t level{0};
-  int32_t seqdata{0};
+  int64_t seqdata{0};
   int64_t last_offset{0};
   ReadAheadStats readahead_stats;
 
@@ -47,6 +47,9 @@ struct ReadaheadPoclicy {
   int64_t ReadaheadSize() const;
   void UpdateOnRead(const FileRange& frange, int64_t rbuffer_used,
                     int64_t rbuffer_total);
+
+  void Degrade();
+
   std::string UUID() const;
   std::string ToString() const;
 };

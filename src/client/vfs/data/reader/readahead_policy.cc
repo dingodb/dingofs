@@ -99,7 +99,7 @@ void ReadaheadPoclicy::UpdateOnRead(const FileRange& frange,
     if (!within_seq_window) {
       // random access
       if (level > 0) {
-        level--;
+        Degrade();
       }
       seqdata = 0;
       VLOG(9) << fmt::format(
@@ -112,8 +112,7 @@ void ReadaheadPoclicy::UpdateOnRead(const FileRange& frange,
     int64_t mem_pressure_threshold =
         (rbuffer_total / 2) + ((rbuffer_total * 1) / (level * 2));
     if (rbuffer_used > mem_pressure_threshold) {
-      level--;
-      seqdata = 0;
+      Degrade();
       LOG(INFO) << fmt::format(
           "{} CheckReadahead degrade (memory pressure) policy: {}, "
           "used: {}, total: {}, threshold: {}",
@@ -123,6 +122,19 @@ void ReadaheadPoclicy::UpdateOnRead(const FileRange& frange,
   }
 }
 
+void ReadaheadPoclicy::Degrade() {
+  if (level > 0) {
+    level--;
+    seqdata = 0;
+    if (level == 0) {
+      last_offset = 0;
+      LOG(INFO) << fmt::format(
+          "{} ReadaheadPoclicy degraded to level 0 (no readahead), reset "
+          "last_offset",
+          UUID());
+    }
+  }
+}
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
