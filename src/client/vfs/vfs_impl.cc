@@ -290,7 +290,6 @@ Status VFSImpl::Read(ContextSPtr ctx, Ino ino, DataBuffer* data_buffer,
   VFS_CHECK_HANDLE(handle, ino, fh);
   auto span = vfs_hub_->GetTraceManager()->StartChildSpan("VFSImpl::Read",
                                                           ctx->GetTraceSpan());
-
   // read .stats file data
   if (BAIDU_UNLIKELY(ino == kStatsIno)) {
     size_t file_size = handle->file_buffer.size;

@@ -25,7 +25,7 @@ namespace dingofs {
 std::shared_ptr<SpanScope> SpanScope::Create(TraceManagerSPtr mgr,
                                              const std::string& name) {
   std::shared_ptr<Span> inner_span = mgr->GetTracer()->MakeSpan(name);
-  auto context = std::make_shared<Context>("", "", "");
+  auto context = std::make_shared<Context>(inner_span->GetTraceID());
   return std::make_shared<SpanScope>(std::move(inner_span), nullptr, context);
 }
 
@@ -35,7 +35,7 @@ std::shared_ptr<SpanScope> SpanScope::Create(TraceManagerSPtr mgr,
                                              const std::string& span_id) {
   std::shared_ptr<Span> inner_span =
       mgr->GetTracer()->MakeSpan(name, trace_id, span_id);
-  auto context = std::make_shared<Context>("", "", "");
+  auto context = std::make_shared<Context>(inner_span->GetTraceID());
   return std::make_shared<SpanScope>(std::move(inner_span), nullptr, context);
 }
 
@@ -49,7 +49,7 @@ std::shared_ptr<SpanScope> SpanScope::CreateChild(
   std::shared_ptr<Span> inner_span =
       mgr->GetTracer()->MakeSpan(name, *parent->GetTraceContext());
 
-  auto context = std::make_shared<Context>("", "", "");
+  auto context = std::make_shared<Context>(inner_span->GetTraceID());
   return std::make_shared<SpanScope>(std::move(inner_span), parent, context);
 }
 

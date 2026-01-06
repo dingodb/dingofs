@@ -13,9 +13,6 @@
 # limitations under the License.
 
 add_library(dingofs_trace
-    log_trace_exporter.cc
-    trace_span.cc
-    tracer.cc
     span_scope.cc
     trace_manager.cc
 )

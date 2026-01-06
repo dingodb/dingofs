@@ -213,7 +213,7 @@ void WriteSliceProcessor::ExecuteBatchOperation(
       ino, delta_slice_entries.size());
 
   std::vector<mds::ChunkDescriptor> chunk_descriptors;
-  auto context = std::make_shared<Context>("", "", "");
+  auto context = std::make_shared<Context>("");
   auto status = mds_client_->WriteSlice(context, ino, delta_slice_entries,
                                         chunk_descriptors);
   if (!status.ok()) {

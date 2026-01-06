@@ -223,7 +223,7 @@ Status MDSClient::SendRequest(ContextSPtr ctx, GetMdsFn get_mds_fn,
   bool is_refresh_mds = true;
 
   request.mutable_info()->set_request_id(
-      ctx ? ctx->TraceId() : std::to_string(utils::TimestampNs()));
+      ctx ? ctx->SessionID() : std::to_string(utils::TimestampNs()));
   request.mutable_context()->set_client_id(client_id_.ID());
 
   Status status;

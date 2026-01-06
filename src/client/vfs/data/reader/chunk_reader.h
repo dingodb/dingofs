@@ -30,7 +30,6 @@
 #include "common/callback.h"
 #include "common/io_buffer.h"
 #include "common/trace/context.h"
-#include "common/trace/itrace_span.h"
 #include "common/trace/trace_manager.h"
 
 namespace dingofs {

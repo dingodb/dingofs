@@ -1239,7 +1239,6 @@ Status MDSClient::GetFsQuota(ContextSPtr ctx, FsStat& fs_stat) {
   pb::mds::GetFsQuotaResponse response;
 
   request.set_fs_id(fs_id_);
-  request.mutable_info()->set_request_id(ctx->TraceId());
   request.mutable_info()->set_trace_id(span->GetTraceID());
   request.mutable_info()->set_span_id(span->GetSpanID());
 
@@ -1272,7 +1271,6 @@ Status MDSClient::GetDirQuota(ContextSPtr ctx, Ino ino, FsStat& fs_stat) {
 
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
-  request.mutable_info()->set_request_id(ctx->TraceId());
   request.mutable_info()->set_trace_id(span->GetTraceID());
   request.mutable_info()->set_span_id(span->GetSpanID());
 

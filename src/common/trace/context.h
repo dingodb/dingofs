@@ -30,22 +30,17 @@ class SpanScope;
 using SpanScopeSptr = std::shared_ptr<SpanScope>;
 
 struct Context {
-  std::string module;
-  std::string trace_id;  // modify session id
-  std::string span_id;   // delete
-  // when root Span, parent_span_id is empty
-  std::string parent_span_id;  // delete
+  std::string session_id;  // modify session id
   // whether hit local cache
   bool hit_cache{false};
   bool is_amend{false};
 
   bool need_cache{false};
-
-  uint64_t start_time_ns{0};  // delete
+  uint64_t start_time_ns{0};
 
   std::weak_ptr<SpanScope> trace_span;
 
-  const std::string& TraceId() const { return trace_id; }  // session id
+  const std::string& SessionID() const { return session_id; }  // session id
 
   SpanScopeSptr GetTraceSpan() { return trace_span.lock(); }
 
@@ -53,12 +48,9 @@ struct Context {
     trace_span = trace_span_ptr;
   }
 
-  Context(std::string module, std::string trace, std::string span,
-          std::string parent = "")
-      : module(std::move(module)),
-        trace_id(std::move(trace)),
-        span_id(std::move(span)),
-        parent_span_id(std::move(parent)) {
+  Context(const std::string& session) {
+    session_id =
+        session.empty() ? std::to_string(utils::TimestampNs()) : session;
     start_time_ns = utils::TimestampNs();
   }
 };

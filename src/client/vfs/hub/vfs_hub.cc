@@ -40,9 +40,6 @@
 #include "common/helper.h"
 #include "common/options/client.h"
 #include "common/status.h"
-#include "common/trace/log_trace_exporter.h"
-#include "common/trace/noop_tracer.h"
-#include "common/trace/tracer.h"
 #include "common/types.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
@@ -127,14 +124,6 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf, bool upgrade) {
 
   // load fs info
   {
-    if (FLAGS_vfs_trace_logging) {
-      tracer_ = std::make_unique<Tracer>(
-          std::make_unique<LogTraceExporter>(kVFSMoudule, Logger::LogDir()));
-    } else {
-      tracer_ = std::make_unique<NoopTracer>();
-    }
-    CHECK(tracer_ != nullptr) << "tracer is nullptr.";
-
     auto span = trace_manager_->StartSpan("vfs::start");
 
     DINGOFS_RETURN_NOT_OK(

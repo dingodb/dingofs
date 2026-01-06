@@ -29,7 +29,6 @@
 #include "common/callback.h"
 #include "common/status.h"
 #include "common/trace/context.h"
-#include "common/trace/itrace_span.h"
 
 namespace dingofs {
 namespace client {

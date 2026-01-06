@@ -60,7 +60,7 @@ bool IdCache::GenID(uint32_t num, uint64_t& id) {
 
 Status IdCache::AllocateIds(uint32_t size) {
   uint64_t id = 0;
-  auto context = std::make_shared<Context>("", "", "");
+  auto context = std::make_shared<Context>("");
   auto status = mds_client_->NewSliceId(context, size, &id);
   if (!status.ok()) {
     return status;

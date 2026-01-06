@@ -131,8 +131,6 @@ class VFSImpl : public VFS {
 
   uint64_t GetMaxNameLength() override;
 
-  ITracer* GetTracer() override { return vfs_hub_->GetTracer(); }
-
   TraceManager* GetTraceManager() override {
     return vfs_hub_->GetTraceManager();
   }

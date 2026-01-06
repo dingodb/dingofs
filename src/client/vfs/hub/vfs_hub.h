@@ -36,7 +36,6 @@
 #include "client/vfs/vfs_meta.h"
 #include "common/blockaccess/block_accesser.h"
 #include "common/status.h"
-#include "common/trace/itracer.h"
 #include "common/trace/trace_manager.h"
 #include "utils/executor/executor.h"
 
@@ -78,8 +77,6 @@ class VFSHub {
 
   virtual WarmupManager* GetWarmupManager() = 0;
 
-  virtual ITracer* GetTracer() = 0;
-
   virtual FsInfo GetFsInfo() = 0;
 
   virtual uint64_t GetPageSize() = 0;
@@ -93,7 +90,7 @@ class VFSHubImpl : public VFSHub {
  public:
   VFSHubImpl(ClientId client_id) : client_id_(client_id) {}
 
-  ~VFSHubImpl() override ;
+  ~VFSHubImpl() override;
 
   Status Start(const VFSConfig& vfs_conf, bool upgrade) override;
 
@@ -146,11 +143,6 @@ class VFSHubImpl : public VFSHub {
     return file_suffix_watcher_.get();
   }
 
-  ITracer* GetTracer() override {
-    CHECK_NOTNULL(tracer_);
-    return tracer_.get();
-  }
-
   PrefetchManager* GetPrefetchManager() override {
     CHECK_NOTNULL(prefetch_manager_);
     return prefetch_manager_.get();
@@ -200,7 +192,6 @@ class VFSHubImpl : public VFSHub {
   std::shared_ptr<PageAllocator> page_allocator_;
   std::unique_ptr<ReadBufferManager> read_buffer_manager_;
   std::unique_ptr<FileSuffixWatcher> file_suffix_watcher_;
-  std::unique_ptr<ITracer> tracer_;
   std::unique_ptr<PrefetchManager> prefetch_manager_;
   std::unique_ptr<WarmupManager> warmup_manager_;
   std::shared_ptr<TraceManager> trace_manager_;

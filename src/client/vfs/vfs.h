@@ -27,7 +27,6 @@
 #include "common/blockaccess/accesser_common.h"
 #include "common/status.h"
 #include "common/trace/context.h"
-#include "common/trace/itracer.h"
 #include "common/trace/trace_manager.h"
 #include "common/types.h"
 
@@ -151,8 +150,6 @@ class VFS {
   virtual double GetEntryTimeout(const FileType& type) = 0;
 
   virtual uint64_t GetMaxNameLength() = 0;
-
-  virtual ITracer* GetTracer() = 0;
 
   virtual TraceManager* GetTraceManager() = 0;
 
