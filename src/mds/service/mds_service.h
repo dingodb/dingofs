@@ -97,8 +97,13 @@ class MDSServiceImpl : public pb::mds::MDSService {
   void MkNod(google::protobuf::RpcController* controller, const pb::mds::MkNodRequest* request,
              pb::mds::MkNodResponse* response, google::protobuf::Closure* done) override;
 
+  void BatchMkNod(google::protobuf::RpcController* controller, const pb::mds::BatchMkNodRequest* request,
+                  pb::mds::BatchMkNodResponse* response, google::protobuf::Closure* done) override;
+
   void MkDir(google::protobuf::RpcController* controller, const pb::mds::MkDirRequest* request,
              pb::mds::MkDirResponse* response, google::protobuf::Closure* done) override;
+  void BatchMkDir(google::protobuf::RpcController* controller, const pb::mds::BatchMkDirRequest* request,
+                  pb::mds::BatchMkDirResponse* response, google::protobuf::Closure* done) override;
   void RmDir(google::protobuf::RpcController* controller, const pb::mds::RmDirRequest* request,
              pb::mds::RmDirResponse* response, google::protobuf::Closure* done) override;
   void ReadDir(google::protobuf::RpcController* controller, const pb::mds::ReadDirRequest* request,
@@ -114,6 +119,8 @@ class MDSServiceImpl : public pb::mds::MDSService {
             pb::mds::LinkResponse* response, google::protobuf::Closure* done) override;
   void UnLink(google::protobuf::RpcController* controller, const pb::mds::UnLinkRequest* request,
               pb::mds::UnLinkResponse* response, google::protobuf::Closure* done) override;
+  void BatchUnLink(google::protobuf::RpcController* controller, const pb::mds::BatchUnLinkRequest* request,
+                   pb::mds::BatchUnLinkResponse* response, google::protobuf::Closure* done) override;
 
   void Symlink(google::protobuf::RpcController* controller, const pb::mds::SymlinkRequest* request,
                pb::mds::SymlinkResponse* response, google::protobuf::Closure* done) override;
@@ -282,8 +289,12 @@ class MDSServiceImpl : public pb::mds::MDSService {
                      pb::mds::BatchCreateResponse* response, TraceClosure* done);
   void DoMkNod(google::protobuf::RpcController* controller, const pb::mds::MkNodRequest* request,
                pb::mds::MkNodResponse* response, TraceClosure* done);
+  void DoBatchMkNod(google::protobuf::RpcController* controller, const pb::mds::BatchMkNodRequest* request,
+                    pb::mds::BatchMkNodResponse* response, TraceClosure* done);
   void DoMkDir(google::protobuf::RpcController* controller, const pb::mds::MkDirRequest* request,
                pb::mds::MkDirResponse* response, TraceClosure* done);
+  void DoBatchMkDir(google::protobuf::RpcController* controller, const pb::mds::BatchMkDirRequest* request,
+                    pb::mds::BatchMkDirResponse* response, TraceClosure* done);
   void DoRmDir(google::protobuf::RpcController* controller, const pb::mds::RmDirRequest* request,
                pb::mds::RmDirResponse* response, TraceClosure* done);
   void DoReadDir(google::protobuf::RpcController* controller, const pb::mds::ReadDirRequest* request,
@@ -298,6 +309,8 @@ class MDSServiceImpl : public pb::mds::MDSService {
               pb::mds::LinkResponse* response, TraceClosure* done);
   void DoUnLink(google::protobuf::RpcController* controller, const pb::mds::UnLinkRequest* request,
                 pb::mds::UnLinkResponse* response, TraceClosure* done);
+  void DoBatchUnLink(google::protobuf::RpcController* controller, const pb::mds::BatchUnLinkRequest* request,
+                     pb::mds::BatchUnLinkResponse* response, TraceClosure* done);
   void DoSymlink(google::protobuf::RpcController* controller, const pb::mds::SymlinkRequest* request,
                  pb::mds::SymlinkResponse* response, TraceClosure* done);
   void DoReadLink(google::protobuf::RpcController* controller, const pb::mds::ReadLinkRequest* request,

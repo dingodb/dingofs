@@ -15,6 +15,7 @@
 #include "mds/filesystem/filesystem.h"
 
 #include <fcntl.h>
+#include <fmt/ranges.h>
 #include <gflags/gflags_declare.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -223,6 +224,13 @@ void FileSystem::DeleteDentryFromPartition(Ino parent, const std::string& name, 
   CHECK(partition != nullptr) << fmt::format("partition({}) not exist in cache.", parent);
 
   partition->Delete(name, version);
+}
+
+void FileSystem::DeleteDentryFromPartition(Ino parent, const std::vector<std::string>& names, uint64_t version) {
+  auto partition = GetPartitionFromCache(parent);
+  CHECK(partition != nullptr) << fmt::format("partition({}) not exist in cache.", parent);
+
+  partition->Delete(names, version);
 }
 
 Status FileSystem::GetPartition(Context& ctx, Ino parent, PartitionPtr& out_partition) {
@@ -565,8 +573,8 @@ Status FileSystem::CreateRoot() {
   attr.set_fs_id(fs_id_);
   attr.set_ino(kRootIno);
   attr.set_length(4096);
-  attr.set_uid(1008);
-  attr.set_gid(1008);
+  attr.set_uid(0);
+  attr.set_gid(0);
   attr.set_mode(S_IFDIR | S_IRUSR | S_IWUSR | S_IRGRP | S_IXUSR | S_IWGRP | S_IXGRP | S_IROTH | S_IWOTH | S_IXOTH);
   attr.set_nlink(kEmptyDirMinLinkNum);
   attr.set_type(pb::mds::FileType::DIRECTORY);
@@ -885,6 +893,113 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
   return Status::OK();
 }
 
+Status FileSystem::BatchMkNod(Context& ctx, const std::vector<MkNodParam>& params, EntryOut& entry_out) {
+  if (!CanServe(ctx)) {
+    return Status(pb::error::ENOT_SERVE, "can not serve");
+  }
+
+  auto& trace = ctx.GetTrace();
+  Ino parent = params[0].parent;
+
+  if (parent == 0) {
+    return Status(pb::error::EILLEGAL_PARAMTETER, "invalid parent inode id");
+  }
+  for (const auto& param : params) {
+    // check request
+    if (param.name.empty()) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "name is empty");
+    }
+  }
+
+  // update parent memo
+  UpdateParentMemo(ctx.GetAncestors());
+
+  // check quota
+  if (!quota_manager_->CheckQuota(trace, parent, 0, 1)) {
+    return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
+  }
+
+  utils::Duration duration;
+
+  std::string join_name;
+  join_name.reserve(params.size() * 128);
+
+  std::vector<Dentry> dentries;
+  std::vector<InodeSPtr> inodes;
+  std::vector<Inode::AttrEntry> attrs;
+
+  dentries.reserve(params.size());
+  inodes.reserve(params.size());
+  attrs.reserve(params.size());
+  for (const auto& param : params) {
+    join_name += param.name + ",";
+
+    // generate inode id
+    Ino ino = 0;
+    auto status = GenFileIno(ino);
+    if (!status.ok()) return status;
+
+    // build inode
+    Inode::AttrEntry attr;
+    attr.set_fs_id(fs_id_);
+    attr.set_ino(ino);
+    attr.set_length(0);
+    attr.set_ctime(duration.StartNs());
+    attr.set_mtime(duration.StartNs());
+    attr.set_atime(duration.StartNs());
+    attr.set_uid(param.uid);
+    attr.set_gid(param.gid);
+    attr.set_mode(param.mode);
+    attr.set_nlink(1);
+    attr.set_type(pb::mds::FileType::FILE);
+    attr.set_rdev(param.rdev);
+    attr.add_parents(parent);
+
+    attrs.push_back(attr);
+
+    auto inode = Inode::New(attr);
+    inodes.push_back(inode);
+
+    // build dentry
+    Dentry dentry(fs_id_, param.name, parent, ino, pb::mds::FileType::FILE, param.flag, inode);
+    dentries.push_back(std::move(dentry));
+  }
+  join_name.resize(join_name.size() - 1);  // remove last ','
+
+  // update backend store
+  BatchMkNodOperation operation(trace, dentries, attrs);
+  auto status = RunOperation(&operation);
+
+  LOG(INFO) << fmt::format("[fs.{}.{}][{}us] mknod {}/{} finish, status({}).", fs_id_, ctx.RequestId(),
+                           duration.ElapsedUs(), parent, join_name, status.error_str());
+
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, fmt::format("put inode/dentry fail, {}", status.error_str()));
+  }
+
+  auto& result = operation.GetResult();
+  auto& parent_attr = result.attr;
+
+  // update cache
+  UpsertInodeCache(parent_attr);
+  for (auto& inode : inodes) UpsertInodeCache(inode->Ino(), inode);
+  for (const auto& dentry : dentries) AddDentryToPartition(parent, dentry, parent_attr.version());
+
+  // update quota
+  std::string reason = fmt::format("batchmknod.{}.{}", parent, join_name);
+  quota_manager_->UpdateFsUsage(0, params.size(), reason);
+  quota_manager_->AsyncUpdateDirUsage(parent, 0, params.size(), reason);
+
+  for (const auto& dentry : dentries) parent_memo_->Remeber(dentry.INo(), parent);
+
+  entry_out.parent_attr = parent_attr;
+  entry_out.attrs.swap(attrs);
+
+  if (IsParentHashPartition()) NotifyBuddyRefreshInode(std::move(parent_attr));
+
+  return Status::OK();
+}
+
 Status FileSystem::GetChunksFromStore(Ino ino, std::vector<ChunkEntry>& chunks, uint32_t max_slice_num) {
   Trace trace;
   ScanChunkOperation operation(trace, fs_id_, ino, max_slice_num);
@@ -1161,6 +1276,119 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
   return Status::OK();
 }
 
+Status FileSystem::BatchMkDir(Context& ctx, const std::vector<MkDirParam>& params, EntryOut& entry_out) {
+  if (!CanServe(ctx)) {
+    return Status(pb::error::ENOT_SERVE, "can not serve");
+  }
+
+  auto& trace = ctx.GetTrace();
+  Ino parent = params[0].parent;
+
+  // check request
+  if (parent == 0) {
+    return Status(pb::error::EILLEGAL_PARAMTETER, "invalid parent inode id.");
+  }
+  for (const auto& param : params) {
+    if (param.name.empty()) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "name is empty.");
+    }
+  }
+
+  // generate inode id
+  Ino ino = 0;
+  auto status = GenDirIno(ino);
+  if (!status.ok()) {
+    return status;
+  }
+
+  // update parent memo
+  UpdateParentMemo(ctx.GetAncestors());
+
+  // check quota
+  if (!quota_manager_->CheckQuota(trace, parent, 0, 1)) {
+    return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
+  }
+
+  // build inode
+  utils::Duration duration;
+
+  std::string join_name;
+  join_name.reserve(params.size() * 128);
+
+  std::vector<Dentry> dentries;
+  std::vector<InodeSPtr> inodes;
+  std::vector<Inode::AttrEntry> attrs;
+
+  dentries.reserve(params.size());
+  inodes.reserve(params.size());
+  attrs.reserve(params.size());
+  for (const auto& param : params) {
+    join_name += param.name + ",";
+
+    Inode::AttrEntry attr;
+    attr.set_fs_id(fs_id_);
+    attr.set_ino(ino);
+    attr.set_length(4096);
+    attr.set_ctime(duration.StartNs());
+    attr.set_mtime(duration.StartNs());
+    attr.set_atime(duration.StartNs());
+    attr.set_uid(param.uid);
+    attr.set_gid(param.gid);
+    attr.set_mode(S_IFDIR | param.mode);
+    attr.set_nlink(kEmptyDirMinLinkNum);
+    attr.set_type(pb::mds::FileType::DIRECTORY);
+    attr.set_rdev(param.rdev);
+    attr.add_parents(parent);
+    attrs.push_back(attr);
+
+    auto inode = Inode::New(attr);
+    inodes.push_back(inode);
+
+    // build dentry
+    Dentry dentry(fs_id_, param.name, parent, ino, pb::mds::FileType::DIRECTORY, param.flag, inode);
+    dentries.push_back(std::move(dentry));
+  }
+  join_name.resize(join_name.size() - 1);
+
+  // update backend store
+  BatchMkDirOperation operation(trace, dentries, attrs);
+
+  status = RunOperation(&operation);
+
+  LOG(INFO) << fmt::format("[fs.{}.{}][{}us] mkdir {}/{} finish, status({}).", fs_id_, ctx.RequestId(),
+                           duration.ElapsedUs(), parent, join_name, status.error_str());
+
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, fmt::format("put inode/dentry fail, {}", status.error_str()));
+  }
+
+  auto& result = operation.GetResult();
+  auto& parent_attr = result.attr;
+
+  // update cache
+  UpsertInodeCache(parent_attr);
+  for (auto& inode : inodes) UpsertInodeCache(inode->Ino(), inode);
+  for (auto& dentry : dentries) AddDentryToPartition(parent, dentry, parent_attr.version());
+
+  if (IsMonoPartition()) {
+    for (auto& inode : inodes) partition_cache_.PutIf(Partition(inode));
+  }
+
+  // update quota
+  std::string reason = fmt::format("batchmkdir.{}.{}", parent, join_name);
+  quota_manager_->UpdateFsUsage(0, params.size(), reason);
+  quota_manager_->AsyncUpdateDirUsage(parent, 0, params.size(), reason);
+
+  for (const auto& dentry : dentries) parent_memo_->Remeber(dentry.INo(), dentry.ParentIno());
+
+  entry_out.parent_attr = parent_attr;
+  entry_out.attrs.swap(attrs);
+
+  if (IsParentHashPartition()) NotifyBuddyRefreshInode(std::move(parent_attr));
+
+  return Status::OK();
+}
+
 Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name, Ino& ino, EntryOut& entry_out) {
   if (!CanServe(ctx)) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
@@ -1354,14 +1582,7 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name, Ent
   if (!partition->Get(name, dentry)) {
     return Status(pb::error::ENOT_FOUND, fmt::format("not found dentry({}/{})", parent, name));
   }
-
-  InodeSPtr inode;
-  status = GetInode(ctx, dentry, partition, inode);
-  if (!status.ok()) {
-    return status;
-  }
-
-  if (inode->Type() == pb::mds::FileType::DIRECTORY) {
+  if (dentry.Type() == pb::mds::FileType::DIRECTORY) {
     return Status(pb::error::ENOT_FILE, "directory not allow unlink");
   }
 
@@ -1401,6 +1622,84 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name, Ent
 
   entry_out.parent_attr = parent_attr;
   entry_out.attr.Swap(&attr);
+
+  if (IsParentHashPartition()) {
+    NotifyBuddyRefreshInode(std::move(parent_attr));
+  }
+
+  return Status::OK();
+}
+
+Status FileSystem::BatchUnLink(Context& ctx, Ino parent, const std::vector<std::string>& names, EntryOut& entry_out) {
+  if (!CanServe(ctx)) {
+    return Status(pb::error::ENOT_SERVE, "can not serve");
+  }
+
+  auto& trace = ctx.GetTrace();
+
+  std::string join_name;
+  join_name.reserve(names.size() * 128);
+
+  PartitionPtr partition;
+  auto status = GetPartition(ctx, parent, partition);
+  if (!status.ok()) return status;
+
+  // get dentry
+  std::vector<Dentry> dentries;
+  dentries.reserve(names.size());
+  for (const auto& name : names) {
+    Dentry dentry;
+    if (!partition->Get(name, dentry)) {
+      return Status(pb::error::ENOT_FOUND, fmt::format("not found dentry({}/{})", parent, name));
+    }
+    if (dentry.Type() == pb::mds::FileType::DIRECTORY) {
+      return Status(pb::error::ENOT_FILE, "directory not allow unlink");
+    }
+
+    join_name += name + ",";
+    dentries.push_back(std::move(dentry));
+  }
+  join_name.resize(join_name.size() - 1);
+
+  // update parent memo
+  UpdateParentMemo(ctx.GetAncestors());
+
+  utils::Duration duration;
+
+  // update backend store
+  BatchUnlinkOperation operation(trace, dentries);
+
+  status = RunOperation(&operation);
+
+  auto& result = operation.GetResult();
+  auto& parent_attr = result.attr;
+  auto& child_attrs = result.child_attrs;
+
+  LOG(INFO) << fmt::format("[fs.{}.{}][{}us] unlink {}/{} finish, status({}).", fs_id_, ctx.RequestId(),
+                           duration.ElapsedUs(), parent, join_name, status.error_str());
+
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, fmt::format("put inode/dentry fail, {}", status.error_str()));
+  }
+
+  // update quota
+  std::string reason = fmt::format("batchunlink.{}.{}", parent, join_name);
+  for (const auto& attr : child_attrs) {
+    int64_t delta_bytes = attr.type() != pb::mds::SYM_LINK ? attr.length() : 0;
+    if (attr.nlink() == 0) {
+      quota_manager_->UpdateFsUsage(-delta_bytes, -1, reason);
+      chunk_cache_.Delete(attr.ino());
+    }
+    quota_manager_->AsyncUpdateDirUsage(parent, -delta_bytes, -1, reason);
+  }
+
+  // update cache
+  UpsertInodeCache(parent_attr);
+  DeleteDentryFromPartition(parent, names, parent_attr.version());
+  for (const auto& attr : child_attrs) UpsertInodeCache(attr);
+
+  entry_out.parent_attr = parent_attr;
+  entry_out.attrs.swap(child_attrs);
 
   if (IsParentHashPartition()) {
     NotifyBuddyRefreshInode(std::move(parent_attr));

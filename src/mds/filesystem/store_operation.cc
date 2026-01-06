@@ -680,6 +680,32 @@ Status MkDirOperation::RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const st
   return Status::OK();
 }
 
+Status BatchMkDirOperation::RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const std::vector<KeyValue>&) {
+  const uint32_t fs_id = parent_attr.fs_id();
+  const Ino parent = parent_attr.ino();
+
+  CHECK(!dentries_.empty()) << "dentries is empty.";
+  CHECK(dentries_.size() == attrs_.size())
+      << fmt::format("dentry and attr size not equal, {} {}.", dentries_.size(), attrs_.size());
+
+  // create dentry
+  for (const auto& dentry : dentries_) {
+    txn->Put(MetaCodec::EncodeDentryKey(fs_id, parent, dentry.Name()), MetaCodec::EncodeDentryValue(dentry.Copy()));
+  }
+
+  // create
+  for (const auto& attr : attrs_) {
+    txn->Put(MetaCodec::EncodeInodeKey(fs_id, attr.ino()), MetaCodec::EncodeInodeValue(attr));
+  }
+
+  // update parent attr
+  parent_attr.set_nlink(parent_attr.nlink() + dentries_.size());
+  parent_attr.set_mtime(std::max(parent_attr.mtime(), GetTime()));
+  parent_attr.set_ctime(std::max(parent_attr.ctime(), GetTime()));
+
+  return Status::OK();
+}
+
 Status MkNodOperation::RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const std::vector<KeyValue>&) {
   const uint32_t fs_id = parent_attr.fs_id();
   const Ino parent = parent_attr.ino();
@@ -689,6 +715,31 @@ Status MkNodOperation::RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const st
 
   // create inode
   txn->Put(MetaCodec::EncodeInodeKey(fs_id, dentry_.INo()), MetaCodec::EncodeInodeValue(attr_));
+
+  // update parent attr
+  parent_attr.set_mtime(std::max(parent_attr.mtime(), GetTime()));
+  parent_attr.set_ctime(std::max(parent_attr.ctime(), GetTime()));
+
+  return Status::OK();
+}
+
+Status BatchMkNodOperation::RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const std::vector<KeyValue>&) {
+  const uint32_t fs_id = parent_attr.fs_id();
+  const Ino parent = parent_attr.ino();
+
+  CHECK(!dentries_.empty()) << "dentries is empty.";
+  CHECK(dentries_.size() == attrs_.size())
+      << fmt::format("dentry and attr size not equal, {} {}.", dentries_.size(), attrs_.size());
+
+  // create dentry
+  for (const auto& dentry : dentries_) {
+    txn->Put(MetaCodec::EncodeDentryKey(fs_id, parent, dentry.Name()), MetaCodec::EncodeDentryValue(dentry.Copy()));
+  }
+
+  // create inode
+  for (const auto& attr : attrs_) {
+    txn->Put(MetaCodec::EncodeInodeKey(fs_id, attr.ino()), MetaCodec::EncodeInodeValue(attr));
+  }
 
   // update parent attr
   parent_attr.set_mtime(std::max(parent_attr.mtime(), GetTime()));
@@ -1387,6 +1438,75 @@ Status UnlinkOperation::Run(TxnUPtr& txn) {
 
   SetAttr(parent_attr);
   result_.child_attr = attr;
+
+  return Status::OK();
+}
+
+Status BatchUnlinkOperation::Run(TxnUPtr& txn) {
+  const uint32_t fs_id = dentries_[0].FsId();
+  const Ino parent = dentries_[0].ParentIno();
+
+  // get parent/child attr
+  std::vector<std::string> keys;
+  keys.reserve(dentries_.size() + 1);
+  std::string parent_key = MetaCodec::EncodeInodeKey(fs_id, parent);
+  keys.push_back(parent_key);
+  for (const auto& dentry : dentries_) {
+    keys.push_back(MetaCodec::EncodeInodeKey(fs_id, dentry.INo()));
+  }
+
+  std::vector<KeyValue> kvs;
+  auto status = txn->BatchGet(keys, kvs);
+  if (!status.ok()) return status;
+
+  if (kvs.size() != dentries_.size() + 1) {
+    return Status(pb::error::ENOT_FOUND, fmt::format("get parent/child inode fail, count({})", kvs.size()));
+  }
+
+  AttrEntry parent_attr;
+  std::vector<AttrEntry> attrs;
+  for (auto& kv : kvs) {
+    if (kv.key == parent_key) {
+      parent_attr = MetaCodec::DecodeInodeValue(kv.value);
+
+    } else {
+      attrs.push_back(MetaCodec::DecodeInodeValue(kv.value));
+    }
+  }
+
+  // update parent attr
+  parent_attr.set_ctime(std::max(parent_attr.ctime(), GetTime()));
+  parent_attr.set_mtime(std::max(parent_attr.mtime(), GetTime()));
+  parent_attr.set_version(parent_attr.version() + 1);
+
+  txn->Put(parent_key, MetaCodec::EncodeInodeValue(parent_attr));
+
+  // decrease nlink
+  for (auto& attr : attrs) {
+    std::string key = MetaCodec::EncodeInodeKey(fs_id, attr.ino());
+
+    attr.set_nlink(attr.nlink() - 1);
+    DelParentIno(attr, parent);
+    attr.set_ctime(std::max(attr.ctime(), GetTime()));
+    attr.set_version(attr.version() + 1);
+    if (attr.nlink() <= 0) {
+      // delete inode
+      txn->Delete(key);
+      // save delete file info
+      txn->Put(MetaCodec::EncodeDelFileKey(fs_id, attr.ino()), MetaCodec::EncodeDelFileValue(attr));
+
+    } else {
+      txn->Put(key, MetaCodec::EncodeInodeValue(attr));
+    }
+  }
+
+  // delete dentry
+  for (const auto& dentry : dentries_) {
+    txn->Delete(MetaCodec::EncodeDentryKey(fs_id, parent, dentry.Name()));
+  }
+
+  SetAttr(parent_attr);
+  result_.child_attrs.swap(attrs);
 
   return Status::OK();
 }
@@ -2710,15 +2830,18 @@ void OperationProcessor::ProcessOperation() {
   std::vector<Operation*> stage_operations;
   stage_operations.reserve(FLAGS_mds_store_operation_batch_size);
 
+  Operation* operation = nullptr;
   while (true) {
+    operation = nullptr;
     stage_operations.clear();
 
-    Operation* operation = nullptr;
     while (!operations_.Dequeue(operation) && !is_stop_.load(std::memory_order_relaxed)) {
       bthread_mutex_lock(&mutex_);
       bthread_cond_wait(&cond_, &mutex_);
       bthread_mutex_unlock(&mutex_);
     }
+
+    if (operation) stage_operations.push_back(operation);
 
     if (is_stop_.load(std::memory_order_relaxed) && stage_operations.empty()) {
       break;
@@ -2726,10 +2849,9 @@ void OperationProcessor::ProcessOperation() {
 
     bool is_waited = false;
     do {
+      if (!operations_.Dequeue(operation)) break;
+
       stage_operations.push_back(operation);
-      if (!operations_.Dequeue(operation)) {
-        break;
-      }
 
       if (!is_waited && FLAGS_mds_store_operation_merge_delay_us > 0) {
         bthread_usleep(FLAGS_mds_store_operation_merge_delay_us);
@@ -2740,18 +2862,24 @@ void OperationProcessor::ProcessOperation() {
 
     auto batch_operation_map = Grouping(stage_operations);
     for (auto& [_, batch_operation] : batch_operation_map) {
-      LaunchExecuteBatchOperation(batch_operation);
+      LaunchExecuteBatchOperation(std::move(batch_operation));
     }
+  }
+
+  // print pending operations
+  while (operations_.Dequeue(operation)) {
+    LOG(INFO) << fmt::format("[operation] pending operation type({}) ino({}).", operation->OpName(),
+                             operation->GetIno());
   }
 }
 
-void OperationProcessor::LaunchExecuteBatchOperation(const BatchOperation& batch_operation) {
+void OperationProcessor::LaunchExecuteBatchOperation(BatchOperation&& batch_operation) {
   struct Params {
     OperationProcessor* self{nullptr};
     BatchOperation batch_operation;
   };
 
-  Params* params = new Params({.self = this, .batch_operation = batch_operation});
+  Params* params = new Params({.self = this, .batch_operation = std::move(batch_operation)});
 
   bthread_t tid;
   bthread_attr_t attr = BTHREAD_ATTR_NORMAL;

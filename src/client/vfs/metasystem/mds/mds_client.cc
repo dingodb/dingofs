@@ -16,6 +16,7 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
 
 #include "client/vfs/common/helper.h"
 #include "client/vfs/metasystem/mds/helper.h"
@@ -234,7 +235,7 @@ Status MDSClient::UmountFs(const std::string& name,
   return Status::OK();
 }
 
-Status MDSClient::Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
+Status MDSClient::Lookup(ContextSPtr& ctx, Ino parent, const std::string& name,
                          AttrEntry& attr_entry) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
@@ -244,6 +245,8 @@ Status MDSClient::Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
 
   auto span =
       trace_manager_.StartChildSpan("MDSClient::Lookup", ctx->GetTraceSpan());
+
+  auto span_ctx = SpanScope::GetContext(span);
 
   pb::mds::LookupRequest request;
   pb::mds::LookupResponse response;
@@ -256,8 +259,8 @@ Status MDSClient::Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
   request.mutable_info()->set_trace_id(SpanScope::GetTraceID(span));
   request.mutable_info()->set_span_id(SpanScope::GetSpanID(span));
 
-  auto status = SendRequest(SpanScope::GetContext(span), get_mds_fn,
-                            "MDSService", "Lookup", request, response);
+  auto status = SendRequest(span_ctx, get_mds_fn, "MDSService", "Lookup",
+                            request, response);
   if (!status.ok()) {
     SpanScope::SetStatus(span, status);
     return status;
@@ -270,7 +273,7 @@ Status MDSClient::Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
     if (parent_memo_->GetVersion(inode.ino(), last_version) &&
         inode.version() < last_version) {
       // fetch last inode
-      status = GetAttr(SpanScope::GetContext(span), inode.ino(), attr_entry);
+      status = GetAttr(span_ctx, inode.ino(), attr_entry);
       if (status.ok()) {
         parent_memo_->Upsert(inode.ino(), parent);
         return Status::OK();
@@ -291,7 +294,7 @@ Status MDSClient::Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
   return Status::OK();
 }
 
-Status MDSClient::Create(ContextSPtr ctx, Ino parent, const std::string& name,
+Status MDSClient::Create(ContextSPtr& ctx, Ino parent, const std::string& name,
                          uint32_t uid, uint32_t gid, uint32_t mode, int flag,
                          AttrEntry& attr_entry, AttrEntry& parent_attr_entry,
                          std::vector<std::string>& session_ids) {
@@ -345,10 +348,11 @@ Status MDSClient::Create(ContextSPtr ctx, Ino parent, const std::string& name,
   return Status::OK();
 }
 
-Status MDSClient::MkNod(ContextSPtr ctx, Ino parent, const std::string& name,
+Status MDSClient::MkNod(ContextSPtr& ctx, Ino parent, const std::string& name,
                         uint32_t uid, uint32_t gid, mode_t mode, dev_t rdev,
                         AttrEntry& attr_entry, AttrEntry& parent_attr_entry) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
+  CHECK(ctx != nullptr) << "context is nullptr.";
 
   auto get_mds_fn = [this, parent](bool& is_primary_mds) -> MDSMeta {
     return GetMdsByParent(parent, is_primary_mds);
@@ -393,10 +397,59 @@ Status MDSClient::MkNod(ContextSPtr ctx, Ino parent, const std::string& name,
   return Status::OK();
 }
 
-Status MDSClient::MkDir(ContextSPtr ctx, Ino parent, const std::string& name,
+Status MDSClient::BatchMkNod(ContextSPtr& ctx, Ino parent,
+                             const std::vector<MkNodParam>& params,
+                             std::vector<AttrEntry>& attr_entries,
+                             AttrEntry& parent_attr_entry) {
+  CHECK(fs_id_ != 0) << "fs_id is invalid.";
+
+  auto get_mds_fn = [this, parent](bool& is_primary_mds) -> MDSMeta {
+    return GetMdsByParent(parent, is_primary_mds);
+  };
+
+  pb::mds::BatchMkNodRequest request;
+  pb::mds::BatchMkNodResponse response;
+
+  request.mutable_context()->set_inode_version(GetInodeVersion(parent));
+  SetAncestorInContext(request, parent);
+
+  request.set_fs_id(fs_id_);
+  request.set_parent(parent);
+  for (const auto& param : params) {
+    auto* mut_param = request.add_params();
+    mut_param->set_parent(parent);
+    mut_param->set_name(param.name);
+    mut_param->set_mode(param.mode);
+    mut_param->set_uid(param.uid);
+    mut_param->set_gid(param.gid);
+    mut_param->set_rdev(param.rdev);
+  }
+
+  auto status = SendRequest(ctx, get_mds_fn, "MDSService", "BatchMkNod",
+                            request, response);
+  if (!status.ok()) {
+    return status;
+  }
+
+  parent_memo_->UpsertVersion(parent, response.parent_inode().version());
+
+  attr_entries.reserve(response.inodes_size());
+  for (auto& mut_inode : *response.mutable_inodes()) {
+    parent_memo_->Upsert(mut_inode.ino(), parent, mut_inode.version());
+
+    attr_entries.push_back(std::move(mut_inode));
+  }
+
+  parent_attr_entry.Swap(response.mutable_parent_inode());
+
+  return Status::OK();
+}
+
+Status MDSClient::MkDir(ContextSPtr& ctx, Ino parent, const std::string& name,
                         uint32_t uid, uint32_t gid, mode_t mode, dev_t rdev,
                         AttrEntry& attr_entry, AttrEntry& parent_attr_entry) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
+  CHECK(ctx != nullptr) << "context is nullptr.";
 
   auto get_mds_fn = [this, parent](bool& is_primary_mds) -> MDSMeta {
     return GetMdsByParent(parent, is_primary_mds);
@@ -440,7 +493,53 @@ Status MDSClient::MkDir(ContextSPtr ctx, Ino parent, const std::string& name,
   return Status::OK();
 }
 
-Status MDSClient::RmDir(ContextSPtr ctx, Ino parent, const std::string& name,
+Status MDSClient::BatchMkDir(ContextSPtr& ctx, Ino parent,
+                             const std::vector<MkDirParam>& params,
+                             std::vector<AttrEntry>& attr_entries,
+                             AttrEntry& parent_attr_entry) {
+  CHECK(fs_id_ != 0) << "fs_id is invalid.";
+
+  auto get_mds_fn = [this, parent](bool& is_primary_mds) -> MDSMeta {
+    return GetMdsByParent(parent, is_primary_mds);
+  };
+
+  pb::mds::BatchMkDirRequest request;
+  pb::mds::BatchMkDirResponse response;
+
+  request.mutable_context()->set_inode_version(GetInodeVersion(parent));
+  SetAncestorInContext(request, parent);
+
+  request.set_fs_id(fs_id_);
+  request.set_parent(parent);
+  for (const auto& param : params) {
+    auto* mut_param = request.add_params();
+    mut_param->set_parent(parent);
+    mut_param->set_name(param.name);
+    mut_param->set_mode(param.mode);
+    mut_param->set_uid(param.uid);
+    mut_param->set_gid(param.gid);
+    mut_param->set_rdev(param.rdev);
+  }
+
+  auto status = SendRequest(ctx, get_mds_fn, "MDSService", "BatchMkDir",
+                            request, response);
+  if (!status.ok()) return status;
+
+  parent_memo_->UpsertVersion(parent, response.parent_inode().version());
+
+  attr_entries.reserve(response.inodes_size());
+  for (auto& mut_inode : *response.mutable_inodes()) {
+    parent_memo_->Upsert(mut_inode.ino(), parent, mut_inode.version());
+
+    attr_entries.push_back(std::move(mut_inode));
+  }
+
+  parent_attr_entry.Swap(response.mutable_parent_inode());
+
+  return Status::OK();
+}
+
+Status MDSClient::RmDir(ContextSPtr& ctx, Ino parent, const std::string& name,
                         Ino& ino, AttrEntry& parent_attr_entry) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
@@ -480,7 +579,7 @@ Status MDSClient::RmDir(ContextSPtr ctx, Ino parent, const std::string& name,
   return Status::OK();
 }
 
-Status MDSClient::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
+Status MDSClient::ReadDir(ContextSPtr& ctx, Ino ino, uint64_t fh,
                           const std::string& last_name, uint32_t limit,
                           bool with_attr, std::vector<DirEntry>& entries) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
@@ -527,7 +626,7 @@ Status MDSClient::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
 }
 
 Status MDSClient::Open(
-    ContextSPtr ctx, Ino ino, int flags, std::string& session_id,
+    ContextSPtr& ctx, Ino ino, int flags, std::string& session_id,
     bool is_prefetch_chunk,
     const std::vector<mds::ChunkDescriptor>& chunk_descriptors,
     AttrEntry& attr_entry, std::vector<mds::ChunkEntry>& chunks) {
@@ -570,7 +669,7 @@ Status MDSClient::Open(
   return Status::OK();
 }
 
-Status MDSClient::Release(ContextSPtr ctx, Ino ino,
+Status MDSClient::Release(ContextSPtr& ctx, Ino ino,
                           const std::string& session_id) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
@@ -597,7 +696,7 @@ Status MDSClient::Release(ContextSPtr ctx, Ino ino,
   return status;
 }
 
-Status MDSClient::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
+Status MDSClient::Link(ContextSPtr& ctx, Ino ino, Ino new_parent,
                        const std::string& new_name, AttrEntry& attr_entry,
                        AttrEntry& parent_attr_entry) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
@@ -639,9 +738,10 @@ Status MDSClient::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
   return Status::OK();
 }
 
-Status MDSClient::UnLink(ContextSPtr ctx, Ino parent, const std::string& name,
+Status MDSClient::UnLink(ContextSPtr& ctx, Ino parent, const std::string& name,
                          AttrEntry& attr_entry, AttrEntry& parent_attr_entry) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
+  CHECK(ctx != nullptr) << "context is nullptr.";
 
   auto get_mds_fn = [this, parent](bool& is_primary_mds) -> MDSMeta {
     return GetMdsByParent(parent, is_primary_mds);
@@ -680,7 +780,50 @@ Status MDSClient::UnLink(ContextSPtr ctx, Ino parent, const std::string& name,
   return Status::OK();
 }
 
-Status MDSClient::Symlink(ContextSPtr ctx, Ino parent, const std::string& name,
+Status MDSClient::BatchUnLink(ContextSPtr& ctx, Ino parent,
+                              const std::vector<std::string>& names,
+                              std::vector<AttrEntry>& attr_entries,
+                              AttrEntry& parent_attr_entry) {
+  CHECK(fs_id_ != 0) << "fs_id is invalid.";
+
+  auto get_mds_fn = [this, parent](bool& is_primary_mds) -> MDSMeta {
+    return GetMdsByParent(parent, is_primary_mds);
+  };
+
+  pb::mds::BatchUnLinkRequest request;
+  pb::mds::BatchUnLinkResponse response;
+
+  request.mutable_context()->set_inode_version(GetInodeVersion(parent));
+
+  SetAncestorInContext(request, parent);
+
+  request.set_fs_id(fs_id_);
+  request.set_parent(parent);
+  for (const auto& name : names) {
+    request.add_names(name);
+  }
+
+  auto status = SendRequest(ctx, get_mds_fn, "MDSService", "BatchUnLink",
+                            request, response);
+  if (!status.ok()) {
+    return status;
+  }
+
+  parent_memo_->UpsertVersion(parent, response.parent_inode().version());
+
+  attr_entries.reserve(response.inodes_size());
+  for (auto& mut_inode : *response.mutable_inodes()) {
+    parent_memo_->UpsertVersion(mut_inode.ino(), mut_inode.version());
+
+    attr_entries.push_back(std::move(mut_inode));
+  }
+
+  parent_attr_entry.Swap(response.mutable_parent_inode());
+
+  return Status::OK();
+}
+
+Status MDSClient::Symlink(ContextSPtr& ctx, Ino parent, const std::string& name,
                           uint32_t uid, uint32_t gid,
                           const std::string& symlink, AttrEntry& attr_entry,
                           AttrEntry& parent_attr_entry) {
@@ -727,7 +870,7 @@ Status MDSClient::Symlink(ContextSPtr ctx, Ino parent, const std::string& name,
   return Status::OK();
 }
 
-Status MDSClient::ReadLink(ContextSPtr ctx, Ino ino, std::string& symlink) {
+Status MDSClient::ReadLink(ContextSPtr& ctx, Ino ino, std::string& symlink) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, ino](bool& is_primary_mds) -> MDSMeta {
@@ -759,7 +902,7 @@ Status MDSClient::ReadLink(ContextSPtr ctx, Ino ino, std::string& symlink) {
   return Status::OK();
 }
 
-Status MDSClient::GetAttr(ContextSPtr ctx, Ino ino, AttrEntry& attr_entry) {
+Status MDSClient::GetAttr(ContextSPtr& ctx, Ino ino, AttrEntry& attr_entry) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, ino](bool& is_primary_mds) -> MDSMeta {
@@ -795,7 +938,7 @@ Status MDSClient::GetAttr(ContextSPtr ctx, Ino ino, AttrEntry& attr_entry) {
   return Status::OK();
 }
 
-Status MDSClient::SetAttr(ContextSPtr ctx, Ino ino, const Attr& attr,
+Status MDSClient::SetAttr(ContextSPtr& ctx, Ino ino, const Attr& attr,
                           int to_set, AttrEntry& attr_entry,
                           bool& shrink_file) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
@@ -887,7 +1030,7 @@ Status MDSClient::SetAttr(ContextSPtr ctx, Ino ino, const Attr& attr,
   return Status::OK();
 }
 
-Status MDSClient::GetXAttr(ContextSPtr ctx, Ino ino, const std::string& name,
+Status MDSClient::GetXAttr(ContextSPtr& ctx, Ino ino, const std::string& name,
                            std::string& value) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
@@ -923,7 +1066,7 @@ Status MDSClient::GetXAttr(ContextSPtr ctx, Ino ino, const std::string& name,
   return Status::OK();
 }
 
-Status MDSClient::SetXAttr(ContextSPtr ctx, Ino ino, const std::string& name,
+Status MDSClient::SetXAttr(ContextSPtr& ctx, Ino ino, const std::string& name,
                            const std::string& value, AttrEntry& attr_entry) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
@@ -958,8 +1101,8 @@ Status MDSClient::SetXAttr(ContextSPtr ctx, Ino ino, const std::string& name,
   return Status::OK();
 }
 
-Status MDSClient::RemoveXAttr(ContextSPtr ctx, Ino ino, const std::string& name,
-                              AttrEntry& attr_entry) {
+Status MDSClient::RemoveXAttr(ContextSPtr& ctx, Ino ino,
+                              const std::string& name, AttrEntry& attr_entry) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, ino](bool& is_primary_mds) -> MDSMeta {
@@ -993,7 +1136,7 @@ Status MDSClient::RemoveXAttr(ContextSPtr ctx, Ino ino, const std::string& name,
   return Status::OK();
 }
 
-Status MDSClient::ListXAttr(ContextSPtr ctx, Ino ino,
+Status MDSClient::ListXAttr(ContextSPtr& ctx, Ino ino,
                             std::map<std::string, std::string>& xattrs) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
@@ -1028,7 +1171,7 @@ Status MDSClient::ListXAttr(ContextSPtr ctx, Ino ino,
   return Status::OK();
 }
 
-Status MDSClient::Rename(ContextSPtr ctx, Ino old_parent,
+Status MDSClient::Rename(ContextSPtr& ctx, Ino old_parent,
                          const std::string& old_name, Ino new_parent,
                          const std::string& new_name,
                          std::vector<Ino>& effected_inos) {
@@ -1081,7 +1224,7 @@ Status MDSClient::Rename(ContextSPtr ctx, Ino old_parent,
   return Status::OK();
 }
 
-Status MDSClient::NewSliceId(ContextSPtr ctx, uint32_t num, uint64_t* id) {
+Status MDSClient::NewSliceId(ContextSPtr& ctx, uint32_t num, uint64_t* id) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this](bool& is_primary_mds) -> MDSMeta {
@@ -1111,7 +1254,7 @@ Status MDSClient::NewSliceId(ContextSPtr ctx, uint32_t num, uint64_t* id) {
 }
 
 Status MDSClient::ReadSlice(
-    ContextSPtr ctx, Ino ino,
+    ContextSPtr& ctx, Ino ino,
     const std::vector<ChunkDescriptor>& chunk_descriptors,
     std::vector<mds::ChunkEntry>& chunks) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
@@ -1151,10 +1294,11 @@ Status MDSClient::ReadSlice(
 }
 
 Status MDSClient::WriteSlice(
-    ContextSPtr ctx, Ino ino,
+    ContextSPtr& ctx, Ino ino,
     const std::vector<mds::DeltaSliceEntry>& delta_slices,
     std::vector<ChunkDescriptor>& chunk_descriptors) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
+  CHECK(ctx != nullptr) << "context is nullptr.";
 
   auto get_mds_fn = [this, ino](bool& is_primary_mds) -> MDSMeta {
     return GetMds(ino, is_primary_mds);
@@ -1192,7 +1336,7 @@ Status MDSClient::WriteSlice(
   return Status::OK();
 }
 
-Status MDSClient::Fallocate(ContextSPtr ctx, Ino ino, int32_t mode,
+Status MDSClient::Fallocate(ContextSPtr& ctx, Ino ino, int32_t mode,
                             uint64_t offset, uint64_t length) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
@@ -1228,7 +1372,7 @@ Status MDSClient::Fallocate(ContextSPtr ctx, Ino ino, int32_t mode,
   return Status::OK();
 }
 
-Status MDSClient::GetFsQuota(ContextSPtr ctx, FsStat& fs_stat) {
+Status MDSClient::GetFsQuota(ContextSPtr& ctx, FsStat& fs_stat) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto span = trace_manager_.StartChildSpan("MDSClient::GetFsQuota",
@@ -1257,7 +1401,7 @@ Status MDSClient::GetFsQuota(ContextSPtr ctx, FsStat& fs_stat) {
   return Status::OK();
 }
 
-Status MDSClient::GetDirQuota(ContextSPtr ctx, Ino ino, FsStat& fs_stat) {
+Status MDSClient::GetDirQuota(ContextSPtr& ctx, Ino ino, FsStat& fs_stat) {
   auto get_mds_fn = [this, ino](bool& is_primary_mds) -> MDSMeta {
     return GetMdsByParent(ino, is_primary_mds);
   };

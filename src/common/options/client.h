@@ -91,7 +91,7 @@ DECLARE_bool(vfs_intime_warmup_enable);
 DECLARE_int64(vfs_warmup_mtime_restart_interval_secs);
 DECLARE_int64(vfs_warmup_trigger_restart_interval_secs);
 
-// vfs handle 
+// vfs handle
 DECLARE_int32(vfs_bg_executor_thread);
 DECLARE_int32(vfs_periodic_flush_interval_ms);
 DECLARE_int32(vfs_periodic_trim_mem_ms);
@@ -102,7 +102,8 @@ DECLARE_uint32(vfs_meta_read_dir_batch_size);
 DECLARE_uint32(vfs_meta_rpc_timeout_ms);
 DECLARE_int32(vfs_meta_rpc_retry_times);
 
-DECLARE_uint32(vfs_meta_write_slice_operation_merge_delay_us);
+DECLARE_bool(vfs_meta_batch_operation_enable);
+DECLARE_uint32(vfs_meta_batch_operation_merge_delay_us);
 DECLARE_uint32(vfs_meta_commit_slice_max_num);
 
 // begin used in inode_blocks_service

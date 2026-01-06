@@ -1006,6 +1006,73 @@ void MDSServiceImpl::MkNod(google::protobuf::RpcController* controller, const pb
   RunInQueue(MkNod, controller, request, response, svr_done, write_worker_set_);
 }
 
+void MDSServiceImpl::DoBatchMkNod(google::protobuf::RpcController*, const pb::mds::BatchMkNodRequest* request,
+                                  pb::mds::BatchMkNodResponse* response, TraceClosure* done) {
+  brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
+
+  auto file_system = GetFileSystem(request->fs_id());
+  auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  std::vector<FileSystem::MkNodParam> params;
+  params.reserve(request->params_size());
+  for (const auto& item : request->params()) {
+    FileSystem::MkNodParam param;
+    param.parent = request->parent();
+    param.name = item.name();
+    param.mode = item.mode();
+    param.uid = item.uid();
+    param.gid = item.gid();
+    param.rdev = item.rdev();
+
+    params.push_back(std::move(param));
+  }
+
+  Context ctx(request->context(), request->info().request_id(), __func__);
+
+  EntryOut entry_out;
+  status = file_system->BatchMkNod(ctx, params, entry_out);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  response->mutable_parent_inode()->Swap(&entry_out.parent_attr);
+  for (auto& attr : entry_out.attrs) response->add_inodes()->Swap(&attr);
+}
+
+void MDSServiceImpl::BatchMkNod(google::protobuf::RpcController* controller, const pb::mds::BatchMkNodRequest* request,
+                                pb::mds::BatchMkNodResponse* response, google::protobuf::Closure* done) {
+  auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // validate request
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_id() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs_id is empty");
+    }
+    if (request->params().empty()) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "params is empty");
+    }
+
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  // run in place.
+  RunInPlace(BatchMkNod, controller, request, response, svr_done);
+
+  // run in queue.
+  RunInQueue(BatchMkNod, controller, request, response, svr_done, write_worker_set_);
+}
+
 void MDSServiceImpl::DoMkDir(google::protobuf::RpcController*, const pb::mds::MkDirRequest* request,
                              pb::mds::MkDirResponse* response, TraceClosure* done) {
   brpc::ClosureGuard done_guard(done);
@@ -1051,6 +1118,73 @@ void MDSServiceImpl::MkDir(google::protobuf::RpcController* controller, const pb
 
   // run in queue.
   RunInQueue(MkDir, controller, request, response, svr_done, write_worker_set_);
+}
+
+void MDSServiceImpl::DoBatchMkDir(google::protobuf::RpcController*, const pb::mds::BatchMkDirRequest* request,
+                                  pb::mds::BatchMkDirResponse* response, TraceClosure* done) {
+  brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
+
+  auto file_system = GetFileSystem(request->fs_id());
+  auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  std::vector<FileSystem::MkDirParam> params;
+  params.reserve(request->params_size());
+  for (const auto& item : request->params()) {
+    FileSystem::MkDirParam param;
+    param.parent = request->parent();
+    param.name = item.name();
+    param.mode = item.mode();
+    param.uid = item.uid();
+    param.gid = item.gid();
+    param.rdev = item.rdev();
+
+    params.push_back(std::move(param));
+  }
+
+  Context ctx(request->context(), request->info().request_id(), __func__);
+
+  EntryOut entry_out;
+  status = file_system->BatchMkDir(ctx, params, entry_out);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  response->mutable_parent_inode()->Swap(&entry_out.parent_attr);
+  for (auto& attr : entry_out.attrs) response->add_inodes()->Swap(&attr);
+}
+
+void MDSServiceImpl::BatchMkDir(google::protobuf::RpcController* controller, const pb::mds::BatchMkDirRequest* request,
+                                pb::mds::BatchMkDirResponse* response, google::protobuf::Closure* done) {
+  auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // validate request
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_id() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs_id is empty");
+    }
+    if (request->params().empty()) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "params is empty");
+    }
+
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  // run in place.
+  RunInPlace(BatchMkDir, controller, request, response, svr_done);
+
+  // run in queue.
+  RunInQueue(BatchMkDir, controller, request, response, svr_done, write_worker_set_);
 }
 
 void MDSServiceImpl::DoRmDir(google::protobuf::RpcController*, const pb::mds::RmDirRequest* request,
@@ -1301,6 +1435,60 @@ void MDSServiceImpl::UnLink(google::protobuf::RpcController* controller, const p
 
   // run in queue.
   RunInQueue(UnLink, controller, request, response, svr_done, write_worker_set_);
+}
+
+void MDSServiceImpl::DoBatchUnLink(google::protobuf::RpcController*, const pb::mds::BatchUnLinkRequest* request,
+                                   pb::mds::BatchUnLinkResponse* response, TraceClosure* done) {
+  brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
+
+  auto file_system = GetFileSystem(request->fs_id());
+  auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  Context ctx(request->context(), request->info().request_id(), __func__);
+
+  EntryOut entry_out;
+  status = file_system->BatchUnLink(ctx, request->parent(), Helper::PbRepeatedToVector(request->names()), entry_out);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  response->mutable_parent_inode()->Swap(&entry_out.parent_attr);
+  for (auto& attr : entry_out.attrs) response->add_inodes()->Swap(&attr);
+}
+
+void MDSServiceImpl::BatchUnLink(google::protobuf::RpcController* controller,
+                                 const pb::mds::BatchUnLinkRequest* request, pb::mds::BatchUnLinkResponse* response,
+                                 google::protobuf::Closure* done) {
+  auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // validate request
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_id() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs_id is empty");
+    }
+    if (request->names().empty()) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "names is empty");
+    }
+
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  // run in place.
+  RunInPlace(BatchUnLink, controller, request, response, svr_done);
+
+  // run in queue.
+  RunInQueue(BatchUnLink, controller, request, response, svr_done, write_worker_set_);
 }
 
 void MDSServiceImpl::DoSymlink(google::protobuf::RpcController*, const pb::mds::SymlinkRequest* request,

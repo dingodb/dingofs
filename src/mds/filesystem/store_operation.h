@@ -64,19 +64,22 @@ class Operation {
 
     kCreateRoot = 20,
     kMkDir = 21,
-    kMkNod = 22,
-    kBatchCreateFile = 23,
-    kHardLink = 24,
-    kSmyLink = 25,
-    kUpdateAttr = 26,
-    kUpdateXAttr = 27,
-    kRemoveXAttr = 28,
-    kFallocate = 29,
-    kOpenFile = 30,
-    kCloseFile = 31,
-    kRmDir = 32,
-    kUnlink = 33,
-    kRename = 34,
+    kBatchMkDir = 22,
+    kMkNod = 23,
+    kBatchMkNod = 24,
+    kBatchCreateFile = 25,
+    kHardLink = 26,
+    kSmyLink = 27,
+    kUpdateAttr = 28,
+    kUpdateXAttr = 29,
+    kRemoveXAttr = 30,
+    kFallocate = 31,
+    kOpenFile = 32,
+    kCloseFile = 33,
+    kRmDir = 34,
+    kUnlink = 35,
+    kBatchUnlink = 36,
+    kRename = 37,
 
     kCompactChunk = 50,
     kUpsertChunk = 51,
@@ -146,7 +149,9 @@ class Operation {
   bool IsCreateType() const {
     switch (GetOpType()) {
       case OpType::kMkDir:
+      case OpType::kBatchMkDir:
       case OpType::kMkNod:
+      case OpType::kBatchMkNod:
       case OpType::kBatchCreateFile:
       case OpType::kSmyLink:
         return true;
@@ -174,7 +179,9 @@ class Operation {
   bool IsBatchRun() const {
     switch (GetOpType()) {
       case OpType::kMkDir:
+      case OpType::kBatchMkDir:
       case OpType::kMkNod:
+      case OpType::kBatchMkNod:
       case OpType::kBatchCreateFile:
       case OpType::kSmyLink:
       case OpType::kUpdateAttr:
@@ -484,8 +491,25 @@ class MkDirOperation : public Operation {
   Status RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const std::vector<KeyValue>& prefetch_kvs) override;
 
  private:
-  const Dentry dentry_;
-  AttrEntry attr_;
+  const Dentry& dentry_;
+  const AttrEntry& attr_;
+};
+
+class BatchMkDirOperation : public Operation {
+ public:
+  BatchMkDirOperation(Trace& trace, const std::vector<Dentry>& dentries, const std::vector<AttrEntry>& attrs)
+      : Operation(trace), dentries_(dentries), attrs_(attrs) {};
+  ~BatchMkDirOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kBatchMkDir; }
+  uint32_t GetFsId() const override { return dentries_[0].FsId(); }
+  Ino GetIno() const override { return dentries_[0].ParentIno(); }
+
+  Status RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const std::vector<KeyValue>& prefetch_kvs) override;
+
+ private:
+  const std::vector<Dentry>& dentries_;
+  const std::vector<AttrEntry>& attrs_;
 };
 
 class MkNodOperation : public Operation {
@@ -502,8 +526,26 @@ class MkNodOperation : public Operation {
   Status RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const std::vector<KeyValue>& prefetch_kvs) override;
 
  private:
-  const Dentry dentry_;
-  AttrEntry attr_;
+  const Dentry& dentry_;
+  const AttrEntry& attr_;
+};
+
+class BatchMkNodOperation : public Operation {
+ public:
+  BatchMkNodOperation(Trace& trace, const std::vector<Dentry>& dentries, const std::vector<AttrEntry>& attrs)
+      : Operation(trace), dentries_(dentries), attrs_(attrs) {};
+  ~BatchMkNodOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kBatchMkNod; }
+
+  uint32_t GetFsId() const override { return dentries_[0].FsId(); }
+  Ino GetIno() const override { return dentries_[0].ParentIno(); }
+
+  Status RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const std::vector<KeyValue>& prefetch_kvs) override;
+
+ private:
+  const std::vector<Dentry>& dentries_;
+  const std::vector<AttrEntry>& attrs_;
 };
 
 class BatchCreateFileOperation : public Operation {
@@ -926,6 +968,36 @@ class UnlinkOperation : public Operation {
 
  private:
   const Dentry& dentry_;
+  Result result_;
+};
+
+class BatchUnlinkOperation : public Operation {
+ public:
+  BatchUnlinkOperation(Trace& trace, const std::vector<Dentry>& dentries) : Operation(trace), dentries_(dentries) {};
+  ~BatchUnlinkOperation() override = default;
+
+  struct Result : public Operation::Result {
+    std::vector<AttrEntry> child_attrs;
+  };
+
+  OpType GetOpType() const override { return OpType::kBatchUnlink; }
+
+  uint32_t GetFsId() const override { return dentries_[0].FsId(); }
+  Ino GetIno() const override { return dentries_[0].ParentIno(); }
+
+  Status Run(TxnUPtr& txn) override;
+
+  template <int size = 0>
+  Result& GetResult() {
+    auto& result = Operation::GetResult();
+    result_.status = result.status;
+    result_.attr = std::move(result.attr);
+
+    return result_;
+  }
+
+ private:
+  const std::vector<Dentry>& dentries_;
   Result result_;
 };
 
@@ -2130,7 +2202,7 @@ class OperationProcessor : public std::enable_shared_from_this<OperationProcesso
  private:
   static std::map<OperationProcessor::Key, BatchOperation> Grouping(std::vector<Operation*>& operations);
   void ProcessOperation();
-  void LaunchExecuteBatchOperation(const BatchOperation& batch_operation);
+  void LaunchExecuteBatchOperation(BatchOperation&& batch_operation);
   void ExecuteBatchOperation(BatchOperation& batch_operation);
 
   bthread_t tid_{0};

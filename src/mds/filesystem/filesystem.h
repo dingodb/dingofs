@@ -130,6 +130,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status BatchCreate(Context& ctx, Ino parent, const std::vector<MkNodParam>& params, EntryOut& entry_out,
                      std::vector<std::string>& session_ids);
   Status MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_out);
+  Status BatchMkNod(Context& ctx, const std::vector<MkNodParam>& params, EntryOut& entry_out);
   Status Open(Context& ctx, Ino ino, uint32_t flags, std::string& session_id, bool is_prefetch_chunk,
               const std::map<uint32_t, uint64_t>& chunk_version_map, EntryOut& entry_out,
               std::vector<ChunkEntry>& chunks);
@@ -146,6 +147,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
     uint64_t rdev{0};
   };
   Status MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_out);
+  Status BatchMkDir(Context& ctx, const std::vector<MkDirParam>& params, EntryOut& entry_out);
   Status RmDir(Context& ctx, Ino parent, const std::string& name, Ino& ino, EntryOut& entry_out);
   Status ReadDir(Context& ctx, Ino ino, const std::string& last_name, uint32_t limit, bool with_attr,
                  std::vector<EntryOut>& entry_outs);
@@ -154,6 +156,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status Link(Context& ctx, Ino ino, Ino new_parent, const std::string& new_name, EntryOut& entry_out);
   // delete link
   Status UnLink(Context& ctx, Ino parent, const std::string& name, EntryOut& entry_out);
+  Status BatchUnLink(Context& ctx, Ino parent, const std::vector<std::string>& names, EntryOut& entry_out);
   // create symbolic link
   Status Symlink(Context& ctx, const std::string& symlink, Ino new_parent, const std::string& new_name, uint32_t uid,
                  uint32_t gid, EntryOut& entry_out);
@@ -251,6 +254,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status GetPartitionParentInode(Context& ctx, PartitionPtr& partition, InodeSPtr& out_inode);
   void AddDentryToPartition(Ino parent, const Dentry& dentry, uint64_t version);
   void DeleteDentryFromPartition(Ino parent, const std::string& name, uint64_t version);
+  void DeleteDentryFromPartition(Ino parent, const std::vector<std::string>& names, uint64_t version);
 
   // get partition
   Status GetPartition(Context& ctx, Ino parent, PartitionPtr& out_partition);

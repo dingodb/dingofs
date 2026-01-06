@@ -42,7 +42,7 @@ struct Context {
 
   const std::string& SessionID() const { return session_id; }  // session id
 
-  SpanScopeSPtr GetTraceSpan() { return trace_span.lock(); }
+  SpanScopeSPtr GetTraceSpan() const { return trace_span.lock(); }
 
   void SetTraceSpan(SpanScopeSPtr trace_span_ptr) {
     trace_span = trace_span_ptr;

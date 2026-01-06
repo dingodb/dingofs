@@ -138,10 +138,13 @@ DEFINE_validator(vfs_meta_rpc_timeout_ms, brpc::PassValidate);
 DEFINE_int32(vfs_meta_rpc_retry_times, 8, "rpc retry time");
 DEFINE_validator(vfs_meta_rpc_retry_times, brpc::PassValidate);
 
-DEFINE_uint32(vfs_meta_write_slice_operation_merge_delay_us, 10,
-              "write slice operation merge delay us.");
-DEFINE_validator(vfs_meta_write_slice_operation_merge_delay_us,
-                 brpc::PassValidate);
+DEFINE_bool(vfs_meta_batch_operation_enable, true,
+            "enable batch operation, default is false");
+DEFINE_validator(vfs_meta_batch_operation_enable, brpc::PassValidate);
+
+DEFINE_uint32(vfs_meta_batch_operation_merge_delay_us, 10,
+              "batch operation merge delay us.");
+DEFINE_validator(vfs_meta_batch_operation_merge_delay_us, brpc::PassValidate);
 
 DEFINE_uint32(vfs_meta_commit_slice_max_num, 2048,
               "maximum number of slices to commit at once.");

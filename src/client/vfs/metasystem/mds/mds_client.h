@@ -90,73 +90,102 @@ class MDSClient {
                  const pb::mds::MountPoint& mount_point);
   Status UmountFs(const std::string& name, const std::string& client_id);
 
-  Status Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
+  Status Lookup(ContextSPtr& ctx, Ino parent, const std::string& name,
                 AttrEntry& attr_entry);
 
-  Status Create(ContextSPtr ctx, Ino parent, const std::string& name,
+  Status Create(ContextSPtr& ctx, Ino parent, const std::string& name,
                 uint32_t uid, uint32_t gid, uint32_t mode, int flag,
                 AttrEntry& attr_entry, AttrEntry& parent_attr_entry,
                 std::vector<std::string>& session_ids);
-  Status MkNod(ContextSPtr ctx, Ino parent, const std::string& name,
+  Status MkNod(ContextSPtr& ctx, Ino parent, const std::string& name,
                uint32_t uid, uint32_t gid, mode_t mode, dev_t rdev,
                AttrEntry& attr_entry, AttrEntry& parent_attr_entry);
-  Status MkDir(ContextSPtr ctx, Ino parent, const std::string& name,
+
+  struct MkNodParam {
+    std::string name;
+    uint32_t uid;
+    uint32_t gid;
+    mode_t mode;
+    dev_t rdev;
+  };
+  Status BatchMkNod(ContextSPtr& ctx, Ino parent,
+                    const std::vector<MkNodParam>& params,
+                    std::vector<AttrEntry>& attr_entries,
+                    AttrEntry& parent_attr_entry);
+
+  Status MkDir(ContextSPtr& ctx, Ino parent, const std::string& name,
                uint32_t uid, uint32_t gid, mode_t mode, dev_t rdev,
                AttrEntry& attr_entry, AttrEntry& parent_attr_entry);
-  Status RmDir(ContextSPtr ctx, Ino parent, const std::string& name, Ino& ino,
+  struct MkDirParam {
+    std::string name;
+    uint32_t uid;
+    uint32_t gid;
+    mode_t mode;
+    dev_t rdev;
+  };
+  Status BatchMkDir(ContextSPtr& ctx, Ino parent,
+                    const std::vector<MkDirParam>& params,
+                    std::vector<AttrEntry>& attr_entries,
+                    AttrEntry& parent_attr_entry);
+
+  Status RmDir(ContextSPtr& ctx, Ino parent, const std::string& name, Ino& ino,
                AttrEntry& parent_attr_entry);
 
-  Status ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
+  Status ReadDir(ContextSPtr& ctx, Ino ino, uint64_t fh,
                  const std::string& last_name, uint32_t limit, bool with_attr,
                  std::vector<DirEntry>& entries);
 
-  Status Open(ContextSPtr ctx, Ino ino, int flags, std::string& session_id,
+  Status Open(ContextSPtr& ctx, Ino ino, int flags, std::string& session_id,
               bool is_prefetch_chunk,
               const std::vector<mds::ChunkDescriptor>& chunk_descriptors,
               AttrEntry& attr_entry, std::vector<mds::ChunkEntry>& chunks);
-  Status Release(ContextSPtr ctx, Ino ino, const std::string& session_id);
+  Status Release(ContextSPtr& ctx, Ino ino, const std::string& session_id);
 
-  Status Link(ContextSPtr ctx, Ino ino, Ino new_parent,
+  Status Link(ContextSPtr& ctx, Ino ino, Ino new_parent,
               const std::string& new_name, AttrEntry& attr_entry,
               AttrEntry& parent_attr_entry);
-  Status UnLink(ContextSPtr ctx, Ino parent, const std::string& name,
+  Status UnLink(ContextSPtr& ctx, Ino parent, const std::string& name,
                 AttrEntry& attr_entry, AttrEntry& parent_attr_entry);
-  Status Symlink(ContextSPtr ctx, Ino parent, const std::string& name,
+  Status BatchUnLink(ContextSPtr& ctx, Ino parent,
+                     const std::vector<std::string>& names,
+                     std::vector<AttrEntry>& attr_entries,
+                     AttrEntry& parent_attr_entry);
+  Status Symlink(ContextSPtr& ctx, Ino parent, const std::string& name,
                  uint32_t uid, uint32_t gid, const std::string& symlink,
                  AttrEntry& attr_entry, AttrEntry& parent_attr_entry);
-  Status ReadLink(ContextSPtr ctx, Ino ino, std::string& symlink);
+  Status ReadLink(ContextSPtr& ctx, Ino ino, std::string& symlink);
 
-  Status GetAttr(ContextSPtr ctx, Ino ino, AttrEntry& attr_entry);
-  Status SetAttr(ContextSPtr ctx, Ino ino, const Attr& attr, int to_set,
+  Status GetAttr(ContextSPtr& ctx, Ino ino, AttrEntry& attr_entry);
+  Status SetAttr(ContextSPtr& ctx, Ino ino, const Attr& attr, int to_set,
                  AttrEntry& attr_entry, bool& shrink_file);
-  Status GetXAttr(ContextSPtr ctx, Ino ino, const std::string& name,
+  Status GetXAttr(ContextSPtr& ctx, Ino ino, const std::string& name,
                   std::string& value);
-  Status SetXAttr(ContextSPtr ctx, Ino ino, const std::string& name,
+  Status SetXAttr(ContextSPtr& ctx, Ino ino, const std::string& name,
                   const std::string& value, AttrEntry& attr_entry);
-  Status RemoveXAttr(ContextSPtr ctx, Ino ino, const std::string& name,
+  Status RemoveXAttr(ContextSPtr& ctx, Ino ino, const std::string& name,
                      AttrEntry& attr_entry);
-  Status ListXAttr(ContextSPtr ctx, Ino ino,
+  Status ListXAttr(ContextSPtr& ctx, Ino ino,
                    std::map<std::string, std::string>& xattrs);
 
-  Status Rename(ContextSPtr ctx, Ino old_parent, const std::string& old_name,
+  Status Rename(ContextSPtr& ctx, Ino old_parent, const std::string& old_name,
                 Ino new_parent, const std::string& new_name,
                 std::vector<Ino>& effected_inos);
 
-  Status NewSliceId(ContextSPtr ctx, uint32_t num, uint64_t* id);
+  Status NewSliceId(ContextSPtr& ctx, uint32_t num, uint64_t* id);
 
-  Status ReadSlice(ContextSPtr ctx, Ino ino,
+  Status ReadSlice(ContextSPtr& ctx, Ino ino,
                    const std::vector<ChunkDescriptor>& chunk_descriptors,
                    std::vector<mds::ChunkEntry>& chunks);
 
-  Status WriteSlice(ContextSPtr ctx, Ino ino,
+  Status WriteSlice(ContextSPtr& ctx, Ino ino,
                     const std::vector<mds::DeltaSliceEntry>& delta_slices,
                     std::vector<ChunkDescriptor>& chunk_descriptors);
 
-  Status Fallocate(ContextSPtr ctx, Ino ino, int32_t mode, uint64_t offset,
+  Status Fallocate(ContextSPtr& ctx, Ino ino, int32_t mode, uint64_t offset,
                    uint64_t length);
 
-  Status GetFsQuota(ContextSPtr ctx, FsStat& fs_stat);
-  Status GetDirQuota(ContextSPtr ctx, Ino ino, FsStat& fs_stat);
+  Status GetFsQuota(ContextSPtr& ctx, FsStat& fs_stat);
+  Status GetDirQuota(ContextSPtr& ctx, Ino ino, FsStat& fs_stat);
 
  private:
   static Status DoGetFsInfo(RPCPtr rpc, pb::mds::GetFsInfoRequest& request,

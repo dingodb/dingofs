@@ -21,6 +21,7 @@
 #include <string>
 
 #include "client/vfs/common/client_id.h"
+#include "client/vfs/metasystem/mds/batch_processor.h"
 #include "client/vfs/metasystem/mds/chunk_memo.h"
 #include "client/vfs/metasystem/mds/dir_iterator.h"
 #include "client/vfs/metasystem/mds/file_session.h"
@@ -29,7 +30,6 @@
 #include "client/vfs/metasystem/mds/mds_client.h"
 #include "client/vfs/metasystem/mds/mds_discovery.h"
 #include "client/vfs/metasystem/mds/modify_time_memo.h"
-#include "client/vfs/metasystem/mds/write_slice_processor.h"
 #include "client/vfs/metasystem/meta_system.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
@@ -170,15 +170,19 @@ class MDSMetaSystem : public vfs::MetaSystem {
 
   // chunk cache
   Status SetInodeLength(ContextSPtr ctx, FileSessionSPtr file_session, Ino ino);
-  void LaunchWriteSlice(FileSessionSPtr file_session, CommitTaskSPtr task);
-  void AsyncCommitSlice(FileSessionSPtr file_session, bool is_force,
-                        bool is_wait);
+  void LaunchWriteSlice(ContextSPtr& ctx, FileSessionSPtr file_session,
+                        CommitTaskSPtr task);
+  void AsyncCommitSlice(ContextSPtr& ctx, FileSessionSPtr file_session,
+                        bool is_force, bool is_wait);
   Status CommitAllSlice(ContextSPtr ctx, Ino ino);
 
   Status CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
                      const std::string& caller);
   void CorrectAttrLength(ContextSPtr ctx, Attr& attr,
                          const std::string& caller);
+
+  // batch operation
+  Status RunOperation(OperationSPtr operation);
 
   const std::string name_;
   const ClientId client_id_;
@@ -205,7 +209,7 @@ class MDSMetaSystem : public vfs::MetaSystem {
   // This is manage crontab, like heartbeat.
   mds::CrontabManager crontab_manager_;
 
-  WriteSliceProcessorSPtr write_slice_processor_;
+  BatchProcessor batch_processor_;
 };
 
 }  // namespace meta

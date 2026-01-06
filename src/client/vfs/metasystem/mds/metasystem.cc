@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -70,7 +71,7 @@ MDSMetaSystem::MDSMetaSystem(mds::FsInfoSPtr fs_info, const ClientId& client_id,
       file_session_map_(fs_info),
       inode_cache_(InodeCache::New(fs_info->GetFsId())),
       mds_client_(mds_client),
-      write_slice_processor_(WriteSliceProcessor::New(mds_client)) {}
+      batch_processor_(mds_client) {}
 
 MDSMetaSystem::~MDSMetaSystem() {}  // NOLINT
 
@@ -83,8 +84,8 @@ Status MDSMetaSystem::Init(bool upgrade) {
     return Status::MountFailed("mount fs fail");
   }
 
-  if (!write_slice_processor_->Init()) {
-    return Status::Internal("init write slice processor fail");
+  if (!batch_processor_.Init()) {
+    return Status::Internal("init batch processor fail");
   }
 
   // init crontab
@@ -102,7 +103,7 @@ void MDSMetaSystem::UnInit(bool upgrade) {
 
   crontab_manager_.Destroy();
 
-  write_slice_processor_->Destroy();
+  batch_processor_.Destroy();
 }
 
 bool MDSMetaSystem::Dump(ContextSPtr, Json::Value& value) {
@@ -383,14 +384,44 @@ Status MDSMetaSystem::Create(ContextSPtr ctx, Ino parent,
   return Status::OK();
 }
 
+Status MDSMetaSystem::RunOperation(OperationSPtr operation) {
+  CHECK(operation != nullptr) << "operation is null.";
+
+  bthread::CountdownEvent count_down(1);
+
+  operation->SetEvent(&count_down);
+
+  if (!batch_processor_.RunBatched(operation)) {
+    return Status::Internal("commit operation fail");
+  }
+
+  CHECK(count_down.wait() == 0) << "count down wait fail.";
+
+  return operation->GetStatus();
+}
+
 Status MDSMetaSystem::MkNod(ContextSPtr ctx, Ino parent,
                             const std::string& name, uint32_t uid, uint32_t gid,
                             uint32_t mode, uint64_t rdev, Attr* attr) {
   AttrEntry attr_entry, parent_attr_entry;
-  auto status = mds_client_->MkNod(ctx, parent, name, uid, gid, mode, rdev,
-                                   attr_entry, parent_attr_entry);
-  if (!status.ok()) {
-    return status;
+  if (FLAGS_vfs_meta_batch_operation_enable) {
+    auto operation = std::make_shared<MkNodOperation>(ctx, parent, name, uid,
+                                                      gid, mode, rdev);
+    auto status = RunOperation(operation);
+    if (!status.ok()) return status;
+
+    auto& result = operation->GetResult();
+    attr_entry = result.attr_entry;
+    parent_attr_entry = result.parent_attr_entry;
+
+    LOG(INFO) << fmt::format("[meta.fs] mknod {}/{} attr({}) parent_attr({})",
+                             parent, name, attr_entry.ShortDebugString(),
+                             parent_attr_entry.ShortDebugString());
+
+  } else {
+    auto status = mds_client_->MkNod(ctx, parent, name, uid, gid, mode, rdev,
+                                     attr_entry, parent_attr_entry);
+    if (!status.ok()) return status;
   }
 
   *attr = Helper::ToAttr(attr_entry);
@@ -596,7 +627,7 @@ Status MDSMetaSystem::WriteSlice(ContextSPtr, Ino ino, uint64_t index,
   return Status::OK();
 }
 
-Status MDSMetaSystem::AsyncWriteSlice(ContextSPtr, Ino ino, uint64_t index,
+Status MDSMetaSystem::AsyncWriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                                       uint64_t fh,
                                       const std::vector<Slice>& slices,
                                       DoneClosure done) {
@@ -609,7 +640,7 @@ Status MDSMetaSystem::AsyncWriteSlice(ContextSPtr, Ino ino, uint64_t index,
 
   file_session->GetChunkSet().Append(index, slices);
 
-  AsyncCommitSlice(file_session, false, false);
+  AsyncCommitSlice(ctx, file_session, false, false);
 
   done(Status::OK());
 
@@ -637,10 +668,25 @@ Status MDSMetaSystem::MkDir(ContextSPtr ctx, Ino parent,
                             const std::string& name, uint32_t uid, uint32_t gid,
                             uint32_t mode, Attr* attr) {
   AttrEntry attr_entry, parent_attr_entry;
-  auto status = mds_client_->MkDir(ctx, parent, name, uid, gid, mode, 0,
-                                   attr_entry, parent_attr_entry);
-  if (!status.ok()) {
-    return status;
+
+  if (FLAGS_vfs_meta_batch_operation_enable) {
+    auto operation =
+        std::make_shared<MkDirOperation>(ctx, parent, name, uid, gid, mode);
+    auto status = RunOperation(operation);
+    if (!status.ok()) return status;
+
+    auto& result = operation->GetResult();
+    attr_entry = result.attr_entry;
+    parent_attr_entry = result.parent_attr_entry;
+
+    LOG(INFO) << fmt::format("[meta.fs] mkdir {}/{} attr({}) parent_attr({})",
+                             parent, name, attr_entry.ShortDebugString(),
+                             parent_attr_entry.ShortDebugString());
+
+  } else {
+    auto status = mds_client_->MkDir(ctx, parent, name, uid, gid, mode, 0,
+                                     attr_entry, parent_attr_entry);
+    if (!status.ok()) return status;
   }
 
   *attr = Helper::ToAttr(attr_entry);
@@ -744,12 +790,24 @@ Status MDSMetaSystem::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
 Status MDSMetaSystem::Unlink(ContextSPtr ctx, Ino parent,
                              const std::string& name) {
   AttrEntry attr_entry, parent_attr_entry;
-  auto status =
-      mds_client_->UnLink(ctx, parent, name, attr_entry, parent_attr_entry);
-  if (!status.ok()) {
-    LOG(ERROR) << fmt::format("[meta.fs.{}.{}] unlink fail, error({}).", parent,
-                              name, status.ToString());
-    return status;
+
+  if (FLAGS_vfs_meta_batch_operation_enable) {
+    auto operation = std::make_shared<UnlinkOperation>(ctx, parent, name);
+    auto status = RunOperation(operation);
+    if (!status.ok()) return status;
+
+    auto& result = operation->GetResult();
+    attr_entry = result.attr_entry;
+    parent_attr_entry = result.parent_attr_entry;
+
+    LOG(INFO) << fmt::format("[meta.fs] unlink {}/{} attr({}) parent_attr({})",
+                             parent, name, attr_entry.ShortDebugString(),
+                             parent_attr_entry.ShortDebugString());
+
+  } else {
+    auto status =
+        mds_client_->UnLink(ctx, parent, name, attr_entry, parent_attr_entry);
+    if (!status.ok()) return status;
   }
 
   DeleteInodeFromCache(parent);
@@ -993,17 +1051,16 @@ Status MDSMetaSystem::SetInodeLength(ContextSPtr ctx,
   return Status::OK();
 }
 
-void MDSMetaSystem::LaunchWriteSlice(FileSessionSPtr file_session,
+void MDSMetaSystem::LaunchWriteSlice(ContextSPtr& ctx,
+                                     FileSessionSPtr file_session,
                                      CommitTaskSPtr task) {
   Ino ino = file_session->GetIno();
 
   LOG(INFO) << fmt::format("[meta.fs.{}] launch write slice {}.", ino,
                            task->Describe());
 
-  auto operation = std::make_shared<WriteSliceOperation>();
-  operation->ino = ino;
-  operation->task = task;
-  operation->done =
+  auto operation = std::make_shared<WriteSliceOperation>(
+      ctx, ino, task,
       [this, file_session, ino](
           const Status& status, CommitTaskSPtr task,
           const std::vector<mds::ChunkDescriptor>& chunk_descriptors) {
@@ -1026,15 +1083,16 @@ void MDSMetaSystem::LaunchWriteSlice(FileSessionSPtr file_session,
               "status({}).",
               ino, task->TaskID(), task->Retries(), status.ToString());
         }
-      };
+      });
 
-  if (!write_slice_processor_->AsyncRun(operation)) {
+  if (!batch_processor_.AsyncRun(operation)) {
     LOG(ERROR) << fmt::format("[meta.fs.{}] commit delta slice fail.", ino);
     task->SetDone(Status::Internal("launch write slice fail"));
   }
 }
 
-void MDSMetaSystem::AsyncCommitSlice(FileSessionSPtr file_session,
+void MDSMetaSystem::AsyncCommitSlice(ContextSPtr& ctx,
+                                     FileSessionSPtr file_session,
                                      bool is_force, bool is_wait) {
   Ino ino = file_session->GetIno();
   auto& chunk_set = file_session->GetChunkSet();
@@ -1047,7 +1105,7 @@ void MDSMetaSystem::AsyncCommitSlice(FileSessionSPtr file_session,
   for (auto& task : tasks) {
     if (task->MaybeRun()) {
       ++launched_count;
-      LaunchWriteSlice(file_session, task);
+      LaunchWriteSlice(ctx, file_session, task);
     }
   }
 
@@ -1080,7 +1138,7 @@ Status MDSMetaSystem::CommitAllSlice(ContextSPtr ctx, Ino ino) {
         "has_commit_task({}).",
         ino, has_stage, has_committing, has_commit_task);
 
-    AsyncCommitSlice(file_session, true, true);
+    AsyncCommitSlice(ctx, file_session, true, true);
 
   } while (true);
 

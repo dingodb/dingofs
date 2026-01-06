@@ -1665,8 +1665,8 @@ Status LocalMetaSystem::InitRoot() {
   attr_entry.set_ctime(now_ns);
   attr_entry.set_mtime(now_ns);
   attr_entry.set_atime(now_ns);
-  attr_entry.set_uid(1008);
-  attr_entry.set_gid(1008);
+  attr_entry.set_uid(0);
+  attr_entry.set_gid(0);
   attr_entry.set_nlink(kEmptyDirMinLinkNum);
   attr_entry.set_type(pb::mds::FileType::DIRECTORY);
   attr_entry.set_version(1);

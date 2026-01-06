@@ -298,8 +298,8 @@ static MemoryMetaSystem::PBInode GenInode(uint32_t fs_id, uint64_t ino,
   inode.set_fs_id(fs_id);
   inode.set_mode(S_IFDIR | S_IRUSR | S_IWUSR | S_IRGRP | S_IXUSR | S_IWGRP |
                  S_IXGRP | S_IROTH | S_IWOTH | S_IXOTH);
-  inode.set_uid(1008);
-  inode.set_gid(1008);
+  inode.set_uid(0);
+  inode.set_gid(0);
   inode.set_rdev(0);
   inode.set_type(type);
 

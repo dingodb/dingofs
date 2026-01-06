@@ -101,6 +101,23 @@ void Partition::Delete(const std::string& name, uint64_t version) {
   delta_version_ = std::max(version, delta_version_);
 }
 
+void Partition::Delete(const std::vector<std::string>& names, uint64_t version) {
+  utils::WriteLockGuard lk(lock_);
+
+  for (const auto& name : names) {
+    Dentry detry(name);
+    auto it = children_.find(name);
+    if (it != children_.end()) {
+      detry = it->second;
+      children_.erase(it);
+    }
+
+    AddDeltaDentryOp(DentryOp{DentryOpType::DELETE, version, detry});
+  }
+
+  delta_version_ = std::max(version, delta_version_);
+}
+
 bool Partition::Empty() {
   utils::ReadLockGuard lk(lock_);
 

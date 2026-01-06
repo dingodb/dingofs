@@ -60,6 +60,7 @@ class Partition {
   void PutWithInode(const Dentry& dentry);
 
   void Delete(const std::string& name, uint64_t version);
+  void Delete(const std::vector<std::string>& names, uint64_t version);
 
   bool Empty();
   size_t Size();
