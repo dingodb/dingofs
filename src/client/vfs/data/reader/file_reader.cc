@@ -425,7 +425,7 @@ bool FileReader::IsProtectedReq(const ReadRequestSptr& req) const {
   int64_t s = policy_->last_offset >= bt ? policy_->last_offset - bt : 0;
   int64_t e = policy_->last_offset + readahead;
 
-  VLOG(9) << "IsProtectedReq check req " << req->ToString()
+  VLOG(9) << "IsProtectedReq check req " << req->ToStringUnlock()
           << " policy: " << policy_->ToString() << ", [" << s << "," << e
           << ")";
 
@@ -648,13 +648,13 @@ void FileReader::CleanUpRequest(ContextSPtr ctx, const FileRange& frange) {
 
   auto can_remove = [&req_num, now, this](const ReadRequestSptr& req) -> bool {
     if (req->access_sec + kReqValidityTimeoutS < now) {
-      VLOG(12) << "CleanUpRequest remove timeout req: " << req->ToString()
+      VLOG(12) << "CleanUpRequest remove timeout req: " << req->ToStringUnlock()
                << " req_num: " << req_num;
       return true;
     }
 
     if (req_num > kMaxReadRequests && !IsProtectedReq(req)) {
-      VLOG(12) << "CleanUpRequest remove useless req: " << req->ToString()
+      VLOG(12) << "CleanUpRequest remove useless req: " << req->ToStringUnlock()
                << " req_num: " << req_num;
       return true;
     }
