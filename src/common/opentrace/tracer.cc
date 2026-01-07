@@ -14,16 +14,13 @@
  * limitations under the License.
  */
 
-#include "common/opentrace/opentelemetry/tracer.h"
+#include "common/opentrace/tracer.h"
 
 #include <memory>
 
-#include "common/opentrace/opentelemetry/noop_span.h"
-#include "common/opentrace/opentelemetry/otlp_span.h"
+#include "common/opentrace/otlp_span.h"
 
 namespace dingofs {
-
-DEFINE_bool(enable_trace, false, "Whether to enable trace");
 
 bool OpenTeleMetryTracer::Init() {
   auto resource_attributes = opentelemetry::sdk::resource::ResourceAttributes{
@@ -33,6 +30,7 @@ bool OpenTeleMetryTracer::Init() {
 
   otlp::OtlpGrpcExporterOptions opts;
   opts.endpoint = otlp_export_endpoint_;
+  opts.max_threads = max_export_thread_;
 
   auto exporter = std::unique_ptr<trace_sdk::SpanExporter>(
       new otlp::OtlpGrpcExporter(opts));
@@ -81,30 +79,20 @@ void OpenTeleMetryTracer::Stop() {
   trace::Provider::SetTracerProvider(noop);
 };
 
-std::shared_ptr<Span> OpenTeleMetryTracer::MakeSpan(const std::string& name) {
-  if (!FLAGS_enable_trace) {
-    return std::make_shared<NoopSpan>();
-  }
-  return std::make_shared<OtlpSpan>(tracer_->StartSpan(name));
+OtlpSpan OpenTeleMetryTracer::MakeSpan(const std::string& name) {
+  return OtlpSpan(tracer_->StartSpan(name));
 }
 
-std::shared_ptr<Span> OpenTeleMetryTracer::MakeSpan(
-    const std::string& name, const SpanContext& span_context) {
-  if (!FLAGS_enable_trace) {
-    return std::make_shared<NoopSpan>();
-  }
+OtlpSpan OpenTeleMetryTracer::MakeSpan(const std::string& name,
+                                       const SpanContext& span_context) {
   trace::StartSpanOptions options;
   options.parent = span_context;
-  return std::make_shared<OtlpSpan>(tracer_->StartSpan(name, options));
+  return OtlpSpan(tracer_->StartSpan(name, options));
 }
 
-std::shared_ptr<Span> OpenTeleMetryTracer::MakeSpan(
-    const std::string& name, const std::string& trace_id,
-    const std::string& span_id) {
-  if (!FLAGS_enable_trace) {
-    return std::make_shared<NoopSpan>();
-  }
-
+OtlpSpan OpenTeleMetryTracer::MakeSpan(const std::string& name,
+                                       const std::string& trace_id,
+                                       const std::string& span_id) {
   auto otel_trace_id =
       trace::propagation::HttpTraceContext::TraceIdFromHex(trace_id);
   auto otel_span_id =
@@ -120,7 +108,7 @@ std::shared_ptr<Span> OpenTeleMetryTracer::MakeSpan(
   // Create a server span that is a child of the extracted context
   trace::StartSpanOptions options;
   options.parent = span_context;  // Set the parent context
-  return std::make_shared<OtlpSpan>(tracer_->StartSpan(name, options));
+  return OtlpSpan(tracer_->StartSpan(name, options));
 }
 
 }  // namespace dingofs

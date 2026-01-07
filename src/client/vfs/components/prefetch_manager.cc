@@ -102,7 +102,7 @@ void PrefetchManager::SubmitTask(PrefetchContext context) {
 
 void PrefetchManager::ProcessPrefetch(const PrefetchContext& context) {
   auto span =
-      vfs_hub_->GetTraceManager()->StartSpan("VFSWrapper::ProcessPrefetch");
+      vfs_hub_->GetTraceManager().StartSpan("VFSWrapper::ProcessPrefetch");
 
   const auto block_size = vfs_hub_->GetFsInfo().block_size;
   // Prefetch include current block
@@ -112,7 +112,7 @@ void PrefetchManager::ProcessPrefetch(const PrefetchContext& context) {
                                        context.file_size - prefetch_offset);
 
   auto block_keys =
-      FileRange2BlockKey(span->GetContext(), vfs_hub_, context.ino,
+      FileRange2BlockKey(SpanScope::GetContext(span), vfs_hub_, context.ino,
                          prefetch_offset, prefetch_max_len);
 
   const auto blocks = block_keys.size();
@@ -131,7 +131,7 @@ void PrefetchManager::ProcessPrefetch(const PrefetchContext& context) {
 
 void PrefetchManager::AsyncPrefetch(BlockKey key, size_t length) {
   auto span =
-      vfs_hub_->GetTraceManager()->StartSpan("PrefetchManager::AsyncPrefetch");
+      vfs_hub_->GetTraceManager().StartSpan("PrefetchManager::AsyncPrefetch");
 
   if (IsBusy(key)) {
     VLOG(12) << "Skip block: " << key.Filename() << ", length: " << length;
@@ -145,7 +145,7 @@ void PrefetchManager::AsyncPrefetch(BlockKey key, size_t length) {
   req.block = key;
   req.block_size = length;
 
-  auto ctx = span->GetContext();
+  auto ctx = SpanScope::GetContext(span);
 
   SetBusy(key);
 
@@ -159,7 +159,7 @@ void PrefetchManager::AsyncPrefetch(BlockKey key, size_t length) {
           << "key = " << req.block.Filename() << ", length = " << req.block_size
           << ", status = " << status.ToString();
     }
-    span->End();
+    SpanScope::End(span);
     SetIdle(req.block);
   };
 

@@ -151,7 +151,7 @@ class VFS {
 
   virtual uint64_t GetMaxNameLength() = 0;
 
-  virtual TraceManager* GetTraceManager() = 0;
+  virtual TraceManager& GetTraceManager() = 0;
 
   virtual blockaccess::BlockAccessOptions GetBlockAccesserOptions() = 0;
 };

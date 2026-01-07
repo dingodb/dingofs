@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "common/opentrace/opentelemetry/otlp_span.h"
+#include "common/opentrace/otlp_span.h"
 
 #include <memory>
 
@@ -23,7 +23,7 @@
 
 namespace dingofs {
 
-OtlpSpan::~OtlpSpan() { End(); }
+OtlpSpan::~OtlpSpan() {}
 
 void OtlpSpan::SetStatus(bool ok, const std::string& msg) {
   if (ok) {

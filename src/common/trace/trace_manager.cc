@@ -18,47 +18,27 @@
 
 #include <memory>
 
-#include "common/opentrace/opentelemetry/tracer.h"
-#include "fmt/format.h"
-#include "glog/logging.h"
+#include "common/opentrace/tracer.h"
 #include "mds/common/version.h"
 
 namespace dingofs {
 
 DEFINE_string(trace_service_name, "dingofs", "service name");
+
 DEFINE_string(otlp_export_endpoint, "172.30.14.125:4317", "otlp export addrs");
 
-bool TraceManager::Init() { return tracer_->Init(); }
+DEFINE_uint32(trace_export_thread_num, 2, "otlp export thread num");
 
-void TraceManager::Stop() { tracer_->Stop(); };
+DEFINE_bool(enable_trace, false, "Whether to enable trace");
 
-TraceManager::TraceManager() {
-  tracer_ = OpenTeleMetryTracer::New(
-      FLAGS_trace_service_name, FLAGS_otlp_export_endpoint,
-      dingofs::mds::GetGitCommitHash(), dingofs::mds::GetGitVersion());
-}
+bool TraceManager::Init() { return tracer_.Init(); }
 
-SpanScopeSPtr TraceManager::StartSpan(const std::string& name) {
-  auto scope = SpanScope::Create(shared_from_this(), name);
+void TraceManager::Stop() { tracer_.Stop(); };
 
-  scope->SetTraceSpan();
-  return scope;
-}
-
-SpanScopeSPtr TraceManager::StartSpan(const std::string& name,
-                                      const std::string& trace_id,
-                                      const std::string& span_id) {
-  auto scope = SpanScope::Create(shared_from_this(), name, trace_id, span_id);
-
-  scope->SetTraceSpan();
-  return scope;
-}
-
-SpanScopeSPtr TraceManager::StartChildSpan(const std::string& name,
-                                           SpanScopeSptr parent) {
-  auto scope = SpanScope::CreateChild(shared_from_this(), name, parent);
-  scope->SetTraceSpan();
-  return scope;
-}
+TraceManager::TraceManager()
+    : tracer_(OpenTeleMetryTracer(
+          FLAGS_trace_service_name, FLAGS_otlp_export_endpoint,
+          FLAGS_trace_export_thread_num, dingofs::mds::GetGitCommitHash(),
+          dingofs::mds::GetGitVersion())) {}
 
 }  // namespace dingofs

@@ -27,7 +27,7 @@
 namespace dingofs {
 
 class SpanScope;
-using SpanScopeSptr = std::shared_ptr<SpanScope>;
+using SpanScopeSPtr = std::shared_ptr<SpanScope>;
 
 struct Context {
   std::string session_id;  // modify session id
@@ -42,9 +42,9 @@ struct Context {
 
   const std::string& SessionID() const { return session_id; }  // session id
 
-  SpanScopeSptr GetTraceSpan() { return trace_span.lock(); }
+  SpanScopeSPtr GetTraceSpan() { return trace_span.lock(); }
 
-  void SetTraceSpan(SpanScopeSptr trace_span_ptr) {
+  void SetTraceSpan(SpanScopeSPtr trace_span_ptr) {
     trace_span = trace_span_ptr;
   }
 

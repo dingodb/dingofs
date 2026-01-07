@@ -21,8 +21,7 @@
 #include <memory>
 #include <string>
 
-#include "common/opentrace/base_tracer.h"
-#include "common/opentrace/span.h"
+#include "common/options/common.h"
 #include "common/trace/span_scope.h"
 
 namespace dingofs {
@@ -30,28 +29,52 @@ namespace dingofs {
 class SpanScope;
 using SpanScopeSPtr = std::shared_ptr<SpanScope>;
 
-class TraceManager : public std::enable_shared_from_this<TraceManager> {
+class TraceManager {
  public:
   TraceManager();
   ~TraceManager() = default;
-
-  static std::shared_ptr<TraceManager> New() {
-    return std::make_shared<TraceManager>();
-  }
 
   bool Init();
 
   void Stop();
 
-  std::shared_ptr<BaseTracer> GetTracer() { return tracer_; }
+  OpenTeleMetryTracer& GetTracer() { return tracer_; }
 
-  SpanScopeSPtr StartSpan(const std::string& name);
-  SpanScopeSPtr StartSpan(const std::string& name, const std::string& trace_id,
-                          const std::string& span_id);
-  SpanScopeSPtr StartChildSpan(const std::string& name, SpanScopeSptr parent);
+  inline SpanScopeSPtr StartSpan(const std::string& name) {
+    if (!FLAGS_enable_trace) {
+      return nullptr;
+    }
+
+    auto scope = SpanScope::Create(GetTracer(), name);
+    SpanScope::SetTraceSpan(scope);
+    return scope;
+  }
+
+  inline SpanScopeSPtr StartSpan(const std::string& name,
+                                 const std::string& trace_id,
+                                 const std::string& span_id) {
+    if (!FLAGS_enable_trace) {
+      return nullptr;
+    }
+
+    auto scope = SpanScope::Create(GetTracer(), name, trace_id, span_id);
+    SpanScope::SetTraceSpan(scope);
+    return scope;
+  }
+
+  inline SpanScopeSPtr StartChildSpan(const std::string& name,
+                                      SpanScopeSPtr parent) {
+    if (!FLAGS_enable_trace) {
+      return nullptr;
+    }
+
+    auto scope = SpanScope::CreateChild(GetTracer(), name, parent);
+    SpanScope::SetTraceSpan(scope);
+    return scope;
+  }
 
  private:
-  std::shared_ptr<BaseTracer> tracer_;
+  OpenTeleMetryTracer tracer_;
 };
 
 using TraceManagerSPtr = std::shared_ptr<TraceManager>;
