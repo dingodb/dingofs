@@ -26,7 +26,11 @@
 namespace dingofs {
 
 DEFINE_string(trace_service_name, "dingofs", "service name");
+
 DEFINE_string(otlp_export_endpoint, "172.30.14.125:4317", "otlp export addrs");
+
+DEFINE_bool(enable_trace, false, "Whether to enable trace");
+BRPC_VALIDATE_GFLAG(enable_trace, brpc::PassValidate);
 
 bool TraceManager::Init() { return tracer_->Init(); }
 
@@ -36,29 +40,6 @@ TraceManager::TraceManager() {
   tracer_ = OpenTeleMetryTracer::New(
       FLAGS_trace_service_name, FLAGS_otlp_export_endpoint,
       dingofs::mds::GetGitCommitHash(), dingofs::mds::GetGitVersion());
-}
-
-SpanScopeSPtr TraceManager::StartSpan(const std::string& name) {
-  auto scope = SpanScope::Create(shared_from_this(), name);
-
-  scope->SetTraceSpan();
-  return scope;
-}
-
-SpanScopeSPtr TraceManager::StartSpan(const std::string& name,
-                                      const std::string& trace_id,
-                                      const std::string& span_id) {
-  auto scope = SpanScope::Create(shared_from_this(), name, trace_id, span_id);
-
-  scope->SetTraceSpan();
-  return scope;
-}
-
-SpanScopeSPtr TraceManager::StartChildSpan(const std::string& name,
-                                           SpanScopeSptr parent) {
-  auto scope = SpanScope::CreateChild(shared_from_this(), name, parent);
-  scope->SetTraceSpan();
-  return scope;
 }
 
 }  // namespace dingofs

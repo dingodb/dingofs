@@ -71,8 +71,8 @@ int64_t FileWriter::InflightFlushTaskCount() const {
 
 Status FileWriter::Write(ContextSPtr ctx, const char* buf, uint64_t size,
                          uint64_t offset, uint64_t* out_wsize) {
-  auto span = vfs_hub_->GetTraceManager()->StartChildSpan("FileWriter::Write",
-                                                          ctx->GetTraceSpan());
+  auto span = vfs_hub_->GetTraceManager().StartChildSpan("FileWriter::Write",
+                                                         ctx->GetTraceSpan());
 
   uint64_t chunk_size = GetChunkSize();
   CHECK(chunk_size > 0) << "chunk size not allow 0";
@@ -93,7 +93,8 @@ Status FileWriter::Write(ContextSPtr ctx, const char* buf, uint64_t size,
     uint64_t write_size = std::min(size, chunk_size - chunk_offset);
 
     ChunkWriter* chunk = GetOrCreateChunkWriter(chunk_index);
-    s = chunk->Write(ctx, pos, write_size, chunk_offset);
+    s = chunk->Write(SpanScope::GetContext(span), pos, write_size,
+                     chunk_offset);
     if (!s.ok()) {
       LOG(WARNING) << "Fail write chunk, ino: " << ino_
                    << ", chunk_index: " << chunk_index

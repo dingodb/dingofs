@@ -82,7 +82,7 @@ void SliceFlushTask::BlockDataFlushed(BlockData* block_data, Status status) {
 void SliceFlushTask::FlushBlockData(uint64_t block_index, BlockData* block_data,
                                     bool writeback) {
   auto span =
-      vfs_hub_->GetTraceManager()->StartSpan("SliceFlushTask::FlushBlockData");
+      vfs_hub_->GetTraceManager().StartSpan("SliceFlushTask::FlushBlockData");
 
   cache::BlockKey key(slice_data_context_.fs_id, slice_data_context_.ino,
                       slice_id_, block_index, 0);
@@ -95,10 +95,10 @@ void SliceFlushTask::FlushBlockData(uint64_t block_index, BlockData* block_data,
                          UUID(), key.StoreKey(), (writeback ? "true" : "false"),
                          block_data->ToString());
 
-  auto ctx = span->GetContext();
+  auto ctx = SpanScope::GetContext(span);
   // Transfer ownership of block_data to the callback
   auto on_block_flushed = [this, block_data, span](Status status) {
-    span->End();
+    SpanScope::End(span);
     BlockDataFlushedFromBlockCache(block_data, std::move(status));
   };
 

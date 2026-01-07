@@ -35,7 +35,7 @@ namespace meta {
 MDSClient::MDSClient(const ClientId& client_id, mds::FsInfoSPtr fs_info,
                      ParentMemoSPtr parent_memo, MDSDiscoverySPtr mds_discovery,
                      MDSRouterPtr mds_router, RPCPtr rpc,
-                     TraceManagerSPtr trace_manager)
+                     TraceManager& trace_manager)
     : client_id_(client_id),
       fs_info_(fs_info),
       fs_id_(fs_info->GetFsId()),
@@ -194,19 +194,19 @@ Status MDSClient::Heartbeat() {
 
 Status MDSClient::MountFs(const std::string& name,
                           const pb::mds::MountPoint& mount_point) {
-  auto span = trace_manager_->StartSpan("MDSClient::MountFs");
+  auto span = trace_manager_.StartSpan("MDSClient::MountFs");
 
   pb::mds::MountFsRequest request;
   pb::mds::MountFsResponse response;
 
   request.set_fs_name(name);
   request.mutable_mount_point()->CopyFrom(mount_point);
-  request.mutable_info()->set_trace_id(span->GetTraceID());
-  request.mutable_info()->set_span_id(span->GetSpanID());
+  request.mutable_info()->set_trace_id(SpanScope::GetTraceID(span));
+  request.mutable_info()->set_span_id(SpanScope::GetSpanID(span));
 
   auto status = rpc_->SendRequest("MDSService", "MountFs", request, response);
   if (!status.ok()) {
-    span->SetStatus(status);
+    SpanScope::SetStatus(span, status);
     return status;
   }
 
@@ -215,19 +215,19 @@ Status MDSClient::MountFs(const std::string& name,
 
 Status MDSClient::UmountFs(const std::string& name,
                            const std::string& client_id) {
-  auto span = trace_manager_->StartSpan("MDSClient::UmountFs");
+  auto span = trace_manager_.StartSpan("MDSClient::UmountFs");
 
   pb::mds::UmountFsRequest request;
   pb::mds::UmountFsResponse response;
 
   request.set_fs_name(name);
   request.set_client_id(client_id);
-  request.mutable_info()->set_trace_id(span->GetTraceID());
-  request.mutable_info()->set_span_id(span->GetSpanID());
+  request.mutable_info()->set_trace_id(SpanScope::GetTraceID(span));
+  request.mutable_info()->set_span_id(SpanScope::GetSpanID(span));
 
   auto status = rpc_->SendRequest("MDSService", "UmountFs", request, response);
   if (!status.ok()) {
-    span->SetStatus(status);
+    SpanScope::SetStatus(span, status);
     return status;
   }
 
@@ -243,7 +243,7 @@ Status MDSClient::Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
   };
 
   auto span =
-      trace_manager_->StartChildSpan("MDSClient::Lookup", ctx->GetTraceSpan());
+      trace_manager_.StartChildSpan("MDSClient::Lookup", ctx->GetTraceSpan());
 
   pb::mds::LookupRequest request;
   pb::mds::LookupResponse response;
@@ -253,13 +253,13 @@ Status MDSClient::Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
   request.set_fs_id(fs_id_);
   request.set_parent(parent);
   request.set_name(name);
-  request.mutable_info()->set_trace_id(span->GetTraceID());
-  request.mutable_info()->set_span_id(span->GetSpanID());
+  request.mutable_info()->set_trace_id(SpanScope::GetTraceID(span));
+  request.mutable_info()->set_span_id(SpanScope::GetSpanID(span));
 
-  auto status = SendRequest(span->GetContext(), get_mds_fn, "MDSService",
-                            "Lookup", request, response);
+  auto status = SendRequest(SpanScope::GetContext(span), get_mds_fn,
+                            "MDSService", "Lookup", request, response);
   if (!status.ok()) {
-    span->SetStatus(status);
+    SpanScope::SetStatus(span, status);
     return status;
   }
 
@@ -270,7 +270,7 @@ Status MDSClient::Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
     if (parent_memo_->GetVersion(inode.ino(), last_version) &&
         inode.version() < last_version) {
       // fetch last inode
-      status = GetAttr(span->GetContext(), inode.ino(), attr_entry);
+      status = GetAttr(SpanScope::GetContext(span), inode.ino(), attr_entry);
       if (status.ok()) {
         parent_memo_->Upsert(inode.ino(), parent);
         return Status::OK();
@@ -302,7 +302,7 @@ Status MDSClient::Create(ContextSPtr ctx, Ino parent, const std::string& name,
   };
 
   auto span =
-      trace_manager_->StartChildSpan("MDSClient::Create", ctx->GetTraceSpan());
+      trace_manager_.StartChildSpan("MDSClient::Create", ctx->GetTraceSpan());
 
   pb::mds::BatchCreateRequest request;
   pb::mds::BatchCreateResponse response;
@@ -312,8 +312,8 @@ Status MDSClient::Create(ContextSPtr ctx, Ino parent, const std::string& name,
 
   request.set_fs_id(fs_id_);
   request.set_parent(parent);
-  request.mutable_info()->set_trace_id(span->GetTraceID());
-  request.mutable_info()->set_span_id(span->GetSpanID());
+  request.mutable_info()->set_trace_id(SpanScope::GetTraceID(span));
+  request.mutable_info()->set_span_id(SpanScope::GetSpanID(span));
   auto* param = request.add_params();
 
   param->set_name(name);
@@ -324,10 +324,10 @@ Status MDSClient::Create(ContextSPtr ctx, Ino parent, const std::string& name,
   param->set_rdev(0);
   param->set_length(0);
 
-  auto status = SendRequest(span->GetContext(), get_mds_fn, "MDSService",
-                            "BatchCreate", request, response);
+  auto status = SendRequest(SpanScope::GetContext(span), get_mds_fn,
+                            "MDSService", "BatchCreate", request, response);
   if (!status.ok()) {
-    span->SetStatus(status);
+    SpanScope::SetStatus(span, status);
     return status;
   }
 
@@ -355,7 +355,7 @@ Status MDSClient::MkNod(ContextSPtr ctx, Ino parent, const std::string& name,
   };
 
   auto span =
-      trace_manager_->StartChildSpan("MDSClient::MkNod", ctx->GetTraceSpan());
+      trace_manager_.StartChildSpan("MDSClient::MkNod", ctx->GetTraceSpan());
 
   pb::mds::MkNodRequest request;
   pb::mds::MkNodResponse response;
@@ -373,13 +373,13 @@ Status MDSClient::MkNod(ContextSPtr ctx, Ino parent, const std::string& name,
 
   request.set_length(0);
 
-  request.mutable_info()->set_trace_id(span->GetTraceID());
-  request.mutable_info()->set_span_id(span->GetSpanID());
+  request.mutable_info()->set_trace_id(SpanScope::GetTraceID(span));
+  request.mutable_info()->set_span_id(SpanScope::GetSpanID(span));
 
-  auto status = SendRequest(span->GetContext(), get_mds_fn, "MDSService",
-                            "MkNod", request, response);
+  auto status = SendRequest(SpanScope::GetContext(span), get_mds_fn,
+                            "MDSService", "MkNod", request, response);
   if (!status.ok()) {
-    span->SetStatus(status);
+    SpanScope::SetStatus(span, status);
     return status;
   }
 
@@ -403,7 +403,7 @@ Status MDSClient::MkDir(ContextSPtr ctx, Ino parent, const std::string& name,
   };
 
   auto span =
-      trace_manager_->StartChildSpan("MDSClient::MkDir", ctx->GetTraceSpan());
+      trace_manager_.StartChildSpan("MDSClient::MkDir", ctx->GetTraceSpan());
 
   pb::mds::MkDirRequest request;
   pb::mds::MkDirResponse response;
@@ -420,13 +420,13 @@ Status MDSClient::MkDir(ContextSPtr ctx, Ino parent, const std::string& name,
   request.set_rdev(rdev);
 
   request.set_length(0);
-  request.mutable_info()->set_trace_id(span->GetTraceID());
-  request.mutable_info()->set_span_id(span->GetSpanID());
+  request.mutable_info()->set_trace_id(SpanScope::GetTraceID(span));
+  request.mutable_info()->set_span_id(SpanScope::GetSpanID(span));
 
-  auto status = SendRequest(span->GetContext(), get_mds_fn, "MDSService",
-                            "MkDir", request, response);
+  auto status = SendRequest(SpanScope::GetContext(span), get_mds_fn,
+                            "MDSService", "MkDir", request, response);
   if (!status.ok()) {
-    span->SetStatus(status);
+    SpanScope::SetStatus(span, status);
     return status;
   }
 
@@ -449,7 +449,7 @@ Status MDSClient::RmDir(ContextSPtr ctx, Ino parent, const std::string& name,
   };
 
   auto span =
-      trace_manager_->StartChildSpan("MDSClient::RmDir", ctx->GetTraceSpan());
+      trace_manager_.StartChildSpan("MDSClient::RmDir", ctx->GetTraceSpan());
 
   pb::mds::RmDirRequest request;
   pb::mds::RmDirResponse response;
@@ -460,13 +460,13 @@ Status MDSClient::RmDir(ContextSPtr ctx, Ino parent, const std::string& name,
   request.set_fs_id(fs_id_);
   request.set_parent(parent);
   request.set_name(name);
-  request.mutable_info()->set_trace_id(span->GetTraceID());
-  request.mutable_info()->set_span_id(span->GetSpanID());
+  request.mutable_info()->set_trace_id(SpanScope::GetTraceID(span));
+  request.mutable_info()->set_span_id(SpanScope::GetSpanID(span));
 
-  auto status = SendRequest(span->GetContext(), get_mds_fn, "MDSService",
-                            "RmDir", request, response);
+  auto status = SendRequest(SpanScope::GetContext(span), get_mds_fn,
+                            "MDSService", "RmDir", request, response);
   if (!status.ok()) {
-    span->SetStatus(status);
+    SpanScope::SetStatus(span, status);
     return status;
   }
 
@@ -490,7 +490,7 @@ Status MDSClient::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
   };
 
   auto span =
-      trace_manager_->StartChildSpan("MDSClient::ReadDir", ctx->GetTraceSpan());
+      trace_manager_.StartChildSpan("MDSClient::ReadDir", ctx->GetTraceSpan());
 
   pb::mds::ReadDirRequest request;
   pb::mds::ReadDirResponse response;
@@ -505,13 +505,13 @@ Status MDSClient::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
   request.set_limit(limit);
   request.set_with_attr(with_attr);
   request.set_fh(fh);
-  request.mutable_info()->set_trace_id(span->GetTraceID());
-  request.mutable_info()->set_span_id(span->GetSpanID());
+  request.mutable_info()->set_trace_id(SpanScope::GetTraceID(span));
+  request.mutable_info()->set_span_id(SpanScope::GetSpanID(span));
 
-  auto status = SendRequest(span->GetContext(), get_mds_fn, "MDSService",
-                            "ReadDir", request, response);
+  auto status = SendRequest(SpanScope::GetContext(span), get_mds_fn,
+                            "MDSService", "ReadDir", request, response);
   if (!status.ok()) {
-    span->SetStatus(status);
+    SpanScope::SetStatus(span, status);
     return status;
   }
 
@@ -538,7 +538,7 @@ Status MDSClient::Open(
   };
 
   auto span =
-      trace_manager_->StartChildSpan("MDSClient::Open", ctx->GetTraceSpan());
+      trace_manager_.StartChildSpan("MDSClient::Open", ctx->GetTraceSpan());
 
   pb::mds::OpenRequest request;
   pb::mds::OpenResponse response;
@@ -547,17 +547,17 @@ Status MDSClient::Open(
   request.set_ino(ino);
   request.set_flags(flags);
   request.set_prefetch_chunk(is_prefetch_chunk);
-  request.mutable_info()->set_trace_id(span->GetTraceID());
-  request.mutable_info()->set_span_id(span->GetSpanID());
+  request.mutable_info()->set_trace_id(SpanScope::GetTraceID(span));
+  request.mutable_info()->set_span_id(SpanScope::GetSpanID(span));
   if (is_prefetch_chunk) {
     *request.mutable_chunk_descriptors() = {chunk_descriptors.begin(),
                                             chunk_descriptors.end()};
   }
 
-  auto status = SendRequest(span->GetContext(), get_mds_fn, "MDSService",
-                            "Open", request, response);
+  auto status = SendRequest(SpanScope::GetContext(span), get_mds_fn,
+                            "MDSService", "Open", request, response);
   if (!status.ok()) {
-    span->SetStatus(status);
+    SpanScope::SetStatus(span, status);
     return status;
   }
 
@@ -579,7 +579,7 @@ Status MDSClient::Release(ContextSPtr ctx, Ino ino,
   };
 
   auto span =
-      trace_manager_->StartChildSpan("MDSClient::Release", ctx->GetTraceSpan());
+      trace_manager_.StartChildSpan("MDSClient::Release", ctx->GetTraceSpan());
 
   pb::mds::ReleaseRequest request;
   pb::mds::ReleaseResponse response;
@@ -587,13 +587,13 @@ Status MDSClient::Release(ContextSPtr ctx, Ino ino,
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
   request.set_session_id(session_id);
-  request.mutable_info()->set_trace_id(span->GetTraceID());
-  request.mutable_info()->set_span_id(span->GetSpanID());
+  request.mutable_info()->set_trace_id(SpanScope::GetTraceID(span));
+  request.mutable_info()->set_span_id(SpanScope::GetSpanID(span));
 
-  auto status = SendRequest(span->GetContext(), get_mds_fn, "MDSService",
-                            "Release", request, response);
+  auto status = SendRequest(SpanScope::GetContext(span), get_mds_fn,
+                            "MDSService", "Release", request, response);
 
-  span->SetStatus(status);
+  SpanScope::SetStatus(span, status);
   return status;
 }
 
@@ -607,7 +607,7 @@ Status MDSClient::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
   };
 
   auto span =
-      trace_manager_->StartChildSpan("MDSClient::Link", ctx->GetTraceSpan());
+      trace_manager_.StartChildSpan("MDSClient::Link", ctx->GetTraceSpan());
 
   pb::mds::LinkRequest request;
   pb::mds::LinkResponse response;
@@ -619,13 +619,13 @@ Status MDSClient::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
   request.set_ino(ino);
   request.set_new_parent(new_parent);
   request.set_new_name(new_name);
-  request.mutable_info()->set_trace_id(span->GetTraceID());
-  request.mutable_info()->set_span_id(span->GetSpanID());
+  request.mutable_info()->set_trace_id(SpanScope::GetTraceID(span));
+  request.mutable_info()->set_span_id(SpanScope::GetSpanID(span));
 
-  auto status = SendRequest(span->GetContext(), get_mds_fn, "MDSService",
-                            "Link", request, response);
+  auto status = SendRequest(SpanScope::GetContext(span), get_mds_fn,
+                            "MDSService", "Link", request, response);
   if (!status.ok()) {
-    span->SetStatus(status);
+    SpanScope::SetStatus(span, status);
     return status;
   }
 
@@ -648,7 +648,7 @@ Status MDSClient::UnLink(ContextSPtr ctx, Ino parent, const std::string& name,
   };
 
   auto span =
-      trace_manager_->StartChildSpan("MDSClient::UnLink", ctx->GetTraceSpan());
+      trace_manager_.StartChildSpan("MDSClient::UnLink", ctx->GetTraceSpan());
 
   pb::mds::UnLinkRequest request;
   pb::mds::UnLinkResponse response;
@@ -660,13 +660,13 @@ Status MDSClient::UnLink(ContextSPtr ctx, Ino parent, const std::string& name,
   request.set_fs_id(fs_id_);
   request.set_parent(parent);
   request.set_name(name);
-  request.mutable_info()->set_trace_id(span->GetTraceID());
-  request.mutable_info()->set_span_id(span->GetSpanID());
+  request.mutable_info()->set_trace_id(SpanScope::GetTraceID(span));
+  request.mutable_info()->set_span_id(SpanScope::GetSpanID(span));
 
-  auto status = SendRequest(span->GetContext(), get_mds_fn, "MDSService",
-                            "UnLink", request, response);
+  auto status = SendRequest(SpanScope::GetContext(span), get_mds_fn,
+                            "MDSService", "UnLink", request, response);
   if (!status.ok()) {
-    span->SetStatus(status);
+    SpanScope::SetStatus(span, status);
     return status;
   }
 
@@ -691,7 +691,7 @@ Status MDSClient::Symlink(ContextSPtr ctx, Ino parent, const std::string& name,
   };
 
   auto span =
-      trace_manager_->StartChildSpan("MDSClient::Symlink", ctx->GetTraceSpan());
+      trace_manager_.StartChildSpan("MDSClient::Symlink", ctx->GetTraceSpan());
 
   pb::mds::SymlinkRequest request;
   pb::mds::SymlinkResponse response;
@@ -706,13 +706,13 @@ Status MDSClient::Symlink(ContextSPtr ctx, Ino parent, const std::string& name,
   request.set_new_name(name);
   request.set_uid(uid);
   request.set_gid(gid);
-  request.mutable_info()->set_trace_id(span->GetTraceID());
-  request.mutable_info()->set_span_id(span->GetSpanID());
+  request.mutable_info()->set_trace_id(SpanScope::GetTraceID(span));
+  request.mutable_info()->set_span_id(SpanScope::GetSpanID(span));
 
-  auto status = SendRequest(span->GetContext(), get_mds_fn, "MDSService",
-                            "Symlink", request, response);
+  auto status = SendRequest(SpanScope::GetContext(span), get_mds_fn,
+                            "MDSService", "Symlink", request, response);
   if (!status.ok()) {
-    span->SetStatus(status);
+    SpanScope::SetStatus(span, status);
     return status;
   }
 
@@ -734,8 +734,8 @@ Status MDSClient::ReadLink(ContextSPtr ctx, Ino ino, std::string& symlink) {
     return GetMds(ino, is_primary_mds);
   };
 
-  auto span = trace_manager_->StartChildSpan("MDSClient::ReadLink",
-                                             ctx->GetTraceSpan());
+  auto span =
+      trace_manager_.StartChildSpan("MDSClient::ReadLink", ctx->GetTraceSpan());
 
   pb::mds::ReadLinkRequest request;
   pb::mds::ReadLinkResponse response;
@@ -744,13 +744,13 @@ Status MDSClient::ReadLink(ContextSPtr ctx, Ino ino, std::string& symlink) {
 
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
-  request.mutable_info()->set_trace_id(span->GetTraceID());
-  request.mutable_info()->set_span_id(span->GetSpanID());
+  request.mutable_info()->set_trace_id(SpanScope::GetTraceID(span));
+  request.mutable_info()->set_span_id(SpanScope::GetSpanID(span));
 
-  auto status = SendRequest(span->GetContext(), get_mds_fn, "MDSService",
-                            "ReadLink", request, response);
+  auto status = SendRequest(SpanScope::GetContext(span), get_mds_fn,
+                            "MDSService", "ReadLink", request, response);
   if (!status.ok()) {
-    span->SetStatus(status);
+    SpanScope::SetStatus(span, status);
     return status;
   }
 
@@ -768,7 +768,7 @@ Status MDSClient::GetAttr(ContextSPtr ctx, Ino ino, AttrEntry& attr_entry) {
   };
 
   auto span =
-      trace_manager_->StartChildSpan("MDSClient::GetAttr", ctx->GetTraceSpan());
+      trace_manager_.StartChildSpan("MDSClient::GetAttr", ctx->GetTraceSpan());
 
   pb::mds::GetAttrRequest request;
   pb::mds::GetAttrResponse response;
@@ -778,13 +778,13 @@ Status MDSClient::GetAttr(ContextSPtr ctx, Ino ino, AttrEntry& attr_entry) {
 
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
-  request.mutable_info()->set_trace_id(span->GetTraceID());
-  request.mutable_info()->set_span_id(span->GetSpanID());
+  request.mutable_info()->set_trace_id(SpanScope::GetTraceID(span));
+  request.mutable_info()->set_span_id(SpanScope::GetSpanID(span));
 
-  auto status = SendRequest(span->GetContext(), get_mds_fn, "MDSService",
-                            "GetAttr", request, response);
+  auto status = SendRequest(SpanScope::GetContext(span), get_mds_fn,
+                            "MDSService", "GetAttr", request, response);
   if (!status.ok()) {
-    span->SetStatus(status);
+    SpanScope::SetStatus(span, status);
     return status;
   }
 
@@ -805,17 +805,16 @@ Status MDSClient::SetAttr(ContextSPtr ctx, Ino ino, const Attr& attr,
                            : GetMds(ino, is_primary_mds);
   };
 
-  // auto span =
-  //     trace_manager_->StartChildSpan("MDSClient::SetAttr",
-  //     ctx->GetTraceSpan());
+  auto span =
+      trace_manager_.StartChildSpan("MDSClient::SetAttr", ctx->GetTraceSpan());
 
   pb::mds::SetAttrRequest request;
   pb::mds::SetAttrResponse response;
 
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
-  // request.mutable_info()->set_trace_id(span->GetTraceID());
-  // request.mutable_info()->set_span_id(span->GetSpanID());
+  request.mutable_info()->set_trace_id(SpanScope::GetTraceID(span));
+  request.mutable_info()->set_span_id(SpanScope::GetSpanID(span));
 
   uint32_t temp_to_set = 0;
   if (to_set & kSetAttrMode) {
@@ -876,7 +875,7 @@ Status MDSClient::SetAttr(ContextSPtr ctx, Ino ino, const Attr& attr,
   auto status =
       SendRequest(ctx, get_mds_fn, "MDSService", "SetAttr", request, response);
   if (!status.ok()) {
-    // span->SetStatus(status);
+    SpanScope::SetStatus(span, status);
     return status;
   }
 
@@ -897,8 +896,8 @@ Status MDSClient::GetXAttr(ContextSPtr ctx, Ino ino, const std::string& name,
                            : GetMds(ino, is_primary_mds);
   };
 
-  auto span = trace_manager_->StartChildSpan("MDSClient::GetXAttr",
-                                             ctx->GetTraceSpan());
+  auto span =
+      trace_manager_.StartChildSpan("MDSClient::GetXAttr", ctx->GetTraceSpan());
 
   pb::mds::GetXAttrRequest request;
   pb::mds::GetXAttrResponse response;
@@ -909,13 +908,13 @@ Status MDSClient::GetXAttr(ContextSPtr ctx, Ino ino, const std::string& name,
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
   request.set_name(name);
-  request.mutable_info()->set_trace_id(span->GetTraceID());
-  request.mutable_info()->set_span_id(span->GetSpanID());
+  request.mutable_info()->set_trace_id(SpanScope::GetTraceID(span));
+  request.mutable_info()->set_span_id(SpanScope::GetSpanID(span));
 
-  auto status = SendRequest(span->GetContext(), get_mds_fn, "MDSService",
-                            "GetXAttr", request, response);
+  auto status = SendRequest(SpanScope::GetContext(span), get_mds_fn,
+                            "MDSService", "GetXAttr", request, response);
   if (!status.ok()) {
-    span->SetStatus(status);
+    SpanScope::SetStatus(span, status);
     return status;
   }
 
@@ -933,8 +932,8 @@ Status MDSClient::SetXAttr(ContextSPtr ctx, Ino ino, const std::string& name,
                            : GetMds(ino, is_primary_mds);
   };
 
-  auto span = trace_manager_->StartChildSpan("MDSClient::SetXAttr",
-                                             ctx->GetTraceSpan());
+  auto span =
+      trace_manager_.StartChildSpan("MDSClient::SetXAttr", ctx->GetTraceSpan());
 
   pb::mds::SetXAttrRequest request;
   pb::mds::SetXAttrResponse response;
@@ -942,13 +941,13 @@ Status MDSClient::SetXAttr(ContextSPtr ctx, Ino ino, const std::string& name,
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
   request.mutable_xattrs()->insert({name, value});
-  request.mutable_info()->set_trace_id(span->GetTraceID());
-  request.mutable_info()->set_span_id(span->GetSpanID());
+  request.mutable_info()->set_trace_id(SpanScope::GetTraceID(span));
+  request.mutable_info()->set_span_id(SpanScope::GetSpanID(span));
 
-  auto status = SendRequest(span->GetContext(), get_mds_fn, "MDSService",
-                            "SetXAttr", request, response);
+  auto status = SendRequest(SpanScope::GetContext(span), get_mds_fn,
+                            "MDSService", "SetXAttr", request, response);
   if (!status.ok()) {
-    span->SetStatus(status);
+    SpanScope::SetStatus(span, status);
     return status;
   }
 
@@ -968,8 +967,8 @@ Status MDSClient::RemoveXAttr(ContextSPtr ctx, Ino ino, const std::string& name,
                            : GetMds(ino, is_primary_mds);
   };
 
-  auto span = trace_manager_->StartChildSpan("MDSClient::RemoveXAttr",
-                                             ctx->GetTraceSpan());
+  auto span = trace_manager_.StartChildSpan("MDSClient::RemoveXAttr",
+                                            ctx->GetTraceSpan());
 
   pb::mds::RemoveXAttrRequest request;
   pb::mds::RemoveXAttrResponse response;
@@ -977,13 +976,13 @@ Status MDSClient::RemoveXAttr(ContextSPtr ctx, Ino ino, const std::string& name,
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
   request.set_name(name);
-  request.mutable_info()->set_trace_id(span->GetTraceID());
-  request.mutable_info()->set_span_id(span->GetSpanID());
+  request.mutable_info()->set_trace_id(SpanScope::GetTraceID(span));
+  request.mutable_info()->set_span_id(SpanScope::GetSpanID(span));
 
-  auto status = SendRequest(span->GetContext(), get_mds_fn, "MDSService",
-                            "RemoveXAttr", request, response);
+  auto status = SendRequest(SpanScope::GetContext(span), get_mds_fn,
+                            "MDSService", "RemoveXAttr", request, response);
   if (!status.ok()) {
-    span->SetStatus(status);
+    SpanScope::SetStatus(span, status);
     return status;
   }
 
@@ -1003,8 +1002,8 @@ Status MDSClient::ListXAttr(ContextSPtr ctx, Ino ino,
                            : GetMds(ino, is_primary_mds);
   };
 
-  auto span = trace_manager_->StartChildSpan("MDSClient::ListXAttr",
-                                             ctx->GetTraceSpan());
+  auto span = trace_manager_.StartChildSpan("MDSClient::ListXAttr",
+                                            ctx->GetTraceSpan());
   pb::mds::ListXAttrRequest request;
   pb::mds::ListXAttrResponse response;
 
@@ -1012,13 +1011,13 @@ Status MDSClient::ListXAttr(ContextSPtr ctx, Ino ino,
 
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
-  request.mutable_info()->set_trace_id(span->GetTraceID());
-  request.mutable_info()->set_span_id(span->GetSpanID());
+  request.mutable_info()->set_trace_id(SpanScope::GetTraceID(span));
+  request.mutable_info()->set_span_id(SpanScope::GetSpanID(span));
 
-  auto status = SendRequest(span->GetContext(), get_mds_fn, "MDSService",
-                            "ListXAttr", request, response);
+  auto status = SendRequest(SpanScope::GetContext(span), get_mds_fn,
+                            "MDSService", "ListXAttr", request, response);
   if (!status.ok()) {
-    span->SetStatus(status);
+    SpanScope::SetStatus(span, status);
     return status;
   }
 
@@ -1040,7 +1039,7 @@ Status MDSClient::Rename(ContextSPtr ctx, Ino old_parent,
   };
 
   auto span =
-      trace_manager_->StartChildSpan("MDSClient::Rename", ctx->GetTraceSpan());
+      trace_manager_.StartChildSpan("MDSClient::Rename", ctx->GetTraceSpan());
 
   pb::mds::RenameRequest request;
   pb::mds::RenameResponse response;
@@ -1062,13 +1061,13 @@ Status MDSClient::Rename(ContextSPtr ctx, Ino old_parent,
   request.set_old_name(old_name);
   request.set_new_parent(new_parent);
   request.set_new_name(new_name);
-  request.mutable_info()->set_trace_id(span->GetTraceID());
-  request.mutable_info()->set_span_id(span->GetSpanID());
+  request.mutable_info()->set_trace_id(SpanScope::GetTraceID(span));
+  request.mutable_info()->set_span_id(SpanScope::GetSpanID(span));
 
-  auto status = SendRequest(span->GetContext(), get_mds_fn, "MDSService",
-                            "Rename", request, response);
+  auto status = SendRequest(SpanScope::GetContext(span), get_mds_fn,
+                            "MDSService", "Rename", request, response);
   if (!status.ok()) {
-    span->SetStatus(status);
+    SpanScope::SetStatus(span, status);
     return status;
   }
 
@@ -1089,20 +1088,20 @@ Status MDSClient::NewSliceId(ContextSPtr ctx, uint32_t num, uint64_t* id) {
     return GetMdsByParent(kRootIno, is_primary_mds);
   };
 
-  auto span = trace_manager_->StartChildSpan("MDSClient::NewSliceId",
-                                             ctx->GetTraceSpan());
+  auto span = trace_manager_.StartChildSpan("MDSClient::NewSliceId",
+                                            ctx->GetTraceSpan());
 
   pb::mds::AllocSliceIdRequest request;
   pb::mds::AllocSliceIdResponse response;
-  request.mutable_info()->set_trace_id(span->GetTraceID());
-  request.mutable_info()->set_span_id(span->GetSpanID());
+  request.mutable_info()->set_trace_id(SpanScope::GetTraceID(span));
+  request.mutable_info()->set_span_id(SpanScope::GetSpanID(span));
 
   request.set_alloc_num(num);
 
-  auto status = SendRequest(span->GetContext(), get_mds_fn, "MDSService",
-                            "AllocSliceId", request, response);
+  auto status = SendRequest(SpanScope::GetContext(span), get_mds_fn,
+                            "MDSService", "AllocSliceId", request, response);
   if (!status.ok()) {
-    span->SetStatus(status);
+    SpanScope::SetStatus(span, status);
     return status;
   }
 
@@ -1122,8 +1121,8 @@ Status MDSClient::ReadSlice(
     return GetMds(ino, is_primary_mds);
   };
 
-  auto span = trace_manager_->StartChildSpan("MDSClient::ReadSlice",
-                                             ctx->GetTraceSpan());
+  auto span = trace_manager_.StartChildSpan("MDSClient::ReadSlice",
+                                            ctx->GetTraceSpan());
 
   pb::mds::ReadSliceRequest request;
   pb::mds::ReadSliceResponse response;
@@ -1133,16 +1132,16 @@ Status MDSClient::ReadSlice(
 
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
-  request.mutable_info()->set_trace_id(span->GetTraceID());
-  request.mutable_info()->set_span_id(span->GetSpanID());
+  request.mutable_info()->set_trace_id(SpanScope::GetTraceID(span));
+  request.mutable_info()->set_span_id(SpanScope::GetSpanID(span));
 
   mds::Helper::VectorToPbRepeated(chunk_descriptors,
                                   request.mutable_chunk_descriptors());
 
-  auto status = SendRequest(span->GetContext(), get_mds_fn, "MDSService",
-                            "ReadSlice", request, response);
+  auto status = SendRequest(SpanScope::GetContext(span), get_mds_fn,
+                            "MDSService", "ReadSlice", request, response);
   if (!status.ok()) {
-    span->SetStatus(status);
+    SpanScope::SetStatus(span, status);
     return status;
   }
 
@@ -1161,8 +1160,8 @@ Status MDSClient::WriteSlice(
     return GetMds(ino, is_primary_mds);
   };
 
-  auto span = trace_manager_->StartChildSpan("MDSClient::WriteSlice",
-                                             ctx->GetTraceSpan());
+  auto span = trace_manager_.StartChildSpan("MDSClient::WriteSlice",
+                                            ctx->GetTraceSpan());
   pb::mds::WriteSliceRequest request;
   pb::mds::WriteSliceResponse response;
 
@@ -1175,15 +1174,15 @@ Status MDSClient::WriteSlice(
   request.set_fs_id(fs_id_);
   request.set_parent(parent);
   request.set_ino(ino);
-  request.mutable_info()->set_trace_id(span->GetTraceID());
-  request.mutable_info()->set_span_id(span->GetSpanID());
+  request.mutable_info()->set_trace_id(SpanScope::GetTraceID(span));
+  request.mutable_info()->set_span_id(SpanScope::GetSpanID(span));
 
   mds::Helper::VectorToPbRepeated(delta_slices, request.mutable_delta_slices());
 
-  auto status = SendRequest(span->GetContext(), get_mds_fn, "MDSService",
-                            "WriteSlice", request, response);
+  auto status = SendRequest(SpanScope::GetContext(span), get_mds_fn,
+                            "MDSService", "WriteSlice", request, response);
   if (!status.ok()) {
-    span->SetStatus(status);
+    SpanScope::SetStatus(span, status);
     return status;
   }
 
@@ -1201,8 +1200,8 @@ Status MDSClient::Fallocate(ContextSPtr ctx, Ino ino, int32_t mode,
     return GetMds(ino, is_primary_mds);
   };
 
-  auto span = trace_manager_->StartChildSpan("MDSClient::Fallocate",
-                                             ctx->GetTraceSpan());
+  auto span = trace_manager_.StartChildSpan("MDSClient::Fallocate",
+                                            ctx->GetTraceSpan());
 
   pb::mds::FallocateRequest request;
   pb::mds::FallocateResponse response;
@@ -1212,13 +1211,13 @@ Status MDSClient::Fallocate(ContextSPtr ctx, Ino ino, int32_t mode,
   request.set_mode(mode);
   request.set_offset(offset);
   request.set_len(length);
-  request.mutable_info()->set_trace_id(span->GetTraceID());
-  request.mutable_info()->set_span_id(span->GetSpanID());
+  request.mutable_info()->set_trace_id(SpanScope::GetTraceID(span));
+  request.mutable_info()->set_span_id(SpanScope::GetSpanID(span));
 
-  auto status = SendRequest(span->GetContext(), get_mds_fn, "MDSService",
-                            "Fallocate", request, response);
+  auto status = SendRequest(SpanScope::GetContext(span), get_mds_fn,
+                            "MDSService", "Fallocate", request, response);
   if (!status.ok()) {
-    span->SetStatus(status);
+    SpanScope::SetStatus(span, status);
     return status;
   }
 
@@ -1232,20 +1231,20 @@ Status MDSClient::Fallocate(ContextSPtr ctx, Ino ino, int32_t mode,
 Status MDSClient::GetFsQuota(ContextSPtr ctx, FsStat& fs_stat) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
-  auto span = trace_manager_->StartChildSpan("MDSClient::GetFsQuota",
-                                             ctx->GetTraceSpan());
+  auto span = trace_manager_.StartChildSpan("MDSClient::GetFsQuota",
+                                            ctx->GetTraceSpan());
 
   pb::mds::GetFsQuotaRequest request;
   pb::mds::GetFsQuotaResponse response;
 
   request.set_fs_id(fs_id_);
-  request.mutable_info()->set_trace_id(span->GetTraceID());
-  request.mutable_info()->set_span_id(span->GetSpanID());
+  request.mutable_info()->set_trace_id(SpanScope::GetTraceID(span));
+  request.mutable_info()->set_span_id(SpanScope::GetSpanID(span));
 
   auto status =
       rpc_->SendRequest("MDSService", "GetFsQuota", request, response);
   if (!status.ok()) {
-    span->SetStatus(status);
+    SpanScope::SetStatus(span, status);
     return status;
   }
 
@@ -1263,21 +1262,21 @@ Status MDSClient::GetDirQuota(ContextSPtr ctx, Ino ino, FsStat& fs_stat) {
     return GetMdsByParent(ino, is_primary_mds);
   };
 
-  auto span = trace_manager_->StartChildSpan("MDSClient::GetDirQuota",
-                                             ctx->GetTraceSpan());
+  auto span = trace_manager_.StartChildSpan("MDSClient::GetDirQuota",
+                                            ctx->GetTraceSpan());
 
   pb::mds::GetDirQuotaRequest request;
   pb::mds::GetDirQuotaResponse response;
 
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
-  request.mutable_info()->set_trace_id(span->GetTraceID());
-  request.mutable_info()->set_span_id(span->GetSpanID());
+  request.mutable_info()->set_trace_id(SpanScope::GetTraceID(span));
+  request.mutable_info()->set_span_id(SpanScope::GetSpanID(span));
 
-  auto status = SendRequest(span->GetContext(), get_mds_fn, "MDSService",
-                            "GetDirQuota", request, response);
+  auto status = SendRequest(SpanScope::GetContext(span), get_mds_fn,
+                            "MDSService", "GetDirQuota", request, response);
   if (!status.ok()) {
-    span->SetStatus(status);
+    SpanScope::SetStatus(span, status);
     return status;
   }
 

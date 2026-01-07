@@ -29,6 +29,7 @@
 #include "common/opentrace/span.h"
 #include "common/status.h"
 #include "common/trace/context.h"
+#include "fmt/format.h"
 #include "glog/logging.h"
 #include "opentelemetry/trace/span_context.h"
 
@@ -36,6 +37,8 @@ namespace dingofs {
 
 class TraceManager;
 
+class SpanScope;
+using SpanScopeSptr = std::shared_ptr<SpanScope>;
 class SpanScope : public std::enable_shared_from_this<SpanScope> {
  public:
   SpanScope(std::shared_ptr<Span> inner_span, std::shared_ptr<SpanScope> parent,
@@ -45,32 +48,102 @@ class SpanScope : public std::enable_shared_from_this<SpanScope> {
         ended_(false),
         context_(std::move(ctx)) {}
 
-  static std::shared_ptr<SpanScope> Create(std::shared_ptr<TraceManager> mgr,
-                                           const std::string& name);
+  static SpanScopeSptr Create(TraceManager* mgr, const std::string& name);
 
-  static std::shared_ptr<SpanScope> Create(std::shared_ptr<TraceManager> mgr,
-                                           const std::string& name,
-                                           const std::string& trace_id,
-                                           const std::string& span_id);
+  static SpanScopeSptr Create(TraceManager* mgr, const std::string& name,
+                              const std::string& trace_id,
+                              const std::string& span_id);
 
-  static std::shared_ptr<SpanScope> CreateChild(
-      std::shared_ptr<TraceManager> mgr, const std::string& name,
-      std::shared_ptr<SpanScope> parent);
+  static SpanScopeSptr CreateChild(TraceManager* mgr, const std::string& name,
+                                   SpanScopeSptr parent);
 
   ~SpanScope() { End(); };
 
+  static std::string GetTraceID(SpanScopeSptr span) {
+    if (span) {
+      return span->GetTraceID();
+    }
+    return "";
+  }
+
+  static std::string GetSpanID(SpanScopeSptr span) {
+    if (span) {
+      return span->GetSpanID();
+    }
+    return "";
+  }
+
+  static void AddAttribute(SpanScopeSptr span, const std::string& key,
+                           const std::string& value) {
+    if (span) {
+      span->AddAttribute(key, value);
+    }
+  }
+
+  static void AddEvent(SpanScopeSptr span, const std::string& name) {
+    if (span) {
+      span->AddEvent(name);
+    }
+  }
+
+  static void SetStatus(SpanScopeSptr span, const Status& status) {
+    if (span) {
+      span->SetStatus(status);
+    }
+  }
+
+  static void SetStatus(SpanScopeSptr span, butil::Status const& status) {
+    if (span) {
+      span->SetStatus(status);
+    }
+  }
+
+  static std::shared_ptr<SpanContext> GetTraceContext(SpanScopeSptr span) {
+    if (span) {
+      return span->GetTraceContext();
+    }
+    return nullptr;
+  }
+
+  static ContextSPtr GetContext(SpanScopeSptr span) {
+    if (span) {
+      return span->GetContext();
+    }
+    return std::make_shared<Context>("");
+  }
+
+  static std::string GetSessionID(SpanScopeSptr span) {
+    if (span) {
+      return span->context_->SessionID();
+    }
+    return std::to_string(utils::TimestampNs());
+  }
+
+  static void End(SpanScopeSptr span) {
+    if (span) {
+      span->End();
+    }
+  }
+
+  static void SetTraceSpan(SpanScopeSptr span) {
+    if (span) {
+      span->SetTraceSpan();
+    }
+  }
+
+ private:
   void End() {
     if (ended_.exchange(true)) return;
     inner_span_->End();
   }
 
-  std::shared_ptr<SpanContext> GetTraceContext() const {
-    return inner_span_->GetContext();
-  }
-
   void SetTraceSpan() { context_->SetTraceSpan(shared_from_this()); }
 
   ContextSPtr GetContext() const { return context_; }
+
+  std::shared_ptr<SpanContext> GetTraceContext() {
+    return inner_span_->GetContext();
+  }
 
   void AddAttribute(const std::string& key, const std::string& value) {
     inner_span_->AddAttribute(key, value);
@@ -90,14 +163,12 @@ class SpanScope : public std::enable_shared_from_this<SpanScope> {
 
   std::string GetSpanID() { return inner_span_->GetSpanID(); }
 
- private:
   std::shared_ptr<Span> inner_span_;
-  std::shared_ptr<SpanScope> parent_;
+  SpanScopeSptr parent_;
   std::atomic<bool> ended_;
   ContextSPtr context_;
 };
 
-using SpanScopeSptr = std::shared_ptr<SpanScope>;
 }  // namespace dingofs
 
 #endif  // DINGOFS_COMMON_TRACE_SPAN_SCOPE_H_

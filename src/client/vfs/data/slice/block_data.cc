@@ -87,8 +87,8 @@ PageData* BlockData::FindOrCreatePageData(uint64_t page_index,
 
 Status BlockData::Write(ContextSPtr ctx, const char* buf, uint64_t size,
                         uint64_t block_offset) {
-  auto span = vfs_hub_->GetTraceManager()->StartChildSpan("BlockData::Write",
-                                                          ctx->GetTraceSpan());
+  auto span = vfs_hub_->GetTraceManager().StartChildSpan("BlockData::Write",
+                                                         ctx->GetTraceSpan());
 
   uint64_t end_write_block_offset = (block_offset + size);
 
@@ -126,7 +126,8 @@ Status BlockData::Write(ContextSPtr ctx, const char* buf, uint64_t size,
     uint64_t write_size = std::min(remain_len, page_size - page_offset);
     PageData* page_data = FindOrCreatePageData(page_index, page_offset);
 
-    page_data->Write(span->GetContext(), buf_pos, write_size, page_offset);
+    page_data->Write(SpanScope::GetContext(span), buf_pos, write_size,
+                     page_offset);
 
     remain_len -= write_size;
     buf_pos += write_size;

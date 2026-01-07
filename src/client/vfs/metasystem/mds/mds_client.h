@@ -54,8 +54,7 @@ class MDSClient {
  public:
   MDSClient(const ClientId& client_id, mds::FsInfoSPtr fs_info,
             ParentMemoSPtr parent_memo, MDSDiscoverySPtr mds_discovery,
-            MDSRouterPtr mds_router, RPCPtr rpc,
-            TraceManagerSPtr trace_manager);
+            MDSRouterPtr mds_router, RPCPtr rpc, TraceManager& trace_manager);
   virtual ~MDSClient() = default;
 
   static MDSClientSPtr New(const ClientId& client_id, mds::FsInfoSPtr fs_info,
@@ -63,7 +62,7 @@ class MDSClient {
 
                            MDSDiscoverySPtr mds_discovery,
                            MDSRouterPtr mds_router, RPCPtr rpc,
-                           TraceManagerSPtr trace_manager) {
+                           TraceManager& trace_manager) {
     return std::make_shared<MDSClient>(client_id, fs_info, parent_memo,
                                        mds_discovery, mds_router, rpc,
                                        trace_manager);
@@ -197,7 +196,7 @@ class MDSClient {
   MDSDiscoverySPtr mds_discovery_;
 
   RPCPtr rpc_;
-  TraceManagerSPtr trace_manager_;
+  TraceManager& trace_manager_;
 };
 
 template <typename Request>

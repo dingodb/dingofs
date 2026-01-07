@@ -80,10 +80,6 @@ VFSHubImpl::~VFSHubImpl() {
   if (meta_system_ != nullptr) {
     meta_system_.reset();
   }
-
-  if (trace_manager_ != nullptr) {
-    trace_manager_.reset();
-  }
 }
 
 Status VFSHubImpl::Start(const VFSConfig& vfs_conf, bool upgrade) {
@@ -94,9 +90,8 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf, bool upgrade) {
 
   // trace manager
   {
-    trace_manager_ = TraceManager::New();
-    CHECK(trace_manager_ != nullptr) << "trace manager is nullptr.";
-    if (!trace_manager_->Init()) {
+    trace_manager_ = TraceManager();
+    if (!trace_manager_.Init()) {
       return Status::Internal("init trace manager fail");
     }
   }
@@ -124,10 +119,10 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf, bool upgrade) {
 
   // load fs info
   {
-    auto span = trace_manager_->StartSpan("vfs::start");
+    auto span = trace_manager_.StartSpan("vfs::start");
 
     DINGOFS_RETURN_NOT_OK(
-        meta_system_->GetFsInfo(span->GetContext(), &fs_info_));
+        meta_system_->GetFsInfo(SpanScope::GetContext(span), &fs_info_));
 
     LOG(INFO) << fmt::format("[vfs.hub] vfs_fs_info: {}", FsInfo2Str(fs_info_));
     if (fs_info_.status != FsStatus::kNormal) {
@@ -305,9 +300,7 @@ Status VFSHubImpl::Stop(bool upgrade) {
     meta_system_->UnInit(upgrade);
   }
 
-  if (trace_manager_ != nullptr) {
-    trace_manager_->Stop();
-  }
+  trace_manager_.Stop();
 
   started_.store(false, std::memory_order_relaxed);
 

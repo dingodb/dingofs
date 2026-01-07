@@ -288,8 +288,8 @@ Status VFSImpl::Read(ContextSPtr ctx, Ino ino, DataBuffer* data_buffer,
   Status s;
   auto handle = handle_manager_->FindHandler(fh);
   VFS_CHECK_HANDLE(handle, ino, fh);
-  auto span = vfs_hub_->GetTraceManager()->StartChildSpan("VFSImpl::Read",
-                                                          ctx->GetTraceSpan());
+  auto span = vfs_hub_->GetTraceManager().StartChildSpan("VFSImpl::Read",
+                                                         ctx->GetTraceSpan());
   // read .stats file data
   if (BAIDU_UNLIKELY(ino == kStatsIno)) {
     size_t file_size = handle->file_buffer.size;
@@ -307,23 +307,23 @@ Status VFSImpl::Read(ContextSPtr ctx, Ino ino, DataBuffer* data_buffer,
   if (handle->file == nullptr) {
     LOG(ERROR) << "file is null in handle, ino: " << ino << ", fh: " << fh;
     s = Status::BadFd(fmt::format("bad  fh:{}", fh));
-    span->SetStatus(s);
+    SpanScope::SetStatus(span, s);
     return s;
   }
 
   {
-    auto flush_span = vfs_hub_->GetTraceManager()->StartChildSpan(
-        "VFSImpl::Read.Flush", span);
+    auto flush_span =
+        vfs_hub_->GetTraceManager().StartChildSpan("VFSImpl::Read.Flush", span);
     s = handle->file->Flush();
     if (!s.ok()) {
-      flush_span->SetStatus(s);
+      SpanScope::SetStatus(flush_span, s);
       return s;
     }
   }
 
-  s = handle->file->Read(span->GetContext(), data_buffer, size, offset,
+  s = handle->file->Read(SpanScope::GetContext(span), data_buffer, size, offset,
                          out_rsize);
-  span->SetStatus(s);
+  SpanScope::SetStatus(span, s);
   return s;
 }
 
@@ -333,8 +333,8 @@ Status VFSImpl::Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t size,
   auto handle = handle_manager_->FindHandler(fh);
   VFS_CHECK_HANDLE(handle, ino, fh);
 
-  auto span = vfs_hub_->GetTraceManager()->StartChildSpan("VFSImpl::Write",
-                                                          ctx->GetTraceSpan());
+  auto span = vfs_hub_->GetTraceManager().StartChildSpan("VFSImpl::Write",
+                                                         ctx->GetTraceSpan());
 
   if (handle->file == nullptr) {
     LOG(ERROR) << "file is null in handle, ino: " << ino << ", fh: " << fh;
@@ -350,9 +350,10 @@ Status VFSImpl::Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t size,
     vfs_hub_->GetHandleManager()->TriggerFlushAll();
   }
 
-  s = handle->file->Write(ctx, buf, size, offset, out_wsize);
+  s = handle->file->Write(SpanScope::GetContext(span), buf, size, offset,
+                          out_wsize);
   if (s.ok()) {
-    s = meta_system_->Write(ctx, ino, offset, size, fh);
+    s = meta_system_->Write(SpanScope::GetContext(span), ino, offset, size, fh);
     handle->file->Invalidate(offset, size);
   }
 

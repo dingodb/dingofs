@@ -1164,7 +1164,7 @@ static std::string GetAliveMdsAddr(const std::string& mds_addrs) {
 MDSMetaSystemUPtr MDSMetaSystem::Build(const std::string& fs_name,
                                        const std::string& mds_addrs,
                                        const ClientId& client_id,
-                                       TraceManagerSPtr trace_manager) {
+                                       TraceManager& trace_manager) {
   LOG(INFO) << fmt::format("[meta.fs.{}] build filesystem mds_addrs({}).",
                            fs_name, mds_addrs);
 

@@ -22,22 +22,14 @@
 #include <thread>
 #include <vector>
 
-#include "common/opentrace/opentelemetry/tracer.h"
+#include "common/trace/trace_manager.h"
+#include "utils/time.h"
 
 namespace dingofs {
 DECLARE_bool(enable_trace);
 DECLARE_string(otlp_export_endpoint);
 namespace common {
 namespace unit_test {
-// ==========================================
-// Simulate business loads
-// ==========================================
-void RunBusinessLogic() {
-  volatile int sum = 0;
-  for (int i = 0; i < 100; ++i) {
-    sum += i;
-  }
-}
 
 template <typename Func>
 double MeasureAvgNanoseconds(const std::string& label, int iterations,
@@ -60,35 +52,28 @@ double MeasureAvgNanoseconds(const std::string& label, int iterations,
 class TraceManagerTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    tracer_ = OpenTeleMetryTracer::New("dingofs", FLAGS_otlp_export_endpoint);
-    tracer_->Init();
+    tracer_manager_ = TraceManager::New();
+    tracer_manager_->Init();
   }
 
-  void TearDown() override { tracer_->Stop(); }
+  void TearDown() override { tracer_manager_->Stop(); }
 
   void RecursiveReal(int depth) {
-    auto span = tracer_->MakeSpan("trace_operation");
+    auto span = tracer_manager_->StartSpan("trace_operation");
 
     if (depth > 0) {
       RecursiveReal(depth - 1);
     }
   }
 
-  void RecursiveBase(int depth) {
-    RunBusinessLogic();
-    if (depth > 0) {
-      RecursiveBase(depth - 1);
-    }
-  }
-
  private:
-  OpenTeleMetryTracerSPtr tracer_;
+  TraceManagerSPtr tracer_manager_;
 };
 
 TEST_F(TraceManagerTest, AnalyzeOverhead) {
   // GTEST_SKIP() << "skip, run too long.";
   FLAGS_enable_trace = true;
-  const int ITERATIONS = 100000;
+  const int ITERATIONS = 100;
   const int DEPTH = 0;
 
   std::cout << "\n=== Starting Trace Manager Performance Analysis ("
@@ -96,18 +81,10 @@ TEST_F(TraceManagerTest, AnalyzeOverhead) {
             << std::endl;
 
   // ---------------------------------------------------------
-  // BaseTime
-  // ---------------------------------------------------------
-  double t_base = MeasureAvgNanoseconds("1. Base (No Trace)", ITERATIONS,
-                                        [this]() { RecursiveBase(DEPTH); });
-
-  // ---------------------------------------------------------
   // Real Trace
   // ---------------------------------------------------------
-  double t_real = MeasureAvgNanoseconds("2. Real (Enable)", ITERATIONS,
+  double t_real = MeasureAvgNanoseconds("1. Real (Enable)", ITERATIONS,
                                         [this]() { RecursiveReal(DEPTH); });
-
-  // double total_overhead = t_real - t_base;
 
   std::cout
       << "\n================================================================"
@@ -121,28 +98,20 @@ TEST_F(TraceManagerTest, AnalyzeOverhead) {
 
   std::cout << std::fixed << std::setprecision(2);
 
-  std::cout << "Base Logic Time:       " << t_base << " ns" << std::endl;
   std::cout << "Real Logic Time:       " << t_real << " ns" << std::endl;
   std::cout
       << "----------------------------------------------------------------"
       << std::endl;
 
-  // std::cout << "Total Overhead                 = " << std::setw(6)
-  //           << total_overhead << " ns" << std::endl;
-
   std::cout
       << "----------------------------------------------------------------"
-      << std::endl;
-
-  std::cout
-      << "================================================================"
       << std::endl;
 }
 
 TEST_F(TraceManagerTest, AnalyzeNestOverhead) {
   // GTEST_SKIP() << "skip, run too long.";
   FLAGS_enable_trace = true;
-  const int ITERATIONS = 100000;
+  const int ITERATIONS = 100;
   const int DEPTH = 10;
 
   std::cout << "\n=== Starting Trace Manager Performance Analysis ("
@@ -153,18 +122,10 @@ TEST_F(TraceManagerTest, AnalyzeNestOverhead) {
             << std::endl;
 
   // ---------------------------------------------------------
-  // scene 1: BaseTime
-  // ---------------------------------------------------------
-  double t_base = MeasureAvgNanoseconds("1. Base (No Trace)", ITERATIONS,
-                                        [this]() { RecursiveBase(DEPTH); });
-
-  // ---------------------------------------------------------
-  // scene 2: Real Trace
+  // scene : Real Trace
   // ---------------------------------------------------------
   double t_real = MeasureAvgNanoseconds("2. Real (Enable)", ITERATIONS,
                                         [this]() { RecursiveReal(DEPTH); });
-
-  double total_overhead = t_real - t_base;
 
   std::cout
       << "\n================================================================"
@@ -178,14 +139,10 @@ TEST_F(TraceManagerTest, AnalyzeNestOverhead) {
 
   std::cout << std::fixed << std::setprecision(2);
 
-  std::cout << "Base Logic Time:       " << t_base << " ns" << std::endl;
   std::cout << "Real Logic Time:       " << t_real << " ns" << std::endl;
   std::cout
       << "----------------------------------------------------------------"
       << std::endl;
-
-  std::cout << "Total Overhead                 = " << std::setw(6)
-            << total_overhead << " ns" << std::endl;
 
   std::cout
       << "----------------------------------------------------------------"
@@ -198,7 +155,7 @@ TEST_F(TraceManagerTest, AnalyzeNestOverhead) {
 
 TEST_F(TraceManagerTest, AnalyzeNoopOverhead) {
   FLAGS_enable_trace = false;
-  const int ITERATIONS = 100000;
+  const int ITERATIONS = 100;
   const int DEPTH = 0;
 
   std::cout << "\n=== Starting Trace Manager Performance Analysis ("
@@ -206,18 +163,10 @@ TEST_F(TraceManagerTest, AnalyzeNoopOverhead) {
             << std::endl;
 
   // ---------------------------------------------------------
-  // BaseTime
-  // ---------------------------------------------------------
-  double t_base = MeasureAvgNanoseconds("1. Base (No Trace)", ITERATIONS,
-                                        [this]() { RecursiveBase(DEPTH); });
-
-  // ---------------------------------------------------------
   // Real Trace
   // ---------------------------------------------------------
-  double t_real = MeasureAvgNanoseconds("2. Real (Disable)", ITERATIONS,
+  double t_real = MeasureAvgNanoseconds("1. Real (Disable)", ITERATIONS,
                                         [this]() { RecursiveReal(DEPTH); });
-
-  // double total_overhead = t_real - t_base;
 
   std::cout
       << "\n================================================================"
@@ -231,15 +180,7 @@ TEST_F(TraceManagerTest, AnalyzeNoopOverhead) {
 
   std::cout << std::fixed << std::setprecision(2);
 
-  std::cout << "Base Logic Time:       " << t_base << " ns" << std::endl;
   std::cout << "Real Logic Time:       " << t_real << " ns" << std::endl;
-  std::cout
-      << "----------------------------------------------------------------"
-      << std::endl;
-
-  // std::cout << "Total Overhead                 = " << std::setw(6)
-  //           << total_overhead << " ns" << std::endl;
-
   std::cout
       << "----------------------------------------------------------------"
       << std::endl;
@@ -252,7 +193,7 @@ TEST_F(TraceManagerTest, AnalyzeNoopOverhead) {
 TEST_F(TraceManagerTest, AnalyzeNoopNestOverhead) {
   // GTEST_SKIP() << "skip, run too long.";
   FLAGS_enable_trace = false;
-  const int ITERATIONS = 100000;
+  const int ITERATIONS = 100;
   const int DEPTH = 10;
 
   std::cout << "\n=== Starting Trace Manager Performance Analysis ("
@@ -263,18 +204,10 @@ TEST_F(TraceManagerTest, AnalyzeNoopNestOverhead) {
             << std::endl;
 
   // ---------------------------------------------------------
-  // scene 1: BaseTime
+  // scene: Real Trace
   // ---------------------------------------------------------
-  double t_base = MeasureAvgNanoseconds("1. Base (No Trace)", ITERATIONS,
-                                        [this]() { RecursiveBase(DEPTH); });
-
-  // ---------------------------------------------------------
-  // scene 2: Real Trace
-  // ---------------------------------------------------------
-  double t_real = MeasureAvgNanoseconds("2. Real (Disable)", ITERATIONS,
+  double t_real = MeasureAvgNanoseconds("1. Real (Disable)", ITERATIONS,
                                         [this]() { RecursiveReal(DEPTH); });
-
-  double total_overhead = t_real - t_base;
 
   std::cout
       << "\n================================================================"
@@ -288,15 +221,7 @@ TEST_F(TraceManagerTest, AnalyzeNoopNestOverhead) {
 
   std::cout << std::fixed << std::setprecision(2);
 
-  std::cout << "Base Logic Time:       " << t_base << " ns" << std::endl;
   std::cout << "Real Logic Time:       " << t_real << " ns" << std::endl;
-  std::cout
-      << "----------------------------------------------------------------"
-      << std::endl;
-
-  std::cout << "Total Overhead                 = " << std::setw(6)
-            << total_overhead << " ns" << std::endl;
-
   std::cout
       << "----------------------------------------------------------------"
       << std::endl;
@@ -304,6 +229,38 @@ TEST_F(TraceManagerTest, AnalyzeNoopNestOverhead) {
   std::cout
       << "================================================================"
       << std::endl;
+}
+
+static void PerformanceTest(size_t iterations) {
+  butil::Timer timer;
+  timer.start();
+
+  for (size_t i = 0; i < iterations; ++i) {
+    std::to_string(utils::TimestampNs());
+  }
+
+  timer.stop();
+
+  // Calculate and print results
+  double avg_time_ns = timer.n_elapsed(0.0) / iterations;
+
+  std::cout << "Performance Test Results:\n";
+  std::cout << "========================\n";
+
+  std::cout << "Iterations:     " << iterations << "\n";
+  std::cout << "Total time:     " << timer.m_elapsed(0.0) << " ms\n";
+  std::cout << "Average time:   " << avg_time_ns << " ns per call\n";
+  std::cout << "Throughput:     " << (iterations / timer.s_elapsed(0.0))
+            << " calls/second\n";
+  std::cout << "Sample output:  " << std::to_string(utils::TimestampNs())
+            << "\n";
+}
+
+TEST(GenerateSessionIDTest, Benchmark) {
+  // Test different ID lengths
+  const size_t iterations = 100000;
+
+  PerformanceTest(iterations);
 }
 
 }  // namespace unit_test

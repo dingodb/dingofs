@@ -23,8 +23,6 @@
 
 namespace dingofs {
 
-DEFINE_bool(enable_trace, false, "Whether to enable trace");
-
 bool OpenTeleMetryTracer::Init() {
   auto resource_attributes = opentelemetry::sdk::resource::ResourceAttributes{
       {"service.name", service_name_}, {"service.commit", commit_hash_}};
@@ -82,17 +80,11 @@ void OpenTeleMetryTracer::Stop() {
 };
 
 std::shared_ptr<Span> OpenTeleMetryTracer::MakeSpan(const std::string& name) {
-  if (!FLAGS_enable_trace) {
-    return std::make_shared<NoopSpan>();
-  }
   return std::make_shared<OtlpSpan>(tracer_->StartSpan(name));
 }
 
 std::shared_ptr<Span> OpenTeleMetryTracer::MakeSpan(
     const std::string& name, const SpanContext& span_context) {
-  if (!FLAGS_enable_trace) {
-    return std::make_shared<NoopSpan>();
-  }
   trace::StartSpanOptions options;
   options.parent = span_context;
   return std::make_shared<OtlpSpan>(tracer_->StartSpan(name, options));
@@ -101,10 +93,6 @@ std::shared_ptr<Span> OpenTeleMetryTracer::MakeSpan(
 std::shared_ptr<Span> OpenTeleMetryTracer::MakeSpan(
     const std::string& name, const std::string& trace_id,
     const std::string& span_id) {
-  if (!FLAGS_enable_trace) {
-    return std::make_shared<NoopSpan>();
-  }
-
   auto otel_trace_id =
       trace::propagation::HttpTraceContext::TraceIdFromHex(trace_id);
   auto otel_span_id =

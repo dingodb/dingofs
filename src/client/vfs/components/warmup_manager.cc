@@ -151,20 +151,20 @@ void WarmupManager::DoWarmupTask(WarmupTask* task) {
 }
 
 void WarmupManager::ProcessIntimeWarmup(WarmupTask* task) {
-  auto span = vfs_hub_->GetTraceManager()->StartSpan(
+  auto span = vfs_hub_->GetTraceManager().StartSpan(
       "WarmupManager::ProcessIntimeWarmup");
   auto inode = task->GetKey();
   LOG(INFO) << "Intime warmup started for inode: " << task->GetKey();
 
   WarmupFile(inode, [inode, task, span](Status s) {
-    span->End();
+    SpanScope::End(span);
     LOG(INFO) << "Finish intime warmup file: " << inode
               << ", with status: " << s.ToString();
   });
 }
 
 void WarmupManager::ProcessManualWarmup(WarmupTask* task) {
-  auto span = vfs_hub_->GetTraceManager()->StartSpan(
+  auto span = vfs_hub_->GetTraceManager().StartSpan(
       "WarmupManager::ProcessManualWarmup");
   VLOG(3) << "Process manual warmup task, key: " << task->GetKey()
           << ", inodes: " << task->GetTaskInodes();
@@ -219,10 +219,11 @@ void WarmupManager::WarmupFiles(WarmupTask* task) {
 }
 
 Status WarmupManager::WalkFile(WarmupTask* task, Ino ino) {
-  auto span = vfs_hub_->GetTraceManager()->StartSpan("WarmupManager::WalkFile");
+  auto span = vfs_hub_->GetTraceManager().StartSpan("WarmupManager::WalkFile");
 
   Attr attr;
-  Status s = vfs_hub_->GetMetaSystem()->GetAttr(span->GetContext(), ino, &attr);
+  Status s = vfs_hub_->GetMetaSystem()->GetAttr(SpanScope::GetContext(span),
+                                                ino, &attr);
   if (!s.ok()) {
     LOG(ERROR) << "Failed to get attr for ino: " << ino
                << ", status: " << s.ToString();
@@ -249,8 +250,8 @@ Status WarmupManager::WalkFile(WarmupTask* task, Ino ino) {
     auto dirIt = parentDir.begin();
     while (dirIt != parentDir.end()) {
       uint64_t fh = vfs::FhGenerator::GenFh();
-      openStatus =
-          vfs_hub_->GetMetaSystem()->OpenDir(span->GetContext(), *dirIt, fh);
+      openStatus = vfs_hub_->GetMetaSystem()->OpenDir(
+          SpanScope::GetContext(span), *dirIt, fh);
       if (!openStatus.ok()) {
         LOG(ERROR) << "Failed to open dir: " << *dirIt
                    << ", status: " << openStatus.ToString();
@@ -259,7 +260,7 @@ Status WarmupManager::WalkFile(WarmupTask* task, Ino ino) {
       }
 
       vfs_hub_->GetMetaSystem()->ReadDir(
-          span->GetContext(), *dirIt, fh, 0, true,
+          SpanScope::GetContext(span), *dirIt, fh, 0, true,
           [task, &childDir, this](const DirEntry& entry, uint64_t offset) {
             (void)offset;
             Ino inoTmp = entry.ino;
@@ -275,7 +276,8 @@ Status WarmupManager::WalkFile(WarmupTask* task, Ino ino) {
             }
             return true;  // Continue reading
           });
-      vfs_hub_->GetMetaSystem()->ReleaseDir(span->GetContext(), *dirIt, fh);
+      vfs_hub_->GetMetaSystem()->ReleaseDir(SpanScope::GetContext(span), *dirIt,
+                                            fh);
 
       dirIt++;
     }
@@ -287,21 +289,21 @@ Status WarmupManager::WalkFile(WarmupTask* task, Ino ino) {
 
 void WarmupManager::WarmupFile(Ino ino, AsyncWarmupCb cb) {
   auto span =
-      vfs_hub_->GetTraceManager()->StartSpan("WarmupManager::WarmupFile");
+      vfs_hub_->GetTraceManager().StartSpan("WarmupManager::WarmupFile");
   IncFileMetric(1);
   BRPC_SCOPE_EXIT { DecFileMetric(1); };
 
   Attr attr;
-  auto status =
-      vfs_hub_->GetMetaSystem()->GetAttr(span->GetContext(), ino, &attr);
+  auto status = vfs_hub_->GetMetaSystem()->GetAttr(SpanScope::GetContext(span),
+                                                   ino, &attr);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("Get attr failed, status: {}", status.ToString());
     cb(status);
     return;
   }
 
-  auto unique_blocks =
-      FileRange2BlockKey(span->GetContext(), vfs_hub_, ino, 0, attr.length);
+  auto unique_blocks = FileRange2BlockKey(SpanScope::GetContext(span), vfs_hub_,
+                                          ino, 0, attr.length);
 
   IncBlockMetric(unique_blocks.size());
 
@@ -319,7 +321,7 @@ void WarmupManager::WarmupFile(Ino ino, AsyncWarmupCb cb) {
     req.block_size = block.len;
 
     block_store_->PrefetchAsync(
-        span->GetContext(), req,
+        SpanScope::GetContext(span), req,
         [this, req, &countdown, &donwload_status](Status status) {
           VLOG(6) << fmt::format("Download block {} finished, status: {}.",
                                  req.block.Filename(), status.ToString());

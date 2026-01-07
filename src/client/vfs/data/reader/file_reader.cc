@@ -385,19 +385,18 @@ void FileReader::DoReadRequst(ReadRequestSptr req) {
   // out of lock
   ChunkReadReq chunk_req = GenChunkReqdReq(req);
 
-  auto span =
-      vfs_hub_->GetTraceManager()->StartSpan("FileReader::DoReadRequst");
+  auto span = vfs_hub_->GetTraceManager().StartSpan("FileReader::DoReadRequst");
 
   AcquireRef();
 
   auto* reader = new ChunkReader(vfs_hub_, fh_, chunk_req);
-  reader->ReadAsync(span->GetContext(), [this, reader, req, span](Status s) {
-    span->AddEvent("Complete ReadAsync callback");
-    this->OnReadRequestComplete(reader, req, s);
-    delete reader;
-
-    ReleaseRef();
-  });
+  reader->ReadAsync(SpanScope::GetContext(span),
+                    [this, reader, req, span](Status s) {
+                      SpanScope::AddEvent(span, "Complete ReadAsync callback");
+                      this->OnReadRequestComplete(reader, req, s);
+                      delete reader;
+                      ReleaseRef();
+                    });
 }
 
 void FileReader::TakeMem(int64_t size) {
@@ -440,7 +439,7 @@ bool FileReader::IsProtectedReq(const ReadRequestSptr& req) const {
 };
 
 void FileReader::MakeReadahead(ContextSPtr ctx, const FileRange& frange) {
-  auto span = vfs_hub_->GetTraceManager()->StartChildSpan(
+  auto span = vfs_hub_->GetTraceManager().StartChildSpan(
       "FileReader::MakeReadahead", ctx->GetTraceSpan());
   VLOG(9) << "MakeReadahead: input frange=" << frange.ToString();
   CHECK_GT(frange.len, 0);
@@ -521,7 +520,7 @@ void FileReader::MakeReadahead(ContextSPtr ctx, const FileRange& frange) {
 
 void FileReader::CheckReadahead(ContextSPtr ctx, const FileRange& frange,
                                 int64_t flen) {
-  auto span = vfs_hub_->GetTraceManager()->StartChildSpan(
+  auto span = vfs_hub_->GetTraceManager().StartChildSpan(
       "FileReader::CheckReadahead", ctx->GetTraceSpan());
 
   VLOG(9) << "CheckReadahead frange: " << frange.ToString()
@@ -547,7 +546,7 @@ void FileReader::CheckReadahead(ContextSPtr ctx, const FileRange& frange,
             << ", policy: " << policy_->ToString();
 
     if (ahead.len > 0) {
-      MakeReadahead(span->GetContext(), ahead);
+      MakeReadahead(SpanScope::GetContext(span), ahead);
     }
   }
 
@@ -556,7 +555,7 @@ void FileReader::CheckReadahead(ContextSPtr ctx, const FileRange& frange,
 
 std::vector<int64_t> FileReader::SplitRange(ContextSPtr ctx,
                                             const FileRange& frange) {
-  auto span = vfs_hub_->GetTraceManager()->StartChildSpan(
+  auto span = vfs_hub_->GetTraceManager().StartChildSpan(
       "FileReader::SplitRange", ctx->GetTraceSpan());
 
   std::vector<int64_t> ranges;
@@ -591,7 +590,7 @@ std::vector<int64_t> FileReader::SplitRange(ContextSPtr ctx,
 
 std::vector<PartialReadRequest> FileReader::PrepareRequests(
     ContextSPtr ctx, const std::vector<int64_t>& ranges) {
-  auto span = vfs_hub_->GetTraceManager()->StartChildSpan(
+  auto span = vfs_hub_->GetTraceManager().StartChildSpan(
       "FileReader::PrepareRequests", ctx->GetTraceSpan());
   std::vector<PartialReadRequest> read_reqs;
 
@@ -638,7 +637,7 @@ std::vector<PartialReadRequest> FileReader::PrepareRequests(
 };
 
 void FileReader::CleanUpRequest(ContextSPtr ctx, const FileRange& frange) {
-  auto span = vfs_hub_->GetTraceManager()->StartChildSpan(
+  auto span = vfs_hub_->GetTraceManager().StartChildSpan(
       "FileReader::CleanUpRequest", ctx->GetTraceSpan());
 
   const uint64_t now = butil::monotonic_time_s();
@@ -706,7 +705,7 @@ void FileReader::CleanUpRequest(ContextSPtr ctx, const FileRange& frange) {
 
 void FileReader::CheckPrefetch(ContextSPtr ctx, const Attr& attr,
                                const FileRange& frange) {
-  auto span = vfs_hub_->GetTraceManager()->StartChildSpan(
+  auto span = vfs_hub_->GetTraceManager().StartChildSpan(
       "FileReader::CheckPrefetch", ctx->GetTraceSpan());
 
   uint64_t time_now = butil::monotonic_time_s();
@@ -732,11 +731,11 @@ void FileReader::CheckPrefetch(ContextSPtr ctx, const Attr& attr,
 
 Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
                         int64_t offset, uint64_t* out_rsize) {
-  auto span = vfs_hub_->GetTraceManager()->StartChildSpan("FileReader::Read",
-                                                          ctx->GetTraceSpan());
+  auto span = vfs_hub_->GetTraceManager().StartChildSpan("FileReader::Read",
+                                                         ctx->GetTraceSpan());
 
   Attr attr;
-  DINGOFS_RETURN_NOT_OK(GetAttr(span->GetContext(), &attr));
+  DINGOFS_RETURN_NOT_OK(GetAttr(SpanScope::GetContext(span), &attr));
 
   if (offset >= attr.length || size == 0) {
     *out_rsize = 0;
@@ -752,7 +751,7 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
   VLOG(6) << fmt::format("FileReader::Read ino: {}, fh: {}, frange: {} ", ino_,
                          fh_, frange.ToString());
 
-  CheckPrefetch(span->GetContext(), attr, frange);
+  CheckPrefetch(SpanScope::GetContext(span), attr, frange);
 
   int64_t used_mem = UsedMem();
   int64_t total_mem = TotalMem();
@@ -775,7 +774,7 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
   {
     std::unique_lock<std::mutex> lock(mutex_);
 
-    CleanUpRequest(span->GetContext(), frange);
+    CleanUpRequest(SpanScope::GetContext(span), frange);
 
     uint64_t last_bs = 32 << 10;  // 32KB
     if (frange.End() + last_bs > attr.length) {
@@ -788,18 +787,19 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
       }
 
       VLOG(9) << "Read MakeReadahead for last bs, last: " << last.ToString();
-      MakeReadahead(span->GetContext(), last);
+      MakeReadahead(SpanScope::GetContext(span), last);
     }
 
-    std::vector<int64_t> ranges = SplitRange(span->GetContext(), frange);
+    std::vector<int64_t> ranges =
+        SplitRange(SpanScope::GetContext(span), frange);
 
-    reqs = PrepareRequests(span->GetContext(), ranges);
+    reqs = PrepareRequests(SpanScope::GetContext(span), ranges);
 
-    CheckReadahead(span->GetContext(), frange, attr.length);
+    CheckReadahead(SpanScope::GetContext(span), frange, attr.length);
   }
 
   SCOPED_CLEANUP({
-    auto release_span = vfs_hub_->GetTraceManager()->StartChildSpan(
+    auto release_span = vfs_hub_->GetTraceManager().StartChildSpan(
         "FileReader::Read::ReleaseRequests", span);
 
     std::unique_lock<std::mutex> lock(mutex_);
@@ -817,7 +817,7 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
   Status ret;
 
   {
-    auto wait_span = vfs_hub_->GetTraceManager()->StartChildSpan(
+    auto wait_span = vfs_hub_->GetTraceManager().StartChildSpan(
         "FileReader::Read::WaitRequests", span);
 
     // TODO: support wait with timeout
@@ -865,10 +865,11 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
 }
 
 Status FileReader::GetAttr(ContextSPtr ctx, Attr* attr) {
-  auto span = vfs_hub_->GetTraceManager()->StartChildSpan("FileWriter::GetAttr",
-                                                          ctx->GetTraceSpan());
+  auto span = vfs_hub_->GetTraceManager().StartChildSpan("FileWriter::GetAttr",
+                                                         ctx->GetTraceSpan());
 
-  Status s = vfs_hub_->GetMetaSystem()->GetAttr(span->GetContext(), ino_, attr);
+  Status s = vfs_hub_->GetMetaSystem()->GetAttr(SpanScope::GetContext(span),
+                                                ino_, attr);
   if (!s.ok()) {
     LOG(WARNING) << fmt::format(
         "FileReader::GetAttr failed, ino: {}, status: {}", ino_, s.ToString());

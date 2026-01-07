@@ -67,7 +67,7 @@ class MDSMetaSystem : public vfs::MetaSystem {
   static MDSMetaSystemUPtr Build(const std::string& fs_name,
                                  const std::string& mds_addrs,
                                  const ClientId& client_id,
-                                 TraceManagerSPtr trace_manager);
+                                 TraceManager& trace_manager);
 
   Status Init(bool upgrade) override;
 

@@ -131,7 +131,7 @@ class VFSImpl : public VFS {
 
   uint64_t GetMaxNameLength() override;
 
-  TraceManager* GetTraceManager() override {
+  TraceManager GetTraceManager() override {
     return vfs_hub_->GetTraceManager();
   }
   blockaccess::BlockAccessOptions GetBlockAccesserOptions() override {

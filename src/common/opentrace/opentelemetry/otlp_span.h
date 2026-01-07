@@ -21,15 +21,16 @@
 #include <memory>
 #include <string>
 
-#include "common/opentrace/span.h"
 #include "common/opentrace/opentelemetry/type.h"
+#include "common/opentrace/span.h"
 
 namespace dingofs {
 
 class OtlpSpan : public Span {
  public:
-  OtlpSpan(nostd::shared_ptr<trace::Span> span)
-      : span_(span), scope_(trace::Scope(span)) {}
+  // OtlpSpan(nostd::shared_ptr<trace::Span> span)
+  //     : span_(span), scope_(trace::Scope(span)) {}
+  OtlpSpan(nostd::shared_ptr<trace::Span> span) : span_(span) {}
 
   ~OtlpSpan() override;
 
@@ -53,7 +54,7 @@ class OtlpSpan : public Span {
 
  private:
   opentelemetry::nostd::shared_ptr<opentelemetry::trace::Span> span_;
-  opentelemetry::trace::Scope scope_;
+  // opentelemetry::trace::Scope scope_;
 };
 
 }  // namespace dingofs

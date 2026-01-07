@@ -81,7 +81,7 @@ class VFSHub {
 
   virtual uint64_t GetPageSize() = 0;
 
-  virtual TraceManager* GetTraceManager() = 0;
+  virtual TraceManager GetTraceManager() = 0;
 
   virtual blockaccess::BlockAccessOptions GetBlockAccesserOptions() = 0;
 };
@@ -163,9 +163,8 @@ class VFSHubImpl : public VFSHub {
     return FLAGS_data_stream_page_size;
   }
 
-  TraceManager* GetTraceManager() override {
-    CHECK_NOTNULL(trace_manager_);
-    return trace_manager_.get();
+  TraceManager GetTraceManager() override {
+    return trace_manager_;
   }
 
   blockaccess::BlockAccessOptions GetBlockAccesserOptions() override {
@@ -194,7 +193,7 @@ class VFSHubImpl : public VFSHub {
   std::unique_ptr<FileSuffixWatcher> file_suffix_watcher_;
   std::unique_ptr<PrefetchManager> prefetch_manager_;
   std::unique_ptr<WarmupManager> warmup_manager_;
-  std::shared_ptr<TraceManager> trace_manager_;
+  TraceManager trace_manager_;
 };
 
 }  // namespace vfs
