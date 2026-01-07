@@ -126,9 +126,9 @@ static dingofs::FlagExtraInfo extras = {
     .program = "dingo-client",
     .usage = "  dingo-client [OPTIONS] <meta-url> <mountpoint>",
     .examples =
-        R"(  $ dingo-client local://dingofs /mnt/dingofs
-  $ dingo-client mds://10.220.69.10:7400/dingofs /mnt/dingofs
-  $ dingo-client --conf client.conf mds://10.220.32.1:6700/dingofs /mnt/dingofs
+        R"(  $ dingo-client local://myfs /mnt/dingofs
+  $ dingo-client mds://10.220.69.10:7400/myfs /mnt/dingofs
+  $ dingo-client --conf client.conf mds://10.220.32.1:6700/myfs /mnt/dingofs
 )",
     .patterns = {"src/client", "cache/common", "cache/storage",
                  "cache/tiercache", "cache/blockcache", "cache/remotecache",
