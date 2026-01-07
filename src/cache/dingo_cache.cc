@@ -36,6 +36,31 @@
 namespace dingofs {
 namespace cache {
 
+static std::vector<std::pair<std::string, std::string>> GenConfigs() {
+  std::vector<std::pair<std::string, std::string>> configs;
+  configs.emplace_back("id", fmt::format("[{}]", FLAGS_id));
+  // config
+  configs.emplace_back("config", fmt::format("[{}]", dingofs::FLAGS_conf));
+  // log
+  configs.emplace_back(
+      "log", fmt::format("[{} {} {}(verbose)]",
+                         dingofs::Helper::ExpandPath(
+                             ::FLAGS_log_dir.empty() ? dingofs::kDefaultLogDir
+                                                     : ::FLAGS_log_dir),
+                         dingofs::FLAGS_log_level, dingofs::FLAGS_log_v));
+  // mds
+  configs.emplace_back("mds", fmt::format("[{}]", FLAGS_mds_addrs));
+  // cache
+  if (dingofs::cache::FLAGS_enable_cache) {
+    configs.emplace_back(
+        "cache", fmt::format("[{} {} {}MB {}%(ratio)]", FLAGS_cache_store,
+                             FLAGS_cache_dir, FLAGS_cache_size_mb,
+                             FLAGS_free_space_ratio * 100));
+  }
+
+  return configs;
+}
+
 static dingofs::FlagExtraInfo extras = {
     .program = "dingo-cache",
     .usage = "  dingo-cache [OPTIONS] --id <cache_node_uuid>",
@@ -101,7 +126,6 @@ int DingoCache::Run(int argc, char** argv) {
 
   // read gflags from conf file
   if (!FLAGS_conf.empty()) {
-    LOG(INFO) << "use config file: " << FLAGS_conf;
     CHECK(dingofs::Helper::IsExistPath(FLAGS_conf))
         << fmt::format("config file {} not exist.", FLAGS_conf);
     gflags::ReadFromFlagsFile(FLAGS_conf, argv[0], true);
@@ -117,6 +141,8 @@ int DingoCache::Run(int argc, char** argv) {
       return -1;
     }
   }
+  // print config info
+  dingofs::Helper::PrintConfigInfo(GenConfigs());
 
   GlobalInitOrDie();
   return StartServer();

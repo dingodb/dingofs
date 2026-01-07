@@ -79,6 +79,9 @@ Status CacheGroupNodeServerImpl::Start() {
 
   CHECK_RUNNING("Cache group node server");
 
+  std::cout << "\ndingo-cache is listening on " << listen_ip << ":"
+            << listen_port << "\n";
+
   brpc::FLAGS_graceful_quit_on_sigterm = true;
   server_->RunUntilAskedToQuit();
 
