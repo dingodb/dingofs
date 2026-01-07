@@ -74,7 +74,7 @@ DEFINE_validator(mds_filesystem_hash_mds_num_default, brpc::PassValidate);
 DEFINE_uint32(mds_filesystem_recycle_time_hour, 1, "Filesystem recycle time hour.");
 DEFINE_validator(mds_filesystem_recycle_time_hour, brpc::PassValidate);
 
-DEFINE_bool(mds_compact_chunk_enable, false, "Compact chunk enable.");
+DEFINE_bool(mds_compact_chunk_enable, true, "Compact chunk enable.");
 DEFINE_validator(mds_compact_chunk_enable, brpc::PassValidate);
 DEFINE_uint32(mds_compact_chunk_threshold_num, 10, "Compact chunk threshold num.");
 DEFINE_validator(mds_compact_chunk_threshold_num, brpc::PassValidate);

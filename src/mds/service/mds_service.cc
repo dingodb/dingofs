@@ -51,12 +51,12 @@ DEFINE_string(mds_service_worker_set_type, "execq", "worker set type, execq or s
 DEFINE_validator(mds_service_worker_set_type,
                  [](const char*, const std::string& value) -> bool { return value == "execq" || value == "simple"; });
 
-DEFINE_uint32(mds_service_read_worker_num, 4, "number of read workers");
-DEFINE_uint32(mds_service_read_worker_max_pending_num, 1024, "read service worker max pending num");
+DEFINE_uint32(mds_service_read_worker_num, 4096, "number of read workers");
+DEFINE_uint32(mds_service_read_worker_max_pending_num, 259072, "read service worker max pending num");
 DEFINE_bool(mds_service_read_worker_use_pthread, false, "read worker use pthread");
 
-DEFINE_uint32(mds_service_write_worker_num, 4, "number of write workers");
-DEFINE_uint32(mds_service_write_worker_max_pending_num, 1024, "write service worker max pending num");
+DEFINE_uint32(mds_service_write_worker_num, 4096, "number of write workers");
+DEFINE_uint32(mds_service_write_worker_max_pending_num, 259072, "write service worker max pending num");
 DEFINE_bool(mds_service_write_worker_use_pthread, false, "write worker use pthread");
 
 #define RunInPlace(name, controller, request, response, svr_done) \

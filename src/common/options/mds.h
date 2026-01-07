@@ -100,7 +100,6 @@ DECLARE_uint32(mds_cache_expire_interval_s);
 
 // compaction config
 DECLARE_bool(mds_compact_chunk_enable);
-DECLARE_bool(mds_compact_chunk_detail_log_enable);
 DECLARE_uint32(mds_compact_chunk_threshold_num);
 DECLARE_uint32(mds_compact_chunk_interval_ms);
 

@@ -53,9 +53,6 @@ DEFINE_validator(mds_store_operation_merge_delay_us, brpc::PassValidate);
 
 DECLARE_uint32(mds_compact_chunk_interval_ms);
 
-DEFINE_bool(mds_compact_chunk_detail_log_enable, true, "compact chunk detal log enable.");
-DEFINE_validator(mds_compact_chunk_detail_log_enable, brpc::PassValidate);
-
 static const uint32_t kOpNameBufInitSize = 128;
 static const uint32_t kCleanCompactedSliceIntervalS = 1200;  // 20 minutes
 
