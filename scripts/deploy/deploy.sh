@@ -66,7 +66,7 @@ function deploy_server() {
   if [ "${FLAGS_replace_conf}" == "0" ]; then
     # conf file
     dist_conf="${dstpath}/conf/${role}.conf"
-    cp $srcpath/scripts/dev-mds/${role}.template.conf $dist_conf
+    cp $srcpath/conf/${role}.template.conf $dist_conf
 
     sed  -i 's,\$CLUSTER_ID\$,'"$CLUSTER_ID"',g'                    $dist_conf
     sed  -i 's,\$INSTANCE_ID\$,'"$instance_id"',g'                  $dist_conf

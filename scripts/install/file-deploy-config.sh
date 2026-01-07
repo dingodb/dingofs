@@ -102,12 +102,13 @@ get_options "$@"
 ############################  MAIN()
 docker_prefix="$(pwd)/scripts/docker/$g_os"
 prefix="$docker_prefix/dingofs" # /path/to/dingofs/scripts/docker/rocky9/dingofs
-mkdir -p $prefix $prefix/conf
+mkdir -p conf $prefix $prefix/conf
 install_pkg $prefix
 install_pkg $prefix monitor
 
+cp scripts/dev-mds/mds.template.conf $prefix/conf/mds.template.conf
 paths=`ls conf/*`
-# paths="$paths tools/pkg/config/dingo.yaml"
+# paths="$paths scripts/dev-mds/mds.template.conf"
 for path in $paths;
 do
     dir=`dirname $path`
