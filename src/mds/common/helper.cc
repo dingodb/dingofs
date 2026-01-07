@@ -28,6 +28,7 @@
 #include <thread>
 
 #include "butil/strings/string_split.h"
+#include "common/helper.h"
 #include "common/logging.h"
 #include "fmt/core.h"
 
@@ -293,6 +294,8 @@ bool Helper::Rename(const std::string& src_path, const std::string& dst_path, bo
 }
 
 bool Helper::IsExistPath(const std::string& path) { return std::filesystem::exists(path); }
+
+std::string Helper::ExpandPath(const std::string& path) { return dingofs::Helper::ExpandPath(path); }
 
 int64_t Helper::GetFileSize(const std::string& path) {
   try {

@@ -57,9 +57,6 @@ static std::vector<std::pair<std::string, std::string>> GenConfigs() {
                              FLAGS_cache_dir, FLAGS_cache_size_mb,
                              FLAGS_free_space_ratio * 100));
   }
-  // listen
-  // configs.emplace_back(
-  //     "listen", fmt::format("[{}:{}]", FLAGS_listen_ip, FLAGS_listen_port));
 
   return configs;
 }

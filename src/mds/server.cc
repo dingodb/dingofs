@@ -134,8 +134,6 @@ bool Server::InitConfig(const std::string& path) {
 }
 
 bool Server::InitLog() {
-  LOG(INFO) << fmt::format("init log: {} {}", Logger::LogLevel(), Logger::LogDir());
-
   Logger::Init("mds");
 
   DingoLogVersion();
@@ -538,6 +536,8 @@ void Server::Run() {
 
   brpc::ServerOptions option;
   CHECK(brpc_server_.Start(GetListenAddr().c_str(), &option) == 0) << "start brpc server error.";
+
+  std::cout << "\nmds is listening on " << GetListenAddr() << "\n";
 
   while (!brpc::IsAskedToQuit() && !stop_.load()) {
     bthread_usleep(1000000L);

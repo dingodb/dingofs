@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "butil/endpoint.h"
+#include "common/helper.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/core.h"
 #include "google/protobuf/util/json_util.h"
@@ -67,6 +68,7 @@ class Helper {
   static bool RemoveAllFileOrDirectory(const std::string& path);
   static bool Rename(const std::string& src_path, const std::string& dst_path, bool is_force = true);
   static bool IsExistPath(const std::string& path);
+  static std::string ExpandPath(const std::string& path);
   static int64_t GetFileSize(const std::string& path);
 
   static std::string GenerateRandomString(int length);

@@ -229,6 +229,27 @@ static bool CheckStorageUrl(const std::string& storage_url) {
   return true;
 }
 
+static std::vector<std::pair<std::string, std::string>> GenConfigs() {
+  std::vector<std::pair<std::string, std::string>> configs;
+  // serverid
+  configs.emplace_back("id", fmt::format("[{}]", dingofs::mds::FLAGS_mds_server_id));
+  // config
+  configs.emplace_back("config", fmt::format("[{}]", dingofs::FLAGS_conf));
+  // log
+  configs.emplace_back("log", fmt::format("[{} {} {}(verbose)]",
+                                          dingofs::Helper::ExpandPath(::FLAGS_log_dir.empty() ? dingofs::kDefaultLogDir
+                                                                                              : ::FLAGS_log_dir),
+                                          dingofs::FLAGS_log_level, dingofs::FLAGS_log_v));
+  // storage
+  if (dingofs::mds::FLAGS_mds_storage_engine == "dummy") {
+    configs.emplace_back("storage", fmt::format("[{}]", dingofs::mds::FLAGS_mds_storage_engine));
+  } else {
+    configs.emplace_back("storage", fmt::format("[{} {}]", dingofs::mds::FLAGS_mds_storage_engine, FLAGS_storage_url));
+  }
+
+  return configs;
+}
+
 static dingofs::FlagExtraInfo extras = {
     .program = "dingo-mds",
     .usage = "  dingo-mds [OPTIONS]",
@@ -240,7 +261,6 @@ static dingofs::FlagExtraInfo extras = {
 )",
     .patterns = {"src/mds", "options/common"},
 };
-
 
 int main(int argc, char* argv[]) {
   using dingofs::FLAGS_conf;
@@ -258,7 +278,6 @@ int main(int argc, char* argv[]) {
 
   // read gflags from conf file
   if (!FLAGS_conf.empty()) {
-    std::cout << "use config file: " << FLAGS_conf << '\n';
     CHECK(dingofs::mds::Helper::IsExistPath(FLAGS_conf)) << fmt::format("config file {} not exist.", FLAGS_conf);
     gflags::ReadFromFlagsFile(FLAGS_conf, argv[0], true);
   }
@@ -266,12 +285,14 @@ int main(int argc, char* argv[]) {
   // reset brpc flag default value if not set
   dingofs::ResetBrpcFlagDefaultValue();
 
-  std::cout << fmt::format("mds server id: {}\n", dingofs::mds::FLAGS_mds_server_id);
   dingofs::mds::MetaCodec::SetClusterID(FLAGS_mds_cluster_id);
 
   if (dingofs::mds::FLAGS_mds_storage_engine != "dummy" && !CheckStorageUrl(FLAGS_storage_url)) return -1;
 
   SetupSignalHandler();
+
+  // print config info
+  dingofs::Helper::PrintConfigInfo(GenConfigs());
 
   // run in daemon mode
   if (dingofs::FLAGS_daemonize && !dingofs::utils::Daemonize(false, true)) {
