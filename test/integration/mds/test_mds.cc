@@ -14,7 +14,6 @@
 
 #include <string>
 
-#include "client/vfs/vfs_meta.h"
 #include "common/const.h"
 #include "gflags/gflags.h"
 #include "gtest/gtest.h"
@@ -405,7 +404,7 @@ TEST_F(MDSTest, AttrOperations) {
   attr.set_uid(uid);
   attr.set_gid(gid);
   auto setattr_resp = mds_client_->SetAttr(
-      ino, client::vfs::kSetAttrUid | client::vfs::kSetAttrGid, attr);
+      ino, dingofs::kSetAttrUid | dingofs::kSetAttrGid, attr);
   ASSERT_EQ(setattr_resp.error().errcode(), dingofs::pb::error::OK);
 
   // verify GetAttr still succeeds after SetAttr
