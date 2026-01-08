@@ -341,11 +341,12 @@ int InitFuseClient(const char* argv0, const struct MountOption* mount_option,
   Status s = g_vfs->Start(argv0, config);
   if (!s.ok()) {
     LOG(ERROR) << "start vfs fail, status: " << s.ToString();
+    return s.ToSysErrNo();
   }
 
   *options = g_vfs->GetBlockAccesserOptions();
 
-  return s.ToSysErrNo();
+  return 0;
 }
 
 void UnInitFuseClient() { delete g_vfs; }
