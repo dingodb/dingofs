@@ -17,13 +17,13 @@ add_library(vfs_hub
 )
 
 target_link_libraries(vfs_hub
-    client_options
-    client_memory
-    cache_blockcache
-    vfs_metasystem
-    block_accesser
+    vfs_memory
     vfs_handle
     vfs_components
+    vfs_metasystem
+    client_options
+    cache_blockcache
+    block_accesser
     dingofs_trace
     absl::str_format
 )

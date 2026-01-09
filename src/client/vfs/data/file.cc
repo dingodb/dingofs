@@ -16,15 +16,14 @@
 
 #include "client/vfs/data/file.h"
 
+#include <bthread/bthread.h>
 #include <glog/logging.h>
 #include <unistd.h>
 
 #include <cstdint>
 #include <mutex>
 
-#include "client/vfs/data/common/async_util.h"
 #include "client/vfs/hub/vfs_hub.h"
-#include "common/callback.h"
 #include "common/status.h"
 #include "common/trace/context.h"
 
@@ -43,16 +42,21 @@ File::~File() {
 
   file_reader_->ReleaseRef();
   file_reader_ = nullptr;
-  file_writer_.reset();
+
+  file_writer_->ReleaseRef();
+  file_writer_ = nullptr;
 
   VLOG(12) << fmt::format("{} File::~File destroyed", uuid_);
 }
 
 Status File::Open() {
-  file_writer_ = std::make_unique<FileWriter>(vfs_hub_, fh_, ino_);
+  file_writer_ = new FileWriter(vfs_hub_, fh_, ino_);
+  file_writer_->AcquireRef();
+  DINGOFS_RETURN_NOT_OK(file_writer_->Open());
 
   file_reader_ = new FileReader(vfs_hub_, fh_, ino_);
   file_reader_->AcquireRef();
+  DINGOFS_RETURN_NOT_OK(file_reader_->Open());
 
   return Status::OK();
 }
@@ -87,6 +91,25 @@ Status File::PreCheck() {
 Status File::Write(ContextSPtr ctx, const char* buf, uint64_t size,
                    uint64_t offset, uint64_t* out_wsize) {
   DINGOFS_RETURN_NOT_OK(PreCheck());
+
+  auto* buffer_manager = vfs_hub_->GetWriteBufferManager();
+  int64_t total_bytes = buffer_manager->GetTotalBytes();
+  int64_t used_bytes = buffer_manager->GetUsedBytes();
+  if (used_bytes > total_bytes) {
+    bthread_usleep(10);
+    LOG(INFO) << fmt::format(
+        "{} Write tigger flush because low memory, used_bytes: {}, "
+        "total_bytes: {}",
+        uuid_, used_bytes, total_bytes);
+
+    DINGOFS_RETURN_NOT_OK(Flush());
+
+    used_bytes = buffer_manager->GetUsedBytes();
+    if (used_bytes > 2 * total_bytes) {
+      bthread_usleep(100);
+    }
+  }
+
   return file_writer_->Write(ctx, buf, size, offset, out_wsize);
 }
 
@@ -100,45 +123,21 @@ void File::Invalidate(int64_t offset, int64_t size) {
   file_reader_->Invalidate(offset, size);
 }
 
-void File::FileFlushed(StatusCallback cb, Status status) {
-  if (!status.ok()) {
-    LOG(WARNING) << fmt::format("{} File::FileFlushed failed, status: {}",
-                                uuid_, status.ToString());
+Status File::Flush() {
+  auto span = vfs_hub_->GetTraceManager()->StartSpan("File::Flush");
+
+  Status s = file_writer_->Flush();
+  if (!s.ok()) {
+    LOG(WARNING) << fmt::format("{} Flush failed, status: {}", uuid_,
+                                s.ToString());
     {
       std::lock_guard<std::mutex> lg(mutex_);
-      file_status_ = status;
+      file_status_ = s;
     }
   }
 
-  cb(status);
-}
-
-void File::AsyncFlush(StatusCallback cb) {
-  auto span = vfs_hub_->GetTraceManager()->StartSpan("File::AsyncFlush");
-
-  inflight_flush_.fetch_add(1, std::memory_order_relaxed);
-
-  file_writer_->AsyncFlush([&, span, cb](Status s) {
-    FileFlushed(cb, s);
-    span->End();
-
-    inflight_flush_.fetch_sub(1, std::memory_order_relaxed);
-
-    VLOG(3) << fmt::format(
-        "{} File::FileFlushed end, status: {}, inflight_flush: {}", uuid_,
-        s.ToString(), inflight_flush_.load(std::memory_order_relaxed));
-  });
-}
-
-Status File::Flush() {
-  Status s;
-  Synchronizer sync;
-  AsyncFlush(sync.AsStatusCallBack(s));
-  sync.Wait();
   return s;
 }
-
-void File::ShrinkMem() { file_reader_->ShrinkMem(); }
 
 }  // namespace vfs
 

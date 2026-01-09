@@ -175,6 +175,7 @@ class ChunkWriter {
   VFSHub* hub_;
   uint64_t fh_;
   const Chunk chunk_;
+  const int64_t page_size_;
   std::atomic<bool> stopped_{false};
 
   static FlushTask fake_header_;

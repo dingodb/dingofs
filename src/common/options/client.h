@@ -74,9 +74,12 @@ DECLARE_int32(vfs_read_max_retry_block_not_found);
 DECLARE_uint32(vfs_read_buffer_total_mb);
 DECLARE_bool(vfs_print_readahead_stats);
 
+// vfs write
+DECLARE_uint32(vfs_write_buffer_page_size);
+DECLARE_uint64(vfs_write_buffer_total_mb);
+
 // vfs flush
-DECLARE_int32(vfs_flush_bg_thread);
-DECLARE_double(vfs_trigger_flush_free_page_ratio);
+DECLARE_int32(vfs_flush_thread);
 
 // vfs prefetch
 DECLARE_uint32(vfs_prefetch_blocks);
@@ -89,7 +92,7 @@ DECLARE_int64(vfs_warmup_mtime_restart_interval_secs);
 DECLARE_int64(vfs_warmup_trigger_restart_interval_secs);
 
 // vfs handle 
-DECLARE_int32(vfs_handle_bg_executor_thread);
+DECLARE_int32(vfs_bg_executor_thread);
 DECLARE_int32(vfs_periodic_flush_interval_ms);
 DECLARE_int32(vfs_periodic_trim_mem_ms);
 
@@ -119,11 +122,6 @@ DECLARE_uint32(vfs_meta_max_name_length);
 DECLARE_bool(vfs_data_writeback);
 DECLARE_string(vfs_data_writeback_suffix);
 DECLARE_uint32(vfs_dummy_server_port);
-
-// memory option
-DECLARE_uint32(data_stream_page_size);
-DECLARE_uint64(data_stream_page_total_size_mb);
-DECLARE_bool(data_stream_page_use_pool);
 
 // trace log
 DECLARE_bool(vfs_trace_logging);

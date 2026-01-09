@@ -28,7 +28,6 @@
 #include <mutex>
 #include <utility>
 
-#include "client/common/const.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/data/slice/task/slice_flush_task.h"
 #include "client/vfs/hub/vfs_hub.h"
@@ -53,9 +52,9 @@ BlockData* SliceData::FindOrCreateBlockDataUnlocked(uint64_t block_index,
   }
 
   auto [new_iter, inserted] = block_datas_.emplace(
-      block_index, std::make_unique<BlockData>(context_, vfs_hub_,
-                                               vfs_hub_->GetPageAllocator(),
-                                               block_index, block_offset));
+      block_index, std::make_unique<BlockData>(
+                       context_, vfs_hub_, vfs_hub_->GetWriteBufferManager(),
+                       block_index, block_offset));
   CHECK(inserted);
 
   VLOG(4) << fmt::format(

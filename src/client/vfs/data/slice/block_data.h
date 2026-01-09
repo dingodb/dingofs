@@ -23,10 +23,10 @@
 #include <map>
 #include <memory>
 
-#include "client/memory/page_allocator.h"
 #include "client/vfs/data/slice/common.h"
 #include "client/vfs/data/slice/page_data.h"
 #include "client/vfs/hub/vfs_hub.h"
+#include "client/vfs/memory/write_buffer_manager.h"
 #include "common/io_buffer.h"
 #include "common/status.h"
 #include "common/trace/context.h"
@@ -39,11 +39,11 @@ namespace vfs {
 class BlockData {
  public:
   explicit BlockData(const SliceDataContext& context, VFSHub* vfs_hub,
-                     PageAllocator* allocator, uint64_t block_index,
+                     WriteBufferManager* buffer_manager, uint64_t block_index,
                      uint64_t block_offset)
       : context_(context),
         vfs_hub_(vfs_hub),
-        page_allocator_(allocator),
+        write_buffer_manager_(buffer_manager),
         block_index_(block_index),
         block_offset_(block_offset),
         lower_bound_in_chunk_(block_index_ * context_.block_size),
@@ -87,7 +87,7 @@ class BlockData {
 
   const SliceDataContext context_;
   VFSHub* vfs_hub_{nullptr};
-  PageAllocator* page_allocator_{nullptr};
+  WriteBufferManager* write_buffer_manager_{nullptr};
   const uint64_t block_index_;
   uint64_t block_offset_{0};
   uint64_t len_{0};

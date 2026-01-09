@@ -112,11 +112,16 @@ FileReader::~FileReader() {
   }
 }
 
+Status FileReader::Open() {
+  VLOG(9) << fmt::format("{} FileReader opened", uuid_);
+  SchedulePeriodicShrink();
+  return Status::OK();
+}
+
 void FileReader::Close() {
   if (closing_.load(std::memory_order_acquire)) {
     return;
   }
-
   closing_.store(true, std::memory_order_release);
   VLOG(9) << fmt::format("{} FileReader closed", uuid_);
 }
@@ -193,6 +198,34 @@ void FileReader::ShrinkMem() {
   for (const auto& req : to_delete) {
     DeleteReadRequestUnlock(req);
   }
+}
+
+void FileReader::SchedulePeriodicShrink() {
+  if (closing_.load(std::memory_order_acquire)) {
+    LOG(INFO) << fmt::format("{} SchedulePeriodicShrink skipped because closed",
+                             uuid_);
+    return;
+  }
+
+  AcquireRef();
+  vfs_hub_->GetBGExecutor()->Schedule(
+      [this] {
+        RunPeriodicShrink();
+        ReleaseRef();
+      },
+      FLAGS_vfs_periodic_flush_interval_ms);
+}
+
+void FileReader::RunPeriodicShrink() {
+  if (closing_.load(std::memory_order_acquire)) {
+    LOG(INFO) << fmt::format("{} RunPeriodicShrink skipped because closed",
+                             uuid_);
+    return;
+  }
+
+  ShrinkMem();
+
+  SchedulePeriodicShrink();
 }
 
 void FileReader::Invalidate(int64_t offset, int64_t size) {
@@ -291,7 +324,7 @@ ReadRequestSptr FileReader::NewReadRequest(int64_t s, int64_t e) {
 // NOTD: hold req lock
 void FileReader::DeleteReadRequestAsync(ReadRequestSptr req) {
   AcquireRef();
-  vfs_hub_->GetReadExecutor()->Execute([&, req]() {
+  vfs_hub_->GetBGExecutor()->Execute([&, req]() {
     DeleteReadRequest(req);
     ReleaseRef();
   });

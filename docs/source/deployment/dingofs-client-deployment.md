@@ -87,16 +87,6 @@ log _dir: /home/dingo/logs/client
 data_dir: /home/dingo/data/dingofs 
 disk_cache.cache_dir: /dingofs/client/cache/1:10240;/dingofs/client/ cache/2:10240;/dingofs/client/cache/3:10240 # container_path:size 
 mount_dirs: /mnt/cache/1:/dingofs/client/cache/1;/mnt/cache/2:/ dingofs/client/cache/2;/mnt/cache/3:/dingofs/client/cache/3 # host_path:container_path
-# memory reference 
-data_stream.page.size: 64536 
-data_stream.page.total_size_mb: 512 
-data_stream.page.use_pool: true
-
-# cto reference 
-fs.cto: true
-
-# s3 upload thread num 
-data_stream.s3.async_upload_workers: 1024
 
 # quota 
 quota.capacity: 10 

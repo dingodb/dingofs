@@ -22,16 +22,13 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
-std::string Chunk::UUID() const {
-  return fmt::format("{}-{}", ino, index);
-}
+std::string Chunk::UUID() const { return fmt::format("{}-{}", ino, index); }
 
 std::string Chunk::ToString() const {
   return fmt::format(
       "(fs_id={}, ino={}, index={}, chunk_size={}, block_size={}, "
-      "page_size={}, chunk_start={}, chunk_end={})",
-      fs_id, ino, index, chunk_size, block_size, page_size, chunk_start,
-      chunk_end);
+      "chunk_start={}, chunk_end={})",
+      fs_id, ino, index, chunk_size, block_size, chunk_start, chunk_end);
 }
 
 }  // namespace vfs

@@ -23,8 +23,6 @@
 
 #include <cstdint>
 
-#include "client/common/const.h"
-
 namespace dingofs {
 namespace client {
 namespace vfs {
@@ -39,28 +37,19 @@ void BlockData::FreePageData() {
     PageData* page_data = it->second.get();
     CHECK_NOTNULL(page_data->page);
 
-    butil::Timer timer;
-    timer.start();
-    page_allocator_->DeAllocate(page_data->page);
-    timer.stop();
+    write_buffer_manager_->DeAllocate(page_data->page);
 
-    VLOG(12) << fmt::format("{} Deallocating page at: {} took: <{:.6f}> ms",
-                            UUID(), Helper::Char2Addr(page_data->page),
-                            timer.u_elapsed(0.0));
+    VLOG(16) << fmt::format("{} Deallocating page at: {}", UUID(),
+                            Helper::Char2Addr(page_data->page));
 
     it = pages_.erase(it);
   }
 }
 
 char* BlockData::AllocPage() {
-  // TODO: add metric for time spent in page allocation
-  butil::Timer timer;
-  timer.start();
-  auto* page = page_allocator_->Allocate();
-  timer.stop();
-  VLOG(12) << fmt::format(
-      "{} Allocated page at: {} allocation took: <{:.6f}> ms", UUID(),
-      Helper::Char2Addr(page), timer.u_elapsed(0.0));
+  auto* page = write_buffer_manager_->Allocate();
+  VLOG(16) << fmt::format("{} Allocated page at: {} allocation", UUID(),
+                          Helper::Char2Addr(page));
   return page;
 }
 

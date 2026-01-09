@@ -20,17 +20,16 @@
 #include <glog/logging.h>
 
 #include <atomic>
-#include <cstdint>
 #include <memory>
 
-#include "client/memory/page_allocator.h"
-#include "client/memory/read_buffer_manager.h"
 #include "client/vfs/blockstore/block_store.h"
 #include "client/vfs/common/client_id.h"
 #include "client/vfs/components/file_suffix_watcher.h"
 #include "client/vfs/components/prefetch_manager.h"
 #include "client/vfs/components/warmup_manager.h"
 #include "client/vfs/handle/handle_manager.h"
+#include "client/vfs/memory/read_buffer_manager.h"
+#include "client/vfs/memory/write_buffer_manager.h"
 #include "client/vfs/metasystem/meta_system.h"
 #include "client/vfs/vfs.h"
 #include "client/vfs/vfs_meta.h"
@@ -63,11 +62,13 @@ class VFSHub {
 
   virtual blockaccess::BlockAccesser* GetBlockAccesser() = 0;
 
-  virtual Executor* GetFlushExecutor() = 0;
-
   virtual Executor* GetReadExecutor() = 0;
 
-  virtual PageAllocator* GetPageAllocator() = 0;
+  virtual Executor* GetBGExecutor() = 0;
+
+  virtual Executor* GetFlushExecutor() = 0;
+
+  virtual WriteBufferManager* GetWriteBufferManager() = 0;
 
   virtual ReadBufferManager* GetReadBufferManager() = 0;
 
@@ -78,8 +79,6 @@ class VFSHub {
   virtual WarmupManager* GetWarmupManager() = 0;
 
   virtual FsInfo GetFsInfo() = 0;
-
-  virtual uint64_t GetPageSize() = 0;
 
   virtual TraceManager* GetTraceManager() = 0;
 
@@ -118,19 +117,24 @@ class VFSHubImpl : public VFSHub {
     return block_accesser_.get();
   }
 
-  Executor* GetFlushExecutor() override {
-    CHECK_NOTNULL(flush_executor_);
-    return flush_executor_.get();
-  }
-
   Executor* GetReadExecutor() override {
     CHECK_NOTNULL(read_executor_);
     return read_executor_.get();
   }
 
-  PageAllocator* GetPageAllocator() override {
-    CHECK_NOTNULL(page_allocator_);
-    return page_allocator_.get();
+  Executor* GetBGExecutor() override {
+    CHECK_NOTNULL(bg_executor_);
+    return bg_executor_.get();
+  }
+
+  Executor* GetFlushExecutor() override {
+    CHECK_NOTNULL(flush_executor_);
+    return flush_executor_.get();
+  }
+
+  WriteBufferManager* GetWriteBufferManager() override {
+    CHECK_NOTNULL(write_buffer_manager_);
+    return write_buffer_manager_.get();
   }
 
   ReadBufferManager* GetReadBufferManager() override {
@@ -158,11 +162,6 @@ class VFSHubImpl : public VFSHub {
     return fs_info_;
   }
 
-  uint64_t GetPageSize() override {
-    CHECK(started_.load(std::memory_order_relaxed)) << "not started";
-    return FLAGS_data_stream_page_size;
-  }
-
   TraceManager* GetTraceManager() override {
     CHECK_NOTNULL(trace_manager_);
     return trace_manager_.get();
@@ -187,9 +186,10 @@ class VFSHubImpl : public VFSHub {
   std::unique_ptr<HandleManager> handle_manager_;
   std::unique_ptr<blockaccess::BlockAccesser> block_accesser_;
   std::unique_ptr<BlockStore> block_store_;
-  std::unique_ptr<Executor> flush_executor_;
   std::unique_ptr<Executor> read_executor_;
-  std::shared_ptr<PageAllocator> page_allocator_;
+  std::unique_ptr<Executor> bg_executor_;
+  std::unique_ptr<Executor> flush_executor_;
+  std::unique_ptr<WriteBufferManager> write_buffer_manager_;
   std::unique_ptr<ReadBufferManager> read_buffer_manager_;
   std::unique_ptr<FileSuffixWatcher> file_suffix_watcher_;
   std::unique_ptr<PrefetchManager> prefetch_manager_;

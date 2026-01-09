@@ -20,7 +20,7 @@ add_library(vfs_data_slice
 )
 
 target_link_libraries(vfs_data_slice
-    client_memory
+    vfs_memory
     vfs_hub
     fmt::fmt
     brpc::brpc

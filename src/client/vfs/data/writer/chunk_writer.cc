@@ -44,7 +44,8 @@ ChunkWriter::ChunkWriter(VFSHub* hub, uint64_t fh, uint64_t ino, uint64_t index)
     : hub_(hub),
       fh_(fh),
       chunk_(hub->GetFsInfo().id, ino, index, hub->GetFsInfo().chunk_size,
-             hub->GetFsInfo().block_size, hub->GetPageSize()) {}
+             hub->GetFsInfo().block_size),
+      page_size_(hub->GetWriteBufferManager()->GetPageSize()) {}
 
 ChunkWriter::~ChunkWriter() {
   VLOG(12) << fmt::format("{} Destroy Chunk addr: {}", UUID(),
@@ -242,7 +243,7 @@ SliceData* ChunkWriter::CreateSliceUnlocked(uint64_t chunk_pos) {
   // Use static because chunk with same index may be deleted and recreated
   uint64_t seq = slice_seq_id_gen.fetch_add(1, std::memory_order_relaxed);
   SliceDataContext ctx(chunk_.fs_id, chunk_.ino, chunk_.index, seq,
-                       chunk_.chunk_size, chunk_.block_size, chunk_.page_size);
+                       chunk_.chunk_size, chunk_.block_size, page_size_);
   auto [it, inserted] = slices_.try_emplace(
       seq, std::make_unique<SliceData>(ctx, hub_, chunk_pos));
   CHECK(inserted) << "Slice seq already exists: " << seq;

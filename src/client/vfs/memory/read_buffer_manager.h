@@ -14,18 +14,20 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_SRC_CLIENT_MEMRORY_READ_BUFFER_MANAGER_H_
-#define DINGOFS_SRC_CLIENT_MEMRORY_READ_BUFFER_MANAGER_H_
+#ifndef CLIENT_VFS_MEMRORY_READ_BUFFER_MANAGER_H_
+#define CLIENT_VFS_MEMRORY_READ_BUFFER_MANAGER_H_
 
-#include <bvar/reducer.h>
-#include <bvar/status.h>
 #include <sys/types.h>
 
 #include <atomic>
 #include <cstdint>
 
+#include "bvar/passive_status.h"
+#include "bvar/status.h"
+
 namespace dingofs {
 namespace client {
+namespace vfs {
 
 class ReadBufferManager {
  public:
@@ -46,14 +48,20 @@ class ReadBufferManager {
   bool IsHighPressure(double threshold = 0.8) const;
 
  private:
+  static int64_t UsedBytes(void* arg) {
+    auto* manager = reinterpret_cast<ReadBufferManager*>(arg);
+    return manager->GetUsedBytes();
+  }
+
   const int64_t total_bytes_{0};
   std::atomic<int64_t> used_bytes_{0};
 
   bvar::Status<int64_t> read_buffer_total_bytes_;
-  bvar::Adder<int64_t> read_buffer_used_bytes_;
+  bvar::PassiveStatus<int64_t> read_buffer_used_bytes_;
 };
 
+}  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_MEMRORY_READ_BUFFER_MANAGER_H_
+#endif  // CLIENT_VFS_MEMRORY_READ_BUFFER_MANAGER_H_

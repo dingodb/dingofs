@@ -17,7 +17,6 @@
 #include "client/vfs/hub/vfs_hub.h"
 
 #include <atomic>
-#include <cstdint>
 #include <memory>
 
 #include "client/vfs/blockstore/block_store_impl.h"
@@ -50,6 +49,7 @@ namespace vfs {
 
 static const std::string kFlushExecutorName = "vfs_flush";
 static const std::string kReadExecutorName = "vfs_read";
+static const std::string kBgExecutorName = "vfs_bg";
 
 VFSHubImpl::~VFSHubImpl() {
   if (handle_manager_ != nullptr) {
@@ -62,6 +62,10 @@ VFSHubImpl::~VFSHubImpl() {
 
   if (flush_executor_ != nullptr) {
     flush_executor_.reset();
+  }
+
+  if (bg_executor_ != nullptr) {
+    bg_executor_.reset();
   }
 
   if (warmup_manager_ != nullptr) {
@@ -188,42 +192,33 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf, bool upgrade) {
     DINGOFS_RETURN_NOT_OK(block_store_->Start());
   }
 
-  // flush executor
-  {
-    flush_executor_ = std::make_unique<ExecutorImpl>(kFlushExecutorName,
-                                                     FLAGS_vfs_flush_bg_thread);
-    CHECK(flush_executor_ != nullptr) << "flush executor is nullptr.";
-    if (!flush_executor_->Start()) {
-      return Status::Internal("flush executor start fail");
-    }
-  }
-
-  // read executor
   {
     read_executor_ = std::make_unique<ExecutorImpl>(
         kReadExecutorName, FLAGS_vfs_read_executor_thread);
-    CHECK(read_executor_ != nullptr) << "read executor is nullptr.";
     if (!read_executor_->Start()) {
       return Status::Internal("read executor start fail");
     }
   }
 
-  // page allocator
   {
-    if (FLAGS_data_stream_page_use_pool) {
-      page_allocator_ = std::make_shared<PagePool>();
-    } else {
-      page_allocator_ = std::make_shared<DefaultPageAllocator>();
-    }
-    CHECK(page_allocator_ != nullptr)
-        << "data stream page allocator is nullptr.";
-
-    if (!page_allocator_->Init(FLAGS_data_stream_page_size,
-                               (FLAGS_data_stream_page_total_size_mb * kMiB) /
-                                   FLAGS_data_stream_page_size)) {
-      return Status::Internal("init page allocator fail");
+    bg_executor_ = std::make_unique<ExecutorImpl>(kBgExecutorName,
+                                                  FLAGS_vfs_bg_executor_thread);
+    if (!bg_executor_->Start()) {
+      return Status::Internal("bg executor start fail");
     }
   }
+
+  {
+    flush_executor_ = std::make_unique<ExecutorImpl>(kFlushExecutorName,
+                                                     FLAGS_vfs_flush_thread);
+    if (!flush_executor_->Start()) {
+      return Status::Internal("flush executor start fail");
+    }
+  }
+
+  write_buffer_manager_ = std::make_unique<WriteBufferManager>(
+      FLAGS_vfs_write_buffer_total_mb * 1024 * 1024,
+      FLAGS_vfs_write_buffer_page_size);
 
   // read buffer manager
   {
@@ -233,15 +228,10 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf, bool upgrade) {
 
     read_buffer_manager_ = std::make_unique<ReadBufferManager>(
         FLAGS_vfs_read_buffer_total_mb * 1024 * 1024);
-    CHECK(read_buffer_manager_ != nullptr) << "read buffer manager is nullptr.";
   }
 
-  // file suffix watcher
-  {
-    file_suffix_watcher_ =
-        std::make_unique<FileSuffixWatcher>(FLAGS_vfs_data_writeback_suffix);
-    CHECK(file_suffix_watcher_ != nullptr) << "file suffix watcher is nullptr.";
-  }
+  file_suffix_watcher_ =
+      std::make_unique<FileSuffixWatcher>(FLAGS_vfs_data_writeback_suffix);
 
   // prefetch manager
   {
@@ -282,6 +272,10 @@ Status VFSHubImpl::Stop(bool upgrade) {
 
   if (read_executor_ != nullptr) {
     read_executor_->Stop();
+  }
+
+  if (bg_executor_ != nullptr) {
+    bg_executor_->Stop();
   }
 
   if (flush_executor_ != nullptr) {

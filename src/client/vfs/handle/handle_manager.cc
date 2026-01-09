@@ -24,50 +24,24 @@
 #include "client/vfs/data/file.h"
 #include "client/vfs/vfs_fh.h"
 #include "common/const.h"
-#include "utils/executor/thread/executor_impl.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 
-Status HandleManager::Start() {
-  bg_executor_ = std::make_unique<ExecutorImpl>(
-      "handle_bg", FLAGS_vfs_handle_bg_executor_thread);
-  bg_executor_->Start();
-
-  bg_executor_->Schedule([&] { RunPeriodicFlush(); },
-                         FLAGS_vfs_periodic_flush_interval_ms);
-
-  bg_executor_->Schedule([&] { RunPeriodicShrinkMem(); },
-                         FLAGS_vfs_periodic_trim_mem_ms);
-
-  return Status::OK();
-}
+Status HandleManager::Start() { return Status::OK(); }
 
 // TODO: concurrent flush
 void HandleManager::Stop() {
-  std::unordered_map<uint64_t, std::unique_ptr<Handle>> to_release;
-
-  {
-    std::unique_lock<std::mutex> lock(mutex_);
-    if (stopped_) {
-      LOG(INFO) << "HandleManager already stopped";
-      return;
-    }
-
-    stopped_ = true;
-
-    while (bg_flush_tigger_ > 0 || bg_shrink_mem_tigger_ > 0) {
-      LOG(INFO) << "HandleManager waiting bg tasks done, flush_tigger:"
-                << bg_flush_tigger_
-                << ", shrink_mem_tigger:" << bg_shrink_mem_tigger_;
-      cv_.wait(lock);
-    }
-
-    handles_.swap(to_release);
+  std::unique_lock<std::mutex> lock(mutex_);
+  if (stopped_) {
+    LOG(INFO) << "HandleManager already stopped";
+    return;
   }
 
-  for (auto& [fh, handle] : to_release) {
+  stopped_ = true;
+
+  for (auto& [fh, handle] : handles_) {
     if (handle->ino == kStatsIno) {
       continue;
     }
@@ -75,10 +49,6 @@ void HandleManager::Stop() {
     CHECK_NOTNULL(handle->file);
     handle->file->Close();
     handle.reset();
-  }
-
-  if (!bg_executor_->Stop()) {
-    LOG(ERROR) << "Failed to stop HandleManager bg executor";
   }
 }
 
@@ -117,120 +87,6 @@ void HandleManager::Invalidate(uint64_t fh, int64_t offset, int64_t size) {
   } else {
     LOG(WARNING) << "Invalidate failed, file is nullptr, fh:" << fh;
   }
-}
-
-void HandleManager::TriggerFlushAllDone(TriggerFlushTask* task, uint64_t fh,
-                                        Status s) {
-  if (!s.ok()) {
-    LOG(ERROR) << "Failed to async flush file handle, fh:" << fh
-               << ", error: " << s.ToString();
-  }
-
-  int64_t origin = task->inflight_flush.fetch_sub(1);
-
-  if (origin > 1) {
-    return;
-  }
-
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-    bg_flush_tigger_--;
-    if (bg_flush_tigger_ == 0) {
-      cv_.notify_all();
-    }
-  }
-
-  delete task;
-}
-
-void HandleManager::TriggerFlushAll() {
-  std::unordered_map<uint64_t, Handle*> to_flush_handles;
-
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (stopped_) {
-      LOG(WARNING) << "HandleManager already stopped";
-      return;
-    }
-
-    for (auto& [fh, handle] : to_flush_handles) {
-      if (handle->ino == kStatsIno) {
-        continue;
-      }
-
-      CHECK_NOTNULL(handle->file);
-      to_flush_handles.emplace(std::make_pair(fh, handle));
-    }
-
-    CHECK_GE(bg_flush_tigger_, 0);
-    bg_flush_tigger_++;
-  }
-
-  auto* task = new TriggerFlushTask();
-  task->inflight_flush.store(to_flush_handles.size());
-
-  for (auto& [fh, handle] : to_flush_handles) {
-    CHECK_NOTNULL(handle->file);
-    uint64_t fh_copy = fh;
-    handle->file->AsyncFlush([&, task, fh_copy](const Status& status) {
-      TriggerFlushAllDone(task, fh_copy, status);
-    });
-  }
-}
-
-void HandleManager::RunPeriodicFlush() {
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (stopped_) {
-      LOG(INFO) << "HandleManager already stopped, stop periodic flush";
-      return;
-    }
-  }
-
-  TriggerFlushAll();
-
-  bg_executor_->Schedule([&] { RunPeriodicFlush(); },
-                         FLAGS_vfs_periodic_flush_interval_ms);
-}
-
-void HandleManager::RunPeriodicShrinkMem() {
-  std::unordered_map<uint64_t, Handle*> to_trim_handles;
-
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (stopped_) {
-      LOG(INFO) << "HandleManager already stopped, stop periodic shrink mem";
-      return;
-    }
-
-    for (auto& [fh, handle] : handles_) {
-      if (handle->ino == kStatsIno) {
-        continue;
-      }
-
-      CHECK_NOTNULL(handle->file);
-      to_trim_handles.emplace(std::make_pair(fh, handle.get()));
-    }
-
-    CHECK_GE(bg_shrink_mem_tigger_, 0);
-    bg_shrink_mem_tigger_++;
-  }
-
-  for (auto& [fh, handle] : to_trim_handles) {
-    CHECK_NOTNULL(handle->file);
-    handle->file->ShrinkMem();
-  }
-
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-    bg_shrink_mem_tigger_--;
-    if (bg_shrink_mem_tigger_ == 0) {
-      cv_.notify_all();
-    }
-  }
-
-  bg_executor_->Schedule([&] { RunPeriodicShrinkMem(); },
-                         FLAGS_vfs_periodic_trim_mem_ms);
 }
 
 bool HandleManager::Dump(Json::Value& value) {

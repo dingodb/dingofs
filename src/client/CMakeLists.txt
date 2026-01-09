@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(memory)
 add_subdirectory(vfs)
 
 file(GLOB FUSE_CLIENT_LIB_SRCS

@@ -17,7 +17,6 @@
 #ifndef DINGODB_CLIENT_VFS_DATA_FILE_H_
 #define DINGODB_CLIENT_VFS_DATA_FILE_H_
 
-#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -25,7 +24,6 @@
 #include "client/vfs/data/ifile.h"
 #include "client/vfs/data/reader/file_reader.h"
 #include "client/vfs/data/writer/file_writer.h"
-#include "common/callback.h"
 #include "common/status.h"
 
 namespace dingofs {
@@ -54,24 +52,17 @@ class File : public IFile {
 
   Status Flush() override;
 
-  void AsyncFlush(StatusCallback cb) override;
-
-  void ShrinkMem() override;
-
  private:
   Status PreCheck();
   uint64_t GetChunkSize() const;
-  void FileFlushed(StatusCallback cb, Status status);
 
   VFSHub* vfs_hub_;
   const uint64_t fh_;
   const uint64_t ino_;
   const std::string uuid_;
 
-  FileWriterUPtr file_writer_;
+  FileWriter* file_writer_;
   FileReader* file_reader_;
-
-  std::atomic_int64_t inflight_flush_{0};
 
   std::mutex mutex_;
   // when sync fail, we need set file status to error

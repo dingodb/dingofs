@@ -24,7 +24,6 @@
 
 #include "cache/metric/cache_status.h"
 #include "client/common/const.h"
-#include "client/memory/page_allocator.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/components/warmup_manager.h"
 #include "client/vfs/data/file.h"
@@ -340,14 +339,6 @@ Status VFSImpl::Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t size,
     LOG(ERROR) << "file is null in handle, ino: " << ino << ", fh: " << fh;
     s = Status::BadFd(fmt::format("bad  fh:{}", fh));
     return s;
-  }
-
-  PageAllocatorStat stat = vfs_hub_->GetPageAllocator()->GetStat();
-  if ((stat.free_pages / (double)stat.total_pages) <
-      FLAGS_vfs_trigger_flush_free_page_ratio) {
-    VLOG(1) << "trigger flush because low memory, page stat: "
-            << stat.ToString();
-    vfs_hub_->GetHandleManager()->TriggerFlushAll();
   }
 
   s = handle->file->Write(ctx, buf, size, offset, out_wsize);

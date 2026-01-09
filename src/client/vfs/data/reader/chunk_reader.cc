@@ -30,7 +30,6 @@
 #include <vector>
 
 #include "cache/utils/helper.h"
-#include "client/common/const.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/data/common/common.h"
 #include "client/vfs/data/common/data_utils.h"
@@ -68,8 +67,7 @@ ChunkReader::ChunkReader(VFSHub* hub, uint64_t fh, const ChunkReadReq& req)
     : hub_(hub),
       fh_(fh),
       chunk_(hub->GetFsInfo().id, req.ino, req.index,
-             hub->GetFsInfo().chunk_size, hub->GetFsInfo().block_size,
-             hub->GetPageSize()),
+             hub->GetFsInfo().chunk_size, hub->GetFsInfo().block_size),
       req_(req) {}
 
 static std::string SlicesToString(const std::vector<Slice>& slices) {

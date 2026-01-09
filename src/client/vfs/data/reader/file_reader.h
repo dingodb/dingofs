@@ -44,6 +44,8 @@ class FileReader {
 
   ~FileReader();
 
+  Status Open();
+
   void Close();
 
   Status Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
@@ -52,8 +54,6 @@ class FileReader {
   // NOTE: if we manage filehandle by ino,
   // then write/commit_slice/fallocate/truncate/copyfile_range should call this
   void Invalidate(int64_t offset, int64_t size);
-
-  void ShrinkMem();
 
   void AcquireRef();
 
@@ -65,6 +65,10 @@ class FileReader {
 
   void CheckPrefetch(ContextSPtr ctx, const Attr& attr,
                      const FileRange& frange);
+
+  void ShrinkMem();
+  void SchedulePeriodicShrink();
+  void RunPeriodicShrink();
 
   void TakeMem(int64_t size);
   void ReleaseMem(int64_t size);

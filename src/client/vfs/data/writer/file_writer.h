@@ -43,15 +43,27 @@ class FileWriter {
 
   ~FileWriter();
 
+  Status Open();
+
   void Close();
 
   Status Write(ContextSPtr ctx, const char* buf, uint64_t size, uint64_t offset,
                uint64_t* out_wsize);
 
-  void AsyncFlush(StatusCallback cb);
+  Status Flush();
+
+  void AcquireRef();
+
+  // caller should ensure ReleaseRef called outside of lock
+  void ReleaseRef();
 
  private:
   uint64_t GetChunkSize() const;
+
+  void AsyncFlush(StatusCallback cb);
+
+  void SchedulePeriodicFlush();
+  void RunPeriodicFlush();
 
   ChunkWriter* GetOrCreateChunkWriter(uint64_t chunk_index);
 
@@ -61,6 +73,8 @@ class FileWriter {
   const uint64_t fh_;
   const uint64_t ino_;
   const std::string uuid_;
+
+  std::atomic<int64_t> refs_{0};
 
   mutable std::mutex mutex_;
   std::condition_variable cv_;
@@ -76,8 +90,6 @@ class FileWriter {
   std::unordered_map<uint64_t, std::unique_ptr<FileFlushTask>>
       inflight_flush_tasks_;
 };
-
-using FileWriterUPtr = std::unique_ptr<FileWriter>;
 
 }  // namespace vfs
 }  // namespace client

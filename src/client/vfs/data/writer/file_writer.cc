@@ -38,6 +38,12 @@ static std::atomic<uint64_t> file_flush_id_gen{1};
 
 FileWriter::~FileWriter() { Close(); }
 
+Status FileWriter::Open() {
+  VLOG(9) << fmt::format("{} FileWriter opened", uuid_);
+  SchedulePeriodicFlush();
+  return Status::OK();
+}
+
 void FileWriter::Close() {
   std::unique_lock<std::mutex> lg(mutex_);
   if (closed_) {
@@ -46,11 +52,13 @@ void FileWriter::Close() {
 
   closed_ = true;
 
+  VLOG(9) << fmt::format("{} FileWriter closed ", uuid_);
+
   while (writers_count_ > 0 || !inflight_flush_tasks_.empty()) {
     VLOG(1) << fmt::format(
-        "{} File::Close waiting, ino: {}, writers_count_: {}, "
-        "inflight_flush_task_count_: {}",
-        uuid_, ino_, writers_count_, inflight_flush_tasks_.size());
+        "{} Close waiting, writers_count_: {}, inflight_flush_task_count_: {}, "
+        "bg_flush_scheduled_: {}",
+        uuid_, writers_count_, inflight_flush_tasks_.size());
     cv_.wait(lg);
   }
 
@@ -75,6 +83,21 @@ void FileWriter::Close() {
     ChunkWriter* chunk_writer = pair.second;
     chunk_writer->Stop();
     delete chunk_writer;
+  }
+}
+
+void FileWriter::AcquireRef() {
+  int64_t orgin = refs_.fetch_add(1);
+  VLOG(12) << fmt::format("{} AcquireRef origin refs: {}", uuid_, orgin);
+  CHECK_GE(orgin, 0);
+}
+
+void FileWriter::ReleaseRef() {
+  int64_t orgin = refs_.fetch_sub(1);
+  VLOG(12) << fmt::format("{} ReleaseRef origin refs: {}", uuid_, orgin);
+  CHECK_GT(orgin, 0);
+  if (orgin == 1) {
+    delete this;
   }
 }
 
@@ -222,13 +245,64 @@ void FileWriter::AsyncFlush(StatusCallback cb) {
 
   CHECK_NOTNULL(flush_task);
 
+  AcquireRef();
   flush_task->RunAsync(
       [this, file_flush_id, rcb = std::move(cb)](Status status) {
         VLOG(3) << "File::AsyncFlush end ino: " << ino_
                 << ", file_flush_id: " << file_flush_id
                 << ", status: " << status.ToString();
         FileFlushTaskDone(file_flush_id, rcb, std::move(status));
+        ReleaseRef();
       });
+}
+
+Status FileWriter::Flush() {
+  Status s;
+  Synchronizer sync;
+  AsyncFlush(sync.AsStatusCallBack(s));
+  sync.Wait();
+  return s;
+}
+
+void FileWriter::SchedulePeriodicFlush() {
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (closed_) {
+      LOG(INFO) << fmt::format("{} ScheduleFlush skipped because closed",
+                               uuid_);
+      return;
+    }
+  }
+
+  AcquireRef();
+
+  vfs_hub_->GetBGExecutor()->Schedule(
+      [this] {
+        RunPeriodicFlush();
+        ReleaseRef();
+      },
+      FLAGS_vfs_periodic_flush_interval_ms);
+}
+
+
+void FileWriter::RunPeriodicFlush() {
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (closed_) {
+      LOG(INFO) << fmt::format("{} RunPeriodicFlush skipped because closed",
+                               uuid_);
+      return;
+    }
+  }
+
+  AsyncFlush([this](Status s) {
+    if (!s.ok()) {
+      LOG(ERROR) << fmt::format("{} RunPeriodicFlush failed, status: {}", uuid_,
+                                s.ToString());
+    }
+  });
+
+  SchedulePeriodicFlush();
 }
 
 }  // namespace vfs

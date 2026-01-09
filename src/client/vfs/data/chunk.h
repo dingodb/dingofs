@@ -29,19 +29,16 @@ struct Chunk {
   const uint64_t index{0};
   const uint64_t chunk_size{0};
   const uint64_t block_size{0};
-  const uint64_t page_size{0};
   const uint64_t chunk_start{0};  // in file offset
   const uint64_t chunk_end{0};    // in file offset
 
   explicit Chunk(uint64_t _fs_id, uint64_t _ino, uint64_t _index,
-                 uint64_t _chunk_size, uint64_t _block_size,
-                 uint64_t _page_size)
+                 uint64_t _chunk_size, uint64_t _block_size)
       : fs_id(_fs_id),
         ino(_ino),
         index(_index),
         chunk_size(_chunk_size),
         block_size(_block_size),
-        page_size(_page_size),
         chunk_start(_index * _chunk_size),
         chunk_end(chunk_start + _chunk_size) {}
 

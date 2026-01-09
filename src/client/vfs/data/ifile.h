@@ -20,7 +20,6 @@
 #include <cstdint>
 
 #include "client/vfs/data_buffer.h"
-#include "common/callback.h"
 #include "common/status.h"
 #include "common/trace/context.h"
 
@@ -44,12 +43,7 @@ class IFile {
 
   virtual void Invalidate(int64_t offset, int64_t size) = 0;
 
-  // TODO: remove this in future
-  virtual void ShrinkMem() = 0;
-
   virtual Status Flush() = 0;
-
-  virtual void AsyncFlush(StatusCallback cb) = 0;
 };
 
 using IFileUPtr = std::unique_ptr<IFile>;

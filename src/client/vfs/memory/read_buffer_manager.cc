@@ -14,25 +14,25 @@
  * limitations under the License.
  */
 
-#include "client/memory/read_buffer_manager.h"
+#include "client/vfs/memory/read_buffer_manager.h"
 
 #include <glog/logging.h>
 
 namespace dingofs {
 namespace client {
+namespace vfs {
 
 ReadBufferManager::ReadBufferManager(int64_t total_bytes)
     : total_bytes_(total_bytes),
       used_bytes_(0),
-      read_buffer_total_bytes_("dingofs_read_buffer_total_bytes", total_bytes),
-      read_buffer_used_bytes_("dingofs_read_buffer_used_bytes") {}
+      read_buffer_total_bytes_("vfs_read_buffer_total_bytes", total_bytes),
+      read_buffer_used_bytes_("vfs_read_buffer_used_bytes", UsedBytes, this) {}
 
 void ReadBufferManager::Take(int64_t bytes) {
   VLOG(12) << "ReadBufferManager::Take bytes: " << bytes;
 
   CHECK(bytes > 0) << "bytes must be positive";
   used_bytes_.fetch_add(bytes, std::memory_order_relaxed);
-  read_buffer_used_bytes_ << bytes;
 }
 
 void ReadBufferManager::Release(int64_t bytes) {
@@ -40,7 +40,6 @@ void ReadBufferManager::Release(int64_t bytes) {
 
   CHECK(bytes > 0) << "bytes must be positive";
   used_bytes_.fetch_sub(bytes, std::memory_order_relaxed);
-  read_buffer_used_bytes_ << -bytes;
 }
 
 int64_t ReadBufferManager::GetTotalBytes() const { return total_bytes_; }
@@ -61,5 +60,6 @@ bool ReadBufferManager::IsHighPressure(double threshold) const {
   return GetUsageRatio() >= threshold;
 }
 
+}  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

@@ -78,12 +78,8 @@ DEFINE_validator(vfs_meta_memo_expired_s, brpc::PassValidate);
 DEFINE_uint64(vfs_meta_inode_cache_expired_s, 1, "inode cache expired time");
 DEFINE_validator(vfs_meta_inode_cache_expired_s, brpc::PassValidate);
 
-DEFINE_int32(vfs_flush_bg_thread, 16, "number of background flush threads");
-DEFINE_validator(vfs_flush_bg_thread, brpc::PassValidate);
-
-DEFINE_double(vfs_trigger_flush_free_page_ratio, 0.3,
-              "trigger flush when free page ratio is lower than this value");
-DEFINE_validator(vfs_trigger_flush_free_page_ratio, brpc::PassValidate);
+DEFINE_int32(vfs_flush_thread, 16, "number of background flush threads");
+DEFINE_validator(vfs_flush_thread, brpc::PassValidate);
 
 DEFINE_int32(vfs_read_executor_thread, 16, "number of read executor threads");
 DEFINE_validator(vfs_read_executor_thread, brpc::PassValidate);
@@ -107,9 +103,9 @@ DEFINE_uint32(vfs_prefetch_threads, 8, "number of prefetch threads");
 DEFINE_int32(vfs_warmup_threads, 4, "number of warmup threads");
 
 // vfs handle
-DEFINE_int32(vfs_handle_bg_executor_thread, 8,
+DEFINE_int32(vfs_bg_executor_thread, 8,
              "number of handle backgroud threads");
-DEFINE_validator(vfs_handle_bg_executor_thread, brpc::PassValidate);
+DEFINE_validator(vfs_bg_executor_thread, brpc::PassValidate);
 
 DEFINE_int32(vfs_periodic_flush_interval_ms, 5000,
              "periodic flush interval in milliseconds");
@@ -196,8 +192,8 @@ DEFINE_bool(fuse_enable_auto_inval_data, true,
 DEFINE_validator(fuse_enable_auto_inval_data, brpc::PassValidate);
 
 // memory page allocator
-DEFINE_uint32(data_stream_page_size, 65536, "memory page size for datastream");
-DEFINE_validator(data_stream_page_size,
+DEFINE_uint32(vfs_write_buffer_page_size, 65536, "page size for vfs write buffer");
+DEFINE_validator(vfs_write_buffer_page_size,
                  [](const char* /*flag_name*/, uint32_t value) -> bool {
                    if (value == 0) {
                      LOG(ERROR) << "page size must greater than 0.";
@@ -211,9 +207,9 @@ DEFINE_validator(data_stream_page_size,
                    return true;
                  });
 
-DEFINE_uint64(data_stream_page_total_size_mb, 1024,
-              "total memory size for data stream");
-DEFINE_validator(data_stream_page_total_size_mb,
+DEFINE_uint64(vfs_write_buffer_total_mb, 1024,
+              "total memory size for vfs write buffer in MB");
+DEFINE_validator(vfs_write_buffer_total_mb,
                  [](const char* /*flag_name*/, uint64_t value) -> bool {
                    if (value < 64) {
                      LOG(ERROR) << "page total size cannot be less than 64MB.";
@@ -221,10 +217,6 @@ DEFINE_validator(data_stream_page_total_size_mb,
                    }
                    return true;
                  });
-
-DEFINE_bool(data_stream_page_use_pool, true,
-            "whether to use memory pool for data stream");
-DEFINE_validator(data_stream_page_use_pool, brpc::PassValidate);
 
 // vfs meta
 DEFINE_uint32(vfs_meta_max_name_length, 255, "max file name length");
