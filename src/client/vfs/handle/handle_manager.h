@@ -60,7 +60,7 @@ class HandleManager {
  public:
   HandleManager(VFSHub* hub) : vfs_hub_(hub) {};
 
-  ~HandleManager() { Stop(); }
+  ~HandleManager();
 
   Status Start();
 

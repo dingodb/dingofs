@@ -29,9 +29,15 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
+HandleManager::~HandleManager() {
+  Stop();
+  for (auto& [fh, handle] : handles_) {
+    handle.reset();
+  }
+}
+
 Status HandleManager::Start() { return Status::OK(); }
 
-// TODO: concurrent flush
 void HandleManager::Stop() {
   std::unique_lock<std::mutex> lock(mutex_);
   if (stopped_) {
@@ -48,7 +54,6 @@ void HandleManager::Stop() {
 
     CHECK_NOTNULL(handle->file);
     handle->file->Close();
-    handle.reset();
   }
 }
 
