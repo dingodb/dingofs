@@ -33,25 +33,40 @@ namespace client {
 namespace vfs {
 namespace meta {
 
-MDSClient::MDSClient(const ClientId& client_id, mds::FsInfoSPtr fs_info,
-                     ParentMemoSPtr parent_memo, MDSDiscoverySPtr mds_discovery,
-                     MDSRouterPtr mds_router, RPCPtr rpc,
+MDSClient::MDSClient(const ClientId& client_id, mds::FsInfo& fs_info, RPC&& rpc,
                      TraceManager& trace_manager)
-    : client_id_(client_id),
+    : fs_id_(fs_info.GetFsId()),
+      epoch_(fs_info.GetEpoch()),
+      client_id_(client_id),
       fs_info_(fs_info),
-      fs_id_(fs_info->GetFsId()),
-      epoch_(fs_info->GetEpoch()),
-      parent_memo_(parent_memo),
-      mds_discovery_(mds_discovery),
-      mds_router_(mds_router),
-      rpc_(rpc),
-      trace_manager_(trace_manager) {}
+      rpc_(std::move(rpc)),
+      mds_discovery_(rpc_),
+      trace_manager_(trace_manager) {
+  // create mds router
+  auto partition_type = fs_info.GetPartitionType();
+  if (partition_type == dingofs::pb::mds::PartitionType::MONOLITHIC_PARTITION) {
+    mds_router_ = MonoMDSRouter::New(mds_discovery_);
+
+  } else if (partition_type ==
+             dingofs::pb::mds::PartitionType::PARENT_ID_HASH_PARTITION) {
+    mds_router_ = ParentHashMDSRouter::New(mds_discovery_, parent_memo_);
+  } else {
+    LOG(FATAL) << "not support partition policy type.";
+  }
+}
 
 bool MDSClient::Init() {
-  CHECK(parent_memo_ != nullptr) << "parent cache is null.";
-  CHECK(mds_discovery_ != nullptr) << "mds discovery is null.";
   CHECK(mds_router_ != nullptr) << "mds router is null.";
-  CHECK(rpc_ != nullptr) << "rpc is null.";
+
+  if (!mds_discovery_.Init()) {
+    LOG(ERROR) << "[meta.client] init mds discovery fail.";
+    return false;
+  }
+
+  if (!mds_router_->Init(fs_info_.GetPartitionPolicy())) {
+    LOG(ERROR) << "[meta.client] init mds router fail.";
+    return false;
+  }
 
   return true;
 }
@@ -68,9 +83,11 @@ bool MDSClient::Dump(Json::Value& value) {
 }
 
 bool MDSClient::Dump(const DumpOption& options, Json::Value& value) {
-  LOG(INFO) << "[meta.client] dump...";
+  if (options.parent_memo && !parent_memo_.Dump(value)) {
+    return false;
+  }
 
-  if (options.parent_memo && !parent_memo_->Dump(value)) {
+  if (options.rpc && !rpc_.Dump(value)) {
     return false;
   }
 
@@ -78,27 +95,26 @@ bool MDSClient::Dump(const DumpOption& options, Json::Value& value) {
     return false;
   }
 
-  if (options.rpc && !rpc_->Dump(value)) {
+  return true;
+}
+
+bool MDSClient::Load(const Json::Value& value) {
+  if (!parent_memo_.Load(value)) {
     return false;
   }
 
   return true;
 }
 
-bool MDSClient::Load(const Json::Value& value) {
-  LOG(INFO) << "[meta.client] load...";
-  return parent_memo_->Load(value);
-}
-
 bool MDSClient::SetEndpoint(const std::string& ip, int port) {
-  return rpc_->AddEndpoint(ip, port);
+  return rpc_.AddEndpoint(ip, port);
 }
 
-Status MDSClient::DoGetFsInfo(RPCPtr rpc, pb::mds::GetFsInfoRequest& request,
+Status MDSClient::DoGetFsInfo(RPC& rpc, pb::mds::GetFsInfoRequest& request,
                               mds::FsInfoEntry& fs_info) {
   pb::mds::GetFsInfoResponse response;
 
-  auto status = rpc->SendRequest("MDSService", "GetFsInfo", request, response);
+  auto status = rpc.SendRequest("MDSService", "GetFsInfo", request, response);
   if (status.ok()) {
     fs_info = response.fs_info();
   }
@@ -136,31 +152,31 @@ MDSMeta MDSClient::GetMdsByParent(int64_t parent, bool& is_primary_mds) {
 
 uint64_t MDSClient::GetInodeVersion(Ino ino) {
   uint64_t version = 0;
-  parent_memo_->GetVersion(ino, version);
+  parent_memo_.GetVersion(ino, version);
   return version;
 }
 
 int32_t MDSClient::GetInodeRenameRefCount(Ino ino) {
   int32_t rename_ref_count = 0;
-  parent_memo_->GetRenameRefCount(ino, rename_ref_count);
+  parent_memo_.GetRenameRefCount(ino, rename_ref_count);
   return rename_ref_count;
 }
 
-Status MDSClient::GetFsInfo(RPCPtr rpc, const std::string& name,
+Status MDSClient::GetFsInfo(RPC& rpc, const std::string& name,
                             mds::FsInfoEntry& fs_info) {
   pb::mds::GetFsInfoRequest request;
   request.set_fs_name(name);
   return DoGetFsInfo(rpc, request, fs_info);
 }
 
-Status MDSClient::GetFsInfo(RPCPtr rpc, uint32_t fs_id,
+Status MDSClient::GetFsInfo(RPC& rpc, uint32_t fs_id,
                             mds::FsInfoEntry& fs_info) {
   pb::mds::GetFsInfoRequest request;
   request.set_fs_id(fs_id);
   return DoGetFsInfo(rpc, request, fs_info);
 }
 
-RPCPtr MDSClient::GetRpc() { return rpc_; }
+RPC& MDSClient::GetRpc() { return rpc_; }
 
 Status MDSClient::Heartbeat() {
   if (client_id_.ID().empty()) {
@@ -181,7 +197,7 @@ Status MDSClient::Heartbeat() {
   client->set_ip(client_id_.IP());
   client->set_port(client_id_.Port());
   client->set_mountpoint(client_id_.Mountpoint());
-  client->set_fs_name(fs_info_->GetName());
+  client->set_fs_name(fs_info_.GetName());
   client->set_create_time_ms(client_id_.CreateTimeMs());
 
   auto status = SendRequest(nullptr, get_mds_fn, "MDSService", "Heartbeat",
@@ -205,7 +221,7 @@ Status MDSClient::MountFs(const std::string& name,
   request.mutable_info()->set_trace_id(SpanScope::GetTraceID(span));
   request.mutable_info()->set_span_id(SpanScope::GetSpanID(span));
 
-  auto status = rpc_->SendRequest("MDSService", "MountFs", request, response);
+  auto status = rpc_.SendRequest("MDSService", "MountFs", request, response);
   if (!status.ok()) {
     SpanScope::SetStatus(span, status);
     return status;
@@ -226,7 +242,7 @@ Status MDSClient::UmountFs(const std::string& name,
   request.mutable_info()->set_trace_id(SpanScope::GetTraceID(span));
   request.mutable_info()->set_span_id(SpanScope::GetSpanID(span));
 
-  auto status = rpc_->SendRequest("MDSService", "UmountFs", request, response);
+  auto status = rpc_.SendRequest("MDSService", "UmountFs", request, response);
   if (!status.ok()) {
     SpanScope::SetStatus(span, status);
     return status;
@@ -268,14 +284,14 @@ Status MDSClient::Lookup(ContextSPtr& ctx, Ino parent, const std::string& name,
 
   const auto& inode = response.inode();
 
-  if (fs_info_->IsHashPartition() && mds::IsDir(inode.ino())) {
+  if (fs_info_.IsHashPartition() && mds::IsDir(inode.ino())) {
     uint64_t last_version;
-    if (parent_memo_->GetVersion(inode.ino(), last_version) &&
+    if (parent_memo_.GetVersion(inode.ino(), last_version) &&
         inode.version() < last_version) {
       // fetch last inode
       status = GetAttr(span_ctx, inode.ino(), attr_entry);
       if (status.ok()) {
-        parent_memo_->Upsert(inode.ino(), parent);
+        parent_memo_.Upsert(inode.ino(), parent);
         return Status::OK();
 
       } else {
@@ -287,7 +303,7 @@ Status MDSClient::Lookup(ContextSPtr& ctx, Ino parent, const std::string& name,
   }
 
   // save ino to parent mapping
-  parent_memo_->Upsert(inode.ino(), parent, inode.version());
+  parent_memo_.Upsert(inode.ino(), parent, inode.version());
 
   attr_entry.Swap(response.mutable_inode());
 
@@ -337,8 +353,8 @@ Status MDSClient::Create(ContextSPtr& ctx, Ino parent, const std::string& name,
   CHECK(!response.inodes().empty()) << "inodes is empty.";
   const auto& inode = response.inodes().at(0);
 
-  parent_memo_->Upsert(inode.ino(), parent, inode.version());
-  parent_memo_->UpsertVersion(parent, response.parent_inode().version());
+  parent_memo_.Upsert(inode.ino(), parent, inode.version());
+  parent_memo_.UpsertVersion(parent, response.parent_inode().version());
 
   session_ids = mds::Helper::PbRepeatedToVector(response.session_ids());
 
@@ -387,9 +403,9 @@ Status MDSClient::MkNod(ContextSPtr& ctx, Ino parent, const std::string& name,
     return status;
   }
 
-  parent_memo_->Upsert(response.inode().ino(), parent,
-                       response.inode().version());
-  parent_memo_->UpsertVersion(parent, response.parent_inode().version());
+  parent_memo_.Upsert(response.inode().ino(), parent,
+                      response.inode().version());
+  parent_memo_.UpsertVersion(parent, response.parent_inode().version());
 
   attr_entry.Swap(response.mutable_inode());
   parent_attr_entry.Swap(response.mutable_parent_inode());
@@ -431,11 +447,11 @@ Status MDSClient::BatchMkNod(ContextSPtr& ctx, Ino parent,
     return status;
   }
 
-  parent_memo_->UpsertVersion(parent, response.parent_inode().version());
+  parent_memo_.UpsertVersion(parent, response.parent_inode().version());
 
   attr_entries.reserve(response.inodes_size());
   for (auto& mut_inode : *response.mutable_inodes()) {
-    parent_memo_->Upsert(mut_inode.ino(), parent, mut_inode.version());
+    parent_memo_.Upsert(mut_inode.ino(), parent, mut_inode.version());
 
     attr_entries.push_back(std::move(mut_inode));
   }
@@ -483,9 +499,9 @@ Status MDSClient::MkDir(ContextSPtr& ctx, Ino parent, const std::string& name,
     return status;
   }
 
-  parent_memo_->Upsert(response.inode().ino(), parent,
-                       response.inode().version());
-  parent_memo_->UpsertVersion(parent, response.parent_inode().version());
+  parent_memo_.Upsert(response.inode().ino(), parent,
+                      response.inode().version());
+  parent_memo_.UpsertVersion(parent, response.parent_inode().version());
 
   attr_entry.Swap(response.mutable_inode());
   parent_attr_entry.Swap(response.mutable_parent_inode());
@@ -525,11 +541,11 @@ Status MDSClient::BatchMkDir(ContextSPtr& ctx, Ino parent,
                             request, response);
   if (!status.ok()) return status;
 
-  parent_memo_->UpsertVersion(parent, response.parent_inode().version());
+  parent_memo_.UpsertVersion(parent, response.parent_inode().version());
 
   attr_entries.reserve(response.inodes_size());
   for (auto& mut_inode : *response.mutable_inodes()) {
-    parent_memo_->Upsert(mut_inode.ino(), parent, mut_inode.version());
+    parent_memo_.Upsert(mut_inode.ino(), parent, mut_inode.version());
 
     attr_entries.push_back(std::move(mut_inode));
   }
@@ -571,8 +587,8 @@ Status MDSClient::RmDir(ContextSPtr& ctx, Ino parent, const std::string& name,
 
   ino = response.ino();
 
-  parent_memo_->Delete(ino);
-  parent_memo_->UpsertVersion(parent, response.parent_inode().version());
+  parent_memo_.Delete(ino);
+  parent_memo_.UpsertVersion(parent, response.parent_inode().version());
 
   parent_attr_entry.Swap(response.mutable_parent_inode());
 
@@ -614,11 +630,11 @@ Status MDSClient::ReadDir(ContextSPtr& ctx, Ino ino, uint64_t fh,
     return status;
   }
 
-  parent_memo_->DecRenameRefCount(ino);
+  parent_memo_.DecRenameRefCount(ino);
 
   entries.reserve(response.entries_size());
   for (const auto& entry : response.entries()) {
-    parent_memo_->Upsert(entry.ino(), ino, entry.inode().version());
+    parent_memo_.Upsert(entry.ino(), ino, entry.inode().version());
     entries.push_back(Helper::ToDirEntry(entry));
   }
 
@@ -664,7 +680,7 @@ Status MDSClient::Open(
   chunks = mds::Helper::PbRepeatedToVector(response.chunks());
   attr_entry.Swap(response.mutable_inode());
 
-  parent_memo_->UpsertVersion(ino, response.inode().version());
+  parent_memo_.UpsertVersion(ino, response.inode().version());
 
   return Status::OK();
 }
@@ -728,9 +744,9 @@ Status MDSClient::Link(ContextSPtr& ctx, Ino ino, Ino new_parent,
     return status;
   }
 
-  parent_memo_->Upsert(response.inode().ino(), new_parent,
-                       response.inode().version());
-  parent_memo_->UpsertVersion(new_parent, response.parent_inode().version());
+  parent_memo_.Upsert(response.inode().ino(), new_parent,
+                      response.inode().version());
+  parent_memo_.UpsertVersion(new_parent, response.parent_inode().version());
 
   attr_entry.Swap(response.mutable_inode());
   parent_attr_entry.Swap(response.mutable_parent_inode());
@@ -771,8 +787,8 @@ Status MDSClient::UnLink(ContextSPtr& ctx, Ino parent, const std::string& name,
   }
 
   const auto& inode = response.inode();
-  parent_memo_->UpsertVersion(inode.ino(), inode.version());
-  parent_memo_->UpsertVersion(parent, response.parent_inode().version());
+  parent_memo_.UpsertVersion(inode.ino(), inode.version());
+  parent_memo_.UpsertVersion(parent, response.parent_inode().version());
 
   attr_entry.Swap(response.mutable_inode());
   parent_attr_entry.Swap(response.mutable_parent_inode());
@@ -809,11 +825,11 @@ Status MDSClient::BatchUnLink(ContextSPtr& ctx, Ino parent,
     return status;
   }
 
-  parent_memo_->UpsertVersion(parent, response.parent_inode().version());
+  parent_memo_.UpsertVersion(parent, response.parent_inode().version());
 
   attr_entries.reserve(response.inodes_size());
   for (auto& mut_inode : *response.mutable_inodes()) {
-    parent_memo_->UpsertVersion(mut_inode.ino(), mut_inode.version());
+    parent_memo_.UpsertVersion(mut_inode.ino(), mut_inode.version());
 
     attr_entries.push_back(std::move(mut_inode));
   }
@@ -859,10 +875,10 @@ Status MDSClient::Symlink(ContextSPtr& ctx, Ino parent, const std::string& name,
     return status;
   }
 
-  parent_memo_->Upsert(response.inode().ino(), parent,
-                       response.inode().version());
+  parent_memo_.Upsert(response.inode().ino(), parent,
+                      response.inode().version());
 
-  parent_memo_->UpsertVersion(parent, response.parent_inode().version());
+  parent_memo_.UpsertVersion(parent, response.parent_inode().version());
 
   attr_entry.Swap(response.mutable_inode());
   parent_attr_entry.Swap(response.mutable_parent_inode());
@@ -931,7 +947,7 @@ Status MDSClient::GetAttr(ContextSPtr& ctx, Ino ino, AttrEntry& attr_entry) {
     return status;
   }
 
-  parent_memo_->UpsertVersion(ino, response.inode().version());
+  parent_memo_.UpsertVersion(ino, response.inode().version());
 
   attr_entry.Swap(response.mutable_inode());
 
@@ -1022,7 +1038,7 @@ Status MDSClient::SetAttr(ContextSPtr& ctx, Ino ino, const Attr& attr,
     return status;
   }
 
-  parent_memo_->UpsertVersion(ino, response.inode().version());
+  parent_memo_.UpsertVersion(ino, response.inode().version());
 
   attr_entry.Swap(response.mutable_inode());
   shrink_file = response.shrink_file();
@@ -1094,7 +1110,7 @@ Status MDSClient::SetXAttr(ContextSPtr& ctx, Ino ino, const std::string& name,
     return status;
   }
 
-  parent_memo_->UpsertVersion(ino, response.inode().version());
+  parent_memo_.UpsertVersion(ino, response.inode().version());
 
   attr_entry.Swap(response.mutable_inode());
 
@@ -1129,7 +1145,7 @@ Status MDSClient::RemoveXAttr(ContextSPtr& ctx, Ino ino,
     return status;
   }
 
-  parent_memo_->UpsertVersion(ino, response.inode().version());
+  parent_memo_.UpsertVersion(ino, response.inode().version());
 
   attr_entry.Swap(response.mutable_inode());
 
@@ -1187,13 +1203,13 @@ Status MDSClient::Rename(ContextSPtr& ctx, Ino old_parent,
   pb::mds::RenameRequest request;
   pb::mds::RenameResponse response;
 
-  if (fs_info_->IsHashPartition()) {
-    auto old_ancestors = parent_memo_->GetAncestors(old_parent);
+  if (fs_info_.IsHashPartition()) {
+    auto old_ancestors = parent_memo_.GetAncestors(old_parent);
     for (auto& ancestor : old_ancestors) {
       request.add_old_ancestors(ancestor);
     }
 
-    auto new_ancestors = parent_memo_->GetAncestors(new_parent);
+    auto new_ancestors = parent_memo_.GetAncestors(new_parent);
     for (auto& ancestor : new_ancestors) {
       request.add_new_ancestors(ancestor);
     }
@@ -1214,10 +1230,10 @@ Status MDSClient::Rename(ContextSPtr& ctx, Ino old_parent,
     return status;
   }
 
-  parent_memo_->UpsertVersionAndRenameRefCount(old_parent,
-                                               response.old_parent_version());
-  parent_memo_->UpsertVersionAndRenameRefCount(new_parent,
-                                               response.new_parent_version());
+  parent_memo_.UpsertVersionAndRenameRefCount(old_parent,
+                                              response.old_parent_version());
+  parent_memo_.UpsertVersionAndRenameRefCount(new_parent,
+                                              response.new_parent_version());
 
   effected_inos = mds::Helper::PbRepeatedToVector(response.effected_inos());
 
@@ -1312,7 +1328,7 @@ Status MDSClient::WriteSlice(
   SetAncestorInContext(request, ino);
 
   Ino parent = 0;
-  CHECK(parent_memo_->GetParent(ino, parent))
+  CHECK(parent_memo_.GetParent(ino, parent))
       << "get parent fail from parent cache.";
 
   request.set_fs_id(fs_id_);
@@ -1367,7 +1383,7 @@ Status MDSClient::Fallocate(ContextSPtr& ctx, Ino ino, int32_t mode,
 
   const auto& attr = response.inode();
 
-  parent_memo_->UpsertVersion(attr.ino(), attr.version());
+  parent_memo_.UpsertVersion(attr.ino(), attr.version());
 
   return Status::OK();
 }
@@ -1385,8 +1401,7 @@ Status MDSClient::GetFsQuota(ContextSPtr& ctx, FsStat& fs_stat) {
   request.mutable_info()->set_trace_id(SpanScope::GetTraceID(span));
   request.mutable_info()->set_span_id(SpanScope::GetSpanID(span));
 
-  auto status =
-      rpc_->SendRequest("MDSService", "GetFsQuota", request, response);
+  auto status = rpc_.SendRequest("MDSService", "GetFsQuota", request, response);
   if (!status.ok()) {
     SpanScope::SetStatus(span, status);
     return status;
@@ -1435,7 +1450,7 @@ Status MDSClient::GetDirQuota(ContextSPtr& ctx, Ino ino, FsStat& fs_stat) {
 
 bool MDSClient::UpdateRouter() {
   mds::FsInfoEntry new_fs_info;
-  auto status = MDSClient::GetFsInfo(rpc_, fs_info_->GetName(), new_fs_info);
+  auto status = MDSClient::GetFsInfo(rpc_, fs_info_.GetName(), new_fs_info);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("[meta.client] get fs info fail, {}.",
                               status.ToString());
@@ -1444,9 +1459,9 @@ bool MDSClient::UpdateRouter() {
 
   epoch_ = new_fs_info.partition_policy().epoch();
 
-  fs_info_->Update(new_fs_info);
+  fs_info_.Update(new_fs_info);
 
-  if (!mds_discovery_->RefreshFullyMDSList()) {
+  if (!mds_discovery_.RefreshFullyMDSList()) {
     LOG(ERROR) << "[meta.client] refresh mds discovery fail.";
     return false;
   }
@@ -1476,10 +1491,10 @@ void MDSClient::ProcessNotServe() {
 
 void MDSClient::ProcessNetError(MDSMeta& mds_meta) {
   // set the current mds as abnormal
-  mds_discovery_->SetAbnormalMDS(mds_meta.ID());
+  mds_discovery_.SetAbnormalMDS(mds_meta.ID());
 
   // get a normal mds
-  auto mdses = mds_discovery_->GetNormalMDS();
+  auto mdses = mds_discovery_.GetNormalMDS();
   for (auto& mds : mdses) {
     if (mds.ID() != mds_meta.ID()) {
       LOG(INFO) << fmt::format(

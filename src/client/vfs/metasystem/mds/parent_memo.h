@@ -18,7 +18,6 @@
 #include <sys/types.h>
 
 #include <cstdint>
-#include <memory>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
@@ -31,15 +30,10 @@ namespace client {
 namespace vfs {
 namespace meta {
 
-class ParentMemo;
-using ParentMemoSPtr = std::shared_ptr<ParentMemo>;
-
 class ParentMemo {
  public:
   ParentMemo();
   ~ParentMemo() = default;
-
-  static ParentMemoSPtr New() { return std::make_shared<ParentMemo>(); }
 
   bool GetParent(Ino ino, Ino& parent);
   bool GetVersion(Ino ino, uint64_t& version);

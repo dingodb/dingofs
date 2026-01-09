@@ -19,15 +19,13 @@
 #include "fmt/format.h"
 #include "glog/logging.h"
 #include "json/value.h"
-#include "mds/common/helper.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 namespace meta {
 
-FileSession::FileSession(mds::FsInfoSPtr fs_info, Ino ino)
-    : fs_info_(fs_info), ino_(ino), chunk_set_(ino) {}
+FileSession::FileSession(Ino ino) : ino_(ino), chunk_set_(ino) {}
 
 std::string FileSession::GetSessionID(uint64_t fh) {
   utils::ReadLockGuard lk(lock_);
@@ -124,7 +122,7 @@ FileSessionSPtr FileSessionMap::Put(Ino ino, uint64_t fh,
           file_session = it->second;
           file_session->AddSession(fh, session_id);
         } else {
-          file_session = FileSession::New(fs_info_, ino);
+          file_session = FileSession::New(ino);
           file_session->AddSession(fh, session_id);
           map[ino] = file_session;
         }
@@ -240,7 +238,7 @@ bool FileSessionMap::Load(const Json::Value& value) {
     for (const auto& item : file_sessions) {
       Ino ino = item["ino"].asUInt64();
 
-      auto file_session = FileSession::New(fs_info_, ino);
+      auto file_session = FileSession::New(ino);
       CHECK(file_session->Load(item))
           << fmt::format("load file session fail, ino({}).", ino);
 

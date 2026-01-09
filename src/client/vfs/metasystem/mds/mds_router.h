@@ -45,19 +45,18 @@ class MDSRouter {
   virtual bool Dump(Json::Value& value) = 0;
 };
 
-using MDSRouterPtr = std::shared_ptr<MDSRouter>;
+using MDSRouterUPtr = std::unique_ptr<MDSRouter>;
 
 class MonoMDSRouter;
-using MonoMDSRouterPtr = std::shared_ptr<MonoMDSRouter>;
+using MonoMDSRouterUPtr = std::unique_ptr<MonoMDSRouter>;
 
 class MonoMDSRouter : public MDSRouter {
  public:
-  MonoMDSRouter(MDSDiscoverySPtr mds_discovery)
-      : mds_discovery_(mds_discovery) {};
+  MonoMDSRouter(MDSDiscovery& mds_discovery) : mds_discovery_(mds_discovery) {};
   ~MonoMDSRouter() override = default;
 
-  static MonoMDSRouterPtr New(MDSDiscoverySPtr mds_discovery) {
-    return std::make_shared<MonoMDSRouter>(mds_discovery);
+  static MonoMDSRouterUPtr New(MDSDiscovery& mds_discovery) {
+    return std::make_unique<MonoMDSRouter>(mds_discovery);
   }
 
   bool Init(const pb::mds::PartitionPolicy& partition_policy) override;
@@ -77,22 +76,21 @@ class MonoMDSRouter : public MDSRouter {
   utils::RWLock lock_;
   mds::MDSMeta mds_meta_;
 
-  MDSDiscoverySPtr mds_discovery_;
+  MDSDiscovery& mds_discovery_;
 };
 
 class ParentHashMDSRouter;
-using ParentHashMDSRouterPtr = std::shared_ptr<ParentHashMDSRouter>;
+using ParentHashMDSRouterUPtr = std::unique_ptr<ParentHashMDSRouter>;
 
 class ParentHashMDSRouter : public MDSRouter {
  public:
-  ParentHashMDSRouter(MDSDiscoverySPtr mds_discovery,
-                      ParentMemoSPtr parent_memo)
+  ParentHashMDSRouter(MDSDiscovery& mds_discovery, ParentMemo& parent_memo)
       : mds_discovery_(mds_discovery), parent_memo_(parent_memo) {}
   ~ParentHashMDSRouter() override = default;
 
-  static ParentHashMDSRouterPtr New(MDSDiscoverySPtr mds_discovery,
-                                    ParentMemoSPtr parent_memo) {
-    return std::make_shared<ParentHashMDSRouter>(mds_discovery, parent_memo);
+  static ParentHashMDSRouterUPtr New(MDSDiscovery& mds_discovery,
+                                     ParentMemo& parent_memo) {
+    return std::make_unique<ParentHashMDSRouter>(mds_discovery, parent_memo);
   }
 
   bool Init(const pb::mds::PartitionPolicy& partition_policy) override;
@@ -110,8 +108,8 @@ class ParentHashMDSRouter : public MDSRouter {
  private:
   void UpdateMDSes(const pb::mds::HashPartition& hash_partition);
 
-  MDSDiscoverySPtr mds_discovery_;
-  ParentMemoSPtr parent_memo_;
+  MDSDiscovery& mds_discovery_;
+  ParentMemo& parent_memo_;
 
   utils::RWLock lock_;
   pb::mds::HashPartition hash_partition_;

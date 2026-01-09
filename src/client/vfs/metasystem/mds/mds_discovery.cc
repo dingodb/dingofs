@@ -109,8 +109,7 @@ Status MDSDiscovery::GetMDSList(std::vector<mds::MDSMeta>& mdses) {
 
   request.mutable_info()->set_request_id(std::to_string(utils::TimestampNs()));
 
-  auto status =
-      rpc_->SendRequest("MDSService", "GetMDSList", request, response);
+  auto status = rpc_.SendRequest("MDSService", "GetMDSList", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -161,7 +160,7 @@ bool MDSDiscovery::RefreshFullyMDSList() {
   }
 
   for (auto& mds : mdses) {
-    rpc_->AddFallbackEndpoint(StrToEndpoint(mds.Host(), mds.Port()));
+    rpc_.AddFallbackEndpoint(StrToEndpoint(mds.Host(), mds.Port()));
   }
 
   return true;

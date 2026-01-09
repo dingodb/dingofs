@@ -50,9 +50,6 @@ namespace client {
 namespace vfs {
 namespace meta {
 
-class RPC;
-using RPCPtr = std::shared_ptr<RPC>;
-
 using EndPoint = butil::EndPoint;
 
 inline bool IsInvalidEndpoint(const EndPoint& endpoint) {
@@ -103,14 +100,23 @@ class RPC {
   RPC(const EndPoint& endpoint);
   ~RPC() = default;
 
-  static RPCPtr New(const std::string& addr) {
-    return std::make_shared<RPC>(addr);
+  RPC(RPC&& other) noexcept {
+    init_endpoint_ = other.init_endpoint_;
+    channels_ = std::move(other.channels_);
+    fallback_endpoints_ = std::move(other.fallback_endpoints_);
+
+    doing_req_count_.store(other.doing_req_count_.load());
   }
-  static RPCPtr New(const std::string& ip, int port) {
-    return std::make_shared<RPC>(ip, port);
-  }
-  static RPCPtr New(const EndPoint& endpoint) {
-    return std::make_shared<RPC>(endpoint);
+  RPC& operator=(RPC&& other) noexcept {
+    if (this != &other) {
+      init_endpoint_ = other.init_endpoint_;
+      channels_ = std::move(other.channels_);
+      fallback_endpoints_ = std::move(other.fallback_endpoints_);
+
+      doing_req_count_.store(other.doing_req_count_.load());
+    }
+
+    return *this;
   }
 
   bool Init();
@@ -159,6 +165,7 @@ class RPC {
   uint64_t DoingReqCount() {
     return doing_req_count_.load(std::memory_order_relaxed);
   }
+
   utils::RWLock lock_;
   EndPoint init_endpoint_;
   std::map<EndPoint, ChannelSPtr> channels_;

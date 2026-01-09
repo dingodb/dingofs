@@ -114,8 +114,7 @@ struct WriteSliceOperation : public Operation {
     done(status, task, chunk_descriptors);
   }
 
-  static void BatchRun(MDSClientSPtr mds_client,
-                       BatchOperation& batch_operation);
+  static void BatchRun(MDSClient& mds_client, BatchOperation& batch_operation);
 };
 
 using WriteSliceOperationSPtr = std::shared_ptr<WriteSliceOperation>;
@@ -154,8 +153,7 @@ struct MkNodOperation : public Operation {
   }
   Result& GetResult() { return result; }
 
-  static void BatchRun(MDSClientSPtr mds_client,
-                       BatchOperation& batch_operation);
+  static void BatchRun(MDSClient& mds_client, BatchOperation& batch_operation);
 };
 
 using MkNodOperationSPtr = std::shared_ptr<MkNodOperation>;
@@ -192,8 +190,7 @@ struct MkDirOperation : public Operation {
   }
   Result& GetResult() { return result; }
 
-  static void BatchRun(MDSClientSPtr mds_client,
-                       BatchOperation& batch_operation);
+  static void BatchRun(MDSClient& mds_client, BatchOperation& batch_operation);
 };
 
 using MkDirOperationSPtr = std::shared_ptr<MkDirOperation>;
@@ -221,8 +218,7 @@ struct UnlinkOperation : public Operation {
   }
   Result& GetResult() { return result; }
 
-  static void BatchRun(MDSClientSPtr mds_client,
-                       BatchOperation& batch_operation);
+  static void BatchRun(MDSClient& mds_client, BatchOperation& batch_operation);
 };
 
 using UnlinkOperationSPtr = std::shared_ptr<UnlinkOperation>;
@@ -235,7 +231,7 @@ struct BatchOperation {
 
 class BatchProcessor {
  public:
-  BatchProcessor(MDSClientSPtr mds_client);
+  BatchProcessor(MDSClient& mds_client);
   ~BatchProcessor();
 
   BatchProcessor(const BatchProcessor&) = delete;
@@ -267,7 +263,7 @@ class BatchProcessor {
   static std::map<Key, BatchOperation> Grouping(
       std::vector<OperationSPtr>& operations);
   void LaunchExecuteBatchOperation(BatchOperation&& batch_operation);
-  static void ExecuteBatchOperation(MDSClientSPtr mds_client,
+  static void ExecuteBatchOperation(MDSClient& mds_client,
                                     BatchOperation& batch_operation);
 
   // consumer thread
@@ -277,7 +273,7 @@ class BatchProcessor {
 
   std::atomic<bool> is_stop_{false};
 
-  MDSClientSPtr mds_client_;
+  MDSClient& mds_client_;
 
   butil::MPSCQueue<OperationSPtr> operations_;
 };

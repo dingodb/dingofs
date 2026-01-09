@@ -29,7 +29,7 @@ DECLARE_uint32(client_vfs_id_cache_batch_size);
 
 class IdCache {
  public:
-  IdCache(const std::string& name, MDSClientSPtr mds_client,
+  IdCache(const std::string& name, MDSClient& mds_client,
           uint32_t batch_size = FLAGS_client_vfs_id_cache_batch_size)
       : name_(name), mds_client_(mds_client), batch_size_(batch_size) {}
 
@@ -41,7 +41,7 @@ class IdCache {
 
   const std::string name_;
 
-  MDSClientSPtr mds_client_;
+  MDSClient& mds_client_;
 
   utils::RWLock lock_;
 

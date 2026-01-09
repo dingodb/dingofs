@@ -15,17 +15,13 @@
 #ifndef DINGOFS_SRC_CLIENT_VFS_META_MDS_MODIFY_TIME_MEMO_H_
 #define DINGOFS_SRC_CLIENT_VFS_META_MDS_MODIFY_TIME_MEMO_H_
 
-#include <absl/container/flat_hash_map.h>
 #include <sys/types.h>
 
 #include <cstdint>
-#include <map>
-#include <memory>
-#include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "client/vfs/vfs_meta.h"
 #include "json/value.h"
-#include "utils/concurrent/concurrent.h"
 #include "utils/shards.h"
 
 namespace dingofs {

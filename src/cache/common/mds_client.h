@@ -135,8 +135,8 @@ class MDSClientImpl : public MDSClient {
                      Response& response);
 
   std::atomic<bool> running_;
-  std::shared_ptr<client::vfs::meta::RPC> rpc_;
-  std::unique_ptr<client::vfs::meta::MDSDiscovery> mds_discovery_;
+  client::vfs::meta::RPC rpc_;
+  client::vfs::meta::MDSDiscovery mds_discovery_;
 };
 
 }  // namespace cache

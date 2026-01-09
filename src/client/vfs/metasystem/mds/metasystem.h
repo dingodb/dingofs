@@ -52,16 +52,15 @@ using MDSMetaSystemUPtr = std::unique_ptr<MDSMetaSystem>;
 
 class MDSMetaSystem : public vfs::MetaSystem {
  public:
-  MDSMetaSystem(mds::FsInfoSPtr fs_info, const ClientId& client_id,
-                MDSDiscoverySPtr mds_discovery, MDSClientSPtr mds_client);
+  MDSMetaSystem(mds::FsInfoEntry fs_info_entry, const ClientId& client_id,
+                RPC&& rpc, TraceManagerSPtr trace_manager);
   ~MDSMetaSystem() override;
 
-  static MDSMetaSystemUPtr New(mds::FsInfoSPtr fs_info,
-                               const ClientId& client_id,
-                               MDSDiscoverySPtr mds_discovery,
-                               MDSClientSPtr mds_client) {
-    return std::make_unique<MDSMetaSystem>(fs_info, client_id, mds_discovery,
-                                           mds_client);
+  static MDSMetaSystemUPtr New(mds::FsInfoEntry fs_info_entry,
+                               const ClientId& client_id, RPC&& rpc,
+                               TraceManagerSPtr trace_manager) {
+    return std::make_unique<MDSMetaSystem>(fs_info_entry, client_id,
+                                           std::move(rpc), trace_manager);
   }
 
   static MDSMetaSystemUPtr Build(const std::string& fs_name,
@@ -79,7 +78,7 @@ class MDSMetaSystem : public vfs::MetaSystem {
 
   bool Load(ContextSPtr ctx, const Json::Value& value) override;
 
-  mds::FsInfoEntry GetFsInfo() { return fs_info_->Get(); }
+  mds::FsInfoEntry GetFsInfo() { return fs_info_.Get(); }
 
   Status GetFsInfo(ContextSPtr ctx, FsInfo* fs_info) override;
 
@@ -187,11 +186,9 @@ class MDSMetaSystem : public vfs::MetaSystem {
   const std::string name_;
   const ClientId client_id_;
 
-  mds::FsInfoSPtr fs_info_;
+  mds::FsInfo fs_info_;
 
-  MDSDiscoverySPtr mds_discovery_;
-
-  MDSClientSPtr mds_client_;
+  MDSClient mds_client_;
 
   ModifyTimeMemo modify_time_memo_;
 
@@ -202,7 +199,7 @@ class MDSMetaSystem : public vfs::MetaSystem {
   DirIteratorManager dir_iterator_manager_;
 
   IdCache id_cache_;
-  InodeCacheUPtr inode_cache_;
+  InodeCache inode_cache_;
 
   // Crontab config
   std::vector<mds::CrontabConfig> crontab_configs_;

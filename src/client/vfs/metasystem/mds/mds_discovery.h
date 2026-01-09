@@ -16,7 +16,6 @@
 #define DINGOFS_SRC_CLIENT_VFS_META_MDS_DISCOVERY_H_
 
 #include <map>
-#include <memory>
 #include <vector>
 
 #include "client/vfs/metasystem/mds/rpc.h"
@@ -28,17 +27,10 @@ namespace client {
 namespace vfs {
 namespace meta {
 
-class MDSDiscovery;
-using MDSDiscoverySPtr = std::shared_ptr<MDSDiscovery>;
-
 class MDSDiscovery {
  public:
-  MDSDiscovery(RPCPtr rpc) : rpc_(rpc) {};
+  MDSDiscovery(RPC& rpc) : rpc_(rpc) {};
   ~MDSDiscovery() = default;
-
-  static MDSDiscoverySPtr New(RPCPtr rpc) {
-    return std::make_shared<MDSDiscovery>(rpc);
-  }
 
   bool Init();
   void Destroy();
@@ -59,7 +51,7 @@ class MDSDiscovery {
   // mds_id -> MDSMeta
   std::map<int64_t, mds::MDSMeta> mdses_;
 
-  RPCPtr rpc_;
+  RPC& rpc_;
 };
 
 }  // namespace meta

@@ -42,11 +42,11 @@ class FileSessionMap;
 
 class FileSession {
  public:
-  FileSession(mds::FsInfoSPtr fs_info, Ino ino);
+  FileSession(Ino ino);
   ~FileSession() = default;
 
-  static FileSessionSPtr New(mds::FsInfoSPtr fs_info, Ino ino) {
-    return std::make_shared<FileSession>(fs_info, ino);
+  static FileSessionSPtr New(Ino ino) {
+    return std::make_shared<FileSession>(ino);
   }
 
   Ino GetIno() const { return ino_; }
@@ -67,7 +67,6 @@ class FileSession {
  private:
   friend class FileSessionMap;
 
-  mds::FsInfoSPtr fs_info_;
   Ino ino_;
 
   std::atomic<uint32_t> ref_count_{0};
@@ -83,7 +82,7 @@ class FileSession {
 // used by open file
 class FileSessionMap {
  public:
-  FileSessionMap(mds::FsInfoSPtr fs_info) : fs_info_(fs_info) {}
+  FileSessionMap() = default;
   ~FileSessionMap() = default;
 
   FileSessionSPtr Put(Ino ino, uint64_t fh, const std::string& session_id);
@@ -101,8 +100,6 @@ class FileSessionMap {
   void Put(FileSessionSPtr);
 
   using Map = absl::btree_map<Ino, FileSessionSPtr>;
-
-  mds::FsInfoSPtr fs_info_;
 
   constexpr static size_t kShardNum = 32;
   utils::Shards<Map, kShardNum> shard_map_;

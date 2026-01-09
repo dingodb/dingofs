@@ -68,9 +68,9 @@ Status DirIterator::GetValue(ContextSPtr& ctx, uint64_t off, bool with_attr,
 
 Status DirIterator::Fetch(ContextSPtr& ctx) {
   std::vector<DirEntry> entries;
-  auto status = mds_client_->ReadDir(ctx, ino_, fh_, last_name_,
-                                     FLAGS_vfs_meta_read_dir_batch_size,
-                                     with_attr_, entries);
+  auto status = mds_client_.ReadDir(ctx, ino_, fh_, last_name_,
+                                    FLAGS_vfs_meta_read_dir_batch_size,
+                                    with_attr_, entries);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[dir_iterator.{}.{}] readdir fail, offset({}) last_name({}).", ino_,
@@ -224,8 +224,7 @@ bool DirIteratorManager::Dump(Json::Value& value) {
   return true;
 }
 
-bool DirIteratorManager::Load(MDSClientSPtr mds_client,
-                              const Json::Value& value) {
+bool DirIteratorManager::Load(MDSClient& mds_client, const Json::Value& value) {
   utils::WriteLockGuard lk(lock_);
 
   dir_iterator_map_.clear();

@@ -32,7 +32,6 @@
 #include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/format.h"
-#include "mds/common/helper.h"
 #include "mds/common/type.h"
 #include "mds/filesystem/fs_info.h"
 
@@ -52,21 +51,9 @@ using GetMdsFn = std::function<MDSMeta(bool& is_primary_mds)>;
 
 class MDSClient {
  public:
-  MDSClient(const ClientId& client_id, mds::FsInfoSPtr fs_info,
-            ParentMemoSPtr parent_memo, MDSDiscoverySPtr mds_discovery,
-            MDSRouterPtr mds_router, RPCPtr rpc, TraceManager& trace_manager);
+  MDSClient(const ClientId& client_id, mds::FsInfo& fs_info, RPC&& rpc,
+            TraceManager& trace_manager);
   virtual ~MDSClient() = default;
-
-  static MDSClientSPtr New(const ClientId& client_id, mds::FsInfoSPtr fs_info,
-                           ParentMemoSPtr parent_memo,
-
-                           MDSDiscoverySPtr mds_discovery,
-                           MDSRouterPtr mds_router, RPCPtr rpc,
-                           TraceManager& trace_manager) {
-    return std::make_shared<MDSClient>(client_id, fs_info, parent_memo,
-                                       mds_discovery, mds_router, rpc,
-                                       trace_manager);
-  }
 
   bool Init();
   void Destory();
@@ -77,12 +64,11 @@ class MDSClient {
 
   bool SetEndpoint(const std::string& ip, int port);
 
-  static Status GetFsInfo(RPCPtr rpc, const std::string& name,
+  static Status GetFsInfo(RPC& rpc, const std::string& name,
                           mds::FsInfoEntry& fs_info);
-  static Status GetFsInfo(RPCPtr rpc, uint32_t fs_id,
-                          mds::FsInfoEntry& fs_info);
+  static Status GetFsInfo(RPC& rpc, uint32_t fs_id, mds::FsInfoEntry& fs_info);
 
-  RPCPtr GetRpc();
+  RPC& GetRpc();
 
   Status Heartbeat();
 
@@ -188,7 +174,7 @@ class MDSClient {
   Status GetDirQuota(ContextSPtr& ctx, Ino ino, FsStat& fs_stat);
 
  private:
-  static Status DoGetFsInfo(RPCPtr rpc, pb::mds::GetFsInfoRequest& request,
+  static Status DoGetFsInfo(RPC& rpc, pb::mds::GetFsInfoRequest& request,
                             mds::FsInfoEntry& fs_info);
 
   MDSMeta GetMds(Ino ino, bool& is_primary_mds);
@@ -216,25 +202,26 @@ class MDSClient {
   uint64_t epoch_{0};
 
   const ClientId client_id_;
-  mds::FsInfoSPtr fs_info_;
+  mds::FsInfo& fs_info_;
 
-  ParentMemoSPtr parent_memo_;
+  ParentMemo parent_memo_;
 
-  MDSRouterPtr mds_router_;
+  RPC rpc_;
 
-  MDSDiscoverySPtr mds_discovery_;
+  MDSDiscovery mds_discovery_;
 
-  RPCPtr rpc_;
+  MDSRouterUPtr mds_router_;
+
   TraceManager& trace_manager_;
 };
 
 template <typename Request>
 void MDSClient::SetAncestorInContext(Request& request, Ino ino) {
-  if (fs_info_->IsMonoPartition()) {
+  if (fs_info_.IsMonoPartition()) {
     return;
   }
 
-  auto ancestors = parent_memo_->GetAncestors(ino);
+  auto ancestors = parent_memo_.GetAncestors(ino);
   for (auto& ancestor : ancestors) {
     request.mutable_context()->add_ancestors(ancestor);
   }
@@ -267,7 +254,7 @@ Status MDSClient::SendRequest(ContextSPtr ctx, GetMdsFn get_mds_fn,
     auto endpoint = StrToEndpoint(mds_meta.Host(), mds_meta.Port());
 
     status =
-        rpc_->SendRequest(endpoint, service_name, api_name, request, response);
+        rpc_.SendRequest(endpoint, service_name, api_name, request, response);
     if (!status.ok()) {
       LOG(INFO) << fmt::format(
           "[meta.client] send request fail, {} reqid({}) mds({}) retry({}) "

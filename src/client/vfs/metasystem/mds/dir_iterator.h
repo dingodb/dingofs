@@ -39,13 +39,13 @@ using DirIteratorSPtr = std::shared_ptr<DirIterator>;
 // used by read dir
 class DirIterator {
  public:
-  DirIterator(MDSClientSPtr mds_client, Ino ino, uint64_t fh)
+  DirIterator(MDSClient& mds_client, Ino ino, uint64_t fh)
       : mds_client_(mds_client), ino_(ino), fh_(fh) {
     last_fetch_time_ns_ = utils::TimestampNs();
   }
   ~DirIterator();
 
-  static DirIteratorSPtr New(MDSClientSPtr mds_client, Ino ino, uint64_t fh) {
+  static DirIteratorSPtr New(MDSClient& mds_client, Ino ino, uint64_t fh) {
     return std::make_shared<DirIterator>(mds_client, ino, fh);
   }
 
@@ -76,7 +76,7 @@ class DirIterator {
   bool is_fetch_{false};
   std::atomic<uint64_t> last_fetch_time_ns_{0};
 
-  MDSClientSPtr mds_client_;
+  MDSClient& mds_client_;
 
   // stat
   std::vector<uint64_t> offset_stats_;
@@ -97,7 +97,7 @@ class DirIteratorManager {
   void Delete(Ino ino, uint64_t fh);
 
   bool Dump(Json::Value& value);
-  bool Load(MDSClientSPtr mds_client, const Json::Value& value);
+  bool Load(MDSClient& mds_client, const Json::Value& value);
 
  private:
   utils::RWLock lock_;

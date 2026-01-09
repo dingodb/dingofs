@@ -30,7 +30,7 @@ bool MonoMDSRouter::UpdateMds(int64_t mds_id) {
   CHECK(mds_id > 0) << fmt::format("invalid mds_id({}).", mds_id);
 
   mds::MDSMeta mds_meta;
-  if (!mds_discovery_->GetMDS(mds_id, mds_meta)) {
+  if (!mds_discovery_.GetMDS(mds_id, mds_meta)) {
     return false;
   }
 
@@ -103,7 +103,7 @@ void ParentHashMDSRouter::UpdateMDSes(
 
   for (const auto& [mds_id, bucket_set] : hash_partition.distributions()) {
     mds::MDSMeta mds_meta;
-    CHECK(mds_discovery_->GetMDS(mds_id, mds_meta))
+    CHECK(mds_discovery_.GetMDS(mds_id, mds_meta))
         << fmt::format("not found mds by mds_id({}).", mds_id);
 
     for (const auto& bucket_id : bucket_set.bucket_ids()) {
@@ -140,7 +140,7 @@ bool ParentHashMDSRouter::GetMDSByParent(Ino parent, mds::MDSMeta& mds_meta) {
 
 bool ParentHashMDSRouter::GetMDS(Ino ino, mds::MDSMeta& mds_meta) {
   Ino parent = 1;
-  if (ino != 1 && !parent_memo_->GetParent(ino, parent)) {
+  if (ino != 1 && !parent_memo_.GetParent(ino, parent)) {
     return false;
   }
 

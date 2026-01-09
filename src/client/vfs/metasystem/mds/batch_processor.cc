@@ -25,7 +25,7 @@ namespace meta {
 
 static const uint32_t kBatchOperationReserveSize = 256;
 
-void WriteSliceOperation::BatchRun(MDSClientSPtr mds_client,
+void WriteSliceOperation::BatchRun(MDSClient& mds_client,
                                    BatchOperation& batch_operation) {
   const Ino ino = batch_operation.ino;
 
@@ -58,7 +58,7 @@ void WriteSliceOperation::BatchRun(MDSClientSPtr mds_client,
   auto ctx = operations[0]->GetContext();
   if (ctx == nullptr) ctx = std::make_shared<Context>("");
   auto status =
-      mds_client->WriteSlice(ctx, ino, delta_slice_entries, chunk_descriptors);
+      mds_client.WriteSlice(ctx, ino, delta_slice_entries, chunk_descriptors);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[meta.batch_processor.{}] writeslice fail, error({}).", ino,
@@ -86,7 +86,7 @@ void WriteSliceOperation::PreHandle(
   }
 }
 
-void MkNodOperation::BatchRun(MDSClientSPtr mds_client,
+void MkNodOperation::BatchRun(MDSClient& mds_client,
                               BatchOperation& batch_operation) {
   const Ino parent = batch_operation.ino;
 
@@ -120,8 +120,8 @@ void MkNodOperation::BatchRun(MDSClientSPtr mds_client,
   std::vector<AttrEntry> attr_entries;
   AttrEntry parent_attr_entry;
 
-  auto status = mds_client->BatchMkNod(ctx, parent, params, attr_entries,
-                                       parent_attr_entry);
+  auto status = mds_client.BatchMkNod(ctx, parent, params, attr_entries,
+                                      parent_attr_entry);
 
   if (!status.ok()) {
     for (const auto& operation : operations) {
@@ -142,7 +142,7 @@ void MkNodOperation::BatchRun(MDSClientSPtr mds_client,
   for (auto& operation : operations) operation->NotifyEvent();
 }
 
-void MkDirOperation::BatchRun(MDSClientSPtr mds_client,
+void MkDirOperation::BatchRun(MDSClient& mds_client,
                               BatchOperation& batch_operation) {
   const Ino parent = batch_operation.ino;
 
@@ -175,8 +175,8 @@ void MkDirOperation::BatchRun(MDSClientSPtr mds_client,
 
   std::vector<AttrEntry> attr_entries;
   AttrEntry parent_attr_entry;
-  auto status = mds_client->BatchMkDir(ctx, parent, params, attr_entries,
-                                       parent_attr_entry);
+  auto status = mds_client.BatchMkDir(ctx, parent, params, attr_entries,
+                                      parent_attr_entry);
 
   if (!status.ok()) {
     for (const auto& operation : operations) {
@@ -197,7 +197,7 @@ void MkDirOperation::BatchRun(MDSClientSPtr mds_client,
   for (auto& operation : operations) operation->NotifyEvent();
 }
 
-void UnlinkOperation::BatchRun(MDSClientSPtr mds_client,
+void UnlinkOperation::BatchRun(MDSClient& mds_client,
                                BatchOperation& batch_operation) {
   const Ino parent = batch_operation.ino;
 
@@ -224,8 +224,8 @@ void UnlinkOperation::BatchRun(MDSClientSPtr mds_client,
 
   std::vector<AttrEntry> attr_entries;
   AttrEntry parent_attr_entry;
-  auto status = mds_client->BatchUnLink(ctx, parent, names, attr_entries,
-                                        parent_attr_entry);
+  auto status = mds_client.BatchUnLink(ctx, parent, names, attr_entries,
+                                       parent_attr_entry);
   if (!status.ok()) {
     for (const auto& operation : operations) {
       operation->SetStatus(status);
@@ -245,7 +245,7 @@ void UnlinkOperation::BatchRun(MDSClientSPtr mds_client,
   for (auto& operation : operations) operation->NotifyEvent();
 }
 
-BatchProcessor::BatchProcessor(MDSClientSPtr mds_client)
+BatchProcessor::BatchProcessor(MDSClient& mds_client)
     : mds_client_(mds_client) {
   CHECK(bthread_mutex_init(&mutex_, nullptr) == 0)
       << fmt::format("[meta.batch_processor] bthread_mutex_init fail.");
@@ -259,9 +259,6 @@ BatchProcessor::~BatchProcessor() {
 }
 
 bool BatchProcessor::Init() {
-  CHECK(mds_client_ != nullptr)
-      << fmt::format("[meta.batch_processor] mds_client_ is nullptr.");
-
   struct Param {
     BatchProcessor& self;
   };
@@ -400,7 +397,7 @@ std::map<BatchProcessor::Key, BatchOperation> BatchProcessor::Grouping(
 void BatchProcessor::LaunchExecuteBatchOperation(
     BatchOperation&& batch_operation) {
   struct Params {
-    MDSClientSPtr mds_client;
+    MDSClient& mds_client;
     BatchOperation batch_operation;
   };
 
@@ -426,7 +423,7 @@ void BatchProcessor::LaunchExecuteBatchOperation(
   }
 }
 
-void BatchProcessor::ExecuteBatchOperation(MDSClientSPtr mds_client,
+void BatchProcessor::ExecuteBatchOperation(MDSClient& mds_client,
                                            BatchOperation& batch_operation) {
   CHECK(!batch_operation.operations.empty()) << fmt::format(
       "[meta.batch_processor] batch_operation.operations is empty.");

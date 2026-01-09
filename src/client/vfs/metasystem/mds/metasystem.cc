@@ -60,25 +60,28 @@ const std::string kSliceIdCacheName = "slice";
 DEFINE_bool(client_meta_read_chunk_cache_enable, true,
             "enable read chunk cache");
 
-MDSMetaSystem::MDSMetaSystem(mds::FsInfoSPtr fs_info, const ClientId& client_id,
-                             MDSDiscoverySPtr mds_discovery,
-                             MDSClientSPtr mds_client)
-    : name_(fs_info->GetName()),
+MDSMetaSystem::MDSMetaSystem(mds::FsInfoEntry fs_info_entry,
+                             const ClientId& client_id, RPC&& rpc,
+                             TraceManagerSPtr trace_manager)
+    : name_(fs_info_entry.fs_name()),
       client_id_(client_id),
-      fs_info_(fs_info),
-      mds_discovery_(mds_discovery),
-      id_cache_(kSliceIdCacheName, mds_client),
-      file_session_map_(fs_info),
-      inode_cache_(InodeCache::New(fs_info->GetFsId())),
-      mds_client_(mds_client),
-      batch_processor_(mds_client) {}
+      fs_info_(fs_info_entry),
+      mds_client_(client_id, fs_info_, std::move(rpc), trace_manager),
+      inode_cache_(fs_info_.GetFsId()),
+      id_cache_(kSliceIdCacheName, mds_client_),
+      batch_processor_(mds_client_) {}
 
 MDSMetaSystem::~MDSMetaSystem() {}  // NOLINT
 
 Status MDSMetaSystem::Init(bool upgrade) {
   LOG(INFO) << fmt::format("[meta.fs] init, upgrade({}).", upgrade);
 
-  LOG(INFO) << fmt::format("[meta.fs] fs_info: {}.", fs_info_->ToString());
+  LOG(INFO) << fmt::format("[meta.fs] fs_info: {}.", fs_info_.ToString());
+
+  if (!mds_client_.Init()) {
+    return Status::MountFailed("init mds_client fail");
+  }
+
   // mount fs
   if (!upgrade && !MountFs()) {
     return Status::MountFailed("mount fs fail");
@@ -115,7 +118,7 @@ bool MDSMetaSystem::Dump(ContextSPtr, Json::Value& value) {
     return false;
   }
 
-  if (!mds_client_->Dump(value)) {
+  if (!mds_client_.Dump(value)) {
     return false;
   }
 
@@ -146,11 +149,11 @@ bool MDSMetaSystem::Dump(const DumpOption& options, Json::Value& value) {
     return false;
   }
 
-  if (!mds_client_->Dump(options, value)) {
+  if (!mds_client_.Dump(options, value)) {
     return false;
   }
 
-  if (options.inode_cache && !inode_cache_->Dump(value)) {
+  if (options.inode_cache && !inode_cache_.Dump(value)) {
     return false;
   }
 
@@ -176,7 +179,7 @@ bool MDSMetaSystem::Load(ContextSPtr, const Json::Value& value) {
     return false;
   }
 
-  if (!mds_client_->Load(value)) {
+  if (!mds_client_.Load(value)) {
     return false;
   }
 
@@ -192,7 +195,7 @@ bool MDSMetaSystem::Load(ContextSPtr, const Json::Value& value) {
 }
 
 Status MDSMetaSystem::GetFsInfo(ContextSPtr, FsInfo* fs_info) {
-  auto temp_fs_info = fs_info_->Get();
+  auto temp_fs_info = fs_info_.Get();
 
   fs_info->name = name_;
   fs_info->id = temp_fs_info.fs_id();
@@ -237,7 +240,7 @@ bool MDSMetaSystem::MountFs() {
   LOG(INFO) << fmt::format("[meta.fs] mount point({}).",
                            mount_point.ShortDebugString());
 
-  auto status = mds_client_->MountFs(name_, mount_point);
+  auto status = mds_client_.MountFs(name_, mount_point);
   if (!status.ok() && status.Errno() != pb::error::EEXISTED) {
     LOG(ERROR) << fmt::format(
         "[meta.fs] mount fs info fail, mountpoint({}), {}.",
@@ -249,7 +252,7 @@ bool MDSMetaSystem::MountFs() {
 }
 
 bool MDSMetaSystem::UnmountFs() {
-  auto status = mds_client_->UmountFs(name_, client_id_.ID());
+  auto status = mds_client_.UmountFs(name_, client_id_.ID());
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("[meta.fs] mount fs info fail, mountpoint({}).",
                               client_id_.Mountpoint());
@@ -264,7 +267,7 @@ void MDSMetaSystem::Heartbeat() {
   static std::atomic<bool> is_running{false};
   if (is_running.exchange(true)) return;
 
-  auto status = mds_client_->Heartbeat();
+  auto status = mds_client_.Heartbeat();
   if (!status.IsOK()) {
     LOG(ERROR) << fmt::format("[meta.fs] heartbeat fail, error({}).",
                               status.ToString());
@@ -289,7 +292,7 @@ void MDSMetaSystem::CleanExpiredInodeCache() {
   uint64_t expired_time_s =
       utils::Timestamp() - FLAGS_vfs_meta_inode_cache_expired_s;
 
-  inode_cache_->CleanExpired(expired_time_s);
+  inode_cache_.CleanExpired(expired_time_s);
 }
 
 bool MDSMetaSystem::InitCrontab() {
@@ -321,9 +324,9 @@ bool MDSMetaSystem::InitCrontab() {
 Status MDSMetaSystem::StatFs(ContextSPtr ctx, Ino ino, FsStat* fs_stat) {
   Status status;
   if (ino <= kRootIno) {
-    status = mds_client_->GetFsQuota(ctx, *fs_stat);
+    status = mds_client_.GetFsQuota(ctx, *fs_stat);
   } else {
-    status = mds_client_->GetDirQuota(ctx, ino, *fs_stat);
+    status = mds_client_.GetDirQuota(ctx, ino, *fs_stat);
   }
 
   if (fs_stat->max_bytes == 0) {
@@ -343,7 +346,7 @@ Status MDSMetaSystem::StatFs(ContextSPtr ctx, Ino ino, FsStat* fs_stat) {
 Status MDSMetaSystem::Lookup(ContextSPtr ctx, Ino parent,
                              const std::string& name, Attr* attr) {
   AttrEntry attr_entry;
-  auto status = mds_client_->Lookup(ctx, parent, name, attr_entry);
+  auto status = mds_client_.Lookup(ctx, parent, name, attr_entry);
   if (!status.ok()) {
     if (status.Errno() == pb::error::ENOT_FOUND) {
       return Status::NotExist("not found dentry");
@@ -364,8 +367,8 @@ Status MDSMetaSystem::Create(ContextSPtr ctx, Ino parent,
                              uint64_t fh) {
   AttrEntry attr_entry, parent_attr_entry;
   std::vector<std::string> session_ids;
-  auto status = mds_client_->Create(ctx, parent, name, uid, gid, mode, flags,
-                                    attr_entry, parent_attr_entry, session_ids);
+  auto status = mds_client_.Create(ctx, parent, name, uid, gid, mode, flags,
+                                   attr_entry, parent_attr_entry, session_ids);
   if (!status.ok()) {
     return status;
   }
@@ -419,8 +422,8 @@ Status MDSMetaSystem::MkNod(ContextSPtr ctx, Ino parent,
                              parent_attr_entry.ShortDebugString());
 
   } else {
-    auto status = mds_client_->MkNod(ctx, parent, name, uid, gid, mode, rdev,
-                                     attr_entry, parent_attr_entry);
+    auto status = mds_client_.MkNod(ctx, parent, name, uid, gid, mode, rdev,
+                                    attr_entry, parent_attr_entry);
     if (!status.ok()) return status;
   }
 
@@ -455,9 +458,8 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
     }
   }
 
-  auto status =
-      mds_client_->Open(ctx, ino, flags, session_id, is_prefetch_chunk,
-                        chunk_descriptors, attr_entry, chunks);
+  auto status = mds_client_.Open(ctx, ino, flags, session_id, is_prefetch_chunk,
+                                 chunk_descriptors, attr_entry, chunks);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("[meta.fs.{}.{}] open file fail, error({}).", ino,
                               fh, status.ToString());
@@ -501,11 +503,19 @@ Status MDSMetaSystem::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {
 
 Status MDSMetaSystem::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
   struct Param {
-    MDSClientSPtr mds_client;
+    MDSClient& mds_client;
     ContextSPtr ctx;
     Ino ino;
     uint64_t fh;
     std::string session_id;
+
+    Param(ContextSPtr ctx, MDSClient& mds_client, Ino ino, uint64_t fh,
+          const std::string& session_id)
+        : mds_client(mds_client),
+          ctx(ctx),
+          ino(ino),
+          fh(fh),
+          session_id(session_id) {}
   };
 
   std::string session_id = file_session_map_.GetSessionID(ino, fh);
@@ -519,12 +529,7 @@ Status MDSMetaSystem::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
                            fh, session_id);
 
   // async close file
-  Param* param = new Param();
-  param->mds_client = mds_client_;
-  param->ctx = ctx;
-  param->ino = ino;
-  param->fh = fh;
-  param->session_id = session_id;
+  Param* param = new Param(ctx, mds_client_, ino, fh, session_id);
 
   bthread_t tid;
   const bthread_attr_t attr = BTHREAD_ATTR_SMALL;
@@ -538,7 +543,7 @@ Status MDSMetaSystem::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
         auto& fh = param->fh;
         auto& session_id = param->session_id;
 
-        auto status = mds_client->Release(ctx, ino, session_id);
+        auto status = mds_client.Release(ctx, ino, session_id);
         if (!status.ok()) {
           LOG(ERROR) << fmt::format(
               "[meta.fs.{}.{}] close file fail, error({}).", ino, fh,
@@ -576,7 +581,7 @@ Status MDSMetaSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
       chunk_memo_.GetVersion(ino, static_cast<uint32_t>(index)));
 
   std::vector<mds::ChunkEntry> chunks;
-  auto status = mds_client_->ReadSlice(ctx, ino, {chunk_descriptor}, chunks);
+  auto status = mds_client_.ReadSlice(ctx, ino, {chunk_descriptor}, chunks);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("[meta.fs.{}.{}.{}] reeadslice fail, error({}).",
                               ino, fh, index, status.ToString());
@@ -587,8 +592,8 @@ Status MDSMetaSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
   if (chunks.empty()) {
     mds::ChunkEntry chunk_entry;
     chunk_entry.set_index(index);
-    chunk_entry.set_chunk_size(fs_info_->GetChunkSize());
-    chunk_entry.set_block_size(fs_info_->GetBlockSize());
+    chunk_entry.set_chunk_size(fs_info_.GetChunkSize());
+    chunk_entry.set_block_size(fs_info_.GetBlockSize());
     chunk_entry.set_version(0);
     chunks.push_back(chunk_entry);
   }
@@ -684,8 +689,8 @@ Status MDSMetaSystem::MkDir(ContextSPtr ctx, Ino parent,
                              parent_attr_entry.ShortDebugString());
 
   } else {
-    auto status = mds_client_->MkDir(ctx, parent, name, uid, gid, mode, 0,
-                                     attr_entry, parent_attr_entry);
+    auto status = mds_client_.MkDir(ctx, parent, name, uid, gid, mode, 0,
+                                    attr_entry, parent_attr_entry);
     if (!status.ok()) return status;
   }
 
@@ -702,7 +707,7 @@ Status MDSMetaSystem::RmDir(ContextSPtr ctx, Ino parent,
                             const std::string& name) {
   AttrEntry parent_attr_entry;
   Ino ino;
-  auto status = mds_client_->RmDir(ctx, parent, name, ino, parent_attr_entry);
+  auto status = mds_client_.RmDir(ctx, parent, name, ino, parent_attr_entry);
   if (!status.ok()) {
     if (status.Errno() == pb::error::ENOT_EMPTY) {
       return Status::NotEmpty("dir not empty");
@@ -770,8 +775,8 @@ Status MDSMetaSystem::ReleaseDir(ContextSPtr, Ino ino, uint64_t fh) {
 Status MDSMetaSystem::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
                            const std::string& new_name, Attr* attr) {
   AttrEntry attr_entry, parent_attr_entry;
-  auto status = mds_client_->Link(ctx, ino, new_parent, new_name, attr_entry,
-                                  parent_attr_entry);
+  auto status = mds_client_.Link(ctx, ino, new_parent, new_name, attr_entry,
+                                 parent_attr_entry);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("[meta.fs.{}.{}] link to {} fail, error({}).",
                               new_parent, new_name, ino, status.ToString());
@@ -806,7 +811,7 @@ Status MDSMetaSystem::Unlink(ContextSPtr ctx, Ino parent,
 
   } else {
     auto status =
-        mds_client_->UnLink(ctx, parent, name, attr_entry, parent_attr_entry);
+        mds_client_.UnLink(ctx, parent, name, attr_entry, parent_attr_entry);
     if (!status.ok()) return status;
   }
 
@@ -827,8 +832,8 @@ Status MDSMetaSystem::Symlink(ContextSPtr ctx, Ino parent,
                               uint32_t gid, const std::string& link,
                               Attr* attr) {
   AttrEntry attr_entry, parent_attr_entry;
-  auto status = mds_client_->Symlink(ctx, parent, name, uid, gid, link,
-                                     attr_entry, parent_attr_entry);
+  auto status = mds_client_.Symlink(ctx, parent, name, uid, gid, link,
+                                    attr_entry, parent_attr_entry);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[meta.fs.{}.{}] symlink fail, symlink({}) error({}).", parent, name,
@@ -846,7 +851,7 @@ Status MDSMetaSystem::Symlink(ContextSPtr ctx, Ino parent,
 }
 
 Status MDSMetaSystem::ReadLink(ContextSPtr ctx, Ino ino, std::string* link) {
-  auto status = mds_client_->ReadLink(ctx, ino, *link);
+  auto status = mds_client_.ReadLink(ctx, ino, *link);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("[meta.fs.{}] readlink fail, error({}).", ino,
                               status.ToString());
@@ -867,7 +872,7 @@ Status MDSMetaSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
     ctx->hit_cache = true;
 
   } else {
-    auto status = mds_client_->GetAttr(ctx, ino, attr_entry);
+    auto status = mds_client_.GetAttr(ctx, ino, attr_entry);
     if (!status.ok()) return status;
   }
 
@@ -887,7 +892,7 @@ Status MDSMetaSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
   AttrEntry attr_entry;
   bool shrink_file;
   auto status =
-      mds_client_->SetAttr(ctx, ino, attr, set, attr_entry, shrink_file);
+      mds_client_.SetAttr(ctx, ino, attr, set, attr_entry, shrink_file);
   if (!status.ok()) {
     return status;
   }
@@ -916,7 +921,7 @@ Status MDSMetaSystem::GetXattr(ContextSPtr ctx, Ino ino,
   }
 
   // get xattr from mds
-  auto status = mds_client_->GetXAttr(ctx, ino, name, *value);
+  auto status = mds_client_.GetXAttr(ctx, ino, name, *value);
   if (!status.ok()) {
     return Status::NoData(status.Errno(), status.ToString());
   }
@@ -928,7 +933,7 @@ Status MDSMetaSystem::SetXattr(ContextSPtr ctx, Ino ino,
                                const std::string& name,
                                const std::string& value, int) {
   AttrEntry attr_entry;
-  auto status = mds_client_->SetXAttr(ctx, ino, name, value, attr_entry);
+  auto status = mds_client_.SetXAttr(ctx, ino, name, value, attr_entry);
   if (!status.ok()) {
     return status;
   }
@@ -941,7 +946,7 @@ Status MDSMetaSystem::SetXattr(ContextSPtr ctx, Ino ino,
 Status MDSMetaSystem::RemoveXattr(ContextSPtr ctx, Ino ino,
                                   const std::string& name) {
   AttrEntry attr_entry;
-  auto status = mds_client_->RemoveXAttr(ctx, ino, name, attr_entry);
+  auto status = mds_client_.RemoveXAttr(ctx, ino, name, attr_entry);
   if (!status.ok()) {
     return status;
   }
@@ -967,7 +972,7 @@ Status MDSMetaSystem::ListXattr(ContextSPtr ctx, Ino ino,
 
   // get xattr from mds
   std::map<std::string, std::string> xattr_map;
-  auto status = mds_client_->ListXAttr(ctx, ino, xattr_map);
+  auto status = mds_client_.ListXAttr(ctx, ino, xattr_map);
   if (!status.ok()) {
     return status;
   }
@@ -983,8 +988,8 @@ Status MDSMetaSystem::Rename(ContextSPtr ctx, Ino old_parent,
                              const std::string& old_name, Ino new_parent,
                              const std::string& new_name) {
   std::vector<Ino> effected_inos;
-  auto status = mds_client_->Rename(ctx, old_parent, old_name, new_parent,
-                                    new_name, effected_inos);
+  auto status = mds_client_.Rename(ctx, old_parent, old_name, new_parent,
+                                   new_name, effected_inos);
   if (!status.ok()) {
     if (status.Errno() == pb::error::ENOT_EMPTY) {
       return Status::NotEmpty("dist dir not empty");
@@ -1002,24 +1007,24 @@ Status MDSMetaSystem::Rename(ContextSPtr ctx, Ino old_parent,
 
 void MDSMetaSystem::PutInodeToCache(const AttrEntry& attr_entry) {
   if (FLAGS_vfs_meta_inode_cache_enable) {
-    inode_cache_->Put(attr_entry.ino(), attr_entry);
+    inode_cache_.Put(attr_entry.ino(), attr_entry);
   }
 }
 
 void MDSMetaSystem::DeleteInodeFromCache(Ino ino) {
   if (FLAGS_vfs_meta_inode_cache_enable) {
-    inode_cache_->Delete(ino);
+    inode_cache_.Delete(ino);
   }
 }
 
 InodeSPtr MDSMetaSystem::GetInodeFromCache(Ino ino) {
-  return (FLAGS_vfs_meta_inode_cache_enable) ? inode_cache_->Get(ino) : nullptr;
+  return (FLAGS_vfs_meta_inode_cache_enable) ? inode_cache_.Get(ino) : nullptr;
 }
 
 Status MDSMetaSystem::SetInodeLength(ContextSPtr ctx,
                                      FileSessionSPtr file_session, Ino ino) {
   uint64_t length = file_session->GetChunkSet().GetLength();
-  auto inode = inode_cache_->Get(ino);
+  auto inode = inode_cache_.Get(ino);
   if (inode != nullptr && length <= inode->Length()) return Status::OK();
 
   LOG(INFO) << fmt::format("[meta.fs.{}] set inode length({}).", ino, length);
@@ -1035,7 +1040,7 @@ Status MDSMetaSystem::SetInodeLength(ContextSPtr ctx,
   AttrEntry attr_entry;
   bool shrink_file;
   auto status =
-      mds_client_->SetAttr(ctx, ino, attr, set, attr_entry, shrink_file);
+      mds_client_.SetAttr(ctx, ino, attr, set, attr_entry, shrink_file);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[meta.fs.{}] set inode length({}) fail, error({}).", ino, length,
@@ -1154,7 +1159,7 @@ Status MDSMetaSystem::CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
     // correct attr, fetch latest attr from mds
     AttrEntry attr_entry;
 
-    auto status = mds_client_->GetAttr(ctx, attr.ino, attr_entry);
+    auto status = mds_client_.GetAttr(ctx, attr.ino, attr_entry);
     if (!status.ok()) {
       LOG(ERROR) << fmt::format(
           "[meta.fs.{}] get attr fail for correct, caller({}) error({}).",
@@ -1237,64 +1242,21 @@ MDSMetaSystemUPtr MDSMetaSystem::Build(const std::string& fs_name,
     return nullptr;
   }
 
-  auto rpc = RPC::New(alive_mds_addr);
-  if (!rpc->Init()) {
+  RPC rpc(alive_mds_addr);
+  if (!rpc.Init()) {
     LOG(ERROR) << fmt::format("[meta.fs.{}] RPC init fail.", fs_name);
     return nullptr;
   }
 
-  auto mds_discovery = MDSDiscovery::New(rpc);
-  if (!mds_discovery->Init()) {
-    LOG(ERROR) << fmt::format("[meta.fs.{}] MDSDiscovery init fail.", fs_name);
-    return nullptr;
-  }
-
-  mds::FsInfoEntry pb_fs_info;
-  auto status = MDSClient::GetFsInfo(rpc, fs_name, pb_fs_info);
+  mds::FsInfoEntry fs_info;
+  auto status = MDSClient::GetFsInfo(rpc, fs_name, fs_info);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("[meta.fs.{}] Get fs info fail.", fs_name);
     return nullptr;
   }
 
-  // parent cache
-  auto parent_memo = ParentMemo::New();
-
-  // mds router
-  MDSRouterPtr mds_router;
-  if (pb_fs_info.partition_policy().type() ==
-      dingofs::pb::mds::PartitionType::MONOLITHIC_PARTITION) {
-    mds_router = MonoMDSRouter::New(mds_discovery);
-
-  } else if (pb_fs_info.partition_policy().type() ==
-             dingofs::pb::mds::PartitionType::PARENT_ID_HASH_PARTITION) {
-    mds_router = ParentHashMDSRouter::New(mds_discovery, parent_memo);
-
-  } else {
-    LOG(ERROR) << fmt::format(
-        "[meta.fs.{}] not support partition policy type({}).", fs_name,
-        dingofs::pb::mds::PartitionType_Name(
-            pb_fs_info.partition_policy().type()));
-    return nullptr;
-  }
-
-  if (!mds_router->Init(pb_fs_info.partition_policy())) {
-    LOG(ERROR) << fmt::format("[meta.fs.{}] MDSRouter init fail.", fs_name);
-    return nullptr;
-  }
-
-  auto fs_info = mds::FsInfo::New(pb_fs_info);
-
-  // create mds client
-  auto mds_client =
-      MDSClient::New(client_id, fs_info, parent_memo, mds_discovery, mds_router,
-                     rpc, trace_manager);
-  if (!mds_client->Init()) {
-    LOG(INFO) << fmt::format("[meta.fs.{}] MDSClient init fail.", fs_name);
-    return nullptr;
-  }
-
   // create filesystem
-  return MDSMetaSystem::New(fs_info, client_id, mds_discovery, mds_client);
+  return MDSMetaSystem::New(fs_info, client_id, std::move(rpc), trace_manager);
 }
 
 bool MDSMetaSystem::GetDescription(Json::Value& value) {
@@ -1304,12 +1266,12 @@ bool MDSMetaSystem::GetDescription(Json::Value& value) {
   client_id["host_name"] = client_id_.Hostname();
   client_id["port"] = client_id_.Port();
   client_id["mount_point"] = client_id_.Mountpoint();
-  client_id["mds_addr"] = mds_client_->GetRpc()->GetInitEndPoint();
+  client_id["mds_addr"] = mds_client_.GetRpc().GetInitEndPoint();
   value["client_id"] = client_id;
 
   // fs info
   Json::Value fs_info;
-  auto fs_info_entry = fs_info_->Get();
+  auto fs_info_entry = fs_info_.Get();
   fs_info["id"] = fs_info_entry.fs_id();
   fs_info["name"] = fs_info_entry.fs_name();
   fs_info["owner"] = fs_info_entry.owner();
@@ -1330,18 +1292,19 @@ bool MDSMetaSystem::GetDescription(Json::Value& value) {
   value["fs_info"] = fs_info;
 
   // mds info
-  Json::Value mdses = Json::arrayValue;
-  auto all_mds = mds_discovery_->GetAllMDS();
-  for (const auto& mds : all_mds) {
-    Json::Value item;
-    item["id"] = mds.ID();
-    item["host"] = mds.Host();
-    item["port"] = mds.Port();
-    item["state"] = mds.StateName(mds.GetState());
-    item["last_online_time_ms"] = mds.LastOnlineTimeMs();
-    mdses.append(item);
-  }
-  value["mdses"] = mdses;
+  // Json::Value mdses = Json::arrayValue;
+  // auto all_mds = mds_discovery_->GetAllMDS();
+  // for (const auto& mds : all_mds) {
+  //   Json::Value item;
+  //   item["id"] = mds.ID();
+  //   item["host"] = mds.Host();
+  //   item["port"] = mds.Port();
+  //   item["state"] = mds.StateName(mds.GetState());
+  //   item["last_online_time_ms"] = mds.LastOnlineTimeMs();
+  //   mdses.append(item);
+  // }
+  // value["mdses"] = mdses;
+
   return true;
 }
 

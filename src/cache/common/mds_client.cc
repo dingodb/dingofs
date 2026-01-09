@@ -60,21 +60,16 @@ DEFINE_uint32(cache_mds_request_retry_times, 3, "mds rpc request retry time");
 DEFINE_validator(cache_mds_request_retry_times, brpc::PassValidate);
 
 MDSClientImpl::MDSClientImpl(const std::string& mds_addr)
-    : running_(false),
-      rpc_(client::vfs::meta::RPC::New(mds_addr)),
-      mds_discovery_(std::make_unique<client::vfs::meta::MDSDiscovery>(rpc_)) {}
+    : running_(false), rpc_(mds_addr), mds_discovery_(rpc_) {}
 
 Status MDSClientImpl::Start() {
-  CHECK_NOTNULL(rpc_);
-  CHECK_NOTNULL(mds_discovery_);
-
   if (running_) {
     return Status::OK();
   }
 
   LOG(INFO) << "MDS v2 client is starting...";
 
-  if (!mds_discovery_->Init()) {
+  if (!mds_discovery_.Init()) {
     LOG(ERROR) << "Init MDS v2 discovery failed";
     return Status::Internal("init mds v2 discovery failed");
   }
@@ -94,8 +89,8 @@ Status MDSClientImpl::Shutdown() {
 
   LOG(INFO) << "MDS v2 client is shutting down...";
 
-  mds_discovery_->Destroy();
-  rpc_->Destory();
+  mds_discovery_.Destroy();
+  rpc_.Destory();
 
   LOG(INFO) << "MDS v2 client is down.";
 
@@ -226,7 +221,7 @@ CacheGroupMemberState MDSClientImpl::ToMemberState(
 }
 
 mds::MDSMeta MDSClientImpl::GetRandomlyMDS(const mds::MDSMeta& old_mds) {
-  auto mdses = mds_discovery_->GetNormalMDS(true);
+  auto mdses = mds_discovery_.GetNormalMDS(true);
   CHECK(!mdses.empty()) << "No normal mds found";
 
   std::vector<mds::MDSMeta> candidates;
@@ -278,21 +273,21 @@ Status MDSClientImpl::SendRequest(const std::string& service_name,
     mds = GetRandomlyMDS(old_mds);
     auto endpoint = client::vfs::meta::StrToEndpoint(mds.Host(), mds.Port());
 
-    auto status = rpc_->SendRequest(endpoint, service_name, api_name, request,
-                                    response, rpc_option);
+    auto status = rpc_.SendRequest(endpoint, service_name, api_name, request,
+                                   response, rpc_option);
     if (status.ok() || !ShouldRetry(status)) {
       return status;
     }
 
     if (ShouldSetMDSAbormal(status)) {
-      mds_discovery_->SetAbnormalMDS(mds.ID());
+      mds_discovery_.SetAbnormalMDS(mds.ID());
       LOG(INFO) << fmt::format(
           "[mds.client] set mds({}/{}:{}) as abnormal, status({}).", mds.ID(),
           mds.Host(), mds.Port(), status.ToString());
     }
 
     if (ShouldRefreshMDSList(status)) {
-      CHECK(mds_discovery_->RefreshFullyMDSList()) << "Refresh mds list fail";
+      CHECK(mds_discovery_.RefreshFullyMDSList()) << "Refresh mds list fail";
     }
 
     old_mds = mds;
