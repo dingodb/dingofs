@@ -11,6 +11,8 @@ DEFINE_integer num 1 'client number'
 DEFINE_integer force 1 'use kill -9 to stop'
 DEFINE_boolean stop false 'just stop client, do not start'
 DEFINE_boolean upgrade true 'upgrade client'
+DEFINE_boolean loop false 'loop restart client'
+DEFINE_boolean clean_log false 'clean log'
 
 
 # parse the command-line
@@ -124,7 +126,9 @@ function start() {
     if [ ! -d "${log_dir}" ]; then
         mkdir -p ${log_dir}
     else
-        rm -rf ${log_dir}/*
+        if [ ${FLAGS_clean_log} == 0 ]; then
+            rm -rf ${log_dir}/*
+        fi
     fi
 
     # echo "umount ${mountpoint_dir}"
@@ -156,6 +160,8 @@ if [ ${FLAGS_stop} = 0 ]; then
     # umount client
     umount
 
+    sleep 1
+
     echo "# done"
     exit 0
 fi
@@ -171,20 +177,42 @@ if [ ${FLAGS_upgrade} != 0 ]; then
 
     # umount client
     umount
+
+    sleep 1
 else
     echo "# upgrade client"
 fi
 
-echo "wait for 1 seconds to start client."
-sleep 1
 
-for ((i=1; i<=${FLAGS_num}; i++)); do
-    start $i
-    if [ $? -ne 0 ]; then
-        echo "start client fail"
-        exit -1
-    fi
-    sleep 1
-done
+if [ ${FLAGS_loop} == 0 ]; then
+
+    for n in {1..100}; do
+        echo "iteration epoch $n"
+
+        for ((i=1; i<=${FLAGS_num}; i++)); do
+            start $i
+            if [ $? -ne 0 ]; then
+                echo "start client fail"
+                exit -1
+            fi
+            sleep 1
+        done
+
+        sleep 10
+    done
+
+else
+
+    for ((i=1; i<=${FLAGS_num}; i++)); do
+        start $i
+        if [ $? -ne 0 ]; then
+            echo "start client fail"
+            exit -1
+        fi
+        sleep 1
+    done
+
+fi
+
 
 echo "# done"

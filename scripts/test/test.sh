@@ -16,10 +16,10 @@ eval set -- "${FLAGS_ARGV}"
 
 
 for ((i=1; i<=${FLAGS_num}; ++i)); do
-  padded=$(printf "%07d" $i)
+  padded=$(printf "%09d" $i)
   
   if [ "${FLAGS_type}" == "file" ]; then
-    file_path=${FLAGS_path}/file${padded}
+    file_path=${FLAGS_path}/filea${padded}
     touch ${file_path}
 
   elif [ "${FLAGS_type}" == "dir" ]; then

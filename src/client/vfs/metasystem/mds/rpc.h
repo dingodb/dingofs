@@ -120,7 +120,7 @@ class RPC {
   }
 
   bool Init();
-  void Destory();
+  void Stop();
 
   static bool CheckMdsAlive(const std::string& addr);
 

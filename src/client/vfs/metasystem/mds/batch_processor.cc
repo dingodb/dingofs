@@ -286,8 +286,8 @@ bool BatchProcessor::Init() {
   return true;
 }
 
-bool BatchProcessor::Destroy() {
-  is_stop_.store(true);
+bool BatchProcessor::Stop() {
+  stopped_.store(true);
 
   if (tid_ > 0) {
     bthread_cond_signal(&cond_);
@@ -305,7 +305,7 @@ bool BatchProcessor::Destroy() {
 }
 
 bool BatchProcessor::AsyncRun(OperationSPtr operation) {
-  if (is_stop_.load(std::memory_order_relaxed)) {
+  if (stopped_.load(std::memory_order_relaxed)) {
     return false;
   }
 
@@ -317,7 +317,7 @@ bool BatchProcessor::AsyncRun(OperationSPtr operation) {
 }
 
 bool BatchProcessor::RunBatched(OperationSPtr operation) {
-  if (is_stop_.load(std::memory_order_relaxed)) {
+  if (stopped_.load(std::memory_order_relaxed)) {
     return false;
   }
 
@@ -337,7 +337,7 @@ void BatchProcessor::ProcessOperation() {
     stage_operations.clear();
 
     while (!operations_.Dequeue(operation) &&
-           !is_stop_.load(std::memory_order_relaxed)) {
+           !stopped_.load(std::memory_order_relaxed)) {
       bthread_mutex_lock(&mutex_);
       bthread_cond_wait(&cond_, &mutex_);
       bthread_mutex_unlock(&mutex_);
@@ -345,7 +345,7 @@ void BatchProcessor::ProcessOperation() {
 
     if (operation) stage_operations.push_back(operation);
 
-    if (is_stop_.load(std::memory_order_relaxed) && stage_operations.empty()) {
+    if (stopped_.load(std::memory_order_relaxed) && stage_operations.empty()) {
       break;
     }
 

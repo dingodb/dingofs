@@ -17,6 +17,7 @@
 #ifndef DINGOFS_CLIENT_VFS_IMPL_H_
 #define DINGOFS_CLIENT_VFS_IMPL_H_
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
 

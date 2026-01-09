@@ -72,10 +72,6 @@ bool WriteMemo::Load(const Json::Value& value) {
     LOG(ERROR) << "[meta.filesession] write_memo is not object.";
     return false;
   }
-  if (!value["last_time_ns"].isUInt64()) {
-    LOG(ERROR) << "[meta.filesession] write_memo.last_time_ns is not uint64.";
-    return false;
-  }
 
   if (!value["ranges"].isNull()) {
     if (!value["ranges"].isArray()) {

@@ -99,14 +99,22 @@ Status MDSMetaSystem::Init(bool upgrade) {
   return Status::OK();
 }
 
-void MDSMetaSystem::UnInit(bool upgrade) {
-  LOG(INFO) << fmt::format("[meta.fs] uninit, upgrade({}).", upgrade);
+void MDSMetaSystem::Stop(bool upgrade) {
+  LOG(INFO) << fmt::format("[meta.fs] stopping, upgrade({}).", upgrade);
+
+  stopped_.store(true);
+
+  FlushAllSlice();
 
   if (!upgrade) UnmountFs();
 
+  mds_client_.Stop();
+
   crontab_manager_.Destroy();
 
-  batch_processor_.Destroy();
+  batch_processor_.Stop();
+
+  LOG(INFO) << fmt::format("[meta.fs] stopped, upgrade({}).", upgrade);
 }
 
 bool MDSMetaSystem::Dump(ContextSPtr, Json::Value& value) {
@@ -345,6 +353,8 @@ Status MDSMetaSystem::StatFs(ContextSPtr ctx, Ino ino, FsStat* fs_stat) {
 
 Status MDSMetaSystem::Lookup(ContextSPtr ctx, Ino parent,
                              const std::string& name, Attr* attr) {
+  AssertStop();
+
   AttrEntry attr_entry;
   auto status = mds_client_.Lookup(ctx, parent, name, attr_entry);
   if (!status.ok()) {
@@ -365,6 +375,8 @@ Status MDSMetaSystem::Create(ContextSPtr ctx, Ino parent,
                              const std::string& name, uint32_t uid,
                              uint32_t gid, uint32_t mode, int flags, Attr* attr,
                              uint64_t fh) {
+  AssertStop();
+
   AttrEntry attr_entry, parent_attr_entry;
   std::vector<std::string> session_ids;
   auto status = mds_client_.Create(ctx, parent, name, uid, gid, mode, flags,
@@ -395,7 +407,7 @@ Status MDSMetaSystem::RunOperation(OperationSPtr operation) {
   operation->SetEvent(&count_down);
 
   if (!batch_processor_.RunBatched(operation)) {
-    return Status::Internal("commit operation fail");
+    return Status::Internal("flush operation fail");
   }
 
   CHECK(count_down.wait() == 0) << "count down wait fail.";
@@ -406,6 +418,8 @@ Status MDSMetaSystem::RunOperation(OperationSPtr operation) {
 Status MDSMetaSystem::MkNod(ContextSPtr ctx, Ino parent,
                             const std::string& name, uint32_t uid, uint32_t gid,
                             uint32_t mode, uint64_t rdev, Attr* attr) {
+  AssertStop();
+
   AttrEntry attr_entry, parent_attr_entry;
   if (FLAGS_vfs_meta_batch_operation_enable) {
     auto operation = std::make_shared<MkNodOperation>(ctx, parent, name, uid,
@@ -437,6 +451,8 @@ Status MDSMetaSystem::MkNod(ContextSPtr ctx, Ino parent,
 }
 
 Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
+  AssertStop();
+
   if ((flags & O_TRUNC) && !(flags & O_WRONLY || flags & O_RDWR)) {
     return Status::NoPermission("O_TRUNC without O_WRONLY or O_RDWR");
   }
@@ -496,12 +512,16 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
 }
 
 Status MDSMetaSystem::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {
+  AssertStop();
+
   LOG(INFO) << fmt::format("[meta.fs.{}.{}] flush.", ino, fh);
 
-  return CommitAllSlice(ctx, ino);
+  return FlushSlice(ctx, ino);
 }
 
 Status MDSMetaSystem::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
+  AssertStop();
+
   struct Param {
     MDSClient& mds_client;
     ContextSPtr ctx;
@@ -560,6 +580,8 @@ Status MDSMetaSystem::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
 Status MDSMetaSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                                 uint64_t fh, std::vector<Slice>* slices,
                                 uint64_t& version) {
+  AssertStop();
+
   // take from cache
   auto file_session = file_session_map_.GetSession(ino);
   if (file_session != nullptr) {
@@ -617,6 +639,8 @@ Status MDSMetaSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
 }
 
 Status MDSMetaSystem::NewSliceId(ContextSPtr, Ino ino, uint64_t* id) {
+  AssertStop();
+
   if (!id_cache_.GenID(*id)) {
     LOG(ERROR) << fmt::format("[meta.fs.{}] newsliceid fail.", ino);
     return Status::Internal("gen id fail");
@@ -636,6 +660,8 @@ Status MDSMetaSystem::AsyncWriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                                       uint64_t fh,
                                       const std::vector<Slice>& slices,
                                       DoneClosure done) {
+  AssertStop();
+
   LOG(INFO) << fmt::format("[meta.fs.{}.{}.{}] async writeslice, slices({}).",
                            ino, fh, index, Helper::ToString(slices));
 
@@ -645,7 +671,7 @@ Status MDSMetaSystem::AsyncWriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
 
   file_session->GetChunkSet().Append(index, slices);
 
-  AsyncCommitSlice(ctx, file_session, false, false);
+  AsyncFlushSlice(ctx, file_session, false, false);
 
   done(Status::OK());
 
@@ -654,6 +680,8 @@ Status MDSMetaSystem::AsyncWriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
 
 Status MDSMetaSystem::Write(ContextSPtr, Ino ino, uint64_t offset,
                             uint64_t size, uint64_t fh) {
+  AssertStop();
+
   auto file_session = file_session_map_.GetSession(ino);
   CHECK(file_session != nullptr)
       << fmt::format("file session is nullptr, ino({}) fh({}).", ino, fh);
@@ -672,6 +700,8 @@ Status MDSMetaSystem::Write(ContextSPtr, Ino ino, uint64_t offset,
 Status MDSMetaSystem::MkDir(ContextSPtr ctx, Ino parent,
                             const std::string& name, uint32_t uid, uint32_t gid,
                             uint32_t mode, Attr* attr) {
+  AssertStop();
+
   AttrEntry attr_entry, parent_attr_entry;
 
   if (FLAGS_vfs_meta_batch_operation_enable) {
@@ -705,6 +735,8 @@ Status MDSMetaSystem::MkDir(ContextSPtr ctx, Ino parent,
 
 Status MDSMetaSystem::RmDir(ContextSPtr ctx, Ino parent,
                             const std::string& name) {
+  AssertStop();
+
   AttrEntry parent_attr_entry;
   Ino ino;
   auto status = mds_client_.RmDir(ctx, parent, name, ino, parent_attr_entry);
@@ -723,6 +755,8 @@ Status MDSMetaSystem::RmDir(ContextSPtr ctx, Ino parent,
 }
 
 Status MDSMetaSystem::OpenDir(ContextSPtr ctx, Ino ino, uint64_t fh) {
+  AssertStop();
+
   auto dir_iterator = DirIterator::New(mds_client_, ino, fh);
 
   bool need_cache = false;
@@ -742,6 +776,8 @@ Status MDSMetaSystem::OpenDir(ContextSPtr ctx, Ino ino, uint64_t fh) {
 Status MDSMetaSystem::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
                               uint64_t offset, bool with_attr,
                               ReadDirHandler handler) {
+  AssertStop();
+
   auto dir_iterator = dir_iterator_manager_.Get(ino, fh);
   CHECK(dir_iterator != nullptr) << "dir_iterator is null";
 
@@ -768,12 +804,16 @@ Status MDSMetaSystem::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
 }
 
 Status MDSMetaSystem::ReleaseDir(ContextSPtr, Ino ino, uint64_t fh) {
+  AssertStop();
+
   dir_iterator_manager_.Delete(ino, fh);
   return Status::OK();
 }
 
 Status MDSMetaSystem::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
                            const std::string& new_name, Attr* attr) {
+  AssertStop();
+
   AttrEntry attr_entry, parent_attr_entry;
   auto status = mds_client_.Link(ctx, ino, new_parent, new_name, attr_entry,
                                  parent_attr_entry);
@@ -794,6 +834,8 @@ Status MDSMetaSystem::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
 
 Status MDSMetaSystem::Unlink(ContextSPtr ctx, Ino parent,
                              const std::string& name) {
+  AssertStop();
+
   AttrEntry attr_entry, parent_attr_entry;
 
   if (FLAGS_vfs_meta_batch_operation_enable) {
@@ -831,6 +873,8 @@ Status MDSMetaSystem::Symlink(ContextSPtr ctx, Ino parent,
                               const std::string& name, uint32_t uid,
                               uint32_t gid, const std::string& link,
                               Attr* attr) {
+  AssertStop();
+
   AttrEntry attr_entry, parent_attr_entry;
   auto status = mds_client_.Symlink(ctx, parent, name, uid, gid, link,
                                     attr_entry, parent_attr_entry);
@@ -851,6 +895,8 @@ Status MDSMetaSystem::Symlink(ContextSPtr ctx, Ino parent,
 }
 
 Status MDSMetaSystem::ReadLink(ContextSPtr ctx, Ino ino, std::string* link) {
+  AssertStop();
+
   auto status = mds_client_.ReadLink(ctx, ino, *link);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("[meta.fs.{}] readlink fail, error({}).", ino,
@@ -862,6 +908,8 @@ Status MDSMetaSystem::ReadLink(ContextSPtr ctx, Ino ino, std::string* link) {
 }
 
 Status MDSMetaSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
+  AssertStop();
+
   CHECK(ctx != nullptr) << "context is null";
 
   AttrEntry attr_entry;
@@ -889,6 +937,8 @@ Status MDSMetaSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
 
 Status MDSMetaSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
                               const Attr& attr, Attr* out_attr) {
+  AssertStop();
+
   AttrEntry attr_entry;
   bool shrink_file;
   auto status =
@@ -912,6 +962,8 @@ Status MDSMetaSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
 
 Status MDSMetaSystem::GetXattr(ContextSPtr ctx, Ino ino,
                                const std::string& name, std::string* value) {
+  AssertStop();
+
   // take out xattr cache
   auto inode = GetInodeFromCache(ino);
   if (inode != nullptr) {
@@ -932,6 +984,8 @@ Status MDSMetaSystem::GetXattr(ContextSPtr ctx, Ino ino,
 Status MDSMetaSystem::SetXattr(ContextSPtr ctx, Ino ino,
                                const std::string& name,
                                const std::string& value, int) {
+  AssertStop();
+
   AttrEntry attr_entry;
   auto status = mds_client_.SetXAttr(ctx, ino, name, value, attr_entry);
   if (!status.ok()) {
@@ -945,6 +999,8 @@ Status MDSMetaSystem::SetXattr(ContextSPtr ctx, Ino ino,
 
 Status MDSMetaSystem::RemoveXattr(ContextSPtr ctx, Ino ino,
                                   const std::string& name) {
+  AssertStop();
+
   AttrEntry attr_entry;
   auto status = mds_client_.RemoveXAttr(ctx, ino, name, attr_entry);
   if (!status.ok()) {
@@ -958,6 +1014,7 @@ Status MDSMetaSystem::RemoveXattr(ContextSPtr ctx, Ino ino,
 
 Status MDSMetaSystem::ListXattr(ContextSPtr ctx, Ino ino,
                                 std::vector<std::string>* xattrs) {
+  AssertStop();
   CHECK(xattrs != nullptr) << "xattrs is null.";
 
   // take out xattr cache
@@ -987,6 +1044,8 @@ Status MDSMetaSystem::ListXattr(ContextSPtr ctx, Ino ino,
 Status MDSMetaSystem::Rename(ContextSPtr ctx, Ino old_parent,
                              const std::string& old_name, Ino new_parent,
                              const std::string& new_name) {
+  AssertStop();
+
   std::vector<Ino> effected_inos;
   auto status = mds_client_.Rename(ctx, old_parent, old_name, new_parent,
                                    new_name, effected_inos);
@@ -1073,7 +1132,7 @@ void MDSMetaSystem::LaunchWriteSlice(ContextSPtr& ctx,
 
         if (status.ok()) {
           LOG(INFO) << fmt::format(
-              "[meta.fs.{}] commit delta slice done, task({}) status({}).", ino,
+              "[meta.fs.{}] flush delta slice done, task({}) status({}).", ino,
               task->TaskID(), status.ToString());
 
           auto& chunk_set = file_session->GetChunkSet();
@@ -1084,21 +1143,21 @@ void MDSMetaSystem::LaunchWriteSlice(ContextSPtr& ctx,
 
         } else {
           LOG(ERROR) << fmt::format(
-              "[meta.fs.{}] commit delta slice fail, task({}) retry({}) "
+              "[meta.fs.{}] flush delta slice fail, task({}) retry({}) "
               "status({}).",
               ino, task->TaskID(), task->Retries(), status.ToString());
         }
       });
 
   if (!batch_processor_.AsyncRun(operation)) {
-    LOG(ERROR) << fmt::format("[meta.fs.{}] commit delta slice fail.", ino);
+    LOG(ERROR) << fmt::format("[meta.fs.{}] flush delta slice fail.", ino);
     task->SetDone(Status::Internal("launch write slice fail"));
   }
 }
 
-void MDSMetaSystem::AsyncCommitSlice(ContextSPtr& ctx,
-                                     FileSessionSPtr file_session,
-                                     bool is_force, bool is_wait) {
+void MDSMetaSystem::AsyncFlushSlice(ContextSPtr& ctx,
+                                    FileSessionSPtr file_session, bool is_force,
+                                    bool is_wait) {
   Ino ino = file_session->GetIno();
   auto& chunk_set = file_session->GetChunkSet();
 
@@ -1115,7 +1174,7 @@ void MDSMetaSystem::AsyncCommitSlice(ContextSPtr& ctx,
   }
 
   LOG(INFO) << fmt::format(
-      "[meta.fs.{}] async commit task new({}) launch({}) total({}).", ino,
+      "[meta.fs.{}] async flush task new({}) launch({}) total({}).", ino,
       new_task_count, launched_count, tasks.size());
 
   if (is_wait) {
@@ -1123,14 +1182,14 @@ void MDSMetaSystem::AsyncCommitSlice(ContextSPtr& ctx,
   }
 }
 
-Status MDSMetaSystem::CommitAllSlice(ContextSPtr ctx, Ino ino) {
+Status MDSMetaSystem::FlushSlice(ContextSPtr ctx, Ino ino) {
   auto file_session = file_session_map_.GetSession(ino);
   CHECK(file_session != nullptr)
       << fmt::format("file session is nullptr, ino({}).", ino);
 
   auto& chunk_set = file_session->GetChunkSet();
 
-  LOG(INFO) << fmt::format("[meta.fs.{}] commit all slice.", ino);
+  LOG(INFO) << fmt::format("[meta.fs.{}] flush all slice.", ino);
 
   do {
     bool has_stage = chunk_set.HasStage();
@@ -1139,16 +1198,34 @@ Status MDSMetaSystem::CommitAllSlice(ContextSPtr ctx, Ino ino) {
     if (!has_stage && !has_committing && !has_commit_task) break;
 
     LOG(INFO) << fmt::format(
-        "[meta.fs.{}] commit all slice loop, has_stage({}) has_committing({}) "
+        "[meta.fs.{}] flush all slice loop, has_stage({}) has_committing({}) "
         "has_commit_task({}).",
         ino, has_stage, has_committing, has_commit_task);
 
-    AsyncCommitSlice(ctx, file_session, true, true);
+    AsyncFlushSlice(ctx, file_session, true, true);
 
   } while (true);
 
   // modify inode length
   return SetInodeLength(ctx, file_session, ino);
+}
+
+void MDSMetaSystem::FlushAllSlice() {
+  auto file_sessions = file_session_map_.GetAllSession();
+
+  LOG(INFO) << fmt::format("[meta.fs] flush all slice, count({}).",
+                           file_sessions.size());
+
+  for (auto& file_session : file_sessions) {
+    Ino ino = file_session->GetIno();
+    ContextSPtr ctx = std::make_shared<Context>("");
+
+    auto status = FlushSlice(ctx, ino);
+    if (!status.ok()) {
+      LOG(ERROR) << fmt::format("[meta.fs.{}] flush all slice fail, error({}).",
+                                ino, status.ToString());
+    }
+  }
 }
 
 Status MDSMetaSystem::CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
@@ -1292,20 +1369,9 @@ bool MDSMetaSystem::GetDescription(Json::Value& value) {
   value["fs_info"] = fs_info;
 
   // mds info
-  // Json::Value mdses = Json::arrayValue;
-  // auto all_mds = mds_discovery_->GetAllMDS();
-  // for (const auto& mds : all_mds) {
-  //   Json::Value item;
-  //   item["id"] = mds.ID();
-  //   item["host"] = mds.Host();
-  //   item["port"] = mds.Port();
-  //   item["state"] = mds.StateName(mds.GetState());
-  //   item["last_online_time_ms"] = mds.LastOnlineTimeMs();
-  //   mdses.append(item);
-  // }
-  // value["mdses"] = mdses;
-
-  return true;
+  DumpOption options;
+  options.mds_discovery = true;
+  return mds_client_.Dump(options, value);
 }
 
 }  // namespace meta

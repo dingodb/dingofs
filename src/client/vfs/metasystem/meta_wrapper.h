@@ -41,7 +41,7 @@ class MetaWrapper : public MetaSystem {
 
   Status Init(bool upgrade) override;
 
-  void UnInit(bool upgrade) override;
+  void Stop(bool upgrade) override;
 
   bool Dump(ContextSPtr ctx, Json::Value& value) override;
 

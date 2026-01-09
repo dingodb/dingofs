@@ -43,7 +43,7 @@ class VFSWrapper {
   void Init();
 
   // for fuse op destroy, may remove in future
-  void Destory();
+  void Destroy();
 
   double GetAttrTimeout(const FileType& type);
 

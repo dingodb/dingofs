@@ -89,8 +89,8 @@ Status MDSClientImpl::Shutdown() {
 
   LOG(INFO) << "MDS v2 client is shutting down...";
 
-  mds_discovery_.Destroy();
-  rpc_.Destory();
+  mds_discovery_.Stop();
+  rpc_.Stop();
 
   LOG(INFO) << "MDS v2 client is down.";
 

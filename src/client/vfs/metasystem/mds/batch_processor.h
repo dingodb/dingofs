@@ -240,7 +240,7 @@ class BatchProcessor {
   BatchProcessor& operator=(BatchProcessor&&) = delete;
 
   bool Init();
-  bool Destroy();
+  bool Stop();
 
   bool AsyncRun(OperationSPtr operation);
   bool RunBatched(OperationSPtr operation);
@@ -271,7 +271,7 @@ class BatchProcessor {
   bthread_mutex_t mutex_;
   bthread_cond_t cond_;
 
-  std::atomic<bool> is_stop_{false};
+  std::atomic<bool> stopped_{false};
 
   MDSClient& mds_client_;
 

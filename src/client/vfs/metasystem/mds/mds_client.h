@@ -15,6 +15,7 @@
 #ifndef DINGOFS_SRC_CLIENT_VFS_META_MDS_CLIENT_H_
 #define DINGOFS_SRC_CLIENT_VFS_META_MDS_CLIENT_H_
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -56,7 +57,7 @@ class MDSClient {
   virtual ~MDSClient() = default;
 
   bool Init();
-  void Destory();
+  void Stop();
 
   bool Dump(Json::Value& value);
   bool Dump(const DumpOption& options, Json::Value& value);

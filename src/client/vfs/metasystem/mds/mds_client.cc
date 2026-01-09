@@ -71,13 +71,18 @@ bool MDSClient::Init() {
   return true;
 }
 
-void MDSClient::Destory() {}
+void MDSClient::Stop() {
+  rpc_.Stop();
+
+  mds_discovery_.Stop();
+}
 
 bool MDSClient::Dump(Json::Value& value) {
   DumpOption options;
   options.parent_memo = true;
   options.mds_router = true;
   options.rpc = true;
+  options.mds_discovery = true;
 
   return Dump(options, value);
 }
@@ -92,6 +97,10 @@ bool MDSClient::Dump(const DumpOption& options, Json::Value& value) {
   }
 
   if (options.mds_router && !mds_router_->Dump(value)) {
+    return false;
+  }
+
+  if (options.mds_discovery && !mds_discovery_.Dump(value)) {
     return false;
   }
 

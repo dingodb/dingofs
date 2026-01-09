@@ -226,7 +226,7 @@ void VFSWrapper::Init() {
   AccessLogGuard log([&]() { return "init : OK"; });
 }
 
-void VFSWrapper::Destory() {
+void VFSWrapper::Destroy() {
   VLOG(2) << "VFSDestroy";
   AccessLogGuard log([&]() { return "destroy: OK"; });
 }

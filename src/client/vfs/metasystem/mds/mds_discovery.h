@@ -15,9 +15,10 @@
 #ifndef DINGOFS_SRC_CLIENT_VFS_META_MDS_DISCOVERY_H_
 #define DINGOFS_SRC_CLIENT_VFS_META_MDS_DISCOVERY_H_
 
-#include <map>
+#include <atomic>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "client/vfs/metasystem/mds/rpc.h"
 #include "common/status.h"
 #include "mds/mds/mds_meta.h"
@@ -33,7 +34,9 @@ class MDSDiscovery {
   ~MDSDiscovery() = default;
 
   bool Init();
-  void Destroy();
+  void Stop();
+
+  bool Dump(Json::Value& value);
 
   bool GetMDS(int64_t mds_id, mds::MDSMeta& mds_meta);
   void PickFirstMDS(mds::MDSMeta& mds_meta);
@@ -45,13 +48,28 @@ class MDSDiscovery {
   bool RefreshFullyMDSList();
 
  private:
+  void IncActiveCount() {
+    active_count_.fetch_add(1, std::memory_order_release);
+  }
+  void DecActiveCount() {
+    active_count_.fetch_sub(1, std::memory_order_release);
+  }
+  uint32_t ActiveCount() {
+    return active_count_.load(std::memory_order_acquire);
+  }
+
+  bool IsStop() { return stopped_.load(std::memory_order_acquire); }
+
   Status GetMDSList(std::vector<mds::MDSMeta>& mdses);
 
   utils::RWLock lock_;
   // mds_id -> MDSMeta
-  std::map<int64_t, mds::MDSMeta> mdses_;
+  absl::flat_hash_map<int64_t, mds::MDSMeta> mdses_;
 
   RPC& rpc_;
+
+  std::atomic<uint32_t> active_count_{0};
+  std::atomic<bool> stopped_{false};
 };
 
 }  // namespace meta

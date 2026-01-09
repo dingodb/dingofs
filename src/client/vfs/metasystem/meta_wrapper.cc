@@ -38,9 +38,9 @@ Status MetaWrapper::Init(bool upgrade) {
   return s;
 }
 
-void MetaWrapper::UnInit(bool upgrade) {
+void MetaWrapper::Stop(bool upgrade) {
   MetaLogGuard log_guard([&]() { return "uninit"; });
-  target_->UnInit(upgrade);
+  target_->Stop(upgrade);
 }
 
 bool MetaWrapper::Dump(ContextSPtr ctx, Json::Value& value) {

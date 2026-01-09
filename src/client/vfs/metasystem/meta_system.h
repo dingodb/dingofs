@@ -41,6 +41,7 @@ struct DumpOption {
   bool mds_router{false};
   bool inode_cache{false};
   bool rpc{false};
+  bool mds_discovery{false};
 };
 
 class MetaSystem {
@@ -51,7 +52,7 @@ class MetaSystem {
 
   virtual Status Init(bool upgrade) = 0;
 
-  virtual void UnInit(bool upgrade) = 0;
+  virtual void Stop(bool upgrade) = 0;
 
   virtual bool Dump(ContextSPtr ctx, Json::Value& value) = 0;
 

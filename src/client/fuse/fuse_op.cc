@@ -360,7 +360,7 @@ void FuseOpInit(void* userdata, struct fuse_conn_info* conn) {
 }
 
 void FuseOpDestroy(void* userdata) {
-  VLOG(1) << "FuseOpDestroy userdata: " << userdata;
+  LOG(INFO) << "FuseOpDestroy userdata: " << userdata;
   if (g_vfs) {
     g_vfs->Stop();
   }

@@ -107,7 +107,7 @@ class LocalMetaSystem : public vfs::MetaSystem {
   };
 
   Status Init(bool upgrade) override;
-  void UnInit(bool upgrade) override;
+  void Stop(bool upgrade) override;
 
   bool Dump(ContextSPtr ctx, Json::Value& value) override;
   bool Dump(const DumpOption& options, Json::Value& value) override;

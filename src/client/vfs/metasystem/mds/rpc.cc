@@ -56,7 +56,14 @@ bool RPC::Init() {
   return true;
 }
 
-void RPC::Destory() {}
+void RPC::Stop() {
+  while (DoingReqCount() > 0) {
+    LOG(INFO) << fmt::format(
+        "[meta.rpc] waiting doing request({}) finish before stop.",
+        DoingReqCount());
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+}
 
 bool RPC::CheckMdsAlive(const std::string& addr) {
   EndPoint endpoint;

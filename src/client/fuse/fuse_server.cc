@@ -413,7 +413,7 @@ bool FuseServer::ShutdownGracefully(const std::string& mountpoint) {
     LOG(ERROR) << "recv mount fd fail, comm_path=" << comm_path;
     return false;
   }
-  LOG(INFO) << "recv data from" << comm_path << ", mount fd = " << fuse_fd_
+  LOG(INFO) << "recv data from " << comm_path << ", mount fd = " << fuse_fd_
             << ",data size = " << init_fbuf_.size;
 
   // send kill signal to old dingo-client

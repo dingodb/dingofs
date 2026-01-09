@@ -189,6 +189,18 @@ FileSessionSPtr FileSessionMap::GetSession(Ino ino) {
   return file_session;
 }
 
+std::vector<FileSessionSPtr> FileSessionMap::GetAllSession() {
+  std::vector<FileSessionSPtr> file_sessions;
+
+  shard_map_.iterate([&file_sessions](const Map& map) {
+    for (const auto& [_, file_session] : map) {
+      file_sessions.push_back(file_session);
+    }
+  });
+
+  return file_sessions;
+}
+
 bool FileSessionMap::Dump(Ino ino, Json::Value& value) {
   auto file_session = GetSession(ino);
 

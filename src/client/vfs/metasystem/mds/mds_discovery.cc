@@ -14,6 +14,7 @@
 
 #include "client/vfs/metasystem/mds/mds_discovery.h"
 
+#include <atomic>
 #include <cstdint>
 
 #include "dingofs/mds.pb.h"
@@ -31,7 +32,15 @@ static const uint32_t kWaitTimeMs = 100;
 
 bool MDSDiscovery::Init() { return RefreshFullyMDSList(); }
 
-void MDSDiscovery::Destroy() {}
+void MDSDiscovery::Stop() {
+  stopped_.store(true);
+
+  while (ActiveCount() > 0) {
+    LOG(INFO) << fmt::format(
+        "[meta.discovery] waiting active count({}) to be zero.", ActiveCount());
+    bthread_usleep(kWaitTimeMs * 1000);
+  }
+}
 
 bool MDSDiscovery::GetMDS(int64_t mds_id, mds::MDSMeta& mds_meta) {
   utils::ReadLockGuard lk(lock_);
@@ -47,7 +56,15 @@ bool MDSDiscovery::GetMDS(int64_t mds_id, mds::MDSMeta& mds_meta) {
 }
 
 void MDSDiscovery::PickFirstMDS(mds::MDSMeta& mds_meta) {
+  IncActiveCount();
+  mds::DEFER(DecActiveCount());
+
   do {
+    if (IsStop()) {
+      LOG(INFO) << "[meta.discovery] stop pick first mds.";
+      return;
+    }
+
     {
       utils::ReadLockGuard lk(lock_);
 
@@ -94,7 +111,15 @@ std::vector<mds::MDSMeta> MDSDiscovery::GetMDSByState(
 }
 
 std::vector<mds::MDSMeta> MDSDiscovery::GetNormalMDS(bool force) {
+  IncActiveCount();
+  mds::DEFER(DecActiveCount());
+
   for (;;) {
+    if (IsStop()) {
+      LOG(INFO) << "[meta.discovery] stop get normal mds.";
+      return {};
+    }
+
     auto mdses = GetMDSByState(mds::MDSMeta::State::kNormal);
     if (!force) return mdses;
     if (!mdses.empty()) return mdses;
@@ -110,9 +135,7 @@ Status MDSDiscovery::GetMDSList(std::vector<mds::MDSMeta>& mdses) {
   request.mutable_info()->set_request_id(std::to_string(utils::TimestampNs()));
 
   auto status = rpc_.SendRequest("MDSService", "GetMDSList", request, response);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
   mdses.reserve(response.mdses_size());
   for (const auto& mds : response.mdses()) {
@@ -132,9 +155,17 @@ void MDSDiscovery::SetAbnormalMDS(int64_t mds_id) {
 }
 
 bool MDSDiscovery::RefreshFullyMDSList() {
+  IncActiveCount();
+  mds::DEFER(DecActiveCount());
+
   uint64_t retries = 0;
   std::vector<mds::MDSMeta> mdses;
   for (;;) {
+    if (IsStop()) {
+      LOG(INFO) << "[meta.discovery] stop refresh fully mds list.";
+      return false;
+    }
+
     auto status = GetMDSList(mdses);
 
     LOG(INFO) << fmt::format(
@@ -162,6 +193,24 @@ bool MDSDiscovery::RefreshFullyMDSList() {
   for (auto& mds : mdses) {
     rpc_.AddFallbackEndpoint(StrToEndpoint(mds.Host(), mds.Port()));
   }
+
+  return true;
+}
+
+bool MDSDiscovery::Dump(Json::Value& value) {
+  utils::ReadLockGuard lk(lock_);
+
+  Json::Value mdses = Json::arrayValue;
+  for (const auto& [_, mds] : mdses_) {
+    Json::Value item;
+    item["id"] = mds.ID();
+    item["host"] = mds.Host();
+    item["port"] = mds.Port();
+    item["state"] = mds.StateName(mds.GetState());
+    item["last_online_time_ms"] = mds.LastOnlineTimeMs();
+    mdses.append(item);
+  }
+  value["mdses"] = mdses;
 
   return true;
 }

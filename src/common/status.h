@@ -80,6 +80,7 @@ class Status {
     kCacheDown = 27,
     kCacheUnhealthy = 28,
     kCacheFull = 29,
+    kStop = 30,
   };
   static const int32_t kNone = 0;
 
@@ -129,6 +130,7 @@ class Status {
   DECLARE_ERROR_STATUS(CacheDown, kCacheDown);
   DECLARE_ERROR_STATUS(CacheUnhealthy, kCacheUnhealthy);
   DECLARE_ERROR_STATUS(CacheFull, kCacheFull);
+  DECLARE_ERROR_STATUS(Stop, kStop);
 
   // Return a string representation of this status suitable for printing.
   // Returns the string "OK" for success.
@@ -184,6 +186,8 @@ class Status {
         return EIO;
       case kNotFound:
         return ENOENT;
+      case kStop:
+        return EIO;
       default:
         return EIO;
     }

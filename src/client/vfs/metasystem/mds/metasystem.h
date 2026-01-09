@@ -15,6 +15,9 @@
 #ifndef DINGOFS_SRC_CLIENT_VFS_META_MDS_H_
 #define DINGOFS_SRC_CLIENT_VFS_META_MDS_H_
 
+#include <glog/logging.h>
+
+#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -70,7 +73,7 @@ class MDSMetaSystem : public vfs::MetaSystem {
 
   Status Init(bool upgrade) override;
 
-  void UnInit(bool upgrade) override;
+  void Stop(bool upgrade) override;
 
   bool Dump(ContextSPtr ctx, Json::Value& value) override;
 
@@ -171,9 +174,13 @@ class MDSMetaSystem : public vfs::MetaSystem {
   Status SetInodeLength(ContextSPtr ctx, FileSessionSPtr file_session, Ino ino);
   void LaunchWriteSlice(ContextSPtr& ctx, FileSessionSPtr file_session,
                         CommitTaskSPtr task);
-  void AsyncCommitSlice(ContextSPtr& ctx, FileSessionSPtr file_session,
-                        bool is_force, bool is_wait);
-  Status CommitAllSlice(ContextSPtr ctx, Ino ino);
+  // async flush batch slices of single file
+  void AsyncFlushSlice(ContextSPtr& ctx, FileSessionSPtr file_session,
+                       bool is_force, bool is_wait);
+  // flush slices of single file
+  Status FlushSlice(ContextSPtr ctx, Ino ino);
+  // flush slices of all files
+  void FlushAllSlice();
 
   Status CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
                      const std::string& caller);
@@ -182,6 +189,10 @@ class MDSMetaSystem : public vfs::MetaSystem {
 
   // batch operation
   Status RunOperation(OperationSPtr operation);
+
+  void AssertStop() {
+    CHECK(!stopped_.load(std::memory_order_relaxed)) << "metasystem is stopped";
+  }
 
   const std::string name_;
   const ClientId client_id_;
@@ -207,6 +218,8 @@ class MDSMetaSystem : public vfs::MetaSystem {
   mds::CrontabManager crontab_manager_;
 
   BatchProcessor batch_processor_;
+
+  std::atomic<bool> stopped_{false};
 };
 
 }  // namespace meta

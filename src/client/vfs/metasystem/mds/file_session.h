@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "client/vfs/metasystem/mds/chunk.h"
 #include "client/vfs/vfs_meta.h"
@@ -90,6 +91,7 @@ class FileSessionMap {
 
   std::string GetSessionID(Ino ino, uint64_t fh);
   FileSessionSPtr GetSession(Ino ino);
+  std::vector<FileSessionSPtr> GetAllSession();
 
   // output json format string
   bool Dump(Ino ino, Json::Value& value);

@@ -290,7 +290,7 @@ Status VFSHubImpl::Stop(bool upgrade) {
   }
 
   if (meta_system_ != nullptr) {
-    meta_system_->UnInit(upgrade);
+    meta_system_->Stop(upgrade);
   }
 
   trace_manager_.Stop();

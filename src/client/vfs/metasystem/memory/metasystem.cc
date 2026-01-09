@@ -357,7 +357,7 @@ Status MemoryMetaSystem::Init(bool upgrade) {
   return Status::OK();
 }
 
-void MemoryMetaSystem::UnInit(bool upgrade) {}
+void MemoryMetaSystem::Stop(bool upgrade) {}
 
 bool MemoryMetaSystem::Dump(ContextSPtr ctx, Json::Value& value) {
   // Implement your dump logic here

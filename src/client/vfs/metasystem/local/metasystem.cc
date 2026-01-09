@@ -228,7 +228,7 @@ Status LocalMetaSystem::Init(bool upgrade) {
   return Status::OK();
 }
 
-void LocalMetaSystem::UnInit(bool upgrade) {
+void LocalMetaSystem::Stop(bool upgrade) {
   crontab_manager_.Destroy();
 
   CloseLevelDB();
