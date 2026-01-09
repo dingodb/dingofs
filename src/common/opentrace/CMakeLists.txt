@@ -12,11 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(opentelemetry)
-
+find_package(opentelemetry-cpp CONFIG REQUIRED)
 file(GLOB DINGOFS_COMMON_OPEN_TRACE_SRCS
     "*.cc"
-    "opentelemetry/*.cc"
 )
 
 
@@ -25,6 +23,12 @@ add_library(dingofs_open_trace
 )
 
 target_link_libraries(dingofs_open_trace
-    dingofs_opentelemetry
+    glog::glog
+    gflags::gflags
+    spdlog::spdlog
+    fmt::fmt
+    absl::str_format
+    brpc::brpc
+    ${OPENTELEMETRY_CPP_LIBRARIES}
 )
 

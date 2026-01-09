@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_COMMON_OPENTRACE_OPENTELEMETRY_TYPE_H_
-#define DINGOFS_COMMON_OPENTRACE_OPENTELEMETRY_TYPE_H_
+#ifndef DINGOFS_COMMON_OPENTRACE_TYPE_H_
+#define DINGOFS_COMMON_OPENTRACE_TYPE_H_
 
 #ifdef BLOCK_SIZE
 #undef BLOCK_SIZE
@@ -70,4 +70,4 @@ inline std::string ToString(trace::SpanId const& span_id) {
 
 }  // namespace dingofs
 
-#endif  // DINGOFS_COMMON_OPENTRACE_OPENTELEMETRY_TYPE_H_
+#endif  // DINGOFS_COMMON_OPENTRACE_TYPE_H_

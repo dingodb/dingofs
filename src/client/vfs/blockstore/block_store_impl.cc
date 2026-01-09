@@ -64,7 +64,7 @@ void BlockStoreImpl::Shutdown() {
 
 void BlockStoreImpl::RangeAsync(ContextSPtr ctx, RangeReq req,
                                 StatusCallback callback) {
-  auto span = hub_->GetTraceManager()->StartChildSpan(
+  auto span = hub_->GetTraceManager().StartChildSpan(
       "BlockStoreImpl::RangeAsync", ctx->GetTraceSpan());
 
   int64_t start_us = butil::cpuwide_time_us();
@@ -76,8 +76,7 @@ void BlockStoreImpl::RangeAsync(ContextSPtr ctx, RangeReq req,
                          req.block.Filename(), req.length, req.offset,
                          (req.offset + req.length), s.ToString());
     });
-
-    span->End();
+    SpanScope::End(span);
     // dedicated use ctx for callback
     cb(s);
   };
@@ -92,8 +91,8 @@ void BlockStoreImpl::RangeAsync(ContextSPtr ctx, RangeReq req,
 
 void BlockStoreImpl::PutAsync(ContextSPtr ctx, PutReq req,
                               StatusCallback callback) {
-  auto span = hub_->GetTraceManager()->StartChildSpan(
-      "BlockStoreImpl::PutAsync", ctx->GetTraceSpan());
+  auto span = hub_->GetTraceManager().StartChildSpan("BlockStoreImpl::PutAsync",
+                                                     ctx->GetTraceSpan());
 
   int64_t start_us = butil::cpuwide_time_us();
 
@@ -103,7 +102,7 @@ void BlockStoreImpl::PutAsync(ContextSPtr ctx, PutReq req,
       return fmt::format("put_async ({}, {}) : {}", req.block.Filename(),
                          req.data.Size(), s.ToString());
     });
-    span->End();
+    SpanScope::End(span);
     cb(s);
   };
 
@@ -115,7 +114,7 @@ void BlockStoreImpl::PutAsync(ContextSPtr ctx, PutReq req,
 
 void BlockStoreImpl::PrefetchAsync(ContextSPtr ctx, PrefetchReq req,
                                    StatusCallback callback) {
-  auto span = hub_->GetTraceManager()->StartChildSpan(
+  auto span = hub_->GetTraceManager().StartChildSpan(
       "BlockStoreImpl::PrefetchAsync", ctx->GetTraceSpan());
   if (block_cache_->IsCached(req.block)) {
     callback(Status::OK());
@@ -130,7 +129,7 @@ void BlockStoreImpl::PrefetchAsync(ContextSPtr ctx, PrefetchReq req,
       return fmt::format("prefetch_async ({}, {}) : {}", req.block.Filename(),
                          req.block_size, s.ToString());
     });
-    span->End();
+    SpanScope::End(span);
     cb(s);
   };
 

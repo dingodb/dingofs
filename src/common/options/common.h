@@ -24,6 +24,11 @@ namespace dingofs {
 DECLARE_bool(daemonize);
 DECLARE_string(conf);
 
+DECLARE_string(trace_service_name);
+DECLARE_string(otlp_export_endpoint);
+DECLARE_uint32(trace_export_thread_num);
+DECLARE_bool(enable_trace);
+
 }  // namespace dingofs
 
 #endif  // DINGOFS_COMMON_OPTIONS_COMMON_OPTION_H_

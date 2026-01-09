@@ -389,6 +389,10 @@ class MDSServiceImpl : public pb::mds::MDSService {
   void DoDeleteMember(google::protobuf::RpcController* controller, const pb::mds::DeleteMemberRequest* request,
                       pb::mds::DeleteMemberResponse* response, TraceClosure* done);
 
+  inline SpanScopeSPtr StartSpan(const std::string& name, const pb::mds::RequestInfo& info) {
+    return trace_manager_.StartSpan(name, info.request_id(), info.span_id());
+  }
+
   // file system set
   FileSystemSetSPtr file_system_set_;
 
@@ -406,7 +410,7 @@ class MDSServiceImpl : public pb::mds::MDSService {
   WorkerSetUPtr write_worker_set_;
 
   // trace
-  std::shared_ptr<TraceManager> trace_manager_;
+  TraceManager trace_manager_;
 };
 
 }  // namespace mds

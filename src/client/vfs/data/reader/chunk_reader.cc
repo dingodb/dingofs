@@ -84,13 +84,13 @@ static std::string SlicesToString(const std::vector<Slice>& slices) {
 }
 
 Status ChunkReader::GetSlices(ContextSPtr ctx, ChunkSlices* chunk_slices) {
-  auto span = hub_->GetTraceManager()->StartChildSpan("ChunkReader::GetSlices",
-                                                      ctx->GetTraceSpan());
+  auto span = hub_->GetTraceManager().StartChildSpan("ChunkReader::GetSlices",
+                                                     ctx->GetTraceSpan());
 
   std::vector<Slice> slices;
   uint64_t chunk_version = 0;
   DINGOFS_RETURN_NOT_OK(hub_->GetMetaSystem()->ReadSlice(
-      span->GetContext(), chunk_.ino, chunk_.index, fh_, &slices,
+      SpanScope::GetContext(span), chunk_.ino, chunk_.index, fh_, &slices,
       chunk_version));
 
   chunk_slices->version = chunk_version;
@@ -106,14 +106,14 @@ Status ChunkReader::GetSlices(ContextSPtr ctx, ChunkSlices* chunk_slices) {
 std::vector<SliceReadReq> ChunkReader::ConvertToSliceReadReqs(
     ContextSPtr ctx, const std::vector<Slice>& slices,
     const FileRange& frange) {
-  auto span = hub_->GetTraceManager()->StartChildSpan(
+  auto span = hub_->GetTraceManager().StartChildSpan(
       "ChunkReader::ConvertToSliceReadReqs", ctx->GetTraceSpan());
   return ProcessReadRequest(slices, frange);
 }
 
 std::vector<BlockReadReq> ChunkReader::GetBlockReadReqs(
     ContextSPtr ctx, const std::vector<SliceReadReq>& slice_reqs) {
-  auto span = hub_->GetTraceManager()->StartChildSpan(
+  auto span = hub_->GetTraceManager().StartChildSpan(
       "ChunkReader::GetBlockReadReqs", ctx->GetTraceSpan());
   std::vector<BlockReadReq> block_reqs;
 
@@ -145,8 +145,8 @@ std::vector<BlockReadReq> ChunkReader::GetBlockReadReqs(
 
 // protected by shared state mtx
 IOBuffer ChunkReader::GatherIoBuf(ContextSPtr ctx, ReaderSharedState* shared) {
-  auto span = hub_->GetTraceManager()->StartChildSpan(
-      "ChunkReader::GatherIoBuf", ctx->GetTraceSpan());
+  auto span = hub_->GetTraceManager().StartChildSpan("ChunkReader::GatherIoBuf",
+                                                     ctx->GetTraceSpan());
   IOBuffer ret;
   for (const auto& block_cache_req : shared->block_cache_reqs) {
     ret.Append(&block_cache_req->io_buffer);
@@ -167,13 +167,13 @@ void ChunkReader::OnAllBlocksComplete(ReaderSharedState* shared) {
   {
     std::lock_guard<std::mutex> lock(shared->mtx);
 
-    auto span = hub_->GetTraceManager()->StartChildSpan(
+    auto span = hub_->GetTraceManager().StartChildSpan(
         "ChunkReader::OnAllBlocksComplete", shared->read_span);
 
     final_status = shared->status;
 
     if (final_status.ok()) {
-      data = GatherIoBuf(span->GetContext(), shared);
+      data = GatherIoBuf(SpanScope::GetContext(span), shared);
     } else {
       LOG(WARNING) << fmt::format(
           "{} ChunkReader Read failed, status: {}, req: {}", UUID(),
@@ -210,7 +210,7 @@ void ChunkReader::OnBlockReadComplete(ReaderSharedState* shared,
     LOG(WARNING) << fmt::format("{} Fail read block_req: {}, status: {}",
                                 UUID(), req->ToString(), s.ToString());
 
-    auto span = hub_->GetTraceManager()->StartChildSpan(
+    auto span = hub_->GetTraceManager().StartChildSpan(
         "ChunkReader::WaitAllBlocksLock", shared->read_span);
 
     std::lock_guard<std::mutex> lock(shared->mtx);
@@ -240,9 +240,9 @@ void ChunkReader::OnBlockReadComplete(ReaderSharedState* shared,
 void ChunkReader::ProcessBlockCacheReadReq(ContextSPtr ctx,
                                            ReaderSharedState* shared,
                                            BlockCacheReadReq* block_cache_req) {
-  auto span = hub_->GetTraceManager()->StartChildSpan(
+  auto span = hub_->GetTraceManager().StartChildSpan(
       "ChunkReader::ProcessBlockCacheReadReq", ctx->GetTraceSpan());
-  ContextSPtr span_ctx = span->GetContext();
+  ContextSPtr span_ctx = SpanScope::GetContext(span);
 
   // check block is zero block
   if (block_cache_req->block_req.fake) {
@@ -282,11 +282,11 @@ void ChunkReader::ExecuteAsyncRead() {
     root = std::move(root_span_);
   }
 
-  auto span = hub_->GetTraceManager()->StartChildSpan(
+  auto span = hub_->GetTraceManager().StartChildSpan(
       "ChunkReader::ExecuteAsyncRead", root);
 
   ChunkSlices chunk_slices;
-  Status s = GetSlices(span->GetContext(), &chunk_slices);
+  Status s = GetSlices(SpanScope::GetContext(span), &chunk_slices);
   if (!s.ok()) {
     LOG(WARNING) << fmt::format("{} Failed GetSlices, status: {}", UUID(),
                                 s.ToString());
@@ -302,7 +302,7 @@ void ChunkReader::ExecuteAsyncRead() {
     return;
   }
 
-  ContextSPtr span_ctx = span->GetContext();
+  ContextSPtr span_ctx = SpanScope::GetContext(span);
 
   std::vector<SliceReadReq> slice_reqs =
       ConvertToSliceReadReqs(span_ctx, chunk_slices.slices, req_.frange);
@@ -356,8 +356,8 @@ void ChunkReader::ReadAsync(ContextSPtr ctx, StatusCallback cb) {
                          req_.ToString());
   CHECK_GE(chunk_.chunk_end, req_.frange.End());
 
-  auto span = hub_->GetTraceManager()->StartChildSpan("ChunkReader::ReadAsync",
-                                                      ctx->GetTraceSpan());
+  auto span = hub_->GetTraceManager().StartChildSpan("ChunkReader::ReadAsync",
+                                                     ctx->GetTraceSpan());
 
   {
     std::lock_guard<std::mutex> lg(mtx_);

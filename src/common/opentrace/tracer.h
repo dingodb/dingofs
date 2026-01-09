@@ -14,47 +14,48 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_COMMON_OPENTRACE_OPENTELEMETRY_TRACER_H_
-#define DINGOFS_COMMON_OPENTRACE_OPENTELEMETRY_TRACER_H_
+#ifndef DINGOFS_COMMON_OPENTRACE_TRACER_H_
+#define DINGOFS_COMMON_OPENTRACE_TRACER_H_
 
 #include <memory>
 
-#include "common/opentrace/base_tracer.h"
-#include "common/opentrace/opentelemetry/type.h"
-#include "common/opentrace/span.h"
+#include "common/opentrace/otlp_span.h"
+#include "common/opentrace/type.h"
 
 namespace dingofs {
 
-class OpenTeleMetryTracer : public BaseTracer {
+class OpenTeleMetryTracer {
  public:
   OpenTeleMetryTracer(const std::string& service_name,
                       const std::string& otlp_export_endpoint,
+                      uint32_t export_thread_num,
                       const std::string& commit_hash,
                       const std::string& version)
       : service_name_(service_name),
         otlp_export_endpoint_{otlp_export_endpoint},
+        max_export_thread_(export_thread_num),
         commit_hash_(commit_hash),
         version_(version) {}
 
-  bool Init() override;
+  bool Init();
 
-  void Stop() override;
+  void Stop();
 
   static std::shared_ptr<OpenTeleMetryTracer> New(
       const std::string& service_name, const std::string& otlp_export_endpoint,
-      const std::string& commit_hash = "", const std::string& version = "") {
+      uint32_t export_thread_num, const std::string& commit_hash = "",
+      const std::string& version = "") {
     return std::make_shared<OpenTeleMetryTracer>(
-        service_name, otlp_export_endpoint, commit_hash, version);
+        service_name, otlp_export_endpoint, export_thread_num, commit_hash,
+        version);
   }
 
-  std::shared_ptr<Span> MakeSpan(const std::string& name) override;
+  OtlpSpan MakeSpan(const std::string& name);
 
-  std::shared_ptr<Span> MakeSpan(const std::string& name,
-                                 const SpanContext& span_context) override;
+  OtlpSpan MakeSpan(const std::string& name, const SpanContext& span_context);
 
-  std::shared_ptr<Span> MakeSpan(const std::string& name,
-                                 const std::string& trace_id,
-                                 const std::string& span_id) override;
+  OtlpSpan MakeSpan(const std::string& name, const std::string& trace_id,
+                    const std::string& span_id);
 
  private:
   std::string service_name_;
@@ -62,8 +63,9 @@ class OpenTeleMetryTracer : public BaseTracer {
   std::string commit_hash_;
   std::string version_;
   nostd::shared_ptr<trace::Tracer> tracer_;
+  uint32_t max_export_thread_;
 };
 using OpenTeleMetryTracerSPtr = std::shared_ptr<OpenTeleMetryTracer>;
 }  // namespace dingofs
 
-#endif  // DINGOFS_COMMON_OPENTRACE_OPENTELEMETRY_TRACER_H_
+#endif  // DINGOFS_COMMON_OPENTRACE_TRACER_H_

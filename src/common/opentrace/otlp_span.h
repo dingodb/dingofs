@@ -14,37 +14,41 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_COMMON_OPENTRACE_SPAN_H_
-#define DINGOFS_COMMON_OPENTRACE_SPAN_H_
+#ifndef DINGOFS_COMMON_OPENTRACE_OTLP_SPAN_H_
+#define DINGOFS_COMMON_OPENTRACE_OTLP_SPAN_H_
 
-#include <map>
+#include <atomic>
 #include <memory>
 #include <string>
 
-#include "common/opentrace/opentelemetry/type.h"
+#include "common/opentrace/type.h"
 
 namespace dingofs {
 
-class Span {
+class OtlpSpan {
  public:
-  virtual ~Span() = default;
+  OtlpSpan(nostd::shared_ptr<trace::Span> span) : span_(span) {}
 
-  virtual std::shared_ptr<SpanContext> GetContext() const = 0;
+  ~OtlpSpan();
 
-  virtual void AddAttribute(const std::string& key,
-                            const std::string& value) = 0;
+  std::shared_ptr<SpanContext> GetContext() const;
 
-  virtual void AddEvent(const std::string& name) = 0;
+  void AddAttribute(const std::string& key, const std::string& value);
 
-  virtual void SetStatus(bool ok, const std::string& msg) = 0;
+  void AddEvent(const std::string& name);
 
-  virtual std::string GetTraceID() = 0;
+  void SetStatus(bool ok, const std::string& msg);
 
-  virtual std::string GetSpanID() = 0;
+  std::string GetTraceID();
 
-  virtual void End() = 0;
+  std::string GetSpanID();
+
+  void End();
+
+ private:
+  opentelemetry::nostd::shared_ptr<opentelemetry::trace::Span> span_;
 };
 
 }  // namespace dingofs
 
-#endif  // DINGOFS_COMMON_OPENTRACE_SPAN_H_
+#endif  // DINGOFS_COMMON_OPENTRACE_OTLP_SPAN_H_

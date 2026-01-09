@@ -85,8 +85,8 @@ void ChunkWriter::Stop() {
 Status ChunkWriter::Write(ContextSPtr ctx, const char* buf, uint64_t size,
                           uint64_t chunk_offset) {
   CHECK(!stopped_.load(std::memory_order_relaxed));
-  auto span = hub_->GetTraceManager()->StartChildSpan("ChunkWriter::Write",
-                                                      ctx->GetTraceSpan());
+  auto span = hub_->GetTraceManager().StartChildSpan("ChunkWriter::Write",
+                                                     ctx->GetTraceSpan());
 
   uint64_t write_file_offset = chunk_.chunk_start + chunk_offset;
   ChunkWriteInfo info(buf, size, chunk_offset, write_file_offset);
@@ -159,8 +159,9 @@ Status ChunkWriter::Write(ContextSPtr ctx, const char* buf, uint64_t size,
 
         CHECK_NOTNULL(writing_slice);
 
-        Status s = writing_slice->Write(ctx, write_info->buf, write_info->size,
-                                        write_info->chunk_offset);
+        Status s =
+            writing_slice->Write(SpanScope::GetContext(span), write_info->buf,
+                                 write_info->size, write_info->chunk_offset);
         CHECK(s.ok());
 
         if (writing_slice->Len() == chunk_.chunk_size) {
@@ -268,7 +269,7 @@ ChunkWriter::FlushTask ChunkWriter::fake_header_;
 
 void ChunkWriter::FlushTaskDone(FlushTask* flush_task, Status s) {
   // TODO: get ctx from parent
-  auto span = hub_->GetTraceManager()->StartSpan("ChunkWriter::FlushTaskDone");
+  auto span = hub_->GetTraceManager().StartSpan("ChunkWriter::FlushTaskDone");
   if (!s.ok()) {
     LOG(WARNING) << fmt::format(
         "{} FlushTaskDone Failed chunk_flush_task: {}, status: {}", UUID(),
@@ -309,7 +310,7 @@ void ChunkWriter::FlushTaskDone(FlushTask* flush_task, Status s) {
       "{} FlushTaskDone header_task: {} will commit flush_tasks", UUID(),
       flush_task->UUID());
 
-  TryCommitFlushTasks(span->GetContext());
+  TryCommitFlushTasks(SpanScope::GetContext(span));
 }
 
 void ChunkWriter::TryCommitFlushTasks(ContextSPtr ctx) {

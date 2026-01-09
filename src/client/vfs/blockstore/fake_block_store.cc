@@ -64,10 +64,10 @@ void FakeBlockStore::DoRangeAsync(BlockKey key, uint64_t offset,
 
 void FakeBlockStore::RangeAsync(ContextSPtr ctx, RangeReq req,
                                 StatusCallback callback) {
-  auto span = hub_->GetTraceManager()->StartChildSpan(
+  auto span = hub_->GetTraceManager().StartChildSpan(
       "FakeBlockStore::PrefetchAsync", ctx->GetTraceSpan());
   auto wrapper = [this, cb = std::move(callback), span](Status s) {
-    span->End();
+    SpanScope::End(span);
     // dedicated use ctx for callback
     cb(s);
   };
@@ -78,10 +78,10 @@ void FakeBlockStore::RangeAsync(ContextSPtr ctx, RangeReq req,
 void FakeBlockStore::PutAsync(ContextSPtr ctx, PutReq req,
                               StatusCallback callback) {
   (void)req;
-  auto span = hub_->GetTraceManager()->StartChildSpan(
-      "FakeBlockStore::PutAsync", ctx->GetTraceSpan());
+  auto span = hub_->GetTraceManager().StartChildSpan("FakeBlockStore::PutAsync",
+                                                     ctx->GetTraceSpan());
   auto wrapper = [this, cb = std::move(callback), span](Status s) {
-    span->End();
+    SpanScope::End(span);
     cb(s);
   };
 
@@ -92,10 +92,10 @@ void FakeBlockStore::PrefetchAsync(ContextSPtr ctx, PrefetchReq req,
                                    StatusCallback callback) {
   (void)req;
 
-  auto span = hub_->GetTraceManager()->StartChildSpan(
+  auto span = hub_->GetTraceManager().StartChildSpan(
       "FakeBlockStore::PrefetchAsync", ctx->GetTraceSpan());
   auto wrapper = [this, cb = std::move(callback), span](Status s) {
-    span->End();
+    SpanScope::End(span);
     cb(s);
   };
 
