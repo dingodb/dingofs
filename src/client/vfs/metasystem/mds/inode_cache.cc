@@ -30,173 +30,97 @@ namespace client {
 namespace vfs {
 namespace meta {
 
-uint64_t Inode::Ino() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_.ino();
-}
-
-Inode::FileType Inode::Type() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_.type();
-}
-
-uint64_t Inode::Length() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_.length();
-}
-
-uint32_t Inode::Uid() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_.uid();
-}
-
-uint32_t Inode::Gid() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_.gid();
-}
-
-uint32_t Inode::Mode() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_.mode();
-}
-
-uint32_t Inode::Nlink() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_.nlink();
-}
-
-std::string Inode::Symlink() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_.symlink();
-}
-
-uint64_t Inode::Rdev() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_.rdev();
-}
-
-uint64_t Inode::Ctime() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_.ctime();
-}
-
-uint64_t Inode::Mtime() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_.mtime();
-}
-
-uint64_t Inode::Atime() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_.atime();
-}
-
-uint32_t Inode::Flags() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_.flags();
-}
-
-uint64_t Inode::Version() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_.version();
-}
-
-std::vector<uint64_t> Inode::Parents() {
-  utils::ReadLockGuard lk(lock_);
-
-  std::vector<uint64_t> parents;
-  for (const auto& parent : attr_.parents()) {
-    parents.push_back(parent);
-  }
-
-  return parents;
-}
-
-Inode::XAttrSet Inode::ListXAttrs() {
-  utils::ReadLockGuard lk(lock_);
-
-  Inode::XAttrSet xattrs;
-  for (const auto& xattr : attr_.xattrs()) {
-    xattrs.push_back(std::make_pair(xattr.first, xattr.second));
-  }
-
-  return xattrs;
-}
-
-std::string Inode::GetXAttr(const std::string& name) {
-  utils::ReadLockGuard lk(lock_);
-
-  auto it = attr_.xattrs().find(name);
-  return (it != attr_.xattrs().end()) ? it->second : "";
-}
-
-void Inode::SetXAttr(const std::string& name, const std::string& value) {
-  utils::WriteLockGuard lk(lock_);
-
-  (*attr_.mutable_xattrs())[name] = value;
-}
-
-void Inode::RemoveXAttr(const std::string& name) {
-  utils::WriteLockGuard lk(lock_);
-
-  attr_.mutable_xattrs()->erase(name);
-}
-
 bool Inode::PutIf(const AttrEntry& attr) {
   utils::WriteLockGuard lk(lock_);
 
   LOG(INFO) << fmt::format(
-      "[meta.icache.{}] update attr,this({}) version({}->{}).", attr_.ino(),
-      (void*)this, attr_.version(), attr.version());
+      "[meta.icache.{}] update attr,this({}) version({}->{}).", ino_,
+      (void*)this, version_, attr.version());
 
-  if (attr.version() <= attr_.version()) {
+  if (attr.version() <= version_) {
     return false;
   }
 
-  attr_ = attr;
+  // clone new attr
+  if (length_ != attr.length()) length_ = attr.length();
+  if (ctime_ != attr.ctime()) ctime_ = attr.ctime();
+  if (mtime_ != attr.mtime()) mtime_ = attr.mtime();
+  if (atime_ != attr.atime()) atime_ = attr.atime();
+  if (uid_ != attr.uid()) uid_ = attr.uid();
+  if (gid_ != attr.gid()) gid_ = attr.gid();
+  if (mode_ != attr.mode()) mode_ = attr.mode();
+  if (nlink_ != attr.nlink()) nlink_ = attr.nlink();
+  if (symlink_ != attr.symlink()) symlink_ = attr.symlink();
+  if (rdev_ != attr.rdev()) rdev_ = attr.rdev();
+  if (flags_ != attr.flags()) flags_ = attr.flags();
+
+  parents_.clear();
+  parents_.insert(parents_.end(), attr.parents().begin(), attr.parents().end());
+
+  xattrs_.clear();
+  for (const auto& xattr : attr.xattrs()) {
+    xattrs_.emplace(xattr.first, xattr.second);
+  }
+
+  version_ = attr.version();
 
   return true;
 }
 
-bool Inode::PutIf(AttrEntry&& attr) {
-  utils::WriteLockGuard lk(lock_);
+Attr Inode::ToAttr() const {
+  utils::ReadLockGuard lk(lock_);
 
-  LOG(INFO) << fmt::format(
-      "[meta.icache.{}] update attr,this({}) version({}->{}).", attr_.ino(),
-      (void*)this, attr_.version(), attr.version());
+  Attr attr;
+  attr.ino = ino_;
+  attr.mode = mode_;
+  attr.nlink = nlink_;
+  attr.uid = uid_;
+  attr.gid = gid_;
+  attr.length = length_;
+  attr.rdev = rdev_;
+  attr.atime = atime_;
+  attr.mtime = mtime_;
+  attr.ctime = ctime_;
+  attr.type = Helper::ToFileType(type_);
+  attr.flags = flags_;
 
-  if (attr.version() <= attr_.version()) {
-    return false;
+  attr.parents = std::vector<mds::Ino>(parents_.begin(), parents_.end());
+  for (const auto& [key, value] : xattrs_) {
+    attr.xattrs.push_back(std::make_pair(key, value));
   }
 
-  attr_ = std::move(attr);
+  attr.version = version_;
 
-  return true;
+  return attr;
 }
 
-Attr Inode::ToAttr() {
+Inode::AttrEntry Inode::ToAttrEntry() const {
   utils::ReadLockGuard lk(lock_);
 
-  return Helper::ToAttr(attr_);
-}
+  Inode::AttrEntry attr;
+  attr.set_fs_id(fs_id_);
+  attr.set_ino(ino_);
+  attr.set_length(length_);
+  attr.set_ctime(ctime_);
+  attr.set_mtime(mtime_);
+  attr.set_atime(atime_);
+  attr.set_uid(uid_);
+  attr.set_gid(gid_);
+  attr.set_mode(mode_);
+  attr.set_nlink(nlink_);
+  attr.set_type(type_);
+  attr.set_symlink(symlink_);
+  attr.set_rdev(rdev_);
+  attr.set_flags(flags_);
+  for (const auto& parent : parents_) {
+    attr.add_parents(parent);
+  }
+  for (const auto& [key, value] : xattrs_) {
+    (*attr.mutable_xattrs())[key] = value;
+  }
+  attr.set_version(version_);
 
-Inode::AttrEntry Inode::ToAttrEntry() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_;
+  return attr;
 }
 
 void Inode::UpdateLastAccessTime() {

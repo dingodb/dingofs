@@ -202,8 +202,8 @@ static Status GetChunks(OperationProcessorSPtr operation_processor, uint32_t fs_
 }
 
 Status CleanDelFileTask::CleanDelFile(const AttrEntry& attr) {
-  LOG(INFO) << fmt::format("[gc.delfile.{}] clean delfile, nlink({}) len({}) version({}).", attr.ino(), attr.nlink(),
-                           attr.length(), attr.version());
+  LOG(INFO) << fmt::format("[gc.delfile.{}] clean delfile, nlink({}) len({}) ctime({}) version({}).", attr.ino(),
+                           attr.nlink(), attr.length(), attr.ctime(), attr.version());
   // get file chunks
   std::vector<ChunkEntry> chunks;
   auto status = GetChunks(operation_processor_, attr.fs_id(), attr.ino(), chunks);
@@ -749,7 +749,7 @@ void GcProcessor::ScanDelFs(const FsInfoEntry& fs_info) {
 
 bool GcProcessor::ShouldDeleteFile(const AttrEntry& attr) {
   uint64_t now_s = utils::Timestamp();
-  return (attr.ctime() / 1000000000 + FLAGS_mds_gc_delfile_reserve_time_s) < now_s;
+  return ((attr.ctime() / 1000000000) + FLAGS_mds_gc_delfile_reserve_time_s) < now_s;
 }
 
 bool GcProcessor::ShouldCleanFileSession(const FileSessionEntry& file_session,

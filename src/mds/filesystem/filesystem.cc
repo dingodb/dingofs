@@ -323,8 +323,6 @@ Status FileSystem::GetPartitionFromStore(Context& ctx, Ino parent, const std::st
     return Status::OK();
   }
 
-  // auto partition = Partition::New(parent_inode);
-
   auto partition = Partition(parent_inode);
 
   // add child dentry
@@ -511,8 +509,6 @@ std::vector<InodeSPtr> FileSystem::GetAllInodesFromCache() { return inode_cache_
 void FileSystem::UpsertInodeCache(Ino ino, InodeSPtr inode) { inode_cache_.PutIf(ino, inode); }
 
 void FileSystem::UpsertInodeCache(InodeSPtr inode) { inode_cache_.PutIf(inode->Ino(), inode); }
-
-void FileSystem::UpsertInodeCache(AttrEntry&& attr) { inode_cache_.PutIf(std::move(attr)); }
 
 void FileSystem::UpsertInodeCache(const AttrEntry& attr) { inode_cache_.PutIf(attr); }
 

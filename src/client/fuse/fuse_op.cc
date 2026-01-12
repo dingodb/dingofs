@@ -328,6 +328,7 @@ static std::string FuseCtx(fuse_req_t req) {
 
 int InitFuseClient(const char* argv0, const struct MountOption* mount_option,
                    dingofs::blockaccess::BlockAccessOptions* options) {
+  LOG(INFO) << "init fuse client.";
   dingofs::client::vfs::VFSConfig config = {
       .mds_addrs = mount_option->mds_addrs,
       .mount_point = mount_option->mount_point,
@@ -349,21 +350,26 @@ int InitFuseClient(const char* argv0, const struct MountOption* mount_option,
   return 0;
 }
 
-void UnInitFuseClient() { delete g_vfs; }
+void UnInitFuseClient() {
+  LOG(INFO) << "uninit fuse client.";
+  delete g_vfs;
+}
 
 void FuseOpInit(void* userdata, struct fuse_conn_info* conn) {
-  VLOG(1) << "FuseOpInit userdata: " << userdata;
-  (void)userdata;
+  LOG(INFO) << "init fuse op, userdata: " << userdata;
+
   g_vfs->Init();
   InitFuseConnInfo(conn);
-  LOG(INFO) << "FuseOpInit() success";
+
+  LOG(INFO) << "init fuse op success.";
 }
 
 void FuseOpDestroy(void* userdata) {
-  LOG(INFO) << "FuseOpDestroy userdata: " << userdata;
-  if (g_vfs) {
-    g_vfs->Stop();
-  }
+  LOG(INFO) << "destroy fuse op, userdata: " << userdata;
+
+  if (g_vfs) g_vfs->Stop();
+
+  LOG(INFO) << "destroy fuse op success.";
 }
 
 void FuseOpLookup(fuse_req_t req, fuse_ino_t parent, const char* name) {

@@ -62,7 +62,7 @@ DEFINE_bool(client_meta_read_chunk_cache_enable, true,
 
 MDSMetaSystem::MDSMetaSystem(mds::FsInfoEntry fs_info_entry,
                              const ClientId& client_id, RPC&& rpc,
-                             TraceManagerSPtr trace_manager)
+                             TraceManager& trace_manager)
     : name_(fs_info_entry.fs_name()),
       client_id_(client_id),
       fs_info_(fs_info_entry),

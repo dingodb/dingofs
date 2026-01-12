@@ -98,7 +98,7 @@ static bool LoadStateFile(Json::Value& root) {
 }
 
 Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
-  VLOG(2) << "vfs start: " << argv0;
+  LOG(INFO) << "start vfs wrapper: " << argv0;
 
   if (vfs_conf.fs_name.empty()) {
     return Status::InvalidParam("fs_name is empty");
@@ -167,8 +167,13 @@ Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
   return Status::OK();
 }
 
+void VFSWrapper::Init() {
+  LOG(INFO) << "init vfs wrapper.";
+  AccessLogGuard log([&]() { return "init vfs wrapper: OK"; });
+}
+
 Status VFSWrapper::Stop() {
-  VLOG(2) << "VFSStop";
+  LOG(INFO) << "stop vfs wrapper.";
 
   const bool is_upgrade = (FuseUpgradeManager::GetInstance().GetFuseState() ==
                            fuse::FuseUpgradeState::kFuseUpgradeOld);
@@ -221,16 +226,6 @@ bool VFSWrapper::Load(const Json::Value& value) {
   return true;
 }
 
-void VFSWrapper::Init() {
-  VLOG(2) << "VFSInit";
-  AccessLogGuard log([&]() { return "init : OK"; });
-}
-
-void VFSWrapper::Destroy() {
-  VLOG(2) << "VFSDestroy";
-  AccessLogGuard log([&]() { return "destroy: OK"; });
-}
-
 double VFSWrapper::GetAttrTimeout(const FileType& type) {
   return vfs_->GetAttrTimeout(type);
 }
@@ -240,8 +235,10 @@ double VFSWrapper::GetEntryTimeout(const FileType& type) {
 }
 
 Status VFSWrapper::Lookup(Ino parent, const std::string& name, Attr* attr) {
-  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::Lookup");
   VLOG(2) << "VFSLookup parent: " << parent << " name: " << name;
+
+  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::Lookup");
+
   Status s;
   AccessLogGuard log(
       [&]() {
@@ -270,13 +267,16 @@ Status VFSWrapper::Lookup(Ino parent, const std::string& name, Attr* attr) {
   if (!s.ok()) {
     op_metric.FailOp();
   }
+
   return s;
 }
 
 Status VFSWrapper::GetAttr(Ino ino, Attr* attr) {
+  VLOG(2) << "VFSGetAttr ino: " << ino;
+
   auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::GetAttr");
   auto ctx = SpanScope::GetContext(span);
-  VLOG(2) << "VFSGetAttr ino: " << ino;
+
   Status s;
   AccessLogGuard log(
       [&]() {
@@ -306,8 +306,10 @@ Status VFSWrapper::GetAttr(Ino ino, Attr* attr) {
 
 Status VFSWrapper::SetAttr(Ino ino, int set, const Attr& in_attr,
                            Attr* out_attr) {
-  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::SetAttr");
   VLOG(2) << "VFSSetAttr ino: " << ino << " set: " << set;
+
+  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::SetAttr");
+
   Status s;
   AccessLogGuard log([&]() {
     return absl::StrFormat("setattr (%d,0x%X): %s %s", ino, set, s.ToString(),
@@ -322,12 +324,15 @@ Status VFSWrapper::SetAttr(Ino ino, int set, const Attr& in_attr,
   if (!s.ok()) {
     op_metric.FailOp();
   }
+
   return s;
 }
 
 Status VFSWrapper::ReadLink(Ino ino, std::string* link) {
-  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::ReadLink");
   VLOG(2) << "VFSReadLink ino: " << ino;
+
+  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::ReadLink");
+
   Status s;
   AccessLogGuard log([&]() {
     return absl::StrFormat("readlink (%d): %s %s", ino, s.ToString(), *link);
@@ -341,16 +346,19 @@ Status VFSWrapper::ReadLink(Ino ino, std::string* link) {
   if (!s.ok()) {
     op_metric.FailOp();
   }
+
   return s;
 }
 
 Status VFSWrapper::MkNod(Ino parent, const std::string& name, uint32_t uid,
                          uint32_t gid, uint32_t mode, uint64_t dev,
                          Attr* attr) {
-  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::MkNod");
   VLOG(2) << "VFSMknod parent: " << parent << " name: " << name
           << " uid: " << uid << " gid: " << gid << " mode: " << mode
           << " dev: " << dev;
+
+  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::MkNod");
+
   Status s;
   AccessLogGuard log([&]() {
     return absl::StrFormat("mknod (%d,%s,%s:0%04o): %s %s", parent, name,
@@ -371,12 +379,15 @@ Status VFSWrapper::MkNod(Ino parent, const std::string& name, uint32_t uid,
   if (!s.ok()) {
     op_metric.FailOp();
   }
+
   return s;
 }
 
 Status VFSWrapper::Unlink(Ino parent, const std::string& name) {
-  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::Unlink");
   VLOG(2) << "VFSUnlink parent: " << parent << " name: " << name;
+
+  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::Unlink");
+
   Status s;
   AccessLogGuard log([&]() {
     return absl::StrFormat("unlink (%d,%s): %s", parent, name, s.ToString());
@@ -395,14 +406,16 @@ Status VFSWrapper::Unlink(Ino parent, const std::string& name) {
   if (!s.ok()) {
     op_metric.FailOp();
   }
+
   return s;
 }
 
 Status VFSWrapper::Symlink(Ino parent, const std::string& name, uint32_t uid,
                            uint32_t gid, const std::string& link, Attr* attr) {
-  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::Symlink");
   VLOG(2) << "VFSSymlink parent: " << parent << " name: " << name
           << " uid: " << uid << " gid: " << gid << " link: " << link;
+
+  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::Symlink");
 
   Status s;
   AccessLogGuard log([&]() {
@@ -422,14 +435,17 @@ Status VFSWrapper::Symlink(Ino parent, const std::string& name, uint32_t uid,
   s = vfs_->Symlink(SpanScope::GetContext(span), parent, name, uid, gid, link,
                     attr);
   VLOG(2) << "VFSSymlink end, status: " << s.ToString();
+
   return s;
 }
 
 Status VFSWrapper::Rename(Ino old_parent, const std::string& old_name,
                           Ino new_parent, const std::string& new_name) {
-  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::Rename");
   VLOG(2) << "VFSRename old_parent: " << old_parent << " old_name: " << old_name
           << " new_parent: " << new_parent << " new_name: " << new_name;
+
+  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::Rename");
+
   Status s;
   AccessLogGuard log([&]() {
     return absl::StrFormat("rename (%d,%s,%d,%s): %s", old_parent, old_name,
@@ -452,14 +468,17 @@ Status VFSWrapper::Rename(Ino old_parent, const std::string& old_name,
   if (!s.ok()) {
     op_metric.FailOp();
   }
+
   return s;
 }
 
 Status VFSWrapper::Link(Ino ino, Ino new_parent, const std::string& new_name,
                         Attr* attr) {
-  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::Link");
   VLOG(2) << "VFSLink ino: " << ino << " new_parent: " << new_parent
           << " new_name: " << new_name;
+
+  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::Link");
+
   Status s;
   AccessLogGuard log([&]() {
     return absl::StrFormat("link (%d,%d,%s): %s %s", ino, new_parent, new_name,
@@ -488,8 +507,10 @@ Status VFSWrapper::Link(Ino ino, Ino new_parent, const std::string& new_name,
 }
 
 Status VFSWrapper::Open(Ino ino, int flags, uint64_t* fh) {
-  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::Open");
   VLOG(2) << "VFSOpen ino: " << ino << " octal flags: " << std::oct << flags;
+
+  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::Open");
+
   Status s;
   AccessLogGuard log(
       [&]() {
@@ -506,16 +527,19 @@ Status VFSWrapper::Open(Ino ino, int flags, uint64_t* fh) {
   if (!s.ok()) {
     op_metric.FailOp();
   }
+
   return s;
 }
 
 Status VFSWrapper::Create(Ino parent, const std::string& name, uint32_t uid,
                           uint32_t gid, uint32_t mode, int flags, uint64_t* fh,
                           Attr* attr) {
-  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::Create");
   VLOG(2) << "VFSCreate parent: " << parent << " name: " << name
           << " uid: " << uid << " gid: " << gid << " mode: " << mode
           << " octal flags: " << std::oct << flags;
+
+  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::Create");
+
   Status s;
   AccessLogGuard log([&]() {
     return absl::StrFormat("create (%d,%s): %s %s [fh:%d]", parent, name,
@@ -538,14 +562,15 @@ Status VFSWrapper::Create(Ino parent, const std::string& name, uint32_t uid,
   if (!s.ok()) {
     op_metric.FailOp();
   }
+
   return s;
 }
 
 Status VFSWrapper::Read(Ino ino, DataBuffer* data_buffer, uint64_t size,
                         uint64_t offset, uint64_t fh, uint64_t* out_rsize) {
   auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::Read");
-
   std::string session_id = SpanScope::GetSessionID(span);
+
   VLOG(2) << fmt::format("[{}] VFSRead ino: {}, size: {}, offset: {}, fh: {}",
                          session_id, ino, size, offset, fh);
 
@@ -582,9 +607,11 @@ Status VFSWrapper::Read(Ino ino, DataBuffer* data_buffer, uint64_t size,
 
 Status VFSWrapper::Write(Ino ino, const char* buf, uint64_t size,
                          uint64_t offset, uint64_t fh, uint64_t* out_wsize) {
-  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::Write");
   VLOG(2) << "VFSWrite ino: " << ino << ", buf:  " << Helper::Char2Addr(buf)
           << ", size: " << size << " offset: " << offset << " fh: " << fh;
+
+  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::Write");
+
   Status s;
   AccessLogGuard log([&]() {
     return absl::StrFormat("write (%d,%d,%d): %s (%d) [fh:%d]", ino, size,
@@ -604,12 +631,15 @@ Status VFSWrapper::Write(Ino ino, const char* buf, uint64_t size,
   if (!s.ok()) {
     op_metric.FailOp();
   }
+
   return s;
 }
 
 Status VFSWrapper::Flush(Ino ino, uint64_t fh) {
-  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::Flush");
   VLOG(2) << "VFSFlush ino: " << ino << " fh: " << fh;
+
+  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::Flush");
+
   Status s;
   AccessLogGuard log(
       [&]() {
@@ -626,12 +656,15 @@ Status VFSWrapper::Flush(Ino ino, uint64_t fh) {
   if (!s.ok()) {
     op_metric.FailOp();
   }
+
   return s;
 }
 
 Status VFSWrapper::Release(Ino ino, uint64_t fh) {
-  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::Release");
   VLOG(2) << "VFSRelease ino: " << ino << " fh: " << fh;
+
+  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::Release");
+
   Status s;
   AccessLogGuard log(
       [&]() {
@@ -649,13 +682,16 @@ Status VFSWrapper::Release(Ino ino, uint64_t fh) {
   if (!s.ok()) {
     op_metric.FailOp();
   }
+
   return s;
 }
 
 Status VFSWrapper::Fsync(Ino ino, int datasync, uint64_t fh) {
-  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::Fsync");
   VLOG(2) << "VFSFsync ino: " << ino << " datasync: " << datasync
           << " fh: " << fh;
+
+  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::Fsync");
+
   Status s;
   AccessLogGuard log([&]() {
     return absl::StrFormat("fsync (%d,%d): %s [fh:%d]", ino, datasync,
@@ -670,14 +706,17 @@ Status VFSWrapper::Fsync(Ino ino, int datasync, uint64_t fh) {
   if (!s.ok()) {
     op_metric.FailOp();
   }
+
   return s;
 }
 
 Status VFSWrapper::SetXattr(Ino ino, const std::string& name,
                             const std::string& value, int flags) {
-  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::SetXattr");
   VLOG(2) << "VFSSetXattr ino: " << ino << " name: " << name
           << " value: " << value << " octal flags: " << std::oct << flags;
+
+  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::SetXattr");
+
   Status s;
   AccessLogGuard log([&]() {
     return absl::StrFormat("setxattr (%d,%s): %s", ino, name, s.ToString());
@@ -695,14 +734,17 @@ Status VFSWrapper::SetXattr(Ino ino, const std::string& name,
   // NOTE: s is used by log guard
   s = vfs_->SetXattr(SpanScope::GetContext(span), ino, name, value, flags);
   LOG(INFO) << "VFSSetXattr end, status: " << s.ToString();
+
   return s;
 }
 
 Status VFSWrapper::GetXattr(Ino ino, const std::string& name,
                             std::string* value) {
+  VLOG(2) << "VFSGetXattr ino: " << ino << " name: " << name;
+
   auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::GetXattr");
   auto ctx = SpanScope::GetContext(span);
-  VLOG(2) << "VFSGetXattr ino: " << ino << " name: " << name;
+
   Status s;
   AccessLogGuard log(
       [&]() {
@@ -736,8 +778,10 @@ Status VFSWrapper::GetXattr(Ino ino, const std::string& name,
 }
 
 Status VFSWrapper::RemoveXattr(Ino ino, const std::string& name) {
-  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::RemoveXattr");
   VLOG(2) << "VFSRemoveXattr ino: " << ino << " name: " << name;
+
+  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::RemoveXattr");
+
   Status s;
   AccessLogGuard log([&]() {
     return absl::StrFormat("removexattr (%d,%s): %s", ino, name, s.ToString());
@@ -755,13 +799,16 @@ Status VFSWrapper::RemoveXattr(Ino ino, const std::string& name) {
   // NOTE: s is used by log guard
   s = vfs_->RemoveXattr(SpanScope::GetContext(span), ino, name);
   LOG(INFO) << "VFSSetXattr end, status: " << s.ToString();
+
   return s;
 }
 
 Status VFSWrapper::ListXattr(Ino ino, std::vector<std::string>* xattrs) {
+  VLOG(2) << "VFSListXattr ino: " << ino;
+
   auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::ListXattr");
   auto ctx = SpanScope::GetContext(span);
-  VLOG(2) << "VFSListXattr ino: " << ino;
+
   Status s;
   AccessLogGuard log([&]() {
     return absl::StrFormat("listxattr (%d): %s %d %s", ino, s.ToString(),
@@ -777,14 +824,17 @@ Status VFSWrapper::ListXattr(Ino ino, std::vector<std::string>* xattrs) {
   if (!s.ok()) {
     op_metric.FailOp();
   }
+
   return s;
 }
 
 Status VFSWrapper::MkDir(Ino parent, const std::string& name, uint32_t uid,
                          uint32_t gid, uint32_t mode, Attr* attr) {
-  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::MkDir");
   VLOG(2) << "VFSMkDir parent ino: " << parent << " name: " << name
           << " uid: " << uid << " gid: " << gid << " mode: " << mode;
+
+  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::MkDir");
+
   Status s;
   AccessLogGuard log([&]() {
     return absl::StrFormat("mkdir (%d,%s,%s:0%04o,%d,%d): %s %s", parent, name,
@@ -811,8 +861,10 @@ Status VFSWrapper::MkDir(Ino parent, const std::string& name, uint32_t uid,
 }
 
 Status VFSWrapper::OpenDir(Ino ino, uint64_t* fh, bool& need_cache) {
-  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::OpenDir");
   VLOG(2) << "VFSOpendir ino: " << ino;
+
+  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::OpenDir");
+
   Status s;
   AccessLogGuard log([&]() {
     return absl::StrFormat("opendir (%d): %s [fh:%d]", ino, s.ToString(), *fh);
@@ -835,9 +887,11 @@ Status VFSWrapper::OpenDir(Ino ino, uint64_t* fh, bool& need_cache) {
 
 Status VFSWrapper::ReadDir(Ino ino, uint64_t fh, uint64_t offset,
                            bool with_attr, ReadDirHandler handler) {
-  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::ReadDir");
   VLOG(2) << "VFSReaddir ino: " << ino << " fh: " << fh << " offset: " << offset
           << " with_attr: " << (with_attr ? "true" : "false");
+
+  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::ReadDir");
+
   Status s;
   AccessLogGuard log([&]() {
     return absl::StrFormat("readdir (%d): %s (%d) [fh:%d]", ino, s.ToString(),
@@ -855,12 +909,15 @@ Status VFSWrapper::ReadDir(Ino ino, uint64_t fh, uint64_t offset,
   if (!s.ok()) {
     op_metric.FailOp();
   }
+
   return s;
 }
 
 Status VFSWrapper::ReleaseDir(Ino ino, uint64_t fh) {
-  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::ReleaseDir");
   VLOG(2) << "VFSReleaseDir ino: " << ino << " fh: " << fh;
+
+  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::ReleaseDir");
+
   Status s;
   AccessLogGuard log([&]() {
     return absl::StrFormat("releasedir (%d): %s [fh:%d]", ino, s.ToString(),
@@ -875,12 +932,15 @@ Status VFSWrapper::ReleaseDir(Ino ino, uint64_t fh) {
   if (!s.ok()) {
     op_metric.FailOp();
   }
+
   return s;
 }
 
 Status VFSWrapper::RmDir(Ino parent, const std::string& name) {
-  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::RmDir");
   VLOG(2) << "VFSRmdir parent: " << parent << " name: " << name;
+
+  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::RmDir");
+
   Status s;
   AccessLogGuard log([&]() {
     return absl::StrFormat("rmdir (%d,%s): %s", parent, name, s.ToString());
@@ -899,16 +959,18 @@ Status VFSWrapper::RmDir(Ino parent, const std::string& name) {
   if (!s.ok()) {
     op_metric.FailOp();
   }
+
   return s;
 }
 
 Status VFSWrapper::Ioctl(Ino ino, uint32_t uid, unsigned int cmd,
                          unsigned flags, const void* in_buf, size_t in_bufsz,
                          char* out_buf, size_t out_bufsz) {
-  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::Ioctl");
-
   VLOG(2) << "VFSIoctl ino: " << ino << " cmd: " << cmd << " flags: " << flags
           << " in_bufsz: " << in_bufsz << " out_bufsz: " << out_bufsz;
+
+  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::Ioctl");
+
   Status s;
   AccessLogGuard log([&]() {
     return absl::StrFormat("ioctl (%d,%u,%u,%zu,%zu): %s", ino, cmd, flags,
@@ -924,8 +986,10 @@ Status VFSWrapper::Ioctl(Ino ino, uint32_t uid, unsigned int cmd,
 }
 
 Status VFSWrapper::StatFs(Ino ino, FsStat* fs_stat) {
-  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::StatFs");
   VLOG(2) << "VFSStatFs ino: " << ino;
+
+  auto span = vfs_->GetTraceManager().StartSpan("VFSWrapper::StatFs");
+
   Status s;
   AccessLogGuard log(
       [&]() { return absl::StrFormat("statfs (%d): %s", ino, s.ToString()); });
@@ -934,6 +998,7 @@ Status VFSWrapper::StatFs(Ino ino, FsStat* fs_stat) {
       {&client_op_metric_->opStatfs, &client_op_metric_->opAll});
 
   s = vfs_->StatFs(SpanScope::GetContext(span), ino, fs_stat);
+
   VLOG(2) << "VFSStatFs end, status: " << s.ToString()
           << " fs_stat: " << FsStat2Str(*fs_stat);
 
@@ -942,17 +1007,19 @@ Status VFSWrapper::StatFs(Ino ino, FsStat* fs_stat) {
 
 uint64_t VFSWrapper::GetFsId() {
   uint64_t fs_id = vfs_->GetFsId();
-  VLOG(6) << "VFSGetFsId fs_id: " << fs_id;
+  VLOG(6) << "fs_id: " << fs_id;
   return fs_id;
 }
 
 uint64_t VFSWrapper::GetMaxNameLength() {
   uint64_t max_name_length = vfs_->GetMaxNameLength();
-  VLOG(6) << "VFSGetMaxNameLength max_name_length: " << max_name_length;
+  VLOG(6) << "max name length: " << max_name_length;
   return max_name_length;
 }
 
 blockaccess::BlockAccessOptions VFSWrapper::GetBlockAccesserOptions() {
+  CHECK(vfs_ != nullptr) << "vfs_ is nullptr";
+
   return vfs_->GetBlockAccesserOptions();
 }
 

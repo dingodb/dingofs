@@ -235,9 +235,9 @@ static void PerformanceTest(size_t iterations) {
   butil::Timer timer;
   timer.start();
 
-  for (size_t i = 0; i < iterations; ++i) {
-    std::to_string(utils::TimestampNs());
-  }
+  //   for (size_t i = 0; i < iterations; ++i) {
+  //     std::to_string(utils::TimestampNs());
+  //   }
 
   timer.stop();
 

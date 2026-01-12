@@ -17,6 +17,8 @@
 
 #include <sys/types.h>
 
+#include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -27,6 +29,7 @@
 #include "mds/common/type.h"
 #include "utils/concurrent/concurrent.h"
 #include "utils/shards.h"
+#include "utils/time.h"
 
 namespace dingofs {
 namespace mds {
@@ -41,49 +44,137 @@ class Inode {
   using XAttrMap = ::google::protobuf::Map<std::string, std::string>;
   using ChunkMap = ::google::protobuf::Map<uint64_t, ChunkEntry>;
 
-  Inode(const AttrEntry& attr) { attr_ = attr; }
-  Inode(AttrEntry&& attr) { attr_ = std::move(attr); }
+  Inode(const AttrEntry& attr)
+      : fs_id_(attr.fs_id()),
+        ino_(attr.ino()),
+        type_(attr.type()),
+        length_(attr.length()),
+        ctime_(attr.ctime()),
+        mtime_(attr.mtime()),
+        atime_(attr.atime()),
+        uid_(attr.uid()),
+        gid_(attr.gid()),
+        mode_(attr.mode()),
+        nlink_(attr.nlink()),
+        symlink_(attr.symlink()),
+        rdev_(attr.rdev()),
+        flags_(attr.flags()),
+        version_(attr.version()),
+        parents_(attr.parents().begin(), attr.parents().end()) {
+    for (const auto& xattr : attr.xattrs()) {
+      xattrs_.emplace(xattr.first, xattr.second);
+    }
+  }
   ~Inode() = default;
 
   static InodeSPtr New(const AttrEntry& inode) { return std::make_shared<Inode>(inode); }
-  static InodeSPtr New(AttrEntry&& inode) { return std::make_shared<Inode>(std::move(inode)); }
 
-  uint32_t FsId();
-  uint64_t Ino();
-  FileType Type();
-  uint64_t Length();
-  uint32_t Uid();
-  uint32_t Gid();
-  uint32_t Mode();
-  uint32_t Nlink();
-  std::string Symlink();
-  uint64_t Rdev();
-  uint32_t Dtime();
-  uint64_t Ctime();
-  uint64_t Mtime();
-  uint64_t Atime();
-  uint32_t Openmpcount();
-  uint64_t Version();
-  uint32_t Flags();
+  uint32_t FsId() const { return fs_id_; }
+  uint64_t Ino() const { return ino_; }
+  FileType Type() const { return type_; }
 
-  XAttrMap XAttrs();
-  std::string XAttr(const std::string& name);
+  uint64_t Length() const {
+    utils::ReadLockGuard lk(lock_);
+    return length_;
+  }
+  uint32_t Uid() const {
+    utils::ReadLockGuard lk(lock_);
+    return uid_;
+  }
+  uint32_t Gid() const {
+    utils::ReadLockGuard lk(lock_);
+    return gid_;
+  }
+  uint32_t Mode() const {
+    utils::ReadLockGuard lk(lock_);
+    return mode_;
+  }
+  uint32_t Nlink() const {
+    utils::ReadLockGuard lk(lock_);
+    return nlink_;
+  }
+  std::string Symlink() const {
+    utils::ReadLockGuard lk(lock_);
+    return symlink_;
+  }
+  uint64_t Rdev() const {
+    utils::ReadLockGuard lk(lock_);
+    return rdev_;
+  }
+  uint64_t Ctime() const {
+    utils::ReadLockGuard lk(lock_);
+
+    return ctime_;
+  }
+  uint64_t Mtime() const {
+    utils::ReadLockGuard lk(lock_);
+    return mtime_;
+  }
+  uint64_t Atime() const {
+    utils::ReadLockGuard lk(lock_);
+    return atime_;
+  }
+  uint32_t Flags() const {
+    utils::ReadLockGuard lk(lock_);
+    return flags_;
+  }
+  uint64_t Version() const {
+    utils::ReadLockGuard lk(lock_);
+    return version_;
+  }
+
+  XAttrMap XAttrs() const {
+    utils::ReadLockGuard lk(lock_);
+
+    XAttrMap xattrs;
+    for (const auto& [key, value] : xattrs_) {
+      xattrs.emplace(key, value);
+    }
+
+    return xattrs;
+  }
+
+  std::string XAttr(const std::string& name) const {
+    utils::ReadLockGuard lk(lock_);
+
+    auto it = xattrs_.find(name);
+    return (it != xattrs_.end()) ? it->second : "";
+  }
 
   bool PutIf(const AttrEntry& attr);
-  bool PutIf(AttrEntry&& attr);
 
   void ExpandLength(uint64_t length);
 
   AttrEntry Copy();
-  AttrEntry&& Move();
 
-  void UpdateLastAccessTime();
-  uint64_t LastAccessTimeS();
+  void UpdateLastAccessTime() { last_access_time_s_.store(utils::Timestamp(), std::memory_order_release); }
+  uint64_t LastAccessTimeS() { return last_access_time_s_.load(std::memory_order_acquire); }
 
  private:
-  utils::RWLock lock_;
+  mutable utils::RWLock lock_;
 
-  AttrEntry attr_;
+  const uint32_t fs_id_{0};
+  const mds::Ino ino_{0};
+  const FileType type_;
+
+  uint32_t uid_{0};
+  uint32_t gid_{0};
+  uint32_t mode_{0};
+  uint32_t nlink_{0};
+  std::string symlink_;
+  uint64_t rdev_{0};
+  uint32_t flags_;
+
+  static constexpr size_t kDefaultParentNum = 8;
+  absl::InlinedVector<mds::Ino, kDefaultParentNum> parents_;
+  absl::flat_hash_map<std::string, std::string> xattrs_;
+
+  uint64_t length_{0};
+  uint64_t ctime_{0};
+  uint64_t mtime_{0};
+  uint64_t atime_{0};
+
+  uint64_t version_{0};
 
   std::atomic<uint64_t> last_access_time_s_{0};
 };

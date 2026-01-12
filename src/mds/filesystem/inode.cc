@@ -36,151 +36,39 @@ static const std::string kInodeCacheMetricsPrefix = "dingofs_{}_inode_cache_{}";
 DEFINE_uint32(mds_inode_cache_max_count, 4 * 1024 * 1024, "inode cache max count");
 DEFINE_validator(mds_inode_cache_max_count, brpc::PassValidate);
 
-uint32_t Inode::FsId() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_.fs_id();
-}
-
-uint64_t Inode::Ino() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_.ino();
-}
-
-FileType Inode::Type() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_.type();
-}
-
-uint64_t Inode::Length() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_.length();
-}
-
-uint32_t Inode::Uid() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_.uid();
-}
-
-uint32_t Inode::Gid() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_.gid();
-}
-
-uint32_t Inode::Mode() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_.mode();
-}
-
-uint32_t Inode::Nlink() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_.nlink();
-}
-
-std::string Inode::Symlink() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_.symlink();
-}
-
-uint64_t Inode::Rdev() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_.rdev();
-}
-
-uint32_t Inode::Dtime() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_.dtime();
-}
-
-uint64_t Inode::Ctime() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_.ctime();
-}
-
-uint64_t Inode::Mtime() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_.mtime();
-}
-
-uint64_t Inode::Atime() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_.atime();
-}
-
-uint32_t Inode::Openmpcount() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_.openmpcount();
-}
-
-uint64_t Inode::Version() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_.version();
-}
-
-uint32_t Inode::Flags() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_.flags();
-}
-
-Inode::XAttrMap Inode::XAttrs() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_.xattrs();
-}
-
-std::string Inode::XAttr(const std::string& name) {
-  utils::ReadLockGuard lk(lock_);
-
-  auto it = attr_.xattrs().find(name);
-  return (it != attr_.xattrs().end()) ? it->second : std::string();
-}
-
 bool Inode::PutIf(const AttrEntry& attr) {
   utils::WriteLockGuard lk(lock_);
 
-  LOG(INFO) << fmt::format("[inode.{}] update attr,this({}) version({}->{}).", attr_.ino(), (void*)this,
-                           attr_.version(), attr.version());
+  LOG(INFO) << fmt::format("[inode.{}] update attr,this({}) version({}->{}).", ino_, (void*)this, version_,
+                           attr.version());
 
-  if (attr.version() <= attr_.version()) {
-    LOG_DEBUG << fmt::format("[inode.{}] version abnormal, old({}) new({}).", attr_.ino(), attr_.version(),
-                             attr.version());
+  if (attr.version() <= version_) {
+    LOG_DEBUG << fmt::format("[inode.{}] version abnormal, old({}) new({}).", ino_, version_, attr.version());
     return false;
   }
 
-  attr_ = attr;
+  // clone new attr
+  if (length_ != attr.length()) length_ = attr.length();
+  if (ctime_ != attr.ctime()) ctime_ = attr.ctime();
+  if (mtime_ != attr.mtime()) mtime_ = attr.mtime();
+  if (atime_ != attr.atime()) atime_ = attr.atime();
+  if (uid_ != attr.uid()) uid_ = attr.uid();
+  if (gid_ != attr.gid()) gid_ = attr.gid();
+  if (mode_ != attr.mode()) mode_ = attr.mode();
+  if (nlink_ != attr.nlink()) nlink_ = attr.nlink();
+  if (symlink_ != attr.symlink()) symlink_ = attr.symlink();
+  if (rdev_ != attr.rdev()) rdev_ = attr.rdev();
+  if (flags_ != attr.flags()) flags_ = attr.flags();
 
-  return true;
-}
+  parents_.clear();
+  parents_.insert(parents_.end(), attr.parents().begin(), attr.parents().end());
 
-bool Inode::PutIf(AttrEntry&& attr) {
-  utils::WriteLockGuard lk(lock_);
-
-  LOG(INFO) << fmt::format("[inode.{}] update attr,this({}) version({}->{}).", attr_.ino(), (void*)this,
-                           attr_.version(), attr.version());
-
-  if (attr.version() <= attr_.version()) {
-    LOG_DEBUG << fmt::format("[inode.{}] version abnormal, old({}) new({}).", attr_.ino(), attr_.version(),
-                             attr.version());
-    return false;
+  xattrs_.clear();
+  for (const auto& xattr : attr.xattrs()) {
+    xattrs_.emplace(xattr.first, xattr.second);
   }
 
-  attr_ = std::move(attr);
+  version_ = attr.version();
 
   return true;
 }
@@ -188,30 +76,44 @@ bool Inode::PutIf(AttrEntry&& attr) {
 void Inode::ExpandLength(uint64_t length) {
   utils::WriteLockGuard lk(lock_);
 
-  if (length <= attr_.length()) return;
+  if (length <= length_) return;
+
+  length_ = length;
 
   uint64_t now_ns = utils::TimestampNs();
-  attr_.set_length(length);
-  attr_.set_mtime(now_ns);
-  attr_.set_ctime(now_ns);
-  attr_.set_atime(now_ns);
+  mtime_ = now_ns;
+  ctime_ = now_ns;
+  atime_ = now_ns;
 }
 
 Inode::AttrEntry Inode::Copy() {
   utils::ReadLockGuard lk(lock_);
 
-  return attr_;
+  Inode::AttrEntry attr;
+  attr.set_fs_id(fs_id_);
+  attr.set_ino(ino_);
+  attr.set_length(length_);
+  attr.set_ctime(ctime_);
+  attr.set_mtime(mtime_);
+  attr.set_atime(atime_);
+  attr.set_uid(uid_);
+  attr.set_gid(gid_);
+  attr.set_mode(mode_);
+  attr.set_nlink(nlink_);
+  attr.set_type(type_);
+  attr.set_symlink(symlink_);
+  attr.set_rdev(rdev_);
+  attr.set_flags(flags_);
+  for (const auto& parent : parents_) {
+    attr.add_parents(parent);
+  }
+  for (const auto& [key, value] : xattrs_) {
+    (*attr.mutable_xattrs())[key] = value;
+  }
+  attr.set_version(version_);
+
+  return attr;
 }
-
-Inode::AttrEntry&& Inode::Move() {
-  utils::WriteLockGuard lk(lock_);
-
-  return std::move(attr_);
-}
-
-void Inode::UpdateLastAccessTime() { last_access_time_s_.store(utils::Timestamp(), std::memory_order_relaxed); }
-
-uint64_t Inode::LastAccessTimeS() { return last_access_time_s_.load(std::memory_order_relaxed); }
 
 InodeCache::InodeCache(uint32_t fs_id)
     : fs_id_(fs_id),
@@ -242,9 +144,9 @@ void InodeCache::PutIf(AttrEntry&& attr) {  // NOLINT
         auto it = map.find(attr.ino());
         if (it == map.end()) {
           const Ino ino = attr.ino();
-          map.emplace(ino, Inode::New(std::move(attr)));
+          map.emplace(ino, Inode::New(attr));
         } else {
-          it->second->PutIf(std::move(attr));
+          it->second->PutIf(attr);
         }
       },
       attr.ino());

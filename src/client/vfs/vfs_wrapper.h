@@ -42,9 +42,6 @@ class VFSWrapper {
   // for fuse op init, may remove in future
   void Init();
 
-  // for fuse op destroy, may remove in future
-  void Destroy();
-
   double GetAttrTimeout(const FileType& type);
 
   double GetEntryTimeout(const FileType& type);

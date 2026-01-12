@@ -56,12 +56,12 @@ using MDSMetaSystemUPtr = std::unique_ptr<MDSMetaSystem>;
 class MDSMetaSystem : public vfs::MetaSystem {
  public:
   MDSMetaSystem(mds::FsInfoEntry fs_info_entry, const ClientId& client_id,
-                RPC&& rpc, TraceManagerSPtr trace_manager);
+                RPC&& rpc, TraceManager& trace_manager);
   ~MDSMetaSystem() override;
 
   static MDSMetaSystemUPtr New(mds::FsInfoEntry fs_info_entry,
                                const ClientId& client_id, RPC&& rpc,
-                               TraceManagerSPtr trace_manager) {
+                               TraceManager& trace_manager) {
     return std::make_unique<MDSMetaSystem>(fs_info_entry, client_id,
                                            std::move(rpc), trace_manager);
   }

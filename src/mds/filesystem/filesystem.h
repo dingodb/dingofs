@@ -286,7 +286,6 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   std::vector<InodeSPtr> GetAllInodesFromCache();
   void UpsertInodeCache(Ino ino, InodeSPtr inode);
   void UpsertInodeCache(InodeSPtr inode);
-  void UpsertInodeCache(AttrEntry&& attr);
   void UpsertInodeCache(const AttrEntry& attr);
   void DeleteInodeFromCache(Ino ino);
 

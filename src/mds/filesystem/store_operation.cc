@@ -1489,14 +1489,11 @@ Status BatchUnlinkOperation::Run(TxnUPtr& txn) {
     DelParentIno(attr, parent);
     attr.set_ctime(std::max(attr.ctime(), GetTime()));
     attr.set_version(attr.version() + 1);
+    txn->Put(key, MetaCodec::EncodeInodeValue(attr));
+
     if (attr.nlink() <= 0) {
-      // delete inode
-      txn->Delete(key);
       // save delete file info
       txn->Put(MetaCodec::EncodeDelFileKey(fs_id, attr.ino()), MetaCodec::EncodeDelFileValue(attr));
-
-    } else {
-      txn->Put(key, MetaCodec::EncodeInodeValue(attr));
     }
   }
 
@@ -2959,7 +2956,9 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
       break;
     }
 
-    attr = MetaCodec::DecodeInodeValue(FindValue(prefetch_kvs, primary_key));
+    auto primary_value = FindValue(prefetch_kvs, primary_key);
+    CHECK(!primary_value.empty()) << fmt::format("[operation.{}.{}] inode primary value is empty.", fs_id, ino);
+    attr = MetaCodec::DecodeInodeValue(primary_value);
 
     // run set attr operations
     for (auto* operation : batch_operation.setattr_operations) {
