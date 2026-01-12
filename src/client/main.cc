@@ -136,6 +136,24 @@ static dingofs::FlagExtraInfo extras = {
 };
 
 int main(int argc, char* argv[]) {
+  // after parsing:
+  // argv[0] is program name
+  // argv[1] is meta url
+  // argv[2] is mount point
+  if (argc < 3) {
+    std::cerr << "missing meta url or mount point.\n";
+    std::cerr << "Usage: " << extras.usage << '\n';
+    std::cerr << "\n";
+    std::cerr << "Examples:\n" << extras.examples << '\n';
+
+    std::cerr << "For more help see: dingo-client --help\n";
+    return EXIT_FAILURE;
+  }
+
+  std::vector<std::string> orig_args;
+  orig_args.reserve(argc);
+  for (int i = 1; i < argc; ++i) orig_args.emplace_back(argv[i]);
+
   // install singal handler
   InstallSignal(SIGHUP, HandleSignal);
 
@@ -154,20 +172,6 @@ int main(int argc, char* argv[]) {
 
   // reset brpc flag default value if not set
   dingofs::ResetBrpcFlagDefaultValue();
-
-  // after parsing:
-  // argv[0] is program name
-  // argv[1] is meta url
-  // argv[2] is mount point
-  if (argc < 3) {
-    std::cerr << "missing meta url or mount point.\n";
-    std::cerr << "Usage: " << extras.usage << '\n';
-    std::cerr << "\n";
-    std::cerr << "Examples:\n" << extras.examples << '\n';
-
-    std::cerr << "For more help see: dingo-client --help\n";
-    return EXIT_FAILURE;
-  }
 
   dingofs::MetaSystemType metasystem_type;
   std::string mds_addrs;
@@ -190,8 +194,7 @@ int main(int argc, char* argv[]) {
   // used for remote cache
   dingofs::cache::FLAGS_mds_addrs = mds_addrs;
 
-  // run in daemon mode
-  if (dingofs::FLAGS_daemonize && !dingofs::utils::Daemonize(false, true)) {
+  if (dingofs::FLAGS_daemonize && !dingofs::utils::DaemonizeExec(orig_args)) {
     std::cerr << "failed to daemonize process.\n";
     return EXIT_FAILURE;
   }
