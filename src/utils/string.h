@@ -30,8 +30,6 @@
 #include <string>
 #include <vector>
 
-#include "utils/uuid.h"
-
 namespace dingofs {
 namespace utils {
 
@@ -70,8 +68,6 @@ inline bool Strs2Ints(const std::vector<std::string>& strs,
   }
   return true;
 }
-
-inline std::string GenUuid() { return utils::UUIDGenerator().GenerateUUID(); }
 
 inline std::string TrimSpace(const std::string& str) {
   std::string s = str;

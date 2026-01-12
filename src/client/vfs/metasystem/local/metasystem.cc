@@ -1588,7 +1588,7 @@ mds::FsInfoEntry LocalMetaSystem::GenFsInfo() {
   fs_info.set_recycle_time_hour(24);
   fs_info.set_create_time_s(utils::Timestamp());
   fs_info.set_last_update_time_ns(utils::TimestampNs());
-  fs_info.set_uuid(utils::UUIDGenerator::GenerateUUID());
+  fs_info.set_uuid(utils::GenerateUUID());
 
   fs_info.set_version(1);
 

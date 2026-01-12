@@ -1949,7 +1949,7 @@ Status SetFsQuotaOperation::Run(TxnUPtr& txn) {
   if (!value.empty()) {
     fs_quota = MetaCodec::DecodeFsQuotaValue(value);
   } else {
-    fs_quota.set_uuid(utils::UUIDGenerator::GenerateUUID());
+    fs_quota.set_uuid(utils::GenerateUUID());
     fs_quota.set_create_time_ns(utils::TimestampNs());
   }
 
@@ -2026,7 +2026,7 @@ Status SetDirQuotaOperation::Run(TxnUPtr& txn) {
   if (!value.empty()) {
     dir_quota = MetaCodec::DecodeDirQuotaValue(value);
   } else {
-    dir_quota.set_uuid(utils::UUIDGenerator::GenerateUUID());
+    dir_quota.set_uuid(utils::GenerateUUID());
     dir_quota.set_create_time_ns(utils::TimestampNs());
   }
 

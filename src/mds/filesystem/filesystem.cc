@@ -2926,7 +2926,7 @@ FsInfoEntry FileSystemSet::GenFsInfo(uint32_t fs_id, const CreateFsParam& param)
   fs_info.set_recycle_time_hour(param.recycle_time_hour > 0 ? param.recycle_time_hour
                                                             : FLAGS_mds_filesystem_recycle_time_hour);
   fs_info.mutable_extra()->CopyFrom(param.fs_extra);
-  fs_info.set_uuid(utils::UUIDGenerator::GenerateUUID());
+  fs_info.set_uuid(utils::GenerateUUID());
 
   auto mds_metas = mds_meta_map_->GetAllMDSMeta();
   auto* partition_policy = fs_info.mutable_partition_policy();

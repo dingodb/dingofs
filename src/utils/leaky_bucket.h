@@ -23,16 +23,15 @@
 #ifndef SRC_COMMON_LEAKY_BUCKET_H_
 #define SRC_COMMON_LEAKY_BUCKET_H_
 
-#include <bthread/condition_variable.h>
-#include <bthread/mutex.h>
-#include <bthread/timer_thread.h>
-#include <gflags/gflags.h>
-#include <google/protobuf/stubs/callback.h>
-
-#include <cstddef>
 #include <cstdint>
 #include <deque>
 #include <string>
+
+#include "bthread/condition_variable.h"
+#include "bthread/mutex.h"
+#include "bthread/timer_thread.h"
+#include "gflags/gflags.h"
+#include "google/protobuf/stubs/callback.h"
 
 namespace dingofs {
 namespace utils {

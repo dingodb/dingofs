@@ -41,7 +41,7 @@
 #include "mds/filesystem/fs_utils.h"
 #include "mds/server.h"
 #include "mds/storage/dingodb_storage.h"
-#include "utils/string.h"
+#include "utils/uuid.h"
 
 namespace dingofs {
 namespace mds {
@@ -362,7 +362,7 @@ static void RenderClientList(const std::vector<ClientEntry>& clients, butil::IOB
 static void RenderCacheMemberList(const std::vector<CacheMemberEntry>& cache_members, butil::IOBufBuilder& os) {
   os << R"(<div style="margin:12px;margin-top:64px;font-size:smaller;">)";
   os << fmt::format(R"(<h3>Cache [{}]</h3>)", cache_members.size());
-  os << "<td>" << fmt::format("Available UUID: {}", utils::GenUuid()) << "</td>";
+  os << "<td>" << fmt::format("Available UUID: {}", utils::GenerateUUID()) << "</td>";
   os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
   os << "<tr>";
   os << "<th>Member_ID</th>";

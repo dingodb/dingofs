@@ -32,7 +32,7 @@
 
 #include "common/const.h"
 #include "common/helper.h"
-#include "utils/string.h"
+#include "utils/uuid.h"
 
 namespace dingofs {
 
@@ -97,7 +97,7 @@ std::string FlagsHelper::GenTemplate(const FlagsInfo& flags) {
     auto key = gflag.name;
     auto value = gflag.default_value;
     if (key == "id") {
-      value = utils::GenUuid();
+      value = utils::GenerateUUID();
     }
     os << "--" << key << "=" << value << "\n";
   }

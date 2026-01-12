@@ -35,14 +35,13 @@
 #include "cache/blockcache/disk_cache.h"
 #include "cache/utils/access_log.h"
 #include "options/cache/block_cache.h"
-#include "utils/string.h"
+#include "utils/uuid.h"
 
 namespace dingofs {
 namespace cache {
 
 using cache::BlockCacheOption;
 using cache::DiskCacheOption;
-using utils::GenUuid;
 
 class BlockKeyBuilder {
  public:
@@ -73,7 +72,7 @@ class DiskCacheBuilder {
   static DiskCacheOption DefaultOption() {
     auto option = DiskCacheOption();
     option.cache_index() = 0;
-    option.cache_dir() = "." + GenUuid();
+    option.cache_dir() = "." + utils::GenerateUUID();
     option.cache_size_mb() = 1024;
     option.cache_expire_s() = 0;
     return option;

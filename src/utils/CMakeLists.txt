@@ -16,10 +16,9 @@ add_subdirectory(executor)
 
 add_library(dingofs_utils
     leaky_bucket.cc
-    stringstatus.cc
     throttle.cc
+    uuid.cc
 )
-
 
 target_link_libraries(dingofs_utils
     uuid_static

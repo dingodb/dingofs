@@ -36,11 +36,11 @@
 #include "cache/storage/hf3fs.h"
 #include "cache/storage/local_filesystem.h"
 #include "cache/utils/context.h"
-#include "cache/utils/helper.h"
 #include "cache/utils/posix.h"
 #include "common/const.h"
 #include "common/helper.h"
 #include "common/options/cache.h"
+#include "utils/uuid.h"
 
 namespace dingofs {
 namespace cache {
@@ -214,7 +214,7 @@ Status DiskCache::LoadOrCreateLockFile() {
   if (status.ok()) {
     uuid_ = utils::TrimSpace(content);
   } else if (status.IsNotFound()) {
-    uuid_ = utils::GenUuid();
+    uuid_ = utils::GenerateUUID();
     status = FSUtil::WriteFile(lock_path, uuid_);
   }
 

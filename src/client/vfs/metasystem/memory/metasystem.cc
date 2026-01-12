@@ -268,7 +268,7 @@ static pb::mds::FsInfo GenFsInfo() {
   fs_info.set_owner("dengzihui");
   fs_info.set_capacity(INT64_MAX);
   fs_info.set_recycle_time_hour(24);
-  fs_info.set_uuid(utils::UUIDGenerator::GenerateUUID());
+  fs_info.set_uuid(utils::GenerateUUID());
 
   fs_info.set_status(pb::mds::FsStatus::NORMAL);
 

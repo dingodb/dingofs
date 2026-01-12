@@ -32,6 +32,7 @@ target_link_libraries(vfs_lib
     PROTO_OBJS
     dingofs_common
     dingofs_trace
+    dingofs_utils
     vfs_metasystem
     vfs_data
     vfs_hub

@@ -41,6 +41,7 @@
 #include "glog/logging.h"
 #include "json/reader.h"
 #include "json/writer.h"
+#include "utils/uuid.h"
 
 namespace dingofs {
 namespace client {
@@ -144,7 +145,7 @@ Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
   const std::string hostname = Helper::GetHostName();
   if (hostname.empty()) return Status::Internal("get hostname fail");
 
-  ClientId client_id(utils::UUIDGenerator::GenerateUUID(), hostname,
+  ClientId client_id(utils::GenerateUUID(), hostname,
                      FLAGS_vfs_dummy_server_port, vfs_conf.mount_point);
   if (is_upgrade) client_id.Load(root);
   CHECK(!client_id.ID().empty()) << "client id is empty.";
