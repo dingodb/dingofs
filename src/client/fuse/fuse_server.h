@@ -21,6 +21,7 @@
 
 #include "bvar/status.h"
 #include "client/fuse/fuse_common.h"
+#include "fuse3/fuse.h"
 #include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
@@ -38,7 +39,7 @@ class FuseServer {
 
   int AddMountOptions();
 
-  int CreateSession();
+  int CreateSession(void* userdata);
 
   void DestroySsesion();
 
@@ -49,6 +50,8 @@ class FuseServer {
   int Serve();
 
   void Shutdown();
+
+  void MarkThenShutdown();
 
  private:
   void AllocateFuseInitBuf();

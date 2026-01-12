@@ -35,10 +35,8 @@
 #include <fstream>
 #include <unordered_map>
 
-#include "absl/strings/str_format.h"
 #include "common/const.h"
 #include "common/types.h"
-#include "fuse3/fuse_lowlevel.h"
 #include "fuse3/fuse_opt.h"
 #include "utils/string.h"
 
@@ -53,6 +51,7 @@ struct MountOption {
   dingofs::MetaSystemType metasystem_type;
   std::string mds_addrs;
   std::string storage_info;
+  std::string meta_url;
 };
 
 inline int FuseAddOpts(struct fuse_args* args, const char* arg_value) {

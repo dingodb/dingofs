@@ -27,11 +27,14 @@
 
 #include "absl/strings/str_format.h"
 #include "client/common/const.h"
+#include "client/common/helper.h"
+#include "client/fuse/fs_context.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/data_buffer.h"
 #include "client/vfs/vfs_meta.h"
 #include "client/vfs/vfs_wrapper.h"
 #include "common/const.h"
+#include "common/helper.h"
 #include "common/io_buffer.h"
 #include "common/options/client.h"
 #include "common/status.h"
@@ -326,50 +329,54 @@ static std::string FuseCtx(fuse_req_t req) {
   return fmt::format("pid({}) uid({}) gid({})", ctx->pid, ctx->uid, ctx->gid);
 }
 
-int InitFuseClient(const char* argv0, const struct MountOption* mount_option,
-                   dingofs::blockaccess::BlockAccessOptions* options) {
-  LOG(INFO) << "init fuse client.";
-  dingofs::client::vfs::VFSConfig config = {
-      .mds_addrs = mount_option->mds_addrs,
-      .mount_point = mount_option->mount_point,
-      .fs_name = mount_option->fs_name,
-      .metasystem_type = mount_option->metasystem_type,
-      .storage_info = mount_option->storage_info,
-  };
+void FuseOpInit(void* userdata, struct fuse_conn_info* conn) {
+  VLOG(1) << "FuseOpInit userdata: " << userdata;
+  auto* fs_context = (dingofs::client::fuse::FsContext*)userdata;
+
+  CHECK_NOTNULL(fs_context->fuse_server);
+  struct MountOption* mount_option = fs_context->mount_option;
+  CHECK_NOTNULL(mount_option);
+
+  dingofs::client::vfs::VFSConfig config;
+  config.mds_addrs = mount_option->mds_addrs;
+  config.mount_point = mount_option->mount_point;
+  config.fs_name = mount_option->fs_name;
+  config.metasystem_type = mount_option->metasystem_type;
+  config.storage_info = mount_option->storage_info;
+
+  LOG(INFO) << "InitFuseClient meta_system_type: "
+            << dingofs::MetaSystemTypeToString(config.metasystem_type)
+            << ", mds addrs: " << config.mds_addrs
+            << ", storage info: " << config.storage_info
+            << ", fs name: " << config.fs_name
+            << ", meta_url: " << mount_option->meta_url;
 
   g_vfs = new dingofs::client::vfs::VFSWrapper();
-
-  Status s = g_vfs->Start(argv0, config);
+  Status s = g_vfs->Start(config);
   if (!s.ok()) {
     LOG(ERROR) << "start vfs fail, status: " << s.ToString();
-    return s.ToSysErrNo();
+    fs_context->fuse_server->Terminate();
+    return;
   }
 
-  *options = g_vfs->GetBlockAccesserOptions();
+  dingofs::blockaccess::BlockAccessOptions block_options =
+      g_vfs->GetBlockAccesserOptions();
 
-  return 0;
-}
+  // print config info
+  dingofs::Helper::PrintConfigInfo(
+      dingofs::client::GenConfigs(mount_option->meta_url, block_options));
 
-void UnInitFuseClient() {
-  LOG(INFO) << "uninit fuse client.";
-  delete g_vfs;
-}
-
-void FuseOpInit(void* userdata, struct fuse_conn_info* conn) {
-  LOG(INFO) << "init fuse op, userdata: " << userdata;
-
-  g_vfs->Init();
   InitFuseConnInfo(conn);
 
   LOG(INFO) << "init fuse op success.";
 }
 
 void FuseOpDestroy(void* userdata) {
-  LOG(INFO) << "destroy fuse op, userdata: " << userdata;
-
-  if (g_vfs) g_vfs->Stop();
-
-  LOG(INFO) << "destroy fuse op success.";
+  VLOG(1) << "FuseOpDestroy userdata: " << userdata;
+  if (g_vfs) {
+    g_vfs->Stop();
+    delete g_vfs;
+  }
 }
 
 void FuseOpLookup(fuse_req_t req, fuse_ino_t parent, const char* name) {

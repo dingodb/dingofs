@@ -23,6 +23,7 @@
 #include <cstdlib>
 
 #include "absl/cleanup/cleanup.h"
+#include "absl/strings/str_format.h"
 #include "client/fuse/fuse_common.h"
 #include "client/fuse/fuse_lowlevel_ops_func.h"
 #include "client/fuse/fuse_passfd.h"
@@ -125,10 +126,15 @@ void FuseServer::FreeFuseInitBuf() {
 int FuseServer::GetDevFd() const { return fuse_session_fd(session_); }
 
 void FuseServer::Shutdown() {
-  LOG(INFO) << "start shutdown dingo-client";
+  LOG(INFO) << "shutdown dingo-client";
+  fuse_session_exit(session_);
+}
+
+void FuseServer::MarkThenShutdown() {
+  LOG(INFO) << "mark dingo-client kFuseUpgradeOld";
   FuseUpgradeManager::GetInstance().UpdateFuseState(
       FuseUpgradeState::kFuseUpgradeOld);
-  fuse_session_exit(session_);
+  Shutdown();
 }
 
 void FuseServer::UdsServerFunc() {
@@ -218,9 +224,9 @@ int FuseServer::AddMountOptions() {
   return 0;
 }
 
-int FuseServer::CreateSession() {
+int FuseServer::CreateSession(void* usedata) {
   // create fuse new session
-  session_ = fuse_session_new(&args_, &kFuseOp, sizeof(kFuseOp), nullptr);
+  session_ = fuse_session_new(&args_, &kFuseOp, sizeof(kFuseOp), usedata);
   if (session_ == nullptr) return 1;
 
   // install fuse signal

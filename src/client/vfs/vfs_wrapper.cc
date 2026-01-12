@@ -97,8 +97,8 @@ static bool LoadStateFile(Json::Value& root) {
   return true;
 }
 
-Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
-  LOG(INFO) << "start vfs wrapper: " << argv0;
+Status VFSWrapper::Start(const VFSConfig& vfs_conf) {
+  LOG(INFO) << "vfs start";
 
   if (vfs_conf.fs_name.empty()) {
     return Status::InvalidParam("fs_name is empty");
@@ -165,11 +165,6 @@ Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
   gid_ = dingofs::Helper::GetOriginalGid();
 
   return Status::OK();
-}
-
-void VFSWrapper::Init() {
-  LOG(INFO) << "init vfs wrapper.";
-  AccessLogGuard log([&]() { return "init vfs wrapper: OK"; });
 }
 
 Status VFSWrapper::Stop() {

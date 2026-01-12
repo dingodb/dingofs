@@ -114,7 +114,10 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf, bool upgrade) {
       rela_meta_system = meta::MDSMetaSystem::Build(
           vfs_conf.fs_name, vfs_conf.mds_addrs, client_id_, trace_manager_);
     }
-    CHECK(rela_meta_system != nullptr) << "build meta system fail";
+
+    if(rela_meta_system == nullptr) {
+      return Status::InvalidParam("build meta system fail, please check params");
+    }
 
     meta_system_ = std::make_unique<MetaWrapper>(std::move(rela_meta_system));
     DINGOFS_RETURN_NOT_OK(meta_system_->Init(upgrade));

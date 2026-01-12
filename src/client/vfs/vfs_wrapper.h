@@ -35,12 +35,9 @@ class VFSWrapper {
 
   ~VFSWrapper() = default;
 
-  Status Start(const char* argv0, const VFSConfig& vfs_conf);
+  Status Start(const VFSConfig& vfs_conf);
 
   Status Stop();
-
-  // for fuse op init, may remove in future
-  void Init();
 
   double GetAttrTimeout(const FileType& type);
 

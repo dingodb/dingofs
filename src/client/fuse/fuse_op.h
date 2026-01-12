@@ -26,16 +26,11 @@
 #include <unistd.h>
 
 #include "client/fuse/fuse_common.h"
-#include "common/blockaccess/accesser_common.h"
+#include "fuse3/fuse_lowlevel.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-int InitFuseClient(const char* argv0, const struct MountOption* mount_option,
-                   dingofs::blockaccess::BlockAccessOptions* options);
-
-void UnInitFuseClient();
 
 /**
  * Initialize filesystem

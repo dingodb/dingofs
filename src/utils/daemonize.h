@@ -21,6 +21,7 @@
 
 #include <cstring>
 #include <iostream>
+#include <ostream>
 #include <vector>
 
 namespace dingofs {
@@ -149,9 +150,6 @@ inline bool DaemonizeExec(const std::vector<std::string>& args) {
 
   {
     std::string stdout_file = "/tmp/" + std::to_string(getpid()) + ".stdout";
-
-    std::cout << "daemonize stdout/stderr file: " << stdout_file << '\n';
-
     int log_fd = open(stdout_file.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0644);
     if (log_fd < 0) {
       perror("open stdout log file failed");

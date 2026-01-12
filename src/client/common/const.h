@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_CLIENT_VFS_CONST_H_
-#define DINGOFS_CLIENT_VFS_CONST_H_
+#ifndef DINGOFS_CLIENT_COMMON_CONST_H_
+#define DINGOFS_CLIENT_COMMON_CONST_H_
 
 #include <climits>
 #include <cstdint>
@@ -43,4 +43,4 @@ static constexpr size_t kFuseMaxIovSize = IOV_MAX - kFuseReserveIovSize;
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_CLIENT_VFS_CONST_H_
+#endif  // DINGOFS_CLIENT_COMMON _CONST_H_
