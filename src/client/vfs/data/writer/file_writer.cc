@@ -56,8 +56,7 @@ void FileWriter::Close() {
 
   while (writers_count_ > 0 || !inflight_flush_tasks_.empty()) {
     VLOG(1) << fmt::format(
-        "{} Close waiting, writers_count_: {}, inflight_flush_task_count_: {}, "
-        "bg_flush_scheduled_: {}",
+        "{} Close waiting, writers_count_: {}, inflight_flush_task_count_: {}",
         uuid_, writers_count_, inflight_flush_tasks_.size());
     cv_.wait(lg);
   }
