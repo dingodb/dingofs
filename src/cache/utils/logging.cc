@@ -29,14 +29,10 @@
 #include "common/blockaccess/block_access_log.h"
 #include "common/const.h"
 #include "common/helper.h"
+#include "common/logging.h"
 
 namespace dingofs {
 namespace cache {
-
-DEFINE_string(logdir, kDefaultCacheLogDir,
-              "specified logging directory for glog and access log");
-
-DEFINE_int32(loglevel, 0, "sets glog logging level: 0, 1, 2 and etc");
 
 DEFINE_bool(cache_trace_logging, true,
             "whether to enable trace logging for cache");
@@ -48,31 +44,18 @@ static std::shared_ptr<spdlog::logger> logger;
 static bool initialized = false;
 
 void InitLogging(const char* argv0) {
-  // create log dir if not exist
-  FLAGS_logdir = dingofs::Helper::ExpandPath(FLAGS_logdir);
-  CHECK(dingofs::Helper::CreateDirectory(FLAGS_logdir))
-      << "Create cache log dir failed.";
+  // init global log
+  Logger::Init(argv0);
 
-  FLAGS_log_dir = FLAGS_logdir;
-  FLAGS_v = FLAGS_loglevel;
-  FLAGS_logbufsecs = 0;
-  FLAGS_max_log_size = 80;
-  FLAGS_stop_logging_if_full_disk = true;
-  FLAGS_minloglevel = google::GLOG_INFO;
-  FLAGS_logbuflevel = google::GLOG_INFO;
-  FLAGS_logtostdout = false;
-  FLAGS_logtostderr = false;
-  FLAGS_alsologtostderr = false;
-  google::InitGoogleLogging(argv0);
-  LOG(INFO) << "Init glog logger success: log_dir = " << FLAGS_log_dir;
+  CHECK(InitCacheTraceLog(::FLAGS_log_dir)) << "Init cache access log failed.";
+  LOG(INFO) << "Init cache access logger success: log_dir = "
+            << ::FLAGS_log_dir;
 
-  CHECK(InitCacheTraceLog(FLAGS_log_dir)) << "Init cache access log failed.";
-  LOG(INFO) << "Init cache access logger success: log_dir = " << FLAGS_log_dir;
-
-  CHECK(blockaccess::InitBlockAccessLog(FLAGS_log_dir))
+  CHECK(blockaccess::InitBlockAccessLog(::FLAGS_log_dir))
       << "Init block access log failed.";
 
-  LOG(INFO) << "Init block access logger success: log_dir = " << FLAGS_log_dir;
+  LOG(INFO) << "Init block access logger success: log_dir = "
+            << ::FLAGS_log_dir;
 }
 
 bool InitCacheTraceLog(const std::string& log_dir) {

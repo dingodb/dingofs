@@ -109,12 +109,6 @@ DECLARE_uint32(cache_node_state_check_duration_ms);
 // # dingo-cache
 // ###############################################
 
-// Speficied logging directory for glog and access log.
-DECLARE_string(logdir);
-
-// Sets glog logging level: 0, 1, 2 and etc
-DECLARE_int32(loglevel);
-
 // Sets the cache node ID (which only for MDS v2)
 DECLARE_string(id);
 

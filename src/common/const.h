@@ -82,8 +82,6 @@ static constexpr uint64_t kTiB = 1024ULL * kGiB;
 // default dingofs runtime data dir, including cache data, log, meta, etc.
 static const std::string kDefaultRuntimeBaseDir = "~/.dingofs/";
 static const std::string kDefaultCacheDir = kDefaultRuntimeBaseDir + "cache";
-static const std::string kDefaultCacheLogDir =
-    kDefaultRuntimeBaseDir + "log/cache";
 static const std::string kDefaultLogDir = kDefaultRuntimeBaseDir + "log";
 
 static const std::string kDefaultDataDir = kDefaultRuntimeBaseDir + "data";
