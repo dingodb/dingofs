@@ -16,6 +16,7 @@
 
 #include <csignal>
 #include <cstdlib>
+#include <cstring>
 #include <iostream>
 
 #include "absl/cleanup/cleanup.h"
@@ -38,9 +39,19 @@ static FuseServer* fuse_server = nullptr;
 
 // signal handler
 static void HandleSignal(int sig) {
-  printf("received signal %d, exit...\n", sig);
-  if (sig == SIGHUP && fuse_server != nullptr) {
+  printf("received signal %s, exit...\n", strsignal(sig));
+  CHECK(signal(sig, SIG_DFL) != nullptr);
+
+  if (fuse_server == nullptr) {
+    return;
+  }
+
+  if (sig == SIGHUP) {
     fuse_server->MarkThenShutdown();
+  }
+  if (sig == SIGSEGV || sig == SIGABRT) {
+    fuse_server->SessionUnmount();
+    CHECK(raise(sig) == 0);
   }
 }
 
@@ -82,6 +93,8 @@ int main(int argc, char* argv[]) {
 
   // install singal handler
   InstallSignal(SIGHUP, HandleSignal);
+  InstallSignal(SIGSEGV, HandleSignal);
+  InstallSignal(SIGABRT, HandleSignal);
 
   //  parse gflags
   int rc = dingofs::ParseFlags(&argc, &argv, extras);
