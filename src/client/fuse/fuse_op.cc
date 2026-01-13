@@ -355,7 +355,7 @@ void FuseOpInit(void* userdata, struct fuse_conn_info* conn) {
   Status s = g_vfs->Start(config);
   if (!s.ok()) {
     LOG(ERROR) << "start vfs fail, status: " << s.ToString();
-    fs_context->fuse_server->Terminate();
+    fs_context->fuse_server->Shutdown();
     return;
   }
 
