@@ -115,10 +115,9 @@ FileSystem::FileSystem(uint64_t self_mds_id, FsInfoSPtr fs_info, IdGeneratorUPtr
       kv_storage_(kv_storage),
       operation_processor_(operation_processor),
       mds_meta_map_(mds_meta_map),
-      parent_memo_(ParentMemo::New(fs_id_)),
+      parent_memo_(fs_id_),
       chunk_cache_(fs_id_),
-      quota_manager_(
-          quota::QuotaManager::New(fs_info, parent_memo_, operation_processor, quota_worker_set, notify_buddy)),
+      quota_manager_(fs_info, parent_memo_, operation_processor, quota_worker_set, notify_buddy),
       notify_buddy_(notify_buddy),
       file_session_manager_(fs_id_, operation_processor) {
   can_serve_ = CanServe(self_mds_id);
@@ -126,7 +125,7 @@ FileSystem::FileSystem(uint64_t self_mds_id, FsInfoSPtr fs_info, IdGeneratorUPtr
 
 FileSystem::~FileSystem() {
   // destroy
-  quota_manager_->Destroy();
+  quota_manager_.Destroy();
 
   renamer_.Destroy();
 }
@@ -139,7 +138,7 @@ bool FileSystem::Init() {
     return false;
   }
 
-  if (!quota_manager_->Init()) {
+  if (!quota_manager_.Init()) {
     LOG(ERROR) << fmt::format("[fs.{}] init quota manager fail.", fs_id_);
     return false;
   }
@@ -611,7 +610,7 @@ Status FileSystem::CreateQuota() {
   quota_entry.set_max_bytes(INT64_MAX);
   quota_entry.set_used_inodes(1);
 
-  auto status = quota_manager_->SetFsQuota(trace, quota_entry);
+  auto status = quota_manager_.SetFsQuota(trace, quota_entry);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("[fs.{}] create quota fail, status({}).", fs_id_, status.error_str());
     return Status(pb::error::EBACKEND_STORE, fmt::format("create quota fail, {}", status.error_str()));
@@ -644,7 +643,7 @@ Status FileSystem::Lookup(Context& ctx, Ino parent, const std::string& name, Ent
     return status;
   }
 
-  parent_memo_->Remeber(inode->Ino(), parent);
+  parent_memo_.Remeber(inode->Ino(), parent);
 
   entry_out.attr = inode->Copy();
 
@@ -690,7 +689,7 @@ Status FileSystem::BatchCreate(Context& ctx, Ino parent, const std::vector<MkNod
   UpdateParentMemo(ctx.GetAncestors());
 
   // check quota
-  if (!quota_manager_->CheckQuota(trace, parent, 0, params.size())) {
+  if (!quota_manager_.CheckQuota(trace, parent, 0, params.size())) {
     return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
   }
 
@@ -778,11 +777,11 @@ Status FileSystem::BatchCreate(Context& ctx, Ino parent, const std::vector<MkNod
 
   // update quota
   std::string reason = fmt::format("create.{}.{}", parent, names);
-  quota_manager_->UpdateFsUsage(0, params.size(), reason);
-  quota_manager_->AsyncUpdateDirUsage(parent, 0, params.size(), reason);
+  quota_manager_.UpdateFsUsage(0, params.size(), reason);
+  quota_manager_.AsyncUpdateDirUsage(parent, 0, params.size(), reason);
 
   for (auto& dentry : dentries) {
-    parent_memo_->Remeber(dentry.INo(), parent);
+    parent_memo_.Remeber(dentry.INo(), parent);
   }
 
   // set output
@@ -821,12 +820,13 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
   Ino ino = 0;
   auto status = GenFileIno(ino);
   if (!status.ok()) return status;
+  trace.RecordElapsedTime("gen_ino");
 
   // update parent memo
   UpdateParentMemo(ctx.GetAncestors());
 
   // check quota
-  if (!quota_manager_->CheckQuota(trace, param.parent, 0, 1)) {
+  if (!quota_manager_.CheckQuota(trace, param.parent, 0, 1)) {
     return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
   }
 
@@ -874,10 +874,10 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
 
   // update quota
   std::string reason = fmt::format("mknod.{}.{}", parent, param.name);
-  quota_manager_->UpdateFsUsage(0, 1, reason);
-  quota_manager_->AsyncUpdateDirUsage(param.parent, 0, 1, reason);
+  quota_manager_.UpdateFsUsage(0, 1, reason);
+  quota_manager_.AsyncUpdateDirUsage(param.parent, 0, 1, reason);
 
-  parent_memo_->Remeber(attr.ino(), param.parent);
+  parent_memo_.Remeber(attr.ino(), param.parent);
 
   entry_out.parent_attr = parent_attr;
   entry_out.attr.Swap(&attr);
@@ -911,7 +911,7 @@ Status FileSystem::BatchMkNod(Context& ctx, const std::vector<MkNodParam>& param
   UpdateParentMemo(ctx.GetAncestors());
 
   // check quota
-  if (!quota_manager_->CheckQuota(trace, parent, 0, 1)) {
+  if (!quota_manager_.CheckQuota(trace, parent, 0, 1)) {
     return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
   }
 
@@ -983,10 +983,10 @@ Status FileSystem::BatchMkNod(Context& ctx, const std::vector<MkNodParam>& param
 
   // update quota
   std::string reason = fmt::format("batchmknod.{}.{}", parent, join_name);
-  quota_manager_->UpdateFsUsage(0, params.size(), reason);
-  quota_manager_->AsyncUpdateDirUsage(parent, 0, params.size(), reason);
+  quota_manager_.UpdateFsUsage(0, params.size(), reason);
+  quota_manager_.AsyncUpdateDirUsage(parent, 0, params.size(), reason);
 
-  for (const auto& dentry : dentries) parent_memo_->Remeber(dentry.INo(), parent);
+  for (const auto& dentry : dentries) parent_memo_.Remeber(dentry.INo(), parent);
 
   entry_out.parent_attr = parent_attr;
   entry_out.attrs.swap(attrs);
@@ -1071,9 +1071,9 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& sess
   // update quota
   if (delta_bytes != 0) {
     std::string reason = fmt::format("open.{}", ino);
-    quota_manager_->UpdateFsUsage(delta_bytes, 0, reason);
+    quota_manager_.UpdateFsUsage(delta_bytes, 0, reason);
     for (auto parent : attr.parents()) {
-      quota_manager_->AsyncUpdateDirUsage(parent, delta_bytes, 0, reason);
+      quota_manager_.AsyncUpdateDirUsage(parent, delta_bytes, 0, reason);
     }
   }
 
@@ -1196,15 +1196,14 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
   // generate inode id
   Ino ino = 0;
   auto status = GenDirIno(ino);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
+  trace.RecordElapsedTime("gen_ino");
 
   // update parent memo
   UpdateParentMemo(ctx.GetAncestors());
 
   // check quota
-  if (!quota_manager_->CheckQuota(trace, param.parent, 0, 1)) {
+  if (!quota_manager_.CheckQuota(trace, param.parent, 0, 1)) {
     return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
   }
 
@@ -1257,10 +1256,10 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
 
   // update quota
   std::string reason = fmt::format("mkdir.{}.{}", parent, param.name);
-  quota_manager_->UpdateFsUsage(0, 1, reason);
-  quota_manager_->AsyncUpdateDirUsage(param.parent, 0, 1, reason);
+  quota_manager_.UpdateFsUsage(0, 1, reason);
+  quota_manager_.AsyncUpdateDirUsage(param.parent, 0, 1, reason);
 
-  parent_memo_->Remeber(attr.ino(), param.parent);
+  parent_memo_.Remeber(attr.ino(), param.parent);
 
   entry_out.parent_attr = parent_attr;
   entry_out.attr.Swap(&attr);
@@ -1293,15 +1292,13 @@ Status FileSystem::BatchMkDir(Context& ctx, const std::vector<MkDirParam>& param
   // generate inode id
   Ino ino = 0;
   auto status = GenDirIno(ino);
-  if (!status.ok()) {
-    return status;
-  }
-
+  if (!status.ok()) return status;
+  trace.RecordElapsedTime("gen_ino");
   // update parent memo
   UpdateParentMemo(ctx.GetAncestors());
 
   // check quota
-  if (!quota_manager_->CheckQuota(trace, parent, 0, 1)) {
+  if (!quota_manager_.CheckQuota(trace, parent, 0, 1)) {
     return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
   }
 
@@ -1372,10 +1369,10 @@ Status FileSystem::BatchMkDir(Context& ctx, const std::vector<MkDirParam>& param
 
   // update quota
   std::string reason = fmt::format("batchmkdir.{}.{}", parent, join_name);
-  quota_manager_->UpdateFsUsage(0, params.size(), reason);
-  quota_manager_->AsyncUpdateDirUsage(parent, 0, params.size(), reason);
+  quota_manager_.UpdateFsUsage(0, params.size(), reason);
+  quota_manager_.AsyncUpdateDirUsage(parent, 0, params.size(), reason);
 
-  for (const auto& dentry : dentries) parent_memo_->Remeber(dentry.INo(), dentry.ParentIno());
+  for (const auto& dentry : dentries) parent_memo_.Remeber(dentry.INo(), dentry.ParentIno());
 
   entry_out.parent_attr = parent_attr;
   entry_out.attrs.swap(attrs);
@@ -1440,11 +1437,11 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name, Ino&
 
   // update quota
   std::string reason = fmt::format("rmdir.{}.{}", parent, name);
-  quota_manager_->UpdateFsUsage(0, -1, reason);
-  quota_manager_->AsyncUpdateDirUsage(parent, 0, -1, reason);
-  quota_manager_->AsyncDeleteDirQuota(dentry.INo());
+  quota_manager_.UpdateFsUsage(0, -1, reason);
+  quota_manager_.AsyncUpdateDirUsage(parent, 0, -1, reason);
+  quota_manager_.AsyncDeleteDirQuota(dentry.INo());
 
-  parent_memo_->Forget(dentry.INo());
+  parent_memo_.Forget(dentry.INo());
 
   if (IsParentHashPartition()) {
     NotifyBuddyRefreshInode(std::move(parent_attr));
@@ -1513,7 +1510,7 @@ Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent, const std::string
   UpdateParentMemo(ctx.GetAncestors());
 
   // check quota
-  if (!quota_manager_->CheckQuota(trace, new_parent, 0, 1)) {
+  if (!quota_manager_.CheckQuota(trace, new_parent, 0, 1)) {
     return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
   }
 
@@ -1541,7 +1538,7 @@ Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent, const std::string
 
   // update quota
   std::string reason = fmt::format("link.{}.{}.{}", ino, new_parent, new_name);
-  quota_manager_->AsyncUpdateDirUsage(new_parent, attr.length(), 1, reason);
+  quota_manager_.AsyncUpdateDirUsage(new_parent, attr.length(), 1, reason);
 
   // update cache
   UpsertInodeCache(attr);
@@ -1606,10 +1603,10 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name, Ent
   std::string reason = fmt::format("unlink.{}.{}", parent, name);
   int64_t delta_bytes = attr.type() != pb::mds::SYM_LINK ? attr.length() : 0;
   if (attr.nlink() == 0) {
-    quota_manager_->UpdateFsUsage(-delta_bytes, -1, reason);
+    quota_manager_.UpdateFsUsage(-delta_bytes, -1, reason);
     chunk_cache_.Delete(attr.ino());
   }
-  quota_manager_->AsyncUpdateDirUsage(parent, -delta_bytes, -1, reason);
+  quota_manager_.AsyncUpdateDirUsage(parent, -delta_bytes, -1, reason);
 
   // update cache
   DeleteDentryFromPartition(parent, name, parent_attr.version());
@@ -1683,10 +1680,10 @@ Status FileSystem::BatchUnLink(Context& ctx, Ino parent, const std::vector<std::
   for (const auto& attr : child_attrs) {
     int64_t delta_bytes = attr.type() != pb::mds::SYM_LINK ? attr.length() : 0;
     if (attr.nlink() == 0) {
-      quota_manager_->UpdateFsUsage(-delta_bytes, -1, reason);
+      quota_manager_.UpdateFsUsage(-delta_bytes, -1, reason);
       chunk_cache_.Delete(attr.ino());
     }
-    quota_manager_->AsyncUpdateDirUsage(parent, -delta_bytes, -1, reason);
+    quota_manager_.AsyncUpdateDirUsage(parent, -delta_bytes, -1, reason);
   }
 
   // update cache
@@ -1726,15 +1723,14 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_par
   // generate inode id
   Ino ino = 0;
   auto status = GenFileIno(ino);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
+  trace.RecordElapsedTime("gen_ino");
 
   // update parent memo
   UpdateParentMemo(ctx.GetAncestors());
 
   // check quota
-  if (!quota_manager_->CheckQuota(trace, new_parent, 0, 1)) {
+  if (!quota_manager_.CheckQuota(trace, new_parent, 0, 1)) {
     return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
   }
 
@@ -1784,8 +1780,8 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_par
 
   // update quota
   std::string reason = fmt::format("symlink.{}.{}", new_parent, new_name);
-  quota_manager_->UpdateFsUsage(0, 1, reason);
-  quota_manager_->AsyncUpdateDirUsage(new_parent, 0, 1, reason);
+  quota_manager_.UpdateFsUsage(0, 1, reason);
+  quota_manager_.AsyncUpdateDirUsage(new_parent, 0, 1, reason);
 
   entry_out.parent_attr = parent_attr;
   entry_out.attr.Swap(&attr);
@@ -1855,7 +1851,7 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
   if (param.to_set & kSetAttrSize) {
     if (param.attr.length() > inode->Length()) {
       // check quota
-      if (!quota_manager_->CheckQuota(trace, ino, param.attr.length() - inode->Length(), 0)) {
+      if (!quota_manager_.CheckQuota(trace, ino, param.attr.length() - inode->Length(), 0)) {
         return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
       }
     }
@@ -1888,10 +1884,10 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
   // update quota
   if (param.to_set & kSetAttrSize) {
     std::string reason = fmt::format("setattr.{}", ino);
-    quota_manager_->UpdateFsUsage(delta_bytes, 0, reason);
+    quota_manager_.UpdateFsUsage(delta_bytes, 0, reason);
 
     for (const auto& parent : attr.parents()) {
-      quota_manager_->AsyncUpdateDirUsage(parent, delta_bytes, 0, reason);
+      quota_manager_.AsyncUpdateDirUsage(parent, delta_bytes, 0, reason);
     }
   }
 
@@ -2030,7 +2026,7 @@ void FileSystem::UpdateParentMemo(const std::vector<Ino>& ancestors) {
       const Ino& parent = ancestors[i];
 
       // update parent memo
-      parent_memo_->Remeber(ino, parent);
+      parent_memo_.Remeber(ino, parent);
     }
   }
 }
@@ -2106,8 +2102,8 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
   // check quota
   bool is_exist_quota = false;
   if (dentry.Type() == pb::mds::FileType::DIRECTORY) {
-    auto old_quota = quota_manager_->GetNearestDirQuota(old_parent);
-    auto new_quota = quota_manager_->GetNearestDirQuota(new_parent);
+    auto old_quota = quota_manager_.GetNearestDirQuota(old_parent);
+    auto new_quota = quota_manager_.GetNearestDirQuota(new_parent);
     bool can_rename = (old_quota == nullptr && new_quota == nullptr) ||
                       (old_quota != nullptr && new_quota != nullptr && old_quota->INo() == new_quota->INo());
     if (!can_rename) {
@@ -2223,23 +2219,23 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
     if (prev_new_attr.type() == pb::mds::FileType::FILE && prev_new_attr.nlink() == 0) {
       fs_delta_bytes -= prev_new_attr.length();
     }
-    quota_manager_->UpdateFsUsage(fs_delta_bytes, -1, reason);
+    quota_manager_.UpdateFsUsage(fs_delta_bytes, -1, reason);
   }
 
   // update dir quota
   if (dentry.Type() == pb::mds::FileType::FILE) {
     if (!is_same_parent) {
-      quota_manager_->AsyncUpdateDirUsage(old_parent, -old_attr.length(), -1, reason);
-      quota_manager_->AsyncUpdateDirUsage(new_parent, old_attr.length(), 1, reason);
+      quota_manager_.AsyncUpdateDirUsage(old_parent, -old_attr.length(), -1, reason);
+      quota_manager_.AsyncUpdateDirUsage(new_parent, old_attr.length(), 1, reason);
     }
 
     if (is_exist_new_dentry) {
-      quota_manager_->AsyncUpdateDirUsage(new_parent, -prev_new_attr.length(), -1, reason);
+      quota_manager_.AsyncUpdateDirUsage(new_parent, -prev_new_attr.length(), -1, reason);
     }
 
   } else if (dentry.Type() == pb::mds::FileType::DIRECTORY) {
     if (is_exist_new_dentry && is_exist_quota) {
-      quota_manager_->AsyncUpdateDirUsage(old_parent, 0, -1, reason);
+      quota_manager_.AsyncUpdateDirUsage(old_parent, 0, -1, reason);
     }
   }
 
@@ -2450,7 +2446,7 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
     uint64_t new_length = offset + len;
     if (new_length > inode->Length()) {
       // check quota
-      if (!quota_manager_->CheckQuota(trace, ino, new_length - inode->Length(), 0)) {
+      if (!quota_manager_.CheckQuota(trace, ino, new_length - inode->Length(), 0)) {
         return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
       }
 
@@ -3112,7 +3108,7 @@ void FileSystem::DescribeByJson(Json::Value& value) {
   value["chunk_cache"] = chunk_cache;
 
   Json::Value parent_memo;
-  parent_memo_->DescribeByJson(parent_memo);
+  parent_memo_.DescribeByJson(parent_memo);
   value["parent_memo"] = parent_memo;
 }
 

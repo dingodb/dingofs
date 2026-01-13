@@ -103,8 +103,7 @@ DEFINE_uint32(vfs_prefetch_threads, 8, "number of prefetch threads");
 DEFINE_int32(vfs_warmup_threads, 4, "number of warmup threads");
 
 // vfs handle
-DEFINE_int32(vfs_bg_executor_thread, 8,
-             "number of handle backgroud threads");
+DEFINE_int32(vfs_bg_executor_thread, 8, "number of handle backgroud threads");
 DEFINE_validator(vfs_bg_executor_thread, brpc::PassValidate);
 
 DEFINE_int32(vfs_periodic_flush_interval_ms, 5000,
@@ -138,7 +137,7 @@ DEFINE_validator(vfs_meta_rpc_timeout_ms, brpc::PassValidate);
 DEFINE_int32(vfs_meta_rpc_retry_times, 8, "rpc retry time");
 DEFINE_validator(vfs_meta_rpc_retry_times, brpc::PassValidate);
 
-DEFINE_bool(vfs_meta_batch_operation_enable, true,
+DEFINE_bool(vfs_meta_batch_operation_enable, false,
             "enable batch operation, default is false");
 DEFINE_validator(vfs_meta_batch_operation_enable, brpc::PassValidate);
 
@@ -195,7 +194,8 @@ DEFINE_bool(fuse_enable_auto_inval_data, true,
 DEFINE_validator(fuse_enable_auto_inval_data, brpc::PassValidate);
 
 // memory page allocator
-DEFINE_uint32(vfs_write_buffer_page_size, 65536, "page size for vfs write buffer");
+DEFINE_uint32(vfs_write_buffer_page_size, 65536,
+              "page size for vfs write buffer");
 DEFINE_validator(vfs_write_buffer_page_size,
                  [](const char* /*flag_name*/, uint32_t value) -> bool {
                    if (value == 0) {

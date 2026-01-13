@@ -230,7 +230,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   PartitionCache& GetPartitionCache() { return partition_cache_; }
   InodeCache& GetInodeCache() { return inode_cache_; }
 
-  quota::QuotaManager& GetQuotaManager() { return *quota_manager_; }
+  quota::QuotaManager& GetQuotaManager() { return quota_manager_; }
 
   FileSessionManager& GetFileSessionManager() { return file_session_manager_; }
 
@@ -335,13 +335,13 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   MDSMetaMapSPtr mds_meta_map_;
 
   // parent memo
-  ParentMemoSPtr parent_memo_;
+  ParentMemo parent_memo_;
 
   // chunk cache
   ChunkCache chunk_cache_;
 
   // quota
-  quota::QuotaManagerSPtr quota_manager_;
+  quota::QuotaManager quota_manager_;
 
   // renamer
   Renamer renamer_;

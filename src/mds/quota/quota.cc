@@ -301,7 +301,7 @@ QuotaSPtr DirQuotaMap::GetQuota(Ino ino) {
 }
 
 bool DirQuotaMap::GetParent(Ino ino, Ino& parent) {
-  if (parent_memo_->GetParent(ino, parent)) {
+  if (parent_memo_.GetParent(ino, parent)) {
     return true;
   }
 
@@ -322,7 +322,7 @@ bool DirQuotaMap::GetParent(Ino ino, Ino& parent) {
 
   parent = attr.parents().at(0);
 
-  parent_memo_->Remeber(ino, parent);
+  parent_memo_.Remeber(ino, parent);
 
   LOG(INFO) << fmt::format("[quota.{}.{}] query parent finish, parent({}).", fs_id_, ino, parent);
 
@@ -335,14 +335,12 @@ bool DirQuotaMap::HasQuota() {
   return !quota_map_.empty();
 }
 
-void UpdateDirUsageTask::Run() { quota_manager_->UpdateDirUsage(parent_, byte_delta_, inode_delta_, reason_); }
+void UpdateDirUsageTask::Run() { quota_manager_.UpdateDirUsage(parent_, byte_delta_, inode_delta_, reason_); }
 
 void DeleteDirQuotaTask::Run() {
   class Trace trace;
-  quota_manager_->DeleteDirQuota(trace, ino_);
+  quota_manager_.DeleteDirQuota(trace, ino_);
 }
-
-QuotaManagerSPtr QuotaManager::GetSelfPtr() { return std::dynamic_pointer_cast<QuotaManager>(shared_from_this()); }
 
 bool QuotaManager::Init() {
   CHECK(fs_info_ != nullptr) << "[quota] fs_info is nullptr.";
@@ -376,7 +374,7 @@ void QuotaManager::UpdateDirUsage(Ino parent, int64_t byte_delta, int64_t inode_
 void QuotaManager::AsyncUpdateDirUsage(Ino parent, int64_t byte_delta, int64_t inode_delta, const std::string& reason) {
   const uint32_t fs_id = fs_info_->GetFsId();
 
-  auto task = UpdateDirUsageTask::New(GetSelfPtr(), parent, byte_delta, inode_delta, reason);
+  auto task = UpdateDirUsageTask::New(*this, parent, byte_delta, inode_delta, reason);
 
   if (!worker_set_->ExecuteHash(parent, task)) {
     LOG(ERROR) << fmt::format(
@@ -541,7 +539,7 @@ Status QuotaManager::DeleteDirQuotaByNotified(Ino ino, const std::string& uuid) 
 void QuotaManager::AsyncDeleteDirQuota(Ino ino) {
   const uint32_t fs_id = fs_info_->GetFsId();
 
-  auto task = DeleteDirQuotaTask::New(GetSelfPtr(), ino);
+  auto task = DeleteDirQuotaTask::New(*this, ino);
 
   if (!worker_set_->ExecuteHash(ino, task)) {
     LOG(ERROR) << fmt::format("[quota.{}.{}] async delete dir quota fail.", fs_id, ino);

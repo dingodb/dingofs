@@ -23,35 +23,41 @@ ParentMemo::ParentMemo(uint64_t fs_id)
     : fs_id_(fs_id), count_metrics_(fmt::format(kParentMemoCountMetricsName, fs_id)) {}
 
 void ParentMemo::Remeber(Ino ino, Ino parent) {
-  utils::WriteLockGuard lk(rwlock_);
-
-  auto it = parent_map_.find(ino);
-  if (it == parent_map_.end()) {
-    parent_map_.emplace(ino, parent);
-    count_metrics_ << 1;
-
-  } else {
-    it->second = parent;
-  }
+  parent_map_.withWLock(
+      [this, ino, parent](Map& map) mutable {
+        auto it = map.find(ino);
+        if (it == map.end()) {
+          map[ino] = parent;
+          count_metrics_ << 1;
+        } else {
+          it->second = parent;
+        }
+      },
+      ino);
 }
 
 void ParentMemo::Forget(Ino ino) {
-  utils::WriteLockGuard lk(rwlock_);
-
-  parent_map_.erase(ino);
-  count_metrics_ << -1;
+  parent_map_.withWLock(
+      [this, ino](Map& map) mutable {
+        map.erase(ino);
+        count_metrics_ << -1;
+      },
+      ino);
 }
 
 bool ParentMemo::GetParent(Ino ino, Ino& parent) {
-  utils::ReadLockGuard lk(rwlock_);
+  bool found = false;
+  parent_map_.withRLock(
+      [ino, &parent, &found](Map& map) mutable {
+        auto it = map.find(ino);
+        if (it != map.end()) {
+          found = true;
+          parent = it->second;
+        }
+      },
+      ino);
 
-  auto it = parent_map_.find(ino);
-  if (it == parent_map_.end()) {
-    return false;
-  }
-
-  parent = it->second;
-  return true;
+  return found;
 }
 
 void ParentMemo::DescribeByJson(Json::Value& value) { value["count"] = count_metrics_.get_value(); }

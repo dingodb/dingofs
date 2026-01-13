@@ -41,12 +41,12 @@ static const int64_t kFsIdStartId = 1e4;  // 10 thousand
 // all file systems share the same slice id generator
 const std::string kSliceAutoIncrementIdName = "dingofs-slice-id";
 static const int64_t kSliceTableId = 1002;
-static const int64_t kSliceIdBatchSize = 32;
+static const int64_t kSliceIdBatchSize = 256;
 static const int64_t kSliceIdStartId = 1e10;  // 10 billion
 
 // each file system has its own inode id generator
 const std::string kInoAutoIncrementIdName = "dingofs-inode-id";
-static const int64_t kInoBatchSize = 64;
+static const int64_t kInoBatchSize = 1024;
 static const int64_t kInoStartId = 2e10;  // 20 billion
 
 CoorAutoIncrementIdGenerator::CoorAutoIncrementIdGenerator(CoordinatorClientSPtr client, const std::string& name,

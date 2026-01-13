@@ -42,8 +42,6 @@ class Quota;
 using QuotaSPtr = std::shared_ptr<Quota>;
 
 class QuotaManager;
-using QuotaManagerSPtr = std::shared_ptr<QuotaManager>;
-using QuotaManagerUPtr = std::unique_ptr<QuotaManager>;
 
 class Quota {
  public:
@@ -91,7 +89,7 @@ class Quota {
 // manage directory quotas
 class DirQuotaMap {
  public:
-  DirQuotaMap(uint32_t fs_id, ParentMemoSPtr parent_memo, OperationProcessorSPtr operation_processor)
+  DirQuotaMap(uint32_t fs_id, ParentMemo& parent_memo, OperationProcessorSPtr operation_processor)
       : fs_id_(fs_id), parent_memo_(parent_memo), operation_processor_(operation_processor) {}
   ~DirQuotaMap() = default;
 
@@ -115,7 +113,7 @@ class DirQuotaMap {
   bool HasQuota();
 
   uint32_t fs_id_{0};
-  ParentMemoSPtr parent_memo_;
+  ParentMemo& parent_memo_;
   OperationProcessorSPtr operation_processor_;
 
   utils::RWLock rwlock_;
@@ -128,7 +126,7 @@ using UpdateDirUsageTaskSPtr = std::shared_ptr<UpdateDirUsageTask>;
 
 class UpdateDirUsageTask : public TaskRunnable {
  public:
-  UpdateDirUsageTask(QuotaManagerSPtr quota_manager, Ino parent, int64_t byte_delta, int64_t inode_delta,
+  UpdateDirUsageTask(QuotaManager& quota_manager, Ino parent, int64_t byte_delta, int64_t inode_delta,
                      const std::string& reason)
       : quota_manager_(quota_manager),
         parent_(parent),
@@ -138,7 +136,7 @@ class UpdateDirUsageTask : public TaskRunnable {
 
   ~UpdateDirUsageTask() override = default;
 
-  static UpdateDirUsageTaskSPtr New(QuotaManagerSPtr quota_manager, Ino parent, int64_t byte_delta, int64_t inode_delta,
+  static UpdateDirUsageTaskSPtr New(QuotaManager& quota_manager, Ino parent, int64_t byte_delta, int64_t inode_delta,
                                     const std::string& reason) {
     return std::make_shared<UpdateDirUsageTask>(quota_manager, parent, byte_delta, inode_delta, reason);
   }
@@ -148,7 +146,7 @@ class UpdateDirUsageTask : public TaskRunnable {
   void Run() override;
 
  private:
-  QuotaManagerSPtr quota_manager_;
+  QuotaManager& quota_manager_;
 
   Ino parent_;
   int64_t byte_delta_;
@@ -162,11 +160,11 @@ using DeleteDirQuotaTaskSPtr = std::shared_ptr<DeleteDirQuotaTask>;
 
 class DeleteDirQuotaTask : public TaskRunnable {
  public:
-  DeleteDirQuotaTask(QuotaManagerSPtr quota_manager, Ino ino) : quota_manager_(quota_manager), ino_(ino) {}
+  DeleteDirQuotaTask(QuotaManager& quota_manager, Ino ino) : quota_manager_(quota_manager), ino_(ino) {}
 
   ~DeleteDirQuotaTask() override = default;
 
-  static DeleteDirQuotaTaskSPtr New(QuotaManagerSPtr quota_manager, Ino ino) {
+  static DeleteDirQuotaTaskSPtr New(QuotaManager& quota_manager, Ino ino) {
     return std::make_shared<DeleteDirQuotaTask>(quota_manager, ino);
   }
 
@@ -175,15 +173,15 @@ class DeleteDirQuotaTask : public TaskRunnable {
   void Run() override;
 
  private:
-  QuotaManagerSPtr quota_manager_;
+  QuotaManager& quota_manager_;
   Ino ino_;
 };
 
 // manages filesystem and directory quotas
 // include cache and store
-class QuotaManager : public std::enable_shared_from_this<QuotaManager> {
+class QuotaManager {
  public:
-  QuotaManager(FsInfoSPtr fs_info, ParentMemoSPtr parent_memo, OperationProcessorSPtr operation_processor,
+  QuotaManager(FsInfoSPtr fs_info, ParentMemo& parent_memo, OperationProcessorSPtr operation_processor,
                WorkerSetSPtr worker_set, notify::NotifyBuddySPtr notify_buddy)
       : fs_info_(fs_info),
         fs_quota_(fs_info->GetFsId(), 0, {}),
@@ -197,14 +195,6 @@ class QuotaManager : public std::enable_shared_from_this<QuotaManager> {
   QuotaManager& operator=(const QuotaManager&) = delete;
   QuotaManager(QuotaManager&&) = delete;
   QuotaManager& operator=(QuotaManager&&) = delete;
-
-  static QuotaManagerSPtr New(FsInfoSPtr fs_info, ParentMemoSPtr parent_memo,
-                              OperationProcessorSPtr operation_processor, WorkerSetSPtr worker_set,
-                              notify::NotifyBuddySPtr notify_buddy) {
-    return std::make_shared<QuotaManager>(fs_info, parent_memo, operation_processor, worker_set, notify_buddy);
-  }
-
-  QuotaManagerSPtr GetSelfPtr();
 
   bool Init();
   void Destroy();

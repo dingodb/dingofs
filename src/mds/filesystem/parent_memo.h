@@ -16,24 +16,18 @@
 #define DINGOFS_MDS_FILESYSTEM_PARENT_MEMO_H_
 
 #include <cstdint>
-#include <unordered_map>
 
 #include "json/value.h"
 #include "mds/common/type.h"
-#include "utils/concurrent/concurrent.h"
+#include "utils/shards.h"
 
 namespace dingofs {
 namespace mds {
-
-class ParentMemo;
-using ParentMemoSPtr = std::shared_ptr<ParentMemo>;
 
 class ParentMemo {
  public:
   ParentMemo(uint64_t fs_id);
   ~ParentMemo() = default;
-
-  static ParentMemoSPtr New(uint64_t fs_id) { return std::make_shared<ParentMemo>(fs_id); }
 
   void Remeber(Ino ino, Ino parent);
 
@@ -46,9 +40,10 @@ class ParentMemo {
  private:
   uint64_t fs_id_{0};
 
-  utils::RWLock rwlock_;
-  // ino -> parent
-  std::unordered_map<Ino, Ino> parent_map_;
+  using Map = absl::flat_hash_map<Ino, Ino>;
+
+  constexpr static size_t kShardNum = 64;
+  utils::Shards<Map, kShardNum> parent_map_;
 
   // statistics
   bvar::Adder<int64_t> count_metrics_;
