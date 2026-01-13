@@ -340,7 +340,6 @@ int FuseServer::Serve() {
   ExportMetrics(kFdCommPathKey, fd_comm_file_);
 
   UdsServerStart();
-  fuse_daemonize(1);
 
   LOG(INFO) << fmt::format(
       "dingo-client start loop, singlethread={} max_threads={}.",

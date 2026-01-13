@@ -140,7 +140,7 @@ int main(int argc, char* argv[]) {
   }
 
   struct MountOption mount_option{
-      .mount_point = argv[2],
+      .mount_point = dingofs::Helper::ToCanonicalPath(argv[2]),
       .fs_name = fs_name,
       .metasystem_type = metasystem_type,
       .mds_addrs = mds_addrs,
@@ -176,7 +176,8 @@ int main(int argc, char* argv[]) {
   auto defer_unmount =
       ::absl::MakeCleanup([&]() { fuse_server->SessionUnmount(); });
 
-  std::cout << fmt::format("\n{} is ready at {}\n\n", fs_name, argv[2]);
+  std::cout << fmt::format("\n{} is ready at {}\n\n", fs_name,
+                           mount_option.mount_point);
 
   if (fuse_server->Serve() == 1) return EXIT_FAILURE;
 

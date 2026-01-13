@@ -21,6 +21,7 @@
 #include <unistd.h>
 
 #include <cstdint>
+#include <filesystem>
 #include <iomanip>
 #include <iostream>
 #include <utility>
@@ -30,6 +31,7 @@
 #include "butil/file_util.h"
 #include "butil/strings/string_util.h"
 #include "common/types.h"
+#include "fmt/format.h"
 #include "glog/logging.h"
 
 namespace dingofs {
@@ -194,6 +196,17 @@ class Helper {
     }
 
     return true;
+  }
+
+  static std::string ToCanonicalPath(const std::string& path) {
+    try {
+      return std::filesystem::weakly_canonical(std::filesystem::path(path))
+          .string();
+    } catch (const std::filesystem::filesystem_error& ex) {
+      LOG(FATAL) << fmt::format(
+          "convert to canonical path failed, path: {} error: {}", path,
+          ex.what());
+    }
   }
 
   static std::string ToLowerCase(const std::string& str) {
