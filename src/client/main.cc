@@ -103,15 +103,11 @@ int main(int argc, char* argv[]) {
     return EXIT_FAILURE;
   }
 
-  // read gflags from conf file
-  if (!dingofs::FLAGS_conf.empty()) {
-    CHECK(dingofs::Helper::IsExistPath(dingofs::FLAGS_conf))
-        << fmt::format("config file {} not exist.", dingofs::FLAGS_conf);
-    gflags::ReadFromFlagsFile(dingofs::FLAGS_conf, argv[0], true);
+  std::string mountpoint = dingofs::Helper::ToCanonicalPath(argv[2]);
+  if (mountpoint == "/") {
+    std::cerr << "can not mount on the root directory\n";
+    return EXIT_FAILURE;
   }
-
-  // reset brpc flag default value if not set
-  dingofs::ResetBrpcFlagDefaultValue();
 
   dingofs::MetaSystemType metasystem_type;
   std::string mds_addrs;
@@ -131,6 +127,16 @@ int main(int argc, char* argv[]) {
     return EXIT_FAILURE;
   }
 
+  // read gflags from conf file
+  if (!dingofs::FLAGS_conf.empty()) {
+    CHECK(dingofs::Helper::IsExistPath(dingofs::FLAGS_conf))
+        << fmt::format("config file {} not exist.", dingofs::FLAGS_conf);
+    gflags::ReadFromFlagsFile(dingofs::FLAGS_conf, argv[0], true);
+  }
+
+  // reset brpc flag default value if not set
+  dingofs::ResetBrpcFlagDefaultValue();
+
   // used for remote cache
   dingofs::cache::FLAGS_mds_addrs = mds_addrs;
 
@@ -140,7 +146,7 @@ int main(int argc, char* argv[]) {
   }
 
   struct MountOption mount_option{
-      .mount_point = dingofs::Helper::ToCanonicalPath(argv[2]),
+      .mount_point = mountpoint,
       .fs_name = fs_name,
       .metasystem_type = metasystem_type,
       .mds_addrs = mds_addrs,
