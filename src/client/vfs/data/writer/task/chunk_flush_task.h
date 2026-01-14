@@ -25,7 +25,7 @@
 #include <map>
 #include <mutex>
 
-#include "client/vfs/data/slice/slice_data.h"
+#include "client/vfs/data/slice/slice_writer.h"
 #include "common/callback.h"
 
 namespace dingofs {
@@ -36,7 +36,7 @@ class ChunkFlushTask {
  public:
   explicit ChunkFlushTask(
       uint64_t ino, uint64_t index, uint64_t chunk_flush_id,
-      std::map<uint64_t, std::unique_ptr<SliceData>> flush_slices)
+      std::map<uint64_t, std::unique_ptr<SliceWriter>> flush_slices)
       : ino_(ino),
         chunk_index_(index),
         chunk_flush_id(chunk_flush_id),
@@ -74,7 +74,7 @@ class ChunkFlushTask {
   std::atomic_uint64_t flusing_slice_{0};
 
   mutable std::mutex mutex_;
-  const std::map<uint64_t, std::unique_ptr<SliceData>> flush_slices_;
+  const std::map<uint64_t, SliceWriterUPtr> flush_slices_;
   StatusCallback cb_;
   Status status_;
 };

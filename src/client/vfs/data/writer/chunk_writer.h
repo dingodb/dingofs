@@ -27,7 +27,7 @@
 #include <string>
 
 #include "client/vfs/data/chunk.h"
-#include "client/vfs/data/slice/slice_data.h"
+#include "client/vfs/data/slice/slice_writer.h"
 #include "client/vfs/data/writer/task/chunk_flush_task.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
@@ -131,9 +131,9 @@ class ChunkWriter {
 
   uint64_t GetChunkSize() const;
 
-  SliceData* FindWritableSliceUnLocked(uint64_t chunk_pos, uint64_t size);
-  SliceData* CreateSliceUnlocked(uint64_t chunk_pos);
-  SliceData* GetSliceUnlocked(uint64_t chunk_pos, uint64_t size);
+  SliceWriter* FindWritableSliceUnLocked(uint64_t chunk_pos, uint64_t size);
+  SliceWriter* CreateSliceUnlocked(uint64_t chunk_pos);
+  SliceWriter* GetSliceUnlocked(uint64_t chunk_pos, uint64_t size);
 
   Status CommitSlices(ContextSPtr ctx, const std::vector<Slice>& slices);
   void AsyncCommitSlices(ContextSPtr ctx, const std::vector<Slice>& slices,
@@ -186,7 +186,7 @@ class ChunkWriter {
   mutable std::mutex slice_mutex_;
   // seq_id -> slice data
   // TODO: maybe use std::vector
-  std::map<uint64_t, std::unique_ptr<SliceData>> slices_;
+  std::map<uint64_t, SliceWriterUPtr> slices_;
 
   mutable std::mutex flush_mutex_;
   std::deque<FlushTask*> flush_queue_;

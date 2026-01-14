@@ -73,12 +73,12 @@ void ChunkFlushTask::RunAsync(StatusCallback cb) {
   VLOG(4) << fmt::format("{} Start chunk_flush_task: {} flush_slices size: {}",
                          UUID(), ToString(), flush_slices_.size());
 
-  std::map<uint64_t, SliceData*> to_flush_slices;
+  std::map<uint64_t, SliceWriter*> to_flush_slices;
   {
     std::lock_guard<std::mutex> lg(mutex_);
     for (const auto& seq_slice : flush_slices_) {
       int64_t seq = seq_slice.first;
-      SliceData* slice = seq_slice.second.get();
+      SliceWriter* slice = seq_slice.second.get();
 
       to_flush_slices.emplace(seq, slice);
     }
@@ -102,7 +102,7 @@ void ChunkFlushTask::RunAsync(StatusCallback cb) {
 
   for (const auto& seq_slice : to_flush_slices) {
     int64_t seq = seq_slice.first;
-    SliceData* slice = seq_slice.second;
+    SliceWriter* slice = seq_slice.second;
 
     VLOG(4) << fmt::format("{} will flush slice_seq: {}, slice: {}", UUID(),
                            seq, slice->UUID());

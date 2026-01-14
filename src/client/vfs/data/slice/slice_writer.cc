@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "client/vfs/data/slice/slice_data.h"
+#include "client/vfs/data/slice/slice_writer.h"
 
 #include <butil/iobuf.h>
 #include <butil/time.h>
@@ -39,10 +39,10 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
-#define METHOD_NAME() ("SliceData::" + std::string(__FUNCTION__))
+#define METHOD_NAME() ("SliceWriter::" + std::string(__FUNCTION__))
 
-BlockData* SliceData::FindOrCreateBlockDataUnlocked(uint64_t block_index,
-                                                    uint64_t block_offset) {
+BlockData* SliceWriter::FindOrCreateBlockDataUnlocked(uint64_t block_index,
+                                                      uint64_t block_offset) {
   auto iter = block_datas_.find(block_index);
   if (iter != block_datas_.end()) {
     VLOG(4) << fmt::format(
@@ -65,9 +65,9 @@ BlockData* SliceData::FindOrCreateBlockDataUnlocked(uint64_t block_index,
 }
 
 // no overlap slice write will come here
-Status SliceData::Write(ContextSPtr ctx, const char* buf, uint64_t size,
-                        uint64_t chunk_offset) {
-  auto span = vfs_hub_->GetTraceManager().StartChildSpan("SliceData::Write",
+Status SliceWriter::Write(ContextSPtr ctx, const char* buf, uint64_t size,
+                          uint64_t chunk_offset) {
+  auto span = vfs_hub_->GetTraceManager().StartChildSpan("SliceWriter::Write",
                                                          ctx->GetTraceSpan());
 
   uint64_t end_in_chunk = chunk_offset + size;
@@ -130,7 +130,7 @@ Status SliceData::Write(ContextSPtr ctx, const char* buf, uint64_t size,
   return Status::OK();
 }
 
-void SliceData::FlushAsync(StatusCallback cb) {
+void SliceWriter::FlushAsync(StatusCallback cb) {
   VLOG(4) << fmt::format("{} FlushAsync Start", UUID());
 
   {
@@ -145,7 +145,7 @@ void SliceData::FlushAsync(StatusCallback cb) {
   vfs_hub_->GetFlushExecutor()->Execute([this]() { this->DoFlush(); });
 }
 
-void SliceData::FlushDone(Status s) {
+void SliceWriter::FlushDone(Status s) {
   VLOG(4) << fmt::format("{} FlushDone status: {}", UUID(), s.ToString());
 
   flushed_.store(true, std::memory_order_relaxed);
@@ -159,7 +159,7 @@ void SliceData::FlushDone(Status s) {
   cb(s);
 }
 
-void SliceData::SliceFlushed(Status status, SliceFlushTask* task) {
+void SliceWriter::SliceFlushed(Status status, SliceFlushTask* task) {
   if (!status.ok()) {
     LOG(WARNING) << fmt::format(
         "{} Failed to flush slice: {}, slice_flush_task: {}, status: {}",
@@ -170,9 +170,9 @@ void SliceData::SliceFlushed(Status status, SliceFlushTask* task) {
   FlushDone(status);
 }
 
-void SliceData::DoFlush() {
+void SliceWriter::DoFlush() {
   // TODO: get ctx from parent
-  auto span = vfs_hub_->GetTraceManager().StartSpan("SliceData::DoFlush");
+  auto span = vfs_hub_->GetTraceManager().StartSpan("SliceWriter::DoFlush");
 
   VLOG(4) << fmt::format("{} DoFlush", UUID());
 
@@ -205,7 +205,7 @@ void SliceData::DoFlush() {
       [this](Status s) { this->SliceFlushed(s, flush_task_.get()); });
 }
 
-Slice SliceData::GetCommitSlice() {
+Slice SliceWriter::GetCommitSlice() {
   uint64_t chunk_start_in_file = context_.chunk_index * context_.chunk_size;
 
   uint64_t len = 0;

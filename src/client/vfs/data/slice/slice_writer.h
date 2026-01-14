@@ -39,13 +39,13 @@ namespace vfs {
 class VFSHub;
 
 // writing -> flushing -> flushed
-class SliceData {
+class SliceWriter {
  public:
-  explicit SliceData(const SliceDataContext& context, VFSHub* hub,
-                     uint64_t chunk_offset)
+  explicit SliceWriter(const SliceDataContext& context, VFSHub* hub,
+                       uint64_t chunk_offset)
       : context_(context), vfs_hub_(hub), chunk_offset_(chunk_offset) {}
 
-  ~SliceData() = default;
+  ~SliceWriter() = default;
 
   Status Write(ContextSPtr ctx, const char* buf, uint64_t size,
                uint64_t chunk_offset);
@@ -119,7 +119,7 @@ class SliceData {
   std::atomic_bool flushed_{false};
 };
 
-using SliceDataUPtr = std::unique_ptr<SliceData>;
+using SliceWriterUPtr = std::unique_ptr<SliceWriter>;
 
 }  // namespace vfs
 }  // namespace client

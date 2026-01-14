@@ -13,7 +13,7 @@
 # limitations under the License.
 
 add_library(vfs_data_slice
-    slice_data.cc
+    slice_writer.cc
     block_data.cc
     page_data.cc
     task/slice_flush_task.cc
