@@ -33,11 +33,9 @@ void ReadRequest::ToStateUnLock(ReadRequestState new_state,
 
 std::string ReadRequest::ToStringUnlock() const {
   return fmt::format(
-      "(uuid: {}, state: {}, readers: {}, access_sec: {}, ino: {}, file_range: "
-      "[{}-{}), len: {}, chunk_range: [{},{}-{}), status: {})",
-      UUID(), ReadRequestStateToString(state), readers, access_sec, ino,
-      frange.offset, frange.End(), frange.len, chunk_index, chunk_offset,
-      (chunk_offset + frange.len), status.ToString());
+      "(uuid: {}, state: {}, readers: {}, access_sec: {},req:  {}, status: {})",
+      UUID(), ReadRequestStateToString(state), readers, access_sec,
+      req.ToString(), status.ToString());
 }
 
 std::string ReadRequest::ToString() const {

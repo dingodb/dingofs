@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "client/vfs/data/reader/reader_common.h"
+#include "client/vfs/data/reader/chunk_req.h"
 
 #include <fmt/format.h>
 
@@ -22,11 +22,13 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
-std::string ChunkReadReq::ToString() const {
+std::string ChunkReq::UUID() const { return fmt::format("rreq-{}", req_id); }
+
+std::string ChunkReq::ToString() const {
   return fmt::format(
-      "(chunk-rreq-{}, ino: {}, file_range: "
-      "[{}-{}), chunk_range: [{}, {}-{}), read_size: {})",
-      req_id, ino, frange.offset, frange.End(), index, offset,
+      "(uuid: {}, ino: {}, file_range: [{}-{}), chunk_range: [{}, {}-{}), "
+      "size: {})",
+      UUID(), ino, frange.offset, frange.End(), index, offset,
       (offset + frange.len), frange.len);
 }
 

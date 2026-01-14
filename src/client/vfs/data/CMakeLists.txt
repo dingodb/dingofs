@@ -19,10 +19,11 @@ add_library(vfs_data
     flat/flat_chunk.cc
     flat/flat_file.cc
     reader/chunk_reader.cc
+    reader/chunk_req_reader.cc
+    reader/chunk_req.cc
     reader/file_reader.cc
     reader/read_request.cc
     reader/readahead_policy.cc
-    reader/reader_common.cc
     writer/file_writer.cc
     writer/chunk_writer.cc
     writer/task/file_flush_task.cc

@@ -37,7 +37,6 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
-static std::atomic<uint64_t> slice_seq_id_gen{1};
 static std::atomic<uint64_t> chunk_flush_id_gen{1};
 static std::atomic<uint64_t> commit_seq_id_gen{1};
 

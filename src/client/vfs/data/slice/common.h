@@ -19,6 +19,7 @@
 
 #include <fmt/format.h>
 
+#include <atomic>
 #include <cstdint>
 #include <string>
 
@@ -26,23 +27,24 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
+static std::atomic<uint64_t> slice_seq_id_gen{1};
+
 struct SliceDataContext {
+  const uint64_t seq{0};
   const uint64_t fs_id{0};
   const uint64_t ino{0};
   const uint64_t chunk_index{0};
-  const uint64_t seq{0};  // unique id for slice in current chunk, valid from 1
   const uint64_t chunk_size{0};
   const uint64_t block_size{0};
   const uint64_t page_size{0};
 
   explicit SliceDataContext(uint64_t p_fs_id, uint64_t p_ino,
-                            uint64_t p_chunk_index, uint64_t p_seq,
-                            uint64_t p_chunk_size, uint64_t p_block_size,
-                            uint64_t p_page_size)
-      : fs_id(p_fs_id),
+                            uint64_t p_chunk_index, uint64_t p_chunk_size,
+                            uint64_t p_block_size, uint64_t p_page_size)
+      : seq(slice_seq_id_gen.fetch_add(1, std::memory_order_relaxed)),
+        fs_id(p_fs_id),
         ino(p_ino),
         chunk_index(p_chunk_index),
-        seq(p_seq),
         chunk_size(p_chunk_size),
         block_size(p_block_size),
         page_size(p_page_size) {}
@@ -50,7 +52,7 @@ struct SliceDataContext {
   ~SliceDataContext() = default;
 
   std::string UUID() const {
-    return fmt::format("{}-{}-{}", ino, chunk_index, seq);
+    return fmt::format("{}-{}-{}", seq, ino, chunk_index);
   }
 };
 

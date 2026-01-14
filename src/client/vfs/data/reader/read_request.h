@@ -26,6 +26,7 @@
 #include <mutex>
 
 #include "client/vfs/data/common/common.h"
+#include "client/vfs/data/reader/chunk_req.h"
 #include "common/io_buffer.h"
 
 namespace dingofs {
@@ -80,11 +81,7 @@ static std::string TransitionReasonToString(TransitionReason reason) {
 }
 
 struct ReadRequest {
-  const uint64_t req_id;
-  const uint64_t ino;          // ino
-  const int64_t chunk_index;   // chunk index
-  const int64_t chunk_offset;  // offset in the chunk
-  const FileRange frange;
+  const ChunkReq req;
 
   mutable std::mutex mutex;
   std::condition_variable cv;
@@ -94,13 +91,9 @@ struct ReadRequest {
   int64_t access_sec;
   IOBuffer buffer;
 
-  ReadRequest(uint64_t req_id, uint64_t ino, int64_t chunk_index,
-              int64_t chunk_offset, FileRange frange)
-      : req_id(req_id),
-        ino(ino),
-        chunk_index(chunk_index),
-        chunk_offset(chunk_offset),
-        frange(frange) {}
+  explicit ReadRequest(uint64_t ino, int64_t chunk_index, int64_t chunk_offset,
+                       FileRange frange)
+      : req(ino, chunk_index, chunk_offset, frange) {}
 
   void IncReader() {
     std::unique_lock<std::mutex> lock(mutex);
@@ -116,7 +109,13 @@ struct ReadRequest {
 
   void ToStateUnLock(ReadRequestState new_state, TransitionReason reason);
 
-  std::string UUID() const { return fmt::format("rreq-{}", req_id); }
+  uint64_t ReqId() const { return req.req_id; }
+
+  bool Overlaps(const FileRange& other) const {
+    return req.frange.Overlaps(other);
+  }
+
+  std::string UUID() const { return req.UUID(); }
 
   std::string ToStringUnlock() const;
 

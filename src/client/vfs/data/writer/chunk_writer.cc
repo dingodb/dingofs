@@ -241,13 +241,11 @@ SliceData* ChunkWriter::FindWritableSliceUnLocked(uint64_t chunk_pos,
 }
 
 SliceData* ChunkWriter::CreateSliceUnlocked(uint64_t chunk_pos) {
-  // Use static because chunk with same index may be deleted and recreated
-  uint64_t seq = slice_seq_id_gen.fetch_add(1, std::memory_order_relaxed);
-  SliceDataContext ctx(chunk_.fs_id, chunk_.ino, chunk_.index, seq,
+  SliceDataContext ctx(chunk_.fs_id, chunk_.ino, chunk_.index,
                        chunk_.chunk_size, chunk_.block_size, page_size_);
   auto [it, inserted] = slices_.try_emplace(
-      seq, std::make_unique<SliceData>(ctx, hub_, chunk_pos));
-  CHECK(inserted) << "Slice seq already exists: " << seq;
+      ctx.seq, std::make_unique<SliceData>(ctx, hub_, chunk_pos));
+  CHECK(inserted) << "Slice seq already exists: " << ctx.seq;
   return it->second.get();
 }
 

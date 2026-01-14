@@ -54,8 +54,6 @@ namespace vfs {
 static bvar::Adder<uint64_t> vfs_rreq_in_queue("vfs_rreq_in_queue");
 static bvar::Adder<uint64_t> vfs_rreq_inflighting("vfs_rreq_inflighting");
 
-static std::atomic<uint64_t> req_id_gen{1};
-
 static const uint64_t kReqValidityTimeoutS = 30;
 static const uint32_t kMaxReadRequests = 64;
 
@@ -241,7 +239,7 @@ void FileReader::Invalidate(int64_t offset, int64_t size) {
 
     FileRange frange{.offset = offset, .len = size};
 
-    if (!req->frange.Overlaps(frange)) {
+    if (!req->Overlaps(frange)) {
       continue;
     }
 
@@ -300,7 +298,7 @@ ReadRequestSptr FileReader::NewReadRequest(int64_t s, int64_t e) {
       uuid_, s, e, block_end, s, req_end, (req_end - s));
 
   std::shared_ptr<ReadRequest> req(
-      new ReadRequest(req_id_gen.fetch_add(1), ino_, chunk_indx, chunk_offset,
+      new ReadRequest(ino_, chunk_indx, chunk_offset,
                       FileRange{.offset = s, .len = (req_end - s)}));
 
   req->state = ReadRequestState::kNew;
@@ -308,13 +306,13 @@ ReadRequestSptr FileReader::NewReadRequest(int64_t s, int64_t e) {
   req->access_sec = butil::monotonic_time_s();
   req->readers = 0;
 
-  auto [it, inserted] = requests_.emplace(req->req_id, std::move(req));
+  auto [it, inserted] = requests_.emplace(req->ReqId(), std::move(req));
   CHECK(inserted);
   ReadRequestSptr new_req = it->second;
   VLOG(9) << fmt::format("{} NewReadRequest req: {}", uuid_,
                          new_req->ToString());
 
-  TakeMem(new_req->frange.len);
+  TakeMem(new_req->req.frange.len);
 
   RunReadRequest(new_req);
 
@@ -341,19 +339,9 @@ void FileReader::DeleteReadRequestUnlock(ReadRequestSptr req) {
                          req->ToString());
   CHECK(CanDeleteRequest(req));
 
-  ReleaseMem(req->frange.len);
+  ReleaseMem(req->req.frange.len);
 
-  CHECK(requests_.erase(req->req_id) == 1);
-}
-
-static ChunkReadReq GenChunkReqdReq(const ReadRequestSptr& req) {
-  return ChunkReadReq{
-      .req_id = req->req_id,
-      .ino = req->ino,
-      .index = req->chunk_index,
-      .offset = req->chunk_offset,
-      .frange = req->frange,
-  };
+  CHECK(requests_.erase(req->ReqId()) == 1);
 }
 
 void FileReader::OnReadRequestComplete(ChunkReader* reader, ReadRequestSptr req,
@@ -424,15 +412,11 @@ void FileReader::DoReadRequst(ReadRequestSptr req) {
     req->ToStateUnLock(ReadRequestState::kBusy, TransitionReason::kReading);
   }
 
-  // NOTE: becareful here, because related param is const, so we can do this
-  // out of lock
-  ChunkReadReq chunk_req = GenChunkReqdReq(req);
-
   auto span = vfs_hub_->GetTraceManager().StartSpan("FileReader::DoReadRequst");
 
   AcquireRef();
 
-  auto* reader = new ChunkReader(vfs_hub_, fh_, chunk_req);
+  auto* reader = new ChunkReader(vfs_hub_, fh_, req->req);
   reader->ReadAsync(SpanScope::GetContext(span),
                     [this, reader, req, span](Status s) {
                       SpanScope::AddEvent(span, "Complete ReadAsync callback");
@@ -474,7 +458,7 @@ bool FileReader::IsProtectedReq(const ReadRequestSptr& req) const {
   }
 
   FileRange frange{.offset = s, .len = e - s};
-  if (req->frange.Overlaps(frange)) {
+  if (req->Overlaps(frange)) {
     return true;
   }
 
@@ -508,14 +492,14 @@ void FileReader::MakeReadahead(ContextSPtr ctx, const FileRange& frange) {
       continue;
     }
 
-    if (req->frange.offset <= ahead.offset &&
-        req->frange.End() > ahead.offset) {
-      if (req->frange.End() < ahead.End()) {
+    if (req->req.frange.offset <= ahead.offset &&
+        req->req.frange.End() > ahead.offset) {
+      if (req->req.frange.End() < ahead.End()) {
         // ahead:              |--------|
         // or existing req:  |---|
         // NOTE: sequence is important here
-        ahead.len = ahead.End() - req->frange.End();
-        ahead.offset = req->frange.End();
+        ahead.len = ahead.End() - req->req.frange.End();
+        ahead.offset = req->req.frange.End();
       } else {
         // ahead:              |--------|
         // existing req:     |------------|
@@ -530,8 +514,8 @@ void FileReader::MakeReadahead(ContextSPtr ctx, const FileRange& frange) {
       // ahead:              |--------|
       // or existing req:            |----|
       // has overlap
-      if (!(ahead.offset >= req->frange.End() ||
-            ahead.End() <= req->frange.offset)) {
+      if (!(ahead.offset >= req->req.frange.End() ||
+            ahead.End() <= req->req.frange.offset)) {
         ahead.len = 0;
         break;
       }
@@ -558,7 +542,7 @@ void FileReader::MakeReadahead(ContextSPtr ctx, const FileRange& frange) {
           s, e, (e - s));
       auto req = NewReadRequest(s, e);
 
-      s = req->frange.End();
+      s = req->req.frange.End();
     }
   }
 }
@@ -620,11 +604,12 @@ std::vector<int64_t> FileReader::SplitRange(ContextSPtr ctx,
       continue;
     }
 
-    if (frange.Contains(req->frange.offset) && !contains(req->frange.offset)) {
-      ranges.push_back(req->frange.offset);
+    if (frange.Contains(req->req.frange.offset) &&
+        !contains(req->req.frange.offset)) {
+      ranges.push_back(req->req.frange.offset);
     }
 
-    uint64_t req_end = req->frange.End();
+    uint64_t req_end = req->req.frange.End();
     if (frange.Contains(req_end) && !contains(req_end)) {
       ranges.push_back(req_end);
     }
@@ -653,9 +638,9 @@ std::vector<PartialReadRequest> FileReader::PrepareRequests(
           "{} PrepareRequests check req: {} for range [{}-{}))", uuid_,
           req->ToString(), s, e);
 
-      if (req->frange.offset <= s && req->frange.End() >= e) {
+      if (req->req.frange.offset <= s && req->req.frange.End() >= e) {
         read_reqs.emplace_back(PartialReadRequest{
-            .req = req, .offset = s - req->frange.offset, .len = e - s});
+            .req = req, .offset = s - req->req.frange.offset, .len = e - s});
         req->access_sec = butil::monotonic_time_s();
         req->IncReader();
         added = true;
@@ -675,10 +660,10 @@ std::vector<PartialReadRequest> FileReader::PrepareRequests(
         auto req = NewReadRequest(s, e);
 
         read_reqs.emplace_back(PartialReadRequest{
-            .req = req, .offset = 0, .len = req->frange.len});
+            .req = req, .offset = 0, .len = req->req.frange.len});
         req->IncReader();
 
-        s = req->frange.End();
+        s = req->req.frange.End();
       }
     }
   }
@@ -722,7 +707,7 @@ void FileReader::CleanUpRequest(ContextSPtr ctx, const FileRange& frange) {
       return req->readers == 0;
     }
 
-    if (frange.Overlaps(req->frange)) {
+    if (frange.Overlaps(req->req.frange)) {
       return false;
     }
 

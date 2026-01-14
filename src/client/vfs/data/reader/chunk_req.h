@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_CLIENT_VFS_DATA_READER_READER_COMMON_H_
-#define DINGOFS_CLIENT_VFS_DATA_READER_READER_COMMON_H_
+#ifndef DINGOFS_CLIENT_VFS_DATA_READER_CHUNK_REQ_H_
+#define DINGOFS_CLIENT_VFS_DATA_READER_CHUNK_REQ_H_
 
+#include <atomic>
 #include <cstdint>
 #include <string>
 
@@ -26,18 +27,30 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
-struct ChunkReadReq {
+static std::atomic<uint64_t> req_id_gen{1};
+
+struct ChunkReq {
   const uint64_t req_id{0};  // request id
   const uint64_t ino{0};     // ino
   const int64_t index{0};    // chunk index
   const int64_t offset{0};   // offset in the chunk
   const FileRange frange;
 
+  explicit ChunkReq(uint64_t _ino, int64_t _index, int64_t _offset,
+                    FileRange _frange)
+      : req_id(req_id_gen.fetch_add(1)),
+        ino(_ino),
+        index(_index),
+        offset(_offset),
+        frange(_frange) {}
+
   std::string ToString() const;
+
+  std::string UUID() const;
 };
 
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_CLIENT_VFS_DATA_READER_READER_COMMON_H_
+#endif  // DINGOFS_CLIENT_VFS_DATA_READER_CHUNK_REQ_H_
