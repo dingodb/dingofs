@@ -20,6 +20,7 @@
 #include <glog/logging.h>
 #include <unistd.h>
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -92,8 +93,9 @@ void FileWriter::AcquireRef() {
 }
 
 void FileWriter::ReleaseRef() {
+  std::string uuid = uuid_;
   int64_t orgin = refs_.fetch_sub(1);
-  VLOG(12) << fmt::format("{} ReleaseRef origin refs: {}", uuid_, orgin);
+  VLOG(12) << fmt::format("{} ReleaseRef origin refs: {}", uuid, orgin);
   CHECK_GT(orgin, 0);
   if (orgin == 1) {
     delete this;
