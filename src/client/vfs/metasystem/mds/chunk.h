@@ -86,6 +86,9 @@ class Chunk {
     return std::make_shared<Chunk>(ino, chunk);
   }
 
+  Ino GetIno() const { return ino_; }
+  uint32_t GetIndex() const { return index_; }
+
   void Put(const ChunkEntry& chunk);
   void AppendSlice(const std::vector<Slice>& slices);
 
@@ -96,8 +99,11 @@ class Chunk {
   std::vector<Slice> CommitSlice();
   void MarkCommited(uint64_t version);
 
+  bool IsNeedCompaction();
+
   uint64_t GetVersion();
   std::vector<Slice> GetAllSlice();
+  std::vector<Slice> GetCommitedSlice(uint64_t& version);
 
   // output json format string
   bool Dump(Json::Value& value);
@@ -248,6 +254,7 @@ class ChunkSet {
 
   bool Exist(uint32_t index);
   ChunkSPtr Get(uint32_t index);
+  std::vector<ChunkSPtr> GetAll();
 
   uint64_t GetVersion(uint32_t index);
   std::vector<std::pair<uint32_t, uint64_t>> GetAllVersion();

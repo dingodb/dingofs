@@ -150,6 +150,32 @@ bool Chunk::HasCommitting() {
   return !commiting_slices_.empty();
 }
 
+bool Chunk::IsNeedCompaction() {
+  utils::ReadLockGuard guard(lock_);
+
+  if (!FLAGS_vfs_meta_compact_chunk_enable) {
+    return false;
+  }
+
+  if (!is_completed_) {
+    return false;
+  }
+
+  uint64_t now_ms = utils::TimestampMs();
+  if (now_ms <
+      (last_compaction_time_ms_ + FLAGS_vfs_meta_compact_chunk_interval_ms)) {
+    return false;
+  }
+
+  last_compaction_time_ms_ = now_ms;
+
+  if (commited_slices_.size() < FLAGS_vfs_meta_compact_chunk_threshold_num) {
+    return false;
+  }
+
+  return true;
+}
+
 std::vector<Slice> Chunk::CommitSlice() {
   utils::WriteLockGuard guard(lock_);
 
@@ -203,6 +229,13 @@ std::vector<Slice> Chunk::GetAllSlice() {
   // todo: remove duplicate slices
 
   return slices;
+}
+
+std::vector<Slice> Chunk::GetCommitedSlice(uint64_t& version) {
+  utils::ReadLockGuard lk(lock_);
+
+  version = commited_version_;
+  return commited_slices_;
 }
 
 // output json format string
@@ -524,6 +557,18 @@ ChunkSPtr ChunkSet::Get(uint32_t index) {
 
   auto it = chunk_map_.find(index);
   return (it != chunk_map_.end()) ? it->second : nullptr;
+}
+
+std::vector<ChunkSPtr> ChunkSet::GetAll() {
+  utils::ReadLockGuard guard(lock_);
+
+  std::vector<ChunkSPtr> chunks;
+  chunks.reserve(chunk_map_.size());
+  for (const auto& [index, chunk] : chunk_map_) {
+    chunks.push_back(chunk);
+  }
+
+  return chunks;
 }
 
 // output json format string

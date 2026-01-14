@@ -2252,49 +2252,50 @@ Status FileSystem::CommitRename(Context& ctx, const RenameParam& param, Ino& old
 }
 
 void FileSystem::AsyncCheckCompactChunk(Ino ino, std::vector<ChunkEntry>&& chunks) {
-  struct Params {
-    FileSystemSPtr self;
-    Ino ino;
-    std::vector<ChunkEntry> chunks;
-  };
+  // struct Params {
+  //   FileSystemSPtr self;
+  //   Ino ino;
+  //   std::vector<ChunkEntry> chunks;
+  // };
 
-  Params* params = new Params({.self = GetSelfPtr(), .ino = ino, .chunks = std::move(chunks)});
+  // Params* params = new Params({.self = GetSelfPtr(), .ino = ino, .chunks = std::move(chunks)});
 
-  bthread_t tid;
-  bthread_attr_t attr = BTHREAD_ATTR_NORMAL;
-  if (bthread_start_background(
-          &tid, &attr,
-          [](void* arg) -> void* {
-            Params* params = reinterpret_cast<Params*>(arg);
+  // bthread_t tid;
+  // bthread_attr_t attr = BTHREAD_ATTR_NORMAL;
+  // if (bthread_start_background(
+  //         &tid, &attr,
+  //         [](void* arg) -> void* {
+  //           Params* params = reinterpret_cast<Params*>(arg);
 
-            Ino ino = params->ino;
-            auto& chunks = params->chunks;
-            auto self = params->self;
-            auto fs_info = self->fs_info_->Get();
+  //           Ino ino = params->ino;
+  //           auto& chunks = params->chunks;
+  //           auto self = params->self;
+  //           auto fs_info = self->fs_info_->Get();
 
-            for (auto& chunk : chunks) {
-              if (CompactChunkOperation::MaybeCompact(fs_info, ino, 0, chunk)) {
-                LOG(INFO) << fmt::format("[fs.{}.{}] trigger compact chunk({}).", fs_info.fs_id(), ino, chunk.index());
+  //           for (auto& chunk : chunks) {
+  //             if (CompactChunkOperation::MaybeCompact(fs_info, ino, 0, chunk)) {
+  //               LOG(INFO) << fmt::format("[fs.{}.{}] trigger compact chunk({}).", fs_info.fs_id(), ino,
+  //               chunk.index());
 
-                auto post_handler = [self](OperationSPtr operation) {
-                  auto origin_operation = std::dynamic_pointer_cast<CompactChunkOperation>(operation);
-                  auto& result = origin_operation->GetResult();
-                  // update chunk cache
-                  self->chunk_cache_.PutIf(origin_operation->GetIno(), std::move(result.effected_chunk));
-                };
-                self->operation_processor_->AsyncRun(CompactChunkOperation::New(fs_info, ino, chunk.index()),
-                                                     post_handler);
-              }
-            }
+  //               auto post_handler = [self](OperationSPtr operation) {
+  //                 auto origin_operation = std::dynamic_pointer_cast<CompactChunkOperation>(operation);
+  //                 auto& result = origin_operation->GetResult();
+  //                 // update chunk cache
+  //                 self->chunk_cache_.PutIf(origin_operation->GetIno(), std::move(result.effected_chunk));
+  //               };
+  //               self->operation_processor_->AsyncRun(CompactChunkOperation::New(fs_info, ino, chunk.index()),
+  //                                                    post_handler);
+  //             }
+  //           }
 
-            delete params;
+  //           delete params;
 
-            return nullptr;
-          },
-          params) != 0) {
-    delete params;
-    LOG(FATAL) << "[operation] start background thread fail.";
-  }
+  //           return nullptr;
+  //         },
+  //         params) != 0) {
+  //   delete params;
+  //   LOG(FATAL) << "[operation] start background thread fail.";
+  // }
 }
 
 Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, const std::vector<DeltaSliceEntry>& delta_slices,
@@ -2496,8 +2497,8 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
   return Status::OK();
 }
 
-Status FileSystem::CompactChunk(Context& ctx, Ino ino, uint64_t chunk_index,
-                                std::vector<pb::mds::TrashSlice>& trash_slices) {
+Status FileSystem::CompactChunk(Context& ctx, Ino ino, uint32_t index, const CompactChunkParam& param,
+                                ChunkEntry& chunk_out) {
   if (!CanServe(ctx)) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -2505,22 +2506,30 @@ Status FileSystem::CompactChunk(Context& ctx, Ino ino, uint64_t chunk_index,
   auto& trace = ctx.GetTrace();
   utils::Duration duration;
 
-  CompactChunkOperation operation(trace, GetFsInfo(), ino, chunk_index, true);
+  CompactChunkOperation::Param chunk_param{
+      .chunk_index = index,
+      .version = param.version,
+      .start_pos = param.start_pos,
+      .start_slice_id = param.start_slice_id,
+      .end_pos = param.end_pos,
+      .end_slice_id = param.end_slice_id,
+  };
+  CompactChunkOperation operation(trace, fs_id_, ino, chunk_param);
 
   auto status = RunOperation(&operation);
 
   auto& result = operation.GetResult();
-  auto& effected_chunk = result.effected_chunk;
-  trash_slices = Helper::PbRepeatedToVector(result.trash_slice_list.mutable_slices());
+  auto& chunk = result.chunk;
 
-  LOG(INFO) << fmt::format("[fs.{}][{}us] compactchunk {}/{} finish, trash_slices({}) status({}).", fs_id_,
-                           duration.ElapsedUs(), ino, chunk_index, trash_slices.size(), status.error_str());
-  if (!status.ok()) {
-    return status;
-  }
+  LOG(INFO) << fmt::format("[fs.{}][{}us] compactchunk {}/{} finish, param({}|{}|{}) version({}->{}) status({}).",
+                           fs_id_, duration.ElapsedUs(), ino, index, param.start_slice_id, param.end_slice_id,
+                           param.new_slices.size(), param.version, chunk.version(), status.error_str());
+  if (!status.ok()) return status;
+
+  chunk_out = chunk;
 
   // update chunk cache
-  chunk_cache_.PutIf(ino, std::move(effected_chunk));
+  chunk_cache_.PutIf(ino, std::move(chunk));
 
   return Status::OK();
 }

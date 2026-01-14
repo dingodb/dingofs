@@ -168,6 +168,23 @@ class MDSClient {
                     const std::vector<mds::DeltaSliceEntry>& delta_slices,
                     std::vector<ChunkDescriptor>& chunk_descriptors);
 
+  struct CompactChunkParam {
+    uint64_t version{0};
+
+    // old slices in [start_slice_id, end_slice_id) will be replaced by
+    // new_slices
+    uint32_t start_pos{0};
+    uint64_t start_slice_id{0};
+
+    uint32_t end_pos{0};
+    uint64_t end_slice_id{0};
+
+    std::vector<mds::SliceEntry> new_slices;
+  };
+  Status CompactChunk(ContextSPtr& ctx, Ino ino, uint32_t chunk_index,
+                      const CompactChunkParam& param,
+                      mds::ChunkEntry& chunk_entry);
+
   Status Fallocate(ContextSPtr& ctx, Ino ino, int32_t mode, uint64_t offset,
                    uint64_t length);
 

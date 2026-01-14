@@ -2192,17 +2192,23 @@ void MDSServiceImpl::DoCompactChunk(google::protobuf::RpcController*, const pb::
 
   Context ctx(request->context(), request->info().request_id(), __func__);
 
-  std::vector<pb::mds::TrashSlice> trash_slices;
-  status = file_system->CompactChunk(ctx, request->ino(), request->chunk_index(), trash_slices);
+  ChunkEntry chunk;
+  FileSystem::CompactChunkParam param = {
+      .version = request->version(),
+      .start_pos = request->start_pos(),
+      .start_slice_id = request->start_slice_id(),
+      .end_pos = request->end_pos(),
+      .end_slice_id = request->end_slice_id(),
+      .new_slices = Helper::PbRepeatedToVector(request->new_slices()),
+  };
+  status = file_system->CompactChunk(ctx, request->ino(), request->chunk_index(), param, chunk);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     SpanScope::SetStatus(span, status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  for (auto& slice : trash_slices) {
-    response->add_trash_slices()->Swap(&slice);
-  }
+  response->mutable_chunk()->Swap(&chunk);
 }
 
 void MDSServiceImpl::CompactChunk(google::protobuf::RpcController* controller,

@@ -15,29 +15,27 @@
 #ifndef DINGOFS_SRC_CLIENT_VFS_META_MDS_H_
 #define DINGOFS_SRC_CLIENT_VFS_META_MDS_H_
 
-#include <glog/logging.h>
-
 #include <atomic>
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <string>
 
 #include "client/vfs/common/client_id.h"
 #include "client/vfs/metasystem/mds/batch_processor.h"
 #include "client/vfs/metasystem/mds/chunk_memo.h"
+#include "client/vfs/metasystem/mds/compact.h"
 #include "client/vfs/metasystem/mds/dir_iterator.h"
 #include "client/vfs/metasystem/mds/file_session.h"
 #include "client/vfs/metasystem/mds/id_cache.h"
 #include "client/vfs/metasystem/mds/inode_cache.h"
 #include "client/vfs/metasystem/mds/mds_client.h"
-#include "client/vfs/metasystem/mds/mds_discovery.h"
 #include "client/vfs/metasystem/mds/modify_time_memo.h"
 #include "client/vfs/metasystem/meta_system.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
 #include "common/trace/context.h"
 #include "common/trace/trace_manager.h"
+#include "glog/logging.h"
 #include "json/value.h"
 #include "mds/common/crontab.h"
 #include "mds/common/type.h"
@@ -218,6 +216,8 @@ class MDSMetaSystem : public vfs::MetaSystem {
   mds::CrontabManager crontab_manager_;
 
   BatchProcessor batch_processor_;
+
+  CompactProcessor compact_processor_;
 
   std::atomic<bool> stopped_{false};
 };

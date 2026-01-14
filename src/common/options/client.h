@@ -106,6 +106,10 @@ DECLARE_bool(vfs_meta_batch_operation_enable);
 DECLARE_uint32(vfs_meta_batch_operation_merge_delay_us);
 DECLARE_uint32(vfs_meta_commit_slice_max_num);
 
+DECLARE_bool(vfs_meta_compact_chunk_enable);
+DECLARE_uint32(vfs_meta_compact_chunk_threshold_num);
+DECLARE_uint32(vfs_meta_compact_chunk_interval_ms);
+
 // begin used in inode_blocks_service
 DECLARE_uint32(format_file_offset_width);
 DECLARE_uint32(format_len_width);

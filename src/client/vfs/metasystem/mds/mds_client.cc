@@ -1361,6 +1361,60 @@ Status MDSClient::WriteSlice(
   return Status::OK();
 }
 
+struct CompactChunkParam {
+  uint64_t version{0};
+
+  // old slices in [start_slice_id, end_slice_id) will be replaced by
+  // new_slices
+  uint32_t start_pos{0};
+  uint64_t start_slice_id{0};
+
+  uint32_t end_pos{0};
+  uint64_t end_slice_id{0};
+
+  std::vector<mds::SliceEntry> new_slices;
+};
+Status MDSClient::CompactChunk(ContextSPtr& ctx, Ino ino, uint32_t chunk_index,
+                               const CompactChunkParam& param,
+                               mds::ChunkEntry& chunk_entry) {
+  CHECK(fs_id_ != 0) << "fs_id is invalid.";
+  CHECK(ctx != nullptr) << "context is nullptr.";
+  CHECK(ino != 0) << "ino is zero.";
+
+  auto get_mds_fn = [this, ino](bool& is_primary_mds) -> MDSMeta {
+    return GetMds(ino, is_primary_mds);
+  };
+
+  auto span = trace_manager_.StartChildSpan("MDSClient::CompactChunk",
+                                            ctx->GetTraceSpan());
+  pb::mds::CompactChunkRequest request;
+  pb::mds::CompactChunkResponse response;
+
+  request.set_fs_id(fs_id_);
+  request.set_ino(ino);
+  request.set_chunk_index(chunk_index);
+  request.set_version(param.version);
+  request.set_start_pos(param.start_pos);
+  request.set_start_slice_id(param.start_slice_id);
+  request.set_end_pos(param.end_pos);
+  request.set_end_slice_id(param.end_slice_id);
+
+  for (const auto& slice : param.new_slices) {
+    request.add_new_slices()->CopyFrom(slice);
+  }
+
+  auto status = SendRequest(SpanScope::GetContext(span), get_mds_fn,
+                            "MDSService", "CompactChunk", request, response);
+  if (!status.ok()) {
+    SpanScope::SetStatus(span, status);
+    return status;
+  }
+
+  chunk_entry.Swap(response.mutable_chunk());
+
+  return Status::OK();
+}
+
 Status MDSClient::Fallocate(ContextSPtr& ctx, Ino ino, int32_t mode,
                             uint64_t offset, uint64_t length) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";

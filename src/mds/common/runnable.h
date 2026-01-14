@@ -46,6 +46,8 @@ class TaskRunnable {
 
   virtual std::string Type() = 0;
 
+  virtual std::string Key() { return ""; }
+
   virtual void Run() = 0;
 
   virtual std::string Trace() { return fmt::format("{}[{}]", Type(), Id()); }

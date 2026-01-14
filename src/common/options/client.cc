@@ -149,6 +149,15 @@ DEFINE_uint32(vfs_meta_commit_slice_max_num, 2048,
               "maximum number of slices to commit at once.");
 DEFINE_validator(vfs_meta_commit_slice_max_num, brpc::PassValidate);
 
+DEFINE_bool(vfs_meta_compact_chunk_enable, true, "compact chunk enable.");
+DEFINE_validator(vfs_meta_compact_chunk_enable, brpc::PassValidate);
+DEFINE_uint32(vfs_meta_compact_chunk_threshold_num, 10,
+              "compact chunk threshold num.");
+DEFINE_validator(vfs_meta_compact_chunk_threshold_num, brpc::PassValidate);
+DEFINE_uint32(vfs_meta_compact_chunk_interval_ms, 60 * 1000,
+              "compact chunk interval ms.");
+DEFINE_validator(vfs_meta_compact_chunk_interval_ms, brpc::PassValidate);
+
 //  inode_blocks_service
 DEFINE_uint32(format_file_offset_width, 20, "width of file offset in format");
 DEFINE_validator(format_file_offset_width, brpc::PassValidate);

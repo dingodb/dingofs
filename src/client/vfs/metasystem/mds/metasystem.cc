@@ -91,6 +91,10 @@ Status MDSMetaSystem::Init(bool upgrade) {
     return Status::Internal("init batch processor fail");
   }
 
+  if (!compact_processor_.Init()) {
+    return Status::Internal("init compact processor fail");
+  }
+
   // init crontab
   if (!InitCrontab()) {
     return Status::Internal("init crontab fail");
@@ -113,6 +117,8 @@ void MDSMetaSystem::Stop(bool upgrade) {
   crontab_manager_.Destroy();
 
   batch_processor_.Stop();
+
+  compact_processor_.Stop();
 
   LOG(INFO) << fmt::format("[meta.fs] stopped, upgrade({}).", upgrade);
 }
@@ -1180,6 +1186,15 @@ void MDSMetaSystem::AsyncFlushSlice(ContextSPtr& ctx,
   if (is_wait) {
     for (auto& task : tasks) task->Wait();
   }
+
+  // check whether need compact chunk
+  // auto chunks = chunk_set.GetAll();
+  // for (auto& chunk : chunks) {
+  //   if (chunk->IsNeedCompaction()) {
+  //     compact_processor_.Execute(
+  //         CompactChunkTask::New(ino, chunk, mds_client_));
+  //   }
+  // }
 }
 
 Status MDSMetaSystem::FlushSlice(ContextSPtr ctx, Ino ino) {

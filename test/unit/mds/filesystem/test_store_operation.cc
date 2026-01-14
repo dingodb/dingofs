@@ -160,107 +160,107 @@ void PrintTrashSliceList(const TrashSliceList& trash_slice_list) {
 //   PrintTrashSliceList(trash_slice_list);
 // }
 
-TEST_F(OperationTest, GenTrashSlices) {
-  FsInfoEntry fs_info = GenFsInfo();
-  const Ino ino = 1000000001;
-  const uint64_t file_length = 4 * 1024 * 1024;
+// TEST_F(OperationTest, GenTrashSlices) {
+//   FsInfoEntry fs_info = GenFsInfo();
+//   const Ino ino = 1000000001;
+//   const uint64_t file_length = 4 * 1024 * 1024;
 
-  {
-    std::vector<SliceEntry> slices = {
-        GenSlice(20000, 0, 4 * 1024 * 1024),
-    };
-    ChunkEntry chunk = GenChunk(slices);
-    auto trash_slice_list = CompactChunkOperation::TestGenTrashSlices(
-        fs_info, ino, file_length, chunk);
-    ASSERT_EQ(trash_slice_list.slices_size(), 0);
-  }
+//   {
+//     std::vector<SliceEntry> slices = {
+//         GenSlice(20000, 0, 4 * 1024 * 1024),
+//     };
+//     ChunkEntry chunk = GenChunk(slices);
+//     auto trash_slice_list = CompactChunkOperation::TestGenTrashSlices(
+//         fs_info, ino, file_length, chunk);
+//     ASSERT_EQ(trash_slice_list.slices_size(), 0);
+//   }
 
-  {
-    std::vector<SliceEntry> slices = {
-        GenSlice(20000, 0, 4 * 1024 * 1024),
-        GenSlice(20001, 0, 4 * 1024 * 1024),
-    };
-    ChunkEntry chunk = GenChunk(slices);
-    auto trash_slice_list = CompactChunkOperation::TestGenTrashSlices(
-        fs_info, ino, file_length, chunk);
-    ASSERT_EQ(trash_slice_list.slices_size(), 1);
-    ASSERT_EQ(trash_slice_list.slices(0).slice_id(), 20000);
-    ASSERT_EQ(trash_slice_list.slices(0).is_partial(), false);
-  }
+//   {
+//     std::vector<SliceEntry> slices = {
+//         GenSlice(20000, 0, 4 * 1024 * 1024),
+//         GenSlice(20001, 0, 4 * 1024 * 1024),
+//     };
+//     ChunkEntry chunk = GenChunk(slices);
+//     auto trash_slice_list = CompactChunkOperation::TestGenTrashSlices(
+//         fs_info, ino, file_length, chunk);
+//     ASSERT_EQ(trash_slice_list.slices_size(), 1);
+//     ASSERT_EQ(trash_slice_list.slices(0).slice_id(), 20000);
+//     ASSERT_EQ(trash_slice_list.slices(0).is_partial(), false);
+//   }
 
-  {
-    std::vector<SliceEntry> slices = {
-        GenSlice(20000, 0, 4 * 1024 * 1024),
-        GenSlice(20001, 0, 4 * 1024 * 1024),
-        GenSlice(20002, 0, 1 * 1024 * 1024),
-        GenSlice(20003, 1 * 1024 * 1024, 1 * 1024 * 1024),
-        GenSlice(20004, 2 * 1024 * 1024, 1 * 1024 * 1024),
-        GenSlice(20005, 3 * 1024 * 1024, 1 * 1024 * 1024),
-    };
-    ChunkEntry chunk = GenChunk(slices);
-    auto trash_slice_list = CompactChunkOperation::TestGenTrashSlices(
-        fs_info, ino, file_length, chunk);
-    ASSERT_EQ(trash_slice_list.slices_size(), 2);
-    ASSERT_EQ(trash_slice_list.slices(0).slice_id(), 20000);
-    ASSERT_EQ(trash_slice_list.slices(0).is_partial(), false);
-    ASSERT_EQ(trash_slice_list.slices(1).slice_id(), 20001);
-    ASSERT_EQ(trash_slice_list.slices(1).is_partial(), false);
-  }
+//   {
+//     std::vector<SliceEntry> slices = {
+//         GenSlice(20000, 0, 4 * 1024 * 1024),
+//         GenSlice(20001, 0, 4 * 1024 * 1024),
+//         GenSlice(20002, 0, 1 * 1024 * 1024),
+//         GenSlice(20003, 1 * 1024 * 1024, 1 * 1024 * 1024),
+//         GenSlice(20004, 2 * 1024 * 1024, 1 * 1024 * 1024),
+//         GenSlice(20005, 3 * 1024 * 1024, 1 * 1024 * 1024),
+//     };
+//     ChunkEntry chunk = GenChunk(slices);
+//     auto trash_slice_list = CompactChunkOperation::TestGenTrashSlices(
+//         fs_info, ino, file_length, chunk);
+//     ASSERT_EQ(trash_slice_list.slices_size(), 2);
+//     ASSERT_EQ(trash_slice_list.slices(0).slice_id(), 20000);
+//     ASSERT_EQ(trash_slice_list.slices(0).is_partial(), false);
+//     ASSERT_EQ(trash_slice_list.slices(1).slice_id(), 20001);
+//     ASSERT_EQ(trash_slice_list.slices(1).is_partial(), false);
+//   }
 
-  {
-    std::vector<SliceEntry> slices = {
-        GenSlice(20000, 0, 4 * 1024 * 1024),
-        GenSlice(20001, 0, 4 * 1024 * 1024),
-        GenSlice(20002, 0, 1 * 1024 * 1024),
-        GenSlice(20003, 1 * 1024 * 1024, 1 * 1024 * 1024),
-        GenSlice(20004, 2 * 1024 * 1024, 1 * 1024 * 1024),
-        GenSlice(20005, 3 * 1024 * 1024, 1 * 1024 * 1024),
-        GenSlice(20006, 2 * 1024 * 1024, 2 * 1024 * 1024),
-    };
-    ChunkEntry chunk = GenChunk(slices);
-    auto trash_slice_list = CompactChunkOperation::TestGenTrashSlices(
-        fs_info, ino, file_length, chunk);
-    ASSERT_EQ(trash_slice_list.slices_size(), 4);
-    ASSERT_EQ(trash_slice_list.slices(0).slice_id(), 20000);
-    ASSERT_EQ(trash_slice_list.slices(0).is_partial(), false);
-    ASSERT_EQ(trash_slice_list.slices(1).slice_id(), 20001);
-    ASSERT_EQ(trash_slice_list.slices(1).is_partial(), false);
-    ASSERT_EQ(trash_slice_list.slices(2).slice_id(), 20004);
-    ASSERT_EQ(trash_slice_list.slices(2).is_partial(), false);
-    ASSERT_EQ(trash_slice_list.slices(3).slice_id(), 20005);
-    ASSERT_EQ(trash_slice_list.slices(3).is_partial(), false);
-  }
+//   {
+//     std::vector<SliceEntry> slices = {
+//         GenSlice(20000, 0, 4 * 1024 * 1024),
+//         GenSlice(20001, 0, 4 * 1024 * 1024),
+//         GenSlice(20002, 0, 1 * 1024 * 1024),
+//         GenSlice(20003, 1 * 1024 * 1024, 1 * 1024 * 1024),
+//         GenSlice(20004, 2 * 1024 * 1024, 1 * 1024 * 1024),
+//         GenSlice(20005, 3 * 1024 * 1024, 1 * 1024 * 1024),
+//         GenSlice(20006, 2 * 1024 * 1024, 2 * 1024 * 1024),
+//     };
+//     ChunkEntry chunk = GenChunk(slices);
+//     auto trash_slice_list = CompactChunkOperation::TestGenTrashSlices(
+//         fs_info, ino, file_length, chunk);
+//     ASSERT_EQ(trash_slice_list.slices_size(), 4);
+//     ASSERT_EQ(trash_slice_list.slices(0).slice_id(), 20000);
+//     ASSERT_EQ(trash_slice_list.slices(0).is_partial(), false);
+//     ASSERT_EQ(trash_slice_list.slices(1).slice_id(), 20001);
+//     ASSERT_EQ(trash_slice_list.slices(1).is_partial(), false);
+//     ASSERT_EQ(trash_slice_list.slices(2).slice_id(), 20004);
+//     ASSERT_EQ(trash_slice_list.slices(2).is_partial(), false);
+//     ASSERT_EQ(trash_slice_list.slices(3).slice_id(), 20005);
+//     ASSERT_EQ(trash_slice_list.slices(3).is_partial(), false);
+//   }
 
-  {
-    std::vector<SliceEntry> slices = {
-        GenSlice(20000, 0, 4 * 1024 * 1024),
-        GenSlice(20001, 0, 4 * 1024 * 1024),
-        GenSlice(20002, 0, 1 * 1024 * 1024),
-    };
-    ChunkEntry chunk = GenChunk(slices);
-    auto trash_slice_list = CompactChunkOperation::TestGenTrashSlices(
-        fs_info, ino, file_length, chunk);
-    ASSERT_EQ(trash_slice_list.slices_size(), 1);
-    ASSERT_EQ(trash_slice_list.slices(0).slice_id(), 20000);
-    ASSERT_EQ(trash_slice_list.slices(0).is_partial(), false);
-  }
+//   {
+//     std::vector<SliceEntry> slices = {
+//         GenSlice(20000, 0, 4 * 1024 * 1024),
+//         GenSlice(20001, 0, 4 * 1024 * 1024),
+//         GenSlice(20002, 0, 1 * 1024 * 1024),
+//     };
+//     ChunkEntry chunk = GenChunk(slices);
+//     auto trash_slice_list = CompactChunkOperation::TestGenTrashSlices(
+//         fs_info, ino, file_length, chunk);
+//     ASSERT_EQ(trash_slice_list.slices_size(), 1);
+//     ASSERT_EQ(trash_slice_list.slices(0).slice_id(), 20000);
+//     ASSERT_EQ(trash_slice_list.slices(0).is_partial(), false);
+//   }
 
-  {
-    std::vector<SliceEntry> slices = {
-        GenSlice(20000, 0, 4 * 1024 * 1024),
-        GenSlice(20001, 0, 4 * 1024 * 1024),
-        GenSlice(20002, 0, 4 * 1024 * 1024),
-    };
-    ChunkEntry chunk = GenChunk(slices);
-    auto trash_slice_list = CompactChunkOperation::TestGenTrashSlices(
-        fs_info, ino, file_length, chunk);
-    ASSERT_EQ(trash_slice_list.slices_size(), 2);
-    ASSERT_EQ(trash_slice_list.slices(0).slice_id(), 20000);
-    ASSERT_EQ(trash_slice_list.slices(0).is_partial(), false);
-    ASSERT_EQ(trash_slice_list.slices(1).slice_id(), 20001);
-    ASSERT_EQ(trash_slice_list.slices(1).is_partial(), false);
-  }
-}
+//   {
+//     std::vector<SliceEntry> slices = {
+//         GenSlice(20000, 0, 4 * 1024 * 1024),
+//         GenSlice(20001, 0, 4 * 1024 * 1024),
+//         GenSlice(20002, 0, 4 * 1024 * 1024),
+//     };
+//     ChunkEntry chunk = GenChunk(slices);
+//     auto trash_slice_list = CompactChunkOperation::TestGenTrashSlices(
+//         fs_info, ino, file_length, chunk);
+//     ASSERT_EQ(trash_slice_list.slices_size(), 2);
+//     ASSERT_EQ(trash_slice_list.slices(0).slice_id(), 20000);
+//     ASSERT_EQ(trash_slice_list.slices(0).is_partial(), false);
+//     ASSERT_EQ(trash_slice_list.slices(1).slice_id(), 20001);
+//     ASSERT_EQ(trash_slice_list.slices(1).is_partial(), false);
+//   }
+// }
 
 }  // namespace unit_test
 }  // namespace mds

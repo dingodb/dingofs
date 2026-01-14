@@ -203,7 +203,19 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offset, uint64_t len, EntryOut& entry_out);
 
   // compact
-  Status CompactChunk(Context& ctx, Ino ino, uint64_t chunk_index, std::vector<pb::mds::TrashSlice>& trash_slices);
+  struct CompactChunkParam {
+    uint64_t version{0};
+
+    // old slices in [start_slice_id, end_slice_id) will be replaced by new_slices
+    uint32_t start_pos{0};
+    uint64_t start_slice_id{0};
+
+    uint32_t end_pos{0};
+    uint64_t end_slice_id{0};
+
+    std::vector<SliceEntry> new_slices;
+  };
+  Status CompactChunk(Context& ctx, Ino ino, uint32_t index, const CompactChunkParam& param, ChunkEntry& chunk_out);
 
   // dentry/inode
   Status GetDentry(Context& ctx, Ino parent, const std::string& name, Dentry& dentry);
