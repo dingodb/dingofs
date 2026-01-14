@@ -613,7 +613,7 @@ class SmyLinkOperation : public Operation {
 
  private:
   const Dentry& dentry_;
-  AttrEntry attr_;
+  const AttrEntry& attr_;
 };
 
 class UpdateAttrOperation : public Operation {

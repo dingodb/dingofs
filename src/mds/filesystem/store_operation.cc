@@ -1712,7 +1712,7 @@ Status CompactChunkOperation::Run(TxnUPtr& txn) {
 
   // generate trash slice list
   TrashSliceList trash_slice_list;
-  for (int i = param_.start_pos; i <= param_.end_pos; ++i) {
+  for (uint32_t i = param_.start_pos; i <= param_.end_pos; ++i) {
     const auto& slice = slices.at(i);
 
     // filter by new slices

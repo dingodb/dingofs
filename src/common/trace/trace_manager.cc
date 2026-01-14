@@ -19,6 +19,7 @@
 #include <memory>
 
 #include "common/opentrace/tracer.h"
+#include "gflags/gflags.h"
 #include "mds/common/version.h"
 
 namespace dingofs {

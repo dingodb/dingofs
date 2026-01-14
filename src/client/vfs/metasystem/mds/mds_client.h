@@ -211,7 +211,7 @@ class MDSClient {
   void SetAncestorInContext(Request& request, Ino ino);
 
   template <typename Request, typename Response>
-  Status SendRequest(ContextSPtr ctx, GetMdsFn get_mds_fn,
+  Status SendRequest(ContextSPtr ctx, SpanScopeSPtr& span, GetMdsFn get_mds_fn,
                      const std::string& service_name,
                      const std::string& api_name, Request& request,
                      Response& response);
@@ -246,7 +246,8 @@ void MDSClient::SetAncestorInContext(Request& request, Ino ino) {
 }
 
 template <typename Request, typename Response>
-Status MDSClient::SendRequest(ContextSPtr ctx, GetMdsFn get_mds_fn,
+Status MDSClient::SendRequest(ContextSPtr ctx, SpanScopeSPtr& span,
+                              GetMdsFn get_mds_fn,
                               const std::string& service_name,
                               const std::string& api_name, Request& request,
                               Response& response) {
@@ -257,7 +258,11 @@ Status MDSClient::SendRequest(ContextSPtr ctx, GetMdsFn get_mds_fn,
 
   request.mutable_info()->set_request_id(
       ctx ? ctx->SessionID() : std::to_string(utils::TimestampNs()));
+
   request.mutable_context()->set_client_id(client_id_.ID());
+  if (span != nullptr) {
+    request.mutable_info()->set_span_id(SpanScope::GetSpanID(span));
+  }
 
   Status status;
   int retry = 0;

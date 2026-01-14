@@ -17,19 +17,22 @@
 #ifndef DINGOFS_COMMON_OPENTRACE_OTLP_SPAN_H_
 #define DINGOFS_COMMON_OPENTRACE_OTLP_SPAN_H_
 
-#include <atomic>
 #include <memory>
 #include <string>
 
 #include "common/opentrace/type.h"
+#include "opentelemetry/trace/span.h"
 
 namespace dingofs {
+
+using SpanContext = opentelemetry::trace::SpanContext;
+using SpanSPtr = nostd::shared_ptr<trace::Span>;
 
 class OtlpSpan {
  public:
   OtlpSpan(nostd::shared_ptr<trace::Span> span) : span_(span) {}
 
-  ~OtlpSpan();
+  ~OtlpSpan() = default;
 
   std::shared_ptr<SpanContext> GetContext() const;
 

@@ -18,12 +18,7 @@
 
 #include <memory>
 
-#include "fmt/format.h"
-#include "glog/logging.h"
-
 namespace dingofs {
-
-OtlpSpan::~OtlpSpan() {}
 
 void OtlpSpan::SetStatus(bool ok, const std::string& msg) {
   if (ok) {

@@ -21,51 +21,30 @@
 #undef BLOCK_SIZE
 #endif
 
-#include <map>
-#include <memory>
-
-#include "brpc/controller.h"
-#include "butil/status.h"
-#include "butil/time.h"
-#include "common/status.h"
 #include "opentelemetry/context/context.h"
-#include "opentelemetry/context/runtime_context.h"
-#include "opentelemetry/exporters/otlp/otlp_grpc_exporter.h"
-#include "opentelemetry/sdk/common/exporter_utils.h"
-#include "opentelemetry/sdk/resource/resource.h"
-#include "opentelemetry/sdk/trace/batch_span_processor.h"
-#include "opentelemetry/sdk/trace/exporter.h"
 #include "opentelemetry/sdk/trace/span_data.h"
-#include "opentelemetry/sdk/trace/tracer_provider.h"
-#include "opentelemetry/trace/propagation/http_trace_context.h"
-#include "opentelemetry/trace/provider.h"
 #include "opentelemetry/trace/span_context.h"
 
 namespace dingofs {
-    
+
 namespace nostd = opentelemetry::nostd;
 namespace trace = opentelemetry::trace;
-namespace trace_sdk = opentelemetry::sdk::trace;
-namespace context = opentelemetry::context;
-namespace propagation = opentelemetry::context::propagation;
-namespace resource = opentelemetry::sdk::resource;
-namespace otlp = opentelemetry::exporter::otlp;
 
 using SpanContext = opentelemetry::trace::SpanContext;
 using SpanSPtr = nostd::shared_ptr<trace::Span>;
 
 inline std::string ToString(trace::TraceId const& trace_id) {
   constexpr int kSize = trace::TraceId::kSize * 2;
-  char trace_id_array[kSize];
-  trace_id.ToLowerBase16(trace_id_array);
-  return std::string(trace_id_array, kSize);
+  std::string buffer(kSize, '\0');
+  trace_id.ToLowerBase16(buffer);
+  return buffer;
 }
 
 inline std::string ToString(trace::SpanId const& span_id) {
   constexpr int kSize = trace::SpanId::kSize * 2;
-  char span_id_array[kSize];
-  span_id.ToLowerBase16(span_id_array);
-  return std::string(span_id_array, kSize);
+  std::string buffer(kSize, '\0');
+  span_id.ToLowerBase16(buffer);
+  return buffer;
 }
 
 }  // namespace dingofs

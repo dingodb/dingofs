@@ -19,8 +19,24 @@
 #include <memory>
 
 #include "common/opentrace/otlp_span.h"
+// #include "opentelemetry/context/context.h"
+// #include "opentelemetry/context/runtime_context.h"
+#include "opentelemetry/exporters/otlp/otlp_grpc_exporter.h"
+// #include "opentelemetry/sdk/common/exporter_utils.h"
+#include "opentelemetry/sdk/resource/resource.h"
+#include "opentelemetry/sdk/trace/batch_span_processor.h"
+#include "opentelemetry/sdk/trace/exporter.h"
+// #include "opentelemetry/sdk/trace/span_data.h"
+#include "opentelemetry/sdk/trace/tracer_provider.h"
+#include "opentelemetry/trace/propagation/http_trace_context.h"
+#include "opentelemetry/trace/provider.h"
+#include "opentelemetry/trace/span_context.h"
 
 namespace dingofs {
+
+namespace trace_sdk = opentelemetry::sdk::trace;
+namespace resource = opentelemetry::sdk::resource;
+namespace otlp = opentelemetry::exporter::otlp;
 
 bool OpenTeleMetryTracer::Init() {
   auto resource_attributes = opentelemetry::sdk::resource::ResourceAttributes{
@@ -48,8 +64,8 @@ bool OpenTeleMetryTracer::Init() {
   options.max_export_batch_size = 1024;
 
   //  Create a BatchSpanProcessor
-  auto processor = std::unique_ptr<trace_sdk::BatchSpanProcessor>(
-      new trace_sdk::BatchSpanProcessor(std::move(exporter), options));
+  auto processor = std::make_unique<trace_sdk::BatchSpanProcessor>(
+      std::move(exporter), options);
 
   // Create a TracerProvider, and add the processor and resource
   auto provider = nostd::shared_ptr<trace::TracerProvider>(

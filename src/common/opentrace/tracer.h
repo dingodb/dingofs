@@ -21,8 +21,11 @@
 
 #include "common/opentrace/otlp_span.h"
 #include "common/opentrace/type.h"
+#include "opentelemetry/trace/tracer.h"
 
 namespace dingofs {
+
+using SpanContext = opentelemetry::trace::SpanContext;
 
 class OpenTeleMetryTracer {
  public:
@@ -66,6 +69,7 @@ class OpenTeleMetryTracer {
   uint32_t max_export_thread_;
 };
 using OpenTeleMetryTracerSPtr = std::shared_ptr<OpenTeleMetryTracer>;
+
 }  // namespace dingofs
 
 #endif  // DINGOFS_COMMON_OPENTRACE_TRACER_H_

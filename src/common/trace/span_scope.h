@@ -18,11 +18,9 @@
 #define DINGOFS_COMMON_TRACE_SPAN_SCOPE_H_
 
 #include <atomic>
-#include <condition_variable>
-#include <functional>
 #include <memory>
-#include <mutex>
 #include <string>
+#include <utility>
 
 #include "butil/status.h"
 #include "common/opentrace/otlp_span.h"
@@ -30,8 +28,6 @@
 #include "common/opentrace/type.h"
 #include "common/status.h"
 #include "common/trace/context.h"
-#include "fmt/format.h"
-#include "glog/logging.h"
 
 namespace dingofs {
 
@@ -39,13 +35,14 @@ class TraceManager;
 
 class SpanScope;
 using SpanScopeSPtr = std::shared_ptr<SpanScope>;
+
 class SpanScope : public std::enable_shared_from_this<SpanScope> {
  public:
   SpanScope(OtlpSpan span, std::shared_ptr<SpanScope> parent, ContextSPtr ctx)
-      : inner_span_(std::move(span)),
+      : inner_span_(std::forward<OtlpSpan>(span)),
         parent_(parent),
         ended_(false),
-        context_(std::move(ctx)) {}
+        context_(ctx) {}
 
   static SpanScopeSPtr Create(OpenTeleMetryTracer& tracer,
                               const std::string& name);
@@ -61,21 +58,21 @@ class SpanScope : public std::enable_shared_from_this<SpanScope> {
 
   ~SpanScope() { End(); };
 
-  static std::string GetTraceID(SpanScopeSPtr span) {
+  static std::string GetTraceID(SpanScopeSPtr& span) {
     if (span) {
       return span->GetTraceID();
     }
     return "";
   }
 
-  static std::string GetSpanID(SpanScopeSPtr span) {
+  static std::string GetSpanID(SpanScopeSPtr& span) {
     if (span) {
       return span->GetSpanID();
     }
     return "";
   }
 
-  static void AddAttribute(SpanScopeSPtr span, const std::string& key,
+  static void AddAttribute(SpanScopeSPtr& span, const std::string& key,
                            const std::string& value) {
     if (span) {
       span->AddAttribute(key, value);
@@ -88,33 +85,40 @@ class SpanScope : public std::enable_shared_from_this<SpanScope> {
     }
   }
 
-  static void SetStatus(SpanScopeSPtr span, const Status& status) {
+  static void SetStatus(SpanScopeSPtr& span, const Status& status) {
     if (span) {
       span->SetStatus(status);
     }
   }
 
-  static void SetStatus(SpanScopeSPtr span, butil::Status const& status) {
+  static void SetStatus(SpanScopeSPtr& span, butil::Status const& status) {
     if (span) {
       span->SetStatus(status);
     }
   }
 
-  static std::shared_ptr<SpanContext> GetTraceContext(SpanScopeSPtr span) {
+  static std::shared_ptr<SpanContext> GetTraceContext(SpanScopeSPtr& span) {
     if (span) {
       return span->GetTraceContext();
     }
     return nullptr;
   }
 
-  static ContextSPtr GetContext(SpanScopeSPtr span) {
+  static ContextSPtr GetContext(SpanScopeSPtr& span) {
     if (span) {
       return span->GetContext();
     }
     return std::make_shared<Context>("");
   }
 
-  static std::string GetSessionID(SpanScopeSPtr span) {
+  static ContextSPtr GetContext(SpanScopeSPtr& span, ContextSPtr& ctx) {
+    if (span) {
+      return span->GetContext();
+    }
+    return ctx;
+  }
+
+  static std::string GetSessionID(SpanScopeSPtr& span) {
     if (span) {
       return span->context_->SessionID();
     }
@@ -127,7 +131,7 @@ class SpanScope : public std::enable_shared_from_this<SpanScope> {
     }
   }
 
-  static void SetTraceSpan(SpanScopeSPtr span) {
+  static void SetTraceSpan(SpanScopeSPtr& span) {
     if (span) {
       span->SetTraceSpan();
     }
