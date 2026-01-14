@@ -21,6 +21,7 @@ target_link_libraries(vfs_hub
     vfs_handle
     vfs_components
     vfs_metasystem
+    vfs_compaction
     client_options
     cache_blockcache
     block_accesser

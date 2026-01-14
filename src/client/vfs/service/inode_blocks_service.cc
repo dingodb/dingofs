@@ -21,7 +21,6 @@
 #include <cstdint>
 #include <memory>
 
-#include "client/common/const.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/data/flat/flat_file.h"
 #include "client/vfs/vfs_meta.h"

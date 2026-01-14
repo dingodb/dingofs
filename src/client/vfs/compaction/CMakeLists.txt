@@ -12,22 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_library(vfs_service
-    compact_service.cc
-    inode_blocks_service.cc
-    fuse_stat_service.cc
+add_library(vfs_compaction
+    compactor.cc
 )
 
-target_link_libraries(vfs_service
-    PROTO_OBJS
+target_link_libraries(vfs_compaction
     vfs_data
     vfs_hub
-    mds_common
-    client_options
-    dingofs_common
-    brpc::brpc
     fmt::fmt
     glog::glog
-    gflags::gflags
-
 )

@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef DINGODB_CLIENT_VFS_DATA_ASYNC_UTIL_H_
-#define DINGODB_CLIENT_VFS_DATA_ASYNC_UTIL_H_
+#ifndef DINGOFS_CLIENT_VFS_COMMON_ASYNC_UTIL_H_
+#define DINGOFS_CLIENT_VFS_COMMON_ASYNC_UTIL_H_
 
 #include <condition_variable>
 #include <mutex>
@@ -63,4 +63,4 @@ class Synchronizer {
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGODB_CLIENT_VFS_DATA_ASYNC_UTIL_H_
+#endif  // DINGOFS_CLIENT_VFS_COMMON_ASYNC_UTIL_H_

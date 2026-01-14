@@ -17,16 +17,17 @@
 #ifndef DINGOFS_CLIENT_VFS_IMPL_H_
 #define DINGOFS_CLIENT_VFS_IMPL_H_
 
-#include <atomic>
+#include <brpc/server.h>
+
 #include <cstdint>
 #include <memory>
 
-#include "brpc/server.h"
 #include "client/vfs/common/client_id.h"
 #include "client/vfs/data_buffer.h"
 #include "client/vfs/handle/handle_manager.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/metasystem/meta_system.h"
+#include "client/vfs/service/compact_service.h"
 #include "client/vfs/service/fuse_stat_service.h"
 #include "client/vfs/service/inode_blocks_service.h"
 #include "client/vfs/vfs.h"
@@ -152,6 +153,7 @@ class VFSImpl : public VFS {
 
   brpc::Server brpc_server_;
   InodeBlocksServiceImpl inode_blocks_service_;
+  CompactServiceImpl compact_service_;
   FuseStatServiceImpl fuse_stat_service_;
 };
 

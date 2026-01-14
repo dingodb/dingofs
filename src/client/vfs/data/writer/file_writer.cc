@@ -25,7 +25,7 @@
 #include <memory>
 #include <mutex>
 
-#include "client/vfs/data/common/async_util.h"
+#include "client/vfs/common/async_util.h"
 #include "client/vfs/data/writer/chunk_writer.h"
 #include "client/vfs/hub/vfs_hub.h"
 

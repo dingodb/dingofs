@@ -115,8 +115,9 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf, bool upgrade) {
           vfs_conf.fs_name, vfs_conf.mds_addrs, client_id_, trace_manager_);
     }
 
-    if(rela_meta_system == nullptr) {
-      return Status::InvalidParam("build meta system fail, please check params");
+    if (rela_meta_system == nullptr) {
+      return Status::InvalidParam(
+          "build meta system fail, please check params");
     }
 
     meta_system_ = std::make_unique<MetaWrapper>(std::move(rela_meta_system));
@@ -251,6 +252,8 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf, bool upgrade) {
     CHECK(warmup_manager_ != nullptr) << "warmup manager is nullptr.";
     DINGOFS_RETURN_NOT_OK(warmup_manager_->Start(FLAGS_vfs_warmup_threads));
   }
+
+  compactor_ = std::make_unique<Compactor>(this);
 
   started_.store(true, std::memory_order_relaxed);
 

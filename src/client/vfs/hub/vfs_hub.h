@@ -32,6 +32,7 @@
 #include "client/vfs/memory/write_buffer_manager.h"
 #include "client/vfs/metasystem/meta_system.h"
 #include "client/vfs/vfs.h"
+#include "client/vfs/compaction/compactor.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/blockaccess/block_accesser.h"
 #include "common/status.h"
@@ -78,9 +79,11 @@ class VFSHub {
 
   virtual WarmupManager* GetWarmupManager() = 0;
 
-  virtual FsInfo GetFsInfo() = 0;
+  virtual Compactor* GetCompactor() = 0;
 
   virtual TraceManager& GetTraceManager() = 0;
+
+  virtual FsInfo GetFsInfo() = 0;
 
   virtual blockaccess::BlockAccessOptions GetBlockAccesserOptions() = 0;
 };
@@ -157,6 +160,11 @@ class VFSHubImpl : public VFSHub {
     return warmup_manager_.get();
   }
 
+  Compactor* GetCompactor() override {
+    CHECK_NOTNULL(compactor_);
+    return compactor_.get();
+  }
+
   FsInfo GetFsInfo() override {
     CHECK(started_.load(std::memory_order_relaxed)) << "not started";
     return fs_info_;
@@ -191,6 +199,7 @@ class VFSHubImpl : public VFSHub {
   std::unique_ptr<FileSuffixWatcher> file_suffix_watcher_;
   std::unique_ptr<PrefetchManager> prefetch_manager_;
   std::unique_ptr<WarmupManager> warmup_manager_;
+  std::unique_ptr<Compactor> compactor_;
   TraceManager trace_manager_;
 };
 
