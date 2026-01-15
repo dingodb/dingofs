@@ -1,4 +1,4 @@
-// Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
+// Copyright (c) 2026 dingodb.com, Inc. All Rights Reserved
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,26 +15,22 @@
 #ifndef DINGOFS_COMMON_VERSION_H_
 #define DINGOFS_COMMON_VERSION_H_
 
-#include <gflags/gflags_declare.h>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace dingofs {
-
-DECLARE_bool(show_version);
 
 #ifndef GIT_VERSION
 #define GIT_VERSION "unknown"
 #endif
 
-#ifndef MAJOR_VERSION
-#define MAJOR_VERSION "v4"
-#endif
-
-#ifndef MINOR_VERSION
-#define MINOR_VERSION "1"
-#endif
-
 #ifndef GIT_TAG_NAME
-#define GIT_TAG_NAME "v4.1.0"
+#define GIT_TAG_NAME "unknown"
+#endif
+
+#ifndef GIT_BRANCH_NAME
+#define GIT_BRANCH_NAME "unknown"
 #endif
 
 #ifndef GIT_COMMIT_USER
@@ -49,21 +45,23 @@ DECLARE_bool(show_version);
 #define GIT_COMMIT_TIME "unknown"
 #endif
 
-#ifndef GIT_LAST_COMMIT_ID
-#define GIT_LAST_COMMIT_ID "unknown"
-#endif
-
 #ifndef DINGOFS_BUILD_TYPE
 #define DINGOFS_BUILD_TYPE "unknown"
 #endif
 
-std::string Version();
+#ifndef GIT_LAST_COMMIT_ID
+#define GIT_LAST_COMMIT_ID "unknown"
+#endif
 
-void ShowVerion();
+std::string DingoVersionString();
+std::string DingoShortVersionString();
 
-void LogVerion();
+void DingoLogVersion();
+std::vector<std::pair<std::string, std::string>> DingoVersion();
 
-void ExposeDingoVersion();
+std::string GetGitVersion();
+std::string GetGitCommitHash();
+std::string GetGitCommitTime();
 
 }  // namespace dingofs
 

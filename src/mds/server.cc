@@ -20,6 +20,7 @@
 
 #include "common/logging.h"
 #include "common/options/mds.h"
+#include "common/version.h"
 #include "fmt/core.h"
 #include "fmt/format.h"
 #include "gflags/gflags.h"
@@ -32,7 +33,6 @@
 #include "mds/cachegroup/member_manager.h"
 #include "mds/common/codec.h"
 #include "mds/common/helper.h"
-#include "mds/common/version.h"
 #include "mds/coordinator/dingo_coordinator_client.h"
 #include "mds/service/debug_service.h"
 #include "mds/service/fsstat_service.h"

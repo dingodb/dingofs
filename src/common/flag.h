@@ -76,7 +76,7 @@ static int ParseFlags(int* argc, char*** argv, const FlagExtraInfo& extras) {
     std::cout << FlagsHelper::GenHelp(g_flags) << "\n";
     return 1;
   } else if (g_flags.show_version) {
-    std::cout << dingofs::Version() << "\n";
+    std::cout << dingofs::DingoShortVersionString() << "\n";
     return 1;
   } else if (g_flags.create_template) {
     std::cout << FlagsHelper::GenTemplate(g_flags);

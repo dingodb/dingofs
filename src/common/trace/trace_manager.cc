@@ -19,8 +19,8 @@
 #include <memory>
 
 #include "common/opentrace/tracer.h"
+#include "common/version.h"
 #include "gflags/gflags.h"
-#include "mds/common/version.h"
 
 namespace dingofs {
 
@@ -39,7 +39,7 @@ void TraceManager::Stop() { tracer_.Stop(); };
 TraceManager::TraceManager()
     : tracer_(OpenTeleMetryTracer(
           FLAGS_trace_service_name, FLAGS_otlp_export_endpoint,
-          FLAGS_trace_export_thread_num, dingofs::mds::GetGitCommitHash(),
-          dingofs::mds::GetGitVersion())) {}
+          FLAGS_trace_export_thread_num, dingofs::GetGitCommitHash(),
+          dingofs::GetGitVersion())) {}
 
 }  // namespace dingofs

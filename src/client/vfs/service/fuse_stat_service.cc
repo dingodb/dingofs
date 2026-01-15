@@ -28,10 +28,10 @@
 #include "butil/iobuf.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/metasystem/meta_system.h"
+#include "common/version.h"
 #include "fmt/format.h"
 #include "fmt/ranges.h"
 #include "json/json.h"
-#include "mds/common/version.h"
 #include "utils/string.h"
 
 namespace dingofs {
@@ -84,7 +84,7 @@ static void RenderGitInfo(butil::IOBufBuilder& os) {
   os << R"(<h3>Git</h3>)";
   os << R"(<div style="font-size:smaller;">)";
 
-  auto infos = dingofs::mds::DingoVersion();
+  auto infos = dingofs::DingoVersion();
   for (const auto& info : infos) {
     os << fmt::format("{}: {}", info.first, info.second);
     os << "<br>";
@@ -96,9 +96,8 @@ static void RenderGitInfo(butil::IOBufBuilder& os) {
 
 static void RenderGitVersion(butil::IOBufBuilder& os) {
   os << R"(<div style="margin:2px;font-size:smaller;text-align:center">)";
-  os << fmt::format(R"(<p >{} {} {}</p>)", dingofs::mds::GetGitVersion(),
-                    dingofs::mds::GetGitCommitHash(),
-                    dingofs::mds::GetGitCommitTime());
+  os << fmt::format(R"(<p >{} {} {}</p>)", dingofs::GetGitVersion(),
+                    dingofs::GetGitCommitHash(), dingofs::GetGitCommitTime());
   os << "</div>";
 }
 

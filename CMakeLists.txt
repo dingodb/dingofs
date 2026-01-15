@@ -21,6 +21,7 @@ option(BUILD_UNIT_TESTS "Build unit test" OFF)
 option(BUILD_INTEGRATION_TESTS "Build integration test" OFF)
 option(USE_TCMALLOC "Use tcmalloc" ON)
 option(BRPC_ENABLE_CPU_PROFILER "Enable brpc cpu profiler" OFF)
+option(USE_CICD_BUILD "Enable CI/CD build" OFF)
 
 set(CMAKE_CXX_STANDARD 17)
 if(NOT CMAKE_BUILD_TYPE)
@@ -111,6 +112,12 @@ execute_process(
   OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
+execute_process(
+  COMMAND git branch --show-current
+  OUTPUT_VARIABLE GIT_BRANCH_NAME
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
 if(NOT GIT_VERSION)
   set(GIT_VERSION "unknown")
   message(WARNING "Git version is unknown")
@@ -127,6 +134,7 @@ message(STATUS "Git commit user: ${GIT_COMMIT_USER}")
 message(STATUS "Git commit mail: ${GIT_COMMIT_MAIL}")
 message(STATUS "Git commit time: ${GIT_COMMIT_TIME}")
 message(STATUS "Git last commit id: ${GIT_LAST_COMMIT_ID}")
+message(STATUS "Git branch name: ${GIT_BRANCH_NAME}")
 
 add_definitions(-DGIT_VERSION="${GIT_VERSION}")
 add_definitions(-DGIT_TAG_NAME="${GIT_TAG_NAME}")
@@ -134,7 +142,15 @@ add_definitions(-DGIT_COMMIT_USER="${GIT_COMMIT_USER}")
 add_definitions(-DGIT_COMMIT_MAIL="${GIT_COMMIT_MAIL}")
 add_definitions(-DGIT_COMMIT_TIME="${GIT_COMMIT_TIME}")
 add_definitions(-DGIT_LAST_COMMIT_ID="${GIT_LAST_COMMIT_ID}")
+add_definitions(-DGIT_BRANCH_NAME="${GIT_BRANCH_NAME}")
 add_definitions(-DDINGOFS_BUILD_TYPE="${CMAKE_BUILD_TYPE}")
+
+if(USE_CICD_BUILD)
+    message(STATUS "CI/CD build enabled")
+    add_definitions(-DUSE_CICD_BUILD=1)
+else()
+    message(STATUS "Local build - CI/CD disabled")
+endif()
 
 # find dingoEureka
 find_package(dingoEureka 1.0 REQUIRED)

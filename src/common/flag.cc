@@ -32,6 +32,7 @@
 
 #include "common/const.h"
 #include "common/helper.h"
+#include "common/version.h"
 #include "utils/uuid.h"
 
 namespace dingofs {
@@ -72,7 +73,8 @@ std::string FlagsHelper::GenHelp(const FlagsInfo& flags) {
 
   std::ostringstream os;
   // print program name and version
-  os << flags.extra_info.program << " " << dingofs::Version() << "\n\n";
+  os << flags.extra_info.program << " " << dingofs::DingoShortVersionString()
+     << "\n\n";
   os << "Usage:\n";
   os << flags.extra_info.usage << "\n";
   os << "\n";
