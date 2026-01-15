@@ -245,14 +245,15 @@ void FuseServer::DestroySsesion() {
 }
 
 int FuseServer::SessionMount() {
-  LOG(INFO) << fmt::format("Begin to mount fs {} to {}.",
-                           mount_option_->fs_name, mount_option_->mount_point);
+  std::string mountpoint = mount_option_->mount_point;
 
-  if (CanShutdownGracefully(mount_option_->mount_point)) {
-    bool is_shutdown = ShutdownGracefully(mount_option_->mount_point);
+  LOG(INFO) << fmt::format("Begin to mount fs {} to {}.",
+                           mount_option_->fs_name, mountpoint);
+
+  if (CanShutdownGracefully(mountpoint)) {
+    bool is_shutdown = ShutdownGracefully(mountpoint);
     if (!is_shutdown) {
-      LOG(ERROR) << "smooth upgrade failed, can't mount on: "
-                 << mount_option_->mount_point;
+      LOG(ERROR) << "smooth upgrade failed, can't mount on: " << mountpoint;
       return 1;
     }
     LOG(INFO) << "old dingo-client is already shutdown";
@@ -261,15 +262,14 @@ int FuseServer::SessionMount() {
         FuseUpgradeState::kFuseUpgradeNew);
 
     // construct new mountpoint
-    std::string mountpoint = absl::StrFormat("/dev/fd/%d", fuse_fd_);
-    LOG(INFO) << "start mount on mountpoint: " << mountpoint;
-    if (fuse_session_mount(session_, mountpoint.c_str()) != 0) return 1;
-
-    return 0;
+    mountpoint = absl::StrFormat("/dev/fd/%d", fuse_fd_);
   }
 
-  if (fuse_session_mount(session_, mount_option_->mount_point.c_str()) != 0)
+  LOG(INFO) << "start mount on: " << mountpoint;
+  if (fuse_session_mount(session_, mountpoint.c_str()) != 0) {
+    LOG(ERROR) << "failed mount on: " << mountpoint;
     return 1;
+  }
 
   return 0;
 }
