@@ -909,8 +909,8 @@ Status FileReader::GetAttr(ContextSPtr ctx, Attr* attr) {
   auto span = vfs_hub_->GetTraceManager().StartChildSpan("FileWriter::GetAttr",
                                                          ctx->GetTraceSpan());
 
-  Status s = vfs_hub_->GetMetaSystem()->GetAttr(SpanScope::GetContext(span),
-                                                ino_, attr);
+  Status s = vfs_hub_->GetMetaSystem().GetAttr(SpanScope::GetContext(span),
+                                               ino_, attr);
   if (!s.ok()) {
     LOG(WARNING) << fmt::format("{} GetAttr failed, status: {}", uuid_,
                                 s.ToString());

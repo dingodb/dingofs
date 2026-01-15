@@ -39,11 +39,11 @@ namespace vfs {
 
 class VFSImpl : public VFS {
  public:
-  VFSImpl(const ClientId& client_id) : client_id_(client_id) {};
+  VFSImpl(const VFSConfig& vfs_conf, const ClientId& client_id);
 
   ~VFSImpl() override = default;
 
-  Status Start(const VFSConfig& vfs_conf, bool upgrade) override;
+  Status Start(bool upgrade) override;
 
   Status Stop(bool upgrade) override;
 
@@ -114,7 +114,8 @@ class VFSImpl : public VFS {
   Status MkDir(ContextSPtr ctx, Ino parent, const std::string& name,
                uint32_t uid, uint32_t gid, uint32_t mode, Attr* attr) override;
 
-  Status OpenDir(ContextSPtr ctx, Ino ino, uint64_t* fh) override;
+  Status OpenDir(ContextSPtr ctx, Ino ino, uint64_t* fh,
+                 bool& need_cache) override;
 
   Status ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
                  bool with_attr, ReadDirHandler handler) override;
@@ -148,7 +149,7 @@ class VFSImpl : public VFS {
   const ClientId client_id_;
 
   std::unique_ptr<VFSHub> vfs_hub_;
-  MetaSystem* meta_system_;
+  MetaWrapper& meta_system_;
   HandleManager* handle_manager_;
 
   brpc::Server brpc_server_;

@@ -157,7 +157,8 @@ class MetaSystem {
   virtual Status RmDir(ContextSPtr ctx, Ino parent,
                        const std::string& name) = 0;
 
-  virtual Status OpenDir(ContextSPtr ctx, Ino ino, uint64_t fh) = 0;
+  virtual Status OpenDir(ContextSPtr ctx, Ino ino, uint64_t fh,
+                         bool& need_cache) = 0;
 
   virtual Status ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
                          bool with_attr, ReadDirHandler handler) = 0;

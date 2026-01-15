@@ -104,7 +104,9 @@ class MDSMetaSystem : public vfs::MetaSystem {
 
   Status ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index, uint64_t fh,
                    std::vector<Slice>* slices, uint64_t& version) override;
+
   Status NewSliceId(ContextSPtr ctx, Ino ino, uint64_t* id) override;
+
   Status WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index, uint64_t fh,
                     const std::vector<Slice>& slices) override;
   Status AsyncWriteSlice(ContextSPtr ctx, Ino ino, uint64_t index, uint64_t fh,
@@ -117,7 +119,8 @@ class MDSMetaSystem : public vfs::MetaSystem {
                uint32_t uid, uint32_t gid, uint32_t mode, Attr* attr) override;
   Status RmDir(ContextSPtr ctx, Ino parent, const std::string& name) override;
 
-  Status OpenDir(ContextSPtr ctx, Ino ino, uint64_t fh) override;
+  Status OpenDir(ContextSPtr ctx, Ino ino, uint64_t fh,
+                 bool& need_cache) override;
 
   Status ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
                  bool with_attr, ReadDirHandler handler) override;
@@ -181,9 +184,8 @@ class MDSMetaSystem : public vfs::MetaSystem {
   void FlushAllSlice();
 
   Status CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
-                     const std::string& caller);
-  void CorrectAttrLength(ContextSPtr ctx, Attr& attr,
-                         const std::string& caller);
+                     bool& is_amend, const std::string& caller);
+  bool CorrectAttrLength(Attr& attr, const std::string& caller);
 
   // batch operation
   Status RunOperation(OperationSPtr operation);

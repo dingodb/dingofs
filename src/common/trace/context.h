@@ -31,11 +31,7 @@ using SpanScopeSPtr = std::shared_ptr<SpanScope>;
 
 struct Context {
   std::string session_id;  // modify session id
-  // whether hit local cache
-  bool hit_cache{false};
-  bool is_amend{false};
 
-  bool need_cache{false};
   uint64_t start_time_ns{0};
 
   std::weak_ptr<SpanScope> trace_span;

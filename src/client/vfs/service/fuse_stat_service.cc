@@ -1057,7 +1057,7 @@ void FuseStatServiceImpl::RenderMainPage(const brpc::Server* server,
 
   Json::Value meta_value;
 
-  if (!vfs_hub_->GetMetaSystem()->GetDescription(meta_value)) {
+  if (!vfs_hub_->GetMetaSystem().GetDescription(meta_value)) {
     LOG(ERROR) << fmt::format("GetDescription failed.");
     os << "</body>";
     os << "</html>";
@@ -1112,13 +1112,13 @@ void FuseStatServiceImpl::default_method(
     if (api_name == "diriterator") {
       // /FuseStatService/diriterator
       options.dir_iterator = true;
-      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
+      if (vfs_hub_->GetMetaSystem().Dump(options, json_value)) {
         RenderDirInfoPage(json_value, os, client_name);
       }
     } else if (api_name == "filesession") {
       // /FuseStatService/filesession
       options.file_session = true;
-      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
+      if (vfs_hub_->GetMetaSystem().Dump(options, json_value)) {
         RenderFileSessionPage(json_value, os, client_name);
       }
 
@@ -1133,42 +1133,42 @@ void FuseStatServiceImpl::default_method(
     } else if (api_name == "parentmemo") {
       // /FuseStatService/parentmemo
       options.parent_memo = true;
-      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
+      if (vfs_hub_->GetMetaSystem().Dump(options, json_value)) {
         RenderParentMemoPage(json_value, os, client_name);
       }
 
     } else if (api_name == "modifytimememo") {
       // /FuseStatService/parentmemo
       options.modify_time_memo = true;
-      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
+      if (vfs_hub_->GetMetaSystem().Dump(options, json_value)) {
         RenderModifyTimeMemoPage(json_value, os, client_name);
       }
 
     } else if (api_name == "chunkmemo") {
       // /FuseStatService/parentmemo
       options.chunk_memo = true;
-      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
+      if (vfs_hub_->GetMetaSystem().Dump(options, json_value)) {
         RenderChunkMemoPage(json_value, os, client_name);
       }
 
     } else if (api_name == "mdsrouter") {
       // /FuseStatService/mdsrouter
       options.mds_router = true;
-      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
+      if (vfs_hub_->GetMetaSystem().Dump(options, json_value)) {
         RenderMdsRouterPage(json_value, os, client_name);
       }
 
     } else if (api_name == "inodecache") {
       // /FuseStatService/inodecache
       options.inode_cache = true;
-      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
+      if (vfs_hub_->GetMetaSystem().Dump(options, json_value)) {
         RenderInodeCachePage(json_value, os, client_name);
       }
 
     } else if (api_name == "rpc") {
       // /FuseStatService/rpc
       options.rpc = true;
-      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
+      if (vfs_hub_->GetMetaSystem().Dump(options, json_value)) {
         RenderRPCPage(json_value, os, client_name);
       }
     } else {
@@ -1190,7 +1190,7 @@ void FuseStatServiceImpl::default_method(
 
       options.ino = ino;
       options.file_session = true;
-      if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
+      if (vfs_hub_->GetMetaSystem().Dump(options, json_value)) {
         RenderSingleFileSessionPage(ino, json_value, os, client_name);
       }
     }

@@ -24,15 +24,15 @@
 
 #include "client/vfs/blockstore/block_store.h"
 #include "client/vfs/common/client_id.h"
+#include "client/vfs/compaction/compactor.h"
 #include "client/vfs/components/file_suffix_watcher.h"
 #include "client/vfs/components/prefetch_manager.h"
 #include "client/vfs/components/warmup_manager.h"
 #include "client/vfs/handle/handle_manager.h"
 #include "client/vfs/memory/read_buffer_manager.h"
 #include "client/vfs/memory/write_buffer_manager.h"
-#include "client/vfs/metasystem/meta_system.h"
+#include "client/vfs/metasystem/meta_wrapper.h"
 #include "client/vfs/vfs.h"
-#include "client/vfs/compaction/compactor.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/blockaccess/block_accesser.h"
 #include "common/status.h"
@@ -49,13 +49,13 @@ class VFSHub {
 
   virtual ~VFSHub() = default;
 
-  virtual Status Start(const VFSConfig& vfs_conf, bool upgrade) = 0;
+  virtual Status Start(bool upgrade) = 0;
 
   virtual Status Stop(bool upgrade) = 0;
 
   virtual ClientId GetClientId() = 0;
 
-  virtual MetaSystem* GetMetaSystem() = 0;
+  virtual MetaWrapper& GetMetaSystem() = 0;
 
   virtual HandleManager* GetHandleManager() = 0;
 
@@ -90,20 +90,17 @@ class VFSHub {
 
 class VFSHubImpl : public VFSHub {
  public:
-  VFSHubImpl(ClientId client_id) : client_id_(client_id) {}
+  VFSHubImpl(const VFSConfig& vfs_conf, ClientId client_id);
 
   ~VFSHubImpl() override;
 
-  Status Start(const VFSConfig& vfs_conf, bool upgrade) override;
+  Status Start(bool upgrade) override;
 
   Status Stop(bool upgrade) override;
 
   ClientId GetClientId() override { return client_id_; }
 
-  MetaSystem* GetMetaSystem() override {
-    CHECK_NOTNULL(meta_system_);
-    return meta_system_.get();
-  }
+  MetaWrapper& GetMetaSystem() override { return meta_system_; }
 
   HandleManager* GetHandleManager() override {
     CHECK_NOTNULL(handle_manager_);
@@ -187,7 +184,9 @@ class VFSHubImpl : public VFSHub {
   FsInfo fs_info_;
   S3Info s3_info_;
 
-  std::unique_ptr<MetaSystem> meta_system_;
+  TraceManager trace_manager_;
+  MetaWrapper meta_system_;
+
   std::unique_ptr<HandleManager> handle_manager_;
   std::unique_ptr<blockaccess::BlockAccesser> block_accesser_;
   std::unique_ptr<BlockStore> block_store_;
@@ -200,7 +199,6 @@ class VFSHubImpl : public VFSHub {
   std::unique_ptr<PrefetchManager> prefetch_manager_;
   std::unique_ptr<WarmupManager> warmup_manager_;
   std::unique_ptr<Compactor> compactor_;
-  TraceManager trace_manager_;
 };
 
 }  // namespace vfs

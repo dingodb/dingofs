@@ -746,14 +746,15 @@ Status LocalMetaSystem::RmDir(ContextSPtr, Ino parent,
   return Status::OK();
 }
 
-Status LocalMetaSystem::OpenDir(ContextSPtr ctx, Ino ino, uint64_t fh) {
+Status LocalMetaSystem::OpenDir(ContextSPtr, Ino ino, uint64_t fh,
+                                bool& need_cache) {
   std::vector<DentryEntry> dentries;
   auto status = GetDentries(ino, dentries);
   if (!status.ok()) return status;
 
   auto dir_iterator = DirIterator::New(ino, fh, std::move(dentries));
 
-  bool need_cache = false;
+  need_cache = false;
   dir_iterator_manager_.PutWithFunc(
       ino, fh, dir_iterator,
       [&need_cache](const std::vector<DirIteratorSPtr>& vec) {
@@ -761,8 +762,6 @@ Status LocalMetaSystem::OpenDir(ContextSPtr ctx, Ino ino, uint64_t fh) {
           need_cache = true;
         }
       });
-
-  ctx->need_cache = need_cache;
 
   return Status::OK();
 }

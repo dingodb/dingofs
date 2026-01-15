@@ -177,8 +177,8 @@ void SliceWriter::DoFlush() {
   VLOG(4) << fmt::format("{} DoFlush", UUID());
 
   uint64_t slice_id = 0;
-  Status s = vfs_hub_->GetMetaSystem()->NewSliceId(SpanScope::GetContext(span),
-                                                   context_.ino, &slice_id);
+  Status s = vfs_hub_->GetMetaSystem().NewSliceId(SpanScope::GetContext(span),
+                                                  context_.ino, &slice_id);
   if (!s.ok()) {
     LOG(ERROR) << fmt::format("{} Failed to get new slice id status: {}",
                               UUID(), s.ToString());

@@ -49,7 +49,7 @@ class VFS {
 
   virtual ~VFS() = default;
 
-  virtual Status Start(const VFSConfig& vfs_conf, bool upgrade) = 0;
+  virtual Status Start(bool upgrade) = 0;
 
   virtual Status Stop(bool upgrade) = 0;
 
@@ -127,7 +127,8 @@ class VFS {
                        uint32_t uid, uint32_t gid, uint32_t mode,
                        Attr* attr) = 0;
 
-  virtual Status OpenDir(ContextSPtr ctx, Ino ino, uint64_t* fh) = 0;
+  virtual Status OpenDir(ContextSPtr ctx, Ino ino, uint64_t* fh,
+                         bool& need_cache) = 0;
 
   virtual Status ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
                          bool with_attr, ReadDirHandler handler) = 0;

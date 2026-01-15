@@ -63,7 +63,7 @@ Status ChunkReader::GetSlices(ContextSPtr ctx, ChunkSlices* chunk_slices) {
 
   std::vector<Slice> slices;
   uint64_t chunk_version = 0;
-  DINGOFS_RETURN_NOT_OK(hub_->GetMetaSystem()->ReadSlice(
+  DINGOFS_RETURN_NOT_OK(hub_->GetMetaSystem().ReadSlice(
       SpanScope::GetContext(span), reader_->chunk_.ino, reader_->chunk_.index,
       fh_, &slices, chunk_version));
 

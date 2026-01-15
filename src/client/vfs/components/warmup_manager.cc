@@ -222,8 +222,8 @@ Status WarmupManager::WalkFile(WarmupTask* task, Ino ino) {
   auto span = vfs_hub_->GetTraceManager().StartSpan("WarmupManager::WalkFile");
 
   Attr attr;
-  Status s = vfs_hub_->GetMetaSystem()->GetAttr(SpanScope::GetContext(span),
-                                                ino, &attr);
+  Status s = vfs_hub_->GetMetaSystem().GetAttr(SpanScope::GetContext(span), ino,
+                                               &attr);
   if (!s.ok()) {
     LOG(ERROR) << "Failed to get attr for ino: " << ino
                << ", status: " << s.ToString();
@@ -250,8 +250,9 @@ Status WarmupManager::WalkFile(WarmupTask* task, Ino ino) {
     auto dirIt = parentDir.begin();
     while (dirIt != parentDir.end()) {
       uint64_t fh = vfs::FhGenerator::GenFh();
-      openStatus = vfs_hub_->GetMetaSystem()->OpenDir(
-          SpanScope::GetContext(span), *dirIt, fh);
+      bool need_cache = false;
+      openStatus = vfs_hub_->GetMetaSystem().OpenDir(
+          SpanScope::GetContext(span), *dirIt, fh, need_cache);
       if (!openStatus.ok()) {
         LOG(ERROR) << "Failed to open dir: " << *dirIt
                    << ", status: " << openStatus.ToString();
@@ -259,7 +260,7 @@ Status WarmupManager::WalkFile(WarmupTask* task, Ino ino) {
         continue;
       }
 
-      vfs_hub_->GetMetaSystem()->ReadDir(
+      vfs_hub_->GetMetaSystem().ReadDir(
           SpanScope::GetContext(span), *dirIt, fh, 0, true,
           [task, &childDir, this](const DirEntry& entry, uint64_t offset) {
             (void)offset;
@@ -276,8 +277,8 @@ Status WarmupManager::WalkFile(WarmupTask* task, Ino ino) {
             }
             return true;  // Continue reading
           });
-      vfs_hub_->GetMetaSystem()->ReleaseDir(SpanScope::GetContext(span), *dirIt,
-                                            fh);
+      vfs_hub_->GetMetaSystem().ReleaseDir(SpanScope::GetContext(span), *dirIt,
+                                           fh);
 
       dirIt++;
     }
@@ -294,8 +295,8 @@ void WarmupManager::WarmupFile(Ino ino, AsyncWarmupCb cb) {
   BRPC_SCOPE_EXIT { DecFileMetric(1); };
 
   Attr attr;
-  auto status = vfs_hub_->GetMetaSystem()->GetAttr(SpanScope::GetContext(span),
-                                                   ino, &attr);
+  auto status = vfs_hub_->GetMetaSystem().GetAttr(SpanScope::GetContext(span),
+                                                  ino, &attr);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("Get attr failed, status: {}", status.ToString());
     cb(status);

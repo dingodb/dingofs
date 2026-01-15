@@ -153,8 +153,8 @@ Status VFSWrapper::Start(const VFSConfig& vfs_conf) {
   LOG(INFO) << "client id: " << client_id.Description();
 
   // vfs start
-  vfs_ = std::make_unique<vfs::VFSImpl>(client_id);
-  DINGOFS_RETURN_NOT_OK(vfs_->Start(vfs_conf, is_upgrade));
+  vfs_ = std::make_unique<vfs::VFSImpl>(vfs_conf, client_id);
+  DINGOFS_RETURN_NOT_OK(vfs_->Start(is_upgrade));
 
   // load vfs state
   if (is_upgrade && !Load(root)) {
@@ -275,8 +275,7 @@ Status VFSWrapper::GetAttr(Ino ino, Attr* attr) {
   Status s;
   AccessLogGuard log(
       [&]() {
-        return absl::StrFormat("getattr (%d): %s %s %s", ino, s.ToString(),
-                               ctx->hit_cache ? "true" : "false",
+        return absl::StrFormat("getattr (%d): %s %s", ino, s.ToString(),
                                StrAttr(attr));
       },
       !IsInternalNode(ino));
@@ -743,9 +742,8 @@ Status VFSWrapper::GetXattr(Ino ino, const std::string& name,
   Status s;
   AccessLogGuard log(
       [&]() {
-        return absl::StrFormat("getxattr (%d,%s): %s %s %s", ino, name,
-                               s.ToString(), ctx->hit_cache ? "true" : "false",
-                               *value);
+        return absl::StrFormat("getxattr (%d,%s): %s %s", ino, name,
+                               s.ToString(), *value);
       },
       !IsInternalNode(ino));
 
@@ -806,8 +804,8 @@ Status VFSWrapper::ListXattr(Ino ino, std::vector<std::string>* xattrs) {
 
   Status s;
   AccessLogGuard log([&]() {
-    return absl::StrFormat("listxattr (%d): %s %d %s", ino, s.ToString(),
-                           xattrs->size(), ctx->hit_cache ? "true" : "false");
+    return absl::StrFormat("listxattr (%d): %s %d", ino, s.ToString(),
+                           xattrs->size());
   });
 
   ClientOpMetricGuard op_metric(
@@ -869,13 +867,11 @@ Status VFSWrapper::OpenDir(Ino ino, uint64_t* fh, bool& need_cache) {
       {&client_op_metric_->opOpenDir, &client_op_metric_->opAll});
 
   auto ctx = SpanScope::GetContext(span);
-  s = vfs_->OpenDir(ctx, ino, fh);
+  s = vfs_->OpenDir(ctx, ino, fh, need_cache);
   VLOG(2) << "VFSOpendir end, ino: " << ino << " fh: " << *fh;
   if (!s.ok()) {
     op_metric.FailOp();
   }
-
-  need_cache = ctx->need_cache;
 
   return s;
 }

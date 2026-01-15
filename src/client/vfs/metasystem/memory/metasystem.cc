@@ -601,7 +601,8 @@ Status MemoryMetaSystem::RmDir(ContextSPtr ctx, Ino parent,
   return Status::OK();
 }
 
-Status MemoryMetaSystem::OpenDir(ContextSPtr ctx, Ino ino, uint64_t fh) {
+Status MemoryMetaSystem::OpenDir(ContextSPtr ctx, Ino ino, uint64_t fh,
+                                 bool& need_cache) {
   auto dir_iterator = std::make_shared<DirIterator>(this, ino);
   auto status = dir_iterator->Seek();
   if (!status.ok()) {

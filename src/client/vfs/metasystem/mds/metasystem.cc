@@ -594,7 +594,7 @@ Status MDSMetaSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
     auto chunk = file_session->GetChunkSet().Get(index);
     if (chunk != nullptr && chunk->IsCompleted()) {
       *slices = chunk->GetAllSlice();
-      ctx->hit_cache = true;
+      // ctx->hit_cache = true;
 
       LOG(INFO) << fmt::format(
           "[meta.fs.{}.{}.{}] readslice from cache, version({}) slices({}).",
@@ -760,12 +760,13 @@ Status MDSMetaSystem::RmDir(ContextSPtr ctx, Ino parent,
   return Status::OK();
 }
 
-Status MDSMetaSystem::OpenDir(ContextSPtr ctx, Ino ino, uint64_t fh) {
+Status MDSMetaSystem::OpenDir(ContextSPtr ctx, Ino ino, uint64_t fh,
+                              bool& need_cache) {
   AssertStop();
 
   auto dir_iterator = DirIterator::New(mds_client_, ino, fh);
 
-  bool need_cache = false;
+  need_cache = false;
   dir_iterator_manager_.PutWithFunc(
       ino, fh, dir_iterator,
       [&need_cache](const std::vector<DirIteratorSPtr>& vec) {
@@ -773,8 +774,6 @@ Status MDSMetaSystem::OpenDir(ContextSPtr ctx, Ino ino, uint64_t fh) {
           need_cache = true;
         }
       });
-
-  ctx->need_cache = need_cache;
 
   return Status::OK();
 }
@@ -797,7 +796,9 @@ Status MDSMetaSystem::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
       return status;
     }
 
-    CorrectAttr(ctx, dir_iterator->LastFetchTimeNs(), entry.attr, "readdir");
+    bool is_amend = false;
+    CorrectAttr(ctx, dir_iterator->LastFetchTimeNs(), entry.attr, is_amend,
+                "readdir");
 
     PutInodeToCache(Helper::ToAttr(entry.attr));
 
@@ -923,7 +924,7 @@ Status MDSMetaSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
   auto inode = GetInodeFromCache(ino);
   if (inode != nullptr) {
     attr_entry = inode->ToAttrEntry();
-    ctx->hit_cache = true;
+    // ctx->hit_cache = true;
 
   } else {
     auto status = mds_client_.GetAttr(ctx, ino, attr_entry);
@@ -932,12 +933,13 @@ Status MDSMetaSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
 
   *attr = Helper::ToAttr(attr_entry);
 
-  auto status = CorrectAttr(ctx, ctx->start_time_ns, *attr, "getattr");
+  bool is_amend = false;
+  auto status =
+      CorrectAttr(ctx, ctx->start_time_ns, *attr, is_amend, "getattr");
   if (!status.ok()) return status;
 
   LOG(INFO) << fmt::format("[meta.fs.{}] get attr length({}) is_amend({}).",
-                           ino, attr->length, ctx->is_amend);
-
+                           ino, attr->length, is_amend);
   return Status::OK();
 }
 
@@ -955,7 +957,8 @@ Status MDSMetaSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
 
   *out_attr = Helper::ToAttr(attr_entry);
 
-  status = CorrectAttr(ctx, ctx->start_time_ns, *out_attr, "setattr");
+  bool is_amend = false;
+  status = CorrectAttr(ctx, ctx->start_time_ns, *out_attr, is_amend, "setattr");
   if (!status.ok()) return status;
 
   modify_time_memo_.Remember(ino);
@@ -974,7 +977,7 @@ Status MDSMetaSystem::GetXattr(ContextSPtr ctx, Ino ino,
   auto inode = GetInodeFromCache(ino);
   if (inode != nullptr) {
     *value = inode->GetXAttr(name);
-    ctx->hit_cache = true;
+    // ctx->hit_cache = true;
     return Status::OK();
   }
 
@@ -1029,7 +1032,7 @@ Status MDSMetaSystem::ListXattr(ContextSPtr ctx, Ino ino,
     for (auto& pair : inode->ListXAttrs()) {
       xattrs->push_back(pair.first);
     }
-    ctx->hit_cache = true;
+    // ctx->hit_cache = true;
     return Status::OK();
   }
 
@@ -1244,7 +1247,7 @@ void MDSMetaSystem::FlushAllSlice() {
 }
 
 Status MDSMetaSystem::CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
-                                  const std::string& caller) {
+                                  bool& is_amend, const std::string& caller) {
   if (modify_time_memo_.ModifiedSince(attr.ino, time_ns)) {
     LOG(INFO) << fmt::format("[meta.fs.{}] correct attr, caller({}).", attr.ino,
                              caller);
@@ -1259,17 +1262,16 @@ Status MDSMetaSystem::CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
       return status;
     }
     attr = Helper::ToAttr(attr_entry);
-    ctx->is_amend = true;
+    is_amend = true;
   }
 
   // correct length with write memo
-  CorrectAttrLength(ctx, attr, caller);
+  if (CorrectAttrLength(attr, caller)) is_amend = true;
 
   return Status::OK();
 }
 
-void MDSMetaSystem::CorrectAttrLength(ContextSPtr ctx, Attr& attr,
-                                      const std::string& caller) {
+bool MDSMetaSystem::CorrectAttrLength(Attr& attr, const std::string& caller) {
   auto file_session = file_session_map_.GetSession(attr.ino);
   if (file_session != nullptr) {
     auto& chunk_set = file_session->GetChunkSet();
@@ -1284,9 +1286,11 @@ void MDSMetaSystem::CorrectAttrLength(ContextSPtr ctx, Attr& attr,
       attr.ctime = std::max(attr.ctime, time_ns);
       attr.mtime = std::max(attr.mtime, time_ns);
 
-      ctx->is_amend = true;
+      return true;
     }
   }
+
+  return false;
 }
 
 static std::vector<std::string> SplitMdsAddrs(const std::string& mds_addrs) {

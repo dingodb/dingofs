@@ -24,21 +24,14 @@
 #include "client/vfs/common/helper.h"
 #include "client/vfs/components/prefetch_manager.h"
 #include "client/vfs/components/warmup_manager.h"
-#include "client/vfs/metasystem/local/metasystem.h"
-#include "client/vfs/metasystem/mds/metasystem.h"
-#include "client/vfs/metasystem/memory/metasystem.h"
-#include "client/vfs/metasystem/meta_system.h"
 #include "client/vfs/metasystem/meta_wrapper.h"
 #include "client/vfs/vfs.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/blockaccess/accesser_common.h"
 #include "common/blockaccess/block_accesser.h"
 #include "common/blockaccess/rados/rados_common.h"
-#include "common/const.h"
-#include "common/helper.h"
 #include "common/options/client.h"
 #include "common/status.h"
-#include "common/types.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
 #include "utils/executor/thread/executor_impl.h"
@@ -50,6 +43,10 @@ namespace vfs {
 static const std::string kFlushExecutorName = "vfs_flush";
 static const std::string kReadExecutorName = "vfs_read";
 static const std::string kBgExecutorName = "vfs_bg";
+
+VFSHubImpl::VFSHubImpl(const VFSConfig& vfs_conf, ClientId client_id)
+    : client_id_(client_id),
+      meta_system_(vfs_conf, client_id, trace_manager_) {}
 
 VFSHubImpl::~VFSHubImpl() {
   if (handle_manager_ != nullptr) {
@@ -79,57 +76,28 @@ VFSHubImpl::~VFSHubImpl() {
   if (block_store_ != nullptr) {
     block_store_.reset();
   }
-
-  if (meta_system_ != nullptr) {
-    meta_system_.reset();
-  }
 }
 
-Status VFSHubImpl::Start(const VFSConfig& vfs_conf, bool upgrade) {
+Status VFSHubImpl::Start(bool upgrade) {
   CHECK(started_.load(std::memory_order_relaxed) == false)
       << "unexpected start";
 
   LOG(INFO) << fmt::format("[vfs.hub] vfs hub starting, upgrade({}).", upgrade);
 
   // trace manager
-  {
-    trace_manager_ = TraceManager();
-    if (!trace_manager_.Init()) {
-      return Status::Internal("init trace manager fail");
-    }
+  if (!trace_manager_.Init()) {
+    return Status::Internal("init trace manager fail");
   }
 
   // meta system
-  {
-    MetaSystemUPtr rela_meta_system;
-    if (vfs_conf.metasystem_type == MetaSystemType::MEMORY) {
-      rela_meta_system = std::make_unique<memory::MemoryMetaSystem>();
-
-    } else if (vfs_conf.metasystem_type == MetaSystemType::LOCAL) {
-      rela_meta_system = std::make_unique<local::LocalMetaSystem>(
-          dingofs::Helper::ExpandPath(kDefaultMetaDBDir), vfs_conf.fs_name,
-          vfs_conf.storage_info);
-
-    } else if (vfs_conf.metasystem_type == MetaSystemType::MDS) {
-      rela_meta_system = meta::MDSMetaSystem::Build(
-          vfs_conf.fs_name, vfs_conf.mds_addrs, client_id_, trace_manager_);
-    }
-
-    if (rela_meta_system == nullptr) {
-      return Status::InvalidParam(
-          "build meta system fail, please check params");
-    }
-
-    meta_system_ = std::make_unique<MetaWrapper>(std::move(rela_meta_system));
-    DINGOFS_RETURN_NOT_OK(meta_system_->Init(upgrade));
-  }
+  DINGOFS_RETURN_NOT_OK(meta_system_.Init(upgrade));
 
   // load fs info
   {
     auto span = trace_manager_.StartSpan("vfs::start");
 
     DINGOFS_RETURN_NOT_OK(
-        meta_system_->GetFsInfo(SpanScope::GetContext(span), &fs_info_));
+        meta_system_.GetFsInfo(SpanScope::GetContext(span), &fs_info_));
 
     LOG(INFO) << fmt::format("[vfs.hub] vfs_fs_info: {}", FsInfo2Str(fs_info_));
     if (fs_info_.status != FsStatus::kNormal) {
@@ -295,9 +263,7 @@ Status VFSHubImpl::Stop(bool upgrade) {
     block_store_->Shutdown();
   }
 
-  if (meta_system_ != nullptr) {
-    meta_system_->Stop(upgrade);
-  }
+  meta_system_.Stop(upgrade);
 
   trace_manager_.Stop();
 

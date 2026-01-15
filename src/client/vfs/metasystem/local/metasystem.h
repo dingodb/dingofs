@@ -148,7 +148,8 @@ class LocalMetaSystem : public vfs::MetaSystem {
 
   Status RmDir(ContextSPtr ctx, Ino parent, const std::string& name) override;
 
-  Status OpenDir(ContextSPtr ctx, Ino ino, uint64_t fh) override;
+  Status OpenDir(ContextSPtr ctx, Ino ino, uint64_t fh,
+                 bool& need_cache) override;
 
   Status ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
                  bool with_attr, ReadDirHandler handler) override;

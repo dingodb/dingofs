@@ -248,14 +248,14 @@ SliceWriter* ChunkWriter::CreateSliceUnlocked(uint64_t chunk_pos) {
 
 Status ChunkWriter::CommitSlices(ContextSPtr ctx,
                                  const std::vector<Slice>& slices) {
-  return hub_->GetMetaSystem()->WriteSlice(ctx, chunk_.ino, chunk_.index, fh_,
-                                           slices);
+  return hub_->GetMetaSystem().WriteSlice(ctx, chunk_.ino, chunk_.index, fh_,
+                                          slices);
 }
 
 void ChunkWriter::AsyncCommitSlices(ContextSPtr ctx,
                                     const std::vector<Slice>& slices,
                                     StatusCallback cb) {
-  Status s = hub_->GetMetaSystem()->AsyncWriteSlice(
+  Status s = hub_->GetMetaSystem().AsyncWriteSlice(
       ctx, chunk_.ino, chunk_.index, fh_, slices, cb);
   CHECK(s.ok());
 }
