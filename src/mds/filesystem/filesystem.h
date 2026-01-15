@@ -315,9 +315,6 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   void NotifyBuddyRefreshInode(AttrEntry&& attr);
   void NotifyBuddyCleanPartitionCache(Ino ino);
 
-  // aysnc check compact chunk
-  void AsyncCheckCompactChunk(Ino ino, std::vector<ChunkEntry>&& chunks);
-
   uint64_t self_mds_id_;
 
   // filesystem info

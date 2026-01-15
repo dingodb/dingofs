@@ -123,7 +123,6 @@ void Chunk::Put(const ChunkEntry& chunk) {
   }
 
   commited_version_ = chunk.version();
-  last_compaction_time_ms_ = chunk.last_compaction_time_ms();
 }
 
 void Chunk::AppendSlice(const std::vector<Slice>& slices) {
@@ -150,30 +149,34 @@ bool Chunk::HasCommitting() {
   return !commiting_slices_.empty();
 }
 
-bool Chunk::IsNeedCompaction() {
+Status Chunk::IsNeedCompaction(bool check_interval) {
   utils::ReadLockGuard guard(lock_);
 
   if (!FLAGS_vfs_meta_compact_chunk_enable) {
-    return false;
+    return Status::Internal("compact not enabled");
   }
 
-  if (!is_completed_) {
-    return false;
-  }
+  // if (!is_completed_) {
+  //   return Status::Internal("chunk not completed");
+  // }
 
-  uint64_t now_ms = utils::TimestampMs();
-  if (now_ms <
-      (last_compaction_time_ms_ + FLAGS_vfs_meta_compact_chunk_interval_ms)) {
-    return false;
-  }
+  if (check_interval) {
+    uint64_t now_ms = utils::TimestampMs();
+    if (now_ms <
+        (last_compaction_time_ms_ + FLAGS_vfs_meta_compact_chunk_interval_ms)) {
+      return Status::Internal("compact interval not reached");
+    }
 
-  last_compaction_time_ms_ = now_ms;
+    last_compaction_time_ms_ = now_ms;
+  }
 
   if (commited_slices_.size() < FLAGS_vfs_meta_compact_chunk_threshold_num) {
-    return false;
+    return Status::Internal(fmt::format(
+        "compact threshold not reached, {}/{}.", commited_slices_.size(),
+        FLAGS_vfs_meta_compact_chunk_threshold_num));
   }
 
-  return true;
+  return Status::OK();
 }
 
 std::vector<Slice> Chunk::CommitSlice() {

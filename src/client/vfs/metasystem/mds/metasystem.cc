@@ -34,11 +34,11 @@
 #include "common/status.h"
 #include "common/trace/context.h"
 #include "common/trace/trace_manager.h"
+#include "compact.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/core.h"
 #include "fmt/format.h"
-#include "fmt/ranges.h"
 #include "glog/logging.h"
 #include "json/value.h"
 #include "json/writer.h"
@@ -57,19 +57,83 @@ const uint32_t kCleanExpiredModifyTimeMemoIntervalS = 300;  // seconds
 
 const std::string kSliceIdCacheName = "slice";
 
-DEFINE_bool(client_meta_read_chunk_cache_enable, true,
-            "enable read chunk cache");
+DEFINE_bool(vfs_meta_read_chunk_cache_enable, true, "enable read chunk cache");
+
+static std::vector<std::string> SplitMdsAddrs(const std::string& mds_addrs) {
+  std::vector<std::string> addrs;
+
+  if (mds_addrs.find(',') != std::string::npos) {
+    mds::Helper::SplitString(mds_addrs, ',', addrs);
+    return addrs;
+
+  } else if (mds_addrs.find(';') != std::string::npos) {
+    mds::Helper::SplitString(mds_addrs, ';', addrs);
+    return addrs;
+  }
+
+  addrs.push_back(mds_addrs);
+  return addrs;
+}
+
+static std::string GetAliveMdsAddr(const std::string& mds_addrs) {
+  auto mds_addr_vec = SplitMdsAddrs(mds_addrs);
+  for (const auto& mds_addr : mds_addr_vec) {
+    if (RPC::CheckMdsAlive(mds_addr)) {
+      return mds_addr;
+    }
+  }
+
+  return "";
+}
+
+MDSMetaSystemUPtr MDSMetaSystem::Build(const std::string& fs_name,
+                                       const std::string& mds_addrs,
+                                       const ClientId& client_id,
+                                       TraceManager& trace_manager,
+                                       Compactor& compactor) {
+  LOG(INFO) << fmt::format("[meta.fs.{}] build filesystem mds_addrs({}).",
+                           fs_name, mds_addrs);
+
+  CHECK(!fs_name.empty()) << "fs_name is empty.";
+  CHECK(!mds_addrs.empty()) << "mds_addrs is empty.";
+
+  // check mds addr
+  std::string alive_mds_addr = GetAliveMdsAddr(mds_addrs);
+  if (alive_mds_addr.empty()) {
+    LOG(ERROR) << fmt::format(
+        "[meta.fs.{}] mds addr check fail, mds_addrs({}).", fs_name, mds_addrs);
+    return nullptr;
+  }
+
+  RPC rpc(alive_mds_addr);
+  if (!rpc.Init()) {
+    LOG(ERROR) << fmt::format("[meta.fs.{}] RPC init fail.", fs_name);
+    return nullptr;
+  }
+
+  mds::FsInfoEntry fs_info;
+  auto status = MDSClient::GetFsInfo(rpc, fs_name, fs_info);
+  if (!status.ok()) {
+    LOG(ERROR) << fmt::format("[meta.fs.{}] Get fs info fail.", fs_name);
+    return nullptr;
+  }
+
+  // create filesystem
+  return MDSMetaSystem::New(fs_info, client_id, std::move(rpc), trace_manager,
+                            compactor);
+}
 
 MDSMetaSystem::MDSMetaSystem(mds::FsInfoEntry fs_info_entry,
                              const ClientId& client_id, RPC&& rpc,
-                             TraceManager& trace_manager)
+                             TraceManager& trace_manager, Compactor& compactor)
     : name_(fs_info_entry.fs_name()),
       client_id_(client_id),
       fs_info_(fs_info_entry),
       mds_client_(client_id, fs_info_, std::move(rpc), trace_manager),
       inode_cache_(fs_info_.GetFsId()),
       id_cache_(kSliceIdCacheName, mds_client_),
-      batch_processor_(mds_client_) {}
+      batch_processor_(mds_client_),
+      compactor_(compactor) {}
 
 MDSMetaSystem::~MDSMetaSystem() {}  // NOLINT
 
@@ -466,7 +530,7 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
   std::string session_id;
   AttrEntry attr_entry;
   std::vector<mds::ChunkEntry> chunks;
-  bool is_prefetch_chunk = FLAGS_client_meta_read_chunk_cache_enable;
+  bool is_prefetch_chunk = FLAGS_vfs_meta_read_chunk_cache_enable;
 
   // prepare chunk descriptors for expect chunk version
   std::vector<mds::ChunkDescriptor> chunk_descriptors;
@@ -760,7 +824,7 @@ Status MDSMetaSystem::RmDir(ContextSPtr ctx, Ino parent,
   return Status::OK();
 }
 
-Status MDSMetaSystem::OpenDir(ContextSPtr ctx, Ino ino, uint64_t fh,
+Status MDSMetaSystem::OpenDir(ContextSPtr, Ino ino, uint64_t fh,
                               bool& need_cache) {
   AssertStop();
 
@@ -1190,14 +1254,21 @@ void MDSMetaSystem::AsyncFlushSlice(ContextSPtr& ctx,
     for (auto& task : tasks) task->Wait();
   }
 
-  // check whether need compact chunk
-  // auto chunks = chunk_set.GetAll();
-  // for (auto& chunk : chunks) {
-  //   if (chunk->IsNeedCompaction()) {
-  //     compact_processor_.Execute(
-  //         CompactChunkTask::New(ino, chunk, mds_client_));
-  //   }
-  // }
+  if (FLAGS_vfs_meta_compact_chunk_enable) {
+    // check whether need compact chunk
+    auto chunks = chunk_set.GetAll();
+    for (auto& chunk : chunks) {
+      auto status = chunk->IsNeedCompaction();
+      if (status.ok()) {
+        compact_processor_.LaunchCompact(ino, chunk, mds_client_, compactor_,
+                                         true);
+      } else {
+        LOG(INFO) << fmt::format(
+            "[meta.fs.{}.{}] not need compact, reason({}).", ino,
+            chunk->GetIndex(), status.ToString());
+      }
+    }
+  }
 }
 
 Status MDSMetaSystem::FlushSlice(ContextSPtr ctx, Ino ino) {
@@ -1293,66 +1364,32 @@ bool MDSMetaSystem::CorrectAttrLength(Attr& attr, const std::string& caller) {
   return false;
 }
 
-static std::vector<std::string> SplitMdsAddrs(const std::string& mds_addrs) {
-  std::vector<std::string> addrs;
+Status MDSMetaSystem::ManualCompact(ContextSPtr ctx, Ino ino,
+                                    uint32_t chunk_index) {
+  // set chunk version
+  mds::ChunkDescriptor chunk_descriptor;
+  chunk_descriptor.set_index(chunk_index);
+  chunk_descriptor.set_version(chunk_memo_.GetVersion(ino, chunk_index));
 
-  if (mds_addrs.find(',') != std::string::npos) {
-    mds::Helper::SplitString(mds_addrs, ',', addrs);
-    return addrs;
-
-  } else if (mds_addrs.find(';') != std::string::npos) {
-    mds::Helper::SplitString(mds_addrs, ';', addrs);
-    return addrs;
-  }
-
-  addrs.push_back(mds_addrs);
-  return addrs;
-}
-
-static std::string GetAliveMdsAddr(const std::string& mds_addrs) {
-  auto mds_addr_vec = SplitMdsAddrs(mds_addrs);
-  for (const auto& mds_addr : mds_addr_vec) {
-    if (RPC::CheckMdsAlive(mds_addr)) {
-      return mds_addr;
-    }
-  }
-
-  return "";
-}
-
-MDSMetaSystemUPtr MDSMetaSystem::Build(const std::string& fs_name,
-                                       const std::string& mds_addrs,
-                                       const ClientId& client_id,
-                                       TraceManager& trace_manager) {
-  LOG(INFO) << fmt::format("[meta.fs.{}] build filesystem mds_addrs({}).",
-                           fs_name, mds_addrs);
-
-  CHECK(!fs_name.empty()) << "fs_name is empty.";
-  CHECK(!mds_addrs.empty()) << "mds_addrs is empty.";
-
-  // check mds addr
-  std::string alive_mds_addr = GetAliveMdsAddr(mds_addrs);
-  if (alive_mds_addr.empty()) {
-    LOG(ERROR) << fmt::format(
-        "[meta.fs.{}] mds addr check fail, mds_addrs({}).", fs_name, mds_addrs);
-    return nullptr;
-  }
-
-  RPC rpc(alive_mds_addr);
-  if (!rpc.Init()) {
-    LOG(ERROR) << fmt::format("[meta.fs.{}] RPC init fail.", fs_name);
-    return nullptr;
-  }
-
-  mds::FsInfoEntry fs_info;
-  auto status = MDSClient::GetFsInfo(rpc, fs_name, fs_info);
+  std::vector<mds::ChunkEntry> chunks;
+  auto status = mds_client_.ReadSlice(ctx, ino, {chunk_descriptor}, chunks);
   if (!status.ok()) {
-    LOG(ERROR) << fmt::format("[meta.fs.{}] Get fs info fail.", fs_name);
-    return nullptr;
+    LOG(ERROR) << fmt::format("[meta.fs.{}.{}] reeadslice fail, error({}).",
+                              ino, chunk_index, status.ToString());
+    return status;
+  }
+  if (chunks.empty()) {
+    return Status::NoData("not found chunk");
   }
 
-  // create filesystem
-  return MDSMetaSystem::New(fs_info, client_id, std::move(rpc), trace_manager);
+  for (auto& chunk : chunks) {
+    auto chunk_ptr = Chunk::New(ino, chunk);
+    auto status = compact_processor_.LaunchCompact(ino, chunk_ptr, mds_client_,
+                                                   compactor_, false);
+    if (!status.ok()) return status;
+  }
+
+  return Status::OK();
 }
 
 bool MDSMetaSystem::GetDescription(Json::Value& value) {

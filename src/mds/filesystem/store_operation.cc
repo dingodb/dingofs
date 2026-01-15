@@ -1687,10 +1687,6 @@ Status CompactChunkOperation::Run(TxnUPtr& txn) {
   CHECK(param_.end_pos >= param_.start_pos) << "invalid pos range.";
   CHECK(param_.new_slices.size() < (param_.end_pos - param_.start_pos)) << "new_slices size invalid.";
 
-  LOG(INFO) << fmt::format("[operation.{}.{}.{}] compact chunk, pos[{},{}] slice_id[{},{}] new_slices_size({}).", fs_id,
-                           ino_, chunk_index, param_.start_pos, param_.end_pos, param_.start_slice_id,
-                           param_.end_slice_id, param_.new_slices.size());
-
   std::string chunk_key = MetaCodec::EncodeChunkKey(fs_id, ino_, chunk_index);
 
   std::string value;
@@ -1741,17 +1737,23 @@ Status CompactChunkOperation::Run(TxnUPtr& txn) {
   trash_slice_list.set_time_ms(utils::TimestampMs());
 
   // update chunk slices
+  uint32_t old_slice_size = chunk.slices_size();
   uint32_t pos = param_.start_pos;
   for (const auto& slice : param_.new_slices) {
     chunk.mutable_slices()->at(pos++) = slice;
   }
 
-  for (int i = param_.end_pos + 1; i <= chunk.slices_size(); ++i) {
+  for (int i = param_.end_pos + 1; i < chunk.slices_size(); ++i) {
     chunk.mutable_slices()->at(pos++) = chunk.mutable_slices()->at(i);
   }
 
   chunk.mutable_slices()->DeleteSubrange(pos, chunk.slices_size() - pos);
   chunk.set_version(chunk.version() + 1);
+
+  LOG(INFO) << fmt::format(
+      "[operation.{}.{}.{}] compact chunk, pos[{},{}] slice_id[{},{}] new_slices({}) old_slices({}) final_slices({}).",
+      fs_id, ino_, chunk_index, param_.start_pos, param_.end_pos, param_.start_slice_id, param_.end_slice_id,
+      Helper::ToString(param_.new_slices), old_slice_size, chunk.slices_size());
 
   txn->Put(chunk_key, MetaCodec::EncodeChunkValue(chunk));
 

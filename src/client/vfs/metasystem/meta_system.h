@@ -106,6 +106,11 @@ class MetaSystem {
   virtual Status Write(ContextSPtr ctx, Ino ino, uint64_t offset, uint64_t size,
                        uint64_t fh) = 0;
 
+  virtual Status ManualCompact(ContextSPtr ctx, Ino ino,  // NOLINT
+                               uint32_t chunk_index) {    // NOLINT
+    return Status::NotSupport("not supported");
+  }
+
   /**
    * Hard link a file to a new parent directory
    * @param ino the file to be linked

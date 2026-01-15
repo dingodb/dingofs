@@ -163,6 +163,16 @@ class Helper {
   static std::vector<uint64_t> GetMdsIds(const std::map<uint64_t, BucketSetEntry>& distributions);
 
   static const char* DescOpenFlags(int flags);
+
+  static std::string ToString(const std::vector<mds::SliceEntry>& slices) {
+    std::string result;
+    for (uint32_t i = 0; i < slices.size(); ++i) {
+      result += std::to_string(slices[i].id());
+      if (i != slices.size() - 1) result += ",";
+    }
+
+    return result;
+  }
 };
 
 }  // namespace mds

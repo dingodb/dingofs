@@ -35,7 +35,8 @@ namespace vfs {
 
 static MetaSystemUPtr BuildMetaSystem(const VFSConfig& vfs_conf,
                                       ClientId& client_id,
-                                      TraceManager& trace_manager) {
+                                      TraceManager& trace_manager,
+                                      Compactor& compactor) {
   if (vfs_conf.metasystem_type == MetaSystemType::MEMORY) {
     return std::make_unique<memory::MemoryMetaSystem>();
 
@@ -46,15 +47,15 @@ static MetaSystemUPtr BuildMetaSystem(const VFSConfig& vfs_conf,
 
   } else if (vfs_conf.metasystem_type == MetaSystemType::MDS) {
     return meta::MDSMetaSystem::Build(vfs_conf.fs_name, vfs_conf.mds_addrs,
-                                      client_id, trace_manager);
+                                      client_id, trace_manager, compactor);
   }
 
   return nullptr;
 }
 
 MetaWrapper::MetaWrapper(const VFSConfig& vfs_conf, ClientId& client_id,
-                         TraceManager& trace_manager)
-    : target_(BuildMetaSystem(vfs_conf, client_id, trace_manager)),
+                         TraceManager& trace_manager, Compactor& compactor)
+    : target_(BuildMetaSystem(vfs_conf, client_id, trace_manager, compactor)),
       slice_metric_(std::make_unique<metrics::client::SliceMetric>()) {}
 
 Status MetaWrapper::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {

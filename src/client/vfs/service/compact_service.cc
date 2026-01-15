@@ -16,12 +16,19 @@
 
 #include <brpc/closure_guard.h>
 #include <brpc/controller.h>
+#include <butil/strings/string_split.h>
+#include <fmt/format.h>
 
 #include <vector>
 
 namespace dingofs {
 namespace client {
 namespace vfs {
+
+static void SplitString(const std::string& str, char c,
+                        std::vector<std::string>& vec) {
+  butil::SplitString(str, c, &vec);
+}
 
 void CompactServiceImpl::default_method(
     google::protobuf::RpcController* controller,
@@ -33,48 +40,58 @@ void CompactServiceImpl::default_method(
   auto* cntl = static_cast<brpc::Controller*>(controller);
   cntl->http_response().set_content_type("text/plain");
 
-  butil::IOBufBuilder os;
-
   const std::string& path = cntl->http_request().unresolved_path();
-  if (path.empty()) {
-    os << "# Use CompactService/<inode_id>/<chunk_index> to compact\n";
-  } else {
-    char* endptr = nullptr;
-    int64_t ino = strtoll(path.c_str(), &endptr, 10);
-    if (*endptr != '/') {
-      cntl->SetFailed(brpc::ENOMETHOD,
-                      "Invalid path %s, expected /<ino>/<chunk_index>",
-                      path.c_str());
-      return;
-    }
 
-    int64_t chunk_index = strtoll(endptr + 1, &endptr, 10);
-    if (*endptr != '\0' && *endptr != '/') {
-      cntl->SetFailed(brpc::ENOMETHOD,
-                      "Invalid path %s, expected /<ino>/<chunk_index>",
-                      path.c_str());
-      return;
-    }
+  LOG(INFO) << fmt::format("[service.compact] path: {}.", path);
 
-    {
-      auto span = vfs_hub_->GetTraceManager().StartSpan("VFSWrapper::Create");
-      std::vector<Slice> slices;
-      uint64_t version = 0;
-      vfs_hub_->GetMetaSystem()->ReadSlice(SpanScope::GetContext(span), ino,
-                                           chunk_index, 0, &slices, version);
-      LOG(INFO) << "ReadSlice ino: " << ino << " chunk_index: " << chunk_index
-                << " slices size: " << slices.size() << " version: " << version;
-      if (!slices.empty()) {
-        std::vector<Slice> out_slices;
-        vfs_hub_->GetCompactor()->Compact(SpanScope::GetContext(span), ino,
-                                          chunk_index, slices, out_slices);
-      }
-    }
-    LOG(INFO) << "CompactChunk ino: " << ino << " chunk_index: " << chunk_index;
+  std::vector<std::string> params;
+  SplitString(path, '/', params);
 
-    os << "CompactChunk ino: " << ino << " chunk_index: " << chunk_index
-       << "\n";
+  butil::IOBufBuilder os;
+  if (params.empty() || params.size() != 3) {
+    os << "# use CompactService/[compact|try_compact]/<inode_id>/<chunk_index> "
+          "to compact\n";
+
+    os.move_to(cntl->response_attachment());
+    return;
   }
+
+  const std::string& action = params[0];
+  const Ino ino = strtoull(params[1].c_str(), nullptr, 10);
+  const uint32_t chunk_index = strtoull(params[2].c_str(), nullptr, 10);
+  if (ino == 0) {
+    os << "invalid inode id\n";
+    os.move_to(cntl->response_attachment());
+    return;
+  }
+
+  Status status;
+  if (action == "try_compact") {
+    auto ctx = std::make_shared<Context>("");
+
+    std::vector<Slice> slices;
+    uint64_t version = 0;
+    status = vfs_hub_->GetMetaSystem().ReadSlice(ctx, ino, chunk_index, 0,
+                                                 &slices, version);
+    if (status.ok() && !slices.empty()) {
+      LOG(INFO) << fmt::format(
+          "[service.compact.{}.{}] readslice finish, slice_size({}) "
+          "version({}).",
+          ino, chunk_index, slices.size(), version);
+
+      std::vector<Slice> out_slices;
+      status = vfs_hub_->GetCompactor().Compact(ctx, ino, chunk_index, slices,
+                                                out_slices);
+    }
+
+  } else if (action == "compact") {
+    auto ctx = std::make_shared<Context>("");
+    status = vfs_hub_->GetMetaSystem().ManualCompact(ctx, ino, chunk_index);
+  }
+
+  os << fmt::format(
+      "compact chunk finish, ino({}) chunk_index({}) status({}).\n", ino,
+      chunk_index, status.ToString());
 
   os.move_to(cntl->response_attachment());
 }

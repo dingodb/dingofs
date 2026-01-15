@@ -21,6 +21,7 @@
 #include <string>
 
 #include "client/vfs/common/client_id.h"
+#include "client/vfs/compaction/compactor.h"
 #include "client/vfs/metasystem/mds/batch_processor.h"
 #include "client/vfs/metasystem/mds/chunk_memo.h"
 #include "client/vfs/metasystem/mds/compact.h"
@@ -54,20 +55,22 @@ using MDSMetaSystemUPtr = std::unique_ptr<MDSMetaSystem>;
 class MDSMetaSystem : public vfs::MetaSystem {
  public:
   MDSMetaSystem(mds::FsInfoEntry fs_info_entry, const ClientId& client_id,
-                RPC&& rpc, TraceManager& trace_manager);
+                RPC&& rpc, TraceManager& trace_manager, Compactor& compactor);
   ~MDSMetaSystem() override;
 
   static MDSMetaSystemUPtr New(mds::FsInfoEntry fs_info_entry,
                                const ClientId& client_id, RPC&& rpc,
-                               TraceManager& trace_manager) {
-    return std::make_unique<MDSMetaSystem>(fs_info_entry, client_id,
-                                           std::move(rpc), trace_manager);
+                               TraceManager& trace_manager,
+                               Compactor& compactor) {
+    return std::make_unique<MDSMetaSystem>(
+        fs_info_entry, client_id, std::move(rpc), trace_manager, compactor);
   }
 
   static MDSMetaSystemUPtr Build(const std::string& fs_name,
                                  const std::string& mds_addrs,
                                  const ClientId& client_id,
-                                 TraceManager& trace_manager);
+                                 TraceManager& trace_manager,
+                                 Compactor& compactor);
 
   Status Init(bool upgrade) override;
 
@@ -151,6 +154,8 @@ class MDSMetaSystem : public vfs::MetaSystem {
   Status Rename(ContextSPtr ctx, Ino old_parent, const std::string& old_name,
                 Ino new_parent, const std::string& new_name) override;
 
+  Status ManualCompact(ContextSPtr ctx, Ino ino, uint32_t chunk_index) override;
+
   bool GetDescription(Json::Value& value) override;
 
  private:
@@ -220,6 +225,8 @@ class MDSMetaSystem : public vfs::MetaSystem {
   BatchProcessor batch_processor_;
 
   CompactProcessor compact_processor_;
+
+  Compactor& compactor_;
 
   std::atomic<bool> stopped_{false};
 };

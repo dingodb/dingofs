@@ -99,7 +99,7 @@ class Chunk {
   std::vector<Slice> CommitSlice();
   void MarkCommited(uint64_t version);
 
-  bool IsNeedCompaction();
+  Status IsNeedCompaction(bool check_interval = true);
 
   uint64_t GetVersion();
   std::vector<Slice> GetAllSlice();

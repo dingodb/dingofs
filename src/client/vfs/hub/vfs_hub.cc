@@ -46,7 +46,9 @@ static const std::string kBgExecutorName = "vfs_bg";
 
 VFSHubImpl::VFSHubImpl(const VFSConfig& vfs_conf, ClientId client_id)
     : client_id_(client_id),
-      meta_system_(vfs_conf, client_id, trace_manager_) {}
+      handle_manager_(std::make_unique<HandleManager>(this)),
+      compactor_(this),
+      meta_wrapper_(vfs_conf, client_id, trace_manager_, compactor_) {}
 
 VFSHubImpl::~VFSHubImpl() {
   if (handle_manager_ != nullptr) {
@@ -90,14 +92,14 @@ Status VFSHubImpl::Start(bool upgrade) {
   }
 
   // meta system
-  DINGOFS_RETURN_NOT_OK(meta_system_.Init(upgrade));
+  DINGOFS_RETURN_NOT_OK(meta_wrapper_.Init(upgrade));
 
   // load fs info
   {
     auto span = trace_manager_.StartSpan("vfs::start");
 
     DINGOFS_RETURN_NOT_OK(
-        meta_system_.GetFsInfo(SpanScope::GetContext(span), &fs_info_));
+        meta_wrapper_.GetFsInfo(SpanScope::GetContext(span), &fs_info_));
 
     LOG(INFO) << fmt::format("[vfs.hub] vfs_fs_info: {}", FsInfo2Str(fs_info_));
     if (fs_info_.status != FsStatus::kNormal) {
@@ -142,7 +144,6 @@ Status VFSHubImpl::Start(bool upgrade) {
 
   // handle manager
   {
-    handle_manager_ = std::make_unique<HandleManager>(this);
     CHECK(handle_manager_ != nullptr) << "handle manager is nullptr.";
     DINGOFS_RETURN_NOT_OK(handle_manager_->Start());
   }
@@ -221,7 +222,7 @@ Status VFSHubImpl::Start(bool upgrade) {
     DINGOFS_RETURN_NOT_OK(warmup_manager_->Start(FLAGS_vfs_warmup_threads));
   }
 
-  compactor_ = std::make_unique<Compactor>(this);
+  // compactor_ = std::make_unique<Compactor>(this);
 
   started_.store(true, std::memory_order_relaxed);
 
@@ -263,7 +264,7 @@ Status VFSHubImpl::Stop(bool upgrade) {
     block_store_->Shutdown();
   }
 
-  meta_system_.Stop(upgrade);
+  meta_wrapper_.Stop(upgrade);
 
   trace_manager_.Stop();
 

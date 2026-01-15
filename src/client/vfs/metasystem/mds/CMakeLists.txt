@@ -26,6 +26,7 @@ target_link_libraries(vfs_metasystem_mds_lib
     dingofs_common
     dingofs_utils
     client_options
+    vfs_compaction
 
     gflags::gflags
     glog::glog

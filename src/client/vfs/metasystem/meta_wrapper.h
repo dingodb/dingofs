@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "client/vfs/common/client_id.h"
+#include "client/vfs/compaction/compactor.h"
 #include "client/vfs/metasystem/meta_system.h"
 #include "client/vfs/vfs.h"
 #include "common/metrics/client/vfs/slice_metric.h"
@@ -37,7 +38,7 @@ namespace vfs {
 class MetaWrapper {
  public:
   MetaWrapper(const VFSConfig& vfs_conf, ClientId& client_id,
-              TraceManager& trace_manager);
+              TraceManager& trace_manager, Compactor& compactor);
   ~MetaWrapper() = default;
 
   Status Init(bool upgrade) {
@@ -173,6 +174,10 @@ class MetaWrapper {
   Status Write(ContextSPtr ctx, Ino ino, uint64_t offset, uint64_t size,
                uint64_t fh) {
     return target_->Write(ctx, ino, offset, size, fh);
+  }
+
+  Status ManualCompact(ContextSPtr ctx, Ino ino, uint32_t chunk_index) {
+    return target_->ManualCompact(ctx, ino, chunk_index);
   }
 
   Status StatFs(ContextSPtr ctx, Ino ino, FsStat* fs_stat) {

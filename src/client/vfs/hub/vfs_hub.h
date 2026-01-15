@@ -79,7 +79,7 @@ class VFSHub {
 
   virtual WarmupManager* GetWarmupManager() = 0;
 
-  virtual Compactor* GetCompactor() = 0;
+  virtual Compactor& GetCompactor() = 0;
 
   virtual TraceManager& GetTraceManager() = 0;
 
@@ -100,7 +100,7 @@ class VFSHubImpl : public VFSHub {
 
   ClientId GetClientId() override { return client_id_; }
 
-  MetaWrapper& GetMetaSystem() override { return meta_system_; }
+  MetaWrapper& GetMetaSystem() override { return meta_wrapper_; }
 
   HandleManager* GetHandleManager() override {
     CHECK_NOTNULL(handle_manager_);
@@ -157,10 +157,7 @@ class VFSHubImpl : public VFSHub {
     return warmup_manager_.get();
   }
 
-  Compactor* GetCompactor() override {
-    CHECK_NOTNULL(compactor_);
-    return compactor_.get();
-  }
+  Compactor& GetCompactor() override { return compactor_; }
 
   FsInfo GetFsInfo() override {
     CHECK(started_.load(std::memory_order_relaxed)) << "not started";
@@ -185,7 +182,8 @@ class VFSHubImpl : public VFSHub {
   S3Info s3_info_;
 
   TraceManager trace_manager_;
-  MetaWrapper meta_system_;
+  Compactor compactor_;
+  MetaWrapper meta_wrapper_;
 
   std::unique_ptr<HandleManager> handle_manager_;
   std::unique_ptr<blockaccess::BlockAccesser> block_accesser_;
@@ -198,7 +196,6 @@ class VFSHubImpl : public VFSHub {
   std::unique_ptr<FileSuffixWatcher> file_suffix_watcher_;
   std::unique_ptr<PrefetchManager> prefetch_manager_;
   std::unique_ptr<WarmupManager> warmup_manager_;
-  std::unique_ptr<Compactor> compactor_;
 };
 
 }  // namespace vfs

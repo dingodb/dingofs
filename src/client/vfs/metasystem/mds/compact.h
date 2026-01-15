@@ -15,11 +15,10 @@
 #ifndef DINGOFS_SRC_CLIENT_VFS_META_MDS_COMPACT_H_
 #define DINGOFS_SRC_CLIENT_VFS_META_MDS_COMPACT_H_
 
-#include <cstdint>
 #include <string>
-#include <vector>
 
 #include "absl/container/flat_hash_set.h"
+#include "client/vfs/compaction/compactor.h"
 #include "client/vfs/metasystem/mds/chunk.h"
 #include "client/vfs/metasystem/mds/mds_client.h"
 #include "client/vfs/vfs_meta.h"
@@ -39,22 +38,29 @@ using CompactChunkTaskPtr = std::shared_ptr<CompactChunkTask>;
 
 class CompactChunkTask : public TaskRunnable {
  public:
-  CompactChunkTask(Ino ino, ChunkSPtr& chunk, MDSClient& mds_client)
-      : ino_(ino), chunk_(chunk), mds_client_(mds_client) {}
+  CompactChunkTask(Ino ino, ChunkSPtr& chunk, MDSClient& mds_client,
+                   Compactor& compactor)
+      : ino_(ino),
+        chunk_(chunk),
+        mds_client_(mds_client),
+        compactor_(compactor) {}
   ~CompactChunkTask() override = default;
 
   static CompactChunkTaskPtr New(Ino ino, ChunkSPtr& chunk,
-                                 MDSClient& mds_client) {
-    return std::make_shared<CompactChunkTask>(ino, chunk, mds_client);
+                                 MDSClient& mds_client, Compactor& compactor) {
+    return std::make_shared<CompactChunkTask>(ino, chunk, mds_client,
+                                              compactor);
   }
 
   std::string Type() override { return "COMPACT_CHUNK"; }
 
-  std::string Key() override {
-    return fmt::format("COMPACT_CHUNK_{}_{}", ino_, chunk_->GetIndex());
-  }
-
   void Run() override;
+
+  void Wait() { cond_.Wait(); }
+
+  void Signal() { cond_.DecreaseSignal(); }
+
+  Status GetStatus() { return status_; }
 
  private:
   void CompactCompletelyOverlap();
@@ -64,6 +70,10 @@ class CompactChunkTask : public TaskRunnable {
   ChunkSPtr chunk_;
 
   MDSClient& mds_client_;
+  Compactor& compactor_;
+
+  Status status_;
+  mds::BthreadCond cond_{1};
 };
 
 class CompactProcessor {
@@ -80,18 +90,11 @@ class CompactProcessor {
   bool Init();
   void Stop();
 
-  void Execute(TaskRunnablePtr task);
+  Status LaunchCompact(Ino ino, ChunkSPtr& chunk, MDSClient& mds_client,
+                       Compactor& compactor, bool is_async = true);
 
  public:
-  bool IsExistTask(const std::string& key);
-  void RememberTask(const std::string& key);
-  void ForgetTask(const std::string& key);
-
   WorkerSetUPtr worker_set_;
-
-  mutable utils::RWLock lock_;
-  // task key
-  absl::flat_hash_set<std::string> doing_tasks_;
 };
 
 }  // namespace meta
