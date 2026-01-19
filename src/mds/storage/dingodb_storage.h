@@ -68,7 +68,7 @@ class DingodbTxn : public Txn {
   using SdkTxnUPtr = std::unique_ptr<dingodb::sdk::Transaction>;
 
   DingodbTxn(SdkTxnUPtr txn) : txn_(std::move(txn)) {};
-  ~DingodbTxn() override = default;
+  ~DingodbTxn() override;
 
   int64_t ID() const override;
 

@@ -358,6 +358,12 @@ TxnUPtr DingodbStorage::NewTxn(Txn::IsolationLevel isolation_level) {
   return std::make_unique<DingodbTxn>(NewSdkTxn(isolation_level));
 }
 
+DingodbTxn::~DingodbTxn() {
+  dingodb::sdk::TraceMetrics metrics;
+  txn_->GetTraceMetrics(metrics);
+  LOG(INFO) << fmt::format("[storage.{}] trace {}.", ID(), metrics.ToString());
+}
+
 int64_t DingodbTxn::ID() const { return txn_->ID(); }
 
 Status DingodbTxn::Put(const std::string& key, const std::string& value) {
