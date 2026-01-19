@@ -30,7 +30,7 @@ ParentMemo::ParentMemo() {
 
 bool ParentMemo::GetParent(Ino ino, Ino& parent) {
   bool found = false;
-  ino_map_.withRLock(
+  shard_map_.withRLock(
       [ino, &parent, &found](Map& map) {
         auto it = map.find(ino);
         if (it != map.end() && it->second.parent != 0) {
@@ -45,7 +45,7 @@ bool ParentMemo::GetParent(Ino ino, Ino& parent) {
 
 bool ParentMemo::GetVersion(Ino ino, uint64_t& version) {
   bool found = false;
-  ino_map_.withRLock(
+  shard_map_.withRLock(
       [ino, &version, &found](Map& map) {
         auto it = map.find(ino);
         if (it != map.end()) {
@@ -79,7 +79,7 @@ std::vector<uint64_t> ParentMemo::GetAncestors(uint64_t ino) {
 
 bool ParentMemo::GetRenameRefCount(Ino ino, int32_t& rename_ref_count) {
   bool found = false;
-  ino_map_.withRLock(
+  shard_map_.withRLock(
       [ino, &rename_ref_count, &found](Map& map) {
         auto it = map.find(ino);
         if (it != map.end()) {
@@ -93,7 +93,7 @@ bool ParentMemo::GetRenameRefCount(Ino ino, int32_t& rename_ref_count) {
 }
 
 void ParentMemo::Upsert(Ino ino, Ino parent) {
-  ino_map_.withWLock(
+  shard_map_.withWLock(
       [ino, parent](Map& map) mutable {
         auto it = map.find(ino);
         if (it != map.end()) {
@@ -106,7 +106,7 @@ void ParentMemo::Upsert(Ino ino, Ino parent) {
 }
 
 void ParentMemo::UpsertVersion(Ino ino, uint64_t version) {
-  ino_map_.withWLock(
+  shard_map_.withWLock(
       [ino, version](Map& map) mutable {
         auto it = map.find(ino);
         if (it != map.end()) {
@@ -120,7 +120,7 @@ void ParentMemo::UpsertVersion(Ino ino, uint64_t version) {
 }
 
 void ParentMemo::UpsertVersionAndRenameRefCount(Ino ino, uint64_t version) {
-  ino_map_.withWLock(
+  shard_map_.withWLock(
       [ino, version](Map& map) mutable {
         auto it = map.find(ino);
         if (it != map.end()) {
@@ -136,7 +136,7 @@ void ParentMemo::UpsertVersionAndRenameRefCount(Ino ino, uint64_t version) {
 }
 
 void ParentMemo::Upsert(Ino ino, Ino parent, uint64_t version) {
-  ino_map_.withWLock(
+  shard_map_.withWLock(
       [ino, parent, version](Map& map) mutable {
         auto it = map.find(ino);
         if (it != map.end()) {
@@ -151,16 +151,16 @@ void ParentMemo::Upsert(Ino ino, Ino parent, uint64_t version) {
 }
 
 void ParentMemo::UpsertEntry(Ino ino, const Entry& entry) {
-  ino_map_.withWLock([ino, &entry](Map& map) mutable { map[ino] = entry; },
-                     ino);
+  shard_map_.withWLock([ino, &entry](Map& map) mutable { map[ino] = entry; },
+                       ino);
 }
 
 void ParentMemo::Delete(Ino ino) {
-  ino_map_.withWLock([ino](Map& map) mutable { map.erase(ino); }, ino);
+  shard_map_.withWLock([ino](Map& map) mutable { map.erase(ino); }, ino);
 }
 
 void ParentMemo::DecRenameRefCount(Ino ino) {
-  ino_map_.withWLock(
+  shard_map_.withWLock(
       [ino](Map& map) mutable {
         auto it = map.find(ino);
         if (it != map.end() && it->second.rename_ref_count > 0) {
@@ -172,14 +172,14 @@ void ParentMemo::DecRenameRefCount(Ino ino) {
 
 size_t ParentMemo::Size() {
   size_t size = 0;
-  ino_map_.iterate([&size](Map& map) { size += map.size(); });
+  shard_map_.iterate([&size](Map& map) { size += map.size(); });
   return size;
 }
 
 bool ParentMemo::Dump(Json::Value& value) {
   std::vector<std::pair<Ino, Entry>> ino_map_copy;
   ino_map_copy.reserve(Size());
-  ino_map_.iterateWLock([&](Map& map) {
+  shard_map_.iterateWLock([&](Map& map) {
     for (const auto& [ino, entry] : map) {
       ino_map_copy.emplace_back(ino, entry);
     }

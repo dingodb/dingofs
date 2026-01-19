@@ -86,6 +86,9 @@ static void ErrorCallback(void* vdata, const char* msg, int errnum) {
 
 // The signal handler
 static void SignalHandler(int signo) {
+  // flush log
+  dingofs::Logger::FlushLogs();
+
   if (signo == SIGTERM) {
     dingofs::mds::Server& server = dingofs::mds::Server::GetInstance();
     server.Stop();

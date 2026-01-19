@@ -72,10 +72,13 @@ DEFINE_validator(vfs_meta_access_logging, brpc::PassValidate);
 DEFINE_int64(vfs_meta_access_log_threshold_us, 0, "access log threshold");
 DEFINE_validator(vfs_meta_access_log_threshold_us, brpc::PassValidate);
 
-DEFINE_uint64(vfs_meta_memo_expired_s, 1, "modify time memo expired time");
+DEFINE_uint64(vfs_meta_memo_expired_s, 3600, "modify time memo expired time");
 DEFINE_validator(vfs_meta_memo_expired_s, brpc::PassValidate);
 
-DEFINE_uint64(vfs_meta_inode_cache_expired_s, 1, "inode cache expired time");
+DEFINE_uint64(vfs_meta_chunk_cache_expired_s, 3600, "chunk cache expired time");
+DEFINE_validator(vfs_meta_chunk_cache_expired_s, brpc::PassValidate);
+
+DEFINE_uint64(vfs_meta_inode_cache_expired_s, 3600, "inode cache expired time");
 DEFINE_validator(vfs_meta_inode_cache_expired_s, brpc::PassValidate);
 
 DEFINE_int32(vfs_flush_thread, 16, "number of background flush threads");
@@ -154,7 +157,7 @@ DEFINE_validator(vfs_meta_compact_chunk_enable, brpc::PassValidate);
 DEFINE_uint32(vfs_meta_compact_chunk_threshold_num, 32,
               "compact chunk threshold num.");
 DEFINE_validator(vfs_meta_compact_chunk_threshold_num, brpc::PassValidate);
-DEFINE_uint32(vfs_meta_compact_chunk_interval_ms, 30 * 1000,
+DEFINE_uint32(vfs_meta_compact_chunk_interval_ms, 10 * 1000,
               "compact chunk interval ms.");
 DEFINE_validator(vfs_meta_compact_chunk_interval_ms, brpc::PassValidate);
 

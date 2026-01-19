@@ -1525,8 +1525,9 @@ static void RenderChunk(uint64_t& count, uint64_t chunk_size, const ChunkEntry& 
 
     os << "<td>" << ++count << "</td>";
 
-    os << ((i == 0) ? fmt::format(R"(<td>{} [{}, {})</td>)", chunk_index, chunk_index * chunk_size,
-                                  (chunk_index + 1) * chunk_size)
+    os << ((i == 0) ? fmt::format(R"(<td>{} [{}, {}) {}<br>{}</td>)", chunk_index, chunk_index * chunk_size,
+                                  (chunk_index + 1) * chunk_size, chunk.slices_size(),
+                                  utils::FormatMsTime(chunk.last_compaction_time_ms()))
                     : fmt::format(R"(<td>{}</td>)", chunk_index));
 
     os << fmt::format(R"(<td>{}</td>)", chunk.version());
@@ -1565,14 +1566,15 @@ static void RenderChunksPage(Ino ino, const std::vector<ChunkEntry>& chunks, but
   os << fmt::format(R"(<h3>Chunk [{}]</h3>)", chunks.size());
   if (!chunks.empty()) {
     const auto& chunk = chunks.at(0);
-    os << fmt::format(R"(<h5>ChunkSize: {}MB BlockSize: {}KB LastCompactTime: {}</h5>)",
-                      chunk.chunk_size() / (1024 * 1024), chunk.block_size() / 1024,
-                      utils::FormatMsTime(chunk.last_compaction_time_ms()));
+    uint32_t slice_count = 0;
+    for (const auto& chunk : chunks) slice_count += chunk.slices_size();
+    os << fmt::format(R"(<h5>ChunkSize: {}MB BlockSize: {}KB SliceCount: {}</h5>)", chunk.chunk_size() / (1024 * 1024),
+                      chunk.block_size() / 1024, slice_count);
   }
   os << R"(<table class="gridtable sortable" border=1>)";
   os << "<tr>";
   os << "<th>No.</th>";
-  os << "<th>Index</th>";
+  os << "<th>Index<div>index range slices compact-time</div></th>";
   os << "<th>Version</th>";
   os << "<th>Range(byte)</th>";
   os << "<th>Slice<div>id range len size zero</div></th>";

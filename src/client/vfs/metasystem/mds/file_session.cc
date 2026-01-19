@@ -25,8 +25,6 @@ namespace client {
 namespace vfs {
 namespace meta {
 
-FileSession::FileSession(Ino ino) : ino_(ino), chunk_set_(ino) {}
-
 std::string FileSession::GetSessionID(uint64_t fh) {
   utils::ReadLockGuard lk(lock_);
 
@@ -40,6 +38,7 @@ void FileSession::AddSession(uint64_t fh, const std::string& session_id) {
   session_id_map_[fh] = session_id;
 
   IncRef();
+  chunk_set_->RefreshLastActiveTime();
 }
 
 void FileSession::DeleteSession(uint64_t fh) {
@@ -62,11 +61,6 @@ bool FileSession::Dump(Json::Value& value) {
     session_id_map.append(item);
   }
   value["session_id_map"] = session_id_map;
-
-  // dump chunk_set_
-  Json::Value chunk_set_value = Json::objectValue;
-  chunk_set_.Dump(chunk_set_value);
-  value["chunk_set"] = chunk_set_value;
 
   return true;
 }
@@ -98,9 +92,6 @@ bool FileSession::Load(const Json::Value& value) {
     }
   }
 
-  // load chunk_mutation_map
-  if (!chunk_set_.Load(value["chunk_set"])) return false;
-
   return true;
 }
 
@@ -122,7 +113,8 @@ FileSessionSPtr FileSessionMap::Put(Ino ino, uint64_t fh,
           file_session = it->second;
           file_session->AddSession(fh, session_id);
         } else {
-          file_session = FileSession::New(ino);
+          file_session =
+              FileSession::New(ino, chunk_cache_.GetOrCreateChunkSet(ino));
           file_session->AddSession(fh, session_id);
           map[ino] = file_session;
         }
@@ -250,7 +242,8 @@ bool FileSessionMap::Load(const Json::Value& value) {
     for (const auto& item : file_sessions) {
       Ino ino = item["ino"].asUInt64();
 
-      auto file_session = FileSession::New(ino);
+      auto file_session =
+          FileSession::New(ino, chunk_cache_.GetOrCreateChunkSet(ino));
       CHECK(file_session->Load(item))
           << fmt::format("load file session fail, ino({}).", ino);
 

@@ -63,7 +63,7 @@ class ParentMemo {
   using Map = absl::flat_hash_map<Ino, Entry>;
 
   constexpr static size_t kShardNum = 32;
-  utils::Shards<Map, kShardNum> ino_map_;
+  utils::Shards<Map, kShardNum> shard_map_;
 };
 
 }  // namespace meta

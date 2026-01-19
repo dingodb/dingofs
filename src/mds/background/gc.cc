@@ -58,6 +58,9 @@ DEFINE_validator(mds_gc_filesession_enable, brpc::PassValidate);
 DEFINE_bool(mds_gc_delfs_enable, true, "gc delfs enable");
 DEFINE_validator(mds_gc_delfs_enable, brpc::PassValidate);
 
+DEFINE_uint32(mds_gc_delslice_reserve_time_s, 120, "gc del slice reserve time");
+DEFINE_validator(mds_gc_delslice_reserve_time_s, brpc::PassValidate);
+
 DEFINE_uint32(mds_gc_delfile_reserve_time_s, 600, "gc del file reserve time");
 DEFINE_validator(mds_gc_delfile_reserve_time_s, brpc::PassValidate);
 
@@ -515,6 +518,8 @@ bool GcProcessor::HasFileSession(uint32_t fs_id, Ino ino) {
 void GcProcessor::ScanDelSlice(const FsInfoEntry& fs_info) {
   const uint32_t fs_id = fs_info.fs_id();
 
+  const uint64_t now_s = utils::Timestamp();
+
   Trace trace;
   uint32_t count = 0, exec_count = 0;
   ScanDelSliceOperation operation(trace, fs_id, [&](const std::string& key, const std::string& value) -> bool {
@@ -526,6 +531,11 @@ void GcProcessor::ScanDelSlice(const FsInfoEntry& fs_info) {
     MetaCodec::DecodeDelSliceKey(key, fs_id, ino, chunk_index, time_ns);
     CHECK(fs_id > 0) << "invalid fs id.";
     CHECK(ino > 0) << "invalid ino.";
+
+    // check reserve time
+    if ((time_ns / 1000000000ULL + FLAGS_mds_gc_delslice_reserve_time_s) > now_s) {
+      return true;
+    }
 
     // check already exist task
     if (task_memo_->Exist(key)) {

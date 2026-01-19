@@ -66,6 +66,7 @@ DECLARE_uint32(fuse_check_alive_retry_interval_ms);
 DECLARE_bool(vfs_meta_access_logging);
 DECLARE_int64(vfs_meta_access_log_threshold_us);
 DECLARE_uint64(vfs_meta_memo_expired_s);
+DECLARE_uint64(vfs_meta_chunk_cache_expired_s);
 DECLARE_uint64(vfs_meta_inode_cache_expired_s);
 
 // vfs read

@@ -24,7 +24,6 @@
 #include "client/vfs/metasystem/mds/chunk.h"
 #include "client/vfs/vfs_meta.h"
 #include "json/value.h"
-#include "mds/filesystem/fs_info.h"
 #include "utils/concurrent/concurrent.h"
 #include "utils/shards.h"
 
@@ -33,9 +32,6 @@ namespace client {
 namespace vfs {
 namespace meta {
 
-struct ChunkMutation;
-using ChunkMutationSPtr = std::shared_ptr<ChunkMutation>;
-
 class FileSession;
 using FileSessionSPtr = std::shared_ptr<FileSession>;
 
@@ -43,17 +39,18 @@ class FileSessionMap;
 
 class FileSession {
  public:
-  FileSession(Ino ino);
+  FileSession(Ino ino, ChunkSetSPtr& chunk_set)
+      : ino_(ino), chunk_set_(chunk_set) {}
   ~FileSession() = default;
 
-  static FileSessionSPtr New(Ino ino) {
-    return std::make_shared<FileSession>(ino);
+  static FileSessionSPtr New(Ino ino, ChunkSetSPtr chunk_set) {
+    return std::make_shared<FileSession>(ino, chunk_set);
   }
 
   Ino GetIno() const { return ino_; }
   std::string GetSessionID(uint64_t fh);
 
-  ChunkSet& GetChunkSet() { return chunk_set_; }
+  ChunkSetSPtr& GetChunkSet() { return chunk_set_; }
 
   uint32_t IncRef() { return ref_count_.fetch_add(1) + 1; }
   uint32_t DecRef() { return ref_count_.fetch_sub(1) - 1; }
@@ -77,13 +74,13 @@ class FileSession {
   // fh -> session_id
   absl::flat_hash_map<uint64_t, std::string> session_id_map_;
 
-  ChunkSet chunk_set_;
+  ChunkSetSPtr chunk_set_;
 };
 
 // used by open file
 class FileSessionMap {
  public:
-  FileSessionMap() = default;
+  FileSessionMap(ChunkCache& chunk_cache) : chunk_cache_(chunk_cache) {}
   ~FileSessionMap() = default;
 
   FileSessionSPtr Put(Ino ino, uint64_t fh, const std::string& session_id);
@@ -100,6 +97,8 @@ class FileSessionMap {
 
  private:
   void Put(FileSessionSPtr);
+
+  ChunkCache& chunk_cache_;
 
   using Map = absl::btree_map<Ino, FileSessionSPtr>;
 

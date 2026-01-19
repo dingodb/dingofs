@@ -31,6 +31,8 @@
 #include "mds/common/synchronization.h"
 #include "mds/common/type.h"
 #include "utils/concurrent/concurrent.h"
+#include "utils/shards.h"
+#include "utils/time.h"
 
 namespace dingofs {
 namespace client {
@@ -89,7 +91,9 @@ class Chunk {
   Ino GetIno() const { return ino_; }
   uint32_t GetIndex() const { return index_; }
 
-  void Put(const ChunkEntry& chunk);
+  bool Put(const ChunkEntry& chunk);
+  bool Compact(uint32_t start_pos, uint64_t start_slice_id, uint32_t end_pos,
+               uint64_t end_slice_id, const std::vector<Slice>& new_slices);
   void AppendSlice(const std::vector<Slice>& slices);
 
   bool IsCompleted();
@@ -102,7 +106,7 @@ class Chunk {
   Status IsNeedCompaction(bool check_interval = true);
 
   uint64_t GetVersion();
-  std::vector<Slice> GetAllSlice();
+  std::vector<Slice> GetAllSlice(uint64_t& version);
   std::vector<Slice> GetCommitedSlice(uint64_t& version);
 
   // output json format string
@@ -230,10 +234,12 @@ class CommitTask {
 // chunk set per file
 class ChunkSet {
  public:
-  ChunkSet(Ino ino) : ino_(ino) {}
+  ChunkSet(Ino ino) : ino_(ino) { RefreshLastActiveTime(); }
   ~ChunkSet() = default;
 
   static ChunkSetSPtr New(Ino ino) { return std::make_shared<ChunkSet>(ino); }
+
+  Ino GetIno() const { return ino_; }
 
   void AddWriteMemo(uint64_t offset, uint64_t size);
   uint64_t GetLength();
@@ -259,6 +265,13 @@ class ChunkSet {
   uint64_t GetVersion(uint32_t index);
   std::vector<std::pair<uint32_t, uint64_t>> GetAllVersion();
 
+  uint64_t LastActiveTimeS() const {
+    return last_active_s_.load(std::memory_order_relaxed);
+  }
+  void RefreshLastActiveTime() {
+    last_active_s_.store(utils::Timestamp(), std::memory_order_relaxed);
+  }
+
   // output json format string
   bool Dump(Json::Value& value);
   bool Load(const Json::Value& value);
@@ -278,7 +291,32 @@ class ChunkSet {
 
   std::list<CommitTaskSPtr> commit_task_list_;
 
-  std::atomic<uint64_t> last_commit_time_ms_{0};
+  std::atomic<uint64_t> last_commit_ms_{0};
+
+  std::atomic<uint64_t> last_active_s_{0};
+};
+
+// all file chunk cache
+class ChunkCache {
+ public:
+  ChunkCache() = default;
+  ~ChunkCache() = default;
+
+  ChunkSetSPtr GetOrCreateChunkSet(Ino ino);
+
+  size_t Size();
+
+  void Clear();
+
+  void CleanExpired(uint64_t expire_s);
+
+  bool Dump(Json::Value& value);
+
+ private:
+  using Map = absl::flat_hash_map<Ino, ChunkSetSPtr>;
+
+  constexpr static size_t kShardNum = 32;
+  utils::Shards<Map, kShardNum> shard_map_;
 };
 
 }  // namespace meta

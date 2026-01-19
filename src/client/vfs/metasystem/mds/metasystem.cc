@@ -132,6 +132,7 @@ MDSMetaSystem::MDSMetaSystem(mds::FsInfoEntry fs_info_entry,
       mds_client_(client_id, fs_info_, std::move(rpc), trace_manager),
       inode_cache_(fs_info_.GetFsId()),
       id_cache_(kSliceIdCacheName, mds_client_),
+      file_session_map_(chunk_cache_),
       batch_processor_(mds_client_),
       compactor_(compactor) {}
 
@@ -366,6 +367,12 @@ void MDSMetaSystem::CleanExpiredChunkMemo() {
   chunk_memo_.ForgetExpired(expired_time_s);
 }
 
+void MDSMetaSystem::CleanExpiredChunkCache() {
+  uint64_t expired_time_s =
+      utils::Timestamp() - FLAGS_vfs_meta_chunk_cache_expired_s;
+  chunk_cache_.CleanExpired(expired_time_s);
+}
+
 void MDSMetaSystem::CleanExpiredInodeCache() {
   uint64_t expired_time_s =
       utils::Timestamp() - FLAGS_vfs_meta_inode_cache_expired_s;
@@ -560,8 +567,9 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
 
   // add file session and chunk
   auto file_session = file_session_map_.Put(ino, fh, session_id);
+  auto& chunk_set = file_session->GetChunkSet();
   if (is_prefetch_chunk && !chunks.empty()) {
-    file_session->GetChunkSet().Put(chunks);
+    chunk_set->Put(chunks);
   }
 
   if (flags & O_TRUNC) chunk_memo_.Forget(ino);
@@ -655,9 +663,9 @@ Status MDSMetaSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
   // take from cache
   auto file_session = file_session_map_.GetSession(ino);
   if (file_session != nullptr) {
-    auto chunk = file_session->GetChunkSet().Get(index);
+    auto chunk = file_session->GetChunkSet()->Get(index);
     if (chunk != nullptr && chunk->IsCompleted()) {
-      *slices = chunk->GetAllSlice();
+      *slices = chunk->GetAllSlice(version);
       // ctx->hit_cache = true;
 
       LOG(INFO) << fmt::format(
@@ -691,7 +699,7 @@ Status MDSMetaSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
   }
 
   // update cache
-  if (file_session != nullptr) file_session->GetChunkSet().Put(chunks);
+  if (file_session != nullptr) file_session->GetChunkSet()->Put(chunks);
 
   const auto& chunk_entry = chunks.front();
   for (const auto& slice : chunk_entry.slices()) {
@@ -735,13 +743,10 @@ Status MDSMetaSystem::AsyncWriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
   LOG(INFO) << fmt::format("[meta.fs.{}.{}.{}] async writeslice, slices({}).",
                            ino, fh, index, Helper::ToString(slices));
 
-  auto file_session = file_session_map_.GetSession(ino);
-  CHECK(file_session != nullptr)
-      << fmt::format("file session is nullptr, ino({}) fh({}).", ino, fh);
+  auto chunk_set = chunk_cache_.GetOrCreateChunkSet(ino);
+  chunk_set->Append(index, slices);
 
-  file_session->GetChunkSet().Append(index, slices);
-
-  AsyncFlushSlice(ctx, file_session, false, false);
+  AsyncFlushSlice(ctx, chunk_set, false, false);
 
   done(Status::OK());
 
@@ -759,7 +764,7 @@ Status MDSMetaSystem::Write(ContextSPtr, Ino ino, uint64_t offset,
   LOG(INFO) << fmt::format("[meta.fs.{}.{}] write, offset({}) size({}).", ino,
                            fh, offset, size);
 
-  file_session->GetChunkSet().AddWriteMemo(offset, size);
+  file_session->GetChunkSet()->AddWriteMemo(offset, size);
 
   // update last modify time
   modify_time_memo_.Remember(ino);
@@ -1155,7 +1160,7 @@ InodeSPtr MDSMetaSystem::GetInodeFromCache(Ino ino) {
 
 Status MDSMetaSystem::SetInodeLength(ContextSPtr ctx,
                                      FileSessionSPtr file_session, Ino ino) {
-  uint64_t length = file_session->GetChunkSet().GetLength();
+  uint64_t length = file_session->GetChunkSet()->GetLength();
   auto inode = inode_cache_.Get(ino);
   if (inode != nullptr && length <= inode->Length()) return Status::OK();
 
@@ -1188,17 +1193,16 @@ Status MDSMetaSystem::SetInodeLength(ContextSPtr ctx,
   return Status::OK();
 }
 
-void MDSMetaSystem::LaunchWriteSlice(ContextSPtr& ctx,
-                                     FileSessionSPtr file_session,
+void MDSMetaSystem::LaunchWriteSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
                                      CommitTaskSPtr task) {
-  Ino ino = file_session->GetIno();
+  Ino ino = chunk_set->GetIno();
 
   LOG(INFO) << fmt::format("[meta.fs.{}] launch write slice {}.", ino,
                            task->Describe());
 
   auto operation = std::make_shared<WriteSliceOperation>(
       ctx, ino, task,
-      [this, file_session, ino](
+      [this, chunk_set, ino](
           const Status& status, CommitTaskSPtr task,
           const std::vector<mds::ChunkDescriptor>& chunk_descriptors) {
         task->SetDone(status);
@@ -1208,9 +1212,8 @@ void MDSMetaSystem::LaunchWriteSlice(ContextSPtr& ctx,
               "[meta.fs.{}] flush delta slice done, task({}) status({}).", ino,
               task->TaskID(), status.ToString());
 
-          auto& chunk_set = file_session->GetChunkSet();
-          chunk_set.DeleteCommitTask(task->TaskID());
-          chunk_set.MarkCommited(chunk_descriptors);
+          chunk_set->DeleteCommitTask(task->TaskID());
+          chunk_set->MarkCommited(chunk_descriptors);
 
           chunk_memo_.Remember(ino, chunk_descriptors);
 
@@ -1228,21 +1231,19 @@ void MDSMetaSystem::LaunchWriteSlice(ContextSPtr& ctx,
   }
 }
 
-void MDSMetaSystem::AsyncFlushSlice(ContextSPtr& ctx,
-                                    FileSessionSPtr file_session, bool is_force,
-                                    bool is_wait) {
-  Ino ino = file_session->GetIno();
-  auto& chunk_set = file_session->GetChunkSet();
+void MDSMetaSystem::AsyncFlushSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
+                                    bool is_force, bool is_wait) {
+  Ino ino = chunk_set->GetIno();
 
-  uint32_t new_task_count = chunk_set.TryCommitSlice(is_force);
+  uint32_t new_task_count = chunk_set->TryCommitSlice(is_force);
   if (new_task_count == 0) return;
 
   uint32_t launched_count = 0;
-  auto tasks = chunk_set.ListCommitTask();
+  auto tasks = chunk_set->ListCommitTask();
   for (auto& task : tasks) {
     if (task->MaybeRun()) {
       ++launched_count;
-      LaunchWriteSlice(ctx, file_session, task);
+      LaunchWriteSlice(ctx, chunk_set, task);
     }
   }
 
@@ -1256,7 +1257,7 @@ void MDSMetaSystem::AsyncFlushSlice(ContextSPtr& ctx,
 
   if (FLAGS_vfs_meta_compact_chunk_enable) {
     // check whether need compact chunk
-    auto chunks = chunk_set.GetAll();
+    auto chunks = chunk_set->GetAll();
     for (auto& chunk : chunks) {
       auto status = chunk->IsNeedCompaction();
       if (status.ok()) {
@@ -1281,9 +1282,9 @@ Status MDSMetaSystem::FlushSlice(ContextSPtr ctx, Ino ino) {
   LOG(INFO) << fmt::format("[meta.fs.{}] flush all slice.", ino);
 
   do {
-    bool has_stage = chunk_set.HasStage();
-    bool has_committing = chunk_set.HasCommitting();
-    bool has_commit_task = chunk_set.HasCommitTask();
+    bool has_stage = chunk_set->HasStage();
+    bool has_committing = chunk_set->HasCommitting();
+    bool has_commit_task = chunk_set->HasCommitTask();
     if (!has_stage && !has_committing && !has_commit_task) break;
 
     LOG(INFO) << fmt::format(
@@ -1291,7 +1292,7 @@ Status MDSMetaSystem::FlushSlice(ContextSPtr ctx, Ino ino) {
         "has_commit_task({}).",
         ino, has_stage, has_committing, has_commit_task);
 
-    AsyncFlushSlice(ctx, file_session, true, true);
+    AsyncFlushSlice(ctx, chunk_set, true, true);
 
   } while (true);
 
@@ -1345,15 +1346,15 @@ Status MDSMetaSystem::CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
 bool MDSMetaSystem::CorrectAttrLength(Attr& attr, const std::string& caller) {
   auto file_session = file_session_map_.GetSession(attr.ino);
   if (file_session != nullptr) {
-    auto& chunk_set = file_session->GetChunkSet();
-    uint64_t write_memo_length = chunk_set.GetLength();
+    auto chunk_set = file_session->GetChunkSet();
+    uint64_t write_memo_length = chunk_set->GetLength();
     if (write_memo_length > attr.length) {
       LOG(INFO) << fmt::format("[meta.fs.{}] correct length, caller({}).",
                                attr.ino, caller);
 
       attr.length = write_memo_length;
 
-      uint64_t time_ns = chunk_set.GetLastWriteTimeNs();
+      uint64_t time_ns = chunk_set->GetLastWriteTimeNs();
       attr.ctime = std::max(attr.ctime, time_ns);
       attr.mtime = std::max(attr.mtime, time_ns);
 

@@ -147,6 +147,9 @@ std::string Status::ToString() const {
       case kCacheFull:
         type = "CacheFull";
         break;
+      case kNotFit:
+        type = "NotFit";
+        break;
       default:
         type = std::to_string(code_).c_str();
         LOG(ERROR) << fmt::format("Unknown code({}):", static_cast<int>(code_));

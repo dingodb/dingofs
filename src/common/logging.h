@@ -67,6 +67,8 @@ class Logger {
 
   static void ChangeGlogLevel(const std::string& level);
   static void ChangeGlogLevel(enum LogLevel level, uint32_t verbose);
+
+  static void FlushLogs();
 };
 
 }  // namespace dingofs

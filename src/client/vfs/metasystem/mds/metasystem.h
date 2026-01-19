@@ -23,6 +23,7 @@
 #include "client/vfs/common/client_id.h"
 #include "client/vfs/compaction/compactor.h"
 #include "client/vfs/metasystem/mds/batch_processor.h"
+#include "client/vfs/metasystem/mds/chunk.h"
 #include "client/vfs/metasystem/mds/chunk_memo.h"
 #include "client/vfs/metasystem/mds/compact.h"
 #include "client/vfs/metasystem/mds/dir_iterator.h"
@@ -167,6 +168,7 @@ class MDSMetaSystem : public vfs::MetaSystem {
   void Heartbeat();
   void CleanExpiredModifyTimeMemo();
   void CleanExpiredChunkMemo();
+  void CleanExpiredChunkCache();
   void CleanExpiredInodeCache();
 
   bool InitCrontab();
@@ -178,11 +180,11 @@ class MDSMetaSystem : public vfs::MetaSystem {
 
   // chunk cache
   Status SetInodeLength(ContextSPtr ctx, FileSessionSPtr file_session, Ino ino);
-  void LaunchWriteSlice(ContextSPtr& ctx, FileSessionSPtr file_session,
+  void LaunchWriteSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
                         CommitTaskSPtr task);
   // async flush batch slices of single file
-  void AsyncFlushSlice(ContextSPtr& ctx, FileSessionSPtr file_session,
-                       bool is_force, bool is_wait);
+  void AsyncFlushSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set, bool is_force,
+                       bool is_wait);
   // flush slices of single file
   Status FlushSlice(ContextSPtr ctx, Ino ino);
   // flush slices of all files
@@ -207,6 +209,8 @@ class MDSMetaSystem : public vfs::MetaSystem {
   MDSClient mds_client_;
 
   ModifyTimeMemo modify_time_memo_;
+
+  ChunkCache chunk_cache_;
 
   ChunkMemo chunk_memo_;
 

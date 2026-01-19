@@ -51,8 +51,6 @@ DEFINE_validator(mds_txn_max_retry_times, brpc::PassValidate);
 DEFINE_uint32(mds_store_operation_merge_delay_us, 10, "merge operation delay us.");
 DEFINE_validator(mds_store_operation_merge_delay_us, brpc::PassValidate);
 
-DECLARE_uint32(mds_compact_chunk_interval_ms);
-
 static const uint32_t kOpNameBufInitSize = 128;
 static const uint32_t kCleanCompactedSliceIntervalS = 1200;  // 20 minutes
 
@@ -1699,11 +1697,11 @@ Status CompactChunkOperation::Run(TxnUPtr& txn) {
   const auto& slices = chunk.slices();
   if (slices.at(param_.start_pos).id() != param_.start_slice_id) {
     return Status(pb::error::EILLEGAL_PARAMTETER,
-                  fmt::format("not match start slice id,{}", slices.at(param_.start_pos).id()));
+                  fmt::format("not match start slice id({})", slices.at(param_.start_pos).id()));
   }
   if (slices.at(param_.end_pos).id() != param_.end_slice_id) {
     return Status(pb::error::EILLEGAL_PARAMTETER,
-                  fmt::format("not match end slice id,{}", slices.at(param_.end_pos).id()));
+                  fmt::format("not match end slice id({})", slices.at(param_.end_pos).id()));
   }
 
   // generate trash slice list
@@ -1748,6 +1746,14 @@ Status CompactChunkOperation::Run(TxnUPtr& txn) {
   }
 
   chunk.mutable_slices()->DeleteSubrange(pos, chunk.slices_size() - pos);
+  chunk.set_last_compaction_time_ms(utils::TimestampMs());
+  // record compacted slices
+  auto* compacted_slices = chunk.add_compacted_slices();
+  compacted_slices->set_time_ms(utils::TimestampMs());
+  for (const auto& slice : trash_slice_list.slices()) {
+    compacted_slices->add_slice_ids(slice.slice_id());
+  }
+
   chunk.set_version(chunk.version() + 1);
 
   LOG(INFO) << fmt::format(
@@ -1758,7 +1764,7 @@ Status CompactChunkOperation::Run(TxnUPtr& txn) {
   txn->Put(chunk_key, MetaCodec::EncodeChunkValue(chunk));
 
   // save trash slice list
-  txn->Put(MetaCodec::EncodeDelSliceKey(fs_id, ino_, chunk.index(), utils::TimestampNs()),
+  txn->Put(MetaCodec::EncodeDelSliceKey(fs_id, ino_, chunk.index(), GetTime()),
            MetaCodec::EncodeDelSliceValue(trash_slice_list));
 
   result_.chunk = chunk;

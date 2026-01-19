@@ -147,4 +147,6 @@ void Logger::ChangeGlogLevel(enum LogLevel level, uint32_t verbose) {
   FLAGS_v = verbose;
 }
 
+void Logger::FlushLogs() { google::FlushLogFiles(google::INFO); }
+
 }  // namespace dingofs

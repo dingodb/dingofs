@@ -222,8 +222,6 @@ Status VFSHubImpl::Start(bool upgrade) {
     DINGOFS_RETURN_NOT_OK(warmup_manager_->Start(FLAGS_vfs_warmup_threads));
   }
 
-  // compactor_ = std::make_unique<Compactor>(this);
-
   started_.store(true, std::memory_order_relaxed);
 
   return Status::OK();

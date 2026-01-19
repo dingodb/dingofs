@@ -31,9 +31,9 @@ DEFINE_bool(compact_worker_use_pthread, false, "compact worker use pthread");
 
 void CompactChunkTask::Run() {
   auto status = Compact();
-  if (!status.ok()) {
+  if (!status.ok() && !status.IsNotFit()) {
     LOG(ERROR) << fmt::format(
-        "[meta.fs.{}.{}.{}] compact chunk fail, status({}).", ino_,
+        "[meta.compact.{}.{}.{}] compact chunk fail, status({}).", ino_,
         chunk_->GetIndex(), Id(), status.ToString());
   }
 
@@ -78,14 +78,19 @@ Status CompactChunkTask::Compact() {
                                     chunk_entry);
   if (!status.ok()) return status;
 
-  chunk_->Put(chunk_entry);
+  bool extra_local_compact = false;
+  if (!chunk_->Put(chunk_entry)) {
+    extra_local_compact =
+        chunk_->Compact(param.start_pos, param.start_slice_id, param.end_pos,
+                        param.end_slice_id, new_slices);
+  }
 
   LOG(INFO) << fmt::format(
       "[meta.compact.{}.{}.{}] do compact chunk finish, version({}->{}) "
-      "old_slice({}) new_slices({}) final_slices({}).",
+      "old_slice({}) new_slices({}) final_slices({}) extra({}).",
       ino_, chunk_index, Id(), version, chunk_entry.version(),
       old_slices.size(), Helper::ToString(new_slices),
-      chunk_entry.slices_size());
+      chunk_entry.slices_size(), extra_local_compact);
 
   return Status::OK();
 }

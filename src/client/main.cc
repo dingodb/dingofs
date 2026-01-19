@@ -55,6 +55,9 @@ static void HandleSignal(int sig) {
     fuse_server->SessionUnmount();
     CHECK(raise(sig) == 0);
   }
+
+  // flush log
+  dingofs::Logger::FlushLogs();
 }
 
 static int InstallSignal(int sig, void (*handler)(int)) {
