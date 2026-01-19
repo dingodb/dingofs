@@ -52,7 +52,7 @@ bool IdCache::GenID(uint32_t num, uint64_t& id) {
     next_id_ += num;
   }
 
-  LOG(INFO) << fmt::format("[meta.idcache.{}] alloc id({}) num({}).", name_, id,
+  LOG_DEBUG << fmt::format("[meta.idcache.{}] alloc id({}) num({}).", name_, id,
                            num);
 
   return true;

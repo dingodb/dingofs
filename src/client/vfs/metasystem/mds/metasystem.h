@@ -77,8 +77,10 @@ class MDSMetaSystem : public vfs::MetaSystem {
 
   void Stop(bool upgrade) override;
 
+  // dump state for upgrade
   bool Dump(ContextSPtr ctx, Json::Value& value) override;
 
+  // dump state for show
   bool Dump(const DumpOption& options, Json::Value& value) override;
 
   bool Load(ContextSPtr ctx, const Json::Value& value) override;
@@ -179,7 +181,7 @@ class MDSMetaSystem : public vfs::MetaSystem {
   InodeSPtr GetInodeFromCache(Ino ino);
 
   // chunk cache
-  Status SetInodeLength(ContextSPtr ctx, FileSessionSPtr file_session, Ino ino);
+  Status SetInodeLength(ContextSPtr ctx, Ino ino, ChunkSetSPtr& chunk_set);
   void LaunchWriteSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
                         CommitTaskSPtr task);
   // async flush batch slices of single file

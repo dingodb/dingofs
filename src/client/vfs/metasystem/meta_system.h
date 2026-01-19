@@ -32,16 +32,23 @@ namespace vfs {
 
 struct DumpOption {
   Ino ino{0};
+  uint32_t chunk_index{0};
+
   bool dir_iterator{false};
   bool file_session{false};
   bool handler{false};
   bool parent_memo{false};
   bool modify_time_memo{false};
   bool chunk_memo{false};
+  bool chunk_cache{false};
+  bool chunk_set{false};
+  bool chunk{false};
   bool mds_router{false};
   bool inode_cache{false};
   bool rpc{false};
   bool mds_discovery{false};
+
+  bool is_summary{false};
 };
 
 class MetaSystem {

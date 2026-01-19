@@ -13,7 +13,6 @@
 
 #include "mds/filesystem/store_operation.h"
 
-#include <bthread/types.h>
 #include <fcntl.h>
 
 #include <algorithm>
@@ -25,11 +24,11 @@
 
 #include "brpc/reloadable_flags.h"
 #include "bthread/bthread.h"
+#include "bthread/types.h"
 #include "common/const.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/format.h"
-#include "gflags/gflags_declare.h"
 #include "glog/logging.h"
 #include "mds/common/codec.h"
 #include "mds/common/helper.h"
@@ -48,15 +47,26 @@ DEFINE_validator(mds_store_operation_batch_size, brpc::PassValidate);
 DEFINE_uint32(mds_txn_max_retry_times, 5, "txn max retry times.");
 DEFINE_validator(mds_txn_max_retry_times, brpc::PassValidate);
 
+DEFINE_uint32(mds_txn_timeout_ms, 8000, "txn timeout ms.");
+DEFINE_validator(mds_txn_timeout_ms, brpc::PassValidate);
+
 DEFINE_uint32(mds_store_operation_merge_delay_us, 10, "merge operation delay us.");
 DEFINE_validator(mds_store_operation_merge_delay_us, brpc::PassValidate);
 
 static const uint32_t kOpNameBufInitSize = 128;
-static const uint32_t kCleanCompactedSliceIntervalS = 1200;  // 20 minutes
+static const uint32_t kCleanCompactedSliceIntervalS = 180;  // 3 minutes
 
 static uint32_t CalWaitTimeUs(int retry) {
   // exponential backoff
   return Helper::GenerateRealRandomInteger(1000, 5000) * (1 << retry);
+}
+
+static bool IsRetry(uint32_t& retry) {
+  if (++retry <= FLAGS_mds_txn_max_retry_times) {
+    bthread_usleep(CalWaitTimeUs(retry));
+    return true;
+  }
+  return false;
 }
 
 static std::string FindValue(const std::vector<KeyValue>& kvs, const std::string& key) {
@@ -2454,7 +2464,6 @@ Status OperationProcessor::RunAlone(Operation* operation) {
         LOG(WARNING) << fmt::format("[operation.{}.{}][{}][{}us] alone run {} lock conflict, retry({}) status({}).",
                                     fs_id, ino, txn_id, once_duration.ElapsedUs(), operation->OpName(), retry,
                                     status.error_str());
-        bthread_usleep(CalWaitTimeUs(retry));
         continue;
       }
       break;
@@ -2474,9 +2483,11 @@ Status OperationProcessor::RunAlone(Operation* operation) {
                                 ino, txn_id, once_duration.ElapsedUs(), operation->OpName(), commit_type, retry,
                                 status.error_str());
 
-    bthread_usleep(CalWaitTimeUs(retry));
+    if (once_duration.ElapsedMs() > FLAGS_mds_txn_timeout_ms) {
+      break;
+    }
 
-  } while (++retry <= FLAGS_mds_txn_max_retry_times);
+  } while (IsRetry(retry));
 
   trace.RecordElapsedTime("store_operate");
 
@@ -2668,7 +2679,6 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
       if (status.error_code() == pb::error::ESTORE_MAYBE_RETRY) {
         LOG(WARNING) << fmt::format("[operation.{}.{}][{}][{}us] batch run {} lock conflict, retry({}) status({}).",
                                     fs_id, ino, txn_id, once_duration.ElapsedUs(), op_names, retry, status.error_str());
-        bthread_usleep(CalWaitTimeUs(retry));
         continue;
       }
       break;
@@ -2707,9 +2717,11 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
         "[operation.{}.{}][{}][{}us] batch run ({}) fail, count({}) txn({}) retry({}) status({}).", fs_id, ino, txn_id,
         once_duration.ElapsedUs(), op_names, count, commit_type, retry, status.error_str());
 
-    bthread_usleep(CalWaitTimeUs(retry));
+    if (once_duration.ElapsedMs() > FLAGS_mds_txn_timeout_ms) {
+      break;
+    }
 
-  } while (++retry <= FLAGS_mds_txn_max_retry_times);
+  } while (IsRetry(retry));
 
   SetElapsedTime(batch_operation, "store_operate");
 

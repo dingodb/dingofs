@@ -31,7 +31,7 @@
 #include "common/version.h"
 #include "fmt/format.h"
 #include "fmt/ranges.h"
-#include "json/json.h"
+#include "json/value.h"
 #include "utils/string.h"
 
 namespace dingofs {
@@ -244,6 +244,9 @@ static void RenderNavigation(butil::IOBufBuilder& os) {
     result += "<br>";
     result += fmt::format(
         R"(<a href="FuseStatService/chunkmemo" target="_blank">chunk memo</a>: show chunk memo info at meta)");
+    result += "<br>";
+    result += fmt::format(
+        R"(<a href="FuseStatService/chunkcache" target="_blank">chunk cache</a>: show chunk cache info at meta)");
     result += "<br>";
     result += fmt::format(
         R"(<a href="FuseStatService/mdsrouter" target="_blank">mds router</a>: show mds router info at meta)");
@@ -696,6 +699,15 @@ static void RenderSingleFileSessionPage(Ino ino, const Json::Value& json_value,
                  os);
 }
 
+static void RenderSingleChunkPage(Ino ino, const Json::Value& json_value,
+                                  butil::IOBufBuilder& os,
+                                  std::string& client_name) {
+  std::string header = fmt::format("Client({}) Chunk({})", client_name, ino);
+
+  RenderJsonPage("dingofs chunk session", header, json_value.toStyledString(),
+                 os);
+}
+
 static void RenderParentMemoPage(const Json::Value& json_value,
                                  butil::IOBufBuilder& os,
                                  std::string& client_name) {
@@ -814,6 +826,201 @@ static void RenderChunkMemoPage(const Json::Value& json_value,
     os << "<td>" << chunk_index << "</td>";
     os << "<td>" << version << "</td>";
     os << "<td>" << utils::FormatNsTime(time_ns) << "</td>";
+
+    os << "</tr>";
+  }
+  os << "</table>\n";
+  os << "</div>";
+
+  os << "<br>";
+}
+
+static void RenderChunkCachePage(const Json::Value& json_value,
+                                 butil::IOBufBuilder& os,
+                                 std::string& client_name) {
+  os << "<!DOCTYPE html><html>";
+
+  os << "<head>" << RenderHead("dingofs chunk cache") << "</head>";
+  os << "<body>";
+  os << fmt::format(
+      R"(<h1 style="text-align:center;">Client({}) Chunk Cache</h1>)",
+      client_name);
+
+  const Json::Value& chunk_cache_value = json_value["chunk_cache"];
+  if (!chunk_cache_value.isArray()) {
+    LOG(ERROR) << "chunk_cache value is not an array.";
+    return;
+  }
+
+  os << R"(<div style="margin:12px;font-size:smaller;">)";
+  os << fmt::format(R"(<h3>Chunk Cache [{}]</h3>)", chunk_cache_value.size());
+  os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
+  os << "<tr>";
+  os << "<th>Ino</th>";
+  os << "<th>WriteMemo<br>last_write_length last_time</th>";
+  os << "<th>ChunkCount</th>";
+  os << "<th>TaskCount</th>";
+  os << "<th>NextTaskId</th>";
+  os << "<th>LastActiveTime</th>";
+  os << "<th>Details</th>";
+  os << "</tr>";
+
+  for (const auto& item : chunk_cache_value) {
+    Ino ino = item["ino"].asUInt64();
+
+    os << "<td>" << ino << "</td>";
+    os << fmt::format(R"(<td>{} {}</td>)", item["last_write_length"].asUInt64(),
+                      utils::FormatNsTime(item["last_time_ns"].asUInt64()));
+    os << "<td>" << item["chunk_count"].asUInt64() << "</td>";
+    os << "<td>" << item["commit_task_count"].asUInt64() << "</td>";
+    os << "<td>" << item["id_generator"].asUInt64() << "</td>";
+
+    os << "<td>" << utils::FormatTime(item["last_active_s"].asUInt64())
+       << "</td>";
+
+    // details
+    os << fmt::format(
+        R"(<td><a href="/FuseStatService/chunkset/{}" target="_blank">details</a></td>)",
+        ino);
+
+    os << "</tr>";
+  }
+  os << "</table>\n";
+  os << "</div>";
+
+  os << "<br>";
+}
+
+static void RenderChunkSetPage(Ino ino, const Json::Value& json_value,
+                               butil::IOBufBuilder& os,
+                               std::string& client_name) {
+  os << "<!DOCTYPE html><html>";
+
+  os << "<head>" << RenderHead("dingofs chunk set") << "</head>";
+  os << "<body>";
+  os << fmt::format(
+      R"(<h1 style="text-align:center;">Client({}) Chunk Set</h1>)",
+      client_name);
+
+  if (!json_value.isObject()) {
+    LOG(ERROR) << "chunk_set value is not an object.";
+    return;
+  }
+
+  // render write memo table
+  os << R"(<div style="margin:12px;font-size:smaller;">)";
+  os << "<h3>Write Memo</h3>";
+  os << fmt::format(R"(<div>last_write_length: {} last_time: {}</div>)",
+                    json_value["last_write_length"].asUInt64(),
+                    utils::FormatNsTime(json_value["last_time_ns"].asUInt64()));
+
+  os << "</div>";
+
+  // render commit task table
+  const auto& commit_tasks_value = json_value["commit_tasks"];
+  os << R"(<div style="margin:12px;font-size:smaller;">)";
+  os << fmt::format(R"(<h3>Commit Task [{}]</h3>)", commit_tasks_value.size());
+  os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
+  os << "<tr>";
+  os << "<th>Id</th>";
+  os << "<th>State</th>";
+  os << "<th>status</th>";
+  os << "<th>retries</th>";
+  os << "<th>Slices<br>count length</th>";
+  os << "</tr>";
+
+  for (const auto& item : commit_tasks_value) {
+    const auto& delta_slices = item["delta_slices"];
+
+    os << "<td>" << item["task_id"].asUInt64() << "</td>";
+    os << "<td>" << item["state"].asUInt64() << "</td>";
+    os << "<td>" << item["status"].asString() << "</td>";
+    os << "<td>" << item["retries"].asUInt64() << "</td>";
+
+    std::string delta_slice_str;
+    for (const auto& delta_slice : delta_slices) {
+      delta_slice_str +=
+          fmt::format("chunk: {}", delta_slice["chunk_index"].asUInt64());
+      delta_slice_str += "<br>";
+      for (const auto& slice : delta_slice["slices"]) {
+        delta_slice_str +=
+            fmt::format("[{} {} {} {} {}]", slice["id"].asUInt64(),
+                        slice["offset"].asUInt64(), slice["length"].asUInt64(),
+                        slice["size"].asUInt64(), slice["is_zero"].asInt());
+        delta_slice_str += "<br>";
+      }
+    }
+
+    os << "<td>" << delta_slice_str << "</td>";
+
+    os << "</tr>";
+  }
+  os << "</table>\n";
+  os << "</div>";
+
+  // render chunk table
+  const auto& chunks_value = json_value["chunks"];
+  os << R"(<div style="margin:12px;font-size:smaller;">)";
+  os << fmt::format(R"(<h3>Chunk [{}]</h3>)", chunks_value.size());
+  os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
+  os << "<tr>";
+  os << "<th>Index</th>";
+  os << "<th>Completed</th>";
+  os << "<th>Version</th>";
+  os << "<th>LastCompactionTime</th>";
+  os << "<th>StageSlices<br>id offset length size is_zero</th>";
+  os << "<th>CommitingSlices<br>id offset length size is_zero</th>";
+  os << "<th>CommitedSlices<br>id offset length size is_zero</th>";
+  os << "<th>Details</th>";
+  os << "</tr>";
+
+  for (const auto& item : chunks_value) {
+    const uint32_t chunk_index = item["index"].asUInt64();
+
+    os << "<td>" << chunk_index << "</td>";
+    os << "<td>" << item["is_completed"].asUInt64() << "</td>";
+    os << "<td>" << item["commited_version"].asUInt64() << "</td>";
+    os << "<td>"
+       << utils::FormatMsTime(item["last_compaction_time_ms"].asUInt64())
+       << "</td>";
+
+    // stage slices
+    std::string stage_slices_str;
+    for (const auto& slice : item["stage_slices"]) {
+      stage_slices_str +=
+          fmt::format("[{} {} {} {} {}]", slice["id"].asUInt64(),
+                      slice["offset"].asUInt64(), slice["length"].asUInt64(),
+                      slice["size"].asUInt64(), slice["is_zero"].asInt());
+      stage_slices_str += "<br>";
+    }
+    os << "<td>" << stage_slices_str << "</td>";
+
+    // commiting slices
+    std::string commiting_slices_str;
+    for (const auto& slice : item["commiting_slices"]) {
+      commiting_slices_str +=
+          fmt::format("[{} {} {} {} {}]", slice["id"].asUInt64(),
+                      slice["offset"].asUInt64(), slice["length"].asUInt64(),
+                      slice["size"].asUInt64(), slice["is_zero"].asInt());
+      commiting_slices_str += "<br>";
+    }
+    os << "<td>" << commiting_slices_str << "</td>";
+
+    // commited slices
+    std::string commited_slices_str;
+    for (const auto& slice : item["commited_slices"]) {
+      commited_slices_str +=
+          fmt::format("[{} {} {} {} {}]", slice["id"].asUInt64(),
+                      slice["offset"].asUInt64(), slice["length"].asUInt64(),
+                      slice["size"].asUInt64(), slice["is_zero"].asInt());
+      commited_slices_str += "<br>";
+    }
+    os << "<td>" << commited_slices_str << "</td>";
+
+    // details link
+    os << fmt::format(
+        R"(<td><a href="/FuseStatService/chunk/{}/{}" target="_blank">details</a></td>)",
+        ino, chunk_index);
 
     os << "</tr>";
   }
@@ -1093,8 +1300,14 @@ void FuseStatServiceImpl::default_method(
 
   LOG(INFO) << fmt::format("FuseStatService path: {}", path);
 
+  auto client_id = vfs_hub_->GetClientId();
+  std::string client_name =
+      fmt::format("{}:{}", client_id.Hostname(), client_id.Port());
+
   std::vector<std::string> params;
   SplitString(path, '/', params);
+
+  LOG(INFO) << fmt::format("FuseStatService params size: {}.", params.size());
 
   // /FuseStatService
   if (params.empty()) {
@@ -1102,9 +1315,6 @@ void FuseStatServiceImpl::default_method(
 
   } else if (params.size() == 1) {
     const std::string& api_name = params[0];
-    auto client_id = vfs_hub_->GetClientId();
-    std::string client_name =
-        fmt::format("{}:{}", client_id.Hostname(), client_id.Port());
 
     Json::Value json_value;
     DumpOption options;
@@ -1138,17 +1348,25 @@ void FuseStatServiceImpl::default_method(
       }
 
     } else if (api_name == "modifytimememo") {
-      // /FuseStatService/parentmemo
+      // /FuseStatService/modifytimememo
       options.modify_time_memo = true;
       if (vfs_hub_->GetMetaSystem().Dump(options, json_value)) {
         RenderModifyTimeMemoPage(json_value, os, client_name);
       }
 
     } else if (api_name == "chunkmemo") {
-      // /FuseStatService/parentmemo
+      // /FuseStatService/chunkmemo
       options.chunk_memo = true;
       if (vfs_hub_->GetMetaSystem().Dump(options, json_value)) {
         RenderChunkMemoPage(json_value, os, client_name);
+      }
+
+    } else if (api_name == "chunkcache") {
+      // /FuseStatService/chunkcache
+      options.chunk_cache = true;
+      options.is_summary = true;
+      if (vfs_hub_->GetMetaSystem().Dump(options, json_value)) {
+        RenderChunkCachePage(json_value, os, client_name);
       }
 
     } else if (api_name == "mdsrouter") {
@@ -1176,22 +1394,51 @@ void FuseStatServiceImpl::default_method(
     }
 
   } else if (params.size() == 2) {
+    LOG(INFO) << "Dump chunkset for ino: ";
+
     const std::string& api_name = params[0];
     const Ino ino = strtoull(params[1].c_str(), nullptr, 10);
 
-    auto client_id = vfs_hub_->GetClientId();
-    std::string client_name =
-        fmt::format("{}:{}", client_id.Hostname(), client_id.Port());
+    DumpOption options;
+    Json::Value json_value;
 
     if (api_name == "filesession") {
       // /FuseStatService/filesession/{ino}
-      DumpOption options;
-      Json::Value json_value;
 
       options.ino = ino;
       options.file_session = true;
       if (vfs_hub_->GetMetaSystem().Dump(options, json_value)) {
         RenderSingleFileSessionPage(ino, json_value, os, client_name);
+      }
+    } else if (api_name == "chunkset") {
+      // /FuseStatService/chunkset/{ino}
+
+      LOG(INFO) << "Dump chunkset for ino: " << ino;
+
+      options.ino = ino;
+      options.chunk_set = true;
+      if (vfs_hub_->GetMetaSystem().Dump(options, json_value)) {
+        RenderChunkSetPage(ino, json_value, os, client_name);
+      }
+    }
+
+  } else if (params.size() == 3) {
+    const std::string& api_name = params[0];
+    const Ino ino = strtoull(params[1].c_str(), nullptr, 10);
+    const uint32_t chunk_index = strtoull(params[2].c_str(), nullptr, 10);
+
+    DumpOption options;
+    Json::Value json_value;
+    if (api_name == "chunk") {
+      // /FuseStatService/chunk/{ino}/{chunk_index}
+      LOG(INFO) << "Dump chunk for ino: " << ino
+                << ", chunk_index: " << chunk_index;
+
+      options.ino = ino;
+      options.chunk_index = chunk_index;
+      options.chunk = true;
+      if (vfs_hub_->GetMetaSystem().Dump(options, json_value)) {
+        RenderSingleChunkPage(ino, json_value, os, client_name);
       }
     }
 

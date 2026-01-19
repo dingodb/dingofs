@@ -35,63 +35,6 @@ static const uint32_t kChunkCommitIntervalMs = 1000;  // milliseconds
 
 static std::atomic<uint64_t> task_id_generator{10000};
 
-void WriteMemo::AddRange(uint64_t offset, uint64_t size) {
-  ranges_.emplace_back(Range{.start = offset, .end = offset + size});
-  last_time_ns_ = utils::TimestampNs();
-}
-
-uint64_t WriteMemo::GetLength() {
-  uint64_t length = 0;
-  for (const auto& range : ranges_) {
-    length = std::max(length, range.end);
-  }
-
-  return length;
-}
-
-// output json format string
-bool WriteMemo::Dump(Json::Value& value) {
-  // dump ranges
-  Json::Value range_items = Json::arrayValue;
-  for (const auto& range : ranges_) {
-    Json::Value range_item;
-    range_item["start"] = range.start;
-    range_item["end"] = range.end;
-    range_items.append(range_item);
-  }
-  value["ranges"] = range_items;
-
-  value["last_time_ns"] = last_time_ns_;
-
-  return true;
-}
-
-bool WriteMemo::Load(const Json::Value& value) {
-  if (value.isNull()) return true;
-  if (!value.isObject()) {
-    LOG(ERROR) << "[meta.filesession] write_memo is not object.";
-    return false;
-  }
-
-  if (!value["ranges"].isNull()) {
-    if (!value["ranges"].isArray()) {
-      LOG(ERROR) << "[meta.filesession] write_memo.ranges is not array.";
-      return false;
-    }
-
-    for (const auto& range_item : value["ranges"]) {
-      Range range;
-      range.start = range_item["start"].asUInt64();
-      range.end = range_item["end"].asUInt64();
-      ranges_.push_back(range);
-    }
-  }
-
-  last_time_ns_ = value["last_time_ns"].asUInt64();
-
-  return true;
-}
-
 bool Chunk::Put(const ChunkEntry& chunk) {
   CHECK(chunk.index() == index_)
       << fmt::format("[meta.chunk.{}.{}] mismatch chunk index({}|{}).", ino_,
@@ -167,24 +110,6 @@ void Chunk::AppendSlice(const std::vector<Slice>& slices) {
   utils::WriteLockGuard guard(lock_);
 
   stage_slices_.insert(stage_slices_.end(), slices.begin(), slices.end());
-}
-
-bool Chunk::IsCompleted() {
-  utils::ReadLockGuard guard(lock_);
-
-  return is_completed_;
-}
-
-bool Chunk::HasStage() {
-  utils::ReadLockGuard guard(lock_);
-
-  return !stage_slices_.empty();
-}
-
-bool Chunk::HasCommitting() {
-  utils::ReadLockGuard guard(lock_);
-
-  return !commiting_slices_.empty();
 }
 
 Status Chunk::IsNeedCompaction(bool check_interval) {
@@ -282,27 +207,36 @@ std::vector<Slice> Chunk::GetCommitedSlice(uint64_t& version) {
 }
 
 // output json format string
-bool Chunk::Dump(Json::Value& value) {
-  Json::Value stage_slices_items = Json::arrayValue;
-  for (const auto& slice : stage_slices_) {
-    stage_slices_items.append(Helper::DumpSlice(slice));
+bool Chunk::Dump(Json::Value& value, bool is_summary) {
+  value["index"] = index_;
+
+  if (is_summary) {
+    value["stage_slices_count"] = stage_slices_.size();
+    value["commiting_slices_count"] = commiting_slices_.size();
+    value["commited_slices_count"] = commited_slices_.size();
+
+  } else {
+    Json::Value stage_slices_items = Json::arrayValue;
+    for (const auto& slice : stage_slices_) {
+      stage_slices_items.append(Helper::DumpSlice(slice));
+    }
+
+    value["stage_slices"] = stage_slices_items;
+
+    Json::Value commiting_slices_items = Json::arrayValue;
+    for (const auto& slice : commiting_slices_) {
+      stage_slices_items.append(Helper::DumpSlice(slice));
+    }
+
+    value["commiting_slices"] = commiting_slices_items;
+
+    Json::Value commited_slices_items = Json::arrayValue;
+    for (const auto& slice : commited_slices_) {
+      commited_slices_items.append(Helper::DumpSlice(slice));
+    }
+
+    value["commited_slices"] = commited_slices_items;
   }
-
-  value["stage_slices"] = stage_slices_items;
-
-  Json::Value commiting_slices_items = Json::arrayValue;
-  for (const auto& slice : commiting_slices_) {
-    stage_slices_items.append(Helper::DumpSlice(slice));
-  }
-
-  value["commiting_slices"] = commiting_slices_items;
-
-  Json::Value commited_slices_items = Json::arrayValue;
-  for (const auto& slice : commited_slices_) {
-    commited_slices_items.append(Helper::DumpSlice(slice));
-  }
-
-  value["commited_slices"] = commited_slices_items;
 
   value["is_completed"] = is_completed_;
   value["commited_version"] = commited_version_;
@@ -404,24 +338,6 @@ bool CommitTask::Load(const Json::Value& value) {
   retries_.store(value["retries"].asUInt());
 
   return true;
-}
-
-void ChunkSet::AddWriteMemo(uint64_t offset, uint64_t size) {
-  utils::WriteLockGuard lk(lock_);
-
-  write_memo_.AddRange(offset, size);
-}
-
-uint64_t ChunkSet::GetLength() {
-  utils::ReadLockGuard lk(lock_);
-
-  return write_memo_.GetLength();
-}
-
-uint64_t ChunkSet::GetLastWriteTimeNs() {
-  utils::ReadLockGuard lk(lock_);
-
-  return write_memo_.LastTimeNs();
 }
 
 void ChunkSet::Append(uint32_t index, const std::vector<Slice>& slices) {
@@ -614,34 +530,39 @@ std::vector<ChunkSPtr> ChunkSet::GetAll() {
 }
 
 // output json format string
-bool ChunkSet::Dump(Json::Value& value) {
+bool ChunkSet::Dump(Json::Value& value, bool is_summary) {
   value["ino"] = ino_;
+  value["last_write_length"] = last_write_length_;
+  value["last_time_ns"] = last_time_ns_;
 
-  // dump write_memo
-  Json::Value write_memo_value = Json::objectValue;
-  write_memo_.Dump(write_memo_value);
-  value["write_memo"] = write_memo_value;
+  if (is_summary) {
+    value["chunk_count"] = chunk_map_.size();
+    value["commit_task_count"] = commit_task_list_.size();
 
-  // dump chunk_map
-  Json::Value chunk_items = Json::arrayValue;
-  for (const auto& [index, chunk] : chunk_map_) {
-    Json::Value chunk_value = Json::objectValue;
-    chunk_value["index"] = index;
-    chunk->Dump(chunk_value);
-    chunk_items.append(chunk_value);
-  }
-  value["chunk_map"] = chunk_items;
+  } else {
+    // dump chunk_map
+    Json::Value chunk_items = Json::arrayValue;
+    for (const auto& [index, chunk] : chunk_map_) {
+      Json::Value chunk_value = Json::objectValue;
+      chunk_value["index"] = index;
+      chunk->Dump(chunk_value);
+      chunk_items.append(chunk_value);
+    }
+    value["chunks"] = chunk_items;
 
-  // dump commit_task_list
-  Json::Value commit_task_list_items = Json::arrayValue;
-  for (const auto& task : commit_task_list_) {
-    Json::Value task_value = Json::objectValue;
-    task->Dump(task_value);
-    commit_task_list_items.append(task_value);
+    // dump commit_task_list
+    Json::Value commit_task_list_items = Json::arrayValue;
+    for (const auto& task : commit_task_list_) {
+      Json::Value task_value = Json::objectValue;
+      task->Dump(task_value);
+      commit_task_list_items.append(task_value);
+    }
+    value["commit_tasks"] = commit_task_list_items;
   }
 
   value["id_generator"] = task_id_generator.load();
-  value["last_commit_time_ms"] = last_commit_ms_.load();
+  value["last_commit_ms"] = last_commit_ms_.load();
+  value["last_active_s"] = last_active_s_.load();
 
   return true;
 }
@@ -653,16 +574,12 @@ bool ChunkSet::Load(const Json::Value& value) {
     return false;
   }
 
-  // load write_memo
-  if (!value["write_memo"].isNull()) {
-    if (!write_memo_.Load(value["write_memo"])) {
-      LOG(ERROR) << "[meta.chunkset] load write_memo fail.";
-      return false;
-    }
-  }
+  // load last_write_length and last_time_ns
+  last_write_length_ = value["last_write_length"].asUInt64();
+  last_time_ns_ = value["last_time_ns"].asUInt64();
 
   // load chunk_map
-  const auto& chunk_map_value = value["chunk_map"];
+  const auto& chunk_map_value = value["chunks"];
   if (!chunk_map_value.isArray()) {
     LOG(ERROR) << "[meta.chunkset] chunk_map is not array.";
     return false;
@@ -679,7 +596,7 @@ bool ChunkSet::Load(const Json::Value& value) {
   }
 
   // load commit_task_list
-  const auto& commit_task_list_value = value["commit_task_list"];
+  const auto& commit_task_list_value = value["commit_tasks"];
   if (!commit_task_list_value.isArray()) {
     LOG(ERROR) << "[meta.chunkset] commit_task_list is not array.";
     return false;
@@ -764,9 +681,8 @@ void ChunkCache::CleanExpired(uint64_t expire_s) {
   });
 }
 
-bool ChunkCache::Dump(Json::Value& value) {
+bool ChunkCache::Dump(Json::Value& value, bool is_summary) {
   std::vector<ChunkSetSPtr> chunksets;
-  ;
   chunksets.reserve(Size());
 
   shard_map_.iterate([&](Map& map) {
@@ -778,14 +694,14 @@ bool ChunkCache::Dump(Json::Value& value) {
   Json::Value items = Json::arrayValue;
   for (auto& chunkset : chunksets) {
     Json::Value item = Json::objectValue;
-    if (!chunkset->Dump(item)) {
+    if (!chunkset->Dump(item, is_summary)) {
       LOG(ERROR) << "[meta.chunkcache] dump chunkset fail.";
       return false;
     }
     items.append(item);
   }
 
-  value["chunkcache"] = items;
+  value["chunk_cache"] = items;
 
   return true;
 }

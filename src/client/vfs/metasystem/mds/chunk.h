@@ -18,6 +18,7 @@
 #include <sys/types.h>
 
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <list>
 #include <memory>
@@ -48,29 +49,6 @@ using ChunkSPtr = std::shared_ptr<Chunk>;
 class ChunkSet;
 using ChunkSetSPtr = std::shared_ptr<ChunkSet>;
 
-class WriteMemo {
- public:
-  WriteMemo() = default;
-  ~WriteMemo() = default;
-
-  void AddRange(uint64_t offset, uint64_t size);
-  uint64_t GetLength();
-  uint64_t LastTimeNs() const { return last_time_ns_; }
-
-  // output json format string
-  bool Dump(Json::Value& value);
-  bool Load(const Json::Value& value);
-
- private:
-  struct Range {
-    uint64_t start{0};
-    uint64_t end{0};  // [start, end)
-  };
-
-  std::vector<Range> ranges_;
-  uint64_t last_time_ns_{0};
-};
-
 class Chunk {
  public:
   Chunk(Ino ino, uint32_t index) : ino_(ino), index_(index) {}
@@ -96,10 +74,20 @@ class Chunk {
                uint64_t end_slice_id, const std::vector<Slice>& new_slices);
   void AppendSlice(const std::vector<Slice>& slices);
 
-  bool IsCompleted();
+  bool IsCompleted() const {
+    utils::ReadLockGuard guard(lock_);
+    return is_completed_;
+  }
 
-  bool HasStage();
-  bool HasCommitting();
+  bool HasStage() const {
+    utils::ReadLockGuard guard(lock_);
+    return !stage_slices_.empty();
+  }
+  bool HasCommitting() const {
+    utils::ReadLockGuard guard(lock_);
+
+    return !commiting_slices_.empty();
+  }
   std::vector<Slice> CommitSlice();
   void MarkCommited(uint64_t version);
 
@@ -110,11 +98,11 @@ class Chunk {
   std::vector<Slice> GetCommitedSlice(uint64_t& version);
 
   // output json format string
-  bool Dump(Json::Value& value);
+  bool Dump(Json::Value& value, bool is_summary = false);
   bool Load(const Json::Value& value);
 
  private:
-  utils::RWLock lock_;
+  mutable utils::RWLock lock_;
 
   const Ino ino_;
   const uint32_t index_{0};
@@ -241,13 +229,36 @@ class ChunkSet {
 
   Ino GetIno() const { return ino_; }
 
-  void AddWriteMemo(uint64_t offset, uint64_t size);
-  uint64_t GetLength();
-  uint64_t GetLastWriteTimeNs();
+  // write memo operations
+  void SetLastWriteLength(uint64_t offset, uint64_t size) {
+    utils::WriteLockGuard lk(lock_);
+    last_write_length_ = std::max(last_write_length_, offset + size);
+    last_time_ns_ = utils::TimestampNs();
+  }
+  void ResetLastWriteLength() {
+    utils::WriteLockGuard lk(lock_);
+    last_write_length_ = 0;
+  }
 
+  uint64_t GetLastWriteLength() const {
+    utils::ReadLockGuard guard(lock_);
+    return last_write_length_;
+  }
+  uint64_t GetLastWriteTimeNs() const {
+    utils::ReadLockGuard guard(lock_);
+    return last_time_ns_;
+  }
+
+  // chunk operations
   void Append(uint32_t index, const std::vector<Slice>& slices);
   void Put(const std::vector<ChunkEntry>& chunks);
 
+  size_t GetChunkSize() const {
+    utils::ReadLockGuard guard(lock_);
+    return chunk_map_.size();
+  }
+
+  // task operations
   bool HasStage();
   bool HasCommitting();
 
@@ -257,6 +268,11 @@ class ChunkSet {
   bool HasCommitTask();
   void DeleteCommitTask(uint64_t task_id);
   std::vector<CommitTaskSPtr> ListCommitTask();
+
+  size_t GetCommitTaskSize() const {
+    utils::ReadLockGuard guard(lock_);
+    return commit_task_list_.size();
+  }
 
   bool Exist(uint32_t index);
   ChunkSPtr Get(uint32_t index);
@@ -273,7 +289,7 @@ class ChunkSet {
   }
 
   // output json format string
-  bool Dump(Json::Value& value);
+  bool Dump(Json::Value& valuem, bool is_summary = false);
   bool Load(const Json::Value& value);
 
  private:
@@ -282,9 +298,10 @@ class ChunkSet {
 
   const Ino ino_;
 
-  utils::RWLock lock_;
+  mutable utils::RWLock lock_;
 
-  WriteMemo write_memo_;
+  uint64_t last_write_length_{0};
+  uint64_t last_time_ns_{0};
 
   // chunk index -> chunk
   absl::flat_hash_map<uint32_t, ChunkSPtr> chunk_map_;
@@ -310,7 +327,7 @@ class ChunkCache {
 
   void CleanExpired(uint64_t expire_s);
 
-  bool Dump(Json::Value& value);
+  bool Dump(Json::Value& value, bool is_summary = false);
 
  private:
   using Map = absl::flat_hash_map<Ino, ChunkSetSPtr>;

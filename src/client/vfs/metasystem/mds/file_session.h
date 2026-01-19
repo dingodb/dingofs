@@ -52,11 +52,8 @@ class FileSession {
 
   ChunkSetSPtr& GetChunkSet() { return chunk_set_; }
 
-  uint32_t IncRef() { return ref_count_.fetch_add(1) + 1; }
-  uint32_t DecRef() { return ref_count_.fetch_sub(1) - 1; }
-
   void AddSession(uint64_t fh, const std::string& session_id);
-  void DeleteSession(uint64_t fh);
+  uint32_t DeleteSession(uint64_t fh);
 
   // output json format string
   bool Dump(Json::Value& value);
@@ -64,6 +61,9 @@ class FileSession {
 
  private:
   friend class FileSessionMap;
+
+  uint32_t IncRef() { return ref_count_.fetch_add(1) + 1; }
+  uint32_t DecRef() { return ref_count_.fetch_sub(1) - 1; }
 
   Ino ino_;
 

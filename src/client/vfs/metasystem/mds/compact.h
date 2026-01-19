@@ -63,7 +63,6 @@ class CompactChunkTask : public TaskRunnable {
   Status GetStatus() { return status_; }
 
  private:
-  void CompactCompletelyOverlap();
   Status Compact();
 
   Ino ino_;

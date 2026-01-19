@@ -41,10 +41,12 @@ void FileSession::AddSession(uint64_t fh, const std::string& session_id) {
   chunk_set_->RefreshLastActiveTime();
 }
 
-void FileSession::DeleteSession(uint64_t fh) {
+uint32_t FileSession::DeleteSession(uint64_t fh) {
   utils::WriteLockGuard lk(lock_);
 
   session_id_map_.erase(fh);
+
+  return DecRef();
 }
 
 bool FileSession::Dump(Json::Value& value) {
@@ -61,6 +63,11 @@ bool FileSession::Dump(Json::Value& value) {
     session_id_map.append(item);
   }
   value["session_id_map"] = session_id_map;
+
+  // dump chunk_set_
+  Json::Value chunk_set_value = Json::objectValue;
+  chunk_set_->Dump(chunk_set_value);
+  value["chunk_set"] = chunk_set_value;
 
   return true;
 }
@@ -133,10 +140,10 @@ void FileSessionMap::Delete(Ino ino, uint64_t fh) {
       [this, ino, fh, &ref_count](Map& map) {
         auto it = map.find(ino);
         if (it != map.end()) {
-          auto file_session = it->second;
-          file_session->DeleteSession(fh);
-          ref_count = file_session->DecRef();
+          auto& file_session = it->second;
+          ref_count = file_session->DeleteSession(fh);
           if (ref_count == 0) {
+            file_session->GetChunkSet()->ResetLastWriteLength();
             map.erase(it);
           }
         }

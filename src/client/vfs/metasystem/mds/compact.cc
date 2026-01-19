@@ -95,8 +95,6 @@ Status CompactChunkTask::Compact() {
   return Status::OK();
 }
 
-void CompactChunkTask::CompactCompletelyOverlap() {}
-
 bool CompactProcessor::Init() {
   worker_set_ = mds::ExecqWorkerSet::NewUnique(
       kCompactWorkerSetName, FLAGS_compact_worker_num,

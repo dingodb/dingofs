@@ -188,7 +188,10 @@ void MDSMetaSystem::Stop(bool upgrade) {
   LOG(INFO) << fmt::format("[meta.fs] stopped, upgrade({}).", upgrade);
 }
 
+// dump state for upgrade
 bool MDSMetaSystem::Dump(ContextSPtr, Json::Value& value) {
+  LOG(INFO) << "[meta.fs] dump...";
+
   if (!file_session_map_.Dump(value)) {
     return false;
   }
@@ -212,6 +215,7 @@ bool MDSMetaSystem::Dump(ContextSPtr, Json::Value& value) {
   return true;
 }
 
+// dump state for show
 bool MDSMetaSystem::Dump(const DumpOption& options, Json::Value& value) {
   LOG(INFO) << "[meta.fs] dump...";
 
@@ -242,6 +246,28 @@ bool MDSMetaSystem::Dump(const DumpOption& options, Json::Value& value) {
 
   if (options.chunk_memo && !chunk_memo_.Dump(value)) {
     return false;
+  }
+
+  if (options.chunk_cache && !chunk_cache_.Dump(value, options.is_summary)) {
+    return false;
+  }
+
+  if (options.chunk_set) {
+    LOG(INFO) << fmt::format("[meta.fs] dump chunk set, ino({}).", options.ino);
+    auto chunk_set = chunk_cache_.GetOrCreateChunkSet(options.ino);
+    if (chunk_set != nullptr && !chunk_set->Dump(value)) return false;
+  }
+
+  if (options.chunk) {
+    LOG(INFO) << fmt::format("[meta.fs] dump chunk, ino({}) index({}).",
+                             options.ino, options.chunk_index);
+    auto chunk_set = chunk_cache_.GetOrCreateChunkSet(options.ino);
+    if (chunk_set == nullptr) return true;
+
+    auto chunk = chunk_set->Get(options.chunk_index);
+    if (chunk == nullptr) return true;
+
+    if (!chunk->Dump(value)) return false;
   }
 
   return true;
@@ -757,14 +783,14 @@ Status MDSMetaSystem::Write(ContextSPtr, Ino ino, uint64_t offset,
                             uint64_t size, uint64_t fh) {
   AssertStop();
 
+  LOG_DEBUG << fmt::format("[meta.fs.{}.{}] write, offset({}) size({}).", ino,
+                           fh, offset, size);
+
   auto file_session = file_session_map_.GetSession(ino);
   CHECK(file_session != nullptr)
       << fmt::format("file session is nullptr, ino({}) fh({}).", ino, fh);
 
-  LOG(INFO) << fmt::format("[meta.fs.{}.{}] write, offset({}) size({}).", ino,
-                           fh, offset, size);
-
-  file_session->GetChunkSet()->AddWriteMemo(offset, size);
+  file_session->GetChunkSet()->SetLastWriteLength(offset, size);
 
   // update last modify time
   modify_time_memo_.Remember(ino);
@@ -1158,18 +1184,22 @@ InodeSPtr MDSMetaSystem::GetInodeFromCache(Ino ino) {
   return (FLAGS_vfs_meta_inode_cache_enable) ? inode_cache_.Get(ino) : nullptr;
 }
 
-Status MDSMetaSystem::SetInodeLength(ContextSPtr ctx,
-                                     FileSessionSPtr file_session, Ino ino) {
-  uint64_t length = file_session->GetChunkSet()->GetLength();
-  auto inode = inode_cache_.Get(ino);
-  if (inode != nullptr && length <= inode->Length()) return Status::OK();
+Status MDSMetaSystem::SetInodeLength(ContextSPtr ctx, Ino ino,
+                                     ChunkSetSPtr& chunk_set) {
+  CHECK(chunk_set != nullptr) << "chunk_set is null.";
 
-  LOG(INFO) << fmt::format("[meta.fs.{}] set inode length({}).", ino, length);
+  uint64_t last_write_length = chunk_set->GetLastWriteLength();
+  auto inode = inode_cache_.Get(ino);
+  if (inode != nullptr && last_write_length <= inode->Length())
+    return Status::OK();
+
+  LOG(INFO) << fmt::format("[meta.fs.{}] set inode length({}).", ino,
+                           last_write_length);
 
   uint64_t now_ns = utils::TimestampNs();
   Attr attr;
   attr.ino = ino;
-  attr.length = length;
+  attr.length = last_write_length;
   attr.mtime = now_ns;
   attr.ctime = now_ns;
   int set = kSetAttrSize | kSetAttrMtime | kSetAttrCtime;
@@ -1180,8 +1210,8 @@ Status MDSMetaSystem::SetInodeLength(ContextSPtr ctx,
       mds_client_.SetAttr(ctx, ino, attr, set, attr_entry, shrink_file);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
-        "[meta.fs.{}] set inode length({}) fail, error({}).", ino, length,
-        status.ToString());
+        "[meta.fs.{}] set inode length({}) fail, error({}).", ino,
+        last_write_length, status.ToString());
     return status;
   }
 
@@ -1297,7 +1327,7 @@ Status MDSMetaSystem::FlushSlice(ContextSPtr ctx, Ino ino) {
   } while (true);
 
   // modify inode length
-  return SetInodeLength(ctx, file_session, ino);
+  return SetInodeLength(ctx, ino, chunk_set);
 }
 
 void MDSMetaSystem::FlushAllSlice() {
@@ -1347,12 +1377,12 @@ bool MDSMetaSystem::CorrectAttrLength(Attr& attr, const std::string& caller) {
   auto file_session = file_session_map_.GetSession(attr.ino);
   if (file_session != nullptr) {
     auto chunk_set = file_session->GetChunkSet();
-    uint64_t write_memo_length = chunk_set->GetLength();
-    if (write_memo_length > attr.length) {
+    uint64_t last_write_length = chunk_set->GetLastWriteLength();
+    if (last_write_length > attr.length) {
       LOG(INFO) << fmt::format("[meta.fs.{}] correct length, caller({}).",
                                attr.ino, caller);
 
-      attr.length = write_memo_length;
+      attr.length = last_write_length;
 
       uint64_t time_ns = chunk_set->GetLastWriteTimeNs();
       attr.ctime = std::max(attr.ctime, time_ns);
