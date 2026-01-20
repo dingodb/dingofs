@@ -595,7 +595,7 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
   auto file_session = file_session_map_.Put(ino, fh, session_id);
   auto& chunk_set = file_session->GetChunkSet();
   if (is_prefetch_chunk && !chunks.empty()) {
-    chunk_set->Put(chunks);
+    chunk_set->Put(chunks, "open");
   }
 
   if (flags & O_TRUNC) chunk_memo_.Forget(ino);
@@ -725,7 +725,8 @@ Status MDSMetaSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
   }
 
   // update cache
-  if (file_session != nullptr) file_session->GetChunkSet()->Put(chunks);
+  if (file_session != nullptr)
+    file_session->GetChunkSet()->Put(chunks, "readslice");
 
   const auto& chunk_entry = chunks.front();
   for (const auto& slice : chunk_entry.slices()) {
@@ -1242,8 +1243,7 @@ void MDSMetaSystem::LaunchWriteSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
               "[meta.fs.{}] flush delta slice done, task({}) status({}).", ino,
               task->TaskID(), status.ToString());
 
-          chunk_set->DeleteCommitTask(task->TaskID());
-          chunk_set->MarkCommited(chunk_descriptors);
+          chunk_set->FinishCommitTask(task->TaskID(), chunk_descriptors);
 
           chunk_memo_.Remember(ino, chunk_descriptors);
 
@@ -1346,6 +1346,9 @@ void MDSMetaSystem::FlushAllSlice() {
                                 ino, status.ToString());
     }
   }
+
+  CHECK(!chunk_cache_.HasUncommitedSlice())
+      << "still has uncommited slice after flush all.";
 }
 
 Status MDSMetaSystem::CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
@@ -1414,7 +1417,7 @@ Status MDSMetaSystem::ManualCompact(ContextSPtr ctx, Ino ino,
   }
 
   for (auto& chunk : chunks) {
-    auto chunk_ptr = Chunk::New(ino, chunk);
+    auto chunk_ptr = Chunk::New(ino, chunk, "manual_compact");
     auto status = compact_processor_.LaunchCompact(ino, chunk_ptr, mds_client_,
                                                    compactor_, false);
     if (!status.ok()) return status;

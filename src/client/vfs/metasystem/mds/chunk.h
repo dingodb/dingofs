@@ -20,12 +20,12 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <list>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "client/vfs/metasystem/mds/helper.h"
 #include "client/vfs/vfs_meta.h"
 #include "json/value.h"
@@ -52,8 +52,9 @@ using ChunkSetSPtr = std::shared_ptr<ChunkSet>;
 class Chunk {
  public:
   Chunk(Ino ino, uint32_t index) : ino_(ino), index_(index) {}
-  Chunk(Ino ino, const ChunkEntry& chunk) : ino_(ino), index_(chunk.index()) {
-    Put(chunk);
+  Chunk(Ino ino, const ChunkEntry& chunk, const char* reason)
+      : ino_(ino), index_(chunk.index()) {
+    Put(chunk, reason);
   }
 
   ~Chunk() = default;
@@ -62,14 +63,14 @@ class Chunk {
     return std::make_shared<Chunk>(ino, index);
   }
 
-  static ChunkSPtr New(Ino ino, const ChunkEntry& chunk) {
-    return std::make_shared<Chunk>(ino, chunk);
+  static ChunkSPtr New(Ino ino, const ChunkEntry& chunk, const char* reason) {
+    return std::make_shared<Chunk>(ino, chunk, reason);
   }
 
   Ino GetIno() const { return ino_; }
   uint32_t GetIndex() const { return index_; }
 
-  bool Put(const ChunkEntry& chunk);
+  bool Put(const ChunkEntry& chunk, const char* reason);
   bool Compact(uint32_t start_pos, uint64_t start_slice_id, uint32_t end_pos,
                uint64_t end_slice_id, const std::vector<Slice>& new_slices);
   void AppendSlice(const std::vector<Slice>& slices);
@@ -93,7 +94,11 @@ class Chunk {
 
   Status IsNeedCompaction(bool check_interval = true);
 
-  uint64_t GetVersion();
+  uint64_t GetVersion() {
+    utils::ReadLockGuard guard(lock_);
+    return commited_version_;
+  }
+
   std::vector<Slice> GetAllSlice(uint64_t& version);
   std::vector<Slice> GetCommitedSlice(uint64_t& version);
 
@@ -121,6 +126,7 @@ class Chunk {
 class CommitTask;
 using CommitTaskSPtr = std::shared_ptr<CommitTask>;
 
+// for commit new slice
 class CommitTask {
  public:
   struct DeltaSlice {
@@ -133,6 +139,17 @@ class CommitTask {
 
   uint64_t TaskID() const { return task_id_; }
   const std::vector<DeltaSlice>& DeltaSlices() const { return delta_slices_; }
+
+  std::vector<uint32_t> GetChunkIndexs() const {
+    utils::ReadLockGuard lk(lock_);
+
+    std::vector<uint32_t> indexs;
+    indexs.reserve(delta_slices_.size());
+    for (const auto& delta_slice : delta_slices_) {
+      indexs.push_back(delta_slice.chunk_index);
+    }
+    return indexs;
+  }
 
   std::string Describe() const {
     std::string str;
@@ -197,7 +214,6 @@ class CommitTask {
 
   // output json format string
   bool Dump(Json::Value& value);
-  bool Load(const Json::Value& value);
 
   enum class State : uint8_t {
     INIT = 0,
@@ -206,7 +222,7 @@ class CommitTask {
   };
 
  private:
-  utils::RWLock lock_;
+  mutable utils::RWLock lock_;
 
   const uint64_t task_id_;
   const std::vector<DeltaSlice> delta_slices_;
@@ -239,11 +255,11 @@ class ChunkSet {
     utils::WriteLockGuard lk(lock_);
     last_write_length_ = 0;
   }
-
   uint64_t GetLastWriteLength() const {
     utils::ReadLockGuard guard(lock_);
     return last_write_length_;
   }
+
   uint64_t GetLastWriteTimeNs() const {
     utils::ReadLockGuard guard(lock_);
     return last_time_ns_;
@@ -251,35 +267,51 @@ class ChunkSet {
 
   // chunk operations
   void Append(uint32_t index, const std::vector<Slice>& slices);
-  void Put(const std::vector<ChunkEntry>& chunks);
+  void Put(const std::vector<ChunkEntry>& chunks, const char* reason);
 
   size_t GetChunkSize() const {
     utils::ReadLockGuard guard(lock_);
     return chunk_map_.size();
   }
 
-  // task operations
-  bool HasStage();
-  bool HasCommitting();
-
-  uint32_t TryCommitSlice(bool is_force);
-  void MarkCommited(const std::vector<ChunkDescriptor>& chunk_descriptors);
-
-  bool HasCommitTask();
-  void DeleteCommitTask(uint64_t task_id);
-  std::vector<CommitTaskSPtr> ListCommitTask();
-
-  size_t GetCommitTaskSize() const {
+  bool Exist(uint32_t index) {
     utils::ReadLockGuard guard(lock_);
-    return commit_task_list_.size();
+    return chunk_map_.find(index) != chunk_map_.end();
   }
 
-  bool Exist(uint32_t index);
-  ChunkSPtr Get(uint32_t index);
+  ChunkSPtr Get(uint32_t index) {
+    utils::ReadLockGuard guard(lock_);
+
+    auto it = chunk_map_.find(index);
+    return (it != chunk_map_.end()) ? it->second : nullptr;
+  }
+
   std::vector<ChunkSPtr> GetAll();
 
   uint64_t GetVersion(uint32_t index);
   std::vector<std::pair<uint32_t, uint64_t>> GetAllVersion();
+
+  bool HasStage();
+  bool HasCommitting();
+
+  // task operations
+  bool HasCommitTask() {
+    utils::ReadLockGuard guard(lock_);
+    return !commit_task_map_.empty();
+  }
+
+  uint32_t TryCommitSlice(bool is_force);
+
+  void FinishCommitTask(uint64_t task_id,
+                        const std::vector<ChunkDescriptor>& chunk_descriptors);
+  std::vector<CommitTaskSPtr> ListCommitTask();
+
+  size_t GetCommitTaskSize() const {
+    utils::ReadLockGuard guard(lock_);
+    return commit_task_map_.size();
+  }
+
+  bool HasUncommitedSlice();
 
   uint64_t LastActiveTimeS() const {
     return last_active_s_.load(std::memory_order_relaxed);
@@ -293,7 +325,12 @@ class ChunkSet {
   bool Load(const Json::Value& value);
 
  private:
-  CommitTaskSPtr CreateCommitTask(
+  bool HasSpecificChunkCommitTaskUnlock(uint32_t chunk_index) {
+    return committing_chunk_index_set_.find(chunk_index) !=
+           committing_chunk_index_set_.end();
+  }
+
+  CommitTaskSPtr CreateCommitTaskUnlock(
       std::vector<CommitTask::DeltaSlice>&& delta_slices);
 
   const Ino ino_;
@@ -306,7 +343,9 @@ class ChunkSet {
   // chunk index -> chunk
   absl::flat_hash_map<uint32_t, ChunkSPtr> chunk_map_;
 
-  std::list<CommitTaskSPtr> commit_task_list_;
+  // task id -> commit task
+  absl::flat_hash_map<uint64_t, CommitTaskSPtr> commit_task_map_;
+  absl::flat_hash_set<uint32_t> committing_chunk_index_set_;
 
   std::atomic<uint64_t> last_commit_ms_{0};
 
@@ -320,6 +359,8 @@ class ChunkCache {
   ~ChunkCache() = default;
 
   ChunkSetSPtr GetOrCreateChunkSet(Ino ino);
+
+  bool HasUncommitedSlice();
 
   size_t Size();
 

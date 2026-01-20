@@ -699,13 +699,14 @@ static void RenderSingleFileSessionPage(Ino ino, const Json::Value& json_value,
                  os);
 }
 
-static void RenderSingleChunkPage(Ino ino, const Json::Value& json_value,
+static void RenderSingleChunkPage(Ino ino, uint32_t chunk_index,
+                                  const Json::Value& json_value,
                                   butil::IOBufBuilder& os,
                                   std::string& client_name) {
-  std::string header = fmt::format("Client({}) Chunk({})", client_name, ino);
+  std::string header =
+      fmt::format("Client({}) Chunk({}/{})", client_name, ino, chunk_index);
 
-  RenderJsonPage("dingofs chunk session", header, json_value.toStyledString(),
-                 os);
+  RenderJsonPage("dingofs chunk", header, json_value.toStyledString(), os);
 }
 
 static void RenderParentMemoPage(const Json::Value& json_value,
@@ -899,8 +900,8 @@ static void RenderChunkSetPage(Ino ino, const Json::Value& json_value,
   os << "<head>" << RenderHead("dingofs chunk set") << "</head>";
   os << "<body>";
   os << fmt::format(
-      R"(<h1 style="text-align:center;">Client({}) Chunk Set</h1>)",
-      client_name);
+      R"(<h1 style="text-align:center;">Client({}) ChunkSet({})</h1>)",
+      client_name, ino);
 
   if (!json_value.isObject()) {
     LOG(ERROR) << "chunk_set value is not an object.";
@@ -1438,7 +1439,7 @@ void FuseStatServiceImpl::default_method(
       options.chunk_index = chunk_index;
       options.chunk = true;
       if (vfs_hub_->GetMetaSystem().Dump(options, json_value)) {
-        RenderSingleChunkPage(ino, json_value, os, client_name);
+        RenderSingleChunkPage(ino, chunk_index, json_value, os, client_name);
       }
     }
 

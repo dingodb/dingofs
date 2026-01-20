@@ -192,6 +192,9 @@ inline Status TransformError(const pb::error::Error& error) {
     case pb::error::ENOT_CAN_CONNECTED:
       return Status::NetError(error.errcode(), error.errmsg());
 
+    case pb::error::EILLEGAL_PARAMTETER:
+      return Status::InvalidParam(error.errcode(), error.errmsg());
+
     default:
       return Status::Internal(error.errcode(), error.errmsg());
   }

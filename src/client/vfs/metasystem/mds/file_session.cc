@@ -142,6 +142,9 @@ void FileSessionMap::Delete(Ino ino, uint64_t fh) {
         if (it != map.end()) {
           auto& file_session = it->second;
           ref_count = file_session->DeleteSession(fh);
+          LOG(INFO) << fmt::format(
+              "[meta.filesession.{}.{}] delete file session, ref_count({}).",
+              ino, fh, ref_count);
           if (ref_count == 0) {
             file_session->GetChunkSet()->ResetLastWriteLength();
             map.erase(it);

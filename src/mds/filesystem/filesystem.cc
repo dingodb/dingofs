@@ -2269,24 +2269,17 @@ Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, const std::vector<Delt
   UpsertChunkOperation operation(trace, GetFsInfo(), ino, delta_slices);
 
   status = RunOperation(&operation);
-
-  std::string index_str;
-  for (uint32_t i = 0; i < delta_slices.size(); ++i) {
-    index_str += std::to_string(delta_slices[i].chunk_index());
-    if ((i + 1) != delta_slices.size()) index_str += ",";
-  }
-
-  LOG(INFO) << fmt::format("[fs.{}.{}.{}][{}us] writeslice {} finish, status({}).", fs_id_, ino, ctx.RequestId(),
-                           duration.ElapsedUs(), index_str, status.error_str());
-
   if (!status.ok()) {
+    LOG(INFO) << fmt::format("[fs.{}.{}.{}][{}us] writeslice finish, status({}).", fs_id_, ino, ctx.RequestId(),
+                             duration.ElapsedUs(), status.error_str());
     return Status(pb::error::EBACKEND_STORE, fmt::format("upsert chunk fail, {}", status.error_str()));
   }
-
   auto& result = operation.GetResult();
   auto& effected_chunks = result.effected_chunks;
 
   for (auto& chunk : effected_chunks) {
+    LOG(INFO) << fmt::format("[fs.{}.{}.{}][{}us] writeslice finish, chunk({},{}).", fs_id_, ino, ctx.RequestId(),
+                             duration.ElapsedUs(), chunk.index(), chunk.version());
     chunk_cache_.RememberCheckCompact(ino, chunk.index());
   }
 
@@ -2459,12 +2452,12 @@ Status FileSystem::CompactChunk(Context& ctx, Ino ino, uint32_t index, const Com
   auto& result = operation.GetResult();
   auto& chunk = result.chunk;
 
+  chunk_out = chunk;
+
   LOG(INFO) << fmt::format("[fs.{}][{}us] compactchunk {}/{} finish, param({}|{}|{}) version({}->{}) status({}).",
                            fs_id_, duration.ElapsedUs(), ino, index, param.start_slice_id, param.end_slice_id,
                            param.new_slices.size(), param.version, chunk.version(), status.error_str());
   if (!status.ok()) return status;
-
-  chunk_out = chunk;
 
   // update chunk cache
   chunk_cache_.PutIf(ino, std::move(chunk));

@@ -76,23 +76,27 @@ Status CompactChunkTask::Compact() {
   mds::ChunkEntry chunk_entry;
   status = mds_client_.CompactChunk(ctx, ino_, chunk_->GetIndex(), param,
                                     chunk_entry);
-  if (!status.ok()) return status;
+  if (!status.ok() && !status.IsInvalidParam()) {
+    return status;
+  }
 
   bool extra_local_compact = false;
-  if (!chunk_->Put(chunk_entry)) {
-    extra_local_compact =
-        chunk_->Compact(param.start_pos, param.start_slice_id, param.end_pos,
-                        param.end_slice_id, new_slices);
+  if (chunk_entry.version() > version && !chunk_->Put(chunk_entry, "compact")) {
+    if (status.ok()) {
+      extra_local_compact =
+          chunk_->Compact(param.start_pos, param.start_slice_id, param.end_pos,
+                          param.end_slice_id, new_slices);
+    }
   }
 
   LOG(INFO) << fmt::format(
       "[meta.compact.{}.{}.{}] do compact chunk finish, version({}->{}) "
-      "old_slice({}) new_slices({}) final_slices({}) extra({}).",
+      "old_slice({}) new_slices({}) final_slices({}) extra({}) status({}).",
       ino_, chunk_index, Id(), version, chunk_entry.version(),
       old_slices.size(), Helper::ToString(new_slices),
-      chunk_entry.slices_size(), extra_local_compact);
+      chunk_entry.slices_size(), extra_local_compact, status.ToString());
 
-  return Status::OK();
+  return status;
 }
 
 bool CompactProcessor::Init() {

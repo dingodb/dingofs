@@ -1706,10 +1706,12 @@ Status CompactChunkOperation::Run(TxnUPtr& txn) {
 
   const auto& slices = chunk.slices();
   if (slices.at(param_.start_pos).id() != param_.start_slice_id) {
+    result_.chunk = chunk;
     return Status(pb::error::EILLEGAL_PARAMTETER,
                   fmt::format("not match start slice id({})", slices.at(param_.start_pos).id()));
   }
   if (slices.at(param_.end_pos).id() != param_.end_slice_id) {
+    result_.chunk = chunk;
     return Status(pb::error::EILLEGAL_PARAMTETER,
                   fmt::format("not match end slice id({})", slices.at(param_.end_pos).id()));
   }

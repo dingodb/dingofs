@@ -2203,12 +2203,11 @@ void MDSServiceImpl::DoCompactChunk(google::protobuf::RpcController*, const pb::
   };
   status = file_system->CompactChunk(ctx, request->ino(), request->chunk_index(), param, chunk);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  response->mutable_chunk()->Swap(&chunk);
   if (BAIDU_UNLIKELY(!status.ok())) {
     SpanScope::SetStatus(span, status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
-
-  response->mutable_chunk()->Swap(&chunk);
 }
 
 void MDSServiceImpl::CompactChunk(google::protobuf::RpcController* controller,

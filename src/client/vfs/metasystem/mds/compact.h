@@ -17,7 +17,6 @@
 
 #include <string>
 
-#include "absl/container/flat_hash_set.h"
 #include "client/vfs/compaction/compactor.h"
 #include "client/vfs/metasystem/mds/chunk.h"
 #include "client/vfs/metasystem/mds/mds_client.h"

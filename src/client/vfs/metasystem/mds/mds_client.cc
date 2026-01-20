@@ -1369,12 +1369,11 @@ Status MDSClient::CompactChunk(ContextSPtr& ctx, Ino ino, uint32_t chunk_index,
 
   auto status = SendRequest(SpanScope::GetContext(span, ctx), span, get_mds_fn,
                             "MDSService", "CompactChunk", request, response);
+  chunk_entry.Swap(response.mutable_chunk());
   if (!status.ok()) {
     SpanScope::SetStatus(span, status);
     return status;
   }
-
-  chunk_entry.Swap(response.mutable_chunk());
 
   return Status::OK();
 }

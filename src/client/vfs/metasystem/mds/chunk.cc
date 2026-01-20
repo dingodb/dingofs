@@ -35,7 +35,7 @@ static const uint32_t kChunkCommitIntervalMs = 1000;  // milliseconds
 
 static std::atomic<uint64_t> task_id_generator{10000};
 
-bool Chunk::Put(const ChunkEntry& chunk) {
+bool Chunk::Put(const ChunkEntry& chunk, const char* reason) {
   CHECK(chunk.index() == index_)
       << fmt::format("[meta.chunk.{}.{}] mismatch chunk index({}|{}).", ino_,
                      index_, index_, chunk.index());
@@ -45,9 +45,11 @@ bool Chunk::Put(const ChunkEntry& chunk) {
   is_completed_ = true;
 
   LOG(INFO) << fmt::format(
-      "[meta.chunk.{}.{}] put chunk, version({}|{}), slice_num({}|{}).", ino_,
-      index_, commited_version_, chunk.version(), commited_slices_.size(),
-      chunk.slices_size());
+      "[meta.chunk.{}.{}] put chunk, version({}|{}), slice_num({}|{}) "
+      "reason({}).",
+      ino_, index_, commited_version_, chunk.version(), commited_slices_.size(),
+      chunk.slices_size(), reason);
+
   if (chunk.version() <= commited_version_) return false;
 
   commited_slices_.clear();
@@ -162,6 +164,11 @@ std::vector<Slice> Chunk::CommitSlice() {
 void Chunk::MarkCommited(uint64_t version) {
   utils::WriteLockGuard guard(lock_);
 
+  LOG(INFO) << fmt::format(
+      "[meta.chunk.{}.{}] mark commited, version({}|{}), "
+      "commiting_slice_num({}).",
+      ino_, index_, commited_version_, version, commiting_slices_.size());
+
   if (version <= commited_version_) {
     commiting_slices_.clear();
     return;
@@ -172,12 +179,6 @@ void Chunk::MarkCommited(uint64_t version) {
   commited_slices_.insert(commited_slices_.end(), commiting_slices_.begin(),
                           commiting_slices_.end());
   commiting_slices_.clear();
-}
-
-uint64_t Chunk::GetVersion() {
-  utils::ReadLockGuard guard(lock_);
-
-  return commited_version_;
 }
 
 std::vector<Slice> Chunk::GetAllSlice(uint64_t& version) {
@@ -323,23 +324,6 @@ bool CommitTask::Dump(Json::Value& value) {
   return true;
 }
 
-bool CommitTask::Load(const Json::Value& value) {
-  if (value.isNull()) return true;
-
-  if (!value.isObject()) {
-    LOG(ERROR) << "[meta.commit_task] commit_task is not object.";
-    return false;
-  }
-
-  state_ = static_cast<State>(value["state"].asUInt());
-  if (value["status"].asString() != "OK") {
-    status_ = Status::Internal(value["status"].asString());
-  }
-  retries_.store(value["retries"].asUInt());
-
-  return true;
-}
-
 void ChunkSet::Append(uint32_t index, const std::vector<Slice>& slices) {
   utils::WriteLockGuard guard(lock_);
 
@@ -355,130 +339,17 @@ void ChunkSet::Append(uint32_t index, const std::vector<Slice>& slices) {
   }
 }
 
-void ChunkSet::Put(const std::vector<ChunkEntry>& chunks) {
+void ChunkSet::Put(const std::vector<ChunkEntry>& chunks, const char* reason) {
   utils::WriteLockGuard guard(lock_);
 
   for (const auto& chunk : chunks) {
     auto it = chunk_map_.find(chunk.index());
     if (it != chunk_map_.end()) {
-      it->second->Put(chunk);
+      it->second->Put(chunk, reason);
     } else {
-      chunk_map_.emplace(chunk.index(), Chunk::New(ino_, chunk));
+      chunk_map_.emplace(chunk.index(), Chunk::New(ino_, chunk, reason));
     }
   }
-}
-
-bool ChunkSet::HasStage() {
-  utils::ReadLockGuard guard(lock_);
-
-  for (const auto& [index, chunk] : chunk_map_) {
-    if (chunk->HasStage()) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-bool ChunkSet::HasCommitting() {
-  utils::ReadLockGuard guard(lock_);
-
-  for (const auto& [index, chunk] : chunk_map_) {
-    if (chunk->HasCommitting()) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-uint32_t ChunkSet::TryCommitSlice(bool is_force) {
-  uint64_t now_ms = utils::TimestampMs();
-  if (!is_force && now_ms < (last_commit_ms_.load(std::memory_order_relaxed) +
-                             kChunkCommitIntervalMs)) {
-    return 0;
-  }
-
-  last_commit_ms_.store(now_ms, std::memory_order_relaxed);
-
-  utils::WriteLockGuard guard(lock_);
-
-  uint32_t count = 0, total_count = 0;
-  std::vector<CommitTask::DeltaSlice> delta_slices;
-  delta_slices.reserve(1024);
-  for (auto& [index, chunk] : chunk_map_) {
-    auto slices = chunk->CommitSlice();
-    if (slices.empty()) continue;
-
-    CommitTask::DeltaSlice delta_slice;
-    delta_slice.chunk_index = index;
-    delta_slice.slices = std::move(slices);
-    count += delta_slice.slices.size();
-    total_count += delta_slice.slices.size();
-
-    delta_slices.push_back(std::move(delta_slice));
-
-    if (count > FLAGS_vfs_meta_commit_slice_max_num) {
-      CreateCommitTask(std::move(delta_slices));
-      delta_slices.clear();
-      count = 0;
-    }
-  }
-
-  if (!delta_slices.empty()) {
-    CreateCommitTask(std::move(delta_slices));
-  }
-
-  return total_count;
-}
-
-void ChunkSet::MarkCommited(
-    const std::vector<ChunkDescriptor>& chunk_descriptors) {
-  utils::ReadLockGuard guard(lock_);
-
-  for (const auto& chunk_descriptor : chunk_descriptors) {
-    auto it = chunk_map_.find(chunk_descriptor.index());
-    if (it != chunk_map_.end()) {
-      it->second->MarkCommited(chunk_descriptor.version());
-    }
-  }
-}
-
-bool ChunkSet::HasCommitTask() {
-  utils::ReadLockGuard guard(lock_);
-
-  return !commit_task_list_.empty();
-}
-
-CommitTaskSPtr ChunkSet::CreateCommitTask(
-    std::vector<CommitTask::DeltaSlice>&& delta_slices) {
-  auto task = std::make_shared<CommitTask>(task_id_generator.fetch_add(1),
-                                           std::move(delta_slices));
-
-  commit_task_list_.push_back(task);
-
-  return task;
-}
-
-void ChunkSet::DeleteCommitTask(uint64_t task_id) {
-  utils::WriteLockGuard guard(lock_);
-
-  commit_task_list_.remove_if([task_id](const CommitTaskSPtr& task) {
-    return task->TaskID() == task_id;
-  });
-}
-
-std::vector<CommitTaskSPtr> ChunkSet::ListCommitTask() {
-  utils::ReadLockGuard guard(lock_);
-
-  std::vector<CommitTaskSPtr> tasks;
-  tasks.reserve(commit_task_list_.size());
-
-  for (const auto& task : commit_task_list_) {
-    tasks.push_back(task);
-  }
-
-  return tasks;
 }
 
 uint64_t ChunkSet::GetVersion(uint32_t index) {
@@ -504,19 +375,6 @@ std::vector<std::pair<uint32_t, uint64_t>> ChunkSet::GetAllVersion() {
   return versions;
 }
 
-bool ChunkSet::Exist(uint32_t index) {
-  utils::ReadLockGuard guard(lock_);
-
-  return chunk_map_.find(index) != chunk_map_.end();
-}
-
-ChunkSPtr ChunkSet::Get(uint32_t index) {
-  utils::ReadLockGuard guard(lock_);
-
-  auto it = chunk_map_.find(index);
-  return (it != chunk_map_.end()) ? it->second : nullptr;
-}
-
 std::vector<ChunkSPtr> ChunkSet::GetAll() {
   utils::ReadLockGuard guard(lock_);
 
@@ -529,6 +387,131 @@ std::vector<ChunkSPtr> ChunkSet::GetAll() {
   return chunks;
 }
 
+bool ChunkSet::HasStage() {
+  utils::ReadLockGuard guard(lock_);
+
+  for (const auto& [index, chunk] : chunk_map_) {
+    if (chunk->HasStage()) return true;
+  }
+
+  return false;
+}
+
+bool ChunkSet::HasCommitting() {
+  utils::ReadLockGuard guard(lock_);
+
+  for (const auto& [index, chunk] : chunk_map_) {
+    if (chunk->HasCommitting()) return true;
+  }
+
+  return false;
+}
+
+uint32_t ChunkSet::TryCommitSlice(bool is_force) {
+  uint64_t now_ms = utils::TimestampMs();
+  if (!is_force && now_ms < (last_commit_ms_.load(std::memory_order_relaxed) +
+                             kChunkCommitIntervalMs)) {
+    return 0;
+  }
+
+  last_commit_ms_.store(now_ms, std::memory_order_relaxed);
+
+  utils::WriteLockGuard guard(lock_);
+
+  uint32_t count = 0, total_count = 0;
+  std::vector<CommitTask::DeltaSlice> delta_slices;
+  delta_slices.reserve(1024);
+  for (auto& [chunk_index, chunk] : chunk_map_) {
+    if (HasSpecificChunkCommitTaskUnlock(chunk_index)) continue;
+
+    auto slices = chunk->CommitSlice();
+    if (slices.empty()) continue;
+
+    CommitTask::DeltaSlice delta_slice;
+    delta_slice.chunk_index = chunk_index;
+    delta_slice.slices = std::move(slices);
+    count += delta_slice.slices.size();
+    total_count += delta_slice.slices.size();
+
+    delta_slices.push_back(std::move(delta_slice));
+
+    if (count > FLAGS_vfs_meta_commit_slice_max_num) {
+      CreateCommitTaskUnlock(std::move(delta_slices));
+      delta_slices.clear();
+      count = 0;
+    }
+  }
+
+  if (!delta_slices.empty()) {
+    CreateCommitTaskUnlock(std::move(delta_slices));
+  }
+
+  return total_count;
+}
+
+CommitTaskSPtr ChunkSet::CreateCommitTaskUnlock(
+    std::vector<CommitTask::DeltaSlice>&& delta_slices) {
+  auto task = std::make_shared<CommitTask>(task_id_generator.fetch_add(1),
+                                           std::move(delta_slices));
+
+  commit_task_map_.insert({task->TaskID(), task});
+
+  for (auto& chunk_index : task->GetChunkIndexs()) {
+    committing_chunk_index_set_.insert(chunk_index);
+  }
+
+  return task;
+}
+
+void ChunkSet::FinishCommitTask(
+    uint64_t task_id, const std::vector<ChunkDescriptor>& chunk_descriptors) {
+  utils::WriteLockGuard guard(lock_);
+
+  auto it = commit_task_map_.find(task_id);
+  CHECK(it != commit_task_map_.end()) << fmt::format(
+      "[meta.chunkset.{}] finish commit task fail, task({}) not found.", ino_,
+      task_id);
+
+  // delete finished task
+  for (auto& chunk_index : it->second->GetChunkIndexs()) {
+    committing_chunk_index_set_.erase(chunk_index);
+  }
+  commit_task_map_.erase(it);
+
+  // mark chunks commited
+  for (const auto& chunk_descriptor : chunk_descriptors) {
+    auto it = chunk_map_.find(chunk_descriptor.index());
+    if (it != chunk_map_.end()) {
+      it->second->MarkCommited(chunk_descriptor.version());
+    }
+  }
+}
+
+std::vector<CommitTaskSPtr> ChunkSet::ListCommitTask() {
+  utils::ReadLockGuard guard(lock_);
+
+  std::vector<CommitTaskSPtr> tasks;
+  tasks.reserve(commit_task_map_.size());
+
+  for (const auto& [_, task] : commit_task_map_) {
+    tasks.push_back(task);
+  }
+
+  return tasks;
+}
+
+bool ChunkSet::HasUncommitedSlice() {
+  utils::ReadLockGuard guard(lock_);
+
+  if (!commit_task_map_.empty()) return true;
+
+  for (const auto& [_, chunk] : chunk_map_) {
+    if (chunk->HasStage() || chunk->HasCommitting()) return true;
+  }
+
+  return false;
+}
+
 // output json format string
 bool ChunkSet::Dump(Json::Value& value, bool is_summary) {
   value["ino"] = ino_;
@@ -537,7 +520,7 @@ bool ChunkSet::Dump(Json::Value& value, bool is_summary) {
 
   if (is_summary) {
     value["chunk_count"] = chunk_map_.size();
-    value["commit_task_count"] = commit_task_list_.size();
+    value["commit_task_count"] = commit_task_map_.size();
 
   } else {
     // dump chunk_map
@@ -552,7 +535,7 @@ bool ChunkSet::Dump(Json::Value& value, bool is_summary) {
 
     // dump commit_task_list
     Json::Value commit_task_list_items = Json::arrayValue;
-    for (const auto& task : commit_task_list_) {
+    for (const auto& [_, task] : commit_task_map_) {
       Json::Value task_value = Json::objectValue;
       task->Dump(task_value);
       commit_task_list_items.append(task_value);
@@ -595,44 +578,6 @@ bool ChunkSet::Load(const Json::Value& value) {
     chunk_map_.emplace(index, chunk);
   }
 
-  // load commit_task_list
-  const auto& commit_task_list_value = value["commit_tasks"];
-  if (!commit_task_list_value.isArray()) {
-    LOG(ERROR) << "[meta.chunkset] commit_task_list is not array.";
-    return false;
-  }
-
-  for (const auto& item : commit_task_list_value) {
-    uint64_t task_id = item["task_id"].asUInt64();
-
-    // load delta_slices
-    if (!item["delta_slices"].isArray()) {
-      LOG(ERROR) << "[meta.commit_task] delta_slices is not array.";
-      return false;
-    }
-
-    std::vector<CommitTask::DeltaSlice> delta_slices;
-    for (const auto& delta_slice_item : item["delta_slices"]) {
-      CommitTask::DeltaSlice delta_slice;
-      delta_slice.chunk_index = delta_slice_item["chunk_index"].asUInt();
-
-      if (delta_slice_item["slices"].isArray()) {
-        for (const auto& slice_item : delta_slice_item["slices"]) {
-          delta_slice.slices.push_back(Helper::LoadSlice(slice_item));
-        }
-      }
-
-      delta_slices.push_back(delta_slice);
-    }
-
-    auto task = std::make_shared<CommitTask>(task_id, std::move(delta_slices));
-    if (!task->Load(item)) {
-      LOG(ERROR) << "[meta.chunkset] load commit_task fail.";
-      return false;
-    }
-    commit_task_list_.push_back(task);
-  }
-
   task_id_generator.store(
       std::max(task_id_generator.load(), value["id_generator"].asUInt64()));
 
@@ -656,6 +601,20 @@ ChunkSetSPtr ChunkCache::GetOrCreateChunkSet(Ino ino) {
       ino);
 
   return chunk_set;
+}
+
+bool ChunkCache::HasUncommitedSlice() {
+  bool has_uncommited = false;
+  shard_map_.iterate([&has_uncommited](Map& map) {
+    for (auto& [_, chunkset] : map) {
+      if (chunkset->HasUncommitedSlice()) {
+        has_uncommited = true;
+        break;
+      }
+    }
+  });
+
+  return has_uncommited;
 }
 
 size_t ChunkCache::Size() {
