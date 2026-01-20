@@ -100,6 +100,8 @@ jobs:
         shortCommitId=${commitId:0:7}
         echo "commit id is: $shortCommitId"
         echo "$shortCommitId" > commit_id.txt
+        # save long commit id to file
+        echo "$commitId" > commitId.txt
 
         echo "hello dingofs" > event.txt
         if [ "${{ github.event_name }}" == "pull_request" ]; then
@@ -162,8 +164,7 @@ jobs:
       if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) }}
       with:
         files: |
-          commit_id.txt
-          /mnt/dingofs/dingofs.tar.gz
+          commitId.txt
           /mnt/dingofs/scripts/docker/rocky9/dingofs/build/bin/dingo-client
           /mnt/dingofs/scripts/docker/rocky9/dingofs/build/bin/dingo-cache
           /mnt/dingofs/scripts/docker/rocky9/dingofs/build/bin/dingo-mds
