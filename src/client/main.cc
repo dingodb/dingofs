@@ -216,9 +216,6 @@ int main(int argc, char* argv[]) {
   auto defer_unmount =
       ::absl::MakeCleanup([&]() { fuse_server->SessionUnmount(); });
 
-  std::cout << fmt::format("\n{} is ready at {}\n\n", fs_name,
-                           mount_option.mount_point);
-
   if (fuse_server->Serve() == 1) return EXIT_FAILURE;
 
   return EXIT_SUCCESS;

@@ -329,6 +329,18 @@ static std::string FuseCtx(fuse_req_t req) {
   return fmt::format("pid({}) uid({}) gid({})", ctx->pid, ctx->uid, ctx->gid);
 }
 
+static void PrintReadyInfo(struct MountOption* mount_option) {
+  dingofs::blockaccess::BlockAccessOptions block_options =
+      g_vfs->GetBlockAccesserOptions();
+
+  // print config info
+  dingofs::Helper::PrintConfigInfo(
+      dingofs::client::GenConfigs(mount_option->meta_url, block_options));
+
+  std::cout << fmt::format("\n{} is ready at {}\n\n", mount_option->fs_name,
+                           mount_option->mount_point);
+}
+
 void FuseOpInit(void* userdata, struct fuse_conn_info* conn) {
   VLOG(1) << "FuseOpInit userdata: " << userdata;
   auto* fs_context = (dingofs::client::fuse::FsContext*)userdata;
@@ -359,16 +371,11 @@ void FuseOpInit(void* userdata, struct fuse_conn_info* conn) {
     return;
   }
 
-  dingofs::blockaccess::BlockAccessOptions block_options =
-      g_vfs->GetBlockAccesserOptions();
-
-  // print config info
-  dingofs::Helper::PrintConfigInfo(
-      dingofs::client::GenConfigs(mount_option->meta_url, block_options));
-
   InitFuseConnInfo(conn);
 
   LOG(INFO) << "init fuse op success.";
+
+  PrintReadyInfo(mount_option);
 }
 
 void FuseOpDestroy(void* userdata) {
