@@ -1047,9 +1047,11 @@ Status UpsertChunkOperation::Run(TxnUPtr& txn) {
       };
 
       for (const auto& slice : delta_slices.slices()) {
-        if (!is_exist_fn(slice)) *chunk.add_slices() = slice;
-        length = std::max(length, static_cast<int64_t>(slice.offset() + slice.len()));
+        if (is_exist_fn(slice)) continue;
+
         has_update = true;
+        *chunk.add_slices() = slice;
+        length = std::max(length, static_cast<int64_t>(slice.offset() + slice.len()));
       }
     }
 

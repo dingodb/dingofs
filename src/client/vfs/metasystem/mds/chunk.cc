@@ -603,6 +603,10 @@ ChunkSetSPtr ChunkCache::GetOrCreateChunkSet(Ino ino) {
   return chunk_set;
 }
 
+void ChunkCache::Delete(Ino ino) {
+  shard_map_.withWLock([ino](Map& map) { map.erase(ino); }, ino);
+}
+
 bool ChunkCache::HasUncommitedSlice() {
   bool has_uncommited = false;
   shard_map_.iterate([&has_uncommited](Map& map) {

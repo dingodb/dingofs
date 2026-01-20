@@ -359,6 +359,7 @@ class ChunkCache {
   ~ChunkCache() = default;
 
   ChunkSetSPtr GetOrCreateChunkSet(Ino ino);
+  void Delete(Ino ino);
 
   bool HasUncommitedSlice();
 

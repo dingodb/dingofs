@@ -591,14 +591,18 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
       ino, fh, flags, mds::Helper::DescOpenFlags(flags), session_id,
       is_prefetch_chunk, chunks.size());
 
+  // truncate file, forget chunk memo and delete chunk cache
+  if (flags & O_TRUNC) {
+    chunk_memo_.Forget(ino);
+    chunk_cache_.Delete(ino);
+  }
+
   // add file session and chunk
   auto file_session = file_session_map_.Put(ino, fh, session_id);
   auto& chunk_set = file_session->GetChunkSet();
   if (is_prefetch_chunk && !chunks.empty()) {
     chunk_set->Put(chunks, "open");
   }
-
-  if (flags & O_TRUNC) chunk_memo_.Forget(ino);
 
   // update chunk memo
   for (const auto& chunk : chunks) {
