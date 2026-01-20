@@ -12,14 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_library(vfs_compaction
-    compactor.cc
-    compact_utils.cc
+add_library(test_compact_utils
+    test_compact_utils.cc
 )
 
-target_link_libraries(vfs_compaction
-    vfs_data
-    vfs_hub
-    fmt::fmt
-    glog::glog
+target_link_libraries(test_compact_utils
+  vfs_compaction
+  ${TEST_DEPS_WITHOUT_MAIN}
 )

@@ -12,14 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_library(vfs_compaction
-    compactor.cc
-    compact_utils.cc
+add_library(vfs_data_common 
+    common.cc
+    data_utils.cc
 )
 
-target_link_libraries(vfs_compaction
-    vfs_data
-    vfs_hub
+target_link_libraries(vfs_data_common
+    PROTO_OBJS
+    vfs_data_slice
+    absl::span
     fmt::fmt
     glog::glog
 )

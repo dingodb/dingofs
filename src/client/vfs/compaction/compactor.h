@@ -39,7 +39,14 @@ class Compactor {
                  const std::vector<Slice>& slices,
                  std::vector<Slice>& out_slices);
 
+  Status ForceCompact(ContextSPtr ctx, Ino ino, uint64_t chunk_index,
+                      const std::vector<Slice>& slices,
+                      std::vector<Slice>& out_slices);
+
  private:
+  Status DoCompact(ContextSPtr ctx, Ino ino, uint64_t chunk_index,
+                   const std::vector<Slice>& slices, Slice& out_slice);
+
   VFSHub* vfs_hub_;
 };
 

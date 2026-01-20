@@ -19,14 +19,9 @@ add_executable(test_client
 )
 
 target_link_libraries(test_client
+  test_compact_utils
+  test_client_vfs_data
   PROTO_OBJS
-
-  $<TARGET_OBJECTS:test_client_vfs_data>
-
-  vfs_data
-
-  protobuf::libprotobuf
-  ${TEST_DEPS_WITHOUT_MAIN}
 )
 
 set_target_properties(test_client PROPERTIES

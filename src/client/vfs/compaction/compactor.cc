@@ -18,11 +18,11 @@
 
 #include <glog/logging.h>
 
-#include <algorithm>
 #include <cstdint>
 
 #include "client/vfs/common/basync_util.h"
 #include "client/vfs/common/helper.h"
+#include "client/vfs/compaction/compact_utils.h"
 #include "client/vfs/data/reader/chunk_req_reader.h"
 #include "client/vfs/data/slice/common.h"
 #include "client/vfs/data/slice/slice_writer.h"
@@ -31,34 +31,24 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
+using namespace compaction;
 
-// TODO: delete compact object after fail
-Status Compactor::Compact(ContextSPtr ctx, Ino ino, uint64_t chunk_index,
-                          const std::vector<Slice>& slices,
-                          std::vector<Slice>& out_slices) {
+Status Compactor::DoCompact(ContextSPtr ctx, Ino ino, uint64_t chunk_index,
+                            const std::vector<Slice>& slices,
+                            Slice& out_slice) {
   CHECK(!slices.empty()) << "invalid compact, no slices to compact";
-  auto span = vfs_hub_->GetTraceManager().StartChildSpan("Compactor::Compact",
+  auto span = vfs_hub_->GetTraceManager().StartChildSpan("Compactor::DoCompact",
                                                          ctx->GetTraceSpan());
   auto fs_info = vfs_hub_->GetFsInfo();
 
   int64_t chunk_size = fs_info.chunk_size;
 
-  int64_t fpos = (chunk_index * chunk_size) + chunk_size;
-  int64_t fend = 0;
+  FileRange file_range = GetSlicesFileRange(slices);
+  int64_t offset_in_chunk = file_range.offset % chunk_size;
 
-  for (const auto& slice : slices) {
-    fpos = std::min((int64_t)slice.offset, fpos);
-    fend = std::max((int64_t)(slice.offset + slice.length), fend);
-  }
+  ChunkReq req(ino, chunk_index, offset_in_chunk, file_range);
 
-  int64_t offset_in_chunk = fpos % chunk_size;
-  int64_t len = fend - fpos;
-
-  ChunkReq req(ino, chunk_index, offset_in_chunk,
-               FileRange{.offset = fpos, .len = len});
-
-  VLOG(12) << "Start comaction for req: " << req.ToString();
-  CHECK_GT(fend, fpos) << "invalid slices for compaction";
+  VLOG(9) << "Start comaction for req: " << req.ToString();
 
   std::string to_write;
   {
@@ -79,11 +69,13 @@ Status Compactor::Compact(ContextSPtr ctx, Ino ino, uint64_t chunk_index,
 
     IOBuffer data = reader.GetDataBuffer();
     uint64_t data_size = data.Size();
-    CHECK_EQ(data_size, static_cast<uint64_t>(len));
+    CHECK_EQ(data_size, static_cast<uint64_t>(file_range.len));
 
     to_write.resize(data.Size());
     data.CopyTo(to_write.data());
   }
+
+  Slice compacted;
 
   {
     auto page_size = vfs_hub_->GetWriteBufferManager()->GetPageSize();
@@ -107,11 +99,72 @@ Status Compactor::Compact(ContextSPtr ctx, Ino ino, uint64_t chunk_index,
       return s;
     }
 
-    Slice slice = writer.GetCommitSlice();
-    VLOG(12) << "Success compaction, finish_slice: " << Slice2Str(slice);
-    out_slices.push_back(slice);
+    compacted = writer.GetCommitSlice();
+    VLOG(9) << "Success compaction, compacted_slice: " << Slice2Str(compacted);
   }
 
+  out_slice = compacted;
+  return Status::OK();
+}
+
+// TODO: delete compact object after fail
+Status Compactor::Compact(ContextSPtr ctx, Ino ino, uint64_t chunk_index,
+                          const std::vector<Slice>& slices,
+                          std::vector<Slice>& out_slices) {
+  VLOG(9) << "Compactor::Compact ino: " << ino
+          << ", chunk_index: " << chunk_index
+          << ", slices count: " << slices.size();
+  CHECK(!slices.empty()) << "invalid compact, no slices to compact";
+  auto span = vfs_hub_->GetTraceManager().StartChildSpan("Compactor::Compact",
+                                                         ctx->GetTraceSpan());
+
+  std::vector<Slice> to_compact;
+  int32_t skip = Skip(slices);
+  VLOG(9) << "Compactor::Compact skip count: " << skip;
+
+  for (size_t i = skip; i < slices.size(); ++i) {
+    to_compact.push_back(slices[i]);
+  }
+
+  if (to_compact.empty()) {
+    LOG(INFO) << "No slices to compact after skipping";
+    return Status::OK();
+  }
+
+  VLOG(9) << "Compact slices count: " << to_compact.size()
+          << ", skip count: " << skip
+          << ", origin slices count: " << slices.size();
+
+  Slice compacted;
+  DINGOFS_RETURN_NOT_OK(DoCompact(SpanScope::GetContext(span), ino, chunk_index,
+                                  to_compact, compacted));
+
+  std::vector<Slice> out;
+  out.reserve(skip + 1);
+
+  for (int i = 0; i < skip; i++) {
+    out.push_back(slices[i]);
+  }
+  out.push_back(compacted);
+
+  out_slices.swap(out);
+
+  return Status::OK();
+}
+
+Status Compactor::ForceCompact(ContextSPtr ctx, Ino ino, uint64_t chunk_index,
+                               const std::vector<Slice>& slices,
+                               std::vector<Slice>& out_slices) {
+  VLOG(9) << "Compactor::ForceCompact ino: " << ino
+          << ", chunk_index: " << chunk_index
+          << ", slices count: " << slices.size();
+  CHECK(!slices.empty()) << "invalid compact, no slices to compact";
+  auto span = vfs_hub_->GetTraceManager().StartChildSpan("Compactor::Compact",
+                                                         ctx->GetTraceSpan());
+  Slice compacted;
+  DINGOFS_RETURN_NOT_OK(DoCompact(SpanScope::GetContext(span), ino, chunk_index,
+                                  slices, compacted));
+  out_slices.push_back(compacted);
   return Status::OK();
 }
 

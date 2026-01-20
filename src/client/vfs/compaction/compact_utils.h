@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
+ * Copyright (c) 2026 dingodb.com, Inc. All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,13 @@
  * limitations under the License.
  */
 
-#ifndef DINGODB_CLIENT_VFS_DATA_UITLS_H_
-#define DINGODB_CLIENT_VFS_DATA_UITLS_H_
+#ifndef DINGODB_CLIENT_VFS_COMPACTION_COMPACT_UTILS_H_
+#define DINGODB_CLIENT_VFS_COMPACTION_COMPACT_UTILS_H_
 
 #include <absl/types/span.h>
 #include <glog/logging.h>
 
-#include <boost/range/algorithm/sort.hpp>
 #include <cstdint>
-#include <vector>
 
 #include "client/vfs/data/common/common.h"
 #include "client/vfs/vfs_meta.h"
@@ -30,21 +28,17 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
+namespace compaction {
 
-void DumpSliceReadReqs(const std::vector<SliceReadReq>& results);
+FileRange GetSlicesFileRange(absl::Span<const Slice> slices);
 
-std::vector<SliceReadReq> Convert2SliceReadReq(
-    absl::Span<const Slice> slices, const FileRange& file_range_req);
+int64_t SliceReadReqsLength(const std::vector<SliceReadReq>& reqs);
 
-std::vector<SliceReadReq> ProcessReadRequest(
-    const std::vector<Slice>& slices, const FileRange& file_range_req);
+int32_t Skip(const std::vector<Slice>& slices);
 
-std::vector<BlockReadReq> ConvertSliceReadReqToBlockReadReqs(
-    const SliceReadReq& slice_req, uint64_t fs_id, uint64_t ino,
-    uint64_t chunk_size, uint64_t block_size);
-
+}  // namespace compaction
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGODB_CLIENT_VFS_DATA_UITLS_H_
+#endif  // DINGODB_CLIENT_VFS_COMPACTION_COMPACT_UTILS_H_

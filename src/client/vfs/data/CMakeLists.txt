@@ -13,6 +13,7 @@
 # limitations under the License.
 
 add_subdirectory(slice)
+add_subdirectory(common)
 
 add_library(vfs_data 
     common/common.cc
@@ -35,6 +36,7 @@ add_library(vfs_data
 target_link_libraries(vfs_data
     PROTO_OBJS
     vfs_data_slice
+    vfs_data_common
     fmt::fmt
     glog::glog
 )
