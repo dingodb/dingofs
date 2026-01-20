@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "common/const.h"
+#include "common/flag.h"
 #include "gflags/gflags.h"
 #include "mds/client/br.h"
 #include "mds/client/mds.h"
@@ -107,10 +108,24 @@ static std::string GetLastName(const std::string& name) {
   return name.substr(pos + 1);
 }
 
+static dingofs::FlagExtraInfo extras = {
+    .program = "dingo-mds-client",
+    .usage = "  dingo-mds-client [OPTIONS]",
+    .examples =
+        R"(  $ dingo-mds-client --cmd=backup --type=meta --output_type=file --out=backup_restore/meta_backup1
+  $ dingo-mds-client --cmd=restore --type=meta --input_type=file --in=backup_restore/meta_backup1
+)",
+    .patterns = {"mds/client"},
+};
+
 int main(int argc, char* argv[]) {
   using Helper = dingofs::mds::Helper;
 
-  google::ParseCommandLineFlags(&argc, &argv, true);
+  //  parse gflags
+  int rc = dingofs::ParseFlags(&argc, &argv, extras);
+  if (rc != 0) {
+    return 1;
+  }
 
   std::cout << "### use cluster id: " << FLAGS_cluster_id << '\n';
   dingofs::mds::MetaCodec::SetClusterID(FLAGS_cluster_id);
