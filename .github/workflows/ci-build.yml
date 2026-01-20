@@ -79,6 +79,13 @@ jobs:
         # check size of tar file
         ls -lh dingofs.tar.gz
 
+        # generate checksum file for the tar file and other binary files
+        sha256sum dingofs.tar.gz > dingofs.tar.gz.sha256
+        sha256sum scripts/docker/rocky9/dingofs/build/bin/dingo-client > dingo-client.sha256
+        sha256sum scripts/docker/rocky9/dingofs/build/bin/dingo-cache > dingo-cache.sha256
+        sha256sum scripts/docker/rocky9/dingofs/build/bin/dingo-mds > dingo-mds.sha256
+        sha256sum scripts/docker/rocky9/dingofs/build/bin/dingo-mds-client > dingo-mds-client.sha256
+
         echo "DingoFS Build finished"
         EOF
         chmod +x /mnt/dingofs/build.sh
@@ -154,7 +161,18 @@ jobs:
       uses: softprops/action-gh-release@v2
       if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) }}
       with:
-        files: /mnt/dingofs/dingofs-latest.tar.gz
+        files: |
+          commit_id.txt
+          /mnt/dingofs/dingofs.tar.gz
+          /mnt/dingofs/scripts/docker/rocky9/dingofs/build/bin/dingo-client
+          /mnt/dingofs/scripts/docker/rocky9/dingofs/build/bin/dingo-cache
+          /mnt/dingofs/scripts/docker/rocky9/dingofs/build/bin/dingo-mds
+          /mnt/dingofs/scripts/docker/rocky9/dingofs/build/bin/dingo-mds-client
+          /mnt/dingofs/dingofs.tar.gz.sha256
+          /mnt/dingofs/dingo-client.sha256
+          /mnt/dingofs/dingo-cache.sha256
+          /mnt/dingofs/dingo-mds.sha256
+          /mnt/dingofs/dingo-mds-client.sha256
         name: ${{ env.TAG_NAME }}
         tag_name: ${{ env.TAG_NAME }}
         token: ${{ secrets.GH_TOKEN }}

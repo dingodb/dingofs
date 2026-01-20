@@ -222,7 +222,7 @@ install_tools() {
     wget -O "$project_prefix/sbin/dingo" $tools_dingo_file
     chmod +x "$project_prefix/sbin/dingo"
     # copy_file "conf/dingo.yaml" "$g_prefix/conf"
-    curl -o $g_prefix/conf/dingo.yaml https://raw.githubusercontent.com/dingodb/dingocli/main/pkg/config/dingo.yaml
+    curl -o $g_prefix/conf/dingo.yaml https://raw.githubusercontent.com/dingodb/dingocli/main/dingo.yaml
 }
 
 install_scripts() {
