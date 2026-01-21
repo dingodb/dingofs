@@ -91,7 +91,7 @@ inline std::vector<BlockContext> Chunk2Block(ContextSPtr ctx, VFSHub* vfs_hub,
   std::vector<Slice> slices;
   uint64_t chunk_version = 0;
 
-  Status status = vfs_hub->GetMetaSystem().ReadSlice(
+  Status status = vfs_hub->GetMetaSystem()->ReadSlice(
       ctx, req.ino, req.chunk_idx, 0, &slices, chunk_version);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(

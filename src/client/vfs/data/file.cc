@@ -124,7 +124,7 @@ void File::Invalidate(int64_t offset, int64_t size) {
 }
 
 Status File::Flush() {
-  auto span = vfs_hub_->GetTraceManager().StartSpan("File::Flush");
+  auto span = vfs_hub_->GetTraceManager()->StartSpan("File::Flush");
 
   Status s = file_writer_->Flush();
   if (!s.ok()) {

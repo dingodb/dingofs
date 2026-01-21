@@ -39,7 +39,7 @@ std::string PageData::ToString() const {
 
 void PageData::Write(ContextSPtr ctx, const char* buf, uint64_t size,
                      uint64_t page_offset) {
-  auto span = vfs_hub_->GetTraceManager().StartChildSpan("PageData::Write",
+  auto span = vfs_hub_->GetTraceManager()->StartChildSpan("PageData::Write",
                                                          ctx->GetTraceSpan());
 
   uint64_t write_page_end = page_offset + size;

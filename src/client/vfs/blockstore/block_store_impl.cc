@@ -64,7 +64,7 @@ void BlockStoreImpl::Shutdown() {
 
 void BlockStoreImpl::RangeAsync(ContextSPtr ctx, RangeReq req,
                                 StatusCallback callback) {
-  auto span = hub_->GetTraceManager().StartChildSpan(
+  auto span = hub_->GetTraceManager()->StartChildSpan(
       "BlockStoreImpl::RangeAsync", ctx->GetTraceSpan());
 
   int64_t start_us = butil::cpuwide_time_us();
@@ -91,7 +91,7 @@ void BlockStoreImpl::RangeAsync(ContextSPtr ctx, RangeReq req,
 
 void BlockStoreImpl::PutAsync(ContextSPtr ctx, PutReq req,
                               StatusCallback callback) {
-  auto span = hub_->GetTraceManager().StartChildSpan("BlockStoreImpl::PutAsync",
+  auto span = hub_->GetTraceManager()->StartChildSpan("BlockStoreImpl::PutAsync",
                                                      ctx->GetTraceSpan());
 
   int64_t start_us = butil::cpuwide_time_us();
@@ -114,7 +114,7 @@ void BlockStoreImpl::PutAsync(ContextSPtr ctx, PutReq req,
 
 void BlockStoreImpl::PrefetchAsync(ContextSPtr ctx, PrefetchReq req,
                                    StatusCallback callback) {
-  auto span = hub_->GetTraceManager().StartChildSpan(
+  auto span = hub_->GetTraceManager()->StartChildSpan(
       "BlockStoreImpl::PrefetchAsync", ctx->GetTraceSpan());
   if (block_cache_->IsCached(req.block)) {
     callback(Status::OK());

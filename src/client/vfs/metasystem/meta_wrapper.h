@@ -23,10 +23,7 @@
 #include <string>
 #include <vector>
 
-#include "client/vfs/common/client_id.h"
-#include "client/vfs/compaction/compactor.h"
 #include "client/vfs/metasystem/meta_system.h"
-#include "client/vfs/vfs.h"
 #include "common/metrics/client/vfs/slice_metric.h"
 #include "common/trace/context.h"
 #include "json/value.h"
@@ -37,8 +34,7 @@ namespace vfs {
 
 class MetaWrapper {
  public:
-  MetaWrapper(const VFSConfig& vfs_conf, ClientId& client_id,
-              TraceManager& trace_manager, Compactor& compactor);
+  MetaWrapper(MetaSystemUPtr target);
   ~MetaWrapper() = default;
 
   Status Init(bool upgrade) {

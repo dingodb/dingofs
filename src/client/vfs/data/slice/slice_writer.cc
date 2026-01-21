@@ -67,7 +67,7 @@ BlockData* SliceWriter::FindOrCreateBlockDataUnlocked(uint64_t block_index,
 // no overlap slice write will come here
 Status SliceWriter::Write(ContextSPtr ctx, const char* buf, uint64_t size,
                           uint64_t chunk_offset) {
-  auto span = vfs_hub_->GetTraceManager().StartChildSpan("SliceWriter::Write",
+  auto span = vfs_hub_->GetTraceManager()->StartChildSpan("SliceWriter::Write",
                                                          ctx->GetTraceSpan());
 
   uint64_t end_in_chunk = chunk_offset + size;
@@ -172,12 +172,12 @@ void SliceWriter::SliceFlushed(Status status, SliceFlushTask* task) {
 
 void SliceWriter::DoFlush() {
   // TODO: get ctx from parent
-  auto span = vfs_hub_->GetTraceManager().StartSpan("SliceWriter::DoFlush");
+  auto span = vfs_hub_->GetTraceManager()->StartSpan("SliceWriter::DoFlush");
 
   VLOG(4) << fmt::format("{} DoFlush", UUID());
 
   uint64_t slice_id = 0;
-  Status s = vfs_hub_->GetMetaSystem().NewSliceId(SpanScope::GetContext(span),
+  Status s = vfs_hub_->GetMetaSystem()->NewSliceId(SpanScope::GetContext(span),
                                                   context_.ino, &slice_id);
   if (!s.ok()) {
     LOG(ERROR) << fmt::format("{} Failed to get new slice id status: {}",

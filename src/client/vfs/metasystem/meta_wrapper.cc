@@ -20,42 +20,17 @@
 
 #include <cstdint>
 
-#include "client/vfs/metasystem/local/metasystem.h"
-#include "client/vfs/metasystem/mds/metasystem.h"
-#include "client/vfs/metasystem/memory/metasystem.h"
 #include "client/vfs/metasystem/meta_log.h"
 #include "client/vfs/metasystem/meta_system.h"
 #include "client/vfs/vfs_meta.h"
-#include "common/const.h"
 #include "common/trace/context.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 
-static MetaSystemUPtr BuildMetaSystem(const VFSConfig& vfs_conf,
-                                      ClientId& client_id,
-                                      TraceManager& trace_manager,
-                                      Compactor& compactor) {
-  if (vfs_conf.metasystem_type == MetaSystemType::MEMORY) {
-    return std::make_unique<memory::MemoryMetaSystem>();
-
-  } else if (vfs_conf.metasystem_type == MetaSystemType::LOCAL) {
-    return std::make_unique<local::LocalMetaSystem>(
-        dingofs::Helper::ExpandPath(kDefaultMetaDBDir), vfs_conf.fs_name,
-        vfs_conf.storage_info);
-
-  } else if (vfs_conf.metasystem_type == MetaSystemType::MDS) {
-    return meta::MDSMetaSystem::Build(vfs_conf.fs_name, vfs_conf.mds_addrs,
-                                      client_id, trace_manager, compactor);
-  }
-
-  return nullptr;
-}
-
-MetaWrapper::MetaWrapper(const VFSConfig& vfs_conf, ClientId& client_id,
-                         TraceManager& trace_manager, Compactor& compactor)
-    : target_(BuildMetaSystem(vfs_conf, client_id, trace_manager, compactor)),
+MetaWrapper::MetaWrapper(MetaSystemUPtr target)
+    : target_(std::move(target)),
       slice_metric_(std::make_unique<metrics::client::SliceMetric>()) {}
 
 Status MetaWrapper::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {

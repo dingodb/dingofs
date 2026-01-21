@@ -113,7 +113,7 @@ Status FileWriter::Write(ContextSPtr ctx, const char* buf, uint64_t size,
     }
   }
 
-  auto span = vfs_hub_->GetTraceManager().StartChildSpan("FileWriter::Write",
+  auto span = vfs_hub_->GetTraceManager()->StartChildSpan("FileWriter::Write",
                                                          ctx->GetTraceSpan());
 
   uint64_t chunk_size = GetChunkSize();

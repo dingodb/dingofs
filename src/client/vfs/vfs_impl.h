@@ -134,9 +134,10 @@ class VFSImpl : public VFS {
 
   uint64_t GetMaxNameLength() override;
 
-  TraceManager& GetTraceManager() override {
+  TraceManager* GetTraceManager() override {
     return vfs_hub_->GetTraceManager();
   }
+
   blockaccess::BlockAccessOptions GetBlockAccesserOptions() override {
     return vfs_hub_->GetBlockAccesserOptions();
   }
@@ -149,7 +150,7 @@ class VFSImpl : public VFS {
   const ClientId client_id_;
 
   std::unique_ptr<VFSHub> vfs_hub_;
-  MetaWrapper& meta_system_;
+  MetaWrapper* meta_system_;
   HandleManager* handle_manager_;
 
   brpc::Server brpc_server_;

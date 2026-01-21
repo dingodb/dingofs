@@ -99,7 +99,7 @@ std::vector<BlockReadReq> ChunkReqReader::GetBlockReadReqs(
 // protected by shared state mtx
 IOBuffer ChunkReqReader::GatherIoBuf(ContextSPtr ctx,
                                          ReaderSharedState* shared) {
-  auto span = hub_->GetTraceManager().StartChildSpan(
+  auto span = hub_->GetTraceManager()->StartChildSpan(
       "ChunkReqReader::GatherIoBuf", ctx->GetTraceSpan());
   IOBuffer ret;
   for (const auto& block_cache_req : shared->block_cache_reqs) {
@@ -121,7 +121,7 @@ void ChunkReqReader::OnAllBlocksComplete(ReaderSharedState* shared) {
   {
     std::lock_guard<std::mutex> lock(shared->mtx);
 
-    auto span = hub_->GetTraceManager().StartChildSpan(
+    auto span = hub_->GetTraceManager()->StartChildSpan(
         "ChunkReqReader::OnAllBlocksComplete", shared->read_span);
 
     final_status = shared->status;
@@ -163,7 +163,7 @@ void ChunkReqReader::OnBlockReadComplete(ReaderSharedState* shared,
     LOG(WARNING) << fmt::format("{} Fail read block_req: {}, status: {}",
                                 UUID(), req->ToString(), s.ToString());
 
-    auto span = hub_->GetTraceManager().StartChildSpan(
+    auto span = hub_->GetTraceManager()->StartChildSpan(
         "ChunkReqReader::WaitAllBlocksLock", shared->read_span);
 
     std::lock_guard<std::mutex> lock(shared->mtx);
@@ -193,7 +193,7 @@ void ChunkReqReader::OnBlockReadComplete(ReaderSharedState* shared,
 void ChunkReqReader::ProcessBlockCacheReadReq(
     ContextSPtr ctx, ReaderSharedState* shared,
     BlockCacheReadReq* block_cache_req) {
-  auto span = hub_->GetTraceManager().StartChildSpan(
+  auto span = hub_->GetTraceManager()->StartChildSpan(
       "ChunkReqReader::ProcessBlockCacheReadReq", ctx->GetTraceSpan());
   ContextSPtr span_ctx = SpanScope::GetContext(span);
 
@@ -235,7 +235,7 @@ void ChunkReqReader::ReadAsync(ContextSPtr ctx,
                          req_.ToString());
   CHECK_GE(chunk_.chunk_end, req_.frange.End());
 
-  auto span = hub_->GetTraceManager().StartChildSpan(
+  auto span = hub_->GetTraceManager()->StartChildSpan(
       "ChunkReqReader::ReadAsync", ctx->GetTraceSpan());
   {
     std::lock_guard<std::mutex> lg(mtx_);

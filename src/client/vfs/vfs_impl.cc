@@ -53,15 +53,14 @@ namespace vfs {
 
 VFSImpl::VFSImpl(const VFSConfig& vfs_conf, const ClientId& client_id)
     : client_id_(client_id),
-      vfs_hub_(std::make_unique<VFSHubImpl>(vfs_conf, client_id_)),
-      meta_system_(vfs_hub_->GetMetaSystem()),
-      handle_manager_(vfs_hub_->GetHandleManager()) {};
+      vfs_hub_(std::make_unique<VFSHubImpl>(vfs_conf, client_id_)) {};
 
 Status VFSImpl::Start(bool upgrade) {
   CHECK(vfs_hub_ != nullptr) << "vfs_hub is null";
-  CHECK(handle_manager_ != nullptr) << "handle_manager is null";
 
   DINGOFS_RETURN_NOT_OK(vfs_hub_->Start(upgrade));
+  meta_system_ = vfs_hub_->GetMetaSystem();
+  handle_manager_ = vfs_hub_->GetHandleManager();
 
   DINGOFS_RETURN_NOT_OK(StartBrpcServer());
 
@@ -81,7 +80,7 @@ bool VFSImpl::Dump(ContextSPtr ctx, Json::Value& value) {
     return false;
   }
 
-  return meta_system_.Dump(ctx, value);
+  return meta_system_->Dump(ctx, value);
 }
 
 bool VFSImpl::Load(ContextSPtr ctx, const Json::Value& value) {
@@ -91,7 +90,7 @@ bool VFSImpl::Load(ContextSPtr ctx, const Json::Value& value) {
     return false;
   }
 
-  return meta_system_.Load(ctx, value);
+  return meta_system_->Load(ctx, value);
 }
 
 double VFSImpl::GetAttrTimeout(const FileType& type) {  // NOLINT
@@ -110,7 +109,7 @@ Status VFSImpl::Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
     return Status::OK();
   }
 
-  Status s = meta_system_.Lookup(ctx, parent, name, attr);
+  Status s = meta_system_->Lookup(ctx, parent, name, attr);
   if (s.ok()) {
     vfs_hub_->GetFileSuffixWatcher()->Remeber(*attr, name);
   }
@@ -123,7 +122,7 @@ Status VFSImpl::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
     return Status::OK();
   }
 
-  return meta_system_.GetAttr(ctx, ino, attr);
+  return meta_system_->GetAttr(ctx, ino, attr);
 }
 
 Status VFSImpl::SetAttr(ContextSPtr ctx, Ino ino, int set, const Attr& in_attr,
@@ -132,19 +131,19 @@ Status VFSImpl::SetAttr(ContextSPtr ctx, Ino ino, int set, const Attr& in_attr,
     return Status::OK();
   }
 
-  Status s = meta_system_.SetAttr(ctx, ino, set, in_attr, out_attr);
+  Status s = meta_system_->SetAttr(ctx, ino, set, in_attr, out_attr);
 
   return s;
 }
 
 Status VFSImpl::ReadLink(ContextSPtr ctx, Ino ino, std::string* link) {
-  return meta_system_.ReadLink(ctx, ino, link);
+  return meta_system_->ReadLink(ctx, ino, link);
 }
 
 Status VFSImpl::MkNod(ContextSPtr ctx, Ino parent, const std::string& name,
                       uint32_t uid, uint32_t gid, uint32_t mode, uint64_t dev,
                       Attr* attr) {
-  Status s = meta_system_.MkNod(ctx, parent, name, uid, gid, mode, dev, attr);
+  Status s = meta_system_->MkNod(ctx, parent, name, uid, gid, mode, dev, attr);
   if (s.ok()) {
     vfs_hub_->GetFileSuffixWatcher()->Remeber(*attr, name);
   }
@@ -159,7 +158,7 @@ Status VFSImpl::Unlink(ContextSPtr ctx, Ino parent, const std::string& name) {
     return Status::NoPermitted("Can not unlink internal node");
   }
 
-  return meta_system_.Unlink(ctx, parent, name);
+  return meta_system_->Unlink(ctx, parent, name);
 }
 
 Status VFSImpl::Symlink(ContextSPtr ctx, Ino parent, const std::string& name,
@@ -181,7 +180,7 @@ Status VFSImpl::Symlink(ContextSPtr ctx, Ino parent, const std::string& name,
     }
   }
 
-  return meta_system_.Symlink(ctx, parent, name, uid, gid, link, attr);
+  return meta_system_->Symlink(ctx, parent, name, uid, gid, link, attr);
 }
 
 Status VFSImpl::Rename(ContextSPtr ctx, Ino old_parent,
@@ -194,7 +193,7 @@ Status VFSImpl::Rename(ContextSPtr ctx, Ino old_parent,
   }
 
   // TODO: maybe call file suffix watcher to forget old name?
-  return meta_system_.Rename(ctx, old_parent, old_name, new_parent, new_name);
+  return meta_system_->Rename(ctx, old_parent, old_name, new_parent, new_name);
 }
 
 Status VFSImpl::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
@@ -208,7 +207,7 @@ Status VFSImpl::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
     }
   }
 
-  Status s = meta_system_.Link(ctx, ino, new_parent, new_name, attr);
+  Status s = meta_system_->Link(ctx, ino, new_parent, new_name, attr);
   if (s.ok()) {
     vfs_hub_->GetFileSuffixWatcher()->Forget(ino);
   }
@@ -248,7 +247,7 @@ Status VFSImpl::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t* fh) {
     return Status::OK();
   }
 
-  Status s = meta_system_.Open(ctx, ino, flags, gfh);
+  Status s = meta_system_->Open(ctx, ino, flags, gfh);
   if (s.ok()) {
     auto file = std::make_unique<File>(vfs_hub_.get(), gfh, ino);
     DINGOFS_RETURN_NOT_OK(file->Open());
@@ -266,7 +265,7 @@ Status VFSImpl::Create(ContextSPtr ctx, Ino parent, const std::string& name,
                        uint64_t* fh, Attr* attr) {
   uint64_t gfh = vfs::FhGenerator::GenFh();
   Status s =
-      meta_system_.Create(ctx, parent, name, uid, gid, mode, flags, attr, gfh);
+      meta_system_->Create(ctx, parent, name, uid, gid, mode, flags, attr, gfh);
   if (s.ok()) {
     CHECK_GT(attr->ino, 0) << "ino in attr is null";
     Ino ino = attr->ino;
@@ -290,8 +289,8 @@ Status VFSImpl::Read(ContextSPtr ctx, Ino ino, DataBuffer* data_buffer,
   Status s;
   auto* handle = handle_manager_->FindHandler(fh);
   VFS_CHECK_HANDLE(handle, ino, fh);
-  auto span = vfs_hub_->GetTraceManager().StartChildSpan("VFSImpl::Read",
-                                                         ctx->GetTraceSpan());
+  auto span = vfs_hub_->GetTraceManager()->StartChildSpan("VFSImpl::Read",
+                                                          ctx->GetTraceSpan());
   // read .stats file data
   if (BAIDU_UNLIKELY(ino == kStatsIno)) {
     size_t file_size = handle->file_buffer.size;
@@ -314,8 +313,8 @@ Status VFSImpl::Read(ContextSPtr ctx, Ino ino, DataBuffer* data_buffer,
   }
 
   {
-    auto flush_span =
-        vfs_hub_->GetTraceManager().StartChildSpan("VFSImpl::Read.Flush", span);
+    auto flush_span = vfs_hub_->GetTraceManager()->StartChildSpan(
+        "VFSImpl::Read.Flush", span);
     s = handle->file->Flush();
     if (!s.ok()) {
       SpanScope::SetStatus(flush_span, s);
@@ -335,8 +334,8 @@ Status VFSImpl::Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t size,
   auto* handle = handle_manager_->FindHandler(fh);
   VFS_CHECK_HANDLE(handle, ino, fh);
 
-  auto span = vfs_hub_->GetTraceManager().StartChildSpan("VFSImpl::Write",
-                                                         ctx->GetTraceSpan());
+  auto span = vfs_hub_->GetTraceManager()->StartChildSpan("VFSImpl::Write",
+                                                          ctx->GetTraceSpan());
 
   if (handle->file == nullptr) {
     LOG(ERROR) << "file is null in handle, ino: " << ino << ", fh: " << fh;
@@ -347,7 +346,7 @@ Status VFSImpl::Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t size,
   s = handle->file->Write(SpanScope::GetContext(span), buf, size, offset,
                           out_wsize);
   if (s.ok()) {
-    s = meta_system_.Write(SpanScope::GetContext(span), ino, offset, size, fh);
+    s = meta_system_->Write(SpanScope::GetContext(span), ino, offset, size, fh);
     handle->file->Invalidate(offset, size);
   }
 
@@ -372,7 +371,7 @@ Status VFSImpl::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {
   s = handle->file->Flush();
   if (!s.ok()) return s;
 
-  s = meta_system_.Flush(ctx, ino, fh);
+  s = meta_system_->Flush(ctx, ino, fh);
 
   return s;
 }
@@ -394,7 +393,7 @@ Status VFSImpl::Release(ContextSPtr ctx, Ino ino, uint64_t fh) {
   } else {
     handle->file->Close();
     // how do we return
-    s = meta_system_.Close(ctx, ino, fh);
+    s = meta_system_->Close(ctx, ino, fh);
   }
 
   handle_manager_->ReleaseHandler(fh);
@@ -433,7 +432,7 @@ Status VFSImpl::SetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
     return Status::OK();
   }
 
-  return meta_system_.SetXattr(ctx, ino, name, value, flags);
+  return meta_system_->SetXattr(ctx, ino, name, value, flags);
 }
 
 Status VFSImpl::GetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
@@ -448,7 +447,7 @@ Status VFSImpl::GetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
     return Status::OK();
   }
 
-  return meta_system_.GetXattr(ctx, ino, name, value);
+  return meta_system_->GetXattr(ctx, ino, name, value);
 }
 
 Status VFSImpl::RemoveXattr(ContextSPtr ctx, Ino ino, const std::string& name) {
@@ -456,7 +455,7 @@ Status VFSImpl::RemoveXattr(ContextSPtr ctx, Ino ino, const std::string& name) {
     return Status::NoData("No Xattr data in .stats");
   }
 
-  return meta_system_.RemoveXattr(ctx, ino, name);
+  return meta_system_->RemoveXattr(ctx, ino, name);
 }
 
 Status VFSImpl::ListXattr(ContextSPtr ctx, Ino ino,
@@ -465,19 +464,19 @@ Status VFSImpl::ListXattr(ContextSPtr ctx, Ino ino,
     return Status::NoData("No Xattr data in .stats");
   }
 
-  return meta_system_.ListXattr(ctx, ino, xattrs);
+  return meta_system_->ListXattr(ctx, ino, xattrs);
 }
 
 Status VFSImpl::MkDir(ContextSPtr ctx, Ino parent, const std::string& name,
                       uint32_t uid, uint32_t gid, uint32_t mode, Attr* attr) {
-  return meta_system_.MkDir(ctx, parent, name, uid, gid, mode, attr);
+  return meta_system_->MkDir(ctx, parent, name, uid, gid, mode, attr);
 }
 
 Status VFSImpl::OpenDir(ContextSPtr ctx, Ino ino, uint64_t* fh,
                         bool& need_cache) {
   *fh = vfs::FhGenerator::GenFh();
 
-  return meta_system_.OpenDir(ctx, ino, *fh, need_cache);
+  return meta_system_->OpenDir(ctx, ino, *fh, need_cache);
 }
 
 Status VFSImpl::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
@@ -489,11 +488,11 @@ Status VFSImpl::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
     handler(stats_entry, 1);  // pos 0 is the offset for .stats entry
   }
 
-  return meta_system_.ReadDir(ctx, ino, fh, offset, with_attr, handler);
+  return meta_system_->ReadDir(ctx, ino, fh, offset, with_attr, handler);
 }
 
 Status VFSImpl::ReleaseDir(ContextSPtr ctx, Ino ino, uint64_t fh) {
-  return meta_system_.ReleaseDir(ctx, ino, fh);
+  return meta_system_->ReleaseDir(ctx, ino, fh);
 }
 
 Status VFSImpl::RmDir(ContextSPtr ctx, Ino parent, const std::string& name) {
@@ -502,11 +501,11 @@ Status VFSImpl::RmDir(ContextSPtr ctx, Ino parent, const std::string& name) {
     return Status::NoPermitted("not permit rmdir internal dir");
   }
 
-  return meta_system_.RmDir(ctx, parent, name);
+  return meta_system_->RmDir(ctx, parent, name);
 }
 
 Status VFSImpl::StatFs(ContextSPtr ctx, Ino ino, FsStat* fs_stat) {
-  return meta_system_.StatFs(ctx, ino, fs_stat);
+  return meta_system_->StatFs(ctx, ino, fs_stat);
 }
 
 Status VFSImpl::Ioctl(ContextSPtr ctx, Ino ino, uint32_t uid, unsigned int cmd,
@@ -527,7 +526,7 @@ Status VFSImpl::Ioctl(ContextSPtr ctx, Ino ino, uint32_t uid, unsigned int cmd,
   }
 
   Attr attr;
-  Status s = meta_system_.GetAttr(ctx, ino, &attr);
+  Status s = meta_system_->GetAttr(ctx, ino, &attr);
   if (!s.ok()) {
     return s;
   }
@@ -570,7 +569,7 @@ Status VFSImpl::Ioctl(ContextSPtr ctx, Ino ino, uint32_t uid, unsigned int cmd,
     }
 
     Attr out_attr;
-    return meta_system_.SetAttr(ctx, ino, kSetAttrFlags, attr, &out_attr);
+    return meta_system_->SetAttr(ctx, ino, kSetAttrFlags, attr, &out_attr);
   } else {
     uint64_t iflag = 0;
     if (((cmd >> 8) & 0xFF) == 'f') {  // FS_IOC_GETFLAGS

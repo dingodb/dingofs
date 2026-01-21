@@ -37,7 +37,7 @@ Status Compactor::DoCompact(ContextSPtr ctx, Ino ino, uint64_t chunk_index,
                             const std::vector<Slice>& slices,
                             Slice& out_slice) {
   CHECK(!slices.empty()) << "invalid compact, no slices to compact";
-  auto span = vfs_hub_->GetTraceManager().StartChildSpan("Compactor::DoCompact",
+  auto span = vfs_hub_->GetTraceManager()->StartChildSpan("Compactor::DoCompact",
                                                          ctx->GetTraceSpan());
   auto fs_info = vfs_hub_->GetFsInfo();
 
@@ -115,7 +115,7 @@ Status Compactor::Compact(ContextSPtr ctx, Ino ino, uint64_t chunk_index,
           << ", chunk_index: " << chunk_index
           << ", slices count: " << slices.size();
   CHECK(!slices.empty()) << "invalid compact, no slices to compact";
-  auto span = vfs_hub_->GetTraceManager().StartChildSpan("Compactor::Compact",
+  auto span = vfs_hub_->GetTraceManager()->StartChildSpan("Compactor::Compact",
                                                          ctx->GetTraceSpan());
 
   std::vector<Slice> to_compact;
@@ -159,7 +159,7 @@ Status Compactor::ForceCompact(ContextSPtr ctx, Ino ino, uint64_t chunk_index,
           << ", chunk_index: " << chunk_index
           << ", slices count: " << slices.size();
   CHECK(!slices.empty()) << "invalid compact, no slices to compact";
-  auto span = vfs_hub_->GetTraceManager().StartChildSpan("Compactor::Compact",
+  auto span = vfs_hub_->GetTraceManager()->StartChildSpan("Compactor::Compact",
                                                          ctx->GetTraceSpan());
   Slice compacted;
   DINGOFS_RETURN_NOT_OK(DoCompact(SpanScope::GetContext(span), ino, chunk_index,

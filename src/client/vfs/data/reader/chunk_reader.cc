@@ -58,12 +58,12 @@ ChunkReader::ChunkReader(VFSHub* hub, uint64_t fh, const ChunkReq& req)
     : hub_(hub), fh_(fh), reader_(new ChunkReqReader(hub, req)) {}
 
 Status ChunkReader::GetSlices(ContextSPtr ctx, ChunkSlices* chunk_slices) {
-  auto span = hub_->GetTraceManager().StartChildSpan("ChunkReader::GetSlices",
+  auto span = hub_->GetTraceManager()->StartChildSpan("ChunkReader::GetSlices",
                                                      ctx->GetTraceSpan());
 
   std::vector<Slice> slices;
   uint64_t chunk_version = 0;
-  DINGOFS_RETURN_NOT_OK(hub_->GetMetaSystem().ReadSlice(
+  DINGOFS_RETURN_NOT_OK(hub_->GetMetaSystem()->ReadSlice(
       SpanScope::GetContext(span), reader_->chunk_.ino, reader_->chunk_.index,
       fh_, &slices, chunk_version));
 
@@ -78,7 +78,7 @@ Status ChunkReader::GetSlices(ContextSPtr ctx, ChunkSlices* chunk_slices) {
 }
 
 void ChunkReader::ReadAsync(ContextSPtr ctx, StatusCallback cb) {
-  auto span = hub_->GetTraceManager().StartChildSpan("ChunkReader::ReadAsync",
+  auto span = hub_->GetTraceManager()->StartChildSpan("ChunkReader::ReadAsync",
                                                      ctx->GetTraceSpan());
 
   ChunkSlices chunk_slices;

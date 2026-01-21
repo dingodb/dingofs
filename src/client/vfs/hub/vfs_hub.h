@@ -55,7 +55,7 @@ class VFSHub {
 
   virtual ClientId GetClientId() = 0;
 
-  virtual MetaWrapper& GetMetaSystem() = 0;
+  virtual MetaWrapper* GetMetaSystem() = 0;
 
   virtual HandleManager* GetHandleManager() = 0;
 
@@ -79,9 +79,9 @@ class VFSHub {
 
   virtual WarmupManager* GetWarmupManager() = 0;
 
-  virtual Compactor& GetCompactor() = 0;
+  virtual Compactor* GetCompactor() = 0;
 
-  virtual TraceManager& GetTraceManager() = 0;
+  virtual TraceManager* GetTraceManager() = 0;
 
   virtual FsInfo GetFsInfo() = 0;
 
@@ -100,7 +100,10 @@ class VFSHubImpl : public VFSHub {
 
   ClientId GetClientId() override { return client_id_; }
 
-  MetaWrapper& GetMetaSystem() override { return meta_wrapper_; }
+  MetaWrapper* GetMetaSystem() override {
+    CHECK_NOTNULL(meta_wrapper_);
+    return meta_wrapper_.get();
+  }
 
   HandleManager* GetHandleManager() override {
     CHECK_NOTNULL(handle_manager_);
@@ -157,14 +160,20 @@ class VFSHubImpl : public VFSHub {
     return warmup_manager_.get();
   }
 
-  Compactor& GetCompactor() override { return compactor_; }
+  Compactor* GetCompactor() override {
+    CHECK_NOTNULL(compactor_);
+    return compactor_.get();
+  }
 
   FsInfo GetFsInfo() override {
     CHECK(started_.load(std::memory_order_relaxed)) << "not started";
     return fs_info_;
   }
 
-  TraceManager& GetTraceManager() override { return trace_manager_; }
+  TraceManager* GetTraceManager() override {
+    CHECK_NOTNULL(trace_manager_);
+    return trace_manager_.get();
+  }
 
   blockaccess::BlockAccessOptions GetBlockAccesserOptions() override {
     CHECK(started_.load(std::memory_order_relaxed)) << "not started";
@@ -177,14 +186,14 @@ class VFSHubImpl : public VFSHub {
   blockaccess::BlockAccessOptions blockaccess_options_;
 
   const ClientId client_id_;
+  const VFSConfig vfs_conf_;
 
   FsInfo fs_info_;
   S3Info s3_info_;
 
-  TraceManager trace_manager_;
-  Compactor compactor_;
-  MetaWrapper meta_wrapper_;
-
+  std::unique_ptr<TraceManager> trace_manager_;
+  std::unique_ptr<Compactor> compactor_;
+  std::unique_ptr<MetaWrapper> meta_wrapper_;
   std::unique_ptr<HandleManager> handle_manager_;
   std::unique_ptr<blockaccess::BlockAccesser> block_accesser_;
   std::unique_ptr<BlockStore> block_store_;

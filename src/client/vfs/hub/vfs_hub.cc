@@ -16,6 +16,9 @@
 
 #include "client/vfs/hub/vfs_hub.h"
 
+#include <fmt/format.h>
+#include <glog/logging.h>
+
 #include <atomic>
 #include <memory>
 
@@ -24,16 +27,18 @@
 #include "client/vfs/common/helper.h"
 #include "client/vfs/components/prefetch_manager.h"
 #include "client/vfs/components/warmup_manager.h"
+#include "client/vfs/metasystem/local/metasystem.h"
+#include "client/vfs/metasystem/mds/metasystem.h"
+#include "client/vfs/metasystem/memory/metasystem.h"
 #include "client/vfs/metasystem/meta_wrapper.h"
 #include "client/vfs/vfs.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/blockaccess/accesser_common.h"
 #include "common/blockaccess/block_accesser.h"
 #include "common/blockaccess/rados/rados_common.h"
+#include "common/const.h"
 #include "common/options/client.h"
 #include "common/status.h"
-#include "fmt/format.h"
-#include "glog/logging.h"
 #include "utils/executor/thread/executor_impl.h"
 
 namespace dingofs {
@@ -44,11 +49,28 @@ static const std::string kFlushExecutorName = "vfs_flush";
 static const std::string kReadExecutorName = "vfs_read";
 static const std::string kBgExecutorName = "vfs_bg";
 
+static MetaSystemUPtr BuildMetaSystem(const VFSConfig& vfs_conf,
+                                      const ClientId& client_id,
+                                      TraceManager& trace_manager,
+                                      Compactor& compactor) {
+  if (vfs_conf.metasystem_type == MetaSystemType::MEMORY) {
+    return std::make_unique<memory::MemoryMetaSystem>();
+
+  } else if (vfs_conf.metasystem_type == MetaSystemType::LOCAL) {
+    return std::make_unique<local::LocalMetaSystem>(
+        dingofs::Helper::ExpandPath(kDefaultMetaDBDir), vfs_conf.fs_name,
+        vfs_conf.storage_info);
+
+  } else if (vfs_conf.metasystem_type == MetaSystemType::MDS) {
+    return meta::MDSMetaSystem::Build(vfs_conf.fs_name, vfs_conf.mds_addrs,
+                                      client_id, trace_manager, compactor);
+  }
+
+  return nullptr;
+}
+
 VFSHubImpl::VFSHubImpl(const VFSConfig& vfs_conf, ClientId client_id)
-    : client_id_(client_id),
-      handle_manager_(std::make_unique<HandleManager>(this)),
-      compactor_(this),
-      meta_wrapper_(vfs_conf, client_id, trace_manager_, compactor_) {}
+    : client_id_(client_id), vfs_conf_(vfs_conf) {}
 
 VFSHubImpl::~VFSHubImpl() {
   if (handle_manager_ != nullptr) {
@@ -78,6 +100,18 @@ VFSHubImpl::~VFSHubImpl() {
   if (block_store_ != nullptr) {
     block_store_.reset();
   }
+
+  if (meta_wrapper_ != nullptr) {
+    meta_wrapper_.reset();
+  }
+
+  if (compactor_ != nullptr) {
+    compactor_.reset();
+  }
+
+  if (trace_manager_ != nullptr) {
+    trace_manager_.reset();
+  }
 }
 
 Status VFSHubImpl::Start(bool upgrade) {
@@ -87,19 +121,31 @@ Status VFSHubImpl::Start(bool upgrade) {
   LOG(INFO) << fmt::format("[vfs.hub] vfs hub starting, upgrade({}).", upgrade);
 
   // trace manager
-  if (!trace_manager_.Init()) {
+  trace_manager_ = std::make_unique<TraceManager>();
+  if (!trace_manager_->Init()) {
     return Status::Internal("init trace manager fail");
   }
 
+  compactor_ = std::make_unique<Compactor>(this);
+
   // meta system
-  DINGOFS_RETURN_NOT_OK(meta_wrapper_.Init(upgrade));
+  {
+    auto meta =
+        BuildMetaSystem(vfs_conf_, client_id_, *trace_manager_, *compactor_);
+    if (meta == nullptr) {
+      return Status::Internal("build meta system fail");
+    }
+
+    meta_wrapper_ = std::make_unique<MetaWrapper>(std::move(meta));
+    DINGOFS_RETURN_NOT_OK(meta_wrapper_->Init(upgrade));
+  }
 
   // load fs info
   {
-    auto span = trace_manager_.StartSpan("vfs::start");
+    auto span = trace_manager_->StartSpan("vfs::start");
 
     DINGOFS_RETURN_NOT_OK(
-        meta_wrapper_.GetFsInfo(SpanScope::GetContext(span), &fs_info_));
+        meta_wrapper_->GetFsInfo(SpanScope::GetContext(span), &fs_info_));
 
     LOG(INFO) << fmt::format("[vfs.hub] vfs_fs_info: {}", FsInfo2Str(fs_info_));
     if (fs_info_.status != FsStatus::kNormal) {
@@ -144,6 +190,7 @@ Status VFSHubImpl::Start(bool upgrade) {
 
   // handle manager
   {
+    handle_manager_ = std::make_unique<HandleManager>(this);
     CHECK(handle_manager_ != nullptr) << "handle manager is nullptr.";
     DINGOFS_RETURN_NOT_OK(handle_manager_->Start());
   }
@@ -262,9 +309,13 @@ Status VFSHubImpl::Stop(bool upgrade) {
     block_store_->Shutdown();
   }
 
-  meta_wrapper_.Stop(upgrade);
+  if (meta_wrapper_ != nullptr) {
+    meta_wrapper_->Stop(upgrade);
+  }
 
-  trace_manager_.Stop();
+  if (trace_manager_ != nullptr) {
+    trace_manager_->Stop();
+  }
 
   started_.store(false, std::memory_order_relaxed);
 

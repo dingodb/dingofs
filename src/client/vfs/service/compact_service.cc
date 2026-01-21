@@ -71,8 +71,8 @@ void CompactServiceImpl::default_method(
 
     std::vector<Slice> slices;
     uint64_t version = 0;
-    status = vfs_hub_->GetMetaSystem().ReadSlice(ctx, ino, chunk_index, 0,
-                                                 &slices, version);
+    status = vfs_hub_->GetMetaSystem()->ReadSlice(ctx, ino, chunk_index, 0,
+                                                  &slices, version);
     if (status.ok() && !slices.empty()) {
       LOG(INFO) << fmt::format(
           "[service.compact.{}.{}] readslice finish, slice_size({}) "
@@ -80,13 +80,13 @@ void CompactServiceImpl::default_method(
           ino, chunk_index, slices.size(), version);
 
       std::vector<Slice> out_slices;
-      status = vfs_hub_->GetCompactor().Compact(ctx, ino, chunk_index, slices,
-                                                out_slices);
+      status = vfs_hub_->GetCompactor()->Compact(ctx, ino, chunk_index, slices,
+                                                 out_slices);
     }
 
   } else if (action == "compact") {
     auto ctx = std::make_shared<Context>("");
-    status = vfs_hub_->GetMetaSystem().ManualCompact(ctx, ino, chunk_index);
+    status = vfs_hub_->GetMetaSystem()->ManualCompact(ctx, ino, chunk_index);
   }
 
   os << fmt::format(
