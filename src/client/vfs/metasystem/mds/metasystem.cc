@@ -114,7 +114,8 @@ MDSMetaSystemUPtr MDSMetaSystem::Build(const std::string& fs_name,
   mds::FsInfoEntry fs_info;
   auto status = MDSClient::GetFsInfo(rpc, fs_name, fs_info);
   if (!status.ok()) {
-    LOG(ERROR) << fmt::format("[meta.fs.{}] Get fs info fail.", fs_name);
+    LOG(ERROR) << fmt::format("[meta.fs.{}] get fs info fail, status({}).",
+                              fs_name, status.ToString());
     return nullptr;
   }
 
@@ -1297,10 +1298,6 @@ void MDSMetaSystem::AsyncFlushSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
       if (status.ok()) {
         compact_processor_.LaunchCompact(ino, chunk, mds_client_, compactor_,
                                          true);
-      } else {
-        LOG(INFO) << fmt::format(
-            "[meta.fs.{}.{}] not need compact, reason({}).", ino,
-            chunk->GetIndex(), status.ToString());
       }
     }
   }
