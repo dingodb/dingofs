@@ -340,7 +340,7 @@ static void RenderClientList(const std::vector<ClientEntry>& clients, butil::IOB
   for (const auto& client : clients) {
     os << "<tr>";
     os << "<td>" << client.id() << "</td>";
-    os << fmt::format(R"(<td><a href="http://{}:{}/FuseStatService" target="_blank">{}:{} </a></td>)", client.ip(),
+    os << fmt::format(R"(<td><a href="http://{}:{}/ClientStatService" target="_blank">{}:{} </a></td>)", client.ip(),
                       client.port(), client.hostname(), client.port());
     os << "<td>" << client.mountpoint() << "</td>";
     os << "<td>" << client.fs_name() << "</td>";

@@ -29,6 +29,7 @@
 #include <bthread/rwlock.h>
 #include <butil/iobuf.h>
 #include <butil/memory/scope_guard.h>
+#include <json/value.h>
 
 #include <atomic>
 #include <memory>
@@ -49,7 +50,8 @@ namespace cache {
 
 class Peer {
  public:
-  Peer(const std::string& id, const std::string& ip, uint32_t port);
+  Peer(const std::string& id, const std::string& ip, uint32_t port,
+       uint32_t weight);
   Status Start();
   void Shutdown();
 
@@ -59,7 +61,9 @@ class Peer {
   std::string Id() const { return id_; }
   std::string IP() const { return ip_; }
   uint32_t Port() const { return port_; }
+  uint32_t Weight() const { return weight_; }
   bool IsHealthy() { return health_checker_->IsHealthy(); }
+  bool Dump(Json::Value& value) const;
 
  private:
   std::string EndPoint() { return ip_ + ":" + std::to_string(port_); }
@@ -77,6 +81,7 @@ class Peer {
   std::string id_;
   std::string ip_;
   uint32_t port_;
+  uint32_t weight_;
   std::atomic<int> next_conn_index_{0};
   std::vector<PeerConnectionUPtr> connections_;
   PeerHealthCheckerUPtr health_checker_;

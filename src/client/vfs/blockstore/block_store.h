@@ -19,6 +19,7 @@
 
 #include <cstdint>
 
+#include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
 #include "common/callback.h"
 #include "common/io_buffer.h"
@@ -67,6 +68,7 @@ class BlockStore {
                              StatusCallback callback) = 0;
   // utility
   virtual bool EnableCache() const = 0;
+  virtual cache::BlockCache* GetBlockCache() const = 0;
 };
 
 }  // namespace vfs

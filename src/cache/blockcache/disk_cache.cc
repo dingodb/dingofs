@@ -56,6 +56,7 @@ DiskCacheOption::DiskCacheOption()
 
 DiskCache::DiskCache(DiskCacheOption option)
     : running_(false),
+      option_(option),
       layout_(std::make_shared<DiskCacheLayout>(option.cache_index,
                                                 option.cache_dir)),
       localfs_(std::make_unique<LocalFileSystem>(layout_)),
@@ -314,6 +315,16 @@ Status DiskCache::CheckStatus(uint8_t want) const {
   }
 
   return Status::OK();
+}
+
+bool DiskCache::Dump(Json::Value& value) const {
+  value["dir"] = option_.cache_dir;
+  value["capacity"] = option_.cache_size_mb;
+  value["free_space_ratio"] = FLAGS_free_space_ratio * 100;
+  value["stage_full"] = StageFull();
+  value["cache_full"] = CacheFull();
+
+  return true;
 }
 
 }  // namespace cache

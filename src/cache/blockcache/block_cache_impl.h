@@ -79,6 +79,8 @@ class BlockCacheImpl final : public BlockCache {
     return store_->IsCached(key);
   }
 
+  bool Dump(Json::Value& value) const override { return store_->Dump(value); }
+
  private:
   friend class BlockCacheBuilder;
 

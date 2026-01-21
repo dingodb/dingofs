@@ -87,6 +87,9 @@ class RemoteBlockCacheImpl final : public BlockCache {
   bool EnableStage() const override { return IsEnabled(); }
   bool EnableCache() const override { return IsEnabled(); }
   bool IsCached(const BlockKey&) const override { return IsEnabled(); }
+  bool Dump(Json::Value& value) const override {
+    return upstream_->Dump(value);
+  }
 
  private:
   BlockCache* GetSelfPtr() { return this; }

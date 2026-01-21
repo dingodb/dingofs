@@ -24,6 +24,7 @@
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_BLOCK_CACHE_H_
 
 #include <brpc/server.h>
+#include <json/value.h>
 
 #include <ostream>
 
@@ -125,6 +126,7 @@ class BlockCache {
   virtual bool EnableStage() const { return false; }
   virtual bool EnableCache() const { return false; }
   virtual bool IsCached(const BlockKey& /*key*/) const { return false; }
+  virtual bool Dump(Json::Value& /*value*/) const { return true; }
 };
 
 using BlockCachePtr = BlockCache*;

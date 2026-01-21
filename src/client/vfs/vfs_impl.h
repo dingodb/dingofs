@@ -27,8 +27,8 @@
 #include "client/vfs/handle/handle_manager.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/metasystem/meta_system.h"
+#include "client/vfs/service/client_stat_service.h"
 #include "client/vfs/service/compact_service.h"
-#include "client/vfs/service/fuse_stat_service.h"
 #include "client/vfs/service/inode_blocks_service.h"
 #include "client/vfs/vfs.h"
 #include "common/trace/context.h"
@@ -156,7 +156,7 @@ class VFSImpl : public VFS {
   brpc::Server brpc_server_;
   InodeBlocksServiceImpl inode_blocks_service_;
   CompactServiceImpl compact_service_;
-  FuseStatServiceImpl fuse_stat_service_;
+  ClientStatServiceImpl client_stat_service_;
 };
 
 }  // namespace vfs

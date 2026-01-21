@@ -26,6 +26,7 @@
 #include <absl/strings/str_format.h>
 #include <absl/strings/str_split.h>
 #include <glog/logging.h>
+#include <json/value.h>
 
 #include <ostream>
 
@@ -187,6 +188,7 @@ class CacheStore {
   virtual bool IsRunning() const = 0;
   virtual bool IsCached(const BlockKey& key) const = 0;
   virtual bool IsFull(const BlockKey& key) const = 0;
+  virtual bool Dump(Json::Value& value) const = 0;
 };
 
 using CacheStoreSPtr = std::shared_ptr<CacheStore>;

@@ -12,18 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_SRC_CLIENT_VFS_FUSE_STAT_SERVICE_H_
-#define DINGOFS_SRC_CLIENT_VFS_FUSE_STAT_SERVICE_H_
+#ifndef DINGOFS_SRC_CLIENT_VFS_CLIENT_STAT_SERVICE_H_
+#define DINGOFS_SRC_CLIENT_VFS_CLIENT_STAT_SERVICE_H_
 
 #include <glog/logging.h>
-
-#include <memory>
 
 #include "brpc/builtin/tabbed.h"
 #include "brpc/server.h"
 #include "butil/iobuf.h"
 #include "client/vfs/hub/vfs_hub.h"
-#include "dingofs/vfs.pb.h"
 #include "dingofs/web.pb.h"
 
 namespace dingofs {
@@ -34,13 +31,13 @@ struct Range {
   uint64_t start{0};
   uint64_t end{0};  // [start, end)
 };
-class FuseStatServiceImpl : public pb::web::FuseStatService,
-                            public brpc::Tabbed {
+class ClientStatServiceImpl : public pb::web::ClientStatService,
+                              public brpc::Tabbed {
  public:
-  FuseStatServiceImpl() = default;
+  ClientStatServiceImpl() = default;
 
-  FuseStatServiceImpl(const FuseStatServiceImpl&) = delete;
-  FuseStatServiceImpl& operator=(const FuseStatServiceImpl&) = delete;
+  ClientStatServiceImpl(const ClientStatServiceImpl&) = delete;
+  ClientStatServiceImpl& operator=(const ClientStatServiceImpl&) = delete;
 
   void Init(VFSHub* hub) {
     CHECK_NOTNULL(hub);
@@ -63,4 +60,4 @@ class FuseStatServiceImpl : public pb::web::FuseStatService,
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_VFS_FUSE_STAT_SERVICE_H_
+#endif  // DINGOFS_SRC_CLIENT_VFS_CLIENT_STAT_SERVICE_H_

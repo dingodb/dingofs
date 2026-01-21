@@ -50,6 +50,7 @@ class BlockStoreImpl final : public BlockStore {
                      StatusCallback callback) override;
   // utility
   bool EnableCache() const override;
+  cache::BlockCache* GetBlockCache() const override;
 
  private:
   VFSHub* hub_;

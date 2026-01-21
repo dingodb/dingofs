@@ -18,6 +18,7 @@
 
 #include <google/protobuf/descriptor.pb.h>
 
+#include "cache/blockcache/block_cache.h"
 #include "client/common/const.h"
 #include "client/vfs/hub/vfs_hub.h"
 
@@ -78,8 +79,8 @@ void FakeBlockStore::RangeAsync(ContextSPtr ctx, RangeReq req,
 void FakeBlockStore::PutAsync(ContextSPtr ctx, PutReq req,
                               StatusCallback callback) {
   (void)req;
-  auto span = hub_->GetTraceManager()->StartChildSpan("FakeBlockStore::PutAsync",
-                                                     ctx->GetTraceSpan());
+  auto span = hub_->GetTraceManager()->StartChildSpan(
+      "FakeBlockStore::PutAsync", ctx->GetTraceSpan());
   auto wrapper = [this, cb = std::move(callback), span](Status s) {
     SpanScope::End(span);
     cb(s);
@@ -104,6 +105,7 @@ void FakeBlockStore::PrefetchAsync(ContextSPtr ctx, PrefetchReq req,
 
 // utility
 bool FakeBlockStore::EnableCache() const { return false; }
+cache::BlockCache* FakeBlockStore::GetBlockCache() const { return nullptr; }
 
 }  // namespace vfs
 }  // namespace client

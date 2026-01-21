@@ -103,6 +103,8 @@ class Upstream {
   Status SendCacheRequest(const BlockKey& key, const Block& block);
   Status SendPrefetchRequest(const BlockKey& key, size_t length);
 
+  bool Dump(Json::Value& value);
+
  private:
   PeerGroupSPtr GetPeerGroup() {
     bthread::RWLockRdGuard guard(rwlock_);

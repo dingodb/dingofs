@@ -81,6 +81,10 @@ class TierBlockCache final : public BlockCache {
            remote_block_cache_->IsCached(key);
   }
 
+  bool Dump(Json::Value& value) const override {
+    return local_block_cache_->Dump(value) && remote_block_cache_->Dump(value);
+  }
+
  private:
   BlockCache* GetSelfPtr() { return this; }
 

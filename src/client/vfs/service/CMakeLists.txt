@@ -15,7 +15,7 @@
 add_library(vfs_service
     compact_service.cc
     inode_blocks_service.cc
-    fuse_stat_service.cc
+    client_stat_service.cc
 )
 
 target_link_libraries(vfs_service

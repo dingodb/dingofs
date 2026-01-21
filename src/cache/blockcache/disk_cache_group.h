@@ -33,8 +33,8 @@
 namespace dingofs {
 namespace cache {
 
-struct DiskCacheGroupMetric {
-  DiskCacheGroupMetric() = default;
+struct DiskCacheGroupVarsCollector {
+  DiskCacheGroupVarsCollector() = default;
 
   inline static const std::string prefix = "dingofs_disk_cache_group";
 
@@ -43,18 +43,20 @@ struct DiskCacheGroupMetric {
   OpVar op_load{absl::StrFormat("%s_%s", prefix, "load")};
 };
 
-using DiskCacheGroupMetricSPtr = std::shared_ptr<DiskCacheGroupMetric>;
+using DiskCacheGroupVarsCollectorSPtr =
+    std::shared_ptr<DiskCacheGroupVarsCollector>;
 
-struct DiskCacheGroupMetricGuard {
-  DiskCacheGroupMetricGuard(const std::string& op_name, size_t bytes,
-                            Status& status, DiskCacheGroupMetricSPtr metric)
+struct DiskCacheGroupVarsRecordGuard {
+  DiskCacheGroupVarsRecordGuard(const std::string& op_name, size_t bytes,
+                                Status& status,
+                                DiskCacheGroupVarsCollectorSPtr metric)
       : op_name(op_name), bytes(bytes), status(status), metric(metric) {
     CHECK(op_name == "Stage" || op_name == "Cache" || op_name == "Load")
         << "Invalid operation name: " << op_name;
     timer.start();
   }
 
-  ~DiskCacheGroupMetricGuard() {
+  ~DiskCacheGroupVarsRecordGuard() {
     timer.stop();
 
     OpVar* op;
@@ -80,7 +82,7 @@ struct DiskCacheGroupMetricGuard {
   size_t bytes;
   Status& status;
   butil::Timer timer;
-  DiskCacheGroupMetricSPtr metric;
+  DiskCacheGroupVarsCollectorSPtr metric;
 };
 
 class DiskCacheGroup final : public CacheStore {
@@ -104,6 +106,7 @@ class DiskCacheGroup final : public CacheStore {
   bool IsRunning() const override;
   bool IsCached(const BlockKey& key) const override;
   bool IsFull(const BlockKey& key) const override;
+  bool Dump(Json::Value& value) const override;
 
  private:
   static std::vector<uint64_t> CalcWeights(
@@ -116,7 +119,7 @@ class DiskCacheGroup final : public CacheStore {
   std::unique_ptr<iutil::ConHash> chash_;
   std::unordered_map<std::string, DiskCacheSPtr> stores_;
   DiskCacheWatcherUPtr watcher_;
-  DiskCacheGroupMetricSPtr metric_;
+  DiskCacheGroupVarsCollectorSPtr vars_;
 };
 
 }  // namespace cache

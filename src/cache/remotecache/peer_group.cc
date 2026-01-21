@@ -115,8 +115,8 @@ PeerGroupBuilder::Diff PeerGroupBuilder::MakeDiff(const Members& new_members) {
   for (const auto& new_member : new_members) {
     auto iter = old_peers.find(new_member.id);
     if (iter == old_peers.end()) {  // no found in old group
-      diff.add.emplace_back(std::make_shared<Peer>(new_member.id, new_member.ip,
-                                                   new_member.port));
+      diff.add.emplace_back(std::make_shared<Peer>(
+          new_member.id, new_member.ip, new_member.port, new_member.weight));
     } else {  // found in old group
       auto old_peer = iter->second;
       if (old_peer->IP() == new_member.ip &&
@@ -125,7 +125,7 @@ PeerGroupBuilder::Diff PeerGroupBuilder::MakeDiff(const Members& new_members) {
       } else {
         diff.remove.emplace_back(old_peer);
         diff.add.emplace_back(std::make_shared<Peer>(
-            new_member.id, new_member.ip, new_member.port));
+            new_member.id, new_member.ip, new_member.port, new_member.weight));
       }
     }
     new_mset.emplace(new_member.id);

@@ -65,11 +65,13 @@ DEFINE_uint32(cache_rpc_max_timeout_ms, 60000,
               "maximum timeout for rpc request in milliseconds");
 DEFINE_validator(cache_rpc_max_timeout_ms, brpc::PassValidate);
 
-Peer::Peer(const std::string& id, const std::string& ip, uint32_t port)
+Peer::Peer(const std::string& id, const std::string& ip, uint32_t port,
+           uint32_t weight)
     : running_(false),
       id_(id),
       ip_(ip),
       port_(port),
+      weight_(weight),
       health_checker_(std::make_unique<PeerHealthChecker>(ip, port)) {
   for (int i = 0; i < FLAGS_connections; ++i) {
     connections_.emplace_back(PeerConnection::New());
@@ -135,6 +137,15 @@ bool Peer::ShouldRetry(const std::string& method, int /*retcode*/) const {
 
 void Peer::DoConnect(PeerConnection* conn) const {
   conn->Connect(IP(), Port(), FLAGS_cache_rpc_connect_timeout_ms);
+}
+
+bool Peer::Dump(Json::Value& value) const {
+  value["id"] = Id();
+  value["endpoint"] = fmt::format("{}:{}", IP(), Port());
+  value["weight"] = Weight();
+  value["connections"] = static_cast<int>(FLAGS_connections);
+  value["healthy"] = health_checker_->IsHealthy();
+  return true;
 }
 
 std::ostream& operator<<(std::ostream& os, const Peer& peer) {

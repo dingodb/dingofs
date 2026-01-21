@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "client/vfs/service/fuse_stat_service.h"
+#include "client/vfs/service/client_stat_service.h"
 
 #include <sys/types.h>
 
@@ -228,34 +228,37 @@ static void RenderNavigation(butil::IOBufBuilder& os) {
   auto render_navigation_func = []() -> std::string {
     std::string result;
     result += fmt::format(
-        R"(<a href="FuseStatService/handler" target="_blank">handler</a>: show open file handler info at vfs)");
+        R"(<a href="ClientStatService/handler" target="_blank">handler</a>: show open file handler info at vfs)");
     result += "<br>";
     result += fmt::format(
-        R"(<a href="FuseStatService/diriterator" target="_blank">dir iterator</a>: show dir iterator info at meta)");
+        R"(<a href="ClientStatService/diriterator" target="_blank">dir iterator</a>: show dir iterator info at meta)");
     result += "<br>";
     result += fmt::format(
-        R"(<a href="FuseStatService/filesession" target="_blank">file session</a>: show open file session info at meta)");
+        R"(<a href="ClientStatService/filesession" target="_blank">file session</a>: show open file session info at meta)");
     result += "<br>";
     result += fmt::format(
-        R"(<a href="FuseStatService/parentmemo" target="_blank">parent memo</a>: show parent memo info at meta)");
+        R"(<a href="ClientStatService/parentmemo" target="_blank">parent memo</a>: show parent memo info at meta)");
     result += "<br>";
     result += fmt::format(
-        R"(<a href="FuseStatService/modifytimememo" target="_blank">modify time memo</a>: show modify time memo info at meta)");
+        R"(<a href="ClientStatService/modifytimememo" target="_blank">modify time memo</a>: show modify time memo info at meta)");
     result += "<br>";
     result += fmt::format(
-        R"(<a href="FuseStatService/chunkmemo" target="_blank">chunk memo</a>: show chunk memo info at meta)");
+        R"(<a href="ClientStatService/chunkmemo" target="_blank">chunk memo</a>: show chunk memo info at meta)");
     result += "<br>";
     result += fmt::format(
-        R"(<a href="FuseStatService/chunkcache" target="_blank">chunk cache</a>: show chunk cache info at meta)");
+        R"(<a href="ClientStatService/chunkcache" target="_blank">chunk cache</a>: show chunk cache info at meta)");
     result += "<br>";
     result += fmt::format(
-        R"(<a href="FuseStatService/mdsrouter" target="_blank">mds router</a>: show mds router info at meta)");
+        R"(<a href="ClientStatService/mdsrouter" target="_blank">mds router</a>: show mds router info at meta)");
     result += "<br>";
     result += fmt::format(
-        R"(<a href="FuseStatService/inodecache" target="_blank">inode cache</a>: show inode cache info at meta)");
+        R"(<a href="ClientStatService/inodecache" target="_blank">inode cache</a>: show inode cache info at meta)");
     result += "<br>";
     result += fmt::format(
-        R"(<a href="FuseStatService/rpc" target="_blank">rpc</a>: show rpc info at meta)");
+        R"(<a href="ClientStatService/rpc" target="_blank">rpc</a>: show rpc info at meta)");
+    result += "<br>";
+    result += fmt::format(
+        R"(<a href="ClientStatService/blockcache" target="_blank">block cache</a>: show block cache info at cache)");
     return result;
   };
 
@@ -881,7 +884,7 @@ static void RenderChunkCachePage(const Json::Value& json_value,
 
     // details
     os << fmt::format(
-        R"(<td><a href="/FuseStatService/chunkset/{}" target="_blank">details</a></td>)",
+        R"(<td><a href="/ClientStatService/chunkset/{}" target="_blank">details</a></td>)",
         ino);
 
     os << "</tr>";
@@ -1020,7 +1023,7 @@ static void RenderChunkSetPage(Ino ino, const Json::Value& json_value,
 
     // details link
     os << fmt::format(
-        R"(<td><a href="/FuseStatService/chunk/{}/{}" target="_blank">details</a></td>)",
+        R"(<td><a href="/ClientStatService/chunk/{}/{}" target="_blank">details</a></td>)",
         ino, chunk_index);
 
     os << "</tr>";
@@ -1249,8 +1252,75 @@ static void RenderRPCPage(const Json::Value& json_value,
   os << "<br>";
 }
 
-void FuseStatServiceImpl::RenderMainPage(const brpc::Server* server,
-                                         butil::IOBufBuilder& os) {
+static void RenderBlockCachePage(const Json::Value& json_value,
+                                 butil::IOBufBuilder& os,
+                                 std::string& client_name) {
+  os << "<!DOCTYPE html><html>";
+
+  os << "<head>" << RenderHead("dingofs block cache") << "</head>";
+  os << "<body>";
+  os << fmt::format(
+      R"(<h1 style="text-align:center;">Client({}) Block Cache</h1>)",
+      client_name);
+
+  // local block cache
+  const Json::Value& disks = json_value["disks"];
+  os << R"(<div style="margin:12px;font-size:smaller;">)";
+  os << fmt::format(R"(<h3>Local Block Cache [{}]</h3>)", disks.size());
+  os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
+  os << "<tr>";
+  os << "<th>Dir</th>";
+  os << "<th>Capacity (MiB)</th>";
+  os << "<th>Free Space Ratio%</th>";
+  os << "<th>Stage Full</th>";
+  os << "<th>Cache Full</th>";
+  os << "</tr>";
+
+  for (const auto& disk : disks) {
+    os << "<td>" << disk["dir"].asString() << "</td>";
+    os << "<td>" << disk["capacity"].asInt64() << "</td>";
+    os << "<td>" << disk["free_space_ratio"].asDouble() << "</td>";
+    os << "<td>" << disk["stage_full"].asDouble() << "</td>";
+    os << "<td>" << disk["cache_full"].asDouble() << "</td>";
+
+    os << "</tr>";
+  }
+
+  os << "</table>\n";
+  os << "</div>";
+
+  // remote block cache
+  const Json::Value& members = json_value["members"];
+  os << R"(<div style="margin:12px;font-size:smaller;">)";
+  os << fmt::format(R"(<h3>Remote Block Cache [{}]</h3>)", members.size());
+  os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
+  os << "<tr>";
+  os << "<th>Id</th>";
+  os << "<th>Endpoint</th>";
+  os << "<th>Weight</th>";
+  os << "<th>Connections</th>";
+  os << "<th>Healthy</th>";
+  os << "</tr>";
+
+  for (const auto& member : members) {
+    os << "<td>" << member["id"].asString() << "</td>";
+    os << "<td>" << member["endpoint"].asString() << "</td>";
+    os << "<td>" << member["weight"].asUInt() << "</td>";
+    os << "<td>" << member["connections"].asInt64() << "</td>";
+    os << "<td>" << member["healthy"].asBool() << "</td>";
+
+    os << "</tr>";
+  }
+
+  os << "</table>\n";
+  os << "</div>";
+
+  // end
+  os << "<br>";
+}
+
+void ClientStatServiceImpl::RenderMainPage(const brpc::Server* server,
+                                           butil::IOBufBuilder& os) {
   os << "<!DOCTYPE html><html>\n";
 
   os << "<head>";
@@ -1287,7 +1357,7 @@ void FuseStatServiceImpl::RenderMainPage(const brpc::Server* server,
   os << "</html>";
 }
 
-void FuseStatServiceImpl::default_method(
+void ClientStatServiceImpl::default_method(
     ::google::protobuf::RpcController* controller,
     const pb::web::FuseStatRequest*, pb::web::FuseStatResponse*,
     ::google::protobuf::Closure* done) {
@@ -1299,7 +1369,7 @@ void FuseStatServiceImpl::default_method(
   cntl->http_response().set_content_type(use_html ? "text/html" : "text/plain");
   const std::string& path = cntl->http_request().unresolved_path();
 
-  LOG(INFO) << fmt::format("FuseStatService path: {}", path);
+  LOG(INFO) << fmt::format("ClientStatService path: {}", path);
 
   auto client_id = vfs_hub_->GetClientId();
   std::string client_name =
@@ -1308,9 +1378,9 @@ void FuseStatServiceImpl::default_method(
   std::vector<std::string> params;
   SplitString(path, '/', params);
 
-  LOG(INFO) << fmt::format("FuseStatService params size: {}.", params.size());
+  LOG(INFO) << fmt::format("ClientStatService params size: {}.", params.size());
 
-  // /FuseStatService
+  // /ClientStatService
   if (params.empty()) {
     RenderMainPage(server, os);
 
@@ -1321,20 +1391,20 @@ void FuseStatServiceImpl::default_method(
     DumpOption options;
 
     if (api_name == "diriterator") {
-      // /FuseStatService/diriterator
+      // /ClientStatService/diriterator
       options.dir_iterator = true;
       if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
         RenderDirInfoPage(json_value, os, client_name);
       }
     } else if (api_name == "filesession") {
-      // /FuseStatService/filesession
+      // /ClientStatService/filesession
       options.file_session = true;
       if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
         RenderFileSessionPage(json_value, os, client_name);
       }
 
     } else if (api_name == "handler") {
-      // /FuseStatService/handler
+      // /ClientStatService/handler
       if (!vfs_hub_->GetHandleManager()->Dump(json_value)) {
         cntl->SetFailed("GetHandleManager failed.");
         return;
@@ -1342,28 +1412,28 @@ void FuseStatServiceImpl::default_method(
       RenderHandlerInfoPage(json_value, os, client_name);
 
     } else if (api_name == "parentmemo") {
-      // /FuseStatService/parentmemo
+      // /ClientStatService/parentmemo
       options.parent_memo = true;
       if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
         RenderParentMemoPage(json_value, os, client_name);
       }
 
     } else if (api_name == "modifytimememo") {
-      // /FuseStatService/modifytimememo
+      // /ClientStatService/modifytimememo
       options.modify_time_memo = true;
       if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
         RenderModifyTimeMemoPage(json_value, os, client_name);
       }
 
     } else if (api_name == "chunkmemo") {
-      // /FuseStatService/chunkmemo
+      // /ClientStatService/chunkmemo
       options.chunk_memo = true;
       if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
         RenderChunkMemoPage(json_value, os, client_name);
       }
 
     } else if (api_name == "chunkcache") {
-      // /FuseStatService/chunkcache
+      // /ClientStatService/chunkcache
       options.chunk_cache = true;
       options.is_summary = true;
       if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
@@ -1371,24 +1441,30 @@ void FuseStatServiceImpl::default_method(
       }
 
     } else if (api_name == "mdsrouter") {
-      // /FuseStatService/mdsrouter
+      // /ClientStatService/mdsrouter
       options.mds_router = true;
       if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
         RenderMdsRouterPage(json_value, os, client_name);
       }
 
     } else if (api_name == "inodecache") {
-      // /FuseStatService/inodecache
+      // /ClientStatService/inodecache
       options.inode_cache = true;
       if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
         RenderInodeCachePage(json_value, os, client_name);
       }
 
     } else if (api_name == "rpc") {
-      // /FuseStatService/rpc
+      // /ClientStatService/rpc
       options.rpc = true;
       if (vfs_hub_->GetMetaSystem()->Dump(options, json_value)) {
         RenderRPCPage(json_value, os, client_name);
+      }
+    } else if (api_name == "blockcache") {
+      // /ClientStatService/blockcache
+      auto* blockcache = vfs_hub_->GetBlockStore()->GetBlockCache();
+      if (blockcache != nullptr && blockcache->Dump(json_value)) {
+        RenderBlockCachePage(json_value, os, client_name);
       }
     } else {
       return cntl->SetFailed("unknown path: " + path);  // NOLINT
@@ -1404,7 +1480,7 @@ void FuseStatServiceImpl::default_method(
     Json::Value json_value;
 
     if (api_name == "filesession") {
-      // /FuseStatService/filesession/{ino}
+      // /ClientStatService/filesession/{ino}
 
       options.ino = ino;
       options.file_session = true;
@@ -1412,7 +1488,7 @@ void FuseStatServiceImpl::default_method(
         RenderSingleFileSessionPage(ino, json_value, os, client_name);
       }
     } else if (api_name == "chunkset") {
-      // /FuseStatService/chunkset/{ino}
+      // /ClientStatService/chunkset/{ino}
 
       LOG(INFO) << "Dump chunkset for ino: " << ino;
 
@@ -1431,7 +1507,7 @@ void FuseStatServiceImpl::default_method(
     DumpOption options;
     Json::Value json_value;
     if (api_name == "chunk") {
-      // /FuseStatService/chunk/{ino}/{chunk_index}
+      // /ClientStatService/chunk/{ino}/{chunk_index}
       LOG(INFO) << "Dump chunk for ino: " << ino
                 << ", chunk_index: " << chunk_index;
 
@@ -1456,10 +1532,10 @@ void FuseStatServiceImpl::default_method(
   }
 }
 
-void FuseStatServiceImpl::GetTabInfo(brpc::TabInfoList* tab_list) const {
+void ClientStatServiceImpl::GetTabInfo(brpc::TabInfoList* tab_list) const {
   brpc::TabInfo* tab = tab_list->add();
   tab->tab_name = "dingofs";
-  tab->path = "/FuseStatService";
+  tab->path = "/ClientStatService";
 }
 
 }  // namespace vfs

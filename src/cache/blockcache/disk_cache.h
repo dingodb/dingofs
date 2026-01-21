@@ -139,6 +139,8 @@ class DiskCache final : public CacheStore {
 
   bool IsFull(const BlockKey&) const override { return CacheFull(); }
 
+  bool Dump(Json::Value& value) const override;
+
  private:
   friend class Target;
 
@@ -177,6 +179,7 @@ class DiskCache final : public CacheStore {
 
  private:
   std::atomic<bool> running_;
+  DiskCacheOption option_;
   UploadFunc uploader_;
   std::string uuid_;
   DiskCacheLayoutSPtr layout_;

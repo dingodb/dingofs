@@ -226,5 +226,23 @@ void Upstream::PeriodicSyncMembers() {
                       FLAGS_periodic_sync_members_ms);
 }
 
+bool Upstream::Dump(Json::Value& value) {
+  auto group = GetPeerGroup();
+  if (nullptr == group) {
+    return true;
+  }
+
+  Json::Value items = Json::arrayValue;
+  for (const auto& [id, peer] : group->peers) {
+    Json::Value item = Json::objectValue;
+    peer->Dump(item);
+
+    items.append(item);
+  }
+
+  value["members"] = items;
+  return true;
+}
+
 }  // namespace cache
 }  // namespace dingofs

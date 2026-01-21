@@ -28,6 +28,7 @@
 #include "cache/common/macro.h"
 #include "cache/iutil/ketama_con_hash.h"
 #include "cache/iutil/math_util.h"
+#include "common/options/cache.h"
 
 namespace dingofs {
 namespace cache {
@@ -37,13 +38,13 @@ DiskCacheGroup::DiskCacheGroup(std::vector<DiskCacheOption> options)
       options_(options),
       chash_(std::make_unique<iutil::KetamaConHash>()),
       watcher_(std::make_unique<DiskCacheWatcher>()),
-      metric_(std::make_shared<DiskCacheGroupMetric>()) {}
+      vars_(std::make_shared<DiskCacheGroupVarsCollector>()) {}
 
 Status DiskCacheGroup::Start(UploadFunc uploader) {
   CHECK(!options_.empty());
   CHECK_NOTNULL(chash_);
   CHECK_NOTNULL(watcher_);
-  CHECK_NOTNULL(metric_);
+  CHECK_NOTNULL(vars_);
 
   if (running_) {
     return Status::OK();
@@ -99,7 +100,8 @@ Status DiskCacheGroup::Shutdown() {
 Status DiskCacheGroup::Stage(ContextSPtr ctx, const BlockKey& key,
                              const Block& block, StageOption option) {
   Status status;
-  DiskCacheGroupMetricGuard metric_guard(__func__, block.size, status, metric_);
+  DiskCacheGroupVarsRecordGuard metric_guard(__func__, block.size, status,
+                                             vars_);
   status = GetStore(key)->Stage(ctx, key, block, option);
 
   return status;
@@ -122,7 +124,8 @@ Status DiskCacheGroup::RemoveStage(ContextSPtr ctx, const BlockKey& key,
 Status DiskCacheGroup::Cache(ContextSPtr ctx, const BlockKey& key,
                              const Block& block, CacheOption option) {
   Status status;
-  DiskCacheGroupMetricGuard metric_guard(__func__, block.size, status, metric_);
+  DiskCacheGroupVarsRecordGuard metric_guard(__func__, block.size, status,
+                                             vars_);
   status = GetStore(key)->Cache(ctx, key, block, option);
 
   return status;
@@ -142,7 +145,7 @@ Status DiskCacheGroup::Load(ContextSPtr ctx, const BlockKey& key, off_t offset,
   }
 
   Status status;
-  DiskCacheGroupMetricGuard metirc_guard(__func__, length, status, metric_);
+  DiskCacheGroupVarsRecordGuard metirc_guard(__func__, length, status, vars_);
   status = store->Load(ctx, key, offset, length, buffer, option);
 
   return status;
@@ -198,6 +201,18 @@ DiskCacheSPtr DiskCacheGroup::GetStore(const std::string& store_id) const {
   CHECK(iter != stores_.end())
       << "Specified store not found: store_id = " << store_id;
   return iter->second;
+}
+
+bool DiskCacheGroup::Dump(Json::Value& value) const {
+  Json::Value items = Json::arrayValue;
+  for (const auto& [id, store] : stores_) {
+    Json::Value item = Json::objectValue;
+    store->Dump(item);
+    items.append(item);
+  }
+
+  value["disks"] = items;
+  return true;
 }
 
 }  // namespace cache

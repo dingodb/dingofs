@@ -19,6 +19,7 @@
 
 #include <atomic>
 
+#include "cache/blockcache/block_cache.h"
 #include "client/vfs/blockstore/block_store.h"
 
 namespace dingofs {
@@ -46,6 +47,7 @@ class FakeBlockStore final : public BlockStore {
                      StatusCallback callback) override;
   // utility
   bool EnableCache() const override;
+  cache::BlockCache* GetBlockCache() const override;
 
  private:
   void DoRangeAsync(BlockKey key, uint64_t offset, uint64_t length,
