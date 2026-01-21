@@ -16,6 +16,7 @@
 #define SRC_UTILS_DAEMONIZE_H_
 
 #include <fcntl.h>
+#include <fmt/format.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -23,6 +24,8 @@
 #include <iostream>
 #include <ostream>
 #include <vector>
+
+#include "glog/logging.h"
 
 namespace dingofs {
 namespace utils {
@@ -149,7 +152,8 @@ inline bool DaemonizeExec(const std::vector<std::string>& args) {
   }
 
   {
-    std::string stdout_file = "/tmp/" + std::to_string(getpid()) + ".stdout";
+    std::string stdout_file =
+        fmt::format("{}/{}.stdout", ::FLAGS_log_dir, getpid());
     int log_fd = open(stdout_file.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0644);
     if (log_fd < 0) {
       perror("open stdout log file failed");

@@ -25,6 +25,7 @@
 #include "cache/cachegroup/service.h"
 #include "cache/iutil/string_util.h"
 #include "common/options/cache.h"
+#include "fmt/format.h"
 
 namespace brpc {
 DECLARE_bool(graceful_quit_on_sigterm);
@@ -39,6 +40,13 @@ DEFINE_string(listen_ip, "", "ip address to listen on for this cache node");
 DEFINE_validator(listen_ip, iutil::StringValidator);
 
 DEFINE_uint32(listen_port, 9300, "port to listen on for this cache node");
+
+static void PrintReadyInfo(const std::string& addr) {
+  std::cout << "\n";
+  std::cout << "dingo-cache is listening on " << addr;
+  std::cout << "\n";
+  std::cout.flush();
+}
 
 Server::Server()
     : running_(false),
@@ -75,8 +83,7 @@ Status Server::Start() {
   LOG(INFO) << "Cache node server is up, address=" << listen_ip << ":"
             << FLAGS_listen_port;
 
-  std::cout << "\ndingo-cache is listening on " << listen_ip << ":"
-            << FLAGS_listen_port << "\n";
+  PrintReadyInfo(fmt::format("{}:{}", listen_ip, FLAGS_listen_port));
 
   // Run until asked to quit
   brpc::FLAGS_graceful_quit_on_sigterm = true;

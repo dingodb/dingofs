@@ -23,7 +23,6 @@
 #include <cstdint>
 #include <filesystem>
 #include <iomanip>
-#include <iostream>
 #include <utility>
 #include <vector>
 
@@ -243,7 +242,7 @@ class Helper {
                 << "\n";
     }
 
-    std::cout << std::setw(0);
+    std::cout.flush();
   }
 
 };  // class Helper

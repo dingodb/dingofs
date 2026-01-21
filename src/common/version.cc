@@ -17,6 +17,7 @@
 #include <iostream>
 #include <sstream>
 
+#include "common/helper.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
 
@@ -80,9 +81,9 @@ std::string DingoShortVersionString() {
   kUseCICDBuild = false;
 #endif
 
-  return fmt::format("{}, {} build-{}:{} + {}", kGitTagName,
-                     kUseCICDBuild ? "CI/CD" : "Local", kGitBranchName,
-                     kGitLastCommit, kDingoFsBuildType);
+  return Helper::ToLowerCase(fmt::format(
+      "{}, {} build-{}:{} + {}", kGitTagName, kUseCICDBuild ? "ci/cd" : "local",
+      kGitBranchName, kGitLastCommit, kDingoFsBuildType));
 }
 
 void DingoLogVersion() {

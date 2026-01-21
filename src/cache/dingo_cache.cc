@@ -80,13 +80,6 @@ int DingoCache::ParseFlags(int argc, char** argv) {
   // reset brpc flag default value if not set
   dingofs::ResetBrpcFlagDefaultValue();
 
-  // run in daemon mode
-  if (dingofs::FLAGS_daemonize) {
-    if (!dingofs::utils::Daemonize()) {
-      std::cerr << "failed to daemonize process.\n";
-      return -1;
-    }
-  }
   // print config info
   std::vector<std::pair<std::string, std::string>> configs;
   configs.emplace_back("id", fmt::format("[{}]", FLAGS_id));
@@ -115,7 +108,7 @@ int DingoCache::ParseFlags(int argc, char** argv) {
 
 void DingoCache::GlobalInitOrDie() {
   Logger::Init("dingo-cache");
-  GenCurrentFlags();
+  LOG(INFO) << GenCurrentFlags();
 }
 
 int DingoCache::StartServer() {
@@ -130,12 +123,27 @@ int DingoCache::StartServer() {
 }
 
 int DingoCache::Run(int argc, char** argv) {
+  std::vector<std::string> orig_args;
+  orig_args.reserve(argc);
+  for (int i = 1; i < argc; ++i) {
+    orig_args.emplace_back(argv[i]);
+  }
+
   int rc = ParseFlags(argc, argv);
   if (rc != 0) {
     return rc;
   }
 
   GlobalInitOrDie();
+
+  // run in daemon mode
+  if (dingofs::FLAGS_daemonize) {
+    if (!dingofs::utils::DaemonizeExec(orig_args)) {
+      std::cerr << "failed to daemonize process.\n";
+      return -1;
+    }
+  }
+
   return StartServer();
 }
 

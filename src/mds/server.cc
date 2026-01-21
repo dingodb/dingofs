@@ -134,8 +134,6 @@ bool Server::InitConfig(const std::string& path) {
 }
 
 bool Server::InitLog() {
-  Logger::Init("mds");
-
   DingoLogVersion();
   return true;
 }
@@ -525,6 +523,13 @@ FsStatServiceImplUPtr& Server::GetFsStatService() {
   return fs_stat_service_;
 }
 
+static void PrintReadyInfo(const std::string& addr) {
+  std::cout << "\n";
+  std::cout << "mds is listening on " << addr;
+  std::cout << "\n";
+  std::cout.flush();
+}
+
 void Server::Run() {
   CHECK(brpc_server_.AddService(mds_service_.get(), brpc::SERVER_DOESNT_OWN_SERVICE) == 0) << "add mds service error.";
 
@@ -537,7 +542,7 @@ void Server::Run() {
   brpc::ServerOptions option;
   CHECK(brpc_server_.Start(GetListenAddr().c_str(), &option) == 0) << "start brpc server error.";
 
-  std::cout << "\nmds is listening on " << GetListenAddr() << "\n";
+  PrintReadyInfo(GetListenAddr());
 
   while (!brpc::IsAskedToQuit() && !stop_.load()) {
     bthread_usleep(1000000L);

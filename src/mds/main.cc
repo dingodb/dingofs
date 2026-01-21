@@ -268,6 +268,12 @@ static dingofs::FlagExtraInfo extras = {
 int main(int argc, char* argv[]) {
   using dingofs::FLAGS_conf;
 
+  std::vector<std::string> orig_args;
+  orig_args.reserve(argc);
+  for (int i = 1; i < argc; ++i) {
+    orig_args.emplace_back(argv[i]);
+  }
+
   int rc = dingofs::ParseFlags(&argc, &argv, extras);
   if (rc != 0) {
     return 1;
@@ -294,14 +300,15 @@ int main(int argc, char* argv[]) {
 
   SetupSignalHandler();
 
-  // print config info
-  dingofs::Helper::PrintConfigInfo(GenConfigs());
-
+  dingofs::Logger::Init("mds");
   // run in daemon mode
-  if (dingofs::FLAGS_daemonize && !dingofs::utils::Daemonize(false, true)) {
+  if (dingofs::FLAGS_daemonize && !dingofs::utils::DaemonizeExec(orig_args)) {
     std::cerr << "fail to daemonize process.\n";
     return 1;
   }
+
+  // print config info
+  dingofs::Helper::PrintConfigInfo(GenConfigs());
 
   dingofs::mds::Server& server = dingofs::mds::Server::GetInstance();
 

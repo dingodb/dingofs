@@ -174,6 +174,9 @@ int main(int argc, char* argv[]) {
   // used for remote cache
   dingofs::cache::FLAGS_mds_addrs = mds_addrs;
 
+  // init global log
+  dingofs::Logger::Init("dingo-client");
+
   if (dingofs::FLAGS_daemonize && !dingofs::utils::DaemonizeExec(orig_args)) {
     std::cerr << "failed to daemonize process.\n";
     return EXIT_FAILURE;
@@ -194,9 +197,6 @@ int main(int argc, char* argv[]) {
 
   // init fuse
   if (fuse_server->Init(argv[0], &mount_option) == 1) return EXIT_FAILURE;
-
-  // init global log
-  dingofs::Logger::Init("dingo-client");
 
   // print current gflags
   LOG(INFO) << dingofs::GenCurrentFlags();
