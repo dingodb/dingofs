@@ -36,13 +36,14 @@ DECLARE_uint32(mds_txn_max_retry_times);
 
 static const std::string kFileSessionCacheCountMetricsName = "dingofs_{}_file_session_cache_count";
 
-static FileSessionSPtr NewFileSession(uint32_t fs_id, Ino ino, const std::string& client_id) {
+static FileSessionSPtr NewFileSession(uint32_t fs_id, Ino ino, const std::string& client_id,
+                                      const std::string& session_id) {
   auto file_session = std::make_shared<FileSessionEntry>();
 
   file_session->set_fs_id(fs_id);
   file_session->set_ino(ino);
   file_session->set_client_id(client_id);
-  file_session->set_session_id(utils::GenerateUUID());
+  file_session->set_session_id(session_id);
   file_session->set_create_time_s(utils::Timestamp());
 
   return file_session;
@@ -148,8 +149,9 @@ bool FileSessionCache::IsExist(uint64_t ino, const std::string& session_id) {
 FileSessionManager::FileSessionManager(uint32_t fs_id, OperationProcessorSPtr operation_processor)
     : fs_id_(fs_id), file_session_cache_(fs_id), operation_processor_(operation_processor) {}
 
-FileSessionSPtr FileSessionManager::Create(uint64_t ino, const std::string& client_id) const {
-  return NewFileSession(fs_id_, ino, client_id);
+FileSessionSPtr FileSessionManager::Create(uint64_t ino, const std::string& client_id,
+                                           const std::string& session_id) const {
+  return NewFileSession(fs_id_, ino, client_id, session_id);
 }
 
 void FileSessionManager::Put(FileSessionSPtr file_session) {

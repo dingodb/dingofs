@@ -91,10 +91,12 @@ Status CompactChunkTask::Compact() {
 
   LOG(INFO) << fmt::format(
       "[meta.compact.{}.{}.{}] do compact chunk finish, version({}->{}) "
-      "old_slice({}) new_slices({}) final_slices({}) extra({}) status({}).",
+      "old_slice({}|{}|{}) new_slices({}) final_slices({}) extra({}) "
+      "status({}).",
       ino_, chunk_index, Id(), version, chunk_entry.version(),
-      old_slices.size(), Helper::ToString(new_slices),
-      chunk_entry.slices_size(), extra_local_compact, status.ToString());
+      param.start_slice_id, param.end_slice_id, old_slices.size(),
+      Helper::ToString(new_slices), chunk_entry.slices_size(),
+      extra_local_compact, status.ToString());
 
   return status;
 }

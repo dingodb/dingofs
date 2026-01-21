@@ -76,6 +76,7 @@ class Operation {
     kFallocate = 31,
     kOpenFile = 32,
     kCloseFile = 33,
+    kFlushFile = 38,
     kRmDir = 34,
     kUnlink = 35,
     kBatchUnlink = 36,
@@ -649,8 +650,6 @@ class UpdateAttrOperation : public Operation {
   }
 
  private:
-  Status ResetFileRange(TxnUPtr& txn, uint64_t old_length, uint64_t new_length);
-
   uint64_t ino_;
   const uint32_t to_set_;
   const AttrEntry& attr_;
@@ -872,18 +871,29 @@ class FallocateOperation : public Operation {
 
 class OpenFileOperation : public Operation {
  public:
-  OpenFileOperation(Trace& trace, uint32_t flags, const FileSessionEntry& file_session, uint64_t chunk_size)
-      : Operation(trace), flags_(flags), file_session_(file_session), chunk_size_(chunk_size) {};
+  OpenFileOperation(Trace& trace, uint32_t flags, const FileSessionEntry& file_session, uint64_t chunk_size,
+                    const std::vector<uint32_t>& prefetch_chunks, bool prefetch_data)
+      : Operation(trace),
+        flags_(flags),
+        file_session_(file_session),
+        chunk_size_(chunk_size),
+        prefetch_chunks_(prefetch_chunks),
+        prefetch_data_(prefetch_data) {};
   ~OpenFileOperation() override = default;
 
   struct Result : public Operation::Result {
     int64_t delta_bytes{0};
+    std::vector<ChunkEntry> chunks;
+    std::string data;
+    uint64_t data_version;
   };
 
   OpType GetOpType() const override { return OpType::kOpenFile; }
 
   uint32_t GetFsId() const override { return file_session_.fs_id(); }
   Ino GetIno() const override { return file_session_.ino(); }
+
+  std::vector<std::string> PrefetchKey() override;
 
   Status RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>& prefetch_kvs) override;
 
@@ -902,6 +912,9 @@ class OpenFileOperation : public Operation {
   uint32_t flags_;
   FileSessionEntry file_session_;
   uint64_t chunk_size_{0};
+
+  const std::vector<uint32_t>& prefetch_chunks_;
+  bool prefetch_data_{false};
 
   Result result_;
 };
@@ -923,6 +936,48 @@ class CloseFileOperation : public Operation {
   uint32_t fs_id_;
   Ino ino_;
   const std::string session_id_;
+};
+
+class FlushFileOperation : public Operation {
+ public:
+  struct ExtraParam {
+    ExtraParam(const std::string& data) : data(data) {}
+    const std::string& data;
+    uint64_t length;
+    uint64_t slice_id{0};
+    uint64_t chunk_size{0};
+  };
+
+  FlushFileOperation(Trace& trace, uint32_t fs_id, Ino ino, ExtraParam& param)
+      : Operation(trace), fs_id_(fs_id), ino_(ino), param_(param) {};
+  ~FlushFileOperation() override = default;
+
+  struct Result : public Operation::Result {
+    int64_t delta_bytes{0};
+  };
+
+  OpType GetOpType() const override { return OpType::kFlushFile; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return ino_; }
+
+  Status Run(TxnUPtr& txn) override;
+
+  template <int size = 0>
+  Result& GetResult() {
+    auto& result = Operation::GetResult();
+    result_.status = result.status;
+    result_.attr = std::move(result.attr);
+
+    return result_;
+  }
+
+ private:
+  const uint32_t fs_id_;
+  const Ino ino_;
+  ExtraParam& param_;
+
+  Result result_;
 };
 
 class RmDirOperation : public Operation {
@@ -1618,7 +1673,8 @@ class GetDelFileOperation : public Operation {
 
 class CleanDelFileOperation : public Operation {
  public:
-  CleanDelFileOperation(Trace& trace, uint32_t fs_id, Ino ino) : Operation(trace), fs_id_(fs_id), ino_(ino) {};
+  CleanDelFileOperation(Trace& trace, uint32_t fs_id, Ino ino, bool maybe_tiny_file)
+      : Operation(trace), fs_id_(fs_id), ino_(ino), maybe_tiny_file_(maybe_tiny_file) {};
   ~CleanDelFileOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kCleanDelFile; }
@@ -1629,8 +1685,9 @@ class CleanDelFileOperation : public Operation {
   Status Run(TxnUPtr& txn) override;
 
  private:
-  uint32_t fs_id_;
-  Ino ino_;
+  const uint32_t fs_id_;
+  const Ino ino_;
+  const bool maybe_tiny_file_;
 };
 
 class ScanLockOperation : public Operation {

@@ -15,30 +15,28 @@
 #ifndef DINGOFS_SRC_CLIENT_VFS_META_MDS_RPC_H_
 #define DINGOFS_SRC_CLIENT_VFS_META_MDS_RPC_H_
 
-#include <brpc/errno.pb.h>
-#include <bthread/bthread.h>
-#include <butil/endpoint.h>
-#include <fmt/format.h>
-#include <gflags/gflags_declare.h>
-#include <glog/logging.h>
-#include <json/config.h>
-
 #include <atomic>
 #include <cstdint>
-#include <map>
 #include <memory>
 #include <sstream>
 #include <string>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "brpc/channel.h"
 #include "brpc/controller.h"
+#include "brpc/errno.pb.h"
+#include "bthread/bthread.h"
+#include "butil/endpoint.h"
 #include "common/options/client.h"
 #include "common/status.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/core.h"
+#include "fmt/format.h"
 #include "fmt/ranges.h"
+#include "glog/logging.h"
 #include "json/value.h"
 #include "mds/common/helper.h"
 #include "mds/common/synchronization.h"
@@ -51,6 +49,11 @@ namespace vfs {
 namespace meta {
 
 using EndPoint = butil::EndPoint;
+struct EndPointHash {
+  size_t operator()(const EndPoint& e) const noexcept {
+    return butil::HashPair(butil::ip2int(e.ip), e.port);
+  }
+};
 
 inline bool IsInvalidEndpoint(const EndPoint& endpoint) {
   return endpoint.ip == butil::IP_NONE || endpoint.port <= 0;
@@ -168,8 +171,8 @@ class RPC {
 
   utils::RWLock lock_;
   EndPoint init_endpoint_;
-  std::map<EndPoint, ChannelSPtr> channels_;
-  std::set<EndPoint> fallback_endpoints_;
+  absl::flat_hash_map<EndPoint, ChannelSPtr, EndPointHash> channels_;
+  absl::flat_hash_set<EndPoint, EndPointHash> fallback_endpoints_;
 
   std::atomic<uint64_t> doing_req_count_{0};
 };
@@ -222,8 +225,7 @@ inline std::string DescribeReadSliceResponse(
 // print OpenResponse
 inline std::string DescribeOpenResponse(pb::mds::OpenResponse& response) {
   std::ostringstream oss;
-  oss << response.info().ShortDebugString()
-      << " session_id:" << response.session_id() << " inode("
+  oss << response.info().ShortDebugString() << " inode("
       << response.inode().ShortDebugString() << ") chunks[";
   for (const auto& chunk : response.chunks()) {
     std::vector<uint64_t> slice_ids;
@@ -237,6 +239,14 @@ inline std::string DescribeOpenResponse(pb::mds::OpenResponse& response) {
 
   oss << "]";
   return oss.str();
+}
+
+// print FlushFileRequest
+inline std::string DescribeFlushFileRequest(
+    pb::mds::FlushFileRequest& request) {
+  return fmt::format("fs_id:{} ino:{} length:{} data:{} data_version:{}",
+                     request.fs_id(), request.ino(), request.length(),
+                     request.data().size(), request.data_version());
 }
 
 template <typename Request, typename Response>
@@ -320,6 +330,15 @@ Status RPC::SendRequest(const EndPoint& endpoint,
             "response({}) doing({}).",
             EndPointToStr(endpoint), api_name, elapsed_us, retry,
             request.ShortDebugString(), DescribeOpenResponse(response),
+            DoingReqCount());
+
+      } else if constexpr (std::is_same_v<Response,
+                                          pb::mds::FlushFileResponse>) {
+        LOG(INFO) << fmt::format(
+            "[meta.rpc][{}][{}][{}us] success, retry({}) request({}) "
+            "response({}) doing({}).",
+            EndPointToStr(endpoint), api_name, elapsed_us, retry,
+            DescribeFlushFileRequest(request), response.ShortDebugString(),
             DoingReqCount());
 
       } else {

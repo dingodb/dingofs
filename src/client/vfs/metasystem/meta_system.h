@@ -21,6 +21,7 @@
 #include <string>
 #include <vector>
 
+#include "client/vfs/data_buffer.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
 #include "common/trace/context.h"
@@ -110,11 +111,18 @@ class MetaSystem {
                                  uint64_t fh, const std::vector<Slice>& slices,
                                  DoneClosure done) = 0;
   // metasystem record write
-  virtual Status Write(ContextSPtr ctx, Ino ino, uint64_t offset, uint64_t size,
-                       uint64_t fh) = 0;
+  virtual Status Write(ContextSPtr ctx, Ino ino, const char* buf,
+                       uint64_t offset, uint64_t size, uint64_t fh) = 0;
 
-  virtual Status ManualCompact(ContextSPtr ctx, Ino ino,  // NOLINT
-                               uint32_t chunk_index) {    // NOLINT
+  virtual Status Read(ContextSPtr ctx, Ino ino, uint64_t fh,  // NOLINT
+                      uint64_t offset, uint64_t size,         // NOLINT
+                      vfs::DataBuffer& data_buffer,           // NOLINT
+                      uint64_t& out_rsize) {                  // NOLINT
+    return Status::NoData("not data");
+  }
+
+  virtual Status Compact(ContextSPtr ctx, Ino ino,               // NOLINT
+                         uint32_t chunk_index, bool is_async) {  // NOLINT
     return Status::NotSupport("not supported");
   }
 

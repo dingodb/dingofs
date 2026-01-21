@@ -115,6 +115,9 @@ class MDSServiceImpl : public pb::mds::MDSService {
   void Release(google::protobuf::RpcController* controller, const pb::mds::ReleaseRequest* request,
                pb::mds::ReleaseResponse* response, google::protobuf::Closure* done) override;
 
+  void FlushFile(google::protobuf::RpcController* controller, const pb::mds::FlushFileRequest* request,
+                 pb::mds::FlushFileResponse* response, google::protobuf::Closure* done) override;
+
   void Link(google::protobuf::RpcController* controller, const pb::mds::LinkRequest* request,
             pb::mds::LinkResponse* response, google::protobuf::Closure* done) override;
   void UnLink(google::protobuf::RpcController* controller, const pb::mds::UnLinkRequest* request,
@@ -304,6 +307,8 @@ class MDSServiceImpl : public pb::mds::MDSService {
               pb::mds::OpenResponse* response, TraceClosure* done);
   void DoRelease(google::protobuf::RpcController* controller, const pb::mds::ReleaseRequest* request,
                  pb::mds::ReleaseResponse* response, TraceClosure* done);
+  void DoFlushFile(google::protobuf::RpcController* controller, const pb::mds::FlushFileRequest* request,
+                   pb::mds::FlushFileResponse* response, TraceClosure* done);
 
   void DoLink(google::protobuf::RpcController* controller, const pb::mds::LinkRequest* request,
               pb::mds::LinkResponse* response, TraceClosure* done);

@@ -909,6 +909,7 @@ void MDSServiceImpl::DoBatchCreate(google::protobuf::RpcController*, const pb::m
     param.uid = req_param.uid();
     param.gid = req_param.gid();
     param.rdev = req_param.rdev();
+    param.session_id = req_param.session_id();
 
     params.push_back(param);
   }
@@ -916,8 +917,7 @@ void MDSServiceImpl::DoBatchCreate(google::protobuf::RpcController*, const pb::m
   Context ctx(request->context(), request->info().request_id(), __func__);
 
   EntryOut entry_out;
-  std::vector<std::string> session_ids;
-  status = file_system->BatchCreate(ctx, request->parent(), params, entry_out, session_ids);
+  status = file_system->BatchCreate(ctx, request->parent(), params, entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     SpanScope::SetStatus(span, status);
@@ -926,7 +926,6 @@ void MDSServiceImpl::DoBatchCreate(google::protobuf::RpcController*, const pb::m
 
   response->mutable_parent_inode()->Swap(&entry_out.parent_attr);
   for (auto& attr : entry_out.attrs) response->add_inodes()->Swap(&attr);
-  Helper::VectorToPbRepeated(session_ids, response->mutable_session_ids());
 }
 
 void MDSServiceImpl::BatchCreate(google::protobuf::RpcController* controller,
@@ -941,6 +940,18 @@ void MDSServiceImpl::BatchCreate(google::protobuf::RpcController* controller,
     }
     if (request->parent() == 0) {
       return Status(pb::error::EILLEGAL_PARAMTETER, "parent is empty");
+    }
+    if (request->params().empty()) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "params is empty");
+    }
+
+    for (const auto& param : request->params()) {
+      if (param.name().empty()) {
+        return Status(pb::error::EILLEGAL_PARAMTETER, "name is empty");
+      }
+      if (param.session_id().empty()) {
+        return Status(pb::error::EILLEGAL_PARAMTETER, "session_id is empty");
+      }
     }
 
     return Status::OK();
@@ -1291,31 +1302,60 @@ void MDSServiceImpl::DoOpen(google::protobuf::RpcController*, const pb::mds::Ope
 
   Context ctx(request->context(), request->info().request_id(), __func__);
 
-  std::string session_id;
-  EntryOut entry_out;
-  std::vector<ChunkEntry> chunks;
+  FileSystem::OpenParam param;
+  param.session_id = request->session_id();
+  param.flags = request->flags();
+  param.is_prefetch_chunk = request->prefetch_chunk();
+  param.is_prefetch_data = request->prefetch_data();
   // index: version map for chunk validation
-  std::map<uint32_t, uint64_t> chunk_version_map;
   for (const auto& cd : request->chunk_descriptors()) {
-    chunk_version_map.emplace(cd.index(), cd.version());
+    param.chunk_version_map.emplace(cd.index(), cd.version());
   }
 
-  status = file_system->Open(ctx, request->ino(), request->flags(), session_id, request->prefetch_chunk(),
-                             chunk_version_map, entry_out, chunks);
+  EntryOut entry_out;
+  std::vector<ChunkEntry> chunks;
+  std::string data;
+  uint64_t data_version;
+  status = file_system->Open(ctx, request->ino(), param, entry_out, chunks, data, data_version);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     SpanScope::SetStatus(span, status);
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  response->set_session_id(session_id);
   response->mutable_inode()->Swap(&entry_out.attr);
   Helper::VectorToPbRepeated(chunks, response->mutable_chunks());
+  response->set_data(std::move(data));
+  response->set_data_version(data_version);
 }
 
 void MDSServiceImpl::Open(google::protobuf::RpcController* controller, const pb::mds::OpenRequest* request,
                           pb::mds::OpenResponse* response, google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // validate request
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_id() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs_id is empty");
+    }
+    if (request->ino() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "ino is empty");
+    }
+    if (request->flags() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "flags is empty");
+    }
+    if (request->session_id().empty()) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "session_id is empty");
+    }
+
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
 
   // run in place.
   RunInPlace(Open, controller, request, response, svr_done);
@@ -1357,6 +1397,50 @@ void MDSServiceImpl::Release(google::protobuf::RpcController* controller, const 
 
   // run in queue.
   RunInQueue(Release, controller, request, response, svr_done, write_worker_set_);
+}
+
+void MDSServiceImpl::DoFlushFile(google::protobuf::RpcController*, const pb::mds::FlushFileRequest* request,
+                                 pb::mds::FlushFileResponse* response, TraceClosure* done) {
+  brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
+
+  auto span = StartSpan("MDSServiceImpl::DoFlushFile", request->info());
+
+  auto file_system = GetFileSystem(request->fs_id());
+  auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    SpanScope::SetStatus(span, status);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  Context ctx(request->context(), request->info().request_id(), __func__);
+
+  FileSystem::FlushFileParam param{.length = request->length()};
+
+  auto* mut_request = const_cast<pb::mds::FlushFileRequest*>(request);
+  param.data.swap(*mut_request->mutable_data());  // zero copy
+
+  EntryOut entry_out;
+  status = file_system->FlushFile(ctx, request->ino(), param, entry_out);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    SpanScope::SetStatus(span, status);
+    ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  response->mutable_inode()->Swap(&entry_out.attr);
+  response->set_shrink_file(entry_out.shrink_file);
+}
+
+void MDSServiceImpl::FlushFile(google::protobuf::RpcController* controller, const pb::mds::FlushFileRequest* request,
+                               pb::mds::FlushFileResponse* response, google::protobuf::Closure* done) {
+  auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // run in place.
+  RunInPlace(FlushFile, controller, request, response, svr_done);
+
+  // run in queue.
+  RunInQueue(FlushFile, controller, request, response, svr_done, write_worker_set_);
 }
 
 void MDSServiceImpl::DoLink(google::protobuf::RpcController*, const pb::mds::LinkRequest* request,

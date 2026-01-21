@@ -307,9 +307,19 @@ Status VFSImpl::Read(ContextSPtr ctx, Ino ino, DataBuffer* data_buffer,
 
   if (handle->file == nullptr) {
     LOG(ERROR) << "file is null in handle, ino: " << ino << ", fh: " << fh;
-    s = Status::BadFd(fmt::format("bad  fh:{}", fh));
+    s = Status::BadFd(fmt::format("bad fh:{}", fh));
     SpanScope::SetStatus(span, s);
     return s;
+  }
+
+  if (FLAGS_vfs_tiny_file_data_enable) {
+    // read from meta system
+    s = meta_system_->Read(SpanScope::GetContext(span), ino, fh, offset, size,
+                           *data_buffer, *out_rsize);
+    if (!s.IsNoData()) {
+      SpanScope::SetStatus(span, s);
+      return s;
+    }
   }
 
   {
@@ -325,6 +335,7 @@ Status VFSImpl::Read(ContextSPtr ctx, Ino ino, DataBuffer* data_buffer,
   s = handle->file->Read(SpanScope::GetContext(span), data_buffer, size, offset,
                          out_rsize);
   SpanScope::SetStatus(span, s);
+
   return s;
 }
 
@@ -346,7 +357,8 @@ Status VFSImpl::Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t size,
   s = handle->file->Write(SpanScope::GetContext(span), buf, size, offset,
                           out_wsize);
   if (s.ok()) {
-    s = meta_system_->Write(SpanScope::GetContext(span), ino, offset, size, fh);
+    s = meta_system_->Write(SpanScope::GetContext(span), ino, buf, offset, size,
+                            fh);
     handle->file->Invalidate(offset, size);
   }
 

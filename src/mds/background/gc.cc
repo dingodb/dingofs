@@ -236,7 +236,7 @@ Status CleanDelFileTask::CleanDelFile(const AttrEntry& attr) {
 
   // delete inode
   class Trace trace;
-  CleanDelFileOperation operation(trace, attr.fs_id(), attr.ino());
+  CleanDelFileOperation operation(trace, attr.fs_id(), attr.ino(), attr.maybe_tiny_file());
   status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
     return status;

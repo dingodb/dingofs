@@ -14,6 +14,7 @@
 
 #include "client/vfs/metasystem/mds/file_session.h"
 
+#include <cstdint>
 #include <string>
 
 #include "fmt/format.h"
@@ -29,13 +30,21 @@ std::string FileSession::GetSessionID(uint64_t fh) {
   utils::ReadLockGuard lk(lock_);
 
   auto it = session_id_map_.find(fh);
-  return (it != session_id_map_.end()) ? it->second : "";
+  return (it != session_id_map_.end()) ? it->second.session_id : "";
 }
 
-void FileSession::AddSession(uint64_t fh, const std::string& session_id) {
+uint32_t FileSession::GetFlags(uint64_t fh) {
+  utils::ReadLockGuard lk(lock_);
+
+  auto it = session_id_map_.find(fh);
+  return (it != session_id_map_.end()) ? it->second.flags : 0;
+}
+
+void FileSession::AddSession(uint64_t fh, const std::string& session_id,
+                             uint32_t flags) {
   utils::WriteLockGuard lk(lock_);
 
-  session_id_map_[fh] = session_id;
+  session_id_map_[fh] = {flags, session_id};
 
   IncRef();
   chunk_set_->RefreshLastActiveTime();
@@ -49,16 +58,35 @@ uint32_t FileSession::DeleteSession(uint64_t fh) {
   return DecRef();
 }
 
+size_t FileSession::Size() {
+  utils::ReadLockGuard lk(lock_);
+
+  return session_id_map_.size();
+}
+
+size_t FileSession::Bytes() {
+  utils::ReadLockGuard lk(lock_);
+
+  size_t bytes = 0;
+  for (const auto& [_, session_info] : session_id_map_) {
+    bytes +=
+        session_info.session_id.size() + sizeof(uint64_t) + sizeof(uint32_t);
+  }
+
+  return sizeof(FileSession) + bytes;
+}
+
 bool FileSession::Dump(Json::Value& value) {
   value["ino"] = ino_;
   value["ref_count"] = ref_count_.load();
 
   // dump session_id_map
   Json::Value session_id_map = Json::arrayValue;
-  for (const auto& [fh, session_id] : session_id_map_) {
+  for (const auto& [fh, session_info] : session_id_map_) {
     Json::Value item;
     item["fh"] = fh;
-    item["session_id"] = session_id;
+    item["session_id"] = session_info.session_id;
+    item["flags"] = session_info.flags;
 
     session_id_map.append(item);
   }
@@ -95,18 +123,22 @@ bool FileSession::Load(const Json::Value& value) {
     for (const auto& item : session_id_map_value) {
       uint64_t fh = item["fh"].asUInt64();
       std::string session_id = item["session_id"].asString();
-      session_id_map_[fh] = session_id;
+      uint32_t flags = item["flags"].asUInt();
+      session_id_map_[fh] = {flags, session_id};
     }
   }
 
   return true;
 }
 
-FileSessionSPtr FileSessionMap::Put(Ino ino, uint64_t fh,
-                                    const std::string& session_id) {
-  CHECK(ino != 0) << "ino is zero.";
+FileSessionSPtr FileSessionMap::Put(InodeSPtr& inode, uint64_t fh,
+                                    const std::string& session_id,
+                                    uint32_t flags) {
+  CHECK(inode != nullptr) << "inode is nullptr.";
   CHECK(fh != 0) << "fh is zero.";
   CHECK(!session_id.empty()) << "session_id is empty.";
+
+  const Ino ino = inode->Ino();
 
   LOG(INFO) << fmt::format(
       "[meta.filesession.{}.{}] add file session, session_id({}).", ino, fh,
@@ -114,15 +146,15 @@ FileSessionSPtr FileSessionMap::Put(Ino ino, uint64_t fh,
 
   FileSessionSPtr file_session;
   shard_map_.withWLock(
-      [this, ino, fh, &session_id, &file_session](Map& map) {
+      [this, ino, inode, fh, &session_id, &file_session, flags](Map& map) {
         auto it = map.find(ino);
         if (it != map.end()) {
           file_session = it->second;
-          file_session->AddSession(fh, session_id);
+          file_session->AddSession(fh, session_id, flags);
         } else {
           file_session =
-              FileSession::New(ino, chunk_cache_.GetOrCreateChunkSet(ino));
-          file_session->AddSession(fh, session_id);
+              FileSession::New(ino, inode, chunk_cache_.GetOrCreate(ino));
+          file_session->AddSession(fh, session_id, flags);
           map[ino] = file_session;
         }
       },
@@ -203,6 +235,22 @@ std::vector<FileSessionSPtr> FileSessionMap::GetAllSession() {
   return file_sessions;
 }
 
+size_t FileSessionMap::Size() {
+  size_t size = 0;
+  shard_map_.iterate([&size](Map& map) { size += map.size(); });
+  return size;
+}
+
+size_t FileSessionMap::Bytes() {
+  size_t bytes = 0;
+  shard_map_.iterate([&bytes](Map& map) {
+    for (const auto& [_, file_session] : map) {
+      bytes += file_session->Bytes();
+    }
+  });
+  return bytes;
+}
+
 bool FileSessionMap::Dump(Ino ino, Json::Value& value) {
   auto file_session = GetSession(ino);
 
@@ -252,8 +300,8 @@ bool FileSessionMap::Load(const Json::Value& value) {
     for (const auto& item : file_sessions) {
       Ino ino = item["ino"].asUInt64();
 
-      auto file_session =
-          FileSession::New(ino, chunk_cache_.GetOrCreateChunkSet(ino));
+      auto file_session = FileSession::New(ino, inode_cache_.Get(ino),
+                                           chunk_cache_.GetOrCreate(ino));
       CHECK(file_session->Load(item))
           << fmt::format("load file session fail, ino({}).", ino);
 

@@ -24,6 +24,8 @@
 #include "absl/cleanup/cleanup.h"
 #include "client/fuse/fs_context.h"
 #include "client/fuse/fuse_server.h"
+#include "client/vfs/access_log.h"
+#include "client/vfs/metasystem/meta_log.h"
 #include "common/flag.h"
 #include "common/helper.h"
 #include "common/logging.h"
@@ -58,6 +60,8 @@ static void HandleSignal(int sig) {
 
   // flush log
   dingofs::Logger::FlushLogs();
+  dingofs::client::FlushAccessLog();
+  dingofs::client::vfs::FlushMetaLog();
 }
 
 static int InstallSignal(int sig, void (*handler)(int)) {

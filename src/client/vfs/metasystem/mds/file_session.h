@@ -15,6 +15,9 @@
 #ifndef DINGOFS_SRC_CLIENT_VFS_META_MDS_FILE_SESSION_H_
 #define DINGOFS_SRC_CLIENT_VFS_META_MDS_FILE_SESSION_H_
 
+#include <fmt/format.h>
+#include <glog/logging.h>
+
 #include <atomic>
 #include <cstdint>
 #include <memory>
@@ -22,7 +25,7 @@
 #include <vector>
 
 #include "client/vfs/metasystem/mds/chunk.h"
-#include "client/vfs/vfs_meta.h"
+#include "client/vfs/metasystem/mds/inode_cache.h"
 #include "json/value.h"
 #include "utils/concurrent/concurrent.h"
 #include "utils/shards.h"
@@ -39,21 +42,33 @@ class FileSessionMap;
 
 class FileSession {
  public:
-  FileSession(Ino ino, ChunkSetSPtr& chunk_set)
-      : ino_(ino), chunk_set_(chunk_set) {}
+  FileSession(Ino ino, InodeSPtr inode, ChunkSetSPtr chunk_set)
+      : ino_(ino), inode_(inode), chunk_set_(chunk_set) {}
   ~FileSession() = default;
 
-  static FileSessionSPtr New(Ino ino, ChunkSetSPtr chunk_set) {
-    return std::make_shared<FileSession>(ino, chunk_set);
+  static FileSessionSPtr New(Ino ino, InodeSPtr inode, ChunkSetSPtr chunk_set) {
+    return std::make_shared<FileSession>(ino, inode, chunk_set);
   }
 
   Ino GetIno() const { return ino_; }
   std::string GetSessionID(uint64_t fh);
+  uint32_t GetFlags(uint64_t fh);
 
-  ChunkSetSPtr& GetChunkSet() { return chunk_set_; }
+  InodeSPtr& GetInode() {
+    CHECK(inode_ != nullptr) << fmt::format("inode is nullptr, ino({}).", ino_);
+    return inode_;
+  }
+  ChunkSetSPtr& GetChunkSet() {
+    CHECK(chunk_set_ != nullptr)
+        << fmt::format("chunk_set is nullptr, ino({}).", ino_);
+    return chunk_set_;
+  }
 
-  void AddSession(uint64_t fh, const std::string& session_id);
+  void AddSession(uint64_t fh, const std::string& session_id, uint32_t flags);
   uint32_t DeleteSession(uint64_t fh);
+
+  size_t Size();
+  size_t Bytes();
 
   // output json format string
   bool Dump(Json::Value& value);
@@ -72,23 +87,33 @@ class FileSession {
   utils::RWLock lock_;
 
   // fh -> session_id
-  absl::flat_hash_map<uint64_t, std::string> session_id_map_;
+  struct SessionInfo {
+    uint32_t flags{0};
+    std::string session_id;
+  };
+  absl::flat_hash_map<uint64_t, SessionInfo> session_id_map_;
 
+  InodeSPtr inode_;
   ChunkSetSPtr chunk_set_;
 };
 
 // used by open file
 class FileSessionMap {
  public:
-  FileSessionMap(ChunkCache& chunk_cache) : chunk_cache_(chunk_cache) {}
+  FileSessionMap(InodeCache& inode_cache, ChunkCache& chunk_cache)
+      : inode_cache_(inode_cache), chunk_cache_(chunk_cache) {}
   ~FileSessionMap() = default;
 
-  FileSessionSPtr Put(Ino ino, uint64_t fh, const std::string& session_id);
+  FileSessionSPtr Put(InodeSPtr& inode, uint64_t fh,
+                      const std::string& session_id, uint32_t flags);
   void Delete(Ino ino, uint64_t fh);
 
   std::string GetSessionID(Ino ino, uint64_t fh);
   FileSessionSPtr GetSession(Ino ino);
   std::vector<FileSessionSPtr> GetAllSession();
+
+  size_t Size();
+  size_t Bytes();
 
   // output json format string
   bool Dump(Ino ino, Json::Value& value);
@@ -98,6 +123,7 @@ class FileSessionMap {
  private:
   void Put(FileSessionSPtr);
 
+  InodeCache& inode_cache_;
   ChunkCache& chunk_cache_;
 
   using Map = absl::btree_map<Ino, FileSessionSPtr>;

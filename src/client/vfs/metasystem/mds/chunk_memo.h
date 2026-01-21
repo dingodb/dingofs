@@ -17,6 +17,7 @@
 
 #include <sys/types.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -65,6 +66,7 @@ class ChunkMemo {
   std::vector<std::pair<uint32_t, uint64_t>> GetVersion(Ino ino);
 
   size_t Size();
+  size_t Bytes();
 
   bool Dump(Json::Value& value);
   bool Load(const Json::Value& value);

@@ -102,6 +102,13 @@ class Chunk {
   std::vector<Slice> GetAllSlice(uint64_t& version);
   std::vector<Slice> GetCommitedSlice(uint64_t& version);
 
+  size_t Bytes() {
+    utils::ReadLockGuard guard(lock_);
+    return sizeof(Chunk) + ((stage_slices_.size() + commiting_slices_.size() +
+                             commited_slices_.size()) *
+                            sizeof(Slice));
+  }
+
   // output json format string
   bool Dump(Json::Value& value, bool is_summary = false);
   bool Load(const Json::Value& value);
@@ -320,6 +327,9 @@ class ChunkSet {
     last_active_s_.store(utils::Timestamp(), std::memory_order_relaxed);
   }
 
+  size_t Size() const { return GetChunkSize(); }
+  size_t Bytes() const;
+
   // output json format string
   bool Dump(Json::Value& valuem, bool is_summary = false);
   bool Load(const Json::Value& value);
@@ -358,12 +368,14 @@ class ChunkCache {
   ChunkCache() = default;
   ~ChunkCache() = default;
 
-  ChunkSetSPtr GetOrCreateChunkSet(Ino ino);
+  ChunkSetSPtr Get(Ino ino);
+  ChunkSetSPtr GetOrCreate(Ino ino);
   void Delete(Ino ino);
 
   bool HasUncommitedSlice();
 
   size_t Size();
+  size_t Bytes();
 
   void Clear();
 

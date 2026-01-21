@@ -59,6 +59,7 @@ class Inode {
         symlink_(attr.symlink()),
         rdev_(attr.rdev()),
         flags_(attr.flags()),
+        maybe_tiny_file_(attr.maybe_tiny_file()),
         version_(attr.version()),
         parents_(attr.parents().begin(), attr.parents().end()) {
     for (const auto& xattr : attr.xattrs()) {
@@ -118,6 +119,10 @@ class Inode {
     utils::ReadLockGuard lk(lock_);
     return flags_;
   }
+  bool MaybeTinyFile() const {
+    utils::ReadLockGuard lk(lock_);
+    return maybe_tiny_file_;
+  }
   uint64_t Version() const {
     utils::ReadLockGuard lk(lock_);
     return version_;
@@ -164,6 +169,7 @@ class Inode {
   std::string symlink_;
   uint64_t rdev_{0};
   uint32_t flags_;
+  bool maybe_tiny_file_{false};
 
   static constexpr size_t kDefaultParentNum = 8;
   absl::InlinedVector<mds::Ino, kDefaultParentNum> parents_;

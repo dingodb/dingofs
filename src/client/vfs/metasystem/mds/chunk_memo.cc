@@ -112,6 +112,8 @@ size_t ChunkMemo::Size() {
   return size;
 }
 
+size_t ChunkMemo::Bytes() { return Size() * (sizeof(Key) + sizeof(Value)); }
+
 bool ChunkMemo::Dump(Json::Value& value) {
   std::vector<std::pair<Key, Value>> chunk_map_copy;
   chunk_map_copy.reserve(Size());

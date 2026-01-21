@@ -30,6 +30,7 @@
 #include "client/vfs/metasystem/mds/mds_client.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/const.h"
+#include "common/io_buffer.h"
 #include "common/logging.h"
 #include "common/options/client.h"
 #include "common/status.h"
@@ -44,6 +45,7 @@
 #include "json/value.h"
 #include "json/writer.h"
 #include "mds/common/helper.h"
+#include "utils/uuid.h"
 
 namespace dingofs {
 namespace client {
@@ -57,8 +59,6 @@ const uint32_t kHeartbeatIntervalS = 5;                     // seconds
 const uint32_t kCleanExpiredModifyTimeMemoIntervalS = 300;  // seconds
 
 const std::string kSliceIdCacheName = "slice";
-
-DEFINE_bool(vfs_meta_read_chunk_cache_enable, true, "enable read chunk cache");
 
 static std::vector<std::string> SplitMdsAddrs(const std::string& mds_addrs) {
   std::vector<std::string> addrs;
@@ -134,7 +134,7 @@ MDSMetaSystem::MDSMetaSystem(mds::FsInfoEntry fs_info_entry,
       mds_client_(client_id, fs_info_, std::move(rpc), trace_manager),
       inode_cache_(fs_info_.GetFsId()),
       id_cache_(kSliceIdCacheName, mds_client_),
-      file_session_map_(chunk_cache_),
+      file_session_map_(inode_cache_, chunk_cache_),
       batch_processor_(mds_client_),
       compactor_(compactor) {}
 
@@ -256,14 +256,14 @@ bool MDSMetaSystem::Dump(const DumpOption& options, Json::Value& value) {
 
   if (options.chunk_set) {
     LOG(INFO) << fmt::format("[meta.fs] dump chunk set, ino({}).", options.ino);
-    auto chunk_set = chunk_cache_.GetOrCreateChunkSet(options.ino);
+    auto chunk_set = chunk_cache_.GetOrCreate(options.ino);
     if (chunk_set != nullptr && !chunk_set->Dump(value)) return false;
   }
 
   if (options.chunk) {
     LOG(INFO) << fmt::format("[meta.fs] dump chunk, ino({}) index({}).",
                              options.ino, options.chunk_index);
-    auto chunk_set = chunk_cache_.GetOrCreateChunkSet(options.ino);
+    auto chunk_set = chunk_cache_.GetOrCreate(options.ino);
     if (chunk_set == nullptr) return true;
 
     auto chunk = chunk_set->Get(options.chunk_index);
@@ -408,6 +408,13 @@ void MDSMetaSystem::CleanExpiredInodeCache() {
   inode_cache_.CleanExpired(expired_time_s);
 }
 
+void MDSMetaSystem::CleanExpiredTinyFileDataCache() {
+  uint64_t expired_time_s =
+      utils::Timestamp() - FLAGS_vfs_meta_tiny_file_data_cache_expired_s;
+
+  tiny_file_data_cache_.CleanExpired(expired_time_s);
+}
+
 bool MDSMetaSystem::InitCrontab() {
   // add heartbeat crontab
   crontab_configs_.push_back({
@@ -419,13 +426,15 @@ bool MDSMetaSystem::InitCrontab() {
 
   // add clean expired crontab
   crontab_configs_.push_back({
-      "CLEAN_EXPIRED_MEMO",
+      "CLEAN_EXPIRED",
       kCleanExpiredModifyTimeMemoIntervalS * 1000,
       true,
       [this](void*) {
         this->CleanExpiredModifyTimeMemo();
         this->CleanExpiredChunkMemo();
+        this->CleanExpiredChunkCache();
         this->CleanExpiredInodeCache();
+        this->CleanExpiredTinyFileDataCache();
       },
   });
 
@@ -482,24 +491,23 @@ Status MDSMetaSystem::Create(ContextSPtr ctx, Ino parent,
                              uint64_t fh) {
   AssertStop();
 
+  std::string session_id = utils::GenerateUUID();
   AttrEntry attr_entry, parent_attr_entry;
-  std::vector<std::string> session_ids;
   auto status = mds_client_.Create(ctx, parent, name, uid, gid, mode, flags,
-                                   attr_entry, parent_attr_entry, session_ids);
-  if (!status.ok()) {
-    return status;
-  }
-
-  // add file session
-  CHECK(!session_ids.empty()) << "session_ids is empty.";
-  const auto& session_id = session_ids.front();
-  auto file_session = file_session_map_.Put(attr_entry.ino(), fh, session_id);
+                                   session_id, attr_entry, parent_attr_entry);
+  if (!status.ok()) return status;
 
   *attr = Helper::ToAttr(attr_entry);
 
   DeleteInodeFromCache(parent);
-  PutInodeToCache(attr_entry);
+  InodeSPtr inode = PutInodeToCache(attr_entry);
   PutInodeToCache(parent_attr_entry);
+  if (FLAGS_vfs_tiny_file_data_enable) {
+    tiny_file_data_cache_.Create(attr_entry.ino());
+  }
+
+  // add file session
+  auto file_session = file_session_map_.Put(inode, fh, session_id, flags);
 
   return Status::OK();
 }
@@ -555,19 +563,41 @@ Status MDSMetaSystem::MkNod(ContextSPtr ctx, Ino parent,
   return Status::OK();
 }
 
-Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
-  AssertStop();
+bool MDSMetaSystem::IsPrefetchChunk(Ino ino) {
+  auto chunk_set = chunk_cache_.Get(ino);
+  if (chunk_set == nullptr) return true;
 
-  if ((flags & O_TRUNC) && !(flags & O_WRONLY || flags & O_RDWR)) {
-    return Status::NoPermission("O_TRUNC without O_WRONLY or O_RDWR");
-  }
+  // todo: check whether all chunks are completed
+  // size_t chunk_size = chunk_set->GetChunkSize();
 
-  std::string session_id;
-  AttrEntry attr_entry;
-  std::vector<mds::ChunkEntry> chunks;
-  bool is_prefetch_chunk = FLAGS_vfs_meta_read_chunk_cache_enable;
+  return false;
+}
 
+bool MDSMetaSystem::IsPrefetchTinyFileData(Ino ino) {
+  if (!FLAGS_vfs_tiny_file_data_enable) return false;
+
+  auto inode = inode_cache_.Get(ino);
+  if (inode == nullptr) return false;
+  if (!inode->MaybeTinyFile()) return false;
+
+  auto data_buffer = tiny_file_data_cache_.Get(ino);
+  if (data_buffer == nullptr) return true;
+
+  if (data_buffer->IsOutOfRange()) return false;
+  if (!data_buffer->IsComplete()) return true;
+
+  return false;
+}
+
+Status MDSMetaSystem::DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
+                             FileSessionSPtr file_session) {
+  const std::string session_id = file_session != nullptr
+                                     ? file_session->GetSessionID(fh)
+                                     : utils::GenerateUUID();
+
+  // check whether prefetch chunk
   // prepare chunk descriptors for expect chunk version
+  bool is_prefetch_chunk = IsPrefetchChunk(ino);
   std::vector<mds::ChunkDescriptor> chunk_descriptors;
   if (is_prefetch_chunk) {
     auto versions = chunk_memo_.GetVersion(ino);
@@ -579,19 +609,30 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
     }
   }
 
-  auto status = mds_client_.Open(ctx, ino, flags, session_id, is_prefetch_chunk,
-                                 chunk_descriptors, attr_entry, chunks);
-  if (!status.ok()) {
-    LOG(ERROR) << fmt::format("[meta.fs.{}.{}] open file fail, error({}).", ino,
-                              fh, status.ToString());
-    return status;
-  }
+  // check whether prefetch tiny file data
+  bool is_prefetch_data = IsPrefetchTinyFileData(ino);
 
+  AttrEntry attr_entry;
+  std::vector<mds::ChunkEntry> chunks;
+  std::string tiny_file_data;
+  uint64_t data_version = 0;
+  auto status = mds_client_.Open(
+      ctx, ino, flags, session_id, is_prefetch_chunk, chunk_descriptors,
+      is_prefetch_data, attr_entry, chunks, tiny_file_data, data_version);
   LOG(INFO) << fmt::format(
       "[meta.fs.{}.{}] open file flags({:o}:{}) session_id({}) "
-      "is_prefetch_chunk({}) chunks({}).",
+      "chunks({}:{}) tiny_file_data({}:{}) status({}).",
       ino, fh, flags, mds::Helper::DescOpenFlags(flags), session_id,
-      is_prefetch_chunk, chunks.size());
+      is_prefetch_chunk, chunks.size(), is_prefetch_data, tiny_file_data.size(),
+      status.ToString());
+  if (!status.ok()) return status;
+
+  // update inode cache
+  InodeSPtr inode = PutInodeToCache(attr_entry);
+
+  if (file_session == nullptr) {
+    file_session = file_session_map_.Put(inode, fh, session_id, flags);
+  }
 
   // truncate file, forget chunk memo and delete chunk cache
   if (flags & O_TRUNC) {
@@ -599,21 +640,107 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
     chunk_cache_.Delete(ino);
   }
 
-  // add file session and chunk
-  auto file_session = file_session_map_.Put(ino, fh, session_id);
+  // update chunk cache
   auto& chunk_set = file_session->GetChunkSet();
-  if (is_prefetch_chunk && !chunks.empty()) {
-    chunk_set->Put(chunks, "open");
-  }
+  if (!chunks.empty()) chunk_set->Put(chunks, "open");
 
   // update chunk memo
   for (const auto& chunk : chunks) {
     chunk_memo_.Remember(ino, chunk.index(), chunk.version());
   }
 
-  PutInodeToCache(attr_entry);
+  // update tiny file data cache
+  if (is_prefetch_data) {
+    if (flags & O_TRUNC) {
+      tiny_file_data_cache_.Create(ino);
+
+    } else {
+      auto data_buffer = tiny_file_data_cache_.GetOrCreate(ino);
+      if (attr_entry.length() == 0) {
+        CHECK(tiny_file_data.empty()) << fmt::format(
+            "[meta.fs.{}.{}] tiny file data not empty, data_version({}).", ino,
+            fh, data_version);
+        ++data_version;
+      }
+      data_buffer->Put(tiny_file_data, data_version);
+    }
+  }
 
   return Status::OK();
+}
+
+void MDSMetaSystem::AsyncOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
+                              FileSessionSPtr file_session) {
+  struct Param {
+    MDSMetaSystem& self;
+    ContextSPtr ctx;
+    Ino ino;
+    int flags;
+    uint64_t fh;
+    FileSessionSPtr file_session;
+  };
+
+  Param* param = new Param({.self = *this,
+                            .ctx = ctx,
+                            .ino = ino,
+                            .flags = flags,
+                            .fh = fh,
+                            .file_session = file_session});
+
+  bthread_t tid{0};
+  const bthread_attr_t attr = BTHREAD_ATTR_NORMAL;
+  int ret = bthread_start_background(
+      &tid, &attr,
+      [](void* arg) -> void* {
+        Param* param = reinterpret_cast<Param*>(arg);
+
+        auto status = param->self.DoOpen(param->ctx, param->ino, param->flags,
+                                         param->fh, param->file_session);
+        if (!status.ok()) {
+          LOG(ERROR) << fmt::format(
+              "[meta.fs.{}.{}] async open file fail, error({}).", param->ino,
+              param->fh, status.ToString());
+          param->self.file_session_map_.Delete(param->ino, param->fh);
+        }
+
+        delete param;
+        return nullptr;
+      },
+      param);
+  if (ret != 0) {
+    delete param;
+    LOG(FATAL) << fmt::format("[meta.fs.{}.{}] start bthread fail, error({}).",
+                              ino, fh, strerror(ret));
+  }
+}
+
+Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
+  AssertStop();
+
+  if ((flags & O_TRUNC) && !(flags & O_WRONLY || flags & O_RDWR)) {
+    return Status::NoPermission("O_TRUNC without O_WRONLY or O_RDWR");
+  }
+
+  auto inode = GetInodeFromCache(ino);
+  if (inode != nullptr) {
+    if (!(flags & O_TRUNC)) {
+      auto file_session =
+          file_session_map_.Put(inode, fh, utils::GenerateUUID(), flags);
+      // launch async open
+      AsyncOpen(ctx, ino, flags, fh, file_session);
+
+      return Status::OK();
+    }
+  }
+
+  auto status = DoOpen(ctx, ino, flags, fh, nullptr);
+  if (!status.ok()) {
+    LOG(ERROR) << fmt::format("[meta.fs.{}.{}] open file fail, error({}).", ino,
+                              fh, status.ToString());
+    file_session_map_.Delete(ino, fh);
+  }
+
+  return status;
 }
 
 Status MDSMetaSystem::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {
@@ -621,12 +748,24 @@ Status MDSMetaSystem::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {
 
   LOG(INFO) << fmt::format("[meta.fs.{}.{}] flush.", ino, fh);
 
+  auto file_session = file_session_map_.GetSession(ino);
+  CHECK(file_session != nullptr)
+      << fmt::format("get file session fail, ino({}) fh({}).", ino, fh);
+
+  uint32_t flags = file_session->GetFlags(fh);
+
+  // only flush when file opened with write flag
+  if (!(flags & O_WRONLY || flags & O_RDWR)) {
+    LOG(INFO) << fmt::format(
+        "[meta.fs.{}.{}] flush skipped, file opened with read flag.", ino, fh);
+    return Status::OK();
+  }
+
   return FlushSlice(ctx, ino);
 }
 
-Status MDSMetaSystem::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
-  AssertStop();
-
+void MDSMetaSystem::AsyncClose(ContextSPtr ctx, Ino ino, uint64_t fh,
+                               const std::string& session_id) {
   struct Param {
     MDSClient& mds_client;
     ContextSPtr ctx;
@@ -643,22 +782,12 @@ Status MDSMetaSystem::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
           session_id(session_id) {}
   };
 
-  std::string session_id = file_session_map_.GetSessionID(ino, fh);
-  CHECK(!session_id.empty())
-      << fmt::format("get file session fail, ino({}) fh({}).", ino, fh);
-
-  // clean cache
-  file_session_map_.Delete(ino, fh);
-
-  LOG(INFO) << fmt::format("[meta.fs.{}.{}] close file session_id({}).", ino,
-                           fh, session_id);
-
   // async close file
   Param* param = new Param(ctx, mds_client_, ino, fh, session_id);
 
   bthread_t tid;
   const bthread_attr_t attr = BTHREAD_ATTR_SMALL;
-  bthread_start_background(
+  int ret = bthread_start_background(
       &tid, &attr,
       [](void* arg) -> void* {
         Param* param = static_cast<Param*>(arg);
@@ -678,6 +807,27 @@ Status MDSMetaSystem::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
         return nullptr;
       },
       param);
+  if (ret != 0) {
+    delete param;
+    LOG(FATAL) << fmt::format("[meta.fs.{}.{}] start bthread fail, error({}).",
+                              ino, fh, strerror(ret));
+  }
+}
+
+Status MDSMetaSystem::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
+  AssertStop();
+
+  std::string session_id = file_session_map_.GetSessionID(ino, fh);
+  CHECK(!session_id.empty())
+      << fmt::format("get file session fail, ino({}) fh({}).", ino, fh);
+
+  // clean cache
+  file_session_map_.Delete(ino, fh);
+
+  LOG(INFO) << fmt::format("[meta.fs.{}.{}] close file session_id({}).", ino,
+                           fh, session_id);
+
+  AsyncClose(ctx, ino, fh, session_id);
 
   return Status::OK();
 }
@@ -771,7 +921,7 @@ Status MDSMetaSystem::AsyncWriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
   LOG(INFO) << fmt::format("[meta.fs.{}.{}.{}] async writeslice, slices({}).",
                            ino, fh, index, Helper::ToString(slices));
 
-  auto chunk_set = chunk_cache_.GetOrCreateChunkSet(ino);
+  auto chunk_set = chunk_cache_.GetOrCreate(ino);
   chunk_set->Append(index, slices);
 
   AsyncFlushSlice(ctx, chunk_set, false, false);
@@ -781,8 +931,8 @@ Status MDSMetaSystem::AsyncWriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
   return Status::OK();
 }
 
-Status MDSMetaSystem::Write(ContextSPtr, Ino ino, uint64_t offset,
-                            uint64_t size, uint64_t fh) {
+Status MDSMetaSystem::Write(ContextSPtr, Ino ino, const char* buf,
+                            uint64_t offset, uint64_t size, uint64_t fh) {
   AssertStop();
 
   LOG_DEBUG << fmt::format("[meta.fs.{}.{}] write, offset({}) size({}).", ino,
@@ -794,8 +944,53 @@ Status MDSMetaSystem::Write(ContextSPtr, Ino ino, uint64_t offset,
 
   file_session->GetChunkSet()->SetLastWriteLength(offset, size);
 
+  if (FLAGS_vfs_tiny_file_data_enable) {
+    // tiny file write data
+    auto inode = file_session->GetInode();
+    if (inode->MaybeTinyFile()) {
+      auto data_buffer = tiny_file_data_cache_.GetOrCreate(ino);
+      data_buffer->Write(buf, offset, size);
+    }
+  }
+
   // update last modify time
   modify_time_memo_.Remember(ino);
+
+  return Status::OK();
+}
+
+Status MDSMetaSystem::Read(ContextSPtr, Ino ino, uint64_t fh, uint64_t offset,
+                           uint64_t size, vfs::DataBuffer& data_buffer,
+                           uint64_t& out_rsize) {
+  AssertStop();
+
+  LOG_DEBUG << fmt::format("[meta.fs.{}.{}] read, offset({}) size({}).", ino,
+                           fh, offset, size);
+
+  auto file_session = file_session_map_.GetSession(ino);
+  CHECK(file_session != nullptr)
+      << fmt::format("file session is nullptr, ino({}) fh({}).", ino, fh);
+
+  auto& inode = file_session->GetInode();
+  if (!inode->MaybeTinyFile()) {
+    return Status::NoData("not tiny file");
+  }
+
+  auto data = tiny_file_data_cache_.Get(ino);
+  if (data == nullptr) {
+    return Status::NoData("tiny file data not found");
+  }
+  if (data->IsOutOfRange()) {
+    return Status::NoData("tiny file data is out of range");
+  }
+
+  auto* io_buffer = data_buffer.RawIOBuffer();
+
+  if (!data->Read(offset, size, *io_buffer)) {
+    return Status::NoData("tiny file read data fail");
+  }
+
+  out_rsize = io_buffer->Size();
 
   return Status::OK();
 }
@@ -964,6 +1159,7 @@ Status MDSMetaSystem::Unlink(ContextSPtr ctx, Ino parent,
   DeleteInodeFromCache(parent);
   if (attr_entry.nlink() == 0) {
     DeleteInodeFromCache(attr_entry.ino());
+    chunk_cache_.Delete(attr_entry.ino());
 
   } else {
     PutInodeToCache(attr_entry);
@@ -1170,22 +1366,6 @@ Status MDSMetaSystem::Rename(ContextSPtr ctx, Ino old_parent,
   return Status::OK();
 }
 
-void MDSMetaSystem::PutInodeToCache(const AttrEntry& attr_entry) {
-  if (FLAGS_vfs_meta_inode_cache_enable) {
-    inode_cache_.Put(attr_entry.ino(), attr_entry);
-  }
-}
-
-void MDSMetaSystem::DeleteInodeFromCache(Ino ino) {
-  if (FLAGS_vfs_meta_inode_cache_enable) {
-    inode_cache_.Delete(ino);
-  }
-}
-
-InodeSPtr MDSMetaSystem::GetInodeFromCache(Ino ino) {
-  return (FLAGS_vfs_meta_inode_cache_enable) ? inode_cache_.Get(ino) : nullptr;
-}
-
 Status MDSMetaSystem::SetInodeLength(ContextSPtr ctx, Ino ino,
                                      ChunkSetSPtr& chunk_set) {
   CHECK(chunk_set != nullptr) << "chunk_set is null.";
@@ -1213,6 +1393,47 @@ Status MDSMetaSystem::SetInodeLength(ContextSPtr ctx, Ino ino,
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[meta.fs.{}] set inode length({}) fail, error({}).", ino,
+        last_write_length, status.ToString());
+    return status;
+  }
+
+  modify_time_memo_.Remember(ino);
+  if (shrink_file) chunk_memo_.Forget(ino);
+
+  PutInodeToCache(attr_entry);
+
+  return Status::OK();
+}
+
+Status MDSMetaSystem::FlushFile(ContextSPtr ctx, InodeSPtr& inode,
+                                ChunkSetSPtr& chunk_set) {
+  CHECK(inode != nullptr) << "inode is null.";
+  CHECK(chunk_set != nullptr) << "chunk_set is null.";
+
+  Ino ino = inode->Ino();
+  uint64_t last_write_length = chunk_set->GetLastWriteLength();
+  if (last_write_length <= inode->Length()) {
+    LOG(INFO) << fmt::format(
+        "[meta.fs.{}] flush file skip, last_write_length({})<=length({}).", ino,
+        last_write_length, inode->Length());
+    return Status::OK();
+  }
+
+  std::string data;
+  if (FLAGS_vfs_tiny_file_data_enable && inode->MaybeTinyFile()) {
+    auto data_buffer = tiny_file_data_cache_.GetOrCreate(ino);
+    if (data_buffer != nullptr && data_buffer->IsComplete()) {
+      data_buffer->Copy(data);
+    }
+  }
+
+  AttrEntry attr_entry;
+  bool shrink_file;
+  auto status = mds_client_.FlushFile(ctx, ino, last_write_length,
+                                      std::move(data), attr_entry, shrink_file);
+  if (!status.ok()) {
+    LOG(ERROR) << fmt::format(
+        "[meta.fs.{}] flush file fail, length({}) error({}).", ino,
         last_write_length, status.ToString());
     return status;
   }
@@ -1267,7 +1488,6 @@ void MDSMetaSystem::AsyncFlushSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
   Ino ino = chunk_set->GetIno();
 
   uint32_t new_task_count = chunk_set->TryCommitSlice(is_force);
-  if (new_task_count == 0) return;
 
   uint32_t launched_count = 0;
   auto tasks = chunk_set->ListCommitTask();
@@ -1323,8 +1543,8 @@ Status MDSMetaSystem::FlushSlice(ContextSPtr ctx, Ino ino) {
 
   } while (true);
 
-  // modify inode length
-  return SetInodeLength(ctx, ino, chunk_set);
+  // flush file length and data
+  return FlushFile(ctx, file_session->GetInode(), chunk_set);
 }
 
 void MDSMetaSystem::FlushAllSlice() {
@@ -1395,8 +1615,8 @@ bool MDSMetaSystem::CorrectAttrLength(Attr& attr, const std::string& caller) {
   return false;
 }
 
-Status MDSMetaSystem::ManualCompact(ContextSPtr ctx, Ino ino,
-                                    uint32_t chunk_index) {
+Status MDSMetaSystem::Compact(ContextSPtr ctx, Ino ino, uint32_t chunk_index,
+                              bool is_async) {
   // set chunk version
   mds::ChunkDescriptor chunk_descriptor;
   chunk_descriptor.set_index(chunk_index);
@@ -1416,7 +1636,7 @@ Status MDSMetaSystem::ManualCompact(ContextSPtr ctx, Ino ino,
   for (auto& chunk : chunks) {
     auto chunk_ptr = Chunk::New(ino, chunk, "manual_compact");
     auto status = compact_processor_.LaunchCompact(ino, chunk_ptr, mds_client_,
-                                                   compactor_, false);
+                                                   compactor_, is_async);
     if (!status.ok()) return status;
   }
 

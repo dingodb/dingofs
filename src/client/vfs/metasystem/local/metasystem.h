@@ -140,8 +140,8 @@ class LocalMetaSystem : public vfs::MetaSystem {
   Status AsyncWriteSlice(ContextSPtr ctx, Ino ino, uint64_t index, uint64_t fh,
                          const std::vector<Slice>& slices,
                          DoneClosure done) override;
-  Status Write(ContextSPtr ctx, Ino ino, uint64_t offset, uint64_t size,
-               uint64_t fh) override;
+  Status Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t offset,
+               uint64_t size, uint64_t fh) override;
 
   Status MkDir(ContextSPtr ctx, Ino parent, const std::string& name,
                uint32_t uid, uint32_t gid, uint32_t mode, Attr* attr) override;

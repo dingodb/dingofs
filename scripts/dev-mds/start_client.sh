@@ -143,6 +143,7 @@ function start() {
 
     ${CLIENT_BIN_PATH} ${FLAGS_meta} ${mountpoint_dir} \
     --log_dir=${log_dir} \
+    --log_v=20 \
     --vfs_dummy_server_port=${dummy_port} \
     --cache_store=none \
     --daemonize=true 2>&1 > $log_dir/out

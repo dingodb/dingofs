@@ -86,7 +86,7 @@ class FileSessionManager {
     return std::make_unique<FileSessionManager>(fs_id, operation_processor);
   }
 
-  FileSessionSPtr Create(uint64_t ino, const std::string& client_id) const;
+  FileSessionSPtr Create(uint64_t ino, const std::string& client_id, const std::string& session_id) const;
   void Put(FileSessionSPtr file_session);
   Status IsExist(uint64_t ino, bool just_cache, bool& is_exist);
   Status Delete(uint64_t ino, const std::string& session_id);

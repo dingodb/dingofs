@@ -125,16 +125,28 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
     uint32_t mode{0};
     Ino parent{0};
     uint64_t rdev{0};
+    std::string session_id;
   };
 
-  Status BatchCreate(Context& ctx, Ino parent, const std::vector<MkNodParam>& params, EntryOut& entry_out,
-                     std::vector<std::string>& session_ids);
+  Status BatchCreate(Context& ctx, Ino parent, const std::vector<MkNodParam>& params, EntryOut& entry_out);
   Status MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_out);
   Status BatchMkNod(Context& ctx, const std::vector<MkNodParam>& params, EntryOut& entry_out);
-  Status Open(Context& ctx, Ino ino, uint32_t flags, std::string& session_id, bool is_prefetch_chunk,
-              const std::map<uint32_t, uint64_t>& chunk_version_map, EntryOut& entry_out,
-              std::vector<ChunkEntry>& chunks);
+  struct OpenParam {
+    std::string session_id;
+    uint32_t flags{0};
+    bool is_prefetch_chunk{false};
+    bool is_prefetch_data{false};
+    std::map<uint32_t, uint64_t> chunk_version_map;
+  };
+  Status Open(Context& ctx, Ino ino, const OpenParam& param, EntryOut& entry_out, std::vector<ChunkEntry>& chunks_out,
+              std::string& data_out, uint64_t& data_version);
   Status Release(Context& ctx, Ino ino, const std::string& session_id);
+
+  struct FlushFileParam {
+    uint64_t length{0};
+    std::string data;
+  };
+  Status FlushFile(Context& ctx, Ino ino, const FlushFileParam& param, EntryOut& entry_out);
 
   // directory
   struct MkDirParam {

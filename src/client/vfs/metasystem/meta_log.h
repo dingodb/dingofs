@@ -32,6 +32,7 @@ namespace vfs {
 extern std::shared_ptr<spdlog::logger> meta_logger;
 
 bool InitMetaLog(const std::string& log_dir);
+void FlushMetaLog();
 
 class MetaLogGuard {
  public:

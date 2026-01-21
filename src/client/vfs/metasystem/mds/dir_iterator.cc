@@ -89,6 +89,12 @@ Status DirIterator::Fetch(ContextSPtr& ctx) {
   return Status::OK();
 }
 
+size_t DirIterator::Size() { return entries_.size(); }
+
+size_t DirIterator::Bytes() {
+  return sizeof(DirIterator) + (entries_.size() * sizeof(DirEntry));
+}
+
 bool DirIterator::Dump(Json::Value& value) {
   value["ino"] = ino_;
   value["fh"] = fh_;
@@ -142,68 +148,113 @@ bool DirIterator::Load(const Json::Value& value) {
 
 void DirIteratorManager::PutWithFunc(Ino ino, uint64_t,
                                      DirIteratorSPtr& dir_iterator,
-                                     PutFunc&& f) {
-  utils::WriteLockGuard lk(lock_);
+                                     PutFunc&& f) {  // NOLINT
+  shard_map_.withWLock(
+      [this, ino, &dir_iterator, &f](Map& map) {
+        auto it = map.find(ino);
+        if (it != map.end()) {
+          auto& vec = it->second;
+          vec.push_back(dir_iterator);
+          f(vec);
 
-  auto it = dir_iterator_map_.find(ino);
-  if (it == dir_iterator_map_.end()) {
-    DirIteratorSet vec = {dir_iterator};
-    dir_iterator_map_[ino] = vec;
-    f(vec);
+        } else {
+          DirIteratorSet vec = {dir_iterator};
+          map[ino] = vec;
+          f(vec);
+        }
+      },
+      ino);
+}
 
-  } else {
-    auto& vec = it->second;
-    vec.push_back(dir_iterator);
-    f(vec);
-  }
+void DirIteratorManager::Put(Ino ino, DirIteratorSet& dir_iterator_set) {
+  shard_map_.withWLock(
+      [this, ino, &dir_iterator_set](Map& map) { map[ino] = dir_iterator_set; },
+      ino);
 }
 
 DirIteratorSPtr DirIteratorManager::Get(Ino ino, uint64_t fh) {
-  utils::ReadLockGuard lk(lock_);
+  DirIteratorSPtr dir_iterator_out;
+  shard_map_.withRLock(
+      [ino, fh, &dir_iterator_out](Map& map) {
+        auto it = map.find(ino);
+        if (it == map.end()) return;
 
-  auto it = dir_iterator_map_.find(ino);
-  if (it == dir_iterator_map_.end()) return nullptr;
+        for (const auto& dir_iterator : it->second) {
+          if (dir_iterator->Fh() == fh) {
+            dir_iterator_out = dir_iterator;
+            break;
+          }
+        }
+      },
+      ino);
 
-  for (const auto& dir_iterator : it->second) {
-    if (dir_iterator->Fh() == fh) return dir_iterator;
-  }
-
-  return nullptr;
+  return dir_iterator_out;
 }
 
 void DirIteratorManager::Delete(Ino ino, uint64_t fh) {
-  utils::WriteLockGuard lk(lock_);
+  shard_map_.withWLock(
+      [this, ino, fh](Map& map) {
+        auto it = map.find(ino);
+        if (it == map.end()) return;
 
-  auto it = dir_iterator_map_.find(ino);
-  if (it == dir_iterator_map_.end()) return;
+        auto& vec = it->second;
 
-  auto& vec = it->second;
+        uint32_t erase_index = UINT32_MAX;
+        for (uint32_t i = 0; i < vec.size(); ++i) {
+          if (vec[i]->Fh() == fh) {
+            erase_index = i;
+            break;
+          }
+        }
+        CHECK(erase_index != UINT32_MAX)
+            << fmt::format("dir iterator not found, ino({}) fh({}).", ino, fh);
 
-  uint32_t erase_index = UINT32_MAX;
-  for (uint32_t i = 0; i < vec.size(); ++i) {
-    if (vec[i]->Fh() == fh) {
-      erase_index = i;
-      break;
+        if (vec.size() == 1) {
+          map.erase(it);
+        } else {
+          vec[erase_index] = vec.back();
+          vec.pop_back();
+        }
+      },
+      ino);
+}
+
+size_t DirIteratorManager::Size() {
+  size_t size = 0;
+  shard_map_.iterate([&size](const Map& map) {
+    for (const auto& [_, dir_iterator_set] : map) {
+      size += dir_iterator_set.size();
     }
-  }
-  CHECK(erase_index != UINT32_MAX)
-      << fmt::format("dir iterator not found, ino({}) fh({}).", ino, fh);
+  });
 
-  if (vec.size() == 1) {
-    dir_iterator_map_.erase(it);
-  } else {
-    vec[erase_index] = vec.back();
-    vec.pop_back();
-  }
+  return size;
+}
+
+size_t DirIteratorManager::Bytes() {
+  size_t bytes = 0;
+  shard_map_.iterate([&bytes](const Map& map) {
+    for (const auto& [_, dir_iterator_set] : map) {
+      for (const auto& dir_iterator : dir_iterator_set) {
+        bytes += dir_iterator->Bytes();
+      }
+    }
+  });
+
+  return bytes;
 }
 
 bool DirIteratorManager::Dump(Json::Value& value) {
-  utils::ReadLockGuard lk(lock_);
+  std::vector<DirIteratorSet> all_dir_iteratorset;
+  shard_map_.iterate([&all_dir_iteratorset](const Map& map) {
+    for (const auto& [_, dir_iterator_set] : map) {
+      all_dir_iteratorset.push_back(dir_iterator_set);
+    }
+  });
 
   Json::Value items = Json::arrayValue;
-  for (const auto& [ino, dir_iterator_set] : dir_iterator_map_) {
+  for (const auto& dir_iterator_set : all_dir_iteratorset) {
     Json::Value item;
-    item["ino"] = ino;
+    item["ino"] = dir_iterator_set.front()->INo();
     Json::Value sub_items = Json::arrayValue;
     for (const auto& dir_iterator : dir_iterator_set) {
       Json::Value sub_item = Json::objectValue;
@@ -225,9 +276,9 @@ bool DirIteratorManager::Dump(Json::Value& value) {
 }
 
 bool DirIteratorManager::Load(MDSClient& mds_client, const Json::Value& value) {
-  utils::WriteLockGuard lk(lock_);
+  if (value.isNull()) return true;
+  if (value["dir_iterators_map"].isNull()) return true;
 
-  dir_iterator_map_.clear();
   const Json::Value& items = value["dir_iterators_map"];
   if (!items.isArray()) {
     LOG(ERROR) << "[meta.dir_iterator] value is not an array.";
@@ -251,7 +302,7 @@ bool DirIteratorManager::Load(MDSClient& mds_client, const Json::Value& value) {
       dir_iterator_set.push_back(dir_iterator);
     }
 
-    dir_iterator_map_[ino] = dir_iterator_set;
+    Put(ino, dir_iterator_set);
   }
 
   return true;

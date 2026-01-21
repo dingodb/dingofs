@@ -32,6 +32,12 @@ bool InitMetaLog(const std::string& log_dir) {
   return true;
 }
 
+void FlushMetaLog() {
+  if (meta_logger != nullptr) {
+    meta_logger->flush();
+  }
+}
+
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

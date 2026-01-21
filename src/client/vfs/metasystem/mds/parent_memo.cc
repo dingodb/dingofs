@@ -176,6 +176,8 @@ size_t ParentMemo::Size() {
   return size;
 }
 
+size_t ParentMemo::Bytes() { return Size() * (sizeof(Ino) + sizeof(Entry)); }
+
 bool ParentMemo::Dump(Json::Value& value) {
   std::vector<std::pair<Ino, Entry>> ino_map_copy;
   ino_map_copy.reserve(Size());

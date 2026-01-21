@@ -70,6 +70,10 @@ DECLARE_int64(vfs_meta_access_log_threshold_us);
 DECLARE_uint64(vfs_meta_memo_expired_s);
 DECLARE_uint64(vfs_meta_chunk_cache_expired_s);
 DECLARE_uint64(vfs_meta_inode_cache_expired_s);
+DECLARE_uint64(vfs_meta_tiny_file_data_cache_expired_s);
+
+DECLARE_bool(vfs_tiny_file_data_enable);
+DECLARE_uint64(vfs_tiny_file_max_size);
 
 // vfs read
 DECLARE_int32(vfs_read_executor_thread);
@@ -100,7 +104,6 @@ DECLARE_int32(vfs_periodic_flush_interval_ms);
 DECLARE_int32(vfs_periodic_trim_mem_ms);
 
 // vfs meta
-DECLARE_bool(vfs_meta_inode_cache_enable);
 DECLARE_uint32(vfs_meta_read_dir_batch_size);
 DECLARE_uint32(vfs_meta_rpc_timeout_ms);
 DECLARE_int32(vfs_meta_rpc_retry_times);

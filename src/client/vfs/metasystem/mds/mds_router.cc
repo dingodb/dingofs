@@ -181,6 +181,17 @@ bool ParentHashMDSRouter::UpdateRouter(
   return true;
 }
 
+size_t ParentHashMDSRouter::Size() {
+  utils::ReadLockGuard lk(lock_);
+  return mds_map_.size();
+}
+
+size_t ParentHashMDSRouter::Bytes() {
+  utils::ReadLockGuard lk(lock_);
+  return sizeof(ParentHashMDSRouter) +
+         (mds_map_.size() * (sizeof(mds::MDSMeta) + sizeof(int64_t)));
+}
+
 bool ParentHashMDSRouter::Dump(Json::Value& value) {
   utils::ReadLockGuard lk(lock_);
 

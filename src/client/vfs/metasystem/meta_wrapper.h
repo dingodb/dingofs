@@ -167,13 +167,20 @@ class MetaWrapper {
   Status AsyncWriteSlice(ContextSPtr ctx, Ino ino, uint64_t index, uint64_t fh,
                          const std::vector<Slice>& slices, DoneClosure done);
 
-  Status Write(ContextSPtr ctx, Ino ino, uint64_t offset, uint64_t size,
-               uint64_t fh) {
-    return target_->Write(ctx, ino, offset, size, fh);
+  Status Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t offset,
+               uint64_t size, uint64_t fh) {
+    return target_->Write(ctx, ino, buf, offset, size, fh);
   }
 
-  Status ManualCompact(ContextSPtr ctx, Ino ino, uint32_t chunk_index) {
-    return target_->ManualCompact(ctx, ino, chunk_index);
+  Status Read(ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
+              uint64_t size, vfs::DataBuffer& data_buffer,
+              uint64_t& out_rsize) {
+    return target_->Read(ctx, ino, fh, offset, size, data_buffer, out_rsize);
+  }
+
+  Status Compact(ContextSPtr ctx, Ino ino, uint32_t chunk_index,
+                 bool is_async) {
+    return target_->Compact(ctx, ino, chunk_index, is_async);
   }
 
   Status StatFs(ContextSPtr ctx, Ino ino, FsStat* fs_stat) {

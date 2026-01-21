@@ -197,6 +197,16 @@ bool MDSDiscovery::RefreshFullyMDSList() {
   return true;
 }
 
+size_t MDSDiscovery::Size() {
+  utils::ReadLockGuard lk(lock_);
+  return mdses_.size();
+}
+
+size_t MDSDiscovery::Bytes() {
+  utils::ReadLockGuard lk(lock_);
+  return mdses_.size() * (sizeof(int64_t) + sizeof(mds::MDSMeta));
+}
+
 bool MDSDiscovery::Dump(Json::Value& value) {
   utils::ReadLockGuard lk(lock_);
 

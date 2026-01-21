@@ -15,11 +15,8 @@
 #ifndef DINGOFS_SRC_CLIENT_VFS_META_MDS_INODE_CACHE_H_
 #define DINGOFS_SRC_CLIENT_VFS_META_MDS_INODE_CACHE_H_
 
-#include <absl/container/flat_hash_map.h>
-#include <absl/container/inlined_vector.h>
 #include <sys/types.h>
 
-#include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -28,6 +25,8 @@
 #include <utility>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
+#include "absl/container/inlined_vector.h"
 #include "client/vfs/vfs_meta.h"
 #include "json/value.h"
 #include "mds/common/type.h"
@@ -69,6 +68,7 @@ class Inode {
         symlink_(attr.symlink()),
         rdev_(attr.rdev()),
         flags_(attr.flags()),
+        maybe_tiny_file_(attr.maybe_tiny_file()),
         version_(attr.version()),
         parents_(attr.parents().begin(), attr.parents().end()) {
     for (const auto& xattr : attr.xattrs()) {
@@ -130,6 +130,10 @@ class Inode {
   uint32_t Flags() const {
     utils::ReadLockGuard lk(lock_);
     return flags_;
+  }
+  bool MaybeTinyFile() const {
+    utils::ReadLockGuard lk(lock_);
+    return maybe_tiny_file_;
   }
   uint64_t Version() const {
     utils::ReadLockGuard lk(lock_);
@@ -194,6 +198,7 @@ class Inode {
   std::string symlink_;
   uint64_t rdev_{0};
   uint32_t flags_;
+  bool maybe_tiny_file_{false};
 
   static constexpr size_t kDefaultParentNum = 8;
   absl::InlinedVector<mds::Ino, kDefaultParentNum> parents_;
@@ -225,13 +230,16 @@ class InodeCache {
     return std::make_unique<InodeCache>(fs_id);
   }
 
-  void Put(Ino ino, const AttrEntry& attr);
+  InodeSPtr Put(Ino ino, const AttrEntry& attr);
   void Delete(Ino ino);
 
   InodeSPtr Get(Ino ino);
   std::vector<InodeSPtr> Get(const std::vector<uint64_t>& inoes);
 
   void CleanExpired(uint64_t expire_s);
+
+  size_t Size();
+  size_t Bytes();
 
   bool Dump(Json::Value& value);
   bool Load(const Json::Value& value);

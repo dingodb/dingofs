@@ -53,6 +53,9 @@ bool Inode::PutIf(const AttrEntry& attr) {
   if (symlink_ != attr.symlink()) symlink_ = attr.symlink();
   if (rdev_ != attr.rdev()) rdev_ = attr.rdev();
   if (flags_ != attr.flags()) flags_ = attr.flags();
+  if (maybe_tiny_file_ != attr.maybe_tiny_file()) {
+    maybe_tiny_file_ = attr.maybe_tiny_file();
+  }
 
   parents_.clear();
   parents_.insert(parents_.end(), attr.parents().begin(), attr.parents().end());
@@ -112,6 +115,7 @@ Inode::AttrEntry Inode::ToAttrEntry() const {
   attr.set_symlink(symlink_);
   attr.set_rdev(rdev_);
   attr.set_flags(flags_);
+  attr.set_maybe_tiny_file(maybe_tiny_file_);
   for (const auto& parent : parents_) {
     attr.add_parents(parent);
   }
@@ -131,17 +135,22 @@ uint64_t Inode::LastAccessTimeS() {
   return last_access_time_s_.load(std::memory_order_relaxed);
 }
 
-void InodeCache::Put(Ino ino, const AttrEntry& attr) {
+InodeSPtr InodeCache::Put(Ino ino, const AttrEntry& attr) {
+  InodeSPtr inode;
   shard_map_.withWLock(
-      [ino, &attr](Map& map) mutable {
+      [ino, &attr, &inode](Map& map) mutable {
         auto it = map.find(ino);
         if (it == map.end()) {
-          map.emplace(ino, Inode::New(attr));
+          inode = Inode::New(attr);
+          map.emplace(ino, inode);
         } else {
-          it->second->PutIf(attr);
+          inode = it->second;
+          inode->PutIf(attr);
         }
       },
       ino);
+
+  return inode;
 }
 
 void InodeCache::Delete(Ino ino) {
@@ -199,6 +208,16 @@ void InodeCache::CleanExpired(uint64_t expire_s) {
   for (const auto& inode : inodes) {
     Delete(inode->Ino());
   }
+}
+
+size_t InodeCache::Size() {
+  size_t size = 0;
+  shard_map_.iterate([&size](Map& map) { size += map.size(); });
+  return size;
+}
+
+size_t InodeCache::Bytes() {
+  return Size() * (sizeof(Ino) + sizeof(InodeSPtr) + sizeof(Inode));
 }
 
 bool InodeCache::Dump(Json::Value& value) {

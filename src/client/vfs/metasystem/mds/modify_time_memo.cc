@@ -22,16 +22,16 @@ namespace vfs {
 namespace meta {
 
 void ModifyTimeMemo::Remember(Ino ino) {
-  modify_time_map_.withWLock(
+  shard_map_.withWLock(
       [ino](Map& map) mutable { map[ino] = utils::TimestampNs(); }, ino);
 }
 
 void ModifyTimeMemo::Forget(Ino ino) {
-  modify_time_map_.withWLock([ino](Map& map) mutable { map.erase(ino); }, ino);
+  shard_map_.withWLock([ino](Map& map) mutable { map.erase(ino); }, ino);
 }
 
 void ModifyTimeMemo::ForgetExpired(uint64_t expire_time_ns) {
-  modify_time_map_.iterateWLock([expire_time_ns](Map& map) {
+  shard_map_.iterateWLock([expire_time_ns](Map& map) {
     for (auto it = map.begin(); it != map.end();) {
       if (it->second < expire_time_ns) {
         auto temp_it = it++;
@@ -45,7 +45,7 @@ void ModifyTimeMemo::ForgetExpired(uint64_t expire_time_ns) {
 
 uint64_t ModifyTimeMemo::Get(Ino ino) {
   uint64_t modify_time_ns = 0;
-  modify_time_map_.withRLock(
+  shard_map_.withRLock(
       [ino, &modify_time_ns](Map& map) {
         auto it = map.find(ino);
         if (it != map.end()) {
@@ -61,9 +61,19 @@ bool ModifyTimeMemo::ModifiedSince(Ino ino, uint64_t timestamp) {
   return Get(ino) > timestamp;
 }
 
+size_t ModifyTimeMemo::Size() {
+  size_t size = 0;
+  shard_map_.iterate([&size](Map& map) { size += map.size(); });
+  return size;
+}
+
+size_t ModifyTimeMemo::Bytes() {
+  return Size() * (sizeof(Ino) + sizeof(uint64_t));
+}
+
 bool ModifyTimeMemo::Dump(Json::Value& value) {
   Json::Value items = Json::arrayValue;
-  modify_time_map_.iterate([&value, &items](const Map& map) {
+  shard_map_.iterate([&value, &items](const Map& map) {
     for (const auto& [ino, modify_time_ns] : map) {
       Json::Value item;
       item["ino"] = ino;
@@ -90,7 +100,7 @@ bool ModifyTimeMemo::Load(const Json::Value& value) {
     uint64_t modify_time_ns = item["modify_time_ns"].asUInt64();
 
     // put
-    modify_time_map_.withWLock(
+    shard_map_.withWLock(
         [ino, modify_time_ns](Map& map) mutable { map[ino] = modify_time_ns; },
         ino);
   }

@@ -17,6 +17,7 @@
 
 #include <sys/types.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -48,6 +49,7 @@ class ParentMemo {
   void DecRenameRefCount(Ino ino);
 
   size_t Size();
+  size_t Bytes();
 
   bool Dump(Json::Value& value);
   bool Load(const Json::Value& value);

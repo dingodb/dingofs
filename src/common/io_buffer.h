@@ -26,6 +26,8 @@
 #include <bits/types/struct_iovec.h>
 #include <butil/iobuf.h>
 
+#include <cstddef>
+
 namespace dingofs {
 
 class IOBuffer {
@@ -87,7 +89,7 @@ class IOBuffer {
 
   std::vector<iovec> Fetch() const {
     std::vector<iovec> iovecs;
-    for (int i = 0; i < iobuf_.backing_block_num(); i++) {
+    for (size_t i = 0; i < iobuf_.backing_block_num(); i++) {
       const auto& string_piece = iobuf_.backing_block(i);
 
       char* data = (char*)string_piece.data();
@@ -106,7 +108,7 @@ class IOBuffer {
     std::ostringstream oss;
     oss << "IOBuffer[";
     auto vec_count = iovecs.size();
-    for (int i = 0; i < vec_count; ++i) {
+    for (size_t i = 0; i < vec_count; ++i) {
       oss << "(" << i << ", " << iovecs[i].iov_base << ", " << iovecs[i].iov_len
           << ")";
       if (i < vec_count - 1) {

@@ -82,8 +82,8 @@ class MDSClient {
 
   Status Create(ContextSPtr& ctx, Ino parent, const std::string& name,
                 uint32_t uid, uint32_t gid, uint32_t mode, int flag,
-                AttrEntry& attr_entry, AttrEntry& parent_attr_entry,
-                std::vector<std::string>& session_ids);
+                const std::string& session_id, AttrEntry& attr_entry,
+                AttrEntry& parent_attr_entry);
   Status MkNod(ContextSPtr& ctx, Ino parent, const std::string& name,
                uint32_t uid, uint32_t gid, mode_t mode, dev_t rdev,
                AttrEntry& attr_entry, AttrEntry& parent_attr_entry);
@@ -122,11 +122,17 @@ class MDSClient {
                  const std::string& last_name, uint32_t limit, bool with_attr,
                  std::vector<DirEntry>& entries);
 
-  Status Open(ContextSPtr& ctx, Ino ino, int flags, std::string& session_id,
-              bool is_prefetch_chunk,
+  Status Open(ContextSPtr& ctx, Ino ino, int flags,
+              const std::string& session_id, bool prefetch_chunk,
               const std::vector<mds::ChunkDescriptor>& chunk_descriptors,
-              AttrEntry& attr_entry, std::vector<mds::ChunkEntry>& chunks);
+              bool prefetch_data, AttrEntry& attr_entry,
+              std::vector<mds::ChunkEntry>& chunks, std::string& data,
+              uint64_t& data_version);
   Status Release(ContextSPtr& ctx, Ino ino, const std::string& session_id);
+
+  Status FlushFile(ContextSPtr& ctx, Ino ino, uint64_t length,
+                   std::string&& data, AttrEntry& attr_entry,
+                   bool& shrink_file);
 
   Status Link(ContextSPtr& ctx, Ino ino, Ino new_parent,
               const std::string& new_name, AttrEntry& attr_entry,

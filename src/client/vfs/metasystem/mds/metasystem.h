@@ -32,6 +32,7 @@
 #include "client/vfs/metasystem/mds/inode_cache.h"
 #include "client/vfs/metasystem/mds/mds_client.h"
 #include "client/vfs/metasystem/mds/modify_time_memo.h"
+#include "client/vfs/metasystem/mds/tiny_file_data.h"
 #include "client/vfs/metasystem/meta_system.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
@@ -118,8 +119,12 @@ class MDSMetaSystem : public vfs::MetaSystem {
   Status AsyncWriteSlice(ContextSPtr ctx, Ino ino, uint64_t index, uint64_t fh,
                          const std::vector<Slice>& slices,
                          DoneClosure done) override;
-  Status Write(ContextSPtr ctx, Ino ino, uint64_t offset, uint64_t size,
-               uint64_t fh) override;
+  Status Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t offset,
+               uint64_t size, uint64_t fh) override;
+
+  Status Read(ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
+              uint64_t size, vfs::DataBuffer& data_buffer,
+              uint64_t& out_rsize) override;
 
   Status MkDir(ContextSPtr ctx, Ino parent, const std::string& name,
                uint32_t uid, uint32_t gid, uint32_t mode, Attr* attr) override;
@@ -157,7 +162,8 @@ class MDSMetaSystem : public vfs::MetaSystem {
   Status Rename(ContextSPtr ctx, Ino old_parent, const std::string& old_name,
                 Ino new_parent, const std::string& new_name) override;
 
-  Status ManualCompact(ContextSPtr ctx, Ino ino, uint32_t chunk_index) override;
+  Status Compact(ContextSPtr ctx, Ino ino, uint32_t chunk_index,
+                 bool is_async) override;
 
   bool GetDescription(Json::Value& value) override;
 
@@ -172,16 +178,20 @@ class MDSMetaSystem : public vfs::MetaSystem {
   void CleanExpiredChunkMemo();
   void CleanExpiredChunkCache();
   void CleanExpiredInodeCache();
+  void CleanExpiredTinyFileDataCache();
 
   bool InitCrontab();
 
   // inode cache
-  void PutInodeToCache(const AttrEntry& attr_entry);
-  void DeleteInodeFromCache(Ino ino);
-  InodeSPtr GetInodeFromCache(Ino ino);
+  InodeSPtr PutInodeToCache(const AttrEntry& attr_entry) {
+    return inode_cache_.Put(attr_entry.ino(), attr_entry);
+  }
+  void DeleteInodeFromCache(Ino ino) { inode_cache_.Delete(ino); }
+  InodeSPtr GetInodeFromCache(Ino ino) { return inode_cache_.Get(ino); }
 
   // chunk cache
   Status SetInodeLength(ContextSPtr ctx, Ino ino, ChunkSetSPtr& chunk_set);
+  Status FlushFile(ContextSPtr ctx, InodeSPtr& inode, ChunkSetSPtr& chunk_set);
   void LaunchWriteSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
                         CommitTaskSPtr task);
   // async flush batch slices of single file
@@ -195,6 +205,16 @@ class MDSMetaSystem : public vfs::MetaSystem {
   Status CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
                      bool& is_amend, const std::string& caller);
   bool CorrectAttrLength(Attr& attr, const std::string& caller);
+
+  bool IsPrefetchChunk(Ino ino);
+  bool IsPrefetchTinyFileData(Ino ino);
+  Status DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
+                FileSessionSPtr file_session);
+  void AsyncOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
+                 FileSessionSPtr file_session);
+
+  void AsyncClose(ContextSPtr ctx, Ino ino, uint64_t fh,
+                  const std::string& session_id);
 
   // batch operation
   Status RunOperation(OperationSPtr operation);
@@ -222,6 +242,8 @@ class MDSMetaSystem : public vfs::MetaSystem {
 
   IdCache id_cache_;
   InodeCache inode_cache_;
+
+  TinyFileDataCache tiny_file_data_cache_;
 
   // Crontab config
   std::vector<mds::CrontabConfig> crontab_configs_;

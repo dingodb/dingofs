@@ -87,6 +87,9 @@ static uint32_t kDelFileKeySize = 1 + 4 + 1 + 8;
 // fs stats format: ${prefix} kTableFsStats kMetaFsStats {fs_id} {time_ns}
 static uint32_t kFsStatsKeySize = 1 + 1 + 4 + 8;
 
+// fs tiny file data format: ${prefix} kTableFsMeta {fs_id} kMetaFsTinyFileData {ino}
+static uint32_t kTinyFileDataKeySize = 1 + 4 + 1 + 8;
+
 // table:
 //      kTableMeta: all filesystem shared
 //      kTableFsStats: store fs stats for client upload, all filesystem shared
@@ -123,6 +126,7 @@ enum MetaType : unsigned char {
   kMetaFsStats = 21,
   kMetaFsOpLog = 23,
   kMetaCacheMember = 25,
+  kMetaFsTinyFileData = 27,
 };
 
 // inode meta type:
@@ -562,6 +566,24 @@ Range MetaCodec::GetFsStatsRange(uint32_t fs_id) {
   end.push_back(kTableFsStats);
   end.push_back(kMetaFsStats);
   SerialHelper::WriteInt(fs_id + 1, end);
+
+  return range;
+}
+
+Range MetaCodec::GetTinyFileDataRange(uint32_t fs_id) {
+  Range range;
+
+  auto& start = range.start;
+  start = kPrefix;
+  start.push_back(kTableFsMeta);
+  SerialHelper::WriteInt(fs_id, start);
+  start.push_back(kMetaFsTinyFileData);
+
+  auto& end = range.end;
+  end = kPrefix;
+  end.push_back(kTableFsMeta);
+  SerialHelper::WriteInt(fs_id, end);
+  end.push_back(kMetaFsTinyFileData + 1);
 
   return range;
 }
@@ -1320,6 +1342,53 @@ FsStatsDataEntry MetaCodec::DecodeFsStatsValue(const std::string& value) {
   CHECK(stats.ParseFromString(value)) << "parse fs stats fail.";
 
   return stats;
+}
+
+// tiny file data format: ${prefix} kTableFsMeta {fs_id} kMetaFsTinyFileData {ino}
+bool MetaCodec::IsTinyFileDataKey(const std::string& key) {
+  if (key.size() != kTinyFileDataKeySize) {
+    return false;
+  }
+
+  // Check the prefix, table id, and meta type
+  if (key.at(kPrefixSize) != kTableFsMeta || key.at(kPrefixSize + 1 + 4) != kMetaFsTinyFileData) {
+    return false;
+  }
+
+  return true;
+}
+
+std::string MetaCodec::EncodeTinyFileDataKey(uint32_t fs_id, Ino ino) {
+  std::string key;
+  key.reserve(kTinyFileDataKeySize);
+
+  key.append(kPrefix);
+  key.push_back(kTableFsMeta);
+  SerialHelper::WriteInt(fs_id, key);
+  key.push_back(kMetaFsTinyFileData);
+  SerialHelper::WriteULong(ino, key);
+
+  return key;
+}
+
+void MetaCodec::DecodeTinyFileDataKey(const std::string& key, uint32_t& fs_id, Ino& ino) {
+  CHECK(IsTinyFileDataKey(key)) << fmt::format("invalid tiny file data key({}).", Helper::StringToHex(key));
+
+  fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 1));
+  ino = SerialHelper::ReadULong(key.substr(kPrefixSize + 1 + 4 + 1));
+}
+
+std::string& MetaCodec::EncodeTinyFileDataValue(std::string& data, uint64_t version) {
+  SerialHelper::WriteULong(version, data);
+
+  return data;
+}
+
+void MetaCodec::DecodeTinyFileDataValue(std::string& value, uint64_t& version) {
+  CHECK(value.size() >= 8) << fmt::format("tiny file data value({}) size is invalid.", Helper::StringToHex(value));
+
+  version = SerialHelper::ReadULong(value.substr(value.size() - 8, 8));
+  value.resize(value.size() - 8);
 }
 
 bool MetaCodec::IsMetaTableKey(const std::string& key) {

@@ -17,8 +17,8 @@
 
 #include <cstdint>
 #include <memory>
-#include <unordered_map>
 
+#include "absl/container/flat_hash_map.h"
 #include "client/vfs/metasystem/mds/mds_discovery.h"
 #include "client/vfs/metasystem/mds/parent_memo.h"
 #include "dingofs/mds.pb.h"
@@ -41,6 +41,9 @@ class MDSRouter {
 
   virtual bool UpdateRouter(
       const pb::mds::PartitionPolicy& partition_policy) = 0;
+
+  virtual size_t Size() = 0;
+  virtual size_t Bytes() = 0;
 
   virtual bool Dump(Json::Value& value) = 0;
 };
@@ -67,6 +70,9 @@ class MonoMDSRouter : public MDSRouter {
   bool GetRandomlyMDS(mds::MDSMeta& mds_meta) override;
 
   bool UpdateRouter(const pb::mds::PartitionPolicy& partition_policy) override;
+
+  size_t Size() override { return 1; }
+  size_t Bytes() override { return sizeof(MonoMDSRouter); }
 
   bool Dump(Json::Value& value) override;
 
@@ -103,6 +109,9 @@ class ParentHashMDSRouter : public MDSRouter {
 
   bool UpdateRouter(const pb::mds::PartitionPolicy& partition_policy) override;
 
+  size_t Size() override;
+  size_t Bytes() override;
+
   bool Dump(Json::Value& value) override;
 
  private:
@@ -114,7 +123,7 @@ class ParentHashMDSRouter : public MDSRouter {
   utils::RWLock lock_;
   pb::mds::HashPartition hash_partition_;
   // bucket_id -> mds_meta
-  std::unordered_map<int64_t, mds::MDSMeta> mds_map_;
+  absl::flat_hash_map<int64_t, mds::MDSMeta> mds_map_;
 };
 
 }  // namespace meta

@@ -535,8 +535,8 @@ Status MemoryMetaSystem::AsyncWriteSlice(ContextSPtr ctx, Ino ino,
   return Status::Internal(pb::error::ENOT_SUPPORT, "not support");
 }
 
-Status MemoryMetaSystem::Write(ContextSPtr ctx, Ino ino, uint64_t offset,
-                               uint64_t size, uint64_t fh) {
+Status MemoryMetaSystem::Write(ContextSPtr ctx, Ino ino, const char* buf,
+                               uint64_t offset, uint64_t size, uint64_t fh) {
   return Status::OK();
 }
 

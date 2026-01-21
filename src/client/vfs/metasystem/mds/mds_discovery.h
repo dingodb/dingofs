@@ -16,6 +16,7 @@
 #define DINGOFS_SRC_CLIENT_VFS_META_MDS_DISCOVERY_H_
 
 #include <atomic>
+#include <cstddef>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
@@ -36,8 +37,6 @@ class MDSDiscovery {
   bool Init();
   void Stop();
 
-  bool Dump(Json::Value& value);
-
   bool GetMDS(int64_t mds_id, mds::MDSMeta& mds_meta);
   void PickFirstMDS(mds::MDSMeta& mds_meta);
   std::vector<mds::MDSMeta> GetAllMDS();
@@ -46,6 +45,11 @@ class MDSDiscovery {
 
   void SetAbnormalMDS(int64_t mds_id);
   bool RefreshFullyMDSList();
+
+  size_t Size();
+  size_t Bytes();
+
+  bool Dump(Json::Value& value);
 
  private:
   void IncActiveCount() {

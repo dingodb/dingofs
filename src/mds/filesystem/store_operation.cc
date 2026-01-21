@@ -53,6 +53,9 @@ DEFINE_validator(mds_txn_timeout_ms, brpc::PassValidate);
 DEFINE_uint32(mds_store_operation_merge_delay_us, 10, "merge operation delay us.");
 DEFINE_validator(mds_store_operation_merge_delay_us, brpc::PassValidate);
 
+DEFINE_bool(mds_tiny_file_data_enable, false, "enable tiny file data feature.");
+DEFINE_validator(mds_tiny_file_data_enable, brpc::PassValidate);
+
 static const uint32_t kOpNameBufInitSize = 128;
 static const uint32_t kCleanCompactedSliceIntervalS = 180;  // 3 minutes
 
@@ -220,6 +223,9 @@ const char* Operation::OpName() const {
 
     case OpType::kCloseFile:
       return "CloseFile";
+
+    case OpType::kFlushFile:
+      return "FlushFile";
 
     case OpType::kRmDir:
       return "RmDir";
@@ -882,18 +888,16 @@ static Status ScanChunk(TxnUPtr& txn, uint32_t fs_id, Ino ino, std::map<uint64_t
   return status;
 }
 
-Status UpdateAttrOperation::ResetFileRange(TxnUPtr& txn, uint64_t old_length, uint64_t new_length) {
+static Status ResetFileRange(TxnUPtr& txn, uint32_t fs_id, Ino ino, uint64_t old_length, uint64_t new_length,
+                             uint64_t slice_id, uint64_t chunk_size) {
   CHECK(new_length < old_length) << fmt::format("new_length({}) should be less than old_length({}).", new_length,
                                                 old_length);
-  CHECK(extra_param_.slice_id > 0) << "slice_id is zero.";
-
-  const uint32_t fs_id = attr_.fs_id();
-  const Ino ino = attr_.ino();
-  const uint64_t chunk_size = extra_param_.chunk_size;
+  CHECK(slice_id > 0) << "slice_id is zero.";
 
   uint32_t old_num = (old_length / chunk_size) + ((old_length % chunk_size) != 0 ? 1 : 0);
   uint32_t new_num = (new_length / chunk_size) + ((new_length % chunk_size) != 0 ? 1 : 0);
 
+  uint64_t chunk_version = 0;
   SliceEntry slice;
   if (new_length % chunk_size != 0) {
     ChunkEntry chunk;
@@ -902,7 +906,7 @@ Status UpdateAttrOperation::ResetFileRange(TxnUPtr& txn, uint64_t old_length, ui
       return Status(status.error_code(), fmt::format("retfilerange fail({})", status.error_str()));
     }
 
-    slice.set_id(extra_param_.slice_id);
+    slice.set_id(slice_id);
     slice.set_offset(new_length);
     slice.set_size(static_cast<uint64_t>(new_num * chunk_size) - new_length);
     slice.set_len(slice.size());
@@ -912,14 +916,16 @@ Status UpdateAttrOperation::ResetFileRange(TxnUPtr& txn, uint64_t old_length, ui
 
     chunk.set_version(chunk.version() + 1);
     txn->Put(MetaCodec::EncodeChunkKey(fs_id, ino, new_num - 1), MetaCodec::EncodeChunkValue(chunk));
+    chunk_version = chunk.version();
   }
 
   for (uint32_t i = new_num; i < old_num; ++i) {
     txn->Delete(MetaCodec::EncodeChunkKey(fs_id, ino, i));
   }
 
-  LOG(INFO) << fmt::format("[operation.{}.{}] reset file range, length({},{}) chunk_num({},{}) blank_slice({}).", fs_id,
-                           ino, old_length, new_length, old_num, new_num, slice.ShortDebugString());
+  LOG(INFO) << fmt::format("[operation.{}.{}] reset file range, length({},{}) chunk_num({},{},{}) blank_slice({}).",
+                           fs_id, ino, old_length, new_length, old_num, new_num, chunk_version,
+                           slice.ShortDebugString());
 
   return Status::OK();
 }
@@ -941,7 +947,8 @@ Status UpdateAttrOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std:
     result_.delta_bytes = static_cast<int64_t>(attr_.length()) - static_cast<int64_t>(attr.length());
     // if delta_length<0 then delete chunks beyond new length
     if (result_.delta_bytes < 0) {
-      auto status = ResetFileRange(txn, attr.length(), attr_.length());
+      auto status = ResetFileRange(txn, attr_.fs_id(), attr_.ino(), attr.length(), attr_.length(),
+                                   extra_param_.slice_id, extra_param_.chunk_size);
       if (!status.ok()) return status;
     }
 
@@ -1308,11 +1315,33 @@ void OpenFileOperation::ResetFileRange(TxnUPtr& txn, uint64_t length) {
   }
 }
 
-Status OpenFileOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>&) {
+std::vector<std::string> OpenFileOperation::PrefetchKey() {
+  std::vector<std::string> keys;
+
+  if (prefetch_chunks_.empty() && !prefetch_data_) return keys;
+
+  keys.reserve(prefetch_chunks_.size() + 1);
+  for (const auto& chunk_index : prefetch_chunks_) {
+    keys.push_back(MetaCodec::EncodeChunkKey(file_session_.fs_id(), file_session_.ino(), chunk_index));
+  }
+
+  if (FLAGS_mds_tiny_file_data_enable && prefetch_data_) {
+    keys.push_back(MetaCodec::EncodeTinyFileDataKey(file_session_.fs_id(), file_session_.ino()));
+  }
+
+  return keys;
+}
+
+Status OpenFileOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>& prefetch_kvs) {
   CHECK(attr.nlink() > 0) << fmt::format("open file fail, ino({}) nlink is 0.", attr.ino());
 
   if (flags_ & O_TRUNC) {
     ResetFileRange(txn, attr.length());
+
+    // delete tiny file data
+    if (FLAGS_mds_tiny_file_data_enable && attr.maybe_tiny_file()) {
+      txn->Delete(MetaCodec::EncodeTinyFileDataKey(file_session_.fs_id(), file_session_.ino()));
+    }
 
     result_.delta_bytes = -static_cast<int64_t>(attr.length());
     attr.set_length(0);
@@ -1327,11 +1356,82 @@ Status OpenFileOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::v
   txn->Put(MetaCodec::EncodeFileSessionKey(file_session_.fs_id(), file_session_.ino(), file_session_.session_id()),
            MetaCodec::EncodeFileSessionValue(file_session_));
 
+  // prefetch chunks and tiny file data
+  for (const auto& kv : prefetch_kvs) {
+    if (MetaCodec::IsChunkKey(kv.key)) {
+      result_.chunks.push_back(MetaCodec::DecodeChunkValue(kv.value));
+
+    } else if (MetaCodec::IsTinyFileDataKey(kv.key)) {
+      if (attr.length() > 0) {
+        auto& mut_kv = const_cast<KeyValue&>(kv);
+        uint64_t data_version = 0;
+        MetaCodec::DecodeTinyFileDataValue(mut_kv.value, data_version);
+        mut_kv.value.resize(attr.length());
+        result_.data.swap(mut_kv.value);
+        result_.data_version = data_version;
+      }
+    }
+  }
+
   return Status::OK();
 }
 
 Status CloseFileOperation::Run(TxnUPtr& txn) {
   txn->Delete(MetaCodec::EncodeFileSessionKey(fs_id_, ino_, session_id_));
+  return Status::OK();
+}
+
+Status FlushFileOperation::Run(TxnUPtr& txn) {
+  CHECK(param_.slice_id != 0) << "slice_id not should be 0.";
+  CHECK(param_.chunk_size != 0) << "chunk_size not should be 0.";
+
+  const std::string key = MetaCodec::EncodeInodeKey(fs_id_, ino_);
+  std::vector<std::string> keys = {key};
+  if (FLAGS_mds_tiny_file_data_enable) {
+    keys.push_back(MetaCodec::EncodeTinyFileDataKey(fs_id_, ino_));
+  }
+  std::vector<KeyValue> kvs;
+  auto status = txn->BatchGet(keys, kvs);
+  if (!status.ok()) return status;
+
+  AttrEntry attr;
+  bool is_updated = true;
+  uint64_t data_version = 0;
+  for (auto& kv : kvs) {
+    if (kv.key == key) {
+      attr = MetaCodec::DecodeInodeValue(kv.value);
+
+    } else if (MetaCodec::IsTinyFileDataKey(kv.key)) {
+      is_updated = (memcmp(param_.data.data(), kv.value.data(), param_.data.size()) != 0);
+      MetaCodec::DecodeTinyFileDataValue(kv.value, data_version);
+
+    } else {
+      LOG(FATAL) << fmt::format("[operation.{}.{}] invalid key({}).", fs_id_, ino_, Helper::StringToHex(kv.key));
+    }
+  }
+
+  int64_t delta_bytes = static_cast<int64_t>(param_.length) - static_cast<int64_t>(attr.length());
+  if (delta_bytes < 0) {
+    auto status = ResetFileRange(txn, fs_id_, ino_, attr.length(), param_.length, param_.slice_id, param_.chunk_size);
+    if (!status.ok()) return status;
+  }
+
+  attr.set_length(param_.length);
+  attr.set_mtime(std::max(attr.mtime(), GetTime()));
+  attr.set_ctime(std::max(attr.ctime(), GetTime()));
+  attr.set_version(attr.version() + 1);
+
+  txn->Put(key, MetaCodec::EncodeInodeValue(attr));
+
+  if (attr.maybe_tiny_file() && is_updated) {
+    std::string& mut_data = const_cast<std::string&>(param_.data);
+    txn->Put(MetaCodec::EncodeTinyFileDataKey(fs_id_, ino_),
+             MetaCodec::EncodeTinyFileDataValue(mut_data, ++data_version));
+  }
+
+  SetAttr(attr);
+  result_.delta_bytes = delta_bytes;
+
   return Status::OK();
 }
 
@@ -2143,6 +2243,8 @@ Status GetDelFileOperation::Run(TxnUPtr& txn) {
 Status CleanDelFileOperation::Run(TxnUPtr& txn) {
   txn->Delete(MetaCodec::EncodeDelFileKey(fs_id_, ino_));
   txn->Delete(MetaCodec::EncodeInodeKey(fs_id_, ino_));
+  if (maybe_tiny_file_) txn->Delete(MetaCodec::EncodeTinyFileDataKey(fs_id_, ino_));
+
   return Status::OK();
 }
 

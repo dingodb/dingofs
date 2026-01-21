@@ -86,7 +86,7 @@ void CompactServiceImpl::default_method(
 
   } else if (action == "compact") {
     auto ctx = std::make_shared<Context>("");
-    status = vfs_hub_->GetMetaSystem()->ManualCompact(ctx, ino, chunk_index);
+    status = vfs_hub_->GetMetaSystem()->Compact(ctx, ino, chunk_index, false);
   }
 
   os << fmt::format(

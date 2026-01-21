@@ -150,8 +150,8 @@ class VFSImpl : public VFS {
   const ClientId client_id_;
 
   std::unique_ptr<VFSHub> vfs_hub_;
-  MetaWrapper* meta_system_;
-  HandleManager* handle_manager_;
+  MetaWrapper* meta_system_{nullptr};
+  HandleManager* handle_manager_{nullptr};
 
   brpc::Server brpc_server_;
   InodeBlocksServiceImpl inode_blocks_service_;

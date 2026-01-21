@@ -572,8 +572,8 @@ Status LocalMetaSystem::AsyncWriteSlice(ContextSPtr ctx, Ino ino,
   return Status::OK();
 }
 
-Status LocalMetaSystem::Write(ContextSPtr, Ino ino, uint64_t offset,
-                              uint64_t size, uint64_t) {
+Status LocalMetaSystem::Write(ContextSPtr, Ino ino, const char* buf,
+                              uint64_t offset, uint64_t size, uint64_t) {
   const uint32_t fs_id = fs_info_.fs_id();
   const uint64_t now_ns = utils::TimestampNs();
 

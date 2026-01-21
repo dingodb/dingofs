@@ -15,8 +15,6 @@
 #include "mds/filesystem/filesystem.h"
 
 #include <fcntl.h>
-#include <fmt/ranges.h>
-#include <gflags/gflags_declare.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
@@ -37,6 +35,7 @@
 #include "dingofs/mds.pb.h"
 #include "fmt/core.h"
 #include "fmt/format.h"
+#include "fmt/ranges.h"
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 #include "json/value.h"
@@ -44,6 +43,7 @@
 #include "mds/common/helper.h"
 #include "mds/common/partition_helper.h"
 #include "mds/common/status.h"
+#include "mds/common/suffix_set.h"
 #include "mds/common/tracing.h"
 #include "mds/common/type.h"
 #include "mds/filesystem/dentry.h"
@@ -85,6 +85,9 @@ DEFINE_validator(mds_compact_chunk_interval_ms, brpc::PassValidate);
 DEFINE_uint32(mds_transfer_max_slice_num, 8096, "Max slice num for transfer.");
 DEFINE_validator(mds_transfer_max_slice_num, brpc::PassValidate);
 
+DEFINE_uint32(mds_prefetch_chunk_num, 16, "Prefetch chunk num.");
+DEFINE_validator(mds_prefetch_chunk_num, brpc::PassValidate);
+
 DEFINE_uint32(mds_cache_expire_interval_s, 7200, "Cache expire interval in seconds.");
 DEFINE_validator(mds_cache_expire_interval_s, brpc::PassValidate);
 
@@ -97,8 +100,25 @@ DEFINE_string(mds_id_generator_type, "coor", "id generator type, e.g coor|store"
 DEFINE_validator(mds_id_generator_type,
                  [](const char*, const std::string& value) -> bool { return value == "coor" || value == "store"; });
 
+static SuffixSet g_suffix_set;
+
+DEFINE_string(mds_tiny_file_suffix, "jpg,png,cc,cpp,h,js,md", "tiny file suffix, e.g .jpg,.png");
+DEFINE_validator(mds_tiny_file_suffix, [](const char*, const std::string& value) -> bool {
+  g_suffix_set.Update(value);
+
+  return true;
+});
+
+DECLARE_bool(mds_tiny_file_data_enable);
+
 static bool IsInvalidName(const std::string& name) {
   return name.empty() || name.size() > FLAGS_mds_filesystem_name_max_size;
+}
+
+static bool IsTinyFile(const std::string& name) {
+  if (!FLAGS_mds_tiny_file_data_enable) return false;
+
+  return g_suffix_set.HasSuffix(name);
 }
 
 FileSystem::FileSystem(uint64_t self_mds_id, FsInfoSPtr fs_info, IdGeneratorUPtr ino_id_generator,
@@ -676,8 +696,7 @@ uint64_t FileSystem::GetMdsIdByIno(Ino ino) {
   return target_mds_id;
 }
 
-Status FileSystem::BatchCreate(Context& ctx, Ino parent, const std::vector<MkNodParam>& params, EntryOut& entry_out,
-                               std::vector<std::string>& session_ids) {
+Status FileSystem::BatchCreate(Context& ctx, Ino parent, const std::vector<MkNodParam>& params, EntryOut& entry_out) {
   if (!CanServe(ctx)) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -733,6 +752,7 @@ Status FileSystem::BatchCreate(Context& ctx, Ino parent, const std::vector<MkNod
     attr.set_type(pb::mds::FileType::FILE);
     attr.set_rdev(param.rdev);
     attr.add_parents(param.parent);
+    attr.set_maybe_tiny_file(IsTinyFile(param.name));
 
     attrs.push_back(attr);
 
@@ -740,7 +760,7 @@ Status FileSystem::BatchCreate(Context& ctx, Ino parent, const std::vector<MkNod
     inodes.push_back(inode);
     dentries.emplace_back(fs_id_, param.name, param.parent, ino, pb::mds::FileType::FILE, param.flag, inode);
 
-    FileSessionSPtr file_session = file_session_manager_.Create(ino, client_id);
+    FileSessionSPtr file_session = file_session_manager_.Create(ino, client_id, param.session_id);
     file_sessions.push_back(file_session);
 
     names += param.name + ",";
@@ -761,9 +781,7 @@ Status FileSystem::BatchCreate(Context& ctx, Ino parent, const std::vector<MkNod
   auto& parent_attr = result.attr;
 
   // update cache
-  session_ids.reserve(file_sessions.size());
   for (auto& file_session : file_sessions) {
-    session_ids.push_back(file_session->session_id());
     file_session_manager_.Put(file_session);
   }
 
@@ -847,6 +865,7 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
   attr.set_type(pb::mds::FileType::FILE);
   attr.set_rdev(param.rdev);
   attr.add_parents(parent);
+  attr.set_maybe_tiny_file(IsTinyFile(param.name));
 
   auto inode = Inode::New(attr);
 
@@ -1011,9 +1030,8 @@ Status FileSystem::GetChunksFromStore(Ino ino, std::vector<ChunkEntry>& chunks, 
   return Status::OK();
 }
 
-Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& session_id, bool is_prefetch_chunk,
-                        const std::map<uint32_t, uint64_t>& chunk_version_map, EntryOut& entry_out,
-                        std::vector<ChunkEntry>& chunks) {
+Status FileSystem::Open(Context& ctx, Ino ino, const OpenParam& param, EntryOut& entry_out,
+                        std::vector<ChunkEntry>& chunks_out, std::string& data_out, uint64_t& data_version) {
   if (!CanServe(ctx)) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -1028,6 +1046,7 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& sess
   // O_NONBLOCK	        04000
   // O_SYNC	         04010000
   // O_ASYNC	         020000
+  uint32_t flags = param.flags;
   if ((flags & O_TRUNC) && !(flags & O_WRONLY || flags & O_RDWR)) {
     return Status(pb::error::ENO_PERMISSION, "O_TRUNC without O_WRONLY or O_RDWR");
   }
@@ -1042,29 +1061,95 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& sess
 
   InodeSPtr inode;
   auto status = GetInode(ctx, ino, inode);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
+
   CHECK(inode->Nlink() > 0) << fmt::format("open file fail, ino({}) nlink is 0.", ino);
 
   // update parent memo
   UpdateParentMemo(ctx.GetAncestors());
 
-  FileSessionSPtr file_session = file_session_manager_.Create(ino, client_id);
+  // get chunks from cache
+  auto get_chunks_from_cache_fn = [&](std::vector<ChunkEntry>& chunks) {
+    auto cache_chunks = chunk_cache_.Get(ino);
+    uint32_t slice_num = 0;
+    for (auto& chunk : cache_chunks) {
+      // check chunk version
+      auto it = param.chunk_version_map.find(chunk->index());
+      if (it != param.chunk_version_map.end() && chunk->version() < it->second) {
+        continue;
+      }
 
-  OpenFileOperation operation(trace, flags, *file_session, chunk_size);
+      chunks.push_back(*chunk);
+
+      slice_num += chunk->slices_size();
+      if (slice_num >= FLAGS_mds_transfer_max_slice_num) break;
+    }
+  };
+
+  auto is_completely_fn = [&](const std::vector<ChunkEntry>& chunks, uint64_t file_length) -> bool {
+    uint32_t slice_num = 0;
+    for (const auto& chunk : chunks) {
+      slice_num += chunk.slices_size();
+      if (slice_num >= FLAGS_mds_transfer_max_slice_num) return true;
+    }
+
+    if (file_length == 0) return true;
+
+    uint64_t chunk_num = file_length % chunk_size == 0 ? file_length / chunk_size : (file_length / chunk_size) + 1;
+    return chunks.size() >= chunk_num;
+  };
+
+  // decide fetch chunks from cache or store
+  uint64_t file_length = inode->Length();
+  std::vector<uint32_t> prefetch_chunks;
+  std::string fetch_from("none");
+  if (param.is_prefetch_chunk && ((flags & O_ACCMODE) == O_RDONLY || flags & O_RDWR) && !(flags & O_TRUNC)) {
+    fetch_from = "cache";
+    if (!bypass_cache) {
+      // priority take from cache
+      get_chunks_from_cache_fn(chunks_out);
+    }
+
+    // if not enough then fetch from store
+    if (!is_completely_fn(chunks_out, file_length)) {
+      chunks_out.clear();
+      fetch_from = "store";
+      uint32_t chunk_index = 0;
+      for (uint64_t offset = 0; offset < file_length; offset += chunk_size) {
+        prefetch_chunks.push_back(chunk_index++);
+        if (chunk_index >= FLAGS_mds_prefetch_chunk_num) break;
+      }
+
+    } else {
+      trace.SetHitChunk();
+    }
+  }
+
+  FileSessionSPtr file_session = file_session_manager_.Create(ino, client_id, param.session_id);
+
+  OpenFileOperation operation(trace, flags, *file_session, chunk_size, prefetch_chunks, param.is_prefetch_data);
 
   status = RunOperation(&operation);
-  if (!status.ok()) {
-    return status;
-  }
 
   auto& result = operation.GetResult();
   auto& attr = result.attr;
   int64_t delta_bytes = result.delta_bytes;
+  auto& chunks = result.chunks;
+  auto& data = result.data;
 
-  session_id = file_session->session_id();
+  LOG(INFO) << fmt::format(
+      "[fs.{}.{}][{}us] open {} finish, flags({:o}:{}) fetch_chunk({}:{}) fetch_data({}:{}) status({}).", fs_id_,
+      ctx.RequestId(), duration.ElapsedUs(), ino, flags, Helper::DescOpenFlags(flags), fetch_from,
+      chunks_out.empty() ? chunks.size() : chunks_out.size(), param.is_prefetch_data, data.size(), status.error_str());
+
+  if (!status.ok()) return status;
+
   entry_out.attr = attr;
+  for (auto& chunk : chunks) {
+    chunks_out.push_back(chunk);
+  }
+  data_out.swap(data);
+  data_version = result.data_version;
 
   file_session_manager_.Put(file_session);
 
@@ -1081,64 +1166,14 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& sess
   UpsertInodeCache(attr);
 
   // clean chunk cache if O_TRUNC
-  if (flags & O_TRUNC) chunk_cache_.Delete(ino);
+  if (flags & O_TRUNC) {
+    chunk_cache_.Delete(ino);
 
-  uint64_t file_length = attr.length();
-  auto get_chunks_from_cache_fn = [&](std::vector<ChunkEntry>& chunks) {
-    auto cache_chunks = chunk_cache_.Get(ino);
-    uint32_t slice_num = 0;
-    for (auto& chunk : cache_chunks) {
-      // check chunk version
-      auto it = chunk_version_map.find(chunk->index());
-      if (it != chunk_version_map.end() && chunk->version() < it->second) {
-        continue;
-      }
-
-      chunks.push_back(*chunk);
-
-      slice_num += chunk->slices_size();
-      if (slice_num >= FLAGS_mds_transfer_max_slice_num) break;
-    }
-  };
-
-  auto is_completely_fn = [&](const std::vector<ChunkEntry>& chunks) -> bool {
-    uint32_t slice_num = 0;
-    for (const auto& chunk : chunks) {
-      slice_num += chunk.slices_size();
-      if (slice_num >= FLAGS_mds_transfer_max_slice_num) return true;
-    }
-
-    if (file_length == 0) return true;
-
-    uint64_t chunk_num = file_length % chunk_size == 0 ? file_length / chunk_size : (file_length / chunk_size) + 1;
-    return chunks.size() >= chunk_num;
-  };
-
-  std::string fetch_from("none");
-  if (is_prefetch_chunk && ((flags & O_ACCMODE) == O_RDONLY || flags & O_RDWR) && !(flags & O_TRUNC)) {
-    fetch_from = "cache";
-    if (!bypass_cache) {
-      // priority take from cache
-      get_chunks_from_cache_fn(chunks);
-    }
-
-    bool is_completely = is_completely_fn(chunks);
-    // if not enough then fetch from store
-    if (!is_completely) {
-      fetch_from = "store";
-      auto status = GetChunksFromStore(ino, chunks, FLAGS_mds_transfer_max_slice_num);
-      if (status.ok() && !is_completely_fn(chunks)) {
-        LOG(WARNING) << fmt::format("[fs.{}.{}] chunks is not completely, ino({}) length({}) chunks({}).", fs_id_,
-                                    ctx.RequestId(), ino, file_length, chunks.size());
-      }
-    } else {
-      trace.SetHitChunk();
+  } else {
+    for (auto& chunk : chunks) {
+      chunk_cache_.PutIf(ino, std::move(chunk));
     }
   }
-
-  LOG(INFO) << fmt::format("[fs.{}.{}][{}us] open {} finish, flags({:o}:{}) fetch_chunk({}) status({}).", fs_id_,
-                           ctx.RequestId(), duration.ElapsedUs(), ino, flags, Helper::DescOpenFlags(flags), fetch_from,
-                           status.error_str());
 
   return Status::OK();
 }
@@ -1169,6 +1204,69 @@ Status FileSystem::Release(Context& ctx, Ino ino, const std::string& session_id)
   if (inode != nullptr && inode->Nlink() == 0) {
     DeleteInodeFromCache(ino);
   }
+
+  return Status::OK();
+}
+
+Status FileSystem::FlushFile(Context& ctx, Ino ino, const FlushFileParam& param, EntryOut& entry_out) {
+  if (!CanServe(ctx)) {
+    return Status(pb::error::ENOT_SERVE, "can not serve");
+  }
+
+  auto& trace = ctx.GetTrace();
+
+  utils::Duration duration;
+
+  InodeSPtr inode;
+  auto status = GetInode(ctx, ino, inode);
+  if (!status.ok()) return status;
+
+  FlushFileOperation::ExtraParam extra_param(param.data);
+  extra_param.length = param.length;
+  extra_param.chunk_size = fs_info_->GetChunkSize();
+
+  if (param.length > inode->Length()) {
+    // check quota
+    if (!quota_manager_.CheckQuota(trace, ino, param.length - inode->Length(), 0)) {
+      return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
+    }
+  }
+
+  if (!slice_id_generator_->GenID(1, extra_param.slice_id)) {
+    return Status(pb::error::EALLOC_ID, "generate slice id fail");
+  }
+
+  FlushFileOperation operation(trace, fs_id_, ino, extra_param);
+
+  status = RunOperation(&operation);
+
+  if (!status.ok()) return status;
+
+  auto& result = operation.GetResult();
+  auto& attr = result.attr;
+  int64_t delta_bytes = result.delta_bytes;
+
+  LOG(INFO) << fmt::format("[fs.{}.{}].{} flush file finish, delta_bytes({}) version({}) status({}).", fs_id_, ino,
+                           ctx.RequestId(), delta_bytes, attr.version(), status.error_str());
+
+  if (!status.ok()) return status;
+
+  entry_out.attr = attr;
+  entry_out.shrink_file = (delta_bytes < 0) ? true : false;
+
+  // update quota
+  std::string reason = fmt::format("flushfile.{}", ino);
+  quota_manager_.UpdateFsUsage(delta_bytes, 0, reason);
+
+  for (const auto& parent : attr.parents()) {
+    quota_manager_.AsyncUpdateDirUsage(parent, delta_bytes, 0, reason);
+  }
+
+  // update chunk cache
+  if (delta_bytes < 0) chunk_cache_.Delete(ino);
+
+  // update cache
+  UpsertInodeCache(result.attr);
 
   return Status::OK();
 }
@@ -1862,7 +1960,6 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
   }
 
   // update backend store
-
   UpdateAttrOperation operation(trace, ino, param.to_set, param.attr, extra_param);
 
   status = RunOperation(&operation);

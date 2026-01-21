@@ -17,6 +17,7 @@
 
 #include <sys/types.h>
 
+#include <cstddef>
 #include <cstdint>
 
 #include "absl/container/flat_hash_map.h"
@@ -41,6 +42,9 @@ class ModifyTimeMemo {
   uint64_t Get(Ino ino);
   bool ModifiedSince(Ino ino, uint64_t timestamp);
 
+  size_t Size();
+  size_t Bytes();
+
   bool Dump(Json::Value& value);
   bool Load(const Json::Value& value);
 
@@ -49,7 +53,7 @@ class ModifyTimeMemo {
   using Map = absl::flat_hash_map<Ino, uint64_t>;
 
   constexpr static size_t kShardNum = 32;
-  utils::Shards<Map, kShardNum> modify_time_map_;
+  utils::Shards<Map, kShardNum> shard_map_;
 };
 
 }  // namespace meta

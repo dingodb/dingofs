@@ -16,17 +16,17 @@
 #define DINGOFS_SRC_CLIENT_VFS_META_MDS_DIR_ITERATOR_H_
 
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "client/vfs/metasystem/mds/mds_client.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
 #include "json/value.h"
-#include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 namespace client {
@@ -58,6 +58,9 @@ class DirIterator {
                   DirEntry& dir_entry);
 
   uint64_t LastFetchTimeNs() const { return last_fetch_time_ns_.load(); }
+
+  size_t Size();
+  size_t Bytes();
 
   bool Dump(Json::Value& value);
   bool Load(const Json::Value& value);
@@ -96,12 +99,19 @@ class DirIteratorManager {
   DirIteratorSPtr Get(Ino ino, uint64_t fh);
   void Delete(Ino ino, uint64_t fh);
 
+  size_t Size();
+  size_t Bytes();
+
   bool Dump(Json::Value& value);
   bool Load(MDSClient& mds_client, const Json::Value& value);
 
  private:
-  utils::RWLock lock_;
-  std::unordered_map<Ino, DirIteratorSet> dir_iterator_map_;
+  void Put(Ino ino, DirIteratorSet& dir_iterator_set);
+
+  using Map = absl::flat_hash_map<Ino, DirIteratorSet>;
+
+  constexpr static size_t kShardNum = 32;
+  utils::Shards<Map, kShardNum> shard_map_;
 };
 
 }  // namespace meta

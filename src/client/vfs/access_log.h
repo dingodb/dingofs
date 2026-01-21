@@ -40,6 +40,7 @@ namespace client {
 extern std::shared_ptr<spdlog::logger> logger;
 
 bool InitAccessLog(const std::string& prefix);
+void FlushAccessLog();
 
 struct AccessLogGuard {
   using MessageHandler = std::function<std::string()>;

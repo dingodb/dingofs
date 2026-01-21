@@ -28,5 +28,11 @@ bool InitAccessLog(const std::string& prefix) {
   return true;
 }
 
+void FlushAccessLog() {
+  if (logger != nullptr) {
+    logger->flush();
+  }
+}
+
 }  // namespace client
 }  // namespace dingofs

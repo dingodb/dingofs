@@ -59,6 +59,7 @@ bool Inode::PutIf(const AttrEntry& attr) {
   if (symlink_ != attr.symlink()) symlink_ = attr.symlink();
   if (rdev_ != attr.rdev()) rdev_ = attr.rdev();
   if (flags_ != attr.flags()) flags_ = attr.flags();
+  if (maybe_tiny_file_ != attr.maybe_tiny_file()) maybe_tiny_file_ = attr.maybe_tiny_file();
 
   parents_.clear();
   parents_.insert(parents_.end(), attr.parents().begin(), attr.parents().end());
@@ -104,6 +105,7 @@ Inode::AttrEntry Inode::Copy() {
   attr.set_symlink(symlink_);
   attr.set_rdev(rdev_);
   attr.set_flags(flags_);
+  attr.set_maybe_tiny_file(maybe_tiny_file_);
   for (const auto& parent : parents_) {
     attr.add_parents(parent);
   }

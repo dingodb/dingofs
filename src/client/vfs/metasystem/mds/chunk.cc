@@ -46,10 +46,11 @@ bool Chunk::Put(const ChunkEntry& chunk, const char* reason) {
   is_completed_ = true;
 
   LOG_DEBUG << fmt::format(
-      "[meta.chunk.{}.{}] put chunk, version({}|{}), slice_num({}|{}) "
+      "[meta.chunk.{}.{}] put chunk, version({}|{}), slice_num({}|{}|{}|{}) "
       "reason({}).",
-      ino_, index_, commited_version_, chunk.version(), commited_slices_.size(),
-      chunk.slices_size(), reason);
+      ino_, index_, commited_version_, chunk.version(), chunk.slices_size(),
+      stage_slices_.size(), commiting_slices_.size(), commited_slices_.size(),
+      reason);
 
   if (chunk.version() <= commited_version_) return false;
 
@@ -165,10 +166,11 @@ std::vector<Slice> Chunk::CommitSlice() {
 void Chunk::MarkCommited(uint64_t version) {
   utils::WriteLockGuard guard(lock_);
 
-  LOG(INFO) << fmt::format(
+  LOG_DEBUG << fmt::format(
       "[meta.chunk.{}.{}] mark commited, version({}|{}), "
-      "commiting_slice_num({}).",
-      ino_, index_, commited_version_, version, commiting_slices_.size());
+      "slice_num({}|{}|{}).",
+      ino_, index_, commited_version_, version, stage_slices_.size(),
+      commiting_slices_.size(), commited_slices_.size());
 
   if (version <= commited_version_) {
     commiting_slices_.clear();
@@ -513,6 +515,17 @@ bool ChunkSet::HasUncommitedSlice() {
   return false;
 }
 
+size_t ChunkSet::Bytes() const {
+  utils::ReadLockGuard guard(lock_);
+
+  size_t bytes;
+  for (const auto& [_, chunk] : chunk_map_) {
+    bytes += chunk->Bytes();
+  }
+
+  return bytes;
+}
+
 // output json format string
 bool ChunkSet::Dump(Json::Value& value, bool is_summary) {
   value["ino"] = ino_;
@@ -587,7 +600,21 @@ bool ChunkSet::Load(const Json::Value& value) {
   return true;
 }
 
-ChunkSetSPtr ChunkCache::GetOrCreateChunkSet(Ino ino) {
+ChunkSetSPtr ChunkCache::Get(Ino ino) {
+  ChunkSetSPtr chunk_set;
+  shard_map_.withWLock(
+      [ino, &chunk_set](Map& map) mutable {
+        auto it = map.find(ino);
+        if (it != map.end()) {
+          chunk_set = it->second;
+        }
+      },
+      ino);
+
+  return chunk_set;
+}
+
+ChunkSetSPtr ChunkCache::GetOrCreate(Ino ino) {
   ChunkSetSPtr chunk_set;
   shard_map_.withWLock(
       [ino, &chunk_set](Map& map) mutable {
@@ -626,6 +653,17 @@ size_t ChunkCache::Size() {
   size_t size = 0;
   shard_map_.iterate([&size](Map& map) { size += map.size(); });
   return size;
+}
+
+size_t ChunkCache::Bytes() {
+  size_t bytes = 0;
+  shard_map_.iterate([&bytes](Map& map) {
+    for (const auto& [_, chunkset] : map) {
+      bytes += chunkset->Bytes();
+    }
+  });
+
+  return bytes;
 }
 
 void ChunkCache::Clear() {
