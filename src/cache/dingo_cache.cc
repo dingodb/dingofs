@@ -115,7 +115,7 @@ int DingoCache::ParseFlags(int argc, char** argv) {
 
 void DingoCache::GlobalInitOrDie() {
   Logger::Init("dingo-cache");
-  GenCurrentFlags();
+  LOG(INFO) << GenCurrentFlags();
 }
 
 int DingoCache::StartServer() {

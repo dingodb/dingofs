@@ -199,7 +199,7 @@ Status LocalFileSystem::ReadFile(ContextSPtr ctx, const std::string& path,
   BRPC_SCOPE_EXIT { iutil::Close(fd); };
 
   off_t aligned_offset = AlignOffset(offset);
-  size_t aligned_length = AlignLength(length);
+  size_t aligned_length = AlignLength(length + offset - aligned_offset);
 
   auto* fixed_buffer = read_buffer_pool_->Alloc();
   buffer->AppendUserData(fixed_buffer, aligned_length, [this](void* ptr) {
