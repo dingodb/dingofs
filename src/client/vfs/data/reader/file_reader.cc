@@ -880,9 +880,8 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
       }
 
       if (partial_req.req->state == ReadRequestState::kInvalid) {
-        LOG(ERROR) << fmt::format("{} Read failed req: {}, status: {}", uuid_,
-                                  partial_req.req->ToString(),
-                                  partial_req.req->status.ToString());
+        LOG(ERROR) << fmt::format("{} Read failed req: {}", uuid_,
+                                  partial_req.req->ToStringUnlock());
         CHECK(!partial_req.req->status.ok());
         ret = partial_req.req->status;
         break;
@@ -895,7 +894,7 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
         LOG(FATAL) << fmt::format(
             "{} Read buffer append failed req: {}, expected len: {}, actual "
             "len: {}",
-            uuid_, partial_req.req->ToString(), partial_req.len, size);
+            uuid_, partial_req.req->ToStringUnlock(), partial_req.len, size);
       }
 
       read_size += ret;
