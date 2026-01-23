@@ -48,6 +48,11 @@ std::string PartialReadRequest::ToString() const {
                      offset, (offset + len), req->ToString());
 }
 
+std::string PartialReadRequest::ToStringUnlock() const {
+  return fmt::format("(uuid: {}, req_range: [{}-{}), req: {})", req->UUID(),
+                     offset, (offset + len), req->ToStringUnlock());
+}
+
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

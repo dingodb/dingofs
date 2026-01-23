@@ -892,9 +892,11 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
           data_buffer->RawIOBuffer(), partial_req.len, partial_req.offset);
       if (ret != partial_req.len) {
         LOG(FATAL) << fmt::format(
-            "{} Read buffer append failed req: {}, expected len: {}, actual "
-            "len: {}",
-            uuid_, partial_req.req->ToStringUnlock(), partial_req.len, size);
+            "{} Read buffer append failed partial_req: {}, expected len: {}, "
+            "actual len: {}, original buffer:{}, rawbuffer:{}",
+            uuid_, partial_req.ToStringUnlock(), partial_req.len, ret,
+            partial_req.req->buffer.Describe(),
+            data_buffer->RawIOBuffer()->Describe());
       }
 
       read_size += ret;

@@ -130,6 +130,8 @@ struct PartialReadRequest {
   int64_t len{0};
 
   std::string ToString() const;
+
+  std::string ToStringUnlock() const;
 };
 
 }  // namespace vfs
