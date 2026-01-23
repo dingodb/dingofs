@@ -607,11 +607,6 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
 
   // update chunk memo
   for (const auto& chunk : chunks) {
-    uint64_t memo_version = chunk_memo_.GetVersion(ino, chunk.index());
-    CHECK(chunk.version() >= memo_version) << fmt::format(
-        "[meta.fs.{}.{}.{}] chunk version invalid, index({}) version({}<{}).",
-        ino, fh, session_id, chunk.index(), chunk.version(), memo_version);
-
     chunk_memo_.Remember(ino, chunk.index(), chunk.version());
   }
 
