@@ -445,6 +445,14 @@ int64_t FileReader::UsedMem() const {
 }
 
 bool FileReader::IsProtectedReq(const ReadRequestSptr& req) const {
+  if (policy_->level == 0) {
+    VLOG(12) << fmt::format(
+        "{} IsProtectedReq check req {} policy: {}, not protected due to "
+        "policy level 0",
+        uuid_, req->ToStringUnlock(), policy_->ToString());
+    return false;
+  }
+
   int64_t readahead = policy_->ReadaheadSize();
   int64_t bt = std::max(readahead / 8, (int64_t)block_size_);
 
@@ -731,7 +739,6 @@ void FileReader::CleanUpRequest(ContextSPtr ctx, const FileRange& frange) {
   for (auto& [req_id, req] : requests_) {
     VLOG(9) << fmt::format("{} CleanUpRequest check req: {}", uuid_,
                            req->ToString());
-
     if (should_delete(req)) {
       to_delete.push_back(req);
       req_num--;
@@ -811,6 +818,8 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
 
   std::vector<PartialReadRequest> reqs;
   {
+    auto release_span = vfs_hub_->GetTraceManager()->StartChildSpan(
+        "FileReader::Read::PreProcess", span);
     std::unique_lock<std::mutex> lock(mutex_);
 
     CleanUpRequest(SpanScope::GetContext(span), frange);

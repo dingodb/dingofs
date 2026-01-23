@@ -62,7 +62,7 @@ struct AccessLogGuard {
     int64_t duration = timer.u_elapsed();
 
     if (duration >= FLAGS_vfs_access_log_threshold_us) {
-      logger->info("{0} <{1:.6f}>", handler(), timer.u_elapsed() / 1e6);
+      logger->info("{0} <{1:.6f}>", handler(), duration / 1e6);
     }
   }
 

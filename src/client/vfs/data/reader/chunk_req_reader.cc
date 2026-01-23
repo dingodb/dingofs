@@ -281,7 +281,7 @@ void ChunkReqReader::ReadAsync(ContextSPtr ctx,
   {
     std::unique_lock<std::mutex> lock(shared->mtx);
     shared->status = Status::OK();
-    shared->read_span = std::move(span);
+    shared->read_span = span;
     shared->block_cache_reqs = std::move(block_cache_reqs);
   }
 
