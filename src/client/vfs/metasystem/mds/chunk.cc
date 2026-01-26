@@ -20,6 +20,7 @@
 
 #include "boost/range/algorithm/remove_if.hpp"
 #include "client/vfs/metasystem/mds/helper.h"
+#include "common/logging.h"
 #include "common/options/client.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
@@ -44,7 +45,7 @@ bool Chunk::Put(const ChunkEntry& chunk, const char* reason) {
 
   is_completed_ = true;
 
-  LOG(INFO) << fmt::format(
+  LOG_DEBUG << fmt::format(
       "[meta.chunk.{}.{}] put chunk, version({}|{}), slice_num({}|{}) "
       "reason({}).",
       ino_, index_, commited_version_, chunk.version(), commited_slices_.size(),

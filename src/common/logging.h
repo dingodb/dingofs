@@ -36,7 +36,7 @@ enum class LogLevel : uint8_t {
 
 // define the debug log level.
 // The larger the number, the more comprehensive information is displayed.
-#define DINGO_DEBUG 79
+#define DINGO_DEBUG 9
 
 #define LOG_DEBUG VLOG(DINGO_DEBUG)
 

@@ -30,6 +30,7 @@
 #include "client/vfs/metasystem/mds/mds_client.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/const.h"
+#include "common/logging.h"
 #include "common/options/client.h"
 #include "common/status.h"
 #include "common/trace/context.h"
@@ -694,7 +695,7 @@ Status MDSMetaSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
       *slices = chunk->GetAllSlice(version);
       // ctx->hit_cache = true;
 
-      LOG(INFO) << fmt::format(
+      LOG_DEBUG << fmt::format(
           "[meta.fs.{}.{}.{}] readslice from cache, version({}) slices({}).",
           ino, fh, index, version, Helper::ToString(*slices));
       return Status::OK();
@@ -1034,7 +1035,7 @@ Status MDSMetaSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
       CorrectAttr(ctx, ctx->start_time_ns, *attr, is_amend, "getattr");
   if (!status.ok()) return status;
 
-  LOG(INFO) << fmt::format("[meta.fs.{}] get attr length({}) is_amend({}).",
+  LOG_DEBUG << fmt::format("[meta.fs.{}] get attr length({}) is_amend({}).",
                            ino, attr->length, is_amend);
   return Status::OK();
 }

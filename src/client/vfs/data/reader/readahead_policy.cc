@@ -113,7 +113,7 @@ void ReadaheadPoclicy::UpdateOnRead(const FileRange& frange,
         (rbuffer_total / 2) + ((rbuffer_total * 1) / (level * 2));
     if (rbuffer_used > mem_pressure_threshold) {
       Degrade();
-      LOG(INFO) << fmt::format(
+      VLOG(1) << fmt::format(
           "{} CheckReadahead degrade (memory pressure) policy: {}, "
           "used: {}, total: {}, threshold: {}",
           UUID(), ToString(), rbuffer_used, rbuffer_total,
@@ -128,7 +128,7 @@ void ReadaheadPoclicy::Degrade() {
     seqdata = 0;
     if (level == 0) {
       last_offset = 0;
-      LOG(INFO) << fmt::format(
+      VLOG(1) << fmt::format(
           "{} ReadaheadPoclicy degraded to level 0 (no readahead), reset "
           "last_offset",
           UUID());
