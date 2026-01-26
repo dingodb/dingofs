@@ -58,6 +58,7 @@ TierBlockCache::TierBlockCache(StorageClientUPtr storage_client)
           FLAGS_prefetch_max_inflights)),
       joiner_(std::make_unique<iutil::BthreadJoiner>()) {
   if (FLAGS_cache_store == "disk") {
+    FLAGS_fix_buffer = false;
     local_block_cache_ =
         std::make_unique<BlockCacheImpl>(storage_client_.get());
   } else {

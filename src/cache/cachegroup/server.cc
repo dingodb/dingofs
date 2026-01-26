@@ -22,6 +22,8 @@
 
 #include "cache/cachegroup/server.h"
 
+#include <atomic>
+
 #include "cache/cachegroup/service.h"
 #include "cache/iutil/string_util.h"
 #include "common/options/cache.h"
@@ -55,12 +57,12 @@ Server::Server()
       server_(std::make_unique<::brpc::Server>()) {}
 
 Status Server::Start() {
-  if (running_.exchange(true)) {
-    LOG(WARNING) << "Cache node server already running";
+  if (running_.load(std::memory_order_relaxed)) {
+    LOG(WARNING) << "Server already started";
     return Status::OK();
   }
 
-  LOG(INFO) << "Cache node server is starting...";
+  LOG(INFO) << "Server is starting...";
 
   InstallSignal();
 
@@ -78,8 +80,7 @@ Status Server::Start() {
     return status;
   }
 
-  running_ = true;
-
+  running_.store(true, std::memory_order_relaxed);
   LOG(INFO) << "Cache node server is up, address=" << listen_ip << ":"
             << FLAGS_listen_port;
 
@@ -93,12 +94,12 @@ Status Server::Start() {
 }
 
 Status Server::Shutdown() {
-  if (!running_.exchange(false)) {
-    LOG(WARNING) << "Cache node server already down";
+  if (!running_.load(std::memory_order_relaxed)) {
+    LOG(WARNING) << "Server already shutdown";
     return Status::OK();
   }
 
-  LOG(INFO) << "Cache node server is shutting down...";
+  LOG(INFO) << "Server is shutting down...";
 
   brpc::AskToQuit();
   auto status = node_->Shutdown();
@@ -107,7 +108,8 @@ Status Server::Shutdown() {
     return status;
   }
 
-  LOG(INFO) << "Cache node server is down";
+  running_.store(false, std::memory_order_relaxed);
+  LOG(INFO) << "Server is down";
   return status;
 }
 
@@ -118,8 +120,8 @@ Status Server::StartRpcServer(const std::string& listen_ip,
   butil::EndPoint ep;
   int rc = butil::str2endpoint(listen_ip.c_str(), listen_port, &ep);
   if (rc != 0) {
-    LOG(ERROR) << "str2endpoint(" << listen_ip << "," << listen_port
-               << ") failed: rc = " << rc;
+    LOG(ERROR) << "Fail to str2endpoint(" << listen_ip << "," << listen_port
+               << ")";
     return Status::Internal("str2endpoint() failed");
   }
 

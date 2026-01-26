@@ -30,6 +30,7 @@
 #include <atomic>
 #include <cstddef>
 #include <memory>
+#include <string>
 
 #include "cache/blockcache/aio.h"
 #include "cache/blockcache/aio_queue.h"
@@ -38,6 +39,7 @@
 #include "cache/common/macro.h"
 #include "cache/iutil/buffer_pool.h"
 #include "cache/iutil/file_util.h"
+#include "cache/iutil/inflight_tracker.h"
 #include "common/const.h"
 #include "common/io_buffer.h"
 #include "common/options/cache.h"
@@ -46,6 +48,8 @@
 namespace dingofs {
 namespace cache {
 
+DEFINE_bool(fix_buffer, true, "whether to use fixed buffer for aio");
+
 LocalFileSystem::LocalFileSystem(DiskCacheLayoutSPtr layout)
     : running_(false),
       layout_(layout),
@@ -53,6 +57,7 @@ LocalFileSystem::LocalFileSystem(DiskCacheLayoutSPtr layout)
                                                       kAlignedIOBlockSize)),
       read_buffer_pool_(std::make_unique<BufferPool>(4 * kMiB, FLAGS_iodepth,
                                                      kAlignedIOBlockSize)),
+      inflight_(FLAGS_iodepth),
       aio_queue_(std::make_unique<AioQueue>(write_buffer_pool_->Fetch(),
                                             read_buffer_pool_->Fetch())),
       health_checker_(std::make_unique<DiskHealthChecker>(layout)) {}
@@ -147,16 +152,10 @@ Status LocalFileSystem::WriteFile(ContextSPtr ctx, const std::string& path,
     }
   }
 
-  auto* fixed_buffer = write_buffer_pool_->Alloc();
-  buffer->CopyTo(fixed_buffer);
-
-  IOBuffer write_buffer;
-  write_buffer.AppendUserData(fixed_buffer, aligned_length, [this](void* ptr) {
-    write_buffer_pool_->Free((char*)ptr);
-  });
-
-  status = AioWrite(ctx, fd, fixed_buffer, aligned_length,
-                    write_buffer_pool_->Index(fixed_buffer));
+  IOBuffer tbuffer;
+  int buf_index = AllocateAlignedMemory(&tbuffer, aligned_length, false);
+  buffer->CopyTo(tbuffer.Fetch1());
+  status = AioWrite(ctx, fd, tbuffer.Fetch1(), aligned_length, buf_index);
   if (!status.ok()) {
     LOG(ERROR) << "Fail to write file'`" << tmppath << "'";
     return status;
@@ -200,14 +199,9 @@ Status LocalFileSystem::ReadFile(ContextSPtr ctx, const std::string& path,
 
   off_t aligned_offset = AlignOffset(offset);
   size_t aligned_length = AlignLength(length + offset - aligned_offset);
-
-  auto* fixed_buffer = read_buffer_pool_->Alloc();
-  buffer->AppendUserData(fixed_buffer, aligned_length, [this](void* ptr) {
-    read_buffer_pool_->Free((char*)ptr);
-  });
-
-  status = AioRead(ctx, fd, aligned_offset, aligned_length, fixed_buffer,
-                   read_buffer_pool_->Index(fixed_buffer));
+  int buf_index = AllocateAlignedMemory(buffer, aligned_length, true);
+  status = AioRead(ctx, fd, aligned_offset, aligned_length, buffer->Fetch1(),
+                   buf_index);
   if (status.ok()) {
     if (aligned_offset != offset) {
       buffer->PopFront(offset - aligned_offset);
@@ -222,8 +216,30 @@ Status LocalFileSystem::ReadFile(ContextSPtr ctx, const std::string& path,
   return status;
 }
 
+// The inflight for aio which use fixed buffer is controlled by buffer pool,
+// others need to be tracked here.
+struct InflightAioGuard {
+  InflightAioGuard(int fd, iutil::InflightTracker* inflight)
+      : fd(fd), inflight(inflight) {
+    if (!FLAGS_fix_buffer) {
+      CHECK(inflight->Add(std::to_string(fd)).ok());
+    }
+  }
+
+  ~InflightAioGuard() {
+    if (!FLAGS_fix_buffer) {
+      inflight->Remove(std::to_string(fd));
+    }
+  }
+
+  int fd;
+  iutil::InflightTracker* inflight;
+};
+
 Status LocalFileSystem::AioWrite(ContextSPtr ctx, int fd, char* buffer,
                                  size_t length, int buf_index) {
+  InflightAioGuard guard(fd, &inflight_);
+
   auto aio = Aio(ctx, fd, 0, length, buffer, buf_index, false);
   aio_queue_->Submit(&aio);
   aio.Wait();
@@ -232,6 +248,8 @@ Status LocalFileSystem::AioWrite(ContextSPtr ctx, int fd, char* buffer,
 
 Status LocalFileSystem::AioRead(ContextSPtr ctx, int fd, off_t offset,
                                 size_t length, char* buffer, int buf_index) {
+  InflightAioGuard guard(fd, &inflight_);
+
   auto aio = Aio(ctx, fd, offset, length, buffer, buf_index, true);
   aio_queue_->Submit(&aio);
   aio.Wait();
@@ -252,6 +270,32 @@ size_t LocalFileSystem::AlignLength(size_t length) {
     length = (length + alignment - 1) & ~(alignment - 1);
   }
   return length;
+}
+
+int LocalFileSystem::AllocateAlignedMemory(IOBuffer* buffer,
+                                           size_t aligned_length,
+                                           bool for_read) {
+  if (!FLAGS_fix_buffer) {
+    char* data =
+        (char*)butil::AlignedAlloc(aligned_length, kAlignedIOBlockSize);
+    buffer->AppendUserData(data, aligned_length, butil::AlignedFree);
+    return -1;
+  }
+
+  // use fixed buffer
+  if (for_read) {
+    char* data = read_buffer_pool_->Alloc();
+    buffer->AppendUserData(data, aligned_length, [this](void* ptr) {
+      read_buffer_pool_->Free((char*)ptr);
+    });
+    return read_buffer_pool_->Index(data);
+  }
+
+  char* data = write_buffer_pool_->Alloc();
+  buffer->AppendUserData(data, aligned_length, [this](void* ptr) {
+    write_buffer_pool_->Free((char*)ptr);
+  });
+  return write_buffer_pool_->Index(data);
 }
 
 }  // namespace cache

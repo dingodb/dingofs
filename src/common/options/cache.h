@@ -227,7 +227,10 @@ DECLARE_uint32(mds_request_retry_times);
 DECLARE_int32(brpc_idle_timeout_second);
 DECLARE_bool(brpc_log_idle_connection_close);
 
-};  // namespace cache
-};  // namespace dingofs
+DECLARE_bool(fix_buffer);
+DECLARE_bool(block_prefetch);
+
+}  // namespace cache
+}  // namespace dingofs
 
 #endif  // DINGOFS_COMMON_OPTIONS_CACHE_OPTION_H_

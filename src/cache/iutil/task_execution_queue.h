@@ -26,6 +26,7 @@
 #include <bthread/execution_queue.h>
 #include <bthread/execution_queue_inl.h>
 
+#include <atomic>
 #include <functional>
 
 namespace dingofs {
@@ -43,23 +44,20 @@ class TaskExecutionQueue {
     bthread::ExecutionQueueOptions queue_options;
     queue_options.use_pthread = true;
     CHECK_EQ(0, bthread::execution_queue_start(&queue_id_, &queue_options,
-                                               HandleTask, this))
-        << "Fail to start ExecutionQueue";
+                                               HandleTask, this));
   }
 
   void Shutdown() {
-    CHECK_EQ(0, bthread::execution_queue_stop(queue_id_))
-        << "Fail to stop ExecutionQueue";
-    CHECK_EQ(0, bthread::execution_queue_join(queue_id_))
-        << "Fail to join ExecutionQueue";
+    CHECK_EQ(0, bthread::execution_queue_stop(queue_id_));
+    CHECK_EQ(0, bthread::execution_queue_join(queue_id_));
   }
 
   void Submit(Task task) {
     CHECK_EQ(0, bthread::execution_queue_execute(queue_id_, task));
-    size_.fetch_add(1);
+    size_.fetch_add(1, std::memory_order_relaxed);
   }
 
-  int64_t Size() { return size_.load(); }
+  int64_t Size() { return size_.load(std::memory_order_relaxed); }
 
  private:
   static int HandleTask(void* meta, bthread::TaskIterator<Task>& iter) {
@@ -70,7 +68,7 @@ class TaskExecutionQueue {
     auto* self = static_cast<TaskExecutionQueue*>(meta);
     for (; iter; ++iter) {
       (*iter)();
-      self->size_.fetch_sub(1);
+      self->size_.fetch_sub(1, std::memory_order_relaxed);
     }
     return 0;
   }
@@ -81,8 +79,8 @@ class TaskExecutionQueue {
 
 using TaskExecutionQueueSPtr = std::shared_ptr<TaskExecutionQueue>;
 
-};  // namespace iutil
-};  // namespace cache
-};  // namespace dingofs
+}  // namespace iutil
+}  // namespace cache
+}  // namespace dingofs
 
 #endif  // DINGOFS_SRC_CACHE_IUTIL_TASK_EXECUTION_QUEUE_H_

@@ -67,7 +67,7 @@ bool IOUring::Supported() {
 }
 
 Status IOUring::Start() {
-  if (running_.load(std::memory_order_acquire)) {
+  if (running_.load(std::memory_order_relaxed)) {
     LOG(WARNING) << "IOUring already started";
     return Status::OK();
   }
@@ -113,7 +113,7 @@ Status IOUring::Start() {
 }
 
 Status IOUring::Shutdown() {
-  if (!running_.load(std::memory_order_acq_rel)) {
+  if (!running_.load(std::memory_order_relaxed)) {
     LOG(WARNING) << "IOUring already shutdown";
     return Status::OK();
   }
@@ -130,15 +130,23 @@ Status IOUring::Shutdown() {
 }
 
 void IOUring::PrepWrite(io_uring_sqe* sqe, Aio* aio) const {
-  CHECK_GE(aio->buf_index, 0);
-  io_uring_prep_write_fixed(sqe, aio->fd, aio->buffer, aio->length, aio->offset,
-                            aio->buf_index + write_buf_index_offset_);
+  if (aio->buf_index >= 0) {
+    io_uring_prep_write_fixed(sqe, aio->fd, aio->buffer, aio->length,
+                              aio->offset,
+                              aio->buf_index + write_buf_index_offset_);
+  } else {
+    io_uring_prep_write(sqe, aio->fd, aio->buffer, aio->length, aio->offset);
+  }
 }
 
 void IOUring::PrepRead(io_uring_sqe* sqe, Aio* aio) const {
-  CHECK_GE(aio->buf_index, 0);
-  io_uring_prep_read_fixed(sqe, aio->fd, aio->buffer, aio->length, aio->offset,
-                           aio->buf_index + read_buf_index_offset_);
+  if (aio->buf_index >= 0) {
+    io_uring_prep_read_fixed(sqe, aio->fd, aio->buffer, aio->length,
+                             aio->offset,
+                             aio->buf_index + read_buf_index_offset_);
+  } else {
+    io_uring_prep_read(sqe, aio->fd, aio->buffer, aio->length, aio->offset);
+  }
 }
 
 Status IOUring::PrepareIO(Aio* aio) {

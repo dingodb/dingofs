@@ -49,7 +49,8 @@ DEFINE_bool(brpc_log_idle_connection_close, true,
 DEFINE_string(cache_group, "",
               "Cache group name to use, empty means not use cache group");
 
-DEFINE_bool(block_prefetch, true, "whether prefetching block from remote");
+DEFINE_bool(block_prefetch, false,
+            "whether prefetching whole block from remote");
 
 RemoteBlockCacheImpl::RemoteBlockCacheImpl(StorageClient* storage_client)
     : running_(false),
@@ -122,8 +123,15 @@ Status RemoteBlockCacheImpl::Range(ContextSPtr ctx, const BlockKey& key,
     }
   };
 
-  auto status =
-      retriever_->Range(key, offset, length, option.block_whole_length, buffer);
+  Status status;
+  if (FLAGS_block_prefetch) {
+    status = retriever_->Range(key, offset, length, option.block_whole_length,
+                               buffer);
+  } else {
+    status = upstream_->SendRangeRequest(key, offset, length, buffer,
+                                         option.block_whole_length);
+  }
+
   if (!status.ok()) {
     LOG(ERROR) << "Fail to range block from remote cache";
   }

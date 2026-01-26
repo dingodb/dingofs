@@ -31,8 +31,6 @@
 namespace dingofs {
 namespace cache {
 
-class MemberManager;
-
 class Heartbeat {
  public:
   Heartbeat(MDSClientSPtr mds_client);

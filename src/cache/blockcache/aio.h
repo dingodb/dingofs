@@ -49,7 +49,6 @@ struct Aio : public Closure {
     CHECK_GE(offset, 0);
     CHECK_GT(length, 0);
     CHECK_NOTNULL(buffer);
-    CHECK_GE(buf_index, 0);
   }
 
   void Wait() {

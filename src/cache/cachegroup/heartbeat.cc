@@ -22,6 +22,8 @@
 
 #include "cache/cachegroup/heartbeat.h"
 
+#include <atomic>
+
 #include "common/options/cache.h"
 #include "utils/executor/bthread/bthread_executor.h"
 
@@ -29,7 +31,7 @@ namespace dingofs {
 namespace cache {
 
 DEFINE_uint32(periodic_heartbeat_interval_s, 3,
-              "interval to send heartbeat to MDS in seconds");
+              "interval to send heartbeat to mds in seconds");
 
 Heartbeat::Heartbeat(MDSClientSPtr mds_client)
     : running_(false),
@@ -37,31 +39,33 @@ Heartbeat::Heartbeat(MDSClientSPtr mds_client)
       executor_(std::make_unique<BthreadExecutor>()) {}
 
 void Heartbeat::Start() {
-  if (running_.exchange(true)) {
-    LOG(WARNING) << "Cache node heartbeat already running";
+  if (running_.load(std::memory_order_relaxed)) {
+    LOG(WARNING) << "Heartbeat already started";
     return;
   }
 
-  LOG(INFO) << "Cache node heartbeat is starting...";
+  LOG(INFO) << "Heartbeat is starting...";
 
   CHECK(executor_->Start());
   executor_->Schedule([this] { PeriodicSendHeartbeat(); },
                       FLAGS_periodic_heartbeat_interval_s * 1000);
 
-  LOG(INFO) << "Cache node heartbeat is up";
+  running_.store(true, std::memory_order_relaxed);
+  LOG(INFO) << "Heartbeat started";
 }
 
 void Heartbeat::Shutdown() {
-  if (!running_.exchange(false)) {
-    LOG(WARNING) << "Cache node heartbeat already down";
+  if (!running_.load(std::memory_order_relaxed)) {
+    LOG(WARNING) << "Heartbeat already shutdown";
     return;
   }
 
-  LOG(INFO) << "Cache node heartbeat is shutting down...";
+  LOG(INFO) << "Heartbeat is shutting down...";
 
   CHECK(executor_->Stop());
 
-  LOG(INFO) << "Cache node heartbeat is down";
+  running_.store(false, std::memory_order_relaxed);
+  LOG(INFO) << "Heartbeat is down";
 }
 
 void Heartbeat::SendHeartbeat() {
@@ -71,6 +75,10 @@ void Heartbeat::SendHeartbeat() {
     LOG(ERROR) << "Fail to send heartbeat{id=" << FLAGS_id
                << " ip=" << FLAGS_listen_ip << " port=" << FLAGS_listen_port
                << "} to mds";
+  } else {
+    VLOG(3) << "Successfully send heartbeat{id=" << FLAGS_id
+            << " ip=" << FLAGS_listen_ip << " port=" << FLAGS_listen_port
+            << "} to mds";
   }
 }
 

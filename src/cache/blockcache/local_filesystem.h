@@ -33,6 +33,7 @@
 #include "cache/blockcache/disk_health_checker.h"
 #include "cache/common/context.h"
 #include "cache/iutil/buffer_pool.h"
+#include "cache/iutil/inflight_tracker.h"
 #include "common/io_buffer.h"
 
 namespace dingofs {
@@ -58,6 +59,8 @@ class LocalFileSystem {
   bool IsAligned(uint64_t n, uint64_t m) { return (n % m) == 0; }
   off_t AlignOffset(off_t offset);
   size_t AlignLength(size_t length);
+  int AllocateAlignedMemory(IOBuffer* buffer, size_t aligned_length,
+                            bool for_read);
 
   static constexpr size_t kAlignedIOBlockSize = 4096;
 
@@ -65,6 +68,7 @@ class LocalFileSystem {
   DiskCacheLayoutSPtr layout_;
   BufferPoolUPtr write_buffer_pool_;
   BufferPoolUPtr read_buffer_pool_;
+  iutil::InflightTracker inflight_;
   AioQueueUPtr aio_queue_;
   DiskHealthCheckerUPtr health_checker_;
 };
