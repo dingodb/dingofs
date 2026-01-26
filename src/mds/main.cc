@@ -288,7 +288,7 @@ int main(int argc, char* argv[]) {
   // read gflags from conf file
   if (!FLAGS_conf.empty()) {
     CHECK(dingofs::mds::Helper::IsExistPath(FLAGS_conf)) << fmt::format("config file {} not exist.", FLAGS_conf);
-    gflags::ReadFromFlagsFile(FLAGS_conf, argv[0], true);
+    dingofs::ParseFromFlagsFile(dingofs::FLAGS_conf, extras);
   }
 
   // reset brpc flag default value if not set

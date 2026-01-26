@@ -54,6 +54,9 @@ class FlagsHelper {
   static FlagsInfo Parse(int* argc, char*** argv,
                          const FlagExtraInfo& extra_info);
 
+  static FlagsInfo ParseFile(const std::string& flagfile,
+                             const FlagExtraInfo& extra_info);
+
   static std::string GenHelp(const FlagsInfo& flags);
   static std::string GenTemplate(const FlagsInfo& flags);
   static std::string GenCurrentFlags(const FlagsInfo& flags);
@@ -84,6 +87,12 @@ static int ParseFlags(int* argc, char*** argv, const FlagExtraInfo& extras) {
   }
 
   return 0;
+}
+
+static void ParseFromFlagsFile(const std::string& flagfile,
+                               const FlagExtraInfo& extra_info) {
+  auto tmpFlags = FlagsHelper::ParseFile(flagfile, extra_info);
+  g_flags.gflags = tmpFlags.gflags;
 }
 
 static std::string GenCurrentFlags() {

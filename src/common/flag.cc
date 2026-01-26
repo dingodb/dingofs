@@ -64,6 +64,16 @@ FlagsInfo FlagsHelper::Parse(int* argc, char*** argv,
   return flags;
 }
 
+FlagsInfo FlagsHelper::ParseFile(const std::string& flagfile,
+                                 const FlagExtraInfo& extra_info) {
+  FlagsInfo flags;
+  gflags::ReadFromFlagsFile(flagfile, extra_info.program.c_str(), true);
+
+  flags.gflags = GetAllGFlags(extra_info.program, extra_info.patterns);
+  flags.extra_info = extra_info;
+  return flags;
+}
+
 std::string FlagsHelper::GenHelp(const FlagsInfo& flags) {
   auto rows = Normalize(flags);
   size_t max_name_length = 0;
