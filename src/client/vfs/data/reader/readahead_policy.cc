@@ -25,7 +25,7 @@ namespace vfs {
 
 static const uint8_t kReadaheadMaxLevel = 4;
 static const int64_t kReadAheadBaseSize = 1 * 1024 * 1024;  // 1MB
-static const int64_t kSeqAccessWindowSize = (512 + 256) * 1024;
+static const int64_t kSeqAccessWindowSize = 2 * 1024 * 1024;
 
 std::string ReadAheadStats::ToString() const {
   return fmt::format("(read_count={}, sequential_count={}, random_count={} ",
@@ -102,7 +102,7 @@ void ReadaheadPoclicy::UpdateOnRead(const FileRange& frange,
         Degrade();
       }
       seqdata = 0;
-      VLOG(9) << fmt::format(
+      VLOG(2) << fmt::format(
           "{} ReadaheadPoclicy degrade (random access) policy: {}", UUID(),
           ToString());
     }

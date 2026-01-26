@@ -237,12 +237,12 @@ Status VFSHubImpl::Start(bool upgrade) {
 
   // read buffer manager
   {
-    if (FLAGS_vfs_read_buffer_total_mb <= 0) {
+    int64_t total_bytes = FLAGS_vfs_read_buffer_total_mb * 1024 * 1024;
+    if (total_bytes <= 0) {
       return Status::Internal("invalid vfs_read_buffer_total_mb");
     }
 
-    read_buffer_manager_ = std::make_unique<ReadBufferManager>(
-        FLAGS_vfs_read_buffer_total_mb * 1024 * 1024);
+    read_buffer_manager_ = std::make_unique<ReadBufferManager>(total_bytes);
   }
 
   file_suffix_watcher_ =

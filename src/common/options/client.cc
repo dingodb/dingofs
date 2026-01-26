@@ -102,7 +102,7 @@ DEFINE_int32(vfs_read_max_retry_block_not_found, 10,
              "max retry when block not found");
 DEFINE_validator(vfs_read_max_retry_block_not_found, brpc::PassValidate);
 
-DEFINE_uint32(vfs_read_buffer_total_mb, 1024, "total read buffer size in MB");
+DEFINE_int64(vfs_read_buffer_total_mb, 1024, "total read buffer size in MB");
 
 DEFINE_bool(vfs_print_readahead_stats, false, "print readahead stats");
 DEFINE_validator(vfs_print_readahead_stats, brpc::PassValidate);

@@ -590,7 +590,7 @@ void FileReader::CheckReadahead(ContextSPtr ctx, const FileRange& frange,
     }
   }
 
-  policy_->last_offset = std::max(frange.End(), policy_->last_offset);
+  policy_->last_offset = frange.End();
 }
 
 std::vector<int64_t> FileReader::SplitRange(ContextSPtr ctx,
