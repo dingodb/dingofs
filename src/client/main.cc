@@ -127,8 +127,10 @@ int main(int argc, char* argv[]) {
   if (stat(orig_mountpoint, &sb) == -1) {
     if (errno == ENOTCONN) {  // mountpoint not umount last time
       std::cout << fmt::format(
-          "{} cleaning mountpoint: {}, last time may not unmount normally.",
-          dingofs::client::RedString("WARNING:"), orig_mountpoint);
+                       "{} cleaning mountpoint: {}, last time may not unmount "
+                       "normally.",
+                       dingofs::client::RedString("WARNING:"), orig_mountpoint)
+                << "\n";
       CHECK(dingofs::client::Umount(orig_mountpoint));
     } else {
       std::cerr << fmt::format("can't stat {}, errmsg: {}\n", orig_mountpoint,
