@@ -113,7 +113,7 @@ class TaskTracker {
 
 using TaskTrackerUPtr = std::unique_ptr<TaskTracker>;
 
-};  // namespace cache
-};  // namespace dingofs
+}  // namespace cache
+}  // namespace dingofs
 
 #endif  // DINGOFS_SRC_CACHE_CACHEGROUP_TASK_TRACKER_H_

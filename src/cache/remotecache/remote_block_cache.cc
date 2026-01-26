@@ -22,7 +22,9 @@
 
 #include "cache/remotecache/remote_block_cache.h"
 
+#include <brpc/reloadable_flags.h>
 #include <butil/iobuf.h>
+#include <gflags/gflags.h>
 
 #include <atomic>
 #include <memory>
@@ -37,7 +39,7 @@
 namespace brpc {
 DECLARE_int32(idle_timeout_second);
 DECLARE_bool(log_idle_connection_close);
-};  // namespace brpc
+}  // namespace brpc
 
 namespace dingofs {
 namespace cache {
@@ -51,6 +53,7 @@ DEFINE_string(cache_group, "",
 
 DEFINE_bool(block_prefetch, false,
             "whether prefetching whole block from remote");
+DEFINE_validator(block_prefetch, brpc::PassValidate);
 
 RemoteBlockCacheImpl::RemoteBlockCacheImpl(StorageClient* storage_client)
     : running_(false),

@@ -66,7 +66,7 @@ struct Configure : public iutil::IConfiguration {
   int unstable2down_s() override { return FLAGS_disk_state_unstable2down_s; }
 };
 
-};  // namespace
+}  // namespace
 
 DiskHealthChecker::DiskHealthChecker(DiskCacheLayoutSPtr layout)
     : running_(false),

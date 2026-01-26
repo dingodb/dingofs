@@ -77,7 +77,7 @@ struct Configure : public iutil::IConfiguration {
   }
 };
 
-};  // namespace
+}  // namespace
 
 PeerHealthChecker::PeerHealthChecker(const std::string& ip, uint32_t port)
     : running_(false),

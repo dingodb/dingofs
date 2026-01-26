@@ -341,5 +341,5 @@ Status CacheRetriever::Range(const BlockKey& key, off_t offset, size_t length,
   return Status::OK();
 }
 
-};  // namespace cache
-};  // namespace dingofs
+}  // namespace cache
+}  // namespace dingofs
