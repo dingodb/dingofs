@@ -273,9 +273,8 @@ TEST_F(MDSTest, FileCreateOpenRelease) {
   // Open
   std::string session_id;
   {
-    auto response = mds_client_->Open(ino);
+    auto response = mds_client_->Open(ino, session_id);
     ASSERT_EQ(response.error().errcode(), dingofs::pb::error::OK);
-    session_id = response.session_id();
   }
 
   // Release

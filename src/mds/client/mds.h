@@ -237,7 +237,7 @@ class MDSClient {
 
   LookupResponse Lookup(Ino parent, const std::string& name);
 
-  OpenResponse Open(Ino ino);
+  OpenResponse Open(Ino ino, std::string& session_id);
   ReleaseResponse Release(Ino ino, const std::string& session_id);
 
   LinkResponse Link(Ino ino, Ino new_parent, const std::string& new_name);

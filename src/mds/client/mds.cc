@@ -28,6 +28,7 @@
 #include "glog/logging.h"
 #include "mds/common/helper.h"
 #include "utils/time.h"
+#include "utils/uuid.h"
 
 namespace dingofs {
 namespace mds {
@@ -690,7 +691,7 @@ LookupResponse MDSClient::Lookup(Ino parent, const std::string& name) {
   return response;
 }
 
-OpenResponse MDSClient::Open(Ino ino) {
+OpenResponse MDSClient::Open(Ino ino, std::string& session_id) {
   CHECK(fs_id_ > 0) << "fs_id_ is zero";
 
   OpenRequest request;
@@ -701,6 +702,7 @@ OpenResponse MDSClient::Open(Ino ino) {
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
   request.set_flags(O_RDWR);
+  request.set_session_id(utils::GenerateUUID());
 
   auto status = interaction_->SendRequest("MDSService", "Open", request, response);
   if (!status.ok()) {
