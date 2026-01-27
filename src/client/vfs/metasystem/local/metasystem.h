@@ -184,6 +184,7 @@ class LocalMetaSystem : public vfs::MetaSystem {
   Status GetFsInfo(ContextSPtr ctx, FsInfo* fs_info) override;
 
   bool GetDescription(Json::Value& value) override;
+  bool GetSummary(Json::Value&) override { return true; }
 
  private:
   void SetFsStorageInfo(mds::FsInfoEntry& fs_info,

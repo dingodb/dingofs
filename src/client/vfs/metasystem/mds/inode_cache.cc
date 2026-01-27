@@ -20,8 +20,8 @@
 #include <utility>
 
 #include "client/vfs/metasystem/mds/helper.h"
+#include "common/logging.h"
 #include "fmt/format.h"
-#include "glog/logging.h"
 #include "utils/concurrent/concurrent.h"
 #include "utils/time.h"
 
@@ -33,7 +33,7 @@ namespace meta {
 bool Inode::PutIf(const AttrEntry& attr) {
   utils::WriteLockGuard lk(lock_);
 
-  LOG(INFO) << fmt::format(
+  LOG_DEBUG << fmt::format(
       "[meta.icache.{}] update attr,this({}) version({}->{}).", ino_,
       (void*)this, version_, attr.version());
 
@@ -138,11 +138,13 @@ uint64_t Inode::LastAccessTimeS() {
 InodeSPtr InodeCache::Put(Ino ino, const AttrEntry& attr) {
   InodeSPtr inode;
   shard_map_.withWLock(
-      [ino, &attr, &inode](Map& map) mutable {
+      [this, ino, &attr, &inode](Map& map) mutable {
         auto it = map.find(ino);
         if (it == map.end()) {
           inode = Inode::New(attr);
           map.emplace(ino, inode);
+          total_count_ << 1;
+
         } else {
           inode = it->second;
           inode->PutIf(attr);
@@ -154,7 +156,7 @@ InodeSPtr InodeCache::Put(Ino ino, const AttrEntry& attr) {
 }
 
 void InodeCache::Delete(Ino ino) {
-  LOG(INFO) << fmt::format("[meta.icache.{}] delete inode.", ino);
+  LOG_DEBUG << fmt::format("[meta.icache.{}] delete inode.", ino);
 
   shard_map_.withWLock([ino](Map& map) { map.erase(ino); }, ino);
 }
@@ -207,6 +209,7 @@ void InodeCache::CleanExpired(uint64_t expire_s) {
 
   for (const auto& inode : inodes) {
     Delete(inode->Ino());
+    clean_count_ << 1;
   }
 }
 
@@ -218,6 +221,14 @@ size_t InodeCache::Size() {
 
 size_t InodeCache::Bytes() {
   return Size() * (sizeof(Ino) + sizeof(InodeSPtr) + sizeof(Inode));
+}
+
+void InodeCache::Summary(Json::Value& value) {
+  value["name"] = "inodecache";
+  value["count"] = Size();
+  value["bytes"] = Bytes();
+  value["total_count"] = total_count_.get_value();
+  value["clean_count"] = clean_count_.get_value();
 }
 
 bool InodeCache::Dump(Json::Value& value) {

@@ -60,6 +60,8 @@ void HandleManager::Stop() {
 void HandleManager::AddHandle(std::unique_ptr<Handle> handle) {
   std::lock_guard<std::mutex> lock(mutex_);
   handles_[handle->fh] = std::move(handle);
+
+  total_count_ << 1;
 }
 
 Handle* HandleManager::FindHandler(uint64_t fh) {
@@ -92,6 +94,14 @@ void HandleManager::Invalidate(uint64_t fh, int64_t offset, int64_t size) {
   } else {
     LOG(WARNING) << "Invalidate failed, file is nullptr, fh:" << fh;
   }
+}
+
+void HandleManager::Summary(Json::Value& value) {
+  std::lock_guard<std::mutex> lock(mutex_);
+
+  value["name"] = "handler";
+  value["count"] = handles_.size();
+  value["total_count"] = total_count_.get_value();
 }
 
 bool HandleManager::Dump(Json::Value& value) {

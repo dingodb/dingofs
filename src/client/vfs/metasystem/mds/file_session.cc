@@ -156,6 +156,7 @@ FileSessionSPtr FileSessionMap::Put(InodeSPtr& inode, uint64_t fh,
               FileSession::New(ino, inode, chunk_cache_.GetOrCreate(ino));
           file_session->AddSession(fh, session_id, flags);
           map[ino] = file_session;
+          total_count_ << 1;
         }
       },
       ino);
@@ -249,6 +250,13 @@ size_t FileSessionMap::Bytes() {
     }
   });
   return bytes;
+}
+
+void FileSessionMap::Summary(Json::Value& value) {
+  value["name"] = "filesession";
+  value["count"] = Size();
+  value["bytes"] = Bytes();
+  value["total_count"] = total_count_.get_value();
 }
 
 bool FileSessionMap::Dump(Ino ino, Json::Value& value) {

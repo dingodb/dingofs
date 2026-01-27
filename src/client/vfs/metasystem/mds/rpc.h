@@ -148,6 +148,12 @@ class RPC {
                      Response& response,
                      SendRequestOption option = SendRequestOption());
 
+  size_t Size() {
+    utils::ReadLockGuard lk(lock_);
+    return channels_.size();
+  }
+
+  void Summary(Json::Value& value);
   bool Dump(Json::Value& value);
 
  private:

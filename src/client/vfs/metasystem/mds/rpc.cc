@@ -221,6 +221,11 @@ void RPC::DeleteChannel(const EndPoint& endpoint) {
   channels_.erase(endpoint);
 }
 
+void RPC::Summary(Json::Value& value) {
+  value["name"] = "rpc";
+  value["count"] = Size();
+}
+
 bool RPC::Dump(Json::Value& value) {
   utils::ReadLockGuard lk(lock_);
 

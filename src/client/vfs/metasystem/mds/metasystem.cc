@@ -190,6 +190,42 @@ void MDSMetaSystem::Stop(bool upgrade) {
   LOG(INFO) << fmt::format("[meta.fs] stopped, upgrade({}).", upgrade);
 }
 
+bool MDSMetaSystem::GetSummary(Json::Value& value) {
+  CHECK(value.isArray()) << "value is not array.";
+
+  Json::Value modify_time_memo_value = Json::objectValue;
+  modify_time_memo_.Summary(modify_time_memo_value);
+  value.append(modify_time_memo_value);
+
+  Json::Value chunk_cache_value = Json::objectValue;
+  chunk_cache_.Summary(chunk_cache_value);
+  value.append(chunk_cache_value);
+
+  Json::Value chunk_memo_value = Json::objectValue;
+  chunk_memo_.Summary(chunk_memo_value);
+  value.append(chunk_memo_value);
+
+  Json::Value file_session_value = Json::objectValue;
+  file_session_map_.Summary(file_session_value);
+  value.append(file_session_value);
+
+  Json::Value dir_iterator_value = Json::objectValue;
+  dir_iterator_manager_.Summary(dir_iterator_value);
+  value.append(dir_iterator_value);
+
+  Json::Value inode_cache_value = Json::objectValue;
+  inode_cache_.Summary(inode_cache_value);
+  value.append(inode_cache_value);
+
+  Json::Value tiny_file_data_cache_value = Json::objectValue;
+  tiny_file_data_cache_.Summary(tiny_file_data_cache_value);
+  value.append(tiny_file_data_cache_value);
+
+  mds_client_.Summary(value);
+
+  return true;
+}
+
 // dump state for upgrade
 bool MDSMetaSystem::Dump(ContextSPtr, Json::Value& value) {
   LOG(INFO) << "[meta.fs] dump...";
@@ -386,13 +422,13 @@ void MDSMetaSystem::Heartbeat() {
 void MDSMetaSystem::CleanExpiredModifyTimeMemo() {
   uint64_t expired_time_s = utils::Timestamp() - FLAGS_vfs_meta_memo_expired_s;
 
-  modify_time_memo_.ForgetExpired(expired_time_s);
+  modify_time_memo_.CleanExpired(expired_time_s);
 }
 
 void MDSMetaSystem::CleanExpiredChunkMemo() {
   uint64_t expired_time_s = utils::Timestamp() - FLAGS_vfs_meta_memo_expired_s;
 
-  chunk_memo_.ForgetExpired(expired_time_s);
+  chunk_memo_.CleanExpired(expired_time_s);
 }
 
 void MDSMetaSystem::CleanExpiredChunkCache() {

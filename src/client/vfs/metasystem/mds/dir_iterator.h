@@ -102,6 +102,7 @@ class DirIteratorManager {
   size_t Size();
   size_t Bytes();
 
+  void Summary(Json::Value& value);
   bool Dump(Json::Value& value);
   bool Load(MDSClient& mds_client, const Json::Value& value);
 
@@ -112,6 +113,9 @@ class DirIteratorManager {
 
   constexpr static size_t kShardNum = 32;
   utils::Shards<Map, kShardNum> shard_map_;
+
+  // metrics
+  bvar::Adder<uint64_t> total_count_{"meta_dir_iterator_total_count"};
 };
 
 }  // namespace meta

@@ -30,12 +30,13 @@ void ModifyTimeMemo::Forget(Ino ino) {
   shard_map_.withWLock([ino](Map& map) mutable { map.erase(ino); }, ino);
 }
 
-void ModifyTimeMemo::ForgetExpired(uint64_t expire_time_ns) {
-  shard_map_.iterateWLock([expire_time_ns](Map& map) {
+void ModifyTimeMemo::CleanExpired(uint64_t expire_time_ns) {
+  shard_map_.iterateWLock([this, expire_time_ns](Map& map) {
     for (auto it = map.begin(); it != map.end();) {
       if (it->second < expire_time_ns) {
         auto temp_it = it++;
         map.erase(temp_it);
+        clean_count_ << 1;
       } else {
         ++it;
       }
@@ -69,6 +70,13 @@ size_t ModifyTimeMemo::Size() {
 
 size_t ModifyTimeMemo::Bytes() {
   return Size() * (sizeof(Ino) + sizeof(uint64_t));
+}
+
+void ModifyTimeMemo::Summary(Json::Value& value) {
+  value["name"] = "modifytimememo";
+  value["count"] = Size();
+  value["bytes"] = Bytes();
+  value["clean_count"] = clean_count_.get_value();
 }
 
 bool ModifyTimeMemo::Dump(Json::Value& value) {

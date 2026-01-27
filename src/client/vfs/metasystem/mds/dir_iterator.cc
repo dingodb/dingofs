@@ -161,6 +161,7 @@ void DirIteratorManager::PutWithFunc(Ino ino, uint64_t,
           DirIteratorSet vec = {dir_iterator};
           map[ino] = vec;
           f(vec);
+          total_count_ << 1;
         }
       },
       ino);
@@ -241,6 +242,13 @@ size_t DirIteratorManager::Bytes() {
   });
 
   return bytes;
+}
+
+void DirIteratorManager::Summary(Json::Value& value) {
+  value["name"] = "diriterator";
+  value["count"] = Size();
+  value["bytes"] = Bytes();
+  value["total_count"] = total_count_.get_value();
 }
 
 bool DirIteratorManager::Dump(Json::Value& value) {

@@ -60,7 +60,7 @@ class ChunkMemo {
   void Remember(Ino ino, uint32_t chunk_index, uint64_t version);
   void Forget(Ino ino);
   void Forget(Ino ino, uint32_t chunk_index);
-  void ForgetExpired(uint64_t expire_time_ns);
+  void CleanExpired(uint64_t expire_time_ns);
 
   uint64_t GetVersion(Ino ino, uint32_t chunk_index);
   std::vector<std::pair<uint32_t, uint64_t>> GetVersion(Ino ino);
@@ -68,6 +68,7 @@ class ChunkMemo {
   size_t Size();
   size_t Bytes();
 
+  void Summary(Json::Value& value);
   bool Dump(Json::Value& value);
   bool Load(const Json::Value& value);
 
@@ -76,6 +77,10 @@ class ChunkMemo {
 
   constexpr static size_t kShardNum = 64;
   utils::Shards<Map, kShardNum> shard_map_;
+
+  // metric
+  bvar::Adder<uint64_t> total_count_{"meta_chunk_memo_total_count"};
+  bvar::Adder<uint64_t> clean_count_{"meta_chunk_memo_clean_count"};
 };
 
 }  // namespace meta

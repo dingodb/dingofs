@@ -23,6 +23,7 @@
 #include <sstream>
 #include <unordered_map>
 
+#include "bvar/reducer.h"
 #include "client/vfs/data/ifile.h"
 #include "client/vfs/vfs_meta.h"
 #include "json/value.h"
@@ -74,6 +75,7 @@ class HandleManager {
 
   void Invalidate(uint64_t fh, int64_t offset, int64_t size);
 
+  void Summary(Json::Value& value);
   bool Dump(Json::Value& value);
   bool Load(const Json::Value& value);
 
@@ -83,6 +85,9 @@ class HandleManager {
   std::mutex mutex_;
   bool stopped_{false};
   std::unordered_map<uint64_t, std::unique_ptr<Handle>> handles_;
+
+  // metrics
+  bvar::Adder<uint64_t> total_count_{"vfs_handle_total_count"};
 };
 
 }  // namespace vfs

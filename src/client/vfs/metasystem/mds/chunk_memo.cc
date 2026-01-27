@@ -44,6 +44,8 @@ void ChunkMemo::Remember(Ino ino, uint32_t chunk_index, uint64_t version) {
         }
       },
       ino);
+
+  total_count_ << 1;
 }
 
 void ChunkMemo::Forget(Ino ino) {
@@ -65,11 +67,12 @@ void ChunkMemo::Forget(Ino ino, uint32_t chunk_index) {
       ino);
 }
 
-void ChunkMemo::ForgetExpired(uint64_t expire_time_ns) {
+void ChunkMemo::CleanExpired(uint64_t expire_time_ns) {
   shard_map_.iterateWLock([&](Map& map) {
     for (auto it = map.begin(); it != map.end();) {
       if (it->second.time_ns < expire_time_ns) {
         it = map.erase(it);
+        clean_count_ << 1;
       } else {
         ++it;
       }
@@ -113,6 +116,14 @@ size_t ChunkMemo::Size() {
 }
 
 size_t ChunkMemo::Bytes() { return Size() * (sizeof(Key) + sizeof(Value)); }
+
+void ChunkMemo::Summary(Json::Value& value) {
+  value["name"] = "chunkmemo";
+  value["size"] = Size();
+  value["bytes"] = Bytes();
+  value["total_count"] = total_count_.get_value();
+  value["clean_count"] = clean_count_.get_value();
+}
 
 bool ChunkMemo::Dump(Json::Value& value) {
   std::vector<std::pair<Key, Value>> chunk_map_copy;

@@ -36,12 +36,13 @@ DataBufferSPtr TinyFileDataCache::Get(Ino ino) {
 DataBufferSPtr TinyFileDataCache::Create(Ino ino) {
   DataBufferSPtr data_buffer;
   shard_map_.withWLock(
-      [ino, &data_buffer](Map& map) mutable {
+      [this, ino, &data_buffer](Map& map) mutable {
         auto it = map.find(ino);
         if (it != map.end()) map.erase(it);
 
         data_buffer = DataBuffer::New(ino, true);
         map.emplace(ino, data_buffer);
+        total_count_ << 1;
       },
       ino);
 
@@ -51,13 +52,14 @@ DataBufferSPtr TinyFileDataCache::Create(Ino ino) {
 DataBufferSPtr TinyFileDataCache::GetOrCreate(Ino ino) {
   DataBufferSPtr data_buffer;
   shard_map_.withWLock(
-      [ino, &data_buffer](Map& map) mutable {
+      [this, ino, &data_buffer](Map& map) mutable {
         auto it = map.find(ino);
         if (it != map.end()) {
           data_buffer = it->second;
         } else {
           data_buffer = DataBuffer::New(ino);
           map.emplace(ino, data_buffer);
+          total_count_ << 1;
         }
       },
       ino);
@@ -92,11 +94,20 @@ void TinyFileDataCache::CleanExpired(uint64_t expire_s) {
       if (it->second->LastActiveTimeS() < expire_s) {
         auto temp = it++;
         map.erase(temp);
+        clean_count_ << 1;
       } else {
         ++it;
       }
     }
   });
+}
+
+void TinyFileDataCache::Summary(Json::Value& value) {
+  value["name"] = "tinyfiledatacache";
+  value["count"] = Size();
+  value["bytes"] = Bytes();
+  value["total_count"] = total_count_.get_value();
+  value["clean_count"] = clean_count_.get_value();
 }
 
 }  // namespace meta

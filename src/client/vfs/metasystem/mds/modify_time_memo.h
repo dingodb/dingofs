@@ -37,7 +37,7 @@ class ModifyTimeMemo {
 
   void Remember(Ino ino);
   void Forget(Ino ino);
-  void ForgetExpired(uint64_t expire_time_ns);
+  void CleanExpired(uint64_t expire_time_ns);
 
   uint64_t Get(Ino ino);
   bool ModifiedSince(Ino ino, uint64_t timestamp);
@@ -45,6 +45,7 @@ class ModifyTimeMemo {
   size_t Size();
   size_t Bytes();
 
+  void Summary(Json::Value& value);
   bool Dump(Json::Value& value);
   bool Load(const Json::Value& value);
 
@@ -54,6 +55,9 @@ class ModifyTimeMemo {
 
   constexpr static size_t kShardNum = 32;
   utils::Shards<Map, kShardNum> shard_map_;
+
+  // metric
+  bvar::Adder<uint64_t> clean_count_{"meta_modify_time_memo_clean_count"};
 };
 
 }  // namespace meta

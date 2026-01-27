@@ -116,6 +116,7 @@ class FileSessionMap {
   size_t Bytes();
 
   // output json format string
+  void Summary(Json::Value& value);
   bool Dump(Ino ino, Json::Value& value);
   bool Dump(Json::Value& value);
   bool Load(const Json::Value& value);
@@ -130,6 +131,9 @@ class FileSessionMap {
 
   constexpr static size_t kShardNum = 32;
   utils::Shards<Map, kShardNum> shard_map_;
+
+  // metrics
+  bvar::Adder<uint64_t> total_count_{"meta_file_session_total_count"};
 };
 
 }  // namespace meta

@@ -192,6 +192,10 @@ bool VFSWrapper::Dump() {
     return false;
   }
 
+  // dump epch and start time
+  root["epch"] = Json::Value::UInt64(epoch_);
+  root["first_start_time_ms"] = Json::Value::UInt64(first_start_time_ms_);
+
   const std::string path = fmt::format("{}.{}", kFdStatePath, getpid());
   std::ofstream file(path);
   if (!file.is_open()) {
@@ -210,6 +214,16 @@ bool VFSWrapper::Dump() {
 
 bool VFSWrapper::Load(const Json::Value& value) {
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Load");
+
+  // epoch and start time
+  if (!value["epch"].isNull()) {
+    epoch_ = value["epch"].asUInt64() + 1;
+    LOG(INFO) << "load epoch: " << epoch_;
+  }
+
+  if (!value["first_start_time_ms"].isNull()) {
+    first_start_time_ms_ = value["first_start_time_ms"].asUInt64();
+  }
 
   if (!vfs_->Load(SpanScope::GetContext(span), value)) {
     LOG(ERROR) << "load vfs state fail.";

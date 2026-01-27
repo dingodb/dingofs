@@ -28,6 +28,7 @@
 #include "common/io_buffer.h"
 #include "common/options/client.h"
 #include "glog/logging.h"
+#include "json/value.h"
 #include "utils/shards.h"
 #include "utils/time.h"
 
@@ -200,11 +201,17 @@ class TinyFileDataCache {
 
   void CleanExpired(uint64_t expire_s);
 
+  void Summary(Json::Value& value);
+
  private:
   using Map = absl::flat_hash_map<Ino, DataBufferSPtr>;
 
   constexpr static size_t kShardNum = 32;
   utils::Shards<Map, kShardNum> shard_map_;
+
+  // metrics
+  bvar::Adder<uint64_t> total_count_{"meta_tiny_file_data_cache_total_count"};
+  bvar::Adder<uint64_t> clean_count_{"meta_tiny_file_data_cache_clean_count"};
 };
 
 }  // namespace meta

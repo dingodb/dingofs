@@ -79,6 +79,12 @@ bool MonoMDSRouter::UpdateRouter(
   return UpdateMds(partition_policy.mono().mds_id());
 }
 
+void MonoMDSRouter::Summary(Json::Value& value) {
+  value["name"] = "mdsrouter";
+  value["count"] = Size();
+  value["bytes"] = Bytes();
+}
+
 bool MonoMDSRouter::Dump(Json::Value& value) {
   utils::ReadLockGuard lk(lock_);
 
@@ -190,6 +196,12 @@ size_t ParentHashMDSRouter::Bytes() {
   utils::ReadLockGuard lk(lock_);
   return sizeof(ParentHashMDSRouter) +
          (mds_map_.size() * (sizeof(mds::MDSMeta) + sizeof(int64_t)));
+}
+
+void ParentHashMDSRouter::Summary(Json::Value& value) {
+  value["name"] = "mdsrouter";
+  value["count"] = Size();
+  value["bytes"] = Bytes();
 }
 
 bool ParentHashMDSRouter::Dump(Json::Value& value) {

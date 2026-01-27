@@ -51,6 +51,7 @@ class ParentMemo {
   size_t Size();
   size_t Bytes();
 
+  void Summary(Json::Value& value);
   bool Dump(Json::Value& value);
   bool Load(const Json::Value& value);
 
@@ -66,6 +67,9 @@ class ParentMemo {
 
   constexpr static size_t kShardNum = 32;
   utils::Shards<Map, kShardNum> shard_map_;
+
+  // metrics
+  bvar::Adder<uint64_t> total_count_{"meta_parent_memo_total_count"};
 };
 
 }  // namespace meta

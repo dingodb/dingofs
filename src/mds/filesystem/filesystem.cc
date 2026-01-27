@@ -1063,7 +1063,9 @@ Status FileSystem::Open(Context& ctx, Ino ino, const OpenParam& param, EntryOut&
   auto status = GetInode(ctx, ino, inode);
   if (!status.ok()) return status;
 
-  CHECK(inode->Nlink() > 0) << fmt::format("open file fail, ino({}) nlink is 0.", ino);
+  if (inode->Nlink() == 0) {
+    return Status(pb::error::EDELETED, "file is deleted");
+  }
 
   // update parent memo
   UpdateParentMemo(ctx.GetAncestors());

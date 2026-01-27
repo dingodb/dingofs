@@ -207,6 +207,12 @@ size_t MDSDiscovery::Bytes() {
   return mdses_.size() * (sizeof(int64_t) + sizeof(mds::MDSMeta));
 }
 
+void MDSDiscovery::Summary(Json::Value& value) {
+  value["name"] = "discovery";
+  value["count"] = Size();
+  value["bytes"] = Bytes();
+}
+
 bool MDSDiscovery::Dump(Json::Value& value) {
   utils::ReadLockGuard lk(lock_);
 

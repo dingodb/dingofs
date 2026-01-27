@@ -272,6 +272,7 @@ class MemoryMetaSystem : public vfs::MetaSystem {
   Status GetFsInfo(ContextSPtr ctx, FsInfo* fs_info) override;
 
   bool GetDescription(Json::Value& value) override;
+  bool GetSummary(Json::Value&) override { return true; }
 
  private:
   friend class DirIterator;

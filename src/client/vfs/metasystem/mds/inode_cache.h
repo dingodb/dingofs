@@ -241,6 +241,7 @@ class InodeCache {
   size_t Size();
   size_t Bytes();
 
+  void Summary(Json::Value& value);
   bool Dump(Json::Value& value);
   bool Load(const Json::Value& value);
 
@@ -251,6 +252,10 @@ class InodeCache {
 
   constexpr static size_t kShardNum = 32;
   utils::Shards<Map, kShardNum> shard_map_;
+
+  // metrics
+  bvar::Adder<uint64_t> total_count_{"meta_inode_total_count"};
+  bvar::Adder<uint64_t> clean_count_{"meta_inode_clean_count"};
 };
 
 }  // namespace meta

@@ -518,7 +518,7 @@ bool ChunkSet::HasUncommitedSlice() {
 size_t ChunkSet::Bytes() const {
   utils::ReadLockGuard guard(lock_);
 
-  size_t bytes;
+  size_t bytes = 0;
   for (const auto& [_, chunk] : chunk_map_) {
     bytes += chunk->Bytes();
   }
@@ -617,13 +617,14 @@ ChunkSetSPtr ChunkCache::Get(Ino ino) {
 ChunkSetSPtr ChunkCache::GetOrCreate(Ino ino) {
   ChunkSetSPtr chunk_set;
   shard_map_.withWLock(
-      [ino, &chunk_set](Map& map) mutable {
+      [this, ino, &chunk_set](Map& map) mutable {
         auto it = map.find(ino);
         if (it != map.end()) {
           chunk_set = it->second;
         } else {
           chunk_set = ChunkSet::New(ino);
           map.emplace(ino, chunk_set);
+          total_count_ << 1;
         }
       },
       ino);
@@ -676,11 +677,21 @@ void ChunkCache::CleanExpired(uint64_t expire_s) {
       if (it->second->LastActiveTimeS() < expire_s) {
         auto temp = it++;
         map.erase(temp);
+        clean_count_ << 1;
+
       } else {
         ++it;
       }
     }
   });
+}
+
+void ChunkCache::Summary(Json::Value& value) {
+  value["name"] = "chunkcache";
+  value["count"] = Size();
+  value["bytes"] = Bytes();
+  value["total_count"] = total_count_.get_value();
+  value["clean_count"] = clean_count_.get_value();
 }
 
 bool ChunkCache::Dump(Json::Value& value, bool is_summary) {

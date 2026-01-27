@@ -78,6 +78,7 @@ class MDSMetaSystem : public vfs::MetaSystem {
 
   void Stop(bool upgrade) override;
 
+  bool GetSummary(Json::Value& value) override;
   // dump state for upgrade
   bool Dump(ContextSPtr ctx, Json::Value& value) override;
 

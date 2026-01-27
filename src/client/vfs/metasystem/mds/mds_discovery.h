@@ -49,6 +49,7 @@ class MDSDiscovery {
   size_t Size();
   size_t Bytes();
 
+  void Summary(Json::Value& value);
   bool Dump(Json::Value& value);
 
  private:

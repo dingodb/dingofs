@@ -194,6 +194,7 @@ class MetaSystem {
   virtual Status GetFsInfo(ContextSPtr ctx, FsInfo* fs_info) = 0;
 
   virtual bool GetDescription(Json::Value& value) = 0;
+  virtual bool GetSummary(Json::Value& value) = 0;
 };
 
 using MetaSystemPtr = std::shared_ptr<MetaSystem>;

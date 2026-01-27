@@ -28,6 +28,7 @@
 #include "butil/iobuf.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/metasystem/meta_system.h"
+#include "client/vfs/vfs_wrapper.h"
 #include "common/version.h"
 #include "fmt/format.h"
 #include "fmt/ranges.h"
@@ -96,8 +97,42 @@ static void RenderGitInfo(butil::IOBufBuilder& os) {
 
 static void RenderGitVersion(butil::IOBufBuilder& os) {
   os << R"(<div style="margin:2px;font-size:smaller;text-align:center">)";
-  os << fmt::format(R"(<p >{} {} {}</p>)", dingofs::GetGitVersion(),
+  os << fmt::format(R"(<p>{} {} {}</p>)", dingofs::GetGitVersion(),
                     dingofs::GetGitCommitHash(), dingofs::GetGitCommitTime());
+  os << "</div>";
+}
+
+// nM,nH,nD
+static std::string RenderTime(uint64_t diff_time_s) {
+  uint64_t minutes = diff_time_s / 60;
+  uint64_t hours = minutes / 60;
+  uint64_t days = hours / 24;
+
+  minutes = minutes % 60;
+  hours = hours % 24;
+
+  std::string result;
+  if (days > 0) {
+    result += fmt::format("{}D,", days);
+  }
+  if (hours > 0) {
+    result += fmt::format("{}H,", hours);
+  }
+  result += fmt::format("{}M", minutes);
+
+  return result;
+}
+
+static void RenderEpochAndStartTime(butil::IOBufBuilder& os) {
+  using dingofs::client::vfs::VFSWrapper;
+
+  uint64_t now_ms = utils::TimestampMs();
+
+  os << R"(<div style="margin:2px;font-size:smaller;text-align:center">)";
+  os << fmt::format(
+      R"(<p>epoch[{}] uptime[{}] accum_uptime[{}]</p>)", VFSWrapper::GetEpoch(),
+      RenderTime((now_ms - VFSWrapper::GetStartTime()) / 1000),
+      RenderTime((now_ms - VFSWrapper::GetFirstStartTime()) / 1000));
   os << "</div>";
 }
 
@@ -221,42 +256,86 @@ static void RenderJsonPage(const std::string& title, const std::string& header,
   os << "</html>";
 }
 
+static void RenderSummary(Json::Value& json_value, butil::IOBufBuilder& os) {
+  os << R"(<div style="margin:12px;font-size:smaller;">)";
+  os << R"(<h3>Summary</h3>)";
+  os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
+  os << "<tr>";
+  os << "<th>Name</th>";
+  os << "<th>Count</th>";
+  os << "<th>AccumCount</th>";
+  os << "<th>CleanCount</th>";
+  os << "<th>Bytes</th>";
+  os << "<th>Description</th>";
+  os << "</tr>";
+
+  if (!json_value.isArray()) {
+    LOG(ERROR) << "summary is not an array.";
+    os << "</table>\n";
+    os << "</div>";
+    return;
+  }
+
+  static std::map<std::string, std::string> description_map = {
+      {"handler", "show open file handler info at vfs."},
+      {"diriterator", "show dir iterator info at meta."},
+      {"filesession", "show open file session info at meta."},
+      {"parentmemo", "show parent memo info at meta."},
+      {"modifytimememo", "show modify time memo info at meta."},
+      {"chunkmemo", "show chunk memo info at meta."},
+      {"chunkcache", "show chunk cache info at meta."},
+      {"mdsrouter", "show mds router info at meta."},
+      {"inodecache", "show inode cache info at meta."},
+      {"rpc", "show rpc info at meta."},
+      {"blockcache", "show block cache info at meta."},
+      {"tinyfiledatacache", "show tiny file data cache info."},
+  };
+
+  for (const auto& item : json_value) {
+    const std::string name = item["name"].asString();
+
+    uint64_t bytes = item["bytes"].asUInt64();
+
+    os << fmt::format(
+        R"(<td><a href="ClientStatService/{}" target="_blank">{}</a></td>)",
+        name, name);
+    os << "<td>" << item["count"].asUInt64() << "</td>";
+    os << "<td>"
+       << (item["total_count"].isNull()
+               ? "N/A"
+               : std::to_string(item["total_count"].asUInt64()))
+       << "</td>";
+    os << "<td>"
+       << (item["clean_count"].isNull()
+               ? "N/A"
+               : std::to_string(item["clean_count"].asUInt64()))
+       << "</td>";
+    os << "<td>"
+       << (item["bytes"].isNull() ? "N/A"
+                                  : fmt::format("{}MB", bytes / (1024 * 1024)))
+       << "</td>";
+    auto it = description_map.find(name);
+    if (it == description_map.end()) {
+      os << "<td>N/A</td>";
+    } else {
+      os << fmt::format("<td>{}</td>", it->second);
+    }
+
+    os << "</tr>";
+  }
+
+  os << "</table>\n";
+  os << "</div>";
+
+  os << "<br>";
+}
+
 static void RenderNavigation(butil::IOBufBuilder& os) {
   os << R"(<div style="margin:12px;font-size:smaller;">)";
   os << R"(<h3>Navagation </h3>)";
 
   auto render_navigation_func = []() -> std::string {
     std::string result;
-    result += fmt::format(
-        R"(<a href="ClientStatService/handler" target="_blank">handler</a>: show open file handler info at vfs)");
-    result += "<br>";
-    result += fmt::format(
-        R"(<a href="ClientStatService/diriterator" target="_blank">dir iterator</a>: show dir iterator info at meta)");
-    result += "<br>";
-    result += fmt::format(
-        R"(<a href="ClientStatService/filesession" target="_blank">file session</a>: show open file session info at meta)");
-    result += "<br>";
-    result += fmt::format(
-        R"(<a href="ClientStatService/parentmemo" target="_blank">parent memo</a>: show parent memo info at meta)");
-    result += "<br>";
-    result += fmt::format(
-        R"(<a href="ClientStatService/modifytimememo" target="_blank">modify time memo</a>: show modify time memo info at meta)");
-    result += "<br>";
-    result += fmt::format(
-        R"(<a href="ClientStatService/chunkmemo" target="_blank">chunk memo</a>: show chunk memo info at meta)");
-    result += "<br>";
-    result += fmt::format(
-        R"(<a href="ClientStatService/chunkcache" target="_blank">chunk cache</a>: show chunk cache info at meta)");
-    result += "<br>";
-    result += fmt::format(
-        R"(<a href="ClientStatService/mdsrouter" target="_blank">mds router</a>: show mds router info at meta)");
-    result += "<br>";
-    result += fmt::format(
-        R"(<a href="ClientStatService/inodecache" target="_blank">inode cache</a>: show inode cache info at meta)");
-    result += "<br>";
-    result += fmt::format(
-        R"(<a href="ClientStatService/rpc" target="_blank">rpc</a>: show rpc info at meta)");
-    result += "<br>";
     result += fmt::format(
         R"(<a href="ClientStatService/blockcache" target="_blank">block cache</a>: show block cache info at cache)");
     return result;
@@ -1328,15 +1407,29 @@ void ClientStatServiceImpl::RenderMainPage(const brpc::Server* server,
   os << "</head>";
 
   os << "<body>";
-  server->PrintTabsBody(os, "fusesstat");
+  server->PrintTabsBody(os, "clientstat");
   os << R"(<h1 style="text-align:center;">dingofs-client dashboard</h1>)";
 
   RenderGitVersion(os);
+  RenderEpochAndStartTime(os);
 
   Json::Value meta_value;
 
   if (!vfs_hub_->GetMetaSystem()->GetDescription(meta_value)) {
-    LOG(ERROR) << fmt::format("GetDescription failed.");
+    LOG(ERROR) << fmt::format("get description fail.");
+    os << "</body>";
+    os << "</html>";
+    return;
+  }
+
+  Json::Value summary_value = Json::arrayValue;
+
+  Json::Value handle_value = Json::objectValue;
+  vfs_hub_->GetHandleManager()->Summary(handle_value);
+  summary_value.append(handle_value);
+
+  if (!vfs_hub_->GetMetaSystem()->GetSummary(summary_value)) {
+    LOG(ERROR) << fmt::format("get summary fail.");
     os << "</body>";
     os << "</html>";
     return;
@@ -1348,6 +1441,8 @@ void ClientStatServiceImpl::RenderMainPage(const brpc::Server* server,
   RenderFsInfo(meta_value, os);
   // mds info
   RenderMdsInfo(meta_value, os);
+  // state summary
+  RenderSummary(summary_value, os);
   // navigation
   RenderNavigation(os);
   // git info

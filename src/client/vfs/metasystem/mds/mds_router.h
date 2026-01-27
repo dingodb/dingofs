@@ -46,6 +46,7 @@ class MDSRouter {
   virtual size_t Bytes() = 0;
 
   virtual bool Dump(Json::Value& value) = 0;
+  virtual void Summary(Json::Value& value) = 0;
 };
 
 using MDSRouterUPtr = std::unique_ptr<MDSRouter>;
@@ -75,6 +76,7 @@ class MonoMDSRouter : public MDSRouter {
   size_t Bytes() override { return sizeof(MonoMDSRouter); }
 
   bool Dump(Json::Value& value) override;
+  void Summary(Json::Value& value) override;
 
  private:
   bool UpdateMds(int64_t mds_id);
@@ -113,6 +115,7 @@ class ParentHashMDSRouter : public MDSRouter {
   size_t Bytes() override;
 
   bool Dump(Json::Value& value) override;
+  void Summary(Json::Value& value) override;
 
  private:
   void UpdateMDSes(const pb::mds::HashPartition& hash_partition);

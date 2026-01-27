@@ -1333,7 +1333,9 @@ std::vector<std::string> OpenFileOperation::PrefetchKey() {
 }
 
 Status OpenFileOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>& prefetch_kvs) {
-  CHECK(attr.nlink() > 0) << fmt::format("open file fail, ino({}) nlink is 0.", attr.ino());
+  if (attr.nlink() == 0) {
+    return Status(pb::error::EDELETED, "file is deleted");
+  }
 
   if (flags_ & O_TRUNC) {
     ResetFileRange(txn, attr.length());

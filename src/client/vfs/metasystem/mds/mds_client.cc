@@ -14,6 +14,8 @@
 
 #include "client/vfs/metasystem/mds/mds_client.h"
 
+#include <json/value.h>
+
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -75,6 +77,22 @@ void MDSClient::Stop() {
   rpc_.Stop();
 
   mds_discovery_.Stop();
+}
+
+void MDSClient::Summary(Json::Value& value) {
+  CHECK(value.isArray()) << "value is not array.";
+
+  Json::Value parent_memo_value;
+  parent_memo_.Summary(parent_memo_value);
+  value.append(parent_memo_value);
+
+  Json::Value mds_router_value;
+  mds_router_->Summary(mds_router_value);
+  value.append(mds_router_value);
+
+  Json::Value rpc_value;
+  rpc_.Summary(rpc_value);
+  value.append(rpc_value);
 }
 
 bool MDSClient::Dump(Json::Value& value) {

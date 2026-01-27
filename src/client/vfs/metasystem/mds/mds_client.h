@@ -59,6 +59,7 @@ class MDSClient {
   bool Init();
   void Stop();
 
+  void Summary(Json::Value& value);
   bool Dump(Json::Value& value);
   bool Dump(const DumpOption& options, Json::Value& value);
   bool Load(const Json::Value& value);

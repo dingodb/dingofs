@@ -195,6 +195,8 @@ class MetaWrapper {
     return target_->GetDescription(value);
   }
 
+  bool GetSummary(Json::Value& value) { return target_->GetSummary(value); }
+
  private:
   MetaSystemUPtr target_;
   std::unique_ptr<metrics::client::SliceMetric> slice_metric_;

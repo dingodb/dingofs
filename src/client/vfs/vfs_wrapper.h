@@ -121,6 +121,10 @@ class VFSWrapper {
 
   blockaccess::BlockAccessOptions GetBlockAccesserOptions();
 
+  static uint64_t GetEpoch() { return epoch_; }
+  static uint64_t GetStartTime() { return start_time_ms_; }
+  static uint64_t GetFirstStartTime() { return first_start_time_ms_; }
+
  private:
   bool Dump();
   bool Load(const Json::Value& value);
@@ -130,6 +134,11 @@ class VFSWrapper {
 
   uint32_t uid_;
   uint32_t gid_;
+
+  // epoch for upgrade
+  inline static uint64_t epoch_ = 1;
+  inline static uint64_t start_time_ms_ = utils::TimestampMs();
+  inline static uint64_t first_start_time_ms_ = utils::TimestampMs();
 };
 
 }  // namespace vfs
