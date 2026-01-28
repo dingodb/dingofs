@@ -23,8 +23,6 @@
 #include <string>
 #include <vector>
 
-#include "bthread/bthread.h"
-#include "bthread/types.h"
 #include "client/vfs/common/client_id.h"
 #include "client/vfs/metasystem/mds/helper.h"
 #include "client/vfs/metasystem/mds/mds_client.h"
@@ -136,7 +134,8 @@ MDSMetaSystem::MDSMetaSystem(mds::FsInfoEntry fs_info_entry,
       id_cache_(kSliceIdCacheName, mds_client_),
       file_session_map_(inode_cache_, chunk_cache_),
       batch_processor_(mds_client_),
-      compactor_(compactor) {}
+      compactor_(compactor),
+      compact_processor_(executor_) {}
 
 MDSMetaSystem::~MDSMetaSystem() {}  // NOLINT
 
@@ -149,6 +148,10 @@ Status MDSMetaSystem::Init(bool upgrade) {
     return Status::MountFailed("init mds_client fail");
   }
 
+  if (!executor_.Init()) {
+    return Status::Internal("init executor fail");
+  }
+
   // mount fs
   if (!upgrade && !MountFs()) {
     return Status::MountFailed("mount fs fail");
@@ -156,10 +159,6 @@ Status MDSMetaSystem::Init(bool upgrade) {
 
   if (!batch_processor_.Init()) {
     return Status::Internal("init batch processor fail");
-  }
-
-  if (!compact_processor_.Init()) {
-    return Status::Internal("init compact processor fail");
   }
 
   // init crontab
@@ -177,15 +176,15 @@ void MDSMetaSystem::Stop(bool upgrade) {
 
   FlushAllSlice();
 
-  if (!upgrade) UnmountFs();
-
-  mds_client_.Stop();
-
   crontab_manager_.Destroy();
 
   batch_processor_.Stop();
 
-  compact_processor_.Stop();
+  executor_.Stop();
+
+  if (!upgrade) UnmountFs();
+
+  mds_client_.Stop();
 
   LOG(INFO) << fmt::format("[meta.fs] stopped, upgrade({}).", upgrade);
 }
@@ -627,7 +626,7 @@ bool MDSMetaSystem::IsPrefetchTinyFileData(Ino ino) {
 
 Status MDSMetaSystem::DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
                              FileSessionSPtr file_session) {
-  const std::string session_id = file_session != nullptr
+  const std::string session_id = (file_session != nullptr)
                                      ? file_session->GetSessionID(fh)
                                      : utils::GenerateUUID();
 
@@ -707,47 +706,53 @@ Status MDSMetaSystem::DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
 
 void MDSMetaSystem::AsyncOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
                               FileSessionSPtr file_session) {
-  struct Param {
-    MDSMetaSystem& self;
-    ContextSPtr ctx;
-    Ino ino;
-    int flags;
-    uint64_t fh;
-    FileSessionSPtr file_session;
+  class OpenTask;
+  using OpenTaskPtr = std::shared_ptr<OpenTask>;
+
+  class OpenTask : public TaskRunnable {
+   public:
+    OpenTask(MDSMetaSystem& self, ContextSPtr ctx, Ino ino, int flags,
+             uint64_t fh, FileSessionSPtr file_session)
+        : self_(self),
+          ctx_(ctx),
+          ino_(ino),
+          flags_(flags),
+          fh_(fh),
+          file_session_(file_session) {}
+    ~OpenTask() override = default;
+
+    static OpenTaskPtr New(MDSMetaSystem& self, ContextSPtr ctx, Ino ino,
+                           int flags, uint64_t fh,
+                           FileSessionSPtr file_session) {
+      return std::make_shared<OpenTask>(self, ctx, ino, flags, fh,
+                                        file_session);
+    }
+
+    std::string Type() override { return "OPEN"; }
+    std::string Key() override { return fmt::format("{}:{}", ino_, fh_); }
+
+    void Run() override {
+      auto status = self_.DoOpen(ctx_, ino_, flags_, fh_, file_session_);
+      if (!status.ok()) {
+        LOG(ERROR) << fmt::format(
+            "[meta.fs.{}.{}] async open file fail, error({}).", ino_, fh_,
+            status.ToString());
+        self_.file_session_map_.Delete(ino_, fh_);
+      }
+    }
+
+   private:
+    MDSMetaSystem& self_;
+    ContextSPtr ctx_;
+
+    const Ino ino_;
+    const int flags_;
+    const uint64_t fh_;
+    FileSessionSPtr file_session_;
   };
 
-  Param* param = new Param({.self = *this,
-                            .ctx = ctx,
-                            .ino = ino,
-                            .flags = flags,
-                            .fh = fh,
-                            .file_session = file_session});
-
-  bthread_t tid{0};
-  const bthread_attr_t attr = BTHREAD_ATTR_NORMAL;
-  int ret = bthread_start_background(
-      &tid, &attr,
-      [](void* arg) -> void* {
-        Param* param = reinterpret_cast<Param*>(arg);
-
-        auto status = param->self.DoOpen(param->ctx, param->ino, param->flags,
-                                         param->fh, param->file_session);
-        if (!status.ok()) {
-          LOG(ERROR) << fmt::format(
-              "[meta.fs.{}.{}] async open file fail, error({}).", param->ino,
-              param->fh, status.ToString());
-          param->self.file_session_map_.Delete(param->ino, param->fh);
-        }
-
-        delete param;
-        return nullptr;
-      },
-      param);
-  if (ret != 0) {
-    delete param;
-    LOG(FATAL) << fmt::format("[meta.fs.{}.{}] start bthread fail, error({}).",
-                              ino, fh, strerror(ret));
-  }
+  executor_.ExecuteByHash(
+      ino, OpenTask::New(*this, ctx, ino, flags, fh, file_session), true);
 }
 
 Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
@@ -802,52 +807,55 @@ Status MDSMetaSystem::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {
 
 void MDSMetaSystem::AsyncClose(ContextSPtr ctx, Ino ino, uint64_t fh,
                                const std::string& session_id) {
-  struct Param {
-    MDSClient& mds_client;
-    ContextSPtr ctx;
-    Ino ino;
-    uint64_t fh;
-    std::string session_id;
+  class CloseTask;
+  using CloseTaskPtr = std::shared_ptr<CloseTask>;
 
-    Param(ContextSPtr ctx, MDSClient& mds_client, Ino ino, uint64_t fh,
-          const std::string& session_id)
-        : mds_client(mds_client),
-          ctx(ctx),
-          ino(ino),
-          fh(fh),
-          session_id(session_id) {}
+  class CloseTask : public TaskRunnable {
+   public:
+    CloseTask(MDSMetaSystem& metasystem, MDSClient& mds_client, ContextSPtr ctx,
+              Ino ino, uint64_t fh, const std::string& session_id)
+        : metasystem_(metasystem),
+          mds_client_(mds_client),
+          ctx_(ctx),
+          ino_(ino),
+          fh_(fh),
+          session_id_(session_id) {}
+    ~CloseTask() override = default;
+
+    static CloseTaskPtr New(MDSMetaSystem& metasystem, MDSClient& mds_client,
+                            ContextSPtr ctx, Ino ino, uint64_t fh,
+                            const std::string& session_id) {
+      return std::make_shared<CloseTask>(metasystem, mds_client, ctx, ino, fh,
+                                         session_id);
+    }
+
+    std::string Type() override { return "CLOSE"; }
+    std::string Key() override {
+      return fmt::format("{}:{}:{}", ino_, fh_, session_id_);
+    }
+
+    void Run() override {
+      auto status = mds_client_.Release(ctx_, ino_, session_id_);
+      if (!status.ok()) {
+        LOG(ERROR) << fmt::format("[meta.fs.{}.{}] close file fail, error({}).",
+                                  ino_, fh_, status.ToString());
+      }
+
+      // delete file session
+      metasystem_.file_session_map_.Delete(ino_, fh_);
+    }
+
+   private:
+    MDSMetaSystem& metasystem_;
+    MDSClient& mds_client_;
+    ContextSPtr ctx_;
+    const Ino ino_;
+    const uint64_t fh_;
+    const std::string session_id_;
   };
 
-  // async close file
-  Param* param = new Param(ctx, mds_client_, ino, fh, session_id);
-
-  bthread_t tid;
-  const bthread_attr_t attr = BTHREAD_ATTR_SMALL;
-  int ret = bthread_start_background(
-      &tid, &attr,
-      [](void* arg) -> void* {
-        Param* param = static_cast<Param*>(arg);
-        auto& mds_client = param->mds_client;
-        auto& ctx = param->ctx;
-        auto& ino = param->ino;
-        auto& fh = param->fh;
-        auto& session_id = param->session_id;
-
-        auto status = mds_client.Release(ctx, ino, session_id);
-        if (!status.ok()) {
-          LOG(ERROR) << fmt::format(
-              "[meta.fs.{}.{}] close file fail, error({}).", ino, fh,
-              status.ToString());
-        }
-
-        return nullptr;
-      },
-      param);
-  if (ret != 0) {
-    delete param;
-    LOG(FATAL) << fmt::format("[meta.fs.{}.{}] start bthread fail, error({}).",
-                              ino, fh, strerror(ret));
-  }
+  executor_.ExecuteByHash(
+      ino, CloseTask::New(*this, mds_client_, ctx, ino, fh, session_id), true);
 }
 
 Status MDSMetaSystem::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
@@ -856,9 +864,6 @@ Status MDSMetaSystem::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
   std::string session_id = file_session_map_.GetSessionID(ino, fh);
   CHECK(!session_id.empty())
       << fmt::format("get file session fail, ino({}) fh({}).", ino, fh);
-
-  // clean cache
-  file_session_map_.Delete(ino, fh);
 
   LOG(INFO) << fmt::format("[meta.fs.{}.{}] close file session_id({}).", ino,
                            fh, session_id);
@@ -978,7 +983,8 @@ Status MDSMetaSystem::Write(ContextSPtr, Ino ino, const char* buf,
   CHECK(file_session != nullptr)
       << fmt::format("file session is nullptr, ino({}) fh({}).", ino, fh);
 
-  file_session->GetChunkSet()->SetLastWriteLength(offset, size);
+  auto& chunk_set = file_session->GetChunkSet();
+  chunk_set->SetLastWriteLength(offset, size);
 
   if (FLAGS_vfs_tiny_file_data_enable) {
     // tiny file write data
@@ -991,6 +997,19 @@ Status MDSMetaSystem::Write(ContextSPtr, Ino ino, const char* buf,
 
   // update last modify time
   modify_time_memo_.Remember(ino);
+
+  // check whether need compact chunk
+  // if (FLAGS_vfs_meta_compact_chunk_enable) {
+  //   uint32_t chunk_index = offset / fs_info_.GetChunkSize();
+  //   auto chunk = chunk_set->Get(chunk_index);
+  //   if (chunk != nullptr) {
+  //     auto status = chunk->IsNeedCompaction();
+  //     if (status.ok()) {
+  //       compact_processor_.LaunchCompact(ino, chunk, mds_client_, compactor_,
+  //                                        true);
+  //     }
+  //   }
+  // }
 
   return Status::OK();
 }

@@ -27,6 +27,7 @@
 #include "client/vfs/metasystem/mds/chunk_memo.h"
 #include "client/vfs/metasystem/mds/compact.h"
 #include "client/vfs/metasystem/mds/dir_iterator.h"
+#include "client/vfs/metasystem/mds/executor.h"
 #include "client/vfs/metasystem/mds/file_session.h"
 #include "client/vfs/metasystem/mds/id_cache.h"
 #include "client/vfs/metasystem/mds/inode_cache.h"
@@ -169,6 +170,8 @@ class MDSMetaSystem : public vfs::MetaSystem {
   bool GetDescription(Json::Value& value) override;
 
  private:
+  friend class OpenTask;
+
   bool SetRandomEndpoint();
   bool SetEndpoints();
   bool MountFs();
@@ -228,6 +231,8 @@ class MDSMetaSystem : public vfs::MetaSystem {
   const ClientId client_id_;
 
   mds::FsInfo fs_info_;
+
+  Executor executor_;
 
   MDSClient mds_client_;
 

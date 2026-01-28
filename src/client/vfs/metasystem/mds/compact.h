@@ -19,6 +19,7 @@
 
 #include "client/vfs/compaction/compactor.h"
 #include "client/vfs/metasystem/mds/chunk.h"
+#include "client/vfs/metasystem/mds/executor.h"
 #include "client/vfs/metasystem/mds/mds_client.h"
 #include "client/vfs/vfs_meta.h"
 #include "mds/common/runnable.h"
@@ -76,7 +77,7 @@ class CompactChunkTask : public TaskRunnable {
 
 class CompactProcessor {
  public:
-  CompactProcessor() = default;
+  CompactProcessor(Executor& executor) : executor_(executor) {}
   ~CompactProcessor() = default;
 
   // no copy and move
@@ -91,8 +92,8 @@ class CompactProcessor {
   Status LaunchCompact(Ino ino, ChunkSPtr& chunk, MDSClient& mds_client,
                        Compactor& compactor, bool is_async = true);
 
- public:
-  WorkerSetUPtr worker_set_;
+ private:
+  Executor& executor_;
 };
 
 }  // namespace meta

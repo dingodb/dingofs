@@ -139,7 +139,10 @@ function start() {
         mkdir -p ${mountpoint_dir}
     fi
 
-    dummy_port=$(($RANDOM%20000 + 10000))
+    dummy_port=11000
+    if [ ${index} -gt 1 ]; then
+        dummy_port=$(($RANDOM%20000 + 10000))
+    fi
 
     ${CLIENT_BIN_PATH} ${FLAGS_meta} ${mountpoint_dir} \
     --log_dir=${log_dir} \

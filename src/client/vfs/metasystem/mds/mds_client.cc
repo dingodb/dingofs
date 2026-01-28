@@ -667,6 +667,7 @@ Status MDSClient::Open(
     std::vector<mds::ChunkEntry>& chunks, std::string& data,
     uint64_t& data_version) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
+  CHECK(!session_id.empty()) << "session_id is empty.";
 
   auto get_mds_fn = [this, ino](bool& is_primary_mds) -> MDSMeta {
     return GetMds(ino, is_primary_mds);

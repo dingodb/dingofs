@@ -22,13 +22,6 @@ namespace client {
 namespace vfs {
 namespace meta {
 
-const std::string kCompactWorkerSetName = "compact_worker_set";
-
-DEFINE_uint32(compact_worker_num, 8, "number of compact workers");
-DEFINE_uint32(compact_worker_max_pending_num, 1024,
-              "compact worker max pending num");
-DEFINE_bool(compact_worker_use_pthread, false, "compact worker use pthread");
-
 void CompactChunkTask::Run() {
   auto status = Compact();
   if (!status.ok() && !status.IsNotFit()) {
@@ -101,31 +94,13 @@ Status CompactChunkTask::Compact() {
   return status;
 }
 
-bool CompactProcessor::Init() {
-  worker_set_ = mds::ExecqWorkerSet::NewUnique(
-      kCompactWorkerSetName, FLAGS_compact_worker_num,
-      FLAGS_compact_worker_max_pending_num);
-
-  if (!worker_set_->Init()) {
-    LOG(ERROR) << "init compact worker set fail.";
-    return false;
-  }
-
-  return true;
-}
-
-void CompactProcessor::Stop() { worker_set_->Destroy(); }  // NOLINT
-
-Status CompactProcessor::LaunchCompact(Ino ino, ChunkSPtr& chunk,  // NOLINT
+Status CompactProcessor::LaunchCompact(Ino ino, ChunkSPtr& chunk,
                                        MDSClient& mds_client,
                                        Compactor& compactor, bool is_async) {
   auto task = CompactChunkTask::New(ino, chunk, mds_client, compactor);
 
   int64_t hash_id = ino + chunk->GetIndex();
-  if (!worker_set_->ExecuteHash(hash_id, task)) {
-    LOG(WARNING) << fmt::format(
-        "[meta.compact.{}.{}] commit compact task fail.", ino,
-        chunk->GetIndex());
+  if (!executor_.ExecuteByHash(hash_id, task, false)) {
     return Status::Internal("commit compact task fail");
   }
 
