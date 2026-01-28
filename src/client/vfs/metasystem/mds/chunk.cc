@@ -123,10 +123,6 @@ Status Chunk::IsNeedCompaction(bool check_interval) {
     return Status::NotFit("compact not enabled");
   }
 
-  // if (!is_completed_) {
-  //   return Status::Internal("chunk not completed");
-  // }
-
   if (check_interval) {
     uint64_t now_ms = utils::TimestampMs();
     if (now_ms <

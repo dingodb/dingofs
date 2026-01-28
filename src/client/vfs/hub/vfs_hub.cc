@@ -288,7 +288,7 @@ Status VFSHubImpl::Stop(bool upgrade) {
     return Status::OK();
   }
 
-  LOG(INFO) << fmt::format("[vfs.hub] vfs hub stopping, upgrade({}).", upgrade);
+  LOG(INFO) << fmt::format("[vfs.hub] stopping vfs hub, upgrade({}).", upgrade);
 
   if (handle_manager_ != nullptr) {
     handle_manager_->Stop();
@@ -329,6 +329,8 @@ Status VFSHubImpl::Stop(bool upgrade) {
   if (cb_executor_ != nullptr) {
     cb_executor_->Stop();
   }
+
+  LOG(INFO) << fmt::format("[vfs.hub] stopped vfs hub, upgrade({}).", upgrade);
 
   started_.store(false, std::memory_order_relaxed);
 

@@ -256,6 +256,7 @@ bool InodeCache::Dump(Json::Value& value) {
     item["mtime"] = inode->Mtime();
     item["atime"] = inode->Atime();
     item["version"] = inode->Version();
+    item["maybe_tiny_file"] = inode->MaybeTinyFile();
 
     // parents
     Json::Value parent_array = Json::arrayValue;
@@ -299,6 +300,7 @@ bool InodeCache::Load(const Json::Value& value) {
     attr.set_mtime(item["mtime"].asUInt64());
     attr.set_atime(item["atime"].asUInt64());
     attr.set_version(item["version"].asUInt64());
+    attr.set_maybe_tiny_file(item["maybe_tiny_file"].asBool());
 
     // parents
     for (const auto& parent : item["parents"]) {

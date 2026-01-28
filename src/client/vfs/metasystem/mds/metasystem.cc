@@ -166,11 +166,14 @@ Status MDSMetaSystem::Init(bool upgrade) {
     return Status::Internal("init crontab fail");
   }
 
+  LOG(INFO) << fmt::format("[meta.fs] inited, upgrade({}).", upgrade);
+
   return Status::OK();
 }
 
 void MDSMetaSystem::Stop(bool upgrade) {
-  LOG(INFO) << fmt::format("[meta.fs] stopping, upgrade({}).", upgrade);
+  LOG(INFO) << fmt::format("[meta.fs] stopping metasystem, upgrade({}).",
+                           upgrade);
 
   stopped_.store(true);
 
@@ -186,7 +189,8 @@ void MDSMetaSystem::Stop(bool upgrade) {
 
   mds_client_.Stop();
 
-  LOG(INFO) << fmt::format("[meta.fs] stopped, upgrade({}).", upgrade);
+  LOG(INFO) << fmt::format("[meta.fs] stopped metasystem, upgrade({}).",
+                           upgrade);
 }
 
 bool MDSMetaSystem::GetSummary(Json::Value& value) {
@@ -227,7 +231,7 @@ bool MDSMetaSystem::GetSummary(Json::Value& value) {
 
 // dump state for upgrade
 bool MDSMetaSystem::Dump(ContextSPtr, Json::Value& value) {
-  LOG(INFO) << "[meta.fs] dump...";
+  LOG(INFO) << "[meta.fs] dumping...";
 
   if (!file_session_map_.Dump(value)) {
     return false;
@@ -249,12 +253,18 @@ bool MDSMetaSystem::Dump(ContextSPtr, Json::Value& value) {
     return false;
   }
 
+  if (!inode_cache_.Dump(value)) {
+    return false;
+  }
+
+  LOG(INFO) << "[meta.fs] dumped...";
+
   return true;
 }
 
 // dump state for show
 bool MDSMetaSystem::Dump(const DumpOption& options, Json::Value& value) {
-  LOG(INFO) << "[meta.fs] dump...";
+  LOG(INFO) << "[meta.fs] dumping...";
 
   if (options.file_session) {
     if (options.ino != 0) {
@@ -307,11 +317,17 @@ bool MDSMetaSystem::Dump(const DumpOption& options, Json::Value& value) {
     if (!chunk->Dump(value)) return false;
   }
 
+  LOG(INFO) << "[meta.fs] dumped...";
+
   return true;
 }
 
 bool MDSMetaSystem::Load(ContextSPtr, const Json::Value& value) {
-  LOG(INFO) << "[meta.fs] load...";
+  LOG(INFO) << "[meta.fs] loading...";
+
+  if (!inode_cache_.Load(value)) {
+    return false;
+  }
 
   if (!file_session_map_.Load(value)) {
     return false;
@@ -332,6 +348,8 @@ bool MDSMetaSystem::Load(ContextSPtr, const Json::Value& value) {
   if (!chunk_memo_.Load(value)) {
     return false;
   }
+
+  LOG(INFO) << "[meta.fs] loaded...";
 
   return true;
 }
@@ -654,6 +672,7 @@ Status MDSMetaSystem::DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
   auto status = mds_client_.Open(
       ctx, ino, flags, session_id, is_prefetch_chunk, chunk_descriptors,
       is_prefetch_data, attr_entry, chunks, tiny_file_data, data_version);
+
   LOG(INFO) << fmt::format(
       "[meta.fs.{}.{}] open file flags({:o}:{}) session_id({}) "
       "chunks({}:{}) tiny_file_data({}:{}) status({}).",

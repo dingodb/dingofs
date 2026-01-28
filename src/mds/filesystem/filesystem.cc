@@ -478,7 +478,7 @@ Status FileSystem::GetInodeFromStore(Context& ctx, Ino ino, const std::string& r
       LOG(ERROR) << fmt::format("[fs.{}.{}.{}.{}] fetch inode from store fail, reason({}), status({}).", fs_id_,
                                 method_name, request_id, ino, reason, status.error_str());
     }
-    return status;
+    return Status(status.error_code(), fmt::format("get inode({}) {}.", ino, status.error_str()));
   }
 
   auto& result = operation.GetResult();

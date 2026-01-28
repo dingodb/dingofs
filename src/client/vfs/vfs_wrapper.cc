@@ -166,15 +166,17 @@ Status VFSWrapper::Start(const VFSConfig& vfs_conf) {
 }
 
 Status VFSWrapper::Stop() {
-  LOG(INFO) << "stop vfs wrapper.";
-
   const bool is_upgrade = (FuseUpgradeManager::GetInstance().GetFuseState() ==
                            fuse::FuseUpgradeState::kFuseUpgradeOld);
+
+  LOG(INFO) << fmt::format("stopping vfs wrapper, upgrade({}).", is_upgrade);
 
   Status s;
   AccessLogGuard log(
       [&]() { return absl::StrFormat("stop: %s", s.ToString()); });
   s = vfs_->Stop(is_upgrade);
+
+  LOG(INFO) << fmt::format("stopped vfs wrapper, upgrade({}).", is_upgrade);
 
   if (is_upgrade && !Dump()) {
     return Status::InvalidParam("dump vfs state fail");
