@@ -82,7 +82,7 @@ void BlockCacheServiceImpl::Put(google::protobuf::RpcController* controller,
 
   IOBuffer buffer = IOBuffer(cntl->request_attachment().movable());
   Block block(std::move(buffer));
-  status = CheckBodySize(request->block_size(), buffer.Size());
+  status = CheckBodySize(request->block_size(), block.buffer.Size());
   if (status.ok()) {
     status = node_->Put(ctx, BlockKey(request->block_key()), block);
   }
