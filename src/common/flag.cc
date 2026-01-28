@@ -32,9 +32,9 @@
 
 #include "common/const.h"
 #include "common/helper.h"
+#include "common/options/common.h"
 #include "common/version.h"
 #include "utils/uuid.h"
-
 namespace dingofs {
 
 static std::string RedString(const std::string& str) {
@@ -44,7 +44,27 @@ static std::string RedString(const std::string& str) {
 FlagsInfo FlagsHelper::Parse(int* argc, char*** argv,
                              const FlagExtraInfo& extra_info) {
   FlagsInfo flags;
+
+  auto set_config_file = [&](const char* value) {
+    flags.has_flagfile = true;
+    dingofs::FLAGS_conf = value;
+  };
+
   for (int i = 1; i < *argc; i++) {
+    //  parse --conf
+    if (strncmp((*argv)[i], "--conf=", 7) == 0) {
+      set_config_file((*argv)[i] + 7);
+      continue;
+    }
+
+    if (strcmp((*argv)[i], "--conf") == 0) {
+      if (i + 1 < *argc) {
+        set_config_file((*argv)[i + 1]);
+        i++;
+        continue;
+      }
+    }
+
     if (strcmp((*argv)[i], "-v") == 0 || strcmp((*argv)[i], "--version") == 0) {
       flags.show_version = true;
     } else if (strcmp((*argv)[i], "-h") == 0 ||
@@ -56,19 +76,14 @@ FlagsInfo FlagsHelper::Parse(int* argc, char*** argv,
     }
   }
 
+  if (flags.has_flagfile) {
+    gflags::ReadFromFlagsFile(dingofs::FLAGS_conf, extra_info.program.c_str(),
+                              true);
+  }
+
   if (!flags.show_help && !flags.show_version && !flags.create_template) {
     gflags::ParseCommandLineNonHelpFlags(argc, argv, true);
   }
-  flags.gflags = GetAllGFlags(extra_info.program, extra_info.patterns);
-  flags.extra_info = extra_info;
-  return flags;
-}
-
-FlagsInfo FlagsHelper::ParseFile(const std::string& flagfile,
-                                 const FlagExtraInfo& extra_info) {
-  FlagsInfo flags;
-  gflags::ReadFromFlagsFile(flagfile, extra_info.program.c_str(), true);
-
   flags.gflags = GetAllGFlags(extra_info.program, extra_info.patterns);
   flags.extra_info = extra_info;
   return flags;

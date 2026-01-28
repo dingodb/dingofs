@@ -168,13 +168,6 @@ int main(int argc, char* argv[]) {
     return EXIT_FAILURE;
   }
 
-  // read gflags from conf file
-  if (!dingofs::FLAGS_conf.empty()) {
-    CHECK(dingofs::Helper::IsExistPath(dingofs::FLAGS_conf))
-        << fmt::format("config file {} not exist.", dingofs::FLAGS_conf);
-    dingofs::ParseFromFlagsFile(dingofs::FLAGS_conf, extras);
-  }
-
   // reset brpc flag default value if not set
   dingofs::ResetBrpcFlagDefaultValue();
 

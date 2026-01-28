@@ -43,6 +43,7 @@ struct FlagsInfo {
   bool show_help{false};
   bool show_version{false};
   bool create_template{false};
+  bool has_flagfile{false};
   std::vector<gflags::CommandLineFlagInfo> gflags;
   FlagExtraInfo extra_info;
 };
@@ -53,9 +54,6 @@ class FlagsHelper {
  public:
   static FlagsInfo Parse(int* argc, char*** argv,
                          const FlagExtraInfo& extra_info);
-
-  static FlagsInfo ParseFile(const std::string& flagfile,
-                             const FlagExtraInfo& extra_info);
 
   static std::string GenHelp(const FlagsInfo& flags);
   static std::string GenTemplate(const FlagsInfo& flags);
@@ -87,12 +85,6 @@ static int ParseFlags(int* argc, char*** argv, const FlagExtraInfo& extras) {
   }
 
   return 0;
-}
-
-static void ParseFromFlagsFile(const std::string& flagfile,
-                               const FlagExtraInfo& extra_info) {
-  auto tmpFlags = FlagsHelper::ParseFile(flagfile, extra_info);
-  g_flags.gflags = tmpFlags.gflags;
 }
 
 static std::string GenCurrentFlags() {
