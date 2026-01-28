@@ -48,6 +48,7 @@ Status FileWriter::Open() {
 void FileWriter::Close() {
   std::unique_lock<std::mutex> lg(mutex_);
   if (closed_) {
+    LOG(INFO) << fmt::format("{} FileWriter already closed", uuid_);
     return;
   }
 
@@ -114,7 +115,7 @@ Status FileWriter::Write(ContextSPtr ctx, const char* buf, uint64_t size,
   }
 
   auto span = vfs_hub_->GetTraceManager()->StartChildSpan("FileWriter::Write",
-                                                         ctx->GetTraceSpan());
+                                                          ctx->GetTraceSpan());
 
   uint64_t chunk_size = GetChunkSize();
   CHECK(chunk_size > 0) << "chunk size not allow 0";

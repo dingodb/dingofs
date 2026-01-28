@@ -145,8 +145,6 @@ class VFSImpl : public VFS {
  private:
   Status StartBrpcServer();
 
-  Handle* NewHandle(uint64_t fh, Ino ino, int flags, IFileUPtr file);
-
   const ClientId client_id_;
 
   std::unique_ptr<VFSHub> vfs_hub_;

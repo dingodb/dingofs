@@ -20,7 +20,6 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
-#include <sstream>
 #include <unordered_map>
 
 #include "bvar/reducer.h"
@@ -46,15 +45,15 @@ struct Handle {
   // file ralted
   int32_t flags;
   std::unique_ptr<IFile> file;
+  std::atomic<int64_t> refs{0};
 
   FileBuffer file_buffer;
 
-  std::string ToString() const {
-    std::ostringstream oss;
-    oss << "Handle{ino: " << ino << ", fh; " << fh << ", flags: " << std::oct
-        << flags << "}";
-    return oss.str();
-  }
+  std::string ToString() const;
+
+  void AcquireRef();
+
+  void ReleaseRef();
 };
 
 class HandleManager {
@@ -67,7 +66,10 @@ class HandleManager {
 
   void Stop();
 
-  void AddHandle(std::unique_ptr<Handle> handle);
+  Handle* NewHandle(uint64_t fh, Ino ino, int flags, IFileUPtr file);
+
+  // take the ownership of handle
+  void AddHandle(Handle* handle);
 
   Handle* FindHandler(uint64_t fh);
 
@@ -84,7 +86,7 @@ class HandleManager {
 
   std::mutex mutex_;
   bool stopped_{false};
-  std::unordered_map<uint64_t, std::unique_ptr<Handle>> handles_;
+  std::unordered_map<uint64_t, Handle*> handles_;
 
   // metrics
   bvar::Adder<uint64_t> total_count_{"vfs_handle_total_count"};

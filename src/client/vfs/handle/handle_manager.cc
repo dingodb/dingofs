@@ -20,6 +20,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <sstream>
 
 #include "client/vfs/data/file.h"
 #include "client/vfs/vfs_fh.h"
@@ -29,50 +30,106 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
+std::string Handle::ToString() const {
+  std::ostringstream oss;
+  oss << "Handle{ino: " << ino << ", fh; " << fh << ", flags: " << std::oct
+      << flags << "}";
+  return oss.str();
+}
+
+void Handle::AcquireRef() {
+  int64_t orgin = refs.fetch_add(1);
+  VLOG(12) << fmt::format("handle-{} AcquireRef origin refs: {}", fh, orgin);
+  CHECK_GE(orgin, 0);
+}
+
+void Handle::ReleaseRef() {
+  int64_t copy_fh = fh;
+  int64_t orgin = refs.fetch_sub(1);
+  VLOG(12) << fmt::format("handle-{} ReleaseRef origin refs: {}", copy_fh,
+                          orgin);
+  CHECK_GT(orgin, 0);
+  if (orgin == 1) {
+    delete this;
+  }
+}
+
 HandleManager::~HandleManager() {
   Stop();
+  std::unique_lock<std::mutex> lock(mutex_);
   for (auto& [fh, handle] : handles_) {
-    handle.reset();
+    handle->ReleaseRef();
   }
+  handles_.clear();
 }
 
 Status HandleManager::Start() { return Status::OK(); }
 
 void HandleManager::Stop() {
-  std::unique_lock<std::mutex> lock(mutex_);
-  if (stopped_) {
-    LOG(INFO) << "HandleManager already stopped";
-    return;
-  }
-
-  stopped_ = true;
-
-  for (auto& [fh, handle] : handles_) {
-    if (handle->ino == kStatsIno) {
-      continue;
+  std::vector<Handle*> handles_to_close;
+  {
+    std::unique_lock<std::mutex> lock(mutex_);
+    if (stopped_) {
+      LOG(INFO) << "HandleManager already stopped";
+      return;
     }
 
-    CHECK_NOTNULL(handle->file);
+    stopped_ = true;
+
+    for (auto& [fh, handle] : handles_) {
+      if (handle->ino == kStatsIno) {
+        continue;
+      }
+
+      CHECK_NOTNULL(handle->file);
+      handle->AcquireRef();
+      handles_to_close.push_back(handle);
+    }
+  }
+
+  for (auto* handle : handles_to_close) {
     handle->file->Close();
+    handle->ReleaseRef();
   }
 }
 
-void HandleManager::AddHandle(std::unique_ptr<Handle> handle) {
+Handle* HandleManager::NewHandle(uint64_t fh, Ino ino, int flags,
+                                 IFileUPtr file) {
+  auto* handle = new Handle();
+  handle->fh = fh;
+  handle->ino = ino;
+  handle->flags = flags;
+  handle->file = std::move(file);
+
+  AddHandle(handle);
+
+  return handle;
+}
+
+void HandleManager::AddHandle(Handle* handle) {
   std::lock_guard<std::mutex> lock(mutex_);
-  handles_[handle->fh] = std::move(handle);
+  handle->AcquireRef();
+  handles_[handle->fh] = handle;
 
   total_count_ << 1;
+}
+
+void HandleManager::ReleaseHandler(uint64_t fh) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  auto iter = handles_.find(fh);
+  if (iter == handles_.end()) {
+    LOG(ERROR) << "ReleaseHandler failed, fh not found:" << fh;
+    return;
+  }
+
+  iter->second->ReleaseRef();
+  handles_.erase(iter);
 }
 
 Handle* HandleManager::FindHandler(uint64_t fh) {
   std::lock_guard<std::mutex> lock(mutex_);
   auto it = handles_.find(fh);
-  return (it == handles_.end()) ? nullptr : it->second.get();
-}
-
-void HandleManager::ReleaseHandler(uint64_t fh) {
-  std::lock_guard<std::mutex> lock(mutex_);
-  handles_.erase(fh);
+  return (it == handles_.end()) ? nullptr : it->second;
 }
 
 void HandleManager::Invalidate(uint64_t fh, int64_t offset, int64_t size) {
@@ -88,7 +145,7 @@ void HandleManager::Invalidate(uint64_t fh, int64_t offset, int64_t size) {
     return;
   }
 
-  auto* handle = it->second.get();
+  auto* handle = it->second;
   if (handle->file) {
     handle->file->Invalidate(offset, size);
   } else {
@@ -109,7 +166,7 @@ bool HandleManager::Dump(Json::Value& value) {
   Json::Value handlers = Json::arrayValue;
 
   for (const auto& handle : handles_) {
-    auto* fileHandle = handle.second.get();
+    auto* fileHandle = handle.second;
 
     Json::Value item;
     item["ino"] = fileHandle->ino;
@@ -143,16 +200,10 @@ bool HandleManager::Load(const Json::Value& value) {
     uint64_t fh = handler["fh"].asUInt64();
     uint flags = handler["flags"].asUInt();
 
-    {
-      std::lock_guard<std::mutex> lock(mutex_);
-      auto file_handler = std::make_unique<Handle>();
-      file_handler->ino = ino;
-      file_handler->fh = fh;
-      file_handler->flags = flags;
-      file_handler->file = std::make_unique<File>(vfs_hub_, fh, ino);
+    auto file = std::make_unique<File>(vfs_hub_, fh, ino);
+    file->Open();
 
-      handles_.emplace(file_handler->fh, std::move(file_handler));
-    }
+    auto* hanel = NewHandle(fh, ino, flags, std::move(file));
     max_fh = std::max(max_fh, fh);
   }
 

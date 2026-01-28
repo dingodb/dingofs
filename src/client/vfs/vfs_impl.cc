@@ -234,7 +234,7 @@ Status VFSImpl::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t* fh) {
     auto file_data_ptr = std::make_unique<char[]>(len);
     std::memcpy(file_data_ptr.get(), contents.c_str(), len);
 
-    auto handler = std::make_unique<Handle>();
+    auto* handler = new Handle();
     handler->fh = gfh;
     handler->ino = kStatsIno;
     handler->file_buffer.size = len;
@@ -242,7 +242,7 @@ Status VFSImpl::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t* fh) {
 
     *fh = handler->fh;
 
-    handle_manager_->AddHandle(std::move(handler));
+    handle_manager_->AddHandle(handler);
 
     return Status::OK();
   }
@@ -253,7 +253,7 @@ Status VFSImpl::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t* fh) {
     DINGOFS_RETURN_NOT_OK(file->Open());
 
     // TOOD: if flags is O_RDONLY, no need schedule flush
-    auto* handle = NewHandle(gfh, ino, flags, std::move(file));
+    auto* handle = handle_manager_->NewHandle(gfh, ino, flags, std::move(file));
     *fh = handle->fh;
   }
 
@@ -274,7 +274,7 @@ Status VFSImpl::Create(ContextSPtr ctx, Ino parent, const std::string& name,
     DINGOFS_RETURN_NOT_OK(file->Open());
 
     // TOOD: if flags is O_RDONLY, no need schedule flush
-    auto* handle = NewHandle(gfh, ino, flags, std::move(file));
+    auto* handle = handle_manager_->NewHandle(gfh, ino, flags, std::move(file));
     *fh = handle->fh;
 
     vfs_hub_->GetFileSuffixWatcher()->Remeber(*attr, name);
@@ -692,20 +692,6 @@ Status VFSImpl::StartBrpcServer() {
   }
 
   return Status::OK();
-}
-
-Handle* VFSImpl::NewHandle(uint64_t fh, Ino ino, int flags, IFileUPtr file) {
-  auto handle = std::make_unique<Handle>();
-  handle->fh = fh;
-  handle->ino = ino;
-  handle->flags = flags;
-  handle->file = std::move(file);
-
-  Handle* ret = handle.get();
-
-  handle_manager_->AddHandle(std::move(handle));
-
-  return ret;
 }
 
 }  // namespace vfs
