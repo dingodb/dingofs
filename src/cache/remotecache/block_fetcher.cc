@@ -35,6 +35,7 @@
 #include <memory>
 
 #include "cache/blockcache/cache_store.h"
+#include "cache/common/context.h"
 #include "cache/iutil/bthread.h"
 #include "cache/iutil/cache.h"
 #include "cache/remotecache/upstream.h"
@@ -161,8 +162,9 @@ void BlockFetcher::DoFetch(Task* task) {
       std::min(task->block_length - offset, (size_t)FLAGS_segment_size);
 
   auto* buffer = new IOBuffer();
-  auto status = upstream_->SendRangeRequest(task->block_key, offset, length,
-                                            buffer, task->block_length);
+  auto status =
+      upstream_->SendRangeRequest(NewContext(), task->block_key, offset, length,
+                                  buffer, task->block_length);
   if (status.ok()) {
     OnSuccess(task, status, buffer);
   } else {

@@ -102,11 +102,11 @@ Status RemoteBlockCacheImpl::Shutdown() {
   return Status::OK();
 }
 
-Status RemoteBlockCacheImpl::Put(ContextSPtr /*ctx*/, const BlockKey& key,
+Status RemoteBlockCacheImpl::Put(ContextSPtr ctx, const BlockKey& key,
                                  const Block& block, PutOption /*option*/) {
   DCHECK_RUNNING("RemoteBlockCache");
 
-  auto status = upstream_->SendPutRequest(key, block);
+  auto status = upstream_->SendPutRequest(ctx, key, block);
   if (!status.ok()) {
     LOG(ERROR) << "Fail to put block to remote cache";
   }
@@ -131,7 +131,7 @@ Status RemoteBlockCacheImpl::Range(ContextSPtr ctx, const BlockKey& key,
     status = retriever_->Range(key, offset, length, option.block_whole_length,
                                buffer);
   } else {
-    status = upstream_->SendRangeRequest(key, offset, length, buffer,
+    status = upstream_->SendRangeRequest(ctx, key, offset, length, buffer,
                                          option.block_whole_length);
   }
 
@@ -141,23 +141,23 @@ Status RemoteBlockCacheImpl::Range(ContextSPtr ctx, const BlockKey& key,
   return status;
 }
 
-Status RemoteBlockCacheImpl::Cache(ContextSPtr /*ctx*/, const BlockKey& key,
+Status RemoteBlockCacheImpl::Cache(ContextSPtr ctx, const BlockKey& key,
                                    const Block& block, CacheOption /*option*/) {
   DCHECK_RUNNING("RemoteBlockCache");
 
-  auto status = upstream_->SendCacheRequest(key, block);
+  auto status = upstream_->SendCacheRequest(ctx, key, block);
   if (!status.ok()) {
     LOG(ERROR) << "Fail to cache block to remote cache";
   }
   return status;
 }
 
-Status RemoteBlockCacheImpl::Prefetch(ContextSPtr /*ctx*/, const BlockKey& key,
+Status RemoteBlockCacheImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
                                       size_t length,
                                       PrefetchOption /*option*/) {
   DCHECK_RUNNING("RemoteBlockCache");
 
-  auto status = upstream_->SendPrefetchRequest(key, length);
+  auto status = upstream_->SendPrefetchRequest(ctx, key, length);
   if (!status.ok()) {
     LOG(ERROR) << "Fail to submit prefetch task to remote cache";
   }

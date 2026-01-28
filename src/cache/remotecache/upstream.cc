@@ -86,7 +86,8 @@ void Upstream::Shutdown() {
   LOG(INFO) << "Upstream shutdown";
 }
 
-Status Upstream::SendPutRequest(const BlockKey& key, const Block& block) {
+Status Upstream::SendPutRequest(ContextSPtr /*ctx*/, const BlockKey& key,
+                                const Block& block) {
   Status status;
   UpstreamVarsRecordGuard guard("Put", block.size, status, vars_.get());
 
@@ -106,8 +107,8 @@ Status Upstream::SendPutRequest(const BlockKey& key, const Block& block) {
   return status;
 }
 
-Status Upstream::SendRangeRequest(const BlockKey& key, off_t offset,
-                                  size_t length, IOBuffer* buffer,
+Status Upstream::SendRangeRequest(ContextSPtr ctx, const BlockKey& key,
+                                  off_t offset, size_t length, IOBuffer* buffer,
                                   size_t block_whole_length) {
   Status status;
   UpstreamVarsRecordGuard guard("Range", length, status, vars_.get());
@@ -124,6 +125,7 @@ Status Upstream::SendRangeRequest(const BlockKey& key, off_t offset,
   status = response.status;
   if (status.ok()) {
     *buffer = std::move(response.body);
+    ctx->SetCacheHit(response.raw.cache_hit());
   } else if (status.IsCacheUnhealthy()) {
     LOG_EVERY_SECOND(ERROR) << "Fail to send " << request;
   } else {
@@ -132,7 +134,8 @@ Status Upstream::SendRangeRequest(const BlockKey& key, off_t offset,
   return status;
 }
 
-Status Upstream::SendCacheRequest(const BlockKey& key, const Block& block) {
+Status Upstream::SendCacheRequest(ContextSPtr /*ctx*/, const BlockKey& key,
+                                  const Block& block) {
   Status status;
   UpstreamVarsRecordGuard guard("Cache", block.size, status, vars_.get());
 
@@ -152,7 +155,8 @@ Status Upstream::SendCacheRequest(const BlockKey& key, const Block& block) {
   return status;
 }
 
-Status Upstream::SendPrefetchRequest(const BlockKey& key, size_t length) {
+Status Upstream::SendPrefetchRequest(ContextSPtr /*ctx*/, const BlockKey& key,
+                                     size_t length) {
   Status status;
   UpstreamVarsRecordGuard guard("Prefetch", length, status, vars_.get());
 

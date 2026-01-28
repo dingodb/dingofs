@@ -33,6 +33,7 @@
 #include "cache/common/mds_client.h"
 #include "cache/remotecache/peer_group.h"
 #include "cache/remotecache/request.h"
+#include "common/trace/context.h"
 #include "utils/executor/executor.h"
 
 namespace dingofs {
@@ -97,11 +98,15 @@ class Upstream {
   void Start();
   void Shutdown();
 
-  Status SendPutRequest(const BlockKey& key, const Block& block);
-  Status SendRangeRequest(const BlockKey& key, off_t offset, size_t length,
-                          IOBuffer* buffer, size_t block_whole_length);
-  Status SendCacheRequest(const BlockKey& key, const Block& block);
-  Status SendPrefetchRequest(const BlockKey& key, size_t length);
+  Status SendPutRequest(ContextSPtr ctx, const BlockKey& key,
+                        const Block& block);
+  Status SendRangeRequest(ContextSPtr ctx, const BlockKey& key, off_t offset,
+                          size_t length, IOBuffer* buffer,
+                          size_t block_whole_length);
+  Status SendCacheRequest(ContextSPtr ctx, const BlockKey& key,
+                          const Block& block);
+  Status SendPrefetchRequest(ContextSPtr ctx, const BlockKey& key,
+                             size_t length);
 
   bool Dump(Json::Value& value);
 
