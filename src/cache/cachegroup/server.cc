@@ -104,7 +104,7 @@ Status Server::Shutdown() {
   brpc::AskToQuit();
   auto status = node_->Shutdown();
   if (!status.ok()) {
-    LOG(FATAL) << "Fail to shutdown CacheNode";
+    LOG(ERROR) << "Fail to shutdown CacheNode";
     return status;
   }
 
