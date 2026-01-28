@@ -86,7 +86,7 @@ Status ChunkWriter::Write(ContextSPtr ctx, const char* buf, uint64_t size,
                           uint64_t chunk_offset) {
   CHECK(!stopped_.load(std::memory_order_relaxed));
   auto span = hub_->GetTraceManager()->StartChildSpan("ChunkWriter::Write",
-                                                     ctx->GetTraceSpan());
+                                                      ctx->GetTraceSpan());
 
   uint64_t write_file_offset = chunk_.chunk_start + chunk_offset;
   ChunkWriteInfo info(buf, size, chunk_offset, write_file_offset);
@@ -249,7 +249,7 @@ SliceWriter* ChunkWriter::CreateSliceUnlocked(uint64_t chunk_pos) {
 Status ChunkWriter::CommitSlices(ContextSPtr ctx,
                                  const std::vector<Slice>& slices) {
   return hub_->GetMetaSystem()->WriteSlice(ctx, chunk_.ino, chunk_.index, fh_,
-                                          slices);
+                                           slices);
 }
 
 void ChunkWriter::AsyncCommitSlices(ContextSPtr ctx,
@@ -429,8 +429,7 @@ void ChunkWriter::OnSlicesCommitDone(ContextSPtr ctx,
     }
   }
 
-  // call all flush task callback in flush executor
-  hub_->GetFlushExecutor()->Execute([&, uuid, commit_ctx] {
+  hub_->GetCBExecutor()->Execute([&, uuid, commit_ctx] {
     for (FlushTask* task : commit_ctx->flush_tasks) {
       // if one task fail, all task fail
       task->cb(GetErrorStatus());

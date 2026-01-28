@@ -92,11 +92,14 @@ DEFINE_uint64(vfs_tiny_file_max_size, 1024 * 1024 * 32,
               "max size of tiny file");
 DEFINE_validator(vfs_tiny_file_max_size, brpc::PassValidate);
 
-DEFINE_int32(vfs_flush_thread, 16, "number of background flush threads");
+DEFINE_int32(vfs_flush_thread, 4, "number of background flush threads");
 DEFINE_validator(vfs_flush_thread, brpc::PassValidate);
 
 DEFINE_int32(vfs_read_executor_thread, 16, "number of read executor threads");
 DEFINE_validator(vfs_read_executor_thread, brpc::PassValidate);
+
+DEFINE_int32(vfs_cb_thread, 16, "number of background callback threads");
+DEFINE_validator(vfs_cb_thread, brpc::PassValidate);
 
 DEFINE_int32(vfs_read_max_retry_block_not_found, 10,
              "max retry when block not found");
@@ -117,7 +120,7 @@ DEFINE_uint32(vfs_prefetch_threads, 8, "number of prefetch threads");
 DEFINE_int32(vfs_warmup_threads, 4, "number of warmup threads");
 
 // vfs handle
-DEFINE_int32(vfs_bg_executor_thread, 8, "number of handle backgroud threads");
+DEFINE_int32(vfs_bg_executor_thread, 4, "number of backgroud threads");
 DEFINE_validator(vfs_bg_executor_thread, brpc::PassValidate);
 
 DEFINE_int32(vfs_periodic_flush_interval_ms, 5000,

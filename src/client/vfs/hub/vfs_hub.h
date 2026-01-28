@@ -69,6 +69,8 @@ class VFSHub {
 
   virtual Executor* GetFlushExecutor() = 0;
 
+  virtual Executor* GetCBExecutor() = 0;
+
   virtual WriteBufferManager* GetWriteBufferManager() = 0;
 
   virtual ReadBufferManager* GetReadBufferManager() = 0;
@@ -133,6 +135,11 @@ class VFSHubImpl : public VFSHub {
   Executor* GetFlushExecutor() override {
     CHECK_NOTNULL(flush_executor_);
     return flush_executor_.get();
+  }
+
+  Executor* GetCBExecutor() override {
+    CHECK_NOTNULL(cb_executor_);
+    return cb_executor_.get();
   }
 
   WriteBufferManager* GetWriteBufferManager() override {
@@ -200,6 +207,7 @@ class VFSHubImpl : public VFSHub {
   std::unique_ptr<Executor> read_executor_;
   std::unique_ptr<Executor> bg_executor_;
   std::unique_ptr<Executor> flush_executor_;
+  std::unique_ptr<Executor> cb_executor_;
   std::unique_ptr<WriteBufferManager> write_buffer_manager_;
   std::unique_ptr<ReadBufferManager> read_buffer_manager_;
   std::unique_ptr<FileSuffixWatcher> file_suffix_watcher_;

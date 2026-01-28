@@ -49,7 +49,7 @@ void SliceFlushTask::BlockDataFlushedFromBlockCache(BlockData* block_data,
       "{} BlockDataFlushedFromBlockCache block_data: {}, status: {} ", UUID(),
       block_data->UUID(), status.ToString());
 
-  vfs_hub_->GetFlushExecutor()->Execute(
+  vfs_hub_->GetCBExecutor()->Execute(
       [this, block_data, status]() { BlockDataFlushed(block_data, status); });
 }
 

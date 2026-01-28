@@ -88,6 +88,9 @@ DECLARE_uint64(vfs_write_buffer_total_mb);
 // vfs flush
 DECLARE_int32(vfs_flush_thread);
 
+// vfs callback 
+DECLARE_int32(vfs_cb_thread);
+
 // vfs prefetch
 DECLARE_uint32(vfs_prefetch_blocks);
 DECLARE_uint32(vfs_prefetch_threads);

@@ -48,6 +48,7 @@ namespace vfs {
 static const std::string kFlushExecutorName = "vfs_flush";
 static const std::string kReadExecutorName = "vfs_read";
 static const std::string kBgExecutorName = "vfs_bg";
+static const std::string kCBExecutorName = "vfs_callback";
 
 static MetaSystemUPtr BuildMetaSystem(const VFSConfig& vfs_conf,
                                       const ClientId& client_id,
@@ -231,6 +232,14 @@ Status VFSHubImpl::Start(bool upgrade) {
     }
   }
 
+  {
+    cb_executor_ =
+        std::make_unique<ExecutorImpl>(kCBExecutorName, FLAGS_vfs_cb_thread);
+    if (!cb_executor_->Start()) {
+      return Status::Internal("callback executor start fail");
+    }
+  }
+
   write_buffer_manager_ = std::make_unique<WriteBufferManager>(
       FLAGS_vfs_write_buffer_total_mb * 1024 * 1024,
       FLAGS_vfs_write_buffer_page_size);
@@ -315,6 +324,10 @@ Status VFSHubImpl::Stop(bool upgrade) {
 
   if (trace_manager_ != nullptr) {
     trace_manager_->Stop();
+  }
+
+  if (cb_executor_ != nullptr) {
+    cb_executor_->Stop();
   }
 
   started_.store(false, std::memory_order_relaxed);
