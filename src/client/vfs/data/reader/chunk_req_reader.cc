@@ -159,6 +159,10 @@ void ChunkReqReader::OnBlockReadComplete(ReaderSharedState* shared,
     VLOG(6) << fmt::format(
         "{} Success read block_req: {}, iobuf: {}, io_buf_size: {}", UUID(),
         req->ToString(), req->io_buffer.Describe(), req->io_buffer.Size());
+    CHECK(req->io_buffer.Size() == req->block_req.len) << fmt::format(
+        "{} Read block_req size mismatch, req: {}, io_buf_size: {}, io_buf: {}",
+        UUID(), req->ToString(), req->io_buffer.Size(),
+        req->io_buffer.Describe());
   } else {
     LOG(WARNING) << fmt::format("{} Fail read block_req: {}, status: {}",
                                 UUID(), req->ToString(), s.ToString());
