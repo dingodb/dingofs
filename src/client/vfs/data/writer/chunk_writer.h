@@ -136,14 +136,12 @@ class ChunkWriter {
   SliceWriter* GetSliceUnlocked(uint64_t chunk_pos, uint64_t size);
 
   Status CommitSlices(ContextSPtr ctx, const std::vector<Slice>& slices);
-  void AsyncCommitSlices(ContextSPtr ctx, const std::vector<Slice>& slices,
-                         StatusCallback cb);
-  void OnSlicesCommitDone(ContextSPtr ctx, CommmitContext* commit_ctx, Status s);
 
   void DoSyncFlush();
 
   void DoFlushAsync(StatusCallback cb, uint64_t chunk_flush_id);
   void FlushTaskDone(FlushTask* flush_task, Status s);
+
   void TryCommitFlushTasks(ContextSPtr ctx);
 
   int64_t WritersCount() const {

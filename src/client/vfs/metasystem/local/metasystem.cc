@@ -561,17 +561,6 @@ Status LocalMetaSystem::WriteSlice(ContextSPtr, Ino ino, uint64_t index,
   return Status::OK();
 }
 
-Status LocalMetaSystem::AsyncWriteSlice(ContextSPtr ctx, Ino ino,
-                                        uint64_t index, uint64_t fh,
-                                        const std::vector<Slice>& slices,
-                                        DoneClosure done) {
-  auto status = WriteSlice(ctx, ino, index, fh, slices);
-
-  done(status);
-
-  return Status::OK();
-}
-
 Status LocalMetaSystem::Write(ContextSPtr, Ino ino, const char* buf,
                               uint64_t offset, uint64_t size, uint64_t) {
   const uint32_t fs_id = fs_info_.fs_id();

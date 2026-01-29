@@ -107,9 +107,6 @@ class MetaSystem {
   virtual Status WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                             uint64_t fh, const std::vector<Slice>& slices) = 0;
 
-  virtual Status AsyncWriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
-                                 uint64_t fh, const std::vector<Slice>& slices,
-                                 DoneClosure done) = 0;
   // metasystem record write
   virtual Status Write(ContextSPtr ctx, Ino ino, const char* buf,
                        uint64_t offset, uint64_t size, uint64_t fh) = 0;

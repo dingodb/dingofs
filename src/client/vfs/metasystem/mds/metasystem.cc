@@ -946,28 +946,17 @@ Status MDSMetaSystem::NewSliceId(ContextSPtr, Ino ino, uint64_t* id) {
   return Status::OK();
 }
 
-Status MDSMetaSystem::WriteSlice(ContextSPtr, Ino ino, uint64_t index,
-                                 uint64_t fh, const std::vector<Slice>&) {
-  LOG(FATAL) << fmt::format("[meta.fs.{}.{}.{}] writeslice missing cache.", ino,
-                            fh, index);
-  return Status::OK();
-}
-
-Status MDSMetaSystem::AsyncWriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
-                                      uint64_t fh,
-                                      const std::vector<Slice>& slices,
-                                      DoneClosure done) {
+Status MDSMetaSystem::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
+                                 uint64_t fh, const std::vector<Slice>& slices) {
   AssertStop();
 
-  LOG(INFO) << fmt::format("[meta.fs.{}.{}.{}] async writeslice, slices({}).",
+  VLOG(1) << fmt::format("[meta.fs.{}.{}.{}] writeslice, slices({}).",
                            ino, fh, index, Helper::ToString(slices));
 
   auto chunk_set = chunk_cache_.GetOrCreate(ino);
   chunk_set->Append(index, slices);
 
   AsyncFlushSlice(ctx, chunk_set, false, false);
-
-  done(Status::OK());
 
   return Status::OK();
 }

@@ -118,9 +118,6 @@ class MDSMetaSystem : public vfs::MetaSystem {
 
   Status WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index, uint64_t fh,
                     const std::vector<Slice>& slices) override;
-  Status AsyncWriteSlice(ContextSPtr ctx, Ino ino, uint64_t index, uint64_t fh,
-                         const std::vector<Slice>& slices,
-                         DoneClosure done) override;
   Status Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t offset,
                uint64_t size, uint64_t fh) override;
 

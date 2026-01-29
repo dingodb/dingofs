@@ -84,31 +84,6 @@ Status MetaWrapper::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
   return s;
 }
 
-Status MetaWrapper::AsyncWriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
-                                    uint64_t fh,
-                                    const std::vector<Slice>& slices,
-                                    DoneClosure done) {
-  uint64_t start_us = butil::cpuwide_time_us();
-  uint64_t slice_count = slices.size();
-
-  auto wrapped_done = [this, start_us, slice_count, ctx = std::move(ctx), ino,
-                       index, fh,
-                       done = std::move(done)](const Status& status) {
-    MetaLogGuard log_guard(start_us, [&]() {
-      return absl::StrFormat("async_write_slice (%d,%d,%d): %s %d", ino, index,
-                             fh, status.ToString(), slice_count);
-    });
-
-    metrics::client::SliceMetricGuard guard(
-        &status, &slice_metric_->write_slice, start_us);
-
-    done(status);
-  };
-
-  return target_->AsyncWriteSlice(ctx, ino, index, fh, slices,
-                                  std::move(wrapped_done));
-}
-
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
