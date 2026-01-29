@@ -279,10 +279,14 @@ bool InodeCache::Dump(Json::Value& value) {
   }
   value["inodes"] = inode_array;
 
+  LOG(INFO) << fmt::format("[meta.icache] dump inode count({}).",
+                           inodes.size());
+
   return true;
 }
 
 bool InodeCache::Load(const Json::Value& value) {
+  size_t count = 0;
   for (const auto& item : value["inodes"]) {
     AttrEntry attr;
     attr.set_ino(item["ino"].asUInt64());
@@ -314,7 +318,10 @@ bool InodeCache::Load(const Json::Value& value) {
     }
 
     Put(attr.ino(), attr);
+    ++count;
   }
+
+  LOG(INFO) << fmt::format("[meta.icache] load inode count({}).", count);
 
   return true;
 }

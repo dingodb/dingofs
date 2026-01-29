@@ -214,10 +214,15 @@ bool ParentMemo::Dump(Json::Value& value) {
   }
   value["parent_memo"] = items;
 
+  LOG(INFO) << fmt::format("[meta.parent_memo] dump parent memo count({}).",
+                           ino_map_copy.size());
+
   return true;
 }
 
 bool ParentMemo::Load(const Json::Value& value) {
+  if (value.isNull()) return true;
+
   const Json::Value& items = value["parent_memo"];
   if (!items.isArray()) {
     LOG(ERROR) << "[meta.parent_memo] value is not an array.";
@@ -232,6 +237,9 @@ bool ParentMemo::Load(const Json::Value& value) {
 
     UpsertEntry(ino, Entry{parent, version, rename_ref_count});
   }
+
+  LOG(INFO) << fmt::format("[meta.parent_memo] load parent memo count({}).",
+                           items.size());
 
   return true;
 }

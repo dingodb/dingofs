@@ -14,6 +14,7 @@
 
 #include "client/vfs/metasystem/mds/modify_time_memo.h"
 
+#include "fmt/format.h"
 #include "utils/time.h"
 
 namespace dingofs {
@@ -93,10 +94,15 @@ bool ModifyTimeMemo::Dump(Json::Value& value) {
 
   value["modify_time_memo"] = items;
 
+  LOG(INFO) << fmt::format(
+      "[meta.modify_time_memo] dump modify time memo count({}).", items.size());
+
   return true;
 }
 
 bool ModifyTimeMemo::Load(const Json::Value& value) {
+  if (value.isNull()) return true;
+
   const Json::Value& items = value["modify_time_memo"];
   if (!items.isArray()) {
     LOG(ERROR) << "[meta.modify_time_memo] value is not an array.";
@@ -112,6 +118,9 @@ bool ModifyTimeMemo::Load(const Json::Value& value) {
         [ino, modify_time_ns](Map& map) mutable { map[ino] = modify_time_ns; },
         ino);
   }
+
+  LOG(INFO) << fmt::format(
+      "[meta.modify_time_memo] load modify time memo count({}).", items.size());
 
   return true;
 }

@@ -191,7 +191,6 @@ class MDSMetaSystem : public vfs::MetaSystem {
   InodeSPtr GetInodeFromCache(Ino ino) { return inode_cache_.Get(ino); }
 
   // chunk cache
-  Status SetInodeLength(ContextSPtr ctx, Ino ino, ChunkSetSPtr& chunk_set);
   Status FlushFile(ContextSPtr ctx, InodeSPtr& inode, ChunkSetSPtr& chunk_set);
   void LaunchWriteSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
                         CommitTaskSPtr task);

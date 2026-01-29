@@ -712,6 +712,9 @@ bool ChunkCache::Dump(Json::Value& value, bool is_summary) {
 
   value["chunk_cache"] = items;
 
+  LOG(INFO) << fmt::format("[meta.chunkcache] dump chunkset count({}).",
+                           chunksets.size());
+
   return true;
 }
 

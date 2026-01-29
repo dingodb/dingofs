@@ -280,6 +280,9 @@ bool DirIteratorManager::Dump(Json::Value& value) {
 
   value["dir_iterators_map"] = items;
 
+  LOG(INFO) << fmt::format("[meta.dir_iterator] dump dir iterator count({}).",
+                           all_dir_iteratorset.size());
+
   return true;
 }
 
@@ -312,6 +315,9 @@ bool DirIteratorManager::Load(MDSClient& mds_client, const Json::Value& value) {
 
     Put(ino, dir_iterator_set);
   }
+
+  LOG(INFO) << fmt::format("[meta.dir_iterator] load dir iterator count({}).",
+                           items.size());
 
   return true;
 }

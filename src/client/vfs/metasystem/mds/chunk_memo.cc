@@ -147,6 +147,9 @@ bool ChunkMemo::Dump(Json::Value& value) {
   }
   value["chunk_memo"] = items;
 
+  LOG(INFO) << fmt::format("[meta.chunk_memo] dump chunk memo count({}).",
+                           chunk_map_copy.size());
+
   return true;
 }
 
@@ -166,6 +169,9 @@ bool ChunkMemo::Load(const Json::Value& value) {
 
     Remember(ino, chunk_index, version);
   }
+
+  LOG(INFO) << fmt::format("[meta.chunk_memo] load chunk memo count({}).",
+                           items.size());
 
   return true;
 }

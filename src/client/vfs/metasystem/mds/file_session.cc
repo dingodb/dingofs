@@ -287,6 +287,9 @@ bool FileSessionMap::Dump(Json::Value& value) {
 
   value["file_sessions"] = file_sessions_items;
 
+  LOG(INFO) << fmt::format("[meta.filesession] dump file session count({}).",
+                           file_sessions.size());
+
   return true;
 }
 
@@ -315,6 +318,9 @@ bool FileSessionMap::Load(const Json::Value& value) {
 
       Put(file_session);
     }
+
+    LOG(INFO) << fmt::format("[meta.filesession] load file session count({}).",
+                             file_sessions.size());
   }
 
   return true;
