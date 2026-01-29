@@ -299,6 +299,7 @@ Status CacheNode::RetrieveWholeBlock(ContextSPtr ctx,
 
   bool finished = task->Wait(FLAGS_retrieve_storage_lock_timeout_ms);
   if (finished) {
+    *buffer = *(task->buffer);
     return task->status;
   }
 
