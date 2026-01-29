@@ -159,7 +159,7 @@ void PeerHealthChecker::CheckPeer() {
     state_machine_->Success();
   } else {
     state_machine_->Error();
-    LOG(ERROR) << "Fail to check peer";
+    LOG(ERROR) << "Fail to check peer health";
   }
 }
 

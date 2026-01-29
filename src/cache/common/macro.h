@@ -24,6 +24,7 @@
 #define DINGOFS_SRC_CACHE_COMMON_MACRO_H_
 
 #include <absl/strings/str_format.h>
+
 namespace dingofs {
 namespace cache {
 
@@ -34,9 +35,6 @@ namespace cache {
 #define DCHECK_RUNNING(service_name)               \
   DCHECK(running_.load(std::memory_order_relaxed)) \
       << (service_name) << " is not running"
-
-#define DISK_CACHE_BVAR(index, name) \
-  absl::StrFormat("dingofs_disk_cache_%d_%s", index, name)
 
 }  // namespace cache
 }  // namespace dingofs

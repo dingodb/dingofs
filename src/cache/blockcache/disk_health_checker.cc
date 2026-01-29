@@ -73,7 +73,8 @@ DiskHealthChecker::DiskHealthChecker(DiskCacheLayoutSPtr layout)
       layout_(layout),
       state_machine_(std::make_unique<iutil::StateMachineImpl>(Configure())),
       executor_(std::make_unique<BthreadExecutor>()),
-      health_status_(DISK_CACHE_BVAR(layout->CacheIndex(), "health_status"),
+      health_status_(absl::StrFormat("dingofs_disk_cache_%d_health_status",
+                                     layout->CacheIndex()),
                      "unknown") {}
 
 void DiskHealthChecker::Start() {

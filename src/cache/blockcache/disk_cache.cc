@@ -287,7 +287,6 @@ Status DiskCache::Load(ContextSPtr ctx, const BlockKey& key, off_t offset,
     return status;
   }
 
-  ctx->slice_id_ = key.id;
   auto cache_path = GetCachePath(key);
   status = localfs_->ReadFile(ctx, cache_path, offset, length, buffer);
   if (status.IsNotFound()) {  // Delete block which meybe deleted by accident.

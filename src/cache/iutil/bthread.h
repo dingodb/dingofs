@@ -40,6 +40,7 @@ class BthreadJoiner {
  public:
   BthreadJoiner();
   ~BthreadJoiner();
+
   void Start();
   void Shutdown();
 

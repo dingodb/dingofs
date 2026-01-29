@@ -25,6 +25,8 @@
 #include <bthread/types.h>
 #include <glog/logging.h>
 
+#include <atomic>
+
 #include "cache/common/macro.h"
 
 namespace dingofs {
@@ -41,7 +43,7 @@ bthread_t RunInBthread(std::function<void()> func) {
   bthread_t tid;
   const bthread_attr_t attr = BTHREAD_ATTR_NORMAL;
   auto* arg = new FuncArg(func);
-  int rc = bthread_start_background(  // It costs about 100~200 ns
+  int rc = bthread_start_background(
       &tid, &attr,
       [](void* arg) -> void* {
         FuncArg* func_arg = reinterpret_cast<FuncArg*>(arg);
@@ -67,7 +69,7 @@ BthreadJoiner::BthreadJoiner() : running_(false), queue_id_({0}) {}
 BthreadJoiner::~BthreadJoiner() { Shutdown(); }
 
 void BthreadJoiner::Start() {
-  if (running_.exchange(true)) {
+  if (running_.load(std::memory_order_relaxed)) {
     LOG(WARNING) << "BthreadJoiner is already running";
     return;
   }
@@ -77,15 +79,14 @@ void BthreadJoiner::Start() {
   bthread::ExecutionQueueOptions queue_options;
   queue_options.use_pthread = true;
   CHECK_EQ(0, bthread::execution_queue_start(&queue_id_, &queue_options,
-                                             HandleTid, this))
-      << "Fail to start ExecutionQueue";
+                                             HandleTid, this));
 
-  LOG(INFO) << "BthreadJoiner is up";
+  running_.store(true, std::memory_order_relaxed);
+  LOG(INFO) << "Successfully start BthreadJoiner";
 }
 
 void BthreadJoiner::Shutdown() {
-  if (!running_.exchange(false)) {
-    LOG(WARNING) << "BthreadJoiner is already down";
+  if (!running_.load(std::memory_order_relaxed)) {
     return;
   }
 
@@ -94,7 +95,8 @@ void BthreadJoiner::Shutdown() {
   CHECK_EQ(0, bthread::execution_queue_stop(queue_id_));
   CHECK_EQ(0, bthread::execution_queue_join(queue_id_));
 
-  LOG(INFO) << "BthreadJoiner is down";
+  running_.store(false, std::memory_order_relaxed);
+  LOG(INFO) << "Successfully shutdown BthreadJoiner";
 }
 
 void BthreadJoiner::BackgroundJoin(bthread_t tid) {

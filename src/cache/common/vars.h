@@ -20,8 +20,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_COMMON_BVAR_H_
-#define DINGOFS_SRC_CACHE_COMMON_BVAR_H_
+#ifndef DINGOFS_SRC_CACHE_COMMON_VARS_H_
+#define DINGOFS_SRC_CACHE_COMMON_VARS_H_
 
 #include <bvar/latency_recorder.h>
 #include <bvar/reducer.h>
@@ -30,28 +30,28 @@ namespace dingofs {
 namespace cache {
 
 // e.g.
-//   (dingofs_disk_cache_op_stage, error) will generate:
-//     dingofs_disk_cache_op_stage_total_error
-//     dingofs_disk_cache_op_stage_error_per_second
+// PerSecondVar(dingofs_disk_cache_op_stage, error) will create below vars:
+//   dingofs_disk_cache_op_stage_total_error
+//   dingofs_disk_cache_op_stage_error_per_second
 struct PerSecondVar {
-  bvar::Adder<uint64_t> total_count;                  // total count
-  bvar::PerSecond<bvar::Adder<uint64_t>> per_second;  // average count persecond
-
   PerSecondVar(const std::string& opname, const std::string& itemname)
       : total_count(opname, "total_" + itemname),
         per_second(opname, itemname + "_per_second", &total_count, 1) {}
+
+  bvar::Adder<uint64_t> total_count;                  // total count
+  bvar::PerSecond<bvar::Adder<uint64_t>> per_second;  // average count persecond
 };
 
 // e.g.
-//   (dingofs_disk_cache_op_stage) will generate:
-//     dingofs_disk_cache_op_stage_total_op
-//     dingofs_disk_cache_op_stage_op_per_second
-//     dingofs_disk_cache_op_stage_total_bytes
-//     dingofs_disk_cache_op_stage_bytes_per_second
-//     dingofs_disk_cache_op_stage_total_error
-//     dingofs_disk_cache_op_stage_error_per_second
-//     dingofs_disk_cache_op_stage_lat
-//     dingofs_disk_cache_op_stage_total_lat
+// OpVar(dingofs_disk_cache_op_stage) will create below vars:
+//   dingofs_disk_cache_op_stage_total_op
+//   dingofs_disk_cache_op_stage_op_per_second
+//   dingofs_disk_cache_op_stage_total_bytes
+//   dingofs_disk_cache_op_stage_bytes_per_second
+//   dingofs_disk_cache_op_stage_total_error
+//   dingofs_disk_cache_op_stage_error_per_second
+//   dingofs_disk_cache_op_stage_lat
+//   dingofs_disk_cache_op_stage_total_lat
 struct OpVar {
   OpVar(const std::string& opname)
       : op_per_second(opname, "op"),
@@ -70,4 +70,4 @@ struct OpVar {
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_COMMON_BVAR_H_
+#endif  // DINGOFS_SRC_CACHE_COMMON_VARS_H_

@@ -41,12 +41,13 @@ namespace cache {
 class CacheNode {
  public:
   CacheNode();
+
   Status Start();
   Status Shutdown();
 
   Status Put(ContextSPtr ctx, const BlockKey& key, const Block& block);
   Status Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
-               size_t length, IOBuffer* buffer, size_t block_whole_length);
+               size_t length, IOBuffer* buffer, size_t block_length);
   Status AsyncCache(ContextSPtr ctx, const BlockKey& key, const Block& block);
   Status AsyncPrefetch(ContextSPtr ctx, const BlockKey& key, size_t length);
 
@@ -59,18 +60,14 @@ class CacheNode {
   Status RetrieveCache(ContextSPtr ctx, const BlockKey& key, off_t offset,
                        size_t length, IOBuffer* buffer);
   Status RetrieveStorage(ContextSPtr ctx, const BlockKey& key, off_t offset,
-                         size_t length, IOBuffer* buffer,
-                         size_t block_whole_length);
-  Status RetrievePartBlock(ContextSPtr ctx, StorageClient* storage_client,
-                           const BlockKey& key, off_t offset, size_t length,
-                           size_t block_whole_length, IOBuffer* buffer);
-  Status RetrieveWholeBlock(ContextSPtr ctx, StorageClient* storage_client,
-                            const BlockKey& key, size_t length,
-                            IOBuffer* buffer);
-
-  Status RunTask(DownloadTaskSPtr task);
+                         size_t length, IOBuffer* buffer, size_t block_length);
+  Status RetrievePartBlock(ContextSPtr ctx, const BlockKey& key, off_t offset,
+                           size_t length, IOBuffer* buffer,
+                           size_t block_length);
+  Status RetrieveWholeBlock(ContextSPtr ctx, const BlockKey& key,
+                            size_t block_length, IOBuffer* buffer);
+  Status RunTask(StorageClient* storage_client, DownloadTaskSPtr task);
   Status WaitTask(DownloadTaskSPtr task);
-  void AsyncCache(DownloadTaskSPtr task, bool remove_task);
 
  private:
   std::atomic<bool> running_;

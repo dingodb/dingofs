@@ -37,22 +37,15 @@ class Context {
  public:
   Context() : trace_id_(NewTraceId()) {}
   Context(const std::string& trace_id) : trace_id_(trace_id) {}
-  Context(const std::string& trace_id, const std::string& sub_trace_id_)
-      : trace_id_(trace_id), sub_trace_id_(sub_trace_id_) {}
 
   std::string TraceId() const { return trace_id_; }
-  std::string SubTraceId() const { return sub_trace_id_; }
   void SetCacheHit(bool cache_hit) { cache_hit_ = cache_hit; }
   bool GetCacheHit() const { return cache_hit_; }
-
- public:
-  uint64_t slice_id_;
 
  private:
   std::string NewTraceId() { return std::to_string(butil::cpuwide_time_ns()); }
 
   const std::string trace_id_;
-  const std::string sub_trace_id_;
   bool cache_hit_{false};
 };
 

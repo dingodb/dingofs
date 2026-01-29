@@ -29,8 +29,8 @@
 #include <memory>
 
 #include "cache/blockcache/cache_store.h"
-#include "cache/common/bvar.h"
 #include "cache/common/mds_client.h"
+#include "cache/common/vars.h"
 #include "cache/remotecache/peer_group.h"
 #include "cache/remotecache/request.h"
 #include "common/trace/context.h"

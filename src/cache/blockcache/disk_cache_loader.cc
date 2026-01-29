@@ -41,7 +41,8 @@ DiskCacheLoader::DiskCacheLoader(DiskCacheLayoutSPtr layout,
     : running_(false),
       layout_(layout),
       manager_(manager),
-      load_status_(DISK_CACHE_BVAR(layout->CacheIndex(), "load_status"),
+      load_status_(absl::StrFormat("dingofs_disk_cache_%d_load_status",
+                                   layout->CacheIndex()),
                    "down") {}
 
 void DiskCacheLoader::Start(const std::string& disk_id,

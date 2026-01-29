@@ -313,7 +313,7 @@ void DiskCacheManager::DeleteBlocks(const ToDel& to_del) {
     std::string cache_path = GetCachePath(key);
     auto status = iutil::Unlink(cache_path);
     if (status.IsNotFound()) {
-      LOG(WARNING) << "Block file already deleted: path = " << cache_path;
+      LOG(WARNING) << "Block file already deleted, path=" << cache_path;
       continue;
     } else if (!status.ok()) {
       LOG(ERROR) << "Delete block file failed for " << to_del.reason

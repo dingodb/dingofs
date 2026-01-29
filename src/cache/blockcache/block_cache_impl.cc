@@ -147,7 +147,7 @@ Status BlockCacheImpl::Shutdown() {
   store_->Shutdown();
 
   running_.store(false, std::memory_order_relaxed);
-  LOG(INFO) << "BlockCacheImpl is down";
+  LOG(INFO) << "Successfully shutdown BlockCacheImpl";
   return Status::OK();
 }
 

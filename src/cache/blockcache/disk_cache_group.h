@@ -26,8 +26,8 @@
 #include "cache/blockcache/cache_store.h"
 #include "cache/blockcache/disk_cache.h"
 #include "cache/blockcache/disk_cache_watcher.h"
-#include "cache/common/bvar.h"
 #include "cache/common/context.h"
+#include "cache/common/vars.h"
 #include "cache/iutil/con_hash.h"
 
 namespace dingofs {

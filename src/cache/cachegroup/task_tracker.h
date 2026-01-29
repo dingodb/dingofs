@@ -28,10 +28,10 @@
 
 #include <cstddef>
 #include <memory>
+#include <ostream>
 #include <unordered_map>
 
 #include "cache/blockcache/cache_store.h"
-#include "cache/common/closure.h"
 #include "cache/common/context.h"
 #include "cache/common/storage_client.h"
 #include "common/io_buffer.h"
@@ -40,42 +40,45 @@
 namespace dingofs {
 namespace cache {
 
-struct DownloadTask {
-  DownloadTask(ContextSPtr ctx, StorageClient* storage_client,
-               const BlockKey& key, size_t length, IOBuffer* buffer)
-      : ctx(ctx),
-        storage_client(storage_client),
-        key(key),
-        length(length),
-        buffer(buffer) {}
+class DownloadTask {
+ public:
+  struct Attr {
+    ContextSPtr ctx;
+    BlockKey key;
+    size_t length;
+  };
 
-  // Pls gurantee that Run() is called by the task owner.
+  struct Result {
+    Status status;
+    IOBuffer buffer;
+  };
+
+  DownloadTask(ContextSPtr ctx, const BlockKey& key, size_t length)
+      : attr_{ctx, key, length}, result_{} {}
+
+  Attr& Attr() { return attr_; }
+  Result& Result() { return result_; }
+
   void Run() {
-    status = storage_client->Range(ctx, key, 0, length, buffer);
-    std::lock_guard<bthread::Mutex> lock(mutex);
-    finish = true;
-    cond.notify_all();
+    std::lock_guard<bthread::Mutex> lock(mutex_);
+    finish_ = true;
+    cond_.notify_all();
   }
 
   bool Wait(long timeout_ms) {
-    std::unique_lock<bthread::Mutex> lock(mutex);
-    if (!finish) {
-      cond.wait_for(lock, timeout_ms * 1000);
+    std::unique_lock<bthread::Mutex> lock_(mutex_);
+    if (!finish_) {
+      cond_.wait_for(lock_, timeout_ms * 1000);
     }
-    return finish;
+    return finish_;
   }
 
-  ContextSPtr ctx;
-  StorageClient* storage_client;
-  BlockKey key;
-  size_t length;
-  IOBuffer* buffer;
-  Status status;
-
-  // FIXME: make members private?
-  bool finish{false};
-  bthread::Mutex mutex;
-  bthread::ConditionVariable cond;
+ private:
+  struct Attr attr_;
+  struct Result result_;
+  bool finish_{false};
+  bthread::Mutex mutex_;
+  bthread::ConditionVariable cond_;
 };
 
 using DownloadTaskSPtr = std::shared_ptr<DownloadTask>;
@@ -85,8 +88,7 @@ class TaskTracker {
   TaskTracker() = default;
 
   // return true if new task created
-  bool GetOrCreateTask(ContextSPtr ctx, StorageClient* storage_client,
-                       const BlockKey& key, size_t length, IOBuffer* buffer,
+  bool GetOrCreateTask(ContextSPtr ctx, const BlockKey& key, size_t length,
                        DownloadTaskSPtr& task) {
     std::lock_guard<bthread::Mutex> lock(mutex_);
     auto iter = tasks_.find(key.Filename());
@@ -95,8 +97,7 @@ class TaskTracker {
       return false;
     }
 
-    task = std::make_shared<DownloadTask>(ctx, storage_client, key, length,
-                                          buffer);
+    task = std::make_shared<DownloadTask>(ctx, key, length);
     tasks_[key.Filename()] = task;
     return true;
   }
@@ -112,6 +113,13 @@ class TaskTracker {
 };
 
 using TaskTrackerUPtr = std::unique_ptr<TaskTracker>;
+
+inline std::ostream& operator<<(std::ostream& os,
+                                const DownloadTaskSPtr& task) {
+  os << "DownloadTask{key=" << task->Attr().key.Filename()
+     << " length=" << task->Attr().length << "}";
+  return os;
+}
 
 }  // namespace cache
 }  // namespace dingofs
