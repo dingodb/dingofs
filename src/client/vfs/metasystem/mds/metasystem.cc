@@ -897,59 +897,60 @@ Status MDSMetaSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                                 uint64_t& version) {
   AssertStop();
 
-  // take from cache
   auto file_session = file_session_map_.GetSession(ino);
-  if (file_session != nullptr) {
-    auto chunk = file_session->GetChunkSet()->Get(index);
+  CHECK(file_session != nullptr)
+      << fmt::format("file session is nullptr, ino({}) fh({}).", ino, fh);
+
+  auto chunk_set = file_session->GetChunkSet();
+
+  do {
+    auto chunk = chunk_set->Get(index);
     if (chunk != nullptr && chunk->IsCompleted()) {
       *slices = chunk->GetAllSlice(version);
       // ctx->hit_cache = true;
 
       LOG_DEBUG << fmt::format(
-          "[meta.fs.{}.{}.{}] readslice from cache, version({}) slices({}).",
-          ino, fh, index, version, Helper::ToString(*slices));
+          "[meta.fs.{}.{}.{}] readslice, version({}) slices({}).", ino, fh,
+          index, version, Helper::ToString(*slices));
       return Status::OK();
     }
-  }
-  // set chunk version
-  mds::ChunkDescriptor chunk_descriptor;
-  chunk_descriptor.set_index(static_cast<uint32_t>(index));
-  chunk_descriptor.set_version(
-      chunk_memo_.GetVersion(ino, static_cast<uint32_t>(index)));
 
-  std::vector<mds::ChunkEntry> chunks;
-  auto status = mds_client_.ReadSlice(ctx, ino, {chunk_descriptor}, chunks);
-  if (!status.ok()) {
-    LOG(ERROR) << fmt::format("[meta.fs.{}.{}.{}] reeadslice fail, error({}).",
-                              ino, fh, index, status.ToString());
-    return status;
-  }
+    // set chunk version
+    mds::ChunkDescriptor chunk_descriptor;
+    chunk_descriptor.set_index(static_cast<uint32_t>(index));
+    chunk_descriptor.set_version(
+        chunk_memo_.GetVersion(ino, static_cast<uint32_t>(index)));
 
-  // not found chunk, return empty slice
-  if (chunks.empty()) {
-    mds::ChunkEntry chunk_entry;
-    chunk_entry.set_index(index);
-    chunk_entry.set_chunk_size(fs_info_.GetChunkSize());
-    chunk_entry.set_block_size(fs_info_.GetBlockSize());
-    chunk_entry.set_version(0);
-    chunks.push_back(chunk_entry);
-  }
+    std::vector<mds::ChunkEntry> chunks;
+    auto status = mds_client_.ReadSlice(ctx, ino, {chunk_descriptor}, chunks);
+    if (!status.ok()) {
+      LOG(ERROR) << fmt::format(
+          "[meta.fs.{}.{}.{}] reeadslice fail, error({}).", ino, fh, index,
+          status.ToString());
+      return status;
+    }
 
-  // update cache
-  if (file_session != nullptr)
-    file_session->GetChunkSet()->Put(chunks, "readslice");
+    // not found chunk, return empty slice
+    if (chunks.empty()) {
+      mds::ChunkEntry chunk_entry;
+      chunk_entry.set_index(index);
+      chunk_entry.set_chunk_size(fs_info_.GetChunkSize());
+      chunk_entry.set_block_size(fs_info_.GetBlockSize());
+      chunk_entry.set_version(0);
+      chunks.push_back(chunk_entry);
+    }
 
-  const auto& chunk_entry = chunks.front();
-  for (const auto& slice : chunk_entry.slices()) {
-    slices->emplace_back(Helper::ToSlice(slice));
-  }
-  version = chunk_entry.version();
+    // update cache
+    chunk_set->Put(chunks, "readslice");
+    // update chunk memo
+    for (const auto& chunk : chunks) {
+      chunk_memo_.Remember(ino, chunk.index(), chunk.version());
 
-  chunk_memo_.Remember(ino, index, version);
+      LOG(INFO) << fmt::format("[meta.fs.{}.{}.{}] fetch slice, version({}).",
+                               ino, fh, index, chunk.version());
+    }
 
-  LOG(INFO) << fmt::format(
-      "[meta.fs.{}.{}.{}] readslice from server, version({}) slices({}).", ino,
-      fh, index, version, Helper::ToString(*slices));
+  } while (true);
 
   return Status::OK();
 }
@@ -970,8 +971,8 @@ Status MDSMetaSystem::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
                                  const std::vector<Slice>& slices) {
   AssertStop();
 
-  VLOG(1) << fmt::format("[meta.fs.{}.{}.{}] writeslice, slices({}).", ino, fh,
-                         index, Helper::ToString(slices));
+  LOG_DEBUG << fmt::format("[meta.fs.{}.{}.{}] writeslice, slices({}).", ino,
+                           fh, index, Helper::ToString(slices));
 
   auto chunk_set = chunk_cache_.GetOrCreate(ino);
   chunk_set->Append(index, slices);
@@ -1540,8 +1541,8 @@ void MDSMetaSystem::AsyncFlushSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
     for (auto& chunk : chunks) {
       auto status = chunk->IsNeedCompaction();
       if (status.ok()) {
-        compact_processor_.LaunchCompact(ino, chunk, mds_client_, compactor_,
-                                         true);
+        compact_processor_.LaunchCompact(ino, inode_cache_.Get(ino), chunk,
+                                         mds_client_, compactor_, true);
       }
     }
   }
@@ -1663,8 +1664,9 @@ Status MDSMetaSystem::Compact(ContextSPtr ctx, Ino ino, uint32_t chunk_index,
 
   for (auto& chunk : chunks) {
     auto chunk_ptr = Chunk::New(ino, chunk, "manual_compact");
-    auto status = compact_processor_.LaunchCompact(ino, chunk_ptr, mds_client_,
-                                                   compactor_, is_async);
+    auto status =
+        compact_processor_.LaunchCompact(ino, inode_cache_.Get(ino), chunk_ptr,
+                                         mds_client_, compactor_, is_async);
     if (!status.ok()) return status;
   }
 

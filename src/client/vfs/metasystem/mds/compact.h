@@ -20,6 +20,7 @@
 #include "client/vfs/compaction/compactor.h"
 #include "client/vfs/metasystem/mds/chunk.h"
 #include "client/vfs/metasystem/mds/executor.h"
+#include "client/vfs/metasystem/mds/inode_cache.h"
 #include "client/vfs/metasystem/mds/mds_client.h"
 #include "client/vfs/vfs_meta.h"
 #include "mds/common/runnable.h"
@@ -38,17 +39,18 @@ using CompactChunkTaskPtr = std::shared_ptr<CompactChunkTask>;
 
 class CompactChunkTask : public TaskRunnable {
  public:
-  CompactChunkTask(Ino ino, ChunkSPtr& chunk, MDSClient& mds_client,
-                   Compactor& compactor)
+  CompactChunkTask(Ino ino, InodeSPtr& inode, ChunkSPtr& chunk,
+                   MDSClient& mds_client, Compactor& compactor)
       : ino_(ino),
+        inode_(inode),
         chunk_(chunk),
         mds_client_(mds_client),
         compactor_(compactor) {}
   ~CompactChunkTask() override = default;
 
-  static CompactChunkTaskPtr New(Ino ino, ChunkSPtr& chunk,
+  static CompactChunkTaskPtr New(Ino ino, InodeSPtr& inode, ChunkSPtr& chunk,
                                  MDSClient& mds_client, Compactor& compactor) {
-    return std::make_shared<CompactChunkTask>(ino, chunk, mds_client,
+    return std::make_shared<CompactChunkTask>(ino, inode, chunk, mds_client,
                                               compactor);
   }
 
@@ -63,9 +65,11 @@ class CompactChunkTask : public TaskRunnable {
   Status GetStatus() { return status_; }
 
  private:
+  bool IsDeleted() { return inode_ != nullptr && inode_->IsDeleted(); }
   Status Compact();
 
   Ino ino_;
+  InodeSPtr inode_;
   ChunkSPtr chunk_;
 
   MDSClient& mds_client_;
@@ -89,8 +93,9 @@ class CompactProcessor {
   bool Init();
   void Stop();
 
-  Status LaunchCompact(Ino ino, ChunkSPtr& chunk, MDSClient& mds_client,
-                       Compactor& compactor, bool is_async = true);
+  Status LaunchCompact(Ino ino, InodeSPtr inode, ChunkSPtr& chunk,
+                       MDSClient& mds_client, Compactor& compactor,
+                       bool is_async = true);
 
  private:
   Executor& executor_;

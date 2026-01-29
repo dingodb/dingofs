@@ -23,8 +23,10 @@ namespace vfs {
 namespace meta {
 
 void CompactChunkTask::Run() {
+  if (IsDeleted()) return;
+
   auto status = Compact();
-  if (!status.ok() && !status.IsNotFit()) {
+  if (!status.ok() && !status.IsNotFit() && !status.IsStop()) {
     LOG(ERROR) << fmt::format(
         "[meta.compact.{}.{}.{}] compact chunk fail, status({}).", ino_,
         chunk_->GetIndex(), Id(), status.ToString());
@@ -54,6 +56,7 @@ Status CompactChunkTask::Compact() {
   ContextSPtr ctx = std::make_shared<Context>("");
   status = compactor_.Compact(ctx, ino_, chunk_index, old_slices, new_slices);
   if (!status.ok()) return status;
+  if (IsDeleted()) return Status::OK();
 
   MDSClient::CompactChunkParam param;
   param.version = version;
@@ -94,10 +97,10 @@ Status CompactChunkTask::Compact() {
   return status;
 }
 
-Status CompactProcessor::LaunchCompact(Ino ino, ChunkSPtr& chunk,
-                                       MDSClient& mds_client,
+Status CompactProcessor::LaunchCompact(Ino ino, InodeSPtr inode,
+                                       ChunkSPtr& chunk, MDSClient& mds_client,
                                        Compactor& compactor, bool is_async) {
-  auto task = CompactChunkTask::New(ino, chunk, mds_client, compactor);
+  auto task = CompactChunkTask::New(ino, inode, chunk, mds_client, compactor);
 
   int64_t hash_id = ino + chunk->GetIndex();
   if (!executor_.ExecuteByHash(hash_id, task, false)) {

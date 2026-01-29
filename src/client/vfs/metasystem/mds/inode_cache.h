@@ -140,6 +140,12 @@ class Inode {
     return version_;
   }
 
+  bool IsDeleted() const {
+    utils::ReadLockGuard lk(lock_);
+
+    return nlink_ == 0;
+  }
+
   std::vector<uint64_t> Parents() const {
     utils::ReadLockGuard lk(lock_);
 
