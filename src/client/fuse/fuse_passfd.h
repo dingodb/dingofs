@@ -21,8 +21,8 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-#include "absl/cleanup/cleanup.h"
 #include "glog/logging.h"
+#include "utils/scoped_cleanup.h"
 
 namespace dingofs {
 namespace client {
@@ -121,7 +121,7 @@ inline int GetFuseFd(const char* fd_comm_path, void* data_buf,
                << ", error: " << std::strerror(errno);
     return -1;
   }
-  auto defer_close = ::absl::MakeCleanup([&]() { close(client_fd); });
+  auto defer_close = MakeScopedCleanup([&]() { close(client_fd); });
 
   struct sockaddr_un addr;
   memset(&addr, 0, sizeof(addr));

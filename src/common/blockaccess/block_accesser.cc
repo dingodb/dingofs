@@ -16,7 +16,6 @@
 
 #include "common/blockaccess/block_accesser.h"
 
-#include <absl/cleanup/cleanup.h>
 #include <absl/strings/str_format.h>
 
 #include <memory>
@@ -31,6 +30,7 @@
 #include "common/metrics/metric_guard.h"
 #include "common/status.h"
 #include "utils/dingo_define.h"
+#include "utils/scoped_cleanup.h"
 
 namespace dingofs {
 namespace blockaccess {
@@ -134,7 +134,7 @@ Status BlockAccesserImpl::Put(const std::string& key, const char* buffer,
 
   block_put_sync_num << 1;
 
-  auto dec = ::absl::MakeCleanup([&]() { block_put_sync_num << -1; });
+  auto dec = MakeScopedCleanup([&]() { block_put_sync_num << -1; });
 
   if (throttle_) {
     throttle_->Add(false, length);
@@ -187,7 +187,7 @@ Status BlockAccesserImpl::Get(const std::string& key, std::string* data) {
                             butil::cpuwide_time_us());
 
   block_get_sync_num << 1;
-  auto dec = ::absl::MakeCleanup([&]() { block_get_sync_num << -1; });
+  auto dec = MakeScopedCleanup([&]() { block_get_sync_num << -1; });
 
   if (throttle_) {
     throttle_->Add(true, 1);
@@ -242,7 +242,7 @@ Status BlockAccesserImpl::Range(const std::string& key, off_t offset,
                             butil::cpuwide_time_us());
 
   block_get_sync_num << 1;
-  auto dec = ::absl::MakeCleanup([&]() { block_get_sync_num << -1; });
+  auto dec = MakeScopedCleanup([&]() { block_get_sync_num << -1; });
 
   if (throttle_) {
     throttle_->Add(true, length);

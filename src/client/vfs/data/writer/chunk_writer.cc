@@ -273,7 +273,7 @@ void ChunkWriter::FlushTaskDone(FlushTask* flush_task, Status s) {
     auto* header = flush_queue_.front();
     if (flush_task != header) {
       VLOG(4) << fmt::format(
-          "{} FlushTaskDone return because flush_chunk_task: {} is not the "
+          "{} FlushTaskDone Return because flush_chunk_task: {} is not the "
           "header of the flush_queue_, flush_queue size : {}, "
           "header_task_addr: {}",
           UUID(), flush_task->ToString(), flush_queue_.size(),
@@ -301,6 +301,8 @@ void ChunkWriter::FlushTaskDone(FlushTask* flush_task, Status s) {
 }
 
 void ChunkWriter::TryCommitFlushTasks(ContextSPtr ctx) {
+  auto span = hub_->GetTraceManager()->StartChildSpan(
+      "ChunkWriter::TryCommitFlushTasks", ctx->GetTraceSpan());
   std::string uuid = UUID();
 
   while (true) {
@@ -336,9 +338,9 @@ void ChunkWriter::TryCommitFlushTasks(ContextSPtr ctx) {
 
       if (to_commit.empty()) {
         VLOG(4) << fmt::format(
-            "{} TryCommitFlushTasks commit_seq: {} will return because has no "
-            "flush_task to commit, fake header is removed, remain "
-            "flush_queue_size: {}",
+            "{} TryCommitFlushTasks Return,  because has no flush_task to "
+            "commit, fake header is removed, cur_commit_seq: {},"
+            " remain flush_queue_size: {}",
             uuid, commit_seq, flush_queue_.size());
         flush_queue_.pop_front();
         return;
@@ -354,9 +356,8 @@ void ChunkWriter::TryCommitFlushTasks(ContextSPtr ctx) {
         std::vector<Slice> slices;
         task->chunk_flush_task->GetCommitSlices(slices);
         VLOG(4) << fmt::format(
-            "{} TryCommitFlushTasks commit_seq: {} commit chunk_flush_task: "
-            "{}, "
-            "slices_count: {}",
+            "{} TryCommitFlushTasks commit_seq: {} commit "
+            " chunk_flush_task: {}, slices_count: {}",
             uuid, commit_seq, task->ToString(), slices.size());
 
         if (!slices.empty()) {
@@ -377,9 +378,8 @@ void ChunkWriter::TryCommitFlushTasks(ContextSPtr ctx) {
     // TODO: if we found some flush task fail, no need commit the slices
 
     VLOG(4) << fmt::format(
-        "{} TryCommitFlushTasks commit_seq: {} will commit flush_task_count: "
-        "{} "
-        "batch_slices_count: {}",
+        "{} TryCommitFlushTasks commit_seq: {} will commit "
+        " flush_task_count: {} batch_slices_count: {}",
         uuid, commit_seq, to_commit.size(), batch_commit_slices.size());
 
     // this will be delete in cb executor
@@ -393,9 +393,9 @@ void ChunkWriter::TryCommitFlushTasks(ContextSPtr ctx) {
 
       if (!commit.ok()) {
         LOG(WARNING) << fmt::format(
-            "{} TryCommitFlushTasks commit slices fail commit_seq: {} fail "
-            "commit, "
-            "flush_task_count: {} batch_slices_count: {} commit_status: {}",
+            "{} TryCommitFlushTasks Fail commit_slices, commit_seq: {} fail "
+            "commit, flush_task_count: {} batch_slices_count: {} "
+            " commit_status: {}",
             uuid, commit_ctx->commit_seq, commit_ctx->flush_tasks.size(),
             commit_ctx->commit_slices.size(), commit.ToString());
 
@@ -403,8 +403,8 @@ void ChunkWriter::TryCommitFlushTasks(ContextSPtr ctx) {
       } else {
         VLOG(4) << fmt::format(
             "{} TryCommitFlushTasks commit slices commit_seq: {}, "
-            "flush_task_count: {} "
-            "batch_slices_count: {} commit_status: {}",
+            "flush_task_count: {} batch_slices_count: "
+            "{} commit_status: {}",
             uuid, commit_ctx->commit_seq, commit_ctx->flush_tasks.size(),
             commit_ctx->commit_slices.size(), commit.ToString());
 
@@ -424,13 +424,13 @@ void ChunkWriter::TryCommitFlushTasks(ContextSPtr ctx) {
         // if one task fail, all task fail
         task->cb(GetErrorStatus());
         VLOG(6) << fmt::format(
-            "{} OnSlicesCommitDone delete chunk_flush_task: {}", uuid,
+            "{} TryCommitFlushTasks delete chunk_flush_task: {}", uuid,
             task->ToString());
         delete task;
       }
 
       VLOG(4) << fmt::format(
-          "{} OnSlicesCommitDone commit_seq: {} end, delete commit_ctx", uuid,
+          "{} TryCommitFlushTasks commit_seq: {} end, delete commit_ctx", uuid,
           commit_ctx->commit_seq);
 
       delete commit_ctx;

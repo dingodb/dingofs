@@ -13,7 +13,7 @@
 # limitations under the License.
 
 add_library(vfs_compaction
-    compactor.cc
+    compactor_impl.cc
     compact_utils.cc
 )
 

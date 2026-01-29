@@ -21,7 +21,6 @@
 #include <cstring>
 #include <iostream>
 
-#include "absl/cleanup/cleanup.h"
 #include "client/fuse/fs_context.h"
 #include "client/fuse/fuse_server.h"
 #include "client/vfs/access_log.h"
@@ -30,12 +29,12 @@
 #include "common/helper.h"
 #include "common/logging.h"
 #include "common/options/cache.h"
-#include "common/options/client.h"
 #include "common/options/common.h"
 #include "common/types.h"
 #include "fmt/format.h"
 #include "gflags/gflags.h"
 #include "utils/daemonize.h"
+#include "utils/scoped_cleanup.h"
 
 using FuseServer = dingofs::client::fuse::FuseServer;
 using FsContext = dingofs::client::fuse::FsContext;
@@ -193,7 +192,7 @@ int main(int argc, char* argv[]) {
 
   fuse_server = new FuseServer();
   if (fuse_server == nullptr) return EXIT_FAILURE;
-  auto defer_free = ::absl::MakeCleanup([&]() { delete fuse_server; });
+  auto defer_free = dingofs::MakeScopedCleanup([&]() { delete fuse_server; });
 
   // init fuse
   if (fuse_server->Init(argv[0], &mount_option) == 1) return EXIT_FAILURE;
@@ -209,12 +208,12 @@ int main(int argc, char* argv[]) {
   // create fuse session
   if (fuse_server->CreateSession(&fs_context) == 1) return EXIT_FAILURE;
   auto defer_destory =
-      ::absl::MakeCleanup([&]() { fuse_server->DestroySsesion(); });
+      dingofs::MakeScopedCleanup([&]() { fuse_server->DestroySsesion(); });
 
   // mount filesystem
   if (fuse_server->SessionMount() == 1) return EXIT_FAILURE;
   auto defer_unmount =
-      ::absl::MakeCleanup([&]() { fuse_server->SessionUnmount(); });
+      dingofs::MakeScopedCleanup([&]() { fuse_server->SessionUnmount(); });
 
   if (fuse_server->Serve() == 1) return EXIT_FAILURE;
 

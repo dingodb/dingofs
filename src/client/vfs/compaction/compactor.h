@@ -31,23 +31,19 @@ class VFSHub;
 
 class Compactor {
  public:
-  explicit Compactor(VFSHub* hub) : vfs_hub_(hub) {}
+  virtual ~Compactor() = default;
 
-  ~Compactor() = default;
+  virtual Status Start() = 0;
 
-  Status Compact(ContextSPtr ctx, Ino ino, uint64_t chunk_index,
-                 const std::vector<Slice>& slices,
-                 std::vector<Slice>& out_slices);
+  virtual Status Stop() = 0;
 
-  Status ForceCompact(ContextSPtr ctx, Ino ino, uint64_t chunk_index,
-                      const std::vector<Slice>& slices,
-                      std::vector<Slice>& out_slices);
+  virtual Status Compact(ContextSPtr ctx, Ino ino, uint64_t chunk_index,
+                         const std::vector<Slice>& slices,
+                         std::vector<Slice>& out_slices) = 0;
 
- private:
-  Status DoCompact(ContextSPtr ctx, Ino ino, uint64_t chunk_index,
-                   const std::vector<Slice>& slices, Slice& out_slice);
-
-  VFSHub* vfs_hub_;
+  virtual Status ForceCompact(ContextSPtr ctx, Ino ino, uint64_t chunk_index,
+                              const std::vector<Slice>& slices,
+                              std::vector<Slice>& out_slices) = 0;
 };
 
 }  // namespace vfs

@@ -25,6 +25,7 @@
 #include "client/vfs/blockstore/block_store_impl.h"
 #include "client/vfs/blockstore/fake_block_store.h"
 #include "client/vfs/common/helper.h"
+#include "client/vfs/compaction/compactor_impl.h"
 #include "client/vfs/components/prefetch_manager.h"
 #include "client/vfs/components/warmup_manager.h"
 #include "client/vfs/metasystem/local/metasystem.h"
@@ -127,7 +128,10 @@ Status VFSHubImpl::Start(bool upgrade) {
     return Status::Internal("init trace manager fail");
   }
 
-  compactor_ = std::make_unique<Compactor>(this);
+  {
+    compactor_ = std::make_unique<CompactorImpl>(this);
+    DINGOFS_RETURN_NOT_OK(compactor_->Start());
+  }
 
   // meta system
   {
@@ -283,12 +287,17 @@ Status VFSHubImpl::Start(bool upgrade) {
   return Status::OK();
 }
 
+// NOTE: the stop sequence is important, please do not change it lightly.
 Status VFSHubImpl::Stop(bool upgrade) {
   if (!started_.load(std::memory_order_relaxed)) {
     return Status::OK();
   }
 
   LOG(INFO) << fmt::format("[vfs.hub] stopping vfs hub, upgrade({}).", upgrade);
+
+  if (compactor_ != nullptr) {
+    compactor_->Stop();
+  }
 
   if (handle_manager_ != nullptr) {
     handle_manager_->Stop();
@@ -314,12 +323,12 @@ Status VFSHubImpl::Stop(bool upgrade) {
     prefetch_manager_->Stop();
   }
 
-  if (block_store_ != nullptr) {
-    block_store_->Shutdown();
-  }
-
   if (meta_wrapper_ != nullptr) {
     meta_wrapper_->Stop(upgrade);
+  }
+
+  if (block_store_ != nullptr) {
+    block_store_->Shutdown();
   }
 
   if (trace_manager_ != nullptr) {

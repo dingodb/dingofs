@@ -162,10 +162,16 @@ Status VFSWrapper::Start(const VFSConfig& vfs_conf) {
   uid_ = dingofs::Helper::GetOriginalUid();
   gid_ = dingofs::Helper::GetOriginalGid();
 
+  started_.store(true);
   return Status::OK();
 }
 
 Status VFSWrapper::Stop() {
+  if (!started_.load()) {
+    LOG(INFO) << "vfs not started, no need to stop.";
+    return Status::OK();
+  }
+
   const bool is_upgrade = (FuseUpgradeManager::GetInstance().GetFuseState() ==
                            fuse::FuseUpgradeState::kFuseUpgradeOld);
 

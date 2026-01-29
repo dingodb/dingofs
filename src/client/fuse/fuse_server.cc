@@ -22,7 +22,7 @@
 #include <chrono>
 #include <cstdlib>
 
-#include "absl/cleanup/cleanup.h"
+#include "utils/scoped_cleanup.h"
 #include "absl/strings/str_format.h"
 #include "client/fuse/fuse_common.h"
 #include "client/fuse/fuse_lowlevel_ops_func.h"
@@ -149,7 +149,7 @@ void FuseServer::UdsServerFunc() {
                << ", error: " << std::strerror(errno);
     return;
   }
-  auto defer_close = ::absl::MakeCleanup([&]() { close(server_fd); });
+  auto defer_close = MakeScopedCleanup([&]() { close(server_fd); });
   // bind address
   memset(&addr, 0, sizeof(addr));
   addr.sun_family = AF_UNIX;

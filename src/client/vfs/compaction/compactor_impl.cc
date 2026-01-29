@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "client/vfs/compaction/compactor.h"
+#include "client/vfs/compaction/compactor_impl.h"
 
 #include <glog/logging.h>
 
@@ -27,18 +27,59 @@
 #include "client/vfs/data/slice/common.h"
 #include "client/vfs/data/slice/slice_writer.h"
 #include "client/vfs/hub/vfs_hub.h"
+#include "utils/scoped_cleanup.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 using namespace compaction;
 
-Status Compactor::DoCompact(ContextSPtr ctx, Ino ino, uint64_t chunk_index,
-                            const std::vector<Slice>& slices,
-                            Slice& out_slice) {
+Status CompactorImpl::Start() {
+  LOG(INFO) << "CompactorImpl started";
+  return Status::OK();
+}
+
+Status CompactorImpl::Stop() {
+  std::unique_lock lg(mutex_);
+  if (stopped_) {
+    return Status::OK();
+  }
+
+  while (inflight_ > 0) {
+    LOG(INFO) << "CompactorImpl::Stop wait inflight_=" << inflight_;
+    cv_.wait(lg);
+  }
+
+  stopped_ = true;
+
+  LOG(INFO) << "CompactorImpl stopped";
+  return Status::OK();
+}
+
+Status CompactorImpl::IncInflight() {
+  std::unique_lock lg(mutex_);
+  if (stopped_) {
+    LOG(INFO) << "CompactorImpl is stopped, cannot accept new compaction";
+    return Status::Stop("CompactorImpl stopped");
+  }
+  inflight_++;
+  return Status::OK();
+}
+
+void CompactorImpl::DecInflight() {
+  std::unique_lock lg(mutex_);
+  inflight_--;
+  if (inflight_ == 0) {
+    cv_.notify_all();
+  }
+}
+
+Status CompactorImpl::DoCompact(ContextSPtr ctx, Ino ino, uint64_t chunk_index,
+                                const std::vector<Slice>& slices,
+                                Slice& out_slice) {
   CHECK(!slices.empty()) << "invalid compact, no slices to compact";
-  auto span = vfs_hub_->GetTraceManager()->StartChildSpan("Compactor::DoCompact",
-                                                         ctx->GetTraceSpan());
+  auto span = vfs_hub_->GetTraceManager()->StartChildSpan(
+      "CompactorImpl::DoCompact", ctx->GetTraceSpan());
   auto fs_info = vfs_hub_->GetFsInfo();
 
   int64_t chunk_size = fs_info.chunk_size;
@@ -108,19 +149,23 @@ Status Compactor::DoCompact(ContextSPtr ctx, Ino ino, uint64_t chunk_index,
 }
 
 // TODO: delete compact object after fail
-Status Compactor::Compact(ContextSPtr ctx, Ino ino, uint64_t chunk_index,
-                          const std::vector<Slice>& slices,
-                          std::vector<Slice>& out_slices) {
-  VLOG(9) << "Compactor::Compact ino: " << ino
+Status CompactorImpl::Compact(ContextSPtr ctx, Ino ino, uint64_t chunk_index,
+                              const std::vector<Slice>& slices,
+                              std::vector<Slice>& out_slices) {
+  VLOG(9) << "CompactorImpl::Compact ino: " << ino
           << ", chunk_index: " << chunk_index
           << ", slices count: " << slices.size();
   CHECK(!slices.empty()) << "invalid compact, no slices to compact";
-  auto span = vfs_hub_->GetTraceManager()->StartChildSpan("Compactor::Compact",
-                                                         ctx->GetTraceSpan());
+
+  DINGOFS_RETURN_NOT_OK(IncInflight());
+  auto cleanup = MakeScopedCleanup([&]() { DecInflight(); });
+
+  auto span = vfs_hub_->GetTraceManager()->StartChildSpan(
+      "CompactorImpl::Compact", ctx->GetTraceSpan());
 
   std::vector<Slice> to_compact;
   int32_t skip = Skip(slices);
-  VLOG(9) << "Compactor::Compact skip count: " << skip;
+  VLOG(9) << "CompactorImpl::Compact skip count: " << skip;
 
   for (size_t i = skip; i < slices.size(); ++i) {
     to_compact.push_back(slices[i]);
@@ -152,19 +197,25 @@ Status Compactor::Compact(ContextSPtr ctx, Ino ino, uint64_t chunk_index,
   return Status::OK();
 }
 
-Status Compactor::ForceCompact(ContextSPtr ctx, Ino ino, uint64_t chunk_index,
-                               const std::vector<Slice>& slices,
-                               std::vector<Slice>& out_slices) {
-  VLOG(9) << "Compactor::ForceCompact ino: " << ino
+Status CompactorImpl::ForceCompact(ContextSPtr ctx, Ino ino,
+                                   uint64_t chunk_index,
+                                   const std::vector<Slice>& slices,
+                                   std::vector<Slice>& out_slices) {
+  VLOG(9) << "CompactorImpl::ForceCompact ino: " << ino
           << ", chunk_index: " << chunk_index
           << ", slices count: " << slices.size();
   CHECK(!slices.empty()) << "invalid compact, no slices to compact";
-  auto span = vfs_hub_->GetTraceManager()->StartChildSpan("Compactor::Compact",
-                                                         ctx->GetTraceSpan());
+
+  DINGOFS_RETURN_NOT_OK(IncInflight());
+  auto cleanup = MakeScopedCleanup([&]() { DecInflight(); });
+
+  auto span = vfs_hub_->GetTraceManager()->StartChildSpan(
+      "CompactorImpl::Compact", ctx->GetTraceSpan());
   Slice compacted;
   DINGOFS_RETURN_NOT_OK(DoCompact(SpanScope::GetContext(span), ino, chunk_index,
                                   slices, compacted));
   out_slices.push_back(compacted);
+
   return Status::OK();
 }
 

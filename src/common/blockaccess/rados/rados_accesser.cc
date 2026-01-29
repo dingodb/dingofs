@@ -16,7 +16,6 @@
 
 #include "common/blockaccess/rados/rados_accesser.h"
 
-#include <absl/cleanup/cleanup.h>
 #include <butil/time.h>
 #include <glog/logging.h>
 #include <rados/librados.h>
@@ -30,6 +29,7 @@
 
 #include "common/options/blockaccess.h"
 #include "common/status.h"
+#include "utils/scoped_cleanup.h"
 
 namespace dingofs {
 namespace blockaccess {
@@ -141,7 +141,7 @@ Status RadosAccesser::ExecuteSyncOp(
     return Status::IoError(err, "Failed to create ioctx");
   }
 
-  auto defer = ::absl::MakeCleanup([&]() { DestroyIoctx(ioctx); });
+  auto defer = MakeScopedCleanup([&]() { DestroyIoctx(ioctx); });
 
   return sync_op(ioctx);
 }
@@ -286,7 +286,7 @@ static void CompleteCallback(rados_completion_t cb, void* arg) {
 void RadosAccesser::ExecuteAsyncOperation(
     RadosAsyncIOUnit* io_unit, std::function<int(RadosAsyncIOUnit*)> async_op) {
   VLOG(9) << "ExecuteAsyncOperation is called, key: " << io_unit->key;
-  auto defer = ::absl::MakeCleanup([&]() { delete io_unit; });
+  auto defer = MakeScopedCleanup([&]() { delete io_unit; });
 
   int err = CreateIoContext(cluster_, options_.pool_name, &io_unit->ioctx);
   if (err < 0) {
@@ -314,7 +314,7 @@ void RadosAccesser::ExecuteAsyncOperation(
     return;
   }
 
-  std::move(defer).Cancel();
+  defer.cancel();
 }
 
 //  * The return value of the completion will be number of bytes read on

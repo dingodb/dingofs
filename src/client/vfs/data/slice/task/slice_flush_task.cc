@@ -21,7 +21,6 @@
 #include <memory>
 
 #include "cache/blockcache/cache_store.h"
-#include "client/common/const.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "common/options/client.h"
 

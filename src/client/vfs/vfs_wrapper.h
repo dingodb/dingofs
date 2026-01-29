@@ -129,6 +129,7 @@ class VFSWrapper {
   bool Dump();
   bool Load(const Json::Value& value);
 
+  std::atomic<bool> started_ = false;
   std::unique_ptr<VFS> vfs_;
   std::unique_ptr<metrics::client::ClientOpMetric> client_op_metric_;
 
