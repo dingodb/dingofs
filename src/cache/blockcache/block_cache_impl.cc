@@ -54,7 +54,7 @@ DEFINE_bool(enable_cache, true, "whether to enable cache block");
 static void SplitUniteCacheDir(
     const std::string& cache_dir, uint64_t default_cache_size_mb,
     std::vector<std::pair<std::string, uint64_t>>* cache_dirs) {
-  std::vector<std::string> dirs = absl::StrSplit(cache_dir, ";");
+  std::vector<std::string> dirs = absl::StrSplit(cache_dir, ",");
 
   for (const auto& dir : dirs) {
     uint64_t cache_size_mb = default_cache_size_mb;

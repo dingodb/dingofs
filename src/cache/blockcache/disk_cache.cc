@@ -40,9 +40,12 @@
 namespace dingofs {
 namespace cache {
 
-DEFINE_string(cache_dir, kDefaultCacheDir, "directory to store blocks");
+DEFINE_string(cache_dir, kDefaultCacheDir,
+              "directory to store blocks, mutiple paths are separated by "
+              "commas, e.g.: /mnt/cache1,/mnt/cache2");
 DEFINE_validator(cache_dir, [](const char* /*name*/, const std::string& value) {
   FLAGS_cache_dir = dingofs::Helper::ExpandPath(value);
+
   return true;
 });
 DEFINE_string(cache_dir_uuid, "", "");
