@@ -69,7 +69,7 @@ Status Server::Start() {
   std::string listen_ip = FLAGS_wide_access ? "0.0.0.0" : FLAGS_listen_ip;
   auto status = StartRpcServer(FLAGS_listen_ip, FLAGS_listen_port);
   if (!status.ok()) {
-    LOG(FATAL) << "Fail to start rpc server at " << FLAGS_listen_ip << ":"
+    LOG(ERROR) << "Fail to start rpc server at " << FLAGS_listen_ip << ":"
                << FLAGS_listen_port;
     return status;
   }
