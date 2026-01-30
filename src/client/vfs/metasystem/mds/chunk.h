@@ -51,9 +51,10 @@ using ChunkSetSPtr = std::shared_ptr<ChunkSet>;
 
 class Chunk {
  public:
-  Chunk(Ino ino, uint32_t index) : ino_(ino), index_(index) {}
+  Chunk(Ino ino, uint32_t index)
+      : ino_(ino), index_(index), last_active_s_(utils::Timestamp()) {}
   Chunk(Ino ino, const ChunkEntry& chunk, const char* reason)
-      : ino_(ino), index_(chunk.index()) {
+      : ino_(ino), index_(chunk.index()), last_active_s_(utils::Timestamp()) {
     Put(chunk, reason);
   }
 
@@ -102,6 +103,12 @@ class Chunk {
   std::vector<Slice> GetAllSlice(uint64_t& version);
   std::vector<Slice> GetCommitedSlice(uint64_t& version);
 
+  uint64_t GetlastActiveTime() {
+    utils::ReadLockGuard guard(lock_);
+
+    return last_active_s_;
+  }
+
   size_t Bytes() {
     utils::ReadLockGuard guard(lock_);
     return sizeof(Chunk) + ((stage_slices_.size() + commiting_slices_.size() +
@@ -128,6 +135,8 @@ class Chunk {
 
   uint64_t commited_version_{0};
   uint64_t last_compaction_time_ms_{0};
+
+  uint64_t last_active_s_{0};
 };
 
 class CommitTask;
@@ -245,7 +254,7 @@ class CommitTask {
 // chunk set per file
 class ChunkSet {
  public:
-  ChunkSet(Ino ino) : ino_(ino) { RefreshLastActiveTime(); }
+  ChunkSet(Ino ino) : ino_(ino), last_active_s_(utils::Timestamp()) {}
   ~ChunkSet() = default;
 
   static ChunkSetSPtr New(Ino ino) { return std::make_shared<ChunkSet>(ino); }
@@ -256,7 +265,7 @@ class ChunkSet {
   void SetLastWriteLength(uint64_t offset, uint64_t size) {
     utils::WriteLockGuard lk(lock_);
     last_write_length_ = std::max(last_write_length_, offset + size);
-    last_time_ns_ = utils::TimestampNs();
+    last_write_time_ns_ = utils::TimestampNs();
   }
   void ResetLastWriteLength() {
     utils::WriteLockGuard lk(lock_);
@@ -269,7 +278,7 @@ class ChunkSet {
 
   uint64_t GetLastWriteTimeNs() const {
     utils::ReadLockGuard guard(lock_);
-    return last_time_ns_;
+    return last_write_time_ns_;
   }
 
   // chunk operations
@@ -320,12 +329,7 @@ class ChunkSet {
 
   bool HasUncommitedSlice();
 
-  uint64_t LastActiveTimeS() const {
-    return last_active_s_.load(std::memory_order_relaxed);
-  }
-  void RefreshLastActiveTime() {
-    last_active_s_.store(utils::Timestamp(), std::memory_order_relaxed);
-  }
+  uint64_t GetLastActiveTimeS() const;
 
   size_t Size() const { return GetChunkSize(); }
   size_t Bytes() const;
@@ -348,7 +352,7 @@ class ChunkSet {
   mutable utils::RWLock lock_;
 
   uint64_t last_write_length_{0};
-  uint64_t last_time_ns_{0};
+  uint64_t last_write_time_ns_{0};
 
   // chunk index -> chunk
   absl::flat_hash_map<uint32_t, ChunkSPtr> chunk_map_;
@@ -359,7 +363,7 @@ class ChunkSet {
 
   std::atomic<uint64_t> last_commit_ms_{0};
 
-  std::atomic<uint64_t> last_active_s_{0};
+  uint64_t last_active_s_{0};
 };
 
 // all file chunk cache

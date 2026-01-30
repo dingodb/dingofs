@@ -32,6 +32,7 @@
 #include "mds/common/type.h"
 #include "utils/concurrent/concurrent.h"
 #include "utils/shards.h"
+#include "utils/time.h"
 
 namespace dingofs {
 namespace client {
@@ -70,7 +71,8 @@ class Inode {
         flags_(attr.flags()),
         maybe_tiny_file_(attr.maybe_tiny_file()),
         version_(attr.version()),
-        parents_(attr.parents().begin(), attr.parents().end()) {
+        parents_(attr.parents().begin(), attr.parents().end()),
+        last_active_time_s_(utils::Timestamp()) {
     for (const auto& xattr : attr.xattrs()) {
       xattrs_.emplace(xattr.first, xattr.second);
     }
@@ -188,7 +190,7 @@ class Inode {
   AttrEntry ToAttrEntry() const;
 
   void UpdateLastAccessTime();
-  uint64_t LastAccessTimeS();
+  uint64_t GetlastActiveTime();
 
  private:
   mutable utils::RWLock lock_;
@@ -217,7 +219,7 @@ class Inode {
 
   uint64_t version_{0};
 
-  std::atomic<uint64_t> last_access_time_s_{0};
+  std::atomic<uint64_t> last_active_time_s_{0};
 };
 
 class InodeCache {

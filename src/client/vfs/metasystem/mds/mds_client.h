@@ -72,7 +72,8 @@ class MDSClient {
 
   RPC& GetRpc();
 
-  Status Heartbeat();
+  Status Heartbeat(
+      const std::map<Ino, std::vector<std::string>>& need_keep_alive_sessions);
 
   Status MountFs(const std::string& name,
                  const pb::mds::MountPoint& mount_point);

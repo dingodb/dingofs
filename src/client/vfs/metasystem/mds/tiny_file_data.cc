@@ -14,6 +14,8 @@
 
 #include "client/vfs/metasystem/mds/tiny_file_data.h"
 
+#include "common/logging.h"
+
 namespace dingofs {
 namespace client {
 namespace vfs {
@@ -95,6 +97,10 @@ void TinyFileDataCache::CleanExpired(uint64_t expire_s) {
         auto temp = it++;
         map.erase(temp);
         clean_count_ << 1;
+        LOG_DEBUG << fmt::format(
+            "[meta.tinyfiledatacache.{}] clean expired tiny file data.",
+            temp->first);
+
       } else {
         ++it;
       }

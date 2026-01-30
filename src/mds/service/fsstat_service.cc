@@ -1289,7 +1289,8 @@ static void RenderFileSessionPage(uint32_t fs_id, const std::vector<FileSessionE
   os << "<th>Ino</th>";
   os << "<th>SessionID</th>";
   os << "<th>ClientID</th>";
-  os << "<th>Time</th>";
+  os << "<th>CreateTime</th>";
+  os << "<th>ExpiredTime</th>";
   os << "</tr>";
 
   for (const auto& file_session : file_sessions) {
@@ -1299,7 +1300,7 @@ static void RenderFileSessionPage(uint32_t fs_id, const std::vector<FileSessionE
     os << "<td>" << file_session.session_id() << "</td>";
     os << "<td>" << file_session.client_id() << "</td>";
     os << "<td>" << utils::FormatTime(file_session.create_time_s()) << "</td>";
-
+    os << "<td>" << utils::FormatTime(file_session.expire_time_s()) << "</td>";
     os << "</tr>";
   }
 

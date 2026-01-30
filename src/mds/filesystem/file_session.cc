@@ -18,21 +18,22 @@
 #include <string>
 #include <utility>
 
-#include "common/logging.h"
+#include "brpc/reloadable_flags.h"
 #include "dingofs/error.pb.h"
 #include "fmt/format.h"
-#include "mds/common/helper.h"
 #include "mds/common/status.h"
 #include "mds/common/type.h"
 #include "mds/filesystem/store_operation.h"
 #include "utils/concurrent/concurrent.h"
-#include "utils/uuid.h"
 
 namespace dingofs {
 namespace mds {
 
 DECLARE_uint32(mds_scan_batch_size);
 DECLARE_uint32(mds_txn_max_retry_times);
+
+DEFINE_uint32(mds_filesession_live_time_s, 600, "gc file session live time");
+DEFINE_validator(mds_filesession_live_time_s, brpc::PassValidate);
 
 static const std::string kFileSessionCacheCountMetricsName = "dingofs_{}_file_session_cache_count";
 
@@ -45,6 +46,7 @@ static FileSessionSPtr NewFileSession(uint32_t fs_id, Ino ino, const std::string
   file_session->set_client_id(client_id);
   file_session->set_session_id(session_id);
   file_session->set_create_time_s(utils::Timestamp());
+  file_session->set_expire_time_s(utils::Timestamp() + FLAGS_mds_filesession_live_time_s);
 
   return file_session;
 }

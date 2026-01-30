@@ -189,9 +189,15 @@ class MDSMetaSystem : public vfs::MetaSystem {
   }
   void DeleteInodeFromCache(Ino ino) { inode_cache_.Delete(ino); }
   InodeSPtr GetInodeFromCache(Ino ino) { return inode_cache_.Get(ino); }
+  InodeSPtr GetInode(FileSessionSPtr& file_session) {
+    auto inode = file_session->GetInode();
+    if (inode != nullptr) return inode;
+
+    return inode_cache_.Get(file_session->GetIno());
+  }
 
   // chunk cache
-  Status FlushFile(ContextSPtr ctx, InodeSPtr& inode, ChunkSetSPtr& chunk_set);
+  Status FlushFile(ContextSPtr ctx, InodeSPtr inode, ChunkSetSPtr& chunk_set);
   void LaunchWriteSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
                         CommitTaskSPtr task);
   // async flush batch slices of single file

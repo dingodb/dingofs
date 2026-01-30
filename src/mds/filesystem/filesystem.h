@@ -147,6 +147,8 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
     std::string data;
   };
   Status FlushFile(Context& ctx, Ino ino, const FlushFileParam& param, EntryOut& entry_out);
+  using FileSessionParam = pb::mds::HeartbeatRequest::FileSession;
+  void AsyncKeepAliveFileSession(const std::vector<FileSessionParam>& file_sessions);
 
   // directory
   struct MkDirParam {

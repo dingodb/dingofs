@@ -44,13 +44,14 @@ bool Chunk::Put(const ChunkEntry& chunk, const char* reason) {
   utils::WriteLockGuard guard(lock_);
 
   is_completed_ = true;
+  last_active_s_ = utils::Timestamp();
 
   LOG_DEBUG << fmt::format(
-      "[meta.chunk.{}.{}] put chunk, version({}|{}), slice_num({}|{}|{}|{}) "
+      "[meta.chunk.{}.{}.{}] put chunk, version({}|{}), slice_num({}|{}|{}|{}) "
       "reason({}).",
-      ino_, index_, commited_version_, chunk.version(), chunk.slices_size(),
-      stage_slices_.size(), commiting_slices_.size(), commited_slices_.size(),
-      reason);
+      ino_, index_, (void*)this, commited_version_, chunk.version(),
+      chunk.slices_size(), stage_slices_.size(), commiting_slices_.size(),
+      commited_slices_.size(), reason);
 
   if (chunk.version() <= commited_version_) return false;
 
@@ -163,10 +164,12 @@ void Chunk::MarkCommited(uint64_t version) {
   utils::WriteLockGuard guard(lock_);
 
   LOG_DEBUG << fmt::format(
-      "[meta.chunk.{}.{}] mark commited, version({}|{}), "
+      "[meta.chunk.{}.{}.{}] mark commited, version({}|{}), "
       "slice_num({}|{}|{}).",
-      ino_, index_, commited_version_, version, stage_slices_.size(),
-      commiting_slices_.size(), commited_slices_.size());
+      ino_, index_, (void*)this, commited_version_, version,
+      stage_slices_.size(), commiting_slices_.size(), commited_slices_.size());
+
+  last_active_s_ = utils::Timestamp();
 
   if (version <= commited_version_) {
     commiting_slices_.clear();
@@ -182,6 +185,8 @@ void Chunk::MarkCommited(uint64_t version) {
 
 std::vector<Slice> Chunk::GetAllSlice(uint64_t& version) {
   utils::ReadLockGuard lk(lock_);
+
+  last_active_s_ = utils::Timestamp();
 
   std::vector<Slice> slices;
   slices.reserve(commited_slices_.size() + commiting_slices_.size() +
@@ -241,6 +246,7 @@ bool Chunk::Dump(Json::Value& value, bool is_summary) {
   value["is_completed"] = is_completed_;
   value["commited_version"] = commited_version_;
   value["last_compaction_time_ms"] = last_compaction_time_ms_;
+  value["last_active_s"] = last_active_s_;
 
   return true;
 }
@@ -511,6 +517,16 @@ bool ChunkSet::HasUncommitedSlice() {
   return false;
 }
 
+uint64_t ChunkSet::GetLastActiveTimeS() const {
+  utils::ReadLockGuard guard(lock_);
+
+  uint64_t last_active_s = last_active_s_;
+  for (const auto& [_, chunk] : chunk_map_) {
+    last_active_s = std::max(last_active_s, chunk->GetlastActiveTime());
+  }
+  return last_active_s;
+}
+
 size_t ChunkSet::Bytes() const {
   utils::ReadLockGuard guard(lock_);
 
@@ -526,7 +542,7 @@ size_t ChunkSet::Bytes() const {
 bool ChunkSet::Dump(Json::Value& value, bool is_summary) {
   value["ino"] = ino_;
   value["last_write_length"] = last_write_length_;
-  value["last_time_ns"] = last_time_ns_;
+  value["last_write_time_ns"] = last_write_time_ns_;
 
   if (is_summary) {
     value["chunk_count"] = chunk_map_.size();
@@ -555,7 +571,7 @@ bool ChunkSet::Dump(Json::Value& value, bool is_summary) {
 
   value["id_generator"] = task_id_generator.load();
   value["last_commit_ms"] = last_commit_ms_.load();
-  value["last_active_s"] = last_active_s_.load();
+  value["last_active_s"] = GetLastActiveTimeS();
 
   return true;
 }
@@ -569,7 +585,7 @@ bool ChunkSet::Load(const Json::Value& value) {
 
   // load last_write_length and last_time_ns
   last_write_length_ = value["last_write_length"].asUInt64();
-  last_time_ns_ = value["last_time_ns"].asUInt64();
+  last_write_time_ns_ = value["last_write_time_ns"].asUInt64();
 
   // load chunk_map
   const auto& chunk_map_value = value["chunks"];
@@ -670,10 +686,12 @@ void ChunkCache::Clear() {
 void ChunkCache::CleanExpired(uint64_t expire_s) {
   shard_map_.iterateWLock([&](Map& map) {
     for (auto it = map.begin(); it != map.end();) {
-      if (it->second->LastActiveTimeS() < expire_s) {
+      if (it->second->GetLastActiveTimeS() < expire_s) {
         auto temp = it++;
         map.erase(temp);
         clean_count_ << 1;
+        LOG_DEBUG << fmt::format(
+            "[meta.chunkcache] clean expired chunkset ino({}).", temp->first);
 
       } else {
         ++it;

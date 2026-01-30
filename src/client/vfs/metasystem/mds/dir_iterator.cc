@@ -35,8 +35,8 @@ DirIterator::~DirIterator() {
     str += fmt::format("{},", offset);
   }
 
-  VLOG(1) << fmt::format("[dir_iterator.{}.{}] offset stats: {} {}.", ino_, fh_,
-                         offset_stats_.size(), str);
+  LOG_DEBUG << fmt::format("[dir_iterator.{}.{}] offset stats: {} {}.", ino_,
+                           fh_, offset_stats_.size(), str);
 }
 
 void DirIterator::Remember(uint64_t off) { offset_stats_.push_back(off); }

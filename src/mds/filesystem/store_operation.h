@@ -107,7 +107,8 @@ class Operation {
 
     kGetFileSession = 100,
     kScanFileSession = 101,
-    kDeleteFileSession = 102,
+    kKeepAliveFileSession = 102,
+    kDeleteFileSession = 103,
 
     kCleanDelSlice = 110,
     kGetDelFile = 111,
@@ -1636,6 +1637,34 @@ class DeleteFileSessionOperation : public Operation {
 
  private:
   std::vector<FileSessionEntry> file_sessions_;
+};
+
+class KeepAliveFileSessionOperation : public Operation {
+ public:
+  struct Param {
+    struct FileSession {
+      Ino ino;
+      std::vector<std::string> session_ids;
+    };
+
+    std::vector<FileSession> file_sessions;
+  };
+
+  KeepAliveFileSessionOperation(Trace& trace, uint32_t fs_id, const Param& param)
+      : Operation(trace), fs_id_(fs_id), param_(param) {};
+  ~KeepAliveFileSessionOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kKeepAliveFileSession; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  uint32_t fs_id_;
+
+  const Param& param_;
 };
 
 class CleanDelSliceOperation : public Operation {

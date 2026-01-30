@@ -21,7 +21,7 @@ namespace meta {
 
 const std::string kExecutorWorkerSetName = "meta_worker_set";
 
-DEFINE_uint32(vfs_meta_worker_num, 64, "number of meta workers");
+DEFINE_uint32(vfs_meta_worker_num, 32, "number of meta workers");
 DEFINE_uint32(vfs_meta_worker_max_pending_num, 1024,
               "meta worker max pending num");
 DEFINE_bool(vfs_meta_worker_use_pthread, false, "meta worker use pthread");

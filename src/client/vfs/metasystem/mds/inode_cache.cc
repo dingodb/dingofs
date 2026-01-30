@@ -37,25 +37,25 @@ bool Inode::PutIf(const AttrEntry& attr) {
       "[meta.icache.{}] update attr,this({}) version({}->{}).", ino_,
       (void*)this, version_, attr.version());
 
+  UpdateLastAccessTime();
+
   if (attr.version() <= version_) {
     return false;
   }
 
   // clone new attr
-  if (length_ != attr.length()) length_ = attr.length();
-  if (ctime_ != attr.ctime()) ctime_ = attr.ctime();
-  if (mtime_ != attr.mtime()) mtime_ = attr.mtime();
-  if (atime_ != attr.atime()) atime_ = attr.atime();
-  if (uid_ != attr.uid()) uid_ = attr.uid();
-  if (gid_ != attr.gid()) gid_ = attr.gid();
-  if (mode_ != attr.mode()) mode_ = attr.mode();
-  if (nlink_ != attr.nlink()) nlink_ = attr.nlink();
-  if (symlink_ != attr.symlink()) symlink_ = attr.symlink();
-  if (rdev_ != attr.rdev()) rdev_ = attr.rdev();
-  if (flags_ != attr.flags()) flags_ = attr.flags();
-  if (maybe_tiny_file_ != attr.maybe_tiny_file()) {
-    maybe_tiny_file_ = attr.maybe_tiny_file();
-  }
+  length_ = attr.length();
+  ctime_ = attr.ctime();
+  mtime_ = attr.mtime();
+  atime_ = attr.atime();
+  uid_ = attr.uid();
+  gid_ = attr.gid();
+  mode_ = attr.mode();
+  nlink_ = attr.nlink();
+  symlink_ = attr.symlink();
+  rdev_ = attr.rdev();
+  flags_ = attr.flags();
+  maybe_tiny_file_ = attr.maybe_tiny_file();
 
   parents_.clear();
   parents_.insert(parents_.end(), attr.parents().begin(), attr.parents().end());
@@ -128,11 +128,11 @@ Inode::AttrEntry Inode::ToAttrEntry() const {
 }
 
 void Inode::UpdateLastAccessTime() {
-  last_access_time_s_.store(utils::Timestamp(), std::memory_order_relaxed);
+  last_active_time_s_.store(utils::Timestamp(), std::memory_order_relaxed);
 }
 
-uint64_t Inode::LastAccessTimeS() {
-  return last_access_time_s_.load(std::memory_order_relaxed);
+uint64_t Inode::GetlastActiveTime() {
+  return last_active_time_s_.load(std::memory_order_relaxed);
 }
 
 InodeSPtr InodeCache::Put(Ino ino, const AttrEntry& attr) {
@@ -196,12 +196,10 @@ std::vector<InodeSPtr> InodeCache::Get(const std::vector<uint64_t>& inoes) {
 }
 
 void InodeCache::CleanExpired(uint64_t expire_s) {
-  uint64_t now_s = utils::Timestamp();
-
   std::vector<InodeSPtr> inodes;
   shard_map_.iterate([&](const Map& map) {
     for (const auto& [_, inode] : map) {
-      if (inode->LastAccessTimeS() + expire_s < now_s) {
+      if (inode->GetlastActiveTime() < expire_s) {
         inodes.push_back(inode);
       }
     }
@@ -210,6 +208,8 @@ void InodeCache::CleanExpired(uint64_t expire_s) {
   for (const auto& inode : inodes) {
     Delete(inode->Ino());
     clean_count_ << 1;
+    LOG_DEBUG << fmt::format("[meta.icache.{}] clean expired inode.",
+                             inode->Ino());
   }
 }
 

@@ -191,9 +191,17 @@ void MDSServiceImpl::DoHeartbeat(google::protobuf::RpcController*, const pb::mds
 
   } else if (request->role() == pb::mds::ROLE_CLIENT) {
     auto span = StartSpan("MDSServiceImpl::ClientSendHeartbeat", request->info());
-    auto client = request->client();
+    const auto& client_info = request->client();
+    auto client = client_info.client();
     status = heartbeat->SendHeartbeat(ctx, client);
     SpanScope::SetStatus(span, status);
+
+    // todo: keep alive file sessions
+    if (!client_info.file_sessions().empty()) {
+      auto file_system = GetFileSystem(client_info.fs_id());
+
+      file_system->AsyncKeepAliveFileSession(Helper::PbRepeatedToVector(client_info.file_sessions()));
+    }
 
   } else if (request->role() == pb::mds::ROLE_CACHE_MEMBER) {
     auto span = StartSpan("MDSServiceImpl::CacheMemberSendHeartbeat", request->info());

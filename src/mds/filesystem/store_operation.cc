@@ -56,6 +56,8 @@ DEFINE_validator(mds_store_operation_merge_delay_us, brpc::PassValidate);
 DEFINE_bool(mds_tiny_file_data_enable, false, "enable tiny file data feature.");
 DEFINE_validator(mds_tiny_file_data_enable, brpc::PassValidate);
 
+DECLARE_uint32(mds_filesession_live_time_s);
+
 static const uint32_t kOpNameBufInitSize = 128;
 static const uint32_t kCleanCompactedSliceIntervalS = 180;  // 3 minutes
 
@@ -298,6 +300,9 @@ const char* Operation::OpName() const {
 
     case OpType::kScanFileSession:
       return "ScanFileSession";
+
+    case OpType::kKeepAliveFileSession:
+      return "KeepAliveFileSession";
 
     case OpType::kDeleteFileSession:
       return "DeleteFileSession";
@@ -2220,6 +2225,30 @@ Status ScanFileSessionOperation::Run(TxnUPtr& txn) {
 Status DeleteFileSessionOperation::Run(TxnUPtr& txn) {
   for (const auto& file_session : file_sessions_) {
     txn->Delete(MetaCodec::EncodeFileSessionKey(file_session.fs_id(), file_session.ino(), file_session.session_id()));
+  }
+
+  return Status::OK();
+}
+
+Status KeepAliveFileSessionOperation::Run(TxnUPtr& txn) {
+  CHECK(fs_id_ != 0) << "fs_id is 0";
+
+  std::vector<std::string> keys;
+  keys.reserve(param_.file_sessions.size());
+  for (const auto& file_session : param_.file_sessions) {
+    for (const auto& session_id : file_session.session_ids) {
+      keys.push_back(MetaCodec::EncodeFileSessionKey(fs_id_, file_session.ino, session_id));
+    }
+  }
+
+  std::vector<KeyValue> kvs;
+  auto status = txn->BatchGet(keys, kvs);
+  if (!status.ok()) return status;
+
+  for (auto& kv : kvs) {
+    FileSessionEntry file_session = MetaCodec::DecodeFileSessionValue(kv.value);
+    file_session.set_expire_time_s(utils::Timestamp() + FLAGS_mds_filesession_live_time_s);
+    txn->Put(kv.key, MetaCodec::EncodeFileSessionValue(file_session));
   }
 
   return Status::OK();

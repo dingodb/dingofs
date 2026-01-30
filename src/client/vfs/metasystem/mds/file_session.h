@@ -20,6 +20,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -42,22 +43,22 @@ class FileSessionMap;
 
 class FileSession {
  public:
-  FileSession(Ino ino, InodeSPtr inode, ChunkSetSPtr chunk_set)
-      : ino_(ino), inode_(inode), chunk_set_(chunk_set) {}
+  FileSession(Ino ino, ChunkSetSPtr chunk_set)
+      : ino_(ino), chunk_set_(chunk_set) {}
   ~FileSession() = default;
 
-  static FileSessionSPtr New(Ino ino, InodeSPtr inode, ChunkSetSPtr chunk_set) {
-    return std::make_shared<FileSession>(ino, inode, chunk_set);
+  static FileSessionSPtr New(Ino ino, ChunkSetSPtr chunk_set) {
+    return std::make_shared<FileSession>(ino, chunk_set);
   }
 
   Ino GetIno() const { return ino_; }
   std::string GetSessionID(uint64_t fh);
+  std::vector<std::string> GetNeedKeepAliveSessionID();
   uint32_t GetFlags(uint64_t fh);
 
-  InodeSPtr& GetInode() {
-    CHECK(inode_ != nullptr) << fmt::format("inode is nullptr, ino({}).", ino_);
-    return inode_;
-  }
+  void SetInode(InodeSPtr inode) { inode_ = inode; }
+  InodeSPtr& GetInode() { return inode_; }
+
   ChunkSetSPtr& GetChunkSet() {
     CHECK(chunk_set_ != nullptr)
         << fmt::format("chunk_set is nullptr, ino({}).", ino_);
@@ -95,6 +96,8 @@ class FileSession {
 
   InodeSPtr inode_;
   ChunkSetSPtr chunk_set_;
+
+  uint64_t last_keep_alive_time_s_{utils::Timestamp()};
 };
 
 // used by open file
@@ -104,13 +107,14 @@ class FileSessionMap {
       : inode_cache_(inode_cache), chunk_cache_(chunk_cache) {}
   ~FileSessionMap() = default;
 
-  FileSessionSPtr Put(InodeSPtr& inode, uint64_t fh,
-                      const std::string& session_id, uint32_t flags);
+  FileSessionSPtr Put(Ino ino, uint64_t fh, const std::string& session_id,
+                      uint32_t flags);
   void Delete(Ino ino, uint64_t fh);
 
   std::string GetSessionID(Ino ino, uint64_t fh);
   FileSessionSPtr GetSession(Ino ino);
   std::vector<FileSessionSPtr> GetAllSession();
+  std::map<Ino, std::vector<std::string>> GetNeedKeepAliveSession();
 
   size_t Size();
   size_t Bytes();

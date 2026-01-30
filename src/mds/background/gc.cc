@@ -64,9 +64,6 @@ DEFINE_validator(mds_gc_delslice_reserve_time_s, brpc::PassValidate);
 DEFINE_uint32(mds_gc_delfile_reserve_time_s, 600, "gc del file reserve time");
 DEFINE_validator(mds_gc_delfile_reserve_time_s, brpc::PassValidate);
 
-DEFINE_uint32(mds_gc_filesession_reserve_time_s, 86400, "gc file session reserve time");
-DEFINE_validator(mds_gc_filesession_reserve_time_s, brpc::PassValidate);
-
 static const std::string kWorkerSetName = "GC";
 
 static const uint32_t kBatchDeleteObjectSize = 1000;
@@ -769,8 +766,7 @@ bool GcProcessor::ShouldCleanFileSession(const FileSessionEntry& file_session,
     return true;
   }
 
-  uint64_t now_s = utils::Timestamp();
-  return file_session.create_time_s() + FLAGS_mds_gc_filesession_reserve_time_s < now_s;
+  return file_session.expire_time_s() < utils::Timestamp();
 }
 
 bool GcProcessor::ShouldRecycleFs(const FsInfoEntry& fs_info) {

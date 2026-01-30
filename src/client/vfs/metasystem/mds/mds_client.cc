@@ -157,8 +157,9 @@ MDSMeta MDSClient::GetMds(Ino ino, bool& is_primary_mds) {
     is_primary_mds = false;
   }
 
-  VLOG(1) << fmt::format("[meta.client] query mds({}|{}:{}) for ino({}).",
-                         mds_meta.ID(), mds_meta.Host(), mds_meta.Port(), ino);
+  LOG_DEBUG << fmt::format("[meta.client] query mds({}|{}:{}) for ino({}).",
+                           mds_meta.ID(), mds_meta.Host(), mds_meta.Port(),
+                           ino);
   return mds_meta;
 }
 
@@ -171,9 +172,9 @@ MDSMeta MDSClient::GetMdsByParent(int64_t parent, bool& is_primary_mds) {
     is_primary_mds = false;
   }
 
-  VLOG(1) << fmt::format("[meta.client] query mds({}|{}:{}) for parent({}).",
-                         mds_meta.ID(), mds_meta.Host(), mds_meta.Port(),
-                         parent);
+  LOG_DEBUG << fmt::format("[meta.client] query mds({}|{}:{}) for parent({}).",
+                           mds_meta.ID(), mds_meta.Host(), mds_meta.Port(),
+                           parent);
   return mds_meta;
 }
 
@@ -205,7 +206,8 @@ Status MDSClient::GetFsInfo(RPC& rpc, uint32_t fs_id,
 
 RPC& MDSClient::GetRpc() { return rpc_; }
 
-Status MDSClient::Heartbeat() {
+Status MDSClient::Heartbeat(
+    const std::map<Ino, std::vector<std::string>>& need_keep_alive_sessions) {
   if (client_id_.ID().empty()) {
     return Status::InvalidParam("client id is empty");
   }
@@ -221,7 +223,10 @@ Status MDSClient::Heartbeat() {
   pb::mds::HeartbeatResponse response;
 
   request.set_role(pb::mds::ROLE_CLIENT);
-  auto* client = request.mutable_client();
+  auto* client_info = request.mutable_client();
+  client_info->set_fs_id(fs_id_);
+
+  auto* client = client_info->mutable_client();
   client->set_id(client_id_.ID());
   client->set_hostname(client_id_.Hostname());
   client->set_ip(client_id_.IP());
@@ -229,6 +234,16 @@ Status MDSClient::Heartbeat() {
   client->set_mountpoint(client_id_.Mountpoint());
   client->set_fs_name(fs_info_.GetName());
   client->set_create_time_ms(client_id_.CreateTimeMs());
+
+  // add need keep alive file sessions
+  for (const auto& [ino, session_ids] : need_keep_alive_sessions) {
+    auto* file_session =
+        request.mutable_client()->mutable_file_sessions()->Add();
+    file_session->set_ino(ino);
+    for (const auto& session_id : session_ids) {
+      file_session->add_session_ids(session_id);
+    }
+  }
 
   auto status = SendRequest(span_ctx, span, get_mds_fn, "MDSService",
                             "Heartbeat", request, response);

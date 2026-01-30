@@ -26,11 +26,31 @@ namespace client {
 namespace vfs {
 namespace meta {
 
+static const uint32_t kFileSessionKeepAliveIntervalS = 180;
+
 std::string FileSession::GetSessionID(uint64_t fh) {
   utils::ReadLockGuard lk(lock_);
 
   auto it = session_id_map_.find(fh);
   return (it != session_id_map_.end()) ? it->second.session_id : "";
+}
+
+std::vector<std::string> FileSession::GetNeedKeepAliveSessionID() {
+  utils::ReadLockGuard lk(lock_);
+
+  std::vector<std::string> session_ids;
+
+  uint64_t now_s = utils::Timestamp();
+  if ((now_s - last_keep_alive_time_s_) > kFileSessionKeepAliveIntervalS) {
+    session_ids.reserve(session_id_map_.size());
+    for (const auto& [_, session_info] : session_id_map_) {
+      session_ids.push_back(session_info.session_id);
+    }
+
+    last_keep_alive_time_s_ = now_s;
+  }
+
+  return session_ids;
 }
 
 uint32_t FileSession::GetFlags(uint64_t fh) {
@@ -47,7 +67,6 @@ void FileSession::AddSession(uint64_t fh, const std::string& session_id,
   session_id_map_[fh] = {flags, session_id};
 
   IncRef();
-  chunk_set_->RefreshLastActiveTime();
 }
 
 uint32_t FileSession::DeleteSession(uint64_t fh) {
@@ -131,14 +150,11 @@ bool FileSession::Load(const Json::Value& value) {
   return true;
 }
 
-FileSessionSPtr FileSessionMap::Put(InodeSPtr& inode, uint64_t fh,
+FileSessionSPtr FileSessionMap::Put(Ino ino, uint64_t fh,
                                     const std::string& session_id,
                                     uint32_t flags) {
-  CHECK(inode != nullptr) << "inode is nullptr.";
   CHECK(fh != 0) << "fh is zero.";
   CHECK(!session_id.empty()) << "session_id is empty.";
-
-  const Ino ino = inode->Ino();
 
   LOG(INFO) << fmt::format(
       "[meta.filesession.{}.{}] add file session, session_id({}).", ino, fh,
@@ -146,14 +162,13 @@ FileSessionSPtr FileSessionMap::Put(InodeSPtr& inode, uint64_t fh,
 
   FileSessionSPtr file_session;
   shard_map_.withWLock(
-      [this, ino, inode, fh, &session_id, &file_session, flags](Map& map) {
+      [this, ino, fh, &session_id, &file_session, flags](Map& map) {
         auto it = map.find(ino);
         if (it != map.end()) {
           file_session = it->second;
           file_session->AddSession(fh, session_id, flags);
         } else {
-          file_session =
-              FileSession::New(ino, inode, chunk_cache_.GetOrCreate(ino));
+          file_session = FileSession::New(ino, chunk_cache_.GetOrCreate(ino));
           file_session->AddSession(fh, session_id, flags);
           map[ino] = file_session;
           total_count_ << 1;
@@ -233,6 +248,22 @@ std::vector<FileSessionSPtr> FileSessionMap::GetAllSession() {
   return file_sessions;
 }
 
+std::map<Ino, std::vector<std::string>>
+FileSessionMap::GetNeedKeepAliveSession() {
+  std::map<Ino, std::vector<std::string>> file_session_id_map;
+
+  shard_map_.iterate([&file_session_id_map](const Map& map) {
+    for (const auto& [ino, file_session] : map) {
+      auto session_ids = file_session->GetNeedKeepAliveSessionID();
+      if (!session_ids.empty()) {
+        file_session_id_map[ino] = session_ids;
+      }
+    }
+  });
+
+  return file_session_id_map;
+}
+
 size_t FileSessionMap::Size() {
   size_t size = 0;
   shard_map_.iterate([&size](Map& map) { size += map.size(); });
@@ -308,8 +339,8 @@ bool FileSessionMap::Load(const Json::Value& value) {
     for (const auto& item : file_sessions) {
       Ino ino = item["ino"].asUInt64();
 
-      auto file_session = FileSession::New(ino, inode_cache_.Get(ino),
-                                           chunk_cache_.GetOrCreate(ino));
+      auto file_session = FileSession::New(ino, chunk_cache_.GetOrCreate(ino));
+      file_session->SetInode(inode_cache_.Get(ino));
       CHECK(file_session->Load(item))
           << fmt::format("load file session fail, ino({}).", ino);
 

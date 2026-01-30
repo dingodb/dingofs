@@ -1273,6 +1273,54 @@ Status FileSystem::FlushFile(Context& ctx, Ino ino, const FlushFileParam& param,
   return Status::OK();
 }
 
+void FileSystem::AsyncKeepAliveFileSession(const std::vector<FileSessionParam>& file_sessions) {
+  struct Param {
+    FileSystem& filesystem;
+    uint32_t fs_id;
+    const std::vector<FileSessionParam> file_sessions;
+
+    Param(FileSystem& filesystem, uint32_t fs_id, const std::vector<FileSessionParam>& file_sessions)
+        : filesystem(filesystem), fs_id(fs_id), file_sessions(file_sessions) {}
+  };
+
+  // async close file
+  Param* param = new Param(*this, fs_id_, file_sessions);
+
+  bthread_t tid;
+  const bthread_attr_t attr = BTHREAD_ATTR_SMALL;
+  int ret = bthread_start_background(
+      &tid, &attr,
+      [](void* arg) -> void* {
+        Param* param = static_cast<Param*>(arg);
+        uint32_t fs_id = param->fs_id;
+
+        std::string ino_str;
+        Trace trace;
+        KeepAliveFileSessionOperation::Param op_param;
+        for (const auto& file_session : param->file_sessions) {
+          KeepAliveFileSessionOperation::Param::FileSession op_file_session;
+          op_file_session.ino = file_session.ino();
+          op_file_session.session_ids = Helper::PbRepeatedToVector(file_session.session_ids());
+          op_param.file_sessions.push_back(std::move(op_file_session));
+          ino_str += fmt::format("{},", file_session.ino());
+        }
+        ino_str.resize(ino_str.size() - 1);  // remove last ','
+
+        KeepAliveFileSessionOperation operation(trace, fs_id, op_param);
+
+        auto status = param->filesystem.RunOperation(&operation);
+        LOG(INFO) << fmt::format("[meta.fs.{}] keep alive file session finish, ino({}), status({}).", fs_id, ino_str,
+                                 status.error_str());
+
+        return nullptr;
+      },
+      param);
+  if (ret != 0) {
+    delete param;
+    LOG(FATAL) << fmt::format("[meta.fs.{}] start bthread fail, error({}).", fs_id_, strerror(ret));
+  }
+}
+
 // create directory, need below steps:
 // 1. create inode
 // 2. create dentry and update parent inode(nlink/mtime/ctime)
