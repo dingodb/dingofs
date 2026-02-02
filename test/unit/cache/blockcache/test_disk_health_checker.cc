@@ -13,7 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
+/*
+ * Project: DingoFS
+ * Created Date: 2026-02-02
+ * Author: Wine93
+ */
 #include <gtest/gtest.h>
 
 #include <filesystem>
@@ -35,7 +39,7 @@ class DiskHealthCheckerTest : public ::testing::Test {
     option.cache_dir = test_dir_;
     option.cache_size_mb = 100;
     option.cache_index = 0;
-    layout_ = std::make_shared<DiskCacheLayout>(option);
+    layout_ = std::make_shared<DiskCacheLayout>(option.cache_index, option.cache_dir);
   }
 
   void TearDown() override { std::filesystem::remove_all(test_dir_); }

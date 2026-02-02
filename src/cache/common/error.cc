@@ -17,7 +17,7 @@
 /*
  * Project: DingoFS
  * Created Date: 2026-01-19
- * Author: Jingli Chen (Wine93)
+ * Author: Wine93
  */
 
 #include "cache/common/error.h"
