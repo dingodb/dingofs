@@ -233,23 +233,29 @@ Status FileSystem::GetPartitionParentInode(Context& ctx, PartitionPtr& partition
 
 void FileSystem::AddDentryToPartition(Ino parent, const Dentry& dentry, uint64_t version) {
   auto partition = GetPartitionFromCache(parent);
-  CHECK(partition != nullptr) << fmt::format("partition({}) not exist in cache.", parent);
-
-  partition->Put(dentry, version);
+  if (partition != nullptr) {
+    partition->Put(dentry, version);
+  } else {
+    LOG(WARNING) << fmt::format("partition({}) not exist in cache.", parent);
+  }
 }
 
 void FileSystem::DeleteDentryFromPartition(Ino parent, const std::string& name, uint64_t version) {
   auto partition = GetPartitionFromCache(parent);
-  CHECK(partition != nullptr) << fmt::format("partition({}) not exist in cache.", parent);
-
-  partition->Delete(name, version);
+  if (partition != nullptr) {
+    partition->Delete(name, version);
+  } else {
+    LOG(WARNING) << fmt::format("partition({}) not exist in cache.", parent);
+  }
 }
 
 void FileSystem::DeleteDentryFromPartition(Ino parent, const std::vector<std::string>& names, uint64_t version) {
   auto partition = GetPartitionFromCache(parent);
-  CHECK(partition != nullptr) << fmt::format("partition({}) not exist in cache.", parent);
-
-  partition->Delete(names, version);
+  if (partition != nullptr) {
+    partition->Delete(names, version);
+  } else {
+    LOG(WARNING) << fmt::format("partition({}) not exist in cache.", parent);
+  }
 }
 
 Status FileSystem::GetPartition(Context& ctx, Ino parent, PartitionPtr& out_partition) {
@@ -1140,23 +1146,21 @@ Status FileSystem::Open(Context& ctx, Ino ino, const OpenParam& param, EntryOut&
   auto& data = result.data;
 
   LOG(INFO) << fmt::format(
-      "[fs.{}.{}][{}us] open {} finish, flags({:o}:{}) fetch_chunk({}:{}) fetch_data({}:{}) status({}).", fs_id_,
-      ctx.RequestId(), duration.ElapsedUs(), ino, flags, Helper::DescOpenFlags(flags), fetch_from,
+      "[fs.{}.{}][{}us] open {}/{} finish, flags({:o}:{}) fetch_chunk({}:{}) fetch_data({}:{}) status({}).", fs_id_,
+      ctx.RequestId(), duration.ElapsedUs(), ino, param.session_id, flags, Helper::DescOpenFlags(flags), fetch_from,
       chunks_out.empty() ? chunks.size() : chunks_out.size(), param.is_prefetch_data, data.size(), status.error_str());
 
   if (!status.ok()) return status;
 
   entry_out.attr = attr;
-  for (auto& chunk : chunks) {
-    chunks_out.push_back(chunk);
-  }
+  for (auto& chunk : chunks) chunks_out.push_back(chunk);
   data_out.swap(data);
   data_version = result.data_version;
 
-  file_session_manager_.Put(file_session);
+  bool put_success = file_session_manager_.Put(file_session);
 
   // update quota
-  if (delta_bytes != 0) {
+  if (put_success && delta_bytes != 0) {
     std::string reason = fmt::format("open.{}", ino);
     quota_manager_.UpdateFsUsage(delta_bytes, 0, reason);
     for (auto parent : attr.parents()) {

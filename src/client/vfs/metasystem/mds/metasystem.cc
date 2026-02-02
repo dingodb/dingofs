@@ -752,7 +752,6 @@ void MDSMetaSystem::AsyncOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
           LOG(ERROR) << fmt::format(
               "[meta.fs.{}.{}] async open file fail, error({}).", param->ino,
               param->fh, status.ToString());
-          param->self.file_session_map_.Delete(param->ino, param->fh);
         }
 
         delete param;

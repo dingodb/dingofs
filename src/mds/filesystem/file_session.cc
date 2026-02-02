@@ -56,6 +56,7 @@ FileSessionCache::FileSessionCache(uint32_t fs_id)
 
 bool FileSessionCache::Put(FileSessionSPtr file_session) {
   utils::WriteLockGuard guard(lock_);
+
   auto key = Key{.ino = file_session->ino(), .session_id = file_session->session_id()};
   auto it = file_session_map_.find(key);
   if (it != file_session_map_.end()) {
@@ -156,9 +157,14 @@ FileSessionSPtr FileSessionManager::Create(uint64_t ino, const std::string& clie
   return NewFileSession(fs_id_, ino, client_id, session_id);
 }
 
-void FileSessionManager::Put(FileSessionSPtr file_session) {
-  CHECK(file_session_cache_.Put(file_session))
-      << fmt::format("[filesession] put file session fail, {}/{}", file_session->ino(), file_session->client_id());
+bool FileSessionManager::Put(FileSessionSPtr file_session) {
+  if (!file_session_cache_.Put(file_session)) {
+    LOG(WARNING) << fmt::format("[filesession] put file session fail, {}/{}", file_session->ino(),
+                                file_session->session_id());
+    return false;
+  }
+
+  return true;
 }
 
 FileSessionSPtr FileSessionManager::Get(uint64_t ino, const std::string& session_id, bool just_cache) {

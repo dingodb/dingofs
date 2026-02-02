@@ -87,7 +87,7 @@ class FileSessionManager {
   }
 
   FileSessionSPtr Create(uint64_t ino, const std::string& client_id, const std::string& session_id) const;
-  void Put(FileSessionSPtr file_session);
+  bool Put(FileSessionSPtr file_session);
   Status IsExist(uint64_t ino, bool just_cache, bool& is_exist);
   Status Delete(uint64_t ino, const std::string& session_id);
   Status Delete(uint64_t ino);

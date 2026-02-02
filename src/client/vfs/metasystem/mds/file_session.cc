@@ -72,7 +72,12 @@ void FileSession::AddSession(uint64_t fh, const std::string& session_id,
 uint32_t FileSession::DeleteSession(uint64_t fh) {
   utils::WriteLockGuard lk(lock_);
 
-  session_id_map_.erase(fh);
+  auto it = session_id_map_.find(fh);
+  if (it == session_id_map_.end()) {
+    return ref_count_.load();
+  }
+
+  session_id_map_.erase(it);
 
   return DecRef();
 }
