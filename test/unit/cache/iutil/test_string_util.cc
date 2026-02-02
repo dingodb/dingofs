@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
+ * Copyright (c) 2026 dingodb.com, Inc. All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,31 +16,34 @@
 
 /*
  * Project: DingoFS
- * Created Date: 2024-09-04
- * Author: Jingli Chen (Wine93)
+ * Created Date: 2026-02-02
+ * Author: AI
  */
 
-#include <sstream>
+#include <gtest/gtest.h>
 
-#include "cache/utils/access_log.h"
-#include "glog/logging.h"
-#include "gtest/gtest.h"
+#include <string>
+
+#include "cache/iutil/string_util.h"
 
 namespace dingofs {
 namespace cache {
+namespace iutil {
 
-using cache::utils::LogGuard;
+class StringUtilTest : public ::testing::Test {};
 
-class LogTest : public ::testing::Test {
- protected:
-  void SetUp() override {}
-  void TearDown() override {}
-};
-
-// Only test core dump
-TEST_F(LogTest, Basic) {
-  LogGuard log([] { return "hello world"; });
+TEST_F(StringUtilTest, StringValidator) {
+  EXPECT_TRUE(StringValidator("test", "non_empty"));
+  EXPECT_TRUE(StringValidator("test", "a"));
+  EXPECT_FALSE(StringValidator("test", ""));
 }
 
+TEST_F(StringUtilTest, DeleteBuffer) {
+  char* buffer = new char[100];
+  buffer[0] = 'a';
+  DeleteBuffer(buffer);
+}
+
+}  // namespace iutil
 }  // namespace cache
 }  // namespace dingofs

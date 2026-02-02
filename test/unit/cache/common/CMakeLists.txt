@@ -1,4 +1,4 @@
-# Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
+# Copyright (c) 2026 dingodb.com, Inc. All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,13 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-file(GLOB TEST_CACHE_BLOCKCACHE_SRCS "*.cc")
+file(GLOB TEST_CACHE_COMMON_SRCS "*.cc")
 
-add_library(test_cache_blockcache OBJECT
-    ${TEST_CACHE_BLOCKCACHE_SRCS}
+add_library(test_cache_common OBJECT
+    ${TEST_CACHE_COMMON_SRCS}
 )
 
-target_link_libraries(test_cache_blockcache
+target_link_libraries(test_cache_common
     cache_lib
     ${TEST_DEPS_WITHOUT_MAIN}
 )

@@ -33,19 +33,17 @@ static std::unordered_map<pb::cache::BlockCacheErrCode, Status> kErrCodes{
     {pb::cache::BlockCacheErrIOError, Status::IoError("")},
 };
 
-static std::unordered_map<int32_t, pb::cache::BlockCacheErrCode> kSysCodes;
-
-static bool initialized = [] {
-  for (const auto& pair : kErrCodes) {
-    kSysCodes[pair.second.ToSysErrNo()] = pair.first;
-  }
-  return true;
-}();
-
 pb::cache::BlockCacheErrCode ToPBErr(Status status) {
-  auto it = kSysCodes.find(status.ToSysErrNo());
-  if (it != kSysCodes.end()) {
-    return it->second;
+  if (status.ok()) {
+    return pb::cache::BlockCacheOk;
+  } else if (status.IsInvalidParam()) {
+    return pb::cache::BlockCacheErrInvalidParam;
+  } else if (status.IsNotFound()) {
+    return pb::cache::BlockCacheErrNotFound;
+  } else if (status.IsIoError()) {
+    return pb::cache::BlockCacheErrIOError;
+  } else if (status.IsInternal()) {
+    return pb::cache::BlockCacheErrFailure;
   }
   return pb::cache::BlockCacheErrUnknown;
 }
