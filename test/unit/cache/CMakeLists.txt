@@ -12,5 +12,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-#add_subdirectory(storage)
-#add_subdirectory(blockcache)
+add_subdirectory(common)
+add_subdirectory(iutil)
+add_subdirectory(blockcache)
+add_subdirectory(remotecache)
+add_subdirectory(cachegroup)
+add_subdirectory(tiercache)
+
+add_executable(test_cache
+    main.cc
+)
+
+target_link_libraries(test_cache
+    $<TARGET_OBJECTS:test_cache_common>
+    $<TARGET_OBJECTS:test_cache_iutil>
+    $<TARGET_OBJECTS:test_cache_blockcache>
+    $<TARGET_OBJECTS:test_cache_remotecache>
+    $<TARGET_OBJECTS:test_cache_cachegroup>
+    $<TARGET_OBJECTS:test_cache_tiercache>
+
+    cache_lib
+
+    ${TEST_DEPS}
+)
+
+set_target_properties(test_cache PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${TEST_EXECUTABLE_OUTPUT_PATH}
+)

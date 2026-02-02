@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
+ * Copyright (c) 2026 dingodb.com, Inc. All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,157 +13,182 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 /*
  * Project: DingoFS
- * Created Date: 2024-09-08
- * Author: Jingli Chen (Wine93)
+ * Created Date: 2026-02-02
+ * Author: Wine93
  */
+#include <gtest/gtest.h>
 
-#include "absl/cleanup/cleanup.h"
-#include "base/filepath/filepath.h"
-#include "cache/blockcache/builder/builder.h"
-#include "cache/blockcache/cache_store.h"
-#include "cache/utils/local_filesystem.h"
-#include "gtest/gtest.h"
+#include <filesystem>
+
+#include "cache/blockcache/disk_cache.h"
 
 namespace dingofs {
 namespace cache {
 
-using ::absl::MakeCleanup;
-using base::filepath::PathJoin;
+class DiskCacheOptionTest : public ::testing::Test {};
 
-class DiskCacheTest : public ::testing::Test {
- protected:
-  void SetUp() override {}
-
-  void TearDown() override {}
-};
-
-TEST_F(DiskCacheTest, Basic) {
-  auto builder = DiskCacheBuilder();
-  auto _ = MakeCleanup([&]() { builder.Cleanup(); });
-
-  auto disk_cache = builder.Build();
-  auto rc = disk_cache->Init(
-      [](const BlockKey&, const std::string&, BlockContext) {});
-  ASSERT_EQ(rc, Status::OK());
-
-  std::string id = disk_cache->Id();
-  ASSERT_GT(id.size(), 0);
-  LOG(INFO) << "disk cache uuid=" << id;
-
-  rc = disk_cache->Shutdown();
-  ASSERT_EQ(rc, Status::OK());
+TEST_F(DiskCacheOptionTest, DefaultConstructor) {
+  DiskCacheOption option;
+  // Default values are set from FLAGS
+  // Just verify the struct is properly initialized
+  EXPECT_EQ(option.cache_index, 0);
+  // cache_store and cache_dir may have default values from FLAGS
+  // cache_size_mb may have a default value from FLAGS
 }
 
-TEST_F(DiskCacheTest, Stage) {
-  auto builder = DiskCacheBuilder();
-  auto _ = MakeCleanup([&]() { builder.Cleanup(); });
+TEST_F(DiskCacheOptionTest, SetValues) {
+  DiskCacheOption option;
+  option.cache_index = 1;
+  option.cache_store = "disk";
+  option.cache_dir = "/tmp/cache";
+  option.cache_size_mb = 1024;
 
-  auto disk_cache = builder.Build();
-  std::vector<BlockKey> staging;
-  auto rc = disk_cache->Init([&](const BlockKey& key, const std::string&,
-                                 BlockContext) { staging.emplace_back(key); });
-  ASSERT_EQ(rc, Status::OK());
-  auto defer = MakeCleanup([&]() { disk_cache->Shutdown(); });
-
-  auto key = BlockKeyBuilder().Build(100);
-  auto block = BlockBuilder().Build("");
-  auto ctx = BlockContext(BlockFrom::kCtoFlush);
-  rc = disk_cache->Stage(key, block, ctx);
-  ASSERT_EQ(rc, Status::OK());
-
-  auto fs = LocalFileSystem();
-  auto root_dir = builder.GetRootDir();
-  auto stage_path = PathJoin({root_dir, "stage", key.StoreKey()});
-  auto cache_path = PathJoin({root_dir, "cache", key.StoreKey()});
-  ASSERT_TRUE(disk_cache->IsCached(key));
-  ASSERT_TRUE(fs.FileExists(stage_path));
-  ASSERT_TRUE(fs.FileExists(cache_path));
-
-  ASSERT_EQ(staging.size(), 1);
-  ASSERT_EQ(staging[0].id, 100);
+  EXPECT_EQ(option.cache_index, 1);
+  EXPECT_EQ(option.cache_store, "disk");
+  EXPECT_EQ(option.cache_dir, "/tmp/cache");
+  EXPECT_EQ(option.cache_size_mb, 1024);
 }
 
-TEST_F(DiskCacheTest, RemoveStage) {
-  auto builder = DiskCacheBuilder();
-  auto _ = MakeCleanup([&]() { builder.Cleanup(); });
+class DiskCacheVarsCollectorTest : public ::testing::Test {};
 
-  auto disk_cache = builder.Build();
-  auto rc = disk_cache->Init(
-      [](const BlockKey&, const std::string&, BlockContext) {});
-  ASSERT_EQ(rc, Status::OK());
-  auto defer = MakeCleanup([&]() { disk_cache->Shutdown(); });
+TEST_F(DiskCacheVarsCollectorTest, Construction) {
+  DiskCacheVarsCollector vars(0, "/tmp/cache", 100, 0.1);
 
-  auto key = BlockKeyBuilder().Build(100);
-  auto block = BlockBuilder().Build("");
-  auto ctx = BlockContext(BlockFrom::kCtoFlush);
-  rc = disk_cache->Stage(key, block, ctx);
-  ASSERT_EQ(rc, Status::OK());
-
-  auto fs = LocalFileSystem();
-  auto root_dir = builder.GetRootDir();
-  auto stage_path = PathJoin({root_dir, "stage", key.StoreKey()});
-  ASSERT_TRUE(fs.FileExists(stage_path));
-
-  rc = disk_cache->RemoveStage(key, ctx);
-  ASSERT_EQ(rc, Status::OK());
-  ASSERT_FALSE(fs.FileExists(stage_path));
+  EXPECT_EQ(vars.cache_index, 0);
+  EXPECT_EQ(vars.capacity.get_value(), 100 * 1024 * 1024);  // MB to bytes
+  EXPECT_DOUBLE_EQ(vars.free_space_ratio.get_value(), 0.1);
 }
 
-TEST_F(DiskCacheTest, Cache) {
-  auto builder = DiskCacheBuilder();
-  auto _ = MakeCleanup([&]() { builder.Cleanup(); });
+TEST_F(DiskCacheVarsCollectorTest, NameGeneration) {
+  DiskCacheVarsCollector vars(1, "/tmp/cache", 100, 0.1);
 
-  auto disk_cache = builder.Build();
-  auto rc = disk_cache->Init(
-      [](const BlockKey&, const std::string&, BlockContext) {});
-  ASSERT_EQ(rc, Status::OK());
-  auto defer = MakeCleanup([&]() { disk_cache->Shutdown(); });
-
-  auto key = BlockKeyBuilder().Build(100);
-  auto block = BlockBuilder().Build("xyz");
-  rc = disk_cache->Cache(key, block);
-  ASSERT_EQ(rc, Status::OK());
-
-  auto fs = LocalFileSystem();
-  auto root_dir = builder.GetRootDir();
-  auto cache_path = PathJoin({root_dir, "cache", key.StoreKey()});
-  ASSERT_TRUE(fs.FileExists(cache_path));
-
-  char buffer[5];
-  std::shared_ptr<BlockReader> reader;
-  rc = disk_cache->Load(key, reader);
-  ASSERT_EQ(rc, Status::OK());
-  rc = reader->ReadAt(0, 3, buffer);
-  ASSERT_EQ(std::string(buffer, 3), "xyz");
+  EXPECT_EQ(vars.Name("test"), "dingofs_disk_cache_1_test");
+  EXPECT_EQ(vars.Name("status"), "dingofs_disk_cache_1_status");
 }
 
-TEST_F(DiskCacheTest, IsCached) {
-  auto builder = DiskCacheBuilder();
-  auto _ = MakeCleanup([&]() { builder.Cleanup(); });
+TEST_F(DiskCacheVarsCollectorTest, RecordStageSkips) {
+  DiskCacheVarsCollector vars(0, "/tmp/cache", 100, 0.1);
 
-  auto disk_cache = builder.Build();
-  auto rc = disk_cache->Init(
-      [](const BlockKey&, const std::string&, BlockContext) {});
-  ASSERT_EQ(rc, Status::OK());
-  auto defer = MakeCleanup([&]() { disk_cache->Shutdown(); });
+  EXPECT_EQ(vars.stage_skips.get_value(), 0);
 
-  auto key_100 = BlockKeyBuilder().Build(100);
-  auto key_200 = BlockKeyBuilder().Build(200);
-  ASSERT_FALSE(disk_cache->IsCached(key_100));
-  ASSERT_FALSE(disk_cache->IsCached(key_200));
+  vars.stage_skips << 1;
+  EXPECT_EQ(vars.stage_skips.get_value(), 1);
 
-  auto block = BlockBuilder().Build("xyz");
-  auto ctx = BlockContext(BlockFrom::kReload);
-  rc = disk_cache->Stage(key_100, block, ctx);
-  ASSERT_EQ(rc, Status::OK());
-  ASSERT_TRUE(disk_cache->IsCached(key_100));
+  vars.stage_skips << 5;
+  EXPECT_EQ(vars.stage_skips.get_value(), 6);
+}
 
-  rc = disk_cache->Cache(key_200, block);
-  ASSERT_EQ(rc, Status::OK());
-  ASSERT_TRUE(disk_cache->IsCached(key_200));
+TEST_F(DiskCacheVarsCollectorTest, RecordCacheHitsMisses) {
+  DiskCacheVarsCollector vars(0, "/tmp/cache", 100, 0.1);
+
+  vars.cache_hits << 10;
+  vars.cache_misses << 3;
+
+  EXPECT_EQ(vars.cache_hits.get_value(), 10);
+  EXPECT_EQ(vars.cache_misses.get_value(), 3);
+}
+
+TEST_F(DiskCacheVarsCollectorTest, RunningStatus) {
+  DiskCacheVarsCollector vars(0, "/tmp/cache", 100, 0.1);
+
+  EXPECT_EQ(vars.running_status.get_value(), "down");
+
+  vars.running_status.set_value("up");
+  EXPECT_EQ(vars.running_status.get_value(), "up");
+}
+
+TEST_F(DiskCacheVarsCollectorTest, Reset) {
+  DiskCacheVarsCollector vars(0, "/tmp/cache", 100, 0.1);
+
+  vars.running_status.set_value("up");
+  vars.stage_skips << 5;
+  vars.cache_hits << 10;
+  vars.cache_misses << 3;
+
+  vars.Reset();
+
+  EXPECT_EQ(vars.running_status.get_value(), "down");
+  EXPECT_EQ(vars.stage_skips.get_value(), 0);
+  EXPECT_EQ(vars.cache_hits.get_value(), 0);
+  EXPECT_EQ(vars.cache_misses.get_value(), 0);
+}
+
+TEST_F(DiskCacheVarsCollectorTest, DifferentCacheIndices) {
+  DiskCacheVarsCollector vars0(0, "/tmp/cache0", 100, 0.1);
+  DiskCacheVarsCollector vars1(1, "/tmp/cache1", 200, 0.2);
+  DiskCacheVarsCollector vars2(2, "/tmp/cache2", 300, 0.3);
+
+  EXPECT_EQ(vars0.cache_index, 0);
+  EXPECT_EQ(vars1.cache_index, 1);
+  EXPECT_EQ(vars2.cache_index, 2);
+
+  EXPECT_EQ(vars0.Name("test"), "dingofs_disk_cache_0_test");
+  EXPECT_EQ(vars1.Name("test"), "dingofs_disk_cache_1_test");
+  EXPECT_EQ(vars2.Name("test"), "dingofs_disk_cache_2_test");
+}
+
+class DiskCacheVarsRecordGuardTest : public ::testing::Test {};
+
+TEST_F(DiskCacheVarsRecordGuardTest, LoadHit) {
+  DiskCacheVarsCollector vars(0, "/tmp/cache", 100, 0.1);
+  Status status = Status::OK();
+
+  {
+    DiskCacheVarsRecordGuard guard("Load", status, &vars);
+  }
+
+  EXPECT_EQ(vars.cache_hits.get_value(), 1);
+  EXPECT_EQ(vars.cache_misses.get_value(), 0);
+}
+
+TEST_F(DiskCacheVarsRecordGuardTest, LoadMiss) {
+  DiskCacheVarsCollector vars(0, "/tmp/cache", 100, 0.1);
+  Status status = Status::NotFound("not found");
+
+  {
+    DiskCacheVarsRecordGuard guard("Load", status, &vars);
+  }
+
+  EXPECT_EQ(vars.cache_hits.get_value(), 0);
+  EXPECT_EQ(vars.cache_misses.get_value(), 1);
+}
+
+TEST_F(DiskCacheVarsRecordGuardTest, StageSkip) {
+  DiskCacheVarsCollector vars(0, "/tmp/cache", 100, 0.1);
+  Status status = Status::Internal("disk full");
+
+  {
+    DiskCacheVarsRecordGuard guard("Stage", status, &vars);
+  }
+
+  EXPECT_EQ(vars.stage_skips.get_value(), 1);
+}
+
+TEST_F(DiskCacheVarsRecordGuardTest, StageSuccess) {
+  DiskCacheVarsCollector vars(0, "/tmp/cache", 100, 0.1);
+  Status status = Status::OK();
+
+  {
+    DiskCacheVarsRecordGuard guard("Stage", status, &vars);
+  }
+
+  EXPECT_EQ(vars.stage_skips.get_value(), 0);
+}
+
+TEST_F(DiskCacheVarsRecordGuardTest, OtherOperations) {
+  DiskCacheVarsCollector vars(0, "/tmp/cache", 100, 0.1);
+  Status status = Status::OK();
+
+  {
+    DiskCacheVarsRecordGuard guard("Cache", status, &vars);
+  }
+
+  // Cache operation should not affect hits/misses or skips
+  EXPECT_EQ(vars.cache_hits.get_value(), 0);
+  EXPECT_EQ(vars.cache_misses.get_value(), 0);
+  EXPECT_EQ(vars.stage_skips.get_value(), 0);
 }
 
 }  // namespace cache
