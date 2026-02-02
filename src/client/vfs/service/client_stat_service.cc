@@ -374,6 +374,9 @@ static void RenderClientInfo(const Json::Value& json_value,
   os << "<br>";
   os << fmt::format("mds_addr: {}", mds_addr);
   os << "<br>";
+  os << fmt::format("fuse connection: {}",
+                    dingofs::client::vfs::GetFuseConnection(mount_point));
+  os << "<br>";
 
   os << "</div>";
   os << "<br>";

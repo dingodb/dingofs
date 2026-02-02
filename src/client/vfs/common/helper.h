@@ -29,6 +29,7 @@
 #include "fmt/format.h"
 #include "glog/logging.h"
 #include "json/value.h"
+#include "sys/sysmacros.h"
 
 namespace dingofs {
 namespace client {
@@ -225,6 +226,15 @@ inline std::string FsInfo2Str(const FsInfo& fs_info) {
       fs_info.name, fs_info.id, fs_info.chunk_size, fs_info.block_size,
       fs_info.uuid, StoreType2Str(fs_info.storage_info.store_type),
       FsStatus2Str(fs_info.status));
+}
+
+inline std::string GetFuseConnection(const std::string& mountpoint) {
+  struct stat st;
+  if (stat(mountpoint.c_str(), &st) != 0) {
+    return {};
+  }
+
+  return fmt::format("/sys/fs/fuse/connections/{}", minor(st.st_dev));
 }
 
 }  // namespace vfs
