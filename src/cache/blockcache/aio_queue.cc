@@ -137,7 +137,7 @@ void AioQueue::BatchSubmitIO(Aio* aios[], int n) {
 }
 
 void AioQueue::BackgroundWait() {
-  Aio* completed_aios[FLAGS_iodepth];
+  Aio* completed_aios[FLAGS_iodepth * 2];
 
   while (running_.load(std::memory_order_relaxed)) {
     int n = io_uring_->WaitIO(1000, completed_aios);
@@ -145,7 +145,7 @@ void AioQueue::BackgroundWait() {
       continue;
     }
 
-    CHECK_LE(n, FLAGS_iodepth);
+    CHECK_LE(n, FLAGS_iodepth * 2);
 
     for (int i = 0; i < n; i++) {
       OnComplete(completed_aios[i]);
