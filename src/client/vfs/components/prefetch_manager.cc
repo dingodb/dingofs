@@ -106,8 +106,7 @@ void PrefetchManager::ProcessPrefetch(const PrefetchContext& context) {
 
   const auto block_size = vfs_hub_->GetFsInfo().block_size;
   // Prefetch include current block
-  uint32_t prefetch_offset =
-      (context.prefetch_offset / block_size) * block_size;
+  uint32_t prefetch_offset = context.prefetch_offset;
   uint32_t prefetch_max_len = std::min(context.prefetch_blocks * block_size,
                                        context.file_size - prefetch_offset);
 
@@ -134,7 +133,7 @@ void PrefetchManager::AsyncPrefetch(BlockKey key, size_t length) {
       vfs_hub_->GetTraceManager()->StartSpan("PrefetchManager::AsyncPrefetch");
 
   if (IsBusy(key)) {
-    VLOG(12) << "Skip block: " << key.Filename() << ", length: " << length;
+    VLOG(6) << "Skip block: " << key.Filename() << ", length: " << length;
     return;
   }
 
