@@ -18,23 +18,16 @@
 #include <iomanip>
 #include <string>
 
-#include "cache/utils/con_hash.h"
-#include "cache/utils/ketama_con_hash.h"
+#include "cache/iutil/con_hash.h"
+#include "cache/iutil/ketama_con_hash.h"
 #include "gtest/gtest.h"
 
 namespace dingofs {
 
-namespace base {
-namespace hash {
+namespace cache {
+namespace iutil {
 
-class KetamaConHashTest : public ::testing::Test {
- public:
-  KetamaConHashTest() = default;
-
-  ~KetamaConHashTest() override = default;
-};
-
-TEST_F(KetamaConHashTest, BaseTest) {
+TEST(KetamaConHashTest, BaseTest) {
   KetamaConHash hash;
   hash.AddNode("/sda");
   hash.Final();
@@ -48,7 +41,7 @@ TEST_F(KetamaConHashTest, BaseTest) {
   }
 }
 
-TEST_F(KetamaConHashTest, DiskDistributeTest) {
+TEST(KetamaConHashTest, DiskDistributeTest) {
   KetamaConHash hash;
   hash.AddNode("/sda");
   hash.AddNode("/sdb");
@@ -78,7 +71,7 @@ TEST_F(KetamaConHashTest, DiskDistributeTest) {
 }
 
 // 100 w test too slow, use 10 w
-TEST_F(KetamaConHashTest, ReDiskDistributeTest) {
+TEST(KetamaConHashTest, ReDiskDistributeTest) {
   KetamaConHash hash;
   hash.AddNode("/sda");
   hash.AddNode("/sdb");
@@ -165,7 +158,7 @@ TEST_F(KetamaConHashTest, ReDiskDistributeTest) {
   }
 }
 
-TEST_F(KetamaConHashTest, WeightTest) {
+TEST(KetamaConHashTest, WeightTest) {
   KetamaConHash hash;
   hash.AddNode("/sda", 5);
   hash.AddNode("/sdb", 10);
@@ -197,7 +190,7 @@ TEST_F(KetamaConHashTest, WeightTest) {
   }
 }
 
-TEST_F(KetamaConHashTest, IpDistributeTest) {
+TEST(KetamaConHashTest, IpDistributeTest) {
   KetamaConHash hash;
   hash.AddNode("10.0.1.1:11211");
   hash.AddNode("10.0.1.2:11211");
@@ -231,6 +224,6 @@ TEST_F(KetamaConHashTest, IpDistributeTest) {
   }
 }
 
-}  // namespace hash
-}  // namespace base
+}  // namespace iutil
+}  // namespace cache
 }  // namespace dingofs

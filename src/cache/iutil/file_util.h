@@ -64,7 +64,6 @@ Status Walk(const std::string& prefix, WalkFunc func);
 Status Link(const std::string& src, const std::string& dest);
 Status Unlink(const std::string& path);
 Status Rename(const std::string& oldpath, const std::string& newpath);
-Status Fallocate(int fd, int mode, off_t offset, size_t len);
 Status Stat(const std::string& path, FileInfo* info);
 Status StatFS(const std::string& path, struct StatFS* stat);
 Status CreateFile(const std::string& filepath, int mode, int* fd);
@@ -73,6 +72,7 @@ Status OpenFile(const std::string& filepath, int flags, int mode, int* fd);
 Status WriteFile(const std::string& filepath, const std::string& content);
 Status ReadFile(const std::string& filepath, std::string* content);
 Status Close(int fd);
+Status Fallocate(int fd, int mode, off_t offset, size_t len);
 
 }  // namespace iutil
 }  // namespace cache
