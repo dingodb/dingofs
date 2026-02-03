@@ -25,6 +25,7 @@
 #include <iostream>
 
 #include "cache/cachegroup/server.h"
+#include "common/const.h"
 #include "common/flag.h"
 #include "common/helper.h"
 #include "common/logging.h"
@@ -81,9 +82,8 @@ int DingoCache::ParseFlags(int argc, char** argv) {
   // log
   configs.emplace_back(
       "log", fmt::format("[{} {} {}(verbose)]",
-                         dingofs::Helper::ExpandPath(
-                             ::FLAGS_log_dir.empty() ? dingofs::kDefaultLogDir
-                                                     : ::FLAGS_log_dir),
+                         ::FLAGS_log_dir.empty() ? GetDefaultDir(kLogDir)
+                                                 : ::FLAGS_log_dir,
                          dingofs::FLAGS_log_level, dingofs::FLAGS_log_v));
   // mds
   configs.emplace_back("mds", fmt::format("[{}]", FLAGS_mds_addrs));

@@ -22,19 +22,19 @@
 #include <chrono>
 #include <cstdlib>
 
-#include "utils/scoped_cleanup.h"
 #include "absl/strings/str_format.h"
 #include "client/fuse/fuse_common.h"
 #include "client/fuse/fuse_lowlevel_ops_func.h"
 #include "client/fuse/fuse_passfd.h"
 #include "client/fuse/fuse_upgrade_manager.h"
-#include "common/const.h"
+#include "common/directory.h"
 #include "common/helper.h"
 #include "common/options/client.h"
 #include "fmt/format.h"
 #include "fuse_opt.h"
 #include "glog/logging.h"
 #include "utils/concurrent/concurrent.h"
+#include "utils/scoped_cleanup.h"
 
 using ::dingofs::utils::BufToHexString;
 
@@ -57,7 +57,7 @@ DEFINE_validator(fuse_use_clone_fd, brpc::PassValidate);
 DEFINE_uint32(fuse_max_threads, 64, "max threads for libfuse");
 DEFINE_validator(fuse_max_threads, brpc::PassValidate);
 
-DEFINE_string(socket_path, kDefaultSockDir,
+DEFINE_string(socket_path, GetDefaultDir(kSocketDir),
               "path for store unix domain socket file");
 DEFINE_validator(socket_path,
                  [](const char* /*name*/, const std::string& value) {

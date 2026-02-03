@@ -16,7 +16,7 @@
 
 #include <cstdint>
 
-#include "common/const.h"
+#include "common/directory.h"
 #include "common/helper.h"
 #include "fmt/core.h"
 #include "glog/logging.h"
@@ -67,7 +67,7 @@ static LogLevel ToLogLevel(const std::string& log_level) {
 
 void Logger::Init(const std::string& role) {
   ::FLAGS_log_dir = dingofs::Helper::ExpandPath(
-      ::FLAGS_log_dir.empty() ? kDefaultLogDir : ::FLAGS_log_dir);
+      ::FLAGS_log_dir.empty() ? GetDefaultDir(kLogDir) : ::FLAGS_log_dir);
 
   const std::string log_dir = ::FLAGS_log_dir;
 

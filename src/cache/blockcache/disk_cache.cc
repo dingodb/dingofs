@@ -32,7 +32,7 @@
 #include "cache/blockcache/local_filesystem.h"
 #include "cache/common/context.h"
 #include "cache/iutil/file_util.h"
-#include "common/const.h"
+#include "common/directory.h"
 #include "common/helper.h"
 #include "common/options/cache.h"
 #include "utils/uuid.h"
@@ -40,7 +40,7 @@
 namespace dingofs {
 namespace cache {
 
-DEFINE_string(cache_dir, kDefaultCacheDir,
+DEFINE_string(cache_dir, GetDefaultDir(kCacheDir),
               "directory to store blocks, mutiple paths are separated by "
               "commas, e.g.: /mnt/cache1,/mnt/cache2");
 DEFINE_validator(cache_dir, [](const char* /*name*/, const std::string& value) {

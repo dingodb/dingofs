@@ -26,7 +26,7 @@
 #include <vector>
 
 #include "common/blockaccess/accesser_common.h"
-#include "common/const.h"
+#include "common/directory.h"
 #include "common/helper.h"
 #include "common/logging.h"
 #include "common/options/cache.h"
@@ -50,9 +50,8 @@ static std::vector<std::pair<std::string, std::string>> GenConfigs(
   // log
   configs.emplace_back(
       "log", fmt::format("[{} {} {}(verbose)]",
-                         dingofs::Helper::ExpandPath(
-                             ::FLAGS_log_dir.empty() ? dingofs::kDefaultLogDir
-                                                     : ::FLAGS_log_dir),
+                         ::FLAGS_log_dir.empty() ? GetDefaultDir(kLogDir)
+                                                 : ::FLAGS_log_dir,
                          dingofs::FLAGS_log_level, dingofs::FLAGS_log_v));
   // meta
   configs.emplace_back("meta", fmt::format("[{}]", meta));

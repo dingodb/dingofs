@@ -23,6 +23,10 @@
 #ifndef DINGOFS_SRC_COMMON_CONST_H_
 #define DINGOFS_SRC_COMMON_CONST_H_
 
+#include <butil/file_util.h>
+#include <fmt/format.h>
+#include <unistd.h>
+
 #include <cstdint>
 #include <string>
 #include <unordered_map>
@@ -78,26 +82,6 @@ static constexpr uint64_t kKiB = 1024ULL;
 static constexpr uint64_t kMiB = 1024ULL * kKiB;
 static constexpr uint64_t kGiB = 1024ULL * kMiB;
 static constexpr uint64_t kTiB = 1024ULL * kGiB;
-
-// default dingofs runtime data dir, including cache data, log, meta, etc.
-static const std::string kDefaultRuntimeBaseDir = "~/.dingofs/";
-static const std::string kDefaultCacheDir = kDefaultRuntimeBaseDir + "cache";
-static const std::string kDefaultLogDir = kDefaultRuntimeBaseDir + "log";
-
-static const std::string kDefaultDataDir = kDefaultRuntimeBaseDir + "data";
-static const std::string kDefaultMetaDBDir = kDefaultRuntimeBaseDir + "meta";
-
-static const std::string kDefaultSockDir = kDefaultRuntimeBaseDir + "run";
-
-// brpc flags default value
-static const std::string kDefaultBrpcConnectTimeoutAsUnreachable = "10";
-static const std::string kDefaultBrpcMaxConnectionPoolSize = "500";
-static const std::unordered_map<std::string, std::string>
-    kBrpcFlagDefaultValueMap = {
-        {"log_dir", kDefaultLogDir},
-        {"max_connection_pool_size", kDefaultBrpcMaxConnectionPoolSize},
-        {"connect_timeout_as_unreachable",
-         kDefaultBrpcConnectTimeoutAsUnreachable}};
 
 }  // namespace dingofs
 

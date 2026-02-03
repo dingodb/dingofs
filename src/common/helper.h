@@ -160,12 +160,7 @@ class Helper {
     return getuid();
   }
 
-  static std::string GetOriginalHomeDir() {
-    struct passwd* pw = GetSudoUserInfo();
-    if (pw) {
-      return pw->pw_dir;
-    }
-
+  static std::string GetHomeDir() {
     std::string home_dir = butil::GetHomeDir().value();
     if (home_dir.empty()) {
       LOG(FATAL) << "get home dir fail!";
@@ -176,7 +171,7 @@ class Helper {
 
   // parse ~/.dingofs/path to /home/user/.dingofs/path
   static std::string ExpandPath(const std::string& path) {
-    std::string home_dir = GetOriginalHomeDir();
+    std::string home_dir = GetHomeDir();
     std::string expand_dir;
     butil::ReplaceChars(path, "~", home_dir, &expand_dir);
     return expand_dir;

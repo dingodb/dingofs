@@ -27,6 +27,7 @@
 #include "bthread/mutex.h"
 #include "client/vfs/metasystem/mds/helper.h"
 #include "common/const.h"
+#include "common/directory.h"
 #include "common/helper.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
@@ -43,8 +44,6 @@ namespace local {
 using dingofs::mds::AttrEntry;
 using dingofs::mds::DentryEntry;
 using dingofs::mds::MetaCodec;
-
-const std::string kDbDir = fmt::format("{}/store", kDefaultRuntimeBaseDir);
 
 constexpr uint32_t kFsId = 10000;
 const std::string kFsDefaultName = "local_fs";
@@ -191,7 +190,7 @@ bool OpenFileMemo::Load(const Json::Value& value) {
 LocalMetaSystem::LocalMetaSystem(const std::string& db_path,
                                  const std::string& fs_name,
                                  const std::string& storage_info)
-    : db_path_(db_path.empty() ? kDbDir : db_path),
+    : db_path_(db_path.empty() ? GetDefaultDir(kDbDir) : db_path),
       fs_name_(fs_name.empty() ? kFsDefaultName : fs_name),
       storage_info_(storage_info),
       inode_cache_(meta::InodeCache::New(kFsId)) {}  // NOLINT
@@ -1493,8 +1492,7 @@ void LocalMetaSystem::SetFsStorageInfo(mds::FsInfoEntry& fs_info,
   if (storage_info_map.empty()) {  // use default storage path
     fs_info.set_fs_type(pb::mds::FsType::LOCALFILE);
     auto* file_info = fs_info.mutable_extra()->mutable_file_info();
-    auto data_path = fmt::format(
-        "{}/{}", dingofs::Helper::ExpandPath(kDefaultDataDir), fs_name_);
+    auto data_path = fmt::format("{}/{}", GetDefaultDir(kDataDir), fs_name_);
     LOG(INFO) << "use default local storage data path: " << data_path;
 
     file_info->set_path(data_path);

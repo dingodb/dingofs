@@ -27,10 +27,16 @@
 
 #include <iostream>
 
-#include "common/const.h"
+#include "common/directory.h"
 #include "common/version.h"
 
 namespace dingofs {
+
+// brpc flags default value
+static const std::unordered_map<std::string, std::string>
+    kBrpcFlagDefaultValueMap = {{"log_dir", GetDefaultDir(kLogDir)},
+                                {"max_connection_pool_size", "10"},
+                                {"connect_timeout_as_unreachable", "500"}};
 
 struct FlagExtraInfo {
   std::string program;                // program name
@@ -92,7 +98,7 @@ static std::string GenCurrentFlags() {
 }
 
 static void ResetBrpcFlagDefaultValue() {
-  for (const auto& [name, value] : dingofs::kBrpcFlagDefaultValueMap) {
+  for (const auto& [name, value] : kBrpcFlagDefaultValueMap) {
     gflags::CommandLineFlagInfo flag_info;
     if (!gflags::GetCommandLineFlagInfo(name.c_str(), &flag_info)) {
       continue;

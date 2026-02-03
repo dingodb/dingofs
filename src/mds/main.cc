@@ -17,6 +17,7 @@
 #include <string>
 
 #include "backtrace.h"
+#include "common/const.h"
 #include "common/flag.h"
 #include "common/options/common.h"
 #include "common/options/mds.h"
@@ -239,10 +240,10 @@ static std::vector<std::pair<std::string, std::string>> GenConfigs() {
   // config
   configs.emplace_back("config", fmt::format("[{}]", dingofs::FLAGS_conf));
   // log
-  configs.emplace_back("log", fmt::format("[{} {} {}(verbose)]",
-                                          dingofs::Helper::ExpandPath(::FLAGS_log_dir.empty() ? dingofs::kDefaultLogDir
-                                                                                              : ::FLAGS_log_dir),
-                                          dingofs::FLAGS_log_level, dingofs::FLAGS_log_v));
+  configs.emplace_back("log",
+                       fmt::format("[{} {} {}(verbose)]",
+                                   ::FLAGS_log_dir.empty() ? dingofs::GetDefaultDir(dingofs::kLogDir) : ::FLAGS_log_dir,
+                                   dingofs::FLAGS_log_level, dingofs::FLAGS_log_v));
   // storage
   if (dingofs::mds::FLAGS_mds_storage_engine == "dummy") {
     configs.emplace_back("storage", fmt::format("[{}]", dingofs::mds::FLAGS_mds_storage_engine));

@@ -37,7 +37,7 @@
 #include "common/blockaccess/accesser_common.h"
 #include "common/blockaccess/block_accesser.h"
 #include "common/blockaccess/rados/rados_common.h"
-#include "common/const.h"
+#include "common/directory.h"
 #include "common/options/client.h"
 #include "common/status.h"
 #include "utils/executor/thread/executor_impl.h"
@@ -60,8 +60,7 @@ static MetaSystemUPtr BuildMetaSystem(const VFSConfig& vfs_conf,
 
   } else if (vfs_conf.metasystem_type == MetaSystemType::LOCAL) {
     return std::make_unique<local::LocalMetaSystem>(
-        dingofs::Helper::ExpandPath(kDefaultMetaDBDir), vfs_conf.fs_name,
-        vfs_conf.storage_info);
+        GetDefaultDir(kMetaDir), vfs_conf.fs_name, vfs_conf.storage_info);
 
   } else if (vfs_conf.metasystem_type == MetaSystemType::MDS) {
     return meta::MDSMetaSystem::Build(vfs_conf.fs_name, vfs_conf.mds_addrs,
