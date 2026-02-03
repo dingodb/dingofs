@@ -30,42 +30,42 @@ namespace dingofs {
 namespace cache {
 namespace iutil {
 
-class TimeUtilTest : public ::testing::Test {};
+TEST(TimeUtilTest, TimeSpecConstructor) {
+  {
+    TimeSpec ts;
+    EXPECT_EQ(ts.sec, 0);
+    EXPECT_EQ(ts.nsec, 0);
+  }
 
-TEST_F(TimeUtilTest, TimeSpecDefaultConstructor) {
-  TimeSpec ts;
-  EXPECT_EQ(ts.sec, 0);
-  EXPECT_EQ(ts.nsec, 0);
+  {
+    TimeSpec ts(100);
+    EXPECT_EQ(ts.sec, 100);
+    EXPECT_EQ(ts.nsec, 0);
+  }
+
+  {
+    TimeSpec ts(100, 500);
+    EXPECT_EQ(ts.sec, 100);
+    EXPECT_EQ(ts.nsec, 500);
+  }
+
+  {
+    TimeSpec ts1(100, 500);
+    TimeSpec ts2(ts1);
+    EXPECT_EQ(ts2.sec, 100);
+    EXPECT_EQ(ts2.nsec, 500);
+  }
+
+  {
+    TimeSpec ts1(100, 500);
+    TimeSpec ts2;
+    ts2 = ts1;
+    EXPECT_EQ(ts2.sec, 100);
+    EXPECT_EQ(ts2.nsec, 500);
+  }
 }
 
-TEST_F(TimeUtilTest, TimeSpecConstructorWithSec) {
-  TimeSpec ts(100);
-  EXPECT_EQ(ts.sec, 100);
-  EXPECT_EQ(ts.nsec, 0);
-}
-
-TEST_F(TimeUtilTest, TimeSpecConstructorWithSecAndNsec) {
-  TimeSpec ts(100, 500);
-  EXPECT_EQ(ts.sec, 100);
-  EXPECT_EQ(ts.nsec, 500);
-}
-
-TEST_F(TimeUtilTest, TimeSpecCopyConstructor) {
-  TimeSpec ts1(100, 500);
-  TimeSpec ts2(ts1);
-  EXPECT_EQ(ts2.sec, 100);
-  EXPECT_EQ(ts2.nsec, 500);
-}
-
-TEST_F(TimeUtilTest, TimeSpecAssignment) {
-  TimeSpec ts1(100, 500);
-  TimeSpec ts2;
-  ts2 = ts1;
-  EXPECT_EQ(ts2.sec, 100);
-  EXPECT_EQ(ts2.nsec, 500);
-}
-
-TEST_F(TimeUtilTest, TimeSpecAddition) {
+TEST(TimeUtilTest, TimeSpecAddition) {
   TimeSpec ts1(100, 500);
   TimeSpec ts2(50, 300);
   TimeSpec result = ts1 + ts2;
@@ -73,7 +73,7 @@ TEST_F(TimeUtilTest, TimeSpecAddition) {
   EXPECT_EQ(result.nsec, 800);
 }
 
-TEST_F(TimeUtilTest, TimeSpecEquality) {
+TEST(TimeUtilTest, TimeSpecEquality) {
   TimeSpec ts1(100, 500);
   TimeSpec ts2(100, 500);
   TimeSpec ts3(100, 501);
@@ -84,7 +84,7 @@ TEST_F(TimeUtilTest, TimeSpecEquality) {
   EXPECT_FALSE(ts1 == ts4);
 }
 
-TEST_F(TimeUtilTest, TimeSpecInequality) {
+TEST(TimeUtilTest, TimeSpecInequality) {
   TimeSpec ts1(100, 500);
   TimeSpec ts2(100, 500);
   TimeSpec ts3(100, 501);
@@ -93,7 +93,7 @@ TEST_F(TimeUtilTest, TimeSpecInequality) {
   EXPECT_TRUE(ts1 != ts3);
 }
 
-TEST_F(TimeUtilTest, TimeSpecLessThan) {
+TEST(TimeUtilTest, TimeSpecLessThan) {
   TimeSpec ts1(100, 500);
   TimeSpec ts2(100, 501);
   TimeSpec ts3(101, 0);
@@ -105,7 +105,7 @@ TEST_F(TimeUtilTest, TimeSpecLessThan) {
   EXPECT_FALSE(ts2 < ts1);
 }
 
-TEST_F(TimeUtilTest, TimeSpecGreaterThan) {
+TEST(TimeUtilTest, TimeSpecGreaterThan) {
   TimeSpec ts1(100, 501);
   TimeSpec ts2(100, 500);
   TimeSpec ts3(99, 999);
@@ -117,14 +117,14 @@ TEST_F(TimeUtilTest, TimeSpecGreaterThan) {
   EXPECT_FALSE(ts2 > ts1);
 }
 
-TEST_F(TimeUtilTest, TimeSpecStreamOperator) {
+TEST(TimeUtilTest, TimeSpecStreamOperator) {
   TimeSpec ts(100, 500);
   std::ostringstream oss;
   oss << ts;
   EXPECT_EQ(oss.str(), "100.500");
 }
 
-TEST_F(TimeUtilTest, TimeNow) {
+TEST(TimeUtilTest, TimeNow) {
   TimeSpec before = TimeNow();
   TimeSpec after = TimeNow();
 

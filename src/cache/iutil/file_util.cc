@@ -213,14 +213,6 @@ Status Rename(const std::string& oldpath, const std::string& newpath) {
   return Status::OK();
 }
 
-Status Fallocate(int fd, int mode, off_t offset, size_t len) {
-  if (::fallocate(fd, mode, offset, len) < 0) {
-    PLOG(ERROR) << "Fail to fallocate file";
-    return PosixError(errno);
-  }
-  return Status::OK();
-}
-
 Status Stat(const std::string& path, FileInfo* info) {
   struct stat stat;
   if (::stat(path.c_str(), &stat) < 0) {
@@ -310,6 +302,14 @@ Status ReadFile(const std::string& filepath, std::string* content) {
 Status Close(int fd) {
   if (::close(fd) < 0) {
     PLOG(ERROR) << "Fail to close fd=" << fd;
+    return PosixError(errno);
+  }
+  return Status::OK();
+}
+
+Status Fallocate(int fd, int mode, off_t offset, size_t len) {
+  if (::fallocate(fd, mode, offset, len) < 0) {
+    PLOG(ERROR) << "Fail to fallocate file";
     return PosixError(errno);
   }
   return Status::OK();

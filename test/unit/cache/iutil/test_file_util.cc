@@ -26,9 +26,12 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <cerrno>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <map>
+#include <set>
 #include <string>
 
 #include "cache/iutil/file_util.h"
@@ -56,6 +59,7 @@ TEST_F(FileUtilTest, PosixError) {
   EXPECT_TRUE(PosixError(ENOENT).IsNotFound());
   EXPECT_TRUE(PosixError(EEXIST).IsExist());
   EXPECT_TRUE(PosixError(EIO).IsIoError());
+  EXPECT_TRUE(PosixError(ENOSPC).IsIoError());
 }
 
 TEST_F(FileUtilTest, StrMode) {
@@ -99,6 +103,15 @@ TEST_F(FileUtilTest, MkDirs) {
     EXPECT_FALSE(std::filesystem::exists(path));
     EXPECT_TRUE(MkDirs(path).ok());
     EXPECT_TRUE(std::filesystem::is_directory(path));
+
+    auto check_dir_permission = [](const std::string& dir) {
+      struct stat st;
+      EXPECT_EQ(stat(dir.c_str(), &st), 0);
+      EXPECT_EQ(st.st_mode & 0777, 0755);
+    };
+    check_dir_permission(test_dir_ + "/a");
+    check_dir_permission(test_dir_ + "/a/b");
+    check_dir_permission(test_dir_ + "/a/b/c");
   }
 
   {
@@ -136,6 +149,64 @@ TEST_F(FileUtilTest, Walk) {
   EXPECT_EQ(visited_files, files);
 }
 
+TEST_F(FileUtilTest, WalkWithFileInfo) {
+  std::string subdir = test_dir_ + "/walk_fileinfo";
+  std::filesystem::create_directories(subdir);
+
+  std::string src_file = subdir + "/source.txt";
+  std::string hard_link = subdir + "/hardlink.txt";
+
+  {
+    std::ofstream ofs(src_file);
+    ofs << "test content";
+    ofs.close();
+  }
+
+  EXPECT_EQ(link(src_file.c_str(), hard_link.c_str()), 0);
+
+  std::map<std::string, FileInfo> visited_files;
+  auto status =
+      Walk(subdir,
+           [&](const std::string& /*prefix*/, const FileInfo& info) -> Status {
+             visited_files[info.name] = info;
+             return Status::OK();
+           });
+
+  EXPECT_TRUE(status.ok());
+  EXPECT_EQ(visited_files.size(), 2);
+
+  EXPECT_EQ(visited_files["source.txt"].nlink, 2);
+  EXPECT_EQ(visited_files["hardlink.txt"].nlink, 2);
+  EXPECT_GT(visited_files["source.txt"].atime.sec, 0);
+  EXPECT_GT(visited_files["hardlink.txt"].atime.sec, 0);
+  EXPECT_EQ(visited_files["source.txt"].size, 12);
+  EXPECT_EQ(visited_files["hardlink.txt"].size, 12);
+}
+
+TEST_F(FileUtilTest, WalkLargeDirectory) {
+  std::string subdir = test_dir_ + "/walk_large";
+  std::filesystem::create_directories(subdir);
+
+  const int file_count = 10000;
+  for (int i = 0; i < file_count; i++) {
+    std::string filepath = subdir + "/file_" + std::to_string(i) + ".txt";
+    std::ofstream ofs(filepath);
+    ofs << "content";
+    ofs.close();
+  }
+
+  int visited_count = 0;
+  auto status =
+      Walk(subdir,
+           [&](const std::string& /*prefix*/, const FileInfo& info) -> Status {
+             visited_count++;
+             return Status::OK();
+           });
+
+  EXPECT_TRUE(status.ok());
+  EXPECT_EQ(visited_count, file_count);
+}
+
 TEST_F(FileUtilTest, WalkWithSubdirectory) {
   std::string subdir = test_dir_ + "/walk_subdir";
   std::filesystem::create_directories(subdir + "/nested");
@@ -163,6 +234,56 @@ TEST_F(FileUtilTest, WalkWithSubdirectory) {
   EXPECT_EQ(visited_files[1], subdir + "/nested/file2.txt");
 }
 
+TEST_F(FileUtilTest, WalkDeepNestedDirectory) {
+  std::string subdir = test_dir_ + "/walk_deep";
+
+  const int depth = 10;
+  const int subdirs_per_level = 3;
+  const int files_per_dir = 2;
+
+  std::function<void(const std::string&, int)> create_structure =
+      [&](const std::string& path, int level) {
+        std::filesystem::create_directories(path);
+
+        for (int i = 0; i < files_per_dir; i++) {
+          std::string filepath = path + "/file_" + std::to_string(i) + ".txt";
+          std::ofstream ofs(filepath);
+          ofs << "content";
+          ofs.close();
+        }
+
+        if (level < depth) {
+          for (int i = 0; i < subdirs_per_level; i++) {
+            std::string subpath = path + "/subdir_" + std::to_string(i);
+            create_structure(subpath, level + 1);
+          }
+        }
+      };
+
+  create_structure(subdir, 1);
+
+  int expected_files = 0;
+  int dirs = 1;
+  for (int l = 1; l <= depth; l++) {
+    expected_files += dirs * files_per_dir;
+    dirs *= subdirs_per_level;
+  }
+
+  std::vector<std::string> visited_files;
+  auto status = Walk(
+      subdir, [&](const std::string& prefix, const FileInfo& info) -> Status {
+        visited_files.push_back(prefix + "/" + info.name);
+        return Status::OK();
+      });
+
+  EXPECT_TRUE(status.ok());
+  EXPECT_EQ(static_cast<int>(visited_files.size()), expected_files);
+
+  std::set<std::string> unique_files(visited_files.begin(),
+                                     visited_files.end());
+  EXPECT_EQ(unique_files.size(), visited_files.size());
+}
+
 TEST_F(FileUtilTest, WalkNotExist) {
   std::string path = test_dir_ + "/not_exist_dir";
   auto status = Walk(path, [](const std::string&, const FileInfo&) -> Status {
@@ -182,9 +303,11 @@ TEST_F(FileUtilTest, WalkStopOnError) {
   }
 
   int count = 0;
+  std::vector<std::string> visited_files;
   auto status =
-      Walk(subdir, [&](const std::string&, const FileInfo&) -> Status {
+      Walk(subdir, [&](const std::string&, const FileInfo& info) -> Status {
         count++;
+        visited_files.push_back(info.name);
         if (count >= 2) {
           return Status::Internal("stop");
         }
@@ -193,6 +316,11 @@ TEST_F(FileUtilTest, WalkStopOnError) {
 
   EXPECT_TRUE(status.IsInternal());
   EXPECT_EQ(count, 2);
+  EXPECT_EQ(visited_files.size(), 2);
+  for (const auto& name : visited_files) {
+    EXPECT_TRUE(name.find("file") != std::string::npos);
+    EXPECT_TRUE(name.find(".txt") != std::string::npos);
+  }
 }
 
 TEST_F(FileUtilTest, Link) {
@@ -251,27 +379,21 @@ TEST_F(FileUtilTest, Rename) {
   }
 }
 
-TEST_F(FileUtilTest, Fallocate) {
-  std::string filepath = test_dir_ + "/fallocate_test.txt";
-  int fd = -1;
-
-  EXPECT_TRUE(CreateFile(filepath, 0644, &fd).ok());
-  EXPECT_TRUE(Fallocate(fd, 0, 0, 4096).ok());
-
-  FileInfo info;
-  EXPECT_TRUE(Stat(filepath, &info).ok());
-  EXPECT_EQ(info.size, 4096);
-
-  EXPECT_TRUE(Close(fd).ok());
-}
-
 TEST_F(FileUtilTest, Stat) {
   {
     std::string filepath = test_dir_ + "/stat_test.txt";
     std::string content = "Hello, World!";
-    std::ofstream ofs(filepath);
-    ofs << content;
-    ofs.close();
+
+    int fd = open(filepath.c_str(), O_CREAT | O_WRONLY, 0644);
+    EXPECT_GE(fd, 0);
+    write(fd, content.c_str(), content.size());
+    close(fd);
+
+    fd = open(filepath.c_str(), O_RDONLY);
+    EXPECT_GE(fd, 0);
+    char buf[64];
+    read(fd, buf, sizeof(buf));
+    close(fd);
 
     FileInfo info;
     EXPECT_TRUE(Stat(filepath, &info).ok());
@@ -316,6 +438,11 @@ TEST_F(FileUtilTest, CreateFile) {
   EXPECT_TRUE(CreateFile(filepath, 0644, &fd).ok());
   EXPECT_GE(fd, 0);
   EXPECT_TRUE(FileIsExist(filepath));
+
+  struct stat st;
+  EXPECT_EQ(stat(filepath.c_str(), &st), 0);
+  EXPECT_EQ(st.st_mode & 0777, 0644);
+
   EXPECT_TRUE(Close(fd).ok());
 }
 
@@ -329,6 +456,11 @@ TEST_F(FileUtilTest, OpenFile) {
     int fd = -1;
     EXPECT_TRUE(OpenFile(filepath, O_RDONLY, &fd).ok());
     EXPECT_GE(fd, 0);
+
+    int flags = fcntl(fd, F_GETFL);
+    EXPECT_NE(flags, -1);
+    EXPECT_EQ(flags & O_ACCMODE, O_RDONLY);
+
     EXPECT_TRUE(Close(fd).ok());
   }
 
@@ -336,6 +468,30 @@ TEST_F(FileUtilTest, OpenFile) {
     int fd = -1;
     EXPECT_TRUE(OpenFile(filepath, O_RDWR, 0644, &fd).ok());
     EXPECT_GE(fd, 0);
+
+    int flags = fcntl(fd, F_GETFL);
+    EXPECT_NE(flags, -1);
+    EXPECT_EQ(flags & O_ACCMODE, O_RDWR);
+
+    EXPECT_TRUE(Close(fd).ok());
+  }
+
+  {
+    std::string new_filepath = test_dir_ + "/open_create.txt";
+    int fd = -1;
+    EXPECT_FALSE(FileIsExist(new_filepath));
+    EXPECT_TRUE(OpenFile(new_filepath, O_CREAT | O_RDWR, 0755, &fd).ok());
+    EXPECT_GE(fd, 0);
+    EXPECT_TRUE(FileIsExist(new_filepath));
+
+    int flags = fcntl(fd, F_GETFL);
+    EXPECT_NE(flags, -1);
+    EXPECT_EQ(flags & O_ACCMODE, O_RDWR);
+
+    struct stat st;
+    EXPECT_EQ(stat(new_filepath.c_str(), &st), 0);
+    EXPECT_EQ(st.st_mode & 0777, 0755);
+
     EXPECT_TRUE(Close(fd).ok());
   }
 
@@ -379,6 +535,25 @@ TEST_F(FileUtilTest, ReadFile) {
     std::string content;
     EXPECT_TRUE(ReadFile(filepath, &content).IsNotFound());
   }
+}
+
+TEST_F(FileUtilTest, Fallocate) {
+  std::string filepath = test_dir_ + "/fallocate_test.txt";
+  int fd = -1;
+
+  EXPECT_TRUE(CreateFile(filepath, 0644, &fd).ok());
+
+  FileInfo info_before;
+  EXPECT_TRUE(Stat(filepath, &info_before).ok());
+  EXPECT_EQ(info_before.size, 0);
+
+  EXPECT_TRUE(Fallocate(fd, 0, 0, 4096).ok());
+
+  FileInfo info_after;
+  EXPECT_TRUE(Stat(filepath, &info_after).ok());
+  EXPECT_EQ(info_after.size, 4096);
+
+  EXPECT_TRUE(Close(fd).ok());
 }
 
 }  // namespace iutil

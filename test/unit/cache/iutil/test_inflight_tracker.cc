@@ -32,9 +32,7 @@ namespace dingofs {
 namespace cache {
 namespace iutil {
 
-class InflightTrackerTest : public ::testing::Test {};
-
-TEST_F(InflightTrackerTest, BasicAddRemove) {
+TEST(InflightTrackerTest, BasicAddRemove) {
   InflightTracker tracker(10);
 
   auto status = tracker.Add("task1");
@@ -43,7 +41,7 @@ TEST_F(InflightTrackerTest, BasicAddRemove) {
   tracker.Remove("task1");
 }
 
-TEST_F(InflightTrackerTest, DuplicateAdd) {
+TEST(InflightTrackerTest, DuplicateAdd) {
   InflightTracker tracker(10);
 
   auto status1 = tracker.Add("task1");
@@ -55,7 +53,7 @@ TEST_F(InflightTrackerTest, DuplicateAdd) {
   tracker.Remove("task1");
 }
 
-TEST_F(InflightTrackerTest, MultipleTasksUnique) {
+TEST(InflightTrackerTest, MultipleTasksUnique) {
   InflightTracker tracker(10);
 
   EXPECT_TRUE(tracker.Add("task1").ok());
@@ -71,7 +69,7 @@ TEST_F(InflightTrackerTest, MultipleTasksUnique) {
   tracker.Remove("task3");
 }
 
-TEST_F(InflightTrackerTest, AddAfterRemove) {
+TEST(InflightTrackerTest, AddAfterRemove) {
   InflightTracker tracker(10);
 
   EXPECT_TRUE(tracker.Add("task1").ok());
@@ -82,7 +80,7 @@ TEST_F(InflightTrackerTest, AddAfterRemove) {
   tracker.Remove("task1");
 }
 
-TEST_F(InflightTrackerTest, MaxInflightsLimit) {
+TEST(InflightTrackerTest, MaxInflightsLimit) {
   InflightTracker tracker(2);
 
   EXPECT_TRUE(tracker.Add("task1").ok());
@@ -109,7 +107,7 @@ TEST_F(InflightTrackerTest, MaxInflightsLimit) {
   tracker.Remove("task3");
 }
 
-TEST_F(InflightTrackerTest, ConcurrentAddRemove) {
+TEST(InflightTrackerTest, ConcurrentAddRemove) {
   InflightTracker tracker(100);
   std::atomic<int> success_count{0};
 
@@ -140,12 +138,12 @@ TEST_F(InflightTrackerTest, ConcurrentAddRemove) {
   EXPECT_EQ(success_count.load(), 200);
 }
 
-TEST_F(InflightTrackerTest, ZeroInflightsNeverAdd) {
+TEST(InflightTrackerTest, ZeroInflightsNeverAdd) {
   // With 0 max inflights, Add should always block
   // We can't really test this without timeout, skip for now
 }
 
-TEST_F(InflightTrackerTest, SingleInflight) {
+TEST(InflightTrackerTest, SingleInflight) {
   InflightTracker tracker(1);
 
   EXPECT_TRUE(tracker.Add("task1").ok());
