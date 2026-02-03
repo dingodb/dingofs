@@ -45,16 +45,17 @@ class PeerConnection {
  public:
   PeerConnection()
       : id_(kConnectionId.fetch_add(1, std::memory_order_relaxed)) {}
+
   static PeerConnectionUPtr New() { return std::make_unique<PeerConnection>(); }
 
   Status Connect(const std::string& ip, uint32_t port, uint32_t timeout_ms);
   void Close();
-  brpc::Channel* GetChannel();
+  std::shared_ptr<brpc::Channel> GetChannel();
 
  private:
   uint64_t id_;
   bthread::RWLock rwlock_;
-  std::unique_ptr<brpc::Channel> channel_;
+  std::shared_ptr<brpc::Channel> channel_;
 };
 
 }  // namespace cache

@@ -188,7 +188,7 @@ Status TierBlockCache::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
   Status status = Status::NotFound("no cache layer found");
 
   // Firstly, try local cache
-  if (EnableLocalCache()) {
+  if (EnableLocalCache() || EnableLocalStage()) {
     status = local_block_cache_->Range(ctx, key, offset, length, buffer,
                                        {.retrieve_storage = false});
     if (status.ok()) {

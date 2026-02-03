@@ -145,6 +145,8 @@ void AioQueue::BackgroundWait() {
       continue;
     }
 
+    CHECK_LE(n, FLAGS_iodepth);
+
     for (int i = 0; i < n; i++) {
       OnComplete(completed_aios[i]);
     }

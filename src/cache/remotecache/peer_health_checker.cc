@@ -125,7 +125,7 @@ void PeerHealthChecker::Shutdown() {
 Status PeerHealthChecker::SendPingRequest() {
   auto timeout_ms = FLAGS_cache_ping_rpc_timeout_ms;
   Status status;
-  auto* channel = conn_->GetChannel();
+  auto channel = conn_->GetChannel();
   if (nullptr == channel) {
     status = conn_->Connect(ip_, port_, timeout_ms);
     if (!status.ok()) {
@@ -135,7 +135,8 @@ Status PeerHealthChecker::SendPingRequest() {
     }
   }
 
-  channel = CHECK_NOTNULL(conn_->GetChannel());
+  channel = conn_->GetChannel();
+  CHECK_NOTNULL(channel);
 
   brpc::Controller cntl;
   cntl.ignore_eovercrowded();
@@ -143,7 +144,7 @@ Status PeerHealthChecker::SendPingRequest() {
 
   pb::cache::PingRequest request;
   pb::cache::PingResponse reponse;
-  pb::cache::BlockCacheService_Stub stub(channel);
+  pb::cache::BlockCacheService_Stub stub(channel.get());
   stub.Ping(&cntl, &request, &reponse, nullptr);
   if (cntl.Failed()) {
     LOG(ERROR) << "Fail to send ping request to peer: " << cntl.ErrorText();

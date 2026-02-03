@@ -44,11 +44,11 @@ Status PeerConnection::Connect(const std::string& ip, uint32_t port,
   brpc::ChannelOptions options;
   options.connect_timeout_ms = timeout_ms;
   options.connection_group = fmt::format("{}:{}:{}", ip, port, id_);
-  channel_ = std::make_unique<brpc::Channel>();
+  channel_ = std::make_shared<brpc::Channel>();
   rc = channel_->Init(ep, &options);
   if (rc != 0) {
     LOG(ERROR) << "Fail to init channel for address=" << ip << ":" << port;
-    channel_.reset(nullptr);
+    channel_.reset();
     return Status::Internal("init channel failed");
   }
 
@@ -59,15 +59,12 @@ Status PeerConnection::Connect(const std::string& ip, uint32_t port,
 
 void PeerConnection::Close() {
   bthread::RWLockWrGuard guard(rwlock_);
-  channel_.reset(nullptr);
+  channel_.reset();
 }
 
-brpc::Channel* PeerConnection::GetChannel() {
+std::shared_ptr<brpc::Channel> PeerConnection::GetChannel() {
   bthread::RWLockRdGuard guard(rwlock_);
-  if (channel_ == nullptr) {
-    return nullptr;
-  }
-  return channel_.get();
+  return channel_;
 }
 
 }  // namespace cache

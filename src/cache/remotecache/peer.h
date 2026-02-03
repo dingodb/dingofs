@@ -117,7 +117,7 @@ Response<U> Peer::SendRequest(const Request<T>& request) {
        ++retry_count) {
     auto* conn = GetConnection();
     CHECK_NOTNULL(conn);
-    auto* channel = conn->GetChannel();
+    auto channel = conn->GetChannel();
     if (nullptr == channel) {
       LOG(ERROR) << "PeerConnection is not connected, reconnect " << IP() << ":"
                  << Port();
