@@ -91,11 +91,15 @@ using NotifyFuncer = std::function<void(TaskRunnablePtr&, WorkerEventType)>;
 // Run task worker
 class Worker {
  public:
-  Worker(NotifyFuncer notify_func);
+  Worker(NotifyFuncer notify_func, bool use_pthread = false);
   ~Worker() = default;
 
-  static std::shared_ptr<Worker> New() { return std::make_shared<Worker>(nullptr); }
-  static std::shared_ptr<Worker> New(NotifyFuncer notify_func) { return std::make_shared<Worker>(notify_func); }
+  static std::shared_ptr<Worker> New(bool use_pthread = false) {
+    return std::make_shared<Worker>(nullptr, use_pthread);
+  }
+  static std::shared_ptr<Worker> New(NotifyFuncer notify_func, bool use_pthread = false) {
+    return std::make_shared<Worker>(notify_func, use_pthread);
+  }
 
   bool Init();
   void Destroy();
@@ -118,6 +122,8 @@ class Worker {
   void DescribeByJson(Json::Value& value);
 
  private:
+  const bool use_pthread_;
+
   // Execution queue is available.
   std::atomic<bool> is_available_;
   bthread::ExecutionQueueId<TaskRunnablePtr> queue_id_;
@@ -219,16 +225,18 @@ using WorkerSetUPtr = std::unique_ptr<WorkerSet>;
 // Use brpc ExecutionQueueId implement
 class ExecqWorkerSet : public WorkerSet {
  public:
-  ExecqWorkerSet(std::string name, uint32_t worker_num, int64_t max_pending_task_count)
-      : WorkerSet(name, worker_num, max_pending_task_count, false, false) {}
+  ExecqWorkerSet(std::string name, uint32_t worker_num, int64_t max_pending_task_count, bool use_pthread)
+      : WorkerSet(name, worker_num, max_pending_task_count, use_pthread, false) {}
   ~ExecqWorkerSet() override = default;
 
-  static WorkerSetSPtr New(std::string name, uint32_t worker_num, uint32_t max_pending_task_count) {
-    return std::make_shared<ExecqWorkerSet>(name, worker_num, max_pending_task_count);
+  static WorkerSetSPtr New(std::string name, uint32_t worker_num, uint32_t max_pending_task_count,
+                           bool use_pthread = false) {
+    return std::make_shared<ExecqWorkerSet>(name, worker_num, max_pending_task_count, use_pthread);
   }
 
-  static WorkerSetUPtr NewUnique(std::string name, uint32_t worker_num, uint32_t max_pending_task_count) {
-    return std::make_unique<ExecqWorkerSet>(name, worker_num, max_pending_task_count);
+  static WorkerSetUPtr NewUnique(std::string name, uint32_t worker_num, uint32_t max_pending_task_count,
+                                 bool use_pthread = false) {
+    return std::make_unique<ExecqWorkerSet>(name, worker_num, max_pending_task_count, use_pthread);
   }
 
   bool Init() override;

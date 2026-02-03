@@ -1444,7 +1444,7 @@ Status FlushFileOperation::Run(TxnUPtr& txn) {
   return Status::OK();
 }
 
-static Status CheckDirEmpty(TxnUPtr& txn, uint32_t fs_id, uint64_t ino, bool& is_empty) {
+static Status CheckDirEmpty(TxnUPtr& txn, uint32_t fs_id, uint64_t ino, bool& is_empty, Ino& child_ino) {
   Range range = MetaCodec::GetDentryRange(fs_id, ino, true);
 
   std::vector<KeyValue> kvs;
@@ -1453,7 +1453,20 @@ static Status CheckDirEmpty(TxnUPtr& txn, uint32_t fs_id, uint64_t ino, bool& is
     return status;
   }
 
-  is_empty = (kvs.size() < 2);
+  if (kvs.size() < 2) {
+    is_empty = true;
+    return Status::OK();
+  }
+
+  for (const auto& kv : kvs) {
+    if (MetaCodec::IsDentryKey(kv.key)) {
+      auto dentry = MetaCodec::DecodeDentryValue(kv.value);
+      child_ino = dentry.ino();
+      break;
+    }
+  }
+
+  is_empty = false;
 
   return Status::OK();
 }
@@ -1464,13 +1477,15 @@ Status RmDirOperation::Run(TxnUPtr& txn) {
 
   // check dentry empty
   bool is_empty = false;
-  auto status = CheckDirEmpty(txn, fs_id, dentry_.INo(), is_empty);
+  Ino child_ino = 0;
+  auto status = CheckDirEmpty(txn, fs_id, dentry_.INo(), is_empty, child_ino);
   if (!status.ok()) {
     return status;
   }
 
   if (!is_empty) {
-    return Status(pb::error::ENOT_EMPTY, fmt::format("directory({}) is not empty.", dentry_.INo()));
+    return Status(pb::error::ENOT_EMPTY,
+                  fmt::format("directory({}) is not empty, child ino({})", dentry_.INo(), child_ino));
   }
 
   // update parent attr
@@ -1706,12 +1721,14 @@ Status RenameOperation::Run(TxnUPtr& txn) {
     if (prev_new_dentry.type() == pb::mds::DIRECTORY) {
       // check new dentry is empty
       bool is_empty;
-      status = CheckDirEmpty(txn, fs_id_, prev_new_dentry.ino(), is_empty);
+      Ino child_ino = 0;
+      status = CheckDirEmpty(txn, fs_id_, prev_new_dentry.ino(), is_empty, child_ino);
       if (!status.ok()) {
         return status;
       }
       if (!is_empty) {
-        return Status(pb::error::ENOT_EMPTY, fmt::format("new dentry({}/{}) is not empty.", new_parent_, new_name_));
+        return Status(pb::error::ENOT_EMPTY,
+                      fmt::format("new dentry({}/{}) is not empty, child ino({})", new_parent_, new_name_, child_ino));
       }
 
       // delete exist new inode

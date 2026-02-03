@@ -35,6 +35,7 @@
 #include "common/options/common.h"
 #include "common/version.h"
 #include "utils/uuid.h"
+
 namespace dingofs {
 
 static std::string RedString(const std::string& str) {

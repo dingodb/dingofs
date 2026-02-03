@@ -28,7 +28,12 @@ using TaskRunnablePtr = mds::TaskRunnablePtr;
 
 class Executor {
  public:
-  Executor() = default;
+  Executor(const std::string& name, uint32_t worker_num,
+           uint32_t worker_max_pending_num, bool use_pthread = false)
+      : name_(name),
+        worker_num_(worker_num),
+        worker_max_pending_num_(worker_max_pending_num),
+        use_pthread_(use_pthread) {}
   ~Executor() = default;
 
   bool Init();
@@ -37,6 +42,11 @@ class Executor {
   bool ExecuteByHash(uint64_t hash_id, TaskRunnablePtr task, bool retry = true);
 
  private:
+  const std::string name_;
+  const uint32_t worker_num_;
+  const uint32_t worker_max_pending_num_;
+  const bool use_pthread_;
+
   WorkerSetUPtr worker_set_;
 };
 

@@ -81,7 +81,7 @@ class CompactChunkTask : public TaskRunnable {
 
 class CompactProcessor {
  public:
-  CompactProcessor(Executor& executor) : executor_(executor) {}
+  CompactProcessor();
   ~CompactProcessor() = default;
 
   // no copy and move
@@ -98,7 +98,7 @@ class CompactProcessor {
                        bool is_async = true);
 
  private:
-  Executor& executor_;
+  Executor executor_;
 };
 
 }  // namespace meta

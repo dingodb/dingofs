@@ -19,17 +19,9 @@ namespace client {
 namespace vfs {
 namespace meta {
 
-const std::string kExecutorWorkerSetName = "meta_worker_set";
-
-DEFINE_uint32(vfs_meta_worker_num, 32, "number of meta workers");
-DEFINE_uint32(vfs_meta_worker_max_pending_num, 1024,
-              "meta worker max pending num");
-DEFINE_bool(vfs_meta_worker_use_pthread, false, "meta worker use pthread");
-
 bool Executor::Init() {
   worker_set_ = mds::ExecqWorkerSet::NewUnique(
-      kExecutorWorkerSetName, FLAGS_vfs_meta_worker_num,
-      FLAGS_vfs_meta_worker_max_pending_num);
+      name_, worker_num_, worker_max_pending_num_, use_pthread_);
 
   if (!worker_set_->Init()) {
     LOG(ERROR) << "init meta worker set fail.";

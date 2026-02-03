@@ -26,6 +26,7 @@
 #include <gflags/gflags.h>
 
 #include <iostream>
+#include <unordered_map>
 
 #include "common/directory.h"
 #include "common/version.h"

@@ -22,6 +22,13 @@ namespace client {
 namespace vfs {
 namespace meta {
 
+const std::string kCompactWorkerSetName = "compact_worker_set";
+
+DEFINE_uint32(vfs_compact_worker_num, 32, "number of compact workers");
+DEFINE_uint32(vfs_compact_worker_max_pending_num, 8096,
+              "compact worker max pending num");
+DEFINE_bool(vfs_compact_worker_use_pthread, true, "compact worker use pthread");
+
 void CompactChunkTask::Run() {
   if (IsDeleted()) return;
 
@@ -96,6 +103,15 @@ Status CompactChunkTask::Compact() {
 
   return status;
 }
+
+CompactProcessor::CompactProcessor()
+    : executor_(kCompactWorkerSetName, FLAGS_vfs_compact_worker_num,
+                FLAGS_vfs_compact_worker_max_pending_num,
+                FLAGS_vfs_compact_worker_use_pthread) {}
+
+bool CompactProcessor::Init() { return executor_.Init(); }
+
+void CompactProcessor::Stop() { executor_.Stop(); }
 
 Status CompactProcessor::LaunchCompact(Ino ino, InodeSPtr inode,
                                        ChunkSPtr& chunk, MDSClient& mds_client,

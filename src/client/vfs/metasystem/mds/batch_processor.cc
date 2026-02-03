@@ -14,6 +14,7 @@
 
 #include "client/vfs/metasystem/mds/batch_processor.h"
 
+#include <bthread/types.h>
 #include <glog/logging.h>
 
 #include <memory>

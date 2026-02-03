@@ -215,9 +215,9 @@ class MDSMetaSystem : public vfs::MetaSystem {
   bool IsPrefetchChunk(Ino ino);
   bool IsPrefetchTinyFileData(Ino ino);
   Status DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
-                FileSessionSPtr file_session);
+                const std::string& session_id, FileSessionSPtr file_session);
   void AsyncOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
-                 FileSessionSPtr file_session);
+                 const std::string& session_id, FileSessionSPtr file_session);
 
   void AsyncClose(ContextSPtr ctx, Ino ino, uint64_t fh,
                   const std::string& session_id);

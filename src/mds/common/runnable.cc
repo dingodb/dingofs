@@ -75,10 +75,12 @@ int ExecuteRoutine(void* meta,
   return 0;
 }
 
-Worker::Worker(NotifyFuncer notify_func) : is_available_(false), notify_func_(notify_func) {}
+Worker::Worker(NotifyFuncer notify_func, bool use_pthread)
+    : use_pthread_(use_pthread), is_available_(false), notify_func_(notify_func) {}
 
 bool Worker::Init() {
   bthread::ExecutionQueueOptions options;
+  options.use_pthread = use_pthread_;
   options.bthread_attr = BTHREAD_ATTR_NORMAL;
 
   if (bthread::execution_queue_start(&queue_id_, &options, ExecuteRoutine, this) != 0) {
@@ -238,7 +240,8 @@ void WorkerSet::HandleNotify(TaskRunnablePtr& task, WorkerEventType type) {
 
 bool ExecqWorkerSet::Init() {
   for (uint32_t i = 0; i < WorkerNum(); ++i) {
-    auto worker = Worker::New([this](TaskRunnablePtr& task, WorkerEventType type) { HandleNotify(task, type); });
+    auto worker =
+        Worker::New([this](TaskRunnablePtr& task, WorkerEventType type) { HandleNotify(task, type); }, IsUsePthread());
     if (!worker->Init()) {
       return false;
     }
