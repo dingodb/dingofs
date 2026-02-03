@@ -122,7 +122,7 @@ Status MDSClientImpl::JoinCacheGroup(const std::string& member_id,
                << request.ShortDebugString()
                << ", response=" << response.ShortDebugString();
   }
-  return Status::OK();
+  return status;
 }
 
 Status MDSClientImpl::LeaveCacheGroup(const std::string& member_id,

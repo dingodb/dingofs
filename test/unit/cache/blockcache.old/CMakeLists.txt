@@ -12,26 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(common)
-add_subdirectory(iutil)
-#add_subdirectory(blockcache)
-#add_subdirectory(remotecache)
-#add_subdirectory(cachegroup)
-#add_subdirectory(tiercache)
+file(GLOB TEST_CACHE_BLOCKCACHE_SRCS "*.cc")
 
-add_executable(test_cache
-    main.cc
+add_library(test_cache_blockcache OBJECT
+    ${TEST_CACHE_BLOCKCACHE_SRCS}
 )
 
-target_link_libraries(test_cache
-    $<TARGET_OBJECTS:test_cache_common>
-    $<TARGET_OBJECTS:test_cache_iutil>
-
+target_link_libraries(test_cache_blockcache
     cache_lib
-
-    ${TEST_DEPS}
-)
-
-set_target_properties(test_cache PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${TEST_EXECUTABLE_OUTPUT_PATH}
+    ${TEST_DEPS_WITHOUT_MAIN}
 )

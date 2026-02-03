@@ -25,35 +25,37 @@
 namespace dingofs {
 namespace cache {
 
-static std::unordered_map<pb::cache::BlockCacheErrCode, Status> kErrCodes{
-    {pb::cache::BlockCacheOk, Status::OK()},
-    {pb::cache::BlockCacheErrInvalidParam, Status::InvalidParam("")},
-    {pb::cache::BlockCacheErrNotFound, Status::NotFound("")},
-    {pb::cache::BlockCacheErrFailure, Status::Internal("")},
-    {pb::cache::BlockCacheErrIOError, Status::IoError("")},
-};
-
-static std::unordered_map<int32_t, pb::cache::BlockCacheErrCode> kSysCodes;
-
-static bool initialized = [] {
-  for (const auto& pair : kErrCodes) {
-    kSysCodes[pair.second.ToSysErrNo()] = pair.first;
-  }
-  return true;
-}();
-
 pb::cache::BlockCacheErrCode ToPBErr(Status status) {
-  auto it = kSysCodes.find(status.ToSysErrNo());
-  if (it != kSysCodes.end()) {
-    return it->second;
+  if (status.ok()) {
+    return pb::cache::BlockCacheOk;
+  } else if (status.IsInvalidParam()) {
+    return pb::cache::BlockCacheErrInvalidParam;
+  } else if (status.IsNotFound()) {
+    return pb::cache::BlockCacheErrNotFound;
+  } else if (status.IsIoError()) {
+    return pb::cache::BlockCacheErrIOError;
+  } else if (status.IsInternal()) {
+    return pb::cache::BlockCacheErrFailure;
   }
   return pb::cache::BlockCacheErrUnknown;
 }
 
 Status ToStatus(pb::cache::BlockCacheErrCode errcode) {
-  auto it = kErrCodes.find(errcode);
-  if (it != kErrCodes.end()) {
-    return it->second;
+  switch (errcode) {
+    case pb::cache::BlockCacheOk:
+      return Status::OK();
+    case pb::cache::BlockCacheErrInvalidParam:
+      return Status::InvalidParam("");
+    case pb::cache::BlockCacheErrNotFound:
+      return Status::NotFound("");
+    case pb::cache::BlockCacheErrIOError:
+      return Status::IoError("");
+    case pb::cache::BlockCacheErrFailure:
+      return Status::Internal("");
+    case pb::cache::BlockCacheErrUnknown:
+      return Status::Internal("Unknown error code");
+    default:
+      break;
   }
   return Status::Internal("Unknown error code");
 }
