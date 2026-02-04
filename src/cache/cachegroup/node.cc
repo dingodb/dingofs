@@ -333,6 +333,7 @@ Status CacheNode::RunTask(StorageClient* storage_client,
   auto status =
       storage_client->Range(attr.ctx, attr.key, 0, attr.length, &result.buffer);
   if (!status.ok()) {
+    task->Run();
     task_tracker_->RemoveTask(attr.key);
     return status;
   }
