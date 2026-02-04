@@ -77,7 +77,8 @@ inline bool ForkThenExec(const std::vector<std::string>& args,
     std::string stdout_file = fmt::format("{}/{}.stdout", std_dir, getpid());
     int log_fd = open(stdout_file.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0644);
     if (log_fd < 0) {
-      perror("open stdout log file failed");
+      perror(
+          fmt::format("open stdout log file({}) failed", stdout_file).c_str());
       return false;
     }
 
