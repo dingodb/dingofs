@@ -106,8 +106,8 @@ void PrefetchManager::ProcessPrefetch(const PrefetchContext& context) {
 
   const auto block_size = vfs_hub_->GetFsInfo().block_size;
   // Prefetch include current block
-  uint32_t prefetch_offset = context.prefetch_offset;
-  uint32_t prefetch_max_len = std::min(context.prefetch_blocks * block_size,
+  uint64_t prefetch_offset = context.prefetch_offset;
+  uint64_t prefetch_max_len = std::min(context.prefetch_blocks * block_size,
                                        context.file_size - prefetch_offset);
 
   auto block_keys =

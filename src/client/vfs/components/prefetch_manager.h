@@ -46,7 +46,7 @@ struct PrefetchContext {
         prefetch_blocks(prefetch_blocks) {}
 
   uint64_t ino;
-  int64_t prefetch_offset;
+  uint64_t prefetch_offset;
   uint64_t file_size;
   uint64_t prefetch_blocks;
 };

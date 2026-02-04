@@ -771,6 +771,7 @@ void FileReader::CheckPrefetch(ContextSPtr ctx, const Attr& attr,
   // Prefetch blocks if enabled
   if (FLAGS_vfs_prefetch_blocks > 0 &&
       vfs_hub_->GetBlockStore()->EnableCache()) {
+    CHECK(frange.offset >= 0);
     vfs_hub_->GetPrefetchManager()->SubmitTask(PrefetchContext{
         ino_, frange.offset, attr.length, FLAGS_vfs_prefetch_blocks});
   }
