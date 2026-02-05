@@ -55,11 +55,11 @@ void WriteSliceOperation::BatchRun(MDSClient& mds_client,
       "delta_slice_entries({}).",
       ino, delta_slice_entries.size());
 
-  std::vector<mds::ChunkDescriptor> chunk_descriptors;
+  std::vector<mds::ChunkEntry> out_chunks;
   auto ctx = operations[0]->GetContext();
   if (ctx == nullptr) ctx = std::make_shared<Context>("");
   auto status =
-      mds_client.WriteSlice(ctx, ino, delta_slice_entries, chunk_descriptors);
+      mds_client.WriteSlice(ctx, ino, delta_slice_entries, out_chunks);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
         "[meta.batch_processor.{}] writeslice fail, error({}).", ino,
@@ -67,7 +67,7 @@ void WriteSliceOperation::BatchRun(MDSClient& mds_client,
   }
 
   for (auto& operation : operations) {
-    operation->Done(status, chunk_descriptors);
+    operation->Done(status, out_chunks);
   }
 }
 
@@ -78,6 +78,7 @@ void WriteSliceOperation::PreHandle(
   for (const auto& delta_slice : delta_slices) {
     mds::DeltaSliceEntry delta_slice_entry;
     delta_slice_entry.set_chunk_index(delta_slice.chunk_index);
+    delta_slice_entry.set_curr_version(delta_slice.version);
 
     for (const auto& slice : delta_slice.slices) {
       *delta_slice_entry.add_slices() = Helper::ToSlice(slice);

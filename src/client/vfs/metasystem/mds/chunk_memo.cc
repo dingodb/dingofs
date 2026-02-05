@@ -24,10 +24,9 @@ namespace client {
 namespace vfs {
 namespace meta {
 
-void ChunkMemo::Remember(
-    Ino ino, const std::vector<ChunkDescriptor>& chunk_descriptors) {
-  for (const auto& chunk_descriptor : chunk_descriptors) {
-    Remember(ino, chunk_descriptor.index(), chunk_descriptor.version());
+void ChunkMemo::Remember(Ino ino, const std::vector<mds::ChunkEntry>& chunks) {
+  for (const auto& chunk : chunks) {
+    Remember(ino, chunk.index(), chunk.version());
   }
 }
 

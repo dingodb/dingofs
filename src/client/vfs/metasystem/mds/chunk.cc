@@ -143,12 +143,12 @@ Status Chunk::IsNeedCompaction(bool check_interval) {
   return Status::OK();
 }
 
-std::vector<Slice> Chunk::CommitSlice() {
+std::vector<Slice> Chunk::CommitSlice(uint64_t& version) {
   utils::WriteLockGuard guard(lock_);
 
   if (!commiting_slices_.empty()) return {};
 
-  uint32_t max_num = FLAGS_vfs_meta_commit_slice_max_num;
+  const uint32_t max_num = FLAGS_vfs_meta_commit_slice_max_num;
   if (stage_slices_.size() < max_num) {
     commiting_slices_.swap(stage_slices_);
   } else {
@@ -156,6 +156,8 @@ std::vector<Slice> Chunk::CommitSlice() {
                              stage_slices_.begin() + max_num);
     stage_slices_.erase(stage_slices_.begin(), stage_slices_.begin() + max_num);
   }
+
+  version = commited_version_;
 
   return commiting_slices_;
 }
@@ -429,11 +431,13 @@ uint32_t ChunkSet::TryCommitSlice(bool is_force) {
   for (auto& [chunk_index, chunk] : chunk_map_) {
     if (HasSpecificChunkCommitTaskUnlock(chunk_index)) continue;
 
-    auto slices = chunk->CommitSlice();
+    uint64_t curr_version = 0;
+    auto slices = chunk->CommitSlice(curr_version);
     if (slices.empty()) continue;
 
     CommitTask::DeltaSlice delta_slice;
     delta_slice.chunk_index = chunk_index;
+    delta_slice.version = curr_version;
     delta_slice.slices = std::move(slices);
     count += delta_slice.slices.size();
     total_count += delta_slice.slices.size();
@@ -468,8 +472,8 @@ CommitTaskSPtr ChunkSet::CreateCommitTaskUnlock(
   return task;
 }
 
-void ChunkSet::FinishCommitTask(
-    uint64_t task_id, const std::vector<ChunkDescriptor>& chunk_descriptors) {
+void ChunkSet::FinishCommitTask(uint64_t task_id,
+                                const std::vector<ChunkEntry>& chunks) {
   utils::WriteLockGuard guard(lock_);
 
   auto it = commit_task_map_.find(task_id);
@@ -484,10 +488,14 @@ void ChunkSet::FinishCommitTask(
   commit_task_map_.erase(it);
 
   // mark chunks commited
-  for (const auto& chunk_descriptor : chunk_descriptors) {
-    auto it = chunk_map_.find(chunk_descriptor.index());
+  for (const auto& chunk : chunks) {
+    auto it = chunk_map_.find(chunk.index());
     if (it != chunk_map_.end()) {
-      it->second->MarkCommited(chunk_descriptor.version());
+      if (!chunk.just_descriptor()) {
+        // chunk is complete
+        it->second->Put(chunk, "writeslice");
+      }
+      it->second->MarkCommited(chunk.version());
     }
   }
 }

@@ -2120,16 +2120,16 @@ void MDSServiceImpl::DoWriteSlice(google::protobuf::RpcController*, const pb::md
 
   Context ctx(request->context(), request->info().request_id(), __func__);
 
-  std::vector<ChunkDescriptor> chunk_descriptors;
+  std::vector<ChunkEntry> chunks;
   status = file_system->WriteSlice(ctx, request->parent(), request->ino(),
-                                   Helper::PbRepeatedToVector(request->delta_slices()), chunk_descriptors);
+                                   Helper::PbRepeatedToVector(request->delta_slices()), chunks);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     SpanScope::SetStatus(span, status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  Helper::VectorToPbRepeated(chunk_descriptors, response->mutable_chunk_descriptors());
+  Helper::VectorToPbRepeated(chunks, response->mutable_chunks());
 }
 
 void MDSServiceImpl::WriteSlice(google::protobuf::RpcController* controller, const pb::mds::WriteSliceRequest* request,

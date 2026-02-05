@@ -1506,9 +1506,8 @@ void MDSMetaSystem::LaunchWriteSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
 
   auto operation = std::make_shared<WriteSliceOperation>(
       ctx, ino, task,
-      [this, chunk_set, ino](
-          const Status& status, CommitTaskSPtr task,
-          const std::vector<mds::ChunkDescriptor>& chunk_descriptors) {
+      [this, chunk_set, ino](const Status& status, CommitTaskSPtr task,
+                             const std::vector<mds::ChunkEntry>& chunks) {
         task->SetDone(status);
 
         if (status.ok()) {
@@ -1516,9 +1515,9 @@ void MDSMetaSystem::LaunchWriteSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
               "[meta.fs.{}] flush delta slice done, task({}) status({}).", ino,
               task->TaskID(), status.ToString());
 
-          chunk_set->FinishCommitTask(task->TaskID(), chunk_descriptors);
+          chunk_set->FinishCommitTask(task->TaskID(), chunks);
 
-          chunk_memo_.Remember(ino, chunk_descriptors);
+          chunk_memo_.Remember(ino, chunks);
 
         } else {
           LOG(ERROR) << fmt::format(

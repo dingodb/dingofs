@@ -91,9 +91,9 @@ class Operation {
 };
 
 struct WriteSliceOperation : public Operation {
-  using DoneClosure = std::function<void(
-      const Status& status, CommitTaskSPtr task,
-      const std::vector<mds::ChunkDescriptor>& chunk_descriptors)>;
+  using DoneClosure =
+      std::function<void(const Status& status, CommitTaskSPtr task,
+                         const std::vector<mds::ChunkEntry>& chunks)>;
 
   WriteSliceOperation(ContextSPtr& ctx, Ino ino, CommitTaskSPtr& task,
                       DoneClosure&& done)
@@ -110,8 +110,8 @@ struct WriteSliceOperation : public Operation {
   void PreHandle(std::vector<mds::DeltaSliceEntry>& delta_slice_entries);
 
   void Done(const Status& status,
-            const std::vector<mds::ChunkDescriptor>& chunk_descriptors) const {
-    done(status, task, chunk_descriptors);
+            const std::vector<mds::ChunkEntry>& chunks) const {
+    done(status, task, chunks);
   }
 
   static void BatchRun(MDSClient& mds_client, BatchOperation& batch_operation);

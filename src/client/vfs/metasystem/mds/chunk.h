@@ -94,7 +94,7 @@ class Chunk {
 
     return !commiting_slices_.empty();
   }
-  std::vector<Slice> CommitSlice();
+  std::vector<Slice> CommitSlice(uint64_t& version);
   void MarkCommited(uint64_t version);
 
   Status IsNeedCompaction(bool check_interval = true);
@@ -151,6 +151,7 @@ class CommitTask {
  public:
   struct DeltaSlice {
     uint32_t chunk_index{0};
+    uint64_t version{0};
     std::vector<Slice> slices;
   };
 
@@ -176,8 +177,9 @@ class CommitTask {
     str.reserve(1024);
     for (uint32_t i = 0; i < delta_slices_.size(); ++i) {
       const auto& delta_slice = delta_slices_[i];
-      str += fmt::format("{}:{}", delta_slice.chunk_index,
-                         Helper::ToString(delta_slice.slices));
+      str +=
+          fmt::format("{}:{}:{}", delta_slice.chunk_index, delta_slice.version,
+                      Helper::ToString(delta_slice.slices));
       if (i + 1 != delta_slices_.size()) str += ";";
     }
     return fmt::format("task_id({}) retry({}) slices({})", task_id_, Retries(),
@@ -323,7 +325,7 @@ class ChunkSet {
   uint32_t TryCommitSlice(bool is_force);
 
   void FinishCommitTask(uint64_t task_id,
-                        const std::vector<ChunkDescriptor>& chunk_descriptors);
+                        const std::vector<ChunkEntry>& chunks);
   std::vector<CommitTaskSPtr> ListCommitTask();
 
   size_t GetCommitTaskSize() const {

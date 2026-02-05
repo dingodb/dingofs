@@ -365,11 +365,11 @@ Status RPC::SendRequest(const EndPoint& endpoint,
 
     if (response.error().errcode() != pb::error::ENOT_FOUND) {
       LOG(ERROR) << fmt::format(
-          "[meta.rpc][{}][{}][{}us] fail, retry({}) request({}) "
+          "[meta.rpc][{}][{}][{}us] fail, retry({}) request({}) response({}) "
           "doing({}) error({} {}).",
           EndPointToStr(endpoint), api_name, elapsed_us, retry,
-          request.ShortDebugString(), DoingReqCount(),
-          pb::error::Errno_Name(response.error().errcode()),
+          request.ShortDebugString(), response.ShortDebugString(),
+          DoingReqCount(), pb::error::Errno_Name(response.error().errcode()),
           response.error().errmsg());
     }
 

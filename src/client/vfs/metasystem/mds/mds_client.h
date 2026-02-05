@@ -174,7 +174,7 @@ class MDSClient {
 
   Status WriteSlice(ContextSPtr& ctx, Ino ino,
                     const std::vector<mds::DeltaSliceEntry>& delta_slices,
-                    std::vector<ChunkDescriptor>& chunk_descriptors);
+                    std::vector<mds::ChunkEntry>& out_chunks);
 
   struct CompactChunkParam {
     uint64_t version{0};

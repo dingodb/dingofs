@@ -1365,7 +1365,7 @@ Status MDSClient::ReadSlice(
 Status MDSClient::WriteSlice(
     ContextSPtr& ctx, Ino ino,
     const std::vector<mds::DeltaSliceEntry>& delta_slices,
-    std::vector<ChunkDescriptor>& chunk_descriptors) {
+    std::vector<mds::ChunkEntry>& out_chunks) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
   CHECK(ctx != nullptr) << "context is nullptr.";
 
@@ -1397,8 +1397,7 @@ Status MDSClient::WriteSlice(
     return status;
   }
 
-  chunk_descriptors =
-      mds::Helper::PbRepeatedToVector(response.chunk_descriptors());
+  out_chunks = mds::Helper::PbRepeatedToVector(response.chunks());
 
   return Status::OK();
 }

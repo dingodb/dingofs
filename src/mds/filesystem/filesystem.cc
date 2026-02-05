@@ -14,6 +14,7 @@
 
 #include "mds/filesystem/filesystem.h"
 
+#include <bthread/bthread.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -2403,7 +2404,7 @@ Status FileSystem::CommitRename(Context& ctx, const RenameParam& param, Ino& old
 }
 
 Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, const std::vector<DeltaSliceEntry>& delta_slices,
-                              std::vector<ChunkDescriptor>& chunk_descriptors) {
+                              std::vector<ChunkEntry>& out_chunks) {
   if (!CanServe(ctx)) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -2433,12 +2434,31 @@ Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, const std::vector<Delt
                              duration.ElapsedUs(), chunk.index(), chunk.version());
   }
 
+  auto query_curr_versoin_fn = [&delta_slices](uint32_t index) -> uint64_t {
+    for (const auto& slice : delta_slices) {
+      if (slice.chunk_index() == index) {
+        return slice.curr_version();
+      }
+    }
+
+    return 0;
+  };
+
   // update chunk cache and build chunk results
   for (auto& chunk : effected_chunks) {
-    ChunkDescriptor chunk_descriptor;
-    chunk_descriptor.set_index(chunk.index());
-    chunk_descriptor.set_version(chunk.version());
-    chunk_descriptors.push_back(std::move(chunk_descriptor));
+    uint64_t curr_version = query_curr_versoin_fn(chunk.index());
+    if (chunk.version() == (curr_version + 1)) {
+      // just return simple descriptor info
+      ChunkEntry simple_chunk;
+      simple_chunk.set_index(chunk.index());
+      simple_chunk.set_version(chunk.version());
+      simple_chunk.set_just_descriptor(true);
+      out_chunks.push_back(simple_chunk);
+
+    } else {
+      // return full chunk info
+      out_chunks.push_back(chunk);
+    }
 
     chunk_cache_.PutIf(ino, std::move(chunk));
   }
