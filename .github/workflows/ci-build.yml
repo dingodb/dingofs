@@ -80,7 +80,6 @@ jobs:
         ls -lh dingofs.tar.gz
 
         # generate checksum file for the tar file and other binary files
-        sha256sum dingofs.tar.gz > dingofs.tar.gz.sha256
         sha256sum scripts/docker/rocky9/dingofs/build/bin/dingo-client > dingo-client.sha256
         sha256sum scripts/docker/rocky9/dingofs/build/bin/dingo-cache > dingo-cache.sha256
         sha256sum scripts/docker/rocky9/dingofs/build/bin/dingo-mds > dingo-mds.sha256
@@ -169,7 +168,6 @@ jobs:
           /mnt/dingofs/scripts/docker/rocky9/dingofs/build/bin/dingo-cache
           /mnt/dingofs/scripts/docker/rocky9/dingofs/build/bin/dingo-mds
           /mnt/dingofs/scripts/docker/rocky9/dingofs/build/bin/dingo-mds-client
-          /mnt/dingofs/dingofs.tar.gz.sha256
           /mnt/dingofs/dingo-client.sha256
           /mnt/dingofs/dingo-cache.sha256
           /mnt/dingofs/dingo-mds.sha256
