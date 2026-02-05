@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "cache/blockcache/cache_store.h"
+#include "client/vfs/components/context.h"
 #include "client/vfs/data/common/common.h"
 #include "client/vfs/data/common/data_utils.h"
 #include "client/vfs/hub/vfs_hub.h"
@@ -31,34 +32,6 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
-
-struct BlockContext {
-  BlockContext(cache::BlockKey block_key, uint64_t block_len)
-      : key(block_key), len(block_len) {}
-  cache::BlockKey key;
-  uint64_t len;
-};
-
-struct ChunkContext {
-  ChunkContext(uint64_t fs_id, Ino ino, int64_t chunk_idx, int64_t offset,
-               int64_t length)
-      : fs_id(fs_id),
-        ino{ino},
-        chunk_idx(chunk_idx),
-        offset(offset),
-        len(length) {}
-  uint64_t fs_id;
-  Ino ino;
-  int64_t chunk_idx;
-  int64_t offset;
-  int64_t len;
-
-  std::string ToString() const {
-    return fmt::format("Chunk context, ino: {}, chunk: {}-{}-{}", ino,
-                       chunk_idx, offset, offset + len);
-  }
-};
-
 inline std::vector<ChunkContext> File2Chunk(const uint64_t fs_id, const Ino ino,
                                             const uint64_t offset,
                                             const uint64_t len,

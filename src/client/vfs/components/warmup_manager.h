@@ -20,10 +20,11 @@
 
 #include <atomic>
 #include <cstdint>
-#include <set>
 #include <unordered_map>
+#include <vector>
 
 #include "client/vfs/blockstore/block_store.h"
+#include "client/vfs/components/context.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/metrics/client/vfs/warmup_metric.h"
 #include "common/status.h"
@@ -43,24 +44,6 @@ using AsyncWarmupCb = std::function<void(Status status)>;
 using WarmupManagerUptr = std::unique_ptr<WarmupManager>;
 using WarmupMetric = metrics::client::WarmupMetric;
 
-enum class WarmupType : uint8_t {
-  kWarmupIntime = 0,
-  kWarmupManual = 1,
-  kWarmupUnknown = 2,
-};
-
-struct WarmupTaskContext {
-  WarmupTaskContext(const WarmupTaskContext& task) = default;
-  WarmupTaskContext(Ino ino) : task_key(ino), type(WarmupType::kWarmupIntime) {}
-  WarmupTaskContext(Ino ino, const std::string& xattr)
-      : task_key(ino), type(WarmupType::kWarmupManual), task_inodes(xattr) {}
-
-  WarmupType type;
-  Ino task_key;
-  // comma separated inodeid('1000023,10000021,...'), provide by dingo-tool
-  std::string task_inodes;
-};
-
 class WarmupTask {
  public:
   explicit WarmupTask(const WarmupTaskContext& context)
@@ -68,36 +51,52 @@ class WarmupTask {
 
   uint64_t GetKey() const { return task_key_; }
 
-  void AddFileInode(Ino file) {
-    utils::WriteLockGuard lck(rwlock_);
-    auto [_, ok] = file_inodes_.emplace(file);
-    if (ok) {
-      IncTotal();
-    }
+  std::vector<BlockContext> GetFileBlocks(Ino file) const {
+    utils::ReadLockGuard lck(rwlock_);
+    auto it = file_blocks_.find(file);
+    return (it != file_blocks_.end()) ? it->second
+                                      : std::vector<BlockContext>();
   }
 
-  const std::set<Ino>& GetFileInodes() const {
+  // Store file blocks for a file
+  void SetFileBlocks(Ino file, const std::vector<BlockContext>& blocks) {
+    utils::WriteLockGuard lck(rwlock_);
+    file_blocks_[file] = blocks;
+    IncTotal(blocks.size());
+  }
+
+  std::vector<Ino> GetFileInodes() const {
     utils::ReadLockGuard lck(rwlock_);
-    return file_inodes_;
+
+    std::vector<Ino> keys;
+    keys.reserve(file_blocks_.size());
+
+    for (const auto& pair : file_blocks_) {
+      keys.push_back(pair.first);
+    }
+
+    return keys;
   }
 
   uint64_t GetFileCount() const {
     utils::ReadLockGuard lck(rwlock_);
-    return file_inodes_.size();
+    return file_blocks_.size();
   };
 
   WarmupType GetType() const { return context_.type; };
 
   std::string GetTaskInodes() const { return context_.task_inodes; };
 
-  void IncTotal() { progress_.total.fetch_add(1, std::memory_order_relaxed); };
-
-  void IncFinished() {
-    progress_.finish.fetch_add(1, std::memory_order_relaxed);
+  void IncTotal(uint64_t blocks = 1) {
+    progress_.total.fetch_add(blocks, std::memory_order_relaxed);
   };
 
-  void IncErrors() {
-    progress_.errors.fetch_add(1, std::memory_order_relaxed);
+  void IncFinished(uint64_t blocks = 1) {
+    progress_.finish.fetch_add(blocks, std::memory_order_relaxed);
+  };
+
+  void IncErrors(uint64_t blocks = 1) {
+    progress_.errors.fetch_add(blocks, std::memory_order_relaxed);
   };
 
   uint64_t GetTotal() const {
@@ -118,8 +117,8 @@ class WarmupTask {
   };
 
   Ino task_key_{0};
-  std::set<Ino> file_inodes_;  // all files need to warmup
-  uint64_t total_files_{0};
+  std::unordered_map<Ino, std::vector<BlockContext>>
+      file_blocks_;  // inode -> blocks
   mutable BthreadRWLock rwlock_;
   WarmupTaskContext context_;
   WarmupProgress progress_;
@@ -157,7 +156,7 @@ class WarmupManager {
 
   void WarmupFiles(WarmupTask* task);
 
-  void WarmupFile(Ino ino, AsyncWarmupCb cb);
+  void WarmupFile(Ino ino, WarmupTask* task, AsyncWarmupCb cb);
 
   bool NewWarmupTask(const WarmupTaskContext& context);
 

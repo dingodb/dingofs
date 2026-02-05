@@ -24,6 +24,7 @@
 #include <memory>
 
 #include "client/vfs/blockstore/block_store.h"
+#include "client/vfs/components/context.h"
 #include "common/metrics/client/vfs/prefetch_metric.h"
 #include "common/status.h"
 #include "utils/concurrent/rw_lock.h"
@@ -36,20 +37,6 @@ namespace vfs {
 class VFSHub;
 class PrefetchManager;
 using PrefetchManagerUPtr = std::unique_ptr<PrefetchManager>;
-
-struct PrefetchContext {
-  PrefetchContext(uint64_t ino, int64_t prefetch_offset, uint64_t file_size,
-                  uint64_t prefetch_blocks)
-      : ino(ino),
-        prefetch_offset(prefetch_offset),
-        file_size(file_size),
-        prefetch_blocks(prefetch_blocks) {}
-
-  uint64_t ino;
-  uint64_t prefetch_offset;
-  uint64_t file_size;
-  uint64_t prefetch_blocks;
-};
 
 class PrefetchManager {
  public:

@@ -19,8 +19,10 @@
 #include <fmt/format.h>
 #include <glog/logging.h>
 
+#include <chrono>
 #include <cstdint>
 #include <ctime>
+#include <thread>
 
 #include "butil/memory/scope_guard.h"
 #include "client/vfs/components/prefetch_utils.h"
@@ -100,7 +102,7 @@ std::string WarmupManager::GetWarmupTaskStatus(const Ino& task_key) {
   if (iter != warmup_tasks_.end()) {
     // task already running
     const auto& task = iter->second;
-    result = fmt::format("{}/{}/{}", task->GetFinished(), task->GetTotal(),
+    result = fmt::format("{}/{}/{}", task->GetTotal(), task->GetFinished(),
                          task->GetErrors());
   } else {
     // task is finished and removed from warmup task queue
@@ -137,7 +139,11 @@ void WarmupManager::AsyncWarmupTask(const WarmupTaskContext& context) {
 }
 
 void WarmupManager::DoWarmupTask(WarmupTask* task) {
-  BRPC_SCOPE_EXIT { RemoveWarmupTask(task->GetKey()); };
+  BRPC_SCOPE_EXIT {
+    // wait 1s, otherwise dingo tool won't have time to obtain the finish status
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    RemoveWarmupTask(task->GetKey());
+  };
 
   if (task->GetType() == WarmupType::kWarmupIntime) {
     ProcessIntimeWarmup(task);
@@ -155,7 +161,7 @@ void WarmupManager::ProcessIntimeWarmup(WarmupTask* task) {
   auto inode = task->GetKey();
   LOG(INFO) << "Intime warmup started for inode: " << task->GetKey();
 
-  WarmupFile(inode, [inode, task, span](Status s) {
+  WarmupFile(inode, task, [inode, task, span](Status s) {
     SpanScope::End(span);
     LOG(INFO) << "Finish intime warmup file: " << inode
               << ", with status: " << s.ToString();
@@ -205,14 +211,9 @@ void WarmupManager::WarmupFiles(WarmupTask* task) {
   for (const auto& inode : task->GetFileInodes()) {
     LOG(INFO) << "Start warmup file: " << inode;
 
-    WarmupFile(inode, [inode, task](Status s) {
+    WarmupFile(inode, task, [inode, task](Status s) {
       LOG(INFO) << "Finish warmup file: " << inode
                 << ", with status: " << s.ToString();
-      if (s.ok()) {
-        task->IncFinished();
-      } else {
-        task->IncErrors();
-      }
     });
   }
 }
@@ -232,7 +233,11 @@ Status WarmupManager::WalkFile(WarmupTask* task, Ino ino) {
   std::vector<Ino> parentDir;
 
   if (attr.type == FileType::kFile) {
-    task->AddFileInode(ino);
+    // Calculate file blocks
+    auto file_blocks = FileRange2BlockKey(SpanScope::GetContext(span), vfs_hub_,
+                                          ino, 0, attr.length);
+    task->SetFileBlocks(ino, file_blocks);
+
     return Status::OK();
   } else if (attr.type == FileType::kDirectory) {
     parentDir.push_back(ino);
@@ -244,7 +249,7 @@ Status WarmupManager::WalkFile(WarmupTask* task, Ino ino) {
 
   Status openStatus;
 
-  while (parentDir.size()) {
+  while (!parentDir.empty()) {
     std::vector<Ino> childDir;
     auto dirIt = parentDir.begin();
     while (dirIt != parentDir.end()) {
@@ -261,12 +266,17 @@ Status WarmupManager::WalkFile(WarmupTask* task, Ino ino) {
 
       vfs_hub_->GetMetaSystem()->ReadDir(
           SpanScope::GetContext(span), *dirIt, fh, 0, true,
-          [task, &childDir, this](const DirEntry& entry, uint64_t offset) {
+          [task, &childDir, &span, this](const DirEntry& entry,
+                                         uint64_t offset) {
             (void)offset;
             Ino inoTmp = entry.ino;
             Attr attr = entry.attr;
             if (entry.attr.type == FileType::kFile) {
-              task->AddFileInode(entry.ino);
+              // Calculate file blocks
+              auto file_blocks =
+                  FileRange2BlockKey(SpanScope::GetContext(span), vfs_hub_,
+                                     entry.ino, 0, attr.length);
+              task->SetFileBlocks(entry.ino, file_blocks);
             } else if (entry.attr.type == FileType::kDirectory) {
               childDir.push_back(entry.ino);
             } else {
@@ -287,33 +297,24 @@ Status WarmupManager::WalkFile(WarmupTask* task, Ino ino) {
   return Status::OK();
 }
 
-void WarmupManager::WarmupFile(Ino ino, AsyncWarmupCb cb) {
+void WarmupManager::WarmupFile(Ino ino, WarmupTask* task, AsyncWarmupCb cb) {
   auto span =
       vfs_hub_->GetTraceManager()->StartSpan("WarmupManager::WarmupFile");
   IncFileMetric(1);
   BRPC_SCOPE_EXIT { DecFileMetric(1); };
 
-  Attr attr;
-  auto status = vfs_hub_->GetMetaSystem()->GetAttr(SpanScope::GetContext(span),
-                                                   ino, &attr);
-  if (!status.ok()) {
-    LOG(ERROR) << fmt::format("Get attr failed, status: {}", status.ToString());
-    cb(status);
-    return;
-  }
+  // Get file blocks for this file
+  auto file_blocks = task->GetFileBlocks(ino);
 
-  auto unique_blocks = FileRange2BlockKey(SpanScope::GetContext(span), vfs_hub_,
-                                          ino, 0, attr.length);
+  IncBlockMetric(file_blocks.size());
 
-  IncBlockMetric(unique_blocks.size());
-
-  VLOG(6) << fmt::format("Download file: {} started, size: {}, blocks: {}.",
-                         ino, attr.length, unique_blocks.size());
+  VLOG(6) << fmt::format("Download file: {} started, blocks: {}.", ino,
+                         file_blocks.size());
 
   Status donwload_status = Status::OK();
-  bthread::CountdownEvent countdown(unique_blocks.size());
+  bthread::CountdownEvent countdown(file_blocks.size());
 
-  for (auto& block : unique_blocks) {
+  for (const auto& block : file_blocks) {
     VLOG(6) << fmt::format("Download block {}, len {}", block.key.Filename(),
                            block.len);
     PrefetchReq req;
@@ -322,17 +323,20 @@ void WarmupManager::WarmupFile(Ino ino, AsyncWarmupCb cb) {
 
     block_store_->PrefetchAsync(
         SpanScope::GetContext(span), req,
-        [this, req, &countdown, &donwload_status](Status status) {
+        [this, task, req, &countdown, &donwload_status](Status status) {
           VLOG(6) << fmt::format("Download block {} finished, status: {}.",
                                  req.block.Filename(), status.ToString());
-          BRPC_SCOPE_EXIT { DecBlockMetric(1); };
+          BRPC_SCOPE_EXIT {
+            DecBlockMetric(1);
+            countdown.signal();
+          };
 
           if (!status.ok() && !status.IsExist()) {
             donwload_status = status;
+            task->IncErrors();
           } else {
+            task->IncFinished();
           }
-
-          countdown.signal();
         });
   }
 
