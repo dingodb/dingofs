@@ -2431,7 +2431,6 @@ Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, const std::vector<Delt
   for (auto& chunk : effected_chunks) {
     LOG(INFO) << fmt::format("[fs.{}.{}.{}][{}us] writeslice finish, chunk({},{}).", fs_id_, ino, ctx.RequestId(),
                              duration.ElapsedUs(), chunk.index(), chunk.version());
-    chunk_cache_.RememberCheckCompact(ino, chunk.index());
   }
 
   // update chunk cache and build chunk results
@@ -3176,8 +3175,12 @@ Status FileSystem::UpdatePartitionPolicy(const std::map<uint64_t, BucketSetEntry
 }
 
 void FileSystem::CleanExpiredCache() {
-  partition_cache_.CleanExpired(FLAGS_mds_cache_expire_interval_s);
-  inode_cache_.CleanExpired(FLAGS_mds_cache_expire_interval_s);
+  uint64_t now_s = utils::Timestamp();
+
+  uint64_t expired_time = now_s - FLAGS_mds_cache_expire_interval_s;
+  partition_cache_.CleanExpired(expired_time);
+  inode_cache_.CleanExpired(expired_time);
+  chunk_cache_.CleanExpired(expired_time);
 }
 
 void FileSystem::DescribeByJson(Json::Value& value) {
@@ -3201,6 +3204,36 @@ void FileSystem::DescribeByJson(Json::Value& value) {
   Json::Value parent_memo;
   parent_memo_.DescribeByJson(parent_memo);
   value["parent_memo"] = parent_memo;
+}
+
+void FileSystem::Summary(Json::Value& value) {
+  CHECK(value.isObject()) << "value is not object.";
+
+  Json::Value fs_value = Json::arrayValue;
+
+  Json::Value partition_value = Json::objectValue;
+  partition_cache_.Summary(partition_value);
+  fs_value.append(partition_value);
+
+  Json::Value inode_value = Json::objectValue;
+  inode_cache_.Summary(inode_value);
+  fs_value.append(inode_value);
+
+  Json::Value chunk_value = Json::objectValue;
+  chunk_cache_.Summary(chunk_value);
+  fs_value.append(chunk_value);
+
+  Json::Value file_session_value = Json::objectValue;
+  file_session_manager_.Summary(file_session_value);
+  fs_value.append(file_session_value);
+
+  Json::Value parent_memo_value = Json::objectValue;
+  parent_memo_.Summary(parent_memo_value);
+  fs_value.append(parent_memo_value);
+
+  value["fsid"] = fs_id_;
+  value["fs_name"] = fs_info_->GetName();
+  value["caches"] = fs_value;
 }
 
 FileSystemSet::FileSystemSet(CoordinatorClientSPtr coordinator_client, IdGeneratorUPtr fs_id_generator,
@@ -3939,6 +3972,17 @@ void FileSystemSet::DescribeByJson(Json::Value& value) {
     fsset_value.append(fs_value);
   }
   value["filesystems"] = fsset_value;
+}
+
+void FileSystemSet::Summary(Json::Value& value) {
+  CHECK(value.isArray()) << "value is not array.";
+
+  auto fses = GetAllFileSystem();
+  for (auto& fs : fses) {
+    Json::Value fs_value(Json::objectValue);
+    fs->Summary(fs_value);
+    value.append(fs_value);
+  }
 }
 
 }  // namespace mds

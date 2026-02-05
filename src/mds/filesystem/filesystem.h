@@ -263,6 +263,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   void CleanExpiredCache();
 
   void DescribeByJson(Json::Value& value);
+  void Summary(Json::Value& value);
 
  private:
   friend class DebugServiceImpl;
@@ -459,6 +460,7 @@ class FileSystemSet {
   void CleanExpiredCache();
 
   void DescribeByJson(Json::Value& value);
+  void Summary(Json::Value& value);
 
  private:
   friend class FsStatServiceImpl;

@@ -64,6 +64,7 @@ class Partition {
 
   bool Empty();
   size_t Size();
+  size_t Bytes();
 
   bool Get(const std::string& name, Dentry& dentry);
   std::vector<Dentry> Scan(const std::string& start_name, uint32_t limit, bool is_only_dir);
@@ -72,8 +73,8 @@ class Partition {
   bool Merge(PartitionPtr& other_partition);
   bool Merge(Partition&& other_partition);
 
-  void UpdateLastAccessTime();
-  uint64_t LastAccessTimeS();
+  void UpdateLastActiveTime();
+  uint64_t LastActiveTimeS();
 
  private:
   const Ino ino_;
@@ -101,7 +102,7 @@ class Partition {
 
   std::list<DentryOp> delta_dentry_ops_;
 
-  std::atomic<uint64_t> last_access_time_s_{0};
+  std::atomic<uint64_t> last_active_time_s_{0};
 };
 
 class PartitionCache {
@@ -126,10 +127,12 @@ class PartitionCache {
   std::vector<PartitionPtr> GetAll();
 
   size_t Size();
+  size_t Bytes();
 
   void CleanExpired(uint64_t expire_s);
 
   void DescribeByJson(Json::Value& value);
+  void Summary(Json::Value& value);
 
  private:
   using Map = absl::flat_hash_map<Ino, PartitionPtr>;
@@ -140,9 +143,10 @@ class PartitionCache {
   utils::Shards<Map, kShardNum> shard_map_;
 
   // metric
+  bvar::Adder<int64_t> total_count_;
+  bvar::Adder<int64_t> clean_count_;
   bvar::Adder<int64_t> access_miss_count_;
   bvar::Adder<int64_t> access_hit_count_;
-  bvar::Adder<int64_t> clean_count_;
 };
 
 }  // namespace mds

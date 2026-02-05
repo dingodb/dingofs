@@ -296,6 +296,8 @@ static void RenderSummary(Json::Value& json_value, butil::IOBufBuilder& os) {
 
     uint64_t bytes = item["bytes"].asUInt64();
 
+    os << "<tr>";
+
     os << fmt::format(
         R"(<td><a href="ClientStatService/{}" target="_blank">{}</a></td>)",
         name, name);
@@ -500,6 +502,8 @@ static void RenderMdsInfo(const Json::Value& json_value,
     auto port = mds["port"].asInt();
     auto state = mds["state"].asString();
     auto last_online_time_ms = mds["last_online_time_ms"].asUInt64();
+
+    os << "<tr>";
     os << "<td>" << id << "</td>";
     os << fmt::format(
         R"(<td><a href="http://{}:{}/FsStatService" target="_blank">{}:{} </a></td>)",
@@ -557,6 +561,7 @@ static void RenderHandlerInfoPage(const Json::Value& json_value,
     std::snprintf(flags_str, sizeof(flags_str), "0%o",
                   static_cast<uint32_t>(flags));
 
+    os << "<tr>";
     os << "<td>" << ino << "</td>";
     os << "<td>" << fh << "</td>";
     os << "<td>" << flags_str << "</td>";
@@ -640,6 +645,7 @@ static void RenderDirInfoPage(const Json::Value& json_value,
     bool with_attr = dir_iterator["with_attr"].asBool();
     uint32_t offset = dir_iterator["offset"].asUInt();
 
+    os << "<tr>";
     os << "<td>" << fh << "</td>";
     os << "<td>" << ino << "</td>";
     os << "<td>" << last_name << "</td>";
@@ -756,6 +762,7 @@ static void RenderFileSessionPage(const Json::Value& json_value,
     uint32_t ref_count = file_session["ref_count"].asUInt();
     const auto& chunk_set_value = file_session["chunk_set"];
 
+    os << "<tr>";
     os << "<td>" << ino << "</td>";
     os << "<td>" << ref_count << "</td>";
     os << "<td>" << RenderSessionIdMap(file_session) << "</td>";
@@ -825,6 +832,7 @@ static void RenderParentMemoPage(const Json::Value& json_value,
     auto parent = item["parent"].asUInt64();
     auto version = item["version"].asUInt64();
 
+    os << "<tr>";
     os << "<td>" << ino << "</td>";
     os << "<td>" << parent << "</td>";
     os << "<td>" << version << "</td>";
@@ -865,6 +873,7 @@ static void RenderModifyTimeMemoPage(const Json::Value& json_value,
     auto ino = item["ino"].asUInt64();
     auto modify_time_ns = item["modify_time_ns"].asUInt64();
 
+    os << "<tr>";
     os << "<td>" << ino << "</td>";
     os << "<td>" << utils::FormatNsTime(modify_time_ns) << "</td>";
     os << "</tr>";
@@ -908,6 +917,7 @@ static void RenderChunkMemoPage(const Json::Value& json_value,
     auto version = item["version"].asUInt64();
     auto time_ns = item["time_ns"].asUInt64();
 
+    os << "<tr>";
     os << "<td>" << ino << "</td>";
     os << "<td>" << chunk_index << "</td>";
     os << "<td>" << version << "</td>";
@@ -954,6 +964,7 @@ static void RenderChunkCachePage(const Json::Value& json_value,
   for (const auto& item : chunk_cache_value) {
     Ino ino = item["ino"].asUInt64();
 
+    os << "<tr>";
     os << "<td>" << ino << "</td>";
     os << fmt::format(R"(<td>{} {}</td>)", item["last_write_length"].asUInt64(),
                       utils::FormatNsTime(item["last_time_ns"].asUInt64()));
@@ -1018,6 +1029,7 @@ static void RenderChunkSetPage(Ino ino, const Json::Value& json_value,
   for (const auto& item : commit_tasks_value) {
     const auto& delta_slices = item["delta_slices"];
 
+    os << "<tr>";
     os << "<td>" << item["task_id"].asUInt64() << "</td>";
     os << "<td>" << item["state"].asUInt64() << "</td>";
     os << "<td>" << item["status"].asString() << "</td>";
@@ -1063,6 +1075,7 @@ static void RenderChunkSetPage(Ino ino, const Json::Value& json_value,
   for (const auto& item : chunks_value) {
     const uint32_t chunk_index = item["index"].asUInt64();
 
+    os << "<tr>";
     os << "<td>" << chunk_index << "</td>";
     os << "<td>" << item["is_completed"].asUInt64() << "</td>";
     os << "<td>" << item["commited_version"].asUInt64() << "</td>";
@@ -1153,6 +1166,8 @@ static void RenderMdsRouterPage(const Json::Value& json_value,
     auto state = mds_router["state"].asString();
     auto last_online_time_ms = mds_router["last_online_time_ms"].asUInt64();
     auto type = mds_router["type"].asString();
+
+    os << "<tr>";
     os << "<td>" << bucket_id << "</td>";
     os << "<td>" << id << "</td>";
     os << fmt::format(
@@ -1209,6 +1224,7 @@ static void RenderInodeCachePage(const Json::Value& json_value,
   os << "</tr>";
 
   for (const auto& inode : inodes) {
+    os << "<tr>";
     os << "<td>" << inode["ino"].asUInt64() << "</td>";
     os << "<td>" << inode["type"].asString() << "</td>";
     os << "<td>" << inode["length"].asUInt64() << "</td>";
@@ -1359,6 +1375,7 @@ static void RenderBlockCachePage(const Json::Value& json_value,
   os << "</tr>";
 
   for (const auto& disk : disks) {
+    os << "<tr>";
     os << "<td>" << disk["dir"].asString() << "</td>";
     os << "<td>" << disk["capacity"].asInt64() << "</td>";
     os << "<td>" << disk["free_space_ratio"].asDouble() << "</td>";
@@ -1385,6 +1402,7 @@ static void RenderBlockCachePage(const Json::Value& json_value,
   os << "</tr>";
 
   for (const auto& member : members) {
+    os << "<tr>";
     os << "<td>" << member["id"].asString() << "</td>";
     os << "<td>" << member["endpoint"].asString() << "</td>";
     os << "<td>" << member["weight"].asUInt() << "</td>";

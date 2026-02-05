@@ -17,10 +17,10 @@
 namespace dingofs {
 namespace mds {
 
-static const std::string kParentMemoCountMetricsName = "dingofs_{}_parent_memo_count";
+static const std::string kParentMemoTotalCountMetricsName = "dingofs_{}_parent_memo_total_count";
 
 ParentMemo::ParentMemo(uint64_t fs_id)
-    : fs_id_(fs_id), count_metrics_(fmt::format(kParentMemoCountMetricsName, fs_id)) {}
+    : fs_id_(fs_id), total_count_(fmt::format(kParentMemoTotalCountMetricsName, fs_id)) {}
 
 void ParentMemo::Remeber(Ino ino, Ino parent) {
   parent_map_.withWLock(
@@ -28,7 +28,7 @@ void ParentMemo::Remeber(Ino ino, Ino parent) {
         auto it = map.find(ino);
         if (it == map.end()) {
           map[ino] = parent;
-          count_metrics_ << 1;
+          total_count_ << 1;
         } else {
           it->second = parent;
         }
@@ -37,12 +37,7 @@ void ParentMemo::Remeber(Ino ino, Ino parent) {
 }
 
 void ParentMemo::Forget(Ino ino) {
-  parent_map_.withWLock(
-      [this, ino](Map& map) mutable {
-        map.erase(ino);
-        count_metrics_ << -1;
-      },
-      ino);
+  parent_map_.withWLock([ino](Map& map) mutable { map.erase(ino); }, ino);
 }
 
 bool ParentMemo::GetParent(Ino ino, Ino& parent) {
@@ -60,7 +55,22 @@ bool ParentMemo::GetParent(Ino ino, Ino& parent) {
   return found;
 }
 
-void ParentMemo::DescribeByJson(Json::Value& value) { value["count"] = count_metrics_.get_value(); }
+size_t ParentMemo::Size() {
+  size_t size = 0;
+  parent_map_.iterate([&size](Map& map) { size += map.size(); });
+  return size;
+}
+
+size_t ParentMemo::Bytes() { return Size() * (sizeof(Ino) + sizeof(Ino)); }
+
+void ParentMemo::DescribeByJson(Json::Value& value) { value["count"] = Size(); }
+
+void ParentMemo::Summary(Json::Value& value) {
+  value["name"] = "parentmemo";
+  value["count"] = Size();
+  value["bytes"] = Bytes();
+  value["total_count"] = total_count_.get_value();
+}
 
 }  // namespace mds
 }  // namespace dingofs

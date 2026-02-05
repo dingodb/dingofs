@@ -130,6 +130,12 @@ size_t Partition::Size() {
   return children_.size();
 }
 
+size_t Partition::Bytes() {
+  utils::ReadLockGuard lk(lock_);
+
+  return sizeof(Partition) + (children_.size() * sizeof(Dentry)) + (delta_dentry_ops_.size() * sizeof(DentryOp));
+}
+
 bool Partition::Get(const std::string& name, Dentry& dentry) {
   utils::ReadLockGuard lk(lock_);
 
@@ -209,9 +215,9 @@ bool Partition::Merge(Partition&& other_partition) {  // NOLINT
   return true;
 }
 
-void Partition::UpdateLastAccessTime() { last_access_time_s_.store(utils::Timestamp(), std::memory_order_relaxed); }
+void Partition::UpdateLastActiveTime() { last_active_time_s_.store(utils::Timestamp(), std::memory_order_relaxed); }
 
-uint64_t Partition::LastAccessTimeS() { return last_access_time_s_.load(std::memory_order_relaxed); }
+uint64_t Partition::LastActiveTimeS() { return last_active_time_s_.load(std::memory_order_relaxed); }
 
 void Partition::AddDeltaDentryOp(DentryOp&& op) {
   op.time_s = utils::Timestamp();
@@ -230,6 +236,7 @@ void Partition::AddDeltaDentryOp(DentryOp&& op) {
 
 PartitionCache::PartitionCache(uint32_t fs_id)
     : fs_id_(fs_id),
+      total_count_(fmt::format(kPartitionMetricsPrefix, fs_id, "total_count")),
       access_miss_count_(fmt::format(kPartitionMetricsPrefix, fs_id, "miss_count")),
       access_hit_count_(fmt::format(kPartitionMetricsPrefix, fs_id, "hit_count")),
       clean_count_(fmt::format(kPartitionMetricsPrefix, fs_id, "clean_count")) {}
@@ -245,6 +252,8 @@ PartitionPtr PartitionCache::PutIf(PartitionPtr& partition) {
         auto it = map.find(ino);
         if (it == map.end()) {
           map.emplace(ino, partition);
+          total_count_ << 1;
+
         } else {
           it->second->Merge(partition);
           new_partition = it->second;
@@ -267,6 +276,8 @@ PartitionPtr PartitionCache::PutIf(Partition&& partition) {  // NOLINT
         if (it == map.end()) {
           new_partition = Partition::New(std::move(partition));
           map.insert(std::make_pair(ino, new_partition));
+
+          total_count_ << 1;
 
         } else {
           it->second->Merge(std::move(partition));
@@ -320,7 +331,7 @@ PartitionPtr PartitionCache::Get(Ino ino) {
       ino);
 
   if (partition != nullptr) {
-    partition->UpdateLastAccessTime();
+    partition->UpdateLastActiveTime();
     access_hit_count_ << 1;
 
   } else {
@@ -349,15 +360,24 @@ size_t PartitionCache::Size() {
   return size;
 }
 
+size_t PartitionCache::Bytes() {
+  size_t bytes = 0;
+  shard_map_.iterate([&bytes](const Map& map) {
+    for (const auto& [_, partition] : map) {
+      bytes += partition->Bytes();
+    }
+  });
+
+  return bytes;
+}
+
 void PartitionCache::CleanExpired(uint64_t expire_s) {
   if (Size() < FLAGS_mds_partition_cache_max_count) return;
-
-  uint64_t now_s = utils::Timestamp();
 
   std::vector<PartitionPtr> partitions;
   shard_map_.iterate([&](const Map& map) {
     for (const auto& [_, partition] : map) {
-      if (partition->LastAccessTimeS() + expire_s < now_s) {
+      if (partition->LastActiveTimeS() < expire_s) {
         partitions.push_back(partition);
       }
     }
@@ -379,6 +399,16 @@ void PartitionCache::DescribeByJson(Json::Value& value) {
   value["cache_hit"] = access_hit_count_.get_value();
   value["cache_miss"] = access_miss_count_.get_value();
   value["cache_clean"] = clean_count_.get_value();
+}
+
+void PartitionCache::Summary(Json::Value& value) {
+  value["name"] = "partitioncache";
+  value["count"] = Size();
+  value["bytes"] = Bytes();
+  value["total_count"] = total_count_.get_value();
+  value["clean_count"] = clean_count_.get_value();
+  value["hit_count"] = access_hit_count_.get_value();
+  value["miss_count"] = access_miss_count_.get_value();
 }
 
 }  // namespace mds

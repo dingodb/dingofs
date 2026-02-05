@@ -14,6 +14,7 @@
 
 #include "mds/service/fsstat_service.h"
 
+#include <json/value.h>
 #include <sys/types.h>
 
 #include <cmath>
@@ -451,6 +452,80 @@ void FsStatServiceImpl::RenderAutoIncrementIdGenerator(FileSystemSetSPtr file_sy
   os << R"(</div>)";
 }
 
+static void RenderMdsCacheSummary(Json::Value& json_value, butil::IOBufBuilder& os) {
+  os << R"(<div style="margin:12px;margin-top:64px;font-size:smaller">)";
+  os << R"(<h3>MDS Cache Summary</h3>)";
+  os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
+  os << "<tr>";
+  os << "<th>Fs</th>";
+  os << "<th>Name</th>";
+  os << "<th>Count</th>";
+  os << "<th>AccumCount</th>";
+  os << "<th>CleanCount</th>";
+  os << "<th>Bytes</th>";
+  os << "<th>MissCount</th>";
+  os << "<th>HitCount</th>";
+  os << "<th>HitRatio</th>";
+  os << "</tr>";
+
+  if (!json_value.isArray()) {
+    LOG(ERROR) << "summary is not an array.";
+    os << "</table>\n";
+    os << "</div>";
+    return;
+  }
+
+  // json_value is {1: [{"name": "", "count": 1, "total_count": 1, "clean_count": 1, "bytes": 1024}],}
+  for (const auto& fs_value : json_value) {
+    if (!fs_value.isObject()) {
+      LOG(ERROR) << "summary fs item is not an object.";
+      continue;
+    }
+
+    const uint32_t fs_id = fs_value["fsid"].asUInt();
+
+    // iterate each cache item
+    for (const auto& item : fs_value["caches"]) {
+      const std::string name = item["name"].asString();
+
+      os << "<tr>";
+
+      os << "<td>" << fs_id << "</td>";
+      os << "<td>" << name << "</td>";
+      os << "<td>" << item["count"].asUInt64() << "</td>";
+      os << "<td>" << (item["total_count"].isNull() ? "N/A" : std::to_string(item["total_count"].asUInt64()))
+         << "</td>";
+      os << "<td>" << (item["clean_count"].isNull() ? "N/A" : std::to_string(item["clean_count"].asUInt64()))
+         << "</td>";
+      os << "<td>" << (item["bytes"].isNull() ? "N/A" : fmt::format("{}MB", item["bytes"].asUInt64() / (1024 * 1024)))
+         << "</td>";
+
+      const auto& miss_count = item["miss_count"];
+      const auto& hit_count = item["hit_count"];
+
+      os << "<td>" << (miss_count.isNull() ? "N/A" : std::to_string(miss_count.asUInt64())) << "</td>";
+      os << "<td>" << (hit_count.isNull() ? "N/A" : std::to_string(hit_count.asUInt64())) << "</td>";
+      if (miss_count.isNull() || hit_count.isNull()) {
+        os << "<td>N/A</td>";
+      } else {
+        if (hit_count.asUInt64() == 0 && miss_count.asUInt64() == 0) {
+          os << "<td>0%</td>";
+        } else {
+          os << fmt::format("<td>{:.2f}%</td>",
+                            hit_count.asUInt64() * 100.0 / (hit_count.asUInt64() + miss_count.asUInt64()));
+        }
+      }
+
+      os << "</tr>";
+    }
+  }
+
+  os << "</table>\n";
+  os << "</div>";
+
+  os << "<br>";
+}
+
 static void RenderGitInfo(butil::IOBufBuilder& os) {
   os << R"(<div style="margin:12px;margin-top:64px;font-size:smaller">)";
   os << R"(<h3>Git</h3>)";
@@ -732,6 +807,12 @@ void FsStatServiceImpl::RenderMainPage(const brpc::Server* server, FileSystemSet
 
   // auto increment id generator
   RenderAutoIncrementIdGenerator(file_system_set, os);
+
+  // mds cache summary
+  Json::Value summary_value = Json::arrayValue;
+  file_system_set->Summary(summary_value);
+
+  RenderMdsCacheSummary(summary_value, os);
 
   // git info
   RenderGitInfo(os);

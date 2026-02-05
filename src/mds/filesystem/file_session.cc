@@ -24,7 +24,6 @@
 #include "mds/common/status.h"
 #include "mds/common/type.h"
 #include "mds/filesystem/store_operation.h"
-#include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 namespace mds {
@@ -35,7 +34,7 @@ DECLARE_uint32(mds_txn_max_retry_times);
 DEFINE_uint32(mds_filesession_live_time_s, 600, "gc file session live time");
 DEFINE_validator(mds_filesession_live_time_s, brpc::PassValidate);
 
-static const std::string kFileSessionCacheCountMetricsName = "dingofs_{}_file_session_cache_count";
+static const std::string kFileSessionCacheMetricsPrefix = "dingofs_{}_filesession_{}";
 
 static FileSessionSPtr NewFileSession(uint32_t fs_id, Ino ino, const std::string& client_id,
                                       const std::string& session_id) {
@@ -52,101 +51,125 @@ static FileSessionSPtr NewFileSession(uint32_t fs_id, Ino ino, const std::string
 }
 
 FileSessionCache::FileSessionCache(uint32_t fs_id)
-    : count_metrics_(fmt::format(kFileSessionCacheCountMetricsName, fs_id)) {}
+    : fs_id_(fs_id), total_count_(fmt::format(kFileSessionCacheMetricsPrefix, fs_id, "total_count")) {}
 
 bool FileSessionCache::Put(FileSessionSPtr file_session) {
-  utils::WriteLockGuard guard(lock_);
-
   auto key = Key{.ino = file_session->ino(), .session_id = file_session->session_id()};
-  auto it = file_session_map_.find(key);
-  if (it != file_session_map_.end()) {
-    return false;
-  }
 
-  file_session_map_[key] = file_session;
-
-  count_metrics_ << 1;
+  shard_map_.withWLock(
+      [this, &key, &file_session](Map& map) mutable {
+        auto it = map.find(key);
+        if (it == map.end()) {
+          map[key] = file_session;
+          total_count_ << 1;
+        }
+      },
+      key.ino);
 
   return true;
 }
 
 void FileSessionCache::Upsert(FileSessionSPtr file_session) {
-  utils::WriteLockGuard guard(lock_);
-
   auto key = Key{.ino = file_session->ino(), .session_id = file_session->session_id()};
 
-  auto it = file_session_map_.find(key);
-  if (it == file_session_map_.end()) {
-    file_session_map_.insert(std::make_pair(key, file_session));
+  shard_map_.withWLock(
+      [this, &key, &file_session](Map& map) mutable {
+        auto it = map.find(key);
+        if (it == map.end()) {
+          map[key] = file_session;
+          total_count_ << 1;
 
-    count_metrics_ << 1;
-
-  } else {
-    it->second = file_session;
-  }
+        } else {
+          it->second = file_session;
+        }
+      },
+      key.ino);
 }
 
 void FileSessionCache::Delete(uint64_t ino, const std::string& session_id) {
-  utils::WriteLockGuard guard(lock_);
-
   auto key = Key{.ino = ino, .session_id = session_id};
-  file_session_map_.erase(key);
-  count_metrics_ << -1;
+
+  shard_map_.withWLock([&key](Map& map) mutable { map.erase(key); }, key.ino);
 }
 
 void FileSessionCache::Delete(uint64_t ino) {
-  utils::WriteLockGuard guard(lock_);
-
   auto key = Key{.ino = ino, .session_id = ""};
 
-  for (auto it = file_session_map_.upper_bound(key); it != file_session_map_.end();) {
-    if (it->first.ino != ino) {
-      break;
-    }
+  shard_map_.withWLock(
+      [&key](Map& map) mutable {
+        for (auto it = map.upper_bound(key); it != map.end();) {
+          if (it->first.ino != key.ino) break;
 
-    it = file_session_map_.erase(it);
-    count_metrics_ << -1;
-  }
+          it = map.erase(it);
+        }
+      },
+      key.ino);
 }
 
 FileSessionSPtr FileSessionCache::Get(uint64_t ino, const std::string& session_id) {
-  utils::ReadLockGuard guard(lock_);
-
   auto key = Key{.ino = ino, .session_id = session_id};
 
-  auto it = file_session_map_.find(key);
-  return it != file_session_map_.end() ? it->second : nullptr;
+  FileSessionSPtr file_session;
+  shard_map_.withRLock(
+      [&key, &file_session](Map& map) mutable {
+        auto it = map.find(key);
+        if (it != map.end()) {
+          file_session = it->second;
+        }
+      },
+      ino);
+
+  return file_session;
 }
 
 std::vector<FileSessionSPtr> FileSessionCache::Get(uint64_t ino) {
-  utils::ReadLockGuard guard(lock_);
-
   auto key = Key{.ino = ino, .session_id = ""};
 
   std::vector<FileSessionSPtr> file_sessions;
-  for (auto it = file_session_map_.upper_bound(key); it != file_session_map_.end(); ++it) {
-    if (it->first.ino != ino) {
-      break;
-    }
+  shard_map_.withRLock(
+      [&key, &file_sessions](Map& map) mutable {
+        for (auto it = map.upper_bound(key); it != map.end(); ++it) {
+          if (it->first.ino != key.ino) break;
 
-    file_sessions.push_back(it->second);
-  }
+          file_sessions.push_back(it->second);
+        }
+      },
+      ino);
 
   return file_sessions;
 }
 
 bool FileSessionCache::IsExist(uint64_t ino) {
-  utils::ReadLockGuard guard(lock_);
-
   auto key = Key{.ino = ino, .session_id = ""};
-  return file_session_map_.upper_bound(key) != file_session_map_.end();
+
+  bool is_exist = false;
+  shard_map_.withRLock([&key, &is_exist](Map& map) mutable { is_exist = map.upper_bound(key) != map.end(); }, ino);
+
+  return is_exist;
 }
 
 bool FileSessionCache::IsExist(uint64_t ino, const std::string& session_id) {
-  utils::ReadLockGuard guard(lock_);
-
   auto key = Key{.ino = ino, .session_id = session_id};
-  return file_session_map_.find(key) != file_session_map_.end();
+
+  bool is_exist = false;
+  shard_map_.withRLock([&key, &is_exist](Map& map) mutable { is_exist = map.find(key) != map.end(); }, ino);
+
+  return is_exist;
+}
+
+size_t FileSessionCache::Size() {
+  size_t size = 0;
+  shard_map_.iterate([&size](Map& map) { size += map.size(); });
+  return size;
+}
+
+size_t FileSessionCache::Bytes() { return Size() * (sizeof(FileSessionEntry) + sizeof(Key)); }
+
+void FileSessionCache::Summary(Json::Value& value) {
+  value["name"] = "filesession";
+  value["count"] = Size();
+  value["bytes"] = Bytes();
+  value["total_count"] = total_count_.get_value();
 }
 
 FileSessionManager::FileSessionManager(uint32_t fs_id, OperationProcessorSPtr operation_processor)

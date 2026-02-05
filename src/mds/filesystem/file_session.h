@@ -23,7 +23,6 @@
 #include "mds/common/status.h"
 #include "mds/common/type.h"
 #include "mds/filesystem/store_operation.h"
-#include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 namespace mds {
@@ -58,13 +57,20 @@ class FileSessionCache {
   bool IsExist(uint64_t ino);
   bool IsExist(uint64_t ino, const std::string& session_id);
 
+  size_t Size();
+  size_t Bytes();
+
+  void Summary(Json::Value& value);
+
  private:
-  utils::RWLock lock_;
-  // ino/session_id -> file_session
-  std::map<Key, FileSessionSPtr> file_session_map_;
+  const uint32_t fs_id_;
+
+  using Map = absl::btree_map<Key, FileSessionSPtr>;
+  constexpr static size_t kShardNum = 64;
+  utils::Shards<Map, kShardNum> shard_map_;
 
   // statistics
-  bvar::Adder<int64_t> count_metrics_;
+  bvar::Adder<uint64_t> total_count_;
 };
 
 class FileSessionManager;
@@ -97,6 +103,8 @@ class FileSessionManager {
   Status GetAll(std::vector<FileSessionEntry>& file_sessions);
 
   FileSessionCache& GetFileSessionCache() { return file_session_cache_; }
+
+  void Summary(Json::Value& value) { file_session_cache_.Summary(value); }
 
  private:
   Status GetFileSessionsFromStore(uint64_t ino, std::vector<FileSessionSPtr>& file_sessions);

@@ -35,6 +35,10 @@ class ParentMemo {
 
   bool GetParent(Ino ino, Ino& parent);
 
+  size_t Size();
+  size_t Bytes();
+
+  void Summary(Json::Value& value);
   void DescribeByJson(Json::Value& value);
 
  private:
@@ -46,7 +50,7 @@ class ParentMemo {
   utils::Shards<Map, kShardNum> parent_map_;
 
   // statistics
-  bvar::Adder<int64_t> count_metrics_;
+  bvar::Adder<int64_t> total_count_;
 };
 
 }  // namespace mds

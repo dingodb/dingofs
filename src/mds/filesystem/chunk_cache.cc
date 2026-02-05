@@ -18,28 +18,38 @@
 #include <utility>
 #include <vector>
 
+#include "brpc/reloadable_flags.h"
 #include "utils/time.h"
 
 namespace dingofs {
 namespace mds {
 
-static const std::string kChunkCacheCountMetricsName = "dingofs_{}_chunk_cache_count";
+DEFINE_uint32(mds_chunk_cache_max_count, 4 * 1024 * 1024, "chunk cache max count");
+DEFINE_validator(mds_chunk_cache_max_count, brpc::PassValidate);
+
+static const std::string kChunkCacheMetricsPrefix = "dingofs_{}_chunk_cache_{}";
 
 ChunkCache::ChunkCache(uint32_t fs_id)
-    : fs_id_(fs_id), count_metrics_(fmt::format(kChunkCacheCountMetricsName, fs_id)) {}
+    : fs_id_(fs_id),
+      total_count_(fmt::format(kChunkCacheMetricsPrefix, fs_id, "total_count")),
+      access_miss_count_(fmt::format(kChunkCacheMetricsPrefix, fs_id, "miss_count")),
+      access_hit_count_(fmt::format(kChunkCacheMetricsPrefix, fs_id, "hit_count")),
+      clean_count_(fmt::format(kChunkCacheMetricsPrefix, fs_id, "clean_count")) {}
 
 static ChunkCache::ChunkSPtr NewChunk(ChunkEntry&& chunk) { return std::make_shared<ChunkEntry>(std::move(chunk)); }
 
 bool ChunkCache::PutIf(uint64_t ino, ChunkEntry chunk) {
+  chunk.set_expire_time_s(utils::Timestamp());
+
   bool ret = true;
-  chunk_map_.withWLock(
+  shard_map_.withWLock(
       [this, ino, &ret, &chunk](Map& map) mutable {
         Key key{.ino = ino, .chunk_index = chunk.index()};
         auto it = map.find(key);
         if (it == map.end()) {
           map.insert(std::make_pair(key, NewChunk(std::move(chunk))));
 
-          count_metrics_ << 1;
+          total_count_ << 1;
 
         } else {
           const auto& old_chunk = it->second;
@@ -56,39 +66,36 @@ bool ChunkCache::PutIf(uint64_t ino, ChunkEntry chunk) {
 }
 
 void ChunkCache::Delete(uint64_t ino, uint64_t chunk_index) {
-  chunk_map_.withWLock(
-      [this, ino, chunk_index](Map& map) mutable {
+  shard_map_.withWLock(
+      [ino, chunk_index](Map& map) mutable {
         Key key{.ino = ino, .chunk_index = chunk_index};
         auto it = map.find(key);
         if (it == map.end()) return;
 
         map.erase(it);
-        count_metrics_ << -1;
       },
       ino);
 }
 
 void ChunkCache::Delete(uint64_t ino) {
-  chunk_map_.withWLock(
-      [this, ino](Map& map) mutable {
+  shard_map_.withWLock(
+      [ino](Map& map) mutable {
         Key key{.ino = ino, .chunk_index = 0};
 
         for (auto it = map.lower_bound(key); it != map.end();) {
           if (it->first.ino != ino) break;
 
           it = map.erase(it);
-          count_metrics_ << -1;
         }
       },
       ino);
 }
 
 void ChunkCache::BatchDeleteIf(const std::function<bool(const Ino&)>& f) {
-  chunk_map_.iterateWLock([&](Map& map) {
+  shard_map_.iterateWLock([&](Map& map) {
     for (auto it = map.begin(); it != map.end();) {
       if (f(it->first.ino)) {
         it = map.erase(it);
-        count_metrics_ << -1;
 
       } else {
         ++it;
@@ -97,66 +104,109 @@ void ChunkCache::BatchDeleteIf(const std::function<bool(const Ino&)>& f) {
   });
 }
 
-uint64_t ChunkCache::Size() {
-  uint64_t size = 0;
-  chunk_map_.iterate([&size](Map& map) { size += map.size(); });
-
-  return size;
-}
-
 ChunkCache::ChunkSPtr ChunkCache::Get(uint64_t ino, uint64_t chunk_index) {
   ChunkCache::ChunkSPtr chunk;
-  chunk_map_.withRLock(
-      [ino, chunk_index, &chunk](Map& map) mutable {
+  shard_map_.withRLock(
+      [&](Map& map) mutable {
         Key key{.ino = ino, .chunk_index = chunk_index};
 
         auto it = map.find(key);
-        if (it != map.end()) chunk = it->second;
+        if (it != map.end()) {
+          chunk = it->second;
+          access_hit_count_ << 1;
+
+        } else {
+          access_miss_count_ << 1;
+        }
       },
       ino);
+
+  chunk->set_expire_time_s(utils::Timestamp());
 
   return chunk;
 }
 
 std::vector<ChunkCache::ChunkSPtr> ChunkCache::Get(uint64_t ino) {
+  uint64_t now_s = utils::Timestamp();
   std::vector<ChunkSPtr> chunks;
-
-  chunk_map_.withRLock(
-      [ino, &chunks](Map& map) mutable {
+  shard_map_.withRLock(
+      [ino, &chunks, &now_s](Map& map) mutable {
         Key key{.ino = ino, .chunk_index = 0};
 
         for (auto it = map.lower_bound(key); it != map.end(); ++it) {
           if (it->first.ino != ino) break;
 
+          it->second->set_expire_time_s(now_s);
           chunks.push_back(it->second);
         }
       },
       ino);
 
+  access_hit_count_ << chunks.size();
+
   return chunks;
 }
 
+size_t ChunkCache::Size() {
+  size_t size = 0;
+  shard_map_.iterate([&size](Map& map) { size += map.size(); });
+
+  return size;
+}
+
+size_t ChunkCache::Bytes() {
+  size_t bytes = 0;
+  shard_map_.iterate([&bytes](Map& map) {
+    for (auto& [key, chunk] : map) {
+      bytes += sizeof(Key) + sizeof(ChunkEntry) + chunk->slices_size() * sizeof(SliceEntry) +
+               chunk->compacted_slices_size() * sizeof(ChunkEntry::CompactedSlice);
+    }
+  });
+
+  return bytes;
+}
+
 void ChunkCache::Clear() {
-  chunk_map_.iterateWLock([&](Map& map) { map.clear(); });
-  count_metrics_.reset();
+  shard_map_.iterateWLock([&](Map& map) { map.clear(); });
+  total_count_.reset();
+  clean_count_.reset();
 }
 
-void ChunkCache::RememberCheckCompact(uint64_t ino, uint64_t chunk_index) {
-  utils::WriteLockGuard lk(lock_);
+void ChunkCache::CleanExpired(uint64_t expire_s) {
+  if (Size() < FLAGS_mds_chunk_cache_max_count) return;
 
-  auto key = Key{.ino = ino, .chunk_index = chunk_index};
-  check_compact_memo_[key] = utils::TimestampMs();
+  std::vector<Key> keys;
+  shard_map_.iterate([&](const Map& map) {
+    for (const auto& [key, chunk] : map) {
+      if (chunk->expire_time_s() < expire_s) {
+        keys.push_back(key);
+      }
+    }
+  });
+
+  if (keys.empty()) return;
+
+  for (const auto& key : keys) {
+    Delete(key.ino, key.chunk_index);
+  }
+
+  clean_count_ << keys.size();
+
+  LOG(INFO) << fmt::format("[cache.chunk.{}] clean expired, stat({}|{}|{}).", fs_id_, Size(), keys.size(),
+                           clean_count_.get_value());
 }
 
-uint64_t ChunkCache::GetLastCheckCompactTimeMs(uint64_t ino, uint64_t chunk_index) {
-  utils::ReadLockGuard lk(lock_);
+void ChunkCache::DescribeByJson(Json::Value& value) { value["count"] = Size(); }
 
-  auto key = Key{.ino = ino, .chunk_index = chunk_index};
-  auto it = check_compact_memo_.find(key);
-  return (it != check_compact_memo_.end()) ? it->second : 0;
+void ChunkCache::Summary(Json::Value& value) {
+  value["name"] = "chunkcache";
+  value["count"] = Size();
+  value["bytes"] = Bytes();
+  value["total_count"] = total_count_.get_value();
+  value["clean_count"] = clean_count_.get_value();
+  value["hit_count"] = access_hit_count_.get_value();
+  value["miss_count"] = access_miss_count_.get_value();
 }
-
-void ChunkCache::DescribeByJson(Json::Value& value) { value["count"] = count_metrics_.get_value(); }
 
 }  // namespace mds
 }  // namespace dingofs

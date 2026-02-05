@@ -62,6 +62,7 @@ class Inode {
         maybe_tiny_file_(attr.maybe_tiny_file()),
         version_(attr.version()),
         parents_(attr.parents().begin(), attr.parents().end()) {
+    last_active_time_s_ = utils::Timestamp();
     for (const auto& xattr : attr.xattrs()) {
       xattrs_.emplace(xattr.first, xattr.second);
     }
@@ -152,8 +153,8 @@ class Inode {
 
   AttrEntry Copy();
 
-  void UpdateLastAccessTime() { last_access_time_s_.store(utils::Timestamp(), std::memory_order_release); }
-  uint64_t LastAccessTimeS() { return last_access_time_s_.load(std::memory_order_acquire); }
+  void UpdateLastActiveTime() { last_active_time_s_.store(utils::Timestamp(), std::memory_order_relaxed); }
+  uint64_t LastActiveTimeS() { return last_active_time_s_.load(std::memory_order_relaxed); }
 
  private:
   mutable utils::RWLock lock_;
@@ -182,7 +183,7 @@ class Inode {
 
   uint64_t version_{0};
 
-  std::atomic<uint64_t> last_access_time_s_{0};
+  std::atomic<uint64_t> last_active_time_s_{0};
 };
 
 class InodeCache;
@@ -215,10 +216,12 @@ class InodeCache {
   std::vector<InodeSPtr> GetAll();
 
   size_t Size();
+  size_t Bytes();
 
   void CleanExpired(uint64_t expire_s);
 
   void DescribeByJson(Json::Value& value);
+  void Summary(Json::Value& value);
 
  private:
   using Map = absl::flat_hash_map<Ino, InodeSPtr>;
@@ -229,9 +232,10 @@ class InodeCache {
   utils::Shards<Map, kShardNum> shard_map_;
 
   // metric
+  bvar::Adder<int64_t> total_count_;
+  bvar::Adder<int64_t> clean_count_;
   bvar::Adder<int64_t> access_miss_count_;
   bvar::Adder<int64_t> access_hit_count_;
-  bvar::Adder<int64_t> clean_count_;
 };
 
 }  // namespace mds
