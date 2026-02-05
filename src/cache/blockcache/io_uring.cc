@@ -80,7 +80,7 @@ Status IOUring::Start() {
   }
 
   int flags = IORING_SETUP_SQPOLL;
-  int rc = io_uring_queue_init(FLAGS_iodepth, &io_uring_, flags);
+  int rc = io_uring_queue_init(FLAGS_iodepth * 2, &io_uring_, flags);
   if (rc != 0) {
     LOG(ERROR) << "Fail to init io_uring queue: " << strerror(-rc);
     return Status::Internal("init io_uring failed");
