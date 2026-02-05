@@ -94,6 +94,7 @@ struct SendRequestOption {
 
   int64_t timeout_ms;
   int max_retry;
+  bool timeout_retry{true};
 };
 
 class RPC {
@@ -308,9 +309,12 @@ Status RPC::SendRequest(const EndPoint& endpoint,
       // if the error is timeout, we can retry
       if (cntl.ErrorCode() == brpc::ERPCTIMEDOUT) {
         response.mutable_error()->set_errcode(pb::error::ENOT_CAN_CONNECTED);
+
+        if (!option.timeout_retry) return Status::Timeout(cntl.ErrorText());
         if ((retry + 1) >= option.max_retry) DeleteChannel(endpoint);
         continue;
       }
+
       DeleteChannel(endpoint);
       if (cntl.ErrorCode() == EHOSTDOWN) {
         response.mutable_error()->set_errcode(pb::error::ENOT_CAN_CONNECTED);

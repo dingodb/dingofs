@@ -264,6 +264,9 @@ Status MDSClient::SendRequest(ContextSPtr ctx, SpanScopeSPtr& span,
   uint64_t primary_mds_id{0};
   bool is_refresh_mds = true;
 
+  SendRequestOption option;
+  option.timeout_retry = ctx ? ctx->timeout_retry : true;
+
   request.mutable_info()->set_request_id(
       ctx ? ctx->SessionID() : std::to_string(utils::TimestampNs()));
 
@@ -284,8 +287,8 @@ Status MDSClient::SendRequest(ContextSPtr ctx, SpanScopeSPtr& span,
     }
     auto endpoint = StrToEndpoint(mds_meta.Host(), mds_meta.Port());
 
-    status =
-        rpc_.SendRequest(endpoint, service_name, api_name, request, response);
+    status = rpc_.SendRequest(endpoint, service_name, api_name, request,
+                              response, option);
     if (!status.ok()) {
       LOG(INFO) << fmt::format(
           "[meta.client] send request fail, {} reqid({}) mds({}) retry({}) "

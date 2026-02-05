@@ -1445,6 +1445,7 @@ Status MDSClient::CompactChunk(ContextSPtr& ctx, Ino ino, uint32_t chunk_index,
     request.add_new_slices()->CopyFrom(slice);
   }
 
+  ctx->timeout_retry = false;
   auto status = SendRequest(SpanScope::GetContext(span, ctx), span, get_mds_fn,
                             "MDSService", "CompactChunk", request, response);
   chunk_entry.Swap(response.mutable_chunk());

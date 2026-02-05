@@ -150,6 +150,9 @@ std::string Status::ToString() const {
       case kNotFit:
         type = "NotFit";
         break;
+      case kTimeout:
+        type = "Timeout";
+        break;
       default:
         type = std::to_string(code_).c_str();
         LOG(ERROR) << fmt::format("Unknown code({}):", static_cast<int>(code_));

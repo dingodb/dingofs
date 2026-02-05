@@ -82,6 +82,7 @@ class Status {
     kCacheFull = 29,
     kStop = 30,
     kNotFit = 31,
+    kTimeout = 32,
   };
   static const int32_t kNone = 0;
 
@@ -123,6 +124,7 @@ class Status {
   DECLARE_ERROR_STATUS(NoSys, kNoSys);
   DECLARE_ERROR_STATUS(NoPermitted, kNoPermitted);
   DECLARE_ERROR_STATUS(NetError, kNetError);
+  DECLARE_ERROR_STATUS(Timeout, kTimeout);
   DECLARE_ERROR_STATUS(NotFound, kNotFound);
   DECLARE_ERROR_STATUS(NotDirectory, kNotDirectory);
   DECLARE_ERROR_STATUS(FileTooLarge, kFileTooLarge);
@@ -192,6 +194,8 @@ class Status {
         return EIO;
       case kNotFit:
         return EIO;
+      case kTimeout:
+        return ETIMEDOUT;
       default:
         return EIO;
     }

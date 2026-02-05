@@ -34,6 +34,8 @@ struct Context {
 
   uint64_t start_time_ns{0};
 
+  bool timeout_retry{true};
+
   std::weak_ptr<SpanScope> trace_span;
 
   const std::string& SessionID() const { return session_id; }  // session id

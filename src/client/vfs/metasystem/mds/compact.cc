@@ -79,9 +79,11 @@ Status CompactChunkTask::Compact() {
   mds::ChunkEntry chunk_entry;
   status = mds_client_.CompactChunk(ctx, ino_, chunk_->GetIndex(), param,
                                     chunk_entry);
-  if (!status.ok() && !status.IsInvalidParam()) {
+  if (!status.ok() && !status.IsInvalidParam() && !status.IsTimeout()) {
     return status;
   }
+
+  if (status.IsTimeout()) chunk_->SetNotCompleted();
 
   bool extra_local_compact = false;
   if (chunk_entry.version() > version && !chunk_->Put(chunk_entry, "compact")) {

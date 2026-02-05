@@ -76,6 +76,10 @@ class Chunk {
                uint64_t end_slice_id, const std::vector<Slice>& new_slices);
   void AppendSlice(const std::vector<Slice>& slices);
 
+  void SetNotCompleted() {
+    utils::WriteLockGuard guard(lock_);
+    is_completed_ = false;
+  }
   bool IsCompleted() const {
     utils::ReadLockGuard guard(lock_);
     return is_completed_;
