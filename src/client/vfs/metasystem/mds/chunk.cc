@@ -134,13 +134,16 @@ Status Chunk::IsNeedCompaction(bool check_interval) {
     last_compaction_time_ms_ = now_ms;
   }
 
-  if (commited_slices_.size() < FLAGS_vfs_meta_compact_chunk_threshold_num) {
-    return Status::NotFit(fmt::format(
-        "compact threshold not reached, {}/{}.", commited_slices_.size(),
-        FLAGS_vfs_meta_compact_chunk_threshold_num));
+  int64_t slice_count = commited_slices_.size();
+
+  if (slice_count % 100 == 99 ||
+      slice_count > FLAGS_vfs_meta_compact_chunk_threshold_num) {
+    return Status::OK();
   }
 
-  return Status::OK();
+  return Status::NotFit(
+      fmt::format("compact condition not reached, {}/{}.", slice_count,
+                  FLAGS_vfs_meta_compact_chunk_threshold_num));
 }
 
 std::vector<Slice> Chunk::CommitSlice(uint64_t& version) {

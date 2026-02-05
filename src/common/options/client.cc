@@ -165,7 +165,7 @@ DEFINE_validator(vfs_meta_commit_slice_max_num, brpc::PassValidate);
 
 DEFINE_bool(vfs_meta_compact_chunk_enable, true, "compact chunk enable.");
 DEFINE_validator(vfs_meta_compact_chunk_enable, brpc::PassValidate);
-DEFINE_uint32(vfs_meta_compact_chunk_threshold_num, 32,
+DEFINE_uint32(vfs_meta_compact_chunk_threshold_num, 350,
               "compact chunk threshold num.");
 DEFINE_validator(vfs_meta_compact_chunk_threshold_num, brpc::PassValidate);
 DEFINE_uint32(vfs_meta_compact_chunk_interval_ms, 10 * 1000,

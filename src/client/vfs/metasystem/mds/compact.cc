@@ -24,7 +24,7 @@ namespace meta {
 
 const std::string kCompactWorkerSetName = "compact_worker_set";
 
-DEFINE_uint32(vfs_compact_worker_num, 32, "number of compact workers");
+DEFINE_uint32(vfs_compact_worker_num, 8, "number of compact workers");
 DEFINE_uint32(vfs_compact_worker_max_pending_num, 8096,
               "compact worker max pending num");
 DEFINE_bool(vfs_compact_worker_use_pthread, true, "compact worker use pthread");
