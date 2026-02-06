@@ -86,3 +86,5 @@ scripts/docker/rocky9/dingofs
 dist/
 .cache
 .playground
+
+CLAUDE.local.md

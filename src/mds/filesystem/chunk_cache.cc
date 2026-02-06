@@ -121,7 +121,7 @@ ChunkCache::ChunkSPtr ChunkCache::Get(uint64_t ino, uint64_t chunk_index) {
       },
       ino);
 
-  chunk->set_expire_time_s(utils::Timestamp());
+  if (chunk != nullptr) chunk->set_expire_time_s(utils::Timestamp());
 
   return chunk;
 }

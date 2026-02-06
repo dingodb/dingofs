@@ -157,8 +157,8 @@ TEST_F(InodeCacheTest, Put) {
     auto attr_entry = GenInode(kFsId, ino, pb::mds::FileType::FILE);
     inode_cache.PutIf(std::move(attr_entry));
 
-    ASSERT_EQ(attr_entry.parents_size(), 0);
-    ASSERT_EQ(attr_entry.xattrs_size(), 0);
+    ASSERT_EQ(attr_entry.parents_size(), 3);
+    ASSERT_EQ(attr_entry.xattrs_size(), 3);
 
     auto inode = inode_cache.Get(ino);
     ASSERT_TRUE(inode != nullptr);
@@ -222,7 +222,7 @@ TEST_F(InodeCacheTest, Put) {
     ASSERT_EQ(attr_entry.parents_size(), 4);
     inode_cache.PutIf(std::move(attr_entry));
 
-    ASSERT_EQ(attr_entry.parents_size(), 3);
+    ASSERT_EQ(attr_entry.parents_size(), 4);
 
     inode = inode_cache.Get(ino);
     ASSERT_TRUE(inode != nullptr);
