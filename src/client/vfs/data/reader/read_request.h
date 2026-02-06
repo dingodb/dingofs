@@ -95,10 +95,14 @@ struct ReadRequest {
                        FileRange frange)
       : req(ino, chunk_index, chunk_offset, frange) {}
 
-  void IncReader() {
-    std::unique_lock<std::mutex> lock(mutex);
+  void IncReaderUnlock() {
     CHECK_GE(readers, 0);
     ++readers;
+  }
+
+  void IncReader() {
+    std::unique_lock<std::mutex> lock(mutex);
+    IncReaderUnlock();
   }
 
   void DecReader() {

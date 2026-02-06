@@ -644,23 +644,30 @@ std::vector<PartialReadRequest> FileReader::PrepareRequests(
     int64_t e = ranges[i + 1];
 
     for (const auto& [uuid, req] : requests_) {
+      std::unique_lock<std::mutex> req_lock(req->mutex);
+
       VLOG(9) << fmt::format(
           "{} PrepareRequests check req: {} for range [{}-{}))", uuid_,
-          req->ToString(), s, e);
+          req->ToStringUnlock(), s, e);
+
+      if (req->state == ReadRequestState::kInvalid) {
+        continue;
+      }
 
       if (req->req.frange.offset <= s && req->req.frange.End() >= e) {
         read_reqs.emplace_back(PartialReadRequest{
             .req = req, .offset = s - req->req.frange.offset, .len = e - s});
         req->access_sec = butil::monotonic_time_s();
-        req->IncReader();
+        req->IncReaderUnlock();
         added = true;
+
         VLOG(9) << fmt::format(
             "{} PrepareRequests reuse existing req: {} for range [{}-{}), "
             "len: {}",
-            uuid_, req->ToString(), s, e, (e - s));
+            uuid_, req->UUID(), s, e, (e - s));
         break;
       }
-    }
+    }  // end for
 
     if (!added) {
       while (s < e) {
