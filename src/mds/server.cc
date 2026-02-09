@@ -603,15 +603,15 @@ void Server::DescribeByJson(Json::Value& value) {
   file_system_set_->DescribeByJson(fsset_value);
   value["d-file_system_set"] = fsset_value;
 
-  // mds service
-  Json::Value mds_service_value;
-  mds_service_->DescribeByJson(mds_service_value);
-  value["e-mds_service"] = mds_service_value;
-
   // crontab
   Json::Value crontab_value(Json::arrayValue);
   crontab_manager_.DescribeByJson(crontab_value);
-  value["f-crontab"] = crontab_value;
+  value["e-crontab"] = crontab_value;
+
+  // mds service
+  // Json::Value mds_service_value;
+  // mds_service_->DescribeByJson(mds_service_value);
+  // value["f-mds_service"] = mds_service_value;
 
   // gc
 

@@ -1603,19 +1603,24 @@ void MDSMetaSystem::FlushAllSlice() {
   LOG(INFO) << fmt::format("[meta.fs] flush all slice, count({}).",
                            file_sessions.size());
 
-  for (auto& file_session : file_sessions) {
-    Ino ino = file_session->GetIno();
-    ContextSPtr ctx = std::make_shared<Context>("");
+  do {
+    for (auto& file_session : file_sessions) {
+      Ino ino = file_session->GetIno();
+      ContextSPtr ctx = std::make_shared<Context>("");
 
-    auto status = FlushSlice(ctx, ino);
-    if (!status.ok()) {
-      LOG(ERROR) << fmt::format("[meta.fs.{}] flush all slice fail, error({}).",
-                                ino, status.ToString());
+      auto status = FlushSlice(ctx, ino);
+      if (!status.ok()) {
+        LOG(ERROR) << fmt::format(
+            "[meta.fs.{}] flush all slice fail, error({}).", ino,
+            status.ToString());
+      }
     }
-  }
 
-  CHECK(!chunk_cache_.HasUncommitedSlice())
-      << "still has uncommited slice after flush all.";
+    if (!chunk_cache_.HasUncommitedSlice()) break;
+
+    LOG(INFO) << "[meta.fs] flush all slice loop, still has uncommited slice.";
+
+  } while (true);
 }
 
 Status MDSMetaSystem::CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
