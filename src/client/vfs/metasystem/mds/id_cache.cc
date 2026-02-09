@@ -25,7 +25,7 @@ namespace client {
 namespace vfs {
 namespace meta {
 
-DEFINE_uint32(client_vfs_id_cache_batch_size, 100000, "id cache batch size");
+DEFINE_uint32(vfs_id_cache_batch_size, 100000, "id cache batch size");
 
 bool IdCache::GenID(uint64_t& id) { return GenID(1, id); }
 

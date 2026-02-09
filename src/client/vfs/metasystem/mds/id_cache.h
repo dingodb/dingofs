@@ -25,12 +25,12 @@ namespace client {
 namespace vfs {
 namespace meta {
 
-DECLARE_uint32(client_vfs_id_cache_batch_size);
+DECLARE_uint32(vfs_id_cache_batch_size);
 
 class IdCache {
  public:
   IdCache(const std::string& name, MDSClient& mds_client,
-          uint32_t batch_size = FLAGS_client_vfs_id_cache_batch_size)
+          uint32_t batch_size = FLAGS_vfs_id_cache_batch_size)
       : name_(name), mds_client_(mds_client), batch_size_(batch_size) {}
 
   bool GenID(uint64_t& id);
