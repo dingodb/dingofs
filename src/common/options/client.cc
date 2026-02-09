@@ -35,11 +35,11 @@ DEFINE_validator(vfs_access_log_threshold_us, brpc::PassValidate);
 DEFINE_bool(fuse_enable_readdir_cache, true, "enable readdir cache");
 DEFINE_validator(fuse_enable_readdir_cache, brpc::PassValidate);
 
-DEFINE_uint32(fuse_entry_cache_timeout_s, 3600,
+DEFINE_uint32(fuse_entry_cache_timeout_s, 10,
               "fuse entry cache timeout in seconds");
 DEFINE_validator(fuse_entry_cache_timeout_s, brpc::PassValidate);
 
-DEFINE_uint32(fuse_attr_cache_timeout_s, 3600,
+DEFINE_uint32(fuse_attr_cache_timeout_s, 10,
               "fuse attr cache timeout in seconds");
 DEFINE_validator(fuse_attr_cache_timeout_s, brpc::PassValidate);
 
