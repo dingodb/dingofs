@@ -23,6 +23,7 @@
 #ifndef DINGOFS_SRC_CACHE_COMMON_STORAGE_CLIENT_H_
 #define DINGOFS_SRC_CACHE_COMMON_STORAGE_CLIENT_H_
 
+#include <bthread/condition_variable.h>
 #include <bthread/execution_queue.h>
 #include <bthread/mutex.h>
 #include <bvar/passive_status.h>
@@ -37,6 +38,8 @@
 #include "cache/common/context.h"
 #include "cache/iutil/task_execution_queue.h"
 #include "common/blockaccess/block_accesser.h"
+#include "utils/concurrent/task_thread_pool.h"
+#include "utils/throttle.h"
 
 namespace dingofs {
 namespace cache {
@@ -136,6 +139,9 @@ class StorageClient {
   iutil::TaskExecutionQueueSPtr download_retry_queue_;
   bvar::PassiveStatus<int64_t> num_upload_retry_task_;
   bvar::PassiveStatus<int64_t> num_download_retry_task_;
+  std::unique_ptr<
+      utils::TaskThreadPool<bthread::Mutex, bthread::ConditionVariable>>
+      thread_pool_;
 };
 
 using StorageClientUPtr = std::unique_ptr<StorageClient>;

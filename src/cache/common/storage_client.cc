@@ -28,6 +28,8 @@
 #include <glog/logging.h>
 #include <sys/types.h>
 
+#include <memory>
+
 #include "cache/blockcache/cache_store.h"
 #include "cache/iutil/string_util.h"
 #include "cache/iutil/task_execution_queue.h"
@@ -43,6 +45,9 @@ DEFINE_validator(storage_upload_retry_timeout_s, brpc::PassValidate);
 DEFINE_int64(storage_download_retry_timeout_s, 1800,
              "timeout in seconds for download retry");
 DEFINE_validator(storage_download_retry_timeout_s, brpc::PassValidate);
+
+DEFINE_uint64(storage_upload_thread_pool_size, 32,
+              "thread pool size for upload tasks");
 
 static int64_t GetQueueSize(void* meta) {
   iutil::TaskExecutionQueue* queue =
@@ -191,6 +196,8 @@ StorageClient::StorageClient(blockaccess::BlockAccesser* block_accesser)
       queue_id_({0}),
       upload_retry_queue_(std::make_shared<iutil::TaskExecutionQueue>()),
       download_retry_queue_(std::make_shared<iutil::TaskExecutionQueue>()),
+      thread_pool_(std::make_unique<utils::TaskThreadPool<
+                       bthread::Mutex, bthread::ConditionVariable>>()),
       num_upload_retry_task_("dingofs_storage_upload_retry_count", GetQueueSize,
                              upload_retry_queue_.get()),
       num_download_retry_task_("dingofs_storage_download_retry_count",
@@ -203,6 +210,8 @@ Status StorageClient::Start() {
   }
 
   LOG(INFO) << "StorageClient is starting...";
+
+  CHECK_EQ(thread_pool_->Start(FLAGS_storage_upload_thread_pool_size), 0);
 
   bthread::ExecutionQueueOptions queue_options;
   queue_options.use_pthread = true;
@@ -237,6 +246,8 @@ Status StorageClient::Shutdown() {
     return Status::Internal("join execution queue failed");
   }
 
+  thread_pool_->Stop();
+
   upload_retry_queue_->Shutdown();
   download_retry_queue_->Shutdown();
 
@@ -248,7 +259,8 @@ Status StorageClient::Put(ContextSPtr ctx, const BlockKey& key,
                           const Block* block) {
   auto task =
       PutBlockTask(ctx, key, block, block_accesser_, upload_retry_queue_);
-  CHECK_EQ(0, bthread::execution_queue_execute(queue_id_, &task));
+  // CHECK_EQ(0, bthread::execution_queue_execute(queue_id_, &task));
+  thread_pool_->Enqueue([&task]() mutable { task.Run(); });
 
   task.Wait();
   auto status = task.status();
