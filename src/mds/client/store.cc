@@ -19,7 +19,6 @@
 #include <ostream>
 #include <string>
 
-#include "common/logging.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/core.h"
 #include "glog/logging.h"
@@ -29,16 +28,21 @@
 #include "mds/filesystem/store_operation.h"
 #include "mds/storage/dingodb_storage.h"
 #include "mds/storage/storage.h"
+#include "mds/storage/tikv_storage.h"
 
 namespace dingofs {
 namespace mds {
 namespace client {
 
-bool StoreClient::Init(const std::string& coor_addr) {
+bool StoreClient::Init(const std::string& engine_type, const std::string& coor_addr) {
   CHECK(!coor_addr.empty()) << "coor addr is empty.";
 
-  kv_storage_ = DingodbStorage::New();
-  CHECK(kv_storage_ != nullptr) << "new DingodbStorage fail.";
+  if (engine_type == "dingo-store") {
+    kv_storage_ = DingodbStorage::New();
+  } else if (engine_type == "tikv") {
+    kv_storage_ = TikvStorage::New();
+  }
+  CHECK(kv_storage_ != nullptr) << "new kv storage fail.";
 
   std::string store_addrs = Helper::ParseStorageAddr(coor_addr);
   if (store_addrs.empty()) {
@@ -266,7 +270,7 @@ bool StoreCommandRunner::Run(const Options& options, const std::string& coor_add
   }
 
   dingofs::mds::client::StoreClient store_client;
-  if (!store_client.Init(coor_addr)) {
+  if (!store_client.Init(options.storage_engine, coor_addr)) {
     std::cerr << "init store client fail." << '\n';
     return false;
   }

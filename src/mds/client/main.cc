@@ -83,6 +83,8 @@ DEFINE_uint32(weight, 0, "cache member weight");
 
 DEFINE_string(storage_path, "", "local storage path");
 
+DEFINE_string(storage_engine, "dingo-store", "storage engine");
+
 static std::string GetDefaultCoorAddrPath() {
   if (!FLAGS_coor_addr.empty()) {
     return FLAGS_coor_addr;
@@ -237,6 +239,7 @@ int main(int argc, char* argv[]) {
     options.fs_name = FLAGS_fs_name;
     options.meta_table_name = fmt::format("{}[{}]", dingofs::kMetaTableName, FLAGS_cluster_id);
     options.fsstats_table_name = fmt::format("{}[{}]", dingofs::kFsStatsTableName, FLAGS_cluster_id);
+    options.storage_engine = FLAGS_storage_engine;
 
     auto& s3_info = options.s3_info;
     s3_info.ak = FLAGS_s3_ak;

@@ -29,7 +29,7 @@ class StoreClient {
   StoreClient() = default;
   ~StoreClient() = default;
 
-  bool Init(const std::string& coor_addr);
+  bool Init(const std::string& engine_type, const std::string& coor_addr);
 
   bool CreateMetaTable(const std::string& name);
   bool CreateFsStatsTable(const std::string& name);
@@ -58,6 +58,8 @@ class StoreCommandRunner {
     std::string fs_name;
     std::string meta_table_name;
     std::string fsstats_table_name;
+
+    std::string storage_engine;
 
     S3Info s3_info;
     RadosInfo rados_info;
