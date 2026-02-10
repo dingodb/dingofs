@@ -644,7 +644,7 @@ bool MDSMetaSystem::IsPrefetchChunk(Ino ino) {
 bool MDSMetaSystem::IsPrefetchTinyFileData(Ino ino) {
   if (!FLAGS_vfs_tiny_file_data_enable) return false;
 
-  auto inode = inode_cache_.Get(ino);
+  auto inode = GetInodeFromCache(ino);
   if (inode == nullptr) return false;
   if (!inode->MaybeTinyFile()) return false;
 
@@ -767,7 +767,7 @@ void MDSMetaSystem::AsyncOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
 
     void Run() override {
       // check whether file is deleted
-      auto inode = metasystem_.inode_cache_.Get(ino_);
+      auto inode = metasystem_.GetInodeFromCache(ino_);
       if (inode != nullptr && inode->IsDeleted()) {
         LOG(WARNING) << fmt::format(
             "[meta.fs.{}.{}] async open skipped, file is deleted.", ino_, fh_);
@@ -883,7 +883,7 @@ void MDSMetaSystem::AsyncClose(ContextSPtr ctx, Ino ino, uint64_t fh,
 
     void Run() override {
       // check whether file is deleted
-      auto inode = metasystem_.inode_cache_.Get(ino_);
+      auto inode = metasystem_.GetInodeFromCache(ino_);
       if (inode != nullptr && inode->IsDeleted()) {
         LOG(WARNING) << fmt::format(
             "[meta.fs.{}.{}] async close skipped, file is deleted.", ino_, fh_);
@@ -1177,6 +1177,8 @@ Status MDSMetaSystem::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
     auto status = dir_iterator->GetValue(ctx, offset++, with_attr, entry);
     if (!status.ok()) {
       if (status.IsNoData()) break;
+      if (status.IsNotExist()) DeleteInodeFromCache(ino);
+
       return status;
     }
 
@@ -1562,7 +1564,7 @@ void MDSMetaSystem::AsyncFlushSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
     for (auto& chunk : chunks) {
       auto status = chunk->IsNeedCompaction();
       if (status.ok()) {
-        compact_processor_.LaunchCompact(ino, inode_cache_.Get(ino), chunk,
+        compact_processor_.LaunchCompact(ino, GetInodeFromCache(ino), chunk,
                                          mds_client_, compactor_, true);
       }
     }
@@ -1691,7 +1693,7 @@ Status MDSMetaSystem::Compact(ContextSPtr ctx, Ino ino, uint32_t chunk_index,
   for (auto& chunk : chunks) {
     auto chunk_ptr = Chunk::New(ino, chunk, "manual_compact");
     auto status =
-        compact_processor_.LaunchCompact(ino, inode_cache_.Get(ino), chunk_ptr,
+        compact_processor_.LaunchCompact(ino, GetInodeFromCache(ino), chunk_ptr,
                                          mds_client_, compactor_, is_async);
     if (!status.ok()) return status;
   }

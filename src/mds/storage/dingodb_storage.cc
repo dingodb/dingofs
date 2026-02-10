@@ -392,9 +392,7 @@ Status DingodbTxn::Get(const std::string& key, std::string& value) {
   ON_SCOPE_EXIT([&]() { txn_trace_.read_time_us += (utils::TimestampUs() - start_time); });
 
   auto status = txn_->Get(key, value);
-  if (!status.ok()) {
-    return TransformStatus(status);
-  }
+  if (!status.ok()) return TransformStatus(status);
 
   return Status::OK();
 }
@@ -405,9 +403,7 @@ Status DingodbTxn::BatchGet(const std::vector<std::string>& keys, std::vector<Ke
 
   std::vector<dingodb::sdk::KVPair> kv_pairs;
   auto status = txn_->BatchGet(keys, kv_pairs);
-  if (!status.ok()) {
-    return TransformStatus(status);
-  }
+  if (!status.ok()) return TransformStatus(status);
 
   KvPairsToKeyValues(kv_pairs, kvs);
 
@@ -423,9 +419,7 @@ Status DingodbTxn::Scan(const Range& range, uint64_t limit, std::vector<KeyValue
 
   std::vector<dingodb::sdk::KVPair> kv_pairs;
   auto status = txn_->Scan(range.start, range.end, limit, kv_pairs);
-  if (!status.ok()) {
-    return TransformStatus(status);
-  }
+  if (!status.ok()) return TransformStatus(status);
 
   KvPairsToKeyValues(kv_pairs, kvs);
 
@@ -482,6 +476,34 @@ Status DingodbTxn::Scan(const Range& range, std::function<bool(KeyValue&)> handl
   return status;
 }
 
+Status DingodbTxn::Commit() {
+  uint64_t start_time = utils::TimestampUs();
+  ON_SCOPE_EXIT([&]() {
+    txn_trace_.commit_type = GetCommitType();
+    txn_trace_.write_time_us += (utils::TimestampUs() - start_time);
+  });
+
+  auto status = txn_->Commit();
+  if (!status.ok()) {
+    Rollback();
+    return TransformStatus(status);
+  }
+
+  return Status::OK();
+}
+
+void DingodbTxn::Rollback() {
+  auto status = txn_->Rollback();
+  if (!status.ok()) {
+    LOG(ERROR) << fmt::format("[storage] rollback fail, status({}).", status.ToString());
+  }
+}
+
+Trace::Txn DingodbTxn::GetTrace() {
+  txn_trace_.txn_id = ID();
+  return txn_trace_;
+}
+
 char* DingodbTxn::GetCommitType() {
   if (txn_->IsOnePc()) {
     return (char*)"1pc";
@@ -524,34 +546,6 @@ Status DingodbTxn::TransformStatus(const dingodb::sdk::Status& status) {
   } else {
     return Status(pb::error::EBACKEND_STORE, status.ToString());
   }
-}
-
-void DingodbTxn::Rollback() {
-  auto status = txn_->Rollback();
-  if (!status.ok()) {
-    LOG(ERROR) << fmt::format("[storage] rollback fail, status({}).", status.ToString());
-  }
-}
-
-Status DingodbTxn::Commit() {
-  uint64_t start_time = utils::TimestampUs();
-  ON_SCOPE_EXIT([&]() {
-    txn_trace_.commit_type = GetCommitType();
-    txn_trace_.write_time_us += (utils::TimestampUs() - start_time);
-  });
-
-  auto status = txn_->Commit();
-  if (!status.ok()) {
-    Rollback();
-    return TransformStatus(status);
-  }
-
-  return Status::OK();
-}
-
-Trace::Txn DingodbTxn::GetTrace() {
-  txn_trace_.txn_id = ID();
-  return txn_trace_;
 }
 
 }  // namespace mds

@@ -58,7 +58,7 @@ DEFINE_validator(mds_gc_filesession_enable, brpc::PassValidate);
 DEFINE_bool(mds_gc_delfs_enable, true, "gc delfs enable");
 DEFINE_validator(mds_gc_delfs_enable, brpc::PassValidate);
 
-DEFINE_uint32(mds_gc_delslice_reserve_time_s, 120, "gc del slice reserve time");
+DEFINE_uint32(mds_gc_delslice_reserve_time_s, 480, "gc del slice reserve time");
 DEFINE_validator(mds_gc_delslice_reserve_time_s, brpc::PassValidate);
 
 DEFINE_uint32(mds_gc_delfile_reserve_time_s, 600, "gc del file reserve time");

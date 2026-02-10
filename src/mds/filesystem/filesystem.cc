@@ -620,9 +620,7 @@ Status FileSystem::CreateRoot() {
   LOG(INFO) << fmt::format("[fs.{}][{}us] create root finish, status({}).", fs_id_, duration.ElapsedUs(),
                            status.error_str());
 
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("create root fail, {}", status.error_str()));
-  }
+  if (!status.ok()) return status;
 
   UpsertInodeCache(inode);
   partition_cache_.PutIf(Partition(inode));
@@ -780,9 +778,7 @@ Status FileSystem::BatchCreate(Context& ctx, Ino parent, const std::vector<MkNod
   LOG(INFO) << fmt::format("[fs.{}.{}][{}us] create {} finish, status({}).", fs_id_, ctx.RequestId(),
                            duration.ElapsedUs(), names, status.error_str());
 
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("put inode/dentry fail, {}", status.error_str()));
-  }
+  if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
   auto& parent_attr = result.attr;
@@ -886,9 +882,7 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
   LOG(INFO) << fmt::format("[fs.{}.{}][{}us] mknod {} finish, status({}).", fs_id_, ctx.RequestId(),
                            duration.ElapsedUs(), param.name, status.error_str());
 
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("put inode/dentry fail, {}", status.error_str()));
-  }
+  if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
   auto& parent_attr = result.attr;
@@ -995,9 +989,7 @@ Status FileSystem::BatchMkNod(Context& ctx, const std::vector<MkNodParam>& param
   LOG(INFO) << fmt::format("[fs.{}.{}][{}us] mknod {}/{} finish, status({}).", fs_id_, ctx.RequestId(),
                            duration.ElapsedUs(), parent, join_name, status.error_str());
 
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("put inode/dentry fail, {}", status.error_str()));
-  }
+  if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
   auto& parent_attr = result.attr;
@@ -1195,9 +1187,7 @@ Status FileSystem::Release(Context& ctx, Ino ino, const std::string& session_id)
   CloseFileOperation operation(trace, fs_id_, ino, session_id);
 
   auto status = RunOperation(&operation);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
   LOG(INFO) << fmt::format("[fs.{}.{}] release finish, ino({}) session_id({}) status({}).", fs_id_, ctx.RequestId(),
                            ino, session_id, status.error_str());
@@ -1391,9 +1381,7 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
   LOG(INFO) << fmt::format("[fs.{}.{}][{}us] mkdir {} finish, status({}).", fs_id_, ctx.RequestId(),
                            duration.ElapsedUs(), param.name, status.error_str());
 
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("put inode/dentry fail, {}", status.error_str()));
-  }
+  if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
   auto& parent_attr = result.attr;
@@ -1504,9 +1492,7 @@ Status FileSystem::BatchMkDir(Context& ctx, const std::vector<MkDirParam>& param
   LOG(INFO) << fmt::format("[fs.{}.{}][{}us] mkdir {}/{} finish, status({}).", fs_id_, ctx.RequestId(),
                            duration.ElapsedUs(), parent, join_name, status.error_str());
 
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("put inode/dentry fail, {}", status.error_str()));
-  }
+  if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
   auto& parent_attr = result.attr;
@@ -1574,9 +1560,7 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name, Ino&
 
   LOG(INFO) << fmt::format("[fs.{}.{}][{}us] rmdir {}/{} finish, status({}).", fs_id_, ctx.RequestId(),
                            duration.ElapsedUs(), parent, name, status.error_str());
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
   auto& parent_attr = result.attr;  // parent
@@ -1681,9 +1665,7 @@ Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent, const std::string
   LOG(INFO) << fmt::format("[fs.{}.{}][{}us] link {} -> {}/{} finish, status({}).", fs_id_, ctx.RequestId(),
                            duration.ElapsedUs(), ino, new_parent, new_name, status.error_str());
 
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("put inode/dentry fail, {}", status.error_str()));
-  }
+  if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
   auto& parent_attr = result.attr;
@@ -1748,9 +1730,7 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name, Ent
   LOG(INFO) << fmt::format("[fs.{}.{}][{}us] unlink {}/{} finish, nlink({}) status({}).", fs_id_, ctx.RequestId(),
                            duration.ElapsedUs(), parent, name, attr.nlink(), status.error_str());
 
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("put inode/dentry fail, {}", status.error_str()));
-  }
+  if (!status.ok()) return status;
 
   // update quota
   std::string reason = fmt::format("unlink.{}.{}", parent, name);
@@ -1824,9 +1804,7 @@ Status FileSystem::BatchUnLink(Context& ctx, Ino parent, const std::vector<std::
   LOG(INFO) << fmt::format("[fs.{}.{}][{}us] unlink {}/{} finish, status({}).", fs_id_, ctx.RequestId(),
                            duration.ElapsedUs(), parent, join_name, status.error_str());
 
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("put inode/dentry fail, {}", status.error_str()));
-  }
+  if (!status.ok()) return status;
 
   // update quota
   std::string reason = fmt::format("batchunlink.{}.{}", parent, join_name);
@@ -1919,9 +1897,7 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_par
   LOG(INFO) << fmt::format("[fs.{}.{}][{}us] symlink {}/{} finish,  status({}).", fs_id_, ctx.RequestId(),
                            duration.ElapsedUs(), new_parent, new_name, status.error_str());
 
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("put inode/dentry fail, {}", status.error_str()));
-  }
+  if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
   auto& parent_attr = result.attr;
@@ -2022,9 +1998,7 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
   LOG(INFO) << fmt::format("[fs.{}.{}][{}us] setattr {} finish, status({}).", fs_id_, ctx.RequestId(),
                            duration.ElapsedUs(), ino, status.error_str());
 
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("put inode fail, {}", status.error_str()));
-  }
+  if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
   auto& attr = result.attr;
@@ -2112,9 +2086,7 @@ Status FileSystem::SetXAttr(Context& ctx, Ino ino, const Inode::XAttrMap& xattrs
   LOG(INFO) << fmt::format("[fs.{}.{}][{}us] setxattr {} finish, status({}).", fs_id_, ctx.RequestId(),
                            duration.ElapsedUs(), ino, status.error_str());
 
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("put inode fail, {}", status.error_str()));
-  }
+  if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
   auto& attr = result.attr;
@@ -2153,9 +2125,7 @@ Status FileSystem::RemoveXAttr(Context& ctx, Ino ino, const std::string& name, E
   LOG(INFO) << fmt::format("[fs.{}.{}][{}us] removexattr {} finish, status({}).", fs_id_, ctx.RequestId(),
                            duration.ElapsedUs(), ino, status.error_str());
 
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("put inode fail, {}", status.error_str()));
-  }
+  if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
   auto& attr = result.attr;
@@ -2285,9 +2255,7 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
       fs_id_, ctx.RequestId(), duration.ElapsedUs(), old_parent, old_name, new_parent, new_name, is_same_parent,
       is_exist_new_dentry, old_parent_attr.version(), new_parent_attr.version(), status.error_str());
 
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
   old_parent_version = old_parent_attr.version();
   new_parent_version = new_parent_attr.version();
@@ -2421,11 +2389,8 @@ Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, const std::vector<Delt
   UpsertChunkOperation operation(trace, GetFsInfo(), ino, delta_slices);
 
   status = RunOperation(&operation);
-  if (!status.ok()) {
-    LOG(INFO) << fmt::format("[fs.{}.{}.{}][{}us] writeslice finish, status({}).", fs_id_, ino, ctx.RequestId(),
-                             duration.ElapsedUs(), status.error_str());
-    return Status(pb::error::EBACKEND_STORE, fmt::format("upsert chunk fail, {}", status.error_str()));
-  }
+  if (!status.ok()) return status;
+
   auto& result = operation.GetResult();
   auto& effected_chunks = result.effected_chunks;
 
@@ -2510,7 +2475,7 @@ Status FileSystem::ReadSlice(Context& ctx, Ino ino, const std::vector<ChunkDescr
                            ino, param_desc, Helper::VectorToString(miss_chunk_indexes), status.error_str());
 
   if (!status.ok() && status.error_code() != pb::error::ENOT_FOUND) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("get chunk fail, {}", status.error_str()));
+    return status;
   }
 
   if (status.ok()) {
@@ -2573,13 +2538,7 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
   FallocateOperation operation(trace, param);
 
   status = RunOperation(&operation);
-  if (!status.ok()) {
-    LOG(ERROR) << fmt::format(
-        "[fs.{}][{}us] fallocate ino({}), mode({}), offset({}), len({}) fail, "
-        "status({}).",
-        fs_id_, duration.ElapsedUs(), ino, mode, offset, len, status.error_str());
-    return status;
-  }
+  if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
   auto& attr = result.attr;
@@ -2768,9 +2727,7 @@ Status FileSystem::RefreshFsInfo(const std::string& name, const std::string& rea
   GetFsOperation operation(trace, name);
 
   auto status = RunOperation(&operation);
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("get fs info fail, {}", status.error_str()));
-  }
+  if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
 
@@ -2859,9 +2816,7 @@ Status FileSystem::JoinMonoFs(Context& ctx, uint64_t mds_id, const std::string& 
   UpdateFsPartitionOperation operation(trace, FsName(), handler);
 
   auto status = RunOperation(&operation);
-  if (!status.ok()) {
-    return Status(pb::error::EINTERNAL, fmt::format("update fs partition policy fail, {}", status.error_str()));
-  }
+  if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
 
@@ -2954,9 +2909,7 @@ Status FileSystem::JoinHashFs(Context& ctx, const std::vector<uint64_t>& mds_ids
   UpdateFsPartitionOperation operation(trace, FsName(), handler);
 
   auto status = RunOperation(&operation);
-  if (!status.ok()) {
-    return Status(pb::error::EINTERNAL, fmt::format("update fs partition policy fail, {}", status.error_str()));
-  }
+  if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
 
@@ -3048,9 +3001,7 @@ Status FileSystem::QuitFs(Context& ctx, const std::vector<uint64_t>& mds_ids, co
   UpdateFsPartitionOperation operation(trace, FsName(), handler);
 
   auto status = RunOperation(&operation);
-  if (!status.ok()) {
-    return Status(pb::error::EINTERNAL, fmt::format("update fs partition policy fail, {}", status.error_str()));
-  }
+  if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
 
@@ -3125,9 +3076,7 @@ Status FileSystem::QuitAndJoinFs(Context& ctx, const std::vector<uint64_t>& quit
   UpdateFsPartitionOperation operation(trace, FsName(), handler);
 
   auto status = RunOperation(&operation);
-  if (!status.ok()) {
-    return Status(pb::error::EINTERNAL, fmt::format("update fs partition policy fail, {}", status.error_str()));
-  }
+  if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
 

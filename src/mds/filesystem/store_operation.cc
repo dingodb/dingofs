@@ -2841,7 +2841,10 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
     }
 
     auto primary_value = FindValue(prefetch_kvs, primary_key);
-    CHECK(!primary_value.empty()) << fmt::format("[operation.{}.{}] inode primary value is empty.", fs_id, ino);
+    if (primary_value.empty()) {
+      status = Status(pb::error::ENOT_FOUND, fmt::format("not found inode({})", ino));
+      break;
+    }
     attr = MetaCodec::DecodeInodeValue(primary_value);
 
     // run set attr operations

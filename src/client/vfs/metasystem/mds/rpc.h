@@ -363,7 +363,8 @@ Status RPC::SendRequest(const EndPoint& endpoint,
       return Status::OK();
     }
 
-    if (response.error().errcode() != pb::error::ENOT_FOUND) {
+    if (response.error().errcode() != pb::error::ENOT_FOUND ||
+        api_name != "Lookup") {
       LOG(ERROR) << fmt::format(
           "[meta.rpc][{}][{}][{}us] fail, retry({}) request({}) response({}) "
           "doing({}) error({} {}).",
