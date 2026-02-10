@@ -39,6 +39,7 @@
 #include "cache/common/storage_client_pool.h"
 #include "cache/iutil/bthread.h"
 #include "cache/iutil/inflight_tracker.h"
+#include "common/helper.h"
 #include "common/io_buffer.h"
 #include "common/options/cache.h"
 #include "common/status.h"
@@ -51,29 +52,10 @@ DEFINE_string(cache_store, "disk",
 DEFINE_bool(enable_stage, true, "whether to enable stage block for writeback");
 DEFINE_bool(enable_cache, true, "whether to enable cache block");
 
-static void SplitUniteCacheDir(
-    const std::string& cache_dir, uint64_t default_cache_size_mb,
-    std::vector<std::pair<std::string, uint64_t>>* cache_dirs) {
-  std::vector<std::string> dirs = absl::StrSplit(cache_dir, ",");
-
-  for (const auto& dir : dirs) {
-    uint64_t cache_size_mb = default_cache_size_mb;
-    std::vector<std::string> items = absl::StrSplit(dir, ":");
-    if (items.size() > 2 ||
-        (items.size() == 2 && !utils::Str2Int(items[1], &cache_size_mb))) {
-      CHECK(false) << "Invalid cache dir: " << dir;
-    } else if (cache_size_mb == 0) {
-      CHECK(false) << "Cache size must greater than 0.";
-    }
-
-    cache_dirs->emplace_back(items[0], cache_size_mb);
-  }
-}
-
 static std::vector<DiskCacheOption> ParseDiskCacheOption() {
   std::vector<std::pair<std::string, uint64_t>> cache_dirs;
 
-  SplitUniteCacheDir(FLAGS_cache_dir, FLAGS_cache_size_mb, &cache_dirs);
+  Helper::SplitUniteCacheDir(FLAGS_cache_dir, FLAGS_cache_size_mb, &cache_dirs);
   CHECK(!FLAGS_cache_dir_uuid.empty())
       << "cache_dir_uuid MUST be set for disk cache";
 

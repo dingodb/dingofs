@@ -25,7 +25,6 @@
 #include <iostream>
 
 #include "cache/cachegroup/server.h"
-#include "common/const.h"
 #include "common/flag.h"
 #include "common/helper.h"
 #include "common/logging.h"
@@ -89,11 +88,12 @@ int DingoCache::ParseFlags(int argc, char** argv) {
   configs.emplace_back("mds", fmt::format("[{}]", FLAGS_mds_addrs));
   // cache
   if (dingofs::cache::FLAGS_enable_cache) {
-    configs.emplace_back(
-        "cache", fmt::format("[{} {} {}MB {}%(ratio)]", FLAGS_cache_store,
-                             FLAGS_cache_dir, FLAGS_cache_size_mb,
-                             FLAGS_free_space_ratio * 100));
+    configs.emplace_back("cache",
+                         fmt::format("[{} {} {}%(ratio)]", FLAGS_cache_store,
+                                     Helper::GenCacheConfigInfo(),
+                                     FLAGS_free_space_ratio * 100));
   }
+
   Helper::PrintConfigInfo(configs);
 
   return 0;

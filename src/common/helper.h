@@ -15,6 +15,7 @@
 #ifndef DINGOFS_SRC_COMMON_HELPER_H_
 #define DINGOFS_SRC_COMMON_HELPER_H_
 
+#include <absl/strings/str_split.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <pwd.h>
@@ -32,6 +33,8 @@
 #include "common/types.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
+#include "options/cache.h"
+#include "utils/string.h"
 
 namespace dingofs {
 
@@ -238,6 +241,43 @@ class Helper {
     }
 
     std::cout.flush();
+  }
+
+  static void SplitUniteCacheDir(
+      const std::string& cache_dir, uint64_t default_cache_size_mb,
+      std::vector<std::pair<std::string, uint64_t>>* cache_dirs) {
+    std::vector<std::string> dirs = absl::StrSplit(cache_dir, ",");
+
+    for (const auto& dir : dirs) {
+      uint64_t cache_size_mb = default_cache_size_mb;
+      std::vector<std::string> items = absl::StrSplit(dir, ":");
+      if (items.size() > 2 ||
+          (items.size() == 2 && !utils::Str2Int(items[1], &cache_size_mb))) {
+        CHECK(false) << "Invalid cache dir: " << dir;
+      } else if (cache_size_mb == 0) {
+        CHECK(false) << "Cache size must greater than 0.";
+      }
+
+      cache_dirs->emplace_back(items[0], cache_size_mb);
+    }
+  }
+
+  static std::string GenCacheConfigInfo() {
+    std::vector<std::pair<std::string, uint64_t>> cache_dirs;
+
+    Helper::SplitUniteCacheDir(cache::FLAGS_cache_dir,
+                               cache::FLAGS_cache_size_mb, &cache_dirs);
+
+    std::string result;
+    for (size_t i = 0; i < cache_dirs.size(); ++i) {
+      if (i != 0) {
+        result.append(", ");
+      }
+      fmt::format_to(std::back_inserter(result), "{}({}MB)",
+                     cache_dirs[i].first, cache_dirs[i].second);
+    }
+
+    return result;
   }
 
 };  // class Helper

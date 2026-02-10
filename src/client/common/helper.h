@@ -46,13 +46,13 @@ static std::vector<std::pair<std::string, std::string>> GenConfigs(
   std::vector<std::pair<std::string, std::string>> configs;
 
   // config
-  configs.emplace_back("config", fmt::format("[{}]", dingofs::FLAGS_conf));
+  configs.emplace_back("config", fmt::format("[{}]", FLAGS_conf));
   // log
   configs.emplace_back(
       "log", fmt::format("[{} {} {}(verbose)]",
                          ::FLAGS_log_dir.empty() ? GetDefaultDir(kLogDir)
                                                  : ::FLAGS_log_dir,
-                         dingofs::FLAGS_log_level, dingofs::FLAGS_log_v));
+                         FLAGS_log_level, FLAGS_log_v));
   // meta
   configs.emplace_back("meta", fmt::format("[{}]", meta));
   // storage
@@ -74,26 +74,23 @@ static std::vector<std::pair<std::string, std::string>> GenConfigs(
         "storage", fmt::format("[local://{}]", options.file_options.path));
   }
   // cache
-  if (!dingofs::cache::FLAGS_cache_group.empty()) {
-    configs.emplace_back("cache",
-                         fmt::format("[{} {}]", dingofs::cache::FLAGS_mds_addrs,
-                                     dingofs::cache::FLAGS_cache_group));
-  } else if (dingofs::cache::FLAGS_cache_store == "disk") {
+  if (!cache::FLAGS_cache_group.empty()) {
+    configs.emplace_back("cache", fmt::format("[{} {}]", cache::FLAGS_mds_addrs,
+                                              cache::FLAGS_cache_group));
+  } else if (cache::FLAGS_cache_store == "disk") {
     configs.emplace_back(
-        "cache",
-        fmt::format("[{} {}MB {}%(ratio)]", dingofs::cache::FLAGS_cache_dir,
-                    dingofs::cache::FLAGS_cache_size_mb,
-                    dingofs::cache::FLAGS_free_space_ratio * 100));
+        "cache", fmt::format("[{} {} {}%(ratio)]", cache::FLAGS_cache_store,
+                             Helper::GenCacheConfigInfo(),
+                             cache::FLAGS_free_space_ratio * 100));
   } else {
     configs.emplace_back("cache", "[]");
   }
 
   // monitor
-  auto hostname = dingofs::Helper::GetHostName();
-  configs.emplace_back(
-      "monitor",
-      fmt::format("[{}:{}]", dingofs::Helper::GetIpByHostName(hostname),
-                  dingofs::client::FLAGS_vfs_dummy_server_port));
+  auto hostname = Helper::GetHostName();
+  configs.emplace_back("monitor",
+                       fmt::format("[{}:{}]", Helper::GetIpByHostName(hostname),
+                                   client::FLAGS_vfs_dummy_server_port));
 
   return configs;
 }
