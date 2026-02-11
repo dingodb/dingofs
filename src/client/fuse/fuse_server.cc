@@ -57,14 +57,6 @@ DEFINE_validator(fuse_use_clone_fd, brpc::PassValidate);
 DEFINE_uint32(fuse_max_threads, 64, "max threads for libfuse");
 DEFINE_validator(fuse_max_threads, brpc::PassValidate);
 
-DEFINE_string(socket_path, GetDefaultDir(kSocketDir),
-              "path for store unix domain socket file");
-DEFINE_validator(socket_path,
-                 [](const char* /*name*/, const std::string& value) {
-                   FLAGS_socket_path = dingofs::Helper::ExpandPath(value);
-                   return true;
-                 });
-
 FuseServer::FuseServer() = default;
 
 int FuseServer::Init(const std::string& program_name,
@@ -79,10 +71,11 @@ int FuseServer::Init(const std::string& program_name,
   config_ = fuse_loop_cfg_create();
   CHECK(config_ != nullptr) << "fuse_loop_cfg_create fail.";
 
-  CHECK(dingofs::Helper::CreateDirectory(FLAGS_socket_path))
-      << "create directory" << FLAGS_socket_path << " fail";
+  auto socket_path = GetDefaultDir(kSocketDir);
+  CHECK(dingofs::Helper::CreateDirectory(socket_path))
+      << "create directory" << socket_path << " fail";
   fd_comm_file_ =
-      absl::StrFormat("%s/fd_comm_socket.%d", FLAGS_socket_path, getpid());
+      absl::StrFormat("%s/fd_comm_socket.%d", socket_path, getpid());
 
   return 0;
 }

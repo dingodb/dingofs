@@ -119,9 +119,6 @@ DECLARE_bool(vfs_meta_compact_chunk_enable);
 DECLARE_uint32(vfs_meta_compact_chunk_threshold_num);
 DECLARE_uint32(vfs_meta_compact_chunk_interval_ms);
 
-// unix socket path
-DECLARE_string(socket_path);
-
 // vfs option
 DECLARE_uint32(vfs_meta_max_name_length);
 DECLARE_bool(vfs_data_writeback);
