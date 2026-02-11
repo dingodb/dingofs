@@ -17,6 +17,7 @@
 #include "common/blockaccess/rados/rados_accesser.h"
 
 #include <butil/time.h>
+#include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <rados/librados.h>
 
@@ -33,6 +34,8 @@
 
 namespace dingofs {
 namespace blockaccess {
+
+DEFINE_int64(rados_ms_async_op_threads, 16, "number of rados async op threads");
 
 namespace {
 
@@ -88,6 +91,15 @@ bool RadosAccesser::Init() {
   if (err < 0) {
     LOG(ERROR) << "Failed to set rados_osd_op_timeout, value: "
                << FLAGS_rados_op_timeout << ", err: " << strerror(-err);
+    return false;
+  }
+
+  err = rados_conf_set(cluster_, "ms_async_op_threads",
+                       std::to_string(FLAGS_rados_ms_async_op_threads).c_str());
+  if (err < 0) {
+    LOG(ERROR) << "Failed to set ms_async_op_threads, value: "
+               << FLAGS_rados_ms_async_op_threads
+               << ", err: " << strerror(-err);
     return false;
   }
 
