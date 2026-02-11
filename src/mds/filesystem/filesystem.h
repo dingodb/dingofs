@@ -505,11 +505,6 @@ class FileSystemSet {
   MDSMeta self_mds_meta_;
   MDSMetaMapSPtr mds_meta_map_;
 
-  // protect fs_map_
-  // utils::RWLock lock_;
-  // // key: fs_id
-  // std::map<uint32_t, FileSystemSPtr> fs_map_;
-
   // key: fs_id
   utils::DoublyMap<butil::FlatMap<uint32_t, FileSystemSPtr>> fs_map_;
 };

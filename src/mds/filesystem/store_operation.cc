@@ -488,8 +488,7 @@ Status UmountFsOperation::Run(TxnUPtr& txn) {
 
 Status DeleteFsOperation::Run(TxnUPtr& txn) {
   std::string value;
-  std::string fs_key = MetaCodec::EncodeFsKey(fs_name_);
-  auto status = txn->Get(fs_key, value);
+  auto status = txn->Get(MetaCodec::EncodeFsKey(fs_name_), value);
   if (!status.ok()) {
     if (status.error_code() == pb::error::ENOT_FOUND) {
       return Status(pb::error::ENOT_FOUND, fmt::format("not found fs({}), {}.", fs_name_, status.error_str()));
@@ -502,11 +501,14 @@ Status DeleteFsOperation::Run(TxnUPtr& txn) {
     return Status(pb::error::EEXISTED, "fs exist mount point.");
   }
 
+  // rename fs name, add suffix DELETED+<fs_id> to avoid conflict with new fs with same name
+  fs_info.set_fs_name(fmt::format("{}_DELETED_{}", fs_name_, fs_info.fs_id()));
   fs_info.set_status(pb::mds::FsStatus::DELETED);
   fs_info.set_is_deleted(true);
   fs_info.set_delete_time_s(utils::Timestamp());
 
-  txn->Put(fs_key, MetaCodec::EncodeFsValue(fs_info));
+  txn->Put(MetaCodec::EncodeFsKey(fs_info.fs_name()), MetaCodec::EncodeFsValue(fs_info));
+  txn->Delete(MetaCodec::EncodeFsKey(fs_name_));
 
   // add fs op log
   FsOpLog fs_config_log;

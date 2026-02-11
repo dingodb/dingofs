@@ -205,6 +205,8 @@ int main(int argc, char* argv[]) {
 
     options.storage_path = FLAGS_storage_path;
 
+    options.is_force = FLAGS_is_force;
+
     // cache member
     options.member_id = FLAGS_member_id;
     options.ip = FLAGS_cache_member_ip;

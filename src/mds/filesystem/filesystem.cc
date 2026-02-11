@@ -3555,9 +3555,7 @@ Status FileSystemSet::DeleteFs(Context& ctx, const std::string& fs_name, bool is
   auto& result = operation.GetResult();
   auto& fs_info = result.fs_info;
 
-  if (status.ok()) {
-    DeleteFileSystem(fs_info.fs_id());
-  }
+  if (status.ok()) DeleteFileSystem(fs_info.fs_id());
 
   return status;
 }
