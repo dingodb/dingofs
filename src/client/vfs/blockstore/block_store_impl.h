@@ -58,6 +58,8 @@ class BlockStoreImpl final : public BlockStore {
   std::atomic<bool> started_{false};
   blockaccess::BlockAccesser* block_accesser_;
   std::unique_ptr<cache::BlockCache> block_cache_;
+
+  bvar::Adder<int64_t> num_async_put_{"dingofs_blockstore_num_async_put"};
 };
 
 }  // namespace vfs

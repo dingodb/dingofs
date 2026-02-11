@@ -142,6 +142,8 @@ class StorageClient {
   std::unique_ptr<
       utils::TaskThreadPool<bthread::Mutex, bthread::ConditionVariable>>
       thread_pool_;
+  bvar::Adder<int64_t> num_async_put_{"dingofs_storage_num_async_put"};
+  bvar::Adder<int64_t> pending_async_put_{"dingofs_storage_pending_async_put"};
 };
 
 using StorageClientUPtr = std::unique_ptr<StorageClient>;

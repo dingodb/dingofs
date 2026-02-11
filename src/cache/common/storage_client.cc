@@ -260,7 +260,14 @@ Status StorageClient::Put(ContextSPtr ctx, const BlockKey& key,
   auto task =
       PutBlockTask(ctx, key, block, block_accesser_, upload_retry_queue_);
   // CHECK_EQ(0, bthread::execution_queue_execute(queue_id_, &task));
-  thread_pool_->Enqueue([&task]() mutable { task.Run(); });
+  pending_async_put_ << 1;
+  thread_pool_->Enqueue([&task, this]() mutable {
+    pending_async_put_ << -1;
+
+    num_async_put_ << 1;
+    task.Run();
+    num_async_put_ << -1;
+  });
 
   task.Wait();
   auto status = task.status();

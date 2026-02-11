@@ -96,6 +96,8 @@ void BlockStoreImpl::PutAsync(ContextSPtr ctx, PutReq req,
 
   int64_t start_us = butil::cpuwide_time_us();
 
+  num_async_put_ << 1;
+
   auto wrapper = [this, start_us, req, cb = std::move(callback),
                   span](Status s) {
     BlockStoreAccessLogGuard log(start_us, [&]() {
@@ -104,6 +106,8 @@ void BlockStoreImpl::PutAsync(ContextSPtr ctx, PutReq req,
     });
     SpanScope::End(span);
     cb(s);
+
+    num_async_put_ << -1;
   };
 
   cache::PutOption option{.writeback = req.write_back};
