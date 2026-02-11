@@ -40,6 +40,14 @@ static const uint8_t kFlagSync = (1 << 4);
 static constexpr size_t kFuseReserveIovSize = 24;
 static constexpr size_t kFuseMaxIovSize = IOV_MAX - kFuseReserveIovSize;
 
+// used in inode_blocks_service
+static constexpr size_t kFormatFileOffsetWidth = 20;
+static constexpr size_t kFormatLenWidth = 15;
+static constexpr size_t kFormatBlockOffsetWidth = 15;
+static constexpr size_t kFormatBlockNameWidth = 100;
+static constexpr size_t kFormatBlockLenWidth = 15;
+static const std::string kFormatDelimiter = "|";
+
 }  // namespace client
 }  // namespace dingofs
 

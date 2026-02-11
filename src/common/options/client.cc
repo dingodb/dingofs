@@ -172,32 +172,6 @@ DEFINE_uint32(vfs_meta_compact_chunk_interval_ms, 10 * 1000,
               "compact chunk interval ms.");
 DEFINE_validator(vfs_meta_compact_chunk_interval_ms, brpc::PassValidate);
 
-//  inode_blocks_service
-DEFINE_uint32(format_file_offset_width, 20, "width of file offset in format");
-DEFINE_validator(format_file_offset_width, brpc::PassValidate);
-
-DEFINE_uint32(format_len_width, 15, "width of length in format");
-DEFINE_validator(format_len_width, brpc::PassValidate);
-
-DEFINE_uint32(format_block_offset_width, 15, "width of block offset in format");
-DEFINE_validator(format_block_offset_width, brpc::PassValidate);
-
-DEFINE_uint32(format_block_name_width, 100, "width of block name in format");
-DEFINE_validator(format_block_name_width, brpc::PassValidate);
-
-DEFINE_uint32(format_block_len_width, 15, "width of block length in format");
-DEFINE_validator(format_block_len_width, brpc::PassValidate);
-
-DEFINE_string(format_delimiter, "|", "delimiter used in format");
-DEFINE_validator(format_delimiter,
-                 [](const char* flag_name, const std::string& value) -> bool {
-                   (void)flag_name;
-                   if (value.length() != 1) {
-                     return false;
-                   }
-                   return true;
-                 });
-
 // fuse module
 DEFINE_bool(fuse_enable_direct_io, false, "use direct io for file");
 DEFINE_validator(fuse_enable_direct_io, brpc::PassValidate);

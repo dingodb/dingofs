@@ -88,7 +88,7 @@ DECLARE_uint64(vfs_write_buffer_total_mb);
 // vfs flush
 DECLARE_int32(vfs_flush_thread);
 
-// vfs callback 
+// vfs callback
 DECLARE_int32(vfs_cb_thread);
 
 // vfs prefetch
@@ -118,15 +118,6 @@ DECLARE_uint32(vfs_meta_commit_slice_max_num);
 DECLARE_bool(vfs_meta_compact_chunk_enable);
 DECLARE_uint32(vfs_meta_compact_chunk_threshold_num);
 DECLARE_uint32(vfs_meta_compact_chunk_interval_ms);
-
-// begin used in inode_blocks_service
-DECLARE_uint32(format_file_offset_width);
-DECLARE_uint32(format_len_width);
-DECLARE_uint32(format_block_offset_width);
-DECLARE_uint32(format_block_name_width);
-DECLARE_uint32(format_block_len_width);
-DECLARE_string(format_delimiter);
-// end used in inode_blocks_service
 
 // unix socket path
 DECLARE_string(socket_path);

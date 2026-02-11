@@ -21,10 +21,10 @@
 #include <cstdint>
 #include <memory>
 
+#include "client/common/const.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/data/flat/flat_file.h"
 #include "client/vfs/vfs_meta.h"
-#include "common/options/client.h"
 #include "common/status.h"
 
 namespace dingofs {
@@ -104,12 +104,12 @@ void PrintFixedWidthRow(butil::IOBufBuilder& os, const FormatConfig& config,
 static void DumpFlatFile(butil::IOBufBuilder& os, FlatFile* flat_file,
                          bool use_delimiter) {
   FormatConfig config{
-      .file_offset_width = FLAGS_format_file_offset_width,
-      .len_width = FLAGS_format_len_width,
-      .block_offset_width = FLAGS_format_block_offset_width,
-      .block_name_width = FLAGS_format_block_name_width,
-      .block_len_width = FLAGS_format_block_len_width,
-      .delimiter = FLAGS_format_delimiter,
+      .file_offset_width = kFormatFileOffsetWidth,
+      .len_width = kFormatLenWidth,
+      .block_offset_width = kFormatBlockOffsetWidth,
+      .block_name_width = kFormatBlockNameWidth,
+      .block_len_width = kFormatBlockLenWidth,
+      .delimiter = kFormatDelimiter,
   };
 
   // Print header
