@@ -1,41 +1,41 @@
-# DingoFS
+# DingoFS 
 
 [DingoFS](https://github.com/dingodb/dingofs) is a cloud-native distributed high-speed file storage system designed and developed by [DataCanvas](https://www.datacanvas.com/). It integrates multiple features such as elasticity, multi-cloud compatibility, multi-protocol convergence, and exceptional performance.By leveraging its multi-tiered, multi-type, and high-performance distributed multi-level caching architecture, DingoFS accelerates data I/O for AI workflows, effectively addressing burst I/O challenges in AI scenarios. Additionally, it provides local cache storage capabilities to meet the full lifecycle storage requirements of large-scale AI models.
 
 
-## Key Features
+## ✨ Key Features
 
-**1. POSIX Compliance**
+**1. 📂 POSIX Compliance**
 
 DingoFS delivers a native file system-like operational experience, enabling seamless system integration.
 
-**2. AI-Native Architecture**
+**2. 🤖 AI-Native Architecture**
 
 Deeply optimized for large language model (LLM) workflows, efficiently managing massive training datasets and checkpoint workloads.
 
-**3. S3 Protocol Compatibility**
+**3. ☁️ S3 Protocol Compatibility**
 
 DingoFS supports standard S3 interface protocols for streamlined access to filesystem namespace resources.
 
-**4. Fully Distributed Architecture**
+**4. 🔗 Fully Distributed Architecture**
 
 DingoFS's metadata Service (MDS), data storage layer, caching system, and client components all support linear scalability.
 
-**5. Exceptional Performance**
+**5. ⚡ Exceptional Performance**
 
 Combines SSD-level low-latency responsiveness with object storage-grade elastic throughput capacity.
 
-**6. Intelligent Caching Acceleration System**
+**6. 🚀 Intelligent Caching Acceleration System**
 
 DingFS implements a three-tier caching topology (memory/local SSD/distributed cluster) to deliver high-throughput, low-latency intelligent I/O acceleration for AI workloads.
 
 
-## Get Start
+## 🏁 Get Start
 
-### Docs
+### 📚 Docs
 All Documentation [Docs](https://dingofs.readthedocs.io/en/latest/)
 
-## 1. Installation prerequisites
+## 1. 📋 Installation prerequisites
 ### Linux Operating system
 | Release    | Version     |
 |----------|---------------|
@@ -49,7 +49,7 @@ Deploying a cluster via DingoAdm requires the following two network prerequisite
 
 - All servers must be able to pull images from the Docker registry.
 
-## 2. Install dependencies
+## 2. 📦 Install dependencies
 We recommend Rocky and Ubuntu to develop the DingoFS codebase.
 
 ### Rocky 8.9/9.3
@@ -77,7 +77,7 @@ sudo cp -rf cmake-3.30.1-linux-x86_64/bin/* /usr/local/bin/ && sudo cp -rf  cmak
 ### GCC 13
 We recommend using GCC 13 as the primary compiled language.
 
-## 3. Build DingoFS
+## 3. 🔨 Build DingoFS
 ### 1. Setup Dingo-eureka and Dingo-sdk
 
 - [Dingo-eureka](https://github.com/dingodb/dingo-eureka): A Necessary Service Components for DingoFS.
@@ -113,7 +113,7 @@ If you want use 3FS as your block cache, you should build with `WITH_LIBUSRBIO` 
 cmake -DWITH_LIBUSRBIO=ON ..
 ```
 
-## Special Thanks
+## 🙏 Special Thanks
 
 ### DataCanvas
 
@@ -123,7 +123,7 @@ DingoFS is Sponsored by [DataCanvas](https://www.datacanvas.com/), a new platfor
 DingoFS is an open-source project licensed under the **Apache License Version 2.0**, welcome any feedback from the community.
 For any support or suggestion, please contact us.
 
-## Contact us
+## 📬 Contact us
 
 If you have any technical questions or business needs, please contact us.
 
