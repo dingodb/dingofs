@@ -33,10 +33,21 @@
 namespace dingofs {
 namespace cache {
 
+template <typename T, typename = void>
+struct HasShortDebugString : std::false_type {};
+
+template <typename T>
+struct HasShortDebugString<
+    T, std::void_t<decltype(std::declval<T>().ShortDebugString())> >
+    : std::true_type {};
+
+template <typename T>
+inline constexpr bool HasShortDebugStringV = HasShortDebugString<T>::value;
+
 template <typename T>
 struct Request {
-  std::string method;
-  T raw;
+  const std::string method;
+  const T raw;
   const IOBuffer* body;
 };
 
@@ -55,14 +66,24 @@ inline Request<T> MakeRequest(const std::string& method, const T& raw,
 
 template <typename T>
 inline std::ostream& operator<<(std::ostream& os, const Request<T>& request) {
-  os << "Request{method=" << request.method
-     << " raw=" << request.raw.ShortDebugString() << "}";
+  if constexpr (HasShortDebugStringV<T>) {
+    os << "Request{method=" << request.method
+       << " raw=" << request.raw.ShortDebugString() << "}";
+  } else {
+    os << "Request{method=" << request.method << " raw=unknown}";
+  }
+
   return os;
 }
 
 template <typename U>
 inline std::ostream& operator<<(std::ostream& os, const Response<U>& response) {
-  os << "Response{raw=" << response.raw.ShortDebugString() << "}";
+  if constexpr (HasShortDebugStringV<U>) {
+    os << "Response{raw=" << response.raw.ShortDebugString() << "}";
+  } else {
+    os << "Response{raw=unknown}";
+  }
+
   return os;
 }
 
