@@ -212,7 +212,9 @@ DEFINE_validator(vfs_write_buffer_page_size,
                    return true;
                  });
 
-DEFINE_uint64(vfs_write_buffer_total_mb, 1024,
+// concurrence 32, 2g
+// concurrence 64, 4g
+DEFINE_uint64(vfs_write_buffer_total_mb, 2048,
               "total memory size for vfs write buffer in MB");
 DEFINE_validator(vfs_write_buffer_total_mb,
                  [](const char* /*flag_name*/, uint64_t value) -> bool {

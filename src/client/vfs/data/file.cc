@@ -31,6 +31,8 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
+DEFINE_int64(vfs_stale_write_sleep_us, 10, "sleep us when detect memory low");
+
 File::File(VFSHub* hub, uint64_t fh, int64_t ino)
     : vfs_hub_(hub),
       fh_(fh),
@@ -95,18 +97,18 @@ Status File::Write(ContextSPtr ctx, const char* buf, uint64_t size,
   auto* buffer_manager = vfs_hub_->GetWriteBufferManager();
   int64_t total_bytes = buffer_manager->GetTotalBytes();
   int64_t used_bytes = buffer_manager->GetUsedBytes();
+
   if (used_bytes > total_bytes) {
-    bthread_usleep(10);
-    LOG(INFO) << fmt::format(
-        "{} Write tigger flush because low memory, used_bytes: {}, "
-        "total_bytes: {}",
-        uuid_, used_bytes, total_bytes);
+    VLOG(1) << fmt::format(
+        "{} Write detected low memory, used_bytes: {}, total_bytes: {}", uuid_,
+        used_bytes, total_bytes);
+    bthread_usleep(FLAGS_vfs_stale_write_sleep_us);
 
-    DINGOFS_RETURN_NOT_OK(Flush());
-
-    used_bytes = buffer_manager->GetUsedBytes();
-    if (used_bytes > 2 * total_bytes) {
-      bthread_usleep(100);
+    while (buffer_manager->GetUsedBytes() > 2 * total_bytes) {
+      LOG(INFO) << fmt::format(
+          "{} Write detected very low memory, used_bytes: {}, total_bytes: {}",
+          uuid_, buffer_manager->GetUsedBytes(), total_bytes);
+      bthread_usleep(10 * FLAGS_vfs_stale_write_sleep_us);
     }
   }
 

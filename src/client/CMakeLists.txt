@@ -31,8 +31,6 @@ target_link_libraries(fuse_client_lib
     cache_tiercache
     jsoncpp
     ${FUSE3_LIBRARY}
-
-    leveldb
 )
 
 add_executable(dingo-client main.cc)
