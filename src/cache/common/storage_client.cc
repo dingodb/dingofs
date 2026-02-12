@@ -46,7 +46,7 @@ DEFINE_int64(storage_download_retry_timeout_s, 1800,
              "timeout in seconds for download retry");
 DEFINE_validator(storage_download_retry_timeout_s, brpc::PassValidate);
 
-DEFINE_uint64(storage_upload_thread_pool_size, 32,
+DEFINE_uint64(storage_upload_thread_pool_size, 4,
               "thread pool size for upload tasks");
 
 static int64_t GetQueueSize(void* meta) {

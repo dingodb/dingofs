@@ -35,7 +35,14 @@
 namespace dingofs {
 namespace blockaccess {
 
+DEFINE_int64(rados_objecter_inflight_ops, 8192,
+             "number of rados objecter inflight ops");
+DEFINE_int64(rados_objecter_inflight_op_bytes, 1048576000,
+             "number of rados objecter inflight op bytes");
+
 DEFINE_int64(rados_ms_async_op_threads, 16, "number of rados async op threads");
+DEFINE_int64(rados_ms_dispatch_throttle_bytes, 1048576000,
+             "number of rados ms dispatch throttle bytes");
 
 namespace {
 
@@ -94,11 +101,41 @@ bool RadosAccesser::Init() {
     return false;
   }
 
+  err =
+      rados_conf_set(cluster_, "objecter_inflight_ops",
+                     std::to_string(FLAGS_rados_objecter_inflight_ops).c_str());
+  if (err < 0) {
+    LOG(ERROR) << "Failed to set objecter_inflight_ops, value: "
+               << FLAGS_rados_objecter_inflight_ops
+               << ", err: " << strerror(-err);
+    return false;
+  }
+
+  err = rados_conf_set(
+      cluster_, "objecter_inflight_op_bytes",
+      std::to_string(FLAGS_rados_objecter_inflight_op_bytes).c_str());
+  if (err < 0) {
+    LOG(ERROR) << "Failed to set objecter_inflight_op_bytes, value: "
+               << FLAGS_rados_objecter_inflight_op_bytes
+               << ", err: " << strerror(-err);
+    return false;
+  }
+
   err = rados_conf_set(cluster_, "ms_async_op_threads",
                        std::to_string(FLAGS_rados_ms_async_op_threads).c_str());
   if (err < 0) {
     LOG(ERROR) << "Failed to set ms_async_op_threads, value: "
                << FLAGS_rados_ms_async_op_threads
+               << ", err: " << strerror(-err);
+    return false;
+  }
+
+  err = rados_conf_set(
+      cluster_, "ms_dispatch_throttle_bytes",
+      std::to_string(FLAGS_rados_ms_dispatch_throttle_bytes).c_str());
+  if (err < 0) {
+    LOG(ERROR) << "Failed to set ms_dispatch_throttle_bytes, value: "
+               << FLAGS_rados_ms_dispatch_throttle_bytes
                << ", err: " << strerror(-err);
     return false;
   }
