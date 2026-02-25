@@ -130,22 +130,24 @@ Status IOUring::Shutdown() {
 }
 
 void IOUring::PrepWrite(io_uring_sqe* sqe, Aio* aio) const {
-  if (aio->buf_index >= 0) {
-    io_uring_prep_write_fixed(sqe, aio->fd, aio->buffer, aio->length,
-                              aio->offset,
-                              aio->buf_index + write_buf_index_offset_);
+  const auto& attr = aio->Attr();
+  if (attr.buf_index >= 0) {
+    io_uring_prep_write_fixed(sqe, attr.fd, attr.buffer, attr.length,
+                              attr.offset,
+                              attr.buf_index + write_buf_index_offset_);
   } else {
-    io_uring_prep_write(sqe, aio->fd, aio->buffer, aio->length, aio->offset);
+    io_uring_prep_write(sqe, attr.fd, attr.buffer, attr.length, attr.offset);
   }
 }
 
 void IOUring::PrepRead(io_uring_sqe* sqe, Aio* aio) const {
-  if (aio->buf_index >= 0) {
-    io_uring_prep_read_fixed(sqe, aio->fd, aio->buffer, aio->length,
-                             aio->offset,
-                             aio->buf_index + read_buf_index_offset_);
+  const auto& attr = aio->Attr();
+  if (attr.buf_index >= 0) {
+    io_uring_prep_read_fixed(sqe, attr.fd, attr.buffer, attr.length,
+                             attr.offset,
+                             attr.buf_index + read_buf_index_offset_);
   } else {
-    io_uring_prep_read(sqe, aio->fd, aio->buffer, aio->length, aio->offset);
+    io_uring_prep_read(sqe, attr.fd, attr.buffer, attr.length, attr.offset);
   }
 }
 
@@ -155,7 +157,7 @@ Status IOUring::PrepareIO(Aio* aio) {
   struct io_uring_sqe* sqe = io_uring_get_sqe(&io_uring_);
   CHECK_NOTNULL(sqe);
 
-  if (aio->for_read) {
+  if (aio->Attr().for_read) {
     PrepRead(sqe, aio);
   } else {
     PrepWrite(sqe, aio);
@@ -202,20 +204,21 @@ int IOUring::WaitIO(uint64_t timeout_ms, Aio* completed_aios[]) {
 }
 
 void IOUring::OnComplete(Aio* aio, int result) {
+  const auto& attr = aio->Attr();
   Status status;
   if (result < 0) {
     status = Status::IoError(strerror(-result));
-    LOG(ERROR) << "Fail to execute " << aio << ": " << strerror(-result);
-  } else if (result != aio->length) {
+    LOG(ERROR) << "Fail to execute " << *aio << ": " << strerror(-result);
+  } else if (result != attr.length) {
     status = Status::IoError("unexpected io length");
-    LOG(ERROR) << "Fail to execute " << aio << ", want "
-               << (aio->for_read ? "read" : "write") << aio->length
+    LOG(ERROR) << "Fail to execute " << *aio << ", want "
+               << (attr.for_read ? "read" : "write") << attr.length
                << " bytes but got " << result << " bytes";
   } else {
     status = Status::OK();
   }
 
-  aio->status() = status;
+  aio->Result().status = std::move(status);
 }
 
 }  // namespace cache
