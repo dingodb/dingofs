@@ -84,13 +84,13 @@ def loadClient(mdsaddr):
 
     try:
         data = json.loads(output)
-        fsInfos = data.get("result", {}).get("fsInfos", [])
+        fsInfos = data.get("result", {}).get("fs_infos", [])
         if not fsInfos:
             print("no fsInfos found")
             return unitValue(label, [])
         clients = []
         for fsinfo in fsInfos:
-            mountPoints = fsinfo.get("mountPoints", [])
+            mountPoints = fsinfo.get("mount_points", [])
             for mountpoint in mountPoints:
                 hostname = mountpoint.get("hostname")
                 port = mountpoint.get("port")
