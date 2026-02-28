@@ -68,7 +68,7 @@ inline void InitAwsSdkConfig(AwsSdkConfig* aws_sdk_config) {
   aws_sdk_config->loglevel = FLAGS_s3_loglevel;
 
   aws_sdk_config->log_prefix =
-      fmt::format("{}/aws_sdk_{}_", Logger::LogDir(), getpid());
+      fmt::format("{}/aws_sdk_{}_", ::FLAGS_log_dir, getpid());
   LOG(INFO) << fmt::format("s3_log_prefix: {}", aws_sdk_config->log_prefix);
 
   aws_sdk_config->verify_ssl = FLAGS_s3_verify_ssl;

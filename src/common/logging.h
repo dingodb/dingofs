@@ -22,7 +22,6 @@
 
 namespace dingofs {
 
-DECLARE_string(log_dir);
 DECLARE_string(log_level);
 DECLARE_int32(log_v);
 

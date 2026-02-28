@@ -357,7 +357,7 @@ void ChunkWriter::TryCommitFlushTasks(ContextSPtr ctx) {
         task->chunk_flush_task->GetCommitSlices(slices);
         VLOG(4) << fmt::format(
             "{} TryCommitFlushTasks commit_seq: {} commit "
-            " chunk_flush_task: {}, slices_count: {}",
+            "chunk_flush_task: {}, slices_count: {}",
             uuid, commit_seq, task->ToString(), slices.size());
 
         if (!slices.empty()) {
@@ -379,7 +379,7 @@ void ChunkWriter::TryCommitFlushTasks(ContextSPtr ctx) {
 
     VLOG(4) << fmt::format(
         "{} TryCommitFlushTasks commit_seq: {} will commit "
-        " flush_task_count: {} batch_slices_count: {}",
+        "flush_task_count: {} batch_slices_count: {}",
         uuid, commit_seq, to_commit.size(), batch_commit_slices.size());
 
     // this will be delete in cb executor

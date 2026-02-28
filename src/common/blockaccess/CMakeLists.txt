@@ -29,3 +29,19 @@ target_link_libraries(block_accesser
     rados_accesser
     dingofs_common
 )
+
+add_executable(block_access_bench
+    bench/block_access_bench.cc
+    bench/block_access_bench_main.cc
+)
+
+target_link_libraries(block_access_bench
+    block_accesser
+    fake_accesser
+    file_accesser
+    s3_accesser
+    rados_accesser
+    dingofs_common
+    glog::glog
+    brpc::brpc
+)

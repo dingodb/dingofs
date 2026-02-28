@@ -80,7 +80,9 @@ struct BlockAccessOptions {
 };
 
 inline void InitBlockAccessOption(blockaccess::BlockAccessOptions* option) {
-  blockaccess::InitAwsSdkConfig(&option->s3_options.aws_sdk_config);
+  if (option->type == blockaccess::kS3) {
+    blockaccess::InitAwsSdkConfig(&option->s3_options.aws_sdk_config);
+  }
   blockaccess::InitBlockAccesserThrottleOptions(&option->throttle_options);
 }
 
