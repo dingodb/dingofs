@@ -70,9 +70,6 @@ int DingoCache::ParseFlags(int argc, char** argv) {
   // TODO: so ugly implementation :(
   // refactor ASAP!!!
 
-  // reset brpc flag default value if not set
-  dingofs::ResetBrpcFlagDefaultValue();
-
   // print config info
   std::vector<std::pair<std::string, std::string>> configs;
   configs.emplace_back("id", fmt::format("[{}]", FLAGS_id));

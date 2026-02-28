@@ -30,7 +30,6 @@
 #include <sstream>
 #include <vector>
 
-#include "common/const.h"
 #include "common/helper.h"
 #include "common/options/common.h"
 #include "common/version.h"
@@ -38,8 +37,26 @@
 
 namespace dingofs {
 
+// brpc flags default value
+static const std::unordered_map<std::string, std::string>
+    kBrpcFlagDefaultValueMap = {{"log_dir", GetDefaultDir(kLogDir)},
+                                {"max_connection_pool_size", "10"},
+                                {"connect_timeout_as_unreachable", "500"}};
+
 static std::string RedString(const std::string& str) {
   return absl::StrFormat("\x1B[31m%s\033[0m", str);
+}
+
+static void ResetBrpcFlagDefaultValue() {
+  for (const auto& [name, value] : kBrpcFlagDefaultValueMap) {
+    gflags::CommandLineFlagInfo flag_info;
+    if (!gflags::GetCommandLineFlagInfo(name.c_str(), &flag_info)) {
+      continue;
+    }
+    if (flag_info.is_default) {
+      gflags::SetCommandLineOption(name.c_str(), value.c_str());
+    }
+  }
 }
 
 FlagsInfo FlagsHelper::Parse(int* argc, char*** argv,
@@ -85,6 +102,9 @@ FlagsInfo FlagsHelper::Parse(int* argc, char*** argv,
   if (!flags.show_help && !flags.show_version && !flags.create_template) {
     gflags::ParseCommandLineNonHelpFlags(argc, argv, true);
   }
+
+  ResetBrpcFlagDefaultValue();
+
   flags.gflags = GetAllGFlags(extra_info.program, extra_info.patterns);
   flags.extra_info = extra_info;
   return flags;
