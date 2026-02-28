@@ -133,6 +133,21 @@ TxnUPtr TikvStorage::NewTxn(Txn::IsolationLevel isolation_level) {
   return std::make_unique<TikvTxn>(client_, isolation_level);
 }
 
+static bool IsRetryable(const std::string& err_msg) {
+  static const std::vector<std::string> kRetryableErrors = {
+      "retryable:",
+      "Failed to resolve lock",
+  };
+
+  for (const auto& retryable_err : kRetryableErrors) {
+    if (err_msg.find(retryable_err) != std::string::npos) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 TikvTxn::TikvTxn(tikv_client::TransactionClient* client, Txn::IsolationLevel isolation_level)
     : client_(client), txn_(client->begin()), isolation_level_(isolation_level) {
   txn_id_ = txn_.id();
@@ -172,7 +187,11 @@ Status TikvTxn::Get(const std::string& key, std::string& value) {
     value = result.value();
 
   } catch (const std::exception& e) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("{}", e.what()));
+    if (IsRetryable(e.what())) {
+      return Status(pb::error::ESTORE_MAYBE_RETRY, fmt::format("get err({})", e.what()));
+    } else {
+      return Status(pb::error::EBACKEND_STORE, fmt::format("get err({})", e.what()));
+    }
   }
 
   return Status::OK();
@@ -194,7 +213,11 @@ Status TikvTxn::BatchGet(const std::vector<std::string>& keys, std::vector<KeyVa
     }
 
   } catch (const std::exception& e) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("{}", e.what()));
+    if (IsRetryable(e.what())) {
+      return Status(pb::error::ESTORE_MAYBE_RETRY, fmt::format("batchget err({})", e.what()));
+    } else {
+      return Status(pb::error::EBACKEND_STORE, fmt::format("batchget err({})", e.what()));
+    }
   }
 
   return Status::OK();
@@ -216,7 +239,11 @@ Status TikvTxn::Scan(const Range& range, uint64_t limit, std::vector<KeyValue>& 
     }
 
   } catch (const std::exception& e) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("{}", e.what()));
+    if (IsRetryable(e.what())) {
+      return Status(pb::error::ESTORE_MAYBE_RETRY, fmt::format("scan err({})", e.what()));
+    } else {
+      return Status(pb::error::EBACKEND_STORE, fmt::format("scan err({})", e.what()));
+    }
   }
 
   return Status::OK();
@@ -236,7 +263,11 @@ Status TikvTxn::Scan(const Range& range, ScanHandlerType handler) {
     }
 
   } catch (const std::exception& e) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("{}", e.what()));
+    if (IsRetryable(e.what())) {
+      return Status(pb::error::ESTORE_MAYBE_RETRY, fmt::format("scan err({})", e.what()));
+    } else {
+      return Status(pb::error::EBACKEND_STORE, fmt::format("scan err({})", e.what()));
+    }
   }
 
   return Status::OK();
@@ -259,24 +290,14 @@ Status TikvTxn::Scan(const Range& range, std::function<bool(KeyValue&)> handler)
     }
 
   } catch (const std::exception& e) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("{}", e.what()));
-  }
-
-  return Status::OK();
-}
-
-static bool IsRetryable(const std::string& err_msg) {
-  static const std::vector<std::string> kRetryableErrors = {
-      "retryable:",
-  };
-
-  for (const auto& retryable_err : kRetryableErrors) {
-    if (err_msg.find(retryable_err) != std::string::npos) {
-      return true;
+    if (IsRetryable(e.what())) {
+      return Status(pb::error::ESTORE_MAYBE_RETRY, fmt::format("scan err({})", e.what()));
+    } else {
+      return Status(pb::error::EBACKEND_STORE, fmt::format("scan err({})", e.what()));
     }
   }
 
-  return false;
+  return Status::OK();
 }
 
 Status TikvTxn::Commit() {
@@ -288,13 +309,13 @@ Status TikvTxn::Commit() {
     txn_.commit();
 
   } catch (const std::exception& e) {
-    txn_.rollback();
-
     if (IsRetryable(e.what())) {
       status = Status(pb::error::ESTORE_MAYBE_RETRY, fmt::format("commit err({})", e.what()));
     } else {
       status = Status(pb::error::EBACKEND_STORE, fmt::format("commit err({})", e.what()));
     }
+
+    txn_.rollback();
   }
 
   committed_.store(true, std::memory_order_relaxed);
