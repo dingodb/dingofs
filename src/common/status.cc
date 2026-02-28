@@ -55,7 +55,7 @@ std::string Status::ToString() const {
     return "OK";
   } else {
     char tmp[30];
-    const char* type;
+    std::string type;
     switch (code_) {
       case kOk:
         type = "OK";
@@ -78,8 +78,8 @@ std::string Status::ToString() const {
       case kBadFd:
         type = "BadFd";
         break;
-      case kInvaildParam:
-        type = "InvaildParam";
+      case kInvalidParam:
+        type = "InvalidParam";
         break;
       case kNoPermission:
         type = "NoPermission";
@@ -96,8 +96,8 @@ std::string Status::ToString() const {
       case kNameTooLong:
         type = "NameTooLong";
         break;
-      case kMountMountExist:
-        type = "MountMountExist";
+      case kMountPointExist:
+        type = "MountPointExist";
         break;
       case kMountFailed:
         type = "MountFailed";
@@ -147,6 +147,9 @@ std::string Status::ToString() const {
       case kCacheFull:
         type = "CacheFull";
         break;
+      case kStop:
+        type = "Stop";
+        break;
       case kNotFit:
         type = "NotFit";
         break;
@@ -154,8 +157,8 @@ std::string Status::ToString() const {
         type = "Timeout";
         break;
       default:
-        type = std::to_string(code_).c_str();
-        LOG(ERROR) << fmt::format("Unknown code({}):", static_cast<int>(code_));
+        type = std::to_string(static_cast<int>(code_));
+        LOG(ERROR) << fmt::format("Unknown code({}):", type);
     }
 
     std::string result(type);

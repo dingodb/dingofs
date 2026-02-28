@@ -57,13 +57,13 @@ class Status {
     kNotExist = 4,
     kNoSpace = 5,
     kBadFd = 6,
-    kInvaildParam = 7,
+    kInvalidParam = 7,
     kNoPermission = 8,
     kNotEmpty = 9,
     kNoFlush = 10,
     kNotSupport = 11,
     kNameTooLong = 12,
-    kMountMountExist = 13,
+    kMountPointExist = 13,
     kMountFailed = 14,
     kOutOfRange = 15,
     kNoData = 16,
@@ -109,13 +109,13 @@ class Status {
   DECLARE_ERROR_STATUS(NotExist, kNotExist);
   DECLARE_ERROR_STATUS(NoSpace, kNoSpace);
   DECLARE_ERROR_STATUS(BadFd, kBadFd);
-  DECLARE_ERROR_STATUS(InvalidParam, kInvaildParam);
+  DECLARE_ERROR_STATUS(InvalidParam, kInvalidParam);
   DECLARE_ERROR_STATUS(NoPermission, kNoPermission);
   DECLARE_ERROR_STATUS(NotEmpty, kNotEmpty);
   DECLARE_ERROR_STATUS(NoFlush, kNoFlush);
   DECLARE_ERROR_STATUS(NotSupport, kNotSupport);
   DECLARE_ERROR_STATUS(NameTooLong, kNameTooLong);
-  DECLARE_ERROR_STATUS(MountMountExist, kMountMountExist);
+  DECLARE_ERROR_STATUS(MountPointExist, kMountPointExist);
   DECLARE_ERROR_STATUS(MountFailed, kMountFailed);
   DECLARE_ERROR_STATUS(OutOfRange, kOutOfRange);
   DECLARE_ERROR_STATUS(NoData, kNoData);
@@ -158,7 +158,7 @@ class Status {
         return ENOSPC;
       case kBadFd:
         return EBADF;
-      case kInvaildParam:
+      case kInvalidParam:
         return EINVAL;
       case kNoPermission:
         return EACCES;
@@ -170,7 +170,7 @@ class Status {
         return EOPNOTSUPP;
       case kNameTooLong:
         return ENAMETOOLONG;
-      case kMountMountExist:
+      case kMountPointExist:
         return EIO;
       case kMountFailed:
         return EIO;
