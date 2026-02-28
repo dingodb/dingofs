@@ -17,7 +17,6 @@
 #include <string>
 
 #include "backtrace.h"
-#include "common/const.h"
 #include "common/flag.h"
 #include "common/options/common.h"
 #include "common/options/mds.h"
@@ -285,9 +284,6 @@ int main(int argc, char* argv[]) {
 #else
   std::cout << "USE_TCMALLOC is OFF\n";
 #endif
-
-  // reset brpc flag default value if not set
-  dingofs::ResetBrpcFlagDefaultValue();
 
   dingofs::mds::MetaCodec::SetClusterID(FLAGS_mds_cluster_id);
 

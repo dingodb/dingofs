@@ -170,9 +170,6 @@ int main(int argc, char* argv[]) {
     return EXIT_FAILURE;
   }
 
-  // reset brpc flag default value if not set
-  dingofs::ResetBrpcFlagDefaultValue();
-
   // used for remote cache
   dingofs::cache::FLAGS_mds_addrs = mds_addrs;
 
