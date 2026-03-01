@@ -28,59 +28,71 @@
 
 #include <ostream>
 
-#include "cache/common/closure.h"
 #include "cache/common/context.h"
 #include "common/io_buffer.h"
+#include "common/status.h"
 
 namespace dingofs {
 namespace cache {
 
-struct Aio : public Closure {
+class Aio {
+ public:
+  struct Attr {
+    ContextSPtr ctx;
+    int fd;
+    off_t offset;
+    size_t length;
+    char* buffer;
+    int buf_index;
+    bool for_read;
+  };
+
+  struct Result {
+    Status status;
+  };
+
   Aio(ContextSPtr ctx, int fd, off_t offset, size_t length, char* buffer,
       int buf_index, bool for_read)
-      : ctx(ctx),
-        fd(fd),
-        offset(offset),
-        length(length),
-        buffer(buffer),
-        buf_index(buf_index),
-        for_read(for_read) {
+      : attr_({ctx, fd, offset, length, buffer, buf_index, for_read}),
+        result_({Status::Unknown("unknown error")}) {
     CHECK_GE(fd, 0);
     CHECK_GE(offset, 0);
     CHECK_GT(length, 0);
     CHECK_NOTNULL(buffer);
+    CHECK_NOTNULL(buffer);
   }
 
+  const struct Attr& Attr() const { return attr_; }
+  const struct Result& Result() const { return result_; }
+  struct Result& Result() { return result_; }
+
   void Wait() {
-    std::unique_lock<bthread::Mutex> lk(mutex);
-    while (!finish) {
-      cond.wait(lk);
+    std::unique_lock<bthread::Mutex> lk(mutex_);
+    while (!finish_) {
+      cond_.wait(lk);
     }
   }
 
-  void Run() override {
-    std::lock_guard<bthread::Mutex> lk(mutex);
-    finish = true;
-    cond.notify_one();
+  void Run() {
+    std::lock_guard<bthread::Mutex> lk(mutex_);
+    finish_ = true;
+    cond_.notify_one();
   }
 
-  ContextSPtr ctx;
-  int fd;
-  off_t offset;
-  size_t length;
-  char* buffer;
-  int buf_index;
-  bool for_read;
-
-  bool finish{false};
-  bthread::Mutex mutex;
-  bthread::ConditionVariable cond;
+ private:
+  const struct Attr attr_;
+  struct Result result_;
+  bool finish_{false};
+  bthread::Mutex mutex_;
+  bthread::ConditionVariable cond_;
 };
 
 inline std::ostream& operator<<(std::ostream& os, const Aio& aio) {
-  os << "Aio{" << (aio.for_read ? "read" : "write") << " fd=" << aio.fd
-     << " offset=" << aio.offset << " length=" << aio.length
-     << " buf_index=" << aio.buf_index << "}";
+  const auto& attr = aio.Attr();
+  os << "Aio{op=" << (attr.for_read ? "read" : "write") << " fd=" << attr.fd
+     << " offset=" << attr.offset << " length=" << attr.length
+     << " buffer=" << static_cast<void*>(attr.buffer)
+     << " buf_index=" << attr.buf_index << "}";
   return os;
 }
 

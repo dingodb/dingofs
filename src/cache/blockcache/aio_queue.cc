@@ -155,12 +155,12 @@ void AioQueue::BackgroundWait() {
 
 void AioQueue::OnError(Aio* aio, Status status) {
   LOG(ERROR) << "Fail to run " << *aio;
-  aio->status() = status;
+  aio->Result().status = std::move(status);
   RunClosure(aio);
 }
 
 void AioQueue::OnComplete(Aio* aio) {
-  if (!aio->status().ok()) {
+  if (!aio->Result().status.ok()) {
     LOG(ERROR) << "Fail to run " << *aio;
   }
   RunClosure(aio);

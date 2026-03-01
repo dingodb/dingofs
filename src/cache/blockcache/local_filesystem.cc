@@ -243,7 +243,7 @@ Status LocalFileSystem::AioWrite(ContextSPtr ctx, int fd, char* buffer,
   auto aio = Aio(ctx, fd, 0, length, buffer, buf_index, false);
   aio_queue_->Submit(&aio);
   aio.Wait();
-  return aio.status();
+  return aio.Result().status;
 }
 
 Status LocalFileSystem::AioRead(ContextSPtr ctx, int fd, off_t offset,
@@ -253,7 +253,7 @@ Status LocalFileSystem::AioRead(ContextSPtr ctx, int fd, off_t offset,
   auto aio = Aio(ctx, fd, offset, length, buffer, buf_index, true);
   aio_queue_->Submit(&aio);
   aio.Wait();
-  return aio.status();
+  return aio.Result().status;
 }
 
 off_t LocalFileSystem::AlignOffset(off_t offset) {
