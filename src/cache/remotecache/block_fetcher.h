@@ -41,7 +41,7 @@ namespace dingofs {
 namespace cache {
 
 inline std::string SegmentCacheKey(const BlockKey& key, int segment_index) {
-  return key.Filename() + ":" + std::to_string(segment_index);
+  return absl::StrCat(key.Filename(), ":", segment_index);
 }
 
 DECLARE_int32(segment_size);
