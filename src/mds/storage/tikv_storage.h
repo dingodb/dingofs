@@ -75,6 +75,8 @@ class TikvTxn : public Txn {
   Trace::Txn GetTrace() override;
 
  private:
+  Status DoScan(const Range& range, uint32_t limit, std::vector<KeyValue>& kvs);
+
   int64_t txn_id_{0};
 
   tikv_client::TransactionClient* client_{nullptr};

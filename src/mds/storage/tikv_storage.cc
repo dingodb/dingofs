@@ -15,8 +15,10 @@
 #include "mds/storage/tikv_storage.h"
 
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "mds/common/helper.h"
@@ -25,6 +27,8 @@
 
 namespace dingofs {
 namespace mds {
+
+static const uint32_t kScanLimit = 4096;
 
 bool TikvStorage::Init(const std::string& addr) {
   LOG(INFO) << fmt::format("[storage] init tikv storage, addr({}).", addr);
@@ -148,6 +152,8 @@ static bool IsRetryable(const std::string& err_msg) {
   return false;
 }
 
+static bool IsOutOfRange(const std::string& err_msg) { return err_msg.find("OutOfRange") != std::string::npos; }
+
 TikvTxn::TikvTxn(tikv_client::TransactionClient* client, Txn::IsolationLevel isolation_level)
     : client_(client), txn_(client->begin()), isolation_level_(isolation_level) {
   txn_id_ = txn_.id();
@@ -223,78 +229,75 @@ Status TikvTxn::BatchGet(const std::vector<std::string>& keys, std::vector<KeyVa
   return Status::OK();
 }
 
-Status TikvTxn::Scan(const Range& range, uint64_t limit, std::vector<KeyValue>& kvs) {
+Status TikvTxn::DoScan(const Range& range, uint32_t limit, std::vector<KeyValue>& kvs) {
   uint64_t start_time = utils::TimestampUs();
   ON_SCOPE_EXIT([&]() { txn_trace_.read_time_us += (utils::TimestampUs() - start_time); });
 
-  try {
-    auto kv_pairs = txn_.scan(range.start, Bound::Included, range.end, Bound::Included, limit);
+  uint32_t actual_limit = std::min(kScanLimit, limit);
+  kvs.reserve(actual_limit);
 
-    for (auto& kv_pair : kv_pairs) {
-      KeyValue kv;
-      kv.key = std::move(kv_pair.key);
-      kv.value = kv_pair.value;
+  size_t count = 0;
+  std::string start_key = range.start;
+  do {
+    try {
+      LOG_DEBUG << fmt::format("scan range[{}, {}), start_key: {}, limit: {}", Helper::StringToHex(range.start),
+                               Helper::StringToHex(range.end), Helper::StringToHex(start_key), actual_limit);
 
-      kvs.push_back(std::move(kv));
+      auto kv_pairs = txn_.scan(start_key, Bound::Included, range.end, Bound::Excluded, actual_limit);
+      for (auto& kv_pair : kv_pairs) {
+        KeyValue kv;
+        kv.key = std::move(kv_pair.key);
+        kv.value = std::move(kv_pair.value);
+        kvs.push_back(std::move(kv));
+      }
+
+      count += kv_pairs.size();
+      if (count >= limit || kv_pairs.size() < actual_limit) return Status::OK();
+
+      if (!kvs.empty()) start_key = Helper::PrefixNext(kvs.back().key);
+
+    } catch (const std::exception& e) {
+      if (IsOutOfRange(e.what())) {
+        LOG(WARNING) << fmt::format("scan limit({}) err({}).", actual_limit, e.what());
+        actual_limit = std::max(actual_limit / 2, static_cast<uint32_t>(1));
+        continue;
+
+      } else if (IsRetryable(e.what())) {
+        return Status(pb::error::ESTORE_MAYBE_RETRY, fmt::format("scan err({})", e.what()));
+
+      } else {
+        return Status(pb::error::EBACKEND_STORE, fmt::format("scan err({})", e.what()));
+      }
     }
 
-  } catch (const std::exception& e) {
-    if (IsRetryable(e.what())) {
-      return Status(pb::error::ESTORE_MAYBE_RETRY, fmt::format("scan err({})", e.what()));
-    } else {
-      return Status(pb::error::EBACKEND_STORE, fmt::format("scan err({})", e.what()));
-    }
-  }
+  } while (true);
 
   return Status::OK();
 }
 
+Status TikvTxn::Scan(const Range& range, uint64_t limit, std::vector<KeyValue>& kvs) {
+  return DoScan(range, limit, kvs);
+}
+
 Status TikvTxn::Scan(const Range& range, ScanHandlerType handler) {
-  uint64_t start_time = utils::TimestampUs();
-  ON_SCOPE_EXIT([&]() { txn_trace_.read_time_us += (utils::TimestampUs() - start_time); });
+  std::vector<KeyValue> kvs;
+  auto status = DoScan(range, UINT32_MAX, kvs);
+  if (!status.ok()) return status;
 
-  try {
-    auto kv_pairs = txn_.scan(range.start, Bound::Included, range.end, Bound::Included, UINT32_MAX);
-
-    for (auto& kv_pair : kv_pairs) {
-      if (!handler(kv_pair.key, kv_pair.value)) {
-        break;
-      }
-    }
-
-  } catch (const std::exception& e) {
-    if (IsRetryable(e.what())) {
-      return Status(pb::error::ESTORE_MAYBE_RETRY, fmt::format("scan err({})", e.what()));
-    } else {
-      return Status(pb::error::EBACKEND_STORE, fmt::format("scan err({})", e.what()));
-    }
+  for (auto& kv : kvs) {
+    if (!handler(kv.key, kv.value)) break;
   }
 
   return Status::OK();
 }
 
 Status TikvTxn::Scan(const Range& range, std::function<bool(KeyValue&)> handler) {
-  uint64_t start_time = utils::TimestampUs();
-  ON_SCOPE_EXIT([&]() { txn_trace_.read_time_us += (utils::TimestampUs() - start_time); });
+  std::vector<KeyValue> kvs;
+  auto status = DoScan(range, UINT32_MAX, kvs);
+  if (!status.ok()) return status;
 
-  try {
-    auto kv_pairs = txn_.scan(range.start, Bound::Included, range.end, Bound::Included, UINT32_MAX);
-
-    for (auto& kv_pair : kv_pairs) {
-      KeyValue kv;
-      kv.key = std::move(kv_pair.key);
-      kv.value = std::move(kv_pair.value);
-      if (!handler(kv)) {
-        break;
-      }
-    }
-
-  } catch (const std::exception& e) {
-    if (IsRetryable(e.what())) {
-      return Status(pb::error::ESTORE_MAYBE_RETRY, fmt::format("scan err({})", e.what()));
-    } else {
-      return Status(pb::error::EBACKEND_STORE, fmt::format("scan err({})", e.what()));
-    }
+  for (auto& kv : kvs) {
+    if (!handler(kv)) break;
   }
 
   return Status::OK();

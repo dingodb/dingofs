@@ -2583,9 +2583,10 @@ Status FileSystem::CompactChunk(Context& ctx, Ino ino, uint32_t index, const Com
 
   chunk_out = chunk;
 
-  LOG(INFO) << fmt::format("[fs.{}][{}us] compactchunk {}/{} finish, param({}|{}|{}) version({}->{}) status({}).",
-                           fs_id_, duration.ElapsedUs(), ino, index, param.start_slice_id, param.end_slice_id,
-                           param.new_slices.size(), param.version, chunk.version(), status.error_str());
+  LOG(INFO) << fmt::format("[fs.{}.{}.{}.{}][{}us] compactchunk finish, param({}|{}|{}) version({}->{}) status({}).",
+                           fs_id_, ino, index, ctx.RequestId(), duration.ElapsedUs(), param.start_slice_id,
+                           param.end_slice_id, param.new_slices.size(), param.version, chunk.version(),
+                           status.error_str());
   if (!status.ok()) return status;
 
   // update chunk cache
