@@ -14,6 +14,8 @@
 
 #include "mds/filesystem/notify_buddy.h"
 
+#include <bthread/types.h>
+
 #include <cstdint>
 #include <memory>
 
@@ -168,7 +170,7 @@ void NotifyBuddy::LaunchSendMessage(uint64_t mds_id, const BatchMessage& batch_m
   Params* params = new Params({.self = this, .mds_id = mds_id, .batch_message = batch_message});
 
   bthread_t tid;
-  bthread_attr_t attr = BTHREAD_ATTR_SMALL;
+  bthread_attr_t attr = BTHREAD_ATTR_NORMAL;
   if (bthread_start_background(
           &tid, &attr,
           [](void* arg) -> void* {

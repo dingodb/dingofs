@@ -61,7 +61,46 @@ class TikvTxn : public Txn {
   int64_t ID() const override;
   Status Put(const std::string& key, const std::string& value) override;
 
-  Status PutIfAbsent(const std::string& key, const std::string& value) override;
+  Status PutIfAbsent(const std::string& key, const std::string& value) override {  // NOLINT
+    return Status(pb::error::ENOT_SUPPORT, "not support yet");
+  }
+  Status Delete(const std::string& key) override;
+
+  Status Get(const std::string& key, std::string& value) override;
+  Status BatchGet(const std::vector<std::string>& keys, std::vector<KeyValue>& kvs) override;
+  Status Scan(const Range& range, uint64_t limit, std::vector<KeyValue>& kvs) override;
+  Status Scan(const Range& range, ScanHandlerType handler) override;
+  Status Scan(const Range& range, std::function<bool(KeyValue&)> handler) override;
+
+  Status Commit() override;
+
+  Trace::Txn GetTrace() override;
+
+ private:
+  Status DoScan(const Range& range, uint32_t limit, std::vector<KeyValue>& kvs);
+
+  int64_t txn_id_{0};
+
+  tikv_client::TransactionClient* client_{nullptr};
+  tikv_client::Transaction txn_;
+
+  Txn::IsolationLevel isolation_level_;
+  Trace::Txn txn_trace_;
+
+  std::atomic<bool> committed_{false};
+};
+
+class TikvTxnAsync : public Txn {
+ public:
+  TikvTxnAsync(tikv_client::TransactionClient* client, Txn::IsolationLevel isolation_level);
+  ~TikvTxnAsync() override;
+
+  int64_t ID() const override;
+  Status Put(const std::string& key, const std::string& value) override;
+
+  Status PutIfAbsent(const std::string& key, const std::string& value) override {  // NOLINT
+    return Status(pb::error::ENOT_SUPPORT, "not support yet");
+  }
   Status Delete(const std::string& key) override;
 
   Status Get(const std::string& key, std::string& value) override;

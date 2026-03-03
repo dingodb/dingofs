@@ -15,6 +15,7 @@
 #include "mds/filesystem/filesystem.h"
 
 #include <bthread/bthread.h>
+#include <bthread/types.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -316,11 +317,11 @@ std::vector<PartitionPtr> FileSystem::GetAllPartitionsFromCache() { return parti
 
 Status FileSystem::GetPartitionFromStore(Context& ctx, Ino parent, const std::string& reason,
                                          PartitionPtr& out_partition) {
+  auto& trace = ctx.GetTrace();
   const std::string& request_id = ctx.RequestId();
   const std::string& method_name = ctx.MethodName();
 
   // scan dentry from store
-  Trace trace;
   std::vector<KeyValue> kvs;
   ScanPartitionOperation operation(trace, fs_id_, parent, [&](KeyValue& kv) -> bool {
     kvs.push_back(std::move(kv));
@@ -1282,7 +1283,7 @@ void FileSystem::AsyncKeepAliveFileSession(const std::vector<FileSessionParam>& 
   Param* param = new Param(*this, fs_id_, file_sessions);
 
   bthread_t tid;
-  const bthread_attr_t attr = BTHREAD_ATTR_SMALL;
+  const bthread_attr_t attr = BTHREAD_ATTR_NORMAL;
   int ret = bthread_start_background(
       &tid, &attr,
       [](void* arg) -> void* {
