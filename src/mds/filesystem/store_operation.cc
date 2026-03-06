@@ -61,6 +61,8 @@ DECLARE_uint32(mds_filesession_live_time_s);
 static const uint32_t kOpNameBufInitSize = 128;
 static const uint32_t kCleanCompactedSliceIntervalS = 180;  // 3 minutes
 
+static const uint32_t kScheduleThreadNum = 1;
+
 static uint32_t CalWaitTimeUs(int retry) {
   // exponential backoff
   return Helper::GenerateRealRandomInteger(1000, 5000) * (1 << retry);
@@ -2520,41 +2522,13 @@ Status ImportKVOperation::Run(TxnUPtr& txn) {
 }
 
 OperationProcessor::OperationProcessor(KVStorageSPtr kv_storage) : kv_storage_(kv_storage) {
-  CHECK(bthread_mutex_init(&mutex_, nullptr) == 0) << fmt::format("[operation] bthread_mutex_init fail.");
-  CHECK(bthread_cond_init(&cond_, nullptr) == 0) << fmt::format("[operation] bthread_cond_init fail.");
-
   async_worker_ = Worker::New();
   CHECK(async_worker_ != nullptr) << fmt::format("[operation] create async worker fail.");
 }
 
-OperationProcessor::~OperationProcessor() {
-  bthread_cond_destroy(&cond_);
-  bthread_mutex_destroy(&mutex_);
-}
-
 bool OperationProcessor::Init() {
-  struct Param {
-    OperationProcessor* self{nullptr};
-  };
-
-  Param* param = new Param({this});
-
-  const bthread_attr_t attr = BTHREAD_ATTR_LARGE;
-  if (bthread_start_background(
-          &tid_, &attr,
-          [](void* arg) -> void* {
-            Param* param = reinterpret_cast<Param*>(arg);
-
-            param->self->ProcessOperation();
-
-            delete param;
-            return nullptr;
-          },
-          param) != 0) {
-    tid_ = 0;
-    delete param;
-    LOG(FATAL) << "[operation] start background thread fail.";
-    return false;
+  for (int i = 0; i < kScheduleThreadNum; ++i) {
+    threads_.emplace_back([this] { ProcessOperation(); });
   }
 
   if (!async_worker_->Init()) {
@@ -2568,16 +2542,10 @@ bool OperationProcessor::Init() {
 bool OperationProcessor::Destroy() {
   is_stop_.store(true);
 
-  if (tid_ > 0) {
-    bthread_cond_signal(&cond_);
+  for (auto& thread : threads_) {
+    thread_cond_.notify_all();
 
-    if (bthread_stop(tid_) != 0) {
-      LOG(ERROR) << fmt::format("[operation] bthread_stop fail.");
-    }
-
-    if (bthread_join(tid_, nullptr) != 0) {
-      LOG(ERROR) << fmt::format("[operation] bthread_join fail.");
-    }
+    if (thread.joinable()) thread.join();
   }
 
   async_worker_->Destroy();
@@ -2592,7 +2560,7 @@ bool OperationProcessor::RunBatched(Operation* operation) {
 
   operations_.Enqueue(operation);
 
-  bthread_cond_signal(&cond_);
+  thread_cond_.notify_one();
 
   return true;
 }
@@ -2720,9 +2688,9 @@ void OperationProcessor::ProcessOperation() {
     stage_operations.clear();
 
     while (!operations_.Dequeue(operation) && !is_stop_.load(std::memory_order_relaxed)) {
-      bthread_mutex_lock(&mutex_);
-      bthread_cond_wait(&cond_, &mutex_);
-      bthread_mutex_unlock(&mutex_);
+      std::unique_lock<std::mutex> lk(thread_mutex_);
+      thread_cond_.wait(lk);
+      lk.unlock();
     }
 
     if (operation) stage_operations.push_back(operation);

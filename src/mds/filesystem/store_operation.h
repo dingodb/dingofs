@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -2235,7 +2236,7 @@ class OperationTask : public TaskRunnable {
 class OperationProcessor : public std::enable_shared_from_this<OperationProcessor> {
  public:
   OperationProcessor(KVStorageSPtr kv_storage);
-  ~OperationProcessor();
+  ~OperationProcessor() = default;
 
   OperationProcessor(const OperationProcessor&) = delete;
   OperationProcessor& operator=(const OperationProcessor&) = delete;
@@ -2277,9 +2278,10 @@ class OperationProcessor : public std::enable_shared_from_this<OperationProcesso
   void LaunchExecuteBatchOperation(BatchOperation&& batch_operation);
   void ExecuteBatchOperation(BatchOperation& batch_operation);
 
-  bthread_t tid_{0};
-  bthread_mutex_t mutex_;
-  bthread_cond_t cond_;
+  // use std thread
+  std::vector<std::thread> threads_;
+  std::mutex thread_mutex_;
+  std::condition_variable thread_cond_;
 
   std::atomic<bool> is_stop_{false};
 
