@@ -14,11 +14,27 @@
  * limitations under the License.
  */
 
+#include <brpc/reloadable_flags.h>
 #include <gflags/gflags.h>
 
 namespace dingofs {
 
 DEFINE_bool(daemonize, false, "run in background");
 DEFINE_string(conf, "", "config file");
+
+// log clean
+DEFINE_bool(log_clean_enable, true, "enable log file clean");
+DEFINE_validator(log_clean_enable, brpc::PassValidate);
+DEFINE_int32(log_retention_seconds, 604800,
+             "log file retention time in seconds");
+DEFINE_validator(log_retention_seconds,
+                 [](const char* /*name*/, int32_t value) { return value > 0; });
+DEFINE_string(
+    log_clean_filter_pattern, ".log.,.log",
+    "only clean log files with this pattern in filename, separated by comma");
+DEFINE_validator(log_clean_filter_pattern,
+                 [](const char* /*name*/, const std::string& value) {
+                   return !value.empty();
+                 });
 
 }  // namespace dingofs

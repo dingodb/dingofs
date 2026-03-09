@@ -14,6 +14,7 @@
 
 #include "mds/server.h"
 
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -135,6 +136,19 @@ bool Server::InitConfig(const std::string& path) {
 
 bool Server::InitLog() {
   DingoLogVersion();
+  return true;
+}
+
+bool Server::InitLogCleanManager() {
+  logclean_manager_ = std::make_unique<utils::LogCleanManager>(::FLAGS_log_dir);
+  CHECK(logclean_manager_ != nullptr) << "new LogCleanManager fail.";
+
+  auto status = logclean_manager_->Start();
+  if (!status.ok()) {
+    LOG(ERROR) << "start log clean manager fail, status: " << status.ToString();
+    return false;
+  }
+
   return true;
 }
 
@@ -555,6 +569,8 @@ void Server::Stop() {
   if (!stop_.compare_exchange_strong(expected, true)) {
     return;
   }
+
+  logclean_manager_->Stop();
 
   mds_service_->Destroy();
 

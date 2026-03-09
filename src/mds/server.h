@@ -16,6 +16,7 @@
 #define DINGOFS_MDS_SERVER_H_
 
 #include <atomic>
+#include <memory>
 #include <string>
 
 #include "brpc/server.h"
@@ -36,6 +37,7 @@
 #include "mds/service/fsstat_service.h"
 #include "mds/service/mds_service.h"
 #include "mds/storage/storage.h"
+#include "utils/logclean_manager.h"
 
 namespace dingofs {
 namespace mds {
@@ -47,6 +49,8 @@ class Server {
   bool InitConfig(const std::string& path);
 
   bool InitLog();
+
+  bool InitLogCleanManager();
 
   bool InitMDSMeta();
 
@@ -168,6 +172,9 @@ class Server {
   MDSServiceImplUPtr mds_service_;
   DebugServiceImplUPtr debug_service_;
   FsStatServiceImplUPtr fs_stat_service_;
+
+  // log clean manager
+  utils::LogCleanManagerUPtr logclean_manager_;
 
   brpc::Server brpc_server_;
 };

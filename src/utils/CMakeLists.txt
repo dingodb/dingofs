@@ -18,10 +18,13 @@ add_library(dingofs_utils
     leaky_bucket.cc
     throttle.cc
     uuid.cc
+    logclean_manager.cc
 )
 
 target_link_libraries(dingofs_utils
+    dingofs_executor
     uuid_static
     brpc::brpc
     glog::glog
+    gflags::gflags
 )

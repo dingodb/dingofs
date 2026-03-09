@@ -80,6 +80,14 @@ Status Server::Start() {
     return status;
   }
 
+  log_clean_manager_ =
+      std::make_unique<utils::LogCleanManager>(::FLAGS_log_dir);
+  status = log_clean_manager_->Start();
+  if (!status.ok()) {
+    LOG(ERROR) << "start log clean manager fail, status: " << status.ToString();
+    return status;
+  }
+
   running_.store(true, std::memory_order_relaxed);
   LOG(INFO) << "Cache node server is up, address=" << listen_ip << ":"
             << FLAGS_listen_port;
@@ -105,6 +113,13 @@ Status Server::Shutdown() {
   auto status = node_->Shutdown();
   if (!status.ok()) {
     LOG(ERROR) << "Fail to shutdown CacheNode";
+    return status;
+  }
+
+  status = log_clean_manager_->Stop();
+  if (!status.ok()) {
+    LOG(ERROR) << "Stop log clean manager failed, status: "
+               << status.ToString();
     return status;
   }
 

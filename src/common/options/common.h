@@ -29,6 +29,10 @@ DECLARE_string(otlp_export_endpoint);
 DECLARE_uint32(trace_export_thread_num);
 DECLARE_bool(enable_trace);
 
+DECLARE_bool(log_clean_enable);
+DECLARE_int32(log_retention_seconds);
+DECLARE_string(log_clean_filter_pattern);
+
 }  // namespace dingofs
 
 #endif  // DINGOFS_COMMON_OPTIONS_COMMON_OPTION_H_

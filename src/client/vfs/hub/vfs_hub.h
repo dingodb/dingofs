@@ -38,6 +38,7 @@
 #include "common/status.h"
 #include "common/trace/trace_manager.h"
 #include "utils/executor/executor.h"
+#include "utils/logclean_manager.h"
 
 namespace dingofs {
 namespace client {
@@ -213,6 +214,7 @@ class VFSHubImpl : public VFSHub {
   std::unique_ptr<FileSuffixWatcher> file_suffix_watcher_;
   std::unique_ptr<PrefetchManager> prefetch_manager_;
   std::unique_ptr<WarmupManager> warmup_manager_;
+  std::unique_ptr<utils::LogCleanManager> logclean_manager_;
 };
 
 }  // namespace vfs

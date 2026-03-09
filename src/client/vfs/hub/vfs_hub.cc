@@ -113,6 +113,10 @@ VFSHubImpl::~VFSHubImpl() {
   if (trace_manager_ != nullptr) {
     trace_manager_.reset();
   }
+
+  if (logclean_manager_ != nullptr) {
+    logclean_manager_.reset();
+  }
 }
 
 Status VFSHubImpl::Start(bool upgrade) {
@@ -281,6 +285,14 @@ Status VFSHubImpl::Start(bool upgrade) {
     DINGOFS_RETURN_NOT_OK(warmup_manager_->Start(FLAGS_vfs_warmup_threads));
   }
 
+  // log clean manager
+  {
+    logclean_manager_ =
+        std::make_unique<utils::LogCleanManager>(::FLAGS_log_dir);
+    CHECK(logclean_manager_ != nullptr) << "log clean manager is nullptr.";
+    DINGOFS_RETURN_NOT_OK(logclean_manager_->Start());
+  }
+
   started_.store(true, std::memory_order_relaxed);
 
   return Status::OK();
@@ -336,6 +348,10 @@ Status VFSHubImpl::Stop(bool upgrade) {
 
   if (cb_executor_ != nullptr) {
     cb_executor_->Stop();
+  }
+
+  if (logclean_manager_ != nullptr) {
+    logclean_manager_->Stop();
   }
 
   LOG(INFO) << fmt::format("[vfs.hub] stopped vfs hub, upgrade({}).", upgrade);

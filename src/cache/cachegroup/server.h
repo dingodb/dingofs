@@ -29,6 +29,7 @@
 
 #include "cache/cachegroup/node.h"
 #include "dingofs/blockcache.pb.h"
+#include "utils/logclean_manager.h"
 
 namespace dingofs {
 namespace cache {
@@ -47,6 +48,7 @@ class Server {
   CacheNodeSPtr node_;
   std::unique_ptr<pb::cache::BlockCacheService> service_;
   std::unique_ptr<brpc::Server> server_;
+  std::unique_ptr<utils::LogCleanManager> log_clean_manager_;
 };
 
 }  // namespace cache

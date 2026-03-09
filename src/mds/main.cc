@@ -304,6 +304,7 @@ int main(int argc, char* argv[]) {
   dingofs::mds::Server& server = dingofs::mds::Server::GetInstance();
 
   CHECK(server.InitLog()) << "init log error.";
+  CHECK(server.InitLogCleanManager()) << "init log clean manager error.";
   LOG(INFO) << dingofs::GenCurrentFlags();
   CHECK(server.InitConfig(FLAGS_conf)) << fmt::format("init config({}) error.", FLAGS_conf);
   CHECK(GeneratePidFile(server.GetPidFilePath())) << "generate pid file error.";
