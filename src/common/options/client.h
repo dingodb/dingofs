@@ -133,6 +133,10 @@ DECLARE_bool(vfs_use_fake_block_store);
 DECLARE_bool(vfs_block_store_access_log_enable);
 DECLARE_int64(vfs_block_store_access_log_threshold_us);
 
+// numa
+DECLARE_bool(numa_bind_enable);
+DECLARE_int32(numa_bind_node);
+
 }  // namespace client
 }  // namespace dingofs
 

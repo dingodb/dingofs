@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <gflags/gflags.h>
 #include <glog/logging.h>
 
 #include <csignal>
@@ -32,9 +33,12 @@
 #include "common/options/common.h"
 #include "common/types.h"
 #include "fmt/format.h"
-#include "gflags/gflags.h"
 #include "utils/daemonize.h"
+#include "utils/numa_manager.h"
 #include "utils/scoped_cleanup.h"
+
+DEFINE_bool(numa_bind_enable, false, "enable numa bind");
+DEFINE_int32(numa_bind_node, 0, "numa bind node");
 
 using FuseServer = dingofs::client::fuse::FuseServer;
 using FsContext = dingofs::client::fuse::FsContext;
@@ -172,6 +176,13 @@ int main(int argc, char* argv[]) {
 
   // used for remote cache
   dingofs::cache::FLAGS_mds_addrs = mds_addrs;
+
+  // numa bind to node to avoid performance degradation caused by
+  // cross-node memory access
+  auto& numa_manager = dingofs::utils::NumaManager::GetInstance();
+  if (FLAGS_numa_bind_enable && numa_manager.Available()) {
+    numa_manager.BindNode(FLAGS_numa_bind_node);
+  }
 
   // init global log
   dingofs::Logger::Init("dingo-client");
