@@ -77,6 +77,15 @@ class HandleManager {
 
   void Invalidate(uint64_t fh, int64_t offset, int64_t size);
 
+  // Flush all file writers for the given inode across all handles.
+  // This ensures read-after-write consistency when multiple file descriptors
+  // are open for the same inode (e.g. one fd writes, another fd reads).
+  Status FlushByIno(Ino ino);
+
+  // Invalidate read cache for all handles of the given inode in the given
+  // range. This ensures that stale cached data is not served after a write.
+  void InvalidateByIno(Ino ino, int64_t offset, int64_t size);
+
   void Summary(Json::Value& value);
   bool Dump(Json::Value& value);
   bool Load(const Json::Value& value);

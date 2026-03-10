@@ -25,6 +25,7 @@
 #include "client/vfs/data/file.h"
 #include "client/vfs/vfs_fh.h"
 #include "common/const.h"
+#include "fmt/format.h"
 
 namespace dingofs {
 namespace client {
@@ -150,6 +151,56 @@ void HandleManager::Invalidate(uint64_t fh, int64_t offset, int64_t size) {
     handle->file->Invalidate(offset, size);
   } else {
     LOG(WARNING) << "Invalidate failed, file is nullptr, fh:" << fh;
+  }
+}
+
+Status HandleManager::FlushByIno(Ino ino) {
+  std::vector<Handle*> handles_to_flush;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (stopped_) {
+      return Status::OK();
+    }
+    for (auto& [fh, handle] : handles_) {
+      if (handle->ino == ino && handle->file != nullptr) {
+        handle->AcquireRef();
+        handles_to_flush.push_back(handle);
+      }
+    }
+  }
+
+  Status result;
+  for (auto* handle : handles_to_flush) {
+    Status s = handle->file->Flush();
+    if (!s.ok() && result.ok()) {
+      LOG(WARNING) << fmt::format(
+          "FlushByIno failed, ino: {}, fh: {}, status: {}", ino, handle->fh,
+          s.ToString());
+      result = s;
+    }
+    handle->ReleaseRef();
+  }
+  return result;
+}
+
+void HandleManager::InvalidateByIno(Ino ino, int64_t offset, int64_t size) {
+  std::vector<Handle*> handles_to_invalidate;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (stopped_) {
+      return;
+    }
+    for (auto& [fh, handle] : handles_) {
+      if (handle->ino == ino && handle->file != nullptr) {
+        handle->AcquireRef();
+        handles_to_invalidate.push_back(handle);
+      }
+    }
+  }
+
+  for (auto* handle : handles_to_invalidate) {
+    handle->file->Invalidate(offset, size);
+    handle->ReleaseRef();
   }
 }
 

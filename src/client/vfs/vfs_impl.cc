@@ -325,7 +325,11 @@ Status VFSImpl::Read(ContextSPtr ctx, Ino ino, DataBuffer* data_buffer,
   {
     auto flush_span = vfs_hub_->GetTraceManager()->StartChildSpan(
         "VFSImpl::Read.Flush", span);
-    s = handle->file->Flush();
+    // Flush all writers for this inode across all open file handles.
+    // This ensures read-after-write consistency when multiple file descriptors
+    // are open for the same inode: data buffered by any writer fd is flushed
+    // to storage before this read proceeds.
+    s = handle_manager_->FlushByIno(ino);
     if (!s.ok()) {
       SpanScope::SetStatus(flush_span, s);
       return s;
@@ -359,7 +363,10 @@ Status VFSImpl::Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t size,
   if (s.ok()) {
     s = meta_system_->Write(SpanScope::GetContext(span), ino, buf, offset, size,
                             fh);
-    handle->file->Invalidate(offset, size);
+    // Invalidate read cache for all handles of this inode in the written range,
+    // so that no other open file descriptor can serve stale cached data.
+    handle_manager_->InvalidateByIno(ino, static_cast<int64_t>(offset),
+                                     static_cast<int64_t>(size));
   }
 
   return s;
