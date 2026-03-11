@@ -370,9 +370,6 @@ void MDSServiceImpl::MountFs(google::protobuf::RpcController* controller, const 
     if (mount_point.client_id().empty()) {
       return Status(pb::error::EILLEGAL_PARAMTETER, "client_id is empty");
     }
-    if (mount_point.ip().empty()) {
-      return Status(pb::error::EILLEGAL_PARAMTETER, "ip is empty");
-    }
     if (mount_point.hostname().empty()) {
       return Status(pb::error::EILLEGAL_PARAMTETER, "hostname is empty");
     }

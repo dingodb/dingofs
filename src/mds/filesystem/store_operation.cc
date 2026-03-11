@@ -443,7 +443,6 @@ Status MountFsOperation::Run(TxnUPtr& txn) {
   ClientEntry client;
   client.set_id(mount_point_.client_id());
   client.set_hostname(mount_point_.hostname());
-  client.set_ip(mount_point_.ip());
   client.set_port(mount_point_.port());
   client.set_mountpoint(mount_point_.path());
   client.set_fs_name(fs_info.fs_name());

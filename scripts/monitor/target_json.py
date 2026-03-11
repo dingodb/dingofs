@@ -92,10 +92,10 @@ def loadClient(mdsaddr):
         for fsinfo in fsInfos:
             mountPoints = fsinfo.get("mount_points", [])
             for mountpoint in mountPoints:
-                ip = mountpoint.get("ip")
+                hostname = mountpoint.get("hostname")
                 port = mountpoint.get("port")
-                if ip and port:
-                    clients.append(ipPort2Addr(ip, port))
+                if hostname and port:
+                    clients.append(ipPort2Addr(hostname, port))
         print("clients:", clients)
     except json.JSONDecodeError:
         print("load client json decode error")
