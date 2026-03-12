@@ -25,7 +25,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 8,
+  "id": 3,
   "links": [],
   "panels": [
     {
@@ -35,6 +35,465 @@
         "w": 24,
         "x": 0,
         "y": 0
+      },
+      "id": 222,
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "cluster read qps",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green"
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 1
+          },
+          "id": 223,
+          "interval": "1s",
+          "options": {
+            "alertThreshold": true,
+            "legend": {
+              "calcs": [
+                "mean",
+                "max",
+                "min"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.6.0",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "editorMode": "code",
+              "exemplar": true,
+              "expr": "sum(dingofs_vfs_read_qps)",
+              "interval": "",
+              "legendFormat": "cluster read qps",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "cluster_read_qps",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green"
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 1
+          },
+          "id": 49,
+          "interval": "1s",
+          "options": {
+            "alertThreshold": true,
+            "legend": {
+              "calcs": [
+                "mean",
+                "max",
+                "min"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.6.0",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "editorMode": "code",
+              "exemplar": true,
+              "expr": "sum(dingofs_vfs_write_qps)",
+              "interval": "",
+              "legendFormat": "cluster write qps",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "cluster_write_qps",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green"
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "binBps"
+            },
+            "overrides": [
+              {
+                "__systemRef": "hideSeriesFrom",
+                "matcher": {
+                  "id": "byNames",
+                  "options": {
+                    "mode": "exclude",
+                    "names": [
+                      "cluster read bps"
+                    ],
+                    "prefix": "All except:",
+                    "readOnly": true
+                  }
+                },
+                "properties": [
+                  {
+                    "id": "custom.hideFrom",
+                    "value": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": true
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 9
+          },
+          "id": 50,
+          "interval": "1s",
+          "options": {
+            "alertThreshold": true,
+            "legend": {
+              "calcs": [
+                "mean",
+                "max",
+                "min"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.6.0",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "editorMode": "code",
+              "exemplar": true,
+              "expr": "sum(dingofs_vfs_read_bps)",
+              "interval": "",
+              "legendFormat": "cluster read bps",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "cluster_read_bps",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green"
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "binBps"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 9
+          },
+          "id": 226,
+          "interval": "1s",
+          "options": {
+            "alertThreshold": true,
+            "legend": {
+              "calcs": [
+                "mean",
+                "max",
+                "min"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.6.0",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "editorMode": "code",
+              "exemplar": true,
+              "expr": "sum(dingofs_vfs_write_bps)",
+              "interval": "",
+              "legendFormat": "cluster_write_bps",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "cluster_write_bps",
+          "type": "timeseries"
+        }
+      ],
+      "title": "cluster performance",
+      "type": "row"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 1
       },
       "id": 6,
       "panels": [
@@ -102,7 +561,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 1
+            "y": 81
           },
           "id": 4,
           "interval": "1s",
@@ -225,7 +684,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 1
+            "y": 81
           },
           "id": 189,
           "options": {
@@ -294,7 +753,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 1
+        "y": 2
       },
       "id": 85,
       "panels": [
@@ -362,7 +821,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 162
+            "y": 338
           },
           "id": 107,
           "interval": "1s",
@@ -461,7 +920,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 162
+            "y": 338
           },
           "id": 108,
           "interval": "1s",
@@ -560,7 +1019,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 170
+            "y": 346
           },
           "id": 87,
           "interval": "1s",
@@ -659,7 +1118,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 170
+            "y": 346
           },
           "id": 91,
           "interval": "1s",
@@ -758,7 +1217,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 178
+            "y": 354
           },
           "id": 88,
           "interval": "1s",
@@ -857,7 +1316,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 178
+            "y": 354
           },
           "id": 92,
           "interval": "1s",
@@ -956,7 +1415,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 186
+            "y": 362
           },
           "id": 89,
           "interval": "1s",
@@ -1055,7 +1514,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 186
+            "y": 362
           },
           "id": 90,
           "interval": "1s",
@@ -1154,7 +1613,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 194
+            "y": 370
           },
           "id": 93,
           "interval": "1s",
@@ -1253,7 +1712,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 194
+            "y": 370
           },
           "id": 94,
           "interval": "1s",
@@ -1352,7 +1811,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 202
+            "y": 378
           },
           "id": 99,
           "interval": "1s",
@@ -1451,7 +1910,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 202
+            "y": 378
           },
           "id": 100,
           "interval": "1s",
@@ -1550,7 +2009,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 210
+            "y": 386
           },
           "id": 95,
           "interval": "1s",
@@ -1649,7 +2108,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 210
+            "y": 386
           },
           "id": 96,
           "interval": "1s",
@@ -1748,7 +2207,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 218
+            "y": 394
           },
           "id": 97,
           "interval": "1s",
@@ -1847,7 +2306,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 218
+            "y": 394
           },
           "id": 98,
           "interval": "1s",
@@ -1946,7 +2405,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 226
+            "y": 402
           },
           "id": 101,
           "interval": "1s",
@@ -2045,7 +2504,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 226
+            "y": 402
           },
           "id": 102,
           "interval": "1s",
@@ -2144,7 +2603,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 234
+            "y": 410
           },
           "id": 103,
           "interval": "1s",
@@ -2242,7 +2701,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 234
+            "y": 410
           },
           "id": 104,
           "interval": "1s",
@@ -2340,7 +2799,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 242
+            "y": 418
           },
           "id": 105,
           "interval": "1s",
@@ -2438,7 +2897,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 242
+            "y": 418
           },
           "id": 106,
           "interval": "1s",
@@ -2536,7 +2995,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 250
+            "y": 426
           },
           "id": 109,
           "interval": "1s",
@@ -2580,7 +3039,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 2
+        "y": 3
       },
       "id": 176,
       "panels": [
@@ -2648,7 +3107,7 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 259
+            "y": 435
           },
           "id": 177,
           "interval": "1s",
@@ -2695,7 +3154,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 3
+        "y": 4
       },
       "id": 47,
       "panels": [
@@ -2763,7 +3222,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 268
+            "y": 21
           },
           "id": 48,
           "interval": "1s",
@@ -2866,9 +3325,9 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 268
+            "y": 21
           },
-          "id": 49,
+          "id": 224,
           "interval": "1s",
           "options": {
             "alertThreshold": true,
@@ -2969,9 +3428,9 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 276
+            "y": 29
           },
-          "id": 50,
+          "id": 225,
           "interval": "1s",
           "options": {
             "alertThreshold": true,
@@ -3072,7 +3531,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 276
+            "y": 29
           },
           "id": 51,
           "interval": "1s",
@@ -3175,7 +3634,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 284
+            "y": 37
           },
           "id": 58,
           "interval": "1s",
@@ -3279,7 +3738,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 284
+            "y": 37
           },
           "id": 59,
           "interval": "1s",
@@ -3383,7 +3842,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 292
+            "y": 45
           },
           "id": 52,
           "interval": "1s",
@@ -3486,7 +3945,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 292
+            "y": 45
           },
           "id": 53,
           "interval": "1s",
@@ -3535,7 +3994,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 4
+        "y": 5
       },
       "id": 69,
       "panels": [
@@ -3603,7 +4062,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 301
+            "y": 477
           },
           "id": 62,
           "interval": "1s",
@@ -3706,7 +4165,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 301
+            "y": 477
           },
           "id": 63,
           "interval": "1s",
@@ -3809,7 +4268,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 309
+            "y": 485
           },
           "id": 66,
           "interval": "1s",
@@ -3912,7 +4371,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 309
+            "y": 485
           },
           "id": 65,
           "interval": "1s",
@@ -4015,7 +4474,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 317
+            "y": 493
           },
           "id": 64,
           "interval": "1s",
@@ -4119,7 +4578,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 317
+            "y": 493
           },
           "id": 67,
           "interval": "1s",
@@ -4169,7 +4628,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 5
+        "y": 6
       },
       "id": 72,
       "panels": [
@@ -4237,7 +4696,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 510
+            "y": 686
           },
           "id": 208,
           "interval": "1s",
@@ -4342,7 +4801,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 510
+            "y": 686
           },
           "id": 209,
           "interval": "1s",
@@ -4447,7 +4906,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 518
+            "y": 694
           },
           "id": 214,
           "interval": "1s",
@@ -4552,7 +5011,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 518
+            "y": 694
           },
           "id": 215,
           "interval": "1s",
@@ -4657,7 +5116,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 526
+            "y": 702
           },
           "id": 216,
           "interval": "1s",
@@ -4762,7 +5221,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 526
+            "y": 702
           },
           "id": 217,
           "interval": "1s",
@@ -4867,7 +5326,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 534
+            "y": 710
           },
           "id": 210,
           "interval": "1s",
@@ -4972,7 +5431,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 534
+            "y": 710
           },
           "id": 211,
           "interval": "1s",
@@ -5077,7 +5536,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 542
+            "y": 718
           },
           "id": 212,
           "interval": "1s",
@@ -5182,7 +5641,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 542
+            "y": 718
           },
           "id": 213,
           "interval": "1s",
@@ -5287,7 +5746,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 550
+            "y": 726
           },
           "id": 218,
           "interval": "1s",
@@ -5392,7 +5851,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 550
+            "y": 726
           },
           "id": 219,
           "interval": "1s",
@@ -5497,7 +5956,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 558
+            "y": 734
           },
           "id": 116,
           "interval": "1s",
@@ -5598,7 +6057,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 558
+            "y": 734
           },
           "id": 117,
           "interval": "1s",
@@ -5701,7 +6160,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 566
+            "y": 742
           },
           "id": 188,
           "options": {
@@ -5794,7 +6253,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 566
+            "y": 742
           },
           "id": 220,
           "interval": "1s",
@@ -5895,7 +6354,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 574
+            "y": 750
           },
           "id": 119,
           "interval": "1s",
@@ -5996,7 +6455,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 574
+            "y": 750
           },
           "id": 118,
           "interval": "1s",
@@ -6043,7 +6502,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 6
+        "y": 7
       },
       "id": 190,
       "panels": [
@@ -6111,7 +6570,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 7
+            "y": 183
           },
           "id": 73,
           "interval": "1s",
@@ -6216,7 +6675,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 7
+            "y": 183
           },
           "id": 197,
           "interval": "1s",
@@ -6321,7 +6780,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 15
+            "y": 191
           },
           "id": 194,
           "interval": "1s",
@@ -6426,7 +6885,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 15
+            "y": 191
           },
           "id": 195,
           "interval": "1s",
@@ -6531,7 +6990,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 23
+            "y": 199
           },
           "id": 196,
           "interval": "1s",
@@ -6636,7 +7095,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 23
+            "y": 199
           },
           "id": 193,
           "interval": "1s",
@@ -6741,7 +7200,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 31
+            "y": 207
           },
           "id": 198,
           "interval": "1s",
@@ -6846,7 +7305,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 31
+            "y": 207
           },
           "id": 199,
           "interval": "1s",
@@ -6951,7 +7410,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 39
+            "y": 215
           },
           "id": 202,
           "interval": "1s",
@@ -7056,7 +7515,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 39
+            "y": 215
           },
           "id": 203,
           "interval": "1s",
@@ -7161,7 +7620,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 47
+            "y": 223
           },
           "id": 200,
           "interval": "1s",
@@ -7266,7 +7725,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 47
+            "y": 223
           },
           "id": 205,
           "interval": "1s",
@@ -7371,7 +7830,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 55
+            "y": 231
           },
           "id": 206,
           "interval": "1s",
@@ -7476,7 +7935,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 55
+            "y": 231
           },
           "id": 207,
           "interval": "1s",
@@ -7581,7 +8040,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 63
+            "y": 239
           },
           "id": 204,
           "interval": "1s",
@@ -7686,7 +8145,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 63
+            "y": 239
           },
           "id": 201,
           "interval": "1s",
@@ -7791,7 +8250,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 71
+            "y": 247
           },
           "id": 221,
           "interval": "1s",
@@ -7868,12 +8327,8 @@
       },
       {
         "current": {
-          "text": [
-            "All"
-          ],
-          "value": [
-            "$__all"
-          ]
+          "text": "All",
+          "value": "$__all"
         },
         "datasource": {
           "type": "prometheus",
@@ -7922,9 +8377,7 @@
       },
       {
         "current": {
-          "text": [
-            "All"
-          ],
+          "text": "All",
           "value": [
             "$__all"
           ]
@@ -7957,5 +8410,5 @@
   "timezone": "",
   "title": "client",
   "uid": "I2_uSSenk",
-  "version": 1
+  "version": 2
 }
