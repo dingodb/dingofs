@@ -85,7 +85,7 @@ DECLARE_uint32(mds_heartbeat_mds_offline_period_time_ms);
 DECLARE_uint32(mds_heartbeat_client_offline_period_ms);
 
 // monitor config
-DECLARE_uint32(mds_monitor_client_clean_period_time_s);
+DECLARE_uint32(mds_monitor_client_clean_period_time_ms);
 
 // distribution lock config
 DECLARE_uint64(mds_distribution_lock_lease_ttl_ms);

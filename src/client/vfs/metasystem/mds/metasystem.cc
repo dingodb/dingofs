@@ -429,7 +429,7 @@ bool MDSMetaSystem::MountFs() {
 bool MDSMetaSystem::UnmountFs() {
   auto status = mds_client_.UmountFs(name_, client_id_.ID());
   if (!status.ok()) {
-    LOG(ERROR) << fmt::format("[meta.fs] mount fs info fail, mountpoint({}).",
+    LOG(ERROR) << fmt::format("[meta.fs] umount fs info fail, mountpoint({}).",
                               client_id_.Mountpoint());
     return false;
   }

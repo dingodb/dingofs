@@ -243,9 +243,9 @@ UmountFsResponse MDSClient::UmountFs(const std::string& fs_name, const std::stri
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-    LOG(INFO) << "MountFs success";
+    LOG(INFO) << "UmountFs success";
   } else {
-    LOG(ERROR) << "MountFs fail, error: " << response.ShortDebugString();
+    LOG(ERROR) << "UmountFs fail, error: " << response.ShortDebugString();
   }
 
   return response;

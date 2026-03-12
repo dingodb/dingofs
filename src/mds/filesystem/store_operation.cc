@@ -2528,7 +2528,7 @@ OperationProcessor::OperationProcessor(KVStorageSPtr kv_storage) : kv_storage_(k
 }
 
 bool OperationProcessor::Init() {
-  for (int i = 0; i < kScheduleThreadNum; ++i) {
+  for (uint32_t i = 0; i < kScheduleThreadNum; ++i) {
     threads_.emplace_back([this] { ProcessOperation(); });
   }
 
