@@ -165,8 +165,6 @@ find_package(FUSE3 REQUIRED)
 message("Using FUSE3 include_dir:${FUSE3_INCLUDE_DIR}, library:${FUSE3_LIBRARY}")
 include_directories(${FUSE3_INCLUDE_DIR})
 
-find_package(LIBMEMCACHED REQUIRED)
-message("Using LIBMEMCACHED ${LIBMEMCACHED_VERSION}, lib:${LIBMEMCACHED_LIBRARY}")
 
 # find third-party
 set(gflags_DIR ${THIRD_PARTY_INSTALL_PATH}/lib/cmake/gflags)
@@ -236,8 +234,6 @@ message("Using opentelemetry-cpp ${opentelemetry-cpp_VERSION}")
 find_package(uring REQUIRED)
 message("Using uring ${uring_VERSION}")
 
-find_package(hashkit REQUIRED)
-message("Using hashkit: ${hashkit_LIBRARIES}")
 
 find_package(jsoncpp REQUIRED)
 message("Using jsoncpp ${jsoncpp_VERSION}")
