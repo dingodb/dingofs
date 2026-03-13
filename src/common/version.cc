@@ -14,6 +14,8 @@
 
 #include "common/version.h"
 
+#include <bvar/bvar.h>
+
 #include <iostream>
 #include <sstream>
 
@@ -81,9 +83,10 @@ std::string DingoShortVersionString() {
   kUseCICDBuild = false;
 #endif
 
-  return Helper::ToLowerCase(fmt::format(
-      "{}, {} build-{}:{} + {}", kGitTagName, kUseCICDBuild ? "ci/cd" : "local",
-      kGitBranchName, kGitLastCommit, kDingoFsBuildType));
+  return Helper::ToLowerCase(
+      fmt::format("{}, {} build-{}:{} + {}", kGitBranchName,
+                  kUseCICDBuild ? "ci/cd" : "local", kGitBranchName,
+                  kGitLastCommit, kDingoFsBuildType));
 }
 
 void DingoLogVersion() {
@@ -98,7 +101,7 @@ void DingoLogVersion() {
 
 std::vector<std::pair<std::string, std::string>> DingoVersion() {
   std::vector<std::pair<std::string, std::string>> result;
-  result.emplace_back("LAST_TAG", kGitTagName);
+  result.emplace_back("BRANCH", kGitBranchName);
   result.emplace_back("COMMIT_HASH", kGitLastCommit);
   result.emplace_back("COMMIT_USER", kGitCommitUser);
   result.emplace_back("COMMIT_MAIL", kGitCommitMail);
@@ -106,6 +109,12 @@ std::vector<std::pair<std::string, std::string>> DingoVersion() {
   result.emplace_back("BUILD_TYPE", kDingoFsBuildType);
 
   return result;
+}
+
+void ExposeDingoVersion() {
+  static bvar::Status<std::string> version;
+  version.expose_as("dingo", "version");
+  version.set_value("%s-%s", kGitBranchName.c_str(), kGitLastCommit.c_str());
 }
 
 std::string GetGitVersion() { return kGitVersion; }

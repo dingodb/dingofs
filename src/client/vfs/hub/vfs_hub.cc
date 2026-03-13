@@ -40,6 +40,7 @@
 #include "common/directory.h"
 #include "common/options/client.h"
 #include "common/status.h"
+#include "common/version.h"
 #include "utils/executor/thread/executor_impl.h"
 
 namespace dingofs {
@@ -292,6 +293,8 @@ Status VFSHubImpl::Start(bool upgrade) {
     CHECK(logclean_manager_ != nullptr) << "log clean manager is nullptr.";
     DINGOFS_RETURN_NOT_OK(logclean_manager_->Start());
   }
+
+  ExposeDingoVersion();
 
   started_.store(true, std::memory_order_relaxed);
 

@@ -58,6 +58,7 @@ std::string DingoShortVersionString();
 
 void DingoLogVersion();
 std::vector<std::pair<std::string, std::string>> DingoVersion();
+void ExposeDingoVersion();
 
 std::string GetGitVersion();
 std::string GetGitCommitHash();

@@ -20,6 +20,7 @@
 #include "common/flag.h"
 #include "common/options/common.h"
 #include "common/options/mds.h"
+#include "common/version.h"
 #include "dlfcn.h"
 #include "fmt/format.h"
 #include "gflags/gflags.h"
@@ -324,6 +325,8 @@ int main(int argc, char* argv[]) {
   CHECK(server.InitService()) << "init service error.";
 
   LOG(INFO) << "##################### init finish ######################";
+
+  dingofs::ExposeDingoVersion();
 
   server.Run();
 

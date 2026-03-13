@@ -30,6 +30,7 @@
 #include "common/logging.h"
 #include "common/options/cache.h"
 #include "common/options/common.h"
+#include "common/version.h"
 #include "utils/daemonize.h"
 
 namespace dingofs {
@@ -133,6 +134,8 @@ int DingoCache::Run(int argc, char** argv) {
       return -1;
     }
   }
+
+  ExposeDingoVersion();
 
   return StartServer();
 }
