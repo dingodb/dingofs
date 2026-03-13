@@ -2243,6 +2243,7 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
   auto& old_parent_attr = result.old_parent_attr;
   auto& new_parent_attr = result.new_parent_attr;
   auto& old_dentry = result.old_dentry;
+  auto& new_dentry = result.new_dentry;
   auto& prev_new_dentry = result.prev_new_dentry;
   auto& prev_new_attr = result.prev_new_attr;
   // auto& new_dentry = result.new_dentry;
@@ -2313,6 +2314,16 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
     // clean partition cache
     // NotifyBuddyCleanPartitionCache(old_parent, old_parent_attr.version());
     // if (!is_same_parent) NotifyBuddyCleanPartitionCache(new_parent, new_parent_attr.version());
+
+    // refresh parent inode and dentry cache
+    if (is_same_parent) {
+      UpsertInodeCache(old_parent_attr);
+      if (is_exist_new_dentry) {
+        DeleteDentryFromPartition(old_parent, prev_new_dentry.name(), old_parent_attr.version());
+      }
+      AddDentryToPartition(new_parent, new_dentry, old_parent_attr.version());
+      DeleteDentryFromPartition(old_parent, old_dentry.name(), old_parent_attr.version());
+    }
 
     // refresh parent of parent inode cache
     NotifyBuddyRefreshInode(std::move(old_parent_attr));
