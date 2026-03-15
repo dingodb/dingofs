@@ -174,24 +174,18 @@ void ServiceClosure<T, U>::Run() {
 
   if (response_->error().errcode() != 0) {
     if (response_->error().errcode() != pb::error::ENOT_FOUND || method_name_ != "Lookup") {
-      LOG(ERROR) << fmt::format("[service.{}][request_id({})][{}us] Request fail, request({}) response({})",
+      LOG(ERROR) << fmt::format("[service.{}][request_id({})][{}us] request fail, request({}) response({})",
                                 method_name_, request_->info().request_id(), elapsed_time_us,
                                 request_->ShortDebugString().substr(0, FLAGS_mds_service_log_print_max_length),
                                 response_->ShortDebugString().substr(0, FLAGS_mds_service_log_print_max_length));
     }
 
   } else {
-    if (BAIDU_UNLIKELY(elapsed_time_us >= FLAGS_mds_service_log_threshold_time_us)) {
-      LOG(INFO) << fmt::format("[service.{}][request_id({})][{}us] Request finish, request({}) response({})",
-                               method_name_, request_->info().request_id(), elapsed_time_us,
-                               request_->ShortDebugString().substr(0, FLAGS_mds_service_log_print_max_length),
-                               response_->ShortDebugString().substr(0, FLAGS_mds_service_log_print_max_length));
-    } else {
-      LOG(INFO) << fmt::format("[service.{}][request_id({})][{}us] Request finish, request({}) response({})",
-                               method_name_, request_->info().request_id(), elapsed_time_us,
-                               request_->ShortDebugString().substr(0, FLAGS_mds_service_log_print_max_length),
-                               response_->ShortDebugString().substr(0, FLAGS_mds_service_log_print_max_length));
-    }
+    bool is_timeout = (request_->info().timeout_ms() > 0 && elapsed_time_us >= request_->info().timeout_ms() * 1000);
+    LOG(INFO) << fmt::format("[service.{}][request_id({})][{}us] request {}, request({}) response({})", method_name_,
+                             request_->info().request_id(), elapsed_time_us, is_timeout ? "timeout" : "finish",
+                             request_->ShortDebugString().substr(0, FLAGS_mds_service_log_print_max_length),
+                             response_->ShortDebugString().substr(0, FLAGS_mds_service_log_print_max_length));
   }
 }
 
