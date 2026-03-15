@@ -305,6 +305,15 @@ Status FileSystem::GetPartition(Context& ctx, uint64_t version, Ino parent, Part
     return status;
   }
 
+  if (partition->NeedCompact()) {
+    auto status = GetPartitionFromStore(ctx, parent, "Compact", out_partition);
+    if (!status.ok()) {
+      return Status(status.error_code(), fmt::format("not found partition({}), {}.", parent, status.error_str()));
+    }
+
+    return status;
+  }
+
   trace.SetHitPartition();
   out_partition = partition;
 
@@ -1604,25 +1613,36 @@ Status FileSystem::ReadDir(Context& ctx, Ino ino, const std::string& last_name, 
   }
 
   entry_outs.reserve(limit);
-  auto dentries = partition->Scan(last_name, limit, false);
-  for (auto& dentry : dentries) {
-    EntryOut entry_out;
-    entry_out.name = dentry.Name();
-    entry_out.attr.set_ino(dentry.INo());
+  do {
+    std::string start_name = entry_outs.empty() ? last_name : entry_outs.back().name;
+    auto dentries = partition->Scan(start_name, limit - entry_outs.size(), false);
+    if (dentries.empty()) break;
 
-    if (with_attr) {
-      // need inode attr
-      InodeSPtr inode;
-      status = GetInode(ctx, 0, dentry, partition, inode);
-      if (!status.ok()) {
-        return status;
+    for (auto& dentry : dentries) {
+      EntryOut entry_out;
+      entry_out.name = dentry.Name();
+      entry_out.attr.set_ino(dentry.INo());
+
+      if (with_attr) {
+        // need inode attr
+        InodeSPtr inode;
+        status = GetInode(ctx, 0, dentry, partition, inode);
+        if (!status.ok()) {
+          if (status.error_code() == pb::error::ENOT_FOUND) {
+            LOG(INFO) << fmt::format("[fs.{}.{}.{}] read dir, dentry({}) not found inode().", fs_id_, ino,
+                                     ctx.RequestId(), dentry.Name(), dentry.INo());
+            continue;
+          }
+          return status;
+        }
+
+        entry_out.attr = inode->Copy();
       }
 
-      entry_out.attr = inode->Copy();
+      entry_outs.push_back(std::move(entry_out));
     }
 
-    entry_outs.push_back(std::move(entry_out));
-  }
+  } while (entry_outs.size() < limit);
 
   return Status::OK();
 }
@@ -2260,7 +2280,7 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
   if (!status.ok()) return status;
 
   old_parent_version = old_parent_attr.version();
-  new_parent_version = new_parent_attr.version();
+  new_parent_version = is_same_parent ? old_parent_version : new_parent_attr.version();
 
   effected_inos.push_back(old_parent);
   if (!is_same_parent) effected_inos.push_back(new_parent);
@@ -2321,7 +2341,7 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
       if (is_exist_new_dentry) {
         DeleteDentryFromPartition(old_parent, prev_new_dentry.name(), old_parent_attr.version());
       }
-      AddDentryToPartition(new_parent, new_dentry, old_parent_attr.version());
+      AddDentryToPartition(old_parent, new_dentry, old_parent_attr.version());
       DeleteDentryFromPartition(old_parent, old_dentry.name(), old_parent_attr.version());
     }
 

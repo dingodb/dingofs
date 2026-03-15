@@ -66,6 +66,9 @@ class Partition {
   size_t Size();
   size_t Bytes();
 
+  // delta dentry op too many may cause performance issue, need compact to reduce the op count.
+  bool NeedCompact();
+
   bool Get(const std::string& name, Dentry& dentry);
   std::vector<Dentry> Scan(const std::string& start_name, uint32_t limit, bool is_only_dir);
   std::vector<Dentry> GetAll();
@@ -101,6 +104,8 @@ class Partition {
   void AddDeltaDentryOp(DentryOp&& op);
 
   std::list<DentryOp> delta_dentry_ops_;
+
+  bool is_compacting_{false};
 
   std::atomic<uint64_t> last_active_time_s_{0};
 };

@@ -13,6 +13,7 @@
 
 #include "mds/filesystem/store_operation.h"
 
+#include <absl/container/flat_hash_set.h>
 #include <fcntl.h>
 
 #include <algorithm>
@@ -1525,18 +1526,20 @@ Status UnlinkOperation::Run(TxnUPtr& txn) {
   const Ino parent = dentry_.ParentIno();
 
   // get parent/child attr
-  std::string parent_key = MetaCodec::EncodeInodeKey(fs_id, parent);
-  std::string key = MetaCodec::EncodeInodeKey(fs_id, dentry_.INo());
+  const std::string parent_key = MetaCodec::EncodeInodeKey(fs_id, parent);
+  const std::string key = MetaCodec::EncodeInodeKey(fs_id, dentry_.INo());
+  const std::string dentry_key = MetaCodec::EncodeDentryKey(fs_id, parent, dentry_.Name());
 
   std::vector<KeyValue> kvs;
-  auto status = txn->BatchGet({parent_key, key}, kvs);
+  auto status = txn->BatchGet({parent_key, dentry_key, key}, kvs);
   if (!status.ok()) {
     return status;
   }
-  if (kvs.size() != 2) {
+  if (kvs.size() != 3) {
     return Status(pb::error::ENOT_FOUND, fmt::format("get parent/child inode fail, count({})", kvs.size()));
   }
 
+  bool is_exist_dentry = false;
   AttrEntry parent_attr, attr;
   for (auto& kv : kvs) {
     if (kv.key == parent_key) {
@@ -1545,11 +1548,18 @@ Status UnlinkOperation::Run(TxnUPtr& txn) {
     } else if (kv.key == key) {
       attr = MetaCodec::DecodeInodeValue(kv.value);
 
+    } else if (kv.key == dentry_key) {
+      is_exist_dentry = true;
+
     } else {
       LOG(FATAL) << fmt::format("[operation.{}.{}] invalid key({}), parent_key({}), child_key({}).", fs_id,
                                 dentry_.INo(), Helper::StringToHex(kv.key), Helper::StringToHex(parent_key),
                                 Helper::StringToHex(key));
     }
+  }
+
+  if (!is_exist_dentry) {
+    return Status(pb::error::ENOT_FOUND, "dentry not found");
   }
 
   // update parent attr
@@ -1592,26 +1602,39 @@ Status BatchUnlinkOperation::Run(TxnUPtr& txn) {
   keys.push_back(parent_key);
   for (const auto& dentry : dentries_) {
     keys.push_back(MetaCodec::EncodeInodeKey(fs_id, dentry.INo()));
+    keys.push_back(MetaCodec::EncodeDentryKey(fs_id, parent, dentry.Name()));
   }
 
   std::vector<KeyValue> kvs;
   auto status = txn->BatchGet(keys, kvs);
   if (!status.ok()) return status;
 
-  if (kvs.size() != dentries_.size() + 1) {
+  if (kvs.size() != (dentries_.size() * 2 + 1)) {
     return Status(pb::error::ENOT_FOUND, fmt::format("get parent/child inode fail, count({})", kvs.size()));
   }
 
   AttrEntry parent_attr;
   std::vector<AttrEntry> attrs;
+  std::vector<Ino> dentries;
   for (auto& kv : kvs) {
     if (kv.key == parent_key) {
       parent_attr = MetaCodec::DecodeInodeValue(kv.value);
 
-    } else {
+    } else if (MetaCodec::IsInodeKey(kv.key)) {
       attrs.push_back(MetaCodec::DecodeInodeValue(kv.value));
+
+    } else if (MetaCodec::IsDentryKey(kv.key)) {
+      auto dentry = MetaCodec::DecodeDentryValue(kv.value);
+      dentries.push_back(dentry.ino());
+
+    } else {
+      LOG(FATAL) << fmt::format("[operation.{}] batch_unlink invalid key({}), parent_key({}).", fs_id,
+                                Helper::StringToHex(kv.key), Helper::StringToHex(parent_key));
     }
   }
+
+  CHECK(attrs.size() == dentries.size()) << fmt::format("attrs size({}) should be equal to dentries size({}).",
+                                                        attrs.size(), dentries.size());
 
   // update parent attr
   parent_attr.set_ctime(std::max(parent_attr.ctime(), GetTime()));
@@ -1721,7 +1744,8 @@ Status RenameOperation::Run(TxnUPtr& txn) {
   }
 
   if (is_exist_new_dentry) {
-    CHECK(prev_new_attr.ino() != 0) << "prev new inode is null.";
+    CHECK(prev_new_attr.ino() != 0) << fmt::format("prev new inode is null, old({}/{}) new({}/{}) ino({})", old_parent_,
+                                                   old_name_, new_parent_, new_name_, prev_new_dentry.ino());
 
     if (prev_new_dentry.type() == pb::mds::DIRECTORY) {
       // check new dentry is empty
