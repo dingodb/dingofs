@@ -32,6 +32,7 @@ static const std::string kPartitionMetricsPrefix = "dingofs_{}_partition_cache_{
 // 0: no limit
 DEFINE_uint32(mds_partition_cache_max_count, 4 * 1024 * 1024, "partition cache max count");
 DEFINE_uint32(mds_partition_dentry_op_expire_interval_s, 600, "partition dentry op expire interval seconds");
+DEFINE_uint32(mds_partition_dentry_op_max_count, 10000, "partition dentry op max count");
 
 const uint32_t kDentryDefaultNum = 1024;
 
@@ -136,6 +137,18 @@ size_t Partition::Bytes() {
   return sizeof(Partition) + (children_.size() * sizeof(Dentry)) + (delta_dentry_ops_.size() * sizeof(DentryOp));
 }
 
+bool Partition::NeedCompact() {
+  utils::ReadLockGuard lk(lock_);
+
+  if (is_compacting_) return false;
+
+  if (delta_dentry_ops_.size() <= FLAGS_mds_partition_dentry_op_max_count) return false;
+
+  is_compacting_ = true;
+
+  return true;
+}
+
 bool Partition::Get(const std::string& name, Dentry& dentry) {
   utils::ReadLockGuard lk(lock_);
 
@@ -197,20 +210,24 @@ bool Partition::Merge(Partition&& other_partition) {  // NOLINT
   delta_dentry_ops_.sort([](const DentryOp& a, const DentryOp& b) -> bool { return a.version < b.version; });
 
   delta_version_ = base_version_;
-  for (const auto& op : delta_dentry_ops_) {
-    if (op.version <= base_version_) continue;
-
-    if (op.op_type == DentryOpType::ADD) {
-      children_[op.dentry.Name()] = op.dentry;
-
-    } else if (op.op_type == DentryOpType::DELETE) {
-      children_.erase(op.dentry.Name());
+  for (auto it = delta_dentry_ops_.begin(); it != delta_dentry_ops_.end();) {
+    if (it->version <= base_version_) {
+      it = delta_dentry_ops_.erase(it);
+      continue;
     }
 
-    delta_version_ = std::max(delta_version_, op.version);
+    if (it->op_type == DentryOpType::ADD) {
+      children_[it->dentry.Name()] = it->dentry;
+
+    } else if (it->op_type == DentryOpType::DELETE) {
+      children_.erase(it->dentry.Name());
+    }
+
+    delta_version_ = std::max(delta_version_, it->version);
+    ++it;
   }
 
-  delta_dentry_ops_.clear();
+  is_compacting_ = false;
 
   return true;
 }
