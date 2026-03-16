@@ -1613,36 +1613,28 @@ Status FileSystem::ReadDir(Context& ctx, Ino ino, const std::string& last_name, 
   }
 
   entry_outs.reserve(limit);
-  do {
-    std::string start_name = entry_outs.empty() ? last_name : entry_outs.back().name;
-    auto dentries = partition->Scan(start_name, limit - entry_outs.size(), false);
-    if (dentries.empty()) break;
+  auto dentries = partition->Scan(last_name, limit, false);
+  for (auto& dentry : dentries) {
+    EntryOut entry_out;
+    entry_out.name = dentry.Name();
+    entry_out.attr.set_ino(dentry.INo());
 
-    for (auto& dentry : dentries) {
-      EntryOut entry_out;
-      entry_out.name = dentry.Name();
-      entry_out.attr.set_ino(dentry.INo());
+    if (with_attr) {
+      // need inode attr
+      InodeSPtr inode;
+      status = GetInode(ctx, 0, dentry, partition, inode);
+      if (!status.ok()) {
+        LOG(ERROR) << fmt::format("[fs.{}.{}.{}] get inode fail, dentry({}/{}) status({}).", fs_id_, ino,
+                                  ctx.RequestId(), dentry.Name(), dentry.INo(), status.error_str());
 
-      if (with_attr) {
-        // need inode attr
-        InodeSPtr inode;
-        status = GetInode(ctx, 0, dentry, partition, inode);
-        if (!status.ok()) {
-          if (status.error_code() == pb::error::ENOT_FOUND) {
-            LOG(INFO) << fmt::format("[fs.{}.{}.{}] read dir, dentry({}) not found inode().", fs_id_, ino,
-                                     ctx.RequestId(), dentry.Name(), dentry.INo());
-            continue;
-          }
-          return status;
-        }
-
-        entry_out.attr = inode->Copy();
+        return status;
       }
 
-      entry_outs.push_back(std::move(entry_out));
+      entry_out.attr = inode->Copy();
     }
 
-  } while (entry_outs.size() < limit);
+    entry_outs.push_back(std::move(entry_out));
+  }
 
   return Status::OK();
 }
