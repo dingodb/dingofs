@@ -1769,16 +1769,14 @@ Status RenameOperation::Run(TxnUPtr& txn) {
       prev_new_attr.set_ctime(std::max(prev_new_attr.ctime(), time_ns));
       prev_new_attr.set_mtime(std::max(prev_new_attr.mtime(), time_ns));
       prev_new_attr.set_version(prev_new_attr.version() + 1);
+
+      // update exist new inode attr
+      txn->Put(prev_new_inode_key, MetaCodec::EncodeInodeValue(prev_new_attr));
+
       if (prev_new_attr.nlink() <= 0) {
-        // delete exist new inode
-        txn->Delete(prev_new_inode_key);
         // save delete file info
         txn->Put(MetaCodec::EncodeDelFileKey(fs_id_, prev_new_attr.ino()),
                  MetaCodec::EncodeDelFileValue(prev_new_attr));
-
-      } else {
-        // update exist new inode attr
-        txn->Put(prev_new_inode_key, MetaCodec::EncodeInodeValue(prev_new_attr));
       }
     }
   }
