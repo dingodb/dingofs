@@ -18,11 +18,11 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 9,
+  "id": 2,
   "links": [],
   "panels": [
     {
-      "collapsed": false,
+      "collapsed": true,
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -30,131 +30,134 @@
         "y": 0
       },
       "id": 71,
-      "panels": [],
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 9,
+            "w": 12,
+            "x": 0,
+            "y": 1
+          },
+          "id": 72,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "horizontal",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "pluginVersion": "12.2.0",
+          "targets": [
+            {
+              "editorMode": "code",
+              "expr": "sum(up{job=~\"mds\"})",
+              "legendFormat": "__auto",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "online",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 9,
+            "w": 12,
+            "x": 12,
+            "y": 1
+          },
+          "id": 73,
+          "options": {
+            "colorMode": "none",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "horizontal",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "pluginVersion": "12.2.0",
+          "targets": [
+            {
+              "editorMode": "code",
+              "expr": "count(up{job=~\"mds\"})-sum(up{job=~\"mds\"})",
+              "legendFormat": "__auto",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "offline",
+          "type": "stat"
+        }
+      ],
       "title": "server",
       "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green"
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 0,
-        "y": 1
-      },
-      "id": 72,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "horizontal",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "11.6.0",
-      "targets": [
-        {
-          "editorMode": "code",
-          "expr": "sum(up{job=~\"mds\"})",
-          "legendFormat": "__auto",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "online",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green"
-              }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 12,
-        "y": 1
-      },
-      "id": 73,
-      "options": {
-        "colorMode": "none",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "horizontal",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "11.6.0",
-      "targets": [
-        {
-          "editorMode": "code",
-          "expr": "count(up{job=~\"mds\"})-sum(up{job=~\"mds\"})",
-          "legendFormat": "__auto",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "offline",
-      "type": "stat"
     },
     {
       "collapsed": true,
@@ -162,7 +165,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 10
+        "y": 1
       },
       "id": 2,
       "panels": [
@@ -231,7 +234,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 11
+            "y": 275
           },
           "id": 3,
           "interval": "1s",
@@ -365,7 +368,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 11
+            "y": 275
           },
           "id": 4,
           "interval": "1s",
@@ -444,7 +447,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 11
+        "y": 2
       },
       "id": 5,
       "panels": [
@@ -482,6 +485,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -496,7 +500,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -512,7 +517,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 25
+            "y": 3
           },
           "id": 6,
           "interval": "1s",
@@ -534,7 +539,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -587,6 +592,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -601,7 +607,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -617,7 +624,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 25
+            "y": 3
           },
           "id": 7,
           "interval": "1s",
@@ -639,7 +646,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -649,11 +656,11 @@
               "disableTextWrap": false,
               "editorMode": "code",
               "exemplar": false,
-              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_mk_nod\", job=\"mds\", instance=~\"$instance\",quantile=~\"avg\"}",
+              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_mk_nod\", \r\n job=\"mds\", \r\n instance=~\"$instance\",\r\n quantile=~\"0\\\\.8|0\\\\.99|avg\"}",
               "fullMetaSearch": false,
               "includeNullMetadata": true,
               "interval": "",
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{instance}}-latency-{{quantile}}",
               "range": true,
               "refId": "A",
               "useBackend": false
@@ -696,6 +703,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -710,7 +718,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -726,7 +735,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 57
+            "y": 11
           },
           "id": 8,
           "interval": "1s",
@@ -748,7 +757,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -801,6 +810,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -815,7 +825,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -831,7 +842,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 57
+            "y": 11
           },
           "id": 31,
           "interval": "1s",
@@ -853,7 +864,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -863,11 +874,11 @@
               "disableTextWrap": false,
               "editorMode": "code",
               "exemplar": false,
-              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_mk_dir\", job=\"mds\", instance=~\"$instance\",quantile=~\"avg\"}",
+              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_mk_dir\", \r\n job=\"mds\", \r\n instance=~\"$instance\",\r\n quantile=~\"0\\\\.8|0\\\\.99|avg\"}",
               "fullMetaSearch": false,
               "includeNullMetadata": true,
               "interval": "",
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{instance}}-latency-{{quantile}}",
               "range": true,
               "refId": "A",
               "useBackend": false
@@ -910,6 +921,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -924,7 +936,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -940,7 +953,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 65
+            "y": 19
           },
           "id": 29,
           "interval": "1s",
@@ -962,7 +975,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -1015,6 +1028,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -1029,7 +1043,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -1045,7 +1060,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 65
+            "y": 19
           },
           "id": 32,
           "interval": "1s",
@@ -1067,7 +1082,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -1077,11 +1092,11 @@
               "disableTextWrap": false,
               "editorMode": "code",
               "exemplar": false,
-              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_read_slice\", job=\"mds\", instance=~\"$instance\",quantile=~\"avg\"}",
+              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_read_slice\", \r\n job=\"mds\", \r\n instance=~\"$instance\",\r\n quantile=~\"0\\\\.8|0\\\\.99|avg\"}",
               "fullMetaSearch": false,
               "includeNullMetadata": true,
               "interval": "",
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{instance}}-latency-{{quantile}}",
               "range": true,
               "refId": "A",
               "useBackend": false
@@ -1124,6 +1139,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -1138,7 +1154,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -1154,7 +1171,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 73
+            "y": 27
           },
           "id": 30,
           "interval": "1s",
@@ -1176,7 +1193,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -1229,6 +1246,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -1243,7 +1261,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -1259,7 +1278,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 73
+            "y": 27
           },
           "id": 33,
           "interval": "1s",
@@ -1281,7 +1300,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -1291,11 +1310,11 @@
               "disableTextWrap": false,
               "editorMode": "code",
               "exemplar": false,
-              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_write_slice\", job=\"mds\", instance=~\"$instance\",quantile=~\"avg\"}",
+              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_write_slice\", \r\n job=\"mds\", \r\n instance=~\"$instance\",\r\n quantile=~\"0\\\\.8|0\\\\.99|avg\"}",
               "fullMetaSearch": false,
               "includeNullMetadata": true,
               "interval": "",
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{instance}}-latency-{{quantile}}",
               "range": true,
               "refId": "A",
               "useBackend": false
@@ -1338,6 +1357,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -1352,7 +1372,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -1368,7 +1389,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 81
+            "y": 35
           },
           "id": 9,
           "interval": "1s",
@@ -1390,7 +1411,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -1443,6 +1464,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -1457,7 +1479,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -1473,7 +1496,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 81
+            "y": 35
           },
           "id": 34,
           "interval": "1s",
@@ -1495,7 +1518,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -1505,11 +1528,11 @@
               "disableTextWrap": false,
               "editorMode": "code",
               "exemplar": true,
-              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_open\", job=\"mds\", instance=~\"$instance\",quantile=~\"avg\"}",
+              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_open\", \r\n job=\"mds\", \r\n instance=~\"$instance\",\r\n quantile=~\"0\\\\.8|0\\\\.99|avg\"}",
               "fullMetaSearch": false,
               "includeNullMetadata": true,
               "interval": "",
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{instance}}-latency-{{quantile}}",
               "range": true,
               "refId": "A",
               "useBackend": false
@@ -1552,6 +1575,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -1566,7 +1590,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -1582,7 +1607,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 89
+            "y": 43
           },
           "id": 18,
           "interval": "1s",
@@ -1604,7 +1629,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -1657,6 +1682,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -1671,7 +1697,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -1687,7 +1714,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 89
+            "y": 43
           },
           "id": 35,
           "interval": "1s",
@@ -1709,7 +1736,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -1719,11 +1746,11 @@
               "disableTextWrap": false,
               "editorMode": "code",
               "exemplar": true,
-              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_lookup\", job=\"mds\", instance=~\"$instance\",quantile=~\"avg\"}",
+              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_lookup\", \r\n job=\"mds\", \r\n instance=~\"$instance\",\r\n quantile=~\"0\\\\.8|0\\\\.99|avg\"}",
               "fullMetaSearch": false,
               "includeNullMetadata": true,
               "interval": "",
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{instance}}-latency-{{quantile}}",
               "range": true,
               "refId": "A",
               "useBackend": false
@@ -1766,6 +1793,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -1780,7 +1808,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -1796,7 +1825,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 97
+            "y": 51
           },
           "id": 24,
           "interval": "1s",
@@ -1818,7 +1847,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -1871,6 +1900,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -1885,7 +1915,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -1901,7 +1932,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 97
+            "y": 51
           },
           "id": 36,
           "interval": "1s",
@@ -1923,7 +1954,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -1933,11 +1964,11 @@
               "disableTextWrap": false,
               "editorMode": "code",
               "exemplar": false,
-              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_read_dir\", job=\"mds\", instance=~\"$instance\",quantile=~\"avg\"}",
+              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_read_dir\", \r\n job=\"mds\", \r\n instance=~\"$instance\",\r\n quantile=~\"0\\\\.8|0\\\\.99|avg\"}",
               "fullMetaSearch": false,
               "includeNullMetadata": true,
               "interval": "",
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{instance}}-latency-{{quantile}}",
               "range": true,
               "refId": "A",
               "useBackend": false
@@ -1980,6 +2011,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -1994,7 +2026,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -2010,7 +2043,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 105
+            "y": 59
           },
           "id": 25,
           "interval": "1s",
@@ -2032,7 +2065,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -2085,6 +2118,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -2099,7 +2133,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -2115,7 +2150,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 105
+            "y": 59
           },
           "id": 37,
           "interval": "1s",
@@ -2137,7 +2172,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -2147,11 +2182,11 @@
               "disableTextWrap": false,
               "editorMode": "code",
               "exemplar": false,
-              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_read_link\", job=\"mds\", instance=~\"$instance\",quantile=~\"avg\"}",
+              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_read_link\", \r\n job=\"mds\", \r\n instance=~\"$instance\",\r\n quantile=~\"0\\\\.8|0\\\\.99|avg\"}",
               "fullMetaSearch": false,
               "includeNullMetadata": true,
               "interval": "",
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{instance}}-latency-{{quantile}}",
               "range": true,
               "refId": "A",
               "useBackend": false
@@ -2194,6 +2229,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -2208,7 +2244,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -2224,7 +2261,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 113
+            "y": 67
           },
           "id": 10,
           "interval": "1s",
@@ -2246,7 +2283,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -2299,6 +2336,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -2313,7 +2351,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -2329,7 +2368,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 113
+            "y": 67
           },
           "id": 38,
           "interval": "1s",
@@ -2351,7 +2390,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -2361,11 +2400,11 @@
               "disableTextWrap": false,
               "editorMode": "code",
               "exemplar": true,
-              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_get_inode\", job=\"mds\", instance=~\"$instance\",quantile=~\"avg\"}",
+              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_get_inode\", \r\n job=\"mds\", \r\n instance=~\"$instance\",\r\n quantile=~\"0\\\\.8|0\\\\.99|avg\"}",
               "fullMetaSearch": false,
               "includeNullMetadata": true,
               "interval": "",
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{instance}}-latency-{{quantile}}",
               "range": true,
               "refId": "A",
               "useBackend": false
@@ -2408,6 +2447,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -2422,7 +2462,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -2438,7 +2479,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 121
+            "y": 75
           },
           "id": 54,
           "interval": "1s",
@@ -2460,7 +2501,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -2513,6 +2554,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -2527,7 +2569,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -2543,7 +2586,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 121
+            "y": 75
           },
           "id": 55,
           "interval": "1s",
@@ -2565,7 +2608,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -2575,11 +2618,11 @@
               "disableTextWrap": false,
               "editorMode": "code",
               "exemplar": false,
-              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_batch_get_inode\", job=\"mds\", instance=~\"$instance\",quantile=~\"avg\"}",
+              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_batch_get_inode\", \r\n job=\"mds\", \r\n instance=~\"$instance\",\r\n quantile=~\"0\\\\.8|0\\\\.99|avg\"}",
               "fullMetaSearch": false,
               "includeNullMetadata": true,
               "interval": "",
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{instance}}-latency-{{quantile}}",
               "range": true,
               "refId": "A",
               "useBackend": false
@@ -2622,6 +2665,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -2636,7 +2680,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -2652,7 +2697,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 129
+            "y": 83
           },
           "id": 11,
           "interval": "1s",
@@ -2674,7 +2719,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -2727,6 +2772,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -2741,7 +2787,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -2757,7 +2804,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 129
+            "y": 83
           },
           "id": 39,
           "interval": "1s",
@@ -2779,7 +2826,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -2789,11 +2836,11 @@
               "disableTextWrap": false,
               "editorMode": "code",
               "exemplar": false,
-              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_get_dentry\", job=\"mds\", instance=~\"$instance\",quantile=~\"avg\"}",
+              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_get_dentry\", \r\n job=\"mds\", \r\n instance=~\"$instance\",\r\n quantile=~\"0\\\\.8|0\\\\.99|avg\"}\r\n",
               "fullMetaSearch": false,
               "includeNullMetadata": true,
               "interval": "",
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{instance}}-latency-{{quantile}}",
               "range": true,
               "refId": "A",
               "useBackend": false
@@ -2836,6 +2883,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -2850,7 +2898,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -2866,7 +2915,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 137
+            "y": 91
           },
           "id": 12,
           "interval": "1s",
@@ -2888,7 +2937,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -2941,6 +2990,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -2955,7 +3005,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -2971,7 +3022,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 137
+            "y": 91
           },
           "id": 40,
           "interval": "1s",
@@ -2993,7 +3044,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -3003,11 +3054,11 @@
               "disableTextWrap": false,
               "editorMode": "code",
               "exemplar": true,
-              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_list_dentry\", job=\"mds\", instance=~\"$instance\",quantile=~\"avg\"}",
+              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_list_dentry\", \r\n job=\"mds\", \r\n instance=~\"$instance\",\r\n quantile=~\"0\\\\.8|0\\\\.99|avg\"}",
               "fullMetaSearch": false,
               "includeNullMetadata": true,
               "interval": "",
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{instance}}-latency-{{quantile}}",
               "range": true,
               "refId": "A",
               "useBackend": false
@@ -3050,6 +3101,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -3064,7 +3116,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -3080,7 +3133,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 145
+            "y": 99
           },
           "id": 13,
           "interval": "1s",
@@ -3102,7 +3155,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -3155,6 +3208,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -3169,7 +3223,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -3185,7 +3240,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 145
+            "y": 99
           },
           "id": 41,
           "interval": "1s",
@@ -3207,7 +3262,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -3217,11 +3272,11 @@
               "disableTextWrap": false,
               "editorMode": "code",
               "exemplar": true,
-              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_rename\", job=\"mds\", instance=~\"$instance\",quantile=~\"avg\"}",
+              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_rename\", \r\n job=\"mds\", \r\n instance=~\"$instance\",\r\n quantile=~\"0\\\\.8|0\\\\.99|avg\"}",
               "fullMetaSearch": false,
               "includeNullMetadata": true,
               "interval": "",
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{instance}}-latency-{{quantile}}",
               "range": true,
               "refId": "A",
               "useBackend": false
@@ -3264,6 +3319,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -3278,7 +3334,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -3294,7 +3351,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 153
+            "y": 107
           },
           "id": 14,
           "interval": "1s",
@@ -3316,7 +3373,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -3369,6 +3426,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -3383,7 +3441,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -3399,7 +3458,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 153
+            "y": 107
           },
           "id": 42,
           "interval": "1s",
@@ -3421,7 +3480,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -3431,11 +3490,11 @@
               "disableTextWrap": false,
               "editorMode": "code",
               "exemplar": true,
-              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_rm_dir\", job=\"mds\", instance=~\"$instance\",quantile=~\"avg\"}",
+              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_rm_dir\", \r\n job=\"mds\", \r\n instance=~\"$instance\",\r\n quantile=~\"0\\\\.8|0\\\\.99|avg\"}",
               "fullMetaSearch": false,
               "includeNullMetadata": true,
               "interval": "",
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{instance}}-latency-{{quantile}}",
               "range": true,
               "refId": "A",
               "useBackend": false
@@ -3478,6 +3537,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -3492,7 +3552,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -3508,7 +3569,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 161
+            "y": 115
           },
           "id": 15,
           "interval": "1s",
@@ -3530,7 +3591,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -3583,6 +3644,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -3597,7 +3659,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -3613,7 +3676,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 161
+            "y": 115
           },
           "id": 43,
           "interval": "1s",
@@ -3635,7 +3698,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -3645,11 +3708,11 @@
               "disableTextWrap": false,
               "editorMode": "code",
               "exemplar": true,
-              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_link\", job=\"mds\", instance=~\"$instance\",quantile=~\"avg\"}",
+              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_link\", \r\n job=\"mds\", \r\n instance=~\"$instance\",\r\n quantile=~\"0\\\\.8|0\\\\.99|avg\"}",
               "fullMetaSearch": false,
               "includeNullMetadata": true,
               "interval": "",
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{instance}}-latency-{{quantile}}",
               "range": true,
               "refId": "A",
               "useBackend": false
@@ -3692,6 +3755,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -3706,7 +3770,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -3722,7 +3787,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 169
+            "y": 123
           },
           "id": 23,
           "interval": "1s",
@@ -3744,7 +3809,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -3797,6 +3862,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -3811,7 +3877,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -3827,7 +3894,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 169
+            "y": 123
           },
           "id": 44,
           "interval": "1s",
@@ -3849,7 +3916,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -3859,11 +3926,11 @@
               "disableTextWrap": false,
               "editorMode": "code",
               "exemplar": false,
-              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_un_link\", job=\"mds\", instance=~\"$instance\",quantile=~\"avg\"}",
+              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_un_link\", \r\n job=\"mds\", \r\n instance=~\"$instance\",\r\n quantile=~\"0\\\\.8|0\\\\.99|avg\"}",
               "fullMetaSearch": false,
               "includeNullMetadata": true,
               "interval": "",
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{instance}}-latency-{{quantile}}",
               "range": true,
               "refId": "A",
               "useBackend": false
@@ -3906,6 +3973,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -3920,7 +3988,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -3936,7 +4005,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 177
+            "y": 131
           },
           "id": 17,
           "interval": "1s",
@@ -3958,7 +4027,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -4011,6 +4080,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -4025,7 +4095,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -4041,7 +4112,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 177
+            "y": 131
           },
           "id": 45,
           "interval": "1s",
@@ -4063,7 +4134,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -4073,11 +4144,11 @@
               "disableTextWrap": false,
               "editorMode": "code",
               "exemplar": false,
-              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_set_attr\", job=\"mds\", instance=~\"$instance\",quantile=~\"avg\"}",
+              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_set_attr\", \r\n job=\"mds\", \r\n instance=~\"$instance\",\r\n quantile=~\"0\\\\.8|0\\\\.99|avg\"}",
               "fullMetaSearch": false,
               "includeNullMetadata": true,
               "interval": "",
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{instance}}-latency-{{quantile}}",
               "range": true,
               "refId": "A",
               "useBackend": false
@@ -4120,6 +4191,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -4134,7 +4206,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -4150,7 +4223,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 185
+            "y": 139
           },
           "id": 22,
           "interval": "1s",
@@ -4172,7 +4245,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -4225,6 +4298,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -4239,7 +4313,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -4255,7 +4330,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 185
+            "y": 139
           },
           "id": 46,
           "interval": "1s",
@@ -4277,7 +4352,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -4287,11 +4362,11 @@
               "disableTextWrap": false,
               "editorMode": "code",
               "exemplar": false,
-              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_set_xattr\", job=\"mds\", instance=~\"$instance\",quantile=~\"avg\"}",
+              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_set_xattr\", \r\n job=\"mds\", \r\n instance=~\"$instance\",\r\n quantile=~\"0\\\\.8|0\\\\.99|avg\"}",
               "fullMetaSearch": false,
               "includeNullMetadata": true,
               "interval": "",
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{instance}}-latency-{{quantile}}",
               "range": true,
               "refId": "A",
               "useBackend": false
@@ -4334,6 +4409,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -4348,7 +4424,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -4364,7 +4441,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 193
+            "y": 147
           },
           "id": 16,
           "interval": "1s",
@@ -4386,7 +4463,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -4439,6 +4516,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -4453,7 +4531,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -4469,7 +4548,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 193
+            "y": 147
           },
           "id": 47,
           "interval": "1s",
@@ -4491,7 +4570,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -4501,11 +4580,11 @@
               "disableTextWrap": false,
               "editorMode": "code",
               "exemplar": false,
-              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_get_attr\", job=\"mds\", instance=~\"$instance\",quantile=~\"avg\"}",
+              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_get_attr\", \r\n job=\"mds\", \r\n instance=~\"$instance\",\r\n quantile=~\"0\\\\.8|0\\\\.99|avg\"}",
               "fullMetaSearch": false,
               "includeNullMetadata": true,
               "interval": "",
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{instance}}-latency-{{quantile}}",
               "range": true,
               "refId": "A",
               "useBackend": false
@@ -4548,6 +4627,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -4562,7 +4642,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -4578,7 +4659,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 201
+            "y": 155
           },
           "id": 56,
           "interval": "1s",
@@ -4600,7 +4681,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -4653,6 +4734,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -4667,7 +4749,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -4683,7 +4766,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 201
+            "y": 155
           },
           "id": 57,
           "interval": "1s",
@@ -4705,7 +4788,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -4715,11 +4798,11 @@
               "disableTextWrap": false,
               "editorMode": "code",
               "exemplar": false,
-              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_batch_get_xattr\", job=\"mds\", instance=~\"$instance\",quantile=~\"avg\"}",
+              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_batch_get_xattr\", \r\n job=\"mds\", \r\n instance=~\"$instance\",\r\n quantile=~\"0\\\\.8|0\\\\.99|avg\"}",
               "fullMetaSearch": false,
               "includeNullMetadata": true,
               "interval": "",
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{instance}}-latency-{{quantile}}",
               "range": true,
               "refId": "A",
               "useBackend": false
@@ -4762,6 +4845,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -4776,7 +4860,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -4792,7 +4877,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 209
+            "y": 163
           },
           "id": 19,
           "interval": "1s",
@@ -4814,7 +4899,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -4867,6 +4952,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -4881,7 +4967,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -4897,7 +4984,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 209
+            "y": 163
           },
           "id": 48,
           "interval": "1s",
@@ -4919,7 +5006,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -4929,11 +5016,11 @@
               "disableTextWrap": false,
               "editorMode": "code",
               "exemplar": false,
-              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_get_xattr\", job=\"mds\", instance=~\"$instance\",quantile=~\"avg\"}",
+              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_get_xattr\", \r\n job=\"mds\", \r\n instance=~\"$instance\",\r\n quantile=~\"0\\\\.8|0\\\\.99|avg\"}",
               "fullMetaSearch": false,
               "includeNullMetadata": true,
               "interval": "",
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{instance}}-latency-{{quantile}}",
               "range": true,
               "refId": "A",
               "useBackend": false
@@ -4976,6 +5063,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -4990,7 +5078,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -5006,7 +5095,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 217
+            "y": 171
           },
           "id": 20,
           "interval": "1s",
@@ -5028,7 +5117,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -5081,6 +5170,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -5095,7 +5185,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -5111,7 +5202,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 217
+            "y": 171
           },
           "id": 49,
           "interval": "1s",
@@ -5133,7 +5224,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -5143,11 +5234,11 @@
               "disableTextWrap": false,
               "editorMode": "code",
               "exemplar": false,
-              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_list_xattr\", job=\"mds\", instance=~\"$instance\",quantile=~\"avg\"}",
+              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_list_xattr\", \r\n job=\"mds\", \r\n instance=~\"$instance\",\r\n quantile=~\"0\\\\.8|0\\\\.99|avg\"}",
               "fullMetaSearch": false,
               "includeNullMetadata": true,
               "interval": "",
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{instance}}-latency-{{quantile}}",
               "range": true,
               "refId": "A",
               "useBackend": false
@@ -5190,6 +5281,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -5204,7 +5296,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -5220,7 +5313,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 225
+            "y": 179
           },
           "id": 21,
           "interval": "1s",
@@ -5242,7 +5335,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -5295,6 +5388,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -5309,7 +5403,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -5325,7 +5420,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 225
+            "y": 179
           },
           "id": 50,
           "interval": "1s",
@@ -5347,7 +5442,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -5357,11 +5452,11 @@
               "disableTextWrap": false,
               "editorMode": "code",
               "exemplar": false,
-              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_remove_xattr\", job=\"mds\", instance=~\"$instance\",quantile=~\"avg\"}",
+              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_remove_xattr\", \r\n job=\"mds\", \r\n instance=~\"$instance\",\r\n quantile=~\"0\\\\.8|0\\\\.99|avg\"}",
               "fullMetaSearch": false,
               "includeNullMetadata": true,
               "interval": "",
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{instance}}-latency-{{quantile}}",
               "range": true,
               "refId": "A",
               "useBackend": false
@@ -5404,6 +5499,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -5418,7 +5514,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -5434,7 +5531,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 233
+            "y": 187
           },
           "id": 26,
           "interval": "1s",
@@ -5456,7 +5553,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -5509,6 +5606,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -5523,7 +5621,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -5539,7 +5638,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 233
+            "y": 187
           },
           "id": 51,
           "interval": "1s",
@@ -5561,7 +5660,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -5571,11 +5670,11 @@
               "disableTextWrap": false,
               "editorMode": "code",
               "exemplar": false,
-              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_fallocate\", job=\"mds\", instance=~\"$instance\",quantile=~\"avg\"}",
+              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_fallocate\", \r\n job=\"mds\", \r\n instance=~\"$instance\",\r\n quantile=~\"0\\\\.8|0\\\\.99|avg\"}",
               "fullMetaSearch": false,
               "includeNullMetadata": true,
               "interval": "",
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{instance}}-latency-{{quantile}}",
               "range": true,
               "refId": "A",
               "useBackend": false
@@ -5618,6 +5717,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -5632,7 +5732,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -5648,7 +5749,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 241
+            "y": 195
           },
           "id": 27,
           "interval": "1s",
@@ -5670,7 +5771,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -5723,6 +5824,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -5737,7 +5839,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -5753,7 +5856,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 241
+            "y": 195
           },
           "id": 52,
           "interval": "1s",
@@ -5775,7 +5878,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -5785,11 +5888,11 @@
               "disableTextWrap": false,
               "editorMode": "code",
               "exemplar": false,
-              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_release\", job=\"mds\", instance=~\"$instance\",quantile=~\"avg\"}",
+              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_release\", \r\n job=\"mds\", \r\n instance=~\"$instance\",\r\n quantile=~\"0\\\\.8|0\\\\.99|avg\"}\r\n",
               "fullMetaSearch": false,
               "includeNullMetadata": true,
               "interval": "",
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{instance}}-latency-{{quantile}}",
               "range": true,
               "refId": "A",
               "useBackend": false
@@ -5832,6 +5935,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -5846,7 +5950,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -5862,7 +5967,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 249
+            "y": 203
           },
           "id": 28,
           "interval": "1s",
@@ -5884,7 +5989,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -5937,6 +6042,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -5951,7 +6057,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -5967,7 +6074,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 249
+            "y": 203
           },
           "id": 53,
           "interval": "1s",
@@ -5989,7 +6096,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -5999,11 +6106,11 @@
               "disableTextWrap": false,
               "editorMode": "code",
               "exemplar": true,
-              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_symlink\", job=\"mds\", instance=~\"$instance\",quantile=~\"avg\"}",
+              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_symlink\", \r\n job=\"mds\", \r\n instance=~\"$instance\",\r\n quantile=~\"0\\\\.8|0\\\\.99|avg\"}",
               "fullMetaSearch": false,
               "includeNullMetadata": true,
               "interval": "",
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{instance}}-latency-{{quantile}}",
               "range": true,
               "refId": "A",
               "useBackend": false
@@ -6046,6 +6153,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -6060,7 +6168,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -6076,7 +6185,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 257
+            "y": 211
           },
           "id": 63,
           "interval": "1s",
@@ -6098,7 +6207,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -6151,6 +6260,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -6165,7 +6275,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -6181,7 +6292,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 257
+            "y": 211
           },
           "id": 64,
           "interval": "1s",
@@ -6203,7 +6314,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -6213,11 +6324,11 @@
               "disableTextWrap": false,
               "editorMode": "code",
               "exemplar": false,
-              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_alloc_slice_id\", job=\"mds\", instance=~\"$instance\",quantile=~\"avg\"}",
+              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_alloc_slice_id\", \r\n job=\"mds\", \r\n instance=~\"$instance\",\r\n quantile=~\"0\\\\.8|0\\\\.99|avg\"}",
               "fullMetaSearch": false,
               "includeNullMetadata": true,
               "interval": "",
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{instance}}-latency-{{quantile}}",
               "range": true,
               "refId": "A",
               "useBackend": false
@@ -6260,6 +6371,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -6274,7 +6386,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -6290,7 +6403,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 265
+            "y": 219
           },
           "id": 65,
           "interval": "1s",
@@ -6312,7 +6425,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -6365,6 +6478,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -6379,7 +6493,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -6395,7 +6510,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 265
+            "y": 219
           },
           "id": 66,
           "interval": "1s",
@@ -6417,7 +6532,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -6427,11 +6542,11 @@
               "disableTextWrap": false,
               "editorMode": "code",
               "exemplar": false,
-              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_compact_chunk\", job=\"mds\", instance=~\"$instance\",quantile=~\"avg\"}",
+              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_compact_chunk\", \r\n job=\"mds\", \r\n instance=~\"$instance\",\r\n quantile=~\"0\\\\.8|0\\\\.99|avg\"}",
               "fullMetaSearch": false,
               "includeNullMetadata": true,
               "interval": "",
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{instance}}-latency-{{quantile}}",
               "range": true,
               "refId": "A",
               "useBackend": false
@@ -6474,6 +6589,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -6488,7 +6604,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -6504,7 +6621,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 273
+            "y": 227
           },
           "id": 67,
           "interval": "1s",
@@ -6526,7 +6643,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -6579,6 +6696,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -6593,7 +6711,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -6609,7 +6728,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 273
+            "y": 227
           },
           "id": 68,
           "interval": "1s",
@@ -6631,7 +6750,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -6641,11 +6760,11 @@
               "disableTextWrap": false,
               "editorMode": "code",
               "exemplar": false,
-              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_clean_trash_slice\", job=\"mds\", instance=~\"$instance\",quantile=~\"avg\"}",
+              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_clean_trash_slice\", \r\n job=\"mds\", \r\n instance=~\"$instance\",\r\n quantile=~\"0\\\\.8|0\\\\.99|avg\"}",
               "fullMetaSearch": false,
               "includeNullMetadata": true,
               "interval": "",
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{instance}}-latency-{{quantile}}",
               "range": true,
               "refId": "A",
               "useBackend": false
@@ -6688,6 +6807,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -6702,7 +6822,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -6718,7 +6839,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 281
+            "y": 235
           },
           "id": 69,
           "interval": "1s",
@@ -6740,7 +6861,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -6793,6 +6914,7 @@
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -6807,7 +6929,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -6823,7 +6946,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 281
+            "y": 235
           },
           "id": 70,
           "interval": "1s",
@@ -6845,7 +6968,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "11.6.0",
+          "pluginVersion": "12.2.0",
           "targets": [
             {
               "datasource": {
@@ -6855,11 +6978,11 @@
               "disableTextWrap": false,
               "editorMode": "code",
               "exemplar": false,
-              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_clean_del_file\", job=\"mds\", instance=~\"$instance\",quantile=~\"avg\"}",
+              "expr": "{__name__=~\".*dingofs_pb_mds_mdsservice_clean_del_file\", \r\n job=\"mds\", \r\n instance=~\"$instance\",\r\n quantile=~\"0\\\\.8|0\\\\.99|avg\"}",
               "fullMetaSearch": false,
               "includeNullMetadata": true,
               "interval": "",
-              "legendFormat": "{{instance}}",
+              "legendFormat": "{{instance}}-latency-{{quantile}}",
               "range": true,
               "refId": "A",
               "useBackend": false
@@ -6878,7 +7001,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 12
+        "y": 3
       },
       "id": 58,
       "panels": [
@@ -6946,7 +7069,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 26
+            "y": 290
           },
           "id": 59,
           "interval": "1s",
@@ -7051,7 +7174,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 26
+            "y": 290
           },
           "id": 60,
           "interval": "1s",
@@ -7156,7 +7279,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 42
+            "y": 306
           },
           "id": 61,
           "interval": "1s",
@@ -7261,7 +7384,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 42
+            "y": 306
           },
           "id": 62,
           "interval": "1s",
@@ -7308,7 +7431,7 @@
     }
   ],
   "preload": false,
-  "schemaVersion": 41,
+  "schemaVersion": 42,
   "tags": [],
   "templating": {
     "list": [
@@ -7342,5 +7465,5 @@
   "timezone": "browser",
   "title": "mds",
   "uid": "beuxqez1gnbwge",
-  "version": 2
+  "version": 5
 }
