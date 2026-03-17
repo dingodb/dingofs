@@ -1,0 +1,372 @@
+From 41d153c787c3dd3324b183b20b2e6caed0f5d1a3 Mon Sep 17 00:00:00 2001
+From: meilirensheng2020 <yansp@zetyun.com>
+Date: Mon, 16 Mar 2026 16:56:35 +0800
+Subject: [PATCH] [feat][monitor] Add more lateny metrics.
+
+---
+ .../provisioning/dashboards/client.json       | 68 +++++++++----------
+ .../provisioning/dashboards/remotecache.json  | 10 +--
+ 2 files changed, 39 insertions(+), 39 deletions(-)
+
+diff --git a/scripts/monitor/grafana/provisioning/dashboards/client.json b/scripts/monitor/grafana/provisioning/dashboards/client.json
+index b0270519a..eaf04655f 100755
+--- a/scripts/monitor/grafana/provisioning/dashboards/client.json
++++ b/scripts/monitor/grafana/provisioning/dashboards/client.json
+@@ -847,7 +847,7 @@
+                 "uid": "PBFA97CFB590B2093"
+               },
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_fuse_op_read_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_fuse_op_read_lat_latency_(80|90)|dingofs_fuse_op_read_lat_latency", instance=~\"$instance\"}",
+               "interval": "",
+               "legendFormat": "",
+               "refId": "A"
+@@ -946,7 +946,7 @@
+                 "uid": "PBFA97CFB590B2093"
+               },
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_fuse_op_write_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_fuse_op_write_lat_latency_(80|90)|dingofs_fuse_op_write_lat_latency", instance=~\"$instance\"}",
+               "interval": "",
+               "legendFormat": "",
+               "refId": "A"
+@@ -1045,7 +1045,7 @@
+                 "uid": "PBFA97CFB590B2093"
+               },
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_fuse_op_mkdir_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_fuse_op_mkdir_lat_latency_(80|90)|dingofs_fuse_op_mkdir_lat_latency", instance=~\"$instance\"}",
+               "interval": "",
+               "legendFormat": "",
+               "refId": "A"
+@@ -1144,7 +1144,7 @@
+                 "uid": "PBFA97CFB590B2093"
+               },
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_fuse_op_rmdir_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_fuse_op_rmdir_lat_latency_(80|90)|dingofs_fuse_op_rmdir_lat_latency", instance=~\"$instance\"}",
+               "interval": "",
+               "legendFormat": "",
+               "refId": "A"
+@@ -1243,7 +1243,7 @@
+                 "uid": "PBFA97CFB590B2093"
+               },
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_fuse_op_create_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_fuse_op_create_lat_latency_(80|90)|dingofs_fuse_op_create_lat_latency", instance=~\"$instance\"}",
+               "interval": "",
+               "legendFormat": "",
+               "refId": "A"
+@@ -1342,7 +1342,7 @@
+                 "uid": "PBFA97CFB590B2093"
+               },
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_fuse_op_unlink_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_fuse_op_unlink_lat_latency_(80|90)|dingofs_fuse_op_unlink_lat_latency", instance=~\"$instance\"}",
+               "interval": "",
+               "legendFormat": "",
+               "refId": "A"
+@@ -1441,7 +1441,7 @@
+                 "uid": "PBFA97CFB590B2093"
+               },
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_fuse_op_open_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_fuse_op_open_lat_latency_(80|90)|dingofs_fuse_op_open_lat_latency", instance=~\"$instance\"}",
+               "interval": "",
+               "legendFormat": "",
+               "refId": "A"
+@@ -1540,7 +1540,7 @@
+                 "uid": "PBFA97CFB590B2093"
+               },
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_fuse_op_release_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_fuse_op_release_lat_latency_(80|90)|dingofs_fuse_op_release_lat_latency", instance=~\"$instance\"}",
+               "interval": "",
+               "legendFormat": "",
+               "refId": "A"
+@@ -1639,7 +1639,7 @@
+                 "uid": "PBFA97CFB590B2093"
+               },
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_fuse_op_opendir_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_fuse_op_opendir_lat_latency_(80|90)|dingofs_fuse_op_opendir_lat_latency", instance=~\"$instance\"}",
+               "interval": "",
+               "legendFormat": "",
+               "refId": "A"
+@@ -1738,7 +1738,7 @@
+                 "uid": "PBFA97CFB590B2093"
+               },
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_fuse_op_releasedir_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_fuse_op_releasedir_lat_latency_(80|90)|dingofs_fuse_op_releasedir_lat_latency", instance=~\"$instance\"}",
+               "interval": "",
+               "legendFormat": "",
+               "refId": "A"
+@@ -1837,7 +1837,7 @@
+                 "uid": "PBFA97CFB590B2093"
+               },
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_fuse_op_readdir_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_fuse_op_readdir_lat_latency_(80|90)|dingofs_fuse_op_readdir_lat_latency", instance=~\"$instance\"}",
+               "interval": "",
+               "legendFormat": "",
+               "refId": "A"
+@@ -1936,7 +1936,7 @@
+                 "uid": "PBFA97CFB590B2093"
+               },
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_fuse_op_readlink_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_fuse_op_readlink_lat_latency_(80|90)|dingofs_fuse_op_readlink_lat_latency", instance=~\"$instance\"}",
+               "interval": "",
+               "legendFormat": "",
+               "refId": "A"
+@@ -2035,7 +2035,7 @@
+                 "uid": "PBFA97CFB590B2093"
+               },
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_fuse_op_lookup_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_fuse_op_lookup_lat_latency_(80|90)|dingofs_fuse_op_lookup_lat_latency", instance=~\"$instance\"}",
+               "interval": "",
+               "legendFormat": "",
+               "refId": "A"
+@@ -2134,7 +2134,7 @@
+                 "uid": "PBFA97CFB590B2093"
+               },
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_fuse_op_mknod_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_fuse_op_mknod_lat_latency_(80|90)|dingofs_fuse_op_mknod_lat_latency", instance=~\"$instance\"}",
+               "interval": "",
+               "legendFormat": "",
+               "refId": "A"
+@@ -2233,7 +2233,7 @@
+                 "uid": "PBFA97CFB590B2093"
+               },
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_fuse_op_link_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_fuse_op_link_lat_latency_(80|90)|dingofs_fuse_op_link_lat_latency", instance=~\"$instance\"}",
+               "interval": "",
+               "legendFormat": "",
+               "refId": "A"
+@@ -2332,7 +2332,7 @@
+                 "uid": "PBFA97CFB590B2093"
+               },
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_fuse_op_symlink_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_fuse_op_symlink_lat_latency_(80|90)|dingofs_fuse_op_symlink_lat_latency", instance=~\"$instance\"}",
+               "interval": "",
+               "legendFormat": "",
+               "refId": "A"
+@@ -2431,7 +2431,7 @@
+                 "uid": "PBFA97CFB590B2093"
+               },
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_fuse_op_getattr_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_fuse_op_getattr_lat_latency_(80|90)|dingofs_fuse_op_getattr_lat_latency", instance=~\"$instance\"}",
+               "interval": "",
+               "legendFormat": "",
+               "refId": "A"
+@@ -2530,7 +2530,7 @@
+                 "uid": "PBFA97CFB590B2093"
+               },
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_fuse_op_setattr_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_fuse_op_setattr_lat_latency_(80|90)|dingofs_fuse_op_setattr_lat_latency", instance=~\"$instance\"}",
+               "interval": "",
+               "legendFormat": "",
+               "refId": "A"
+@@ -2628,7 +2628,7 @@
+                 "uid": "PBFA97CFB590B2093"
+               },
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_fuse_op_getxattr_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_fuse_op_getxattr_lat_latency_(80|90)|dingofs_fuse_op_getxattr_lat_latency", instance=~\"$instance\"}",
+               "interval": "",
+               "legendFormat": "",
+               "refId": "A"
+@@ -2726,7 +2726,7 @@
+                 "uid": "PBFA97CFB590B2093"
+               },
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_fuse_op_listxattr_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_fuse_op_listxattr_lat_latency_(80|90)|dingofs_fuse_op_listxattr_lat_latency", instance=~\"$instance\"}",
+               "interval": "",
+               "legendFormat": "",
+               "refId": "A"
+@@ -2824,7 +2824,7 @@
+                 "uid": "PBFA97CFB590B2093"
+               },
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_fuse_op_fsync_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_fuse_op_fsync_lat_latency_(80|90)|dingofs_fuse_op_fsync_lat_latency", instance=~\"$instance\"}",
+               "interval": "",
+               "legendFormat": "",
+               "refId": "A"
+@@ -2922,7 +2922,7 @@
+                 "uid": "PBFA97CFB590B2093"
+               },
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_fuse_op_flush_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_fuse_op_flush_lat_latency_(80|90)|dingofs_fuse_op_flush_lat_latency", instance=~\"$instance\"}",
+               "interval": "",
+               "legendFormat": "",
+               "refId": "A"
+@@ -3020,7 +3020,7 @@
+                 "uid": "PBFA97CFB590B2093"
+               },
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_fuse_op_rename_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_fuse_op_rename_lat_latency_(80|90)|dingofs_fuse_op_rename_lat_latency", instance=~\"$instance\"}",
+               "interval": "",
+               "legendFormat": "",
+               "refId": "A"
+@@ -3664,7 +3664,7 @@
+                 "uid": "PBFA97CFB590B2093"
+               },
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_vfs_read_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_vfs_read_lat_latency_(80|90)|dingofs_vfs_read_lat_latency", instance=~\"$instance\"}",
+               "hide": false,
+               "interval": "",
+               "legendFormat": "",
+@@ -3768,7 +3768,7 @@
+                 "uid": "PBFA97CFB590B2093"
+               },
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_vfs_write_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_vfs_write_lat_latency_(80|90)|dingofs_vfs_write_lat_latency", instance=~\"$instance\"}",
+               "hide": false,
+               "interval": "",
+               "legendFormat": "",
+@@ -4504,7 +4504,7 @@
+                 "uid": "PBFA97CFB590B2093"
+               },
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_block_read_block_lat_latency\", job=\"client\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_block_read_block_lat_latency_(80|90)|dingofs_block_read_block_lat_latency", job=\"client\", instance=~\"$instance\"}",
+               "hide": false,
+               "interval": "",
+               "legendFormat": "",
+@@ -4608,7 +4608,7 @@
+                 "uid": "PBFA97CFB590B2093"
+               },
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_block_write_block_lat_latency\", job=\"client\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_block_write_block_lat_latency_(80|90)|dingofs_block_write_block_lat_latency", job=\"client\", instance=~\"$instance\"}",
+               "hide": false,
+               "interval": "",
+               "legendFormat": "",
+@@ -5357,7 +5357,7 @@
+               },
+               "editorMode": "code",
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_disk_cache_group_load_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_disk_cache_group_load_lat_latency_(80|90)|dingofs_disk_cache_group_load_lat_latency", instance=~\"$instance\"}",
+               "interval": "",
+               "legendFormat": "",
+               "range": true,
+@@ -5567,7 +5567,7 @@
+               },
+               "editorMode": "code",
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_disk_cache_group_stage_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_disk_cache_group_stage_lat_latency_(80|90)|dingofs_disk_cache_group_stage_lat_latency", instance=~\"$instance\"}",
+               "interval": "",
+               "legendFormat": "",
+               "range": true,
+@@ -5777,7 +5777,7 @@
+               },
+               "editorMode": "code",
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_disk_cache_group_cache_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_disk_cache_group_cache_lat_latency_(80|90)|dingofs_disk_cache_group_cache_lat_latency", instance=~\"$instance\"}",
+               "interval": "",
+               "legendFormat": "",
+               "range": true,
+@@ -6811,7 +6811,7 @@
+               },
+               "editorMode": "code",
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_remote_node_group_range_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_remote_node_group_range_lat_latency_(80|90)|dingofs_remote_node_group_range_lat_latency", instance=~\"$instance\"}",
+               "interval": "",
+               "legendFormat": "",
+               "range": true,
+@@ -7231,7 +7231,7 @@
+               },
+               "editorMode": "code",
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_remote_node_group_put_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_remote_node_group_put_lat_latency_(80|90)|dingofs_remote_node_group_put_lat_latency", instance=~\"$instance\"}",
+               "interval": "",
+               "legendFormat": "",
+               "range": true,
+@@ -7651,7 +7651,7 @@
+               },
+               "editorMode": "code",
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_remote_node_group_cache_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_remote_node_group_cache_lat_latency_(80|90)|dingofs_remote_node_group_cache_lat_latency", instance=~\"$instance\"}",
+               "interval": "",
+               "legendFormat": "",
+               "range": true,
+@@ -8071,7 +8071,7 @@
+               },
+               "editorMode": "code",
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_remote_node_group_prefetch_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_remote_node_group_prefetch_lat_latency_(80|90)|dingofs_remote_node_group_prefetch_lat_latency", instance=~\"$instance\"}",
+               "interval": "",
+               "legendFormat": "",
+               "range": true,
+diff --git a/scripts/monitor/grafana/provisioning/dashboards/remotecache.json b/scripts/monitor/grafana/provisioning/dashboards/remotecache.json
+index 9153dc80d..e3368ebd4 100755
+--- a/scripts/monitor/grafana/provisioning/dashboards/remotecache.json
++++ b/scripts/monitor/grafana/provisioning/dashboards/remotecache.json
+@@ -1270,7 +1270,7 @@
+               },
+               "editorMode": "code",
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_disk_cache_group_load_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_disk_cache_group_load_lat_latency_(80|90)|dingofs_disk_cache_group_load_lat_latency", instance=~\"$instance\"}",
+               "interval": "",
+               "legendFormat": "",
+               "range": true,
+@@ -1480,7 +1480,7 @@
+               },
+               "editorMode": "code",
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_disk_cache_group_cache_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_disk_cache_group_cache_lat_latency_(80|90)|dingofs_disk_cache_group_cache_lat_latency", instance=~\"$instance\"}",
+               "interval": "",
+               "legendFormat": "",
+               "range": true,
+@@ -1690,7 +1690,7 @@
+               },
+               "editorMode": "code",
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_disk_cache_group_stage_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_disk_cache_group_stage_lat_latency_(80|90)|dingofs_disk_cache_group_stage_lat_latency", instance=~\"$instance\"}",
+               "interval": "",
+               "legendFormat": "",
+               "range": true,
+@@ -3866,7 +3866,7 @@
+               },
+               "editorMode": "code",
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_block_read_block_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_block_read_block_lat_latency_(80|90)|dingofs_block_read_block_lat_latency", instance=~\"$instance\"}",
+               "hide": false,
+               "interval": "",
+               "legendFormat": "",
+@@ -3972,7 +3972,7 @@
+               },
+               "editorMode": "code",
+               "exemplar": true,
+-              "expr": "{__name__=~\"dingofs_block_write_block_lat_latency\", instance=~\"$instance\"}",
++              "expr": "{__name__=~"dingofs_block_write_block_lat_latency_(80|90)|dingofs_block_write_block_lat_latency", instance=~\"$instance\"}",
+               "hide": false,
+               "interval": "",
+               "legendFormat": "",
+-- 
+2.43.5
+
