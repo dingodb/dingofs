@@ -25,7 +25,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 5,
+  "id": 3,
   "links": [],
   "panels": [
     {
@@ -343,7 +343,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 489
+            "y": 225
           },
           "id": 50,
           "interval": "1s",
@@ -450,7 +450,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 489
+            "y": 225
           },
           "id": 226,
           "interval": "1s",
@@ -571,7 +571,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 2
+            "y": 4954
           },
           "id": 4,
           "interval": "1s",
@@ -696,7 +696,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 2
+            "y": 4954
           },
           "id": 189,
           "options": {
@@ -835,7 +835,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 3
+            "y": 4963
           },
           "id": 107,
           "interval": "1s",
@@ -938,7 +938,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 3
+            "y": 4963
           },
           "id": 108,
           "interval": "1s",
@@ -1041,7 +1041,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 291
+            "y": 4971
           },
           "id": 87,
           "interval": "1s",
@@ -1144,7 +1144,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 291
+            "y": 4971
           },
           "id": 91,
           "interval": "1s",
@@ -1247,7 +1247,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 299
+            "y": 4979
           },
           "id": 88,
           "interval": "1s",
@@ -1350,7 +1350,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 299
+            "y": 4979
           },
           "id": 92,
           "interval": "1s",
@@ -1453,7 +1453,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 307
+            "y": 4987
           },
           "id": 89,
           "interval": "1s",
@@ -1556,7 +1556,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 307
+            "y": 4987
           },
           "id": 90,
           "interval": "1s",
@@ -1659,7 +1659,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 315
+            "y": 4995
           },
           "id": 93,
           "interval": "1s",
@@ -1762,7 +1762,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 315
+            "y": 4995
           },
           "id": 94,
           "interval": "1s",
@@ -1865,7 +1865,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 323
+            "y": 5003
           },
           "id": 99,
           "interval": "1s",
@@ -1968,7 +1968,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 323
+            "y": 5003
           },
           "id": 100,
           "interval": "1s",
@@ -2071,7 +2071,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 331
+            "y": 5011
           },
           "id": 95,
           "interval": "1s",
@@ -2174,7 +2174,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 331
+            "y": 5011
           },
           "id": 96,
           "interval": "1s",
@@ -2277,7 +2277,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 339
+            "y": 5019
           },
           "id": 97,
           "interval": "1s",
@@ -2380,7 +2380,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 339
+            "y": 5019
           },
           "id": 98,
           "interval": "1s",
@@ -2483,7 +2483,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 347
+            "y": 5027
           },
           "id": 101,
           "interval": "1s",
@@ -2586,7 +2586,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 347
+            "y": 5027
           },
           "id": 102,
           "interval": "1s",
@@ -2689,7 +2689,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 355
+            "y": 5035
           },
           "id": 103,
           "interval": "1s",
@@ -2792,7 +2792,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 355
+            "y": 5035
           },
           "id": 104,
           "interval": "1s",
@@ -2895,7 +2895,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 363
+            "y": 5043
           },
           "id": 105,
           "interval": "1s",
@@ -2998,7 +2998,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 363
+            "y": 5043
           },
           "id": 106,
           "interval": "1s",
@@ -3101,7 +3101,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 371
+            "y": 5051
           },
           "id": 109,
           "interval": "1s",
@@ -3218,7 +3218,7 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 4
+            "y": 5060
           },
           "id": 177,
           "interval": "1s",
@@ -3335,7 +3335,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 5
+            "y": 5069
           },
           "id": 48,
           "interval": "1s",
@@ -3364,10 +3364,12 @@
                 "type": "prometheus",
                 "uid": "PBFA97CFB590B2093"
               },
+              "editorMode": "code",
               "exemplar": true,
               "expr": "{__name__=~\"dingofs_vfs_read_qps\", instance=~\"$instance\"}",
               "interval": "",
-              "legendFormat": "",
+              "legendFormat": "{{instance}}",
+              "range": true,
               "refId": "A"
             }
           ],
@@ -3440,7 +3442,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 5
+            "y": 5069
           },
           "id": 224,
           "interval": "1s",
@@ -3469,10 +3471,12 @@
                 "type": "prometheus",
                 "uid": "PBFA97CFB590B2093"
               },
+              "editorMode": "code",
               "exemplar": true,
               "expr": "{__name__=~\"dingofs_vfs_write_qps\", instance=~\"$instance\"}",
               "interval": "",
-              "legendFormat": "",
+              "legendFormat": "{{instance}}",
+              "range": true,
               "refId": "A"
             }
           ],
@@ -3545,7 +3549,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 181
+            "y": 5077
           },
           "id": 225,
           "interval": "1s",
@@ -3574,10 +3578,12 @@
                 "type": "prometheus",
                 "uid": "PBFA97CFB590B2093"
               },
+              "editorMode": "code",
               "exemplar": true,
               "expr": "{__name__=~\"dingofs_vfs_read_bps\", instance=~\"$instance\"}",
               "interval": "",
-              "legendFormat": "",
+              "legendFormat": "{{instance}}",
+              "range": true,
               "refId": "A"
             }
           ],
@@ -3650,7 +3656,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 181
+            "y": 5077
           },
           "id": 51,
           "interval": "1s",
@@ -3679,10 +3685,12 @@
                 "type": "prometheus",
                 "uid": "PBFA97CFB590B2093"
               },
+              "editorMode": "code",
               "exemplar": true,
               "expr": "{__name__=~\"dingofs_vfs_write_bps\", instance=~\"$instance\"}",
               "interval": "",
-              "legendFormat": "",
+              "legendFormat": "{{instance}}",
+              "range": true,
               "refId": "A"
             }
           ],
@@ -3755,7 +3763,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 189
+            "y": 5085
           },
           "id": 58,
           "interval": "1s",
@@ -3863,7 +3871,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 189
+            "y": 5085
           },
           "id": 59,
           "interval": "1s",
@@ -3971,7 +3979,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 197
+            "y": 5093
           },
           "id": 52,
           "interval": "1s",
@@ -4000,10 +4008,12 @@
                 "type": "prometheus",
                 "uid": "PBFA97CFB590B2093"
               },
+              "editorMode": "code",
               "exemplar": true,
               "expr": "{__name__=~\"dingofs_vfs_read_eps\", instance=~\"$instance\"}",
               "interval": "",
-              "legendFormat": "",
+              "legendFormat": "{{instance}}",
+              "range": true,
               "refId": "A"
             }
           ],
@@ -4076,7 +4086,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 197
+            "y": 5093
           },
           "id": 53,
           "interval": "1s",
@@ -4105,10 +4115,12 @@
                 "type": "prometheus",
                 "uid": "PBFA97CFB590B2093"
               },
+              "editorMode": "code",
               "exemplar": true,
               "expr": "{__name__=~\"dingofs_vfs_write_eps\", instance=~\"$instance\"}",
               "interval": "",
-              "legendFormat": "",
+              "legendFormat": "{{instance}}",
+              "range": true,
               "refId": "A"
             }
           ],
@@ -4195,7 +4207,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 6
+            "y": 5198
           },
           "id": 62,
           "interval": "1s",
@@ -4224,10 +4236,12 @@
                 "type": "prometheus",
                 "uid": "PBFA97CFB590B2093"
               },
+              "editorMode": "code",
               "exemplar": true,
               "expr": "{__name__=~\"dingofs_block_read_block_qps\", instance=~\"$instance\"}",
               "interval": "",
-              "legendFormat": "",
+              "legendFormat": "{{instance}}",
+              "range": true,
               "refId": "A"
             }
           ],
@@ -4300,7 +4314,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 6
+            "y": 5198
           },
           "id": 63,
           "interval": "1s",
@@ -4329,10 +4343,12 @@
                 "type": "prometheus",
                 "uid": "PBFA97CFB590B2093"
               },
+              "editorMode": "code",
               "exemplar": true,
               "expr": "{__name__=~\"dingofs_block_write_block_qps\", instance=~\"$instance\"}",
               "interval": "",
-              "legendFormat": "",
+              "legendFormat": "{{instance}}",
+              "range": true,
               "refId": "A"
             }
           ],
@@ -4405,7 +4421,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 86
+            "y": 5206
           },
           "id": 66,
           "interval": "1s",
@@ -4434,10 +4450,12 @@
                 "type": "prometheus",
                 "uid": "PBFA97CFB590B2093"
               },
+              "editorMode": "code",
               "exemplar": true,
               "expr": "{__name__=~\"dingofs_block_read_block_bps\", instance=~\"$instance\"}",
               "interval": "",
-              "legendFormat": "",
+              "legendFormat": "{{instance}}",
+              "range": true,
               "refId": "A"
             }
           ],
@@ -4510,7 +4528,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 86
+            "y": 5206
           },
           "id": 65,
           "interval": "1s",
@@ -4539,10 +4557,12 @@
                 "type": "prometheus",
                 "uid": "PBFA97CFB590B2093"
               },
+              "editorMode": "code",
               "exemplar": true,
               "expr": "{__name__=~\"dingofs_block_write_block_bps\", instance=~\"$instance\"}",
               "interval": "",
-              "legendFormat": "",
+              "legendFormat": "{{instance}}",
+              "range": true,
               "refId": "A"
             }
           ],
@@ -4615,7 +4635,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 94
+            "y": 5214
           },
           "id": 64,
           "interval": "1s",
@@ -4723,7 +4743,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 94
+            "y": 5214
           },
           "id": 67,
           "interval": "1s",
@@ -4813,7 +4833,6 @@
                   "type": "linear"
                 },
                 "showPoints": "auto",
-                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -4828,8 +4847,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": 0
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -4867,7 +4885,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "12.2.0",
+          "pluginVersion": "11.6.0",
           "targets": [
             {
               "datasource": {
@@ -4878,7 +4896,7 @@
               "exemplar": true,
               "expr": "{__name__=~\"dingofs_disk_cache_group_load_bytes_per_second\", instance=~\"$instance\"}",
               "interval": "",
-              "legendFormat": "",
+              "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
             }
@@ -4920,7 +4938,6 @@
                   "type": "linear"
                 },
                 "showPoints": "auto",
-                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -4935,8 +4952,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": 0
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -4974,7 +4990,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "12.2.0",
+          "pluginVersion": "11.6.0",
           "targets": [
             {
               "datasource": {
@@ -4985,7 +5001,7 @@
               "exemplar": true,
               "expr": "{__name__=~\"dingofs_disk_cache_group_load_op_per_second\", instance=~\"$instance\"}",
               "interval": "",
-              "legendFormat": "",
+              "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
             }
@@ -5027,7 +5043,6 @@
                   "type": "linear"
                 },
                 "showPoints": "auto",
-                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -5042,8 +5057,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": 0
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -5059,7 +5073,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 87
+            "y": 15
           },
           "id": 214,
           "interval": "1s",
@@ -5081,7 +5095,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "12.2.0",
+          "pluginVersion": "11.6.0",
           "targets": [
             {
               "datasource": {
@@ -5092,7 +5106,7 @@
               "exemplar": true,
               "expr": "{__name__=~\"dingofs_disk_cache_group_stage_bytes_per_second\", instance=~\"$instance\"}",
               "interval": "",
-              "legendFormat": "",
+              "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
             }
@@ -5134,7 +5148,6 @@
                   "type": "linear"
                 },
                 "showPoints": "auto",
-                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -5149,8 +5162,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": 0
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -5166,7 +5178,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 87
+            "y": 15
           },
           "id": 215,
           "interval": "1s",
@@ -5188,7 +5200,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "12.2.0",
+          "pluginVersion": "11.6.0",
           "targets": [
             {
               "datasource": {
@@ -5199,7 +5211,7 @@
               "exemplar": true,
               "expr": "{__name__=~\"dingofs_disk_cache_group_stage_op_per_second\", instance=~\"$instance\"}",
               "interval": "",
-              "legendFormat": "",
+              "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
             }
@@ -5241,7 +5253,6 @@
                   "type": "linear"
                 },
                 "showPoints": "auto",
-                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -5256,8 +5267,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": 0
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -5273,7 +5283,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 95
+            "y": 23
           },
           "id": 216,
           "interval": "1s",
@@ -5295,7 +5305,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "12.2.0",
+          "pluginVersion": "11.6.0",
           "targets": [
             {
               "datasource": {
@@ -5306,7 +5316,7 @@
               "exemplar": true,
               "expr": "{__name__=~\"dingofs_disk_cache_group_cache_bytes_per_second\", instance=~\"$instance\"}",
               "interval": "",
-              "legendFormat": "",
+              "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
             }
@@ -5348,7 +5358,6 @@
                   "type": "linear"
                 },
                 "showPoints": "auto",
-                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -5363,8 +5372,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": 0
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -5380,7 +5388,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 95
+            "y": 23
           },
           "id": 217,
           "interval": "1s",
@@ -5402,7 +5410,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "12.2.0",
+          "pluginVersion": "11.6.0",
           "targets": [
             {
               "datasource": {
@@ -5413,7 +5421,7 @@
               "exemplar": true,
               "expr": "{__name__=~\"dingofs_disk_cache_group_cache_op_per_second\", instance=~\"$instance\"}",
               "interval": "",
-              "legendFormat": "",
+              "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
             }
@@ -5455,7 +5463,6 @@
                   "type": "linear"
                 },
                 "showPoints": "auto",
-                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -5470,8 +5477,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": 0
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -5487,7 +5493,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 103
+            "y": 31
           },
           "id": 210,
           "interval": "1s",
@@ -5509,7 +5515,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "12.2.0",
+          "pluginVersion": "11.6.0",
           "targets": [
             {
               "datasource": {
@@ -5562,7 +5568,6 @@
                   "type": "linear"
                 },
                 "showPoints": "auto",
-                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -5577,8 +5582,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": 0
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -5594,7 +5598,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 103
+            "y": 31
           },
           "id": 211,
           "interval": "1s",
@@ -5616,7 +5620,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "12.2.0",
+          "pluginVersion": "11.6.0",
           "targets": [
             {
               "datasource": {
@@ -5627,7 +5631,7 @@
               "exemplar": true,
               "expr": "{__name__=~\"dingofs_disk_cache_group_load_error_per_second\", instance=~\"$instance\"}",
               "interval": "",
-              "legendFormat": "",
+              "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
             }
@@ -5669,7 +5673,6 @@
                   "type": "linear"
                 },
                 "showPoints": "auto",
-                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -5684,8 +5687,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": 0
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -5701,7 +5703,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 111
+            "y": 39
           },
           "id": 212,
           "interval": "1s",
@@ -5723,7 +5725,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "12.2.0",
+          "pluginVersion": "11.6.0",
           "targets": [
             {
               "datasource": {
@@ -5776,7 +5778,6 @@
                   "type": "linear"
                 },
                 "showPoints": "auto",
-                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -5791,8 +5792,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": 0
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -5808,7 +5808,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 111
+            "y": 39
           },
           "id": 213,
           "interval": "1s",
@@ -5830,7 +5830,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "12.2.0",
+          "pluginVersion": "11.6.0",
           "targets": [
             {
               "datasource": {
@@ -5841,7 +5841,7 @@
               "exemplar": true,
               "expr": "{__name__=~\"dingofs_disk_cache_group_stage_error_per_second\", instance=~\"$instance\"}",
               "interval": "",
-              "legendFormat": "",
+              "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
             }
@@ -5883,7 +5883,6 @@
                   "type": "linear"
                 },
                 "showPoints": "auto",
-                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -5898,8 +5897,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": 0
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -5915,7 +5913,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 119
+            "y": 47
           },
           "id": 218,
           "interval": "1s",
@@ -5937,7 +5935,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "12.2.0",
+          "pluginVersion": "11.6.0",
           "targets": [
             {
               "datasource": {
@@ -5990,7 +5988,6 @@
                   "type": "linear"
                 },
                 "showPoints": "auto",
-                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -6005,8 +6002,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": 0
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -6022,7 +6018,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 119
+            "y": 47
           },
           "id": 219,
           "interval": "1s",
@@ -6044,7 +6040,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "12.2.0",
+          "pluginVersion": "11.6.0",
           "targets": [
             {
               "datasource": {
@@ -6055,7 +6051,7 @@
               "exemplar": true,
               "expr": "{__name__=~\"dingofs_disk_cache_group_cache_error_per_second\", instance=~\"$instance\"}",
               "interval": "",
-              "legendFormat": "",
+              "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
             }
@@ -6097,7 +6093,6 @@
                   "type": "linear"
                 },
                 "showPoints": "auto",
-                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -6112,8 +6107,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": 0
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -6129,7 +6123,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 127
+            "y": 55
           },
           "id": 116,
           "interval": "1s",
@@ -6147,7 +6141,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "12.2.0",
+          "pluginVersion": "11.6.0",
           "targets": [
             {
               "datasource": {
@@ -6200,7 +6194,6 @@
                   "type": "linear"
                 },
                 "showPoints": "auto",
-                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -6215,8 +6208,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": 0
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -6232,7 +6224,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 127
+            "y": 55
           },
           "id": 117,
           "interval": "1s",
@@ -6250,7 +6242,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "12.2.0",
+          "pluginVersion": "11.6.0",
           "targets": [
             {
               "datasource": {
@@ -6303,7 +6295,6 @@
                   "type": "linear"
                 },
                 "showPoints": "auto",
-                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -6320,8 +6311,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": 0
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -6337,7 +6327,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 135
+            "y": 63
           },
           "id": 188,
           "options": {
@@ -6353,12 +6343,12 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "12.2.0",
+          "pluginVersion": "11.6.0",
           "targets": [
             {
               "editorMode": "code",
               "expr": "{__name__=~\"dingofs_disk_cache_.*_stage_blocks\", instance=~\"$instance\"}",
-              "legendFormat": "__auto",
+              "legendFormat": "",
               "range": true,
               "refId": "A"
             }
@@ -6400,7 +6390,6 @@
                   "type": "linear"
                 },
                 "showPoints": "auto",
-                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -6415,8 +6404,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": 0
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -6432,7 +6420,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 135
+            "y": 63
           },
           "id": 220,
           "interval": "1s",
@@ -6450,7 +6438,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "12.2.0",
+          "pluginVersion": "11.6.0",
           "targets": [
             {
               "datasource": {
@@ -6459,220 +6447,14 @@
               },
               "editorMode": "code",
               "exemplar": true,
-              "expr": "100 *\r\nsum by (instance) (\r\n  {__name__=~\"dingofs_disk_cache_.*_cache_hits\",instance=~\"$instance\"}\r\n)\r\n/\r\nclamp_min(\r\n  sum by (instance) (\r\n {__name__=~\"dingofs_disk_cache_.*_cache_hits\",instance=~\"$instance\"} +\r\n    + {__name__=~\"dingofs_disk_cache_.*_cache_misses\",instance=~\"$instance\"}\r\n  ), 1\r\n)",
+              "expr": "100 *\r\nsum by (instance) (\r\n  {__name__=~\"dingofs_disk_cache_.*_cache_hits\",instance=~\"$instance\"}\r\n)\r\n/\r\nclamp_min(\r\n  (\r\n    sum by (instance) (\r\n      {__name__=~\"dingofs_disk_cache_.*_cache_hits\", instance=~\"$instance\"}\r\n    )\r\n    + \r\n    sum by (instance) (\r\n      {__name__=~\"dingofs_disk_cache_.*_cache_misses\", instance=~\"$instance\"}\r\n    )\r\n  ), 1\r\n)",
               "interval": "",
-              "legendFormat": "",
+              "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
             }
           ],
           "title": "cache_hit_percent(%)",
-          "type": "timeseries"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "palette-classic"
-              },
-              "custom": {
-                "axisBorderShow": false,
-                "axisCenteredZero": false,
-                "axisColorMode": "text",
-                "axisLabel": "",
-                "axisPlacement": "auto",
-                "barAlignment": 0,
-                "barWidthFactor": 0.6,
-                "drawStyle": "line",
-                "fillOpacity": 0,
-                "gradientMode": "none",
-                "hideFrom": {
-                  "legend": false,
-                  "tooltip": false,
-                  "viz": false
-                },
-                "insertNulls": false,
-                "lineInterpolation": "linear",
-                "lineWidth": 1,
-                "pointSize": 5,
-                "scaleDistribution": {
-                  "type": "linear"
-                },
-                "showPoints": "auto",
-                "showValues": false,
-                "spanNulls": false,
-                "stacking": {
-                  "group": "A",
-                  "mode": "none"
-                },
-                "thresholdsStyle": {
-                  "mode": "off"
-                }
-              },
-              "mappings": [],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": 0
-                  },
-                  {
-                    "color": "red",
-                    "value": 80
-                  }
-                ]
-              },
-              "unit": "none"
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 0,
-            "y": 143
-          },
-          "id": 119,
-          "interval": "1s",
-          "options": {
-            "alertThreshold": true,
-            "legend": {
-              "calcs": [],
-              "displayMode": "list",
-              "placement": "bottom",
-              "showLegend": true
-            },
-            "tooltip": {
-              "hideZeros": false,
-              "mode": "single",
-              "sort": "none"
-            }
-          },
-          "pluginVersion": "12.2.0",
-          "targets": [
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "PBFA97CFB590B2093"
-              },
-              "editorMode": "code",
-              "exemplar": true,
-              "expr": "{__name__=~\"dingofs_disk_cache_.*_cache_misses\", instance=~\"$instance\"}",
-              "interval": "",
-              "legendFormat": "",
-              "range": true,
-              "refId": "A"
-            }
-          ],
-          "title": "cache misses",
-          "type": "timeseries"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "palette-classic"
-              },
-              "custom": {
-                "axisBorderShow": false,
-                "axisCenteredZero": false,
-                "axisColorMode": "text",
-                "axisLabel": "",
-                "axisPlacement": "auto",
-                "barAlignment": 0,
-                "barWidthFactor": 0.6,
-                "drawStyle": "line",
-                "fillOpacity": 0,
-                "gradientMode": "none",
-                "hideFrom": {
-                  "legend": false,
-                  "tooltip": false,
-                  "viz": false
-                },
-                "insertNulls": false,
-                "lineInterpolation": "linear",
-                "lineWidth": 1,
-                "pointSize": 5,
-                "scaleDistribution": {
-                  "type": "linear"
-                },
-                "showPoints": "auto",
-                "showValues": false,
-                "spanNulls": false,
-                "stacking": {
-                  "group": "A",
-                  "mode": "none"
-                },
-                "thresholdsStyle": {
-                  "mode": "off"
-                }
-              },
-              "mappings": [],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": 0
-                  },
-                  {
-                    "color": "red",
-                    "value": 80
-                  }
-                ]
-              },
-              "unit": "none"
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 12,
-            "y": 143
-          },
-          "id": 118,
-          "interval": "1s",
-          "options": {
-            "alertThreshold": true,
-            "legend": {
-              "calcs": [],
-              "displayMode": "list",
-              "placement": "bottom",
-              "showLegend": true
-            },
-            "tooltip": {
-              "hideZeros": false,
-              "mode": "single",
-              "sort": "none"
-            }
-          },
-          "pluginVersion": "12.2.0",
-          "targets": [
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "PBFA97CFB590B2093"
-              },
-              "editorMode": "code",
-              "exemplar": true,
-              "expr": "{__name__=~\"dingofs_disk_cache_.*_cache_hits\", instance=~\"$instance\"}",
-              "interval": "",
-              "legendFormat": "",
-              "range": true,
-              "refId": "A"
-            }
-          ],
-          "title": "cache_hits",
           "type": "timeseries"
         }
       ],
@@ -6723,7 +6505,6 @@
                   "type": "linear"
                 },
                 "showPoints": "auto",
-                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -6738,8 +6519,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": 0
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -6755,7 +6535,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 8
+            "y": 152
           },
           "id": 73,
           "interval": "1s",
@@ -6777,7 +6557,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "12.2.0",
+          "pluginVersion": "11.6.0",
           "targets": [
             {
               "datasource": {
@@ -6788,7 +6568,7 @@
               "exemplar": true,
               "expr": "{__name__=~\"dingofs_remote_node_group_range_bytes_per_second\", instance=~\"$instance\"}",
               "interval": "",
-              "legendFormat": "",
+              "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
             }
@@ -6830,7 +6610,6 @@
                   "type": "linear"
                 },
                 "showPoints": "auto",
-                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -6845,8 +6624,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": 0
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -6862,7 +6640,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 8
+            "y": 152
           },
           "id": 197,
           "interval": "1s",
@@ -6884,7 +6662,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "12.2.0",
+          "pluginVersion": "11.6.0",
           "targets": [
             {
               "datasource": {
@@ -6895,7 +6673,7 @@
               "exemplar": true,
               "expr": "{__name__=~\"dingofs_remote_node_group_range_op_per_second\", instance=~\"$instance\"}",
               "interval": "",
-              "legendFormat": "",
+              "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
             }
@@ -6937,7 +6715,6 @@
                   "type": "linear"
                 },
                 "showPoints": "auto",
-                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -6952,8 +6729,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": 0
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -6969,7 +6745,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 16
+            "y": 160
           },
           "id": 194,
           "interval": "1s",
@@ -6991,7 +6767,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "12.2.0",
+          "pluginVersion": "11.6.0",
           "targets": [
             {
               "datasource": {
@@ -7044,7 +6820,6 @@
                   "type": "linear"
                 },
                 "showPoints": "auto",
-                "showValues": false,
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -7059,8 +6834,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": 0
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -7076,7 +6850,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 16
+            "y": 160
           },
           "id": 195,
           "interval": "1s",
@@ -7098,7 +6872,7 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "12.2.0",
+          "pluginVersion": "11.6.0",
           "targets": [
             {
               "datasource": {
@@ -7109,7 +6883,7 @@
               "exemplar": true,
               "expr": "{__name__=~\"dingofs_remote_node_group_range_error_per_second\", instance=~\"$instance\"}",
               "interval": "",
-              "legendFormat": "",
+              "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
             }
@@ -7183,7 +6957,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 24
+            "y": 168
           },
           "id": 196,
           "interval": "1s",
@@ -7216,7 +6990,7 @@
               "exemplar": true,
               "expr": "{__name__=~\"dingofs_remote_node_group_put_bytes_per_second\", instance=~\"$instance\"}",
               "interval": "",
-              "legendFormat": "",
+              "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
             }
@@ -7290,7 +7064,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 24
+            "y": 168
           },
           "id": 193,
           "interval": "1s",
@@ -7323,7 +7097,7 @@
               "exemplar": true,
               "expr": "{__name__=~\"dingofs_remote_node_group_put_op_per_second\", instance=~\"$instance\"}",
               "interval": "",
-              "legendFormat": "",
+              "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
             }
@@ -7397,7 +7171,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 32
+            "y": 176
           },
           "id": 198,
           "interval": "1s",
@@ -7504,7 +7278,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 32
+            "y": 176
           },
           "id": 199,
           "interval": "1s",
@@ -7537,7 +7311,7 @@
               "exemplar": true,
               "expr": "{__name__=~\"dingofs_remote_node_group_put_error_per_second\", instance=~\"$instance\"}",
               "interval": "",
-              "legendFormat": "",
+              "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
             }
@@ -7611,7 +7385,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 40
+            "y": 184
           },
           "id": 202,
           "interval": "1s",
@@ -7644,7 +7418,7 @@
               "exemplar": true,
               "expr": "{__name__=~\"dingofs_remote_node_group_cache_bytes_per_second\", instance=~\"$instance\"}",
               "interval": "",
-              "legendFormat": "",
+              "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
             }
@@ -7718,7 +7492,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 40
+            "y": 184
           },
           "id": 203,
           "interval": "1s",
@@ -7751,7 +7525,7 @@
               "exemplar": true,
               "expr": "{__name__=~\"dingofs_remote_node_group_cache_op_per_second\", instance=~\"$instance\"}",
               "interval": "",
-              "legendFormat": "",
+              "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
             }
@@ -7825,7 +7599,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 48
+            "y": 192
           },
           "id": 200,
           "interval": "1s",
@@ -7932,7 +7706,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 48
+            "y": 192
           },
           "id": 205,
           "interval": "1s",
@@ -7965,7 +7739,7 @@
               "exemplar": true,
               "expr": "{__name__=~\"dingofs_remote_node_group_cache_error_per_second\", instance=~\"$instance\"}",
               "interval": "",
-              "legendFormat": "",
+              "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
             }
@@ -8039,7 +7813,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 56
+            "y": 200
           },
           "id": 206,
           "interval": "1s",
@@ -8072,7 +7846,7 @@
               "exemplar": true,
               "expr": "{__name__=~\"dingofs_remote_node_group_prefetch_bytes_per_second\", instance=~\"$instance\"}",
               "interval": "",
-              "legendFormat": "",
+              "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
             }
@@ -8146,7 +7920,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 56
+            "y": 200
           },
           "id": 207,
           "interval": "1s",
@@ -8179,7 +7953,7 @@
               "exemplar": true,
               "expr": "{__name__=~\"dingofs_remote_node_group_prefetch_op_per_second\", instance=~\"$instance\"}",
               "interval": "",
-              "legendFormat": "",
+              "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
             }
@@ -8253,7 +8027,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 64
+            "y": 208
           },
           "id": 204,
           "interval": "1s",
@@ -8360,7 +8134,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 64
+            "y": 208
           },
           "id": 201,
           "interval": "1s",
@@ -8393,7 +8167,7 @@
               "exemplar": true,
               "expr": "{__name__=~\"dingofs_remote_node_group_prefetch_error_per_second\", instance=~\"$instance\"}",
               "interval": "",
-              "legendFormat": "",
+              "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
             }
@@ -8467,7 +8241,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 72
+            "y": 216
           },
           "id": 221,
           "interval": "1s",
@@ -8500,7 +8274,7 @@
               "exemplar": true,
               "expr": "{__name__=~\"dingofs_remote_cache_hit_ratio\", instance=~\"$instance\"}",
               "interval": "",
-              "legendFormat": "",
+              "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
             }
@@ -8515,7 +8289,7 @@
   ],
   "preload": false,
   "refresh": "5s",
-  "schemaVersion": 42,
+  "schemaVersion": 41,
   "tags": [],
   "templating": {
     "list": [
@@ -8627,5 +8401,5 @@
   "timezone": "",
   "title": "client",
   "uid": "I2_uSSenk",
-  "version": 2
+  "version": 1
 }
