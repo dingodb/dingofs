@@ -1317,6 +1317,8 @@ void FileSystem::AsyncKeepAliveFileSession(const std::vector<FileSessionParam>& 
         LOG(INFO) << fmt::format("[meta.fs.{}] keep alive file session finish, ino({}), status({}).", fs_id, ino_str,
                                  status.error_str());
 
+        delete param;
+
         return nullptr;
       },
       param);
