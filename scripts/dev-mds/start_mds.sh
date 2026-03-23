@@ -9,19 +9,20 @@ mydir="${BASH_SOURCE%/*}"
 if [[ ! -d "$mydir" ]]; then mydir="$PWD"; fi
 . $mydir/shflags
 
-DEFINE_string role 'mds' 'server role'
+
 DEFINE_integer server_num 1 'server number'
 
 # parse the command-line
 FLAGS "$@" || exit 1
 eval set -- "${FLAGS_ARGV}"
 
-echo "start role(${FLAGS_role}) server num(${FLAGS_server_num})"
+echo "start server num(${FLAGS_server_num})"
 
 BASE_DIR=$(dirname $(dirname $(cd $(dirname $0); pwd)))
 DIST_DIR=$BASE_DIR/dist
 
-
+SERVER_NAME=mds
+SERVER_BIN_NAME=dingo-mds
 
 function set_ulimit() {
     NUM_FILE=1048576
@@ -75,22 +76,23 @@ function set_ulimit() {
 }
 
 function start_server() {
-  role=$1
-  root_dir=$2
+  root_dir=$1
 
   set_ulimit
 
   cd ${root_dir}
 
-  server_name="dingo-${role}"
-  echo "start server: ${root_dir}/bin/${server_name}"
 
-  ${root_dir}/bin/${server_name} --daemonize=true --conf=${root_dir}/conf/${role}.conf 2>&1 >./log/out &
+  echo "start server: ${root_dir}/bin/${SERVER_BIN_NAME}"
+
+  ${root_dir}/bin/${SERVER_BIN_NAME} --daemonize=true --conf=${root_dir}/conf/${SERVER_NAME}.conf 2>&1 >./log/out &
 }
 
 
 for ((i=1; i<=${FLAGS_server_num}; ++i)); do
-  program_dir=$BASE_DIR/dist/${FLAGS_role}-${i}
+  ininstance_dist_dir=$DIST_DIR/$SERVER_NAME-$i
 
-  start_server ${FLAGS_role} ${program_dir}
+  start_server ${ininstance_dist_dir}
 done
+
+echo "start finish..."

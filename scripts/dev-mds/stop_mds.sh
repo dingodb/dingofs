@@ -4,7 +4,6 @@ mydir="${BASH_SOURCE%/*}"
 if [[ ! -d "$mydir" ]]; then mydir="$PWD"; fi
 . $mydir/shflags
 
-DEFINE_string role 'mds' 'server role'
 DEFINE_integer server_num 1 'server number'
 DEFINE_integer force 0 'use kill -9 to stop'
 DEFINE_integer use_pgrep 0 'use pgrep to get pid'
@@ -13,10 +12,13 @@ DEFINE_integer use_pgrep 0 'use pgrep to get pid'
 FLAGS "$@" || exit 1
 eval set -- "${FLAGS_ARGV}"
 
-echo "stop role(${FLAGS_role}) server num(${FLAGS_server_num})"
+echo "stop server num(${FLAGS_server_num})"
 
 BASE_DIR=$(dirname $(dirname $(cd $(dirname $0); pwd)))
 DIST_DIR=$BASE_DIR/dist
+
+SERVER_NAME=mds
+SERVER_BIN_NAME=dingo-mds
 
 
 wait_for_process_exit() {
@@ -37,7 +39,7 @@ wait_for_process_exit() {
 
 
 if [ ${FLAGS_use_pgrep} -ne 0 ]; then
-    process_no=$(pgrep -f "${BASE_DIR}.*dingo-${FLAGS_role}" -U `id -u` | xargs)
+    process_no=$(pgrep -f "${BASE_DIR}.*${SERVER_BIN_NAME}" -U `id -u` | xargs)
 
     if [ "${process_no}" != "" ]; then
         echo "pid to kill: ${process_no}"
@@ -50,12 +52,11 @@ if [ ${FLAGS_use_pgrep} -ne 0 ]; then
 
         wait_for_process_exit ${process_no}
     else
-        echo "not exist ${FLAGS_role} process"
+        echo "not exist ${SERVER_NAME} process"
     fi
 else
     for ((i=1; i<=$FLAGS_server_num; ++i)); do
-        program_dir=$BASE_DIR/dist/${FLAGS_role}-${i}
-        pid_file=${program_dir}/log/pid
+        pid_file=$DIST_DIR/${SERVER_NAME}-${i}/log/pid
 
         # Check if the PID file exists
         if [ -f "$pid_file" ]; then
