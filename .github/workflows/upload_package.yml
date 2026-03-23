@@ -1,0 +1,37 @@
+name: Upload_Python_Package
+
+on:
+  workflow_run:
+    workflows: ["Build_wheel"]
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download artifact
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          workflow: wheels.yml
+          name: dingofs_whl
+
+      - name: Install Twine
+        run: |
+          pip install twine
+          pip install --upgrade --force-reinstall "packaging>=24.2"
+
+      - name: Upload package to PyPI
+        run: twine upload *.whl
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
