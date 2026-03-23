@@ -13,6 +13,8 @@
 # limitations under the License.
 
 
+add_subdirectory(flat)
+
 file(GLOB TEST_DINGOFS_CLIENT_VFS_DATA_SRCS
   "*.cc"
 )

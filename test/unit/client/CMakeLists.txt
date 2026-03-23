@@ -19,9 +19,26 @@ add_executable(test_client
 )
 
 target_link_libraries(test_client
-  test_compact_utils
-  test_client_vfs_data
+  $<TARGET_OBJECTS:test_compact_utils>
+  $<TARGET_OBJECTS:test_compactor>
+  $<TARGET_OBJECTS:test_client_vfs_data>
+  $<TARGET_OBJECTS:test_vfs_common>
+  $<TARGET_OBJECTS:test_vfs_handle>
+  $<TARGET_OBJECTS:test_vfs_memory>
+  $<TARGET_OBJECTS:test_vfs_components>
+  $<TARGET_OBJECTS:test_vfs_flat>
+  $<TARGET_OBJECTS:test_vfs_impl>
+  $<TARGET_OBJECTS:test_vfs_service>
+
+  vfs_lib
+  vfs_data
+  vfs_handle
+  vfs_memory
+  vfs_components
+  vfs_compaction
+
   PROTO_OBJS
+  ${TEST_DEPS_WITHOUT_MAIN}
 )
 
 set_target_properties(test_client PROPERTIES

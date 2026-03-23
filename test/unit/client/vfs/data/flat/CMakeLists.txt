@@ -12,16 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(common)
-add_subdirectory(memory)
-add_subdirectory(components)
-add_subdirectory(compaction)
-add_subdirectory(data)
-add_subdirectory(handle)
-add_subdirectory(service)
-
-add_library(test_vfs_impl test_vfs_impl.cc)
-target_link_libraries(test_vfs_impl
-  vfs_lib
+file(GLOB TEST_VFS_FLAT_SRCS "*.cc")
+add_library(test_vfs_flat ${TEST_VFS_FLAT_SRCS})
+target_link_libraries(test_vfs_flat
+  vfs_data
   ${TEST_DEPS_WITHOUT_MAIN}
 )

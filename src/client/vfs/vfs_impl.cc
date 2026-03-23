@@ -58,6 +58,12 @@ VFSImpl::VFSImpl(const VFSConfig& vfs_conf, const ClientId& client_id)
     : client_id_(client_id),
       vfs_hub_(std::make_unique<VFSHubImpl>(vfs_conf, client_id_)) {};
 
+VFSImpl::VFSImpl(std::unique_ptr<VFSHub> hub)
+    : client_id_(), vfs_hub_(std::move(hub)) {
+  meta_system_ = vfs_hub_->GetMetaSystem();
+  handle_manager_ = vfs_hub_->GetHandleManager();
+}
+
 Status VFSImpl::Start(bool skip_mount) {
   CHECK(vfs_hub_ != nullptr) << "vfs_hub is null";
 

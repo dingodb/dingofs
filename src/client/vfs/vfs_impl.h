@@ -141,6 +141,11 @@ class VFSImpl : public VFS {
   Status GetInfo(std::string* info) override;
 
  private:
+  friend class VFSImplTest;
+
+  // Test-only constructor: inject a pre-built VFSHub.
+  explicit VFSImpl(std::unique_ptr<VFSHub> hub);
+
   Status StartBrpcServer();
 
   const ClientId client_id_;

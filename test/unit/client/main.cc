@@ -1,40 +1,61 @@
 /*
- *  Copyright (c) 2020 NetEase Inc.
+ * Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
-/*
- * Project: dingo
- * Created Date: Thur May 27 2021
- * Author: xuchaojie
- */
+#include <filesystem>
 
+#include "fmt/core.h"
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
 
-DECLARE_int32(v);
+static void InitLog(const std::string& log_dir) {
+  std::filesystem::create_directories(log_dir);
 
-int main(int argc, char* argv[]) {
-  testing::InitGoogleTest(&argc, argv);
-
-  FLAGS_minloglevel = google::GLOG_INFO;
-  FLAGS_logtostdout = true;
-  FLAGS_colorlogtostdout = true;
   FLAGS_logbufsecs = 0;
+  FLAGS_stop_logging_if_full_disk = true;
+  FLAGS_minloglevel = google::GLOG_INFO;
+  FLAGS_logbuflevel = google::GLOG_INFO;
+  FLAGS_logtostdout = false;
+  FLAGS_logtostderr = false;
+  FLAGS_alsologtostderr = false;
 
-  google::InitGoogleLogging(argv[0]);
+  const std::string program_name = "client_unit_test";
+  google::InitGoogleLogging(program_name.c_str());
+
+  google::SetLogDestination(
+      google::GLOG_INFO,
+      fmt::format("{}/{}.info.log", log_dir, program_name).c_str());
+  google::SetLogDestination(
+      google::GLOG_WARNING,
+      fmt::format("{}/{}.warn.log", log_dir, program_name).c_str());
+  google::SetLogDestination(
+      google::GLOG_ERROR,
+      fmt::format("{}/{}.error.log", log_dir, program_name).c_str());
+  google::SetLogDestination(
+      google::GLOG_FATAL,
+      fmt::format("{}/{}.fatal.log", log_dir, program_name).c_str());
+
+  // Only FATAL goes to stderr so test output stays clean.
+  google::SetStderrLogging(google::GLOG_FATAL);
+}
+
+int main(int argc, char** argv) {
+  InitLog("./log");
+
+  testing::InitGoogleTest(&argc, argv);
   google::ParseCommandLineFlags(&argc, &argv, true);
 
   return RUN_ALL_TESTS();

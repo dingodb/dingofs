@@ -20,3 +20,12 @@ target_link_libraries(test_compact_utils
   vfs_compaction
   ${TEST_DEPS_WITHOUT_MAIN}
 )
+
+add_library(test_compactor
+    test_compactor.cc
+)
+
+target_link_libraries(test_compactor
+  vfs_compaction
+  ${TEST_DEPS_WITHOUT_MAIN}
+)
