@@ -7,7 +7,7 @@ if [[ ! -d "$mydir" ]]; then mydir="$PWD"; fi
 DEFINE_integer server_num 1 'server number'
 DEFINE_boolean clean_log 1 'clean log'
 DEFINE_boolean replace_conf 0 'replace conf'
-DEFINE_string parameters 'mds_deploy_parameters' 'deploy parameters file'
+DEFINE_string parameters 'mds_deploy_parameters.local' 'deploy parameters file'
 
 # parse the command-line
 FLAGS "$@" || exit 1
@@ -76,13 +76,15 @@ function deploy_server() {
     dist_conf="${dstpath}/conf/${SERVER_NAME}.conf"
     cp $srcpath/scripts/dev-mds/${SERVER_NAME}.template.conf $dist_conf
 
-    sed  -i 's,\$CLUSTER_ID\$,'"$CLUSTER_ID"',g'                    $dist_conf
-    sed  -i 's,\$INSTANCE_ID\$,'"$instance_id"',g'                  $dist_conf
-    sed  -i 's,\$SERVER_HOST\$,'"$SERVER_HOST"',g'                  $dist_conf
-    sed  -i 's,\$SERVER_LISTEN_HOST\$,'"$SERVER_LISTEN_HOST"',g'    $dist_conf
-    sed  -i 's,\$SERVER_PORT\$,'"$server_port"',g'                  $dist_conf
-    sed  -i 's,\$BASE_PATH\$,'"$dstpath"',g'                        $dist_conf
-    
+    sed  -i 's,\$CLUSTER_ID,'"$CLUSTER_ID"',g'                    $dist_conf
+    sed  -i 's,\$INSTANCE_ID,'"$instance_id"',g'                  $dist_conf
+    sed  -i 's,\$SERVER_HOST,'"$SERVER_HOST"',g'                  $dist_conf
+    sed  -i 's,\$SERVER_LISTEN_HOST,'"$SERVER_LISTEN_HOST"',g'    $dist_conf
+    sed  -i 's,\$SERVER_PORT,'"$server_port"',g'                  $dist_conf
+    sed  -i 's,\$BASE_PATH,'"$dstpath"',g'                        $dist_conf
+    sed  -i 's,\$STORAGE_ENGINE,'"$STORAGE_ENGINE"',g'            $dist_conf
+    sed  -i 's,\$STORAGE_URL,'"$STORAGE_URL"',g'                  $dist_conf
+
     # coor_list file
     coor_file="${dstpath}/conf/coor_list"
     echo $COORDINATOR_ADDR > $coor_file

@@ -25,7 +25,6 @@ cmake.args = [
     "-DBUILD_UNIT_TESTS=OFF",
     "-DBUILD_INTEGRATION_TESTS=OFF",
     "-DDINGOFS_BUILD_SDK=OFF",
-    "-DWITH_TIKVCPP=OFF",
 ]
 
 # Python 包源码在 python/dingofs/，wheel 内导入路径为 dingofs

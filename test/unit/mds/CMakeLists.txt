@@ -33,7 +33,6 @@ target_link_libraries(test_mds
 
   mds_common
   mds_filesystem
-  mds_storage
   mds_coordinator
   mds_mds
   mds_storage
@@ -49,8 +48,7 @@ target_link_libraries(test_mds
 
   dingo::sdk
 
-  tikvcpp
-  tikvrust
+  tikvgo
 
   protobuf::libprotobuf
   ${TEST_DEPS_WITHOUT_MAIN}

@@ -88,18 +88,18 @@ butil::Status Interaction::SendRequest(const std::string& service_name, const st
 
   channel_.CallMethod(method, &cntl, &request, &response, nullptr);
   if (FLAGS_log_each_request) {
-    LOG(INFO) << fmt::format("send request api {} response: {} request: {}", api_name,
-                             response.ShortDebugString().substr(0, 256), request.ShortDebugString().substr(0, 256));
+    std::cout << fmt::format("send request api {} response: {} request: {}", api_name,
+                             response.ShortDebugString().substr(0, 256), request.ShortDebugString().substr(0, 256))
+              << std::endl;
   }
   if (cntl.Failed()) {
-    LOG(ERROR) << fmt::format("{} response fail, {} {} {}", api_name, cntl.log_id(), cntl.ErrorCode(),
-                              cntl.ErrorText());
+    std::cerr << fmt::format("{} rpc fail, {} {} {}\n", api_name, cntl.log_id(), cntl.ErrorCode(), cntl.ErrorText());
     return Status(cntl.ErrorCode(), cntl.ErrorText());
   }
 
   if (response.error().errcode() != dingofs::pb::error::OK) {
-    LOG(ERROR) << fmt::format("{} response fail, error: {} {}", api_name,
-                              dingofs::pb::error::Errno_Name(response.error().errcode()), response.error().errmsg());
+    std::cerr << fmt::format("{} response fail, error: {} {}\n", api_name,
+                             dingofs::pb::error::Errno_Name(response.error().errcode()), response.error().errmsg());
 
     return Status(response.error().errcode(), response.error().errmsg());
   }

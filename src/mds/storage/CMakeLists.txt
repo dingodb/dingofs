@@ -16,23 +16,24 @@
 set(DINGOFS_MDS_STORAGE_SRCS
   dingodb_storage.cc
   dummy_storage.cc
+  tikv_go_storage.cc
 )
 
-if(WITH_TIKVCPP)
-  list(APPEND DINGOFS_MDS_STORAGE_SRCS tikv_storage.cc)
-endif()
 
 add_library(mds_storage
   ${DINGOFS_MDS_STORAGE_SRCS}
 )
 
+target_include_directories(mds_storage PRIVATE
+  ${TIKVGO_INCLUDE_DIR}
+)
+
 target_link_libraries(mds_storage
+  tikvgo
+
   mds_common
 
   PROTO_OBJS
   protobuf::libprotobuf
 )
 
-if(WITH_TIKVCPP)
-  target_link_libraries(mds_storage tikvcpp tikvrust)
-endif()

@@ -80,6 +80,7 @@ message("CMAKE_PREFIX_PATH:${CMAKE_PREFIX_PATH}")
 
 # link first lookup from THIRD_PARTY_INSTALL_PATH
 link_directories(BEFORE ${THIRD_PARTY_INSTALL_PATH}/lib)
+link_directories(BEFORE ${THIRD_PARTY_INSTALL_PATH}/lib64)
 link_directories(BEFORE ${DINGOSDK_INSTALL_PATH}/lib)
 
 # include dir
@@ -263,12 +264,8 @@ message("Using rados: ${RADOS_LIBRARIES}")
 find_package(dingosdk REQUIRED)
 message(STATUS "Found dingosdk: ${dingosdk_VERSION}")
 
-option(WITH_TIKVCPP "Find and link against tikvcpp (TiKV client)" ON)
-if(WITH_TIKVCPP)
-  find_package(tikvcpp REQUIRED)
-  message(STATUS "Found tikvcpp: ${tikvcpp_VERSION}")
-  add_compile_definitions(WITH_TIKVCPP)
-endif()
+find_package(tikvgo REQUIRED)
+message(STATUS "Found tikvgo: ${tikvgo_VERSION}")
 
 # ------------------------ related to source code ------------------------
 

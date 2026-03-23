@@ -93,9 +93,9 @@ DEFINE_validator(mds_prefetch_chunk_num, brpc::PassValidate);
 DEFINE_uint32(mds_cache_expire_interval_s, 7200, "Cache expire interval in seconds.");
 DEFINE_validator(mds_cache_expire_interval_s, brpc::PassValidate);
 
-DEFINE_string(mds_storage_engine, "dummy", "mds storage engine, e.g dingo-store|tikv|dummy");
+DEFINE_string(mds_storage_engine, "dummy", "mds storage engine, e.g dingo-store|tikv|tikv-go|dummy");
 DEFINE_validator(mds_storage_engine, [](const char*, const std::string& value) -> bool {
-  return value == "dingo-store" || value == "tikv" || value == "dummy";
+  return value == "dingo-store" || value == "tikv" || value == "tikv-go" || value == "dummy";
 });
 
 DEFINE_string(mds_id_generator_type, "coor", "id generator type, e.g coor|store");

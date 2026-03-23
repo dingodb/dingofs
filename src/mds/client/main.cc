@@ -129,7 +129,6 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  std::cout << "### use cluster id: " << FLAGS_cluster_id << '\n';
   dingofs::mds::MetaCodec::SetClusterID(FLAGS_cluster_id);
 
   std::string program_name = GetLastName(std::string(argv[0]));

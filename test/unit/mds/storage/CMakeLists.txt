@@ -26,6 +26,8 @@ target_link_libraries(test_mds_storage
 
   mds_storage
 
+  tikvgo
+
   protobuf::libprotobuf
   ${TEST_DEPS_WITHOUT_MAIN}
 )

@@ -123,6 +123,9 @@ function start() {
     log_dir=$CLIENT_LOG_DIR/${prefix_name}
     mountpoint_dir=${FLAGS_mountpoint}/${prefix_name}
 
+
+    # check file system exist
+
     if [ ! -d "${log_dir}" ]; then
         mkdir -p ${log_dir}
     else
