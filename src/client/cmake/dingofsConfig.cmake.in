@@ -1,0 +1,113 @@
+# dingofsConfig.cmake — CMake package config for the DingoFS client SDK.
+#
+# Usage in your CMakeLists.txt:
+#
+#   # Tell CMake where dingofs is installed (or set CMAKE_PREFIX_PATH):
+#   list(APPEND CMAKE_PREFIX_PATH "$ENV{HOME}/.local/dingofs")
+#
+#   # Optionally override the dingo-eureka path (default: ~/.local/dingo-eureka):
+#   set(DINGO_EUREKA_DIR "/path/to/dingo-eureka")
+#
+#   find_package(dingofs REQUIRED)
+#   target_link_libraries(myapp PRIVATE dingofs::client)
+#
+# =============================================================================
+
+@PACKAGE_INIT@
+
+# ── dingo-eureka path ─────────────────────────────────────────────────────────
+if(NOT DINGO_EUREKA_DIR)
+    if(DEFINED ENV{DINGO_EUREKA_DIR})
+        set(DINGO_EUREKA_DIR "$ENV{DINGO_EUREKA_DIR}")
+    else()
+        set(DINGO_EUREKA_DIR "$ENV{HOME}/.local/dingo-eureka")
+    endif()
+endif()
+
+# ── Search paths ──────────────────────────────────────────────────────────────
+# Our installed Find*.cmake modules (Findbrpc, Findrados, Finduring, …)
+list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}")
+# eureka cmake package configs (gRPC, opentelemetry-cpp, AWSSDK, spdlog, …)
+list(PREPEND CMAKE_PREFIX_PATH "${DINGO_EUREKA_DIR}")
+
+# ── Locate dependencies ───────────────────────────────────────────────────────
+# Pre-find targets that Findbrpc.cmake / Findrados.cmake expect to already exist
+find_package(OpenSSL           REQUIRED)         # → OpenSSL::SSL OpenSSL::Crypto
+find_package(ZLIB              REQUIRED)         # → ZLIB::ZLIB
+find_package(Snappy            REQUIRED CONFIG)  # → Snappy::snappy
+find_package(glog              REQUIRED CONFIG)  # → glog::glog
+find_package(gflags            REQUIRED CONFIG)  # → gflags::gflags
+find_package(fmt               REQUIRED CONFIG)  # → fmt::fmt
+find_package(Protobuf          REQUIRED CONFIG)  # → protobuf::libprotobuf
+find_package(leveldb           REQUIRED CONFIG)  # → leveldb::leveldb
+# Findbrpc.cmake uses plain "leveldb" (no namespace); provide an alias
+if(TARGET leveldb::leveldb AND NOT TARGET leveldb)
+    add_library(leveldb ALIAS leveldb::leveldb)
+endif()
+find_package(nlohmann_json     REQUIRED CONFIG)  # → nlohmann_json::nlohmann_json (needed by opentelemetry)
+
+set(BRPC_ROOT_DIR "${DINGO_EUREKA_DIR}")
+find_package(brpc              REQUIRED)         # → brpc::brpc  (Module mode, uses Findbrpc.cmake)
+#   brpc transitively declares: glog gflags OpenSSL leveldb snappy zlib fmt protobuf
+
+find_package(rados             REQUIRED)         # → ceph::rados (Module mode, uses Findrados.cmake)
+#   rados transitively declares: Boost rdmacm ibverbs udev blkid resolv
+
+find_package(uring             REQUIRED)         # → uring::uring  (Module mode)
+find_package(CURL              REQUIRED CONFIG)  # → CURL::libcurl (needed by opentelemetry http)
+find_package(gRPC              REQUIRED CONFIG)  # → gRPC::grpc++
+#   gRPC transitively declares: protobuf absl re2 c-ares
+
+find_package(opentelemetry-cpp REQUIRED CONFIG)  # → opentelemetry-cpp::*
+find_package(AWSSDK            REQUIRED CONFIG COMPONENTS s3 s3-crt)  # → aws-cpp-sdk-s3 aws-cpp-sdk-s3-crt
+find_package(spdlog            REQUIRED CONFIG)  # → spdlog::spdlog
+find_package(jsoncpp           REQUIRED CONFIG)  # → JsonCpp::JsonCpp
+find_package(Threads           REQUIRED)         # → Threads::Threads (CMake built-in)
+
+# uuid: cmake config at non-standard location; resolve via find_library instead
+if(NOT TARGET uuid::uuid_static)
+    find_library(UUID_STATIC_LIB NAMES uuid_static libuuid_static
+        HINTS "${DINGO_EUREKA_DIR}/lib" NO_DEFAULT_PATH)
+    find_path(UUID_INCLUDE_DIR NAMES uuid/uuid.h
+        HINTS "${DINGO_EUREKA_DIR}/include" NO_DEFAULT_PATH)
+    if(UUID_STATIC_LIB AND UUID_INCLUDE_DIR)
+        add_library(uuid::uuid_static STATIC IMPORTED)
+        set_target_properties(uuid::uuid_static PROPERTIES
+            IMPORTED_LOCATION             "${UUID_STATIC_LIB}"
+            INTERFACE_INCLUDE_DIRECTORIES "${UUID_INCLUDE_DIR}")
+    else()
+        message(FATAL_ERROR "uuid not found in ${DINGO_EUREKA_DIR}")
+    endif()
+endif()
+
+# ── Define dingofs::client ────────────────────────────────────────────────────
+if(NOT TARGET dingofs::client)
+    add_library(dingofs::client STATIC IMPORTED)
+
+    set_and_check(_DINGOFS_LIB     "${PACKAGE_PREFIX_DIR}/lib/libdingofs_client.a")
+    set_and_check(_DINGOFS_INCLUDE "${PACKAGE_PREFIX_DIR}/include")
+
+    set_target_properties(dingofs::client PROPERTIES
+        IMPORTED_LOCATION             "${_DINGOFS_LIB}"
+        INTERFACE_INCLUDE_DIRECTORIES "${_DINGOFS_INCLUDE}"
+        INTERFACE_LINK_LIBRARIES
+            "-Wl,--start-group;\
+brpc::brpc;\
+ceph::rados;\
+opentelemetry-cpp::otlp_grpc_exporter;\
+opentelemetry-cpp::otlp_http_exporter;\
+opentelemetry-cpp::otlp_http_metric_exporter;\
+aws-cpp-sdk-s3-crt;\
+aws-cpp-sdk-s3;\
+spdlog::spdlog;\
+JsonCpp::JsonCpp;\
+uring::uring;\
+uuid::uuid_static;\
+-Wl,--end-group;\
+Threads::Threads;\
+${CMAKE_DL_LIBS};\
+m;rt"
+    )
+endif()
+
+check_required_components(dingofs)

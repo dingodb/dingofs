@@ -195,7 +195,7 @@ LocalMetaSystem::LocalMetaSystem(const std::string& db_path,
       storage_info_(storage_info),
       inode_cache_(meta::InodeCache::New(kFsId)) {}  // NOLINT
 
-Status LocalMetaSystem::Init(bool upgrade) {
+Status LocalMetaSystem::Init(bool /*skip_mount*/) {
   std::string db_path = fmt::format("{}/{}", db_path_, fs_name_);
   // create db path if not exist
   if (!dingofs::Helper::CreateDirectory(db_path)) {
@@ -227,7 +227,7 @@ Status LocalMetaSystem::Init(bool upgrade) {
   return Status::OK();
 }
 
-void LocalMetaSystem::Stop(bool upgrade) {
+void LocalMetaSystem::Stop(bool /*skip_unmount*/) {
   crontab_manager_.Destroy();
 
   CloseLevelDB();

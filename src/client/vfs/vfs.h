@@ -24,7 +24,6 @@
 
 #include "client/vfs/data_buffer.h"
 #include "client/vfs/vfs_meta.h"
-#include "common/blockaccess/accesser_common.h"
 #include "common/status.h"
 #include "common/trace/context.h"
 #include "common/trace/trace_manager.h"
@@ -49,9 +48,11 @@ class VFS {
 
   virtual ~VFS() = default;
 
-  virtual Status Start(bool upgrade) = 0;
+  // skip_mount: if true, skip MountFs on MDS (new process inheriting a session)
+  virtual Status Start(bool skip_mount) = 0;
 
-  virtual Status Stop(bool upgrade) = 0;
+  // skip_unmount: if true, skip UnmountFs on MDS (old process handing off)
+  virtual Status Stop(bool skip_unmount) = 0;
 
   virtual bool Dump(ContextSPtr ctx, Json::Value& value) = 0;
 
@@ -154,7 +155,7 @@ class VFS {
 
   virtual TraceManager* GetTraceManager() = 0;
 
-  virtual blockaccess::BlockAccessOptions GetBlockAccesserOptions() = 0;
+  virtual Status GetInfo(std::string* info) = 0;
 };
 
 }  // namespace vfs

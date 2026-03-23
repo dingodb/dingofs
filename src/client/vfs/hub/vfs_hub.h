@@ -50,9 +50,9 @@ class VFSHub {
 
   virtual ~VFSHub() = default;
 
-  virtual Status Start(bool upgrade) = 0;
+  virtual Status Start(bool skip_mount) = 0;
 
-  virtual Status Stop(bool upgrade) = 0;
+  virtual Status Stop(bool skip_unmount) = 0;
 
   virtual ClientId GetClientId() = 0;
 
@@ -97,9 +97,9 @@ class VFSHubImpl : public VFSHub {
 
   ~VFSHubImpl() override;
 
-  Status Start(bool upgrade) override;
+  Status Start(bool skip_mount) override;
 
-  Status Stop(bool upgrade) override;
+  Status Stop(bool skip_unmount) override;
 
   ClientId GetClientId() override { return client_id_; }
 

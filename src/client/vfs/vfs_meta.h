@@ -20,16 +20,20 @@
 #include <cstdint>
 #include <functional>
 #include <string>
-#include <utility>
-#include <vector>
 
+#include "common/meta.h"
 #include "common/status.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 
-using Ino = uint64_t;
+using Ino = dingofs::Ino;
+using FileType = dingofs::FileType;
+using Attr = dingofs::Attr;
+using DirEntry = dingofs::DirEntry;
+using FsStat = dingofs::FsStat;
+using ReadDirHandler = dingofs::ReadDirHandler;
 
 enum FsStatus : uint8_t {
   kInit = 1,
@@ -53,57 +57,18 @@ inline std::string FsStatus2Str(const FsStatus& fs_status) {
   }
 }
 
-enum FileType : uint8_t {
-  kDirectory = 1,
-  kSymlink = 2,
-  kFile = 3,  // NOTE: match to pb TYPE_S3
-};
-
 inline std::string FileType2Str(const FileType& file_type) {
   switch (file_type) {
-    case kDirectory:
+    case dingofs::kDirectory:
       return "Directory";
-    case kSymlink:
+    case dingofs::kSymlink:
       return "Symlink";
-    case kFile:
+    case dingofs::kFile:
       return "File";
     default:
       return "Unknown";
   }
 }
-
-struct Attr {
-  Ino ino{0};
-  uint32_t mode{0};
-  uint32_t nlink{0};
-  uint32_t uid{0};
-  uint32_t gid{0};
-  uint64_t length{0};
-  uint64_t rdev{0};
-  uint64_t atime{0};
-  uint64_t mtime{0};
-  uint64_t ctime{0};
-  FileType type;
-  uint32_t flags{0};
-
-  std::vector<Ino> parents;
-  std::vector<std::pair<std::string, std::string>> xattrs;
-
-  uint64_t version{0};
-};
-
-struct DirEntry {
-  Ino ino;
-  std::string name;
-  Attr attr;
-};
-
-struct FsStat {
-  int64_t max_bytes;
-  int64_t used_bytes;
-  int64_t max_inodes;
-  int64_t used_inodes;
-};
 
 // map pb chunkinfo
 struct Slice {
@@ -171,19 +136,6 @@ struct FsInfo {
   StorageInfo storage_info;
   FsStatus status;
 };
-
-//  *off* should be any non-zero value that the vfs can use to
-//  identify the current point in the directory stream. It does not
-//  need to be the actual physical position. A value of zero is
-//  reserved to mean "from the beginning", and should therefore never
-//  be used (the first call to ReadDirHandler should be passed the
-//  offset of the second directory entry).
-//  When the handler returns false, it indicates that the
-//  ReadDir operation should stop, and the *off* parameter should be
-//  updated to the offset of the next entry that should be read on the
-//  next call to ReadDirHandler.
-using ReadDirHandler =
-    std::function<bool(const DirEntry& dir_entry, uint64_t offset)>;
 
 using DoneClosure = std::function<void(const Status& status)>;
 

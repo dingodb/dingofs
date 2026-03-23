@@ -22,7 +22,6 @@
 
 namespace dingofs {
 namespace client {
-namespace vfs {
 
 DataBuffer::DataBuffer() : io_buffer_(new class IOBuffer()) {}
 
@@ -51,6 +50,5 @@ std::vector<IOVec> DataBuffer::GatherIOVecs() const {
 
 std::string DataBuffer::Describe() const { return io_buffer_->Describe(); }
 
-}  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

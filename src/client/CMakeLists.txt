@@ -12,29 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+add_subdirectory(buffer)
 add_subdirectory(vfs)
-
-file(GLOB FUSE_CLIENT_LIB_SRCS
-    "fuse/fuse_op.cc"
-    "fuse/fuse_server.cc"
-)
-
-add_library(fuse_client_lib ${FUSE_CLIENT_LIB_SRCS})
-target_link_libraries(fuse_client_lib
-    PROTO_OBJS
-    vfs_lib
-    vfs_block_store
-    block_accesser
-    dingofs_metrics
-    dingofs_common
-    client_options
-    cache_tiercache
-    jsoncpp
-    ${FUSE3_LIBRARY}
-)
+add_subdirectory(fuse)
 
 add_executable(dingo-client main.cc)
 target_link_libraries(dingo-client
     fuse_client_lib
     glog::glog
 )
+
+if(DINGOFS_BUILD_SDK)
+    include(${CMAKE_CURRENT_LIST_DIR}/cmake/bundle.cmake)
+    include(${CMAKE_CURRENT_LIST_DIR}/cmake/install.cmake)
+endif()

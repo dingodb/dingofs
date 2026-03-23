@@ -34,5 +34,4 @@ target_link_libraries(vfs_metasystem_memory_lib
     absl::type_traits
     absl::optional
     absl::btree
-    ${FUSE3_LIBRARY}
 )

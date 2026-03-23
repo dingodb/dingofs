@@ -1,0 +1,43 @@
+[build-system]
+requires = ["scikit-build-core>=0.9"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "dingofs"
+version = "0.1.0"
+description = "Python SDK for DingoFS distributed filesystem"
+readme = "sdk/python/README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.9"
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: C++",
+    "Operating System :: POSIX :: Linux",
+]
+
+[tool.scikit-build]
+cmake.build-type = "Release"
+
+# 只开启 Python 绑定，关闭其余不需要的目标
+cmake.args = [
+    "-DBUILD_PYTHON_BINDINGS=ON",
+    "-DBUILD_UNIT_TESTS=OFF",
+    "-DBUILD_INTEGRATION_TESTS=OFF",
+    "-DDINGOFS_BUILD_SDK=OFF",
+    "-DWITH_TIKVCPP=OFF",
+]
+
+# Python 包源码在 python/dingofs/，wheel 内导入路径为 dingofs
+wheel.packages = ["sdk/python/dingofs"]
+
+build-dir = "build/{wheel_tag}"
+
+[tool.cibuildwheel]
+before-build = "rm -rf {project}/build"
+build = "*-manylinux*"
+skip = "*-musllinux* pp*"
+manylinux-x86_64-image = "dingodatabase/dingo-eureka:manylinux_2_34-fs"
+
+[tool.cibuildwheel.linux]
+archs = ["x86_64"]

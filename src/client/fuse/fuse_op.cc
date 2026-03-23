@@ -31,17 +31,18 @@
 #include "client/fuse/fs_context.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/data_buffer.h"
+#include "common/io_buffer.h"
 #include "client/vfs/vfs_meta.h"
+#include "client/fuse/fuse_upgrade_manager.h"
 #include "client/vfs/vfs_wrapper.h"
 #include "common/const.h"
 #include "common/helper.h"
-#include "common/io_buffer.h"
 #include "common/options/client.h"
 #include "common/status.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
 
-static dingofs::client::vfs::VFSWrapper* g_vfs = nullptr;
+static dingofs::client::VFSWrapper* g_vfs = nullptr;
 
 USING_FLAG(fuse_enable_direct_io)
 USING_FLAG(fuse_enable_keep_cache)
@@ -51,6 +52,9 @@ USING_FLAG(fuse_dryrun_bench_mode)
 using dingofs::Status;
 using dingofs::client::vfs::Attr;
 using dingofs::client::vfs::FsStat;
+using dingofs::client::vfs::Attr2Str;
+using dingofs::client::fuse::FuseUpgradeManager;
+using dingofs::client::fuse::FuseUpgradeState;
 
 namespace {
 
@@ -191,7 +195,7 @@ static void ReplyData(fuse_req_t req, char* buffer, size_t size) {
 }
 
 static void ReplyData(fuse_req_t req,
-                      dingofs::client::vfs::DataBuffer& data_buffer) {
+                      dingofs::client::DataBuffer& data_buffer) {
   auto iovecs = data_buffer.GatherIOVecs();
 
   if (iovecs.empty()) {
@@ -213,9 +217,13 @@ static void ReplyData(fuse_req_t req,
   }
 
   if (iovecs.size() < dingofs::client::kFuseMaxIovSize) {
-    int ret = fuse_reply_iov(
-        req, reinterpret_cast<const struct iovec*>(iovecs.data()),
-        static_cast<int>(iovecs.size()));
+    std::vector<struct iovec> sys_iovecs;
+    sys_iovecs.reserve(iovecs.size());
+    for (const auto& iov : iovecs) {
+      sys_iovecs.push_back({iov.iov_base, static_cast<size_t>(iov.iov_len)});
+    }
+    int ret = fuse_reply_iov(req, sys_iovecs.data(),
+                             static_cast<int>(sys_iovecs.size()));
     if (ret != 0) {
       LOG(ERROR) << fmt::format("[fuse] fuse_reply_data fail, ret({}).", errno);
     }
@@ -333,12 +341,12 @@ static std::string FuseCtx(fuse_req_t req) {
 }
 
 static void PrintReadyInfo(struct MountOption* mount_option) {
-  dingofs::blockaccess::BlockAccessOptions block_options =
-      g_vfs->GetBlockAccesserOptions();
-
   // print config info
-  dingofs::Helper::PrintConfigInfo(
-      dingofs::client::GenConfigs(mount_option->meta_url, block_options));
+  std::string info;
+  auto s = g_vfs->GetInfo(&info);
+  if (s.ok()) {
+    LOG(INFO) << "[dingofs] client info: " << info;
+  }
 
   std::cout << fmt::format("\n{} is ready at {}\n\n", mount_option->fs_name,
                            mount_option->mount_point);
@@ -352,22 +360,27 @@ void FuseOpInit(void* userdata, struct fuse_conn_info* conn) {
   struct MountOption* mount_option = fs_context->mount_option;
   CHECK_NOTNULL(mount_option);
 
-  dingofs::client::vfs::VFSConfig config;
+  dingofs::client::DingofsConfig config;
   config.mds_addrs = mount_option->mds_addrs;
   config.mount_point = mount_option->mount_point;
   config.fs_name = mount_option->fs_name;
-  config.metasystem_type = mount_option->metasystem_type;
+  config.metasystem_type =
+      dingofs::MetaSystemTypeToString(mount_option->metasystem_type);
   config.storage_info = mount_option->storage_info;
 
-  LOG(INFO) << "InitFuseClient meta_system_type: "
-            << dingofs::MetaSystemTypeToString(config.metasystem_type)
+  LOG(INFO) << "InitFuseClient meta_system_type: " << config.metasystem_type
             << ", mds addrs: " << config.mds_addrs
             << ", storage info: " << config.storage_info
             << ", fs name: " << config.fs_name
             << ", meta_url: " << mount_option->meta_url;
 
-  g_vfs = new dingofs::client::vfs::VFSWrapper();
-  Status s = g_vfs->Start(config);
+  g_vfs = new dingofs::client::VFSWrapper();
+  int upgrade_from_pid = 0;
+  if (FuseUpgradeManager::GetInstance().GetFuseState() ==
+      FuseUpgradeState::kFuseUpgradeNew) {
+    upgrade_from_pid = FuseUpgradeManager::GetInstance().GetOldFusePid();
+  }
+  Status s = g_vfs->Start(config, upgrade_from_pid);
   if (!s.ok()) {
     LOG(ERROR) << "start vfs fail, status: " << s.ToString();
     fs_context->fuse_server->Shutdown();
@@ -384,7 +397,9 @@ void FuseOpInit(void* userdata, struct fuse_conn_info* conn) {
 void FuseOpDestroy(void* userdata) {
   VLOG(1) << "FuseOpDestroy userdata: " << userdata;
   if (g_vfs) {
-    g_vfs->Stop();
+    const bool handover = (FuseUpgradeManager::GetInstance().GetFuseState() ==
+                           FuseUpgradeState::kFuseUpgradeOld);
+    g_vfs->Stop(handover);
     delete g_vfs;
   }
 }
@@ -567,7 +582,7 @@ void FuseOpRead(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
       ↓
   FuseOpRead IOBuffer
   */
-  dingofs::client::vfs::DataBuffer data_buffer;
+  dingofs::client::DataBuffer data_buffer;
 
   if (FLAGS_fuse_dryrun_bench_mode) {
     static constexpr int64_t kStaticMemSize = 4 * 1024 * 1024;  // 4MB
@@ -575,8 +590,7 @@ void FuseOpRead(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
     CHECK_GT(kStaticMemSize, size)
         << "dryrun static memory is not enough, size: " << size;
 
-    data_buffer.RawIOBuffer()->AppendUserData(kStaticMemory, size,
-                                              [](void*) {});
+    data_buffer.RawIOBuffer()->AppendUserData(kStaticMemory, size, [](void*) {});
     ReplyData(req, data_buffer);
     return;
   }

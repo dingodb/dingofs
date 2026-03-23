@@ -20,8 +20,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_CLIENT_ACCESS_LOG_H_
-#define DINGOFS_CLIENT_ACCESS_LOG_H_
+#ifndef DINGOFS_CLIENT_VFS_ACCESS_LOG_H_
+#define DINGOFS_CLIENT_VFS_ACCESS_LOG_H_
 
 #include <absl/strings/str_format.h>
 #include <butil/time.h>
@@ -75,4 +75,4 @@ struct AccessLogGuard {
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_CLIENT_ACCESS_LOG_H_
+#endif  // DINGOFS_CLIENT_VFS_ACCESS_LOG_H_

@@ -88,9 +88,7 @@ static dingofs::FlagExtraInfo extras = {
   $ dingo-client mds://10.220.69.10:7400/myfs /mnt/dingofs
   $ dingo-client --conf client.conf mds://10.220.32.1:6700/myfs /mnt/dingofs
 )",
-    .patterns = {"src/client", "cache/common", "cache/storage",
-                 "cache/tiercache", "cache/blockcache", "cache/remotecache",
-                 "options/blockaccess", "options/client", "options/common"},
+    .patterns = dingofs::kSdkFlagPatterns,
 };
 
 int main(int argc, char* argv[]) {

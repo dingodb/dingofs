@@ -41,11 +41,13 @@ endif()
 
 find_path(FUSE3_INCLUDE_DIR
           NAMES fuse_lowlevel.h
+          HINTS ${THIRD_PARTY_INSTALL_PATH}/include
           PATH_SUFFIXES fuse3
 )
 
 find_library(FUSE3_LIBRARY
              NAMES fuse3
+             HINTS ${THIRD_PARTY_INSTALL_PATH}/lib
 )
 
 mark_as_advanced(FUSE3_INCLUDE_DIR FUSE3_LIBRARY)

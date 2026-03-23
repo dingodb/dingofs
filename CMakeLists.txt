@@ -15,8 +15,9 @@
 # if compile_commands.json is needed, please enable CMAKE_EXPORT_COMPILE_COMMANDS, of use `bear --append -- make` to do make, it's more recommended to use bear.
 
 cmake_minimum_required(VERSION 3.25 FATAL_ERROR)
-project(dingofs C CXX)
+project(dingofs VERSION 5.1.0 LANGUAGES C CXX)
 
+option(DINGOFS_BUILD_SDK "Build and install the DingoFS client SDK (fat static library)" OFF)
 option(BUILD_UNIT_TESTS "Build unit test" OFF)
 option(BUILD_INTEGRATION_TESTS "Build integration test" OFF)
 option(USE_TCMALLOC "Use tcmalloc" ON)
@@ -30,6 +31,8 @@ endif()
 message("CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 
 message("SYSTEM: ${CMAKE_HOST_SYSTEM_NAME} ${CMAKE_HOST_SYSTEM_PROCESSOR}")
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(CMAKE_EXE_LINKER_FLAGS "-static-libgcc -static-libstdc++")
 
@@ -59,6 +62,14 @@ if(NOT DINGOSDK_INSTALL_PATH)
   endif()
 endif()
 message("DINGOSDK_INSTALL_PATH:${DINGOSDK_INSTALL_PATH}")
+
+# dingofs SDK install prefix
+# Default: ~/.local/dingofs  Override: cmake -DCMAKE_INSTALL_PREFIX=/your/path ..
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+  set(CMAKE_INSTALL_PREFIX "$ENV{HOME}/.local/dingofs"
+      CACHE PATH "Install prefix for dingofs SDK (default: ~/.local/dingofs)" FORCE)
+endif()
+message("CMAKE_INSTALL_PREFIX: ${CMAKE_INSTALL_PREFIX}")
 
 set(CMAKE_PREFIX_PATH
   ${THIRD_PARTY_INSTALL_PATH}
@@ -252,12 +263,17 @@ message("Using rados: ${RADOS_LIBRARIES}")
 find_package(dingosdk REQUIRED)
 message(STATUS "Found dingosdk: ${dingosdk_VERSION}")
 
-find_package(tikvcpp REQUIRED)
-message(STATUS "Found tikvcpp: ${tikvcpp_VERSION}")
+option(WITH_TIKVCPP "Find and link against tikvcpp (TiKV client)" ON)
+if(WITH_TIKVCPP)
+  find_package(tikvcpp REQUIRED)
+  message(STATUS "Found tikvcpp: ${tikvcpp_VERSION}")
+  add_compile_definitions(WITH_TIKVCPP)
+endif()
 
 # ------------------------ related to source code ------------------------
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 set(PROTO_OUTPUT_DIR ${CMAKE_BINARY_DIR}/protos)
 
@@ -324,19 +340,24 @@ set_target_properties(PROTO_OBJS
   POSITION_INDEPENDENT_CODE ON
 )
 
+include(GNUInstallDirs)
+
+# When building Python bindings or the C shared library, all static libraries
+# must be compiled with -fPIC so they can be linked into a shared library.
+option(BUILD_C_API "Build the C shared library (libdingofs.so)" ON)
+if(BUILD_PYTHON_BINDINGS OR BUILD_C_API)
+    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+endif()
+
 add_subdirectory(src)
+add_subdirectory(sdk)
 
 if(BUILD_UNIT_TESTS)
   message(STATUS "Build unit test")
   add_subdirectory(test/unit)
 endif()
 
-
 if(BUILD_INTEGRATION_TESTS)
   message(STATUS "Build integration test")
   add_subdirectory(test/integration)
 endif()
-
-
-
-

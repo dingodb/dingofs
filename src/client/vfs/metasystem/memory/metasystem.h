@@ -194,8 +194,8 @@ class MemoryMetaSystem : public vfs::MetaSystem {
     PBInode inode;
   };
 
-  Status Init(bool upgrade) override;
-  void Stop(bool upgrade) override;
+  Status Init(bool skip_mount) override;
+  void Stop(bool skip_unmount) override;
 
   bool Dump(ContextSPtr ctx, Json::Value& value) override;
   bool Dump(const DumpOption& options, Json::Value& value) override;

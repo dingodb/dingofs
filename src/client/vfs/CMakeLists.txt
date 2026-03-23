@@ -25,15 +25,16 @@ add_subdirectory(compaction)
 add_library(vfs_lib
     vfs_impl.cc
     vfs_wrapper.cc
-    data_buffer.cc
     access_log.cc
 )
 
 target_link_libraries(vfs_lib
     PROTO_OBJS
+    client_buffer
     dingofs_common
     dingofs_trace
     dingofs_utils
+    vfs_block_store
     vfs_metasystem
     vfs_data
     vfs_hub

@@ -26,9 +26,9 @@
 #include "brpc/controller.h"
 #include "brpc/server.h"
 #include "butil/iobuf.h"
+#include "client/common/client_state.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/metasystem/meta_system.h"
-#include "client/vfs/vfs_wrapper.h"
 #include "common/version.h"
 #include "fmt/format.h"
 #include "fmt/ranges.h"
@@ -124,15 +124,14 @@ static std::string RenderTime(uint64_t diff_time_s) {
 }
 
 static void RenderEpochAndStartTime(butil::IOBufBuilder& os) {
-  using dingofs::client::vfs::VFSWrapper;
-
   uint64_t now_ms = utils::TimestampMs();
 
   os << R"(<div style="margin:2px;font-size:smaller;text-align:center">)";
   os << fmt::format(
-      R"(<p>epoch[{}] uptime[{}] accum_uptime[{}]</p>)", VFSWrapper::GetEpoch(),
-      RenderTime((now_ms - VFSWrapper::GetStartTime()) / 1000),
-      RenderTime((now_ms - VFSWrapper::GetFirstStartTime()) / 1000));
+      R"(<p>epoch[{}] uptime[{}] accum_uptime[{}]</p>)",
+      ClientState::GetEpoch(),
+      RenderTime((now_ms - ClientState::GetStartTime()) / 1000),
+      RenderTime((now_ms - ClientState::GetFirstStartTime()) / 1000));
   os << "</div>";
 }
 

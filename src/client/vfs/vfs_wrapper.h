@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
+ * Copyright (c) 2026 dingodb.com, Inc. All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,20 +14,31 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_CLIENT_VFS_WRAPPER_H_
-#define DINGOFS_CLIENT_VFS_WRAPPER_H_
+#ifndef DINGOFS_CLIENT_VFS_VFS_WRAPPER_H_
+#define DINGOFS_CLIENT_VFS_VFS_WRAPPER_H_
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <vector>
 
-#include "client/vfs/data_buffer.h"
 #include "client/vfs/vfs.h"
+#include "common/meta.h"
 #include "common/metrics/client/client.h"
+#include "common/status.h"
+#include "json/value.h"
 
 namespace dingofs {
 namespace client {
-namespace vfs {
+
+struct DingofsConfig {
+  std::string mds_addrs;
+  std::string mount_point;
+  std::string fs_name;
+  std::string metasystem_type;  // "mds", "memory", "local"
+  std::string storage_info;
+};
 
 class VFSWrapper {
  public:
@@ -35,13 +46,27 @@ class VFSWrapper {
 
   ~VFSWrapper() = default;
 
-  Status Start(const VFSConfig& vfs_conf);
+  // Normal start: upgrade_from_pid = 0.
+  // Graceful-upgrade start (new process taking over): upgrade_from_pid is the
+  // PID of the old process. The new process will restore client state from
+  // the old process's persisted state file and skip re-mounting the FS on MDS.
+  Status Start(const DingofsConfig& config, int upgrade_from_pid = 0);
 
-  Status Stop();
+  // Normal stop: handover = false.
+  // Graceful-upgrade stop (old process handing off): handover = true.
+  // The old process persists its state for the new process to read and skips
+  // unmounting the FS on MDS so the kernel connection remains intact.
+  Status Stop(bool handover = false);
 
-  double GetAttrTimeout(const FileType& type);
+  Status GetInfo(std::string* info);
 
-  double GetEntryTimeout(const FileType& type);
+  double GetAttrTimeout(FileType type);
+
+  double GetEntryTimeout(FileType type);
+
+  uint64_t GetFsId();
+
+  uint64_t GetMaxNameLength();
 
   Status Lookup(Ino parent, const std::string& name, Attr* attr);
 
@@ -56,13 +81,6 @@ class VFSWrapper {
 
   Status Unlink(Ino parent, const std::string& name);
 
-  /**
-   * Create a symlink in parent directory
-   * @param parent
-   * @param name to be created
-   * @param link the content of the symlink
-   * @param attr output
-   */
   Status Symlink(Ino parent, const std::string& name, uint32_t uid,
                  uint32_t gid, const std::string& link, Attr* attr);
 
@@ -109,41 +127,25 @@ class VFSWrapper {
 
   Status RmDir(Ino parent, const std::string& name);
 
+  Status StatFs(Ino ino, FsStat* fs_stat);
+
   Status Ioctl(Ino ino, uint32_t uid, unsigned int cmd, unsigned flags,
                const void* in_buf, size_t in_bufsz, char* out_buf,
                size_t out_bufsz);
 
-  Status StatFs(Ino ino, FsStat* fs_stat);
-
-  uint64_t GetFsId();
-
-  uint64_t GetMaxNameLength();
-
-  blockaccess::BlockAccessOptions GetBlockAccesserOptions();
-
-  static uint64_t GetEpoch() { return epoch_; }
-  static uint64_t GetStartTime() { return start_time_ms_; }
-  static uint64_t GetFirstStartTime() { return first_start_time_ms_; }
-
  private:
   bool Dump();
+
   bool Load(const Json::Value& value);
 
-  std::atomic<bool> started_ = false;
-  std::unique_ptr<VFS> vfs_;
+  std::atomic<bool> started_{false};
+  std::unique_ptr<vfs::VFS> vfs_;
   std::unique_ptr<metrics::client::ClientOpMetric> client_op_metric_;
-
-  uint32_t uid_;
-  uint32_t gid_;
-
-  // epoch for upgrade
-  inline static uint64_t epoch_ = 1;
-  inline static uint64_t start_time_ms_ = utils::TimestampMs();
-  inline static uint64_t first_start_time_ms_ = utils::TimestampMs();
+  uint32_t uid_{0};
+  uint32_t gid_{0};
 };
 
-}  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_CLIENT_VFS_WRAPPER_H_
+#endif  // DINGOFS_CLIENT_VFS_VFS_WRAPPER_H_

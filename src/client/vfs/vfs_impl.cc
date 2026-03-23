@@ -25,8 +25,10 @@
 
 #include "client/common/const.h"
 #include "client/vfs/common/helper.h"
+#include "common/blockaccess/accesser_common.h"
 #include "client/vfs/components/warmup_manager.h"
 #include "client/vfs/data/file.h"
+#include "client/vfs/data_buffer.h"
 #include "client/vfs/data_buffer.h"
 #include "client/vfs/handle/handle_manager.h"
 #include "client/vfs/vfs_fh.h"
@@ -38,6 +40,7 @@
 #include "common/trace/context.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
+#include "json/writer.h"
 #include "linux/fs.h"
 #include "utils/encode.h"
 #include "utils/net_common.h"
@@ -55,10 +58,10 @@ VFSImpl::VFSImpl(const VFSConfig& vfs_conf, const ClientId& client_id)
     : client_id_(client_id),
       vfs_hub_(std::make_unique<VFSHubImpl>(vfs_conf, client_id_)) {};
 
-Status VFSImpl::Start(bool upgrade) {
+Status VFSImpl::Start(bool skip_mount) {
   CHECK(vfs_hub_ != nullptr) << "vfs_hub is null";
 
-  DINGOFS_RETURN_NOT_OK(vfs_hub_->Start(upgrade));
+  DINGOFS_RETURN_NOT_OK(vfs_hub_->Start(skip_mount));
   meta_system_ = vfs_hub_->GetMetaSystem();
   handle_manager_ = vfs_hub_->GetHandleManager();
 
@@ -67,7 +70,7 @@ Status VFSImpl::Start(bool upgrade) {
   return Status::OK();
 }
 
-Status VFSImpl::Stop(bool upgrade) { return vfs_hub_->Stop(upgrade); }
+Status VFSImpl::Stop(bool skip_unmount) { return vfs_hub_->Stop(skip_unmount); }
 
 bool VFSImpl::Dump(ContextSPtr ctx, Json::Value& value) {
   CHECK(handle_manager_ != nullptr) << "handle_manager is null";
@@ -631,6 +634,52 @@ Status VFSImpl::Ioctl(ContextSPtr ctx, Ino ino, uint32_t uid, unsigned int cmd,
 uint64_t VFSImpl::GetFsId() { return 10; }
 
 uint64_t VFSImpl::GetMaxNameLength() { return FLAGS_vfs_meta_max_name_length; }
+
+Status VFSImpl::GetInfo(std::string* info) {
+  Json::Value root;
+
+  // FS Info
+  FsInfo fs_info = vfs_hub_->GetFsInfo();
+  root["fs_name"] = fs_info.name;
+  root["fs_id"] = fs_info.id;
+  root["chunk_size"] = static_cast<Json::UInt64>(fs_info.chunk_size);
+  root["block_size"] = static_cast<Json::UInt64>(fs_info.block_size);
+
+  // Storage type
+  const auto& storage = fs_info.storage_info;
+  switch (storage.store_type) {
+    case StoreType::kS3:
+      root["store_type"] = "S3";
+      root["s3_endpoint"] = storage.s3_info.endpoint;
+      root["s3_bucket"] = storage.s3_info.bucket_name;
+      break;
+    case StoreType::kRados:
+      root["store_type"] = "Rados";
+      root["rados_mon_host"] = storage.rados_info.mon_host;
+      root["rados_pool"] = storage.rados_info.pool_name;
+      break;
+    case StoreType::kLocalFile:
+      root["store_type"] = "LocalFile";
+      root["local_path"] = storage.file_info.path;
+      break;
+    default:
+      root["store_type"] = "Unknown";
+  }
+
+  // Block access options
+  blockaccess::BlockAccessOptions opts = vfs_hub_->GetBlockAccesserOptions();
+  root["max_inflight_bytes"] = static_cast<Json::UInt64>(
+      opts.throttle_options.maxAsyncRequestInflightBytes);
+  root["iops_total_limit"] =
+      static_cast<Json::UInt64>(opts.throttle_options.iopsTotalLimit);
+  root["bps_total_mb"] =
+      static_cast<Json::UInt64>(opts.throttle_options.bpsTotalMB);
+
+  Json::StreamWriterBuilder writer;
+  writer["indentation"] = "";
+  *info = Json::writeString(writer, root);
+  return Status::OK();
+}
 
 Status VFSImpl::StartBrpcServer() {
   int rc = 0;

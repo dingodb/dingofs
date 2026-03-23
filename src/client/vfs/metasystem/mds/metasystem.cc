@@ -29,6 +29,7 @@
 #include "client/vfs/metasystem/mds/mds_client.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/const.h"
+#include "client/vfs/data_buffer.h"
 #include "common/io_buffer.h"
 #include "common/logging.h"
 #include "common/options/client.h"
@@ -147,8 +148,8 @@ MDSMetaSystem::MDSMetaSystem(mds::FsInfoEntry fs_info_entry,
 
 MDSMetaSystem::~MDSMetaSystem() {}  // NOLINT
 
-Status MDSMetaSystem::Init(bool upgrade) {
-  LOG(INFO) << fmt::format("[meta.fs] init, upgrade({}).", upgrade);
+Status MDSMetaSystem::Init(bool skip_mount) {
+  LOG(INFO) << fmt::format("[meta.fs] init, skip_mount({}).", skip_mount);
 
   LOG(INFO) << fmt::format("[meta.fs] fs_info: {}.", fs_info_.ToString());
 
@@ -164,8 +165,8 @@ Status MDSMetaSystem::Init(bool upgrade) {
     return Status::Internal("init compact processor fail");
   }
 
-  // mount fs
-  if (!upgrade && !MountFs()) {
+  // mount fs — skipped when this is a new process inheriting an existing session
+  if (!skip_mount && !MountFs()) {
     return Status::MountFailed("mount fs fail");
   }
 
@@ -178,14 +179,14 @@ Status MDSMetaSystem::Init(bool upgrade) {
     return Status::Internal("init crontab fail");
   }
 
-  LOG(INFO) << fmt::format("[meta.fs] inited, upgrade({}).", upgrade);
+  LOG(INFO) << fmt::format("[meta.fs] inited, skip_mount({}).", skip_mount);
 
   return Status::OK();
 }
 
-void MDSMetaSystem::Stop(bool upgrade) {
-  LOG(INFO) << fmt::format("[meta.fs] stopping metasystem, upgrade({}).",
-                           upgrade);
+void MDSMetaSystem::Stop(bool skip_unmount) {
+  LOG(INFO) << fmt::format("[meta.fs] stopping metasystem, skip_unmount({}).",
+                           skip_unmount);
 
   stopped_.store(true);
 
@@ -199,12 +200,13 @@ void MDSMetaSystem::Stop(bool upgrade) {
 
   compact_processor_.Stop();
 
-  if (!upgrade) UnmountFs();
+  // Skipped when this is the old process handing off its session to the new process.
+  if (!skip_unmount) UnmountFs();
 
   mds_client_.Stop();
 
-  LOG(INFO) << fmt::format("[meta.fs] stopped metasystem, upgrade({}).",
-                           upgrade);
+  LOG(INFO) << fmt::format("[meta.fs] stopped metasystem, skip_unmount({}).",
+                           skip_unmount);
 }
 
 bool MDSMetaSystem::GetSummary(Json::Value& value) {
@@ -1055,7 +1057,7 @@ Status MDSMetaSystem::Write(ContextSPtr, Ino ino, const char* buf,
 }
 
 Status MDSMetaSystem::Read(ContextSPtr, Ino ino, uint64_t fh, uint64_t offset,
-                           uint64_t size, vfs::DataBuffer& data_buffer,
+                           uint64_t size, ::dingofs::client::DataBuffer& data_buffer,
                            uint64_t& out_rsize) {
   AssertStop();
 

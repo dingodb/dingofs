@@ -28,7 +28,9 @@
 #include "mds/filesystem/store_operation.h"
 #include "mds/storage/dingodb_storage.h"
 #include "mds/storage/storage.h"
+#ifdef WITH_TIKVCPP
 #include "mds/storage/tikv_storage.h"
+#endif
 
 namespace dingofs {
 namespace mds {
@@ -39,8 +41,10 @@ bool StoreClient::Init(const std::string& engine_type, const std::string& coor_a
 
   if (engine_type == "dingo-store") {
     kv_storage_ = DingodbStorage::New();
+#ifdef WITH_TIKVCPP
   } else if (engine_type == "tikv") {
     kv_storage_ = TikvStorage::New();
+#endif
   }
   CHECK(kv_storage_ != nullptr) << "new kv storage fail.";
 

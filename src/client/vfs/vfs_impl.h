@@ -43,9 +43,9 @@ class VFSImpl : public VFS {
 
   ~VFSImpl() override = default;
 
-  Status Start(bool upgrade) override;
+  Status Start(bool skip_mount) override;
 
-  Status Stop(bool upgrade) override;
+  Status Stop(bool skip_unmount) override;
 
   bool Dump(ContextSPtr ctx, Json::Value& value) override;
 
@@ -138,9 +138,7 @@ class VFSImpl : public VFS {
     return vfs_hub_->GetTraceManager();
   }
 
-  blockaccess::BlockAccessOptions GetBlockAccesserOptions() override {
-    return vfs_hub_->GetBlockAccesserOptions();
-  }
+  Status GetInfo(std::string* info) override;
 
  private:
   Status StartBrpcServer();

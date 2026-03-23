@@ -41,7 +41,6 @@ target_link_libraries(vfs_metasystem_mds_lib
     absl::type_traits
     absl::optional
     absl::btree
-    ${FUSE3_LIBRARY}
 )
 
 add_library(vfs_meta_mds_rpc_lib

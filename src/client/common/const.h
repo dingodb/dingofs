@@ -21,6 +21,8 @@
 #include <cstdint>
 #include <string>
 
+#include "common/const.h"
+
 namespace dingofs {
 namespace client {
 

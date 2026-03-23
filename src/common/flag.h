@@ -49,6 +49,14 @@ struct FlagsInfo {
   FlagExtraInfo extra_info;
 };
 
+// Source-file path patterns that identify dingofs SDK flags.
+// Used by both dingo-client --help and DingofsClient::ListOptions/PrintOptions.
+static const std::vector<std::string> kSdkFlagPatterns = {
+    "src/client",          "cache/common",     "cache/storage",
+    "cache/tiercache",     "cache/blockcache", "cache/remotecache",
+    "options/blockaccess", "options/client",   "options/common",
+};
+
 static FlagsInfo g_flags;
 
 class FlagsHelper {
@@ -60,6 +68,13 @@ class FlagsHelper {
   static std::string GenTemplate(const FlagsInfo& flags);
   static std::string GenCurrentFlags(const FlagsInfo& flags);
 
+  static std::vector<gflags::CommandLineFlagInfo> GetAllGFlags(
+      const std::string& program, const std::vector<std::string>& patterns);
+
+  // Override brpc flag defaults with dingofs-preferred values,
+  // but only when the user has not explicitly set them.
+  static void ResetBrpcFlagDefaultValue();
+
  private:
   struct Row {
     std::string name;
@@ -67,8 +82,6 @@ class FlagsHelper {
     std::string default_value;
   };
 
-  static std::vector<gflags::CommandLineFlagInfo> GetAllGFlags(
-      const std::string& program, const std::vector<std::string>& patterns);
   static std::vector<Row> Normalize(const FlagsInfo& flags);
 };
 

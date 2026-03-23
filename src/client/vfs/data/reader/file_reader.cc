@@ -40,6 +40,7 @@
 #include "client/vfs/data/common/common.h"
 #include "client/vfs/data/reader/chunk_reader.h"
 #include "client/vfs/hub/vfs_hub.h"
+#include "client/vfs/data_buffer.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
 #include "common/trace/context.h"

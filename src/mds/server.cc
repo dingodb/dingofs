@@ -41,7 +41,9 @@
 #include "mds/statistics/fs_stat.h"
 #include "mds/storage/dingodb_storage.h"
 #include "mds/storage/dummy_storage.h"
+#ifdef WITH_TIKVCPP
 #include "mds/storage/tikv_storage.h"
+#endif
 
 #ifdef USE_TCMALLOC
 #include "gperftools/malloc_extension.h"
@@ -197,8 +199,10 @@ bool Server::InitStorage(const std::string& store_url) {
     }
     kv_storage_ = DingodbStorage::New();
 
+#ifdef WITH_TIKVCPP
   } else if (FLAGS_mds_storage_engine == "tikv") {
     kv_storage_ = TikvStorage::New();
+#endif
 
   } else if (FLAGS_mds_storage_engine == "dummy") {
     kv_storage_ = DummyStorage::New();

@@ -58,9 +58,9 @@ class MetaSystem {
 
   virtual ~MetaSystem() = default;
 
-  virtual Status Init(bool upgrade) = 0;
+  virtual Status Init(bool skip_mount) = 0;
 
-  virtual void Stop(bool upgrade) = 0;
+  virtual void Stop(bool skip_unmount) = 0;
 
   virtual bool Dump(ContextSPtr ctx, Json::Value& value) = 0;
 
@@ -113,7 +113,7 @@ class MetaSystem {
 
   virtual Status Read(ContextSPtr ctx, Ino ino, uint64_t fh,  // NOLINT
                       uint64_t offset, uint64_t size,         // NOLINT
-                      vfs::DataBuffer& data_buffer,           // NOLINT
+                      DataBuffer& data_buffer,           // NOLINT
                       uint64_t& out_rsize) {                  // NOLINT
     return Status::NoData("not data");
   }

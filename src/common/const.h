@@ -31,9 +31,10 @@
 #include <string>
 #include <unordered_map>
 
+#include "common/meta.h"
+
 namespace dingofs {
 
-const uint64_t kRootIno = 1;
 const uint64_t kRootParentIno = 0;
 
 const uint64_t kRecycleIno = 2;
@@ -50,18 +51,6 @@ inline bool IsInternalName(const std::string& name) {
   return name == kStatsName || name == kRecycleName;
 }
 
-// set inode attribute flags
-constexpr uint32_t kSetAttrMode = 1 << 0;
-constexpr uint32_t kSetAttrUid = 1 << 1;
-constexpr uint32_t kSetAttrGid = 1 << 2;
-constexpr uint32_t kSetAttrSize = 1 << 3;
-constexpr uint32_t kSetAttrAtime = 1 << 4;
-constexpr uint32_t kSetAttrMtime = 1 << 5;
-constexpr uint32_t kSetAttrAtimeNow = 1 << 7;
-constexpr uint32_t kSetAttrMtimeNow = 1 << 8;
-constexpr uint32_t kSetAttrCtime = 1 << 10;
-constexpr uint32_t kSetAttrFlags = 1 << 11;
-constexpr uint32_t kSetAttrNlink = 1 << 12;
 
 const int kEmptyDirMinLinkNum = 2;
 

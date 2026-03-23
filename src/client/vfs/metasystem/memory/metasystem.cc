@@ -334,7 +334,7 @@ static MemoryMetaSystem::PBDentry GenDentry(uint32_t fs_id, uint64_t parent_ino,
   return dentry;
 }
 
-Status MemoryMetaSystem::Init(bool upgrade) {
+Status MemoryMetaSystem::Init(bool /*skip_mount*/) {
   // create fs
   fs_info_ = GenFsInfo();
 
@@ -357,7 +357,7 @@ Status MemoryMetaSystem::Init(bool upgrade) {
   return Status::OK();
 }
 
-void MemoryMetaSystem::Stop(bool upgrade) {}
+void MemoryMetaSystem::Stop(bool /*skip_unmount*/) {}
 
 bool MemoryMetaSystem::Dump(ContextSPtr ctx, Json::Value& value) {
   // Implement your dump logic here

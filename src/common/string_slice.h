@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_COMMON_SLICE_H_
-#define DINGOFS_COMMON_SLICE_H_
+#ifndef DINGOFS_COMMON_STRING_SLICE_H_
+#define DINGOFS_COMMON_STRING_SLICE_H_
 
 #include <cassert>
 #include <cstddef>
@@ -175,4 +175,4 @@ inline size_t StringSlice::difference_offset(const StringSlice& b) const {
 
 }  // namespace dingofs
 
-#endif  // DINGOFS_COMMON_SLICE_H_
+#endif  // DINGOFS_COMMON_STRING_SLICE_H_

@@ -119,11 +119,11 @@ VFSHubImpl::~VFSHubImpl() {
   }
 }
 
-Status VFSHubImpl::Start(bool upgrade) {
+Status VFSHubImpl::Start(bool skip_mount) {
   CHECK(started_.load(std::memory_order_relaxed) == false)
       << "unexpected start";
 
-  LOG(INFO) << fmt::format("[vfs.hub] vfs hub starting, upgrade({}).", upgrade);
+  LOG(INFO) << fmt::format("[vfs.hub] vfs hub starting, skip_mount({}).", skip_mount);
 
   // trace manager
   trace_manager_ = std::make_unique<TraceManager>();
@@ -145,7 +145,7 @@ Status VFSHubImpl::Start(bool upgrade) {
     }
 
     meta_wrapper_ = std::make_unique<MetaWrapper>(std::move(meta));
-    DINGOFS_RETURN_NOT_OK(meta_wrapper_->Init(upgrade));
+    DINGOFS_RETURN_NOT_OK(meta_wrapper_->Init(skip_mount));
   }
 
   // load fs info
@@ -299,12 +299,12 @@ Status VFSHubImpl::Start(bool upgrade) {
 }
 
 // NOTE: the stop sequence is important, please do not change it lightly.
-Status VFSHubImpl::Stop(bool upgrade) {
+Status VFSHubImpl::Stop(bool skip_unmount) {
   if (!started_.load(std::memory_order_relaxed)) {
     return Status::OK();
   }
 
-  LOG(INFO) << fmt::format("[vfs.hub] stopping vfs hub, upgrade({}).", upgrade);
+  LOG(INFO) << fmt::format("[vfs.hub] stopping vfs hub, skip_unmount({}).", skip_unmount);
 
   if (compactor_ != nullptr) {
     compactor_->Stop();
@@ -335,7 +335,7 @@ Status VFSHubImpl::Stop(bool upgrade) {
   }
 
   if (meta_wrapper_ != nullptr) {
-    meta_wrapper_->Stop(upgrade);
+    meta_wrapper_->Stop(skip_unmount);
   }
 
   if (block_store_ != nullptr) {
@@ -354,7 +354,7 @@ Status VFSHubImpl::Stop(bool upgrade) {
     logclean_manager_->Stop();
   }
 
-  LOG(INFO) << fmt::format("[vfs.hub] stopped vfs hub, upgrade({}).", upgrade);
+  LOG(INFO) << fmt::format("[vfs.hub] stopped vfs hub, skip_unmount({}).", skip_unmount);
 
   started_.store(false, std::memory_order_relaxed);
 

@@ -21,7 +21,6 @@ target_link_libraries(dingofs_trace
     dingofs_options
     dingofs_common
     dingofs_open_trace
-    mds_common
     glog::glog
     gflags::gflags
     spdlog::spdlog

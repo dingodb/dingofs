@@ -75,9 +75,9 @@ class MDSMetaSystem : public vfs::MetaSystem {
                                  TraceManager& trace_manager,
                                  Compactor& compactor);
 
-  Status Init(bool upgrade) override;
+  Status Init(bool skip_mount) override;
 
-  void Stop(bool upgrade) override;
+  void Stop(bool skip_unmount) override;
 
   bool GetSummary(Json::Value& value) override;
   // dump state for upgrade
@@ -122,7 +122,7 @@ class MDSMetaSystem : public vfs::MetaSystem {
                uint64_t size, uint64_t fh) override;
 
   Status Read(ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
-              uint64_t size, vfs::DataBuffer& data_buffer,
+              uint64_t size, ::dingofs::client::DataBuffer& data_buffer,
               uint64_t& out_rsize) override;
 
   Status MkDir(ContextSPtr ctx, Ino parent, const std::string& name,

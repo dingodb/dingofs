@@ -23,6 +23,7 @@ add_library(dingofs_utils
 
 target_link_libraries(dingofs_utils
     dingofs_executor
+    dingofs_options
     uuid_static
     brpc::brpc
     glog::glog

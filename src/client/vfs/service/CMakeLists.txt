@@ -22,7 +22,6 @@ target_link_libraries(vfs_service
     PROTO_OBJS
     vfs_data
     vfs_hub
-    mds_common
     client_options
     dingofs_common
     brpc::brpc

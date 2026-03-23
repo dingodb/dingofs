@@ -1,0 +1,35 @@
+#!/bin/sh
+# Bundle multiple static libraries into one fat archive.
+# Usage: bundle_libs.sh OUTPUT lib1.a lib2.a ...
+# cmake substitutes @_AR_BIN@ at configure time; all $shell vars are preserved.
+#
+# Uses "ar xN N" to extract all occurrences of duplicate-named members.
+# Plain "ar x" silently overwrites earlier members that share the same name.
+set -e
+AR="@_AR_BIN@"
+OUTPUT="$1"; shift
+TMPDIR="$(mktemp -d)"
+trap 'rm -rf "$TMPDIR"' EXIT
+
+lib_idx=0
+for lib; do
+    if [ -f "$lib" ]; then
+        dir="$TMPDIR/$lib_idx"
+        mkdir "$dir"
+        # Count occurrences of each member name, then extract each occurrence
+        # using ar xN <count> to avoid silent overwrites of duplicate names.
+        "$AR" t "$lib" 2>/dev/null | sort | uniq -c | while read cnt member; do
+            n=1
+            while [ "$n" -le "$cnt" ]; do
+                outfile="$dir/${lib_idx}__${n}__${member}.o"
+                (cd "$dir" && "$AR" xN "$n" "$lib" "$member" 2>/dev/null && \
+                 [ -f "$member" ] && mv "$member" "$outfile")
+                n=$((n + 1))
+            done
+        done
+    fi
+    lib_idx=$((lib_idx + 1))
+done
+
+find "$TMPDIR" -name '*.o' -size +0c | sort > "$TMPDIR/objs.rsp"
+"$AR" rcs "$OUTPUT" @"$TMPDIR/objs.rsp"

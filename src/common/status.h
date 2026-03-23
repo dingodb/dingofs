@@ -89,17 +89,23 @@ class Status {
  public:
   // Create a success status.
   Status() noexcept : code_(kOk), state_(nullptr) {}
+
   ~Status() = default;
 
   Status(const Status& rhs);
+
   Status& operator=(const Status& rhs);
 
   Status(Status&& rhs) noexcept;
+
   Status& operator=(Status&& rhs) noexcept;
+
   bool operator==(const Status& rhs) const { return code_ == rhs.code_; }
+
   bool operator!=(const Status& rhs) const { return code_ != rhs.code_; }
 
   bool ok() const { return code_ == kOk; }  // NOLINT
+
   static Status OK() { return Status(); }
 
   DECLARE_ERROR_STATUS(OK, kOk);

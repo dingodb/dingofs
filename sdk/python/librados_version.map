@@ -1,0 +1,5 @@
+/* Minimal version script: declare the LIBRADOS_14.2.0 version node so
+ * GNU ld >= 2.38 does not error when versioned symbols from librados.a
+ * are pulled into the Python extension shared library. */
+
+LIBRADOS_14.2.0 { };

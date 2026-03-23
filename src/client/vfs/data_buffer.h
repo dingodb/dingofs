@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
+ * Copyright (c) 2026 dingodb.com, Inc. All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_CLIENT_VFS_DATA_BUFFER_H_
-#define DINGOFS_CLIENT_VFS_DATA_BUFFER_H_
+#ifndef DINGOFS_CLIENT_DATA_BUFFER_H_
+#define DINGOFS_CLIENT_DATA_BUFFER_H_
 
 #include <cstdint>
 #include <string>
@@ -23,37 +23,42 @@
 
 namespace dingofs {
 
+// Opaque internal buffer type. Not for use by external consumers.
 class IOBuffer;
 
 namespace client {
-namespace vfs {
 
-/* Structure for scatter/gather I/O.  */
+/* Structure for scatter/gather I/O. */
 struct IOVec {
   void* iov_base;   /* Pointer to data.  */
   uint64_t iov_len; /* Length of data.  */
 };
 
+// DataBuffer is the zero-copy read buffer passed to DingofsClient::Read().
+// After Read() returns, use GatherIOVecs() to access the data segments.
+//
+// NOTE: RawIOBuffer() is for internal VFS use only; external callers should
+// only use GatherIOVecs() and Describe().
 class DataBuffer {
  public:
   DataBuffer();
 
   ~DataBuffer();
 
+  // Internal use only: returns the underlying IOBuffer for zero-copy writes.
   IOBuffer* RawIOBuffer();
 
-  // NOTE: DataBuffer must remain alive while using the returned iovecs
+  // Returns scatter/gather I/O vector. DataBuffer must remain alive while
+  // using the returned iovecs.
   std::vector<IOVec> GatherIOVecs() const;
 
   std::string Describe() const;
 
  private:
-  // takes ownership of buffer
   IOBuffer* io_buffer_;
 };
 
-}  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_CLIENT_VFS_DATA_BUFFER_H_
+#endif  // DINGOFS_CLIENT_DATA_BUFFER_H_

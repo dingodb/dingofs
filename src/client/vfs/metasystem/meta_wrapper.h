@@ -37,12 +37,12 @@ class MetaWrapper {
   MetaWrapper(MetaSystemUPtr target);
   ~MetaWrapper() = default;
 
-  Status Init(bool upgrade) {
+  Status Init(bool skip_mount) {
     CHECK(target_ != nullptr) << "meta system is null";
-    return target_->Init(upgrade);
+    return target_->Init(skip_mount);
   }
 
-  void Stop(bool upgrade) { target_->Stop(upgrade); }
+  void Stop(bool skip_unmount) { target_->Stop(skip_unmount); }
 
   bool Dump(ContextSPtr ctx, Json::Value& value) {
     return target_->Dump(ctx, value);
@@ -169,7 +169,7 @@ class MetaWrapper {
   }
 
   Status Read(ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
-              uint64_t size, vfs::DataBuffer& data_buffer,
+              uint64_t size, DataBuffer& data_buffer,
               uint64_t& out_rsize) {
     return target_->Read(ctx, ino, fh, offset, size, data_buffer, out_rsize);
   }

@@ -47,7 +47,7 @@ static std::string RedString(const std::string& str) {
   return absl::StrFormat("\x1B[31m%s\033[0m", str);
 }
 
-static void ResetBrpcFlagDefaultValue() {
+void FlagsHelper::ResetBrpcFlagDefaultValue() {
   for (const auto& [name, value] : kBrpcFlagDefaultValueMap) {
     gflags::CommandLineFlagInfo flag_info;
     if (!gflags::GetCommandLineFlagInfo(name.c_str(), &flag_info)) {
