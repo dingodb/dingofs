@@ -1,0 +1,23 @@
+# LMCache configuration with DingoFS connector
+#
+# Usage:
+#   LMCACHE_CONFIG_FILE=examples/lmcache_integration/lmcache_config.yaml \
+#       python your_app.py
+
+chunk_size: 256
+remote_url: "dingofs://host:0/mnt/dingofs/kv_cache"
+remote_serde: "naive"
+
+# Register the DingoFS connector plugin
+remote_storage_plugins:
+  - dingofs
+
+extra_config:
+  # Plugin discovery
+  remote_storage_plugin.dingofs.module_path: "dingofs_connector.adapter"
+  remote_storage_plugin.dingofs.class_name: "DingoFSConnectorAdapter"
+
+  # DingoFS tuning
+  dingofs_num_workers: 8         # I/O thread count (8-16 recommended)
+  dingofs_use_odirect: false     # Set true to bypass page cache
+  dingofs_sync_mode: "always"    # "always" or "none"

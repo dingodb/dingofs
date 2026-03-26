@@ -1,0 +1,19 @@
+[build-system]
+requires = ["scikit-build-core>=0.9"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "dingofs-connector"
+version = "0.1.0"
+description = "DingoFS connector for LMCache KV cache storage"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+
+[project.optional-dependencies]
+test = ["pytest", "pytest-asyncio"]
+lmcache = ["lmcache"]
+
+[tool.scikit-build]
+cmake.build-type = "Release"
+cmake.define.BUILD_TESTS = "OFF"
+wheel.packages = ["src/dingofs_connector"]
