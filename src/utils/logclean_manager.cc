@@ -41,6 +41,15 @@ namespace fs = std::filesystem;
 
 static constexpr int kCleanIntervalMs = 60000;  // 60 seconds
 
+#define LOG_FILES(prefix) \
+  prefix ".INFO", prefix ".ERROR", prefix ".WARNING", prefix ".Fatal"
+
+static constexpr std::array<std::string_view, 12> kLinkLogFiles = {
+    LOG_FILES("dingo-client"), LOG_FILES("dingo-cache"),
+    LOG_FILES("dingo-mds")};
+
+#undef LOG_FILES
+
 Status LogCleanManager::Start() {
   CHECK(FLAGS_log_retention_seconds > 0)
       << "Log retention seconds must be greater than 0";
@@ -95,6 +104,21 @@ void LogCleanManager::ScheduleClean() {
   executor_->Schedule([this]() { ScheduleClean(); }, kCleanIntervalMs);
 }
 
+std::unordered_set<std::string> LogCleanManager::GenerateProjectFiles() const {
+  // Build a set of target files that kLinkLogFiles symlinks point to
+  std::unordered_set<std::string> project_files;
+  std::error_code ec;
+  for (const auto& link_file : kLinkLogFiles) {
+    fs::path link_path = log_dir_ / link_file;
+    fs::path target_path = fs::read_symlink(link_path, ec);
+    if (!ec) {
+      project_files.insert(target_path.filename().string());
+    }
+  }
+
+  return project_files;
+}
+
 void LogCleanManager::CleanLogs() {
   LOG(INFO) << "Start cleaning logs...";
 
@@ -103,10 +127,9 @@ void LogCleanManager::CleanLogs() {
     return;
   }
 
-  fs::path log_dir(log_dir_);
   std::error_code ec;
 
-  if (!fs::exists(log_dir, ec) || !fs::is_directory(log_dir, ec)) {
+  if (!fs::exists(log_dir_, ec) || !fs::is_directory(log_dir_, ec)) {
     LOG(ERROR) << "Check log dir error: " << ec.message();
     return;
   }
@@ -120,7 +143,7 @@ void LogCleanManager::CleanLogs() {
 
   auto now = utils::TimeNow();
 
-  for (const auto& entry : fs::directory_iterator(log_dir, ec)) {
+  for (const auto& entry : fs::directory_iterator(log_dir_, ec)) {
     if (ec) {
       LOG(ERROR) << "Scan directory error: " << ec.message();
       break;
@@ -138,6 +161,13 @@ void LogCleanManager::CleanLogs() {
 
     if (!entry.is_regular_file(ec)) {
       ec.clear();
+      continue;
+    }
+
+    const auto& project_files_ = GenerateProjectFiles();
+    // Skip if this file is a target of a symlink in kLinkLogFiles
+    if (project_files_.count(filename)) {
+      LOG(INFO) << "Skip for symlinks point to file: " << filename;
       continue;
     }
 

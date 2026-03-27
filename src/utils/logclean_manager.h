@@ -21,7 +21,9 @@
 #include <gflags/gflags_declare.h>
 
 #include <atomic>
+#include <filesystem>
 #include <memory>
+#include <unordered_set>
 
 #include "common/status.h"
 #include "utils/executor/executor.h"
@@ -46,12 +48,13 @@ class LogCleanManager {
   Status Stop();
 
  private:
+  std::unordered_set<std::string> GenerateProjectFiles() const;
   void CleanLogs();
   void ScheduleClean();
 
   std::unique_ptr<Executor> executor_;
   std::atomic<bool> running_{false};
-  std::string log_dir_;
+  std::filesystem::path log_dir_;
 };
 
 }  // namespace utils
