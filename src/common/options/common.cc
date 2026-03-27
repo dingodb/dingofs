@@ -37,4 +37,8 @@ DEFINE_validator(log_clean_filter_pattern,
                    return !value.empty();
                  });
 
+// numa
+DEFINE_bool(numa_bind_enable, false, "enable numa bind");
+DEFINE_int32(numa_bind_node, 0, "numa bind node");
+
 }  // namespace dingofs
