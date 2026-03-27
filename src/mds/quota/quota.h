@@ -24,6 +24,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "common/metrics/mds/quota_metrics.h"
 #include "mds/common/runnable.h"
 #include "mds/common/status.h"
 #include "mds/common/tracing.h"
@@ -182,13 +183,8 @@ class DeleteDirQuotaTask : public TaskRunnable {
 class QuotaManager {
  public:
   QuotaManager(FsInfoSPtr fs_info, ParentMemo& parent_memo, OperationProcessorSPtr operation_processor,
-               WorkerSetSPtr worker_set, notify::NotifyBuddySPtr notify_buddy)
-      : fs_info_(fs_info),
-        fs_quota_(fs_info->GetFsId(), 0, {}),
-        dir_quota_map_(fs_info->GetFsId(), parent_memo, operation_processor),
-        operation_processor_(std::move(operation_processor)),
-        worker_set_(std::move(worker_set)),
-        notify_buddy_(notify_buddy) {}
+               WorkerSetSPtr worker_set, notify::NotifyBuddySPtr notify_buddy);
+
   ~QuotaManager() = default;
 
   QuotaManager(const QuotaManager&) = delete;
@@ -220,9 +216,27 @@ class QuotaManager {
   Status LoadQuota();
   Status FlushUsage();
 
-  // Status GetActualUsage(Ino ino, UsageEntry& usage);
-
  private:
+  static int64_t GetFsUsedBytes(void* arg) {
+    auto* manager = reinterpret_cast<QuotaManager*>(arg);
+    return manager->fs_quota_.GetQuota().used_bytes();
+  }
+
+  static int64_t GetFsUsedInodes(void* arg) {
+    auto* manager = reinterpret_cast<QuotaManager*>(arg);
+    return manager->fs_quota_.GetQuota().used_inodes();
+  }
+
+  static int64_t GetFsMaxBytes(void* arg) {
+    auto* manager = reinterpret_cast<QuotaManager*>(arg);
+    return manager->fs_quota_.GetQuota().max_bytes();
+  }
+
+  static int64_t GetFsMaxInodes(void* arg) {
+    auto* manager = reinterpret_cast<QuotaManager*>(arg);
+    return manager->fs_quota_.GetQuota().max_inodes();
+  }
+
   Status FlushFsUsage();
   Status FlushDirUsage();
 
@@ -239,8 +253,9 @@ class QuotaManager {
 
   WorkerSetSPtr worker_set_;
 
-  // notify buddy
   notify::NotifyBuddySPtr notify_buddy_;
+
+  metrics::mds::FsQuotaMetric fs_quota_metric_;
 };
 
 }  // namespace quota

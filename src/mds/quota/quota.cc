@@ -342,6 +342,17 @@ void DeleteDirQuotaTask::Run() {
   quota_manager_.DeleteDirQuota(trace, ino_);
 }
 
+QuotaManager::QuotaManager(FsInfoSPtr fs_info, ParentMemo& parent_memo, OperationProcessorSPtr operation_processor,
+                           WorkerSetSPtr worker_set, notify::NotifyBuddySPtr notify_buddy)
+    : fs_info_(fs_info),
+      fs_quota_(fs_info->GetFsId(), 0, {}),
+      dir_quota_map_(fs_info->GetFsId(), parent_memo, operation_processor),
+      operation_processor_(std::move(operation_processor)),
+      worker_set_(std::move(worker_set)),
+      notify_buddy_(notify_buddy),
+      fs_quota_metric_(fmt::format("fs_quota_{}", fs_info->GetName()), this, GetFsUsedBytes, GetFsUsedInodes,
+                       GetFsMaxBytes, GetFsMaxInodes) {}
+
 bool QuotaManager::Init() {
   CHECK(fs_info_ != nullptr) << "[quota] fs_info is nullptr.";
   const uint32_t fs_id = fs_info_->GetFsId();
