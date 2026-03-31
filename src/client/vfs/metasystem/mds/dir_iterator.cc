@@ -43,8 +43,12 @@ void DirIterator::Remember(uint64_t off) { offset_stats_.push_back(off); }
 
 Status DirIterator::GetValue(ContextSPtr& ctx, uint64_t off, bool with_attr,
                              DirEntry& dir_entry) {
-  CHECK(off >= offset_) << fmt::format(
-      "[dir_iterator.{}.{}] off out of range, {} {}.", ino_, fh_, offset_, off);
+  if (off < offset_) {
+    LOG(ERROR) << fmt::format("[dir_iterator.{}.{}] off out of range, {} {}.",
+                              ino_, fh_, offset_, off);
+    return Status::Internal(
+        fmt::format("off out of range, {} {}", offset_, off));
+  }
 
   with_attr_ = with_attr;
 
