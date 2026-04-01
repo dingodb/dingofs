@@ -15,6 +15,8 @@
 #ifndef DINGOFS_SRC_CLIENT_VFS_META_MDS_DIR_ITERATOR_H_
 #define DINGOFS_SRC_CLIENT_VFS_META_MDS_DIR_ITERATOR_H_
 
+#include <absl/container/btree_map.h>
+
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -67,6 +69,7 @@ class DirIterator {
 
  private:
   Status Fetch(ContextSPtr& ctx);
+  Status SeekBackward(ContextSPtr& ctx, uint64_t off);
 
   const Ino ino_;
   const uint64_t fh_;
@@ -75,6 +78,9 @@ class DirIterator {
   uint64_t offset_{0};
   std::string last_name_;
   std::vector<DirEntry> entries_;
+
+  // offset -> last name, used for backward readdir
+  std::map<uint64_t, std::string> last_name_memo_;
 
   bool is_fetch_{false};
   std::atomic<uint64_t> last_fetch_time_ns_{0};

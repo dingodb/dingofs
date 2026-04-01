@@ -31,10 +31,10 @@ class MockMetaSystem : public MetaSystem {
   MOCK_METHOD(Status, Init, (bool skip_mount), (override));
   MOCK_METHOD(void, Stop, (bool skip_unmount), (override));
   MOCK_METHOD(bool, Dump, (ContextSPtr ctx, Json::Value& value), (override));
-  MOCK_METHOD(bool, Dump,
-              (const DumpOption& options, Json::Value& value), (override));
-  MOCK_METHOD(bool, Load,
-              (ContextSPtr ctx, const Json::Value& value), (override));
+  MOCK_METHOD(bool, Dump, (const DumpOption& options, Json::Value& value),
+              (override));
+  MOCK_METHOD(bool, Load, (ContextSPtr ctx, const Json::Value& value),
+              (override));
   MOCK_METHOD(Status, Lookup,
               (ContextSPtr ctx, Ino parent, const std::string& name,
                Attr* attr),
@@ -59,8 +59,8 @@ class MockMetaSystem : public MetaSystem {
               (ContextSPtr ctx, Ino ino, uint64_t index, uint64_t fh,
                std::vector<Slice>* slices, uint64_t& version),
               (override));
-  MOCK_METHOD(Status, NewSliceId,
-              (ContextSPtr ctx, Ino ino, uint64_t* id), (override));
+  MOCK_METHOD(Status, NewSliceId, (ContextSPtr ctx, Ino ino, uint64_t* id),
+              (override));
   MOCK_METHOD(Status, WriteSlice,
               (ContextSPtr ctx, Ino ino, uint64_t index, uint64_t fh,
                const std::vector<Slice>& slices),
@@ -113,7 +113,7 @@ class MockMetaSystem : public MetaSystem {
               (override));
   MOCK_METHOD(Status, ReadDir,
               (ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
-               bool with_attr, ReadDirHandler handler),
+               bool with_attr, ReadDirHandler handler, uint32_t& count),
               (override));
   MOCK_METHOD(Status, ReleaseDir, (ContextSPtr ctx, Ino ino, uint64_t fh),
               (override));
@@ -125,8 +125,8 @@ class MockMetaSystem : public MetaSystem {
               (override));
   MOCK_METHOD(Status, GetFsInfo, (ContextSPtr ctx, FsInfo* fs_info),
               (override));
-  MOCK_METHOD(bool, GetDescription, (Json::Value& value), (override));
-  MOCK_METHOD(bool, GetSummary, (Json::Value& value), (override));
+  MOCK_METHOD(bool, GetDescription, (Json::Value & value), (override));
+  MOCK_METHOD(bool, GetSummary, (Json::Value & value), (override));
 };
 
 }  // namespace test

@@ -25,14 +25,13 @@
 
 #include "client/common/const.h"
 #include "client/vfs/common/helper.h"
-#include "common/blockaccess/accesser_common.h"
 #include "client/vfs/components/warmup_manager.h"
 #include "client/vfs/data/file.h"
-#include "client/vfs/data_buffer.h"
 #include "client/vfs/data_buffer.h"
 #include "client/vfs/handle/handle_manager.h"
 #include "client/vfs/vfs_fh.h"
 #include "client/vfs/vfs_xattr.h"
+#include "common/blockaccess/accesser_common.h"
 #include "common/const.h"
 #include "common/metrics/metrics_dumper.h"
 #include "common/options/client.h"
@@ -516,7 +515,8 @@ Status VFSImpl::OpenDir(ContextSPtr ctx, Ino ino, uint64_t* fh,
 }
 
 Status VFSImpl::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
-                        bool with_attr, ReadDirHandler handler) {
+                        bool with_attr, ReadDirHandler handler,
+                        uint32_t& count) {
   // root dir(add .stats file)
   if (BAIDU_UNLIKELY(ino == kRootIno) && offset == 0) {
     DirEntry stats_entry{kStatsIno, kStatsName,
@@ -524,7 +524,7 @@ Status VFSImpl::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
     handler(stats_entry, 1);  // pos 0 is the offset for .stats entry
   }
 
-  return meta_system_->ReadDir(ctx, ino, fh, offset, with_attr, handler);
+  return meta_system_->ReadDir(ctx, ino, fh, offset, with_attr, handler, count);
 }
 
 Status VFSImpl::ReleaseDir(ContextSPtr ctx, Ino ino, uint64_t fh) {

@@ -25,11 +25,11 @@
 #include <vector>
 
 #include "client/vfs/common/client_id.h"
+#include "client/vfs/data_buffer.h"
 #include "client/vfs/metasystem/mds/helper.h"
 #include "client/vfs/metasystem/mds/mds_client.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/const.h"
-#include "client/vfs/data_buffer.h"
 #include "common/io_buffer.h"
 #include "common/logging.h"
 #include "common/options/client.h"
@@ -165,7 +165,8 @@ Status MDSMetaSystem::Init(bool skip_mount) {
     return Status::Internal("init compact processor fail");
   }
 
-  // mount fs — skipped when this is a new process inheriting an existing session
+  // mount fs — skipped when this is a new process inheriting an existing
+  // session
   if (!skip_mount && !MountFs()) {
     return Status::MountFailed("mount fs fail");
   }
@@ -200,7 +201,8 @@ void MDSMetaSystem::Stop(bool skip_unmount) {
 
   compact_processor_.Stop();
 
-  // Skipped when this is the old process handing off its session to the new process.
+  // Skipped when this is the old process handing off its session to the new
+  // process.
   if (!skip_unmount) UnmountFs();
 
   mds_client_.Stop();
@@ -1057,7 +1059,8 @@ Status MDSMetaSystem::Write(ContextSPtr, Ino ino, const char* buf,
 }
 
 Status MDSMetaSystem::Read(ContextSPtr, Ino ino, uint64_t fh, uint64_t offset,
-                           uint64_t size, ::dingofs::client::DataBuffer& data_buffer,
+                           uint64_t size,
+                           ::dingofs::client::DataBuffer& data_buffer,
                            uint64_t& out_rsize) {
   AssertStop();
 
@@ -1167,7 +1170,7 @@ Status MDSMetaSystem::OpenDir(ContextSPtr, Ino ino, uint64_t fh,
 
 Status MDSMetaSystem::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
                               uint64_t offset, bool with_attr,
-                              ReadDirHandler handler) {
+                              ReadDirHandler handler, uint32_t& count) {
   AssertStop();
 
   auto dir_iterator = dir_iterator_manager_.Get(ino, fh);
@@ -1194,6 +1197,7 @@ Status MDSMetaSystem::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
     if (!handler(entry, offset)) {
       break;
     }
+    ++count;
   }
 
   return Status::OK();

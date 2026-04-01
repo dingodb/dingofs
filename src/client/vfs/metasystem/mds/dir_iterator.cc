@@ -43,8 +43,13 @@ void DirIterator::Remember(uint64_t off) { offset_stats_.push_back(off); }
 
 Status DirIterator::GetValue(ContextSPtr& ctx, uint64_t off, bool with_attr,
                              DirEntry& dir_entry) {
-  CHECK(off >= offset_) << fmt::format(
-      "[dir_iterator.{}.{}] off out of range, {} {}.", ino_, fh_, offset_, off);
+  if (off < offset_) {
+    LOG(INFO) << fmt::format(
+        "[dir_iterator.{}.{}] seek backward, off({}) offset({}).", ino_, fh_,
+        off, offset_);
+    auto status = SeekBackward(ctx, off);
+    if (!status.ok()) return status;
+  }
 
   with_attr_ = with_attr;
 
@@ -86,7 +91,22 @@ Status DirIterator::Fetch(ContextSPtr& ctx) {
     last_name_ = entries_.back().name;
   }
 
+  last_name_memo_.insert({offset_, last_name_});
+
   return Status::OK();
+}
+
+Status DirIterator::SeekBackward(ContextSPtr& ctx, uint64_t off) {
+  auto it = last_name_memo_.lower_bound(off);
+  CHECK(it != last_name_memo_.end()) << fmt::format(
+      "[dir_iterator.{}.{}] seek backward fail, off({}) offset({}).", ino_, fh_,
+      off, offset_);
+
+  entries_.clear();
+  offset_ = it->first;
+  last_name_ = it->second;
+
+  return Fetch(ctx);
 }
 
 size_t DirIterator::Size() { return entries_.size(); }
@@ -104,6 +124,17 @@ bool DirIterator::Dump(Json::Value& value) {
   value["is_fetch"] = is_fetch_;
   value["last_fetch_time_ns"] = last_fetch_time_ns_.load();
 
+  // dump last_name_memo_
+  Json::Value last_name_memo = Json::arrayValue;
+  for (const auto& [offset, last_name] : last_name_memo_) {
+    Json::Value item;
+    item["offset"] = offset;
+    item["last_name"] = last_name;
+    last_name_memo.append(item);
+  }
+  value["last_name_memo"] = last_name_memo;
+
+  // dump entries
   Json::Value entries = Json::arrayValue;
   for (const auto& entry : entries_) {
     Json::Value entry_item;
@@ -129,6 +160,19 @@ bool DirIterator::Load(const Json::Value& value) {
   is_fetch_ = value["is_fetch"].asBool();
   last_fetch_time_ns_.store(value["last_fetch_time_ns"].asUInt64());
 
+  // load last_name_memo_
+  const Json::Value& last_name_memo = value["last_name_memo"];
+  if (!last_name_memo.isArray()) {
+    LOG(ERROR) << "[meta.dir_iterator] last_name_memo is not an array.";
+    return false;
+  }
+  for (const auto& item : last_name_memo) {
+    uint64_t offset = item["offset"].asUInt64();
+    std::string last_name = item["last_name"].asString();
+    last_name_memo_.insert({offset, last_name});
+  }
+
+  // load entries
   const Json::Value& entries = value["entries"];
   if (!entries.isArray()) {
     LOG(ERROR) << "[meta.dir_iterator] entries is not an array.";
