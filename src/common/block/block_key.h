@@ -29,6 +29,8 @@ struct BlockKey {
   uint32_t index{0};  // block index within the slice
   uint32_t size{0};   // block size in bytes
 
+  BlockKey() = default;
+
   BlockKey(uint64_t _id, uint32_t _index, uint32_t _size)
       : id(_id), index(_index), size(_size) {}
 
