@@ -97,8 +97,8 @@ class MetaWrapper {
   }
 
   Status ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
-                 bool with_attr, ReadDirHandler handler) {
-    return target_->ReadDir(ctx, ino, fh, offset, with_attr, handler);
+                 bool with_attr, ReadDirHandler handler, uint32_t& count) {
+    return target_->ReadDir(ctx, ino, fh, offset, with_attr, handler, count);
   }
 
   Status ReleaseDir(ContextSPtr ctx, Ino ino, uint64_t fh) {
@@ -174,8 +174,7 @@ class MetaWrapper {
   }
 
   Status Read(ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
-              uint64_t size, DataBuffer& data_buffer,
-              uint64_t& out_rsize) {
+              uint64_t size, DataBuffer& data_buffer, uint64_t& out_rsize) {
     return target_->Read(ctx, ino, fh, offset, size, data_buffer, out_rsize);
   }
 

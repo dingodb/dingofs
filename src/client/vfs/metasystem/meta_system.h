@@ -113,7 +113,7 @@ class MetaSystem {
 
   virtual Status Read(ContextSPtr ctx, Ino ino, uint64_t fh,  // NOLINT
                       uint64_t offset, uint64_t size,         // NOLINT
-                      DataBuffer& data_buffer,           // NOLINT
+                      DataBuffer& data_buffer,                // NOLINT
                       uint64_t& out_rsize) {                  // NOLINT
     return Status::NoData("not data");
   }
@@ -191,7 +191,8 @@ class MetaSystem {
                          bool& need_cache) = 0;
 
   virtual Status ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
-                         bool with_attr, ReadDirHandler handler) = 0;
+                         bool with_attr, ReadDirHandler handler,
+                         uint32_t& count) = 0;
 
   virtual Status ReleaseDir(ContextSPtr ctx, Ino ino, uint64_t fh) = 0;
 

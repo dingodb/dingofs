@@ -16,8 +16,8 @@
 
 #include "client/vfs/vfs_wrapper.h"
 
-#include <cstdio>
 #include <cstdint>
+#include <cstdio>
 #include <fstream>
 #include <memory>
 #include <string>
@@ -213,7 +213,8 @@ bool VFSWrapper::Dump() {
   }
 
   root["epch"] = Json::Value::UInt64(ClientState::GetEpoch());
-  root["first_start_time_ms"] = Json::Value::UInt64(ClientState::GetFirstStartTime());
+  root["first_start_time_ms"] =
+      Json::Value::UInt64(ClientState::GetFirstStartTime());
 
   const std::string path = fmt::format("{}.{}", kFdStatePath, getpid());
   std::ofstream file(path);
@@ -401,8 +402,7 @@ Status VFSWrapper::ReadLink(Ino ino, std::string* link) {
       {&client_op_metric_->opReadLink, &client_op_metric_->opAll});
 
   s = vfs_->ReadLink(dingofs::SpanScope::GetContext(span), ino, link);
-  VLOG(2) << "VFSReadLink end, status: " << s.ToString()
-          << " link: " << *link;
+  VLOG(2) << "VFSReadLink end, status: " << s.ToString() << " link: " << *link;
   if (!s.ok()) op_metric.FailOp();
 
   return s;
@@ -481,8 +481,7 @@ Status VFSWrapper::Symlink(Ino parent, const std::string& name, uint32_t uid,
       {&client_op_metric_->opSymlink, &client_op_metric_->opAll});
 
   if (name.length() > vfs_->GetMaxNameLength()) {
-    s = Status::NameTooLong(
-        fmt::format("name({}) too long", name.length()));
+    s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
     return s;
   }
 
@@ -496,9 +495,8 @@ Status VFSWrapper::Symlink(Ino parent, const std::string& name, uint32_t uid,
 
 Status VFSWrapper::Rename(Ino old_parent, const std::string& old_name,
                           Ino new_parent, const std::string& new_name) {
-  VLOG(2) << "VFSRename old_parent: " << old_parent
-          << " old_name: " << old_name << " new_parent: " << new_parent
-          << " new_name: " << new_name;
+  VLOG(2) << "VFSRename old_parent: " << old_parent << " old_name: " << old_name
+          << " new_parent: " << new_parent << " new_name: " << new_name;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Rename");
 
@@ -566,8 +564,7 @@ Status VFSWrapper::Open(Ino ino, int flags, uint64_t* fh) {
   Status s;
   AccessLogGuard log(
       [&]() {
-        return absl::StrFormat("open (%d): %s [fh:%d]", ino, s.ToString(),
-                               *fh);
+        return absl::StrFormat("open (%d): %s [fh:%d]", ino, s.ToString(), *fh);
       },
       !dingofs::IsInternalNode(ino));
 
@@ -583,8 +580,8 @@ Status VFSWrapper::Open(Ino ino, int flags, uint64_t* fh) {
 }
 
 Status VFSWrapper::Create(Ino parent, const std::string& name, uint32_t uid,
-                          uint32_t gid, uint32_t mode, int flags,
-                          uint64_t* fh, Attr* attr) {
+                          uint32_t gid, uint32_t mode, int flags, uint64_t* fh,
+                          Attr* attr) {
   VLOG(2) << "VFSCreate parent: " << parent << " name: " << name
           << " uid: " << uid << " gid: " << gid << " mode: " << mode
           << " octal flags: " << std::oct << flags;
@@ -605,8 +602,8 @@ Status VFSWrapper::Create(Ino parent, const std::string& name, uint32_t uid,
     return s;
   }
 
-  s = vfs_->Create(dingofs::SpanScope::GetContext(span), parent, name, uid,
-                   gid, mode, flags, fh, attr);
+  s = vfs_->Create(dingofs::SpanScope::GetContext(span), parent, name, uid, gid,
+                   mode, flags, fh, attr);
   VLOG(2) << "VFSCreate end, status: " << s.ToString()
           << " attr: " << Attr2Str(*attr);
   if (!s.ok()) op_metric.FailOp();
@@ -653,8 +650,8 @@ Status VFSWrapper::Read(Ino ino, DataBuffer* data_buffer, uint64_t size,
 
 Status VFSWrapper::Write(Ino ino, const char* buf, uint64_t size,
                          uint64_t offset, uint64_t fh, uint64_t* out_wsize) {
-  VLOG(2) << "VFSWrite ino: " << ino << ", buf: "
-          << dingofs::Helper::Char2Addr(buf) << ", size: " << size
+  VLOG(2) << "VFSWrite ino: " << ino
+          << ", buf: " << dingofs::Helper::Char2Addr(buf) << ", size: " << size
           << " offset: " << offset << " fh: " << fh;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Write");
@@ -688,8 +685,7 @@ Status VFSWrapper::Flush(Ino ino, uint64_t fh) {
   Status s;
   AccessLogGuard log(
       [&]() {
-        return absl::StrFormat("flush (%d): %s [fh:%d]", ino, s.ToString(),
-                               fh);
+        return absl::StrFormat("flush (%d): %s [fh:%d]", ino, s.ToString(), fh);
       },
       !dingofs::IsInternalNode(ino));
 
@@ -915,23 +911,23 @@ Status VFSWrapper::OpenDir(Ino ino, uint64_t* fh, bool& need_cache) {
 
 Status VFSWrapper::ReadDir(Ino ino, uint64_t fh, uint64_t offset,
                            bool with_attr, ReadDirHandler handler) {
-  VLOG(2) << "VFSReaddir ino: " << ino << " fh: " << fh
-          << " offset: " << offset
+  VLOG(2) << "VFSReaddir ino: " << ino << " fh: " << fh << " offset: " << offset
           << " with_attr: " << (with_attr ? "true" : "false");
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::ReadDir");
 
   Status s;
+  uint32_t count = 0;
   AccessLogGuard log([&]() {
-    return absl::StrFormat("readdir (%d): %s (%d) [fh:%d]", ino, s.ToString(),
-                           offset, fh);
+    return absl::StrFormat("readdir (%d): %s (%d %u) [fh:%d]", ino,
+                           s.ToString(), offset, count, fh);
   });
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opReadDir, &client_op_metric_->opAll});
 
   s = vfs_->ReadDir(dingofs::SpanScope::GetContext(span), ino, fh, offset,
-                    with_attr, handler);
+                    with_attr, handler, count);
   VLOG(2) << "VFSReaddir end, status: " << s.ToString();
   if (!s.ok()) op_metric.FailOp();
 
@@ -1006,9 +1002,8 @@ Status VFSWrapper::StatFs(Ino ino, FsStat* fs_stat) {
 Status VFSWrapper::Ioctl(Ino ino, uint32_t uid, unsigned int cmd,
                          unsigned flags, const void* in_buf, size_t in_bufsz,
                          char* out_buf, size_t out_bufsz) {
-  VLOG(2) << "VFSIoctl ino: " << ino << " cmd: " << cmd
-          << " flags: " << flags << " in_bufsz: " << in_bufsz
-          << " out_bufsz: " << out_bufsz;
+  VLOG(2) << "VFSIoctl ino: " << ino << " cmd: " << cmd << " flags: " << flags
+          << " in_bufsz: " << in_bufsz << " out_bufsz: " << out_bufsz;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Ioctl");
 

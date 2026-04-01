@@ -133,7 +133,8 @@ class MDSMetaSystem : public vfs::MetaSystem {
                  bool& need_cache) override;
 
   Status ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
-                 bool with_attr, ReadDirHandler handler) override;
+                 bool with_attr, ReadDirHandler handler,
+                 uint32_t& count) override;
 
   Status ReleaseDir(ContextSPtr ctx, Ino ino, uint64_t fh) override;
 
