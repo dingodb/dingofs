@@ -23,6 +23,7 @@
 
 #include "brpc/reloadable_flags.h"
 #include "cache/blockcache/cache_store.h"
+#include "common/blockaccess/prefix_block_accesser.h"
 #include "common/blockaccess/rados/rados_common.h"
 #include "common/blockaccess/s3/s3_common.h"
 #include "common/logging.h"
@@ -839,7 +840,8 @@ blockaccess::BlockAccesserSPtr GcProcessor::GetOrCreateDataAccesser(const FsInfo
                                                       .cluster_name = rados_info.cluster_name()};
   }
 
-  auto block_accessor = blockaccess::NewShareBlockAccesser(options);
+  auto block_accessor = blockaccess::NewSharePrefixBlockAccesser(
+      fs_info.fs_name(), options);
   auto status = block_accessor->Init();
   if (!status.IsOK()) {
     LOG(ERROR) << fmt::format("[gc] init block accesser fail, status({}).", status.ToString());

@@ -36,6 +36,7 @@
 #include "client/vfs/vfs_meta.h"
 #include "common/blockaccess/accesser_common.h"
 #include "common/blockaccess/block_accesser.h"
+#include "common/blockaccess/prefix_block_accesser.h"
 #include "common/blockaccess/rados/rados_common.h"
 #include "common/directory.h"
 #include "common/options/client.h"
@@ -193,7 +194,8 @@ Status VFSHubImpl::Start(bool skip_mount) {
       return Status::InvalidParam("unsupported store type");
     }
 
-    block_accesser_ = blockaccess::NewBlockAccesser(blockaccess_options_);
+    block_accesser_ = blockaccess::NewPrefixBlockAccesser(
+        fs_info_.name, blockaccess_options_);
     DINGOFS_RETURN_NOT_OK(block_accesser_->Init());
   }
 
