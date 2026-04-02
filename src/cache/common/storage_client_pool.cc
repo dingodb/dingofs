@@ -30,6 +30,7 @@
 
 #include "cache/common/mds_client.h"
 #include "cache/common/storage_client.h"
+#include "common/blockaccess/prefix_block_accesser.h"
 #include "common/config_mapper.h"
 #include "common/status.h"
 
@@ -75,7 +76,9 @@ Status StorageClientPoolImpl::CreateStorageClient(
   // New block accesser
   blockaccess::BlockAccessOptions block_access_opt;
   FillBlockAccessOption(fs_info, &block_access_opt);
-  accesseres_[fs_id] = blockaccess::NewBlockAccesser(block_access_opt);
+
+  accesseres_[fs_id] = blockaccess::NewPrefixBlockAccesser(
+      fs_info.fs_name(), block_access_opt);
   auto* block_accesser = accesseres_[fs_id].get();
   status = block_accesser->Init();
   if (!status.ok()) {
