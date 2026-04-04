@@ -1,0 +1,19 @@
+# LMCache configuration for DingoFS KVCache Connector
+#
+# Usage with vLLM:
+#   vllm serve <model> \
+#     --kv-connector LMCacheConnectorV1 \
+#     --kv-connector-config '{"lmcache_config_file": "path/to/this/file.yaml"}'
+#
+# Prerequisites:
+#   1. DingoFS FUSE mounted at mount_point (e.g., /mnt/dingofs)
+#   2. pip install lmcache
+
+storage_backend:
+  type: "remote"
+  remote_connector:
+    module: "dingofs.kvcache.remote_connector"
+    class: "DingoFSRemoteConnector"
+    config:
+      mount_point: "/mnt/dingofs"
+      model_name: "llama-3-8b"

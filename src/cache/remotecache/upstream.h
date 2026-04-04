@@ -27,6 +27,8 @@
 #include <bthread/rwlock.h>
 
 #include <memory>
+#include <unordered_map>
+#include <vector>
 
 #include "cache/blockcache/cache_store.h"
 #include "cache/common/mds_client.h"
@@ -107,6 +109,8 @@ class Upstream {
                           const Block& block);
   Status SendPrefetchRequest(ContextSPtr ctx, const BlockKey& key,
                              size_t length);
+  Status SendBatchExistsRequest(const std::vector<BlockKey>& keys,
+                                std::vector<bool>* results);
 
   bool Dump(Json::Value& value);
 

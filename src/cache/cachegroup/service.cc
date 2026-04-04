@@ -151,5 +151,28 @@ void BlockCacheServiceImpl::Ping(
   // do nothing, just reply
 }
 
+void BlockCacheServiceImpl::BatchExists(
+    google::protobuf::RpcController* controller,
+    const pb::cache::BatchExistsRequest* request,
+    pb::cache::BatchExistsResponse* response,
+    google::protobuf::Closure* done) {
+  brpc::ClosureGuard done_guard(done);
+
+  std::vector<BlockKey> keys;
+  keys.reserve(request->block_keys_size());
+  for (const auto& pb_key : request->block_keys()) {
+    keys.emplace_back(pb_key);
+  }
+
+  std::vector<bool> results;
+  auto status = node_->BatchExists(keys, &results);
+  response->set_status(ToPBErr(status));
+  if (status.ok()) {
+    for (bool exists : results) {
+      response->add_exists(exists);
+    }
+  }
+}
+
 }  // namespace cache
 }  // namespace dingofs

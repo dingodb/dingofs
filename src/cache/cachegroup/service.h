@@ -60,6 +60,11 @@ class BlockCacheServiceImpl final : public pb::cache::BlockCacheService {
             pb::cache::PingResponse* response,
             google::protobuf::Closure* done) override;
 
+  void BatchExists(google::protobuf::RpcController* controller,
+                   const pb::cache::BatchExistsRequest* request,
+                   pb::cache::BatchExistsResponse* response,
+                   google::protobuf::Closure* done) override;
+
  private:
   Status CheckBodySize(size_t expected, size_t real) {
     if (expected != real) {

@@ -30,6 +30,7 @@
 
 #include <atomic>
 #include <memory>
+#include <vector>
 
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/block_cache_impl.h"
@@ -352,6 +353,18 @@ Status CacheNode::WaitTask(DownloadTaskSPtr task) {
                << " timeout=" << FLAGS_retrieve_storage_lock_timeout_ms
                << " ms";
   return Status::Internal("wait download task timeout");
+}
+
+Status CacheNode::BatchExists(const std::vector<BlockKey>& keys,
+                               std::vector<bool>* results) {
+  if (!IsRunning()) {
+    return Status::CacheDown("cache node is down");
+  }
+  results->resize(keys.size());
+  for (size_t i = 0; i < keys.size(); i++) {
+    (*results)[i] = block_cache_->IsCached(keys[i]);
+  }
+  return Status::OK();
 }
 
 std::ostream& operator<<(std::ostream& os, const CacheNode& /*node*/) {

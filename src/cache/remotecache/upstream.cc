@@ -196,6 +196,57 @@ Response<U> Upstream::SendRequest(const Request<T>& request) {
   return peer->template SendRequest<T, U>(request);
 }
 
+Status Upstream::SendBatchExistsRequest(const std::vector<BlockKey>& keys,
+                                        std::vector<bool>* results) {
+  results->resize(keys.size(), false);
+
+  if (keys.empty()) {
+    return Status::OK();
+  }
+
+  auto peer_group = GetPeerGroup();
+  if (!peer_group) {
+    return Status::NotFound("no peer group");
+  }
+
+  // Step 1: group keys by peer
+  // key: peer pointer, value: vector of (original_index, BlockKey)
+  std::unordered_map<Peer*, std::vector<std::pair<size_t, BlockKey>>> peer_keys;
+  for (size_t i = 0; i < keys.size(); i++) {
+    auto peer = peer_group->SelectPeer(keys[i].Filename());
+    if (peer && peer->IsHealthy()) {
+      peer_keys[peer.get()].emplace_back(i, keys[i]);
+    }
+    // unhealthy/missing peer -> results[i] remains false
+  }
+
+  // Step 2: send BatchExists RPC to each peer
+  for (auto& [peer_ptr, indexed_keys] : peer_keys) {
+    pb::cache::BatchExistsRequest raw;
+    for (auto& [idx, key] : indexed_keys) {
+      *raw.add_block_keys() = key.ToPB();
+    }
+    auto request = MakeRequest("BatchExists", raw);
+
+    auto response =
+        peer_ptr->SendRequest<pb::cache::BatchExistsRequest,
+                              pb::cache::BatchExistsResponse>(request);
+    if (!response.status.ok()) {
+      LOG(WARNING) << "BatchExists RPC failed to peer: "
+                   << response.status.ToString();
+      continue;  // keys on this peer remain false
+    }
+
+    // Step 3: merge results
+    for (int j = 0;
+         j < response.raw.exists_size() && j < (int)indexed_keys.size(); j++) {
+      (*results)[indexed_keys[j].first] = response.raw.exists(j);
+    }
+  }
+
+  return Status::OK();
+}
+
 bool Upstream::SendListMembersRequest(Members* members) {
   auto group_name = FLAGS_cache_group;
   auto status = mds_client_->ListMembers(group_name, members);

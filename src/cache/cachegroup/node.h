@@ -24,6 +24,7 @@
 #define DINGOFS_SRC_CACHE_CACHEGROUP_NODE_H_
 
 #include <ostream>
+#include <vector>
 
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
@@ -50,6 +51,9 @@ class CacheNode {
                size_t length, IOBuffer* buffer, size_t block_length);
   Status AsyncCache(ContextSPtr ctx, const BlockKey& key, const Block& block);
   Status AsyncPrefetch(ContextSPtr ctx, const BlockKey& key, size_t length);
+
+  Status BatchExists(const std::vector<BlockKey>& keys,
+                     std::vector<bool>* results);
 
  private:
   bool IsRunning() const { return running_.load(std::memory_order_relaxed); }
