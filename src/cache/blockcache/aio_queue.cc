@@ -41,8 +41,9 @@ DEFINE_uint32(iodepth, 128, "aio queue maximum iodepth");
 AioQueue::AioQueue(const std::vector<iovec>& fixed_write_buffers,
                    const std::vector<iovec>& fixed_read_buffers)
     : running_(false),
-      io_uring_(
-          std::make_unique<IOUring>(fixed_write_buffers, fixed_read_buffers)),
+      io_uring_(std::make_unique<IOUring>(
+          IOUringOptions{.fixed_write_buffers = fixed_write_buffers,
+                         .fixed_read_buffers = fixed_read_buffers})),
       prep_io_queue_id_({0}) {}
 
 Status AioQueue::Start() {
@@ -155,12 +156,12 @@ void AioQueue::BackgroundWait() {
 
 void AioQueue::OnError(Aio* aio, Status status) {
   LOG(ERROR) << "Fail to run " << *aio;
-  aio->status() = status;
+  aio->Result().status = std::move(status);
   RunClosure(aio);
 }
 
 void AioQueue::OnComplete(Aio* aio) {
-  if (!aio->status().ok()) {
+  if (!aio->Result().status.ok()) {
     LOG(ERROR) << "Fail to run " << *aio;
   }
   RunClosure(aio);
