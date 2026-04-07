@@ -171,6 +171,8 @@ class Duration {
     return (TimestampNs() - start_time_ns_) / 1000000000;
   }
 
+  void Reset() { start_time_ns_ = TimestampNs(); }
+
  private:
   int64_t start_time_ns_ = 0;
 };

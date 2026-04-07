@@ -66,6 +66,9 @@ class Inode {
     for (const auto& xattr : attr.xattrs()) {
       xattrs_.emplace(xattr.first, xattr.second);
     }
+    for (const auto& boundary : attr.shard_boundaries()) {
+      shard_boundaries_.push_back(boundary);
+    }
   }
   ~Inode() = default;
 
@@ -147,6 +150,12 @@ class Inode {
     return (it != xattrs_.end()) ? it->second : "";
   }
 
+  std::vector<std::string> ShardBoundaries() const {
+    utils::ReadLockGuard lk(lock_);
+
+    return shard_boundaries_;
+  }
+
   bool PutIf(const AttrEntry& attr);
 
   void ExpandLength(uint64_t length);
@@ -175,6 +184,8 @@ class Inode {
   static constexpr size_t kDefaultParentNum = 8;
   absl::InlinedVector<mds::Ino, kDefaultParentNum> parents_;
   absl::flat_hash_map<std::string, std::string> xattrs_;
+
+  std::vector<std::string> shard_boundaries_;
 
   uint64_t length_{0};
   uint64_t ctime_{0};

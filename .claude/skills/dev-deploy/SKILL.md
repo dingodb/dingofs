@@ -1,10 +1,12 @@
 ---
-name: deploy-test
-description: 在开发环境部署测试dingofs的技能，当开发完成功能或修复bug后，可以使用这个技能将代码部署到测试环境进行验证。
+name: dev-deploy
+description: 在开发环境部署dingofs的技能，当开发完成功能或修复bug后，可以使用这个技能将代码部署到测试环境进行验证
+context: fork
+disable-model-invocation: true
 ---
 
 
-# dingofs部署测试技能
+# dingofs部署技能
 **注意**: 本技能仅适用于开发环境部署测试dingofs，不能用于生产环境部署，并只进行基本功能验证，不用于性能测试或压力测试或者稳定性测试。
 
 ## 脚本
@@ -64,26 +66,8 @@ sudo ./start_client.sh --meta=$META_ADDR --mountpoint=$MOUNT_POINT --num=1 --sto
 
 ```
 
-## 测试
-使用文件系统相关的shell命令行工具进行测试，比如: mkdir、ls、touch、cat、rm、dd等命令，验证代码变更是否生效，是否符合预期。
-先创建本次测试的根目录，然后在根目录下进行文件系统相关的操作，验证代码变更是否生效，是否符合预期。
-```bash
-
-# 进入MOUNT_POINT目录
-cd $MOUNT_POINT
-
-# 创建本次测试的根目录
-root=test_deploy_`date +%Y%m%d%H%M%S`
-mkdir $root
-cd $root
-
-
-```
 
 ## 步骤
 1. 代码变更后，重新编译代码，编译成功后进入后续步骤。
 2. 一键部署、启动mds服务器，使用clean_start.sh脚本，启动成功后进入后续步骤，可以使用`ps -ef | grep dingo-mds`命令查看mds服务器是否启动成功。
 3. 先停止client，再启动client，使用start_client.sh脚本，启动成功后进入后续步骤，可以使用`ps -ef | grep dingo-client`命令查看client是否启动成功。
-4. 进行功能测试，验证代码变更是否生效，是否符合预期。
-5. 如果测试出现错误，则停止测试，分析错误原因，修复代码后重新执行步骤1-4。
-6. 如果测试通过，则结束测试，记录测试结果，进行后续的代码提交和发布流程。

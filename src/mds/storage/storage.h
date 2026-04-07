@@ -27,28 +27,6 @@
 namespace dingofs {
 namespace mds {
 
-struct KeyValue {
-  enum class OpType : uint8_t {
-    kPut = 0,
-    kDelete = 1,
-  };
-
-  static std::string OpTypeName(OpType op_type) {
-    switch (op_type) {
-      case OpType::kPut:
-        return "Put";
-      case OpType::kDelete:
-        return "Delete";
-      default:
-        return "Unknown";
-    }
-  }
-
-  OpType opt_type{OpType::kPut};
-  std::string key;
-  std::string value;
-};
-
 class Txn;
 using TxnPtr = std::shared_ptr<Txn>;
 using TxnUPtr = std::unique_ptr<Txn>;

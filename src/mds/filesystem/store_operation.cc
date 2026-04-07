@@ -220,6 +220,9 @@ const char* Operation::OpName() const {
     case OpType::kRemoveXAttr:
       return "RemoveXAttr";
 
+    case OpType::kUpdateShardBoundaries:
+      return "UpdateShardBoundaries";
+
     case OpType::kFallocate:
       return "Fallocate";
 
@@ -327,6 +330,9 @@ const char* Operation::OpName() const {
 
     case OpType::kScanDentry:
       return "ScanDentry";
+
+    case OpType::kScanDirShard:
+      return "ScanDirShard";
 
     case OpType::kScanDelFile:
       return "ScanDelFile";
@@ -1006,6 +1012,20 @@ Status RemoveXAttrOperation::RunInBatch(TxnUPtr&, AttrEntry& attr, const std::ve
 
   // update attr
   attr.set_atime(std::max(attr.atime(), GetTime()));
+  attr.set_mtime(std::max(attr.mtime(), GetTime()));
+  attr.set_ctime(std::max(attr.ctime(), GetTime()));
+
+  return Status::OK();
+}
+
+Status UpdateShardBoundariesOperation::RunInBatch(TxnUPtr&, AttrEntry& attr, const std::vector<KeyValue>&) {
+  attr.mutable_shard_boundaries()->Clear();
+
+  for (const auto& boundary : shard_boundaries_) {
+    *attr.add_shard_boundaries() = boundary;
+  }
+
+  // update attr
   attr.set_mtime(std::max(attr.mtime(), GetTime()));
   attr.set_ctime(std::max(attr.ctime(), GetTime()));
 
@@ -2356,6 +2376,35 @@ Status ScanDentryOperation::Run(TxnUPtr& txn) {
   }
 
   return txn->Scan(range, [&](const std::string&, const std::string& value) -> bool {
+    return handler_(MetaCodec::DecodeDentryValue(value));
+  });
+}
+
+Status ScanDirShardOperation::Run(TxnUPtr& txn) {
+  const Range complete_range = MetaCodec::GetDentryRange(fs_id_, ino_, false);
+
+  Range range;
+  if (!range_.start.empty()) {
+    // fetch parent inode
+    std::string value;
+    auto status = txn->Get(MetaCodec::EncodeInodeKey(fs_id_, ino_), value);
+    if (!status.ok()) return status;
+
+    SetAttr(MetaCodec::DecodeInodeValue(value));
+
+    range.start = MetaCodec::EncodeDentryKey(fs_id_, ino_, range_.start);
+    range.end = range_.end.empty() ? complete_range.end : MetaCodec::EncodeDentryKey(fs_id_, ino_, range_.end);
+
+  } else {
+    range.start = MetaCodec::EncodeInodeKey(fs_id_, ino_);
+    range.end = range_.end.empty() ? complete_range.end : MetaCodec::EncodeDentryKey(fs_id_, ino_, range_.end);
+  }
+
+  return txn->Scan(range, [&](const std::string& key, const std::string& value) -> bool {
+    if (MetaCodec::IsInodeKey(key)) {
+      SetAttr(MetaCodec::DecodeInodeValue(value));
+      return true;
+    }
     return handler_(MetaCodec::DecodeDentryValue(value));
   });
 }

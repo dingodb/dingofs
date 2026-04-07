@@ -39,8 +39,8 @@
 #include "client/vfs/components/warmup_manager.h"
 #include "client/vfs/data/common/common.h"
 #include "client/vfs/data/reader/chunk_reader.h"
-#include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/data_buffer.h"
+#include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
 #include "common/trace/context.h"
@@ -780,8 +780,9 @@ void FileReader::CheckPrefetch(ContextSPtr ctx, const Attr& attr,
   if (FLAGS_vfs_prefetch_blocks > 0 &&
       vfs_hub_->GetBlockStore()->EnableCache()) {
     CHECK(frange.offset >= 0);
-    vfs_hub_->GetPrefetchManager()->SubmitTask(PrefetchContext{
-        ino_, frange.offset, attr.length, FLAGS_vfs_prefetch_blocks});
+    vfs_hub_->GetPrefetchManager()->SubmitTask(
+        PrefetchContext{ino_, frange.offset, static_cast<int64_t>(attr.length),
+                        FLAGS_vfs_prefetch_blocks});
   }
 }
 
