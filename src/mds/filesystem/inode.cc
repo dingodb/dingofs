@@ -69,6 +69,11 @@ bool Inode::PutIf(const AttrEntry& attr) {
     xattrs_.emplace(xattr.first, xattr.second);
   }
 
+  shard_boundaries_.clear();
+  for (const auto& boundary : attr.shard_boundaries()) {
+    shard_boundaries_.push_back(boundary);
+  }
+
   version_ = attr.version();
 
   return true;
@@ -112,6 +117,10 @@ Inode::AttrEntry Inode::Copy() {
   for (const auto& [key, value] : xattrs_) {
     (*attr.mutable_xattrs())[key] = value;
   }
+  for (const auto& boundary : shard_boundaries_) {
+    attr.add_shard_boundaries(boundary);
+  }
+
   attr.set_version(version_);
 
   return attr;

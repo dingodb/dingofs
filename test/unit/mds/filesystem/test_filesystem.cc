@@ -417,7 +417,8 @@ TEST_F(FileSystemTest, MkNod) {
   ASSERT_TRUE(partition != nullptr) << "get partition fail.";
 
   Dentry dentry;
-  ASSERT_TRUE(partition->Get(param.name, dentry)) << "get child fail.";
+  status = partition->Get(param.name, dentry);
+  ASSERT_TRUE(status.ok()) << "get child fail, error: " << status.error_str();
   ASSERT_EQ(param.name, dentry.Name()) << "dentry name not equal.";
   ASSERT_EQ(param.parent, dentry.ParentIno()) << "dentry parent ino not equal.";
   ASSERT_TRUE(dentry.Inode() != nullptr) << "inode is nullptr.";
@@ -458,7 +459,8 @@ TEST_F(FileSystemTest, MkDir) {
   ASSERT_TRUE(partition != nullptr) << "get partition fail.";
 
   Dentry dentry;
-  ASSERT_TRUE(partition->Get(param.name, dentry)) << "get child fail.";
+  status = partition->Get(param.name, dentry);
+  ASSERT_TRUE(status.ok()) << "get child fail, error: " << status.error_str();
   ASSERT_EQ(param.name, dentry.Name()) << "dentry name not equal.";
   ASSERT_EQ(param.parent, dentry.ParentIno()) << "dentry parent ino not equal.";
 
@@ -501,7 +503,8 @@ TEST_F(FileSystemTest, RmDir) {
   ASSERT_TRUE(partition != nullptr) << "get dentry fail.";
 
   Dentry dentry;
-  ASSERT_TRUE(partition->Get(param.name, dentry)) << "get child fail.";
+  status = partition->Get(param.name, dentry);
+  ASSERT_TRUE(status.ok()) << "get child fail, error: " << status.error_str();
   ASSERT_EQ(param.name, dentry.Name()) << "dentry name not equal.";
   ASSERT_EQ(param.parent, dentry.ParentIno()) << "dentry parent ino not equal.";
 
@@ -869,8 +872,12 @@ TEST_F(FileSystemTest, RenameWithSameDir) {
 
   auto partition = partition_cache.Get(old_parent_ino);
   Dentry dentry;
-  ASSERT_FALSE(partition->Get(old_name, dentry));
-  ASSERT_TRUE(partition->Get(new_name, dentry));
+  status = partition->Get(old_name, dentry);
+  ASSERT_FALSE(status.ok())
+      << "get old child fail, error: " << status.error_str();
+  status = partition->Get(new_name, dentry);
+  ASSERT_TRUE(status.ok()) << "get new child fail, error: "
+                           << status.error_str();
   ASSERT_EQ(new_name, dentry.Name());
   ASSERT_EQ(old_parent_ino, dentry.ParentIno());
 }
@@ -967,13 +974,17 @@ TEST_F(FileSystemTest, RenameWithDiffDir) {
   {
     auto partition = partition_cache.Get(old_parent_ino);
     Dentry dentry;
-    ASSERT_FALSE(partition->Get(old_name, dentry));
+    auto status = partition->Get(old_name, dentry);
+    ASSERT_FALSE(status.ok())
+        << "get old child fail, error: " << status.error_str();
   }
 
   {
     auto partition = partition_cache.Get(new_parent_ino);
     Dentry dentry;
-    ASSERT_TRUE(partition->Get(new_name, dentry));
+    auto status = partition->Get(new_name, dentry);
+    ASSERT_TRUE(status.ok())
+        << "get new child fail, error: " << status.error_str();
     ASSERT_EQ(new_name, dentry.Name());
     ASSERT_EQ(new_parent_ino, dentry.ParentIno());
   }

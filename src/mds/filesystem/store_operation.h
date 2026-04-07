@@ -74,14 +74,15 @@ class Operation {
     kUpdateAttr = 28,
     kUpdateXAttr = 29,
     kRemoveXAttr = 30,
-    kFallocate = 31,
-    kOpenFile = 32,
-    kCloseFile = 33,
-    kFlushFile = 38,
-    kRmDir = 34,
-    kUnlink = 35,
-    kBatchUnlink = 36,
-    kRename = 37,
+    kUpdateShardBoundaries = 31,
+    kFallocate = 32,
+    kOpenFile = 33,
+    kCloseFile = 34,
+    kFlushFile = 35,
+    kRmDir = 36,
+    kUnlink = 37,
+    kBatchUnlink = 38,
+    kRename = 39,
 
     kCompactChunk = 50,
     kUpsertChunk = 51,
@@ -119,6 +120,7 @@ class Operation {
     kScanFs = 121,
     kScanPartition = 122,
     kScanDentry = 123,
+    kScanDirShard = 126,
     kScanDelFile = 124,
     kScanDelSlice = 125,
 
@@ -169,6 +171,7 @@ class Operation {
       case OpType::kUpdateAttr:
       case OpType::kUpdateXAttr:
       case OpType::kRemoveXAttr:
+      case OpType::kUpdateShardBoundaries:
       case OpType::kUpsertChunk:
       case OpType::kOpenFile:
       case OpType::kFallocate:
@@ -190,6 +193,7 @@ class Operation {
       case OpType::kUpdateAttr:
       case OpType::kUpdateXAttr:
       case OpType::kRemoveXAttr:
+      case OpType::kUpdateShardBoundaries:
       case OpType::kOpenFile:
       case OpType::kFallocate:
         return true;
@@ -697,6 +701,26 @@ class RemoveXAttrOperation : public Operation {
   uint32_t fs_id_;
   uint64_t ino_;
   std::string name_;
+};
+
+class UpdateShardBoundariesOperation : public Operation {
+ public:
+  UpdateShardBoundariesOperation(Trace& trace, uint32_t fs_id, uint64_t ino,
+                                 const std::vector<std::string>& shard_boundaries)
+      : Operation(trace), fs_id_(fs_id), ino_(ino), shard_boundaries_(shard_boundaries) {};
+  ~UpdateShardBoundariesOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kUpdateShardBoundaries; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return ino_; }
+
+  Status RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>& prefetch_kvs) override;
+
+ private:
+  uint32_t fs_id_;
+  uint64_t ino_;
+  const std::vector<std::string>& shard_boundaries_;
 };
 
 class UpsertChunkOperation : public Operation {
@@ -1820,6 +1844,28 @@ class ScanDentryOperation : public Operation {
   uint32_t fs_id_{0};
   Ino ino_{0};
   const std::string last_name_;
+  HandlerType handler_;
+};
+
+class ScanDirShardOperation : public Operation {
+ public:
+  using HandlerType = std::function<bool(const DentryEntry&)>;
+
+  ScanDirShardOperation(Trace& trace, uint32_t fs_id, Ino ino, const Range& range, HandlerType handler)
+      : Operation(trace), fs_id_(fs_id), ino_(ino), range_(range), handler_(handler) {};
+
+  OpType GetOpType() const override { return OpType::kScanDirShard; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return ino_; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  uint32_t fs_id_{0};
+  Ino ino_{0};
+  const Range range_;
+
   HandlerType handler_;
 };
 

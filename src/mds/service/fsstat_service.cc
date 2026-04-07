@@ -1146,10 +1146,16 @@ body {
         const info = document.createElement('span');
         info.className = 'info';
         info.textContent = `[${item.ino},${item.description}][${item.node}]`;
+
+        const shard_link = document.createElement('a');
+        shard_link.href = `shard/${fs_id}/${item.ino}`;
+        shard_link.target = '_blank';
+        shard_link.textContent = 'shard';
         
         folderDiv.appendChild(icon);
         folderDiv.appendChild(folderName);
         folderDiv.appendChild(info);
+        folderDiv.appendChild(shard_link);
         
         // 只给目录名添加点击事件
         folderName.addEventListener('click', async function(e) {
@@ -1657,6 +1663,46 @@ static void RenderChunksPage(Ino ino, const std::vector<ChunkEntry>& chunks, but
   os << "</body>";
 }
 
+static void RenderShardPage(Ino ino, const Json::Value& value, butil::IOBufBuilder& os) {
+  os << "<!DOCTYPE html><html>";
+
+  os << "<head>" << RenderHead("dingofs shard") << "</head>";
+  os << "<body>";
+  os << fmt::format(R"(<h1 style="text-align:center;">File({}) Shard</h1>)", ino);
+
+  os << R"(<div style="margin: 12px;font-size:smaller">)";
+  os << fmt::format(R"(<h3>Shard [{}]</h3>)", value["shards"].size());
+
+  os << fmt::format(R"(<h5>Partition: ino({}) base_version({}) delta_version({}) delta_dentry_ops_count({})</h5>)",
+                    value["ino"].asInt64(), value["base_version"].asInt64(), value["delta_version"].asInt64(),
+                    value["delta_dentry_ops_count"].asInt64());
+
+  os << R"(<table class="gridtable sortable" border=1>)";
+  os << "<tr>";
+  os << "<th>NO.</th>";
+  os << "<th>Range</th>";
+  os << "<th>Size</th>";
+  os << "<th>Version</th>";
+  os << "</tr>";
+
+  if (!value["shards"].isNull()) {
+    const auto& shards = value["shards"];
+    for (Json::ArrayIndex i = 0; i < shards.size(); ++i) {
+      const auto& shard = shards[i];
+      os << "<tr>";
+      os << "<td>" << (i + 1) << "</td>";
+      os << "<td>" << fmt::format("[{},{})", shard["start"].asString(), shard["end"].asString()) << "</td>";
+      os << "<td>" << (shard["size"].isNull() ? "unknown" : shard["size"].asString()) << "</td>";
+      os << "<td>" << (shard["version"].isNull() ? "unknown" : shard["version"].asString()) << "</td>";
+      os << "</tr>";
+    }
+  }
+
+  os << "</table>";
+  os << "</div>";
+  os << "</body>";
+}
+
 void FsStatServiceImpl::default_method(::google::protobuf::RpcController* controller, const pb::web::FsStatRequest*,
                                        pb::web::FsStatResponse*, ::google::protobuf::Closure* done) {
   brpc::ClosureGuard const done_guard(done);
@@ -1880,6 +1926,27 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
 
     } else {
       os << fmt::format("Get chunk({}) fail, {}.", ino, status.error_str());
+    }
+
+  } else if (params.size() == 3 && params[0] == "shard") {
+    // /FsStatService/shard/{fs_id}/{ino}
+
+    uint32_t fs_id = Helper::StringToInt32(params[1]);
+    uint64_t ino = Helper::StringToInt64(params[2]);
+
+    auto file_system_set = Server::GetInstance().GetFileSystemSet();
+    auto file_system = file_system_set->GetFileSystem(fs_id);
+    if (file_system != nullptr) {
+      Json::Value value;
+      auto status = file_system->DescribePartitionShard(ino, value);
+      if (status.ok()) {
+        RenderShardPage(ino, value, os);
+      } else {
+        cntl->SetFailed(fmt::format("Describe partition shard({}) fail, {}.", ino, status.error_str()));
+      }
+
+    } else {
+      cntl->SetFailed(fmt::format("Not found file system {}.", fs_id));
     }
 
   } else {

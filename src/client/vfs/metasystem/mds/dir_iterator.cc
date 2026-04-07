@@ -83,24 +83,35 @@ Status DirIterator::Fetch(ContextSPtr& ctx) {
     return status;
   }
 
+  LOG(INFO) << fmt::format(
+      "[dir_iterator.{}.{}] readdir success, offset({}) last_name({}) "
+      "curr_batch_size({}) batch_size({}).",
+      ino_, fh_, offset_, last_name_, entries_.size(), entries.size());
+
   is_fetch_ = true;
 
   offset_ += entries_.size();
+  last_name_memo_.insert({offset_, last_name_});
+
   entries_ = std::move(entries);
   if (!entries_.empty()) {
     last_name_ = entries_.back().name;
   }
 
-  last_name_memo_.insert({offset_, last_name_});
-
   return Status::OK();
 }
 
 Status DirIterator::SeekBackward(ContextSPtr& ctx, uint64_t off) {
-  auto it = last_name_memo_.lower_bound(off);
-  CHECK(it != last_name_memo_.end()) << fmt::format(
-      "[dir_iterator.{}.{}] seek backward fail, off({}) offset({}).", ino_, fh_,
-      off, offset_);
+  CHECK(!last_name_memo_.empty()) << fmt::format(
+      "[dir_iterator.{}.{}] last_name_memo is empty.", ino_, fh_);
+
+  // get the nearest offset in memo which less than or equal to off
+  auto it = last_name_memo_.upper_bound(off);
+  if (it != last_name_memo_.begin()) --it;
+  // LOG(ERROR) << fmt::format(
+  //     "[dir_iterator.{}.{}] seek backward fail, off({}) offset({}).", ino_,
+  //     fh_, off, offset_);
+  // return Status::InvalidArgument("seek backward fail");
 
   entries_.clear();
   offset_ = it->first;

@@ -265,6 +265,8 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   void DescribeByJson(Json::Value& value);
   void Summary(Json::Value& value);
 
+  Status DescribePartitionShard(Ino ino, Json::Value& value);
+
  private:
   friend class DebugServiceImpl;
   friend class FsStatServiceImpl;

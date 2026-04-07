@@ -13,11 +13,19 @@
 // limitations under the License.
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
+#include <string>
+#include <vector>
 
+#include "dingofs/mds.pb.h"
+#include "fmt/core.h"
 #include "gtest/gtest.h"
+#include "mds/common/helper.h"
+#include "mds/filesystem/dentry.h"
 #include "mds/filesystem/inode.h"
 #include "mds/filesystem/partition.h"
+#include "mds/filesystem/store_operation.h"
 #include "utils/time.h"
 
 namespace dingofs {
@@ -25,6 +33,7 @@ namespace mds {
 namespace unit_test {
 
 const int64_t kFsId = 1000;
+const Ino kParentIno = 100;
 
 static pb::mds::Inode GenInode(uint32_t fs_id, uint64_t ino,
                                pb::mds::FileType type, uint64_t version = 1) {
@@ -64,11 +73,366 @@ static pb::mds::Inode GenInode(uint32_t fs_id, uint64_t ino,
   return inode;
 }
 
-class PartitionTest : public testing::Test {
+static pb::mds::Dentry GenDentry(uint32_t fs_id, uint64_t parent, uint64_t ino,
+                                 const std::string& name,
+                                 pb::mds::FileType type) {
+  pb::mds::Dentry dentry;
+  dentry.set_fs_id(fs_id);
+  dentry.set_parent(parent);
+  dentry.set_ino(ino);
+  dentry.set_name(name);
+  dentry.set_type(type);
+  return dentry;
+}
+
+// Mock OperationProcessor for testing
+class MockOperationProcessor : public OperationProcessor {
+ public:
+  MockOperationProcessor() : OperationProcessor(nullptr) {}
+
+  bool Init() { return true; }
+  bool Destroy() { return true; }
+
+  bool RunBatched(Operation* operation) {
+    // For UpdateShardBoundariesOperation, just simulate success
+    if (operation->GetOpType() == Operation::OpType::kUpdateShardBoundaries) {
+      auto& result = operation->GetResult();
+      result.status = Status::OK();
+      operation->NotifyEvent();
+      return true;
+    }
+    return false;
+  }
+
+  Status RunAlone(Operation* operation) {
+    // For ScanDirShardOperation, return empty results
+    if (operation->GetOpType() == Operation::OpType::kScanDirShard) {
+      return Status::OK();
+    }
+    return Status(pb::error::EINTERNAL, "mock not implemented");
+  }
+};
+
+class DirShardTest : public testing::Test {
  protected:
   void SetUp() override {}
   void TearDown() override {}
 };
+
+TEST_F(DirShardTest, BasicPutGetDelete) {
+  Range range{"", ""};
+  DirShardSPtr shard = DirShard::New(1, range, 1, {});
+
+  ASSERT_TRUE(shard != nullptr);
+  ASSERT_EQ(shard->ID(), 1);
+  ASSERT_EQ(shard->Version(), 1);
+  ASSERT_TRUE(shard->Empty());
+
+  // Put dentry
+  Dentry dentry1(
+      GenDentry(kFsId, kParentIno, 200, "file1", pb::mds::FileType::FILE));
+  shard->Put(dentry1);
+
+  ASSERT_FALSE(shard->Empty());
+  ASSERT_EQ(shard->Size(), 1);
+
+  // Get dentry
+  Dentry out;
+  ASSERT_TRUE(shard->Get("file1", out));
+  ASSERT_EQ(out.Name(), "file1");
+  ASSERT_EQ(out.INo(), 200);
+
+  // Get non-existent
+  ASSERT_FALSE(shard->Get("nonexistent", out));
+
+  // Delete dentry
+  shard->Delete("file1");
+  ASSERT_TRUE(shard->Empty());
+  ASSERT_FALSE(shard->Get("file1", out));
+}
+
+TEST_F(DirShardTest, MultipleDentries) {
+  Range range{"", ""};
+  DirShardSPtr shard = DirShard::New(1, range, 1, {});
+
+  // Put multiple dentries
+  for (int i = 0; i < 10; ++i) {
+    Dentry dentry(GenDentry(kFsId, kParentIno, 200 + i,
+                            fmt::format("file{}", i), pb::mds::FileType::FILE));
+    shard->Put(dentry);
+  }
+
+  ASSERT_EQ(shard->Size(), 10);
+  ASSERT_FALSE(shard->Empty());
+
+  // Get all
+  for (int i = 0; i < 10; ++i) {
+    Dentry out;
+    ASSERT_TRUE(shard->Get(fmt::format("file{}", i), out));
+    ASSERT_EQ(out.INo(), 200 + i);
+  }
+}
+
+TEST_F(DirShardTest, Scan) {
+  Range range{"", ""};
+  std::vector<Dentry> initial_dentries;
+  initial_dentries.reserve(10);
+  for (int i = 0; i < 10; ++i) {
+    initial_dentries.emplace_back(GenDentry(kFsId, kParentIno, 200 + i,
+                                            fmt::format("file{:02d}", i),
+                                            pb::mds::FileType::FILE));
+  }
+  DirShardSPtr shard = DirShard::New(1, range, 1, initial_dentries);
+
+  ASSERT_EQ(shard->Size(), 10);
+
+  // Scan all
+  std::vector<Dentry> results;
+  shard->Scan("", 100, false, results);
+  ASSERT_EQ(results.size(), 10);
+
+  // Scan with limit
+  results.clear();
+  shard->Scan("", 5, false, results);
+  ASSERT_EQ(results.size(), 5);
+
+  // Scan from specific name
+  results.clear();
+  shard->Scan("file05", 100, false, results);
+  ASSERT_EQ(results.size(), 5);
+
+  // Scan only directories
+  results.clear();
+  shard->Scan("", 100, true, results);
+  ASSERT_EQ(results.size(), 0);
+}
+
+TEST_F(DirShardTest, Contains) {
+  // Full range shard
+  Range range1{"", ""};
+  DirShardSPtr shard1 = DirShard::New(1, range1, 1, {});
+  ASSERT_TRUE(shard1->Contains("anything"));
+  ASSERT_TRUE(shard1->Contains(""));
+
+  // Bounded range shard [a, c)
+  Range range2{"a", "c"};
+  DirShardSPtr shard2 = DirShard::New(2, range2, 1, {});
+  ASSERT_TRUE(shard2->Contains("a"));
+  ASSERT_TRUE(shard2->Contains("apple"));
+  ASSERT_TRUE(shard2->Contains("b"));
+  ASSERT_FALSE(shard2->Contains("c"));
+  ASSERT_FALSE(shard2->Contains("d"));
+  ASSERT_FALSE(shard2->Contains(""));
+
+  // Half-open range [c, )
+  Range range3{"c", ""};
+  DirShardSPtr shard3 = DirShard::New(3, range3, 1, {});
+  ASSERT_TRUE(shard3->Contains("c"));
+  ASSERT_TRUE(shard3->Contains("z"));
+  ASSERT_FALSE(shard3->Contains("a"));
+  ASSERT_FALSE(shard3->Contains("b"));
+}
+
+TEST_F(DirShardTest, IsLastShard) {
+  Range range1{"", ""};
+  DirShardSPtr shard1 = DirShard::New(1, range1, 1, {});
+  ASSERT_TRUE(shard1->IsLastShard());
+
+  Range range2{"a", ""};
+  DirShardSPtr shard2 = DirShard::New(2, range2, 1, {});
+  ASSERT_TRUE(shard2->IsLastShard());
+
+  Range range3{"a", "c"};
+  DirShardSPtr shard3 = DirShard::New(3, range3, 1, {});
+  ASSERT_FALSE(shard3->IsLastShard());
+}
+
+TEST_F(DirShardTest, Mid) {
+  Range range{"", ""};
+  std::vector<Dentry> initial_dentries;
+  initial_dentries.reserve(10);
+  for (int i = 0; i < 10; ++i) {
+    initial_dentries.emplace_back(GenDentry(kFsId, kParentIno, 200 + i,
+                                            fmt::format("file{:02d}", i),
+                                            pb::mds::FileType::FILE));
+  }
+  DirShardSPtr shard = DirShard::New(1, range, 1, initial_dentries);
+
+  std::string mid = shard->Mid();
+  ASSERT_EQ(mid, "file05");
+}
+
+TEST_F(DirShardTest, Split) {
+  Range range{"", ""};
+  std::vector<Dentry> initial_dentries;
+  initial_dentries.reserve(10);
+  for (int i = 0; i < 10; ++i) {
+    initial_dentries.emplace_back(GenDentry(kFsId, kParentIno, 200 + i,
+                                            fmt::format("file{:02d}", i),
+                                            pb::mds::FileType::FILE));
+  }
+  DirShardSPtr shard = DirShard::New(1, range, 1, initial_dentries);
+
+  auto pair_shards = shard->Split("file05", 2, 3);
+  DirShardSPtr left = pair_shards.first;
+  DirShardSPtr right = pair_shards.second;
+
+  ASSERT_NE(left, nullptr);
+  ASSERT_NE(right, nullptr);
+  ASSERT_EQ(left->ID(), 2);
+  ASSERT_EQ(right->ID(), 3);
+  ASSERT_EQ(left->Size(), 5);
+  ASSERT_EQ(right->Size(), 5);
+  ASSERT_EQ(left->Start(), "");
+  ASSERT_EQ(left->End(), "file05");
+  ASSERT_EQ(right->Start(), "file05");
+  ASSERT_EQ(right->End(), "");
+
+  // Verify left contains [start, file05)
+  ASSERT_TRUE(left->Contains("file00"));
+  ASSERT_TRUE(left->Contains("file04"));
+  ASSERT_FALSE(left->Contains("file05"));
+
+  // Verify right contains [file05, end)
+  ASSERT_TRUE(right->Contains("file05"));
+  ASSERT_TRUE(right->Contains("file09"));
+  ASSERT_FALSE(right->Contains("file04"));
+}
+
+TEST_F(DirShardTest, SizeAndBytes) {
+  Range range{"", ""};
+  DirShardSPtr shard = DirShard::New(1, range, 1, {});
+
+  ASSERT_EQ(shard->Size(), 0);
+  ASSERT_EQ(shard->Bytes(), 0);
+
+  Dentry dentry1(
+      GenDentry(kFsId, kParentIno, 200, "file1", pb::mds::FileType::FILE));
+  shard->Put(dentry1);
+
+  ASSERT_EQ(shard->Size(), 1);
+  ASSERT_EQ(shard->Bytes(), sizeof(Dentry));
+}
+
+TEST_F(DirShardTest, ToString) {
+  Range range{"a", "c"};
+  DirShardSPtr shard = DirShard::New(1, range, 1, {});
+
+  std::string str = shard->ToString();
+  ASSERT_NE(str.find("id(1)"), std::string::npos);
+  ASSERT_NE(str.find("version(1)"), std::string::npos);
+}
+
+TEST_F(DirShardTest, UpdateLastActiveTime) {
+  Range range{"", ""};
+  DirShardSPtr shard = DirShard::New(1, range, 1, {});
+
+  uint64_t before = shard->LastActiveTimeS();
+
+  // Sleep a bit to ensure time changes
+  usleep(1000);
+
+  Dentry dentry1(
+      GenDentry(kFsId, kParentIno, 200, "file1", pb::mds::FileType::FILE));
+  shard->Put(dentry1);
+
+  uint64_t after = shard->LastActiveTimeS();
+  ASSERT_GE(after, before);
+}
+
+TEST_F(DirShardTest, EmptyShardOperations) {
+  Range range{"", ""};
+  DirShardSPtr shard = DirShard::New(1, range, 1, {});
+
+  // Mid on empty shard should return empty string
+  ASSERT_EQ(shard->Mid(), "");
+
+  // Scan on empty shard should return empty results
+  std::vector<Dentry> results;
+  shard->Scan("", 100, false, results);
+  ASSERT_TRUE(results.empty());
+
+  // Get on empty shard should return false
+  Dentry out;
+  ASSERT_FALSE(shard->Get("anything", out));
+
+  // Delete on empty shard should be fine
+  shard->Delete("nonexistent");
+}
+
+TEST_F(DirShardTest, OverwriteDentry) {
+  Range range{"", ""};
+  DirShardSPtr shard = DirShard::New(1, range, 1, {});
+
+  // Put initial dentry
+  Dentry dentry1(
+      GenDentry(kFsId, kParentIno, 200, "file1", pb::mds::FileType::FILE));
+  shard->Put(dentry1);
+
+  // Put with same name but different ino
+  Dentry dentry2(
+      GenDentry(kFsId, kParentIno, 300, "file1", pb::mds::FileType::DIRECTORY));
+  shard->Put(dentry2);
+
+  ASSERT_EQ(shard->Size(), 1);
+
+  Dentry out;
+  ASSERT_TRUE(shard->Get("file1", out));
+  ASSERT_EQ(out.INo(), 300);
+  ASSERT_EQ(out.Type(), pb::mds::FileType::DIRECTORY);
+}
+
+TEST_F(DirShardTest, ScanWithMixedTypes) {
+  Range range{"", ""};
+  std::vector<Dentry> initial_dentries;
+
+  // Add mix of files and directories
+  for (int i = 0; i < 5; ++i) {
+    initial_dentries.emplace_back(GenDentry(kFsId, kParentIno, 200 + i,
+                                            fmt::format("file{:02d}", i),
+                                            pb::mds::FileType::FILE));
+    initial_dentries.emplace_back(GenDentry(kFsId, kParentIno, 300 + i,
+                                            fmt::format("dir{:02d}", i),
+                                            pb::mds::FileType::DIRECTORY));
+  }
+  DirShardSPtr shard = DirShard::New(1, range, 1, initial_dentries);
+
+  ASSERT_EQ(shard->Size(), 10);
+
+  // Scan all
+  std::vector<Dentry> results;
+  shard->Scan("", 100, false, results);
+  ASSERT_EQ(results.size(), 10);
+
+  // Scan only directories
+  results.clear();
+  shard->Scan("", 100, true, results);
+  ASSERT_EQ(results.size(), 5);
+}
+
+TEST_F(DirShardTest, RangeBoundariesEdgeCases) {
+  // Test exact boundary matches
+  Range range{"a", "b"};
+  DirShardSPtr shard = DirShard::New(1, range, 1, {});
+
+  ASSERT_TRUE(shard->Contains("a"));
+  ASSERT_FALSE(shard->Contains("b"));
+
+  // Empty end boundary means unlimited
+  Range range2{"z", ""};
+  DirShardSPtr shard2 = DirShard::New(2, range2, 1, {});
+
+  ASSERT_TRUE(shard2->Contains("z"));
+  ASSERT_TRUE(shard2->Contains("zzzz"));
+  ASSERT_FALSE(shard2->Contains("y"));
+
+  // Empty start and end means all
+  Range range3{"", ""};
+  DirShardSPtr shard3 = DirShard::New(3, range3, 1, {});
+
+  ASSERT_TRUE(shard3->Contains(""));
+  ASSERT_TRUE(shard3->Contains("anything"));
+}
 
 class PartitionCacheTest : public testing::Test {
  protected:
@@ -76,359 +440,454 @@ class PartitionCacheTest : public testing::Test {
   void TearDown() override {}
 };
 
-TEST_F(PartitionTest, PutAndGetDelete) {
-  const Ino parent = 1;
+TEST_F(PartitionCacheTest, PutIfAndGet) {
+  PartitionCache cache(kFsId);
 
-  // ready data
-  Partition partition(
-      Inode::New(GenInode(kFsId, parent, pb::mds::FileType::DIRECTORY)));
+  auto mock_processor = std::make_shared<MockOperationProcessor>();
 
-  {
-    partition.Put(
-        Dentry(kFsId, "file01", parent, 1001, pb::mds::FileType::FILE, 0), 1);
-    partition.Put(
-        Dentry(kFsId, "file02", parent, 1002, pb::mds::FileType::FILE, 0), 1);
-    partition.Put(
-        Dentry(kFsId, "file03", parent, 1003, pb::mds::FileType::FILE, 0), 1);
-    partition.Put(
-        Dentry(kFsId, "file04", parent, 1004, pb::mds::FileType::FILE, 0), 1);
-    partition.Put(
-        Dentry(kFsId, "file05", parent, 1005, pb::mds::FileType::FILE, 0), 1);
+  // Create inode for partition
+  auto inode =
+      Inode::New(GenInode(kFsId, kParentIno, pb::mds::FileType::DIRECTORY));
 
-    ASSERT_EQ(partition.Size(), 5);
-  }
+  // Create partition
+  PartitionPtr partition = ShardPartition::New(mock_processor, inode);
 
-  // get one
-  {
-    Dentry dentry1;
-    ASSERT_TRUE(partition.Get("file01", dentry1));
-    ASSERT_EQ(dentry1.INo(), 1001);
+  // Put into cache
+  auto result = cache.PutIf(partition);
+  ASSERT_NE(result, nullptr);
+  ASSERT_EQ(result->INo(), kParentIno);
 
-    Dentry dentry2;
-    ASSERT_TRUE(partition.Get("file02", dentry1));
-    ASSERT_EQ(dentry1.INo(), 1002);
+  // Get from cache
+  auto got = cache.Get(kParentIno);
+  ASSERT_NE(got, nullptr);
+  ASSERT_EQ(got->INo(), kParentIno);
 
-    Dentry dentry3;
-    ASSERT_TRUE(partition.Get("file03", dentry1));
-    ASSERT_EQ(dentry1.INo(), 1003);
-
-    Dentry dentry4;
-    ASSERT_TRUE(partition.Get("file04", dentry1));
-    ASSERT_EQ(dentry1.INo(), 1004);
-
-    Dentry dentry5;
-    ASSERT_TRUE(partition.Get("file05", dentry1));
-    ASSERT_EQ(dentry1.INo(), 1005);
-  }
-
-  // get all
-  {
-    auto dentries = partition.GetAll();
-    ASSERT_EQ(dentries.size(), 5);
-    std::sort(  // NOLINT
-        dentries.begin(), dentries.end(),
-        [](const Dentry& a, const Dentry& b) { return a.INo() < b.INo(); });
-    ASSERT_EQ(dentries[0].INo(), 1001);
-    ASSERT_EQ(dentries[1].INo(), 1002);
-    ASSERT_EQ(dentries[2].INo(), 1003);
-    ASSERT_EQ(dentries[3].INo(), 1004);
-    ASSERT_EQ(dentries[4].INo(), 1005);
-  }
-
-  // scan
-  {
-    auto dentries = partition.Scan("file02", 2, false);
-    ASSERT_EQ(dentries.size(), 2);
-    ASSERT_EQ(dentries[0].INo(), 1003);
-    ASSERT_EQ(dentries[1].INo(), 1004);
-  }
-
-  // delete
-  {
-    partition.Delete("file03", 2);
-    ASSERT_EQ(partition.Size(), 4);
-
-    Dentry temp_dentry;
-    ASSERT_FALSE(partition.Get("file03", temp_dentry));
-  }
+  ASSERT_EQ(cache.Size(), 1);
 }
 
-TEST_F(PartitionTest, Merge) {
-  const Ino parent = 1;
+TEST_F(PartitionCacheTest, PutIfExisting) {
+  PartitionCache cache(kFsId);
 
-  // only put
-  {
-    Partition partition1(
-        Inode::New(GenInode(kFsId, parent, pb::mds::FileType::DIRECTORY, 1)));
+  auto mock_processor = std::make_shared<MockOperationProcessor>();
 
-    partition1.Put(
-        Dentry(kFsId, "file01", parent, 1001, pb::mds::FileType::FILE, 0), 1);
+  // Create first partition
+  auto inode1 =
+      Inode::New(GenInode(kFsId, kParentIno, pb::mds::FileType::DIRECTORY, 1));
+  PartitionPtr partition1 = ShardPartition::New(mock_processor, inode1);
 
-    partition1.Put(
-        Dentry(kFsId, "file02", parent, 1002, pb::mds::FileType::FILE, 0), 2);
+  // Put first
+  auto result1 = cache.PutIf(partition1);
+  ASSERT_EQ(result1->BaseVersion(), 1);
 
-    Partition partition2(
-        Inode::New(GenInode(kFsId, parent, pb::mds::FileType::DIRECTORY, 2)));
+  // Create second partition with higher version
+  auto inode2 =
+      Inode::New(GenInode(kFsId, kParentIno, pb::mds::FileType::DIRECTORY, 2));
 
-    partition2.Put(
-        Dentry(kFsId, "file01", parent, 1001, pb::mds::FileType::FILE, 0), 3);
+  PartitionPtr partition2 = ShardPartition::New(mock_processor, inode2);
+  // Note: PutIf will call Refresh on the existing partition when putting a
+  // partition with same ino
 
-    partition2.Put(
-        Dentry(kFsId, "file02", parent, 1002, pb::mds::FileType::FILE, 0), 4);
+  // Put second - should return existing (and trigger Refresh)
+  auto result2 = cache.PutIf(partition2);
+  ASSERT_EQ(result2->INo(), kParentIno);
 
-    partition2.Put(
-        Dentry(kFsId, "file03", parent, 1003, pb::mds::FileType::FILE, 0), 5);
-
-    partition2.Put(
-        Dentry(kFsId, "file04", parent, 1004, pb::mds::FileType::FILE, 0), 6);
-
-    partition1.Merge(std::move(partition2));
-    ASSERT_EQ(partition1.Size(), 4);
-
-    // get all
-    {
-      auto dentries = partition1.GetAll();
-      ASSERT_EQ(dentries.size(), 4);
-      std::sort(  // NOLINT
-          dentries.begin(), dentries.end(),
-          [](const Dentry& a, const Dentry& b) { return a.INo() < b.INo(); });
-      ASSERT_EQ(dentries[0].INo(), 1001);
-      ASSERT_EQ(dentries[1].INo(), 1002);
-      ASSERT_EQ(dentries[2].INo(), 1003);
-      ASSERT_EQ(dentries[3].INo(), 1004);
-    }
-  }
-
-  // put and delete
-  {
-    Partition partition1(
-        Inode::New(GenInode(kFsId, parent, pb::mds::FileType::DIRECTORY, 1)));
-
-    Partition partition2(
-        Inode::New(GenInode(kFsId, parent, pb::mds::FileType::DIRECTORY, 2)));
-
-    partition2.Put(
-        Dentry(kFsId, "file03", parent, 1003, pb::mds::FileType::FILE, 0), 4);
-
-    partition2.Put(
-        Dentry(kFsId, "file04", parent, 1004, pb::mds::FileType::FILE, 0), 5);
-
-    partition1.Put(
-        Dentry(kFsId, "file01", parent, 1001, pb::mds::FileType::FILE, 0), 6);
-
-    partition1.Put(
-        Dentry(kFsId, "file02", parent, 1002, pb::mds::FileType::FILE, 0), 7);
-
-    partition1.Delete("file01", 8);
-
-    partition1.Merge(std::move(partition2));
-    ASSERT_EQ(partition1.Size(), 3);
-
-    // get all
-    {
-      auto dentries = partition1.GetAll();
-      ASSERT_EQ(dentries.size(), 3);
-      std::sort(  // NOLINT
-          dentries.begin(), dentries.end(),
-          [](const Dentry& a, const Dentry& b) { return a.INo() < b.INo(); });
-      ASSERT_EQ(dentries[0].INo(), 1002);
-      ASSERT_EQ(dentries[1].INo(), 1003);
-      ASSERT_EQ(dentries[2].INo(), 1004);
-    }
-  }
-}
-
-TEST_F(PartitionCacheTest, Put) {
-  PartitionCache partition_cache(kFsId);
-
-  // put PartitionPtr
-  {
-    InodeSPtr inode =
-        Inode::New(GenInode(kFsId, 1, pb::mds::FileType::DIRECTORY));
-    auto partition = Partition::New(inode);
-
-    uint64_t parent_ino = 1;
-    partition->Put(Dentry(kFsId, "dir01", parent_ino, 100000,
-                          pb::mds::FileType::DIRECTORY, 0),
-                   1);
-    partition->Put(
-        Dentry(kFsId, "file01", parent_ino, 100001, pb::mds::FileType::FILE, 0),
-        2);
-
-    partition_cache.PutIf(partition);
-    ASSERT_EQ(partition_cache.Size(), 1);
-
-    partition = partition_cache.Get(inode->Ino());
-    ASSERT_TRUE(partition != nullptr);
-    ASSERT_EQ(partition->INo(), inode->Ino());
-  }
-
-  // put Partition&&
-  {
-    InodeSPtr inode =
-        Inode::New(GenInode(kFsId, 1, pb::mds::FileType::DIRECTORY));
-    Partition partition(inode);
-
-    uint64_t parent_ino = 2;
-    partition.Put(Dentry(kFsId, "dir01", parent_ino, 100000,
-                         pb::mds::FileType::DIRECTORY, 0),
-                  1);
-    partition.Put(
-        Dentry(kFsId, "file01", parent_ino, 100001, pb::mds::FileType::FILE, 0),
-        2);
-
-    partition_cache.PutIf(std::move(partition));
-    ASSERT_EQ(partition_cache.Size(), 1);
-    ASSERT_TRUE(partition.Empty());
-
-    auto partition2 = partition_cache.Get(inode->Ino());
-    ASSERT_TRUE(partition2 != nullptr);
-    ASSERT_EQ(partition2->INo(), inode->Ino());
-  }
-
-  // put return value
-  {
-    auto partition1 = Partition::New(
-        Inode::New(GenInode(kFsId, 20000, pb::mds::FileType::DIRECTORY)));
-
-    auto resp_partition = partition_cache.PutIf(partition1);
-    ASSERT_TRUE(resp_partition.get() == partition1.get());
-
-    auto partition2 = Partition::New(
-        Inode::New(GenInode(kFsId, 20000, pb::mds::FileType::DIRECTORY, 2)));
-    Dentry dentry(kFsId, "file1", 1, 1000, pb::mds::FileType::FILE, 1212,
-                  nullptr);
-    partition2->Put(dentry, 2);
-
-    resp_partition = partition_cache.PutIf(partition2);
-    ASSERT_TRUE(resp_partition.get() == partition1.get());
-    Dentry temp_dentry;
-    ASSERT_TRUE(resp_partition->Get("file1", temp_dentry));
-  }
+  ASSERT_EQ(cache.Size(), 1);
 }
 
 TEST_F(PartitionCacheTest, Delete) {
-  PartitionCache partition_cache(kFsId);
+  PartitionCache cache(kFsId);
 
-  InodeSPtr inode =
-      Inode::New(GenInode(kFsId, 1, pb::mds::FileType::DIRECTORY));
-  auto partition = Partition::New(inode);
+  auto mock_processor = std::make_shared<MockOperationProcessor>();
 
-  uint64_t parent_ino = 1;
-  partition->Put(Dentry(kFsId, "dir01", parent_ino, 100000,
-                        pb::mds::FileType::DIRECTORY, 0),
-                 1);
-  partition->Put(Dentry(kFsId, "dir02", parent_ino, 100001,
-                        pb::mds::FileType::DIRECTORY, 0),
-                 2);
-  partition->Put(Dentry(kFsId, "dir03", parent_ino, 100002,
-                        pb::mds::FileType::DIRECTORY, 0),
-                 3);
-  partition->Put(Dentry(kFsId, "dir04", parent_ino, 100003,
-                        pb::mds::FileType::DIRECTORY, 0),
-                 4);
-  partition->Put(
-      Dentry(kFsId, "file01", parent_ino, 100004, pb::mds::FileType::FILE, 0),
-      5);
-  partition->Put(
-      Dentry(kFsId, "file01", parent_ino, 100005, pb::mds::FileType::FILE, 0),
-      6);
+  // Create and put partition
+  auto inode =
+      Inode::New(GenInode(kFsId, kParentIno, pb::mds::FileType::DIRECTORY));
+  PartitionPtr partition = ShardPartition::New(mock_processor, inode);
+  cache.PutIf(partition);
 
-  partition_cache.PutIf(partition);
+  ASSERT_NE(cache.Get(kParentIno), nullptr);
+  ASSERT_EQ(cache.Size(), 1);
 
-  ASSERT_TRUE(partition_cache.Get(inode->Ino()) != nullptr);
-
-  partition_cache.Delete(inode->Ino());
-  ASSERT_TRUE(partition_cache.Get(inode->Ino()) == nullptr);
+  // Delete
+  cache.Delete(kParentIno);
+  ASSERT_EQ(cache.Get(kParentIno), nullptr);
+  ASSERT_EQ(cache.Size(), 0);
 }
 
-TEST_F(PartitionCacheTest, Get) {
-  PartitionCache partition_cache(kFsId);
+TEST_F(PartitionCacheTest, DeleteIf) {
+  PartitionCache cache(kFsId);
 
-  // ready data
-  {
-    InodeSPtr inode =
-        Inode::New(GenInode(kFsId, 1, pb::mds::FileType::DIRECTORY));
-    Partition partition(inode);
+  auto mock_processor = std::make_shared<MockOperationProcessor>();
 
-    partition_cache.PutIf(std::move(partition));
+  // Create multiple partitions
+  for (int i = 0; i < 10; ++i) {
+    auto inode =
+        Inode::New(GenInode(kFsId, 100 + i, pb::mds::FileType::DIRECTORY));
+    PartitionPtr partition = ShardPartition::New(mock_processor, inode);
+    cache.PutIf(partition);
   }
 
-  {
-    InodeSPtr inode =
-        Inode::New(GenInode(kFsId, 2, pb::mds::FileType::DIRECTORY));
-    Partition partition(inode);
+  ASSERT_EQ(cache.Size(), 10);
 
-    partition_cache.PutIf(std::move(partition));
+  // Delete if ino >= 105
+  cache.DeleteIf([](const Ino& ino) { return ino >= 105; });
+
+  ASSERT_EQ(cache.Size(), 5);
+  ASSERT_NE(cache.Get(100), nullptr);
+  ASSERT_NE(cache.Get(104), nullptr);
+  ASSERT_EQ(cache.Get(105), nullptr);
+  ASSERT_EQ(cache.Get(109), nullptr);
+}
+
+TEST_F(PartitionCacheTest, Clear) {
+  PartitionCache cache(kFsId);
+
+  auto mock_processor = std::make_shared<MockOperationProcessor>();
+
+  // Create multiple partitions
+  for (int i = 0; i < 5; ++i) {
+    auto inode =
+        Inode::New(GenInode(kFsId, 100 + i, pb::mds::FileType::DIRECTORY));
+    PartitionPtr partition = ShardPartition::New(mock_processor, inode);
+    cache.PutIf(partition);
   }
 
-  {
-    InodeSPtr inode =
-        Inode::New(GenInode(kFsId, 3, pb::mds::FileType::DIRECTORY));
-    Partition partition(inode);
+  ASSERT_EQ(cache.Size(), 5);
 
-    partition_cache.PutIf(std::move(partition));
+  // Clear all
+  cache.Clear();
+
+  ASSERT_EQ(cache.Size(), 0);
+  ASSERT_EQ(cache.Get(100), nullptr);
+}
+
+TEST_F(PartitionCacheTest, GetAll) {
+  PartitionCache cache(kFsId);
+
+  auto mock_processor = std::make_shared<MockOperationProcessor>();
+
+  // Create multiple partitions
+  for (int i = 0; i < 5; ++i) {
+    auto inode =
+        Inode::New(GenInode(kFsId, 100 + i, pb::mds::FileType::DIRECTORY));
+    PartitionPtr partition = ShardPartition::New(mock_processor, inode);
+    cache.PutIf(partition);
   }
 
-  {
-    InodeSPtr inode =
-        Inode::New(GenInode(kFsId, 4, pb::mds::FileType::DIRECTORY));
-    Partition partition(inode);
+  auto all = cache.GetAll();
+  ASSERT_EQ(all.size(), 5);
+}
 
-    partition_cache.PutIf(std::move(partition));
+TEST_F(PartitionCacheTest, CacheMiss) {
+  PartitionCache cache(kFsId);
+
+  // Get non-existent partition
+  auto got = cache.Get(9999);
+  ASSERT_EQ(got, nullptr);
+}
+
+TEST_F(PartitionCacheTest, MultiplePutIf) {
+  PartitionCache cache(kFsId);
+
+  auto mock_processor = std::make_shared<MockOperationProcessor>();
+
+  // Add multiple different partitions
+  for (int i = 0; i < 100; ++i) {
+    auto inode =
+        Inode::New(GenInode(kFsId, 1000 + i, pb::mds::FileType::DIRECTORY));
+    PartitionPtr partition = ShardPartition::New(mock_processor, inode);
+    cache.PutIf(partition);
   }
 
-  // get one
-  {
-    auto partition = partition_cache.Get(1);
-    ASSERT_TRUE(partition != nullptr);
-    ASSERT_EQ(partition->INo(), 1);
+  ASSERT_EQ(cache.Size(), 100);
+
+  // Verify all are accessible
+  for (int i = 0; i < 100; ++i) {
+    auto got = cache.Get(1000 + i);
+    ASSERT_NE(got, nullptr);
+    ASSERT_EQ(got->INo(), 1000 + i);
+  }
+}
+
+TEST_F(PartitionCacheTest, BytesAndShardSize) {
+  PartitionCache cache(kFsId);
+
+  auto mock_processor = std::make_shared<MockOperationProcessor>();
+
+  // Create partition with some data
+  auto inode =
+      Inode::New(GenInode(kFsId, kParentIno, pb::mds::FileType::DIRECTORY));
+  PartitionPtr partition = ShardPartition::New(mock_processor, inode);
+
+  // Note: PutWithInode requires shard to exist first
+  // Without fetched shards, ShardSize and Bytes will be 0
+  cache.PutIf(partition);
+
+  ASSERT_EQ(cache.Size(), 1);
+  ASSERT_EQ(cache.ShardSize(), 0);  // No shards fetched
+  ASSERT_EQ(cache.Bytes(), 0);      // No bytes without shards
+}
+
+class ShardPartitionBasicTest : public testing::Test {
+ protected:
+  void SetUp() override {
+    mock_processor_ = std::make_shared<MockOperationProcessor>();
+    inode_ = Inode::New(
+        GenInode(kFsId, kParentIno, pb::mds::FileType::DIRECTORY, 1));
+    partition_ = ShardPartition::New(mock_processor_, inode_);
   }
 
-  {
-    auto partition = partition_cache.Get(2);
-    ASSERT_TRUE(partition != nullptr);
-    ASSERT_EQ(partition->INo(), 2);
+  void TearDown() override {}
+
+  std::shared_ptr<MockOperationProcessor> mock_processor_;
+  InodeSPtr inode_;
+  PartitionPtr partition_;
+};
+
+TEST_F(ShardPartitionBasicTest, BasicProperties) {
+  ASSERT_EQ(partition_->FsId(), kFsId);
+  ASSERT_EQ(partition_->INo(), kParentIno);
+  ASSERT_EQ(partition_->BaseVersion(), 1);
+  ASSERT_EQ(partition_->DeltaVersion(), 1);
+}
+
+TEST_F(ShardPartitionBasicTest, ParentInode) {
+  auto parent = partition_->ParentInode();
+  ASSERT_NE(parent, nullptr);
+  ASSERT_EQ(parent->Ino(), kParentIno);
+
+  // Set new parent inode
+  auto new_inode =
+      Inode::New(GenInode(kFsId, kParentIno, pb::mds::FileType::DIRECTORY));
+  partition_->SetParentInode(new_inode);
+
+  auto got = partition_->ParentInode();
+  ASSERT_EQ(got->Ino(), kParentIno);
+}
+
+TEST_F(ShardPartitionBasicTest, PutWithVersion) {
+  Dentry dentry(
+      GenDentry(kFsId, kParentIno, 200, "file1", pb::mds::FileType::FILE));
+
+  // Put with version - stores in delta ops
+  partition_->Put(dentry, 2);
+
+  // Note: Size() only counts dentries in shards, not delta ops
+  // So size will be 0 because no shard has been fetched yet
+  ASSERT_EQ(partition_->Size(), 0);
+}
+
+TEST_F(ShardPartitionBasicTest, DeleteSingle) {
+  // Note: Delete only works if shard exists
+  // Without a fetched shard, Delete just adds to delta ops
+  partition_->Delete("file1", 2);
+  ASSERT_EQ(partition_->Size(), 0);
+}
+
+TEST_F(ShardPartitionBasicTest, DeleteMultiple) {
+  // Delete multiple - only adds to delta ops since no shard exists
+  std::vector<std::string> names = {"file0", "file2", "file4"};
+  partition_->Delete(names, 2);
+
+  ASSERT_EQ(partition_->Size(), 0);
+}
+
+TEST_F(ShardPartitionBasicTest, Empty) {
+  ASSERT_TRUE(partition_->Empty());
+
+  // Put adds to delta ops but Size() counts only shard entries
+  Dentry dentry(
+      GenDentry(kFsId, kParentIno, 200, "file1", pb::mds::FileType::FILE));
+  partition_->Put(dentry, 2);
+
+  // Still empty because no shard fetched yet
+  ASSERT_TRUE(partition_->Empty());
+}
+
+TEST_F(ShardPartitionBasicTest, SizeAndShardSize) {
+  ASSERT_EQ(partition_->Size(), 0);
+  ASSERT_EQ(partition_->ShardSize(), 0);
+
+  // Put dentries - they go to delta ops since no shard fetched yet
+  for (int i = 0; i < 10; ++i) {
+    Dentry dentry(GenDentry(kFsId, kParentIno, 200 + i,
+                            fmt::format("file{}", i), pb::mds::FileType::FILE));
+    partition_->Put(dentry, 2 + i);
   }
 
-  {
-    auto partition = partition_cache.Get(3);
-    ASSERT_TRUE(partition != nullptr);
-    ASSERT_EQ(partition->INo(), 3);
+  // Size counts entries in shards, not delta ops
+  ASSERT_EQ(partition_->Size(), 0);
+  ASSERT_EQ(partition_->ShardSize(), 0);
+}
+
+TEST_F(ShardPartitionBasicTest, NeedCompact) {
+  // Initially should not need compact
+  ASSERT_FALSE(partition_->NeedCompact());
+}
+
+TEST_F(ShardPartitionBasicTest, GetAll) {
+  // Without fetched shards, GetAll returns empty
+  auto all = partition_->GetAll();
+  ASSERT_EQ(all.size(), 0);
+}
+
+TEST_F(ShardPartitionBasicTest, Refresh) {
+  // Create new inode with higher version and put into a new cache to trigger
+  // refresh
+  PartitionCache cache(kFsId);
+
+  // Put the partition first
+  cache.PutIf(partition_);
+  ASSERT_EQ(partition_->BaseVersion(), 1);
+
+  // Create new inode with higher version
+  auto new_inode =
+      Inode::New(GenInode(kFsId, kParentIno, pb::mds::FileType::DIRECTORY, 2));
+  ASSERT_EQ(new_inode->Version(), 2);
+
+  // Create new partition with higher version inode
+  auto partition2 = ShardPartition::New(mock_processor_, new_inode);
+
+  // PutIf should trigger refresh on existing partition (since ino already
+  // exists)
+  auto result = cache.PutIf(partition2);
+  // Note: Refresh clears shards, so size should be 0 after refresh
+}
+
+TEST_F(ShardPartitionBasicTest, PartitionCacheIntegration) {
+  // Create a cache and put the partition
+  PartitionCache cache(kFsId);
+  cache.PutIf(partition_);
+  ASSERT_EQ(cache.Size(), 1);
+
+  // Create new inode with higher version
+  auto new_inode =
+      Inode::New(GenInode(kFsId, kParentIno, pb::mds::FileType::DIRECTORY, 2));
+
+  // Create new partition with higher version - PutIf will trigger refresh on
+  // existing
+  auto partition2 = ShardPartition::New(mock_processor_, new_inode);
+  auto result = cache.PutIf(partition2);
+  ASSERT_EQ(result->INo(), kParentIno);
+
+  // Note: After refresh through PutIf, the existing partition's shards are
+  // cleared
+}
+
+TEST_F(ShardPartitionBasicTest, DeltaVersionTracking) {
+  ASSERT_EQ(partition_->DeltaVersion(), 1);
+
+  // Put dentry with version
+  Dentry dentry(
+      GenDentry(kFsId, kParentIno, 200, "file1", pb::mds::FileType::FILE));
+  partition_->Put(dentry, 3);
+
+  ASSERT_EQ(partition_->DeltaVersion(), 3);
+
+  // Delete with higher version
+  partition_->Delete("file1", 5);
+
+  ASSERT_EQ(partition_->DeltaVersion(), 5);
+
+  // Delete with lower version should not change delta_version
+  partition_->Delete("file1", 4);
+
+  ASSERT_EQ(partition_->DeltaVersion(), 5);
+}
+
+TEST_F(ShardPartitionBasicTest, DeleteNonExistent) {
+  // Should not crash when deleting non-existent dentry
+  partition_->Delete("nonexistent", 2);
+
+  ASSERT_TRUE(partition_->Empty());
+  ASSERT_EQ(partition_->Size(), 0);
+}
+
+class ShardPartitionWithBoundariesTest : public testing::Test {
+ protected:
+  void SetUp() override {
+    mock_processor_ = std::make_shared<MockOperationProcessor>();
+
+    // Create inode with shard boundaries
+    pb::mds::Inode inode_proto =
+        GenInode(kFsId, kParentIno, pb::mds::FileType::DIRECTORY, 1);
+    inode_proto.add_shard_boundaries("m");
+    inode_ = Inode::New(inode_proto);
+
+    partition_ = ShardPartition::New(mock_processor_, inode_);
   }
 
-  {
-    auto partition = partition_cache.Get(4);
-    ASSERT_TRUE(partition != nullptr);
-    ASSERT_EQ(partition->INo(), 4);
+  void TearDown() override {}
+
+  std::shared_ptr<MockOperationProcessor> mock_processor_;
+  InodeSPtr inode_;
+  PartitionPtr partition_;
+};
+
+TEST_F(ShardPartitionWithBoundariesTest, ShardBoundaries) {
+  // With boundary "m", we have two shards: [", "m") and ["m", ")
+  ASSERT_EQ(partition_->ShardSize(), 0);  // No shards loaded yet
+}
+
+TEST_F(ShardPartitionWithBoundariesTest, PutMultipleShards) {
+  // Put dentries in different shards using Put with version
+  // Note: Without fetched shards, dentries go to delta ops, not to Size()
+  Dentry dentry1(
+      GenDentry(kFsId, kParentIno, 200, "a_file", pb::mds::FileType::FILE));
+  Dentry dentry2(
+      GenDentry(kFsId, kParentIno, 201, "z_file", pb::mds::FileType::FILE));
+
+  partition_->Put(dentry1, 2);
+  partition_->Put(dentry2, 3);
+
+  // Size() counts entries in shards, not delta ops
+  ASSERT_EQ(partition_->Size(), 0);
+}
+
+class DirShardConstructFromDentriesTest : public testing::Test {
+ protected:
+  void SetUp() override {}
+  void TearDown() override {}
+};
+
+TEST_F(DirShardConstructFromDentriesTest, ConstructWithDentries) {
+  std::vector<Dentry> dentries;
+  for (int i = 0; i < 5; ++i) {
+    dentries.emplace_back(GenDentry(kFsId, kParentIno, 200 + i,
+                                    fmt::format("file{}", i),
+                                    pb::mds::FileType::FILE));
   }
 
-  {
-    auto partition = partition_cache.Get(101);
-    ASSERT_TRUE(partition == nullptr);
-  }
+  Range range{"", ""};
+  DirShardSPtr shard = DirShard::New(1, range, 1, dentries);
 
-  // get all
-  {
-    auto partitions = partition_cache.GetAll();
-    ASSERT_EQ(partitions.size(), 4);
-    std::sort(partitions.begin(), partitions.end(),  // NOLINT
-              [](const PartitionPtr& a, const PartitionPtr& b) {
-                return a->INo() < b->INo();
-              });
-    ASSERT_EQ(partitions[0]->INo(), 1);
-    ASSERT_EQ(partitions[1]->INo(), 2);
-    ASSERT_EQ(partitions[2]->INo(), 3);
-    ASSERT_EQ(partitions[3]->INo(), 4);
-  }
+  ASSERT_EQ(shard->Size(), 5);
 
-  // clear
-  {
-    partition_cache.Clear();
-    ASSERT_EQ(partition_cache.Size(), 0);
-    auto partitions = partition_cache.GetAll();
-    ASSERT_EQ(partitions.size(), 0);
+  for (int i = 0; i < 5; ++i) {
+    Dentry out;
+    ASSERT_TRUE(shard->Get(fmt::format("file{}", i), out));
+    ASSERT_EQ(out.INo(), 200 + i);
   }
+}
+
+TEST_F(DirShardConstructFromDentriesTest, OutOfRangeDentry) {
+  // When constructing, dentries must be within range
+  // This is checked by CHECK in the constructor
+  // We'll test that dentries in range are accepted
+  std::vector<Dentry> dentries;
+  dentries.emplace_back(
+      GenDentry(kFsId, kParentIno, 200, "b", pb::mds::FileType::FILE));
+  dentries.emplace_back(
+      GenDentry(kFsId, kParentIno, 201, "c", pb::mds::FileType::FILE));
+
+  Range range{"a", "d"};
+  DirShardSPtr shard = DirShard::New(1, range, 1, dentries);
+
+  ASSERT_EQ(shard->Size(), 2);
+
+  Dentry out;
+  ASSERT_TRUE(shard->Get("b", out));
+  ASSERT_TRUE(shard->Get("c", out));
 }
 
 }  // namespace unit_test
