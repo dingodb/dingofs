@@ -45,11 +45,14 @@ class CacheNode {
   Status Start();
   Status Shutdown();
 
-  Status Put(ContextSPtr ctx, const BlockKey& key, const Block& block);
-  Status Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
+  Status Put(ContextSPtr ctx, const BlockContext& block_ctx,
+             const Block& block);
+  Status Range(ContextSPtr ctx, const BlockContext& block_ctx, off_t offset,
                size_t length, IOBuffer* buffer, size_t block_length);
-  Status AsyncCache(ContextSPtr ctx, const BlockKey& key, const Block& block);
-  Status AsyncPrefetch(ContextSPtr ctx, const BlockKey& key, size_t length);
+  Status AsyncCache(ContextSPtr ctx, const BlockContext& block_ctx,
+                    const Block& block);
+  Status AsyncPrefetch(ContextSPtr ctx, const BlockContext& block_ctx,
+                       size_t length);
 
  private:
   bool IsRunning() const { return running_.load(std::memory_order_relaxed); }
@@ -57,14 +60,15 @@ class CacheNode {
   Status JoinGroup();
   Status LeaveGroup();
 
-  Status RetrieveCache(ContextSPtr ctx, const BlockKey& key, off_t offset,
-                       size_t length, IOBuffer* buffer);
-  Status RetrieveStorage(ContextSPtr ctx, const BlockKey& key, off_t offset,
-                         size_t length, IOBuffer* buffer, size_t block_length);
-  Status RetrievePartBlock(ContextSPtr ctx, const BlockKey& key, off_t offset,
-                           size_t length, IOBuffer* buffer,
+  Status RetrieveCache(ContextSPtr ctx, const BlockContext& block_ctx,
+                       off_t offset, size_t length, IOBuffer* buffer);
+  Status RetrieveStorage(ContextSPtr ctx, const BlockContext& block_ctx,
+                         off_t offset, size_t length, IOBuffer* buffer,
+                         size_t block_length);
+  Status RetrievePartBlock(ContextSPtr ctx, const BlockContext& block_ctx,
+                           off_t offset, size_t length, IOBuffer* buffer,
                            size_t block_length);
-  Status RetrieveWholeBlock(ContextSPtr ctx, const BlockKey& key,
+  Status RetrieveWholeBlock(ContextSPtr ctx, const BlockContext& block_ctx,
                             size_t block_length, IOBuffer* buffer);
   Status RunTask(StorageClient* storage_client, DownloadTaskSPtr task);
   Status WaitTask(DownloadTaskSPtr task);

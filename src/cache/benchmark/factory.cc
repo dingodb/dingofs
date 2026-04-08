@@ -25,24 +25,23 @@
 #include "cache/benchmark/option.h"
 #include "cache/utils/context.h"
 #include "cache/utils/helper.h"
+#include "common/block/block_context.h"
 
 namespace dingofs {
 namespace cache {
 
-BlockKeyIterator::BlockKeyIterator(uint64_t idx, uint64_t fsid, uint64_t ino,
-                                   uint64_t blksize, uint64_t blocks)
+BlockKeyIterator::BlockKeyIterator(uint64_t idx, uint64_t blksize,
+                                   uint64_t blocks)
     : idx_(idx),
-      fsid_(fsid),
-      ino_(ino),
       blksize_(blksize),
       blocks_(blocks),
-      chunkid_((idx_ * blocks) + 1),
-      blockidx_(0),
+      id_((idx_ * blocks) + 1),
+      index_(0),
       allocated_(0) {}
 
 void BlockKeyIterator::SeekToFirst() {
-  chunkid_ = idx_ * blocks_ + 1;
-  blockidx_ = 0;
+  id_ = idx_ * blocks_ + 1;
+  index_ = 0;
 }
 
 bool BlockKeyIterator::Valid() const { return allocated_ < blocks_; }
@@ -55,15 +54,16 @@ void BlockKeyIterator::Next() {
     return;
   }
 
-  blockidx_++;
-  if (blockidx_ == kBlocksPerChunk) {
-    chunkid_++;
-    blockidx_ = 0;
+  index_++;
+  if (index_ == kBlocksPerChunk) {
+    id_++;
+    index_ = 0;
   }
 }
 
 BlockKey BlockKeyIterator::Key() const {
-  return BlockKey(fsid_, ino_, chunkid_, blockidx_, 0);
+  return BlockKey(id_, static_cast<uint32_t>(index_),
+                  static_cast<uint32_t>(blksize_));
 }
 
 constexpr uint64_t pagesize = 64 * 1024;
@@ -93,7 +93,8 @@ void PutTaskFactory::Put(const BlockKey& key) {
   auto option = PutOption();
   option.writeback = FLAGS_writeback;
 
-  auto status = block_cache_->Put(NewContext(), key, block_, option);
+  BlockContext block_ctx(key, static_cast<uint32_t>(FLAGS_fsid));
+  auto status = block_cache_->Put(NewContext(), block_ctx, block_, option);
   if (!status.ok()) {
     LOG(ERROR) << "Put block (key= " << key.Filename()
                << ") failed: " << status.ToString();
@@ -123,10 +124,13 @@ void RangeTaskFactory::RangeAll(const BlockKey& key) {
 void RangeTaskFactory::Range(const BlockKey& key, off_t offset, size_t length,
                              IOBuffer* buffer) {
   auto option = RangeOption();
-  option.retrive = FLAGS_retrive;
-  option.block_size = FLAGS_blksize;
+  option.retrieve_storage = FLAGS_retrive;
+  option.block_whole_length = FLAGS_blksize;
+
+  BlockContext block_ctx(key, static_cast<uint32_t>(FLAGS_fsid));
   auto status =
-      block_cache_->Range(NewContext(), key, offset, length, buffer, option);
+      block_cache_->Range(NewContext(), block_ctx, offset, length, buffer,
+                          option);
 
   if (!status.ok()) {
     LOG(ERROR) << "Range block (key=" << key.Filename()

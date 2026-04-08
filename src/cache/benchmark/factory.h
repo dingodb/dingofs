@@ -24,6 +24,7 @@
 #define DINGOFS_SRC_CACHE_BENCHMARK_FACTORY_H_
 
 #include "cache/blockcache/block_cache.h"
+#include "common/block/block_context.h"
 
 namespace dingofs {
 namespace cache {
@@ -31,8 +32,7 @@ namespace cache {
 // block key iterator
 class BlockKeyIterator {
  public:
-  BlockKeyIterator(uint64_t idx, uint64_t fsid, uint64_t ino, uint64_t blksize,
-                   uint64_t blocks);
+  BlockKeyIterator(uint64_t idx, uint64_t blksize, uint64_t blocks);
 
   void SeekToFirst();
   bool Valid() const;
@@ -43,12 +43,10 @@ class BlockKeyIterator {
   static constexpr uint64_t kBlocksPerChunk = 16;
 
   uint64_t idx_;  // worker index, start with 0
-  uint64_t fsid_;
-  uint64_t ino_;
   uint64_t blksize_;
   uint64_t blocks_;
-  uint64_t chunkid_;
-  uint64_t blockidx_;
+  uint64_t id_;        // slice id
+  uint64_t index_;     // block index within the slice
   uint64_t allocated_;
 };
 

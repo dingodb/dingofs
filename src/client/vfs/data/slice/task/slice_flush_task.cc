@@ -22,6 +22,7 @@
 
 #include "cache/blockcache/cache_store.h"
 #include "client/vfs/hub/vfs_hub.h"
+#include "common/block/block_context.h"
 #include "common/options/client.h"
 
 namespace dingofs {
@@ -83,10 +84,10 @@ void SliceFlushTask::FlushBlockData(uint64_t block_index, BlockData* block_data,
   auto span =
       vfs_hub_->GetTraceManager()->StartSpan("SliceFlushTask::FlushBlockData");
 
-  cache::BlockKey key(slice_data_context_.fs_id, slice_data_context_.ino,
-                      slice_id_, block_index, 0);
+  BlockKey key(slice_id_, block_index, slice_data_context_.block_size);
+  BlockContext block_ctx(key, slice_data_context_.fs_id);
   PutReq req;
-  req.block = key;
+  req.block_ctx = block_ctx;
   req.data = block_data->ToIOBuffer();
   req.write_back = writeback;
 

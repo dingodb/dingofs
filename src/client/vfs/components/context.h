@@ -17,8 +17,8 @@
 #ifndef DINGOFS_SRC_CLIENT_VFS_COMPONENT_CONTEXT_H_
 #define DINGOFS_SRC_CLIENT_VFS_COMPONENT_CONTEXT_H_
 
-#include "cache/blockcache/cache_store.h"
 #include "client/vfs/vfs_meta.h"
+#include "common/block/block_key.h"
 #include "fmt/format.h"
 
 namespace dingofs {
@@ -31,10 +31,10 @@ enum class WarmupType : uint8_t {
   kWarmupUnknown = 2,
 };
 
-struct BlockContext {
-  BlockContext(cache::BlockKey block_key, uint64_t block_len)
+struct PrefetchBlock {
+  PrefetchBlock(BlockKey block_key, uint64_t block_len)
       : key(block_key), len(block_len) {}
-  cache::BlockKey key;
+  BlockKey key;
   uint64_t len;
 };
 

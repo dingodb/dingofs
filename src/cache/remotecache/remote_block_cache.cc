@@ -102,20 +102,21 @@ Status RemoteBlockCacheImpl::Shutdown() {
   return Status::OK();
 }
 
-Status RemoteBlockCacheImpl::Put(ContextSPtr ctx, const BlockKey& key,
+Status RemoteBlockCacheImpl::Put(ContextSPtr ctx, const BlockContext& block_ctx,
                                  const Block& block, PutOption /*option*/) {
   DCHECK_RUNNING("RemoteBlockCache");
 
-  auto status = upstream_->SendPutRequest(ctx, key, block);
+  auto status = upstream_->SendPutRequest(ctx, block_ctx, block);
   if (!status.ok()) {
     LOG(ERROR) << "Fail to put block to remote cache";
   }
   return status;
 }
 
-Status RemoteBlockCacheImpl::Range(ContextSPtr ctx, const BlockKey& key,
-                                   off_t offset, size_t length,
-                                   IOBuffer* buffer, RangeOption option) {
+Status RemoteBlockCacheImpl::Range(ContextSPtr ctx,
+                                   const BlockContext& block_ctx, off_t offset,
+                                   size_t length, IOBuffer* buffer,
+                                   RangeOption option) {
   DCHECK_RUNNING("RemoteBlockCache");
 
   BRPC_SCOPE_EXIT {
@@ -128,11 +129,11 @@ Status RemoteBlockCacheImpl::Range(ContextSPtr ctx, const BlockKey& key,
 
   Status status;
   if (FLAGS_block_prefetch) {
-    status = retriever_->Range(key, offset, length, option.block_whole_length,
-                               buffer);
+    status = retriever_->Range(block_ctx.key, offset, length,
+                               option.block_whole_length, buffer);
   } else {
-    status = upstream_->SendRangeRequest(ctx, key, offset, length, buffer,
-                                         option.block_whole_length);
+    status = upstream_->SendRangeRequest(ctx, block_ctx, offset, length,
+                                         buffer, option.block_whole_length);
   }
 
   if (!status.ok()) {
