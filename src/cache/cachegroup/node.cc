@@ -176,36 +176,38 @@ Status CacheNode::LeaveGroup() {
   return Status::OK();
 }
 
-Status CacheNode::Put(ContextSPtr ctx, const BlockKey& key,
+Status CacheNode::Put(ContextSPtr ctx, const BlockContext& block_ctx,
                       const Block& block) {
   if (!IsRunning()) {
     return Status::CacheDown("cache node is down");
   }
-  return block_cache_->Put(ctx, key, block, {.writeback = true});
+  return block_cache_->Put(ctx, block_ctx, block, {.writeback = true});
 }
 
-Status CacheNode::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
-                        size_t length, IOBuffer* buffer, size_t block_length) {
+Status CacheNode::Range(ContextSPtr ctx, const BlockContext& block_ctx,
+                        off_t offset, size_t length, IOBuffer* buffer,
+                        size_t block_length) {
   if (!IsRunning()) {
     return Status::CacheDown("cache node is down");
   }
 
-  auto status = RetrieveCache(ctx, key, offset, length, buffer);
+  auto status = RetrieveCache(ctx, block_ctx, offset, length, buffer);
   if (status.IsNotFound()) {
-    status = RetrieveStorage(ctx, key, offset, length, buffer, block_length);
+    status =
+        RetrieveStorage(ctx, block_ctx, offset, length, buffer, block_length);
   }
   return status;
 }
 
-Status CacheNode::AsyncCache(ContextSPtr ctx, const BlockKey& key,
+Status CacheNode::AsyncCache(ContextSPtr ctx, const BlockContext& block_ctx,
                              const Block& block) {
   if (!IsRunning()) {
     LOG(ERROR) << "Cache node is down, skip async cache block, key="
-               << key.Filename();
+               << block_ctx.key.Filename();
     return Status::CacheDown("cache node is down");
   }
 
-  block_cache_->AsyncCache(ctx, key, block, [](Status status) {
+  block_cache_->AsyncCache(ctx, block_ctx, block, [](Status status) {
     if (!status.ok()) {
       LOG(ERROR) << "Fail to async cache block, status=" << status.ToString();
     }
@@ -213,24 +215,28 @@ Status CacheNode::AsyncCache(ContextSPtr ctx, const BlockKey& key,
   return Status::OK();
 }
 
-Status CacheNode::AsyncPrefetch(ContextSPtr ctx, const BlockKey& key,
+Status CacheNode::AsyncPrefetch(ContextSPtr ctx,
+                                const BlockContext& block_ctx,
                                 size_t length) {
   if (!IsRunning()) {
     return Status::CacheDown("cache node is down");
   }
 
-  block_cache_->AsyncPrefetch(ctx, key, length, [key](Status status) {
-    if (!status.ok()) {
-      LOG(ERROR) << "Fail to async prefetch block, key=" << key.Filename()
-                 << ", status=" << status.ToString();
-    }
-  });
+  block_cache_->AsyncPrefetch(
+      ctx, block_ctx, length, [block_ctx](Status status) {
+        if (!status.ok()) {
+          LOG(ERROR) << "Fail to async prefetch block, key="
+                     << block_ctx.key.Filename()
+                     << ", status=" << status.ToString();
+        }
+      });
   return Status::OK();
 }
 
-Status CacheNode::RetrieveCache(ContextSPtr ctx, const BlockKey& key,
-                                off_t offset, size_t length, IOBuffer* buffer) {
-  auto status = block_cache_->Range(ctx, key, offset, length, buffer,
+Status CacheNode::RetrieveCache(ContextSPtr ctx,
+                                const BlockContext& block_ctx, off_t offset,
+                                size_t length, IOBuffer* buffer) {
+  auto status = block_cache_->Range(ctx, block_ctx, offset, length, buffer,
                                     {.retrieve_storage = false});
   if (status.ok()) {
     num_hit_cache_ << 1;
@@ -241,24 +247,26 @@ Status CacheNode::RetrieveCache(ContextSPtr ctx, const BlockKey& key,
   return status;
 }
 
-Status CacheNode::RetrieveStorage(ContextSPtr ctx, const BlockKey& key,
-                                  off_t offset, size_t length, IOBuffer* buffer,
+Status CacheNode::RetrieveStorage(ContextSPtr ctx,
+                                  const BlockContext& block_ctx, off_t offset,
+                                  size_t length, IOBuffer* buffer,
                                   size_t block_length) {
   StorageClient* storage_client;
   auto status =
-      storage_client_pool_->GetStorageClient(key.fs_id, &storage_client);
+      storage_client_pool_->GetStorageClient(block_ctx.fs_id, &storage_client);
   if (!status.ok()) {
     return status;
   }
 
   // Retrieve range of block: unknown block size or unreach max_range_size
   if (block_length == 0 || length < FLAGS_max_range_size_kb * kKiB) {
-    return RetrievePartBlock(ctx, key, offset, length, buffer, block_length);
+    return RetrievePartBlock(ctx, block_ctx, offset, length, buffer,
+                             block_length);
   }
 
   // Retrieve the whole block
   IOBuffer block;
-  status = RetrieveWholeBlock(ctx, key, block_length, &block);
+  status = RetrieveWholeBlock(ctx, block_ctx, block_length, &block);
   if (status.ok()) {
     block.AppendTo(buffer, length, offset);
   }
@@ -266,48 +274,53 @@ Status CacheNode::RetrieveStorage(ContextSPtr ctx, const BlockKey& key,
 }
 
 // TODO: Should we check download block task?
-Status CacheNode::RetrievePartBlock(ContextSPtr ctx, const BlockKey& key,
+Status CacheNode::RetrievePartBlock(ContextSPtr ctx,
+                                    const BlockContext& block_ctx,
                                     off_t offset, size_t length,
                                     IOBuffer* buffer, size_t block_length) {
   StorageClient* storage_client;
   auto status =
-      storage_client_pool_->GetStorageClient(key.fs_id, &storage_client);
+      storage_client_pool_->GetStorageClient(block_ctx.fs_id, &storage_client);
   if (!status.ok()) {
     return status;
   }
 
-  status = storage_client->Range(ctx, key, offset, length, buffer);
+  status = storage_client->Range(ctx, block_ctx.key, offset, length, buffer);
   if (status.ok() && block_length > 0) {
-    block_cache_->AsyncPrefetch(ctx, key, block_length, nullptr);
+    block_cache_->AsyncPrefetch(ctx, block_ctx, block_length, nullptr);
   }
   return status;
 }
 
-Status CacheNode::RetrieveWholeBlock(ContextSPtr ctx, const BlockKey& key,
+Status CacheNode::RetrieveWholeBlock(ContextSPtr ctx,
+                                     const BlockContext& block_ctx,
                                      size_t block_length, IOBuffer* buffer) {
   Status status;
   bool created = false;
   StorageClient* storage_client;
 
-  status = storage_client_pool_->GetStorageClient(key.fs_id, &storage_client);
+  status =
+      storage_client_pool_->GetStorageClient(block_ctx.fs_id, &storage_client);
   if (!status.ok()) {
     return status;
   }
 
   BRPC_SCOPE_EXIT {
     if (status.ok()) {
-      block_cache_->AsyncCache(ctx, key, Block(*buffer),
-                               [this, created, key](Status /*status*/) {
-                                 if (created) {
-                                   task_tracker_->RemoveTask(key);
-                                 }
-                               });
+      block_cache_->AsyncCache(
+          ctx, block_ctx, Block(*buffer),
+          [this, created, block_ctx](Status /*status*/) {
+            if (created) {
+              task_tracker_->RemoveTask(block_ctx);
+            }
+          });
     }
   };
 
   if (FLAGS_retrieve_storage_lock) {
     DownloadTaskSPtr task;
-    created = task_tracker_->GetOrCreateTask(ctx, key, block_length, task);
+    created =
+        task_tracker_->GetOrCreateTask(ctx, block_ctx, block_length, task);
     if (created) {
       status = RunTask(storage_client, task);
     } else {
@@ -322,7 +335,8 @@ Status CacheNode::RetrieveWholeBlock(ContextSPtr ctx, const BlockKey& key,
     }
   }
 
-  status = storage_client->Range(ctx, key, 0, block_length, buffer);
+  status =
+      storage_client->Range(ctx, block_ctx.key, 0, block_length, buffer);
   return status;
 }
 
@@ -330,11 +344,11 @@ Status CacheNode::RunTask(StorageClient* storage_client,
                           DownloadTaskSPtr task) {
   const auto& attr = task->Attr();
   auto& result = task->Result();
-  auto status =
-      storage_client->Range(attr.ctx, attr.key, 0, attr.length, &result.buffer);
+  auto status = storage_client->Range(attr.ctx, attr.block_ctx.key, 0,
+                                      attr.length, &result.buffer);
   if (!status.ok()) {
     task->Run();
-    task_tracker_->RemoveTask(attr.key);
+    task_tracker_->RemoveTask(attr.block_ctx);
     return status;
   }
 

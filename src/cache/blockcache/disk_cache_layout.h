@@ -28,7 +28,7 @@
 
 #include <string>
 
-#include "cache/blockcache/cache_store.h"
+#include "common/block/block_context.h"
 #include "utils/time.h"
 
 namespace dingofs {
@@ -41,25 +41,22 @@ static const std::string kTempFileSuffix = ".tmp";
  *
  *   950c9813-ea26-4726-96fd-383b0cd22b20
  *   ├── stage
- *   |   └── blocks
- *   │       └── 0
- *   |           └── 4
- *   │               ├── 2_21626898_4098_0_0
- *   |               ├── 2_21626898_4098_1_0
- *   |               ├── 2_21626898_4098_2_0
- *   |               ├── 2_21626898_4098_3_0
- *   |               └── 2_21626898_4098_4_0
+ *   |   └── {fs_id}
+ *   |       └── blocks
+ *   │           └── 0
+ *   |               └── 4
+ *   │                   ├── 4098_0_4194304
+ *   |                   ├── 4098_1_4194304
+ *   |                   └── 4098_2_4194304
  *   ├── cache
  *   │   └── blocks
  *   |       └── 0
  *   │           ├── 0
- *   |           |   ├── 2_21626898_1_0_0
- *   |           |   ├── 2_21626898_1_1_0
- *   |           |   ├── 2_21626898_1_1_0
- *   |           |   └── 2_21626898_1_1_0
+ *   |           |   ├── 1_0_4194304
+ *   |           |   └── 1_1_4194304
  *   |           └── 4
- *   |               ├── 2_21626898_4096_0_0
- *   |               └── 2_21626898_4097_0_0
+ *   |               ├── 4096_0_4194304
+ *   |               └── 4097_0_4194304
  *   ├── probe
  *   ├── .detect
  *   └── .lock
@@ -78,8 +75,11 @@ class DiskCacheLayout {
   std::string GetDetectPath() const { return PathJoin(cache_dir_, ".detect"); }
   std::string GetLockPath() const { return PathJoin(cache_dir_, ".lock"); }
 
-  std::string GetStagePath(const BlockKey& key) const {
-    return PathJoin(GetStageDir(), key.StoreKey());
+  std::string GetStagePath(const BlockContext& block_ctx) const {
+    return absl::StrJoin(
+        {GetStageDir(), std::to_string(block_ctx.fs_id),
+         block_ctx.key.StoreKey()},
+        "/");
   }
 
   std::string GetCachePath(const BlockKey& key) const {

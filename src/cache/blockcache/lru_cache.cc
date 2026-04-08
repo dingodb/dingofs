@@ -24,6 +24,8 @@
 
 #include <glog/logging.h>
 
+#include "cache/common/block_key_helper.h"
+
 namespace dingofs {
 namespace cache {
 
@@ -121,7 +123,7 @@ CacheItem LRUCache::KV(ListNode* node) {
   CacheKey key;
   // we use CacheKey.Filename() as hash key
   auto filename = hash_->Key(node->handle);
-  CHECK(key.ParseFromFilename(filename)) << "filename = " << filename;
+  CHECK(ParseFromFilename(filename, &key)) << "filename = " << filename;
   return CacheItem(key, node->value);
 }
 

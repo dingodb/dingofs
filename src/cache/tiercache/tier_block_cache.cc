@@ -35,6 +35,7 @@
 #include "cache/common/storage_client.h"
 #include "cache/iutil/string_util.h"
 #include "cache/remotecache/remote_block_cache.h"
+#include "common/block/block_context.h"
 #include "common/blockaccess/block_accesser.h"
 #include "common/options/cache.h"
 #include "common/status.h"
@@ -143,7 +144,7 @@ Status TierBlockCache::Shutdown() {
   return Status::OK();
 }
 
-Status TierBlockCache::Put(ContextSPtr ctx, const BlockKey& key,
+Status TierBlockCache::Put(ContextSPtr ctx, const BlockContext& block_ctx,
                            const Block& block, PutOption option) {
   DCHECK_RUNNING("TierBlockCache");
 
@@ -151,9 +152,9 @@ Status TierBlockCache::Put(ContextSPtr ctx, const BlockKey& key,
   if (option.writeback) {
     option.block_attr = BlockAttr(BlockAttr::kFromWriteback);
     if (EnableLocalStage()) {
-      status = local_block_cache_->Put(ctx, key, block, option);
+      status = local_block_cache_->Put(ctx, block_ctx, block, option);
     } else if (EnableRemoteStage()) {
-      status = remote_block_cache_->Put(ctx, key, block, option);
+      status = remote_block_cache_->Put(ctx, block_ctx, block, option);
     } else {
       status = Status::NotFound("no cache layer found");
     }
@@ -161,7 +162,8 @@ Status TierBlockCache::Put(ContextSPtr ctx, const BlockKey& key,
     if (status.ok()) {
       return status;
     } else {
-      LOG(WARNING) << "Fail to put block to cache, key=" << key.Filename()
+      LOG(WARNING) << "Fail to put block to cache, key="
+                   << block_ctx.key.Filename()
                    << ", status=" << status.ToString();
     }
   }
@@ -169,19 +171,20 @@ Status TierBlockCache::Put(ContextSPtr ctx, const BlockKey& key,
   // FIXME: !!!!!! independent copy thread pool !!!!!!
   auto new_block = CopyBlock(block);
   if (EnableRemoteCache() && FLAGS_fill_group_cache) {
-    FillGroupCache(ctx, key, new_block);
+    FillGroupCache(ctx, block_ctx, new_block);
   }
 
-  status = storage_client_->Put(ctx, key, &new_block);
+  status = storage_client_->Put(ctx, block_ctx.key, &new_block);
   if (!status.ok()) {
-    LOG(ERROR) << "Fail to put block to storage, key=" << key.Filename()
+    LOG(ERROR) << "Fail to put block to storage, key="
+               << block_ctx.key.Filename()
                << ", status=" << status.ToString();
   }
   return status;
 }
 
-Status TierBlockCache::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
-                             size_t length, IOBuffer* buffer,
+Status TierBlockCache::Range(ContextSPtr ctx, const BlockContext& block_ctx,
+                             off_t offset, size_t length, IOBuffer* buffer,
                              RangeOption option) {
   DCHECK_RUNNING("TierBlockCache");
 
@@ -189,7 +192,7 @@ Status TierBlockCache::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
 
   // Firstly, try local cache
   if (EnableLocalCache() || EnableLocalStage()) {
-    status = local_block_cache_->Range(ctx, key, offset, length, buffer,
+    status = local_block_cache_->Range(ctx, block_ctx, offset, length, buffer,
                                        {.retrieve_storage = false});
     if (status.ok()) {
       return status;
@@ -200,14 +203,15 @@ Status TierBlockCache::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
           << "Fail to range block from local cache because cache is unhealthy";
     } else if (!status.IsNotFound()) {
       LOG(ERROR) << "Fail to range block from local cache, key="
-                 << key.Filename() << ", status=" << status.ToString();
+                 << block_ctx.key.Filename()
+                 << ", status=" << status.ToString();
     }
   }
 
   // Secondly, try remote cache
   if (EnableRemoteCache()) {
-    status =
-        remote_block_cache_->Range(ctx, key, offset, length, buffer, option);
+    status = remote_block_cache_->Range(ctx, block_ctx, offset, length, buffer,
+                                        option);
     if (status.ok()) {
       return status;
     }
@@ -217,88 +221,94 @@ Status TierBlockCache::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
           << "Fail to range block from remote cache because cache is unhealthy";
     } else if (!status.IsNotFound()) {
       LOG(ERROR) << "Fail to range block from remote cache, key="
-                 << key.Filename() << ", status=" << status.ToString();
+                 << block_ctx.key.Filename()
+                 << ", status=" << status.ToString();
     }
   }
 
   // Finally, retrieve from storage if allowed
   if (option.retrieve_storage) {
-    status = storage_client_->Range(ctx, key, offset, length, buffer);
+    status =
+        storage_client_->Range(ctx, block_ctx.key, offset, length, buffer);
     if (!status.ok()) {
-      LOG(ERROR) << "Fail to range block from storage, key=" << key.Filename()
+      LOG(ERROR) << "Fail to range block from storage, key="
+                 << block_ctx.key.Filename()
                  << ", status=" << status.ToString();
     }
   }
   return status;
 }
 
-Status TierBlockCache::Cache(ContextSPtr ctx, const BlockKey& key,
+Status TierBlockCache::Cache(ContextSPtr ctx, const BlockContext& block_ctx,
                              const Block& block, CacheOption option) {
   DCHECK_RUNNING("TierBlockCache");
 
   Status status;
   if (EnableLocalCache()) {
-    status = local_block_cache_->Cache(ctx, key, block, option);
+    status = local_block_cache_->Cache(ctx, block_ctx, block, option);
   } else if (EnableRemoteCache()) {
-    status = remote_block_cache_->Cache(ctx, key, block, option);
+    status = remote_block_cache_->Cache(ctx, block_ctx, block, option);
   } else {
     status = Status::NotFound("no cache layer found");
   }
 
   if (!status.ok()) {
-    LOG(ERROR) << "Fail to cache block to cache, key=" << key.Filename()
+    LOG(ERROR) << "Fail to cache block to cache, key="
+               << block_ctx.key.Filename()
                << ", status=" << status.ToString();
   }
   return status;
 }
 
-Status TierBlockCache::Prefetch(ContextSPtr ctx, const BlockKey& key,
+Status TierBlockCache::Prefetch(ContextSPtr ctx, const BlockContext& block_ctx,
                                 size_t length, PrefetchOption option) {
   DCHECK_RUNNING("TierBlockCache");
 
   Status status;
   if (EnableLocalCache()) {
-    status = local_block_cache_->Prefetch(ctx, key, length, option);
+    status = local_block_cache_->Prefetch(ctx, block_ctx, length, option);
   } else if (EnableRemoteCache()) {
-    status = remote_block_cache_->Prefetch(ctx, key, length, option);
+    status = remote_block_cache_->Prefetch(ctx, block_ctx, length, option);
   } else {
     status = Status::NotFound("no cache layer found");
   }
 
   if (!status.ok()) {
-    LOG(ERROR) << "Fail to prefetch block, key=" << key.Filename()
+    LOG(ERROR) << "Fail to prefetch block, key=" << block_ctx.key.Filename()
                << ", status=" << status.ToString();
   }
   return status;
 }
 
-void TierBlockCache::AsyncPut(ContextSPtr ctx, const BlockKey& key,
+void TierBlockCache::AsyncPut(ContextSPtr ctx, const BlockContext& block_ctx,
                               const Block& block, AsyncCallback cb,
                               PutOption option) {
   DCHECK_RUNNING("TierBlockCache");
 
   auto* self = GetSelfPtr();
-  auto tid = iutil::RunInBthread([self, ctx, key, block, cb, option]() {
-    Status status = self->Put(ctx, key, block, option);
-    if (cb) {
-      cb(status);
-    }
-  });
+  auto tid =
+      iutil::RunInBthread([self, ctx, block_ctx, block, cb, option]() {
+        Status status = self->Put(ctx, block_ctx, block, option);
+        if (cb) {
+          cb(status);
+        }
+      });
 
   if (tid != 0) {
     joiner_->BackgroundJoin(tid);
   }
 }
 
-void TierBlockCache::AsyncRange(ContextSPtr ctx, const BlockKey& key,
+void TierBlockCache::AsyncRange(ContextSPtr ctx, const BlockContext& block_ctx,
                                 off_t offset, size_t length, IOBuffer* buffer,
                                 AsyncCallback cb, RangeOption option) {
   DCHECK_RUNNING("TierBlockCache");
 
   auto* self = GetSelfPtr();
   auto tid = iutil::RunInBthread(
-      [self, ctx, key, offset, length, buffer, cb, option]() {
-        Status status = self->Range(ctx, key, offset, length, buffer, option);
+      [self, ctx, block_ctx, offset, length, buffer, cb, option]() {
+        Status status =
+            self->Range(ctx, block_ctx, offset, length, buffer, option);
         if (cb) {
           cb(status);
         }
@@ -309,14 +319,14 @@ void TierBlockCache::AsyncRange(ContextSPtr ctx, const BlockKey& key,
   }
 }
 
-void TierBlockCache::AsyncCache(ContextSPtr ctx, const BlockKey& key,
+void TierBlockCache::AsyncCache(ContextSPtr ctx, const BlockContext& block_ctx,
                                 const Block& block, AsyncCallback cb,
                                 CacheOption option) {
   DCHECK_RUNNING("TierBlockCache");
 
   // TODO: maybe filter out duplicate task by up-level is better
   auto tracker = cache_tracker_;
-  auto status = tracker->Add(key.Filename());
+  auto status = tracker->Add(block_ctx.key.Filename());
   if (status.IsExist()) {
     if (cb) {
       cb(status);
@@ -325,14 +335,14 @@ void TierBlockCache::AsyncCache(ContextSPtr ctx, const BlockKey& key,
   }
 
   auto* self = GetSelfPtr();
-  auto tid =
-      iutil::RunInBthread([tracker, self, ctx, key, block, cb, option]() {
-        Status status = self->Cache(ctx, key, block, option);
+  auto tid = iutil::RunInBthread(
+      [tracker, self, ctx, block_ctx, block, cb, option]() {
+        Status status = self->Cache(ctx, block_ctx, block, option);
         if (cb) {
           cb(status);
         }
 
-        tracker->Remove(key.Filename());
+        tracker->Remove(block_ctx.key.Filename());
       });
 
   if (tid != 0) {
@@ -340,14 +350,15 @@ void TierBlockCache::AsyncCache(ContextSPtr ctx, const BlockKey& key,
   }
 }
 
-void TierBlockCache::AsyncPrefetch(ContextSPtr ctx, const BlockKey& key,
+void TierBlockCache::AsyncPrefetch(ContextSPtr ctx,
+                                   const BlockContext& block_ctx,
                                    size_t length, AsyncCallback cb,
                                    PrefetchOption option) {
   DCHECK_RUNNING("TierBlockCache");
 
   // TODO: maybe filter out duplicate task by up-level is better
   auto tracker = prefetch_tracker_;
-  auto status = tracker->Add(key.Filename());
+  auto status = tracker->Add(block_ctx.key.Filename());
   if (status.IsExist()) {
     if (cb) {
       cb(status);
@@ -356,14 +367,14 @@ void TierBlockCache::AsyncPrefetch(ContextSPtr ctx, const BlockKey& key,
   }
 
   auto* self = GetSelfPtr();
-  auto tid =
-      iutil::RunInBthread([tracker, self, ctx, key, length, cb, option]() {
-        Status status = self->Prefetch(ctx, key, length, option);
+  auto tid = iutil::RunInBthread(
+      [tracker, self, ctx, block_ctx, length, cb, option]() {
+        Status status = self->Prefetch(ctx, block_ctx, length, option);
         if (cb) {
           cb(status);
         }
 
-        tracker->Remove(key.Filename());
+        tracker->Remove(block_ctx.key.Filename());
       });
 
   if (tid != 0) {
@@ -379,10 +390,11 @@ Block TierBlockCache::CopyBlock(const Block& block) {
   return Block(std::move(buffer));
 }
 
-void TierBlockCache::FillGroupCache(ContextSPtr ctx, const BlockKey& key,
+void TierBlockCache::FillGroupCache(ContextSPtr ctx,
+                                    const BlockContext& block_ctx,
                                     const Block& block) {
   remote_block_cache_->AsyncCache(
-      ctx, key, block, [ctx, key, block](Status status) {
+      ctx, block_ctx, block, [ctx, block_ctx, block](Status status) {
         if (!status.ok()) {
           LOG(ERROR) << "Fail to async block, status=" << status.ToString();
         }

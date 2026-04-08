@@ -51,15 +51,15 @@ class WarmupTask {
 
   uint64_t GetKey() const { return task_key_; }
 
-  std::vector<BlockContext> GetFileBlocks(Ino file) const {
+  std::vector<PrefetchBlock> GetFileBlocks(Ino file) const {
     utils::ReadLockGuard lck(rwlock_);
     auto it = file_blocks_.find(file);
     return (it != file_blocks_.end()) ? it->second
-                                      : std::vector<BlockContext>();
+                                      : std::vector<PrefetchBlock>();
   }
 
   // Store file blocks for a file
-  void SetFileBlocks(Ino file, const std::vector<BlockContext>& blocks) {
+  void SetFileBlocks(Ino file, const std::vector<PrefetchBlock>& blocks) {
     utils::WriteLockGuard lck(rwlock_);
     file_blocks_[file] = blocks;
     IncTotal(blocks.size());
@@ -117,7 +117,7 @@ class WarmupTask {
   };
 
   Ino task_key_{0};
-  std::unordered_map<Ino, std::vector<BlockContext>>
+  std::unordered_map<Ino, std::vector<PrefetchBlock>>
       file_blocks_;  // inode -> blocks
   mutable BthreadRWLock rwlock_;
   WarmupTaskContext context_;

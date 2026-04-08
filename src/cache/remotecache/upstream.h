@@ -30,6 +30,7 @@
 
 #include "cache/blockcache/cache_store.h"
 #include "cache/common/mds_client.h"
+#include "common/block/block_context.h"
 #include "cache/common/vars.h"
 #include "cache/remotecache/peer_group.h"
 #include "cache/remotecache/request.h"
@@ -98,14 +99,14 @@ class Upstream {
   void Start();
   void Shutdown();
 
-  Status SendPutRequest(ContextSPtr ctx, const BlockKey& key,
+  Status SendPutRequest(ContextSPtr ctx, const BlockContext& block_ctx,
                         const Block& block);
-  Status SendRangeRequest(ContextSPtr ctx, const BlockKey& key, off_t offset,
-                          size_t length, IOBuffer* buffer,
+  Status SendRangeRequest(ContextSPtr ctx, const BlockContext& block_ctx,
+                          off_t offset, size_t length, IOBuffer* buffer,
                           size_t block_whole_length);
-  Status SendCacheRequest(ContextSPtr ctx, const BlockKey& key,
+  Status SendCacheRequest(ContextSPtr ctx, const BlockContext& block_ctx,
                           const Block& block);
-  Status SendPrefetchRequest(ContextSPtr ctx, const BlockKey& key,
+  Status SendPrefetchRequest(ContextSPtr ctx, const BlockContext& block_ctx,
                              size_t length);
 
   bool Dump(Json::Value& value);

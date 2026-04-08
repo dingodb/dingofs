@@ -28,6 +28,7 @@
 
 #include "cache/blockcache/disk_cache_layout.h"
 #include "cache/blockcache/disk_cache_manager.h"
+#include "cache/common/block_key_helper.h"
 #include "cache/iutil/file_util.h"
 
 namespace dingofs {

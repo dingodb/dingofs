@@ -27,6 +27,7 @@
 
 #include "cache/iutil/string_util.h"
 #include "client/vfs/data/common/common.h"
+#include "common/block/block_context.h"
 #include "client/vfs/data/common/data_utils.h"
 #include "client/vfs/data/reader/chunk_req.h"
 #include "client/vfs/hub/vfs_hub.h"
@@ -43,10 +44,10 @@ namespace vfs {
 
 namespace {
 
-BlockKey GenerateBlockKey(const BlockCacheReadReq* req) {
-  BlockKey key(req->fs_id, req->ino, req->block_req.block.slice_id,
-               req->block_req.block.index, req->block_req.block.version);
-  return key;
+BlockContext GenerateBlockContext(const BlockCacheReadReq* req) {
+  BlockKey key(req->block_req.block.slice_id, req->block_req.block.index,
+               req->block_req.block.block_len);
+  return BlockContext(key, req->fs_id);
 }
 
 };  // namespace
@@ -57,7 +58,8 @@ std::string BlockCacheReadReq::UUID() const {
 
 std::string BlockCacheReadReq::ToString() const {
   return fmt::format("(uuid: {}, block_key: {}, block_req: {})", UUID(),
-                     GenerateBlockKey(this).StoreKey(), block_req.ToString());
+                     GenerateBlockContext(this).key.StoreKey(),
+                     block_req.ToString());
 }
 
 ChunkReqReader::ChunkReqReader(VFSHub* hub, const ChunkReq& req)
@@ -222,7 +224,7 @@ void ChunkReqReader::ProcessBlockCacheReadReq(
     };
 
     RangeReq req;
-    req.block = GenerateBlockKey(block_cache_req);
+    req.block_ctx = GenerateBlockContext(block_cache_req);
     req.block_size = block_cache_req->block_req.block.block_len;
     req.offset = block_cache_req->block_req.block_offset;
     req.length = block_cache_req->block_req.len;
@@ -256,8 +258,8 @@ void ChunkReqReader::ReadAsync(ContextSPtr ctx,
 
   uint32_t block_req_index = 0;
   for (auto& block_req : block_reqs) {
-    cache::BlockKey key(chunk_.fs_id, chunk_.ino, block_req.block.slice_id,
-                        block_req.block.index, block_req.block.version);
+    BlockKey key(block_req.block.slice_id, block_req.block.index,
+                 block_req.block.block_len);
 
     VLOG(6) << fmt::format("{} Read block_key: {}, block_req: {}", UUID(),
                            key.StoreKey(), block_req.ToString());

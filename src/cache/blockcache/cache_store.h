@@ -23,18 +23,15 @@
 #ifndef DINGOFS_SRC_CACHE_BLOCKCACHE_CACHE_STORE_H_
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_CACHE_STORE_H_
 
-#include <absl/strings/str_format.h>
-#include <absl/strings/str_split.h>
 #include <glog/logging.h>
 #include <json/value.h>
 
 #include <ostream>
 
 #include "cache/common/context.h"
+#include "common/block/block_context.h"
 #include "common/io_buffer.h"
 #include "common/status.h"
-#include "dingofs/blockcache.pb.h"
-#include "utils/string.h"
 
 namespace dingofs {
 namespace cache {
@@ -44,53 +41,6 @@ enum class StoreType : uint8_t {
   kNone = 0,
   kDisk = 1,
   k3FS = 2,
-};
-
-// block key
-struct BlockKey {
-  BlockKey() : fs_id(0), ino(0), id(0), index(0), version(0) {}
-
-  BlockKey(uint64_t fs_id, uint64_t ino, uint64_t id, uint64_t index,
-           uint64_t version)
-      : fs_id(fs_id), ino(ino), id(id), index(index), version(version) {}
-
-  BlockKey(pb::cache::BlockKey pb)
-      : fs_id(pb.fs_id()),
-        ino(pb.ino()),
-        id(pb.id()),
-        index(pb.index()),
-        version(pb.version()) {}
-
-  std::string Filename() const {
-    return absl::StrFormat("%llu_%llu_%llu_%llu_%llu", fs_id, ino, id, index,
-                           version);
-  }
-
-  std::string StoreKey() const {
-    return absl::StrFormat("blocks/%llu/%llu/%s", id / 1000 / 1000, id / 1000,
-                           Filename());
-  }
-
-  pb::cache::BlockKey ToPB() const {
-    pb::cache::BlockKey pb;
-    pb.set_fs_id(fs_id);
-    pb.set_ino(ino);
-    pb.set_id(id);
-    pb.set_index(index);
-    pb.set_version(version);
-    return pb;
-  }
-
-  bool ParseFromFilename(const std::string_view& filename) {
-    auto strs = absl::StrSplit(filename, "_");
-    return utils::Strs2Ints(strs, {&fs_id, &ino, &id, &index, &version});
-  }
-
-  uint64_t fs_id;    // filesystem id
-  uint64_t ino;      // inode id
-  uint64_t id;       // chunkid
-  uint64_t index;    // block index (offset/chunkSize)
-  uint64_t version;  // compaction version
 };
 
 // block
@@ -165,29 +115,32 @@ class CacheStore {
     BlockAttr block_attr;
   };
 
-  using UploadFunc = std::function<void(ContextSPtr ctx, const BlockKey& key,
-                                        size_t length, BlockAttr block_attr)>;
+  using UploadFunc =
+      std::function<void(ContextSPtr ctx, const BlockContext& block_ctx,
+                         size_t length, BlockAttr block_attr)>;
 
   virtual ~CacheStore() = default;
 
   virtual Status Start(UploadFunc uploader) = 0;
   virtual Status Shutdown() = 0;
 
-  virtual Status Stage(ContextSPtr ctx, const BlockKey& key, const Block& block,
+  virtual Status Stage(ContextSPtr ctx, const BlockContext& block_ctx,
+                       const Block& block,
                        StageOption option = StageOption()) = 0;
   virtual Status RemoveStage(
-      ContextSPtr ctx, const BlockKey& key,
+      ContextSPtr ctx, const BlockContext& block_ctx,
       RemoveStageOption option = RemoveStageOption()) = 0;
-  virtual Status Cache(ContextSPtr ctx, const BlockKey& key, const Block& block,
+  virtual Status Cache(ContextSPtr ctx, const BlockContext& block_ctx,
+                       const Block& block,
                        CacheOption option = CacheOption()) = 0;
-  virtual Status Load(ContextSPtr ctx, const BlockKey& key, off_t offset,
-                      size_t length, IOBuffer* buffer,
+  virtual Status Load(ContextSPtr ctx, const BlockContext& block_ctx,
+                      off_t offset, size_t length, IOBuffer* buffer,
                       LoadOption option = LoadOption()) = 0;
 
   virtual std::string Id() const = 0;
   virtual bool IsRunning() const = 0;
-  virtual bool IsCached(const BlockKey& key) const = 0;
-  virtual bool IsFull(const BlockKey& key) const = 0;
+  virtual bool IsCached(const BlockContext& block_ctx) const = 0;
+  virtual bool IsFull(const BlockContext& block_ctx) const = 0;
   virtual bool Dump(Json::Value& value) const = 0;
 };
 

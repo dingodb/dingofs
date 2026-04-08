@@ -97,17 +97,18 @@ Status DiskCacheGroup::Shutdown() {
   return Status::OK();
 }
 
-Status DiskCacheGroup::Stage(ContextSPtr ctx, const BlockKey& key,
+Status DiskCacheGroup::Stage(ContextSPtr ctx, const BlockContext& block_ctx,
                              const Block& block, StageOption option) {
   Status status;
   DiskCacheGroupVarsRecordGuard metric_guard(__func__, block.size, status,
                                              vars_);
-  status = GetStore(key)->Stage(ctx, key, block, option);
+  status = GetStore(block_ctx.key)->Stage(ctx, block_ctx, block, option);
 
   return status;
 }
 
-Status DiskCacheGroup::RemoveStage(ContextSPtr ctx, const BlockKey& key,
+Status DiskCacheGroup::RemoveStage(ContextSPtr ctx,
+                                   const BlockContext& block_ctx,
                                    RemoveStageOption option) {
   CHECK_RUNNING("Disk cache group");
 
@@ -116,23 +117,23 @@ Status DiskCacheGroup::RemoveStage(ContextSPtr ctx, const BlockKey& key,
   if (!store_id.empty()) {
     store = GetStore(store_id);
   } else {
-    store = GetStore(key);
+    store = GetStore(block_ctx.key);
   }
-  return store->RemoveStage(ctx, key, option);
+  return store->RemoveStage(ctx, block_ctx, option);
 }
 
-Status DiskCacheGroup::Cache(ContextSPtr ctx, const BlockKey& key,
+Status DiskCacheGroup::Cache(ContextSPtr ctx, const BlockContext& block_ctx,
                              const Block& block, CacheOption option) {
   Status status;
   DiskCacheGroupVarsRecordGuard metric_guard(__func__, block.size, status,
                                              vars_);
-  status = GetStore(key)->Cache(ctx, key, block, option);
+  status = GetStore(block_ctx.key)->Cache(ctx, block_ctx, block, option);
 
   return status;
 }
 
-Status DiskCacheGroup::Load(ContextSPtr ctx, const BlockKey& key, off_t offset,
-                            size_t length, IOBuffer* buffer,
+Status DiskCacheGroup::Load(ContextSPtr ctx, const BlockContext& block_ctx,
+                            off_t offset, size_t length, IOBuffer* buffer,
                             LoadOption option) {
   CHECK_RUNNING("Disk cache group");
 
@@ -141,12 +142,12 @@ Status DiskCacheGroup::Load(ContextSPtr ctx, const BlockKey& key, off_t offset,
   if (!store_id.empty()) {
     store = GetStore(store_id);
   } else {
-    store = GetStore(key);
+    store = GetStore(block_ctx.key);
   }
 
   Status status;
   DiskCacheGroupVarsRecordGuard metirc_guard(__func__, length, status, vars_);
-  status = store->Load(ctx, key, offset, length, buffer, option);
+  status = store->Load(ctx, block_ctx, offset, length, buffer, option);
 
   return status;
 }
@@ -157,16 +158,16 @@ bool DiskCacheGroup::IsRunning() const {
   return running_.load(std::memory_order_relaxed);
 }
 
-bool DiskCacheGroup::IsCached(const BlockKey& key) const {
+bool DiskCacheGroup::IsCached(const BlockContext& block_ctx) const {
   DCHECK_RUNNING("Disk cache group");
 
-  return GetStore(key)->IsCached(key);
+  return GetStore(block_ctx.key)->IsCached(block_ctx);
 }
 
-bool DiskCacheGroup::IsFull(const BlockKey& key) const {
+bool DiskCacheGroup::IsFull(const BlockContext& block_ctx) const {
   DCHECK_RUNNING("Disk cache group");
 
-  return GetStore(key)->IsFull(key);
+  return GetStore(block_ctx.key)->IsFull(block_ctx);
 }
 
 std::vector<uint64_t> DiskCacheGroup::CalcWeights(

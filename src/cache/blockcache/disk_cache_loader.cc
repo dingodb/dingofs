@@ -27,9 +27,11 @@
 #include <butil/time.h>
 
 #include <atomic>
+#include <cstdlib>
 #include <thread>
 
 #include "cache/blockcache/cache_store.h"
+#include "cache/common/block_key_helper.h"
 #include "cache/common/macro.h"
 #include "cache/iutil/file_util.h"
 
@@ -137,7 +139,7 @@ bool DiskCacheLoader::LoadOneBlock(const std::string& prefix,
   BlockKey key;
   std::string name = file.name;
   std::string path = absl::StrJoin({prefix, name}, "/");
-  if (IsTempFilepath(name) || !key.ParseFromFilename(name)) {
+  if (IsTempFilepath(name) || !ParseFromFilename(name, &key)) {
     auto status = iutil::Unlink(path);
     if (status.ok()) {
       LOG(INFO) << "Removed invalid block, path=`" << path << "'";
@@ -148,8 +150,23 @@ bool DiskCacheLoader::LoadOneBlock(const std::string& prefix,
   }
 
   if (type == BlockType::kStageBlock) {
+    // Stage path: stage/{fs_id}/blocks/.../{filename}
+    // Extract fs_id from prefix: strip the stage dir prefix, then take the
+    // first path component.
+    auto stage_dir = layout_->GetStageDir();
+    uint32_t fs_id = 0;
+    if (prefix.size() > stage_dir.size() + 1) {
+      auto remainder = prefix.substr(stage_dir.size() + 1);
+      auto pos = remainder.find('/');
+      auto fs_id_str =
+          (pos != std::string::npos) ? remainder.substr(0, pos) : remainder;
+      fs_id = static_cast<uint32_t>(std::strtoul(fs_id_str.c_str(), nullptr,
+                                                  10));
+    }
+
+    BlockContext block_ctx(key, fs_id);
     manager_->Add(key, CacheValue(file.size, file.atime), BlockPhase::kStaging);
-    uploader_(NewContext(), key, file.size,
+    uploader_(NewContext(), block_ctx, file.size,
               BlockAttr(BlockAttr::kFromReload, disk_id_));
   } else if (type == BlockType::kCacheBlock) {
     if (file.nlink == 1) {

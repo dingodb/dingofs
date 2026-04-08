@@ -29,6 +29,7 @@
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/cachegroup/service.h"
+#include "cache/common/block_key_helper.h"
 #include "cache/common/context.h"
 #include "cache/common/error.h"
 #include "common/io_buffer.h"
@@ -84,7 +85,8 @@ void BlockCacheServiceImpl::Put(google::protobuf::RpcController* controller,
   Block block(std::move(buffer));
   status = CheckBodySize(request->block_size(), block.buffer.Size());
   if (status.ok()) {
-    status = node_->Put(ctx, BlockKey(request->block_key()), block);
+    BlockContext block_ctx = FromContextPB(request->block_ctx());
+    status = node_->Put(ctx, block_ctx, block);
   }
   response->set_status(ToPBErr(status));
 }
@@ -100,7 +102,8 @@ void BlockCacheServiceImpl::Range(google::protobuf::RpcController* controller,
   brpc::ClosureGuard done_guard(srv_done);
 
   IOBuffer buffer;
-  status = node_->Range(ctx, BlockKey(request->block_key()), request->offset(),
+  BlockContext block_ctx = FromContextPB(request->block_ctx());
+  status = node_->Range(ctx, block_ctx, request->offset(),
                         request->length(), &buffer, request->block_size());
   if (status.ok()) {
     cntl->response_attachment() = buffer.IOBuf().movable();
@@ -122,8 +125,8 @@ void BlockCacheServiceImpl::Cache(google::protobuf::RpcController* controller,
   IOBuffer buffer = IOBuffer(cntl->request_attachment().movable());
   status = CheckBodySize(request->block_size(), buffer.Size());
   if (status.ok()) {
-    status = node_->AsyncCache(ctx, BlockKey(request->block_key()),
-                               Block(std::move(buffer)));
+    BlockContext block_ctx = FromContextPB(request->block_ctx());
+    status = node_->AsyncCache(ctx, block_ctx, Block(std::move(buffer)));
   }
   response->set_status(ToPBErr(status));
 }
@@ -138,8 +141,8 @@ void BlockCacheServiceImpl::Prefetch(
   auto* srv_done = new ServiceClosure(ctx, done, request, response, status);
   brpc::ClosureGuard done_guard(srv_done);
 
-  status = node_->AsyncPrefetch(ctx, BlockKey(request->block_key()),
-                                request->block_size());
+  BlockContext block_ctx = FromContextPB(request->block_ctx());
+  status = node_->AsyncPrefetch(ctx, block_ctx, request->block_size());
   response->set_status(ToPBErr(status));
 }
 

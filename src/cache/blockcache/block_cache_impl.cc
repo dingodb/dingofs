@@ -101,9 +101,11 @@ Status BlockCacheImpl::Start() {
 
   uploader_->Start();
 
-  auto status = store_->Start([this](ContextSPtr ctx, const BlockKey& key,
+  auto status = store_->Start([this](ContextSPtr ctx,
+                                     const BlockContext& block_ctx,
                                      size_t length, BlockAttr block_attr) {
-    uploader_->EnterUploadQueue(StageBlock(ctx, key, length, block_attr));
+    uploader_->EnterUploadQueue(
+        StageBlock(ctx, block_ctx, length, block_attr));
   });
   if (!status.ok()) {
     LOG(ERROR) << "Fail to init DiskCache";
@@ -133,100 +135,105 @@ Status BlockCacheImpl::Shutdown() {
   return Status::OK();
 }
 
-Status BlockCacheImpl::Put(ContextSPtr ctx, const BlockKey& key,
+Status BlockCacheImpl::Put(ContextSPtr ctx, const BlockContext& block_ctx,
                            const Block& block, PutOption option) {
   DCHECK_RUNNING("BlockCacheImpl");
 
   // writeback: stage block
   auto status =
-      store_->Stage(ctx, key, block, {.block_attr = option.block_attr});
+      store_->Stage(ctx, block_ctx, block, {.block_attr = option.block_attr});
   if (status.ok()) {
     return status;
   } else if (status.IsCacheFull()) {
     LOG_EVERY_SECOND(WARNING)
-        << "Stage block failed:  key = " << key.Filename()
+        << "Stage block failed:  key = " << block_ctx.key.Filename()
         << ", length = " << block.size << ", status = " << status.ToString();
   } else {
-    LOG(ERROR) << "Fail to stage block key=" << key.Filename();
+    LOG(ERROR) << "Fail to stage block key=" << block_ctx.key.Filename();
   }
 
   return status;
 }
 
-Status BlockCacheImpl::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
-                             size_t length, IOBuffer* buffer,
+Status BlockCacheImpl::Range(ContextSPtr ctx, const BlockContext& block_ctx,
+                             off_t offset, size_t length, IOBuffer* buffer,
                              RangeOption /*option*/) {
   DCHECK_RUNNING("BlockCacheImpl");
 
-  return store_->Load(ctx, key, offset, length, buffer);
+  return store_->Load(ctx, block_ctx, offset, length, buffer);
 }
 
-Status BlockCacheImpl::Cache(ContextSPtr ctx, const BlockKey& key,
+Status BlockCacheImpl::Cache(ContextSPtr ctx, const BlockContext& block_ctx,
                              const Block& block, CacheOption /*option*/) {
   DCHECK_RUNNING("BlockCacheImpl");
 
-  auto status = store_->Cache(ctx, key, block);
+  auto status = store_->Cache(ctx, block_ctx, block);
   if (status.IsCacheFull()) {
     LOG_EVERY_SECOND(WARNING)
-        << "Cache block failed: key = " << key.Filename()
+        << "Cache block failed: key = " << block_ctx.key.Filename()
         << ", length = " << block.size << ", status = " << status.ToString();
   } else if (!status.ok()) {
-    LOG(ERROR) << "Fail to cache block key=" << key.Filename();
+    LOG(ERROR) << "Fail to cache block key=" << block_ctx.key.Filename();
   }
 
   return status;
 }
 
-Status BlockCacheImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
-                                size_t length, PrefetchOption /*option*/) {
+Status BlockCacheImpl::Prefetch(ContextSPtr ctx,
+                                const BlockContext& block_ctx, size_t length,
+                                PrefetchOption /*option*/) {
   DCHECK_RUNNING("BlockCacheImpl");
 
-  if (IsCached(key)) {
+  if (IsCached(block_ctx)) {
     return Status::OK();
-  } else if (store_->IsFull(key)) {
+  } else if (store_->IsFull(block_ctx)) {
     return Status::CacheFull("disk cache is full");
   }
 
   IOBuffer buffer;
-  auto status = StorageRange(ctx, key, 0, length, &buffer);
+  auto status = StorageRange(ctx, block_ctx, 0, length, &buffer);
   if (!status.ok()) {
     return status;
   }
 
-  status = store_->Cache(ctx, key, Block(buffer));
+  status = store_->Cache(ctx, block_ctx, Block(buffer));
   if (!status.ok()) {
-    LOG(ERROR) << "Fail to prefetch block key=" << key.Filename();
+    LOG(ERROR) << "Fail to prefetch block key="
+               << block_ctx.key.Filename();
   }
   return status;
 }
 
-void BlockCacheImpl::AsyncPut(ContextSPtr ctx, const BlockKey& key,
+void BlockCacheImpl::AsyncPut(ContextSPtr ctx, const BlockContext& block_ctx,
                               const Block& block, AsyncCallback cb,
                               PutOption option) {
   DCHECK_RUNNING("BlockCacheImpl");
 
   auto* self = GetSelfPtr();
-  auto tid = iutil::RunInBthread([self, ctx, key, block, cb, option]() {
-    Status status = self->Put(ctx, key, block, option);
-    if (cb) {
-      cb(status);
-    }
-  });
+  auto tid =
+      iutil::RunInBthread([self, ctx, block_ctx, block, cb, option]() {
+        Status status = self->Put(ctx, block_ctx, block, option);
+        if (cb) {
+          cb(status);
+        }
+      });
 
   if (tid != 0) {
     joiner_->BackgroundJoin(tid);
   }
 }
 
-void BlockCacheImpl::AsyncRange(ContextSPtr ctx, const BlockKey& key,
-                                off_t offset, size_t length, IOBuffer* buffer,
+void BlockCacheImpl::AsyncRange(ContextSPtr ctx,
+                                const BlockContext& block_ctx, off_t offset,
+                                size_t length, IOBuffer* buffer,
                                 AsyncCallback cb, RangeOption option) {
   DCHECK_RUNNING("BlockCacheImpl");
 
   auto* self = GetSelfPtr();
   auto tid = iutil::RunInBthread(
-      [self, ctx, key, offset, length, buffer, cb, option]() {
-        Status status = self->Range(ctx, key, offset, length, buffer, option);
+      [self, ctx, block_ctx, offset, length, buffer, cb, option]() {
+        Status status =
+            self->Range(ctx, block_ctx, offset, length, buffer, option);
         if (cb) {
           cb(status);
         }
@@ -237,13 +244,14 @@ void BlockCacheImpl::AsyncRange(ContextSPtr ctx, const BlockKey& key,
   }
 }
 
-void BlockCacheImpl::AsyncCache(ContextSPtr ctx, const BlockKey& key,
+void BlockCacheImpl::AsyncCache(ContextSPtr ctx,
+                                const BlockContext& block_ctx,
                                 const Block& block, AsyncCallback cb,
                                 CacheOption option) {
   DCHECK_RUNNING("BlockCacheImpl");
 
   auto tracker = cache_tracker_;
-  auto status = tracker->Add(key.Filename());
+  auto status = tracker->Add(block_ctx.key.Filename());
   if (status.IsExist()) {
     if (cb) {
       cb(status);
@@ -252,14 +260,14 @@ void BlockCacheImpl::AsyncCache(ContextSPtr ctx, const BlockKey& key,
   }
 
   auto* self = GetSelfPtr();
-  auto tid =
-      iutil::RunInBthread([tracker, self, ctx, key, block, cb, option]() {
-        Status status = self->Cache(ctx, key, block, option);
+  auto tid = iutil::RunInBthread(
+      [tracker, self, ctx, block_ctx, block, cb, option]() {
+        Status status = self->Cache(ctx, block_ctx, block, option);
         if (cb) {
           cb(status);
         }
 
-        tracker->Remove(key.Filename());
+        tracker->Remove(block_ctx.key.Filename());
       });
 
   if (tid != 0) {
@@ -267,13 +275,14 @@ void BlockCacheImpl::AsyncCache(ContextSPtr ctx, const BlockKey& key,
   }
 }
 
-void BlockCacheImpl::AsyncPrefetch(ContextSPtr ctx, const BlockKey& key,
+void BlockCacheImpl::AsyncPrefetch(ContextSPtr ctx,
+                                   const BlockContext& block_ctx,
                                    size_t length, AsyncCallback cb,
                                    PrefetchOption option) {
   DCHECK_RUNNING("BlockCacheImpl");
 
   auto tracker = prefetch_tracker_;
-  auto status = tracker->Add(key.Filename());
+  auto status = tracker->Add(block_ctx.key.Filename());
   if (status.IsExist()) {
     if (cb) {
       cb(status);
@@ -282,14 +291,14 @@ void BlockCacheImpl::AsyncPrefetch(ContextSPtr ctx, const BlockKey& key,
   }
 
   auto* self = GetSelfPtr();
-  auto tid =
-      iutil::RunInBthread([tracker, self, ctx, key, length, cb, option]() {
-        Status status = self->Prefetch(ctx, key, length, option);
+  auto tid = iutil::RunInBthread(
+      [tracker, self, ctx, block_ctx, length, cb, option]() {
+        Status status = self->Prefetch(ctx, block_ctx, length, option);
         if (cb) {
           cb(status);
         }
 
-        tracker->Remove(key.Filename());
+        tracker->Remove(block_ctx.key.Filename());
       });
 
   if (tid != 0) {
@@ -297,37 +306,43 @@ void BlockCacheImpl::AsyncPrefetch(ContextSPtr ctx, const BlockKey& key,
   }
 }
 
-Status BlockCacheImpl::StoragePut(ContextSPtr ctx, const BlockKey& key,
+Status BlockCacheImpl::StoragePut(ContextSPtr ctx,
+                                  const BlockContext& block_ctx,
                                   const Block& block) {
   StorageClient* storage_client;
-  auto status =
-      storage_client_pool_->GetStorageClient(key.fs_id, &storage_client);
+  auto status = storage_client_pool_->GetStorageClient(block_ctx.fs_id,
+                                                       &storage_client);
   if (!status.ok()) {
-    LOG(ERROR) << "Fail to get storage client for key=" << key.Filename();
+    LOG(ERROR) << "Fail to get storage client for key="
+               << block_ctx.key.Filename();
     return status;
   }
 
-  status = storage_client->Put(ctx, key, &block);
+  status = storage_client->Put(ctx, block_ctx.key, &block);
   if (!status.ok()) {
-    LOG(ERROR) << "Fail to put block to storage, key=" << key.Filename();
+    LOG(ERROR) << "Fail to put block to storage, key="
+               << block_ctx.key.Filename();
   }
   return status;
 }
 
-Status BlockCacheImpl::StorageRange(ContextSPtr ctx, const BlockKey& key,
+Status BlockCacheImpl::StorageRange(ContextSPtr ctx,
+                                    const BlockContext& block_ctx,
                                     off_t offset, size_t length,
                                     IOBuffer* buffer) {
   StorageClient* storage_client;
-  auto status =
-      storage_client_pool_->GetStorageClient(key.fs_id, &storage_client);
+  auto status = storage_client_pool_->GetStorageClient(block_ctx.fs_id,
+                                                       &storage_client);
   if (!status.ok()) {
-    LOG(ERROR) << "Fail to get storage client for key=" << key.Filename();
+    LOG(ERROR) << "Fail to get storage client for key="
+               << block_ctx.key.Filename();
     return status;
   }
 
-  status = storage_client->Range(ctx, key, offset, length, buffer);
+  status = storage_client->Range(ctx, block_ctx.key, offset, length, buffer);
   if (!status.ok()) {
-    LOG(ERROR) << "Fail to range block from storage, key=" << key.Filename();
+    LOG(ERROR) << "Fail to range block from storage, key="
+               << block_ctx.key.Filename();
   }
   return status;
 }

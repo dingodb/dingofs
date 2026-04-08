@@ -207,13 +207,13 @@ void BlockCacheUploader::UploadWorker() {
 }
 
 void BlockCacheUploader::AsyncUpload(const StageBlock& sblock) {
-  tracker_->Add(sblock.key.Filename());
+  tracker_->Add(sblock.block_ctx.key.Filename());
 
   auto* self = GetSelfPtr();
   auto tid = iutil::RunInBthread([self, sblock]() {
     auto status = self->DoUpload(sblock);
     self->OnComplete(sblock, status);
-    self->tracker_->Remove(sblock.key.Filename());
+    self->tracker_->Remove(sblock.block_ctx.key.Filename());
   });
 
   if (tid != 0) {
@@ -222,7 +222,6 @@ void BlockCacheUploader::AsyncUpload(const StageBlock& sblock) {
 }
 
 void BlockCacheUploader::OnComplete(const StageBlock& sblock, Status status) {
-  auto key = sblock.key;
   if (status.ok() || status.IsNotFound()) {
     return;
   } else if (status.IsCacheDown()) {
@@ -245,7 +244,8 @@ void BlockCacheUploader::OnComplete(const StageBlock& sblock, Status status) {
 
 Status BlockCacheUploader::DoUpload(const StageBlock& sblock) {
   IOBuffer buffer;
-  auto status = store_->Load(sblock.ctx, sblock.key, 0, sblock.length, &buffer);
+  auto status =
+      store_->Load(sblock.ctx, sblock.block_ctx, 0, sblock.length, &buffer);
   if (status.IsNotFound()) {
     LOG(ERROR) << "Fail to upload " << sblock
                << " which already deleted, abort upload";
@@ -256,31 +256,32 @@ Status BlockCacheUploader::DoUpload(const StageBlock& sblock) {
   }
 
   StorageClient* storage_client;
-  status =
-      storage_client_pool_->GetStorageClient(sblock.key.fs_id, &storage_client);
+  status = storage_client_pool_->GetStorageClient(sblock.block_ctx.fs_id,
+                                                  &storage_client);
   if (!status.ok()) {
     LOG(ERROR) << "Fail to get storage client";
     return status;
   }
 
   Block block(std::move(buffer));
-  status = storage_client->Put(sblock.ctx, sblock.key, &block);
+  status = storage_client->Put(sblock.ctx, sblock.block_ctx.key, &block);
   if (!status.ok()) {
     LOG(ERROR) << "Fail to put " << sblock << " to storage";
     return status;
   }
 
-  status = store_->RemoveStage(sblock.ctx, sblock.key,
+  status = store_->RemoveStage(sblock.ctx, sblock.block_ctx,
                                {.block_attr = sblock.block_attr});
   if (!status.ok()) {
-    LOG(WARNING) << "Fail to remove stage block, key=" << sblock.key.Filename();
+    LOG(WARNING) << "Fail to remove stage block, key="
+                 << sblock.block_ctx.key.Filename();
     status = Status::OK();  // ignore removestage error
   }
   return status;
 }
 
 std::ostream& operator<<(std::ostream& os, const StageBlock& sblock) {
-  os << "StageBlock{key=" << sblock.key.Filename()
+  os << "StageBlock{key=" << sblock.block_ctx.key.Filename()
      << " length=" << sblock.length << " attr=" << sblock.block_attr << "}";
   return os;
 }
