@@ -23,6 +23,7 @@
 #include "cache/blockcache/disk_cache_watcher.h"
 
 #include "cache/common/macro.h"
+#include "utils/string.h"
 #include "cache/iutil/file_util.h"
 #include "utils/executor/bthread/bthread_executor.h"
 

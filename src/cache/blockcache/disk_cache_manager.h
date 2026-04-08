@@ -23,6 +23,7 @@
 #ifndef DINGOFS_SRC_CACHE_BLOCKCACHE_DISK_CACHE_MANAGER_H_
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_DISK_CACHE_MANAGER_H_
 
+#include <absl/strings/str_format.h>
 #include <bthread/execution_queue.h>
 #include <bthread/mutex.h>
 

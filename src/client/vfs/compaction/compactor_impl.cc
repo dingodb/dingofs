@@ -74,7 +74,7 @@ void CompactorImpl::DecInflight() {
   }
 }
 
-Status CompactorImpl::DoCompact(ContextSPtr ctx, Ino ino, uint64_t chunk_index,
+Status CompactorImpl::DoCompact(ContextSPtr ctx, Ino ino, int64_t chunk_index,
                                 const std::vector<Slice>& slices,
                                 Slice& out_slice) {
   CHECK(!slices.empty()) << "invalid compact, no slices to compact";
@@ -82,10 +82,11 @@ Status CompactorImpl::DoCompact(ContextSPtr ctx, Ino ino, uint64_t chunk_index,
       "CompactorImpl::DoCompact", ctx->GetTraceSpan());
   auto fs_info = vfs_hub_->GetFsInfo();
 
-  int64_t chunk_size = fs_info.chunk_size;
+  int32_t chunk_size = fs_info.chunk_size;
+  int64_t chunk_start = chunk_index * chunk_size;
 
-  FileRange file_range = GetSlicesFileRange(slices);
-  int64_t offset_in_chunk = file_range.offset % chunk_size;
+  FileRange file_range = GetSlicesFileRange(chunk_start, slices);
+  int32_t offset_in_chunk = static_cast<int32_t>(file_range.offset % chunk_size);
 
   ChunkReq req(ino, chunk_index, offset_in_chunk, file_range);
 
@@ -126,7 +127,8 @@ Status CompactorImpl::DoCompact(ContextSPtr ctx, Ino ino, uint64_t chunk_index,
 
     SliceWriter writer(ctx, vfs_hub_, offset_in_chunk);
     Status ret = writer.Write(SpanScope::GetContext(span), to_write.data(),
-                              to_write.size(), offset_in_chunk);
+                              static_cast<int32_t>(to_write.size()),
+                              offset_in_chunk);
     CHECK(ret.ok()) << "Compaction write slice failed: " << ret.ToString()
                     << ", ino: " << ino << ", chunk_index: " << chunk_index;
 
@@ -149,7 +151,7 @@ Status CompactorImpl::DoCompact(ContextSPtr ctx, Ino ino, uint64_t chunk_index,
 }
 
 // TODO: delete compact object after fail
-Status CompactorImpl::Compact(ContextSPtr ctx, Ino ino, uint64_t chunk_index,
+Status CompactorImpl::Compact(ContextSPtr ctx, Ino ino, int64_t chunk_index,
                               const std::vector<Slice>& slices,
                               std::vector<Slice>& out_slices) {
   VLOG(9) << "CompactorImpl::Compact ino: " << ino
@@ -164,7 +166,8 @@ Status CompactorImpl::Compact(ContextSPtr ctx, Ino ino, uint64_t chunk_index,
       "CompactorImpl::Compact", ctx->GetTraceSpan());
 
   std::vector<Slice> to_compact;
-  int32_t skip = Skip(slices);
+  int64_t chunk_start = chunk_index * vfs_hub_->GetFsInfo().chunk_size;
+  int32_t skip = Skip(chunk_start, slices);
   VLOG(9) << "CompactorImpl::Compact skip count: " << skip;
 
   for (size_t i = skip; i < slices.size(); ++i) {
@@ -198,7 +201,7 @@ Status CompactorImpl::Compact(ContextSPtr ctx, Ino ino, uint64_t chunk_index,
 }
 
 Status CompactorImpl::ForceCompact(ContextSPtr ctx, Ino ino,
-                                   uint64_t chunk_index,
+                                   int64_t chunk_index,
                                    const std::vector<Slice>& slices,
                                    std::vector<Slice>& out_slices) {
   VLOG(9) << "CompactorImpl::ForceCompact ino: " << ino

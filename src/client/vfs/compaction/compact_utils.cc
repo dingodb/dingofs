@@ -31,22 +31,24 @@ namespace client {
 namespace vfs {
 namespace compaction {
 
-FileRange GetSlicesFileRange(absl::Span<const Slice> slices) {
+FileRange GetSlicesFileRange(int64_t chunk_start,
+                             absl::Span<const Slice> slices) {
   CHECK(!slices.empty()) << "invalid compact, no slices to compact";
 
-  uint64_t min_offset = UINT64_MAX;
-  uint64_t max_end = 0;
+  int64_t min_offset = INT64_MAX;
+  int64_t max_end = 0;
 
   for (const auto& slice : slices) {
-    min_offset = std::min(slice.offset, min_offset);
-    uint64_t end = slice.offset + slice.length;
+    int64_t file_offset = chunk_start + slice.pos;
+    min_offset = std::min(file_offset, min_offset);
+    int64_t end = file_offset + slice.len;
     max_end = std::max(end, max_end);
   }
 
   CHECK_GT(max_end, min_offset);
 
-  return FileRange{.offset = static_cast<int64_t>(min_offset),
-                   .len = static_cast<int64_t>((max_end - min_offset))};
+  return FileRange{.offset = min_offset,
+                   .len = (max_end - min_offset)};
 }
 
 int64_t SliceReadReqsLength(const std::vector<SliceReadReq>& reqs) {
@@ -57,7 +59,7 @@ int64_t SliceReadReqsLength(const std::vector<SliceReadReq>& reqs) {
   return total_len;
 }
 
-int32_t Skip(const std::vector<Slice>& slices) {
+int32_t Skip(int64_t chunk_start, const std::vector<Slice>& slices) {
   int32_t skipped = 0;
   int32_t total = slices.size();
 
@@ -67,15 +69,15 @@ int32_t Skip(const std::vector<Slice>& slices) {
     absl::Span<const Slice> ss = span_slices.subspan(skipped);
     const Slice& first = ss[0];
 
-    FileRange range = GetSlicesFileRange(ss);
-    auto slice_readreqs = Convert2SliceReadReq(ss, range);
+    FileRange range = GetSlicesFileRange(chunk_start, ss);
+    auto slice_readreqs = Convert2SliceReadReq(ss, range, chunk_start);
     CHECK(!slice_readreqs.empty())
         << "invalid slice readreqs for compact, slices count: " << ss.size();
 
     int64_t readreqs_len = SliceReadReqsLength(slice_readreqs);
     CHECK_GT(readreqs_len, 0) << "invalid slice readreqs length for compact";
 
-    if (first.length < (1 << 20) || first.length * 5 < readreqs_len) {
+    if (first.len < (1 << 20) || first.len * 5 < readreqs_len) {
       VLOG(9) << "Can't skip first slice too small, first_slice: "
               << Slice2Str(first) << ", readreqs_len: " << readreqs_len
               << ", skip: " << skipped;
@@ -83,10 +85,11 @@ int32_t Skip(const std::vector<Slice>& slices) {
     }
 
     const auto& first_req = slice_readreqs[0];
+    int64_t first_file_offset = chunk_start + first.pos;
 
     bool is_first =
-        (static_cast<uint64_t>(first_req.file_offset) == first.offset) &&
-        (first_req.slice->id == first.id) && (first_req.len == first.length);
+        (first_req.file_offset == first_file_offset) &&
+        (first_req.slice->id == first.id) && (first_req.len == first.len);
 
     if (!is_first) {
       VLOG(9) << "Can't skip not same as first, first_slice: "

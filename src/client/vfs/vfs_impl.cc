@@ -648,8 +648,8 @@ Status VFSImpl::GetInfo(std::string* info) {
   FsInfo fs_info = vfs_hub_->GetFsInfo();
   root["fs_name"] = fs_info.name;
   root["fs_id"] = fs_info.id;
-  root["chunk_size"] = static_cast<Json::UInt64>(fs_info.chunk_size);
-  root["block_size"] = static_cast<Json::UInt64>(fs_info.block_size);
+  root["chunk_size"] = fs_info.chunk_size;
+  root["block_size"] = fs_info.block_size;
 
   // Storage type
   const auto& storage = fs_info.storage_info;

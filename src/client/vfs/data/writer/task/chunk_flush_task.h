@@ -35,7 +35,7 @@ namespace vfs {
 class ChunkFlushTask {
  public:
   explicit ChunkFlushTask(
-      uint64_t ino, uint64_t index, uint64_t chunk_flush_id,
+      uint64_t ino, int64_t index, uint64_t chunk_flush_id,
       std::map<uint64_t, std::unique_ptr<SliceWriter>> flush_slices)
       : ino_(ino),
         chunk_index_(index),
@@ -68,7 +68,7 @@ class ChunkFlushTask {
   void SliceFlushed(uint64_t slice_seq, Status s);
 
   const uint64_t ino_{0};
-  const uint64_t chunk_index_{0};
+  const int64_t chunk_index_{0};
   const uint64_t chunk_flush_id;
 
   std::atomic_uint64_t flusing_slice_{0};

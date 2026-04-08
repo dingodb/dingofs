@@ -36,7 +36,7 @@ static mds::ChunkEntry GenChunkEntry(uint32_t index, uint64_t version) {
     slice->set_id(i);
     slice->set_size(1024 * 1024);
     slice->set_len(slice->size());
-    slice->set_offset(i * 1024 * 1024);
+    slice->set_pos(i * 1024 * 1024);
   }
 
   return chunk;

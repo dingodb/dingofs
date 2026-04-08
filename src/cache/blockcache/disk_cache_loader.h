@@ -26,6 +26,7 @@
 #include <atomic>
 #include <thread>
 
+#include "cache/blockcache/cache_store.h"
 #include "cache/blockcache/disk_cache_layout.h"
 #include "cache/blockcache/disk_cache_manager.h"
 #include "cache/common/block_key_helper.h"

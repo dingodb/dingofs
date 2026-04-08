@@ -22,6 +22,7 @@
 #include <string>
 
 #include "client/vfs/vfs_meta.h"
+#include "common/block/block_key.h"
 
 namespace dingofs {
 namespace client {
@@ -51,27 +52,14 @@ struct SliceReadReq {
   std::string ToString() const;
 };
 
-struct BlockDesc {
-  int64_t file_offset;
-  int64_t block_len;  // the len of the block
-  bool zero;
-  uint64_t version;
-  uint64_t slice_id;
-  uint64_t index;  // block index in the chunk
-
-  uint64_t End() const { return file_offset + block_len; }
-  std::string ToString() const;
-};
-
 struct BlockReadReq {
   int64_t file_offset;
-  int64_t block_offset;
-  int64_t len;
-  BlockDesc block;
-  bool fake{false};  // true means fake block req, used for hole
+  int32_t offset_in_block;
+  int32_t len;
+  std::optional<BlockKey> key;
 
-  // Note: this is the offset in the block, not the file offset.
-  uint64_t End() const { return block_offset + len; }
+  bool IsHole() const { return !key.has_value(); }
+  int64_t FileEnd() const { return file_offset + len; }
   std::string ToString() const;
 };
 

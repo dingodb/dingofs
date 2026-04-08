@@ -150,9 +150,11 @@ TEST_F(SliceWriterTest, FlushAsync_CommitSlice_CorrectFields) {
 
   Slice commit = sw_->GetCommitSlice();
   EXPECT_EQ(commit.id, 99u);
-  // chunk_index=0 so chunk_start_in_file = 0; chunk_offset_=0
-  EXPECT_EQ(commit.offset, 0u);
-  EXPECT_EQ(commit.length, write_size);
+  // chunk_offset_=0, len_=write_size
+  EXPECT_EQ(commit.pos, 0);
+  EXPECT_EQ(commit.size, write_size);
+  EXPECT_EQ(commit.off, 0);
+  EXPECT_EQ(commit.len, write_size);
 }
 
 // 5. Mock NewSliceId returns error; FlushAsync callback gets error.
@@ -268,6 +270,311 @@ TEST_F(SliceWriterTest, NoWrites_LenIsZero) {
   EXPECT_EQ(sw_->Len(), 0u);
   EXPECT_FALSE(sw_->IsFlushed());
   EXPECT_EQ(sw_->ChunkOffset(), 0u);
+}
+
+// ---------------------------------------------------------------------------
+// Phase 3: Slice-Relative block_index tests (target behavior — red-light)
+// ---------------------------------------------------------------------------
+
+// Helper fixture with configurable chunk_offset for SliceWriter construction.
+class SliceWriterSliceRelativeTest : public test::VFSTestBase {
+ protected:
+  void SetUp() override {
+    trace_manager_ = std::make_unique<TraceManager>();
+    ON_CALL(*mock_hub_, GetTraceManager())
+        .WillByDefault(Return(trace_manager_.get()));
+    EXPECT_CALL(*mock_hub_, GetTraceManager()).Times(AnyNumber());
+
+    context_ = std::make_unique<SliceDataContext>(MakeContext());
+  }
+
+  // Create a SliceWriter starting at the given chunk_offset.
+  std::unique_ptr<SliceWriter> MakeSliceWriter(int32_t chunk_offset) {
+    return std::make_unique<SliceWriter>(*context_, mock_hub_, chunk_offset);
+  }
+
+  std::vector<char> MakeBuf(uint64_t size, char val = 'A') {
+    return std::vector<char>(size, val);
+  }
+
+  std::unique_ptr<TraceManager> trace_manager_;
+  std::unique_ptr<SliceDataContext> context_;
+};
+
+// 1. SliceWriter(chunk_offset=5MB), Write(9MB, off=5MB)
+//    Target: block indices should be {0,1,2} (slice-relative).
+//    Current (chunk-relative) produces {1,2,3} — test will fail (red).
+TEST_F(SliceWriterSliceRelativeTest, Write_SliceRelative_StartsFromZero) {
+  const int32_t kStartOffset = 5 * 1024 * 1024;  // 5MB
+  const int32_t kWriteSize = 9 * 1024 * 1024;     // 9MB
+  auto sw = MakeSliceWriter(kStartOffset);
+
+  // Capture all block indices from PutAsync calls.
+  std::vector<uint32_t> captured_indices;
+  std::mutex mu;
+  EXPECT_CALL(*mock_block_store_, PutAsync(_, _, _))
+      .WillRepeatedly(
+          Invoke([&](ContextSPtr, PutReq req, StatusCallback cb) {
+            {
+              std::lock_guard<std::mutex> lk(mu);
+              captured_indices.push_back(req.block_ctx.key.index);
+            }
+            cb(Status::OK());
+          }));
+  EXPECT_CALL(*mock_meta_system_, NewSliceId(_, _, _))
+      .WillOnce(DoAll(SetArgPointee<2>(100u), Return(Status::OK())));
+
+  auto buf = MakeBuf(kWriteSize);
+  ASSERT_TRUE(sw->Write(ctx_, buf.data(), kWriteSize, kStartOffset).ok());
+
+  test::AsyncWaiter waiter;
+  waiter.Expect(1);
+  sw->FlushAsync([&](Status s) {
+    EXPECT_TRUE(s.ok());
+    waiter.Done();
+  });
+  waiter.Wait();
+
+  // Sort captured indices for deterministic comparison.
+  std::sort(captured_indices.begin(), captured_indices.end());
+  ASSERT_EQ(captured_indices.size(), 3u);
+  EXPECT_EQ(captured_indices[0], 0u);
+  EXPECT_EQ(captured_indices[1], 1u);
+  EXPECT_EQ(captured_indices[2], 2u);
+}
+
+// 2. Verify 3 blocks have correct sizes: 4MB, 4MB, 1MB (slice-relative).
+TEST_F(SliceWriterSliceRelativeTest, Write_MultiBlock_Sequential) {
+  const int32_t kStartOffset = 5 * 1024 * 1024;
+  const int32_t kWriteSize = 9 * 1024 * 1024;
+  auto sw = MakeSliceWriter(kStartOffset);
+
+  // Capture block index -> data size.
+  std::map<uint32_t, size_t> block_sizes;
+  std::mutex mu;
+  EXPECT_CALL(*mock_block_store_, PutAsync(_, _, _))
+      .WillRepeatedly(
+          Invoke([&](ContextSPtr, PutReq req, StatusCallback cb) {
+            {
+              std::lock_guard<std::mutex> lk(mu);
+              block_sizes[req.block_ctx.key.index] = req.data.Size();
+            }
+            cb(Status::OK());
+          }));
+  EXPECT_CALL(*mock_meta_system_, NewSliceId(_, _, _))
+      .WillOnce(DoAll(SetArgPointee<2>(101u), Return(Status::OK())));
+
+  auto buf = MakeBuf(kWriteSize);
+  ASSERT_TRUE(sw->Write(ctx_, buf.data(), kWriteSize, kStartOffset).ok());
+
+  test::AsyncWaiter waiter;
+  waiter.Expect(1);
+  sw->FlushAsync([&](Status s) {
+    EXPECT_TRUE(s.ok());
+    waiter.Done();
+  });
+  waiter.Wait();
+
+  ASSERT_EQ(block_sizes.size(), 3u);
+  EXPECT_EQ(block_sizes[0], kBlockSize);              // 4MB
+  EXPECT_EQ(block_sizes[1], kBlockSize);              // 4MB
+  EXPECT_EQ(block_sizes[2], 1u * 1024 * 1024);        // 1MB
+}
+
+// 3. Four 1MB writes → single block (index=0), total Len()=4MB.
+TEST_F(SliceWriterSliceRelativeTest, Write_MultipleSmallWrites_SameBlock) {
+  auto sw = MakeSliceWriter(0);
+  const int32_t kSmallSize = 1 * 1024 * 1024;
+
+  for (int i = 0; i < 4; ++i) {
+    auto buf = MakeBuf(kSmallSize, 'A' + i);
+    ASSERT_TRUE(
+        sw->Write(ctx_, buf.data(), kSmallSize, i * kSmallSize).ok());
+  }
+  EXPECT_EQ(sw->Len(), static_cast<int32_t>(4 * kSmallSize));
+
+  // Flush and verify only one block with index=0.
+  std::vector<uint32_t> captured_indices;
+  std::mutex mu;
+  EXPECT_CALL(*mock_block_store_, PutAsync(_, _, _))
+      .WillRepeatedly(
+          Invoke([&](ContextSPtr, PutReq req, StatusCallback cb) {
+            {
+              std::lock_guard<std::mutex> lk(mu);
+              captured_indices.push_back(req.block_ctx.key.index);
+            }
+            cb(Status::OK());
+          }));
+  EXPECT_CALL(*mock_meta_system_, NewSliceId(_, _, _))
+      .WillOnce(DoAll(SetArgPointee<2>(102u), Return(Status::OK())));
+
+  test::AsyncWaiter waiter;
+  waiter.Expect(1);
+  sw->FlushAsync([&](Status s) {
+    EXPECT_TRUE(s.ok());
+    waiter.Done();
+  });
+  waiter.Wait();
+
+  ASSERT_EQ(captured_indices.size(), 1u);
+  EXPECT_EQ(captured_indices[0], 0u);
+}
+
+// 4. Write(3MB) + Write(2MB) crosses block boundary → two blocks.
+TEST_F(SliceWriterSliceRelativeTest, Write_SmallWrites_CrossBoundary) {
+  auto sw = MakeSliceWriter(0);
+  const int32_t k3MB = 3 * 1024 * 1024;
+  const int32_t k2MB = 2 * 1024 * 1024;
+
+  auto buf1 = MakeBuf(k3MB, 'X');
+  auto buf2 = MakeBuf(k2MB, 'Y');
+  ASSERT_TRUE(sw->Write(ctx_, buf1.data(), k3MB, 0).ok());
+  ASSERT_TRUE(sw->Write(ctx_, buf2.data(), k2MB, k3MB).ok());
+  EXPECT_EQ(sw->Len(), k3MB + k2MB);
+
+  std::vector<uint32_t> captured_indices;
+  std::mutex mu;
+  EXPECT_CALL(*mock_block_store_, PutAsync(_, _, _))
+      .WillRepeatedly(
+          Invoke([&](ContextSPtr, PutReq req, StatusCallback cb) {
+            {
+              std::lock_guard<std::mutex> lk(mu);
+              captured_indices.push_back(req.block_ctx.key.index);
+            }
+            cb(Status::OK());
+          }));
+  EXPECT_CALL(*mock_meta_system_, NewSliceId(_, _, _))
+      .WillOnce(DoAll(SetArgPointee<2>(103u), Return(Status::OK())));
+
+  test::AsyncWaiter waiter;
+  waiter.Expect(1);
+  sw->FlushAsync([&](Status s) {
+    EXPECT_TRUE(s.ok());
+    waiter.Done();
+  });
+  waiter.Wait();
+
+  std::sort(captured_indices.begin(), captured_indices.end());
+  ASSERT_EQ(captured_indices.size(), 2u);
+  EXPECT_EQ(captured_indices[0], 0u);
+  EXPECT_EQ(captured_indices[1], 1u);
+}
+
+// 5. Flush last block — verify BlockKey.size equals actual data size (1MB).
+TEST_F(SliceWriterSliceRelativeTest, Flush_LastBlock_ActualSize) {
+  const int32_t kStartOffset = 5 * 1024 * 1024;
+  const int32_t kWriteSize = 9 * 1024 * 1024;
+  auto sw = MakeSliceWriter(kStartOffset);
+
+  // Capture BlockKey.size per block_index.
+  std::map<uint32_t, uint32_t> key_sizes;
+  std::mutex mu;
+  EXPECT_CALL(*mock_block_store_, PutAsync(_, _, _))
+      .WillRepeatedly(
+          Invoke([&](ContextSPtr, PutReq req, StatusCallback cb) {
+            {
+              std::lock_guard<std::mutex> lk(mu);
+              key_sizes[req.block_ctx.key.index] = req.block_ctx.key.size;
+            }
+            cb(Status::OK());
+          }));
+  EXPECT_CALL(*mock_meta_system_, NewSliceId(_, _, _))
+      .WillOnce(DoAll(SetArgPointee<2>(104u), Return(Status::OK())));
+
+  auto buf = MakeBuf(kWriteSize);
+  ASSERT_TRUE(sw->Write(ctx_, buf.data(), kWriteSize, kStartOffset).ok());
+
+  test::AsyncWaiter waiter;
+  waiter.Expect(1);
+  sw->FlushAsync([&](Status s) {
+    EXPECT_TRUE(s.ok());
+    waiter.Done();
+  });
+  waiter.Wait();
+
+  // Last block (index=2) should have actual size = 1MB, not block_size.
+  ASSERT_EQ(key_sizes.size(), 3u);
+  EXPECT_EQ(key_sizes[0], kBlockSize);
+  EXPECT_EQ(key_sizes[1], kBlockSize);
+  EXPECT_EQ(key_sizes[2], 1u * 1024 * 1024);
+}
+
+// 6. Write(100 bytes) → one block, BlockKey.size=100.
+TEST_F(SliceWriterSliceRelativeTest, Write_SingleBlockLessThanBlockSize) {
+  auto sw = MakeSliceWriter(0);
+
+  uint32_t captured_key_size = 0;
+  EXPECT_CALL(*mock_block_store_, PutAsync(_, _, _))
+      .WillRepeatedly(
+          Invoke([&](ContextSPtr, PutReq req, StatusCallback cb) {
+            captured_key_size = req.block_ctx.key.size;
+            cb(Status::OK());
+          }));
+  EXPECT_CALL(*mock_meta_system_, NewSliceId(_, _, _))
+      .WillOnce(DoAll(SetArgPointee<2>(105u), Return(Status::OK())));
+
+  auto buf = MakeBuf(100, 'Z');
+  ASSERT_TRUE(sw->Write(ctx_, buf.data(), 100, 0).ok());
+  EXPECT_EQ(sw->Len(), 100);
+
+  test::AsyncWaiter waiter;
+  waiter.Expect(1);
+  sw->FlushAsync([&](Status s) {
+    EXPECT_TRUE(s.ok());
+    waiter.Done();
+  });
+  waiter.Wait();
+
+  EXPECT_EQ(captured_key_size, 100u);
+}
+
+// 7. Reverse write should be rejected (target: only forward append allowed).
+//    Current code allows reverse via `end_in_chunk == chunk_offset_`.
+//    After migration, SliceWriter::Write CHECKs chunk_offset == End() only.
+TEST_F(SliceWriterSliceRelativeTest, Write_ReverseWrite_CheckFails) {
+  const int32_t k4MB = 4 * 1024 * 1024;
+  auto sw = MakeSliceWriter(k4MB);
+
+  // First write at offset 4MB (the starting chunk_offset).
+  auto buf1 = MakeBuf(k4MB);
+  ASSERT_TRUE(sw->Write(ctx_, buf1.data(), k4MB, k4MB).ok());
+
+  // Reverse write: [2MB, 4MB) prepends to the slice — target rejects this.
+  auto buf2 = MakeBuf(2 * 1024 * 1024);
+  EXPECT_DEATH(
+      sw->Write(ctx_, buf2.data(), 2 * 1024 * 1024, 2 * 1024 * 1024), "");
+}
+
+// 8. GetCommitSlice returns correct fields for a non-zero chunk_offset.
+TEST_F(SliceWriterSliceRelativeTest, GetCommitSlice_CorrectFields) {
+  const int32_t kStartOffset = 5 * 1024 * 1024;
+  const int32_t kWriteSize = 9 * 1024 * 1024;
+  auto sw = MakeSliceWriter(kStartOffset);
+
+  EXPECT_CALL(*mock_meta_system_, NewSliceId(_, _, _))
+      .WillOnce(DoAll(SetArgPointee<2>(200u), Return(Status::OK())));
+  EXPECT_CALL(*mock_block_store_, PutAsync(_, _, _))
+      .WillRepeatedly(Invoke([](ContextSPtr, PutReq, StatusCallback cb) {
+        cb(Status::OK());
+      }));
+
+  auto buf = MakeBuf(kWriteSize);
+  ASSERT_TRUE(sw->Write(ctx_, buf.data(), kWriteSize, kStartOffset).ok());
+
+  test::AsyncWaiter waiter;
+  waiter.Expect(1);
+  sw->FlushAsync([&](Status s) {
+    EXPECT_TRUE(s.ok());
+    waiter.Done();
+  });
+  waiter.Wait();
+
+  Slice commit = sw->GetCommitSlice();
+  EXPECT_EQ(commit.id, 200u);
+  EXPECT_EQ(commit.pos, kStartOffset);   // 5MB
+  EXPECT_EQ(commit.size, kWriteSize);     // 9MB
+  EXPECT_EQ(commit.off, 0);
+  EXPECT_EQ(commit.len, kWriteSize);      // 9MB
 }
 
 }  // namespace vfs
