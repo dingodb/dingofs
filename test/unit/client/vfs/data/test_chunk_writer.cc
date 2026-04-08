@@ -408,6 +408,87 @@ TEST_F(ChunkWriterTest, ConcurrentWriteAndFlush_SeqOrdered) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Phase 3: Slice-Relative — ChunkWriter::FindWritableSliceUnLocked tests
+// ---------------------------------------------------------------------------
+
+// 9. Reverse write creates a new SliceWriter (not reused).
+//    Write [4MB,8MB) then [2MB,4MB) → two separate slices committed.
+//    Target: FindWritableSliceUnLocked returns nullptr for reverse adjacency,
+//    so a new SliceWriter is created. Two WriteSlice calls (or one call with
+//    two slice entries).
+TEST_F(ChunkWriterTest, FindWritable_Reverse_CreatesNew) {
+  int committed_slice_count = 0;
+  ON_CALL(*mock_meta_system_, WriteSlice)
+      .WillByDefault(
+          [&](auto, auto, auto, auto, const std::vector<Slice>& slices) {
+            committed_slice_count += static_cast<int>(slices.size());
+            return Status::OK();
+          });
+
+  auto writer = MakeWriter();
+
+  const uint64_t k4MB = 4 * 1024 * 1024;
+  std::vector<char> buf1(k4MB, 'A');
+  std::vector<char> buf2(2 * 1024 * 1024, 'B');
+
+  // Forward write [4MB, 8MB).
+  Status s1 = writer->Write(ctx_, buf1.data(), k4MB, k4MB);
+  EXPECT_TRUE(s1.ok());
+
+  // Reverse adjacent write [2MB, 4MB) — target creates a new slice.
+  Status s2 = writer->Write(ctx_, buf2.data(), 2 * 1024 * 1024, 2 * 1024 * 1024);
+  EXPECT_TRUE(s2.ok());
+
+  AsyncWaiter waiter;
+  waiter.Expect(1);
+  writer->FlushAsync([&](Status fs) {
+    EXPECT_TRUE(fs.ok());
+    waiter.Done();
+  });
+  waiter.Wait();
+
+  // Two slices expected: one for [4MB,8MB), one for [2MB,4MB).
+  EXPECT_GE(committed_slice_count, 2);
+}
+
+// 10. Forward contiguous write reuses the same SliceWriter.
+//     Write [0,4MB) then [4MB,8MB) → single slice committed.
+TEST_F(ChunkWriterTest, FindWritable_Forward_Reuses) {
+  int committed_slice_count = 0;
+  ON_CALL(*mock_meta_system_, WriteSlice)
+      .WillByDefault(
+          [&](auto, auto, auto, auto, const std::vector<Slice>& slices) {
+            committed_slice_count += static_cast<int>(slices.size());
+            return Status::OK();
+          });
+
+  auto writer = MakeWriter();
+
+  const uint64_t k4MB = 4 * 1024 * 1024;
+  std::vector<char> buf1(k4MB, 'A');
+  std::vector<char> buf2(k4MB, 'B');
+
+  // Forward write [0, 4MB).
+  Status s1 = writer->Write(ctx_, buf1.data(), k4MB, 0);
+  EXPECT_TRUE(s1.ok());
+
+  // Forward adjacent write [4MB, 8MB) — should reuse the same slice.
+  Status s2 = writer->Write(ctx_, buf2.data(), k4MB, k4MB);
+  EXPECT_TRUE(s2.ok());
+
+  AsyncWaiter waiter;
+  waiter.Expect(1);
+  writer->FlushAsync([&](Status fs) {
+    EXPECT_TRUE(fs.ok());
+    waiter.Done();
+  });
+  waiter.Wait();
+
+  // Single slice covers the full [0, 8MB) range.
+  EXPECT_EQ(committed_slice_count, 1);
+}
+
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

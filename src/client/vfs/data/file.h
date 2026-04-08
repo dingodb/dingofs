@@ -54,7 +54,7 @@ class File : public IFile {
 
  private:
   Status PreCheck();
-  uint64_t GetChunkSize() const;
+  int32_t GetChunkSize() const;
 
   VFSHub* vfs_hub_;
   const uint64_t fh_;

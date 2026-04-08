@@ -35,7 +35,7 @@ class ChunkWriter;
 class FileFlushTask {
  public:
   explicit FileFlushTask(uint64_t ino, uint64_t file_flush_id,
-                         std::unordered_map<uint64_t, ChunkWriter*> chunks)
+                         std::unordered_map<int64_t, ChunkWriter*> chunks)
       : ino_(ino),
         file_flush_id_(file_flush_id),
         chunk_writers_(std::move(chunks)) {}
@@ -54,7 +54,7 @@ class FileFlushTask {
   }
 
  private:
-  void ChunkFlushed(uint64_t chunk_index, Status status);
+  void ChunkFlushed(int64_t chunk_index, Status status);
 
   const uint64_t ino_;
   const uint64_t file_flush_id_;
@@ -63,7 +63,7 @@ class FileFlushTask {
 
   mutable std::mutex mutex_;
   // NOTICE: chunk_writers_ will be moved to local variable to_flush
-  std::unordered_map<uint64_t, ChunkWriter*> chunk_writers_;
+  std::unordered_map<int64_t, ChunkWriter*> chunk_writers_;
   StatusCallback cb_;
   Status status_;
 };

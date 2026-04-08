@@ -22,20 +22,34 @@
 #include "client/vfs/data/common/common.h"
 #include "client/vfs/data/common/data_utils.h"
 #include "client/vfs/data/test_data_utils_common.h"
+#include "common/block/block_key.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 
-#define CHECK_BLOCK_BOJ_EQUAL(block_obj, expected_block)              \
-  do {                                                                \
-    EXPECT_EQ((block_obj).file_offset, (expected_block).file_offset); \
-    EXPECT_EQ((block_obj).block_len, (expected_block).block_len);     \
-    EXPECT_EQ((block_obj).zero, (expected_block).zero);               \
-    EXPECT_EQ((block_obj).version, (expected_block).version);         \
-    EXPECT_EQ((block_obj).slice_id, (expected_block).slice_id);       \
-    EXPECT_EQ((block_obj).index, (expected_block).index);             \
-  } while (0)
+// Constants for readability (in bytes)
+static constexpr int32_t MB = 1024 * 1024;
+
+// Helper to verify a BlockReadReq against expected values.
+// key_id:           expected BlockKey.id (slice id)
+// key_index:        expected BlockKey.index (slice-relative block index)
+// key_size:         expected BlockKey.size (actual block size in bytes)
+// file_offset:      expected file_offset in the BlockReadReq
+// offset_in_block:  expected offset within the block object
+// len:              expected read length
+static void CheckBlockReadReq(const BlockReadReq& req, uint64_t key_id,
+                               uint32_t key_index, uint32_t key_size,
+                               int64_t file_offset, int32_t offset_in_block,
+                               int32_t len) {
+  ASSERT_TRUE(req.key.has_value()) << "BlockReadReq.key should not be nullopt";
+  EXPECT_EQ(req.key->id, key_id);
+  EXPECT_EQ(req.key->index, key_index);
+  EXPECT_EQ(req.key->size, key_size);
+  EXPECT_EQ(req.file_offset, file_offset);
+  EXPECT_EQ(req.offset_in_block, offset_in_block);
+  EXPECT_EQ(req.len, len);
+}
 
 // Helper function to create a SliceReadReq object
 static SliceReadReq CreateSliceReadReq(int64_t file_offset, int64_t read_len,
@@ -47,374 +61,381 @@ static SliceReadReq CreateSliceReadReq(int64_t file_offset, int64_t read_len,
   };
 }
 
-TEST(ConvertSliceReadReqToBlockReadReqsTest, NormalCase) {
-  bool is_zero = false;
-  uint64_t compaction = 1;
-  Slice slice = CreateSlice(0, 128, 1, is_zero, compaction);
+// ============================================================
+// off=0 basic scenarios
+// ============================================================
 
-  SliceReadReq slice_req = CreateSliceReadReq(32, 64, slice);
+// 1. Single block, full read
+// slice{pos=0, size=4MB, off=0, len=4MB}, read entire slice
+// Expected: 1 req, key(index=0, size=4MB), offset_in_block=0
+TEST(ConvertSliceReadReqToBlockReadReqsTest, SingleBlock_FullRead) {
+  Slice slice = CreateSlice(/*id=*/1, /*pos=*/0, /*size=*/4 * MB);
+  SliceReadReq slice_req = CreateSliceReadReq(0, 4 * MB, slice);
 
-  uint64_t fs_id = 1;
+  uint32_t fs_id = 1;
   uint64_t ino = 2;
-  uint64_t chunk_size = 128;
-  uint64_t block_size = 32;
+  int32_t chunk_size = 64 * MB;
+  int32_t block_size = 4 * MB;
 
-  auto block_read_reqs = ConvertSliceReadReqToBlockReadReqs(
-      slice_req, fs_id, ino, chunk_size, block_size);
+  auto reqs = ConvertSliceReadReqToBlockReadReqs(slice_req, fs_id, ino,
+                                                  chunk_size, block_size, 0);
 
-  ASSERT_EQ(block_read_reqs.size(), 2);
-
-  uint64_t next_block_index = (slice_req.file_offset % chunk_size) / block_size;
-
-  {
-    BlockDesc expected_block{
-        .file_offset = 32,
-        .block_len = 32,
-        .zero = is_zero,
-        .version = compaction,
-        .slice_id = slice_req.slice->id,
-        .index = next_block_index,
-    };
-
-    EXPECT_EQ(block_read_reqs[0].block_offset, 0);
-    EXPECT_EQ(block_read_reqs[0].len, 32);
-    CHECK_BLOCK_BOJ_EQUAL(block_read_reqs[0].block, expected_block);
-
-    next_block_index += 1;
-  }
-
-  {
-    BlockDesc expected_block{
-        .file_offset = 64,
-        .block_len = 32,
-        .zero = is_zero,
-        .version = compaction,
-        .slice_id = slice_req.slice->id,
-        .index = next_block_index,
-    };
-
-    EXPECT_EQ(block_read_reqs[1].block_offset, 0);
-    EXPECT_EQ(block_read_reqs[1].len, 32);
-    CHECK_BLOCK_BOJ_EQUAL(block_read_reqs[1].block, expected_block);
-
-    next_block_index += 1;
-  }
+  ASSERT_EQ(reqs.size(), 1u);
+  CheckBlockReadReq(reqs[0], /*key_id=*/1, /*key_index=*/0,
+                    /*key_size=*/4 * MB, /*file_offset=*/0,
+                    /*offset_in_block=*/0, /*len=*/4 * MB);
 }
 
-TEST(ConvertSliceReadReqToBlockReadReqsTest, TwoBlockRead) {
-  bool is_zero = false;
-  uint64_t compaction = 1;
-  Slice slice = CreateSlice(0, 64, 1, is_zero, compaction);
+// 2. Single block, partial read
+// slice{pos=0, size=4MB, off=0, len=4MB}, read file_offset=1MB, len=1MB
+// Expected: 1 req, key(index=0, size=4MB), offset_in_block=1MB
+TEST(ConvertSliceReadReqToBlockReadReqsTest, SingleBlock_PartialRead) {
+  Slice slice = CreateSlice(/*id=*/1, /*pos=*/0, /*size=*/4 * MB);
+  SliceReadReq slice_req = CreateSliceReadReq(1 * MB, 1 * MB, slice);
 
-  SliceReadReq slice_req = CreateSliceReadReq(16, 32, slice);
-
-  uint64_t fs_id = 1;
+  uint32_t fs_id = 1;
   uint64_t ino = 2;
-  uint64_t chunk_size = 64;
-  uint64_t block_size = 32;
+  int32_t chunk_size = 64 * MB;
+  int32_t block_size = 4 * MB;
 
-  auto block_read_reqs = ConvertSliceReadReqToBlockReadReqs(
-      slice_req, fs_id, ino, chunk_size, block_size);
+  auto reqs = ConvertSliceReadReqToBlockReadReqs(slice_req, fs_id, ino,
+                                                  chunk_size, block_size, 0);
 
-  ASSERT_EQ(block_read_reqs.size(), 2);
-
-  uint64_t next_block_index = (slice_req.file_offset % chunk_size) / block_size;
-
-  {
-    BlockDesc expected_block{
-        .file_offset = 0,
-        .block_len = 32,
-        .zero = is_zero,
-        .version = compaction,
-        .slice_id = slice_req.slice->id,
-        .index = next_block_index,
-    };
-
-    EXPECT_EQ(block_read_reqs[0].block_offset, 16);
-    EXPECT_EQ(block_read_reqs[0].len, 16);
-    CHECK_BLOCK_BOJ_EQUAL(block_read_reqs[0].block, expected_block);
-
-    next_block_index += 1;
-  }
-
-  {
-    BlockDesc expected_block{
-        .file_offset = 32,
-        .block_len = 32,
-        .zero = is_zero,
-        .version = compaction,
-        .slice_id = slice_req.slice->id,
-        .index = next_block_index,
-    };
-
-    EXPECT_EQ(block_read_reqs[1].block_offset, 0);
-    EXPECT_EQ(block_read_reqs[1].len, 16);
-    CHECK_BLOCK_BOJ_EQUAL(block_read_reqs[1].block, expected_block);
-
-    next_block_index += 1;
-  }
+  ASSERT_EQ(reqs.size(), 1u);
+  CheckBlockReadReq(reqs[0], 1, 0, 4 * MB, 1 * MB, 1 * MB, 1 * MB);
 }
 
-TEST(ConvertSliceReadReqToBlockReadReqsTest, ZeroDataSlice) {
-  bool is_zero = true;
-  uint64_t compaction = 1;
-  Slice slice = CreateSlice(0, 128, 1, is_zero, compaction);
+// 3. Single block, small slice (size < block_size)
+// slice{pos=0, size=1MB, off=0, len=1MB}, block_size=4MB
+// Expected: 1 req, key(index=0, size=1MB) -- self-describing actual size
+TEST(ConvertSliceReadReqToBlockReadReqsTest, SingleBlock_SmallSlice) {
+  Slice slice = CreateSlice(/*id=*/1, /*pos=*/0, /*size=*/1 * MB);
+  SliceReadReq slice_req = CreateSliceReadReq(0, 1 * MB, slice);
 
-  SliceReadReq slice_req = CreateSliceReadReq(32, 64, slice);
-
-  uint64_t fs_id = 1;
+  uint32_t fs_id = 1;
   uint64_t ino = 2;
-  uint64_t chunk_size = 128;
-  uint64_t block_size = 32;
+  int32_t chunk_size = 64 * MB;
+  int32_t block_size = 4 * MB;
 
-  auto block_read_reqs = ConvertSliceReadReqToBlockReadReqs(
-      slice_req, fs_id, ino, chunk_size, block_size);
+  auto reqs = ConvertSliceReadReqToBlockReadReqs(slice_req, fs_id, ino,
+                                                  chunk_size, block_size, 0);
 
-  ASSERT_EQ(block_read_reqs.size(), 2);
-
-  uint64_t next_block_index = (slice_req.file_offset % chunk_size) / block_size;
-
-  {
-    BlockDesc expected_block{
-        .file_offset = 32,
-        .block_len = 32,
-        .zero = is_zero,
-        .version = compaction,
-        .slice_id = slice_req.slice->id,
-        .index = next_block_index,
-    };
-
-    EXPECT_EQ(block_read_reqs[0].block_offset, 0);
-    EXPECT_EQ(block_read_reqs[0].len, 32);
-    CHECK_BLOCK_BOJ_EQUAL(block_read_reqs[0].block, expected_block);
-
-    next_block_index += 1;
-  }
-
-  {
-    BlockDesc expected_block{
-        .file_offset = 64,
-        .block_len = 32,
-        .zero = is_zero,
-        .version = compaction,
-        .slice_id = slice_req.slice->id,
-        .index = next_block_index,
-    };
-
-    EXPECT_EQ(block_read_reqs[1].block_offset, 0);
-    EXPECT_EQ(block_read_reqs[1].len, 32);
-    CHECK_BLOCK_BOJ_EQUAL(block_read_reqs[1].block, expected_block);
-
-    next_block_index += 1;
-  }
+  ASSERT_EQ(reqs.size(), 1u);
+  CheckBlockReadReq(reqs[0], 1, 0, 1 * MB, 0, 0, 1 * MB);
 }
 
-TEST(ConvertSliceReadReqToBlockReadReqsTest, ReadAcrossMultipleBlocks) {
-  bool is_zero = false;
-  uint64_t compaction = 1;
-  Slice slice = CreateSlice(0, 256, 1, is_zero, compaction);
+// ============================================================
+// off=0 cross-block scenarios
+// ============================================================
 
-  SliceReadReq slice_req = CreateSliceReadReq(64, 128, slice);
+// 4. Cross two blocks
+// slice{pos=0, size=8MB, off=0, len=8MB}, read from 2MB len=4MB
+// Expected: 2 reqs crossing block[0] and block[1]
+TEST(ConvertSliceReadReqToBlockReadReqsTest, CrossBlock_TwoBlocks) {
+  Slice slice = CreateSlice(/*id=*/1, /*pos=*/0, /*size=*/8 * MB);
+  SliceReadReq slice_req = CreateSliceReadReq(2 * MB, 4 * MB, slice);
 
-  uint64_t fs_id = 1;
+  uint32_t fs_id = 1;
   uint64_t ino = 2;
-  uint64_t chunk_size = 512;
-  uint64_t block_size = 32;
+  int32_t chunk_size = 64 * MB;
+  int32_t block_size = 4 * MB;
 
-  uint64_t block_num_in_chunk = chunk_size / block_size;
+  auto reqs = ConvertSliceReadReqToBlockReadReqs(slice_req, fs_id, ino,
+                                                  chunk_size, block_size, 0);
 
-  auto block_read_reqs = ConvertSliceReadReqToBlockReadReqs(
-      slice_req, fs_id, ino, chunk_size, block_size);
-
-  ASSERT_EQ(block_read_reqs.size(), 4);
-
-  uint64_t next_block_index = (slice_req.file_offset % chunk_size) / block_size;
-
-  {
-    BlockDesc expected_block{
-        .file_offset = 64,
-        .block_len = 32,
-        .zero = is_zero,
-        .version = compaction,
-        .slice_id = slice_req.slice->id,
-        .index = next_block_index,
-    };
-
-    EXPECT_EQ(block_read_reqs[0].block_offset, 0);
-    EXPECT_EQ(block_read_reqs[0].len, 32);
-    CHECK_BLOCK_BOJ_EQUAL(block_read_reqs[0].block, expected_block);
-
-    next_block_index = (next_block_index + 1) % block_num_in_chunk;
-  }
-
-  {
-    BlockDesc expected_block{
-        .file_offset = 96,
-        .block_len = 32,
-        .zero = is_zero,
-        .version = compaction,
-        .slice_id = slice_req.slice->id,
-        .index = next_block_index,
-    };
-
-    EXPECT_EQ(block_read_reqs[1].block_offset, 0);
-    EXPECT_EQ(block_read_reqs[1].len, 32);
-    CHECK_BLOCK_BOJ_EQUAL(block_read_reqs[1].block, expected_block);
-
-    next_block_index = (next_block_index + 1) % block_num_in_chunk;
-  }
-
-  {
-    BlockDesc expected_block{
-        .file_offset = 128,
-        .block_len = 32,
-        .zero = is_zero,
-        .version = compaction,
-        .slice_id = slice_req.slice->id,
-        .index = next_block_index,
-    };
-
-    EXPECT_EQ(block_read_reqs[2].block_offset, 0);
-    EXPECT_EQ(block_read_reqs[2].len, 32);
-    CHECK_BLOCK_BOJ_EQUAL(block_read_reqs[2].block, expected_block);
-
-    next_block_index = (next_block_index + 1) % block_num_in_chunk;
-  }
-
-  {
-    BlockDesc expected_block{
-        .file_offset = 160,
-        .block_len = 32,
-        .zero = is_zero,
-        .version = compaction,
-        .slice_id = slice_req.slice->id,
-        .index = next_block_index,
-    };
-
-    EXPECT_EQ(block_read_reqs[3].block_offset, 0);
-    EXPECT_EQ(block_read_reqs[3].len, 32);
-    CHECK_BLOCK_BOJ_EQUAL(block_read_reqs[3].block, expected_block);
-
-    next_block_index = (next_block_index + 1) % block_num_in_chunk;
-  }
+  ASSERT_EQ(reqs.size(), 2u);
+  // block[0]: physical 2MB..4MB, offset_in_block=2MB, len=2MB
+  CheckBlockReadReq(reqs[0], 1, 0, 4 * MB, 2 * MB, 2 * MB, 2 * MB);
+  // block[1]: physical 4MB..8MB, offset_in_block=0, len=2MB
+  CheckBlockReadReq(reqs[1], 1, 1, 4 * MB, 4 * MB, 0, 2 * MB);
 }
 
-TEST(ConvertSliceReadReqToBlockReadReqsTest, NonAlignedBlockBoundaries) {
-  bool is_zero = false;
-  uint64_t compaction = 2;
-  uint64_t chunk_size = 256;
-  uint64_t block_size = 64;
+// 5. Design doc section 5.2 example: cross blocks with non-zero pos
+// slice{id=1001, pos=5MB, size=9MB, off=0, len=9MB}
+// read from file_offset=7MB (chunk_start=0), len=5MB
+// physical_offset = 0 + (7MB - 5MB) = 2MB -> block[0]
+// Expected: 2 reqs
+TEST(ConvertSliceReadReqToBlockReadReqsTest,
+     CrossBlock_ThreeBlocks_DesignDoc) {
+  Slice slice = CreateSlice(/*id=*/1001, /*pos=*/5 * MB, /*size=*/9 * MB);
+  // file_offset = chunk_start + pos + read_within_slice
+  // chunk_start = 0, slice_offset = 0 + 5MB = 5MB
+  // read from file_offset=7MB, len=5MB -> covers [7MB, 12MB)
+  SliceReadReq slice_req = CreateSliceReadReq(7 * MB, 5 * MB, slice);
 
-  Slice slice = CreateSlice(10, 200, 1, is_zero, compaction);   // [10-210]
-  SliceReadReq slice_req = CreateSliceReadReq(35, 120, slice);  // [35-155]
-
-  uint64_t fs_id = 1;
+  uint32_t fs_id = 1;
   uint64_t ino = 2;
+  int32_t chunk_size = 64 * MB;
+  int32_t block_size = 4 * MB;
 
-  auto block_read_reqs = ConvertSliceReadReqToBlockReadReqs(
-      slice_req, fs_id, ino, chunk_size, block_size);
+  auto reqs = ConvertSliceReadReqToBlockReadReqs(slice_req, fs_id, ino,
+                                                  chunk_size, block_size, 0);
 
-  ASSERT_EQ(block_read_reqs.size(), 3);
-
-  uint64_t next_block_index = (slice_req.file_offset % chunk_size) / block_size;
-
-  {
-    BlockDesc expected_block{
-        .file_offset = 10,
-        .block_len = 54,
-        .zero = is_zero,
-        .version = compaction,
-        .slice_id = slice_req.slice->id,
-        .index = next_block_index,
-    };
-
-    EXPECT_EQ(block_read_reqs[0].block_offset, 25);
-    EXPECT_EQ(block_read_reqs[0].len, 54 - 25);
-    CHECK_BLOCK_BOJ_EQUAL(block_read_reqs[0].block, expected_block);
-
-    next_block_index += 1;
-  }
-
-  {
-    BlockDesc expected_block{
-        .file_offset = 64,
-        .block_len = 64,
-        .zero = is_zero,
-        .version = compaction,
-        .slice_id = slice_req.slice->id,
-        .index = next_block_index,
-    };
-
-    EXPECT_EQ(block_read_reqs[1].block_offset, 0);
-    EXPECT_EQ(block_read_reqs[1].len, 64);
-    CHECK_BLOCK_BOJ_EQUAL(block_read_reqs[1].block, expected_block);
-
-    next_block_index += 1;
-  }
-
-  {
-    BlockDesc expected_block{
-        .file_offset = 128,
-        .block_len = 64,
-        .zero = is_zero,
-        .version = compaction,
-        .slice_id = slice_req.slice->id,
-        .index = next_block_index,
-    };
-
-    EXPECT_EQ(block_read_reqs[2].block_offset, 0);
-    EXPECT_EQ(block_read_reqs[2].len, 155 - 128);
-    CHECK_BLOCK_BOJ_EQUAL(block_read_reqs[2].block, expected_block);
-
-    next_block_index += 1;
-  }
+  ASSERT_EQ(reqs.size(), 2u);
+  // block[0]: physical_offset=2MB, block_aligned=0..4MB
+  //   file range: 5MB + (0-0) = 5MB to 5MB + (4MB-0) = 9MB
+  //   read from 7MB, len = 9MB - 7MB = 2MB
+  //   offset_in_block = 2MB % 4MB = 2MB
+  CheckBlockReadReq(reqs[0], 1001, 0, 4 * MB, 7 * MB, 2 * MB, 2 * MB);
+  // block[1]: physical_offset=4MB, block_aligned=4MB..8MB
+  //   file range: 5MB + (4MB-0) = 9MB to 5MB + (8MB-0) = 13MB
+  //   read from 9MB, len = min(3MB, 13MB-9MB) = 3MB
+  //   offset_in_block = 4MB % 4MB = 0
+  CheckBlockReadReq(reqs[1], 1001, 1, 4 * MB, 9 * MB, 0, 3 * MB);
 }
 
-TEST(ConvertSliceReadReqToBlockReadReqsTest, InvalidSlice) {
-  SliceReadReq slice_req{
-      .file_offset = 32,
-      .len = 64,
-      .slice = std::nullopt,  // No slice provided
-  };
+// 6. Read entire slice spanning 3 blocks
+// slice{pos=0, size=9MB, off=0, len=9MB}, read all 9MB
+// Expected: 3 reqs, last block key.size=1MB
+TEST(ConvertSliceReadReqToBlockReadReqsTest, CrossBlock_EntireSlice) {
+  Slice slice = CreateSlice(/*id=*/1, /*pos=*/0, /*size=*/9 * MB);
+  SliceReadReq slice_req = CreateSliceReadReq(0, 9 * MB, slice);
 
-  uint64_t fs_id = 1;
+  uint32_t fs_id = 1;
   uint64_t ino = 2;
-  uint64_t chunk_size = 128;
-  uint64_t block_size = 32;
+  int32_t chunk_size = 64 * MB;
+  int32_t block_size = 4 * MB;
 
-  EXPECT_DEATH(ConvertSliceReadReqToBlockReadReqs(slice_req, fs_id, ino,
-                                                  chunk_size, block_size),
-               "Illegal slice_req");
+  auto reqs = ConvertSliceReadReqToBlockReadReqs(slice_req, fs_id, ino,
+                                                  chunk_size, block_size, 0);
+
+  ASSERT_EQ(reqs.size(), 3u);
+  // block[0]: 0..4MB, full block
+  CheckBlockReadReq(reqs[0], 1, 0, 4 * MB, 0, 0, 4 * MB);
+  // block[1]: 4MB..8MB, full block
+  CheckBlockReadReq(reqs[1], 1, 1, 4 * MB, 4 * MB, 0, 4 * MB);
+  // block[2]: 8MB..9MB, actual size=1MB (self-describing)
+  CheckBlockReadReq(reqs[2], 1, 2, 1 * MB, 8 * MB, 0, 1 * MB);
 }
 
-TEST(ConvertSliceReadReqToBlockReadReqsTest, InvalidReadOffset) {
-  Slice slice = CreateSlice(32, 128, 1, false, 1);
-  SliceReadReq slice_req = CreateSliceReadReq(0, 64, slice);
+// ============================================================
+// CopyFileRange (off != 0) scenarios
+// ============================================================
 
-  uint64_t fs_id = 1;
+// 7. Design doc section 5.3: CopyFileRange single block
+// Source slice: {id=100, size=12MB}
+// Target slice: {id=100, pos=0, size=12MB, off=8MB, len=4MB}
+// read file_offset=0, len=4MB
+// physical_offset = 8MB + (0 - 0) = 8MB -> block_index=2
+// Expected: 1 req, key(index=2, size=4MB), offset_in_block=0
+TEST(ConvertSliceReadReqToBlockReadReqsTest, CopyFileRange_SingleBlock) {
+  Slice slice = CreateSlice(/*id=*/100, /*pos=*/0, /*size=*/12 * MB,
+                            /*off=*/8 * MB, /*len=*/4 * MB);
+  SliceReadReq slice_req = CreateSliceReadReq(0, 4 * MB, slice);
+
+  uint32_t fs_id = 1;
   uint64_t ino = 2;
-  uint64_t chunk_size = 128;
-  uint64_t block_size = 32;
+  int32_t chunk_size = 64 * MB;
+  int32_t block_size = 4 * MB;
 
-  EXPECT_DEATH(ConvertSliceReadReqToBlockReadReqs(slice_req, fs_id, ino,
-                                                  chunk_size, block_size),
-               "Illegal slice_req_offset");
+  auto reqs = ConvertSliceReadReqToBlockReadReqs(slice_req, fs_id, ino,
+                                                  chunk_size, block_size, 0);
+
+  ASSERT_EQ(reqs.size(), 1u);
+  CheckBlockReadReq(reqs[0], 100, 2, 4 * MB, 0, 0, 4 * MB);
 }
 
-TEST(ConvertSliceReadReqToBlockReadReqsTest, ReadLengthExceedsSlice) {
-  bool is_zero = false;
-  uint64_t compaction = 1;
-  Slice slice = CreateSlice(0, 64, 1, is_zero, compaction);
-  SliceReadReq slice_req = CreateSliceReadReq(32, 64, slice);
+// 8. CopyFileRange partial block
+// slice{id=200, pos=0, size=12MB, off=6MB, len=2MB}
+// read file_offset=0, len=2MB
+// physical_offset = 6MB + (0 - 0) = 6MB -> block_index=1, offset_in_block=2MB
+// block_aligned_start=4MB, block_aligned_end=min(8MB, 12MB)=8MB
+// file_block_start = 0 + (4MB - 6MB) = -2MB -> clamped to 0
+// file_block_end = 0 + (8MB - 6MB) = 2MB
+// Expected: 1 req
+TEST(ConvertSliceReadReqToBlockReadReqsTest, CopyFileRange_PartialBlock) {
+  Slice slice = CreateSlice(/*id=*/200, /*pos=*/0, /*size=*/12 * MB,
+                            /*off=*/6 * MB, /*len=*/2 * MB);
+  SliceReadReq slice_req = CreateSliceReadReq(0, 2 * MB, slice);
 
-  uint64_t fs_id = 1;
+  uint32_t fs_id = 1;
   uint64_t ino = 2;
-  uint64_t chunk_size = 64;
-  uint64_t block_size = 32;
+  int32_t chunk_size = 64 * MB;
+  int32_t block_size = 4 * MB;
 
-  EXPECT_DEATH(ConvertSliceReadReqToBlockReadReqs(slice_req, fs_id, ino,
-                                                  chunk_size, block_size),
-               "Illegal cur_block_start");
+  auto reqs = ConvertSliceReadReqToBlockReadReqs(slice_req, fs_id, ino,
+                                                  chunk_size, block_size, 0);
+
+  ASSERT_EQ(reqs.size(), 1u);
+  // physical_offset=6MB, block_index=6MB/4MB=1, offset_in_block=6MB%4MB=2MB
+  CheckBlockReadReq(reqs[0], 200, 1, 4 * MB, 0, 2 * MB, 2 * MB);
+}
+
+// 9. CopyFileRange crossing three blocks
+// slice{id=300, pos=0, size=12MB, off=3MB, len=6MB}
+// read file_offset=0, len=6MB
+// physical start: 3MB, physical end: 3MB + 6MB = 9MB
+// block[0]: physical 0..4MB -> read 3MB..4MB (1MB), offset_in_block=3MB
+// block[1]: physical 4MB..8MB -> read 4MB..8MB (4MB), offset_in_block=0
+// block[2]: physical 8MB..12MB -> read 8MB..9MB (1MB), offset_in_block=0
+// Expected: 3 reqs
+TEST(ConvertSliceReadReqToBlockReadReqsTest, CopyFileRange_CrossThreeBlocks) {
+  Slice slice = CreateSlice(/*id=*/300, /*pos=*/0, /*size=*/12 * MB,
+                            /*off=*/3 * MB, /*len=*/6 * MB);
+  SliceReadReq slice_req = CreateSliceReadReq(0, 6 * MB, slice);
+
+  uint32_t fs_id = 1;
+  uint64_t ino = 2;
+  int32_t chunk_size = 64 * MB;
+  int32_t block_size = 4 * MB;
+
+  auto reqs = ConvertSliceReadReqToBlockReadReqs(slice_req, fs_id, ino,
+                                                  chunk_size, block_size, 0);
+
+  ASSERT_EQ(reqs.size(), 3u);
+  // block[0]: physical_offset=3MB, index=0, offset_in_block=3MB
+  //   file_block_end = 0 + (4MB - 3MB) = 1MB
+  //   len = min(6MB, 1MB - 0) = 1MB
+  CheckBlockReadReq(reqs[0], 300, 0, 4 * MB, 0, 3 * MB, 1 * MB);
+  // block[1]: physical_offset=4MB, index=1, offset_in_block=0
+  //   file range: 0 + (4MB - 3MB) = 1MB to 0 + (8MB - 3MB) = 5MB
+  //   read from 1MB, len = min(5MB, 5MB - 1MB) = 4MB
+  CheckBlockReadReq(reqs[1], 300, 1, 4 * MB, 1 * MB, 0, 4 * MB);
+  // block[2]: physical_offset=8MB, index=2, offset_in_block=0
+  //   file range: 0 + (8MB - 3MB) = 5MB to 0 + (12MB - 3MB) = 9MB
+  //   but clamped to slice_offset + slice.len = 0 + 6MB = 6MB
+  //   read from 5MB, len = min(1MB, 6MB - 5MB) = 1MB
+  CheckBlockReadReq(reqs[2], 300, 2, 4 * MB, 5 * MB, 0, 1 * MB);
+}
+
+// 10. CopyFileRange large offset spanning 4 blocks
+// slice{id=400, pos=0, size=20MB, off=6MB, len=10MB}
+// read file_offset=0, len=10MB
+// physical range: 6MB..16MB
+// block[1]: 4MB..8MB -> read 6MB..8MB (2MB), offset_in_block=2MB
+// block[2]: 8MB..12MB -> read 8MB..12MB (4MB)
+// block[3]: 12MB..16MB -> read 12MB..16MB (4MB)
+// Wait -- physical 6MB..16MB covers blocks 1,2,3 = 3 blocks.
+// Actually: 2MB + 4MB + 4MB = 10MB. That's 3 reqs, not 4.
+// Let me use off=5MB, len=10MB to get 4 blocks.
+// physical range: 5MB..15MB
+// block[1]: 4MB..8MB -> read 5MB..8MB (3MB), offset_in_block=1MB
+// block[2]: 8MB..12MB -> 4MB
+// block[3]: 12MB..16MB -> read 12MB..15MB (3MB)
+// Still 3. For 4 reqs: off=3MB, len=10MB -> physical 3MB..13MB
+// block[0]: 0..4MB -> 3MB..4MB (1MB)
+// block[1]: 4..8MB -> 4MB (full)
+// block[2]: 8..12MB -> 4MB (full)
+// block[3]: 12..16MB -> 12..13MB (1MB)
+// That's 4 reqs.
+TEST(ConvertSliceReadReqToBlockReadReqsTest, CopyFileRange_LargeOffset) {
+  Slice slice = CreateSlice(/*id=*/400, /*pos=*/0, /*size=*/20 * MB,
+                            /*off=*/3 * MB, /*len=*/10 * MB);
+  SliceReadReq slice_req = CreateSliceReadReq(0, 10 * MB, slice);
+
+  uint32_t fs_id = 1;
+  uint64_t ino = 2;
+  int32_t chunk_size = 64 * MB;
+  int32_t block_size = 4 * MB;
+
+  auto reqs = ConvertSliceReadReqToBlockReadReqs(slice_req, fs_id, ino,
+                                                  chunk_size, block_size, 0);
+
+  ASSERT_EQ(reqs.size(), 4u);
+  // block[0]: physical 3MB, index=0, offset_in_block=3MB, len=1MB
+  CheckBlockReadReq(reqs[0], 400, 0, 4 * MB, 0, 3 * MB, 1 * MB);
+  // block[1]: physical 4MB, index=1, offset_in_block=0, len=4MB
+  CheckBlockReadReq(reqs[1], 400, 1, 4 * MB, 1 * MB, 0, 4 * MB);
+  // block[2]: physical 8MB, index=2, offset_in_block=0, len=4MB
+  CheckBlockReadReq(reqs[2], 400, 2, 4 * MB, 5 * MB, 0, 4 * MB);
+  // block[3]: physical 12MB, index=3, offset_in_block=0, len=1MB
+  CheckBlockReadReq(reqs[3], 400, 3, 4 * MB, 9 * MB, 0, 1 * MB);
+}
+
+// ============================================================
+// Boundary conditions
+// ============================================================
+
+// 11. Last block smaller than block_size
+// slice{pos=0, size=9MB, off=0, len=9MB}, read last 1MB
+// read file_offset=8MB, len=1MB
+// physical_offset = 8MB -> block_index=2, key.size=min(9MB-8MB, 4MB)=1MB
+TEST(ConvertSliceReadReqToBlockReadReqsTest, LastBlock_SmallerThanBlockSize) {
+  Slice slice = CreateSlice(/*id=*/1, /*pos=*/0, /*size=*/9 * MB);
+  SliceReadReq slice_req = CreateSliceReadReq(8 * MB, 1 * MB, slice);
+
+  uint32_t fs_id = 1;
+  uint64_t ino = 2;
+  int32_t chunk_size = 64 * MB;
+  int32_t block_size = 4 * MB;
+
+  auto reqs = ConvertSliceReadReqToBlockReadReqs(slice_req, fs_id, ino,
+                                                  chunk_size, block_size, 0);
+
+  ASSERT_EQ(reqs.size(), 1u);
+  // block[2]: actual_size = min(9MB - 2*4MB, 4MB) = 1MB
+  CheckBlockReadReq(reqs[0], 1, 2, 1 * MB, 8 * MB, 0, 1 * MB);
+}
+
+// 12. Single byte at block boundary
+// slice{pos=0, size=64, off=0, len=64}, block_size=32
+// read file_offset=32, len=1
+// physical_offset=32 -> block_index=1, offset_in_block=0
+TEST(ConvertSliceReadReqToBlockReadReqsTest, SingleByte_AtBlockBoundary) {
+  Slice slice = CreateSlice(/*id=*/1, /*pos=*/0, /*size=*/64);
+  SliceReadReq slice_req = CreateSliceReadReq(32, 1, slice);
+
+  uint32_t fs_id = 1;
+  uint64_t ino = 2;
+  int32_t chunk_size = 256;
+  int32_t block_size = 32;
+
+  auto reqs = ConvertSliceReadReqToBlockReadReqs(slice_req, fs_id, ino,
+                                                  chunk_size, block_size, 0);
+
+  ASSERT_EQ(reqs.size(), 1u);
+  // block[1]: key.size=32 (full block), offset_in_block=0
+  CheckBlockReadReq(reqs[0], 1, 1, 32, 32, 0, 1);
+}
+
+// 13. Single byte before block boundary
+// slice{pos=0, size=64, off=0, len=64}, block_size=32
+// read file_offset=31, len=1
+// physical_offset=31 -> block_index=0, offset_in_block=31
+TEST(ConvertSliceReadReqToBlockReadReqsTest, SingleByte_BeforeBlockBoundary) {
+  Slice slice = CreateSlice(/*id=*/1, /*pos=*/0, /*size=*/64);
+  SliceReadReq slice_req = CreateSliceReadReq(31, 1, slice);
+
+  uint32_t fs_id = 1;
+  uint64_t ino = 2;
+  int32_t chunk_size = 256;
+  int32_t block_size = 32;
+
+  auto reqs = ConvertSliceReadReqToBlockReadReqs(slice_req, fs_id, ino,
+                                                  chunk_size, block_size, 0);
+
+  ASSERT_EQ(reqs.size(), 1u);
+  // block[0]: key.size=32, offset_in_block=31
+  CheckBlockReadReq(reqs[0], 1, 0, 32, 31, 31, 1);
+}
+
+// 14. Non-zero chunk_start -- block_index is still slice-relative
+// chunk_start=64MB, slice{pos=0, size=8MB, off=0, len=8MB}
+// slice_offset = 64MB + 0 = 64MB
+// read file_offset=66MB (= 64MB + 2MB), len=4MB
+// physical_offset = 0 + (66MB - 64MB) = 2MB -> block_index=0
+// This confirms block_index is slice-relative, not chunk-relative.
+TEST(ConvertSliceReadReqToBlockReadReqsTest, NonZeroChunkStart) {
+  Slice slice = CreateSlice(/*id=*/1, /*pos=*/0, /*size=*/8 * MB);
+  int64_t chunk_start = 64 * MB;
+  int64_t slice_offset = chunk_start + slice.pos;  // 64MB
+  SliceReadReq slice_req =
+      CreateSliceReadReq(slice_offset + 2 * MB, 4 * MB, slice);
+
+  uint32_t fs_id = 1;
+  uint64_t ino = 2;
+  int32_t chunk_size = 64 * MB;
+  int32_t block_size = 4 * MB;
+
+  auto reqs = ConvertSliceReadReqToBlockReadReqs(
+      slice_req, fs_id, ino, chunk_size, block_size, chunk_start);
+
+  ASSERT_EQ(reqs.size(), 2u);
+  // block[0]: physical 2MB, index=0, offset_in_block=2MB, len=2MB
+  CheckBlockReadReq(reqs[0], 1, 0, 4 * MB, slice_offset + 2 * MB, 2 * MB,
+                    2 * MB);
+  // block[1]: physical 4MB, index=1, offset_in_block=0, len=2MB
+  CheckBlockReadReq(reqs[1], 1, 1, 4 * MB, slice_offset + 4 * MB, 0, 2 * MB);
 }
 
 }  // namespace vfs

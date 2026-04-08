@@ -21,7 +21,6 @@
 
 #include <vector>
 
-#include "cache/blockcache/cache_store.h"
 #include "client/vfs/components/context.h"
 #include "client/vfs/data/common/common.h"
 #include "client/vfs/data/common/data_utils.h"
@@ -32,19 +31,19 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
-inline std::vector<ChunkContext> File2Chunk(const uint64_t fs_id, const Ino ino,
+inline std::vector<ChunkContext> File2Chunk(const uint32_t fs_id, const Ino ino,
                                             const uint64_t offset,
                                             const uint64_t len,
-                                            const uint64_t chunk_size) {
+                                            const int32_t chunk_size) {
   std::vector<ChunkContext> chunk_contexts;
 
-  uint64_t chunk_idx = offset / chunk_size;
-  uint64_t chunk_offset = offset % chunk_size;
+  int64_t chunk_idx = offset / chunk_size;
+  int64_t chunk_offset = offset % chunk_size;
   uint64_t prefetch_size = len;
 
   while (prefetch_size > 0) {
-    uint64_t chunk_fetch_size =
-        std::min(prefetch_size, chunk_size - chunk_offset);
+    uint64_t chunk_fetch_size = std::min(
+        prefetch_size, static_cast<uint64_t>(chunk_size - chunk_offset));
     ChunkContext chunk_context(fs_id, ino, chunk_idx, chunk_offset,
                                chunk_fetch_size);
     chunk_contexts.push_back(chunk_context);
@@ -74,16 +73,18 @@ inline std::vector<PrefetchBlock> Chunk2Block(ContextSPtr ctx, VFSHub* vfs_hub,
     return {};
   }
 
-  FileRange range = {(req.chunk_idx * chunk_size) + req.offset, req.len};
-  std::vector<SliceReadReq> slice_reqs = ProcessReadRequest(slices, range);
+  int64_t chunk_start = req.chunk_idx * chunk_size;
+  FileRange range = {(int64_t)(chunk_start + req.offset), req.len};
+  std::vector<SliceReadReq> slice_reqs =
+      ProcessReadRequest(slices, range, chunk_start);
 
   std::vector<BlockReadReq> block_reqs;
   for (auto& slice_req : slice_reqs) {
     VLOG(9) << "Read slice_seq : " << slice_req.ToString();
 
-    if (slice_req.slice.has_value() && !slice_req.slice.value().is_zero) {
+    if (slice_req.slice.has_value() && slice_req.slice.value().id != 0) {
       std::vector<BlockReadReq> reqs = ConvertSliceReadReqToBlockReadReqs(
-          slice_req, req.fs_id, req.ino, chunk_size, block_size);
+          slice_req, req.fs_id, req.ino, chunk_size, block_size, chunk_start);
 
       block_reqs.insert(block_reqs.end(), std::make_move_iterator(reqs.begin()),
                         std::make_move_iterator(reqs.end()));
@@ -92,9 +93,10 @@ inline std::vector<PrefetchBlock> Chunk2Block(ContextSPtr ctx, VFSHub* vfs_hub,
 
   std::vector<PrefetchBlock> block_contexts;
   for (const auto& block_req : block_reqs) {
-    BlockKey key(block_req.block.slice_id, block_req.block.index,
-                 block_req.block.block_len);
-    block_contexts.emplace_back(key, block_req.block.block_len);
+    if (block_req.key.has_value()) {
+      block_contexts.emplace_back(block_req.key.value(),
+                                  block_req.key->size);
+    }
   }
 
   return block_contexts;
@@ -123,9 +125,9 @@ inline std::vector<PrefetchBlock> FileRange2BlockKey(ContextSPtr ctx,
                                                     const uint64_t offset,
                                                     const uint64_t len) {
   CHECK_NOTNULL(vfs_hub);
-  uint64_t fs_id = vfs_hub->GetFsInfo().id;
-  uint64_t chunk_size = vfs_hub->GetFsInfo().chunk_size;
-  uint64_t block_size = vfs_hub->GetFsInfo().block_size;
+  uint32_t fs_id = vfs_hub->GetFsInfo().id;
+  int32_t chunk_size = vfs_hub->GetFsInfo().chunk_size;
+  int32_t block_size = vfs_hub->GetFsInfo().block_size;
 
   std::vector<ChunkContext> chunk_contexts =
       File2Chunk(fs_id, ino, offset, len, chunk_size);

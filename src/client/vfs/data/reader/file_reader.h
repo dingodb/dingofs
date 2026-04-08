@@ -112,8 +112,8 @@ class FileReader {
   const uint64_t fh_;
   const uint64_t ino_;
   const std::string uuid_;
-  const uint64_t chunk_size_{0};
-  const uint64_t block_size_{0};
+  const int32_t chunk_size_{0};
+  const int32_t block_size_{0};
 
   std::atomic<int64_t> refs_{0};
 

@@ -82,13 +82,13 @@ void ChunkWriter::Stop() {
   stopped_.store(true, std::memory_order_relaxed);
 }
 
-Status ChunkWriter::Write(ContextSPtr ctx, const char* buf, uint64_t size,
-                          uint64_t chunk_offset) {
+Status ChunkWriter::Write(ContextSPtr ctx, const char* buf, int32_t size,
+                          int32_t chunk_offset) {
   CHECK(!stopped_.load(std::memory_order_relaxed));
   auto span = hub_->GetTraceManager()->StartChildSpan("ChunkWriter::Write",
                                                       ctx->GetTraceSpan());
 
-  uint64_t write_file_offset = chunk_.chunk_start + chunk_offset;
+  int64_t write_file_offset = chunk_.chunk_start + chunk_offset;
   ChunkWriteInfo info(buf, size, chunk_offset, write_file_offset);
   Writer writer;
   writer.write_info = &info;
@@ -197,7 +197,7 @@ Status ChunkWriter::Write(ContextSPtr ctx, const char* buf, uint64_t size,
   return Status::OK();
 }
 
-SliceWriter* ChunkWriter::GetSliceUnlocked(uint64_t chunk_pos, uint64_t size) {
+SliceWriter* ChunkWriter::GetSliceUnlocked(int32_t chunk_pos, int32_t size) {
   SliceWriter* slice = FindWritableSliceUnLocked(chunk_pos, size);
   if (slice == nullptr) {
     slice = CreateSliceUnlocked(chunk_pos);
@@ -209,9 +209,9 @@ SliceWriter* ChunkWriter::GetSliceUnlocked(uint64_t chunk_pos, uint64_t size) {
 }
 
 // TODO: maybe this algorithm is not good enough
-SliceWriter* ChunkWriter::FindWritableSliceUnLocked(uint64_t chunk_pos,
-                                                    uint64_t size) {
-  uint64_t end_in_chunk = chunk_pos + size;
+SliceWriter* ChunkWriter::FindWritableSliceUnLocked(int32_t chunk_pos,
+                                                    int32_t size) {
+  int32_t end_in_chunk = chunk_pos + size;
 
   //   from new to old
   for (auto it = slices_.rbegin(); it != slices_.rend(); ++it) {
@@ -229,7 +229,7 @@ SliceWriter* ChunkWriter::FindWritableSliceUnLocked(uint64_t chunk_pos,
       return nullptr;
     }
 
-    if (chunk_pos == slice->End() || end_in_chunk == slice->ChunkOffset()) {
+    if (chunk_pos == slice->End()) {
       return slice;
     }
   }
@@ -237,7 +237,7 @@ SliceWriter* ChunkWriter::FindWritableSliceUnLocked(uint64_t chunk_pos,
   return nullptr;
 }
 
-SliceWriter* ChunkWriter::CreateSliceUnlocked(uint64_t chunk_pos) {
+SliceWriter* ChunkWriter::CreateSliceUnlocked(int32_t chunk_pos) {
   SliceDataContext ctx(chunk_.fs_id, chunk_.ino, chunk_.index,
                        chunk_.chunk_size, chunk_.block_size, page_size_);
   auto [it, inserted] = slices_.try_emplace(
@@ -414,7 +414,7 @@ void ChunkWriter::TryCommitFlushTasks(ContextSPtr ctx) {
               "{} TryCommitFlushTasks invalidate commit_seq: {} committed "
               "slice: {}",
               uuid, commit_ctx->commit_seq, Slice2Str(slice));
-          manager->Invalidate(fh_, slice.offset, slice.length);
+          manager->Invalidate(fh_, chunk_.chunk_start + slice.pos, slice.len);
         }
       }
     }  // end if commit_slices not empty

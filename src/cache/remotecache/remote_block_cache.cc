@@ -142,37 +142,40 @@ Status RemoteBlockCacheImpl::Range(ContextSPtr ctx,
   return status;
 }
 
-Status RemoteBlockCacheImpl::Cache(ContextSPtr ctx, const BlockKey& key,
+Status RemoteBlockCacheImpl::Cache(ContextSPtr ctx,
+                                   const BlockContext& block_ctx,
                                    const Block& block, CacheOption /*option*/) {
   DCHECK_RUNNING("RemoteBlockCache");
 
-  auto status = upstream_->SendCacheRequest(ctx, key, block);
+  auto status = upstream_->SendCacheRequest(ctx, block_ctx, block);
   if (!status.ok()) {
     LOG(ERROR) << "Fail to cache block to remote cache";
   }
   return status;
 }
 
-Status RemoteBlockCacheImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
+Status RemoteBlockCacheImpl::Prefetch(ContextSPtr ctx,
+                                      const BlockContext& block_ctx,
                                       size_t length,
                                       PrefetchOption /*option*/) {
   DCHECK_RUNNING("RemoteBlockCache");
 
-  auto status = upstream_->SendPrefetchRequest(ctx, key, length);
+  auto status = upstream_->SendPrefetchRequest(ctx, block_ctx, length);
   if (!status.ok()) {
     LOG(ERROR) << "Fail to submit prefetch task to remote cache";
   }
   return status;
 }
 
-void RemoteBlockCacheImpl::AsyncPut(ContextSPtr ctx, const BlockKey& key,
+void RemoteBlockCacheImpl::AsyncPut(ContextSPtr ctx,
+                                    const BlockContext& block_ctx,
                                     const Block& block, AsyncCallback cb,
                                     PutOption option) {
   DCHECK_RUNNING("RemoteBlockCache");
 
   auto* self = GetSelfPtr();
-  auto tid = iutil::RunInBthread([self, ctx, key, block, cb, option]() {
-    Status status = self->Put(ctx, key, block, option);
+  auto tid = iutil::RunInBthread([self, ctx, block_ctx, block, cb, option]() {
+    Status status = self->Put(ctx, block_ctx, block, option);
     if (cb) {
       cb(status);
     }
@@ -183,7 +186,8 @@ void RemoteBlockCacheImpl::AsyncPut(ContextSPtr ctx, const BlockKey& key,
   }
 }
 
-void RemoteBlockCacheImpl::AsyncRange(ContextSPtr ctx, const BlockKey& key,
+void RemoteBlockCacheImpl::AsyncRange(ContextSPtr ctx,
+                                      const BlockContext& block_ctx,
                                       off_t offset, size_t length,
                                       IOBuffer* buffer, AsyncCallback cb,
                                       RangeOption option) {
@@ -191,8 +195,9 @@ void RemoteBlockCacheImpl::AsyncRange(ContextSPtr ctx, const BlockKey& key,
 
   auto* self = GetSelfPtr();
   auto tid = iutil::RunInBthread(
-      [self, ctx, key, offset, length, buffer, cb, option]() {
-        Status status = self->Range(ctx, key, offset, length, buffer, option);
+      [self, ctx, block_ctx, offset, length, buffer, cb, option]() {
+        Status status =
+            self->Range(ctx, block_ctx, offset, length, buffer, option);
         if (cb) {
           cb(status);
         }
@@ -203,14 +208,15 @@ void RemoteBlockCacheImpl::AsyncRange(ContextSPtr ctx, const BlockKey& key,
   }
 }
 
-void RemoteBlockCacheImpl::AsyncCache(ContextSPtr ctx, const BlockKey& key,
+void RemoteBlockCacheImpl::AsyncCache(ContextSPtr ctx,
+                                      const BlockContext& block_ctx,
                                       const Block& block, AsyncCallback cb,
                                       CacheOption option) {
   DCHECK_RUNNING("RemoteBlockCache");
 
   auto* self = GetSelfPtr();
-  auto tid = iutil::RunInBthread([self, ctx, key, block, cb, option]() {
-    Status status = self->Cache(ctx, key, block, option);
+  auto tid = iutil::RunInBthread([self, ctx, block_ctx, block, cb, option]() {
+    Status status = self->Cache(ctx, block_ctx, block, option);
     if (cb) {
       cb(status);
     }
@@ -221,18 +227,20 @@ void RemoteBlockCacheImpl::AsyncCache(ContextSPtr ctx, const BlockKey& key,
   }
 }
 
-void RemoteBlockCacheImpl::AsyncPrefetch(ContextSPtr ctx, const BlockKey& key,
+void RemoteBlockCacheImpl::AsyncPrefetch(ContextSPtr ctx,
+                                         const BlockContext& block_ctx,
                                          size_t length, AsyncCallback cb,
                                          PrefetchOption option) {
   DCHECK_RUNNING("RemoteBlockCache");
 
   auto* self = GetSelfPtr();
-  auto tid = iutil::RunInBthread([self, ctx, key, length, cb, option]() {
-    Status status = self->Prefetch(ctx, key, length, option);
-    if (cb) {
-      cb(status);
-    }
-  });
+  auto tid =
+      iutil::RunInBthread([self, ctx, block_ctx, length, cb, option]() {
+        Status status = self->Prefetch(ctx, block_ctx, length, option);
+        if (cb) {
+          cb(status);
+        }
+      });
 
   if (tid != 0) {
     joiner_->BackgroundJoin(tid);

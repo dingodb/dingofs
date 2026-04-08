@@ -70,16 +70,18 @@ inline std::string FileType2Str(const FileType& file_type) {
   }
 }
 
-// map pb chunkinfo
+// Slice describes a contiguous range of physical data within a chunk.
+// Fields align with proto/dingofs/mds.proto::Slice (uint32 in proto).
+// Use signed int32_t internally so that subtraction bugs surface as
+// negative values instead of silent wrap-around.
+// Actual values are bounded by chunk_size (typically 64 MB), well within
+// int32_t range (2 GB).
 struct Slice {
-  uint64_t id;          // slice id map to old pb chunkid
-  uint64_t offset;      // offset in the file
-  uint64_t length;      // length of the slice
-  uint64_t compaction;  // compaction version
-  bool is_zero;         // is zero slice
-  uint64_t size;        // now same as length, maybe use for future or remove
-
-  uint64_t End() const { return offset + length; }
+  uint64_t id{0};   // slice ID (globally unique, no arithmetic)
+  int32_t pos{0};   // start byte position within the owning chunk
+  int32_t size{0};  // total physical data size of the slice
+  int32_t off{0};   // read offset within the slice (for CopyFileRange/Clone)
+  int32_t len{0};   // logical length of this mapping
 };
 
 enum StoreType : uint8_t {
@@ -130,8 +132,8 @@ struct StorageInfo {
 struct FsInfo {
   std::string name;
   uint32_t id;
-  uint64_t chunk_size;
-  uint64_t block_size;
+  int32_t chunk_size;
+  int32_t block_size;
   std::string uuid;
   StorageInfo storage_info;
   FsStatus status;

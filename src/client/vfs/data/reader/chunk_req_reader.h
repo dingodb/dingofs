@@ -42,7 +42,7 @@ class ChunkReader;
 struct BlockCacheReadReq {
   const uint64_t req_id;
   const uint32_t req_index;
-  const uint64_t fs_id;
+  const uint32_t fs_id;
   const uint64_t ino;
   const BlockReadReq block_req;
   IOBuffer io_buffer;
@@ -89,9 +89,9 @@ class ChunkReqReader {
   void OnBlockReadComplete(ReaderSharedState* shared, BlockCacheReadReq* req,
                            Status s);
 
-  uint64_t GetChunkSize() const;
+  int32_t GetChunkSize() const;
 
-  uint64_t GetBlockSize() const;
+  int32_t GetBlockSize() const;
 
   std::string UUID() const {
     return fmt::format("rreq-{}-chunk-{}", req_.req_id, chunk_.UUID());

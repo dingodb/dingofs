@@ -34,9 +34,9 @@ class HelperTest : public testing::Test {
 static IntRange CalBlockIndex(uint64_t block_size, uint64_t chunk_offset,
                               const SliceEntry& slice) {
   IntRange range;
-  range.start = (slice.offset() - chunk_offset) / block_size;
+  range.start = (slice.pos() - chunk_offset) / block_size;
 
-  uint64_t end_offset = slice.offset() - chunk_offset + slice.len();
+  uint64_t end_offset = slice.pos() - chunk_offset + slice.len();
   if (end_offset % block_size == 0) {
     range.end = end_offset / block_size;
   } else {
@@ -52,7 +52,7 @@ TEST_F(HelperTest, CalBlockIndex) {
 
   {
     SliceEntry slice;
-    slice.set_offset(0);
+    slice.set_pos(0);
     slice.set_len(100);
     auto range = CalBlockIndex(block_size, chunk_offset, slice);
     EXPECT_EQ(0, range.start);
@@ -61,7 +61,7 @@ TEST_F(HelperTest, CalBlockIndex) {
 
   {
     SliceEntry slice;
-    slice.set_offset(0);
+    slice.set_pos(0);
     slice.set_len(block_size);
     auto range = CalBlockIndex(block_size, chunk_offset, slice);
     EXPECT_EQ(0, range.start);
@@ -70,7 +70,7 @@ TEST_F(HelperTest, CalBlockIndex) {
 
   {
     SliceEntry slice;
-    slice.set_offset(0);
+    slice.set_pos(0);
     slice.set_len(block_size + 1);
     auto range = CalBlockIndex(block_size, chunk_offset, slice);
     EXPECT_EQ(0, range.start);
@@ -79,7 +79,7 @@ TEST_F(HelperTest, CalBlockIndex) {
 
   {
     SliceEntry slice;
-    slice.set_offset(0);
+    slice.set_pos(0);
     slice.set_len(block_size * 2);
     auto range = CalBlockIndex(block_size, chunk_offset, slice);
     EXPECT_EQ(0, range.start);
@@ -88,7 +88,7 @@ TEST_F(HelperTest, CalBlockIndex) {
 
   {
     SliceEntry slice;
-    slice.set_offset(0);
+    slice.set_pos(0);
     slice.set_len((block_size * 2) + 1234);
     auto range = CalBlockIndex(block_size, chunk_offset, slice);
     EXPECT_EQ(0, range.start);
@@ -97,7 +97,7 @@ TEST_F(HelperTest, CalBlockIndex) {
 
   {
     SliceEntry slice;
-    slice.set_offset(1234);
+    slice.set_pos(1234);
     slice.set_len(100);
     auto range = CalBlockIndex(block_size, chunk_offset, slice);
     EXPECT_EQ(0, range.start);
@@ -106,7 +106,7 @@ TEST_F(HelperTest, CalBlockIndex) {
 
   {
     SliceEntry slice;
-    slice.set_offset(1234);
+    slice.set_pos(1234);
     slice.set_len(block_size);
     auto range = CalBlockIndex(block_size, chunk_offset, slice);
     EXPECT_EQ(0, range.start);
@@ -115,7 +115,7 @@ TEST_F(HelperTest, CalBlockIndex) {
 
   {
     SliceEntry slice;
-    slice.set_offset(1234);
+    slice.set_pos(1234);
     slice.set_len(block_size + 1);
     auto range = CalBlockIndex(block_size, chunk_offset, slice);
     EXPECT_EQ(0, range.start);
@@ -124,7 +124,7 @@ TEST_F(HelperTest, CalBlockIndex) {
 
   {
     SliceEntry slice;
-    slice.set_offset(1234);
+    slice.set_pos(1234);
     slice.set_len(block_size * 2);
     auto range = CalBlockIndex(block_size, chunk_offset, slice);
     EXPECT_EQ(0, range.start);
@@ -132,7 +132,7 @@ TEST_F(HelperTest, CalBlockIndex) {
   }
   {
     SliceEntry slice;
-    slice.set_offset(1234);
+    slice.set_pos(1234);
     slice.set_len((block_size * 2) + 1234);
     auto range = CalBlockIndex(block_size, chunk_offset, slice);
     EXPECT_EQ(0, range.start);
@@ -141,7 +141,7 @@ TEST_F(HelperTest, CalBlockIndex) {
 
   {
     SliceEntry slice;
-    slice.set_offset(1234);
+    slice.set_pos(1234);
     slice.set_len((block_size * 2) + 2000);
     auto range = CalBlockIndex(block_size, chunk_offset, slice);
     EXPECT_EQ(0, range.start);

@@ -33,19 +33,13 @@ std::string SliceReadReq::ToString() const {
                      slice.has_value() ? Slice2Str(slice.value()) : "null");
 }
 
-std::string BlockDesc::ToString() const {
-  return fmt::format(
-      "(file_range:[{}-{}], len: {}, zero: {}, version: {}, slice_id: {}, "
-      "block_index: {})",
-      file_offset, End(), block_len, zero, version, slice_id, index);
-}
-
 std::string BlockReadReq::ToString() const {
   return fmt::format(
-      "(file_range:[{}-{}], block_req_range: [{}-{}], len: {}, block: {}, "
-      "fake: {})",
-      file_offset, file_offset + len, block_offset, End(), len,
-      block.ToString(), fake ? "true" : "false");
+      "(file_range:[{}-{}], offset_in_block: {}, len: {}, key: {}, "
+      "hole: {})",
+      file_offset, FileEnd(), offset_in_block, len,
+      key.has_value() ? key->Filename() : "null",
+      IsHole() ? "true" : "false");
 }
 
 }  // namespace vfs

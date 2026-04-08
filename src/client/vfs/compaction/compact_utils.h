@@ -30,11 +30,12 @@ namespace client {
 namespace vfs {
 namespace compaction {
 
-FileRange GetSlicesFileRange(absl::Span<const Slice> slices);
+FileRange GetSlicesFileRange(int64_t chunk_start,
+                             absl::Span<const Slice> slices);
 
 int64_t SliceReadReqsLength(const std::vector<SliceReadReq>& reqs);
 
-int32_t Skip(const std::vector<Slice>& slices);
+int32_t Skip(int64_t chunk_start, const std::vector<Slice>& slices);
 
 }  // namespace compaction
 }  // namespace vfs

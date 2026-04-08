@@ -39,32 +39,30 @@ namespace vfs {
 class BlockData {
  public:
   explicit BlockData(const SliceDataContext& context, VFSHub* vfs_hub,
-                     WriteBufferManager* buffer_manager, uint64_t block_index,
-                     uint64_t block_offset)
+                     WriteBufferManager* buffer_manager, uint32_t block_index,
+                     int32_t block_offset)
       : context_(context),
         vfs_hub_(vfs_hub),
         write_buffer_manager_(buffer_manager),
         block_index_(block_index),
-        block_offset_(block_offset),
-        lower_bound_in_chunk_(block_index_ * context_.block_size),
-        upper_bound_in_chunk_(lower_bound_in_chunk_ + context_.block_size) {}
+        block_offset_(block_offset) {}
 
   ~BlockData() { FreePageData(); }
 
-  Status Write(ContextSPtr ctx, const char* buf, uint64_t size,
-               uint64_t block_offset);
+  Status Write(ContextSPtr ctx, const char* buf, int32_t size,
+               int32_t block_offset);
 
   IOBuffer ToIOBuffer() const;
 
-  uint64_t BlockIndex() const { return block_index_; }
+  uint32_t BlockIndex() const { return block_index_; }
 
-  uint64_t ChunkOffset() const {
+  int32_t SliceOffset() const {
     return (block_index_ * context_.block_size) + block_offset_;
   }
 
-  uint64_t End() const { return ChunkOffset() + len_; }
+  int32_t End() const { return SliceOffset() + len_; }
 
-  uint64_t Len() const { return len_; }
+  int32_t Len() const { return len_; }
 
   std::string UUID() const {
     return fmt::format("block_data-{}-{}", context_.UUID(), block_index_);
@@ -72,10 +70,10 @@ class BlockData {
 
   std::string ToString() const {
     return fmt::format(
-        "(uuid: {}, block_range: [{}-{}], chunk_range: [{}-{}], len: {}, "
-        "bound: [{}-{}], page_count: {})",
-        UUID(), block_offset_, block_offset_ + len_, ChunkOffset(), End(), len_,
-        lower_bound_in_chunk_, upper_bound_in_chunk_, pages_.size());
+        "(uuid: {}, block_range: [{}-{}], slice_range: [{}-{}], len: {}, "
+        "page_count: {})",
+        UUID(), block_offset_, block_offset_ + len_, SliceOffset(), End(), len_,
+        pages_.size());
   }
 
  private:
@@ -83,17 +81,15 @@ class BlockData {
 
   void FreePageData();
 
-  PageData* FindOrCreatePageData(uint64_t page_index, uint64_t page_offset);
+  PageData* FindOrCreatePageData(uint32_t page_index, int32_t page_offset);
 
   const SliceDataContext context_;
   VFSHub* vfs_hub_{nullptr};
   WriteBufferManager* write_buffer_manager_{nullptr};
-  const uint64_t block_index_;
-  uint64_t block_offset_{0};
-  uint64_t len_{0};
-  const uint64_t lower_bound_in_chunk_{0};
-  const uint64_t upper_bound_in_chunk_{0};
-  std::map<uint64_t, PageDataUPtr> pages_;  // page_index -> PageData
+  const uint32_t block_index_;
+  int32_t block_offset_{0};
+  int32_t len_{0};
+  std::map<uint32_t, PageDataUPtr> pages_;  // page_index -> PageData
 };
 
 using BlockDataUPtr = std::unique_ptr<BlockData>;

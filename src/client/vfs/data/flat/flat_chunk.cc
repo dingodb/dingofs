@@ -25,16 +25,17 @@ namespace vfs {
 std::vector<BlockReadReq> FlatFileChunk::GenBlockReadReqs() const {
   std::vector<BlockReadReq> block_reqs;
 
-  FileRange file_range = {.offset = (int64_t)(index_ * chunk_size_),
+  int64_t chunk_start = index_ * chunk_size_;
+  FileRange file_range = {.offset = chunk_start,
                           .len = chunk_size_};
 
   std::vector<SliceReadReq> slice_reqs =
-      ProcessReadRequest(chunk_slices_, file_range);
+      ProcessReadRequest(chunk_slices_, file_range, chunk_start);
 
   for (const auto& slice_req : slice_reqs) {
-    if (slice_req.slice.has_value() && !slice_req.slice->is_zero) {
+    if (slice_req.slice.has_value() && slice_req.slice->id != 0) {
       std::vector<BlockReadReq> reqs = ConvertSliceReadReqToBlockReadReqs(
-          slice_req, fs_id_, ino_, chunk_size_, block_size_);
+          slice_req, fs_id_, ino_, chunk_size_, block_size_, chunk_start);
 
       block_reqs.insert(block_reqs.end(), std::make_move_iterator(reqs.begin()),
                         std::make_move_iterator(reqs.end()));
