@@ -32,21 +32,21 @@ enum class WarmupType : uint8_t {
 };
 
 struct PrefetchBlock {
-  PrefetchBlock(BlockKey block_key, uint64_t block_len)
+  PrefetchBlock(BlockKey block_key, int32_t block_len)
       : key(block_key), len(block_len) {}
   BlockKey key;
-  uint64_t len;
+  int32_t len;
 };
 
 struct ChunkContext {
-  ChunkContext(uint64_t fs_id, Ino ino, int64_t chunk_idx, int64_t offset,
+  ChunkContext(uint32_t fs_id, Ino ino, int64_t chunk_idx, int64_t offset,
                int64_t length)
       : fs_id(fs_id),
         ino{ino},
         chunk_idx(chunk_idx),
         offset(offset),
         len(length) {}
-  uint64_t fs_id;
+  uint32_t fs_id;
   Ino ino;
   int64_t chunk_idx;
   int64_t offset;
@@ -71,17 +71,17 @@ struct WarmupTaskContext {
 };
 
 struct PrefetchContext {
-  PrefetchContext(uint64_t ino, int64_t prefetch_offset, uint64_t file_size,
-                  uint64_t prefetch_blocks)
+  PrefetchContext(uint64_t ino, int64_t prefetch_offset, int64_t file_size,
+                  int64_t prefetch_blocks)
       : ino(ino),
         prefetch_offset(prefetch_offset),
         file_size(file_size),
         prefetch_blocks(prefetch_blocks) {}
 
   uint64_t ino;
-  uint64_t prefetch_offset;
-  uint64_t file_size;
-  uint64_t prefetch_blocks;
+  int64_t prefetch_offset;
+  int64_t file_size;
+  int64_t prefetch_blocks;
 };
 
 }  // namespace vfs

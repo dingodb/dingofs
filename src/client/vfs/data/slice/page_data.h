@@ -28,14 +28,14 @@ namespace vfs {
 
 struct PageData {
   VFSHub* vfs_hub_{nullptr};
-  const uint64_t index{0};
-  const uint64_t page_size{0};  // size of the page, used for validation
-  uint64_t data_offset{0};      // validate data offset in page
-  uint64_t data_len{0};
+  const uint32_t index{0};
+  const int32_t page_size{0};  // size of the page, used for validation
+  int32_t data_offset{0};      // validate data offset in page
+  int32_t data_len{0};
   char* page{nullptr};  // not owned, mem managed by page allocator
 
-  explicit PageData(VFSHub* vfs_hub, uint64_t p_index, uint64_t p_page_size,
-                    char* p_page, uint64_t p_data_offset)
+  explicit PageData(VFSHub* vfs_hub, uint32_t p_index, int32_t p_page_size,
+                    char* p_page, int32_t p_data_offset)
       : vfs_hub_(vfs_hub),
         index(p_index),
         page_size(p_page_size),
@@ -44,10 +44,10 @@ struct PageData {
 
   ~PageData() = default;
 
-  void Write(ContextSPtr ctx, const char* buf, uint64_t size,
-             uint64_t page_offset);
+  void Write(ContextSPtr ctx, const char* buf, int32_t size,
+             int32_t page_offset);
 
-  uint64_t DataEnd() const { return data_offset + data_len; }
+  int32_t DataEnd() const { return data_offset + data_len; }
 
   std::string ToString() const;
 };

@@ -43,14 +43,14 @@ static std::atomic<uint64_t> commit_seq_id_gen{1};
 class VFSHub;
 struct ChunkWriteInfo {
   const char* buf{nullptr};
-  const uint64_t size{0};
-  const uint64_t chunk_offset{0};
-  const uint64_t end_chunk_offset{0};
-  const uint64_t file_offset{0};
-  const uint64_t end_file_offset{0};
+  const int32_t size{0};
+  const int32_t chunk_offset{0};
+  const int32_t end_chunk_offset{0};
+  const int64_t file_offset{0};
+  const int64_t end_file_offset{0};
 
-  explicit ChunkWriteInfo(const char* _buf, uint64_t _size,
-                          uint64_t _chunk_offset, uint64_t _file_offset)
+  explicit ChunkWriteInfo(const char* _buf, int32_t _size,
+                          int32_t _chunk_offset, int64_t _file_offset)
       : buf(_buf),
         size(_size),
         chunk_offset(_chunk_offset),
@@ -75,8 +75,8 @@ class ChunkWriter {
   void Stop();
 
   // chunk_offset is the offset in the chunk, not in the file
-  Status Write(ContextSPtr ctx, const char* buf, uint64_t size,
-               uint64_t chunk_offset);
+  Status Write(ContextSPtr ctx, const char* buf, int32_t size,
+               int32_t chunk_offset);
 
   // All slice data can be flushed in concurrent, but commit must be in order.
   // If slice data is empty, the empty flush task must be submitted
@@ -129,11 +129,11 @@ class ChunkWriter {
     return fmt::format("chunk_writer-{}", chunk_.UUID());
   }
 
-  uint64_t GetChunkSize() const;
+  int32_t GetChunkSize() const;
 
-  SliceWriter* FindWritableSliceUnLocked(uint64_t chunk_pos, uint64_t size);
-  SliceWriter* CreateSliceUnlocked(uint64_t chunk_pos);
-  SliceWriter* GetSliceUnlocked(uint64_t chunk_pos, uint64_t size);
+  SliceWriter* FindWritableSliceUnLocked(int32_t chunk_pos, int32_t size);
+  SliceWriter* CreateSliceUnlocked(int32_t chunk_pos);
+  SliceWriter* GetSliceUnlocked(int32_t chunk_pos, int32_t size);
 
   Status CommitSlices(ContextSPtr ctx, const std::vector<Slice>& slices);
 

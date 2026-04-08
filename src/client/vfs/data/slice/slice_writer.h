@@ -42,27 +42,27 @@ class VFSHub;
 class SliceWriter {
  public:
   explicit SliceWriter(const SliceDataContext& context, VFSHub* hub,
-                       uint64_t chunk_offset)
+                       int32_t chunk_offset)
       : context_(context), vfs_hub_(hub), chunk_offset_(chunk_offset) {}
 
   ~SliceWriter() = default;
 
-  Status Write(ContextSPtr ctx, const char* buf, uint64_t size,
-               uint64_t chunk_offset);
+  Status Write(ContextSPtr ctx, const char* buf, int32_t size,
+               int32_t chunk_offset);
 
   // prected by chunk, this is should be called only once
   void FlushAsync(StatusCallback cb);
 
   Slice GetCommitSlice();
 
-  uint64_t ChunkOffset() const { return chunk_offset_; }
+  int32_t ChunkOffset() const { return chunk_offset_; }
 
-  uint64_t End() const {
+  int32_t End() const {
     std::lock_guard<std::mutex> lg(write_flush_mutex_);
     return chunk_offset_ + len_;
   }
 
-  uint64_t Len() const {
+  int32_t Len() const {
     std::lock_guard<std::mutex> lg(write_flush_mutex_);
     return len_;
   }
@@ -91,8 +91,8 @@ class SliceWriter {
         block_datas_.size());
   }
 
-  BlockData* FindOrCreateBlockDataUnlocked(uint64_t block_index,
-                                           uint64_t block_offset);
+  BlockData* FindOrCreateBlockDataUnlocked(uint32_t block_index,
+                                           int32_t block_offset);
 
   void SliceFlushed(Status status, SliceFlushTask* task);
   void FlushDone(Status s);
@@ -107,12 +107,12 @@ class SliceWriter {
   // in a thread-safe manner.
   // TODO: use memory fench instead of mutex
   mutable std::mutex write_flush_mutex_;
-  uint64_t chunk_offset_;
-  uint64_t len_{0};
+  int32_t chunk_offset_;
+  int32_t len_{0};
   bool flushing_{false};  // used to prevent multiple flushes
   uint64_t id_{0};        // from mds
   // block_index -> BlockData, this should be immutable
-  std::map<uint64_t, BlockDataUPtr> block_datas_;
+  std::map<uint32_t, BlockDataUPtr> block_datas_;
   StatusCallback flush_cb_;
   Status flush_status_;
 

@@ -26,18 +26,19 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
-static const bool kDefaltZero = false;
-static const uint64_t kDefaultCompaction = 1;
-
-static Slice CreateSlice(uint64_t offset, uint64_t length, uint64_t id,
-                         bool is_zero = kDefaltZero,
-                         uint64_t compaction = kDefaultCompaction) {
+// Create a Slice with the new fields: pos, size, off, len.
+// For simple cases where off=0 and len=size, only pos/size/id are needed.
+static Slice CreateSlice(uint64_t id, int32_t pos, int32_t size,
+                         int32_t off = 0, int32_t len = -1) {
+  if (len < 0) {
+    len = size - off;
+  }
   return Slice{
       .id = id,
-      .offset = offset,
-      .length = length,
-      .compaction = compaction,
-      .is_zero = is_zero,
+      .pos = pos,
+      .size = size,
+      .off = off,
+      .len = len,
   };
 }
 

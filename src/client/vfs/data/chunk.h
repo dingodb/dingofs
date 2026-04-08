@@ -24,16 +24,16 @@ namespace client {
 namespace vfs {
 
 struct Chunk {
-  const uint64_t fs_id{0};
+  const uint32_t fs_id{0};
   const uint64_t ino{0};
-  const uint64_t index{0};
-  const uint64_t chunk_size{0};
-  const uint64_t block_size{0};
-  const uint64_t chunk_start{0};  // in file offset
-  const uint64_t chunk_end{0};    // in file offset
+  const int64_t index{0};
+  const int32_t chunk_size{0};
+  const int32_t block_size{0};
+  const int64_t chunk_start{0};  // in file offset
+  const int64_t chunk_end{0};    // in file offset
 
-  explicit Chunk(uint64_t _fs_id, uint64_t _ino, uint64_t _index,
-                 uint64_t _chunk_size, uint64_t _block_size)
+  explicit Chunk(uint32_t _fs_id, uint64_t _ino, int64_t _index,
+                 int32_t _chunk_size, int32_t _block_size)
       : fs_id(_fs_id),
         ino(_ino),
         index(_index),

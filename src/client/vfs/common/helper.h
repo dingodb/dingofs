@@ -213,10 +213,8 @@ inline std::string FsStat2Str(const FsStat& fs_stat) {
 }
 
 inline std::string Slice2Str(const Slice& slice) {
-  return fmt::format(
-      "(id: {}, range: [{}-{}], compaction: {}, is_zero: {}, size: {})",
-      slice.id, slice.offset, slice.End(), slice.compaction,
-      slice.is_zero ? "true" : "false", slice.size);
+  return fmt::format("(id: {}, pos: {}, size: {}, off: {}, len: {})", slice.id,
+                     slice.pos, slice.size, slice.off, slice.len);
 }
 
 inline std::string FsInfo2Str(const FsInfo& fs_info) {

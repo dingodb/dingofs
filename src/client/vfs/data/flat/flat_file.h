@@ -34,7 +34,7 @@ namespace vfs {
 
 class FlatFile {
  public:
-  FlatFile(uint64_t fs_id, uint64_t ino, int64_t chunk_size, int64_t block_size)
+  FlatFile(uint32_t fs_id, uint64_t ino, int32_t chunk_size, int32_t block_size)
       : fs_id_(fs_id),
         ino_(ino),
         chunk_size_(chunk_size),
@@ -42,13 +42,13 @@ class FlatFile {
 
   ~FlatFile() = default;
 
-  uint64_t GetFsId() const { return fs_id_; }
+  uint32_t GetFsId() const { return fs_id_; }
 
   uint64_t GetIno() const { return ino_; }
 
-  int64_t GetChunkSize() const { return chunk_size_; }
+  int32_t GetChunkSize() const { return chunk_size_; }
 
-  int64_t GetBlockSize() const { return block_size_; }
+  int32_t GetBlockSize() const { return block_size_; }
 
   // if chunk has no slices, must fill an empty slices
   void FillChunk(uint64_t index, std::vector<Slice> chunk_slices);
@@ -56,10 +56,10 @@ class FlatFile {
   std::vector<BlockReadReq> GenBlockReadReqs() const;
 
  private:
-  const uint64_t fs_id_{0};
+  const uint32_t fs_id_{0};
   const uint64_t ino_{0};
-  const int64_t chunk_size_{0};
-  const int64_t block_size_{0};
+  const int32_t chunk_size_{0};
+  const int32_t block_size_{0};
 
   std::map<uint64_t, std::unique_ptr<FlatFileChunk>> chunk_map_;
 };

@@ -75,14 +75,10 @@ inline FsInfo MakeTestFsInfo(uint64_t chunk_size = 64 * 1024 * 1024,
 }
 
 // Create a test Slice.
-inline Slice MakeSlice(uint64_t id, uint64_t offset, uint64_t length,
-                       bool is_zero = false) {
-  return Slice{.id = id,
-               .offset = offset,
-               .length = length,
-               .compaction = 1,
-               .is_zero = is_zero,
-               .size = length};
+inline Slice MakeSlice(uint64_t id, int32_t pos, int32_t size,
+                       int32_t off = 0, int32_t len = -1) {
+  if (len < 0) len = size - off;
+  return Slice{.id = id, .pos = pos, .size = size, .off = off, .len = len};
 }
 
 // Create a test file Attr.

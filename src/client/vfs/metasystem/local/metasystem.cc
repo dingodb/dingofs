@@ -463,11 +463,10 @@ Status LocalMetaSystem::ReadSlice(ContextSPtr, Ino ino, uint64_t index,
   for (const auto& slice_info : chunk_entry.slices()) {
     Slice slice;
     slice.id = slice_info.id();
-    slice.offset = slice_info.offset();
+    slice.pos = slice_info.pos();
     slice.size = slice_info.size();
-    slice.length = slice_info.len();
-    slice.compaction = slice_info.compaction_version();
-    slice.is_zero = slice_info.zero();
+    slice.off = slice_info.off();
+    slice.len = slice_info.len();
 
     slices->push_back(slice);
   }
@@ -519,16 +518,16 @@ Status LocalMetaSystem::WriteSlice(ContextSPtr, Ino ino, uint64_t index,
 
     uint64_t new_length = 0;
     for (const auto& slice : slices) {
-      new_length = std::max(new_length, slice.offset + slice.size);
+      new_length = std::max(new_length,
+                            static_cast<uint64_t>(slice.pos) + slice.len);
 
       auto* slice_entry = chunk_entry.add_slices();
 
       slice_entry->set_id(slice.id);
-      slice_entry->set_offset(slice.offset);
-      slice_entry->set_len(slice.length);
+      slice_entry->set_pos(slice.pos);
       slice_entry->set_size(slice.size);
-      slice_entry->set_compaction_version(slice.compaction);
-      slice_entry->set_zero(slice.is_zero);
+      slice_entry->set_off(slice.off);
+      slice_entry->set_len(slice.len);
     }
 
     chunk_entry.set_version(chunk_entry.version() + 1);

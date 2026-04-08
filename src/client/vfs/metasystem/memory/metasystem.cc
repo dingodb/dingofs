@@ -510,7 +510,8 @@ Status MemoryMetaSystem::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
 
   uint64_t new_max_length = 0;
   for (const auto& slice : slices) {
-    new_max_length = std::max(new_max_length, slice.End());
+    new_max_length = std::max(new_max_length,
+                              static_cast<uint64_t>(slice.pos) + slice.len);
   }
 
   if (new_max_length > inode.length()) {
