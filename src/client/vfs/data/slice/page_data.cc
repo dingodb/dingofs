@@ -37,12 +37,12 @@ std::string PageData::ToString() const {
       Helper::Char2Addr(page));
 }
 
-void PageData::Write(ContextSPtr ctx, const char* buf, uint64_t size,
-                     uint64_t page_offset) {
+void PageData::Write(ContextSPtr ctx, const char* buf, int32_t size,
+                     int32_t page_offset) {
   auto span = vfs_hub_->GetTraceManager()->StartChildSpan("PageData::Write",
                                                          ctx->GetTraceSpan());
 
-  uint64_t write_page_end = page_offset + size;
+  int32_t write_page_end = page_offset + size;
   VLOG(8) << fmt::format("{} Write Start page_range: [{}-{}], size: {}",
                          ToString(), page_offset, write_page_end, size);
 
@@ -55,8 +55,8 @@ void PageData::Write(ContextSPtr ctx, const char* buf, uint64_t size,
 
   memcpy(page + page_offset, buf, size);
 
-  uint64_t old_data_offset = data_offset;
-  uint64_t old_data_len = data_len;
+  int32_t old_data_offset = data_offset;
+  int32_t old_data_len = data_len;
 
   data_offset = std::min(data_offset, page_offset);
   data_len += size;

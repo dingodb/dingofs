@@ -24,6 +24,7 @@
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_LRU_CACHE_H_
 
 #include <functional>
+#include <memory>
 
 #include "cache/iutil/cache.h"
 #include "cache/iutil/time_util.h"

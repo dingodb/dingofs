@@ -40,8 +40,9 @@ void DumpSliceReadReqs(const std::vector<SliceReadReq>& results) {
   }
 }
 
-std::vector<SliceReadReq> Convert2SliceReadReq(
-    absl::Span<const Slice> slices, const FileRange& file_range_req) {
+std::vector<SliceReadReq> Convert2SliceReadReq(absl::Span<const Slice> slices,
+                                               const FileRange& file_range_req,
+                                               int64_t chunk_start) {
   VLOG(9) << "Convert2SliceReadReq: input_file_range_req: "
           << file_range_req.ToString();
   std::vector<SliceReadReq> results;
@@ -58,8 +59,10 @@ std::vector<SliceReadReq> Convert2SliceReadReq(
       VLOG(9) << "Convert2SliceReadReq: file_range: " << file_range.ToString();
 
       // check if the current range overlaps with the slice
-      if (slice.End() <= file_range.offset ||
-          slice.offset >= file_range.End()) {
+      int64_t slice_file_offset = chunk_start + slice.pos;
+      int64_t slice_file_end = slice_file_offset + slice.len;
+      if (slice_file_end <= file_range.offset ||
+          slice_file_offset >= file_range.End()) {
         new_unmatched_ranges.push_back(file_range);
         VLOG(9)
             << "Convert2SliceReadReq: file_range_req no overlap with slice_id: "
@@ -68,9 +71,8 @@ std::vector<SliceReadReq> Convert2SliceReadReq(
       }
 
       // calculate the overlapping part
-      int64_t overlap_start =
-          std::max(file_range.offset, (int64_t)slice.offset);
-      int64_t overlap_end = std::min(file_range.End(), (int64_t)slice.End());
+      int64_t overlap_start = std::max(file_range.offset, slice_file_offset);
+      int64_t overlap_end = std::min(file_range.End(), slice_file_end);
       int64_t overlap_len = overlap_end - overlap_start;
 
       SliceReadReq slice_read_req{
@@ -139,16 +141,17 @@ std::vector<SliceReadReq> Convert2SliceReadReq(
 }
 
 std::vector<SliceReadReq> ProcessReadRequest(const std::vector<Slice>& slices,
-                                             const FileRange& file_range_req) {
+                                             const FileRange& file_range_req,
+                                             int64_t chunk_start) {
   VLOG(9) << "ProcessReadRequest: file_range_req: "
           << file_range_req.ToString();
   absl::Span<const Slice> slice_span(slices);
-  return Convert2SliceReadReq(slice_span, file_range_req);
+  return Convert2SliceReadReq(slice_span, file_range_req, chunk_start);
 }
 
 std::vector<BlockReadReq> ConvertSliceReadReqToBlockReadReqs(
-    const SliceReadReq& slice_req, uint64_t fs_id, uint64_t ino,
-    uint64_t chunk_size, uint64_t block_size) {
+    const SliceReadReq& slice_req, uint32_t fs_id, uint64_t ino,
+    int32_t chunk_size, int32_t block_size, int64_t chunk_start) {
   VLOG(9) << "ConvertSliceReadReqToBlockReadReqs: slice_req: "
           << slice_req.ToString() << " fs_id=" << fs_id << ", ino=" << ino
           << ", chunk_size=" << chunk_size << ", block_size=" << block_size;
@@ -158,15 +161,15 @@ std::vector<BlockReadReq> ConvertSliceReadReqToBlockReadReqs(
       << ", ino=" << ino << ", chunk_size=" << chunk_size
       << ", block_size=" << block_size;
 
-  CHECK_GE(slice_req.file_offset, slice_req.slice->offset)
+  int64_t slice_file_offset = chunk_start + slice_req.slice->pos;
+  CHECK_GE(slice_req.file_offset, slice_file_offset)
       << "Illegal slice_req_offset: " << slice_req.file_offset
-      << " slice_offset: " << slice_req.slice->offset;
+      << " slice_file_offset: " << slice_file_offset;
 
   std::vector<BlockReadReq> block_read_reqs;
 
   const auto& slice = slice_req.slice.value();
-  int64_t slice_offset = slice.offset;
-  int64_t slice_len = slice.length;
+  int64_t slice_offset = chunk_start + slice.pos;
   uint64_t slice_id = slice.id;
 
   int64_t read_offset = slice_req.file_offset;
@@ -175,45 +178,45 @@ std::vector<BlockReadReq> ConvertSliceReadReqToBlockReadReqs(
   VLOG(9) << "ConvertSliceReadReqToBlockReadReqs: read from file_offset: "
           << read_offset << ", remain_len: " << remain_len;
 
+  int32_t slice_off = slice.off;
+  int32_t slice_size = slice.size;
+
+  int64_t slice_logical_end = slice_offset + slice.len;
+
   while (remain_len > 0) {
-    // calculate the current block range
-    int64_t cur_block_start = (read_offset / block_size) * block_size;
-    int64_t cur_block_end = cur_block_start + block_size;
-    cur_block_start = std::max(cur_block_start, slice_offset);
-    cur_block_end = std::min(cur_block_end, slice_offset + slice_len);
-    CHECK_LT(cur_block_start, cur_block_end)
-        << "Illegal cur_block_start: " << cur_block_start
-        << ", cur_block_end: " << cur_block_end
-        << ", slice_req: " << slice_req.ToString();
+    // 1. Calculate the physical offset within the slice's data
+    int32_t physical_offset =
+        static_cast<int32_t>(slice_off + (read_offset - slice_offset));
 
-    uint64_t offset_in_chunk = cur_block_start % chunk_size;
-    uint64_t block_index_in_chunk = offset_in_chunk / block_size;
+    // 2. Block boundaries based on slice physical offset
+    int32_t block_index = physical_offset / block_size;
+    int32_t block_start = block_index * block_size;
+    int32_t block_end = std::min(block_start + block_size, slice_size);
+    int32_t actual_block_size = block_end - block_start;
 
-    BlockDesc block{
-        .file_offset = cur_block_start,
-        .block_len = cur_block_end - cur_block_start,
-        .zero = slice.is_zero,
-        .version = slice.compaction,
-        .slice_id = slice_id,
-        .index = block_index_in_chunk,
-    };
+    // 3. Reverse-map to file range covered by this block, clamped to slice
+    int64_t file_block_start =
+        std::max(slice_offset + (block_start - slice_off), slice_offset);
+    int64_t file_block_end =
+        std::min(slice_offset + (block_end - slice_off), slice_logical_end);
 
-    VLOG(9) << "ConvertSliceReadReqToBlockReadReqs: block_obj: "
-            << block.ToString() << " read file_offset:" << read_offset;
+    // 4. Offset within the block and read length
+    int32_t offset_in_block = physical_offset % block_size;
+    int32_t read_len = static_cast<int32_t>(
+        std::min(remain_len, file_block_end - read_offset));
 
-    CHECK_GE(read_offset, cur_block_start)
-        << "Illegal read_offset: " << read_offset
-        << " cur_block_start: " << cur_block_start;
+    CHECK_GT(read_len, 0) << "Illegal read_len: " << read_len
+                          << ", slice_req: " << slice_req.ToString()
+                          << ", read_offset: " << read_offset
+                          << ", file_block_end: " << file_block_end;
 
-    int64_t read_block_offst = read_offset - cur_block_start;
-    int64_t read_block_len =
-        std::min(remain_len, (block.block_len - read_block_offst));
-
+    // 5. Construct BlockReadReq
+    BlockKey key(slice_id, block_index, actual_block_size);
     BlockReadReq block_read_req{
         .file_offset = read_offset,
-        .block_offset = read_block_offst,
-        .len = read_block_len,
-        .block = block,
+        .offset_in_block = offset_in_block,
+        .len = read_len,
+        .key = key,
     };
 
     VLOG(9) << "ConvertSliceReadReqToBlockReadReqs: block_read_req: "
@@ -221,8 +224,8 @@ std::vector<BlockReadReq> ConvertSliceReadReqToBlockReadReqs(
 
     block_read_reqs.push_back(block_read_req);
 
-    remain_len -= read_block_len;
-    read_offset += read_block_len;
+    remain_len -= read_len;
+    read_offset += read_len;
 
     VLOG(9) << "ConvertSliceReadReqToBlockReadReqs: read_offset: "
             << read_offset << ", remain_len: " << remain_len;

@@ -472,7 +472,7 @@ TEST_F(FlushTasksTest, FileFlushTask_AllSuccess_CallbackCalledOnce) {
 
   // Build kChunkCount ChunkWriters, write data to each, then register them.
   std::vector<std::unique_ptr<ChunkWriter>> owned_writers;
-  std::unordered_map<uint64_t, ChunkWriter*> writers_map;
+  std::unordered_map<int64_t, ChunkWriter*> writers_map;
 
   for (int i = 0; i < kChunkCount; ++i) {
     auto cw = std::make_unique<ChunkWriter>(mock_hub_, /*fh=*/1, kIno,
@@ -511,7 +511,7 @@ TEST_F(FlushTasksTest, FileFlushTask_OneChunkFail_ErrorPropagated) {
   std::vector<char> buf(kPageSize, 'E');
   ASSERT_TRUE(cw->Write(ctx_, buf.data(), kPageSize, 0).ok());
 
-  std::unordered_map<uint64_t, ChunkWriter*> writers_map;
+  std::unordered_map<int64_t, ChunkWriter*> writers_map;
   writers_map.emplace(0u, cw.get());
 
   FileFlushTask task(kIno, kFileFlushId, std::move(writers_map));
@@ -529,7 +529,7 @@ TEST_F(FlushTasksTest, FileFlushTask_OneChunkFail_ErrorPropagated) {
 TEST_F(FlushTasksTest, FileFlushTask_EmptyChunks_ImmediateOK) {
   static constexpr uint64_t kFileFlushId = 2003;
 
-  std::unordered_map<uint64_t, ChunkWriter*> empty_map;
+  std::unordered_map<int64_t, ChunkWriter*> empty_map;
   FileFlushTask task(kIno, kFileFlushId, std::move(empty_map));
 
   bool called = false;
@@ -557,7 +557,7 @@ TEST_F(FlushTasksTest, FileFlushTask_Concurrent_ExactlyOnce) {
       .WillByDefault(Return(Status::OK()));
 
   std::vector<std::unique_ptr<ChunkWriter>> owned_writers;
-  std::unordered_map<uint64_t, ChunkWriter*> writers_map;
+  std::unordered_map<int64_t, ChunkWriter*> writers_map;
 
   for (int i = 0; i < kChunkCount; ++i) {
     auto cw = std::make_unique<ChunkWriter>(mock_hub_, /*fh=*/1, kIno,

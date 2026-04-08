@@ -58,14 +58,14 @@ class FileWriter {
   void ReleaseRef();
 
  private:
-  uint64_t GetChunkSize() const;
+  int32_t GetChunkSize() const;
 
   void AsyncFlush(StatusCallback cb);
 
   void SchedulePeriodicFlush();
   void RunPeriodicFlush();
 
-  ChunkWriter* GetOrCreateChunkWriter(uint64_t chunk_index);
+  ChunkWriter* GetOrCreateChunkWriter(int64_t chunk_index);
 
   void FileFlushTaskDone(uint64_t file_flush_id, StatusCallback cb,
                          Status status);
@@ -84,7 +84,7 @@ class FileWriter {
   // chunk_index -> chunk
   // chunk is used by file/file_flush_task/chunk_flush_task
   // owned by FileWriter
-  std::unordered_map<uint64_t, ChunkWriter*> chunk_writers_;
+  std::unordered_map<int64_t, ChunkWriter*> chunk_writers_;
   // TODO: monitor this and add a manager
   // file_flush_id -> FileFlushTask
   std::unordered_map<uint64_t, std::unique_ptr<FileFlushTask>>

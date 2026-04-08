@@ -24,6 +24,7 @@
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_DISK_CACHE_LAYOUT_H_
 
 #include <absl/strings/match.h>
+#include <absl/strings/str_format.h>
 #include <absl/strings/str_join.h>
 
 #include <string>

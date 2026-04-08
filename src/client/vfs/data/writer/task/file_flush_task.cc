@@ -29,7 +29,7 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
-void FileFlushTask::ChunkFlushed(uint64_t chunk_index, Status status) {
+void FileFlushTask::ChunkFlushed(int64_t chunk_index, Status status) {
   if (!status.ok()) {
     LOG(WARNING) << fmt::format(
         "{} ChunkFlushed Failed to flush chunk_index: {}, status: {}", UUID(),
@@ -60,7 +60,7 @@ void FileFlushTask::ChunkFlushed(uint64_t chunk_index, Status status) {
 void FileFlushTask::RunAsync(StatusCallback cb) {
   VLOG(4) << fmt::format("{} Start file_flush_task: {}", UUID(), ToString());
 
-  std::unordered_map<uint64_t, ChunkWriter*> to_flush;
+  std::unordered_map<int64_t, ChunkWriter*> to_flush;
 
   {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -84,7 +84,7 @@ void FileFlushTask::RunAsync(StatusCallback cb) {
   }
 
   for (const auto& iter : to_flush) {
-    uint64_t chunk_index = iter.first;
+    int64_t chunk_index = iter.first;
     VLOG(4) << fmt::format("{} Flushing chunk_index: {}", UUID(), chunk_index);
 
     ChunkWriter* chunk_writer = iter.second;

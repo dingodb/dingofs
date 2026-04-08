@@ -37,11 +37,11 @@ class Compactor {
 
   virtual Status Stop() = 0;
 
-  virtual Status Compact(ContextSPtr ctx, Ino ino, uint64_t chunk_index,
+  virtual Status Compact(ContextSPtr ctx, Ino ino, int64_t chunk_index,
                          const std::vector<Slice>& slices,
                          std::vector<Slice>& out_slices) = 0;
 
-  virtual Status ForceCompact(ContextSPtr ctx, Ino ino, uint64_t chunk_index,
+  virtual Status ForceCompact(ContextSPtr ctx, Ino ino, int64_t chunk_index,
                               const std::vector<Slice>& slices,
                               std::vector<Slice>& out_slices) = 0;
 };

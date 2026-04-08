@@ -26,22 +26,22 @@ namespace vfs {
 
 static void CheckSliceEqual(const Slice& slice, const Slice& expected) {
   EXPECT_EQ(slice.id, expected.id);
-  EXPECT_EQ(slice.offset, expected.offset);
-  EXPECT_EQ(slice.length, expected.length);
-  EXPECT_EQ(slice.compaction, expected.compaction);
-  EXPECT_EQ(slice.is_zero, expected.is_zero);
+  EXPECT_EQ(slice.pos, expected.pos);
+  EXPECT_EQ(slice.size, expected.size);
+  EXPECT_EQ(slice.off, expected.off);
+  EXPECT_EQ(slice.len, expected.len);
 }
 
 TEST(ProcessReadRequestTest, BasicOverlap) {
   std::vector<Slice> slices = {
-      CreateSlice(0, 100, 1),
-      CreateSlice(100, 100, 2),
-      CreateSlice(200, 100, 3),
+      CreateSlice(1, 0, 100),
+      CreateSlice(2, 100, 100),
+      CreateSlice(3, 200, 100),
   };
 
   FileRange file_range_req = CreateFileRange(50, 150);
 
-  auto results = ProcessReadRequest(slices, file_range_req);
+  auto results = ProcessReadRequest(slices, file_range_req, 0);
 
   ASSERT_EQ(results.size(), 2);
   EXPECT_EQ(results[0].file_offset, 50);
@@ -57,13 +57,13 @@ TEST(ProcessReadRequestTest, BasicOverlap) {
 
 TEST(ProcessReadRequestTest, NoOverlap) {
   std::vector<Slice> slices = {
-      CreateSlice(0, 100, 1),
-      CreateSlice(200, 100, 2),
+      CreateSlice(1, 0, 100),
+      CreateSlice(2, 200, 100),
   };
 
   FileRange file_range_req = CreateFileRange(300, 50);
 
-  auto results = ProcessReadRequest(slices, file_range_req);
+  auto results = ProcessReadRequest(slices, file_range_req, 0);
 
   ASSERT_EQ(results.size(), 1);
   EXPECT_EQ(results[0].file_offset, 300);
@@ -73,13 +73,13 @@ TEST(ProcessReadRequestTest, NoOverlap) {
 
 TEST(ProcessReadRequestTest, PartialOverlap) {
   std::vector<Slice> slices = {
-      CreateSlice(0, 100, 1),
-      CreateSlice(100, 100, 2),
+      CreateSlice(1, 0, 100),
+      CreateSlice(2, 100, 100),
   };
 
   FileRange file_range_req = CreateFileRange(50, 100);
 
-  auto results = ProcessReadRequest(slices, file_range_req);
+  auto results = ProcessReadRequest(slices, file_range_req, 0);
 
   ASSERT_EQ(results.size(), 2);
   EXPECT_EQ(results[0].file_offset, 50);
@@ -95,11 +95,11 @@ TEST(ProcessReadRequestTest, PartialOverlap) {
 
 TEST(ProcessReadRequestTest, CompleteCoverage) {
   std::vector<Slice> slices = {
-      CreateSlice(0, 100, 1)  // Covers the entire range
+      CreateSlice(1, 0, 100)  // Covers the entire range
   };
   FileRange req = CreateFileRange(0, 100);
 
-  auto results = ProcessReadRequest(slices, req);
+  auto results = ProcessReadRequest(slices, req, 0);
 
   ASSERT_EQ(results.size(), 1);
 
@@ -112,12 +112,12 @@ TEST(ProcessReadRequestTest, CompleteCoverage) {
 
 TEST(ProcessReadRequestTest, OverlappingSlices) {
   std::vector<Slice> slices = {
-      CreateSlice(0, 100, 1),  // Old slice [0-100]
-      CreateSlice(50, 100, 2)  // New slice (should take priority) [50-150]
+      CreateSlice(1, 0, 100),   // Old slice [0-100]
+      CreateSlice(2, 50, 100)   // New slice (should take priority) [50-150]
   };
   FileRange req = CreateFileRange(40, 80);  // 40-120
 
-  auto results = ProcessReadRequest(slices, req);
+  auto results = ProcessReadRequest(slices, req, 0);
 
   ASSERT_EQ(results.size(), 2);
   EXPECT_EQ(results[0].file_offset, 40);
@@ -132,11 +132,11 @@ TEST(ProcessReadRequestTest, OverlappingSlices) {
 }
 
 TEST(ProcessReadRequestTest, NonOverlappingSlices) {
-  std::vector<Slice> slices = {CreateSlice(0, 50, 1), CreateSlice(100, 50, 2)};
+  std::vector<Slice> slices = {CreateSlice(1, 0, 50), CreateSlice(2, 100, 50)};
 
   FileRange req = CreateFileRange(0, 150);
 
-  auto results = ProcessReadRequest(slices, req);
+  auto results = ProcessReadRequest(slices, req, 0);
 
   ASSERT_EQ(results.size(), 3);
   EXPECT_EQ(results[0].file_offset, 0);
@@ -155,11 +155,11 @@ TEST(ProcessReadRequestTest, NonOverlappingSlices) {
 }
 
 TEST(ProcessReadRequestTest, FragmentedSlices) {
-  std::vector<Slice> slices = {CreateSlice(0, 20, 1), CreateSlice(30, 20, 2),
-                               CreateSlice(60, 20, 3)};
+  std::vector<Slice> slices = {CreateSlice(1, 0, 20), CreateSlice(2, 30, 20),
+                               CreateSlice(3, 60, 20)};
   FileRange req = CreateFileRange(0, 100);
 
-  auto results = ProcessReadRequest(slices, req);
+  auto results = ProcessReadRequest(slices, req, 0);
 
   ASSERT_EQ(results.size(), 6);
 
@@ -192,10 +192,10 @@ TEST(ProcessReadRequestTest, FragmentedSlices) {
 }
 
 TEST(ProcessReadRequestTest, NoCoverage) {
-  std::vector<Slice> slices = {CreateSlice(100, 50, 1)};
+  std::vector<Slice> slices = {CreateSlice(1, 100, 50)};
   FileRange req = CreateFileRange(0, 50);
 
-  auto results = ProcessReadRequest(slices, req);
+  auto results = ProcessReadRequest(slices, req, 0);
 
   ASSERT_EQ(results.size(), 1);
   EXPECT_EQ(results[0].file_offset, 0);
@@ -204,10 +204,10 @@ TEST(ProcessReadRequestTest, NoCoverage) {
 }
 
 TEST(ProcessReadRequestTest, ExactBoundaryAlignment) {
-  std::vector<Slice> slices = {CreateSlice(0, 64, 1), CreateSlice(64, 64, 2)};
+  std::vector<Slice> slices = {CreateSlice(1, 0, 64), CreateSlice(2, 64, 64)};
   FileRange req = CreateFileRange(0, 128);
 
-  auto results = ProcessReadRequest(slices, req);
+  auto results = ProcessReadRequest(slices, req, 0);
 
   ASSERT_EQ(results.size(), 2);
   EXPECT_EQ(results[0].file_offset, 0);
@@ -223,11 +223,11 @@ TEST(ProcessReadRequestTest, ExactBoundaryAlignment) {
 
 TEST(ProcessReadRequestTest, ZeroSlices) {
   std::vector<Slice> slices = {
-      CreateSlice(0, 100, 1, true)  // Zero data slice
+      CreateSlice(1, 0, 100)  // Zero data slice (is_zero removed from Slice)
   };
   FileRange req = CreateFileRange(20, 60);
 
-  auto results = ProcessReadRequest(slices, req);
+  auto results = ProcessReadRequest(slices, req, 0);
 
   ASSERT_EQ(results.size(), 1);
   EXPECT_EQ(results[0].file_offset, 20);
@@ -238,14 +238,14 @@ TEST(ProcessReadRequestTest, ZeroSlices) {
 
 TEST(ProcessReadRequestTest, LargeRandomSlices) {
   std::vector<Slice> slices = {
-      CreateSlice(0, 1000, 1),    // [0-1000]
-      CreateSlice(500, 1000, 2),  // [500-1500]
-      CreateSlice(200, 200, 3)    // [200-400]
+      CreateSlice(1, 0, 1000),    // [0-1000]
+      CreateSlice(2, 500, 1000),  // [500-1500]
+      CreateSlice(3, 200, 200)    // [200-400]
   };
 
   FileRange req = CreateFileRange(100, 900);  // [100-1000]
 
-  auto results = ProcessReadRequest(slices, req);
+  auto results = ProcessReadRequest(slices, req, 0);
   DumpSliceReadReqs(results);
 
   ASSERT_EQ(results.size(), 4);

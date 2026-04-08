@@ -68,11 +68,10 @@ class PrefetchManagerTest : public test::VFSTestBase {
           const uint64_t kBlockSize = 4 * 1024 * 1024;
           Slice sl;
           sl.id = chunk_index + 1;
-          sl.offset = chunk_index * (64 * 1024 * 1024);
-          sl.length = 12 * kBlockSize;  // cover up to 3 blocks
-          sl.is_zero = false;
-          sl.size = sl.length;
-          sl.compaction = 1;
+          sl.pos = 0;
+          sl.size = 12 * kBlockSize;  // cover up to 3 blocks
+          sl.off = 0;
+          sl.len = sl.size;
           s->push_back(sl);
           v = 1;
           return Status::OK();

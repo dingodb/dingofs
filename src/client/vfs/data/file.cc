@@ -70,7 +70,7 @@ void File::Close() {
   VLOG(12) << fmt::format("{} File::Close", uuid_);
 }
 
-uint64_t File::GetChunkSize() const { return vfs_hub_->GetFsInfo().chunk_size; }
+int32_t File::GetChunkSize() const { return vfs_hub_->GetFsInfo().chunk_size; }
 
 Status File::PreCheck() {
   Status tmp;

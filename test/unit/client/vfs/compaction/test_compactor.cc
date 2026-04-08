@@ -55,12 +55,9 @@ class CompactorTest : public dingofs::client::vfs::test::VFSTestBase {
 
   void TearDown() override { compactor_->Stop(); }
 
-  // Build a zero-filled slice of the given length at a given file offset.
-  // The slice uses is_zero=true so no actual block reads are performed for
-  // the data path (ChunkReqReader skips zero blocks).
-  Slice MakeZeroSlice(uint64_t id, uint64_t offset, uint64_t length) {
-    return dingofs::client::vfs::test::MakeSlice(id, offset, length,
-                                                 /*is_zero=*/true);
+  // Build a zero-filled slice (id=0 means hole in new design).
+  Slice MakeZeroSlice(int32_t pos, int32_t size) {
+    return dingofs::client::vfs::test::MakeSlice(/*id=*/0, pos, size);
   }
 
   std::unique_ptr<TraceManager> trace_manager_;
@@ -98,7 +95,7 @@ TEST_F(CompactorTest, Compact_EmptySlices_AbortContract) {
 TEST_F(CompactorTest, Compact_SingleZeroSlice_SkippedOrOk) {
   // A single zero slice occupies less than 1 MB -> Skip() returns 0 ->
   // to_compact is empty -> Compact returns OK with empty out_slices.
-  std::vector<Slice> slices = {MakeZeroSlice(1, 0, 4096)};
+  std::vector<Slice> slices = {MakeZeroSlice(0, 4096)};
   std::vector<Slice> out;
   Status s = compactor_->Compact(ctx_, 100, 0, slices, out);
   EXPECT_TRUE(s.ok());
@@ -111,7 +108,7 @@ TEST_F(CompactorTest, Compact_SingleZeroSlice_SkippedOrOk) {
 //    empty and Compact returns OK with no output work done.
 TEST_F(CompactorTest, Compact_SingleLargeZeroSlice_SkippedBySkipLogic) {
   // 2 MB > 1 MB threshold -> Skip returns 1 -> to_compact is empty.
-  std::vector<Slice> slices = {MakeZeroSlice(1, 0, 2 * 1024 * 1024)};
+  std::vector<Slice> slices = {MakeZeroSlice(0, 2 * 1024 * 1024)};
   std::vector<Slice> out;
   Status s = compactor_->Compact(ctx_, 100, 0, slices, out);
   EXPECT_TRUE(s.ok());
@@ -122,7 +119,7 @@ TEST_F(CompactorTest, Compact_SingleLargeZeroSlice_SkippedBySkipLogic) {
 // 6. Compact_AfterStop returns a Stop error.
 TEST_F(CompactorTest, Compact_AfterStop_ReturnsStopError) {
   compactor_->Stop();
-  std::vector<Slice> slices = {MakeZeroSlice(1, 0, 4096)};
+  std::vector<Slice> slices = {MakeZeroSlice(0, 4096)};
   std::vector<Slice> out;
   Status s = compactor_->Compact(ctx_, 100, 0, slices, out);
   EXPECT_FALSE(s.ok());
@@ -131,7 +128,7 @@ TEST_F(CompactorTest, Compact_AfterStop_ReturnsStopError) {
 // 7. ForceCompact_AfterStop returns a Stop error.
 TEST_F(CompactorTest, ForceCompact_AfterStop_ReturnsStopError) {
   compactor_->Stop();
-  std::vector<Slice> slices = {MakeZeroSlice(1, 0, 4096)};
+  std::vector<Slice> slices = {MakeZeroSlice(0, 4096)};
   std::vector<Slice> out;
   Status s = compactor_->ForceCompact(ctx_, 100, 0, slices, out);
   EXPECT_FALSE(s.ok());
@@ -154,8 +151,7 @@ TEST_F(CompactorTest, Compact_BlockStore_ReadFail_ReturnsError) {
   // A single non-zero slice of 4 MB: Skip() would skip it (single large
   // slice), so use ForceCompact to bypass the skip logic and force DoCompact.
   std::vector<Slice> slices = {
-      dingofs::client::vfs::test::MakeSlice(1, 0, 4 * 1024 * 1024,
-                                            /*is_zero=*/false)};
+      dingofs::client::vfs::test::MakeSlice(1, 0, 4 * 1024 * 1024)};
   std::vector<Slice> out;
   Status s = compactor_->ForceCompact(ctx_, 100, 0, slices, out);
   EXPECT_FALSE(s.ok());
@@ -197,8 +193,7 @@ TEST_F(CompactorTest, Stop_WaitsForInflight) {
 
   // Use a non-zero 4 MB slice with ForceCompact to drive DoCompact.
   std::vector<Slice> slices = {
-      dingofs::client::vfs::test::MakeSlice(2, 0, 4 * 1024 * 1024,
-                                            /*is_zero=*/false)};
+      dingofs::client::vfs::test::MakeSlice(2, 0, 4 * 1024 * 1024)};
   std::vector<Slice> out;
 
   std::thread compact_thread([&]() {

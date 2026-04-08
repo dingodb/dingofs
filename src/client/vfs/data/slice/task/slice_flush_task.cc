@@ -79,12 +79,12 @@ void SliceFlushTask::BlockDataFlushed(BlockData* block_data, Status status) {
   }
 }
 
-void SliceFlushTask::FlushBlockData(uint64_t block_index, BlockData* block_data,
+void SliceFlushTask::FlushBlockData(uint32_t block_index, BlockData* block_data,
                                     bool writeback) {
   auto span =
       vfs_hub_->GetTraceManager()->StartSpan("SliceFlushTask::FlushBlockData");
 
-  BlockKey key(slice_id_, block_index, slice_data_context_.block_size);
+  BlockKey key(slice_id_, block_index, block_data->Len());
   BlockContext block_ctx(key, slice_data_context_.fs_id);
   PutReq req;
   req.block_ctx = block_ctx;
@@ -115,7 +115,7 @@ void SliceFlushTask::RunAsync(StatusCallback cb) {
     return;
   }
 
-  std::map<uint64_t, BlockDataUPtr> to_flush;
+  std::map<uint32_t, BlockDataUPtr> to_flush;
   {
     std::lock_guard<std::mutex> lock(mutex_);
     cb_ = std::move(cb);

@@ -34,8 +34,8 @@ class SliceHolder;
 
 class FlatFileChunk {
  public:
-  FlatFileChunk(uint64_t fs_id, uint64_t ino, uint64_t index,
-                uint64_t chunk_size, uint64_t block_size,
+  FlatFileChunk(uint32_t fs_id, uint64_t ino, int64_t index,
+                int32_t chunk_size, int32_t block_size,
                 std::vector<Slice> chunk_slices)
       : fs_id_(fs_id),
         ino_(ino),
@@ -47,11 +47,11 @@ class FlatFileChunk {
   std::vector<BlockReadReq> GenBlockReadReqs() const;
 
  private:
-  const uint64_t fs_id_{0};
+  const uint32_t fs_id_{0};
   const uint64_t ino_{0};
-  const uint64_t index_{0};
-  const int64_t chunk_size_{0};
-  const int64_t block_size_{0};
+  const int64_t index_{0};
+  const int32_t chunk_size_{0};
+  const int32_t block_size_{0};
   const std::vector<Slice> chunk_slices_;
 };
 

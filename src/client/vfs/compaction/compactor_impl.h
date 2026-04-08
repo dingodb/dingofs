@@ -42,16 +42,16 @@ class CompactorImpl : public Compactor {
 
   Status Stop() override;
 
-  Status Compact(ContextSPtr ctx, Ino ino, uint64_t chunk_index,
+  Status Compact(ContextSPtr ctx, Ino ino, int64_t chunk_index,
                  const std::vector<Slice>& slices,
                  std::vector<Slice>& out_slices) override;
 
-  Status ForceCompact(ContextSPtr ctx, Ino ino, uint64_t chunk_index,
+  Status ForceCompact(ContextSPtr ctx, Ino ino, int64_t chunk_index,
                       const std::vector<Slice>& slices,
                       std::vector<Slice>& out_slices) override;
 
  private:
-  Status DoCompact(ContextSPtr ctx, Ino ino, uint64_t chunk_index,
+  Status DoCompact(ContextSPtr ctx, Ino ino, int64_t chunk_index,
                    const std::vector<Slice>& slices, Slice& out_slice);
 
   Status IncInflight();

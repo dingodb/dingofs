@@ -170,11 +170,10 @@ class Helper {
     Slice out_slice;
 
     out_slice.id = slice.id();
-    out_slice.offset = slice.offset();
-    out_slice.length = slice.len();
-    out_slice.compaction = slice.compaction_version();
-    out_slice.is_zero = slice.zero();
+    out_slice.pos = slice.pos();
     out_slice.size = slice.size();
+    out_slice.off = slice.off();
+    out_slice.len = slice.len();
 
     return out_slice;
   }
@@ -183,11 +182,10 @@ class Helper {
     pb::mds::Slice out_slice;
 
     out_slice.set_id(slice.id);
-    out_slice.set_offset(slice.offset);
-    out_slice.set_len(slice.length);
-    out_slice.set_compaction_version(slice.compaction);
-    out_slice.set_zero(slice.is_zero);
+    out_slice.set_pos(slice.pos);
     out_slice.set_size(slice.size);
+    out_slice.set_off(slice.off);
+    out_slice.set_len(slice.len);
 
     return out_slice;
   }
@@ -233,7 +231,8 @@ class Helper {
   static uint64_t CalLength(const std::vector<Slice>& slices) {
     uint64_t length = 0;
     for (const auto& slice : slices) {
-      length = std::max(length, slice.offset + slice.length);
+      length = std::max(length,
+                        static_cast<uint64_t>(slice.pos) + slice.len);
     }
 
     return length;
@@ -271,11 +270,10 @@ class Helper {
   static Json::Value DumpSlice(const Slice& slice) {
     Json::Value item = Json::objectValue;
     item["id"] = slice.id;
-    item["offset"] = slice.offset;
-    item["length"] = slice.length;
-    item["compaction"] = slice.compaction;
-    item["is_zero"] = slice.is_zero;
+    item["pos"] = slice.pos;
     item["size"] = slice.size;
+    item["off"] = slice.off;
+    item["len"] = slice.len;
 
     return item;
   }
@@ -283,11 +281,10 @@ class Helper {
   static Slice LoadSlice(const Json::Value& value) {
     Slice slice;
     slice.id = value["id"].asUInt64();
-    slice.offset = value["offset"].asUInt64();
-    slice.length = value["length"].asUInt64();
-    slice.compaction = value["compaction"].asUInt64();
-    slice.is_zero = value["is_zero"].asBool();
-    slice.size = value["size"].asUInt64();
+    slice.pos = value["pos"].asInt();
+    slice.size = value["size"].asInt();
+    slice.off = value["off"].asInt();
+    slice.len = value["len"].asInt();
 
     return slice;
   }

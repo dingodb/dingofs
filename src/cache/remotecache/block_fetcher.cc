@@ -162,9 +162,9 @@ void BlockFetcher::DoFetch(Task* task) {
       std::min(task->block_length - offset, (size_t)FLAGS_segment_size);
 
   auto* buffer = new IOBuffer();
-  auto status =
-      upstream_->SendRangeRequest(NewContext(), task->block_key, offset, length,
-                                  buffer, task->block_length);
+  BlockContext block_ctx(task->block_key, /*fs_id=*/0);
+  auto status = upstream_->SendRangeRequest(NewContext(), block_ctx, offset,
+                                            length, buffer, task->block_length);
   if (status.ok()) {
     OnSuccess(task, status, buffer);
   } else {

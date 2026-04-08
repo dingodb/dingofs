@@ -125,17 +125,21 @@ static void DumpFlatFile(butil::IOBufBuilder& os, FlatFile* flat_file,
 
   // Print each row
   for (const auto& req : block_reqs) {
-    BlockKey key(req.block.slice_id, req.block.index, req.block.block_len);
+    const auto file_pos = req.file_offset;
+    std::string block_key;
+    uint32_t block_size = 0;
 
-    const auto file_pos = req.block.file_offset + req.block_offset;
-    const auto& block_key = key.StoreKey();
+    if (req.key.has_value()) {
+      block_key = req.key->StoreKey();
+      block_size = req.key->size;
+    }
 
     if (use_delimiter) {
-      PrintDelimitedRow(os, config, file_pos, req.len, req.block_offset,
-                        block_key, req.block.block_len);
+      PrintDelimitedRow(os, config, file_pos, req.len, req.offset_in_block,
+                        block_key, block_size);
     } else {
-      PrintFixedWidthRow(os, config, file_pos, req.len, req.block_offset,
-                         block_key, req.block.block_len);
+      PrintFixedWidthRow(os, config, file_pos, req.len, req.offset_in_block,
+                         block_key, block_size);
     }
   }
 }

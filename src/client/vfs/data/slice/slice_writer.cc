@@ -41,8 +41,8 @@ namespace vfs {
 
 #define METHOD_NAME() ("SliceWriter::" + std::string(__FUNCTION__))
 
-BlockData* SliceWriter::FindOrCreateBlockDataUnlocked(uint64_t block_index,
-                                                      uint64_t block_offset) {
+BlockData* SliceWriter::FindOrCreateBlockDataUnlocked(uint32_t block_index,
+                                                      int32_t block_offset) {
   auto iter = block_datas_.find(block_index);
   if (iter != block_datas_.end()) {
     VLOG(4) << fmt::format(
@@ -65,34 +65,35 @@ BlockData* SliceWriter::FindOrCreateBlockDataUnlocked(uint64_t block_index,
 }
 
 // no overlap slice write will come here
-Status SliceWriter::Write(ContextSPtr ctx, const char* buf, uint64_t size,
-                          uint64_t chunk_offset) {
+Status SliceWriter::Write(ContextSPtr ctx, const char* buf, int32_t size,
+                          int32_t chunk_offset) {
   auto span = vfs_hub_->GetTraceManager()->StartChildSpan("SliceWriter::Write",
                                                          ctx->GetTraceSpan());
 
-  uint64_t end_in_chunk = chunk_offset + size;
+  int32_t end_in_chunk = chunk_offset + size;
 
   VLOG(4) << fmt::format("{} Start writing chunk_range: [{}-{}] len: {}",
                          UUID(), chunk_offset, end_in_chunk, size);
 
   CHECK_GT(size, 0);
-  CHECK(chunk_offset == End() || end_in_chunk == chunk_offset_) << fmt::format(
-      "{} Unexpected chunk offset: {}, end in chunk: {}, chunk_offset_: {}",
-      ToString(), chunk_offset, end_in_chunk, chunk_offset_);
+  CHECK_EQ(chunk_offset, End()) << fmt::format(
+      "{} Unexpected chunk offset: {}, End(): {}, chunk_offset_: {}",
+      ToString(), chunk_offset, End(), chunk_offset_);
 
-  uint64_t block_size = context_.block_size;
-  uint64_t block_index = chunk_offset / block_size;
-  uint64_t block_offset = chunk_offset % block_size;
+  int32_t block_size = context_.block_size;
+  int32_t slice_internal_offset = chunk_offset - chunk_offset_;
+  uint32_t block_index = slice_internal_offset / block_size;
+  int32_t block_offset = slice_internal_offset % block_size;
 
   const char* buf_pos = buf;
 
-  uint64_t remain_len = size;
+  int32_t remain_len = size;
 
   {
     std::lock_guard<std::mutex> lg(write_flush_mutex_);
 
     while (remain_len > 0) {
-      uint64_t write_size = std::min(remain_len, block_size - block_offset);
+      int32_t write_size = std::min(remain_len, block_size - block_offset);
       BlockData* block_data =
           FindOrCreateBlockDataUnlocked(block_index, block_offset);
 
@@ -111,8 +112,8 @@ Status SliceWriter::Write(ContextSPtr ctx, const char* buf, uint64_t size,
     }
 
     {
-      uint64_t old_len = len_;
-      uint64_t old_chunk_offset = chunk_offset_;
+      int32_t old_len = len_;
+      int32_t old_chunk_offset = chunk_offset_;
 
       chunk_offset_ = std::min(chunk_offset, chunk_offset_);
       len_ += size;
@@ -188,7 +189,7 @@ void SliceWriter::DoFlush() {
 
   VLOG(4) << fmt::format("{} Got slice id: {}", UUID(), slice_id);
 
-  std::map<uint64_t, BlockDataUPtr> to_flush;
+  std::map<uint32_t, BlockDataUPtr> to_flush;
   {
     std::lock_guard<std::mutex> lg(write_flush_mutex_);
     CHECK_GT(block_datas_.size(), 0) << fmt::format(
@@ -206,10 +207,8 @@ void SliceWriter::DoFlush() {
 }
 
 Slice SliceWriter::GetCommitSlice() {
-  uint64_t chunk_start_in_file = context_.chunk_index * context_.chunk_size;
-
-  uint64_t len = 0;
-  uint64_t chunk_offset = 0;
+  int32_t len = 0;
+  int32_t chunk_offset = 0;
 
   {
     std::lock_guard<std::mutex> lg(write_flush_mutex_);
@@ -222,11 +221,10 @@ Slice SliceWriter::GetCommitSlice() {
   }
 
   Slice slice{.id = id_,
-              .offset = chunk_start_in_file + chunk_offset,
-              .length = len,
-              .compaction = 0,
-              .is_zero = false,
-              .size = len};
+              .pos = chunk_offset,
+              .size = len,
+              .off = 0,
+              .len = len};
 
   VLOG(4) << fmt::format(
       "{} GetCommitSlices completed, slice: {}, slice_data: {}", UUID(),

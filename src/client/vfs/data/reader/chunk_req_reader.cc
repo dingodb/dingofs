@@ -42,24 +42,15 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
-namespace {
-
-BlockContext GenerateBlockContext(const BlockCacheReadReq* req) {
-  BlockKey key(req->block_req.block.slice_id, req->block_req.block.index,
-               req->block_req.block.block_len);
-  return BlockContext(key, req->fs_id);
-}
-
-};  // namespace
-
 std::string BlockCacheReadReq::UUID() const {
   return fmt::format("rreq-{}-breq-{}", req_id, req_index);
 }
 
 std::string BlockCacheReadReq::ToString() const {
+  std::string key_str =
+      block_req.key.has_value() ? block_req.key->StoreKey() : "hole";
   return fmt::format("(uuid: {}, block_key: {}, block_req: {})", UUID(),
-                     GenerateBlockContext(this).key.StoreKey(),
-                     block_req.ToString());
+                     key_str, block_req.ToString());
 }
 
 ChunkReqReader::ChunkReqReader(VFSHub* hub, const ChunkReq& req)
@@ -76,10 +67,10 @@ std::vector<BlockReadReq> ChunkReqReader::GetBlockReadReqs(
     VLOG(6) << fmt::format("{} Read slice_req: {}", UUID(),
                            slice_req.ToString());
 
-    if (slice_req.slice.has_value() && !slice_req.slice.value().is_zero) {
+    if (slice_req.slice.has_value() && slice_req.slice.value().id != 0) {
       std::vector<BlockReadReq> reqs = ConvertSliceReadReqToBlockReadReqs(
           slice_req, chunk_.fs_id, chunk_.ino, chunk_.chunk_size,
-          chunk_.block_size);
+          chunk_.block_size, chunk_.chunk_start);
 
       block_reqs.insert(block_reqs.end(), std::make_move_iterator(reqs.begin()),
                         std::make_move_iterator(reqs.end()));
@@ -87,10 +78,9 @@ std::vector<BlockReadReq> ChunkReqReader::GetBlockReadReqs(
       block_reqs.insert(block_reqs.end(),
                         BlockReadReq{
                             .file_offset = slice_req.file_offset,
-                            .block_offset = 0,
-                            .len = slice_req.len,
-                            .block = BlockDesc{},
-                            .fake = true,
+                            .offset_in_block = 0,
+                            .len = static_cast<int32_t>(slice_req.len),
+                            .key = std::nullopt,
                         });
     }
   }
@@ -203,12 +193,12 @@ void ChunkReqReader::ProcessBlockCacheReadReq(
       "ChunkReqReader::ProcessBlockCacheReadReq", ctx->GetTraceSpan());
   ContextSPtr span_ctx = SpanScope::GetContext(span);
 
-  // check block is zero block
-  if (block_cache_req->block_req.fake) {
-    VLOG(6) << fmt::format("{} Read fake block, block_req: {}", UUID(),
+  // check block is hole (no data)
+  if (block_cache_req->block_req.IsHole()) {
+    VLOG(6) << fmt::format("{} Read hole block, block_req: {}", UUID(),
                            block_cache_req->block_req.ToString());
 
-    // zero block, no need to read from block cache, just fill zero
+    // hole block, no need to read from block cache, just fill zero
     char* data = new char[block_cache_req->block_req.len];
     std::fill(data, data + block_cache_req->block_req.len, 0);
     block_cache_req->io_buffer.AppendUserData(
@@ -223,10 +213,11 @@ void ChunkReqReader::ProcessBlockCacheReadReq(
       OnBlockReadComplete(shared, block_cache_req, s);
     };
 
+    const auto& key = block_cache_req->block_req.key.value();
     RangeReq req;
-    req.block_ctx = GenerateBlockContext(block_cache_req);
-    req.block_size = block_cache_req->block_req.block.block_len;
-    req.offset = block_cache_req->block_req.block_offset;
+    req.block_ctx = BlockContext(key, block_cache_req->fs_id);
+    req.block_size = key.size;
+    req.offset = block_cache_req->block_req.offset_in_block;
     req.length = block_cache_req->block_req.len;
     req.data = &block_cache_req->io_buffer;
 
@@ -249,7 +240,7 @@ void ChunkReqReader::ReadAsync(ContextSPtr ctx,
   }
 
   std::vector<SliceReadReq> slice_reqs =
-      ProcessReadRequest(slices, req_.frange);
+      ProcessReadRequest(slices, req_.frange, chunk_.chunk_start);
 
   std::vector<BlockReadReq> block_reqs = GetBlockReadReqs(slice_reqs);
 
@@ -258,11 +249,11 @@ void ChunkReqReader::ReadAsync(ContextSPtr ctx,
 
   uint32_t block_req_index = 0;
   for (auto& block_req : block_reqs) {
-    BlockKey key(block_req.block.slice_id, block_req.block.index,
-                 block_req.block.block_len);
+    std::string key_str =
+        block_req.key.has_value() ? block_req.key->StoreKey() : "hole";
 
     VLOG(6) << fmt::format("{} Read block_key: {}, block_req: {}", UUID(),
-                           key.StoreKey(), block_req.ToString());
+                           key_str, block_req.ToString());
 
     // TODO: optimize memory copy for block_req
     block_cache_reqs.emplace_back(std::make_unique<BlockCacheReadReq>(

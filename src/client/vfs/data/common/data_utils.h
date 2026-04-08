@@ -34,14 +34,16 @@ namespace vfs {
 void DumpSliceReadReqs(const std::vector<SliceReadReq>& results);
 
 std::vector<SliceReadReq> Convert2SliceReadReq(
-    absl::Span<const Slice> slices, const FileRange& file_range_req);
+    absl::Span<const Slice> slices, const FileRange& file_range_req,
+    int64_t chunk_start);
 
 std::vector<SliceReadReq> ProcessReadRequest(
-    const std::vector<Slice>& slices, const FileRange& file_range_req);
+    const std::vector<Slice>& slices, const FileRange& file_range_req,
+    int64_t chunk_start);
 
 std::vector<BlockReadReq> ConvertSliceReadReqToBlockReadReqs(
-    const SliceReadReq& slice_req, uint64_t fs_id, uint64_t ino,
-    uint64_t chunk_size, uint64_t block_size);
+    const SliceReadReq& slice_req, uint32_t fs_id, uint64_t ino,
+    int32_t chunk_size, int32_t block_size, int64_t chunk_start);
 
 }  // namespace vfs
 }  // namespace client

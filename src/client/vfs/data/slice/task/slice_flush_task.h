@@ -35,7 +35,7 @@ class SliceFlushTask {
  public:
   SliceFlushTask(const SliceDataContext& context, VFSHub* hub,
                  uint64_t slice_id,
-                 std::map<uint64_t, BlockDataUPtr> block_datas)
+                 std::map<uint32_t, BlockDataUPtr> block_datas)
       : slice_data_context_(context),
         vfs_hub_(hub),
         slice_id_(slice_id),
@@ -58,7 +58,7 @@ class SliceFlushTask {
  private:
   void BlockDataFlushed(BlockData* block_data, Status status);
   void BlockDataFlushedFromBlockCache(BlockData* block_data, Status status);
-  void FlushBlockData(uint64_t block_index, BlockData* block_data,
+  void FlushBlockData(uint32_t block_index, BlockData* block_data,
                       bool writeback);
   void FlushDone(Status s);
 
@@ -71,7 +71,7 @@ class SliceFlushTask {
 
   std::mutex mutex_;
   // block_index -> BlockData, this should be immutable
-  std::map<uint64_t, BlockDataUPtr> block_datas_;
+  std::map<uint32_t, BlockDataUPtr> block_datas_;
   StatusCallback cb_;
   Status status_;
 };

@@ -117,11 +117,11 @@ Status FileWriter::Write(ContextSPtr ctx, const char* buf, uint64_t size,
   auto span = vfs_hub_->GetTraceManager()->StartChildSpan("FileWriter::Write",
                                                           ctx->GetTraceSpan());
 
-  uint64_t chunk_size = GetChunkSize();
+  int32_t chunk_size = GetChunkSize();
   CHECK(chunk_size > 0) << "chunk size not allow 0";
 
-  uint64_t chunk_index = offset / chunk_size;
-  uint64_t chunk_offset = offset % chunk_size;
+  int64_t chunk_index = offset / chunk_size;
+  int32_t chunk_offset = static_cast<int32_t>(offset % chunk_size);
 
   VLOG(3) << "File::Write, ino: " << ino_ << ", buf: " << Helper::Char2Addr(buf)
           << ", size: " << size << ", offset: " << offset
@@ -133,7 +133,8 @@ Status FileWriter::Write(ContextSPtr ctx, const char* buf, uint64_t size,
   uint64_t written_size = 0;
 
   while (size > 0) {
-    uint64_t write_size = std::min(size, chunk_size - chunk_offset);
+    int32_t write_size = static_cast<int32_t>(
+        std::min(size, static_cast<uint64_t>(chunk_size - chunk_offset)));
 
     ChunkWriter* chunk = GetOrCreateChunkWriter(chunk_index);
     s = chunk->Write(SpanScope::GetContext(span), pos, write_size,
@@ -152,8 +153,8 @@ Status FileWriter::Write(ContextSPtr ctx, const char* buf, uint64_t size,
     written_size += write_size;
 
     offset += write_size;
-    chunk_index = offset / chunk_size;
-    chunk_offset = offset % chunk_size;
+    chunk_index = static_cast<int64_t>(offset / chunk_size);
+    chunk_offset = static_cast<int32_t>(offset % chunk_size);
   }
 
   {
@@ -168,11 +169,11 @@ Status FileWriter::Write(ContextSPtr ctx, const char* buf, uint64_t size,
   return s;
 }
 
-uint64_t FileWriter::GetChunkSize() const {
+int32_t FileWriter::GetChunkSize() const {
   return vfs_hub_->GetFsInfo().chunk_size;
 }
 
-ChunkWriter* FileWriter::GetOrCreateChunkWriter(uint64_t chunk_index) {
+ChunkWriter* FileWriter::GetOrCreateChunkWriter(int64_t chunk_index) {
   std::lock_guard<std::mutex> lock(mutex_);
 
   auto iter = chunk_writers_.find(chunk_index);

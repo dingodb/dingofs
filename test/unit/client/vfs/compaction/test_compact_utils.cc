@@ -29,12 +29,13 @@ namespace compaction {
 
 class CompactUtilsTest : public testing::Test {
  protected:
-  Slice CreateSlice(uint64_t id, uint64_t offset, uint64_t length) {
+  Slice CreateSlice(uint64_t id, int32_t pos, int32_t len) {
     Slice s;
     s.id = id;
-    s.offset = offset;
-    s.length = length;
-    s.size = length;
+    s.pos = pos;
+    s.size = len;
+    s.off = 0;
+    s.len = len;
     return s;
   }
 };
@@ -45,7 +46,7 @@ TEST_F(CompactUtilsTest, GetCompactFileRange) {
   slices.push_back(CreateSlice(2, 150, 150));  // 150-300
   slices.push_back(CreateSlice(3, 50, 50));    // 50-100
 
-  FileRange range = GetSlicesFileRange(absl::MakeSpan(slices));
+  FileRange range = GetSlicesFileRange(0, absl::MakeSpan(slices));
   EXPECT_EQ(range.offset, 50);
   EXPECT_EQ(range.len, 250);  // 300 - 50 = 250
 }
@@ -60,7 +61,7 @@ TEST_F(CompactUtilsTest, SliceReadReqsLength) {
 
 TEST_F(CompactUtilsTest, SkipEmpty) {
   std::vector<Slice> slices;
-  EXPECT_EQ(Skip(slices), 0);
+  EXPECT_EQ(Skip(0, slices), 0);
 }
 
 TEST_F(CompactUtilsTest, SkipSingleSmallSlice) {
@@ -68,7 +69,7 @@ TEST_F(CompactUtilsTest, SkipSingleSmallSlice) {
   // 10 Bytes < 1MB
   slices.push_back(CreateSlice(1, 0, 10));
 
-  EXPECT_EQ(Skip(slices), 0);
+  EXPECT_EQ(Skip(0, slices), 0);
 }
 
 TEST_F(CompactUtilsTest, SkipSingleLargeSlice) {
@@ -76,7 +77,7 @@ TEST_F(CompactUtilsTest, SkipSingleLargeSlice) {
   // 2MB > 1MB
   slices.push_back(CreateSlice(1, 0, 2 * 1024 * 1024));
 
-  EXPECT_EQ(Skip(slices), 1);
+  EXPECT_EQ(Skip(0, slices), 1);
 }
 
 TEST_F(CompactUtilsTest, SkipSmallRatio) {
@@ -89,7 +90,7 @@ TEST_F(CompactUtilsTest, SkipSmallRatio) {
   slices.push_back(CreateSlice(2, 2 * 1024 * 1024, 20 * 1024 * 1024));
 
   // Should skip 0 because first slice is too small relative to total
-  EXPECT_EQ(Skip(slices), 0);
+  EXPECT_EQ(Skip(0, slices), 0);
 }
 
 TEST_F(CompactUtilsTest, SkipLargeRatio) {
@@ -102,7 +103,7 @@ TEST_F(CompactUtilsTest, SkipLargeRatio) {
   slices.push_back(CreateSlice(2, 5 * 1024 * 1024, 5 * 1024 * 1024));
 
   // Assuming Convert2SliceReadReq preserves non-overlapping slices
-  EXPECT_EQ(Skip(slices), 2);
+  EXPECT_EQ(Skip(0, slices), 2);
 }
 
 TEST_F(CompactUtilsTest, SkipOverlapOverwrite) {
@@ -122,7 +123,7 @@ TEST_F(CompactUtilsTest, SkipOverlapOverwrite) {
   // Slice 2 (or part of it). first_req.slice->id (2) != first.id (1) So
   // is_first should be false.
 
-  EXPECT_EQ(Skip(slices), 0);
+  EXPECT_EQ(Skip(0, slices), 0);
 }
 
 TEST_F(CompactUtilsTest, SkipPartiallyOverwritten) {
@@ -147,7 +148,7 @@ TEST_F(CompactUtilsTest, SkipPartiallyOverwritten) {
   // is_first should be false.
   slices.push_back(CreateSlice(2, 4 * 1024 * 1024, 2 * 1024 * 1024));
 
-  EXPECT_EQ(Skip(slices), 0);
+  EXPECT_EQ(Skip(0, slices), 0);
 }
 
 }  // namespace compaction
