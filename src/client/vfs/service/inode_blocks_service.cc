@@ -23,6 +23,7 @@
 
 #include "client/common/const.h"
 #include "client/vfs/common/helper.h"
+#include "common/block/block_key.h"
 #include "client/vfs/data/flat/flat_file.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
@@ -121,13 +122,10 @@ static void DumpFlatFile(butil::IOBufBuilder& os, FlatFile* flat_file,
 
   // Get data once
   const auto block_reqs = flat_file->GenBlockReadReqs();
-  const uint64_t fs_id = flat_file->GetFsId();
-  const uint64_t ino = flat_file->GetIno();
 
   // Print each row
   for (const auto& req : block_reqs) {
-    cache::BlockKey key(fs_id, ino, req.block.slice_id, req.block.index,
-                        req.block.version);
+    BlockKey key(req.block.slice_id, req.block.index, req.block.block_len);
 
     const auto file_pos = req.block.file_offset + req.block_offset;
     const auto& block_key = key.StoreKey();

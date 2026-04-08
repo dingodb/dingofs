@@ -38,8 +38,7 @@ void Worker::Start() { ExecAllTasks(); }
 void Worker::Shutdown() { countdown_.wait(); }
 
 void Worker::ExecAllTasks() {
-  BlockKeyIterator iter(idx_, FLAGS_fsid, FLAGS_ino, FLAGS_blksize,
-                        FLAGS_blocks);
+  BlockKeyIterator iter(idx_, FLAGS_blksize, FLAGS_blocks);
 
   for (iter.SeekToFirst(); iter.Valid(); iter.Next()) {
     auto task = factory_->GenTask(iter.Key());

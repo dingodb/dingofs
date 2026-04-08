@@ -57,7 +57,7 @@ inline std::vector<ChunkContext> File2Chunk(const uint64_t fs_id, const Ino ino,
   return chunk_contexts;
 }
 
-inline std::vector<BlockContext> Chunk2Block(ContextSPtr ctx, VFSHub* vfs_hub,
+inline std::vector<PrefetchBlock> Chunk2Block(ContextSPtr ctx, VFSHub* vfs_hub,
                                              const ChunkContext& req,
                                              const int64_t chunk_size,
                                              const int64_t block_size) {
@@ -90,20 +90,20 @@ inline std::vector<BlockContext> Chunk2Block(ContextSPtr ctx, VFSHub* vfs_hub,
     }
   }
 
-  std::vector<BlockContext> block_contexts;
+  std::vector<PrefetchBlock> block_contexts;
   for (const auto& block_req : block_reqs) {
-    cache::BlockKey key(req.fs_id, req.ino, block_req.block.slice_id,
-                        block_req.block.index, block_req.block.version);
+    BlockKey key(block_req.block.slice_id, block_req.block.index,
+                 block_req.block.block_len);
     block_contexts.emplace_back(key, block_req.block.block_len);
   }
 
   return block_contexts;
 }
 
-inline std::vector<BlockContext> RemoveDuplicateBlocks(
-    const std::vector<BlockContext>& blocks) {
+inline std::vector<PrefetchBlock> RemoveDuplicateBlocks(
+    const std::vector<PrefetchBlock>& blocks) {
   std::unordered_set<std::string> seen_filenames;
-  std::vector<BlockContext> result;
+  std::vector<PrefetchBlock> result;
 
   seen_filenames.reserve(blocks.size());
   result.reserve(blocks.size());
@@ -118,7 +118,7 @@ inline std::vector<BlockContext> RemoveDuplicateBlocks(
   return result;
 }
 
-inline std::vector<BlockContext> FileRange2BlockKey(ContextSPtr ctx,
+inline std::vector<PrefetchBlock> FileRange2BlockKey(ContextSPtr ctx,
                                                     VFSHub* vfs_hub, Ino ino,
                                                     const uint64_t offset,
                                                     const uint64_t len) {
@@ -130,9 +130,9 @@ inline std::vector<BlockContext> FileRange2BlockKey(ContextSPtr ctx,
   std::vector<ChunkContext> chunk_contexts =
       File2Chunk(fs_id, ino, offset, len, chunk_size);
 
-  std::vector<BlockContext> block_contexts;
+  std::vector<PrefetchBlock> block_contexts;
   for (const auto& chunk_context : chunk_contexts) {
-    std::vector<BlockContext> block_contexts_temp =
+    std::vector<PrefetchBlock> block_contexts_temp =
         Chunk2Block(ctx, vfs_hub, chunk_context, chunk_size, block_size);
 
     block_contexts.insert(block_contexts.end(),

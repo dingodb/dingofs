@@ -73,7 +73,8 @@ void FakeBlockStore::RangeAsync(ContextSPtr ctx, RangeReq req,
     cb(s);
   };
 
-  DoRangeAsync(req.block, req.offset, req.length, req.data, std::move(wrapper));
+  DoRangeAsync(req.block_ctx.key, req.offset, req.length, req.data,
+               std::move(wrapper));
 }
 
 void FakeBlockStore::PutAsync(ContextSPtr ctx, PutReq req,

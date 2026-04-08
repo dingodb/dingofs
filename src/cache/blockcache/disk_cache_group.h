@@ -93,19 +93,22 @@ class DiskCacheGroup final : public CacheStore {
   Status Start(UploadFunc uploader) override;
   Status Shutdown() override;
 
-  Status Stage(ContextSPtr ctx, const BlockKey& key, const Block& block,
+  Status Stage(ContextSPtr ctx, const BlockContext& block_ctx,
+               const Block& block,
                StageOption option = StageOption()) override;
-  Status RemoveStage(ContextSPtr ctx, const BlockKey& key,
+  Status RemoveStage(ContextSPtr ctx, const BlockContext& block_ctx,
                      RemoveStageOption option = RemoveStageOption()) override;
-  Status Cache(ContextSPtr ctx, const BlockKey& key, const Block& block,
+  Status Cache(ContextSPtr ctx, const BlockContext& block_ctx,
+               const Block& block,
                CacheOption option = CacheOption()) override;
-  Status Load(ContextSPtr ctx, const BlockKey& key, off_t offset, size_t length,
-              IOBuffer* buffer, LoadOption option = LoadOption()) override;
+  Status Load(ContextSPtr ctx, const BlockContext& block_ctx, off_t offset,
+              size_t length, IOBuffer* buffer,
+              LoadOption option = LoadOption()) override;
 
   std::string Id() const override;
   bool IsRunning() const override;
-  bool IsCached(const BlockKey& key) const override;
-  bool IsFull(const BlockKey& key) const override;
+  bool IsCached(const BlockContext& block_ctx) const override;
+  bool IsFull(const BlockContext& block_ctx) const override;
   bool Dump(Json::Value& value) const override;
 
  private:

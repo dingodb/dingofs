@@ -25,14 +25,14 @@
 
 #include <functional>
 
-#include "cache/blockcache/cache_store.h"
 #include "cache/iutil/cache.h"
 #include "cache/iutil/time_util.h"
+#include "common/block/block_key.h"
 
 namespace dingofs {
 namespace cache {
 
-using CacheKey = BlockKey;
+using CacheKey = dingofs::BlockKey;
 
 struct CacheValue {
   CacheValue() = default;
