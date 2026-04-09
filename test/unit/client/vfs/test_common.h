@@ -78,7 +78,7 @@ inline FsInfo MakeTestFsInfo(uint64_t chunk_size = 64 * 1024 * 1024,
 inline Slice MakeSlice(uint64_t id, int32_t pos, int32_t size,
                        int32_t off = 0, int32_t len = -1) {
   if (len < 0) len = size - off;
-  return Slice{.id = id, .pos = pos, .size = size, .off = off, .len = len};
+  return Slice{.id = id, .size = size, .off = off, .len = len, .pos = pos};
 }
 
 // Create a test file Attr.
