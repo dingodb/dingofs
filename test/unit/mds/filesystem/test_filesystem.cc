@@ -50,7 +50,6 @@ static pb::mds::S3Info CreateS3Info() {
   s3_info.set_sk("sk");
   s3_info.set_endpoint("http://s3.com");
   s3_info.set_bucketname("bucket");
-  s3_info.set_object_prefix(1);
 
   return s3_info;
 }

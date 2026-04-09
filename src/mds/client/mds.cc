@@ -162,7 +162,6 @@ CreateFsResponse MDSClient::CreateFs(const std::string& fs_name, const CreateFsP
     mut_s3_info->set_sk(s3_info.sk);
     mut_s3_info->set_endpoint(s3_info.endpoint);
     mut_s3_info->set_bucketname(s3_info.bucket_name);
-    mut_s3_info->set_object_prefix(0);
 
   } else if (!rados_info.mon_host.empty()) {
     request.set_fs_type(pb::mds::FsType::RADOS);
@@ -1067,9 +1066,10 @@ WriteSliceResponse MDSClient::WriteSlice(Ino parent, Ino ino, int64_t chunk_inde
   for (int i = 0; i < 10; i++) {
     auto* slice = delta_slice.add_slices();
     slice->set_id(i + 100000);
-    slice->set_offset(i * len);
+    slice->set_pos(0 * len);
+    slice->set_size(0);
+    slice->set_off(0);
     slice->set_len(len);
-    slice->set_size(len);
   }
 
   *request.add_delta_slices() = delta_slice;

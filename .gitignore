@@ -89,3 +89,5 @@ dist/
 
 CLAUDE.local.md
 settings.local.json
+
+mds_deploy_parameters.local

@@ -1425,21 +1425,6 @@ static void RenderDelfilePage(const std::vector<AttrEntry>& delfiles, butil::IOB
 }
 
 static void RenderDelslicePage(const std::vector<TrashSliceList>& delslices, butil::IOBufBuilder& os) {
-  auto render_range_func = [](const pb::mds::TrashSlice& slice) -> std::string {
-    std::string result;
-    for (int i = 0; i < slice.ranges_size(); ++i) {
-      const auto& range = slice.ranges().at(i);
-      if (i + 1 < slice.ranges_size()) {
-        result += fmt::format("[{},{}),", range.offset(), range.offset() + range.len());
-      } else {
-        result += fmt::format("[{},{})", range.offset(), range.offset() + range.len());
-      }
-
-      result += "<br>";
-    }
-    return result;
-  };
-
   os << "<!DOCTYPE html><html>";
 
   os << "<head>" << RenderHead("dingofs delslice") << "</head>";
@@ -1462,20 +1447,20 @@ static void RenderDelslicePage(const std::vector<TrashSliceList>& delslices, but
   os << "<th>Ino</th>";
   os << "<th>ChunkIndex</th>";
   os << "<th>SliceId</th>";
-  os << "<th>IsPartial</th>";
-  os << "<th>Ranges</th>";
+  os << "<th>Details<div>pos size off len</div></th>";
   os << "<th>Time</th>";
   os << "</tr>";
 
   for (const auto& delslice : delslices) {
     for (const auto& slice : delslice.slices()) {
+      const auto& the_slice = slice.slice();
       os << "<tr>";
       os << "<td>" << slice.fs_id() << "</td>";
       os << "<td>" << slice.ino() << "</td>";
       os << "<td>" << slice.chunk_index() << "</td>";
-      os << "<td>" << slice.slice_id() << "</td>";
-      os << "<td>" << (slice.is_partial() ? "true" : "false") << "</td>";
-      os << "<td>" << render_range_func(slice) << "</td>";
+      os << "<td>" << the_slice.id() << "</td>";
+      os << "<td>" << fmt::format("{} {} {} {}", the_slice.pos(), the_slice.size(), the_slice.off(), the_slice.len())
+         << "</td>";
       os << "<td>" << utils::FormatMsTime(delslice.time_ms()) << "</td>";
       os << "</tr>";
     }
@@ -1560,8 +1545,8 @@ static void RenderChunk(uint64_t& count, uint64_t chunk_size, const ChunkEntry& 
   std::set<uint64_t> offsets;
   if (!chunk.slices().empty()) {
     for (const auto& slice : chunk.slices()) {
-      offsets.insert(slice.offset());
-      offsets.insert(slice.offset() + slice.len());
+      offsets.insert(slice.pos());
+      offsets.insert(slice.pos() + slice.len());
     }
   } else {
     offsets.insert(chunk.index() * chunk_size);
@@ -1578,8 +1563,8 @@ static void RenderChunk(uint64_t& count, uint64_t chunk_size, const ChunkEntry& 
 
   for (auto& offset_range : offset_ranges) {
     for (const auto& slice : chunk.slices()) {
-      uint64_t slice_start = slice.offset();
-      uint64_t slice_end = slice.offset() + slice.len();
+      uint64_t slice_start = slice.pos();
+      uint64_t slice_end = slice.pos() + slice.len();
 
       // check intersect
       if (slice_end <= offset_range.start || slice_start >= offset_range.end) {
@@ -1623,12 +1608,12 @@ static void RenderChunk(uint64_t& count, uint64_t chunk_size, const ChunkEntry& 
     for (size_t i = 0; i < slices.size(); ++i) {
       const auto& slice = slices.at(i);
       if (i + 1 < slices.size()) {
-        os << fmt::format(R"(<li style="color:gray;">{} [{},{}) {} {} {}</li>)", slice.id(), slice.offset(),
-                          slice.offset() + slice.len(), slice.len(), slice.size(), slice.zero());
+        os << fmt::format(R"(<li style="color:gray;">{} [{},{}) {} {}</li>)", slice.id(), slice.pos(), slice.size(),
+                          slice.off(), slice.len());
 
       } else {
-        os << fmt::format(R"(<li>{} [{},{}) {} {} {}</li>)", slice.id(), slice.offset(), slice.offset() + slice.len(),
-                          slice.len(), slice.size(), slice.zero());
+        os << fmt::format(R"(<li>{} [{},{}) {} {}</li>)", slice.id(), slice.pos(), slice.size(), slice.off(),
+                          slice.len());
       }
     }
     os << "</ul></td>";
