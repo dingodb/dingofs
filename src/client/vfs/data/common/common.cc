@@ -35,9 +35,9 @@ std::string SliceReadReq::ToString() const {
 
 std::string BlockReadReq::ToString() const {
   return fmt::format(
-      "(file_range:[{}-{}], offset_in_block: {}, len: {}, key: {}, "
+      "(file_range:[{}-{}], block_offset: {}, len: {}, key: {}, "
       "hole: {})",
-      file_offset, FileEnd(), offset_in_block, len,
+      file_offset, FileEnd(), block_offset, len,
       key.has_value() ? key->Filename() : "null",
       IsHole() ? "true" : "false");
 }

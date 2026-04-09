@@ -31,7 +31,7 @@ namespace vfs {
 TEST(DumpBlockReadReqsTest, SingleBlock_DelimitedFormat) {
   std::vector<BlockReadReq> reqs = {BlockReadReq{
       .file_offset = 0,
-      .offset_in_block = 0,
+      .block_offset = 0,
       .len = 4194304,
       .key = BlockKey(1001, 0, 4194304),
   }};
@@ -47,7 +47,7 @@ TEST(DumpBlockReadReqsTest, SingleBlock_DelimitedFormat) {
 TEST(DumpBlockReadReqsTest, HoleBlock_ShowsAsHole) {
   std::vector<BlockReadReq> reqs = {BlockReadReq{
       .file_offset = 0,
-      .offset_in_block = 0,
+      .block_offset = 0,
       .len = 4194304,
       .key = std::nullopt,
   }};
@@ -61,15 +61,15 @@ TEST(DumpBlockReadReqsTest, HoleBlock_ShowsAsHole) {
 TEST(DumpBlockReadReqsTest, MixedHoleAndData) {
   std::vector<BlockReadReq> reqs = {
       BlockReadReq{.file_offset = 0,
-                   .offset_in_block = 0,
+                   .block_offset = 0,
                    .len = 4194304,
                    .key = BlockKey(100, 0, 4194304)},
       BlockReadReq{.file_offset = 4194304,
-                   .offset_in_block = 0,
+                   .block_offset = 0,
                    .len = 4194304,
                    .key = std::nullopt},
       BlockReadReq{.file_offset = 8388608,
-                   .offset_in_block = 0,
+                   .block_offset = 0,
                    .len = 1048576,
                    .key = BlockKey(100, 2, 1048576)},
   };
@@ -94,7 +94,7 @@ TEST(DumpBlockReadReqsTest, EmptyReqs_HeaderOnly) {
 TEST(DumpBlockReadReqsTest, FixedWidthFormat_NoDelimiter) {
   std::vector<BlockReadReq> reqs = {BlockReadReq{
       .file_offset = 0,
-      .offset_in_block = 0,
+      .block_offset = 0,
       .len = 4194304,
       .key = BlockKey(1001, 0, 4194304),
   }};
@@ -107,14 +107,14 @@ TEST(DumpBlockReadReqsTest, FixedWidthFormat_NoDelimiter) {
 TEST(DumpBlockReadReqsTest, OffsetInBlock_DisplayedCorrectly) {
   std::vector<BlockReadReq> reqs = {BlockReadReq{
       .file_offset = 7340032,      // 7MB
-      .offset_in_block = 3145728,  // 3MB (CopyFileRange scenario)
+      .block_offset = 3145728,  // 3MB (CopyFileRange scenario)
       .len = 1048576,              // 1MB
       .key = BlockKey(100, 0, 4194304),
   }};
 
   std::string out = DumpBlockReadReqs(reqs, /*use_delimiter=*/true);
 
-  EXPECT_NE(out.find("3145728"), std::string::npos);  // offset_in_block
+  EXPECT_NE(out.find("3145728"), std::string::npos);  // block_offset
   EXPECT_NE(out.find("7340032"), std::string::npos);  // file_offset
 }
 

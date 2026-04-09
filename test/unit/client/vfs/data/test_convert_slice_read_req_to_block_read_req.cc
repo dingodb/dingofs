@@ -36,18 +36,18 @@ static constexpr int32_t MB = 1024 * 1024;
 // key_index:        expected BlockKey.index (slice-relative block index)
 // key_size:         expected BlockKey.size (actual block size in bytes)
 // file_offset:      expected file_offset in the BlockReadReq
-// offset_in_block:  expected offset within the block object
+// block_offset:  expected offset within the block object
 // len:              expected read length
 static void CheckBlockReadReq(const BlockReadReq& req, uint64_t key_id,
                                uint32_t key_index, uint32_t key_size,
-                               int64_t file_offset, int32_t offset_in_block,
+                               int64_t file_offset, int32_t block_offset,
                                int32_t len) {
   ASSERT_TRUE(req.key.has_value()) << "BlockReadReq.key should not be nullopt";
   EXPECT_EQ(req.key->id, key_id);
   EXPECT_EQ(req.key->index, key_index);
   EXPECT_EQ(req.key->size, key_size);
   EXPECT_EQ(req.file_offset, file_offset);
-  EXPECT_EQ(req.offset_in_block, offset_in_block);
+  EXPECT_EQ(req.block_offset, block_offset);
   EXPECT_EQ(req.len, len);
 }
 
@@ -67,7 +67,7 @@ static SliceReadReq CreateSliceReadReq(int64_t file_offset, int64_t read_len,
 
 // 1. Single block, full read
 // slice{pos=0, size=4MB, off=0, len=4MB}, read entire slice
-// Expected: 1 req, key(index=0, size=4MB), offset_in_block=0
+// Expected: 1 req, key(index=0, size=4MB), block_offset=0
 TEST(ConvertSliceReadReqToBlockReadReqsTest, SingleBlock_FullRead) {
   Slice slice = CreateSlice(/*id=*/1, /*pos=*/0, /*size=*/4 * MB);
   SliceReadReq slice_req = CreateSliceReadReq(0, 4 * MB, slice);
@@ -83,12 +83,12 @@ TEST(ConvertSliceReadReqToBlockReadReqsTest, SingleBlock_FullRead) {
   ASSERT_EQ(reqs.size(), 1u);
   CheckBlockReadReq(reqs[0], /*key_id=*/1, /*key_index=*/0,
                     /*key_size=*/4 * MB, /*file_offset=*/0,
-                    /*offset_in_block=*/0, /*len=*/4 * MB);
+                    /*block_offset=*/0, /*len=*/4 * MB);
 }
 
 // 2. Single block, partial read
 // slice{pos=0, size=4MB, off=0, len=4MB}, read file_offset=1MB, len=1MB
-// Expected: 1 req, key(index=0, size=4MB), offset_in_block=1MB
+// Expected: 1 req, key(index=0, size=4MB), block_offset=1MB
 TEST(ConvertSliceReadReqToBlockReadReqsTest, SingleBlock_PartialRead) {
   Slice slice = CreateSlice(/*id=*/1, /*pos=*/0, /*size=*/4 * MB);
   SliceReadReq slice_req = CreateSliceReadReq(1 * MB, 1 * MB, slice);
@@ -144,9 +144,9 @@ TEST(ConvertSliceReadReqToBlockReadReqsTest, CrossBlock_TwoBlocks) {
                                                   chunk_size, block_size, 0);
 
   ASSERT_EQ(reqs.size(), 2u);
-  // block[0]: physical 2MB..4MB, offset_in_block=2MB, len=2MB
+  // block[0]: physical 2MB..4MB, block_offset=2MB, len=2MB
   CheckBlockReadReq(reqs[0], 1, 0, 4 * MB, 2 * MB, 2 * MB, 2 * MB);
-  // block[1]: physical 4MB..8MB, offset_in_block=0, len=2MB
+  // block[1]: physical 4MB..8MB, block_offset=0, len=2MB
   CheckBlockReadReq(reqs[1], 1, 1, 4 * MB, 4 * MB, 0, 2 * MB);
 }
 
@@ -175,12 +175,12 @@ TEST(ConvertSliceReadReqToBlockReadReqsTest,
   // block[0]: physical_offset=2MB, block_aligned=0..4MB
   //   file range: 5MB + (0-0) = 5MB to 5MB + (4MB-0) = 9MB
   //   read from 7MB, len = 9MB - 7MB = 2MB
-  //   offset_in_block = 2MB % 4MB = 2MB
+  //   block_offset = 2MB % 4MB = 2MB
   CheckBlockReadReq(reqs[0], 1001, 0, 4 * MB, 7 * MB, 2 * MB, 2 * MB);
   // block[1]: physical_offset=4MB, block_aligned=4MB..8MB
   //   file range: 5MB + (4MB-0) = 9MB to 5MB + (8MB-0) = 13MB
   //   read from 9MB, len = min(3MB, 13MB-9MB) = 3MB
-  //   offset_in_block = 4MB % 4MB = 0
+  //   block_offset = 4MB % 4MB = 0
   CheckBlockReadReq(reqs[1], 1001, 1, 4 * MB, 9 * MB, 0, 3 * MB);
 }
 
@@ -217,7 +217,7 @@ TEST(ConvertSliceReadReqToBlockReadReqsTest, CrossBlock_EntireSlice) {
 // Target slice: {id=100, pos=0, size=12MB, off=8MB, len=4MB}
 // read file_offset=0, len=4MB
 // physical_offset = 8MB + (0 - 0) = 8MB -> block_index=2
-// Expected: 1 req, key(index=2, size=4MB), offset_in_block=0
+// Expected: 1 req, key(index=2, size=4MB), block_offset=0
 TEST(ConvertSliceReadReqToBlockReadReqsTest, CopyFileRange_SingleBlock) {
   Slice slice = CreateSlice(/*id=*/100, /*pos=*/0, /*size=*/12 * MB,
                             /*off=*/8 * MB, /*len=*/4 * MB);
@@ -238,7 +238,7 @@ TEST(ConvertSliceReadReqToBlockReadReqsTest, CopyFileRange_SingleBlock) {
 // 8. CopyFileRange partial block
 // slice{id=200, pos=0, size=12MB, off=6MB, len=2MB}
 // read file_offset=0, len=2MB
-// physical_offset = 6MB + (0 - 0) = 6MB -> block_index=1, offset_in_block=2MB
+// physical_offset = 6MB + (0 - 0) = 6MB -> block_index=1, block_offset=2MB
 // block_aligned_start=4MB, block_aligned_end=min(8MB, 12MB)=8MB
 // file_block_start = 0 + (4MB - 6MB) = -2MB -> clamped to 0
 // file_block_end = 0 + (8MB - 6MB) = 2MB
@@ -257,7 +257,7 @@ TEST(ConvertSliceReadReqToBlockReadReqsTest, CopyFileRange_PartialBlock) {
                                                   chunk_size, block_size, 0);
 
   ASSERT_EQ(reqs.size(), 1u);
-  // physical_offset=6MB, block_index=6MB/4MB=1, offset_in_block=6MB%4MB=2MB
+  // physical_offset=6MB, block_index=6MB/4MB=1, block_offset=6MB%4MB=2MB
   CheckBlockReadReq(reqs[0], 200, 1, 4 * MB, 0, 2 * MB, 2 * MB);
 }
 
@@ -265,9 +265,9 @@ TEST(ConvertSliceReadReqToBlockReadReqsTest, CopyFileRange_PartialBlock) {
 // slice{id=300, pos=0, size=12MB, off=3MB, len=6MB}
 // read file_offset=0, len=6MB
 // physical start: 3MB, physical end: 3MB + 6MB = 9MB
-// block[0]: physical 0..4MB -> read 3MB..4MB (1MB), offset_in_block=3MB
-// block[1]: physical 4MB..8MB -> read 4MB..8MB (4MB), offset_in_block=0
-// block[2]: physical 8MB..12MB -> read 8MB..9MB (1MB), offset_in_block=0
+// block[0]: physical 0..4MB -> read 3MB..4MB (1MB), block_offset=3MB
+// block[1]: physical 4MB..8MB -> read 4MB..8MB (4MB), block_offset=0
+// block[2]: physical 8MB..12MB -> read 8MB..9MB (1MB), block_offset=0
 // Expected: 3 reqs
 TEST(ConvertSliceReadReqToBlockReadReqsTest, CopyFileRange_CrossThreeBlocks) {
   Slice slice = CreateSlice(/*id=*/300, /*pos=*/0, /*size=*/12 * MB,
@@ -283,15 +283,15 @@ TEST(ConvertSliceReadReqToBlockReadReqsTest, CopyFileRange_CrossThreeBlocks) {
                                                   chunk_size, block_size, 0);
 
   ASSERT_EQ(reqs.size(), 3u);
-  // block[0]: physical_offset=3MB, index=0, offset_in_block=3MB
+  // block[0]: physical_offset=3MB, index=0, block_offset=3MB
   //   file_block_end = 0 + (4MB - 3MB) = 1MB
   //   len = min(6MB, 1MB - 0) = 1MB
   CheckBlockReadReq(reqs[0], 300, 0, 4 * MB, 0, 3 * MB, 1 * MB);
-  // block[1]: physical_offset=4MB, index=1, offset_in_block=0
+  // block[1]: physical_offset=4MB, index=1, block_offset=0
   //   file range: 0 + (4MB - 3MB) = 1MB to 0 + (8MB - 3MB) = 5MB
   //   read from 1MB, len = min(5MB, 5MB - 1MB) = 4MB
   CheckBlockReadReq(reqs[1], 300, 1, 4 * MB, 1 * MB, 0, 4 * MB);
-  // block[2]: physical_offset=8MB, index=2, offset_in_block=0
+  // block[2]: physical_offset=8MB, index=2, block_offset=0
   //   file range: 0 + (8MB - 3MB) = 5MB to 0 + (12MB - 3MB) = 9MB
   //   but clamped to slice_offset + slice.len = 0 + 6MB = 6MB
   //   read from 5MB, len = min(1MB, 6MB - 5MB) = 1MB
@@ -302,14 +302,14 @@ TEST(ConvertSliceReadReqToBlockReadReqsTest, CopyFileRange_CrossThreeBlocks) {
 // slice{id=400, pos=0, size=20MB, off=6MB, len=10MB}
 // read file_offset=0, len=10MB
 // physical range: 6MB..16MB
-// block[1]: 4MB..8MB -> read 6MB..8MB (2MB), offset_in_block=2MB
+// block[1]: 4MB..8MB -> read 6MB..8MB (2MB), block_offset=2MB
 // block[2]: 8MB..12MB -> read 8MB..12MB (4MB)
 // block[3]: 12MB..16MB -> read 12MB..16MB (4MB)
 // Wait -- physical 6MB..16MB covers blocks 1,2,3 = 3 blocks.
 // Actually: 2MB + 4MB + 4MB = 10MB. That's 3 reqs, not 4.
 // Let me use off=5MB, len=10MB to get 4 blocks.
 // physical range: 5MB..15MB
-// block[1]: 4MB..8MB -> read 5MB..8MB (3MB), offset_in_block=1MB
+// block[1]: 4MB..8MB -> read 5MB..8MB (3MB), block_offset=1MB
 // block[2]: 8MB..12MB -> 4MB
 // block[3]: 12MB..16MB -> read 12MB..15MB (3MB)
 // Still 3. For 4 reqs: off=3MB, len=10MB -> physical 3MB..13MB
@@ -332,13 +332,13 @@ TEST(ConvertSliceReadReqToBlockReadReqsTest, CopyFileRange_LargeOffset) {
                                                   chunk_size, block_size, 0);
 
   ASSERT_EQ(reqs.size(), 4u);
-  // block[0]: physical 3MB, index=0, offset_in_block=3MB, len=1MB
+  // block[0]: physical 3MB, index=0, block_offset=3MB, len=1MB
   CheckBlockReadReq(reqs[0], 400, 0, 4 * MB, 0, 3 * MB, 1 * MB);
-  // block[1]: physical 4MB, index=1, offset_in_block=0, len=4MB
+  // block[1]: physical 4MB, index=1, block_offset=0, len=4MB
   CheckBlockReadReq(reqs[1], 400, 1, 4 * MB, 1 * MB, 0, 4 * MB);
-  // block[2]: physical 8MB, index=2, offset_in_block=0, len=4MB
+  // block[2]: physical 8MB, index=2, block_offset=0, len=4MB
   CheckBlockReadReq(reqs[2], 400, 2, 4 * MB, 5 * MB, 0, 4 * MB);
-  // block[3]: physical 12MB, index=3, offset_in_block=0, len=1MB
+  // block[3]: physical 12MB, index=3, block_offset=0, len=1MB
   CheckBlockReadReq(reqs[3], 400, 3, 4 * MB, 9 * MB, 0, 1 * MB);
 }
 
@@ -370,7 +370,7 @@ TEST(ConvertSliceReadReqToBlockReadReqsTest, LastBlock_SmallerThanBlockSize) {
 // 12. Single byte at block boundary
 // slice{pos=0, size=64, off=0, len=64}, block_size=32
 // read file_offset=32, len=1
-// physical_offset=32 -> block_index=1, offset_in_block=0
+// physical_offset=32 -> block_index=1, block_offset=0
 TEST(ConvertSliceReadReqToBlockReadReqsTest, SingleByte_AtBlockBoundary) {
   Slice slice = CreateSlice(/*id=*/1, /*pos=*/0, /*size=*/64);
   SliceReadReq slice_req = CreateSliceReadReq(32, 1, slice);
@@ -384,14 +384,14 @@ TEST(ConvertSliceReadReqToBlockReadReqsTest, SingleByte_AtBlockBoundary) {
                                                   chunk_size, block_size, 0);
 
   ASSERT_EQ(reqs.size(), 1u);
-  // block[1]: key.size=32 (full block), offset_in_block=0
+  // block[1]: key.size=32 (full block), block_offset=0
   CheckBlockReadReq(reqs[0], 1, 1, 32, 32, 0, 1);
 }
 
 // 13. Single byte before block boundary
 // slice{pos=0, size=64, off=0, len=64}, block_size=32
 // read file_offset=31, len=1
-// physical_offset=31 -> block_index=0, offset_in_block=31
+// physical_offset=31 -> block_index=0, block_offset=31
 TEST(ConvertSliceReadReqToBlockReadReqsTest, SingleByte_BeforeBlockBoundary) {
   Slice slice = CreateSlice(/*id=*/1, /*pos=*/0, /*size=*/64);
   SliceReadReq slice_req = CreateSliceReadReq(31, 1, slice);
@@ -405,7 +405,7 @@ TEST(ConvertSliceReadReqToBlockReadReqsTest, SingleByte_BeforeBlockBoundary) {
                                                   chunk_size, block_size, 0);
 
   ASSERT_EQ(reqs.size(), 1u);
-  // block[0]: key.size=32, offset_in_block=31
+  // block[0]: key.size=32, block_offset=31
   CheckBlockReadReq(reqs[0], 1, 0, 32, 31, 31, 1);
 }
 
@@ -431,10 +431,10 @@ TEST(ConvertSliceReadReqToBlockReadReqsTest, NonZeroChunkStart) {
       slice_req, fs_id, ino, chunk_size, block_size, chunk_start);
 
   ASSERT_EQ(reqs.size(), 2u);
-  // block[0]: physical 2MB, index=0, offset_in_block=2MB, len=2MB
+  // block[0]: physical 2MB, index=0, block_offset=2MB, len=2MB
   CheckBlockReadReq(reqs[0], 1, 0, 4 * MB, slice_offset + 2 * MB, 2 * MB,
                     2 * MB);
-  // block[1]: physical 4MB, index=1, offset_in_block=0, len=2MB
+  // block[1]: physical 4MB, index=1, block_offset=0, len=2MB
   CheckBlockReadReq(reqs[1], 1, 1, 4 * MB, slice_offset + 4 * MB, 0, 2 * MB);
 }
 
