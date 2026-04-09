@@ -102,8 +102,8 @@ void PrintFixedWidthRow(butil::IOBufBuilder& os, const FormatConfig& config,
 
 }  // namespace
 
-static void DumpFlatFile(butil::IOBufBuilder& os, FlatFile* flat_file,
-                         bool use_delimiter) {
+std::string DumpBlockReadReqs(const std::vector<BlockReadReq>& block_reqs,
+                              bool use_delimiter) {
   FormatConfig config{
       .file_offset_width = kFormatFileOffsetWidth,
       .len_width = kFormatLenWidth,
@@ -113,17 +113,14 @@ static void DumpFlatFile(butil::IOBufBuilder& os, FlatFile* flat_file,
       .delimiter = kFormatDelimiter,
   };
 
-  // Print header
+  butil::IOBufBuilder os;
+
   if (use_delimiter) {
     PrintDelimitedHeader(os, config);
   } else {
     PrintFixedWidthHeader(os, config);
   }
 
-  // Get data once
-  const auto block_reqs = flat_file->GenBlockReadReqs();
-
-  // Print each row
   for (const auto& req : block_reqs) {
     const auto file_pos = req.file_offset;
     std::string block_key;
@@ -132,6 +129,8 @@ static void DumpFlatFile(butil::IOBufBuilder& os, FlatFile* flat_file,
     if (req.key.has_value()) {
       block_key = req.key->StoreKey();
       block_size = req.key->size;
+    } else {
+      block_key = "hole";
     }
 
     if (use_delimiter) {
@@ -142,6 +141,10 @@ static void DumpFlatFile(butil::IOBufBuilder& os, FlatFile* flat_file,
                          block_key, block_size);
     }
   }
+
+  butil::IOBuf buf;
+  os.move_to(buf);
+  return buf.to_string();
 }
 
 void InodeBlocksServiceImpl::default_method(
@@ -182,7 +185,8 @@ void InodeBlocksServiceImpl::default_method(
 
       const std::string* delimiter =
           cntl->http_request().uri().GetQuery("delimiter");
-      DumpFlatFile(os, flat_file.get(), (delimiter != nullptr));
+      os << DumpBlockReadReqs(flat_file->GenBlockReadReqs(),
+                              (delimiter != nullptr));
     } else {
       LOG(INFO) << "Invalid ino: " << path;
       cntl->SetFailed(brpc::ENOMETHOD, "Invalid ino %s", path.c_str());

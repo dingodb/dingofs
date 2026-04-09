@@ -17,12 +17,22 @@
 
 #include <glog/logging.h>
 
+#include <string>
+#include <vector>
+
+#include "client/vfs/data/common/common.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "dingofs/vfs.pb.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
+
+// Dump BlockReadReqs as a text table. Holes are shown as "hole".
+// use_delimiter=true outputs delimiter-separated rows, false outputs
+// fixed-width columns.
+std::string DumpBlockReadReqs(const std::vector<BlockReadReq>& block_reqs,
+                              bool use_delimiter);
 
 class InodeBlocksServiceImpl : public pb::client::InodeBlocksService {
  public:
