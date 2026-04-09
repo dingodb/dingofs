@@ -20,6 +20,7 @@
 
 #include "client/vfs/data/common/common.h"
 #include "common/block/block_key.h"
+#include "common/block/block_utils.h"
 
 namespace dingofs {
 namespace client {
@@ -52,6 +53,55 @@ TEST(BlockKeyTest, Filename_WithActualSize) {
 TEST(BlockKeyTest, StoreKey_WithActualSize) {
   BlockKey key(1001, 2, 1048576);
   EXPECT_EQ(key.StoreKey(), "blocks/0/1/1001_2_1048576");
+}
+
+// ─── EnumerateBlockKeys ─────────────────────────────────────────────────────
+
+TEST(EnumerateBlockKeysTest, Aligned_ThreeFullBlocks) {
+  auto keys = dingofs::EnumerateBlockKeys(100, 12 * 1024 * 1024, 4 * 1024 * 1024);
+  ASSERT_EQ(keys.size(), 3u);
+  EXPECT_EQ(keys[0].index, 0);
+  EXPECT_EQ(keys[0].size, 4 * 1024 * 1024);
+  EXPECT_EQ(keys[1].index, 1);
+  EXPECT_EQ(keys[1].size, 4 * 1024 * 1024);
+  EXPECT_EQ(keys[2].index, 2);
+  EXPECT_EQ(keys[2].size, 4 * 1024 * 1024);
+  for (const auto& k : keys) {
+    EXPECT_EQ(k.id, 100u);
+  }
+}
+
+TEST(EnumerateBlockKeysTest, NotAligned_LastBlockSmaller) {
+  auto keys = dingofs::EnumerateBlockKeys(200, 9 * 1024 * 1024, 4 * 1024 * 1024);
+  ASSERT_EQ(keys.size(), 3u);
+  EXPECT_EQ(keys[0].size, 4 * 1024 * 1024);
+  EXPECT_EQ(keys[1].size, 4 * 1024 * 1024);
+  EXPECT_EQ(keys[2].size, 1 * 1024 * 1024);  // 9MB - 8MB = 1MB
+}
+
+TEST(EnumerateBlockKeysTest, SmallerThanBlockSize_SingleBlock) {
+  auto keys = dingofs::EnumerateBlockKeys(300, 100, 4 * 1024 * 1024);
+  ASSERT_EQ(keys.size(), 1u);
+  EXPECT_EQ(keys[0].index, 0);
+  EXPECT_EQ(keys[0].size, 100);
+}
+
+TEST(EnumerateBlockKeysTest, ExactlyOneBlock) {
+  auto keys = dingofs::EnumerateBlockKeys(400, 4 * 1024 * 1024, 4 * 1024 * 1024);
+  ASSERT_EQ(keys.size(), 1u);
+  EXPECT_EQ(keys[0].size, 4 * 1024 * 1024);
+}
+
+TEST(EnumerateBlockKeysTest, ZeroSize_Empty) {
+  auto keys = dingofs::EnumerateBlockKeys(500, 0, 4 * 1024 * 1024);
+  EXPECT_TRUE(keys.empty());
+}
+
+TEST(EnumerateBlockKeysTest, StoreKey_Correct) {
+  auto keys = dingofs::EnumerateBlockKeys(1001, 9 * 1024 * 1024, 4 * 1024 * 1024);
+  EXPECT_EQ(keys[0].StoreKey(), "blocks/0/1/1001_0_4194304");
+  EXPECT_EQ(keys[1].StoreKey(), "blocks/0/1/1001_1_4194304");
+  EXPECT_EQ(keys[2].StoreKey(), "blocks/0/1/1001_2_1048576");
 }
 
 }  // namespace vfs
