@@ -20,7 +20,6 @@
 #include <cstdint>
 
 #include "cache/blockcache/block_cache.h"
-#include "cache/blockcache/cache_store.h"
 #include "common/block/block_context.h"
 #include "common/callback.h"
 #include "common/io_buffer.h"
@@ -33,7 +32,6 @@ namespace vfs {
 
 struct RangeReq {
   BlockContext block_ctx;
-  size_t block_size{0};
   int64_t offset{0};
   int64_t length{0};
   IOBuffer* data{nullptr};
@@ -47,7 +45,6 @@ struct PutReq {
 
 struct PrefetchReq {
   BlockContext block_ctx;
-  size_t block_size{0};
 };
 
 class BlockStore {

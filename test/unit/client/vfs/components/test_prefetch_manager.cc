@@ -96,6 +96,31 @@ TEST_F(PrefetchManagerTest, Start_Stop_NoCrash) {
   ASSERT_TRUE(mgr_->Stop().ok());
 }
 
+// After removing PrefetchReq.block_size, consumers must read the block
+// size from req.block_ctx.key.size. Verify BlockKey fields are set.
+TEST_F(PrefetchManagerTest, SubmitTask_VerifyBlockKeyFields) {
+  ASSERT_TRUE(mgr_->Start(2).ok());
+
+  test::AsyncWaiter waiter;
+  waiter.Expect(1);
+
+  std::vector<PrefetchReq> captured;
+  EXPECT_CALL(*mock_block_store_, PrefetchAsync(_, _, _))
+      .WillOnce([&](ContextSPtr, PrefetchReq req, StatusCallback cb) {
+        captured.push_back(req);
+        cb(Status::OK());
+        waiter.Done();
+      });
+
+  mgr_->SubmitTask(MakeSingleBlockCtx());
+  waiter.Wait();
+
+  ASSERT_EQ(captured.size(), 1u);
+  // BlockKey must carry a valid (non-zero) id and the actual block size.
+  EXPECT_NE(captured[0].block_ctx.key.id, 0u);
+  EXPECT_GT(captured[0].block_ctx.key.size, 0);
+}
+
 TEST_F(PrefetchManagerTest, SubmitTask_TriggersPrefetchAsync) {
   ASSERT_TRUE(mgr_->Start(2).ok());
 

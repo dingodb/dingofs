@@ -319,7 +319,6 @@ void WarmupManager::WarmupFile(Ino ino, WarmupTask* task, AsyncWarmupCb cb) {
                            block.len);
     PrefetchReq req;
     req.block_ctx = BlockContext(block.key, vfs_hub_->GetFsInfo().id);
-    req.block_size = block.len;
 
     block_store_->PrefetchAsync(
         SpanScope::GetContext(span), req,

@@ -83,7 +83,7 @@ void BlockStoreImpl::RangeAsync(ContextSPtr ctx, RangeReq req,
 
   cache::RangeOption option;
   option.retrieve_storage = true;
-  option.block_whole_length = req.block_size;
+  option.block_whole_length = req.block_ctx.key.size;
 
   block_cache_->AsyncRange(cache::NewContext(), req.block_ctx, req.offset,
                            req.length, req.data, std::move(wrapper), option);
@@ -133,15 +133,15 @@ void BlockStoreImpl::PrefetchAsync(ContextSPtr ctx, PrefetchReq req,
     BlockStoreAccessLogGuard log(start_us, [&]() {
       return fmt::format("prefetch_async ({}, {}) : {}",
                          req.block_ctx.key.Filename(),
-                         req.block_size, s.ToString());
+                         req.block_ctx.key.size, s.ToString());
     });
     SpanScope::End(span);
     cb(s);
   };
 
   // transfer ownership of block_data to BlockDataFlushed
-  block_cache_->AsyncPrefetch(cache::NewContext(), req.block_ctx, req.block_size,
-                              std::move(wrapper));
+  block_cache_->AsyncPrefetch(cache::NewContext(), req.block_ctx,
+                              req.block_ctx.key.size, std::move(wrapper));
 }
 
 // utility
