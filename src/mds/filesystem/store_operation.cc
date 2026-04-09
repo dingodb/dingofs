@@ -903,7 +903,6 @@ static Status ResetFileRange(TxnUPtr& txn, uint32_t fs_id, Ino ino, uint64_t old
                              uint64_t slice_id, uint64_t chunk_size) {
   CHECK(new_length < old_length) << fmt::format("new_length({}) should be less than old_length({}).", new_length,
                                                 old_length);
-  CHECK(slice_id > 0) << "slice_id is zero.";
 
   uint32_t old_num = (old_length / chunk_size) + ((old_length % chunk_size) != 0 ? 1 : 0);
   uint32_t new_num = (new_length / chunk_size) + ((new_length % chunk_size) != 0 ? 1 : 0);
@@ -917,11 +916,11 @@ static Status ResetFileRange(TxnUPtr& txn, uint32_t fs_id, Ino ino, uint64_t old
       return Status(status.error_code(), fmt::format("retfilerange fail({})", status.error_str()));
     }
 
-    slice.set_id(slice_id);
-    slice.set_offset(new_length);
-    slice.set_size(static_cast<uint64_t>(new_num * chunk_size) - new_length);
-    slice.set_len(slice.size());
-    slice.set_zero(true);
+    slice.set_id(0);
+    slice.set_size(0);
+    slice.set_pos(new_length % chunk_size);
+    slice.set_off(0);
+    slice.set_len(static_cast<uint64_t>(new_num * chunk_size) - new_length);
 
     *chunk.add_slices() = slice;
 
@@ -1064,12 +1063,13 @@ Status UpsertChunkOperation::Run(TxnUPtr& txn) {
         return false;
       };
 
+      uint64_t chunk_pos = chunk.index() * chunk.chunk_size();
       for (const auto& slice : delta_slices.slices()) {
         if (is_exist_fn(slice)) continue;
 
         has_update = true;
         *chunk.add_slices() = slice;
-        length = std::max(length, static_cast<int64_t>(slice.offset() + slice.len()));
+        length = std::max(length, static_cast<int64_t>(chunk_pos + slice.pos() + slice.len()));
       }
     }
 
@@ -1155,7 +1155,6 @@ Status FallocateOperation::PreAlloc(TxnUPtr& txn, AttrEntry& attr, uint64_t offs
   const Ino ino = attr.ino();
   const uint64_t chunk_size = param_.chunk_size;
   const uint64_t block_size = param_.block_size;
-  uint64_t slice_id = param_.slice_id;
   const uint32_t slice_num = param_.slice_num;
 
   ChunkEntry max_chunk;
@@ -1171,11 +1170,11 @@ Status FallocateOperation::PreAlloc(TxnUPtr& txn, AttrEntry& attr, uint64_t offs
     uint64_t delta_chunk_size = (chunk_pos + delta_size > chunk_size) ? (chunk_size - chunk_pos) : delta_size;
 
     SliceEntry slice;
-    slice.set_id(slice_id++);
-    slice.set_offset(chunk_pos);
+    slice.set_id(0);
+    slice.set_size(0);
+    slice.set_pos(chunk_pos);
+    slice.set_off(0);
     slice.set_len(delta_chunk_size);
-    slice.set_size(delta_chunk_size);
-    slice.set_zero(true);
 
     CHECK(chunk_index >= max_chunk.index()) << fmt::format(
         "chunk_index({}) should be greater than or equal to max_chunk.index({}).", chunk_index, max_chunk.index());
@@ -1220,7 +1219,6 @@ Status FallocateOperation::SetZero(TxnUPtr& txn, AttrEntry& attr, uint64_t offse
   const uint64_t chunk_size = param_.chunk_size;
   const uint64_t block_size = param_.block_size;
   const uint32_t slice_num = param_.slice_num;
-  uint64_t slice_id = param_.slice_id;
 
   uint64_t end_offset = keep_size ? std::min(attr.length(), offset + len) : (offset + len);
 
@@ -1238,11 +1236,11 @@ Status FallocateOperation::SetZero(TxnUPtr& txn, AttrEntry& attr, uint64_t offse
     uint64_t delta_chunk_size = chunk_size - chunk_pos;
 
     SliceEntry slice;
-    slice.set_id(slice_id++);
-    slice.set_offset(chunk_pos);
+    slice.set_id(0);
+    slice.set_size(0);
+    slice.set_pos(chunk_pos);
+    slice.set_off(0);
     slice.set_len(delta_chunk_size);
-    slice.set_size(delta_chunk_size);
-    slice.set_zero(true);
 
     // todo
     auto it = chunks.find(chunk_index);
@@ -1890,14 +1888,9 @@ Status CompactChunkOperation::Run(TxnUPtr& txn) {
     trash_slice->set_fs_id(fs_id);
     trash_slice->set_ino(ino_);
     trash_slice->set_chunk_index(chunk.index());
-    trash_slice->set_slice_id(slice.id());
     trash_slice->set_block_size(chunk.block_size());
     trash_slice->set_chunk_size(chunk.chunk_size());
-
-    auto* range = trash_slice->add_ranges();
-    range->set_offset(slice.offset());
-    range->set_len(slice.len());
-    range->set_compaction_version(slice.compaction_version());
+    trash_slice->mutable_slice()->CopyFrom(slice);
   }
   trash_slice_list.set_time_ms(utils::TimestampMs());
 
@@ -1918,7 +1911,7 @@ Status CompactChunkOperation::Run(TxnUPtr& txn) {
   auto* compacted_slices = chunk.add_compacted_slices();
   compacted_slices->set_time_ms(utils::TimestampMs());
   for (const auto& slice : trash_slice_list.slices()) {
-    compacted_slices->add_slice_ids(slice.slice_id());
+    compacted_slices->add_slice_ids(slice.slice().id());
   }
 
   chunk.set_version(chunk.version() + 1);

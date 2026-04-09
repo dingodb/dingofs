@@ -86,6 +86,9 @@ class MetaCodec {
   // format: ${prefix} kTableFsMeta {fs_id} kMetaFsTinyFileData
   static Range GetTinyFileDataRange(uint32_t fs_id);
 
+  // format: ${prefix} kTableFsMeta {fs_id} kMetaFsSliceRef
+  static Range GetSliceRefRange(uint32_t fs_id);
+
   // lock format: ${prefix} kTableMeta kMetaLock {name}
   static bool IsLockKey(const std::string& key);
   static std::string EncodeLockKey(const std::string& name);
@@ -203,6 +206,13 @@ class MetaCodec {
   static void DecodeTinyFileDataKey(const std::string& key, uint32_t& fs_id, Ino& ino);
   static std::string& EncodeTinyFileDataValue(std::string& data, uint64_t version);
   static void DecodeTinyFileDataValue(std::string& value, uint64_t& version);
+
+  // slice ref format: ${prefix} kTableFsMeta {fs_id} kMetaFsSliceRef {slice_id} {size}
+  static bool IsSliceRefKey(const std::string& key);
+  static std::string EncodeSliceRefKey(uint32_t fs_id, uint64_t slice_id, uint32_t size);
+  static void DecodeSliceRefKey(const std::string& key, uint32_t& fs_id, uint64_t& slice_id, uint32_t& size);
+  static std::string EncodeSliceRefValue(uint32_t ref_count);
+  static uint32_t DecodeSliceRefValue(const std::string& value);
 
   // check key belongs to a specific table
   static bool IsMetaTableKey(const std::string& key);
