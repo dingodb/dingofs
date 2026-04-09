@@ -21,17 +21,13 @@
 #include <fmt/format.h>
 #include <unistd.h>
 
+#include <cstdlib>
 #include <filesystem>
 #include <string>
 
 #include "common/helper.h"
 
 namespace dingofs {
-
-// default dingofs runtime data dir, including cache data, log, meta, etc.
-static const std::string kBaseDir =
-    (getuid() == 0) ? "/var/dingofs"
-                    : fmt::format("{}/.dingofs", Helper::GetHomeDir());
 
 static const std::string kCacheDir = "cache";
 static const std::string kLogDir = "log";
@@ -40,8 +36,27 @@ static const std::string kMetaDir = "meta";
 static const std::string kDbDir = "store";
 static const std::string kSocketDir = "run";
 
+// Base directory for all dingofs runtime data (log/cache/meta/data/run).
+// Resolution order (highest priority first):
+//   1. $DINGOFS_BASE_DIR environment variable, if set and non-empty.
+//   2. /var/dingofs when running as root (getuid() == 0).
+//   3. $HOME/.dingofs otherwise.
+//
+// This is a function (not a static const) so that callers invoked during
+// static initialization — e.g. DEFINE_string(cache_dir, GetDefaultDir(...))
+// and the kBrpcFlagDefaultValueMap in flag.cc — observe the current env var,
+// which is available before main() runs.
+inline std::string GetBaseDir() {
+  const char* env = std::getenv("DINGOFS_BASE_DIR");
+  if (env != nullptr && env[0] != '\0') {
+    return env;
+  }
+  return (getuid() == 0) ? "/var/dingofs"
+                         : fmt::format("{}/.dingofs", Helper::GetHomeDir());
+}
+
 inline std::string GetDefaultDir(const std::string& sub_dir) {
-  std::filesystem::path base_dir(kBaseDir);
+  std::filesystem::path base_dir(GetBaseDir());
   return (base_dir / sub_dir).string();
 }
 
