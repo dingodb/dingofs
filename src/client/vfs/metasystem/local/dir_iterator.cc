@@ -19,10 +19,8 @@
 #include <cstdint>
 #include <vector>
 
-#include "client/vfs/common/helper.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
-#include "mds/common/codec.h"
 
 namespace dingofs {
 namespace client {
