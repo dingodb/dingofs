@@ -77,7 +77,7 @@ TEST(FlatFileChunkTest, SingleSlice_TwoBlocks) {
 
 // A zero-flag slice should not contribute any BlockReadReq (it is treated as a
 // hole and skipped by FlatFileChunk::GenBlockReadReqs).
-TEST(FlatFileChunkTest, ZeroSlice_NoBlockReqs) {
+TEST(FlatFileChunkTest, ZeroSlice_ProducesHoleReq) {
   constexpr uint64_t kChunkSize = 67108864;
   constexpr uint64_t kBlockSize = 4194304;
 
@@ -86,7 +86,11 @@ TEST(FlatFileChunkTest, ZeroSlice_NoBlockReqs) {
   FlatFileChunk chunk(1, 12, 0, kChunkSize, kBlockSize, {s});
   auto reqs = chunk.GenBlockReadReqs();
 
-  EXPECT_TRUE(reqs.empty());
+  // Zero slice should produce a hole BlockReadReq, not be skipped
+  ASSERT_EQ(reqs.size(), 1u);
+  EXPECT_TRUE(reqs[0].IsHole());
+  EXPECT_EQ(reqs[0].file_offset, 0);
+  EXPECT_EQ(reqs[0].len, static_cast<int32_t>(kBlockSize));
 }
 
 // Two non-overlapping slices that together fill two blocks → two BlockReadReqs.
@@ -269,7 +273,11 @@ TEST(FlatFileChunkE2ETest, ZeroSlice_Hole) {
   FlatFileChunk chunk(1, 10, /*index=*/0, kChunkSize, kBlockSize, {s});
   auto reqs = chunk.GenBlockReadReqs();
 
-  EXPECT_TRUE(reqs.empty());
+  // Zero slice should produce a hole BlockReadReq
+  ASSERT_EQ(reqs.size(), 1u);
+  EXPECT_TRUE(reqs[0].IsHole());
+  EXPECT_EQ(reqs[0].file_offset, 0);
+  EXPECT_EQ(reqs[0].len, kBlockSize);
 }
 
 // Multi-chunk FlatFile: verify chunk_start offsets are correct.
