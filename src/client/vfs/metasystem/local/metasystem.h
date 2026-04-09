@@ -15,7 +15,6 @@
 #ifndef DINGOFS_SRC_CLIENT_VFS_META_LOCAL_H_
 #define DINGOFS_SRC_CLIENT_VFS_META_LOCAL_H_
 
-#include <atomic>
 #include <cstdint>
 #include <map>
 #include <string>
@@ -164,6 +163,8 @@ class LocalMetaSystem : public vfs::MetaSystem {
   Status GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) override;
   Status SetAttr(ContextSPtr ctx, Ino ino, int to_set, const Attr& in_attr,
                  Attr* out_attr) override;
+  Status Fallocate(ContextSPtr ctx, Ino ino, int mode, uint64_t offset,
+                   uint64_t length) override;
   Status GetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
                   std::string* value) override;
   Status SetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
@@ -226,6 +227,13 @@ class LocalMetaSystem : public vfs::MetaSystem {
 
   Status Get(const std::string& key, std::string& value);
   Status Put(std::vector<KeyValue>& kvs);
+
+  // Append a zero slice (id=0) covering [chunk_pos, chunk_pos+len) of the
+  // given chunk. Creates the chunk if it does not exist. Appends the KV op
+  // to |kvs| instead of writing directly.
+  Status AppendZeroSliceToChunk(uint32_t fs_id, Ino ino, uint64_t chunk_index,
+                                uint32_t chunk_pos, uint32_t len,
+                                std::vector<KeyValue>& kvs);
 
   const std::string fs_name_;
   const std::string db_path_;

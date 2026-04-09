@@ -15,18 +15,16 @@
 #ifndef DINGOFS_SRC_CLIENT_VFS_META_LOCAL_DIR_ITERATOR_H_
 #define DINGOFS_SRC_CLIENT_VFS_META_LOCAL_DIR_ITERATOR_H_
 
-#include <atomic>
 #include <cstdint>
 #include <functional>
-#include <string>
 #include <unordered_map>
 #include <vector>
 
-#include "client/vfs/metasystem/mds/mds_client.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
+#include "common/trace/context.h"
 #include "json/value.h"
-#include "leveldb/iterator.h"
+#include "mds/common/type.h"
 #include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
