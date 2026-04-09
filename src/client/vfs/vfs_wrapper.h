@@ -74,6 +74,8 @@ class VFSWrapper {
 
   Status SetAttr(Ino ino, int set, const Attr& in_attr, Attr* out_attr);
 
+  Status Fallocate(Ino ino, int mode, uint64_t offset, uint64_t length);
+
   Status ReadLink(Ino ino, std::string* link);
 
   Status MkNod(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,

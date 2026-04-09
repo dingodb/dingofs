@@ -67,7 +67,7 @@ static const struct fuse_lowlevel_ops kFuseOp = {
     .retrieve_reply = nullptr,
     .forget_multi = nullptr,
     .flock = nullptr,
-    .fallocate = nullptr,
+    .fallocate = FuseOpFallocate,
 #endif
 #if FUSE_VERSION >= FUSE_MAKE_VERSION(3, 0)
     .readdirplus = FuseOpReadDirPlus,

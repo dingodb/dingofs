@@ -145,6 +145,14 @@ Status VFSImpl::SetAttr(ContextSPtr ctx, Ino ino, int set, const Attr& in_attr,
   return s;
 }
 
+Status VFSImpl::Fallocate(ContextSPtr ctx, Ino ino, int mode, uint64_t offset,
+                          uint64_t length) {
+  if (BAIDU_UNLIKELY(ino == kStatsIno)) {
+    return Status::NoPermitted("fallocate on internal node");
+  }
+  return meta_system_->Fallocate(ctx, ino, mode, offset, length);
+}
+
 Status VFSImpl::ReadLink(ContextSPtr ctx, Ino ino, std::string* link) {
   return meta_system_->ReadLink(ctx, ino, link);
 }

@@ -363,6 +363,30 @@ Status VFSWrapper::SetAttr(Ino ino, int set, const Attr& in_attr,
   return s;
 }
 
+Status VFSWrapper::Fallocate(Ino ino, int mode, uint64_t offset,
+                             uint64_t length) {
+  VLOG(2) << fmt::format("VFSFallocate ino: {} mode: {} offset: {} length: {}",
+                         ino, mode, offset, length);
+
+  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Fallocate");
+
+  Status s;
+  AccessLogGuard log([&]() {
+    return absl::StrFormat("fallocate (%d, mode=0x%X, off=%lu, len=%lu): %s",
+                           ino, mode, offset, length, s.ToString());
+  });
+
+  ClientOpMetricGuard op_metric(
+      {&client_op_metric_->opFallocate, &client_op_metric_->opAll});
+
+  s = vfs_->Fallocate(dingofs::SpanScope::GetContext(span), ino, mode, offset,
+                      length);
+  VLOG(2) << "VFSFallocate end, status: " << s.ToString();
+  if (!s.ok()) op_metric.FailOp();
+
+  return s;
+}
+
 Status VFSWrapper::ReadLink(Ino ino, std::string* link) {
   VLOG(2) << "VFSReadLink ino: " << ino;
 

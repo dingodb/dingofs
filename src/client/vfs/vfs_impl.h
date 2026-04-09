@@ -62,6 +62,9 @@ class VFSImpl : public VFS {
   Status SetAttr(ContextSPtr ctx, Ino ino, int set, const Attr& in_attr,
                  Attr* out_attr) override;
 
+  Status Fallocate(ContextSPtr ctx, Ino ino, int mode, uint64_t offset,
+                   uint64_t length) override;
+
   Status ReadLink(ContextSPtr ctx, Ino ino, std::string* link) override;
 
   Status MkNod(ContextSPtr ctx, Ino parent, const std::string& name,
