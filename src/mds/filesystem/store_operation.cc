@@ -1063,7 +1063,7 @@ Status UpsertChunkOperation::Run(TxnUPtr& txn) {
         return false;
       };
 
-      uint64_t chunk_pos = chunk.index() * chunk.chunk_size();
+      const uint64_t chunk_pos = chunk.index() * chunk.chunk_size();
       for (const auto& slice : delta_slices.slices()) {
         if (is_exist_fn(slice)) continue;
 
