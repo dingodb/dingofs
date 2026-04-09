@@ -221,10 +221,10 @@ Slice SliceWriter::GetCommitSlice() {
   }
 
   Slice slice{.id = id_,
-              .pos = chunk_offset,
               .size = len,
               .off = 0,
-              .len = len};
+              .len = len,
+              .pos = chunk_offset};
 
   VLOG(4) << fmt::format(
       "{} GetCommitSlices completed, slice: {}, slice_data: {}", UUID(),
