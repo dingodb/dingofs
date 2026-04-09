@@ -302,7 +302,7 @@ TEST_F(MetaDataCodecTest, DelSliceKey) {
   slice->set_fs_id(expected_fs_id);
   slice->set_ino(expected_inode_id);
   slice->set_chunk_index(expected_chunk_index);
-  slice->set_slice_id(1210231231232);
+  slice->mutable_slice()->set_id(1210231231232);
   slice->set_chunk_size(123123213213);
   std::string value = MetaCodec::EncodeDelSliceValue(slice_list);
   TrashSliceList actual_slice_list = MetaCodec::DecodeDelSliceValue(value);
@@ -313,8 +313,8 @@ TEST_F(MetaDataCodecTest, DelSliceKey) {
     EXPECT_EQ(slice_list.slices(i).ino(), actual_slice_list.slices(i).ino());
     EXPECT_EQ(slice_list.slices(i).chunk_index(),
               actual_slice_list.slices(i).chunk_index());
-    EXPECT_EQ(slice_list.slices(i).slice_id(),
-              actual_slice_list.slices(i).slice_id());
+    EXPECT_EQ(slice_list.slices(i).slice().id(),
+              actual_slice_list.slices(i).slice().id());
     EXPECT_EQ(slice_list.slices(i).chunk_size(),
               actual_slice_list.slices(i).chunk_size());
   }

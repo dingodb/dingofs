@@ -22,7 +22,8 @@
 #include <vector>
 
 #include "brpc/reloadable_flags.h"
-#include "cache/blockcache/cache_store.h"
+#include "common/block/block_key.h"
+#include "common/block/block_utils.h"
 #include "common/blockaccess/prefix_block_accesser.h"
 #include "common/blockaccess/rados/rados_common.h"
 #include "common/blockaccess/s3/s3_common.h"
@@ -96,28 +97,6 @@ static Status BatchDeleteBlocks(blockaccess::BlockAccesserSPtr& data_accessor, c
   return Status::OK();
 }
 
-// range [start, end)
-static IntRange CalBlockIndex(uint64_t block_size, uint64_t chunk_offset, const SliceEntry& slice) {
-  IntRange range;
-  range.start = (slice.offset() - chunk_offset) / block_size;
-
-  uint64_t end_offset = slice.offset() - chunk_offset + slice.len();
-  range.end = (end_offset % block_size == 0) ? (end_offset / block_size) : ((end_offset / block_size) + 1);
-
-  return range;
-}
-
-// range [start, end)
-static IntRange CalBlockIndex(uint64_t block_size, uint64_t chunk_offset, const TrashSliceEntry::Range& slice) {
-  IntRange range;
-  range.start = (slice.offset() - chunk_offset) / block_size;
-
-  uint64_t end_offset = slice.offset() - chunk_offset + slice.len();
-  range.end = (end_offset % block_size == 0) ? (end_offset / block_size) : ((end_offset / block_size) + 1);
-
-  return range;
-}
-
 void CleanDelSliceTask::Run() {
   auto status = CleanDelSlice();
   if (!status.ok()) {
@@ -134,20 +113,17 @@ Status CleanDelSliceTask::CleanDelSlice() {
   auto trash_slice_list = MetaCodec::DecodeDelSliceValue(value_);
   for (int i = 0; i < trash_slice_list.slices_size(); ++i) {
     const auto& slice = trash_slice_list.slices().at(i);
+    if (slice.slice().id() == 0) continue;  // skip invalid slice
 
-    uint64_t chunk_offset = slice.chunk_index() * slice.chunk_size();
-    for (const auto& slice_range : slice.ranges()) {
-      auto range = CalBlockIndex(slice.block_size(), chunk_offset, slice_range);
-      for (uint32_t block_index = range.start; block_index < range.end; ++block_index) {
-        cache::BlockKey block_key(slice.fs_id(), slice.ino(), slice.slice_id(), block_index,
-                                  slice_range.compaction_version());
+    auto block_keys = dingofs::EnumerateBlockKeys(slice.slice().id(), slice.slice().size(), slice.block_size());
 
-        LOG(INFO) << fmt::format("[gc.delslice.{}] delete block key({}).", ino_, block_key.StoreKey());
-        keys.push_back(block_key.StoreKey());
-      }
+    for (const auto& block_key : block_keys) {
+      keys.push_back(block_key.StoreKey());
+
+      LOG(INFO) << fmt::format("[gc.delslice.{}] delete block key({}).", ino_, block_key.StoreKey());
     }
 
-    slice_id_trace += std::to_string(slice.slice_id());
+    slice_id_trace += std::to_string(slice.slice().id());
     if (i + 1 < trash_slice_list.slices_size()) {
       slice_id_trace += ",";
     }
@@ -208,21 +184,20 @@ Status CleanDelFileTask::CleanDelFile(const AttrEntry& attr) {
   // get file chunks
   std::vector<ChunkEntry> chunks;
   auto status = GetChunks(operation_processor_, attr.fs_id(), attr.ino(), chunks);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
   // delete data from s3
   std::list<std::string> keys;
   for (const auto& chunk : chunks) {
-    uint64_t chunk_offset = chunk.index() * chunk.chunk_size();
     for (const auto& slice : chunk.slices()) {
-      auto range = CalBlockIndex(chunk.block_size(), chunk_offset, slice);
-      for (uint32_t block_index = range.start; block_index < range.end; ++block_index) {
-        cache::BlockKey block_key(attr.fs_id(), attr.ino(), slice.id(), block_index, slice.compaction_version());
+      if (slice.id() == 0) continue;  // skip invalid slice
+
+      std::vector<BlockKey> block_keys = dingofs::EnumerateBlockKeys(slice.id(), slice.size(), chunk.block_size());
+
+      for (const auto& block_key : block_keys) {
+        keys.push_back(block_key.StoreKey());
 
         LOG(INFO) << fmt::format("[gc.delfile.{}] delete block key({}).", attr.ino(), block_key.StoreKey());
-        keys.push_back(block_key.StoreKey());
       }
     }
   }
@@ -265,14 +240,14 @@ Status CleanFileTask::CleanFile(const AttrEntry& attr) {
   // delete data from s3
   std::list<std::string> keys;
   for (const auto& chunk : chunks) {
-    uint64_t chunk_offset = chunk.index() * chunk.chunk_size();
     for (const auto& slice : chunk.slices()) {
-      auto range = CalBlockIndex(chunk.block_size(), chunk_offset, slice);
-      for (uint32_t block_index = range.start; block_index < range.end; ++block_index) {
-        cache::BlockKey block_key(attr.fs_id(), attr.ino(), slice.id(), block_index, slice.compaction_version());
+      if (slice.id() == 0) continue;  // skip invalid slice
+
+      std::vector<BlockKey> block_keys = dingofs::EnumerateBlockKeys(slice.id(), slice.size(), chunk.block_size());
+      for (const auto& block_key : block_keys) {
+        keys.push_back(block_key.StoreKey());
 
         LOG(INFO) << fmt::format("[gc.delfs] delete block key({}).", block_key.StoreKey());
-        keys.push_back(block_key.StoreKey());
       }
     }
   }
@@ -840,8 +815,7 @@ blockaccess::BlockAccesserSPtr GcProcessor::GetOrCreateDataAccesser(const FsInfo
                                                       .cluster_name = rados_info.cluster_name()};
   }
 
-  auto block_accessor = blockaccess::NewSharePrefixBlockAccesser(
-      fs_info.fs_name(), options);
+  auto block_accessor = blockaccess::NewSharePrefixBlockAccesser(fs_info.fs_name(), options);
   auto status = block_accessor->Init();
   if (!status.IsOK()) {
     LOG(ERROR) << fmt::format("[gc] init block accesser fail, status({}).", status.ToString());
