@@ -27,7 +27,6 @@
 
 #include "absl/strings/str_format.h"
 #include "client/common/const.h"
-#include "client/common/helper.h"
 #include "client/fuse/fs_context.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/data_buffer.h"
@@ -36,7 +35,6 @@
 #include "client/fuse/fuse_upgrade_manager.h"
 #include "client/vfs/vfs_wrapper.h"
 #include "common/const.h"
-#include "common/helper.h"
 #include "common/options/client.h"
 #include "common/status.h"
 #include "fmt/format.h"
@@ -654,6 +652,20 @@ void FuseOpFsync(fuse_req_t req, fuse_ino_t ino, int datasync,
   }
 
   Status s = g_vfs->Fsync(ino, datasync, fi->fh);
+  ReplyError(req, s);
+}
+
+void FuseOpFallocate(fuse_req_t req, fuse_ino_t ino, int mode, off_t offset,
+                     off_t length, struct fuse_file_info* /*fi*/) {
+  VLOG(1) << fmt::format(
+      "FuseOpFallocate ino({}) mode(0x{:x}) offset({}) length({}) ctx({})",
+      ino, mode, offset, length, FuseCtx(req));
+  if (offset < 0 || length <= 0) {
+    ReplyError(req, Status::InvalidParam("invalid fallocate range"));
+    return;
+  }
+  Status s = g_vfs->Fallocate(ino, mode, static_cast<uint64_t>(offset),
+                              static_cast<uint64_t>(length));
   ReplyError(req, s);
 }
 
