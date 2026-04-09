@@ -57,6 +57,9 @@ class MetaCodec {
   // format: ${prefix} kTableMeta kMetaFsOpLog {fs_id} {time_ns}
   static Range GetFsConfigLogRange(uint32_t fs_id);
 
+  // format: ${prefix} kTableMeta kMetaFsSliceRef
+  static Range GetSliceRefRange();
+
   // format: ${prefix} kTableFsMeta {fs_id} kMetaFsInode {ino} kFsInodeDentry
   static Range GetDentryRange(uint32_t fs_id, Ino ino, bool include_parent);
   // format: ${prefix} kTableFsMeta {fs_id} kMetaFsInode {ino} kFsInodeChunk
@@ -85,9 +88,6 @@ class MetaCodec {
 
   // format: ${prefix} kTableFsMeta {fs_id} kMetaFsTinyFileData
   static Range GetTinyFileDataRange(uint32_t fs_id);
-
-  // format: ${prefix} kTableFsMeta {fs_id} kMetaFsSliceRef
-  static Range GetSliceRefRange(uint32_t fs_id);
 
   // lock format: ${prefix} kTableMeta kMetaLock {name}
   static bool IsLockKey(const std::string& key);
@@ -142,6 +142,13 @@ class MetaCodec {
   static void DecodeFsOpLogKey(const std::string& key, uint32_t& fs_id, uint64_t& time_ns);
   static std::string EncodeFsOpLogValue(const FsOpLog& entry);
   static FsOpLog DecodeFsOpLogValue(const std::string& value);
+
+  // slice ref format: ${prefix} kTableMeta kMetaFsSliceRef {slice_id}
+  static bool IsSliceRefKey(const std::string& key);
+  static std::string EncodeSliceRefKey(uint64_t slice_id);
+  static void DecodeSliceRefKey(const std::string& key, uint64_t& slice_id);
+  static std::string EncodeSliceRefValue(uint32_t size, uint32_t ref_count);
+  static void DecodeSliceRefValue(const std::string& value, uint32_t& size, uint32_t& ref_count);
 
   // inode attr format: ${prefix} kTableFsMeta {fs_id} kMetaFsInode {ino} kFsInodeAttr
   static bool IsInodeKey(const std::string& key);
@@ -206,13 +213,6 @@ class MetaCodec {
   static void DecodeTinyFileDataKey(const std::string& key, uint32_t& fs_id, Ino& ino);
   static std::string& EncodeTinyFileDataValue(std::string& data, uint64_t version);
   static void DecodeTinyFileDataValue(std::string& value, uint64_t& version);
-
-  // slice ref format: ${prefix} kTableFsMeta {fs_id} kMetaFsSliceRef {slice_id} {size}
-  static bool IsSliceRefKey(const std::string& key);
-  static std::string EncodeSliceRefKey(uint32_t fs_id, uint64_t slice_id, uint32_t size);
-  static void DecodeSliceRefKey(const std::string& key, uint32_t& fs_id, uint64_t& slice_id, uint32_t& size);
-  static std::string EncodeSliceRefValue(uint32_t ref_count);
-  static uint32_t DecodeSliceRefValue(const std::string& value);
 
   // check key belongs to a specific table
   static bool IsMetaTableKey(const std::string& key);
