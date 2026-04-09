@@ -201,7 +201,7 @@ std::vector<BlockReadReq> ConvertSliceReadReqToBlockReadReqs(
         std::min(slice_offset + (block_end - slice_off), slice_logical_end);
 
     // 4. Offset within the block and read length
-    int32_t offset_in_block = physical_offset % block_size;
+    int32_t block_offset = physical_offset % block_size;
     int32_t read_len = static_cast<int32_t>(
         std::min(remain_len, file_block_end - read_offset));
 
@@ -214,7 +214,7 @@ std::vector<BlockReadReq> ConvertSliceReadReqToBlockReadReqs(
     BlockKey key(slice_id, block_index, actual_block_size);
     BlockReadReq block_read_req{
         .file_offset = read_offset,
-        .offset_in_block = offset_in_block,
+        .block_offset = block_offset,
         .len = read_len,
         .key = key,
     };
