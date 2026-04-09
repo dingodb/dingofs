@@ -78,7 +78,7 @@ std::vector<BlockReadReq> ChunkReqReader::GetBlockReadReqs(
       block_reqs.insert(block_reqs.end(),
                         BlockReadReq{
                             .file_offset = slice_req.file_offset,
-                            .offset_in_block = 0,
+                            .block_offset = 0,
                             .len = static_cast<int32_t>(slice_req.len),
                             .key = std::nullopt,
                         });
@@ -217,7 +217,7 @@ void ChunkReqReader::ProcessBlockCacheReadReq(
     RangeReq req;
     req.block_ctx = BlockContext(key, block_cache_req->fs_id);
     req.block_size = key.size;
-    req.offset = block_cache_req->block_req.offset_in_block;
+    req.offset = block_cache_req->block_req.block_offset;
     req.length = block_cache_req->block_req.len;
     req.data = &block_cache_req->io_buffer;
 
