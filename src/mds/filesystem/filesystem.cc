@@ -2425,7 +2425,7 @@ Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, const std::vector<Delt
                              duration.ElapsedUs(), chunk.index(), chunk.version());
   }
 
-  auto query_curr_versoin_fn = [&delta_slices](uint32_t index) -> uint64_t {
+  auto query_curr_version_fn = [&delta_slices](uint32_t index) -> uint64_t {
     for (const auto& slice : delta_slices) {
       if (slice.chunk_index() == index) {
         return slice.curr_version();
@@ -2437,7 +2437,7 @@ Status FileSystem::WriteSlice(Context& ctx, Ino, Ino ino, const std::vector<Delt
 
   // update chunk cache and build chunk results
   for (auto& chunk : effected_chunks) {
-    uint64_t curr_version = query_curr_versoin_fn(chunk.index());
+    uint64_t curr_version = query_curr_version_fn(chunk.index());
     if (chunk.version() == (curr_version + 1)) {
       // just return simple descriptor info
       ChunkEntry simple_chunk;

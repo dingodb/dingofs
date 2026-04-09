@@ -90,8 +90,8 @@ static uint32_t kFsStatsKeySize = 1 + 1 + 4 + 8;
 // fs tiny file data format: ${prefix} kTableFsMeta {fs_id} kMetaFsTinyFileData {ino}
 static uint32_t kTinyFileDataKeySize = 1 + 4 + 1 + 8;
 
-// fs slice ref format: ${prefix} kTableFsMeta {fs_id} kMetaFsSliceRef {slice_id} {size}
-static uint32_t kSliceRefKeySize = 1 + 4 + 1 + 8 + 4;
+// fs slice ref format: ${prefix} kTableMeta kMetaFsSliceRef {slice_id}
+static uint32_t kSliceRefKeySize = 1 + 1 + 8;
 
 // table:
 //      kTableMeta: all filesystem shared
@@ -364,6 +364,22 @@ Range MetaCodec::GetFsConfigLogRange(uint32_t fs_id) {
   return range;
 }
 
+Range MetaCodec::GetSliceRefRange() {
+  Range range;
+
+  auto& start = range.start;
+  start = kPrefix;
+  start.push_back(kTableMeta);
+  start.push_back(kMetaFsSliceRef);
+
+  auto& end = range.end;
+  end = kPrefix;
+  end.push_back(kTableFsMeta);
+  end.push_back(kMetaFsSliceRef + 1);
+
+  return range;
+}
+
 Range MetaCodec::GetDentryRange(uint32_t fs_id, Ino ino, bool include_parent) {
   Range range;
 
@@ -594,24 +610,6 @@ Range MetaCodec::GetTinyFileDataRange(uint32_t fs_id) {
   end.push_back(kTableFsMeta);
   SerialHelper::WriteInt(fs_id, end);
   end.push_back(kMetaFsTinyFileData + 1);
-
-  return range;
-}
-
-Range MetaCodec::GetSliceRefRange(uint32_t fs_id) {
-  Range range;
-
-  auto& start = range.start;
-  start = kPrefix;
-  start.push_back(kTableFsMeta);
-  SerialHelper::WriteInt(fs_id, start);
-  start.push_back(kMetaFsSliceRef);
-
-  auto& end = range.end;
-  end = kPrefix;
-  end.push_back(kTableFsMeta);
-  SerialHelper::WriteInt(fs_id, end);
-  end.push_back(kMetaFsSliceRef + 1);
 
   return range;
 }
@@ -977,6 +975,51 @@ FsOpLog MetaCodec::DecodeFsOpLogValue(const std::string& value) {
   CHECK(entry.ParseFromString(value)) << "parse fs config log fail.";
 
   return entry;
+}
+
+bool MetaCodec::IsSliceRefKey(const std::string& key) {
+  if (key.size() != kSliceRefKeySize) {
+    return false;
+  }
+
+  // Check the prefix, table id, and meta type
+  if (key.at(kPrefixSize) != kTableMeta || key.at(kPrefixSize + 1) != kMetaFsSliceRef) {
+    return false;
+  }
+
+  return true;
+}
+std::string MetaCodec::EncodeSliceRefKey(uint64_t slice_id) {
+  std::string key;
+  key.reserve(kSliceRefKeySize);
+
+  key.append(kPrefix);
+  key.push_back(kTableMeta);
+  key.push_back(kMetaFsSliceRef);
+  SerialHelper::WriteULong(slice_id, key);
+
+  return key;
+}
+
+void MetaCodec::DecodeSliceRefKey(const std::string& key, uint64_t& slice_id) {
+  CHECK(IsSliceRefKey(key)) << fmt::format("invalid slice ref key({}).", Helper::StringToHex(key));
+
+  slice_id = SerialHelper::ReadULong(key.substr(kPrefixSize + 1 + 4 + 1));
+}
+
+std::string MetaCodec::EncodeSliceRefValue(uint32_t size, uint32_t ref_count) {
+  std::string value;
+  SerialHelper::WriteInt(size, value);
+  SerialHelper::WriteInt(ref_count, value);
+
+  return value;
+}
+
+void MetaCodec::DecodeSliceRefValue(const std::string& value, uint32_t& size, uint32_t& ref_count) {
+  CHECK(value.size() >= 8) << fmt::format("slice ref value({}) size is invalid.", Helper::StringToHex(value));
+
+  size = SerialHelper::ReadInt(value.substr(0, 4));
+  ref_count = SerialHelper::ReadInt(value.substr(4, 4));
 }
 
 // inode attr format: ${prefix} kTableFsMeta {fs_id} kMetaFsInode {ino} kFsInodeAttr
@@ -1429,53 +1472,6 @@ bool MetaCodec::IsMetaTableKey(const std::string& key) {
   }
 
   return true;
-}
-
-bool MetaCodec::IsSliceRefKey(const std::string& key) {
-  if (key.size() != kSliceRefKeySize) {
-    return false;
-  }
-
-  // Check the prefix, table id, and meta type
-  if (key.at(kPrefixSize) != kTableFsMeta || key.at(kPrefixSize + 1 + 4) != kMetaFsSliceRef) {
-    return false;
-  }
-
-  return true;
-}
-std::string MetaCodec::EncodeSliceRefKey(uint32_t fs_id, uint64_t slice_id, uint32_t size) {
-  std::string key;
-  key.reserve(kSliceRefKeySize);
-
-  key.append(kPrefix);
-  key.push_back(kTableFsMeta);
-  SerialHelper::WriteInt(fs_id, key);
-  key.push_back(kMetaFsSliceRef);
-  SerialHelper::WriteULong(slice_id, key);
-  SerialHelper::WriteInt(size, key);
-
-  return key;
-}
-
-void MetaCodec::DecodeSliceRefKey(const std::string& key, uint32_t& fs_id, uint64_t& slice_id, uint32_t& size) {
-  CHECK(IsSliceRefKey(key)) << fmt::format("invalid slice ref key({}).", Helper::StringToHex(key));
-
-  fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 1));
-  slice_id = SerialHelper::ReadULong(key.substr(kPrefixSize + 1 + 4 + 1));
-  size = SerialHelper::ReadInt(key.substr(kPrefixSize + 1 + 4 + 1 + 8));
-}
-
-std::string MetaCodec::EncodeSliceRefValue(uint32_t ref_count) {
-  std::string value;
-  SerialHelper::WriteInt(ref_count, value);
-
-  return value;
-}
-
-uint32_t MetaCodec::DecodeSliceRefValue(const std::string& value) {
-  CHECK(value.size() >= 4) << fmt::format("slice ref value({}) size is invalid.", Helper::StringToHex(value));
-
-  return SerialHelper::ReadInt(value.substr(0, 4));
 }
 
 bool MetaCodec::IsFsStatsTableKey(const std::string& key) {
