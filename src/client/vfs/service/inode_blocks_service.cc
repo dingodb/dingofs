@@ -134,10 +134,10 @@ std::string DumpBlockReadReqs(const std::vector<BlockReadReq>& block_reqs,
     }
 
     if (use_delimiter) {
-      PrintDelimitedRow(os, config, file_pos, req.len, req.offset_in_block,
+      PrintDelimitedRow(os, config, file_pos, req.len, req.block_offset,
                         block_key, block_size);
     } else {
-      PrintFixedWidthRow(os, config, file_pos, req.len, req.offset_in_block,
+      PrintFixedWidthRow(os, config, file_pos, req.len, req.block_offset,
                          block_key, block_size);
     }
   }

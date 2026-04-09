@@ -155,19 +155,19 @@ TEST(FlatFileTest, EmptyChunk_NoBlockReqs) {
   EXPECT_TRUE(reqs.empty());
 }
 
-// ─── End-to-end: verify BlockKey fields (index, size, offset_in_block) ──────
+// ─── End-to-end: verify BlockKey fields (index, size, block_offset) ──────
 
 // Helper to check all BlockReadReq fields
 static void CheckReq(const BlockReadReq& req, uint64_t slice_id,
                      int32_t block_index, int32_t block_size,
-                     int64_t file_offset, int32_t offset_in_block,
+                     int64_t file_offset, int32_t block_offset,
                      int32_t len) {
   ASSERT_TRUE(req.key.has_value()) << "Expected non-hole block";
   EXPECT_EQ(req.key->id, slice_id);
   EXPECT_EQ(req.key->index, block_index);
   EXPECT_EQ(req.key->size, block_size);
   EXPECT_EQ(req.file_offset, file_offset);
-  EXPECT_EQ(req.offset_in_block, offset_in_block);
+  EXPECT_EQ(req.block_offset, block_offset);
   EXPECT_EQ(req.len, len);
 }
 
@@ -208,11 +208,11 @@ TEST(FlatFileChunkE2ETest, SliceRelative_NonZeroPos_IndexFromZero) {
   auto reqs = chunk.GenBlockReadReqs();
 
   ASSERT_EQ(reqs.size(), 3u);
-  // block[0]: 4MB, file_offset=5MB, offset_in_block=0
+  // block[0]: 4MB, file_offset=5MB, block_offset=0
   CheckReq(reqs[0], 1001, 0, 4 * k1MB, 5 * k1MB, 0, 4 * k1MB);
-  // block[1]: 4MB, file_offset=9MB, offset_in_block=0
+  // block[1]: 4MB, file_offset=9MB, block_offset=0
   CheckReq(reqs[1], 1001, 1, 4 * k1MB, 9 * k1MB, 0, 4 * k1MB);
-  // block[2]: 1MB (tail), file_offset=13MB, offset_in_block=0
+  // block[2]: 1MB (tail), file_offset=13MB, block_offset=0
   CheckReq(reqs[2], 1001, 2, 1 * k1MB, 13 * k1MB, 0, 1 * k1MB);
 }
 
@@ -234,7 +234,7 @@ TEST(FlatFileChunkE2ETest, CopyFileRange_OffNonZero) {
   auto reqs = chunk.GenBlockReadReqs();
 
   ASSERT_EQ(reqs.size(), 1u);
-  // physical_offset = 8MB, block_index = 8MB/4MB = 2, offset_in_block = 0
+  // physical_offset = 8MB, block_index = 8MB/4MB = 2, block_offset = 0
   CheckReq(reqs[0], 100, 2, 4 * k1MB, 0, 0, 4 * k1MB);
 }
 
@@ -255,11 +255,11 @@ TEST(FlatFileChunkE2ETest, CopyFileRange_CrossThreeBlocks) {
   auto reqs = chunk.GenBlockReadReqs();
 
   ASSERT_EQ(reqs.size(), 3u);
-  // block[0]: physical [3MB,4MB), offset_in_block=3MB, len=1MB
+  // block[0]: physical [3MB,4MB), block_offset=3MB, len=1MB
   CheckReq(reqs[0], 300, 0, 4 * k1MB, 0, 3 * k1MB, 1 * k1MB);
-  // block[1]: physical [4MB,8MB), offset_in_block=0, len=4MB
+  // block[1]: physical [4MB,8MB), block_offset=0, len=4MB
   CheckReq(reqs[1], 300, 1, 4 * k1MB, 1 * k1MB, 0, 4 * k1MB);
-  // block[2]: physical [8MB,9MB), offset_in_block=0, len=1MB
+  // block[2]: physical [8MB,9MB), block_offset=0, len=1MB
   CheckReq(reqs[2], 300, 2, 4 * k1MB, 5 * k1MB, 0, 1 * k1MB);
 }
 

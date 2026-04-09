@@ -41,7 +41,7 @@ std::vector<BlockReadReq> FlatFileChunk::GenBlockReadReqs() const {
       // Zero slice (punch hole) → show as hole in diagnostic output
       block_reqs.push_back(BlockReadReq{
           .file_offset = slice_req.file_offset,
-          .offset_in_block = 0,
+          .block_offset = 0,
           .len = static_cast<int32_t>(slice_req.len),
           .key = std::nullopt,
       });

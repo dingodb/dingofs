@@ -54,7 +54,7 @@ struct SliceReadReq {
 
 struct BlockReadReq {
   int64_t file_offset;
-  int32_t offset_in_block;
+  int32_t block_offset;
   int32_t len;
   std::optional<BlockKey> key;
 
