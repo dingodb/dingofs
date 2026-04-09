@@ -40,8 +40,13 @@ std::vector<BlockReadReq> FlatFileChunk::GenBlockReadReqs() const {
       block_reqs.insert(block_reqs.end(), std::make_move_iterator(reqs.begin()),
                         std::make_move_iterator(reqs.end()));
     } else {
-      VLOG(1) << "Slice is zero or not available, skipping convert, slice_req: "
-              << slice_req.ToString();
+      // Zero slice (id=0) or uncovered region → hole, fill with zeros
+      block_reqs.push_back(BlockReadReq{
+          .file_offset = slice_req.file_offset,
+          .offset_in_block = 0,
+          .len = static_cast<int32_t>(slice_req.len),
+          .key = std::nullopt,
+      });
     }
   }
 
