@@ -155,6 +155,64 @@ TEST_F(FileReaderTest, Read_WithinRange_RangeAsyncCalled) {
   CloseAndRelease(r);
 }
 
+// 3b. Read() propagates BlockKey fields correctly to RangeReq.
+//     After removing RangeReq.block_size, block size must be read from
+//     req.block_ctx.key.size.
+TEST_F(FileReaderTest, Read_VerifyRangeReqFields) {
+  constexpr int32_t kBlockSize = 4 * 1024 * 1024;  // 4 MiB
+  constexpr uint64_t kSliceId = 12345;
+
+  // One slice covering one full block
+  ON_CALL(*mock_meta_system_, ReadSlice)
+      .WillByDefault([](ContextSPtr, Ino, uint64_t, int64_t,
+                        std::vector<Slice>* s, uint64_t& v) {
+        s->clear();
+        Slice sl;
+        sl.id = kSliceId;
+        sl.pos = 0;
+        sl.size = kBlockSize;
+        sl.off = 0;
+        sl.len = sl.size;
+        s->push_back(sl);
+        v = 1;
+        return Status::OK();
+      });
+
+  // Capture the RangeReq so we can assert its fields
+  std::vector<RangeReq> captured_reqs;
+  ON_CALL(*mock_block_store_, RangeAsync)
+      .WillByDefault([&](ContextSPtr, RangeReq req, StatusCallback cb) {
+        captured_reqs.push_back(req);
+        if (req.data && req.length > 0) {
+          char* buf = new char[req.length]();
+          req.data->AppendUserData(
+              buf, req.length,
+              [](void* p) { delete[] static_cast<char*>(p); });
+        }
+        cb(Status::OK());
+      });
+
+  auto* r = MakeOpenReader();
+
+  DataBuffer buf;
+  uint64_t rsize = 0;
+  constexpr uint64_t kReadSize = 4096;
+  Status s = r->Read(ctx_, &buf, kReadSize, /*offset=*/0, &rsize);
+  EXPECT_TRUE(s.ok());
+
+  ASSERT_GE(captured_reqs.size(), 1u);
+  const auto& req = captured_reqs[0];
+  // BlockKey must carry the correct slice id and actual block size.
+  // block_size field was removed from RangeReq; downstream uses key.size.
+  EXPECT_EQ(req.block_ctx.key.id, kSliceId);
+  EXPECT_EQ(req.block_ctx.key.index, 0);
+  EXPECT_EQ(req.block_ctx.key.size, kBlockSize);
+  EXPECT_EQ(req.offset, 0);
+  EXPECT_EQ(req.length, static_cast<int64_t>(kReadSize));
+
+  CloseAndRelease(r);
+}
+
 // 4. Read() with file containing no slices (hole) returns zeros.
 //    ReadSlice returns empty vector (hole); block store is not called for holes.
 TEST_F(FileReaderTest, Read_Hole_ReturnsZero) {
