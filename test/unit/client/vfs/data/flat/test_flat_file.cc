@@ -180,7 +180,7 @@ TEST(FlatFileChunkE2ETest, SliceRelative_ThreeBlocks_LastSmaller) {
   constexpr int32_t k1MB = 1024 * 1024;
 
   // slice: id=1001, pos=0, size=9MB, off=0, len=9MB
-  Slice s{.id = 1001, .pos = 0, .size = 9 * k1MB, .off = 0, .len = 9 * k1MB};
+  Slice s{.id = 1001, .size = 9 * k1MB, .off = 0, .len = 9 * k1MB, .pos = 0};
 
   FlatFileChunk chunk(1, 10, /*index=*/0, kChunkSize, kBlockSize, {s});
   auto reqs = chunk.GenBlockReadReqs();
@@ -199,10 +199,10 @@ TEST(FlatFileChunkE2ETest, SliceRelative_NonZeroPos_IndexFromZero) {
   constexpr int32_t k1MB = 1024 * 1024;
 
   Slice s{.id = 1001,
-          .pos = 5 * k1MB,
           .size = 9 * k1MB,
           .off = 0,
-          .len = 9 * k1MB};
+          .len = 9 * k1MB,
+          .pos = 5 * k1MB};
 
   FlatFileChunk chunk(1, 10, /*index=*/0, kChunkSize, kBlockSize, {s});
   auto reqs = chunk.GenBlockReadReqs();
@@ -225,10 +225,10 @@ TEST(FlatFileChunkE2ETest, CopyFileRange_OffNonZero) {
   constexpr int32_t k1MB = 1024 * 1024;
 
   Slice s{.id = 100,
-          .pos = 0,
           .size = 12 * k1MB,
           .off = 8 * k1MB,
-          .len = 4 * k1MB};
+          .len = 4 * k1MB,
+          .pos = 0};
 
   FlatFileChunk chunk(1, 10, /*index=*/0, kChunkSize, kBlockSize, {s});
   auto reqs = chunk.GenBlockReadReqs();
@@ -246,10 +246,10 @@ TEST(FlatFileChunkE2ETest, CopyFileRange_CrossThreeBlocks) {
   constexpr int32_t k1MB = 1024 * 1024;
 
   Slice s{.id = 300,
-          .pos = 0,
           .size = 12 * k1MB,
           .off = 3 * k1MB,
-          .len = 6 * k1MB};
+          .len = 6 * k1MB,
+          .pos = 0};
 
   FlatFileChunk chunk(1, 10, /*index=*/0, kChunkSize, kBlockSize, {s});
   auto reqs = chunk.GenBlockReadReqs();
@@ -268,7 +268,7 @@ TEST(FlatFileChunkE2ETest, ZeroSlice_Hole) {
   constexpr int32_t kChunkSize = 64 * 1024 * 1024;
   constexpr int32_t kBlockSize = 4 * 1024 * 1024;
 
-  Slice s{.id = 0, .pos = 0, .size = kBlockSize, .off = 0, .len = kBlockSize};
+  Slice s{.id = 0, .size = kBlockSize, .off = 0, .len = kBlockSize, .pos = 0};
 
   FlatFileChunk chunk(1, 10, /*index=*/0, kChunkSize, kBlockSize, {s});
   auto reqs = chunk.GenBlockReadReqs();
@@ -290,11 +290,11 @@ TEST(FlatFileE2ETest, MultiChunk_BlockKeysCorrect) {
   FlatFile ff(1, 30, kChunkSize, kBlockSize);
 
   // Chunk 0: one block
-  ff.FillChunk(0, {Slice{.id = 100, .pos = 0, .size = kBlockSize, .off = 0,
-                         .len = kBlockSize}});
+  ff.FillChunk(0, {Slice{.id = 100, .size = kBlockSize, .off = 0,
+                         .len = kBlockSize, .pos = 0}});
   // Chunk 1: one block
-  ff.FillChunk(1, {Slice{.id = 200, .pos = 0, .size = kBlockSize, .off = 0,
-                         .len = kBlockSize}});
+  ff.FillChunk(1, {Slice{.id = 200, .size = kBlockSize, .off = 0,
+                         .len = kBlockSize, .pos = 0}});
 
   auto reqs = ff.GenBlockReadReqs();
   ASSERT_EQ(reqs.size(), 2u);
@@ -311,10 +311,10 @@ TEST(FlatFileChunkE2ETest, TwoSlices_IndependentBlockKeys) {
   constexpr int32_t kBlockSize = 4 * 1024 * 1024;
 
   std::vector<Slice> slices = {
-      Slice{.id = 10, .pos = 0, .size = kBlockSize, .off = 0,
-            .len = kBlockSize},
-      Slice{.id = 11, .pos = kBlockSize, .size = kBlockSize, .off = 0,
-            .len = kBlockSize},
+      Slice{.id = 10, .size = kBlockSize, .off = 0,
+            .len = kBlockSize, .pos = 0},
+      Slice{.id = 11, .size = kBlockSize, .off = 0,
+            .len = kBlockSize, .pos = kBlockSize},
   };
 
   FlatFileChunk chunk(1, 13, 0, kChunkSize, kBlockSize, slices);
