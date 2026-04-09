@@ -66,6 +66,9 @@ class VFS {
   virtual Status SetAttr(ContextSPtr ctx, Ino ino, int set, const Attr& in_attr,
                          Attr* out_attr) = 0;
 
+  virtual Status Fallocate(ContextSPtr ctx, Ino ino, int mode, uint64_t offset,
+                           uint64_t length) = 0;
+
   virtual Status ReadLink(ContextSPtr ctx, Ino ino, std::string* link) = 0;
 
   virtual Status MkNod(ContextSPtr ctx, Ino parent, const std::string& name,
