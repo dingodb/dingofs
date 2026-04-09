@@ -78,10 +78,10 @@ inline std::string FileType2Str(const FileType& file_type) {
 // int32_t range (2 GB).
 struct Slice {
   uint64_t id{0};   // slice ID (globally unique, no arithmetic)
-  int32_t pos{0};   // start byte position within the owning chunk
   int32_t size{0};  // total physical data size of the slice
   int32_t off{0};   // read offset within the slice (for CopyFileRange/Clone)
   int32_t len{0};   // logical length of this mapping
+  int32_t pos{0};   // start byte position within the owning chunk
 };
 
 enum StoreType : uint8_t {
