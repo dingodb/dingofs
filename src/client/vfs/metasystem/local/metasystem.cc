@@ -26,7 +26,6 @@
 
 #include "bthread/mutex.h"
 #include "client/vfs/metasystem/mds/helper.h"
-#include "common/const.h"
 #include "common/directory.h"
 #include "common/helper.h"
 #include "fmt/format.h"
@@ -407,7 +406,7 @@ Status LocalMetaSystem::Open(ContextSPtr, Ino ino, int flags, uint64_t) {
 
   PutInodeToCache(attr_entry);
 
-  if (flags & O_TRUNC) UpdateFsUsage(-file_length, 0, "open");
+  if (flags & O_TRUNC) UpdateFsUsage(-file_length, 0, "open_trunc");
 
   return Status::OK();
 }
@@ -516,10 +515,12 @@ Status LocalMetaSystem::WriteSlice(ContextSPtr, Ino ino, uint64_t index,
       chunk_entry = MetaCodec::DecodeChunkValue(value);
     }
 
+    const uint64_t chunk_start = index * fs_info_.chunk_size();
     uint64_t new_length = 0;
     for (const auto& slice : slices) {
-      new_length = std::max(new_length,
-                            static_cast<uint64_t>(slice.pos) + slice.len);
+      new_length = std::max(
+          new_length,
+          chunk_start + static_cast<uint64_t>(slice.pos) + slice.len);
 
       auto* slice_entry = chunk_entry.add_slices();
 
@@ -554,7 +555,7 @@ Status LocalMetaSystem::WriteSlice(ContextSPtr, Ino ino, uint64_t index,
 
   if (attr_entry.ino() > 0) PutInodeToCache(attr_entry);
 
-  if (delta_size != 0) UpdateFsUsage(delta_size, 0, "symlink");
+  if (delta_size != 0) UpdateFsUsage(delta_size, 0, "write_slice");
 
   return Status::OK();
 }
@@ -564,6 +565,7 @@ Status LocalMetaSystem::Write(ContextSPtr, Ino ino, const char* buf,
   const uint32_t fs_id = fs_info_.fs_id();
   const uint64_t now_ns = utils::TimestampNs();
 
+  int64_t delta_size = 0;
   AttrEntry attr_entry;
   {
     utils::WriteLockGuard lk(lock_);
@@ -576,8 +578,10 @@ Status LocalMetaSystem::Write(ContextSPtr, Ino ino, const char* buf,
 
     attr_entry = MetaCodec::DecodeInodeValue(value);
 
-    if (attr_entry.length() < offset + size) {
-      attr_entry.set_length(offset + size);
+    const uint64_t new_end = offset + size;
+    if (attr_entry.length() < new_end) {
+      delta_size = static_cast<int64_t>(new_end - attr_entry.length());
+      attr_entry.set_length(new_end);
     }
     attr_entry.set_ctime(std::max(attr_entry.ctime(), now_ns));
     attr_entry.set_mtime(std::max(attr_entry.mtime(), now_ns));
@@ -593,6 +597,8 @@ Status LocalMetaSystem::Write(ContextSPtr, Ino ino, const char* buf,
   }
 
   PutInodeToCache(attr_entry);
+
+  if (delta_size != 0) UpdateFsUsage(delta_size, 0, "write_inline");
 
   return Status::OK();
 }
@@ -923,7 +929,9 @@ Status LocalMetaSystem::Unlink(ContextSPtr, Ino parent,
   PutInodeToCache(attr_entry);
   PutInodeToCache(parent_attr_entry);
 
-  if (attr_entry.nlink() == 0) UpdateFsUsage(0, -1, "unlink");
+  if (attr_entry.nlink() == 0) {
+    UpdateFsUsage(-static_cast<int64_t>(attr_entry.length()), -1, "unlink");
+  }
 
   return Status::OK();
 }
@@ -994,7 +1002,7 @@ Status LocalMetaSystem::Symlink(ContextSPtr, Ino parent,
   PutInodeToCache(attr_entry);
   PutInodeToCache(parent_attr_entry);
 
-  UpdateFsUsage(0, 1, "symlink");
+  UpdateFsUsage(static_cast<int64_t>(link.size()), 1, "symlink");
 
   *attr = meta::Helper::ToAttr(attr_entry);
 
@@ -1032,6 +1040,7 @@ Status LocalMetaSystem::SetAttr(ContextSPtr, Ino ino, int to_set,
                                 const Attr& in_attr, Attr* out_attr) {
   const uint32_t fs_id = fs_info_.fs_id();
 
+  int64_t delta_size = 0;
   AttrEntry attr_entry;
   {
     utils::WriteLockGuard lk(lock_);
@@ -1077,6 +1086,11 @@ Status LocalMetaSystem::SetAttr(ContextSPtr, Ino ino, int to_set,
     }
 
     if (to_set & kSetAttrSize) {
+      // uint64 subtraction wraps on shrink; reinterpreting the bit pattern
+      // as int64 recovers the correct signed delta (valid because both
+      // lengths fit in int64).
+      delta_size =
+          static_cast<int64_t>(in_attr.length - attr_entry.length());
       attr_entry.set_length(in_attr.length);
     }
 
@@ -1097,8 +1111,133 @@ Status LocalMetaSystem::SetAttr(ContextSPtr, Ino ino, int to_set,
 
   PutInodeToCache(attr_entry);
 
+  if (delta_size != 0) UpdateFsUsage(delta_size, 0, "setattr_size");
+
   *out_attr = meta::Helper::ToAttr(attr_entry);
 
+  return Status::OK();
+}
+
+Status LocalMetaSystem::Fallocate(ContextSPtr, Ino ino, int mode,
+                                  uint64_t offset, uint64_t length) {
+  // Only support a subset of modes: allocate (0), KEEP_SIZE, PUNCH_HOLE,
+  // and their combinations. Others are rejected.
+  constexpr int kSupported = 0x01 /*KEEP_SIZE*/ | 0x02 /*PUNCH_HOLE*/;
+  if ((mode & ~kSupported) != 0) {
+    return Status::NotSupport(fmt::format("fallocate mode({}) not supported",
+                                          mode));
+  }
+  if (length == 0) return Status::OK();
+
+  const bool punch_hole = (mode & 0x02) != 0;
+  const bool keep_size = (mode & 0x01) != 0;
+
+  // PUNCH_HOLE must be paired with KEEP_SIZE per Linux semantics
+  if (punch_hole && !keep_size) {
+    return Status::InvalidParam("PUNCH_HOLE requires KEEP_SIZE");
+  }
+
+  const uint32_t fs_id = fs_info_.fs_id();
+  const uint64_t chunk_size = fs_info_.chunk_size();
+  const uint64_t now_ns = utils::TimestampNs();
+
+  int64_t delta_size = 0;
+  AttrEntry attr_entry;
+  {
+    utils::WriteLockGuard lk(lock_);
+
+    std::string inode_key = MetaCodec::EncodeInodeKey(fs_id, ino);
+    std::string value;
+    auto status = Get(inode_key, value);
+    if (!status.ok()) return status;
+    attr_entry = MetaCodec::DecodeInodeValue(value);
+
+    // Effective end offset: for KEEP_SIZE or PUNCH_HOLE, clamp to current
+    // length; for allocate, extend if necessary.
+    uint64_t end_offset;
+    if (keep_size) {
+      end_offset = std::min(attr_entry.length(), offset + length);
+    } else {
+      end_offset = offset + length;
+    }
+
+    std::vector<KeyValue> kvs;
+
+    // Write zero slices covering [offset, end_offset), split by chunk
+    // boundaries. This is used for both PUNCH_HOLE and allocate-with-zero,
+    // since in local mode data on object storage is untouched and reads
+    // return zeros via id=0 slices.
+    uint64_t cursor = offset;
+    while (cursor < end_offset) {
+      const uint64_t chunk_index = cursor / chunk_size;
+      const uint64_t chunk_pos = cursor % chunk_size;
+      const uint64_t remain = end_offset - cursor;
+      const uint64_t delta =
+          std::min(remain, chunk_size - chunk_pos);
+
+      status = AppendZeroSliceToChunk(fs_id, ino, chunk_index,
+                                      static_cast<uint32_t>(chunk_pos),
+                                      static_cast<uint32_t>(delta), kvs);
+      if (!status.ok()) return status;
+
+      cursor += delta;
+    }
+
+    // Update file length if not keep_size and we extended the file
+    if (!keep_size && (offset + length) > attr_entry.length()) {
+      delta_size =
+          static_cast<int64_t>((offset + length) - attr_entry.length());
+      attr_entry.set_length(offset + length);
+      attr_entry.set_ctime(std::max(attr_entry.ctime(), now_ns));
+      attr_entry.set_mtime(std::max(attr_entry.mtime(), now_ns));
+      attr_entry.set_version(attr_entry.version() + 1);
+
+      kvs.push_back({KeyValue::OpType::kPut, inode_key,
+                     MetaCodec::EncodeInodeValue(attr_entry)});
+    }
+
+    status = Put(kvs);
+    if (!status.ok()) return status;
+  }
+
+  PutInodeToCache(attr_entry);
+
+  if (delta_size != 0) UpdateFsUsage(delta_size, 0, "fallocate");
+
+  return Status::OK();
+}
+
+Status LocalMetaSystem::AppendZeroSliceToChunk(uint32_t fs_id, Ino ino,
+                                               uint64_t chunk_index,
+                                               uint32_t chunk_pos, uint32_t len,
+                                               std::vector<KeyValue>& kvs) {
+  std::string chunk_key = MetaCodec::EncodeChunkKey(fs_id, ino, chunk_index);
+  std::string value;
+  auto status = Get(chunk_key, value);
+
+  mds::ChunkEntry chunk_entry;
+  if (status.IsNotFound()) {
+    chunk_entry.set_index(chunk_index);
+    chunk_entry.set_chunk_size(fs_info_.chunk_size());
+    chunk_entry.set_block_size(fs_info_.block_size());
+    chunk_entry.set_version(0);
+  } else if (status.ok()) {
+    chunk_entry = MetaCodec::DecodeChunkValue(value);
+  } else {
+    return status;
+  }
+
+  auto* slice_entry = chunk_entry.add_slices();
+  slice_entry->set_id(0);
+  slice_entry->set_pos(chunk_pos);
+  slice_entry->set_size(0);
+  slice_entry->set_off(0);
+  slice_entry->set_len(len);
+
+  chunk_entry.set_version(chunk_entry.version() + 1);
+
+  kvs.push_back({KeyValue::OpType::kPut, chunk_key,
+                 MetaCodec::EncodeChunkValue(chunk_entry)});
   return Status::OK();
 }
 
@@ -1619,8 +1758,12 @@ Status LocalMetaSystem::InitFsQuota() {
     fs_quota_ = MetaCodec::DecodeFsQuotaValue(value);
 
   } else {
-    fs_quota_.set_max_bytes(INT64_MAX);
-    fs_quota_.set_max_inodes(INT64_MAX);
+    // Use bounded defaults instead of INT64_MAX to avoid overflow /
+    // sign-flip in downstream consumers (e.g. ReplyStatfs computes
+    // total_blocks - used_blocks in uint64 and underflows when either
+    // side approaches 2^63).
+    fs_quota_.set_max_bytes(1LL << 50);     // 1 PiB
+    fs_quota_.set_max_inodes(1LL << 40);    // 1T inodes
     fs_quota_.set_used_bytes(0);
     fs_quota_.set_used_inodes(1);
 
@@ -1926,8 +2069,20 @@ void LocalMetaSystem::UpdateFsUsage(int64_t byte_delta, int64_t inode_delta,
                                     const std::string& reason) {
   utils::WriteLockGuard lk(fs_quota_lock_);
 
-  fs_quota_.set_used_bytes(fs_quota_.used_bytes() + byte_delta);
-  fs_quota_.set_used_inodes(fs_quota_.used_inodes() + inode_delta);
+  const int64_t new_bytes = fs_quota_.used_bytes() + byte_delta;
+  const int64_t new_inodes = fs_quota_.used_inodes() + inode_delta;
+
+  // Catch bookkeeping drift loudly. Any path that subtracts must be paired
+  // with a path that adds an equivalent amount.
+  CHECK_GE(new_bytes, 0) << fmt::format(
+      "fs used_bytes underflow: prev={}, delta={}, reason={}",
+      fs_quota_.used_bytes(), byte_delta, reason);
+  CHECK_GE(new_inodes, 0) << fmt::format(
+      "fs used_inodes underflow: prev={}, delta={}, reason={}",
+      fs_quota_.used_inodes(), inode_delta, reason);
+
+  fs_quota_.set_used_bytes(new_bytes);
+  fs_quota_.set_used_inodes(new_inodes);
 
   // write to leveldb
   std::vector<KeyValue> kvs = {

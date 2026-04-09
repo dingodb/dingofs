@@ -508,10 +508,12 @@ Status MemoryMetaSystem::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
 
   std::vector<std::string> update_fields;
 
+  const uint64_t chunk_start = index * fs_info_.chunk_size();
   uint64_t new_max_length = 0;
   for (const auto& slice : slices) {
-    new_max_length = std::max(new_max_length,
-                              static_cast<uint64_t>(slice.pos) + slice.len);
+    new_max_length = std::max(
+        new_max_length,
+        chunk_start + static_cast<uint64_t>(slice.pos) + slice.len);
   }
 
   if (new_max_length > inode.length()) {
@@ -791,6 +793,66 @@ Status MemoryMetaSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
   UpdateInode(inode, update_fields);
 
   *out_attr = ToAttr(inode);
+
+  return Status::OK();
+}
+
+Status MemoryMetaSystem::Fallocate(ContextSPtr /*ctx*/, Ino ino, int mode,
+                                   uint64_t offset, uint64_t length) {
+  // Only KEEP_SIZE (0x01) and PUNCH_HOLE (0x02); and plain allocate (0).
+  constexpr int kSupported = 0x01 | 0x02;
+  if ((mode & ~kSupported) != 0) {
+    return Status::NotSupport(
+        fmt::format("fallocate mode({}) not supported", mode));
+  }
+  if (length == 0) return Status::OK();
+
+  const bool punch_hole = (mode & 0x02) != 0;
+  const bool keep_size = (mode & 0x01) != 0;
+  if (punch_hole && !keep_size) {
+    return Status::InvalidParam("PUNCH_HOLE requires KEEP_SIZE");
+  }
+
+  PBInode inode;
+  if (!GetInode(ino, inode)) {
+    return Status::Internal(pb::error::ENOT_FOUND, "not found inode");
+  }
+
+  const uint64_t chunk_size = fs_info_.chunk_size();
+  const uint64_t end_offset =
+      keep_size ? std::min(inode.length(), offset + length) : (offset + length);
+
+  // Write zero slices split by chunk boundaries.
+  uint64_t cursor = offset;
+  while (cursor < end_offset) {
+    const uint64_t chunk_index = cursor / chunk_size;
+    const uint64_t chunk_pos = cursor % chunk_size;
+    const uint64_t remain = end_offset - cursor;
+    const uint64_t delta = std::min(remain, chunk_size - chunk_pos);
+
+    Slice zero_slice;
+    zero_slice.id = 0;
+    zero_slice.pos = static_cast<int32_t>(chunk_pos);
+    zero_slice.size = 0;
+    zero_slice.off = 0;
+    zero_slice.len = static_cast<int32_t>(delta);
+
+    DINGOFS_RETURN_NOT_OK(
+        file_chunk_map_.Write(ino, chunk_index, {zero_slice}));
+    cursor += delta;
+  }
+
+  // Update file length if extending
+  if (!keep_size && (offset + length) > inode.length()) {
+    inode.set_length(offset + length);
+    std::vector<std::string> update_fields = {"length"};
+    uint64_t now = CurrentTimestamp();
+    inode.set_mtime(now);
+    inode.set_ctime(now);
+    update_fields.push_back("mtime");
+    update_fields.push_back("ctime");
+    UpdateInode(inode, update_fields);
+  }
 
   return Status::OK();
 }

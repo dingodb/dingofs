@@ -133,6 +133,11 @@ class MetaWrapper {
     return target_->SetAttr(ctx, ino, set, in_attr, out_attr);
   }
 
+  Status Fallocate(ContextSPtr ctx, Ino ino, int mode, uint64_t offset,
+                   uint64_t length) {
+    return target_->Fallocate(ctx, ino, mode, offset, length);
+  }
+
   Status GetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
                   std::string* value) {
     return target_->GetXattr(ctx, ino, name, value);

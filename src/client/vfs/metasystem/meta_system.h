@@ -154,6 +154,19 @@ class MetaSystem {
   virtual Status SetAttr(ContextSPtr ctx, Ino ino, int set, const Attr& in_attr,
                          Attr* out_attr) = 0;
 
+  // Allocate / punch hole in file. mode bits follow Linux fallocate(2):
+  //   FALLOC_FL_KEEP_SIZE, FALLOC_FL_PUNCH_HOLE, FALLOC_FL_ZERO_RANGE.
+  // Default implementation returns NotSupport.
+  virtual Status Fallocate(ContextSPtr ctx, Ino ino, int mode, uint64_t offset,
+                           uint64_t length) {
+    (void)ctx;
+    (void)ino;
+    (void)mode;
+    (void)offset;
+    (void)length;
+    return Status::NotSupport("fallocate not supported");
+  }
+
   virtual Status SetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
                           const std::string& value, int flags) = 0;
 
