@@ -28,14 +28,16 @@ namespace dingofs {
 // Enumerate all BlockKeys for a slice's physical data.
 // Each block's size is self-describing: full block_size except the last
 // which may be smaller (size % block_size).
-inline std::vector<BlockKey> EnumerateBlockKeys(uint64_t slice_id, int32_t size,
-                                                int32_t block_size) {
+inline std::vector<BlockKey> EnumerateBlockKeys(uint64_t slice_id,
+                                                uint32_t size,
+                                                uint32_t block_size) {
   std::vector<BlockKey> keys;
-  for (int32_t offset = 0; offset < size; offset += block_size) {
-    int32_t index = offset / block_size;
-    int32_t actual_size = std::min(block_size, size - offset);
+  for (uint32_t offset = 0; offset < size; offset += block_size) {
+    uint32_t index = offset / block_size;
+    uint32_t actual_size = std::min(block_size, size - offset);
     keys.emplace_back(slice_id, index, actual_size);
   }
+
   return keys;
 }
 
