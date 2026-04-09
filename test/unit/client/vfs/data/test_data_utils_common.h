@@ -35,10 +35,10 @@ static Slice CreateSlice(uint64_t id, int32_t pos, int32_t size,
   }
   return Slice{
       .id = id,
-      .pos = pos,
       .size = size,
       .off = off,
       .len = len,
+      .pos = pos,
   };
 }
 
