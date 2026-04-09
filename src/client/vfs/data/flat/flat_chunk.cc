@@ -33,21 +33,24 @@ std::vector<BlockReadReq> FlatFileChunk::GenBlockReadReqs() const {
       ProcessReadRequest(chunk_slices_, file_range, chunk_start);
 
   for (const auto& slice_req : slice_reqs) {
-    if (slice_req.slice.has_value() && slice_req.slice->id != 0) {
-      std::vector<BlockReadReq> reqs = ConvertSliceReadReqToBlockReadReqs(
-          slice_req, fs_id_, ino_, chunk_size_, block_size_, chunk_start);
-
-      block_reqs.insert(block_reqs.end(), std::make_move_iterator(reqs.begin()),
-                        std::make_move_iterator(reqs.end()));
-    } else {
-      // Zero slice (id=0) or uncovered region → hole, fill with zeros
+    if (!slice_req.slice.has_value()) {
+      // Uncovered region (no slice present) → skip in diagnostic output
+      continue;
+    }
+    if (slice_req.slice->id == 0) {
+      // Zero slice (punch hole) → show as hole in diagnostic output
       block_reqs.push_back(BlockReadReq{
           .file_offset = slice_req.file_offset,
           .offset_in_block = 0,
           .len = static_cast<int32_t>(slice_req.len),
           .key = std::nullopt,
       });
+      continue;
     }
+    std::vector<BlockReadReq> reqs = ConvertSliceReadReqToBlockReadReqs(
+        slice_req, fs_id_, ino_, chunk_size_, block_size_, chunk_start);
+    block_reqs.insert(block_reqs.end(), std::make_move_iterator(reqs.begin()),
+                      std::make_move_iterator(reqs.end()));
   }
 
   return block_reqs;
