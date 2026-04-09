@@ -142,7 +142,6 @@ void PrefetchManager::AsyncPrefetch(BlockKey key, size_t length) {
 
   PrefetchReq req;
   req.block_ctx = BlockContext(key, vfs_hub_->GetFsInfo().id);
-  req.block_size = length;
 
   auto ctx = SpanScope::GetContext(span);
 
@@ -155,7 +154,8 @@ void PrefetchManager::AsyncPrefetch(BlockKey key, size_t length) {
     } else {
       LOG_EVERY_N(WARNING, 100)
           << "Prefetch failed: "
-          << "key = " << req.block_ctx.key.Filename() << ", length = " << req.block_size
+          << "key = " << req.block_ctx.key.Filename()
+          << ", length = " << req.block_ctx.key.size
           << ", status = " << status.ToString();
     }
     SpanScope::End(span);

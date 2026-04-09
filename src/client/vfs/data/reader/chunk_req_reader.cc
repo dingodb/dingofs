@@ -216,7 +216,6 @@ void ChunkReqReader::ProcessBlockCacheReadReq(
     const auto& key = block_cache_req->block_req.key.value();
     RangeReq req;
     req.block_ctx = BlockContext(key, block_cache_req->fs_id);
-    req.block_size = key.size;
     req.offset = block_cache_req->block_req.block_offset;
     req.length = block_cache_req->block_req.len;
     req.data = &block_cache_req->io_buffer;
