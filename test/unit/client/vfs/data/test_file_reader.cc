@@ -17,7 +17,11 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <atomic>
 #include <cstdint>
+#include <memory>
+#include <mutex>
 
 #include "client/vfs/data/reader/file_reader.h"
 #include "client/vfs/data_buffer.h"
@@ -129,18 +133,21 @@ TEST_F(FileReaderTest, Read_WithinRange_RangeAsyncCalled) {
         return Status::OK();
       });
 
-  int range_async_calls = 0;
+  // shared_ptr capture: see Read_VerifyRangeReqFields for the rationale —
+  // readahead is fire-and-forget and may run after the test scope dies.
+  auto range_async_calls = std::make_shared<std::atomic<int>>(0);
   ON_CALL(*mock_block_store_, RangeAsync)
-      .WillByDefault([&](ContextSPtr, RangeReq req, StatusCallback cb) {
-        ++range_async_calls;
-        if (req.data && req.length > 0) {
-          char* buf = new char[req.length]();
-          req.data->AppendUserData(
-              buf, req.length,
-              [](void* p) { delete[] static_cast<char*>(p); });
-        }
-        cb(Status::OK());
-      });
+      .WillByDefault(
+          [range_async_calls](ContextSPtr, RangeReq req, StatusCallback cb) {
+            range_async_calls->fetch_add(1, std::memory_order_relaxed);
+            if (req.data && req.length > 0) {
+              char* buf = new char[req.length]();
+              req.data->AppendUserData(
+                  buf, req.length,
+                  [](void* p) { delete[] static_cast<char*>(p); });
+            }
+            cb(Status::OK());
+          });
 
   auto* r = MakeOpenReader();
 
@@ -150,7 +157,7 @@ TEST_F(FileReaderTest, Read_WithinRange_RangeAsyncCalled) {
   Status s = r->Read(ctx_, &buf, kReadSize, /*offset=*/0, &rsize);
   EXPECT_TRUE(s.ok());
   EXPECT_EQ(rsize, kReadSize);
-  EXPECT_GE(range_async_calls, 1);
+  EXPECT_GE(range_async_calls->load(std::memory_order_relaxed), 1);
 
   CloseAndRelease(r);
 }
@@ -178,11 +185,32 @@ TEST_F(FileReaderTest, Read_VerifyRangeReqFields) {
         return Status::OK();
       });
 
-  // Capture the RangeReq so we can assert its fields
-  std::vector<RangeReq> captured_reqs;
+  // Capture RangeReqs with a shared, mutex-protected state.
+  //
+  // Two important non-obvious facts about the production code:
+  //   1. A Read at offset=0 promotes ReadaheadPoclicy from level 0 to level 1,
+  //      which dispatches extra readahead RangeAsync calls in parallel from
+  //      read_executor_. So multiple threads call this lambda concurrently
+  //      and captured_reqs needs a mutex.
+  //   2. FileReader::Read only waits for the user request; readahead requests
+  //      are fire-and-forget and may still run after Read() returns.
+  //      Therefore the lambda's captured state must outlive the test function:
+  //      we hold it in a shared_ptr captured by value, so it lives as long as
+  //      the mock object (released in fixture dtor after executors are
+  //      stopped). A naive [&] capture of stack vars triggers stack smashing
+  //      when the readahead callback fires after the test scope dies.
+  struct Captured {
+    std::mutex mu;
+    std::vector<RangeReq> reqs;
+  };
+  auto captured = std::make_shared<Captured>();
+
   ON_CALL(*mock_block_store_, RangeAsync)
-      .WillByDefault([&](ContextSPtr, RangeReq req, StatusCallback cb) {
-        captured_reqs.push_back(req);
+      .WillByDefault([captured](ContextSPtr, RangeReq req, StatusCallback cb) {
+        {
+          std::lock_guard<std::mutex> lk(captured->mu);
+          captured->reqs.push_back(req);
+        }
         if (req.data && req.length > 0) {
           char* buf = new char[req.length]();
           req.data->AppendUserData(
@@ -200,8 +228,20 @@ TEST_F(FileReaderTest, Read_VerifyRangeReqFields) {
   Status s = r->Read(ctx_, &buf, kReadSize, /*offset=*/0, &rsize);
   EXPECT_TRUE(s.ok());
 
-  ASSERT_GE(captured_reqs.size(), 1u);
-  const auto& req = captured_reqs[0];
+  // Locate the user-read request by its (offset,length) signature; other
+  // captured requests belong to readahead.
+  RangeReq req;
+  {
+    std::lock_guard<std::mutex> lk(captured->mu);
+    ASSERT_GE(captured->reqs.size(), 1u);
+    auto it = std::find_if(
+        captured->reqs.begin(), captured->reqs.end(), [&](const RangeReq& r) {
+          return r.offset == 0 && r.length == static_cast<int64_t>(kReadSize);
+        });
+    ASSERT_NE(it, captured->reqs.end())
+        << "user-read RangeReq (offset=0,length=" << kReadSize << ") not found";
+    req = *it;
+  }
   // BlockKey must carry the correct slice id and actual block size.
   // block_size field was removed from RangeReq; downstream uses key.size.
   EXPECT_EQ(req.block_ctx.key.id, kSliceId);
