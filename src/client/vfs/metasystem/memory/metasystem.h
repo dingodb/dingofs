@@ -252,6 +252,8 @@ class MemoryMetaSystem : public vfs::MetaSystem {
   Status GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) override;
   Status SetAttr(ContextSPtr ctx, Ino ino, int set, const Attr& in_attr,
                  Attr* out_attr) override;
+  Status Fallocate(ContextSPtr ctx, Ino ino, int mode, uint64_t offset,
+                   uint64_t length) override;
   Status GetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
                   std::string* value) override;
   Status SetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
