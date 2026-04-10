@@ -204,7 +204,7 @@ class ShardPartition {
 
   uint64_t base_version_{0};
   uint64_t delta_version_{0};
-  std::vector<DentryOp> delta_dentry_ops_;
+  std::list<DentryOp> delta_dentry_ops_;
 
   std::vector<std::string> shard_boundaries_;
 

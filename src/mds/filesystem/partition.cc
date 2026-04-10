@@ -362,7 +362,24 @@ size_t ShardPartition::Bytes() const {
 
 void ShardPartition::AddDeltaOpNoLock(DentryOp&& op) {
   op.time_s = utils::Timestamp();
+
   delta_dentry_ops_.push_back(std::move(op));
+
+  // keep delta_dentry_ops_ ordered by version, the new op is usually with greater version, so we compare with the last
+  // op first to avoid unnecessary sort
+  if (delta_dentry_ops_.size() > 1) {
+    auto it = delta_dentry_ops_.end();
+    --it;  // last element
+    auto prev = it;
+    --prev;
+    while (true) {
+      if (it->version >= prev->version) break;
+      std::iter_swap(it, prev);
+      if (prev == delta_dentry_ops_.begin()) break;
+      it = prev;
+      --prev;
+    }
+  }
 }
 
 void ShardPartition::ApplyDeltaOpNoLock(DirShardSPtr shard) {
@@ -490,10 +507,6 @@ bool ShardPartition::Refresh(InodeSPtr inode) {
   base_version_ = inode->Version();
   delta_version_ = std::max(delta_version_, base_version_);
   shard_map_.clear();
-
-  // apply delta ops
-  std::sort(delta_dentry_ops_.begin(), delta_dentry_ops_.end(),  // NOLINT
-            [](const DentryOp& a, const DentryOp& b) -> bool { return a.version < b.version; });
 
   delta_version_ = base_version_;
   for (auto it = delta_dentry_ops_.begin(); it != delta_dentry_ops_.end();) {
