@@ -1347,7 +1347,16 @@ Status MDSMetaSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
   if (!status.ok()) return status;
 
   modify_time_memo_.Remember(ino);
-  if (shrink_file) chunk_memo_.Forget(ino);
+  // When the file is shrunk, the MDS appends zero slices covering the
+  // truncated range. The local chunk_cache_ still holds the pre-shrink slice
+  // list, and its cache-hit path in ReadSlice does NOT consult chunk_memo_
+  // versions. Forgetting only chunk_memo_ would leave stale slices visible;
+  // a subsequent grow would then let the old data reappear (data leak).
+  // Delete both caches, matching the Open(O_TRUNC) path.
+  if (shrink_file) {
+    chunk_memo_.Forget(ino);
+    chunk_cache_.Delete(ino);
+  }
 
   PutInodeToCache(attr_entry);
 
