@@ -712,6 +712,15 @@ Status MDSMetaSystem::DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
 
   // update chunk cache
   auto& chunk_set = file_session->GetChunkSet();
+
+  // Reset the cached write length so that FlushFile sends the correct
+  // post-truncation length rather than the stale pre-truncation value.
+  // Without this, a fast close(fd1)+open(fd2,O_TRUNC) race leaves the
+  // shared chunk_set with last_write_length_ from fd1 (e.g. 4), and
+  // fd2's write of 2 bytes computes max(4,2)=4 → FlushFile(length=4).
+  if (flags & O_TRUNC) {
+    chunk_set->ResetLastWriteLength();
+  }
   if (!chunks.empty()) chunk_set->Put(chunks, "open");
 
   // update chunk memo
