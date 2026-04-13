@@ -1657,8 +1657,7 @@ void LocalMetaSystem::SetFsStorageInfo(mds::FsInfoEntry& fs_info,
     fs_info.set_fs_type(pb::mds::FsType::LOCALFILE);
     auto* file_info = fs_info.mutable_extra()->mutable_file_info();
 
-    auto data_path = fmt::format("{}/{}", storage_info_map["path"], fs_name_);
-    file_info->set_path(data_path);
+    file_info->set_path(storage_info_map["path"]);
 
   } else if (storage_it->second == "s3") {  // s3 storage
     for (const auto& param : kS3Params) {
