@@ -51,9 +51,20 @@ class DirShard {
     }
     last_active_time_s_ = utils::Timestamp();
   }
+  DirShard(uint64_t id, const Range& range, uint64_t version, absl::btree_map<std::string, Dentry>&& dentries)
+      : id_(id), range_{range}, version_(version) {
+    // ingest dentries to map
+    children_ = std::move(dentries);
+    last_active_time_s_ = utils::Timestamp();
+  }
 
   static DirShardSPtr New(uint64_t id, const Range& range, uint64_t version, const std::vector<Dentry>& dentries) {
     return std::make_shared<DirShard>(id, range, version, dentries);
+  }
+
+  static DirShardSPtr New(uint64_t id, const Range& range, uint64_t version,
+                          absl::btree_map<std::string, Dentry>&& dentries) {
+    return std::make_shared<DirShard>(id, range, version, std::move(dentries));
   }
 
   uint64_t ID() const { return id_; }
