@@ -810,6 +810,7 @@ Status BatchCreateFileOperation::RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr
   return Status::OK();
 }
 
+// todo: batch hardlink
 Status HardLinkOperation::Run(TxnUPtr& txn) {
   const uint32_t fs_id = dentry_.FsId();
   const Ino parent = dentry_.ParentIno();
@@ -906,7 +907,7 @@ static Status ScanChunk(TxnUPtr& txn, uint32_t fs_id, Ino ino, std::map<uint64_t
 }
 
 static Status ResetFileRange(TxnUPtr& txn, uint32_t fs_id, Ino ino, uint64_t old_length, uint64_t new_length,
-                             uint64_t slice_id, uint64_t chunk_size) {
+                             uint64_t chunk_size) {
   CHECK(new_length < old_length) << fmt::format("new_length({}) should be less than old_length({}).", new_length,
                                                 old_length);
 
@@ -963,8 +964,8 @@ Status UpdateAttrOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std:
     result_.delta_bytes = static_cast<int64_t>(attr_.length()) - static_cast<int64_t>(attr.length());
     // if delta_length<0 then delete chunks beyond new length
     if (result_.delta_bytes < 0) {
-      auto status = ResetFileRange(txn, attr_.fs_id(), attr_.ino(), attr.length(), attr_.length(),
-                                   extra_param_.slice_id, extra_param_.chunk_size);
+      auto status =
+          ResetFileRange(txn, attr_.fs_id(), attr_.ino(), attr.length(), attr_.length(), extra_param_.chunk_size);
       if (!status.ok()) return status;
     }
 
@@ -1444,7 +1445,7 @@ Status FlushFileOperation::Run(TxnUPtr& txn) {
   if (param_.length > 0) {
     int64_t delta_bytes = static_cast<int64_t>(param_.length) - static_cast<int64_t>(attr.length());
     if (delta_bytes < 0) {
-      auto status = ResetFileRange(txn, fs_id_, ino_, attr.length(), param_.length, param_.slice_id, param_.chunk_size);
+      auto status = ResetFileRange(txn, fs_id_, ino_, attr.length(), param_.length, param_.chunk_size);
       if (!status.ok()) return status;
     }
 

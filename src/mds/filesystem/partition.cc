@@ -38,9 +38,7 @@ static const std::string kPartitionMetricsPrefix = "dingofs_{}_partition_cache_{
 DEFINE_uint32(mds_partition_cache_shard_max_count, 4 * 1024 * 1024, "partition cache shard max count");
 DEFINE_uint32(mds_partition_dentry_op_max_count, 100000, "partition dentry op max count");
 
-DEFINE_uint32(mds_partition_shard_split_threshold, 10000, "split shard when dentry count exceeds this");
-
-const uint32_t kDentryDefaultNum = 1024;
+DEFINE_uint32(mds_partition_shard_split_threshold, 8192, "split shard when dentry count exceeds this");
 
 // --- DirShard implementation ---
 
@@ -133,15 +131,12 @@ size_t DirShard::Bytes() const {
 std::pair<DirShardSPtr, DirShardSPtr> DirShard::Split(const std::string& key, uint64_t left_id, uint64_t right_id) {
   utils::WriteLockGuard lk(lock_);
 
-  std::vector<Dentry> left_dentries, right_dentries;
-  left_dentries.reserve(kDentryDefaultNum);
-  right_dentries.reserve(kDentryDefaultNum);
-
+  absl::btree_map<std::string, Dentry> left_dentries, right_dentries;
   for (auto& it : children_) {
     if (it.first < key) {
-      left_dentries.push_back(it.second);
+      left_dentries[it.first] = it.second;
     } else {
-      right_dentries.push_back(it.second);
+      right_dentries[it.first] = it.second;
     }
   }
 
@@ -149,8 +144,8 @@ std::pair<DirShardSPtr, DirShardSPtr> DirShard::Split(const std::string& key, ui
   Range left_range{range_.start, key};
   Range right_range{key, range_.end};
 
-  DirShardSPtr left_shard = DirShard::New(left_id, left_range, version_, left_dentries);
-  DirShardSPtr right_shard = DirShard::New(right_id, right_range, version_, right_dentries);
+  DirShardSPtr left_shard = DirShard::New(left_id, left_range, version_, std::move(left_dentries));
+  DirShardSPtr right_shard = DirShard::New(right_id, right_range, version_, std::move(right_dentries));
 
   return {left_shard, right_shard};
 }
@@ -469,10 +464,10 @@ void ShardPartition::DeleteShardNoLock(const std::string& start) { shard_map_.er
 
 Status ShardPartition::FetchDirShard(const Range& range, DirShardSPtr& out_shard) {
   utils::Duration duration;
-  std::vector<Dentry> dentries;
+  absl::btree_map<std::string, Dentry> dentries;
   Trace trace;
   ScanDirShardOperation operation(trace, fs_id_, ino_, range, [&dentries](const DentryEntry& dentry) -> bool {
-    dentries.push_back(Dentry(dentry));
+    dentries[dentry.name()] = Dentry(dentry);
     return true;
   });
 
@@ -483,7 +478,8 @@ Status ShardPartition::FetchDirShard(const Range& range, DirShardSPtr& out_shard
 
   uint64_t version = result.attr.version();
 
-  out_shard = DirShard::New(NextShardID(), range, version, dentries);
+  out_shard = DirShard::New(NextShardID(), range, version, std::move(dentries));
+
   PutShard(out_shard);
 
   LOG(INFO) << fmt::format("[partition.{}.{}][{}us] fetch dir shard, range{} {}.", fs_id_, ino_, duration.ElapsedUs(),

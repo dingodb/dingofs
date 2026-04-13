@@ -121,7 +121,7 @@ class DirShardTest : public testing::Test {
 
 TEST_F(DirShardTest, BasicPutGetDelete) {
   Range range{"", ""};
-  DirShardSPtr shard = DirShard::New(1, range, 1, {});
+  DirShardSPtr shard = DirShard::New(1, range, 1, std::vector<Dentry>{});
 
   ASSERT_TRUE(shard != nullptr);
   ASSERT_EQ(shard->ID(), 1);
@@ -153,7 +153,7 @@ TEST_F(DirShardTest, BasicPutGetDelete) {
 
 TEST_F(DirShardTest, MultipleDentries) {
   Range range{"", ""};
-  DirShardSPtr shard = DirShard::New(1, range, 1, {});
+  DirShardSPtr shard = DirShard::New(1, range, 1, std::vector<Dentry>{});
 
   // Put multiple dentries
   for (int i = 0; i < 10; ++i) {
@@ -210,13 +210,13 @@ TEST_F(DirShardTest, Scan) {
 TEST_F(DirShardTest, Contains) {
   // Full range shard
   Range range1{"", ""};
-  DirShardSPtr shard1 = DirShard::New(1, range1, 1, {});
+  DirShardSPtr shard1 = DirShard::New(1, range1, 1, std::vector<Dentry>{});
   ASSERT_TRUE(shard1->Contains("anything"));
   ASSERT_TRUE(shard1->Contains(""));
 
   // Bounded range shard [a, c)
   Range range2{"a", "c"};
-  DirShardSPtr shard2 = DirShard::New(2, range2, 1, {});
+  DirShardSPtr shard2 = DirShard::New(2, range2, 1, std::vector<Dentry>{});
   ASSERT_TRUE(shard2->Contains("a"));
   ASSERT_TRUE(shard2->Contains("apple"));
   ASSERT_TRUE(shard2->Contains("b"));
@@ -226,7 +226,7 @@ TEST_F(DirShardTest, Contains) {
 
   // Half-open range [c, )
   Range range3{"c", ""};
-  DirShardSPtr shard3 = DirShard::New(3, range3, 1, {});
+  DirShardSPtr shard3 = DirShard::New(3, range3, 1, std::vector<Dentry>{});
   ASSERT_TRUE(shard3->Contains("c"));
   ASSERT_TRUE(shard3->Contains("z"));
   ASSERT_FALSE(shard3->Contains("a"));
@@ -235,15 +235,15 @@ TEST_F(DirShardTest, Contains) {
 
 TEST_F(DirShardTest, IsLastShard) {
   Range range1{"", ""};
-  DirShardSPtr shard1 = DirShard::New(1, range1, 1, {});
+  DirShardSPtr shard1 = DirShard::New(1, range1, 1, std::vector<Dentry>{});
   ASSERT_TRUE(shard1->IsLastShard());
 
   Range range2{"a", ""};
-  DirShardSPtr shard2 = DirShard::New(2, range2, 1, {});
+  DirShardSPtr shard2 = DirShard::New(2, range2, 1, std::vector<Dentry>{});
   ASSERT_TRUE(shard2->IsLastShard());
 
   Range range3{"a", "c"};
-  DirShardSPtr shard3 = DirShard::New(3, range3, 1, {});
+  DirShardSPtr shard3 = DirShard::New(3, range3, 1, std::vector<Dentry>{});
   ASSERT_FALSE(shard3->IsLastShard());
 }
 
@@ -301,7 +301,7 @@ TEST_F(DirShardTest, Split) {
 
 TEST_F(DirShardTest, SizeAndBytes) {
   Range range{"", ""};
-  DirShardSPtr shard = DirShard::New(1, range, 1, {});
+  DirShardSPtr shard = DirShard::New(1, range, 1, std::vector<Dentry>{});
 
   ASSERT_EQ(shard->Size(), 0);
   ASSERT_EQ(shard->Bytes(), 0);
@@ -316,7 +316,7 @@ TEST_F(DirShardTest, SizeAndBytes) {
 
 TEST_F(DirShardTest, ToString) {
   Range range{"a", "c"};
-  DirShardSPtr shard = DirShard::New(1, range, 1, {});
+  DirShardSPtr shard = DirShard::New(1, range, 1, std::vector<Dentry>{});
 
   std::string str = shard->ToString();
   ASSERT_NE(str.find("id(1)"), std::string::npos);
@@ -325,7 +325,7 @@ TEST_F(DirShardTest, ToString) {
 
 TEST_F(DirShardTest, UpdateLastActiveTime) {
   Range range{"", ""};
-  DirShardSPtr shard = DirShard::New(1, range, 1, {});
+  DirShardSPtr shard = DirShard::New(1, range, 1, std::vector<Dentry>{});
 
   uint64_t before = shard->LastActiveTimeS();
 
@@ -342,7 +342,7 @@ TEST_F(DirShardTest, UpdateLastActiveTime) {
 
 TEST_F(DirShardTest, EmptyShardOperations) {
   Range range{"", ""};
-  DirShardSPtr shard = DirShard::New(1, range, 1, {});
+  DirShardSPtr shard = DirShard::New(1, range, 1, std::vector<Dentry>{});
 
   // Mid on empty shard should return empty string
   ASSERT_EQ(shard->Mid(), "");
@@ -362,7 +362,7 @@ TEST_F(DirShardTest, EmptyShardOperations) {
 
 TEST_F(DirShardTest, OverwriteDentry) {
   Range range{"", ""};
-  DirShardSPtr shard = DirShard::New(1, range, 1, {});
+  DirShardSPtr shard = DirShard::New(1, range, 1, std::vector<Dentry>{});
 
   // Put initial dentry
   Dentry dentry1(
@@ -413,14 +413,14 @@ TEST_F(DirShardTest, ScanWithMixedTypes) {
 TEST_F(DirShardTest, RangeBoundariesEdgeCases) {
   // Test exact boundary matches
   Range range{"a", "b"};
-  DirShardSPtr shard = DirShard::New(1, range, 1, {});
+  DirShardSPtr shard = DirShard::New(1, range, 1, std::vector<Dentry>{});
 
   ASSERT_TRUE(shard->Contains("a"));
   ASSERT_FALSE(shard->Contains("b"));
 
   // Empty end boundary means unlimited
   Range range2{"z", ""};
-  DirShardSPtr shard2 = DirShard::New(2, range2, 1, {});
+  DirShardSPtr shard2 = DirShard::New(2, range2, 1, std::vector<Dentry>{});
 
   ASSERT_TRUE(shard2->Contains("z"));
   ASSERT_TRUE(shard2->Contains("zzzz"));
@@ -428,7 +428,7 @@ TEST_F(DirShardTest, RangeBoundariesEdgeCases) {
 
   // Empty start and end means all
   Range range3{"", ""};
-  DirShardSPtr shard3 = DirShard::New(3, range3, 1, {});
+  DirShardSPtr shard3 = DirShard::New(3, range3, 1, std::vector<Dentry>{});
 
   ASSERT_TRUE(shard3->Contains(""));
   ASSERT_TRUE(shard3->Contains("anything"));
