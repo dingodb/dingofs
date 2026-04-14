@@ -34,15 +34,18 @@ namespace vfs {
 
 class ChunkFlushTask {
  public:
-  explicit ChunkFlushTask(
-      uint64_t ino, int64_t index, uint64_t chunk_flush_id,
-      std::map<uint64_t, std::unique_ptr<SliceWriter>> flush_slices)
+  explicit ChunkFlushTask(uint64_t ino, int64_t index, uint64_t chunk_flush_id,
+                          std::map<uint64_t, SliceWriterPtr> flush_slices)
       : ino_(ino),
         chunk_index_(index),
         chunk_flush_id(chunk_flush_id),
         flush_slices_(std::move(flush_slices)) {}
 
-  ~ChunkFlushTask() = default;
+  ~ChunkFlushTask() {
+    for (const auto& [seq, sw] : flush_slices_) {
+      if (sw) sw->DecRef();
+    }
+  }
 
   void RunAsync(StatusCallback cb);
 
@@ -74,7 +77,7 @@ class ChunkFlushTask {
   std::atomic_uint64_t flusing_slice_{0};
 
   mutable std::mutex mutex_;
-  const std::map<uint64_t, SliceWriterUPtr> flush_slices_;
+  const std::map<uint64_t, SliceWriterPtr> flush_slices_;
   StatusCallback cb_;
   Status status_;
 };
