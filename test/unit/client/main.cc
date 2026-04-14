@@ -15,11 +15,15 @@
  */
 
 #include <filesystem>
+#include <string>
 
 #include "fmt/core.h"
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
+
+DEFINE_string(test_log_dir, "/tmp/dingofs-test-logs",
+              "Directory for test log output");
 
 static void InitLog(const std::string& log_dir) {
   std::filesystem::create_directories(log_dir);
@@ -53,10 +57,10 @@ static void InitLog(const std::string& log_dir) {
 }
 
 int main(int argc, char** argv) {
-  InitLog("./log");
-
   testing::InitGoogleTest(&argc, argv);
   google::ParseCommandLineFlags(&argc, &argv, true);
+
+  InitLog(FLAGS_test_log_dir);
 
   return RUN_ALL_TESTS();
 }

@@ -184,7 +184,7 @@ class ChunkWriter {
   mutable std::mutex slice_mutex_;
   // seq_id -> slice data
   // TODO: maybe use std::vector
-  std::map<uint64_t, SliceWriterUPtr> slices_;
+  std::map<uint64_t, SliceWriterPtr> slices_;
 
   mutable std::mutex flush_mutex_;
   std::deque<FlushTask*> flush_queue_;

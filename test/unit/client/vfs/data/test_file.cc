@@ -23,7 +23,6 @@
 #include "client/vfs/data_buffer.h"
 #include "common/trace/trace_manager.h"
 #include "test/unit/client/vfs/test_base.h"
-#include "test/unit/client/vfs/test_common.h"
 
 namespace dingofs {
 namespace client {
