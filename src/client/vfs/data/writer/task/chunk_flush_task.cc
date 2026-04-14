@@ -78,7 +78,7 @@ void ChunkFlushTask::RunAsync(StatusCallback cb) {
     std::lock_guard<std::mutex> lg(mutex_);
     for (const auto& seq_slice : flush_slices_) {
       int64_t seq = seq_slice.first;
-      SliceWriter* slice = seq_slice.second.get();
+      SliceWriter* slice = seq_slice.second;
 
       to_flush_slices.emplace(seq, slice);
     }

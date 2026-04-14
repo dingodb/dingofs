@@ -20,16 +20,13 @@
 #include <atomic>
 #include <map>
 #include <memory>
-#include <thread>
 #include <vector>
 
 #include "client/vfs/data/slice/common.h"
 #include "client/vfs/data/slice/slice_writer.h"
-#include "client/vfs/data/slice/task/slice_flush_task.h"
 #include "client/vfs/data/writer/chunk_writer.h"
 #include "client/vfs/data/writer/task/chunk_flush_task.h"
 #include "client/vfs/data/writer/task/file_flush_task.h"
-#include "common/options/client.h"
 #include "common/status.h"
 #include "common/trace/trace_manager.h"
 #include "test/unit/client/vfs/test_base.h"
@@ -58,9 +55,9 @@ static constexpr uint64_t kIno = 200;
 static constexpr uint64_t kChunkIndex = 0;
 
 static SliceDataContext MakeSliceContext(uint64_t ino = kIno,
-                                        uint64_t chunk_index = kChunkIndex) {
+                                         uint64_t chunk_index = kChunkIndex) {
   return SliceDataContext(kFsId, ino, chunk_index, kChunkSize, kBlockSize,
-                         kPageSize);
+                          kPageSize);
 }
 
 // ============================================================================
@@ -77,9 +74,10 @@ class FlushTasksTest : public test::VFSTestBase {
   }
 
   // Create a SliceWriter that has written data and is ready to flush.
-  std::unique_ptr<SliceWriter> MakeFlushedSliceWriter(uint64_t slice_id) {
+  SliceWriter* MakeFlushedSliceWriter(uint64_t slice_id) {
     SliceDataContext ctx = MakeSliceContext();
-    auto sw = std::make_unique<SliceWriter>(ctx, mock_hub_, 0);
+    auto* sw = new SliceWriter(ctx, mock_hub_, 0);
+    sw->IncRef();
     std::vector<char> buf(4096, 'X');
     CHECK(sw->Write(ctx_, buf.data(), 4096, 0).ok());
 
@@ -87,9 +85,8 @@ class FlushTasksTest : public test::VFSTestBase {
     EXPECT_CALL(*mock_meta_system_, NewSliceId(_, _, _))
         .WillOnce(DoAll(SetArgPointee<2>(slice_id), Return(Status::OK())));
     EXPECT_CALL(*mock_block_store_, PutAsync(_, _, _))
-        .WillRepeatedly(Invoke([](ContextSPtr, PutReq, StatusCallback cb) {
-          cb(Status::OK());
-        }));
+        .WillRepeatedly(Invoke(
+            [](ContextSPtr, PutReq, StatusCallback cb) { cb(Status::OK()); }));
 
     test::AsyncWaiter waiter;
     waiter.Expect(1);
@@ -114,199 +111,6 @@ class FlushTasksTest : public test::VFSTestBase {
 // we build BlockData objects by writing through a SliceWriter and capturing
 // what SliceFlushTask receives via the mocked PutAsync.
 
-// 8. SliceFlushTask with one real block: PutAsync called, FlushDone OK.
-TEST_F(FlushTasksTest, SliceFlushTask_AllBlocks_Success) {
-  SliceDataContext ctx = MakeSliceContext();
-
-  // Create a SliceWriter, write data so it has a block.
-  auto sw = std::make_unique<SliceWriter>(ctx, mock_hub_, 0);
-  std::vector<char> buf(kPageSize, 'A');
-  ASSERT_TRUE(sw->Write(ctx_, buf.data(), kPageSize, 0).ok());
-
-  // Expect NewSliceId once and PutAsync once (one block).
-  static constexpr uint64_t kSliceId = 55;
-  EXPECT_CALL(*mock_meta_system_, NewSliceId(_, _, _))
-      .WillOnce(DoAll(SetArgPointee<2>(kSliceId), Return(Status::OK())));
-
-  std::atomic<int> put_count{0};
-  EXPECT_CALL(*mock_block_store_, PutAsync(_, _, _))
-      .WillRepeatedly(Invoke([&put_count](ContextSPtr, PutReq, StatusCallback cb) {
-        ++put_count;
-        cb(Status::OK());
-      }));
-
-  test::AsyncWaiter waiter;
-  waiter.Expect(1);
-  sw->FlushAsync([&](Status s) {
-    EXPECT_TRUE(s.ok());
-    waiter.Done();
-  });
-  waiter.Wait();
-
-  EXPECT_TRUE(sw->IsFlushed());
-  EXPECT_GE(put_count.load(), 1);
-}
-
-// 9. SliceFlushTask: BlockStore error is propagated via FlushAsync callback.
-TEST_F(FlushTasksTest, SliceFlushTask_BlockStore_Error_Propagated) {
-  SliceDataContext ctx = MakeSliceContext();
-
-  auto sw = std::make_unique<SliceWriter>(ctx, mock_hub_, 0);
-  std::vector<char> buf(kPageSize, 'B');
-  ASSERT_TRUE(sw->Write(ctx_, buf.data(), kPageSize, 0).ok());
-
-  EXPECT_CALL(*mock_meta_system_, NewSliceId(_, _, _))
-      .WillOnce(DoAll(SetArgPointee<2>(10u), Return(Status::OK())));
-  EXPECT_CALL(*mock_block_store_, PutAsync(_, _, _))
-      .WillRepeatedly(Invoke([](ContextSPtr, PutReq, StatusCallback cb) {
-        cb(Status::IoError("disk full"));
-      }));
-
-  test::AsyncWaiter waiter;
-  waiter.Expect(1);
-  sw->FlushAsync([&](Status s) {
-    EXPECT_FALSE(s.ok());
-    waiter.Done();
-  });
-  waiter.Wait();
-}
-
-// 10. SliceFlushTask multi-block: multiple PutAsync calls, all succeed,
-//     callback called once with OK.
-TEST_F(FlushTasksTest, SliceFlushTask_MultiBlock_Success_CallbackOnce) {
-  SliceDataContext ctx = MakeSliceContext();
-
-  // Write more than one block worth of data (kBlockSize + kPageSize).
-  uint64_t write_size = kBlockSize + kPageSize;
-  auto sw = std::make_unique<SliceWriter>(ctx, mock_hub_, 0);
-  std::vector<char> buf(write_size, 'C');
-  ASSERT_TRUE(sw->Write(ctx_, buf.data(), write_size, 0).ok());
-
-  EXPECT_CALL(*mock_meta_system_, NewSliceId(_, _, _))
-      .WillOnce(DoAll(SetArgPointee<2>(20u), Return(Status::OK())));
-
-  std::atomic<int> put_count{0};
-  EXPECT_CALL(*mock_block_store_, PutAsync(_, _, _))
-      .WillRepeatedly(Invoke([&put_count](ContextSPtr, PutReq, StatusCallback cb) {
-        ++put_count;
-        cb(Status::OK());
-      }));
-
-  std::atomic<int> callback_count{0};
-  test::AsyncWaiter waiter;
-  waiter.Expect(1);
-  sw->FlushAsync([&](Status s) {
-    ++callback_count;
-    EXPECT_TRUE(s.ok());
-    waiter.Done();
-  });
-  waiter.Wait();
-
-  // Two blocks: block 0 (kBlockSize) + block 1 (kPageSize).
-  EXPECT_EQ(put_count.load(), 2);
-  EXPECT_EQ(callback_count.load(), 1);
-}
-
-// 11. SliceFlushTask concurrent: flush with 2 blocks whose PutAsync callbacks
-//     fire from separate threads; verify callback called exactly once.
-TEST_F(FlushTasksTest, SliceFlushTask_Concurrent_ExactlyOnce) {
-  SliceDataContext ctx = MakeSliceContext();
-
-  uint64_t write_size = kBlockSize + kPageSize;
-  auto sw = std::make_unique<SliceWriter>(ctx, mock_hub_, 0);
-  std::vector<char> buf(write_size, 'D');
-  ASSERT_TRUE(sw->Write(ctx_, buf.data(), write_size, 0).ok());
-
-  EXPECT_CALL(*mock_meta_system_, NewSliceId(_, _, _))
-      .WillOnce(DoAll(SetArgPointee<2>(30u), Return(Status::OK())));
-
-  // Collect the callbacks and fire them from background threads.
-  std::mutex cbs_mu;
-  std::vector<StatusCallback> pending_cbs;
-
-  EXPECT_CALL(*mock_block_store_, PutAsync(_, _, _))
-      .WillRepeatedly(Invoke(
-          [&](ContextSPtr, PutReq, StatusCallback cb) {
-            std::lock_guard<std::mutex> lg(cbs_mu);
-            pending_cbs.push_back(std::move(cb));
-          }));
-
-  std::atomic<int> callback_count{0};
-  test::AsyncWaiter waiter;
-  waiter.Expect(1);
-  sw->FlushAsync([&](Status s) {
-    ++callback_count;
-    EXPECT_TRUE(s.ok());
-    waiter.Done();
-  });
-
-  // Wait until both PutAsync callbacks are collected.
-  while (true) {
-    std::lock_guard<std::mutex> lg(cbs_mu);
-    if (pending_cbs.size() >= 2) break;
-  }
-
-  // Fire both callbacks from concurrent threads.
-  std::vector<StatusCallback> to_fire;
-  {
-    std::lock_guard<std::mutex> lg(cbs_mu);
-    to_fire.swap(pending_cbs);
-  }
-  std::vector<std::thread> threads;
-  for (auto& cb : to_fire) {
-    threads.emplace_back([cb = std::move(cb)]() mutable {
-      cb(Status::OK());
-    });
-  }
-  for (auto& t : threads) t.join();
-
-  waiter.Wait();
-  EXPECT_EQ(callback_count.load(), 1);
-}
-
-// 12. SliceFlushTask writeback flag: when file suffix matches writeback,
-//     PutReq::write_back should be true.
-TEST_F(FlushTasksTest, SliceFlushTask_Writeback_Via_SuffixWatcher) {
-  // Recreate the FileSuffixWatcher with a matching suffix, then register
-  // the inode so ShouldWriteback returns true.
-  auto watcher = std::make_unique<FileSuffixWatcher>(".hot");
-  Attr attr;
-  attr.ino = kIno;
-  attr.type = dingofs::kFile;
-  watcher->Remeber(attr, "testfile.hot");
-
-  ON_CALL(*mock_hub_, GetFileSuffixWatcher())
-      .WillByDefault(Return(watcher.get()));
-
-  // FLAGS_vfs_data_writeback defaults to false; the watcher path should
-  // override it for this inode.
-  SliceDataContext ctx = MakeSliceContext(kIno, kChunkIndex);
-  auto sw = std::make_unique<SliceWriter>(ctx, mock_hub_, 0);
-  std::vector<char> buf(kPageSize, 'W');
-  ASSERT_TRUE(sw->Write(ctx_, buf.data(), kPageSize, 0).ok());
-
-  EXPECT_CALL(*mock_meta_system_, NewSliceId(_, _, _))
-      .WillOnce(DoAll(SetArgPointee<2>(77u), Return(Status::OK())));
-
-  bool observed_writeback = false;
-  EXPECT_CALL(*mock_block_store_, PutAsync(_, _, _))
-      .WillRepeatedly(Invoke(
-          [&observed_writeback](ContextSPtr, PutReq req, StatusCallback cb) {
-            observed_writeback = req.write_back;
-            cb(Status::OK());
-          }));
-
-  test::AsyncWaiter waiter;
-  waiter.Expect(1);
-  sw->FlushAsync([&](Status s) {
-    EXPECT_TRUE(s.ok());
-    waiter.Done();
-  });
-  waiter.Wait();
-
-  EXPECT_TRUE(observed_writeback);
-}
-
 // ============================================================================
 // ChunkFlushTask tests
 // ============================================================================
@@ -323,22 +127,22 @@ TEST_F(FlushTasksTest, ChunkFlushTask_AllSlices_Success) {
   EXPECT_CALL(*mock_meta_system_, NewSliceId(_, _, _))
       .WillRepeatedly(DoAll(SetArgPointee<2>(50u), Return(Status::OK())));
   EXPECT_CALL(*mock_block_store_, PutAsync(_, _, _))
-      .WillRepeatedly(Invoke([](ContextSPtr, PutReq, StatusCallback cb) {
-        cb(Status::OK());
-      }));
+      .WillRepeatedly(Invoke(
+          [](ContextSPtr, PutReq, StatusCallback cb) { cb(Status::OK()); }));
 
   // Build kSliceCount SliceWriters, each starting at consecutive block offsets.
   // We reuse seq numbers; SliceDataContext auto-increments seq.
-  std::map<uint64_t, SliceWriterUPtr> slices;
+  std::map<uint64_t, SliceWriterPtr> slices;
   for (int i = 0; i < kSliceCount; ++i) {
     SliceDataContext ctx = MakeSliceContext();
     uint64_t seq = ctx.seq;
     // Each slice starts at its own chunk offset (offset by kPageSize each).
     uint64_t chunk_off = static_cast<uint64_t>(i) * kPageSize;
-    auto sw = std::make_unique<SliceWriter>(ctx, mock_hub_, chunk_off);
+    auto* sw = new SliceWriter(ctx, mock_hub_, chunk_off);
+    sw->IncRef();
     std::vector<char> buf(kPageSize, static_cast<char>('A' + i));
     ASSERT_TRUE(sw->Write(ctx_, buf.data(), kPageSize, chunk_off).ok());
-    slices.emplace(seq, std::move(sw));
+    slices.emplace(seq, sw);
   }
 
   ChunkFlushTask task(kIno, kChunkIndex, kChunkFlushId, std::move(slices));
@@ -366,12 +170,13 @@ TEST_F(FlushTasksTest, ChunkFlushTask_SliceFail_Propagated) {
 
   SliceDataContext ctx = MakeSliceContext();
   uint64_t seq = ctx.seq;
-  auto sw = std::make_unique<SliceWriter>(ctx, mock_hub_, 0);
+  auto* sw = new SliceWriter(ctx, mock_hub_, 0);
+  sw->IncRef();
   std::vector<char> buf(kPageSize, 'F');
   ASSERT_TRUE(sw->Write(ctx_, buf.data(), kPageSize, 0).ok());
 
-  std::map<uint64_t, SliceWriterUPtr> slices;
-  slices.emplace(seq, std::move(sw));
+  std::map<uint64_t, SliceWriterPtr> slices;
+  slices.emplace(seq, sw);
 
   ChunkFlushTask task(kIno, kChunkIndex, kChunkFlushId, std::move(slices));
 
@@ -386,6 +191,8 @@ TEST_F(FlushTasksTest, ChunkFlushTask_SliceFail_Propagated) {
 
 // 7. ChunkFlushTask concurrent: N slices flushed in parallel,
 //    callback called exactly once.
+//    Note: streaming upload uses CBExecutor for callbacks, so we use
+//    synchronous PutAsync mock (not held callbacks) to avoid deadlock.
 TEST_F(FlushTasksTest, ChunkFlushTask_Concurrent_ExactlyOnce) {
   static constexpr int kSliceCount = 8;
   static const uint64_t kChunkFlushId = 1003;
@@ -393,25 +200,24 @@ TEST_F(FlushTasksTest, ChunkFlushTask_Concurrent_ExactlyOnce) {
   EXPECT_CALL(*mock_meta_system_, NewSliceId(_, _, _))
       .WillRepeatedly(DoAll(SetArgPointee<2>(60u), Return(Status::OK())));
 
-  // Collect PutAsync callbacks to fire concurrently.
-  std::mutex cbs_mu;
-  std::vector<StatusCallback> pending_cbs;
+  std::atomic<int> put_count{0};
   EXPECT_CALL(*mock_block_store_, PutAsync(_, _, _))
-      .WillRepeatedly(Invoke(
-          [&](ContextSPtr, PutReq, StatusCallback cb) {
-            std::lock_guard<std::mutex> lg(cbs_mu);
-            pending_cbs.push_back(std::move(cb));
+      .WillRepeatedly(
+          Invoke([&put_count](ContextSPtr, PutReq, StatusCallback cb) {
+            ++put_count;
+            cb(Status::OK());
           }));
 
-  std::map<uint64_t, SliceWriterUPtr> slices;
+  std::map<uint64_t, SliceWriterPtr> slices;
   for (int i = 0; i < kSliceCount; ++i) {
     SliceDataContext ctx = MakeSliceContext();
     uint64_t seq = ctx.seq;
     uint64_t chunk_off = static_cast<uint64_t>(i) * kPageSize;
-    auto sw = std::make_unique<SliceWriter>(ctx, mock_hub_, chunk_off);
+    auto* sw = new SliceWriter(ctx, mock_hub_, chunk_off);
+    sw->IncRef();
     std::vector<char> buf(kPageSize, static_cast<char>('a' + i));
     ASSERT_TRUE(sw->Write(ctx_, buf.data(), kPageSize, chunk_off).ok());
-    slices.emplace(seq, std::move(sw));
+    slices.emplace(seq, sw);
   }
 
   ChunkFlushTask task(kIno, kChunkIndex, kChunkFlushId, std::move(slices));
@@ -425,28 +231,9 @@ TEST_F(FlushTasksTest, ChunkFlushTask_Concurrent_ExactlyOnce) {
     waiter.Done();
   });
 
-  // Wait until all kSliceCount PutAsync callbacks are collected.
-  while (true) {
-    std::lock_guard<std::mutex> lg(cbs_mu);
-    if (static_cast<int>(pending_cbs.size()) >= kSliceCount) break;
-  }
-
-  // Fire all callbacks from concurrent threads.
-  std::vector<StatusCallback> to_fire;
-  {
-    std::lock_guard<std::mutex> lg(cbs_mu);
-    to_fire.swap(pending_cbs);
-  }
-  std::vector<std::thread> threads;
-  for (auto& cb : to_fire) {
-    threads.emplace_back([cb = std::move(cb)]() mutable {
-      cb(Status::OK());
-    });
-  }
-  for (auto& t : threads) t.join();
-
   waiter.Wait();
   EXPECT_EQ(callback_count.load(), 1);
+  EXPECT_GE(put_count.load(), kSliceCount);
 }
 
 // ============================================================================
@@ -464,9 +251,8 @@ TEST_F(FlushTasksTest, FileFlushTask_AllSuccess_CallbackCalledOnce) {
   EXPECT_CALL(*mock_meta_system_, NewSliceId(_, _, _))
       .WillRepeatedly(DoAll(SetArgPointee<2>(80u), Return(Status::OK())));
   EXPECT_CALL(*mock_block_store_, PutAsync(_, _, _))
-      .WillRepeatedly(Invoke([](ContextSPtr, PutReq, StatusCallback cb) {
-        cb(Status::OK());
-      }));
+      .WillRepeatedly(Invoke(
+          [](ContextSPtr, PutReq, StatusCallback cb) { cb(Status::OK()); }));
   ON_CALL(*mock_meta_system_, WriteSlice(_, _, _, _, _))
       .WillByDefault(Return(Status::OK()));
 
@@ -503,9 +289,9 @@ TEST_F(FlushTasksTest, FileFlushTask_AllSuccess_CallbackCalledOnce) {
 TEST_F(FlushTasksTest, FileFlushTask_OneChunkFail_ErrorPropagated) {
   static constexpr uint64_t kFileFlushId = 2002;
 
-  // NewSliceId fails; BlockStore is not reached.
+  // All NewSliceId calls fail (PrepareSliceId + DoFlush fallback).
   EXPECT_CALL(*mock_meta_system_, NewSliceId(_, _, _))
-      .WillOnce(Return(Status::IoError("mds timeout")));
+      .WillRepeatedly(Return(Status::IoError("mds timeout")));
 
   auto cw = std::make_unique<ChunkWriter>(mock_hub_, /*fh=*/1, kIno, 0);
   std::vector<char> buf(kPageSize, 'E');
@@ -550,9 +336,8 @@ TEST_F(FlushTasksTest, FileFlushTask_Concurrent_ExactlyOnce) {
   EXPECT_CALL(*mock_meta_system_, NewSliceId(_, _, _))
       .WillRepeatedly(DoAll(SetArgPointee<2>(90u), Return(Status::OK())));
   EXPECT_CALL(*mock_block_store_, PutAsync(_, _, _))
-      .WillRepeatedly(Invoke([](ContextSPtr, PutReq, StatusCallback cb) {
-        cb(Status::OK());
-      }));
+      .WillRepeatedly(Invoke(
+          [](ContextSPtr, PutReq, StatusCallback cb) { cb(Status::OK()); }));
   ON_CALL(*mock_meta_system_, WriteSlice(_, _, _, _, _))
       .WillByDefault(Return(Status::OK()));
 

@@ -18,14 +18,14 @@
 #define DINGOFS_CLIENT_VFS_DATA_SLICE_DATA_H_
 
 #include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <cstdint>
 #include <map>
-#include <memory>
 #include <mutex>
 
 #include "client/vfs/data/slice/block_data.h"
 #include "client/vfs/data/slice/common.h"
-#include "client/vfs/data/slice/task/slice_flush_task.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/callback.h"
 #include "common/status.h"
@@ -38,7 +38,9 @@ namespace vfs {
 
 class VFSHub;
 
-// writing -> flushing -> flushed
+// Streaming upload: write-full-then-upload pipeline.
+// Block is uploaded as soon as it is full during Write().
+// DoFlush() handles remaining partial blocks.
 class SliceWriter {
  public:
   explicit SliceWriter(const SliceDataContext& context, VFSHub* hub,
@@ -47,11 +49,19 @@ class SliceWriter {
 
   ~SliceWriter() = default;
 
+  // --- reference counting (prevents use-after-free on async callbacks) ---
+  void IncRef();
+  void DecRef();
+
   Status Write(ContextSPtr ctx, const char* buf, int32_t size,
                int32_t chunk_offset);
 
-  // prected by chunk, this is should be called only once
+  // Should be called only once (protected by ChunkWriter).
   void FlushAsync(StatusCallback cb);
+
+  // Trigger async slice_id pre-allocation on BGExecutor.
+  // Called by ChunkWriter after construction.
+  void StartPrepareSliceId();
 
   Slice GetCommitSlice();
 
@@ -94,32 +104,57 @@ class SliceWriter {
   BlockData* FindOrCreateBlockDataUnlocked(uint32_t block_index,
                                            int32_t block_offset);
 
-  void SliceFlushed(Status status, SliceFlushTask* task);
-  void FlushDone(Status s);
+  void PrepareSliceId();
+  void FlushUpTo(int32_t written_len);  // caller holds write_flush_mutex_
+  void UploadBlockAsync(uint64_t slice_id, uint32_t block_index,
+                        BlockData* block_data);
+  void OnBlockUploaded(BlockData* block_data, Status s);
   void DoFlush();
+  void FlushDone(Status s);
+  bool WaitInflightWithTimeout(std::chrono::seconds timeout);
 
+  // --- immutable ---
   const SliceDataContext context_;
   VFSHub* vfs_hub_{nullptr};
 
-  std::unique_ptr<SliceFlushTask> flush_task_;
-  // write and flush will run in sequence, but they may be called in different
-  // thread, so this mutex is just used for the member variables are accessed
-  // in a thread-safe manner.
-  // TODO: use memory fench instead of mutex
+  // --- guarded by write_flush_mutex_ ---
   mutable std::mutex write_flush_mutex_;
   int32_t chunk_offset_;
   int32_t len_{0};
-  bool flushing_{false};  // used to prevent multiple flushes
-  uint64_t id_{0};        // from mds
-  // block_index -> BlockData, this should be immutable
+  bool flushing_{false};
+  uint64_t id_{0};
   std::map<uint32_t, BlockDataUPtr> block_datas_;
   StatusCallback flush_cb_;
-  Status flush_status_;
 
+  // --- guarded by inflight_mutex_ ---
+  std::mutex inflight_mutex_;
+  std::condition_variable inflight_cv_;
+
+  // --- guarded by error_mutex_ ---
+  std::mutex error_mutex_;
+  Status upload_error_;
+
+  // --- atomic (lock-free) ---
+  std::atomic<uint64_t> slice_id_{0};
+  std::atomic<bool> slice_id_alloc_failed_{false};
+  std::atomic<uint32_t> inflight_{0};
   std::atomic_bool flushed_{false};
+
+  // --- reference counting ---
+  std::atomic<int32_t> refs_{
+      0};  // creator must call IncRef() after construction
+
+  // --- observability counters (atomic, lock-free) ---
+  std::atomic<uint64_t> total_blocks_streamed_{0};
+  std::atomic<uint64_t> total_blocks_uploaded_{0};
+  std::atomic<uint64_t> slice_id_alloc_latency_us_{0};
 };
 
-using SliceWriterUPtr = std::unique_ptr<SliceWriter>;
+// SliceWriter uses manual ref counting (IncRef/DecRef).
+// Creator must call IncRef() after construction, DecRef() to release.
+// Async callbacks (UploadBlockAsync) hold additional refs.
+// When last DecRef reaches 0, object is deleted.
+using SliceWriterPtr = SliceWriter*;
 
 }  // namespace vfs
 }  // namespace client
