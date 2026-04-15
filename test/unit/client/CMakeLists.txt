@@ -29,6 +29,7 @@ target_link_libraries(test_client
   $<TARGET_OBJECTS:test_vfs_flat>
   $<TARGET_OBJECTS:test_vfs_impl>
   $<TARGET_OBJECTS:test_vfs_service>
+  $<TARGET_OBJECTS:test_vfs_metasystem>
 
   vfs_lib
   vfs_data
