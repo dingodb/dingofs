@@ -13,11 +13,14 @@
 
 #include "mds/filesystem/store_operation.h"
 
+#include <absl/container/flat_hash_map.h>
 #include <absl/container/flat_hash_set.h>
 #include <fcntl.h>
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <functional>
 #include <string>
 #include <utility>
@@ -111,13 +114,13 @@ static void SetError(BatchOperation& batch_operation, Status& status) {
   }
 }
 
-static void SetAttr(BatchOperation& batch_operation, AttrEntry& attr) {
+static void SetResultAttr(BatchOperation& batch_operation, AttrEntry& attrs) {
   for (auto* operation : batch_operation.setattr_operations) {
-    operation->SetAttr(attr);
+    operation->SetResultAttr(attrs);
   }
 
   for (auto* operation : batch_operation.create_operations) {
-    operation->SetAttr(attr);
+    operation->SetResultAttr(attrs);
   }
 }
 
@@ -407,32 +410,18 @@ Status CreateFsOperation::Run(TxnUPtr& txn) {
 Status GetFsOperation::Run(TxnUPtr& txn) {
   std::string value;
   Status status = txn->Get(MetaCodec::EncodeFsKey(fs_name_), value);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
   result_.fs_info = MetaCodec::DecodeFsValue(value);
 
   return Status::OK();
 }
-// message Client {
-//   string id = 1;
-//   string hostname = 2;
-//   uint32 port = 3;
-//   string mountpoint = 4;
-//   string fs_name = 5;
-//   string ip = 6;
-
-//   uint64 last_online_time_ms = 10;
-// }
 
 Status MountFsOperation::Run(TxnUPtr& txn) {
   std::string value;
   std::string key = MetaCodec::EncodeFsKey(fs_name_);
   Status status = txn->Get(key, value);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
   auto fs_info = MetaCodec::DecodeFsValue(value);
 
@@ -478,9 +467,7 @@ Status UmountFsOperation::Run(TxnUPtr& txn) {
   std::string value;
   std::string key = MetaCodec::EncodeFsKey(fs_name_);
   Status status = txn->Get(key, value);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
   auto fs_info = MetaCodec::DecodeFsValue(value);
 
@@ -561,9 +548,7 @@ Status UpdateFsOperation::Run(TxnUPtr& txn) {
 
   std::string value;
   auto status = txn->Get(fs_key, value);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
   auto new_fs_info = MetaCodec::DecodeFsValue(value);
   if (fs_info_.capacity() > 0) new_fs_info.set_capacity(fs_info_.capacity());
@@ -602,9 +587,7 @@ Status UpdateFsPartitionOperation::Run(TxnUPtr& txn) {
 
   std::string value;
   auto status = txn->Get(fs_key, value);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
   auto fs_info = MetaCodec::DecodeFsValue(value);
   auto* partition_policy = fs_info.mutable_partition_policy();
@@ -634,9 +617,7 @@ Status UpdateFsStateOperation::Run(TxnUPtr& txn) {
 
   std::string value;
   auto status = txn->Get(fs_key, value);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
   auto fs_info = MetaCodec::DecodeFsValue(value);
 
@@ -667,9 +648,7 @@ Status UpdateFsRecycleProgressOperation::Run(TxnUPtr& txn) {
 
   std::string value;
   auto status = txn->Get(fs_key, value);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
   auto fs_info = MetaCodec::DecodeFsValue(value);
 
@@ -821,9 +800,8 @@ Status HardLinkOperation::Run(TxnUPtr& txn) {
 
   std::vector<KeyValue> kvs;
   auto status = txn->BatchGet({parent_key, key}, kvs);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
+
   if (kvs.size() != 2) {
     return Status(pb::error::ENOT_FOUND, fmt::format("get parent/child inode fail, count({})", kvs.size()));
   }
@@ -858,7 +836,7 @@ Status HardLinkOperation::Run(TxnUPtr& txn) {
   // create dentry
   txn->Put(MetaCodec::EncodeDentryKey(fs_id, parent, dentry_.Name()), MetaCodec::EncodeDentryValue(dentry_.Copy()));
 
-  SetAttr(parent_attr);
+  result_.parent_attr = parent_attr;
   result_.child_attr = attr;
 
   return status;
@@ -1345,12 +1323,9 @@ void OpenFileOperation::ResetFileRange(TxnUPtr& txn, uint64_t length) {
   }
 }
 
-std::vector<std::string> OpenFileOperation::PrefetchKey() {
-  std::vector<std::string> keys;
+void OpenFileOperation::PrefetchKey(std::vector<std::string>& keys) {
+  if (prefetch_chunks_.empty() && !prefetch_data_) return;
 
-  if (prefetch_chunks_.empty() && !prefetch_data_) return keys;
-
-  keys.reserve(prefetch_chunks_.size() + 1);
   for (const auto& chunk_index : prefetch_chunks_) {
     keys.push_back(MetaCodec::EncodeChunkKey(file_session_.fs_id(), file_session_.ino(), chunk_index));
   }
@@ -1358,8 +1333,6 @@ std::vector<std::string> OpenFileOperation::PrefetchKey() {
   if (FLAGS_mds_tiny_file_data_enable && prefetch_data_) {
     keys.push_back(MetaCodec::EncodeTinyFileDataKey(file_session_.fs_id(), file_session_.ino()));
   }
-
-  return keys;
 }
 
 Status OpenFileOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>& prefetch_kvs) {
@@ -1464,7 +1437,7 @@ Status FlushFileOperation::Run(TxnUPtr& txn) {
              MetaCodec::EncodeTinyFileDataValue(mut_data, ++data_version));
   }
 
-  SetAttr(attr);
+  result_.attr = attr;
 
   return Status::OK();
 }
@@ -1474,9 +1447,7 @@ static Status CheckDirEmpty(TxnUPtr& txn, uint32_t fs_id, uint64_t ino, bool& is
 
   std::vector<KeyValue> kvs;
   auto status = txn->Scan(range, 2, kvs);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
   if (kvs.size() < 2) {
     is_empty = true;
@@ -1504,9 +1475,7 @@ Status RmDirOperation::Run(TxnUPtr& txn) {
   bool is_empty = false;
   Ino child_ino = 0;
   auto status = CheckDirEmpty(txn, fs_id, dentry_.INo(), is_empty, child_ino);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
   if (!is_empty) {
     return Status(pb::error::ENOT_EMPTY,
@@ -1535,7 +1504,7 @@ Status RmDirOperation::Run(TxnUPtr& txn) {
   // delete dentry
   txn->Delete(MetaCodec::EncodeDentryKey(fs_id, parent, dentry_.Name()));
 
-  SetAttr(parent_attr);
+  result_.parent_attr = parent_attr;
 
   return Status::OK();
 }
@@ -1551,9 +1520,8 @@ Status UnlinkOperation::Run(TxnUPtr& txn) {
 
   std::vector<KeyValue> kvs;
   auto status = txn->BatchGet({parent_key, dentry_key, key}, kvs);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
+
   if (kvs.size() != 3) {
     return Status(pb::error::ENOT_FOUND, fmt::format("get parent/child inode fail, count({})", kvs.size()));
   }
@@ -1604,7 +1572,7 @@ Status UnlinkOperation::Run(TxnUPtr& txn) {
   // delete dentry
   txn->Delete(MetaCodec::EncodeDentryKey(fs_id, parent, dentry_.Name()));
 
-  SetAttr(parent_attr);
+  result_.parent_attr = parent_attr;
   result_.child_attr = attr;
 
   return Status::OK();
@@ -1683,7 +1651,7 @@ Status BatchUnlinkOperation::Run(TxnUPtr& txn) {
     txn->Delete(MetaCodec::EncodeDentryKey(fs_id, parent, dentry.Name()));
   }
 
-  SetAttr(parent_attr);
+  result_.parent_attr = parent_attr;
   result_.child_attrs.swap(attrs);
 
   return Status::OK();
@@ -1707,9 +1675,7 @@ Status RenameOperation::Run(TxnUPtr& txn) {
   std::vector<KeyValue> kvs;
   auto status = txn->BatchGet(keys, kvs);
   LOG(INFO) << fmt::format("[operation.{}] kvs size({})", fs_id_, kvs.size());
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
   if (kvs.size() < 2) {
     return Status(pb::error::ENOT_FOUND, "not found old parent inode/old dentry");
@@ -1745,9 +1711,8 @@ Status RenameOperation::Run(TxnUPtr& txn) {
   keys.push_back(old_inode_key);
   if (is_exist_new_dentry) keys.push_back(prev_new_inode_key);
   status = txn->BatchGet(keys, kvs);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
+
   if (kvs.empty()) {
     return Status(pb::error::ENOT_FOUND, fmt::format("not found old inode({})", old_dentry.ino()));
   }
@@ -1771,9 +1736,8 @@ Status RenameOperation::Run(TxnUPtr& txn) {
       bool is_empty;
       Ino child_ino = 0;
       status = CheckDirEmpty(txn, fs_id_, prev_new_dentry.ino(), is_empty, child_ino);
-      if (!status.ok()) {
-        return status;
-      }
+      if (!status.ok()) return status;
+
       if (!is_empty) {
         return Status(pb::error::ENOT_EMPTY,
                       fmt::format("new dentry({}/{}) is not empty, child ino({})", new_parent_, new_name_, child_ino));
@@ -1985,9 +1949,7 @@ Status SetFsQuotaOperation::Run(TxnUPtr& txn) {
 Status GetFsQuotaOperation::Run(TxnUPtr& txn) {
   std::string value;
   auto status = txn->Get(MetaCodec::EncodeFsQuotaKey(fs_id_), value);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
   if (value.empty()) {
     return Status(pb::error::ENOT_FOUND, "fs quota not found");
@@ -2002,9 +1964,8 @@ Status FlushFsUsageOperation::Run(TxnUPtr& txn) {
   std::string key = MetaCodec::EncodeFsQuotaKey(fs_id_);
   std::string value;
   auto status = txn->Get(key, value);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
+
   CHECK(!value.empty()) << "fs quota value is empty.";
 
   auto fs_quota = MetaCodec::DecodeFsQuotaValue(value);
@@ -2062,9 +2023,7 @@ Status SetDirQuotaOperation::Run(TxnUPtr& txn) {
 Status GetDirQuotaOperation::Run(TxnUPtr& txn) {
   std::string value;
   auto status = txn->Get(MetaCodec::EncodeDirQuotaKey(fs_id_, ino_), value);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
   if (value.empty()) {
     return Status(pb::error::ENOT_FOUND, "not found dir quota");
@@ -2079,9 +2038,7 @@ Status GetDirQuotaOperation::Run(TxnUPtr& txn) {
 Status DeleteDirQuotaOperation::Run(TxnUPtr& txn) {
   std::string value;
   auto status = txn->Get(MetaCodec::EncodeDirQuotaKey(fs_id_, ino_), value);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
   result_.quota = MetaCodec::DecodeDirQuotaValue(value);
 
@@ -2117,9 +2074,7 @@ Status FlushDirUsagesOperation::Run(TxnUPtr& txn) {
 
   std::vector<KeyValue> kvs;
   auto status = txn->BatchGet(keys, kvs);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
   for (auto& kv : kvs) {
     uint32_t fs_id;
@@ -2213,9 +2168,8 @@ Status UpsertCacheMemberOperation::Run(TxnUPtr& txn) {
   }
 
   status = handler_(cache_member, status);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
+
   cache_member.set_version(cache_member.version() + 1);
   result_.cache_member = cache_member;
   txn->Put(MetaCodec::EncodeHeartbeatCacheMemberKey(cache_member_id_), MetaCodec::EncodeHeartbeatValue(cache_member));
@@ -2320,12 +2274,10 @@ Status CleanDelSliceOperation::Run(TxnUPtr& txn) {
 Status GetDelFileOperation::Run(TxnUPtr& txn) {
   std::string value;
   auto status = txn->Get(MetaCodec::EncodeDelFileKey(fs_id_, ino_), value);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
   if (!value.empty()) {
-    SetAttr(MetaCodec::DecodeDelFileValue(value));
+    result_.attr = MetaCodec::DecodeDelFileValue(value);
   }
 
   return Status::OK();
@@ -2391,7 +2343,7 @@ Status ScanDirShardOperation::Run(TxnUPtr& txn) {
     auto status = txn->Get(MetaCodec::EncodeInodeKey(fs_id_, ino_), value);
     if (!status.ok()) return status;
 
-    SetAttr(MetaCodec::DecodeInodeValue(value));
+    result_.attr = MetaCodec::DecodeInodeValue(value);
 
     range.start = MetaCodec::EncodeDentryKey(fs_id_, ino_, range_.start);
     range.end = range_.end.empty() ? complete_range.end : MetaCodec::EncodeDentryKey(fs_id_, ino_, range_.end);
@@ -2403,7 +2355,7 @@ Status ScanDirShardOperation::Run(TxnUPtr& txn) {
 
   return txn->Scan(range, [&](const std::string& key, const std::string& value) -> bool {
     if (MetaCodec::IsInodeKey(key)) {
-      SetAttr(MetaCodec::DecodeInodeValue(value));
+      result_.attr = MetaCodec::DecodeInodeValue(value);
       return true;
     }
     return handler_(MetaCodec::DecodeDentryValue(value));
@@ -2531,7 +2483,7 @@ Status GetInodeAttrOperation::Run(TxnUPtr& txn) {
   auto status = txn->Get(MetaCodec::EncodeInodeKey(fs_id_, ino_), value);
   if (!status.ok()) return status;
 
-  SetAttr(MetaCodec::DecodeInodeValue(value));
+  result_.attr = MetaCodec::DecodeInodeValue(value);
 
   return Status::OK();
 }
@@ -2708,45 +2660,32 @@ bool OperationProcessor::AsyncRun(OperationSPtr operation, OperationTask::PostHa
   return ret;
 }
 
-std::map<OperationProcessor::Key, BatchOperation> OperationProcessor::Grouping(std::vector<Operation*>& operations) {
-  std::map<Key, BatchOperation> batch_operation_map;
-
+void OperationProcessor::Grouping(std::vector<Operation*>& operations, BatchOperationMap& batch_operation_map) {
   for (auto* operation : operations) {
-    Key key = {.fs_id = operation->GetFsId(), .ino = operation->GetIno()};
+    auto [it, inserted] = batch_operation_map.try_emplace(operation->GroupingKey());
+    if (inserted) {
+      it->second.fs_id = operation->GetFsId();
+      it->second.ino = operation->GetIno();
+    }
 
-    auto it = batch_operation_map.find(key);
-    if (it == batch_operation_map.end()) {
-      BatchOperation batch_operation = {.fs_id = operation->GetFsId(), .ino = operation->GetIno()};
-      if (operation->IsCreateType()) {
-        batch_operation.create_operations.push_back(operation);
+    auto& batch_operation = it->second;
+    if (operation->IsCreateType()) {
+      batch_operation.create_operations.push_back(operation);
 
-      } else if (operation->IsSetAttrType()) {
-        batch_operation.setattr_operations.push_back(operation);
-
-      } else {
-        LOG(FATAL) << "[operation] invalid operation type.";
-      }
-      batch_operation_map.insert(std::make_pair(key, batch_operation));
+    } else if (operation->IsSetAttrType()) {
+      batch_operation.setattr_operations.push_back(operation);
 
     } else {
-      if (operation->IsCreateType()) {
-        it->second.create_operations.push_back(operation);
-
-      } else if (operation->IsSetAttrType()) {
-        it->second.setattr_operations.push_back(operation);
-
-      } else {
-        LOG(FATAL) << "[operation] invalid operation type.";
-      }
+      LOG(FATAL) << "[operation] invalid operation type.";
     }
   }
-
-  return batch_operation_map;
 }
 
 void OperationProcessor::ProcessOperation() {
   std::vector<Operation*> stage_operations;
   stage_operations.reserve(FLAGS_mds_store_operation_batch_size);
+
+  BatchOperationMap batch_operation_map;
 
   Operation* operation = nullptr;
   while (true) {
@@ -2778,10 +2717,11 @@ void OperationProcessor::ProcessOperation() {
 
     } while (true);
 
-    auto batch_operation_map = Grouping(stage_operations);
+    Grouping(stage_operations, batch_operation_map);
     for (auto& [_, batch_operation] : batch_operation_map) {
       LaunchExecuteBatchOperation(std::move(batch_operation));
     }
+    batch_operation_map.clear();
   }
 
   // print pending operations
@@ -2832,26 +2772,35 @@ static std::string GetName(const BatchOperation& batch_operation) {
   return op_names;
 }
 
+static void GenPrefetchKey(BatchOperation& batch_operation, std::vector<std::string>& prefetch_keys) {
+  for (auto* operation : batch_operation.create_operations) {
+    operation->PrefetchKey(prefetch_keys);
+  }
+
+  for (auto* operation : batch_operation.setattr_operations) {
+    operation->PrefetchKey(prefetch_keys);
+  }
+}
+
 void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) {
   const uint32_t fs_id = batch_operation.fs_id;
   const uint64_t ino = batch_operation.ino;
+  size_t count = batch_operation.setattr_operations.size() + batch_operation.create_operations.size();
 
   utils::Duration duration;
 
   // get prefetch keys
   std::string primary_key = MetaCodec::EncodeInodeKey(fs_id, ino);
-  std::vector<std::string> keys = {primary_key};
-  for (auto* operation : batch_operation.setattr_operations) {
-    auto prefetch_keys = operation->PrefetchKey();
-    if (!prefetch_keys.empty()) keys.insert(keys.end(), prefetch_keys.begin(), prefetch_keys.end());
-  }
+  std::vector<std::string> prefetch_keys;
+  prefetch_keys.reserve(kStoreOperationBatchSize);
+  prefetch_keys.push_back(primary_key);
+  GenPrefetchKey(batch_operation, prefetch_keys);
 
   SetElapsedTime(batch_operation, "store_pending");
 
   AttrEntry attr;
   Status status;
   uint32_t retry = 0;
-  int count = 0;
   int64_t txn_id = 0;
   char* commit_type = (char*)"none";
   std::string op_names = GetName(batch_operation);
@@ -2866,7 +2815,7 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
     txn_id = txn->ID();
 
     std::vector<KeyValue> prefetch_kvs;
-    status = txn->BatchGet(keys, prefetch_kvs);
+    status = txn->BatchGet(prefetch_keys, prefetch_kvs);
     if (!status.ok()) {
       if (status.error_code() == pb::error::ESTORE_MAYBE_RETRY) {
         LOG(WARNING) << fmt::format("[operation.{}.{}][{}][{}us] batch run {} lock conflict, retry({}) status({}).",
@@ -2886,13 +2835,11 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
     // run set attr operations
     for (auto* operation : batch_operation.setattr_operations) {
       operation->RunInBatch(txn, attr, prefetch_kvs);
-      if (retry == 0) ++count;
     }
 
     // run create operations
     for (auto* operation : batch_operation.create_operations) {
       operation->RunInBatch(txn, attr, prefetch_kvs);
-      if (retry == 0) ++count;
     }
 
     attr.set_version(attr.version() + 1);
@@ -2925,7 +2872,7 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
       txn_id, duration.ElapsedUs(), op_names, count, commit_type, retry, status.error_str(), DescribeAttr(attr));
 
   if (status.ok()) {
-    SetAttr(batch_operation, attr);
+    SetResultAttr(batch_operation, attr);
 
   } else {
     SetError(batch_operation, status);
