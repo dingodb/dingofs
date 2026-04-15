@@ -54,6 +54,10 @@ Status DirIterator::GetValue(ContextSPtr& ctx, uint64_t off, bool with_attr,
   with_attr_ = with_attr;
 
   do {
+    CHECK(off >= offset_) << fmt::format(
+        "[dir_iterator.{}.{}] invalid off({}) offset({}).", ino_, fh_, off,
+        offset_);
+
     if (off < offset_ + entries_.size()) {
       dir_entry = entries_[off - offset_];
       return Status::OK();
@@ -108,10 +112,6 @@ Status DirIterator::SeekBackward(ContextSPtr& ctx, uint64_t off) {
   // get the nearest offset in memo which less than or equal to off
   auto it = last_name_memo_.upper_bound(off);
   if (it != last_name_memo_.begin()) --it;
-  // LOG(ERROR) << fmt::format(
-  //     "[dir_iterator.{}.{}] seek backward fail, off({}) offset({}).", ino_,
-  //     fh_, off, offset_);
-  // return Status::InvalidArgument("seek backward fail");
 
   entries_.clear();
   offset_ = it->first;
@@ -359,7 +359,7 @@ bool DirIteratorManager::Load(MDSClient& mds_client, const Json::Value& value) {
       uint64_t fh = sub_item["fh"].asUInt64();
 
       auto dir_iterator = DirIterator::New(mds_client, ino, fh);
-      if (!dir_iterator->Load(item)) {
+      if (!dir_iterator->Load(sub_item)) {
         LOG(ERROR) << fmt::format(
             "[meta.dir_iterator] load dir({}) iterator fail.", ino);
         return false;
