@@ -570,7 +570,7 @@ Status FileSystem::RunOperation(Operation* operation) {
 
   CHECK(count_down.wait() == 0) << "count down wait fail.";
 
-  return operation->GetResult().status;
+  return operation->GetStatus();
 }
 
 Status FileSystem::CreateRoot() {
@@ -767,7 +767,7 @@ Status FileSystem::BatchCreate(Context& ctx, Ino parent, const std::vector<MkNod
   if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
-  auto& parent_attr = result.attr;
+  auto& parent_attr = result.parent_attr;
 
   // update cache
   for (auto& file_session : file_sessions) {
@@ -872,7 +872,7 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
   if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
-  auto& parent_attr = result.attr;
+  auto& parent_attr = result.parent_attr;
 
   // update cache
   UpsertInodeCache(ino, inode);
@@ -979,7 +979,7 @@ Status FileSystem::BatchMkNod(Context& ctx, const std::vector<MkNodParam>& param
   if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
-  auto& parent_attr = result.attr;
+  auto& parent_attr = result.parent_attr;
 
   // update cache
   UpsertInodeCache(parent_attr);
@@ -1373,7 +1373,7 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
   if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
-  auto& parent_attr = result.attr;
+  auto& parent_attr = result.parent_attr;
 
   // update cache
   UpsertInodeCache(ino, inode);
@@ -1484,7 +1484,7 @@ Status FileSystem::BatchMkDir(Context& ctx, const std::vector<MkDirParam>& param
   if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
-  auto& parent_attr = result.attr;
+  auto& parent_attr = result.parent_attr;
 
   // update cache
   UpsertInodeCache(parent_attr);
@@ -1549,7 +1549,7 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name, Ino&
   if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
-  auto& parent_attr = result.attr;  // parent
+  auto& parent_attr = result.parent_attr;
 
   ino = dentry.INo();
   entry_out.parent_attr = parent_attr;
@@ -1658,7 +1658,7 @@ Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent, const std::string
   if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
-  auto& parent_attr = result.attr;
+  auto& parent_attr = result.parent_attr;
   auto& attr = result.child_attr;
 
   // update quota
@@ -1713,7 +1713,7 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name, Ent
   status = RunOperation(&operation);
 
   auto& result = operation.GetResult();
-  auto& parent_attr = result.attr;
+  auto& parent_attr = result.parent_attr;
   auto& attr = result.child_attr;
   LOG(INFO) << fmt::format("[fs.{}.{}][{}us] unlink {}/{} finish, nlink({}) status({}).", fs_id_, ctx.RequestId(),
                            duration.ElapsedUs(), parent, name, attr.nlink(), status.error_str());
@@ -1786,7 +1786,7 @@ Status FileSystem::BatchUnLink(Context& ctx, Ino parent, const std::vector<std::
   status = RunOperation(&operation);
 
   auto& result = operation.GetResult();
-  auto& parent_attr = result.attr;
+  auto& parent_attr = result.parent_attr;
   auto& child_attrs = result.child_attrs;
 
   LOG(INFO) << fmt::format("[fs.{}.{}][{}us] unlink {}/{} finish, status({}).", fs_id_, ctx.RequestId(),
@@ -1888,7 +1888,7 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_par
   if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
-  auto& parent_attr = result.attr;
+  auto& parent_attr = result.parent_attr;
 
   // update cache
   UpsertInodeCache(ino, inode);
@@ -3940,7 +3940,7 @@ Status FileSystemSet::RunOperation(Operation* operation) {
 
   CHECK(count_down.wait() == 0) << "count down wait fail.";
 
-  return operation->GetResult().status;
+  return operation->GetStatus();
 }
 
 void FileSystemSet::DescribeByJson(Json::Value& value) {
