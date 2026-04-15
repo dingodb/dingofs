@@ -96,8 +96,6 @@ class MockOperationProcessor : public OperationProcessor {
   bool RunBatched(Operation* operation) {
     // For UpdateShardBoundariesOperation, just simulate success
     if (operation->GetOpType() == Operation::OpType::kUpdateShardBoundaries) {
-      auto& result = operation->GetResult();
-      result.status = Status::OK();
       operation->NotifyEvent();
       return true;
     }

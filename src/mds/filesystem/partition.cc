@@ -410,7 +410,7 @@ Status ShardPartition::RunOperation(Operation* operation) {
 
   CHECK(count_down.wait() == 0) << "count down wait fail.";
 
-  return operation->GetResult().status;
+  return operation->GetStatus();
 }
 
 Range ShardPartition::QueryRangeNoLock(const std::string& name) {
