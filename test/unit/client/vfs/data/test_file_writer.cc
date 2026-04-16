@@ -17,7 +17,6 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include <atomic>
 #include <cstdint>
 #include <thread>
 #include <vector>
@@ -25,7 +24,6 @@
 #include "client/vfs/data/writer/file_writer.h"
 #include "common/trace/trace_manager.h"
 #include "test/unit/client/vfs/test_base.h"
-#include "test/unit/client/vfs/test_common.h"
 
 namespace dingofs {
 namespace client {
