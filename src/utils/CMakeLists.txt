@@ -19,6 +19,7 @@ add_library(dingofs_utils
     throttle.cc
     uuid.cc
     logclean_manager.cc
+    numa_manager.cc
 )
 
 target_link_libraries(dingofs_utils
@@ -28,4 +29,5 @@ target_link_libraries(dingofs_utils
     brpc::brpc
     glog::glog
     gflags::gflags
+    numa
 )

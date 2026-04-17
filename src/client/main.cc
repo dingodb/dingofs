@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <gflags/gflags.h>
 #include <glog/logging.h>
 
 #include <csignal>
@@ -32,8 +33,8 @@
 #include "common/options/common.h"
 #include "common/types.h"
 #include "fmt/format.h"
-#include "gflags/gflags.h"
 #include "utils/daemonize.h"
+#include "utils/numa_manager.h"
 #include "utils/scoped_cleanup.h"
 
 using FuseServer = dingofs::client::fuse::FuseServer;
@@ -177,6 +178,13 @@ int main(int argc, char* argv[]) {
   if (dingofs::FLAGS_daemonize && !dingofs::utils::DaemonizeExec(orig_args)) {
     std::cerr << "failed to daemonize process.\n";
     return EXIT_FAILURE;
+  }
+
+  // numa bind to node to avoid performance degradation caused by
+  // cross-node memory access
+  auto& numa_manager = dingofs::utils::NumaManager::GetInstance();
+  if (dingofs::FLAGS_numa_bind_enable && numa_manager.Available()) {
+    numa_manager.BindNode(dingofs::FLAGS_numa_bind_node);
   }
 
   struct MountOption mount_option{
