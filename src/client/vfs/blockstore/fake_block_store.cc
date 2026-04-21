@@ -27,7 +27,11 @@ namespace client {
 namespace vfs {
 
 static constexpr int64_t kStaticMemSize = 4 * 1024 * 1024;  // 4MB
-static char kStaticMemory[kStaticMemSize] = {0};
+// Per-thread buffer so concurrent FUSE replies don't all point at the same
+// BSS region (which causes kernel fuse_copy_fill -> get_user_pages_fast ->
+// follow_page_pte to serialize on a single PTE spinlock). Same fix as the
+// dryrun FuseOpRead thread_local patch (6b9136f7d).
+thread_local static char kStaticMemory[kStaticMemSize] = {0};
 
 #define METHOD_NAME() ("FakeBlockStore::" + std::string(__FUNCTION__))
 
