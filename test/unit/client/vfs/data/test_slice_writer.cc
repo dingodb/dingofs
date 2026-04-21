@@ -563,6 +563,53 @@ TEST_F(SliceWriterSliceRelativeTest, Write_ReverseWrite_CheckFails) {
                "");
 }
 
+// Forward-gap write should be rejected: SliceWriter enforces
+// CHECK_EQ(chunk_offset, End()), so skipping ahead is not allowed.
+TEST_F(SliceWriterSliceRelativeTest, Write_ForwardGap_CheckFails) {
+  const int32_t k4MB = 4 * 1024 * 1024;
+  auto sw = MakeSliceWriter(k4MB);
+  SliceWriterGuard guard(sw);
+
+  auto buf1 = MakeBuf(k4MB);
+  ASSERT_TRUE(sw->Write(ctx_, buf1.data(), k4MB, k4MB).ok());
+  // End() is now 8MB. Writing at 10MB leaves a 2MB hole -> reject.
+  auto buf2 = MakeBuf(k4MB);
+  EXPECT_DEATH(sw->Write(ctx_, buf2.data(), k4MB, 10 * 1024 * 1024), "");
+}
+
+// First Write at wrong starting offset should be rejected
+// (chunk_offset_ is set at construction, forward-append only).
+TEST_F(SliceWriterSliceRelativeTest, Write_WrongStartOffset_CheckFails) {
+  const int32_t k4MB = 4 * 1024 * 1024;
+  auto sw = MakeSliceWriter(k4MB);  // ctor sets chunk_offset_ = 4MB
+  SliceWriterGuard guard(sw);
+
+  // Slice starts at 4MB; writing at 0 / 2MB / 6MB are all != End() -> reject.
+  auto buf = MakeBuf(k4MB);
+  EXPECT_DEATH(sw->Write(ctx_, buf.data(), k4MB, 0), "");
+}
+
+// ChunkOffset() is const after construction: multiple forward writes never
+// shift it.
+TEST_F(SliceWriterSliceRelativeTest, ChunkOffset_StableAfterWrites) {
+  const int32_t kStart = 5 * 1024 * 1024;
+  auto sw = MakeSliceWriter(kStart);
+  SliceWriterGuard guard(sw);
+
+  EXPECT_EQ(sw->ChunkOffset(), kStart);
+
+  const int32_t k1MB = 1 * 1024 * 1024;
+  int32_t off = kStart;
+  for (int i = 0; i < 8; ++i) {
+    auto buf = MakeBuf(k1MB, 'A' + i);
+    ASSERT_TRUE(sw->Write(ctx_, buf.data(), k1MB, off).ok());
+    off += k1MB;
+    EXPECT_EQ(sw->ChunkOffset(), kStart) << "after write " << i;
+    EXPECT_EQ(sw->End(), off) << "after write " << i;
+  }
+  EXPECT_EQ(sw->Len(), 8 * k1MB);
+}
+
 // 8. GetCommitSlice returns correct fields for a non-zero chunk_offset.
 TEST_F(SliceWriterSliceRelativeTest, GetCommitSlice_CorrectFields) {
   const int32_t kStartOffset = 5 * 1024 * 1024;

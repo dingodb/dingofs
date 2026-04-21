@@ -99,24 +99,28 @@ void SliceWriter::PrepareSliceId() {
   auto ctx = SpanScope::GetContext(span);
 
   uint64_t slice_id = 0;
-  uint64_t start_us = butil::cpuwide_time_us();
-
   Status s =
       vfs_hub_->GetMetaSystem()->NewSliceId(ctx, context_.ino, &slice_id);
 
-  uint64_t elapsed_us = butil::cpuwide_time_us() - start_us;
-  slice_id_alloc_latency_us_.store(elapsed_us, std::memory_order_relaxed);
-
-  VLOG(2) << fmt::format("{} PrepareSliceId elapsed_us={}, status={}", UUID(),
-                         elapsed_us, s.ToString());
+  VLOG(2) << fmt::format("{} PrepareSliceId status={}", UUID(), s.ToString());
 
   if (s.ok()) {
     CHECK_GT(slice_id, 0);
-    slice_id_.store(slice_id, std::memory_order_release);
+    // CAS: only publish our id if DoFlush's sync fallback hasn't already
+    // stored one. Whoever's NewSliceId returns first wins; the later one's
+    // id is abandoned (MDS-side leak).
+    uint64_t expected = 0;
+    if (!slice_id_.compare_exchange_strong(expected, slice_id,
+                                           std::memory_order_acq_rel,
+                                           std::memory_order_acquire)) {
+      VLOG(2) << fmt::format(
+          "{} PrepareSliceId raced DoFlush sync fallback, abandoning our id {}",
+          UUID(), slice_id);
+    }
   } else {
-    LOG(WARNING) << fmt::format("{} PrepareSliceId failed: {}", UUID(),
-                                s.ToString());
-    slice_id_alloc_failed_.store(true, std::memory_order_release);
+    LOG(WARNING) << fmt::format(
+        "{} PrepareSliceId failed: {}, DoFlush will retry synchronously",
+        UUID(), s.ToString());
   }
 }
 
@@ -170,20 +174,18 @@ Status SliceWriter::Write(ContextSPtr ctx, const char* buf, int32_t size,
     }
 
     // ---- Update len_ ----
-    {
-      int32_t old_len = len_;
-      int32_t old_chunk_offset = chunk_offset_;
-
-      chunk_offset_ = std::min(chunk_offset, chunk_offset_);
-      len_ += size;
-
-      VLOG(4) << fmt::format(
-          "{} Update slice data, old_chunk_offset: {}, old_len: {}, "
-          "updated slice: {}",
-          UUID(), old_chunk_offset, old_len, ToStringUnlocked());
-    }
+    // chunk_offset_ is const (forward-append only); only len_ grows.
+    int32_t old_len = len_;
+    len_ += size;
+    VLOG(4) << fmt::format("{} Update slice data, old_len: {}, updated: {}",
+                           UUID(), old_len, ToStringUnlocked());
 
     // ---- Trigger streaming upload ----
+    // After FlushAsync, let DoFlush be the sole uploader (Step 5 takes
+    // block_datas_ wholesale). Skipping FlushUpTo here is not required for
+    // correctness - ChunkWriter's slice_mutex_ already prevents Write after
+    // FlushAsync on the same slice - but it keeps the upload path single-
+    // sourced once flushing starts.
     if (len_ >= context_.block_size && !flushing_) {
       FlushUpTo(len_);
     }
@@ -200,12 +202,9 @@ Status SliceWriter::Write(ContextSPtr ctx, const char* buf, int32_t size,
 void SliceWriter::FlushUpTo(int32_t written_len) {
   uint64_t sid = slice_id_.load(std::memory_order_acquire);
   if (sid == 0) {
-    if (slice_id_alloc_failed_.load(std::memory_order_acquire)) {
-      VLOG(2) << fmt::format("{} FlushUpTo skipped: slice_id alloc failed",
-                             UUID());
-    } else {
-      VLOG(4) << fmt::format("{} FlushUpTo skipped: slice_id pending", UUID());
-    }
+    LOG(INFO) << fmt::format(
+        "{} FlushUpTo skipped: slice_id not ready (pending or alloc failed)",
+        UUID());
     return;
   }
 
@@ -383,15 +382,9 @@ void SliceWriter::DoFlush() {
   // === Step 4: Ensure slice_id ===
   uint64_t sid = slice_id_.load(std::memory_order_acquire);
   if (sid == 0) {
-    if (slice_id_alloc_failed_.load(std::memory_order_acquire)) {
-      LOG(WARNING) << fmt::format(
-          "{} DoFlush: prepareSliceId had failed, retrying synchronously",
-          UUID());
-    } else {
-      VLOG(2) << fmt::format(
-          "{} DoFlush: prepareSliceId still pending, falling back to sync",
-          UUID());
-    }
+    VLOG(2) << fmt::format(
+        "{} DoFlush: prepareSliceId not ready, falling back to sync NewSliceId",
+        UUID());
 
     Status s = vfs_hub_->GetMetaSystem()->NewSliceId(ctx, context_.ino, &sid);
     if (!s.ok()) {
@@ -400,14 +393,21 @@ void SliceWriter::DoFlush() {
       FlushDone(s);
       return;
     }
-    slice_id_.store(sid, std::memory_order_release);
+    // CAS: if PrepareSliceId landed between our load and now, use its id and
+    // abandon ours (MDS leaks our allocation, but that's cheaper than mixing
+    // ids mid-flush). If we win, slice_id_ becomes sid.
+    uint64_t expected = 0;
+    if (!slice_id_.compare_exchange_strong(expected, sid,
+                                           std::memory_order_acq_rel,
+                                           std::memory_order_acquire)) {
+      sid = expected;
+    }
   }
 
   // === Step 5: Upload remaining blocks (partial + any not yet streamed) ===
   std::map<uint32_t, BlockDataUPtr> remaining;
   {
     std::lock_guard<std::mutex> lg(write_flush_mutex_);
-    id_ = sid;
     remaining = std::move(block_datas_);
   }
 
@@ -473,16 +473,22 @@ void SliceWriter::FlushDone(Status s) {
 
 Slice SliceWriter::GetCommitSlice() {
   int32_t len = 0;
-  int32_t chunk_offset = 0;
-
   {
     std::lock_guard<std::mutex> lg(write_flush_mutex_);
     len = len_;
-    chunk_offset = chunk_offset_;
   }
 
+  uint64_t sid = slice_id_.load(std::memory_order_acquire);
+  // Caller (ChunkFlushTask) must only call this after a successful flush,
+  // at which point either PrepareSliceId or DoFlush's sync fallback has
+  // published a valid id via CAS. A zero id here means contract violation.
+  CHECK_GT(sid, 0) << fmt::format(
+      "{} GetCommitSlice called before slice_id is published "
+      "(flush not done or failed?)",
+      UUID());
+
   Slice slice{
-      .id = id_, .size = len, .off = 0, .len = len, .pos = chunk_offset};
+      .id = sid, .size = len, .off = 0, .len = len, .pos = chunk_offset_};
 
   VLOG(4) << fmt::format(
       "{} GetCommitSlices completed, slice: {}, slice_data: {}", UUID(),
