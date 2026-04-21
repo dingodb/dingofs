@@ -13,23 +13,37 @@
 # limitations under the License.
 
 # ============================================================================
-# sdk/: Public SDK targets
-#   shim/   — language-agnostic shim layer (dingofs_shim, used by python/c)
-#   python/ — Python nanobind extension (_dingofs_core)
+# write_bench: VFS write benchmark — bypass FUSE, call libdingofs C API
 # ============================================================================
 
-add_subdirectory(shim)
+add_executable(write_bench
+    write_bench.cc
+)
 
-if(BUILD_C_API)
-    message(STATUS "Build C API (libdingofs.so)")
-    add_subdirectory(c)
-endif()
+target_include_directories(write_bench
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/sdk
+)
 
-if(BUILD_PYTHON_BINDINGS)
-    message(STATUS "Build Python bindings")
-    add_subdirectory(python)
-endif()
+target_link_libraries(write_bench
+    PRIVATE
+        dingofs_c
+        gflags::gflags
+        glog::glog
+)
 
-if(BUILD_C_API)
-    add_subdirectory(bench)
-endif()
+add_executable(read_bench
+    read_bench.cc
+)
+
+target_include_directories(read_bench
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/sdk
+)
+
+target_link_libraries(read_bench
+    PRIVATE
+        dingofs_c
+        gflags::gflags
+        glog::glog
+)
