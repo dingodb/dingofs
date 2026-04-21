@@ -1875,7 +1875,7 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
       Context ctx("11111111111111", "fsstatservice");
       auto status = file_system->GetInodeFromStore(ctx, ino, "Stat", false, inode);
       if (status.ok()) {
-        RenderInodePage(inode->Copy(), os);
+        RenderInodePage(inode->ToAttr(), os);
 
       } else {
         os << fmt::format("Get inode({}) fail, {}.", ino, status.error_str());

@@ -21,16 +21,16 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
-#include "absl/container/flat_hash_set.h"
+#include "absl/container/flat_hash_map.h"
 #include "bthread/countdown_event.h"
 #include "butil/containers/mpsc_queue.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"
-#include "mds/common/codec.h"
 #include "mds/common/runnable.h"
 #include "mds/common/status.h"
 #include "mds/common/tracing.h"
@@ -76,7 +76,7 @@ class Operation {
     kBatchMkNod = 24,
     kBatchCreateFile = 25,
     kHardLink = 26,
-    kSmyLink = 27,
+    kSymLink = 27,
     kUpdateAttr = 28,
     kUpdateXAttr = 29,
     kRemoveXAttr = 30,
@@ -124,9 +124,8 @@ class Operation {
 
     kScanLock = 120,
     kScanFs = 121,
-    kScanPartition = 122,
-    kScanDentry = 123,
-    kScanDirShard = 126,
+    kScanDentry = 122,
+    kScanDirShard = 123,
     kScanDelFile = 124,
     kScanDelSlice = 125,
 
@@ -140,14 +139,14 @@ class Operation {
 
     kGetInodeAttr = 160,
     kBatchGetInodeAttr = 161,
-    KGetDentry = 162,
+    kGetDentry = 162,
 
     kImportKV = 170,
 
     kUpsertCacheMember = 180,
     kDeleteCacheMember = 181,
     kScanCacheMember = 182,
-    KGetCacheMember = 183,
+    kGetCacheMember = 183,
   };
 
   const char* OpName() const;
@@ -159,7 +158,10 @@ class Operation {
       case OpType::kMkNod:
       case OpType::kBatchMkNod:
       case OpType::kBatchCreateFile:
-      case OpType::kSmyLink:
+      case OpType::kHardLink:
+      case OpType::kSymLink:
+      case OpType::kUnlink:
+      case OpType::kBatchUnlink:
         return true;
 
       default:
@@ -190,13 +192,34 @@ class Operation {
       case OpType::kMkNod:
       case OpType::kBatchMkNod:
       case OpType::kBatchCreateFile:
-      case OpType::kSmyLink:
+      case OpType::kHardLink:
+      case OpType::kSymLink:
+      case OpType::kUnlink:
+      case OpType::kBatchUnlink:
       case OpType::kUpdateAttr:
       case OpType::kUpdateXAttr:
       case OpType::kRemoveXAttr:
       case OpType::kUpdateShardBoundaries:
       case OpType::kOpenFile:
       case OpType::kFallocate:
+        return true;
+
+      default:
+        return false;
+    }
+  }
+
+  bool IsDirMutationOperation() const {
+    if (!HasDirAttrMutation()) return false;
+
+    switch (GetOpType()) {
+      case OpType::kMkNod:
+      case OpType::kBatchMkNod:
+      case OpType::kBatchCreateFile:
+      case OpType::kHardLink:
+      case OpType::kSymLink:
+      case OpType::kUnlink:
+      case OpType::kBatchUnlink:
         return true;
 
       default:
@@ -250,20 +273,41 @@ class Operation {
 
   virtual void PrefetchKey(std::vector<std::string>& keys) {}
 
-  virtual Status RunInBatch(TxnUPtr&, AttrEntry&, const std::vector<KeyValue>&) {
-    return Status(pb::error::ENOT_SUPPORT, "not support.");
-  }
+  struct BatchSharedParam {
+    AttrEntry attr;
+    AttrMutationEntry attr_mutation;
+    std::vector<KeyValue> prefetch_kvs;
+    // Index over prefetch_kvs for O(1) value lookup. The string_views point
+    // into the entries of prefetch_kvs and remain valid as long as that
+    // vector is not mutated. Call RebuildIndex() after every BatchGet that
+    // (re)populates prefetch_kvs (including transaction retries).
+    absl::flat_hash_map<std::string_view, std::string_view> prefetch_index;
+
+    void RebuildIndex() {
+      prefetch_index.clear();
+      prefetch_index.reserve(prefetch_kvs.size());
+      for (const auto& kv : prefetch_kvs) {
+        prefetch_index.emplace(kv.key, kv.value);
+      }
+    }
+  };
+  virtual Status RunInBatch(TxnUPtr&, BatchSharedParam&) { return Status(pb::error::ENOT_SUPPORT, "not support."); }
   virtual Status Run(TxnUPtr&) { return Status(pb::error::ENOT_SUPPORT, "not support."); }
+
+  void SetBatchIndex(uint32_t index) { batch_index_ = index; }
+  uint32_t GetBatchIndex() const { return batch_index_; }
 
   void SetStatus(const Status& status) { status_ = status; }
   const Status& GetStatus() const { return status_; }
 
-  virtual void SetResultAttr(AttrEntry&) { LOG(FATAL) << "set result attr not supported."; }
+  virtual void SetResultAttr(BatchSharedParam&) { LOG(FATAL) << "set result attr not supported."; }
 
   Trace& GetTrace() { return trace_; }
 
  private:
   uint64_t time_ns_{0};
+
+  uint32_t batch_index_{0};
 
   Status status_;
 
@@ -488,9 +532,9 @@ class MkDirOperation : public Operation {
   uint32_t GetFsId() const override { return dentry_.FsId(); }
   Ino GetIno() const override { return dentry_.ParentIno(); }
 
-  Status RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const std::vector<KeyValue>& prefetch_kvs) override;
+  Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
 
-  void SetResultAttr(AttrEntry& attr) override { result_.parent_attr = attr; }
+  void SetResultAttr(BatchSharedParam& shared_param) override { result_.parent_attr = shared_param.attr; }
 
   Result& GetResult() { return result_; }
 
@@ -515,9 +559,9 @@ class BatchMkDirOperation : public Operation {
   uint32_t GetFsId() const override { return dentries_[0].FsId(); }
   Ino GetIno() const override { return dentries_[0].ParentIno(); }
 
-  Status RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const std::vector<KeyValue>& prefetch_kvs) override;
+  Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
 
-  void SetResultAttr(AttrEntry& attr) override { result_.parent_attr = attr; }
+  void SetResultAttr(BatchSharedParam& shared_param) override { result_.parent_attr = shared_param.attr; }
 
   Result& GetResult() { return result_; }
 
@@ -535,7 +579,7 @@ class MkNodOperation : public Operation {
   ~MkNodOperation() override = default;
 
   struct Result {
-    AttrEntry parent_attr;
+    AttrOrMutation parent_attr_or_mutation;
   };
 
   OpType GetOpType() const override { return OpType::kMkNod; }
@@ -543,9 +587,12 @@ class MkNodOperation : public Operation {
   uint32_t GetFsId() const override { return dentry_.FsId(); }
   Ino GetIno() const override { return dentry_.ParentIno(); }
 
-  Status RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const std::vector<KeyValue>& prefetch_kvs) override;
+  Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
 
-  void SetResultAttr(AttrEntry& attr) override { result_.parent_attr = attr; }
+  void SetResultAttr(BatchSharedParam& shared_param) override {
+    result_.parent_attr_or_mutation.attr = shared_param.attr;
+    result_.parent_attr_or_mutation.mutation = shared_param.attr_mutation;
+  }
 
   Result& GetResult() { return result_; }
 
@@ -563,7 +610,7 @@ class BatchMkNodOperation : public Operation {
   ~BatchMkNodOperation() override = default;
 
   struct Result {
-    AttrEntry parent_attr;
+    AttrOrMutation parent_attr_or_mutation;
   };
 
   OpType GetOpType() const override { return OpType::kBatchMkNod; }
@@ -571,9 +618,12 @@ class BatchMkNodOperation : public Operation {
   uint32_t GetFsId() const override { return dentries_[0].FsId(); }
   Ino GetIno() const override { return dentries_[0].ParentIno(); }
 
-  Status RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const std::vector<KeyValue>& prefetch_kvs) override;
+  Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
 
-  void SetResultAttr(AttrEntry& attr) override { result_.parent_attr = attr; }
+  void SetResultAttr(BatchSharedParam& shared_param) override {
+    result_.parent_attr_or_mutation.attr = shared_param.attr;
+    result_.parent_attr_or_mutation.mutation = shared_param.attr_mutation;
+  }
 
   Result& GetResult() { return result_; }
 
@@ -592,7 +642,7 @@ class BatchCreateFileOperation : public Operation {
   ~BatchCreateFileOperation() override = default;
 
   struct Result {
-    AttrEntry parent_attr;
+    AttrOrMutation parent_attr_or_mutation;
   };
 
   OpType GetOpType() const override { return OpType::kBatchCreateFile; }
@@ -600,9 +650,12 @@ class BatchCreateFileOperation : public Operation {
   uint32_t GetFsId() const override { return dentries_.front().FsId(); }
   Ino GetIno() const override { return dentries_.front().ParentIno(); }
 
-  Status RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const std::vector<KeyValue>& prefetch_kvs) override;
+  Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
 
-  void SetResultAttr(AttrEntry& attr) override { result_.parent_attr = attr; }
+  void SetResultAttr(BatchSharedParam& shared_param) override {
+    result_.parent_attr_or_mutation.attr = shared_param.attr;
+    result_.parent_attr_or_mutation.mutation = shared_param.attr_mutation;
+  }
 
   Result& GetResult() { return result_; }
 
@@ -620,7 +673,7 @@ class HardLinkOperation : public Operation {
   ~HardLinkOperation() override = default;
 
   struct Result {
-    AttrEntry parent_attr;
+    AttrOrMutation parent_attr_or_mutation;
     AttrEntry child_attr;
   };
 
@@ -629,7 +682,14 @@ class HardLinkOperation : public Operation {
   uint32_t GetFsId() const override { return dentry_.FsId(); }
   Ino GetIno() const override { return dentry_.ParentIno(); }
 
-  Status Run(TxnUPtr& txn) override;
+  void PrefetchKey(std::vector<std::string>& keys) override;
+
+  Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
+
+  void SetResultAttr(BatchSharedParam& shared_param) override {
+    result_.parent_attr_or_mutation.attr = shared_param.attr;
+    result_.parent_attr_or_mutation.mutation = shared_param.attr_mutation;
+  }
 
   Result& GetResult() { return result_; }
 
@@ -639,24 +699,27 @@ class HardLinkOperation : public Operation {
   Result result_;
 };
 
-class SmyLinkOperation : public Operation {
+class SymLinkOperation : public Operation {
  public:
-  SmyLinkOperation(Trace& trace, const Dentry& dentry, const AttrEntry& attr)
+  SymLinkOperation(Trace& trace, const Dentry& dentry, const AttrEntry& attr)
       : Operation(trace), dentry_(dentry), attr_(attr) {};
-  ~SmyLinkOperation() override = default;
+  ~SymLinkOperation() override = default;
 
   struct Result {
-    AttrEntry parent_attr;
+    AttrOrMutation parent_attr_or_mutation;
   };
 
-  OpType GetOpType() const override { return OpType::kSmyLink; }
+  OpType GetOpType() const override { return OpType::kSymLink; }
 
   uint32_t GetFsId() const override { return dentry_.FsId(); }
   Ino GetIno() const override { return dentry_.ParentIno(); }
 
-  Status RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const std::vector<KeyValue>& prefetch_kvs) override;
+  Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
 
-  void SetResultAttr(AttrEntry& attr) override { result_.parent_attr = attr; }
+  void SetResultAttr(BatchSharedParam& shared_param) override {
+    result_.parent_attr_or_mutation.attr = shared_param.attr;
+    result_.parent_attr_or_mutation.mutation = shared_param.attr_mutation;
+  }
 
   Result& GetResult() { return result_; }
 
@@ -688,9 +751,9 @@ class UpdateAttrOperation : public Operation {
   uint32_t GetFsId() const override { return attr_.fs_id(); }
   Ino GetIno() const override { return ino_; }
 
-  Status RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>& prefetch_kvs) override;
+  Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
 
-  void SetResultAttr(AttrEntry& attr) override { result_.attr = attr; }
+  void SetResultAttr(BatchSharedParam& shared_param) override { result_.attr = shared_param.attr; }
 
   Result& GetResult() { return result_; }
 
@@ -719,9 +782,9 @@ class UpdateXAttrOperation : public Operation {
   uint32_t GetFsId() const override { return fs_id_; }
   Ino GetIno() const override { return ino_; }
 
-  Status RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>& prefetch_kvs) override;
+  Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
 
-  void SetResultAttr(AttrEntry& attr) override { result_.attr = attr; }
+  void SetResultAttr(BatchSharedParam& shared_param) override { result_.attr = shared_param.attr; }
 
   Result& GetResult() { return result_; }
 
@@ -748,9 +811,9 @@ class RemoveXAttrOperation : public Operation {
   uint32_t GetFsId() const override { return fs_id_; }
   Ino GetIno() const override { return ino_; }
 
-  Status RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>& prefetch_kvs) override;
+  Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
 
-  void SetResultAttr(AttrEntry& attr) override { result_.attr = attr; }
+  void SetResultAttr(BatchSharedParam& shared_param) override { result_.attr = shared_param.attr; }
 
   Result& GetResult() { return result_; }
 
@@ -778,9 +841,9 @@ class UpdateShardBoundariesOperation : public Operation {
   uint32_t GetFsId() const override { return fs_id_; }
   Ino GetIno() const override { return ino_; }
 
-  Status RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>& prefetch_kvs) override;
+  Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
 
-  void SetResultAttr(AttrEntry& attr) override { result_.attr = attr; }
+  void SetResultAttr(BatchSharedParam& shared_param) override { result_.attr = shared_param.attr; }
 
   Result& GetResult() { return result_; }
 
@@ -932,9 +995,9 @@ class FallocateOperation : public Operation {
   uint32_t GetFsId() const override { return param_.fs_id; }
   Ino GetIno() const override { return param_.ino; }
 
-  Status RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>& prefetch_kvs) override;
+  Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
 
-  void SetResultAttr(AttrEntry& attr) override { result_.attr = attr; }
+  void SetResultAttr(BatchSharedParam& shared_param) override { result_.attr = shared_param.attr; }
 
   Result& GetResult() { return result_; }
 
@@ -974,9 +1037,9 @@ class OpenFileOperation : public Operation {
 
   void PrefetchKey(std::vector<std::string>& keys) override;
 
-  Status RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>& prefetch_kvs) override;
+  Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
 
-  void SetResultAttr(AttrEntry& attr) override { result_.attr = attr; }
+  void SetResultAttr(BatchSharedParam& shared_param) override { result_.attr = shared_param.attr; }
 
   Result& GetResult() { return result_; }
 
@@ -1050,24 +1113,28 @@ class FlushFileOperation : public Operation {
 
 class RmDirOperation : public Operation {
  public:
-  RmDirOperation(Trace& trace, Dentry dentry) : Operation(trace), dentry_(dentry) {};
+  RmDirOperation(Trace& trace, uint32_t fs_id, Ino parent, const std::string& name)
+      : Operation(trace), fs_id_(fs_id), parent_(parent), name_(name) {};
   ~RmDirOperation() override = default;
 
   struct Result {
     AttrEntry parent_attr;
+    DentryEntry dentry;
   };
 
   OpType GetOpType() const override { return OpType::kRmDir; }
 
-  uint32_t GetFsId() const override { return dentry_.FsId(); }
-  Ino GetIno() const override { return dentry_.ParentIno(); }
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return parent_; }
 
   Status Run(TxnUPtr& txn) override;
 
   Result& GetResult() { return result_; }
 
  private:
-  const Dentry dentry_;
+  uint32_t fs_id_;
+  const Ino parent_;
+  const std::string name_;
 
   Result result_;
 };
@@ -1078,7 +1145,7 @@ class UnlinkOperation : public Operation {
   ~UnlinkOperation() override = default;
 
   struct Result {
-    AttrEntry parent_attr;
+    AttrOrMutation parent_attr_or_mutation;
     AttrEntry child_attr;
   };
   OpType GetOpType() const override { return OpType::kUnlink; }
@@ -1086,7 +1153,14 @@ class UnlinkOperation : public Operation {
   uint32_t GetFsId() const override { return dentry_.FsId(); }
   Ino GetIno() const override { return dentry_.ParentIno(); }
 
-  Status Run(TxnUPtr& txn) override;
+  void PrefetchKey(std::vector<std::string>& keys) override;
+
+  Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
+
+  void SetResultAttr(BatchSharedParam& shared_param) override {
+    result_.parent_attr_or_mutation.attr = shared_param.attr;
+    result_.parent_attr_or_mutation.mutation = shared_param.attr_mutation;
+  }
 
   Result& GetResult() { return result_; }
 
@@ -1102,16 +1176,23 @@ class BatchUnlinkOperation : public Operation {
   ~BatchUnlinkOperation() override = default;
 
   struct Result {
-    AttrEntry parent_attr;
+    AttrOrMutation parent_attr_or_mutation;
     std::vector<AttrEntry> child_attrs;
   };
 
   OpType GetOpType() const override { return OpType::kBatchUnlink; }
 
-  uint32_t GetFsId() const override { return dentries_[0].FsId(); }
-  Ino GetIno() const override { return dentries_[0].ParentIno(); }
+  uint32_t GetFsId() const override { return dentries_.front().FsId(); }
+  Ino GetIno() const override { return dentries_.front().ParentIno(); }
 
-  Status Run(TxnUPtr& txn) override;
+  void PrefetchKey(std::vector<std::string>& keys) override;
+
+  Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
+
+  void SetResultAttr(BatchSharedParam& shared_param) override {
+    result_.parent_attr_or_mutation.attr = shared_param.attr;
+    result_.parent_attr_or_mutation.mutation = shared_param.attr_mutation;
+  }
 
   Result& GetResult() { return result_; }
 
@@ -1134,8 +1215,8 @@ class RenameOperation : public Operation {
   ~RenameOperation() override = default;
 
   struct Result {
-    AttrEntry old_parent_attr;
-    AttrEntry new_parent_attr;
+    AttrWithMutation old_parent_attr_with_mutation;
+    AttrWithMutation new_parent_attr_with_mutation;
     DentryEntry old_dentry;
     DentryEntry prev_new_dentry;
     AttrEntry prev_new_attr;
@@ -1714,27 +1795,6 @@ class ScanFsOperation : public Operation {
   Result result_;
 };
 
-class ScanPartitionOperation : public Operation {
- public:
-  using HandlerType = std::function<bool(KeyValue&)>;
-
-  ScanPartitionOperation(Trace& trace, uint32_t fs_id, Ino ino, HandlerType handler)
-      : Operation(trace), fs_id_(fs_id), ino_(ino), handler_(handler) {};
-  ~ScanPartitionOperation() override = default;
-
-  OpType GetOpType() const override { return OpType::kScanPartition; }
-
-  uint32_t GetFsId() const override { return fs_id_; }
-  Ino GetIno() const override { return ino_; }
-
-  Status Run(TxnUPtr& txn) override;
-
- private:
-  const uint32_t fs_id_{0};
-  const Ino ino_{0};
-  HandlerType handler_;
-};
-
 class ScanDentryOperation : public Operation {
  public:
   using HandlerType = std::function<bool(const DentryEntry&)>;
@@ -1767,7 +1827,7 @@ class ScanDirShardOperation : public Operation {
       : Operation(trace), fs_id_(fs_id), ino_(ino), range_(range), handler_(handler) {};
 
   struct Result {
-    AttrEntry attr;
+    AttrWithMutation attr_with_mutation;
   };
 
   OpType GetOpType() const override { return OpType::kScanDirShard; }
@@ -1941,7 +2001,7 @@ class GetInodeAttrOperation : public Operation {
   ~GetInodeAttrOperation() override = default;
 
   struct Result {
-    AttrEntry attr;
+    AttrWithMutation attr_with_mutation;
   };
 
   OpType GetOpType() const override { return OpType::kGetInodeAttr; }
@@ -1967,7 +2027,7 @@ class BatchGetInodeAttrOperation : public Operation {
   ~BatchGetInodeAttrOperation() override = default;
 
   struct Result {
-    std::vector<AttrEntry> attrs;
+    std::vector<AttrWithMutation> attr_with_mutations;
   };
 
   OpType GetOpType() const override { return OpType::kBatchGetInodeAttr; }
@@ -1996,7 +2056,7 @@ class GetDentryOperation : public Operation {
     DentryEntry dentry;
   };
 
-  OpType GetOpType() const override { return OpType::KGetDentry; }
+  OpType GetOpType() const override { return OpType::kGetDentry; }
 
   uint32_t GetFsId() const override { return fs_id_; }
 
@@ -2095,7 +2155,7 @@ class GetCacheMemberOperation : public Operation {
     CacheMemberEntry cache_member;
   };
 
-  OpType GetOpType() const override { return OpType::KGetCacheMember; }
+  OpType GetOpType() const override { return OpType::kGetCacheMember; }
 
   Status Run(TxnUPtr& txn) override;
 
@@ -2109,6 +2169,8 @@ class GetCacheMemberOperation : public Operation {
 struct BatchOperation {
   uint32_t fs_id{0};
   Ino ino;
+
+  uint32_t dir_attr_mutation_index{0};
 
   // set attr/xattr/chunk
   absl::InlinedVector<Operation*, kStoreOperationBatchSize> setattr_operations;
@@ -2138,6 +2200,38 @@ class OperationTask : public TaskRunnable {
 
   PostHandler post_handler_{nullptr};
 };
+
+// for dispatching dir inode update index
+class ConflictController {
+ public:
+  ConflictController() = default;
+  ~ConflictController() = default;
+
+  bool GetIndexAndIncRunningCount(uint32_t fs_id, Ino ino, uint32_t& index);
+  bool IncRunningCount(uint32_t fs_id, Ino ino);
+  void DecRunningCount(uint32_t fs_id, Ino ino);
+
+ private:
+  struct Key {
+    uint32_t fs_id;
+    Ino ino;
+
+    bool operator==(const Key& other) const { return fs_id == other.fs_id && ino == other.ino; }
+  };
+  struct KeyHash {
+    size_t operator()(const Key& key) const noexcept { return butil::HashPair(key.fs_id, key.ino); }
+  };  // namespace mds
+  struct Value {
+    uint32_t dir_mutation_index{0};
+    uint32_t running_count{0};
+  };
+
+  // fs_id,ino -> running count
+  using Map = absl::flat_hash_map<Key, Value, KeyHash>;
+
+  constexpr static size_t kShardNum = 64;
+  utils::Shards<Map, kShardNum> running_map_;
+};  // namespace dingofs
 
 class OperationProcessor : public std::enable_shared_from_this<OperationProcessor> {
  public:
@@ -2174,13 +2268,15 @@ class OperationProcessor : public std::enable_shared_from_this<OperationProcesso
   void ExecuteBatchOperation(BatchOperation& batch_operation);
 
   // use std thread
-  std::vector<std::thread> threads_;
+  std::thread thread_;
   std::mutex thread_mutex_;
   std::condition_variable thread_cond_;
 
   std::atomic<bool> is_stop_{false};
 
   butil::MPSCQueue<Operation*> operations_;
+
+  ConflictController conflict_controller_;
 
   WorkerSPtr async_worker_;
 

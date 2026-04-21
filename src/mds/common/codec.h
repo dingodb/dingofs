@@ -60,6 +60,8 @@ class MetaCodec {
   // format: ${prefix} kTableMeta kMetaFsSliceRef
   static Range GetSliceRefRange();
 
+  static Range GetDirInodeUpdateOpRange(uint32_t fs_id, Ino ino);
+
   // format: ${prefix} kTableFsMeta {fs_id} kMetaFsInode {ino} kFsInodeDentry
   static Range GetDentryRange(uint32_t fs_id, Ino ino, bool include_parent);
   // format: ${prefix} kTableFsMeta {fs_id} kMetaFsInode {ino} kFsInodeChunk
@@ -156,6 +158,13 @@ class MetaCodec {
   static void DecodeInodeKey(const std::string& key, uint32_t& fs_id, uint64_t& ino);
   static std::string EncodeInodeValue(const AttrEntry& attr);
   static AttrEntry DecodeInodeValue(const std::string& value);
+
+  // inode update op format: ${prefix} kTableFsMeta {fs_id} kMetaFsInode {ino} kFsDirInodeMutation
+  static bool IsDirInodeMutationKey(const std::string& key);
+  static std::string EncodeDirInodeMutationKey(uint32_t fs_id, Ino ino, uint32_t index);
+  static void DecodeDirInodeMutationKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, uint32_t& index);
+  static std::string EncodeDirInodeMutationValue(const AttrMutationEntry& op);
+  static AttrMutationEntry DecodeDirInodeMutationValue(const std::string& value);
 
   // dentry format: ${prefix} kTableFsMeta {fs_id} kMetaFsInode {ino} kFsInodeDentry {name}
   static bool IsDentryKey(const std::string& key);

@@ -2978,8 +2978,8 @@ void MDSServiceImpl::DoNotifyBuddy(google::protobuf::RpcController*, const pb::m
           return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
         }
 
-        auto& mut_message = const_cast<pb::mds::NotifyBuddyRequest::Message&>(message);
-        file_system->RefreshInode(*mut_message.mutable_refresh_inode()->mutable_inode());
+        file_system->RefreshInode(message.refresh_inode().inode(), message.refresh_inode().attr_mutation(),
+                                  message.reason());
       } break;
 
       case pb::mds::NotifyBuddyRequest::TYPE_CLEAN_PARTITION_CACHE: {

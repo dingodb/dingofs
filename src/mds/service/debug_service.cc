@@ -113,23 +113,27 @@ void DebugServiceImpl::GetFs(google::protobuf::RpcController*, const pb::debug::
   }
 }
 
-static void FillPartition(PartitionPtr partition, bool with_inode,
+static void FillPartition(FileSystemSPtr fs, PartitionPtr partition, bool with_inode,
                           pb::debug::GetPartitionResponse::Partition* pb_partition) {
-  *pb_partition->mutable_parent_inode() = partition->ParentInode()->Copy();
+  Context ctx;
+  EntryOut entry_out;
+  fs->GetInode(ctx, partition->INo(), entry_out);
+  *pb_partition->mutable_parent_inode() = entry_out.attr;
 
   auto child_dentries = partition->GetAll();
   for (auto& child_dentry : child_dentries) {
     auto* pb_dentry = pb_partition->add_entries();
     *pb_dentry->mutable_dentry() = child_dentry.Copy();
-    auto inode = child_dentry.Inode();
-    if (with_inode && inode != nullptr) {
-      *pb_dentry->mutable_inode() = inode->Copy();
+
+    if (with_inode) {
+      EntryOut entry_out;
+      fs->GetInode(ctx, child_dentry.INo(), entry_out);
+      *pb_dentry->mutable_inode() = entry_out.attr;
     }
   }
 }
 
-void DebugServiceImpl::GetPartition(google::protobuf::RpcController* controller,
-                                    const pb::debug::GetPartitionRequest* request,
+void DebugServiceImpl::GetPartition(google::protobuf::RpcController*, const pb::debug::GetPartitionRequest* request,
                                     pb::debug::GetPartitionResponse* response, google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
   brpc::ClosureGuard done_guard(svr_done);
@@ -144,7 +148,7 @@ void DebugServiceImpl::GetPartition(google::protobuf::RpcController* controller,
     auto partitions = fs->GetAllPartitionsFromCache();
     for (auto& partition : partitions) {
       auto* pb_partition = response->add_partitions();
-      FillPartition(partition, request->with_inode(), pb_partition);
+      FillPartition(fs, partition, request->with_inode(), pb_partition);
     }
 
     return;
@@ -161,15 +165,21 @@ void DebugServiceImpl::GetPartition(google::protobuf::RpcController* controller,
 
   // get all children of one partition
   if (request->name().empty()) {
-    FillPartition(partition, request->with_inode(), pb_partition);
+    FillPartition(fs, partition, request->with_inode(), pb_partition);
   } else {
     Dentry dentry;
     partition->Get(request->name(), dentry);
-    *pb_partition->mutable_parent_inode() = partition->ParentInode()->Copy();
+
+    Context ctx;
+    EntryOut entry_out;
+    fs->GetInode(ctx, partition->INo(), entry_out);
+
+    *pb_partition->mutable_parent_inode() = entry_out.attr;
     auto* pb_dentry = pb_partition->add_entries();
-    auto inode = dentry.Inode();
-    if (request->with_inode() && inode != nullptr) {
-      *pb_dentry->mutable_inode() = inode->Copy();
+
+    if (request->with_inode()) {
+      fs->GetInode(ctx, dentry.INo(), entry_out);
+      *pb_dentry->mutable_inode() = entry_out.attr;
     }
   }
 }
@@ -189,7 +199,7 @@ void DebugServiceImpl::GetInode(google::protobuf::RpcController*, const pb::debu
   if (request->inoes().empty() && request->use_cache()) {
     auto inodes = fs->GetAllInodesFromCache();
     for (auto& inode : inodes) {
-      *response->add_inodes() = inode->Copy();
+      *response->add_inodes() = inode->ToAttr();
     }
   }
 
@@ -197,7 +207,7 @@ void DebugServiceImpl::GetInode(google::protobuf::RpcController*, const pb::debu
     InodeSPtr inode;
     auto status = fs->GetInode(ctx, ino, inode);
     if (status.ok()) {
-      *response->add_inodes() = inode->Copy();
+      *response->add_inodes() = inode->ToAttr();
     }
   }
 }

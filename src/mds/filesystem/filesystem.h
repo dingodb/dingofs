@@ -98,15 +98,20 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   std::string FsName() const { return fs_info_->GetName(); }
   std::string UUID() const { return fs_info_->GetUUID(); }
 
-  uint64_t Epoch() const;
+  uint64_t Epoch() const {
+    auto partition_policy = fs_info_->GetPartitionPolicy();
+    return partition_policy.epoch();
+  }
 
   FsInfoEntry GetFsInfo() const { return fs_info_->Get(); }
 
-  pb::mds::PartitionType PartitionType() const;
-  bool IsMonoPartition() const;
-  bool IsParentHashPartition() const;
+  pb::mds::PartitionType PartitionType() const { return fs_info_->GetPartitionType(); }
+  bool IsMonoPartition() const { return fs_info_->GetPartitionType() == pb::mds::PartitionType::MONOLITHIC_PARTITION; }
+  bool IsParentHashPartition() const {
+    return fs_info_->GetPartitionType() == pb::mds::PartitionType::PARENT_ID_HASH_PARTITION;
+  }
 
-  bool CanServe(Context& ctx);
+  bool CanServe(Context& ctx) { return ctx.IsBypassCache() ? true : can_serve_.load(std::memory_order_acquire); }
 
   // create root directory
   Status CreateRoot();
@@ -239,7 +244,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status BatchGetInode(Context& ctx, const std::vector<uint64_t>& inoes, std::vector<EntryOut>& out_entries);
   Status BatchGetXAttr(Context& ctx, const std::vector<uint64_t>& inoes, std::vector<pb::mds::XAttr>& out_xattrs);
 
-  void RefreshInode(AttrEntry& attr);
+  void RefreshInode(const AttrEntry& attr, const AttrMutationEntry& mutation, const std::string& reason);
 
   Status RefreshFsInfo(const std::string& reason);
   Status RefreshFsInfo(const std::string& name, const std::string& reason);
@@ -280,10 +285,11 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status GenFileIno(Ino& ino);
   bool CanServe(uint64_t self_mds_id);
 
-  Status GetPartitionParentInode(Context& ctx, PartitionPtr& partition, InodeSPtr& out_inode);
   void AddDentryToPartition(Ino parent, const Dentry& dentry, uint64_t version);
   void DeleteDentryFromPartition(Ino parent, const std::string& name, uint64_t version);
   void DeleteDentryFromPartition(Ino parent, const std::vector<std::string>& names, uint64_t version);
+  // for setattr/setxattr/removexattr, which may update dir attr but not change dentry
+  void RefreshPartitionDeltaVersion(Ino parent, uint64_t version);
 
   // get partition
   Status GetPartition(Context& ctx, Ino parent, PartitionPtr& out_partition);
@@ -298,24 +304,22 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
                              std::vector<Dentry>& dentries);
 
   // get inode
-  Status GetInode(Context& ctx, const Dentry& dentry, PartitionPtr partition, InodeSPtr& out_inode);
-  Status GetInode(Context& ctx, uint64_t version, const Dentry& dentry, PartitionPtr partition, InodeSPtr& out_inode);
   Status GetInode(Context& ctx, Ino ino, InodeSPtr& out_inode);
   Status GetInode(Context& ctx, uint64_t version, Ino ino, InodeSPtr& out_inode);
 
   Status GetInodeFromStore(Context& ctx, Ino ino, const std::string& reason, bool is_cache, InodeSPtr& out_inode);
-  Status BatchGetInodeFromStore(std::vector<uint64_t> inoes, std::vector<InodeSPtr>& out_inodes);
+  Status BatchGetInodeFromStore(Context& ctx, std::vector<uint64_t> inoes, const std::string& reason, bool is_cache,
+                                std::vector<InodeSPtr>& out_inodes);
 
   Status GetDelFileFromStore(Ino ino, AttrEntry& out_attr);
-
-  Status GetChunksFromStore(Ino ino, std::vector<ChunkEntry>& chunks, uint32_t max_slice_num = 0);
 
   // inode cache
   InodeSPtr GetInodeFromCache(Ino ino);
   std::vector<InodeSPtr> GetAllInodesFromCache();
-  void UpsertInodeCache(Ino ino, InodeSPtr inode);
-  void UpsertInodeCache(InodeSPtr inode);
-  void UpsertInodeCache(const AttrEntry& attr);
+  InodeSPtr UpsertInodeCache(const AttrWithMutation& attr_with_mutation, const std::string& reason);
+  InodeSPtr UpsertInodeCache(const AttrEntry& attr, const std::string& reason);
+  AttrEntry UpdateParentInodeCache(InodeSPtr& inode, const AttrOrMutation& attr_or_mutation, const std::string& reason);
+
   void DeleteInodeFromCache(Ino ino);
 
   void ClearCache();
@@ -328,9 +332,11 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   void UpdateParentMemo(const std::vector<Ino>& ancestors);
 
-  void NotifyBuddyRefreshFsInfo(std::vector<uint64_t> mds_ids, const FsInfoEntry& fs_info);
-  void NotifyBuddyRefreshInode(AttrEntry&& attr);
-  void NotifyBuddyCleanPartitionCache(Ino ino);
+  void NotifyBuddyRefreshFsInfo(std::vector<uint64_t> mds_ids, const FsInfoEntry& fs_info, const std::string& reason);
+  void NotifyBuddyRefreshInode(const AttrEntry& attr, const std::string& reason);
+  void NotifyBuddyRefreshInode(const std::vector<Ino>& parents, const AttrOrMutation& attr_or_mutation,
+                               const std::string& reason);
+  void NotifyBuddyCleanPartitionCache(Ino ino, const std::string& reason);
 
   uint64_t self_mds_id_;
 
