@@ -29,7 +29,6 @@
 
 #include <cstdint>
 #include <string>
-#include <unordered_map>
 
 #include "common/meta.h"
 
@@ -51,7 +50,6 @@ inline bool IsInternalName(const std::string& name) {
   return name == kStatsName || name == kRecycleName;
 }
 
-
 const int kEmptyDirMinLinkNum = 2;
 
 // meta table names
@@ -71,6 +69,10 @@ static constexpr uint64_t kKiB = 1024ULL;
 static constexpr uint64_t kMiB = 1024ULL * kKiB;
 static constexpr uint64_t kGiB = 1024ULL * kMiB;
 static constexpr uint64_t kTiB = 1024ULL * kGiB;
+
+static constexpr uint32_t kDirAttrMutationNum = 8;
+
+constexpr bool HasDirAttrMutation() { return kDirAttrMutationNum != 0; }
 
 }  // namespace dingofs
 

@@ -179,18 +179,6 @@ uint64_t ShardPartition::DeltaVersion() {
   return delta_version_;
 }
 
-InodeSPtr ShardPartition::ParentInode() {
-  utils::ReadLockGuard lk(lock_);
-
-  return inode_.lock();
-}
-
-void ShardPartition::SetParentInode(InodeSPtr parent_inode) {
-  utils::WriteLockGuard lk(lock_);
-
-  inode_ = parent_inode;
-}
-
 Status ShardPartition::Get(const std::string& name, Dentry& out) {
   do {
     Range range;
@@ -270,11 +258,6 @@ void ShardPartition::Put(const Dentry& dentry, uint64_t version) {
   if (shard) shard->Put(dentry);
 }
 
-void ShardPartition::PutWithInode(const Dentry& dentry) {
-  auto shard = GetShard(dentry.Name());
-  if (shard) shard->Put(dentry);
-}
-
 void ShardPartition::Delete(const std::string& name, uint64_t version) {
   {
     utils::WriteLockGuard lk(lock_);
@@ -301,6 +284,12 @@ void ShardPartition::Delete(const std::vector<std::string>& names, uint64_t vers
       AddDeltaOpNoLock({DentryOpType::DELETE, version, Dentry(name), 0});
     }
   }
+}
+
+void ShardPartition::RefreshDeltaVersion(uint64_t version) {
+  utils::WriteLockGuard lk(lock_);
+
+  delta_version_ = std::max(version, delta_version_);
 }
 
 bool ShardPartition::NeedCompact() {
@@ -476,7 +465,7 @@ Status ShardPartition::FetchDirShard(const Range& range, DirShardSPtr& out_shard
 
   auto& result = operation.GetResult();
 
-  uint64_t version = result.attr.version();
+  uint64_t version = result.attr_with_mutation.Version();
 
   out_shard = DirShard::New(NextShardID(), range, version, std::move(dentries));
 
@@ -488,23 +477,18 @@ Status ShardPartition::FetchDirShard(const Range& range, DirShardSPtr& out_shard
   return Status::OK();
 }
 
-bool ShardPartition::Refresh(InodeSPtr inode) {
-  CHECK(inode != nullptr) << fmt::format("inode is null, partition ino({})", ino_);
-  CHECK(inode->Ino() == ino_) << fmt::format("inode ino({}) mismatch partition ino({})", inode->Ino(), ino_);
-
-  LOG(INFO) << fmt::format(
-      "[partition.{}.{}] refresh partition, version({}->{}) delta_version({}) shard_boundaries({}).", fs_id_, ino_,
-      base_version_, inode->Version(), delta_version_, Helper::VectorToString(inode->ShardBoundaries()));
+bool ShardPartition::Refresh(uint64_t new_version) {
+  LOG(INFO) << fmt::format("[partition.{}.{}] refresh partition, version({}->{}) delta_version({}).", fs_id_, ino_,
+                           base_version_, new_version, delta_version_);
 
   utils::WriteLockGuard lk(lock_);
 
-  if (inode->Version() <= base_version_) return false;
+  if (new_version <= base_version_) return false;
 
-  base_version_ = inode->Version();
+  base_version_ = new_version;
   delta_version_ = std::max(delta_version_, base_version_);
   shard_map_.clear();
 
-  delta_version_ = base_version_;
   for (auto it = delta_dentry_ops_.begin(); it != delta_dentry_ops_.end();) {
     if (it->version <= base_version_) {
       it = delta_dentry_ops_.erase(it);
@@ -711,7 +695,7 @@ PartitionPtr PartitionCache::PutIf(const PartitionPtr& partition) {
           total_count_ << 1;
 
         } else {
-          it->second->Refresh(partition->ParentInode());
+          it->second->Refresh(partition->BaseVersion());
           new_partition = it->second;
         }
       },

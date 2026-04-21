@@ -22,7 +22,9 @@
 #include <cstdint>
 #include <cstdlib>
 #include <functional>
+#include <map>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -54,7 +56,7 @@ DEFINE_validator(mds_txn_max_retry_times, brpc::PassValidate);
 DEFINE_uint32(mds_txn_timeout_ms, 8000, "txn timeout ms.");
 DEFINE_validator(mds_txn_timeout_ms, brpc::PassValidate);
 
-DEFINE_uint32(mds_store_operation_merge_delay_us, 10, "merge operation delay us.");
+DEFINE_uint32(mds_store_operation_merge_delay_us, 20, "merge operation delay us.");
 DEFINE_validator(mds_store_operation_merge_delay_us, brpc::PassValidate);
 
 DEFINE_bool(mds_tiny_file_data_enable, false, "enable tiny file data feature.");
@@ -66,6 +68,8 @@ static const uint32_t kOpNameBufInitSize = 128;
 static const uint32_t kCleanCompactedSliceIntervalS = 180;  // 3 minutes
 
 static const uint32_t kScheduleThreadNum = 1;
+
+static constexpr uint32_t kTryMaxCount = 10;
 
 static uint32_t CalWaitTimeUs(int retry) {
   // exponential backoff
@@ -114,13 +118,13 @@ static void SetError(BatchOperation& batch_operation, Status& status) {
   }
 }
 
-static void SetResultAttr(BatchOperation& batch_operation, AttrEntry& attrs) {
+static void SetResultAttr(BatchOperation& batch_operation, Operation::BatchSharedParam& shared_param) {
   for (auto* operation : batch_operation.setattr_operations) {
-    operation->SetResultAttr(attrs);
+    operation->SetResultAttr(shared_param);
   }
 
   for (auto* operation : batch_operation.create_operations) {
-    operation->SetResultAttr(attrs);
+    operation->SetResultAttr(shared_param);
   }
 }
 
@@ -205,8 +209,11 @@ const char* Operation::OpName() const {
     case OpType::kMkNod:
       return "MkNod";
 
+    case OpType::kBatchMkNod:
+      return "BatchMkNod";
+
     case OpType::kBatchCreateFile:
-      return "CreateFile";
+      return "BatchCreateFile";
 
     case OpType::kHardLink:
       return "HardLink";
@@ -243,6 +250,9 @@ const char* Operation::OpName() const {
 
     case OpType::kUnlink:
       return "Unlink";
+
+    case OpType::kBatchUnlink:
+      return "BatchUnlink";
 
     case OpType::kRename:
       return "Rename";
@@ -328,9 +338,6 @@ const char* Operation::OpName() const {
     case OpType::kScanFs:
       return "ScanFs";
 
-    case OpType::kScanPartition:
-      return "ScanPartition";
-
     case OpType::kScanDentry:
       return "ScanDentry";
 
@@ -367,7 +374,7 @@ const char* Operation::OpName() const {
     case OpType::kBatchGetInodeAttr:
       return "BatchGetInodeAttr";
 
-    case OpType::KGetDentry:
+    case OpType::kGetDentry:
       return "GetDentry";
 
     case OpType::kImportKV:
@@ -381,6 +388,9 @@ const char* Operation::OpName() const {
 
     case OpType::kScanCacheMember:
       return "ScanCacheMember";
+
+    case OpType::kGetCacheMember:
+      return "GetCacheMember";
 
     default:
       return "UnknownOperation";
@@ -672,7 +682,8 @@ Status CreateRootOperation::Run(TxnUPtr& txn) {
   return Status::OK();
 }
 
-Status MkDirOperation::RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const std::vector<KeyValue>&) {
+Status MkDirOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) {
+  auto& parent_attr = shared_param.attr;
   const uint32_t fs_id = parent_attr.fs_id();
   const Ino parent = parent_attr.ino();
 
@@ -690,7 +701,8 @@ Status MkDirOperation::RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const st
   return Status::OK();
 }
 
-Status BatchMkDirOperation::RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const std::vector<KeyValue>&) {
+Status BatchMkDirOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) {
+  auto& parent_attr = shared_param.attr;
   const uint32_t fs_id = parent_attr.fs_id();
   const Ino parent = parent_attr.ino();
 
@@ -716,9 +728,10 @@ Status BatchMkDirOperation::RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, con
   return Status::OK();
 }
 
-Status MkNodOperation::RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const std::vector<KeyValue>&) {
-  const uint32_t fs_id = parent_attr.fs_id();
-  const Ino parent = parent_attr.ino();
+Status MkNodOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) {
+  auto& parent_attr = shared_param.attr;
+  const uint32_t fs_id = GetFsId();
+  const Ino parent = GetIno();
 
   // create dentry
   txn->Put(MetaCodec::EncodeDentryKey(fs_id, parent, dentry_.Name()), MetaCodec::EncodeDentryValue(dentry_.Copy()));
@@ -727,15 +740,29 @@ Status MkNodOperation::RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const st
   txn->Put(MetaCodec::EncodeInodeKey(fs_id, dentry_.INo()), MetaCodec::EncodeInodeValue(attr_));
 
   // update parent attr
-  parent_attr.set_mtime(std::max(parent_attr.mtime(), GetTime()));
-  parent_attr.set_ctime(std::max(parent_attr.ctime(), GetTime()));
+  if (parent_attr.ino() == 0) {
+    // indirectly update parent attr update op, can reduce conflict with other operations on same parent
+    AttrMutationEntry& parent_attr_mutation = shared_param.attr_mutation;
+
+    CHECK(parent_attr_mutation.ino() == parent)
+        << fmt::format("parent not equal in shared param, {} {}", parent_attr_mutation.ino(), parent);
+
+    parent_attr_mutation.set_mtime(std::max(parent_attr_mutation.mtime(), GetTime()));
+    parent_attr_mutation.set_ctime(std::max(parent_attr_mutation.ctime(), GetTime()));
+
+  } else {
+    // directly update parent attr, may cause more conflicts
+    parent_attr.set_mtime(std::max(parent_attr.mtime(), GetTime()));
+    parent_attr.set_ctime(std::max(parent_attr.ctime(), GetTime()));
+  }
 
   return Status::OK();
 }
 
-Status BatchMkNodOperation::RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const std::vector<KeyValue>&) {
-  const uint32_t fs_id = parent_attr.fs_id();
-  const Ino parent = parent_attr.ino();
+Status BatchMkNodOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) {
+  auto& parent_attr = shared_param.attr;
+  const uint32_t fs_id = GetFsId();
+  const Ino parent = GetIno();
 
   CHECK(!dentries_.empty()) << "dentries is empty.";
   CHECK(dentries_.size() == attrs_.size())
@@ -752,15 +779,27 @@ Status BatchMkNodOperation::RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, con
   }
 
   // update parent attr
-  parent_attr.set_mtime(std::max(parent_attr.mtime(), GetTime()));
-  parent_attr.set_ctime(std::max(parent_attr.ctime(), GetTime()));
+  if (parent_attr.ino() == 0) {
+    // indirectly update parent attr update op, can reduce conflict with other operations on same parent
+
+    AttrMutationEntry& parent_attr_mutation = shared_param.attr_mutation;
+    parent_attr_mutation.set_mtime(std::max(parent_attr_mutation.mtime(), GetTime()));
+    parent_attr_mutation.set_ctime(std::max(parent_attr_mutation.ctime(), GetTime()));
+
+  } else {
+    // directly update parent attr, may cause more conflicts
+    parent_attr.set_mtime(std::max(parent_attr.mtime(), GetTime()));
+    parent_attr.set_ctime(std::max(parent_attr.ctime(), GetTime()));
+  }
 
   return Status::OK();
 }
 
-Status BatchCreateFileOperation::RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const std::vector<KeyValue>&) {
-  const uint32_t fs_id = parent_attr.fs_id();
-  const Ino parent = parent_attr.ino();
+Status BatchCreateFileOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) {
+  auto& parent_attr = shared_param.attr;
+  const uint32_t fs_id = GetFsId();
+  const Ino parent = GetIno();
+
   CHECK(dentries_.size() == attrs_.size())
       << fmt::format("dentry and attr size not equal, {} {}.", dentries_.size(), attrs_.size());
   CHECK(dentries_.size() == file_sessions_.size())
@@ -783,47 +822,42 @@ Status BatchCreateFileOperation::RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr
   }
 
   // update parent attr
-  parent_attr.set_mtime(std::max(parent_attr.mtime(), GetTime()));
-  parent_attr.set_ctime(std::max(parent_attr.ctime(), GetTime()));
+  if (parent_attr.ino() == 0) {
+    // indirectly update parent attr update op, can reduce conflict with other operations on same parent
+
+    AttrMutationEntry& parent_attr_mutation = shared_param.attr_mutation;
+    CHECK(parent_attr_mutation.ino() == parent)
+        << fmt::format("parent not equal in shared param, {} {}", parent_attr_mutation.ino(), parent);
+
+    parent_attr_mutation.set_mtime(std::max(parent_attr_mutation.mtime(), GetTime()));
+    parent_attr_mutation.set_ctime(std::max(parent_attr_mutation.ctime(), GetTime()));
+
+  } else {
+    // directly update parent attr, may cause more conflicts
+    parent_attr.set_mtime(std::max(parent_attr.mtime(), GetTime()));
+    parent_attr.set_ctime(std::max(parent_attr.ctime(), GetTime()));
+  }
 
   return Status::OK();
 }
 
-// todo: batch hardlink
-Status HardLinkOperation::Run(TxnUPtr& txn) {
-  const uint32_t fs_id = dentry_.FsId();
-  const Ino parent = dentry_.ParentIno();
+void HardLinkOperation::PrefetchKey(std::vector<std::string>& keys) {
+  keys.push_back(MetaCodec::EncodeInodeKey(GetFsId(), dentry_.INo()));
+}
 
-  // get parent/child attr
-  std::string parent_key = MetaCodec::EncodeInodeKey(fs_id, parent);
-  std::string key = MetaCodec::EncodeInodeKey(fs_id, dentry_.INo());
+Status HardLinkOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) {
+  auto& parent_attr = shared_param.attr;
+  auto& prefetch_kvs = shared_param.prefetch_kvs;
+  const uint32_t fs_id = GetFsId();
+  const Ino parent = GetIno();
 
-  std::vector<KeyValue> kvs;
-  auto status = txn->BatchGet({parent_key, key}, kvs);
-  if (!status.ok()) return status;
-
-  if (kvs.size() != 2) {
-    return Status(pb::error::ENOT_FOUND, fmt::format("get parent/child inode fail, count({})", kvs.size()));
+  // get child attr
+  std::string child_key = MetaCodec::EncodeInodeKey(fs_id, dentry_.INo());
+  std::string value = FindValue(prefetch_kvs, child_key);
+  if (value.empty()) {
+    return Status(pb::error::ENOT_FOUND, fmt::format("get child inode({}) fail", dentry_.INo()));
   }
-
-  AttrEntry parent_attr, attr;
-  for (auto& kv : kvs) {
-    if (kv.key == parent_key) {
-      parent_attr = MetaCodec::DecodeInodeValue(kv.value);
-    } else if (kv.key == key) {
-      attr = MetaCodec::DecodeInodeValue(kv.value);
-    } else {
-      LOG(FATAL) << fmt::format("[operation.{}.{}] invalid key({}), parent_key({}), child_key({}).", fs_id,
-                                dentry_.INo(), Helper::StringToHex(kv.key), Helper::StringToHex(parent_key),
-                                Helper::StringToHex(key));
-    }
-  }
-
-  // update parent attr
-  parent_attr.set_mtime(std::max(parent_attr.mtime(), GetTime()));
-  parent_attr.set_ctime(std::max(parent_attr.ctime(), GetTime()));
-  parent_attr.set_version(parent_attr.version() + 1);
-  txn->Put(parent_key, MetaCodec::EncodeInodeValue(parent_attr));
+  AttrEntry attr = MetaCodec::DecodeInodeValue(value);
 
   // update inode nlink
   attr.set_nlink(attr.nlink() + 1);
@@ -831,20 +865,37 @@ Status HardLinkOperation::Run(TxnUPtr& txn) {
   attr.set_ctime(std::max(attr.ctime(), GetTime()));
   AddParentIno(attr, parent);
   attr.set_version(attr.version() + 1);
-  txn->Put(key, MetaCodec::EncodeInodeValue(attr));
+  txn->Put(child_key, MetaCodec::EncodeInodeValue(attr));
 
   // create dentry
   txn->Put(MetaCodec::EncodeDentryKey(fs_id, parent, dentry_.Name()), MetaCodec::EncodeDentryValue(dentry_.Copy()));
 
-  result_.parent_attr = parent_attr;
+  // update parent attr
+  if (parent_attr.ino() == 0) {
+    // indirectly update parent attr update op, can reduce conflict with other operations on same parent
+
+    AttrMutationEntry& parent_attr_mutation = shared_param.attr_mutation;
+    CHECK(parent_attr_mutation.ino() == parent)
+        << fmt::format("parent not equal in shared param, {} {}", parent_attr_mutation.ino(), parent);
+
+    parent_attr_mutation.set_mtime(std::max(parent_attr_mutation.mtime(), GetTime()));
+    parent_attr_mutation.set_ctime(std::max(parent_attr_mutation.ctime(), GetTime()));
+
+  } else {
+    // directly update parent attr, may cause more conflicts
+    parent_attr.set_mtime(std::max(parent_attr.mtime(), GetTime()));
+    parent_attr.set_ctime(std::max(parent_attr.ctime(), GetTime()));
+  }
+
   result_.child_attr = attr;
 
-  return status;
+  return Status::OK();
 }
 
-Status SmyLinkOperation::RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const std::vector<KeyValue>&) {
-  const uint32_t fs_id = parent_attr.fs_id();
-  const Ino parent = parent_attr.ino();
+Status SmyLinkOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) {
+  auto& parent_attr = shared_param.attr;
+  const uint32_t fs_id = GetFsId();
+  const Ino parent = GetIno();
 
   // create dentry
   txn->Put(MetaCodec::EncodeDentryKey(fs_id, parent, dentry_.Name()), MetaCodec::EncodeDentryValue(dentry_.Copy()));
@@ -853,8 +904,21 @@ Status SmyLinkOperation::RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const 
   txn->Put(MetaCodec::EncodeInodeKey(fs_id, dentry_.INo()), MetaCodec::EncodeInodeValue(attr_));
 
   // update parent attr
-  parent_attr.set_mtime(std::max(parent_attr.mtime(), GetTime()));
-  parent_attr.set_ctime(std::max(parent_attr.ctime(), GetTime()));
+  if (parent_attr.ino() == 0) {
+    // indirectly update parent attr update op, can reduce conflict with other operations on same parent
+
+    AttrMutationEntry& parent_attr_mutation = shared_param.attr_mutation;
+    CHECK(parent_attr_mutation.ino() == parent)
+        << fmt::format("parent not equal in shared param, {} {}", parent_attr_mutation.ino(), parent);
+
+    parent_attr_mutation.set_mtime(std::max(parent_attr_mutation.mtime(), GetTime()));
+    parent_attr_mutation.set_ctime(std::max(parent_attr_mutation.ctime(), GetTime()));
+
+  } else {
+    // directly update parent attr, may cause more conflicts
+    parent_attr.set_mtime(std::max(parent_attr.mtime(), GetTime()));
+    parent_attr.set_ctime(std::max(parent_attr.ctime(), GetTime()));
+  }
 
   return Status::OK();
 }
@@ -925,7 +989,9 @@ static Status ResetFileRange(TxnUPtr& txn, uint32_t fs_id, Ino ino, uint64_t old
   return Status::OK();
 }
 
-Status UpdateAttrOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>&) {
+Status UpdateAttrOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) {
+  auto& attr = shared_param.attr;
+
   if (to_set_ & kSetAttrMode) {
     attr.set_mode(attr_.mode());
   }
@@ -973,7 +1039,9 @@ Status UpdateAttrOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std:
   return Status::OK();
 }
 
-Status UpdateXAttrOperation::RunInBatch(TxnUPtr&, AttrEntry& attr, const std::vector<KeyValue>&) {
+Status UpdateXAttrOperation::RunInBatch(TxnUPtr&, BatchSharedParam& shared_param) {
+  auto& attr = shared_param.attr;
+
   for (const auto& [key, value] : xattrs_) {
     (*attr.mutable_xattrs())[key] = value;
   }
@@ -986,7 +1054,9 @@ Status UpdateXAttrOperation::RunInBatch(TxnUPtr&, AttrEntry& attr, const std::ve
   return Status::OK();
 }
 
-Status RemoveXAttrOperation::RunInBatch(TxnUPtr&, AttrEntry& attr, const std::vector<KeyValue>&) {
+Status RemoveXAttrOperation::RunInBatch(TxnUPtr&, BatchSharedParam& shared_param) {
+  auto& attr = shared_param.attr;
+
   attr.mutable_xattrs()->erase(name_);
 
   // update attr
@@ -997,7 +1067,9 @@ Status RemoveXAttrOperation::RunInBatch(TxnUPtr&, AttrEntry& attr, const std::ve
   return Status::OK();
 }
 
-Status UpdateShardBoundariesOperation::RunInBatch(TxnUPtr&, AttrEntry& attr, const std::vector<KeyValue>&) {
+Status UpdateShardBoundariesOperation::RunInBatch(TxnUPtr&, BatchSharedParam& shared_param) {
+  auto& attr = shared_param.attr;
+
   attr.mutable_shard_boundaries()->Clear();
 
   for (const auto& boundary : shard_boundaries_) {
@@ -1277,7 +1349,8 @@ Status FallocateOperation::SetZero(TxnUPtr& txn, AttrEntry& attr, uint64_t offse
   return Status::OK();
 }
 
-Status FallocateOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>&) {
+Status FallocateOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) {
+  auto& attr = shared_param.attr;
   const int32_t mode_ = param_.mode;
   const uint64_t offset = param_.offset;
   const uint64_t len = param_.len;
@@ -1335,7 +1408,10 @@ void OpenFileOperation::PrefetchKey(std::vector<std::string>& keys) {
   }
 }
 
-Status OpenFileOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>& prefetch_kvs) {
+Status OpenFileOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) {
+  auto& attr = shared_param.attr;
+  const auto& prefetch_kvs = shared_param.prefetch_kvs;
+
   if (attr.nlink() == 0) {
     return Status(pb::error::EDELETED, "file is deleted");
   }
@@ -1443,13 +1519,13 @@ Status FlushFileOperation::Run(TxnUPtr& txn) {
 }
 
 static Status CheckDirEmpty(TxnUPtr& txn, uint32_t fs_id, uint64_t ino, bool& is_empty, Ino& child_ino) {
-  Range range = MetaCodec::GetDentryRange(fs_id, ino, true);
+  Range range = MetaCodec::GetDentryRange(fs_id, ino, false);
 
   std::vector<KeyValue> kvs;
-  auto status = txn->Scan(range, 2, kvs);
+  auto status = txn->Scan(range, 1, kvs);
   if (!status.ok()) return status;
 
-  if (kvs.size() < 2) {
+  if (kvs.empty()) {
     is_empty = true;
     return Status::OK();
   }
@@ -1468,29 +1544,48 @@ static Status CheckDirEmpty(TxnUPtr& txn, uint32_t fs_id, uint64_t ino, bool& is
 }
 
 Status RmDirOperation::Run(TxnUPtr& txn) {
-  const uint32_t fs_id = dentry_.FsId();
-  const Ino parent = dentry_.ParentIno();
+  const uint32_t fs_id = fs_id_;
+  const Ino parent = parent_;
+
+  // get parent attr and child name
+  std::vector<KeyValue> kvs;
+  std::string parent_key = MetaCodec::EncodeInodeKey(fs_id, parent);
+  std::string dentry_key = MetaCodec::EncodeDentryKey(fs_id, parent, name_);
+  auto status = txn->BatchGet({parent_key, dentry_key}, kvs);
+  if (!status.ok()) return status;
+
+  AttrEntry parent_attr;
+  DentryEntry dentry;
+  for (const auto& kv : kvs) {
+    if (kv.key == parent_key) {
+      parent_attr = MetaCodec::DecodeInodeValue(kv.value);
+
+    } else if (kv.key == dentry_key) {
+      dentry = MetaCodec::DecodeDentryValue(kv.value);
+
+    } else {
+      LOG(FATAL) << fmt::format("[operation.{}.{}] invalid key({}).", fs_id, parent, Helper::StringToHex(kv.key));
+    }
+  }
+  if (parent_attr.ino() == 0) {
+    return Status(pb::error::ENOT_FOUND, fmt::format("parent inode({}) not found", parent));
+  }
+  if (dentry.ino() == 0) {
+    return Status(pb::error::ENOT_FOUND, fmt::format("dentry({}) not found", name_));
+  }
 
   // check dentry empty
   bool is_empty = false;
   Ino child_ino = 0;
-  auto status = CheckDirEmpty(txn, fs_id, dentry_.INo(), is_empty, child_ino);
+  status = CheckDirEmpty(txn, fs_id, dentry.ino(), is_empty, child_ino);
   if (!status.ok()) return status;
 
   if (!is_empty) {
     return Status(pb::error::ENOT_EMPTY,
-                  fmt::format("directory({}) is not empty, child ino({})", dentry_.INo(), child_ino));
+                  fmt::format("directory({}) is not empty, child ino({})", dentry.ino(), child_ino));
   }
 
   // update parent attr
-  std::string value;
-  std::string parent_key = MetaCodec::EncodeInodeKey(fs_id, parent);
-  status = txn->Get(parent_key, value);
-  if (!status.ok()) {
-    return status;
-  }
-
-  auto parent_attr = MetaCodec::DecodeInodeValue(value);
   parent_attr.set_nlink(parent_attr.nlink() - 1);
   parent_attr.set_ctime(std::max(parent_attr.ctime(), GetTime()));
   parent_attr.set_mtime(std::max(parent_attr.mtime(), GetTime()));
@@ -1499,62 +1594,41 @@ Status RmDirOperation::Run(TxnUPtr& txn) {
   txn->Put(parent_key, MetaCodec::EncodeInodeValue(parent_attr));
 
   // delete inode
-  txn->Delete(MetaCodec::EncodeInodeKey(fs_id, dentry_.INo()));
+  txn->Delete(MetaCodec::EncodeInodeKey(fs_id, dentry.ino()));
+  for (uint32_t i = 0; i < kDirAttrMutationNum; ++i) {
+    txn->Delete(MetaCodec::EncodeDirInodeMutationKey(fs_id, dentry.ino(), i));
+  }
 
   // delete dentry
-  txn->Delete(MetaCodec::EncodeDentryKey(fs_id, parent, dentry_.Name()));
+  txn->Delete(MetaCodec::EncodeDentryKey(fs_id, parent, name_));
 
   result_.parent_attr = parent_attr;
+  result_.dentry = dentry;
 
   return Status::OK();
 }
 
-Status UnlinkOperation::Run(TxnUPtr& txn) {
+void UnlinkOperation::PrefetchKey(std::vector<std::string>& keys) {
+  keys.push_back(MetaCodec::EncodeInodeKey(GetFsId(), dentry_.INo()));
+  keys.push_back(MetaCodec::EncodeDentryKey(GetFsId(), dentry_.ParentIno(), dentry_.Name()));
+}
+
+Status UnlinkOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) {
+  auto& parent_attr = shared_param.attr;
+  auto& prefetch_kvs = shared_param.prefetch_kvs;
   const uint32_t fs_id = dentry_.FsId();
   const Ino parent = dentry_.ParentIno();
 
-  // get parent/child attr
-  const std::string parent_key = MetaCodec::EncodeInodeKey(fs_id, parent);
-  const std::string key = MetaCodec::EncodeInodeKey(fs_id, dentry_.INo());
+  // get child attr
+  const std::string attr_key = MetaCodec::EncodeInodeKey(fs_id, dentry_.INo());
+  std::string attr_value = FindValue(prefetch_kvs, attr_key);
+  if (attr_value.empty()) return Status(pb::error::ENOT_FOUND, fmt::format("not found attr({})", dentry_.INo()));
+
+  AttrEntry attr = MetaCodec::DecodeInodeValue(attr_value);
+
   const std::string dentry_key = MetaCodec::EncodeDentryKey(fs_id, parent, dentry_.Name());
-
-  std::vector<KeyValue> kvs;
-  auto status = txn->BatchGet({parent_key, dentry_key, key}, kvs);
-  if (!status.ok()) return status;
-
-  if (kvs.size() != 3) {
-    return Status(pb::error::ENOT_FOUND, fmt::format("get parent/child inode fail, count({})", kvs.size()));
-  }
-
-  bool is_exist_dentry = false;
-  AttrEntry parent_attr, attr;
-  for (auto& kv : kvs) {
-    if (kv.key == parent_key) {
-      parent_attr = MetaCodec::DecodeInodeValue(kv.value);
-
-    } else if (kv.key == key) {
-      attr = MetaCodec::DecodeInodeValue(kv.value);
-
-    } else if (kv.key == dentry_key) {
-      is_exist_dentry = true;
-
-    } else {
-      LOG(FATAL) << fmt::format("[operation.{}.{}] invalid key({}), parent_key({}), child_key({}).", fs_id,
-                                dentry_.INo(), Helper::StringToHex(kv.key), Helper::StringToHex(parent_key),
-                                Helper::StringToHex(key));
-    }
-  }
-
-  if (!is_exist_dentry) {
-    return Status(pb::error::ENOT_FOUND, "dentry not found");
-  }
-
-  // update parent attr
-  parent_attr.set_ctime(std::max(parent_attr.ctime(), GetTime()));
-  parent_attr.set_mtime(std::max(parent_attr.mtime(), GetTime()));
-  parent_attr.set_version(parent_attr.version() + 1);
-
-  txn->Put(parent_key, MetaCodec::EncodeInodeValue(parent_attr));
+  std::string dentry_value = FindValue(prefetch_kvs, dentry_key);
+  if (dentry_value.empty()) return Status(pb::error::ENOT_FOUND, fmt::format("not found dentry({})", dentry_.Name()));
 
   // decrease nlink
   attr.set_nlink(attr.nlink() - 1);
@@ -1562,7 +1636,7 @@ Status UnlinkOperation::Run(TxnUPtr& txn) {
   attr.set_ctime(std::max(attr.ctime(), GetTime()));
   attr.set_version(attr.version() + 1);
 
-  txn->Put(key, MetaCodec::EncodeInodeValue(attr));
+  txn->Put(attr_key, MetaCodec::EncodeInodeValue(attr));
 
   if (attr.nlink() <= 0) {
     // save delete file info
@@ -1570,65 +1644,65 @@ Status UnlinkOperation::Run(TxnUPtr& txn) {
   }
 
   // delete dentry
-  txn->Delete(MetaCodec::EncodeDentryKey(fs_id, parent, dentry_.Name()));
+  txn->Delete(dentry_key);
 
-  result_.parent_attr = parent_attr;
+  // update parent attr
+  if (parent_attr.ino() == 0) {
+    // indirectly update parent attr update op, can reduce conflict with other operations on same parent
+
+    AttrMutationEntry& parent_attr_mutation = shared_param.attr_mutation;
+    CHECK(parent_attr_mutation.ino() == parent)
+        << fmt::format("parent not equal in shared param, {} {}", parent_attr_mutation.ino(), parent);
+
+    parent_attr_mutation.set_mtime(std::max(parent_attr_mutation.mtime(), GetTime()));
+    parent_attr_mutation.set_ctime(std::max(parent_attr_mutation.ctime(), GetTime()));
+
+  } else {
+    // directly update parent attr, may cause more conflicts
+    parent_attr.set_mtime(std::max(parent_attr.mtime(), GetTime()));
+    parent_attr.set_ctime(std::max(parent_attr.ctime(), GetTime()));
+  }
+
   result_.child_attr = attr;
 
   return Status::OK();
 }
 
-Status BatchUnlinkOperation::Run(TxnUPtr& txn) {
-  const uint32_t fs_id = dentries_[0].FsId();
-  const Ino parent = dentries_[0].ParentIno();
+void BatchUnlinkOperation::PrefetchKey(std::vector<std::string>& keys) {
+  const uint32_t fs_id = GetFsId();
+  const Ino parent = GetIno();
 
-  // get parent/child attr
-  std::vector<std::string> keys;
-  keys.reserve(dentries_.size() + 1);
-  std::string parent_key = MetaCodec::EncodeInodeKey(fs_id, parent);
-  keys.push_back(parent_key);
   for (const auto& dentry : dentries_) {
     keys.push_back(MetaCodec::EncodeInodeKey(fs_id, dentry.INo()));
     keys.push_back(MetaCodec::EncodeDentryKey(fs_id, parent, dentry.Name()));
   }
+}
 
-  std::vector<KeyValue> kvs;
-  auto status = txn->BatchGet(keys, kvs);
-  if (!status.ok()) return status;
+Status BatchUnlinkOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) {
+  auto& parent_attr = shared_param.attr;
+  auto& prefetch_kvs = shared_param.prefetch_kvs;
+  const uint32_t fs_id = GetFsId();
+  const Ino parent = GetIno();
 
-  if (kvs.size() != (dentries_.size() * 2 + 1)) {
-    return Status(pb::error::ENOT_FOUND, fmt::format("get parent/child inode fail, count({})", kvs.size()));
-  }
-
-  AttrEntry parent_attr;
+  // get child attr
   std::vector<AttrEntry> attrs;
   std::vector<Ino> dentries;
-  for (auto& kv : kvs) {
-    if (kv.key == parent_key) {
-      parent_attr = MetaCodec::DecodeInodeValue(kv.value);
-
-    } else if (MetaCodec::IsInodeKey(kv.key)) {
-      attrs.push_back(MetaCodec::DecodeInodeValue(kv.value));
-
-    } else if (MetaCodec::IsDentryKey(kv.key)) {
-      auto dentry = MetaCodec::DecodeDentryValue(kv.value);
-      dentries.push_back(dentry.ino());
-
-    } else {
-      LOG(FATAL) << fmt::format("[operation.{}] batch_unlink invalid key({}), parent_key({}).", fs_id,
-                                Helper::StringToHex(kv.key), Helper::StringToHex(parent_key));
+  for (const auto& dentry : dentries_) {
+    auto attr_value = FindValue(prefetch_kvs, MetaCodec::EncodeInodeKey(fs_id, dentry.INo()));
+    if (attr_value.empty()) {
+      return Status(pb::error::ENOT_FOUND, fmt::format("not found attr({})", dentry.INo()));
     }
+    attrs.push_back(MetaCodec::DecodeInodeValue(attr_value));
+
+    auto dentry_value = FindValue(prefetch_kvs, MetaCodec::EncodeDentryKey(fs_id, parent, dentry.Name()));
+    if (dentry_value.empty()) {
+      return Status(pb::error::ENOT_FOUND, fmt::format("not found dentry({})", dentry.Name()));
+    }
+    dentries.push_back(MetaCodec::DecodeDentryValue(dentry_value).ino());
   }
 
   CHECK(attrs.size() == dentries.size()) << fmt::format("attrs size({}) should be equal to dentries size({}).",
                                                         attrs.size(), dentries.size());
-
-  // update parent attr
-  parent_attr.set_ctime(std::max(parent_attr.ctime(), GetTime()));
-  parent_attr.set_mtime(std::max(parent_attr.mtime(), GetTime()));
-  parent_attr.set_version(parent_attr.version() + 1);
-
-  txn->Put(parent_key, MetaCodec::EncodeInodeValue(parent_attr));
 
   // decrease nlink
   for (auto& attr : attrs) {
@@ -1651,7 +1725,23 @@ Status BatchUnlinkOperation::Run(TxnUPtr& txn) {
     txn->Delete(MetaCodec::EncodeDentryKey(fs_id, parent, dentry.Name()));
   }
 
-  result_.parent_attr = parent_attr;
+  // update parent attr
+  if (parent_attr.ino() == 0) {
+    // indirectly update parent attr update op, can reduce conflict with other operations on same parent
+
+    AttrMutationEntry& parent_attr_mutation = shared_param.attr_mutation;
+    CHECK(parent_attr_mutation.ino() == parent)
+        << fmt::format("parent not equal in shared param, {} {}", parent_attr_mutation.ino(), parent);
+
+    parent_attr_mutation.set_mtime(std::max(parent_attr_mutation.mtime(), GetTime()));
+    parent_attr_mutation.set_ctime(std::max(parent_attr_mutation.ctime(), GetTime()));
+
+  } else {
+    // directly update parent attr, may cause more conflicts
+    parent_attr.set_mtime(std::max(parent_attr.mtime(), GetTime()));
+    parent_attr.set_ctime(std::max(parent_attr.ctime(), GetTime()));
+  }
+
   result_.child_attrs.swap(attrs);
 
   return Status::OK();
@@ -1664,6 +1754,7 @@ Status RenameOperation::Run(TxnUPtr& txn) {
                            fs_id_, old_parent_, old_name_, new_parent_, new_name_);
 
   bool is_same_parent = (old_parent_ == new_parent_);
+
   // batch get old parent attr/child dentry and new parentattr/child dentry
   std::string old_parent_key = MetaCodec::EncodeInodeKey(fs_id_, old_parent_);
   std::string old_dentry_key = MetaCodec::EncodeDentryKey(fs_id_, old_parent_, old_name_);
@@ -1671,7 +1762,16 @@ Status RenameOperation::Run(TxnUPtr& txn) {
   std::string new_dentry_key = MetaCodec::EncodeDentryKey(fs_id_, new_parent_, new_name_);
 
   std::vector<std::string> keys = {old_parent_key, old_dentry_key, new_dentry_key};
-  if (!is_same_parent) keys.push_back(new_parent_key);
+  for (uint32_t i = 0; i < kDirAttrMutationNum; ++i) {
+    keys.push_back(MetaCodec::EncodeDirInodeMutationKey(fs_id_, old_parent_, i));
+  }
+  if (!is_same_parent) {
+    keys.push_back(new_parent_key);
+    for (uint32_t i = 0; i < kDirAttrMutationNum; ++i) {
+      keys.push_back(MetaCodec::EncodeDirInodeMutationKey(fs_id_, new_parent_, i));
+    }
+  }
+
   std::vector<KeyValue> kvs;
   auto status = txn->BatchGet(keys, kvs);
   LOG(INFO) << fmt::format("[operation.{}] kvs size({})", fs_id_, kvs.size());
@@ -1696,6 +1796,18 @@ Status RenameOperation::Run(TxnUPtr& txn) {
 
     } else if (kv.key == new_dentry_key) {
       prev_new_dentry = MetaCodec::DecodeDentryValue(kv.value);
+
+    } else if (MetaCodec::IsDirInodeMutationKey(kv.key)) {
+      auto mutation = MetaCodec::DecodeDirInodeMutationValue(kv.value);
+      if (mutation.ino() == old_parent_) {
+        result_.old_parent_attr_with_mutation.mutations.push_back(mutation);
+      }
+      if (mutation.ino() == new_parent_) {
+        result_.new_parent_attr_with_mutation.mutations.push_back(mutation);
+      }
+
+    } else {
+      LOG(FATAL) << fmt::format("[operation.{}.{}] invalid key({}).", fs_id_, old_parent_, Helper::StringToHex(kv.key));
     }
   }
   CHECK(old_parent_attr.ino() > 0) << "old parent attr is null.";
@@ -1745,6 +1857,9 @@ Status RenameOperation::Run(TxnUPtr& txn) {
 
       // delete exist new inode
       txn->Delete(prev_new_inode_key);
+      for (uint32_t i = 0; i < kDirAttrMutationNum; ++i) {
+        txn->Delete(MetaCodec::EncodeDirInodeMutationKey(fs_id_, prev_new_dentry.ino(), i));
+      }
 
     } else {
       // update exist new inode nlink
@@ -1809,10 +1924,10 @@ Status RenameOperation::Run(TxnUPtr& txn) {
     txn->Put(new_parent_key, MetaCodec::EncodeInodeValue(new_parent_attr));
   }
 
-  result_.old_parent_attr = old_parent_attr;
+  result_.old_parent_attr_with_mutation.attr = old_parent_attr;
   result_.old_dentry = old_dentry;
   result_.old_attr = old_attr;
-  result_.new_parent_attr = new_parent_attr;
+  result_.new_parent_attr_with_mutation.attr = new_parent_attr;
   result_.prev_new_dentry = prev_new_dentry;
   result_.prev_new_attr = prev_new_attr;
   result_.new_dentry = new_dentry;
@@ -2316,12 +2431,6 @@ Status ScanFsOperation::Run(TxnUPtr& txn) {
   });
 }
 
-Status ScanPartitionOperation::Run(TxnUPtr& txn) {
-  Range range = MetaCodec::GetDentryRange(fs_id_, ino_, true);
-
-  return txn->Scan(range, [&](KeyValue& kv) -> bool { return handler_(kv); });
-}
-
 Status ScanDentryOperation::Run(TxnUPtr& txn) {
   Range range = MetaCodec::GetDentryRange(fs_id_, ino_, false);
   if (!last_name_.empty()) {
@@ -2339,11 +2448,25 @@ Status ScanDirShardOperation::Run(TxnUPtr& txn) {
   Range range;
   if (!range_.start.empty()) {
     // fetch parent inode
-    std::string value;
-    auto status = txn->Get(MetaCodec::EncodeInodeKey(fs_id_, ino_), value);
+    std::vector<std::string> keys;
+    keys.reserve(kDirAttrMutationNum + 1);
+    keys.push_back(MetaCodec::EncodeInodeKey(fs_id_, ino_));
+    for (uint32_t i = 0; i < kDirAttrMutationNum; ++i) {
+      keys.push_back(MetaCodec::EncodeDirInodeMutationKey(fs_id_, ino_, i));
+    }
+    std::vector<KeyValue> kvs;
+    auto status = txn->BatchGet(keys, kvs);
     if (!status.ok()) return status;
 
-    result_.attr = MetaCodec::DecodeInodeValue(value);
+    for (const auto& kv : kvs) {
+      if (MetaCodec::IsInodeKey(kv.key)) {
+        result_.attr_with_mutation.attr = MetaCodec::DecodeInodeValue(kv.value);
+      } else if (MetaCodec::IsDirInodeMutationKey(kv.key)) {
+        result_.attr_with_mutation.mutations.push_back(MetaCodec::DecodeDirInodeMutationValue(kv.value));
+      } else {
+        CHECK(false) << fmt::format("invalid key({}) in scan dir shard operation.", kv.key);
+      }
+    }
 
     range.start = MetaCodec::EncodeDentryKey(fs_id_, ino_, range_.start);
     range.end = range_.end.empty() ? complete_range.end : MetaCodec::EncodeDentryKey(fs_id_, ino_, range_.end);
@@ -2355,7 +2478,10 @@ Status ScanDirShardOperation::Run(TxnUPtr& txn) {
 
   return txn->Scan(range, [&](const std::string& key, const std::string& value) -> bool {
     if (MetaCodec::IsInodeKey(key)) {
-      result_.attr = MetaCodec::DecodeInodeValue(value);
+      result_.attr_with_mutation.attr = MetaCodec::DecodeInodeValue(value);
+      return true;
+    } else if (MetaCodec::IsDirInodeMutationKey(key)) {
+      result_.attr_with_mutation.mutations.push_back(MetaCodec::DecodeDirInodeMutationValue(value));
       return true;
     }
     return handler_(MetaCodec::DecodeDentryValue(value));
@@ -2479,13 +2605,34 @@ Status GetInodeAttrOperation::Run(TxnUPtr& txn) {
   CHECK(fs_id_ > 0) << "fs_id is 0";
   CHECK(ino_ > 0) << "ino is 0";
 
-  std::string value;
-  auto status = txn->Get(MetaCodec::EncodeInodeKey(fs_id_, ino_), value);
-  if (!status.ok()) return status;
+  if (IsDir(ino_)) {
+    Range range;
+    range.start = MetaCodec::EncodeInodeKey(fs_id_, ino_);
+    range.end = MetaCodec::GetDirInodeUpdateOpRange(fs_id_, ino_).end;
 
-  result_.attr = MetaCodec::DecodeInodeValue(value);
+    return txn->Scan(range, [&](const std::string& key, const std::string& value) -> bool {
+      if (MetaCodec::IsInodeKey(key)) {
+        result_.attr_with_mutation.attr = MetaCodec::DecodeInodeValue(value);
 
-  return Status::OK();
+      } else if (MetaCodec::IsDirInodeMutationKey(key)) {
+        result_.attr_with_mutation.mutations.push_back(MetaCodec::DecodeDirInodeMutationValue(value));
+
+      } else {
+        LOG(FATAL) << fmt::format("invalid key({}).", Helper::StringToHex(key));
+      }
+
+      return true;
+    });
+
+  } else {
+    std::string value;
+    auto status = txn->Get(MetaCodec::EncodeInodeKey(fs_id_, ino_), value);
+    if (!status.ok()) return status;
+
+    result_.attr_with_mutation.attr = MetaCodec::DecodeInodeValue(value);
+
+    return Status::OK();
+  }
 }
 
 Status BatchGetInodeAttrOperation::Run(TxnUPtr& txn) {
@@ -2494,19 +2641,40 @@ Status BatchGetInodeAttrOperation::Run(TxnUPtr& txn) {
 
   std::vector<std::string> keys;
   keys.reserve(inoes_.size());
-  for (auto& ino : inoes_) {
+  for (const auto& ino : inoes_) {
     keys.push_back(MetaCodec::EncodeInodeKey(fs_id_, ino));
+
+    if (HasDirAttrMutation() && IsDir(ino)) {
+      for (uint32_t i = 0; i < kDirAttrMutationNum; ++i) {
+        keys.push_back(MetaCodec::EncodeDirInodeMutationKey(fs_id_, ino, i));
+      }
+    }
   }
 
   std::vector<KeyValue> kvs;
   auto status = txn->BatchGet(keys, kvs);
   if (!status.ok()) return status;
 
-  result_.attrs.clear();
-  for (auto& kv : kvs) {
-    CHECK(MetaCodec::IsInodeKey(kv.key)) << fmt::format("invalid inode key({}).", kv.key);
+  std::map<Ino, AttrWithMutation> attr_with_mutation_map;
+  for (const auto& kv : kvs) {
+    if (MetaCodec::IsInodeKey(kv.key)) {
+      auto attr = MetaCodec::DecodeInodeValue(kv.value);
+      attr_with_mutation_map[attr.ino()].attr = attr;
 
-    result_.attrs.push_back(MetaCodec::DecodeInodeValue(kv.value));
+    } else if (MetaCodec::IsDirInodeMutationKey(kv.key)) {
+      uint32_t fs_id, index;
+      uint64_t ino;
+      MetaCodec::DecodeDirInodeMutationKey(kv.key, fs_id, ino, index);
+      attr_with_mutation_map[ino].mutations.push_back(MetaCodec::DecodeDirInodeMutationValue(kv.value));
+
+    } else {
+      LOG(FATAL) << fmt::format("invalid key({}).", Helper::StringToHex(kv.key));
+    }
+  }
+
+  result_.attr_with_mutations.clear();
+  for (auto& [_, attr_with_mutation] : attr_with_mutation_map) {
+    result_.attr_with_mutations.push_back(attr_with_mutation);
   }
 
   return Status::OK();
@@ -2537,6 +2705,43 @@ Status ImportKVOperation::Run(TxnUPtr& txn) {
   }
 
   return Status::OK();
+}
+
+uint32_t ConflictController::DispatchIndex(uint32_t fs_id, Ino ino) {
+  auto [it, _] = index_map_.try_emplace(Key{fs_id, ino}, 0);
+
+  return ++it->second % kDirAttrMutationNum;
+}
+
+bool ConflictController::IncRunningCount(uint32_t fs_id, Ino ino) {
+  bool ret = false;
+  running_map_.withWLock(
+      [&](Map& map) mutable {
+        auto it = map.find(Key{fs_id, ino});
+        if (it == map.end()) {
+          map.emplace(Key{fs_id, ino}, 1);
+          ret = true;
+
+        } else {
+          if (it->second == 0) ret = true;
+          ++it->second;
+        }
+      },
+      ino);
+
+  return ret;
+}
+
+void ConflictController::DecRunningCount(uint32_t fs_id, Ino ino) {
+  running_map_.withWLock(
+      [&](Map& map) mutable {
+        auto it = map.find(Key{fs_id, ino});
+        CHECK(it != map.end()) << fmt::format("ino({}) not found in running map.", ino);
+        CHECK(it->second > 0) << fmt::format("running count of ino({}) is already 0.", ino);
+
+        --it->second;
+      },
+      ino);
 }
 
 OperationProcessor::OperationProcessor(KVStorageSPtr kv_storage) : kv_storage_(kv_storage) {
@@ -2589,6 +2794,17 @@ Status OperationProcessor::RunAlone(Operation* operation) {
   auto& trace = operation->GetTrace();
   const uint32_t fs_id = operation->GetFsId();
   const Ino ino = operation->GetIno();
+
+  // for some operations like rmdir and rename, we need to increase the running count to avoid conflict with batch
+  // operations.
+  bool need_inc_running =
+      (operation->GetOpType() == Operation::OpType::kRmDir) || (operation->GetOpType() == Operation::OpType::kRename);
+  if (need_inc_running) conflict_controller_.IncRunningCount(fs_id, ino);
+
+  ON_SCOPE_EXIT([&] {
+    if (need_inc_running) conflict_controller_.DecRunningCount(fs_id, ino);
+  });
+
   Status status;
   uint32_t retry = 0;
   int64_t txn_id = 0;
@@ -2704,19 +2920,22 @@ void OperationProcessor::ProcessOperation() {
       break;
     }
 
-    bool is_waited = false;
+    // bool is_waited = false;
+    uint32_t try_count = 0;
     do {
-      if (!operations_.Dequeue(operation)) break;
-
-      stage_operations.push_back(operation);
-
-      if (!is_waited && FLAGS_mds_store_operation_merge_delay_us > 0) {
-        bthread_usleep(FLAGS_mds_store_operation_merge_delay_us);
-        is_waited = true;
+      if (operations_.Dequeue(operation)) {
+        stage_operations.push_back(operation);
       }
 
-    } while (true);
+      if (try_count == 0 && FLAGS_mds_store_operation_merge_delay_us > 0) {
+        // bthread_usleep(FLAGS_mds_store_operation_merge_delay_us);
+        std::this_thread::sleep_for(std::chrono::microseconds(FLAGS_mds_store_operation_merge_delay_us));
+        // is_waited = true;
+      }
 
+    } while (++try_count < kTryMaxCount);
+
+    // grouping operations
     Grouping(stage_operations, batch_operation_map);
     for (auto& [_, batch_operation] : batch_operation_map) {
       LaunchExecuteBatchOperation(std::move(batch_operation));
@@ -2736,6 +2955,9 @@ void OperationProcessor::LaunchExecuteBatchOperation(BatchOperation&& batch_oper
     OperationProcessor* self{nullptr};
     BatchOperation batch_operation;
   };
+
+  batch_operation.dir_attr_mutation_index =
+      conflict_controller_.DispatchIndex(batch_operation.fs_id, batch_operation.ino);
 
   Params* params = new Params({.self = this, .batch_operation = std::move(batch_operation)});
 
@@ -2769,7 +2991,20 @@ static std::string GetName(const BatchOperation& batch_operation) {
     op_names += fmt::format("{},", operation->OpName());
   }
 
+  op_names.resize(op_names.size() > 0 ? op_names.size() - 1 : 0);
+
   return op_names;
+}
+
+static void SetBatchIndex(BatchOperation& batch_operation) {
+  uint32_t index = 0;
+  for (auto* operation : batch_operation.create_operations) {
+    operation->SetBatchIndex(index++);
+  }
+
+  for (auto* operation : batch_operation.setattr_operations) {
+    operation->SetBatchIndex(index++);
+  }
 }
 
 static void GenPrefetchKey(BatchOperation& batch_operation, std::vector<std::string>& prefetch_keys) {
@@ -2782,23 +3017,51 @@ static void GenPrefetchKey(BatchOperation& batch_operation, std::vector<std::str
   }
 }
 
+static bool IsNeedParentKey(const BatchOperation& batch_operation) {
+  for (auto* operation : batch_operation.create_operations) {
+    if (!operation->IsDirMutationOperation()) return true;
+  }
+
+  for (auto* operation : batch_operation.setattr_operations) {
+    if (!operation->IsDirMutationOperation()) return true;
+  }
+
+  return false;
+}
+
 void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) {
   const uint32_t fs_id = batch_operation.fs_id;
   const uint64_t ino = batch_operation.ino;
+  const uint32_t dir_attr_mutation_index = batch_operation.dir_attr_mutation_index;
   size_t count = batch_operation.setattr_operations.size() + batch_operation.create_operations.size();
 
   utils::Duration duration;
 
-  // get prefetch keys
-  std::string primary_key = MetaCodec::EncodeInodeKey(fs_id, ino);
-  std::vector<std::string> prefetch_keys;
-  prefetch_keys.reserve(kStoreOperationBatchSize);
-  prefetch_keys.push_back(primary_key);
-  GenPrefetchKey(batch_operation, prefetch_keys);
-
   SetElapsedTime(batch_operation, "store_pending");
 
-  AttrEntry attr;
+  if (count > 1) SetBatchIndex(batch_operation);
+
+  bool need_parent_key =
+      !IsDir(ino) || conflict_controller_.IncRunningCount(fs_id, ino) || IsNeedParentKey(batch_operation);
+  ON_SCOPE_EXIT([&] {
+    if (IsDir(ino)) conflict_controller_.DecRunningCount(fs_id, ino);
+  });
+
+  // get prefetch keys
+  std::vector<std::string> prefetch_keys;
+  prefetch_keys.reserve(kStoreOperationBatchSize);
+  std::string parent_key, parent_mutation_key;
+  if (need_parent_key) {
+    parent_key = MetaCodec::EncodeInodeKey(fs_id, ino);
+    prefetch_keys.push_back(parent_key);
+
+  } else {
+    parent_mutation_key = MetaCodec::EncodeDirInodeMutationKey(fs_id, ino, dir_attr_mutation_index);
+    prefetch_keys.push_back(parent_mutation_key);
+  }
+  GenPrefetchKey(batch_operation, prefetch_keys);
+
+  Operation::BatchSharedParam shared_param;
   Status status;
   uint32_t retry = 0;
   int64_t txn_id = 0;
@@ -2807,6 +3070,12 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
   do {
     utils::Duration once_duration;
 
+    if (retry > 0) {
+      shared_param.attr.Clear();
+      shared_param.attr_mutation.Clear();
+      shared_param.prefetch_kvs.clear();
+    }
+
     auto txn = kv_storage_->NewTxn();
     if (txn == nullptr) {
       status = Status(pb::error::EBACKEND_STORE, "new transaction fail");
@@ -2814,8 +3083,7 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
     }
     txn_id = txn->ID();
 
-    std::vector<KeyValue> prefetch_kvs;
-    status = txn->BatchGet(prefetch_keys, prefetch_kvs);
+    status = txn->BatchGet(prefetch_keys, shared_param.prefetch_kvs);
     if (!status.ok()) {
       if (status.error_code() == pb::error::ESTORE_MAYBE_RETRY) {
         LOG(WARNING) << fmt::format("[operation.{}.{}][{}][{}us] batch run {} lock conflict, retry({}) status({}).",
@@ -2825,25 +3093,39 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
       break;
     }
 
-    auto primary_value = FindValue(prefetch_kvs, primary_key);
-    if (primary_value.empty()) {
-      status = Status(pb::error::ENOT_FOUND, fmt::format("not found inode({})", ino));
-      break;
+    if (need_parent_key) {
+      std::string value = FindValue(shared_param.prefetch_kvs, parent_key);
+      if (value.empty()) {
+        status = Status(pb::error::ENOT_FOUND, fmt::format("not found inode({})", ino));
+        break;
+      }
+      shared_param.attr = MetaCodec::DecodeInodeValue(value);
+
+    } else {
+      shared_param.attr_mutation.set_ino(ino);
+      shared_param.attr_mutation.set_index(dir_attr_mutation_index);
+      std::string value = FindValue(shared_param.prefetch_kvs, parent_mutation_key);
+      if (!value.empty()) shared_param.attr_mutation = MetaCodec::DecodeDirInodeMutationValue(value);
     }
-    attr = MetaCodec::DecodeInodeValue(primary_value);
 
     // run set attr operations
     for (auto* operation : batch_operation.setattr_operations) {
-      operation->RunInBatch(txn, attr, prefetch_kvs);
+      operation->RunInBatch(txn, shared_param);
     }
 
     // run create operations
     for (auto* operation : batch_operation.create_operations) {
-      operation->RunInBatch(txn, attr, prefetch_kvs);
+      operation->RunInBatch(txn, shared_param);
     }
 
-    attr.set_version(attr.version() + 1);
-    txn->Put(primary_key, MetaCodec::EncodeInodeValue(attr));
+    if (need_parent_key) {
+      shared_param.attr.set_version(shared_param.attr.version() + 1);
+      txn->Put(parent_key, MetaCodec::EncodeInodeValue(shared_param.attr));
+
+    } else {
+      shared_param.attr_mutation.set_delta_version(shared_param.attr_mutation.delta_version() + 1);
+      txn->Put(parent_mutation_key, MetaCodec::EncodeDirInodeMutationValue(shared_param.attr_mutation));
+    }
 
     status = txn->Commit();
 
@@ -2867,12 +3149,16 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
 
   SetElapsedTime(batch_operation, "store_operate");
 
+  CHECK(!need_parent_key || shared_param.attr.ino() != 0)
+      << fmt::format("invalid attr ino({}).", shared_param.attr.ino());
+
   LOG(INFO) << fmt::format(
       "[operation.{}.{}][{}][{}us] batch run ({}) finish, count({}) txn({}) retry({}) status({}) attr({}).", fs_id, ino,
-      txn_id, duration.ElapsedUs(), op_names, count, commit_type, retry, status.error_str(), DescribeAttr(attr));
+      txn_id, duration.ElapsedUs(), op_names, count, commit_type, retry, status.error_str(),
+      need_parent_key ? DescribeAttr(shared_param.attr) : DescribeAttrMutation(shared_param.attr_mutation));
 
   if (status.ok()) {
-    SetResultAttr(batch_operation, attr);
+    SetResultAttr(batch_operation, shared_param);
 
   } else {
     SetError(batch_operation, status);

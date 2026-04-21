@@ -36,30 +36,20 @@ static const std::string kInodeCacheMetricsPrefix = "dingofs_{}_inode_cache_{}";
 DEFINE_uint32(mds_inode_cache_max_count, 4 * 1024 * 1024, "inode cache max count");
 DEFINE_validator(mds_inode_cache_max_count, brpc::PassValidate);
 
-bool Inode::PutIf(const AttrEntry& attr) {
-  utils::WriteLockGuard lk(lock_);
-
-  LOG(INFO) << fmt::format("[inode.{}] update attr,this({}) version({}->{}).", ino_, (void*)this, version_,
-                           attr.version());
-
-  if (attr.version() <= version_) {
-    LOG_DEBUG << fmt::format("[inode.{}] version abnormal, old({}) new({}).", ino_, version_, attr.version());
-    return false;
-  }
-
+void Inode::Put(const AttrEntry& attr) {
   // clone new attr
-  if (length_ != attr.length()) length_ = attr.length();
-  if (ctime_ != attr.ctime()) ctime_ = attr.ctime();
-  if (mtime_ != attr.mtime()) mtime_ = attr.mtime();
-  if (atime_ != attr.atime()) atime_ = attr.atime();
-  if (uid_ != attr.uid()) uid_ = attr.uid();
-  if (gid_ != attr.gid()) gid_ = attr.gid();
-  if (mode_ != attr.mode()) mode_ = attr.mode();
-  if (nlink_ != attr.nlink()) nlink_ = attr.nlink();
-  if (symlink_ != attr.symlink()) symlink_ = attr.symlink();
-  if (rdev_ != attr.rdev()) rdev_ = attr.rdev();
-  if (flags_ != attr.flags()) flags_ = attr.flags();
-  if (maybe_tiny_file_ != attr.maybe_tiny_file()) maybe_tiny_file_ = attr.maybe_tiny_file();
+  length_ = attr.length();
+  ctime_ = std::max(ctime_, attr.ctime());
+  mtime_ = std::max(mtime_, attr.mtime());
+  atime_ = std::max(atime_, attr.atime());
+  uid_ = attr.uid();
+  gid_ = attr.gid();
+  mode_ = attr.mode();
+  nlink_ = attr.nlink();
+  symlink_ = attr.symlink();
+  rdev_ = attr.rdev();
+  flags_ = attr.flags();
+  maybe_tiny_file_ = attr.maybe_tiny_file();
 
   parents_.clear();
   parents_.insert(parents_.end(), attr.parents().begin(), attr.parents().end());
@@ -74,9 +64,68 @@ bool Inode::PutIf(const AttrEntry& attr) {
     shard_boundaries_.push_back(boundary);
   }
 
-  version_ = attr.version();
+  base_version_ = attr.version();
+}
 
-  return true;
+void Inode::ApplyMutation(const AttrWithMutation& attr_with_mutation) {
+  for (const auto& mutation : attr_with_mutation.mutations) {
+    if (mutation.delta_version() <= delta_versions_[mutation.index()]) continue;
+
+    total_delta_version_ += (mutation.delta_version() - delta_versions_[mutation.index()]);
+    delta_versions_[mutation.index()] = mutation.delta_version();
+
+    ctime_ = std::max(ctime_, mutation.ctime());
+    mtime_ = std::max(mtime_, mutation.mtime());
+    atime_ = std::max(atime_, mutation.atime());
+  }
+}
+
+void Inode::PutIf(const AttrEntry& attr, const std::string& reason) {
+  LOG(INFO) << fmt::format("[inode.{}.{}] update attr, version({}-{}) in_base_version({}) reason({}).", fs_id_, ino_,
+                           base_version_, total_delta_version_, attr.version(), reason);
+
+  utils::WriteLockGuard lk(lock_);
+
+  if (attr.version() <= base_version_) return;
+
+  Put(attr);
+}
+
+void Inode::PutIf(const AttrWithMutation& attr_with_mutation, const std::string& reason) {
+  const auto& attr = attr_with_mutation.attr;
+
+  LOG(INFO) << fmt::format("[inode.{}.{}] update attr with mutation, version({}-{}) in_version({}-{}) reason({}).",
+                           fs_id_, ino_, base_version_, total_delta_version_, attr_with_mutation.BaseVersion(),
+                           attr_with_mutation.TotalDeltaVersion(), reason);
+
+  utils::WriteLockGuard lk(lock_);
+
+  if (attr.version() > base_version_) Put(attr);
+
+  ApplyMutation(attr_with_mutation);
+}
+
+AttrEntry Inode::PutByMutation(const AttrMutationEntry& mutation, const std::string& reason) {
+  CHECK(mutation.index() < kDirAttrMutationNum)
+      << fmt::format("invalid mutation index({}), should be less than {}.", mutation.index(), kDirAttrMutationNum);
+
+  LOG(INFO) << fmt::format("[inode.{}.{}] update attr by mutation, version({}-{}) in_delta_version({}_{}) reason({}).",
+                           fs_id_, ino_, base_version_, total_delta_version_, mutation.index(),
+                           mutation.delta_version(), reason);
+
+  utils::WriteLockGuard lk(lock_);
+
+  uint64_t& delta_version = delta_versions_[mutation.index()];
+  if (mutation.delta_version() <= delta_version) return ToAttrNoLock();
+
+  ctime_ = std::max(ctime_, mutation.ctime());
+  mtime_ = std::max(mtime_, mutation.mtime());
+  atime_ = std::max(atime_, mutation.atime());
+
+  total_delta_version_ += (mutation.delta_version() - delta_version);
+  delta_version = mutation.delta_version();
+
+  return ToAttrNoLock();
 }
 
 void Inode::ExpandLength(uint64_t length) {
@@ -92,9 +141,13 @@ void Inode::ExpandLength(uint64_t length) {
   atime_ = now_ns;
 }
 
-Inode::AttrEntry Inode::Copy() {
+Inode::AttrEntry Inode::ToAttr() {
   utils::ReadLockGuard lk(lock_);
 
+  return ToAttrNoLock();
+}
+
+Inode::AttrEntry Inode::ToAttrNoLock() {
   Inode::AttrEntry attr;
   attr.set_fs_id(fs_id_);
   attr.set_ino(ino_);
@@ -121,7 +174,7 @@ Inode::AttrEntry Inode::Copy() {
     attr.add_shard_boundaries(boundary);
   }
 
-  attr.set_version(version_);
+  attr.set_version(base_version_ + total_delta_version_);
 
   return attr;
 }
@@ -135,52 +188,51 @@ InodeCache::InodeCache(uint32_t fs_id)
 
 InodeCache::~InodeCache() {}  // NOLINT
 
-void InodeCache::PutIf(Ino ino, InodeSPtr& inode) {
-  CHECK(inode != nullptr) << "inode is nullptr.";
+InodeSPtr InodeCache::PutIf(const AttrEntry& attr, const std::string& reason) {
+  InodeSPtr inode;
 
-  shard_map_.withWLock(
-      [this, ino, &inode](Map& map) mutable {
-        auto it = map.find(ino);
-        if (it == map.end()) {
-          map.emplace(ino, inode);
-          total_count_ << 1;
-
-        } else {
-          it->second->PutIf(inode->Copy());
-        }
-      },
-      ino);
-}
-
-void InodeCache::PutIf(AttrEntry&& attr) {  // NOLINT
   shard_map_.withWLock(
       [&](Map& map) mutable {
         auto it = map.find(attr.ino());
         if (it == map.end()) {
-          const Ino ino = attr.ino();
-          map.emplace(ino, Inode::New(attr));
+          inode = Inode::New(attr);
+          map.emplace(attr.ino(), inode);
           total_count_ << 1;
 
+          LOG(INFO) << fmt::format("[inode.{}.{}] put inode, version({}).", fs_id_, attr.ino(), attr.version());
+
         } else {
-          it->second->PutIf(attr);
+          inode = it->second;
+          inode->PutIf(attr, reason);
         }
       },
       attr.ino());
+
+  return inode;
 }
 
-void InodeCache::PutIf(const AttrEntry& attr) {
+InodeSPtr InodeCache::PutIf(const AttrWithMutation& attr_with_mutation, const std::string& reason) {
+  InodeSPtr inode;
+
+  const auto& attr = attr_with_mutation.attr;
   shard_map_.withWLock(
       [&](Map& map) mutable {
         auto it = map.find(attr.ino());
         if (it == map.end()) {
-          map.emplace(attr.ino(), Inode::New(attr));
+          inode = Inode::New(attr_with_mutation);
+          map.emplace(attr.ino(), inode);
           total_count_ << 1;
 
+          LOG(INFO) << fmt::format("[inode.{}.{}] put inode, version({}).", fs_id_, attr.ino(), attr.version());
+
         } else {
-          it->second->PutIf(attr);
+          inode = it->second;
+          inode->PutIf(attr_with_mutation, reason);
         }
       },
       attr.ino());
+
+  return inode;
 }
 
 void InodeCache::Delete(Ino ino) {

@@ -77,7 +77,8 @@ void Monitor::Run() {
 }
 
 void Monitor::NotifyRefreshFs(const MDSMeta& mds, const FsInfoEntry& fs_info) {
-  notify_buddy_->AsyncNotify(notify::RefreshFsInfoMessage::Create(mds.ID(), fs_info.fs_id(), fs_info.fs_name()));
+  notify_buddy_->AsyncNotify(
+      notify::RefreshFsInfoMessage::Create(mds.ID(), fs_info.fs_id(), fs_info.fs_name(), "monitor"));
 }
 
 void Monitor::NotifyRefreshFs(const std::vector<MDSMeta>& mdses, const FsInfoEntry& fs_info) {

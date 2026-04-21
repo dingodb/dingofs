@@ -15,8 +15,6 @@
 #ifndef DINGOFS_MDS_FILESYSTEM_PARTITION_H_
 #define DINGOFS_MDS_FILESYSTEM_PARTITION_H_
 
-#include <glog/logging.h>
-
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -26,11 +24,11 @@
 #include <vector>
 
 #include "absl/container/btree_map.h"
+#include "glog/logging.h"
 #include "json/value.h"
 #include "mds/common/status.h"
 #include "mds/common/type.h"
 #include "mds/filesystem/dentry.h"
-#include "mds/filesystem/inode.h"
 #include "mds/filesystem/store_operation.h"
 
 namespace dingofs {
@@ -119,19 +117,21 @@ using PartitionPtr = std::shared_ptr<ShardPartition>;
 
 class ShardPartition {
  public:
-  ShardPartition(OperationProcessorSPtr operation_processor, InodeSPtr& inode)
-      : fs_id_(inode->FsId()),
-        ino_(inode->Ino()),
-        inode_(inode),
-        shard_boundaries_(inode->ShardBoundaries()),
-        base_version_(inode->Version()),
+  ShardPartition(OperationProcessorSPtr operation_processor, const AttrEntry& attr)
+      : fs_id_(attr.fs_id()),
+        ino_(attr.ino()),
+        base_version_(attr.version()),
         delta_version_(base_version_),
-        operation_processor_(operation_processor) {}
+        operation_processor_(operation_processor) {
+    for (const auto& boundary : attr.shard_boundaries()) {
+      shard_boundaries_.push_back(boundary);
+    }
+  }
 
   ~ShardPartition() = default;
 
-  static PartitionPtr New(OperationProcessorSPtr operation_processor, InodeSPtr& inode) {
-    return std::make_shared<ShardPartition>(operation_processor, inode);
+  static PartitionPtr New(OperationProcessorSPtr operation_processor, const AttrEntry& attr) {
+    return std::make_shared<ShardPartition>(operation_processor, attr);
   }
 
   uint32_t FsId() const { return fs_id_; }
@@ -140,9 +140,6 @@ class ShardPartition {
   uint64_t BaseVersion();
   uint64_t DeltaVersion();
 
-  InodeSPtr ParentInode();
-  void SetParentInode(InodeSPtr parent_inode);
-
   Status Get(const std::string& name, Dentry& out);
   std::vector<Dentry> GetAll();
 
@@ -150,9 +147,10 @@ class ShardPartition {
               std::vector<Dentry>& dentries);
 
   void Put(const Dentry& dentry, uint64_t version);
-  void PutWithInode(const Dentry& dentry);
   void Delete(const std::string& name, uint64_t version);
   void Delete(const std::vector<std::string>& names, uint64_t version);
+  // refresh partition with latest version, for SetAttr/SetXAttr/RemoveXAttr
+  void RefreshDeltaVersion(uint64_t version);
 
   // delta dentry op too many may cause performance issue, need compact to reduce the op count.
   bool NeedCompact();
@@ -198,7 +196,7 @@ class ShardPartition {
   Status FetchDirShard(const Range& range, DirShardSPtr& out_shard);
 
   // refresh partition with latest inode
-  bool Refresh(InodeSPtr inode);
+  bool Refresh(uint64_t new_version);
 
   // split dir shard
   Status DoSplitDirShard(const Range& range);
@@ -210,8 +208,6 @@ class ShardPartition {
   const Ino ino_;
 
   mutable utils::RWLock lock_;
-
-  InodeWPtr inode_;
 
   uint64_t base_version_{0};
   uint64_t delta_version_{0};
@@ -265,7 +261,7 @@ class PartitionCache {
 
   const uint32_t fs_id_{0};
 
-  constexpr static size_t kShardNum = 64;
+  constexpr static size_t kShardNum = 128;
   utils::Shards<Map, kShardNum> shard_map_;
 
   // metric
