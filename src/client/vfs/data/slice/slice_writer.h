@@ -94,9 +94,10 @@ class SliceWriter {
  private:
   std::string ToStringUnlocked() const {
     return fmt::format(
-        "(uuid: {}, chunk_range: [{}-{}], len: {}, id: "
+        "(uuid: {}, chunk_range: [{}-{}], len: {}, slice_id: "
         "{}, flushed: {}, block_data_count: {})",
-        UUID(), chunk_offset_, (chunk_offset_ + len_), len_, id_,
+        UUID(), chunk_offset_, (chunk_offset_ + len_), len_,
+        slice_id_.load(std::memory_order_relaxed),
         (flushed_.load(std::memory_order_relaxed) ? "true" : "false"),
         block_datas_.size());
   }
@@ -116,13 +117,14 @@ class SliceWriter {
   // --- immutable ---
   const SliceDataContext context_;
   VFSHub* vfs_hub_{nullptr};
+  // Set in ctor, never changes: slice is forward-append only
+  // (CHECK_EQ(chunk_offset, End()) in Write).
+  const int32_t chunk_offset_;
 
   // --- guarded by write_flush_mutex_ ---
   mutable std::mutex write_flush_mutex_;
-  int32_t chunk_offset_;
   int32_t len_{0};
   bool flushing_{false};
-  uint64_t id_{0};
   std::map<uint32_t, BlockDataUPtr> block_datas_;
   StatusCallback flush_cb_;
 
@@ -136,18 +138,16 @@ class SliceWriter {
 
   // --- atomic (lock-free) ---
   std::atomic<uint64_t> slice_id_{0};
-  std::atomic<bool> slice_id_alloc_failed_{false};
   std::atomic<uint32_t> inflight_{0};
   std::atomic_bool flushed_{false};
 
   // --- reference counting ---
-  std::atomic<int32_t> refs_{
-      0};  // creator must call IncRef() after construction
+  // creator must call IncRef() after construction
+  std::atomic<int32_t> refs_{0};
 
   // --- observability counters (atomic, lock-free) ---
   std::atomic<uint64_t> total_blocks_streamed_{0};
   std::atomic<uint64_t> total_blocks_uploaded_{0};
-  std::atomic<uint64_t> slice_id_alloc_latency_us_{0};
 };
 
 // SliceWriter uses manual ref counting (IncRef/DecRef).
