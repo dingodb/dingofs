@@ -22,7 +22,6 @@
 #include <string>
 
 #include "mds/common/type.h"
-#include "mds/filesystem/inode.h"
 
 namespace dingofs {
 namespace mds {
@@ -35,11 +34,10 @@ class Dentry {
  public:
   Dentry() = default;
   Dentry(const std::string& name) : name_(name), type_(pb::mds::FileType::FILE) {};
-  Dentry(uint32_t fs_id, const std::string& name, Ino parent, Ino ino, pb::mds::FileType type, uint32_t flag,
-         InodeSPtr inode = nullptr);
-  Dentry(const pb::mds::Dentry& dentry, InodeSPtr inode = nullptr);
-  Dentry(const Dentry& dentry, InodeSPtr inode);
-  ~Dentry();
+  Dentry(uint32_t fs_id, const std::string& name, Ino parent, Ino ino, pb::mds::FileType type, uint32_t flag);
+  Dentry(const pb::mds::Dentry& dentry);
+  Dentry(const Dentry& dentry);
+  ~Dentry() = default;
 
   const std::string& Name() const { return name_; }
   uint32_t FsId() const { return fs_id_; }
@@ -47,8 +45,6 @@ class Dentry {
   Ino ParentIno() const { return parent_; }
   pb::mds::FileType Type() const { return type_; }
   uint32_t Flag() const { return flag_; }
-
-  InodeSPtr Inode() const { return inode_.lock(); }
 
   DentryEntry Copy() const;
 
@@ -59,9 +55,6 @@ class Dentry {
   Ino parent_{0};
   pb::mds::FileType type_;
   uint32_t flag_{0};
-
-  // maybe null, just inode shortcut
-  InodeWPtr inode_;
 };
 
 }  // namespace mds

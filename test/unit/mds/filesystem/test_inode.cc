@@ -79,46 +79,32 @@ TEST_F(InodeCacheTest, Put) {
   InodeCache inode_cache(kFsId);
 
   {
-    InodeSPtr inode =
-        Inode::New(GenInode(kFsId, 2000, pb::mds::FileType::DIRECTORY));
-    inode_cache.PutIf(inode->Ino(), inode);
-
-    ASSERT_TRUE(inode_cache.Get(inode->Ino()) != nullptr);
+    inode_cache.PutIf(GenInode(kFsId, 2000, pb::mds::FileType::DIRECTORY), "test");
+    ASSERT_TRUE(inode_cache.Get(2000) != nullptr);
   }
 
   {
-    InodeSPtr inode =
-        Inode::New(GenInode(kFsId, 2001, pb::mds::FileType::DIRECTORY));
-    inode_cache.PutIf(inode->Ino(), inode);
-
-    ASSERT_TRUE(inode_cache.Get(inode->Ino()) != nullptr);
+    inode_cache.PutIf(GenInode(kFsId, 2001, pb::mds::FileType::DIRECTORY), "test");
+    ASSERT_TRUE(inode_cache.Get(2001) != nullptr);
   }
 
   {
-    InodeSPtr inode =
-        Inode::New(GenInode(kFsId, 2003, pb::mds::FileType::DIRECTORY));
-    inode_cache.PutIf(inode->Ino(), inode);
-
-    ASSERT_TRUE(inode_cache.Get(inode->Ino()) != nullptr);
+    inode_cache.PutIf(GenInode(kFsId, 2003, pb::mds::FileType::DIRECTORY), "test");
+    ASSERT_TRUE(inode_cache.Get(2003) != nullptr);
   }
 
   {
-    InodeSPtr inode =
-        Inode::New(GenInode(kFsId, 2004, pb::mds::FileType::DIRECTORY));
-    inode_cache.PutIf(inode->Ino(), inode);
-
-    ASSERT_TRUE(inode_cache.Get(inode->Ino()) != nullptr);
+    inode_cache.PutIf(GenInode(kFsId, 2004, pb::mds::FileType::DIRECTORY), "test");
+    ASSERT_TRUE(inode_cache.Get(2004) != nullptr);
   }
 
   // put by InodeSPtr
   {
     const Ino ino = 2005;
 
-    InodeSPtr inode =
-        Inode::New(GenInode(kFsId, ino, pb::mds::FileType::DIRECTORY));
-    inode_cache.PutIf(inode->Ino(), inode);
+    inode_cache.PutIf(GenInode(kFsId, ino, pb::mds::FileType::DIRECTORY), "test");
 
-    inode = inode_cache.Get(inode->Ino());
+    auto inode = inode_cache.Get(ino);
     ASSERT_TRUE(inode != nullptr);
     ASSERT_EQ(inode->Ino(), ino);
     ASSERT_EQ(inode->Gid(), 1008);
@@ -130,10 +116,9 @@ TEST_F(InodeCacheTest, Put) {
     attr_entry.set_uid(5678);
     attr_entry.set_length(1234567);
     attr_entry.set_version(2);
-    inode = Inode::New(attr_entry);
-    inode_cache.PutIf(inode->Ino(), inode);
+    inode_cache.PutIf(attr_entry, "test");
 
-    inode = inode_cache.Get(inode->Ino());
+    inode = inode_cache.Get(ino);
     ASSERT_TRUE(inode != nullptr);
     ASSERT_EQ(inode->Ino(), ino);
     ASSERT_EQ(inode->Gid(), 1234);
@@ -145,7 +130,7 @@ TEST_F(InodeCacheTest, Put) {
   {
     const Ino ino = 2006;
     auto attr_entry = GenInode(kFsId, ino, pb::mds::FileType::FILE);
-    inode_cache.PutIf(attr_entry);
+    inode_cache.PutIf(attr_entry, "test");
 
     auto inode = inode_cache.Get(ino);
     ASSERT_TRUE(inode != nullptr);
@@ -155,7 +140,7 @@ TEST_F(InodeCacheTest, Put) {
   {
     const Ino ino = 2007;
     auto attr_entry = GenInode(kFsId, ino, pb::mds::FileType::FILE);
-    inode_cache.PutIf(std::move(attr_entry));
+    inode_cache.PutIf(std::move(attr_entry), "test");
 
     ASSERT_EQ(attr_entry.parents_size(), 3);
     ASSERT_EQ(attr_entry.xattrs_size(), 3);
@@ -171,11 +156,9 @@ TEST_F(InodeCacheTest, Put) {
     const Ino ino = 2008;
 
     // insert
-    InodeSPtr inode =
-        Inode::New(GenInode(kFsId, ino, pb::mds::FileType::DIRECTORY));
-    inode_cache.PutIf(inode->Ino(), inode);
+    inode_cache.PutIf(GenInode(kFsId, ino, pb::mds::FileType::DIRECTORY), "test");
 
-    ASSERT_TRUE(inode_cache.Get(inode->Ino()) != nullptr);
+    ASSERT_TRUE(inode_cache.Get(ino) != nullptr);
 
     // update
     auto attr_entry = GenInode(kFsId, ino, pb::mds::FileType::DIRECTORY);
@@ -183,12 +166,12 @@ TEST_F(InodeCacheTest, Put) {
     attr_entry.set_uid(5678);
     attr_entry.set_length(1234567);
     attr_entry.set_version(2);
-    inode_cache.PutIf(attr_entry);
+    inode_cache.PutIf(attr_entry, "test");
 
     ASSERT_EQ(attr_entry.parents_size(), 3);
     ASSERT_EQ(attr_entry.xattrs_size(), 3);
 
-    inode = inode_cache.Get(ino);
+    auto inode = inode_cache.Get(ino);
     ASSERT_TRUE(inode != nullptr);
     ASSERT_EQ(inode->Ino(), ino);
     ASSERT_EQ(inode->Type(), pb::mds::FileType::DIRECTORY);
@@ -203,11 +186,9 @@ TEST_F(InodeCacheTest, Put) {
     const Ino ino = 2009;
 
     // insert
-    InodeSPtr inode =
-        Inode::New(GenInode(kFsId, ino, pb::mds::FileType::DIRECTORY));
-    inode_cache.PutIf(ino, inode);
+    inode_cache.PutIf(GenInode(kFsId, ino, pb::mds::FileType::DIRECTORY), "test");
 
-    inode = inode_cache.Get(ino);
+    auto inode = inode_cache.Get(ino);
     ASSERT_TRUE(inode != nullptr);
     ASSERT_EQ(inode->Ino(), ino);
     ASSERT_EQ(inode->Version(), 1);
@@ -220,7 +201,7 @@ TEST_F(InodeCacheTest, Put) {
     attr_entry.set_version(2);
     attr_entry.add_parents(100000001);
     ASSERT_EQ(attr_entry.parents_size(), 4);
-    inode_cache.PutIf(std::move(attr_entry));
+    inode_cache.PutIf(std::move(attr_entry), "test");
 
     ASSERT_EQ(attr_entry.parents_size(), 4);
 
@@ -239,90 +220,70 @@ TEST_F(InodeCacheTest, Delete) {
   InodeCache inode_cache(kFsId);
 
   {
-    InodeSPtr inode =
-        Inode::New(GenInode(kFsId, 2000, pb::mds::FileType::DIRECTORY));
-    inode_cache.PutIf(inode->Ino(), inode);
-
-    ASSERT_TRUE(inode_cache.Get(inode->Ino()) != nullptr);
-
-    inode_cache.Delete(inode->Ino());
-
-    ASSERT_TRUE(inode_cache.Get(inode->Ino()) == nullptr);
+    inode_cache.PutIf(GenInode(kFsId, 2000, pb::mds::FileType::DIRECTORY), "test");
+    ASSERT_TRUE(inode_cache.Get(2000) != nullptr);
+    inode_cache.Delete(2000);
+    ASSERT_TRUE(inode_cache.Get(2000) == nullptr);
   }
 
   {
-    InodeSPtr inode =
-        Inode::New(GenInode(kFsId, 2001, pb::mds::FileType::DIRECTORY));
-    inode_cache.PutIf(inode->Ino(), inode);
-
-    ASSERT_TRUE(inode_cache.Get(inode->Ino()) != nullptr);
-
-    inode_cache.Delete(inode->Ino());
-
-    ASSERT_TRUE(inode_cache.Get(inode->Ino()) == nullptr);
+    inode_cache.PutIf(GenInode(kFsId, 2001, pb::mds::FileType::DIRECTORY), "test");
+    ASSERT_TRUE(inode_cache.Get(2001) != nullptr);
+    inode_cache.Delete(2001);
+    ASSERT_TRUE(inode_cache.Get(2001) == nullptr);
   }
 
   {
-    InodeSPtr inode =
-        Inode::New(GenInode(kFsId, 2002, pb::mds::FileType::DIRECTORY));
-    inode_cache.PutIf(inode->Ino(), inode);
-
-    ASSERT_TRUE(inode_cache.Get(inode->Ino()) != nullptr);
-
-    inode_cache.Delete(inode->Ino());
-
-    ASSERT_TRUE(inode_cache.Get(inode->Ino()) == nullptr);
+    inode_cache.PutIf(GenInode(kFsId, 2002, pb::mds::FileType::DIRECTORY), "test");
+    ASSERT_TRUE(inode_cache.Get(2002) != nullptr);
+    inode_cache.Delete(2002);
+    ASSERT_TRUE(inode_cache.Get(2002) == nullptr);
   }
 
   {
-    InodeSPtr inode =
-        Inode::New(GenInode(kFsId, 2003, pb::mds::FileType::DIRECTORY));
-    inode_cache.PutIf(inode->Ino(), inode);
-
-    ASSERT_TRUE(inode_cache.Get(inode->Ino()) != nullptr);
-
-    inode_cache.Delete(inode->Ino());
-
-    ASSERT_TRUE(inode_cache.Get(inode->Ino()) == nullptr);
+    inode_cache.PutIf(GenInode(kFsId, 2003, pb::mds::FileType::DIRECTORY), "test");
+    ASSERT_TRUE(inode_cache.Get(2003) != nullptr);
+    inode_cache.Delete(2003);
+    ASSERT_TRUE(inode_cache.Get(2003) == nullptr);
   }
 }
 
 TEST_F(InodeCacheTest, Get) {
   InodeCache inode_cache(kFsId);
 
-  inode_cache.PutIf(GenInode(kFsId, 4001, pb::mds::FileType::FILE));
+  inode_cache.PutIf(GenInode(kFsId, 4001, pb::mds::FileType::FILE), "test");
   ASSERT_TRUE(inode_cache.Get(4001) != nullptr);
   ASSERT_EQ(inode_cache.Size(), 1);
 
-  inode_cache.PutIf(GenInode(kFsId, 4002, pb::mds::FileType::FILE));
+  inode_cache.PutIf(GenInode(kFsId, 4002, pb::mds::FileType::FILE), "test");
   ASSERT_TRUE(inode_cache.Get(4002) != nullptr);
   ASSERT_EQ(inode_cache.Size(), 2);
 
-  inode_cache.PutIf(GenInode(kFsId, 4003, pb::mds::FileType::FILE));
+  inode_cache.PutIf(GenInode(kFsId, 4003, pb::mds::FileType::FILE), "test");
   ASSERT_TRUE(inode_cache.Get(4003) != nullptr);
   ASSERT_EQ(inode_cache.Size(), 3);
 
-  inode_cache.PutIf(GenInode(kFsId, 4004, pb::mds::FileType::FILE));
+  inode_cache.PutIf(GenInode(kFsId, 4004, pb::mds::FileType::FILE), "test");
   ASSERT_TRUE(inode_cache.Get(4004) != nullptr);
   ASSERT_EQ(inode_cache.Size(), 4);
 
   auto attr_entry = GenInode(kFsId, 4001, pb::mds::FileType::FILE);
   attr_entry.set_version(2);
-  inode_cache.PutIf(std::move(attr_entry));
+  inode_cache.PutIf(std::move(attr_entry), "test");
   ASSERT_TRUE(inode_cache.Get(4001) != nullptr);
   ASSERT_EQ(inode_cache.Size(), 4);
 
   attr_entry = GenInode(kFsId, 4001, pb::mds::FileType::FILE);
   attr_entry.set_version(3);
-  inode_cache.PutIf(std::move(attr_entry));
+  inode_cache.PutIf(std::move(attr_entry), "test");
   ASSERT_TRUE(inode_cache.Get(4001) != nullptr);
   ASSERT_EQ(inode_cache.Size(), 4);
 
-  inode_cache.PutIf(GenInode(kFsId, 4002, pb::mds::FileType::FILE));
+  inode_cache.PutIf(GenInode(kFsId, 4002, pb::mds::FileType::FILE), "test");
   ASSERT_TRUE(inode_cache.Get(4002) != nullptr);
   ASSERT_EQ(inode_cache.Size(), 4);
 
-  inode_cache.PutIf(GenInode(kFsId, 4005, pb::mds::FileType::FILE));
+  inode_cache.PutIf(GenInode(kFsId, 4005, pb::mds::FileType::FILE), "test");
   ASSERT_TRUE(inode_cache.Get(4005) != nullptr);
   ASSERT_EQ(inode_cache.Size(), 5);
 
@@ -362,7 +323,7 @@ TEST_F(InodeCacheTest, Benchmark) {
     threads.emplace_back([thread_no = i, &inode_cache, &ino_gen]() {
       for (;;) {
         Ino ino = ino_gen.fetch_add(1, std::memory_order_relaxed);
-        inode_cache.PutIf(GenInode(kFsId, ino, pb::mds::FileType::FILE));
+        inode_cache.PutIf(GenInode(kFsId, ino, pb::mds::FileType::FILE), "test");
       }
     });
   }

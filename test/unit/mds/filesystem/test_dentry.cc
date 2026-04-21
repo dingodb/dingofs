@@ -43,14 +43,12 @@ class DentryTest : public testing::Test {
 };
 
 TEST_F(DentryTest, Put) {
-  Dentry dentry(kFsId, "file1", 1, 1000, pb::mds::FileType::FILE, 1212,
-                nullptr);
+  Dentry dentry(kFsId, "file1", 1, 1000, pb::mds::FileType::FILE, 1212);
 
   ASSERT_EQ("file1", dentry.Name());
   ASSERT_EQ(1000, dentry.INo());
   ASSERT_EQ(pb::mds::FileType::FILE, dentry.Type());
   ASSERT_EQ(1212, dentry.Flag());
-  ASSERT_EQ(nullptr, dentry.Inode());
 }
 
 class FileStore {

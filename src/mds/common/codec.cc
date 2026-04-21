@@ -66,6 +66,9 @@ static uint32_t kFsConfigLogKeySize = 1 + 1 + 4 + 8;
 // inode attr format: ${prefix} kTableFsMeta {fs_id} kMetaFsInode {ino} kFsInodeAttr
 static uint32_t kInodeKeySize = 1 + 4 + 1 + 8 + 1;
 
+// inode update op format: ${prefix} kTableFsMeta {fs_id} kMetaFsInode {ino} kFsDirInodeMutation {index}
+static uint32_t kDirInodeMutationKeySize = 1 + 4 + 1 + 8 + 1 + 4;
+
 // dentry format: ${prefix} kTableFsMeta {fs_id} kMetaFsInode {ino} kFsInodeDentry {name}
 static uint32_t kDentryKeyHeaderSize = 1 + 4 + 1 + 8 + 1;
 
@@ -139,6 +142,7 @@ enum MetaType : unsigned char {
 
 // inode meta type:
 //      kFsInodeAttr: inode basic attributes
+//      kFsDirInodeMutation: inode attribute operations
 //      kFsInodeDentry: dentry, file/directory name
 //      kFsInodeChunk: chunk, file data chunk
 // key locality:
@@ -146,8 +150,9 @@ enum MetaType : unsigned char {
 //      file: kFsInodeAttr kFsInodeChunk
 enum FsInodeType : unsigned char {
   kFsInodeAttr = 1,
-  kFsInodeDentry = 3,
-  kFsInodeChunk = 5,
+  kFsDirInodeMutation = 3,
+  kFsInodeDentry = 5,
+  kFsInodeChunk = 7,
 };
 
 void MetaCodec::SetClusterID(uint32_t cluster_id) {
@@ -171,6 +176,7 @@ void MetaCodec::SetClusterID(uint32_t cluster_id) {
   kFsQuotaKeySize += kPrefixSize;
   kFsConfigLogKeySize += kPrefixSize;
   kInodeKeySize += kPrefixSize;
+  kDirInodeMutationKeySize += kPrefixSize;
   kDentryKeyHeaderSize += kPrefixSize;
   kChunkKeySize += kPrefixSize;
   kFileSessionKeySize += kPrefixSize;
@@ -376,6 +382,28 @@ Range MetaCodec::GetSliceRefRange() {
   end = kPrefix;
   end.push_back(kTableFsMeta);
   end.push_back(kMetaFsSliceRef + 1);
+
+  return range;
+}
+
+Range MetaCodec::GetDirInodeUpdateOpRange(uint32_t fs_id, Ino ino) {
+  Range range;
+
+  auto& start = range.start;
+  start = kPrefix;
+  start.push_back(kTableFsMeta);
+  SerialHelper::WriteInt(fs_id, start);
+  start.push_back(kMetaFsInode);
+  SerialHelper::WriteULong(ino, start);
+  start.push_back(kFsDirInodeMutation);
+
+  auto& end = range.end;
+  end = kPrefix;
+  end.push_back(kTableFsMeta);
+  SerialHelper::WriteInt(fs_id, end);
+  end.push_back(kMetaFsInode);
+  SerialHelper::WriteULong(ino, end);
+  end.push_back(kFsDirInodeMutation + 1);
 
   return range;
 }
@@ -1072,6 +1100,53 @@ AttrEntry MetaCodec::DecodeInodeValue(const std::string& value) {
   CHECK(attr.ParseFromString(value)) << "parse inode attr fail.";
 
   return attr;
+}
+
+bool MetaCodec::IsDirInodeMutationKey(const std::string& key) {
+  if (key.size() != kDirInodeMutationKeySize) {
+    return false;
+  }
+
+  // Check the prefix, table id, and meta type
+  if (key.at(kPrefixSize) != kTableFsMeta || key.at(kPrefixSize + 1 + 4) != kMetaFsInode ||
+      key.at(kPrefixSize + 1 + 4 + 1 + 8) != kFsDirInodeMutation) {
+    return false;
+  }
+
+  return true;
+}
+
+std::string MetaCodec::EncodeDirInodeMutationKey(uint32_t fs_id, Ino ino, uint32_t index) {
+  std::string key;
+  key.reserve(kDirInodeMutationKeySize);
+
+  key.append(kPrefix);
+  key.push_back(kTableFsMeta);
+  SerialHelper::WriteInt(fs_id, key);
+  key.push_back(kMetaFsInode);
+  SerialHelper::WriteULong(ino, key);
+  key.push_back(kFsDirInodeMutation);
+  SerialHelper::WriteInt(index, key);
+
+  return key;
+}
+
+void MetaCodec::DecodeDirInodeMutationKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, uint32_t& index) {
+  CHECK(IsDirInodeMutationKey(key)) << fmt::format("invalid inode update op key({}).", Helper::StringToHex(key));
+  fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 1));
+  ino = SerialHelper::ReadULong(key.substr(kPrefixSize + 1 + 4 + 1));
+  index = SerialHelper::ReadInt(key.substr(kPrefixSize + 1 + 4 + 1 + 8 + 1));
+}
+
+std::string MetaCodec::EncodeDirInodeMutationValue(const AttrMutationEntry& op) { return op.SerializeAsString(); }
+
+AttrMutationEntry MetaCodec::DecodeDirInodeMutationValue(const std::string& value) {
+  CHECK(!value.empty()) << "inode update op value is empty.";
+
+  AttrMutationEntry op;
+  CHECK(op.ParseFromString(value)) << "parse inode update op fail.";
+
+  return op;
 }
 
 // dentry format: ${prefix} kTableFsMeta {fs_id} kMetaFsInode {ino} kFsInodeDentry {name}

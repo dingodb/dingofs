@@ -195,6 +195,7 @@ void NotifyBuddy::SendMessage(uint64_t mds_id, BatchMessage& batch_message) {
   for (auto& message : batch_message) {
     auto* mut_message = notify_message.add_messages();
     mut_message->set_fs_id(message->fs_id);
+    mut_message->set_reason(message->reason);
 
     switch (message->type) {
       case Type::kRefreshFsInfo: {
@@ -214,6 +215,7 @@ void NotifyBuddy::SendMessage(uint64_t mds_id, BatchMessage& batch_message) {
         auto* mut_refresh_inode = mut_message->mutable_refresh_inode();
         auto refresh_inode_message = std::dynamic_pointer_cast<RefreshInodeMessage>(message);
         mut_refresh_inode->mutable_inode()->Swap(&refresh_inode_message->attr);
+        mut_refresh_inode->mutable_attr_mutation()->Swap(&refresh_inode_message->mutation);
 
         LOG(INFO) << fmt::format("[notify.{}] refresh inode, inode({}).", mds_id,
                                  mut_refresh_inode->inode().ShortDebugString());

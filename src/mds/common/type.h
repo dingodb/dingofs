@@ -15,11 +15,13 @@
 #ifndef DINGOFS_MDS_COMMON_TYPE_H_
 #define DINGOFS_MDS_COMMON_TYPE_H_
 
+#include <absl/container/inlined_vector.h>
 #include <sys/types.h>
 
 #include <cstdint>
 #include <string>
 
+#include "common/const.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/format.h"
 
@@ -50,6 +52,7 @@ using BucketSetEntry = pb::mds::HashPartition::BucketSet;
 using DeltaSliceEntry = pb::mds::WriteSliceRequest::DeltaSlice;
 using RecycleProgress = pb::mds::RecycleProgress;
 using ContextEntry = pb::mds::Context;
+using AttrMutationEntry = pb::mds::AttrMutation;
 
 struct KeyValue {
   enum class OpType : uint8_t {
@@ -108,6 +111,11 @@ inline std::string DescribeAttr(const AttrEntry& attr) {
                      attr.atime());
 }
 
+inline std::string DescribeAttrMutation(const AttrMutationEntry& attr_mutation) {
+  return fmt::format("{}:{}:{}:{}:{}:{}", attr_mutation.ino(), attr_mutation.index(), attr_mutation.atime(),
+                     attr_mutation.mtime(), attr_mutation.ctime(), attr_mutation.delta_version());
+}
+
 struct S3Info {
   // s3 info
   std::string ak;
@@ -136,6 +144,47 @@ struct RadosInfo {
 
 struct LocalFileInfo {
   std::string path;
+};
+
+struct AttrWithMutation {
+  AttrEntry attr;
+  absl::InlinedVector<AttrMutationEntry, kDirAttrMutationNum> mutations;
+
+  uint64_t BaseVersion() const { return attr.version(); }
+
+  uint64_t TotalDeltaVersion() const {
+    uint64_t total_delta_version = 0;
+    for (const auto& mutation : mutations) {
+      total_delta_version += mutation.delta_version();
+    }
+
+    return total_delta_version;
+  }
+
+  uint64_t Version() const { return attr.version() + TotalDeltaVersion(); }
+
+  AttrEntry ToCompleteAttr() const {
+    AttrEntry latest_attr = attr;
+    for (const auto& mutation : mutations) {
+      latest_attr.set_atime(std::max(latest_attr.atime(), mutation.atime()));
+      latest_attr.set_mtime(std::max(latest_attr.mtime(), mutation.mtime()));
+      latest_attr.set_ctime(std::max(latest_attr.ctime(), mutation.ctime()));
+      latest_attr.set_version(latest_attr.version() + mutation.delta_version());
+    }
+    return latest_attr;
+  }
+};
+
+// AttrOrMutation carries either a full parent inode attr (need_parent_key path)
+// or only a delta mutation against it (mutation path). The two are disambiguated
+// by attr.ino(): when attr.ino() == 0 the full attr was not loaded and only the
+// mutation entry is valid; otherwise attr is authoritative and mutation may be
+// empty. Use IsMutation() instead of inspecting ino() directly at call sites.
+struct AttrOrMutation {
+  AttrEntry attr;
+  AttrMutationEntry mutation;
+
+  bool IsMutation() const { return attr.ino() == 0; }
 };
 
 }  // namespace mds

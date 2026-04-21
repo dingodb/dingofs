@@ -19,29 +19,24 @@
 namespace dingofs {
 namespace mds {
 
-Dentry::Dentry(uint32_t fs_id, const std::string& name, Ino parent, Ino ino, pb::mds::FileType type, uint32_t flag,
-               InodeSPtr inode)
-    : fs_id_(fs_id), name_(name), parent_(parent), ino_(ino), type_(type), flag_(flag), inode_(inode) {}
+Dentry::Dentry(uint32_t fs_id, const std::string& name, Ino parent, Ino ino, pb::mds::FileType type, uint32_t flag)
+    : fs_id_(fs_id), name_(name), parent_(parent), ino_(ino), type_(type), flag_(flag) {}
 
-Dentry::Dentry(const pb::mds::Dentry& dentry, InodeSPtr inode)
+Dentry::Dentry(const pb::mds::Dentry& dentry)
     : name_(dentry.name()),
       fs_id_(dentry.fs_id()),
       ino_(dentry.ino()),
       parent_(dentry.parent()),
       type_(dentry.type()),
-      flag_(dentry.flag()),
-      inode_(inode) {}
+      flag_(dentry.flag()) {}
 
-Dentry::Dentry(const Dentry& dentry, InodeSPtr inode)
+Dentry::Dentry(const Dentry& dentry)
     : name_(dentry.Name()),
       fs_id_(dentry.FsId()),
       ino_(dentry.INo()),
       parent_(dentry.ParentIno()),
       type_(dentry.Type()),
-      flag_(dentry.Flag()),
-      inode_(inode) {}
-
-Dentry::~Dentry() {}  // NOLINT
+      flag_(dentry.Flag()) {}
 
 DentryEntry Dentry::Copy() const {
   DentryEntry dentry;
