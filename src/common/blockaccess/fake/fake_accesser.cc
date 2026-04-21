@@ -83,7 +83,8 @@ Status FakeAccesser::RangeRead(const std::string& key, off_t offset,
                                size_t* readed_size) {
   (void)key;
   (void)offset;
-  memset(buffer, 0, length);
+  (void)buffer;
+  // Skip memset to isolate client overhead from memset page-fault cost.
   *readed_size = length;
   return Status::OK();
 }
