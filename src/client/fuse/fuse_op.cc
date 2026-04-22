@@ -587,11 +587,18 @@ void FuseOpRead(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
     // Per-worker buffer so concurrent FUSE workers don't all point their
     // replies at the same PTE page and cause get_user_pages_fast to collide
     // on a single pte_lock. Matches 3FS's per-request RDMABufPool in spirit.
-    thread_local static char kStaticMemory[kStaticMemSize] = {0};
+    // Allocated on heap (not as thread_local char[]) to keep static TLS small;
+    // a 4MB TLS array eats the pthread stack mmap and leaves worker threads
+    // with only a few KB of usable stack.
+    thread_local std::unique_ptr<char[]> kStaticMemory;
+    if (__builtin_expect(!kStaticMemory, 0)) {
+      kStaticMemory.reset(new char[kStaticMemSize]());
+    }
     CHECK_GT(kStaticMemSize, size)
         << "dryrun static memory is not enough, size: " << size;
 
-    data_buffer.RawIOBuffer()->AppendUserData(kStaticMemory, size, [](void*) {});
+    data_buffer.RawIOBuffer()->AppendUserData(kStaticMemory.get(), size,
+                                              [](void*) {});
     ReplyData(req, data_buffer);
     return;
   }

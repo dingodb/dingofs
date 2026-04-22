@@ -18,6 +18,8 @@
 
 #include <google/protobuf/descriptor.pb.h>
 
+#include <memory>
+
 #include "cache/blockcache/block_cache.h"
 #include "client/common/const.h"
 #include "client/vfs/hub/vfs_hub.h"
@@ -31,7 +33,17 @@ static constexpr int64_t kStaticMemSize = 4 * 1024 * 1024;  // 4MB
 // BSS region (which causes kernel fuse_copy_fill -> get_user_pages_fast ->
 // follow_page_pte to serialize on a single PTE spinlock). Same fix as the
 // dryrun FuseOpRead thread_local patch (6b9136f7d).
-thread_local static char kStaticMemory[kStaticMemSize] = {0};
+// Allocated on heap (not as thread_local char[]) to keep static TLS small;
+// a 4MB TLS array eats the pthread stack mmap and leaves worker threads
+// with only a few KB of usable stack.
+thread_local static std::unique_ptr<char[]> kStaticMemory;
+
+static char* GetStaticMemory() {
+  if (__builtin_expect(!kStaticMemory, 0)) {
+    kStaticMemory.reset(new char[kStaticMemSize]());
+  }
+  return kStaticMemory.get();
+}
 
 #define METHOD_NAME() ("FakeBlockStore::" + std::string(__FUNCTION__))
 
@@ -63,7 +75,7 @@ void FakeBlockStore::DoRangeAsync(BlockKey key, uint64_t offset,
   (void)key;
   (void)offset;
   CHECK_GE(kStaticMemSize, length);
-  buffer->AppendUserData(kStaticMemory, length, NoopDeleter);
+  buffer->AppendUserData(GetStaticMemory(), length, NoopDeleter);
   callback(Status::OK());
 }
 
