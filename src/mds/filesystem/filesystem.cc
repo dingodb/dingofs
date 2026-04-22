@@ -2622,7 +2622,6 @@ Status FileSystem::ListDentry(Context& ctx, Ino parent, const std::string& last_
     auto partition = GetPartitionFromCache(parent);
     if (partition != nullptr) {
       trace.SetHitPartition();
-      std::vector<Dentry> dentries;
       return partition->Scan(ctx.RequestId(), last_name, limit, is_only_dir, dentries);
     }
   }
