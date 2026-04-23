@@ -32,6 +32,7 @@
 #include "common/options/common.h"
 #include "common/version.h"
 #include "utils/daemonize.h"
+#include "utils/numa_manager.h"
 
 namespace dingofs {
 namespace cache {
@@ -136,6 +137,10 @@ int DingoCache::Run(int argc, char** argv) {
   }
 
   ExposeDingoVersion();
+  auto& numa_manager = dingofs::utils::NumaManager::GetInstance();
+  if (dingofs::FLAGS_numa_bind_enable && numa_manager.Available()) {
+    numa_manager.BindNode(dingofs::FLAGS_numa_bind_node);
+  }
 
   return StartServer();
 }

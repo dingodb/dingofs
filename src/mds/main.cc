@@ -30,6 +30,7 @@
 #include "mds/common/helper.h"
 #include "mds/server.h"
 #include "utils/daemonize.h"
+#include "utils/numa_manager.h"
 
 DEFINE_string(storage_url, "file://./conf/coor_list", "storage url, e.g. file://<path> or list://<addr1>");
 
@@ -297,6 +298,13 @@ int main(int argc, char* argv[]) {
   if (dingofs::FLAGS_daemonize && !dingofs::utils::DaemonizeExec(orig_args)) {
     std::cerr << "fail to daemonize process.\n";
     return 1;
+  }
+
+  // numa bind to node to avoid performance degradation caused by
+  // cross-node memory access
+  auto& numa_manager = dingofs::utils::NumaManager::GetInstance();
+  if (dingofs::FLAGS_numa_bind_enable && numa_manager.Available()) {
+    numa_manager.BindNode(dingofs::FLAGS_numa_bind_node);
   }
 
   // print config info

@@ -33,6 +33,10 @@ DECLARE_bool(log_clean_enable);
 DECLARE_int32(log_retention_seconds);
 DECLARE_string(log_clean_filter_pattern);
 
+// numa
+DECLARE_bool(numa_bind_enable);
+DECLARE_int32(numa_bind_node);
+
 }  // namespace dingofs
 
 #endif  // DINGOFS_COMMON_OPTIONS_COMMON_OPTION_H_
