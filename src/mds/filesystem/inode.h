@@ -15,6 +15,7 @@
 #ifndef DINGOFS_MDS_FILESYSTEM_INODE_H_
 #define DINGOFS_MDS_FILESYSTEM_INODE_H_
 
+#include <absl/container/inlined_vector.h>
 #include <sys/types.h>
 
 #include <atomic>
@@ -22,9 +23,11 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <valarray>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "common/const.h"
 #include "json/value.h"
 #include "mds/common/type.h"
 #include "utils/concurrent/concurrent.h"
@@ -43,6 +46,7 @@ class Inode {
   using AttrEntry = mds::AttrEntry;
   using XAttrMap = ::google::protobuf::Map<std::string, std::string>;
   using ChunkMap = ::google::protobuf::Map<uint64_t, ChunkEntry>;
+  using DeltaVersionVec = absl::InlinedVector<uint64_t, kDirAttrMutationNum>;
 
   Inode(const AttrEntry& attr)
       : fs_id_(attr.fs_id()),
@@ -60,9 +64,13 @@ class Inode {
         rdev_(attr.rdev()),
         flags_(attr.flags()),
         maybe_tiny_file_(attr.maybe_tiny_file()),
-        version_(attr.version()),
+        base_version_(attr.version()),
         parents_(attr.parents().begin(), attr.parents().end()) {
     last_active_time_s_ = utils::Timestamp();
+
+    total_delta_version_ = 0;
+    delta_versions_.resize(kDirAttrMutationNum, 0);
+
     for (const auto& xattr : attr.xattrs()) {
       xattrs_.emplace(xattr.first, xattr.second);
     }
@@ -70,9 +78,48 @@ class Inode {
       shard_boundaries_.push_back(boundary);
     }
   }
+
+  Inode(const AttrWithMutation& attr_with_mutation)
+      : fs_id_(attr_with_mutation.attr.fs_id()),
+        ino_(attr_with_mutation.attr.ino()),
+        type_(attr_with_mutation.attr.type()),
+        length_(attr_with_mutation.attr.length()),
+        ctime_(attr_with_mutation.attr.ctime()),
+        mtime_(attr_with_mutation.attr.mtime()),
+        atime_(attr_with_mutation.attr.atime()),
+        uid_(attr_with_mutation.attr.uid()),
+        gid_(attr_with_mutation.attr.gid()),
+        mode_(attr_with_mutation.attr.mode()),
+        nlink_(attr_with_mutation.attr.nlink()),
+        symlink_(attr_with_mutation.attr.symlink()),
+        rdev_(attr_with_mutation.attr.rdev()),
+        flags_(attr_with_mutation.attr.flags()),
+        maybe_tiny_file_(attr_with_mutation.attr.maybe_tiny_file()),
+        base_version_(attr_with_mutation.attr.version()),
+        parents_(attr_with_mutation.attr.parents().begin(), attr_with_mutation.attr.parents().end()) {
+    last_active_time_s_ = utils::Timestamp();
+
+    total_delta_version_ = 0;
+    delta_versions_.resize(kDirAttrMutationNum, 0);
+    for (const auto& mutation : attr_with_mutation.mutations) {
+      delta_versions_[mutation.index()] = mutation.delta_version();
+      total_delta_version_ += mutation.delta_version();
+    }
+
+    for (const auto& xattr : attr_with_mutation.attr.xattrs()) {
+      xattrs_.emplace(xattr.first, xattr.second);
+    }
+    for (const auto& boundary : attr_with_mutation.attr.shard_boundaries()) {
+      shard_boundaries_.push_back(boundary);
+    }
+  }
   ~Inode() = default;
 
-  static InodeSPtr New(const AttrEntry& inode) { return std::make_shared<Inode>(inode); }
+  static InodeSPtr New(const AttrEntry& attr) { return std::make_shared<Inode>(attr); }
+
+  static InodeSPtr New(const AttrWithMutation& attr_with_mutation) {
+    return std::make_shared<Inode>(attr_with_mutation);
+  }
 
   uint32_t FsId() const { return fs_id_; }
   uint64_t Ino() const { return ino_; }
@@ -127,9 +174,13 @@ class Inode {
     utils::ReadLockGuard lk(lock_);
     return maybe_tiny_file_;
   }
+  uint64_t BaseVersion() const {
+    utils::ReadLockGuard lk(lock_);
+    return base_version_;
+  }
   uint64_t Version() const {
     utils::ReadLockGuard lk(lock_);
-    return version_;
+    return base_version_ + total_delta_version_;
   }
 
   XAttrMap XAttrs() const {
@@ -150,22 +201,35 @@ class Inode {
     return (it != xattrs_.end()) ? it->second : "";
   }
 
+  std::vector<mds::Ino> Parents() const {
+    utils::ReadLockGuard lk(lock_);
+
+    std::vector<mds::Ino> parents(parents_.begin(), parents_.end());
+    return parents;
+  }
+
   std::vector<std::string> ShardBoundaries() const {
     utils::ReadLockGuard lk(lock_);
 
     return shard_boundaries_;
   }
 
-  bool PutIf(const AttrEntry& attr);
+  void PutIf(const AttrEntry& attr, const std::string& reason);
+  void PutIf(const AttrWithMutation& attr_with_mutation, const std::string& reason);
+  AttrEntry PutByMutation(const AttrMutationEntry& mutation, const std::string& reason);
 
   void ExpandLength(uint64_t length);
 
-  AttrEntry Copy();
+  AttrEntry ToAttr();
 
   void UpdateLastActiveTime() { last_active_time_s_.store(utils::Timestamp(), std::memory_order_relaxed); }
   uint64_t LastActiveTimeS() { return last_active_time_s_.load(std::memory_order_relaxed); }
 
  private:
+  void Put(const AttrEntry& attr);
+  void ApplyMutation(const AttrWithMutation& attr_with_mutation);
+  AttrEntry ToAttrNoLock();
+
   mutable utils::RWLock lock_;
 
   const uint32_t fs_id_{0};
@@ -192,7 +256,13 @@ class Inode {
   uint64_t mtime_{0};
   uint64_t atime_{0};
 
-  uint64_t version_{0};
+  // base version
+  uint64_t base_version_{0};
+
+  // delta versions
+  DeltaVersionVec delta_versions_;
+  // sum of delta versions, used for quick check if there is mutation
+  uint64_t total_delta_version_{0};
 
   std::atomic<uint64_t> last_active_time_s_{0};
 };
@@ -213,9 +283,8 @@ class InodeCache {
 
   static InodeCacheSPtr New(uint32_t fs_id) { return std::make_shared<InodeCache>(fs_id); }
 
-  void PutIf(Ino ino, InodeSPtr& inode);
-  void PutIf(AttrEntry&& attr);
-  void PutIf(const AttrEntry& attr);
+  InodeSPtr PutIf(const AttrEntry& attr, const std::string& reason);
+  InodeSPtr PutIf(const AttrWithMutation& attr_with_mutation, const std::string& reason);
 
   void Delete(Ino ino);
   void DeleteIf(std::function<bool(const Ino&)>&& f);
@@ -239,7 +308,7 @@ class InodeCache {
 
   const uint32_t fs_id_{0};
 
-  constexpr static size_t kShardNum = 64;
+  constexpr static size_t kShardNum = 128;
   utils::Shards<Map, kShardNum> shard_map_;
 
   // metric

@@ -59,6 +59,14 @@ static void FreeMap(std::multimap<uint64_t, FsTreeNode*>& node_map) {
   }
 }
 
+static void ApplyDirInodeUpdateOp(const AttrMutationEntry& op, AttrEntry& attr) {
+  attr.set_atime(std::max(attr.atime(), op.atime()));
+  attr.set_mtime(std::max(attr.mtime(), op.mtime()));
+  attr.set_ctime(std::max(attr.ctime(), op.ctime()));
+
+  attr.set_version(attr.version() + op.delta_version());
+}
+
 static FsTreeNode* GenFsTreeStruct(OperationProcessorSPtr operation_processor, uint32_t fs_id,
                                    std::multimap<uint64_t, FsTreeNode*>& node_map) {
   uint64_t count = 0;
@@ -80,6 +88,15 @@ static FsTreeNode* GenFsTreeStruct(OperationProcessorSPtr operation_processor, u
         it->second->attr = attr;
         ++it;
       }
+
+    } else if (MetaCodec::IsDirInodeMutationKey(key)) {
+      uint32_t fs_id, index;
+      uint64_t ino = 0;
+      MetaCodec::DecodeDirInodeMutationKey(key, fs_id, ino, index);
+      auto op = MetaCodec::DecodeDirInodeMutationValue(value);
+
+      auto it = node_map.find(ino);
+      if (it != node_map.end()) ApplyDirInodeUpdateOp(op, it->second->attr);
 
     } else if (MetaCodec::IsDentryKey(key)) {
       // dentry
@@ -228,7 +245,7 @@ Status FsUtils::GenRootDirJsonString(std::string& output) {
   if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
-  auto& attr = result.attr;
+  auto attr = result.attr_with_mutation.ToCompleteAttr();
 
   nlohmann::json doc = nlohmann::json::array();
 
@@ -290,13 +307,15 @@ Status FsUtils::GenDirJsonString(Ino parent, std::string& output) {
         return status;
       }
       auto& result = operation.GetResult();
+      auto& attr_with_mutations = result.attr_with_mutations;
 
-      if (result.attrs.size() != inoes.size()) {
-        LOG(WARNING) << fmt::format("[fsutils] batch get attrs size({}) not match ino size({}).", result.attrs.size(),
-                                    inoes.size());
+      if (attr_with_mutations.size() != inoes.size()) {
+        LOG(WARNING) << fmt::format("[fsutils] batch get attrs size({}) not match ino size({}).",
+                                    attr_with_mutations.size(), inoes.size());
       }
 
-      for (const auto& attr : result.attrs) {
+      for (const auto& attr_with_mutation : attr_with_mutations) {
+        auto attr = attr_with_mutation.ToCompleteAttr();
         attrs.insert(std::make_pair(attr.ino(), attr));
       }
 

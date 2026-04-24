@@ -315,7 +315,7 @@ bool DirQuotaMap::GetParent(Ino ino, Ino& parent) {
   }
 
   auto& result = operation.GetResult();
-  auto& attr = result.attr;
+  auto& attr = result.attr_with_mutation.attr;
 
   CHECK(attr.parents().size() == 1) << fmt::format("[quota.{}.{}] dir should only one parent, attr({}).", fs_id_, ino,
                                                    attr.ShortDebugString());
@@ -491,7 +491,7 @@ Status QuotaManager::SetDirQuota(Trace& trace, Ino ino, const QuotaEntry& quota,
 
   auto mds_ids = fs_info_->GetMdsIds();
   for (auto mds_id : mds_ids) {
-    notify_buddy_->AsyncNotify(notify::SetDirQuotaMessage::Create(mds_id, fs_id, ino, result.quota));
+    notify_buddy_->AsyncNotify(notify::SetDirQuotaMessage::Create(mds_id, fs_id, ino, result.quota, "set-dir-quota"));
   }
 
   return Status::OK();
@@ -535,7 +535,7 @@ Status QuotaManager::DeleteDirQuota(Trace& trace, Ino ino) {
 
   auto mds_ids = fs_info_->GetMdsIds();
   for (auto mds_id : mds_ids) {
-    notify_buddy_->AsyncNotify(notify::DeleteDirQuotaMessage::Create(mds_id, fs_id, ino, uuid));
+    notify_buddy_->AsyncNotify(notify::DeleteDirQuotaMessage::Create(mds_id, fs_id, ino, uuid, "delete-dir-quota"));
   }
 
   return Status::OK();

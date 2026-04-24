@@ -14,6 +14,8 @@
 #ifndef DINGOFS_MDS_FILESYSTEM_STORE_OPERATION_H_
 #define DINGOFS_MDS_FILESYSTEM_STORE_OPERATION_H_
 
+#include <absl/container/flat_hash_map.h>
+
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -45,6 +47,8 @@ using OperationSPtr = std::shared_ptr<Operation>;
 
 class OperationProcessor;
 using OperationProcessorSPtr = std::shared_ptr<OperationProcessor>;
+
+const uint32_t kStoreOperationBatchSize = 64;
 
 class Operation {
  public:
@@ -118,9 +122,8 @@ class Operation {
 
     kScanLock = 120,
     kScanFs = 121,
-    kScanPartition = 122,
-    kScanDentry = 123,
-    kScanDirShard = 126,
+    kScanDentry = 122,
+    kScanDirShard = 123,
     kScanDelFile = 124,
     kScanDelSlice = 125,
 
@@ -134,22 +137,17 @@ class Operation {
 
     kGetInodeAttr = 160,
     kBatchGetInodeAttr = 161,
-    KGetDentry = 162,
+    kGetDentry = 162,
 
     kImportKV = 170,
 
     kUpsertCacheMember = 180,
     kDeleteCacheMember = 181,
     kScanCacheMember = 182,
-    KGetCacheMember = 183,
+    kGetCacheMember = 183,
   };
 
   const char* OpName() const;
-
-  struct Result {
-    Status status;
-    AttrEntry attr;
-  };
 
   bool IsCreateType() const {
     switch (GetOpType()) {
@@ -158,7 +156,10 @@ class Operation {
       case OpType::kMkNod:
       case OpType::kBatchMkNod:
       case OpType::kBatchCreateFile:
+      case OpType::kHardLink:
       case OpType::kSmyLink:
+      case OpType::kUnlink:
+      case OpType::kBatchUnlink:
         return true;
 
       default:
@@ -189,7 +190,10 @@ class Operation {
       case OpType::kMkNod:
       case OpType::kBatchMkNod:
       case OpType::kBatchCreateFile:
+      case OpType::kHardLink:
       case OpType::kSmyLink:
+      case OpType::kUnlink:
+      case OpType::kBatchUnlink:
       case OpType::kUpdateAttr:
       case OpType::kUpdateXAttr:
       case OpType::kRemoveXAttr:
@@ -203,38 +207,94 @@ class Operation {
     }
   }
 
+  bool IsDirMutationOperation() const {
+    if (!HasDirAttrMutation()) return false;
+
+    switch (GetOpType()) {
+      case OpType::kMkNod:
+      case OpType::kBatchMkNod:
+      case OpType::kBatchCreateFile:
+      case OpType::kHardLink:
+      case OpType::kSmyLink:
+      case OpType::kUnlink:
+      case OpType::kBatchUnlink:
+        return true;
+
+      default:
+        return false;
+    }
+  }
+
+  struct Key {
+    uint32_t fs_id{0};
+    uint64_t ino{0};
+
+    bool operator<(const Key& other) const {
+      if (fs_id != other.fs_id) {
+        return fs_id < other.fs_id;
+      }
+
+      return ino < other.ino;
+    }
+
+    struct Hash {
+      std::size_t operator()(const Operation::Key& key) const {
+        std::size_t seed = 0;
+        seed ^= std::hash<uint32_t>()(key.fs_id) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+        seed ^= std::hash<uint64_t>()(key.ino) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+        return seed;
+      }
+    };
+
+    struct Eq {
+      bool operator()(const dingofs::mds::Operation::Key& lhs, const dingofs::mds::Operation::Key& rhs) const {
+        return lhs.fs_id == rhs.fs_id && lhs.ino == rhs.ino;
+      }
+    };
+  };
+
   virtual OpType GetOpType() const = 0;
 
-  virtual uint32_t GetFsId() const = 0;
-  virtual Ino GetIno() const = 0;
+  virtual uint32_t GetFsId() const { return 0; };
+  virtual Ino GetIno() const { return 0; };
   virtual uint64_t GetTime() const { return time_ns_; }
+
+  virtual Key GroupingKey() const { return {.fs_id = GetFsId(), .ino = GetIno()}; }
 
   void SetIsolationLevel(Txn::IsolationLevel level) { isolation_level_ = level; }
   Txn::IsolationLevel GetIsolationLevel() const { return isolation_level_; }
-
-  virtual std::vector<std::string> PrefetchKey() { return {}; }
 
   void SetEvent(bthread::CountdownEvent* event) { event_ = event; }
   void NotifyEvent() {
     if (event_) event_->signal();
   }
 
-  virtual Status RunInBatch(TxnUPtr&, AttrEntry&, const std::vector<KeyValue>& prefetch_kvs) {  // NOLINT
-    return Status(pb::error::ENOT_SUPPORT, "not support.");
-  }
+  virtual void PrefetchKey(std::vector<std::string>& keys) {}
+
+  struct BatchSharedParam {
+    AttrEntry attr;
+    AttrMutationEntry attr_mutation;
+    std::vector<KeyValue> prefetch_kvs;
+  };
+  virtual Status RunInBatch(TxnUPtr&, BatchSharedParam&) { return Status(pb::error::ENOT_SUPPORT, "not support."); }
   virtual Status Run(TxnUPtr&) { return Status(pb::error::ENOT_SUPPORT, "not support."); }
 
-  void SetStatus(const Status& status) { result_.status = status; }
-  void SetAttr(const AttrEntry& attr) { result_.attr = attr; }
+  void SetBatchIndex(uint32_t index) { batch_index_ = index; }
+  uint32_t GetBatchIndex() const { return batch_index_; }
 
-  virtual Result& GetResult() { return result_; }
+  void SetStatus(const Status& status) { status_ = status; }
+  const Status& GetStatus() const { return status_; }
+
+  virtual void SetResultAttr(BatchSharedParam&) { LOG(FATAL) << "set result attr not supported."; }
 
   Trace& GetTrace() { return trace_; }
 
  private:
   uint64_t time_ns_{0};
 
-  Result result_;
+  uint32_t batch_index_{0};
+
+  Status status_;
 
   bthread::CountdownEvent* event_{nullptr};
   Trace& trace_;
@@ -250,7 +310,6 @@ class CreateFsOperation : public Operation {
   OpType GetOpType() const override { return OpType::kCreateFs; }
 
   uint32_t GetFsId() const override { return fs_info_.fs_id(); }
-  Ino GetIno() const override { return 0; }
 
   Status Run(TxnUPtr& txn) override;
 
@@ -263,25 +322,15 @@ class GetFsOperation : public Operation {
   GetFsOperation(Trace& trace, const std::string& fs_name) : Operation(trace), fs_name_(fs_name) {}
   ~GetFsOperation() override = default;
 
-  struct Result : public Operation::Result {
+  struct Result {
     FsInfoEntry fs_info;
   };
 
   OpType GetOpType() const override { return OpType::kGetFs; }
 
-  uint32_t GetFsId() const override { return 0; }
-  Ino GetIno() const override { return 0; }
-
   Status Run(TxnUPtr& txn) override;
 
-  template <int size = 0>
-  Result& GetResult() {
-    auto& result = Operation::GetResult();
-    result_.status = result.status;
-    result_.attr = std::move(result.attr);
-
-    return result_;
-  }
+  Result& GetResult() { return result_; }
 
  private:
   const std::string fs_name_;
@@ -296,9 +345,6 @@ class MountFsOperation : public Operation {
   ~MountFsOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kMountFs; }
-
-  uint32_t GetFsId() const override { return 0; }
-  Ino GetIno() const override { return 0; }
 
   Status Run(TxnUPtr& txn) override;
 
@@ -315,9 +361,6 @@ class UmountFsOperation : public Operation {
 
   OpType GetOpType() const override { return OpType::kUmountFs; }
 
-  uint32_t GetFsId() const override { return 0; }
-  Ino GetIno() const override { return 0; }
-
   Status Run(TxnUPtr& txn) override;
 
  private:
@@ -331,25 +374,15 @@ class DeleteFsOperation : public Operation {
       : Operation(trace), fs_name_(fs_name), is_force_(is_force) {};
   ~DeleteFsOperation() override = default;
 
-  struct Result : public Operation::Result {
+  struct Result {
     FsInfoEntry fs_info;
   };
 
   OpType GetOpType() const override { return OpType::kDeleteFs; }
 
-  uint32_t GetFsId() const override { return 0; }
-  Ino GetIno() const override { return 0; }
-
   Status Run(TxnUPtr& txn) override;
 
-  template <int size = 0>
-  Result& GetResult() {
-    auto& result = Operation::GetResult();
-    result_.status = result.status;
-    result_.attr = std::move(result.attr);
-
-    return result_;
-  }
+  Result& GetResult() { return result_; }
 
  private:
   std::string fs_name_;
@@ -367,7 +400,6 @@ class CleanFsOperation : public Operation {
   OpType GetOpType() const override { return OpType::kCleanFs; }
 
   uint32_t GetFsId() const override { return fs_id_; }
-  Ino GetIno() const override { return 0; }
 
   Status Run(TxnUPtr& txn) override;
 
@@ -385,7 +417,6 @@ class UpdateFsOperation : public Operation {
   OpType GetOpType() const override { return OpType::kUpdateFs; }
 
   uint32_t GetFsId() const override { return fs_info_.fs_id(); }
-  Ino GetIno() const override { return 0; }
 
   Status Run(TxnUPtr& txn) override;
 
@@ -402,7 +433,7 @@ class UpdateFsPartitionOperation : public Operation {
       : Operation(trace), fs_name_(fs_name), handler_(handler) {};
   ~UpdateFsPartitionOperation() override = default;
 
-  struct Result : public Operation::Result {
+  struct Result {
     FsInfoEntry fs_info;
   };
 
@@ -413,14 +444,7 @@ class UpdateFsPartitionOperation : public Operation {
 
   Status Run(TxnUPtr& txn) override;
 
-  template <int size = 0>
-  Result& GetResult() {
-    auto& result = Operation::GetResult();
-    result_.status = result.status;
-    result_.attr = std::move(result.attr);
-
-    return result_;
-  }
+  Result& GetResult() { return result_; }
 
  private:
   const std::string fs_name_;
@@ -437,9 +461,6 @@ class UpdateFsStateOperation : public Operation {
 
   OpType GetOpType() const override { return OpType::kUpdateFsState; }
 
-  uint32_t GetFsId() const override { return 0; }
-  Ino GetIno() const override { return 0; }
-
   Status Run(TxnUPtr& txn) override;
 
  private:
@@ -454,9 +475,6 @@ class UpdateFsRecycleProgressOperation : public Operation {
   ~UpdateFsRecycleProgressOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kUpdateFsRecycleProgress; }
-
-  uint32_t GetFsId() const override { return 0; }
-  Ino GetIno() const override { return 0; }
 
   Status Run(TxnUPtr& txn) override;
 
@@ -490,16 +508,26 @@ class MkDirOperation : public Operation {
       : Operation(trace), dentry_(dentry), attr_(attr) {};
   ~MkDirOperation() override = default;
 
+  struct Result {
+    AttrEntry parent_attr;
+  };
+
   OpType GetOpType() const override { return OpType::kMkDir; }
 
   uint32_t GetFsId() const override { return dentry_.FsId(); }
   Ino GetIno() const override { return dentry_.ParentIno(); }
 
-  Status RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const std::vector<KeyValue>& prefetch_kvs) override;
+  Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
+
+  void SetResultAttr(BatchSharedParam& shared_param) override { result_.parent_attr = shared_param.attr; }
+
+  Result& GetResult() { return result_; }
 
  private:
   const Dentry& dentry_;
   const AttrEntry& attr_;
+
+  Result result_;
 };
 
 class BatchMkDirOperation : public Operation {
@@ -508,15 +536,25 @@ class BatchMkDirOperation : public Operation {
       : Operation(trace), dentries_(dentries), attrs_(attrs) {};
   ~BatchMkDirOperation() override = default;
 
+  struct Result {
+    AttrEntry parent_attr;
+  };
+
   OpType GetOpType() const override { return OpType::kBatchMkDir; }
   uint32_t GetFsId() const override { return dentries_[0].FsId(); }
   Ino GetIno() const override { return dentries_[0].ParentIno(); }
 
-  Status RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const std::vector<KeyValue>& prefetch_kvs) override;
+  Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
+
+  void SetResultAttr(BatchSharedParam& shared_param) override { result_.parent_attr = shared_param.attr; }
+
+  Result& GetResult() { return result_; }
 
  private:
   const std::vector<Dentry>& dentries_;
   const std::vector<AttrEntry>& attrs_;
+
+  Result result_;
 };
 
 class MkNodOperation : public Operation {
@@ -525,16 +563,29 @@ class MkNodOperation : public Operation {
       : Operation(trace), dentry_(dentry), attr_(attr) {};
   ~MkNodOperation() override = default;
 
+  struct Result {
+    AttrOrMutation parent_attr_or_mutation;
+  };
+
   OpType GetOpType() const override { return OpType::kMkNod; }
 
   uint32_t GetFsId() const override { return dentry_.FsId(); }
   Ino GetIno() const override { return dentry_.ParentIno(); }
 
-  Status RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const std::vector<KeyValue>& prefetch_kvs) override;
+  Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
+
+  void SetResultAttr(BatchSharedParam& shared_param) override {
+    result_.parent_attr_or_mutation.attr = shared_param.attr;
+    result_.parent_attr_or_mutation.mutation = shared_param.attr_mutation;
+  }
+
+  Result& GetResult() { return result_; }
 
  private:
   const Dentry& dentry_;
   const AttrEntry& attr_;
+
+  Result result_;
 };
 
 class BatchMkNodOperation : public Operation {
@@ -543,16 +594,29 @@ class BatchMkNodOperation : public Operation {
       : Operation(trace), dentries_(dentries), attrs_(attrs) {};
   ~BatchMkNodOperation() override = default;
 
+  struct Result {
+    AttrOrMutation parent_attr_or_mutation;
+  };
+
   OpType GetOpType() const override { return OpType::kBatchMkNod; }
 
   uint32_t GetFsId() const override { return dentries_[0].FsId(); }
   Ino GetIno() const override { return dentries_[0].ParentIno(); }
 
-  Status RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const std::vector<KeyValue>& prefetch_kvs) override;
+  Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
+
+  void SetResultAttr(BatchSharedParam& shared_param) override {
+    result_.parent_attr_or_mutation.attr = shared_param.attr;
+    result_.parent_attr_or_mutation.mutation = shared_param.attr_mutation;
+  }
+
+  Result& GetResult() { return result_; }
 
  private:
   const std::vector<Dentry>& dentries_;
   const std::vector<AttrEntry>& attrs_;
+
+  Result result_;
 };
 
 class BatchCreateFileOperation : public Operation {
@@ -562,17 +626,30 @@ class BatchCreateFileOperation : public Operation {
       : Operation(trace), dentries_(dentries), attrs_(attrs), file_sessions_(file_sessions) {};
   ~BatchCreateFileOperation() override = default;
 
+  struct Result {
+    AttrOrMutation parent_attr_or_mutation;
+  };
+
   OpType GetOpType() const override { return OpType::kBatchCreateFile; }
 
   uint32_t GetFsId() const override { return dentries_.front().FsId(); }
   Ino GetIno() const override { return dentries_.front().ParentIno(); }
 
-  Status RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const std::vector<KeyValue>& prefetch_kvs) override;
+  Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
+
+  void SetResultAttr(BatchSharedParam& shared_param) override {
+    result_.parent_attr_or_mutation.attr = shared_param.attr;
+    result_.parent_attr_or_mutation.mutation = shared_param.attr_mutation;
+  }
+
+  Result& GetResult() { return result_; }
 
  private:
   const std::vector<Dentry>& dentries_;
   const std::vector<AttrEntry>& attrs_;
   const std::vector<FileSessionSPtr>& file_sessions_;
+
+  Result result_;
 };
 
 class HardLinkOperation : public Operation {
@@ -580,7 +657,8 @@ class HardLinkOperation : public Operation {
   HardLinkOperation(Trace& trace, const Dentry& dentry) : Operation(trace), dentry_(dentry) {};
   ~HardLinkOperation() override = default;
 
-  struct Result : public Operation::Result {
+  struct Result {
+    AttrOrMutation parent_attr_or_mutation;
     AttrEntry child_attr;
   };
 
@@ -589,19 +667,20 @@ class HardLinkOperation : public Operation {
   uint32_t GetFsId() const override { return dentry_.FsId(); }
   Ino GetIno() const override { return dentry_.ParentIno(); }
 
-  template <int size = 0>
-  Result& GetResult() {
-    auto& result = Operation::GetResult();
-    result_.status = result.status;
-    result_.attr = std::move(result.attr);
+  void PrefetchKey(std::vector<std::string>& keys) override;
 
-    return result_;
+  Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
+
+  void SetResultAttr(BatchSharedParam& shared_param) override {
+    result_.parent_attr_or_mutation.attr = shared_param.attr;
+    result_.parent_attr_or_mutation.mutation = shared_param.attr_mutation;
   }
 
-  Status Run(TxnUPtr& txn) override;
+  Result& GetResult() { return result_; }
 
  private:
   const Dentry& dentry_;
+
   Result result_;
 };
 
@@ -611,16 +690,29 @@ class SmyLinkOperation : public Operation {
       : Operation(trace), dentry_(dentry), attr_(attr) {};
   ~SmyLinkOperation() override = default;
 
+  struct Result {
+    AttrOrMutation parent_attr_or_mutation;
+  };
+
   OpType GetOpType() const override { return OpType::kSmyLink; }
 
   uint32_t GetFsId() const override { return dentry_.FsId(); }
   Ino GetIno() const override { return dentry_.ParentIno(); }
 
-  Status RunInBatch(TxnUPtr& txn, AttrEntry& parent_attr, const std::vector<KeyValue>& prefetch_kvs) override;
+  Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
+
+  void SetResultAttr(BatchSharedParam& shared_param) override {
+    result_.parent_attr_or_mutation.attr = shared_param.attr;
+    result_.parent_attr_or_mutation.mutation = shared_param.attr_mutation;
+  }
+
+  Result& GetResult() { return result_; }
 
  private:
   const Dentry& dentry_;
   const AttrEntry& attr_;
+
+  Result result_;
 };
 
 class UpdateAttrOperation : public Operation {
@@ -635,25 +727,20 @@ class UpdateAttrOperation : public Operation {
       : Operation(trace), ino_(ino), to_set_(to_set), attr_(attr), extra_param_(extra_param) {};
   ~UpdateAttrOperation() override = default;
 
-  struct Result : public Operation::Result {
+  struct Result {
+    AttrEntry attr;
     int64_t delta_bytes{0};
   };
-
   OpType GetOpType() const override { return OpType::kUpdateAttr; }
 
   uint32_t GetFsId() const override { return attr_.fs_id(); }
   Ino GetIno() const override { return ino_; }
 
-  Status RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>& prefetch_kvs) override;
+  Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
 
-  template <int size = 0>
-  Result& GetResult() {
-    auto& result = Operation::GetResult();
-    result_.status = result.status;
-    result_.attr = std::move(result.attr);
+  void SetResultAttr(BatchSharedParam& shared_param) override { result_.attr = shared_param.attr; }
 
-    return result_;
-  }
+  Result& GetResult() { return result_; }
 
  private:
   uint64_t ino_;
@@ -671,17 +758,27 @@ class UpdateXAttrOperation : public Operation {
       : Operation(trace), fs_id_(fs_id), ino_(ino), xattrs_(xattrs) {};
   ~UpdateXAttrOperation() override = default;
 
+  struct Result {
+    AttrEntry attr;
+  };
+
   OpType GetOpType() const override { return OpType::kUpdateXAttr; }
 
   uint32_t GetFsId() const override { return fs_id_; }
   Ino GetIno() const override { return ino_; }
 
-  Status RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>& prefetch_kvs) override;
+  Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
+
+  void SetResultAttr(BatchSharedParam& shared_param) override { result_.attr = shared_param.attr; }
+
+  Result& GetResult() { return result_; }
 
  private:
   uint32_t fs_id_;
   uint64_t ino_;
   const Inode::XAttrMap& xattrs_;
+
+  Result result_;
 };
 
 class RemoveXAttrOperation : public Operation {
@@ -690,17 +787,27 @@ class RemoveXAttrOperation : public Operation {
       : Operation(trace), fs_id_(fs_id), ino_(ino), name_(name) {};
   ~RemoveXAttrOperation() override = default;
 
+  struct Result {
+    AttrEntry attr;
+  };
+
   OpType GetOpType() const override { return OpType::kRemoveXAttr; }
 
   uint32_t GetFsId() const override { return fs_id_; }
   Ino GetIno() const override { return ino_; }
 
-  Status RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>& prefetch_kvs) override;
+  Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
+
+  void SetResultAttr(BatchSharedParam& shared_param) override { result_.attr = shared_param.attr; }
+
+  Result& GetResult() { return result_; }
 
  private:
   uint32_t fs_id_;
   uint64_t ino_;
   std::string name_;
+
+  Result result_;
 };
 
 class UpdateShardBoundariesOperation : public Operation {
@@ -710,17 +817,26 @@ class UpdateShardBoundariesOperation : public Operation {
       : Operation(trace), fs_id_(fs_id), ino_(ino), shard_boundaries_(shard_boundaries) {};
   ~UpdateShardBoundariesOperation() override = default;
 
+  struct Result {
+    AttrEntry attr;
+  };
+
   OpType GetOpType() const override { return OpType::kUpdateShardBoundaries; }
 
   uint32_t GetFsId() const override { return fs_id_; }
   Ino GetIno() const override { return ino_; }
 
-  Status RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>& prefetch_kvs) override;
+  Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
+
+  void SetResultAttr(BatchSharedParam& shared_param) override { result_.attr = shared_param.attr; }
+
+  Result& GetResult() { return result_; }
 
  private:
   uint32_t fs_id_;
   uint64_t ino_;
   const std::vector<std::string>& shard_boundaries_;
+  Result result_;
 };
 
 class UpsertChunkOperation : public Operation {
@@ -730,7 +846,8 @@ class UpsertChunkOperation : public Operation {
       : Operation(trace), fs_info_(fs_info), ino_(ino), delta_slices_(delta_slices) {};
   ~UpsertChunkOperation() override = default;
 
-  struct Result : public Operation::Result {
+  struct Result {
+    AttrEntry attr;
     int64_t length{0};
     std::vector<ChunkEntry> effected_chunks;
   };
@@ -742,14 +859,7 @@ class UpsertChunkOperation : public Operation {
 
   Status Run(TxnUPtr& txn) override;
 
-  template <int size = 0>
-  Result& GetResult() {
-    auto& result = Operation::GetResult();
-    result_.status = result.status;
-    result_.attr = std::move(result.attr);
-
-    return result_;
-  }
+  Result& GetResult() { return result_; }
 
  private:
   const FsInfoEntry fs_info_;
@@ -766,7 +876,8 @@ class GetChunkOperation : public Operation {
       : Operation(trace), fs_id_(fs_id), ino_(ino), chunk_indexes_(chunk_indexes) {};
   ~GetChunkOperation() override = default;
 
-  struct Result : public Operation::Result {
+  struct Result {
+    AttrEntry attr;
     std::vector<ChunkEntry> chunks;
   };
 
@@ -777,14 +888,7 @@ class GetChunkOperation : public Operation {
 
   Status Run(TxnUPtr& txn) override;
 
-  template <int size = 0>
-  Result& GetResult() {
-    auto& result = Operation::GetResult();
-    result_.status = result.status;
-    result_.attr = std::move(result.attr);
-
-    return result_;
-  }
+  Result& GetResult() { return result_; }
 
  private:
   uint32_t fs_id_;
@@ -800,7 +904,8 @@ class ScanChunkOperation : public Operation {
       : Operation(trace), fs_id_(fs_id), ino_(ino), max_slice_num_(max_slice_num) {};
   ~ScanChunkOperation() override = default;
 
-  struct Result : public Operation::Result {
+  struct Result {
+    AttrEntry attr;
     std::vector<ChunkEntry> chunks;
   };
 
@@ -811,14 +916,7 @@ class ScanChunkOperation : public Operation {
 
   Status Run(TxnUPtr& txn) override;
 
-  template <int size = 0>
-  Result& GetResult() {
-    auto& result = Operation::GetResult();
-    result_.status = result.status;
-    result_.attr = std::move(result.attr);
-
-    return result_;
-  }
+  Result& GetResult() { return result_; }
 
  private:
   uint32_t fs_id_;
@@ -834,6 +932,10 @@ class CleanChunkOperation : public Operation {
       : Operation(trace), fs_id_(fs_id), ino_(ino), chunk_indexs_(chunk_indexs) {};
   ~CleanChunkOperation() override = default;
 
+  struct Result {
+    AttrEntry attr;
+  };
+
   OpType GetOpType() const override { return OpType::kCleanChunk; }
 
   uint32_t GetFsId() const override { return fs_id_; }
@@ -845,6 +947,8 @@ class CleanChunkOperation : public Operation {
   uint32_t fs_id_;
   uint64_t ino_;
   std::vector<uint64_t> chunk_indexs_{0};
+
+  Result result_;
 };
 
 class FallocateOperation : public Operation {
@@ -866,7 +970,8 @@ class FallocateOperation : public Operation {
   FallocateOperation(Trace& trace, const Param& param) : Operation(trace), param_(param) {};
   ~FallocateOperation() override = default;
 
-  struct Result : public Operation::Result {
+  struct Result {
+    AttrEntry attr;
     std::vector<ChunkEntry> effected_chunks;
   };
 
@@ -875,16 +980,11 @@ class FallocateOperation : public Operation {
   uint32_t GetFsId() const override { return param_.fs_id; }
   Ino GetIno() const override { return param_.ino; }
 
-  Status RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>& prefetch_kvs) override;
+  Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
 
-  template <int size = 0>
-  Result& GetResult() {
-    auto& result = Operation::GetResult();
-    result_.status = result.status;
-    result_.attr = std::move(result.attr);
+  void SetResultAttr(BatchSharedParam& shared_param) override { result_.attr = shared_param.attr; }
 
-    return result_;
-  }
+  Result& GetResult() { return result_; }
 
  private:
   Status PreAlloc(TxnUPtr& txn, AttrEntry& attr, uint64_t offset, uint32_t len);
@@ -907,7 +1007,8 @@ class OpenFileOperation : public Operation {
         prefetch_data_(prefetch_data) {};
   ~OpenFileOperation() override = default;
 
-  struct Result : public Operation::Result {
+  struct Result {
+    AttrEntry attr;
     int64_t delta_bytes{0};
     std::vector<ChunkEntry> chunks;
     std::string data;
@@ -919,18 +1020,13 @@ class OpenFileOperation : public Operation {
   uint32_t GetFsId() const override { return file_session_.fs_id(); }
   Ino GetIno() const override { return file_session_.ino(); }
 
-  std::vector<std::string> PrefetchKey() override;
+  void PrefetchKey(std::vector<std::string>& keys) override;
 
-  Status RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::vector<KeyValue>& prefetch_kvs) override;
+  Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
 
-  template <int size = 0>
-  Result& GetResult() {
-    auto& result = Operation::GetResult();
-    result_.status = result.status;
-    result_.attr = std::move(result.attr);
+  void SetResultAttr(BatchSharedParam& shared_param) override { result_.attr = shared_param.attr; }
 
-    return result_;
-  }
+  Result& GetResult() { return result_; }
 
  private:
   void ResetFileRange(TxnUPtr& txn, uint64_t length);
@@ -978,7 +1074,8 @@ class FlushFileOperation : public Operation {
       : Operation(trace), fs_id_(fs_id), ino_(ino), param_(param) {};
   ~FlushFileOperation() override = default;
 
-  struct Result : public Operation::Result {
+  struct Result {
+    AttrEntry attr;
     int64_t delta_bytes{0};
   };
 
@@ -989,14 +1086,7 @@ class FlushFileOperation : public Operation {
 
   Status Run(TxnUPtr& txn) override;
 
-  template <int size = 0>
-  Result& GetResult() {
-    auto& result = Operation::GetResult();
-    result_.status = result.status;
-    result_.attr = std::move(result.attr);
-
-    return result_;
-  }
+  Result& GetResult() { return result_; }
 
  private:
   const uint32_t fs_id_;
@@ -1008,18 +1098,30 @@ class FlushFileOperation : public Operation {
 
 class RmDirOperation : public Operation {
  public:
-  RmDirOperation(Trace& trace, Dentry dentry) : Operation(trace), dentry_(dentry) {};
+  RmDirOperation(Trace& trace, uint32_t fs_id, Ino parent, const std::string& name)
+      : Operation(trace), fs_id_(fs_id), parent_(parent), name_(name) {};
   ~RmDirOperation() override = default;
+
+  struct Result {
+    AttrEntry parent_attr;
+    DentryEntry dentry;
+  };
 
   OpType GetOpType() const override { return OpType::kRmDir; }
 
-  uint32_t GetFsId() const override { return dentry_.FsId(); }
-  Ino GetIno() const override { return dentry_.ParentIno(); }
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return parent_; }
 
   Status Run(TxnUPtr& txn) override;
 
+  Result& GetResult() { return result_; }
+
  private:
-  const Dentry dentry_;
+  uint32_t fs_id_;
+  const Ino parent_;
+  const std::string name_;
+
+  Result result_;
 };
 
 class UnlinkOperation : public Operation {
@@ -1027,28 +1129,29 @@ class UnlinkOperation : public Operation {
   UnlinkOperation(Trace& trace, const Dentry& dentry) : Operation(trace), dentry_(dentry) {};
   ~UnlinkOperation() override = default;
 
-  struct Result : public Operation::Result {
+  struct Result {
+    AttrOrMutation parent_attr_or_mutation;
     AttrEntry child_attr;
   };
-
   OpType GetOpType() const override { return OpType::kUnlink; }
 
   uint32_t GetFsId() const override { return dentry_.FsId(); }
   Ino GetIno() const override { return dentry_.ParentIno(); }
 
-  Status Run(TxnUPtr& txn) override;
+  void PrefetchKey(std::vector<std::string>& keys) override;
 
-  template <int size = 0>
-  Result& GetResult() {
-    auto& result = Operation::GetResult();
-    result_.status = result.status;
-    result_.attr = std::move(result.attr);
+  Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
 
-    return result_;
+  void SetResultAttr(BatchSharedParam& shared_param) override {
+    result_.parent_attr_or_mutation.attr = shared_param.attr;
+    result_.parent_attr_or_mutation.mutation = shared_param.attr_mutation;
   }
+
+  Result& GetResult() { return result_; }
 
  private:
   const Dentry& dentry_;
+
   Result result_;
 };
 
@@ -1057,28 +1160,30 @@ class BatchUnlinkOperation : public Operation {
   BatchUnlinkOperation(Trace& trace, const std::vector<Dentry>& dentries) : Operation(trace), dentries_(dentries) {};
   ~BatchUnlinkOperation() override = default;
 
-  struct Result : public Operation::Result {
+  struct Result {
+    AttrOrMutation parent_attr_or_mutation;
     std::vector<AttrEntry> child_attrs;
   };
 
   OpType GetOpType() const override { return OpType::kBatchUnlink; }
 
-  uint32_t GetFsId() const override { return dentries_[0].FsId(); }
-  Ino GetIno() const override { return dentries_[0].ParentIno(); }
+  uint32_t GetFsId() const override { return dentries_.front().FsId(); }
+  Ino GetIno() const override { return dentries_.front().ParentIno(); }
 
-  Status Run(TxnUPtr& txn) override;
+  void PrefetchKey(std::vector<std::string>& keys) override;
 
-  template <int size = 0>
-  Result& GetResult() {
-    auto& result = Operation::GetResult();
-    result_.status = result.status;
-    result_.attr = std::move(result.attr);
+  Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
 
-    return result_;
+  void SetResultAttr(BatchSharedParam& shared_param) override {
+    result_.parent_attr_or_mutation.attr = shared_param.attr;
+    result_.parent_attr_or_mutation.mutation = shared_param.attr_mutation;
   }
+
+  Result& GetResult() { return result_; }
 
  private:
   const std::vector<Dentry>& dentries_;
+
   Result result_;
 };
 
@@ -1094,9 +1199,9 @@ class RenameOperation : public Operation {
         new_name_(new_name) {};
   ~RenameOperation() override = default;
 
-  struct Result : public Operation::Result {
-    AttrEntry old_parent_attr;
-    AttrEntry new_parent_attr;
+  struct Result {
+    AttrWithMutation old_parent_attr_with_mutation;
+    AttrWithMutation new_parent_attr_with_mutation;
     DentryEntry old_dentry;
     DentryEntry prev_new_dentry;
     AttrEntry prev_new_attr;
@@ -1114,14 +1219,7 @@ class RenameOperation : public Operation {
 
   Status Run(TxnUPtr& txn) override;
 
-  template <int size = 0>
-  Result& GetResult() {
-    auto& result = Operation::GetResult();
-    result_.status = result.status;
-    result_.attr = std::move(result.attr);
-
-    return result_;
-  }
+  Result& GetResult() { return result_; }
 
  private:
   uint32_t fs_id_{0};
@@ -1154,7 +1252,7 @@ class CompactChunkOperation : public Operation {
       : Operation(trace), fs_id_(fs_id), ino_(ino), param_(param) {};
   ~CompactChunkOperation() override = default;
 
-  struct Result : public Operation::Result {
+  struct Result {
     ChunkEntry chunk;
   };
 
@@ -1165,14 +1263,7 @@ class CompactChunkOperation : public Operation {
 
   Status Run(TxnUPtr& txn) override;
 
-  template <int size = 0>
-  Result& GetResult() {
-    auto& result = Operation::GetResult();
-    result_.status = result.status;
-    result_.attr = std::move(result.attr);
-
-    return result_;
-  }
+  Result& GetResult() { return result_; }
 
  private:
   const uint32_t fs_id_;
@@ -1189,7 +1280,7 @@ class SetFsQuotaOperation : public Operation {
       : Operation(trace), fs_id_(fs_id), quota_(quota) {};
   ~SetFsQuotaOperation() override = default;
 
-  struct Result : public Operation::Result {
+  struct Result {
     QuotaEntry quota;
   };
 
@@ -1200,14 +1291,7 @@ class SetFsQuotaOperation : public Operation {
 
   Status Run(TxnUPtr& txn) override;
 
-  template <int size = 0>
-  Result& GetResult() {
-    auto& result = Operation::GetResult();
-    result_.status = result.status;
-    result_.attr = std::move(result.attr);
-
-    return result_;
-  }
+  Result& GetResult() { return result_; }
 
  private:
   uint32_t fs_id_;
@@ -1220,7 +1304,7 @@ class GetFsQuotaOperation : public Operation {
   GetFsQuotaOperation(Trace& trace, uint32_t fs_id) : Operation(trace), fs_id_(fs_id) {};
   ~GetFsQuotaOperation() override = default;
 
-  struct Result : public Operation::Result {
+  struct Result {
     QuotaEntry quota;
   };
 
@@ -1231,17 +1315,11 @@ class GetFsQuotaOperation : public Operation {
 
   Status Run(TxnUPtr& txn) override;
 
-  template <int size = 0>
-  Result& GetResult() {
-    auto& result = Operation::GetResult();
-    result_.status = result.status;
-    result_.attr = std::move(result.attr);
-
-    return result_;
-  }
+  Result& GetResult() { return result_; }
 
  private:
-  uint32_t fs_id_;
+  const uint32_t fs_id_;
+
   Result result_;
 };
 
@@ -1251,7 +1329,7 @@ class FlushFsUsageOperation : public Operation {
       : Operation(trace), fs_id_(fs_id), usages_(usages) {};
   ~FlushFsUsageOperation() override = default;
 
-  struct Result : public Operation::Result {
+  struct Result {
     QuotaEntry quota;
   };
 
@@ -1262,18 +1340,12 @@ class FlushFsUsageOperation : public Operation {
 
   Status Run(TxnUPtr& txn) override;
 
-  template <int size = 0>
-  Result& GetResult() {
-    auto& result = Operation::GetResult();
-    result_.status = result.status;
-    result_.attr = std::move(result.attr);
-
-    return result_;
-  }
+  Result& GetResult() { return result_; }
 
  private:
-  uint32_t fs_id_;
-  std::vector<UsageEntry> usages_;
+  const uint32_t fs_id_;
+  const std::vector<UsageEntry> usages_;
+
   Result result_;
 };
 
@@ -1285,7 +1357,6 @@ class DeleteFsQuotaOperation : public Operation {
   OpType GetOpType() const override { return OpType::kDeleteFsQuota; }
 
   uint32_t GetFsId() const override { return fs_id_; }
-  Ino GetIno() const override { return 0; }
 
   Status Run(TxnUPtr& txn) override;
 
@@ -1299,7 +1370,7 @@ class SetDirQuotaOperation : public Operation {
       : Operation(trace), fs_id_(fs_id), ino_(ino), quota_(quota) {};
   ~SetDirQuotaOperation() override = default;
 
-  struct Result : public Operation::Result {
+  struct Result {
     QuotaEntry quota;
   };
 
@@ -1310,14 +1381,7 @@ class SetDirQuotaOperation : public Operation {
 
   Status Run(TxnUPtr& txn) override;
 
-  template <int size = 0>
-  Result& GetResult() {
-    auto& result = Operation::GetResult();
-    result_.status = result.status;
-    result_.attr = std::move(result.attr);
-
-    return result_;
-  }
+  Result& GetResult() { return result_; }
 
  private:
   uint32_t fs_id_;
@@ -1332,7 +1396,7 @@ class GetDirQuotaOperation : public Operation {
   GetDirQuotaOperation(Trace& trace, uint32_t fs_id, uint64_t ino) : Operation(trace), fs_id_(fs_id), ino_(ino) {};
   ~GetDirQuotaOperation() override = default;
 
-  struct Result : public Operation::Result {
+  struct Result {
     QuotaEntry quota;
   };
 
@@ -1343,18 +1407,12 @@ class GetDirQuotaOperation : public Operation {
 
   Status Run(TxnUPtr& txn) override;
 
-  template <int size = 0>
-  Result& GetResult() {
-    auto& result = Operation::GetResult();
-    result_.status = result.status;
-    result_.attr = std::move(result.attr);
-
-    return result_;
-  }
+  Result& GetResult() { return result_; }
 
  private:
-  uint32_t fs_id_;
-  uint64_t ino_;
+  const uint32_t fs_id_;
+  const uint64_t ino_;
+
   Result result_;
 };
 
@@ -1363,7 +1421,7 @@ class DeleteDirQuotaOperation : public Operation {
   DeleteDirQuotaOperation(Trace& trace, uint32_t fs_id, uint64_t ino) : Operation(trace), fs_id_(fs_id), ino_(ino) {};
   ~DeleteDirQuotaOperation() override = default;
 
-  struct Result : public Operation::Result {
+  struct Result {
     QuotaEntry quota;
   };
 
@@ -1374,18 +1432,12 @@ class DeleteDirQuotaOperation : public Operation {
 
   Status Run(TxnUPtr& txn) override;
 
-  template <int size = 0>
-  Result& GetResult() {
-    auto& result = Operation::GetResult();
-    result_.status = result.status;
-    result_.attr = std::move(result.attr);
-
-    return result_;
-  }
+  Result& GetResult() { return result_; }
 
  private:
   uint32_t fs_id_;
   uint64_t ino_;
+
   Result result_;
 };
 
@@ -1394,28 +1446,21 @@ class LoadDirQuotasOperation : public Operation {
   LoadDirQuotasOperation(Trace& trace, uint32_t fs_id) : Operation(trace), fs_id_(fs_id) {};
   ~LoadDirQuotasOperation() override = default;
 
-  struct Result : public Operation::Result {
+  struct Result {
     std::unordered_map<Ino, QuotaEntry> quotas;
   };
 
   OpType GetOpType() const override { return OpType::kLoadDirQuotas; }
 
   uint32_t GetFsId() const override { return fs_id_; }
-  Ino GetIno() const override { return 0; }
 
   Status Run(TxnUPtr& txn) override;
 
-  template <int size = 0>
-  Result& GetResult() {
-    auto& result = Operation::GetResult();
-    result_.status = result.status;
-    result_.attr = std::move(result.attr);
-
-    return result_;
-  }
+  Result& GetResult() { return result_; }
 
  private:
-  uint32_t fs_id_;
+  const uint32_t fs_id_;
+
   Result result_;
 };
 
@@ -1426,7 +1471,7 @@ class FlushDirUsagesOperation : public Operation {
       : Operation(trace), fs_id_(fs_id), usage_map_(usage_map) {};
   ~FlushDirUsagesOperation() override = default;
 
-  struct Result : public Operation::Result {
+  struct Result {
     // ino -> Quota
     std::map<uint64_t, QuotaEntry> quotas;
   };
@@ -1438,14 +1483,7 @@ class FlushDirUsagesOperation : public Operation {
 
   Status Run(TxnUPtr& txn) override;
 
-  template <int size = 0>
-  Result& GetResult() {
-    auto& result = Operation::GetResult();
-    result_.status = result.status;
-    result_.attr = std::move(result.attr);
-
-    return result_;
-  }
+  Result& GetResult() { return result_; }
 
  private:
   uint32_t fs_id_;
@@ -1462,9 +1500,6 @@ class UpsertMdsOperation : public Operation {
 
   OpType GetOpType() const override { return OpType::kUpsertMds; }
 
-  uint32_t GetFsId() const override { return 0; }
-  Ino GetIno() const override { return 0; }
-
   Status Run(TxnUPtr& txn) override;
 
  private:
@@ -1478,13 +1513,10 @@ class DeleteMdsOperation : public Operation {
 
   OpType GetOpType() const override { return OpType::kDeleteMds; }
 
-  uint32_t GetFsId() const override { return 0; }
-  Ino GetIno() const override { return 0; }
-
   Status Run(TxnUPtr& txn) override;
 
  private:
-  uint64_t mds_id_;
+  const uint64_t mds_id_;
 };
 
 class ScanMdsOperation : public Operation {
@@ -1492,25 +1524,15 @@ class ScanMdsOperation : public Operation {
   ScanMdsOperation(Trace& trace) : Operation(trace) {};
   ~ScanMdsOperation() override = default;
 
-  struct Result : public Operation::Result {
+  struct Result {
     std::vector<MdsEntry> mds_entries;
   };
 
   OpType GetOpType() const override { return OpType::kScanMds; }
 
-  uint32_t GetFsId() const override { return 0; }
-  Ino GetIno() const override { return 0; }
-
   Status Run(TxnUPtr& txn) override;
 
-  template <int size = 0>
-  Result& GetResult() {
-    auto& result = Operation::GetResult();
-    result_.status = result.status;
-    result_.attr = std::move(result.attr);
-
-    return result_;
-  }
+  Result& GetResult() { return result_; }
 
  private:
   Result result_;
@@ -1522,9 +1544,6 @@ class UpsertClientOperation : public Operation {
   ~UpsertClientOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kUpsertClient; }
-
-  uint32_t GetFsId() const override { return 0; }
-  Ino GetIno() const override { return 0; }
 
   Status Run(TxnUPtr& txn) override;
 
@@ -1539,9 +1558,6 @@ class DeleteClientOperation : public Operation {
 
   OpType GetOpType() const override { return OpType::kDeleteClient; }
 
-  uint32_t GetFsId() const override { return 0; }
-  Ino GetIno() const override { return 0; }
-
   Status Run(TxnUPtr& txn) override;
 
  private:
@@ -1553,25 +1569,15 @@ class ScanClientOperation : public Operation {
   ScanClientOperation(Trace& trace) : Operation(trace) {};
   ~ScanClientOperation() override = default;
 
-  struct Result : public Operation::Result {
+  struct Result {
     std::vector<ClientEntry> client_entries;
   };
 
   OpType GetOpType() const override { return OpType::kScanClient; }
 
-  uint32_t GetFsId() const override { return 0; }
-  Ino GetIno() const override { return 0; }
-
   Status Run(TxnUPtr& txn) override;
 
-  template <int size = 0>
-  Result& GetResult() {
-    auto& result = Operation::GetResult();
-    result_.status = result.status;
-    result_.attr = std::move(result.attr);
-
-    return result_;
-  }
+  Result& GetResult() { return result_; }
 
  private:
   Result result_;
@@ -1583,7 +1589,7 @@ class GetFileSessionOperation : public Operation {
       : Operation(trace), fs_id_(fs_id), ino_(ino), session_id_(session_id) {};
   ~GetFileSessionOperation() override = default;
 
-  struct Result : public Operation::Result {
+  struct Result {
     FileSessionEntry file_session;
   };
 
@@ -1594,19 +1600,13 @@ class GetFileSessionOperation : public Operation {
 
   Status Run(TxnUPtr& txn) override;
 
-  template <int size = 0>
-  Result& GetResult() {
-    auto& result = Operation::GetResult();
-    result_.status = result.status;
-    result_.attr = std::move(result.attr);
-
-    return result_;
-  }
+  Result& GetResult() { return result_; }
 
  private:
-  uint32_t fs_id_;
-  Ino ino_;
-  std::string session_id_;
+  const uint32_t fs_id_;
+  const Ino ino_;
+  const std::string session_id_;
+
   Result result_;
 };
 
@@ -1620,7 +1620,7 @@ class ScanFileSessionOperation : public Operation {
       : Operation(trace), fs_id_(fs_id), handler_(handler) {};
   ~ScanFileSessionOperation() override = default;
 
-  struct Result : public Operation::Result {
+  struct Result {
     std::vector<FileSessionEntry> file_sessions;
   };
 
@@ -1631,19 +1631,13 @@ class ScanFileSessionOperation : public Operation {
 
   Status Run(TxnUPtr& txn) override;
 
-  template <int size = 0>
-  Result& GetResult() {
-    auto& result = Operation::GetResult();
-    result_.status = result.status;
-    result_.attr = std::move(result.attr);
-
-    return result_;
-  }
+  Result& GetResult() { return result_; }
 
  private:
-  uint32_t fs_id_{0};
-  Ino ino_{0};
+  const uint32_t fs_id_{0};
+  const Ino ino_{0};
   HandlerType handler_;
+
   Result result_;
 };
 
@@ -1654,9 +1648,6 @@ class DeleteFileSessionOperation : public Operation {
   ~DeleteFileSessionOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kDeleteFileSession; }
-
-  uint32_t GetFsId() const override { return 0; }
-  Ino GetIno() const override { return 0; }
 
   Status Run(TxnUPtr& txn) override;
 
@@ -1682,7 +1673,6 @@ class KeepAliveFileSessionOperation : public Operation {
   OpType GetOpType() const override { return OpType::kKeepAliveFileSession; }
 
   uint32_t GetFsId() const override { return fs_id_; }
-  Ino GetIno() const override { return 0; }
 
   Status Run(TxnUPtr& txn) override;
 
@@ -1699,9 +1689,6 @@ class CleanDelSliceOperation : public Operation {
 
   OpType GetOpType() const override { return OpType::kCleanDelSlice; }
 
-  uint32_t GetFsId() const override { return 0; }
-  Ino GetIno() const override { return 0; }
-
   Status Run(TxnUPtr& txn) override;
 
  private:
@@ -1713,6 +1700,10 @@ class GetDelFileOperation : public Operation {
   GetDelFileOperation(Trace& trace, uint32_t fs_id, Ino ino) : Operation(trace), fs_id_(fs_id), ino_(ino) {};
   ~GetDelFileOperation() override = default;
 
+  struct Result {
+    AttrEntry attr;
+  };
+
   OpType GetOpType() const override { return OpType::kGetDelFile; }
 
   uint32_t GetFsId() const override { return fs_id_; }
@@ -1720,9 +1711,13 @@ class GetDelFileOperation : public Operation {
 
   Status Run(TxnUPtr& txn) override;
 
+  Result& GetResult() { return result_; }
+
  private:
   uint32_t fs_id_;
   Ino ino_;
+
+  Result result_;
 };
 
 class CleanDelFileOperation : public Operation {
@@ -1749,7 +1744,7 @@ class ScanLockOperation : public Operation {
   ScanLockOperation(Trace& trace) : Operation(trace) {};
   ~ScanLockOperation() override = default;
 
-  struct Result : public Operation::Result {
+  struct Result {
     std::vector<KeyValue> kvs;
   };
 
@@ -1760,14 +1755,7 @@ class ScanLockOperation : public Operation {
 
   Status Run(TxnUPtr& txn) override;
 
-  template <int size = 0>
-  Result& GetResult() {
-    auto& result = Operation::GetResult();
-    result_.status = result.status;
-    result_.attr = std::move(result.attr);
-
-    return result_;
-  }
+  Result& GetResult() { return result_; }
 
  private:
   Result result_;
@@ -1778,49 +1766,18 @@ class ScanFsOperation : public Operation {
   ScanFsOperation(Trace& trace) : Operation(trace) {};
   ~ScanFsOperation() override = default;
 
-  struct Result : public Operation::Result {
+  struct Result {
     std::vector<FsInfoEntry> fs_infoes;
   };
 
   OpType GetOpType() const override { return OpType::kScanFs; }
 
-  uint32_t GetFsId() const override { return 0; }
-  Ino GetIno() const override { return 0; }
-
   Status Run(TxnUPtr& txn) override;
 
-  template <int size = 0>
-  Result& GetResult() {
-    auto& result = Operation::GetResult();
-    result_.status = result.status;
-    result_.attr = std::move(result.attr);
-
-    return result_;
-  }
+  Result& GetResult() { return result_; }
 
  private:
   Result result_;
-};
-
-class ScanPartitionOperation : public Operation {
- public:
-  using HandlerType = std::function<bool(KeyValue&)>;
-
-  ScanPartitionOperation(Trace& trace, uint32_t fs_id, Ino ino, HandlerType handler)
-      : Operation(trace), fs_id_(fs_id), ino_(ino), handler_(handler) {};
-  ~ScanPartitionOperation() override = default;
-
-  OpType GetOpType() const override { return OpType::kScanPartition; }
-
-  uint32_t GetFsId() const override { return fs_id_; }
-  Ino GetIno() const override { return ino_; }
-
-  Status Run(TxnUPtr& txn) override;
-
- private:
-  uint32_t fs_id_{0};
-  Ino ino_{0};
-  HandlerType handler_;
 };
 
 class ScanDentryOperation : public Operation {
@@ -1841,8 +1798,8 @@ class ScanDentryOperation : public Operation {
   Status Run(TxnUPtr& txn) override;
 
  private:
-  uint32_t fs_id_{0};
-  Ino ino_{0};
+  const uint32_t fs_id_{0};
+  const Ino ino_{0};
   const std::string last_name_;
   HandlerType handler_;
 };
@@ -1854,6 +1811,10 @@ class ScanDirShardOperation : public Operation {
   ScanDirShardOperation(Trace& trace, uint32_t fs_id, Ino ino, const Range& range, HandlerType handler)
       : Operation(trace), fs_id_(fs_id), ino_(ino), range_(range), handler_(handler) {};
 
+  struct Result {
+    AttrWithMutation attr_with_mutation;
+  };
+
   OpType GetOpType() const override { return OpType::kScanDirShard; }
 
   uint32_t GetFsId() const override { return fs_id_; }
@@ -1861,12 +1822,15 @@ class ScanDirShardOperation : public Operation {
 
   Status Run(TxnUPtr& txn) override;
 
+  Result& GetResult() { return result_; }
+
  private:
-  uint32_t fs_id_{0};
-  Ino ino_{0};
+  const uint32_t fs_id_{0};
+  const Ino ino_{0};
   const Range range_;
 
   HandlerType handler_;
+  Result result_;
 };
 
 class ScanDelSliceOperation : public Operation {
@@ -1879,15 +1843,12 @@ class ScanDelSliceOperation : public Operation {
 
   OpType GetOpType() const override { return OpType::kScanDelSlice; }
 
-  uint32_t GetFsId() const override { return 0; }
-  Ino GetIno() const override { return 0; }
-
   Status Run(TxnUPtr& txn) override;
 
  private:
-  uint32_t fs_id_{0};
-  Ino ino_{0};
-  uint64_t chunk_index_{0};
+  const uint32_t fs_id_{0};
+  const Ino ino_{0};
+  const uint64_t chunk_index_{0};
   Txn::ScanHandlerType handler_;
 };
 
@@ -1900,12 +1861,11 @@ class ScanDelFileOperation : public Operation {
   OpType GetOpType() const override { return OpType::kScanDelFile; }
 
   uint32_t GetFsId() const override { return fs_id_; }
-  Ino GetIno() const override { return 0; }
 
   Status Run(TxnUPtr& txn) override;
 
  private:
-  uint32_t fs_id_{0};
+  const uint32_t fs_id_{0};
   Txn::ScanHandlerType scan_handler_;
 };
 
@@ -1916,9 +1876,6 @@ class ScanMetaTableOperation : public Operation {
   ~ScanMetaTableOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kScanMetaTable; }
-
-  uint32_t GetFsId() const override { return 0; }
-  Ino GetIno() const override { return 0; }
 
   Status Run(TxnUPtr& txn) override;
 
@@ -1937,13 +1894,10 @@ class ScanFsMetaTableOperation : public Operation {
 
   OpType GetOpType() const override { return OpType::kScanFsMetaTable; }
 
-  uint32_t GetFsId() const override { return 0; }
-  Ino GetIno() const override { return 0; }
-
   Status Run(TxnUPtr& txn) override;
 
  private:
-  uint32_t fs_id_{0};
+  const uint32_t fs_id_{0};
   std::string start_key_;
   Txn::ScanHandlerType scan_handler_;
 };
@@ -1958,12 +1912,11 @@ class ScanFsOpLogOperation : public Operation {
   OpType GetOpType() const override { return OpType::kScanFsOpLog; }
 
   uint32_t GetFsId() const override { return fs_id_; }
-  Ino GetIno() const override { return 0; }
 
   Status Run(TxnUPtr& txn) override;
 
  private:
-  uint32_t fs_id_{0};
+  const uint32_t fs_id_{0};
   HandlerType handler_;
 };
 
@@ -1976,13 +1929,12 @@ class SaveFsStatsOperation : public Operation {
   OpType GetOpType() const override { return OpType::kSaveFsStats; }
 
   uint32_t GetFsId() const override { return fs_id_; }
-  Ino GetIno() const override { return 0; }
 
   Status Run(TxnUPtr& txn) override;
 
  private:
   const uint32_t fs_id_{0};
-  FsStatsDataEntry fs_stats_;
+  const FsStatsDataEntry fs_stats_;
 };
 
 class ScanFsStatsOperation : public Operation {
@@ -1994,7 +1946,6 @@ class ScanFsStatsOperation : public Operation {
   OpType GetOpType() const override { return OpType::kScanFsStats; }
 
   uint32_t GetFsId() const override { return fs_id_; }
-  Ino GetIno() const override { return 0; }
 
   Status Run(TxnUPtr& txn) override;
 
@@ -2010,29 +1961,22 @@ class GetAndCompactFsStatsOperation : public Operation {
       : Operation(trace), fs_id_(fs_id), mark_time_ns_(mark_time_ns) {};
   ~GetAndCompactFsStatsOperation() override = default;
 
-  struct Result : public Operation::Result {
+  struct Result {
     FsStatsDataEntry fs_stats;
   };
 
   OpType GetOpType() const override { return OpType::kGetAndCompactFsStats; }
 
   uint32_t GetFsId() const override { return fs_id_; }
-  Ino GetIno() const override { return 0; }
 
   Status Run(TxnUPtr& txn) override;
 
-  template <int size = 0>
-  Result& GetResult() {
-    auto& result = Operation::GetResult();
-    result_.status = result.status;
-    result_.attr = std::move(result.attr);
-
-    return result_;
-  }
+  Result& GetResult() { return result_; }
 
  private:
   const uint32_t fs_id_;
   const uint64_t mark_time_ns_{0};
+
   Result result_;
 };
 
@@ -2041,6 +1985,10 @@ class GetInodeAttrOperation : public Operation {
   GetInodeAttrOperation(Trace& trace, uint32_t fs_id, uint64_t ino) : Operation(trace), fs_id_(fs_id), ino_(ino) {};
   ~GetInodeAttrOperation() override = default;
 
+  struct Result {
+    AttrWithMutation attr_with_mutation;
+  };
+
   OpType GetOpType() const override { return OpType::kGetInodeAttr; }
 
   uint32_t GetFsId() const override { return fs_id_; }
@@ -2048,9 +1996,13 @@ class GetInodeAttrOperation : public Operation {
 
   Status Run(TxnUPtr& txn) override;
 
+  Result& GetResult() { return result_; }
+
  private:
-  uint32_t fs_id_;
-  uint64_t ino_;
+  const uint32_t fs_id_;
+  const uint64_t ino_;
+
+  Result result_;
 };
 
 class BatchGetInodeAttrOperation : public Operation {
@@ -2059,8 +2011,8 @@ class BatchGetInodeAttrOperation : public Operation {
       : Operation(trace), fs_id_(fs_id), inoes_(inoes) {};
   ~BatchGetInodeAttrOperation() override = default;
 
-  struct Result : public Operation::Result {
-    std::vector<AttrEntry> attrs;
+  struct Result {
+    std::vector<AttrWithMutation> attr_with_mutations;
   };
 
   OpType GetOpType() const override { return OpType::kBatchGetInodeAttr; }
@@ -2070,18 +2022,11 @@ class BatchGetInodeAttrOperation : public Operation {
 
   Status Run(TxnUPtr& txn) override;
 
-  template <int size = 0>
-  Result& GetResult() {
-    auto& result = Operation::GetResult();
-    result_.status = result.status;
-    result_.attr = std::move(result.attr);
-
-    return result_;
-  }
+  Result& GetResult() { return result_; }
 
  private:
-  uint32_t fs_id_;
-  std::vector<Ino> inoes_;
+  const uint32_t fs_id_;
+  const std::vector<Ino> inoes_;
 
   Result result_;
 };
@@ -2092,30 +2037,22 @@ class GetDentryOperation : public Operation {
       : Operation(trace), fs_id_(fs_id), parent_(parent), name_(name) {};
   ~GetDentryOperation() override = default;
 
-  struct Result : public Operation::Result {
+  struct Result {
     DentryEntry dentry;
   };
 
-  OpType GetOpType() const override { return OpType::KGetDentry; }
+  OpType GetOpType() const override { return OpType::kGetDentry; }
 
   uint32_t GetFsId() const override { return fs_id_; }
-  Ino GetIno() const override { return 0; }
 
   Status Run(TxnUPtr& txn) override;
 
-  template <int size = 0>
-  Result& GetResult() {
-    auto& result = Operation::GetResult();
-    result_.status = result.status;
-    result_.attr = std::move(result.attr);
-
-    return result_;
-  }
+  Result& GetResult() { return result_; }
 
  private:
-  uint32_t fs_id_;
-  Ino parent_;
-  std::string name_;
+  const uint32_t fs_id_;
+  const Ino parent_;
+  const std::string name_;
 
   Result result_;
 };
@@ -2126,9 +2063,6 @@ class ImportKVOperation : public Operation {
   ~ImportKVOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kImportKV; }
-
-  uint32_t GetFsId() const override { return 0; }
-  Ino GetIno() const override { return 0; }
 
   Status Run(TxnUPtr& txn) override;
 
@@ -2143,7 +2077,7 @@ class UpsertCacheMemberOperation : public Operation {
       : Operation(trace), cache_member_id_(cache_member_id), handler_(handler) {};
   ~UpsertCacheMemberOperation() override = default;
 
-  struct Result : public Operation::Result {
+  struct Result {
     CacheMemberEntry cache_member;
   };
 
@@ -2154,18 +2088,12 @@ class UpsertCacheMemberOperation : public Operation {
 
   Status Run(TxnUPtr& txn) override;
 
-  template <int size = 0>
-  Result& GetResult() {
-    auto& result = Operation::GetResult();
-    result_.status = result.status;
-    result_.attr = std::move(result.attr);
-
-    return result_;
-  }
+  Result& GetResult() { return result_; }
 
  private:
-  std::string cache_member_id_;
+  const std::string cache_member_id_;
   HandlerType handler_;
+
   Result result_;
 };
 
@@ -2176,9 +2104,6 @@ class DeleteCacheMemberOperation : public Operation {
   ~DeleteCacheMemberOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kDeleteCacheMember; }
-
-  uint32_t GetFsId() const override { return 0; }
-  Ino GetIno() const override { return 0; }
 
   Status Run(TxnUPtr& txn) override;
 
@@ -2191,25 +2116,15 @@ class ScanCacheMemberOperation : public Operation {
   ScanCacheMemberOperation(Trace& trace) : Operation(trace) {};
   ~ScanCacheMemberOperation() override = default;
 
-  struct Result : public Operation::Result {
+  struct Result {
     std::vector<CacheMemberEntry> cache_member_entries;
   };
 
   OpType GetOpType() const override { return OpType::kScanCacheMember; }
 
-  uint32_t GetFsId() const override { return 0; }
-  Ino GetIno() const override { return 0; }
-
   Status Run(TxnUPtr& txn) override;
 
-  template <int size = 0>
-  Result& GetResult() {
-    auto& result = Operation::GetResult();
-    result_.status = result.status;
-    result_.attr = std::move(result.attr);
-
-    return result_;
-  }
+  Result& GetResult() { return result_; }
 
  private:
   Result result_;
@@ -2221,25 +2136,15 @@ class GetCacheMemberOperation : public Operation {
       : Operation(trace), cache_member_id_(cache_member_id) {};
   ~GetCacheMemberOperation() override = default;
 
-  struct Result : public Operation::Result {
+  struct Result {
     CacheMemberEntry cache_member;
   };
 
-  OpType GetOpType() const override { return OpType::KGetCacheMember; }
-
-  uint32_t GetFsId() const override { return 0; }
-  Ino GetIno() const override { return 0; }
+  OpType GetOpType() const override { return OpType::kGetCacheMember; }
 
   Status Run(TxnUPtr& txn) override;
 
-  template <int size = 0>
-  Result& GetResult() {
-    auto& result = Operation::GetResult();
-    result_.status = result.status;
-    result_.attr = std::move(result.attr);
-
-    return result_;
-  }
+  Result& GetResult() { return result_; }
 
  private:
   std::string cache_member_id_;
@@ -2248,12 +2153,14 @@ class GetCacheMemberOperation : public Operation {
 
 struct BatchOperation {
   uint32_t fs_id{0};
-  uint64_t ino{0};
+  Ino ino;
+
+  uint32_t dir_attr_mutation_index{0};
 
   // set attr/xattr/chunk
-  std::vector<Operation*> setattr_operations;
+  absl::InlinedVector<Operation*, kStoreOperationBatchSize> setattr_operations;
   // mkdir/mknod/symlink/hardlink
-  std::vector<Operation*> create_operations;
+  absl::InlinedVector<Operation*, kStoreOperationBatchSize> create_operations;
 };
 
 class OperationTask : public TaskRunnable {
@@ -2279,6 +2186,38 @@ class OperationTask : public TaskRunnable {
   PostHandler post_handler_{nullptr};
 };
 
+// for dispatching dir inode update index
+class ConflictController {
+ public:
+  ConflictController() = default;
+  ~ConflictController() = default;
+
+  uint32_t DispatchIndex(uint32_t fs_id, Ino ino);
+
+  bool IncRunningCount(uint32_t fs_id, Ino ino);
+  void DecRunningCount(uint32_t fs_id, Ino ino);
+
+ private:
+  struct Key {
+    uint32_t fs_id;
+    Ino ino;
+
+    bool operator==(const Key& other) const { return fs_id == other.fs_id && ino == other.ino; }
+  };
+  struct KeyHash {
+    size_t operator()(const Key& key) const noexcept { return butil::HashPair(key.fs_id, key.ino); }
+  };
+
+  // ino -> dir mutation index
+  absl::flat_hash_map<Key, uint32_t, KeyHash> index_map_;
+
+  // fs_id,ino -> running count
+  using Map = absl::flat_hash_map<Key, uint32_t, KeyHash>;
+
+  constexpr static size_t kShardNum = 64;
+  utils::Shards<Map, kShardNum> running_map_;
+};
+
 class OperationProcessor : public std::enable_shared_from_this<OperationProcessor> {
  public:
   OperationProcessor(KVStorageSPtr kv_storage);
@@ -2293,19 +2232,6 @@ class OperationProcessor : public std::enable_shared_from_this<OperationProcesso
     return std::make_shared<OperationProcessor>(kv_storage);
   }
 
-  struct Key {
-    uint32_t fs_id{0};
-    uint64_t ino{0};
-
-    bool operator<(const Key& other) const {
-      if (fs_id != other.fs_id) {
-        return fs_id < other.fs_id;
-      }
-
-      return ino < other.ino;
-    }
-  };
-
   OperationProcessorSPtr GetSelfPtr() { return shared_from_this(); }
 
   bool Init();
@@ -2319,7 +2245,9 @@ class OperationProcessor : public std::enable_shared_from_this<OperationProcesso
   Status CreateTable(const std::string& table_name, const Range& range, int64_t& table_id);
 
  private:
-  static std::map<OperationProcessor::Key, BatchOperation> Grouping(std::vector<Operation*>& operations);
+  using BatchOperationMap =
+      absl::flat_hash_map<Operation::Key, BatchOperation, Operation::Key::Hash, Operation::Key::Eq>;
+  static void Grouping(std::vector<Operation*>& operations, BatchOperationMap& batch_operation_map);
   void ProcessOperation();
   void LaunchExecuteBatchOperation(BatchOperation&& batch_operation);
   void ExecuteBatchOperation(BatchOperation& batch_operation);
@@ -2332,6 +2260,8 @@ class OperationProcessor : public std::enable_shared_from_this<OperationProcesso
   std::atomic<bool> is_stop_{false};
 
   butil::MPSCQueue<Operation*> operations_;
+
+  ConflictController conflict_controller_;
 
   WorkerSPtr async_worker_;
 

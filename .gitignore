@@ -91,3 +91,8 @@ CLAUDE.local.md
 settings.local.json
 
 mds_deploy_parameters.local
+
+# Compound Engineering local config
+.compound-engineering/
+
+.context/

@@ -309,6 +309,14 @@ Status MDSClient::Lookup(ContextSPtr& ctx, Ino parent, const std::string& name,
   pb::mds::LookupResponse response;
 
   request.mutable_context()->set_inode_version(GetInodeVersion(parent));
+  bool use_base_version = GetInodeRenameRefCount(parent) > 0;
+  request.mutable_context()->set_use_base_version(use_base_version);
+
+  if (use_base_version) {
+    LOG(INFO) << fmt::format(
+        "[meta.client] lookup name {}/{} use_base_version({}).", parent, name,
+        use_base_version);
+  }
 
   request.set_fs_id(fs_id_);
   request.set_parent(parent);
@@ -330,7 +338,7 @@ Status MDSClient::Lookup(ContextSPtr& ctx, Ino parent, const std::string& name,
       // fetch last inode
       status = GetAttr(span_ctx, inode.ino(), attr_entry);
       if (status.ok()) {
-        parent_memo_.Upsert(inode.ino(), parent);
+        parent_memo_.Upsert(inode.ino(), parent, 0, use_base_version);
         return Status::OK();
 
       } else {
@@ -342,7 +350,7 @@ Status MDSClient::Lookup(ContextSPtr& ctx, Ino parent, const std::string& name,
   }
 
   // save ino to parent mapping
-  parent_memo_.Upsert(inode.ino(), parent, inode.version());
+  parent_memo_.Upsert(inode.ino(), parent, inode.version(), use_base_version);
 
   attr_entry.Swap(response.mutable_inode());
 
@@ -646,8 +654,13 @@ Status MDSClient::ReadDir(ContextSPtr& ctx, Ino ino, uint64_t fh,
   pb::mds::ReadDirResponse response;
 
   request.mutable_context()->set_inode_version(GetInodeVersion(ino));
-  request.mutable_context()->set_use_base_version(GetInodeRenameRefCount(ino) >
-                                                  0);
+  bool use_base_version = GetInodeRenameRefCount(ino) > 0;
+  request.mutable_context()->set_use_base_version(use_base_version);
+  if (use_base_version) {
+    LOG(INFO) << fmt::format(
+        "[meta.client] readdir ino({}) use_base_version({}).", ino,
+        use_base_version);
+  }
 
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
@@ -663,7 +676,7 @@ Status MDSClient::ReadDir(ContextSPtr& ctx, Ino ino, uint64_t fh,
     return status;
   }
 
-  parent_memo_.DecRenameRefCount(ino);
+  if (use_base_version) parent_memo_.DecRenameRefCount(ino);
 
   entries.reserve(response.entries_size());
   for (const auto& entry : response.entries()) {
@@ -1263,14 +1276,16 @@ Status MDSClient::Rename(ContextSPtr& ctx, Ino old_parent,
   pb::mds::RenameResponse response;
 
   if (fs_info_.IsHashPartition()) {
-    auto old_ancestors = parent_memo_.GetAncestors(old_parent);
-    for (auto& ancestor : old_ancestors) {
-      request.add_old_ancestors(ancestor);
-    }
-
     auto new_ancestors = parent_memo_.GetAncestors(new_parent);
     for (auto& ancestor : new_ancestors) {
       request.add_new_ancestors(ancestor);
+    }
+
+    if (old_parent != new_parent) {
+      auto old_ancestors = parent_memo_.GetAncestors(old_parent);
+      for (auto& ancestor : old_ancestors) {
+        request.add_old_ancestors(ancestor);
+      }
     }
   }
 
@@ -1287,10 +1302,17 @@ Status MDSClient::Rename(ContextSPtr& ctx, Ino old_parent,
     return status;
   }
 
-  parent_memo_.UpsertVersionAndRenameRefCount(old_parent,
-                                              response.old_parent_version());
-  parent_memo_.UpsertVersionAndRenameRefCount(new_parent,
-                                              response.new_parent_version());
+  if (request.context().is_bypass_cache()) {
+    parent_memo_.UpsertVersionAndRenameRefCount(new_parent,
+                                                response.new_parent_version());
+
+  } else {
+    parent_memo_.UpsertVersion(new_parent, response.new_parent_version());
+  }
+  if (old_parent != new_parent) {
+    parent_memo_.UpsertVersionAndRenameRefCount(old_parent,
+                                                response.old_parent_version());
+  }
 
   effected_inos = mds::Helper::PbRepeatedToVector(response.effected_inos());
 

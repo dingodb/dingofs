@@ -14,6 +14,7 @@
 
 #include "mds/filesystem/filesystem.h"
 
+#include <absl/container/flat_hash_set.h>
 #include <bthread/bthread.h>
 #include <bthread/types.h>
 #include <fcntl.h>
@@ -173,28 +174,6 @@ bool FileSystem::Init() {
   return true;
 }
 
-uint64_t FileSystem::Epoch() const {
-  auto partition_policy = fs_info_->GetPartitionPolicy();
-  return partition_policy.epoch();
-}
-
-pb::mds::PartitionType FileSystem::PartitionType() const { return fs_info_->GetPartitionType(); }
-
-bool FileSystem::IsMonoPartition() const {
-  return fs_info_->GetPartitionType() == pb::mds::PartitionType::MONOLITHIC_PARTITION;
-}
-bool FileSystem::IsParentHashPartition() const {
-  return fs_info_->GetPartitionType() == pb::mds::PartitionType::PARENT_ID_HASH_PARTITION;
-}
-
-bool FileSystem::CanServe(Context& ctx) {
-  if (ctx.IsBypassCache()) {
-    return true;
-  }
-
-  return can_serve_.load(std::memory_order_acquire);
-};
-
 // odd number is dir inode
 Status FileSystem::GenDirIno(Ino& ino) {
   bool ret = ino_id_generator_->GenID(2, ino);
@@ -221,16 +200,6 @@ bool FileSystem::CanServe(uint64_t self_mds_id) {
   }
 
   return false;
-}
-
-Status FileSystem::GetPartitionParentInode(Context& ctx, PartitionPtr& partition, InodeSPtr& out_inode) {
-  auto inode = partition->ParentInode();
-  if (inode != nullptr) {
-    out_inode = inode;
-    return Status::OK();
-  }
-
-  return GetInode(ctx, ctx.GetInodeVersion(), partition->INo(), out_inode);
 }
 
 void FileSystem::AddDentryToPartition(Ino parent, const Dentry& dentry, uint64_t version) {
@@ -260,6 +229,13 @@ void FileSystem::DeleteDentryFromPartition(Ino parent, const std::vector<std::st
   }
 }
 
+void FileSystem::RefreshPartitionDeltaVersion(Ino parent, uint64_t version) {
+  auto partition = GetPartitionFromCache(parent);
+  if (partition != nullptr) {
+    partition->RefreshDeltaVersion(version);
+  }
+}
+
 Status FileSystem::GetPartition(Context& ctx, Ino parent, PartitionPtr& out_partition) {
   auto status = GetPartition(ctx, ctx.GetInodeVersion(), parent, out_partition);
   if (status.ok()) {
@@ -275,9 +251,12 @@ Status FileSystem::GetPartition(Context& ctx, uint64_t version, Ino parent, Part
   auto& trace = ctx.GetTrace();
   const bool bypass_cache = ctx.IsBypassCache();
   const bool use_base_version = ctx.UseBaseVersion();
+  const std::string& request_id = ctx.RequestId();
+  const std::string& method_name = ctx.MethodName();
 
   if (bypass_cache) {
-    auto status = GetPartitionFromStore(ctx, parent, "Bypass", out_partition);
+    auto status =
+        GetPartitionFromStore(ctx, parent, fmt::format("Bypass.{}.{}", method_name, request_id), out_partition);
     if (!status.ok()) {
       return Status(status.error_code(), fmt::format("not found partition({}), {}.", parent, status.error_str()));
     }
@@ -287,7 +266,8 @@ Status FileSystem::GetPartition(Context& ctx, uint64_t version, Ino parent, Part
 
   auto partition = GetPartitionFromCache(parent);
   if (partition == nullptr) {
-    auto status = GetPartitionFromStore(ctx, parent, "CacheMiss", out_partition);
+    auto status =
+        GetPartitionFromStore(ctx, parent, fmt::format("CacheMiss.{}.{}", method_name, request_id), out_partition);
     if (!status.ok()) {
       return Status(status.error_code(), fmt::format("not found partition({}), {}.", parent, status.error_str()));
     }
@@ -295,9 +275,10 @@ Status FileSystem::GetPartition(Context& ctx, uint64_t version, Ino parent, Part
     return status;
   }
 
-  uint64_t check_version = use_base_version ? partition->BaseVersion() : partition->DeltaVersion();
-  if (version > check_version) {
-    std::string reason = fmt::format("OutOfDate[{},cache{},req{}]", use_base_version, check_version, version);
+  uint64_t cache_version = use_base_version ? partition->BaseVersion() : partition->DeltaVersion();
+  if (version > cache_version) {
+    std::string reason = fmt::format("OutOfDate.{}.{}.[{},cache{},req{}]", method_name, request_id, use_base_version,
+                                     cache_version, version);
     auto status = GetPartitionFromStore(ctx, parent, reason, out_partition);
     if (!status.ok()) {
       return Status(status.error_code(), fmt::format("not found partition({}), {}.", parent, status.error_str()));
@@ -339,17 +320,18 @@ Status FileSystem::GetPartitionFromStore(Context& ctx, Ino parent, const std::st
   if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
+  auto& attr_with_mutation = result.attr_with_mutation;
+  auto attr = attr_with_mutation.ToCompleteAttr();
 
-  auto inode = Inode::New(result.attr);
-
-  auto partition = ShardPartition::New(operation_processor_, inode);
+  // todo: fixup version
+  auto partition = ShardPartition::New(operation_processor_, attr);
   out_partition = partition_cache_.PutIf(partition);
 
-  UpsertInodeCache(parent, inode);
+  UpsertInodeCache(attr_with_mutation, reason);
 
   LOG(INFO) << fmt::format("[fs.{}.{}.{}.{}][{}us] fetch partition, version({}) shard_boundaries({}) reason({}).",
-                           fs_id_, parent, method_name, request_id, duration.ElapsedUs(), inode->Version(),
-                           Helper::VectorToString(inode->ShardBoundaries()), reason);
+                           fs_id_, parent, method_name, request_id, duration.ElapsedUs(), attr.version(),
+                           Helper::VectorToString(Helper::PbRepeatedToVector(attr.shard_boundaries())), reason);
 
   return Status::OK();
 }
@@ -385,52 +367,6 @@ Status FileSystem::ListDentryFromStore(Ino parent, const std::string& last_name,
   return RunOperation(&operation);
 }
 
-Status FileSystem::GetInode(Context& ctx, const Dentry& dentry, PartitionPtr partition, InodeSPtr& out_inode) {
-  return GetInode(ctx, ctx.GetInodeVersion(), dentry, partition, out_inode);
-}
-
-Status FileSystem::GetInode(Context& ctx, uint64_t version, const Dentry& dentry, PartitionPtr partition,
-                            InodeSPtr& out_inode) {
-  auto& trace = ctx.GetTrace();
-  const bool bypass_cache = ctx.IsBypassCache();
-
-  bool is_fetch = false;
-  Status status;
-  do {
-    if (bypass_cache) {
-      status = GetInodeFromStore(ctx, dentry.INo(), "Bypass", false, out_inode);
-      is_fetch = true;
-      break;
-    }
-
-    auto inode = dentry.Inode();
-    if (inode == nullptr) {
-      inode = GetInodeFromCache(dentry.INo());
-      if (inode == nullptr) {
-        status = GetInodeFromStore(ctx, dentry.INo(), "CacheMiss", true, out_inode);
-        is_fetch = true;
-        break;
-      }
-    }
-
-    if (inode->Version() < version) {
-      status = GetInodeFromStore(ctx, dentry.INo(), "OutOfDate", true, out_inode);
-      is_fetch = true;
-      break;
-    }
-
-    out_inode = inode;
-    trace.SetHitInode();
-
-  } while (false);
-
-  if (is_fetch && status.ok()) {
-    partition->PutWithInode(Dentry(dentry, out_inode));
-  }
-
-  return status;
-}
-
 Status FileSystem::GetInode(Context& ctx, Ino ino, InodeSPtr& out_inode) {
   return GetInode(ctx, ctx.GetInodeVersion(), ino, out_inode);
 }
@@ -438,18 +374,24 @@ Status FileSystem::GetInode(Context& ctx, Ino ino, InodeSPtr& out_inode) {
 Status FileSystem::GetInode(Context& ctx, uint64_t version, Ino ino, InodeSPtr& out_inode) {
   auto& trace = ctx.GetTrace();
   const bool bypass_cache = ctx.IsBypassCache();
+  const bool use_base_version = ctx.UseBaseVersion();
+  const std::string& request_id = ctx.RequestId();
+  const std::string& method_name = ctx.MethodName();
 
   if (bypass_cache) {
-    return GetInodeFromStore(ctx, ino, "Bypass", false, out_inode);
+    return GetInodeFromStore(ctx, ino, fmt::format("Bypass.{}.{}", method_name, request_id), false, out_inode);
   }
 
   auto inode = GetInodeFromCache(ino);
   if (inode == nullptr) {
-    return GetInodeFromStore(ctx, ino, "CacheMiss", true, out_inode);
+    return GetInodeFromStore(ctx, ino, fmt::format("CacheMiss.{}.{}", method_name, request_id), true, out_inode);
   }
 
-  if (inode->Version() < version) {
-    return GetInodeFromStore(ctx, ino, "OutOfDate", true, out_inode);
+  uint64_t cache_version = use_base_version ? inode->BaseVersion() : inode->Version();
+  if (cache_version < version) {
+    std::string reason = fmt::format("OutOfDate.{}.{}.[{},cache{},req{}]", method_name, request_id, use_base_version,
+                                     cache_version, version);
+    return GetInodeFromStore(ctx, ino, reason, true, out_inode);
   }
 
   out_inode = inode;
@@ -476,27 +418,34 @@ Status FileSystem::GetInodeFromStore(Context& ctx, Ino ino, const std::string& r
   }
 
   auto& result = operation.GetResult();
+  auto& attr_with_mutation = result.attr_with_mutation;
 
-  out_inode = Inode::New(result.attr);
+  out_inode = is_cache ? UpsertInodeCache(attr_with_mutation, reason) : Inode::New(attr_with_mutation);
 
-  if (is_cache) UpsertInodeCache(ino, out_inode);
-
-  LOG(INFO) << fmt::format("[fs.{}.{}.{}.{}] fetch inode, version({}) reason({}).", fs_id_, method_name, request_id,
-                           ino, out_inode->Version(), reason);
+  LOG(INFO) << fmt::format("[fs.{}.{}.{}.{}] fetch inode, version({}) is_cache({}) reason({}).", fs_id_, method_name,
+                           request_id, ino, attr_with_mutation.attr.version(), is_cache, reason);
 
   return Status::OK();
 }
 
-Status FileSystem::BatchGetInodeFromStore(std::vector<uint64_t> inoes, std::vector<InodeSPtr>& out_inodes) {
-  Trace trace;
+Status FileSystem::BatchGetInodeFromStore(Context& ctx, std::vector<uint64_t> inoes, const std::string& reason,
+                                          bool is_cache, std::vector<InodeSPtr>& out_inodes) {
+  auto& trace = ctx.GetTrace();
+  const auto& request_id = ctx.RequestId();
+  const auto& method_name = ctx.MethodName();
+
   BatchGetInodeAttrOperation operation(trace, fs_id_, inoes);
 
   auto status = RunOperation(&operation);
   if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
-  for (auto& attr : result.attrs) {
-    out_inodes.push_back(Inode::New(attr));
+  for (auto& attr_with_mutation : result.attr_with_mutations) {
+    out_inodes.push_back(is_cache ? UpsertInodeCache(attr_with_mutation, reason) : Inode::New(attr_with_mutation));
+
+    const auto& attr = attr_with_mutation.attr;
+    LOG(INFO) << fmt::format("[fs.{}.{}.{}.{}] fetch inode, version({}) is_cache({}) reason({}).", fs_id_, method_name,
+                             request_id, attr.ino(), attr.version(), is_cache, reason);
   }
 
   return Status::OK();
@@ -519,11 +468,27 @@ InodeSPtr FileSystem::GetInodeFromCache(Ino ino) { return inode_cache_.Get(ino);
 
 std::vector<InodeSPtr> FileSystem::GetAllInodesFromCache() { return inode_cache_.GetAll(); }
 
-void FileSystem::UpsertInodeCache(Ino ino, InodeSPtr inode) { inode_cache_.PutIf(ino, inode); }
+InodeSPtr FileSystem::UpsertInodeCache(const AttrWithMutation& attr_with_mutation, const std::string& reason) {
+  return inode_cache_.PutIf(attr_with_mutation, reason);
+}
 
-void FileSystem::UpsertInodeCache(InodeSPtr inode) { inode_cache_.PutIf(inode->Ino(), inode); }
+InodeSPtr FileSystem::UpsertInodeCache(const AttrEntry& attr, const std::string& reason) {
+  return inode_cache_.PutIf(attr, reason);
+}
 
-void FileSystem::UpsertInodeCache(const AttrEntry& attr) { inode_cache_.PutIf(attr); }
+AttrEntry FileSystem::UpdateParentInodeCache(InodeSPtr& inode, const AttrOrMutation& attr_or_mutation,
+                                             const std::string& reason) {
+  CHECK(inode != nullptr) << "inode is null.";
+  CHECK(IsDir(inode->Ino())) << fmt::format("inode({}) is not a directory.", inode->Ino());
+
+  if (attr_or_mutation.attr.ino() == 0) {
+    return inode->PutByMutation(attr_or_mutation.mutation, reason);
+
+  } else {
+    inode->PutIf(attr_or_mutation.attr, reason);
+    return inode->ToAttr();
+  }
+}
 
 void FileSystem::DeleteInodeFromCache(Ino ino) { inode_cache_.Delete(ino); }
 
@@ -570,7 +535,7 @@ Status FileSystem::RunOperation(Operation* operation) {
 
   CHECK(count_down.wait() == 0) << "count down wait fail.";
 
-  return operation->GetResult().status;
+  return operation->GetStatus();
 }
 
 Status FileSystem::CreateRoot() {
@@ -599,7 +564,7 @@ Status FileSystem::CreateRoot() {
 
   auto inode = Inode::New(attr);
 
-  Dentry dentry(fs_id_, "/", kRootParentIno, kRootIno, pb::mds::FileType::DIRECTORY, 0, inode);
+  Dentry dentry(fs_id_, "/", kRootParentIno, kRootIno, pb::mds::FileType::DIRECTORY, 0);
 
   // update backend store
   Trace trace;
@@ -611,8 +576,8 @@ Status FileSystem::CreateRoot() {
 
   if (!status.ok()) return status;
 
-  UpsertInodeCache(inode);
-  partition_cache_.PutIf(ShardPartition::New(operation_processor_, inode));
+  UpsertInodeCache(attr, "createroot");
+  partition_cache_.PutIf(ShardPartition::New(operation_processor_, attr));
 
   return Status::OK();
 }
@@ -649,14 +614,12 @@ Status FileSystem::Lookup(Context& ctx, Ino parent, const std::string& name, Ent
   if (!status.ok()) return status;
 
   InodeSPtr inode;
-  status = GetInode(ctx, 0, dentry, partition, inode);
-  if (!status.ok()) {
-    return status;
-  }
+  status = GetInode(ctx, 0, dentry.INo(), inode);
+  if (!status.ok()) return status;
 
   parent_memo_.Remeber(inode->Ino(), parent);
 
-  entry_out.attr = inode->Copy();
+  entry_out.attr = inode->ToAttr();
 
   LOG(INFO) << fmt::format("[fs.{}.{}][{}us] lookup parent({}), name({}) version({}) ptr({}).", fs_id_, ctx.RequestId(),
                            duration.ElapsedUs(), parent, name, entry_out.attr.version(), (void*)inode.get());
@@ -665,7 +628,7 @@ Status FileSystem::Lookup(Context& ctx, Ino parent, const std::string& name, Ent
 }
 
 uint64_t FileSystem::GetMdsIdByIno(Ino ino) {
-  ino = ino != kRootParentIno ? ino : kRootIno;
+  ino = (ino != kRootParentIno) ? ino : kRootIno;
   auto partition_policy = fs_info_->GetPartitionPolicy();
   const auto& parent_hash = partition_policy.parent_hash();
 
@@ -679,9 +642,7 @@ uint64_t FileSystem::GetMdsIdByIno(Ino ino) {
       }
     }
 
-    if (target_mds_id > 0) {
-      break;
-    }
+    if (target_mds_id > 0) break;
   }
 
   return target_mds_id;
@@ -694,6 +655,12 @@ Status FileSystem::BatchCreate(Context& ctx, Ino parent, const std::vector<MkNod
 
   auto& trace = ctx.GetTrace();
   const std::string& client_id = ctx.ClientId();
+  const std::string& request_id = ctx.RequestId();
+
+  // get parent inode
+  InodeSPtr parent_inode;
+  auto status = GetInode(ctx, parent, parent_inode);
+  if (!status.ok()) return status;
 
   // update parent memo
   UpdateParentMemo(ctx.GetAncestors());
@@ -711,8 +678,6 @@ Status FileSystem::BatchCreate(Context& ctx, Ino parent, const std::vector<MkNod
   dentries.reserve(params.size());
   std::vector<FileSessionSPtr> file_sessions;
   file_sessions.reserve(params.size());
-  std::vector<InodeSPtr> inodes;
-  inodes.reserve(params.size());
 
   std::string names;
   for (const auto& param : params) {
@@ -744,22 +709,22 @@ Status FileSystem::BatchCreate(Context& ctx, Ino parent, const std::vector<MkNod
     attr.set_rdev(param.rdev);
     attr.add_parents(param.parent);
     attr.set_maybe_tiny_file(IsTinyFile(param.name));
+    attr.set_version(1);
 
     attrs.push_back(attr);
 
-    auto inode = Inode::New(attr);
-    inodes.push_back(inode);
-    dentries.emplace_back(fs_id_, param.name, param.parent, ino, pb::mds::FileType::FILE, param.flag, inode);
+    dentries.emplace_back(fs_id_, param.name, param.parent, ino, pb::mds::FileType::FILE, param.flag);
 
     FileSessionSPtr file_session = file_session_manager_.Create(ino, client_id, param.session_id);
     file_sessions.push_back(file_session);
 
     names += param.name + ",";
   }
+  names.resize(names.size() - 1);
 
   BatchCreateFileOperation operation(trace, dentries, attrs, file_sessions);
 
-  auto status = RunOperation(&operation);
+  status = RunOperation(&operation);
 
   LOG(INFO) << fmt::format("[fs.{}.{}][{}us] create {} finish, status({}).", fs_id_, ctx.RequestId(),
                            duration.ElapsedUs(), names, status.error_str());
@@ -767,38 +732,31 @@ Status FileSystem::BatchCreate(Context& ctx, Ino parent, const std::vector<MkNod
   if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
-  auto& parent_attr = result.attr;
+  auto& parent_attr_or_mutation = result.parent_attr_or_mutation;
 
   // update cache
-  for (auto& file_session : file_sessions) {
-    file_session_manager_.Put(file_session);
-  }
+  for (auto& file_session : file_sessions) file_session_manager_.Put(file_session);
 
-  for (auto& dentry : dentries) {
-    AddDentryToPartition(parent, dentry, parent_attr.version());
-  }
-
-  for (auto& inode : inodes) {
-    UpsertInodeCache(inode);
-  }
-  UpsertInodeCache(parent_attr);
+  std::string reason = fmt::format("create.{}.{}.{}", request_id, parent, names);
+  for (auto& attr : attrs) UpsertInodeCache(attr, reason);
+  AttrEntry last_parent_attr = UpdateParentInodeCache(parent_inode, parent_attr_or_mutation, reason);
+  for (auto& dentry : dentries) AddDentryToPartition(parent, dentry, last_parent_attr.version());
 
   // update quota
-  std::string reason = fmt::format("create.{}.{}", parent, names);
   quota_manager_.UpdateFsUsage(0, params.size(), reason);
   quota_manager_.AsyncUpdateDirUsage(parent, 0, params.size(), reason);
 
-  for (auto& dentry : dentries) {
-    parent_memo_.Remeber(dentry.INo(), parent);
-  }
+  // update parent memo
+  for (auto& dentry : dentries) parent_memo_.Remeber(dentry.INo(), parent);
 
   // set output
-  entry_out.parent_attr = parent_attr;
+  entry_out.parent_attr = last_parent_attr;
   entry_out.attrs.swap(attrs);
 
   // notify buddy mds to refresh inode
-  if (IsParentHashPartition()) {
-    NotifyBuddyRefreshInode(std::move(parent_attr));
+  if (operation.GetBatchIndex() == 0 && IsParentHashPartition()) {
+    std::vector<Ino> parents = Helper::PbRepeatedToVector(last_parent_attr.parents());
+    NotifyBuddyRefreshInode(parents, parent_attr_or_mutation, reason);
   }
 
   return Status::OK();
@@ -813,6 +771,7 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
   }
 
   auto& trace = ctx.GetTrace();
+  const auto& request_id = ctx.RequestId();
   Ino parent = param.parent;
 
   // check request
@@ -829,6 +788,11 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
   auto status = GenFileIno(ino);
   if (!status.ok()) return status;
   trace.RecordElapsedTime("gen_ino");
+
+  // get parent inode
+  InodeSPtr parent_inode;
+  status = GetInode(ctx, parent, parent_inode);
+  if (!status.ok()) return status;
 
   // update parent memo
   UpdateParentMemo(ctx.GetAncestors());
@@ -856,11 +820,10 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
   attr.set_rdev(param.rdev);
   attr.add_parents(parent);
   attr.set_maybe_tiny_file(IsTinyFile(param.name));
-
-  auto inode = Inode::New(attr);
+  attr.set_version(1);
 
   // build dentry
-  Dentry dentry(fs_id_, param.name, parent, ino, pb::mds::FileType::FILE, param.flag, inode);
+  Dentry dentry(fs_id_, param.name, parent, ino, pb::mds::FileType::FILE, param.flag);
 
   // update backend store
   MkNodOperation operation(trace, dentry, attr);
@@ -872,25 +835,28 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
   if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
-  auto& parent_attr = result.attr;
+  auto& parent_attr_or_mutation = result.parent_attr_or_mutation;
 
   // update cache
-  UpsertInodeCache(ino, inode);
-  UpsertInodeCache(parent_attr);
-  AddDentryToPartition(parent, dentry, parent_attr.version());
+  std::string reason = fmt::format("mknod.{}.{}.{}", request_id, parent, param.name);
+  UpsertInodeCache(attr, reason);
+  AttrEntry last_parent_attr = UpdateParentInodeCache(parent_inode, parent_attr_or_mutation, reason);
+  AddDentryToPartition(parent, dentry, last_parent_attr.version());
 
   // update quota
-  std::string reason = fmt::format("mknod.{}.{}", parent, param.name);
   quota_manager_.UpdateFsUsage(0, 1, reason);
   quota_manager_.AsyncUpdateDirUsage(param.parent, 0, 1, reason);
 
+  // update parent memo
   parent_memo_.Remeber(attr.ino(), param.parent);
 
-  entry_out.parent_attr = parent_attr;
+  // set output
+  entry_out.parent_attr = last_parent_attr;
   entry_out.attr.Swap(&attr);
 
-  if (IsParentHashPartition()) {
-    NotifyBuddyRefreshInode(std::move(parent_attr));
+  if (operation.GetBatchIndex() == 0 && IsParentHashPartition()) {
+    std::vector<Ino> parents = Helper::PbRepeatedToVector(last_parent_attr.parents());
+    NotifyBuddyRefreshInode(parents, parent_attr_or_mutation, reason);
   }
 
   return Status::OK();
@@ -902,6 +868,7 @@ Status FileSystem::BatchMkNod(Context& ctx, const std::vector<MkNodParam>& param
   }
 
   auto& trace = ctx.GetTrace();
+  const auto& request_id = ctx.RequestId();
   Ino parent = params[0].parent;
 
   if (parent == 0) {
@@ -913,6 +880,11 @@ Status FileSystem::BatchMkNod(Context& ctx, const std::vector<MkNodParam>& param
       return Status(pb::error::EILLEGAL_PARAMTETER, "name is empty");
     }
   }
+
+  // get inode
+  InodeSPtr parent_inode;
+  auto status = GetInode(ctx, parent, parent_inode);
+  if (!status.ok()) return status;
 
   // update parent memo
   UpdateParentMemo(ctx.GetAncestors());
@@ -928,11 +900,9 @@ Status FileSystem::BatchMkNod(Context& ctx, const std::vector<MkNodParam>& param
   join_name.reserve(params.size() * 128);
 
   std::vector<Dentry> dentries;
-  std::vector<InodeSPtr> inodes;
   std::vector<Inode::AttrEntry> attrs;
 
   dentries.reserve(params.size());
-  inodes.reserve(params.size());
   attrs.reserve(params.size());
   for (const auto& param : params) {
     join_name += param.name + ",";
@@ -957,21 +927,19 @@ Status FileSystem::BatchMkNod(Context& ctx, const std::vector<MkNodParam>& param
     attr.set_type(pb::mds::FileType::FILE);
     attr.set_rdev(param.rdev);
     attr.add_parents(parent);
+    attr.set_version(1);
 
     attrs.push_back(attr);
 
-    auto inode = Inode::New(attr);
-    inodes.push_back(inode);
-
     // build dentry
-    Dentry dentry(fs_id_, param.name, parent, ino, pb::mds::FileType::FILE, param.flag, inode);
+    Dentry dentry(fs_id_, param.name, parent, ino, pb::mds::FileType::FILE, param.flag);
     dentries.push_back(std::move(dentry));
   }
   join_name.resize(join_name.size() - 1);  // remove last ','
 
   // update backend store
   BatchMkNodOperation operation(trace, dentries, attrs);
-  auto status = RunOperation(&operation);
+  status = RunOperation(&operation);
 
   LOG(INFO) << fmt::format("[fs.{}.{}][{}us] mknod {}/{} finish, status({}).", fs_id_, ctx.RequestId(),
                            duration.ElapsedUs(), parent, join_name, status.error_str());
@@ -979,39 +947,29 @@ Status FileSystem::BatchMkNod(Context& ctx, const std::vector<MkNodParam>& param
   if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
-  auto& parent_attr = result.attr;
+  auto& parent_attr_or_mutation = result.parent_attr_or_mutation;
 
   // update cache
-  UpsertInodeCache(parent_attr);
-  for (auto& inode : inodes) UpsertInodeCache(inode->Ino(), inode);
-  for (const auto& dentry : dentries) AddDentryToPartition(parent, dentry, parent_attr.version());
+  std::string reason = fmt::format("batchmknod.{}.{}.{}", request_id, parent, join_name);
+  AttrEntry last_parent_attr = UpdateParentInodeCache(parent_inode, parent_attr_or_mutation, reason);
+  for (const auto& attr : attrs) UpsertInodeCache(attr, reason);
+  for (const auto& dentry : dentries) AddDentryToPartition(parent, dentry, last_parent_attr.version());
 
   // update quota
-  std::string reason = fmt::format("batchmknod.{}.{}", parent, join_name);
   quota_manager_.UpdateFsUsage(0, params.size(), reason);
   quota_manager_.AsyncUpdateDirUsage(parent, 0, params.size(), reason);
 
+  // update parent memo
   for (const auto& dentry : dentries) parent_memo_.Remeber(dentry.INo(), parent);
 
-  entry_out.parent_attr = parent_attr;
+  // set output
+  entry_out.parent_attr = last_parent_attr;
   entry_out.attrs.swap(attrs);
 
-  if (IsParentHashPartition()) NotifyBuddyRefreshInode(std::move(parent_attr));
-
-  return Status::OK();
-}
-
-Status FileSystem::GetChunksFromStore(Ino ino, std::vector<ChunkEntry>& chunks, uint32_t max_slice_num) {
-  Trace trace;
-  ScanChunkOperation operation(trace, fs_id_, ino, max_slice_num);
-  auto status = RunOperation(&operation);
-  if (!status.ok()) {
-    LOG(ERROR) << fmt::format("[fs.{}] fetch chunks fail, status({}).", fs_id_, ino, status.error_str());
-    return status;
+  if (operation.GetBatchIndex() == 0 && IsParentHashPartition()) {
+    std::vector<Ino> parents = Helper::PbRepeatedToVector(last_parent_attr.parents());
+    NotifyBuddyRefreshInode(parents, parent_attr_or_mutation, reason);
   }
-
-  auto& result = operation.GetResult();
-  chunks = std::move(result.chunks);
 
   return Status::OK();
 }
@@ -1038,6 +996,7 @@ Status FileSystem::Open(Context& ctx, Ino ino, const OpenParam& param, EntryOut&
   }
 
   auto& trace = ctx.GetTrace();
+  const auto& request_id = ctx.RequestId();
   const std::string& client_id = ctx.ClientId();
   const bool bypass_cache = ctx.IsBypassCache();
 
@@ -1132,16 +1091,16 @@ Status FileSystem::Open(Context& ctx, Ino ino, const OpenParam& param, EntryOut&
 
   if (!status.ok()) return status;
 
+  // set output
   entry_out.attr = attr;
   for (auto& chunk : chunks) chunks_out.push_back(chunk);
   data_out.swap(data);
   data_version = result.data_version;
 
-  bool put_success = file_session_manager_.Put(file_session);
-
   // update quota
+  std::string reason = fmt::format("open.{}.{}", request_id, ino);
+  bool put_success = file_session_manager_.Put(file_session);
   if (put_success && delta_bytes != 0) {
-    std::string reason = fmt::format("open.{}", ino);
     quota_manager_.UpdateFsUsage(delta_bytes, 0, reason);
     for (auto parent : attr.parents()) {
       quota_manager_.AsyncUpdateDirUsage(parent, delta_bytes, 0, reason);
@@ -1149,7 +1108,7 @@ Status FileSystem::Open(Context& ctx, Ino ino, const OpenParam& param, EntryOut&
   }
 
   // update cache
-  UpsertInodeCache(attr);
+  UpsertInodeCache(attr, reason);
 
   // clean chunk cache if O_TRUNC
   if (flags & O_TRUNC) {
@@ -1198,6 +1157,7 @@ Status FileSystem::FlushFile(Context& ctx, Ino ino, const FlushFileParam& param,
   }
 
   auto& trace = ctx.GetTrace();
+  const auto& request_id = ctx.RequestId();
 
   utils::Duration duration;
 
@@ -1235,11 +1195,12 @@ Status FileSystem::FlushFile(Context& ctx, Ino ino, const FlushFileParam& param,
 
   if (!status.ok()) return status;
 
+  // set output
   entry_out.attr = attr;
   entry_out.shrink_file = (delta_bytes < 0) ? true : false;
 
   // update quota
-  std::string reason = fmt::format("flushfile.{}", ino);
+  std::string reason = fmt::format("flushfile.{}.{}", request_id, ino);
   quota_manager_.UpdateFsUsage(delta_bytes, 0, reason);
 
   for (const auto& parent : attr.parents()) {
@@ -1250,7 +1211,7 @@ Status FileSystem::FlushFile(Context& ctx, Ino ino, const FlushFileParam& param,
   if (delta_bytes < 0) chunk_cache_.Delete(ino);
 
   // update cache
-  UpsertInodeCache(result.attr);
+  UpsertInodeCache(result.attr, reason);
 
   return Status::OK();
 }
@@ -1314,6 +1275,7 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
   }
 
   auto& trace = ctx.GetTrace();
+  const auto& request_id = ctx.RequestId();
   Ino parent = param.parent;
 
   // check request
@@ -1356,11 +1318,10 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
   attr.set_type(pb::mds::FileType::DIRECTORY);
   attr.set_rdev(param.rdev);
   attr.add_parents(parent);
-
-  auto inode = Inode::New(attr);
+  attr.set_version(1);
 
   // build dentry
-  Dentry dentry(fs_id_, param.name, parent, ino, pb::mds::FileType::DIRECTORY, param.flag, inode);
+  Dentry dentry(fs_id_, param.name, parent, ino, pb::mds::FileType::DIRECTORY, param.flag);
 
   // update backend store
   MkDirOperation operation(trace, dentry, attr);
@@ -1373,29 +1334,31 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
   if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
-  auto& parent_attr = result.attr;
+  auto& parent_attr = result.parent_attr;
 
   // update cache
-  UpsertInodeCache(ino, inode);
-  UpsertInodeCache(parent_attr);
-  AddDentryToPartition(parent, dentry, parent_attr.version());
+  std::string reason = fmt::format("mkdir.{}.{}.{}", request_id, parent, param.name);
+  UpsertInodeCache(attr, reason);
+  InodeSPtr last_parent_inode = UpsertInodeCache(parent_attr, reason);
+  AddDentryToPartition(parent, dentry, last_parent_inode->Version());
 
   if (IsMonoPartition()) {
-    partition_cache_.PutIf(ShardPartition::New(operation_processor_, inode));
+    partition_cache_.PutIf(ShardPartition::New(operation_processor_, attr));
   }
 
   // update quota
-  std::string reason = fmt::format("mkdir.{}.{}", parent, param.name);
   quota_manager_.UpdateFsUsage(0, 1, reason);
   quota_manager_.AsyncUpdateDirUsage(param.parent, 0, 1, reason);
 
+  // update parent memo
   parent_memo_.Remeber(attr.ino(), param.parent);
 
-  entry_out.parent_attr = parent_attr;
+  // set output
+  entry_out.parent_attr = last_parent_inode->ToAttr();
   entry_out.attr.Swap(&attr);
 
-  if (IsParentHashPartition()) {
-    NotifyBuddyRefreshInode(std::move(parent_attr));
+  if (operation.GetBatchIndex() == 0 && IsParentHashPartition()) {
+    NotifyBuddyRefreshInode(parent_attr, reason);
   }
 
   return Status::OK();
@@ -1407,6 +1370,7 @@ Status FileSystem::BatchMkDir(Context& ctx, const std::vector<MkDirParam>& param
   }
 
   auto& trace = ctx.GetTrace();
+  const auto& request_id = ctx.RequestId();
   Ino parent = params[0].parent;
 
   // check request
@@ -1439,11 +1403,9 @@ Status FileSystem::BatchMkDir(Context& ctx, const std::vector<MkDirParam>& param
   join_name.reserve(params.size() * 128);
 
   std::vector<Dentry> dentries;
-  std::vector<InodeSPtr> inodes;
   std::vector<Inode::AttrEntry> attrs;
 
   dentries.reserve(params.size());
-  inodes.reserve(params.size());
   attrs.reserve(params.size());
   for (const auto& param : params) {
     join_name += param.name + ",";
@@ -1462,13 +1424,12 @@ Status FileSystem::BatchMkDir(Context& ctx, const std::vector<MkDirParam>& param
     attr.set_type(pb::mds::FileType::DIRECTORY);
     attr.set_rdev(param.rdev);
     attr.add_parents(parent);
+    attr.set_version(1);
+
     attrs.push_back(attr);
 
-    auto inode = Inode::New(attr);
-    inodes.push_back(inode);
-
     // build dentry
-    Dentry dentry(fs_id_, param.name, parent, ino, pb::mds::FileType::DIRECTORY, param.flag, inode);
+    Dentry dentry(fs_id_, param.name, parent, ino, pb::mds::FileType::DIRECTORY, param.flag);
     dentries.push_back(std::move(dentry));
   }
   join_name.resize(join_name.size() - 1);
@@ -1484,28 +1445,32 @@ Status FileSystem::BatchMkDir(Context& ctx, const std::vector<MkDirParam>& param
   if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
-  auto& parent_attr = result.attr;
+  auto& parent_attr = result.parent_attr;
 
   // update cache
-  UpsertInodeCache(parent_attr);
-  for (auto& inode : inodes) UpsertInodeCache(inode->Ino(), inode);
-  for (auto& dentry : dentries) AddDentryToPartition(parent, dentry, parent_attr.version());
+  std::string reason = fmt::format("batchmkdir.{}.{}.{}", request_id, parent, join_name);
+  for (auto& attr : attrs) UpsertInodeCache(attr, reason);
+  InodeSPtr last_parent_inode = UpsertInodeCache(parent_attr, reason);
+  for (auto& dentry : dentries) AddDentryToPartition(parent, dentry, last_parent_inode->Version());
 
   if (IsMonoPartition()) {
-    for (auto& inode : inodes) partition_cache_.PutIf(ShardPartition::New(operation_processor_, inode));
+    for (auto& attr : attrs) partition_cache_.PutIf(ShardPartition::New(operation_processor_, attr));
   }
 
   // update quota
-  std::string reason = fmt::format("batchmkdir.{}.{}", parent, join_name);
   quota_manager_.UpdateFsUsage(0, params.size(), reason);
   quota_manager_.AsyncUpdateDirUsage(parent, 0, params.size(), reason);
 
+  // update parent memo
   for (const auto& dentry : dentries) parent_memo_.Remeber(dentry.INo(), dentry.ParentIno());
 
-  entry_out.parent_attr = parent_attr;
+  // set output
+  entry_out.parent_attr = last_parent_inode->ToAttr();
   entry_out.attrs.swap(attrs);
 
-  if (IsParentHashPartition()) NotifyBuddyRefreshInode(std::move(parent_attr));
+  if (operation.GetBatchIndex() == 0 && IsParentHashPartition()) {
+    NotifyBuddyRefreshInode(parent_attr, reason);
+  }
 
   return Status::OK();
 }
@@ -1516,23 +1481,7 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name, Ino&
   }
 
   auto& trace = ctx.GetTrace();
-
-  PartitionPtr partition;
-  auto status = GetPartition(ctx, parent, partition);
-  if (!status.ok()) return status;
-
-  Dentry dentry;
-  status = partition->Get(name, dentry);
-  if (!status.ok()) return status;
-
-  if (IsMonoPartition()) {
-    InodeSPtr inode;
-    GetInode(ctx, dentry.INo(), inode);
-    if (inode != nullptr && inode->Nlink() > kEmptyDirMinLinkNum) {
-      return Status(pb::error::ENOT_EMPTY,
-                    fmt::format("dir({}/{}) is not empty, nlink({}).", parent, name, inode->Nlink()));
-    }
-  }
+  const auto& request_id = ctx.RequestId();
 
   // update parent memo
   UpdateParentMemo(ctx.GetAncestors());
@@ -1540,37 +1489,40 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name, Ino&
   utils::Duration duration;
 
   // update backend store
-  RmDirOperation operation(trace, dentry);
+  RmDirOperation operation(trace, fs_id_, parent, name);
 
-  status = RunOperation(&operation);
+  auto status = RunOperation(&operation);
 
   LOG(INFO) << fmt::format("[fs.{}.{}][{}us] rmdir {}/{} finish, status({}).", fs_id_, ctx.RequestId(),
                            duration.ElapsedUs(), parent, name, status.error_str());
   if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
-  auto& parent_attr = result.attr;  // parent
-
-  ino = dentry.INo();
-  entry_out.parent_attr = parent_attr;
+  auto& parent_attr = result.parent_attr;
+  auto& dentry = result.dentry;
 
   // update cache
-  UpsertInodeCache(parent_attr);
-  DeleteDentryFromPartition(parent, name, parent_attr.version());
+  std::string reason = fmt::format("rmdir.{}.{}.{}", request_id, parent, name);
+  InodeSPtr last_parent_inode = UpsertInodeCache(parent_attr, reason);
+  DeleteDentryFromPartition(parent, name, last_parent_inode->Version());
 
   // update quota
-  std::string reason = fmt::format("rmdir.{}.{}", parent, name);
   quota_manager_.UpdateFsUsage(0, -1, reason);
   quota_manager_.AsyncUpdateDirUsage(parent, 0, -1, reason);
-  quota_manager_.AsyncDeleteDirQuota(dentry.INo());
+  quota_manager_.AsyncDeleteDirQuota(dentry.ino());
 
-  parent_memo_.Forget(dentry.INo());
+  // update parent memo
+  parent_memo_.Forget(dentry.ino());
+
+  // set output
+  ino = dentry.ino();
+  entry_out.parent_attr = last_parent_inode->ToAttr();
 
   if (IsParentHashPartition()) {
-    NotifyBuddyRefreshInode(std::move(parent_attr));
-    NotifyBuddyCleanPartitionCache(dentry.INo());
+    NotifyBuddyRefreshInode(parent_attr, reason);
+    NotifyBuddyCleanPartitionCache(dentry.ino(), reason);
   } else {
-    partition_cache_.Delete(dentry.INo());
+    partition_cache_.Delete(dentry.ino());
   }
 
   return Status::OK();
@@ -1599,7 +1551,7 @@ Status FileSystem::ReadDir(Context& ctx, Ino ino, const std::string& last_name, 
     if (with_attr) {
       // need inode attr
       InodeSPtr inode;
-      status = GetInode(ctx, 0, dentry, partition, inode);
+      status = GetInode(ctx, 0, dentry.INo(), inode);
       if (!status.ok()) {
         LOG(ERROR) << fmt::format("[fs.{}.{}.{}] get inode fail, dentry({}/{}) status({}).", fs_id_, ino,
                                   ctx.RequestId(), dentry.Name(), dentry.INo(), status.error_str());
@@ -1607,7 +1559,7 @@ Status FileSystem::ReadDir(Context& ctx, Ino ino, const std::string& last_name, 
         return status;
       }
 
-      entry_out.attr = inode->Copy();
+      entry_out.attr = inode->ToAttr();
     }
 
     entry_outs.push_back(std::move(entry_out));
@@ -1625,13 +1577,14 @@ Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent, const std::string
   }
 
   auto& trace = ctx.GetTrace();
+  const auto& request_id = ctx.RequestId();
 
-  // get inode
-  InodeSPtr inode;
-  auto status = GetInode(ctx, ino, inode);
-  if (!status.ok()) {
-    return status;
-  }
+  const uint32_t fs_id = FsId();
+
+  // get parent inode
+  InodeSPtr parent_inode;
+  auto status = GetInode(ctx, new_parent, parent_inode);
+  if (!status.ok()) return status;
 
   // update parent memo
   UpdateParentMemo(ctx.GetAncestors());
@@ -1641,10 +1594,8 @@ Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent, const std::string
     return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
   }
 
-  uint32_t fs_id = inode->FsId();
-
   // build dentry
-  Dentry dentry(fs_id, new_name, new_parent, ino, pb::mds::FileType::FILE, 0, inode);
+  Dentry dentry(fs_id, new_name, new_parent, ino, pb::mds::FileType::FILE, 0);
 
   // update backend store
   utils::Duration duration;
@@ -1652,29 +1603,31 @@ Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent, const std::string
   HardLinkOperation operation(trace, dentry);
   status = RunOperation(&operation);
 
-  LOG(INFO) << fmt::format("[fs.{}.{}][{}us] link {} -> {}/{} finish, status({}).", fs_id_, ctx.RequestId(),
+  LOG(INFO) << fmt::format("[fs.{}.{}][{}us] link {} -> {}/{} finish, status({}).", fs_id, ctx.RequestId(),
                            duration.ElapsedUs(), ino, new_parent, new_name, status.error_str());
 
   if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
-  auto& parent_attr = result.attr;
+  auto& parent_attr_or_mutation = result.parent_attr_or_mutation;
   auto& attr = result.child_attr;
 
   // update quota
-  std::string reason = fmt::format("link.{}.{}.{}", ino, new_parent, new_name);
+  std::string reason = fmt::format("link.{}.{}.{}.{}", request_id, ino, new_parent, new_name);
   quota_manager_.AsyncUpdateDirUsage(new_parent, attr.length(), 1, reason);
 
   // update cache
-  UpsertInodeCache(attr);
-  UpsertInodeCache(parent_attr);
-  AddDentryToPartition(parent_attr.ino(), dentry, parent_attr.version());
+  UpsertInodeCache(attr, reason);
+  AttrEntry last_parent_attr = UpdateParentInodeCache(parent_inode, parent_attr_or_mutation, reason);
+  AddDentryToPartition(new_parent, dentry, last_parent_attr.version());
 
-  entry_out.parent_attr = parent_attr;
+  // set output
+  entry_out.parent_attr = last_parent_attr;
   entry_out.attr.Swap(&attr);
 
-  if (IsParentHashPartition()) {
-    NotifyBuddyRefreshInode(std::move(parent_attr));
+  if (operation.GetBatchIndex() == 0 && IsParentHashPartition()) {
+    std::vector<Ino> parents = Helper::PbRepeatedToVector(last_parent_attr.parents());
+    NotifyBuddyRefreshInode(parents, parent_attr_or_mutation, reason);
   }
 
   return Status::OK();
@@ -1689,6 +1642,7 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name, Ent
   }
 
   auto& trace = ctx.GetTrace();
+  const auto& request_id = ctx.RequestId();
 
   PartitionPtr partition;
   auto status = GetPartition(ctx, parent, partition);
@@ -1702,6 +1656,11 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name, Ent
     return Status(pb::error::ENOT_FILE, "directory not allow unlink");
   }
 
+  // get parent inode
+  InodeSPtr parent_inode;
+  status = GetInode(ctx, parent, parent_inode);
+  if (!status.ok()) return status;
+
   // update parent memo
   UpdateParentMemo(ctx.GetAncestors());
 
@@ -1713,15 +1672,16 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name, Ent
   status = RunOperation(&operation);
 
   auto& result = operation.GetResult();
-  auto& parent_attr = result.attr;
+  auto& parent_attr_or_mutation = result.parent_attr_or_mutation;
   auto& attr = result.child_attr;
+
   LOG(INFO) << fmt::format("[fs.{}.{}][{}us] unlink {}/{} finish, nlink({}) status({}).", fs_id_, ctx.RequestId(),
                            duration.ElapsedUs(), parent, name, attr.nlink(), status.error_str());
 
   if (!status.ok()) return status;
 
   // update quota
-  std::string reason = fmt::format("unlink.{}.{}", parent, name);
+  std::string reason = fmt::format("unlink.{}.{}.{}", request_id, parent, name);
   int64_t delta_bytes = attr.type() != pb::mds::SYM_LINK ? attr.length() : 0;
   if (attr.nlink() == 0) {
     quota_manager_.UpdateFsUsage(-delta_bytes, -1, reason);
@@ -1730,15 +1690,17 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name, Ent
   quota_manager_.AsyncUpdateDirUsage(parent, -delta_bytes, -1, reason);
 
   // update cache
-  DeleteDentryFromPartition(parent, name, parent_attr.version());
-  UpsertInodeCache(parent_attr);
-  UpsertInodeCache(attr);
+  UpsertInodeCache(attr, reason);
+  AttrEntry last_parent_attr = UpdateParentInodeCache(parent_inode, parent_attr_or_mutation, reason);
+  DeleteDentryFromPartition(parent, name, last_parent_attr.version());
 
-  entry_out.parent_attr = parent_attr;
+  // set output
+  entry_out.parent_attr = last_parent_attr;
   entry_out.attr.Swap(&attr);
 
-  if (IsParentHashPartition()) {
-    NotifyBuddyRefreshInode(std::move(parent_attr));
+  if (operation.GetBatchIndex() == 0 && IsParentHashPartition()) {
+    std::vector<Ino> parents = Helper::PbRepeatedToVector(last_parent_attr.parents());
+    NotifyBuddyRefreshInode(parents, parent_attr_or_mutation, reason);
   }
 
   return Status::OK();
@@ -1750,6 +1712,7 @@ Status FileSystem::BatchUnLink(Context& ctx, Ino parent, const std::vector<std::
   }
 
   auto& trace = ctx.GetTrace();
+  const auto& request_id = ctx.RequestId();
 
   std::string join_name;
   join_name.reserve(names.size() * 128);
@@ -1775,6 +1738,11 @@ Status FileSystem::BatchUnLink(Context& ctx, Ino parent, const std::vector<std::
   }
   join_name.resize(join_name.size() - 1);
 
+  // get parent inode
+  InodeSPtr parent_inode;
+  status = GetInode(ctx, parent, parent_inode);
+  if (!status.ok()) return status;
+
   // update parent memo
   UpdateParentMemo(ctx.GetAncestors());
 
@@ -1786,7 +1754,7 @@ Status FileSystem::BatchUnLink(Context& ctx, Ino parent, const std::vector<std::
   status = RunOperation(&operation);
 
   auto& result = operation.GetResult();
-  auto& parent_attr = result.attr;
+  auto& parent_attr_or_mutation = result.parent_attr_or_mutation;
   auto& child_attrs = result.child_attrs;
 
   LOG(INFO) << fmt::format("[fs.{}.{}][{}us] unlink {}/{} finish, status({}).", fs_id_, ctx.RequestId(),
@@ -1795,7 +1763,7 @@ Status FileSystem::BatchUnLink(Context& ctx, Ino parent, const std::vector<std::
   if (!status.ok()) return status;
 
   // update quota
-  std::string reason = fmt::format("batchunlink.{}.{}", parent, join_name);
+  std::string reason = fmt::format("batchunlink.{}.{}.{}", request_id, parent, join_name);
   for (const auto& attr : child_attrs) {
     int64_t delta_bytes = attr.type() != pb::mds::SYM_LINK ? attr.length() : 0;
     if (attr.nlink() == 0) {
@@ -1806,15 +1774,17 @@ Status FileSystem::BatchUnLink(Context& ctx, Ino parent, const std::vector<std::
   }
 
   // update cache
-  UpsertInodeCache(parent_attr);
-  DeleteDentryFromPartition(parent, names, parent_attr.version());
-  for (const auto& attr : child_attrs) UpsertInodeCache(attr);
+  for (const auto& attr : child_attrs) UpsertInodeCache(attr, reason);
+  AttrEntry last_parent_attr = UpdateParentInodeCache(parent_inode, parent_attr_or_mutation, reason);
+  DeleteDentryFromPartition(parent, names, last_parent_attr.version());
 
-  entry_out.parent_attr = parent_attr;
+  // set output
+  entry_out.parent_attr = last_parent_attr;
   entry_out.attrs.swap(child_attrs);
 
-  if (IsParentHashPartition()) {
-    NotifyBuddyRefreshInode(std::move(parent_attr));
+  if (operation.GetBatchIndex() == 0 && IsParentHashPartition()) {
+    std::vector<Ino> parents = Helper::PbRepeatedToVector(last_parent_attr.parents());
+    NotifyBuddyRefreshInode(parents, parent_attr_or_mutation, reason);
   }
 
   return Status::OK();
@@ -1838,12 +1808,18 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_par
   }
 
   auto& trace = ctx.GetTrace();
+  const auto& request_id = ctx.RequestId();
 
   // generate inode id
   Ino ino = 0;
   auto status = GenFileIno(ino);
   if (!status.ok()) return status;
   trace.RecordElapsedTime("gen_ino");
+
+  // get parent inode
+  InodeSPtr parent_inode;
+  status = GetInode(ctx, new_parent, parent_inode);
+  if (!status.ok()) return status;
 
   // update parent memo
   UpdateParentMemo(ctx.GetAncestors());
@@ -1871,11 +1847,10 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_par
   attr.set_type(pb::mds::FileType::SYM_LINK);
   attr.set_rdev(1);
   attr.add_parents(new_parent);
-
-  auto inode = Inode::New(attr);
+  attr.set_version(1);
 
   // build dentry
-  Dentry dentry(fs_id_, new_name, new_parent, ino, pb::mds::FileType::SYM_LINK, 0, inode);
+  Dentry dentry(fs_id_, new_name, new_parent, ino, pb::mds::FileType::SYM_LINK, 0);
 
   // update backend store
   SmyLinkOperation operation(trace, dentry, attr);
@@ -1888,23 +1863,26 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_par
   if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
-  auto& parent_attr = result.attr;
+  auto& parent_attr_or_mutation = result.parent_attr_or_mutation;
 
   // update cache
-  UpsertInodeCache(ino, inode);
-  UpsertInodeCache(parent_attr);
-  AddDentryToPartition(parent_attr.ino(), dentry, parent_attr.version());
+  std::string reason = fmt::format("symlink.{}.{}.{}", request_id, new_parent, new_name);
+  UpsertInodeCache(attr, reason);
+  AttrEntry last_parent_attr = UpdateParentInodeCache(parent_inode, parent_attr_or_mutation, reason);
+  AddDentryToPartition(new_parent, dentry, last_parent_attr.version());
 
   // update quota
-  std::string reason = fmt::format("symlink.{}.{}", new_parent, new_name);
+
   quota_manager_.UpdateFsUsage(0, 1, reason);
   quota_manager_.AsyncUpdateDirUsage(new_parent, 0, 1, reason);
 
-  entry_out.parent_attr = parent_attr;
+  // set output
+  entry_out.parent_attr = last_parent_attr;
   entry_out.attr.Swap(&attr);
 
-  if (IsParentHashPartition()) {
-    NotifyBuddyRefreshInode(std::move(parent_attr));
+  if (operation.GetBatchIndex() == 0 && IsParentHashPartition()) {
+    std::vector<Ino> parents = Helper::PbRepeatedToVector(last_parent_attr.parents());
+    NotifyBuddyRefreshInode(parents, parent_attr_or_mutation, reason);
   }
 
   return Status::OK();
@@ -1917,9 +1895,7 @@ Status FileSystem::ReadLink(Context& ctx, Ino ino, std::string& link) {
 
   InodeSPtr inode;
   auto status = GetInode(ctx, ino, inode);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
   if (inode->Type() != pb::mds::FileType::SYM_LINK) {
     return Status(pb::error::EILLEGAL_PARAMTETER, "not symlink inode");
@@ -1937,11 +1913,9 @@ Status FileSystem::GetAttr(Context& ctx, Ino ino, EntryOut& entry_out) {
 
   InodeSPtr inode;
   auto status = GetInode(ctx, ino, inode);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
-  entry_out.attr = inode->Copy();
+  entry_out.attr = inode->ToAttr();
 
   return Status::OK();
 }
@@ -1952,14 +1926,13 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
   }
 
   auto& trace = ctx.GetTrace();
+  const auto& request_id = ctx.RequestId();
 
   utils::Duration duration;
 
   InodeSPtr inode;
   auto status = GetInode(ctx, ino, inode);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
   UpdateAttrOperation::ExtraParam extra_param;
   extra_param.block_size = fs_info_->GetBlockSize();
@@ -1992,12 +1965,9 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
   auto& attr = result.attr;
   int64_t delta_bytes = result.delta_bytes;
 
-  entry_out.attr = attr;
-  entry_out.shrink_file = (delta_bytes < 0) ? true : false;
-
   // update quota
+  std::string reason = fmt::format("setattr.{}.{}", request_id, ino);
   if (param.to_set & kSetAttrSize) {
-    std::string reason = fmt::format("setattr.{}", ino);
     quota_manager_.UpdateFsUsage(delta_bytes, 0, reason);
 
     for (const auto& parent : attr.parents()) {
@@ -2009,9 +1979,16 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
   if (delta_bytes < 0) chunk_cache_.Delete(ino);
 
   // update cache
-  UpsertInodeCache(attr);
-  if (IsDir(ino) && IsParentHashPartition()) {
-    NotifyBuddyRefreshInode(std::move(attr));
+  auto last_inode = UpsertInodeCache(attr, reason);
+
+  // set output
+  entry_out.attr = (IsDir(ino) && HasDirAttrMutation()) ? last_inode->ToAttr() : attr;
+  entry_out.shrink_file = (delta_bytes < 0) ? true : false;
+
+  if (IsDir(ino)) RefreshPartitionDeltaVersion(ino, entry_out.attr.version());
+
+  if (operation.GetBatchIndex() == 0 && IsDir(ino) && IsParentHashPartition()) {
+    NotifyBuddyRefreshInode(attr, reason);
   }
 
   return Status::OK();
@@ -2026,9 +2003,7 @@ Status FileSystem::GetXAttr(Context& ctx, Ino ino, Inode::XAttrMap& xattr) {
 
   InodeSPtr inode;
   auto status = GetInode(ctx, ino, inode);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
   xattr = inode->XAttrs();
 
@@ -2042,9 +2017,7 @@ Status FileSystem::GetXAttr(Context& ctx, Ino ino, const std::string& name, std:
 
   InodeSPtr inode;
   auto status = GetInode(ctx, ino, inode);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
   value = inode->XAttr(name);
 
@@ -2057,12 +2030,11 @@ Status FileSystem::SetXAttr(Context& ctx, Ino ino, const Inode::XAttrMap& xattrs
   }
 
   auto& trace = ctx.GetTrace();
+  const auto& request_id = ctx.RequestId();
 
   InodeSPtr inode;
   auto status = GetInode(ctx, ino, inode);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
   utils::Duration duration;
 
@@ -2079,12 +2051,17 @@ Status FileSystem::SetXAttr(Context& ctx, Ino ino, const Inode::XAttrMap& xattrs
   auto& result = operation.GetResult();
   auto& attr = result.attr;
 
-  entry_out.attr = attr;
-
   // update cache
-  UpsertInodeCache(attr);
-  if (IsDir(ino) && IsParentHashPartition()) {
-    NotifyBuddyRefreshInode(std::move(attr));
+  std::string reason = fmt::format("setxattr.{}.{}", request_id, ino);
+  auto last_inode = UpsertInodeCache(attr, reason);
+
+  // set output
+  entry_out.attr = (IsDir(ino) && HasDirAttrMutation()) ? last_inode->ToAttr() : attr;
+
+  if (IsDir(ino)) RefreshPartitionDeltaVersion(ino, entry_out.attr.version());
+
+  if (operation.GetBatchIndex() == 0 && IsDir(ino) && IsParentHashPartition()) {
+    NotifyBuddyRefreshInode(attr, reason);
   }
 
   return Status::OK();
@@ -2096,12 +2073,11 @@ Status FileSystem::RemoveXAttr(Context& ctx, Ino ino, const std::string& name, E
   }
 
   auto& trace = ctx.GetTrace();
+  const auto& request_id = ctx.RequestId();
 
   InodeSPtr inode;
   auto status = GetInode(ctx, ino, inode);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
   utils::Duration duration;
 
@@ -2118,12 +2094,17 @@ Status FileSystem::RemoveXAttr(Context& ctx, Ino ino, const std::string& name, E
   auto& result = operation.GetResult();
   auto& attr = result.attr;
 
-  entry_out.attr = attr;
-
   // update cache
-  UpsertInodeCache(attr);
-  if (IsDir(ino) && IsParentHashPartition()) {
-    NotifyBuddyRefreshInode(std::move(attr));
+  std::string reason = fmt::format("removexattr.{}.{}", request_id, ino);
+  auto last_inode = UpsertInodeCache(attr, reason);
+
+  // set output
+  entry_out.attr = (IsDir(ino) && HasDirAttrMutation()) ? last_inode->ToAttr() : attr;
+
+  if (IsDir(ino)) RefreshPartitionDeltaVersion(ino, entry_out.attr.version());
+
+  if (operation.GetBatchIndex() == 0 && IsDir(ino) && IsParentHashPartition()) {
+    NotifyBuddyRefreshInode(attr, reason);
   }
 
   return Status::OK();
@@ -2141,34 +2122,46 @@ void FileSystem::UpdateParentMemo(const std::vector<Ino>& ancestors) {
   }
 }
 
-void FileSystem::NotifyBuddyRefreshFsInfo(std::vector<uint64_t> mds_ids, const FsInfoEntry& fs_info) {
+void FileSystem::NotifyBuddyRefreshFsInfo(std::vector<uint64_t> mds_ids, const FsInfoEntry& fs_info,
+                                          const std::string& reason) {
   for (auto mds_id : mds_ids) {
     if (mds_id == 0 || mds_id == self_mds_id_) continue;
 
-    notify_buddy_->AsyncNotify(notify::RefreshFsInfoMessage::Create(mds_id, fs_info.fs_id(), fs_info.fs_name()));
+    notify_buddy_->AsyncNotify(
+        notify::RefreshFsInfoMessage::Create(mds_id, fs_info.fs_id(), fs_info.fs_name(), reason));
   }
 }
 
-void FileSystem::NotifyBuddyRefreshInode(AttrEntry&& attr) {
+void FileSystem::NotifyBuddyRefreshInode(const AttrEntry& attr, const std::string& reason) {
+  NotifyBuddyRefreshInode(Helper::PbRepeatedToVector(attr.parents()), {.attr = attr}, reason);
+}
+
+void FileSystem::NotifyBuddyRefreshInode(const std::vector<Ino>& parents, const AttrOrMutation& attr_or_mutation,
+                                         const std::string& reason) {
   if (notify_buddy_ == nullptr) return;
 
-  Ino parent = kRootParentIno;
-  if (attr.ino() != kRootIno) {
-    CHECK(attr.parents_size() == 1) << fmt::format("parent size should be 1, but is {} ino({}).", attr.parents_size(),
-                                                   attr.ino());
-    parent = attr.parents().at(0);
-  }
-  auto mds_id = GetMdsIdByIno(parent);
-  CHECK(mds_id != 0) << fmt::format("mds id should not be 0, ino({}).", parent);
-  if (mds_id == self_mds_id_) {
-    RefreshInode(attr);
+  Ino ino = attr_or_mutation.attr.ino() != 0 ? attr_or_mutation.attr.ino() : attr_or_mutation.mutation.ino();
+  if (ino == kRootIno) return;
 
-  } else {
-    notify_buddy_->AsyncNotify(notify::RefreshInodeMessage::Create(mds_id, fs_id_, std::move(attr)));
+  CHECK(parents.size() >= 1) << fmt::format("parent size should be 1, but is {} ino({}).", parents.size(), ino);
+
+  absl::flat_hash_set<uint64_t> notified_mds_ids;
+  for (const Ino& parent : parents) {
+    uint64_t mds_id = GetMdsIdByIno(parent);
+
+    CHECK(mds_id != 0) << fmt::format("mds id should not be 0, ino({}).", parent);
+    if (notified_mds_ids.contains(mds_id)) continue;
+
+    if (mds_id != self_mds_id_) {
+      notify_buddy_->AsyncNotify(notify::RefreshInodeMessage::Create(
+          mds_id, fs_id_, attr_or_mutation.attr, attr_or_mutation.mutation, reason + ".notifybuddy"));
+    }
+
+    notified_mds_ids.insert(mds_id);
   }
 }
 
-void FileSystem::NotifyBuddyCleanPartitionCache(Ino ino) {
+void FileSystem::NotifyBuddyCleanPartitionCache(Ino ino, const std::string& reason) {
   if (notify_buddy_ == nullptr) return;
 
   auto mds_id = GetMdsIdByIno(ino);
@@ -2177,7 +2170,7 @@ void FileSystem::NotifyBuddyCleanPartitionCache(Ino ino) {
     partition_cache_.Delete(ino);
 
   } else {
-    notify_buddy_->AsyncNotify(notify::CleanPartitionCacheMessage::Create(mds_id, fs_id_, ino, 0));
+    notify_buddy_->AsyncNotify(notify::CleanPartitionCacheMessage::Create(mds_id, fs_id_, ino, 0, reason));
   }
 }
 
@@ -2189,6 +2182,7 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
   const std::string& new_name = param.new_name;
 
   auto& trace = ctx.GetTrace();
+  const auto& request_id = ctx.RequestId();
 
   utils::Duration duration;
 
@@ -2227,8 +2221,10 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
   status = RunOperation(&operation);
 
   auto& result = operation.GetResult();
-  auto& old_parent_attr = result.old_parent_attr;
-  auto& new_parent_attr = result.new_parent_attr;
+  auto& old_parent_attr_with_mutation = result.old_parent_attr_with_mutation;
+  auto& old_parent_attr = old_parent_attr_with_mutation.attr;
+  auto& new_parent_attr_with_mutation = result.new_parent_attr_with_mutation;
+  auto& new_parent_attr = new_parent_attr_with_mutation.attr;
   auto& old_dentry = result.old_dentry;
   auto& new_dentry = result.new_dentry;
   auto& prev_new_dentry = result.prev_new_dentry;
@@ -2246,14 +2242,15 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
 
   if (!status.ok()) return status;
 
-  old_parent_version = old_parent_attr.version();
-  new_parent_version = is_same_parent ? old_parent_version : new_parent_attr.version();
+  old_parent_version = old_parent_attr_with_mutation.Version();
+  new_parent_version = is_same_parent ? old_parent_version : new_parent_attr_with_mutation.Version();
 
   effected_inos.push_back(old_parent);
   if (!is_same_parent) effected_inos.push_back(new_parent);
   effected_inos.push_back(old_attr.ino());
   if (is_exist_new_dentry) effected_inos.push_back(prev_new_attr.ino());
 
+  std::string reason = fmt::format("rename.{}.{}.{}->{}.{}", request_id, old_parent, old_name, new_parent, new_name);
   if (IsMonoPartition()) {
     // update cache
     PartitionPtr old_parent_partition;
@@ -2262,25 +2259,24 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
       // delete old dentry
       old_parent_partition->Delete(old_name, old_parent_attr.version());
       // update old parent attr
-      UpsertInodeCache(old_parent_attr);
+      UpsertInodeCache(old_parent_attr_with_mutation, reason);
     }
 
-    UpsertInodeCache(old_attr);
+    UpsertInodeCache(old_attr, reason);
 
     // check new parent dentry/inode
     PartitionPtr new_parent_partition;
     status = GetPartition(ctx, new_parent, new_parent_partition);
     if (status.ok()) {
       // update new parent attr
-      UpsertInodeCache(new_parent_attr);
+      auto new_parent_node = UpsertInodeCache(new_parent_attr_with_mutation, reason);
 
       // delete prev new dentry
-      if (is_exist_new_dentry) new_parent_partition->Delete(new_name, new_parent_attr.version());
+      if (is_exist_new_dentry) new_parent_partition->Delete(new_name, new_parent_node->Version());
 
       // add new dentry
-      Dentry new_dentry(fs_id_, new_name, new_parent, old_dentry.ino(), old_dentry.type(), 0,
-                        GetInodeFromCache(old_dentry.ino()));
-      new_parent_partition->Put(new_dentry, new_parent_attr.version());
+      Dentry new_dentry(fs_id_, new_name, new_parent, old_dentry.ino(), old_dentry.type(), 0);
+      new_parent_partition->Put(new_dentry, new_parent_node->Version());
     }
 
     // delete exist new partition
@@ -2292,7 +2288,7 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
           DeleteInodeFromCache(prev_new_attr.ino());
 
         } else {
-          UpsertInodeCache(prev_new_attr);
+          UpsertInodeCache(prev_new_attr, reason);
         }
       }
     }
@@ -2302,37 +2298,34 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
     // NotifyBuddyCleanPartitionCache(old_parent, old_parent_attr.version());
     // if (!is_same_parent) NotifyBuddyCleanPartitionCache(new_parent, new_parent_attr.version());
 
-    // refresh parent inode and dentry cache
-    if (is_same_parent) {
-      UpsertInodeCache(old_parent_attr);
-      if (is_exist_new_dentry) {
-        DeleteDentryFromPartition(old_parent, prev_new_dentry.name(), old_parent_attr.version());
-      }
-      AddDentryToPartition(old_parent, new_dentry, old_parent_attr.version());
-      DeleteDentryFromPartition(old_parent, old_dentry.name(), old_parent_attr.version());
+    // refresh new parent inode and dentry cache
+    auto new_parent_inode = UpsertInodeCache(new_parent_attr_with_mutation, reason);
+    if (is_exist_new_dentry) {
+      DeleteDentryFromPartition(new_parent, prev_new_dentry.name(), new_parent_inode->Version());
     }
+    AddDentryToPartition(new_parent, new_dentry, new_parent_inode->Version());
+    DeleteDentryFromPartition(new_parent, old_dentry.name(), new_parent_inode->Version());
 
     // refresh parent of parent inode cache
-    NotifyBuddyRefreshInode(std::move(old_parent_attr));
-    if (!is_same_parent) NotifyBuddyRefreshInode(std::move(new_parent_attr));
+    NotifyBuddyRefreshInode(old_parent_attr, reason);
+    if (!is_same_parent) NotifyBuddyRefreshInode(new_parent_attr, reason);
 
     // delete exist new partition
     if (is_exist_new_dentry) {
       if (prev_new_dentry.type() == pb::mds::FileType::DIRECTORY) {
-        NotifyBuddyCleanPartitionCache(prev_new_dentry.ino());
+        NotifyBuddyCleanPartitionCache(prev_new_dentry.ino(), reason);
       } else {
         if (prev_new_attr.nlink() <= 0) {
           DeleteInodeFromCache(prev_new_attr.ino());
 
         } else {
-          UpsertInodeCache(prev_new_attr);
+          UpsertInodeCache(prev_new_attr, reason);
         }
       }
     }
   }
 
   // update fs quota
-  std::string reason = fmt::format("rename.{}.{}.to.{}.{}", old_parent, old_name, new_parent, new_name);
   if (is_exist_new_dentry) {
     int64_t fs_delta_bytes = 0;
     if (prev_new_attr.type() == pb::mds::FileType::FILE && prev_new_attr.nlink() == 0) {
@@ -2496,6 +2489,7 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
   }
 
   auto& trace = ctx.GetTrace();
+  const auto& request_id = ctx.RequestId();
 
   InodeSPtr inode;
   auto status = GetInode(ctx, ino, inode);
@@ -2543,7 +2537,8 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
   auto& attr = result.attr;
   auto& effected_chunks = result.effected_chunks;
 
-  UpsertInodeCache(attr);
+  std::string reason = fmt::format("fallocate.{}.{}", request_id, ino);
+  UpsertInodeCache(attr, reason);
 
   entry_out.attr = std::move(attr);
 
@@ -2634,11 +2629,9 @@ Status FileSystem::GetInode(Context& ctx, Ino ino, EntryOut& entry_out) {
 
   InodeSPtr inode;
   auto status = GetInode(ctx, ino, inode);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
-  entry_out.attr = inode->Copy();
+  entry_out.attr = inode->ToAttr();
 
   return Status::OK();
 }
@@ -2656,20 +2649,18 @@ Status FileSystem::BatchGetInode(Context& ctx, const std::vector<uint64_t>& inoe
       }
 
       EntryOut entry_out;
-      entry_out.attr = inode->Copy();
+      entry_out.attr = inode->ToAttr();
       out_entries.push_back(entry_out);
     }
 
   } else {
     std::vector<InodeSPtr> inodes;
-    auto status = BatchGetInodeFromStore(inoes, inodes);
-    if (!status.ok()) {
-      return status;
-    }
+    auto status = BatchGetInodeFromStore(ctx, inoes, "BatchGetInode", false, inodes);
+    if (!status.ok()) return status;
 
     for (auto& inode : inodes) {
       EntryOut entry_out;
-      entry_out.attr = inode->Copy();
+      entry_out.attr = inode->ToAttr();
       out_entries.push_back(entry_out);
     }
   }
@@ -2703,10 +2694,8 @@ Status FileSystem::BatchGetXAttr(Context& ctx, const std::vector<uint64_t>& inoe
 
   } else {
     std::vector<InodeSPtr> inodes;
-    auto status = BatchGetInodeFromStore(inoes, inodes);
-    if (!status.ok()) {
-      return status;
-    }
+    auto status = BatchGetInodeFromStore(ctx, inoes, "BatchGetXAttr", false, inodes);
+    if (!status.ok()) return status;
 
     for (auto& inode : inodes) {
       add_xattr_func(inode);
@@ -2716,7 +2705,18 @@ Status FileSystem::BatchGetXAttr(Context& ctx, const std::vector<uint64_t>& inoe
   return Status::OK();
 }
 
-void FileSystem::RefreshInode(AttrEntry& attr) { UpsertInodeCache(attr); }
+void FileSystem::RefreshInode(const AttrEntry& attr, const AttrMutationEntry& mutation, const std::string& reason) {
+  if (attr.ino() == 0) {
+    CHECK(mutation.ino() != 0) << fmt::format("mutation ino should not be 0 when attr ino is 0, mutation ino({}).",
+                                              mutation.ino());
+    auto inode = GetInodeFromCache(mutation.ino());
+    if (inode != nullptr) inode->PutByMutation(mutation, reason);
+
+  } else {
+    auto inode = GetInodeFromCache(attr.ino());
+    if (inode != nullptr) inode->PutIf(attr, reason);
+  }
+}
 
 Status FileSystem::RefreshFsInfo(const std::string& reason) { return RefreshFsInfo(fs_info_->GetName(), reason); }
 
@@ -2822,7 +2822,7 @@ Status FileSystem::JoinMonoFs(Context& ctx, uint64_t mds_id, const std::string& 
 
   RefreshFsInfo(result.fs_info, "join_mono");
 
-  NotifyBuddyRefreshFsInfo({old_mds_id}, result.fs_info);
+  NotifyBuddyRefreshFsInfo({old_mds_id}, result.fs_info, "join_mono");
 
   return Status::OK();
 }
@@ -2915,7 +2915,7 @@ Status FileSystem::JoinHashFs(Context& ctx, const std::vector<uint64_t>& mds_ids
 
   RefreshFsInfo(result.fs_info, "join_hash");
 
-  NotifyBuddyRefreshFsInfo(old_mds_ids, result.fs_info);
+  NotifyBuddyRefreshFsInfo(old_mds_ids, result.fs_info, "join_hash");
 
   return Status::OK();
 }
@@ -3007,7 +3007,7 @@ Status FileSystem::QuitFs(Context& ctx, const std::vector<uint64_t>& mds_ids, co
 
   RefreshFsInfo(result.fs_info, "quit_fs");
 
-  NotifyBuddyRefreshFsInfo(old_mds_ids, result.fs_info);
+  NotifyBuddyRefreshFsInfo(old_mds_ids, result.fs_info, "quit_fs");
 
   return Status::OK();
 }
@@ -3082,7 +3082,7 @@ Status FileSystem::QuitAndJoinFs(Context& ctx, const std::vector<uint64_t>& quit
 
   RefreshFsInfo(result.fs_info, "quit_and_join_fs");
 
-  NotifyBuddyRefreshFsInfo(old_mds_ids, result.fs_info);
+  NotifyBuddyRefreshFsInfo(old_mds_ids, result.fs_info, "quit_and_join_fs");
 
   return Status::OK();
 }
@@ -3213,7 +3213,7 @@ Status FileSystem::DescribePartitionShard(Ino ino, Json::Value& value) {
     auto status = GetInodeFromStore(ctx, ino, "DescribePartitionShard", false, inode);
     if (!status.ok()) return status;
 
-    partition = ShardPartition::New(operation_processor_, inode);
+    partition = ShardPartition::New(operation_processor_, inode->ToAttr());
   }
 
   partition->Dump(value);
@@ -3940,7 +3940,7 @@ Status FileSystemSet::RunOperation(Operation* operation) {
 
   CHECK(count_down.wait() == 0) << "count down wait fail.";
 
-  return operation->GetResult().status;
+  return operation->GetStatus();
 }
 
 void FileSystemSet::DescribeByJson(Json::Value& value) {

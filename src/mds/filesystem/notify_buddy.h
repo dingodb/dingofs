@@ -42,58 +42,64 @@ enum class Type : int8_t {
 };
 
 struct Message {
-  Message(Type type, uint64_t mds_id, uint32_t fs_id) : type(type), mds_id(mds_id), fs_id(fs_id) {}
-  Message(Type type, uint64_t mds_id, uint32_t fs_id, uint64_t version)
-      : type(type), mds_id(mds_id), fs_id(fs_id), version(version) {}
+  Message(Type type, uint64_t mds_id, uint32_t fs_id, const std::string& reason)
+      : type(type), mds_id(mds_id), fs_id(fs_id), reason(reason) {}
+  Message(Type type, uint64_t mds_id, uint32_t fs_id, uint64_t version, const std::string& reason)
+      : type(type), mds_id(mds_id), fs_id(fs_id), version(version), reason(reason) {}
   virtual ~Message() = default;
 
   Type type;
   uint64_t mds_id{0};
   uint32_t fs_id{0};
   uint64_t version{0};
+  std::string reason;
 };
 
 using MessageSPtr = std::shared_ptr<Message>;
 
 struct RefreshFsInfoMessage : public Message {
-  RefreshFsInfoMessage(uint64_t mds_id, uint32_t fs_id, const std::string& fs_name)
-      : Message{Type::kRefreshFsInfo, mds_id, fs_id}, fs_name(fs_name) {}
+  RefreshFsInfoMessage(uint64_t mds_id, uint32_t fs_id, const std::string& fs_name, const std::string& reason)
+      : Message{Type::kRefreshFsInfo, mds_id, fs_id, reason}, fs_name(fs_name) {}
 
-  static MessageSPtr Create(uint64_t mds_id, uint32_t fs_id, const std::string& fs_name) {
-    return std::make_shared<RefreshFsInfoMessage>(mds_id, fs_id, fs_name);
+  static MessageSPtr Create(uint64_t mds_id, uint32_t fs_id, const std::string& fs_name, const std::string& reason) {
+    return std::make_shared<RefreshFsInfoMessage>(mds_id, fs_id, fs_name, reason);
   }
 
   std::string fs_name;
 };
 
 struct RefreshInodeMessage : public Message {
-  RefreshInodeMessage(uint64_t mds_id, uint32_t fs_id, AttrEntry&& attr)
-      : Message{Type::kRefreshInode, mds_id, fs_id}, attr(std::move(attr)) {}
+  RefreshInodeMessage(uint64_t mds_id, uint32_t fs_id, const AttrEntry& attr, const AttrMutationEntry& mutation,
+                      const std::string& reason)
+      : Message{Type::kRefreshInode, mds_id, fs_id, reason}, attr(attr), mutation(mutation) {}
 
-  static MessageSPtr Create(uint64_t mds_id, uint32_t fs_id, AttrEntry&& attr) {
-    return std::make_shared<RefreshInodeMessage>(mds_id, fs_id, std::move(attr));
+  static MessageSPtr Create(uint64_t mds_id, uint32_t fs_id, const AttrEntry& attr, const AttrMutationEntry& mutation,
+                            const std::string& reason) {
+    return std::make_shared<RefreshInodeMessage>(mds_id, fs_id, attr, mutation, reason);
   }
 
   AttrEntry attr;
+  AttrMutationEntry mutation;
 };
 
 struct CleanPartitionCacheMessage : public Message {
-  CleanPartitionCacheMessage(uint64_t mds_id, uint32_t fs_id, Ino ino, uint64_t version)
-      : Message{Type::kCleanPartitionCache, mds_id, fs_id, version}, ino(ino) {}
+  CleanPartitionCacheMessage(uint64_t mds_id, uint32_t fs_id, Ino ino, uint64_t version, const std::string& reason)
+      : Message{Type::kCleanPartitionCache, mds_id, fs_id, version, reason}, ino(ino) {}
 
-  static MessageSPtr Create(uint64_t mds_id, uint32_t fs_id, Ino ino, uint64_t version) {
-    return std::make_shared<CleanPartitionCacheMessage>(mds_id, fs_id, ino, version);
+  static MessageSPtr Create(uint64_t mds_id, uint32_t fs_id, Ino ino, uint64_t version, const std::string& reason) {
+    return std::make_shared<CleanPartitionCacheMessage>(mds_id, fs_id, ino, version, reason);
   }
 
   Ino ino{0};
 };
 
 struct SetDirQuotaMessage : public Message {
-  SetDirQuotaMessage(uint64_t mds_id, uint32_t fs_id, Ino ino, const QuotaEntry& quota)
-      : Message{Type::kSetDirQuota, mds_id, fs_id}, ino(ino), quota(quota) {}
+  SetDirQuotaMessage(uint64_t mds_id, uint32_t fs_id, Ino ino, const QuotaEntry& quota, const std::string& reason)
+      : Message{Type::kSetDirQuota, mds_id, fs_id, reason}, ino(ino), quota(quota) {}
 
-  static MessageSPtr Create(uint64_t mds_id, uint32_t fs_id, Ino ino, const QuotaEntry& quota) {
-    return std::make_shared<SetDirQuotaMessage>(mds_id, fs_id, ino, quota);
+  static MessageSPtr Create(uint64_t mds_id, uint32_t fs_id, Ino ino, const QuotaEntry& quota,
+                            const std::string& reason) {
+    return std::make_shared<SetDirQuotaMessage>(mds_id, fs_id, ino, quota, reason);
   }
 
   Ino ino{0};
@@ -101,11 +107,12 @@ struct SetDirQuotaMessage : public Message {
 };
 
 struct DeleteDirQuotaMessage : public Message {
-  DeleteDirQuotaMessage(uint64_t mds_id, uint32_t fs_id, Ino ino, const std::string& uuid)
-      : Message{Type::kDeleteDirQuota, mds_id, fs_id}, ino(ino), uuid(uuid) {}
+  DeleteDirQuotaMessage(uint64_t mds_id, uint32_t fs_id, Ino ino, const std::string& uuid, const std::string& reason)
+      : Message{Type::kDeleteDirQuota, mds_id, fs_id, reason}, ino(ino), uuid(uuid) {}
 
-  static MessageSPtr Create(uint64_t mds_id, uint32_t fs_id, Ino ino, const std::string& uuid) {
-    return std::make_shared<DeleteDirQuotaMessage>(mds_id, fs_id, ino, uuid);
+  static MessageSPtr Create(uint64_t mds_id, uint32_t fs_id, Ino ino, const std::string& uuid,
+                            const std::string& reason) {
+    return std::make_shared<DeleteDirQuotaMessage>(mds_id, fs_id, ino, uuid, reason);
   }
 
   Ino ino{0};

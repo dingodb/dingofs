@@ -421,7 +421,6 @@ TEST_F(FileSystemTest, MkNod) {
   ASSERT_TRUE(status.ok()) << "get child fail, error: " << status.error_str();
   ASSERT_EQ(param.name, dentry.Name()) << "dentry name not equal.";
   ASSERT_EQ(param.parent, dentry.ParentIno()) << "dentry parent ino not equal.";
-  ASSERT_TRUE(dentry.Inode() != nullptr) << "inode is nullptr.";
 
   InodeSPtr inode = inode_cache.Get(entry_out.attr.ino());
   ASSERT_TRUE(inode != nullptr) << "get inode fail.";

@@ -96,8 +96,6 @@ class MockOperationProcessor : public OperationProcessor {
   bool RunBatched(Operation* operation) {
     // For UpdateShardBoundariesOperation, just simulate success
     if (operation->GetOpType() == Operation::OpType::kUpdateShardBoundaries) {
-      auto& result = operation->GetResult();
-      result.status = Status::OK();
       operation->NotifyEvent();
       return true;
     }
@@ -445,12 +443,9 @@ TEST_F(PartitionCacheTest, PutIfAndGet) {
 
   auto mock_processor = std::make_shared<MockOperationProcessor>();
 
-  // Create inode for partition
-  auto inode =
-      Inode::New(GenInode(kFsId, kParentIno, pb::mds::FileType::DIRECTORY));
-
   // Create partition
-  PartitionPtr partition = ShardPartition::New(mock_processor, inode);
+  PartitionPtr partition = ShardPartition::New(mock_processor,
+      GenInode(kFsId, kParentIno, pb::mds::FileType::DIRECTORY));
 
   // Put into cache
   auto result = cache.PutIf(partition);
@@ -471,19 +466,16 @@ TEST_F(PartitionCacheTest, PutIfExisting) {
   auto mock_processor = std::make_shared<MockOperationProcessor>();
 
   // Create first partition
-  auto inode1 =
-      Inode::New(GenInode(kFsId, kParentIno, pb::mds::FileType::DIRECTORY, 1));
-  PartitionPtr partition1 = ShardPartition::New(mock_processor, inode1);
+  PartitionPtr partition1 = ShardPartition::New(mock_processor,
+      GenInode(kFsId, kParentIno, pb::mds::FileType::DIRECTORY, 1));
 
   // Put first
   auto result1 = cache.PutIf(partition1);
   ASSERT_EQ(result1->BaseVersion(), 1);
 
   // Create second partition with higher version
-  auto inode2 =
-      Inode::New(GenInode(kFsId, kParentIno, pb::mds::FileType::DIRECTORY, 2));
-
-  PartitionPtr partition2 = ShardPartition::New(mock_processor, inode2);
+  PartitionPtr partition2 = ShardPartition::New(mock_processor,
+      GenInode(kFsId, kParentIno, pb::mds::FileType::DIRECTORY, 2));
   // Note: PutIf will call Refresh on the existing partition when putting a
   // partition with same ino
 
@@ -500,9 +492,8 @@ TEST_F(PartitionCacheTest, Delete) {
   auto mock_processor = std::make_shared<MockOperationProcessor>();
 
   // Create and put partition
-  auto inode =
-      Inode::New(GenInode(kFsId, kParentIno, pb::mds::FileType::DIRECTORY));
-  PartitionPtr partition = ShardPartition::New(mock_processor, inode);
+  PartitionPtr partition = ShardPartition::New(mock_processor,
+      GenInode(kFsId, kParentIno, pb::mds::FileType::DIRECTORY));
   cache.PutIf(partition);
 
   ASSERT_NE(cache.Get(kParentIno), nullptr);
@@ -521,9 +512,8 @@ TEST_F(PartitionCacheTest, DeleteIf) {
 
   // Create multiple partitions
   for (int i = 0; i < 10; ++i) {
-    auto inode =
-        Inode::New(GenInode(kFsId, 100 + i, pb::mds::FileType::DIRECTORY));
-    PartitionPtr partition = ShardPartition::New(mock_processor, inode);
+    PartitionPtr partition = ShardPartition::New(mock_processor,
+        GenInode(kFsId, 100 + i, pb::mds::FileType::DIRECTORY));
     cache.PutIf(partition);
   }
 
@@ -546,9 +536,8 @@ TEST_F(PartitionCacheTest, Clear) {
 
   // Create multiple partitions
   for (int i = 0; i < 5; ++i) {
-    auto inode =
-        Inode::New(GenInode(kFsId, 100 + i, pb::mds::FileType::DIRECTORY));
-    PartitionPtr partition = ShardPartition::New(mock_processor, inode);
+    PartitionPtr partition = ShardPartition::New(mock_processor,
+        GenInode(kFsId, 100 + i, pb::mds::FileType::DIRECTORY));
     cache.PutIf(partition);
   }
 
@@ -568,9 +557,8 @@ TEST_F(PartitionCacheTest, GetAll) {
 
   // Create multiple partitions
   for (int i = 0; i < 5; ++i) {
-    auto inode =
-        Inode::New(GenInode(kFsId, 100 + i, pb::mds::FileType::DIRECTORY));
-    PartitionPtr partition = ShardPartition::New(mock_processor, inode);
+    PartitionPtr partition = ShardPartition::New(mock_processor,
+        GenInode(kFsId, 100 + i, pb::mds::FileType::DIRECTORY));
     cache.PutIf(partition);
   }
 
@@ -593,9 +581,8 @@ TEST_F(PartitionCacheTest, MultiplePutIf) {
 
   // Add multiple different partitions
   for (int i = 0; i < 100; ++i) {
-    auto inode =
-        Inode::New(GenInode(kFsId, 1000 + i, pb::mds::FileType::DIRECTORY));
-    PartitionPtr partition = ShardPartition::New(mock_processor, inode);
+    PartitionPtr partition = ShardPartition::New(mock_processor,
+        GenInode(kFsId, 1000 + i, pb::mds::FileType::DIRECTORY));
     cache.PutIf(partition);
   }
 
@@ -615,9 +602,8 @@ TEST_F(PartitionCacheTest, BytesAndShardSize) {
   auto mock_processor = std::make_shared<MockOperationProcessor>();
 
   // Create partition with some data
-  auto inode =
-      Inode::New(GenInode(kFsId, kParentIno, pb::mds::FileType::DIRECTORY));
-  PartitionPtr partition = ShardPartition::New(mock_processor, inode);
+  PartitionPtr partition = ShardPartition::New(mock_processor,
+      GenInode(kFsId, kParentIno, pb::mds::FileType::DIRECTORY));
 
   // Note: PutWithInode requires shard to exist first
   // Without fetched shards, ShardSize and Bytes will be 0
@@ -632,15 +618,13 @@ class ShardPartitionBasicTest : public testing::Test {
  protected:
   void SetUp() override {
     mock_processor_ = std::make_shared<MockOperationProcessor>();
-    inode_ = Inode::New(
+    partition_ = ShardPartition::New(mock_processor_,
         GenInode(kFsId, kParentIno, pb::mds::FileType::DIRECTORY, 1));
-    partition_ = ShardPartition::New(mock_processor_, inode_);
   }
 
   void TearDown() override {}
 
   std::shared_ptr<MockOperationProcessor> mock_processor_;
-  InodeSPtr inode_;
   PartitionPtr partition_;
 };
 
@@ -649,20 +633,6 @@ TEST_F(ShardPartitionBasicTest, BasicProperties) {
   ASSERT_EQ(partition_->INo(), kParentIno);
   ASSERT_EQ(partition_->BaseVersion(), 1);
   ASSERT_EQ(partition_->DeltaVersion(), 1);
-}
-
-TEST_F(ShardPartitionBasicTest, ParentInode) {
-  auto parent = partition_->ParentInode();
-  ASSERT_NE(parent, nullptr);
-  ASSERT_EQ(parent->Ino(), kParentIno);
-
-  // Set new parent inode
-  auto new_inode =
-      Inode::New(GenInode(kFsId, kParentIno, pb::mds::FileType::DIRECTORY));
-  partition_->SetParentInode(new_inode);
-
-  auto got = partition_->ParentInode();
-  ASSERT_EQ(got->Ino(), kParentIno);
 }
 
 TEST_F(ShardPartitionBasicTest, PutWithVersion) {
@@ -746,7 +716,8 @@ TEST_F(ShardPartitionBasicTest, Refresh) {
   ASSERT_EQ(new_inode->Version(), 2);
 
   // Create new partition with higher version inode
-  auto partition2 = ShardPartition::New(mock_processor_, new_inode);
+  auto partition2 = ShardPartition::New(mock_processor_,
+      GenInode(kFsId, kParentIno, pb::mds::FileType::DIRECTORY, 2));
 
   // PutIf should trigger refresh on existing partition (since ino already
   // exists)
@@ -766,7 +737,8 @@ TEST_F(ShardPartitionBasicTest, PartitionCacheIntegration) {
 
   // Create new partition with higher version - PutIf will trigger refresh on
   // existing
-  auto partition2 = ShardPartition::New(mock_processor_, new_inode);
+  auto partition2 = ShardPartition::New(mock_processor_,
+      GenInode(kFsId, kParentIno, pb::mds::FileType::DIRECTORY, 2));
   auto result = cache.PutIf(partition2);
   ASSERT_EQ(result->INo(), kParentIno);
 
@@ -812,15 +784,12 @@ class ShardPartitionWithBoundariesTest : public testing::Test {
     pb::mds::Inode inode_proto =
         GenInode(kFsId, kParentIno, pb::mds::FileType::DIRECTORY, 1);
     inode_proto.add_shard_boundaries("m");
-    inode_ = Inode::New(inode_proto);
-
-    partition_ = ShardPartition::New(mock_processor_, inode_);
+    partition_ = ShardPartition::New(mock_processor_, inode_proto);
   }
 
   void TearDown() override {}
 
   std::shared_ptr<MockOperationProcessor> mock_processor_;
-  InodeSPtr inode_;
   PartitionPtr partition_;
 };
 
