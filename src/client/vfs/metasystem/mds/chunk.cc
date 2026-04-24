@@ -699,10 +699,11 @@ void ChunkCache::CleanExpired(uint64_t expire_s) {
     for (auto it = map.begin(); it != map.end();) {
       if (it->second->GetLastActiveTimeS() < expire_s) {
         auto temp = it++;
+        uint64_t ino = temp->first;
         map.erase(temp);
         clean_count_ << 1;
         LOG_DEBUG << fmt::format(
-            "[meta.chunkcache] clean expired chunkset ino({}).", temp->first);
+            "[meta.chunkcache] clean expired chunkset ino({}).", ino);
 
       } else {
         ++it;

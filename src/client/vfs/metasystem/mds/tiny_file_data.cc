@@ -95,11 +95,11 @@ void TinyFileDataCache::CleanExpired(uint64_t expire_s) {
     for (auto it = map.begin(); it != map.end();) {
       if (it->second->LastActiveTimeS() < expire_s) {
         auto temp = it++;
+        uint64_t ino = temp->first;
         map.erase(temp);
         clean_count_ << 1;
         LOG_DEBUG << fmt::format(
-            "[meta.tinyfiledatacache.{}] clean expired tiny file data.",
-            temp->first);
+            "[meta.tinyfiledatacache.{}] clean expired tiny file data.", ino);
 
       } else {
         ++it;
