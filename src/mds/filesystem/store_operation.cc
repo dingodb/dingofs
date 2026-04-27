@@ -13,7 +13,6 @@
 
 #include "mds/filesystem/store_operation.h"
 
-#include <absl/container/flat_hash_map.h>
 #include <fcntl.h>
 
 #include <algorithm>
@@ -27,6 +26,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "brpc/reloadable_flags.h"
 #include "bthread/bthread.h"
 #include "bthread/types.h"
@@ -747,7 +747,7 @@ Status MkNodOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) 
   txn->Put(MetaCodec::EncodeInodeKey(fs_id, dentry_.INo()), MetaCodec::EncodeInodeValue(attr_));
 
   // update parent attr
-  if (parent_attr.ino() == 0) {
+  if (shared_param.UseMutation()) {
     // indirectly update parent attr update op, can reduce conflict with other operations on same parent
     AttrMutationEntry& parent_attr_mutation = shared_param.attr_mutation;
 
@@ -786,7 +786,7 @@ Status BatchMkNodOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_pa
   }
 
   // update parent attr
-  if (parent_attr.ino() == 0) {
+  if (shared_param.UseMutation()) {
     // indirectly update parent attr update op, can reduce conflict with other operations on same parent
 
     AttrMutationEntry& parent_attr_mutation = shared_param.attr_mutation;
@@ -833,7 +833,7 @@ Status BatchCreateFileOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shar
   }
 
   // update parent attr
-  if (parent_attr.ino() == 0) {
+  if (shared_param.UseMutation()) {
     // indirectly update parent attr update op, can reduce conflict with other operations on same parent
 
     AttrMutationEntry& parent_attr_mutation = shared_param.attr_mutation;
@@ -882,7 +882,7 @@ Status HardLinkOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_para
   txn->Put(MetaCodec::EncodeDentryKey(fs_id, parent, dentry_.Name()), MetaCodec::EncodeDentryValue(dentry_.Copy()));
 
   // update parent attr
-  if (parent_attr.ino() == 0) {
+  if (shared_param.UseMutation()) {
     // indirectly update parent attr update op, can reduce conflict with other operations on same parent
 
     AttrMutationEntry& parent_attr_mutation = shared_param.attr_mutation;
@@ -915,7 +915,7 @@ Status SymLinkOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param
   txn->Put(MetaCodec::EncodeInodeKey(fs_id, dentry_.INo()), MetaCodec::EncodeInodeValue(attr_));
 
   // update parent attr
-  if (parent_attr.ino() == 0) {
+  if (shared_param.UseMutation()) {
     // indirectly update parent attr update op, can reduce conflict with other operations on same parent
 
     AttrMutationEntry& parent_attr_mutation = shared_param.attr_mutation;
@@ -1658,7 +1658,7 @@ Status UnlinkOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param)
   txn->Delete(dentry_key);
 
   // update parent attr
-  if (parent_attr.ino() == 0) {
+  if (shared_param.UseMutation()) {
     // indirectly update parent attr update op, can reduce conflict with other operations on same parent
 
     AttrMutationEntry& parent_attr_mutation = shared_param.attr_mutation;
@@ -1737,7 +1737,7 @@ Status BatchUnlinkOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_p
   }
 
   // update parent attr
-  if (parent_attr.ino() == 0) {
+  if (shared_param.UseMutation()) {
     // indirectly update parent attr update op, can reduce conflict with other operations on same parent
 
     AttrMutationEntry& parent_attr_mutation = shared_param.attr_mutation;
@@ -2939,23 +2939,30 @@ void OperationProcessor::ProcessOperation() {
       lk.unlock();
     }
 
-    if (operation) stage_operations.push_back(operation);
+    if (operation) {
+      stage_operations.push_back(operation);
+      operation = nullptr;
+    }
 
     if (is_stop_.load(std::memory_order_relaxed) && stage_operations.empty()) {
       break;
     }
 
+    bool waited = false;
     uint32_t try_count = 0;
     do {
-      if (operations_.Dequeue(operation)) {
+      if (operation) {
         stage_operations.push_back(operation);
+        operation = nullptr;
+
+        if (!waited && FLAGS_mds_store_operation_merge_delay_us > 0) {
+          waited = true;
+          std::this_thread::sleep_for(std::chrono::microseconds(FLAGS_mds_store_operation_merge_delay_us));
+        }
       }
 
-      if (try_count == 0 && FLAGS_mds_store_operation_merge_delay_us > 0) {
-        std::this_thread::sleep_for(std::chrono::microseconds(FLAGS_mds_store_operation_merge_delay_us));
-      }
-
-    } while (++try_count < kTryMaxCount);
+    } while (stage_operations.size() < FLAGS_mds_store_operation_batch_size &&
+             (operations_.Dequeue(operation) || ++try_count < kTryMaxCount));
 
     // grouping operations
     Grouping(stage_operations, batch_operation_map);

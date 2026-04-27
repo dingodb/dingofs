@@ -15,7 +15,6 @@
 #ifndef DINGOFS_MDS_FILESYSTEM_INODE_H_
 #define DINGOFS_MDS_FILESYSTEM_INODE_H_
 
-#include <absl/container/inlined_vector.h>
 #include <sys/types.h>
 
 #include <atomic>
@@ -23,10 +22,10 @@
 #include <cstdint>
 #include <memory>
 #include <string>
-#include <valarray>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/container/inlined_vector.h"
 #include "common/const.h"
 #include "json/value.h"
 #include "mds/common/type.h"
@@ -46,7 +45,6 @@ class Inode {
   using AttrEntry = mds::AttrEntry;
   using XAttrMap = ::google::protobuf::Map<std::string, std::string>;
   using ChunkMap = ::google::protobuf::Map<uint64_t, ChunkEntry>;
-  using DeltaVersionVec = absl::InlinedVector<uint64_t, kDirAttrMutationNum>;
 
   Inode(const AttrEntry& attr)
       : fs_id_(attr.fs_id()),
@@ -260,7 +258,7 @@ class Inode {
   uint64_t base_version_{0};
 
   // delta versions
-  DeltaVersionVec delta_versions_;
+  absl::InlinedVector<uint64_t, kDirAttrMutationNum> delta_versions_;
   // sum of delta versions, used for quick check if there is mutation
   uint64_t total_delta_version_{0};
 
