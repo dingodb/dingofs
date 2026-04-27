@@ -283,6 +283,8 @@ class Operation {
     // (re)populates prefetch_kvs (including transaction retries).
     absl::flat_hash_map<std::string_view, std::string_view> prefetch_index;
 
+    bool UseMutation() const { return attr.ino() == 0; }
+
     void RebuildIndex() {
       prefetch_index.clear();
       prefetch_index.reserve(prefetch_kvs.size());

@@ -152,7 +152,7 @@ void Quota::Refresh(const QuotaEntry& quota, uint64_t timepoint, const std::stri
     compact_usage = CompactDeltaUsage(timepoint);
     if (compact_usage.bytes() != 0 || compact_usage.inodes() != 0) is_change = true;
 
-    if (quota.uuid() == quota.uuid()) {
+    if (quota_.uuid() == quota.uuid()) {
       if (quota_.version() < quota.version()) {
         quota_ = quota;
         is_change = true;
