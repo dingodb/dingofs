@@ -225,6 +225,21 @@ DECLARE_string(mds_addrs);
 // Keepalive connection number per peer
 DECLARE_int32(connections);
 
+// ----- RDMA transport (shared by cache client and cache server) -----
+// Enable Infiniband/RDMA transport for cache RPCs. Server and client must
+// agree on this value for the RDMA path to be used.
+DECLARE_bool(use_rdma);
+// IB device and HCA port (1-based) used by the cache RDMA path.
+DECLARE_string(cache_rdma_device);
+DECLARE_uint32(cache_rdma_port_num);
+// Server: number of 4MiB buffers in each global slab pool (send + recv). Bounds
+// in-flight disk + RDMA concurrency on the server.
+DECLARE_uint32(cache_rdma_server_pool_size);
+// Client: number and per-buffer size of the registered RDMA buffer pool used to
+// advertise Put/Cache sources and Range destinations.
+DECLARE_uint32(cache_rdma_client_pool_size);
+DECLARE_uint32(cache_rdma_client_pool_buffer_size);
+
 // [onfly]
 DECLARE_int64(mds_rpc_timeout_ms);
 DECLARE_int32(mds_rpc_retry_times);

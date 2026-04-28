@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -172,6 +173,8 @@ PYBIND11_MODULE(_dingofs_native, m) {
       py::arg("name"));
 
   using PyMemoryRegion = std::pair<std::uintptr_t, std::size_t>;
+  using PyRegisteredMemoryRegion =
+      std::tuple<std::uintptr_t, std::size_t, std::uint32_t, std::uint32_t>;
 
   py::class_<NativeEngine>(m, "RemoteCache")
       .def(py::init([](std::string mds_addrs, std::string cache_group,
@@ -200,10 +203,10 @@ Args:
                 (one ``--flag=value`` per line, ``#`` comments allowed).
                 Same format dingo-mds / dingo-client / cache-bench accept.
     rdma_pools: optional list of (addr, length) tuples covering CPU memory
-                regions that should later be registered with the RDMA NIC
-                (ibv_reg_mr). Typically the LMCache LocalCPUBackend's pinned
-                arena. Stored for future RDMA bring-up; no registration
-                happens at construction time.
+                regions to register with the RDMA NIC (ibv_reg_mr). Typically
+                the LMCache LocalCPUBackend's pinned arena. If non-empty,
+                construction initializes the custom cache RDMA path, registers
+                every region, exposes lkey/rkey, and raises on setup failure.
 
 Only one instance per process (gflags are process-global).
 )doc")
@@ -219,6 +222,19 @@ Only one instance per process (gflags are process-global).
           },
           "Return the CPU memory regions stashed for RDMA registration as a "
           "list of (addr, length) tuples. Read-only.")
+      .def(
+          "registered_rdma_regions",
+          [](const NativeEngine& self) {
+            std::vector<PyRegisteredMemoryRegion> out;
+            out.reserve(self.registered_rdma_regions().size());
+            for (const auto& r : self.registered_rdma_regions()) {
+              out.emplace_back(r.addr, r.length, r.lkey, r.rkey);
+            }
+            return out;
+          },
+          "Return registered RDMA MRs as (addr, length, lkey, rkey) tuples.")
+      .def("rdma_device_name", &NativeEngine::rdma_device_name,
+           "Return the verbs device used for RDMA pool registration, or ''.")
       .def("event_fd", &NativeEngine::event_fd,
            "Native eventfd; signaled when at least one completion is ready.")
       .def(

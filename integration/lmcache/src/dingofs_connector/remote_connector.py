@@ -60,6 +60,11 @@ class DingoFSConnector(RemoteConnector):
     #   3) default below
     _DEFAULT_MAX_CHUNK_MIB = 4
     _ENV_MAX_CHUNK_MIB = "DINGOFS_MAX_CHUNK_MIB"
+    _DEFAULT_BATCH_MAX_KEYS = 512
+    _ENV_BATCH_MAX_KEYS = "DINGOFS_CONNECTOR_BATCH_MAX_KEYS"
+    _DEFAULT_GET_PARALLELISM = 1
+    _ENV_GET_PARALLELISM = "DINGOFS_CONNECTOR_GET_PARALLELISM"
+    _ENV_ASSUME_EXISTS = "DINGOFS_CONNECTOR_ASSUME_EXISTS"
 
     def __init__(
         self,
@@ -78,6 +83,9 @@ class DingoFSConnector(RemoteConnector):
             self._check_chunk_size_within_cap(
                 local_cpu_backend.config, max_chunk_bytes
             )
+            self._batch_max_keys = self._resolve_batch_max_keys()
+            self._get_parallelism = self._resolve_get_parallelism()
+            self._assume_exists = self._resolve_bool_env(self._ENV_ASSUME_EXISTS)
 
             rdma_pools = self._collect_rdma_pools(local_cpu_backend)
 
@@ -95,7 +103,8 @@ class DingoFSConnector(RemoteConnector):
             logger.info(
                 "DingoFSConnector ready: mds=%s cache_group=%s "
                 "max_chunk_bytes=%d (%.0f MiB) conf=%s "
-                "rdma_pools=%d region(s) (%.1f MiB)",
+                "rdma_pools=%d region(s) (%.1f MiB) "
+                "batch_max_keys=%d get_parallelism=%d assume_exists=%s",
                 endpoint.mds_addrs,
                 endpoint.cache_group,
                 max_chunk_bytes,
@@ -103,6 +112,9 @@ class DingoFSConnector(RemoteConnector):
                 gflag_conf_path or "-",
                 len(rdma_pools),
                 total_pool_mib,
+                self._batch_max_keys,
+                self._get_parallelism,
+                self._assume_exists,
             )
             r.result = f"mds={endpoint.mds_addrs} cache_group={endpoint.cache_group}"
 
@@ -166,6 +178,39 @@ class DingoFSConnector(RemoteConnector):
         if yaml_override_mib is not None:
             return yaml_override_mib * 1024 * 1024
         return cls._DEFAULT_MAX_CHUNK_MIB * 1024 * 1024
+
+    @classmethod
+    def _resolve_batch_max_keys(cls) -> int:
+        return cls._resolve_positive_int_env(
+            cls._ENV_BATCH_MAX_KEYS, cls._DEFAULT_BATCH_MAX_KEYS
+        )
+
+    @classmethod
+    def _resolve_get_parallelism(cls) -> int:
+        return cls._resolve_positive_int_env(
+            cls._ENV_GET_PARALLELISM, cls._DEFAULT_GET_PARALLELISM
+        )
+
+    @classmethod
+    def _resolve_positive_int_env(cls, env_name: str, default: int) -> int:
+        raw = os.environ.get(env_name)
+        if not raw:
+            return default
+        try:
+            n = int(raw)
+        except ValueError as e:
+            raise ValueError(
+                f"{env_name} must be an integer, got {raw!r}"
+            ) from e
+        if n <= 0:
+            raise ValueError(f"{env_name} must be positive, got {n}")
+        return n
+
+    @staticmethod
+    def _resolve_bool_env(env_name: str) -> bool:
+        return os.environ.get(env_name, "0").lower() in (
+            "1", "true", "yes", "on"
+        )
 
     def _check_chunk_size_within_cap(self, config, max_chunk_bytes: int) -> None:
         chunk_bytes = self.full_chunk_size_bytes
@@ -239,23 +284,46 @@ class DingoFSConnector(RemoteConnector):
             if not keys:
                 r.result = "empty"
                 return 0
+            if self._assume_exists:
+                r.result = f"prefix={n} (assume_exists)"
+                return n
             key_strs = [cache_engine_key_to_native_str(k) for k in keys]
             # Find the first key not in the LRU; everything before it is a hit.
-            for i, ks in enumerate(key_strs):
-                if not self._exists_lru.has(ks):
-                    remaining = key_strs[i:]
-                    per_key = await self._client.batch_exists(remaining)
-                    if not per_key:
-                        r.result = f"prefix={i} (lru) +0 (no resp)"
-                        return i
-                    for j, found in enumerate(per_key):
-                        if not found:
-                            r.result = f"prefix={i + j} (lru={i}, remote={j})"
-                            return i + j
-                        self._exists_lru.add(remaining[j])
-                    r.result = f"prefix={n} (all hit; lru={i})"
-                    return n
-            r.result = f"prefix={n} (all lru hit)"
+            i = self._exists_lru.prefix_len(key_strs)
+            if i == n:
+                r.result = f"prefix={n} (all lru hit)"
+                return n
+
+            remaining = key_strs[i:]
+            for start, end in self._batch_slices(len(remaining)):
+                chunk = remaining[start:end]
+                per_key = await self._client.batch_exists(chunk)
+                if not per_key:
+                    r.result = (
+                        f"prefix={i + start} (lru={i}, "
+                        f"remote={start} +0 no resp)"
+                    )
+                    return i + start
+                hit_keys: List[str] = []
+                for j, found in enumerate(per_key):
+                    if not found:
+                        if hit_keys:
+                            self._exists_lru.add_many(hit_keys)
+                        r.result = (
+                            f"prefix={i + start + j} "
+                            f"(lru={i}, remote={start + j})"
+                        )
+                        return i + start + j
+                    hit_keys.append(chunk[j])
+                if hit_keys:
+                    self._exists_lru.add_many(hit_keys)
+                if len(per_key) < len(chunk):
+                    r.result = (
+                        f"prefix={i + start + len(per_key)} "
+                        f"(short_resp)"
+                    )
+                    return i + start + len(per_key)
+            r.result = f"prefix={n} (all hit; lru={i})"
             return n
 
     # ------------------------------------------------------------------
@@ -329,10 +397,29 @@ class DingoFSConnector(RemoteConnector):
                 raise ValueError("keys and memory_objs length mismatch")
             key_strs = [cache_engine_key_to_native_str(k) for k in keys]
             views = [obj.byte_array for obj in memory_objs]
-            ok, _ = await self._client.batch_set(key_strs, views)
-            if ok:
-                self._exists_lru.add_many(key_strs)
-            r.result = "ok" if ok else "partial_fail"
+            ok_all = True
+            stored_keys: List[str] = []
+            chunks = 0
+            for start, end in self._batch_slices(n):
+                chunks += 1
+                ok, per_key = await self._client.batch_set(
+                    key_strs[start:end], views[start:end]
+                )
+                if ok and per_key is None:
+                    stored_keys.extend(key_strs[start:end])
+                    continue
+                per_key_list = list(per_key or [])
+                for i, found in enumerate(per_key_list):
+                    if found:
+                        stored_keys.append(key_strs[start + i])
+                if not ok or len(per_key_list) < (end - start) or not all(per_key_list):
+                    ok_all = False
+            if stored_keys:
+                self._exists_lru.add_many(stored_keys)
+            r.result = (
+                f"ok chunks={chunks}" if ok_all
+                else f"partial_fail stored={len(stored_keys)}/{n} chunks={chunks}"
+            )
 
     def support_batched_get(self) -> bool:
         return True
@@ -361,21 +448,24 @@ class DingoFSConnector(RemoteConnector):
                 objs.append(obj)
 
             views = [o.byte_array for o in objs]
+            out: List[Optional[MemoryObj]] = [None] * n
+            hit_keys: List[str] = []
             try:
-                _ok, per_key = await self._client.batch_get(key_strs, views)
+                for start, _end, per_key_list in await self._batch_get_chunks(
+                    key_strs, views
+                ):
+                    for local_i, found in enumerate(per_key_list):
+                        i = start + local_i
+                        if found:
+                            out[i] = objs[i]
+                            hit_keys.append(key_strs[i])
             except Exception:
                 for o in objs:
                     o.ref_count_down()
                 raise
 
-            per_key_list = list(per_key or [])
-            out: List[Optional[MemoryObj]] = [None] * n
-            hit_keys: List[str] = []
             for i, obj in enumerate(objs):
-                if i < len(per_key_list) and per_key_list[i]:
-                    out[i] = obj
-                    hit_keys.append(key_strs[i])
-                else:
+                if out[i] is None:
                     obj.ref_count_down()
             if hit_keys:
                 self._exists_lru.add_many(hit_keys)
@@ -438,10 +528,6 @@ class DingoFSConnector(RemoteConnector):
     # ------------------------------------------------------------------
     # batched_get_non_blocking / remove_sync / batched_contains
     # ------------------------------------------------------------------
-    #
-    # These three exist on RemoteConnector but we didn't customise them.
-    # Wrap-and-delegate so the access log shows whether (and how) LMCache
-    # actually calls them in practice — research target, not perf path.
 
     def support_batched_get_non_blocking(self) -> bool:
         # Base default is True; we keep it.
@@ -452,16 +538,85 @@ class DingoFSConnector(RemoteConnector):
         lookup_id: str,
         keys: List[CacheEngineKey],
     ) -> List[MemoryObj]:
-        # Base impl in base_connector.py does asyncio.gather(self.get for k in
-        # keys) and trims to the longest consecutive prefix. Each per-key get
-        # still emits its own access_log entry; this outer line just confirms
-        # the entry point itself was hit and what prefix LMCache got.
         n = len(keys)
         with access_log("batched_get_non_blocking",
                         lambda: f"{n} keys lookup_id={lookup_id}") as r:
-            result = await super().batched_get_non_blocking(lookup_id, keys)
-            r.result = f"prefix={len(result)}/{n}"
-            return result
+            if not keys:
+                r.result = "empty"
+                return []
+
+            # The RemoteConnector base implementation gathers per-key get()
+            # calls. Keep LMCache's prefix contract, but issue one native batch
+            # read per bounded slice so hot lookups avoid per-key Python calls
+            # without exhausting the RDMA request/destination pools.
+            key_strs = [cache_engine_key_to_native_str(k) for k in keys]
+            out: List[MemoryObj] = []
+            ranges = list(self._batch_slices(n))
+            chunks = len(ranges)
+            for group_start in range(0, len(ranges), self._get_parallelism):
+                group = ranges[group_start:group_start + self._get_parallelism]
+                group_objs: List[List[MemoryObj]] = []
+                group_views: List[List[memoryview]] = []
+                for start, end in group:
+                    objs: List[MemoryObj] = []
+                    for _ in range(start, end):
+                        obj = self._allocate_chunk()
+                        if obj is None:
+                            for chunk_objs in group_objs:
+                                for o in chunk_objs:
+                                    o.ref_count_down()
+                            for o in objs:
+                                o.ref_count_down()
+                            r.result = (
+                                f"alloc_failed prefix={len(out)}/{n} "
+                                f"chunks={chunks}"
+                            )
+                            return out
+                        objs.append(obj)
+                    group_objs.append(objs)
+                    group_views.append([o.byte_array for o in objs])
+                try:
+                    results = await asyncio.gather(
+                        *(
+                            self._client.batch_get(key_strs[start:end], views)
+                            for (start, end), views in zip(group, group_views)
+                        )
+                    )
+                except Exception:
+                    for chunk_objs in group_objs:
+                        for o in chunk_objs:
+                            o.ref_count_down()
+                    for o in out:
+                        o.ref_count_down()
+                    raise
+
+                for idx, (((start, _end), objs), (_ok, per_key)) in enumerate(
+                    zip(zip(group, group_objs), results)
+                ):
+                    per_key_list = list(per_key or [])
+                    local_prefix = 0
+                    while (local_prefix < len(objs) and
+                           local_prefix < len(per_key_list) and
+                           per_key_list[local_prefix]):
+                        local_prefix += 1
+
+                    if local_prefix:
+                        self._exists_lru.add_many(
+                            key_strs[start:start + local_prefix]
+                        )
+                        out.extend(objs[:local_prefix])
+
+                    if local_prefix < len(objs):
+                        for obj in objs[local_prefix:]:
+                            obj.ref_count_down()
+                        for later_objs in group_objs[idx + 1:]:
+                            for obj in later_objs:
+                                obj.ref_count_down()
+                        r.result = f"prefix={len(out)}/{n} chunks={chunks}"
+                        return out
+
+            r.result = f"prefix={len(out)}/{n} chunks={chunks}"
+            return out
 
     def remove_sync(self, key: CacheEngineKey) -> bool:
         # Base raises NotImplementedError. Log the call so we know whether
@@ -499,3 +654,24 @@ class DingoFSConnector(RemoteConnector):
             self.meta_dtypes[0],
             self.meta_fmt,
         )
+
+    def _batch_slices(self, n: int):
+        step = self._batch_max_keys
+        for start in range(0, n, step):
+            yield start, min(start + step, n)
+
+    async def _batch_get_chunks(self, key_strs, views):
+        ranges = list(self._batch_slices(len(key_strs)))
+        out = []
+        for group_start in range(0, len(ranges), self._get_parallelism):
+            group = ranges[group_start:group_start + self._get_parallelism]
+            results = await asyncio.gather(
+                *(
+                    self._client.batch_get(key_strs[start:end],
+                                           views[start:end])
+                    for start, end in group
+                )
+            )
+            for (start, end), (_ok, per_key) in zip(group, results):
+                out.append((start, end, list(per_key or [])))
+        return out

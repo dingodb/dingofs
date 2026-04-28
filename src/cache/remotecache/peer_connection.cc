@@ -22,50 +22,225 @@
 
 #include "cache/remotecache/peer_connection.h"
 
+#include <brpc/channel.h>
+#include <brpc/controller.h>
+#include <bthread/rwlock.h>
 #include <fmt/format.h>
+#include <gflags/gflags.h>
+#include <glog/logging.h>
+
+#include <atomic>
+#include <cerrno>
+#include <memory>
+#include <string>
+
+#include "cache/infiniband/client.h"
+#include "cache/infiniband/connection.h"
+#include "cache/infiniband/controller.h"
+#include "common/options/cache.h"
+#include "dingofs/blockcache.pb.h"
+#include "dingofs/infiniband.pb.h"
 
 namespace dingofs {
 namespace cache {
 
-Status PeerConnection::Connect(const std::string& ip, uint32_t port,
-                               uint32_t timeout_ms) {
-  bthread::RWLockWrGuard guard(rwlock_);
-  if (channel_ != nullptr) {
+namespace {
+
+constexpr const char* kServiceName = "dingofs.pb.cache.BlockCacheService";
+
+// Distinct connection_group per brpc connection so brpc keeps separate physical
+// links (matches the previous one-channel-per-PeerConnection behavior).
+std::atomic<uint64_t> g_connection_id{0};
+
+void SetFailed(TransportResult* out, int error_code,
+               const std::string& error_text) {
+  out->failed = true;
+  out->error_code = error_code;
+  out->error_text = error_text;
+}
+
+}  // namespace
+
+// Transport over brpc (TCP / IPoIB). Block payloads ride as brpc attachments.
+class TcpTransport : public Transport {
+ public:
+  TcpTransport()
+      : id_(g_connection_id.fetch_add(1, std::memory_order_relaxed)) {}
+
+  Status Connect(const std::string& ip, uint32_t port,
+                 uint32_t timeout_ms) override {
+    bthread::RWLockWrGuard guard(rwlock_);
+    if (channel_ != nullptr) {
+      return Status::OK();
+    }
+
+    butil::EndPoint ep;
+    int rc = butil::str2endpoint(ip.c_str(), port, &ep);
+    if (rc != 0) {
+      LOG(ERROR) << "Fail to str2endpoint(" << ip << ":" << port << ")";
+      return Status::Internal("str2endpoint failed");
+    }
+
+    brpc::ChannelOptions options;
+    options.connect_timeout_ms = timeout_ms;
+    options.connection_group = fmt::format("{}:{}:{}", ip, port, id_);
+    auto channel = std::make_shared<brpc::Channel>();
+    rc = channel->Init(ep, &options);
+    if (rc != 0) {
+      LOG(ERROR) << "Fail to init channel for address=" << ip << ":" << port;
+      return Status::Internal("init channel failed");
+    }
+
+    channel_ = std::move(channel);
+    LOG(INFO) << "Successfully init brpc channel for " << ip << ":" << port
+              << ":" << id_;
     return Status::OK();
   }
 
-  butil::EndPoint ep;
-  int rc = butil::str2endpoint(ip.c_str(), port, &ep);
-  if (rc != 0) {
-    LOG(ERROR) << "Fail to str2endpoint(" << ip << ":" << port << ")";
-    return Status::Internal("str2endpoint failed");
-  }
-
-  brpc::ChannelOptions options;
-  options.connect_timeout_ms = timeout_ms;
-  options.connection_group = fmt::format("{}:{}:{}", ip, port, id_);
-  channel_ = std::make_shared<brpc::Channel>();
-  rc = channel_->Init(ep, &options);
-  if (rc != 0) {
-    LOG(ERROR) << "Fail to init channel for address=" << ip << ":" << port;
+  void Close() override {
+    bthread::RWLockWrGuard guard(rwlock_);
     channel_.reset();
-    return Status::Internal("init channel failed");
   }
 
-  LOG(INFO) << "Successfully init channel for PeerConnection=" << ip << ":"
-            << port << ":" << id_;
-  return Status::OK();
-}
+  bool Connected() override {
+    bthread::RWLockRdGuard guard(rwlock_);
+    return channel_ != nullptr;
+  }
 
-void PeerConnection::Close() {
-  bthread::RWLockWrGuard guard(rwlock_);
-  channel_.reset();
-}
+  void Execute(const std::string& method,
+               const google::protobuf::Message& raw_request,
+               google::protobuf::Message* raw_response, const IOBuffer* req_body,
+               IOBuffer* resp_body, uint32_t timeout_ms,
+               TransportResult* out) override {
+    std::shared_ptr<brpc::Channel> channel;
+    {
+      bthread::RWLockRdGuard guard(rwlock_);
+      channel = channel_;
+    }
+    if (channel == nullptr) {
+      SetFailed(out, EIO, "brpc channel is not connected");
+      return;
+    }
 
-std::shared_ptr<brpc::Channel> PeerConnection::GetChannel() {
-  bthread::RWLockRdGuard guard(rwlock_);
-  return channel_;
-}
+    const auto* descriptor =
+        pb::cache::BlockCacheService::descriptor()->FindMethodByName(method);
+    CHECK(descriptor != nullptr) << "Unknown rpc method=" << method;
+
+    brpc::Controller cntl;
+    cntl.set_connection_type(brpc::CONNECTION_TYPE_SINGLE);
+    cntl.set_timeout_ms(timeout_ms);
+    cntl.ignore_eovercrowded();
+    if (req_body != nullptr) {
+      cntl.request_attachment() = const_cast<IOBuffer*>(req_body)->IOBuf();
+    }
+
+    channel->CallMethod(descriptor, &cntl, &raw_request, raw_response, nullptr);
+    if (cntl.Failed()) {
+      SetFailed(out, cntl.ErrorCode(), cntl.ErrorText());
+      return;
+    }
+
+    if (resp_body != nullptr) {
+      *resp_body = IOBuffer(cntl.response_attachment().movable());
+    }
+    out->failed = false;
+  }
+
+ private:
+  uint64_t id_;
+  bthread::RWLock rwlock_;
+  std::shared_ptr<brpc::Channel> channel_;
+};
+
+// Transport over Infiniband/RDMA. Pure mechanics: the cache layer has already
+// turned the payloads into registered IOBuffers (meta=rkey), so Execute only
+// reads addr/len/rkey and advertises them — a one-sided RDMA read for the
+// Put/Cache source, or a write into the pre-registered Range destination.
+class RdmaTransport : public Transport {
+ public:
+  Status Connect(const std::string& ip, uint32_t port,
+                 uint32_t /*timeout_ms*/) override {
+    infiniband::EndPoint ep{FLAGS_cache_rdma_device,
+                            static_cast<uint8_t>(FLAGS_cache_rdma_port_num)};
+    auto client = infiniband::Client::Create(ep);
+    if (client == nullptr) {
+      return Status::Internal("create rdma client failed");
+    }
+    auto status = client->Connect(ip + ":" + std::to_string(port));
+    if (!status.ok()) {
+      return status;
+    }
+    bthread::RWLockWrGuard guard(rwlock_);
+    client_ = std::move(client);
+    return Status::OK();
+  }
+
+  void Close() override {
+    bthread::RWLockWrGuard guard(rwlock_);
+    client_.reset();
+  }
+
+  bool Connected() override {
+    bthread::RWLockRdGuard guard(rwlock_);
+    return client_ != nullptr;
+  }
+
+  void Execute(const std::string& method,
+               const google::protobuf::Message& raw_request,
+               google::protobuf::Message* raw_response, const IOBuffer* req_body,
+               IOBuffer* resp_body, uint32_t /*timeout_ms*/,
+               TransportResult* out) override {
+    std::shared_ptr<infiniband::Client> client;
+    {
+      bthread::RWLockRdGuard guard(rwlock_);
+      client = client_;
+    }
+    if (client == nullptr) {
+      SetFailed(out, pb::infiniband::ErrorCode::InternalError,
+                "rdma client is not connected");
+      return;
+    }
+
+    infiniband::Controller cntl;
+    if (method == "Range") {
+      // resp_body is the pre-registered destination prepared by the cache
+      // layer; the server RDMA-writes the block straight into it.
+      if (resp_body != nullptr && resp_body->Size() > 0) {
+        cntl.SetRequestRdmaRegion(
+            resp_body->Fetch1(), static_cast<uint32_t>(resp_body->Size()),
+            static_cast<uint32_t>(resp_body->GetFirstDataMeta()));
+      }
+    } else if (method == "Put" || method == "Cache") {
+      // req_body is already a registered block; advertise it for the server's
+      // one-sided RDMA read.
+      if (req_body != nullptr && req_body->Size() > 0) {
+        auto* body = const_cast<IOBuffer*>(req_body);
+        cntl.SetRequestAttachmentRegion(
+            body->Fetch1(), static_cast<uint32_t>(body->Size()),
+            static_cast<uint32_t>(body->GetFirstDataMeta()));
+      }
+    }
+    // Prefetch / Ping carry no attachment.
+
+    client->Call(&cntl, kServiceName, method, raw_request, raw_response);
+    if (cntl.Failed()) {
+      SetFailed(out, cntl.ErrorCode(), cntl.ErrorText());
+      return;
+    }
+    // For Range the block was RDMA-written into resp_body in place; nothing
+    // else to do here.
+    out->failed = false;
+  }
+
+ private:
+  bthread::RWLock rwlock_;
+  std::shared_ptr<infiniband::Client> client_;
+};
+
+PeerConnection::PeerConnection()
+    : transport_(FLAGS_use_rdma
+                     ? TransportUPtr(std::make_unique<RdmaTransport>())
+                     : TransportUPtr(std::make_unique<TcpTransport>())) {}
 
 }  // namespace cache
 }  // namespace dingofs

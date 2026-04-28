@@ -22,24 +22,25 @@
 
 #include "cache/benchmark/benchmarker.h"
 
+#include <functional>
 #include <memory>
+#include <vector>
 
 #include "cache/benchmark/option.h"
-#include "cache/common/mds_client.h"
-#include "cache/common/type.h"
-#include "cache/storage/storage_pool.h"
-#include "cache/tiercache/tier_block_cache.h"
+#include "cache/remotecache/remote_block_cache.h"
 #include "common/options/cache.h"
 
 namespace dingofs {
 namespace cache {
 
 Benchmarker::Benchmarker()
-    : mds_client_(std::make_shared<MDSClientImpl>(FLAGS_mds_addrs)),
-      storage_pool_(std::make_shared<StoragePoolImpl>(mds_client_)),
-      collector_(std::make_unique<Collector>()),
+    : collector_(std::make_unique<Collector>()),
       reporter_(std::make_shared<Reporter>(collector_)),
-      thread_pool_(std::make_unique<TaskThreadPool>("benchmarker_worker")) {
+      thread_pool_(
+          std::make_unique<utils::TaskThreadPool<>>("benchmarker_worker")) {
+  if (FLAGS_offset >= FLAGS_blksize) {
+    FLAGS_offset = 0;
+  }
   if (FLAGS_offset + FLAGS_length > FLAGS_blksize) {
     FLAGS_length = FLAGS_blksize - FLAGS_offset;
   }
@@ -48,9 +49,9 @@ Benchmarker::Benchmarker()
 Status Benchmarker::Start() { return InitAll(); }
 
 Status Benchmarker::InitAll() {
-  auto initers = std::vector<std::function<Status()>>{
-      [this]() { return InitMdsClient(); },
-      [this]() { return InitStorage(); },
+  auto initers = std::vector<std::function<Status()>>{};
+  initers.insert(initers.end(),
+                 {
       [this]() { return InitBlockCache(); },
       [this]() { return InitCollector(); },
       [this]() { return InitReporter(); },
@@ -61,7 +62,7 @@ Status Benchmarker::InitAll() {
       [this]() {
         InitWorkers();
         return Status::OK();
-      }};
+      }});
 
   for (const auto& initer : initers) {
     auto status = initer();
@@ -79,8 +80,14 @@ void Benchmarker::RunUntilFinish() {
 }
 
 void Benchmarker::StartAll() {
-  StartReporter();
+  // Launch workers; they init + warmup, then block on `go_`.
   StartWorkers();
+  // Wait until every worker is warm (pool registered, QPs primed), then start
+  // the wall clock and release the measured phase — so qps/bandwidth exclude
+  // one-time setup and reflect steady state.
+  warmed_.wait();
+  StartReporter();
+  go_.signal();
 }
 
 void Benchmarker::StopAll() {
@@ -89,20 +96,12 @@ void Benchmarker::StopAll() {
   StopCollector();
 }
 
-// init
-Status Benchmarker::InitMdsClient() { return mds_client_->Start(); }
-
-Status Benchmarker::InitStorage() {
-  auto status = storage_pool_->GetStorage(FLAGS_fsid, storage_);
-  if (!status.ok()) {
-    LOG(ERROR) << "Fail to get storage for fsid=" << FLAGS_fsid;
-    return status;
-  }
-  return Status::OK();
-}
-
 Status Benchmarker::InitBlockCache() {
-  block_cache_ = std::make_shared<TierBlockCache>(storage_);
+  if (!FLAGS_bench_remote_only) {
+    return Status::InvalidParam(
+        "cache-bench requires --bench_remote_only=true in this workspace");
+  }
+  block_cache_ = std::make_shared<RemoteBlockCacheImpl>(nullptr);
   auto status = block_cache_->Start();
   if (!status.ok()) {
     LOG(ERROR) << "Init block cache failed: " << status.ToString();
@@ -118,13 +117,7 @@ Status Benchmarker::InitCollector() {
   return status;
 }
 
-Status Benchmarker::InitReporter() {
-  auto status = reporter_->Start();
-  if (!status.ok()) {
-    LOG(ERROR) << "Init reporter failed: " << status.ToString();
-  }
-  return status;
-}
+Status Benchmarker::InitReporter() { return Status::OK(); }
 
 void Benchmarker::InitFactory() {
   factory_ = NewFactory(block_cache_, FLAGS_op);
@@ -132,8 +125,11 @@ void Benchmarker::InitFactory() {
 
 void Benchmarker::InitWorkers() {
   CHECK_EQ(thread_pool_->Start(FLAGS_threads), 0);
+  warmed_.reset(FLAGS_threads);
+  go_.reset(1);
   for (auto i = 0; i < FLAGS_threads; i++) {
-    workers_.emplace_back(std::make_unique<Worker>(i, factory_, collector_));
+    workers_.emplace_back(
+        std::make_unique<Worker>(i, factory_, collector_, &warmed_, &go_));
   }
 }
 

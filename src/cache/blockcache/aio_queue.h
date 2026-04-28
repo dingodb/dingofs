@@ -36,8 +36,7 @@ namespace cache {
 
 class AioQueue {
  public:
-  AioQueue(const std::vector<iovec>& fixed_write_buffers,
-           const std::vector<iovec>& fixed_read_buffers);
+  explicit AioQueue(const std::vector<iovec>& fixed_buffers);
   Status Start();
   Status Shutdown();
 

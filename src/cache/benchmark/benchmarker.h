@@ -23,13 +23,13 @@
 #ifndef DINGOFS_SRC_CACHE_BENCHMARK_BENCHMARKER_H_
 #define DINGOFS_SRC_CACHE_BENCHMARK_BENCHMARKER_H_
 
+#include <bthread/countdown_event.h>
+
 #include "cache/benchmark/factory.h"
 #include "cache/benchmark/reporter.h"
 #include "cache/benchmark/worker.h"
 #include "cache/blockcache/block_cache.h"
-#include "cache/common/mds_client.h"
-#include "cache/storage/storage.h"
-#include "cache/storage/storage_pool.h"
+#include "utils/concurrent/task_thread_pool.h"
 
 namespace dingofs {
 namespace cache {
@@ -45,8 +45,6 @@ class Benchmarker {
  private:
   // Init
   Status InitAll();
-  Status InitMdsClient();
-  Status InitStorage();
   Status InitBlockCache();
   Status InitCollector();
   Status InitReporter();
@@ -65,15 +63,16 @@ class Benchmarker {
   void StopCollector();
 
  private:
-  MDSClientSPtr mds_client_;
-  StoragePoolSPtr storage_pool_;
-  StorageSPtr storage_;
   BlockCacheSPtr block_cache_;
   CollectorSPtr collector_;
   ReporterSPtr reporter_;
   TaskFactorySPtr factory_;
   std::vector<WorkerUPtr> workers_;
-  TaskThreadPoolUPtr thread_pool_;
+  utils::TaskThreadPoolUPtr thread_pool_;
+  // Barrier between the warmup and measured phases: workers signal `warmed_`
+  // after init+warmup; the benchmarker then starts the timer and opens `go_`.
+  bthread::CountdownEvent warmed_;
+  bthread::CountdownEvent go_;
 };
 
 }  // namespace cache

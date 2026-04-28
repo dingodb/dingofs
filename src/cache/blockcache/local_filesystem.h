@@ -56,16 +56,24 @@ class LocalFileSystem {
   bool IsAligned(uint64_t n, uint64_t m) { return (n % m) == 0; }
   off_t AlignOffset(off_t offset);
   size_t AlignLength(size_t length);
-  int AllocateAlignedMemory(IOBuffer* buffer, size_t aligned_length,
-                            bool for_read);
+  // Appends an O_DIRECT-aligned buffer to `out` for aio. With --fix_buffer the
+  // buffer comes from a global slab pool — the recv pool for writes, the send
+  // pool for reads — so it is at once the io_uring fixed buffer and the
+  // RDMA-registered buffer (its meta carries the RDMA lkey). *buf_index is the
+  // absolute io_uring fixed-buffer index (recv buffers are registered first,
+  // send buffers after, offset by read_buf_offset_). Without --fix_buffer it
+  // falls back to an aligned malloc and *buf_index is -1.
+  Status AllocFixedBuffer(IOBuffer* out, size_t aligned_length, bool for_read,
+                          int* buf_index);
 
   static constexpr size_t kAlignedIOBlockSize = 4096;
 
   std::atomic<bool> running_;
   DiskCacheLayoutSPtr layout_;
-  BufferPoolUPtr write_buffer_pool_;
-  BufferPoolUPtr read_buffer_pool_;
   iutil::InflightTracker inflight_;
+  // io_uring registers recv-pool (write) buffers first then send-pool (read)
+  // buffers; a read buffer's absolute fixed index is read_buf_offset_ + index.
+  size_t read_buf_offset_;
   AioQueueUPtr aio_queue_;
   DiskHealthCheckerUPtr health_checker_;
 };

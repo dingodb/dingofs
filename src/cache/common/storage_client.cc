@@ -134,6 +134,7 @@ void RangeBlockTask::Run() {
 }
 
 blockaccess::GetObjectAsyncContextSPtr RangeBlockTask::OnPrepare() {
+  // FIXME:
   char* data = new char[length_];
   buffer_->AppendUserData(data, length_, iutil::DeleteBuffer);
 

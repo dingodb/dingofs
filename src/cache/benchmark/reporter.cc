@@ -25,7 +25,13 @@
 #include <absl/strings/str_format.h>
 #include <fmt/format.h>
 
+#include <fstream>
+#include <iostream>
+#include <sstream>
+
 #include "cache/benchmark/option.h"
+#include "common/options/cache.h"
+#include "common/options/cache.h"
 #include "utils/executor/bthread/bthread_executor.h"
 
 namespace dingofs {
@@ -66,8 +72,14 @@ void Reporter::OnStart(Stat* stat, Stat* total) {
   CHECK_EQ(total->Count(), 0);
 
   std::cout << absl::StrFormat(
-      "%s: threads=%d fsid=%llu ino=%llu blksize=%llu blocks=%llu\n", FLAGS_op,
-      FLAGS_threads, FLAGS_fsid, FLAGS_ino, FLAGS_blksize, FLAGS_blocks);
+      "%s: threads=%d fsid=%llu ino=%llu start_block_id=%llu blksize=%llu "
+      "blocks=%llu offset=%llu length=%llu remote_only=%s use_rdma=%s "
+      "registered_buffers=%s\n",
+      FLAGS_op, FLAGS_threads, FLAGS_fsid, FLAGS_ino, FLAGS_start_block_id,
+      FLAGS_blksize, FLAGS_blocks, FLAGS_offset, FLAGS_length,
+      FLAGS_bench_remote_only ? "true" : "false",
+      FLAGS_use_rdma ? "true" : "false",
+      FLAGS_bench_rdma_registered_buffers ? "true" : "false");
 
   std::cout << "...\n";
   std::cout << "Starting " << FLAGS_threads << " workers\n";
@@ -80,15 +92,18 @@ void Reporter::OnShow(Stat* stat, Stat* total) {
   auto interval_us = kReportIntervalSeconds * 1e6;
   auto iops = stat->IOPS(interval_us);
   auto bandwidth = stat->Bandwidth(interval_us);
-  auto avglat = stat->AvgLat() * 1.0 / 1e6;
-  auto maxlat = stat->MaxLat() * 1.0 / 1e6;
-  auto minlat = stat->MinLat() * 1.0 / 1e6;
-  auto percent = total->Count() * 1.0 / (FLAGS_threads * FLAGS_blocks) * 100;
+  auto percent =
+      FLAGS_time_based
+          ? 0
+          : total->Count() * 1.0 / (FLAGS_threads * FLAGS_blocks) * 100;
 
   std::cout << absl::StrFormat(
-      "%9s  %s: %6llu op/s  %5lld MB/s  lat(%.6lf %.6lf %.6lf)\n",
-      absl::StrFormat("[%.2lf%%]", percent), FLAGS_op, iops, bandwidth, avglat,
-      maxlat, minlat);
+      "%9s  %s: %9.2f qps  %9.2f MiB/s  ok/fail=%llu/%llu  "
+      "lat_us(min/mean/p50/p90/p99/max=%llu/%llu/%llu/%llu/%llu/%llu)\n",
+      FLAGS_time_based ? "[time]" : absl::StrFormat("[%.2lf%%]", percent),
+      FLAGS_op, iops, bandwidth, stat->SuccessCount(), stat->FailCount(),
+      stat->MinLat(), stat->AvgLat(), stat->PercentileLat(50),
+      stat->PercentileLat(90), stat->PercentileLat(99), stat->MaxLat());
 
   *stat = Stat();  // Reset the interval stat
 }
@@ -103,15 +118,72 @@ void Reporter::OnStop(Stat* stat, Stat* total) {
   auto interval_us = g_timer_.u_elapsed();
   auto iops = total->IOPS(interval_us);
   auto bandwidth = total->Bandwidth(interval_us);
-  auto avglat = total->AvgLat() * 1.0 / 1e6;
-  auto maxlat = total->MaxLat() * 1.0 / 1e6;
-  auto minlat = total->MinLat() * 1.0 / 1e6;
 
   std::cout << "\n";
   std::cout << "Summary (" << FLAGS_threads << " workers):\n";
   std::cout << absl::StrFormat(
-      "  Avg(%s):  %llu op/s  %lld MB/s  lat(%.6lf %.6lf %.6lf)\n", FLAGS_op,
-      iops, bandwidth, avglat, maxlat, minlat);
+      "  Avg(%s):  %.2f qps  %.2f MiB/s  attempts=%llu success=%llu "
+      "fail=%llu bytes=%llu\n",
+      FLAGS_op, iops, bandwidth, total->Count(), total->SuccessCount(),
+      total->FailCount(), total->TotalBytes());
+  std::cout << absl::StrFormat(
+      "  Lat(us): min=%llu mean=%llu p50=%llu p90=%llu p99=%llu max=%llu\n",
+      total->MinLat(), total->AvgLat(), total->PercentileLat(50),
+      total->PercentileLat(90), total->PercentileLat(99), total->MaxLat());
+
+  if (FLAGS_json_result || !FLAGS_result_path.empty()) {
+    auto json = BuildJson(*total, interval_us);
+    if (FLAGS_json_result) {
+      std::cout << json << "\n";
+    }
+    if (!FLAGS_result_path.empty()) {
+      std::ofstream out(FLAGS_result_path);
+      if (!out) {
+        LOG(ERROR) << "Fail to open result_path=" << FLAGS_result_path;
+      } else {
+        out << json << "\n";
+      }
+    }
+  }
+}
+
+std::string Reporter::BuildJson(const Stat& total,
+                                uint64_t elapsed_us) const {
+  std::ostringstream oss;
+  oss << "{";
+  oss << "\"op\":\"" << FLAGS_op << "\",";
+  oss << "\"fsid\":" << FLAGS_fsid << ",";
+  oss << "\"ino\":" << FLAGS_ino << ",";
+  oss << "\"start_block_id\":" << FLAGS_start_block_id << ",";
+  oss << "\"blksize\":" << FLAGS_blksize << ",";
+  oss << "\"blocks\":" << FLAGS_blocks << ",";
+  oss << "\"threads\":" << FLAGS_threads << ",";
+  oss << "\"offset\":" << FLAGS_offset << ",";
+  oss << "\"length\":" << FLAGS_length << ",";
+  oss << "\"time_based\":" << (FLAGS_time_based ? "true" : "false") << ",";
+  oss << "\"runtime\":" << FLAGS_runtime << ",";
+  oss << "\"remote_only\":"
+      << (FLAGS_bench_remote_only ? "true" : "false") << ",";
+  oss << "\"use_rdma\":" << (FLAGS_use_rdma ? "true" : "false") << ",";
+  oss << "\"registered_buffers\":"
+      << (FLAGS_bench_rdma_registered_buffers ? "true" : "false") << ",";
+  oss << "\"elapsed_us\":" << elapsed_us << ",";
+  oss << "\"attempts\":" << total.Count() << ",";
+  oss << "\"success\":" << total.SuccessCount() << ",";
+  oss << "\"fail\":" << total.FailCount() << ",";
+  oss << "\"bytes\":" << total.TotalBytes() << ",";
+  oss << "\"qps\":" << total.IOPS(elapsed_us) << ",";
+  oss << "\"mib_per_sec\":" << total.Bandwidth(elapsed_us) << ",";
+  oss << "\"lat_us\":{";
+  oss << "\"min\":" << total.MinLat() << ",";
+  oss << "\"mean\":" << total.AvgLat() << ",";
+  oss << "\"p50\":" << total.PercentileLat(50) << ",";
+  oss << "\"p90\":" << total.PercentileLat(90) << ",";
+  oss << "\"p99\":" << total.PercentileLat(99) << ",";
+  oss << "\"max\":" << total.MaxLat();
+  oss << "}";
+  oss << "}";
+  return oss.str();
 }
 
 }  // namespace cache

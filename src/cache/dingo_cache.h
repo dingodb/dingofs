@@ -36,6 +36,8 @@ class DingoCache {
   static int StartServer();
 };
 
+// 这里持有 brpc_server, rdma_server
+
 }  // namespace cache
 }  // namespace dingofs
 

@@ -168,17 +168,17 @@ void BlockCacheUploader::Start() {
 }
 
 void BlockCacheUploader::Shutdown() {
-  if (!running_.load(std::memory_order_relaxed)) {
+  if (!running_.exchange(false, std::memory_order_relaxed)) {
     LOG(INFO) << "BlockCacheUploader is already shutdown";
     return;
   }
 
   LOG(INFO) << "BlockCacheUploader is shutting down...";
 
+  if (thread_.joinable()) {
+    thread_.join();
+  }
   joiner_->Shutdown();
-
-  running_.store(false, std::memory_order_relaxed);
-  thread_.join();
   LOG(INFO) << "BlockCacheUploader is down";
 }
 
@@ -206,6 +206,10 @@ void BlockCacheUploader::UploadWorker() {
 }
 
 void BlockCacheUploader::AsyncUpload(const StageBlock& sblock) {
+  if (!IsRunning()) {
+    return;
+  }
+
   tracker_->Add(sblock.handle.Filename());
 
   auto* self = GetSelfPtr();

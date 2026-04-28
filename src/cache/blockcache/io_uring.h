@@ -40,8 +40,7 @@ namespace cache {
 struct IOUringOptions {
   uint32_t entries{4096};
   bool use_sqpoll{true};
-  std::vector<iovec> fixed_write_buffers;
-  std::vector<iovec> fixed_read_buffers;
+  std::vector<iovec> fixed_buffers;
 };
 
 class IOUring {
@@ -61,25 +60,20 @@ class IOUring {
   FRIEND_TEST(IOUringTest, OnComplete);
   friend std::ostream& operator<<(std::ostream& os, const IOUring& r);
 
+  // A single set of registered buffers shared by reads and writes. With one
+  // contiguous registration (the global slab pool) a buffer's index is the same
+  // for io_uring and for the caller (SlabPool::IndexOf), so GetIndex is just a
+  // bounds check that returns the index unchanged.
   struct FixedBuffers {
-    FixedBuffers(std::vector<iovec> write_buffers,
-                 std::vector<iovec> read_buffers)
-        : write_count(write_buffers.size()) {
-      buffers.reserve(write_buffers.size() + read_buffers.size());
-      buffers.insert(buffers.end(), write_buffers.begin(), write_buffers.end());
-      buffers.insert(buffers.end(), read_buffers.begin(), read_buffers.end());
-    }
+    explicit FixedBuffers(std::vector<iovec> bufs) : buffers(std::move(bufs)) {}
 
-    int GetIndex(bool for_read, int buf_index) const {
-      size_t offset = for_read ? write_count : 0;
-      size_t count = for_read ? buffers.size() - write_count : write_count;
-      if (buf_index < 0 || static_cast<size_t>(buf_index) >= count) {
+    int GetIndex(int buf_index) const {
+      if (buf_index < 0 || static_cast<size_t>(buf_index) >= buffers.size()) {
         return -1;
       }
-      return static_cast<int>(offset) + buf_index;
+      return buf_index;
     }
 
-    const size_t write_count{0};
     std::vector<iovec> buffers;
   };
 

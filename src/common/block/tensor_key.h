@@ -51,8 +51,8 @@ struct TensorKey {
   std::string Id() const { return chunk_hash; }
 
   std::string Filename() const {
-    return fmt::format("{}@{}@{}@{}@{}", model_name, world_size, worker_id,
-                       chunk_hash, dtype);
+    return fmt::format("{}@{}@{}@{}@{}", SafePart(model_name), world_size,
+                       worker_id, SafePart(chunk_hash), SafePart(dtype));
   }
 
   std::string StoreKey() const {
@@ -68,6 +68,17 @@ struct TensorKey {
   uint32_t worker_id{0};
   std::string chunk_hash;  // hex digest produced by LMCache
   std::string dtype;       // e.g. "float16", "bfloat16"
+
+ private:
+  static std::string SafePart(const std::string& s) {
+    std::string out = s;
+    for (char& c : out) {
+      if (c == '/' || c == '@') {
+        c = '_';
+      }
+    }
+    return out;
+  }
 };
 //
 

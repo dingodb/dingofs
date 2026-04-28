@@ -24,10 +24,10 @@ SET(BENCHMARK_LIB_SRCS
 
 add_library(cache_benchmark ${BENCHMARK_LIB_SRCS})
 target_link_libraries(cache_benchmark
-    cache_utils
     cache_common
-    cache_storage
-    cache_tiercache
+    cache_infiniband
+    cache_remotecache
+    dingofs_common
 )
 
 add_executable(cache-bench main.cc)

@@ -18,6 +18,7 @@
 
 #include "common/block/tensor_key.h"
 #include "completion_queue.h"
+#include "rdma_memory_registry.h"
 
 namespace dingofs {
 
@@ -43,10 +44,9 @@ struct GetItem {
   size_t size;
 };
 
-// A CPU memory range to be registered with the RDMA NIC (via ibv_reg_mr or
-// equivalent) when the RDMA data path comes online. Populated from LMCache
-// LocalCPUBackend's pinned arena on the Python side at construction time;
-// the engine just stores it for the later RDMA bring-up to consume.
+// A CPU memory range to be registered with the RDMA NIC. Populated from
+// LMCache LocalCPUBackend's pinned arena on the Python side at construction
+// time; put/get buffers are slices inside these ranges.
 struct MemoryRegion {
   std::uintptr_t addr;
   std::size_t length;
@@ -80,10 +80,11 @@ class NativeEngine {
 
   int event_fd() const { return queue_.event_fd(); }
 
-  // CPU memory regions handed to us at construction for future RDMA
-  // registration. The RDMA bring-up (separate PR) will iterate this and
-  // call ibv_reg_mr per region.
+  // CPU memory regions handed to us at construction. When non-empty, they are
+  // RDMA-registered during startup and used as the direct LMCache data path.
   const std::vector<MemoryRegion>& rdma_pools() const { return rdma_pools_; }
+  const std::vector<RegisteredMemoryRegion>& registered_rdma_regions() const;
+  std::string rdma_device_name() const;
 
   // Sync existence probe. Maps OK -> true, NotFound -> false.
   // Returns false and fills *err on any other error.
@@ -107,11 +108,13 @@ class NativeEngine {
 
   void InstallFlags(const InitOptions& opts);
   void StartCache();
+  void RegisterRdmaPools();
 
   std::atomic<bool> running_{false};
   std::unique_ptr<cache::RemoteBlockCacheImpl> block_cache_;
   CompletionQueue queue_;
   std::vector<MemoryRegion> rdma_pools_;
+  std::unique_ptr<RdmaMemoryRegistry> rdma_registry_;
 };
 
 }  // namespace lmcache

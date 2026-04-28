@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import threading
 from collections import OrderedDict
-from typing import Iterable
+from typing import Iterable, Sequence
 
 __all__ = ["ExistsLRU"]
 
@@ -50,6 +50,22 @@ class ExistsLRU:
                 return False
             self._entries.move_to_end(key)
             return True
+
+    def prefix_len(self, keys: Sequence[str]) -> int:
+        """Return the longest prefix already known to exist.
+
+        This is the batched form of ``has()`` for LMCache's prefetch path.
+        It keeps the lock for one contiguous scan instead of taking it once
+        per key, which matters when prompts expand to thousands of KV chunks.
+        """
+        with self._lock:
+            prefix = 0
+            for key in keys:
+                if key not in self._entries:
+                    break
+                self._entries.move_to_end(key)
+                prefix += 1
+            return prefix
 
     def __len__(self) -> int:
         with self._lock:

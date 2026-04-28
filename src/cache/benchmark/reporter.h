@@ -28,6 +28,7 @@
 #include <butil/time.h>
 
 #include <memory>
+#include <string>
 
 #include "cache/benchmark/collector.h"
 #include "utils/executor/executor.h"
@@ -50,6 +51,7 @@ class Reporter {
   void OnStart(Stat* stat, Stat* total);
   void OnShow(Stat* stat, Stat* total);
   void OnStop(Stat* stat, Stat* total);
+  std::string BuildJson(const Stat& total, uint64_t elapsed_us) const;
 
   butil::Timer g_timer_;
   CollectorSPtr collector_;

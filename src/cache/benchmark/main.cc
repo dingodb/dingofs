@@ -4,12 +4,12 @@
 #include <iostream>
 
 #include "cache/benchmark/benchmarker.h"
-#include "cache/utils/logging.h"
+#include "common/logging.h"
 
 int main(int argc, char** argv) {
   google::ParseCommandLineFlags(&argc, &argv, false);
 
-  dingofs::cache::InitLogging(argv[0]);
+  dingofs::Logger::Init("cache-bench");
 
   // Init benchmarker
   dingofs::cache::Benchmarker benchmarker;

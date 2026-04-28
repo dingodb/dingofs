@@ -27,6 +27,7 @@
 #include <bthread/execution_queue_inl.h>
 
 #include <functional>
+#include <vector>
 
 #include "common/status.h"
 
@@ -37,27 +38,34 @@ class Stat {
  public:
   Stat() = default;
 
-  void Add(uint64_t bytes, uint64_t latency_us);
+  void Add(uint64_t bytes, uint64_t latency_us, bool ok);
 
-  // iops
-  uint64_t IOPS(uint64_t interval_us) const;
+  // success qps
+  double IOPS(uint64_t interval_us) const;
 
   // bandwidth in MiB/s
-  uint64_t Bandwidth(uint64_t interval_us) const;
+  double Bandwidth(uint64_t interval_us) const;
 
   // latency in us
   uint64_t AvgLat() const;
   uint64_t MaxLat() const;
   uint64_t MinLat() const;
+  uint64_t PercentileLat(double percentile) const;
 
   uint64_t Count() const;
+  uint64_t SuccessCount() const;
+  uint64_t FailCount() const;
+  uint64_t TotalBytes() const;
 
  private:
   uint64_t count_{0};
+  uint64_t success_count_{0};
+  uint64_t fail_count_{0};
   uint64_t total_bytes_{0};
   uint64_t max_latency_us_{0};
   uint64_t min_latency_us_{0};
   uint64_t total_latency_us_{0};
+  std::vector<uint64_t> latencies_us_;
 };
 
 class Collector {

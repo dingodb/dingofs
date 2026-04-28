@@ -163,13 +163,12 @@ TEST_F(IOUringTest, StartAndShutdown) {
         static_cast<char*>(aligned_alloc(4096, kBufferSize));
     char* raw_read_buffer =
         static_cast<char*>(aligned_alloc(4096, kBufferSize));
-    std::vector<iovec> write_buffers = {{raw_write_buffer, kBufferSize}};
-    std::vector<iovec> read_buffers = {{raw_read_buffer, kBufferSize}};
+    std::vector<iovec> fixed_buffers = {{raw_write_buffer, kBufferSize},
+                                        {raw_read_buffer, kBufferSize}};
 
     IOUringOptions options = {.entries = 1024,
                               .use_sqpoll = false,
-                              .fixed_write_buffers = write_buffers,
-                              .fixed_read_buffers = read_buffers};
+                              .fixed_buffers = fixed_buffers};
 
     IOUring io_uring(std::move(options));
     EXPECT_TRUE(io_uring.Start().ok());
@@ -184,91 +183,34 @@ TEST_F(IOUringTest, StartAndShutdown) {
 
 TEST_F(IOUringTest, FixedBuffers) {
   constexpr size_t kBufferSize = 4096;
-  constexpr size_t kNumWriteBuffers = 4;
-  constexpr size_t kNumReadBuffers = 3;
+  constexpr size_t kNumBuffers = 7;
 
-  std::vector<char*> raw_write_buffers(kNumWriteBuffers);
-  std::vector<char*> raw_read_buffers(kNumReadBuffers);
-  std::vector<iovec> write_buffers(kNumWriteBuffers);
-  std::vector<iovec> read_buffers(kNumReadBuffers);
+  std::vector<char*> raw_buffers(kNumBuffers);
+  std::vector<iovec> buffers(kNumBuffers);
 
-  for (size_t i = 0; i < kNumWriteBuffers; ++i) {
-    raw_write_buffers[i] = static_cast<char*>(aligned_alloc(4096, kBufferSize));
-    write_buffers[i] = {raw_write_buffers[i], kBufferSize};
-  }
-
-  for (size_t i = 0; i < kNumReadBuffers; ++i) {
-    raw_read_buffers[i] = static_cast<char*>(aligned_alloc(4096, kBufferSize));
-    read_buffers[i] = {raw_read_buffers[i], kBufferSize};
+  for (size_t i = 0; i < kNumBuffers; ++i) {
+    raw_buffers[i] = static_cast<char*>(aligned_alloc(4096, kBufferSize));
+    buffers[i] = {raw_buffers[i], kBufferSize};
   }
 
   {
     IOUringOptions options = {.entries = 1024,
                               .use_sqpoll = false,
-                              .fixed_write_buffers = write_buffers,
-                              .fixed_read_buffers = read_buffers};
+                              .fixed_buffers = buffers};
 
     IOUring io_uring(std::move(options));
     ASSERT_TRUE(io_uring.Start().ok());
 
+    // A single pool shared by reads and writes: the slab index is the fixed
+    // buffer index, so GetIndex is just a bounds check that returns it as-is.
     auto& fixed_buffers = io_uring.fixed_buffers_;
-    EXPECT_EQ(fixed_buffers->write_count, kNumWriteBuffers);
-    EXPECT_EQ(fixed_buffers->buffers.size(),
-              kNumWriteBuffers + kNumReadBuffers);
+    EXPECT_EQ(fixed_buffers->buffers.size(), kNumBuffers);
 
-    EXPECT_EQ(fixed_buffers->GetIndex(false, 0), 0);
-    EXPECT_EQ(fixed_buffers->GetIndex(false, 1), 1);
-    EXPECT_EQ(fixed_buffers->GetIndex(false, 3), 3);
-    EXPECT_EQ(fixed_buffers->GetIndex(false, 4), -1);
-    EXPECT_EQ(fixed_buffers->GetIndex(false, -1), -1);
-
-    EXPECT_EQ(fixed_buffers->GetIndex(true, 0), 4);
-    EXPECT_EQ(fixed_buffers->GetIndex(true, 1), 5);
-    EXPECT_EQ(fixed_buffers->GetIndex(true, 2), 6);
-    EXPECT_EQ(fixed_buffers->GetIndex(true, 3), -1);
-    EXPECT_EQ(fixed_buffers->GetIndex(true, -1), -1);
-
-    EXPECT_TRUE(io_uring.Shutdown().ok());
-  }
-
-  {
-    IOUringOptions options = {.entries = 1024,
-                              .use_sqpoll = false,
-                              .fixed_write_buffers = write_buffers};
-
-    IOUring io_uring(std::move(options));
-    ASSERT_TRUE(io_uring.Start().ok());
-
-    auto& fixed_buffers = io_uring.fixed_buffers_;
-    EXPECT_EQ(fixed_buffers->write_count, kNumWriteBuffers);
-    EXPECT_EQ(fixed_buffers->buffers.size(), kNumWriteBuffers);
-
-    EXPECT_EQ(fixed_buffers->GetIndex(false, 0), 0);
-    EXPECT_EQ(fixed_buffers->GetIndex(false, 3), 3);
-    EXPECT_EQ(fixed_buffers->GetIndex(false, 4), -1);
-
-    EXPECT_EQ(fixed_buffers->GetIndex(true, 0), -1);
-
-    EXPECT_TRUE(io_uring.Shutdown().ok());
-  }
-
-  {
-    IOUringOptions options = {.entries = 1024,
-                              .use_sqpoll = false,
-                              .fixed_read_buffers = read_buffers};
-
-    IOUring io_uring(std::move(options));
-    ASSERT_TRUE(io_uring.Start().ok());
-
-    auto& fixed_buffers = io_uring.fixed_buffers_;
-    EXPECT_EQ(fixed_buffers->write_count, 0);
-    EXPECT_EQ(fixed_buffers->buffers.size(), kNumReadBuffers);
-
-    EXPECT_EQ(fixed_buffers->GetIndex(false, 0), -1);
-
-    EXPECT_EQ(fixed_buffers->GetIndex(true, 0), 0);
-    EXPECT_EQ(fixed_buffers->GetIndex(true, 2), 2);
-    EXPECT_EQ(fixed_buffers->GetIndex(true, 3), -1);
+    EXPECT_EQ(fixed_buffers->GetIndex(0), 0);
+    EXPECT_EQ(fixed_buffers->GetIndex(3), 3);
+    EXPECT_EQ(fixed_buffers->GetIndex(6), 6);
+    EXPECT_EQ(fixed_buffers->GetIndex(7), -1);
+    EXPECT_EQ(fixed_buffers->GetIndex(-1), -1);
 
     EXPECT_TRUE(io_uring.Shutdown().ok());
   }
@@ -280,19 +222,14 @@ TEST_F(IOUringTest, FixedBuffers) {
     ASSERT_TRUE(io_uring.Start().ok());
 
     auto& fixed_buffers = io_uring.fixed_buffers_;
-    EXPECT_EQ(fixed_buffers->write_count, 0);
     EXPECT_EQ(fixed_buffers->buffers.size(), 0);
 
-    EXPECT_EQ(fixed_buffers->GetIndex(false, 0), -1);
-    EXPECT_EQ(fixed_buffers->GetIndex(true, 0), -1);
+    EXPECT_EQ(fixed_buffers->GetIndex(0), -1);
 
     EXPECT_TRUE(io_uring.Shutdown().ok());
   }
 
-  for (auto* buf : raw_write_buffers) {
-    free(buf);
-  }
-  for (auto* buf : raw_read_buffers) {
+  for (auto* buf : raw_buffers) {
     free(buf);
   }
 }
@@ -643,7 +580,7 @@ TEST_F(IOUringTest, WriteWithFixedBuffer) {
 
   IOUringOptions options = {.entries = 256,
                             .use_sqpoll = false,
-                            .fixed_write_buffers = write_buffers};
+                            .fixed_buffers = write_buffers};
 
   IOUring io_uring(std::move(options));
   ASSERT_TRUE(io_uring.Start().ok());
@@ -681,7 +618,7 @@ TEST_F(IOUringTest, ReadWithFixedBuffer) {
   std::vector<iovec> read_buffers = {{raw_read_buffer, kBufferSize}};
 
   IOUringOptions options = {
-      .entries = 256, .use_sqpoll = false, .fixed_read_buffers = read_buffers};
+      .entries = 256, .use_sqpoll = false, .fixed_buffers = read_buffers};
 
   IOUring io_uring(std::move(options));
   ASSERT_TRUE(io_uring.Start().ok());
@@ -999,13 +936,11 @@ TEST_F(IOUringTest, OutputStream) {
 
   {
     char* raw_buffer = static_cast<char*>(aligned_alloc(4096, 4096));
-    std::vector<iovec> write_buffers = {{raw_buffer, 4096}};
-    std::vector<iovec> read_buffers = {{raw_buffer, 4096}};
+    std::vector<iovec> fixed_buffers = {{raw_buffer, 4096}, {raw_buffer, 4096}};
 
     IOUringOptions options = {.entries = 512,
                               .use_sqpoll = false,
-                              .fixed_write_buffers = write_buffers,
-                              .fixed_read_buffers = read_buffers};
+                              .fixed_buffers = fixed_buffers};
 
     IOUring io_uring(std::move(options));
     ASSERT_TRUE(io_uring.Start().ok());
@@ -1424,7 +1359,7 @@ class IOUringPerfTest : public IOUringTest {
     if (use_fixed_buffer) {
       options = {.entries = 1024,
                  .use_sqpoll = false,
-                 .fixed_read_buffers = read_buffers};
+                 .fixed_buffers = read_buffers};
     } else {
       options = {.entries = 1024, .use_sqpoll = false};
     }

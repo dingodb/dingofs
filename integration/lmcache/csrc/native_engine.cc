@@ -17,6 +17,7 @@
 #include <utility>
 
 #include "cache/blockcache/block_cache.h"
+#include "cache/remotecache/rdma_buffer_manager.h"
 #include "cache/remotecache/remote_block_cache.h"
 #include "common/block/block_handle.h"
 #include "common/io_buffer.h"
@@ -84,23 +85,28 @@ std::unique_ptr<NativeEngine> NativeEngine::Create(const InitOptions& opts) {
   }
 
   std::unique_ptr<NativeEngine> engine(new NativeEngine());
-  // Stash RDMA pools for the future ibv_reg_mr pass. Doing this before
-  // InstallFlags lets future code read it from anywhere in the bring-up.
   engine->rdma_pools_ = opts.rdma_pools;
   try {
     engine->InstallFlags(opts);
     InitGlogOnce();
     engine->StartCache();
+    engine->running_.store(true, std::memory_order_release);
+    engine->RegisterRdmaPools();
   } catch (...) {
+    engine->Shutdown();
     g_engine_alive.store(false);
     throw;
   }
 
-  engine->running_.store(true, std::memory_order_release);
   return engine;
 }
 
 void NativeEngine::InstallFlags(const InitOptions& opts) {
+  // LMCache hands us buffers from a pinned CPU arena. When that arena is
+  // present, prefer the custom cache RDMA transport by default; an explicit
+  // conf file can still turn it off for diagnostics with --use_rdma=false.
+  dingofs::cache::FLAGS_use_rdma = !opts.rdma_pools.empty();
+
   // 1) Conf file (if any) goes first: same parser dingofs's own binaries use
   //    (src/common/flag.cc:98). errors_are_fatal=false so a typo'd flag or a
   //    missing file surfaces as a C++ exception instead of calling exit(1).
@@ -136,15 +142,45 @@ void NativeEngine::StartCache() {
   }
 }
 
+void NativeEngine::RegisterRdmaPools() {
+  if (rdma_pools_.empty()) {
+    LOG(INFO) << "DingoFS LMCache RDMA: no CPU memory pool provided; "
+                 "RDMA data path uses the cache client's fallback pool";
+    return;
+  }
+
+  rdma_registry_ = RdmaMemoryRegistry::Create(rdma_pools_);
+}
+
 void NativeEngine::Shutdown() {
   bool was_running = running_.exchange(false, std::memory_order_acq_rel);
-  if (!was_running) return;
+  if (!was_running) {
+    rdma_registry_.reset();
+    return;
+  }
 
   if (block_cache_) {
     block_cache_->Shutdown();
     block_cache_.reset();
   }
+  rdma_registry_.reset();
   g_engine_alive.store(false);
+}
+
+const std::vector<RegisteredMemoryRegion>&
+NativeEngine::registered_rdma_regions() const {
+  static const std::vector<RegisteredMemoryRegion> empty;
+  if (rdma_registry_ == nullptr) {
+    return empty;
+  }
+  return rdma_registry_->registered_regions();
+}
+
+std::string NativeEngine::rdma_device_name() const {
+  if (rdma_registry_ == nullptr) {
+    return {};
+  }
+  return rdma_registry_->device_name();
 }
 
 // ---------- sync ops ----------
@@ -191,14 +227,27 @@ uint64_t NativeEngine::SubmitBatchSet(std::vector<SetItem> items) {
   FanIn* fan = queue_.NewFanIn(OpType::kSet, items.size());
   uint64_t fid = fan->future_id();
 
+  // Only stamp the rkey when the cache will actually take its RDMA path
+  // (same condition it uses to pick the transport); otherwise the meta is
+  // dead weight and the TCP path copies as usual.
+  const bool rdma_on = cache::RdmaBufferManager::GetInstance().Enabled();
+
   for (size_t i = 0; i < items.size(); ++i) {
     auto& it = items[i];
-    // Zero-copy: hand the raw Python buffer to butil::IOBuf via AppendUserData.
-    // No deleter — the Python-side keepalive in DingoFSNativeClient._pending
-    // pins the buffer until the future resolves, which only happens after the
-    // callback (and therefore after brpc finished consuming this data).
+    // Zero-copy handoff from Python into IOBuffer. When this memory lives in a
+    // registered LMCache pool we tag the block with its rkey, so EnsureRegistered
+    // keeps it as-is and the server RDMA_READs the arena directly; otherwise the
+    // cache layer stages it into its registered client pool (single copy).
+    uint32_t rkey = (rdma_on && rdma_registry_ != nullptr)
+                        ? rdma_registry_->RkeyFor(it.data, it.size)
+                        : 0;
     IOBuffer io;
-    io.AppendUserData(const_cast<void*>(it.data), it.size, [](void*) {});
+    if (rkey != 0) {
+      io.AppendUserDataWithMeta(const_cast<void*>(it.data), it.size,
+                                [](void*) {}, rkey);
+    } else {
+      io.AppendUserData(const_cast<void*>(it.data), it.size, [](void*) {});
+    }
 
     // AsyncCache, not AsyncPut: LMCache chunks are computed in-process and
     // have no storage-backend origin. AsyncPut would trigger server-side
@@ -230,6 +279,8 @@ uint64_t NativeEngine::SubmitBatchGet(std::vector<GetItem> items) {
   // instead of N. Each callback captures the shared_ptr by value; the vector
   // dies when the last callback runs.
   auto response_bufs = std::make_shared<std::vector<IOBuffer>>(items.size());
+  auto direct_rdma_get =
+      std::make_shared<std::vector<uint8_t>>(items.size(), 0);
 
   // retrieve_storage=false: cache-miss returns NotFound directly instead of
   // falling through to object storage. LMCache writes via AsyncCache only
@@ -239,16 +290,45 @@ uint64_t NativeEngine::SubmitBatchGet(std::vector<GetItem> items) {
   cache::RangeOption opt;
   opt.retrieve_storage = false;
 
+  // Only advertise the arena destination for the server to RDMA-write into
+  // when the cache will actually take its RDMA path (same condition it uses to
+  // pick the transport); otherwise direct_rdma_get must stay 0 so the callback
+  // copies the brpc response into dst.
+  const bool rdma_on = cache::RdmaBufferManager::GetInstance().Enabled();
+
   for (size_t i = 0; i < items.size(); ++i) {
     auto& it = items[i];
     void* dst = it.dst;
     size_t size = it.size;
+    uint32_t rkey = (rdma_on && rdma_registry_ != nullptr)
+                        ? rdma_registry_->RkeyFor(dst, size)
+                        : 0;
+    if (rkey != 0) {
+      // Pre-registered destination: the server RDMA_WRITEs the block straight
+      // into the arena slice. direct_rdma_get skips the post-copy in the cb.
+      (*response_bufs)[i].AppendUserDataWithMeta(dst, size, [](void*) {}, rkey);
+      (*direct_rdma_get)[i] = 1;
+    }
     block_cache_->AsyncRange(
         BlockHandle(it.key), 0, size, &(*response_bufs)[i],
-        [fan, i, response_bufs, dst, size](Status s) {
+        [fan, i, response_bufs, direct_rdma_get, dst, size](Status s) {
           if (s.ok()) {
-            // FIXME:
-            // (*response_bufs)[i].IOBuf().cutn(dst, size);  // TODO: zero copy
+            // Inert on the direct path (the buffer length is pre-set to size);
+            // still guards the TCP/pooled fallback where the response length is
+            // whatever the server returned.
+            const size_t actual = (*response_bufs)[i].Size();
+            if (actual != size) {
+              fan->Report(i, false,
+                          "response size mismatch: expected " +
+                              std::to_string(size) + ", got " +
+                              std::to_string(actual));
+              return;
+            }
+            // direct_rdma_get == 1: server already RDMA-wrote into dst (arena),
+            // no copy needed. Otherwise pull the brpc/pooled response into dst.
+            if ((*direct_rdma_get)[i] == 0) {
+              (*response_bufs)[i].CopyTo(static_cast<char*>(dst), size);
+            }
             fan->Report(i, true);
           } else if (s.IsNotFound()) {
             fan->Report(i, false);

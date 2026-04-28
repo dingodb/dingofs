@@ -22,45 +22,101 @@
 
 #include "cache/benchmark/worker.h"
 
+#include <butil/time.h>
+#include <glog/logging.h>
+
 #include "cache/benchmark/option.h"
 
 namespace dingofs {
 namespace cache {
 
-Worker::Worker(uint64_t idx, TaskFactorySPtr factory, CollectorSPtr collector)
+Worker::Worker(uint64_t idx, TaskFactorySPtr factory, CollectorSPtr collector,
+               bthread::CountdownEvent* warmed, bthread::CountdownEvent* go)
     : idx_(idx),
       factory_(factory),
       collector_(collector),
-      countdown_(FLAGS_blocks) {}
+      finished_(1),
+      warmed_(warmed),
+      go_(go) {}
 
-void Worker::Start() { ExecAllTasks(); }
+void Worker::Start() {
+  auto status = context_.Init(idx_);
+  if (!status.ok()) {
+    LOG(ERROR) << "Fail to init worker context idx=" << idx_
+               << ": " << status.ToString();
+    collector_->Submit([status](Stat* stat, Stat* total) {
+      stat->Add(0, 0, false);
+      total->Add(0, 0, false);
+    });
+    warmed_->signal();  // release the barrier so the benchmarker doesn't hang
+    finished_.signal();
+    return;
+  }
 
-void Worker::Shutdown() { countdown_.wait(); }
+  RunWarmup();        // init + warmup happen before the wall clock starts
+  warmed_->signal();  // this worker is warm
+  go_->wait();        // wait until all workers are warm and timing has begun
 
-void Worker::ExecAllTasks() {
+  ExecAllTasks();
+  finished_.signal();
+}
+
+void Worker::Shutdown() { finished_.wait(); }
+
+void Worker::RunWarmup() {
+  if (FLAGS_warmup == 0) {
+    return;
+  }
   BlockKeyIterator iter(idx_, FLAGS_blksize, FLAGS_blocks);
-
-  for (iter.SeekToFirst(); iter.Valid(); iter.Next()) {
-    auto task = factory_->GenTask(iter.Key());
-    ExecTask(task);
-
-    VLOG(9) << "Execute task (key=" << iter.Key().Filename() << ").";
-
-    countdown_.signal(1);
+  uint64_t done = 0;
+  while (done < FLAGS_warmup) {
+    for (iter.SeekToFirst(); iter.Valid() && done < FLAGS_warmup; iter.Next()) {
+      factory_->GenTask(iter.Key(), &context_)();  // untimed, not collected
+      ++done;
+    }
   }
 }
 
-void Worker::ExecTask(std::function<void()> task) {
+void Worker::ExecAllTasks() {
+  BlockKeyIterator iter(idx_, FLAGS_blksize, FLAGS_blocks);
+  const int64_t deadline_us =
+      FLAGS_time_based
+          ? butil::gettimeofday_us() + static_cast<int64_t>(FLAGS_runtime) *
+                                        1000 * 1000
+          : 0;
+
+  do {
+    for (iter.SeekToFirst(); iter.Valid(); iter.Next()) {
+      if (FLAGS_time_based && butil::gettimeofday_us() >= deadline_us) {
+        return;
+      }
+      auto key = iter.Key();
+      auto task = factory_->GenTask(key, &context_);
+      ExecTask(task);
+
+      VLOG(9) << "Execute task (key=" << key.Filename() << ").";
+    }
+  } while (FLAGS_time_based);
+}
+
+void Worker::ExecTask(Task task) {
   butil::Timer timer;
 
   timer.start();
-  task();
+  auto result = task();
   timer.stop();
 
-  collector_->Submit([this, timer](Stat* stat, Stat* total) {
-    stat->Add(FLAGS_blksize, timer.u_elapsed());
-    total->Add(FLAGS_blksize, timer.u_elapsed());
+  const bool ok = result.status.ok();
+  const uint64_t bytes = ok ? result.bytes : 0;
+  const uint64_t latency_us = timer.u_elapsed();
+  collector_->Submit([bytes, latency_us, ok](Stat* stat, Stat* total) {
+    stat->Add(bytes, latency_us, ok);
+    total->Add(bytes, latency_us, ok);
   });
+
+  if (!ok) {
+    LOG(ERROR) << "Task failed: " << result.status.ToString();
+  }
 }
 
 }  // namespace cache

@@ -35,6 +35,8 @@ DECLARE_uint64(fsid);
 DECLARE_uint64(ino);
 DECLARE_uint64(blksize);
 DECLARE_uint64(blocks);
+DECLARE_uint64(warmup);
+DECLARE_uint64(start_block_id);
 DECLARE_uint64(offset);
 DECLARE_uint64(length);
 DECLARE_bool(writeback);
@@ -42,6 +44,11 @@ DECLARE_bool(retrive);
 DECLARE_uint32(async_max_inflight);
 DECLARE_uint32(runtime);
 DECLARE_bool(time_based);
+DECLARE_bool(bench_remote_only);
+DECLARE_bool(bench_rdma_registered_buffers);
+DECLARE_bool(json_result);
+DECLARE_string(result_path);
+DECLARE_string(verify);
 
 }  // namespace cache
 }  // namespace dingofs

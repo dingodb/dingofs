@@ -19,6 +19,7 @@ add_subdirectory(writemempool)
 add_executable(test_common
   main.cc
   test_read_mem_pool.cc
+  test_block_key.cc
 )
 
 target_link_libraries(test_common

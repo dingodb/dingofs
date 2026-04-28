@@ -32,6 +32,7 @@
 
 #include "cache/common/macro.h"
 #include "cache/common/storage_client.h"
+#include "cache/remotecache/rdma_buffer_manager.h"
 #include "cache/remotecache/upstream.h"
 #include "common/io_buffer.h"
 #include "common/options/cache.h"
@@ -99,7 +100,12 @@ Status RemoteBlockCacheImpl::Put(BlockHandle handle, IOBuffer block,
                                  PutOption /*option*/) {
   DCHECK_RUNNING("RemoteBlockCache");
 
-  auto status = upstream_->SendPutRequest(handle, block);
+  // Prepare the upload source so the server can RDMA-read it (zero copy when
+  // the block is already in a registered buffer; otherwise a single copy).
+  auto& rdma = RdmaBufferManager::GetInstance();
+  IOBuffer source = rdma.Enabled() ? rdma.EnsureRegistered(block)
+                                    : std::move(block);
+  auto status = upstream_->SendPutRequest(handle, source);
   if (!status.ok()) {
     LOG(ERROR) << "Fail to put block to remote cache";
   }
@@ -113,8 +119,37 @@ Status RemoteBlockCacheImpl::Range(BlockHandle handle, off_t offset,
 
   Status status;
   bool cache_hit = false;
-  status = upstream_->SendRangeRequest(handle, offset, length, buffer,
-                                       option.block_whole_length, &cache_hit);
+  auto& rdma = RdmaBufferManager::GetInstance();
+  if (rdma.Enabled()) {
+    if (buffer->ConstIOBuf().backing_block_num() == 1 &&
+        buffer->GetFirstDataMeta() != 0 && buffer->Size() >= length) {
+      // The caller already supplied a registered single-block destination
+      // (meta carries the rkey, e.g. an LMCache arena slice); let the server
+      // RDMA-write straight into it — fully zero copy, no pool buffer, no move.
+      status = upstream_->SendRangeRequest(handle, offset, length, buffer,
+                                           option.block_whole_length,
+                                           &cache_hit);
+    } else {
+      // Hand the server a pre-registered pool destination to RDMA-write into
+      // (zero copy). Publish it to the caller only on success, so a NotFound
+      // leaves `buffer` clean for any higher-tier storage fallback that
+      // appends into it.
+      IOBuffer dest = rdma.NewBuffer(length);
+      if (dest.Size() == 0) {
+        return Status::Internal("alloc rdma range destination failed");
+      }
+      status = upstream_->SendRangeRequest(handle, offset, length, &dest,
+                                           option.block_whole_length,
+                                           &cache_hit);
+      if (status.ok()) {
+        *buffer = std::move(dest);
+      }
+    }
+  } else {
+    // brpc fills `buffer` from the response attachment.
+    status = upstream_->SendRangeRequest(handle, offset, length, buffer,
+                                         option.block_whole_length, &cache_hit);
+  }
   if (status.ok()) {
     if (cache_hit) {
       vars_->cache_hit_count << 1;
@@ -131,7 +166,10 @@ Status RemoteBlockCacheImpl::Cache(BlockHandle handle, IOBuffer block,
                                    CacheOption /*option*/) {
   DCHECK_RUNNING("RemoteBlockCache");
 
-  auto status = upstream_->SendCacheRequest(handle, block);
+  auto& rdma = RdmaBufferManager::GetInstance();
+  IOBuffer source = rdma.Enabled() ? rdma.EnsureRegistered(block)
+                                    : std::move(block);
+  auto status = upstream_->SendCacheRequest(handle, source);
   if (!status.ok()) {
     LOG(ERROR) << "Fail to cache block to remote cache";
   }

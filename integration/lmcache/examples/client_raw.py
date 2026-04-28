@@ -20,6 +20,7 @@ Usage (matches client.py):
 from __future__ import annotations
 
 import argparse
+import ctypes
 import importlib.util
 import logging
 import os
@@ -50,6 +51,9 @@ _native = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_native)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
+_RDMA_POOL_KEEPALIVE = []
+_RDMA_POOL_OFFSET = 0
 
 
 # --------------------------------------------------------------------------
@@ -113,10 +117,47 @@ def _parse_url(url: str) -> tuple[str, str]:
     return mds, grp
 
 
-def _open_native(url: str):
+def _open_native(args_or_url):
+    global _RDMA_POOL_OFFSET
+    url = args_or_url if isinstance(args_or_url, str) else args_or_url.url
+    rdma_pool_mib = 0 if isinstance(args_or_url, str) else args_or_url.rdma_pool_mib
     mds, grp = _parse_url(url)
-    logging.info("connecting: mds=%s cache_group=%s", mds, grp)
-    return _native.RemoteCache(mds_addrs=mds, cache_group=grp, extra={})
+    rdma_pools = []
+    if rdma_pool_mib:
+        pool = bytearray(rdma_pool_mib * 1024 * 1024)
+        addr = ctypes.addressof(ctypes.c_char.from_buffer(pool))
+        rdma_pools.append((addr, len(pool)))
+        _RDMA_POOL_KEEPALIVE.append(pool)
+        _RDMA_POOL_OFFSET = 0
+    logging.info("connecting: mds=%s cache_group=%s rdma_pools=%d",
+                 mds, grp, len(rdma_pools))
+    rc = _native.RemoteCache(
+        mds_addrs=mds,
+        cache_group=grp,
+        conf_file="",
+        rdma_pools=rdma_pools,
+    )
+    if rdma_pools:
+        logging.info("rdma: device=%s regions=%s",
+                     rc.rdma_device_name(), rc.registered_rdma_regions())
+    return rc
+
+
+def _alloc_payload(size: int):
+    global _RDMA_POOL_OFFSET
+    if not _RDMA_POOL_KEEPALIVE:
+        return bytearray(size)
+
+    pool = _RDMA_POOL_KEEPALIVE[-1]
+    end = _RDMA_POOL_OFFSET + size
+    if end > len(pool):
+        raise SystemExit(
+            "FATAL: --rdma-pool-mib is too small for this command "
+            f"(need at least {end} bytes)"
+        )
+    out = memoryview(pool)[_RDMA_POOL_OFFSET:end]
+    _RDMA_POOL_OFFSET = end
+    return out
 
 
 def _wait_one_completion(rc, expected_future_id: int, timeout_ms: int = 30_000):
@@ -148,7 +189,7 @@ def _wait_one_completion(rc, expected_future_id: int, timeout_ms: int = 30_000):
 # --------------------------------------------------------------------------
 
 def cmd_ping(args: argparse.Namespace) -> int:
-    rc = _open_native(args.url)
+    rc = _open_native(args)
     try:
         rc.ping()
         print("ping: ok")
@@ -161,10 +202,10 @@ def cmd_ping(args: argparse.Namespace) -> int:
 
 
 def cmd_put(args: argparse.Namespace) -> int:
-    rc = _open_native(args.url)
+    rc = _open_native(args)
     try:
         key = _make_key(args)
-        buf = bytearray(args.size)
+        buf = _alloc_payload(args.size)
         _fill_pattern(memoryview(buf), args.seed)
         print(f"put: key={key} size={len(buf)} seed=0x{args.seed:x}")
         fid = rc.submit_batch_set([key], [memoryview(buf)])
@@ -182,10 +223,10 @@ def cmd_put(args: argparse.Namespace) -> int:
 
 
 def cmd_get(args: argparse.Namespace) -> int:
-    rc = _open_native(args.url)
+    rc = _open_native(args)
     try:
         key = _make_key(args)
-        buf = bytearray(args.size)
+        buf = _alloc_payload(args.size)
         print(f"get: key={key} size={len(buf)}")
         fid = rc.submit_batch_get([key], [memoryview(buf)])
         ok, err, per_key = _wait_one_completion(rc, fid)
@@ -206,7 +247,7 @@ def cmd_get(args: argparse.Namespace) -> int:
 
 
 def cmd_exists(args: argparse.Namespace) -> int:
-    rc = _open_native(args.url)
+    rc = _open_native(args)
     try:
         key = _make_key(args)
         present = rc.exists_sync(key)
@@ -239,7 +280,7 @@ def cmd_bench(args: argparse.Namespace) -> int:
     else:
         print(f"  (deterministic hashes from --rand-seed=0x{args.rand_seed:x})")
 
-    rc = _open_native(args.url)
+    rc = _open_native(args)
     try:
         kv_rank = (args.world_size << 24) | (args.worker_id << 16)
         keys = [f"{args.model}@{kv_rank:08x}@{h:08x}" for h in hashes]
@@ -253,7 +294,7 @@ def cmd_bench(args: argparse.Namespace) -> int:
         # One source buffer reused across N keys. Native zero-copy holds a
         # ref until brpc releases the IOBuf block; the buffer object stays
         # alive for the whole loop scope, so reuse is safe.
-        src = bytearray(args.size)
+        src = _alloc_payload(args.size)
         _fill_pattern(memoryview(src), args.seed)
 
         rounds = max(1, args.rounds)
@@ -273,7 +314,7 @@ def cmd_bench(args: argparse.Namespace) -> int:
                      args.mode)
 
         # ---- GET ----
-        dsts = [bytearray(args.size) for _ in range(args.count)]
+        dsts = [_alloc_payload(args.size) for _ in range(args.count)]
         mvs = [memoryview(d) for d in dsts]
         if args.mode == "seq":
             get_lat_ms, get_wall_ms, get_failed = _bench_seq(
@@ -408,7 +449,7 @@ def cmd_watch(args: argparse.Namespace) -> int:
 
     rng = random.Random(args.rand_seed) if args.rand_seed is not None else random.Random()
     kv_rank = (args.world_size << 24) | (args.worker_id << 16)
-    rc = _open_native(args.url)
+    rc = _open_native(args)
 
     # First Ctrl-C: drop out of the loop after the current batch.
     # Second Ctrl-C: force-exit. Needed when the current batch is wedged
@@ -435,7 +476,7 @@ def cmd_watch(args: argparse.Namespace) -> int:
             primed_hashes = [rng.randint(0, 0xFFFFFFFF) for _ in range(args.count)]
             primed_keys = [f"{args.model}@{kv_rank:08x}@{h:08x}"
                            for h in primed_hashes]
-            primer = bytearray(args.size)
+            primer = _alloc_payload(args.size)
             _fill_pattern(memoryview(primer), args.seed)
             print(f"  priming {args.count} keys with {args.size}-byte payload...",
                   flush=True)
@@ -458,9 +499,9 @@ def cmd_watch(args: argparse.Namespace) -> int:
         cum_start = time.perf_counter()
         deadline = (time.perf_counter() + args.duration) if args.duration > 0 else None
         round_no = 0
-        src = bytearray(args.size)
+        src = _alloc_payload(args.size)
         _fill_pattern(memoryview(src), args.seed)
-        dsts = [bytearray(args.size) for _ in range(args.count)]
+        dsts = [_alloc_payload(args.size) for _ in range(args.count)]
         mvs = [memoryview(d) for d in dsts]
 
         while not stop["flag"]:
@@ -538,12 +579,12 @@ def cmd_watch(args: argparse.Namespace) -> int:
 
 
 def cmd_roundtrip(args: argparse.Namespace) -> int:
-    rc = _open_native(args.url)
+    rc = _open_native(args)
     try:
         key = _make_key(args)
 
         # [1/3] put
-        src = bytearray(args.size)
+        src = _alloc_payload(args.size)
         _fill_pattern(memoryview(src), args.seed)
         print(f"[1/3] put key={key} size={len(src)} seed=0x{args.seed:x}")
         fid = rc.submit_batch_set([key], [memoryview(src)])
@@ -554,7 +595,7 @@ def cmd_roundtrip(args: argparse.Namespace) -> int:
 
         # [2/3] get
         print(f"[2/3] get key={key}")
-        dst = bytearray(args.size)
+        dst = _alloc_payload(args.size)
         fid = rc.submit_batch_get([key], [memoryview(dst)])
         ok, err, per_key = _wait_one_completion(rc, fid)
         if err:
@@ -589,6 +630,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help="model_name field (default: smoke-client)")
     p.add_argument("--world-size", type=int, default=1)
     p.add_argument("--worker-id", type=int, default=0)
+    p.add_argument("--rdma-pool-mib", type=int, default=0,
+                   help="allocate and register an RDMA pool before connecting")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     for name in ("put", "get", "exists", "roundtrip"):

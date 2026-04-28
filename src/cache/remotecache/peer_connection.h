@@ -24,38 +24,76 @@
 #ifndef DINGOFS_SRC_CACHE_REMOTECACHE_PEER_CONNECTION_H_
 #define DINGOFS_SRC_CACHE_REMOTECACHE_PEER_CONNECTION_H_
 
-#include <brpc/channel.h>
-#include <bthread/rwlock.h>
+#include <google/protobuf/message.h>
 
-#include <atomic>
 #include <memory>
 #include <string>
 
+#include "common/io_buffer.h"
 #include "common/status.h"
 
 namespace dingofs {
 namespace cache {
 
-static std::atomic<uint64_t> kConnectionId{0};
+// Result of a single transport-level RPC, decoupled from the concrete
+// transport (brpc / RDMA). `failed` means a transport/network error (the app
+// status, if any, lives in the response message).
+struct TransportResult {
+  bool failed{false};
+  int error_code{0};
+  std::string error_text;
+};
+
+// One physical connection to a cache peer. Hides whether the wire is brpc or
+// RDMA so that Peer::SendRequest stays transport-agnostic.
+class Transport {
+ public:
+  virtual ~Transport() = default;
+
+  virtual Status Connect(const std::string& ip, uint32_t port,
+                         uint32_t timeout_ms) = 0;
+  virtual void Close() = 0;
+  virtual bool Connected() = 0;
+
+  // Sends one BlockCacheService RPC. For Put/Cache, `req_body` is the block to
+  // upload (may be null); for Range, `resp_body` receives the fetched block
+  // (may be null). Transport-specific details (brpc attachment vs one-sided
+  // RDMA) are hidden here.
+  virtual void Execute(const std::string& method,
+                       const google::protobuf::Message& raw_request,
+                       google::protobuf::Message* raw_response,
+                       const IOBuffer* req_body, IOBuffer* resp_body,
+                       uint32_t timeout_ms, TransportResult* out) = 0;
+};
+
+using TransportUPtr = std::unique_ptr<Transport>;
 
 class PeerConnection;
 using PeerConnectionUPtr = std::unique_ptr<PeerConnection>;
 
 class PeerConnection {
  public:
-  PeerConnection()
-      : id_(kConnectionId.fetch_add(1, std::memory_order_relaxed)) {}
+  PeerConnection();
 
   static PeerConnectionUPtr New() { return std::make_unique<PeerConnection>(); }
 
-  Status Connect(const std::string& ip, uint32_t port, uint32_t timeout_ms);
-  void Close();
-  std::shared_ptr<brpc::Channel> GetChannel();
+  Status Connect(const std::string& ip, uint32_t port, uint32_t timeout_ms) {
+    return transport_->Connect(ip, port, timeout_ms);
+  }
+  void Close() { transport_->Close(); }
+  bool Connected() { return transport_->Connected(); }
+
+  void Execute(const std::string& method,
+               const google::protobuf::Message& raw_request,
+               google::protobuf::Message* raw_response,
+               const IOBuffer* req_body, IOBuffer* resp_body,
+               uint32_t timeout_ms, TransportResult* out) {
+    transport_->Execute(method, raw_request, raw_response, req_body, resp_body,
+                        timeout_ms, out);
+  }
 
  private:
-  uint64_t id_;
-  bthread::RWLock rwlock_;
-  std::shared_ptr<brpc::Channel> channel_;
+  TransportUPtr transport_;
 };
 
 }  // namespace cache

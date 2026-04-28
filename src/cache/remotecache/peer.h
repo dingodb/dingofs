@@ -93,13 +93,6 @@ std::ostream& operator<<(std::ostream& os, const Peer& peer);
 
 template <typename T, typename U>
 Response<U> Peer::SendRequest(const Request<T>& request) {
-  const auto* method =
-      pb::cache::BlockCacheService::descriptor()->FindMethodByName(
-          request.method);
-  if (method == nullptr) {
-    LOG(FATAL) << "Unknown rpc method=" << request.method;
-  }
-
   Response<U> response;
   BRPC_SCOPE_EXIT {
     auto status = response.status;
@@ -117,34 +110,29 @@ Response<U> Peer::SendRequest(const Request<T>& request) {
        ++retry_count) {
     auto* conn = GetConnection();
     CHECK_NOTNULL(conn);
-    auto channel = conn->GetChannel();
-    if (nullptr == channel) {
+    if (!conn->Connected()) {
       LOG(ERROR) << "PeerConnection is not connected, reconnect " << IP() << ":"
                  << Port();
       DoConnect(conn);
-      continue;  // retry anthor one
+      continue;  // retry another one
     }
 
-    brpc::Controller cntl;
-    cntl.set_connection_type(brpc::CONNECTION_TYPE_SINGLE);
-    cntl.set_timeout_ms(NextTimeoutMs(request.method, retry_count));
-    cntl.ignore_eovercrowded();
-    if (request.body != nullptr) {
-      cntl.request_attachment() = const_cast<IOBuffer*>(request.body)->IOBuf();
-    }
-    // cntl.set_request_id(ctx->TraceId());
-
-    channel->CallMethod(method, &cntl, &request.raw, &response.raw, nullptr);
+    // The transport (brpc or RDMA) hides how the block body is carried: a brpc
+    // attachment, or a one-sided RDMA read (Put/Cache) / write (Range). For
+    // Range the caller-provided destination (request.dest) receives the block
+    // directly — pre-registered by the cache layer for the RDMA path.
+    TransportResult tr;
+    conn->Execute(request.method, request.raw, &response.raw, request.body,
+                  request.dest, NextTimeoutMs(request.method, retry_count),
+                  &tr);
 
     // network error
-    if (cntl.Failed()) {
+    if (tr.failed) {
       LOG(ERROR) << "Fail to send " << request << " to " << EndPoint()
-                 << ", because network is error: " << cntl.ErrorText()
-                 << ", tooks " << std::setprecision(6)
-                 << cntl.latency_us() / 1e6 << " seconds";
+                 << ", because network is error: " << tr.error_text;
 
-      if (!ShouldRetry(request.method, cntl.ErrorCode())) {
-        response.status = Status::NetError(cntl.ErrorCode(), cntl.ErrorText());
+      if (!ShouldRetry(request.method, tr.error_code)) {
+        response.status = Status::NetError(tr.error_code, tr.error_text);
         return response;
       }
 
@@ -156,16 +144,11 @@ Response<U> Peer::SendRequest(const Request<T>& request) {
 
     // response status is ok
     response.status = ToStatus(response.raw.status());
-    if (response.status.ok()) {
-      response.body = IOBuffer(cntl.response_attachment().movable());
-      return response;
-    } else {
+    if (!response.status.ok()) {
       LOG(ERROR) << "Fail to send " << request << " to " << EndPoint()
-                 << ", because receive " << response << ", tooks "
-                 << std::setprecision(6) << cntl.latency_us() / 1e6
-                 << " seconds";
-      return response;
+                 << ", because receive " << response;
     }
+    return response;
   }
 
   timer.stop();

@@ -17,6 +17,7 @@ set(NATIVE_SRCS
     csrc/module.cc
     csrc/native_engine.cc
     csrc/completion_queue.cc
+    csrc/rdma_memory_registry.cc
 )
 
 pybind11_add_module(_dingofs_native MODULE ${NATIVE_SRCS})
@@ -31,9 +32,18 @@ target_include_directories(_dingofs_native PRIVATE
 # we mutate at init time. PROTO_OBJS supplies the generated pb code that
 # block_handle_helper.h depends on.
 target_link_libraries(_dingofs_native PRIVATE
+    ibverbs::ibverbs
     cache_remotecache
     dingofs_options
     PROTO_OBJS
+)
+
+# cache_remotecache's transitive storage stack pulls static librados/librdmacm,
+# which in turn pulls libibverbs.a for rdma-core internal symbols. Hide those
+# archive exports so DingoFS's own RDMA path binds to libibverbs.so and can
+# dlopen mlx5 providers inside Python.
+target_link_options(_dingofs_native PRIVATE
+    "-Wl,--exclude-libs,libibverbs.a"
 )
 
 # Place the .so straight inside the Python package source tree so

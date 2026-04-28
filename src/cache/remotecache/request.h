@@ -37,7 +37,8 @@ template <typename T>
 struct Request {
   std::string method;
   T raw;
-  const IOBuffer* body;
+  const IOBuffer* body;   // upload source for Put/Cache (may be null)
+  IOBuffer* dest{nullptr};  // download destination for Range (may be null)
 };
 
 template <typename U>

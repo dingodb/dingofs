@@ -1,0 +1,66 @@
+/*
+ * Copyright (c) 2026 dingodb.com, Inc. All Rights Reserved
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/*
+ * Project: DingoFS
+ * Created Date: 2026-05-07
+ * Author: Jingli Chen (Wine93)
+ */
+
+#ifndef DINGOFS_SRC_CACHE_INFINIBAND_SERVICE_H_
+#define DINGOFS_SRC_CACHE_INFINIBAND_SERVICE_H_
+
+#include <google/protobuf/arena.h>
+#include <google/protobuf/descriptor.h>
+#include <google/protobuf/message.h>
+#include <google/protobuf/service.h>
+
+#include <cstddef>
+#include <memory>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+
+#include "cache/infiniband/controller.h"
+#include "common/status.h"
+#include "dingofs/infiniband.pb.h"
+
+namespace dingofs {
+namespace cache {
+namespace infiniband {
+
+class ServiceHub {
+ public:
+  ServiceHub() = default;
+
+  Status AddService(google::protobuf::Service* service);
+  Status GetService(const std::string& service_name,
+                    google::protobuf::Service** service);
+  Status GetMethod(google::protobuf::Service* service,
+                   const std::string& method_name,
+                   google::protobuf::MethodDescriptor** method);
+
+ private:
+  std::unordered_map<std::string, ::google::protobuf::Service*> services_;
+};
+
+using ServiceHubUPtr = std::unique_ptr<ServiceHub>;
+
+}  // namespace infiniband
+}  // namespace cache
+}  // namespace dingofs
+
+#endif  // DINGOFS_SRC_CACHE_INFINIBAND_SERVICE_H_

@@ -58,6 +58,13 @@ from lmcache.utils import CacheEngineKey
 from _fake_lmcache import FakeLocalCPUBackend, FakeMemoryObj, FakeMetadata
 from dingofs_connector.remote_connector import DingoFSConnector
 
+# Set by main() from the global --arena-mib / --conf flags. arena_mib > 0 swaps
+# the bytearray-pool fake backend for a real contiguous-arena backend so the
+# connector's zero-copy RDMA path activates; conf_path toggles --use_rdma for a
+# clean TCP-vs-RDMA A/B (arena stays registered in both runs).
+_ARENA_MIB = 0
+_CONF_PATH: Optional[str] = None
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 
@@ -86,6 +93,10 @@ def _make_key(args: argparse.Namespace,
 
 def _fill_pattern(mv: memoryview, seed: int) -> None:
     """Bulk-fill (fast): ~30x quicker than per-8-byte loop on 4 MiB."""
+    # Real LMCache MemoryObj hands back a '<B'-format memoryview, which rejects
+    # slice assignment; the plain-byte view does not.
+    if mv.format != "B":
+        mv = mv.cast("B")
     pattern = struct.pack("<Q", seed & 0xFFFFFFFFFFFFFFFF)
     full = len(mv) // _PATTERN_LEN
     if full:
@@ -97,6 +108,8 @@ def _fill_pattern(mv: memoryview, seed: int) -> None:
 
 def _verify_pattern(mv: memoryview, seed: int) -> bool:
     """Bulk-compare (fast)."""
+    if mv.format != "B":
+        mv = mv.cast("B")
     pattern = struct.pack("<Q", seed & 0xFFFFFFFFFFFFFFFF)
     full = len(mv) // _PATTERN_LEN
     if full and bytes(mv[: full * _PATTERN_LEN]) != pattern * full:
@@ -121,9 +134,20 @@ async def _with_connector(url: str, fn, *, size: Optional[int] = None):
     back as full-sized chunks.
     """
     metadata = FakeMetadata.for_size(size) if size else FakeMetadata()
-    backend = FakeLocalCPUBackend(metadata=metadata)
+    if _ARENA_MIB > 0:
+        from _arena_lmcache import ArenaLocalCPUBackend
+        backend = ArenaLocalCPUBackend(metadata=metadata, arena_mib=_ARENA_MIB)
+    else:
+        backend = FakeLocalCPUBackend(metadata=metadata)
     loop = asyncio.get_running_loop()
-    conn = DingoFSConnector(url=url, loop=loop, local_cpu_backend=backend)
+    conn = DingoFSConnector(url=url, loop=loop, local_cpu_backend=backend,
+                            gflag_conf_path=_CONF_PATH)
+    # Surface the actual transport so an A/B run can't silently fall back.
+    native = conn._client._native
+    from dingofs_connector import _dingofs_native
+    logging.info("transport: use_rdma=%s rdma_regions=%d",
+                 _dingofs_native.get_flag("use_rdma"),
+                 len(native.registered_rdma_regions()))
     try:
         return await fn(conn, backend)
     finally:
@@ -152,6 +176,7 @@ async def cmd_put(args: argparse.Namespace) -> int:
             f"size={len(obj.byte_array)} seed=0x{args.seed:x}"
         )
         await conn.put(key, obj)
+        obj.ref_count_down()  # return the arena slot (connector.put doesn't)
         print("put: ok")
         return 0
     return await _with_connector(args.url, go, size=args.size)
@@ -191,6 +216,7 @@ async def cmd_roundtrip(args: argparse.Namespace) -> int:
         print(f"[1/3] put key={key.to_string()} size={len(src.byte_array)} "
               f"seed=0x{args.seed:x}")
         await conn.put(key, src)
+        src.ref_count_down()  # return the arena slot (connector.put doesn't)
 
         # Server-side AsyncCache is fire-and-forget: the put RPC ACKs as
         # soon as the request is enqueued, but data hits the cache-node disk
@@ -223,7 +249,9 @@ async def cmd_roundtrip(args: argparse.Namespace) -> int:
             return 1
 
         print("[3/3] verify byte pattern")
-        if not _verify_pattern(got.byte_array, args.seed):
+        ok = _verify_pattern(got.byte_array, args.seed)
+        got.ref_count_down()
+        if not ok:
             print("FAIL: byte pattern mismatch")
             return 1
         print("PASS")
@@ -269,6 +297,11 @@ async def cmd_bench(args: argparse.Namespace) -> int:
         _print_stats("put", put_lat, args.size, put_wall,
                      put_failed, args.count * rounds, args.mode)
 
+        # AsyncCache is fire-and-forget; let the writes land on the cache node
+        # before reading, else the GET phase races and sees misses. Larger
+        # blocks take longer to flush, so scale the wait a little with size.
+        await asyncio.sleep(3.0)
+
         # --- GET ---
         if args.mode == "seq":
             get_lat, get_wall, get_failed, get_mismatch = await _bench_seq_get(
@@ -305,6 +338,8 @@ async def _bench_seq_put(conn, backend, keys, hashes, size, seed, size_mib):
             lat_ms.append(elapsed)
             failed += 1
             print(f"  put #{i:02d} hash=0x{h:08x}: FAIL {elapsed:7.2f} ms  err={e!r}")
+        finally:
+            obj.ref_count_down()  # return the arena slot
     return lat_ms, (time.perf_counter() - wall_start) * 1000, failed
 
 
@@ -359,6 +394,9 @@ async def _bench_batch_put(conn, backend, keys, size, seed, rounds):
             per_round_ms.append(elapsed)
             failed += len(keys)
             print(f"  put round#{r:02d}: FAIL {elapsed:.2f} ms  err={e!r}")
+        finally:
+            for o in objs:
+                o.ref_count_down()  # return arena slots before next round
     return per_round_ms, (time.perf_counter() - overall_start) * 1000, failed
 
 
@@ -471,6 +509,10 @@ async def cmd_watch(args: argparse.Namespace) -> int:
             except Exception as e:
                 print(f"  prime FAIL: {e!r}")
                 return 1
+            for o in primer_objs:
+                o.ref_count_down()  # priming done; return arena slots
+            # Let the async Cache land before the read loop starts.
+            await asyncio.sleep(2.5)
 
         print(f"  watching: op={op} count={args.count} concurrency={conc} "
               f"size={args.size} ({size_mib:.2f} MiB each, "
@@ -490,6 +532,8 @@ async def cmd_watch(args: argparse.Namespace) -> int:
             for o in objs:
                 _fill_pattern(o.byte_array, args.seed)
             await conn.batched_put(keys, objs)
+            for o in objs:
+                o.ref_count_down()  # return arena slots
             return 0
 
         async def _one_get() -> int:
@@ -594,6 +638,13 @@ def build_parser() -> argparse.ArgumentParser:
                    help="model_name field of the CacheEngineKey")
     p.add_argument("--world-size", type=int, default=1)
     p.add_argument("--worker-id", type=int, default=0)
+    p.add_argument("--arena-mib", type=int, default=0,
+                   help="if >0, back the connector with a real contiguous "
+                        "pinned arena of this size (enables the zero-copy RDMA "
+                        "path); 0 uses the bytearray-pool fake backend")
+    p.add_argument("--conf", default=None,
+                   help="gflags conf file passed to the connector "
+                        "(e.g. a file with --use_rdma=true|false)")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     for name in ("put", "get", "exists", "roundtrip"):
@@ -658,6 +709,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = build_parser().parse_args()
+    global _ARENA_MIB, _CONF_PATH
+    _ARENA_MIB = args.arena_mib
+    _CONF_PATH = args.conf
     cmd = {
         "put": cmd_put,
         "get": cmd_get,

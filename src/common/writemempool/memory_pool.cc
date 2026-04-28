@@ -26,6 +26,8 @@
 #include <sys/mman.h>
 
 #include <atomic>
+#include <cstdlib>
+#include <thread>
 
 namespace dingofs {
 
@@ -252,10 +254,12 @@ void* MemoryPool::HugePagesMalloc(size_t size) {
       nullptr, real_size, PROT_READ | PROT_WRITE,
       MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE | MAP_HUGETLB, -1, 0);
   if (ptr == MAP_FAILED) {
-    ptr = (char*)std::malloc(real_size);
-    if (nullptr == ptr) {
+    void* aligned = nullptr;
+    int rc = posix_memalign(&aligned, HUGE_PAGE_SIZE_2MB, real_size);
+    if (rc != 0) {
       return nullptr;
     }
+    ptr = static_cast<char*>(aligned);
     real_size = 0;
   }
 

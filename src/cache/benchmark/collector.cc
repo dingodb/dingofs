@@ -23,42 +23,76 @@
 
 #include "cache/benchmark/collector.h"
 
-#include "cache/common/const.h"
+#include <algorithm>
+#include <cmath>
+
+#include "common/const.h"
 
 namespace dingofs {
 namespace cache {
 
-void Stat::Add(uint64_t bytes, uint64_t latency_us) {
+void Stat::Add(uint64_t bytes, uint64_t latency_us, bool ok) {
+  count_++;
+  if (!ok) {
+    fail_count_++;
+    return;
+  }
+
   max_latency_us_ = std::max(max_latency_us_, latency_us);
   if (min_latency_us_ == 0 || latency_us < min_latency_us_) {
     min_latency_us_ = latency_us;
   }
 
-  count_++;
+  success_count_++;
   total_bytes_ += bytes;
   total_latency_us_ += latency_us;
+  latencies_us_.push_back(latency_us);
 }
 
-uint64_t Stat::IOPS(uint64_t interval_us) const {
-  return count_ / (interval_us * 1.0 / 1e6);
+double Stat::IOPS(uint64_t interval_us) const {
+  if (interval_us == 0) {
+    return 0;
+  }
+  return success_count_ / (interval_us * 1.0 / 1e6);
 }
 
-uint64_t Stat::Bandwidth(uint64_t interval_us) const {
+double Stat::Bandwidth(uint64_t interval_us) const {
+  if (interval_us == 0) {
+    return 0;
+  }
   return total_bytes_ * 1.0 / (interval_us * 1.0 / 1e6) / kMiB;
 }
 
 uint64_t Stat::AvgLat() const {
-  if (count_ == 0) {
+  if (success_count_ == 0) {
     return 0;
   }
-  return total_latency_us_ / count_;
+  return total_latency_us_ / success_count_;
 }
 
 uint64_t Stat::MaxLat() const { return max_latency_us_; }
 
 uint64_t Stat::MinLat() const { return min_latency_us_; }
 
+uint64_t Stat::PercentileLat(double percentile) const {
+  if (latencies_us_.empty()) {
+    return 0;
+  }
+  auto latencies = latencies_us_;
+  std::sort(latencies.begin(), latencies.end());
+  auto index = static_cast<size_t>(
+      std::ceil(percentile / 100.0 * latencies.size()) - 1);
+  index = std::min(index, latencies.size() - 1);
+  return latencies[index];
+}
+
 uint64_t Stat::Count() const { return count_; }
+
+uint64_t Stat::SuccessCount() const { return success_count_; }
+
+uint64_t Stat::FailCount() const { return fail_count_; }
+
+uint64_t Stat::TotalBytes() const { return total_bytes_; }
 
 Status Collector::Start() {
   bthread::ExecutionQueueOptions queue_options;

@@ -20,5 +20,6 @@ add_library(test_cache_common OBJECT
 
 target_link_libraries(test_cache_common
     cache_lib
+    ibverbs::ibverbs
     ${TEST_DEPS_WITHOUT_MAIN}
 )

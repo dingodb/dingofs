@@ -23,9 +23,15 @@
 #ifndef DINGOFS_SRC_CACHE_BENCHMARK_FACTORY_H_
 #define DINGOFS_SRC_CACHE_BENCHMARK_FACTORY_H_
 
+#include <cstdint>
+#include <functional>
+#include <memory>
+#include <string>
+
 #include "cache/blockcache/block_cache.h"
 #include "common/block/block_handle.h"
 #include "common/block/block_key.h"
+#include "common/status.h"
 
 namespace dingofs {
 namespace cache {
@@ -55,13 +61,30 @@ class BlockKeyIterator {
 IOBuffer NewBlock(uint64_t blksize);
 
 // task factory
-using Task = std::function<void()>;
+struct TaskResult {
+  Status status;
+  uint64_t bytes{0};
+};
+
+struct TaskContext {
+  Status Init(uint64_t worker_idx);
+  IOBuffer* RequestBody() { return &request_body; }
+  bool VerifyRange(const IOBuffer& buffer, uint64_t length) const;
+
+  // With --bench_rdma_registered_buffers (and --use_rdma), request_body is a
+  // single registered buffer from RdmaBufferManager so Put/Cache are zero-copy
+  // on the wire; its deleter returns the buffer to the pool on destruction.
+  IOBuffer request_body;
+  uint64_t worker_idx{0};
+};
+
+using Task = std::function<TaskResult()>;
 
 class TaskFactory {
  public:
   virtual ~TaskFactory() = default;
 
-  virtual Task GenTask(const BlockKey& key) = 0;
+  virtual Task GenTask(const BlockKey& key, TaskContext* context) = 0;
 };
 
 using TaskFactoryUPtr = std::unique_ptr<TaskFactory>;
@@ -71,25 +94,36 @@ class PutTaskFactory final : public TaskFactory {
  public:
   PutTaskFactory(BlockCacheSPtr block_cache);
 
-  Task GenTask(const BlockKey& key) override;
+  Task GenTask(const BlockKey& key, TaskContext* context) override;
 
  private:
-  void Put(const BlockKey& key);
+  TaskResult Put(const BlockKey& key, TaskContext* context);
 
   BlockCacheSPtr block_cache_;
-  IOBuffer block_;
+};
+
+class CacheTaskFactory final : public TaskFactory {
+ public:
+  explicit CacheTaskFactory(BlockCacheSPtr block_cache);
+
+  Task GenTask(const BlockKey& key, TaskContext* context) override;
+
+ private:
+  TaskResult Cache(const BlockKey& key, TaskContext* context);
+
+  BlockCacheSPtr block_cache_;
 };
 
 class RangeTaskFactory final : public TaskFactory {
  public:
   explicit RangeTaskFactory(BlockCacheSPtr block_cache);
 
-  Task GenTask(const BlockKey& key) override;
+  Task GenTask(const BlockKey& key, TaskContext* context) override;
 
  private:
-  void RangeAll(const BlockKey& key);
-  void Range(const BlockKey& key, off_t offset, size_t length,
-             IOBuffer* buffer);
+  TaskResult RangeAll(const BlockKey& key, TaskContext* context);
+  Status Range(const BlockKey& key, off_t offset, size_t length,
+               IOBuffer* buffer);
 
   BlockCacheSPtr block_cache_;
 };

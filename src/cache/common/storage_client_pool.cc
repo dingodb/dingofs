@@ -77,8 +77,8 @@ Status StorageClientPoolImpl::CreateStorageClient(
   blockaccess::BlockAccessOptions block_access_opt;
   FillBlockAccessOption(fs_info, &block_access_opt);
 
-  accesseres_[fs_id] = blockaccess::NewPrefixBlockAccesser(
-      fs_info.fs_name(), block_access_opt);
+  accesseres_[fs_id] =
+      blockaccess::NewPrefixBlockAccesser(fs_info.fs_name(), block_access_opt);
   auto* block_accesser = accesseres_[fs_id].get();
   status = block_accesser->Init();
   if (!status.ok()) {
