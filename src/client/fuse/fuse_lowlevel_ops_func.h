@@ -41,11 +41,7 @@ static const struct fuse_lowlevel_ops kFuseOp = {
     .release = FuseOpRelease,
     .fsync = FuseOpFsync,
     .opendir = FuseOpOpenDir,
-#if FUSE_VERSION >= FUSE_MAKE_VERSION(3, 0)
-    .readdir = nullptr,
-#else
     .readdir = FuseOpReadDir,
-#endif
     .releasedir = FuseOpReleaseDir,
     .fsyncdir = nullptr,
     .statfs = FuseOpStatFs,

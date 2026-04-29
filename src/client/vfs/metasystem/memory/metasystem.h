@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -153,7 +154,11 @@ class DirIterator {
 
   void SetDirEntries(std::vector<DirEntry>&& dir_entries);
 
+  std::mutex& Mutex() { return mutex_; }
+
  private:
+  std::mutex mutex_;
+
   Ino ino_{0};
   uint64_t offset_{0};
 

@@ -17,6 +17,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <mutex>
 #include <unordered_map>
 #include <vector>
 
@@ -52,12 +53,16 @@ class DirIterator {
 
   void Remember(uint64_t off);
 
+  std::mutex& Mutex() { return mutex_; }
+
   Status GetValue(ContextSPtr& ctx, uint64_t off, DirEntry& dir_entry);
 
   bool Dump(Json::Value& value);
   bool Load(const Json::Value& value);
 
  private:
+  std::mutex mutex_;
+
   const Ino ino_;
   const uint64_t fh_;
 

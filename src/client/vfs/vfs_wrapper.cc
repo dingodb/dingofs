@@ -919,8 +919,9 @@ Status VFSWrapper::ReadDir(Ino ino, uint64_t fh, uint64_t offset,
   Status s;
   uint32_t count = 0;
   AccessLogGuard log([&]() {
-    return absl::StrFormat("readdir (%d): %s (%d %u) [fh:%d]", ino,
-                           s.ToString(), offset, count, fh);
+    return absl::StrFormat("readdir (%d): %s (%d %u) [fh:%d] %s", ino,
+                           s.ToString(), offset, count, fh,
+                           with_attr ? "true" : "false");
   });
 
   ClientOpMetricGuard op_metric(

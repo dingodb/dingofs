@@ -28,13 +28,13 @@
 #include "absl/strings/str_format.h"
 #include "client/common/const.h"
 #include "client/fuse/fs_context.h"
+#include "client/fuse/fuse_upgrade_manager.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/data_buffer.h"
-#include "common/io_buffer.h"
 #include "client/vfs/vfs_meta.h"
-#include "client/fuse/fuse_upgrade_manager.h"
 #include "client/vfs/vfs_wrapper.h"
 #include "common/const.h"
+#include "common/io_buffer.h"
 #include "common/options/client.h"
 #include "common/status.h"
 #include "fmt/format.h"
@@ -45,14 +45,15 @@ static dingofs::client::VFSWrapper* g_vfs = nullptr;
 USING_FLAG(fuse_enable_direct_io)
 USING_FLAG(fuse_enable_keep_cache)
 USING_FLAG(fuse_enable_readdir_cache)
+USING_FLAG(fuse_enable_parallel_dirops)
 USING_FLAG(fuse_dryrun_bench_mode)
 
 using dingofs::Status;
-using dingofs::client::vfs::Attr;
-using dingofs::client::vfs::FsStat;
-using dingofs::client::vfs::Attr2Str;
 using dingofs::client::fuse::FuseUpgradeManager;
 using dingofs::client::fuse::FuseUpgradeState;
+using dingofs::client::vfs::Attr;
+using dingofs::client::vfs::Attr2Str;
+using dingofs::client::vfs::FsStat;
 
 namespace {
 
@@ -76,6 +77,16 @@ void InitFuseConnInfo(struct fuse_conn_info* conn) {
     fuse_unset_feature_flag(conn, FUSE_CAP_AUTO_INVAL_DATA);
     LOG(INFO) << "[disabled] FUSE_CAP_AUTO_INVAL_DATA";
   }
+  if (FLAGS_fuse_enable_parallel_dirops) {
+    LOG_IF(INFO, fuse_set_feature_flag(conn, FUSE_CAP_PARALLEL_DIROPS))
+        << "[enabled] FUSE_CAP_PARALLEL_DIROPS";
+  }
+
+  LOG_IF(INFO, fuse_set_feature_flag(conn, FUSE_CAP_READDIRPLUS))
+      << "[enabled] FUSE_CAP_READDIRPLUS";
+
+  LOG_IF(INFO, fuse_set_feature_flag(conn, FUSE_CAP_READDIRPLUS_AUTO))
+      << "[enabled] FUSE_CAP_READDIRPLUS_AUTO";
 
   conn->max_readahead = FLAGS_fuse_max_readahead_kb * 1024;
   conn->max_background = FLAGS_fuse_max_background;
@@ -409,6 +420,7 @@ void FuseOpLookup(fuse_req_t req, fuse_ino_t parent, const char* name) {
   Status s = g_vfs->Lookup(parent, name, &attr);
   if (!s.ok()) {
     ReplyError(req, s);
+
   } else {
     ReplyEntry(req, attr);
   }
@@ -668,8 +680,8 @@ void FuseOpFsync(fuse_req_t req, fuse_ino_t ino, int datasync,
 void FuseOpFallocate(fuse_req_t req, fuse_ino_t ino, int mode, off_t offset,
                      off_t length, struct fuse_file_info* /*fi*/) {
   VLOG(1) << fmt::format(
-      "FuseOpFallocate ino({}) mode(0x{:x}) offset({}) length({}) ctx({})",
-      ino, mode, offset, length, FuseCtx(req));
+      "FuseOpFallocate ino({}) mode(0x{:x}) offset({}) length({}) ctx({})", ino,
+      mode, offset, length, FuseCtx(req));
   if (offset < 0 || length <= 0) {
     ReplyError(req, Status::InvalidParam("invalid fallocate range"));
     return;

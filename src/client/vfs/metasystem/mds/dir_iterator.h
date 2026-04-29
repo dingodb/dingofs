@@ -21,6 +21,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -56,6 +57,8 @@ class DirIterator {
 
   void Remember(uint64_t off);
 
+  std::mutex& Mutex() { return mutex_; }
+
   Status GetValue(ContextSPtr& ctx, uint64_t off, bool with_attr,
                   DirEntry& dir_entry);
 
@@ -70,6 +73,8 @@ class DirIterator {
  private:
   Status Fetch(ContextSPtr& ctx);
   Status SeekBackward(ContextSPtr& ctx, uint64_t off);
+
+  std::mutex mutex_;
 
   const Ino ino_;
   const uint64_t fh_;
