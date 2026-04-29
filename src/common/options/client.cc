@@ -190,6 +190,11 @@ DEFINE_bool(fuse_enable_auto_inval_data, true,
             "fuse will check the validity of the attributes on every read");
 DEFINE_validator(fuse_enable_auto_inval_data, brpc::PassValidate);
 
+DEFINE_bool(
+    fuse_enable_parallel_dirops, true,
+    "enable parallel lookup and readdir requests in the same directory");
+DEFINE_validator(fuse_enable_parallel_dirops, brpc::PassValidate);
+
 DEFINE_int32(fuse_max_readahead_kb, 131072,
              "maximum number of bytes that the kernel will read ahead");
 DEFINE_int32(fuse_max_background, 128,

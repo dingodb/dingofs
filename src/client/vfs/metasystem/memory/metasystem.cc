@@ -618,6 +618,8 @@ Status MemoryMetaSystem::ReadDir(ContextSPtr ctx, Ino, uint64_t fh,
   auto dir_iterator = dir_iterator_manager_.Get(fh);
   CHECK(dir_iterator != nullptr) << "dir_iterator is null";
 
+  std::lock_guard<std::mutex> lock(dir_iterator->Mutex());
+
   while (dir_iterator->Valid()) {
     DirEntry entry = dir_iterator->GetValue(with_attr);
 

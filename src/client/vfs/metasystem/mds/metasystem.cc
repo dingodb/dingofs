@@ -1185,6 +1185,8 @@ Status MDSMetaSystem::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
   auto dir_iterator = dir_iterator_manager_.Get(ino, fh);
   CHECK(dir_iterator != nullptr) << "dir_iterator is null";
 
+  std::lock_guard<std::mutex> lock(dir_iterator->Mutex());
+
   dir_iterator->Remember(offset);
 
   while (true) {

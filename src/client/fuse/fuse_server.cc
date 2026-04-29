@@ -52,7 +52,7 @@ DEFINE_string(fuse_mount_options, "default_permissions",
               "mount options for libfuse");
 DEFINE_bool(fuse_use_single_thread, false, "use single thread for libfuse");
 DEFINE_validator(fuse_use_single_thread, brpc::PassValidate);
-DEFINE_bool(fuse_use_clone_fd, false, "use clone fd for libfuse");
+DEFINE_bool(fuse_use_clone_fd, true, "use clone fd for libfuse");
 DEFINE_validator(fuse_use_clone_fd, brpc::PassValidate);
 DEFINE_uint32(fuse_max_threads, 64, "max threads for libfuse");
 DEFINE_validator(fuse_max_threads, brpc::PassValidate);
