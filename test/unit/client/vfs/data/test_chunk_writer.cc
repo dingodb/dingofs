@@ -539,7 +539,7 @@ TEST_F(ChunkWriterTest, ConcurrentFlush_HoldsSliceMutexUntilQueuePush) {
   auto release_t1_future = release_t1.get_future().share();
 
   std::atomic<bool> sync_fired{false};
-  SyncPoint::Get()->SetCallBack("ChunkWriter::DoFlushAsync:after_take_slices",
+  SyncPoint::GetInstance()->SetCallBack("ChunkWriter::DoFlushAsync:after_take_slices",
                                 [&](void*) {
                                   // Only the first FlushAsync (T1) trips this;
                                   // subsequent ones from T2 already block on
@@ -550,7 +550,7 @@ TEST_F(ChunkWriterTest, ConcurrentFlush_HoldsSliceMutexUntilQueuePush) {
                                   t1_in_section.set_value();
                                   release_t1_future.wait();
                                 });
-  SyncPoint::Get()->EnableProcessing();
+  SyncPoint::GetInstance()->EnableProcessing();
 
   std::atomic<bool> t1_returned_async{false};
   std::atomic<bool> t2_returned_async{false};
@@ -582,8 +582,8 @@ TEST_F(ChunkWriterTest, ConcurrentFlush_HoldsSliceMutexUntilQueuePush) {
   t1_thread.join();
   t2_thread.join();
 
-  SyncPoint::Get()->DisableProcessing();
-  SyncPoint::Get()->ClearAllCallBacks();
+  SyncPoint::GetInstance()->DisableProcessing();
+  SyncPoint::GetInstance()->ClearAllCallBacks();
 
   // Final flush (no sync point active) to drain any remaining work and
   // give the chunk_writer a clean exit.

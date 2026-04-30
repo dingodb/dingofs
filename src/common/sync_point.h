@@ -13,87 +13,84 @@
 
 // Test-only synchronization points for deterministic concurrency tests.
 //
-// In production builds (NDEBUG defined), TEST_SYNC_POINT() is a no-op macro
-// with zero cost. In debug/test builds, it dispatches to a registry that
-// allows tests to inject callbacks at named program locations to interleave
-// threads, observe ordering, or simulate races deterministically.
+// Pattern modeled after RocksDB's util/sync_point.h: in production builds
+// (NDEBUG defined) the SyncPoint class is not declared and the
+// TEST_SYNC_POINT macros expand to nothing — production code pays zero
+// cost. In Debug/test builds, callbacks can be registered at named program
+// points to interleave threads, observe ordering, or simulate races.
 //
-// Pattern modeled after RocksDB's util/sync_point.h.
+// Production code embeds sync points via the macro (no #ifdef needed):
 //
-// Usage in production code:
 //   TEST_SYNC_POINT("ChunkWriter::DoFlushAsync:between_locks");
 //
-// Usage in tests:
-//   SyncPoint::Get()->SetCallBack(
+// Tests drive callbacks through the class API directly:
+//
+//   SyncPoint::GetInstance()->SetCallBack(
 //       "ChunkWriter::DoFlushAsync:between_locks",
-//       [&](void*) { /* do something to trigger race */ });
-//   SyncPoint::Get()->EnableProcessing();
+//       [&](void*) { /* trigger race */ });
+//   SyncPoint::GetInstance()->EnableProcessing();
 //   ... run code ...
-//   SyncPoint::Get()->DisableProcessing();
-//   SyncPoint::Get()->ClearAllCallBacks();
+//   SyncPoint::GetInstance()->DisableProcessing();
+//   SyncPoint::GetInstance()->ClearAllCallBacks();
+//
+// CI contract: tests are built and executed only by the unit-test job, which
+// uses CMAKE_BUILD_TYPE=Debug (no NDEBUG). The release-binary job builds
+// with NDEBUG and BUILD_UNIT_TESTS=OFF, so tests using SyncPoint::GetInstance
+// directly never enter that compilation. See .github/workflows/ci-build.yml.
 
 #ifdef NDEBUG
 
-// Production: no-op.
-#define TEST_SYNC_POINT(name) ((void)0)
-#define TEST_SYNC_POINT_CALLBACK(name, arg) ((void)0)
+#define TEST_SYNC_POINT(name)
+#define TEST_SYNC_POINT_CALLBACK(name, arg)
 
 #else
 
-#include <atomic>
 #include <functional>
-#include <mutex>
 #include <string>
-#include <unordered_map>
 
 namespace dingofs {
 
 class SyncPoint {
  public:
-  static SyncPoint* Get() {
-    static SyncPoint instance;
-    return &instance;
-  }
+  static SyncPoint* GetInstance();
 
-  void SetCallBack(const std::string& name,
-                   std::function<void(void*)> callback) {
-    std::lock_guard<std::mutex> lk(mutex_);
-    callbacks_[name] = std::move(callback);
-  }
+  SyncPoint(const SyncPoint&) = delete;
+  SyncPoint& operator=(const SyncPoint&) = delete;
+  ~SyncPoint();
 
-  void ClearAllCallBacks() {
-    std::lock_guard<std::mutex> lk(mutex_);
-    callbacks_.clear();
-  }
+  // Register a callback to fire when Process(point) is invoked from
+  // production code (typically via TEST_SYNC_POINT). Replaces any previous
+  // callback bound to the same point.
+  void SetCallBack(const std::string& point,
+                   const std::function<void(void*)>& callback);
 
-  void EnableProcessing() { enabled_.store(true, std::memory_order_release); }
+  // Drop all registered callbacks.
+  void ClearAllCallBacks();
 
-  void DisableProcessing() { enabled_.store(false, std::memory_order_release); }
+  // Enable sync point processing (disabled on startup).
+  void EnableProcessing();
 
-  void Process(const std::string& name, void* arg = nullptr) {
-    if (!enabled_.load(std::memory_order_acquire)) return;
-    std::function<void(void*)> cb;
-    {
-      std::lock_guard<std::mutex> lk(mutex_);
-      auto it = callbacks_.find(name);
-      if (it == callbacks_.end()) return;
-      cb = it->second;
-    }
-    cb(arg);
-  }
+  // Disable sync point processing without clearing callbacks.
+  void DisableProcessing();
+
+  // Triggered by TEST_SYNC_POINT; invokes the registered callback for `point`
+  // with `cb_arg`. No-op when processing is disabled or no callback bound.
+  void Process(const std::string& point, void* cb_arg = nullptr);
+
+  // PIMPL — implementation lives in sync_point.cc.
+  struct Data;
 
  private:
-  SyncPoint() = default;
-  std::atomic<bool> enabled_{false};
-  std::mutex mutex_;
-  std::unordered_map<std::string, std::function<void(void*)> > callbacks_;
+  SyncPoint();
+  Data* impl_;
 };
 
 }  // namespace dingofs
 
-#define TEST_SYNC_POINT(name) ::dingofs::SyncPoint::Get()->Process(name)
+#define TEST_SYNC_POINT(name) \
+  ::dingofs::SyncPoint::GetInstance()->Process(name)
 #define TEST_SYNC_POINT_CALLBACK(name, arg) \
-  ::dingofs::SyncPoint::Get()->Process(name, arg)
+  ::dingofs::SyncPoint::GetInstance()->Process(name, arg)
 
 #endif  // NDEBUG
 
