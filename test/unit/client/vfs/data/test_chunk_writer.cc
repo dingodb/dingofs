@@ -516,6 +516,13 @@ TEST_F(ChunkWriterTest, FindWritable_Forward_Reuses) {
 // race through DoFlushAsync, push its (empty) task, and return — the
 // "T2's FlushAsync returns while T1 is in critical section" anomaly.
 TEST_F(ChunkWriterTest, ConcurrentFlush_HoldsSliceMutexUntilQueuePush) {
+#ifdef NDEBUG
+  GTEST_SKIP()
+      << "Race regression relies on TEST_SYNC_POINT firing inside "
+         "ChunkWriter::DoFlushAsync, which is a no-op under NDEBUG. "
+         "Rebuild with CMAKE_BUILD_TYPE=Debug to exercise this test "
+         "(the unit-test CI job already does so).";
+#else
   using namespace std::chrono;
 
   std::atomic<int> write_slice_calls{0};
@@ -599,6 +606,7 @@ TEST_F(ChunkWriterTest, ConcurrentFlush_HoldsSliceMutexUntilQueuePush) {
          "move(slices_) through flush_queue_ push, otherwise a second "
          "caller can race in with empty to_commit and push an empty "
          "FlushTask ahead.";
+#endif  // NDEBUG
 }
 
 }  // namespace vfs
