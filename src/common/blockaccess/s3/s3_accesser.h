@@ -40,12 +40,14 @@ class S3Accesser : public Accesser {
 
   Status Put(const std::string& key, const char* buffer,
              size_t length) override;
-  void AsyncPut(PutObjectAsyncContextSPtr context) override;
+  void AsyncPut(const std::string& key,
+                PutObjectAsyncContextSPtr context) override;
 
   Status Get(const std::string& key, std::string* data) override;
   Status Range(const std::string& key, off_t offset, size_t length,
                char* buffer) override;
-  void AsyncGet(GetObjectAsyncContextSPtr context) override;
+  void AsyncGet(const std::string& key,
+                GetObjectAsyncContextSPtr context) override;
 
   bool BlockExist(const std::string& key) override;
 

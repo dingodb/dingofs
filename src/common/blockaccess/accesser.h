@@ -46,14 +46,16 @@ class Accesser {
   virtual Status Put(const std::string& key, const char* buffer,
                      size_t length) = 0;
 
-  virtual void AsyncPut(std::shared_ptr<PutObjectAsyncContext> context) = 0;
+  virtual void AsyncPut(const std::string& key,
+                        std::shared_ptr<PutObjectAsyncContext> context) = 0;
 
   virtual Status Get(const std::string& key, std::string* data) = 0;
 
   virtual Status Range(const std::string& key, off_t offset, size_t length,
                        char* buffer) = 0;
 
-  virtual void AsyncGet(std::shared_ptr<GetObjectAsyncContext> context) = 0;
+  virtual void AsyncGet(const std::string& key,
+                        std::shared_ptr<GetObjectAsyncContext> context) = 0;
 
   virtual bool BlockExist(const std::string& key) = 0;
 

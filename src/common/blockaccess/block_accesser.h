@@ -49,11 +49,21 @@ class BlockAccesser {
   virtual Status Put(const std::string& key, const char* buffer,
                      size_t length) = 0;
 
-  virtual void AsyncPut(std::shared_ptr<PutObjectAsyncContext> context) = 0;
+  // `key` is the storage key for this Put. It is passed as a separate
+  // parameter (not via `context->origin_key`) so that wrappers (e.g.
+  // PrefixBlockAccesser) can transform the key per-call without mutating
+  // the shared context — callers reuse the same context across retries,
+  // and any in-place mutation would accumulate (e.g. "myfs/myfs/myfs/...").
+  // `context->origin_key` may still be set by the caller as a
+  // logical/correlation identifier for logging, but backends MUST use the `key`
+  // parameter for the actual storage operation.
+  virtual void AsyncPut(const std::string& key,
+                        std::shared_ptr<PutObjectAsyncContext> context) = 0;
 
   virtual Status Get(const std::string& key, std::string* data) = 0;
 
-  virtual void AsyncGet(std::shared_ptr<GetObjectAsyncContext> context) = 0;
+  virtual void AsyncGet(const std::string& key,
+                        std::shared_ptr<GetObjectAsyncContext> context) = 0;
 
   virtual Status Range(const std::string& key, off_t offset, size_t length,
                        char* buffer) = 0;
@@ -82,11 +92,13 @@ class BlockAccesserImpl : public BlockAccesser {
   Status Put(const std::string& key, const char* buffer,
              size_t length) override;
 
-  void AsyncPut(std::shared_ptr<PutObjectAsyncContext> context) override;
+  void AsyncPut(const std::string& key,
+                std::shared_ptr<PutObjectAsyncContext> context) override;
 
   Status Get(const std::string& key, std::string* data) override;
 
-  void AsyncGet(std::shared_ptr<GetObjectAsyncContext> context) override;
+  void AsyncGet(const std::string& key,
+                std::shared_ptr<GetObjectAsyncContext> context) override;
 
   Status Range(const std::string& key, off_t offset, size_t length,
                char* buffer) override;

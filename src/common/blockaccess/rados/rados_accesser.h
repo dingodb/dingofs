@@ -40,13 +40,15 @@ struct RadosAsyncIOUnit {
   rados_completion_t completion{nullptr};
   std::function<void(RadosAsyncIOUnit*, int ret_code)> callback;
 
-  explicit RadosAsyncIOUnit(std::shared_ptr<GetObjectAsyncContext> get_context)
-      : async_context(std::move(CHECK_NOTNULL(get_context))),
-        key(get_context->key) {}
+  RadosAsyncIOUnit(std::string k,
+                   std::shared_ptr<GetObjectAsyncContext> get_context)
+      : key(std::move(k)),
+        async_context(std::move(CHECK_NOTNULL(get_context))) {}
 
-  explicit RadosAsyncIOUnit(std::shared_ptr<PutObjectAsyncContext> put_context)
-      : async_context(std::move(CHECK_NOTNULL(put_context))),
-        key(put_context->key) {}
+  RadosAsyncIOUnit(std::string k,
+                   std::shared_ptr<PutObjectAsyncContext> put_context)
+      : key(std::move(k)),
+        async_context(std::move(CHECK_NOTNULL(put_context))) {}
 
   ~RadosAsyncIOUnit();
 
@@ -68,12 +70,14 @@ class RadosAccesser : public Accesser {
 
   Status Put(const std::string& key, const char* buffer,
              size_t length) override;
-  void AsyncPut(std::shared_ptr<PutObjectAsyncContext> context) override;
+  void AsyncPut(const std::string& key,
+                std::shared_ptr<PutObjectAsyncContext> context) override;
 
   Status Get(const std::string& key, std::string* data) override;
   Status Range(const std::string& key, off_t offset, size_t length,
                char* buffer) override;
-  void AsyncGet(std::shared_ptr<GetObjectAsyncContext> context) override;
+  void AsyncGet(const std::string& key,
+                std::shared_ptr<GetObjectAsyncContext> context) override;
 
   bool BlockExist(const std::string& key) override;
 

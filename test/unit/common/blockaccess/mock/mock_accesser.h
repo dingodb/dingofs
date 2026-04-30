@@ -57,13 +57,17 @@ class MockBlockAccesser : public BlockAccesser {
               (const std::string& key, const char* buffer, size_t length),
               (override));
 
-  MOCK_METHOD(void, AsyncPut, (std::shared_ptr<PutObjectAsyncContext> context),
+  MOCK_METHOD(void, AsyncPut,
+              (const std::string& key,
+               std::shared_ptr<PutObjectAsyncContext> context),
               (override));
 
   MOCK_METHOD(Status, Get, (const std::string& key, std::string* data),
               (override));
 
-  MOCK_METHOD(void, AsyncGet, (std::shared_ptr<GetObjectAsyncContext> context),
+  MOCK_METHOD(void, AsyncGet,
+              (const std::string& key,
+               std::shared_ptr<GetObjectAsyncContext> context),
               (override));
 
   MOCK_METHOD(Status, Range,

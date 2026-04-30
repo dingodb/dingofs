@@ -63,13 +63,15 @@ Status FakeAccesser::Put(const std::string& key, const char* buffer,
   return Status::OK();
 }
 
-void FakeAccesser::DoAsyncPut(PutObjectAsyncContextSPtr context) {
-  context->status = Put(context->key, context->buffer, context->buffer_size);
+void FakeAccesser::DoAsyncPut(const std::string& key,
+                              PutObjectAsyncContextSPtr context) {
+  context->status = Put(key, context->buffer, context->buffer_size);
   context->cb(context);
 }
 
-void FakeAccesser::AsyncPut(PutObjectAsyncContextSPtr context) {
-  std::thread([&, context]() { DoAsyncPut(context); }).detach();
+void FakeAccesser::AsyncPut(const std::string& key,
+                            PutObjectAsyncContextSPtr context) {
+  std::thread([&, key, context]() { DoAsyncPut(key, context); }).detach();
 }
 
 Status FakeAccesser::Get(const std::string& key, std::string* data) {
@@ -96,16 +98,18 @@ Status FakeAccesser::Range(const std::string& key, off_t offset, size_t length,
   return Status::OK();
 }
 
-void FakeAccesser::DoAsyncGet(GetObjectAsyncContextSPtr context) {
+void FakeAccesser::DoAsyncGet(const std::string& key,
+                              GetObjectAsyncContextSPtr context) {
   size_t total_read = 0;
-  context->status = RangeRead(context->key, context->offset, context->len,
-                              context->buf, &total_read);
+  context->status =
+      RangeRead(key, context->offset, context->len, context->buf, &total_read);
   context->actual_len = total_read;
   context->cb(context);
 }
 
-void FakeAccesser::AsyncGet(GetObjectAsyncContextSPtr context) {
-  std::thread([&, context]() { DoAsyncGet(context); }).detach();
+void FakeAccesser::AsyncGet(const std::string& key,
+                            GetObjectAsyncContextSPtr context) {
+  std::thread([&, key, context]() { DoAsyncGet(key, context); }).detach();
 }
 
 bool FakeAccesser::BlockExist(const std::string& key) {

@@ -67,13 +67,16 @@ PutBlockTask::PutBlockTask(ContextSPtr ctx, const BlockKey& key,
 
 void PutBlockTask::Run() {
   auto ctx = OnPrepare();
-  block_accesser_->AsyncPut(ctx);
+  // ctx->origin_key is immutable (const) and shared across retries — pass it as
+  // the storage key so wrappers (e.g. PrefixBlockAccesser) compute their
+  // transforms from the same original key on every call.
+  block_accesser_->AsyncPut(ctx->origin_key, ctx);
 }
 
 blockaccess::PutObjectAsyncContextSPtr PutBlockTask::OnPrepare() {
-  auto ctx = std::make_shared<blockaccess::PutObjectAsyncContext>();
+  auto ctx =
+      std::make_shared<blockaccess::PutObjectAsyncContext>(key_.StoreKey());
   ctx->start_time = butil::gettimeofday_us();
-  ctx->key = key_.StoreKey();
   ctx->buffer = block_->buffer.Fetch1();
   ctx->buffer_size = block_->buffer.Size();
   ctx->retry = 0;
@@ -92,8 +95,8 @@ void PutBlockTask::OnCallback(
              butil::gettimeofday_us()) {
     OnRetry(ctx);
   } else {
-    LOG(ERROR) << "Upload block exceed max retry timeout: key = " << ctx->key
-               << ", retry(" << ctx->retry << "), elapsed("
+    LOG(ERROR) << "Upload block exceed max retry timeout: key = "
+               << ctx->origin_key << ", retry(" << ctx->retry << "), elapsed("
                << (butil::gettimeofday_us() - ctx->start_time) / 1e6 << "s)"
                << ",  status = " << ctx->status.ToString();
     OnComplete(status);
@@ -102,12 +105,13 @@ void PutBlockTask::OnCallback(
 
 void PutBlockTask::OnRetry(const blockaccess::PutObjectAsyncContextSPtr& ctx) {
   ctx->retry++;
-  LOG(WARNING) << "Retry upload block: key = " << ctx->key << ", retry("
+  LOG(WARNING) << "Retry upload block: key = " << ctx->origin_key << ", retry("
                << ctx->retry << "), elapsed("
                << (butil::gettimeofday_us() - ctx->start_time) / 1e6 << "s)"
                << ",  status = " << ctx->status.ToString();
 
-  retry_queue_->Submit([this, ctx]() { block_accesser_->AsyncPut(ctx); });
+  retry_queue_->Submit(
+      [this, ctx]() { block_accesser_->AsyncPut(ctx->origin_key, ctx); });
 }
 
 void PutBlockTask::OnComplete(Status s) {
@@ -129,16 +133,16 @@ RangeBlockTask::RangeBlockTask(ContextSPtr ctx, const BlockKey& key,
 
 void RangeBlockTask::Run() {
   auto ctx = OnPrepare();
-  block_accesser_->AsyncGet(ctx);
+  block_accesser_->AsyncGet(ctx->origin_key, ctx);
 }
 
 blockaccess::GetObjectAsyncContextSPtr RangeBlockTask::OnPrepare() {
   char* data = new char[length_];
   buffer_->AppendUserData(data, length_, iutil::DeleteBuffer);
 
-  auto ctx = std::make_shared<blockaccess::GetObjectAsyncContext>();
+  auto ctx =
+      std::make_shared<blockaccess::GetObjectAsyncContext>(key_.StoreKey());
   ctx->start_time = butil::gettimeofday_us();
-  ctx->key = key_.StoreKey();
   ctx->buf = buffer_->Fetch1();
   ctx->offset = offset_;
   ctx->len = length_;
@@ -160,14 +164,14 @@ void RangeBlockTask::OnCallback(
     OnComplete(status);
   } else if (status.IsNotFound()) {
     LOG(WARNING) << "Download block failed, object not found : key = "
-                 << ctx->key << ",  status = " << ctx->status.ToString();
+                 << ctx->origin_key << ",  status = " << ctx->status.ToString();
     OnComplete(status);
   } else if (ctx->start_time + FLAGS_storage_download_retry_timeout_s * 1e6 >
              butil::gettimeofday_us()) {
     OnRetry(ctx);
   } else {
-    LOG(ERROR) << "Download block exceed max retry timeout: key = " << ctx->key
-               << ", retry(" << ctx->retry << "), elapsed("
+    LOG(ERROR) << "Download block exceed max retry timeout: key = "
+               << ctx->origin_key << ", retry(" << ctx->retry << "), elapsed("
                << (butil::gettimeofday_us() - ctx->start_time) / 1e6 << "s)"
                << ",  status = " << ctx->status.ToString();
     OnComplete(status);
@@ -177,12 +181,13 @@ void RangeBlockTask::OnCallback(
 void RangeBlockTask::OnRetry(
     const blockaccess::GetObjectAsyncContextSPtr& ctx) {
   ctx->retry++;
-  LOG(WARNING) << "Retry download block: key = " << ctx->key << ", retry("
-               << ctx->retry << "), elapsed("
+  LOG(WARNING) << "Retry download block: key = " << ctx->origin_key
+               << ", retry(" << ctx->retry << "), elapsed("
                << (butil::gettimeofday_us() - ctx->start_time) / 1e6 << "s)"
                << ",  status = " << ctx->status.ToString();
 
-  retry_queue_->Submit([this, ctx]() { block_accesser_->AsyncGet(ctx); });
+  retry_queue_->Submit(
+      [this, ctx]() { block_accesser_->AsyncGet(ctx->origin_key, ctx); });
 }
 
 void RangeBlockTask::OnComplete(Status s) {

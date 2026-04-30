@@ -217,8 +217,7 @@ TEST_F(FileAccesserTest, AsyncPut) {
   bool callback_called = false;
   Status async_status;
 
-  auto context = std::make_shared<PutObjectAsyncContext>();
-  context->key = key;
+  auto context = std::make_shared<PutObjectAsyncContext>(key);
   context->buffer = data.data();
   context->buffer_size = data.size();
   context->cb = [&](const PutObjectAsyncContextSPtr& ctx) {
@@ -229,7 +228,7 @@ TEST_F(FileAccesserTest, AsyncPut) {
   };
 
   // Execute async put
-  accesser_->AsyncPut(context);
+  accesser_->AsyncPut(key, context);
 
   // Wait for callback
   {
@@ -264,8 +263,7 @@ TEST_F(FileAccesserTest, AsyncGet) {
   Status async_status;
   std::vector<char> buffer(data.size());
 
-  auto context = std::make_shared<GetObjectAsyncContext>();
-  context->key = key;
+  auto context = std::make_shared<GetObjectAsyncContext>(key);
   context->buf = buffer.data();
   context->offset = 0;
   context->len = data.size();
@@ -277,7 +275,7 @@ TEST_F(FileAccesserTest, AsyncGet) {
   };
 
   // Execute async get
-  accesser_->AsyncGet(context);
+  accesser_->AsyncGet(key, context);
 
   // Wait for callback
   {
@@ -306,8 +304,7 @@ TEST_F(FileAccesserTest, AsyncPutConcurrent) {
     std::string key = "concurrent_key_" + std::to_string(i);
     std::string data = "Concurrent data " + std::to_string(i);
 
-    auto context = std::make_shared<PutObjectAsyncContext>();
-    context->key = key;
+    auto context = std::make_shared<PutObjectAsyncContext>(key);
     context->buffer = data.data();
     context->buffer_size = data.size();
     context->cb = [&, i, key, data](const PutObjectAsyncContextSPtr& ctx) {
@@ -317,7 +314,7 @@ TEST_F(FileAccesserTest, AsyncPutConcurrent) {
       cv.notify_one();
     };
 
-    accesser_->AsyncPut(context);
+    accesser_->AsyncPut(key, context);
   }
 
   // Wait for all callbacks

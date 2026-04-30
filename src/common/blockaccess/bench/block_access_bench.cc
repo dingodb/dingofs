@@ -252,9 +252,11 @@ Status BlockAccessBench::Init() {
     return s;
   }
 
-  // Warm up connection: check if container exists (triggers DNS/TCP/TLS handshake)
+  // Warm up connection: check if container exists (triggers DNS/TCP/TLS
+  // handshake)
   if (!accesser_->ContainerExist()) {
-    LOG(WARNING) << "[bench] Container/bucket does not exist or connection failed";
+    LOG(WARNING)
+        << "[bench] Container/bucket does not exist or connection failed";
   } else {
     VLOG(1) << "[bench] Connection warmed up successfully";
   }
@@ -313,8 +315,7 @@ Status BlockAccessBench::PrefillDataForGet() {
         const auto& buffer = test_data_pool_[t % options_.threads];
         auto s = accesser_->Put(key, buffer.data(), options_.block_size);
         if (!s.ok()) {
-          LOG(ERROR) << "Failed to prefill key " << key << ": "
-                     << s.ToString();
+          LOG(ERROR) << "Failed to prefill key " << key << ": " << s.ToString();
           return;
         }
         uint32_t current = ++completed;
@@ -448,8 +449,7 @@ void BlockAccessBench::RunAsyncPutBench() {
     // Use thread-local buffer to avoid false sharing
     const auto& thread_buffer = test_data_pool_[thread_id];
 
-    auto context = std::make_shared<PutObjectAsyncContext>();
-    context->key = key;
+    auto context = std::make_shared<PutObjectAsyncContext>(key);
     context->buffer = thread_buffer.data();
     context->buffer_size = options_.block_size;
     context->start_time = std::chrono::duration_cast<std::chrono::microseconds>(
@@ -471,7 +471,7 @@ void BlockAccessBench::RunAsyncPutBench() {
       }
     };
 
-    accesser_->AsyncPut(context);
+    accesser_->AsyncPut(key, context);
   }
 
   WaitAsync();
@@ -610,8 +610,7 @@ void BlockAccessBench::RunAsyncGetBench() {
     uint32_t thread_id = i / num_ops_per_thread;
     auto key = keys_[i];
 
-    auto context = std::make_shared<GetObjectAsyncContext>();
-    context->key = key;
+    auto context = std::make_shared<GetObjectAsyncContext>(key);
     context->offset = 0;
     context->len = options_.block_size;
     context->buf = read_buffers[thread_id];
@@ -634,7 +633,7 @@ void BlockAccessBench::RunAsyncGetBench() {
       }
     };
 
-    accesser_->AsyncGet(context);
+    accesser_->AsyncGet(key, context);
   }
 
   WaitAsync();

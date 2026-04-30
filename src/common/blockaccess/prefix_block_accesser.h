@@ -42,6 +42,13 @@ class PrefixBlockAccesser : public BlockAccesser {
     CHECK(!prefix_.empty()) << "PrefixBlockAccesser: prefix must not be empty";
   }
 
+  // Test-only ctor: inject a custom inner BlockAccesser (e.g. a mock).
+  PrefixBlockAccesser(std::string prefix, std::unique_ptr<BlockAccesser> inner)
+      : inner_(std::move(inner)), prefix_(std::move(prefix)) {
+    CHECK(!prefix_.empty()) << "PrefixBlockAccesser: prefix must not be empty";
+    CHECK(inner_) << "PrefixBlockAccesser: inner must not be null";
+  }
+
   ~PrefixBlockAccesser() override = default;
 
   Status Init() override { return inner_->Init(); }
@@ -59,18 +66,22 @@ class PrefixBlockAccesser : public BlockAccesser {
     return inner_->Put(PrefixKey(key), buffer, length);
   }
 
-  void AsyncPut(std::shared_ptr<PutObjectAsyncContext> context) override {
-    context->key = PrefixKey(context->key);
-    inner_->AsyncPut(std::move(context));
+  void AsyncPut(const std::string& key,
+                std::shared_ptr<PutObjectAsyncContext> context) override {
+    // Compute the prefixed key freshly for THIS call. We deliberately do
+    // not mutate context->origin_key — callers reuse the same context across
+    // retries, so any in-place mutation here would accumulate
+    // ("myfs/myfs/myfs/...") on every retry until the path explodes.
+    inner_->AsyncPut(PrefixKey(key), std::move(context));
   }
 
   Status Get(const std::string& key, std::string* data) override {
     return inner_->Get(PrefixKey(key), data);
   }
 
-  void AsyncGet(std::shared_ptr<GetObjectAsyncContext> context) override {
-    context->key = PrefixKey(context->key);
-    inner_->AsyncGet(std::move(context));
+  void AsyncGet(const std::string& key,
+                std::shared_ptr<GetObjectAsyncContext> context) override {
+    inner_->AsyncGet(PrefixKey(key), std::move(context));
   }
 
   Status Range(const std::string& key, off_t offset, size_t length,
@@ -99,7 +110,7 @@ class PrefixBlockAccesser : public BlockAccesser {
     return prefix_ + "/" + key;
   }
 
-  std::unique_ptr<BlockAccesserImpl> inner_;
+  std::unique_ptr<BlockAccesser> inner_;
   const std::string prefix_;
 };
 
