@@ -69,8 +69,6 @@ BlockData* SliceWriter::FindOrCreateBlockDataUnlocked(uint32_t block_index,
   return new_iter->second.get();
 }
 
-// --- slice_id async pre-allocation ---
-
 // --- reference counting ---
 
 void SliceWriter::IncRef() {

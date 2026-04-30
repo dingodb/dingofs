@@ -86,7 +86,8 @@ Status CompactorImpl::DoCompact(ContextSPtr ctx, Ino ino, int64_t chunk_index,
   int64_t chunk_start = chunk_index * chunk_size;
 
   FileRange file_range = GetSlicesFileRange(chunk_start, slices);
-  int32_t offset_in_chunk = static_cast<int32_t>(file_range.offset % chunk_size);
+  int32_t offset_in_chunk =
+      static_cast<int32_t>(file_range.offset % chunk_size);
 
   ChunkReq req(ino, chunk_index, offset_in_chunk, file_range);
 
@@ -125,16 +126,29 @@ Status CompactorImpl::DoCompact(ContextSPtr ctx, Ino ino, int64_t chunk_index,
     SliceDataContext ctx(fs_info.id, ino, chunk_index, chunk_size,
                          fs_info.block_size, page_size);
 
-    SliceWriter writer(ctx, vfs_hub_, offset_in_chunk);
-    Status ret = writer.Write(SpanScope::GetContext(span), to_write.data(),
-                              static_cast<int32_t>(to_write.size()),
-                              offset_in_chunk);
+    // SliceWriter MUST be heap-allocated. Its lifetime is governed by manual
+    // ref-counting (IncRef/DecRef) where the last DecRef does `delete this`.
+    // A stack instance crashes here: FlushAsync's flush-lambda eventually
+    // DecRefs to zero and tries to free the stack address with operator
+    // delete → glibc reports "free(): invalid pointer" and aborts. Match the
+    // pattern used by ChunkWriter::CreateSliceUnlocked (chunk_writer.cc:249):
+    // new + IncRef for the owner ref, ScopedCleanup releases it. Do NOT
+    // wrap in unique_ptr — that would also call `delete writer` on scope
+    // exit, racing with `delete this` from DecRef→0 and reproducing the
+    // very double-free we are fixing.
+    auto* writer = new SliceWriter(ctx, vfs_hub_, offset_in_chunk);
+    writer->IncRef();
+    auto release_owner = MakeScopedCleanup([writer]() { writer->DecRef(); });
+
+    Status ret =
+        writer->Write(SpanScope::GetContext(span), to_write.data(),
+                      static_cast<int32_t>(to_write.size()), offset_in_chunk);
     CHECK(ret.ok()) << "Compaction write slice failed: " << ret.ToString()
                     << ", ino: " << ino << ", chunk_index: " << chunk_index;
 
     Status s;
     BSynchronizer sync;
-    writer.FlushAsync(sync.AsStatusCallBack(s));
+    writer->FlushAsync(sync.AsStatusCallBack(s));
     sync.Wait();
     if (!s.ok()) {
       LOG(WARNING) << "Fail compaction because flush failed: " << s.ToString()
@@ -142,7 +156,7 @@ Status CompactorImpl::DoCompact(ContextSPtr ctx, Ino ino, int64_t chunk_index,
       return s;
     }
 
-    compacted = writer.GetCommitSlice();
+    compacted = writer->GetCommitSlice();
     VLOG(9) << "Success compaction, compacted_slice: " << Slice2Str(compacted);
   }
 

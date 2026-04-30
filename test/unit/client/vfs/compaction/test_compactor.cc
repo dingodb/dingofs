@@ -142,10 +142,9 @@ TEST_F(CompactorTest, ForceCompact_AfterStop_ReturnsStopError) {
 TEST_F(CompactorTest, Compact_BlockStore_ReadFail_ReturnsError) {
   // Override the default RangeAsync behaviour to return an error.
   ON_CALL(*mock_block_store_, RangeAsync)
-      .WillByDefault(
-          [](ContextSPtr, RangeReq, StatusCallback cb) {
-            cb(Status::IoError("simulated read failure"));
-          });
+      .WillByDefault([](ContextSPtr, RangeReq, StatusCallback cb) {
+        cb(Status::IoError("simulated read failure"));
+      });
   EXPECT_CALL(*mock_block_store_, RangeAsync).Times(AnyNumber());
 
   // A single non-zero slice of 4 MB: Skip() would skip it (single large
@@ -183,8 +182,7 @@ TEST_F(CompactorTest, Stop_WaitsForInflight) {
         if (req.data && req.length > 0) {
           char* buf = new char[req.length]();
           req.data->AppendUserData(
-              buf, req.length,
-              [](void* p) { delete[] static_cast<char*>(p); });
+              buf, req.length, [](void* p) { delete[] static_cast<char*>(p); });
         }
         cb(Status::OK());
       });
@@ -196,9 +194,8 @@ TEST_F(CompactorTest, Stop_WaitsForInflight) {
       dingofs::client::vfs::test::MakeSlice(2, 0, 4 * 1024 * 1024)};
   std::vector<Slice> out;
 
-  std::thread compact_thread([&]() {
-    compactor_->ForceCompact(ctx_, 200, 0, slices, out);
-  });
+  std::thread compact_thread(
+      [&]() { compactor_->ForceCompact(ctx_, 200, 0, slices, out); });
 
   // Wait until the compact is inside RangeAsync (in-flight).
   {
@@ -216,6 +213,38 @@ TEST_F(CompactorTest, Stop_WaitsForInflight) {
   }
 
   compact_thread.join();
+}
+
+// 10. Regression for compactor SliceWriter heap-alloc fix.
+//
+// Pre-fix bug: compactor_impl.cc DoCompact had
+//   `SliceWriter writer(ctx, vfs_hub_, offset_in_chunk);` on the STACK.
+// SliceWriter is governed by manual ref counting that calls `delete this`
+// from DecRef→0; firing operator delete on a stack address aborts with
+// `free(): invalid pointer`. The crash window is the µs between
+// FlushAsync's flush-lambda DecRef and the compactor stack frame exit:
+// two threads end up running ~SliceWriter on the same stack address.
+//
+// Fix: heap-allocate with `new SliceWriter(...)` + IncRef owner ref +
+// ScopedCleanup-DecRef, matching ChunkWriter::CreateSliceUnlocked's
+// pattern. The last DecRef triggers `delete this` on a real heap address.
+//
+// Each ForceCompact below drives DoCompact end-to-end through SliceWriter
+// Write+FlushAsync+sync.Wait+GetCommitSlice. With the bug, at least one
+// iteration aborts; with the fix, all 20 succeed.
+TEST_F(CompactorTest, RegressionHeapAllocSliceWriter_RepeatedDoCompact_Stable) {
+  for (int i = 0; i < 20; ++i) {
+    // 4 MB non-zero slice; ForceCompact bypasses Skip() logic and forces
+    // DoCompact -> SliceWriter heap alloc + FlushAsync.
+    std::vector<Slice> slices = {dingofs::client::vfs::test::MakeSlice(
+        /*id=*/100 + i, /*pos=*/0, /*len=*/4 * 1024 * 1024)};
+    std::vector<Slice> out;
+    Status s = compactor_->ForceCompact(ctx_,
+                                        /*ino=*/300 + i,
+                                        /*chunk_index=*/0, slices, out);
+    ASSERT_TRUE(s.ok()) << "iter=" << i << " status=" << s.ToString();
+    ASSERT_EQ(out.size(), 1u) << "iter=" << i;
+  }
 }
 
 }  // namespace vfs
