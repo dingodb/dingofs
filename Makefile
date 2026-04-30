@@ -12,6 +12,7 @@ case?= "*"
 os?= "rocky9"
 ci?=0
 image_type?=0
+build_type?= "RelWithDebInfo"
 
 define help_msg
 ## list
@@ -49,7 +50,7 @@ help:
 	@echo "$$help_msg"
 
 file_build:
-	@bash scripts/install/file-build.sh --only=$(only) --dep=$(dep) --release=$(release) --os=$(os) --unit_tests=${unit_tests}
+	@bash scripts/install/file-build.sh --only=$(only) --dep=$(dep) --release=$(release) --os=$(os) --unit_tests=${unit_tests} --build_type=${build_type}
 
 file_dep:
 	@bash scripts/install/file-build.sh --only="" --dep=1
