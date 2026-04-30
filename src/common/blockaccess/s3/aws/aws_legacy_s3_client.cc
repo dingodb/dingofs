@@ -142,6 +142,7 @@ int AwsLegacyS3Client::PutObject(const std::string& bucket,
 }
 
 void AwsLegacyS3Client::AsyncPutObject(const std::string& bucket,
+                                       const std::string& key,
                                        PutObjectAsyncContextSPtr user_ctx) {
   auto aws_ctx = std::make_shared<AwsPutObjectAsyncContext>();
 
@@ -150,12 +151,12 @@ void AwsLegacyS3Client::AsyncPutObject(const std::string& bucket,
   aws_ctx->request = std::make_any<Model::PutObjectRequest>();
   auto& request = std::any_cast<Model::PutObjectRequest&>(aws_ctx->request);
   request.SetBucket(bucket);
-  request.SetKey(std::string{user_ctx->key.c_str(), user_ctx->key.size()});
+  request.SetKey(std::string{key.c_str(), key.size()});
   request.SetBody(Aws::MakeShared<PreallocatedIOStream>(
       AWS_ALLOCATE_TAG, user_ctx->buffer, user_ctx->buffer_size));
 
   PutObjectResponseReceivedHandler handler =
-      [aws_ctx, this, bucket](
+      [aws_ctx, this, bucket, key](
           const S3Client* /*client*/,
           const Model::PutObjectRequest& /*request*/,
           const Model::PutObjectOutcome& response,
@@ -168,7 +169,7 @@ void AwsLegacyS3Client::AsyncPutObject(const std::string& bucket,
 
         LOG_IF(ERROR, !response.IsSuccess()) << fmt::format(
             "[s3_legacy.{}] AsyncPutObject fail, key({}) error({} {}).", bucket,
-            user_ctx->key, response.GetError().GetExceptionName(),
+            key, response.GetError().GetExceptionName(),
             response.GetError().GetMessage());
 
         user_ctx->status =
@@ -227,6 +228,7 @@ int AwsLegacyS3Client::RangeObject(const std::string& bucket,
 }
 
 void AwsLegacyS3Client::AsyncGetObject(const std::string& bucket,
+                                       const std::string& key,
                                        GetObjectAsyncContextSPtr user_ctx) {
   auto aws_ctx = std::make_shared<AwsGetObjectAsyncContext>();
 
@@ -236,7 +238,7 @@ void AwsLegacyS3Client::AsyncGetObject(const std::string& bucket,
   auto& request = std::any_cast<Model::GetObjectRequest&>(aws_ctx->request);
 
   request.SetBucket(bucket);
-  request.SetKey(std::string{user_ctx->key.c_str(), user_ctx->key.size()});
+  request.SetKey(std::string{key.c_str(), key.size()});
   request.SetRange(GetObjectRequestRange(user_ctx->offset, user_ctx->len));
   request.SetResponseStreamFactory([user_ctx]() {
     return Aws::New<PreallocatedIOStream>(AWS_ALLOCATE_TAG, user_ctx->buf,
@@ -244,7 +246,7 @@ void AwsLegacyS3Client::AsyncGetObject(const std::string& bucket,
   });
 
   GetObjectResponseReceivedHandler handler =
-      [this, aws_ctx, bucket](
+      [this, aws_ctx, bucket, key](
           const S3Client* /*client*/,
           const Model::GetObjectRequest& /*request*/,
           const Model::GetObjectOutcome& response,
@@ -257,7 +259,7 @@ void AwsLegacyS3Client::AsyncGetObject(const std::string& bucket,
 
         LOG_IF(ERROR, !response.IsSuccess()) << fmt::format(
             "[s3_legacy.{}] AsyncGetObject fail, key({}) error({} {}).", bucket,
-            user_ctx->key, response.GetError().GetExceptionName(),
+            key, response.GetError().GetExceptionName(),
             response.GetError().GetMessage());
 
         user_ctx->actual_len = response.GetResult().GetContentLength();

@@ -47,7 +47,7 @@ class AwsCrtS3Client : public AwsS3Client {
   int PutObject(const std::string& bucket, const std::string& key,
                 const char* buffer, size_t buffer_size) override;
 
-  void AsyncPutObject(const std::string& bucket,
+  void AsyncPutObject(const std::string& bucket, const std::string& key,
                       PutObjectAsyncContextSPtr user_ctx) override;
 
   int GetObject(const std::string& bucket, const std::string& key,
@@ -56,7 +56,7 @@ class AwsCrtS3Client : public AwsS3Client {
   int RangeObject(const std::string& bucket, const std::string& key, char* buf,
                   off_t offset, size_t len) override;
 
-  void AsyncGetObject(const std::string& bucket,
+  void AsyncGetObject(const std::string& bucket, const std::string& key,
                       GetObjectAsyncContextSPtr user_ctx) override;
 
   int DeleteObject(const std::string& bucket, const std::string& key) override;

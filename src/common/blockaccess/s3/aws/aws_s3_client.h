@@ -40,7 +40,7 @@ class AwsS3Client {
   virtual int PutObject(const std::string& bucket, const std::string& key,
                         const char* buffer, size_t buffer_size) = 0;
 
-  virtual void AsyncPutObject(const std::string& bucket,
+  virtual void AsyncPutObject(const std::string& bucket, const std::string& key,
                               PutObjectAsyncContextSPtr user_ctx) = 0;
 
   virtual int GetObject(const std::string& bucket, const std::string& key,
@@ -49,7 +49,7 @@ class AwsS3Client {
   virtual int RangeObject(const std::string& bucket, const std::string& key,
                           char* buf, off_t offset, size_t len) = 0;
 
-  virtual void AsyncGetObject(const std::string& bucket,
+  virtual void AsyncGetObject(const std::string& bucket, const std::string& key,
                               GetObjectAsyncContextSPtr user_ctx) = 0;
 
   virtual int DeleteObject(const std::string& bucket,

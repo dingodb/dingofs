@@ -97,15 +97,23 @@ using PutObjectAsyncCallBack =
     std::function<void(const PutObjectAsyncContextSPtr&)>;
 
 struct PutObjectAsyncContext {
-  uint64_t start_time;
+  // `origin_key` is set once at construction and never mutated afterwards.
+  // Callers reuse the same context across retries; if any layer mutated
+  // `origin_key` (e.g. a wrapper prepending a prefix), the mutation would
+  // accumulate on every retry. The `key` parameter on AsyncPut/AsyncGet is
+  // what backends MUST use; this field exists for caller-side correlation
+  // and logging only.
+  explicit PutObjectAsyncContext(std::string k) : origin_key(std::move(k)) {}
 
-  std::string key;
-  const char* buffer;
-  size_t buffer_size;
+  uint64_t start_time{0};
+
+  const std::string origin_key;
+  const char* buffer{nullptr};
+  size_t buffer_size{0};
 
   Status status;
 
-  uint32_t retry;
+  uint32_t retry{0};
   PutObjectAsyncCallBack cb;
 };
 
@@ -113,17 +121,20 @@ using GetObjectAsyncCallBack =
     std::function<void(const GetObjectAsyncContextSPtr&)>;
 
 struct GetObjectAsyncContext {
-  uint64_t start_time;
+  // See PutObjectAsyncContext::origin_key — same immutable contract.
+  explicit GetObjectAsyncContext(std::string k) : origin_key(std::move(k)) {}
 
-  std::string key;
+  uint64_t start_time{0};
+
+  const std::string origin_key;
   char* buf{nullptr};
-  off_t offset;
-  size_t len;
+  off_t offset{0};
+  size_t len{0};
 
   Status status;
-  size_t actual_len;
+  size_t actual_len{0};
 
-  uint32_t retry;
+  uint32_t retry{0};
   GetObjectAsyncCallBack cb;
 };
 

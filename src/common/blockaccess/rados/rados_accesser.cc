@@ -390,18 +390,17 @@ static void AsyncGetCallback(RadosAsyncIOUnit* io_unit, int ret_code) {
   get_context->cb(get_context);
 }
 
-void RadosAccesser::AsyncGet(std::shared_ptr<GetObjectAsyncContext> context) {
-  auto* io_unit = new RadosAsyncIOUnit(context);
+void RadosAccesser::AsyncGet(const std::string& key,
+                             std::shared_ptr<GetObjectAsyncContext> context) {
+  auto* io_unit = new RadosAsyncIOUnit(key, context);
   io_unit->callback = &AsyncGetCallback;
 
   // transfer ownership of io_unit to the callback
-  ExecuteAsyncOperation(io_unit, [this, context](RadosAsyncIOUnit* unit) {
-    int err =
-        rados_aio_read(unit->ioctx, context->key.c_str(), unit->completion,
-                       context->buf, context->len, context->offset);
+  ExecuteAsyncOperation(io_unit, [this, key, context](RadosAsyncIOUnit* unit) {
+    int err = rados_aio_read(unit->ioctx, key.c_str(), unit->completion,
+                             context->buf, context->len, context->offset);
     if (err < 0) {
-      LOG(ERROR) << "Fail AsyncGet key: " << context->key
-                 << ", length: " << context->len
+      LOG(ERROR) << "Fail AsyncGet key: " << key << ", length: " << context->len
                  << ", offset: " << context->offset
                  << ", err: " << strerror(-err);
     }
@@ -421,17 +420,17 @@ static void AsyncPutCallback(RadosAsyncIOUnit* io_unit, int ret_code) {
   put_context->cb(put_context);
 }
 
-void RadosAccesser::AsyncPut(std::shared_ptr<PutObjectAsyncContext> context) {
-  auto* io_unit = new RadosAsyncIOUnit(context);
+void RadosAccesser::AsyncPut(const std::string& key,
+                             std::shared_ptr<PutObjectAsyncContext> context) {
+  auto* io_unit = new RadosAsyncIOUnit(key, context);
   io_unit->callback = &AsyncPutCallback;
 
   // transfer ownership of io_unit to the callback
-  ExecuteAsyncOperation(io_unit, [this, context](RadosAsyncIOUnit* unit) {
-    int err =
-        rados_aio_write(unit->ioctx, context->key.c_str(), unit->completion,
-                        context->buffer, context->buffer_size, 0);
+  ExecuteAsyncOperation(io_unit, [this, key, context](RadosAsyncIOUnit* unit) {
+    int err = rados_aio_write(unit->ioctx, key.c_str(), unit->completion,
+                              context->buffer, context->buffer_size, 0);
     if (err < 0) {
-      LOG(ERROR) << "Fail AsyncPut key: " << context->key
+      LOG(ERROR) << "Fail AsyncPut key: " << key
                  << ", length: " << context->buffer_size
                  << ", err: " << strerror(-err);
     }

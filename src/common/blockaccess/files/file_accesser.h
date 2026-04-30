@@ -17,8 +17,6 @@
 #ifndef DINGOFS_BLOCK_ACCESS_FILE_ACCESSER_H_
 #define DINGOFS_BLOCK_ACCESS_FILE_ACCESSER_H_
 
-#include <filesystem>
-
 #include "common/blockaccess/accesser.h"
 #include "common/status.h"
 
@@ -39,12 +37,14 @@ class FileAccesser : public Accesser {
 
   Status Put(const std::string& key, const char* buffer,
              size_t length) override;
-  void AsyncPut(PutObjectAsyncContextSPtr context) override;
+  void AsyncPut(const std::string& key,
+                PutObjectAsyncContextSPtr context) override;
 
   Status Get(const std::string& key, std::string* data) override;
   Status Range(const std::string& key, off_t offset, size_t length,
                char* buffer) override;
-  void AsyncGet(GetObjectAsyncContextSPtr context) override;
+  void AsyncGet(const std::string& key,
+                GetObjectAsyncContextSPtr context) override;
 
   bool BlockExist(const std::string& key) override;
 
@@ -57,9 +57,9 @@ class FileAccesser : public Accesser {
   Status RangeRead(const std::string& key, off_t offset, size_t length,
                    char* buffer, size_t* readed_size);
 
-  void DoAsyncGet(GetObjectAsyncContextSPtr context);
+  void DoAsyncGet(const std::string& key, GetObjectAsyncContextSPtr context);
 
-  void DoAsyncPut(PutObjectAsyncContextSPtr context);
+  void DoAsyncPut(const std::string& key, PutObjectAsyncContextSPtr context);
 
   const std::string root_;
   std::atomic<bool> started_{false};

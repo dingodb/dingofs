@@ -94,10 +94,11 @@ Status S3Accesser::Put(const std::string& key, const char* buffer,
   return Status::OK();
 }
 
-void S3Accesser::AsyncPut(PutObjectAsyncContextSPtr context) {
+void S3Accesser::AsyncPut(const std::string& key,
+                          PutObjectAsyncContextSPtr context) {
   CHECK(context->cb) << "AsyncPut context callback is null";
 
-  client_->AsyncPutObject(bucket_, context);
+  client_->AsyncPutObject(bucket_, key, context);
 }
 
 Status S3Accesser::Get(const std::string& key, std::string* data) {
@@ -133,23 +134,24 @@ Status S3Accesser::Range(const std::string& key, off_t offset, size_t length,
   return Status::OK();
 }
 
-void S3Accesser::AsyncGet(GetObjectAsyncContextSPtr context) {
+void S3Accesser::AsyncGet(const std::string& key,
+                          GetObjectAsyncContextSPtr context) {
   CHECK(context->cb) << "AsyncGet context callback is null";
 
   auto origin_cb = context->cb;
-  context->cb = [this,
+  context->cb = [this, key,
                  origin_cb](const std::shared_ptr<GetObjectAsyncContext>& ctx) {
     if (!ctx->status.ok()) {
-      if (!client_->ObjectExist(bucket_, S3Key(ctx->key))) {
+      if (!client_->ObjectExist(bucket_, S3Key(key))) {
         LOG(WARNING) << fmt::format(
-            "[s3_accesser] object({}) not found in async get", ctx->key);
+            "[s3_accesser] object({}) not found in async get", key);
         ctx->status = Status::NotFound("object not found");
       }
     }
     origin_cb(ctx);
   };
 
-  client_->AsyncGetObject(bucket_, context);
+  client_->AsyncGetObject(bucket_, key, context);
 }
 
 bool S3Accesser::BlockExist(const std::string& key) {

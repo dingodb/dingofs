@@ -145,17 +145,25 @@ Status BlockAccesserImpl::Put(const std::string& key, const char* buffer,
 }
 
 void BlockAccesserImpl::AsyncPut(
-    std::shared_ptr<PutObjectAsyncContext> context) {
+    const std::string& key, std::shared_ptr<PutObjectAsyncContext> context) {
   int64_t start_us = butil::cpuwide_time_us();
   block_put_async_num << 1;
 
   auto origin_cb = std::move(context->cb);
 
-  context->cb = [this, start_us, origin = std::move(origin_cb)](
+  // Capture key for the log guard so logging shows the key actually
+  // requested by this call (post-wrapper transforms), independent of any
+  // ctx->origin_key value the caller may have set.
+  context->cb = [this, start_us, key, origin = std::move(origin_cb)](
                     const std::shared_ptr<PutObjectAsyncContext>& ctx) {
-    BlockAccessLogGuard log(start_us, [&]() {
-      return fmt::format("async_put_block ({}, {}) : {}", ctx->key,
-                         ctx->buffer_size, ctx->status.ToString());
+    // The inner formatter lambda must capture by VALUE (not [&]) — the
+    // outer closure (which owns `key`) is destroyed by `ctx->cb = origin`
+    // below, but the BlockAccessLogGuard's destructor runs AFTER that,
+    // invoking this formatter. With [&], `key` would dangle.
+    BlockAccessLogGuard log(start_us, [start_us, key, ctx]() {
+      (void)start_us;
+      return fmt::format("async_put_block ({}, {}) : {}", key, ctx->buffer_size,
+                         ctx->status.ToString());
     });
     MetricGuard<Status> guard(&ctx->status, &g_block_metric.write_block,
                               ctx->buffer_size, start_us);
@@ -174,7 +182,7 @@ void BlockAccesserImpl::AsyncPut(
 
   inflight_bytes_throttle_->OnStart(context->buffer_size);
 
-  data_accesser_->AsyncPut(context);
+  data_accesser_->AsyncPut(key, context);
 }
 
 Status BlockAccesserImpl::Get(const std::string& key, std::string* data) {
@@ -198,17 +206,18 @@ Status BlockAccesserImpl::Get(const std::string& key, std::string* data) {
 }
 
 void BlockAccesserImpl::AsyncGet(
-    std::shared_ptr<GetObjectAsyncContext> context) {
+    const std::string& key, std::shared_ptr<GetObjectAsyncContext> context) {
   int64_t start_us = butil::cpuwide_time_us();
   block_get_async_num << 1;
 
   auto origin_cb = std::move(context->cb);
 
-  context->cb = [this, start_us, origin = std::move(origin_cb)](
+  context->cb = [this, start_us, key, origin = std::move(origin_cb)](
                     const std::shared_ptr<GetObjectAsyncContext>& ctx) {
-    BlockAccessLogGuard log(start_us, [&]() {
-      return fmt::format("async_get_block ({}, {}, {}) : {}", ctx->key,
-                         ctx->offset, ctx->len, ctx->status.ToString());
+    // Inner formatter must capture by VALUE — see AsyncPut comment above.
+    BlockAccessLogGuard log(start_us, [key, ctx]() {
+      return fmt::format("async_get_block ({}, {}, {}) : {}", key, ctx->offset,
+                         ctx->len, ctx->status.ToString());
     });
     MetricGuard<Status> guard(&ctx->status, &g_block_metric.read_block,
                               ctx->len, start_us);
@@ -227,7 +236,7 @@ void BlockAccesserImpl::AsyncGet(
 
   inflight_bytes_throttle_->OnStart(context->len);
 
-  data_accesser_->AsyncGet(context);
+  data_accesser_->AsyncGet(key, context);
 }
 
 Status BlockAccesserImpl::Range(const std::string& key, off_t offset,
