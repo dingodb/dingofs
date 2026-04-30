@@ -52,6 +52,9 @@ struct MountOption {
   std::string mds_addrs;
   std::string storage_info;
   std::string meta_url;
+  // Filesystem-internal directory exposed as the local mountpoint root.
+  // "/" means the whole filesystem (default).
+  std::string subdir = "/";
 };
 
 inline int FuseAddOpts(struct fuse_args* args, const char* arg_value) {

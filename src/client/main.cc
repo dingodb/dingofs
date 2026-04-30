@@ -29,6 +29,7 @@
 #include "common/helper.h"
 #include "common/logging.h"
 #include "common/options/cache.h"
+#include "common/options/client.h"
 #include "common/options/common.h"
 #include "common/types.h"
 #include "fmt/format.h"
@@ -87,6 +88,7 @@ static dingofs::FlagExtraInfo extras = {
         R"(  $ dingo-client local://myfs /mnt/dingofs
   $ dingo-client mds://10.220.69.10:7400/myfs /mnt/dingofs
   $ dingo-client --conf client.conf mds://10.220.32.1:6700/myfs /mnt/dingofs
+  $ dingo-client mds://10.220.69.10:7400/myfs /mnt/dingofs --fuse_subdir=/tenant-1
 )",
     .patterns = dingofs::kSdkFlagPatterns,
 };
@@ -186,6 +188,7 @@ int main(int argc, char* argv[]) {
       .mds_addrs = mds_addrs,
       .storage_info = storage_info,
       .meta_url = argv[1],
+      .subdir = dingofs::client::FLAGS_fuse_subdir,
   };
 
   fuse_server = new FuseServer();

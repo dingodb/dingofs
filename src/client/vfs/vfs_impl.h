@@ -30,6 +30,7 @@
 #include "client/vfs/service/compact_service.h"
 #include "client/vfs/service/inode_blocks_service.h"
 #include "client/vfs/vfs.h"
+#include "common/meta.h"
 #include "common/trace/context.h"
 
 namespace dingofs {
@@ -151,7 +152,35 @@ class VFSImpl : public VFS {
 
   Status StartBrpcServer();
 
+  // Resolve `mount_root_path_` to a real directory inode by walking the
+  // filesystem. Must be called after `vfs_hub_->Start()` so that
+  // `meta_system_` is available. On success, sets `mount_root_ino_`.
+  Status ResolveMountRoot();
+
+  // Translate an inode coming from FUSE/VFS callers into the real underlying
+  // inode. When the caller targets the FUSE-visible root (`kRootIno`) we
+  // substitute the resolved subdir inode; descendant inodes pass through.
+  Ino TranslateIno(Ino ino) const {
+    return (ino == kRootIno) ? mount_root_ino_ : ino;
+  }
+
+  // If `ino` matches the real mount-root inode in subdir mode, rewrite
+  // `attr->ino` back to `kRootIno` so FUSE sees a stable root.
+  void RewriteRootAttr(Ino req_ino, Attr* attr) const {
+    if (req_ino == kRootIno && mount_root_ino_ != kRootIno && attr != nullptr) {
+      attr->ino = kRootIno;
+    }
+  }
+
+  bool IsSubdirMount() const { return mount_root_ino_ != kRootIno; }
+
   const ClientId client_id_;
+
+  // Filesystem-internal path mounted as the local mountpoint root.
+  // "/" means the whole filesystem.
+  std::string mount_root_path_{"/"};
+  // Real inode of `mount_root_path_`. Equals `kRootIno` for whole-FS mounts.
+  Ino mount_root_ino_{kRootIno};
 
   std::unique_ptr<VFSHub> vfs_hub_;
   MetaWrapper* meta_system_{nullptr};

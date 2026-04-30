@@ -62,6 +62,13 @@ class VFSImplTest : public test::VFSTestBase {
 
   std::unique_ptr<VFSImpl> vfs_;
   std::unique_ptr<TraceManager> trace_manager_;
+
+  // Helper accessible from TEST_F-derived subclasses (which are not friends
+  // of VFSImpl themselves but inherit from this friend class).
+  void SetMountRoot(const std::string& path, Ino ino) {
+    vfs_->mount_root_path_ = path;
+    vfs_->mount_root_ino_ = ino;
+  }
 };
 
 // --- 1. GetFsId ---
@@ -218,6 +225,61 @@ TEST_F(VFSImplTest, Rename_InternalName_Blocked) {
   Status s = vfs_->Rename(ctx_, kRootIno, kStatsName, kRootIno, "newname");
   EXPECT_FALSE(s.ok());
   EXPECT_TRUE(s.IsNoPermitted());
+}
+
+// --- 16. Subdir mount: Lookup translates virtual root to real subdir ino ---
+TEST_F(VFSImplTest, SubdirMount_Lookup_TranslatesParent) {
+  constexpr Ino kSubdirIno = 100;
+  SetMountRoot("/team", kSubdirIno);
+
+  Attr attr;
+  attr.ino = 42;
+  attr.type = dingofs::kFile;
+
+  // Caller passes virtual root (kRootIno); MetaSystem must see kSubdirIno.
+  EXPECT_CALL(*mock_meta_system_, Lookup(_, kSubdirIno, "child", _))
+      .WillOnce(DoAll(SetArgPointee<3>(attr), Return(Status::OK())));
+  EXPECT_CALL(*mock_hub_, GetFileSuffixWatcher()).Times(AnyNumber());
+
+  Attr out;
+  EXPECT_TRUE(vfs_->Lookup(ctx_, kRootIno, "child", &out).ok());
+  EXPECT_EQ(out.ino, 42u);
+}
+
+// --- 17. Subdir mount: GetAttr on virtual root returns ino == kRootIno ---
+TEST_F(VFSImplTest, SubdirMount_GetAttr_RewritesRootAttr) {
+  constexpr Ino kSubdirIno = 100;
+  SetMountRoot("/team", kSubdirIno);
+
+  Attr attr;
+  attr.ino = kSubdirIno;
+  attr.type = dingofs::kDirectory;
+
+  EXPECT_CALL(*mock_meta_system_, GetAttr(_, kSubdirIno, _))
+      .WillOnce(DoAll(SetArgPointee<2>(attr), Return(Status::OK())));
+
+  Attr out;
+  EXPECT_TRUE(vfs_->GetAttr(ctx_, kRootIno, &out).ok());
+  // FUSE-visible root must remain inode 1.
+  EXPECT_EQ(out.ino, kRootIno);
+}
+
+// --- 18. Subdir mount: descendant inode passes through unchanged ---
+TEST_F(VFSImplTest, SubdirMount_Descendant_NoTranslation) {
+  constexpr Ino kSubdirIno = 100;
+  constexpr Ino kChildIno = 200;
+  SetMountRoot("/team", kSubdirIno);
+
+  Attr attr;
+  attr.ino = kChildIno;
+  attr.type = dingofs::kFile;
+
+  EXPECT_CALL(*mock_meta_system_, GetAttr(_, kChildIno, _))
+      .WillOnce(DoAll(SetArgPointee<2>(attr), Return(Status::OK())));
+
+  Attr out;
+  EXPECT_TRUE(vfs_->GetAttr(ctx_, kChildIno, &out).ok());
+  EXPECT_EQ(out.ino, kChildIno);
 }
 
 }  // namespace vfs

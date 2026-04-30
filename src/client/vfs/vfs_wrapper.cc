@@ -93,6 +93,58 @@ static bool LoadStateFile(int pid, Json::Value& root) {
   return true;
 }
 
+// Normalize a filesystem-internal mount-root path.
+// Accepts: "/", "/a", "/a/b", "/a/b/" (trailing slash trimmed),
+//          repeated slashes collapsed.
+// Rejects: empty string, relative paths (no leading '/'), and any
+//          ".", ".." or empty components from malformed input.
+static Status NormalizeMountRootPath(const std::string& in, std::string& out) {
+  if (in.empty()) {
+    return Status::InvalidParam("subdir is empty");
+  }
+  if (in[0] != '/') {
+    return Status::InvalidParam(fmt::format(
+        "subdir({}) must be an absolute path starting with '/'", in));
+  }
+
+  std::vector<std::string> parts;
+  std::string cur;
+  for (char c : in) {
+    if (c == '/') {
+      if (!cur.empty()) {
+        if (cur == "." || cur == "..") {
+          return Status::InvalidParam(fmt::format(
+              "subdir({}) must not contain '.' or '..' components", in));
+        }
+        parts.push_back(std::move(cur));
+        cur.clear();
+      }
+    } else {
+      cur.push_back(c);
+    }
+  }
+  if (!cur.empty()) {
+    if (cur == "." || cur == "..") {
+      return Status::InvalidParam(fmt::format(
+          "subdir({}) must not contain '.' or '..' components", in));
+    }
+    parts.push_back(std::move(cur));
+  }
+
+  if (parts.empty()) {
+    out = "/";
+  } else {
+    std::string normalized;
+    for (const auto& p : parts) {
+      normalized.push_back('/');
+      normalized.append(p);
+    }
+    out = std::move(normalized);
+  }
+
+  return Status::OK();
+}
+
 Status VFSWrapper::Start(const DingofsConfig& config, int upgrade_from_pid) {
   LOG(INFO) << "vfs start";
 
@@ -113,6 +165,10 @@ Status VFSWrapper::Start(const DingofsConfig& config, int upgrade_from_pid) {
   vfs_conf.fs_name = config.fs_name;
   vfs_conf.metasystem_type = ParseMetaSystemType(config.metasystem_type);
   vfs_conf.storage_info = config.storage_info;
+
+  DINGOFS_RETURN_NOT_OK(
+      NormalizeMountRootPath(config.subdir, vfs_conf.mount_root_path));
+  LOG(INFO) << "vfs mount_root_path: " << vfs_conf.mount_root_path;
 
   if (vfs_conf.metasystem_type != MetaSystemType::MDS &&
       vfs_conf.metasystem_type != MetaSystemType::LOCAL &&

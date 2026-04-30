@@ -39,6 +39,9 @@ struct VFSConfig {
   std::string fs_name;
   MetaSystemType metasystem_type;  // mds,memory,local
   std::string storage_info;
+  // Filesystem-internal directory exposed as the local mountpoint root.
+  // "/" means the whole filesystem (default).
+  std::string mount_root_path = "/";
 };
 
 // NOT: all return value should sys error code in <errno.h>

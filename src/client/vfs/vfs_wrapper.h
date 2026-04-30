@@ -38,6 +38,9 @@ struct DingofsConfig {
   std::string fs_name;
   std::string metasystem_type;  // "mds", "memory", "local"
   std::string storage_info;
+  // Filesystem-internal directory exposed as the local mountpoint root.
+  // "/" means the whole filesystem (default).
+  std::string subdir = "/";
 };
 
 class VFSWrapper {
@@ -142,7 +145,9 @@ class VFSWrapper {
 
   std::atomic<bool> started_{false};
   std::unique_ptr<vfs::VFS> vfs_;
+
   std::unique_ptr<metrics::client::ClientOpMetric> client_op_metric_;
+
   uint32_t uid_{0};
   uint32_t gid_{0};
 };
