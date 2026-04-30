@@ -71,7 +71,7 @@ static const struct fuse_lowlevel_ops kFuseOp = {
     .readdirplus = nullptr,
 #endif
 #if FUSE_VERSION >= FUSE_MAKE_VERSION(3, 4)
-    .copy_file_range = nullptr,
+    .copy_file_range = FuseOpCopyFileRange,
 #endif
 #if FUSE_VERSION >= FUSE_MAKE_VERSION(3, 8)
     .lseek = nullptr

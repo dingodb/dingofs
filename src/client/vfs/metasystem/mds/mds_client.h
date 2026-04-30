@@ -193,6 +193,17 @@ class MDSClient {
                       const CompactChunkParam& param,
                       mds::ChunkEntry& chunk_entry);
 
+  struct CopyFileRangeParam {
+    Ino src_ino{0};
+    Ino dst_ino{0};
+    uint64_t src_off{0};
+    uint64_t dst_off{0};
+    uint64_t len{0};
+    uint32_t flags{0};
+  };
+  Status CopyFileRange(ContextSPtr& ctx, const CopyFileRangeParam& param,
+                       uint64_t& bytes_copied, AttrEntry& dst_inode);
+
   Status Fallocate(ContextSPtr& ctx, Ino ino, int32_t mode, uint64_t offset,
                    uint64_t length);
 

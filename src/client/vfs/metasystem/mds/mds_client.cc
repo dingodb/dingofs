@@ -1478,6 +1478,46 @@ Status MDSClient::CompactChunk(ContextSPtr& ctx, Ino ino, uint32_t chunk_index,
   return Status::OK();
 }
 
+Status MDSClient::CopyFileRange(ContextSPtr& ctx,
+                                const CopyFileRangeParam& param,
+                                uint64_t& bytes_copied, AttrEntry& dst_inode) {
+  CHECK(fs_id_ != 0) << "fs_id is invalid.";
+  CHECK(ctx != nullptr) << "context is nullptr.";
+  CHECK(param.src_ino != 0) << "src_ino is zero.";
+  CHECK(param.dst_ino != 0) << "dst_ino is zero.";
+
+  auto get_mds_fn = [this,
+                     ino = param.dst_ino](bool& is_primary_mds) -> MDSMeta {
+    return GetMds(ino, is_primary_mds);
+  };
+
+  auto span = trace_manager_.StartChildSpan("MDSClient::CopyFileRange",
+                                            ctx->GetTraceSpan());
+  pb::mds::CopyFileRangeRequest request;
+  pb::mds::CopyFileRangeResponse response;
+
+  request.set_fs_id(fs_id_);
+  request.set_src_ino(param.src_ino);
+  request.set_dst_ino(param.dst_ino);
+  request.set_src_off(param.src_off);
+  request.set_dst_off(param.dst_off);
+  request.set_len(param.len);
+  request.set_flags(param.flags);
+
+  ctx->timeout_retry = false;
+  auto status = SendRequest(SpanScope::GetContext(span, ctx), span, get_mds_fn,
+                            "MDSService", "CopyFileRange", request, response);
+  if (!status.ok()) {
+    SpanScope::SetStatus(span, status);
+    return status;
+  }
+
+  bytes_copied = response.bytes_copied();
+  dst_inode.Swap(response.mutable_dst_inode());
+
+  return Status::OK();
+}
+
 Status MDSClient::Fallocate(ContextSPtr& ctx, Ino ino, int32_t mode,
                             uint64_t offset, uint64_t length) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";

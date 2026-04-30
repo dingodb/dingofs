@@ -165,6 +165,11 @@ class MDSMetaSystem : public vfs::MetaSystem {
   Status Compact(ContextSPtr ctx, Ino ino, uint32_t chunk_index,
                  bool is_async) override;
 
+  Status CopyFileRange(ContextSPtr ctx, Ino src_ino, uint64_t src_off,
+                       Ino dst_ino, uint64_t dst_off, uint64_t len,
+                       uint32_t flags, uint64_t* bytes_copied,
+                       Attr* dst_attr) override;
+
   bool GetDescription(Json::Value& value) override;
 
  private:

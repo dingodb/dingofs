@@ -53,6 +53,7 @@ using DeltaSliceEntry = pb::mds::WriteSliceRequest::DeltaSlice;
 using RecycleProgress = pb::mds::RecycleProgress;
 using ContextEntry = pb::mds::Context;
 using AttrMutationEntry = pb::mds::AttrMutation;
+using SliceRefEntry = pb::mds::SliceRef;
 
 struct KeyValue {
   enum class OpType : uint8_t {

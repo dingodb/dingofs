@@ -72,6 +72,11 @@ class VFS {
   virtual Status Fallocate(ContextSPtr ctx, Ino ino, int mode, uint64_t offset,
                            uint64_t length) = 0;
 
+  virtual Status CopyFileRange(ContextSPtr ctx, Ino src_ino, uint64_t src_off,
+                               uint64_t src_fh, Ino dst_ino, uint64_t dst_off,
+                               uint64_t dst_fh, uint64_t len, uint32_t flags,
+                               uint64_t* bytes_copied) = 0;
+
   virtual Status ReadLink(ContextSPtr ctx, Ino ino, std::string* link) = 0;
 
   virtual Status MkNod(ContextSPtr ctx, Ino parent, const std::string& name,

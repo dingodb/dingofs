@@ -444,6 +444,41 @@ Status VFSWrapper::Fallocate(Ino ino, int mode, uint64_t offset,
   return s;
 }
 
+Status VFSWrapper::CopyFileRange(Ino src_ino, uint64_t src_off, uint64_t src_fh,
+                                 Ino dst_ino, uint64_t dst_off, uint64_t dst_fh,
+                                 uint64_t len, uint32_t flags,
+                                 uint64_t* bytes_copied) {
+  VLOG(2) << fmt::format(
+      "VFSCopyFileRange src_ino: {} src_off: {} src_fh: {} dst_ino: {} "
+      "dst_off: {} dst_fh: {} len: {} flags: 0x{:x}",
+      src_ino, src_off, src_fh, dst_ino, dst_off, dst_fh, len, flags);
+
+  auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::CopyFileRange");
+
+  CHECK(bytes_copied != nullptr) << "bytes_copied is nullptr";
+
+  Status s;
+  AccessLogGuard log([&]() {
+    return absl::StrFormat(
+        "copyfilerange (%lu %lu fh:%lu, %lu %lu fh:%lu, %lu 0x%X): %s %lu",
+        src_ino, src_off, src_fh, dst_ino, dst_off, dst_fh, len, flags,
+        s.ToString(), *bytes_copied);
+  });
+
+  ClientOpMetricGuard op_metric(
+      {&client_op_metric_->opCopyFileRange, &client_op_metric_->opAll});
+
+  s = vfs_->CopyFileRange(dingofs::SpanScope::GetContext(span), src_ino,
+                          src_off, src_fh, dst_ino, dst_off, dst_fh, len, flags,
+                          bytes_copied);
+
+  VLOG(2) << "VFSCopyFileRange end, copied: " << *bytes_copied
+          << ", status: " << s.ToString();
+  if (!s.ok()) op_metric.FailOp();
+
+  return s;
+}
+
 Status VFSWrapper::ReadLink(Ino ino, std::string* link) {
   VLOG(2) << "VFSReadLink ino: " << ino;
 

@@ -2231,6 +2231,76 @@ void MDSServiceImpl::ReadSlice(google::protobuf::RpcController* controller, cons
   RunInQueue(ReadSlice, controller, request, response, svr_done, read_worker_set_);
 }
 
+void MDSServiceImpl::DoCopyFileRange(google::protobuf::RpcController*, const pb::mds::CopyFileRangeRequest* request,
+                                     pb::mds::CopyFileRangeResponse* response, TraceClosure* done) {
+  brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
+
+  auto span = StartSpan("MDSServiceImpl::DoCopyFileRange", request->info());
+
+  auto file_system = GetFileSystem(request->fs_id());
+  auto status = ValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    SpanScope::SetStatus(span, status);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  Context ctx(request->context(), request->info().request_id(), __func__);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+
+  FileSystem::CopyFileRangeParam param;
+  param.src_ino = request->src_ino();
+  param.dst_ino = request->dst_ino();
+  param.src_off = request->src_off();
+  param.dst_off = request->dst_off();
+  param.len = request->len();
+
+  uint64_t bytes_copied = 0;
+  AttrEntry dst_attr;
+  status = file_system->CopyFileRange(ctx, param, bytes_copied, dst_attr);
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    SpanScope::SetStatus(span, status);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  response->set_bytes_copied(bytes_copied);
+  response->mutable_dst_inode()->Swap(&dst_attr);
+}
+
+void MDSServiceImpl::CopyFileRange(google::protobuf::RpcController* controller,
+                                   const pb::mds::CopyFileRangeRequest* request,
+                                   pb::mds::CopyFileRangeResponse* response, google::protobuf::Closure* done) {
+  auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_id() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs_id is 0");
+    }
+    if (request->src_ino() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "src_ino is 0");
+    }
+    if (request->dst_ino() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "dst_ino is 0");
+    }
+    if (request->len() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "len is 0");
+    }
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  // run in place.
+  RunInPlace(CopyFileRange, controller, request, response, svr_done);
+
+  // run in queue.
+  RunInQueue(CopyFileRange, controller, request, response, svr_done, write_worker_set_);
+}
+
 void MDSServiceImpl::DoFallocate(google::protobuf::RpcController*, const pb::mds::FallocateRequest* request,
                                  pb::mds::FallocateResponse* response, TraceClosure* done) {
   brpc::ClosureGuard done_guard(done);

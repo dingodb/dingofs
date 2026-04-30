@@ -149,8 +149,8 @@ class MetaCodec {
   static bool IsSliceRefKey(const std::string& key);
   static std::string EncodeSliceRefKey(uint64_t slice_id);
   static void DecodeSliceRefKey(const std::string& key, uint64_t& slice_id);
-  static std::string EncodeSliceRefValue(uint32_t size, uint32_t ref_count);
-  static void DecodeSliceRefValue(const std::string& value, uint32_t& size, uint32_t& ref_count);
+  static std::string EncodeSliceRefValue(const SliceRefEntry& entry);
+  static SliceRefEntry DecodeSliceRefValue(const std::string& value);
 
   // inode attr format: ${prefix} kTableFsMeta {fs_id} kMetaFsInode {ino} kFsInodeAttr
   static bool IsInodeKey(const std::string& key);

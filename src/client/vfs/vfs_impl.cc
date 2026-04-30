@@ -229,6 +229,58 @@ Status VFSImpl::Fallocate(ContextSPtr ctx, Ino ino, int mode, uint64_t offset,
   return meta_system_->Fallocate(ctx, TranslateIno(ino), mode, offset, length);
 }
 
+Status VFSImpl::CopyFileRange(ContextSPtr ctx, Ino src_ino, uint64_t src_off,
+                              uint64_t src_fh, Ino dst_ino, uint64_t dst_off,
+                              uint64_t dst_fh, uint64_t len, uint32_t flags,
+                              uint64_t* bytes_copied) {
+  CHECK(bytes_copied != nullptr);
+  *bytes_copied = 0;
+
+  if (BAIDU_UNLIKELY(src_ino == kStatsIno || dst_ino == kStatsIno)) {
+    return Status::NoPermitted("copy_file_range on internal node");
+  }
+  // Linux kernel currently passes flags == 0; reject anything else so we
+  // surface kernel/protocol drift rather than silently ignore it.
+  if (flags != 0) {
+    return Status::InvalidParam("unsupported copy_file_range flags");
+  }
+  if (len == 0) return Status::OK();
+
+  // Same-file overlap is undefined by POSIX; reject before touching MDS.
+  if (src_ino == dst_ino) {
+    const uint64_t src_end = src_off + len;
+    const uint64_t dst_end = dst_off + len;
+    if (src_off < dst_end && dst_off < src_end) {
+      return Status::InvalidParam("overlapping ranges in same file");
+    }
+  }
+
+  Status s;
+
+  // Flush both files' buffered writes so MDS observes durable slices.
+  // Use FlushByIno to cover all open handles for each inode.
+  s = handle_manager_->FlushByIno(src_ino);
+  if (!s.ok()) return s;
+  if (dst_ino != src_ino) {
+    s = handle_manager_->FlushByIno(dst_ino);
+    if (!s.ok()) return s;
+  }
+
+  Attr dst_attr;
+  s = meta_system_->CopyFileRange(ctx, TranslateIno(src_ino), src_off,
+                                  TranslateIno(dst_ino), dst_off, len, flags,
+                                  bytes_copied, &dst_attr);
+  if (!s.ok()) return s;
+
+  // Invalidate any in-flight reader caches for the rewritten dst range.
+  if (*bytes_copied > 0) {
+    handle_manager_->InvalidateByIno(dst_ino, static_cast<int64_t>(dst_off),
+                                     static_cast<int64_t>(*bytes_copied));
+  }
+
+  return s;
+}
+
 Status VFSImpl::ReadLink(ContextSPtr ctx, Ino ino, std::string* link) {
   return meta_system_->ReadLink(ctx, TranslateIno(ino), link);
 }

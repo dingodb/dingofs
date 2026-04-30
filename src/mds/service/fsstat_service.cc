@@ -226,6 +226,8 @@ static void RenderFsInfo(const std::vector<pb::mds::FsInfo>& fs_infoes, butil::I
     result += "<br>";
     result += fmt::format(R"(<a href="FsStatService/delslices/{}" target="_blank">delslices</a>)", fs_info.fs_id());
     result += "<br>";
+    result += fmt::format(R"(<a href="FsStatService/slicerefs/{}" target="_blank">slicerefs</a>)", fs_info.fs_id());
+    result += "<br>";
     result += fmt::format(R"(<a href="FsStatService/oplog/{}" target="_blank">oplog</a>)", fs_info.fs_id());
     result += "</div>";
     return result;
@@ -1477,6 +1479,48 @@ static void RenderDelslicePage(const std::vector<TrashSliceList>& delslices, but
   os << "</body>";
 }
 
+static void RenderSliceRefPage(const std::vector<SliceRefEntry>& slice_refs, butil::IOBufBuilder& os) {
+  os << "<!DOCTYPE html><html>";
+
+  os << "<head>" << RenderHead("dingofs sliceref") << "</head>";
+  os << "<body>";
+  os << R"(<h1 style="text-align:center;">Slice Reference</h1>)";
+
+  os << R"(<div style="margin: 12px;font-size:smaller">)";
+  os << fmt::format(R"(<h3>SliceRef [{}]</h3>)", slice_refs.size());
+  os << R"(<table class="gridtable sortable" border=1>)";
+  os << "<tr>";
+  os << "<th>SliceId</th>";
+  os << "<th>Size(byte)</th>";
+  os << "<th>RefCount</th>";
+  os << "<th>Inos</th>";
+  os << "</tr>";
+
+  for (const auto& slice_ref : slice_refs) {
+    os << "<tr>";
+    os << "<td>" << slice_ref.id() << "</td>";
+    os << "<td>" << slice_ref.size() << "</td>";
+    os << "<td>" << slice_ref.ref_count() << "</td>";
+
+    if (slice_ref.inos_size() == 0) {
+      os << "<td>-</td>";
+    } else {
+      os << "<td>";
+      for (int i = 0; i < slice_ref.inos_size(); ++i) {
+        if (i > 0) os << ", ";
+        os << slice_ref.inos(i);
+      }
+      os << "</td>";
+    }
+
+    os << "</tr>";
+  }
+
+  os << "</table>";
+  os << "</div>";
+  os << "</body>";
+}
+
 static void RenderOplogPage(const std::vector<FsOpLog>& oplogs, butil::IOBufBuilder& os) {
   os << "<!DOCTYPE html><html>";
 
@@ -1582,16 +1626,6 @@ static void RenderChunk(uint64_t& count, uint64_t chunk_size, const ChunkEntry& 
 
   uint64_t chunk_index = chunk.index();
 
-  std::set<uint64_t> uncontinuous_offsets;
-  uint64_t prev_offset = chunk_index * chunk_size;
-  for (auto& offset_range : offset_ranges) {
-    if (offset_range.start != prev_offset) {
-      uncontinuous_offsets.insert(offset_range.start);
-    }
-
-    prev_offset = offset_range.end;
-  }
-
   for (size_t i = 0; i < offset_ranges.size(); ++i) {
     const auto& offset_range = offset_ranges[i];
     os << "<tr>";
@@ -1605,9 +1639,9 @@ static void RenderChunk(uint64_t& count, uint64_t chunk_size, const ChunkEntry& 
 
     os << fmt::format(R"(<td>{}</td>)", chunk.version());
 
-    os << ((uncontinuous_offsets.count(offset_range.start) == 0)
-               ? fmt::format(R"(<td>[{}, {})</td>)", offset_range.start, offset_range.end)
-               : fmt::format(R"(<td style="color:red;">[{}, {})</td>)", offset_range.start, offset_range.end));
+    os << ((i == 0 && offset_range.start != 0)
+               ? fmt::format(R"(<td style="color:red;">[{}, {})</td>)", offset_range.start, offset_range.end)
+               : fmt::format(R"(<td>[{}, {})</td>)", offset_range.start, offset_range.end));
 
     os << R"(<td><ul style="list-style:disc">)";
     const auto& slices = offset_range.slices;
@@ -1845,6 +1879,18 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
 
     } else {
       os << fmt::format("Not found file system {} status({}).", fs_id, status.error_str());
+    }
+
+  } else if (params.size() == 2 && params[0] == "slicerefs") {
+    // /FsStatService/slicerefs/{fs_id}
+    auto file_system_set = Server::GetInstance().GetFileSystemSet();
+    std::vector<SliceRefEntry> slice_refs;
+    auto status = file_system_set->GetSliceRefs(slice_refs);
+    if (status.ok()) {
+      RenderSliceRefPage(slice_refs, os);
+
+    } else {
+      os << fmt::format("Get sliceref fail, {}.", status.error_str());
     }
 
   } else if (params.size() == 2 && params[0] == "oplog") {

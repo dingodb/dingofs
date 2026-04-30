@@ -1035,19 +1035,15 @@ void MetaCodec::DecodeSliceRefKey(const std::string& key, uint64_t& slice_id) {
   slice_id = SerialHelper::ReadULong(key.substr(kPrefixSize + 1 + 4 + 1));
 }
 
-std::string MetaCodec::EncodeSliceRefValue(uint32_t size, uint32_t ref_count) {
-  std::string value;
-  SerialHelper::WriteInt(size, value);
-  SerialHelper::WriteInt(ref_count, value);
+std::string MetaCodec::EncodeSliceRefValue(const SliceRefEntry& entry) { return entry.SerializeAsString(); }
 
-  return value;
-}
+SliceRefEntry MetaCodec::DecodeSliceRefValue(const std::string& value) {
+  CHECK(!value.empty()) << "slice ref value is empty.";
 
-void MetaCodec::DecodeSliceRefValue(const std::string& value, uint32_t& size, uint32_t& ref_count) {
-  CHECK(value.size() >= 8) << fmt::format("slice ref value({}) size is invalid.", Helper::StringToHex(value));
+  SliceRefEntry entry;
+  CHECK(entry.ParseFromString(value)) << "parse slice ref fail.";
 
-  size = SerialHelper::ReadInt(value.substr(0, 4));
-  ref_count = SerialHelper::ReadInt(value.substr(4, 4));
+  return entry;
 }
 
 // inode attr format: ${prefix} kTableFsMeta {fs_id} kMetaFsInode {ino} kFsInodeAttr
