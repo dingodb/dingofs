@@ -25,6 +25,7 @@ add_library(dingofs_common
     string_slice.cc
     status.cc
     logging.cc
+    sync_point.cc
 )
 target_link_libraries(dingofs_common
     dingofs_utils
