@@ -90,7 +90,14 @@ void SliceWriter::DecRef() {
 // --- slice_id async pre-allocation ---
 
 void SliceWriter::StartPrepareSliceId() {
-  vfs_hub_->GetBGExecutor()->Execute([this]() { PrepareSliceId(); });
+  // Hold a ref for the async work to prevent use-after-free if SliceWriter
+  // is destroyed before BGExecutor picks up the lambda (high load + short
+  // SliceWriter lifetime). Mirrors the pattern in UploadBlockAsync.
+  IncRef();
+  vfs_hub_->GetBGExecutor()->Execute([this]() {
+    PrepareSliceId();
+    DecRef();
+  });
 }
 
 void SliceWriter::PrepareSliceId() {
@@ -339,7 +346,13 @@ void SliceWriter::FlushAsync(StatusCallback cb) {
     flush_cb_.swap(cb);
   }
 
-  vfs_hub_->GetFlushExecutor()->Execute([this]() { this->DoFlush(); });
+  // Hold a ref for the async work to prevent use-after-free if SliceWriter
+  // is destroyed before FlushExecutor picks up the lambda.
+  IncRef();
+  vfs_hub_->GetFlushExecutor()->Execute([this]() {
+    DoFlush();
+    DecRef();
+  });
 }
 
 void SliceWriter::DoFlush() {
