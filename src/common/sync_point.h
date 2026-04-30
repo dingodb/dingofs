@@ -14,11 +14,17 @@
 // Test-only synchronization points for deterministic concurrency tests.
 //
 // In production builds (NDEBUG defined), TEST_SYNC_POINT() is a no-op macro
-// with zero cost. In debug/test builds, it dispatches to a registry that
-// allows tests to inject callbacks at named program locations to interleave
-// threads, observe ordering, or simulate races deterministically.
+// with zero cost and the SyncPoint class is not declared. In debug/test
+// builds it dispatches to a registry that allows tests to inject callbacks
+// at named program locations to interleave threads, observe ordering, or
+// simulate races deterministically.
 //
-// Pattern modeled after RocksDB's util/sync_point.h.
+// Pattern modeled after RocksDB's util/sync_point.h. Tests that drive
+// SyncPoint::Get() directly (e.g. race regression tests) must therefore
+// guard their bodies with `#ifndef NDEBUG` — the test will simply not be
+// compiled into the binary in NDEBUG builds. Long-term we plan to follow
+// RocksDB's CI pattern of running unit tests in a Debug build separate from
+// the release build job, at which point the guards become redundant.
 //
 // Usage in production code:
 //   TEST_SYNC_POINT("ChunkWriter::DoFlushAsync:between_locks");

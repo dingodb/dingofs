@@ -515,6 +515,7 @@ TEST_F(ChunkWriterTest, FindWritable_Forward_Reuses) {
 // releases. Without the fix, T1 holds NO lock at this point, so T2 can
 // race through DoFlushAsync, push its (empty) task, and return — the
 // "T2's FlushAsync returns while T1 is in critical section" anomaly.
+#ifndef NDEBUG
 TEST_F(ChunkWriterTest, ConcurrentFlush_HoldsSliceMutexUntilQueuePush) {
   using namespace std::chrono;
 
@@ -600,6 +601,7 @@ TEST_F(ChunkWriterTest, ConcurrentFlush_HoldsSliceMutexUntilQueuePush) {
          "caller can race in with empty to_commit and push an empty "
          "FlushTask ahead.";
 }
+#endif  // NDEBUG
 
 }  // namespace vfs
 }  // namespace client
