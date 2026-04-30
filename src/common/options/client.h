@@ -41,6 +41,7 @@ DECLARE_string(fuse_mount_options);
 DECLARE_bool(fuse_use_single_thread);
 DECLARE_bool(fuse_use_clone_fd);
 DECLARE_uint32(fuse_max_threads);
+DECLARE_string(fuse_subdir);
 
 // fuse module
 DECLARE_bool(fuse_enable_direct_io);

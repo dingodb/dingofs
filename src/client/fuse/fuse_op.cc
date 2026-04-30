@@ -376,6 +376,7 @@ void FuseOpInit(void* userdata, struct fuse_conn_info* conn) {
   config.metasystem_type =
       dingofs::MetaSystemTypeToString(mount_option->metasystem_type);
   config.storage_info = mount_option->storage_info;
+  config.subdir = mount_option->subdir;
 
   LOG(INFO) << "InitFuseClient meta_system_type: " << config.metasystem_type
             << ", mds addrs: " << config.mds_addrs

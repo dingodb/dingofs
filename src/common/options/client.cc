@@ -43,6 +43,12 @@ DEFINE_uint32(fuse_attr_cache_timeout_s, 10,
               "fuse attr cache timeout in seconds");
 DEFINE_validator(fuse_attr_cache_timeout_s, brpc::PassValidate);
 
+// Mount a subdirectory of the filesystem as the local mountpoint root.
+// "/" (the default) means mount the whole filesystem.
+DEFINE_string(fuse_subdir, "/",
+              "filesystem-internal directory to mount as the local mountpoint "
+              "root; \"/\" means mount the whole filesystem");
+
 DEFINE_bool(fuse_dryrun_bench_mode, false, "enable fuse dryrun bench mode");
 
 // smooth upgrade

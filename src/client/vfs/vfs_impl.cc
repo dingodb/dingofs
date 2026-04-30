@@ -22,6 +22,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "client/common/const.h"
 #include "client/vfs/common/helper.h"
@@ -34,6 +35,7 @@
 #include "client/vfs/vfs_xattr.h"
 #include "common/blockaccess/accesser_common.h"
 #include "common/const.h"
+#include "common/helper.h"
 #include "common/metrics/metrics_dumper.h"
 #include "common/options/client.h"
 #include "common/status.h"
@@ -56,6 +58,8 @@ namespace vfs {
 
 VFSImpl::VFSImpl(const VFSConfig& vfs_conf, const ClientId& client_id)
     : client_id_(client_id),
+      mount_root_path_(
+          vfs_conf.mount_root_path.empty() ? "/" : vfs_conf.mount_root_path),
       vfs_hub_(std::make_unique<VFSHubImpl>(vfs_conf, client_id_)) {};
 
 VFSImpl::VFSImpl(std::unique_ptr<VFSHub> hub)
@@ -71,8 +75,49 @@ Status VFSImpl::Start(bool skip_mount) {
   meta_system_ = vfs_hub_->GetMetaSystem();
   handle_manager_ = vfs_hub_->GetHandleManager();
 
+  DINGOFS_RETURN_NOT_OK(ResolveMountRoot());
+
   DINGOFS_RETURN_NOT_OK(StartBrpcServer());
 
+  return Status::OK();
+}
+
+Status VFSImpl::ResolveMountRoot() {
+  // Whole-FS mount: nothing to resolve.
+  if (mount_root_path_ == "/") {
+    mount_root_ino_ = kRootIno;
+    return Status::OK();
+  }
+
+  CHECK(meta_system_ != nullptr) << "meta_system is null";
+
+  Ino parent = kRootIno;
+  ContextSPtr ctx = std::make_shared<Context>("");
+  std::vector<std::string> dir_names;
+  Helper::SplitString(mount_root_path_, '/', dir_names);
+  // remove the empty string before the first '/'
+  if (!dir_names.empty()) dir_names.erase(dir_names.begin());
+  for (const auto& dir_name : dir_names) {
+    if (dir_name.empty()) break;
+
+    Attr attr;
+    Status s = meta_system_->Lookup(ctx, parent, dir_name, &attr);
+    if (!s.ok()) {
+      LOG(ERROR) << fmt::format(
+          "resolve mount root fail, dir({}/{}) status({}).", parent, dir_name,
+          s.ToString());
+      return s;
+    }
+    if (attr.type != FileType::kDirectory) {
+      return Status::NotDirectory(fmt::format("{} is not directory", dir_name));
+    }
+    parent = attr.ino;
+  }
+
+  mount_root_ino_ = parent;
+
+  LOG(INFO) << fmt::format("resolve mount root finish, path({}) ino({}).",
+                           mount_root_path_, mount_root_ino_);
   return Status::OK();
 }
 
@@ -89,6 +134,9 @@ bool VFSImpl::Dump(ContextSPtr ctx, Json::Value& value) {
     return false;
   }
 
+  value["mount_root_path"] = mount_root_path_;
+  value["mount_root_ino"] = static_cast<Json::UInt64>(mount_root_ino_);
+
   return meta_system_->Dump(ctx, value);
 }
 
@@ -97,6 +145,29 @@ bool VFSImpl::Load(ContextSPtr ctx, const Json::Value& value) {
 
   if (!handle_manager_->Load(value)) {
     return false;
+  }
+
+  // Validate mount-root state across smooth upgrades.
+  if (value.isMember("mount_root_path")) {
+    const std::string persisted_path = value["mount_root_path"].asString();
+    if (persisted_path != mount_root_path_) {
+      LOG(ERROR) << fmt::format(
+          "mount root path mismatch on upgrade: persisted({}) current({})",
+          persisted_path, mount_root_path_);
+      return false;
+    }
+    if (value.isMember("mount_root_ino")) {
+      Ino persisted_ino = static_cast<Ino>(value["mount_root_ino"].asUInt64());
+      if (mount_root_ino_ != kRootIno && persisted_ino != mount_root_ino_) {
+        LOG(ERROR) << fmt::format(
+            "mount root ino mismatch on upgrade: persisted({}) resolved({})",
+            persisted_ino, mount_root_ino_);
+        return false;
+      }
+      // Reuse persisted ino so the new process points at the same directory
+      // even if path resolution has not yet been performed.
+      mount_root_ino_ = persisted_ino;
+    }
   }
 
   return meta_system_->Load(ctx, value);
@@ -118,7 +189,7 @@ Status VFSImpl::Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
     return Status::OK();
   }
 
-  Status s = meta_system_->Lookup(ctx, parent, name, attr);
+  Status s = meta_system_->Lookup(ctx, TranslateIno(parent), name, attr);
   if (s.ok()) {
     vfs_hub_->GetFileSuffixWatcher()->Remeber(*attr, name);
   }
@@ -131,7 +202,10 @@ Status VFSImpl::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
     return Status::OK();
   }
 
-  return meta_system_->GetAttr(ctx, ino, attr);
+  Status s = meta_system_->GetAttr(ctx, TranslateIno(ino), attr);
+  if (s.ok()) RewriteRootAttr(ino, attr);
+
+  return s;
 }
 
 Status VFSImpl::SetAttr(ContextSPtr ctx, Ino ino, int set, const Attr& in_attr,
@@ -140,7 +214,9 @@ Status VFSImpl::SetAttr(ContextSPtr ctx, Ino ino, int set, const Attr& in_attr,
     return Status::OK();
   }
 
-  Status s = meta_system_->SetAttr(ctx, ino, set, in_attr, out_attr);
+  Status s =
+      meta_system_->SetAttr(ctx, TranslateIno(ino), set, in_attr, out_attr);
+  if (s.ok()) RewriteRootAttr(ino, out_attr);
 
   return s;
 }
@@ -150,17 +226,18 @@ Status VFSImpl::Fallocate(ContextSPtr ctx, Ino ino, int mode, uint64_t offset,
   if (BAIDU_UNLIKELY(ino == kStatsIno)) {
     return Status::NoPermitted("fallocate on internal node");
   }
-  return meta_system_->Fallocate(ctx, ino, mode, offset, length);
+  return meta_system_->Fallocate(ctx, TranslateIno(ino), mode, offset, length);
 }
 
 Status VFSImpl::ReadLink(ContextSPtr ctx, Ino ino, std::string* link) {
-  return meta_system_->ReadLink(ctx, ino, link);
+  return meta_system_->ReadLink(ctx, TranslateIno(ino), link);
 }
 
 Status VFSImpl::MkNod(ContextSPtr ctx, Ino parent, const std::string& name,
                       uint32_t uid, uint32_t gid, uint32_t mode, uint64_t dev,
                       Attr* attr) {
-  Status s = meta_system_->MkNod(ctx, parent, name, uid, gid, mode, dev, attr);
+  Status s = meta_system_->MkNod(ctx, TranslateIno(parent), name, uid, gid,
+                                 mode, dev, attr);
   if (s.ok()) {
     vfs_hub_->GetFileSuffixWatcher()->Remeber(*attr, name);
   }
@@ -175,7 +252,7 @@ Status VFSImpl::Unlink(ContextSPtr ctx, Ino parent, const std::string& name) {
     return Status::NoPermitted("Can not unlink internal node");
   }
 
-  return meta_system_->Unlink(ctx, parent, name);
+  return meta_system_->Unlink(ctx, TranslateIno(parent), name);
 }
 
 Status VFSImpl::Symlink(ContextSPtr ctx, Ino parent, const std::string& name,
@@ -197,7 +274,8 @@ Status VFSImpl::Symlink(ContextSPtr ctx, Ino parent, const std::string& name,
     }
   }
 
-  return meta_system_->Symlink(ctx, parent, name, uid, gid, link, attr);
+  return meta_system_->Symlink(ctx, TranslateIno(parent), name, uid, gid, link,
+                               attr);
 }
 
 Status VFSImpl::Rename(ContextSPtr ctx, Ino old_parent,
@@ -210,7 +288,8 @@ Status VFSImpl::Rename(ContextSPtr ctx, Ino old_parent,
   }
 
   // TODO: maybe call file suffix watcher to forget old name?
-  return meta_system_->Rename(ctx, old_parent, old_name, new_parent, new_name);
+  return meta_system_->Rename(ctx, TranslateIno(old_parent), old_name,
+                              TranslateIno(new_parent), new_name);
 }
 
 Status VFSImpl::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
@@ -224,7 +303,8 @@ Status VFSImpl::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
     }
   }
 
-  Status s = meta_system_->Link(ctx, ino, new_parent, new_name, attr);
+  Status s = meta_system_->Link(ctx, TranslateIno(ino),
+                                TranslateIno(new_parent), new_name, attr);
   if (s.ok()) {
     vfs_hub_->GetFileSuffixWatcher()->Forget(ino);
   }
@@ -264,7 +344,7 @@ Status VFSImpl::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t* fh) {
     return Status::OK();
   }
 
-  Status s = meta_system_->Open(ctx, ino, flags, gfh);
+  Status s = meta_system_->Open(ctx, TranslateIno(ino), flags, gfh);
   if (s.ok()) {
     auto* handle = handle_manager_->NewHandle(gfh, ino, flags);
     if (handle == nullptr) {
@@ -280,8 +360,8 @@ Status VFSImpl::Create(ContextSPtr ctx, Ino parent, const std::string& name,
                        uint32_t uid, uint32_t gid, uint32_t mode, int flags,
                        uint64_t* fh, Attr* attr) {
   uint64_t gfh = vfs::FhGenerator::GenFh();
-  Status s =
-      meta_system_->Create(ctx, parent, name, uid, gid, mode, flags, attr, gfh);
+  Status s = meta_system_->Create(ctx, TranslateIno(parent), name, uid, gid,
+                                  mode, flags, attr, gfh);
   if (s.ok()) {
     CHECK_GT(attr->ino, 0) << "ino in attr is null";
     Ino ino = attr->ino;
@@ -457,7 +537,7 @@ Status VFSImpl::SetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
     return Status::OK();
   }
 
-  return meta_system_->SetXattr(ctx, ino, name, value, flags);
+  return meta_system_->SetXattr(ctx, TranslateIno(ino), name, value, flags);
 }
 
 Status VFSImpl::GetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
@@ -472,7 +552,7 @@ Status VFSImpl::GetXattr(ContextSPtr ctx, Ino ino, const std::string& name,
     return Status::OK();
   }
 
-  return meta_system_->GetXattr(ctx, ino, name, value);
+  return meta_system_->GetXattr(ctx, TranslateIno(ino), name, value);
 }
 
 Status VFSImpl::RemoveXattr(ContextSPtr ctx, Ino ino, const std::string& name) {
@@ -480,7 +560,7 @@ Status VFSImpl::RemoveXattr(ContextSPtr ctx, Ino ino, const std::string& name) {
     return Status::NoData("No Xattr data in .stats");
   }
 
-  return meta_system_->RemoveXattr(ctx, ino, name);
+  return meta_system_->RemoveXattr(ctx, TranslateIno(ino), name);
 }
 
 Status VFSImpl::ListXattr(ContextSPtr ctx, Ino ino,
@@ -489,19 +569,20 @@ Status VFSImpl::ListXattr(ContextSPtr ctx, Ino ino,
     return Status::NoData("No Xattr data in .stats");
   }
 
-  return meta_system_->ListXattr(ctx, ino, xattrs);
+  return meta_system_->ListXattr(ctx, TranslateIno(ino), xattrs);
 }
 
 Status VFSImpl::MkDir(ContextSPtr ctx, Ino parent, const std::string& name,
                       uint32_t uid, uint32_t gid, uint32_t mode, Attr* attr) {
-  return meta_system_->MkDir(ctx, parent, name, uid, gid, mode, attr);
+  return meta_system_->MkDir(ctx, TranslateIno(parent), name, uid, gid, mode,
+                             attr);
 }
 
 Status VFSImpl::OpenDir(ContextSPtr ctx, Ino ino, uint64_t* fh,
                         bool& need_cache) {
   *fh = vfs::FhGenerator::GenFh();
 
-  return meta_system_->OpenDir(ctx, ino, *fh, need_cache);
+  return meta_system_->OpenDir(ctx, TranslateIno(ino), *fh, need_cache);
 }
 
 Status VFSImpl::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
@@ -514,11 +595,12 @@ Status VFSImpl::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
     handler(stats_entry, 1);  // pos 0 is the offset for .stats entry
   }
 
-  return meta_system_->ReadDir(ctx, ino, fh, offset, with_attr, handler, count);
+  return meta_system_->ReadDir(ctx, TranslateIno(ino), fh, offset, with_attr,
+                               handler, count);
 }
 
 Status VFSImpl::ReleaseDir(ContextSPtr ctx, Ino ino, uint64_t fh) {
-  return meta_system_->ReleaseDir(ctx, ino, fh);
+  return meta_system_->ReleaseDir(ctx, TranslateIno(ino), fh);
 }
 
 Status VFSImpl::RmDir(ContextSPtr ctx, Ino parent, const std::string& name) {
@@ -527,11 +609,11 @@ Status VFSImpl::RmDir(ContextSPtr ctx, Ino parent, const std::string& name) {
     return Status::NoPermitted("not permit rmdir internal dir");
   }
 
-  return meta_system_->RmDir(ctx, parent, name);
+  return meta_system_->RmDir(ctx, TranslateIno(parent), name);
 }
 
 Status VFSImpl::StatFs(ContextSPtr ctx, Ino ino, FsStat* fs_stat) {
-  return meta_system_->StatFs(ctx, ino, fs_stat);
+  return meta_system_->StatFs(ctx, TranslateIno(ino), fs_stat);
 }
 
 Status VFSImpl::Ioctl(ContextSPtr ctx, Ino ino, uint32_t uid, unsigned int cmd,

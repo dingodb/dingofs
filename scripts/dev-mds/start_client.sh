@@ -148,6 +148,7 @@ function start() {
     fi
 
     ${CLIENT_BIN_PATH} ${FLAGS_meta} ${mountpoint_dir} \
+    --fuse_subdir=/ \
     --log_dir=${log_dir} \
     --log_v=20 \
     --vfs_dummy_server_port=${dummy_port} \
