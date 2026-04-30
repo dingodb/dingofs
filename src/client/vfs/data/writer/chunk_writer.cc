@@ -32,6 +32,7 @@
 #include "client/vfs/vfs_meta.h"
 #include "common/callback.h"
 #include "common/status.h"
+#include "common/sync_point.h"
 
 namespace dingofs {
 namespace client {
@@ -449,19 +450,30 @@ void ChunkWriter::DoFlushAsync(StatusCallback cb, uint64_t chunk_flush_id) {
   VLOG(4) << fmt::format("{} Start DoFlushAsync chunk_flush_id: {}", UUID(),
                          chunk_flush_id);
   std::map<uint64_t, SliceWriterPtr> to_commit;
-
-  {
-    std::lock_guard<std::mutex> lg(slice_mutex_);
-    to_commit = std::move(slices_);
-  }
-
-  uint64_t slice_count = to_commit.size();
-
+  uint64_t slice_count = 0;
   Status error_status;
   FlushTask* flush_task{nullptr};
 
+  // Hold slice_mutex_ across BOTH the move-out of slices_ AND the push to
+  // flush_queue_. Without this, two concurrent FlushByIno callers can
+  // interleave: T1 takes slices_ first, T2 takes empty, but T2 reaches
+  // flush_mutex_ first and pushes an empty FlushTask in FRONT of T1's. The
+  // empty task short-circuits via ChunkFlushTask::RunAsync's cb(OK) path,
+  // and TryCommitFlushTasks dispatches T2's user cb (FlushByIno return)
+  // long before T1's actual commit hits MDS — letting a subsequent read
+  // observe a stale slice list.
   {
-    std::lock_guard<std::mutex> lg(flush_mutex_);
+    std::lock_guard<std::mutex> sl(slice_mutex_);
+    to_commit = std::move(slices_);
+    slice_count = to_commit.size();
+
+    // Test-only sync point. With the fix in place we are still holding
+    // slice_mutex_ here, so any concurrent caller must block. Pre-fix this
+    // sync point would have been outside any lock, letting a second caller
+    // sneak in and push an empty FlushTask ahead of ours.
+    TEST_SYNC_POINT("ChunkWriter::DoFlushAsync:after_take_slices");
+
+    std::lock_guard<std::mutex> fl(flush_mutex_);
     error_status = error_status_;
 
     if (error_status.ok()) {
