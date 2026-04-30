@@ -18,10 +18,12 @@
 #include <gtest/gtest.h>
 
 #include <atomic>
+#include <future>
 #include <thread>
 #include <vector>
 
 #include "client/vfs/data/writer/chunk_writer.h"
+#include "common/sync_point.h"
 #include "common/trace/trace_manager.h"
 #include "test/unit/client/vfs/test_base.h"
 #include "test/unit/client/vfs/test_common.h"
@@ -30,12 +32,12 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
+using dingofs::client::vfs::test::AsyncWaiter;
+using dingofs::client::vfs::test::VFSTestBase;
 using ::testing::_;
 using ::testing::AnyNumber;
 using ::testing::Invoke;
 using ::testing::Return;
-using dingofs::client::vfs::test::AsyncWaiter;
-using dingofs::client::vfs::test::VFSTestBase;
 
 class ChunkWriterTest : public VFSTestBase {
  protected:
@@ -342,14 +344,14 @@ TEST_F(ChunkWriterTest, ConcurrentWriteAndFlush_SeqOrdered) {
   std::mutex ids_mutex;
 
   ON_CALL(*mock_meta_system_, WriteSlice)
-      .WillByDefault([&](auto, auto, auto, auto,
-                         const std::vector<Slice>& slices) {
-        std::lock_guard<std::mutex> lk(ids_mutex);
-        for (const auto& s : slices) {
-          committed_ids.push_back(s.id);
-        }
-        return Status::OK();
-      });
+      .WillByDefault(
+          [&](auto, auto, auto, auto, const std::vector<Slice>& slices) {
+            std::lock_guard<std::mutex> lk(ids_mutex);
+            for (const auto& s : slices) {
+              committed_ids.push_back(s.id);
+            }
+            return Status::OK();
+          });
 
   auto writer = MakeWriter();
 
@@ -403,8 +405,8 @@ TEST_F(ChunkWriterTest, ConcurrentWriteAndFlush_SeqOrdered) {
   std::lock_guard<std::mutex> lk(ids_mutex);
   for (size_t i = 1; i < committed_ids.size(); ++i) {
     EXPECT_LT(committed_ids[i - 1], committed_ids[i])
-        << "Slice IDs out of order: " << committed_ids[i - 1] << " >= "
-        << committed_ids[i] << " at index " << i;
+        << "Slice IDs out of order: " << committed_ids[i - 1]
+        << " >= " << committed_ids[i] << " at index " << i;
   }
 }
 
@@ -437,7 +439,8 @@ TEST_F(ChunkWriterTest, FindWritable_Reverse_CreatesNew) {
   EXPECT_TRUE(s1.ok());
 
   // Reverse adjacent write [2MB, 4MB) — target creates a new slice.
-  Status s2 = writer->Write(ctx_, buf2.data(), 2 * 1024 * 1024, 2 * 1024 * 1024);
+  Status s2 =
+      writer->Write(ctx_, buf2.data(), 2 * 1024 * 1024, 2 * 1024 * 1024);
   EXPECT_TRUE(s2.ok());
 
   AsyncWaiter waiter;
@@ -487,6 +490,115 @@ TEST_F(ChunkWriterTest, FindWritable_Forward_Reuses) {
 
   // Single slice covers the full [0, 8MB) range.
   EXPECT_EQ(committed_slice_count, 1);
+}
+
+// 11. Regression: ChunkWriter::DoFlushAsync must hold slice_mutex_ across
+//     BOTH the move-out of slices_ AND the push to flush_queue_ — otherwise
+//     a concurrent caller can squeeze in between and push an EMPTY
+//     ChunkFlushTask ahead of ours, causing FlushAsync to return OK before
+//     the actual WriteSlice happens (stale-read consistency hole).
+//
+// Bug history: pre-fix DoFlushAsync used two separate critical sections:
+//   { lock slice_mutex_; to_commit = move(slices_); }
+//   { lock flush_mutex_;  flush_queue_.push(FlushTask); }
+// If T1 took slice_mutex_ first (full to_commit) and T2 got flush_mutex_
+// first (empty to_commit), the queue ended up [T2_empty, T1_full]. T2's
+// empty ChunkFlushTask::RunAsync cb-fast-OK'd and TryCommitFlushTasks
+// fired T2's user cb in microseconds — long before T1's WriteSlice. A
+// reader on the same fh then observed pre-write data.
+//
+// Strategy without artificial sleeps in production code:
+// Use a TEST_SYNC_POINT inside the merged critical section (between
+// move(slices_) and push to flush_queue_). T1 hits the sync point and
+// blocks. With the fix, T1 still holds slice_mutex_ at this point, so a
+// concurrent T2 calling FlushAsync MUST block on slice_mutex_ until T1
+// releases. Without the fix, T1 holds NO lock at this point, so T2 can
+// race through DoFlushAsync, push its (empty) task, and return — the
+// "T2's FlushAsync returns while T1 is in critical section" anomaly.
+TEST_F(ChunkWriterTest, ConcurrentFlush_HoldsSliceMutexUntilQueuePush) {
+  using namespace std::chrono;
+
+  std::atomic<int> write_slice_calls{0};
+  ON_CALL(*mock_meta_system_, WriteSlice)
+      .WillByDefault(
+          [&](auto, auto, auto, auto, const std::vector<Slice>& slices) {
+            if (!slices.empty()) {
+              write_slice_calls.fetch_add(1, std::memory_order_acq_rel);
+            }
+            return Status::OK();
+          });
+
+  auto writer = MakeWriter();
+  const char buf[] = "race-data";
+  ASSERT_TRUE(writer->Write(ctx_, buf, sizeof(buf), 0).ok());
+
+  // Coordinate T1 in the sync point.
+  std::promise<void> t1_in_section;
+  std::promise<void> release_t1;
+  auto t1_in_future = t1_in_section.get_future();
+  auto release_t1_future = release_t1.get_future().share();
+
+  std::atomic<bool> sync_fired{false};
+  SyncPoint::Get()->SetCallBack("ChunkWriter::DoFlushAsync:after_take_slices",
+                                [&](void*) {
+                                  // Only the first FlushAsync (T1) trips this;
+                                  // subsequent ones from T2 already block on
+                                  // slice_mutex_ before reaching here (with
+                                  // fix) or reach here too (without fix) — we
+                                  // want only T1 to gate.
+                                  if (sync_fired.exchange(true)) return;
+                                  t1_in_section.set_value();
+                                  release_t1_future.wait();
+                                });
+  SyncPoint::Get()->EnableProcessing();
+
+  std::atomic<bool> t1_returned_async{false};
+  std::atomic<bool> t2_returned_async{false};
+
+  std::thread t1_thread([&]() {
+    writer->FlushAsync([](Status) {});
+    t1_returned_async.store(true, std::memory_order_release);
+  });
+
+  // Wait until T1 is parked inside the merged critical section.
+  ASSERT_EQ(t1_in_future.wait_for(seconds(2)), std::future_status::ready);
+
+  // Now spawn T2 — it must block on slice_mutex_ while T1 holds it.
+  std::thread t2_thread([&]() {
+    writer->FlushAsync([](Status) {});
+    t2_returned_async.store(true, std::memory_order_release);
+  });
+
+  // Give T2 plenty of time to either block (fix) or sneak through (bug).
+  std::this_thread::sleep_for(milliseconds(100));
+
+  // Snapshot the anomaly: did T2's FlushAsync return while T1 still inside
+  // the merged critical section?
+  bool t2_done_while_t1_in_section =
+      t2_returned_async.load(std::memory_order_acquire);
+
+  // Release T1 and let everything drain.
+  release_t1.set_value();
+  t1_thread.join();
+  t2_thread.join();
+
+  SyncPoint::Get()->DisableProcessing();
+  SyncPoint::Get()->ClearAllCallBacks();
+
+  // Final flush (no sync point active) to drain any remaining work and
+  // give the chunk_writer a clean exit.
+  AsyncWaiter waiter;
+  waiter.Expect(1);
+  writer->FlushAsync([&](Status) { waiter.Done(); });
+  waiter.Wait();
+
+  EXPECT_FALSE(t2_done_while_t1_in_section)
+      << "Concurrent FlushAsync returned while the first caller was still "
+         "inside DoFlushAsync's slice_mutex_ critical section. "
+         "DoFlushAsync must hold slice_mutex_ continuously from "
+         "move(slices_) through flush_queue_ push, otherwise a second "
+         "caller can race in with empty to_commit and push an empty "
+         "FlushTask ahead.";
 }
 
 }  // namespace vfs
