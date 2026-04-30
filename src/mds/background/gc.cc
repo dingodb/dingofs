@@ -14,6 +14,8 @@
 
 #include "mds/background/gc.h"
 
+#include <absl/container/flat_hash_map.h>
+
 #include <atomic>
 #include <cmath>
 #include <cstddef>
@@ -97,6 +99,26 @@ static Status BatchDeleteBlocks(blockaccess::BlockAccesserSPtr& data_accessor, c
   return Status::OK();
 }
 
+// check whether slice should delete, if file is shared by multiple inodes, we can't delete the slice when gc delfile,
+// and need to add reference counting for slice
+static bool ShouldDeleteSlice(OperationProcessorSPtr operation_processor, Ino ino, uint64_t slice_id) {
+  Trace trace;
+  DecSliceRefOperation operation(trace, ino, slice_id);
+
+  auto status = operation_processor->RunAlone(&operation);
+  if (!status.ok()) {
+    return status.error_code() == pb::error::ENOT_FOUND;
+  }
+
+  auto& result = operation.GetResult();
+
+  SliceRefEntry& slice_ref = result.slice_ref;
+
+  LOG(INFO) << fmt::format("[gc.delfile.{}] slice({}) refcount({}).", ino, slice_id, slice_ref.ref_count());
+
+  return slice_ref.ref_count() <= 0;
+}
+
 void CleanDelSliceTask::Run() {
   auto status = CleanDelSlice();
   if (!status.ok()) {
@@ -115,12 +137,15 @@ Status CleanDelSliceTask::CleanDelSlice() {
     const auto& slice = trash_slice_list.slices().at(i);
     if (slice.slice().id() == 0) continue;  // skip invalid slice
 
-    auto block_keys = dingofs::EnumerateBlockKeys(slice.slice().id(), slice.slice().size(), slice.block_size());
+    // check slice whether should delete
+    if (ShouldDeleteSlice(operation_processor_, ino_, slice.slice().id())) {
+      auto block_keys = dingofs::EnumerateBlockKeys(slice.slice().id(), slice.slice().size(), slice.block_size());
 
-    for (const auto& block_key : block_keys) {
-      keys.push_back(block_key.StoreKey());
+      for (const auto& block_key : block_keys) {
+        keys.push_back(block_key.StoreKey());
 
-      LOG(INFO) << fmt::format("[gc.delslice.{}] delete block key({}).", ino_, block_key.StoreKey());
+        LOG(INFO) << fmt::format("[gc.delslice.{}] delete block key({}).", ino_, block_key.StoreKey());
+      }
     }
 
     slice_id_trace += std::to_string(slice.slice().id());
@@ -167,9 +192,7 @@ static Status GetChunks(OperationProcessorSPtr operation_processor, uint32_t fs_
   operation.SetIsolationLevel(Txn::kReadCommitted);
 
   auto status = operation_processor->RunAlone(&operation);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
 
@@ -191,6 +214,14 @@ Status CleanDelFileTask::CleanDelFile(const AttrEntry& attr) {
   for (const auto& chunk : chunks) {
     for (const auto& slice : chunk.slices()) {
       if (slice.id() == 0) continue;  // skip invalid slice
+
+      // if file is shared by multiple inodes, we can't delete the slice when gc delfile, and need to add reference
+      // counting for slice
+      if (attr.shared_slice()) {
+        if (!ShouldDeleteSlice(operation_processor_, attr.ino(), slice.id())) {
+          continue;
+        }
+      }
 
       std::vector<BlockKey> block_keys = dingofs::EnumerateBlockKeys(slice.id(), slice.size(), chunk.block_size());
 

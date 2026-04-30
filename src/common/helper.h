@@ -15,7 +15,6 @@
 #ifndef DINGOFS_SRC_COMMON_HELPER_H_
 #define DINGOFS_SRC_COMMON_HELPER_H_
 
-#include <absl/strings/str_split.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <pwd.h>
@@ -27,8 +26,10 @@
 #include <utility>
 #include <vector>
 
+#include "absl/strings/str_split.h"
 #include "butil/endpoint.h"
 #include "butil/file_util.h"
+#include "butil/strings/string_split.h"
 #include "butil/strings/string_util.h"
 #include "common/types.h"
 #include "fmt/format.h"
@@ -278,6 +279,24 @@ class Helper {
     }
 
     return result;
+  }
+
+  static void SplitString(const std::string& str, char c,
+                          std::vector<std::string>& vec) {
+    butil::SplitString(str, c, &vec);
+  }
+
+  static void SplitString(const std::string& str, char c,
+                          std::vector<int64_t>& vec) {
+    std::vector<std::string> strs;
+    SplitString(str, c, strs);
+    for (auto& s : strs) {
+      try {
+        vec.push_back(std::stoll(s));
+      } catch (const std::exception& e) {
+        LOG(ERROR) << "stoll exception: " << e.what();
+      }
+    }
   }
 
 };  // class Helper

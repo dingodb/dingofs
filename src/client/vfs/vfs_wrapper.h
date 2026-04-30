@@ -79,6 +79,10 @@ class VFSWrapper {
 
   Status Fallocate(Ino ino, int mode, uint64_t offset, uint64_t length);
 
+  Status CopyFileRange(Ino src_ino, uint64_t src_off, uint64_t src_fh,
+                       Ino dst_ino, uint64_t dst_off, uint64_t dst_fh,
+                       uint64_t len, uint32_t flags, uint64_t* bytes_copied);
+
   Status ReadLink(Ino ino, std::string* link);
 
   Status MkNod(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,

@@ -27,6 +27,7 @@
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "brpc/reloadable_flags.h"
 #include "bthread/bthread.h"
 #include "bthread/types.h"
@@ -108,6 +109,12 @@ static void DelParentIno(AttrEntry& attr, Ino parent) {
   auto it = std::find(attr.parents().begin(), attr.parents().end(), parent);
   if (it != attr.parents().end()) {
     attr.mutable_parents()->erase(it);
+  }
+}
+static void DelSliceRefIno(SliceRefEntry& slice_ref, Ino ino) {
+  auto it = std::find(slice_ref.inos().begin(), slice_ref.inos().end(), ino);
+  if (it != slice_ref.inos().end()) {
+    slice_ref.mutable_inos()->erase(it);
   }
 }
 
@@ -1227,6 +1234,56 @@ Status CleanChunkOperation::Run(TxnUPtr& txn) {
   return Status::OK();
 }
 
+Status GetSliceRefOperation::Run(TxnUPtr& txn) {
+  CHECK(fs_id_ > 0) << " fs_id is 0.";
+  CHECK(slice_id_ > 0) << " slice_id is 0.";
+
+  std::string value;
+  auto status = txn->Get(MetaCodec::EncodeSliceRefKey(slice_id_), value);
+  if (!status.ok()) return status;
+
+  result_.slice_ref = MetaCodec::DecodeSliceRefValue(value);
+
+  return Status::OK();
+}
+
+Status DecSliceRefOperation::Run(TxnUPtr& txn) {
+  CHECK(slice_id_ > 0) << " slice_id is 0.";
+
+  std::string value;
+  const std::string key = MetaCodec::EncodeSliceRefKey(slice_id_);
+  auto status = txn->Get(key, value);
+  if (!status.ok()) return status;
+
+  SliceRefEntry slice_ref = MetaCodec::DecodeSliceRefValue(value);
+
+  slice_ref.set_ref_count(slice_ref.ref_count() - 1);
+  DelSliceRefIno(slice_ref, ino_);
+  if (slice_ref.ref_count() > 0) {
+    txn->Put(key, MetaCodec::EncodeSliceRefValue(slice_ref));
+
+  } else {
+    txn->Delete(key);
+  }
+
+  result_.slice_ref = std::move(slice_ref);
+
+  return Status::OK();
+}
+
+Status ScanSliceRefOperation::Run(TxnUPtr& txn) {
+  Range range = MetaCodec::GetSliceRefRange();
+
+  result_.slice_refs.clear();
+  return txn->Scan(range, [&](const std::string& key, const std::string& value) -> bool {
+    if (!MetaCodec::IsSliceRefKey(key)) return true;
+
+    result_.slice_refs.push_back(MetaCodec::DecodeSliceRefValue(value));
+
+    return true;
+  });
+}
+
 Status FallocateOperation::PreAlloc(TxnUPtr& txn, AttrEntry& attr, uint64_t offset, uint32_t len) {
   uint64_t length = attr.length();
   const uint64_t new_length = offset + len;
@@ -2039,6 +2096,309 @@ Status CompactChunkOperation::Run(TxnUPtr& txn) {
            MetaCodec::EncodeDelSliceValue(trash_slice_list));
 
   result_.chunk = chunk;
+
+  return Status::OK();
+}
+
+// slice range [slice.pos, slice.pos + slice.len) is covered by any slice in chunk
+static bool IsCoveredSlice(const ChunkEntry& chunk, const SliceEntry& slice) {
+  for (const auto& s : chunk.slices()) {
+    if (s.id() == slice.id()) continue;
+
+    if (s.pos() <= slice.pos() && (s.pos() + s.len()) >= (slice.pos() + slice.len())) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// Clone slice references from a source byte range [src_off, src_off+len) into
+// a destination byte range starting at dst_off. This is the metadata core of
+// reflink-style copy_file_range: no underlying object data is copied; the
+// returned slices reuse the source slices' physical identity (id/off/size)
+// and only their logical placement (pos/len) is recomputed for the dst chunks.
+//
+// Returns a map from destination chunk index -> the new slices that should be
+// appended to that chunk.
+static absl::flat_hash_map<uint64_t, std::vector<SliceEntry>> CloneSlice(
+    absl::flat_hash_map<uint64_t, ChunkEntry> src_chunks, uint64_t src_off, uint64_t dst_off, uint64_t len,
+    uint32_t chunk_size) {
+  // Intermediate (chunk_index, slice) pairs before grouping by destination
+  // chunk. A single source slice may produce multiple entries when it crosses
+  // a destination chunk boundary.
+  struct DstSlice {
+    uint64_t chunk_index;
+    SliceEntry slice;
+  };
+  std::vector<DstSlice> dst_mapped;
+  const uint64_t src_end = src_off + len;
+
+  // Iterate only over the source chunks intersecting [src_off, src_end).
+  // The end index uses ceiling division so the last partially-covered chunk
+  // is included.
+  uint32_t src_chunk_index_begin = src_off / chunk_size;
+  uint32_t src_chunk_index_end = (src_off + len + chunk_size - 1) / chunk_size;
+
+  for (uint32_t i = src_chunk_index_begin; i < src_chunk_index_end; ++i) {
+    auto it = src_chunks.find(i);
+    // Sparse holes between chunks are simply skipped.
+    if (it == src_chunks.end()) continue;
+    const auto& src_chunk = it->second;
+
+    // Absolute file offset of this source chunk's first byte.
+    const uint64_t src_chunk_pos = static_cast<uint64_t>(src_chunk.index()) * chunk_size;
+    for (const auto& slice : src_chunk.slices()) {
+      // id == 0 represents a hole / unreferenced slot; nothing to clone.
+      if (slice.id() == 0) continue;
+      // Older slices that have been fully overwritten by a later slice in the
+      // same chunk are obsolete; do not propagate them to the destination.
+      if (IsCoveredSlice(src_chunk, slice)) continue;
+
+      // Project this slice onto the absolute file address space.
+      const uint64_t slice_logical_start = src_chunk_pos + slice.pos();
+      const uint64_t slice_logical_end = slice_logical_start + slice.len();
+
+      // Intersect the slice's logical extent with the requested source range.
+      // If they do not overlap, this slice contributes nothing.
+      const uint64_t inter_start = std::max(slice_logical_start, src_off);
+      const uint64_t inter_end = std::min(slice_logical_end, src_end);
+      if (inter_start >= inter_end) continue;
+
+      // Translate the overlap into the slice's physical backing object:
+      //   off_in_slice : how far into the slice the overlap begins
+      //   inter_len    : number of bytes the overlap covers
+      const uint64_t off_in_slice = inter_start - slice_logical_start;
+      const uint64_t inter_len = inter_end - inter_start;
+
+      // Map the overlap onto the destination address space and emit one new
+      // slice per destination chunk it spans. A single source slice can span
+      // multiple destination chunks when src_off and dst_off have different
+      // alignments relative to chunk boundaries.
+      uint64_t dst_logical = dst_off + (inter_start - src_off);
+      uint64_t remaining = inter_len;
+      uint64_t cursor_off = slice.off() + off_in_slice;
+      while (remaining > 0) {
+        const uint64_t dst_chunk_index = dst_logical / chunk_size;
+        const uint64_t dst_chunk_pos = dst_logical % chunk_size;
+        // Number of bytes still available in the current destination chunk.
+        const uint64_t in_chunk_room = chunk_size - dst_chunk_pos;
+        // Emit at most up to the chunk boundary; the rest goes to next chunk.
+        const uint64_t take = std::min(remaining, in_chunk_room);
+
+        // The new slice shares the source slice's physical identity
+        // (id/size) and the running physical cursor (cursor_off); only its
+        // logical position within the destination chunk is recomputed.
+        SliceEntry new_slice;
+        new_slice.set_id(slice.id());
+        new_slice.set_size(slice.size());
+        new_slice.set_off(cursor_off);
+        new_slice.set_len(take);
+        new_slice.set_pos(dst_chunk_pos);
+        dst_mapped.push_back({.chunk_index = dst_chunk_index, .slice = std::move(new_slice)});
+
+        // Advance all three cursors in lockstep for the next iteration.
+        dst_logical += take;
+        cursor_off += take;
+        remaining -= take;
+      }
+    }
+  }
+
+  // Group the produced slices by destination chunk index for the caller.
+  absl::flat_hash_map<uint64_t, std::vector<SliceEntry>> dst_copy_slice_map;
+  for (auto& item : dst_mapped) {
+    dst_copy_slice_map[item.chunk_index].push_back(std::move(item.slice));
+  }
+
+  return dst_copy_slice_map;
+}
+
+absl::flat_hash_map<uint64_t, std::vector<SliceEntry>> CopyFileRangeOperation::TestCloneSlice(
+    absl::flat_hash_map<uint64_t, ChunkEntry> src_chunks, uint64_t src_off, uint64_t dst_off, uint64_t len,
+    uint32_t chunk_size) {
+  return CloneSlice(std::move(src_chunks), src_off, dst_off, len, chunk_size);
+}
+
+static Status UpsertSliceRef(TxnUPtr& txn, absl::flat_hash_map<uint64_t, std::vector<SliceEntry>> copy_slice_map,
+                             Ino src_ino, Ino dst_ino) {
+  // 5.a) collect unique slice ids
+  std::set<uint64_t> copy_slice_ids;
+  for (const auto& [_, slices] : copy_slice_map) {
+    for (const auto& slice : slices) {
+      copy_slice_ids.insert(slice.id());
+    }
+  }
+
+  // 5.b) batch get slice ref entries
+  std::vector<std::string> copy_slice_ref_keys;
+  copy_slice_ref_keys.reserve(copy_slice_ids.size());
+  for (const auto& slice_id : copy_slice_ids) {
+    copy_slice_ref_keys.push_back(MetaCodec::EncodeSliceRefKey(slice_id));
+  }
+
+  if (!copy_slice_ref_keys.empty()) {
+    std::vector<KeyValue> slice_ref_kvs;
+    auto status = txn->BatchGet(copy_slice_ref_keys, slice_ref_kvs);
+    if (!status.ok() && status.error_code() != pb::error::ENOT_FOUND) {
+      return status;
+    }
+
+    // 5.c) update slice ref entries
+    absl::flat_hash_map<uint64_t, SliceRefEntry> slice_ref_map;
+    for (auto& kv : slice_ref_kvs) {
+      SliceRefEntry slice_ref = MetaCodec::DecodeSliceRefValue(kv.value);
+      slice_ref_map[slice_ref.id()] = slice_ref;
+    }
+
+    for (const auto& [_, slices] : copy_slice_map) {
+      for (const auto& slice : slices) {
+        auto it = slice_ref_map.find(slice.id());
+        if (it != slice_ref_map.end()) {
+          auto& slice_ref = it->second;
+          slice_ref.set_ref_count(slice_ref.ref_count() + 1);
+          slice_ref.add_inos(dst_ino);
+
+        } else {
+          SliceRefEntry slice_ref;
+          slice_ref.set_id(slice.id());
+          slice_ref.set_size(slice.size());
+          slice_ref.set_ref_count(2);
+          slice_ref.add_inos(src_ino);
+          slice_ref.add_inos(dst_ino);
+
+          slice_ref_map.insert({slice_ref.id(), slice_ref});
+        }
+      }
+    }
+
+    for (const auto& [_, slice_ref] : slice_ref_map) {
+      txn->Put(MetaCodec::EncodeSliceRefKey(slice_ref.id()), MetaCodec::EncodeSliceRefValue(slice_ref));
+    }
+  }
+
+  return Status::OK();
+}
+
+Status CopyFileRangeOperation::Run(TxnUPtr& txn) {
+  const uint32_t fs_id = fs_info_.fs_id();
+  const uint64_t chunk_size = fs_info_.chunk_size();
+  const uint64_t block_size = fs_info_.block_size();
+  const uint64_t now_ns = GetTime();
+
+  // 1) batch get src/dst inodes + src chunks in [begin, end)
+  const std::string src_inode_key = MetaCodec::EncodeInodeKey(fs_id, param_.src_ino);
+  const std::string dst_inode_key = MetaCodec::EncodeInodeKey(fs_id, param_.dst_ino);
+
+  std::vector<std::string> phase1_keys{src_inode_key, dst_inode_key};
+
+  uint32_t src_chunk_index_begin = param_.src_off / chunk_size;
+  uint32_t src_chunk_index_end = (param_.src_off + param_.len + chunk_size - 1) / chunk_size;
+  for (uint32_t i = src_chunk_index_begin; i < src_chunk_index_end; ++i) {
+    phase1_keys.push_back(MetaCodec::EncodeChunkKey(fs_id, param_.src_ino, i));
+  }
+
+  uint32_t dst_chunk_index_begin = param_.dst_off / chunk_size;
+  uint32_t dst_chunk_index_end = (param_.dst_off + param_.len + chunk_size - 1) / chunk_size;
+  for (uint32_t i = dst_chunk_index_begin; i < dst_chunk_index_end; ++i) {
+    phase1_keys.push_back(MetaCodec::EncodeChunkKey(fs_id, param_.dst_ino, i));
+  }
+
+  std::vector<KeyValue> phase1_kvs;
+  auto status = txn->BatchGet(phase1_keys, phase1_kvs);
+  if (!status.ok()) return status;
+
+  AttrEntry src_attr;
+  AttrEntry dst_attr;
+  absl::flat_hash_map<uint64_t, ChunkEntry> src_chunks;  // index -> chunk
+  absl::flat_hash_map<uint64_t, ChunkEntry> dst_chunks;  // index -> chunk
+  for (const auto& kv : phase1_kvs) {
+    if (kv.key == src_inode_key) {
+      src_attr = MetaCodec::DecodeInodeValue(kv.value);
+
+    } else if (kv.key == dst_inode_key) {
+      dst_attr = MetaCodec::DecodeInodeValue(kv.value);
+
+    } else if (MetaCodec::IsChunkKey(kv.key)) {
+      uint32_t fs_id;
+      uint64_t ino;
+      uint64_t chunk_index;
+      MetaCodec::DecodeChunkKey(kv.key, fs_id, ino, chunk_index);
+      auto chunk = MetaCodec::DecodeChunkValue(kv.value);
+      if (ino == param_.src_ino) {
+        src_chunks[chunk.index()] = std::move(chunk);
+      } else if (ino == param_.dst_ino) {
+        dst_chunks[chunk.index()] = std::move(chunk);
+      }
+    }
+  }
+
+  if (src_attr.ino() == 0) return Status(pb::error::ENOT_FOUND, "src inode not found");
+  if (dst_attr.ino() == 0) return Status(pb::error::ENOT_FOUND, "dst inode not found");
+  if (src_attr.type() != pb::mds::FileType::FILE) return Status(pb::error::ENOT_FILE, "src is not regular file");
+  if (dst_attr.type() != pb::mds::FileType::FILE) return Status(pb::error::ENOT_FILE, "dst is not regular file");
+
+  // 2) check src offset and length
+  if (param_.src_off >= src_attr.length()) {
+    return Status(pb::error::EOUT_OF_RANGE, "src offset beyond EOF");
+  }
+
+  // actually copy length
+  const uint64_t actual_len = std::min(param_.len, src_attr.length() - param_.src_off);
+  CHECK(actual_len != 0) << fmt::format("invalid copy length {}, src_off {}, src_attr.length {}", param_.len,
+                                        param_.src_off, src_attr.length());
+
+  // 3) clone slice
+  absl::flat_hash_map<uint64_t, std::vector<SliceEntry>> copy_slice_map =
+      CloneSlice(src_chunks, param_.src_off, param_.dst_off, actual_len, chunk_size);
+
+  // 4) update dst chunks; if chunk not exist, create new one; Put
+  dst_chunk_index_end = (param_.dst_off + actual_len + chunk_size - 1) / chunk_size;
+  for (uint32_t i = dst_chunk_index_begin; i < dst_chunk_index_end; ++i) {
+    auto it = dst_chunks.find(i);
+    ChunkEntry chunk;
+    if (it != dst_chunks.end()) {
+      chunk = std::move(it->second);
+    } else {
+      chunk.set_index(i);
+      chunk.set_chunk_size(chunk_size);
+      chunk.set_block_size(block_size);
+    }
+
+    auto it2 = copy_slice_map.find(i);
+    if (it2 != copy_slice_map.end()) {
+      for (const auto& slice : it2->second) {
+        *chunk.add_slices() = slice;
+      }
+    }
+
+    chunk.set_version(chunk.version() + 1);
+    txn->Put(MetaCodec::EncodeChunkKey(fs_id, param_.dst_ino, i), MetaCodec::EncodeChunkValue(chunk));
+  }
+
+  // 5) upsert slice ref
+  status = UpsertSliceRef(txn, copy_slice_map, param_.src_ino, param_.dst_ino);
+  if (!status.ok()) return status;
+
+  // 6) update dst inode (size grow, mtime/ctime)
+  const uint64_t new_end = param_.dst_off + actual_len;
+  const int64_t length_delta = new_end > dst_attr.length() ? static_cast<int64_t>(new_end - dst_attr.length()) : 0;
+  if (length_delta > 0) dst_attr.set_length(new_end);
+  dst_attr.set_mtime(std::max(dst_attr.mtime(), now_ns));
+  dst_attr.set_ctime(std::max(dst_attr.ctime(), now_ns));
+  dst_attr.set_shared_slice(true);
+  dst_attr.set_version(dst_attr.version() + 1);
+  txn->Put(dst_inode_key, MetaCodec::EncodeInodeValue(dst_attr));
+
+  // 7) update src inode
+  src_attr.set_shared_slice(true);
+  src_attr.set_atime(std::max(src_attr.atime(), now_ns));
+  src_attr.set_version(src_attr.version() + 1);
+  txn->Put(src_inode_key, MetaCodec::EncodeInodeValue(src_attr));
+
+  result_.bytes_copied = actual_len;
+  result_.length_delta = length_delta;
+  result_.dst_attr = dst_attr;
 
   return Status::OK();
 }

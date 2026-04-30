@@ -96,6 +96,10 @@ class Operation {
     kScanChunk = 53,
     kCleanChunk = 54,
 
+    kGetSliceRef = 55,
+    kDecSliceRef = 56,
+    kScanSliceRef = 57,
+
     kSetFsQuota = 60,
     kGetFsQuota = 61,
     kFlushFsUsage = 62,
@@ -968,6 +972,74 @@ class CleanChunkOperation : public Operation {
   Result result_;
 };
 
+class GetSliceRefOperation : public Operation {
+ public:
+  GetSliceRefOperation(Trace& trace, uint32_t fs_id, uint64_t slice_id)
+      : Operation(trace), fs_id_(fs_id), slice_id_(slice_id) {};
+  ~GetSliceRefOperation() override = default;
+
+  struct Result {
+    SliceRefEntry slice_ref;
+  };
+
+  OpType GetOpType() const override { return OpType::kGetSliceRef; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+
+  Status Run(TxnUPtr& txn) override;
+
+  Result& GetResult() { return result_; }
+
+ private:
+  uint32_t fs_id_;
+  uint64_t slice_id_{0};
+
+  Result result_;
+};
+
+class DecSliceRefOperation : public Operation {
+ public:
+  DecSliceRefOperation(Trace& trace, Ino ino, uint64_t slice_id) : Operation(trace), ino_(ino), slice_id_(slice_id) {};
+  ~DecSliceRefOperation() override = default;
+
+  struct Result {
+    SliceRefEntry slice_ref;
+  };
+
+  OpType GetOpType() const override { return OpType::kDecSliceRef; }
+
+  Ino GetIno() const override { return ino_; }
+
+  Status Run(TxnUPtr& txn) override;
+
+  Result& GetResult() { return result_; }
+
+ private:
+  Ino ino_;
+  uint64_t slice_id_{0};
+
+  Result result_;
+};
+
+class ScanSliceRefOperation : public Operation {
+ public:
+  ScanSliceRefOperation(Trace& trace) : Operation(trace) {};
+  ~ScanSliceRefOperation() override = default;
+
+  struct Result {
+    std::vector<SliceRefEntry> slice_refs;
+  };
+
+  OpType GetOpType() const override { return OpType::kScanSliceRef; }
+
+  Status Run(TxnUPtr& txn) override;
+
+  Result& GetResult() { return result_; }
+
+ private:
+  Result result_;
+};
+
 class FallocateOperation : public Operation {
  public:
   struct Param {
@@ -1286,6 +1358,50 @@ class CompactChunkOperation : public Operation {
   const uint32_t fs_id_;
   const Ino ino_;
 
+  const Param param_;
+
+  Result result_;
+};
+
+// Reflink-style copy_file_range: within a single txn, slice references owned
+// by `src_ino` over the byte range [src_off, src_off + len) are replicated
+// into `dst_ino` at [dst_off, dst_off + len). Physical slice data is shared;
+// only chunk metadata and SliceReferrer reverse-index rows are written.
+class CopyFileRangeOperation : public Operation {
+ public:
+  struct Param {
+    Ino src_ino;
+    Ino dst_ino;
+    uint64_t src_off;
+    uint64_t dst_off;
+    uint64_t len;
+  };
+
+  CopyFileRangeOperation(Trace& trace, FsInfoEntry fs_info, const Param& param)
+      : Operation(trace), fs_info_(std::move(fs_info)), param_(param) {};
+  ~CopyFileRangeOperation() override = default;
+
+  struct Result {
+    uint64_t bytes_copied{0};
+    AttrEntry dst_attr;
+    int64_t length_delta{0};  // for quota accounting
+  };
+
+  OpType GetOpType() const override { return OpType::kUpsertChunk; }
+
+  uint32_t GetFsId() const override { return fs_info_.fs_id(); }
+  Ino GetIno() const override { return param_.dst_ino; }
+
+  Status Run(TxnUPtr& txn) override;
+
+  Result& GetResult() { return result_; }
+
+  absl::flat_hash_map<uint64_t, std::vector<SliceEntry>> TestCloneSlice(
+      absl::flat_hash_map<uint64_t, ChunkEntry> src_chunks, uint64_t src_off, uint64_t dst_off, uint64_t len,
+      uint32_t chunk_size);
+
+ private:
+  const FsInfoEntry fs_info_;
   const Param param_;
 
   Result result_;

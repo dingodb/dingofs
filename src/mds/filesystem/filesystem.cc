@@ -91,6 +91,10 @@ DEFINE_validator(mds_transfer_max_slice_num, brpc::PassValidate);
 DEFINE_uint32(mds_prefetch_chunk_num, 16, "Prefetch chunk num.");
 DEFINE_validator(mds_prefetch_chunk_num, brpc::PassValidate);
 
+DEFINE_uint32(mds_copy_file_range_max_chunks_per_rpc, 256,
+              "Max number of dst chunks affected by a single CopyFileRange RPC.");
+DEFINE_validator(mds_copy_file_range_max_chunks_per_rpc, brpc::PassValidate);
+
 DEFINE_uint32(mds_cache_expire_interval_s, 7200, "Cache expire interval in seconds.");
 DEFINE_validator(mds_cache_expire_interval_s, brpc::PassValidate);
 
@@ -2154,8 +2158,8 @@ void FileSystem::NotifyBuddyRefreshInode(const std::vector<Ino>& parents, const 
     if (notified_mds_ids.contains(mds_id)) continue;
 
     if (mds_id != self_mds_id_) {
-      notify_buddy_->AsyncNotify(notify::RefreshInodeMessage::Create(
-          mds_id, fs_id_, attr_or_mutation.attr, attr_or_mutation.mutation, notify_reason));
+      notify_buddy_->AsyncNotify(notify::RefreshInodeMessage::Create(mds_id, fs_id_, attr_or_mutation.attr,
+                                                                     attr_or_mutation.mutation, notify_reason));
     }
 
     notified_mds_ids.insert(mds_id);
@@ -2305,7 +2309,9 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
       DeleteDentryFromPartition(new_parent, prev_new_dentry.name(), new_parent_inode->Version());
     }
     AddDentryToPartition(new_parent, new_dentry, new_parent_inode->Version());
-    DeleteDentryFromPartition(new_parent, old_dentry.name(), new_parent_inode->Version());
+    if (is_same_parent) {
+      DeleteDentryFromPartition(new_parent, old_dentry.name(), new_parent_inode->Version());
+    }
 
     // refresh parent of parent inode cache
     NotifyBuddyRefreshInode(old_parent_attr, reason);
@@ -2479,6 +2485,49 @@ Status FileSystem::ReadSlice(Context& ctx, Ino ino, const std::vector<ChunkDescr
       // update chunk cache
       chunk_cache_.PutIf(ino, std::move(chunk));
     }
+  }
+
+  return Status::OK();
+}
+
+Status FileSystem::CopyFileRange(Context& ctx, const CopyFileRangeParam& param, uint64_t& bytes_copied,
+                                 AttrEntry& dst_attr) {
+  if (!CanServe(ctx)) {
+    return Status(pb::error::ENOT_SERVE, "can not serve");
+  }
+  if (param.src_ino == 0 || param.dst_ino == 0) {
+    return Status(pb::error::EILLEGAL_PARAMTETER, "invalid ino");
+  }
+  if (param.len == 0) {
+    return Status(pb::error::EILLEGAL_PARAMTETER, "len is 0");
+  }
+
+  // optimistic quota pre-check — uses requested `len`; src EOF may shrink the
+  // actual delta, but we err on the safe side here (mirrors fallocate path).
+  if (!quota_manager_.CheckQuota(ctx.GetTrace(), param.dst_ino, param.len, 0)) {
+    return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
+  }
+
+  CopyFileRangeOperation::Param op_param;
+  op_param.src_ino = param.src_ino;
+  op_param.dst_ino = param.dst_ino;
+  op_param.src_off = param.src_off;
+  op_param.dst_off = param.dst_off;
+  op_param.len = param.len;
+
+  CopyFileRangeOperation operation(ctx.GetTrace(), GetFsInfo(), op_param);
+
+  auto status = RunOperation(&operation);
+  if (!status.ok()) return status;
+
+  auto& result = operation.GetResult();
+  bytes_copied = result.bytes_copied;
+  dst_attr = result.dst_attr;
+
+  if (bytes_copied > 0) {
+    std::string reason = fmt::format("copy_file_range.{}.{}->{}", ctx.RequestId(), param.src_ino, param.dst_ino);
+    UpsertInodeCache(dst_attr, reason);
+    chunk_cache_.Delete(param.dst_ino);
   }
 
   return Status::OK();
@@ -3846,6 +3895,18 @@ Status FileSystemSet::GetFsOpLogs(uint32_t fs_id, std::vector<FsOpLog>& fs_op_lo
   operation.SetIsolationLevel(Txn::kReadCommitted);
 
   return RunOperation(&operation);
+}
+
+Status FileSystemSet::GetSliceRefs(std::vector<SliceRefEntry>& slice_refs) {
+  Trace trace;
+  ScanSliceRefOperation operation(trace);
+  operation.SetIsolationLevel(Txn::kReadCommitted);
+
+  auto status = RunOperation(&operation);
+  if (!status.ok()) return status;
+
+  slice_refs = std::move(operation.GetResult().slice_refs);
+  return Status::OK();
 }
 
 bool FileSystemSet::LoadFileSystems() {

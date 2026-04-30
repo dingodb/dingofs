@@ -66,6 +66,9 @@ DEFINE_uint32(vfs_meta_worker_num, 128, "number of meta workers");
 DEFINE_uint32(vfs_meta_worker_max_pending_num, 1048576,
               "meta worker max pending num");
 
+DEFINE_uint32(vfs_meta_copy_file_range_max_chunks_per_rpc, 256,
+              "Max dst chunks affected by one CopyFileRange RPC window.");
+
 static std::vector<std::string> SplitMdsAddrs(const std::string& mds_addrs) {
   std::vector<std::string> addrs;
 
@@ -1724,6 +1727,41 @@ Status MDSMetaSystem::Compact(ContextSPtr ctx, Ino ino, uint32_t chunk_index,
                                          mds_client_, compactor_, is_async);
     if (!status.ok()) return status;
   }
+
+  return Status::OK();
+}
+
+Status MDSMetaSystem::CopyFileRange(ContextSPtr ctx, Ino src_ino,
+                                    uint64_t src_off, Ino dst_ino,
+                                    uint64_t dst_off, uint64_t len,
+                                    uint32_t flags, uint64_t* bytes_copied,
+                                    Attr* dst_attr) {
+  AssertStop();
+  CHECK(bytes_copied != nullptr) << "bytes_copied is null";
+  CHECK(dst_attr != nullptr) << "dst_attr is null";
+
+  *bytes_copied = 0;
+
+  if (len == 0) return Status::OK();
+
+  MDSClient::CopyFileRangeParam param;
+  param.src_ino = src_ino;
+  param.dst_ino = dst_ino;
+  param.src_off = src_off;
+  param.dst_off = dst_off;
+  param.len = len;
+  param.flags = flags;
+
+  AttrEntry dst_attr_entry;
+  auto status =
+      mds_client_.CopyFileRange(ctx, param, *bytes_copied, dst_attr_entry);
+  if (!status.ok()) return status;
+
+  PutInodeToCache(dst_attr_entry);
+
+  chunk_memo_.Forget(dst_ino);
+  chunk_cache_.Delete(dst_ino);
+  modify_time_memo_.Remember(dst_ino);
 
   return Status::OK();
 }

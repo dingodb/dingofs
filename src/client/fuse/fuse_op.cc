@@ -692,6 +692,45 @@ void FuseOpFallocate(fuse_req_t req, fuse_ino_t ino, int mode, off_t offset,
   ReplyError(req, s);
 }
 
+void FuseOpCopyFileRange(fuse_req_t req, fuse_ino_t ino_in, off_t off_in,
+                         struct fuse_file_info* fi_in, fuse_ino_t ino_out,
+                         off_t off_out, struct fuse_file_info* fi_out,
+                         size_t len, int flags) {
+  VLOG(1) << fmt::format(
+      "FuseOpCopyFileRange src_ino({}) src_off({}) src_fh({}) "
+      "dst_ino({}) dst_off({}) dst_fh({}) len({}) flags(0x{:x}) ctx({})",
+      ino_in, off_in, fi_in ? fi_in->fh : 0, ino_out, off_out,
+      fi_out ? fi_out->fh : 0, len, flags, FuseCtx(req));
+
+  if (FLAGS_fuse_dryrun_bench_mode) {
+    ReplyWrite(req, len);
+    return;
+  }
+
+  if (off_in < 0 || off_out < 0) {
+    ReplyError(req, Status::InvalidParam("negative copy_file_range offset"));
+    return;
+  }
+  if (len == 0) {
+    ReplyWrite(req, 0);
+    return;
+  }
+
+  uint64_t bytes_copied = 0;
+  Status s = g_vfs->CopyFileRange(
+      ino_in, static_cast<uint64_t>(off_in), fi_in ? fi_in->fh : 0, ino_out,
+      static_cast<uint64_t>(off_out), fi_out ? fi_out->fh : 0,
+      static_cast<uint64_t>(len), static_cast<uint32_t>(flags), &bytes_copied);
+
+  // POSIX copy_file_range: only surface an error if zero bytes were copied;
+  // otherwise return the partial count and let the kernel/app retry.
+  if (!s.ok() && bytes_copied == 0) {
+    ReplyError(req, s);
+  } else {
+    ReplyWrite(req, bytes_copied);
+  }
+}
+
 void FuseOpOpenDir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
   VLOG(1) << fmt::format("FuseOpOpenDir ino({}) ctx({})", ino, FuseCtx(req));
 

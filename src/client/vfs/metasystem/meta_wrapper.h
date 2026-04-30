@@ -183,6 +183,13 @@ class MetaWrapper {
     return target_->Compact(ctx, ino, chunk_index, is_async);
   }
 
+  Status CopyFileRange(ContextSPtr ctx, Ino src_ino, uint64_t src_off,
+                       Ino dst_ino, uint64_t dst_off, uint64_t len,
+                       uint32_t flags, uint64_t* bytes_copied, Attr* dst_attr) {
+    return target_->CopyFileRange(ctx, src_ino, src_off, dst_ino, dst_off, len,
+                                  flags, bytes_copied, dst_attr);
+  }
+
   Status StatFs(ContextSPtr ctx, Ino ino, FsStat* fs_stat) {
     return target_->StatFs(ctx, ino, fs_stat);
   }

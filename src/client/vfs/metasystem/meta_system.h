@@ -123,6 +123,17 @@ class MetaSystem {
     return Status::NotSupport("not supported");
   }
 
+  // copy_file_range — reflink-style metadata copy. Default impl returns
+  // NotSupport; only the MDS backend implements it.
+  virtual Status CopyFileRange(ContextSPtr ctx,                // NOLINT
+                               Ino src_ino, uint64_t src_off,  // NOLINT
+                               Ino dst_ino, uint64_t dst_off,  // NOLINT
+                               uint64_t len, uint32_t flags,   // NOLINT
+                               uint64_t* bytes_copied,         // NOLINT
+                               Attr* dst_attr) {               // NOLINT
+    return Status::NotSupport("not supported");
+  }
+
   /**
    * Hard link a file to a new parent directory
    * @param ino the file to be linked

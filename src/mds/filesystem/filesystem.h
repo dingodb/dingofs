@@ -218,6 +218,16 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status ReadSlice(Context& ctx, Ino ino, const std::vector<ChunkDescriptor>& chunk_descriptors,
                    std::vector<ChunkEntry>& chunks);
 
+  // copy_file_range — reflink-style: shares slices via SliceReferrer.
+  struct CopyFileRangeParam {
+    Ino src_ino;
+    Ino dst_ino;
+    uint64_t src_off;
+    uint64_t dst_off;
+    uint64_t len;
+  };
+  Status CopyFileRange(Context& ctx, const CopyFileRangeParam& param, uint64_t& bytes_copied, AttrEntry& dst_attr);
+
   // fallocate
   Status Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offset, uint64_t len, EntryOut& entry_out);
 
@@ -461,6 +471,7 @@ class FileSystemSet {
   Status GetDelFiles(uint32_t fs_id, std::vector<AttrEntry>& delfiles);
   Status GetDelSlices(uint32_t fs_id, std::vector<TrashSliceList>& delslices);
   Status GetFsOpLogs(uint32_t fs_id, std::vector<FsOpLog>& fs_op_logs);
+  Status GetSliceRefs(std::vector<SliceRefEntry>& slice_refs);
 
   // load already exist filesystem
   bool LoadFileSystems();

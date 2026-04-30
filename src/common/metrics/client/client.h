@@ -56,6 +56,7 @@ struct ClientOpMetric {
   OpMetric opWrite;
   OpMetric opStatfs;
   OpMetric opFallocate;
+  OpMetric opCopyFileRange;
   OpMetric opAll;
 
   ClientOpMetric()
@@ -85,6 +86,7 @@ struct ClientOpMetric {
         opWrite(prefix, "opWrite"),
         opStatfs(prefix, "opStatfs"),
         opFallocate(prefix, "opFallocate"),
+        opCopyFileRange(prefix, "opCopyFileRange"),
         opAll(prefix, "opAll") {}
 };
 

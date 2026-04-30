@@ -161,6 +161,9 @@ class MDSServiceImpl : public pb::mds::MDSService {
   void ReadSlice(google::protobuf::RpcController* controller, const pb::mds::ReadSliceRequest* request,
                  pb::mds::ReadSliceResponse* response, google::protobuf::Closure* done) override;
 
+  void CopyFileRange(google::protobuf::RpcController* controller, const pb::mds::CopyFileRangeRequest* request,
+                     pb::mds::CopyFileRangeResponse* response, google::protobuf::Closure* done) override;
+
   // fallocate
   void Fallocate(google::protobuf::RpcController* controller, const pb::mds::FallocateRequest* request,
                  pb::mds::FallocateResponse* response, google::protobuf::Closure* done) override;
@@ -348,6 +351,9 @@ class MDSServiceImpl : public pb::mds::MDSService {
                     pb::mds::WriteSliceResponse* response, TraceClosure* done);
   void DoReadSlice(google::protobuf::RpcController* controller, const pb::mds::ReadSliceRequest* request,
                    pb::mds::ReadSliceResponse* response, TraceClosure* done);
+
+  void DoCopyFileRange(google::protobuf::RpcController* controller, const pb::mds::CopyFileRangeRequest* request,
+                       pb::mds::CopyFileRangeResponse* response, TraceClosure* done);
 
   void DoFallocate(google::protobuf::RpcController* controller, const pb::mds::FallocateRequest* request,
                    pb::mds::FallocateResponse* response, TraceClosure* done);
