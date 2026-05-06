@@ -41,9 +41,8 @@ namespace vfs {
 #define METHOD_NAME() ("ChunkWriter::" + std::string(__FUNCTION__))
 
 // protected by mutex_
-ChunkWriter::ChunkWriter(VFSHub* hub, uint64_t fh, uint64_t ino, uint64_t index)
+ChunkWriter::ChunkWriter(VFSHub* hub, uint64_t ino, uint64_t index)
     : hub_(hub),
-      fh_(fh),
       chunk_(hub->GetFsInfo().id, ino, index, hub->GetFsInfo().chunk_size,
              hub->GetFsInfo().block_size),
       page_size_(hub->GetWriteBufferManager()->GetPageSize()) {}
@@ -256,8 +255,11 @@ SliceWriter* ChunkWriter::CreateSliceUnlocked(int32_t chunk_pos) {
 
 Status ChunkWriter::CommitSlices(ContextSPtr ctx,
                                  const std::vector<Slice>& slices) {
-  return hub_->GetMetaSystem()->WriteSlice(ctx, chunk_.ino, chunk_.index, fh_,
-                                           slices);
+  // Shared writer model: a commit batch may aggregate slices from multiple
+  // fhs, so no single fh applies. Pass 0 sentinel; metasystem only uses
+  // this argument for log/trace output.
+  return hub_->GetMetaSystem()->WriteSlice(ctx, chunk_.ino, chunk_.index,
+                                           /*fh*/ 0, slices);
 }
 
 ChunkWriter::FlushTask ChunkWriter::fake_header_;
@@ -422,7 +424,11 @@ void ChunkWriter::TryCommitFlushTasks(ContextSPtr ctx) {
               "{} TryCommitFlushTasks invalidate commit_seq: {} committed "
               "slice: {}",
               uuid, commit_ctx->commit_seq, Slice2Str(slice));
-          manager->Invalidate(fh_, chunk_.chunk_start + slice.pos, slice.len);
+          // Shared writer model: a commit batch may aggregate slices from
+          // multiple fhs. Invalidate by inode rather than by single fh so
+          // every reader on this inode sees a fresh chunk_set.
+          manager->InvalidateByIno(chunk_.ino,
+                                   chunk_.chunk_start + slice.pos, slice.len);
         }
       }
     }  // end if commit_slices not empty

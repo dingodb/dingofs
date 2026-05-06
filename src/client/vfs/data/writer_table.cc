@@ -98,9 +98,8 @@ FileWriter* WriterTable::AcquireWriter(uint64_t ino) {
     return it->second.writer;
   }
 
-  // First-time create. fh argument is a sentinel (0) — Phase 1.5 will remove
-  // fh from the FileWriter constructor entirely.
-  auto* w = new FileWriter(vfs_hub_, /*fh*/ 0, ino);
+  // First-time create.
+  auto* w = new FileWriter(vfs_hub_, ino);
   w->AcquireRef();   // ref balance for the AcquireWriter caller
   Status s = w->Open();
   if (!s.ok()) {

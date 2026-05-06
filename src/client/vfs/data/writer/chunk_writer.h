@@ -68,13 +68,13 @@ struct ChunkWriteInfo {
 
 class ChunkWriter {
  public:
-  ChunkWriter(VFSHub* hub, uint64_t fh, uint64_t ino, uint64_t index);
+  ChunkWriter(VFSHub* hub, uint64_t ino, uint64_t index);
 
   ~ChunkWriter();
 
   void Stop();
 
-  // chunk_offset is the offset in the chunk, not in the file
+  // chunk_offset is the offset in the chunk, not in the file.
   Status Write(ContextSPtr ctx, const char* buf, int32_t size,
                int32_t chunk_offset);
 
@@ -170,7 +170,6 @@ class ChunkWriter {
   }
 
   VFSHub* hub_;
-  uint64_t fh_;
   const Chunk chunk_;
   const int64_t page_size_;
   std::atomic<bool> stopped_{false};
