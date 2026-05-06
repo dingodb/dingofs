@@ -36,6 +36,12 @@ struct Context {
 
   bool timeout_retry{true};
 
+  // Caller uid carried to MDS via proto Context.uid. Currently only used by
+  // root-only paths (manual trash cleanup inside .trash/<bucket>/). 0 means
+  // "root or unset" — paths that strictly enforce root must ensure the value
+  // was explicitly populated by the FUSE entry point (fuse_req_ctx->uid).
+  uint32_t uid{0};
+
   std::weak_ptr<SpanScope> trace_span;
 
   const std::string& SessionID() const { return session_id; }  // session id

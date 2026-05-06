@@ -181,6 +181,11 @@ class Inode {
     return base_version_ + total_delta_version_;
   }
 
+  std::vector<mds::Ino> Parents() const {
+    utils::ReadLockGuard lk(lock_);
+    return std::vector<mds::Ino>(parents_.begin(), parents_.end());
+  }
+
   XAttrMap XAttrs() const {
     utils::ReadLockGuard lk(lock_);
 
@@ -197,13 +202,6 @@ class Inode {
 
     auto it = xattrs_.find(name);
     return (it != xattrs_.end()) ? it->second : "";
-  }
-
-  std::vector<mds::Ino> Parents() const {
-    utils::ReadLockGuard lk(lock_);
-
-    std::vector<mds::Ino> parents(parents_.begin(), parents_.end());
-    return parents;
   }
 
   std::vector<std::string> ShardBoundaries() const {

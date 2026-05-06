@@ -67,6 +67,8 @@ DEFINE_uint32(mds_crontab_fsinfosync_interval_s, 10, "fs info sync interval seco
 DEFINE_uint32(mds_crontab_mdsmonitor_interval_s, 5, "mds monitor interval seconds");
 DEFINE_uint32(mds_crontab_quota_sync_interval_s, 3, "quota sync interval seconds");
 DEFINE_uint32(mds_crontab_gc_interval_s, 60, "gc interval seconds");
+DEFINE_uint32(mds_crontab_gc_trash_interval_s, 3600,
+              "gc trash scan interval seconds (aligned with hour-bucket granularity)");
 DEFINE_uint32(mds_crontab_cache_member_sync_interval_s, 3, "cache member sync interval seconds");
 DEFINE_uint32(mds_crontab_clean_expired_cache_interval_s, 600, "clean expired cache interval seconds");
 
@@ -396,6 +398,15 @@ bool Server::InitCrontab() {
       FLAGS_mds_crontab_gc_interval_s * 1000,
       true,
       [](void*) { Server::GetInstance().GetGcProcessor()->Run(); },
+  });
+
+  // Trash cleanup runs on its own cadence — bucket eligibility only changes at
+  // hour boundaries, so there's no reason to pay the scan cost every minute.
+  crontab_configs_.push_back({
+      "GC_TRASH",
+      FLAGS_mds_crontab_gc_trash_interval_s * 1000,
+      true,
+      [](void*) { Server::GetInstance().GetGcProcessor()->RunTrash(); },
   });
 
   // Add filesystem cache crontab

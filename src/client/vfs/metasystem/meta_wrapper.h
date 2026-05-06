@@ -128,6 +128,10 @@ class MetaWrapper {
     return target_->GetAttr(ctx, ino, attr);
   }
 
+  bool IsInodeInTrash(ContextSPtr ctx, Ino ino) {
+    return target_->IsInodeInTrash(ctx, ino);
+  }
+
   Status SetAttr(ContextSPtr ctx, Ino ino, int set, const Attr& in_attr,
                  Attr* out_attr) {
     return target_->SetAttr(ctx, ino, set, in_attr, out_attr);

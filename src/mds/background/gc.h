@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "common/blockaccess/block_accesser.h"
+#include "fmt/format.h"
 #include "mds/common/distribution_lock.h"
 #include "mds/common/runnable.h"
 #include "mds/common/status.h"
@@ -230,6 +231,56 @@ class CleanExpiredFileSessionTask : public TaskRunnable {
   TaskMemoSPtr task_memo_;
 };
 
+class CleanTrashTask : public TaskRunnable {
+ public:
+  CleanTrashTask(OperationProcessorSPtr operation_processor, TaskMemoSPtr task_memo,
+                 FileSystemSetSPtr file_system_set, uint32_t fs_id, Ino sub_trash_ino,
+                 const std::string& bucket_name)
+      : operation_processor_(operation_processor),
+        task_memo_(task_memo),
+        file_system_set_(file_system_set),
+        fs_id_(fs_id),
+        sub_trash_ino_(sub_trash_ino),
+        bucket_name_(bucket_name),
+        key_(fmt::format("trash.{}.{}", fs_id, sub_trash_ino)) {}
+  ~CleanTrashTask() override = default;
+
+  static TaskRunnablePtr New(OperationProcessorSPtr operation_processor, TaskMemoSPtr task_memo,
+                             FileSystemSetSPtr file_system_set, uint32_t fs_id, Ino sub_trash_ino,
+                             const std::string& bucket_name) {
+    return std::make_shared<CleanTrashTask>(operation_processor, task_memo, file_system_set, fs_id, sub_trash_ino,
+                                            bucket_name);
+  }
+
+  std::string Type() override { return "CLEAN_TRASH"; }
+  void Run() override;
+
+ private:
+  // returns true if every file in the bucket was unlinked cleanly; false
+  // means we hit a scan failure or a no-progress round and bailed. Always
+  // populates `all_dirs` with every directory dentry seen so far.
+  // `class Trace` tag disambiguates from TaskRunnable::Trace() method in this scope.
+  bool DrainBucketFiles(FileSystemSPtr fs, bool immediate_quota, class Trace& trace, std::vector<Dentry>& all_dirs,
+                        uint32_t& processed, uint32_t& failed);
+
+  // rmdir's all collected directories; tracks its own failures. Safe to call
+  // after a partial DrainBucketFiles -- non-empty dirs simply fail with
+  // ENOTEMPTY and contribute to `failed`.
+  void RmdirBucketDirs(FileSystemSPtr fs, bool immediate_quota, class Trace& trace,
+                       const std::vector<Dentry>& all_dirs, uint32_t& processed, uint32_t& failed);
+
+  // CleanTrashBucketOperation + logging; only called when drain was clean.
+  void DeleteBucketAtomic(class Trace& trace, uint32_t processed);
+
+  OperationProcessorSPtr operation_processor_;
+  TaskMemoSPtr task_memo_;
+  FileSystemSetSPtr file_system_set_;
+  uint32_t fs_id_;
+  Ino sub_trash_ino_;
+  std::string bucket_name_;
+  std::string key_;
+};
+
 class GcProcessor {
  public:
   GcProcessor(FileSystemSetSPtr file_system_set, OperationProcessorSPtr operation_processor,
@@ -249,6 +300,7 @@ class GcProcessor {
   void Destroy();
 
   void Run();
+  void RunTrash();
 
   Status ManualCleanDelSlice(Trace& trace, uint32_t fs_id, Ino ino, uint64_t chunk_index);
   Status ManualCleanDelFile(Trace& trace, uint32_t fs_id, Ino ino);
@@ -269,6 +321,7 @@ class GcProcessor {
   void ScanDelFile(const FsInfoEntry& fs_info);
   void ScanExpiredFileSession(const FsInfoEntry& fs_info);
   void ScanDelFs(const FsInfoEntry& fs_info);
+  void ScanTrash(const FsInfoEntry& fs_info);
 
   static bool ShouldDeleteFile(const AttrEntry& attr);
   static bool ShouldCleanFileSession(const FileSessionEntry& file_session, const std::set<std::string>& alive_clients);
@@ -281,6 +334,7 @@ class GcProcessor {
   blockaccess::BlockAccesserSPtr GetOrCreateDataAccesser(const FsInfoEntry& fs_info);
 
   std::atomic<bool> is_running_{false};
+  std::atomic<bool> is_trash_running_{false};
 
   DistributionLockSPtr dist_lock_;
 

@@ -22,6 +22,7 @@
 #include "common/logging.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
+#include "mds/common/trash.h"
 #include "mds/filesystem/store_operation.h"
 
 namespace dingofs {
@@ -301,6 +302,14 @@ QuotaSPtr DirQuotaMap::GetQuota(Ino ino) {
 }
 
 bool DirQuotaMap::GetParent(Ino ino, Ino& parent) {
+  // Stop the quota walk at the trash boundary: kTrashInodeId is virtual (no
+  // KV record) and sub_trash buckets carry no quota. Any caller hitting an
+  // ino in the trash range has already reached the top of the relevant
+  // ancestor chain.
+  if (ino == 0 || IsTrashInode(ino)) {
+    return false;
+  }
+
   if (parent_memo_.GetParent(ino, parent)) {
     return true;
   }

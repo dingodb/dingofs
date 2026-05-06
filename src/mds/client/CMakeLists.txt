@@ -18,6 +18,7 @@ add_library(mds_client
   store.cc
   interaction.cc
   br.cc
+  trash_restore.cc
 )
 
 target_link_libraries(mds_client

@@ -195,6 +195,33 @@ TEST_F(MetaDataCodecTest, DentryKey) {
   }
 }
 
+// Sub-trash bucket dentries are encoded as plain Dentry, the same as tree
+// dentries. ParseFsMetaTableKey relies on this — older builds wrapped these
+// values in a TrashDentry message, which has been removed.
+TEST_F(MetaDataCodecTest, ParseFsMetaTableKeyDecodesTrashBucketDentry) {
+  constexpr uint32_t kFsId = 7;
+  // Sub-trash hour bucket parent (range begins at kTrashSubInodeStart).
+  const uint64_t kBucketIno = 0x7FFFFFFF00000005ULL;
+  const uint64_t kFileIno = 1234567ULL;
+  const std::string kEntryName = "1-1234567-foo.txt";
+
+  DentryEntry dentry;
+  dentry.set_fs_id(kFsId);
+  dentry.set_ino(kFileIno);
+  dentry.set_parent(kBucketIno);
+  dentry.set_name(kEntryName);
+  dentry.set_type(pb::mds::FileType::FILE);
+
+  std::string key = MetaCodec::EncodeDentryKey(kFsId, kBucketIno, kEntryName);
+  std::string value = MetaCodec::EncodeDentryValue(dentry);
+
+  auto desc = MetaCodec::ParseFsMetaTableKey(key, value);
+  EXPECT_NE(desc.second.find(fmt::format("ino: {}", kFileIno)), std::string::npos)
+      << "value desc must surface bucket dentry ino, got: " << desc.second;
+  EXPECT_NE(desc.second.find(kEntryName), std::string::npos)
+      << "value desc must surface bucket dentry name, got: " << desc.second;
+}
+
 TEST_F(MetaDataCodecTest, ChunkKey) {
   uint32_t expected_fs_id = 1;
   Ino expected_inode_id = 12345;

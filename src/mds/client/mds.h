@@ -87,6 +87,9 @@ using pb::mds::BatchGetXAttrResponse;
 using pb::mds::LookupRequest;
 using pb::mds::LookupResponse;
 
+using pb::mds::RestoreFromTrashRequest;
+using pb::mds::RestoreFromTrashResponse;
+
 using pb::mds::OpenRequest;
 using pb::mds::OpenResponse;
 
@@ -206,6 +209,9 @@ class MDSClient {
     RadosInfo rados_info;
     LocalFileInfo local_file_info;
     std::string owner = "deng";
+    uint32_t trash_days;
+    // Create-time only. When true, trash-move debits parent quota immediately.
+    bool immediate_trash_quota{true};
   };
 
   CreateFsResponse CreateFs(const std::string& fs_name, const CreateFsParams& params);
@@ -258,6 +264,9 @@ class MDSClient {
                                  const std::string& new_name, const std::vector<int64_t>& old_ancestors = {},
                                  const std::vector<int64_t>& new_ancestors = {});
 
+  RestoreFromTrashResponse RestoreFromTrash(Ino trash_parent, const std::string& trash_name, uint32_t uid,
+                                            bool allow_trash_parent);
+
   AllocSliceIdResponse AllocSliceId(uint32_t alloc_num, uint64_t min_slice_id);
   WriteSliceResponse WriteSlice(Ino parent, Ino ino, int64_t chunk_index);
   ReadSliceResponse ReadSlice(Ino ino, int64_t chunk_index);
@@ -286,6 +295,7 @@ class MDSClient {
 
   void UpdateFsS3Info(const std::string& fs_name, const S3Info& s3_info);
   void UpdateFsRadosInfo(const std::string& fs_name, const RadosInfo& rados_info);
+  void UpdateFsTrashDays(const std::string& fs_name, uint32_t trash_days);
 
  private:
   uint32_t fs_id_{0};
@@ -325,6 +335,15 @@ class MdsCommandRunner {
     uint32_t port;
     std::string group_name;
     uint32_t weight;
+
+    //trash
+    uint32_t trash_days{0};
+    bool immediate_trash_quota{true};
+
+    // trash restore (`restoretrash` subcommand)
+    std::vector<std::string> trash_hours;
+    bool trash_put_back{false};
+    uint32_t trash_threads{10};
 
     S3Info s3_info;
     RadosInfo rados_info;

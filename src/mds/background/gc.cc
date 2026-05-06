@@ -16,11 +16,13 @@
 
 #include <absl/container/flat_hash_map.h>
 
+#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include "brpc/reloadable_flags.h"
@@ -40,8 +42,10 @@
 #include "mds/common/runnable.h"
 #include "mds/common/status.h"
 #include "mds/common/tracing.h"
+#include "mds/common/trash.h"
 #include "mds/filesystem/store_operation.h"
 #include "mds/storage/storage.h"
+#include "utils/time.h"
 
 namespace dingofs {
 namespace mds {
@@ -67,6 +71,18 @@ DEFINE_validator(mds_gc_delslice_reserve_time_s, brpc::PassValidate);
 
 DEFINE_uint32(mds_gc_delfile_reserve_time_s, 600, "gc del file reserve time");
 DEFINE_validator(mds_gc_delfile_reserve_time_s, brpc::PassValidate);
+
+DEFINE_bool(mds_gc_trash_enable, true, "gc trash cleanup enable");
+DEFINE_validator(mds_gc_trash_enable, brpc::PassValidate);
+
+DEFINE_uint32(mds_gc_trash_scan_budget, 10000,
+              "max file dentries collected per CleanTrashTask scan round; "
+              "bounds memory and single-scan txn size within one drain round. "
+              "Must be >= mds_gc_trash_batch_size.");
+DEFINE_validator(mds_gc_trash_scan_budget, brpc::PassValidate);
+
+DEFINE_uint32(mds_gc_trash_batch_size, 256, "batch size for BatchTrashUnlinkOperation inside CleanTrashTask.");
+DEFINE_validator(mds_gc_trash_batch_size, brpc::PassValidate);
 
 static const std::string kWorkerSetName = "GC";
 
@@ -468,6 +484,40 @@ Status GcProcessor::LaunchGc() {
   return Status::OK();
 }
 
+void GcProcessor::RunTrash() {
+  if (!FLAGS_mds_gc_trash_enable) {
+    return;
+  }
+
+  bool running = false;
+  if (!is_trash_running_.compare_exchange_strong(running, true)) {
+    LOG(INFO) << "[gc.trash] previous sweep still in flight, skip.";
+    return;
+  }
+  DEFER(is_trash_running_.store(false));
+
+  if (!dist_lock_->IsLocked()) {
+    return;
+  }
+
+  Context ctx;
+  std::vector<FsInfoEntry> fs_infoes;
+  auto status = file_system_set_->GetAllFsInfo(ctx, true, fs_infoes);
+  if (!status.ok()) {
+    LOG(INFO) << fmt::format("[gc.trash] get all fs info fail, {}.", status.error_str());
+    return;
+  }
+
+  if (worker_set_->IsAlmostFull()) {
+    LOG(INFO) << "[gc.trash] worker set is almost full, skip this round.";
+    return;
+  }
+
+  for (auto& fs_info : fs_infoes) {
+    ScanTrash(fs_info);
+  }
+}
+
 bool GcProcessor::Execute(TaskRunnablePtr task) {
   if (!worker_set_->ExecuteLeastQueue(task)) {
     LOG(WARNING) << "[gc] execute task fail.";
@@ -856,6 +906,244 @@ blockaccess::BlockAccesserSPtr GcProcessor::GetOrCreateDataAccesser(const FsInfo
   block_accessers_[fs_id] = block_accessor;
 
   return block_accessor;
+}
+
+// Order invariant: every file in the bucket must be unlinked before any
+// directory is rmdir'd — a file's origin_parent may itself be a trashed dir
+// in this bucket, and the quota ancestor walk needs that dir to still exist.
+// Quota debits diverge by immediate_trash_quota: legacy mode debits per-dir
+// AND fs-level here; immediate mode already debited per-dir at trash-move
+// time, so this path only releases fs-level when nlink reaches 0.
+void CleanTrashTask::Run() {
+  LOG(INFO) << fmt::format("[gc.trash.{}.{}] start cleaning bucket {}.", fs_id_, sub_trash_ino_, bucket_name_);
+  DEFER(if (task_memo_ != nullptr) task_memo_->Forget(key_));
+
+  auto fs = file_system_set_ != nullptr ? file_system_set_->GetFileSystem(fs_id_) : nullptr;
+  const bool immediate_quota = fs != nullptr && fs->GetFsInfo().immediate_trash_quota();
+
+  dingofs::mds::Trace trace;
+  uint32_t processed = 0, failed = 0;
+  std::vector<Dentry> all_dirs;
+
+  const bool drained = DrainBucketFiles(fs, immediate_quota, trace, all_dirs, processed, failed);
+  RmdirBucketDirs(fs, immediate_quota, trace, all_dirs, processed, failed);
+
+  if (drained && failed == 0) {
+    DeleteBucketAtomic(trace, processed);
+  } else {
+    LOG(WARNING) << fmt::format("[gc.trash.{}.{}] bucket {} partial: processed({}) failed({}) aborted({})", fs_id_,
+                                sub_trash_ino_, bucket_name_, processed, failed, !drained);
+  }
+}
+
+// To drain arbitrarily large buckets without unbounded memory or a single
+// long-lived scan txn, we loop: each round does a fresh kReadCommitted scan
+// that collects up to scan_budget files plus any new directories (deduped by
+// ino), processes the files, and repeats. The rmdir pass runs once after the
+// file loop terminates so the ORDER INVARIANT (see Run()) still holds.
+bool CleanTrashTask::DrainBucketFiles(FileSystemSPtr fs, bool immediate_quota, class Trace& trace,
+                                      std::vector<Dentry>& all_dirs, uint32_t& processed, uint32_t& failed) {
+  const uint32_t scan_budget = FLAGS_mds_gc_trash_scan_budget;
+  const uint32_t batch_size = FLAGS_mds_gc_trash_batch_size;
+
+  // Directories are accumulated across rounds (deduped by ino) and rmdir'd
+  // only after every file in the bucket has been unlinked. The count of
+  // trashed directories is bounded by the number of rmdir's that happened
+  // into this hour bucket, typically small even for large buckets.
+  std::unordered_set<Ino> seen_dirs;
+
+  while (true) {
+    std::vector<Dentry> files;
+
+    ScanTrashDentryOperation scan_op(trace, fs_id_, sub_trash_ino_, [&](const DentryEntry& dentry) -> bool {
+      if (dentry.type() == pb::mds::FileType::DIRECTORY) {
+        if (seen_dirs.insert(dentry.ino()).second) {
+          all_dirs.emplace_back(dentry);
+        }
+        return true;  // dirs don't count toward the chunk; typically few
+      }
+      if (files.size() >= scan_budget) {
+        return false;  // chunk boundary; pick up the rest next round
+      }
+      files.emplace_back(dentry);
+      return true;
+    });
+    scan_op.SetIsolationLevel(Txn::kReadCommitted);
+
+    auto scan_status = operation_processor_->RunAlone(&scan_op);
+    if (!scan_status.ok()) {
+      LOG(ERROR) << fmt::format("[gc.trash.{}.{}] scan fail, {}", fs_id_, sub_trash_ino_, scan_status.error_str());
+      return false;
+    }
+
+    if (files.empty()) return true;  // no more files; fall through to rmdir pass
+
+    // batch unlink files (idempotent to NotFound)
+    const uint32_t processed_before_round = processed;
+    for (size_t i = 0; i < files.size(); i += batch_size) {
+      const size_t end = std::min(i + static_cast<size_t>(batch_size), files.size());
+      std::vector<Dentry> chunk(files.begin() + i, files.begin() + end);
+
+      BatchTrashUnlinkOperation operation(trace, chunk);
+      auto status = operation_processor_->RunAlone(&operation);
+      if (!status.ok()) {
+        LOG(WARNING) << fmt::format("[gc.trash.{}.{}] batch-unlink [{},{}) fail: {}", fs_id_, sub_trash_ino_, i, end,
+                                    status.error_str());
+        failed += chunk.size();
+        continue;
+      }
+
+      auto& result = operation.GetResult();
+      processed += result.skipped_count + result.child_attrs.size();
+
+      if (fs != nullptr) {
+        // result.child_attrs is aligned with the entries we actually processed
+        // (skipped entries are not in the vector). For per-dir quota we walk
+        // ancestors starting from origin_parent (parsed out of the trash entry
+        // name) — UpdateUsage is fail-soft on missing parents, so an ancestor
+        // that has been physically removed since trash-move is silently
+        // skipped. FS-level is debited only when the last link is gone.
+        size_t attr_idx = 0;
+        for (const auto& dentry : chunk) {
+          if (attr_idx >= result.child_attrs.size()) break;
+          const auto& attr = result.child_attrs[attr_idx];
+          if (attr.ino() != dentry.INo()) continue;
+          ++attr_idx;
+
+          if (!immediate_quota) {
+            const int64_t delta_bytes =
+                attr.type() == pb::mds::FileType::FILE ? -static_cast<int64_t>(attr.length()) : 0;
+            const std::string reason = fmt::format("trash-clean.{}.{}", sub_trash_ino_, attr.ino());
+            Ino origin_parent = 0;
+            Ino origin_ino = 0;
+            std::string origin_name;
+            if (ParseTrashEntryName(dentry.Name(), origin_parent, origin_ino, origin_name) && origin_parent != 0) {
+              fs->GetQuotaManager().AsyncUpdateDirUsage(origin_parent, delta_bytes, -1, reason);
+            }
+          }
+
+          if (attr.nlink() <= 0) {
+            const int64_t delta_bytes = -static_cast<int64_t>(attr.length());
+            fs->GetQuotaManager().UpdateFsUsage(delta_bytes, -1,
+                                                fmt::format("trash-clean.{}.{}", sub_trash_ino_, attr.ino()));
+          }
+        }
+      }
+    }
+
+    // Safety net: if every batch in this round failed, `processed` doesn't
+    // advance and the next scan would see the same files -- don't loop
+    // forever. Bail out; the next GC_TRASH cycle will retry.
+    if (processed == processed_before_round) {
+      LOG(WARNING) << fmt::format(
+          "[gc.trash.{}.{}] no forward progress ({} files collected, 0 processed); deferring to next cycle", fs_id_,
+          sub_trash_ino_, files.size());
+      return false;
+    }
+  }
+}
+
+void CleanTrashTask::RmdirBucketDirs(FileSystemSPtr fs, bool immediate_quota, class Trace& trace,
+                                     const std::vector<Dentry>& all_dirs, uint32_t& processed, uint32_t& failed) {
+  for (const auto& dir : all_dirs) {
+    RmDirOperation operation(trace, dir.FsId(), dir.ParentIno(), dir.Name(), dir.INo());
+    auto status = operation_processor_->RunAlone(&operation);
+    if (status.ok()) {
+      ++processed;
+      if (fs != nullptr) {
+        // Debit the dir's original parent for the inode count (legacy mode
+        // only -- immediate_trash_quota already did this at RmDir-to-trash
+        // time), release fs-level, and finally drop the trashed dir's own
+        // quota config. Dropping quota config is done here in both modes so
+        // restored directories keep their quota config intact through the
+        // trash lifecycle.
+        if (!immediate_quota) {
+          const std::string reason = fmt::format("trash-clean.{}.{}", sub_trash_ino_, dir.INo());
+          Ino origin_parent = 0;
+          Ino origin_ino = 0;
+          std::string origin_name;
+          if (ParseTrashEntryName(dir.Name(), origin_parent, origin_ino, origin_name) && origin_parent != 0) {
+            fs->GetQuotaManager().AsyncUpdateDirUsage(origin_parent, 0, -1, reason);
+          }
+        }
+        fs->GetQuotaManager().AsyncDeleteDirQuota(dir.INo());
+        fs->GetQuotaManager().UpdateFsUsage(0, -1, fmt::format("trash-clean.{}.{}", sub_trash_ino_, dir.INo()));
+      }
+    } else if (status.error_code() == pb::error::ENOT_FOUND) {
+      ++processed;  // already gone; idempotent
+    } else {
+      LOG(WARNING) << fmt::format("[gc.trash.{}.{}] rmdir {} fail: {}", fs_id_, sub_trash_ino_, dir.Name(),
+                                  status.error_str());
+      ++failed;
+    }
+  }
+}
+
+void CleanTrashTask::DeleteBucketAtomic(class Trace& trace, uint32_t processed) {
+  CleanTrashBucketOperation operation(trace, fs_id_, sub_trash_ino_, bucket_name_);
+  auto status = operation_processor_->RunAlone(&operation);
+  if (!status.ok()) {
+    LOG(ERROR) << fmt::format("[gc.trash.{}.{}] clean bucket {} fail: {}", fs_id_, sub_trash_ino_, bucket_name_,
+                              status.error_str());
+  } else {
+    LOG(INFO) << fmt::format("[gc.trash.{}.{}] bucket {} cleaned, processed({}).", fs_id_, sub_trash_ino_, bucket_name_,
+                             processed);
+  }
+}
+
+void GcProcessor::ScanTrash(const FsInfoEntry& fs_info) {
+  const uint32_t fs_id = fs_info.fs_id();
+  const uint32_t trash_days = fs_info.trash_days();
+
+  uint64_t now_s = utils::Timestamp();
+  uint64_t expire_before_s;
+  if (trash_days == 0) {
+    // Trash feature disabled — drain any residue left from a prior non-zero
+    // retention by treating every existing hour bucket as expired.
+    expire_before_s = now_s;
+  } else {
+    uint64_t expire_s = static_cast<uint64_t>(trash_days) * 24 * 3600 + 1 * 3600;
+    expire_before_s = now_s - expire_s;
+  }
+
+  Trace trace;
+  uint32_t count = 0, exec_count = 0;
+
+  // Scan dentries under kTrashInodeId (the hour bucket directories).
+  ScanDentryOperation operation(trace, fs_id, kTrashInodeId, [&](const DentryEntry& dentry) -> bool {
+    ++count;
+    const std::string& bucket_name = dentry.name();
+
+    uint64_t bucket_ts = ParseTrashBucketName(bucket_name);
+    CHECK(bucket_ts != 0) << fmt::format("[gc.trash.{}] invalid bucket name: {}", fs_id, bucket_name);
+
+    if (bucket_ts >= expire_before_s) {
+      // Bucket names are "YYYY-MM-DD-HH" — lexicographic scan order matches
+      // chronological order, so every bucket after this one is also unexpired.
+      return false;
+    }
+
+    std::string memo_key = fmt::format("trash.{}.{}", fs_id, dentry.ino());
+    if (task_memo_->Exist(memo_key)) {
+      return true;
+    }
+
+    task_memo_->Remember(memo_key);
+    if (!Execute(CleanTrashTask::New(operation_processor_, task_memo_, file_system_set_, fs_id, dentry.ino(),
+                                     bucket_name))) {
+      task_memo_->Forget(memo_key);
+      return false;
+    }
+    ++exec_count;
+
+    return true;
+  });
+  operation.SetIsolationLevel(Txn::kReadCommitted);
+
+  auto status = operation_processor_->RunAlone(&operation);
+
+  LOG(INFO) << fmt::format("[gc.trash.{}] scan trash count({}/{}), status({}).", fs_id, exec_count, count,
+                           status.error_str());
 }
 
 }  // namespace mds

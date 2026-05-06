@@ -44,7 +44,9 @@ static const int64_t kSliceTableId = 1002;
 static const int64_t kSliceIdBatchSize = 256;
 static const int64_t kSliceIdStartId = 1e10;  // 10 billion
 
-// each file system has its own inode id generator
+// each file system has its own inode id generator.
+// Sub-trash directories do NOT use a separate generator: their ino is derived
+// from this allocator + a kTrashInodeId offset inside BuildTrashMove.
 const std::string kInoAutoIncrementIdName = "dingofs-inode-id";
 static const int64_t kInoBatchSize = 1024;
 static const int64_t kInoStartId = 2e10;  // 20 billion

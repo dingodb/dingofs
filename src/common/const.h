@@ -36,18 +36,18 @@ namespace dingofs {
 
 const uint64_t kRootParentIno = 0;
 
-const uint64_t kRecycleIno = 2;
-const char kRecycleName[] = ".recycle";
-
 const uint64_t kStatsIno = 0x7FFFFFFF00000001;
 const char kStatsName[] = ".stats";
 
+const uint64_t kTrashIno = 0x7FFFFFFF00000003;
+const char kTrashDirName[] = ".trash";
+
 inline bool IsInternalNode(uint64_t ino) {
-  return ino == kStatsIno || ino == kRecycleIno || ino == kRootIno;
+  return ino == kStatsIno || ino == kRootIno || ino == kTrashIno;
 }
 
 inline bool IsInternalName(const std::string& name) {
-  return name == kStatsName || name == kRecycleName;
+  return name == kStatsName || name == kTrashDirName;
 }
 
 const int kEmptyDirMinLinkNum = 2;

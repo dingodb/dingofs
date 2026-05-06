@@ -306,7 +306,10 @@ bool ExecqWorkerSet::ExecuteHash(int64_t id, TaskRunnablePtr task) {
     return false;
   }
 
-  auto ret = workers_[id % WorkerNum()]->Execute(task);
+  // Cast to uint64_t before modulo: callers pass Ino (uint64_t), and sub-trash
+  // bucket inos (kTrashInodeId + offset) can exceed INT64_MAX, producing a
+  // negative id and thus workers_[negative] OOB.
+  auto ret = workers_[static_cast<uint64_t>(id) % WorkerNum()]->Execute(task);
   if (ret) {
     IncPendingTaskCount();
     IncTotalTaskCount();

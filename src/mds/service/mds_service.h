@@ -240,6 +240,10 @@ class MDSServiceImpl : public pb::mds::MDSService {
   void DeleteMember(google::protobuf::RpcController* controller, const pb::mds::DeleteMemberRequest* request,
                     pb::mds::DeleteMemberResponse* response, google::protobuf::Closure* done) override;
 
+  void RestoreFromTrash(google::protobuf::RpcController* controller,
+                        const pb::mds::RestoreFromTrashRequest* request,
+                        pb::mds::RestoreFromTrashResponse* response, google::protobuf::Closure* done) override;
+
   void DescribeByJson(Json::Value& value);
 
  private:

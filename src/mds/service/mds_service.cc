@@ -288,6 +288,8 @@ void MDSServiceImpl::DoCreateFs(google::protobuf::RpcController*, const pb::mds:
   param.owner = request->owner();
   param.capacity = request->capacity();
   param.recycle_time_hour = request->recycle_time_hour();
+  param.trash_days = request->trash_days();
+  param.immediate_trash_quota = request->immediate_trash_quota();
   param.partition_type = request->partition_type();
   param.expect_mds_num = request->expect_mds_num();
   param.candidate_mds_ids = Helper::PbRepeatedToVector(request->candidate_mds_ids());
@@ -3462,6 +3464,31 @@ void MDSServiceImpl::DescribeByJson(Json::Value& value) {
   Json::Value write_worker_set_value;
   write_worker_set_->DescribeByJson(write_worker_set_value);
   value["write_worker_set"] = write_worker_set_value;
+}
+
+void MDSServiceImpl::RestoreFromTrash(google::protobuf::RpcController* controller,
+                                      const pb::mds::RestoreFromTrashRequest* request,
+                                      pb::mds::RestoreFromTrashResponse* response, google::protobuf::Closure* done) {
+  brpc::ClosureGuard done_guard(done);
+
+  // Only root (uid=0) can restore from trash.
+  if (request->uid() != 0) {
+    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENO_PERMISSION, "restore requires root privilege");
+  }
+
+  auto file_system = GetFileSystem(request->fs_id());
+  if (file_system == nullptr) {
+    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "filesystem not found");
+  }
+
+  Context ctx(request->context(), request->info().request_id(), __func__);
+
+  auto status = file_system->RestoreFromTrash(ctx, request->trash_parent(), request->trash_name(),
+                                               request->allow_trash_parent());
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  if (!status.ok()) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
 }
 
 }  // namespace mds

@@ -35,7 +35,8 @@ class Context {
         inode_version_(ctx.inode_version()),
         client_id_(ctx.client_id()),
         request_id_(request_id),
-        method_name_(method_name) {
+        method_name_(method_name),
+        uid_(ctx.uid()) {
     ancestors_ = {ctx.ancestors().begin(), ctx.ancestors().end()};
   };
 
@@ -46,6 +47,7 @@ class Context {
   const std::string& RequestId() const { return request_id_; }
   const std::string& MethodName() const { return method_name_; }
   Trace& GetTrace() { return trace_; }
+  uint32_t Uid() const { return uid_; }
 
   const std::vector<Ino>& GetAncestors() const { return ancestors_; }
 
@@ -59,6 +61,8 @@ class Context {
   const std::string client_id_;
   const std::string request_id_;
   const std::string method_name_;
+
+  const uint32_t uid_{0};
 
   std::vector<Ino> ancestors_;
 

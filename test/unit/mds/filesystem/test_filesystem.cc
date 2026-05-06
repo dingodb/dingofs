@@ -24,6 +24,7 @@
 #include "fmt/core.h"
 #include "gtest/gtest.h"
 #include "mds/common/context.h"
+#include "mds/common/trash.h"
 #include "mds/coordinator/dummy_coordinator_client.h"
 #include "mds/filesystem/filesystem.h"
 #include "mds/filesystem/store_operation.h"

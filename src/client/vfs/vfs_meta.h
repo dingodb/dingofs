@@ -137,6 +137,10 @@ struct FsInfo {
   std::string uuid;
   StorageInfo storage_info;
   FsStatus status;
+  // Filesystem creation time (unix seconds). 0 for filesystems created before
+  // this field existed. Used to pin synthesized attrs (e.g. .trash) to a
+  // stable timestamp so kernel attr/dentry caches stay valid across calls.
+  uint64_t create_time_s{0};
 };
 
 using DoneClosure = std::function<void(const Status& status)>;
