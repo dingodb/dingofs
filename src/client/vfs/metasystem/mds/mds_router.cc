@@ -20,6 +20,7 @@
 #include "fmt/core.h"
 #include "glog/logging.h"
 #include "mds/common/helper.h"
+#include "mds/common/trash.h"
 
 namespace dingofs {
 namespace client {
@@ -132,6 +133,15 @@ bool ParentHashMDSRouter::Init(
 }
 
 bool ParentHashMDSRouter::GetMDSByParent(Ino parent, mds::MDSMeta& mds_meta) {
+  // Trash virtual root and hour-bucket children have no caching benefit on a
+  // fixed MDS: ReadDir always evicts (filesystem.cc IsTrashInode branch) and
+  // cross-MDS trash-moves don't notify the bucket-owner. Fall through to
+  // random routing so listing/lookup load on .trash spreads across MDSes;
+  // caller will set is_bypass_cache=true.
+  if (mds::IsTrashInode(parent)) {
+    return false;
+  }
+
   utils::ReadLockGuard lk(lock_);
 
   int64_t bucket_id = parent % hash_partition_.bucket_num();
@@ -147,6 +157,10 @@ bool ParentHashMDSRouter::GetMDSByParent(Ino parent, mds::MDSMeta& mds_meta) {
 bool ParentHashMDSRouter::GetMDS(Ino ino, mds::MDSMeta& mds_meta) {
   Ino parent = 1;
   if (ino != 1 && !parent_memo_.GetParent(ino, parent)) {
+    return false;
+  }
+
+  if (mds::IsTrashInode(parent)) {
     return false;
   }
 

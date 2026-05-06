@@ -45,6 +45,7 @@
 #include "json/value.h"
 #include "json/writer.h"
 #include "mds/common/helper.h"
+#include "mds/common/trash.h"
 #include "utils/uuid.h"
 
 namespace dingofs {
@@ -384,6 +385,7 @@ Status MDSMetaSystem::GetFsInfo(ContextSPtr, FsInfo* fs_info) {
   fs_info->block_size = temp_fs_info.block_size();
   fs_info->uuid = temp_fs_info.uuid();
   fs_info->status = Helper::ToFsStatus(temp_fs_info.status());
+  fs_info->create_time_s = temp_fs_info.create_time_s();
 
   fs_info->storage_info.store_type =
       Helper::ToStoreType(temp_fs_info.fs_type());
@@ -1202,11 +1204,13 @@ Status MDSMetaSystem::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
       return status;
     }
 
-    bool is_amend = false;
-    CorrectAttr(ctx, dir_iterator->LastFetchTimeNs(), entry.attr, is_amend,
-                "readdir");
+    if (with_attr) {
+      bool is_amend = false;
+      CorrectAttr(ctx, dir_iterator->LastFetchTimeNs(), entry.attr, is_amend,
+                  "readdir");
 
-    PutInodeToCache(Helper::ToAttr(entry.attr));
+      PutInodeToCache(Helper::ToAttr(entry.attr));
+    }
 
     if (!handler(entry, offset)) {
       break;
@@ -1344,6 +1348,33 @@ Status MDSMetaSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
   LOG_DEBUG << fmt::format("[meta.fs.{}] get attr length({}) is_amend({}).",
                            ino, attr->length, is_amend);
   return Status::OK();
+}
+
+bool MDSMetaSystem::IsInodeInTrash(ContextSPtr ctx, Ino ino) {
+  AssertStop();
+
+  // Hot path: read parents directly from the inode cache (no RPC, no proto
+  // round-trip). Cache is populated by Lookup/Open/Unlink and stays in sync
+  // with mv-to-trash via PutInodeToCache, so a hit reflects the latest known
+  // parent set for this client.
+  auto inode = GetInodeFromCache(ino);
+  if (inode != nullptr) {
+    for (auto p : inode->Parents()) {
+      if (mds::IsTrashBucketChild(p)) return true;
+    }
+    return false;
+  }
+
+  // Cold cache: fall back to GetAttr (which itself prefers cache, then RPC).
+  // Open's fast path also requires a cache hit, so reaching here means the
+  // caller bypassed prior Lookup; we accept the extra RPC to preserve the
+  // early-reject guarantee.
+  Attr attr;
+  if (!GetAttr(ctx, ino, &attr).ok()) return false;
+  for (auto p : attr.parents) {
+    if (mds::IsTrashBucketChild(p)) return true;
+  }
+  return false;
 }
 
 Status MDSMetaSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,

@@ -148,6 +148,7 @@ class MDSMetaSystem : public vfs::MetaSystem {
   Status ReadLink(ContextSPtr ctx, Ino ino, std::string* link) override;
 
   Status GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) override;
+  bool IsInodeInTrash(ContextSPtr ctx, Ino ino) override;
   Status SetAttr(ContextSPtr ctx, Ino ino, int set, const Attr& attr,
                  Attr* out_attr) override;
   Status Fallocate(ContextSPtr ctx, Ino ino, int mode, uint64_t offset,

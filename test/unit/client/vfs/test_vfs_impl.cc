@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include "client/vfs/vfs_impl.h"
-
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
@@ -23,6 +21,7 @@
 #include <string>
 
 #include "client/vfs/data_buffer.h"
+#include "client/vfs/vfs_impl.h"
 #include "common/blockaccess/accesser_common.h"
 #include "common/const.h"
 #include "common/status.h"
@@ -56,7 +55,8 @@ class VFSImplTest : public test::VFSTestBase {
     EXPECT_CALL(*mock_hub_, GetBlockAccesserOptions()).Times(AnyNumber());
 
     // hub_uptr_ is consumed here; after this, use vfs_ to access VFSImpl.
-    // VFSImplTest is a friend of VFSImpl, so the private constructor is accessible.
+    // VFSImplTest is a friend of VFSImpl, so the private constructor is
+    // accessible.
     vfs_.reset(new VFSImpl(std::move(hub_uptr_)));
   }
 
@@ -182,14 +182,7 @@ TEST_F(VFSImplTest, Unlink_InternalFile_EPERM) {
   EXPECT_TRUE(s.IsNoPermitted());
 }
 
-// --- 11. Unlink ".recycle" from root returns NoPermitted ---
-TEST_F(VFSImplTest, Unlink_RecycleFile_EPERM) {
-  Status s = vfs_->Unlink(ctx_, kRootIno, ".recycle");
-  EXPECT_FALSE(s.ok());
-  EXPECT_TRUE(s.IsNoPermitted());
-}
-
-// --- 12. StatFs delegates ---
+// --- 11. StatFs delegates ---
 TEST_F(VFSImplTest, StatFs_DelegatesToMetaSystem) {
   FsStat fs_stat;
   fs_stat.max_bytes = 1024 * 1024 * 1024LL;
@@ -280,6 +273,140 @@ TEST_F(VFSImplTest, SubdirMount_Descendant_NoTranslation) {
   Attr out;
   EXPECT_TRUE(vfs_->GetAttr(ctx_, kChildIno, &out).ok());
   EXPECT_EQ(out.ino, kChildIno);
+}
+
+// --- Trash: Unlink under sub-trash hour bucket is blocked at client ---
+TEST_F(VFSImplTest, Trash_Unlink_HourBucket_BlockedAtClient) {
+  EXPECT_CALL(*mock_meta_system_, Unlink(_, _, _)).Times(0);
+
+  ctx_->uid = 1000;
+  Status s = vfs_->Unlink(ctx_, /*parent=*/0x7FFFFFFF00000005ULL, "anything");
+  EXPECT_FALSE(s.ok());
+  EXPECT_TRUE(s.IsNoPermitted());
+}
+
+// --- Trash: RmDir under sub-trash hour bucket is blocked at client ---
+TEST_F(VFSImplTest, Trash_RmDir_HourBucket_BlockedAtClient) {
+  EXPECT_CALL(*mock_meta_system_, RmDir(_, _, _)).Times(0);
+
+  ctx_->uid = 1000;
+  Status s = vfs_->RmDir(ctx_, /*parent=*/0x7FFFFFFF00000005ULL, "subdir");
+  EXPECT_FALSE(s.ok());
+  EXPECT_TRUE(s.IsNoPermitted());
+}
+
+// --- Trash: Root manual unlink under hour bucket passes through ---
+TEST_F(VFSImplTest, Trash_Unlink_HourBucket_Root_PassesThrough) {
+  ctx_->uid = 0;
+  EXPECT_CALL(*mock_meta_system_, Unlink(_, 0x7FFFFFFF00000005ULL, _))
+      .WillOnce(Return(Status::OK()));
+
+  Status s = vfs_->Unlink(ctx_, /*parent=*/0x7FFFFFFF00000005ULL, "file");
+  EXPECT_TRUE(s.ok());
+}
+
+// --- Trash: Root manual rmdir under hour bucket passes through ---
+TEST_F(VFSImplTest, Trash_RmDir_HourBucket_Root_PassesThrough) {
+  ctx_->uid = 0;
+  EXPECT_CALL(*mock_meta_system_, RmDir(_, 0x7FFFFFFF00000005ULL, _))
+      .WillOnce(Return(Status::OK()));
+
+  Status s = vfs_->RmDir(ctx_, /*parent=*/0x7FFFFFFF00000005ULL, "subdir");
+  EXPECT_TRUE(s.ok());
+}
+
+// --- Trash: Root cannot rmdir an hour bucket directly under .trash ---
+TEST_F(VFSImplTest, Trash_RmDir_KTrashIno_Root_Blocked) {
+  ctx_->uid = 0;
+  EXPECT_CALL(*mock_meta_system_, RmDir(_, _, _)).Times(0);
+
+  Status s = vfs_->RmDir(ctx_, /*parent=*/kTrashIno, "2026-04-30-13");
+  EXPECT_FALSE(s.ok());
+  EXPECT_TRUE(s.IsNoPermitted());
+}
+
+// --- Trash: MkNod under trash hour bucket blocked at client ---
+TEST_F(VFSImplTest, Trash_MkNod_InTrashBucket_BlockedAtClient) {
+  EXPECT_CALL(*mock_meta_system_, MkNod(_, _, _, _, _, _, _, _)).Times(0);
+  Attr out;
+  Status s = vfs_->MkNod(ctx_, /*parent=*/0x7FFFFFFF00000005ULL, "file",
+                         /*uid=*/0, /*gid=*/0, /*mode=*/0644, /*dev=*/0, &out);
+  EXPECT_FALSE(s.ok());
+  EXPECT_TRUE(s.IsNoPermitted());
+}
+
+// --- Trash: MkDir under trash hour bucket blocked at client ---
+TEST_F(VFSImplTest, Trash_MkDir_InTrashBucket_BlockedAtClient) {
+  EXPECT_CALL(*mock_meta_system_, MkDir(_, _, _, _, _, _, _)).Times(0);
+  Attr out;
+  Status s = vfs_->MkDir(ctx_, /*parent=*/0x7FFFFFFF00000005ULL, "subdir",
+                         /*uid=*/0, /*gid=*/0, /*mode=*/0755, &out);
+  EXPECT_FALSE(s.ok());
+  EXPECT_TRUE(s.IsNoPermitted());
+}
+
+// --- Trash: Symlink under trash hour bucket blocked at client ---
+TEST_F(VFSImplTest, Trash_Symlink_InTrashBucket_BlockedAtClient) {
+  EXPECT_CALL(*mock_meta_system_, Symlink(_, _, _, _, _, _, _)).Times(0);
+  Attr out;
+  Status s = vfs_->Symlink(ctx_, /*parent=*/0x7FFFFFFF00000005ULL, "link",
+                           /*uid=*/0, /*gid=*/0, "/tmp/target", &out);
+  EXPECT_FALSE(s.ok());
+  EXPECT_TRUE(s.IsNoPermitted());
+}
+
+// --- Trash: MkNod ".trash" under root blocked at client ---
+TEST_F(VFSImplTest, Trash_MkNod_DotTrashUnderRoot_BlockedAtClient) {
+  EXPECT_CALL(*mock_meta_system_, MkNod(_, _, _, _, _, _, _, _)).Times(0);
+  Attr out;
+  Status s = vfs_->MkNod(ctx_, kRootIno, kTrashDirName, 0, 0, 0644, 0, &out);
+  EXPECT_FALSE(s.ok());
+  EXPECT_TRUE(s.IsNoPermitted());
+}
+
+// --- Trash: Rename out of .trash root by non-root is blocked at client ---
+TEST_F(VFSImplTest, Trash_Rename_OutOfTrashRoot_NonRoot_BlockedAtClient) {
+  EXPECT_CALL(*mock_meta_system_, Rename(_, _, _, _, _)).Times(0);
+
+  // Force non-root uid on ctx_ via the public field.
+  ctx_->uid = 1000;
+
+  Status s = vfs_->Rename(ctx_, /*old_parent=*/kTrashIno, "anything",
+                          /*new_parent=*/kRootIno, "newname");
+  EXPECT_FALSE(s.ok());
+  EXPECT_TRUE(s.IsNoPermitted());
+}
+
+// --- Trash: Rename out of .trash root by root passes through to MDS ---
+TEST_F(VFSImplTest, Trash_Rename_OutOfTrashRoot_Root_PassesThrough) {
+  EXPECT_CALL(*mock_meta_system_, Rename(_, kTrashIno, _, _, _))
+      .WillOnce(Return(Status::OK()));
+
+  ctx_->uid = 0;  // root
+  Status s = vfs_->Rename(ctx_, /*old_parent=*/kTrashIno, "anything",
+                          /*new_parent=*/kRootIno, "newname");
+  EXPECT_TRUE(s.ok());
+}
+
+// --- Trash: Link with new_parent in trash bucket blocked at client ---
+TEST_F(VFSImplTest, Trash_Link_InTrashBucket_BlockedAtClient) {
+  EXPECT_CALL(*mock_meta_system_, Link(_, _, _, _, _)).Times(0);
+
+  Attr out;
+  Status s = vfs_->Link(ctx_, /*ino=*/100u,
+                        /*new_parent=*/0x7FFFFFFF00000005ULL, "linkname", &out);
+  EXPECT_FALSE(s.ok());
+  EXPECT_TRUE(s.IsNoPermitted());
+}
+
+// --- Trash: Rename into trash bucket blocked at client ---
+TEST_F(VFSImplTest, Trash_Rename_IntoTrash_BlockedAtClient) {
+  EXPECT_CALL(*mock_meta_system_, Rename(_, _, _, _, _)).Times(0);
+
+  Status s = vfs_->Rename(ctx_, /*old_parent=*/kRootIno, "anything",
+                          /*new_parent=*/0x7FFFFFFF00000005ULL, "newname");
+  EXPECT_FALSE(s.ok());
+  EXPECT_TRUE(s.IsNoPermitted());
 }
 
 }  // namespace vfs

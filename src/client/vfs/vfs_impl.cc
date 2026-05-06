@@ -45,6 +45,7 @@
 #include "glog/logging.h"
 #include "json/writer.h"
 #include "linux/fs.h"
+#include "mds/common/trash.h"
 #include "utils/encode.h"
 #include "utils/net_common.h"
 #include "vfs_meta.h"
@@ -61,7 +62,7 @@ VFSImpl::VFSImpl(const VFSConfig& vfs_conf, const ClientId& client_id)
     : client_id_(client_id),
       mount_root_path_(
           vfs_conf.mount_root_path.empty() ? "/" : vfs_conf.mount_root_path),
-      vfs_hub_(std::make_unique<VFSHubImpl>(vfs_conf, client_id_)) {};
+      vfs_hub_(std::make_unique<VFSHubImpl>(vfs_conf, client_id_)){};
 
 VFSImpl::VFSImpl(std::unique_ptr<VFSHub> hub)
     : client_id_(), vfs_hub_(std::move(hub)) {
@@ -182,11 +183,54 @@ double VFSImpl::GetEntryTimeout(const FileType& type) {  // NOLINT
   return FLAGS_fuse_entry_cache_timeout_s;
 }
 
+static Attr GenerateTrashDirAttr() {
+  Attr attr;
+  attr.ino = kTrashIno;
+  attr.mode = S_IFDIR | 0555;
+  attr.nlink = 2;
+  attr.length = 4096;
+  attr.uid = 0;
+  attr.gid = 0;
+
+  // Align timestamps to the start of the current hour so they match the
+  // hour-bucket that the next delete will materialize under .trash. Stable
+  // within an hour (kernel attr cache hits); at hour boundaries the stamp
+  // advances by exactly one hour. Trash content freshness is still guaranteed
+  // by `cache_readdir=0` and by the MDS-side partition bypass on trash inodes.
+  const uint64_t now_s = static_cast<uint64_t>(::time(nullptr));
+  const uint64_t hour_aligned_s = (now_s / 3600ULL) * 3600ULL;
+  const uint64_t t_ns = hour_aligned_s * 1000000000ULL;
+  attr.atime = t_ns;
+  attr.mtime = t_ns;
+  attr.ctime = t_ns;
+
+  attr.type = FileType::kDirectory;
+
+  return attr;
+}
+
+// Trash protection helper for create-style operations: returns true if
+// creating a child of `parent` named `name` is forbidden, either because
+// `parent` is in the trash range, or because this would create the
+// synthesized .trash dir at the FS root. Used by MkNod / MkDir / Symlink /
+// Link to keep one canonical predicate. Each call site keeps its own
+// op-specific error string.
+static bool IsCreateInTrashForbidden(Ino parent, const std::string& name) {
+  return mds::IsTrashInode(parent) ||
+         (parent == kRootIno && name == kTrashDirName);
+}
+
 Status VFSImpl::Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
                        Attr* attr) {
   // check if parent is root inode and file name is .stats name
   if (BAIDU_UNLIKELY(parent == kRootIno && name == kStatsName)) {  // stats node
     *attr = GenerateVirtualInodeAttr(kStatsIno);
+    return Status::OK();
+  }
+
+  // check if parent is root inode and name is .trash
+  if (BAIDU_UNLIKELY(parent == kRootIno && name == kTrashDirName)) {
+    *attr = GenerateTrashDirAttr();
     return Status::OK();
   }
 
@@ -200,6 +244,11 @@ Status VFSImpl::Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
 Status VFSImpl::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
   if (BAIDU_UNLIKELY(ino == kStatsIno)) {
     *attr = GenerateVirtualInodeAttr(kStatsIno);
+    return Status::OK();
+  }
+
+  if (BAIDU_UNLIKELY(ino == kTrashIno)) {
+    *attr = GenerateTrashDirAttr();
     return Status::OK();
   }
 
@@ -307,6 +356,10 @@ Status VFSImpl::ReadLink(ContextSPtr ctx, Ino ino, std::string* link) {
 Status VFSImpl::MkNod(ContextSPtr ctx, Ino parent, const std::string& name,
                       uint32_t uid, uint32_t gid, uint32_t mode, uint64_t dev,
                       Attr* attr) {
+  if (IsCreateInTrashForbidden(parent, name)) {
+    return Status::NoPermitted("cannot create in trash");
+  }
+
   Status s = meta_system_->MkNod(ctx, TranslateIno(parent), name, uid, gid,
                                  mode, dev, attr);
   if (s.ok()) {
@@ -316,11 +369,15 @@ Status VFSImpl::MkNod(ContextSPtr ctx, Ino parent, const std::string& name,
 }
 
 Status VFSImpl::Unlink(ContextSPtr ctx, Ino parent, const std::string& name) {
-  // check if node is recycle or recycle time dir or .stats node
-  if ((IsInternalName(name) && parent == kRootIno) || parent == kRecycleIno) {
+  if (IsInternalName(name) && parent == kRootIno) {
     LOG(WARNING) << "Can not unlink internal node, parent inodeId=" << parent
                  << ", name: " << name;
     return Status::NoPermitted("Can not unlink internal node");
+  }
+  if (mds::IsTrashInode(parent) && ctx->uid != 0) {
+    LOG(WARNING) << "Non-root cannot manually clean trash, parent inodeId="
+                 << parent << ", name: " << name;
+    return Status::NoPermitted("only root can manually clean trash");
   }
 
   return meta_system_->Unlink(ctx, TranslateIno(parent), name);
@@ -330,6 +387,11 @@ Status VFSImpl::Symlink(ContextSPtr ctx, Ino parent, const std::string& name,
                         uint32_t uid, uint32_t gid, const std::string& link,
                         Attr* attr) {
   {
+    // Trash protection: cannot create new entries inside .trash/sub-buckets,
+    // nor a symlink literally named .trash at root.
+    if (IsCreateInTrashForbidden(parent, name)) {
+      return Status::NoPermitted("cannot symlink in trash");
+    }
     // internal file name can not allowed for symlink
     // cant't allow  ln -s  .stats  <file>
     if (parent == kRootIno && IsInternalName(name)) {
@@ -358,6 +420,17 @@ Status VFSImpl::Rename(ContextSPtr ctx, Ino old_parent,
     return Status::NoPermitted("Can not rename internal node");
   }
 
+  // Rename into .trash or any sub-trash bucket is forbidden for everyone.
+  if (mds::IsTrashInode(new_parent)) {
+    return Status::NoPermitted("cannot move into trash");
+  }
+
+  // Rename out of .trash root requires root; hour buckets fall through to
+  // MDS-side manual-cleanup rules.
+  if (old_parent == kTrashIno && ctx->uid != 0) {
+    return Status::NoPermitted("only root can move out of .trash");
+  }
+
   // TODO: maybe call file suffix watcher to forget old name?
   return meta_system_->Rename(ctx, TranslateIno(old_parent), old_name,
                               TranslateIno(new_parent), new_name);
@@ -366,6 +439,11 @@ Status VFSImpl::Rename(ContextSPtr ctx, Ino old_parent,
 Status VFSImpl::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
                      const std::string& new_name, Attr* attr) {
   {
+    // Trash protection: cannot create a hard link inside .trash/sub-buckets,
+    // nor a hardlink literally named .trash at root.
+    if (IsCreateInTrashForbidden(new_parent, new_name)) {
+      return Status::NoPermitted("cannot link in trash");
+    }
     // cant't allow  ln   <file> .stats
     // cant't allow  ln  .stats  <file>
     if (IsInternalNode(ino) ||
@@ -386,6 +464,14 @@ Status VFSImpl::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t* fh) {
   // check if ino is .stats inode,if true ,get metric data and generate
   // inodeattr information
   uint64_t gfh = vfs::FhGenerator::GenFh();
+
+  // MDS rejects write ops on trashed inodes, but the async-open fast path
+  // returns OK before the MDS response is known — without this gate the
+  // caller's first write would queue and retry until timeout.
+  if ((flags & (O_WRONLY | O_RDWR | O_TRUNC | O_APPEND)) &&
+      meta_system_->IsInodeInTrash(ctx, ino)) {
+    return Status::NoPermitted("cannot open trashed inode for write");
+  }
 
   if (BAIDU_UNLIKELY(ino == kStatsIno)) {
     // uint64_t gfh = vfs::FhGenerator::GenFh();
@@ -645,6 +731,9 @@ Status VFSImpl::ListXattr(ContextSPtr ctx, Ino ino,
 
 Status VFSImpl::MkDir(ContextSPtr ctx, Ino parent, const std::string& name,
                       uint32_t uid, uint32_t gid, uint32_t mode, Attr* attr) {
+  if (IsCreateInTrashForbidden(parent, name)) {
+    return Status::NoPermitted("cannot mkdir in trash");
+  }
   return meta_system_->MkDir(ctx, TranslateIno(parent), name, uid, gid, mode,
                              attr);
 }
@@ -659,11 +748,14 @@ Status VFSImpl::OpenDir(ContextSPtr ctx, Ino ino, uint64_t* fh,
 Status VFSImpl::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
                         bool with_attr, ReadDirHandler handler,
                         uint32_t& count) {
-  // root dir(add .stats file)
+  // root dir(add .stats file and .trash)
   if (BAIDU_UNLIKELY(ino == kRootIno) && offset == 0) {
     DirEntry stats_entry{kStatsIno, kStatsName,
                          GenerateVirtualInodeAttr(kStatsIno)};
-    handler(stats_entry, 1);  // pos 0 is the offset for .stats entry
+    handler(stats_entry, 1);
+
+    DirEntry trash_entry{kTrashIno, kTrashDirName, GenerateTrashDirAttr()};
+    handler(trash_entry, 2);
   }
 
   return meta_system_->ReadDir(ctx, TranslateIno(ino), fh, offset, with_attr,
@@ -675,9 +767,15 @@ Status VFSImpl::ReleaseDir(ContextSPtr ctx, Ino ino, uint64_t fh) {
 }
 
 Status VFSImpl::RmDir(ContextSPtr ctx, Ino parent, const std::string& name) {
-  // check if node is recycle or recycle time dir or .stats node
-  if ((IsInternalName(name) && parent == kRootIno) || parent == kRecycleIno) {
+  if (IsInternalName(name) && parent == kRootIno) {
     return Status::NoPermitted("not permit rmdir internal dir");
+  }
+  if (parent == kTrashIno) {
+    // Hour buckets are GC-managed; never user-removable, even by root.
+    return Status::NoPermitted("not permit rmdir trash hour buckets");
+  }
+  if (mds::IsTrashInode(parent) && ctx->uid != 0) {
+    return Status::NoPermitted("only root can manually clean trash");
   }
 
   return meta_system_->RmDir(ctx, TranslateIno(parent), name);

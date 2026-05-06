@@ -23,6 +23,7 @@
 #include "common/const.h"
 #include "common/logging.h"
 #include "dingofs/mds.pb.h"
+#include "mds/common/trash.h"
 #include "fmt/format.h"
 #include "gflags/gflags.h"
 #include "glog/logging.h"

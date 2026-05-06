@@ -85,6 +85,18 @@ DEFINE_string(storage_path, "", "local storage path");
 
 DEFINE_string(storage_engine, "dingo-store", "storage engine");
 
+// Trash restore (`restoretrash` subcommand).
+DEFINE_string(hours, "", "comma-separated trash hour buckets to restore, e.g. 2026-04-05-14,2026-04-05-15 (UTC)");
+DEFINE_bool(put_back, false, "if true, restore files back to their original directories");
+DEFINE_uint32(restore_threads, 10, "concurrency for trash restore workers");
+DEFINE_uint32(trash_days, 1,
+              "per-fs trash retention in days: deleted files are kept in trash for this many days before GC; "
+              "0 means trash disabled. Applied at createfs and at updatefs trash_days.");
+DEFINE_bool(immediate_trash_quota, true,
+            "per-fs: when true, trash-move immediately debits the parent/ancestor per-dir quota "
+            "(credited back on restore); when false, the debit is deferred to GC. "
+            "Applied at createfs only and immutable thereafter.");
+
 static std::string GetDefaultCoorAddrPath() {
   if (!FLAGS_coor_addr.empty()) {
     return FLAGS_coor_addr;
@@ -212,6 +224,15 @@ int main(int argc, char* argv[]) {
     options.port = FLAGS_cache_member_port;
     options.group_name = FLAGS_group_name;
     options.weight = FLAGS_weight;
+
+    options.trash_days = FLAGS_trash_days;
+    options.immediate_trash_quota = FLAGS_immediate_trash_quota;
+    // trash restore
+    options.trash_put_back = FLAGS_put_back;
+    options.trash_threads = FLAGS_restore_threads;
+    if (!FLAGS_hours.empty()) {
+      dingofs::mds::Helper::SplitString(FLAGS_hours, ',', options.trash_hours);
+    }
 
     auto& s3_info = options.s3_info;
     s3_info.ak = FLAGS_s3_ak;

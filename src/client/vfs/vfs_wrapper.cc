@@ -530,7 +530,7 @@ Status VFSWrapper::MkNod(Ino parent, const std::string& name, uint32_t uid,
   return s;
 }
 
-Status VFSWrapper::Unlink(Ino parent, const std::string& name) {
+Status VFSWrapper::Unlink(Ino parent, const std::string& name, uint32_t uid) {
   VLOG(2) << "VFSUnlink parent: " << parent << " name: " << name;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::Unlink");
@@ -548,7 +548,9 @@ Status VFSWrapper::Unlink(Ino parent, const std::string& name) {
     return s;
   }
 
-  s = vfs_->Unlink(dingofs::SpanScope::GetContext(span), parent, name);
+  auto ctx = dingofs::SpanScope::GetContext(span);
+  if (ctx) ctx->uid = uid;
+  s = vfs_->Unlink(ctx, parent, name);
   VLOG(2) << "VFSUnlink end, status: " << s.ToString();
   if (!s.ok()) op_metric.FailOp();
 
@@ -585,7 +587,8 @@ Status VFSWrapper::Symlink(Ino parent, const std::string& name, uint32_t uid,
 }
 
 Status VFSWrapper::Rename(Ino old_parent, const std::string& old_name,
-                          Ino new_parent, const std::string& new_name) {
+                          Ino new_parent, const std::string& new_name,
+                          uint32_t uid) {
   VLOG(2) << "VFSRename old_parent: " << old_parent << " old_name: " << old_name
           << " new_parent: " << new_parent << " new_name: " << new_name;
 
@@ -607,8 +610,9 @@ Status VFSWrapper::Rename(Ino old_parent, const std::string& old_name,
     return s;
   }
 
-  s = vfs_->Rename(dingofs::SpanScope::GetContext(span), old_parent, old_name,
-                   new_parent, new_name);
+  auto ctx = dingofs::SpanScope::GetContext(span);
+  if (ctx) ctx->uid = uid;
+  s = vfs_->Rename(ctx, old_parent, old_name, new_parent, new_name);
   VLOG(2) << "VFSRename end, status: " << s.ToString();
   if (!s.ok()) op_metric.FailOp();
 
@@ -1047,7 +1051,7 @@ Status VFSWrapper::ReleaseDir(Ino ino, uint64_t fh) {
   return s;
 }
 
-Status VFSWrapper::RmDir(Ino parent, const std::string& name) {
+Status VFSWrapper::RmDir(Ino parent, const std::string& name, uint32_t uid) {
   VLOG(2) << "VFSRmdir parent: " << parent << " name: " << name;
 
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::RmDir");
@@ -1065,7 +1069,9 @@ Status VFSWrapper::RmDir(Ino parent, const std::string& name) {
     return s;
   }
 
-  s = vfs_->RmDir(dingofs::SpanScope::GetContext(span), parent, name);
+  auto ctx = dingofs::SpanScope::GetContext(span);
+  if (ctx) ctx->uid = uid;
+  s = vfs_->RmDir(ctx, parent, name);
   VLOG(2) << "VFSRmdir end, status: " << s.ToString();
   if (!s.ok()) op_metric.FailOp();
 

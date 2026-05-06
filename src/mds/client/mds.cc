@@ -26,6 +26,7 @@
 #include "dingofs/mds.pb.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
+#include "mds/client/trash_restore.h"
 #include "mds/common/helper.h"
 #include "utils/time.h"
 #include "utils/uuid.h"
@@ -148,6 +149,8 @@ CreateFsResponse MDSClient::CreateFs(const std::string& fs_name, const CreateFsP
   request.set_owner(params.owner);
   request.set_capacity(1024 * 1024 * 1024);
   request.set_recycle_time_hour(1);
+  request.set_trash_days(params.trash_days);
+  request.set_immediate_trash_quota(params.immediate_trash_quota);
 
   if (params.partition_type == "mono") {
     request.set_partition_type(::dingofs::pb::mds::PartitionType::MONOLITHIC_PARTITION);
@@ -1026,6 +1029,31 @@ RenameResponse MDSClient::Rename(Ino old_parent, const std::string& old_name, In
   return response;
 }
 
+RestoreFromTrashResponse MDSClient::RestoreFromTrash(Ino trash_parent, const std::string& trash_name, uint32_t uid,
+                                                     bool allow_trash_parent) {
+  CHECK(fs_id_ > 0) << "fs_id_ is zero";
+
+  RestoreFromTrashRequest request;
+  RestoreFromTrashResponse response;
+
+  request.mutable_context()->set_epoch(epoch_);
+
+  request.set_fs_id(fs_id_);
+  request.set_trash_parent(trash_parent);
+  request.set_trash_name(trash_name);
+  request.set_uid(uid);
+  request.set_allow_trash_parent(allow_trash_parent);
+
+  auto status = interaction_->SendRequest("MDSService", "RestoreFromTrash", request, response);
+  if (!status.ok()) {
+    response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
+    response.mutable_error()->set_errmsg(status.error_str());
+    return response;
+  }
+
+  return response;
+}
+
 AllocSliceIdResponse MDSClient::AllocSliceId(uint32_t alloc_num, uint64_t min_slice_id) {
   AllocSliceIdRequest request;
   AllocSliceIdResponse response;
@@ -1455,7 +1483,8 @@ DeleteMemberResponse MDSClient::DeleteMember(const std::string& member_id) {
 
 void MDSClient::UpdateFsS3Info(const std::string& fs_name, const S3Info& s3_info) {
   if (fs_name.empty()) {
-    std::cerr << "fs_name is empty" << "\n";
+    std::cerr << "fs_name is empty"
+              << "\n";
     return;
   }
   auto fs_response = GetFs(fs_name);
@@ -1482,7 +1511,8 @@ void MDSClient::UpdateFsS3Info(const std::string& fs_name, const S3Info& s3_info
 
 void MDSClient::UpdateFsRadosInfo(const std::string& fs_name, const RadosInfo& rados_info) {
   if (fs_name.empty()) {
-    std::cerr << "fs_name is empty" << "\n";
+    std::cerr << "fs_name is empty"
+              << "\n";
     return;
   }
 
@@ -1506,6 +1536,25 @@ void MDSClient::UpdateFsRadosInfo(const std::string& fs_name, const RadosInfo& r
   pb_rados_info.set_cluster_name(rados_info.cluster_name);
   fs_info.mutable_extra()->mutable_rados_info()->CopyFrom(pb_rados_info);
 
+  UpdateFs(fs_name, fs_info);
+}
+
+void MDSClient::UpdateFsTrashDays(const std::string& fs_name, uint32_t trash_days) {
+  if (fs_name.empty()) {
+    std::cerr << "fs_name is empty"
+              << "\n";
+    return;
+  }
+
+  auto fs_response = GetFs(fs_name);
+  pb::mds::FsInfo fs_info;
+  fs_info.CopyFrom(fs_response.fs_info());
+  if (fs_info.fs_id() == 0) {
+    std::cerr << "not found fs: " << fs_name << "\n";
+    return;
+  }
+
+  fs_info.set_trash_days(trash_days);
   UpdateFs(fs_name, fs_info);
 }
 
@@ -1548,6 +1597,8 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr, 
       "listmembers",
       "unlockmember",
       "deletemember",
+      "restoretrash",
+      "updatefstrashdays",
   };
 
   if (mds_cmd.count(cmd) == 0) return false;
@@ -1576,6 +1627,8 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr, 
     params.local_file_info.path = options.storage_path;
     params.fs_id = options.fs_id;
     params.expect_mds_num = options.num;
+    params.trash_days = options.trash_days;
+    params.immediate_trash_quota = options.immediate_trash_quota;
 
     mds_client.CreateFs(options.fs_name, params);
 
@@ -1590,6 +1643,9 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr, 
 
   } else if (cmd == Helper::ToLowerCase("UpdateFsRadosInfo")) {
     mds_client.UpdateFsRadosInfo(options.fs_name, options.rados_info);
+
+  } else if (cmd == Helper::ToLowerCase("UpdateFsTrashDays")) {
+    mds_client.UpdateFsTrashDays(options.fs_name, options.trash_days);
 
   } else if (cmd == Helper::ToLowerCase("GetFs")) {
     mds_client.GetFs(options.fs_name);
@@ -1766,6 +1822,19 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr, 
     } else {
       std::cout << "deletemember fail, error: " << response.ShortDebugString() << '\n';
     }
+
+  } else if (cmd == Helper::ToLowerCase("RestoreTrash")) {
+    TrashRestore::Options restore_options;
+    restore_options.fs_id = options.fs_id;
+    restore_options.hours = options.trash_hours;
+    restore_options.put_back = options.trash_put_back;
+    restore_options.threads = options.trash_threads;
+
+    TrashRestore runner;
+    if (!runner.Init(mds_addr, restore_options)) {
+      return true;
+    }
+    runner.Run();
   }
 
   return true;

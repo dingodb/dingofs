@@ -88,13 +88,13 @@ class VFSWrapper {
   Status MkNod(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
                uint32_t mode, uint64_t dev, Attr* attr);
 
-  Status Unlink(Ino parent, const std::string& name);
+  Status Unlink(Ino parent, const std::string& name, uint32_t uid = 0);
 
   Status Symlink(Ino parent, const std::string& name, uint32_t uid,
                  uint32_t gid, const std::string& link, Attr* attr);
 
   Status Rename(Ino old_parent, const std::string& old_name, Ino new_parent,
-                const std::string& new_name);
+                const std::string& new_name, uint32_t uid = 0);
 
   Status Link(Ino ino, Ino new_parent, const std::string& new_name, Attr* attr);
 
@@ -134,7 +134,7 @@ class VFSWrapper {
 
   Status ReleaseDir(Ino ino, uint64_t fh);
 
-  Status RmDir(Ino parent, const std::string& name);
+  Status RmDir(Ino parent, const std::string& name, uint32_t uid = 0);
 
   Status StatFs(Ino ino, FsStat* fs_stat);
 

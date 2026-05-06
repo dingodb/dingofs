@@ -282,6 +282,9 @@ Status MDSClient::SendRequest(ContextSPtr ctx, SpanScopeSPtr& span,
       ctx ? ctx->SessionID() : std::to_string(utils::TimestampNs()));
 
   request.mutable_context()->set_client_id(client_id_.ID());
+  if (ctx) {
+    request.mutable_context()->set_uid(ctx->uid);
+  }
   if (span != nullptr) {
     request.mutable_info()->set_span_id(SpanScope::GetSpanID(span));
   }

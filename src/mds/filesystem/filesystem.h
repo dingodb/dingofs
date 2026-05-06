@@ -28,6 +28,7 @@
 #include "json/value.h"
 #include "mds/common/context.h"
 #include "mds/common/status.h"
+#include "mds/common/trash.h"
 #include "mds/common/type.h"
 #include "mds/filesystem/chunk_cache.h"
 #include "mds/filesystem/dentry.h"
@@ -43,6 +44,7 @@
 #include "mds/mds/mds_meta.h"
 #include "mds/quota/quota.h"
 #include "mds/storage/storage.h"
+#include "utils/concurrent/rw_lock.h"
 #include "utils/doubly_map.h"
 
 namespace dingofs {
@@ -56,6 +58,38 @@ using FileSystemSetSPtr = std::shared_ptr<FileSystemSet>;
 
 class GcProcessor;
 using GcProcessorSPtr = std::shared_ptr<GcProcessor>;
+
+// Per-FileSystem cache of "current hour bucket name → bucket ino", populated
+// lazily by trash-move ops. Read-mostly: writes only happen on hour-bucket
+// rollover and on cold-path back-fill, so a bthread RW lock lets concurrent
+// Lookup callers proceed in parallel. std::mutex/std::shared_mutex is
+// intentionally avoided here because acquiring it from a bthread would park
+// the whole pthread worker.
+class SubTrashCache {
+ public:
+  SubTrashCache() = default;
+  ~SubTrashCache() = default;
+
+  SubTrashCache(const SubTrashCache&) = delete;
+  SubTrashCache& operator=(const SubTrashCache&) = delete;
+
+  // Returns true and writes the cached ino to *out_ino when `bucket_name`
+  // matches. Returns false on miss (caller falls back to the cold path).
+  bool Lookup(const std::string& bucket_name, Ino* out_ino) const;
+
+  // Post-commit cold-path back-fill: replace whatever is cached with this
+  // (name, ino). Same name overwrites silently; a different name evicts the
+  // previous bucket (we only cache the current hour).
+  void Record(const std::string& bucket_name, Ino ino);
+
+  // Drop the cache (e.g. on FsInfo refresh / fs detach).
+  void Reset();
+
+ private:
+  mutable utils::BthreadRWLock rwlock_;
+  std::string bucket_name_;
+  Ino ino_{0};
+};
 
 struct EntryOut {
   EntryOut() = default;
@@ -212,6 +246,13 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status CommitRename(Context& ctx, const RenameParam& param, uint64_t& old_parent_version,
                       uint64_t& new_parent_version, std::vector<Ino>& effected_inos);
 
+  // trash restore
+  // dst (parent + name) is always parsed from trash_name. When allow_trash_parent
+  // is true, the parsed dst parent may itself be a trashed directory (tree-rebuild
+  // mode); it may never be the trash root or an hour bucket.
+  Status RestoreFromTrash(Context& ctx, Ino trash_parent, const std::string& trash_name,
+                          bool allow_trash_parent = false);
+
   // slice
   Status WriteSlice(Context& ctx, Ino parent, Ino ino, const std::vector<DeltaSliceEntry>& delta_slices,
                     std::vector<ChunkEntry>& out_chunks);
@@ -290,6 +331,36 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   Status RunOperation(Operation* operation);
 
+  // Encapsulates the post-commit quota update matrix shared by UnLink /
+  // BatchUnLink / RmDir. The four cases:
+  //
+  //   is_trash_cleanup ........ root manually clearing a trashed entry;
+  //                             phase-2 mirror of CleanTrashTask
+  //   to_trash + immediate .... soft delete, per-dir eager debit
+  //   to_trash + !immediate ... soft delete, FULLY deferred to CleanTrashTask
+  //   !to_trash ............... permanent delete, full eager debit
+  //
+  // `is_unlink_zero`: inode actually going away (not just one of its
+  //   dentries being removed)
+  //   - file (UnLink/BatchUnLink): attr.nlink() == 0
+  //   - dir  (RmDir):              always true (empty dir gone after rmdir)
+  // `is_dir`: gates fs-level cleanup variant
+  //   - true:  AsyncDeleteDirQuota (drop the dir's own quota config)
+  //   - false: chunk_cache_.Delete (evict file's chunk metadata)
+  struct DeleteQuotaInputs {
+    bool is_trash_cleanup;
+    bool to_trash;
+    Ino parent;
+    Ino deleted_ino;
+    int64_t delta_bytes;  // 0 for dirs
+    bool is_unlink_zero;
+    bool is_dir;
+    Ino trash_origin_parent;  // 0 == name not parseable; skip per-dir debit
+    const std::string& reason;
+  };
+
+  void ApplyDeleteQuota(const DeleteQuotaInputs& in);
+
   // generate ino
   Status GenDirIno(Ino& ino);
   Status GenFileIno(Ino& ino);
@@ -342,11 +413,38 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   void UpdateParentMemo(const std::vector<Ino>& ancestors);
 
+  // Reject create-style operations (MkNod / MkDir / Symlink / Link / batch
+  // variants) when the target lands inside the trash subtree:
+  //   1. parent itself in trash range (the .trash root or an hour bucket);
+  //   2. parent is a trashed directory entry — its own ino is in the regular
+  //      range but at least one of its parents() points at a trash bucket.
+  //   3. caller asks to materialize `.trash` at FS root.
+  //
+  // For (2) we look up parent_memo_ first (O(1), zero KV); on miss we fall
+  // back to the inode cache and finally to a KV read via GetInode. This
+  // mirrors JuiceFS's `pattr.Parent > TrashInode` check (pkg/meta/tkv.go in
+  // doMknod / doLink) but reuses our own ParentMemo so the hot path stays
+  // free under PARENT_ID_HASH_PARTITION.
+  Status CheckCreateInTrash(Context& ctx, Ino parent, const std::string& name, const std::string& op_label);
+
   void NotifyBuddyRefreshFsInfo(std::vector<uint64_t> mds_ids, const FsInfoEntry& fs_info, const std::string& reason);
   void NotifyBuddyRefreshInode(const AttrEntry& attr, const std::string& reason);
   void NotifyBuddyRefreshInode(const std::vector<Ino>& parents, const AttrOrMutation& attr_or_mutation,
                                const std::string& reason);
   void NotifyBuddyCleanPartitionCache(Ino ino, const std::string& reason);
+
+  // Build a TrashMove for a pending unlink/rmdir/rename-overwrite on `parent`.
+  // Leaves `active` false when trash is disabled or parent is already in trash.
+  // On sub_trash_cache_ hit the hot-path trash_ino is filled; on miss a candidate
+  // bucket ino is pre-allocated (via ino_id_generator_, which cannot run inside
+  // a txn) and the op performs the actual bucket ensure in its own transaction.
+  // Caller fills `trash_entry_name` afterwards for Unlink/RmDir.
+  Status BuildTrashMove(Ino parent, TrashMove& out);
+
+  // Post-commit: update sub_trash_cache_ with the winning bucket ino (cold
+  // path only). Trash partitions are not cached, so there is no partition
+  // cache invalidation to do.
+  void RecordTrashMoveOutcome(const TrashMove& trash, Ino winning_trash_ino);
 
   uint64_t self_mds_id_;
 
@@ -356,7 +454,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   std::atomic<bool> can_serve_{false};
 
-  // generate inode id
+  // generate inode id; sub-trash directories use this too with a kTrashInodeId offset.
   IdGeneratorUPtr ino_id_generator_;
   // for slice id
   IdGeneratorSPtr slice_id_generator_;
@@ -392,6 +490,10 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   // notify buddy
   notify::NotifyBuddySPtr notify_buddy_;
+
+  // Trash sub-directory cache: avoids repeated lookup/creation within the same
+  // hour. Owns its own bthread mutex.
+  SubTrashCache sub_trash_cache_;
 };
 
 // manage all filesystem
@@ -431,6 +533,10 @@ class FileSystemSet {
     std::string owner;
     uint64_t capacity;
     uint32_t recycle_time_hour;
+    uint32_t trash_days{0};  // 0 disables trash; server does not apply a default, see client CLI
+    // Create-time only. true = debit parent/ancestor quota immediately at
+    // trash-move (restore credits back); false = defer to CleanTrashTask.
+    bool immediate_trash_quota{false};
     pb::mds::PartitionType partition_type;
     uint32_t expect_mds_num{0};  // for hash partition
     std::vector<uint64_t> candidate_mds_ids;

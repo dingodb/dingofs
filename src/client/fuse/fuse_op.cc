@@ -503,14 +503,16 @@ void FuseOpMkDir(fuse_req_t req, fuse_ino_t parent, const char* name,
 void FuseOpUnlink(fuse_req_t req, fuse_ino_t parent, const char* name) {
   VLOG(1) << fmt::format("FuseOpUnlink parent({}) name({}) ctx({})", parent,
                          name, FuseCtx(req));
-  Status s = g_vfs->Unlink(parent, name);
+  const struct fuse_ctx* ctx = fuse_req_ctx(req);
+  Status s = g_vfs->Unlink(parent, name, ctx->uid);
   ReplyError(req, s);
 }
 
 void FuseOpRmDir(fuse_req_t req, fuse_ino_t parent, const char* name) {
   VLOG(1) << fmt::format("FuseOpRmDir parent({}) name({}) ctx({})", parent,
                          name, FuseCtx(req));
-  Status s = g_vfs->RmDir(parent, name);
+  const struct fuse_ctx* ctx = fuse_req_ctx(req);
+  Status s = g_vfs->RmDir(parent, name, ctx->uid);
   ReplyError(req, s);
 }
 
@@ -538,7 +540,8 @@ void FuseOpRename(fuse_req_t req, fuse_ino_t parent, const char* name,
       "ctx({})",
       parent, name, newparent, newname, flags, FuseCtx(req));
 
-  Status s = g_vfs->Rename(parent, name, newparent, newname);
+  const struct fuse_ctx* ctx = fuse_req_ctx(req);
+  Status s = g_vfs->Rename(parent, name, newparent, newname, ctx->uid);
   ReplyError(req, s);
 }
 
@@ -744,8 +747,16 @@ void FuseOpOpenDir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
   } else {
     fi->fh = fh;
 
-    fi->cache_readdir = (need_cache && FLAGS_fuse_enable_readdir_cache) ? 1 : 0;
-    fi->keep_cache = FLAGS_fuse_enable_readdir_cache ? 1 : 0;
+    // .trash and sub-trash buckets mutate whenever files/dirs are unlinked or
+    // rmdir'd anywhere in the fs. The kernel's readdir cache has no way to
+    // discover those additions, so disable it for trash inos — otherwise the
+    // first ls after an unlink serves stale contents until a full attr_timeout
+    // + readdir cycle elapses.
+    const bool is_trash = ino >= dingofs::kTrashIno;
+    fi->cache_readdir =
+        (need_cache && FLAGS_fuse_enable_readdir_cache && !is_trash) ? 1 : 0;
+    fi->keep_cache =
+        (FLAGS_fuse_enable_readdir_cache && !is_trash) ? 1 : 0;
 
     ReplyOpen(req, fi);
   }

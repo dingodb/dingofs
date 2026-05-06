@@ -23,6 +23,7 @@
 #include "fmt/format.h"
 #include "glog/logging.h"
 #include "mds/common/helper.h"
+#include "mds/common/trash.h"
 #include "mds/common/serial_helper.h"
 
 namespace dingofs {

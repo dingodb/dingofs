@@ -979,6 +979,7 @@ Status MemoryMetaSystem::GetFsInfo(ContextSPtr, FsInfo* fs_info) {
   fs_info->block_size = fs_info_.block_size();
   fs_info->uuid = fs_info_.uuid();
   fs_info->status = meta::Helper::ToFsStatus(fs_info_.status());
+  fs_info->create_time_s = fs_info_.create_time_s();
 
   fs_info->storage_info.store_type = ToStoreType(fs_info_.fs_type());
   if (fs_info->storage_info.store_type == StoreType::kS3) {
