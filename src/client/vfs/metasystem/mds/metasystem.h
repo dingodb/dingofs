@@ -197,16 +197,19 @@ class MDSMetaSystem : public vfs::MetaSystem {
   }
 
   // chunk cache
-  Status FlushFile(ContextSPtr ctx, InodeSPtr inode, ChunkSetSPtr& chunk_set);
+  Status DoFlushFile(ContextSPtr ctx, InodeSPtr inode, ChunkSetSPtr& chunk_set,
+                     bool is_final);
   void LaunchWriteSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
                         CommitTaskSPtr task);
   // async flush batch slices of single file
   void AsyncFlushSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set, bool is_force,
                        bool is_wait);
-  // flush slices of single file
-  Status FlushSlice(ContextSPtr ctx, Ino ino);
+  // flush slices and file
+  Status FlushSliceAndFile(ContextSPtr ctx, Ino ino);
+  // async flush of single slice
+  void AsyncFlushFile(ContextSPtr ctx, Ino ino);
   // flush slices of all files
-  void FlushAllSlice();
+  void FlushAllFile();
 
   Status CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
                      bool& is_amend, const std::string& caller);

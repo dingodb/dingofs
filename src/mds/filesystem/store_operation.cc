@@ -1426,6 +1426,11 @@ Status FlushFileOperation::Run(TxnUPtr& txn) {
   if (param_.length > 0) {
     int64_t delta_bytes = static_cast<int64_t>(param_.length) - static_cast<int64_t>(attr.length());
     if (delta_bytes < 0) {
+      if (!param_.is_final) {
+        SetAttr(attr);
+        return Status::OK();
+      }
+
       auto status = ResetFileRange(txn, fs_id_, ino_, attr.length(), param_.length, param_.slice_id, param_.chunk_size);
       if (!status.ok()) return status;
     }

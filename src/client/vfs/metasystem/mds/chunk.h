@@ -28,6 +28,7 @@
 #include "absl/container/flat_hash_set.h"
 #include "client/vfs/metasystem/mds/helper.h"
 #include "client/vfs/vfs_meta.h"
+#include "common/options/client.h"
 #include "json/value.h"
 #include "mds/common/synchronization.h"
 #include "mds/common/type.h"
@@ -172,6 +173,18 @@ class CommitTask {
     return indexs;
   }
 
+  uint64_t GetLength() const {
+    utils::ReadLockGuard lk(lock_);
+
+    uint64_t length = 0;
+    for (const auto& delta_slice : delta_slices_) {
+      for (const auto& slice : delta_slice.slices) {
+        length = std::max(length, slice.End());
+      }
+    }
+    return length;
+  }
+
   std::string Describe() const {
     std::string str;
     str.reserve(1024);
@@ -260,7 +273,10 @@ class CommitTask {
 // chunk set per file
 class ChunkSet {
  public:
-  ChunkSet(Ino ino) : ino_(ino), last_active_s_(utils::Timestamp()) {}
+  ChunkSet(Ino ino)
+      : ino_(ino),
+        last_flush_ms_(utils::TimestampMs()),
+        last_active_s_(utils::Timestamp()) {}
   ~ChunkSet() = default;
 
   static ChunkSetSPtr New(Ino ino) { return std::make_shared<ChunkSet>(ino); }
@@ -285,6 +301,10 @@ class ChunkSet {
   uint64_t GetLastWriteTimeNs() const {
     utils::ReadLockGuard guard(lock_);
     return last_write_time_ns_;
+  }
+  uint64_t GetLastComitedLength() const {
+    utils::ReadLockGuard guard(lock_);
+    return last_commited_length_;
   }
 
   // chunk operations
@@ -337,6 +357,35 @@ class ChunkSet {
 
   uint64_t GetLastActiveTimeS() const;
 
+  bool IsFlushing() const {
+    utils::ReadLockGuard guard(lock_);
+    return flushing_;
+  }
+
+  bool TryFlush() {
+    utils::WriteLockGuard guard(lock_);
+
+    if (flushing_) return false;
+    if (!last_commited_length_changed_) return false;
+
+    uint64_t now_ms = utils::TimestampMs();
+    if ((last_flush_ms_ + FLAGS_vfs_meta_flush_chunk_interval_ms) > now_ms) {
+      return false;
+    }
+
+    flushing_ = true;
+    last_flush_ms_ = now_ms;
+    last_commited_length_changed_ = false;
+
+    return true;
+  }
+
+  void ResetFlush() {
+    utils::WriteLockGuard guard(lock_);
+    flushing_ = false;
+    last_flush_ms_ = utils::TimestampMs();
+  }
+
   size_t Size() const { return GetChunkSize(); }
   size_t Bytes() const;
 
@@ -360,14 +409,22 @@ class ChunkSet {
   uint64_t last_write_length_{0};
   uint64_t last_write_time_ns_{0};
 
+  uint64_t last_commited_length_{0};
+  bool last_commited_length_changed_{false};
+
   // chunk index -> chunk
   absl::flat_hash_map<uint32_t, ChunkSPtr> chunk_map_;
 
   // task id -> commit task
   absl::flat_hash_map<uint64_t, CommitTaskSPtr> commit_task_map_;
+  // committing chunk index set, to avoid commit same chunk concurrently
   absl::flat_hash_set<uint32_t> committing_chunk_index_set_;
 
   std::atomic<uint64_t> last_commit_ms_{0};
+
+  // flush
+  bool flushing_{false};
+  uint64_t last_flush_ms_{0};
 
   uint64_t last_active_s_{0};
 };

@@ -189,7 +189,7 @@ void MDSMetaSystem::Stop(bool upgrade) {
 
   stopped_.store(true);
 
-  FlushAllSlice();
+  FlushAllFile();
 
   crontab_manager_.Destroy();
 
@@ -850,7 +850,7 @@ Status MDSMetaSystem::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {
     return Status::OK();
   }
 
-  return FlushSlice(ctx, ino);
+  return FlushSliceAndFile(ctx, ino);
 }
 
 void MDSMetaSystem::AsyncClose(ContextSPtr ctx, Ino ino, uint64_t fh,
@@ -1011,6 +1011,8 @@ Status MDSMetaSystem::WriteSlice(ContextSPtr ctx, Ino ino, uint64_t index,
   chunk_set->Append(index, slices);
 
   AsyncFlushSlice(ctx, chunk_set, false, false);
+
+  if (chunk_set->TryFlush()) AsyncFlushFile(ctx, ino);
 
   return Status::OK();
 }
@@ -1456,13 +1458,14 @@ Status MDSMetaSystem::Rename(ContextSPtr ctx, Ino old_parent,
   return Status::OK();
 }
 
-Status MDSMetaSystem::FlushFile(ContextSPtr ctx, InodeSPtr inode,
-                                ChunkSetSPtr& chunk_set) {
+Status MDSMetaSystem::DoFlushFile(ContextSPtr ctx, InodeSPtr inode,
+                                  ChunkSetSPtr& chunk_set, bool is_final) {
   CHECK(inode != nullptr) << "inode is null.";
   CHECK(chunk_set != nullptr) << "chunk_set is null.";
 
   Ino ino = inode->Ino();
-  uint64_t last_write_length = chunk_set->GetLastWriteLength();
+  uint64_t last_write_length = is_final ? chunk_set->GetLastWriteLength()
+                                        : chunk_set->GetLastComitedLength();
   if (last_write_length == 0) {
     LOG(INFO) << fmt::format(
         "[meta.fs.{}] flush file skip cause no write data, length({}).", ino,
@@ -1471,10 +1474,16 @@ Status MDSMetaSystem::FlushFile(ContextSPtr ctx, InodeSPtr inode,
   }
 
   if (last_write_length <= inode->Length()) last_write_length = 0;
+  if (!is_final && last_write_length == 0) {
+    LOG(INFO) << fmt::format(
+        "[meta.fs.{}] flush file skip cause no length expand, length({}).", ino,
+        inode->Length());
+    return Status::OK();
+  }
 
   // get tiny file data
   std::string data;
-  if (FLAGS_vfs_tiny_file_data_enable && inode->MaybeTinyFile()) {
+  if (is_final && FLAGS_vfs_tiny_file_data_enable && inode->MaybeTinyFile()) {
     auto data_buffer = tiny_file_data_cache_.GetOrCreate(ino);
     if (data_buffer != nullptr && data_buffer->IsComplete()) {
       data_buffer->Copy(data);
@@ -1483,12 +1492,13 @@ Status MDSMetaSystem::FlushFile(ContextSPtr ctx, InodeSPtr inode,
 
   AttrEntry attr_entry;
   bool shrink_file;
-  auto status = mds_client_.FlushFile(ctx, ino, last_write_length,
-                                      std::move(data), attr_entry, shrink_file);
+  auto status =
+      mds_client_.FlushFile(ctx, ino, last_write_length, std::move(data),
+                            attr_entry, is_final, shrink_file);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
-        "[meta.fs.{}] flush file fail, length({}) error({}).", ino,
-        last_write_length, status.ToString());
+        "[meta.fs.{}] flush file fail, is_final({}) length({}) error({}).", ino,
+        is_final, last_write_length, status.ToString());
     return status;
   }
 
@@ -1572,7 +1582,7 @@ void MDSMetaSystem::AsyncFlushSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
   }
 }
 
-Status MDSMetaSystem::FlushSlice(ContextSPtr ctx, Ino ino) {
+Status MDSMetaSystem::FlushSliceAndFile(ContextSPtr ctx, Ino ino) {
   auto file_session = file_session_map_.GetSession(ino);
   CHECK(file_session != nullptr)
       << fmt::format("file session is nullptr, ino({}).", ino);
@@ -1597,13 +1607,49 @@ Status MDSMetaSystem::FlushSlice(ContextSPtr ctx, Ino ino) {
   } while (true);
 
   // flush file length and data
-  return FlushFile(ctx, GetInode(file_session), chunk_set);
+  return DoFlushFile(ctx, GetInode(file_session), chunk_set, true);
 }
 
-void MDSMetaSystem::FlushAllSlice() {
+void MDSMetaSystem::AsyncFlushFile(ContextSPtr ctx, Ino ino) {
+  struct Param {
+    MDSMetaSystem& self;
+    ContextSPtr ctx;
+    Ino ino;
+  };
+
+  Param* param = new Param({.self = *this, .ctx = ctx, .ino = ino});
+
+  bthread_t tid;
+  const bthread_attr_t attr = BTHREAD_ATTR_NORMAL;
+  if (bthread_start_background(
+          &tid, &attr,
+          [](void* arg) -> void* {
+            Param* param = reinterpret_cast<Param*>(arg);
+            auto& self = param->self;
+            Ino ino = param->ino;
+            auto file_session = self.file_session_map_.GetSession(ino);
+            if (file_session != nullptr) {
+              LOG(INFO) << fmt::format("[meta.fs.{}] async flush file.", ino);
+
+              auto& chunk_set = file_session->GetChunkSet();
+              self.DoFlushFile(param->ctx, self.GetInode(file_session),
+                               chunk_set, false);
+              chunk_set->ResetFlush();
+            }
+
+            delete param;
+            return nullptr;
+          },
+          param) != 0) {
+    delete param;
+    LOG(FATAL) << "[meta.fs] start background thread fail.";
+  }
+}
+
+void MDSMetaSystem::FlushAllFile() {
   auto file_sessions = file_session_map_.GetAllSession();
 
-  LOG(INFO) << fmt::format("[meta.fs] flush all slice, count({}).",
+  LOG(INFO) << fmt::format("[meta.fs] flush all file, count({}).",
                            file_sessions.size());
 
   do {
@@ -1611,10 +1657,10 @@ void MDSMetaSystem::FlushAllSlice() {
       Ino ino = file_session->GetIno();
       ContextSPtr ctx = std::make_shared<Context>("");
 
-      auto status = FlushSlice(ctx, ino);
+      auto status = FlushSliceAndFile(ctx, ino);
       if (!status.ok()) {
         LOG(ERROR) << fmt::format(
-            "[meta.fs.{}] flush all slice fail, error({}).", ino,
+            "[meta.fs.{}] flush all file fail, error({}).", ino,
             status.ToString());
       }
     }

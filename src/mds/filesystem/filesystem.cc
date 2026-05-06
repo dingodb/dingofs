@@ -1231,6 +1231,7 @@ Status FileSystem::FlushFile(Context& ctx, Ino ino, const FlushFileParam& param,
   FlushFileOperation::ExtraParam extra_param(param.data);
   extra_param.length = param.length;
   extra_param.chunk_size = fs_info_->GetChunkSize();
+  extra_param.is_final = param.is_final;
 
   if (param.length > inode->Length()) {
     // check quota
@@ -1262,11 +1263,13 @@ Status FileSystem::FlushFile(Context& ctx, Ino ino, const FlushFileParam& param,
   entry_out.shrink_file = (delta_bytes < 0) ? true : false;
 
   // update quota
-  std::string reason = fmt::format("flushfile.{}", ino);
-  quota_manager_.UpdateFsUsage(delta_bytes, 0, reason);
+  if (delta_bytes != 0) {
+    std::string reason = fmt::format("flushfile.{}", ino);
+    quota_manager_.UpdateFsUsage(delta_bytes, 0, reason);
 
-  for (const auto& parent : attr.parents()) {
-    quota_manager_.AsyncUpdateDirUsage(parent, delta_bytes, 0, reason);
+    for (const auto& parent : attr.parents()) {
+      quota_manager_.AsyncUpdateDirUsage(parent, delta_bytes, 0, reason);
+    }
   }
 
   // update chunk cache

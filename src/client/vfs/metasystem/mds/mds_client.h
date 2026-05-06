@@ -133,7 +133,7 @@ class MDSClient {
   Status Release(ContextSPtr& ctx, Ino ino, const std::string& session_id);
 
   Status FlushFile(ContextSPtr& ctx, Ino ino, uint64_t length,
-                   std::string&& data, AttrEntry& attr_entry,
+                   std::string&& data, AttrEntry& attr_entry, bool is_final,
                    bool& shrink_file);
 
   Status Link(ContextSPtr& ctx, Ino ino, Ino new_parent,

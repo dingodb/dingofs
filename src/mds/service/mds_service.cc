@@ -1430,6 +1430,7 @@ void MDSServiceImpl::DoFlushFile(google::protobuf::RpcController*, const pb::mds
 
   auto* mut_request = const_cast<pb::mds::FlushFileRequest*>(request);
   param.data.swap(*mut_request->mutable_data());  // zero copy
+  param.is_final = request->is_final();
 
   EntryOut entry_out;
   status = file_system->FlushFile(ctx, request->ino(), param, entry_out);
