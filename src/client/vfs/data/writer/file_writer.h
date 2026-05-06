@@ -57,6 +57,8 @@ class FileWriter {
   // caller should ensure ReleaseRef called outside of lock
   void ReleaseRef();
 
+  uint64_t Ino() const { return ino_; }
+
  private:
   int32_t GetChunkSize() const;
 
