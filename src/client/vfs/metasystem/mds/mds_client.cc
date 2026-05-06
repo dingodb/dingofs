@@ -646,8 +646,8 @@ Status MDSClient::ReadDir(ContextSPtr& ctx, Ino ino, uint64_t fh,
   pb::mds::ReadDirResponse response;
 
   request.mutable_context()->set_inode_version(GetInodeVersion(ino));
-  request.mutable_context()->set_use_base_version(GetInodeRenameRefCount(ino) >
-                                                  0);
+  bool use_base_version = GetInodeRenameRefCount(ino) > 0;
+  request.mutable_context()->set_use_base_version(use_base_version);
 
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
@@ -663,7 +663,7 @@ Status MDSClient::ReadDir(ContextSPtr& ctx, Ino ino, uint64_t fh,
     return status;
   }
 
-  parent_memo_.DecRenameRefCount(ino);
+  if (use_base_version) parent_memo_.DecRenameRefCount(ino);
 
   entries.reserve(response.entries_size());
   for (const auto& entry : response.entries()) {
@@ -754,7 +754,7 @@ Status MDSClient::Release(ContextSPtr& ctx, Ino ino,
 
 Status MDSClient::FlushFile(ContextSPtr& ctx, Ino ino, uint64_t length,
                             std::string&& data, AttrEntry& attr_entry,
-                            bool& shrink_file) {
+                            bool is_final, bool& shrink_file) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, ino](bool& is_primary_mds) -> MDSMeta {
@@ -771,6 +771,7 @@ Status MDSClient::FlushFile(ContextSPtr& ctx, Ino ino, uint64_t length,
   request.set_ino(ino);
   request.set_length(length);
   request.mutable_data()->assign(std::move(data));
+  request.set_is_final(is_final);
 
   auto status = SendRequest(SpanScope::GetContext(span, ctx), span, get_mds_fn,
                             "MDSService", "FlushFile", request, response);
@@ -1287,10 +1288,13 @@ Status MDSClient::Rename(ContextSPtr& ctx, Ino old_parent,
     return status;
   }
 
-  parent_memo_.UpsertVersionAndRenameRefCount(old_parent,
-                                              response.old_parent_version());
   parent_memo_.UpsertVersionAndRenameRefCount(new_parent,
                                               response.new_parent_version());
+
+  if (old_parent != new_parent) {
+    parent_memo_.UpsertVersionAndRenameRefCount(old_parent,
+                                                response.old_parent_version());
+  }
 
   effected_inos = mds::Helper::PbRepeatedToVector(response.effected_inos());
 
