@@ -27,6 +27,7 @@ add_library(vfs_data
     reader/readahead_policy.cc
     writer/file_writer.cc
     writer/chunk_writer.cc
+    writer_table.cc
     writer/task/file_flush_task.cc
     writer/task/chunk_flush_task.cc
     chunk.cc
