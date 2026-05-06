@@ -44,6 +44,8 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
+class WriterTable;   // forward decl; full include lives in vfs_hub.cc
+
 class VFSHub {
  public:
   VFSHub() = default;
@@ -59,6 +61,8 @@ class VFSHub {
   virtual MetaWrapper* GetMetaSystem() = 0;
 
   virtual HandleManager* GetHandleManager() = 0;
+
+  virtual WriterTable* GetWriterTable() = 0;
 
   virtual BlockStore* GetBlockStore() = 0;
 
@@ -112,6 +116,8 @@ class VFSHubImpl : public VFSHub {
     CHECK_NOTNULL(handle_manager_);
     return handle_manager_.get();
   }
+
+  WriterTable* GetWriterTable() override;   // out-of-line (see vfs_hub.cc)
 
   BlockStore* GetBlockStore() override {
     CHECK_NOTNULL(block_store_);
@@ -202,6 +208,7 @@ class VFSHubImpl : public VFSHub {
   std::unique_ptr<TraceManager> trace_manager_;
   std::unique_ptr<Compactor> compactor_;
   std::unique_ptr<MetaWrapper> meta_wrapper_;
+  std::unique_ptr<WriterTable> writer_table_;
   std::unique_ptr<HandleManager> handle_manager_;
   std::unique_ptr<blockaccess::BlockAccesser> block_accesser_;
   std::unique_ptr<BlockStore> block_store_;

@@ -24,6 +24,7 @@
 
 #include "client/vfs/blockstore/block_store_impl.h"
 #include "client/vfs/blockstore/fake_block_store.h"
+#include "client/vfs/data/writer_table.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/compaction/compactor_impl.h"
 #include "client/vfs/components/prefetch_manager.h"
@@ -75,9 +76,18 @@ static MetaSystemUPtr BuildMetaSystem(const VFSConfig& vfs_conf,
 VFSHubImpl::VFSHubImpl(const VFSConfig& vfs_conf, ClientId client_id)
     : client_id_(client_id), vfs_conf_(vfs_conf) {}
 
+WriterTable* VFSHubImpl::GetWriterTable() {
+  CHECK_NOTNULL(writer_table_);
+  return writer_table_.get();
+}
+
 VFSHubImpl::~VFSHubImpl() {
   if (handle_manager_ != nullptr) {
     handle_manager_.reset();
+  }
+
+  if (writer_table_ != nullptr) {
+    writer_table_.reset();
   }
 
   if (read_executor_ != nullptr) {
@@ -199,6 +209,14 @@ Status VFSHubImpl::Start(bool skip_mount) {
     DINGOFS_RETURN_NOT_OK(block_accesser_->Init());
   }
 
+  // writer table — must start before handle_manager since NewHandle calls
+  // GetWriterTable()->AcquireWriter for writable opens.
+  {
+    writer_table_ = std::make_unique<WriterTable>(this);
+    CHECK(writer_table_ != nullptr) << "writer table is nullptr.";
+    DINGOFS_RETURN_NOT_OK(writer_table_->Start());
+  }
+
   // handle manager
   {
     handle_manager_ = std::make_unique<HandleManager>(this);
@@ -317,6 +335,14 @@ Status VFSHubImpl::Stop(bool skip_unmount) {
 
   if (handle_manager_ != nullptr) {
     handle_manager_->Stop();
+  }
+
+  // After all Handles are gone, drain residual dirty data and stop the
+  // writer table.  WriterTable::Stop only marks stopped_; FlushAll flushes
+  // any writers that survived (e.g. via lambdas still holding refs).
+  if (writer_table_ != nullptr) {
+    (void)writer_table_->FlushAll();
+    writer_table_->Stop();
   }
 
   if (read_executor_ != nullptr) {

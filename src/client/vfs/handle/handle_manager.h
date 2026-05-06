@@ -17,14 +17,15 @@
 #ifndef DINGOFS_CLIENT_VFS_HANDLE_MANAGER_H
 #define DINGOFS_CLIENT_VFS_HANDLE_MANAGER_H
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <mutex>
 #include <unordered_map>
 
 #include "bvar/reducer.h"
-#include "client/vfs/data/ifile.h"
 #include "client/vfs/vfs_meta.h"
+#include "common/status.h"
 #include "json/value.h"
 
 namespace dingofs {
@@ -32,6 +33,8 @@ namespace client {
 namespace vfs {
 
 class VFSHub;
+class FileReader;
+class FileWriter;
 
 // temporary store .stats file data
 struct FileBuffer {
@@ -39,21 +42,24 @@ struct FileBuffer {
   std::unique_ptr<char[]> data{nullptr};
 };
 
+// Handle is a pure-data per-fh value object: identity (fh/ino/flags), the
+// resources owned/borrowed for that fh (reader, writer, file_buffer), and
+// an atomic refcount.  All lifecycle logic — including atomic ref ops,
+// reader Close, writer return to WriterTable, and deletion — lives in
+// HandleManager.  Handle has no methods that touch any of these.
 struct Handle {
-  Ino ino;
-  uint64_t fh;
-  // file ralted
-  int32_t flags;
-  std::unique_ptr<IFile> file;
+  Ino ino{0};
+  uint64_t fh{0};
+  int32_t flags{0};
+
+  FileReader* reader{nullptr};
+  FileWriter* writer{nullptr};   // nullptr for O_RDONLY
+
   std::atomic<int64_t> refs{0};
 
   FileBuffer file_buffer;
 
   std::string ToString() const;
-
-  void AcquireRef();
-
-  void ReleaseRef();
 };
 
 class HandleManager {
@@ -66,9 +72,12 @@ class HandleManager {
 
   void Stop();
 
-  Handle* NewHandle(uint64_t fh, Ino ino, int flags, IFileUPtr file);
+  // Build a new Handle for (fh, ino, flags). Allocates FileReader
+  // unconditionally and acquires a writer from WriterTable for any
+  // writable open mode.  Returns nullptr on failure.
+  Handle* NewHandle(uint64_t fh, Ino ino, int flags);
 
-  // take the ownership of handle
+  // Used by the .stats path — adds an externally-built (data-only) Handle.
   void AddHandle(Handle* handle);
 
   Handle* FindHandler(uint64_t fh);
@@ -77,13 +86,12 @@ class HandleManager {
 
   void Invalidate(uint64_t fh, int64_t offset, int64_t size);
 
-  // Flush all file writers for the given inode across all handles.
-  // This ensures read-after-write consistency when multiple file descriptors
-  // are open for the same inode (e.g. one fd writes, another fd reads).
+  // Flush dirty data for the given inode. After WriterTable adoption this
+  // is O(1): a single PeekWriter lookup + Flush.
   Status FlushByIno(Ino ino);
 
   // Invalidate read cache for all handles of the given inode in the given
-  // range. This ensures that stale cached data is not served after a write.
+  // range (per-inode).
   void InvalidateByIno(Ino ino, int64_t offset, int64_t size);
 
   void Summary(Json::Value& value);
@@ -91,6 +99,18 @@ class HandleManager {
   bool Load(const Json::Value& value);
 
  private:
+  // Atomic refs ops on Handle::refs. Caller must use these instead of
+  // touching Handle::refs directly.
+  void AcquireRefHandle(Handle* h);
+
+  // Drop one ref on `h`; if it was the last ref, close the reader, return
+  // the writer to WriterTable, and delete the handle.
+  void ReleaseRefHandle(Handle* h);
+
+  // Internal cleanup: closes reader, returns writer, deletes the handle.
+  // Called from ReleaseRefHandle when refs hit 0.
+  void DestroyHandle(Handle* h);
+
   VFSHub* vfs_hub_{nullptr};
 
   std::mutex mutex_;

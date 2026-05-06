@@ -16,13 +16,17 @@
 
 #include "client/vfs/handle/handle_manager.h"
 
+#include <fcntl.h>
 #include <glog/logging.h>
 
 #include <cstdint>
-#include <memory>
 #include <sstream>
+#include <vector>
 
-#include "client/vfs/data/file.h"
+#include "client/vfs/data/reader/file_reader.h"
+#include "client/vfs/data/writer/file_writer.h"
+#include "client/vfs/data/writer_table.h"
+#include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/vfs_fh.h"
 #include "common/const.h"
 #include "fmt/format.h"
@@ -33,35 +37,49 @@ namespace vfs {
 
 std::string Handle::ToString() const {
   std::ostringstream oss;
-  oss << "Handle{ino: " << ino << ", fh; " << fh << ", flags: " << std::oct
-      << flags << "}";
+  oss << "Handle{ino: " << ino << ", fh: " << fh << ", flags: " << std::oct
+      << flags << ", has_reader: " << (reader ? "true" : "false")
+      << ", has_writer: " << (writer ? "true" : "false") << "}";
   return oss.str();
-}
-
-void Handle::AcquireRef() {
-  int64_t orgin = refs.fetch_add(1);
-  VLOG(12) << fmt::format("handle-{} AcquireRef origin refs: {}", fh, orgin);
-  CHECK_GE(orgin, 0);
-}
-
-void Handle::ReleaseRef() {
-  int64_t copy_fh = fh;
-  int64_t orgin = refs.fetch_sub(1);
-  VLOG(12) << fmt::format("handle-{} ReleaseRef origin refs: {}", copy_fh,
-                          orgin);
-  CHECK_GT(orgin, 0);
-  if (orgin == 1) {
-    delete this;
-  }
 }
 
 HandleManager::~HandleManager() {
   Stop();
   std::unique_lock<std::mutex> lock(mutex_);
   for (auto& [fh, handle] : handles_) {
-    handle->ReleaseRef();
+    ReleaseRefHandle(handle);
   }
   handles_.clear();
+}
+
+void HandleManager::AcquireRefHandle(Handle* h) {
+  int64_t orgin = h->refs.fetch_add(1);
+  VLOG(12) << fmt::format("handle-{} AcquireRef origin refs: {}", h->fh,
+                          orgin);
+  CHECK_GE(orgin, 0);
+}
+
+void HandleManager::ReleaseRefHandle(Handle* h) {
+  int64_t orgin = h->refs.fetch_sub(1);
+  VLOG(12) << fmt::format("handle-{} ReleaseRef origin refs: {}", h->fh,
+                          orgin);
+  CHECK_GT(orgin, 0);
+  if (orgin == 1) {
+    DestroyHandle(h);
+  }
+}
+
+void HandleManager::DestroyHandle(Handle* h) {
+  if (h->reader != nullptr) {
+    h->reader->Close();
+    h->reader->ReleaseRef();
+    h->reader = nullptr;
+  }
+  if (h->writer != nullptr) {
+    vfs_hub_->GetWriterTable()->ReleaseWriter(h->writer);
+    h->writer = nullptr;
+  }
+  delete h;
 }
 
 Status HandleManager::Start() { return Status::OK(); }
@@ -81,50 +99,84 @@ void HandleManager::Stop() {
       if (handle->ino == kStatsIno) {
         continue;
       }
-
-      CHECK_NOTNULL(handle->file);
-      handle->AcquireRef();
+      AcquireRefHandle(handle);
       handles_to_close.push_back(handle);
     }
   }
 
+  // Force-close the per-fh reader on each surviving Handle. Writer release
+  // happens via ~Handle when refs hit 0 (i.e. when ReleaseHandler is called
+  // for that fh, or from this manager's destructor).
   for (auto* handle : handles_to_close) {
-    handle->file->Close();
-    handle->ReleaseRef();
+    if (handle->reader != nullptr) {
+      handle->reader->Close();
+    }
+    ReleaseRefHandle(handle);
   }
 }
 
-Handle* HandleManager::NewHandle(uint64_t fh, Ino ino, int flags,
-                                 IFileUPtr file) {
+Handle* HandleManager::NewHandle(uint64_t fh, Ino ino, int flags) {
   auto* handle = new Handle();
   handle->fh = fh;
   handle->ino = ino;
   handle->flags = flags;
-  handle->file = std::move(file);
+
+  // Reader is always per-fh.
+  handle->reader = new FileReader(vfs_hub_, fh, ino);
+  handle->reader->AcquireRef();
+  Status s = handle->reader->Open();
+  if (!s.ok()) {
+    LOG(ERROR) << fmt::format("NewHandle: reader Open failed, fh={}, ino={}, "
+                              "status={}",
+                              fh, ino, s.ToString());
+    // Reader holds 1 ref from AcquireRef above; release it (reader will
+    // delete-this when refs hit 0). Then drop the bare handle.
+    handle->reader->ReleaseRef();
+    delete handle;
+    return nullptr;
+  }
+
+  // Writer only for writable opens. Borrowed from WriterTable.
+  if ((flags & O_ACCMODE) != O_RDONLY) {
+    handle->writer = vfs_hub_->GetWriterTable()->AcquireWriter(ino);
+    if (handle->writer == nullptr) {
+      LOG(ERROR) << fmt::format(
+          "NewHandle: AcquireWriter failed, fh={}, ino={}", fh, ino);
+      handle->reader->Close();
+      handle->reader->ReleaseRef();
+      delete handle;
+      return nullptr;
+    }
+  }
 
   AddHandle(handle);
-
   return handle;
 }
 
 void HandleManager::AddHandle(Handle* handle) {
   std::lock_guard<std::mutex> lock(mutex_);
-  handle->AcquireRef();
+  AcquireRefHandle(handle);
   handles_[handle->fh] = handle;
 
   total_count_ << 1;
 }
 
 void HandleManager::ReleaseHandler(uint64_t fh) {
-  std::lock_guard<std::mutex> lock(mutex_);
-  auto iter = handles_.find(fh);
-  if (iter == handles_.end()) {
-    LOG(ERROR) << "ReleaseHandler failed, fh not found:" << fh;
-    return;
+  Handle* h = nullptr;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto iter = handles_.find(fh);
+    if (iter == handles_.end()) {
+      LOG(ERROR) << "ReleaseHandler failed, fh not found:" << fh;
+      return;
+    }
+    h = iter->second;
+    handles_.erase(iter);
   }
-
-  iter->second->ReleaseRef();
-  handles_.erase(iter);
+  // Drop the AddHandle-time ref. DestroyHandle (called when refs→0) does
+  // reader Close + writer return + delete; running it outside the table
+  // mutex avoids deadlocks against WriterTable / FileWriter cleanup.
+  ReleaseRefHandle(h);
 }
 
 Handle* HandleManager::FindHandler(uint64_t fh) {
@@ -147,40 +199,26 @@ void HandleManager::Invalidate(uint64_t fh, int64_t offset, int64_t size) {
   }
 
   auto* handle = it->second;
-  if (handle->file) {
-    handle->file->Invalidate(offset, size);
+  if (handle->reader != nullptr) {
+    handle->reader->Invalidate(offset, size);
   } else {
-    LOG(WARNING) << "Invalidate failed, file is nullptr, fh:" << fh;
+    LOG(WARNING) << "Invalidate failed, reader is nullptr, fh:" << fh;
   }
 }
 
 Status HandleManager::FlushByIno(Ino ino) {
-  std::vector<Handle*> handles_to_flush;
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (stopped_) {
-      return Status::OK();
-    }
-    for (auto& [fh, handle] : handles_) {
-      if (handle->ino == ino && handle->file != nullptr) {
-        handle->AcquireRef();
-        handles_to_flush.push_back(handle);
-      }
-    }
+  // O(1) hash lookup via WriterTable.
+  auto* writer = vfs_hub_->GetWriterTable()->PeekWriter(ino);
+  if (writer == nullptr) {
+    return Status::OK();   // no writer for this ino → nothing to flush
   }
-
-  Status result;
-  for (auto* handle : handles_to_flush) {
-    Status s = handle->file->Flush();
-    if (!s.ok() && result.ok()) {
-      LOG(WARNING) << fmt::format(
-          "FlushByIno failed, ino: {}, fh: {}, status: {}", ino, handle->fh,
-          s.ToString());
-      result = s;
-    }
-    handle->ReleaseRef();
+  Status s = writer->Flush();
+  vfs_hub_->GetWriterTable()->ReleaseWriter(writer);
+  if (!s.ok()) {
+    LOG(WARNING) << fmt::format("FlushByIno failed, ino: {}, status: {}", ino,
+                                s.ToString());
   }
-  return result;
+  return s;
 }
 
 void HandleManager::InvalidateByIno(Ino ino, int64_t offset, int64_t size) {
@@ -191,16 +229,16 @@ void HandleManager::InvalidateByIno(Ino ino, int64_t offset, int64_t size) {
       return;
     }
     for (auto& [fh, handle] : handles_) {
-      if (handle->ino == ino && handle->file != nullptr) {
-        handle->AcquireRef();
+      if (handle->ino == ino && handle->reader != nullptr) {
+        AcquireRefHandle(handle);
         handles_to_invalidate.push_back(handle);
       }
     }
   }
 
   for (auto* handle : handles_to_invalidate) {
-    handle->file->Invalidate(offset, size);
-    handle->ReleaseRef();
+    handle->reader->Invalidate(offset, size);
+    ReleaseRefHandle(handle);
   }
 }
 
@@ -246,19 +284,20 @@ bool HandleManager::Load(const Json::Value& value) {
 
   uint64_t max_fh = 0;
   for (const auto& handler : handlers) {
-    // peek inode,fh,flags
     Ino ino = handler["ino"].asUInt64();
     uint64_t fh = handler["fh"].asUInt64();
     uint flags = handler["flags"].asUInt();
 
-    auto file = std::make_unique<File>(vfs_hub_, fh, ino);
-    file->Open();
-
-    auto* hanel = NewHandle(fh, ino, flags, std::move(file));
+    auto* h = NewHandle(fh, ino, flags);
+    if (h == nullptr) {
+      LOG(ERROR) << fmt::format("Load: NewHandle failed for fh={}, ino={}", fh,
+                                ino);
+      continue;
+    }
     max_fh = std::max(max_fh, fh);
   }
 
-  vfs::FhGenerator::UpdateNextFh(max_fh + 1);  // update next_fh
+  vfs::FhGenerator::UpdateNextFh(max_fh + 1);
 
   LOG(INFO) << "successfuly load " << handles_.size()
             << " handlers, next fh is:" << vfs::FhGenerator::GetNextFh();

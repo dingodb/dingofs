@@ -31,7 +31,6 @@ add_library(vfs_data
     writer/task/file_flush_task.cc
     writer/task/chunk_flush_task.cc
     chunk.cc
-    file.cc
 )
 
 target_link_libraries(vfs_data

@@ -26,7 +26,8 @@
 #include "client/common/const.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/components/warmup_manager.h"
-#include "client/vfs/data/file.h"
+#include "client/vfs/data/reader/file_reader.h"
+#include "client/vfs/data/writer/file_writer.h"
 #include "client/vfs/data_buffer.h"
 #include "client/vfs/handle/handle_manager.h"
 #include "client/vfs/vfs_fh.h"
@@ -265,11 +266,10 @@ Status VFSImpl::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t* fh) {
 
   Status s = meta_system_->Open(ctx, ino, flags, gfh);
   if (s.ok()) {
-    auto file = std::make_unique<File>(vfs_hub_.get(), gfh, ino);
-    DINGOFS_RETURN_NOT_OK(file->Open());
-
-    // TOOD: if flags is O_RDONLY, no need schedule flush
-    auto* handle = handle_manager_->NewHandle(gfh, ino, flags, std::move(file));
+    auto* handle = handle_manager_->NewHandle(gfh, ino, flags);
+    if (handle == nullptr) {
+      return Status::Internal("NewHandle failed");
+    }
     *fh = handle->fh;
   }
 
@@ -286,11 +286,10 @@ Status VFSImpl::Create(ContextSPtr ctx, Ino parent, const std::string& name,
     CHECK_GT(attr->ino, 0) << "ino in attr is null";
     Ino ino = attr->ino;
 
-    auto file = std::make_unique<File>(vfs_hub_.get(), gfh, ino);
-    DINGOFS_RETURN_NOT_OK(file->Open());
-
-    // TOOD: if flags is O_RDONLY, no need schedule flush
-    auto* handle = handle_manager_->NewHandle(gfh, ino, flags, std::move(file));
+    auto* handle = handle_manager_->NewHandle(gfh, ino, flags);
+    if (handle == nullptr) {
+      return Status::Internal("NewHandle failed");
+    }
     *fh = handle->fh;
 
     vfs_hub_->GetFileSuffixWatcher()->Remeber(*attr, name);
@@ -321,8 +320,8 @@ Status VFSImpl::Read(ContextSPtr ctx, Ino ino, DataBuffer* data_buffer,
     return Status::OK();
   }
 
-  if (handle->file == nullptr) {
-    LOG(ERROR) << "file is null in handle, ino: " << ino << ", fh: " << fh;
+  if (handle->reader == nullptr) {
+    LOG(ERROR) << "reader is null in handle, ino: " << ino << ", fh: " << fh;
     s = Status::BadFd(fmt::format("bad fh:{}", fh));
     SpanScope::SetStatus(span, s);
     return s;
@@ -352,8 +351,8 @@ Status VFSImpl::Read(ContextSPtr ctx, Ino ino, DataBuffer* data_buffer,
     }
   }
 
-  s = handle->file->Read(SpanScope::GetContext(span), data_buffer, size, offset,
-                         out_rsize);
+  s = handle->reader->Read(SpanScope::GetContext(span), data_buffer, size,
+                           offset, out_rsize);
   SpanScope::SetStatus(span, s);
 
   return s;
@@ -368,14 +367,15 @@ Status VFSImpl::Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t size,
   auto span = vfs_hub_->GetTraceManager()->StartChildSpan("VFSImpl::Write",
                                                           ctx->GetTraceSpan());
 
-  if (handle->file == nullptr) {
-    LOG(ERROR) << "file is null in handle, ino: " << ino << ", fh: " << fh;
-    s = Status::BadFd(fmt::format("bad  fh:{}", fh));
+  if (handle->writer == nullptr) {
+    LOG(ERROR) << "writer is null (read-only fh), ino: " << ino
+               << ", fh: " << fh;
+    s = Status::BadFd(fmt::format("read-only fh:{}", fh));
     return s;
   }
 
-  s = handle->file->Write(SpanScope::GetContext(span), buf, size, offset,
-                          out_wsize);
+  s = handle->writer->Write(SpanScope::GetContext(span), buf, size, offset,
+                            out_wsize);
   if (s.ok()) {
     s = meta_system_->Write(SpanScope::GetContext(span), ino, buf, offset, size,
                             fh);
@@ -397,14 +397,11 @@ Status VFSImpl::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {
   auto* handle = handle_manager_->FindHandler(fh);
   VFS_CHECK_HANDLE(handle, ino, fh);
 
-  if (handle->file == nullptr) {
-    LOG(ERROR) << "file is null in handle, ino: " << ino << ", fh: " << fh;
-    s = Status::BadFd(fmt::format("bad fh:{}", fh));
-    return s;
+  // O_RDONLY fh has no writer — nothing to flush at the data layer.
+  if (handle->writer != nullptr) {
+    s = handle->writer->Flush();
+    if (!s.ok()) return s;
   }
-
-  s = handle->file->Flush();
-  if (!s.ok()) return s;
 
   s = meta_system_->Flush(ctx, ino, fh);
 
@@ -421,15 +418,12 @@ Status VFSImpl::Release(ContextSPtr ctx, Ino ino, uint64_t fh) {
   auto* handle = handle_manager_->FindHandler(fh);
   VFS_CHECK_HANDLE(handle, ino, fh);
 
-  if (handle->file == nullptr) {
-    LOG(ERROR) << "file is null in handle, ino: " << ino << ", fh: " << fh;
-    s = Status::BadFd(fmt::format("bad  fh:{}", fh));
-
-  } else {
-    handle->file->Close();
-    // how do we return
-    s = meta_system_->Close(ctx, ino, fh);
+  // Per-fh reader is closed here; writer release happens via ~Handle when
+  // ReleaseHandler triggers refs→0.
+  if (handle->reader != nullptr) {
+    handle->reader->Close();
   }
+  s = meta_system_->Close(ctx, ino, fh);
 
   handle_manager_->ReleaseHandler(fh);
 
@@ -442,12 +436,8 @@ Status VFSImpl::Fsync(ContextSPtr ctx, Ino ino, int datasync, uint64_t fh) {
   auto* handle = handle_manager_->FindHandler(fh);
   VFS_CHECK_HANDLE(handle, ino, fh);
 
-  if (handle->file == nullptr) {
-    LOG(ERROR) << "file is null in handle, ino: " << ino << ", fh: " << fh;
-    s = Status::BadFd(fmt::format("bad  fh:{}", fh));
-
-  } else {
-    s = handle->file->Flush();
+  if (handle->writer != nullptr) {
+    s = handle->writer->Flush();
   }
 
   return s;
