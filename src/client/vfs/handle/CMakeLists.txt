@@ -20,4 +20,7 @@ target_compile_options(vfs_handle PUBLIC -Wno-deprecated-declarations)
 
 target_link_libraries(vfs_handle
     PROTO_OBJS
+    glog::glog
+    fmt::fmt
+    brpc::brpc
 )

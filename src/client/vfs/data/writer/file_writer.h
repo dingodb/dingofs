@@ -58,6 +58,11 @@ class FileWriter {
 
   uint64_t Ino() const { return ino_; }
 
+  // Sticky-broken status; absorbed from File::file_status_. Once set, all
+  // subsequent Write / Flush via this writer return the broken status.
+  Status GetStatus() const;
+  void SetStatusIfBroken(const Status& s);
+
  private:
   int32_t GetChunkSize() const;
 
@@ -75,6 +80,9 @@ class FileWriter {
   const std::string uuid_;
 
   std::atomic<int64_t> refs_{0};
+
+  mutable std::mutex status_mutex_;
+  Status file_status_;   // sticky after first error
 
   mutable std::mutex mutex_;
   std::condition_variable cv_;

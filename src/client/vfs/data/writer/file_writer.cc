@@ -21,13 +21,18 @@
 #include <unistd.h>
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <thread>
 
 #include "client/vfs/common/async_util.h"
 #include "client/vfs/data/writer/chunk_writer.h"
 #include "client/vfs/hub/vfs_hub.h"
+#include "client/vfs/memory/write_buffer_manager.h"
+
+DEFINE_int64(vfs_stale_write_sleep_us, 10, "sleep us when detect memory low");
 
 namespace dingofs {
 namespace client {
@@ -36,6 +41,30 @@ namespace vfs {
 #define METHOD_NAME() ("FileWriter::" + std::string(__FUNCTION__))
 
 static std::atomic<uint64_t> file_flush_id_gen{1};
+
+namespace {
+
+// Memory-pressure throttle:
+// soft (used > total) → sleep T µs once; hard (used > 2*total) → loop sleep
+// 10*T µs until back below.  Block here so the FUSE syscall back-pressures
+// the caller; lets the flush worker drain dirty buffers.
+void ApplyWriteBufferThrottle(WriteBufferManager* bm) {
+  if (bm->GetUsedBytes() <= bm->GetTotalBytes()) return;
+
+  VLOG(1) << "WriteBufferManager soft pressure, used=" << bm->GetUsedBytes()
+          << " total=" << bm->GetTotalBytes();
+  std::this_thread::sleep_for(
+      std::chrono::microseconds(FLAGS_vfs_stale_write_sleep_us));
+
+  while (bm->GetUsedBytes() > 2 * bm->GetTotalBytes()) {
+    LOG(INFO) << "WriteBufferManager hard pressure, used="
+              << bm->GetUsedBytes() << " total=" << bm->GetTotalBytes();
+    std::this_thread::sleep_for(
+        std::chrono::microseconds(10 * FLAGS_vfs_stale_write_sleep_us));
+  }
+}
+
+}  // namespace
 
 FileWriter::~FileWriter() { Close(); }
 
@@ -104,6 +133,12 @@ void FileWriter::ReleaseRef() {
 
 Status FileWriter::Write(ContextSPtr ctx, const char* buf, uint64_t size,
                          uint64_t offset, uint64_t* out_wsize) {
+  // Sticky-broken fast-fail.
+  DINGOFS_RETURN_NOT_OK(GetStatus());
+
+  // Memory-pressure throttle (replaces former File::Write logic).
+  ApplyWriteBufferThrottle(vfs_hub_->GetWriteBufferManager());
+
   {
     std::lock_guard<std::mutex> lock(mutex_);
     if (closed_) {
@@ -264,7 +299,23 @@ Status FileWriter::Flush() {
   Synchronizer sync;
   AsyncFlush(sync.AsStatusCallBack(s));
   sync.Wait();
+  if (!s.ok()) {
+    SetStatusIfBroken(s);
+  }
   return s;
+}
+
+Status FileWriter::GetStatus() const {
+  std::lock_guard<std::mutex> lg(status_mutex_);
+  return file_status_;
+}
+
+void FileWriter::SetStatusIfBroken(const Status& s) {
+  if (s.ok()) return;
+  std::lock_guard<std::mutex> lg(status_mutex_);
+  if (file_status_.ok()) {
+    file_status_ = s;
+  }
 }
 
 void FileWriter::SchedulePeriodicFlush() {
