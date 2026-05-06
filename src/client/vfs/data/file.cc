@@ -52,7 +52,7 @@ File::~File() {
 }
 
 Status File::Open() {
-  file_writer_ = new FileWriter(vfs_hub_, fh_, ino_);
+  file_writer_ = new FileWriter(vfs_hub_, ino_);
   file_writer_->AcquireRef();
   DINGOFS_RETURN_NOT_OK(file_writer_->Open());
 

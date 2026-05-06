@@ -74,9 +74,8 @@ void FileWriter::Close() {
     sync.Wait();
 
     if (!s.ok()) {
-      LOG(ERROR) << fmt::format(
-          "{} Failed to close file, fh: {}, flush error: {}", uuid_, fh_,
-          s.ToString());
+      LOG(ERROR) << fmt::format("{} Failed to close file, flush error: {}",
+                                uuid_, s.ToString());
     }
   }
 
@@ -180,7 +179,7 @@ ChunkWriter* FileWriter::GetOrCreateChunkWriter(int64_t chunk_index) {
   if (iter != chunk_writers_.end()) {
     return iter->second;
   } else {
-    auto* chunk_writer = new ChunkWriter(vfs_hub_, fh_, ino_, chunk_index);
+    auto* chunk_writer = new ChunkWriter(vfs_hub_, ino_, chunk_index);
     chunk_writers_[chunk_index] = chunk_writer;
     return chunk_writer;
   }

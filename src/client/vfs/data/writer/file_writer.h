@@ -35,11 +35,10 @@ class VFSHub;
 
 class FileWriter {
  public:
-  FileWriter(VFSHub* hub, uint64_t fh, uint64_t ino)
+  FileWriter(VFSHub* hub, uint64_t ino)
       : vfs_hub_(hub),
-        fh_(fh),
         ino_(ino),
-        uuid_(fmt::format("file_writer-{}-{}", ino_, fh_)) {}
+        uuid_(fmt::format("file_writer-{}", ino_)) {}
 
   ~FileWriter();
 
@@ -72,7 +71,6 @@ class FileWriter {
   void FileFlushTaskDone(uint64_t file_flush_id, StatusCallback cb,
                          Status status);
   VFSHub* vfs_hub_;
-  const uint64_t fh_;
   const uint64_t ino_;
   const std::string uuid_;
 
