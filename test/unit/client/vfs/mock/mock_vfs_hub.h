@@ -33,6 +33,7 @@ class MockVFSHub : public VFSHub {
   MOCK_METHOD(ClientId, GetClientId, (), (override));
   MOCK_METHOD(MetaWrapper*, GetMetaSystem, (), (override));
   MOCK_METHOD(HandleManager*, GetHandleManager, (), (override));
+  MOCK_METHOD(WriterTable*, GetWriterTable, (), (override));
   MOCK_METHOD(BlockStore*, GetBlockStore, (), (override));
   MOCK_METHOD(blockaccess::BlockAccesser*, GetBlockAccesser, (), (override));
   MOCK_METHOD(Executor*, GetReadExecutor, (), (override));

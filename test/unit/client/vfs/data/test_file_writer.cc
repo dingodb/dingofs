@@ -48,8 +48,10 @@ class FileWriterTest : public VFSTestBase {
 
   // Creates, acquires a ref on, and opens a FileWriter.
   // The caller owns the writer; ReleaseRef() destroys it.
-  FileWriter* MakeOpenWriter(uint64_t ino = 200, uint64_t fh = 2) {
-    auto* w = new FileWriter(mock_hub_, fh, ino);
+  // (`fh` arg kept for legacy test call sites; ignored under the per-inode
+  // shared writer model.)
+  FileWriter* MakeOpenWriter(uint64_t ino = 200, uint64_t /*fh*/ = 2) {
+    auto* w = new FileWriter(mock_hub_, ino);
     w->AcquireRef();
     CHECK(w->Open().ok());
     return w;
@@ -202,6 +204,95 @@ TEST_F(FileWriterTest, Write_AfterClose_ReturnsError) {
   EXPECT_FALSE(s.ok());
 
   // Release the ref (Close was already called above by test).
+  w->ReleaseRef();
+}
+
+// 9. Ino() returns the value passed to the constructor — used by
+// WriterTable as the inode key.
+TEST_F(FileWriterTest, Ino_ReturnsConstructedValue) {
+  constexpr uint64_t kIno = 4242;
+  auto* w = MakeOpenWriter(kIno);
+  EXPECT_EQ(w->Ino(), kIno);
+
+  w->Close();
+  w->ReleaseRef();
+}
+
+// 10. A freshly-opened writer has a clean (OK) sticky status.
+TEST_F(FileWriterTest, GetStatus_Default_IsOK) {
+  auto* w = MakeOpenWriter();
+  EXPECT_TRUE(w->GetStatus().ok());
+
+  w->Close();
+  w->ReleaseRef();
+}
+
+// 11. SetStatusIfBroken honors first-error-wins: an OK input is a no-op,
+// and a second error must NOT overwrite the first.
+TEST_F(FileWriterTest, SetStatusIfBroken_FirstErrorWins) {
+  auto* w = MakeOpenWriter();
+
+  // OK input must not mutate the OK starting state.
+  w->SetStatusIfBroken(Status::OK());
+  EXPECT_TRUE(w->GetStatus().ok());
+
+  // First broken status sticks.
+  w->SetStatusIfBroken(Status::Internal("first"));
+  EXPECT_FALSE(w->GetStatus().ok());
+  std::string first_msg = w->GetStatus().ToString();
+
+  // Second broken status must NOT replace the first.
+  w->SetStatusIfBroken(Status::IoError("second"));
+  EXPECT_EQ(w->GetStatus().ToString(), first_msg)
+      << "first error must win; subsequent errors are dropped";
+
+  w->Close();
+  w->ReleaseRef();
+}
+
+// 12. Once status is broken, all subsequent Write calls fast-fail with
+// the broken status — this is the cross-fh consistency mechanism: one fh
+// observing an error makes every other fh on the same inode fail too.
+TEST_F(FileWriterTest, StickyStatus_BlocksSubsequentWrites) {
+  auto* w = MakeOpenWriter();
+
+  w->SetStatusIfBroken(Status::Internal("simulated upload failure"));
+  ASSERT_FALSE(w->GetStatus().ok());
+
+  const char buf[] = "blocked";
+  uint64_t wsize = 0;
+  Status s = w->Write(ctx_, buf, sizeof(buf), 0, &wsize);
+  EXPECT_FALSE(s.ok())
+      << "Write must fast-fail when sticky status is broken";
+
+  w->Close();
+  w->ReleaseRef();
+}
+
+// 13. A Flush failure must promote into the sticky status so subsequent
+// Write calls observe the failure.
+TEST_F(FileWriterTest, FlushError_BecomesStickyAndBlocksWrites) {
+  ON_CALL(*mock_meta_system_, WriteSlice)
+      .WillByDefault(Return(Status::Internal("flush error")));
+
+  auto* w = MakeOpenWriter();
+
+  // Write some data so Flush has something to commit.
+  const char buf[] = "data";
+  uint64_t wsize = 0;
+  ASSERT_TRUE(w->Write(ctx_, buf, sizeof(buf), 0, &wsize).ok());
+
+  // Flush fails — failure must promote to sticky status.
+  Status fs = w->Flush();
+  ASSERT_FALSE(fs.ok());
+  EXPECT_FALSE(w->GetStatus().ok())
+      << "Flush failure must be promoted to sticky status";
+
+  // Subsequent Write fast-fails on the sticky status.
+  Status ws = w->Write(ctx_, buf, sizeof(buf), 4096, &wsize);
+  EXPECT_FALSE(ws.ok());
+
+  w->Close();
   w->ReleaseRef();
 }
 
