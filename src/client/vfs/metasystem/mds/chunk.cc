@@ -463,8 +463,8 @@ uint32_t ChunkSet::TryCommitSlice(bool is_force) {
 
 CommitTaskSPtr ChunkSet::CreateCommitTaskUnlock(
     std::vector<CommitTask::DeltaSlice>&& delta_slices) {
-  auto task = std::make_shared<CommitTask>(task_id_generator.fetch_add(1),
-                                           std::move(delta_slices));
+  auto task = std::make_shared<CommitTask>(
+      task_id_generator.fetch_add(1), std::move(delta_slices), chunk_size_);
 
   commit_task_map_.insert({task->TaskID(), task});
 
@@ -479,16 +479,22 @@ void ChunkSet::FinishCommitTask(uint64_t task_id,
                                 const std::vector<ChunkEntry>& chunks) {
   utils::WriteLockGuard guard(lock_);
 
-  auto it = commit_task_map_.find(task_id);
-  CHECK(it != commit_task_map_.end()) << fmt::format(
+  auto task_it = commit_task_map_.find(task_id);
+  CHECK(task_it != commit_task_map_.end()) << fmt::format(
       "[meta.chunkset.{}] finish commit task fail, task({}) not found.", ino_,
       task_id);
 
+  auto& task = task_it->second;
+  if (last_commited_length_ < task->GetLength()) {
+    last_commited_length_ = task->GetLength();
+    last_commited_length_changed_ = true;
+  }
+
   // delete finished task
-  for (auto& chunk_index : it->second->GetChunkIndexs()) {
+  for (auto& chunk_index : task->GetChunkIndexs()) {
     committing_chunk_index_set_.erase(chunk_index);
   }
-  commit_task_map_.erase(it);
+  commit_task_map_.erase(task_it);
 
   // mark chunks commited
   for (const auto& chunk : chunks) {
@@ -645,7 +651,7 @@ ChunkSetSPtr ChunkCache::GetOrCreate(Ino ino) {
         if (it != map.end()) {
           chunk_set = it->second;
         } else {
-          chunk_set = ChunkSet::New(ino);
+          chunk_set = ChunkSet::New(ino, chunk_size_);
           map.emplace(ino, chunk_set);
           total_count_ << 1;
         }

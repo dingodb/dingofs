@@ -794,7 +794,7 @@ Status MDSClient::Release(ContextSPtr& ctx, Ino ino,
 
 Status MDSClient::FlushFile(ContextSPtr& ctx, Ino ino, uint64_t length,
                             std::string&& data, AttrEntry& attr_entry,
-                            bool& shrink_file) {
+                            bool is_final, bool& shrink_file) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, ino](bool& is_primary_mds) -> MDSMeta {
@@ -813,6 +813,7 @@ Status MDSClient::FlushFile(ContextSPtr& ctx, Ino ino, uint64_t length,
   request.set_ino(ino);
   request.set_length(length);
   request.mutable_data()->assign(std::move(data));
+  request.set_is_final(is_final);
 
   auto status = SendRequest(SpanScope::GetContext(span, ctx), span, get_mds_fn,
                             "MDSService", "FlushFile", request, response);
@@ -1346,6 +1347,11 @@ Status MDSClient::Rename(ContextSPtr& ctx, Ino old_parent,
   } else {
     parent_memo_.UpsertVersion(new_parent, response.new_parent_version());
   }
+  if (old_parent != new_parent) {
+    parent_memo_.UpsertVersionAndRenameRefCount(old_parent,
+                                                response.old_parent_version());
+  }
+
   if (old_parent != new_parent) {
     parent_memo_.UpsertVersionAndRenameRefCount(old_parent,
                                                 response.old_parent_version());
