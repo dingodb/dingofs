@@ -54,7 +54,7 @@ class ChunkWriterTest : public VFSTestBase {
   std::unique_ptr<ChunkWriter> MakeWriter(uint64_t ino = 100,
                                           uint64_t chunk_index = 0,
                                           uint64_t fh = 1) {
-    return std::make_unique<ChunkWriter>(mock_hub_, fh, ino, chunk_index);
+    return std::make_unique<ChunkWriter>(mock_hub_, ino, chunk_index);
   }
 
   const uint64_t kIno = 100;

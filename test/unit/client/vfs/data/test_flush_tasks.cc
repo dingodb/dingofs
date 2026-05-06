@@ -261,7 +261,7 @@ TEST_F(FlushTasksTest, FileFlushTask_AllSuccess_CallbackCalledOnce) {
   std::unordered_map<int64_t, ChunkWriter*> writers_map;
 
   for (int i = 0; i < kChunkCount; ++i) {
-    auto cw = std::make_unique<ChunkWriter>(mock_hub_, /*fh=*/1, kIno,
+    auto cw = std::make_unique<ChunkWriter>(mock_hub_, kIno,
                                             static_cast<uint64_t>(i));
     std::vector<char> buf(kPageSize, static_cast<char>('A' + i));
     uint64_t chunk_off = 0;
@@ -293,7 +293,7 @@ TEST_F(FlushTasksTest, FileFlushTask_OneChunkFail_ErrorPropagated) {
   EXPECT_CALL(*mock_meta_system_, NewSliceId(_, _, _))
       .WillRepeatedly(Return(Status::IoError("mds timeout")));
 
-  auto cw = std::make_unique<ChunkWriter>(mock_hub_, /*fh=*/1, kIno, 0);
+  auto cw = std::make_unique<ChunkWriter>(mock_hub_, kIno, 0);
   std::vector<char> buf(kPageSize, 'E');
   ASSERT_TRUE(cw->Write(ctx_, buf.data(), kPageSize, 0).ok());
 
@@ -345,7 +345,7 @@ TEST_F(FlushTasksTest, FileFlushTask_Concurrent_ExactlyOnce) {
   std::unordered_map<int64_t, ChunkWriter*> writers_map;
 
   for (int i = 0; i < kChunkCount; ++i) {
-    auto cw = std::make_unique<ChunkWriter>(mock_hub_, /*fh=*/1, kIno,
+    auto cw = std::make_unique<ChunkWriter>(mock_hub_, kIno,
                                             static_cast<uint64_t>(i));
     std::vector<char> buf(kPageSize, static_cast<char>('a' + i));
     ASSERT_TRUE(cw->Write(ctx_, buf.data(), kPageSize, 0).ok());
