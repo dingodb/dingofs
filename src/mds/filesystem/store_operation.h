@@ -1167,6 +1167,7 @@ class FlushFileOperation : public Operation {
     uint64_t length;
     uint64_t slice_id{0};
     uint64_t chunk_size{0};
+    bool is_final{false};
   };
 
   FlushFileOperation(Trace& trace, uint32_t fs_id, Ino ino, ExtraParam& param)

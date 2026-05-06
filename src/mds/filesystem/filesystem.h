@@ -155,6 +155,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   struct FlushFileParam {
     uint64_t length{0};
     std::string data;
+    bool is_final{false};
   };
   Status FlushFile(Context& ctx, Ino ino, const FlushFileParam& param, EntryOut& entry_out);
   using FileSessionParam = pb::mds::HeartbeatRequest::FileSession;

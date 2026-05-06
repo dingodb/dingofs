@@ -82,6 +82,8 @@ struct Slice {
   int32_t off{0};   // read offset within the slice (for CopyFileRange/Clone)
   int32_t len{0};   // logical length of this mapping
   int32_t pos{0};   // start byte position within the owning chunk
+
+  int32_t End() const { return pos + len; }
 };
 
 enum StoreType : uint8_t {

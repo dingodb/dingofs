@@ -127,6 +127,7 @@ DECLARE_uint32(vfs_meta_commit_slice_max_num);
 DECLARE_bool(vfs_meta_compact_chunk_enable);
 DECLARE_uint32(vfs_meta_compact_chunk_threshold_num);
 DECLARE_uint32(vfs_meta_compact_chunk_interval_ms);
+DECLARE_uint32(vfs_meta_flush_chunk_interval_ms);
 
 // vfs option
 DECLARE_uint32(vfs_meta_max_name_length);
