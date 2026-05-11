@@ -176,8 +176,9 @@ Status VFSHubImpl::Start(bool skip_mount) {
 
   // block accesser
   {
-    // set s3/rados config info
-    blockaccess::InitBlockAccessOption(&blockaccess_options_);
+    // 1) decide backend type from fs_info and set per-backend connection
+    //    info FIRST. The backend-specific gflag-fill below depends on
+    //    `type` being correct.
     if (fs_info_.storage_info.store_type == StoreType::kS3) {
       auto s3_info = fs_info_.storage_info.s3_info;
       blockaccess_options_.type = blockaccess::AccesserType::kS3;
@@ -186,7 +187,8 @@ Status VFSHubImpl::Start(bool skip_mount) {
                               .sk = s3_info.sk,
                               .endpoint = s3_info.endpoint,
                               .bucket_name = s3_info.bucket_name};
-
+      blockaccess::FillAwsSdkConfigFromGFlags(
+          &blockaccess_options_.s3_options.aws_sdk_config);
     } else if (fs_info_.storage_info.store_type == StoreType::kRados) {
       auto rados_info = fs_info_.storage_info.rados_info;
       blockaccess_options_.type = blockaccess::AccesserType::kRados;
@@ -203,6 +205,10 @@ Status VFSHubImpl::Start(bool skip_mount) {
     } else {
       return Status::InvalidParam("unsupported store type");
     }
+
+    // 2) Throttle options are backend-agnostic.
+    blockaccess::FillThrottleOptionsFromGFlags(
+        &blockaccess_options_.throttle_options);
 
     block_accesser_ = blockaccess::NewPrefixBlockAccesser(
         fs_info_.name, blockaccess_options_);
