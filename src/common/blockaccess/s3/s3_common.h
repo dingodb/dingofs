@@ -63,7 +63,11 @@ struct S3Options {
   AwsSdkConfig aws_sdk_config;
 };
 
-inline void InitAwsSdkConfig(AwsSdkConfig* aws_sdk_config) {
+// Fill AwsSdkConfig fields from global gflags (FLAGS_s3_*, FLAGS_log_dir).
+// Pure side-effect-on-arg function — does NOT construct anything, just
+// syncs the global flag state into the caller-owned struct. Caller MUST
+// invoke this only when it actually wants an S3 backend.
+inline void FillAwsSdkConfigFromGFlags(AwsSdkConfig* aws_sdk_config) {
   aws_sdk_config->region = FLAGS_s3_region;
   aws_sdk_config->loglevel = FLAGS_s3_loglevel;
 

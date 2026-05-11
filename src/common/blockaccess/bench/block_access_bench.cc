@@ -217,7 +217,7 @@ Status BlockAccessBench::Init() {
       access_options.s3_options.s3_info.endpoint = options_.s3_endpoint;
       access_options.s3_options.s3_info.ak = options_.s3_ak;
       access_options.s3_options.s3_info.sk = options_.s3_sk;
-      InitBlockAccessOption(&access_options);
+      FillAwsSdkConfigFromGFlags(&access_options.s3_options.aws_sdk_config);
       access_options.s3_options.aws_sdk_config.use_crt_client =
           options_.s3_use_crt_client;
       access_options.s3_options.aws_sdk_config.use_thread_pool =
@@ -231,16 +231,14 @@ Status BlockAccessBench::Init() {
       access_options.rados_options.cluster_name = options_.rados_cluster_name;
       access_options.rados_options.user_name = options_.rados_user_name;
       access_options.rados_options.key = options_.rados_key;
-      InitBlockAccessOption(&access_options);
       break;
     case AccesserType::kLocalFile:
       access_options.file_options.path = options_.data_path;
-      InitBlockAccessOption(&access_options);
       break;
     default:
-      InitBlockAccessOption(&access_options);
       break;
   }
+  FillThrottleOptionsFromGFlags(&access_options.throttle_options);
 
   accesser_ = NewShareBlockAccesser(access_options);
   if (accesser_ == nullptr) {

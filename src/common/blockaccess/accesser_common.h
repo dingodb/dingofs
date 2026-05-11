@@ -41,7 +41,9 @@ struct BlockAccesserThrottleOptions {
   uint64_t bpsWriteMB{0};
 };
 
-inline void InitBlockAccesserThrottleOptions(
+// Fill throttle options from global gflags. Backend-agnostic — same gflags
+// apply to S3 / Rados / LocalFile.
+inline void FillThrottleOptionsFromGFlags(
     BlockAccesserThrottleOptions* options) {
   options->iopsTotalLimit = FLAGS_iops_total_limit;
   options->iopsReadLimit = FLAGS_iops_read_limit;
@@ -78,13 +80,6 @@ struct BlockAccessOptions {
   LocalFileOptions file_options;
   BlockAccesserThrottleOptions throttle_options;
 };
-
-inline void InitBlockAccessOption(blockaccess::BlockAccessOptions* option) {
-  if (option->type == blockaccess::kS3) {
-    blockaccess::InitAwsSdkConfig(&option->s3_options.aws_sdk_config);
-  }
-  blockaccess::InitBlockAccesserThrottleOptions(&option->throttle_options);
-}
 
 // TODO: refact this use one struct
 struct GetObjectAsyncContext;
