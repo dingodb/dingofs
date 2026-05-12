@@ -1,0 +1,7 @@
+# uv-managed venv
+.venv/
+
+# pytest / Python runtime
+__pycache__/
+.pytest_cache/
+*.pyc
