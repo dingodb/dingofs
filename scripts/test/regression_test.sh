@@ -18,48 +18,54 @@ if [ -z "${FLAGS_mountpoint}" ]; then
 fi
 
 dir_suffix=$(date +%Y%m%d%H%M%S)
+TEST_DIR=${FLAGS_mountpoint}/dtt_$dir_suffix
+LOG_DIR=/tmp/dtt
+RESULT_FILE=${LOG_DIR}/result.log
+
+mkdir -p ${TEST_DIR}
+mkdir -p ${LOG_DIR}
+
+# check mkdir result
+if [ ! -d "${TEST_DIR}" ]; then
+  echo "Failed to create directory ${TEST_DIR}"
+  exit 1
+fi
+
+
+# set dtt config
+dtt config set testdir ${TEST_DIR}
+dtt config set output ${LOG_DIR}
+dtt config set runtime podman
+
+
 
 # pjd test
 function pjd_test() {
-  PJD_TEST_DIR=${FLAGS_mountpoint}/pjd_test_$dir_suffix
-  LOG_DIR=/tmp/log/pjd_test_$dir_suffix
-  mkdir -p ${PJD_TEST_DIR}
-  mkdir -p ${LOG_DIR}
+  dtt -t pjd -s all
 
-  # check mkdir result
-  if [ ! -d "${PJD_TEST_DIR}" ]; then
-    echo "Failed to create directory ${PJD_TEST_DIR}"
+
+  # check result file
+  # search ${RESULT_FILE} for "FAIL" keyword
+  cat ${RESULT_FILE}
+  if grep -q "Status: FAIL" ${RESULT_FILE}; then
+    echo "pjd test failed, please check ${RESULT_FILE} for details."
     exit 1
   fi
-
-  podman run --rm -v ${PJD_TEST_DIR}:/data -v ${LOG_DIR}:/output dingofs-benchmark-tools  -t pjdtest -s pjdtest -m /data -o /output
 
   echo "pjd test completed, logs are stored in ${LOG_DIR}"
 }
 
 # mdtest test
 function mdtest_test() {
-  MDTEST_TEST_DIR=${FLAGS_mountpoint}/mdtest_test_$dir_suffix
-  LOG_DIR=/tmp/log/mdtest_test_$dir_suffix
-  mkdir -p ${MDTEST_TEST_DIR}
+  dtt -t mdtest -s all
 
-  # check mkdir result
-  if [ ! -d "${MDTEST_TEST_DIR}" ]; then
-    echo "Failed to create directory ${MDTEST_TEST_DIR}"
+  # check result file
+  # search ${RESULT_FILE} for "FAIL" keyword
+  cat ${RESULT_FILE}
+  if grep -q "Status: FAIL" ${RESULT_FILE}; then
+    echo "mdtest test failed, please check ${RESULT_FILE} for details."
     exit 1
   fi
-
-  mkdir -p ${LOG_DIR}/mdtest_z0_n100
-  podman run --rm -v ${MDTEST_TEST_DIR}:/data -v ${LOG_DIR}:/output dingofs-benchmark-tools -t mdtest -s mdtest_z0_n100 -m /data -o /output
-
-  mkdir -p ${LOG_DIR}/mdtest_z5_b4_i1
-  podman run --rm -v ${MDTEST_TEST_DIR}:/data -v ${LOG_DIR}:/output dingofs-benchmark-tools -t mdtest -s mdtest_z5_b4_i1 -m /data -o /output
-
-  mkdir -p ${LOG_DIR}/mdtest_z6_b3_i1
-  podman run --rm -v ${MDTEST_TEST_DIR}:/data -v ${LOG_DIR}:/output dingofs-benchmark-tools -t mdtest -s mdtest_z6_b3_i1 -m /data -o /output
-
-  mkdir -p ${LOG_DIR}/mdtest_z9_b2_i1
-  podman run --rm -v ${MDTEST_TEST_DIR}:/data -v ${LOG_DIR}:/output dingofs-benchmark-tools -t mdtest -s mdtest_z9_b2_i1 -m /data -o /output
 
   echo "mdtest test completed, logs are stored in ${LOG_DIR}"
 }
@@ -67,28 +73,15 @@ function mdtest_test() {
 
 # vdbench test
 function vdbench_test() {
-  VDBENCH_TEST_DIR=${FLAGS_mountpoint}/vdbench_test_$dir_suffix
-  LOG_DIR=/tmp/log/vdbench_test_$dir_suffix
-  mkdir -p ${VDBENCH_TEST_DIR}
+  dtt -t vdbench -s all
 
-  # check mkdir result
-  if [ ! -d "${VDBENCH_TEST_DIR}" ]; then
-    echo "Failed to create directory ${VDBENCH_TEST_DIR}"
+  # check result file
+  # search ${RESULT_FILE} for "FAIL" keyword
+  cat ${RESULT_FILE}
+  if grep -q "Status: FAIL" ${RESULT_FILE}; then
+    echo "vdbench test failed, please check ${RESULT_FILE} for details."
     exit 1
   fi
-
-  mkdir -p ${LOG_DIR}/seq_wr
-  podman run --rm -v ${VDBENCH_TEST_DIR}:/data -v ${LOG_DIR}:/output dingofs-benchmark-tools -t vdbench -s seq_wr -m /data -o /output
-
-  mkdir -p ${LOG_DIR}/seq_rd
-  podman run --rm -v ${VDBENCH_TEST_DIR}:/data -v ${LOG_DIR}:/output dingofs-benchmark-tools -t vdbench -s seq_rd -m /data -o /output
-
-  mkdir -p ${LOG_DIR}/rand_wr
-  podman run --rm -v ${VDBENCH_TEST_DIR}:/data -v ${LOG_DIR}:/output dingofs-benchmark-tools -t vdbench -s rand_wr -m /data -o /output
-
-  mkdir -p ${LOG_DIR}/rand_rd
-  podman run --rm -v ${VDBENCH_TEST_DIR}:/data -v ${LOG_DIR}:/output dingofs-benchmark-tools -t vdbench -s rand_rd -m /data -o /output
-
 
   echo "vdbench test completed, logs are stored in ${LOG_DIR}"
 }
@@ -96,27 +89,15 @@ function vdbench_test() {
 
 # fio test
 function fio_test() {
-  FIO_TEST_DIR=${FLAGS_mountpoint}/fio_test_$dir_suffix
-  LOG_DIR=/tmp/log/fio_test_$dir_suffix
-  mkdir -p ${FIO_TEST_DIR}
+  dtt -t fio -s all
 
-  # check mkdir result
-  if [ ! -d "${FIO_TEST_DIR}" ]; then
-    echo "Failed to create directory ${FIO_TEST_DIR}"
+  # check result file
+  # search ${RESULT_FILE} for "FAIL" keyword
+  cat ${RESULT_FILE}
+  if grep -q "Status: FAIL" ${RESULT_FILE}; then
+    echo "fio test failed, please check ${RESULT_FILE} for details."
     exit 1
   fi
-
-  mkdir -p ${LOG_DIR}/rand_read_0d_128k_16j
-  podman run --rm -v ${FIO_TEST_DIR}:/data -v ${LOG_DIR}:/output dingofs-benchmark-tools -t fio -s rand_read_0d_128k_16j -m /data -o /output
-
-  mkdir -p ${LOG_DIR}/rand_read_0d_128k_1j
-  podman run --rm -v ${FIO_TEST_DIR}:/data -v ${LOG_DIR}:/output dingofs-benchmark-tools -t fio -s rand_read_0d_128k_1j -m /data -o /output
-
-  mkdir -p ${LOG_DIR}/rand_write_0d_128k_16j
-  podman run --rm -v ${FIO_TEST_DIR}:/data -v ${LOG_DIR}:/output dingofs-benchmark-tools -t fio -s rand_write_0d_128k_16j -m /data -o /output
-
-  mkdir -p ${LOG_DIR}/rand_write_0d_1m_16j
-  podman run --rm -v ${FIO_TEST_DIR}:/data -v ${LOG_DIR}:/output dingofs-benchmark-tools -t fio -s rand_write_0d_1m_16j -m /data -o /output
 
   echo "fio test completed, logs are stored in ${LOG_DIR}"
 }

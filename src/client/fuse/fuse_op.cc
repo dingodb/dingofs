@@ -72,15 +72,22 @@ void InitFuseConnInfo(struct fuse_conn_info* conn) {
     LOG_IF(INFO, fuse_set_feature_flag(conn, FUSE_CAP_SPLICE_WRITE))
         << "[enabled] FUSE_CAP_SPLICE_WRITE";
   }
-  if (fuse_get_feature_flag(conn, FUSE_CAP_AUTO_INVAL_DATA) &&
-      !FLAGS_fuse_enable_auto_inval_data) {
+
+  if (FLAGS_fuse_enable_auto_inval_data) {
+    LOG_IF(INFO, fuse_set_feature_flag(conn, FUSE_CAP_AUTO_INVAL_DATA))
+        << "[enabled] FUSE_CAP_AUTO_INVAL_DATA";
+  } else {
     fuse_unset_feature_flag(conn, FUSE_CAP_AUTO_INVAL_DATA);
     LOG(INFO) << "[disabled] FUSE_CAP_AUTO_INVAL_DATA";
   }
+
   if (FLAGS_fuse_enable_parallel_dirops) {
     LOG_IF(INFO, fuse_set_feature_flag(conn, FUSE_CAP_PARALLEL_DIROPS))
         << "[enabled] FUSE_CAP_PARALLEL_DIROPS";
   }
+
+  LOG_IF(INFO, fuse_set_feature_flag(conn, FUSE_CAP_WRITEBACK_CACHE))
+      << "[enabled] FUSE_CAP_WRITEBACK_CACHE";
 
   LOG_IF(INFO, fuse_set_feature_flag(conn, FUSE_CAP_READDIRPLUS))
       << "[enabled] FUSE_CAP_READDIRPLUS";
