@@ -27,21 +27,35 @@
 #include "client/vfs/common/helper.h"
 #include "client/vfs/metasystem/mds/helper.h"
 #include "client/vfs/vfs_meta.h"
-#include "common/const.h"
 #include "common/status.h"
 #include "common/trace/context.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/format.h"
+#include "gflags/gflags.h"
 #include "glog/logging.h"
 #include "json/value.h"
 #include "utils/uuid.h"
+
+// MemoryMetaSystem keeps metadata (inodes/dentries/chunks/slices) in-process
+// but client byte data still flows through block_accesser → S3 (see
+// vfs_hub.cc:182). These flags fill the FsInfo that block_accesser consumes
+// at startup.
+DEFINE_string(vfs_memory_fs_name, "dummy_fs",
+              "Filesystem name reported in MemoryMetaSystem FsInfo");
+DEFINE_string(vfs_memory_fs_s3_ak, "UAJ1WIVF3NM5XRIL0OU2",
+              "S3 access key reported in MemoryMetaSystem FsInfo");
+DEFINE_string(vfs_memory_fs_s3_sk, "X9MxdCZslPmXADljX140iiN6r81aGgCnO61wEA3L",
+              "S3 secret key reported in MemoryMetaSystem FsInfo");
+DEFINE_string(vfs_memory_fs_s3_endpoint, "http://10.220.68.19:80",
+              "S3 endpoint reported in MemoryMetaSystem FsInfo");
+DEFINE_string(vfs_memory_fs_s3_bucket, "dummy-fs",
+              "S3 bucket name reported in MemoryMetaSystem FsInfo");
 
 static const uint32_t kFsID = 10000;
 static const uint64_t kRootIno = 1;
 static const uint64_t kDefaultBlockSize = 4 * 1024 * 1024;
 static const uint64_t kDefaultChunkSize = 64 * 1024 * 1024;
-static const std::string kDefaultFsName = "dummy_fs";
 
 namespace dingofs {
 namespace client {
@@ -261,7 +275,7 @@ static pb::mds::FsInfo GenFsInfo() {
   pb::mds::FsInfo fs_info;
 
   fs_info.set_fs_id(kFsID);
-  fs_info.set_fs_name(kDefaultFsName);
+  fs_info.set_fs_name(FLAGS_vfs_memory_fs_name);
   fs_info.set_block_size(kDefaultBlockSize);
   fs_info.set_chunk_size(kDefaultChunkSize);
   fs_info.set_fs_type(pb::mds::FsType::S3);
@@ -273,18 +287,10 @@ static pb::mds::FsInfo GenFsInfo() {
   fs_info.set_status(pb::mds::FsStatus::NORMAL);
 
   auto* s3_info = fs_info.mutable_extra()->mutable_s3_info();
-
-  std::string ak = "UAJ1WIVF3NM5XRIL0OU2";
-  s3_info->set_ak(ak);
-
-  std::string sk = "X9MxdCZslPmXADljX140iiN6r81aGgCnO61wEA3L";
-  s3_info->set_sk(sk);
-
-  std::string endpoint = "http://10.220.68.19:80";
-  s3_info->set_endpoint(endpoint);
-
-  std::string bucketname = "dummy-fs";
-  s3_info->set_bucketname(bucketname);
+  s3_info->set_ak(FLAGS_vfs_memory_fs_s3_ak);
+  s3_info->set_sk(FLAGS_vfs_memory_fs_s3_sk);
+  s3_info->set_endpoint(FLAGS_vfs_memory_fs_s3_endpoint);
+  s3_info->set_bucketname(FLAGS_vfs_memory_fs_s3_bucket);
 
   LOG(INFO) << fmt::format("gen fs info: {}", fs_info.ShortDebugString());
   return fs_info;
@@ -802,8 +808,9 @@ Status MemoryMetaSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
 
 Status MemoryMetaSystem::Fallocate(ContextSPtr /*ctx*/, Ino ino, int mode,
                                    uint64_t offset, uint64_t length) {
-  // Only KEEP_SIZE (0x01) and PUNCH_HOLE (0x02); and plain allocate (0).
-  constexpr int kSupported = 0x01 | 0x02;
+  // Supported: plain allocate (0), KEEP_SIZE (0x01), PUNCH_HOLE (0x02),
+  // ZERO_RANGE (0x10) and valid combinations.
+  constexpr int kSupported = 0x01 | 0x02 | 0x10;
   if ((mode & ~kSupported) != 0) {
     return Status::NotSupport(
         fmt::format("fallocate mode({}) not supported", mode));
@@ -966,7 +973,7 @@ static RadosInfo ToRadosInfo(const pb::mds::RadosInfo& rados_info) {
 }
 
 Status MemoryMetaSystem::GetFsInfo(ContextSPtr, FsInfo* fs_info) {
-  fs_info->name = kDefaultFsName;
+  fs_info->name = fs_info_.fs_name();
   fs_info->id = fs_info_.fs_id();
   fs_info->chunk_size = fs_info_.chunk_size();
   fs_info->block_size = fs_info_.block_size();
