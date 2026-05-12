@@ -1331,6 +1331,8 @@ Status FallocateOperation::PreAlloc(TxnUPtr& txn, AttrEntry& attr, uint64_t offs
 
     } else {
       max_chunk.add_slices()->Swap(&slice);
+      // bump version so ChunkCache::PutIf accepts the updated slice list.
+      max_chunk.set_version(max_chunk.version() + 1);
       txn->Put(MetaCodec::EncodeChunkKey(fs_id, ino, chunk_index), MetaCodec::EncodeChunkValue(max_chunk));
       effected_chunks.push_back(max_chunk);
     }
@@ -1341,6 +1343,11 @@ Status FallocateOperation::PreAlloc(TxnUPtr& txn, AttrEntry& attr, uint64_t offs
       return Status(pb::error::EINTERNAL, fmt::format("beyond slice num({})", slice_num));
     }
   }
+
+  // PreAlloc extends file size unconditionally (plain mode=0 semantic).
+  // Without this, fallocate(2) with mode=0 returns success but the file
+  // length never grows past the original — `ls -la` reports the old size.
+  attr.set_length(new_length);
 
   result_.effected_chunks = std::move(effected_chunks);
 
@@ -1397,6 +1404,10 @@ Status FallocateOperation::SetZero(TxnUPtr& txn, AttrEntry& attr, uint64_t offse
     } else {
       auto& chunk = it->second;
       chunk.add_slices()->Swap(&slice);
+      // bump version so ChunkCache::PutIf (filesystem.cc:2612) accepts the
+      // updated slice list — otherwise server keeps serving the pre-fallocate
+      // cached chunk and client read returns old bytes instead of zeros.
+      chunk.set_version(chunk.version() + 1);
       txn->Put(MetaCodec::EncodeChunkKey(fs_id, ino, chunk_index), MetaCodec::EncodeChunkValue(chunk));
       effected_chunks.push_back(chunk);
     }

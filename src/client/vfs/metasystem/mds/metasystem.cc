@@ -1381,6 +1381,28 @@ Status MDSMetaSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
   return Status::OK();
 }
 
+Status MDSMetaSystem::Fallocate(ContextSPtr ctx, Ino ino, int mode,
+                                uint64_t offset, uint64_t length) {
+  AssertStop();
+
+  auto status = mds_client_.Fallocate(ctx, ino, mode, offset, length);
+
+  // Invalidate caches on success OR ambiguous net error (server may have
+  // committed the txn but the response was lost — cache TTL is 3600s, so
+  // stale could persist that long). Business errors (EQUOTA / EALLOC_ID /
+  // EINTERNAL / EPERM) roll the txn back atomically on the server side —
+  // cache stays consistent, skip.
+  if (status.ok() || status.IsNetError()) {
+    chunk_memo_.Forget(ino);
+    chunk_cache_.Delete(ino);
+    DeleteInodeFromCache(ino);
+  }
+  if (status.ok()) {
+    modify_time_memo_.Remember(ino);
+  }
+  return status;
+}
+
 Status MDSMetaSystem::GetXattr(ContextSPtr ctx, Ino ino,
                                const std::string& name, std::string* value) {
   AssertStop();

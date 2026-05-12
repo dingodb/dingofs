@@ -2551,19 +2551,34 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
 
   uint64_t slice_num = 0;
   uint64_t slice_id = 0;
-  if (mode == 0 || (mode & FALLOC_FL_ZERO_RANGE)) {
+  if (mode == 0) {
+    // Plain preallocate: extend file size and reserve slices for the new tail.
     uint64_t new_length = offset + len;
     if (new_length > inode->Length()) {
-      // check quota
       if (!quota_manager_.CheckQuota(trace, ino, new_length - inode->Length(), 0)) {
         return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
       }
-
-      // prealloc slice id
-      slice_num = (new_length - inode->Length()) / fs_info_->GetChunkSize() + 1;
+      slice_num = ((new_length - inode->Length()) / fs_info_->GetChunkSize()) + 1;
       if (!slice_id_generator_->GenID(slice_num, 0, slice_id)) {
         return Status(pb::error::EALLOC_ID, "generate slice id fail");
       }
+    }
+  } else if (mode & (FALLOC_FL_PUNCH_HOLE | FALLOC_FL_ZERO_RANGE)) {
+    // PUNCH_HOLE / ZERO_RANGE write zero slices over [offset, offset+len).
+    // Always pre-allocate slice ids covering every chunk the range touches —
+    // without this, FallocateOperation::SetZero fails with `beyond slice
+    // num(0)`. ZERO_RANGE without KEEP_SIZE may extend the file → quota check.
+    if ((mode & FALLOC_FL_ZERO_RANGE) && !(mode & FALLOC_FL_KEEP_SIZE)) {
+      uint64_t new_length = offset + len;
+      if (new_length > inode->Length()) {
+        if (!quota_manager_.CheckQuota(trace, ino, new_length - inode->Length(), 0)) {
+          return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
+        }
+      }
+    }
+    slice_num = (len / fs_info_->GetChunkSize()) + 1;
+    if (!slice_id_generator_->GenID(slice_num, 0, slice_id)) {
+      return Status(pb::error::EALLOC_ID, "generate slice id fail");
     }
   }
 
