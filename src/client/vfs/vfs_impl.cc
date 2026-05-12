@@ -20,6 +20,7 @@
 #include <fcntl.h>
 
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
@@ -217,6 +218,14 @@ Status VFSImpl::SetAttr(ContextSPtr ctx, Ino ino, int set, const Attr& in_attr,
   Status s =
       meta_system_->SetAttr(ctx, TranslateIno(ino), set, in_attr, out_attr);
   if (s.ok()) RewriteRootAttr(ino, out_attr);
+
+  // Truncate (size change) must invalidate cached read buffers — readahead
+  // buffers in FileReader::requests_ are indexed by (ino, frange) and would
+  // otherwise serve stale data after the inode shrinks/grows.
+  if (s.ok() && (set & kSetAttrSize)) {
+    handle_manager_->InvalidateByIno(ino, 0,
+                                     std::numeric_limits<int64_t>::max());
+  }
 
   return s;
 }
