@@ -1123,9 +1123,12 @@ Status LocalMetaSystem::SetAttr(ContextSPtr, Ino ino, int to_set,
 
 Status LocalMetaSystem::Fallocate(ContextSPtr, Ino ino, int mode,
                                   uint64_t offset, uint64_t length) {
-  // Only support a subset of modes: allocate (0), KEEP_SIZE, PUNCH_HOLE,
-  // and their combinations. Others are rejected.
-  constexpr int kSupported = 0x01 /*KEEP_SIZE*/ | 0x02 /*PUNCH_HOLE*/;
+  // Supported modes: plain allocate (0), KEEP_SIZE, PUNCH_HOLE, ZERO_RANGE,
+  // and valid combinations. Both PUNCH_HOLE and ZERO_RANGE write id=0
+  // (zero/hole) slices over the target range. ZERO_RANGE without KEEP_SIZE
+  // additionally extends file length when the range reaches past EOF.
+  constexpr int kSupported =
+      0x01 /*KEEP_SIZE*/ | 0x02 /*PUNCH_HOLE*/ | 0x10 /*ZERO_RANGE*/;
   if ((mode & ~kSupported) != 0) {
     return Status::NotSupport(fmt::format("fallocate mode({}) not supported",
                                           mode));
