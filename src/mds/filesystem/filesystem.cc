@@ -2961,13 +2961,19 @@ Status FileSystem::CopyFileRange(Context& ctx, const CopyFileRangeParam& param, 
   if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
+  int64_t length_delat = result.length_delta;
   bytes_copied = result.bytes_copied;
   dst_attr = result.dst_attr;
 
+  std::string reason = fmt::format("copy_file_range.{}.{}->{}", ctx.RequestId(), param.src_ino, param.dst_ino);
   if (bytes_copied > 0) {
-    std::string reason = fmt::format("copy_file_range.{}.{}->{}", ctx.RequestId(), param.src_ino, param.dst_ino);
     UpsertInodeCache(dst_attr, reason);
     chunk_cache_.Delete(param.dst_ino);
+  }
+
+  if (length_delat > 0) {
+    quota_manager_.UpdateFsUsage(length_delat, 0, reason);
+    quota_manager_.AsyncUpdateDirUsage(param.dst_ino, length_delat, 0, reason);
   }
 
   return Status::OK();
