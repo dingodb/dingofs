@@ -1,0 +1,8 @@
+[project]
+name = "dingofs-e2e"
+version = "0.1.0"
+description = "DingoFS end-to-end tests (black-box, FUSE mountpoint based)"
+requires-python = ">=3.10"
+dependencies = [
+    "pytest>=7.0",
+]
