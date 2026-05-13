@@ -1296,9 +1296,21 @@ Status FallocateOperation::PreAlloc(TxnUPtr& txn, AttrEntry& attr, uint64_t offs
   const uint64_t block_size = param_.block_size;
   const uint32_t slice_num = param_.slice_num;
 
+  // GetChunk returns ENOT_FOUND when no chunk exists at the starting index —
+  // expected for an empty (0-byte) file or a chunk-aligned current length.
+  // Track existence explicitly so the loop always takes the "create new chunk"
+  // branch when there is nothing to append to (which sets chunk_size and
+  // block_size properly instead of writing a zero-init ChunkEntry back).
   ChunkEntry max_chunk;
-  auto status = GetChunk(txn, fs_id, ino, length / chunk_size, max_chunk);
-  if (!status.ok()) return status;
+  bool max_chunk_exists = false;
+  {
+    auto status = GetChunk(txn, fs_id, ino, length / chunk_size, max_chunk);
+    if (status.ok()) {
+      max_chunk_exists = true;
+    } else if (status.error_code() != pb::error::ENOT_FOUND) {
+      return status;
+    }
+  }
 
   std::vector<ChunkEntry> effected_chunks;
   uint32_t count = 0;
@@ -1315,10 +1327,12 @@ Status FallocateOperation::PreAlloc(TxnUPtr& txn, AttrEntry& attr, uint64_t offs
     slice.set_off(0);
     slice.set_len(delta_chunk_size);
 
-    CHECK(chunk_index >= max_chunk.index()) << fmt::format(
-        "chunk_index({}) should be greater than or equal to max_chunk.index({}).", chunk_index, max_chunk.index());
+    if (max_chunk_exists) {
+      CHECK(chunk_index >= max_chunk.index()) << fmt::format(
+          "chunk_index({}) should be greater than or equal to max_chunk.index({}).", chunk_index, max_chunk.index());
+    }
 
-    if (chunk_index > max_chunk.index()) {
+    if (!max_chunk_exists || chunk_index > max_chunk.index()) {
       ChunkEntry chunk;
       chunk.set_index(chunk_index);
       chunk.set_chunk_size(chunk_size);
@@ -1335,6 +1349,9 @@ Status FallocateOperation::PreAlloc(TxnUPtr& txn, AttrEntry& attr, uint64_t offs
       max_chunk.set_version(max_chunk.version() + 1);
       txn->Put(MetaCodec::EncodeChunkKey(fs_id, ino, chunk_index), MetaCodec::EncodeChunkValue(max_chunk));
       effected_chunks.push_back(max_chunk);
+      // After we append to max_chunk in this iteration, subsequent iterations
+      // will be in new chunks (chunk_index > max_chunk.index()).
+      max_chunk_exists = false;
     }
 
     length += delta_chunk_size;

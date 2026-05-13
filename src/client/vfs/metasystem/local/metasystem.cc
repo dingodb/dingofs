@@ -1088,13 +1088,44 @@ Status LocalMetaSystem::SetAttr(ContextSPtr, Ino ino, int to_set,
       attr_entry.set_ctime(ToTimestamp(now));
     }
 
+    std::vector<KeyValue> kvs;
+
     if (to_set & kSetAttrSize) {
       // uint64 subtraction wraps on shrink; reinterpreting the bit pattern
       // as int64 recovers the correct signed delta (valid because both
       // lengths fit in int64).
-      delta_size =
-          static_cast<int64_t>(in_attr.length - attr_entry.length());
-      attr_entry.set_length(in_attr.length);
+      const uint64_t old_length = attr_entry.length();
+      const uint64_t new_length = in_attr.length;
+      delta_size = static_cast<int64_t>(new_length - old_length);
+      attr_entry.set_length(new_length);
+
+      // On shrink, clear stale slices in [new_length, old_length) so a
+      // subsequent grow (or fallocate ZERO_RANGE / read past length-then-
+      // truncate-up) does not expose the old bytes. Mirrors the MDS-side
+      // TruncateFileRange semantics (store_operation.cc): if the new length
+      // falls inside a chunk, append an id=0 (zero) slice covering the
+      // chunk tail; then delete every chunk fully past new_length.
+      if (new_length < old_length) {
+        const uint64_t chunk_size = fs_info_.chunk_size();
+        const uint32_t old_num = static_cast<uint32_t>(
+            (old_length + chunk_size - 1) / chunk_size);
+        const uint32_t new_num = static_cast<uint32_t>(
+            (new_length + chunk_size - 1) / chunk_size);
+
+        if (new_length % chunk_size != 0) {
+          const uint64_t chunk_pos = new_length % chunk_size;
+          const uint64_t len = chunk_size - chunk_pos;
+          status = AppendZeroSliceToChunk(fs_id, ino, new_num - 1,
+                                          static_cast<uint32_t>(chunk_pos),
+                                          static_cast<uint32_t>(len), kvs);
+          if (!status.ok()) return status;
+        }
+        for (uint32_t i = new_num; i < old_num; ++i) {
+          kvs.push_back({KeyValue::OpType::kDelete,
+                         MetaCodec::EncodeChunkKey(fs_id, ino, i),
+                         std::string()});
+        }
+      }
     }
 
     if (to_set & kSetAttrFlags) {
@@ -1103,11 +1134,10 @@ Status LocalMetaSystem::SetAttr(ContextSPtr, Ino ino, int to_set,
 
     attr_entry.set_version(attr_entry.version() + 1);
 
-    // write to leveldb
-    std::vector<KeyValue> kvs = {
-        {KeyValue::OpType::kPut, inode_key,
-         MetaCodec::EncodeInodeValue(attr_entry)},
-    };
+    // write to leveldb (inode + any chunk tail/delete ops queued above
+    // for the shrink case are applied atomically by Put()).
+    kvs.push_back({KeyValue::OpType::kPut, inode_key,
+                   MetaCodec::EncodeInodeValue(attr_entry)});
     status = Put(kvs);
     if (!status.ok()) return status;
   }
