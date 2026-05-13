@@ -235,7 +235,17 @@ Status VFSImpl::Fallocate(ContextSPtr ctx, Ino ino, int mode, uint64_t offset,
   if (BAIDU_UNLIKELY(ino == kStatsIno)) {
     return Status::NoPermitted("fallocate on internal node");
   }
-  return meta_system_->Fallocate(ctx, TranslateIno(ino), mode, offset, length);
+  Status s =
+      meta_system_->Fallocate(ctx, TranslateIno(ino), mode, offset, length);
+  // Mirror the SetAttr(size) path: PUNCH_HOLE / ZERO_RANGE / extending the
+  // file all change byte contents in [offset, offset+length); cached readahead
+  // buffers in FileReader::requests_ on the same fd would otherwise serve
+  // stale bytes for the affected range.
+  if (s.ok()) {
+    handle_manager_->InvalidateByIno(ino, static_cast<int64_t>(offset),
+                                     static_cast<int64_t>(length));
+  }
+  return s;
 }
 
 Status VFSImpl::CopyFileRange(ContextSPtr ctx, Ino src_ino, uint64_t src_off,
