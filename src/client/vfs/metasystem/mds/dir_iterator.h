@@ -26,6 +26,7 @@
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "client/vfs/metasystem/mds/dir_profile.h"
 #include "client/vfs/metasystem/mds/mds_client.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
@@ -45,6 +46,9 @@ class DirIterator {
   DirIterator(MDSClient& mds_client, Ino ino, uint64_t fh)
       : mds_client_(mds_client), ino_(ino), fh_(fh) {
     last_fetch_time_ns_ = utils::TimestampNs();
+    if (FLAGS_vfs_meta_warmup_small_file_enable) {
+      dir_profile_ = std::make_shared<DirProfile>(ino);
+    }
   }
   ~DirIterator();
 
@@ -63,6 +67,8 @@ class DirIterator {
                   DirEntry& dir_entry);
 
   uint64_t LastFetchTimeNs() const { return last_fetch_time_ns_.load(); }
+
+  DirProfileSPtr GetDirProfile() const { return dir_profile_; }
 
   size_t Size();
   size_t Bytes();
@@ -94,6 +100,8 @@ class DirIterator {
 
   // stat
   std::vector<uint64_t> offset_stats_;
+
+  DirProfileSPtr dir_profile_;
 };
 
 class DirIteratorManager {

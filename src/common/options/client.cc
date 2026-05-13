@@ -148,6 +148,20 @@ DEFINE_int64(vfs_warmup_trigger_restart_interval_secs, 1800,
              "passive warmup restart interval");
 DEFINE_validator(vfs_warmup_trigger_restart_interval_secs, brpc::PassValidate);
 
+// dir-warmup: drive bulk intime prefetch from per-directory profile built
+// during ReadDir. Triggered on Open against the parent directory profile.
+DEFINE_bool(vfs_meta_warmup_small_file_enable, true,
+            "enable directory-profile driven warmup on open");
+DEFINE_validator(vfs_meta_warmup_small_file_enable, brpc::PassValidate);
+
+DEFINE_uint32(vfs_meta_warmup_small_file_batch_size, 256,
+              "batch size of inos to warm up per trigger");
+DEFINE_validator(vfs_meta_warmup_small_file_batch_size, brpc::PassValidate);
+
+DEFINE_uint32(vfs_meta_warmup_small_file_ttl_s, 600,
+              "DirProfile TTL in seconds (Tprofile)");
+DEFINE_validator(vfs_meta_warmup_small_file_ttl_s, brpc::PassValidate);
+
 // vfs meta
 
 DEFINE_uint32(vfs_meta_read_dir_batch_size, 1024, "read dir batch size.");

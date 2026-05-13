@@ -31,6 +31,8 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
+class WarmupManager;
+
 struct DumpOption {
   Ino ino{0};
   uint32_t chunk_index{0};
@@ -227,6 +229,10 @@ class MetaSystem {
 
   virtual bool GetDescription(Json::Value& value) = 0;
   virtual bool GetSummary(Json::Value& value) = 0;
+
+  // Inject the WarmupManager owned by VFSHub after both objects exist.
+  // Default is a no-op so non-MDS backends do not need to care.
+  virtual void SetWarmupManager(WarmupManager* /*warmup_manager*/) {}
 };
 
 using MetaSystemPtr = std::shared_ptr<MetaSystem>;

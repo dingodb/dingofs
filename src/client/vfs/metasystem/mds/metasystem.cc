@@ -14,7 +14,6 @@
 
 #include "client/vfs/metasystem/mds/metasystem.h"
 
-#include <bthread/types.h>
 #include <fcntl.h>
 #include <openssl/rsa.h>
 
@@ -25,6 +24,8 @@
 #include <vector>
 
 #include "client/vfs/common/client_id.h"
+#include "client/vfs/components/context.h"
+#include "client/vfs/components/warmup_manager.h"
 #include "client/vfs/data_buffer.h"
 #include "client/vfs/metasystem/mds/helper.h"
 #include "client/vfs/metasystem/mds/mds_client.h"
@@ -147,6 +148,7 @@ MDSMetaSystem::MDSMetaSystem(mds::FsInfoEntry fs_info_entry,
       inode_cache_(fs_info_.GetFsId()),
       id_cache_(kSliceIdCacheName, mds_client_),
       file_session_map_(inode_cache_, chunk_cache_),
+      dir_profile_cache_(DirProfileCache::New()),
       batch_processor_(mds_client_),
       compactor_(compactor) {}
 
@@ -493,6 +495,11 @@ void MDSMetaSystem::CleanExpiredTinyFileDataCache() {
   tiny_file_data_cache_.CleanExpired(expired_time_s);
 }
 
+void MDSMetaSystem::CleanExpiredDirProfileCache() {
+  if (!FLAGS_vfs_meta_warmup_small_file_enable) return;
+  dir_profile_cache_->CleanExpired(utils::Timestamp());
+}
+
 bool MDSMetaSystem::InitCrontab() {
   // add heartbeat crontab
   crontab_configs_.push_back({
@@ -513,6 +520,7 @@ bool MDSMetaSystem::InitCrontab() {
         this->CleanExpiredChunkCache();
         this->CleanExpiredInodeCache();
         this->CleanExpiredTinyFileDataCache();
+        this->CleanExpiredDirProfileCache();
       },
   });
 
@@ -825,6 +833,14 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
     return Status::NoPermission("O_TRUNC without O_WRONLY or O_RDWR");
   }
 
+  // for warmup small file
+  if (flags & O_RDONLY) {
+    auto dir_profile = GetDirProfile(ino);
+    if (dir_profile != nullptr) {
+      WarmupSmallFiles(dir_profile->CheckAndGenWarmupInos(ino));
+    }
+  }
+
   const std::string session_id = utils::GenerateUUID();
   auto file_session = file_session_map_.Put(ino, fh, session_id, flags);
 
@@ -848,6 +864,24 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
   }
 
   return status;
+}
+
+DirProfileSPtr MDSMetaSystem::GetDirProfile(Ino ino) {
+  auto inode = GetInodeFromCache(ino);
+  if (inode == nullptr) return nullptr;
+  auto parents = inode->Parents();
+  if (parents.empty()) return nullptr;
+  Ino parent = parents.front();
+
+  return dir_profile_cache_->Get(parent);
+}
+
+void MDSMetaSystem::WarmupSmallFiles(const std::vector<Ino>& inoes) {
+  if (warmup_manager_ == nullptr) return;
+
+  for (Ino ino : inoes) {
+    warmup_manager_->SubmitTask(WarmupTaskContext(ino));
+  }
 }
 
 Status MDSMetaSystem::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {
@@ -1198,7 +1232,10 @@ Status MDSMetaSystem::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
     DirEntry entry;
     auto status = dir_iterator->GetValue(ctx, offset++, with_attr, entry);
     if (!status.ok()) {
+      // IsNoData is the EOF signal — the directory has been fully streamed,
+      // so this is the moment to lock in the profile decision.
       if (status.IsNoData()) break;
+
       if (status.IsNotExist()) DeleteInodeFromCache(ino);
 
       return status;
@@ -1213,6 +1250,9 @@ Status MDSMetaSystem::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
     }
 
     if (!handler(entry, offset)) {
+      // Caller stopped pagination early — leave the profile un-finalized.
+      // Either the next ReadDir page reaches EOF, or the entry expires by
+      // TTL/LRU. We never want a partial profile to drive warmup.
       break;
     }
     ++count;
@@ -1223,6 +1263,15 @@ Status MDSMetaSystem::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
 
 Status MDSMetaSystem::ReleaseDir(ContextSPtr, Ino ino, uint64_t fh) {
   AssertStop();
+
+  auto dir_iterator = dir_iterator_manager_.Get(ino, fh);
+  if (dir_iterator != nullptr) {
+    auto dir_profile = dir_iterator->GetDirProfile();
+    if (dir_profile != nullptr) {
+      dir_profile->Finalize();
+      if (dir_profile->IsSmallFileDir()) dir_profile_cache_->Put(dir_profile);
+    }
+  }
 
   dir_iterator_manager_.Delete(ino, fh);
   return Status::OK();
