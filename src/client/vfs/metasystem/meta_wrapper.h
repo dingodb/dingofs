@@ -208,6 +208,10 @@ class MetaWrapper {
 
   bool GetSummary(Json::Value& value) { return target_->GetSummary(value); }
 
+  void SetWarmupManager(WarmupManager* warmup_manager) {
+    target_->SetWarmupManager(warmup_manager);
+  }
+
  private:
   MetaSystemUPtr target_;
   std::unique_ptr<metrics::client::SliceMetric> slice_metric_;

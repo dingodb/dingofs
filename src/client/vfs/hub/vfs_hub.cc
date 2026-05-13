@@ -310,6 +310,10 @@ Status VFSHubImpl::Start(bool skip_mount) {
     warmup_manager_ = WarmupManager::New(this);
     CHECK(warmup_manager_ != nullptr) << "warmup manager is nullptr.";
     DINGOFS_RETURN_NOT_OK(warmup_manager_->Start(FLAGS_vfs_warmup_threads));
+    // Inject the manager into the meta system so directory-driven warmup
+    // can fire from Open. Wired here (post-construction) to avoid a cyclic
+    // dependency between MetaWrapper and WarmupManager during build.
+    meta_wrapper_->SetWarmupManager(warmup_manager_.get());
   }
 
   // log clean manager
@@ -364,6 +368,11 @@ Status VFSHubImpl::Stop(bool skip_unmount) {
   }
 
   if (warmup_manager_ != nullptr) {
+    // Detach from meta system before stopping so any in-flight Open hook
+    // observes nullptr instead of a half-stopped manager.
+    if (meta_wrapper_ != nullptr) {
+      meta_wrapper_->SetWarmupManager(nullptr);
+    }
     warmup_manager_->Stop();
   }
 

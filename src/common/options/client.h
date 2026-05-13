@@ -103,6 +103,11 @@ DECLARE_bool(vfs_intime_warmup_enable);
 DECLARE_int64(vfs_warmup_mtime_restart_interval_secs);
 DECLARE_int64(vfs_warmup_trigger_restart_interval_secs);
 
+// vfs meta dir-warmup (small-file cold-read warmup driven by DirProfile)
+DECLARE_bool(vfs_meta_warmup_small_file_enable);
+DECLARE_uint32(vfs_meta_warmup_small_file_batch_size);
+DECLARE_uint32(vfs_meta_warmup_small_file_ttl_s);
+
 // vfs handle
 DECLARE_int32(vfs_bg_executor_thread);
 DECLARE_int32(vfs_periodic_flush_interval_ms);

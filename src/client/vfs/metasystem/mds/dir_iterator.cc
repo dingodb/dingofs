@@ -102,6 +102,13 @@ Status DirIterator::Fetch(ContextSPtr& ctx) {
     last_name_ = entries_.back().name;
   }
 
+  // set dir profile
+  if (dir_profile_ != nullptr) {
+    for (auto& entry : entries_) {
+      dir_profile_->Accumulate(entry.ino, entry.attr.type, entry.attr.length);
+    }
+  }
+
   return Status::OK();
 }
 

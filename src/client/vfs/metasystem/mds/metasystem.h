@@ -27,6 +27,7 @@
 #include "client/vfs/metasystem/mds/chunk_memo.h"
 #include "client/vfs/metasystem/mds/compact.h"
 #include "client/vfs/metasystem/mds/dir_iterator.h"
+#include "client/vfs/metasystem/mds/dir_profile.h"
 #include "client/vfs/metasystem/mds/executor.h"
 #include "client/vfs/metasystem/mds/file_session.h"
 #include "client/vfs/metasystem/mds/id_cache.h"
@@ -175,6 +176,10 @@ class MDSMetaSystem : public vfs::MetaSystem {
 
   bool GetDescription(Json::Value& value) override;
 
+  void SetWarmupManager(WarmupManager* warmup_manager) override {
+    warmup_manager_ = warmup_manager;
+  }
+
  private:
   friend class OpenTask;
 
@@ -189,6 +194,7 @@ class MDSMetaSystem : public vfs::MetaSystem {
   void CleanExpiredChunkCache();
   void CleanExpiredInodeCache();
   void CleanExpiredTinyFileDataCache();
+  void CleanExpiredDirProfileCache();
 
   bool InitCrontab();
 
@@ -231,6 +237,9 @@ class MDSMetaSystem : public vfs::MetaSystem {
   void AsyncClose(ContextSPtr ctx, Ino ino, uint64_t fh,
                   const std::string& session_id);
 
+  DirProfileSPtr GetDirProfile(Ino ino);
+  void WarmupSmallFiles(const std::vector<Ino>& inoes);
+
   // batch operation
   Status RunOperation(OperationSPtr operation);
 
@@ -261,6 +270,10 @@ class MDSMetaSystem : public vfs::MetaSystem {
   InodeCache inode_cache_;
 
   TinyFileDataCache tiny_file_data_cache_;
+
+  DirProfileCacheUPtr dir_profile_cache_;
+
+  WarmupManager* warmup_manager_{nullptr};
 
   // Crontab config
   std::vector<mds::CrontabConfig> crontab_configs_;
