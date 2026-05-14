@@ -1,0 +1,64 @@
+# 1+1 dingo-store + minio for CI integration tests.
+# network_mode: host so coord/store/minio advertise + listen on 127.0.0.1 + host
+# dingo-mds / dingo-client reach them without port translation.
+# Used by all .github/workflows/*.yml e2e jobs and .github/scripts/up.sh.
+#
+# Image strategy (see design doc §5.1):
+#   minio/minio                        — pin sha256 digest (third-party, supply chain)
+#   dingodatabase/dingo-store          — :latest on main; pin sha256 on release branch/tag
+# Bump minio digest via: bash .github/scripts/get-image-digest.sh minio/minio latest
+
+x-store-env: &store-env
+  SERVER_LISTEN_HOST: 0.0.0.0
+  SERVER_HOST: 127.0.0.1
+  RAFT_LISTEN_HOST: 0.0.0.0
+  RAFT_HOST: 127.0.0.1
+  DISKANN_SERVER_HOST: 127.0.0.1
+  COOR_RAFT_PEERS: 127.0.0.1:32101
+  COOR_SRV_PEERS: 127.0.0.1:32001
+  DEFAULT_REPLICA_NUM: 1
+  ENABLE_LITE: "false"
+  DINGODB_ENABLE_LITE: "0"
+
+services:
+  minio:
+    image: minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+    container_name: dingofs-ci-minio
+    network_mode: host
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: admin123
+    command: server /data --console-address ':9001'
+    volumes: [minio-data:/data]
+    restart: unless-stopped
+
+  coordinator:
+    image: dingodatabase/dingo-store:latest
+    container_name: dingofs-ci-coord
+    network_mode: host
+    depends_on: [minio]
+    environment:
+      FLAGS_role: coordinator
+      COORDINATOR_SERVER_START_PORT: 32001
+      COORDINATOR_RAFT_START_PORT: 32101
+      INSTANCE_START_ID: 1001
+      <<: *store-env
+    volumes: [coord-data:/opt/dingo-store/dist]
+
+  store:
+    image: dingodatabase/dingo-store:latest
+    container_name: dingofs-ci-store
+    network_mode: host
+    depends_on: [coordinator]
+    environment:
+      FLAGS_role: store
+      SERVER_START_PORT: 30001
+      RAFT_START_PORT: 30101
+      INSTANCE_START_ID: 1002
+      <<: *store-env
+    volumes: [store-data:/opt/dingo-store/dist]
+
+volumes:
+  minio-data:
+  coord-data:
+  store-data:

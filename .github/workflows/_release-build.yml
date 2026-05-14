@@ -1,19 +1,16 @@
-name: CI Build
+name: release-build
 
 on:
-  push:
-    branches: [ "**" ]
-    tags:
-      - '*'
-  pull_request:
-    branches: [ "**" ]
+  workflow_call:
+    secrets:
+      GH_TOKEN:
+        required: false
 
 env:
   BUILD_TYPE: Release
 
 jobs:
-  build-release:
-    if: ${{ !startsWith(github.ref, 'refs/heads/gh-readonly-queue/') }}
+  release-build:
     runs-on: ubuntu-latest
 
     steps:
@@ -157,87 +154,3 @@ jobs:
           name: dingofs
           path: /mnt/dingofs/dingofs.tar.gz
           compression-level: 0
-
-    - name: Release
-      uses: softprops/action-gh-release@v2
-      if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) }}
-      with:
-        files: |
-          commitId.txt
-          /mnt/dingofs/scripts/docker/rocky9/dingofs/build/bin/dingo-client
-          /mnt/dingofs/scripts/docker/rocky9/dingofs/build/bin/dingo-cache
-          /mnt/dingofs/scripts/docker/rocky9/dingofs/build/bin/dingo-mds
-          /mnt/dingofs/scripts/docker/rocky9/dingofs/build/bin/dingo-mds-client
-          /mnt/dingofs/dingo-client.sha256
-          /mnt/dingofs/dingo-cache.sha256
-          /mnt/dingofs/dingo-mds.sha256
-          /mnt/dingofs/dingo-mds-client.sha256
-        name: ${{ env.TAG_NAME }}
-        tag_name: ${{ env.TAG_NAME }}
-        token: ${{ secrets.GH_TOKEN }}
-
-  unit-test:
-    if: ${{ !startsWith(github.ref, 'refs/heads/gh-readonly-queue/') }}
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Copy dingofs repository
-      run: |
-        echo "Move dingofs repository"
-        sudo cp -r /home/runner/work/dingofs/dingofs /mnt/
-        sudo chown $USER:$USER /mnt/dingofs
-
-    - name: Configure Docker data-root
-      run: |
-        sudo systemctl stop docker
-        sudo systemctl stop docker.socket
-        sudo mkdir -p /mnt/docker
-        echo '{ "data-root": "/mnt/docker" }' | sudo tee /etc/docker/daemon.json
-        if [ -d /var/lib/docker ]; then
-          sudo mv /var/lib/docker /mnt/docker || true
-        fi
-        sudo systemctl start docker.socket
-        sudo systemctl start docker
-        docker info | grep "Docker Root Dir"
-        df -h
-
-    - name: Pull dingodatabase/dingo-eureka:rocky9-fs
-      run: |
-        docker pull dingodatabase/dingo-eureka:rocky9-fs
-
-    - name: Init test build script
-      run: |
-        cat <<EOF > /mnt/dingofs/test.sh
-        #!/bin/bash
-        set -x
-        set -e
-
-        cd / && git clone --branch main --single-branch https://github.com/dingodb/dingo-sdk.git && cd dingo-sdk && \
-        git submodule sync --recursive && git submodule update --init --recursive && \
-        mkdir build && cd build && cmake -DTHIRD_PARTY_INSTALL_PATH=/root/.local/dingo-eureka -DCMAKE_INSTALL_PREFIX=/root/.local/dingo-sdk -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_SDK_EXAMPLE=OFF  -DBUILD_BENCHMARK=OFF -DBUILD_PYTHON_SDK=OFF -DBUILD_INTEGRATION_TESTS=OFF -DBUILD_UNIT_TESTS=OFF .. && \
-        make -j16 && make install && export DINGOSDK_INSTALL_PATH=/root/.local/dingo-sdk
-
-        cd /opt/dingofs/
-        git config --global --add safe.directory /opt/dingofs
-
-        make file_dep
-        # Debug build with NDEBUG undefined so SyncPoint and TEST_SYNC_POINT
-        # are armed. unit_tests=ON pulls in test/unit/ targets.
-        make file_build only=//src/* release=0 unit_tests=ON build_type=Debug
-        if [ \$? -ne 0 ]; then
-            echo "build failed"
-            exit -1
-        fi
-
-        # Run client unit tests. Other suites (mds, cache) are out of scope
-        # for this job and can be enabled here as they stabilize.
-        ./build/bin/test/test_client --gtest_color=yes
-        EOF
-        chmod +x /mnt/dingofs/test.sh
-
-    - name: Build and run unit tests
-      run: |
-        echo "Run DingoFS unit tests"
-        docker run --name unit-test-dingofs --rm -v /mnt/dingofs:/opt/dingofs/ dingodatabase/dingo-eureka:rocky9-fs /opt/dingofs/test.sh
