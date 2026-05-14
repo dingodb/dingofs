@@ -1,0 +1,167 @@
+name: PR Check
+
+on:
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '.gitignore'
+      - 'LICENSE'
+  merge_group:
+    branches: [main]
+
+concurrency:
+  group: pr-check-${{ github.event.pull_request.number || github.event.merge_group.head_sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  unit-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Copy dingofs repository
+        run: |
+          echo "Move dingofs repository"
+          sudo cp -r /home/runner/work/dingofs/dingofs /mnt/
+          sudo chown $USER:$USER /mnt/dingofs
+
+      - name: Configure Docker data-root
+        run: |
+          sudo systemctl stop docker
+          sudo systemctl stop docker.socket
+          sudo mkdir -p /mnt/docker
+          echo '{ "data-root": "/mnt/docker" }' | sudo tee /etc/docker/daemon.json
+          if [ -d /var/lib/docker ]; then
+            sudo mv /var/lib/docker /mnt/docker || true
+          fi
+          sudo systemctl start docker.socket
+          sudo systemctl start docker
+          docker info | grep "Docker Root Dir"
+          df -h
+
+      - name: Pull dingodatabase/dingo-eureka:rocky9-fs
+        run: docker pull dingodatabase/dingo-eureka:rocky9-fs
+
+      - name: Init test build script
+        run: |
+          cat <<EOF > /mnt/dingofs/test.sh
+          #!/bin/bash
+          set -x
+          set -e
+
+          cd / && git clone --branch main --single-branch https://github.com/dingodb/dingo-sdk.git && cd dingo-sdk && \
+          git submodule sync --recursive && git submodule update --init --recursive && \
+          mkdir build && cd build && cmake -DTHIRD_PARTY_INSTALL_PATH=/root/.local/dingo-eureka -DCMAKE_INSTALL_PREFIX=/root/.local/dingo-sdk -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_SDK_EXAMPLE=OFF  -DBUILD_BENCHMARK=OFF -DBUILD_PYTHON_SDK=OFF -DBUILD_INTEGRATION_TESTS=OFF -DBUILD_UNIT_TESTS=OFF .. && \
+          make -j16 && make install && export DINGOSDK_INSTALL_PATH=/root/.local/dingo-sdk
+
+          cd /opt/dingofs/
+          git config --global --add safe.directory /opt/dingofs
+
+          make file_dep
+          # Debug build with NDEBUG undefined so SyncPoint and TEST_SYNC_POINT
+          # are armed. unit_tests=ON pulls in test/unit/ targets.
+          make file_build only=//src/* release=0 unit_tests=ON build_type=Debug
+          if [ \$? -ne 0 ]; then
+              echo "build failed"
+              exit -1
+          fi
+
+          # Run client unit tests. Other suites (mds, cache) are out of scope
+          # for this job and can be enabled here as they stabilize.
+          ./build/bin/test/test_client --gtest_color=yes
+          EOF
+          chmod +x /mnt/dingofs/test.sh
+
+      - name: Build and run unit tests
+        run: |
+          echo "Run DingoFS unit tests"
+          docker run --name unit-test-dingofs --rm -v /mnt/dingofs:/opt/dingofs/ dingodatabase/dingo-eureka:rocky9-fs /opt/dingofs/test.sh
+
+  build:
+    needs: unit-test
+    uses: ./.github/workflows/_release-build.yml
+    secrets: inherit
+
+  e2e:
+    needs: build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preflight (sysctl + disk)
+        run: bash ${{ github.workspace }}/.github/scripts/_lib/preflight.sh
+
+      - name: Install host tools (fuse3 + dingocli + uv)
+        run: bash ${{ github.workspace }}/.github/scripts/_lib/install.sh
+
+      - name: Download dingofs artifact from same-run build
+        uses: actions/download-artifact@v4
+        with:
+          name: dingofs
+          path: ${{ runner.temp }}/dingofs-artifact/
+
+      - name: Extract dingofs binaries
+        run: |
+          mkdir -p ${{ github.workspace }}/build/bin
+          ART=${{ runner.temp }}/dingofs-artifact
+          if [ -f "$ART/dingofs.tar.gz" ]; then
+            tar -xzf "$ART/dingofs.tar.gz" -C "$ART/"
+          fi
+          for bin in dingo-mds dingo-mds-client dingo-client; do
+            f=$(find "$ART" -name "$bin" -type f -executable | head -1)
+            [ -z "$f" ] && { echo "✗ $bin not found"; find "$ART" -type f | head -30; exit 1; }
+            cp "$f" ${{ github.workspace }}/build/bin/
+            chmod +x ${{ github.workspace }}/build/bin/$bin
+          done
+
+      - name: Pull docker images (minio pinned + dingo-store latest)
+        run: |
+          grep 'image:' ${{ github.workspace }}/.github/scripts/docker-compose.yml \
+            | awk '{print $2}' | sort -u | while read -r img; do
+              docker pull "$img"
+            done
+
+      - name: Bring up CI stack
+        run: bash ${{ github.workspace }}/.github/scripts/up.sh
+
+      - name: Deploy dingofs MDS + create fs + mount client
+        run: bash ${{ github.workspace }}/.github/scripts/deploy-mds-client.sh
+
+      - name: Pre-test glog scan
+        run: bash ${{ github.workspace }}/.github/scripts/_lib/glog-scan.sh
+
+      - name: Run e2e tests
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          cd ${{ github.workspace }}/test/e2e
+          uv sync
+          uv run pytest -v --tb=short --mount-point=${{ runner.temp }}/dingofs-mount
+
+      - name: Collect logs
+        if: always()
+        run: |
+          mkdir -p ${{ runner.temp }}/ci-logs
+          docker logs dingofs-ci-coord > ${{ runner.temp }}/ci-logs/coord.stdout.log 2>&1 || true
+          docker logs dingofs-ci-store > ${{ runner.temp }}/ci-logs/store.stdout.log 2>&1 || true
+          docker logs dingofs-ci-minio > ${{ runner.temp }}/ci-logs/minio.log 2>&1 || true
+          docker exec dingofs-ci-coord tar czf - /opt/dingo-store/dist/coordinator1/log \
+            > ${{ runner.temp }}/ci-logs/coord.glog.tgz 2>/dev/null || true
+          docker exec dingofs-ci-store tar czf - /opt/dingo-store/dist/store1/log \
+            > ${{ runner.temp }}/ci-logs/store.glog.tgz 2>/dev/null || true
+          sudo tar czf ${{ runner.temp }}/ci-logs/dingofs-runtime.tgz \
+            -C ${{ runner.temp }} dingofs-runtime/ 2>/dev/null || true
+
+      - name: Upload logs artifact
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-logs-${{ github.run_id }}
+          path: ${{ runner.temp }}/ci-logs/
+          retention-days: 7
+
+      - name: Tear down
+        if: always()
+        run: bash ${{ github.workspace }}/.github/scripts/down.sh || true
