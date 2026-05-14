@@ -17,6 +17,7 @@ add_subdirectory(trace)
 
 add_executable(test_common
   main.cc
+  test_memory_pool.cc
 )
 
 target_link_libraries(test_common
@@ -25,6 +26,7 @@ target_link_libraries(test_common
   dingofs_trace
   $<TARGET_OBJECTS:test_blockaccess>
   block_accesser
+  dingofs_common
   dingofs_open_trace
   PROTO_OBJS
   protobuf::libprotobuf
