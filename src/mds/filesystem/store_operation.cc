@@ -1653,65 +1653,41 @@ static Status CheckDirEmpty(TxnUPtr& txn, uint32_t fs_id, uint64_t ino, bool& is
   return Status::OK();
 }
 
-// Resolve `trash_ino` from TrashMove + BatchGet results.
-// On cold path, either adopts a racing winner's ino from bucket_dentry, or
-// creates the hour bucket using candidate_bucket_ino. Side effects (Puts,
-// created flag) are applied via `txn` and `out_created`. Used by
-// Unlink/RmDir/Rename.
-//
-// Trust model: hot path skips the bucket-inode existence check because
-// SubTrashCache only holds (current-hour) buckets, and current-hour buckets
-// are out of trash-GC scope by definition. Cold-bucket-exists likewise trusts
-// that bucket_dentry → bucket_inode is an atomic same-txn invariant.
-static Status ResolveTrashBucket(TxnUPtr& txn, uint32_t fs_id, const TrashMove& trash, bool bucket_exists,
-                                 const std::string& bucket_dentry_value, Ino& out_trash_ino) {
-  if (trash.is_cache_hit()) {
-    out_trash_ino = trash.trash_ino;
-    return Status::OK();
-  }
+static void PutTrashBucket(TxnUPtr& txn, uint32_t fs_id, const TrashMove& trash, bool trash_bucket_exist) {
+  if (trash.IsAlreadyExist() || trash_bucket_exist) return;
 
-  if (bucket_exists) {
-    auto bucket_dentry = MetaCodec::DecodeDentryValue(bucket_dentry_value);
-    out_trash_ino = bucket_dentry.ino();
-    return Status::OK();
-  }
+  AttrEntry trash_bucket_attr = BuildSubTrashBucketAttr(fs_id, trash.bucket_ino);
+  txn->Put(MetaCodec::EncodeInodeKey(fs_id, trash.bucket_ino), MetaCodec::EncodeInodeValue(trash_bucket_attr));
 
-  // Bucket absent: claim it with the caller-pre-allocated candidate_bucket_ino.
-  // A racing winner would have bumped the snapshot and triggered a txn conflict,
-  // retried by OperationProcessor with a fresh Run invocation.
-  out_trash_ino = trash.candidate_bucket_ino;
-  AttrEntry sub_trash_attr = BuildSubTrashBucketAttr(fs_id, out_trash_ino);
-  txn->Put(MetaCodec::EncodeInodeKey(fs_id, out_trash_ino), MetaCodec::EncodeInodeValue(sub_trash_attr));
   DentryEntry bucket_dentry;
   bucket_dentry.set_fs_id(fs_id);
-  bucket_dentry.set_ino(out_trash_ino);
+  bucket_dentry.set_ino(trash.bucket_ino);
   bucket_dentry.set_parent(kTrashInodeId);
   bucket_dentry.set_name(trash.bucket_name);
   bucket_dentry.set_type(pb::mds::FileType::DIRECTORY);
   txn->Put(MetaCodec::EncodeDentryKey(fs_id, kTrashInodeId, trash.bucket_name),
            MetaCodec::EncodeDentryValue(bucket_dentry));
-  return Status::OK();
 }
 
 Status RmDirOperation::Run(TxnUPtr& txn) {
   const uint32_t fs_id = fs_id_;
   const Ino parent = parent_;
   const Ino child_ino = child_ino_;
-  const bool enable_trash = trash_.enabled();
+  const bool enable_trash = trash_.Enabled();
 
   // 1. BatchGet parent + dentry + child inode (always); trash mode also pulls
-  // bucket lookup material so ResolveTrashBucket can stay within this txn.
+  // bucket lookup material so PutTrashBucket can stay within this txn.
   // child_ino comes from caller (FileSystem::RmDir partition->Get) so child_key
   // can join the same BatchGet -- mirrors UnlinkOperation's prefetch pattern
   // and keeps trash-branch parents rewrite at zero extra RTT.
   const std::string parent_key = MetaCodec::EncodeInodeKey(fs_id, parent);
   const std::string dentry_key = MetaCodec::EncodeDentryKey(fs_id, parent, name_);
-  const std::string child_key = MetaCodec::EncodeInodeKey(fs_id, child_ino);
   std::vector<std::string> keys{parent_key, dentry_key};
-  std::string bucket_dentry_key;
+  std::string child_attr_key, bucket_dentry_key;
   if (enable_trash) {
-    keys.push_back(child_key);
-    if (!trash_.is_cache_hit()) {
+    child_attr_key = MetaCodec::EncodeInodeKey(fs_id, child_ino);
+    keys.push_back(child_attr_key);
+    if (!trash_.IsAlreadyExist()) {
       bucket_dentry_key = MetaCodec::EncodeDentryKey(fs_id, kTrashInodeId, trash_.bucket_name);
       keys.push_back(bucket_dentry_key);
     }
@@ -1724,18 +1700,16 @@ Status RmDirOperation::Run(TxnUPtr& txn) {
   AttrEntry parent_attr;
   DentryEntry dentry;
   AttrEntry child_attr;
-  bool bucket_exists = false;
-  std::string bucket_dentry_value;
+  bool trash_bucket_exist = false;
   for (const auto& kv : kvs) {
     if (kv.key == parent_key) {
       parent_attr = MetaCodec::DecodeInodeValue(kv.value);
     } else if (kv.key == dentry_key) {
       dentry = MetaCodec::DecodeDentryValue(kv.value);
-    } else if (kv.key == child_key) {
+    } else if (kv.key == child_attr_key) {
       child_attr = MetaCodec::DecodeInodeValue(kv.value);
     } else if (kv.key == bucket_dentry_key) {
-      bucket_exists = true;
-      bucket_dentry_value = kv.value;
+      trash_bucket_exist = true;
     } else {
       LOG(FATAL) << fmt::format("[operation.{}.{}] invalid key({}).", fs_id, parent, Helper::StringToHex(kv.key));
     }
@@ -1751,9 +1725,8 @@ Status RmDirOperation::Run(TxnUPtr& txn) {
   }
 
   // 2. Build trash_entry_name now that the child ino is known.
-  if (enable_trash) {
-    result_.trash_entry_name = BuildTrashEntryName(parent, child_ino, name_);
-  }
+  std::string trash_entry_name;
+  if (enable_trash) trash_entry_name = BuildTrashEntryName(parent, child_ino, name_);
 
   // 3. POSIX rmdir requires the directory to be empty.
   bool is_empty = false;
@@ -1768,9 +1741,7 @@ Status RmDirOperation::Run(TxnUPtr& txn) {
   // 4. Update parent attr (nlink--, ctime/mtime/version bump) in both modes.
   // Manual cleanup of a grafted subtree under .trash routes here with
   // parent == bucket; bucket nlink is intentionally fixed (see trash.cc).
-  if (!IsTrashInode(parent)) {
-    parent_attr.set_nlink(parent_attr.nlink() - 1);
-  }
+  if (!IsTrashInode(parent)) parent_attr.set_nlink(parent_attr.nlink() - 1);
   parent_attr.set_ctime(std::max(parent_attr.ctime(), GetTime()));
   parent_attr.set_mtime(std::max(parent_attr.mtime(), GetTime()));
   parent_attr.set_version(parent_attr.version() + 1);
@@ -1781,47 +1752,48 @@ Status RmDirOperation::Run(TxnUPtr& txn) {
 
   if (!enable_trash) {
     // 6a. Plain rmdir: drop the child inode and its mutation slots.
-    txn->Delete(child_key);
+    txn->Delete(child_attr_key);
     for (uint32_t i = 0; i < kDirAttrMutationNum; ++i) {
       txn->Delete(MetaCodec::EncodeDirInodeMutationKey(fs_id, child_ino, i));
     }
   } else {
+    CHECK(trash_.bucket_ino != 0) << "invalid trash bucket ino(0)";
+
     // 6b. Trash rmdir: resolve bucket, swap child parents into trash bucket,
     // and write the trash dentry. Symmetric with UnlinkOperation::RunInBatch
     // so trashed directories carry parents=[trash_ino] in KV, closing the
     // immutability gate for MkDir/MkNod/SetAttr/etc. under a stale handle.
-    Ino trash_ino = 0;
-    status = ResolveTrashBucket(txn, fs_id, trash_, bucket_exists, bucket_dentry_value, trash_ino);
-    if (!status.ok()) return status;
+    PutTrashBucket(txn, fs_id, trash_, trash_bucket_exist);
 
     DelParentIno(child_attr, parent);
-    AddParentIno(child_attr, trash_ino);
+    AddParentIno(child_attr, trash_.bucket_ino);
     child_attr.set_ctime(std::max(child_attr.ctime(), GetTime()));
     child_attr.set_version(child_attr.version() + 1);
-    txn->Put(child_key, MetaCodec::EncodeInodeValue(child_attr));
+    txn->Put(child_attr_key, MetaCodec::EncodeInodeValue(child_attr));
 
     // Bucket inode attr is intentionally not touched (see trash.cc).
     DentryEntry trash_dentry;
     trash_dentry.set_fs_id(fs_id);
     trash_dentry.set_ino(child_ino);
-    trash_dentry.set_parent(trash_ino);
-    trash_dentry.set_name(result_.trash_entry_name);
+    trash_dentry.set_parent(trash_.bucket_ino);
+    trash_dentry.set_name(trash_entry_name);
     trash_dentry.set_type(pb::mds::FileType::DIRECTORY);
-    txn->Put(MetaCodec::EncodeDentryKey(fs_id, trash_ino, result_.trash_entry_name),
+    txn->Put(MetaCodec::EncodeDentryKey(fs_id, trash_.bucket_ino, trash_entry_name),
              MetaCodec::EncodeDentryValue(trash_dentry));
-    result_.winning_trash_ino = trash_ino;
+
     result_.child_attr = child_attr;
   }
 
   result_.parent_attr = parent_attr;
   result_.dentry = dentry;
+
   return Status::OK();
 }
 
 void UnlinkOperation::PrefetchKey(std::vector<std::string>& keys) {
   keys.push_back(MetaCodec::EncodeInodeKey(GetFsId(), dentry_.INo()));
   keys.push_back(MetaCodec::EncodeDentryKey(GetFsId(), dentry_.ParentIno(), dentry_.Name()));
-  if (trash_.enabled() && !trash_.is_cache_hit()) {
+  if (trash_.Enabled() && !trash_.IsAlreadyExist()) {
     keys.push_back(MetaCodec::EncodeDentryKey(GetFsId(), kTrashInodeId, trash_.bucket_name));
   }
 }
@@ -1843,34 +1815,15 @@ Status UnlinkOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param)
   std::string dentry_value = FindValue(prefetch_index, dentry_key);
   if (dentry_value.empty()) return Status(pb::error::ENOT_FOUND, fmt::format("not found dentry({})", dentry_.Name()));
 
-  // DentryEntry dentry = MetaCodec::DecodeDentryValue(dentry_value);
-  // const Ino child_ino = dentry.ino();
-
-  const bool enable_trash = trash_.enabled();
-
-  // 3. Now we know child_ino, build trash_entry_name.
-  if (enable_trash) {
-    result_.trash_entry_name = BuildTrashEntryName(parent, dentry_.INo(), dentry_.Name());
-  }
-
-  // 4. Read child attr (cannot prefetch — child_ino lives inside dentry).
+  const bool enable_trash = trash_.Enabled();
 
   // 5. trash bucket info from prefetch (cold path only — hot path trusts the
   // SubTrashCache invariant and skips the inode existence check).
-  bool bucket_exists = false;
-  std::string bucket_dentry_value;
-  if (enable_trash && !trash_.is_cache_hit()) {
-    bucket_dentry_value =
+  bool trash_bucket_exist = false;
+  if (enable_trash && !trash_.IsAlreadyExist()) {
+    std::string trash_bucket_dentry_value =
         FindValue(prefetch_index, MetaCodec::EncodeDentryKey(fs_id, kTrashInodeId, trash_.bucket_name));
-    if (!bucket_dentry_value.empty()) {
-      bucket_exists = true;
-    }
-  }
-
-  Ino trash_ino = 0;
-  if (enable_trash) {
-    auto status = ResolveTrashBucket(txn, fs_id, trash_, bucket_exists, bucket_dentry_value, trash_ino);
-    if (!status.ok()) return status;
+    if (!trash_bucket_dentry_value.empty()) trash_bucket_exist = true;
   }
 
   // 6. Update child attr. Trash mode replaces the original parent in
@@ -1880,7 +1833,7 @@ Status UnlinkOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param)
   attr.set_version(attr.version() + 1);
   if (enable_trash) {
     DelParentIno(attr, parent);
-    AddParentIno(attr, trash_ino);
+    AddParentIno(attr, trash_.bucket_ino);
   } else {
     attr.set_nlink(attr.nlink() - 1);
     DelParentIno(attr, parent);
@@ -1888,7 +1841,6 @@ Status UnlinkOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param)
   txn->Put(attr_key, MetaCodec::EncodeInodeValue(attr));
 
   if (!enable_trash && attr.nlink() <= 0) {
-    // save delete file info
     txn->Put(MetaCodec::EncodeDelFileKey(fs_id, dentry_.INo()), MetaCodec::EncodeDelFileValue(attr));
   }
 
@@ -1898,38 +1850,156 @@ Status UnlinkOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param)
   // 8. Trash bucket: write the new trash dentry. The bucket inode attr is
   // intentionally not touched (see trash.cc).
   if (enable_trash) {
+    // put hour trash bucket
+    PutTrashBucket(txn, fs_id, trash_, trash_bucket_exist);
+
+    std::string trash_entry_name = BuildTrashEntryName(parent, dentry_.INo(), dentry_.Name());
     DentryEntry trash_dentry;
     trash_dentry.set_fs_id(fs_id);
     trash_dentry.set_ino(dentry_.INo());
-    trash_dentry.set_parent(trash_ino);
-    trash_dentry.set_name(result_.trash_entry_name);
+    trash_dentry.set_parent(trash_.bucket_ino);
+    trash_dentry.set_name(trash_entry_name);
     trash_dentry.set_type(dentry_.Type());
-    txn->Put(MetaCodec::EncodeDentryKey(fs_id, trash_ino, result_.trash_entry_name),
+    txn->Put(MetaCodec::EncodeDentryKey(fs_id, trash_.bucket_ino, trash_entry_name),
              MetaCodec::EncodeDentryValue(trash_dentry));
-    result_.winning_trash_ino = trash_ino;
   }
 
-  // 9. Bump parent timestamps. Trash path forces direct path
-  // (IsDirMutationOperation override returns false), so shared_param.attr is
-  // fully loaded. Non-trash uses framework mutation/direct based on
-  // shared_param.UseMutation(). Either way, the framework handles the actual
-  // KV Put — we only mutate shared_param state here.
-  if (!enable_trash && shared_param.UseMutation()) {
+  if (shared_param.UseMutation()) {
     AttrMutationEntry& parent_attr_mutation = shared_param.attr_mutation;
     CHECK(parent_attr_mutation.ino() == parent)
         << fmt::format("parent not equal in shared param, {} {}", parent_attr_mutation.ino(), parent);
     parent_attr_mutation.set_mtime(std::max(parent_attr_mutation.mtime(), GetTime()));
     parent_attr_mutation.set_ctime(std::max(parent_attr_mutation.ctime(), GetTime()));
+
   } else {
     parent_attr.set_mtime(std::max(parent_attr.mtime(), GetTime()));
     parent_attr.set_ctime(std::max(parent_attr.ctime(), GetTime()));
   }
 
   result_.child_attr = attr;
+
+  return Status::OK();
+}
+
+void BatchUnlinkOperation::PrefetchKey(std::vector<std::string>& keys) {
+  const uint32_t fs_id = GetFsId();
+  const Ino parent = GetIno();
+
+  for (const auto& dentry : dentries_) {
+    keys.push_back(MetaCodec::EncodeInodeKey(fs_id, dentry.INo()));
+    keys.push_back(MetaCodec::EncodeDentryKey(fs_id, parent, dentry.Name()));
+  }
+  if (trash_.Enabled() && !trash_.IsAlreadyExist()) {
+    keys.push_back(MetaCodec::EncodeDentryKey(fs_id, kTrashInodeId, trash_.bucket_name));
+  }
+}
+
+Status BatchUnlinkOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) {
+  auto& parent_attr = shared_param.attr;
+  auto& prefetch_index = shared_param.prefetch_index;
+  const uint32_t fs_id = GetFsId();
+  const Ino parent = GetIno();
+  const bool enable_trash = trash_.Enabled();
+
+  // 1. Decode prefetched dentries (per-name) and child inode attrs.
+  std::vector<AttrEntry> attrs;
+  std::vector<DentryEntry> dentries;
+  attrs.reserve(dentries_.size());
+  dentries.reserve(dentries_.size());
+  for (const auto& dentry : dentries_) {
+    auto attr_value = FindValue(prefetch_index, MetaCodec::EncodeInodeKey(fs_id, dentry.INo()));
+    if (attr_value.empty()) {
+      return Status(pb::error::ENOT_FOUND, fmt::format("not found attr({})", dentry.INo()));
+    }
+    attrs.push_back(MetaCodec::DecodeInodeValue(attr_value));
+
+    auto dentry_value = FindValue(prefetch_index, MetaCodec::EncodeDentryKey(fs_id, parent, dentry.Name()));
+    if (dentry_value.empty()) {
+      return Status(pb::error::ENOT_FOUND, fmt::format("not found dentry({})", dentry.Name()));
+    }
+    dentries.push_back(MetaCodec::DecodeDentryValue(dentry_value));
+  }
+
+  CHECK(attrs.size() == dentries.size()) << fmt::format("attrs size({}) should be equal to dentries size({}).",
+                                                        attrs.size(), dentries.size());
+
+  // 2. Resolve sub-trash bucket (once for the whole batch) when in trash mode.
+  // Hot path skips inode prefetch and trusts the SubTrashCache invariant; only
+  // cold path needs the bucket dentry to discover an existing winner.
+  if (enable_trash) {
+    bool trash_bucket_exist = false;
+    if (!trash_.IsAlreadyExist()) {
+      std::string bucket_dentry_value =
+          FindValue(prefetch_index, MetaCodec::EncodeDentryKey(fs_id, kTrashInodeId, trash_.bucket_name));
+      if (!bucket_dentry_value.empty()) trash_bucket_exist = true;
+    }
+    PutTrashBucket(txn, fs_id, trash_, trash_bucket_exist);
+  }
+
+  // 3. Per-child: trash → swap parent into bucket + write trash dentry;
+  //    plain → nlink--, DelFile if last link, delete dentry.
+  for (size_t i = 0; i < attrs.size(); ++i) {
+    auto& attr = attrs[i];
+    const auto& dentry = dentries_[i];
+    const Ino child_ino = dentries[i].ino();
+    const std::string child_key = MetaCodec::EncodeInodeKey(fs_id, child_ino);
+    const std::string dentry_key = MetaCodec::EncodeDentryKey(fs_id, parent, dentry.Name());
+
+    attr.set_ctime(std::max(attr.ctime(), GetTime()));
+    attr.set_version(attr.version() + 1);
+    if (enable_trash) {
+      DelParentIno(attr, parent);
+      AddParentIno(attr, trash_.bucket_ino);
+    } else {
+      attr.set_nlink(attr.nlink() - 1);
+      DelParentIno(attr, parent);
+    }
+    txn->Put(child_key, MetaCodec::EncodeInodeValue(attr));
+
+    if (!enable_trash && attr.nlink() <= 0) {
+      txn->Put(MetaCodec::EncodeDelFileKey(fs_id, child_ino), MetaCodec::EncodeDelFileValue(attr));
+    }
+
+    txn->Delete(dentry_key);
+
+    if (enable_trash) {
+      const std::string trash_entry_name = BuildTrashEntryName(parent, child_ino, dentry.Name());
+      DentryEntry trash_dentry;
+      trash_dentry.set_fs_id(fs_id);
+      trash_dentry.set_ino(child_ino);
+      trash_dentry.set_parent(trash_.bucket_ino);
+      trash_dentry.set_name(trash_entry_name);
+      trash_dentry.set_type(dentries[i].type());
+      txn->Put(MetaCodec::EncodeDentryKey(fs_id, trash_.bucket_ino, trash_entry_name),
+               MetaCodec::EncodeDentryValue(trash_dentry));
+    }
+  }
+
+  if (shared_param.UseMutation()) {
+    AttrMutationEntry& parent_attr_mutation = shared_param.attr_mutation;
+    CHECK(parent_attr_mutation.ino() == parent)
+        << fmt::format("parent not equal in shared param, {} {}", parent_attr_mutation.ino(), parent);
+
+    parent_attr_mutation.set_mtime(std::max(parent_attr_mutation.mtime(), GetTime()));
+    parent_attr_mutation.set_ctime(std::max(parent_attr_mutation.ctime(), GetTime()));
+
+  } else {
+    parent_attr.set_mtime(std::max(parent_attr.mtime(), GetTime()));
+    parent_attr.set_ctime(std::max(parent_attr.ctime(), GetTime()));
+  }
+
+  result_.child_attrs.swap(attrs);
+
   return Status::OK();
 }
 
 Status RestoreFromTrashOperation::Run(TxnUPtr& txn) {
+  CHECK(fs_id_ != 0) << "invalid fs_id";
+  CHECK(expected_file_ino_ != 0) << "invalid expected_file_ino";
+  CHECK(trash_parent_ != 0) << "invalid trash_parent";
+  CHECK(dst_parent_ != 0) << "invalid dst_parent";
+  CHECK(!trash_name_.empty()) << "invalid trash_name";
+
   // Caller already parsed file_ino out of trash_name (see ParseTrashEntryName
   // in FileSystem::RestoreFromTrash), so all four reads are independent and
   // can be served by a single BatchGet. trash_parent_ is always a sub-trash
@@ -1974,8 +2044,8 @@ Status RestoreFromTrashOperation::Run(TxnUPtr& txn) {
   // into an hour bucket: its parent is kTrashInodeId. Grafting is only allowed
   // onto trashed user directories (whose parents are other trashed dirs).
   if (allow_trash_parent_ && IsTrashInode(dst_parent_)) {
-    for (Ino p : dst_parent_attr.parents()) {
-      if (p == kTrashInodeId) {
+    for (Ino parent : dst_parent_attr.parents()) {
+      if (parent == kTrashInodeId) {
         return Status(pb::error::ENOT_SUPPORT, "cannot restore under .trash hour bucket");
       }
     }
@@ -2020,128 +2090,6 @@ Status RestoreFromTrashOperation::Run(TxnUPtr& txn) {
   result_.file_attr = attr;
   result_.file_ino = expected_file_ino_;
   result_.file_type = trash_dentry.type();
-
-  return Status::OK();
-}
-
-void BatchUnlinkOperation::PrefetchKey(std::vector<std::string>& keys) {
-  const uint32_t fs_id = GetFsId();
-  const Ino parent = GetIno();
-
-  for (const auto& dentry : dentries_) {
-    keys.push_back(MetaCodec::EncodeInodeKey(fs_id, dentry.INo()));
-    keys.push_back(MetaCodec::EncodeDentryKey(fs_id, parent, dentry.Name()));
-  }
-  if (trash_.enabled() && !trash_.is_cache_hit()) {
-    keys.push_back(MetaCodec::EncodeDentryKey(fs_id, kTrashInodeId, trash_.bucket_name));
-  }
-}
-
-Status BatchUnlinkOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) {
-  auto& parent_attr = shared_param.attr;
-  auto& prefetch_index = shared_param.prefetch_index;
-  const uint32_t fs_id = GetFsId();
-  const Ino parent = GetIno();
-  const bool enable_trash = trash_.enabled();
-
-  // 1. Decode prefetched dentries (per-name) and child inode attrs.
-  std::vector<AttrEntry> attrs;
-  std::vector<DentryEntry> dentries;
-  attrs.reserve(dentries_.size());
-  dentries.reserve(dentries_.size());
-  for (const auto& dentry : dentries_) {
-    auto attr_value = FindValue(prefetch_index, MetaCodec::EncodeInodeKey(fs_id, dentry.INo()));
-    if (attr_value.empty()) {
-      return Status(pb::error::ENOT_FOUND, fmt::format("not found attr({})", dentry.INo()));
-    }
-    attrs.push_back(MetaCodec::DecodeInodeValue(attr_value));
-
-    auto dentry_value = FindValue(prefetch_index, MetaCodec::EncodeDentryKey(fs_id, parent, dentry.Name()));
-    if (dentry_value.empty()) {
-      return Status(pb::error::ENOT_FOUND, fmt::format("not found dentry({})", dentry.Name()));
-    }
-    dentries.push_back(MetaCodec::DecodeDentryValue(dentry_value));
-  }
-
-  CHECK(attrs.size() == dentries.size()) << fmt::format("attrs size({}) should be equal to dentries size({}).",
-                                                        attrs.size(), dentries.size());
-
-  // 2. Resolve sub-trash bucket (once for the whole batch) when in trash mode.
-  // Hot path skips inode prefetch and trusts the SubTrashCache invariant; only
-  // cold path needs the bucket dentry to discover an existing winner.
-  Ino trash_ino = 0;
-  if (enable_trash) {
-    bool bucket_exists = false;
-    std::string bucket_dentry_value;
-    if (!trash_.is_cache_hit()) {
-      auto v = FindValue(prefetch_index, MetaCodec::EncodeDentryKey(fs_id, kTrashInodeId, trash_.bucket_name));
-      if (!v.empty()) {
-        bucket_exists = true;
-        bucket_dentry_value = v;
-      }
-    }
-    auto status = ResolveTrashBucket(txn, fs_id, trash_, bucket_exists, bucket_dentry_value, trash_ino);
-    if (!status.ok()) return status;
-    result_.winning_trash_ino = trash_ino;
-  }
-
-  // 3. Per-child: trash → swap parent into bucket + write trash dentry;
-  //    plain → nlink--, DelFile if last link, delete dentry.
-  for (size_t i = 0; i < attrs.size(); ++i) {
-    auto& attr = attrs[i];
-    const auto& dentry = dentries_[i];
-    const Ino child_ino = dentries[i].ino();
-    const std::string child_key = MetaCodec::EncodeInodeKey(fs_id, child_ino);
-    const std::string dentry_key = MetaCodec::EncodeDentryKey(fs_id, parent, dentry.Name());
-
-    attr.set_ctime(std::max(attr.ctime(), GetTime()));
-    attr.set_version(attr.version() + 1);
-    if (enable_trash) {
-      DelParentIno(attr, parent);
-      AddParentIno(attr, trash_ino);
-    } else {
-      attr.set_nlink(attr.nlink() - 1);
-      DelParentIno(attr, parent);
-    }
-    txn->Put(child_key, MetaCodec::EncodeInodeValue(attr));
-
-    if (!enable_trash && attr.nlink() <= 0) {
-      txn->Put(MetaCodec::EncodeDelFileKey(fs_id, child_ino), MetaCodec::EncodeDelFileValue(attr));
-    }
-
-    txn->Delete(dentry_key);
-
-    if (enable_trash) {
-      const std::string trash_entry_name = BuildTrashEntryName(parent, child_ino, dentry.Name());
-      DentryEntry trash_dentry;
-      trash_dentry.set_fs_id(fs_id);
-      trash_dentry.set_ino(child_ino);
-      trash_dentry.set_parent(trash_ino);
-      trash_dentry.set_name(trash_entry_name);
-      trash_dentry.set_type(dentries[i].type());
-      txn->Put(MetaCodec::EncodeDentryKey(fs_id, trash_ino, trash_entry_name),
-               MetaCodec::EncodeDentryValue(trash_dentry));
-    }
-  }
-
-  // 4. Bump parent timestamps. Trash forces direct path (see
-  //    IsDirMutationOperation override).
-  if (enable_trash) {
-    parent_attr.set_ctime(std::max(parent_attr.ctime(), GetTime()));
-    parent_attr.set_mtime(std::max(parent_attr.mtime(), GetTime()));
-  } else if (shared_param.UseMutation()) {
-    AttrMutationEntry& parent_attr_mutation = shared_param.attr_mutation;
-    CHECK(parent_attr_mutation.ino() == parent)
-        << fmt::format("parent not equal in shared param, {} {}", parent_attr_mutation.ino(), parent);
-
-    parent_attr_mutation.set_mtime(std::max(parent_attr_mutation.mtime(), GetTime()));
-    parent_attr_mutation.set_ctime(std::max(parent_attr_mutation.ctime(), GetTime()));
-  } else {
-    parent_attr.set_mtime(std::max(parent_attr.mtime(), GetTime()));
-    parent_attr.set_ctime(std::max(parent_attr.ctime(), GetTime()));
-  }
-
-  result_.child_attrs.swap(attrs);
 
   return Status::OK();
 }
@@ -2228,7 +2176,7 @@ Status RenameOperation::Run(TxnUPtr& txn) {
   bool is_same_parent = (old_parent_ == new_parent_);
 
   // batch get old parent attr/child dentry and new parent attr/child dentry.
-  // When trash is enabled we speculatively read the sub_trash / bucket-dentry
+  // When trash is Enabled we speculatively read the sub_trash / bucket-dentry
   // keys in the same round-trip so the trash branch below can stay in one txn.
   std::string old_parent_key = MetaCodec::EncodeInodeKey(fs_id_, old_parent_);
   std::string old_dentry_key = MetaCodec::EncodeDentryKey(fs_id_, old_parent_, old_name_);
@@ -2246,12 +2194,8 @@ Status RenameOperation::Run(TxnUPtr& txn) {
     }
   }
   std::string bucket_dentry_key;
-  if (trash_.enabled() && !trash_.is_cache_hit()) {
+  if (trash_.Enabled() && !trash_.IsAlreadyExist()) {
     bucket_dentry_key = MetaCodec::EncodeDentryKey(fs_id_, kTrashInodeId, trash_.bucket_name);
-    // Skip the prefetch if it duplicates an existing key in the batch.
-    // Happens when an admin renames the current hour bucket out of .trash:
-    // old_parent=kTrashInodeId and old_name=current bucket name, so
-    // old_dentry_key == bucket_dentry_key. The decode loop reuses the kv.
     if (bucket_dentry_key != old_dentry_key && bucket_dentry_key != new_dentry_key) {
       keys.push_back(bucket_dentry_key);
     }
@@ -2268,8 +2212,7 @@ Status RenameOperation::Run(TxnUPtr& txn) {
 
   AttrEntry old_parent_attr, new_parent_attr;
   DentryEntry old_dentry, prev_new_dentry;
-  bool bucket_exists = false;
-  std::string bucket_dentry_value;
+  bool trash_bucket_exist = false;
   for (const auto& kv : kvs) {
     if (kv.key == old_parent_key) {
       old_parent_attr = MetaCodec::DecodeInodeValue(kv.value);
@@ -2277,12 +2220,9 @@ Status RenameOperation::Run(TxnUPtr& txn) {
 
     } else if (kv.key == old_dentry_key) {
       old_dentry = MetaCodec::DecodeDentryValue(kv.value);
-      // Old dentry IS the bucket dentry: caller asked to rename the current
-      // hour bucket out of .trash. Reuse this kv for the bucket lookup so
-      // any later trash-resolve sees a consistent view.
+
       if (!bucket_dentry_key.empty() && kv.key == bucket_dentry_key) {
-        bucket_exists = true;
-        bucket_dentry_value = kv.value;
+        trash_bucket_exist = true;
       }
 
     } else if (kv.key == new_parent_key) {
@@ -2291,8 +2231,7 @@ Status RenameOperation::Run(TxnUPtr& txn) {
     } else if (kv.key == new_dentry_key) {
       prev_new_dentry = MetaCodec::DecodeDentryValue(kv.value);
       if (!bucket_dentry_key.empty() && kv.key == bucket_dentry_key) {
-        bucket_exists = true;
-        bucket_dentry_value = kv.value;
+        trash_bucket_exist = true;
       }
 
     } else if (MetaCodec::IsDirInodeMutationKey(kv.key)) {
@@ -2304,9 +2243,8 @@ Status RenameOperation::Run(TxnUPtr& txn) {
         result_.new_parent_attr_with_mutation.mutations.push_back(mutation);
       }
 
-    } else if (!bucket_dentry_key.empty() && kv.key == bucket_dentry_key) {
-      bucket_exists = true;
-      bucket_dentry_value = kv.value;
+    } else if (kv.key == bucket_dentry_key) {
+      trash_bucket_exist = true;
 
     } else {
       LOG(FATAL) << fmt::format("[operation.{}.{}] invalid key({}).", fs_id_, old_parent_, Helper::StringToHex(kv.key));
@@ -2354,7 +2292,9 @@ Status RenameOperation::Run(TxnUPtr& txn) {
     CHECK(prev_new_attr.ino() != 0) << fmt::format("prev new inode is null, old({}/{}) new({}/{}) ino({})", old_parent_,
                                                    old_name_, new_parent_, new_name_, prev_new_dentry.ino());
 
-    if (trash_.enabled()) {
+    if (trash_.Enabled()) {
+      CHECK(trash_.bucket_ino != 0) << "invalid trash bucket ino(0)";
+
       // Move overwritten entry to trash instead of deleting.
       if (prev_new_dentry.type() == pb::mds::DIRECTORY) {
         bool is_empty;
@@ -2367,16 +2307,14 @@ Status RenameOperation::Run(TxnUPtr& txn) {
         }
       }
 
-      Ino trash_ino = 0;
-      status = ResolveTrashBucket(txn, fs_id_, trash_, bucket_exists, bucket_dentry_value, trash_ino);
-      if (!status.ok()) return status;
+      PutTrashBucket(txn, fs_id_, trash_, trash_bucket_exist);
 
       // Mark overwritten inode as in trash by replacing new_parent_ in
       // parents_ with the sub_trash bucket. parents_[*] >= kTrashInodeId is
       // the trash-membership marker; the original parent is recovered from
       // trash_entry_name on restore.
       DelParentIno(prev_new_attr, new_parent_);
-      AddParentIno(prev_new_attr, trash_ino);
+      AddParentIno(prev_new_attr, trash_.bucket_ino);
       prev_new_attr.set_ctime(std::max(prev_new_attr.ctime(), time_ns));
       prev_new_attr.set_version(prev_new_attr.version() + 1);
       txn->Put(prev_new_inode_key, MetaCodec::EncodeInodeValue(prev_new_attr));
@@ -2387,12 +2325,11 @@ Status RenameOperation::Run(TxnUPtr& txn) {
       DentryEntry trash_dentry;
       trash_dentry.set_fs_id(fs_id_);
       trash_dentry.set_ino(prev_new_dentry.ino());
-      trash_dentry.set_parent(trash_ino);
+      trash_dentry.set_parent(trash_.bucket_ino);
       trash_dentry.set_name(trash_entry_name);
       trash_dentry.set_type(prev_new_dentry.type());
-      txn->Put(MetaCodec::EncodeDentryKey(fs_id_, trash_ino, trash_entry_name),
+      txn->Put(MetaCodec::EncodeDentryKey(fs_id_, trash_.bucket_ino, trash_entry_name),
                MetaCodec::EncodeDentryValue(trash_dentry));
-      result_.winning_trash_ino = trash_ino;
 
     } else if (prev_new_dentry.type() == pb::mds::DIRECTORY) {
       // check new dentry is empty

@@ -14,6 +14,8 @@
 
 #include "mds/client/trash_restore.h"
 
+#include <fmt/format.h>
+#include <glog/logging.h>
 #include <unistd.h>
 
 #include <algorithm>
@@ -23,9 +25,6 @@
 #include <string>
 #include <thread>
 #include <vector>
-
-#include <fmt/format.h>
-#include <glog/logging.h>
 
 #include "common/meta.h"
 #include "dingofs/error.pb.h"
@@ -178,9 +177,8 @@ void TrashRestore::WorkerLoop(Ino bucket_ino) {
     // Parse the trash entry name to decide whether to skip (tree-rebuild)
     // and for logging. The server re-parses for correctness; the CLI-side
     // parse is informational only.
-    Ino orig_parent = 0, orig_ino = 0;
-    std::string orig_name;
-    if (!ParseTrashEntryName(dentry.name(), orig_parent, orig_ino, orig_name)) {
+    Ino orig_parent = ParseTrashEntryName(dentry.name());
+    if (orig_parent == 0) {
       LOG(WARNING) << fmt::format("skip unparseable trash entry '{}'", dentry.name());
       failed_.fetch_add(1);
       continue;

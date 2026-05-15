@@ -21,6 +21,7 @@
 
 #include "common/options/client.h"
 #include "utils/concurrent/concurrent.h"
+#include "utils/time.h"
 
 namespace dingofs {
 namespace client {

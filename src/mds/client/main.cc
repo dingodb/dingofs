@@ -89,7 +89,7 @@ DEFINE_string(storage_engine, "dingo-store", "storage engine");
 DEFINE_string(hours, "", "comma-separated trash hour buckets to restore, e.g. 2026-04-05-14,2026-04-05-15 (UTC)");
 DEFINE_bool(put_back, false, "if true, restore files back to their original directories");
 DEFINE_uint32(restore_threads, 10, "concurrency for trash restore workers");
-DEFINE_uint32(trash_days, 1,
+DEFINE_uint32(trash_days, 0,
               "per-fs trash retention in days: deleted files are kept in trash for this many days before GC; "
               "0 means trash disabled. Applied at createfs and at updatefs trash_days.");
 DEFINE_bool(immediate_trash_quota, true,

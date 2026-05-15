@@ -150,7 +150,7 @@ DEFINE_validator(vfs_warmup_trigger_restart_interval_secs, brpc::PassValidate);
 
 // dir-warmup: drive bulk intime prefetch from per-directory profile built
 // during ReadDir. Triggered on Open against the parent directory profile.
-DEFINE_bool(vfs_meta_warmup_small_file_enable, true,
+DEFINE_bool(vfs_meta_warmup_small_file_enable, false,
             "enable directory-profile driven warmup on open");
 DEFINE_validator(vfs_meta_warmup_small_file_enable, brpc::PassValidate);
 

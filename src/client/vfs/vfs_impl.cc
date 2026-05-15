@@ -62,7 +62,7 @@ VFSImpl::VFSImpl(const VFSConfig& vfs_conf, const ClientId& client_id)
     : client_id_(client_id),
       mount_root_path_(
           vfs_conf.mount_root_path.empty() ? "/" : vfs_conf.mount_root_path),
-      vfs_hub_(std::make_unique<VFSHubImpl>(vfs_conf, client_id_)){};
+      vfs_hub_(std::make_unique<VFSHubImpl>(vfs_conf, client_id_)) {};
 
 VFSImpl::VFSImpl(std::unique_ptr<VFSHub> hub)
     : client_id_(), vfs_hub_(std::move(hub)) {
@@ -284,6 +284,7 @@ Status VFSImpl::Fallocate(ContextSPtr ctx, Ino ino, int mode, uint64_t offset,
   if (BAIDU_UNLIKELY(ino == kStatsIno)) {
     return Status::NoPermitted("fallocate on internal node");
   }
+
   Status s =
       meta_system_->Fallocate(ctx, TranslateIno(ino), mode, offset, length);
   // Mirror the SetAttr(size) path: PUNCH_HOLE / ZERO_RANGE / extending the
@@ -294,6 +295,7 @@ Status VFSImpl::Fallocate(ContextSPtr ctx, Ino ino, int mode, uint64_t offset,
     handle_manager_->InvalidateByIno(ino, static_cast<int64_t>(offset),
                                      static_cast<int64_t>(length));
   }
+
   return s;
 }
 
@@ -304,7 +306,7 @@ Status VFSImpl::CopyFileRange(ContextSPtr ctx, Ino src_ino, uint64_t src_off,
   CHECK(bytes_copied != nullptr);
   *bytes_copied = 0;
 
-  if (BAIDU_UNLIKELY(src_ino == kStatsIno || dst_ino == kStatsIno)) {
+  if (BAIDU_UNLIKELY(IsInternalNode(src_ino) || IsInternalNode(dst_ino))) {
     return Status::NoPermitted("copy_file_range on internal node");
   }
   // Linux kernel currently passes flags == 0; reject anything else so we
@@ -357,7 +359,7 @@ Status VFSImpl::MkNod(ContextSPtr ctx, Ino parent, const std::string& name,
                       uint32_t uid, uint32_t gid, uint32_t mode, uint64_t dev,
                       Attr* attr) {
   if (IsCreateInTrashForbidden(parent, name)) {
-    return Status::NoPermitted("cannot create in trash");
+    return Status::NoPermitted("cannot mknod in trash");
   }
 
   Status s = meta_system_->MkNod(ctx, TranslateIno(parent), name, uid, gid,
@@ -365,6 +367,7 @@ Status VFSImpl::MkNod(ContextSPtr ctx, Ino parent, const std::string& name,
   if (s.ok()) {
     vfs_hub_->GetFileSuffixWatcher()->Remeber(*attr, name);
   }
+
   return s;
 }
 
@@ -386,25 +389,23 @@ Status VFSImpl::Unlink(ContextSPtr ctx, Ino parent, const std::string& name) {
 Status VFSImpl::Symlink(ContextSPtr ctx, Ino parent, const std::string& name,
                         uint32_t uid, uint32_t gid, const std::string& link,
                         Attr* attr) {
-  {
-    // Trash protection: cannot create new entries inside .trash/sub-buckets,
-    // nor a symlink literally named .trash at root.
-    if (IsCreateInTrashForbidden(parent, name)) {
-      return Status::NoPermitted("cannot symlink in trash");
-    }
-    // internal file name can not allowed for symlink
-    // cant't allow  ln -s  .stats  <file>
-    if (parent == kRootIno && IsInternalName(name)) {
-      LOG(WARNING) << "Can not symlink internal node, parent inodeId=" << parent
-                   << ", name: " << name;
-      return Status::NoPermitted("Can not symlink internal node");
-    }
-    // cant't allow  ln -s <file> .stats
-    if (parent == kRootIno && IsInternalName(link)) {
-      LOG(WARNING) << "Can not symlink to internal node, parent inodeId="
-                   << parent << ", link: " << link;
-      return Status::NoPermitted("Can not symlink to internal node");
-    }
+  // Trash protection: cannot create new entries inside .trash/sub-buckets,
+  // nor a symlink literally named .trash at root.
+  if (IsCreateInTrashForbidden(parent, name)) {
+    return Status::NoPermitted("cannot symlink in trash");
+  }
+  // internal file name can not allowed for symlink
+  // cant't allow  ln -s  .stats  <file>
+  if (parent == kRootIno && IsInternalName(name)) {
+    LOG(WARNING) << "Can not symlink internal node, parent inodeId=" << parent
+                 << ", name: " << name;
+    return Status::NoPermitted("Can not symlink internal node");
+  }
+  // cant't allow  ln -s <file> .stats
+  if (parent == kRootIno && IsInternalName(link)) {
+    LOG(WARNING) << "Can not symlink to internal node, parent inodeId="
+                 << parent << ", link: " << link;
+    return Status::NoPermitted("Can not symlink to internal node");
   }
 
   return meta_system_->Symlink(ctx, TranslateIno(parent), name, uid, gid, link,
@@ -438,18 +439,16 @@ Status VFSImpl::Rename(ContextSPtr ctx, Ino old_parent,
 
 Status VFSImpl::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
                      const std::string& new_name, Attr* attr) {
-  {
-    // Trash protection: cannot create a hard link inside .trash/sub-buckets,
-    // nor a hardlink literally named .trash at root.
-    if (IsCreateInTrashForbidden(new_parent, new_name)) {
-      return Status::NoPermitted("cannot link in trash");
-    }
-    // cant't allow  ln   <file> .stats
-    // cant't allow  ln  .stats  <file>
-    if (IsInternalNode(ino) ||
-        (new_parent == kRootIno && IsInternalName(new_name))) {
-      return Status::NoPermitted("Can not link internal node");
-    }
+  // Trash protection: cannot create a hard link inside .trash/sub-buckets,
+  // nor a hardlink literally named .trash at root.
+  if (IsCreateInTrashForbidden(new_parent, new_name)) {
+    return Status::NoPermitted("cannot link in trash");
+  }
+  // cant't allow  ln   <file> .stats
+  // cant't allow  ln  .stats  <file>
+  if (IsInternalNode(ino) ||
+      (new_parent == kRootIno && IsInternalName(new_name))) {
+    return Status::NoPermitted("Can not link internal node");
   }
 
   Status s = meta_system_->Link(ctx, TranslateIno(ino),
@@ -457,6 +456,7 @@ Status VFSImpl::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
   if (s.ok()) {
     vfs_hub_->GetFileSuffixWatcher()->Forget(ino);
   }
+
   return s;
 }
 
@@ -516,6 +516,10 @@ Status VFSImpl::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t* fh) {
 Status VFSImpl::Create(ContextSPtr ctx, Ino parent, const std::string& name,
                        uint32_t uid, uint32_t gid, uint32_t mode, int flags,
                        uint64_t* fh, Attr* attr) {
+  if (IsCreateInTrashForbidden(parent, name)) {
+    return Status::NoPermitted("cannot create in trash");
+  }
+
   uint64_t gfh = vfs::FhGenerator::GenFh();
   Status s = meta_system_->Create(ctx, TranslateIno(parent), name, uid, gid,
                                   mode, flags, attr, gfh);
@@ -626,7 +630,7 @@ Status VFSImpl::Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t size,
 }
 
 Status VFSImpl::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {
-  if (BAIDU_UNLIKELY(ino == kStatsIno)) {
+  if (BAIDU_UNLIKELY(IsInternalNode(ino))) {
     return Status::OK();
   }
 
@@ -646,7 +650,7 @@ Status VFSImpl::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {
 }
 
 Status VFSImpl::Release(ContextSPtr ctx, Ino ino, uint64_t fh) {
-  if (BAIDU_UNLIKELY(ino == kStatsIno)) {
+  if (BAIDU_UNLIKELY(IsInternalNode(ino))) {
     handle_manager_->ReleaseHandler(fh);
     return Status::OK();
   }
@@ -734,6 +738,7 @@ Status VFSImpl::MkDir(ContextSPtr ctx, Ino parent, const std::string& name,
   if (IsCreateInTrashForbidden(parent, name)) {
     return Status::NoPermitted("cannot mkdir in trash");
   }
+
   return meta_system_->MkDir(ctx, TranslateIno(parent), name, uid, gid, mode,
                              attr);
 }
