@@ -103,10 +103,11 @@ static std::string FindValue(const std::vector<KeyValue>& kvs, const std::string
 }
 
 static void AddParentIno(AttrEntry& attr, Ino parent) {
-  auto it = std::find(attr.parents().begin(), attr.parents().end(), parent);
-  if (it == attr.parents().end()) {
-    attr.add_parents(parent);
-  }
+  attr.add_parents(parent);
+  // auto it = std::find(attr.parents().begin(), attr.parents().end(), parent);
+  // if (it == attr.parents().end()) {
+  //   attr.add_parents(parent);
+  // }
 }
 
 static void DelParentIno(AttrEntry& attr, Ino parent) {
@@ -1685,6 +1686,8 @@ Status RmDirOperation::Run(TxnUPtr& txn) {
   std::vector<std::string> keys{parent_key, dentry_key};
   std::string child_attr_key, bucket_dentry_key;
   if (enable_trash) {
+    CHECK(child_ino != 0) << "invalid child ino(0) for trash rmdir";
+
     child_attr_key = MetaCodec::EncodeInodeKey(fs_id, child_ino);
     keys.push_back(child_attr_key);
     if (!trash_.IsAlreadyExist()) {
@@ -1731,11 +1734,11 @@ Status RmDirOperation::Run(TxnUPtr& txn) {
   // 3. POSIX rmdir requires the directory to be empty.
   bool is_empty = false;
   Ino first_child_ino = 0;
-  status = CheckDirEmpty(txn, fs_id, child_ino, is_empty, first_child_ino);
+  status = CheckDirEmpty(txn, fs_id, dentry.ino(), is_empty, first_child_ino);
   if (!status.ok()) return status;
   if (!is_empty) {
     return Status(pb::error::ENOT_EMPTY,
-                  fmt::format("directory({}) is not empty, child ino({})", child_ino, first_child_ino));
+                  fmt::format("directory({}) is not empty, child ino({})", dentry.ino(), first_child_ino));
   }
 
   // 4. Update parent attr (nlink--, ctime/mtime/version bump) in both modes.
@@ -1751,10 +1754,11 @@ Status RmDirOperation::Run(TxnUPtr& txn) {
   txn->Delete(dentry_key);
 
   if (!enable_trash) {
+    child_attr_key = MetaCodec::EncodeInodeKey(fs_id, dentry.ino());
     // 6a. Plain rmdir: drop the child inode and its mutation slots.
     txn->Delete(child_attr_key);
     for (uint32_t i = 0; i < kDirAttrMutationNum; ++i) {
-      txn->Delete(MetaCodec::EncodeDirInodeMutationKey(fs_id, child_ino, i));
+      txn->Delete(MetaCodec::EncodeDirInodeMutationKey(fs_id, dentry.ino(), i));
     }
   } else {
     CHECK(trash_.bucket_ino != 0) << "invalid trash bucket ino(0)";
@@ -1774,7 +1778,7 @@ Status RmDirOperation::Run(TxnUPtr& txn) {
     // Bucket inode attr is intentionally not touched (see trash.cc).
     DentryEntry trash_dentry;
     trash_dentry.set_fs_id(fs_id);
-    trash_dentry.set_ino(child_ino);
+    trash_dentry.set_ino(dentry.ino());
     trash_dentry.set_parent(trash_.bucket_ino);
     trash_dentry.set_name(trash_entry_name);
     trash_dentry.set_type(pb::mds::FileType::DIRECTORY);

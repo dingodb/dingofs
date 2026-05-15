@@ -15,8 +15,10 @@
 #ifndef DINGOFS_MDS_DUMMY_STORAGE_H_
 #define DINGOFS_MDS_DUMMY_STORAGE_H_
 
+#include <atomic>
 #include <cstdint>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -54,6 +56,14 @@ class DummyStorage : public KVStorage {
   TxnUPtr NewTxn(Txn::IsolationLevel isolation_level = Txn::kSnapshotIsolation) override;
 
  private:
+  friend class DummyTxn;
+
+  // Atomically verifies that none of `if_absent_keys` already exist, then
+  // applies `writes` (last-write-wins per key). Used by DummyTxn::Commit to
+  // make PutIfAbsent semantics race-free against concurrent committers.
+  Status ApplyTxn(const std::map<std::string, KeyValue>& writes,
+                  const std::set<std::string>& if_absent_keys);
+
   struct Table {
     std::string name;
     std::string start_key;
@@ -95,7 +105,15 @@ class DummyTxn : public Txn {
 
   Txn::IsolationLevel isolation_level_;
 
-  std::vector<KeyValue> stage_writes_;
+  // key -> latest staged op (last-write-wins). Map is sorted to make Scan
+  // merging cheap and deterministic.
+  std::map<std::string, KeyValue> stage_writes_;
+
+  // Subset of stage_writes_ keys created via PutIfAbsent. Their absence in
+  // storage must be re-verified atomically at Commit time.
+  std::set<std::string> if_absent_keys_;
+
+  bool committed_{false};
 };
 
 }  // namespace mds

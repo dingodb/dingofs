@@ -14,10 +14,15 @@
 
 #include "mds/storage/dummy_storage.h"
 
+#include <atomic>
 #include <cstddef>
+#include <cstdint>
+#include <map>
+#include <set>
+#include <utility>
+#include <vector>
 
 #include "dingofs/error.pb.h"
-#include "mds/common/helper.h"
 
 namespace dingofs {
 namespace mds {
@@ -38,7 +43,17 @@ Status DummyStorage::CreateTable(const std::string& name, const TableOption& opt
 Status DummyStorage::DropTable(int64_t table_id) {
   utils::WriteLockGuard lock(lock_);
 
-  tables_.erase(table_id);
+  auto it = tables_.find(table_id);
+  if (it == tables_.end()) return Status::OK();
+
+  // Erase all data belonging to this table's key range.
+  const auto& tbl = it->second;
+  if (!tbl.start_key.empty() || !tbl.end_key.empty()) {
+    auto first = data_.lower_bound(tbl.start_key);
+    auto last = data_.lower_bound(tbl.end_key);
+    data_.erase(first, last);
+  }
+  tables_.erase(it);
 
   return Status::OK();
 }
@@ -53,6 +68,12 @@ Status DummyStorage::DropTable(const Range& range) {
       ++it;
     }
   }
+
+  // Erase data in the requested range, regardless of whether a matching
+  // table descriptor existed.
+  auto first = data_.lower_bound(range.start);
+  auto last = data_.lower_bound(range.end);
+  data_.erase(first, last);
 
   return Status::OK();
 }
@@ -79,7 +100,8 @@ Status DummyStorage::Put(WriteOption option, const std::string& key, const std::
 Status DummyStorage::Put(WriteOption option, KeyValue& kv) {
   utils::WriteLockGuard lock(lock_);
 
-  if (option.is_if_absent) {
+  // is_if_absent only makes sense for Put operations.
+  if (option.is_if_absent && kv.opt_type == KeyValue::OpType::kPut) {
     auto it = data_.find(kv.key);
     if (it != data_.end()) {
       return Status(pb::error::EEXISTED, "key already exist");
@@ -100,6 +122,7 @@ Status DummyStorage::Put(WriteOption option, const std::vector<KeyValue>& kvs) {
 
   if (option.is_if_absent) {
     for (const auto& kv : kvs) {
+      if (kv.opt_type != KeyValue::OpType::kPut) continue;
       auto it = data_.find(kv.key);
       if (it != data_.end()) {
         return Status(pb::error::EEXISTED, "key already exist");
@@ -179,122 +202,213 @@ TxnUPtr DummyStorage::NewTxn(Txn::IsolationLevel isolation_level) {
   return std::make_unique<DummyTxn>(this, isolation_level);
 }
 
+Status DummyStorage::ApplyTxn(const std::map<std::string, KeyValue>& writes,
+                              const std::set<std::string>& if_absent_keys) {
+  utils::WriteLockGuard lock(lock_);
+
+  // Re-verify if-absent keys atomically with the apply.
+  for (const auto& key : if_absent_keys) {
+    auto wit = writes.find(key);
+    // Skip if the key was overwritten to a delete after PutIfAbsent.
+    if (wit == writes.end() || wit->second.opt_type != KeyValue::OpType::kPut) {
+      continue;
+    }
+    if (data_.find(key) != data_.end()) {
+      return Status(pb::error::EEXISTED, "key already exist");
+    }
+  }
+
+  for (const auto& [key, kv] : writes) {
+    if (kv.opt_type == KeyValue::OpType::kPut) {
+      data_[key] = kv.value;
+    } else if (kv.opt_type == KeyValue::OpType::kDelete) {
+      data_.erase(key);
+    }
+  }
+
+  return Status::OK();
+}
+
 DummyTxn::DummyTxn(DummyStorage* storage, Txn::IsolationLevel isolation_level)
     : storage_(storage), isolation_level_(isolation_level) {
-  txn_id_ = utils::TimestampNs();
+  static std::atomic<int64_t> kNextTxnId{1};
+  txn_id_ = kNextTxnId.fetch_add(1, std::memory_order_relaxed);
 }
 
 int64_t DummyTxn::ID() const { return txn_id_; }
 
 Status DummyTxn::Put(const std::string& key, const std::string& value) {
-  stage_writes_.push_back(KeyValue{KeyValue::OpType::kPut, key, value});
+  if (committed_) return Status(pb::error::EINTERNAL, "txn already committed");
+
+  stage_writes_[key] = KeyValue{KeyValue::OpType::kPut, key, value};
+  // A subsequent unconditional Put overrides any prior PutIfAbsent intent.
+  if_absent_keys_.erase(key);
   return Status::OK();
 }
 
 Status DummyTxn::PutIfAbsent(const std::string& key, const std::string& value) {
-  KVStorage::WriteOption option;
-  option.is_if_absent = true;
+  if (committed_) return Status(pb::error::EINTERNAL, "txn already committed");
 
-  return storage_->Put(option, key, value);
+  // A prior staged Put in this txn means the key is already present from the
+  // txn's view -- reject immediately.
+  auto sit = stage_writes_.find(key);
+  if (sit != stage_writes_.end() &&
+      sit->second.opt_type == KeyValue::OpType::kPut) {
+    return Status(pb::error::EEXISTED, "key already exist");
+  }
+
+  // Verify the key is absent in storage. Re-checked atomically at Commit.
+  std::string ignored;
+  auto status = storage_->Get(key, ignored);
+  if (status.ok()) {
+    return Status(pb::error::EEXISTED, "key already exist");
+  }
+  if (status.error_code() != pb::error::ENOT_FOUND) {
+    return status;
+  }
+
+  stage_writes_[key] = KeyValue{KeyValue::OpType::kPut, key, value};
+  if_absent_keys_.insert(key);
+  return Status::OK();
 }
 
 Status DummyTxn::Delete(const std::string& key) {
-  stage_writes_.push_back(KeyValue{KeyValue::OpType::kDelete, key, ""});
+  if (committed_) return Status(pb::error::EINTERNAL, "txn already committed");
 
+  stage_writes_[key] = KeyValue{KeyValue::OpType::kDelete, key, ""};
+  if_absent_keys_.erase(key);
   return Status::OK();
 }
 
 Status DummyTxn::Get(const std::string& key, std::string& value) {
-  // check staged writes first
-  for (size_t i = stage_writes_.size(); i > 0; --i) {
-    auto& kv = stage_writes_[i - 1];
-
-    if (kv.key == key) {
-      if (kv.opt_type == KeyValue::OpType::kPut) {
-        value = kv.value;
-        return Status::OK();
-
-      } else if (kv.opt_type == KeyValue::OpType::kDelete) {
-        return Status(pb::error::ENOT_FOUND, "key not found");
-      }
+  auto it = stage_writes_.find(key);
+  if (it != stage_writes_.end()) {
+    if (it->second.opt_type == KeyValue::OpType::kDelete) {
+      return Status(pb::error::ENOT_FOUND, "key not found");
     }
+    value = it->second.value;
+    return Status::OK();
   }
 
   return storage_->Get(key, value);
 }
 
 Status DummyTxn::BatchGet(const std::vector<std::string>& keys, std::vector<KeyValue>& kvs) {
-  // check staged writes first
   std::vector<std::string> rest_keys;
+  rest_keys.reserve(keys.size());
+
   for (const auto& key : keys) {
-    bool found = false;
-    for (size_t i = stage_writes_.size(); i > 0; --i) {
-      auto& kv = stage_writes_[i - 1];
-
-      if (kv.key == key) {
-        if (kv.opt_type == KeyValue::OpType::kPut) {
-          kvs.push_back(kv);
-        }
-
-        found = true;
-        break;
-      }
+    auto it = stage_writes_.find(key);
+    if (it == stage_writes_.end()) {
+      rest_keys.push_back(key);
+      continue;
     }
-
-    if (!found) rest_keys.push_back(key);
+    // Staged delete masks any underlying value; staged put returns the staged value.
+    if (it->second.opt_type == KeyValue::OpType::kPut) {
+      kvs.push_back(it->second);
+    }
   }
+
+  if (rest_keys.empty()) return Status::OK();
 
   std::vector<KeyValue> rest_kvs;
   auto status = storage_->BatchGet(rest_keys, rest_kvs);
   if (!status.ok()) return status;
 
   kvs.insert(kvs.end(), rest_kvs.begin(), rest_kvs.end());
-
   return Status::OK();
 }
 
+// Merges a sorted storage scan result with the txn's staged writes for the
+// given range. Iterates in ascending key order, applying staged
+// puts/deletes to mask or override storage values.
+static void MergeScanWithStage(const Range& range, const std::map<std::string, KeyValue>& stage_writes,
+                               std::vector<KeyValue>&& storage_kvs, uint64_t limit, std::vector<KeyValue>& out) {
+  auto sit = stage_writes.lower_bound(range.start);
+  auto send = stage_writes.lower_bound(range.end);
+
+  auto kit = storage_kvs.begin();
+  auto kend = storage_kvs.end();
+
+  auto emit = [&](KeyValue kv) -> bool {
+    out.push_back(std::move(kv));
+    return out.size() < limit;
+  };
+
+  while (out.size() < limit && (kit != kend || sit != send)) {
+    bool take_stage;
+    if (kit == kend) {
+      take_stage = true;
+    } else if (sit == send) {
+      take_stage = false;
+    } else if (sit->first < kit->key) {
+      take_stage = true;
+    } else if (sit->first == kit->key) {
+      take_stage = true;
+      ++kit;  // staged op overrides storage value for this key
+    } else {
+      take_stage = false;
+    }
+
+    if (take_stage) {
+      if (sit->second.opt_type == KeyValue::OpType::kPut) {
+        if (!emit(sit->second)) return;
+      }
+      ++sit;
+    } else {
+      if (!emit(*kit)) return;
+      ++kit;
+    }
+  }
+}
+
 Status DummyTxn::Scan(const Range& range, uint64_t limit, std::vector<KeyValue>& kvs) {
-  auto status = storage_->Scan(range, kvs);
+  std::vector<KeyValue> storage_kvs;
+  auto status = storage_->Scan(range, storage_kvs);
   if (!status.ok()) return status;
 
-  if (kvs.size() > limit) kvs.resize(limit);
-
-  return status;
+  if (limit == 0) limit = UINT64_MAX;
+  MergeScanWithStage(range, stage_writes_, std::move(storage_kvs), limit, kvs);
+  return Status::OK();
 }
 
 Status DummyTxn::Scan(const Range& range, ScanHandlerType handler) {
-  std::vector<KeyValue> kvs;
-  auto status = storage_->Scan(range, kvs);
-  if (!status.ok()) {
-    return status;
-  }
+  std::vector<KeyValue> storage_kvs;
+  auto status = storage_->Scan(range, storage_kvs);
+  if (!status.ok()) return status;
 
-  for (const auto& kv : kvs) {
-    if (!handler(kv.key, kv.value)) {
-      break;
-    }
-  }
+  std::vector<KeyValue> merged;
+  MergeScanWithStage(range, stage_writes_, std::move(storage_kvs), UINT64_MAX, merged);
 
-  return status;
+  for (const auto& kv : merged) {
+    if (!handler(kv.key, kv.value)) break;
+  }
+  return Status::OK();
 }
 
 Status DummyTxn::Scan(const Range& range, std::function<bool(KeyValue&)> handler) {
-  std::vector<KeyValue> kvs;
-  auto status = storage_->Scan(range, kvs);
-  if (!status.ok()) {
-    return status;
-  }
+  std::vector<KeyValue> storage_kvs;
+  auto status = storage_->Scan(range, storage_kvs);
+  if (!status.ok()) return status;
 
-  for (auto& kv : kvs) {
-    if (!handler(kv)) {
-      break;
-    }
-  }
+  std::vector<KeyValue> merged;
+  MergeScanWithStage(range, stage_writes_, std::move(storage_kvs), UINT64_MAX, merged);
 
-  return status;
+  for (auto& kv : merged) {
+    if (!handler(kv)) break;
+  }
+  return Status::OK();
 }
 
-Status DummyTxn::Commit() { return storage_->Put(KVStorage::WriteOption(), stage_writes_); }
+Status DummyTxn::Commit() {
+  if (committed_) return Status(pb::error::EINTERNAL, "txn already committed");
+  committed_ = true;
+
+  auto status = storage_->ApplyTxn(stage_writes_, if_absent_keys_);
+  stage_writes_.clear();
+  if_absent_keys_.clear();
+  return status;
+}
 
 Trace::Txn DummyTxn::GetTrace() { return Trace::Txn(); }
 
