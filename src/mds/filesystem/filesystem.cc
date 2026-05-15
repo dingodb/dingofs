@@ -149,9 +149,13 @@ static bool IsInodeInTrash(const InodeSPtr& inode) {
   // parents-only walk would miss it and let mutation ops reach the batch
   // path against an inode with no KV record (fail-loud CHECK).
   if (IsTrashInode(inode->Ino())) return true;
+
+  if (inode->Parents().empty()) return false;  // no parents → not in trash
+
   for (auto p : inode->Parents()) {
     if (!IsTrashInode(p)) return false;
   }
+
   return true;  // every parent is a trash bucket (or parents is empty)
 }
 
