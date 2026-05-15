@@ -28,6 +28,7 @@
 #include "dingofs/mds.pb.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
+#include "mds/common/trash.h"
 #include "mds/common/type.h"
 
 namespace dingofs {
@@ -414,6 +415,10 @@ Status MDSClient::MkNod(ContextSPtr& ctx, Ino parent, const std::string& name,
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
   CHECK(ctx != nullptr) << "context is nullptr.";
 
+  if (CheckTrashParent(parent)) {
+    return Status::NoPermitted("cannot mknod under trash");
+  }
+
   auto get_mds_fn = [this, parent](bool& is_primary_mds) -> MDSMeta {
     return GetMdsByParent(parent, is_primary_mds);
   };
@@ -459,6 +464,10 @@ Status MDSClient::BatchMkNod(ContextSPtr& ctx, Ino parent,
                              std::vector<AttrEntry>& attr_entries,
                              AttrEntry& parent_attr_entry) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
+
+  if (CheckTrashParent(parent)) {
+    return Status::NoPermitted("cannot mknod under trash");
+  }
 
   auto get_mds_fn = [this, parent](bool& is_primary_mds) -> MDSMeta {
     return GetMdsByParent(parent, is_primary_mds);
@@ -511,6 +520,10 @@ Status MDSClient::MkDir(ContextSPtr& ctx, Ino parent, const std::string& name,
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
   CHECK(ctx != nullptr) << "context is nullptr.";
 
+  if (CheckTrashParent(parent)) {
+    return Status::NoPermitted("cannot mkdir under trash");
+  }
+
   auto get_mds_fn = [this, parent](bool& is_primary_mds) -> MDSMeta {
     return GetMdsByParent(parent, is_primary_mds);
   };
@@ -556,6 +569,10 @@ Status MDSClient::BatchMkDir(ContextSPtr& ctx, Ino parent,
                              std::vector<AttrEntry>& attr_entries,
                              AttrEntry& parent_attr_entry) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
+
+  if (CheckTrashParent(parent)) {
+    return Status::NoPermitted("cannot mkdir under trash");
+  }
 
   auto get_mds_fn = [this, parent](bool& is_primary_mds) -> MDSMeta {
     return GetMdsByParent(parent, is_primary_mds);
@@ -806,6 +823,10 @@ Status MDSClient::Link(ContextSPtr& ctx, Ino ino, Ino new_parent,
                        AttrEntry& parent_attr_entry) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
+  if (CheckTrashParent(new_parent)) {
+    return Status::NoPermitted("cannot link under trash");
+  }
+
   auto get_mds_fn = [this, new_parent](bool& is_primary_mds) -> MDSMeta {
     return GetMdsByParent(new_parent, is_primary_mds);
   };
@@ -932,6 +953,10 @@ Status MDSClient::Symlink(ContextSPtr& ctx, Ino parent, const std::string& name,
                           const std::string& symlink, AttrEntry& attr_entry,
                           AttrEntry& parent_attr_entry) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
+
+  if (CheckTrashParent(parent)) {
+    return Status::NoPermitted("cannot symlink under trash");
+  }
 
   auto get_mds_fn = [this, parent](bool& is_primary_mds) -> MDSMeta {
     return GetMdsByParent(parent, is_primary_mds);
@@ -1606,6 +1631,14 @@ Status MDSClient::GetDirQuota(ContextSPtr& ctx, Ino ino, FsStat& fs_stat) {
   fs_stat.used_inodes = quota.used_inodes();
 
   return Status::OK();
+}
+
+bool MDSClient::CheckTrashParent(Ino parent) {
+  Ino gparent;
+  if (parent_memo_.GetParent(parent, gparent)) {
+    return mds::IsTrashInode(gparent);
+  }
+  return false;
 }
 
 bool MDSClient::UpdateRouter() {

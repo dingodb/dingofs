@@ -133,14 +133,7 @@ bool ParentHashMDSRouter::Init(
 }
 
 bool ParentHashMDSRouter::GetMDSByParent(Ino parent, mds::MDSMeta& mds_meta) {
-  // Trash virtual root and hour-bucket children have no caching benefit on a
-  // fixed MDS: ReadDir always evicts (filesystem.cc IsTrashInode branch) and
-  // cross-MDS trash-moves don't notify the bucket-owner. Fall through to
-  // random routing so listing/lookup load on .trash spreads across MDSes;
-  // caller will set is_bypass_cache=true.
-  if (mds::IsTrashInode(parent)) {
-    return false;
-  }
+  if (mds::IsTrashInode(parent)) return false;
 
   utils::ReadLockGuard lk(lock_);
 
@@ -160,9 +153,7 @@ bool ParentHashMDSRouter::GetMDS(Ino ino, mds::MDSMeta& mds_meta) {
     return false;
   }
 
-  if (mds::IsTrashInode(parent)) {
-    return false;
-  }
+  if (mds::IsTrashInode(parent)) return false;
 
   utils::ReadLockGuard lk(lock_);
 

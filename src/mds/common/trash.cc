@@ -57,8 +57,7 @@ std::string BuildTrashEntryName(Ino parent_ino, Ino file_ino, const std::string&
   return result;
 }
 
-bool ParseTrashEntryName(const std::string& trash_name, Ino& parent_ino, Ino& file_ino,
-                         std::string& original_name) {
+bool ParseTrashEntryName(const std::string& trash_name, Ino& parent_ino, Ino& file_ino, std::string& original_name) {
   auto pos1 = trash_name.find('-');
   if (pos1 == std::string::npos) return false;
 
@@ -74,6 +73,20 @@ bool ParseTrashEntryName(const std::string& trash_name, Ino& parent_ino, Ino& fi
 
   original_name = trash_name.substr(pos2 + 1);
   return true;
+}
+
+Ino ParseTrashEntryName(const std::string& trash_name) {
+  auto pos1 = trash_name.find('-');
+  if (pos1 == std::string::npos) return false;
+
+  try {
+    return std::stoull(trash_name.substr(0, pos1));
+
+  } catch (...) {
+    return 0;
+  }
+
+  return 0;
 }
 
 AttrEntry BuildTrashInodeAttr(uint32_t fs_id, uint64_t fs_create_time_ns) {

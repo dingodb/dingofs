@@ -53,8 +53,9 @@ uint64_t ParseTrashBucketName(const std::string& name);
 // Truncated to 255 bytes if needed.
 std::string BuildTrashEntryName(Ino parent_ino, Ino file_ino, const std::string& original_name);
 
-// Parse trash entry name. Returns false on parse failure.
+// Parse trash entry name
 bool ParseTrashEntryName(const std::string& trash_name, Ino& parent_ino, Ino& file_ino, std::string& original_name);
+Ino ParseTrashEntryName(const std::string& trash_name);
 
 // Build the virtual inode attr for kTrashInodeId. kTrashInodeId has no KV record
 // (its dentries live under it, but the node itself is synthesized on demand).

@@ -17,7 +17,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <deque>
 #include <memory>
 #include <vector>
 
@@ -27,7 +26,6 @@
 #include "mds/common/type.h"
 #include "utils/concurrent/concurrent.h"
 #include "utils/shards.h"
-#include "utils/time.h"
 
 namespace dingofs {
 namespace client {
@@ -36,12 +34,18 @@ namespace meta {
 
 using mds::Ino;
 
+class DirProfile;
+using DirProfileSPtr = std::shared_ptr<DirProfile>;
 // Per-directory profile populated incrementally during ReadDir and consulted
 // on Open to decide whether to fire a batch warmup. Best-effort: data is
 // statistical, never authoritative for correctness.
 class DirProfile {
  public:
   explicit DirProfile(Ino parent_ino) : parent_ino_(parent_ino) {}
+
+  static DirProfileSPtr New(Ino parent_ino) {
+    return std::make_shared<DirProfile>(parent_ino);
+  }
 
   Ino ParentIno() const { return parent_ino_; }
 
@@ -106,8 +110,6 @@ class DirProfile {
 
   uint64_t last_active_time_s_{0};
 };
-
-using DirProfileSPtr = std::shared_ptr<DirProfile>;
 
 class DirProfileCache;
 using DirProfileCacheUPtr = std::unique_ptr<DirProfileCache>;

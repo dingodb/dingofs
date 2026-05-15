@@ -220,6 +220,8 @@ class MDSClient {
   uint64_t GetInodeVersion(Ino ino);
   int32_t GetInodeRenameRefCount(Ino ino);
 
+  bool CheckTrashParent(Ino parent);
+
   bool UpdateRouter();
 
   void ProcessEpochChange();

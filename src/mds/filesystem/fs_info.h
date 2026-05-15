@@ -90,6 +90,23 @@ class FsInfo {
     return fs_info_.status();
   }
 
+  bool ImmediateTrashQuota() {
+    utils::ReadLockGuard lock(lock_);
+
+    return fs_info_.immediate_trash_quota();
+  }
+
+  uint32_t TrashDays() {
+    utils::ReadLockGuard lock(lock_);
+
+    return fs_info_.trash_days();
+  }
+  bool EnableTrash() {
+    utils::ReadLockGuard lock(lock_);
+
+    return fs_info_.trash_days() != 0;
+  }
+
   pb::mds::PartitionType GetPartitionType() {
     utils::ReadLockGuard lock(lock_);
 

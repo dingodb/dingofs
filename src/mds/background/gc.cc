@@ -1014,10 +1014,8 @@ bool CleanTrashTask::DrainBucketFiles(FileSystemSPtr fs, bool immediate_quota, c
             const int64_t delta_bytes =
                 attr.type() == pb::mds::FileType::FILE ? -static_cast<int64_t>(attr.length()) : 0;
             const std::string reason = fmt::format("trash-clean.{}.{}", sub_trash_ino_, attr.ino());
-            Ino origin_parent = 0;
-            Ino origin_ino = 0;
-            std::string origin_name;
-            if (ParseTrashEntryName(dentry.Name(), origin_parent, origin_ino, origin_name) && origin_parent != 0) {
+            Ino origin_parent = ParseTrashEntryName(dentry.Name());
+            if (origin_parent != 0) {
               fs->GetQuotaManager().AsyncUpdateDirUsage(origin_parent, delta_bytes, -1, reason);
             }
           }
@@ -1059,10 +1057,8 @@ void CleanTrashTask::RmdirBucketDirs(FileSystemSPtr fs, bool immediate_quota, cl
         // trash lifecycle.
         if (!immediate_quota) {
           const std::string reason = fmt::format("trash-clean.{}.{}", sub_trash_ino_, dir.INo());
-          Ino origin_parent = 0;
-          Ino origin_ino = 0;
-          std::string origin_name;
-          if (ParseTrashEntryName(dir.Name(), origin_parent, origin_ino, origin_name) && origin_parent != 0) {
+          Ino origin_parent = ParseTrashEntryName(dir.Name());
+          if (origin_parent != 0) {
             fs->GetQuotaManager().AsyncUpdateDirUsage(origin_parent, 0, -1, reason);
           }
         }
