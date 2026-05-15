@@ -251,7 +251,11 @@ Status FsUtils::GenRootDirJsonString(std::string& output) {
   nlohmann::json doc = nlohmann::json::array();
 
   nlohmann::json item;
-  item["ino"] = attr.ino();
+  // Emit ino as a JSON string: trash-realm inos (kTrashInodeId,
+  // kTrashSubInodeStart+) exceed 2^53 and lose precision when parsed as a
+  // JSON number by the dashboard JS, which then sends a wrong-parent URL
+  // back. Stringifying all inos keeps the wire format uniform.
+  item["ino"] = std::to_string(attr.ino());
   item["name"] = "/";
   item["type"] = "directory";
   if (fs_info_.partition_policy().type() == pb::mds::PartitionType::MONOLITHIC_PARTITION) {
@@ -336,9 +340,16 @@ Status FsUtils::GenDirJsonString(Ino parent, std::string& output) {
     const auto& attr = it->second;
 
     nlohmann::json item;
-    item["ino"] = dentry.ino();
+    item["ino"] = std::to_string(dentry.ino());
     item["name"] = dentry.name();
     item["type"] = dentry.type() == pb::mds::FileType::DIRECTORY ? "directory" : "file";
+    // Hour-bucket sub-trash directories live in the trash ino range and have
+    // no persistent partition (every request builds a request-local
+    // ShardPartition; see mds/common/trash.h). Suppress the dashboard shard
+    // link for them, matching the synthesized `.trash` row above.
+    if (IsTrashInode(dentry.ino())) {
+      item["no_shard"] = true;
+    }
     if (fs_info_.partition_policy().type() == pb::mds::PartitionType::MONOLITHIC_PARTITION) {
       item["node"] = fs_info_.partition_policy().mono().mds_id();
     } else {
@@ -352,6 +363,34 @@ Status FsUtils::GenDirJsonString(Ino parent, std::string& output) {
                     attr.nlink(), attr.uid(), attr.gid(), attr.length(), FormatTime(attr.ctime()),
                     FormatTime(attr.mtime()), FormatTime(attr.atime()));
 
+    doc.push_back(item);
+  }
+
+  // Synthesize the virtual `.trash` directory under root. kTrashInodeId has
+  // no KV dentry — it is built on demand via BuildTrashInodeAttr (see
+  // mds/common/trash.h), so the ScanDentryOperation above never returns it.
+  // Gated on trash_days > 0 to mirror the GC enabled check
+  // (mds/background/gc.cc:1100) and the client-visible behavior.
+  if (parent == kRootIno && fs_info_.trash_days() > 0) {
+    const auto attr =
+        BuildTrashInodeAttr(fs_info_.fs_id(), fs_info_.create_time_s() * 1000000000ULL);
+    nlohmann::json item;
+    item["ino"] = std::to_string(attr.ino());
+    item["name"] = kTrashName;
+    item["type"] = "directory";
+    // .trash is a virtual root; it has no on-disk partition, so suppress
+    // the shard link in the dashboard JS.
+    item["no_shard"] = true;
+    if (fs_info_.partition_policy().type() == pb::mds::PartitionType::MONOLITHIC_PARTITION) {
+      item["node"] = fs_info_.partition_policy().mono().mds_id();
+    } else {
+      item["node"] = hash_router_->GetMDS(attr.ino());
+    }
+    item["description"] = fmt::format(
+        "{},{}/{},{},{},{},{},{},{},{}", attr.version(), attr.mode(),
+        Helper::FsModeToString(attr.mode()), attr.nlink(), attr.uid(), attr.gid(),
+        attr.length(), FormatTime(attr.ctime()), FormatTime(attr.mtime()),
+        FormatTime(attr.atime()));
     doc.push_back(item);
   }
 

@@ -43,6 +43,7 @@ class Helper {
   static bool StringToBool(const std::string& str);
   static int32_t StringToInt32(const std::string& str);
   static int64_t StringToInt64(const std::string& str);
+  static uint64_t StringToUint64(const std::string& str);
   static float StringToFloat(const std::string& str);
   static double StringToDouble(const std::string& str);
 
