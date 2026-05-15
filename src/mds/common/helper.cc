@@ -74,6 +74,7 @@ std::string Helper::ToLowerCase(const std::string& str) {
 bool Helper::StringToBool(const std::string& str) { return !(str == "0" || str == "false"); }
 int32_t Helper::StringToInt32(const std::string& str) { return std::strtol(str.c_str(), nullptr, 10); }
 int64_t Helper::StringToInt64(const std::string& str) { return std::strtoll(str.c_str(), nullptr, 10); }
+uint64_t Helper::StringToUint64(const std::string& str) { return std::strtoull(str.c_str(), nullptr, 10); }
 float Helper::StringToFloat(const std::string& str) { return std::strtof(str.c_str(), nullptr); }
 double Helper::StringToDouble(const std::string& str) { return std::strtod(str.c_str(), nullptr); }
 

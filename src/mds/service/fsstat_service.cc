@@ -247,6 +247,7 @@ static void RenderFsInfo(const std::vector<pb::mds::FsInfo>& fs_infoes, butil::I
   os << "<th>Owner</th>";
   os << "<th>Navigation</th>";
   os << "<th>Time</th>";
+  os << "<th>Trash</th>";
   os << "<th>RecycleTime</th>";
   os << "<th>MountPoint</th>";
   os << "<th>Storage</th>";
@@ -271,6 +272,10 @@ static void RenderFsInfo(const std::vector<pb::mds::FsInfo>& fs_infoes, butil::I
     os << "<td>" << fs_info.owner() << "</td>";
     os << "<td>" << render_navigation_func(fs_info) << "</td>";
     os << "<td>" << render_time_func(fs_info) << "</td>";
+    os << "<td>"
+       << fmt::format("trash_days: {}<br>immediate_trash_quota: {}", fs_info.trash_days(),
+                      fs_info.immediate_trash_quota() ? "true" : "false")
+       << "</td>";
     os << "<td>" << fmt::format("{}hour", fs_info.recycle_time_hour()) << "</td>";
     os << fmt::format(R"(<td><a href="FsStatService/mountpoint/{}" target="_blank">Goto</a>&nbsp;[{}]</td>)",
                       fs_info.fs_name(), fs_info.mount_points_size());
@@ -1149,15 +1154,16 @@ body {
         info.className = 'info';
         info.textContent = `[${item.ino},${item.description}][${item.node}]`;
 
-        const shard_link = document.createElement('a');
-        shard_link.href = `shard/${fs_id}/${item.ino}`;
-        shard_link.target = '_blank';
-        shard_link.textContent = 'shard';
-        
         folderDiv.appendChild(icon);
         folderDiv.appendChild(folderName);
         folderDiv.appendChild(info);
-        folderDiv.appendChild(shard_link);
+        if (!item.no_shard) {
+          const shard_link = document.createElement('a');
+          shard_link.href = `shard/${fs_id}/${item.ino}`;
+          shard_link.target = '_blank';
+          shard_link.textContent = 'shard';
+          folderDiv.appendChild(shard_link);
+        }
         
         // 只给目录名添加点击事件
         folderName.addEventListener('click', async function(e) {
@@ -1850,7 +1856,7 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
     // /FsStatService/delfiles/{fs_id}/{ino}
 
     uint32_t fs_id = Helper::StringToInt32(params[1]);
-    uint64_t ino = Helper::StringToInt64(params[2]);
+    uint64_t ino = Helper::StringToUint64(params[2]);
 
     auto file_system_set = Server::GetInstance().GetFileSystemSet();
     auto file_system = file_system_set->GetFileSystem(fs_id);
@@ -1912,7 +1918,7 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
     // /FsStatService/{fs_id}/{ino}
 
     uint32_t fs_id = Helper::StringToInt32(params[0]);
-    uint64_t ino = Helper::StringToInt64(params[1]);
+    uint64_t ino = Helper::StringToUint64(params[1]);
 
     auto file_system_set = Server::GetInstance().GetFileSystemSet();
     auto file_system = file_system_set->GetFileSystem(fs_id);
@@ -1934,7 +1940,7 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
     // /FsStatService/partition/{fs_id}/{ino}
 
     uint32_t fs_id = Helper::StringToInt32(params[1]);
-    uint64_t ino = Helper::StringToInt64(params[2]);
+    uint64_t ino = Helper::StringToUint64(params[2]);
 
     LOG(INFO) << fmt::format("Get dir json, fs_id: {}, ino: {}", fs_id, ino);
 
@@ -1961,7 +1967,7 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
     // /FsStatService/chunk/{fs_id}/{ino}
 
     uint32_t fs_id = Helper::StringToInt32(params[1]);
-    uint64_t ino = Helper::StringToInt64(params[2]);
+    uint64_t ino = Helper::StringToUint64(params[2]);
 
     FsUtils fs_utils(Server::GetInstance().GetOperationProcessor());
 
@@ -1978,7 +1984,7 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
     // /FsStatService/shard/{fs_id}/{ino}
 
     uint32_t fs_id = Helper::StringToInt32(params[1]);
-    uint64_t ino = Helper::StringToInt64(params[2]);
+    uint64_t ino = Helper::StringToUint64(params[2]);
 
     auto file_system_set = Server::GetInstance().GetFileSystemSet();
     auto file_system = file_system_set->GetFileSystem(fs_id);
