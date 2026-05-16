@@ -3631,6 +3631,19 @@ Status FileSystem::RestoreFromTrash(Context& ctx, Ino trash_parent, const std::s
   // GetPartitionFromStore), so there's nothing to evict here — the next
   // ls .trash/<bucket> reads dentries directly from KV.
 
+  // Refresh parent_memo_ for restored DIRECTORY: the dir's parents() just
+  // flipped from [trash_parent_] back to [actual_dst_parent]. Any
+  // AsyncUpdateDirUsage(parent=this_dir_ino, ...) that fires next (e.g. when
+  // a child file is restored or written into it) walks ancestors via
+  // DirQuotaMap::GetParent, which would otherwise either read the new value
+  // from KV or, worse, return a stale [trash_parent_] cached from when the
+  // dir was still in trash -- in which case the walk hits IsTrashInode and
+  // stops at the trash boundary, losing the per-dir quota credit. Updating
+  // the memo here closes that window for the in-process MDS.
+  if (result.file_type == pb::mds::FileType::DIRECTORY) {
+    parent_memo_.Remeber(result.file_ino, actual_dst_parent);
+  }
+
   // Quota.
   //  - immediate_trash_quota=false: nothing to do. Trash-move didn't touch
   //    per-dir quota, so there's no debit to reverse.

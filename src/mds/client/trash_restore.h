@@ -68,6 +68,10 @@ class TrashRestore {
  private:
   void DoRestoreHour(const std::string& hour);
   void WorkerLoop(Ino bucket_ino);
+  // Restore a single trash dentry. Increments restored_/skipped_/failed_ as
+  // appropriate. Used both by WorkerLoop (queue-driven) and DoRestoreHour
+  // (serial directory pre-pass).
+  void RestoreOne(Ino bucket_ino, const pb::mds::Dentry& dentry);
 
   Options options_;
   std::unique_ptr<MDSClient> client_;
