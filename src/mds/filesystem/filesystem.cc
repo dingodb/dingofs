@@ -2454,11 +2454,11 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
   }
   // Sub-trash hour buckets are server-managed; extracting one strands its
   // contents (their parents_ still points at the original sub_trash_ino, so
-  // neither ScanTrash nor RestoreFromTrash can reach them anymore). Allow
-  // root only -- on the assumption root is doing this deliberately and will
-  // take responsibility for the orphaned entries.
-  if (old_parent == kTrashInodeId && ctx.Uid() != 0) {
-    return Status(pb::error::ENO_PERMISSION, "renaming trash hour buckets requires root");
+  // neither ScanTrash nor RestoreFromTrash can reach them anymore).
+  // Disallow unconditionally -- granular rescue is still possible by renaming
+  // individual children out of the bucket, or via RestoreFromTrash.
+  if (old_parent == kTrashInodeId) {
+    return Status(pb::error::ENOT_SUPPORT, "cannot rename trash hour buckets");
   }
 
   Dentry dentry;

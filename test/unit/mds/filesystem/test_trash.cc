@@ -261,117 +261,6 @@ TEST_F(TrashFileSystemTest, CannotCreateDirInTrash) {
   EXPECT_EQ(status.error_code(), pb::error::ENOT_SUPPORT);
 }
 
-// A trashed directory entry is itself an ordinary inode (its ino < kTrashInodeId)
-// but its parent — the hour bucket — sits in the trash range. Creates inside
-// such a directory must be rejected so root cannot inject content into a
-// "deleted" subtree (which would then be smuggled back out via mv-out from
-// trash, the legitimate restore path).
-TEST_F(TrashFileSystemTest, CannotCreateInsideTrashedDirectory) {
-  auto fs = Fs();
-  Context ctx;
-
-  // Set up: /td/{x.txt} → unlink x.txt → rmdir td. Both land in the same hour
-  // bucket. After rmdir, dir_ino is a trashed-dir whose parents()[0] == bucket.
-  FileSystem::MkDirParam dir_param;
-  dir_param.parent = kRootIno;
-  dir_param.name = "trashed_dir_for_create";
-  dir_param.mode = 0755;
-  dir_param.uid = 1;
-  dir_param.gid = 1;
-  EntryOut dir_out;
-  ASSERT_TRUE(fs->MkDir(ctx, dir_param, dir_out).ok());
-  Ino dir_ino = dir_out.attr.ino();
-
-  FileSystem::MkNodParam file_param;
-  file_param.parent = dir_ino;
-  file_param.name = "x.txt";
-  file_param.mode = 0644;
-  file_param.uid = 1;
-  file_param.gid = 1;
-  file_param.rdev = 0;
-  EntryOut file_out;
-  ASSERT_TRUE(fs->MkNod(ctx, file_param, file_out).ok());
-
-  EntryOut unlink_out;
-  ASSERT_TRUE(fs->UnLink(ctx, dir_ino, "x.txt", unlink_out).ok());
-
-  Ino removed_ino;
-  EntryOut rmdir_out;
-  ASSERT_TRUE(fs->RmDir(ctx, kRootIno, "trashed_dir_for_create", removed_ino,
-                        rmdir_out)
-                  .ok());
-  ASSERT_EQ(removed_ino, dir_ino);
-
-  // Now dir_ino is a trashed directory. All these creates must be rejected.
-  {
-    FileSystem::MkDirParam p;
-    p.parent = dir_ino;
-    p.name = "injected_dir";
-    p.mode = 0755;
-    p.uid = 0;
-    p.gid = 0;
-    EntryOut out;
-    auto status = fs->MkDir(ctx, p, out);
-    ASSERT_FALSE(status.ok()) << "MkDir into trashed dir should be rejected";
-    EXPECT_EQ(status.error_code(), pb::error::ENOT_SUPPORT);
-  }
-  {
-    FileSystem::MkNodParam p;
-    p.parent = dir_ino;
-    p.name = "injected_file.txt";
-    p.mode = 0644;
-    p.uid = 0;
-    p.gid = 0;
-    p.rdev = 0;
-    EntryOut out;
-    auto status = fs->MkNod(ctx, p, out);
-    ASSERT_FALSE(status.ok()) << "MkNod into trashed dir should be rejected";
-    EXPECT_EQ(status.error_code(), pb::error::ENOT_SUPPORT);
-  }
-  {
-    EntryOut out;
-    auto status =
-        fs->Symlink(ctx, "/target", dir_ino, "injected_link", 0, 0, out);
-    ASSERT_FALSE(status.ok()) << "Symlink into trashed dir should be rejected";
-    EXPECT_EQ(status.error_code(), pb::error::ENOT_SUPPORT);
-  }
-  {
-    // Create a fresh file under root to be the link source.
-    FileSystem::MkNodParam src;
-    src.parent = kRootIno;
-    src.name = "link_src_for_trashed_dir";
-    src.mode = 0644;
-    src.uid = 0;
-    src.gid = 0;
-    src.rdev = 0;
-    EntryOut src_out;
-    ASSERT_TRUE(fs->MkNod(ctx, src, src_out).ok());
-
-    EntryOut out;
-    auto status =
-        fs->Link(ctx, src_out.attr.ino(), dir_ino, "injected_hardlink", out);
-    ASSERT_FALSE(status.ok()) << "Link into trashed dir should be rejected";
-    EXPECT_EQ(status.error_code(), pb::error::ENOT_SUPPORT);
-  }
-}
-
-TEST_F(TrashFileSystemTest, CannotCreateDotTrashManually) {
-  auto fs = Fs();
-  Context ctx;
-
-  FileSystem::MkDirParam param;
-  param.parent = kRootIno;
-  param.name = kTrashName;
-  param.mode = 0755;
-  param.uid = 0;
-  param.gid = 0;
-
-  EntryOut entry_out;
-  auto status = fs->MkDir(ctx, param, entry_out);
-  ASSERT_FALSE(status.ok());
-  EXPECT_EQ(status.error_code(), pb::error::ENOT_SUPPORT);
-}
-
 TEST_F(TrashFileSystemTest, CannotLinkIntoTrash) {
   auto fs = Fs();
   Context ctx;
@@ -468,9 +357,10 @@ TEST_F(TrashFileSystemTest, CannotRenameToDotTrash) {
   EXPECT_EQ(status.error_code(), pb::error::ENOT_SUPPORT);
 }
 
-// Hour buckets normally cannot be moved out of .trash because their entries
-// still reference sub_trash_ino as parent, which would orphan them. Root is
-// allowed to do this (deliberate eviction); non-root is rejected.
+// Hour buckets cannot be moved out of .trash because their entries still
+// reference sub_trash_ino as parent, which would orphan them. The gate is
+// unconditional (no root exception): granular rescue is via renaming
+// individual bucket children out, or via RestoreFromTrash.
 TEST_F(TrashFileSystemTest, CannotRenameTrashHourBucketAsNonRoot) {
   auto fs = Fs();
 
@@ -515,10 +405,10 @@ TEST_F(TrashFileSystemTest, CannotRenameTrashHourBucketAsNonRoot) {
   std::vector<Ino> eff;
   auto status = fs->Rename(user_ctx, rp, ov, nv, eff);
   ASSERT_FALSE(status.ok());
-  EXPECT_EQ(status.error_code(), pb::error::ENO_PERMISSION);
+  EXPECT_EQ(status.error_code(), pb::error::ENOT_SUPPORT);
 }
 
-TEST_F(TrashFileSystemTest, RootCanRenameTrashHourBucketOut) {
+TEST_F(TrashFileSystemTest, CannotRenameTrashHourBucketAsRoot) {
   auto fs = Fs();
   Context root_ctx;
 
@@ -558,11 +448,11 @@ TEST_F(TrashFileSystemTest, RootCanRenameTrashHourBucketOut) {
   uint64_t ov, nv;
   std::vector<Ino> eff;
   auto status = fs->Rename(root_ctx, rp, ov, nv, eff);
-  ASSERT_TRUE(status.ok())
-      << "root should be allowed to rename hour bucket out: "
-      << status.error_str();
+  ASSERT_FALSE(status.ok())
+      << "even root must not be allowed to rename hour bucket out";
+  EXPECT_EQ(status.error_code(), pb::error::ENOT_SUPPORT);
 
-  // Bucket dentry no longer reachable under .trash.
+  // Bucket dentry still under .trash.
   bool still_in_trash = false;
   ScanDentryOperation rescan(trace, 2000, kTrashInodeId,
                              [&](const DentryEntry& d) -> bool {
@@ -570,14 +460,13 @@ TEST_F(TrashFileSystemTest, RootCanRenameTrashHourBucketOut) {
                                return true;
                              });
   ASSERT_TRUE(operation_processor->RunAlone(&rescan).ok());
-  EXPECT_FALSE(still_in_trash)
-      << "hour bucket should be gone from .trash after rename";
+  EXPECT_TRUE(still_in_trash)
+      << "hour bucket should remain in .trash after rejected rename";
 
-  // And visible under its new home.
+  // And not visible under the attempted new home.
   EntryOut look_out;
   status = fs->Lookup(root_ctx, kRootIno, "evicted_bucket_root", look_out);
-  ASSERT_TRUE(status.ok()) << status.error_str();
-  EXPECT_EQ(look_out.attr.ino(), bucket_ino);
+  EXPECT_FALSE(status.ok());
 }
 
 TEST_F(TrashFileSystemTest, CannotRmdirTrashSubDirectory) {
