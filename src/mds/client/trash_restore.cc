@@ -129,25 +129,54 @@ void TrashRestore::DoRestoreHour(const std::string& hour) {
     return;
   }
 
-  // Shuffle to reduce transaction conflicts on hot inodes across parallel
-  // restore runs.
-  std::mt19937_64 rng(std::chrono::steady_clock::now().time_since_epoch().count());
-  std::shuffle(entries.begin(), entries.end(), rng);
+  // Partition into directories vs files. Directories must be restored before
+  // files that live under them: a file's RestoreFromTrash triggers
+  // AsyncUpdateDirUsage(parent=its_dir_ino, ...). When the quota walk reads
+  // the dir's inode, the dir's parents() must already be the live
+  // [actual_dst_parent] (i.e. the dir has already been restored); otherwise
+  // parents() is still [bucket_ino], the walk hits IsTrashInode and stops at
+  // the trash boundary -- and the per-dir quota credit for the file is lost.
+  // The same ordering matters between dirs themselves when restoring a
+  // multi-level subtree (qt/a/b/c/...): c's restore would see b as still in
+  // trash unless b is restored first, etc. Sorting dir entries ASCENDING by
+  // their original parent ino (parsed out of the trash entry name) gives the
+  // right topo order under DingoFS's monotonic ino allocation -- a parent
+  // dir is always created before its children, so parent_ino < child_ino,
+  // which means every ancestor sorts before its descendants. Numerical sort
+  // is required: lex sort on the name would mis-order "99-..." vs "100-..."
+  // (because '1' < '9').
+  std::vector<pb::mds::Dentry> dirs;
+  std::vector<pb::mds::Dentry> files;
+  dirs.reserve(entries.size());
+  files.reserve(entries.size());
+  for (auto& d : entries) {
+    if (d.type() == pb::mds::FileType::DIRECTORY) {
+      dirs.push_back(std::move(d));
+    } else {
+      files.push_back(std::move(d));
+    }
+  }
+  std::sort(dirs.begin(), dirs.end(), [](const pb::mds::Dentry& a, const pb::mds::Dentry& b) {
+    return ParseTrashEntryName(a.name()) < ParseTrashEntryName(b.name());
+  });
 
   // In tree-rebuild mode, we only restore entries whose original parent was
   // also trashed (and therefore appears in this bucket as a directory). Build
   // that set before dispatching workers.
   if (!options_.put_back) {
-    for (const auto& d : entries) {
-      if (d.type() == pb::mds::FileType::DIRECTORY) {
-        trashed_dir_inos_.insert(d.ino());
-      }
-    }
+    for (const auto& d : dirs) trashed_dir_inos_.insert(d.ino());
   }
+
+  // Phase 1: restore directories serially.
+  for (const auto& d : dirs) RestoreOne(bucket_ino, d);
+
+  // Phase 2: restore files in parallel. Shuffle to spread txn conflicts.
+  std::mt19937_64 rng(std::chrono::steady_clock::now().time_since_epoch().count());
+  std::shuffle(files.begin(), files.end(), rng);
 
   {
     std::lock_guard<std::mutex> lg(mu_);
-    for (auto& d : entries) queue_.push(std::move(d));
+    for (auto& d : files) queue_.push(std::move(d));
     queue_closed_ = true;
   }
   cv_.notify_all();
@@ -173,31 +202,34 @@ void TrashRestore::WorkerLoop(Ino bucket_ino) {
       dentry = std::move(queue_.front());
       queue_.pop();
     }
+    RestoreOne(bucket_ino, dentry);
+  }
+}
 
-    // Parse the trash entry name to decide whether to skip (tree-rebuild)
-    // and for logging. The server re-parses for correctness; the CLI-side
-    // parse is informational only.
-    Ino orig_parent = ParseTrashEntryName(dentry.name());
-    if (orig_parent == 0) {
-      LOG(WARNING) << fmt::format("skip unparseable trash entry '{}'", dentry.name());
-      failed_.fetch_add(1);
-      continue;
-    }
+void TrashRestore::RestoreOne(Ino bucket_ino, const pb::mds::Dentry& dentry) {
+  // Parse the trash entry name to decide whether to skip (tree-rebuild)
+  // and for logging. The server re-parses for correctness; the CLI-side
+  // parse is informational only.
+  Ino orig_parent = ParseTrashEntryName(dentry.name());
+  if (orig_parent == 0) {
+    LOG(WARNING) << fmt::format("skip unparseable trash entry '{}'", dentry.name());
+    failed_.fetch_add(1);
+    return;
+  }
 
-    if (!options_.put_back && trashed_dir_inos_.count(orig_parent) == 0) {
-      skipped_.fetch_add(1);
-      continue;
-    }
+  if (!options_.put_back && trashed_dir_inos_.count(orig_parent) == 0) {
+    skipped_.fetch_add(1);
+    return;
+  }
 
-    const bool allow_trash_parent = !options_.put_back;
-    auto resp = client_->RestoreFromTrash(bucket_ino, dentry.name(), kRootUid, allow_trash_parent);
-    if (resp.error().errcode() == pb::error::OK) {
-      restored_.fetch_add(1);
-    } else {
-      LOG(WARNING) << fmt::format("restore '{}' fail: {} ({})", dentry.name(), resp.error().errmsg(),
-                                  static_cast<int>(resp.error().errcode()));
-      failed_.fetch_add(1);
-    }
+  const bool allow_trash_parent = !options_.put_back;
+  auto resp = client_->RestoreFromTrash(bucket_ino, dentry.name(), kRootUid, allow_trash_parent);
+  if (resp.error().errcode() == pb::error::OK) {
+    restored_.fetch_add(1);
+  } else {
+    LOG(WARNING) << fmt::format("restore '{}' fail: {} ({})", dentry.name(), resp.error().errmsg(),
+                                static_cast<int>(resp.error().errcode()));
+    failed_.fetch_add(1);
   }
 }
 
