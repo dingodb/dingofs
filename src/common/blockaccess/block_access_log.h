@@ -25,6 +25,8 @@
 #include <cstdint>
 #include <string>
 
+#include "common/options/blockaccess.h"
+
 namespace dingofs {
 namespace blockaccess {
 
@@ -40,7 +42,7 @@ struct BlockAccessLogGuard {
       : start_us(p_start_us), handler(handler) {}
 
   ~BlockAccessLogGuard() {
-    if (initialized) {
+    if (initialized && FLAGS_block_access_logging) {
       block_access_logger->info("{0} <{1:.6f}>", handler(),
                                 (butil::cpuwide_time_us() - start_us) / 1e6);
     }

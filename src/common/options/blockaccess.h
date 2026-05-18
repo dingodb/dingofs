@@ -22,6 +22,9 @@
 namespace dingofs {
 namespace blockaccess {
 
+// access log
+DECLARE_bool(block_access_logging);
+
 DECLARE_int32(rados_op_timeout);
 
 // aws option
