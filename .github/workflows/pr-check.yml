@@ -3,11 +3,6 @@ name: PR Check
 on:
   pull_request:
     branches: [main]
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
-      - '.gitignore'
-      - 'LICENSE'
   merge_group:
     branches: [main]
 
