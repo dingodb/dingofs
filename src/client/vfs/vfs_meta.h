@@ -141,6 +141,9 @@ struct FsInfo {
   // this field existed. Used to pin synthesized attrs (e.g. .trash) to a
   // stable timestamp so kernel attr/dentry caches stay valid across calls.
   uint64_t create_time_s{0};
+  // Trash retention days; 0 means trash is disabled. Pinned at mount time;
+  // runtime `updatefs --trash_days=...` requires remount to take effect.
+  uint32_t trash_days{0};
 };
 
 using DoneClosure = std::function<void(const Status& status)>;

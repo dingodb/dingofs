@@ -179,6 +179,10 @@ class VFSImpl : public VFS {
 
   bool IsSubdirMount() const { return mount_root_ino_ != kRootIno; }
 
+  // True when the filesystem has trash enabled (`trash_days > 0`). Pinned to
+  // the mount-time fs_info; runtime `updatefs --trash_days` requires remount.
+  bool IsTrashVisible() const { return vfs_hub_->GetFsInfo().trash_days > 0; }
+
   const ClientId client_id_;
 
   // Filesystem-internal path mounted as the local mountpoint root.

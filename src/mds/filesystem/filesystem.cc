@@ -149,9 +149,13 @@ static bool IsInodeInTrash(const InodeSPtr& inode) {
   // parents-only walk would miss it and let mutation ops reach the batch
   // path against an inode with no KV record (fail-loud CHECK).
   if (IsTrashInode(inode->Ino())) return true;
+
+  if (inode->Parents().empty()) return false;  // no parents → not in trash
+
   for (auto p : inode->Parents()) {
     if (!IsTrashInode(p)) return false;
   }
+
   return true;  // every parent is a trash bucket (or parents is empty)
 }
 
@@ -2454,11 +2458,11 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
   }
   // Sub-trash hour buckets are server-managed; extracting one strands its
   // contents (their parents_ still points at the original sub_trash_ino, so
-  // neither ScanTrash nor RestoreFromTrash can reach them anymore). Allow
-  // root only -- on the assumption root is doing this deliberately and will
-  // take responsibility for the orphaned entries.
-  if (old_parent == kTrashInodeId && ctx.Uid() != 0) {
-    return Status(pb::error::ENO_PERMISSION, "renaming trash hour buckets requires root");
+  // neither ScanTrash nor RestoreFromTrash can reach them anymore).
+  // Disallow unconditionally -- granular rescue is still possible by renaming
+  // individual children out of the bucket, or via RestoreFromTrash.
+  if (old_parent == kTrashInodeId) {
+    return Status(pb::error::ENOT_SUPPORT, "cannot rename trash hour buckets");
   }
 
   Dentry dentry;
@@ -3630,6 +3634,19 @@ Status FileSystem::RestoreFromTrash(Context& ctx, Ino trash_parent, const std::s
   // Trash partitions don't participate in partition_cache_ (see
   // GetPartitionFromStore), so there's nothing to evict here — the next
   // ls .trash/<bucket> reads dentries directly from KV.
+
+  // Refresh parent_memo_ for restored DIRECTORY: the dir's parents() just
+  // flipped from [trash_parent_] back to [actual_dst_parent]. Any
+  // AsyncUpdateDirUsage(parent=this_dir_ino, ...) that fires next (e.g. when
+  // a child file is restored or written into it) walks ancestors via
+  // DirQuotaMap::GetParent, which would otherwise either read the new value
+  // from KV or, worse, return a stale [trash_parent_] cached from when the
+  // dir was still in trash -- in which case the walk hits IsTrashInode and
+  // stops at the trash boundary, losing the per-dir quota credit. Updating
+  // the memo here closes that window for the in-process MDS.
+  if (result.file_type == pb::mds::FileType::DIRECTORY) {
+    parent_memo_.Remeber(result.file_ino, actual_dst_parent);
+  }
 
   // Quota.
   //  - immediate_trash_quota=false: nothing to do. Trash-move didn't touch

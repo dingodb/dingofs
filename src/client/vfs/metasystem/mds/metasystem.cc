@@ -388,6 +388,7 @@ Status MDSMetaSystem::GetFsInfo(ContextSPtr, FsInfo* fs_info) {
   fs_info->uuid = temp_fs_info.uuid();
   fs_info->status = Helper::ToFsStatus(temp_fs_info.status());
   fs_info->create_time_s = temp_fs_info.create_time_s();
+  fs_info->trash_days = temp_fs_info.trash_days();
 
   fs_info->storage_info.store_type =
       Helper::ToStoreType(temp_fs_info.fs_type());
