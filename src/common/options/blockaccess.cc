@@ -16,10 +16,15 @@
 
 #include "common/options/blockaccess.h"
 
+#include <brpc/reloadable_flags.h>
 #include <gflags/gflags.h>
 
 namespace dingofs {
 namespace blockaccess {
+
+// access log
+DEFINE_bool(block_access_logging, true, "enable block access log");
+DEFINE_validator(block_access_logging, brpc::PassValidate);
 
 // rados option
 DEFINE_int32(rados_op_timeout, 120, "rados operation timeout in seconds");
