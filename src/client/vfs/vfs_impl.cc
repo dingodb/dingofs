@@ -230,6 +230,7 @@ Status VFSImpl::Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
 
   // check if parent is root inode and name is .trash
   if (BAIDU_UNLIKELY(parent == kRootIno && name == kTrashDirName)) {
+    if (!IsTrashVisible()) return Status::NotFound("trash disabled");
     *attr = GenerateTrashDirAttr();
     return Status::OK();
   }
@@ -248,6 +249,7 @@ Status VFSImpl::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
   }
 
   if (BAIDU_UNLIKELY(ino == kTrashIno)) {
+    if (!IsTrashVisible()) return Status::NotFound("trash disabled");
     *attr = GenerateTrashDirAttr();
     return Status::OK();
   }
@@ -759,8 +761,10 @@ Status VFSImpl::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
                          GenerateVirtualInodeAttr(kStatsIno)};
     handler(stats_entry, 1);
 
-    DirEntry trash_entry{kTrashIno, kTrashDirName, GenerateTrashDirAttr()};
-    handler(trash_entry, 2);
+    if (IsTrashVisible()) {
+      DirEntry trash_entry{kTrashIno, kTrashDirName, GenerateTrashDirAttr()};
+      handler(trash_entry, 2);
+    }
   }
 
   return meta_system_->ReadDir(ctx, TranslateIno(ino), fh, offset, with_attr,
