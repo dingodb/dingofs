@@ -197,7 +197,8 @@ Status DiskCache::Stage(ContextSPtr ctx, const BlockContext& block_ctx,
   }
 
   std::string stage_path(GetStagePath(block_ctx));
-  std::string cache_path(GetCachePath(block_ctx.key));
+  const auto& key = block_ctx.key;
+  std::string cache_path(GetCachePath(key));
   status = localfs_->WriteFile(ctx, stage_path, &block.buffer);
   if (!status.ok()) {
     LOG(ERROR) << "Fail to write stage file, path=" << stage_path
@@ -242,37 +243,37 @@ Status DiskCache::RemoveStage(ContextSPtr /*ctx*/,
   return status;
 }
 
-Status DiskCache::Cache(ContextSPtr ctx, const BlockContext& block_ctx,
+Status DiskCache::Cache(ContextSPtr ctx, const CacheKey& key,
                         const Block& block, CacheOption /*option*/) {
   auto status = CheckStatus(kWantExec | kWantCache);
   if (!status.ok()) {
     LOG(ERROR) << "Disk cache status is unavailable, skip cache: key="
-               << block_ctx.key.Filename() << ", length=" << block.size
+               << key.Filename() << ", length=" << block.size
                << ", status=" << status.ToString();
     return status;
   }
 
-  if (IsCached(block_ctx)) {
-    VLOG(9) << "Block already cached, skip cache: key = "
-            << block_ctx.key.Filename() << ", length = " << block.size;
+  if (IsCached(key)) {
+    VLOG(9) << "Block already cached, skip cache: key = " << key.Filename()
+            << ", length = " << block.size;
     return Status::OK();
   }
 
-  auto cache_path = GetCachePath(block_ctx.key);
+  auto cache_path = GetCachePath(key);
   status = localfs_->WriteFile(ctx, cache_path, &block.buffer);
   if (!status.ok()) {
     LOG(ERROR) << "Fail to write cache file=`" << cache_path << "'";
     return status;
   }
 
-  manager_->Add(block_ctx.key, CacheValue(block.size, iutil::TimeNow()),
+  manager_->Add(key, CacheValue(block.size, iutil::TimeNow()),
                 BlockPhase::kCached);
 
   return status;
 }
 
-Status DiskCache::Load(ContextSPtr ctx, const BlockContext& block_ctx,
-                       off_t offset, size_t length, IOBuffer* buffer,
+Status DiskCache::Load(ContextSPtr ctx, const CacheKey& key, off_t offset,
+                       size_t length, IOBuffer* buffer,
                        LoadOption /*option*/) {
   Status status;
   DiskCacheVarsRecordGuard guard(__func__, status, vars_.get());
@@ -280,23 +281,23 @@ Status DiskCache::Load(ContextSPtr ctx, const BlockContext& block_ctx,
   status = CheckStatus(kWantExec);
   if (!status.ok()) {
     LOG(ERROR) << "Disk cache status is unavailable, skip load: key="
-               << block_ctx.key.Filename() << ", offset=" << offset
+               << key.Filename() << ", offset=" << offset
                << ", length=" << length << ", status=" << status.ToString();
     return status;
   }
 
-  if (!IsCached(block_ctx)) {
+  if (!IsCached(key)) {
     status = Status::NotFound("cache not found");
     return status;
   }
 
-  auto cache_path = GetCachePath(block_ctx.key);
+  auto cache_path = GetCachePath(key);
   status = localfs_->ReadFile(ctx, cache_path, offset, length, buffer);
   if (status.IsNotFound()) {  // Delete block which meybe deleted by accident.
     LOG(WARNING) << "Cache block file not found, delete the corresponding "
                     "key from lru, path=`"
                  << cache_path << "'";
-    manager_->Delete(block_ctx.key);
+    manager_->Delete(key);
   } else if (!status.ok()) {
     LOG(ERROR) << "Fail to read block file=`" << cache_path << "'";
   }

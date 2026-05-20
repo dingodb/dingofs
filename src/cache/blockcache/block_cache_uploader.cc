@@ -245,7 +245,7 @@ void BlockCacheUploader::OnComplete(const StageBlock& sblock, Status status) {
 Status BlockCacheUploader::DoUpload(const StageBlock& sblock) {
   IOBuffer buffer;
   auto status =
-      store_->Load(sblock.ctx, sblock.block_ctx, 0, sblock.length, &buffer);
+      store_->Load(sblock.ctx, sblock.block_ctx.key, 0, sblock.length, &buffer);
   if (status.IsNotFound()) {
     LOG(ERROR) << "Fail to upload " << sblock
                << " which already deleted, abort upload";

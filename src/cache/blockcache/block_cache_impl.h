@@ -46,11 +46,10 @@ class BlockCacheImpl final : public BlockCache {
   Status Put(ContextSPtr ctx, const BlockContext& block_ctx,
              const Block& block,
              PutOption option = PutOption()) override;
-  Status Range(ContextSPtr ctx, const BlockContext& block_ctx, off_t offset,
-               size_t length, IOBuffer* buffer,
+  Status Range(ContextSPtr ctx, const CacheKey& key, off_t offset, size_t length,
+               IOBuffer* buffer,
                RangeOption option = RangeOption()) override;
-  Status Cache(ContextSPtr ctx, const BlockContext& block_ctx,
-               const Block& block,
+  Status Cache(ContextSPtr ctx, const CacheKey& key, const Block& block,
                CacheOption option = CacheOption()) override;
   Status Prefetch(ContextSPtr ctx, const BlockContext& block_ctx,
                   size_t length,
@@ -59,12 +58,11 @@ class BlockCacheImpl final : public BlockCache {
   void AsyncPut(ContextSPtr ctx, const BlockContext& block_ctx,
                 const Block& block, AsyncCallback cb,
                 PutOption option = PutOption()) override;
-  void AsyncRange(ContextSPtr ctx, const BlockContext& block_ctx,
-                  off_t offset, size_t length, IOBuffer* buffer,
-                  AsyncCallback cb,
+  void AsyncRange(ContextSPtr ctx, const CacheKey& key, off_t offset,
+                  size_t length, IOBuffer* buffer, AsyncCallback cb,
                   RangeOption option = RangeOption()) override;
-  void AsyncCache(ContextSPtr ctx, const BlockContext& block_ctx,
-                  const Block& block, AsyncCallback cb,
+  void AsyncCache(ContextSPtr ctx, const CacheKey& key, const Block& block,
+                  AsyncCallback cb,
                   CacheOption option = CacheOption()) override;
   void AsyncPrefetch(ContextSPtr ctx, const BlockContext& block_ctx,
                      size_t length, AsyncCallback cb,
@@ -80,8 +78,8 @@ class BlockCacheImpl final : public BlockCache {
     return IsEnabled() && FLAGS_enable_cache;
   }
 
-  bool IsCached(const BlockContext& block_ctx) const override {
-    return store_->IsCached(block_ctx);
+  bool IsCached(const CacheKey& key) const override {
+    return store_->IsCached(key);
   }
 
   bool Dump(Json::Value& value) const override { return store_->Dump(value); }

@@ -122,12 +122,10 @@ class DiskCache final : public CacheStore {
                StageOption option = StageOption()) override;
   Status RemoveStage(ContextSPtr ctx, const BlockContext& block_ctx,
                      RemoveStageOption option = RemoveStageOption()) override;
-  Status Cache(ContextSPtr ctx, const BlockContext& block_ctx,
-               const Block& block,
+  Status Cache(ContextSPtr ctx, const CacheKey& key, const Block& block,
                CacheOption option = CacheOption()) override;
-  Status Load(ContextSPtr ctx, const BlockContext& block_ctx, off_t offset,
-              size_t length, IOBuffer* buffer,
-              LoadOption option = LoadOption()) override;
+  Status Load(ContextSPtr ctx, const CacheKey& key, off_t offset, size_t length,
+              IOBuffer* buffer, LoadOption option = LoadOption()) override;
 
   std::string Id() const override { return uuid_; }
 
@@ -135,13 +133,12 @@ class DiskCache final : public CacheStore {
     return running_.load(std::memory_order_relaxed);
   }
 
-  bool IsCached(const BlockContext& block_ctx) const override {
-    return manager_->Exist(block_ctx.key) ||
-           (StillLoading() &&
-            iutil::FileIsExist(GetCachePath(block_ctx.key)));
+  bool IsCached(const CacheKey& key) const override {
+    return manager_->Exist(key) ||
+           (StillLoading() && iutil::FileIsExist(GetCachePath(key)));
   }
 
-  bool IsFull(const BlockContext&) const override { return CacheFull(); }
+  bool IsFull(const CacheKey&) const override { return CacheFull(); }
 
   bool Dump(Json::Value& value) const override;
 
@@ -177,7 +174,7 @@ class DiskCache final : public CacheStore {
     return layout_->GetStagePath(block_ctx);
   }
 
-  std::string GetCachePath(const BlockKey& key) const {
+  std::string GetCachePath(const CacheKey& key) const {
     return layout_->GetCachePath(key);
   }
 

@@ -98,23 +98,21 @@ class DiskCacheGroup final : public CacheStore {
                StageOption option = StageOption()) override;
   Status RemoveStage(ContextSPtr ctx, const BlockContext& block_ctx,
                      RemoveStageOption option = RemoveStageOption()) override;
-  Status Cache(ContextSPtr ctx, const BlockContext& block_ctx,
-               const Block& block,
+  Status Cache(ContextSPtr ctx, const CacheKey& key, const Block& block,
                CacheOption option = CacheOption()) override;
-  Status Load(ContextSPtr ctx, const BlockContext& block_ctx, off_t offset,
-              size_t length, IOBuffer* buffer,
-              LoadOption option = LoadOption()) override;
+  Status Load(ContextSPtr ctx, const CacheKey& key, off_t offset, size_t length,
+              IOBuffer* buffer, LoadOption option = LoadOption()) override;
 
   std::string Id() const override;
   bool IsRunning() const override;
-  bool IsCached(const BlockContext& block_ctx) const override;
-  bool IsFull(const BlockContext& block_ctx) const override;
+  bool IsCached(const CacheKey& key) const override;
+  bool IsFull(const CacheKey& key) const override;
   bool Dump(Json::Value& value) const override;
 
  private:
   static std::vector<uint64_t> CalcWeights(
       std::vector<DiskCacheOption> options);
-  DiskCacheSPtr GetStore(const BlockKey& key) const;
+  DiskCacheSPtr GetStore(const CacheKey& key) const;
   DiskCacheSPtr GetStore(const std::string& store_id) const;
 
   std::atomic<bool> running_;

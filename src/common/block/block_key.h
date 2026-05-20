@@ -20,11 +20,14 @@
 #include <fmt/format.h>
 
 #include <cstdint>
+#include <memory>
 #include <string>
+
+#include "common/block/cache_key.h"
 
 namespace dingofs {
 
-struct BlockKey {
+struct BlockKey : public CacheKey {
   uint64_t id{0};     // slice ID (globally unique)
   uint32_t index{0};  // block index within the slice
   uint32_t size{0};   // block size in bytes
@@ -34,14 +37,18 @@ struct BlockKey {
   BlockKey(uint64_t _id, uint32_t _index, uint32_t _size)
       : id(_id), index(_index), size(_size) {}
 
-  std::string Filename() const {
+  std::string Filename() const override {
     return fmt::format("{}_{}_{}", id, index, size);
   }
 
   // Storage path with two-level directory bucketing by slice id.
-  std::string StoreKey() const {
+  std::string StoreKey() const override {
     return fmt::format("blocks/{}/{}/{}", id / 1000 / 1000, id / 1000,
                        Filename());
+  }
+
+  CacheKeySPtr Clone() const override {
+    return std::make_shared<BlockKey>(*this);
   }
 };
 

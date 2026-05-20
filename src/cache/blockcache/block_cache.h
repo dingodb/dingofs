@@ -31,6 +31,7 @@
 #include "cache/blockcache/cache_store.h"
 #include "cache/common/context.h"
 #include "common/block/block_context.h"
+#include "common/block/cache_key.h"
 #include "common/io_buffer.h"
 #include "common/status.h"
 
@@ -68,14 +69,14 @@ class BlockCache {
     return Status::NotSupport("not implemented");
   }
 
-  virtual Status Range(ContextSPtr /*ctx*/, const BlockContext& /*block_ctx*/,
+  virtual Status Range(ContextSPtr /*ctx*/, const CacheKey& /*key*/,
                        off_t /*offset*/, size_t /*length*/,
                        IOBuffer* /*buffer*/,
                        [[maybe_unused]] RangeOption option = RangeOption()) {
     return Status::NotSupport("not implemented");
   }
 
-  virtual Status Cache(ContextSPtr /*ctx*/, const BlockContext& /*block_ctx*/,
+  virtual Status Cache(ContextSPtr /*ctx*/, const CacheKey& /*key*/,
                        const Block& /*block*/,
                        [[maybe_unused]] CacheOption option = CacheOption()) {
     return Status::NotSupport("not implemented");
@@ -97,8 +98,7 @@ class BlockCache {
     }
   }
 
-  virtual void AsyncRange(ContextSPtr /*ctx*/,
-                          const BlockContext& /*block_ctx*/,
+  virtual void AsyncRange(ContextSPtr /*ctx*/, const CacheKey& /*key*/,
                           off_t /*offset*/, size_t /*length*/,
                           IOBuffer* /*buffer*/, AsyncCallback cb,
                           [[maybe_unused]] RangeOption option = RangeOption()) {
@@ -107,8 +107,7 @@ class BlockCache {
     }
   }
 
-  virtual void AsyncCache(ContextSPtr /*ctx*/,
-                          const BlockContext& /*block_ctx*/,
+  virtual void AsyncCache(ContextSPtr /*ctx*/, const CacheKey& /*key*/,
                           const Block& /*block*/, AsyncCallback cb,
                           [[maybe_unused]] CacheOption option = CacheOption()) {
     if (cb) {
@@ -129,9 +128,7 @@ class BlockCache {
   virtual bool IsEnabled() const { return false; }
   virtual bool EnableStage() const { return false; }
   virtual bool EnableCache() const { return false; }
-  virtual bool IsCached(const BlockContext& /*block_ctx*/) const {
-    return false;
-  }
+  virtual bool IsCached(const CacheKey& /*key*/) const { return false; }
   virtual bool Dump(Json::Value& /*value*/) const { return true; }
 };
 

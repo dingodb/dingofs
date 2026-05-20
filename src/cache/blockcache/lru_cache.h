@@ -28,12 +28,10 @@
 
 #include "cache/iutil/cache.h"
 #include "cache/iutil/time_util.h"
-#include "common/block/block_key.h"
+#include "common/block/cache_key.h"
 
 namespace dingofs {
 namespace cache {
-
-using CacheKey = dingofs::BlockKey;
 
 struct CacheValue {
   CacheValue() = default;
@@ -44,9 +42,10 @@ struct CacheValue {
 };
 
 struct CacheItem {
-  CacheItem(CacheKey key, CacheValue value) : key(key), value(value) {}
+  CacheItem(CacheKeySPtr key, CacheValue value)
+      : key(std::move(key)), value(value) {}
 
-  CacheKey key;
+  CacheKeySPtr key;
   CacheValue value;
 };
 
@@ -55,9 +54,14 @@ using CacheItems = std::vector<CacheItem>;
 struct ListNode {
   ListNode() = default;
 
-  ListNode(const CacheValue& value)
-      : value(value), handle(nullptr), prev(nullptr), next(nullptr) {}
+  ListNode(CacheKeySPtr key, const CacheValue& value)
+      : key(std::move(key)),
+        value(value),
+        handle(nullptr),
+        prev(nullptr),
+        next(nullptr) {}
 
+  CacheKeySPtr key;
   CacheValue value;
   iutil::Cache::Handle* handle;
   struct ListNode* prev;
@@ -117,7 +121,7 @@ class LRUCache {
   bool EvictNode(ListNode* list, FilterFunc filter, CacheItems* evicted);
   void EvictAllNodes(ListNode* list);
 
-  iutil::Cache* hash_;  // mapping: CacheKey -> ListNode*
+  iutil::Cache* hash_;  // mapping: CacheKey::Filename() -> ListNode*
   ListNode active_;
   ListNode inactive_;
 };

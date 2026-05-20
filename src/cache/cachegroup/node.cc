@@ -207,7 +207,7 @@ Status CacheNode::AsyncCache(ContextSPtr ctx, const BlockContext& block_ctx,
     return Status::CacheDown("cache node is down");
   }
 
-  block_cache_->AsyncCache(ctx, block_ctx, block, [](Status status) {
+  block_cache_->AsyncCache(ctx, block_ctx.key, block, [](Status status) {
     if (!status.ok()) {
       LOG(ERROR) << "Fail to async cache block, status=" << status.ToString();
     }
@@ -236,7 +236,7 @@ Status CacheNode::AsyncPrefetch(ContextSPtr ctx,
 Status CacheNode::RetrieveCache(ContextSPtr ctx,
                                 const BlockContext& block_ctx, off_t offset,
                                 size_t length, IOBuffer* buffer) {
-  auto status = block_cache_->Range(ctx, block_ctx, offset, length, buffer,
+  auto status = block_cache_->Range(ctx, block_ctx.key, offset, length, buffer,
                                     {.retrieve_storage = false});
   if (status.ok()) {
     num_hit_cache_ << 1;
@@ -308,7 +308,7 @@ Status CacheNode::RetrieveWholeBlock(ContextSPtr ctx,
   BRPC_SCOPE_EXIT {
     if (status.ok()) {
       block_cache_->AsyncCache(
-          ctx, block_ctx, Block(*buffer),
+          ctx, block_ctx.key, Block(*buffer),
           [this, created, block_ctx](Status /*status*/) {
             if (created) {
               task_tracker_->RemoveTask(block_ctx);

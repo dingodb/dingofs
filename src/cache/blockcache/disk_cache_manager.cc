@@ -308,7 +308,7 @@ void DiskCacheManager::DeleteBlocks(const ToDel& to_del) {
 
   timer.start();
   for (const auto& item : to_del.items) {
-    CacheKey key = item.key;
+    const CacheKey& key = *item.key;
     CacheValue value = item.value;
     std::string cache_path = GetCachePath(key);
     auto status = iutil::Unlink(cache_path);

@@ -22,9 +22,13 @@
 
 #include "cache/blockcache/disk_cache_loader.h"
 
+#include <absl/strings/match.h>
 #include <absl/strings/str_format.h>
 #include <absl/strings/str_join.h>
+#include <absl/strings/str_split.h>
 #include <butil/time.h>
+
+#include <string_view>
 
 #include <atomic>
 #include <cstdlib>
@@ -34,6 +38,9 @@
 #include "cache/common/block_key_helper.h"
 #include "cache/common/macro.h"
 #include "cache/iutil/file_util.h"
+#include "common/block/block_key.h"
+#include "common/block/cache_key.h"
+#include "common/block/tensor_key.h"
 
 namespace dingofs {
 namespace cache {
@@ -133,13 +140,61 @@ void DiskCacheLoader::LoadAllBlocks(const std::string& dir, BlockType type) {
   }
 }
 
+namespace {
+
+// Parse TensorKey from its filename produced by TensorKey::Filename(), i.e.
+// "{model_name}@{world_size}@{worker_id}@{chunk_hash}@{dtype}". Returns false
+// if the string is not in that format.
+bool ParseTensorFilename(std::string_view name, TensorKey* out) {
+  std::vector<std::string_view> parts = absl::StrSplit(name, '@');
+  if (parts.size() < 5) {
+    return false;
+  }
+  out->model_name.assign(parts[0].data(), parts[0].size());
+  out->world_size = static_cast<uint32_t>(
+      std::strtoul(std::string(parts[1]).c_str(), nullptr, 10));
+  out->worker_id = static_cast<uint32_t>(
+      std::strtoul(std::string(parts[2]).c_str(), nullptr, 10));
+  out->chunk_hash.assign(parts[3].data(), parts[3].size());
+  out->dtype.assign(parts[4].data(), parts[4].size());
+  return true;
+}
+
+// The cache dir layout is either "<cache_root>/blocks/..." (BlockKey) or
+// "<cache_root>/tensor/..." (TensorKey). The prefix the walker hands us is the
+// file's parent directory; checking whether it lives under "tensor/" tells us
+// which key type to reconstruct.
+bool IsTensorPath(const std::string& prefix) {
+  return absl::StrContains(prefix, "/tensor/") ||
+         absl::EndsWith(prefix, "/tensor");
+}
+
+}  // namespace
+
 bool DiskCacheLoader::LoadOneBlock(const std::string& prefix,
                                    const iutil::FileInfo& file,
                                    BlockType type) {
-  BlockKey key;
   std::string name = file.name;
   std::string path = absl::StrJoin({prefix, name}, "/");
-  if (IsTempFilepath(name) || !ParseFromFilename(name, &key)) {
+
+  CacheKeySPtr key;
+  if (!IsTempFilepath(name)) {
+    if (type == BlockType::kStageBlock || !IsTensorPath(prefix)) {
+      // Stage blocks are always block-typed (tensor never staged), and the
+      // cache tree under "blocks/" is BlockKey.
+      BlockKey bk;
+      if (ParseFromFilename(name, &bk)) {
+        key = std::make_shared<BlockKey>(bk);
+      }
+    } else {
+      TensorKey tk;
+      if (ParseTensorFilename(name, &tk)) {
+        key = std::make_shared<TensorKey>(std::move(tk));
+      }
+    }
+  }
+
+  if (key == nullptr) {
     auto status = iutil::Unlink(path);
     if (status.ok()) {
       LOG(INFO) << "Removed invalid block, path=`" << path << "'";
@@ -164,13 +219,16 @@ bool DiskCacheLoader::LoadOneBlock(const std::string& prefix,
                                                   10));
     }
 
-    BlockContext block_ctx(key, fs_id);
-    manager_->Add(key, CacheValue(file.size, file.atime), BlockPhase::kStaging);
+    // Stage path only ever holds BlockKey (the type was discriminated above).
+    auto* block_key = dynamic_cast<BlockKey*>(key.get());
+    CHECK(block_key != nullptr) << "stage path produced non-block key: " << path;
+    BlockContext block_ctx(*block_key, fs_id);
+    manager_->Add(*key, CacheValue(file.size, file.atime), BlockPhase::kStaging);
     uploader_(NewContext(), block_ctx, file.size,
               BlockAttr(BlockAttr::kFromReload, disk_id_));
   } else if (type == BlockType::kCacheBlock) {
     if (file.nlink == 1) {
-      manager_->Add(key, CacheValue(file.size, file.atime),
+      manager_->Add(*key, CacheValue(file.size, file.atime),
                     BlockPhase::kCached);
     }
   } else {

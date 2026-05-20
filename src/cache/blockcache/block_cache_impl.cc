@@ -155,25 +155,25 @@ Status BlockCacheImpl::Put(ContextSPtr ctx, const BlockContext& block_ctx,
   return status;
 }
 
-Status BlockCacheImpl::Range(ContextSPtr ctx, const BlockContext& block_ctx,
-                             off_t offset, size_t length, IOBuffer* buffer,
+Status BlockCacheImpl::Range(ContextSPtr ctx, const CacheKey& key, off_t offset,
+                             size_t length, IOBuffer* buffer,
                              RangeOption /*option*/) {
   DCHECK_RUNNING("BlockCacheImpl");
 
-  return store_->Load(ctx, block_ctx, offset, length, buffer);
+  return store_->Load(ctx, key, offset, length, buffer);
 }
 
-Status BlockCacheImpl::Cache(ContextSPtr ctx, const BlockContext& block_ctx,
+Status BlockCacheImpl::Cache(ContextSPtr ctx, const CacheKey& key,
                              const Block& block, CacheOption /*option*/) {
   DCHECK_RUNNING("BlockCacheImpl");
 
-  auto status = store_->Cache(ctx, block_ctx, block);
+  auto status = store_->Cache(ctx, key, block);
   if (status.IsCacheFull()) {
     LOG_EVERY_SECOND(WARNING)
-        << "Cache block failed: key = " << block_ctx.key.Filename()
+        << "Cache block failed: key = " << key.Filename()
         << ", length = " << block.size << ", status = " << status.ToString();
   } else if (!status.ok()) {
-    LOG(ERROR) << "Fail to cache block key=" << block_ctx.key.Filename();
+    LOG(ERROR) << "Fail to cache block key=" << key.Filename();
   }
 
   return status;
@@ -184,9 +184,9 @@ Status BlockCacheImpl::Prefetch(ContextSPtr ctx,
                                 PrefetchOption /*option*/) {
   DCHECK_RUNNING("BlockCacheImpl");
 
-  if (IsCached(block_ctx)) {
+  if (IsCached(block_ctx.key)) {
     return Status::OK();
-  } else if (store_->IsFull(block_ctx)) {
+  } else if (store_->IsFull(block_ctx.key)) {
     return Status::CacheFull("disk cache is full");
   }
 
@@ -196,7 +196,7 @@ Status BlockCacheImpl::Prefetch(ContextSPtr ctx,
     return status;
   }
 
-  status = store_->Cache(ctx, block_ctx, Block(buffer));
+  status = store_->Cache(ctx, block_ctx.key, Block(buffer));
   if (!status.ok()) {
     LOG(ERROR) << "Fail to prefetch block key="
                << block_ctx.key.Filename();
@@ -223,17 +223,19 @@ void BlockCacheImpl::AsyncPut(ContextSPtr ctx, const BlockContext& block_ctx,
   }
 }
 
-void BlockCacheImpl::AsyncRange(ContextSPtr ctx,
-                                const BlockContext& block_ctx, off_t offset,
-                                size_t length, IOBuffer* buffer,
+void BlockCacheImpl::AsyncRange(ContextSPtr ctx, const CacheKey& key,
+                                off_t offset, size_t length, IOBuffer* buffer,
                                 AsyncCallback cb, RangeOption option) {
   DCHECK_RUNNING("BlockCacheImpl");
 
+  // The bthread outlives this call so the polymorphic key must be owned by the
+  // lambda; clone it once instead of forcing every caller to heap-allocate.
+  auto key_sp = key.Clone();
   auto* self = GetSelfPtr();
   auto tid = iutil::RunInBthread(
-      [self, ctx, block_ctx, offset, length, buffer, cb, option]() {
+      [self, ctx, key_sp, offset, length, buffer, cb, option]() {
         Status status =
-            self->Range(ctx, block_ctx, offset, length, buffer, option);
+            self->Range(ctx, *key_sp, offset, length, buffer, option);
         if (cb) {
           cb(status);
         }
@@ -244,14 +246,13 @@ void BlockCacheImpl::AsyncRange(ContextSPtr ctx,
   }
 }
 
-void BlockCacheImpl::AsyncCache(ContextSPtr ctx,
-                                const BlockContext& block_ctx,
+void BlockCacheImpl::AsyncCache(ContextSPtr ctx, const CacheKey& key,
                                 const Block& block, AsyncCallback cb,
                                 CacheOption option) {
   DCHECK_RUNNING("BlockCacheImpl");
 
   auto tracker = cache_tracker_;
-  auto status = tracker->Add(block_ctx.key.Filename());
+  auto status = tracker->Add(key.Filename());
   if (status.IsExist()) {
     if (cb) {
       cb(status);
@@ -259,15 +260,16 @@ void BlockCacheImpl::AsyncCache(ContextSPtr ctx,
     return;
   }
 
+  auto key_sp = key.Clone();
   auto* self = GetSelfPtr();
   auto tid = iutil::RunInBthread(
-      [tracker, self, ctx, block_ctx, block, cb, option]() {
-        Status status = self->Cache(ctx, block_ctx, block, option);
+      [tracker, self, ctx, key_sp, block, cb, option]() {
+        Status status = self->Cache(ctx, *key_sp, block, option);
         if (cb) {
           cb(status);
         }
 
-        tracker->Remove(block_ctx.key.Filename());
+        tracker->Remove(key_sp->Filename());
       });
 
   if (tid != 0) {

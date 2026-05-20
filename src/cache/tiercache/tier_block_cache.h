@@ -29,6 +29,7 @@
 #include "cache/common/storage_client.h"
 #include "cache/iutil/bthread.h"
 #include "cache/iutil/inflight_tracker.h"
+#include "cache/remotecache/remote_block_cache.h"
 #include "common/block/block_context.h"
 #include "common/blockaccess/block_accesser.h"
 
@@ -46,11 +47,10 @@ class TierBlockCache final : public BlockCache {
   Status Put(ContextSPtr ctx, const BlockContext& block_ctx,
              const Block& block,
              PutOption option = PutOption()) override;
-  Status Range(ContextSPtr ctx, const BlockContext& block_ctx,
-               off_t offset, size_t length, IOBuffer* buffer,
+  Status Range(ContextSPtr ctx, const CacheKey& key, off_t offset, size_t length,
+               IOBuffer* buffer,
                RangeOption option = RangeOption()) override;
-  Status Cache(ContextSPtr ctx, const BlockContext& block_ctx,
-               const Block& block,
+  Status Cache(ContextSPtr ctx, const CacheKey& key, const Block& block,
                CacheOption option = CacheOption()) override;
   Status Prefetch(ContextSPtr ctx, const BlockContext& block_ctx,
                   size_t length,
@@ -59,12 +59,11 @@ class TierBlockCache final : public BlockCache {
   void AsyncPut(ContextSPtr ctx, const BlockContext& block_ctx,
                 const Block& block, AsyncCallback cb,
                 PutOption option = PutOption()) override;
-  void AsyncRange(ContextSPtr ctx, const BlockContext& block_ctx,
-                  off_t offset, size_t length, IOBuffer* buffer,
-                  AsyncCallback cb,
+  void AsyncRange(ContextSPtr ctx, const CacheKey& key, off_t offset,
+                  size_t length, IOBuffer* buffer, AsyncCallback cb,
                   RangeOption option = RangeOption()) override;
-  void AsyncCache(ContextSPtr ctx, const BlockContext& block_ctx,
-                  const Block& block, AsyncCallback cb,
+  void AsyncCache(ContextSPtr ctx, const CacheKey& key, const Block& block,
+                  AsyncCallback cb,
                   CacheOption option = CacheOption()) override;
   void AsyncPrefetch(ContextSPtr ctx, const BlockContext& block_ctx,
                      size_t length, AsyncCallback cb,
@@ -82,9 +81,8 @@ class TierBlockCache final : public BlockCache {
     return EnableLocalCache() || EnableRemoteCache();
   }
 
-  bool IsCached(const BlockContext& block_ctx) const override {
-    return local_block_cache_->IsCached(block_ctx) ||
-           remote_block_cache_->IsCached(block_ctx);
+  bool IsCached(const CacheKey& key) const override {
+    return local_block_cache_->IsCached(key);
   }
 
   bool Dump(Json::Value& value) const override {
@@ -111,6 +109,10 @@ class TierBlockCache final : public BlockCache {
   StorageClientUPtr storage_client_;
   BlockCacheUPtr local_block_cache_;
   BlockCacheUPtr remote_block_cache_;
+  // Non-owning view of remote_block_cache_ when it's a RemoteBlockCacheImpl.
+  // Used for the block fan-out path (Put/FillGroupCache) that needs fs_id and
+  // therefore can't go through the polymorphic BlockCache interface.
+  RemoteBlockCacheImpl* remote_block_cache_concrete_{nullptr};
   iutil::InflightTrackerSPtr cache_tracker_;
   iutil::InflightTrackerSPtr prefetch_tracker_;
   iutil::BthreadJoinerUPtr joiner_;

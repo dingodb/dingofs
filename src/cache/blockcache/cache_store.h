@@ -30,6 +30,7 @@
 
 #include "cache/common/context.h"
 #include "common/block/block_context.h"
+#include "common/block/cache_key.h"
 #include "common/io_buffer.h"
 #include "common/status.h"
 
@@ -124,23 +125,28 @@ class CacheStore {
   virtual Status Start(UploadFunc uploader) = 0;
   virtual Status Shutdown() = 0;
 
+  // Stage/RemoveStage are block-specific: the stage path embeds fs_id and the
+  // staged block is eventually pushed to S3 by the uploader. TensorKey never
+  // takes this path.
   virtual Status Stage(ContextSPtr ctx, const BlockContext& block_ctx,
                        const Block& block,
                        StageOption option = StageOption()) = 0;
   virtual Status RemoveStage(
       ContextSPtr ctx, const BlockContext& block_ctx,
       RemoveStageOption option = RemoveStageOption()) = 0;
-  virtual Status Cache(ContextSPtr ctx, const BlockContext& block_ctx,
-                       const Block& block,
+
+  // Cache/Load only touch the local cache tree, so they accept a polymorphic
+  // CacheKey and serve both block and tensor traffic.
+  virtual Status Cache(ContextSPtr ctx, const CacheKey& key, const Block& block,
                        CacheOption option = CacheOption()) = 0;
-  virtual Status Load(ContextSPtr ctx, const BlockContext& block_ctx,
-                      off_t offset, size_t length, IOBuffer* buffer,
+  virtual Status Load(ContextSPtr ctx, const CacheKey& key, off_t offset,
+                      size_t length, IOBuffer* buffer,
                       LoadOption option = LoadOption()) = 0;
 
   virtual std::string Id() const = 0;
   virtual bool IsRunning() const = 0;
-  virtual bool IsCached(const BlockContext& block_ctx) const = 0;
-  virtual bool IsFull(const BlockContext& block_ctx) const = 0;
+  virtual bool IsCached(const CacheKey& key) const = 0;
+  virtual bool IsFull(const CacheKey& key) const = 0;
   virtual bool Dump(Json::Value& value) const = 0;
 };
 

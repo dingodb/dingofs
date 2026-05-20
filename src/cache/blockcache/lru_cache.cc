@@ -24,8 +24,6 @@
 
 #include <glog/logging.h>
 
-#include "cache/common/block_key_helper.h"
-
 namespace dingofs {
 namespace cache {
 
@@ -47,7 +45,7 @@ LRUCache::~LRUCache() {
 }
 
 void LRUCache::Add(const CacheKey& key, const CacheValue& value) {
-  ListNode* node = new ListNode(value);
+  ListNode* node = new ListNode(key.Clone(), value);
   HashInsert(key.Filename(), node);
   ListAddFront(&inactive_, node);
 }
@@ -120,11 +118,10 @@ void LRUCache::HashDelete(ListNode* node) {
 }
 
 CacheItem LRUCache::KV(ListNode* node) {
-  CacheKey key;
-  // we use CacheKey.Filename() as hash key
-  auto filename = hash_->Key(node->handle);
-  CHECK(ParseFromFilename(filename, &key)) << "filename = " << filename;
-  return CacheItem(key, node->value);
+  // The original polymorphic key was stashed in the node at Add() time, so we
+  // can return it as-is without having to parse Filename() back into a typed
+  // key (which would not be possible for TensorKey).
+  return CacheItem(node->key, node->value);
 }
 
 bool LRUCache::EvictNode(ListNode* list, FilterFunc filter,

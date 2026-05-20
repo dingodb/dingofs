@@ -193,7 +193,7 @@ void RemoteBlockCacheImpl::AsyncRange(ContextSPtr ctx,
                                       RangeOption option) {
   DCHECK_RUNNING("RemoteBlockCache");
 
-  auto* self = GetSelfPtr();
+  auto* self = this;
   auto tid = iutil::RunInBthread(
       [self, ctx, block_ctx, offset, length, buffer, cb, option]() {
         Status status =
@@ -214,7 +214,7 @@ void RemoteBlockCacheImpl::AsyncCache(ContextSPtr ctx,
                                       CacheOption option) {
   DCHECK_RUNNING("RemoteBlockCache");
 
-  auto* self = GetSelfPtr();
+  auto* self = this;
   auto tid = iutil::RunInBthread([self, ctx, block_ctx, block, cb, option]() {
     Status status = self->Cache(ctx, block_ctx, block, option);
     if (cb) {

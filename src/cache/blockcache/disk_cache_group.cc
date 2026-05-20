@@ -122,18 +122,18 @@ Status DiskCacheGroup::RemoveStage(ContextSPtr ctx,
   return store->RemoveStage(ctx, block_ctx, option);
 }
 
-Status DiskCacheGroup::Cache(ContextSPtr ctx, const BlockContext& block_ctx,
+Status DiskCacheGroup::Cache(ContextSPtr ctx, const CacheKey& key,
                              const Block& block, CacheOption option) {
   Status status;
   DiskCacheGroupVarsRecordGuard metric_guard(__func__, block.size, status,
                                              vars_);
-  status = GetStore(block_ctx.key)->Cache(ctx, block_ctx, block, option);
+  status = GetStore(key)->Cache(ctx, key, block, option);
 
   return status;
 }
 
-Status DiskCacheGroup::Load(ContextSPtr ctx, const BlockContext& block_ctx,
-                            off_t offset, size_t length, IOBuffer* buffer,
+Status DiskCacheGroup::Load(ContextSPtr ctx, const CacheKey& key, off_t offset,
+                            size_t length, IOBuffer* buffer,
                             LoadOption option) {
   CHECK_RUNNING("Disk cache group");
 
@@ -142,12 +142,12 @@ Status DiskCacheGroup::Load(ContextSPtr ctx, const BlockContext& block_ctx,
   if (!store_id.empty()) {
     store = GetStore(store_id);
   } else {
-    store = GetStore(block_ctx.key);
+    store = GetStore(key);
   }
 
   Status status;
   DiskCacheGroupVarsRecordGuard metirc_guard(__func__, length, status, vars_);
-  status = store->Load(ctx, block_ctx, offset, length, buffer, option);
+  status = store->Load(ctx, key, offset, length, buffer, option);
 
   return status;
 }
@@ -158,16 +158,16 @@ bool DiskCacheGroup::IsRunning() const {
   return running_.load(std::memory_order_relaxed);
 }
 
-bool DiskCacheGroup::IsCached(const BlockContext& block_ctx) const {
+bool DiskCacheGroup::IsCached(const CacheKey& key) const {
   DCHECK_RUNNING("Disk cache group");
 
-  return GetStore(block_ctx.key)->IsCached(block_ctx);
+  return GetStore(key)->IsCached(key);
 }
 
-bool DiskCacheGroup::IsFull(const BlockContext& block_ctx) const {
+bool DiskCacheGroup::IsFull(const CacheKey& key) const {
   DCHECK_RUNNING("Disk cache group");
 
-  return GetStore(block_ctx.key)->IsFull(block_ctx);
+  return GetStore(key)->IsFull(key);
 }
 
 std::vector<uint64_t> DiskCacheGroup::CalcWeights(
@@ -180,9 +180,12 @@ std::vector<uint64_t> DiskCacheGroup::CalcWeights(
   return iutil::NormalizeByGcd(weights);
 }
 
-DiskCacheSPtr DiskCacheGroup::GetStore(const BlockKey& key) const {
+DiskCacheSPtr DiskCacheGroup::GetStore(const CacheKey& key) const {
   iutil::ConNode node;
-  bool find = chash_->Lookup(std::to_string(key.id), node);
+  // Filename() is stable and unique across both BlockKey and TensorKey, so the
+  // consistent hash placement is identical to the legacy behavior for blocks
+  // (which used to hash by slice id) up to the choice of hash input.
+  bool find = chash_->Lookup(key.Filename(), node);
   CHECK(find) << "No corresponding store found: key = " << key.Filename();
 
   auto iter = stores_.find(node.key);

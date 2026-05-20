@@ -30,6 +30,7 @@
 #include <string>
 
 #include "common/block/block_context.h"
+#include "common/block/cache_key.h"
 #include "utils/time.h"
 
 namespace dingofs {
@@ -83,7 +84,7 @@ class DiskCacheLayout {
         "/");
   }
 
-  std::string GetCachePath(const BlockKey& key) const {
+  std::string GetCachePath(const CacheKey& key) const {
     return PathJoin(GetCacheDir(), key.StoreKey());
   }
 

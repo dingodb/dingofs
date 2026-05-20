@@ -65,31 +65,35 @@ class RemoteBlockCacheImpl final : public BlockCache {
 
   Status Put(ContextSPtr ctx, const BlockContext& block_ctx,
              const Block& block, PutOption option) override;
-  Status Range(ContextSPtr ctx, const BlockContext& block_ctx, off_t offset,
-               size_t length, IOBuffer* buffer, RangeOption option) override;
-  Status Cache(ContextSPtr ctx, const BlockContext& block_ctx,
-               const Block& block, CacheOption option) override;
   Status Prefetch(ContextSPtr ctx, const BlockContext& block_ctx,
                   size_t length, PrefetchOption option) override;
 
   void AsyncPut(ContextSPtr ctx, const BlockContext& block_ctx,
                 const Block& block, AsyncCallback cb,
                 PutOption option) override;
-  void AsyncRange(ContextSPtr ctx, const BlockContext& block_ctx, off_t offset,
-                  size_t length, IOBuffer* buffer, AsyncCallback cb,
-                  RangeOption option) override;
-  void AsyncCache(ContextSPtr ctx, const BlockContext& block_ctx,
-                  const Block& block, AsyncCallback cb,
-                  CacheOption option) override;
   void AsyncPrefetch(ContextSPtr ctx, const BlockContext& block_ctx,
                      size_t length, AsyncCallback cb,
                      PrefetchOption option) override;
+
+  // Block-context variants kept for the tier's Range/Cache fan-out (the
+  // remote cache RPC needs fs_id, which the polymorphic CacheKey doesn't
+  // carry). They're called directly through the concrete pointer in
+  // TierBlockCache and are not part of the BlockCache virtual interface.
+  Status Range(ContextSPtr ctx, const BlockContext& block_ctx, off_t offset,
+               size_t length, IOBuffer* buffer, RangeOption option);
+  Status Cache(ContextSPtr ctx, const BlockContext& block_ctx,
+               const Block& block, CacheOption option);
+  void AsyncRange(ContextSPtr ctx, const BlockContext& block_ctx, off_t offset,
+                  size_t length, IOBuffer* buffer, AsyncCallback cb,
+                  RangeOption option);
+  void AsyncCache(ContextSPtr ctx, const BlockContext& block_ctx,
+                  const Block& block, AsyncCallback cb, CacheOption option);
+  bool IsCachedBlock(const BlockContext&) const { return IsEnabled(); }
 
   // We gurantee that cache node is always enable stage and cache.
   bool IsEnabled() const override { return !FLAGS_cache_group.empty(); }
   bool EnableStage() const override { return IsEnabled(); }
   bool EnableCache() const override { return IsEnabled(); }
-  bool IsCached(const BlockContext&) const override { return IsEnabled(); }
   bool Dump(Json::Value& value) const override {
     return upstream_->Dump(value);
   }

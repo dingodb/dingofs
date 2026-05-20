@@ -84,7 +84,7 @@ void BlockStoreImpl::RangeAsync(ContextSPtr ctx, RangeReq req,
   option.retrieve_storage = true;
   option.block_whole_length = req.block_ctx.key.size;
 
-  block_cache_->AsyncRange(cache::NewContext(), req.block_ctx, req.offset,
+  block_cache_->AsyncRange(cache::NewContext(), req.block_ctx.key, req.offset,
                            req.length, req.data, std::move(wrapper), option);
 }
 
@@ -120,7 +120,7 @@ void BlockStoreImpl::PrefetchAsync(ContextSPtr ctx, PrefetchReq req,
                                    StatusCallback callback) {
   auto span = hub_->GetTraceManager()->StartChildSpan(
       "BlockStoreImpl::PrefetchAsync", ctx->GetTraceSpan());
-  if (block_cache_->IsCached(req.block_ctx)) {
+  if (block_cache_->IsCached(req.block_ctx.key)) {
     callback(Status::OK());
     return;
   }
