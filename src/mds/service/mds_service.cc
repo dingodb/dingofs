@@ -1328,7 +1328,7 @@ void MDSServiceImpl::DoOpen(google::protobuf::RpcController*, const pb::mds::Ope
   EntryOut entry_out;
   std::vector<ChunkEntry> chunks;
   std::string data;
-  uint64_t data_version;
+  uint64_t data_version = 0;
   status = file_system->Open(ctx, request->ino(), param, entry_out, chunks, data, data_version);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
@@ -3473,7 +3473,8 @@ void MDSServiceImpl::RestoreFromTrash(google::protobuf::RpcController* controlle
 
   // Only root (uid=0) can restore from trash.
   if (request->uid() != 0) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENO_PERMISSION, "restore requires root privilege");
+    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENO_PERMISSION,
+                                   "restore requires root privilege");
   }
 
   auto file_system = GetFileSystem(request->fs_id());
@@ -3483,8 +3484,8 @@ void MDSServiceImpl::RestoreFromTrash(google::protobuf::RpcController* controlle
 
   Context ctx(request->context(), request->info().request_id(), __func__);
 
-  auto status = file_system->RestoreFromTrash(ctx, request->trash_parent(), request->trash_name(),
-                                               request->allow_trash_parent());
+  auto status =
+      file_system->RestoreFromTrash(ctx, request->trash_parent(), request->trash_name(), request->allow_trash_parent());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (!status.ok()) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
