@@ -63,7 +63,7 @@ static Status ParseAsyncResult(void* vr, std::string* out_value = nullptr) {
 
   if (res->error != nullptr && res->error_len > 0) {
     std::string err_msg(res->error, res->error_len);
-    if (err_msg.find("retryable:") != std::string::npos) {
+    if (err_msg.find("retryable:") != std::string::npos || err_msg.find("write conflict") != std::string::npos) {
       return Status(pb::error::ESTORE_MAYBE_RETRY, fmt::format("tikv-go err({})", err_msg));
     }
     return Status(pb::error::EBACKEND_STORE, fmt::format("tikv-go err({})", err_msg));

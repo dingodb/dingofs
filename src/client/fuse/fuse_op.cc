@@ -92,8 +92,8 @@ void InitFuseConnInfo(struct fuse_conn_info* conn) {
   LOG_IF(INFO, fuse_set_feature_flag(conn, FUSE_CAP_READDIRPLUS))
       << "[enabled] FUSE_CAP_READDIRPLUS";
 
-  LOG_IF(INFO, fuse_set_feature_flag(conn, FUSE_CAP_READDIRPLUS_AUTO))
-      << "[enabled] FUSE_CAP_READDIRPLUS_AUTO";
+  // LOG_IF(INFO, fuse_set_feature_flag(conn, FUSE_CAP_READDIRPLUS_AUTO))
+  //     << "[enabled] FUSE_CAP_READDIRPLUS_AUTO";
 
   conn->max_readahead = FLAGS_fuse_max_readahead_kb * 1024;
   conn->max_background = FLAGS_fuse_max_background;
@@ -762,8 +762,7 @@ void FuseOpOpenDir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
     const bool is_trash = ino >= dingofs::kTrashIno;
     fi->cache_readdir =
         (need_cache && FLAGS_fuse_enable_readdir_cache && !is_trash) ? 1 : 0;
-    fi->keep_cache =
-        (FLAGS_fuse_enable_readdir_cache && !is_trash) ? 1 : 0;
+    fi->keep_cache = (FLAGS_fuse_enable_readdir_cache && !is_trash) ? 1 : 0;
 
     ReplyOpen(req, fi);
   }

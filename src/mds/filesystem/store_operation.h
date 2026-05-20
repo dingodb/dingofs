@@ -1111,7 +1111,7 @@ class OpenFileOperation : public Operation {
     int64_t delta_bytes{0};
     std::vector<ChunkEntry> chunks;
     std::string data;
-    uint64_t data_version;
+    uint64_t data_version{0};
   };
 
   OpType GetOpType() const override { return OpType::kOpenFile; }
