@@ -18,6 +18,7 @@
 
 #include "backtrace.h"
 #include "common/flag.h"
+#include "common/options/blockaccess.h"
 #include "common/options/common.h"
 #include "common/options/mds.h"
 #include "common/version.h"
@@ -286,6 +287,9 @@ int main(int argc, char* argv[]) {
 #else
   std::cout << "USE_TCMALLOC is OFF\n";
 #endif
+
+  // set default crt event loop threads to 2 for better performance in mds
+  dingofs::blockaccess::FLAGS_s3_crt_event_loop_threads = 2;
 
   dingofs::mds::MetaCodec::SetClusterID(FLAGS_mds_cluster_id);
 

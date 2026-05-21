@@ -20,6 +20,9 @@
 #include <memory>
 
 #include "aws/core/Aws.h"
+#include "aws/crt/io/Bootstrap.h"
+#include "aws/crt/io/EventLoopGroup.h"
+#include "aws/crt/io/HostResolver.h"
 #include "common/blockaccess/s3/aws/aws_crt_s3_client.h"
 #include "common/blockaccess/s3/aws/aws_legacy_s3_client.h"
 #include "fmt/format.h"
@@ -51,6 +54,32 @@ bool S3Accesser::Init() {
         Aws::Utils::Logging::LogLevel(options_.aws_sdk_config.loglevel);
     logging_options.defaultLogPrefix =
         options_.aws_sdk_config.log_prefix.c_str();
+
+    // Customize the CRT EventLoopGroup thread count when using the crt client.
+    // Must be set before Aws::InitAPI so the SDK uses this bootstrap as the
+    // process-wide default for all S3CrtClient instances.
+    if (options_.aws_sdk_config.use_crt_client) {
+      const int event_loop_threads =
+          options_.aws_sdk_config.crt_event_loop_threads;
+      LOG(INFO) << fmt::format(
+          "[s3_accesser] init aws crt event loop group, threads={} "
+          "(0 means all cpus).",
+          event_loop_threads);
+      aws_sdk_options.ioOptions.clientBootstrap_create_fn =
+          [event_loop_threads]() {
+            Aws::Crt::Io::EventLoopGroup event_loop_group(
+                static_cast<uint16_t>(event_loop_threads));
+
+            Aws::Crt::Io::DefaultHostResolver host_resolver(
+                event_loop_group, /*maxHosts=*/8, /*maxTTL=*/30);
+
+            auto bootstrap = Aws::MakeShared<Aws::Crt::Io::ClientBootstrap>(
+                "Aws_Init_Cleanup", event_loop_group, host_resolver);
+            bootstrap->EnableBlockingShutdown();
+
+            return bootstrap;
+          };
+    }
 
     Aws::InitAPI(aws_sdk_options);
 

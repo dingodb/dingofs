@@ -50,6 +50,10 @@ struct AwsSdkConfig {
   int request_timeout{10000};
 
   bool use_crt_client{true};
+  // Only effective when use_crt_client=true. 0 means use all available cpu
+  // cores. The thread count is applied to the AWS CRT EventLoopGroup which is
+  // shared by all S3CrtClient instances in this process.
+  int crt_event_loop_threads{0};
 
   bool use_thread_pool{true};  // this only work when use_crt_client is false
   int async_thread_num{16};    // this only work when use_crt_client is false
@@ -84,6 +88,9 @@ inline void FillAwsSdkConfigFromGFlags(AwsSdkConfig* aws_sdk_config) {
   if (aws_sdk_config->use_crt_client) {
     LOG(INFO) << "s3 use crt client.";
   }
+  aws_sdk_config->crt_event_loop_threads = FLAGS_s3_crt_event_loop_threads;
+  LOG(INFO) << fmt::format("s3 crt event loop threads: {} (0 means all cpus).",
+                           aws_sdk_config->crt_event_loop_threads);
   aws_sdk_config->use_thread_pool = FLAGS_s3_use_thread_pool;
   if (aws_sdk_config->use_thread_pool) {
     LOG(INFO) << "s3 use thread pool.";
