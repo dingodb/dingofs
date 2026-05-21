@@ -327,7 +327,7 @@ TEST_F(DirProfileCacheTest, SizeAcrossShards) {
     DirProfileSPtr p = std::make_shared<DirProfile>(static_cast<Ino>(i + 1), 0);
     cache->Put(p);
   }
-  EXPECT_EQ(cache->Size(), static_cast<size_t>(kNum));
+  ASSERT_EQ(cache->Size(), static_cast<size_t>(kNum));
 
   for (int i = 0; i < kNum; ++i) {
     EXPECT_NE(cache->Get(static_cast<Ino>(i + 1)), nullptr);

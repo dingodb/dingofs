@@ -15,6 +15,7 @@
 #include <csignal>
 #include <iostream>
 #include <string>
+#include <thread>
 
 #include "backtrace.h"
 #include "common/flag.h"
@@ -269,6 +270,11 @@ static dingofs::FlagExtraInfo extras = {
 };
 
 int main(int argc, char* argv[]) {
+  // tikvgo starts with a thread named "tikvgo", and wait tikvgo thread create finish,
+  // then set mds main thread name is "dingo-mds"
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  pthread_setname_np(pthread_self(), "dingo-mds");
+
   using dingofs::FLAGS_conf;
 
   std::vector<std::string> orig_args;

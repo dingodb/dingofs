@@ -3939,6 +3939,9 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
       if (!value.empty()) shared_param.attr_mutation = MetaCodec::DecodeDirInodeMutationValue(value);
     }
 
+    CHECK(!need_parent_key || shared_param.attr.ino() != 0)
+        << fmt::format("invalid attr ino({}).", shared_param.attr.ino());
+
     // run set attr operations
     for (auto* operation : batch_operation.setattr_operations) {
       Status s = operation->RunInBatch(txn, shared_param);
@@ -3987,9 +3990,6 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
   } while (IsRetry(retry));
 
   SetElapsedTime(batch_operation, "store_operate");
-
-  CHECK(!need_parent_key || shared_param.attr.ino() != 0)
-      << fmt::format("invalid attr ino({}).", shared_param.attr.ino());
 
   LOG(INFO) << fmt::format(
       "[operation.{}.{}][{}][{}us] batch run ({}) finish, count({}) txn({}) retry({}) status({}) attr({}).", fs_id, ino,

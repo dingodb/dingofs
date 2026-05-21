@@ -115,7 +115,7 @@ std::vector<Ino> DirProfile::SmallFileInosForTest() const {
 }
 
 void DirProfileCache::Put(DirProfileSPtr& dir_profile) {
-  if (!dir_profile->IsSmallFileDir()) return;
+  // if (!dir_profile->IsSmallFileDir()) return;
 
   Ino ino = dir_profile->ParentIno();
 
@@ -144,19 +144,19 @@ void DirProfileCache::Put(DirProfileSPtr& dir_profile) {
   }
 }
 
-DirProfileSPtr DirProfileCache::Get(Ino parent) {
+DirProfileSPtr DirProfileCache::Get(Ino ino) {
   DirProfileSPtr profile;
   shard_map_.withRLock(
-      [parent, &profile](Map& map) {
-        auto it = map.find(parent);
+      [ino, &profile](Map& map) {
+        auto it = map.find(ino);
         if (it != map.end()) profile = it->second;
       },
-      parent);
+      ino);
   return profile;
 }
 
-void DirProfileCache::Erase(Ino parent) {
-  shard_map_.withWLock([parent](Map& map) { map.erase(parent); }, parent);
+void DirProfileCache::Erase(Ino ino) {
+  shard_map_.withWLock([ino](Map& map) { map.erase(ino); }, ino);
 }
 
 void DirProfileCache::CleanExpired(uint64_t expire_s) {
@@ -171,9 +171,9 @@ void DirProfileCache::CleanExpired(uint64_t expire_s) {
 }
 
 size_t DirProfileCache::Size() const {
-  size_t sz = 0;
-  shard_map_.iterate([&sz](const Map& map) { sz += map.size(); });
-  return sz;
+  size_t size = 0;
+  shard_map_.iterate([&size](const Map& map) { size += map.size(); });
+  return size;
 }
 
 }  // namespace meta

@@ -133,9 +133,9 @@ class DirProfileCache {
   void Put(DirProfileSPtr& dir_profile);
 
   // Returns existing entry or nullptr; never creates.
-  DirProfileSPtr Get(Ino parent);
+  DirProfileSPtr Get(Ino ino);
 
-  void Erase(Ino parent);
+  void Erase(Ino ino);
 
   void CleanExpired(uint64_t expire_s);
 

@@ -24,11 +24,11 @@
 
 #include "client/vfs/blockstore/block_store_impl.h"
 #include "client/vfs/blockstore/fake_block_store.h"
-#include "client/vfs/data/writer_table.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/compaction/compactor_impl.h"
 #include "client/vfs/components/prefetch_manager.h"
 #include "client/vfs/components/warmup_manager.h"
+#include "client/vfs/data/writer_table.h"
 #include "client/vfs/metasystem/local/metasystem.h"
 #include "client/vfs/metasystem/mds/metasystem.h"
 #include "client/vfs/metasystem/memory/metasystem.h"
@@ -41,6 +41,7 @@
 #include "common/blockaccess/rados/rados_common.h"
 #include "common/directory.h"
 #include "common/options/client.h"
+#include "common/options/common.h"
 #include "common/status.h"
 #include "common/version.h"
 #include "utils/executor/thread/executor_impl.h"
@@ -135,12 +136,15 @@ Status VFSHubImpl::Start(bool skip_mount) {
   CHECK(started_.load(std::memory_order_relaxed) == false)
       << "unexpected start";
 
-  LOG(INFO) << fmt::format("[vfs.hub] vfs hub starting, skip_mount({}).", skip_mount);
+  LOG(INFO) << fmt::format("[vfs.hub] vfs hub starting, skip_mount({}).",
+                           skip_mount);
 
   // trace manager
   trace_manager_ = std::make_unique<TraceManager>();
-  if (!trace_manager_->Init()) {
-    return Status::Internal("init trace manager fail");
+  if (FLAGS_enable_trace) {
+    if (!trace_manager_->Init()) {
+      return Status::Internal("init trace manager fail");
+    }
   }
 
   {
@@ -210,8 +214,8 @@ Status VFSHubImpl::Start(bool skip_mount) {
     blockaccess::FillThrottleOptionsFromGFlags(
         &blockaccess_options_.throttle_options);
 
-    block_accesser_ = blockaccess::NewPrefixBlockAccesser(
-        fs_info_.name, blockaccess_options_);
+    block_accesser_ = blockaccess::NewPrefixBlockAccesser(fs_info_.name,
+                                                          blockaccess_options_);
     DINGOFS_RETURN_NOT_OK(block_accesser_->Init());
   }
 
@@ -337,7 +341,8 @@ Status VFSHubImpl::Stop(bool skip_unmount) {
     return Status::OK();
   }
 
-  LOG(INFO) << fmt::format("[vfs.hub] stopping vfs hub, skip_unmount({}).", skip_unmount);
+  LOG(INFO) << fmt::format("[vfs.hub] stopping vfs hub, skip_unmount({}).",
+                           skip_unmount);
 
   if (compactor_ != nullptr) {
     compactor_->Stop();
@@ -389,7 +394,7 @@ Status VFSHubImpl::Stop(bool skip_unmount) {
   }
 
   if (trace_manager_ != nullptr) {
-    trace_manager_->Stop();
+    if (FLAGS_enable_trace) trace_manager_->Stop();
   }
 
   if (cb_executor_ != nullptr) {
@@ -400,7 +405,8 @@ Status VFSHubImpl::Stop(bool skip_unmount) {
     logclean_manager_->Stop();
   }
 
-  LOG(INFO) << fmt::format("[vfs.hub] stopped vfs hub, skip_unmount({}).", skip_unmount);
+  LOG(INFO) << fmt::format("[vfs.hub] stopped vfs hub, skip_unmount({}).",
+                           skip_unmount);
 
   started_.store(false, std::memory_order_relaxed);
 
