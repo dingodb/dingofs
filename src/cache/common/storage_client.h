@@ -35,7 +35,6 @@
 
 #include "cache/blockcache/cache_store.h"
 #include "cache/common/closure.h"
-#include "cache/common/context.h"
 #include "cache/iutil/task_execution_queue.h"
 #include "common/blockaccess/block_accesser.h"
 #include "utils/concurrent/task_thread_pool.h"
@@ -67,7 +66,7 @@ class TaskClosure : public Closure {
 
 class PutBlockTask final : public TaskClosure {
  public:
-  PutBlockTask(ContextSPtr ctx, const BlockKey& key, const Block* block,
+  PutBlockTask(BlockHandle handle, const IOBuffer& block,
                blockaccess::BlockAccesser* block_accesser,
                iutil::TaskExecutionQueueSPtr retry_queue);
 
@@ -81,17 +80,16 @@ class PutBlockTask final : public TaskClosure {
   void OnRetry(const blockaccess::PutObjectAsyncContextSPtr& ctx);
   void OnComplete(Status s);
 
-  ContextSPtr ctx_;
-  BlockKey key_;
-  const Block* block_;
+  BlockHandle handle_;
+  const IOBuffer& block_;
   blockaccess::BlockAccesser* block_accesser_;
   iutil::TaskExecutionQueueSPtr retry_queue_;
 };
 
 class RangeBlockTask final : public TaskClosure {
  public:
-  RangeBlockTask(ContextSPtr ctx, const BlockKey& key, off_t offset,
-                 size_t length, IOBuffer* buffer,
+  RangeBlockTask(BlockHandle handle, off_t offset, size_t length,
+                 IOBuffer* buffer,
                  blockaccess::BlockAccesser* block_accesser,
                  iutil::TaskExecutionQueueSPtr retry_queue);
 
@@ -105,8 +103,7 @@ class RangeBlockTask final : public TaskClosure {
   void OnRetry(const blockaccess::GetObjectAsyncContextSPtr& ctx);
   void OnComplete(Status s);
 
-  ContextSPtr ctx_;
-  BlockKey key_;
+  BlockHandle handle_;
   off_t offset_;
   size_t length_;
   IOBuffer* buffer_;
@@ -124,9 +121,9 @@ class StorageClient {
   Status Start();
   Status Shutdown();
 
-  Status Put(ContextSPtr ctx, const BlockKey& key, const Block* block);
-  Status Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
-               size_t length, IOBuffer* buffer);
+  Status Put(BlockHandle handle, const IOBuffer& block);
+  Status Range(BlockHandle handle, off_t offset, size_t length,
+               IOBuffer* buffer);
 
  private:
   static int HandleClosure(void* meta,

@@ -320,13 +320,13 @@ void WarmupManager::WarmupFile(Ino ino, WarmupTask* task, AsyncWarmupCb cb) {
     VLOG(6) << fmt::format("Download block {}, len {}", block.key.Filename(),
                            block.len);
     PrefetchReq req;
-    req.block_ctx = BlockContext(block.key, vfs_hub_->GetFsInfo().id);
+    req.handle = BlockHandle(vfs_hub_->GetFsInfo().id, block.key);
 
     block_store_->PrefetchAsync(
         SpanScope::GetContext(span), req,
         [this, task, req, &countdown, &donwload_status](Status status) {
           VLOG(6) << fmt::format("Download block {} finished, status: {}.",
-                                 req.block_ctx.key.Filename(), status.ToString());
+                                 req.handle.Filename(), status.ToString());
           BRPC_SCOPE_EXIT {
             DecBlockMetric(1);
             countdown.signal();

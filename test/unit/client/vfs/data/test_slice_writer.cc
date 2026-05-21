@@ -21,6 +21,7 @@
 #include <memory>
 #include <string>
 
+#include "cache/common/block_handle_helper.h"
 #include "client/vfs/data/slice/common.h"
 #include "client/vfs/data/slice/slice_writer.h"
 #include "common/status.h"
@@ -38,6 +39,19 @@ using ::testing::DoAll;
 using ::testing::Invoke;
 using ::testing::Return;
 using ::testing::SetArgPointee;
+
+namespace {
+inline uint32_t HandleIndex(const BlockHandle& h) {
+  BlockKey k;
+  CHECK(cache::ParseFromFilename(h.Filename(), &k));
+  return k.index;
+}
+inline uint32_t HandleSize(const BlockHandle& h) {
+  BlockKey k;
+  CHECK(cache::ParseFromFilename(h.Filename(), &k));
+  return k.size;
+}
+}  // namespace
 
 // RAII guard: calls DecRef on scope exit
 struct SliceWriterGuard {
@@ -335,7 +349,7 @@ TEST_F(SliceWriterSliceRelativeTest, Write_SliceRelative_StartsFromZero) {
       .WillRepeatedly(Invoke([&](ContextSPtr, PutReq req, StatusCallback cb) {
         {
           std::lock_guard<std::mutex> lk(mu);
-          captured_indices.push_back(req.block_ctx.key.index);
+          captured_indices.push_back(HandleIndex(req.handle));
         }
         cb(Status::OK());
       }));
@@ -375,7 +389,7 @@ TEST_F(SliceWriterSliceRelativeTest, Write_MultiBlock_Sequential) {
       .WillRepeatedly(Invoke([&](ContextSPtr, PutReq req, StatusCallback cb) {
         {
           std::lock_guard<std::mutex> lk(mu);
-          block_sizes[req.block_ctx.key.index] = req.data.Size();
+          block_sizes[HandleIndex(req.handle)] = req.data.Size();
         }
         cb(Status::OK());
       }));
@@ -418,7 +432,7 @@ TEST_F(SliceWriterSliceRelativeTest, Write_MultipleSmallWrites_SameBlock) {
       .WillRepeatedly(Invoke([&](ContextSPtr, PutReq req, StatusCallback cb) {
         {
           std::lock_guard<std::mutex> lk(mu);
-          captured_indices.push_back(req.block_ctx.key.index);
+          captured_indices.push_back(HandleIndex(req.handle));
         }
         cb(Status::OK());
       }));
@@ -456,7 +470,7 @@ TEST_F(SliceWriterSliceRelativeTest, Write_SmallWrites_CrossBoundary) {
       .WillRepeatedly(Invoke([&](ContextSPtr, PutReq req, StatusCallback cb) {
         {
           std::lock_guard<std::mutex> lk(mu);
-          captured_indices.push_back(req.block_ctx.key.index);
+          captured_indices.push_back(HandleIndex(req.handle));
         }
         cb(Status::OK());
       }));
@@ -491,7 +505,7 @@ TEST_F(SliceWriterSliceRelativeTest, Flush_LastBlock_ActualSize) {
       .WillRepeatedly(Invoke([&](ContextSPtr, PutReq req, StatusCallback cb) {
         {
           std::lock_guard<std::mutex> lk(mu);
-          key_sizes[req.block_ctx.key.index] = req.block_ctx.key.size;
+          key_sizes[HandleIndex(req.handle)] = HandleSize(req.handle);
         }
         cb(Status::OK());
       }));
@@ -524,7 +538,7 @@ TEST_F(SliceWriterSliceRelativeTest, Write_SingleBlockLessThanBlockSize) {
   uint32_t captured_key_size = 0;
   EXPECT_CALL(*mock_block_store_, PutAsync(_, _, _))
       .WillRepeatedly(Invoke([&](ContextSPtr, PutReq req, StatusCallback cb) {
-        captured_key_size = req.block_ctx.key.size;
+        captured_key_size = HandleSize(req.handle);
         cb(Status::OK());
       }));
   EXPECT_CALL(*mock_meta_system_, NewSliceId(_, _, _))
@@ -710,7 +724,7 @@ TEST_F(SliceWriterStreamingTest, UT1_FlushUpTo_OnlyFullBlocks) {
       .WillRepeatedly(Invoke([&](ContextSPtr, PutReq req, StatusCallback cb) {
         {
           std::lock_guard<std::mutex> lk(mu);
-          uploaded_indices.push_back(req.block_ctx.key.index);
+          uploaded_indices.push_back(HandleIndex(req.handle));
         }
         cb(Status::OK());
       }));
@@ -771,7 +785,7 @@ TEST_F(SliceWriterStreamingTest, UT2_SliceId_DelayedArrival_CatchUp) {
       .WillRepeatedly(Invoke([&](ContextSPtr, PutReq req, StatusCallback cb) {
         {
           std::lock_guard<std::mutex> lk(mu);
-          uploaded_indices.push_back(req.block_ctx.key.index);
+          uploaded_indices.push_back(HandleIndex(req.handle));
         }
         cb(Status::OK());
       }));
@@ -953,7 +967,7 @@ TEST_F(SliceWriterStreamingTest, UT6_MultipleWrites_StreamingOneByOne) {
       .WillRepeatedly(Invoke([&](ContextSPtr, PutReq req, StatusCallback cb) {
         {
           std::lock_guard<std::mutex> lk(mu);
-          uploaded_indices.push_back(req.block_ctx.key.index);
+          uploaded_indices.push_back(HandleIndex(req.handle));
         }
         put_count.fetch_add(1);
         cb(Status::OK());
@@ -1005,7 +1019,7 @@ TEST_F(SliceWriterStreamingTest, UT7_SliceId_PreallocFail_SyncFallback) {
       .WillRepeatedly(Invoke([&](ContextSPtr, PutReq req, StatusCallback cb) {
         {
           std::lock_guard<std::mutex> lk(mu);
-          uploaded_indices.push_back(req.block_ctx.key.index);
+          uploaded_indices.push_back(HandleIndex(req.handle));
         }
         cb(Status::OK());
       }));
@@ -1056,7 +1070,7 @@ TEST_F(SliceWriterStreamingTest, UT8_SingleWrite_MultiBlockFlushUpTo) {
       .WillRepeatedly(Invoke([&](ContextSPtr, PutReq req, StatusCallback cb) {
         {
           std::lock_guard<std::mutex> lk(mu);
-          uploaded_indices.push_back(req.block_ctx.key.index);
+          uploaded_indices.push_back(HandleIndex(req.handle));
         }
         cb(Status::OK());
       }));
@@ -1164,7 +1178,7 @@ TEST_F(SliceWriterStreamingTest, UT10_MixedStreamAndFlushResidual) {
         }
         {
           std::lock_guard<std::mutex> lk(mu);
-          all_indices.push_back(req.block_ctx.key.index);
+          all_indices.push_back(HandleIndex(req.handle));
         }
         cb(Status::OK());
       }));

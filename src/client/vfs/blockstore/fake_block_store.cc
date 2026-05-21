@@ -69,10 +69,10 @@ void FakeBlockStore::Shutdown() {
   started_.store(false);
 }
 
-void FakeBlockStore::DoRangeAsync(BlockKey key, uint64_t offset,
+void FakeBlockStore::DoRangeAsync(const BlockHandle& handle, uint64_t offset,
                                   uint64_t length, IOBuffer* buffer,
                                   StatusCallback callback) {
-  (void)key;
+  (void)handle;
   (void)offset;
   CHECK_GE(kStaticMemSize, length);
   buffer->AppendUserData(GetStaticMemory(), length, NoopDeleter);
@@ -89,7 +89,7 @@ void FakeBlockStore::RangeAsync(ContextSPtr ctx, RangeReq req,
     cb(s);
   };
 
-  DoRangeAsync(req.block_ctx.key, req.offset, req.length, req.data,
+  DoRangeAsync(req.handle, req.offset, req.length, req.data,
                std::move(wrapper));
 }
 

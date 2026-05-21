@@ -104,7 +104,7 @@ Status LocalFileSystem::Shutdown() {
   return Status::OK();
 }
 
-Status LocalFileSystem::WriteFile(ContextSPtr ctx, const std::string& path,
+Status LocalFileSystem::WriteFile(const std::string& path,
                                   const IOBuffer* buffer) {
   DCHECK_RUNNING("LocalFilesystem");
 
@@ -155,7 +155,7 @@ Status LocalFileSystem::WriteFile(ContextSPtr ctx, const std::string& path,
   IOBuffer tbuffer;
   int buf_index = AllocateAlignedMemory(&tbuffer, aligned_length, false);
   buffer->CopyTo(tbuffer.Fetch1());
-  status = AioWrite(ctx, fd, tbuffer.Fetch1(), aligned_length, buf_index);
+  status = AioWrite(fd, tbuffer.Fetch1(), aligned_length, buf_index);
   if (!status.ok()) {
     LOG(ERROR) << "Fail to write file'`" << tmppath << "'";
     return status;
@@ -170,9 +170,8 @@ Status LocalFileSystem::WriteFile(ContextSPtr ctx, const std::string& path,
   return status;
 }
 
-Status LocalFileSystem::ReadFile(ContextSPtr ctx, const std::string& path,
-                                 off_t offset, size_t length,
-                                 IOBuffer* buffer) {
+Status LocalFileSystem::ReadFile(const std::string& path, off_t offset,
+                                 size_t length, IOBuffer* buffer) {
   CHECK_RUNNING("LocalFilesystem");
 
   if (!health_checker_->IsHealthy()) {
@@ -200,8 +199,8 @@ Status LocalFileSystem::ReadFile(ContextSPtr ctx, const std::string& path,
   off_t aligned_offset = AlignOffset(offset);
   size_t aligned_length = AlignLength(length + offset - aligned_offset);
   int buf_index = AllocateAlignedMemory(buffer, aligned_length, true);
-  status = AioRead(ctx, fd, aligned_offset, aligned_length, buffer->Fetch1(),
-                   buf_index);
+  status =
+      AioRead(fd, aligned_offset, aligned_length, buffer->Fetch1(), buf_index);
   if (status.ok()) {
     if (aligned_offset != offset) {
       buffer->PopFront(offset - aligned_offset);
@@ -236,21 +235,21 @@ struct InflightAioGuard {
   iutil::InflightTracker* inflight;
 };
 
-Status LocalFileSystem::AioWrite(ContextSPtr ctx, int fd, char* buffer,
-                                 size_t length, int buf_index) {
+Status LocalFileSystem::AioWrite(int fd, char* buffer, size_t length,
+                                 int buf_index) {
   InflightAioGuard guard(fd, &inflight_);
 
-  auto aio = Aio(ctx, fd, 0, length, buffer, buf_index, false);
+  auto aio = Aio(fd, 0, length, buffer, buf_index, false);
   aio_queue_->Submit(&aio);
   aio.Wait();
   return aio.Result().status;
 }
 
-Status LocalFileSystem::AioRead(ContextSPtr ctx, int fd, off_t offset,
-                                size_t length, char* buffer, int buf_index) {
+Status LocalFileSystem::AioRead(int fd, off_t offset, size_t length,
+                                char* buffer, int buf_index) {
   InflightAioGuard guard(fd, &inflight_);
 
-  auto aio = Aio(ctx, fd, offset, length, buffer, buf_index, true);
+  auto aio = Aio(fd, offset, length, buffer, buf_index, true);
   aio_queue_->Submit(&aio);
   aio.Wait();
   return aio.Result().status;

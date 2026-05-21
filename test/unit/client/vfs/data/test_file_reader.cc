@@ -242,11 +242,9 @@ TEST_F(FileReaderTest, Read_VerifyRangeReqFields) {
         << "user-read RangeReq (offset=0,length=" << kReadSize << ") not found";
     req = *it;
   }
-  // BlockKey must carry the correct slice id and actual block size.
-  // block_size field was removed from RangeReq; downstream uses key.size.
-  EXPECT_EQ(req.block_ctx.key.id, kSliceId);
-  EXPECT_EQ(req.block_ctx.key.index, 0);
-  EXPECT_EQ(req.block_ctx.key.size, kBlockSize);
+  // Handle must carry the correct slice id and actual block size.
+  EXPECT_EQ(req.handle.Filename(),
+            fmt::format("{}_{}_{}", kSliceId, 0, kBlockSize));
   EXPECT_EQ(req.offset, 0);
   EXPECT_EQ(req.length, static_cast<int64_t>(kReadSize));
 

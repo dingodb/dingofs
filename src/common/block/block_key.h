@@ -21,18 +21,21 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 
 namespace dingofs {
 
 struct BlockKey {
-  uint64_t id{0};     // slice ID (globally unique)
-  uint32_t index{0};  // block index within the slice
-  uint32_t size{0};   // block size in bytes
+  // Top-level directory under cache/stage roots where StoreKey is rooted.
+  // Single source of truth — loader uses this to know where file-blocks live.
+  static constexpr std::string_view kStoreDir = "blocks";
 
   BlockKey() = default;
 
-  BlockKey(uint64_t _id, uint32_t _index, uint32_t _size)
-      : id(_id), index(_index), size(_size) {}
+  BlockKey(uint64_t id, uint32_t index, uint32_t size)
+      : id(id), index(index), size(size) {}
+
+  std::string Id() const { return std::to_string(id); }
 
   std::string Filename() const {
     return fmt::format("{}_{}_{}", id, index, size);
@@ -40,9 +43,15 @@ struct BlockKey {
 
   // Storage path with two-level directory bucketing by slice id.
   std::string StoreKey() const {
-    return fmt::format("blocks/{}/{}/{}", id / 1000 / 1000, id / 1000,
+    return fmt::format("{}/{}/{}/{}", kStoreDir, id / 1000 / 1000, id / 1000,
                        Filename());
   }
+
+  uint64_t StoreSize() const { return size; }
+
+  uint64_t id{0};     // slice ID (globally unique)
+  uint32_t index{0};  // block index within the slice
+  uint32_t size{0};   // block size in bytes
 };
 
 }  // namespace dingofs

@@ -28,8 +28,7 @@
 
 #include <ostream>
 
-#include "cache/common/context.h"
-#include "common/block/block_context.h"
+#include "common/block/block_handle.h"
 #include "common/io_buffer.h"
 #include "common/status.h"
 
@@ -43,19 +42,7 @@ enum class StoreType : uint8_t {
   k3FS = 2,
 };
 
-// block
-struct Block {
-  Block() = default;
-  Block(const IOBuffer& buffer) : buffer(buffer), size(buffer.Size()) {}
-  Block(IOBuffer&& buffer)
-      : buffer(std::move(buffer)), size(this->buffer.Size()) {}
-  Block(const char* data, size_t size) : buffer(data, size), size(size) {}
-
-  IOBuffer buffer;
-  size_t size{0};
-};
-
-// block context
+// block attribute
 struct BlockAttr {
   enum BlockFrom : uint8_t {
     kFromWriteback = 0,
@@ -115,32 +102,27 @@ class CacheStore {
     BlockAttr block_attr;
   };
 
-  using UploadFunc =
-      std::function<void(ContextSPtr ctx, const BlockContext& block_ctx,
-                         size_t length, BlockAttr block_attr)>;
+  using UploadFunc = std::function<void(BlockHandle handle, size_t length,
+                                        BlockAttr block_attr)>;
 
   virtual ~CacheStore() = default;
 
   virtual Status Start(UploadFunc uploader) = 0;
   virtual Status Shutdown() = 0;
 
-  virtual Status Stage(ContextSPtr ctx, const BlockContext& block_ctx,
-                       const Block& block,
-                       StageOption option = StageOption()) = 0;
-  virtual Status RemoveStage(
-      ContextSPtr ctx, const BlockContext& block_ctx,
-      RemoveStageOption option = RemoveStageOption()) = 0;
-  virtual Status Cache(ContextSPtr ctx, const BlockContext& block_ctx,
-                       const Block& block,
-                       CacheOption option = CacheOption()) = 0;
-  virtual Status Load(ContextSPtr ctx, const BlockContext& block_ctx,
-                      off_t offset, size_t length, IOBuffer* buffer,
-                      LoadOption option = LoadOption()) = 0;
+  virtual Status Stage(BlockHandle handle, IOBuffer block,
+                       StageOption option = {}) = 0;
+  virtual Status RemoveStage(BlockHandle handle,
+                             RemoveStageOption option = {}) = 0;
+  virtual Status Cache(BlockHandle handle, IOBuffer block,
+                       CacheOption option = {}) = 0;
+  virtual Status Load(BlockHandle handle, off_t offset, size_t length,
+                      IOBuffer* buffer, LoadOption option = {}) = 0;
 
   virtual std::string Id() const = 0;
   virtual bool IsRunning() const = 0;
-  virtual bool IsCached(const BlockContext& block_ctx) const = 0;
-  virtual bool IsFull(const BlockContext& block_ctx) const = 0;
+  virtual bool IsCached(const BlockHandle& handle) const = 0;
+  virtual bool IsFull(const BlockHandle& handle) const = 0;
   virtual bool Dump(Json::Value& value) const = 0;
 };
 

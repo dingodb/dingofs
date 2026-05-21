@@ -29,12 +29,19 @@
 #include "cache/blockcache/cache_store.h"
 #include "cache/blockcache/disk_cache_layout.h"
 #include "cache/blockcache/disk_cache_manager.h"
-#include "cache/common/block_key_helper.h"
 #include "cache/iutil/file_util.h"
+#include "common/block/block_handle.h"
 
 namespace dingofs {
 namespace cache {
 
+// On-disk layout (see disk_cache_layout.h):
+//   {root}/stage/{fs_id}/{blocks|tensor}/.../{filename}
+//   {root}/cache/{blocks|tensor}/.../{filename}
+//
+// The loader mirrors this layout in its traversal so that for any file it
+// already knows (a) the kind — block or tensor — and (b) the fs_id, without
+// re-deriving them from the path on every file.
 class DiskCacheLoader {
  public:
   DiskCacheLoader(DiskCacheLayoutSPtr layout, DiskCacheManagerSPtr manager);
@@ -62,9 +69,33 @@ class DiskCacheLoader {
     }
   }
 
-  void LoadAllBlocks(const std::string& dir, BlockType type);
-  bool LoadOneBlock(const std::string& prefix, const iutil::FileInfo& file,
-                    BlockType type);
+  struct LoadStats {
+    uint64_t num_blocks{0};
+    uint64_t num_invalids{0};
+    uint64_t total_bytes{0};
+  };
+
+  // Top-level entry: dispatches to LoadStageDir / LoadCacheDir.
+  void LoadAllBlocks(BlockType type);
+
+  // Layout-aware walkers: enumerate {fs_id} / {blocks,tensor} subdirs and
+  // delegate to LoadKindDir for the per-key-type leaf walk.
+  void LoadStageDir(LoadStats* stats);
+  void LoadCacheDir(LoadStats* stats);
+
+  // Walks a single {blocks} or {tensor} subtree. KeyT picks the parser
+  // (BlockKey or TensorKey) and Wrap lifts the parsed key into a BlockHandle
+  // — fs_id is closed over in the wrapper, not re-parsed per file.
+  template <typename KeyT, typename Wrap>
+  void LoadKindDir(const std::string& root, BlockType type, Wrap&& wrap,
+                   LoadStats* stats);
+
+  // Adds a successfully-parsed handle to the manager and, for stage blocks,
+  // triggers the upload callback.
+  void RegisterBlock(const BlockHandle& handle, const iutil::FileInfo& file,
+                     BlockType type);
+
+  static void RemoveInvalidBlock(const std::string& path, const char* reason);
 
   std::atomic<bool> running_;
   DiskCacheLayoutSPtr layout_;

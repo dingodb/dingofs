@@ -29,7 +29,7 @@
 
 #include <string>
 
-#include "common/block/block_context.h"
+#include "common/block/block_handle.h"
 #include "utils/time.h"
 
 namespace dingofs {
@@ -76,15 +76,14 @@ class DiskCacheLayout {
   std::string GetDetectPath() const { return PathJoin(cache_dir_, ".detect"); }
   std::string GetLockPath() const { return PathJoin(cache_dir_, ".lock"); }
 
-  std::string GetStagePath(const BlockContext& block_ctx) const {
-    return absl::StrJoin(
-        {GetStageDir(), std::to_string(block_ctx.fs_id),
-         block_ctx.key.StoreKey()},
-        "/");
+  std::string GetStagePath(const BlockHandle& handle) const {
+    return absl::StrJoin({GetStageDir(), std::to_string(handle.FsId()),
+                          handle.StoreKey()},
+                         "/");
   }
 
-  std::string GetCachePath(const BlockKey& key) const {
-    return PathJoin(GetCacheDir(), key.StoreKey());
+  std::string GetCachePath(const BlockHandle& handle) const {
+    return PathJoin(GetCacheDir(), handle.StoreKey());
   }
 
  private:
