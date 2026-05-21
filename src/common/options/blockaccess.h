@@ -35,6 +35,7 @@ DECLARE_int32(s3_max_connections);
 DECLARE_int32(s3_connect_timeout);
 DECLARE_int32(s3_request_timeout);
 DECLARE_bool(s3_use_crt_client);
+DECLARE_int32(s3_crt_event_loop_threads);
 DECLARE_bool(s3_use_thread_pool);
 DECLARE_int32(s3_async_thread_num);
 DECLARE_bool(s3_use_thread_pool);

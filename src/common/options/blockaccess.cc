@@ -37,6 +37,9 @@ DEFINE_int32(s3_max_connections, 32, "max connections to s3");
 DEFINE_int32(s3_connect_timeout, 60000, "s3 connect timeout in milliseconds");
 DEFINE_int32(s3_request_timeout, 10000, "s3 request timeout in milliseconds");
 DEFINE_bool(s3_use_crt_client, true, "whether to use crt client");
+DEFINE_int32(s3_crt_event_loop_threads, 0,
+             "aws crt client event loop group thread count; 0 means use all "
+             "available cpu cores. Only effective when s3_use_crt_client=true.");
 DEFINE_bool(s3_use_thread_pool, true, "whether to use thread pool");
 DEFINE_int32(s3_async_thread_num, 256, "async thread num in thread pool");
 DEFINE_bool(s3_use_virtual_address, false, "whether to use virtual address");
