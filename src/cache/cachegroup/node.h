@@ -29,7 +29,6 @@
 #include "cache/blockcache/cache_store.h"
 #include "cache/cachegroup/heartbeat.h"
 #include "cache/cachegroup/task_tracker.h"
-#include "cache/common/context.h"
 #include "cache/common/mds_client.h"
 #include "cache/common/storage_client.h"
 #include "cache/common/storage_client_pool.h"
@@ -45,14 +44,14 @@ class CacheNode {
   Status Start();
   Status Shutdown();
 
-  Status Put(ContextSPtr ctx, const BlockContext& block_ctx,
-             const Block& block);
-  Status Range(ContextSPtr ctx, const BlockContext& block_ctx, off_t offset,
-               size_t length, IOBuffer* buffer, size_t block_length);
-  Status AsyncCache(ContextSPtr ctx, const BlockContext& block_ctx,
-                    const Block& block);
-  Status AsyncPrefetch(ContextSPtr ctx, const BlockContext& block_ctx,
-                       size_t length);
+  Status Put(BlockHandle handle, IOBuffer block);
+  // `cache_hit` (out): true iff the request was satisfied from the local cache
+  // (not from the storage fallback). Used by the RPC handler to set the
+  // response's cache_hit field.
+  Status Range(BlockHandle handle, off_t offset, size_t length,
+               IOBuffer* buffer, size_t block_length, bool* cache_hit);
+  Status AsyncCache(BlockHandle handle, IOBuffer block);
+  Status AsyncPrefetch(BlockHandle handle, size_t length);
 
  private:
   bool IsRunning() const { return running_.load(std::memory_order_relaxed); }
@@ -60,16 +59,14 @@ class CacheNode {
   Status JoinGroup();
   Status LeaveGroup();
 
-  Status RetrieveCache(ContextSPtr ctx, const BlockContext& block_ctx,
-                       off_t offset, size_t length, IOBuffer* buffer);
-  Status RetrieveStorage(ContextSPtr ctx, const BlockContext& block_ctx,
-                         off_t offset, size_t length, IOBuffer* buffer,
-                         size_t block_length);
-  Status RetrievePartBlock(ContextSPtr ctx, const BlockContext& block_ctx,
-                           off_t offset, size_t length, IOBuffer* buffer,
-                           size_t block_length);
-  Status RetrieveWholeBlock(ContextSPtr ctx, const BlockContext& block_ctx,
-                            size_t block_length, IOBuffer* buffer);
+  Status RetrieveCache(const BlockHandle& handle, off_t offset, size_t length,
+                       IOBuffer* buffer);
+  Status RetrieveStorage(const BlockHandle& handle, off_t offset, size_t length,
+                         IOBuffer* buffer, size_t block_length);
+  Status RetrievePartBlock(const BlockHandle& handle, off_t offset,
+                           size_t length, IOBuffer* buffer, size_t block_length);
+  Status RetrieveWholeBlock(const BlockHandle& handle, size_t block_length,
+                            IOBuffer* buffer);
   Status RunTask(StorageClient* storage_client, DownloadTaskSPtr task);
   Status WaitTask(DownloadTaskSPtr task);
 

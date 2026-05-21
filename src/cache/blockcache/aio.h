@@ -28,7 +28,6 @@
 
 #include <ostream>
 
-#include "cache/common/context.h"
 #include "common/io_buffer.h"
 #include "common/status.h"
 
@@ -38,7 +37,6 @@ namespace cache {
 class Aio {
  public:
   struct Attr {
-    ContextSPtr ctx;
     int fd;
     off_t offset;
     size_t length;
@@ -51,9 +49,9 @@ class Aio {
     Status status;
   };
 
-  Aio(ContextSPtr ctx, int fd, off_t offset, size_t length, char* buffer,
-      int buf_index, bool for_read)
-      : attr_({ctx, fd, offset, length, buffer, buf_index, for_read}),
+  Aio(int fd, off_t offset, size_t length, char* buffer, int buf_index,
+      bool for_read)
+      : attr_({fd, offset, length, buffer, buf_index, for_read}),
         result_({Status::Unknown("unknown error")}) {
     CHECK_GE(fd, 0);
     CHECK_GE(offset, 0);

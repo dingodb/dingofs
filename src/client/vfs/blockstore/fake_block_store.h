@@ -50,7 +50,7 @@ class FakeBlockStore final : public BlockStore {
   cache::BlockCache* GetBlockCache() const override;
 
  private:
-  void DoRangeAsync(BlockKey key, uint64_t offset, uint64_t length,
+  void DoRangeAsync(const BlockHandle& handle, uint64_t offset, uint64_t length,
                     ReadBufView dst, StatusCallback callback);
   VFSHub* hub_;
   const std::string uuid_;

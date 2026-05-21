@@ -48,12 +48,12 @@ void FakeBlockStore::Shutdown() {
   started_.store(false);
 }
 
-void FakeBlockStore::DoRangeAsync(BlockKey key, uint64_t offset,
+void FakeBlockStore::DoRangeAsync(const BlockHandle& handle, uint64_t offset,
                                   uint64_t length, ReadBufView dst,
                                   StatusCallback callback) {
   // Fake store for IO-isolated benchmarking: leave the slot unfilled. The
   // payload is never checked and the slot is request-owned pool memory.
-  (void)key;
+  (void)handle;
   (void)offset;
   (void)length;
   (void)dst;
@@ -70,10 +70,9 @@ void FakeBlockStore::RangeAsync(ContextSPtr ctx, RangeReq req,
     cb(s);
   };
 
-  DoRangeAsync(req.block_ctx.key, req.offset, req.length, req.dst,
+  DoRangeAsync(req.handle, req.offset, req.length, req.dst,
                std::move(wrapper));
 }
-
 void FakeBlockStore::PutAsync(ContextSPtr ctx, PutReq req,
                               StatusCallback callback) {
   (void)req;

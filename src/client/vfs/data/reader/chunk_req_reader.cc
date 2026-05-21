@@ -31,7 +31,7 @@
 #include "client/vfs/data/reader/chunk_req.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/vfs_meta.h"
-#include "common/block/block_context.h"
+#include "common/block/block_handle.h"
 #include "common/status.h"
 #include "common/trace/context.h"
 
@@ -177,7 +177,7 @@ void ChunkReqReader::ProcessBlockCacheReadReq(
 
     const auto& key = block_cache_req->block_req.key.value();
     RangeReq req;
-    req.block_ctx = BlockContext(key, block_cache_req->fs_id);
+    req.handle = BlockHandle(block_cache_req->fs_id, key);
     req.offset = block_cache_req->block_req.block_offset;
     req.length = block_cache_req->block_req.len;
     req.dst = block_cache_req->dst;

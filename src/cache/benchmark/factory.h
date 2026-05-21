@@ -24,7 +24,8 @@
 #define DINGOFS_SRC_CACHE_BENCHMARK_FACTORY_H_
 
 #include "cache/blockcache/block_cache.h"
-#include "common/block/block_context.h"
+#include "common/block/block_handle.h"
+#include "common/block/block_key.h"
 
 namespace dingofs {
 namespace cache {
@@ -51,7 +52,7 @@ class BlockKeyIterator {
 };
 
 // block
-Block NewBlock(uint64_t blksize);
+IOBuffer NewBlock(uint64_t blksize);
 
 // task factory
 using Task = std::function<void()>;
@@ -76,7 +77,7 @@ class PutTaskFactory final : public TaskFactory {
   void Put(const BlockKey& key);
 
   BlockCacheSPtr block_cache_;
-  Block block_;
+  IOBuffer block_;
 };
 
 class RangeTaskFactory final : public TaskFactory {
@@ -85,7 +86,6 @@ class RangeTaskFactory final : public TaskFactory {
 
   Task GenTask(const BlockKey& key) override;
 
- private:
  private:
   void RangeAll(const BlockKey& key);
   void Range(const BlockKey& key, off_t offset, size_t length,

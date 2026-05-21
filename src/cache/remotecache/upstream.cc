@@ -29,7 +29,7 @@
 #include <atomic>
 #include <memory>
 
-#include "cache/common/block_key_helper.h"
+#include "cache/common/block_handle_helper.h"
 #include "cache/common/mds_client.h"
 #include "cache/remotecache/peer_group.h"
 #include "common/options/cache.h"
@@ -87,16 +87,16 @@ void Upstream::Shutdown() {
   LOG(INFO) << "Upstream shutdown";
 }
 
-Status Upstream::SendPutRequest(ContextSPtr /*ctx*/,
-                                const BlockContext& block_ctx,
-                                const Block& block) {
+Status Upstream::SendPutRequest(const BlockHandle& handle,
+                                const IOBuffer& block) {
   Status status;
-  UpstreamVarsRecordGuard guard("Put", block.size, status, vars_.get());
+  size_t length = block.Size();
+  UpstreamVarsRecordGuard guard("Put", length, status, vars_.get());
 
   pb::cache::PutRequest raw;
-  *raw.mutable_block_ctx() = ToContextPB(block_ctx);
-  raw.set_block_size(block.buffer.Size());
-  auto request = MakeRequest("Put", raw, &block.buffer);
+  *raw.mutable_handle() = ToHandlePB(handle);
+  raw.set_block_size(length);
+  auto request = MakeRequest("Put", raw, &block);
 
   auto response =
       SendRequest<pb::cache::PutRequest, pb::cache::PutResponse>(request);
@@ -109,15 +109,14 @@ Status Upstream::SendPutRequest(ContextSPtr /*ctx*/,
   return status;
 }
 
-Status Upstream::SendRangeRequest(ContextSPtr ctx,
-                                  const BlockContext& block_ctx, off_t offset,
+Status Upstream::SendRangeRequest(const BlockHandle& handle, off_t offset,
                                   size_t length, IOBuffer* buffer,
-                                  size_t block_whole_length) {
+                                  size_t block_whole_length, bool* cache_hit) {
   Status status;
   UpstreamVarsRecordGuard guard("Range", length, status, vars_.get());
 
   pb::cache::RangeRequest raw;
-  *raw.mutable_block_ctx() = ToContextPB(block_ctx);
+  *raw.mutable_handle() = ToHandlePB(handle);
   raw.set_offset(offset);
   raw.set_length(length);
   raw.set_block_size(block_whole_length);
@@ -128,7 +127,9 @@ Status Upstream::SendRangeRequest(ContextSPtr ctx,
   status = response.status;
   if (status.ok()) {
     *buffer = std::move(response.body);
-    ctx->SetCacheHit(response.raw.cache_hit());
+    if (cache_hit != nullptr) {
+      *cache_hit = response.raw.cache_hit();
+    }
   } else if (status.IsCacheUnhealthy()) {
     LOG_EVERY_SECOND(ERROR) << "Fail to send " << request;
   } else {
@@ -137,16 +138,16 @@ Status Upstream::SendRangeRequest(ContextSPtr ctx,
   return status;
 }
 
-Status Upstream::SendCacheRequest(ContextSPtr /*ctx*/,
-                                  const BlockContext& block_ctx,
-                                  const Block& block) {
+Status Upstream::SendCacheRequest(const BlockHandle& handle,
+                                  const IOBuffer& block) {
   Status status;
-  UpstreamVarsRecordGuard guard("Cache", block.size, status, vars_.get());
+  size_t length = block.Size();
+  UpstreamVarsRecordGuard guard("Cache", length, status, vars_.get());
 
   pb::cache::CacheRequest raw;
-  *raw.mutable_block_ctx() = ToContextPB(block_ctx);
-  raw.set_block_size(block.buffer.Size());
-  auto request = MakeRequest("Cache", raw, &block.buffer);
+  *raw.mutable_handle() = ToHandlePB(handle);
+  raw.set_block_size(length);
+  auto request = MakeRequest("Cache", raw, &block);
 
   auto response =
       SendRequest<pb::cache::CacheRequest, pb::cache::CacheResponse>(request);
@@ -159,14 +160,12 @@ Status Upstream::SendCacheRequest(ContextSPtr /*ctx*/,
   return status;
 }
 
-Status Upstream::SendPrefetchRequest(ContextSPtr /*ctx*/,
-                                     const BlockContext& block_ctx,
-                                     size_t length) {
+Status Upstream::SendPrefetchRequest(const BlockHandle& handle, size_t length) {
   Status status;
   UpstreamVarsRecordGuard guard("Prefetch", length, status, vars_.get());
 
   pb::cache::PrefetchRequest raw;
-  *raw.mutable_block_ctx() = ToContextPB(block_ctx);
+  *raw.mutable_handle() = ToHandlePB(handle);
   raw.set_block_size(length);
   auto request = MakeRequest("Prefetch", raw);
 
@@ -185,8 +184,8 @@ Status Upstream::SendPrefetchRequest(ContextSPtr /*ctx*/,
 template <typename T, typename U>
 Response<U> Upstream::SendRequest(const Request<T>& request) {
   auto peer_group = CHECK_NOTNULL(GetPeerGroup());
-  auto peer = peer_group->SelectPeer(
-      FromContextPB(request.raw.block_ctx()).key.Filename());
+  auto peer =
+      peer_group->SelectPeer(FromHandlePB(request.raw.handle()).Filename());
   if (nullptr == peer) {
     LOG(ERROR) << "No peer found for " << request;
     return Response<U>{Status::NotFound("no peer found")};

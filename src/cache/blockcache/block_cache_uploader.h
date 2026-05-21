@@ -37,15 +37,12 @@ namespace dingofs {
 namespace cache {
 
 struct StageBlock {
-  StageBlock(ContextSPtr ctx, const BlockContext& block_ctx, size_t length,
-             BlockAttr block_attr)
-      : ctx(ctx),
-        block_ctx(block_ctx),
+  StageBlock(BlockHandle handle, size_t length, BlockAttr block_attr)
+      : handle(std::move(handle)),
         length(length),
         block_attr(block_attr) {}
 
-  ContextSPtr ctx;
-  BlockContext block_ctx;
+  BlockHandle handle;
   size_t length;
   BlockAttr block_attr;
 };
