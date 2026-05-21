@@ -146,12 +146,29 @@ void BlockCacheServiceImpl::Prefetch(
   response->set_status(ToPBErr(status));
 }
 
+void BlockCacheServiceImpl::Head(google::protobuf::RpcController* controller,
+                                 const pb::cache::HeadRequest* request,
+                                 pb::cache::HeadResponse* response,
+                                 google::protobuf::Closure* done) {
+  Status status;
+  auto* cntl = static_cast<brpc::Controller*>(controller);
+  auto ctx = NewContext(cntl->request_id());
+  auto* srv_done = new ServiceClosure(ctx, done, request, response, status);
+  brpc::ClosureGuard done_guard(srv_done);
+
+  BlockContext block_ctx = FromContextPB(request->block_ctx());
+  bool exists = node_->IsCached(block_ctx);
+  response->set_exists(exists);
+  response->set_status(pb::cache::BlockCacheOk);
+}
+
 void BlockCacheServiceImpl::Ping(
     google::protobuf::RpcController* /*controller*/,
     const pb::cache::PingRequest* /*request*/,
-    pb::cache::PingResponse* /*response*/, google::protobuf::Closure* done) {
+    pb::cache::PingResponse* response, google::protobuf::Closure* done) {
   brpc::ClosureGuard done_guard(done);
-  // do nothing, just reply
+  response->set_service_version(kBlockCacheServiceVersion);
+  response->set_status(pb::cache::BlockCacheOk);
 }
 
 }  // namespace cache

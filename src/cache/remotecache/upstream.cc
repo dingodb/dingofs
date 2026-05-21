@@ -159,6 +159,54 @@ Status Upstream::SendCacheRequest(ContextSPtr /*ctx*/,
   return status;
 }
 
+Status Upstream::SendHeadRequest(ContextSPtr /*ctx*/,
+                                 const BlockContext& block_ctx, bool* exists) {
+  Status status;
+  pb::cache::HeadRequest raw;
+  *raw.mutable_block_ctx() = ToContextPB(block_ctx);
+  auto request = MakeRequest("Head", raw);
+
+  auto response =
+      SendRequest<pb::cache::HeadRequest, pb::cache::HeadResponse>(request);
+  status = response.status;
+  if (status.ok()) {
+    *exists = response.raw.exists();
+  } else if (!status.IsCacheUnhealthy()) {
+    LOG(ERROR) << "Fail to send " << request;
+  }
+  return status;
+}
+
+Status Upstream::SendPingRequest(uint32_t* service_version) {
+  // Ping is not key-routed; iterate over peers and probe the first healthy one.
+  auto peer_group = GetPeerGroup();
+  if (peer_group == nullptr) {
+    return Status::NotFound("no peer group");
+  }
+
+  PeerSPtr target;
+  for (const auto& [id, peer] : peer_group->peers) {
+    if (peer && peer->IsHealthy()) {
+      target = peer;
+      break;
+    }
+  }
+  if (target == nullptr) {
+    return Status::CacheUnhealthy("no healthy peer for ping");
+  }
+
+  pb::cache::PingRequest raw;
+  auto request = MakeRequest("Ping", raw);
+  auto response =
+      target->SendRequest<pb::cache::PingRequest, pb::cache::PingResponse>(
+          request);
+  if (response.status.ok() && service_version != nullptr) {
+    *service_version =
+        response.raw.has_service_version() ? response.raw.service_version() : 0;
+  }
+  return response.status;
+}
+
 Status Upstream::SendPrefetchRequest(ContextSPtr /*ctx*/,
                                      const BlockContext& block_ctx,
                                      size_t length) {
@@ -186,7 +234,7 @@ template <typename T, typename U>
 Response<U> Upstream::SendRequest(const Request<T>& request) {
   auto peer_group = CHECK_NOTNULL(GetPeerGroup());
   auto peer = peer_group->SelectPeer(
-      FromContextPB(request.raw.block_ctx()).key.Filename());
+      ActiveKey(FromContextPB(request.raw.block_ctx())).Filename());
   if (nullptr == peer) {
     LOG(ERROR) << "No peer found for " << request;
     return Response<U>{Status::NotFound("no peer found")};

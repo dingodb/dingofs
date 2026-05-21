@@ -181,6 +181,11 @@ Status CacheNode::Put(ContextSPtr ctx, const BlockContext& block_ctx,
   if (!IsRunning()) {
     return Status::CacheDown("cache node is down");
   }
+  // Tensor traffic has no S3 backing — route through Cache (disk-only, no
+  // writeback queue). Block traffic keeps the writeback semantics.
+  if (IsTensorContext(block_ctx)) {
+    return block_cache_->Cache(ctx, ActiveKey(block_ctx), block);
+  }
   return block_cache_->Put(ctx, block_ctx, block, {.writeback = true});
 }
 
@@ -192,7 +197,7 @@ Status CacheNode::Range(ContextSPtr ctx, const BlockContext& block_ctx,
   }
 
   auto status = RetrieveCache(ctx, block_ctx, offset, length, buffer);
-  if (status.IsNotFound()) {
+  if (status.IsNotFound() && !IsTensorContext(block_ctx)) {
     status =
         RetrieveStorage(ctx, block_ctx, offset, length, buffer, block_length);
   }
@@ -203,11 +208,11 @@ Status CacheNode::AsyncCache(ContextSPtr ctx, const BlockContext& block_ctx,
                              const Block& block) {
   if (!IsRunning()) {
     LOG(ERROR) << "Cache node is down, skip async cache block, key="
-               << block_ctx.key.Filename();
+               << ActiveKey(block_ctx).Filename();
     return Status::CacheDown("cache node is down");
   }
 
-  block_cache_->AsyncCache(ctx, block_ctx.key, block, [](Status status) {
+  block_cache_->AsyncCache(ctx, ActiveKey(block_ctx), block, [](Status status) {
     if (!status.ok()) {
       LOG(ERROR) << "Fail to async cache block, status=" << status.ToString();
     }
@@ -221,6 +226,10 @@ Status CacheNode::AsyncPrefetch(ContextSPtr ctx,
   if (!IsRunning()) {
     return Status::CacheDown("cache node is down");
   }
+  // Tensor traffic has no S3 backing to prefetch from.
+  if (IsTensorContext(block_ctx)) {
+    return Status::OK();
+  }
 
   block_cache_->AsyncPrefetch(
       ctx, block_ctx, length, [block_ctx](Status status) {
@@ -233,11 +242,18 @@ Status CacheNode::AsyncPrefetch(ContextSPtr ctx,
   return Status::OK();
 }
 
+bool CacheNode::IsCached(const BlockContext& block_ctx) const {
+  if (!IsRunning()) {
+    return false;
+  }
+  return block_cache_->IsCached(ActiveKey(block_ctx));
+}
+
 Status CacheNode::RetrieveCache(ContextSPtr ctx,
                                 const BlockContext& block_ctx, off_t offset,
                                 size_t length, IOBuffer* buffer) {
-  auto status = block_cache_->Range(ctx, block_ctx.key, offset, length, buffer,
-                                    {.retrieve_storage = false});
+  auto status = block_cache_->Range(ctx, ActiveKey(block_ctx), offset, length,
+                                    buffer, {.retrieve_storage = false});
   if (status.ok()) {
     num_hit_cache_ << 1;
     ctx->SetCacheHit(true);

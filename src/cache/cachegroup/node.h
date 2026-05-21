@@ -54,6 +54,8 @@ class CacheNode {
   Status AsyncPrefetch(ContextSPtr ctx, const BlockContext& block_ctx,
                        size_t length);
 
+  bool IsCached(const BlockContext& block_ctx) const;
+
  private:
   bool IsRunning() const { return running_.load(std::memory_order_relaxed); }
 

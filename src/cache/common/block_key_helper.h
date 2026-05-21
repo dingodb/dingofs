@@ -18,9 +18,12 @@
 #define DINGOFS_CACHE_COMMON_BLOCK_KEY_HELPER_H_
 
 #include <cstdio>
+#include <functional>
+#include <memory>
 #include <string_view>
 
 #include "common/block/block_context.h"
+#include "common/block/tensor_key.h"
 #include "dingofs/blockcache.pb.h"
 
 namespace dingofs {
@@ -52,15 +55,56 @@ inline BlockKey FromPB(const pb::cache::BlockKey& pb) {
   return BlockKey(pb.id(), pb.index(), pb.size());
 }
 
+inline pb::cache::TensorKey ToPB(const TensorKey& key) {
+  pb::cache::TensorKey pb;
+  pb.set_model_name(key.model_name);
+  pb.set_world_size(key.world_size);
+  pb.set_worker_id(key.worker_id);
+  pb.set_chunk_hash(key.chunk_hash);
+  pb.set_dtype(key.dtype);
+  return pb;
+}
+
+inline TensorKey FromPB(const pb::cache::TensorKey& pb) {
+  return TensorKey(pb.model_name(), pb.world_size(), pb.worker_id(),
+                   pb.chunk_hash(), pb.dtype());
+}
+
 inline pb::cache::BlockContext ToContextPB(const BlockContext& ctx) {
   pb::cache::BlockContext pb;
-  *pb.mutable_key() = ToPB(ctx.key);
   pb.set_fs_id(ctx.fs_id);
+  if (ctx.tensor_key) {
+    // The overlay is currently always a TensorKey; downcast is safe.
+    *pb.mutable_tensor_key() =
+        ToPB(static_cast<const TensorKey&>(*ctx.tensor_key));
+  } else {
+    *pb.mutable_block_key() = ToPB(ctx.key);
+  }
   return pb;
 }
 
 inline BlockContext FromContextPB(const pb::cache::BlockContext& pb) {
-  return BlockContext(FromPB(pb.key()), pb.fs_id());
+  BlockContext ctx;
+  ctx.fs_id = pb.fs_id();
+  switch (pb.key_case()) {
+    case pb::cache::BlockContext::kBlockKey:
+      ctx.key = FromPB(pb.block_key());
+      break;
+    case pb::cache::BlockContext::kTensorKey: {
+      auto tkey = std::make_shared<TensorKey>(FromPB(pb.tensor_key()));
+      // Fill BlockKey with a deterministic synthetic id so the S3-only call
+      // sites that still index by block_ctx.key keep working. Hash by Filename
+      // so collisions across tensor chunks are negligible.
+      uint64_t synth_id = std::hash<std::string>{}(tkey->Filename());
+      ctx.key = BlockKey(synth_id, 0, /*size set by caller from request*/ 0);
+      ctx.tensor_key = std::move(tkey);
+      break;
+    }
+    default:
+      // No key set — leave defaults; caller is expected to error out.
+      break;
+  }
+  return ctx;
 }
 
 }  // namespace cache

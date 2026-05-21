@@ -20,21 +20,29 @@
 #include <cstdint>
 
 #include "common/block/block_key.h"
+#include "common/block/cache_key.h"
 
 namespace dingofs {
 
-// BlockContext = BlockKey (block identity) + routing metadata.
+// BlockContext = key identity + routing metadata.
 //
-// BlockKey is a pure block identifier: {id, index, size}.
-// It determines Filename/StoreKey and is used for cache lookup, disk layout,
-// and hash-based placement. fs_id has nothing to do with block identity.
+// `key` is the canonical BlockKey {id, index, size}. For filesystem traffic
+// it carries the real block identity. For tensor (KV-cache) traffic it is a
+// synthetic placeholder filled from hash(tensor_key.Filename()) so the existing
+// BlockKey-typed call sites (`storage_client->Put(block_ctx.key, ...)` and
+// friends) keep compiling — those S3 paths are skipped at dispatch time when
+// `tensor_key` is set.
 //
-// BlockContext carries the extra routing metadata that the cache layer needs
-// (e.g. fs_id for StorageClientPool to pick the right S3 config) without
-// polluting BlockKey itself.
+// `fs_id` is routing metadata (StorageClientPool selects S3 config by fs_id).
+//
+// `tensor_key`, when non-null, marks this context as carrying a polymorphic
+// CacheKey (currently always a TensorKey). Server-side dispatch routes through
+// disk_cache only (no S3 uploader). Use `ActiveKey(ctx)` to obtain the
+// effective key for filename / store-path / hash-ring computations.
 struct BlockContext {
   BlockKey key;
-  uint32_t fs_id{0};  // routing: StorageClientPool selects S3 config by fs_id
+  uint32_t fs_id{0};
+  CacheKeySPtr tensor_key;
 
   BlockContext() = default;
 
@@ -43,6 +51,19 @@ struct BlockContext {
   BlockContext(uint64_t id, uint32_t index, uint32_t size, uint32_t fs_id)
       : key(id, index, size), fs_id(fs_id) {}
 };
+
+// The effective key for filename / store-path / hash-ring computation.
+// Returns the polymorphic overlay if present, otherwise the BlockKey.
+inline const CacheKey& ActiveKey(const BlockContext& ctx) {
+  if (ctx.tensor_key) {
+    return *ctx.tensor_key;
+  }
+  return static_cast<const CacheKey&>(ctx.key);
+}
+
+inline bool IsTensorContext(const BlockContext& ctx) {
+  return static_cast<bool>(ctx.tensor_key);
+}
 
 }  // namespace dingofs
 

@@ -1,0 +1,33 @@
+[build-system]
+requires = ["scikit-build-core>=0.9", "pybind11>=2.12"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "dingofs-connector"
+version = "0.1.0"
+description = "DingoFS-backed RemoteConnector and L2 adapter for LMCache."
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "DingoDB" }]
+license = { text = "Apache-2.0" }
+dependencies = [
+    "lmcache>=0.3.6,<0.4",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: C++",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: POSIX :: Linux",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7", "pytest-asyncio>=0.23"]
+
+[tool.scikit-build]
+cmake.source-dir = "."
+cmake.build-type = "Release"
+wheel.packages = ["src/dingofs_connector", "src/lmcache_dingofs"]
+wheel.install-dir = "."
+
+[tool.scikit-build.cmake.define]
+DINGOFS_LMCACHE_USE_INSTALLED = "OFF"

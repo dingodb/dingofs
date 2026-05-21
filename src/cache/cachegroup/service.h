@@ -31,6 +31,11 @@
 namespace dingofs {
 namespace cache {
 
+// Bumped whenever the BlockCacheService wire schema changes. Reported via
+// PingResponse.service_version so clients can refuse mismatched servers.
+//   1 = TensorKey oneof in BlockContext.
+inline constexpr uint32_t kBlockCacheServiceVersion = 1;
+
 class BlockCacheServiceImpl final : public pb::cache::BlockCacheService {
  public:
   explicit BlockCacheServiceImpl(CacheNodeSPtr node);
@@ -54,6 +59,11 @@ class BlockCacheServiceImpl final : public pb::cache::BlockCacheService {
                 const pb::cache::PrefetchRequest* request,
                 pb::cache::PrefetchResponse* response,
                 google::protobuf::Closure* done) override;
+
+  void Head(google::protobuf::RpcController* controller,
+            const pb::cache::HeadRequest* request,
+            pb::cache::HeadResponse* response,
+            google::protobuf::Closure* done) override;
 
   void Ping(google::protobuf::RpcController* controller,
             const pb::cache::PingRequest* request,

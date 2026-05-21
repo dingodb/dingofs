@@ -108,6 +108,11 @@ class Upstream {
                           const Block& block);
   Status SendPrefetchRequest(ContextSPtr ctx, const BlockContext& block_ctx,
                              size_t length);
+  Status SendHeadRequest(ContextSPtr ctx, const BlockContext& block_ctx,
+                         bool* exists);
+  // Returns the server's PingResponse.service_version. 0 means the server
+  // pre-dates schema versioning.
+  Status SendPingRequest(uint32_t* service_version);
 
   bool Dump(Json::Value& value);
 
