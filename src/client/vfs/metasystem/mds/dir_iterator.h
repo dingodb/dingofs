@@ -47,7 +47,7 @@ class DirIterator {
       : mds_client_(mds_client), ino_(ino), fh_(fh) {
     last_fetch_time_ns_ = utils::TimestampNs();
     if (FLAGS_vfs_meta_warmup_small_file_enable) {
-      dir_profile_ = DirProfile::New(ino);
+      dir_profile_ = DirProfile::New(ino, fh);
     }
   }
   ~DirIterator();

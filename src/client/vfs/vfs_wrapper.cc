@@ -659,7 +659,8 @@ Status VFSWrapper::Open(Ino ino, int flags, uint64_t* fh) {
   Status s;
   AccessLogGuard log(
       [&]() {
-        return absl::StrFormat("open (%d): %s [fh:%d]", ino, s.ToString(), *fh);
+        return absl::StrFormat("open (%d): %s %s [fh:%d]", ino,
+                               Helper::DescOpenFlags(flags), s.ToString(), *fh);
       },
       !dingofs::IsInternalNode(ino));
 

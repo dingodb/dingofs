@@ -21,6 +21,7 @@
 #include "common/options/common.h"
 #include "common/options/mds.h"
 #include "common/version.h"
+#include "dingo_eureka_version.h"
 #include "dlfcn.h"
 #include "fmt/format.h"
 #include "gflags/gflags.h"
@@ -306,7 +307,14 @@ int main(int argc, char* argv[]) {
 
   CHECK(server.InitLog()) << "init log error.";
   CHECK(server.InitLogCleanManager()) << "init log clean manager error.";
+
+  // print current gflags
   LOG(INFO) << dingofs::GenCurrentFlags();
+  // print version
+  LOG(INFO) << dingofs::DingoShortVersionString();
+  // print dingo eureka version
+  LOG(INFO) << FormatDingoEurekaVersion();
+
   CHECK(server.InitConfig(FLAGS_conf)) << fmt::format("init config({}) error.", FLAGS_conf);
   CHECK(GeneratePidFile(server.GetPidFilePath())) << "generate pid file error.";
   CHECK(server.InitStorage(FLAGS_storage_url)) << "init storage error.";

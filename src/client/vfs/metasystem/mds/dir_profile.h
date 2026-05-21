@@ -41,13 +41,15 @@ using DirProfileSPtr = std::shared_ptr<DirProfile>;
 // statistical, never authoritative for correctness.
 class DirProfile {
  public:
-  explicit DirProfile(Ino parent_ino) : parent_ino_(parent_ino) {}
+  explicit DirProfile(Ino parent_ino, uint64_t fh)
+      : parent_ino_(parent_ino), fh_(fh) {}
 
-  static DirProfileSPtr New(Ino parent_ino) {
-    return std::make_shared<DirProfile>(parent_ino);
+  static DirProfileSPtr New(Ino parent_ino, uint64_t fh) {
+    return std::make_shared<DirProfile>(parent_ino, fh);
   }
 
   Ino ParentIno() const { return parent_ino_; }
+  uint64_t Fh() const { return fh_; }
 
   // Add one ReadDir entry into the running statistics. Idempotent on the
   // child ino (a duplicate page won't double-count or grow small_file_inos_).
@@ -93,6 +95,7 @@ class DirProfile {
   mutable utils::RWLock lock_;
 
   const Ino parent_ino_;
+  const uint64_t fh_;
 
   bool is_finalized_{false};
   bool is_small_file_dir_{false};
