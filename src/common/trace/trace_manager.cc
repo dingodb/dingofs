@@ -30,7 +30,7 @@ DEFINE_string(otlp_export_endpoint, "172.30.14.125:4317", "otlp export addrs");
 
 DEFINE_uint32(trace_export_thread_num, 2, "otlp export thread num");
 
-DEFINE_bool(enable_trace, false, "Whether to enable trace");
+DEFINE_bool(enable_trace, false, "whether to enable trace");
 
 bool TraceManager::Init() { return tracer_.Init(); }
 

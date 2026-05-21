@@ -25,6 +25,7 @@
 
 #include "brpc/controller.h"
 #include "common/logging.h"
+#include "common/options/common.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/format.h"
@@ -37,6 +38,7 @@
 #include "mds/server.h"
 #include "mds/service/service_helper.h"
 #include "mds/statistics/fs_stat.h"
+
 namespace dingofs {
 namespace mds {
 
@@ -149,9 +151,11 @@ bool MDSServiceImpl::Init() {
   }
 
   trace_manager_ = TraceManager();
-  if (!trace_manager_.Init()) {
-    LOG(ERROR) << "init trace mananger fail.";
-    return false;
+  if (FLAGS_enable_trace) {
+    if (!trace_manager_.Init()) {
+      LOG(ERROR) << "init trace mananger fail.";
+      return false;
+    }
   }
 
   return true;
@@ -160,7 +164,7 @@ bool MDSServiceImpl::Init() {
 void MDSServiceImpl::Destroy() {
   read_worker_set_->Destroy();
   write_worker_set_->Destroy();
-  trace_manager_.Stop();
+  if (FLAGS_enable_trace) trace_manager_.Stop();
 }
 
 FileSystemSPtr MDSServiceImpl::GetFileSystem(uint32_t fs_id) { return file_system_set_->GetFileSystem(fs_id); }
