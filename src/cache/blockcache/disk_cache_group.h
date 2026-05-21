@@ -26,7 +26,6 @@
 #include "cache/blockcache/cache_store.h"
 #include "cache/blockcache/disk_cache.h"
 #include "cache/blockcache/disk_cache_watcher.h"
-#include "cache/common/context.h"
 #include "cache/common/vars.h"
 #include "cache/iutil/con_hash.h"
 
@@ -93,28 +92,25 @@ class DiskCacheGroup final : public CacheStore {
   Status Start(UploadFunc uploader) override;
   Status Shutdown() override;
 
-  Status Stage(ContextSPtr ctx, const BlockContext& block_ctx,
-               const Block& block,
-               StageOption option = StageOption()) override;
-  Status RemoveStage(ContextSPtr ctx, const BlockContext& block_ctx,
-                     RemoveStageOption option = RemoveStageOption()) override;
-  Status Cache(ContextSPtr ctx, const BlockContext& block_ctx,
-               const Block& block,
-               CacheOption option = CacheOption()) override;
-  Status Load(ContextSPtr ctx, const BlockContext& block_ctx, off_t offset,
-              size_t length, IOBuffer* buffer,
-              LoadOption option = LoadOption()) override;
+  Status Stage(BlockHandle handle, IOBuffer block,
+               StageOption option = {}) override;
+  Status RemoveStage(BlockHandle handle,
+                     RemoveStageOption option = {}) override;
+  Status Cache(BlockHandle handle, IOBuffer block,
+               CacheOption option = {}) override;
+  Status Load(BlockHandle handle, off_t offset, size_t length, IOBuffer* buffer,
+              LoadOption option = {}) override;
 
   std::string Id() const override;
   bool IsRunning() const override;
-  bool IsCached(const BlockContext& block_ctx) const override;
-  bool IsFull(const BlockContext& block_ctx) const override;
+  bool IsCached(const BlockHandle& handle) const override;
+  bool IsFull(const BlockHandle& handle) const override;
   bool Dump(Json::Value& value) const override;
 
  private:
   static std::vector<uint64_t> CalcWeights(
       std::vector<DiskCacheOption> options);
-  DiskCacheSPtr GetStore(const BlockKey& key) const;
+  DiskCacheSPtr GetStore(const BlockHandle& handle) const;
   DiskCacheSPtr GetStore(const std::string& store_id) const;
 
   std::atomic<bool> running_;

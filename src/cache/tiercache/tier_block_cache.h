@@ -25,11 +25,9 @@
 
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
-#include "cache/common/context.h"
 #include "cache/common/storage_client.h"
 #include "cache/iutil/bthread.h"
 #include "cache/iutil/inflight_tracker.h"
-#include "common/block/block_context.h"
 #include "common/blockaccess/block_accesser.h"
 
 namespace dingofs {
@@ -43,32 +41,24 @@ class TierBlockCache final : public BlockCache {
   Status Start() override;
   Status Shutdown() override;
 
-  Status Put(ContextSPtr ctx, const BlockContext& block_ctx,
-             const Block& block,
-             PutOption option = PutOption()) override;
-  Status Range(ContextSPtr ctx, const BlockContext& block_ctx,
-               off_t offset, size_t length, IOBuffer* buffer,
-               RangeOption option = RangeOption()) override;
-  Status Cache(ContextSPtr ctx, const BlockContext& block_ctx,
-               const Block& block,
-               CacheOption option = CacheOption()) override;
-  Status Prefetch(ContextSPtr ctx, const BlockContext& block_ctx,
-                  size_t length,
-                  PrefetchOption option = PrefetchOption()) override;
+  Status Put(BlockHandle handle, IOBuffer block,
+             PutOption option = {}) override;
+  Status Range(BlockHandle handle, off_t offset, size_t length,
+               IOBuffer* buffer, RangeOption option = {}) override;
+  Status Cache(BlockHandle handle, IOBuffer block,
+               CacheOption option = {}) override;
+  Status Prefetch(BlockHandle handle, size_t length,
+                  PrefetchOption option = {}) override;
 
-  void AsyncPut(ContextSPtr ctx, const BlockContext& block_ctx,
-                const Block& block, AsyncCallback cb,
-                PutOption option = PutOption()) override;
-  void AsyncRange(ContextSPtr ctx, const BlockContext& block_ctx,
-                  off_t offset, size_t length, IOBuffer* buffer,
-                  AsyncCallback cb,
-                  RangeOption option = RangeOption()) override;
-  void AsyncCache(ContextSPtr ctx, const BlockContext& block_ctx,
-                  const Block& block, AsyncCallback cb,
-                  CacheOption option = CacheOption()) override;
-  void AsyncPrefetch(ContextSPtr ctx, const BlockContext& block_ctx,
-                     size_t length, AsyncCallback cb,
-                     PrefetchOption option = PrefetchOption()) override;
+  void AsyncPut(BlockHandle handle, IOBuffer block, AsyncCallback cb,
+                PutOption option = {}) override;
+  void AsyncRange(BlockHandle handle, off_t offset, size_t length,
+                  IOBuffer* buffer, AsyncCallback cb,
+                  RangeOption option = {}) override;
+  void AsyncCache(BlockHandle handle, IOBuffer block, AsyncCallback cb,
+                  CacheOption option = {}) override;
+  void AsyncPrefetch(BlockHandle handle, size_t length, AsyncCallback cb,
+                     PrefetchOption option = {}) override;
 
   bool IsEnabled() const override {
     return remote_block_cache_->IsEnabled() || local_block_cache_->IsEnabled();
@@ -82,9 +72,9 @@ class TierBlockCache final : public BlockCache {
     return EnableLocalCache() || EnableRemoteCache();
   }
 
-  bool IsCached(const BlockContext& block_ctx) const override {
-    return local_block_cache_->IsCached(block_ctx) ||
-           remote_block_cache_->IsCached(block_ctx);
+  bool IsCached(const BlockHandle& handle) const override {
+    return local_block_cache_->IsCached(handle) ||
+           remote_block_cache_->IsCached(handle);
   }
 
   bool Dump(Json::Value& value) const override {
@@ -99,9 +89,10 @@ class TierBlockCache final : public BlockCache {
   bool EnableRemoteStage() const { return remote_block_cache_->EnableStage(); }
   bool EnableRemoteCache() const { return remote_block_cache_->EnableCache(); }
 
-  Block CopyBlock(const Block& block);
-  void FillGroupCache(ContextSPtr ctx, const BlockContext& block_ctx,
-                      const Block& block);
+  // Linearize a possibly multi-block IOBuf into a single contiguous backing
+  // block, required by S3 upload (storage_client → IOBuffer::Fetch1()).
+  IOBuffer CopyBlock(const IOBuffer& block);
+  void FillGroupCache(const BlockHandle& handle, const IOBuffer& block);
 
   // The behavior of local block cache is same as remote block cache,
   // the biggest difference is that the local block cache will read/write data

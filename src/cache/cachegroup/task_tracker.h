@@ -32,9 +32,8 @@
 #include <unordered_map>
 
 #include "cache/blockcache/cache_store.h"
-#include "cache/common/context.h"
 #include "cache/common/storage_client.h"
-#include "common/block/block_context.h"
+#include "common/block/block_handle.h"
 #include "common/io_buffer.h"
 #include "common/status.h"
 
@@ -44,8 +43,7 @@ namespace cache {
 class DownloadTask {
  public:
   struct Attr {
-    ContextSPtr ctx;
-    BlockContext block_ctx;
+    BlockHandle handle;
     size_t length;
   };
 
@@ -54,8 +52,8 @@ class DownloadTask {
     IOBuffer buffer;
   };
 
-  DownloadTask(ContextSPtr ctx, const BlockContext& block_ctx, size_t length)
-      : attr_{ctx, block_ctx, length}, result_{} {}
+  DownloadTask(const BlockHandle& handle, size_t length)
+      : attr_{handle, length}, result_{} {}
 
   Attr& Attr() { return attr_; }
   Result& Result() { return result_; }
@@ -89,23 +87,23 @@ class TaskTracker {
   TaskTracker() = default;
 
   // return true if new task created
-  bool GetOrCreateTask(ContextSPtr ctx, const BlockContext& block_ctx,
-                       size_t length, DownloadTaskSPtr& task) {
+  bool GetOrCreateTask(const BlockHandle& handle, size_t length,
+                       DownloadTaskSPtr& task) {
     std::lock_guard<bthread::Mutex> lock(mutex_);
-    auto iter = tasks_.find(block_ctx.key.Filename());
+    auto iter = tasks_.find(handle.Filename());
     if (iter != tasks_.end()) {
       task = iter->second;
       return false;
     }
 
-    task = std::make_shared<DownloadTask>(ctx, block_ctx, length);
-    tasks_[block_ctx.key.Filename()] = task;
+    task = std::make_shared<DownloadTask>(handle, length);
+    tasks_[handle.Filename()] = task;
     return true;
   }
 
-  void RemoveTask(const BlockContext& block_ctx) {
+  void RemoveTask(const BlockHandle& handle) {
     std::lock_guard<bthread::Mutex> lock(mutex_);
-    tasks_.erase(block_ctx.key.Filename());
+    tasks_.erase(handle.Filename());
   }
 
  private:
@@ -117,7 +115,7 @@ using TaskTrackerUPtr = std::unique_ptr<TaskTracker>;
 
 inline std::ostream& operator<<(std::ostream& os,
                                 const DownloadTaskSPtr& task) {
-  os << "DownloadTask{key=" << task->Attr().block_ctx.key.Filename()
+  os << "DownloadTask{key=" << task->Attr().handle.Filename()
      << " length=" << task->Attr().length << "}";
   return os;
 }

@@ -117,17 +117,14 @@ class DiskCache final : public CacheStore {
   Status Start(UploadFunc uploader) override;
   Status Shutdown() override;
 
-  Status Stage(ContextSPtr ctx, const BlockContext& block_ctx,
-               const Block& block,
-               StageOption option = StageOption()) override;
-  Status RemoveStage(ContextSPtr ctx, const BlockContext& block_ctx,
-                     RemoveStageOption option = RemoveStageOption()) override;
-  Status Cache(ContextSPtr ctx, const BlockContext& block_ctx,
-               const Block& block,
-               CacheOption option = CacheOption()) override;
-  Status Load(ContextSPtr ctx, const BlockContext& block_ctx, off_t offset,
-              size_t length, IOBuffer* buffer,
-              LoadOption option = LoadOption()) override;
+  Status Stage(BlockHandle handle, IOBuffer block,
+               StageOption option = {}) override;
+  Status RemoveStage(BlockHandle handle,
+                     RemoveStageOption option = {}) override;
+  Status Cache(BlockHandle handle, IOBuffer block,
+               CacheOption option = {}) override;
+  Status Load(BlockHandle handle, off_t offset, size_t length, IOBuffer* buffer,
+              LoadOption option = {}) override;
 
   std::string Id() const override { return uuid_; }
 
@@ -135,13 +132,12 @@ class DiskCache final : public CacheStore {
     return running_.load(std::memory_order_relaxed);
   }
 
-  bool IsCached(const BlockContext& block_ctx) const override {
-    return manager_->Exist(block_ctx.key) ||
-           (StillLoading() &&
-            iutil::FileIsExist(GetCachePath(block_ctx.key)));
+  bool IsCached(const BlockHandle& handle) const override {
+    return manager_->Exist(handle) ||
+           (StillLoading() && iutil::FileIsExist(GetCachePath(handle)));
   }
 
-  bool IsFull(const BlockContext&) const override { return CacheFull(); }
+  bool IsFull(const BlockHandle&) const override { return CacheFull(); }
 
   bool Dump(Json::Value& value) const override;
 
@@ -173,12 +169,12 @@ class DiskCache final : public CacheStore {
   std::string GetDetectPath() const { return layout_->GetDetectPath(); }
   std::string GetLockPath() const { return layout_->GetLockPath(); }
 
-  std::string GetStagePath(const BlockContext& block_ctx) const {
-    return layout_->GetStagePath(block_ctx);
+  std::string GetStagePath(const BlockHandle& handle) const {
+    return layout_->GetStagePath(handle);
   }
 
-  std::string GetCachePath(const BlockKey& key) const {
-    return layout_->GetCachePath(key);
+  std::string GetCachePath(const BlockHandle& handle) const {
+    return layout_->GetCachePath(handle);
   }
 
  private:

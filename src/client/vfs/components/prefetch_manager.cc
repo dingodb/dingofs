@@ -141,25 +141,24 @@ void PrefetchManager::AsyncPrefetch(BlockKey key, size_t length) {
           << ", length: " << length;
 
   PrefetchReq req;
-  req.block_ctx = BlockContext(key, vfs_hub_->GetFsInfo().id);
+  req.handle = BlockHandle(vfs_hub_->GetFsInfo().id, key);
 
   auto ctx = SpanScope::GetContext(span);
 
   SetBusy(key);
 
-  auto callback = [&, req, span](const Status& status) {
+  auto callback = [&, req, key, length, span](const Status& status) {
     if (status.ok()) {
-      VLOG(6) << "Prefetch block: " << req.block_ctx.key.Filename()
+      VLOG(6) << "Prefetch block: " << req.handle.Filename()
               << " finished, status = " << status.ToString();
     } else {
       LOG_EVERY_N(WARNING, 100)
           << "Prefetch failed: "
-          << "key = " << req.block_ctx.key.Filename()
-          << ", length = " << req.block_ctx.key.size
+          << "key = " << req.handle.Filename() << ", length = " << length
           << ", status = " << status.ToString();
     }
     SpanScope::End(span);
-    SetIdle(req.block_ctx.key);
+    SetIdle(key);
   };
 
   block_store_->PrefetchAsync(ctx, req, std::move(callback));

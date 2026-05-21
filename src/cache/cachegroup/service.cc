@@ -26,11 +26,11 @@
 #include <brpc/controller.h>
 #include <butil/memory/aligned_memory.h>
 
+#include <utility>
+
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
-#include "cache/cachegroup/service.h"
-#include "cache/common/block_key_helper.h"
-#include "cache/common/context.h"
+#include "cache/common/block_handle_helper.h"
 #include "cache/common/error.h"
 #include "common/io_buffer.h"
 #include "common/status.h"
@@ -38,15 +38,11 @@
 namespace dingofs {
 namespace cache {
 
-template <typename T, typename U, typename... Args>
+template <typename T, typename U>
 struct ServiceClosure : public google::protobuf::Closure {
-  ServiceClosure(ContextSPtr ctx, google::protobuf::Closure* done,
-                 const T* request, U* response, Status& status)
-      : ctx(ctx),
-        done(done),
-        request(request),
-        response(response),
-        status(status) {}
+  ServiceClosure(google::protobuf::Closure* done, const T* request, U* response,
+                 Status& status)
+      : done(done), request(request), response(response), status(status) {}
 
   ~ServiceClosure() override = default;
 
@@ -61,7 +57,6 @@ struct ServiceClosure : public google::protobuf::Closure {
     done->Run();
   }
 
-  ContextSPtr ctx;
   google::protobuf::Closure* done;
   const T* request;
   U* response;
@@ -77,16 +72,14 @@ void BlockCacheServiceImpl::Put(google::protobuf::RpcController* controller,
                                 google::protobuf::Closure* done) {
   Status status;
   auto* cntl = static_cast<brpc::Controller*>(controller);
-  auto ctx = NewContext(cntl->request_id());
-  auto* srv_done = new ServiceClosure(ctx, done, request, response, status);
+  auto* srv_done = new ServiceClosure(done, request, response, status);
   brpc::ClosureGuard done_guard(srv_done);
 
-  IOBuffer buffer = IOBuffer(cntl->request_attachment().movable());
-  Block block(std::move(buffer));
-  status = CheckBodySize(request->block_size(), block.buffer.Size());
+  IOBuffer block = IOBuffer(cntl->request_attachment().movable());
+  status = CheckBodySize(request->block_size(), block.Size());
   if (status.ok()) {
-    BlockContext block_ctx = FromContextPB(request->block_ctx());
-    status = node_->Put(ctx, block_ctx, block);
+    BlockHandle handle = FromHandlePB(request->handle());
+    status = node_->Put(std::move(handle), std::move(block));
   }
   response->set_status(ToPBErr(status));
 }
@@ -97,19 +90,19 @@ void BlockCacheServiceImpl::Range(google::protobuf::RpcController* controller,
                                   google::protobuf::Closure* done) {
   Status status;
   auto* cntl = static_cast<brpc::Controller*>(controller);
-  auto ctx = NewContext(cntl->request_id());
-  auto* srv_done = new ServiceClosure(ctx, done, request, response, status);
+  auto* srv_done = new ServiceClosure(done, request, response, status);
   brpc::ClosureGuard done_guard(srv_done);
 
   IOBuffer buffer;
-  BlockContext block_ctx = FromContextPB(request->block_ctx());
-  status = node_->Range(ctx, block_ctx, request->offset(),
-                        request->length(), &buffer, request->block_size());
+  bool cache_hit = false;
+  BlockHandle handle = FromHandlePB(request->handle());
+  status = node_->Range(handle, request->offset(), request->length(), &buffer,
+                        request->block_size(), &cache_hit);
   if (status.ok()) {
     cntl->response_attachment() = buffer.IOBuf().movable();
   }
   response->set_status(ToPBErr(status));
-  response->set_cache_hit(ctx->GetCacheHit());
+  response->set_cache_hit(cache_hit);
 }
 
 void BlockCacheServiceImpl::Cache(google::protobuf::RpcController* controller,
@@ -118,15 +111,14 @@ void BlockCacheServiceImpl::Cache(google::protobuf::RpcController* controller,
                                   google::protobuf::Closure* done) {
   Status status;
   auto* cntl = static_cast<brpc::Controller*>(controller);
-  auto ctx = NewContext(cntl->request_id());
-  auto* srv_done = new ServiceClosure(ctx, done, request, response, status);
+  auto* srv_done = new ServiceClosure(done, request, response, status);
   brpc::ClosureGuard done_guard(srv_done);
 
   IOBuffer buffer = IOBuffer(cntl->request_attachment().movable());
   status = CheckBodySize(request->block_size(), buffer.Size());
   if (status.ok()) {
-    BlockContext block_ctx = FromContextPB(request->block_ctx());
-    status = node_->AsyncCache(ctx, block_ctx, Block(std::move(buffer)));
+    BlockHandle handle = FromHandlePB(request->handle());
+    status = node_->AsyncCache(std::move(handle), std::move(buffer));
   }
   response->set_status(ToPBErr(status));
 }
@@ -137,12 +129,11 @@ void BlockCacheServiceImpl::Prefetch(
     pb::cache::PrefetchResponse* response, google::protobuf::Closure* done) {
   Status status;
   auto* cntl = static_cast<brpc::Controller*>(controller);
-  auto ctx = NewContext(cntl->request_id());
-  auto* srv_done = new ServiceClosure(ctx, done, request, response, status);
+  auto* srv_done = new ServiceClosure(done, request, response, status);
   brpc::ClosureGuard done_guard(srv_done);
 
-  BlockContext block_ctx = FromContextPB(request->block_ctx());
-  status = node_->AsyncPrefetch(ctx, block_ctx, request->block_size());
+  BlockHandle handle = FromHandlePB(request->handle());
+  status = node_->AsyncPrefetch(handle, request->block_size());
   response->set_status(ToPBErr(status));
 }
 

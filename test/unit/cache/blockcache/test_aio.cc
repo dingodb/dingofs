@@ -35,22 +35,19 @@ namespace cache {
 class AioTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    ctx_ = std::make_shared<Context>();
     buffer_ = new char[4096];
   }
 
   void TearDown() override { delete[] buffer_; }
 
-  ContextSPtr ctx_;
   char* buffer_;
 };
 
 TEST_F(AioTest, Constructor) {
   {
-    Aio aio(ctx_, 10, 0, 4096, buffer_, 0, true);
+    Aio aio(10, 0, 4096, buffer_, 0, true);
 
     const auto& attr = aio.Attr();
-    EXPECT_EQ(attr.ctx, ctx_);
     EXPECT_EQ(attr.fd, 10);
     EXPECT_EQ(attr.offset, 0);
     EXPECT_EQ(attr.length, 4096);
@@ -63,10 +60,9 @@ TEST_F(AioTest, Constructor) {
   }
 
   {
-    Aio aio(ctx_, 5, 1024, 2048, buffer_, 1, false);
+    Aio aio(5, 1024, 2048, buffer_, 1, false);
 
     const auto& attr = aio.Attr();
-    EXPECT_EQ(attr.ctx, ctx_);
     EXPECT_EQ(attr.fd, 5);
     EXPECT_EQ(attr.offset, 1024);
     EXPECT_EQ(attr.length, 2048);
@@ -76,15 +72,15 @@ TEST_F(AioTest, Constructor) {
 
   {
     GTEST_FLAG_SET(death_test_style, "threadsafe");
-    EXPECT_DEATH(Aio(ctx_, -1, 0, 4096, buffer_, 0, true), "");
-    EXPECT_DEATH(Aio(ctx_, 10, -1, 4096, buffer_, 0, true), "");
-    EXPECT_DEATH(Aio(ctx_, 10, 0, 0, buffer_, 0, true), "");
-    EXPECT_DEATH(Aio(ctx_, 10, 0, 4096, nullptr, 0, true), "");
+    EXPECT_DEATH(Aio(-1, 0, 4096, buffer_, 0, true), "");
+    EXPECT_DEATH(Aio(10, -1, 4096, buffer_, 0, true), "");
+    EXPECT_DEATH(Aio(10, 0, 0, buffer_, 0, true), "");
+    EXPECT_DEATH(Aio(10, 0, 4096, nullptr, 0, true), "");
   }
 }
 
 TEST_F(AioTest, AttrAndResult) {
-  Aio aio(ctx_, 10, 0, 4096, buffer_, 0, true);
+  Aio aio(10, 0, 4096, buffer_, 0, true);
 
   {
     const auto& attr = aio.Attr();
@@ -110,7 +106,7 @@ TEST_F(AioTest, AttrAndResult) {
 
 TEST_F(AioTest, WaitAndRun) {
   {
-    Aio aio(ctx_, 10, 0, 4096, buffer_, 0, true);
+    Aio aio(10, 0, 4096, buffer_, 0, true);
 
     std::thread worker([&aio]() {
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -126,7 +122,7 @@ TEST_F(AioTest, WaitAndRun) {
   }
 
   {
-    Aio aio(ctx_, 10, 0, 4096, buffer_, 0, true);
+    Aio aio(10, 0, 4096, buffer_, 0, true);
 
     auto start = std::chrono::steady_clock::now();
 
@@ -151,7 +147,7 @@ TEST_F(AioTest, WaitAndRun) {
 
 TEST_F(AioTest, OutputStream) {
   {
-    Aio aio(ctx_, 10, 1024, 4096, buffer_, 2, true);
+    Aio aio(10, 1024, 4096, buffer_, 2, true);
     std::ostringstream oss;
     oss << aio;
 
@@ -166,7 +162,7 @@ TEST_F(AioTest, OutputStream) {
   }
 
   {
-    Aio aio(ctx_, 5, 0, 2048, buffer_, 1, false);
+    Aio aio(5, 0, 2048, buffer_, 1, false);
     std::ostringstream oss;
     oss << aio;
 
@@ -176,7 +172,7 @@ TEST_F(AioTest, OutputStream) {
   }
 
   {
-    Aio aio(ctx_, 10, 1024, 4096, buffer_, 2, true);
+    Aio aio(10, 1024, 4096, buffer_, 2, true);
     std::cout << "Aio example output: " << aio << "\n";
   }
 }

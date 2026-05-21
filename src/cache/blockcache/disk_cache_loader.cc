@@ -28,15 +28,18 @@
 
 #include <atomic>
 #include <cstdlib>
+#include <filesystem>
 #include <thread>
+#include <utility>
 
 #include "cache/blockcache/cache_store.h"
-#include "cache/common/block_key_helper.h"
-#include "cache/common/macro.h"
+#include "cache/common/block_handle_helper.h"
 #include "cache/iutil/file_util.h"
 
 namespace dingofs {
 namespace cache {
+
+namespace fs = std::filesystem;
 
 DiskCacheLoader::DiskCacheLoader(DiskCacheLayoutSPtr layout,
                                  std::shared_ptr<DiskCacheManager> manager)
@@ -57,14 +60,10 @@ void DiskCacheLoader::Start(const std::string& disk_id,
   LOG(INFO) << "DiskCacheLoader is starting...";
 
   disk_id_ = disk_id;
-  uploader_ = uploader;
+  uploader_ = std::move(uploader);
 
-  t1_ = std::thread([this]() {
-    LoadAllBlocks(layout_->GetStageDir(), BlockType::kStageBlock);
-  });
-  t2_ = std::thread([this]() {
-    LoadAllBlocks(layout_->GetCacheDir(), BlockType::kCacheBlock);
-  });
+  t1_ = std::thread([this]() { LoadAllBlocks(BlockType::kStageBlock); });
+  t2_ = std::thread([this]() { LoadAllBlocks(BlockType::kCacheBlock); });
 
   running_.store(true, std::memory_order_relaxed);
   load_status_.set_value("loading");
@@ -86,100 +85,129 @@ void DiskCacheLoader::Shutdown() {
   LOG(INFO) << "DiskCacheLoader is down";
 }
 
-// If load failed, it only takes up some spaces.
-void DiskCacheLoader::LoadAllBlocks(const std::string& dir, BlockType type) {
+void DiskCacheLoader::LoadAllBlocks(BlockType type) {
   butil::Timer timer;
-  uint64_t num_blocks = 0, num_invalids = 0, size = 0;
-
   timer.start();
-  auto status = iutil::Walk(
-      dir, [&](const std::string& prefix, const iutil::FileInfo& file) {
-        if (!running_.load(std::memory_order_relaxed)) {
-          return Status::Abort("disk cache loader stopped");
-        }
+  LoadStats stats;
 
-        if (LoadOneBlock(prefix, file, type)) {
-          num_blocks++;
-          size += file.size;
-        } else {
-          num_invalids++;
-        }
-        return Status::OK();
-      });
+  if (type == BlockType::kStageBlock) {
+    LoadStageDir(&stats);
+  } else {
+    LoadCacheDir(&stats);
+  }
+
   timer.stop();
+  LOG(INFO) << "Loaded " << stats.num_blocks << " " << BlockTypeToString(type)
+            << "(s), removed " << stats.num_invalids
+            << " invalid file(s), took " << timer.u_elapsed() / 1e6 << "s";
 
-  if (status.ok()) {
-    LOG(INFO) << "Successfully load " << num_blocks << BlockTypeToString(type)
-              << " blocks form dir=`" << dir << "' " << num_invalids
-              << " invalid blocks found, tooks " << timer.u_elapsed() / 1e6
-              << " seconds";
-  } else {
-    LOG(ERROR) << "Fail to load " << BlockTypeToString(type)
-               << " block from dir=`" << dir
-               << "', status=" << status.ToString();
-  }
-
-  if (type == BlockType::kCacheBlock) {
-    still_loading_cache_.store(false, std::memory_order_relaxed);
-  } else if (type == BlockType::kStageBlock) {
-    still_loading_stage_.store(false, std::memory_order_relaxed);
-  } else {
-    CHECK(false) << "Unknown block type=" << static_cast<int>(type);
-  }
-
+  auto& flag = (type == BlockType::kCacheBlock) ? still_loading_cache_
+                                                : still_loading_stage_;
+  flag.store(false, std::memory_order_relaxed);
   if (!still_loading_cache_.load(std::memory_order_relaxed) &&
       !still_loading_stage_.load(std::memory_order_relaxed)) {
     load_status_.set_value("finish");
   }
 }
 
-bool DiskCacheLoader::LoadOneBlock(const std::string& prefix,
-                                   const iutil::FileInfo& file,
-                                   BlockType type) {
-  BlockKey key;
-  std::string name = file.name;
-  std::string path = absl::StrJoin({prefix, name}, "/");
-  if (IsTempFilepath(name) || !ParseFromFilename(name, &key)) {
-    auto status = iutil::Unlink(path);
-    if (status.ok()) {
-      LOG(INFO) << "Removed invalid block, path=`" << path << "'";
-    } else {
-      LOG(WARNING) << "Fail to remove invalid block, path=`" << path << "'";
+void DiskCacheLoader::LoadStageDir(LoadStats* stats) {
+  // stage/{fs_id}/{kStoreDir}/... — subdir names come from the key types
+  // themselves (single source of truth, see {Block,Tensor}Key::kStoreDir).
+  std::error_code ec;
+  for (const auto& entry : fs::directory_iterator(layout_->GetStageDir(), ec)) {
+    if (!running_.load(std::memory_order_relaxed)) {
+      return;
     }
-    return false;
+    if (!entry.is_directory()) {
+      continue;
+    }
+
+    uint32_t fs_id = static_cast<uint32_t>(
+        std::strtoul(entry.path().filename().c_str(), nullptr, 10));
+
+    LoadKindDir<BlockKey>(
+        (entry.path() / BlockKey::kStoreDir).string(), BlockType::kStageBlock,
+        [fs_id](BlockKey k) { return BlockHandle(fs_id, k); }, stats);
+    LoadKindDir<TensorKey>(
+        (entry.path() / TensorKey::kStoreDir).string(),
+        BlockType::kStageBlock,
+        [](TensorKey k) { return BlockHandle(std::move(k)); }, stats);
+  }
+}
+
+void DiskCacheLoader::LoadCacheDir(LoadStats* stats) {
+  // cache/{kStoreDir}/...
+  fs::path cache_dir(layout_->GetCacheDir());
+  LoadKindDir<BlockKey>(
+      (cache_dir / BlockKey::kStoreDir).string(), BlockType::kCacheBlock,
+      [](BlockKey k) { return BlockHandle(0, k); }, stats);
+  LoadKindDir<TensorKey>(
+      (cache_dir / TensorKey::kStoreDir).string(), BlockType::kCacheBlock,
+      [](TensorKey k) { return BlockHandle(std::move(k)); }, stats);
+}
+
+template <typename KeyT, typename Wrap>
+void DiskCacheLoader::LoadKindDir(const std::string& root, BlockType type,
+                                  Wrap&& wrap, LoadStats* stats) {
+  std::error_code ec;
+  if (!fs::exists(root, ec)) {
+    return;  // empty / never-written kind
   }
 
-  if (type == BlockType::kStageBlock) {
-    // Stage path: stage/{fs_id}/blocks/.../{filename}
-    // Extract fs_id from prefix: strip the stage dir prefix, then take the
-    // first path component.
-    auto stage_dir = layout_->GetStageDir();
-    uint32_t fs_id = 0;
-    if (prefix.size() > stage_dir.size() + 1) {
-      auto remainder = prefix.substr(stage_dir.size() + 1);
-      auto pos = remainder.find('/');
-      auto fs_id_str =
-          (pos != std::string::npos) ? remainder.substr(0, pos) : remainder;
-      fs_id = static_cast<uint32_t>(std::strtoul(fs_id_str.c_str(), nullptr,
-                                                  10));
-    }
+  iutil::Walk(root,
+              [&](const std::string& prefix, const iutil::FileInfo& file) {
+                if (!running_.load(std::memory_order_relaxed)) {
+                  return Status::Abort("disk cache loader stopped");
+                }
 
-    BlockContext block_ctx(key, fs_id);
-    manager_->Add(key, CacheValue(file.size, file.atime), BlockPhase::kStaging);
-    uploader_(NewContext(), block_ctx, file.size,
-              BlockAttr(BlockAttr::kFromReload, disk_id_));
-  } else if (type == BlockType::kCacheBlock) {
-    if (file.nlink == 1) {
-      manager_->Add(key, CacheValue(file.size, file.atime),
-                    BlockPhase::kCached);
-    }
+                std::string path = absl::StrJoin({prefix, file.name}, "/");
+                if (IsTempFilepath(file.name)) {
+                  RemoveInvalidBlock(path, "temp");
+                  stats->num_invalids++;
+                  return Status::OK();
+                }
+
+                KeyT key;
+                if (!ParseFromFilename(file.name, &key)) {
+                  RemoveInvalidBlock(path, "invalid");
+                  stats->num_invalids++;
+                  return Status::OK();
+                }
+
+                RegisterBlock(wrap(std::move(key)), file, type);
+                stats->num_blocks++;
+                stats->total_bytes += file.size;
+                return Status::OK();
+              });
+}
+
+void DiskCacheLoader::RegisterBlock(const BlockHandle& handle,
+                                    const iutil::FileInfo& file,
+                                    BlockType type) {
+  switch (type) {
+    case BlockType::kStageBlock:
+      manager_->Add(handle, CacheValue(file.size, file.atime),
+                    BlockPhase::kStaging);
+      uploader_(handle, file.size, BlockAttr(BlockAttr::kFromReload, disk_id_));
+      break;
+    case BlockType::kCacheBlock:
+      if (file.nlink == 1) {
+        manager_->Add(handle, CacheValue(file.size, file.atime),
+                      BlockPhase::kCached);
+      }
+      break;
+  }
+}
+
+void DiskCacheLoader::RemoveInvalidBlock(const std::string& path,
+                                         const char* reason) {
+  auto status = iutil::Unlink(path);
+  if (status.ok()) {
+    LOG(INFO) << "Removed " << reason << " block, path=`" << path << "'";
   } else {
-    LOG(FATAL) << "Unknown block type=" << static_cast<int>(type)
-               << ", filepath=`" << path << "', filesize=" << file.size
-               << ", nlink=" << file.nlink;
+    LOG(WARNING) << "Fail to remove " << reason << " block, path=`" << path
+                 << "'";
   }
-
-  return true;
 }
 
 }  // namespace cache

@@ -28,6 +28,7 @@
 
 #include <atomic>
 #include <memory>
+#include <utility>
 
 #include "cache/common/macro.h"
 #include "cache/common/storage_client.h"
@@ -51,15 +52,9 @@ DEFINE_bool(brpc_log_idle_connection_close, true,
 DEFINE_string(cache_group, "",
               "Cache group name to use, empty means not use cache group");
 
-DEFINE_bool(block_prefetch, false,
-            "whether prefetching whole block from remote");
-DEFINE_validator(block_prefetch, brpc::PassValidate);
-
-RemoteBlockCacheImpl::RemoteBlockCacheImpl(StorageClient* storage_client)
+RemoteBlockCacheImpl::RemoteBlockCacheImpl(StorageClient* /*storage_client*/)
     : running_(false),
       upstream_(std::make_unique<Upstream>()),
-      retriever_(
-          std::make_unique<CacheRetriever>(upstream_.get(), storage_client)),
       joiner_(std::make_unique<iutil::BthreadJoiner>()),
       vars_(std::make_unique<RemoteBlockCacheVarsCollector>()) {
   brpc::FLAGS_idle_timeout_second = FLAGS_brpc_idle_timeout_second;
@@ -78,7 +73,6 @@ Status RemoteBlockCacheImpl::Start() {
 
   joiner_->Start();
   upstream_->Start();
-  retriever_->Start();
 
   running_.store(true, std::memory_order_relaxed);
   LOG(INFO) << "RemoteBlockCache is up";
@@ -93,7 +87,6 @@ Status RemoteBlockCacheImpl::Shutdown() {
 
   LOG(INFO) << "RemoteBlockCache is shutting down...";
 
-  retriever_->Shutdown();
   upstream_->Shutdown();
   joiner_->Shutdown();
 
@@ -102,102 +95,69 @@ Status RemoteBlockCacheImpl::Shutdown() {
   return Status::OK();
 }
 
-Status RemoteBlockCacheImpl::Put(ContextSPtr ctx, const BlockContext& block_ctx,
-                                 const Block& block, PutOption /*option*/) {
+Status RemoteBlockCacheImpl::Put(BlockHandle handle, IOBuffer block,
+                                 PutOption /*option*/) {
   DCHECK_RUNNING("RemoteBlockCache");
 
-  auto status = upstream_->SendPutRequest(ctx, block_ctx, block);
+  auto status = upstream_->SendPutRequest(handle, block);
   if (!status.ok()) {
     LOG(ERROR) << "Fail to put block to remote cache";
   }
   return status;
 }
 
-Status RemoteBlockCacheImpl::Range(ContextSPtr ctx,
-                                   const BlockContext& block_ctx, off_t offset,
+Status RemoteBlockCacheImpl::Range(BlockHandle handle, off_t offset,
                                    size_t length, IOBuffer* buffer,
                                    RangeOption option) {
   DCHECK_RUNNING("RemoteBlockCache");
 
-  BRPC_SCOPE_EXIT {
-    if (ctx->GetCacheHit()) {
+  Status status;
+  bool cache_hit = false;
+  status = upstream_->SendRangeRequest(handle, offset, length, buffer,
+                                       option.block_whole_length, &cache_hit);
+  if (status.ok()) {
+    if (cache_hit) {
       vars_->cache_hit_count << 1;
     } else {
       vars_->cache_miss_count << 1;
     }
-  };
-
-  Status status;
-  if (FLAGS_block_prefetch) {
-    status = retriever_->Range(block_ctx.key, offset, length,
-                               option.block_whole_length, buffer);
   } else {
-    status = upstream_->SendRangeRequest(ctx, block_ctx, offset, length,
-                                         buffer, option.block_whole_length);
-  }
-
-  if (!status.ok()) {
     LOG(ERROR) << "Fail to range block from remote cache";
   }
   return status;
 }
 
-Status RemoteBlockCacheImpl::Cache(ContextSPtr ctx,
-                                   const BlockContext& block_ctx,
-                                   const Block& block, CacheOption /*option*/) {
+Status RemoteBlockCacheImpl::Cache(BlockHandle handle, IOBuffer block,
+                                   CacheOption /*option*/) {
   DCHECK_RUNNING("RemoteBlockCache");
 
-  auto status = upstream_->SendCacheRequest(ctx, block_ctx, block);
+  auto status = upstream_->SendCacheRequest(handle, block);
   if (!status.ok()) {
     LOG(ERROR) << "Fail to cache block to remote cache";
   }
   return status;
 }
 
-Status RemoteBlockCacheImpl::Prefetch(ContextSPtr ctx,
-                                      const BlockContext& block_ctx,
-                                      size_t length,
+Status RemoteBlockCacheImpl::Prefetch(BlockHandle handle, size_t length,
                                       PrefetchOption /*option*/) {
   DCHECK_RUNNING("RemoteBlockCache");
 
-  auto status = upstream_->SendPrefetchRequest(ctx, block_ctx, length);
+  auto status = upstream_->SendPrefetchRequest(handle, length);
   if (!status.ok()) {
     LOG(ERROR) << "Fail to submit prefetch task to remote cache";
   }
   return status;
 }
 
-void RemoteBlockCacheImpl::AsyncPut(ContextSPtr ctx,
-                                    const BlockContext& block_ctx,
-                                    const Block& block, AsyncCallback cb,
-                                    PutOption option) {
+void RemoteBlockCacheImpl::AsyncPut(BlockHandle handle, IOBuffer block,
+                                    AsyncCallback cb, PutOption option) {
   DCHECK_RUNNING("RemoteBlockCache");
 
   auto* self = GetSelfPtr();
-  auto tid = iutil::RunInBthread([self, ctx, block_ctx, block, cb, option]() {
-    Status status = self->Put(ctx, block_ctx, block, option);
-    if (cb) {
-      cb(status);
-    }
-  });
-
-  if (tid != 0) {
-    joiner_->BackgroundJoin(tid);
-  }
-}
-
-void RemoteBlockCacheImpl::AsyncRange(ContextSPtr ctx,
-                                      const BlockContext& block_ctx,
-                                      off_t offset, size_t length,
-                                      IOBuffer* buffer, AsyncCallback cb,
-                                      RangeOption option) {
-  DCHECK_RUNNING("RemoteBlockCache");
-
-  auto* self = GetSelfPtr();
-  auto tid = iutil::RunInBthread(
-      [self, ctx, block_ctx, offset, length, buffer, cb, option]() {
-        Status status =
-            self->Range(ctx, block_ctx, offset, length, buffer, option);
+  auto tid =
+      iutil::RunInBthread([self, handle = std::move(handle),
+                           block = std::move(block), cb, option]() mutable {
+        Status status = self->Put(std::move(handle), std::move(block), option);
         if (cb) {
           cb(status);
         }
@@ -208,15 +168,16 @@ void RemoteBlockCacheImpl::AsyncRange(ContextSPtr ctx,
   }
 }
 
-void RemoteBlockCacheImpl::AsyncCache(ContextSPtr ctx,
-                                      const BlockContext& block_ctx,
-                                      const Block& block, AsyncCallback cb,
-                                      CacheOption option) {
+void RemoteBlockCacheImpl::AsyncRange(BlockHandle handle, off_t offset,
+                                      size_t length, IOBuffer* buffer,
+                                      AsyncCallback cb, RangeOption option) {
   DCHECK_RUNNING("RemoteBlockCache");
 
   auto* self = GetSelfPtr();
-  auto tid = iutil::RunInBthread([self, ctx, block_ctx, block, cb, option]() {
-    Status status = self->Cache(ctx, block_ctx, block, option);
+  auto tid = iutil::RunInBthread([self, handle = std::move(handle), offset,
+                                  length, buffer, cb, option]() mutable {
+    Status status =
+        self->Range(std::move(handle), offset, length, buffer, option);
     if (cb) {
       cb(status);
     }
@@ -227,16 +188,34 @@ void RemoteBlockCacheImpl::AsyncCache(ContextSPtr ctx,
   }
 }
 
-void RemoteBlockCacheImpl::AsyncPrefetch(ContextSPtr ctx,
-                                         const BlockContext& block_ctx,
-                                         size_t length, AsyncCallback cb,
+void RemoteBlockCacheImpl::AsyncCache(BlockHandle handle, IOBuffer block,
+                                      AsyncCallback cb, CacheOption option) {
+  DCHECK_RUNNING("RemoteBlockCache");
+
+  auto* self = GetSelfPtr();
+  auto tid = iutil::RunInBthread([self, handle = std::move(handle),
+                                  block = std::move(block), cb,
+                                  option]() mutable {
+    Status status = self->Cache(std::move(handle), std::move(block), option);
+    if (cb) {
+      cb(status);
+    }
+  });
+
+  if (tid != 0) {
+    joiner_->BackgroundJoin(tid);
+  }
+}
+
+void RemoteBlockCacheImpl::AsyncPrefetch(BlockHandle handle, size_t length,
+                                         AsyncCallback cb,
                                          PrefetchOption option) {
   DCHECK_RUNNING("RemoteBlockCache");
 
   auto* self = GetSelfPtr();
-  auto tid =
-      iutil::RunInBthread([self, ctx, block_ctx, length, cb, option]() {
-        Status status = self->Prefetch(ctx, block_ctx, length, option);
+  auto tid = iutil::RunInBthread(
+      [self, handle = std::move(handle), length, cb, option]() mutable {
+        Status status = self->Prefetch(std::move(handle), length, option);
         if (cb) {
           cb(status);
         }

@@ -310,10 +310,10 @@ void SliceWriter::UploadBlockAsync(uint64_t slice_id, uint32_t block_index,
       vfs_hub_->GetTraceManager()->StartSpan("SliceWriter::UploadBlockAsync");
 
   BlockKey key(slice_id, block_index, block_data->Len());
-  BlockContext block_ctx(key, context_.fs_id);
+  BlockHandle handle(context_.fs_id, key);
 
   PutReq req;
-  req.block_ctx = block_ctx;
+  req.handle = handle;
   req.data = block_data->ToIOBuffer();
 
   bool writeback = FLAGS_vfs_data_writeback;

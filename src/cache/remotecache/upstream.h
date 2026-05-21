@@ -30,11 +30,10 @@
 
 #include "cache/blockcache/cache_store.h"
 #include "cache/common/mds_client.h"
-#include "common/block/block_context.h"
 #include "cache/common/vars.h"
 #include "cache/remotecache/peer_group.h"
 #include "cache/remotecache/request.h"
-#include "common/trace/context.h"
+#include "common/block/block_handle.h"
 #include "utils/executor/executor.h"
 
 namespace dingofs {
@@ -99,15 +98,14 @@ class Upstream {
   void Start();
   void Shutdown();
 
-  Status SendPutRequest(ContextSPtr ctx, const BlockContext& block_ctx,
-                        const Block& block);
-  Status SendRangeRequest(ContextSPtr ctx, const BlockContext& block_ctx,
-                          off_t offset, size_t length, IOBuffer* buffer,
-                          size_t block_whole_length);
-  Status SendCacheRequest(ContextSPtr ctx, const BlockContext& block_ctx,
-                          const Block& block);
-  Status SendPrefetchRequest(ContextSPtr ctx, const BlockContext& block_ctx,
-                             size_t length);
+  Status SendPutRequest(const BlockHandle& handle, const IOBuffer& block);
+  // `cache_hit` (out, may be nullptr): set true iff the remote cache server
+  // satisfied the request from its local cache (vs falling through to S3).
+  Status SendRangeRequest(const BlockHandle& handle, off_t offset,
+                          size_t length, IOBuffer* buffer,
+                          size_t block_whole_length, bool* cache_hit);
+  Status SendCacheRequest(const BlockHandle& handle, const IOBuffer& block);
+  Status SendPrefetchRequest(const BlockHandle& handle, size_t length);
 
   bool Dump(Json::Value& value);
 
