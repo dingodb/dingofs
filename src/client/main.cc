@@ -32,6 +32,7 @@
 #include "common/options/client.h"
 #include "common/options/common.h"
 #include "common/types.h"
+#include "dingo_eureka_version.h"
 #include "fmt/format.h"
 #include "gflags/gflags.h"
 #include "utils/daemonize.h"
@@ -200,6 +201,10 @@ int main(int argc, char* argv[]) {
 
   // print current gflags
   LOG(INFO) << dingofs::GenCurrentFlags();
+  // print version
+  LOG(INFO) << dingofs::DingoShortVersionString();
+  // print dingo eureka version
+  LOG(INFO) << FormatDingoEurekaVersion();
 
   FsContext fs_context{
       .mount_option = &mount_option,

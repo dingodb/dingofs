@@ -33,6 +33,7 @@
 #include "brpc/reloadable_flags.h"
 #include "butil/status.h"
 #include "common/const.h"
+#include "common/helper.h"
 #include "common/logging.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"
@@ -1174,8 +1175,9 @@ Status FileSystem::Open(Context& ctx, Ino ino, const OpenParam& param, EntryOut&
 
   LOG(INFO) << fmt::format(
       "[fs.{}.{}][{}us] open {}/{} finish, flags({:o}:{}) fetch_chunk({}:{}) fetch_data({}:{}) status({}).", fs_id_,
-      ctx.RequestId(), duration.ElapsedUs(), ino, param.session_id, flags, Helper::DescOpenFlags(flags), fetch_from,
-      chunks_out.empty() ? chunks.size() : chunks_out.size(), param.is_prefetch_data, data.size(), status.error_str());
+      ctx.RequestId(), duration.ElapsedUs(), ino, param.session_id, flags, dingofs::Helper::DescOpenFlags(flags),
+      fetch_from, chunks_out.empty() ? chunks.size() : chunks_out.size(), param.is_prefetch_data, data.size(),
+      status.error_str());
 
   if (!status.ok()) return status;
 

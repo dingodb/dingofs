@@ -16,6 +16,7 @@
 #define DINGOFS_SRC_COMMON_HELPER_H_
 
 #include <arpa/inet.h>
+#include <fcntl.h>
 #include <netdb.h>
 #include <pwd.h>
 #include <unistd.h>
@@ -297,6 +298,37 @@ class Helper {
         LOG(ERROR) << "stoll exception: " << e.what();
       }
     }
+  }
+
+  static const char* DescOpenFlags(int flags) {
+    if ((flags & O_ACCMODE) == O_RDONLY) {
+      return "RDONLY";
+
+    } else if (flags & O_WRONLY) {
+      if (flags & O_TRUNC)
+        return "WRONLY|TRUNC";
+      else if (flags & O_APPEND)
+        return "WRONLY|APPEND";
+      return "WRONLY";
+
+    } else if (flags & O_RDWR) {
+      if (flags & O_TRUNC)
+        return "RDWR|TRUNC";
+      else if (flags & O_APPEND)
+        return "RDWR|APPEND";
+      return "RDWR";
+
+    } else if (flags & O_CREAT) {
+      return "CREAT";
+
+    } else if (flags & O_TRUNC) {
+      return "TRUNC";
+
+    } else if (flags & O_APPEND) {
+      return "APPEND";
+    }
+
+    return "UNKNOWN";
   }
 
 };  // class Helper

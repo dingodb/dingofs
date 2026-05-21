@@ -709,7 +709,7 @@ Status MDSMetaSystem::DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
   LOG(INFO) << fmt::format(
       "[meta.fs.{}.{}] open file flags({:o}:{}) session_id({}) "
       "chunks({}:{}) tiny_file_data({}:{}) status({}).",
-      ino, fh, flags, mds::Helper::DescOpenFlags(flags), session_id,
+      ino, fh, flags, dingofs::Helper::DescOpenFlags(flags), session_id,
       is_prefetch_chunk, chunks.size(), is_prefetch_data, tiny_file_data.size(),
       status.ToString());
   if (!status.ok()) return status;
@@ -835,7 +835,7 @@ Status MDSMetaSystem::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t fh) {
   }
 
   // for warmup small file
-  if (flags & O_RDONLY) {
+  if ((flags & O_ACCMODE) == O_RDONLY) {
     auto dir_profile = GetDirProfile(ino);
     if (dir_profile != nullptr) {
       WarmupSmallFiles(dir_profile->CheckAndGenWarmupInos(ino));
@@ -874,6 +874,9 @@ DirProfileSPtr MDSMetaSystem::GetDirProfile(Ino ino) {
   if (parents.empty()) return nullptr;
   Ino parent = parents.front();
 
+  LOG(INFO) << fmt::format("[meta.fs.{}] get dir profile, parent({}).", ino,
+                           parent);
+
   return dir_profile_cache_->Get(parent);
 }
 
@@ -881,7 +884,8 @@ void MDSMetaSystem::WarmupSmallFiles(const std::vector<Ino>& inoes) {
   if (warmup_manager_ == nullptr) return;
 
   for (Ino ino : inoes) {
-    warmup_manager_->SubmitTask(WarmupTaskContext(ino));
+    LOG(INFO) << fmt::format("[meta.fs] submit warmup task, ino({}).", ino);
+    // warmup_manager_->SubmitTask(WarmupTaskContext(ino));
   }
 }
 

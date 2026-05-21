@@ -8,8 +8,6 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-#include "client/vfs/metasystem/mds/dir_profile.h"
-
 #include <gflags/gflags.h>
 #include <gtest/gtest.h>
 
@@ -19,6 +17,7 @@
 #include <thread>
 #include <vector>
 
+#include "client/vfs/metasystem/mds/dir_profile.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/options/client.h"
 #include "utils/time.h"
@@ -57,7 +56,7 @@ class DirProfileTest : public ::testing::Test {
 };
 
 TEST_F(DirProfileTest, CtorAndAccessors) {
-  DirProfile p(42);
+  DirProfile p(42, 0);
   EXPECT_EQ(p.ParentIno(), 42u);
   EXPECT_EQ(p.TotalChildren(), 0u);
   EXPECT_EQ(p.SmallFileCount(), 0u);
@@ -68,7 +67,7 @@ TEST_F(DirProfileTest, CtorAndAccessors) {
 }
 
 TEST_F(DirProfileTest, AccumulateClassifiesEntries) {
-  DirProfile p(1);
+  DirProfile p(1, 0);
 
   // Small file: counted in both totals and small file list.
   p.Accumulate(100, FileType::kFile, 1024);
@@ -91,7 +90,7 @@ TEST_F(DirProfileTest, AccumulateClassifiesEntries) {
 }
 
 TEST_F(DirProfileTest, FinalizeMarksSmallFileDirWhenAboveMin) {
-  DirProfile p(1);
+  DirProfile p(1, 0);
   for (uint32_t i = 0; i < kWarmupDirMinFiles; ++i) {
     p.Accumulate(1000 + i, FileType::kFile, 1024);
   }
@@ -103,7 +102,7 @@ TEST_F(DirProfileTest, FinalizeMarksSmallFileDirWhenAboveMin) {
 }
 
 TEST_F(DirProfileTest, FinalizeNotSmallFileDirWhenBelowMin) {
-  DirProfile p(1);
+  DirProfile p(1, 0);
   for (uint32_t i = 0; i < kWarmupDirMinFiles - 1; ++i) {
     p.Accumulate(1000 + i, FileType::kFile, 1024);
   }
@@ -114,14 +113,14 @@ TEST_F(DirProfileTest, FinalizeNotSmallFileDirWhenBelowMin) {
 }
 
 TEST_F(DirProfileTest, FinalizeNotSmallFileDirWhenEmpty) {
-  DirProfile p(1);
+  DirProfile p(1, 0);
   p.Finalize();
   EXPECT_TRUE(p.IsFinalized());
   EXPECT_FALSE(p.IsSmallFileDir());
 }
 
 TEST_F(DirProfileTest, CheckAndGenWarmupInosBelowThresholdReturnsEmpty) {
-  DirProfile p(1);
+  DirProfile p(1, 0);
   for (uint32_t i = 0; i < 200; ++i) {
     p.Accumulate(1000 + i, FileType::kFile, 1024);
   }
@@ -135,7 +134,7 @@ TEST_F(DirProfileTest, CheckAndGenWarmupInosBelowThresholdReturnsEmpty) {
 }
 
 TEST_F(DirProfileTest, CheckAndGenWarmupInosAtThresholdReturnsBatch) {
-  DirProfile p(1);
+  DirProfile p(1, 0);
   // 200 small files, none of which collide with the open inos used below.
   for (uint32_t i = 0; i < 200; ++i) {
     p.Accumulate(1000 + i, FileType::kFile, 1024);
@@ -161,7 +160,7 @@ TEST_F(DirProfileTest, CheckAndGenWarmupInosAtThresholdReturnsBatch) {
 TEST_F(DirProfileTest, CheckAndGenWarmupInosRespectsBatchSize) {
   FLAGS_vfs_meta_warmup_small_file_batch_size = 32;
 
-  DirProfile p(1);
+  DirProfile p(1, 0);
   for (uint32_t i = 0; i < 200; ++i) {
     p.Accumulate(1000 + i, FileType::kFile, 1024);
   }
@@ -179,7 +178,7 @@ TEST_F(DirProfileTest, CheckAndGenWarmupInosRespectsBatchSize) {
 TEST_F(DirProfileTest, CheckAndGenWarmupInosExcludesOpenInos) {
   FLAGS_vfs_meta_warmup_small_file_batch_size = 16;
 
-  DirProfile p(1);
+  DirProfile p(1, 0);
   // Use small file inos that overlap with the open inos so they get filtered.
   for (uint32_t i = 0; i < 200; ++i) {
     p.Accumulate(1000 + i, FileType::kFile, 1024);
@@ -201,7 +200,7 @@ TEST_F(DirProfileTest, CheckAndGenWarmupInosExcludesOpenInos) {
 TEST_F(DirProfileTest, WarmedPosAdvancesAcrossInvocations) {
   FLAGS_vfs_meta_warmup_small_file_batch_size = 16;
 
-  DirProfile p(1);
+  DirProfile p(1, 0);
   for (uint32_t i = 0; i < 200; ++i) {
     p.Accumulate(1000 + i, FileType::kFile, 1024);
   }
@@ -227,7 +226,7 @@ TEST_F(DirProfileTest, WarmedPosAdvancesAcrossInvocations) {
 }
 
 TEST_F(DirProfileTest, CheckAndGenWarmupInosLastActiveTimeUpdated) {
-  DirProfile p(1);
+  DirProfile p(1, 0);
   uint64_t before = utils::Timestamp();
   p.CheckAndGenWarmupInos(123);
   uint64_t after = utils::Timestamp();
@@ -251,7 +250,7 @@ TEST_F(DirProfileCacheTest, GetMissingReturnsNullptr) {
 
 TEST_F(DirProfileCacheTest, PutAndGet) {
   auto cache = DirProfileCache::New();
-  DirProfileSPtr p = std::make_shared<DirProfile>(7);
+  DirProfileSPtr p = std::make_shared<DirProfile>(7, 0);
   cache->Put(p);
 
   auto got = cache->Get(7);
@@ -263,14 +262,14 @@ TEST_F(DirProfileCacheTest, PutAndGet) {
 TEST_F(DirProfileCacheTest, PutKeepsExistingWhenChildCountNotGreater) {
   auto cache = DirProfileCache::New();
 
-  DirProfileSPtr first = std::make_shared<DirProfile>(9);
+  DirProfileSPtr first = std::make_shared<DirProfile>(9, 0);
   for (int i = 0; i < 10; ++i) {
     first->Accumulate(100 + i, FileType::kFile, 1024);
   }
   cache->Put(first);
 
   // Same total_children → should NOT replace.
-  DirProfileSPtr same = std::make_shared<DirProfile>(9);
+  DirProfileSPtr same = std::make_shared<DirProfile>(9, 0);
   for (int i = 0; i < 10; ++i) {
     same->Accumulate(200 + i, FileType::kFile, 1024);
   }
@@ -279,7 +278,7 @@ TEST_F(DirProfileCacheTest, PutKeepsExistingWhenChildCountNotGreater) {
   EXPECT_EQ(cache->Get(9).get(), first.get());
 
   // Fewer total_children → should NOT replace.
-  DirProfileSPtr smaller = std::make_shared<DirProfile>(9);
+  DirProfileSPtr smaller = std::make_shared<DirProfile>(9, 0);
   smaller->Accumulate(300, FileType::kFile, 1024);
   cache->Put(smaller);
 
@@ -289,13 +288,13 @@ TEST_F(DirProfileCacheTest, PutKeepsExistingWhenChildCountNotGreater) {
 TEST_F(DirProfileCacheTest, PutReplacesWhenChildCountGreater) {
   auto cache = DirProfileCache::New();
 
-  DirProfileSPtr first = std::make_shared<DirProfile>(9);
+  DirProfileSPtr first = std::make_shared<DirProfile>(9, 0);
   for (int i = 0; i < 10; ++i) {
     first->Accumulate(100 + i, FileType::kFile, 1024);
   }
   cache->Put(first);
 
-  DirProfileSPtr bigger = std::make_shared<DirProfile>(9);
+  DirProfileSPtr bigger = std::make_shared<DirProfile>(9, 0);
   for (int i = 0; i < 11; ++i) {
     bigger->Accumulate(200 + i, FileType::kFile, 1024);
   }
@@ -307,7 +306,7 @@ TEST_F(DirProfileCacheTest, PutReplacesWhenChildCountGreater) {
 
 TEST_F(DirProfileCacheTest, Erase) {
   auto cache = DirProfileCache::New();
-  DirProfileSPtr p = std::make_shared<DirProfile>(11);
+  DirProfileSPtr p = std::make_shared<DirProfile>(11, 0);
   cache->Put(p);
   EXPECT_NE(cache->Get(11), nullptr);
 
@@ -325,7 +324,7 @@ TEST_F(DirProfileCacheTest, SizeAcrossShards) {
   // Insert enough entries to land on multiple shards (kShardNum = 32).
   constexpr int kNum = 200;
   for (int i = 0; i < kNum; ++i) {
-    DirProfileSPtr p = std::make_shared<DirProfile>(static_cast<Ino>(i + 1));
+    DirProfileSPtr p = std::make_shared<DirProfile>(static_cast<Ino>(i + 1), 0);
     cache->Put(p);
   }
   EXPECT_EQ(cache->Size(), static_cast<size_t>(kNum));
@@ -339,8 +338,8 @@ TEST_F(DirProfileCacheTest, CleanExpiredRemovesStaleEntries) {
   auto cache = DirProfileCache::New();
 
   // Two entries, neither has been "touched" yet (LastActiveTimeS == 0).
-  DirProfileSPtr a = std::make_shared<DirProfile>(1);
-  DirProfileSPtr b = std::make_shared<DirProfile>(2);
+  DirProfileSPtr a = std::make_shared<DirProfile>(1, 0);
+  DirProfileSPtr b = std::make_shared<DirProfile>(2, 0);
   cache->Put(a);
   cache->Put(b);
 
@@ -359,7 +358,7 @@ TEST_F(DirProfileCacheTest, CleanExpiredRemovesStaleEntries) {
 TEST_F(DirProfileCacheTest, CleanExpiredRemovesAllWhenCutoffInFuture) {
   auto cache = DirProfileCache::New();
   for (int i = 0; i < 10; ++i) {
-    DirProfileSPtr p = std::make_shared<DirProfile>(static_cast<Ino>(i + 1));
+    DirProfileSPtr p = std::make_shared<DirProfile>(static_cast<Ino>(i + 1), 0);
     p->CheckAndGenWarmupInos(100);  // populate LastActiveTimeS
     cache->Put(p);
   }

@@ -52,6 +52,12 @@ void DirProfile::Finalize() {
 
   expire_ts_ = utils::Timestamp() + FLAGS_vfs_meta_warmup_small_file_ttl_s;
   is_finalized_ = true;
+
+  LOG(INFO) << fmt::format(
+      "[meta.dir_profile.{}.{}] finalize dir profile, total_children({}),"
+      "small_file_count({}),is_small_file_dir({}).",
+      parent_ino_, fh_, total_children_, small_file_inos_.size(),
+      is_small_file_dir_);
 }
 
 std::vector<Ino> DirProfile::CheckAndGenWarmupInos(Ino ino) {
@@ -92,6 +98,14 @@ std::vector<Ino> DirProfile::GenWarmupInos() {
   open_window_start_s_ = utils::Timestamp();
   open_inos_.clear();
 
+  if (!candidates.empty()) {
+    LOG(INFO) << fmt::format(
+        "[meta.dir_profile.{}.{}] gen warmup inodes, candidates({}), "
+        "total_small_files({}),warmed_count({}).",
+        parent_ino_, fh_, candidates.size(), small_file_inos_.size(),
+        warmed_inos_.size());
+  }
+
   return candidates;
 }
 
@@ -101,22 +115,33 @@ std::vector<Ino> DirProfile::SmallFileInosForTest() const {
 }
 
 void DirProfileCache::Put(DirProfileSPtr& dir_profile) {
+  if (!dir_profile->IsSmallFileDir()) return;
+
   Ino ino = dir_profile->ParentIno();
 
+  bool is_put = false;
   shard_map_.withWLock(
-      [ino, &dir_profile](Map& map) {
+      [ino, &dir_profile, &is_put](Map& map) {
         auto it = map.find(ino);
         if (it == map.end()) {
           map.emplace(ino, dir_profile);
+          is_put = true;
 
         } else {
           auto pre_profile = it->second;
           if (dir_profile->TotalChildren() > pre_profile->TotalChildren()) {
             it->second = dir_profile;
+            is_put = true;
           }
         }
       },
       ino);
+
+  if (is_put) {
+    LOG(INFO) << fmt::format(
+        "[meta.dir_profile.{}.{}] put dir profile, total_children({}).", ino,
+        dir_profile->Fh(), dir_profile->TotalChildren());
+  }
 }
 
 DirProfileSPtr DirProfileCache::Get(Ino parent) {
