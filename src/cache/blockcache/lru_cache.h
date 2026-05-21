@@ -28,12 +28,12 @@
 
 #include "cache/iutil/cache.h"
 #include "cache/iutil/time_util.h"
-#include "common/block/block_key.h"
+#include "common/block/block_handle.h"
 
 namespace dingofs {
 namespace cache {
 
-using CacheKey = dingofs::BlockKey;
+using CacheKey = BlockHandle;
 
 struct CacheValue {
   CacheValue() = default;
@@ -44,9 +44,10 @@ struct CacheValue {
 };
 
 struct CacheItem {
-  CacheItem(CacheKey key, CacheValue value) : key(key), value(value) {}
+  CacheItem(BlockHandle key, CacheValue value)
+      : key(std::move(key)), value(value) {}
 
-  CacheKey key;
+  BlockHandle key;
   CacheValue value;
 };
 
@@ -55,9 +56,14 @@ using CacheItems = std::vector<CacheItem>;
 struct ListNode {
   ListNode() = default;
 
-  ListNode(const CacheValue& value)
-      : value(value), handle(nullptr), prev(nullptr), next(nullptr) {}
+  ListNode(BlockHandle key, const CacheValue& value)
+      : key(std::move(key)),
+        value(value),
+        handle(nullptr),
+        prev(nullptr),
+        next(nullptr) {}
 
+  BlockHandle key;
   CacheValue value;
   iutil::Cache::Handle* handle;
   struct ListNode* prev;

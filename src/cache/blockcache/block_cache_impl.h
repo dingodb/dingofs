@@ -25,7 +25,6 @@
 
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/block_cache_uploader.h"
-#include "cache/common/context.h"
 #include "cache/common/storage_client.h"
 #include "cache/common/storage_client_pool.h"
 #include "cache/iutil/inflight_tracker.h"
@@ -43,32 +42,24 @@ class BlockCacheImpl final : public BlockCache {
   Status Start() override;
   Status Shutdown() override;
 
-  Status Put(ContextSPtr ctx, const BlockContext& block_ctx,
-             const Block& block,
-             PutOption option = PutOption()) override;
-  Status Range(ContextSPtr ctx, const BlockContext& block_ctx, off_t offset,
-               size_t length, IOBuffer* buffer,
-               RangeOption option = RangeOption()) override;
-  Status Cache(ContextSPtr ctx, const BlockContext& block_ctx,
-               const Block& block,
-               CacheOption option = CacheOption()) override;
-  Status Prefetch(ContextSPtr ctx, const BlockContext& block_ctx,
-                  size_t length,
-                  PrefetchOption option = PrefetchOption()) override;
+  Status Put(BlockHandle handle, IOBuffer block,
+             PutOption option = {}) override;
+  Status Range(BlockHandle handle, off_t offset, size_t length,
+               IOBuffer* buffer, RangeOption option = {}) override;
+  Status Cache(BlockHandle handle, IOBuffer block,
+               CacheOption option = {}) override;
+  Status Prefetch(BlockHandle handle, size_t length,
+                  PrefetchOption option = {}) override;
 
-  void AsyncPut(ContextSPtr ctx, const BlockContext& block_ctx,
-                const Block& block, AsyncCallback cb,
-                PutOption option = PutOption()) override;
-  void AsyncRange(ContextSPtr ctx, const BlockContext& block_ctx,
-                  off_t offset, size_t length, IOBuffer* buffer,
-                  AsyncCallback cb,
-                  RangeOption option = RangeOption()) override;
-  void AsyncCache(ContextSPtr ctx, const BlockContext& block_ctx,
-                  const Block& block, AsyncCallback cb,
-                  CacheOption option = CacheOption()) override;
-  void AsyncPrefetch(ContextSPtr ctx, const BlockContext& block_ctx,
-                     size_t length, AsyncCallback cb,
-                     PrefetchOption option = PrefetchOption()) override;
+  void AsyncPut(BlockHandle handle, IOBuffer block, AsyncCallback cb,
+                PutOption option = {}) override;
+  void AsyncRange(BlockHandle handle, off_t offset, size_t length,
+                  IOBuffer* buffer, AsyncCallback cb,
+                  RangeOption option = {}) override;
+  void AsyncCache(BlockHandle handle, IOBuffer block, AsyncCallback cb,
+                  CacheOption option = {}) override;
+  void AsyncPrefetch(BlockHandle handle, size_t length, AsyncCallback cb,
+                     PrefetchOption option = {}) override;
 
   bool IsEnabled() const override { return FLAGS_cache_store != "none"; }
 
@@ -80,8 +71,8 @@ class BlockCacheImpl final : public BlockCache {
     return IsEnabled() && FLAGS_enable_cache;
   }
 
-  bool IsCached(const BlockContext& block_ctx) const override {
-    return store_->IsCached(block_ctx);
+  bool IsCached(const BlockHandle& handle) const override {
+    return store_->IsCached(handle);
   }
 
   bool Dump(Json::Value& value) const override { return store_->Dump(value); }
@@ -91,10 +82,9 @@ class BlockCacheImpl final : public BlockCache {
 
   BlockCache* GetSelfPtr() { return this; }
 
-  Status StoragePut(ContextSPtr ctx, const BlockContext& block_ctx,
-                    const Block& block);
-  Status StorageRange(ContextSPtr ctx, const BlockContext& block_ctx,
-                      off_t offset, size_t length, IOBuffer* buffer);
+  Status StoragePut(const BlockHandle& handle, const IOBuffer& block);
+  Status StorageRange(const BlockHandle& handle, off_t offset, size_t length,
+                      IOBuffer* buffer);
 
   std::atomic<bool> running_;
   StorageClientPoolSPtr storage_client_pool_;

@@ -55,12 +55,10 @@ static int64_t GetQueueSize(void* meta) {
   return queue->Size();
 }
 
-PutBlockTask::PutBlockTask(ContextSPtr ctx, const BlockKey& key,
-                           const Block* block,
+PutBlockTask::PutBlockTask(BlockHandle handle, const IOBuffer& block,
                            blockaccess::BlockAccesser* block_accesser,
                            iutil::TaskExecutionQueueSPtr retry_queue)
-    : ctx_(ctx),
-      key_(key),
+    : handle_(std::move(handle)),
       block_(block),
       block_accesser_(block_accesser),
       retry_queue_(retry_queue) {}
@@ -75,10 +73,10 @@ void PutBlockTask::Run() {
 
 blockaccess::PutObjectAsyncContextSPtr PutBlockTask::OnPrepare() {
   auto ctx =
-      std::make_shared<blockaccess::PutObjectAsyncContext>(key_.StoreKey());
+      std::make_shared<blockaccess::PutObjectAsyncContext>(handle_.StoreKey());
   ctx->start_time = butil::gettimeofday_us();
-  ctx->buffer = block_->buffer.Fetch1();
-  ctx->buffer_size = block_->buffer.Size();
+  ctx->buffer = block_.Fetch1();
+  ctx->buffer_size = block_.Size();
   ctx->retry = 0;
   ctx->cb = [this](const blockaccess::PutObjectAsyncContextSPtr& ctx) {
     OnCallback(ctx);
@@ -119,12 +117,11 @@ void PutBlockTask::OnComplete(Status s) {
   TaskClosure::Run();
 }
 
-RangeBlockTask::RangeBlockTask(ContextSPtr ctx, const BlockKey& key,
-                               off_t offset, size_t length, IOBuffer* buffer,
+RangeBlockTask::RangeBlockTask(BlockHandle handle, off_t offset, size_t length,
+                               IOBuffer* buffer,
                                blockaccess::BlockAccesser* block_accesser,
                                iutil::TaskExecutionQueueSPtr retry_queue)
-    : ctx_(ctx),
-      key_(key),
+    : handle_(std::move(handle)),
       offset_(offset),
       length_(length),
       buffer_(buffer),
@@ -141,7 +138,7 @@ blockaccess::GetObjectAsyncContextSPtr RangeBlockTask::OnPrepare() {
   buffer_->AppendUserData(data, length_, iutil::DeleteBuffer);
 
   auto ctx =
-      std::make_shared<blockaccess::GetObjectAsyncContext>(key_.StoreKey());
+      std::make_shared<blockaccess::GetObjectAsyncContext>(handle_.StoreKey());
   ctx->start_time = butil::gettimeofday_us();
   ctx->buf = buffer_->Fetch1();
   ctx->offset = offset_;
@@ -260,11 +257,9 @@ Status StorageClient::Shutdown() {
   return Status::OK();
 }
 
-Status StorageClient::Put(ContextSPtr ctx, const BlockKey& key,
-                          const Block* block) {
-  auto task =
-      PutBlockTask(ctx, key, block, block_accesser_, upload_retry_queue_);
-  // CHECK_EQ(0, bthread::execution_queue_execute(queue_id_, &task));
+Status StorageClient::Put(BlockHandle handle, const IOBuffer& block) {
+  auto task = PutBlockTask(std::move(handle), block, block_accesser_,
+                           upload_retry_queue_);
   pending_async_put_ << 1;
   thread_pool_->Enqueue([&task, this]() mutable {
     pending_async_put_ << -1;
@@ -282,10 +277,10 @@ Status StorageClient::Put(ContextSPtr ctx, const BlockKey& key,
   return status;
 }
 
-Status StorageClient::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
-                            size_t length, IOBuffer* buffer) {
-  auto task = RangeBlockTask(ctx, key, offset, length, buffer, block_accesser_,
-                             download_retry_queue_);
+Status StorageClient::Range(BlockHandle handle, off_t offset, size_t length,
+                            IOBuffer* buffer) {
+  auto task = RangeBlockTask(std::move(handle), offset, length, buffer,
+                             block_accesser_, download_retry_queue_);
   CHECK_EQ(0, bthread::execution_queue_execute(queue_id_, &task));
 
   task.Wait();
@@ -311,13 +306,13 @@ int StorageClient::HandleClosure(void* meta,
 }
 
 std::ostream& operator<<(std::ostream& os, const PutBlockTask& task) {
-  os << "PutBlockTask{key=" << task.key_.Filename()
-     << " size=" << task.block_->buffer.Size() << "}";
+  os << "PutBlockTask{key=" << task.handle_.Filename()
+     << " size=" << task.block_.Size() << "}";
   return os;
 }
 
 std::ostream& operator<<(std::ostream& os, const RangeBlockTask& task) {
-  os << "RangeBlockTask{key=" << task.key_.Filename()
+  os << "RangeBlockTask{key=" << task.handle_.Filename()
      << " offset=" << task.offset_ << " length=" << task.length_ << "}";
   return os;
 }

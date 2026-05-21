@@ -97,18 +97,18 @@ Status DiskCacheGroup::Shutdown() {
   return Status::OK();
 }
 
-Status DiskCacheGroup::Stage(ContextSPtr ctx, const BlockContext& block_ctx,
-                             const Block& block, StageOption option) {
+Status DiskCacheGroup::Stage(BlockHandle handle, IOBuffer block,
+                             StageOption option) {
   Status status;
-  DiskCacheGroupVarsRecordGuard metric_guard(__func__, block.size, status,
-                                             vars_);
-  status = GetStore(block_ctx.key)->Stage(ctx, block_ctx, block, option);
+  size_t length = block.Size();
+  DiskCacheGroupVarsRecordGuard metric_guard(__func__, length, status, vars_);
+  auto store = GetStore(handle);
+  status = store->Stage(std::move(handle), std::move(block), option);
 
   return status;
 }
 
-Status DiskCacheGroup::RemoveStage(ContextSPtr ctx,
-                                   const BlockContext& block_ctx,
+Status DiskCacheGroup::RemoveStage(BlockHandle handle,
                                    RemoveStageOption option) {
   CHECK_RUNNING("Disk cache group");
 
@@ -117,24 +117,24 @@ Status DiskCacheGroup::RemoveStage(ContextSPtr ctx,
   if (!store_id.empty()) {
     store = GetStore(store_id);
   } else {
-    store = GetStore(block_ctx.key);
+    store = GetStore(handle);
   }
-  return store->RemoveStage(ctx, block_ctx, option);
+  return store->RemoveStage(std::move(handle), option);
 }
 
-Status DiskCacheGroup::Cache(ContextSPtr ctx, const BlockContext& block_ctx,
-                             const Block& block, CacheOption option) {
+Status DiskCacheGroup::Cache(BlockHandle handle, IOBuffer block,
+                             CacheOption option) {
   Status status;
-  DiskCacheGroupVarsRecordGuard metric_guard(__func__, block.size, status,
-                                             vars_);
-  status = GetStore(block_ctx.key)->Cache(ctx, block_ctx, block, option);
+  size_t length = block.Size();
+  DiskCacheGroupVarsRecordGuard metric_guard(__func__, length, status, vars_);
+  auto store = GetStore(handle);
+  status = store->Cache(std::move(handle), std::move(block), option);
 
   return status;
 }
 
-Status DiskCacheGroup::Load(ContextSPtr ctx, const BlockContext& block_ctx,
-                            off_t offset, size_t length, IOBuffer* buffer,
-                            LoadOption option) {
+Status DiskCacheGroup::Load(BlockHandle handle, off_t offset, size_t length,
+                            IOBuffer* buffer, LoadOption option) {
   CHECK_RUNNING("Disk cache group");
 
   DiskCacheSPtr store;
@@ -142,12 +142,12 @@ Status DiskCacheGroup::Load(ContextSPtr ctx, const BlockContext& block_ctx,
   if (!store_id.empty()) {
     store = GetStore(store_id);
   } else {
-    store = GetStore(block_ctx.key);
+    store = GetStore(handle);
   }
 
   Status status;
   DiskCacheGroupVarsRecordGuard metirc_guard(__func__, length, status, vars_);
-  status = store->Load(ctx, block_ctx, offset, length, buffer, option);
+  status = store->Load(std::move(handle), offset, length, buffer, option);
 
   return status;
 }
@@ -158,16 +158,16 @@ bool DiskCacheGroup::IsRunning() const {
   return running_.load(std::memory_order_relaxed);
 }
 
-bool DiskCacheGroup::IsCached(const BlockContext& block_ctx) const {
+bool DiskCacheGroup::IsCached(const BlockHandle& handle) const {
   DCHECK_RUNNING("Disk cache group");
 
-  return GetStore(block_ctx.key)->IsCached(block_ctx);
+  return GetStore(handle)->IsCached(handle);
 }
 
-bool DiskCacheGroup::IsFull(const BlockContext& block_ctx) const {
+bool DiskCacheGroup::IsFull(const BlockHandle& handle) const {
   DCHECK_RUNNING("Disk cache group");
 
-  return GetStore(block_ctx.key)->IsFull(block_ctx);
+  return GetStore(handle)->IsFull(handle);
 }
 
 std::vector<uint64_t> DiskCacheGroup::CalcWeights(
@@ -180,10 +180,10 @@ std::vector<uint64_t> DiskCacheGroup::CalcWeights(
   return iutil::NormalizeByGcd(weights);
 }
 
-DiskCacheSPtr DiskCacheGroup::GetStore(const BlockKey& key) const {
+DiskCacheSPtr DiskCacheGroup::GetStore(const BlockHandle& handle) const {
   iutil::ConNode node;
-  bool find = chash_->Lookup(std::to_string(key.id), node);
-  CHECK(find) << "No corresponding store found: key = " << key.Filename();
+  bool find = chash_->Lookup(handle.Id(), node);
+  CHECK(find) << "No corresponding store found: key = " << handle.Filename();
 
   auto iter = stores_.find(node.key);
   CHECK(iter != stores_.end());

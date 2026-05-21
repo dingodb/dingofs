@@ -51,7 +51,6 @@ class IOUringTest : public ::testing::Test {
   void SetUp() override {
     test_dir_ = FLAGS_test_dir + "/io_uring_test_" + std::to_string(getpid());
     std::filesystem::create_directories(test_dir_);
-    ctx_ = std::make_shared<Context>();
   }
 
   void TearDown() override { std::filesystem::remove_all(test_dir_); }
@@ -119,7 +118,6 @@ class IOUringTest : public ::testing::Test {
   }
 
   std::string test_dir_;
-  ContextSPtr ctx_;
 };
 
 TEST_F(IOUringTest, StartAndShutdown) {
@@ -318,7 +316,7 @@ TEST_F(IOUringTest, BasicWrite) {
     std::memset(buffer, 'A', 4096);
 
     // Step 4: Create and submit write request
-    Aio aio(ctx_, fd, 0, 4096, buffer, -1, false);
+    Aio aio(fd, 0, 4096, buffer, -1, false);
     EXPECT_TRUE(io_uring.PrepareIO(&aio).ok());
     EXPECT_TRUE(io_uring.SubmitIO().ok());
 
@@ -364,7 +362,7 @@ TEST_F(IOUringTest, BasicRead) {
     std::memset(buffer, 0, 4096);
 
     // Step 4: Create and submit read request
-    Aio aio(ctx_, fd, 0, 4096, buffer, -1, true);
+    Aio aio(fd, 0, 4096, buffer, -1, true);
     EXPECT_TRUE(io_uring.PrepareIO(&aio).ok());
     EXPECT_TRUE(io_uring.SubmitIO().ok());
 
@@ -407,7 +405,7 @@ TEST_F(IOUringTest, WriteAndReadWithOffset) {
   std::memset(write_buffer, 'C', 4096);
 
   {
-    Aio write_aio(ctx_, fd, 4096, 4096, write_buffer, -1, false);
+    Aio write_aio(fd, 4096, 4096, write_buffer, -1, false);
 
     EXPECT_TRUE(io_uring.PrepareIO(&write_aio).ok());
     EXPECT_TRUE(io_uring.SubmitIO().ok());
@@ -426,7 +424,7 @@ TEST_F(IOUringTest, WriteAndReadWithOffset) {
     char* read_buffer = static_cast<char*>(aligned_alloc(4096, 4096));
     std::memset(read_buffer, 0, 4096);
 
-    Aio read_aio(ctx_, fd, 4096, 4096, read_buffer, -1, true);
+    Aio read_aio(fd, 4096, 4096, read_buffer, -1, true);
 
     EXPECT_TRUE(io_uring.PrepareIO(&read_aio).ok());
     EXPECT_TRUE(io_uring.SubmitIO().ok());
@@ -486,7 +484,7 @@ TEST_F(IOUringTest, MultipleIOOperations) {
     std::memset(buffers[i], 0, 4096);
 
     aios.push_back(
-        std::make_unique<Aio>(ctx_, fd, i * 4096, 4096, buffers[i], -1, true));
+        std::make_unique<Aio>(fd, i * 4096, 4096, buffers[i], -1, true));
   }
 
   // Step 3: Submit all read operations
@@ -563,7 +561,7 @@ TEST_F(IOUringTest, MixedReadWrite) {
     int block_idx = i * 2;  // 0, 2, 4, 6
     read_buffers[i] = static_cast<char*>(aligned_alloc(4096, kBlockSize));
     std::memset(read_buffers[i], 0, kBlockSize);
-    aios.push_back(std::make_unique<Aio>(ctx_, fd, block_idx * kBlockSize,
+    aios.push_back(std::make_unique<Aio>(fd, block_idx * kBlockSize,
                                          kBlockSize, read_buffers[i], -1,
                                          true));
   }
@@ -574,7 +572,7 @@ TEST_F(IOUringTest, MixedReadWrite) {
     write_buffers[i] = static_cast<char*>(aligned_alloc(4096, kBlockSize));
     std::memset(write_buffers[i], static_cast<char>('X' + block_idx),
                 kBlockSize);
-    aios.push_back(std::make_unique<Aio>(ctx_, fd, block_idx * kBlockSize,
+    aios.push_back(std::make_unique<Aio>(fd, block_idx * kBlockSize,
                                          kBlockSize, write_buffers[i], -1,
                                          false));
   }
@@ -654,7 +652,7 @@ TEST_F(IOUringTest, WriteWithFixedBuffer) {
   int fd = OpenFileForDirectIO(file_path, O_RDWR);
   ASSERT_GE(fd, 0);
 
-  Aio aio(ctx_, fd, 0, kBufferSize, raw_write_buffer, 0, false);
+  Aio aio(fd, 0, kBufferSize, raw_write_buffer, 0, false);
 
   EXPECT_TRUE(io_uring.PrepareIO(&aio).ok());
   EXPECT_TRUE(io_uring.SubmitIO().ok());
@@ -694,7 +692,7 @@ TEST_F(IOUringTest, ReadWithFixedBuffer) {
   int fd = OpenFileForDirectIO(file_path, O_RDONLY);
   ASSERT_GE(fd, 0);
 
-  Aio aio(ctx_, fd, 0, kBufferSize, raw_read_buffer, 0, true);
+  Aio aio(fd, 0, kBufferSize, raw_read_buffer, 0, true);
 
   EXPECT_TRUE(io_uring.PrepareIO(&aio).ok());
   EXPECT_TRUE(io_uring.SubmitIO().ok());
@@ -747,7 +745,7 @@ TEST_F(IOUringTest, WaitIO) {
     char* buffer = static_cast<char*>(aligned_alloc(4096, 4096));
     std::memset(buffer, 0, 4096);
 
-    Aio aio(ctx_, fd, 0, 4096, buffer, -1, true);
+    Aio aio(fd, 0, 4096, buffer, -1, true);
     EXPECT_TRUE(io_uring.PrepareIO(&aio).ok());
     EXPECT_TRUE(io_uring.SubmitIO().ok());
 
@@ -770,7 +768,7 @@ TEST_F(IOUringTest, WaitIO) {
       buffers[i] = static_cast<char*>(aligned_alloc(4096, 4096));
       std::memset(buffers[i], 0, 4096);
       aios.push_back(
-          std::make_unique<Aio>(ctx_, fd, 0, 4096, buffers[i], -1, true));
+          std::make_unique<Aio>(fd, 0, 4096, buffers[i], -1, true));
       EXPECT_TRUE(io_uring.PrepareIO(aios[i].get()).ok());
     }
     EXPECT_TRUE(io_uring.SubmitIO().ok());
@@ -809,47 +807,47 @@ TEST_F(IOUringTest, OnComplete) {
   char* buffer = static_cast<char*>(aligned_alloc(4096, 4096));
 
   {
-    Aio aio(ctx_, fd, 0, 4096, buffer, -1, true);
+    Aio aio(fd, 0, 4096, buffer, -1, true);
     io_uring.OnComplete(&aio, 4096);
     EXPECT_TRUE(aio.Result().status.ok());
   }
 
   {
-    Aio aio(ctx_, fd, 0, 4096, buffer, -1, false);
+    Aio aio(fd, 0, 4096, buffer, -1, false);
     io_uring.OnComplete(&aio, 4096);
     EXPECT_TRUE(aio.Result().status.ok());
   }
 
   {
-    Aio aio(ctx_, fd, 0, 4096, buffer, -1, true);
+    Aio aio(fd, 0, 4096, buffer, -1, true);
     io_uring.OnComplete(&aio, -EIO);
     EXPECT_FALSE(aio.Result().status.ok());
     EXPECT_TRUE(aio.Result().status.IsIoError());
   }
 
   {
-    Aio aio(ctx_, fd, 0, 4096, buffer, -1, true);
+    Aio aio(fd, 0, 4096, buffer, -1, true);
     io_uring.OnComplete(&aio, -ENOENT);
     EXPECT_FALSE(aio.Result().status.ok());
     EXPECT_TRUE(aio.Result().status.IsIoError());
   }
 
   {
-    Aio aio(ctx_, fd, 0, 4096, buffer, -1, true);
+    Aio aio(fd, 0, 4096, buffer, -1, true);
     io_uring.OnComplete(&aio, 2048);
     EXPECT_FALSE(aio.Result().status.ok());
     EXPECT_TRUE(aio.Result().status.IsIoError());
   }
 
   {
-    Aio aio(ctx_, fd, 0, 4096, buffer, -1, false);
+    Aio aio(fd, 0, 4096, buffer, -1, false);
     io_uring.OnComplete(&aio, 1024);
     EXPECT_FALSE(aio.Result().status.ok());
     EXPECT_TRUE(aio.Result().status.IsIoError());
   }
 
   {
-    Aio aio(ctx_, fd, 0, 4096, buffer, -1, true);
+    Aio aio(fd, 0, 4096, buffer, -1, true);
     io_uring.OnComplete(&aio, 0);
     EXPECT_FALSE(aio.Result().status.ok());
     EXPECT_TRUE(aio.Result().status.IsIoError());
@@ -871,7 +869,7 @@ TEST_F(IOUringTest, RealIOErrors) {
   {
     // Read from invalid fd
     int invalid_fd = 9999;
-    Aio aio(ctx_, invalid_fd, 0, 4096, buffer, -1, true);
+    Aio aio(invalid_fd, 0, 4096, buffer, -1, true);
 
     EXPECT_TRUE(io_uring.PrepareIO(&aio).ok());
     EXPECT_TRUE(io_uring.SubmitIO().ok());
@@ -890,7 +888,7 @@ TEST_F(IOUringTest, RealIOErrors) {
   {
     // Write to invalid fd
     int invalid_fd = 9999;
-    Aio aio(ctx_, invalid_fd, 0, 4096, buffer, -1, false);
+    Aio aio(invalid_fd, 0, 4096, buffer, -1, false);
 
     EXPECT_TRUE(io_uring.PrepareIO(&aio).ok());
     EXPECT_TRUE(io_uring.SubmitIO().ok());
@@ -914,7 +912,7 @@ TEST_F(IOUringTest, RealIOErrors) {
     ASSERT_GE(fd, 0);
     close(fd);
 
-    Aio aio(ctx_, fd, 0, 4096, buffer, -1, true);
+    Aio aio(fd, 0, 4096, buffer, -1, true);
 
     EXPECT_TRUE(io_uring.PrepareIO(&aio).ok());
     EXPECT_TRUE(io_uring.SubmitIO().ok());
@@ -937,7 +935,7 @@ TEST_F(IOUringTest, RealIOErrors) {
     ASSERT_GE(fd, 0);
     close(fd);
 
-    Aio aio(ctx_, fd, 0, 4096, buffer, -1, false);
+    Aio aio(fd, 0, 4096, buffer, -1, false);
 
     EXPECT_TRUE(io_uring.PrepareIO(&aio).ok());
     EXPECT_TRUE(io_uring.SubmitIO().ok());
@@ -960,7 +958,7 @@ TEST_F(IOUringTest, RealIOErrors) {
     int fd = OpenFileForDirectIO(file_path, O_RDONLY);
     ASSERT_GE(fd, 0);
 
-    Aio aio(ctx_, fd, 0, 4096, buffer, -1, true);
+    Aio aio(fd, 0, 4096, buffer, -1, true);
 
     EXPECT_TRUE(io_uring.PrepareIO(&aio).ok());
     EXPECT_TRUE(io_uring.SubmitIO().ok());
@@ -1117,7 +1115,7 @@ class IOUringPerfTest : public IOUringTest {
     for (int i = 0; i < num_blocks; ++i) {
       buffers[i] = static_cast<char*>(aligned_alloc(4096, block_size));
       std::memset(buffers[i], static_cast<char>(i % 256), block_size);
-      aios.push_back(std::make_unique<Aio>(ctx_, fd, i * block_size, block_size,
+      aios.push_back(std::make_unique<Aio>(fd, i * block_size, block_size,
                                            buffers[i], -1, false));
     }
 
@@ -1183,7 +1181,7 @@ class IOUringPerfTest : public IOUringTest {
     for (int i = 0; i < num_blocks; ++i) {
       buffers[i] = static_cast<char*>(aligned_alloc(4096, block_size));
       std::memset(buffers[i], 0, block_size);
-      aios.push_back(std::make_unique<Aio>(ctx_, fd, i * block_size, block_size,
+      aios.push_back(std::make_unique<Aio>(fd, i * block_size, block_size,
                                            buffers[i], -1, true));
     }
 
@@ -1260,7 +1258,7 @@ class IOUringPerfTest : public IOUringTest {
         std::memset(buffers[i], static_cast<char>(i), block_size);
       }
 
-      aios.push_back(std::make_unique<Aio>(ctx_, fd, offset, block_size,
+      aios.push_back(std::make_unique<Aio>(fd, offset, block_size,
                                            buffers[i], -1, is_read));
     }
 
@@ -1327,7 +1325,7 @@ class IOUringPerfTest : public IOUringTest {
     while (completed < num_blocks) {
       while (submitted < num_blocks && submitted - completed < queue_depth) {
         int buf_idx = submitted % queue_depth;
-        auto aio = new Aio(ctx_, fd, submitted * block_size, block_size,
+        auto aio = new Aio(fd, submitted * block_size, block_size,
                            buffers[buf_idx], -1, true);
         ASSERT_TRUE(io_uring.PrepareIO(aio).ok());
         submitted++;
@@ -1381,7 +1379,7 @@ class IOUringPerfTest : public IOUringTest {
 
     int completed = 0;
     for (int i = 0; i < num_blocks; ++i) {
-      Aio aio(ctx_, fd, i * block_size, block_size, buffer, -1, true);
+      Aio aio(fd, i * block_size, block_size, buffer, -1, true);
 
       ASSERT_TRUE(io_uring.PrepareIO(&aio).ok());
       ASSERT_TRUE(io_uring.SubmitIO().ok());
@@ -1442,7 +1440,7 @@ class IOUringPerfTest : public IOUringTest {
     int completed = 0;
     for (int i = 0; i < num_blocks; ++i) {
       int buf_idx = i % kNumBuffers;
-      Aio aio(ctx_, fd, i * block_size, block_size, raw_buffers[buf_idx],
+      Aio aio(fd, i * block_size, block_size, raw_buffers[buf_idx],
               use_fixed_buffer ? buf_idx : -1, true);
 
       ASSERT_TRUE(io_uring.PrepareIO(&aio).ok());
@@ -1556,7 +1554,7 @@ TEST_F(IOUringTest, WriteReadDataIntegrity) {
 
   {
     for (int i = 0; i < kNumBlocks; ++i) {
-      Aio aio(ctx_, fd, i * kBlockSize, kBlockSize, write_buffers[i], -1,
+      Aio aio(fd, i * kBlockSize, kBlockSize, write_buffers[i], -1,
               false);
 
       ASSERT_TRUE(io_uring.PrepareIO(&aio).ok());
@@ -1577,7 +1575,7 @@ TEST_F(IOUringTest, WriteReadDataIntegrity) {
 
   {
     for (int i = 0; i < kNumBlocks; ++i) {
-      Aio aio(ctx_, fd, i * kBlockSize, kBlockSize, read_buffers[i], -1, true);
+      Aio aio(fd, i * kBlockSize, kBlockSize, read_buffers[i], -1, true);
 
       ASSERT_TRUE(io_uring.PrepareIO(&aio).ok());
       ASSERT_TRUE(io_uring.SubmitIO().ok());
@@ -1626,7 +1624,7 @@ TEST_F(IOUringTest, ConcurrentWritesDifferentOffsets) {
     buffers[i] = static_cast<char*>(aligned_alloc(4096, kBlockSize));
     std::memset(buffers[i], static_cast<char>('A' + (i % 26)), kBlockSize);
 
-    aios.push_back(std::make_unique<Aio>(ctx_, fd, i * kBlockSize, kBlockSize,
+    aios.push_back(std::make_unique<Aio>(fd, i * kBlockSize, kBlockSize,
                                          buffers[i], -1, false));
   }
 

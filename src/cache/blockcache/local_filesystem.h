@@ -31,7 +31,6 @@
 #include "cache/blockcache/aio_queue.h"
 #include "cache/blockcache/disk_cache_layout.h"
 #include "cache/blockcache/disk_health_checker.h"
-#include "cache/common/context.h"
 #include "cache/iutil/buffer_pool.h"
 #include "cache/iutil/inflight_tracker.h"
 #include "common/io_buffer.h"
@@ -45,16 +44,14 @@ class LocalFileSystem {
   Status Start();
   Status Shutdown();
 
-  Status WriteFile(ContextSPtr ctx, const std::string& path,
-                   const IOBuffer* buffer);
-  Status ReadFile(ContextSPtr ctx, const std::string& path, off_t offset,
-                  size_t length, IOBuffer* buffer);
+  Status WriteFile(const std::string& path, const IOBuffer* buffer);
+  Status ReadFile(const std::string& path, off_t offset, size_t length,
+                  IOBuffer* buffer);
 
  private:
-  Status AioWrite(ContextSPtr ctx, int fd, char* buffer, size_t length,
-                  int buf_index);
-  Status AioRead(ContextSPtr ctx, int fd, off_t offset, size_t length,
-                 char* buffer, int buf_index);
+  Status AioWrite(int fd, char* buffer, size_t length, int buf_index);
+  Status AioRead(int fd, off_t offset, size_t length, char* buffer,
+                 int buf_index);
 
   bool IsAligned(uint64_t n, uint64_t m) { return (n % m) == 0; }
   off_t AlignOffset(off_t offset);

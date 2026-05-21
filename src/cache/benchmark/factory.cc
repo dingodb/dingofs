@@ -23,9 +23,8 @@
 #include "cache/benchmark/factory.h"
 
 #include "cache/benchmark/option.h"
-#include "cache/utils/context.h"
 #include "cache/utils/helper.h"
-#include "common/block/block_context.h"
+#include "common/block/block_handle.h"
 
 namespace dingofs {
 namespace cache {
@@ -68,7 +67,7 @@ BlockKey BlockKeyIterator::Key() const {
 
 constexpr uint64_t pagesize = 64 * 1024;
 
-Block NewBlock(uint64_t blksize) {
+IOBuffer NewBlock(uint64_t blksize) {
   butil::IOBuf pages;
   auto length = blksize;
   while (length > 0) {
@@ -79,7 +78,7 @@ Block NewBlock(uint64_t blksize) {
 
     length -= size;
   }
-  return Block(IOBuffer(pages));
+  return IOBuffer(pages);
 }
 
 PutTaskFactory::PutTaskFactory(BlockCacheSPtr block_cache)
@@ -93,8 +92,8 @@ void PutTaskFactory::Put(const BlockKey& key) {
   auto option = PutOption();
   option.writeback = FLAGS_writeback;
 
-  BlockContext block_ctx(key, static_cast<uint32_t>(FLAGS_fsid));
-  auto status = block_cache_->Put(NewContext(), block_ctx, block_, option);
+  BlockHandle handle(static_cast<uint32_t>(FLAGS_fsid), key);
+  auto status = block_cache_->Put(handle, block_, option);
   if (!status.ok()) {
     LOG(ERROR) << "Put block (key= " << key.Filename()
                << ") failed: " << status.ToString();
@@ -127,10 +126,9 @@ void RangeTaskFactory::Range(const BlockKey& key, off_t offset, size_t length,
   option.retrieve_storage = FLAGS_retrive;
   option.block_whole_length = FLAGS_blksize;
 
-  BlockContext block_ctx(key, static_cast<uint32_t>(FLAGS_fsid));
+  BlockHandle handle(static_cast<uint32_t>(FLAGS_fsid), key);
   auto status =
-      block_cache_->Range(NewContext(), block_ctx, offset, length, buffer,
-                          option);
+      block_cache_->Range(handle, offset, length, buffer, option);
 
   if (!status.ok()) {
     LOG(ERROR) << "Range block (key=" << key.Filename()

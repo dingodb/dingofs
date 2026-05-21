@@ -30,12 +30,11 @@
 
 #include <atomic>
 #include <memory>
+#include <utility>
 
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/block_cache_impl.h"
-#include "cache/cachegroup/node.h"
 #include "cache/cachegroup/task_tracker.h"
-#include "cache/common/context.h"
 #include "cache/common/macro.h"
 #include "cache/common/mds_client.h"
 #include "cache/common/storage_client.h"
@@ -176,97 +175,95 @@ Status CacheNode::LeaveGroup() {
   return Status::OK();
 }
 
-Status CacheNode::Put(ContextSPtr ctx, const BlockContext& block_ctx,
-                      const Block& block) {
+Status CacheNode::Put(BlockHandle handle, IOBuffer block) {
   if (!IsRunning()) {
     return Status::CacheDown("cache node is down");
   }
-  return block_cache_->Put(ctx, block_ctx, block, {.writeback = true});
+  return block_cache_->Put(std::move(handle), std::move(block),
+                           {.writeback = true});
 }
 
-Status CacheNode::Range(ContextSPtr ctx, const BlockContext& block_ctx,
-                        off_t offset, size_t length, IOBuffer* buffer,
-                        size_t block_length) {
+Status CacheNode::Range(BlockHandle handle, off_t offset, size_t length,
+                        IOBuffer* buffer, size_t block_length,
+                        bool* cache_hit) {
+  *cache_hit = false;
   if (!IsRunning()) {
     return Status::CacheDown("cache node is down");
   }
 
-  auto status = RetrieveCache(ctx, block_ctx, offset, length, buffer);
+  auto status = RetrieveCache(handle, offset, length, buffer);
+  if (status.ok()) {
+    *cache_hit = true;
+    return status;
+  }
   if (status.IsNotFound()) {
-    status =
-        RetrieveStorage(ctx, block_ctx, offset, length, buffer, block_length);
+    status = RetrieveStorage(handle, offset, length, buffer, block_length);
   }
   return status;
 }
 
-Status CacheNode::AsyncCache(ContextSPtr ctx, const BlockContext& block_ctx,
-                             const Block& block) {
+Status CacheNode::AsyncCache(BlockHandle handle, IOBuffer block) {
   if (!IsRunning()) {
     LOG(ERROR) << "Cache node is down, skip async cache block, key="
-               << block_ctx.key.Filename();
+               << handle.Filename();
     return Status::CacheDown("cache node is down");
   }
 
-  block_cache_->AsyncCache(ctx, block_ctx, block, [](Status status) {
+  block_cache_->AsyncCache(std::move(handle), std::move(block),
+                           [](Status status) {
+                             if (!status.ok()) {
+                               LOG(ERROR) << "Fail to async cache block, "
+                                             "status="
+                                          << status.ToString();
+                             }
+                           });
+  return Status::OK();
+}
+
+Status CacheNode::AsyncPrefetch(BlockHandle handle, size_t length) {
+  if (!IsRunning()) {
+    return Status::CacheDown("cache node is down");
+  }
+
+  block_cache_->AsyncPrefetch(handle, length, [handle](Status status) {
     if (!status.ok()) {
-      LOG(ERROR) << "Fail to async cache block, status=" << status.ToString();
+      LOG(ERROR) << "Fail to async prefetch block, key=" << handle.Filename()
+                 << ", status=" << status.ToString();
     }
   });
   return Status::OK();
 }
 
-Status CacheNode::AsyncPrefetch(ContextSPtr ctx,
-                                const BlockContext& block_ctx,
-                                size_t length) {
-  if (!IsRunning()) {
-    return Status::CacheDown("cache node is down");
-  }
-
-  block_cache_->AsyncPrefetch(
-      ctx, block_ctx, length, [block_ctx](Status status) {
-        if (!status.ok()) {
-          LOG(ERROR) << "Fail to async prefetch block, key="
-                     << block_ctx.key.Filename()
-                     << ", status=" << status.ToString();
-        }
-      });
-  return Status::OK();
-}
-
-Status CacheNode::RetrieveCache(ContextSPtr ctx,
-                                const BlockContext& block_ctx, off_t offset,
+Status CacheNode::RetrieveCache(const BlockHandle& handle, off_t offset,
                                 size_t length, IOBuffer* buffer) {
-  auto status = block_cache_->Range(ctx, block_ctx, offset, length, buffer,
+  auto status = block_cache_->Range(handle, offset, length, buffer,
                                     {.retrieve_storage = false});
   if (status.ok()) {
     num_hit_cache_ << 1;
-    ctx->SetCacheHit(true);
   } else {
     num_miss_cache_ << 1;
   }
   return status;
 }
 
-Status CacheNode::RetrieveStorage(ContextSPtr ctx,
-                                  const BlockContext& block_ctx, off_t offset,
+Status CacheNode::RetrieveStorage(const BlockHandle& handle, off_t offset,
                                   size_t length, IOBuffer* buffer,
                                   size_t block_length) {
   StorageClient* storage_client;
   auto status =
-      storage_client_pool_->GetStorageClient(block_ctx.fs_id, &storage_client);
+      storage_client_pool_->GetStorageClient(handle.FsId(), &storage_client);
   if (!status.ok()) {
     return status;
   }
 
   // Retrieve range of block: unknown block size or unreach max_range_size
   if (block_length == 0 || length < FLAGS_max_range_size_kb * kKiB) {
-    return RetrievePartBlock(ctx, block_ctx, offset, length, buffer,
-                             block_length);
+    return RetrievePartBlock(handle, offset, length, buffer, block_length);
   }
 
   // Retrieve the whole block
   IOBuffer block;
-  status = RetrieveWholeBlock(ctx, block_ctx, block_length, &block);
+  status = RetrieveWholeBlock(handle, block_length, &block);
   if (status.ok()) {
     block.AppendTo(buffer, length, offset);
   }
@@ -274,53 +271,49 @@ Status CacheNode::RetrieveStorage(ContextSPtr ctx,
 }
 
 // TODO: Should we check download block task?
-Status CacheNode::RetrievePartBlock(ContextSPtr ctx,
-                                    const BlockContext& block_ctx,
-                                    off_t offset, size_t length,
-                                    IOBuffer* buffer, size_t block_length) {
+Status CacheNode::RetrievePartBlock(const BlockHandle& handle, off_t offset,
+                                    size_t length, IOBuffer* buffer,
+                                    size_t block_length) {
   StorageClient* storage_client;
   auto status =
-      storage_client_pool_->GetStorageClient(block_ctx.fs_id, &storage_client);
+      storage_client_pool_->GetStorageClient(handle.FsId(), &storage_client);
   if (!status.ok()) {
     return status;
   }
 
-  status = storage_client->Range(ctx, block_ctx.key, offset, length, buffer);
+  status = storage_client->Range(handle, offset, length, buffer);
   if (status.ok() && block_length > 0) {
-    block_cache_->AsyncPrefetch(ctx, block_ctx, block_length, nullptr);
+    block_cache_->AsyncPrefetch(handle, block_length, nullptr);
   }
   return status;
 }
 
-Status CacheNode::RetrieveWholeBlock(ContextSPtr ctx,
-                                     const BlockContext& block_ctx,
+Status CacheNode::RetrieveWholeBlock(const BlockHandle& handle,
                                      size_t block_length, IOBuffer* buffer) {
   Status status;
   bool created = false;
   StorageClient* storage_client;
 
   status =
-      storage_client_pool_->GetStorageClient(block_ctx.fs_id, &storage_client);
+      storage_client_pool_->GetStorageClient(handle.FsId(), &storage_client);
   if (!status.ok()) {
     return status;
   }
 
   BRPC_SCOPE_EXIT {
     if (status.ok()) {
-      block_cache_->AsyncCache(
-          ctx, block_ctx, Block(*buffer),
-          [this, created, block_ctx](Status /*status*/) {
-            if (created) {
-              task_tracker_->RemoveTask(block_ctx);
-            }
-          });
+      block_cache_->AsyncCache(handle, *buffer,
+                               [this, created, handle](Status /*status*/) {
+                                 if (created) {
+                                   task_tracker_->RemoveTask(handle);
+                                 }
+                               });
     }
   };
 
   if (FLAGS_retrieve_storage_lock) {
     DownloadTaskSPtr task;
-    created =
-        task_tracker_->GetOrCreateTask(ctx, block_ctx, block_length, task);
+    created = task_tracker_->GetOrCreateTask(handle, block_length, task);
     if (created) {
       status = RunTask(storage_client, task);
     } else {
@@ -335,8 +328,7 @@ Status CacheNode::RetrieveWholeBlock(ContextSPtr ctx,
     }
   }
 
-  status =
-      storage_client->Range(ctx, block_ctx.key, 0, block_length, buffer);
+  status = storage_client->Range(handle, 0, block_length, buffer);
   return status;
 }
 
@@ -344,11 +336,11 @@ Status CacheNode::RunTask(StorageClient* storage_client,
                           DownloadTaskSPtr task) {
   const auto& attr = task->Attr();
   auto& result = task->Result();
-  auto status = storage_client->Range(attr.ctx, attr.block_ctx.key, 0,
-                                      attr.length, &result.buffer);
+  auto status =
+      storage_client->Range(attr.handle, 0, attr.length, &result.buffer);
   if (!status.ok()) {
     task->Run();
-    task_tracker_->RemoveTask(attr.block_ctx);
+    task_tracker_->RemoveTask(attr.handle);
     return status;
   }
 
