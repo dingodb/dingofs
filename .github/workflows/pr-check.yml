@@ -74,13 +74,20 @@ jobs:
           echo "Run DingoFS unit tests"
           docker run --name unit-test-dingofs --rm -v /mnt/dingofs:/opt/dingofs/ dingodatabase/dingo-eureka:rocky9-fs /opt/dingofs/test.sh
 
+  # 内联 job：check 名就是 `build`（branch protection 锚这个，跟 unit-test / e2e 一样）。
+  # 不走 workflow_call（那会让 check 漂成叶子名 `build / ...` 而锚不住）；构建逻辑复用 composite action。
+  # PR 上 if 跳过 → 直接报 build=skipped（满足 required）；merge_group 才真编译。
   build:
     needs: unit-test
-    uses: ./.github/workflows/_release-build.yml
-    secrets: inherit
+    if: github.event_name == 'merge_group'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/build-release
 
   e2e:
     needs: build
+    if: github.event_name == 'merge_group'
     runs-on: ubuntu-22.04
     timeout-minutes: 25
     steps:
