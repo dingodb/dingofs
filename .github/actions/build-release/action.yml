@@ -32,6 +32,26 @@ runs:
       run: |
         docker pull dingodatabase/dingo-eureka:rocky9-fs
 
+    - name: Resolve dingo-sdk cache key
+      id: sdk-key
+      shell: bash
+      run: |
+        sdk_sha=$(git ls-remote https://github.com/dingodb/dingo-sdk.git refs/heads/main | cut -f1)
+        eureka_id=$(docker image inspect --format '{{.Id}}' dingodatabase/dingo-eureka:rocky9-fs | cut -d: -f2 | head -c12)
+        # key = 手动版本 v1 · 构建配方指纹(hashFiles) · eureka 镜像 ID · dingo-sdk main SHA
+        echo "key=dingo-sdk-v1-${{ hashFiles('.github/scripts/_lib/build-dingo-sdk.sh') }}-${eureka_id}-${sdk_sha}" >> "$GITHUB_OUTPUT"
+
+    # /mnt 是 root 属主：预建成 runner 可写，下面 actions/cache restore 才能往里解压（命中时）
+    - name: Prepare dingo-sdk cache dir
+      shell: bash
+      run: sudo mkdir -p /mnt/dingo-sdk && sudo chown "$USER":"$USER" /mnt/dingo-sdk
+
+    - name: Cache dingo-sdk install
+      uses: actions/cache@v4
+      with:
+        path: /mnt/dingo-sdk
+        key: ${{ steps.sdk-key.outputs.key }}
+
     - name: Init build script
       shell: bash
       run: |
@@ -40,10 +60,10 @@ runs:
         set -x
         set -e
 
-        cd / && git clone --branch main --single-branch https://github.com/dingodb/dingo-sdk.git && cd dingo-sdk && \
-        git submodule sync --recursive && git submodule update --init --recursive && \
-        mkdir build && cd build && cmake -DTHIRD_PARTY_INSTALL_PATH=/root/.local/dingo-eureka -DCMAKE_INSTALL_PREFIX=/root/.local/dingo-sdk -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_SDK_EXAMPLE=OFF  -DBUILD_BENCHMARK=OFF -DBUILD_PYTHON_SDK=OFF -DBUILD_INTEGRATION_TESTS=OFF -DBUILD_UNIT_TESTS=OFF .. && \
-        make -j16 && make install && export DINGOSDK_INSTALL_PATH=/root/.local/dingo-sdk
+        # dingo-sdk 编译 + 缓存命中(.cache-complete sentinel)逻辑抽到共享脚本，容器内 source；
+        # 其内容被 cache key 的 hashFiles 指纹，配方一改 key 自动失效（见上 Resolve 步骤）。
+        # install 目录由 host /mnt/dingo-sdk 缓存 bind-mount 进 /root/.local/dingo-sdk。
+        source /opt/dingofs/.github/scripts/_lib/build-dingo-sdk.sh
 
         cd /opt/dingofs/
         git config --global --add safe.directory /opt/dingofs
@@ -76,7 +96,15 @@ runs:
       shell: bash
       run: |
         echo "Build DingoFS"
-        docker run --name release-dingofs --rm -v /mnt/dingofs:/opt/dingofs/ dingodatabase/dingo-eureka:rocky9-fs /opt/dingofs/build.sh
+        docker run --name release-dingofs --rm \
+          -v /mnt/dingofs:/opt/dingofs/ \
+          -v /mnt/dingo-sdk:/root/.local/dingo-sdk \
+          dingodatabase/dingo-eureka:rocky9-fs /opt/dingofs/build.sh
+
+    - name: Normalize dingo-sdk cache ownership
+      if: always()
+      shell: bash
+      run: sudo chown -R "$USER":"$USER" /mnt/dingo-sdk 2>/dev/null || true
 
     - name: Upload dingofs artifact
       uses: actions/upload-artifact@v4

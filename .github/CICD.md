@@ -10,7 +10,7 @@ dingofs 的 CI/CD 系统：**2 个 GitHub Actions workflow + 1 个 composite act
 |---|---|---|
 | `.github/workflows/pr-check.yml` | `pull_request` + `merge_group` | 顶层 3 个内联 job：`unit-test` → `build` → `e2e`。**PR 阶段只跑 `unit-test`**（拦编译 + client 单测，~17min）；`build` / `e2e` 用 `if: github.event_name == 'merge_group'` 跳过——**只在 `merge_group` 出队对 rebased SHA 真跑**。见 §8 决策。merge_group event 是 Merge Queue 出队 gate |
 | `.github/workflows/release.yml` | `push: branches:[main]` + `push: tags:['v*']` | 发布流水：build → docker-publish (always) + wheels → pypi-publish (tag only)。**不重测**（信任 merge queue 已守门）|
-| `.github/actions/build-release/` | composite action（被 pr-check `build` + release `build` 两处 `uses:` 内联）| `dingodatabase/dingo-eureka:rocky9-fs` container 内 Release cmake build，产 `dingofs.tar.gz` artifact。**逻辑复用走 composite 而非 `workflow_call`**——后者会让 required check 漂成锚不住的叶子名（见 §8）|
+| `.github/actions/build-release/` | composite action（被 pr-check `build` + release `build` 两处 `uses:` 内联）| `dingodatabase/dingo-eureka:rocky9-fs` container 内 Release cmake build，产 `dingofs.tar.gz` artifact。dingo-sdk install 走 `actions/cache`（同 unit-test，见 §8）。**逻辑复用走 composite 而非 `workflow_call`**——后者会让 required check 漂成锚不住的叶子名（见 §8）|
 
 ### Status Check 命名
 
@@ -274,6 +274,11 @@ ci-logs/
 - **为什么 release 不重测 unit/build/e2e**：merge queue 已用 rebased SHA gate 过，重测是浪费 + 阻塞 publish。release.yml 信任 queue 保证。
 - **为什么 PR 只跑 unit-test，build + e2e 留到 merge_group**：完整链跑一次 ~47min（实测 unit-test 17 / build 23 / e2e 7），PR + 出队跑两次等于 ~94min。`unit-test`（Debug 编译 + `test_client`）拦掉最高频失败——编译错误和单测回归；且 Debug 编过 ⟹ Release 基本编过，`build` 极少独立挂。于是 PR 阶段只花 17min 就挡住绝大多数问题，把 `build` + `e2e` 推到出队时对 rebased SHA 跑——`e2e` 这种集成验证本就该测 merge 后状态。代价是 reviewer 审批时看不到 e2e 绿、坏 PR 会赔一个出队周期，单维护者 / 低并发可接受；PR 量上来再把 `build`/`e2e` 加回 `pull_request` 触发即可。
 - **为什么 `build` 是普通内联 job + composite action，而不用 `workflow_call`**：required check 必须名字稳定，而 `workflow_call` reusable 的 check 会漂成叶子名 `build / <job>`，且 caller 被 skip 时还卡 `Expected`（实测两次死锁，详 §1 ⚠️）。改用普通内联 `build` job：check 名就是 `build`；`if: github.event_name == 'merge_group'` 跳过时直接报 `skipped`（跟 `e2e` 同机制，满足 required 不挡），merge_group 才真跑、`success` 才放行。构建逻辑（sdk + dingofs Release 编译 + 产 `dingofs.tar.gz`）抽到 composite action 给 pr-check `build` 与 release `build` 两处 `uses:` 复用——composite 在 caller 内联执行,既复用逻辑又不引入会漂移的叶子 check 名。**这是整套"PR skip / 队列真跑 / 三个都 required"设计能跑通的命门**：required 的 job 必须是内联 job。
+- **为什么缓存 dingo-sdk install（`actions/cache`）**：`unit-test`（pr-check.yml）和 `build`（composite action）各自 `git clone dingo-sdk && make -j$(nproc)` 一遍，是两个 job 的耗时大头且完全重复。把 sdk 的 install 目录缓存在 host `/mnt/dingo-sdk`、bind-mount 进容器 `/root/.local/dingo-sdk`，命中（目录里有 `.cache-complete` sentinel）就跳过 clone + 编译。同 key 跨 job 共享——merge_group 出队时 `unit-test` 编完，`build` 直接命中。**PR 阶段只有 unit-test 跑，故只有它的缓存被命中（~16min → ~3min）；`build` 的缓存只在 merge_group / release 生效。** composite 里 `actions/cache` 的 save 靠嵌套 action 的 post-step 在 job 结束时跑。
+- **cache key 的四段构成（为什么不只靠外部 head + sentinel）**：`dingo-sdk-v1-<构建配方指纹>-<eureka 镜像 ID>-<dingo-sdk main HEAD SHA>`。
+  - `<dingo-sdk main SHA>` + `<eureka 镜像 ID>`：**外部输入**变了就重编（ABI 不会拿旧 sdk 配新 eureka）。
+  - `<构建配方指纹>` = `hashFiles('.github/scripts/_lib/build-dingo-sdk.sh')`：**本地"怎么编"**(cmake flags / 编译命令)变了就重编。sdk 的 clone+cmake+make 抽到这个**单一真相源脚本**（unit-test 和 build 都 `source` 它，不会两边 drift），改它 → hash 变 → key 自动失效。**这是关键**：只锚外部 head + `.cache-complete` sentinel 的话，改了配方但 key 不变，sentinel 会"自信地"命中、复用配方过时的 sdk；指纹堵上这个洞，也免去手动 bump。
+  - `v1`：保留的**手动版本位**，留作"配方没变但想强制刷缓存"（如缓存损坏）的应急杠杆。
 - **为什么没有 nightly main 健康检查**：merge queue 已保证 main 上每个 commit 测过；nightly 防"依赖漂移 / 镜像更新"的兜底场景按需独立加，不强制属于本设计核心。
 - **为什么 dingocli + dingo-store image 日常不 pin**：dingofs e2e 测试要验证的就是"客户端跟最新 dingo-store / dingocli 的兼容性"，pin 反而掩盖 dingo 系自身的 regression；release 时 pin 是为可重现（详 §5）。
 - **为什么必须 GitHub Merge Queue（org-only feature）**：merge_group event 配 rebased SHA gate 是 GitHub 原生最干净的 race 防护——broken 状态进不去 main。Merge Queue 是 organization 仓 only，个人 fork 用不了（`mergeQueue=null + isInOrganization=false` 实测），所以本设计的落地仓必须是 organization 账户（dingodb/dingofs）。
