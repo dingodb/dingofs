@@ -196,7 +196,7 @@ Status CacheNode::Range(BlockHandle handle, off_t offset, size_t length,
     *cache_hit = true;
     return status;
   }
-  if (status.IsNotFound()) {
+  if (status.IsNotFound() && handle.FsId() != 0) {
     status = RetrieveStorage(handle, offset, length, buffer, block_length);
   }
   return status;
