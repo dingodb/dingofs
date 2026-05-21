@@ -20,6 +20,7 @@
 #include <cstring>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "fmt/core.h"
@@ -36,19 +37,50 @@ namespace dingofs {
 namespace mds {
 
 // ---------------------------------------------------------------------------
+// AsyncContext lifetime management.
+//
+// The Go async API invokes our C callback on an arbitrary Go-managed pthread
+// once the operation completes. Because bthread's butex_wake (used by
+// BthreadSemaphore::Release) still touches the per-butex mutex *after* the
+// waiter is woken, the waiting bthread must NOT destroy the butex memory
+// before the wake-side has fully unwound.
+//
+// We solve this by heap-allocating AsyncContext via shared_ptr and holding a
+// second strong reference from a heap-allocated "holder" pointer that is
+// handed to the Go callback. The callback releases the semaphore first, then
+// deletes the holder. By the time the holder is deleted, butex_wake has
+// already returned, so it is safe to drop the last reference and destroy the
+// butex (whether the final drop happens on the callback thread or on the
+// waiter thread).
+// ---------------------------------------------------------------------------
+
+using AsyncContextHolder = std::shared_ptr<AsyncContext>;
+
+inline static AsyncContextHolder* MakeHolder(AsyncContextHolder* out) {
+  *out = std::make_shared<AsyncContext>();
+  return new AsyncContextHolder(*out);
+}
+
+// ---------------------------------------------------------------------------
 // Callback stubs – invoked by go goroutines on arbitrary pthreads.
 // ---------------------------------------------------------------------------
 
 void TikvGoTxn::OnAsyncComplete(size_t ctx_ptr, void* result) {
-  auto* ctx = reinterpret_cast<AsyncContext*>(ctx_ptr);
-  ctx->result = result;
-  ctx->sem.Release(1);
+  auto* holder = reinterpret_cast<AsyncContextHolder*>(ctx_ptr);
+  (*holder)->result = result;
+  (*holder)->sem.Release(1);
+  // Must be the last access to *holder on this thread: butex_wake has
+  // returned, so it is now safe to drop our reference. If the waiter has
+  // already dropped its reference, AsyncContext (and its butex) will be
+  // destroyed here, which is safe because butex_wake is fully unwound.
+  delete holder;
 }
 
 void TikvGoTxn::OnAsyncKVComplete(size_t ctx_ptr, void* result) {
-  auto* ctx = reinterpret_cast<AsyncContext*>(ctx_ptr);
-  ctx->kv_result = result;
-  ctx->sem.Release(1);
+  auto* holder = reinterpret_cast<AsyncContextHolder*>(ctx_ptr);
+  (*holder)->kv_result = result;
+  (*holder)->sem.Release(1);
+  delete holder;
 }
 
 // ---------------------------------------------------------------------------
@@ -262,14 +294,15 @@ int64_t TikvGoTxn::ID() const { return txn_id_; }
 Status TikvGoTxn::Put(const std::string& key, const std::string& value) {
   CHECK(txn_handle_ != 0) << "txn not initialized";
 
-  AsyncContext ctx;
+  AsyncContextHolder ctx;
+  auto* holder = MakeHolder(&ctx);
   tikv_go_txn_put_async(static_cast<GoUint64>(txn_handle_), const_cast<char*>(key.data()), static_cast<int>(key.size()),
                         const_cast<char*>(value.data()), static_cast<int>(value.size()),
-                        reinterpret_cast<GoUintptr>(OnAsyncComplete), reinterpret_cast<GoUintptr>(&ctx));
-  ctx.sem.Acquire();
+                        reinterpret_cast<GoUintptr>(OnAsyncComplete), reinterpret_cast<GoUintptr>(holder));
+  ctx->sem.Acquire();
 
-  Status status = ParseAsyncResult(ctx.result);
-  tikv_go_free_async_result(static_cast<CAsyncResult*>(ctx.result));
+  Status status = ParseAsyncResult(ctx->result);
+  tikv_go_free_async_result(static_cast<CAsyncResult*>(ctx->result));
 
   return status;
 }
@@ -281,14 +314,15 @@ Status TikvGoTxn::PutIfAbsent(const std::string& /*key*/, const std::string& /*v
 Status TikvGoTxn::Delete(const std::string& key) {
   CHECK(txn_handle_ != 0) << "txn not initialized";
 
-  AsyncContext ctx;
+  AsyncContextHolder ctx;
+  auto* holder = MakeHolder(&ctx);
   tikv_go_txn_delete_async(static_cast<GoUint64>(txn_handle_), const_cast<char*>(key.data()),
                            static_cast<int>(key.size()), reinterpret_cast<GoUintptr>(OnAsyncComplete),
-                           reinterpret_cast<GoUintptr>(&ctx));
-  ctx.sem.Acquire();
+                           reinterpret_cast<GoUintptr>(holder));
+  ctx->sem.Acquire();
 
-  Status status = ParseAsyncResult(ctx.result);
-  tikv_go_free_async_result(static_cast<CAsyncResult*>(ctx.result));
+  Status status = ParseAsyncResult(ctx->result);
+  tikv_go_free_async_result(static_cast<CAsyncResult*>(ctx->result));
 
   return status;
 }
@@ -299,13 +333,14 @@ Status TikvGoTxn::Get(const std::string& key, std::string& value) {
   uint64_t start_time = utils::TimestampUs();
   ON_SCOPE_EXIT([&]() { txn_trace_.read_time_us += (utils::TimestampUs() - start_time); });
 
-  AsyncContext ctx;
+  AsyncContextHolder ctx;
+  auto* holder = MakeHolder(&ctx);
   tikv_go_txn_get_async(static_cast<GoUint64>(txn_handle_), const_cast<char*>(key.data()), static_cast<int>(key.size()),
-                        reinterpret_cast<GoUintptr>(OnAsyncComplete), reinterpret_cast<GoUintptr>(&ctx));
-  ctx.sem.Acquire();
+                        reinterpret_cast<GoUintptr>(OnAsyncComplete), reinterpret_cast<GoUintptr>(holder));
+  ctx->sem.Acquire();
 
-  Status status = ParseAsyncResult(ctx.result, &value);
-  tikv_go_free_async_result(static_cast<CAsyncResult*>(ctx.result));
+  Status status = ParseAsyncResult(ctx->result, &value);
+  tikv_go_free_async_result(static_cast<CAsyncResult*>(ctx->result));
 
   return status;
 }
@@ -326,14 +361,15 @@ Status TikvGoTxn::BatchGet(const std::vector<std::string>& keys, std::vector<Key
     c_lens[i] = static_cast<int>(keys[i].size());
   }
 
-  AsyncContext ctx;
+  AsyncContextHolder ctx;
+  auto* holder = MakeHolder(&ctx);
   tikv_go_txn_batch_get_async(static_cast<GoUint64>(txn_handle_), const_cast<char**>(c_keys.data()), c_lens.data(),
                               static_cast<int>(keys.size()), reinterpret_cast<GoUintptr>(OnAsyncKVComplete),
-                              reinterpret_cast<GoUintptr>(&ctx));
-  ctx.sem.Acquire();
+                              reinterpret_cast<GoUintptr>(holder));
+  ctx->sem.Acquire();
 
-  Status status = ParseAsyncKVResult(ctx.kv_result, kvs);
-  tikv_go_free_kv_result(static_cast<CAsyncKVResult*>(ctx.kv_result));
+  Status status = ParseAsyncKVResult(ctx->kv_result, kvs);
+  tikv_go_free_kv_result(static_cast<CAsyncKVResult*>(ctx->kv_result));
 
   return status;
 }
@@ -345,14 +381,15 @@ Status TikvGoTxn::DoScan(const Range& range, uint64_t limit,
   uint64_t start_time = utils::TimestampUs();
   ON_SCOPE_EXIT([&]() { txn_trace_.read_time_us += (utils::TimestampUs() - start_time); });
 
-  AsyncContext ctx;
+  AsyncContextHolder ctx;
+  auto* holder = MakeHolder(&ctx);
   tikv_go_txn_scan_async(static_cast<GoUint64>(txn_handle_), const_cast<char*>(range.start.data()),
                          static_cast<int>(range.start.size()), const_cast<char*>(range.end.data()),
                          static_cast<int>(range.end.size()), static_cast<GoUint64>(limit),
-                         reinterpret_cast<GoUintptr>(OnAsyncKVComplete), reinterpret_cast<GoUintptr>(&ctx));
-  ctx.sem.Acquire();
+                         reinterpret_cast<GoUintptr>(OnAsyncKVComplete), reinterpret_cast<GoUintptr>(holder));
+  ctx->sem.Acquire();
 
-  CAsyncKVResult* kv_result = static_cast<CAsyncKVResult*>(ctx.kv_result);
+  CAsyncKVResult* kv_result = static_cast<CAsyncKVResult*>(ctx->kv_result);
   if (kv_result == nullptr) {
     return Status(pb::error::EBACKEND_STORE, "kv result is null");
   }
@@ -403,13 +440,14 @@ Status TikvGoTxn::Commit() {
   uint64_t start_time = utils::TimestampUs();
   ON_SCOPE_EXIT([&]() { txn_trace_.write_time_us += (utils::TimestampUs() - start_time); });
 
-  AsyncContext ctx;
+  AsyncContextHolder ctx;
+  auto* holder = MakeHolder(&ctx);
   tikv_go_txn_commit_async(static_cast<GoUint64>(txn_handle_), reinterpret_cast<GoUintptr>(OnAsyncComplete),
-                           reinterpret_cast<GoUintptr>(&ctx));
-  ctx.sem.Acquire();
+                           reinterpret_cast<GoUintptr>(holder));
+  ctx->sem.Acquire();
 
-  Status status = ParseAsyncResult(ctx.result);
-  tikv_go_free_async_result(static_cast<CAsyncResult*>(ctx.result));
+  Status status = ParseAsyncResult(ctx->result);
+  tikv_go_free_async_result(static_cast<CAsyncResult*>(ctx->result));
 
   if (!status.ok()) {
     // Async rollback on commit failure.
@@ -424,11 +462,12 @@ Status TikvGoTxn::Commit() {
 void TikvGoTxn::Rollback() {  // NOLINT
   CHECK(txn_handle_ != 0) << "txn not initialized";
 
-  AsyncContext rb_ctx;
+  AsyncContextHolder rb_ctx;
+  auto* holder = MakeHolder(&rb_ctx);
   tikv_go_txn_rollback_async(static_cast<GoUint64>(txn_handle_), reinterpret_cast<GoUintptr>(OnAsyncComplete),
-                             reinterpret_cast<GoUintptr>(&rb_ctx));
-  rb_ctx.sem.Acquire();
-  tikv_go_free_async_result(static_cast<CAsyncResult*>(rb_ctx.result));
+                             reinterpret_cast<GoUintptr>(holder));
+  rb_ctx->sem.Acquire();
+  tikv_go_free_async_result(static_cast<CAsyncResult*>(rb_ctx->result));
 }
 
 Trace::Txn TikvGoTxn::GetTrace() {
