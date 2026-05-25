@@ -18,6 +18,7 @@ add_subdirectory(trace)
 add_executable(test_common
   main.cc
   test_memory_pool.cc
+  test_read_mem_pool.cc
 )
 
 target_link_libraries(test_common
