@@ -289,7 +289,7 @@ ReadRequestSptr FileReader::NewReadRequest(int64_t s, int64_t e) {
   int64_t chunk_indx = s / chunk_size_;
   int64_t chunk_offset = s % chunk_size_;
 
-  int64_t block_end_in_chunk = (chunk_offset / block_size_ + 1) * block_size_;
+  int64_t block_end_in_chunk = ((chunk_offset / block_size_) + 1) * block_size_;
   int64_t block_end = (chunk_indx * chunk_size_) + block_end_in_chunk;
 
   int64_t req_end = std::min(e, block_end);

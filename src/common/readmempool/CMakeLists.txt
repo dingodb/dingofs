@@ -1,4 +1,4 @@
-# Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
+# Copyright (c) 2026 dingodb.com, Inc. All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,29 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(blockaccess)
-add_subdirectory(metrics)
-add_subdirectory(options)
-add_subdirectory(trace)
-add_subdirectory(opentrace)
-add_subdirectory(readmempool)
-
-add_library(dingofs_common
-    io_buffer.cc
-    version.cc
-    flag.cc
-    string_slice.cc
-    status.cc
-    logging.cc
-    sync_point.cc
-    memory_pool.cc
+# Self-contained read memory pool: buddy over arena (+ slab/TLS). No dependency on common/memory_pool.
+# Links brpc for bvar::Adder metrics counters (per-thread sharded, lock-free).
+add_library(dingofs_read_mempool
+    arena.cc
+    buddy_allocator.cc
+    slab_allocator.cc
+    tls_cache.cc
+    read_buf.cc
+    read_mem_pool.cc
 )
-target_link_libraries(dingofs_common
-    dingofs_utils
-    brpc::brpc
-    fmt::fmt
-    gflags::gflags
+target_link_libraries(dingofs_read_mempool
     glog::glog
-    dingofs_open_trace
-    dingofs_read_mempool
+    gflags::gflags
+    brpc::brpc
 )
