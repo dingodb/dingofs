@@ -18,6 +18,7 @@ add_library(vfs_hub
 
 target_link_libraries(vfs_hub
     vfs_memory
+    dingofs_read_mempool
     vfs_handle
     vfs_components
     vfs_metasystem

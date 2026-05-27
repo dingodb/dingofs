@@ -51,7 +51,7 @@ class FakeBlockStore final : public BlockStore {
 
  private:
   void DoRangeAsync(BlockKey key, uint64_t offset, uint64_t length,
-                    IOBuffer* buffer, StatusCallback callback);
+                    ReadBufView dst, StatusCallback callback);
   VFSHub* hub_;
   const std::string uuid_;
   std::atomic<bool> started_{false};

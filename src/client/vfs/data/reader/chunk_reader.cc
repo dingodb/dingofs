@@ -59,7 +59,7 @@ ChunkReader::ChunkReader(VFSHub* hub, uint64_t fh, const ChunkReq& req)
 
 Status ChunkReader::GetSlices(ContextSPtr ctx, ChunkSlices* chunk_slices) {
   auto span = hub_->GetTraceManager()->StartChildSpan("ChunkReader::GetSlices",
-                                                     ctx->GetTraceSpan());
+                                                      ctx->GetTraceSpan());
 
   std::vector<Slice> slices;
   uint64_t chunk_version = 0;
@@ -77,9 +77,10 @@ Status ChunkReader::GetSlices(ContextSPtr ctx, ChunkSlices* chunk_slices) {
   return Status::OK();
 }
 
-void ChunkReader::ReadAsync(ContextSPtr ctx, StatusCallback cb) {
+void ChunkReader::ReadAsync(ContextSPtr ctx, ReadBufView dst,
+                            StatusCallback cb) {
   auto span = hub_->GetTraceManager()->StartChildSpan("ChunkReader::ReadAsync",
-                                                     ctx->GetTraceSpan());
+                                                      ctx->GetTraceSpan());
 
   ChunkSlices chunk_slices;
   Status s = GetSlices(SpanScope::GetContext(span), &chunk_slices);
@@ -90,11 +91,9 @@ void ChunkReader::ReadAsync(ContextSPtr ctx, StatusCallback cb) {
     return;
   }
 
-  reader_->ReadAsync(SpanScope::GetContext(span), chunk_slices.slices,
+  reader_->ReadAsync(SpanScope::GetContext(span), chunk_slices.slices, dst,
                      std::move(cb));
 }
-
-IOBuffer ChunkReader::GetDataBuffer() const { return reader_->GetDataBuffer(); }
 
 }  // namespace vfs
 

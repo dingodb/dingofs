@@ -20,16 +20,17 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <cstring>
 #include <memory>
 
 #include "client/vfs/components/file_suffix_watcher.h"
-#include "common/options/client.h"
 #include "client/vfs/handle/handle_manager.h"
-#include "client/vfs/memory/read_buffer_manager.h"
 #include "client/vfs/memory/write_buffer_manager.h"
 #include "client/vfs/metasystem/meta_wrapper.h"
-#include "common/trace/context.h"
+#include "common/options/client.h"
+#include "common/readmempool/read_mem_pool.h"
 #include "common/status.h"
+#include "common/trace/context.h"
 #include "test/unit/client/vfs/mock/mock_block_store.h"
 #include "test/unit/client/vfs/mock/mock_compactor.h"
 #include "test/unit/client/vfs/mock/mock_meta_system.h"
@@ -65,8 +66,7 @@ class VFSTestBase : public ::testing::Test {
     hub_uptr_ = std::move(hub_uptr);
 
     // --- 2. Real stateless objects ---
-    read_buf_mgr_ =
-        std::make_unique<ReadBufferManager>(64 * 1024 * 1024);  // 64MB
+    read_mem_pool_ = std::make_unique<ReadMemPool>(64 * 1024 * 1024);  // 64MB
     write_buf_mgr_ =
         std::make_unique<WriteBufferManager>(64 * 1024 * 1024, 4096);
     file_suffix_watcher_ = std::make_unique<FileSuffixWatcher>("");
@@ -106,14 +106,13 @@ class VFSTestBase : public ::testing::Test {
         .WillByDefault(Return(handle_manager_.get()));
     ON_CALL(*mock_hub_, GetBlockStore())
         .WillByDefault(Return(mock_block_store_));
-    ON_CALL(*mock_hub_, GetReadBufferManager())
-        .WillByDefault(Return(read_buf_mgr_.get()));
+    ON_CALL(*mock_hub_, GetReadMemPool())
+        .WillByDefault(Return(read_mem_pool_.get()));
     ON_CALL(*mock_hub_, GetWriteBufferManager())
         .WillByDefault(Return(write_buf_mgr_.get()));
     ON_CALL(*mock_hub_, GetFileSuffixWatcher())
         .WillByDefault(Return(file_suffix_watcher_.get()));
-    ON_CALL(*mock_hub_, GetCompactor())
-        .WillByDefault(Return(mock_compactor_));
+    ON_CALL(*mock_hub_, GetCompactor()).WillByDefault(Return(mock_compactor_));
     ON_CALL(*mock_hub_, GetReadExecutor())
         .WillByDefault(Return(read_executor_.get()));
     ON_CALL(*mock_hub_, GetFlushExecutor())
@@ -127,7 +126,7 @@ class VFSTestBase : public ::testing::Test {
     EXPECT_CALL(*mock_hub_, GetMetaSystem()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetHandleManager()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetBlockStore()).Times(AnyNumber());
-    EXPECT_CALL(*mock_hub_, GetReadBufferManager()).Times(AnyNumber());
+    EXPECT_CALL(*mock_hub_, GetReadMemPool()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetWriteBufferManager()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetFileSuffixWatcher()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetCompactor()).Times(AnyNumber());
@@ -140,16 +139,13 @@ class VFSTestBase : public ::testing::Test {
     // --- 8. MockBlockStore: synchronous success by default ---
     // Callbacks invoked inline (no async) to eliminate timing non-determinism.
     ON_CALL(*mock_block_store_, PutAsync)
-        .WillByDefault([](ContextSPtr, PutReq, StatusCallback cb) {
-          cb(Status::OK());
-        });
+        .WillByDefault(
+            [](ContextSPtr, PutReq, StatusCallback cb) { cb(Status::OK()); });
     ON_CALL(*mock_block_store_, RangeAsync)
         .WillByDefault([](ContextSPtr, RangeReq req, StatusCallback cb) {
-          // Fill output buffer with zeros so io_buffer.Size() == block_req.len.
-          if (req.data && req.length > 0) {
-            char* buf = new char[req.length]();
-            req.data->AppendUserData(buf, req.length,
-                                     [](void* p) { delete[] static_cast<char*>(p); });
+          // Fill the request slot window in place with zeros.
+          if (req.dst.base != nullptr && req.length > 0) {
+            std::memset(req.dst.data(), 0, req.length);
           }
           cb(Status::OK());
         });
@@ -170,16 +166,14 @@ class VFSTestBase : public ::testing::Test {
           *id = slice_id_counter.fetch_add(1, std::memory_order_relaxed);
           return Status::OK();
         });
-    ON_CALL(*mock_meta_system_, WriteSlice)
-        .WillByDefault(Return(Status::OK()));
+    ON_CALL(*mock_meta_system_, WriteSlice).WillByDefault(Return(Status::OK()));
     ON_CALL(*mock_meta_system_, ReadSlice)
-        .WillByDefault(
-            [](ContextSPtr, Ino, uint64_t, uint64_t, std::vector<Slice>* s,
-               uint64_t& v) {
-              s->clear();
-              v = 0;
-              return Status::OK();
-            });
+        .WillByDefault([](ContextSPtr, Ino, uint64_t, uint64_t,
+                          std::vector<Slice>* s, uint64_t& v) {
+          s->clear();
+          v = 0;
+          return Status::OK();
+        });
     ON_CALL(*mock_meta_system_, Flush).WillByDefault(Return(Status::OK()));
     ON_CALL(*mock_meta_system_, Close).WillByDefault(Return(Status::OK()));
     ON_CALL(*mock_meta_system_, Open).WillByDefault(Return(Status::OK()));
@@ -218,7 +212,7 @@ class VFSTestBase : public ::testing::Test {
   std::unique_ptr<MockCompactor> compactor_uptr_;
   std::unique_ptr<MetaWrapper> meta_wrapper_;
   std::unique_ptr<HandleManager> handle_manager_;
-  std::unique_ptr<ReadBufferManager> read_buf_mgr_;
+  std::unique_ptr<ReadMemPool> read_mem_pool_;
   std::unique_ptr<WriteBufferManager> write_buf_mgr_;
   std::unique_ptr<FileSuffixWatcher> file_suffix_watcher_;
 

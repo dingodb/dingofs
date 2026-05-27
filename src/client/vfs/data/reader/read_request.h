@@ -25,6 +25,7 @@
 #include <memory>
 #include <mutex>
 
+#include "client/vfs/common/read_buf_view.h"
 #include "client/vfs/data/common/common.h"
 #include "client/vfs/data/reader/chunk_req.h"
 #include "common/io_buffer.h"
@@ -89,7 +90,10 @@ struct ReadRequest {
   ReadRequestState state;
   Status status;
   int64_t access_sec;
-  IOBuffer buffer;
+  IOBuffer buffer;  // backed by one contiguous pool slot (AppendUserData)
+  // Writable window into that slot; lower layers fill base + offset. Phase 2:
+  // folds into a refcounted ReadBuf handle that owns the slot itself.
+  ReadBufView dst;
 
   explicit ReadRequest(uint64_t ino, int64_t chunk_index, int64_t chunk_offset,
                        FileRange frange)

@@ -19,6 +19,7 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <cstring>
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -178,11 +179,9 @@ TEST_F(CompactorTest, Stop_WaitsForInflight) {
           std::lock_guard<std::mutex> lk(m);
           range_done = true;
         }
-        // Fill output buffer so io_buffer.Size() == block_req.len.
-        if (req.data && req.length > 0) {
-          char* buf = new char[req.length]();
-          req.data->AppendUserData(
-              buf, req.length, [](void* p) { delete[] static_cast<char*>(p); });
+        // Fill the request slot window in place.
+        if (req.dst.base != nullptr && req.length > 0) {
+          std::memset(req.dst.data(), 0, req.length);
         }
         cb(Status::OK());
       });

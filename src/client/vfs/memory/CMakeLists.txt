@@ -16,7 +16,6 @@
 # Seperate memory_pool and page_allocator from datastream
 add_library(vfs_memory
     write_buffer_manager.cc
-    read_buffer_manager.cc
 )
 target_link_libraries(vfs_memory
     client_options

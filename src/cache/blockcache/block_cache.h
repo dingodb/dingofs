@@ -82,8 +82,7 @@ class BlockCache {
   }
 
   virtual Status Prefetch(
-      ContextSPtr /*ctx*/, const BlockContext& /*block_ctx*/,
-      size_t /*length*/,
+      ContextSPtr /*ctx*/, const BlockContext& /*block_ctx*/, size_t /*length*/,
       [[maybe_unused]] PrefetchOption option = PrefetchOption()) {
     return Status::NotSupport("not implemented");
   }
@@ -97,10 +96,25 @@ class BlockCache {
     }
   }
 
+  // Async range read: the cache reads [offset, offset+length) and APPENDS the
+  // bytes into `buffer` (callee-allocates -- the impl allocates its own block
+  // and appends it, see StorageClient's RangeBlockTask::OnPrepare). `buffer` is
+  // caller-owned and must outlive the callback.
+  //
+  // Zero-copy follow-up (not yet wired): let the caller pass a preset pool-slot
+  // block here and have the leaf fill it in place (drop the allocate+append),
+  // recovering the slot via the IOBuf user-data meta (= arena base). When that
+  // lands, this `IOBuffer*` MUST become `IOBuffer&` or a by-value `IOBuffer` --
+  // NOT a pointer: the block_store edge builds the preset block on the stack,
+  // so the cache has to hold it by refcount (a by-value param, or an internal
+  // copy of the reference) to keep the pool-slot block alive past the caller's
+  // frame; a raw pointer to that stack temporary would dangle. Until then the
+  // read path's block_store edge (BlockStoreImpl::RangeAsync) keeps cache
+  // unchanged and copies from this buffer into the request's pool slot.
   virtual void AsyncRange(ContextSPtr /*ctx*/,
-                          const BlockContext& /*block_ctx*/,
-                          off_t /*offset*/, size_t /*length*/,
-                          IOBuffer* /*buffer*/, AsyncCallback cb,
+                          const BlockContext& /*block_ctx*/, off_t /*offset*/,
+                          size_t /*length*/, IOBuffer* /*buffer*/,
+                          AsyncCallback cb,
                           [[maybe_unused]] RangeOption option = RangeOption()) {
     if (cb) {
       cb(Status::NotSupport("not implemented"));
@@ -117,8 +131,8 @@ class BlockCache {
   }
 
   virtual void AsyncPrefetch(
-      ContextSPtr /*ctx*/, const BlockContext& /*block_ctx*/,
-      size_t /*length*/, AsyncCallback cb,
+      ContextSPtr /*ctx*/, const BlockContext& /*block_ctx*/, size_t /*length*/,
+      AsyncCallback cb,
       [[maybe_unused]] PrefetchOption option = PrefetchOption()) {
     if (cb) {
       cb(Status::NotSupport("not implemented"));

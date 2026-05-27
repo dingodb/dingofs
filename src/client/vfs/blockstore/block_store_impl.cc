@@ -68,24 +68,33 @@ void BlockStoreImpl::RangeAsync(ContextSPtr ctx, RangeReq req,
 
   int64_t start_us = butil::cpuwide_time_us();
 
-  auto wrapper = [this, start_us, req, cb = std::move(callback),
-                  span](Status s) {
-    BlockStoreAccessLogGuard log(start_us, [&]() {
-      return fmt::format("range_async ({}, {}, [{}-{})) : {}",
-                         req.block_ctx.key.Filename(), req.length, req.offset,
-                         (req.offset + req.length), s.ToString());
-    });
-    SpanScope::End(span);
-    // dedicated use ctx for callback
-    cb(s);
-  };
-
   cache::RangeOption option;
   option.retrieve_storage = true;
   option.block_whole_length = req.block_ctx.key.size;
 
-  block_cache_->AsyncRange(cache::NewContext(), req.block_ctx, req.offset,
-                           req.length, req.data, std::move(wrapper), option);
+  // Transitional adapter -- cache stays unchanged: it allocates its own block
+  // and appends into a temp IOBuffer (callee-allocates), then we copy that into
+  // the request's pool slot (req.dst). When the cache leaf learns to fill a
+  // preset slot block in place, drop the temp + this copy and hand the slot to
+  // the cache directly.
+  auto* tmp = new IOBuffer();
+  block_cache_->AsyncRange(
+      cache::NewContext(), req.block_ctx, req.offset, req.dst.len, tmp,
+      [start_us, req, tmp, cb = std::move(callback), span](Status s) {
+        BlockStoreAccessLogGuard log(start_us, [&]() {
+          return fmt::format("range_async ({}, {}, [{}-{})) : {}",
+                             req.block_ctx.key.Filename(), req.length,
+                             req.offset, (req.offset + req.length),
+                             s.ToString());
+        });
+        if (s.ok()) {
+          tmp->CopyTo(reinterpret_cast<char*>(req.dst.data()), req.dst.len);
+        }
+        delete tmp;
+        SpanScope::End(span);
+        cb(s);
+      },
+      option);
 }
 
 void BlockStoreImpl::PutAsync(ContextSPtr ctx, PutReq req,
@@ -100,8 +109,9 @@ void BlockStoreImpl::PutAsync(ContextSPtr ctx, PutReq req,
   auto wrapper = [this, start_us, req, cb = std::move(callback),
                   span](Status s) {
     BlockStoreAccessLogGuard log(start_us, [&]() {
-      return fmt::format("put_async ({}, {}) : {}", req.block_ctx.key.Filename(),
-                         req.data.Size(), s.ToString());
+      return fmt::format("put_async ({}, {}) : {}",
+                         req.block_ctx.key.Filename(), req.data.Size(),
+                         s.ToString());
     });
     SpanScope::End(span);
     cb(s);
@@ -112,8 +122,7 @@ void BlockStoreImpl::PutAsync(ContextSPtr ctx, PutReq req,
   cache::PutOption option{.writeback = req.write_back};
 
   block_cache_->AsyncPut(cache::NewContext(), req.block_ctx,
-                         cache::Block(req.data),
-                         std::move(wrapper), option);
+                         cache::Block(req.data), std::move(wrapper), option);
 }
 
 void BlockStoreImpl::PrefetchAsync(ContextSPtr ctx, PrefetchReq req,
@@ -131,8 +140,8 @@ void BlockStoreImpl::PrefetchAsync(ContextSPtr ctx, PrefetchReq req,
                   span](Status s) {
     BlockStoreAccessLogGuard log(start_us, [&]() {
       return fmt::format("prefetch_async ({}, {}) : {}",
-                         req.block_ctx.key.Filename(),
-                         req.block_ctx.key.size, s.ToString());
+                         req.block_ctx.key.Filename(), req.block_ctx.key.size,
+                         s.ToString());
     });
     SpanScope::End(span);
     cb(s);

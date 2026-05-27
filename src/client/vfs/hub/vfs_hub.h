@@ -29,12 +29,13 @@
 #include "client/vfs/components/prefetch_manager.h"
 #include "client/vfs/components/warmup_manager.h"
 #include "client/vfs/handle/handle_manager.h"
-#include "client/vfs/memory/read_buffer_manager.h"
 #include "client/vfs/memory/write_buffer_manager.h"
 #include "client/vfs/metasystem/meta_wrapper.h"
 #include "client/vfs/vfs.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/blockaccess/block_accesser.h"
+#include "common/readmempool/read_mem_pool.h"
+#include "common/readmempool/read_mem_pool_vars.h"
 #include "common/status.h"
 #include "common/trace/trace_manager.h"
 #include "utils/executor/executor.h"
@@ -44,7 +45,7 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
-class WriterTable;   // forward decl; full include lives in vfs_hub.cc
+class WriterTable;  // forward decl; full include lives in vfs_hub.cc
 
 class VFSHub {
  public:
@@ -78,7 +79,7 @@ class VFSHub {
 
   virtual WriteBufferManager* GetWriteBufferManager() = 0;
 
-  virtual ReadBufferManager* GetReadBufferManager() = 0;
+  virtual ReadMemPool* GetReadMemPool() = 0;
 
   virtual FileSuffixWatcher* GetFileSuffixWatcher() = 0;
 
@@ -117,7 +118,7 @@ class VFSHubImpl : public VFSHub {
     return handle_manager_.get();
   }
 
-  WriterTable* GetWriterTable() override;   // out-of-line (see vfs_hub.cc)
+  WriterTable* GetWriterTable() override;  // out-of-line (see vfs_hub.cc)
 
   BlockStore* GetBlockStore() override {
     CHECK_NOTNULL(block_store_);
@@ -154,9 +155,9 @@ class VFSHubImpl : public VFSHub {
     return write_buffer_manager_.get();
   }
 
-  ReadBufferManager* GetReadBufferManager() override {
-    CHECK_NOTNULL(read_buffer_manager_);
-    return read_buffer_manager_.get();
+  ReadMemPool* GetReadMemPool() override {
+    CHECK_NOTNULL(read_mem_pool_);
+    return read_mem_pool_.get();
   }
 
   FileSuffixWatcher* GetFileSuffixWatcher() override {
@@ -217,7 +218,9 @@ class VFSHubImpl : public VFSHub {
   std::unique_ptr<Executor> flush_executor_;
   std::unique_ptr<Executor> cb_executor_;
   std::unique_ptr<WriteBufferManager> write_buffer_manager_;
-  std::unique_ptr<ReadBufferManager> read_buffer_manager_;
+  std::unique_ptr<ReadMemPool> read_mem_pool_;
+  std::unique_ptr<ReadMemPoolVars>
+      read_mem_pool_vars_;  // after pool: dtor first
   std::unique_ptr<FileSuffixWatcher> file_suffix_watcher_;
   std::unique_ptr<PrefetchManager> prefetch_manager_;
   std::unique_ptr<WarmupManager> warmup_manager_;

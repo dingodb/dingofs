@@ -25,7 +25,6 @@
 #include <memory>
 #include <mutex>
 
-#include "client/vfs/data/reader/chunk_reader.h"
 #include "client/vfs/data/reader/read_request.h"
 #include "client/vfs/data/reader/readahead_policy.h"
 #include "client/vfs/data_buffer.h"
@@ -70,15 +69,13 @@ class FileReader {
   void SchedulePeriodicShrink();
   void RunPeriodicShrink();
 
-  void TakeMem(int64_t size);
-  void ReleaseMem(int64_t size);
   int64_t TotalMem() const;
   int64_t UsedMem() const;
+  double UsedRatio() const;
 
   // pretected by mutex_
   void RunReadRequest(ReadRequestSptr req);
-  void OnReadRequestComplete(ChunkReader* reader, ReadRequestSptr req,
-                             Status s);
+  void OnReadRequestComplete(ReadRequestSptr req, Status s);
   // pretected by mutex_
   void DoReadRequst(ReadRequestSptr req);
 

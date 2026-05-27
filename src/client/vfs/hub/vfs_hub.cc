@@ -282,14 +282,20 @@ Status VFSHubImpl::Start(bool skip_mount) {
       FLAGS_vfs_write_buffer_total_mb * 1024 * 1024,
       FLAGS_vfs_write_buffer_page_size);
 
-  // read buffer manager
+  // read mempool (the read-path buffer accountant; replaces ReadBufferManager)
   {
     int64_t total_bytes = FLAGS_vfs_read_buffer_total_mb * 1024 * 1024;
     if (total_bytes <= 0) {
       return Status::Internal("invalid vfs_read_buffer_total_mb");
     }
 
-    read_buffer_manager_ = std::make_unique<ReadBufferManager>(total_bytes);
+    read_mem_pool_ =
+        std::make_unique<ReadMemPool>(static_cast<size_t>(total_bytes));
+    if (!read_mem_pool_->Valid()) {
+      return Status::Internal("read mem pool arena create failed");
+    }
+    read_mem_pool_vars_ =
+        std::make_unique<ReadMemPoolVars>(read_mem_pool_.get(), "vfs");
   }
 
   file_suffix_watcher_ =

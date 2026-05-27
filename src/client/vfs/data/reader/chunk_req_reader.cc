@@ -20,18 +20,18 @@
 #include <glog/logging.h>
 
 #include <cstdint>
+#include <cstring>
 #include <functional>
 #include <memory>
 #include <mutex>
 #include <vector>
 
-#include "cache/iutil/string_util.h"
 #include "client/vfs/data/common/common.h"
-#include "common/block/block_context.h"
 #include "client/vfs/data/common/data_utils.h"
 #include "client/vfs/data/reader/chunk_req.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/vfs_meta.h"
+#include "common/block/block_context.h"
 #include "common/status.h"
 #include "common/trace/context.h"
 
@@ -88,56 +88,27 @@ std::vector<BlockReadReq> ChunkReqReader::GetBlockReadReqs(
   return block_reqs;
 }
 
-// protected by shared state mtx
-IOBuffer ChunkReqReader::GatherIoBuf(ContextSPtr ctx,
-                                     ReaderSharedState* shared) {
-  auto span = hub_->GetTraceManager()->StartChildSpan(
-      "ChunkReqReader::GatherIoBuf", ctx->GetTraceSpan());
-  IOBuffer ret;
-  for (const auto& block_cache_req : shared->block_cache_reqs) {
-    ret.Append(&block_cache_req->io_buffer);
-    VLOG(6) << fmt::format(
-        "{} GatherIoBuf: Append iobuf: {} to out_buf: {}"
-        "block_req_index: {}, block_req: {}",
-        UUID(), block_cache_req->io_buffer.Describe(), ret.Describe(),
-        block_cache_req->req_index, block_cache_req->block_req.ToString());
-  }
-
-  return ret;
-}
-
 void ChunkReqReader::OnAllBlocksComplete(ReaderSharedState* shared) {
-  // append all read block iobufs
+  // On success each block already filled its own sub-window of the request
+  // slot in place, so there is nothing to gather here.
   Status final_status;
-  IOBuffer data;
   {
     std::lock_guard<std::mutex> lock(shared->mtx);
-
-    auto span = hub_->GetTraceManager()->StartChildSpan(
-        "ChunkReqReader::OnAllBlocksComplete", shared->read_span);
-
     final_status = shared->status;
-
-    if (final_status.ok()) {
-      data = GatherIoBuf(SpanScope::GetContext(span), shared);
-    } else {
+    if (!final_status.ok()) {
       LOG(WARNING) << fmt::format(
           "{} ChunkReqReader Read failed, status: {}, req: {}", UUID(),
           final_status.ToString(), req_.ToString());
     }
   }
 
-  // for final_status not found, for now no need process
   StatusCallback cb;
   {
     std::lock_guard<std::mutex> lg(mtx_);
-    data_buf_ = std::move(data);
-    ready_ = true;
     cb.swap(cb_);
   }
 
   delete shared;
-  //  for final_status not found, for now no need process
   VLOG(4) << fmt::format("{} ChunkReqReader Read End", UUID());
 
   // TODO: maybe use reference count to manage ChunkReqReader?
@@ -148,13 +119,8 @@ void ChunkReqReader::OnAllBlocksComplete(ReaderSharedState* shared) {
 void ChunkReqReader::OnBlockReadComplete(ReaderSharedState* shared,
                                          BlockCacheReadReq* req, Status s) {
   if (s.ok()) {
-    VLOG(6) << fmt::format(
-        "{} Success read block_req: {}, iobuf: {}, io_buf_size: {}", UUID(),
-        req->ToString(), req->io_buffer.Describe(), req->io_buffer.Size());
-    CHECK(req->io_buffer.Size() == req->block_req.len) << fmt::format(
-        "{} Read block_req size mismatch, req: {}, io_buf_size: {}, io_buf: {}",
-        UUID(), req->ToString(), req->io_buffer.Size(),
-        req->io_buffer.Describe());
+    VLOG(6) << fmt::format("{} Success read block_req: {}", UUID(),
+                           req->ToString());
   } else {
     LOG(WARNING) << fmt::format("{} Fail read block_req: {}, status: {}",
                                 UUID(), req->ToString(), s.ToString());
@@ -198,13 +164,9 @@ void ChunkReqReader::ProcessBlockCacheReadReq(
     VLOG(6) << fmt::format("{} Read hole block, block_req: {}", UUID(),
                            block_cache_req->block_req.ToString());
 
-    // hole block, no need to read from block cache, just fill zero
-    char* data = new char[block_cache_req->block_req.len];
-    std::fill(data, data + block_cache_req->block_req.len, 0);
-    block_cache_req->io_buffer.AppendUserData(
-        data, block_cache_req->block_req.len, cache::iutil::DeleteBuffer);
-    Status s = Status::OK();
-    OnBlockReadComplete(shared, block_cache_req, s);
+    // hole block, no need to read from block cache, just fill zero in place
+    std::memset(block_cache_req->dst.data(), 0, block_cache_req->dst.len);
+    OnBlockReadComplete(shared, block_cache_req, Status::OK());
   } else {
     vfs_block_rreq_inflighting << 1;
 
@@ -218,7 +180,7 @@ void ChunkReqReader::ProcessBlockCacheReadReq(
     req.block_ctx = BlockContext(key, block_cache_req->fs_id);
     req.offset = block_cache_req->block_req.block_offset;
     req.length = block_cache_req->block_req.len;
-    req.data = &block_cache_req->io_buffer;
+    req.dst = block_cache_req->dst;
 
     hub_->GetBlockStore()->RangeAsync(span_ctx, req, std::move(callback));
   }
@@ -226,10 +188,11 @@ void ChunkReqReader::ProcessBlockCacheReadReq(
 
 void ChunkReqReader::ReadAsync(ContextSPtr ctx,
                                const std::vector<Slice>& slices,
-                               StatusCallback cb) {
+                               ReadBufView dst, StatusCallback cb) {
   VLOG(4) << fmt::format("{} ChunkReqReader Read req: {}", UUID(),
                          req_.ToString());
   CHECK_GE(chunk_.chunk_end, req_.frange.End());
+  CHECK_NOTNULL(dst.base);
 
   auto span = hub_->GetTraceManager()->StartChildSpan(
       "ChunkReqReader::ReadAsync", ctx->GetTraceSpan());
@@ -247,6 +210,7 @@ void ChunkReqReader::ReadAsync(ContextSPtr ctx,
   block_cache_reqs.reserve(block_reqs.size());
 
   uint32_t block_req_index = 0;
+  size_t slot_off = 0;  // cumulative offset into the slot (= block order)
   for (auto& block_req : block_reqs) {
     std::string key_str =
         block_req.key.has_value() ? block_req.key->StoreKey() : "hole";
@@ -254,14 +218,16 @@ void ChunkReqReader::ReadAsync(ContextSPtr ctx,
     VLOG(6) << fmt::format("{} Read block_key: {}, block_req: {}", UUID(),
                            key_str, block_req.ToString());
 
-    // TODO: optimize memory copy for block_req
-    block_cache_reqs.emplace_back(std::make_unique<BlockCacheReadReq>(
-        BlockCacheReadReq{.req_id = req_.req_id,
-                          .req_index = block_req_index++,
-                          .fs_id = chunk_.fs_id,
-                          .ino = chunk_.ino,
-                          .block_req = block_req,
-                          .io_buffer = IOBuffer()}));
+    block_cache_reqs.emplace_back(
+        std::make_unique<BlockCacheReadReq>(BlockCacheReadReq{
+            .req_id = req_.req_id,
+            .req_index = block_req_index++,
+            .fs_id = chunk_.fs_id,
+            .ino = chunk_.ino,
+            .block_req = block_req,
+            .dst = ReadBufView{dst.base, dst.offset + slot_off,
+                               static_cast<size_t>(block_req.len)}}));
+    slot_off += static_cast<size_t>(block_req.len);
   }
 
   std::vector<BlockCacheReadReq*> to_process_reqs;
@@ -286,16 +252,6 @@ void ChunkReqReader::ReadAsync(ContextSPtr ctx,
   for (BlockCacheReadReq* block_cache_req : to_process_reqs) {
     ProcessBlockCacheReadReq(span_ctx, shared, block_cache_req);
   }
-}
-
-IOBuffer ChunkReqReader::GetDataBuffer() const {
-  IOBuffer buf;
-  {
-    std::lock_guard<std::mutex> lg(mtx_);
-    CHECK(ready_);
-    buf = data_buf_;
-  }
-  return buf;
 }
 }  // namespace vfs
 

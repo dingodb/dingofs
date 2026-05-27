@@ -20,10 +20,9 @@
 #include <cstdint>
 #include <memory>
 
-#include "client/vfs/data/reader/chunk_req_reader.h"
 #include "client/vfs/data/reader/chunk_req.h"
+#include "client/vfs/data/reader/chunk_req_reader.h"
 #include "common/callback.h"
-#include "common/io_buffer.h"
 #include "common/trace/context.h"
 
 namespace dingofs {
@@ -43,9 +42,7 @@ class ChunkReader {
 
   ~ChunkReader() = default;
 
-  void ReadAsync(ContextSPtr ctx, StatusCallback cb);
-
-  IOBuffer GetDataBuffer() const;
+  void ReadAsync(ContextSPtr ctx, ReadBufView dst, StatusCallback cb);
 
  private:
   Status GetSlices(ContextSPtr ctx, ChunkSlices* chunk_slices);
