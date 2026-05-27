@@ -83,6 +83,7 @@ class Status {
     kStop = 30,
     kNotFit = 31,
     kTimeout = 32,
+    kOutOfMemory = 33,
   };
   static const int32_t kNone = 0;
 
@@ -141,6 +142,7 @@ class Status {
   DECLARE_ERROR_STATUS(CacheFull, kCacheFull);
   DECLARE_ERROR_STATUS(Stop, kStop);
   DECLARE_ERROR_STATUS(NotFit, kNotFit);
+  DECLARE_ERROR_STATUS(OutOfMemory, kOutOfMemory);
 
   // Return a string representation of this status suitable for printing.
   // Returns the string "OK" for success.
@@ -202,6 +204,8 @@ class Status {
         return EIO;
       case kTimeout:
         return ETIMEDOUT;
+      case kOutOfMemory:
+        return ENOMEM;
       default:
         return EIO;
     }
