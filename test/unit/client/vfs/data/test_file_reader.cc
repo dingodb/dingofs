@@ -20,14 +20,15 @@
 #include <algorithm>
 #include <atomic>
 #include <cstdint>
+#include <cstring>
 #include <memory>
 #include <mutex>
 
 #include "client/vfs/data/reader/file_reader.h"
 #include "client/vfs/data_buffer.h"
+#include "common/options/client.h"
 #include "common/trace/trace_manager.h"
 #include "test/unit/client/vfs/test_base.h"
-#include "test/unit/client/vfs/test_common.h"
 
 namespace dingofs {
 namespace client {
@@ -39,7 +40,6 @@ using ::testing::DoAll;
 using ::testing::Invoke;
 using ::testing::Return;
 using ::testing::SetArgPointee;
-using dingofs::client::vfs::test::VFSTestBase;
 
 // Helper: build an Attr with a given file length for ino 300.
 static Attr MakeAttr(Ino ino, uint64_t length) {
@@ -52,7 +52,7 @@ static Attr MakeAttr(Ino ino, uint64_t length) {
   return a;
 }
 
-class FileReaderTest : public VFSTestBase {
+class FileReaderTest : public test::VFSTestBase {
  protected:
   void SetUp() override {
     trace_manager_ = std::make_unique<TraceManager>();
@@ -140,11 +140,8 @@ TEST_F(FileReaderTest, Read_WithinRange_RangeAsyncCalled) {
       .WillByDefault(
           [range_async_calls](ContextSPtr, RangeReq req, StatusCallback cb) {
             range_async_calls->fetch_add(1, std::memory_order_relaxed);
-            if (req.data && req.length > 0) {
-              char* buf = new char[req.length]();
-              req.data->AppendUserData(
-                  buf, req.length,
-                  [](void* p) { delete[] static_cast<char*>(p); });
+            if (req.dst.base != nullptr && req.length > 0) {
+              std::memset(req.dst.data(), 0, req.length);  // fill slot in place
             }
             cb(Status::OK());
           });
@@ -211,11 +208,8 @@ TEST_F(FileReaderTest, Read_VerifyRangeReqFields) {
           std::lock_guard<std::mutex> lk(captured->mu);
           captured->reqs.push_back(req);
         }
-        if (req.data && req.length > 0) {
-          char* buf = new char[req.length]();
-          req.data->AppendUserData(
-              buf, req.length,
-              [](void* p) { delete[] static_cast<char*>(p); });
+        if (req.dst.base != nullptr && req.length > 0) {
+          std::memset(req.dst.data(), 0, req.length);  // fill slot in place
         }
         cb(Status::OK());
       });
@@ -254,7 +248,8 @@ TEST_F(FileReaderTest, Read_VerifyRangeReqFields) {
 }
 
 // 4. Read() with file containing no slices (hole) returns zeros.
-//    ReadSlice returns empty vector (hole); block store is not called for holes.
+//    ReadSlice returns empty vector (hole); block store is not called for
+//    holes.
 TEST_F(FileReaderTest, Read_Hole_ReturnsZero) {
   // ReadSlice returns empty slices → this is a zero/hole range.
   ON_CALL(*mock_meta_system_, ReadSlice)
@@ -311,8 +306,9 @@ TEST_F(FileReaderTest, Read_BlockStoreError_ReturnsError) {
       });
 
   ON_CALL(*mock_block_store_, RangeAsync)
-      .WillByDefault(
-          [](ContextSPtr, RangeReq, StatusCallback cb) { cb(Status::IoError("io err")); });
+      .WillByDefault([](ContextSPtr, RangeReq, StatusCallback cb) {
+        cb(Status::IoError("io err"));
+      });
 
   auto* r = MakeOpenReader();
 
@@ -387,6 +383,46 @@ TEST_F(FileReaderTest, AcquireRef_ReleaseRef_Lifecycle) {
 
   r->ReleaseRef();  // refs = 1, not destroyed yet
   r->ReleaseRef();  // refs = 0 → destroys; must not crash
+}
+
+// 11. Read mempool exhausted: a foreground read whose request can't get a pool
+//     slot fails with OutOfMemory (ENOMEM), not a crash. Hogging the whole pool
+//     also makes the readahead requests fail+free at once, exercising the
+//     idempotent delete path.
+TEST_F(FileReaderTest, Read_PoolExhausted_ReturnsOutOfMemory) {
+  // Raise the backpressure watermark so the foreground read doesn't burn the
+  // bounded wait (~2s); we're testing the hard-fail path, not the wait.
+  double saved_wm = FLAGS_vfs_read_mempool_backpressure_watermark;
+  FLAGS_vfs_read_mempool_backpressure_watermark = 2.0;
+
+  // Hog the entire read mempool: any further Allocate returns an empty handle.
+  auto hog = mock_hub_->GetReadMemPool()->Allocate(64ull * 1024 * 1024);
+  ASSERT_TRUE(static_cast<bool>(hog));
+
+  // Real (non-hole) slice so the read actually needs a pool slot.
+  ON_CALL(*mock_meta_system_, ReadSlice)
+      .WillByDefault([](ContextSPtr, Ino, uint64_t, uint64_t,
+                        std::vector<Slice>* s, uint64_t& v) {
+        s->clear();
+        Slice sl;
+        sl.id = 1;
+        sl.pos = 0;
+        sl.size = 4 * 1024 * 1024;
+        sl.off = 0;
+        sl.len = sl.size;
+        s->push_back(sl);
+        v = 1;
+        return Status::OK();
+      });
+
+  auto* r = MakeOpenReader();
+  DataBuffer buf;
+  uint64_t rsize = 0;
+  Status s = r->Read(ctx_, &buf, 4096, /*offset=*/0, &rsize);
+  EXPECT_TRUE(s.IsOutOfMemory()) << s.ToString();
+
+  CloseAndRelease(r);
+  FLAGS_vfs_read_mempool_backpressure_watermark = saved_wm;
 }
 
 }  // namespace vfs

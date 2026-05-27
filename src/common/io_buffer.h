@@ -77,6 +77,20 @@ class IOBuffer {
     iobuf_.append_user_data(data, size, deleter);
   }
 
+  // Like AppendUserData but tags this user-data block with a 64-bit meta,
+  // retrievable via GetFirstDataMeta(). Intended to carry the pool arena base
+  // so a consumer can recover the slot offset (data_ptr - base) and, for RDMA,
+  // map base -> MR/rkey -- used once the cache leaf fills a preset slot block.
+  void AppendUserDataWithMeta(void* data, size_t size,
+                              std::function<void(void*)> deleter,
+                              uint64_t meta) {
+    iobuf_.append_user_data_with_meta(data, size, deleter, meta);
+  }
+
+  // Meta of the first user-data block (0 if absent). See
+  // AppendUserDataWithMeta.
+  uint64_t GetFirstDataMeta() { return iobuf_.get_first_data_meta(); }
+
   void PopFront(size_t n) { iobuf_.pop_front(n); }
   void PopBack(size_t n) { iobuf_.pop_back(n); }
 

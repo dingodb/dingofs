@@ -20,6 +20,7 @@
 #include <aws/s3/model/ObjectLockRetentionMode.h>
 #include <butil/strings/string_split.h>
 #include <butil/time.h>
+#include <bvar/latency_recorder.h>
 #include <fmt/format.h>
 #include <glog/logging.h>
 #include <sys/types.h>
@@ -54,6 +55,17 @@ namespace vfs {
 // TODO: maybe we need rreq manager in future
 static bvar::Adder<uint64_t> vfs_rreq_in_queue("vfs_rreq_in_queue");
 static bvar::Adder<uint64_t> vfs_rreq_inflighting("vfs_rreq_inflighting");
+
+// Read-mempool backpressure observability (for tuning the watermark; see
+// read-path-readmempool.md §5). All auto-exposed on /vars.
+static bvar::Adder<uint64_t> vfs_read_readahead_suppressed_num(
+    "vfs_read_readahead_suppressed_num");  // readahead skipped (over watermark)
+static bvar::Adder<uint64_t> vfs_read_backpressure_num(
+    "vfs_read_backpressure_num");  // foreground reads that hit backpressure
+static bvar::LatencyRecorder vfs_read_backpressure_wait(
+    "vfs_read_backpressure_wait");  // foreground wait time (us)
+static bvar::Adder<uint64_t> vfs_read_backpressure_timeout_num(
+    "vfs_read_backpressure_timeout_num");  // wait window expired still over wm
 
 static const uint64_t kReqValidityTimeoutS = 30;
 static const uint32_t kMaxReadRequests = 64;
@@ -145,17 +157,18 @@ void FileReader::ShrinkMem() {
   int64_t used = UsedMem();
   int64_t total = TotalMem();
 
-  if (used < total) {
+  // Only reclaim idle readahead once the pool is under pressure.
+  if (UsedRatio() < FLAGS_vfs_read_mempool_readahead_watermark) {
     VLOG(3) << fmt::format(
-        "{} ShrinkMem skipped due to buffer not full, used: {}, total: {}",
-        uuid_, used, total);
+        "{} ShrinkMem skipped, used: {}, total: {}, ratio < {}", uuid_, used,
+        total, FLAGS_vfs_read_mempool_readahead_watermark);
     return;
   }
 
   int64_t now = butil::monotonic_time_s();
   int64_t idle_sec = 60;
-  if (used > total && total > 0) {
-    idle_sec /= (used / total);
+  if (total > 0) {
+    idle_sec /= std::max<int64_t>(1, used / total);
   }
   VLOG(9) << fmt::format(
       "{} ShrinkMem start, used: {}, total: {}, idle_sec: {}, now: {}", uuid_,
@@ -314,7 +327,24 @@ ReadRequestSptr FileReader::NewReadRequest(int64_t s, int64_t e) {
   VLOG(9) << fmt::format("{} NewReadRequest req: {}", uuid_,
                          new_req->ToString());
 
-  TakeMem(new_req->req.frange.len);
+  // Allocate one contiguous pool slot for the whole request; lower layers fill
+  // it in place (dst base + offset). buffer holds it via AppendUserData;
+  // the slot returns to the pool when buffer's IOBuf block refcount hits zero.
+  {
+    size_t len = static_cast<size_t>(new_req->req.frange.len);
+    ReadMemPool* pool = vfs_hub_->GetReadMemPool();
+    ReadBuf rb = pool->Allocate(len);
+    if (rb) {
+      new_req->dst = ReadBufView{rb.data(), 0, len};
+      new_req->buffer.AppendUserData(rb.Disown(), len, pool->Deleter());
+    } else {
+      // exhausted even after the pool's internal reclaim; leave dst empty
+      // and let DoReadRequst fail the request with ENOMEM (Step 3 may upgrade
+      // this to a bounded cv-wait). Pool-only: never malloc-fallback.
+      LOG(ERROR) << fmt::format("{} read mempool exhausted, len={}", uuid_,
+                                len);
+    }
+  }
 
   RunReadRequest(new_req);
 
@@ -335,19 +365,30 @@ void FileReader::DeleteReadRequest(ReadRequestSptr req) {
   DeleteReadRequestUnlock(req);
 }
 
-// out of req lock
+// Caller holds mutex_; req->mutex is not required.
+//
+// erase() is intentionally idempotent. A request may be reclaimed by several
+// uncoordinated paths that all delete on the same (kInvalid && readers==0)
+// condition: the async DeleteReadRequestAsync scheduled from
+// OnReadRequestComplete, the per-read CleanUpRequest, the periodic ShrinkMem,
+// and the foreground Read cleanup. The async path decides to delete while
+// holding only req->mutex and erases later under mutex_, so a synchronous path
+// can erase the same request in the gap -- erase() then legitimately finds it
+// already gone. A CHECK(erase()==1) here SIGABRTs once pool exhaustion turns
+// many readahead requests kInvalid at the same time.
 void FileReader::DeleteReadRequestUnlock(ReadRequestSptr req) {
   VLOG(9) << fmt::format("{} DeleteReadRequest req: {}", uuid_,
                          req->ToString());
   CHECK(CanDeleteRequest(req));
 
-  ReleaseMem(req->req.frange.len);
+  // The pool slot is released when req->buffer's IOBuf block refcount hits zero
+  // (after the reply), which auto-updates the pool's OutstandingBytes. No
+  // explicit release here.
 
-  CHECK(requests_.erase(req->ReqId()) == 1);
+  requests_.erase(req->ReqId());
 }
 
-void FileReader::OnReadRequestComplete(ChunkReader* reader, ReadRequestSptr req,
-                                       Status s) {
+void FileReader::OnReadRequestComplete(ReadRequestSptr req, Status s) {
   std::unique_lock<std::mutex> lock(req->mutex);
   if (!s.ok()) {
     LOG(WARNING) << fmt::format("{} Failed read read_req: {}, status: {}",
@@ -365,7 +406,8 @@ void FileReader::OnReadRequestComplete(ChunkReader* reader, ReadRequestSptr req,
     req->status = s;
 
     if (req->status.ok()) {
-      req->buffer = reader->GetDataBuffer();
+      // buffer is the pool slot allocated in NewReadRequest, already filled in
+      // place by the lower layers; nothing to assign here.
       req->access_sec = butil::monotonic_time_s();
       req->ToStateUnLock(ReadRequestState::kReady, TransitionReason::kReadDone);
     } else {
@@ -414,35 +456,42 @@ void FileReader::DoReadRequst(ReadRequestSptr req) {
     req->ToStateUnLock(ReadRequestState::kBusy, TransitionReason::kReading);
   }
 
+  // Pool slot allocation failed in NewReadRequest -> fail this request without
+  // reading. ENOMEM (not ENOSPC): the fs isn't full, we transiently lack a read
+  // buffer. Pool-only, never malloc-fallback. (Step 3 may upgrade this to a
+  // bounded wait + EAGAIN.)
+  if (req->dst.base == nullptr) {
+    OnReadRequestComplete(req, Status::OutOfMemory("read mempool exhausted"));
+    return;
+  }
+
   auto span =
       vfs_hub_->GetTraceManager()->StartSpan("FileReader::DoReadRequst");
 
   AcquireRef();
 
   auto* reader = new ChunkReader(vfs_hub_, fh_, req->req);
-  reader->ReadAsync(SpanScope::GetContext(span),
+  reader->ReadAsync(SpanScope::GetContext(span), req->dst,
                     [this, reader, req, span](Status s) {
                       SpanScope::AddEvent(span, "Complete ReadAsync callback");
-                      this->OnReadRequestComplete(reader, req, s);
+                      this->OnReadRequestComplete(req, s);
                       delete reader;
                       ReleaseRef();
                     });
 }
 
-void FileReader::TakeMem(int64_t size) {
-  vfs_hub_->GetReadBufferManager()->Take(size);
-}
-
-void FileReader::ReleaseMem(int64_t size) {
-  vfs_hub_->GetReadBufferManager()->Release(size);
-}
-
 int64_t FileReader::TotalMem() const {
-  return vfs_hub_->GetReadBufferManager()->GetTotalBytes();
+  return static_cast<int64_t>(vfs_hub_->GetReadMemPool()->TotalSize());
 }
 
+// Bytes currently held by live read requests (the pool is the accountant now;
+// ReadBufferManager is gone). Equals the sum of in-flight request slots.
 int64_t FileReader::UsedMem() const {
-  return vfs_hub_->GetReadBufferManager()->GetUsedBytes();
+  return vfs_hub_->GetReadMemPool()->OutstandingBytes();
+}
+
+double FileReader::UsedRatio() const {
+  return vfs_hub_->GetReadMemPool()->UsageRatio();
 }
 
 bool FileReader::IsProtectedReq(const ReadRequestSptr& req) const {
@@ -483,10 +532,13 @@ void FileReader::MakeReadahead(ContextSPtr ctx, const FileRange& frange) {
                          frange.ToString());
   CHECK_GT(frange.len, 0);
 
-  if (UsedMem() > TotalMem()) {
+  // Readahead is speculative: suppress it once pool usage is above the
+  // readahead watermark so the foreground reads keep their headroom.
+  if (UsedRatio() > FLAGS_vfs_read_mempool_readahead_watermark) {
+    vfs_read_readahead_suppressed_num << 1;
     LOG(INFO) << fmt::format(
-        "{} MakeReadahead skipped due to buffer full, used: {}, max: {}", uuid_,
-        UsedMem(), TotalMem());
+        "{} MakeReadahead skipped, pool usage ratio {} > {}", uuid_,
+        UsedRatio(), FLAGS_vfs_read_mempool_readahead_watermark);
     return;
   }
 
@@ -810,15 +862,26 @@ Status FileReader::Read(ContextSPtr ctx, DataBuffer* data_buffer, int64_t size,
 
   CheckPrefetch(SpanScope::GetContext(span), attr, frange);
 
-  int64_t used_mem = UsedMem();
-  int64_t total_mem = TotalMem();
-  while (used_mem > 2 * total_mem) {
-    uint64_t wait_time = (used_mem / total_mem) * 1;
-    LOG(INFO) << fmt::format(
-        "{} Read wait due to buffer full, used: {}, total: {}, wait_time_s: {}",
-        uuid_, used_mem, total_mem, wait_time);
-    sleep(wait_time);
-    used_mem = UsedMem();
+  // Foreground backpressure: above the backpressure watermark, wait a bounded
+  // window for in-flight reads to release their slots (and for the periodic
+  // RunPeriodicShrink to reclaim idle readahead) before proceeding. Reclaim is
+  // intentionally NOT driven from the read path -- it runs on its own timer.
+  // The per-request pool Allocate still hard-fails -> ENOMEM if truly exhausted
+  // (pool-only, no malloc). Step-3 follow-up may turn this into a bounded
+  // cv-wait.
+  if (UsedRatio() > FLAGS_vfs_read_mempool_backpressure_watermark) {
+    vfs_read_backpressure_num << 1;
+    int64_t wait_start_us = butil::gettimeofday_us();
+    for (int waited_ms = 0;
+         UsedRatio() > FLAGS_vfs_read_mempool_backpressure_watermark &&
+         waited_ms < 2000 && !closing_.load(std::memory_order_acquire);
+         waited_ms += 10) {
+      usleep(10 * 1000);
+    }
+    vfs_read_backpressure_wait << (butil::gettimeofday_us() - wait_start_us);
+    if (UsedRatio() > FLAGS_vfs_read_mempool_backpressure_watermark) {
+      vfs_read_backpressure_timeout_num << 1;  // wait didn't relieve pressure
+    }
   }
 
   if (closing_.load(std::memory_order_acquire)) {

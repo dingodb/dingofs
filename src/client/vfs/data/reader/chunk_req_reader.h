@@ -24,11 +24,11 @@
 #include <memory>
 #include <mutex>
 
+#include "client/vfs/common/read_buf_view.h"
 #include "client/vfs/data/chunk.h"
 #include "client/vfs/data/common/common.h"
 #include "client/vfs/data/reader/chunk_req.h"
 #include "common/callback.h"
-#include "common/io_buffer.h"
 #include "common/trace/context.h"
 #include "common/trace/trace_manager.h"
 
@@ -45,7 +45,7 @@ struct BlockCacheReadReq {
   const uint32_t fs_id;
   const uint64_t ino;
   const BlockReadReq block_req;
-  IOBuffer io_buffer;
+  ReadBufView dst;  // sub-window of the request slot this block fills in place
 
   std::string UUID() const;
   std::string ToString() const;
@@ -69,10 +69,11 @@ class ChunkReqReader {
 
   ~ChunkReqReader() = default;
 
+  // dst = writable window over the request's contiguous pool slot; each block
+  // gets its own sub-window of it (BlockCacheReadReq::dst) and fills it in
+  // place (no per-block buffer, no gather).
   void ReadAsync(ContextSPtr ctx, const std::vector<Slice>& slices,
-                 StatusCallback cb);
-
-  IOBuffer GetDataBuffer() const;
+                 ReadBufView dst, StatusCallback cb);
 
  private:
   friend class ChunkReader;
@@ -83,7 +84,6 @@ class ChunkReqReader {
   void ProcessBlockCacheReadReq(ContextSPtr ctx, ReaderSharedState* shared,
                                 BlockCacheReadReq* block_cache_req);
 
-  IOBuffer GatherIoBuf(ContextSPtr ctx, ReaderSharedState* shared);
   // delete shared
   void OnAllBlocksComplete(ReaderSharedState* shared);
   void OnBlockReadComplete(ReaderSharedState* shared, BlockCacheReadReq* req,
@@ -103,8 +103,6 @@ class ChunkReqReader {
 
   mutable std::mutex mtx_;
   StatusCallback cb_;
-  IOBuffer data_buf_;
-  bool ready_{false};
 };
 
 }  // namespace vfs

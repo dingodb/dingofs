@@ -19,73 +19,11 @@
 #include <thread>
 #include <vector>
 
-#include "client/vfs/memory/read_buffer_manager.h"
 #include "client/vfs/memory/write_buffer_manager.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
-
-// ─── ReadBufferManager ───────────────────────────────────────────────────────
-
-TEST(ReadBufferManagerTest, Take_IncreasesUsedBytes) {
-  ReadBufferManager mgr(1024);
-  EXPECT_EQ(mgr.GetUsedBytes(), 0);
-  mgr.Take(256);
-  EXPECT_EQ(mgr.GetUsedBytes(), 256);
-}
-
-TEST(ReadBufferManagerTest, Release_DecreasesUsedBytes) {
-  ReadBufferManager mgr(1024);
-  mgr.Take(512);
-  mgr.Release(200);
-  EXPECT_EQ(mgr.GetUsedBytes(), 312);
-}
-
-TEST(ReadBufferManagerTest, GetUsageRatio_Correct) {
-  ReadBufferManager mgr(1000);
-  mgr.Take(500);
-  double ratio = mgr.GetUsageRatio();
-  EXPECT_NEAR(ratio, 0.5, 1e-9);
-}
-
-TEST(ReadBufferManagerTest, IsHighPressure_True_WhenAboveThreshold) {
-  ReadBufferManager mgr(1000);
-  // Default threshold is 0.8
-  mgr.Take(900);
-  EXPECT_TRUE(mgr.IsHighPressure());
-  EXPECT_TRUE(mgr.IsHighPressure(0.8));
-}
-
-TEST(ReadBufferManagerTest, IsHighPressure_False_WhenBelowThreshold) {
-  ReadBufferManager mgr(1000);
-  mgr.Take(500);
-  EXPECT_FALSE(mgr.IsHighPressure());
-}
-
-TEST(ReadBufferManagerTest, Concurrent_TakeAndRelease_FinalZero) {
-  constexpr int kThreads = 8;
-  constexpr int kIters = 1000;
-  constexpr int64_t kBytes = 100;
-
-  ReadBufferManager mgr(static_cast<int64_t>(kThreads) * kIters * kBytes * 2);
-
-  std::vector<std::thread> threads;
-  threads.reserve(kThreads);
-  for (int t = 0; t < kThreads; ++t) {
-    threads.emplace_back([&mgr]() {
-      for (int i = 0; i < kIters; ++i) {
-        mgr.Take(kBytes);
-        mgr.Release(kBytes);
-      }
-    });
-  }
-  for (auto& th : threads) {
-    th.join();
-  }
-
-  EXPECT_EQ(mgr.GetUsedBytes(), 0);
-}
 
 // ─── WriteBufferManager ──────────────────────────────────────────────────────
 

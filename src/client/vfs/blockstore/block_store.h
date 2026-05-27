@@ -20,6 +20,7 @@
 #include <cstdint>
 
 #include "cache/blockcache/block_cache.h"
+#include "client/vfs/common/read_buf_view.h"
 #include "common/block/block_context.h"
 #include "common/callback.h"
 #include "common/io_buffer.h"
@@ -34,7 +35,10 @@ struct RangeReq {
   BlockContext block_ctx;
   int64_t offset{0};
   int64_t length{0};
-  IOBuffer* data{nullptr};
+  // Window into the request's pool slot to fill. IOBuffer stays out of the read
+  // path above this struct; block_store wraps `dst` as an IOBuffer (meta =
+  // arena base) only at the cache edge (BlockStoreImpl::RangeAsync).
+  ReadBufView dst;
 };
 
 struct PutReq {

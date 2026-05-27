@@ -95,12 +95,17 @@ Status CompactorImpl::DoCompact(ContextSPtr ctx, Ino ino, int64_t chunk_index,
 
   std::string to_write;
   {
-    // read data
+    // read data into our own destination buffer (compaction is not the FUSE
+    // read-reply / RDMA path, so a plain buffer is the fill target here).
+    to_write.resize(static_cast<size_t>(file_range.len));
+
     ChunkReqReader reader(vfs_hub_, req);
 
     Status s;
     BSynchronizer sync;
-    reader.ReadAsync(SpanScope::GetContext(span), slices,
+    ReadBufView dst{reinterpret_cast<uint8_t*>(to_write.data()), 0,
+                    to_write.size()};
+    reader.ReadAsync(SpanScope::GetContext(span), slices, dst,
                      sync.AsStatusCallBack(s));
     sync.Wait();
 
@@ -109,13 +114,7 @@ Status CompactorImpl::DoCompact(ContextSPtr ctx, Ino ino, int64_t chunk_index,
                    << ", req: " << req.ToString();
       return s;
     }
-
-    IOBuffer data = reader.GetDataBuffer();
-    uint64_t data_size = data.Size();
-    CHECK_EQ(data_size, static_cast<uint64_t>(file_range.len));
-
-    to_write.resize(data.Size());
-    data.CopyTo(to_write.data());
+    // to_write is now filled in place.
   }
 
   Slice compacted;

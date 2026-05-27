@@ -18,8 +18,6 @@
 
 #include <google/protobuf/descriptor.pb.h>
 
-#include <memory>
-
 #include "cache/blockcache/block_cache.h"
 #include "client/common/const.h"
 #include "client/vfs/hub/vfs_hub.h"
@@ -28,26 +26,7 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
-static constexpr int64_t kStaticMemSize = 4 * 1024 * 1024;  // 4MB
-// Per-thread buffer so concurrent FUSE replies don't all point at the same
-// BSS region (which causes kernel fuse_copy_fill -> get_user_pages_fast ->
-// follow_page_pte to serialize on a single PTE spinlock). Same fix as the
-// dryrun FuseOpRead thread_local patch (6b9136f7d).
-// Allocated on heap (not as thread_local char[]) to keep static TLS small;
-// a 4MB TLS array eats the pthread stack mmap and leaves worker threads
-// with only a few KB of usable stack.
-thread_local static std::unique_ptr<char[]> kStaticMemory;
-
-static char* GetStaticMemory() {
-  if (__builtin_expect(!kStaticMemory, 0)) {
-    kStaticMemory.reset(new char[kStaticMemSize]());
-  }
-  return kStaticMemory.get();
-}
-
 #define METHOD_NAME() ("FakeBlockStore::" + std::string(__FUNCTION__))
-
-static void NoopDeleter(void* data) {}
 
 FakeBlockStore::FakeBlockStore(VFSHub* hub, std::string uuid)
     : hub_(hub), uuid_(std::move(uuid)) {}
@@ -70,12 +49,14 @@ void FakeBlockStore::Shutdown() {
 }
 
 void FakeBlockStore::DoRangeAsync(BlockKey key, uint64_t offset,
-                                  uint64_t length, IOBuffer* buffer,
+                                  uint64_t length, ReadBufView dst,
                                   StatusCallback callback) {
+  // Fake store for IO-isolated benchmarking: leave the slot unfilled. The
+  // payload is never checked and the slot is request-owned pool memory.
   (void)key;
   (void)offset;
-  CHECK_GE(kStaticMemSize, length);
-  buffer->AppendUserData(GetStaticMemory(), length, NoopDeleter);
+  (void)length;
+  (void)dst;
   callback(Status::OK());
 }
 
@@ -89,7 +70,7 @@ void FakeBlockStore::RangeAsync(ContextSPtr ctx, RangeReq req,
     cb(s);
   };
 
-  DoRangeAsync(req.block_ctx.key, req.offset, req.length, req.data,
+  DoRangeAsync(req.block_ctx.key, req.offset, req.length, req.dst,
                std::move(wrapper));
 }
 
