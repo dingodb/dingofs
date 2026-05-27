@@ -81,6 +81,8 @@ DECLARE_uint64(vfs_tiny_file_max_size);
 DECLARE_int32(vfs_read_executor_thread);
 DECLARE_int32(vfs_read_max_retry_block_not_found);
 DECLARE_int64(vfs_read_buffer_total_mb);
+DECLARE_double(vfs_read_mempool_readahead_watermark);
+DECLARE_double(vfs_read_mempool_backpressure_watermark);
 DECLARE_bool(vfs_print_readahead_stats);
 
 // vfs write

@@ -113,6 +113,16 @@ DEFINE_validator(vfs_read_max_retry_block_not_found, brpc::PassValidate);
 
 DEFINE_int64(vfs_read_buffer_total_mb, 8192, "total read buffer size in MB");
 
+DEFINE_double(vfs_read_mempool_readahead_watermark, 0.80,
+              "read mempool usage ratio above which readahead is suppressed "
+              "and idle readahead buffers are eagerly reclaimed");
+DEFINE_validator(vfs_read_mempool_readahead_watermark, brpc::PassValidate);
+
+DEFINE_double(vfs_read_mempool_backpressure_watermark, 0.90,
+              "read mempool usage ratio above which the foreground read "
+              "applies backpressure (bounded wait)");
+DEFINE_validator(vfs_read_mempool_backpressure_watermark, brpc::PassValidate);
+
 DEFINE_bool(vfs_print_readahead_stats, false, "print readahead stats");
 DEFINE_validator(vfs_print_readahead_stats, brpc::PassValidate);
 
