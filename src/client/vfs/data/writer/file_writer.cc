@@ -16,6 +16,7 @@
 
 #include "client/vfs/data/writer/file_writer.h"
 
+#include <bvar/reducer.h>
 #include <fmt/format.h>
 #include <glog/logging.h>
 #include <unistd.h>
@@ -34,6 +35,15 @@
 
 DEFINE_int64(vfs_stale_write_sleep_us, 10, "sleep us when detect memory low");
 
+DEFINE_double(vfs_write_throttle_soft_ratio, 0.85,
+              "write buffer usage ratio at which to start soft throttle");
+DEFINE_double(vfs_write_throttle_hard_ratio, 0.95,
+              "write buffer usage ratio at which to keep throttling until "
+              "the flush worker drains it back below");
+DEFINE_int64(vfs_write_throttle_budget_ms, 5000,
+             "max time to block in hard throttle before returning NoSpace; "
+             "bounds the wait so a stalled flush can't hang the FUSE syscall");
+
 namespace dingofs {
 namespace client {
 namespace vfs {
@@ -44,24 +54,46 @@ static std::atomic<uint64_t> file_flush_id_gen{1};
 
 namespace {
 
-// Memory-pressure throttle:
-// soft (used > total) → sleep T µs once; hard (used > 2*total) → loop sleep
-// 10*T µs until back below.  Block here so the FUSE syscall back-pressures
-// the caller; lets the flush worker drain dirty buffers.
-void ApplyWriteBufferThrottle(WriteMemPool* bm) {
-  if (bm->GetUsedBytes() <= bm->GetTotalBytes()) return;
+// Throttle counters (lock-free per-thread Adder). Only bumped on the slow path
+// (usage already past soft_ratio), so the normal write path never touches them.
+bvar::Adder<int64_t> g_throttle_num("vfs_write_throttle_num");
+bvar::Adder<int64_t> g_throttle_timeout_num("vfs_write_throttle_timeout_num");
 
-  VLOG(1) << "WriteMemPool soft pressure, used=" << bm->GetUsedBytes()
-          << " total=" << bm->GetTotalBytes();
+// Memory-pressure throttle (pool-backed WriteMemPool, usage is hard-capped at
+// 100% so the old `used > total` / `> 2*total` thresholds never fire). Now
+// ratio-based with a soft pre-throttle:
+//   usage < soft_ratio  -> pass;
+//   usage >= soft_ratio -> sleep once to slow the writer;
+//   usage >= hard_ratio -> keep sleeping (bounded by budget_ms) until the
+//                          flush worker drains it back below.
+// The soft pre-throttle keeps the pool from truly filling, which would make
+// Allocate's bounded-acquire time out into ENOSPC. The wait is bounded so a
+// stalled flush (S3 down) can't D-state the FUSE syscall forever -- on timeout
+// we return NoSpace (-> ENOSPC) instead of blocking indefinitely.
+Status ApplyWriteBufferThrottle(WriteMemPool* bm) {
+  if (!bm->IsHighPressure(FLAGS_vfs_write_throttle_soft_ratio)) {
+    return Status::OK();
+  }
+
+  g_throttle_num << 1;  // soft limit hit (slow path only)
+  VLOG(1) << "WriteMemPool soft pressure, usage=" << bm->GetUsageRatio();
   std::this_thread::sleep_for(
       std::chrono::microseconds(FLAGS_vfs_stale_write_sleep_us));
 
-  while (bm->GetUsedBytes() > 2 * bm->GetTotalBytes()) {
-    LOG(INFO) << "WriteMemPool hard pressure, used=" << bm->GetUsedBytes()
-              << " total=" << bm->GetTotalBytes();
+  auto deadline = std::chrono::steady_clock::now() +
+                  std::chrono::milliseconds(FLAGS_vfs_write_throttle_budget_ms);
+  while (bm->IsHighPressure(FLAGS_vfs_write_throttle_hard_ratio)) {
+    if (std::chrono::steady_clock::now() >= deadline) {
+      g_throttle_timeout_num << 1;
+      LOG(WARNING) << "WriteMemPool throttle timeout, usage="
+                   << bm->GetUsageRatio() << " used=" << bm->GetUsedBytes()
+                   << " total=" << bm->GetTotalBytes();
+      return Status::NoSpace("write buffer throttle timeout");
+    }
     std::this_thread::sleep_for(
         std::chrono::microseconds(10 * FLAGS_vfs_stale_write_sleep_us));
   }
+  return Status::OK();
 }
 
 }  // namespace
@@ -136,8 +168,9 @@ Status FileWriter::Write(ContextSPtr ctx, const char* buf, uint64_t size,
   // Sticky-broken fast-fail.
   DINGOFS_RETURN_NOT_OK(GetStatus());
 
-  // Memory-pressure throttle (replaces former File::Write logic).
-  ApplyWriteBufferThrottle(vfs_hub_->GetWriteMemPool());
+  // Memory-pressure throttle (soft pre-throttle; bounded hard wait). On timeout
+  // returns NoSpace -> ENOSPC instead of blocking the FUSE syscall forever.
+  DINGOFS_RETURN_NOT_OK(ApplyWriteBufferThrottle(vfs_hub_->GetWriteMemPool()));
 
   {
     std::lock_guard<std::mutex> lock(mutex_);
