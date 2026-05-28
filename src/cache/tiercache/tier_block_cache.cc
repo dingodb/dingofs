@@ -50,6 +50,19 @@ DEFINE_validator(fill_group_cache, brpc::PassValidate);
 DEFINE_uint32(prefetch_max_inflights, 16,
               "maximum inflight requests for prefetching blocks");
 
+DEFINE_uint32(small_block_size_kb, 0,
+              "blocks whose whole size is smaller than this many KB are "
+              "automatically pinned to the local cache tier (when local cache "
+              "is enabled). 0 disables this behavior.");
+
+static bool UseLocal(CacheTier tier) {
+  return tier == CacheTier::kDefault || tier == CacheTier::kLocal;
+}
+
+static bool UseRemote(CacheTier tier) {
+  return tier == CacheTier::kDefault || tier == CacheTier::kRemote;
+}
+
 TierBlockCache::TierBlockCache(StorageClientUPtr storage_client)
     : running_(false),
       storage_client_(std::move(storage_client)),
@@ -147,14 +160,16 @@ Status TierBlockCache::Put(BlockHandle handle, IOBuffer block,
                            PutOption option) {
   DCHECK_RUNNING("TierBlockCache");
 
+  option.tier = ResolveTier(handle, option.tier);
+
   Status status;
   if (option.writeback) {
     option.block_attr = BlockAttr(BlockAttr::kFromWriteback);
     // Don't move `block` here: if writeback fails, we still need it for the
     // storage fallback path below.
-    if (EnableLocalStage()) {
+    if (UseLocal(option.tier) && EnableLocalStage()) {
       status = local_block_cache_->Put(handle, block, option);
-    } else if (EnableRemoteStage()) {
+    } else if (UseRemote(option.tier) && EnableRemoteStage()) {
       status = remote_block_cache_->Put(handle, block, option);
     } else {
       status = Status::NotFound("no cache layer found");
@@ -171,7 +186,7 @@ Status TierBlockCache::Put(BlockHandle handle, IOBuffer block,
   // contiguous backing block; linearize once and share with the optional
   // fill-group path so downstream consumers see the same flat buffer.
   IOBuffer contiguous = CopyBlock(block);
-  if (EnableRemoteCache() && FLAGS_fill_group_cache) {
+  if (UseRemote(option.tier) && EnableRemoteCache() && FLAGS_fill_group_cache) {
     FillGroupCache(handle, contiguous);
   }
 
@@ -187,10 +202,12 @@ Status TierBlockCache::Range(BlockHandle handle, off_t offset, size_t length,
                              IOBuffer* buffer, RangeOption option) {
   DCHECK_RUNNING("TierBlockCache");
 
+  option.tier = ResolveTier(handle, option.tier);
+
   Status status = Status::NotFound("no cache layer found");
 
-  // Firstly, try local cache
-  if (EnableLocalCache() || EnableLocalStage()) {
+  // Firstly, try local cache (skipped if caller pinned to remote tier).
+  if (UseLocal(option.tier) && (EnableLocalCache() || EnableLocalStage())) {
     status = local_block_cache_->Range(handle, offset, length, buffer,
                                        {.retrieve_storage = false});
     if (status.ok()) {
@@ -206,8 +223,8 @@ Status TierBlockCache::Range(BlockHandle handle, off_t offset, size_t length,
     }
   }
 
-  // Secondly, try remote cache
-  if (EnableRemoteCache()) {
+  // Secondly, try remote cache (skipped if caller pinned to local tier).
+  if (UseRemote(option.tier) && EnableRemoteCache()) {
     status = remote_block_cache_->Range(handle, offset, length, buffer, option);
     if (status.ok()) {
       return status;
@@ -237,10 +254,12 @@ Status TierBlockCache::Cache(BlockHandle handle, IOBuffer block,
                              CacheOption option) {
   DCHECK_RUNNING("TierBlockCache");
 
+  option.tier = ResolveTier(handle, option.tier);
+
   Status status;
-  if (EnableLocalCache()) {
+  if (UseLocal(option.tier) && EnableLocalCache()) {
     status = local_block_cache_->Cache(handle, std::move(block), option);
-  } else if (EnableRemoteCache()) {
+  } else if (UseRemote(option.tier) && EnableRemoteCache()) {
     status = remote_block_cache_->Cache(handle, std::move(block), option);
   } else {
     status = Status::NotFound("no cache layer found");
@@ -257,10 +276,12 @@ Status TierBlockCache::Prefetch(BlockHandle handle, size_t length,
                                 PrefetchOption option) {
   DCHECK_RUNNING("TierBlockCache");
 
+  option.tier = ResolveTier(handle, option.tier);
+
   Status status;
-  if (EnableLocalCache()) {
+  if (UseLocal(option.tier) && EnableLocalCache()) {
     status = local_block_cache_->Prefetch(handle, length, option);
-  } else if (EnableRemoteCache()) {
+  } else if (UseRemote(option.tier) && EnableRemoteCache()) {
     status = remote_block_cache_->Prefetch(handle, length, option);
   } else {
     status = Status::NotFound("no cache layer found");
@@ -368,6 +389,21 @@ void TierBlockCache::AsyncPrefetch(BlockHandle handle, size_t length,
   if (tid != 0) {
     joiner_->BackgroundJoin(tid);
   }
+}
+
+CacheTier TierBlockCache::ResolveTier(const BlockHandle& handle,
+                                      CacheTier hint) const {
+  if (hint != CacheTier::kDefault) {
+    return hint;  // Respect caller's explicit choice.
+  }
+  if (FLAGS_small_block_size_kb == 0 || !local_block_cache_->IsEnabled()) {
+    return hint;
+  }
+  if (handle.StoreSize() <
+      static_cast<uint64_t>(FLAGS_small_block_size_kb) * 1024) {
+    return CacheTier::kLocal;
+  }
+  return hint;
 }
 
 IOBuffer TierBlockCache::CopyBlock(const IOBuffer& block) {

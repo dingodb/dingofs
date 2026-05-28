@@ -33,6 +33,7 @@
 #include "cache/blockcache/disk_cache.h"
 #include "cache/blockcache/disk_cache_group.h"
 #include "cache/blockcache/disk_cache_layout.h"
+#include "cache/blockcache/mem_cache.h"
 #include "cache/common/macro.h"
 #include "cache/common/storage_client.h"
 #include "cache/common/storage_client_pool.h"
@@ -47,7 +48,7 @@ namespace dingofs {
 namespace cache {
 
 DEFINE_string(cache_store, "disk",
-              "cache store type, can be none, disk or 3fs");
+              "cache store type, can be none, disk or memory");
 DEFINE_bool(enable_stage, true, "whether to enable stage block for writeback");
 DEFINE_bool(enable_cache, true, "whether to enable cache block");
 
@@ -72,6 +73,14 @@ static std::vector<DiskCacheOption> ParseDiskCacheOption() {
   return disk_cache_options;
 }
 
+static CacheStoreSPtr NewCacheStore() {
+  if (FLAGS_cache_store == "memory") {
+    return std::make_shared<MemCache>(
+        MemCacheOption{.cache_size_mb = FLAGS_cache_size_mb});
+  }
+  return std::make_shared<DiskCacheGroup>(ParseDiskCacheOption());
+}
+
 BlockCacheImpl::BlockCacheImpl(StorageClient* storage_client)
     : BlockCacheImpl(std::make_shared<SingletonStorageClient>(storage_client)) {
 }
@@ -79,7 +88,7 @@ BlockCacheImpl::BlockCacheImpl(StorageClient* storage_client)
 BlockCacheImpl::BlockCacheImpl(StorageClientPoolSPtr storage_client_pool)
     : running_(false),
       storage_client_pool_(storage_client_pool),
-      store_(std::make_shared<DiskCacheGroup>(ParseDiskCacheOption())),
+      store_(NewCacheStore()),
       uploader_(
           std::make_shared<BlockCacheUploader>(store_, storage_client_pool_)),
       joiner_(std::make_unique<iutil::BthreadJoiner>()),
@@ -89,7 +98,8 @@ BlockCacheImpl::BlockCacheImpl(StorageClientPoolSPtr storage_client_pool)
 BlockCacheImpl::~BlockCacheImpl() { Shutdown(); }
 
 Status BlockCacheImpl::Start() {
-  CHECK_EQ(FLAGS_cache_store, "disk");
+  CHECK(FLAGS_cache_store == "disk" || FLAGS_cache_store == "memory")
+      << "unsupported cache_store: " << FLAGS_cache_store;
 
   if (running_.load(std::memory_order_relaxed)) {
     LOG(WARNING) << "BlockCacheImpl is already started";
@@ -204,9 +214,9 @@ void BlockCacheImpl::AsyncPut(BlockHandle handle, IOBuffer block,
   DCHECK_RUNNING("BlockCacheImpl");
 
   auto* self = GetSelfPtr();
-  auto tid = iutil::RunInBthread(
-      [self, handle = std::move(handle), block = std::move(block), cb,
-       option]() mutable {
+  auto tid =
+      iutil::RunInBthread([self, handle = std::move(handle),
+                           block = std::move(block), cb, option]() mutable {
         Status status = self->Put(std::move(handle), std::move(block), option);
         if (cb) {
           cb(status);
@@ -224,15 +234,14 @@ void BlockCacheImpl::AsyncRange(BlockHandle handle, off_t offset, size_t length,
   DCHECK_RUNNING("BlockCacheImpl");
 
   auto* self = GetSelfPtr();
-  auto tid = iutil::RunInBthread(
-      [self, handle = std::move(handle), offset, length, buffer, cb,
-       option]() mutable {
-        Status status =
-            self->Range(std::move(handle), offset, length, buffer, option);
-        if (cb) {
-          cb(status);
-        }
-      });
+  auto tid = iutil::RunInBthread([self, handle = std::move(handle), offset,
+                                  length, buffer, cb, option]() mutable {
+    Status status =
+        self->Range(std::move(handle), offset, length, buffer, option);
+    if (cb) {
+      cb(status);
+    }
+  });
 
   if (tid != 0) {
     joiner_->BackgroundJoin(tid);
