@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <gflags/gflags.h>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
@@ -25,6 +26,7 @@
 #include "client/vfs/data/writer/chunk_writer.h"
 #include "common/sync_point.h"
 #include "common/trace/trace_manager.h"
+#include "common/writemempool/write_mem_pool.h"
 #include "test/unit/client/vfs/test_base.h"
 #include "test/unit/client/vfs/test_common.h"
 
@@ -517,11 +519,10 @@ TEST_F(ChunkWriterTest, FindWritable_Forward_Reuses) {
 // "T2's FlushAsync returns while T1 is in critical section" anomaly.
 TEST_F(ChunkWriterTest, ConcurrentFlush_HoldsSliceMutexUntilQueuePush) {
 #ifdef NDEBUG
-  GTEST_SKIP()
-      << "Race regression relies on TEST_SYNC_POINT firing inside "
-         "ChunkWriter::DoFlushAsync, which is a no-op under NDEBUG. "
-         "Rebuild with CMAKE_BUILD_TYPE=Debug to exercise this test "
-         "(the unit-test CI job already does so).";
+  GTEST_SKIP() << "Race regression relies on TEST_SYNC_POINT firing inside "
+                  "ChunkWriter::DoFlushAsync, which is a no-op under NDEBUG. "
+                  "Rebuild with CMAKE_BUILD_TYPE=Debug to exercise this test "
+                  "(the unit-test CI job already does so).";
 #else
   using namespace std::chrono;
 
@@ -546,17 +547,17 @@ TEST_F(ChunkWriterTest, ConcurrentFlush_HoldsSliceMutexUntilQueuePush) {
   auto release_t1_future = release_t1.get_future().share();
 
   std::atomic<bool> sync_fired{false};
-  SyncPoint::GetInstance()->SetCallBack("ChunkWriter::DoFlushAsync:after_take_slices",
-                                [&](void*) {
-                                  // Only the first FlushAsync (T1) trips this;
-                                  // subsequent ones from T2 already block on
-                                  // slice_mutex_ before reaching here (with
-                                  // fix) or reach here too (without fix) — we
-                                  // want only T1 to gate.
-                                  if (sync_fired.exchange(true)) return;
-                                  t1_in_section.set_value();
-                                  release_t1_future.wait();
-                                });
+  SyncPoint::GetInstance()->SetCallBack(
+      "ChunkWriter::DoFlushAsync:after_take_slices", [&](void*) {
+        // Only the first FlushAsync (T1) trips this;
+        // subsequent ones from T2 already block on
+        // slice_mutex_ before reaching here (with
+        // fix) or reach here too (without fix) — we
+        // want only T1 to gate.
+        if (sync_fired.exchange(true)) return;
+        t1_in_section.set_value();
+        release_t1_future.wait();
+      });
   SyncPoint::GetInstance()->EnableProcessing();
 
   std::atomic<bool> t1_returned_async{false};
@@ -607,6 +608,67 @@ TEST_F(ChunkWriterTest, ConcurrentFlush_HoldsSliceMutexUntilQueuePush) {
          "caller can race in with empty to_commit and push an empty "
          "FlushTask ahead.";
 #endif  // NDEBUG
+}
+
+// --- P2 failure-path: pool exhaustion (WriteMemPool::Allocate -> nullptr) ---
+
+// Tiny pool + zero acquire timeout makes exhaustion deterministic. A write
+// needing more pages than the pool has must fail with NoSpace AND roll back
+// every page it briefly took (BlockData::Write pass-1 rollback) -- no leak.
+TEST_F(ChunkWriterTest, PoolExhaustion_WriteReturnsNoSpaceAndRollsBack) {
+  gflags::FlagSaver flag_saver;
+  FLAGS_vfs_write_pool_acquire_timeout_ms = 0;
+  auto tiny_pool = std::make_unique<WriteMemPool>(4 * 4096, 4096);  // 4 slots
+  ON_CALL(*mock_hub_, GetWriteMemPool()).WillByDefault(Return(tiny_pool.get()));
+
+  auto writer = MakeWriter();
+
+  // 8 pages (32 KiB) > 4-slot pool: BlockData::Write pass-1 fails on the 5th
+  // page, rolls back the 4 it took, and NoSpace propagates up the chain.
+  std::string buf(8 * 4096, 'x');
+  Status s = writer->Write(ctx_, buf.data(), static_cast<int32_t>(buf.size()),
+                           /*chunk_offset=*/0);
+  EXPECT_TRUE(s.IsNoSpace()) << "expected NoSpace, got: " << s.ToString();
+  EXPECT_EQ(tiny_pool->GetUsedBytes(), 0)
+      << "rollback leaked pages: used=" << tiny_pool->GetUsedBytes();
+}
+
+// Concurrent writers all hit the exhausted pool. The batch leader fails, and
+// EVERY queued writer must be woken with the batch status -- if batch wakeup is
+// broken a waiter blocks forever and join() hangs (test times out). Reaching
+// the assertions proves no deadlock and no lost writer.
+TEST_F(ChunkWriterTest, PoolExhaustion_ConcurrentWritersAllWokenNoDeadlock) {
+  gflags::FlagSaver flag_saver;
+  FLAGS_vfs_write_pool_acquire_timeout_ms = 0;
+  auto tiny_pool = std::make_unique<WriteMemPool>(4 * 4096, 4096);
+  ON_CALL(*mock_hub_, GetWriteMemPool()).WillByDefault(Return(tiny_pool.get()));
+
+  auto writer = MakeWriter();
+
+  constexpr int kThreads = 8;
+  std::atomic<int> nospace{0};
+  std::atomic<int> okcnt{0};
+  std::vector<std::thread> ts;
+  ts.reserve(kThreads);
+  for (int i = 0; i < kThreads; ++i) {
+    // Distinct 8 MiB-apart offsets -> independent slices, no contiguity clash.
+    ts.emplace_back([&, i] {
+      std::string buf(8 * 4096, 'x');
+      Status s =
+          writer->Write(ctx_, buf.data(), static_cast<int32_t>(buf.size()),
+                        /*chunk_offset=*/i * 8 * 1024 * 1024);
+      if (s.IsNoSpace()) {
+        nospace.fetch_add(1, std::memory_order_relaxed);
+      } else if (s.ok()) {
+        okcnt.fetch_add(1, std::memory_order_relaxed);
+      }
+    });
+  }
+  for (auto& t : ts) t.join();  // must not hang -- proves all writers woken
+
+  EXPECT_GT(nospace.load(), 0) << "expected writers to hit NoSpace";
+  EXPECT_EQ(nospace.load() + okcnt.load(), kThreads) << "a writer was lost";
+  EXPECT_EQ(tiny_pool->GetUsedBytes(), 0) << "rollback leaked pages";
 }
 
 }  // namespace vfs

@@ -22,6 +22,7 @@
 #include <glog/logging.h>
 
 #include <cstdint>
+#include <vector>
 
 namespace dingofs {
 namespace client {
@@ -62,10 +63,18 @@ PageData* BlockData::FindOrCreatePageData(uint32_t page_index,
     return iter->second.get();
   }
 
+  char* page = AllocPage();
+  if (page == nullptr) {
+    // Pool exhausted (bounded-acquire timed out). Don't create a PageData
+    // holding a null page -- return nullptr so BlockData::Write rolls back any
+    // pages it newly allocated this call and surfaces NoSpace.
+    return nullptr;
+  }
+
   auto [new_iter, inserted] = pages_.emplace(
       page_index,
-      std::make_unique<PageData>(vfs_hub_, page_index, context_.page_size,
-                                 AllocPage(), page_offset));
+      std::make_unique<PageData>(vfs_hub_, page_index, context_.page_size, page,
+                                 page_offset));
   CHECK(inserted);
 
   VLOG(12) << fmt::format("{} Creating new page_data: {} for page index: {}",
@@ -77,11 +86,11 @@ PageData* BlockData::FindOrCreatePageData(uint32_t page_index,
 Status BlockData::Write(ContextSPtr ctx, const char* buf, int32_t size,
                         int32_t block_offset) {
   auto span = vfs_hub_->GetTraceManager()->StartChildSpan("BlockData::Write",
-                                                         ctx->GetTraceSpan());
+                                                          ctx->GetTraceSpan());
 
   VLOG(6) << fmt::format(
-      "{} Write Start data size: {}, block_offset: {}, block_data: {}",
-      UUID(), size, block_offset, ToString());
+      "{} Write Start data size: {}, block_offset: {}, block_data: {}", UUID(),
+      size, block_offset, ToString());
 
   CHECK_GT(size, 0);
   CHECK_GE(block_offset, 0);
@@ -97,6 +106,52 @@ Status BlockData::Write(ContextSPtr ctx, const char* buf, int32_t size,
   uint32_t page_index = block_offset / page_size;
   int32_t page_offset = block_offset % page_size;
 
+  // Pass 1: pre-allocate every page this write needs. AllocPage may fail (pool
+  // exhausted, bounded-acquire timed out) -- if so, roll back the pages created
+  // this call (DeAllocate + erase) and return NoSpace, leaving block state
+  // untouched (len_/block_offset_ unchanged, no half-written page) so a retry
+  // at the same offset is clean and won't trip PageData's contiguity CHECK.
+  {
+    std::vector<uint32_t> created_this_call;
+    int32_t pre_offset = page_offset;
+    uint32_t pre_index = page_index;
+    int32_t pre_remain = size;
+    bool alloc_failed = false;
+    while (pre_remain > 0) {
+      int32_t write_size = std::min(pre_remain, page_size - pre_offset);
+      bool existed = pages_.find(pre_index) != pages_.end();
+      PageData* page_data = FindOrCreatePageData(pre_index, pre_offset);
+      if (page_data == nullptr) {
+        alloc_failed = true;
+        break;
+      }
+      if (!existed) {
+        created_this_call.push_back(pre_index);
+      }
+      pre_remain -= write_size;
+      pre_offset = 0;
+      ++pre_index;
+    }
+
+    if (alloc_failed) {
+      for (uint32_t idx : created_this_call) {
+        auto it = pages_.find(idx);
+        if (it != pages_.end()) {
+          if (it->second->page != nullptr) {
+            write_buffer_manager_->DeAllocate(it->second->page);
+          }
+          pages_.erase(it);
+        }
+      }
+      VLOG(6) << fmt::format(
+          "{} Write rollback: pool exhausted, freed {} pages", UUID(),
+          created_this_call.size());
+      return Status::NoSpace("write page pool exhausted");
+    }
+  }
+
+  // Pass 2: every page is allocated -- memcpy into them (FindOrCreatePageData
+  // now always hits the existing entry).
   const char* buf_pos = buf;
   int32_t remain_len = size;
 

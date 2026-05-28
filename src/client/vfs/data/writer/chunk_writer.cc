@@ -104,6 +104,10 @@ Status ChunkWriter::Write(ContextSPtr ctx, const char* buf, int32_t size,
 
   // TODO: check mem ratio, sleep when mem is near full
   bool has_full = false;
+  // Result of the batch the leader writer drives below; propagated to EVERY
+  // queued writer (success or NoSpace) so none blocks forever on pool
+  // exhaustion.
+  Status batch_status = Status::OK();
 
   {
     std::unique_lock<std::mutex> lg(writer_mutex_);
@@ -166,7 +170,12 @@ Status ChunkWriter::Write(ContextSPtr ctx, const char* buf, int32_t size,
 
         Status s = slice->Write(SpanScope::GetContext(span), write_info->buf,
                                 write_info->size, write_info->chunk_offset);
-        CHECK(s.ok());
+        if (!s.ok()) {
+          // Pool exhausted. Stop the batch; batch_status is propagated to all
+          // queued writers below so none blocks forever (fills former TODO).
+          batch_status = s;
+          break;
+        }
 
         if (slice->Len() == chunk_.chunk_size) {
           has_full = true;
@@ -182,8 +191,7 @@ Status ChunkWriter::Write(ContextSPtr ctx, const char* buf, int32_t size,
       Writer* ready = writers_.front();
       writers_.pop_front();
       if (ready != &writer) {
-        // TOOD: we need member every writer status when slice write can be fail
-        ready->status = Status::OK();
+        ready->status = batch_status;  // OK on success, NoSpace on exhaustion
         ready->done = true;
         ready->cv.notify_all();
       }
@@ -199,7 +207,7 @@ Status ChunkWriter::Write(ContextSPtr ctx, const char* buf, int32_t size,
     TriggerFlush();
   }
 
-  return Status::OK();
+  return batch_status;
 }
 
 SliceWriter* ChunkWriter::GetSliceUnlocked(int32_t chunk_pos, int32_t size) {
