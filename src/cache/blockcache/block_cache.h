@@ -36,19 +36,39 @@
 namespace dingofs {
 namespace cache {
 
+// Selects which tier of TierBlockCache to route an operation to.
+//   kDefault — current tiered behavior (local first, then remote)
+//   kLocal   — restrict to the local tier only; do NOT fall back to remote
+//   kRemote  — restrict to the remote tier only; do NOT fall back to local
+// In all cases, Range may still fall through to origin storage if
+// retrieve_storage is set. Useful for pinning specific blocks to one tier
+// (e.g. small blocks pinned to an in-memory local store).
+enum class CacheTier : uint8_t {
+  kDefault = 0,
+  kLocal = 1,
+  kRemote = 2,
+};
+
 struct PutOption {
   bool writeback{false};
   BlockAttr block_attr{BlockAttr::kFromUnknown};
+  CacheTier tier{CacheTier::kDefault};
 };
 
 struct RangeOption {
   bool retrieve_storage{true};
   size_t block_whole_length{0};
   bool is_subrequest{false};
+  CacheTier tier{CacheTier::kDefault};
 };
 
-struct CacheOption {};
-struct PrefetchOption {};
+struct CacheOption {
+  CacheTier tier{CacheTier::kDefault};
+};
+
+struct PrefetchOption {
+  CacheTier tier{CacheTier::kDefault};
+};
 
 // async callback
 using AsyncCallback = std::function<void(Status)>;

@@ -138,7 +138,7 @@ DECLARE_uint32(periodic_heartbeat_interval_s);
 // Sets whether to enable trace logging for cache.
 DECLARE_bool(cache_trace_logging);
 
-// Sets the cache store type, can be "none", "disk" or "3fs".
+// Sets the cache store type, can be "none", "disk" or "memory".
 DECLARE_string(cache_store);
 
 // Sets whether to enable stage block for writeback which will store block in
@@ -165,6 +165,12 @@ DECLARE_uint32(upload_stage_max_inflights);
 
 // Sets the maximum inflight requests for prefetching blocks.
 DECLARE_uint32(prefetch_max_inflights);
+
+// Blocks whose whole size is smaller than this many KB are automatically
+// pinned to the local cache tier (when local cache is enabled), instead of
+// going through the local->remote tier fallback. 0 disables this behavior.
+// Intended for routing tiny blocks to the in-memory local store.
+DECLARE_uint32(small_block_size_kb);
 
 // Sets the directory to store stage and cache blocks.
 // Multi directories and corresponding cache size are supported, e.g.

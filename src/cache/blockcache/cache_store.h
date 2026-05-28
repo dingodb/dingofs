@@ -39,7 +39,7 @@ namespace cache {
 enum class StoreType : uint8_t {
   kNone = 0,
   kDisk = 1,
-  k3FS = 2,
+  kMem = 2,
 };
 
 // block attribute
