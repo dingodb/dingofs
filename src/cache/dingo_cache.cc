@@ -32,6 +32,7 @@
 #include "common/options/common.h"
 #include "common/version.h"
 #include "utils/daemonize.h"
+#include "utils/numa_binder.h"
 
 namespace dingofs {
 namespace cache {
@@ -125,11 +126,16 @@ int DingoCache::Run(int argc, char** argv) {
     return rc;
   }
 
+  // Pin process to NUMA node (no-op when --numa_node < 0). Must happen before
+  // any worker threads or large allocations are created so the binding is
+  // inherited by all descendants.
+  utils::BindNumaOrDie();
+
   GlobalInitOrDie();
 
   // run in daemon mode
   if (dingofs::FLAGS_daemonize) {
-    if (!dingofs::utils::DaemonizeExec(orig_args)) {
+    if (!utils::DaemonizeExec(orig_args)) {
       std::cerr << "failed to daemonize process.\n";
       return -1;
     }
