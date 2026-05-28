@@ -671,6 +671,53 @@ TEST_F(ChunkWriterTest, PoolExhaustion_ConcurrentWritersAllWokenNoDeadlock) {
   EXPECT_EQ(tiny_pool->GetUsedBytes(), 0) << "rollback leaked pages";
 }
 
+// Per-writer regression: in a batch where early writers succeed and a later one
+// exhausts the pool, the successful writers MUST return OK -- their data
+// already landed in the buffer. A single shared batch status would clobber them
+// with NoSpace, the caller would retry the same range and double-write. 8
+// writers each take 1 page from a 4-slot pool: exactly 4 fit (and stay, nothing
+// is flushed), the rest get NoSpace. The fix keeps okcnt > 0; the pre-fix bug
+// made it 0 for any batch that mixed success + failure.
+TEST_F(ChunkWriterTest, PoolExhaustion_PartialBatch_SuccessfulWritersReturnOK) {
+  gflags::FlagSaver flag_saver;
+  FLAGS_vfs_write_pool_acquire_timeout_ms = 0;
+  auto tiny_pool = std::make_unique<WriteMemPool>(4 * 4096, 4096);  // 4 slots
+  ON_CALL(*mock_hub_, GetWriteMemPool()).WillByDefault(Return(tiny_pool.get()));
+
+  auto writer = MakeWriter();
+
+  constexpr int kThreads = 8;
+  std::atomic<int> nospace{0};
+  std::atomic<int> okcnt{0};
+  std::vector<std::thread> ts;
+  ts.reserve(kThreads);
+  for (int i = 0; i < kThreads; ++i) {
+    // 1 page each, distinct 8 MiB-apart offsets (independent slices).
+    ts.emplace_back([&, i] {
+      std::string buf(4096, 'x');
+      Status s =
+          writer->Write(ctx_, buf.data(), static_cast<int32_t>(buf.size()),
+                        /*chunk_offset=*/i * 8 * 1024 * 1024);
+      if (s.IsNoSpace()) {
+        nospace.fetch_add(1, std::memory_order_relaxed);
+      } else if (s.ok()) {
+        okcnt.fetch_add(1, std::memory_order_relaxed);
+      }
+    });
+  }
+  for (auto& t : ts) t.join();
+
+  EXPECT_GT(okcnt.load(), 0)
+      << "successful writers were clobbered with the batch failure status";
+  EXPECT_GT(nospace.load(), 0) << "expected some writers to hit NoSpace";
+  EXPECT_EQ(okcnt.load() + nospace.load(), kThreads) << "a writer was lost";
+  // Successful writers each hold exactly 1 page (not flushed); failed writers
+  // rolled back cleanly -- so used is precisely okcnt pages, nothing leaked.
+  EXPECT_EQ(tiny_pool->GetUsedBytes(),
+            static_cast<int64_t>(okcnt.load()) * 4096)
+      << "used should equal successful writers' pages with no leak";
+}
+
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
