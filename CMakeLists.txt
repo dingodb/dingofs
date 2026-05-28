@@ -247,6 +247,10 @@ message("Using opentelemetry-cpp ${opentelemetry-cpp_VERSION}")
 find_package(uring REQUIRED)
 message("Using uring ${uring_VERSION}")
 
+# libnuma: used by src/utils/numa_binder for NUMA pinning
+find_library(NUMA_LIBRARY numa REQUIRED)
+message("Using libnuma: ${NUMA_LIBRARY}")
+
 
 find_package(jsoncpp REQUIRED)
 message("Using jsoncpp ${jsoncpp_VERSION}")
