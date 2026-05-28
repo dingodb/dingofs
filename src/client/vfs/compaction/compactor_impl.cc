@@ -120,7 +120,7 @@ Status CompactorImpl::DoCompact(ContextSPtr ctx, Ino ino, int64_t chunk_index,
   Slice compacted;
 
   {
-    auto page_size = vfs_hub_->GetWriteBufferManager()->GetPageSize();
+    auto page_size = vfs_hub_->GetWriteMemPool()->GetPageSize();
 
     SliceDataContext ctx(fs_info.id, ino, chunk_index, chunk_size,
                          fs_info.block_size, page_size);

@@ -278,7 +278,7 @@ Status VFSHubImpl::Start(bool skip_mount) {
     }
   }
 
-  write_buffer_manager_ = std::make_unique<WriteBufferManager>(
+  write_buffer_manager_ = std::make_unique<WriteMemPool>(
       FLAGS_vfs_write_buffer_total_mb * 1024 * 1024,
       FLAGS_vfs_write_buffer_page_size);
 

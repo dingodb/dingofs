@@ -19,7 +19,7 @@ add_library(vfs_data_slice
 )
 
 target_link_libraries(vfs_data_slice
-    vfs_memory
+    dingofs_write_mempool
     vfs_hub
     fmt::fmt
     brpc::brpc

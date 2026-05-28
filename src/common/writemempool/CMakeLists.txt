@@ -11,10 +11,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# Define the BASE_FLAGS and DINGO_DEFAULT_COPTS variables
 
-file(GLOB TEST_VFS_MEMORY_SRCS "*.cc")
-add_library(test_vfs_memory ${TEST_VFS_MEMORY_SRCS})
-target_link_libraries(test_vfs_memory
-  vfs_memory
-  ${TEST_DEPS_WITHOUT_MAIN}
+add_library(dingofs_write_mempool
+    memory_pool.cc
+    write_mem_pool.cc
+)
+target_link_libraries(dingofs_write_mempool
+    glog::glog
+    gflags::gflags
+    brpc::brpc
+    fmt::fmt
 )

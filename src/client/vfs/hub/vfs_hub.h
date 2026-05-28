@@ -29,7 +29,6 @@
 #include "client/vfs/components/prefetch_manager.h"
 #include "client/vfs/components/warmup_manager.h"
 #include "client/vfs/handle/handle_manager.h"
-#include "client/vfs/memory/write_buffer_manager.h"
 #include "client/vfs/metasystem/meta_wrapper.h"
 #include "client/vfs/vfs.h"
 #include "client/vfs/vfs_meta.h"
@@ -38,6 +37,7 @@
 #include "common/readmempool/read_mem_pool_vars.h"
 #include "common/status.h"
 #include "common/trace/trace_manager.h"
+#include "common/writemempool/write_mem_pool.h"
 #include "utils/executor/executor.h"
 #include "utils/logclean_manager.h"
 
@@ -77,7 +77,7 @@ class VFSHub {
 
   virtual Executor* GetCBExecutor() = 0;
 
-  virtual WriteBufferManager* GetWriteBufferManager() = 0;
+  virtual WriteMemPool* GetWriteMemPool() = 0;
 
   virtual ReadMemPool* GetReadMemPool() = 0;
 
@@ -150,7 +150,7 @@ class VFSHubImpl : public VFSHub {
     return cb_executor_.get();
   }
 
-  WriteBufferManager* GetWriteBufferManager() override {
+  WriteMemPool* GetWriteMemPool() override {
     CHECK_NOTNULL(write_buffer_manager_);
     return write_buffer_manager_.get();
   }
@@ -217,7 +217,7 @@ class VFSHubImpl : public VFSHub {
   std::unique_ptr<Executor> bg_executor_;
   std::unique_ptr<Executor> flush_executor_;
   std::unique_ptr<Executor> cb_executor_;
-  std::unique_ptr<WriteBufferManager> write_buffer_manager_;
+  std::unique_ptr<WriteMemPool> write_buffer_manager_;
   std::unique_ptr<ReadMemPool> read_mem_pool_;
   std::unique_ptr<ReadMemPoolVars>
       read_mem_pool_vars_;  // after pool: dtor first

@@ -107,7 +107,7 @@ class FlushTasksTest : public test::VFSTestBase {
 // We create a SliceWriter with data, then steal its block_datas_ indirectly
 // by going through a SliceFlushTask constructed from scratch.
 //
-// Because BlockData requires the full VFSHub stack (WriteBufferManager etc.),
+// Because BlockData requires the full VFSHub stack (WriteMemPool etc.),
 // we build BlockData objects by writing through a SliceWriter and capturing
 // what SliceFlushTask receives via the mocked PutAsync.
 

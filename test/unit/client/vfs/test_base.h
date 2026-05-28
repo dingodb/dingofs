@@ -25,12 +25,12 @@
 
 #include "client/vfs/components/file_suffix_watcher.h"
 #include "client/vfs/handle/handle_manager.h"
-#include "client/vfs/memory/write_buffer_manager.h"
 #include "client/vfs/metasystem/meta_wrapper.h"
 #include "common/options/client.h"
 #include "common/readmempool/read_mem_pool.h"
 #include "common/status.h"
 #include "common/trace/context.h"
+#include "common/writemempool/write_mem_pool.h"
 #include "test/unit/client/vfs/mock/mock_block_store.h"
 #include "test/unit/client/vfs/mock/mock_compactor.h"
 #include "test/unit/client/vfs/mock/mock_meta_system.h"
@@ -67,8 +67,7 @@ class VFSTestBase : public ::testing::Test {
 
     // --- 2. Real stateless objects ---
     read_mem_pool_ = std::make_unique<ReadMemPool>(64 * 1024 * 1024);  // 64MB
-    write_buf_mgr_ =
-        std::make_unique<WriteBufferManager>(64 * 1024 * 1024, 4096);
+    write_buf_mgr_ = std::make_unique<WriteMemPool>(64 * 1024 * 1024, 4096);
     file_suffix_watcher_ = std::make_unique<FileSuffixWatcher>("");
 
     // --- 3. MockMetaSystem + MetaWrapper ---
@@ -108,7 +107,7 @@ class VFSTestBase : public ::testing::Test {
         .WillByDefault(Return(mock_block_store_));
     ON_CALL(*mock_hub_, GetReadMemPool())
         .WillByDefault(Return(read_mem_pool_.get()));
-    ON_CALL(*mock_hub_, GetWriteBufferManager())
+    ON_CALL(*mock_hub_, GetWriteMemPool())
         .WillByDefault(Return(write_buf_mgr_.get()));
     ON_CALL(*mock_hub_, GetFileSuffixWatcher())
         .WillByDefault(Return(file_suffix_watcher_.get()));
@@ -127,7 +126,7 @@ class VFSTestBase : public ::testing::Test {
     EXPECT_CALL(*mock_hub_, GetHandleManager()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetBlockStore()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetReadMemPool()).Times(AnyNumber());
-    EXPECT_CALL(*mock_hub_, GetWriteBufferManager()).Times(AnyNumber());
+    EXPECT_CALL(*mock_hub_, GetWriteMemPool()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetFileSuffixWatcher()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetCompactor()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetReadExecutor()).Times(AnyNumber());
@@ -213,7 +212,7 @@ class VFSTestBase : public ::testing::Test {
   std::unique_ptr<MetaWrapper> meta_wrapper_;
   std::unique_ptr<HandleManager> handle_manager_;
   std::unique_ptr<ReadMemPool> read_mem_pool_;
-  std::unique_ptr<WriteBufferManager> write_buf_mgr_;
+  std::unique_ptr<WriteMemPool> write_buf_mgr_;
   std::unique_ptr<FileSuffixWatcher> file_suffix_watcher_;
 
   // Real executors

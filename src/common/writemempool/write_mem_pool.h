@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef CLIENT_VFS_MEMRORY_WRITE_BUFFER_MANAGER_H_
-#define CLIENT_VFS_MEMRORY_WRITE_BUFFER_MANAGER_H_
+#ifndef DINGOFS_SRC_COMMON_WRITEMEMPOOL_WRITE_MEM_POOL_H_
+#define DINGOFS_SRC_COMMON_WRITEMEMPOOL_WRITE_MEM_POOL_H_
 
 #include <sys/types.h>
 
@@ -26,14 +26,12 @@
 #include "bvar/status.h"
 
 namespace dingofs {
-namespace client {
-namespace vfs {
 
-class WriteBufferManager {
+class WriteMemPool {
  public:
-  explicit WriteBufferManager(int64_t total_bytes, int64_t page_size);
+  explicit WriteMemPool(int64_t total_bytes, int64_t page_size);
 
-  ~WriteBufferManager() = default;
+  ~WriteMemPool() = default;
 
   char* Allocate();
 
@@ -51,12 +49,12 @@ class WriteBufferManager {
 
  private:
   static int64_t UsedBytes(void* arg) {
-    auto* manager = reinterpret_cast<WriteBufferManager*>(arg);
+    auto* manager = reinterpret_cast<WriteMemPool*>(arg);
     return manager->GetUsedBytes();
   }
 
   static int64_t UsedPages(void* arg) {
-    auto* manager = reinterpret_cast<WriteBufferManager*>(arg);
+    auto* manager = reinterpret_cast<WriteMemPool*>(arg);
     return manager->used_pages_.load();
   }
 
@@ -69,8 +67,6 @@ class WriteBufferManager {
   bvar::PassiveStatus<int64_t> write_buffer_used_bytes_;
 };
 
-}  // namespace vfs
-}  // namespace client
 }  // namespace dingofs
 
-#endif  // CLIENT_VFS_MEMRORY_WRITE_BUFFER_MANAGER_H_
+#endif  // DINGOFS_SRC_COMMON_WRITEMEMPOOL_WRITE_MEM_POOL_H_
