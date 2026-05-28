@@ -34,6 +34,12 @@ namespace {
 // Bounded-acquire backoff: spin-yield this many times before each short sleep.
 constexpr uint32_t kAcquireSpinYields = 64;
 constexpr uint32_t kAcquireBackoffUs = 50;
+
+int64_t ElapsedUs(std::chrono::steady_clock::time_point start) {
+  return std::chrono::duration_cast<std::chrono::microseconds>(
+             std::chrono::steady_clock::now() - start)
+      .count();
+}
 }  // namespace
 
 WriteMemPool::WriteMemPool(int64_t total_bytes, int64_t page_size)
@@ -41,9 +47,14 @@ WriteMemPool::WriteMemPool(int64_t total_bytes, int64_t page_size)
       page_size_(page_size),
       pool_(MemoryPool::Create(static_cast<size_t>(page_size),
                                static_cast<size_t>(total_bytes / page_size))),
-      write_buffer_total_bytes_("vfs_write_buffer_total_bytes_", total_bytes),
-      write_buffer_used_pages_("vfs_write_buffer_used_pages", UsedPages, this),
-      write_buffer_used_bytes_("vfs_write_buffer_used_bytes", UsedBytes, this) {
+      capacity_pages_("vfs_write_pool_capacity_pages",
+                      page_size > 0 ? total_bytes / page_size : 0),
+      used_pages_var_("vfs_write_pool_used_pages", UsedPages, this),
+      used_bytes_var_("vfs_write_pool_used_bytes", UsedBytes, this),
+      acquire_fail_num_("vfs_write_pool_acquire_fail_num"),
+      transient_null_num_("vfs_write_pool_transient_null_num"),
+      acquire_wait_num_("vfs_write_pool_acquire_wait_num"),
+      acquire_wait_us_("vfs_write_pool_acquire_wait_us") {
   CHECK(pool_ != nullptr) << "WriteMemPool failed to create MemoryPool: page="
                           << page_size
                           << " count=" << (total_bytes / page_size);
@@ -57,13 +68,21 @@ char* WriteMemPool::Allocate() {
   // counts as genuine exhaustion (returns nullptr -> caller maps to ENOSPC).
   char* page = pool_->Require();
   if (page == nullptr) {
+    // --- slow path: all metrics live here; the fast path above is untouched
+    // ---
+    transient_null_num_ << 1;  // first miss
+    acquire_wait_num_ << 1;    // this request entered bounded-acquire
+    const auto wait_start = std::chrono::steady_clock::now();
     const auto deadline =
-        std::chrono::steady_clock::now() +
+        wait_start +
         std::chrono::milliseconds(FLAGS_vfs_write_pool_acquire_timeout_ms);
     uint32_t spins = 0;
     while ((page = pool_->Require()) == nullptr) {
+      transient_null_num_ << 1;  // each retry miss
       if (std::chrono::steady_clock::now() >= deadline) {
-        return nullptr;  // genuine exhaustion (bounded wait elapsed)
+        acquire_fail_num_ << 1;  // genuine exhaustion (bounded wait elapsed)
+        acquire_wait_us_ << ElapsedUs(wait_start);
+        return nullptr;
       }
       if (spins < kAcquireSpinYields) {
         std::this_thread::yield();
@@ -73,8 +92,9 @@ char* WriteMemPool::Allocate() {
             std::chrono::microseconds(kAcquireBackoffUs));
       }
     }
+    acquire_wait_us_ << ElapsedUs(wait_start);
   }
-  used_pages_.fetch_add(1);
+  used_pages_ << 1;
   return page;
 }
 
@@ -83,7 +103,7 @@ void WriteMemPool::DeAllocate(char* page) {
     return;
   }
   pool_->Release(page);
-  used_pages_.fetch_sub(1);
+  used_pages_ << -1;
 }
 
 int64_t WriteMemPool::GetPageSize() const { return page_size_; }
@@ -91,7 +111,7 @@ int64_t WriteMemPool::GetPageSize() const { return page_size_; }
 int64_t WriteMemPool::GetTotalBytes() const { return total_bytes_; }
 
 int64_t WriteMemPool::GetUsedBytes() const {
-  return page_size_ * used_pages_.load(std::memory_order_relaxed);
+  return page_size_ * used_pages_.get_value();
 }
 
 double WriteMemPool::GetUsageRatio() const {
@@ -105,5 +125,9 @@ double WriteMemPool::GetUsageRatio() const {
 bool WriteMemPool::IsHighPressure(double threshold) const {
   return GetUsageRatio() >= threshold;
 }
+
+char* WriteMemPool::BaseAddr() const { return pool_->BaseAddr(); }
+
+size_t WriteMemPool::TotalSize() const { return pool_->TotalSize(); }
 
 }  // namespace dingofs

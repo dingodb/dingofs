@@ -58,6 +58,11 @@ class MemoryPool {
   char* Require();
   void Release(char* buffer);
 
+  // RDMA-ready: the pool is one contiguous region (single mmap), so these give
+  // ibv_reg_mr its addr + length. Mirrors ReadMemPool's BaseAddr()/TotalSize().
+  char* BaseAddr() const { return base_; }
+  size_t TotalSize() const { return buffer_size_ * buffer_count_; }
+
  private:
   static constexpr uint32_t kNumShards = 32;
   static constexpr uint32_t kNumCaches = 128;

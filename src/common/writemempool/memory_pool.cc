@@ -26,7 +26,6 @@
 #include <sys/mman.h>
 
 #include <atomic>
-#include <thread>
 
 namespace dingofs {
 
