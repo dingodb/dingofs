@@ -24,7 +24,7 @@
 
 namespace dingofs {
 
-DEFINE_int64(vfs_write_pool_acquire_timeout_ms, 5000,
+DEFINE_int64(vfs_write_pool_acquire_timeout_ms, 3000,
              "Bounded-acquire deadline (ms) for one write-page Allocate(): "
              "loop MemoryPool::Require() until this elapses before returning "
              "nullptr. A single Require()==nullptr is transient contention, "
