@@ -20,10 +20,12 @@
 #include <sys/types.h>
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 
 #include "bvar/passive_status.h"
 #include "bvar/status.h"
+#include "common/writemempool/memory_pool.h"
 
 namespace dingofs {
 
@@ -61,6 +63,7 @@ class WriteMemPool {
   const int64_t total_bytes_{0};
   const int64_t page_size_{0};
   std::atomic<int64_t> used_pages_{0};
+  MemoryPoolUPtr pool_;
 
   bvar::Status<int64_t> write_buffer_total_bytes_;
   bvar::PassiveStatus<int64_t> write_buffer_used_pages_;
