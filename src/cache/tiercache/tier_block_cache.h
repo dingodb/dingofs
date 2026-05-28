@@ -94,6 +94,12 @@ class TierBlockCache final : public BlockCache {
   IOBuffer CopyBlock(const IOBuffer& block);
   void FillGroupCache(const BlockHandle& handle, const IOBuffer& block);
 
+  // Returns the effective tier for an operation. If the caller already pinned
+  // a tier (kLocal or kRemote) it is honored as-is. Otherwise, small blocks
+  // are automatically pinned to local when FLAGS_small_block_size_kb > 0
+  // and local cache is enabled.
+  CacheTier ResolveTier(const BlockHandle& handle, CacheTier hint) const;
+
   // The behavior of local block cache is same as remote block cache,
   // the biggest difference is that the local block cache will read/write data
   // from/to the local disk, while the remote block cache will read/write data
