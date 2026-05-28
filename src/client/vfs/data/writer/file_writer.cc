@@ -30,7 +30,7 @@
 #include "client/vfs/common/async_util.h"
 #include "client/vfs/data/writer/chunk_writer.h"
 #include "client/vfs/hub/vfs_hub.h"
-#include "client/vfs/memory/write_buffer_manager.h"
+#include "common/writemempool/write_mem_pool.h"
 
 DEFINE_int64(vfs_stale_write_sleep_us, 10, "sleep us when detect memory low");
 
@@ -48,17 +48,17 @@ namespace {
 // soft (used > total) → sleep T µs once; hard (used > 2*total) → loop sleep
 // 10*T µs until back below.  Block here so the FUSE syscall back-pressures
 // the caller; lets the flush worker drain dirty buffers.
-void ApplyWriteBufferThrottle(WriteBufferManager* bm) {
+void ApplyWriteBufferThrottle(WriteMemPool* bm) {
   if (bm->GetUsedBytes() <= bm->GetTotalBytes()) return;
 
-  VLOG(1) << "WriteBufferManager soft pressure, used=" << bm->GetUsedBytes()
+  VLOG(1) << "WriteMemPool soft pressure, used=" << bm->GetUsedBytes()
           << " total=" << bm->GetTotalBytes();
   std::this_thread::sleep_for(
       std::chrono::microseconds(FLAGS_vfs_stale_write_sleep_us));
 
   while (bm->GetUsedBytes() > 2 * bm->GetTotalBytes()) {
-    LOG(INFO) << "WriteBufferManager hard pressure, used="
-              << bm->GetUsedBytes() << " total=" << bm->GetTotalBytes();
+    LOG(INFO) << "WriteMemPool hard pressure, used=" << bm->GetUsedBytes()
+              << " total=" << bm->GetTotalBytes();
     std::this_thread::sleep_for(
         std::chrono::microseconds(10 * FLAGS_vfs_stale_write_sleep_us));
   }
@@ -137,7 +137,7 @@ Status FileWriter::Write(ContextSPtr ctx, const char* buf, uint64_t size,
   DINGOFS_RETURN_NOT_OK(GetStatus());
 
   // Memory-pressure throttle (replaces former File::Write logic).
-  ApplyWriteBufferThrottle(vfs_hub_->GetWriteBufferManager());
+  ApplyWriteBufferThrottle(vfs_hub_->GetWriteMemPool());
 
   {
     std::lock_guard<std::mutex> lock(mutex_);

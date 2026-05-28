@@ -11,13 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# Define the BASE_FLAGS and DINGO_DEFAULT_COPTS variables
 
-# Seperate memory_pool and page_allocator from datastream
-add_library(vfs_memory
-    write_buffer_manager.cc
-)
-target_link_libraries(vfs_memory
-    client_options
-    dingofs_metrics
+file(GLOB TEST_WRITEMEMPOOL_SRCS "*.cc")
+add_library(test_write_mempool ${TEST_WRITEMEMPOOL_SRCS})
+target_link_libraries(test_write_mempool
+  dingofs_write_mempool
+  ${TEST_DEPS_WITHOUT_MAIN}
 )

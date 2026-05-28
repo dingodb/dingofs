@@ -18,6 +18,7 @@ add_subdirectory(options)
 add_subdirectory(trace)
 add_subdirectory(opentrace)
 add_subdirectory(readmempool)
+add_subdirectory(writemempool)
 
 add_library(dingofs_common
     io_buffer.cc
@@ -27,7 +28,6 @@ add_library(dingofs_common
     status.cc
     logging.cc
     sync_point.cc
-    memory_pool.cc
 )
 target_link_libraries(dingofs_common
     dingofs_utils
@@ -37,4 +37,5 @@ target_link_libraries(dingofs_common
     glog::glog
     dingofs_open_trace
     dingofs_read_mempool
+    dingofs_write_mempool
 )

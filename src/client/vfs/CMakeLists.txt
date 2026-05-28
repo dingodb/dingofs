@@ -19,7 +19,6 @@ add_subdirectory(hub)
 add_subdirectory(metasystem)
 add_subdirectory(service)
 add_subdirectory(components)
-add_subdirectory(memory)
 add_subdirectory(compaction)
 
 add_library(vfs_lib

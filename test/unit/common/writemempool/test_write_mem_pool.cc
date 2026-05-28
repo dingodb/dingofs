@@ -19,17 +19,15 @@
 #include <thread>
 #include <vector>
 
-#include "client/vfs/memory/write_buffer_manager.h"
+#include "common/writemempool/write_mem_pool.h"
 
 namespace dingofs {
-namespace client {
-namespace vfs {
 
-// ─── WriteBufferManager ──────────────────────────────────────────────────────
+// ─── WriteMemPool ──────────────────────────────────────────────────────
 
-TEST(WriteBufferManagerTest, Allocate_ReturnsNonNull_IncreasesUsed) {
+TEST(WriteMemPoolTest, Allocate_ReturnsNonNull_IncreasesUsed) {
   constexpr int64_t kPageSize = 4096;
-  WriteBufferManager mgr(kPageSize * 4, kPageSize);
+  WriteMemPool mgr(kPageSize * 4, kPageSize);
 
   char* page = mgr.Allocate();
   ASSERT_NE(page, nullptr);
@@ -38,9 +36,9 @@ TEST(WriteBufferManagerTest, Allocate_ReturnsNonNull_IncreasesUsed) {
   mgr.DeAllocate(page);
 }
 
-TEST(WriteBufferManagerTest, DeAllocate_DecreasesUsed) {
+TEST(WriteMemPoolTest, DeAllocate_DecreasesUsed) {
   constexpr int64_t kPageSize = 4096;
-  WriteBufferManager mgr(kPageSize * 4, kPageSize);
+  WriteMemPool mgr(kPageSize * 4, kPageSize);
 
   char* page = mgr.Allocate();
   ASSERT_NE(page, nullptr);
@@ -50,19 +48,19 @@ TEST(WriteBufferManagerTest, DeAllocate_DecreasesUsed) {
   EXPECT_EQ(mgr.GetUsedBytes(), 0);
 }
 
-TEST(WriteBufferManagerTest, GetPageSize_GetTotalBytes) {
+TEST(WriteMemPoolTest, GetPageSize_GetTotalBytes) {
   constexpr int64_t kPageSize = 8192;
   constexpr int64_t kTotal = kPageSize * 8;
-  WriteBufferManager mgr(kTotal, kPageSize);
+  WriteMemPool mgr(kTotal, kPageSize);
 
   EXPECT_EQ(mgr.GetPageSize(), kPageSize);
   EXPECT_EQ(mgr.GetTotalBytes(), kTotal);
 }
 
-TEST(WriteBufferManagerTest, IsHighPressure_True_WhenAboveThreshold) {
+TEST(WriteMemPoolTest, IsHighPressure_True_WhenAboveThreshold) {
   constexpr int64_t kPageSize = 1024;
   // 2 pages total; allocate 2 to hit 100% usage
-  WriteBufferManager mgr(kPageSize * 2, kPageSize);
+  WriteMemPool mgr(kPageSize * 2, kPageSize);
 
   char* p1 = mgr.Allocate();
   char* p2 = mgr.Allocate();
@@ -75,13 +73,13 @@ TEST(WriteBufferManagerTest, IsHighPressure_True_WhenAboveThreshold) {
   mgr.DeAllocate(p2);
 }
 
-TEST(WriteBufferManagerTest, Concurrent_AllocAndDealloc_FinalZero) {
+TEST(WriteMemPoolTest, Concurrent_AllocAndDealloc_FinalZero) {
   constexpr int kThreads = 4;
   constexpr int kIters = 200;
   constexpr int64_t kPageSize = 4096;
 
-  WriteBufferManager mgr(static_cast<int64_t>(kThreads) * kIters * kPageSize,
-                         kPageSize);
+  WriteMemPool mgr(static_cast<int64_t>(kThreads) * kIters * kPageSize,
+                   kPageSize);
 
   std::vector<std::thread> threads;
   threads.reserve(kThreads);
@@ -100,6 +98,4 @@ TEST(WriteBufferManagerTest, Concurrent_AllocAndDealloc_FinalZero) {
   EXPECT_EQ(mgr.GetUsedBytes(), 0);
 }
 
-}  // namespace vfs
-}  // namespace client
 }  // namespace dingofs

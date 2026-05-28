@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include "common/memory_pool.h"
-
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
@@ -27,6 +25,8 @@
 #include <thread>
 #include <unordered_set>
 #include <vector>
+
+#include "common/writemempool/memory_pool.h"
 
 namespace dingofs {
 
@@ -365,7 +365,8 @@ TEST(MemoryPoolTest, CacheOverflowTriggersFlush) {
   ASSERT_EQ(bufs.size(), kBufferCount);
   EXPECT_EQ(pool->Require(), nullptr);
 
-  // Release all — cache fills to kCacheCap, flushes half to shards, refills, ...
+  // Release all — cache fills to kCacheCap, flushes half to shards, refills,
+  // ...
   for (char* b : bufs) pool->Release(b);
 
   // Drain again — must recover all 100 buffers (sum of cache + shards).
@@ -406,8 +407,8 @@ TEST(MemoryPoolTest, DataIntegrityUnderContention) {
         char* buf = pool->Require();
         if (buf == nullptr) continue;
         // Write our (tid, iter) tag past the intrusive free-list area.
-        uint64_t tag = (static_cast<uint64_t>(tid) << 32) |
-                       static_cast<uint64_t>(i);
+        uint64_t tag =
+            (static_cast<uint64_t>(tid) << 32) | static_cast<uint64_t>(i);
         std::memcpy(buf + sizeof(uint32_t), &tag, sizeof(tag));
         // Brief hold to widen the race window.
         for (volatile int x = 0; x < 16; ++x) {

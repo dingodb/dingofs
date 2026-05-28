@@ -26,10 +26,10 @@
 #include "client/vfs/data/slice/common.h"
 #include "client/vfs/data/slice/page_data.h"
 #include "client/vfs/hub/vfs_hub.h"
-#include "client/vfs/memory/write_buffer_manager.h"
 #include "common/io_buffer.h"
 #include "common/status.h"
 #include "common/trace/context.h"
+#include "common/writemempool/write_mem_pool.h"
 
 namespace dingofs {
 namespace client {
@@ -39,7 +39,7 @@ namespace vfs {
 class BlockData {
  public:
   explicit BlockData(const SliceDataContext& context, VFSHub* vfs_hub,
-                     WriteBufferManager* buffer_manager, uint32_t block_index,
+                     WriteMemPool* buffer_manager, uint32_t block_index,
                      int32_t block_offset)
       : context_(context),
         vfs_hub_(vfs_hub),
@@ -85,7 +85,7 @@ class BlockData {
 
   const SliceDataContext context_;
   VFSHub* vfs_hub_{nullptr};
-  WriteBufferManager* write_buffer_manager_{nullptr};
+  WriteMemPool* write_buffer_manager_{nullptr};
   const uint32_t block_index_;
   int32_t block_offset_{0};
   int32_t len_{0};

@@ -14,10 +14,10 @@
 
 add_subdirectory(blockaccess)
 add_subdirectory(trace)
+add_subdirectory(writemempool)
 
 add_executable(test_common
   main.cc
-  test_memory_pool.cc
   test_read_mem_pool.cc
 )
 
@@ -27,6 +27,8 @@ target_link_libraries(test_common
   dingofs_trace
   $<TARGET_OBJECTS:test_blockaccess>
   block_accesser
+  $<TARGET_OBJECTS:test_write_mempool>
+  dingofs_write_mempool
   dingofs_common
   dingofs_open_trace
   PROTO_OBJS

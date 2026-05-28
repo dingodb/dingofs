@@ -28,7 +28,8 @@
 namespace dingofs {
 
 // Concurrent fast-path cache for buddy's small/mid classes. Modeled on
-// common/memory_pool's per-thread Cache, but **without thread_local**: a fixed
+// common/writemempool/memory_pool's per-thread Cache, but **without
+// thread_local**: a fixed
 // array of cache slots (caches_[kNumCaches]); a thread maps to one slot via a
 // thread-local slot id (threads beyond kNumCaches share, guarded by an
 // atomic_flag try-lock). This avoids thread_local destruction issues -- the
@@ -74,7 +75,8 @@ class TlsCacheSet {
  private:
   static constexpr int kNumCaches = 64;
   static constexpr int kMaxLane = 8;
-  static constexpr size_t kTlsBudget = 1ULL * 1024 * 1024;  // per-slot per-class budget: 1M
+  static constexpr size_t kTlsBudget =
+      1ULL * 1024 * 1024;  // per-slot per-class budget: 1M
 
   static uint32_t Slot();  // thread-local slot id
 

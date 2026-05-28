@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "common/memory_pool.h"
+#include "common/writemempool/memory_pool.h"
 
 #include <glog/logging.h>
 #include <sys/mman.h>

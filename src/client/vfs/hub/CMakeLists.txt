@@ -17,7 +17,7 @@ add_library(vfs_hub
 )
 
 target_link_libraries(vfs_hub
-    vfs_memory
+    dingofs_write_mempool
     dingofs_read_mempool
     vfs_handle
     vfs_components

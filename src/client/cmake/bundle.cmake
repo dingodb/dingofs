@@ -21,7 +21,7 @@ set(_DINGOFS_INTERNAL_LIBS
     vfs_data_common
     vfs_hub
     vfs_handle
-    vfs_memory
+    dingofs_write_mempool
     vfs_components
     vfs_block_store
     vfs_compaction
@@ -85,7 +85,7 @@ add_custom_command(
             $<TARGET_FILE:vfs_data_common>
             $<TARGET_FILE:vfs_hub>
             $<TARGET_FILE:vfs_handle>
-            $<TARGET_FILE:vfs_memory>
+            $<TARGET_FILE:dingofs_write_mempool>
             $<TARGET_FILE:vfs_components>
             $<TARGET_FILE:vfs_block_store>
             $<TARGET_FILE:vfs_compaction>

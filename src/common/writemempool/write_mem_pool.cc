@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "client/vfs/memory/write_buffer_manager.h"
+#include "common/writemempool/write_mem_pool.h"
 
 #include <fmt/format.h>
 #include <glog/logging.h>
@@ -22,10 +22,8 @@
 #include "common/helper.h"
 
 namespace dingofs {
-namespace client {
-namespace vfs {
 
-WriteBufferManager::WriteBufferManager(int64_t total_bytes, int64_t page_size)
+WriteMemPool::WriteMemPool(int64_t total_bytes, int64_t page_size)
     : total_bytes_(total_bytes),
       page_size_(page_size),
       write_buffer_total_bytes_("vfs_write_buffer_total_bytes_", total_bytes),
@@ -33,7 +31,7 @@ WriteBufferManager::WriteBufferManager(int64_t total_bytes, int64_t page_size)
       write_buffer_used_bytes_("vfs_write_buffer_used_bytes", UsedBytes, this) {
 }
 
-char* WriteBufferManager::Allocate() {
+char* WriteMemPool::Allocate() {
   butil::Timer timer;
   timer.start();
   char* page = new char[page_size_];
@@ -46,7 +44,7 @@ char* WriteBufferManager::Allocate() {
   return page;
 }
 
-void WriteBufferManager::DeAllocate(char* page) {
+void WriteMemPool::DeAllocate(char* page) {
   butil::Timer timer;
   timer.start();
   delete[] page;
@@ -59,15 +57,15 @@ void WriteBufferManager::DeAllocate(char* page) {
   used_pages_.fetch_sub(1);
 }
 
-int64_t WriteBufferManager::GetPageSize() const { return page_size_; }
+int64_t WriteMemPool::GetPageSize() const { return page_size_; }
 
-int64_t WriteBufferManager::GetTotalBytes() const { return total_bytes_; }
+int64_t WriteMemPool::GetTotalBytes() const { return total_bytes_; }
 
-int64_t WriteBufferManager::GetUsedBytes() const {
+int64_t WriteMemPool::GetUsedBytes() const {
   return page_size_ * used_pages_.load(std::memory_order_relaxed);
 }
 
-double WriteBufferManager::GetUsageRatio() const {
+double WriteMemPool::GetUsageRatio() const {
   int64_t total = GetTotalBytes();
   if (total == 0) {
     return 0.0;
@@ -75,10 +73,8 @@ double WriteBufferManager::GetUsageRatio() const {
   return static_cast<double>(GetUsedBytes()) / total;
 }
 
-bool WriteBufferManager::IsHighPressure(double threshold) const {
+bool WriteMemPool::IsHighPressure(double threshold) const {
   return GetUsageRatio() >= threshold;
 }
 
-}  // namespace vfs
-}  // namespace client
 }  // namespace dingofs

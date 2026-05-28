@@ -13,7 +13,6 @@
 # limitations under the License.
 
 add_subdirectory(common)
-add_subdirectory(memory)
 add_subdirectory(components)
 add_subdirectory(compaction)
 add_subdirectory(data)

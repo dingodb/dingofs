@@ -57,9 +57,9 @@ BlockData* SliceWriter::FindOrCreateBlockDataUnlocked(uint32_t block_index,
   }
 
   auto [new_iter, inserted] = block_datas_.emplace(
-      block_index, std::make_unique<BlockData>(
-                       context_, vfs_hub_, vfs_hub_->GetWriteBufferManager(),
-                       block_index, block_offset));
+      block_index, std::make_unique<BlockData>(context_, vfs_hub_,
+                                               vfs_hub_->GetWriteMemPool(),
+                                               block_index, block_offset));
   CHECK(inserted);
 
   VLOG(4) << fmt::format(

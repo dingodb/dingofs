@@ -45,7 +45,7 @@ ChunkWriter::ChunkWriter(VFSHub* hub, uint64_t ino, uint64_t index)
     : hub_(hub),
       chunk_(hub->GetFsInfo().id, ino, index, hub->GetFsInfo().chunk_size,
              hub->GetFsInfo().block_size),
-      page_size_(hub->GetWriteBufferManager()->GetPageSize()) {}
+      page_size_(hub->GetWriteMemPool()->GetPageSize()) {}
 
 ChunkWriter::~ChunkWriter() {
   VLOG(12) << fmt::format("{} Destroy Chunk addr: {}", UUID(),
@@ -427,8 +427,8 @@ void ChunkWriter::TryCommitFlushTasks(ContextSPtr ctx) {
           // Shared writer model: a commit batch may aggregate slices from
           // multiple fhs. Invalidate by inode rather than by single fh so
           // every reader on this inode sees a fresh chunk_set.
-          manager->InvalidateByIno(chunk_.ino,
-                                   chunk_.chunk_start + slice.pos, slice.len);
+          manager->InvalidateByIno(chunk_.ino, chunk_.chunk_start + slice.pos,
+                                   slice.len);
         }
       }
     }  // end if commit_slices not empty

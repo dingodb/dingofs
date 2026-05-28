@@ -24,7 +24,6 @@ target_link_libraries(test_client
   $<TARGET_OBJECTS:test_client_vfs_data>
   $<TARGET_OBJECTS:test_vfs_common>
   $<TARGET_OBJECTS:test_vfs_handle>
-  $<TARGET_OBJECTS:test_vfs_memory>
   $<TARGET_OBJECTS:test_vfs_components>
   $<TARGET_OBJECTS:test_vfs_flat>
   $<TARGET_OBJECTS:test_vfs_impl>
@@ -34,7 +33,7 @@ target_link_libraries(test_client
   vfs_lib
   vfs_data
   vfs_handle
-  vfs_memory
+  dingofs_write_mempool
   vfs_components
   vfs_compaction
 
