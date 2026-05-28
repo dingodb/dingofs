@@ -166,11 +166,17 @@ Status SliceWriter::Write(ContextSPtr ctx, const char* buf, int32_t size,
 
       Status s = block_data->Write(SpanScope::GetContext(span), buf_pos,
                                    write_size, block_offset);
-      CHECK(s.ok()) << fmt::format(
-          "{} Failed to write data to block data, block_index: {}, "
-          "chunk_range: [{}-{}], len: {}, slice: {}, status: {}",
-          UUID(), block_index, block_offset, (block_offset + write_size),
-          write_size, ToStringUnlocked(), s.ToString());
+      if (!s.ok()) {
+        // BlockData::Write already rolled back its own pages on pool
+        // exhaustion. Propagate up; blocks written earlier in this slice stay
+        // (POSIX short write), len_ is NOT bumped, caller surfaces ENOSPC.
+        LOG(WARNING) << fmt::format(
+            "{} BlockData::Write failed, block_index: {}, chunk_range: "
+            "[{}-{}], len: {}, status: {}",
+            UUID(), block_index, block_offset, (block_offset + write_size),
+            write_size, s.ToString());
+        return s;
+      }
 
       remain_len -= write_size;
       buf_pos += write_size;
