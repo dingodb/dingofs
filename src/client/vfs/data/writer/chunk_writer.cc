@@ -24,6 +24,7 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <unordered_map>
 #include <utility>
 
 #include "client/vfs/common/async_util.h"
@@ -104,10 +105,21 @@ Status ChunkWriter::Write(ContextSPtr ctx, const char* buf, int32_t size,
 
   // TODO: check mem ratio, sleep when mem is near full
   bool has_full = false;
-  // Result of the batch the leader writer drives below; propagated to EVERY
-  // queued writer (success or NoSpace) so none blocks forever on pool
-  // exhaustion.
-  Status batch_status = Status::OK();
+  // Per-writer result of the batch the leader drives below. Each write_info the
+  // leader actually wrote records its own status (OK, or the NoSpace that
+  // stopped the batch); write_infos past the failure point aren't inserted and
+  // fall back to batch_fail_status. This must be per-writer: a late failure
+  // must NOT clobber writers whose data already landed in the buffer -- they
+  // have to return OK, otherwise the caller retries the same range and
+  // double-writes (or trips a downstream CHECK).
+  std::unordered_map<const ChunkWriteInfo*, Status> batch_results;
+  Status batch_fail_status = Status::OK();
+  // A writer's status is its own write_info result if the leader reached it,
+  // else the batch failure (its data was never written -> must not return OK).
+  auto status_for = [&](const ChunkWriteInfo* wi) -> Status {
+    auto it = batch_results.find(wi);
+    return it != batch_results.end() ? it->second : batch_fail_status;
+  };
 
   {
     std::unique_lock<std::mutex> lg(writer_mutex_);
@@ -170,10 +182,12 @@ Status ChunkWriter::Write(ContextSPtr ctx, const char* buf, int32_t size,
 
         Status s = slice->Write(SpanScope::GetContext(span), write_info->buf,
                                 write_info->size, write_info->chunk_offset);
+        batch_results[write_info] = s;
         if (!s.ok()) {
-          // Pool exhausted. Stop the batch; batch_status is propagated to all
-          // queued writers below so none blocks forever (fills former TODO).
-          batch_status = s;
+          // Pool exhausted. Stop the batch here; write_infos already processed
+          // keep their own (OK) status, the rest fall back to this failure in
+          // the wakeup loop below so none blocks forever (fills former TODO).
+          batch_fail_status = s;
           break;
         }
 
@@ -191,7 +205,7 @@ Status ChunkWriter::Write(ContextSPtr ctx, const char* buf, int32_t size,
       Writer* ready = writers_.front();
       writers_.pop_front();
       if (ready != &writer) {
-        ready->status = batch_status;  // OK on success, NoSpace on exhaustion
+        ready->status = status_for(ready->write_info);
         ready->done = true;
         ready->cv.notify_all();
       }
@@ -203,11 +217,12 @@ Status ChunkWriter::Write(ContextSPtr ctx, const char* buf, int32_t size,
     }
   }
 
+  // TriggerFlush must run with writer_mutex_ released (block closed above).
   if (has_full) {
     TriggerFlush();
   }
 
-  return batch_status;
+  return status_for(&info);
 }
 
 SliceWriter* ChunkWriter::GetSliceUnlocked(int32_t chunk_pos, int32_t size) {
