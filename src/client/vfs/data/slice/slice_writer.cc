@@ -46,21 +46,26 @@ namespace vfs {
 
 #define METHOD_NAME() ("SliceWriter::" + std::string(__FUNCTION__))
 
-BlockData* SliceWriter::FindOrCreateBlockDataUnlocked(uint32_t block_index,
-                                                      int32_t block_offset) {
+BlockData* SliceWriter::FindBlockDataUnlocked(uint32_t block_index) {
   auto iter = block_datas_.find(block_index);
-  if (iter != block_datas_.end()) {
-    VLOG(4) << fmt::format(
-        "{} Found existing block data for block index: {}, block: {}", UUID(),
-        block_index, iter->second->ToString());
-    return iter->second.get();
+  if (iter == block_datas_.end()) {
+    return nullptr;
   }
+  VLOG(4) << fmt::format(
+      "{} Found existing block data for block index: {}, block: {}", UUID(),
+      block_index, iter->second->ToString());
+  return iter->second.get();
+}
 
+BlockData* SliceWriter::CreateBlockDataUnlocked(uint32_t block_index,
+                                                int32_t block_offset) {
   auto [new_iter, inserted] = block_datas_.emplace(
       block_index, std::make_unique<BlockData>(context_, vfs_hub_,
                                                vfs_hub_->GetWriteMemPool(),
                                                block_index, block_offset));
-  CHECK(inserted);
+  CHECK(inserted) << fmt::format(
+      "{} CreateBlockDataUnlocked on existing block index: {}", UUID(),
+      block_index);
 
   VLOG(4) << fmt::format(
       "{} Creating new block data for block index: {}, block: {}", UUID(),
@@ -151,40 +156,88 @@ Status SliceWriter::Write(ContextSPtr ctx, const char* buf, int32_t size,
   uint32_t block_index = slice_internal_offset / block_size;
   int32_t block_offset = slice_internal_offset % block_size;
 
-  const char* buf_pos = buf;
-
-  int32_t remain_len = size;
+  // One memcpy unit in phase 2: which block, where in it, from where in buf.
+  struct BlockApply {
+    BlockData* block;
+    const char* buf;
+    int32_t size;
+    int32_t block_offset;
+  };
+  // Pages this call newly reserved in a block -- the rollback unit.
+  struct Reserved {
+    BlockData* block;
+    std::vector<uint32_t> pages;
+  };
 
   {
     std::lock_guard<std::mutex> lg(write_flush_mutex_);
 
-    // ---- Write loop: only fills BlockData ----
-    while (remain_len > 0) {
-      int32_t write_size = std::min(remain_len, block_size - block_offset);
-      BlockData* block_data =
-          FindOrCreateBlockDataUnlocked(block_index, block_offset);
+    std::vector<BlockApply> applies;
+    std::vector<Reserved> reserved;        // every block's new pages this call
+    std::vector<uint32_t> created_blocks;  // BlockData newly created this call
 
-      Status s = block_data->Write(SpanScope::GetContext(span), buf_pos,
-                                   write_size, block_offset);
-      if (!s.ok()) {
-        // BlockData::Write already rolled back its own pages on pool
-        // exhaustion. Propagate up; blocks written earlier in this slice stay
-        // (POSIX short write), len_ is NOT bumped, caller surfaces ENOSPC.
-        LOG(WARNING) << fmt::format(
-            "{} BlockData::Write failed, block_index: {}, chunk_range: "
-            "[{}-{}], len: {}, status: {}",
-            UUID(), block_index, block_offset, (block_offset + write_size),
-            write_size, s.ToString());
-        return s;
+    // ---- Phase 1: reserve pages across ALL blocks (allocate only) ----
+    // Nothing is memcpy'd and len_ is untouched, so any pool miss can be fully
+    // rolled back, leaving zero visible state -- a same-offset retry stays
+    // clean (no contiguity CHECK trip) and flush can't pick up a half-write.
+    Status fail_status;
+    bool failed = false;
+    {
+      uint32_t bi = block_index;
+      int32_t bo = block_offset;
+      const char* p = buf;
+      int32_t remain_len = size;
+      while (remain_len > 0) {
+        int32_t write_size = std::min(remain_len, block_size - bo);
+
+        BlockData* block = FindBlockDataUnlocked(bi);
+        if (block == nullptr) {
+          block = CreateBlockDataUnlocked(bi, bo);
+          created_blocks.push_back(bi);
+        }
+
+        std::vector<uint32_t> pages;
+        Status s = block->ReservePages(write_size, bo, &pages);
+        reserved.push_back({block, std::move(pages)});
+        if (!s.ok()) {
+          fail_status = s;
+          failed = true;
+          break;
+        }
+        applies.push_back({block, p, write_size, bo});
+
+        remain_len -= write_size;
+        p += write_size;
+        bo = 0;
+        ++bi;
       }
-
-      remain_len -= write_size;
-      buf_pos += write_size;
-      block_offset = 0;
-      ++block_index;
     }
 
-    // ---- Update len_ ----
+    // ---- Rollback: free this call's new pages, drop this call's new blocks
+    // ----
+    if (failed) {
+      for (auto it = reserved.rbegin(); it != reserved.rend(); ++it) {
+        it->block->RollbackPages(it->pages);
+      }
+      for (auto it = created_blocks.rbegin(); it != created_blocks.rend();
+           ++it) {
+        block_datas_.erase(*it);
+      }
+      LOG(WARNING) << fmt::format(
+          "{} Write reserve failed, rolled back chunk_range: [{}-{}], "
+          "status: {}",
+          UUID(), chunk_offset, end_in_chunk, fail_status.ToString());
+      return fail_status;
+    }
+
+    // ---- Phase 2: every page exists -- memcpy + bump each BlockData::len_
+    // ----
+    for (const auto& a : applies) {
+      a.block->ApplyWrite(SpanScope::GetContext(span), a.buf, a.size,
+                          a.block_offset);
+    }
+
+    // ---- Publish slice len (only after full success) ----
     // chunk_offset_ is const (forward-append only); only len_ grows.
     int32_t old_len = len_;
     len_ += size;

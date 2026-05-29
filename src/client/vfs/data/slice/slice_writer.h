@@ -102,8 +102,13 @@ class SliceWriter {
         block_datas_.size());
   }
 
-  BlockData* FindOrCreateBlockDataUnlocked(uint32_t block_index,
-                                           int32_t block_offset);
+  // Lookup only -- never creates. Returns nullptr if the block is absent.
+  BlockData* FindBlockDataUnlocked(uint32_t block_index);
+
+  // Always creates a fresh BlockData (caller must have checked it is absent);
+  // the caller tracks the new index so the Write transaction can roll it back.
+  BlockData* CreateBlockDataUnlocked(uint32_t block_index,
+                                     int32_t block_offset);
 
   void PrepareSliceId();
   void FlushUpTo(int32_t written_len);  // caller holds write_flush_mutex_

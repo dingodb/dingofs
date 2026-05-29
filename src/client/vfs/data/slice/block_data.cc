@@ -47,50 +47,83 @@ void BlockData::FreePageData() {
   }
 }
 
-char* BlockData::AllocPage() {
-  auto* page = write_buffer_manager_->Allocate();
-  VLOG(16) << fmt::format("{} Allocated page at: {} allocation", UUID(),
-                          Helper::Char2Addr(page));
-  return page;
-}
-
-PageData* BlockData::FindOrCreatePageData(uint32_t page_index,
-                                          int32_t page_offset) {
+PageData* BlockData::FindPageData(uint32_t page_index) {
   auto iter = pages_.find(page_index);
-  if (iter != pages_.end()) {
-    VLOG(6) << fmt::format("{} Found existing page data for page index: {}",
-                           UUID(), page_index);
-    return iter->second.get();
-  }
-
-  char* page = AllocPage();
-  if (page == nullptr) {
-    // Pool exhausted (bounded-acquire timed out). Don't create a PageData
-    // holding a null page -- return nullptr so BlockData::Write rolls back any
-    // pages it newly allocated this call and surfaces NoSpace.
-    return nullptr;
-  }
-
-  auto [new_iter, inserted] = pages_.emplace(
-      page_index,
-      std::make_unique<PageData>(vfs_hub_, page_index, context_.page_size, page,
-                                 page_offset));
-  CHECK(inserted);
-
-  VLOG(12) << fmt::format("{} Creating new page_data: {} for page index: {}",
-                          UUID(), new_iter->second->ToString(), page_index);
-
-  return new_iter->second.get();
+  return iter == pages_.end() ? nullptr : iter->second.get();
 }
 
-Status BlockData::Write(ContextSPtr ctx, const char* buf, int32_t size,
-                        int32_t block_offset) {
-  auto span = vfs_hub_->GetTraceManager()->StartChildSpan("BlockData::Write",
-                                                          ctx->GetTraceSpan());
+Status BlockData::ReservePages(int32_t size, int32_t block_offset,
+                               std::vector<uint32_t>* created_pages) {
+  CHECK_GT(size, 0);
+  CHECK_GE(block_offset, 0);
+  CHECK_LE(block_offset + size, context_.block_size);
 
-  VLOG(6) << fmt::format(
-      "{} Write Start data size: {}, block_offset: {}, block_data: {}", UUID(),
-      size, block_offset, ToString());
+  CHECK(block_offset == (block_offset_ + len_) ||
+        (block_offset + size) == block_offset_)
+      << fmt::format(
+             "{} Reserve Illegal block_offset: {}, size: {}, block_data: {}",
+             UUID(), block_offset, size, ToString());
+
+  int32_t page_size = context_.page_size;
+  uint32_t page_index = block_offset / page_size;
+  int32_t page_offset = block_offset % page_size;
+  int32_t remain_len = size;
+
+  // Allocate only the pages this write actually needs. Existing pages (e.g. a
+  // partially-filled straddle page) need no allocation and are NOT recorded, so
+  // a later RollbackPages won't free pages that predate this transaction. The
+  // first new page keeps its in-page offset; later pages start at 0 -- this
+  // matches the data_offset PageData::Write's contiguity CHECK expects.
+  while (remain_len > 0) {
+    int32_t write_size = std::min(remain_len, page_size - page_offset);
+    if (FindPageData(page_index) == nullptr) {
+      char* page = write_buffer_manager_->TryAllocate();
+      if (page == nullptr) {
+        return Status::NoSpace("write page pool exhausted");
+      }
+      auto [iter, inserted] = pages_.emplace(
+          page_index,
+          std::make_unique<PageData>(vfs_hub_, page_index, context_.page_size,
+                                     page, page_offset));
+      CHECK(inserted);
+      created_pages->push_back(page_index);
+      VLOG(12) << fmt::format(
+          "{} Reserved new page_data: {} for page index: {}", UUID(),
+          iter->second->ToString(), page_index);
+    }
+    remain_len -= write_size;
+    page_offset = 0;
+    ++page_index;
+  }
+  return Status::OK();
+}
+
+void BlockData::RollbackPages(const std::vector<uint32_t>& created_pages) {
+  for (uint32_t idx : created_pages) {
+    auto it = pages_.find(idx);
+    if (it != pages_.end()) {
+      if (it->second->page != nullptr) {
+        write_buffer_manager_->DeAllocate(it->second->page);
+      }
+      pages_.erase(it);
+    }
+  }
+  VLOG(6) << fmt::format("{} RollbackPages freed {} pages", UUID(),
+                         created_pages.size());
+}
+
+// INVARIANT: ApplyWrite must be infallible -- SliceWriter's two-phase
+// atomicity relies on it (all fallible work, i.e. allocation, lives in
+// ReservePages/phase 1; phase 2 only memcpys). It is infallible only because
+// writes are append-only (SliceWriter gates on CHECK_EQ(chunk_offset, End())):
+// PageData::Write then always sees a contiguous append/prepend and never its
+// "illegal range" CHECK. If a random-overwrite write path is ever added, that
+// CHECK can fire mid-apply -- after other blocks were already reserved/applied
+// -- and abort the process, breaking the transaction. Revisit this split then.
+void BlockData::ApplyWrite(ContextSPtr ctx, const char* buf, int32_t size,
+                           int32_t block_offset) {
+  auto span = vfs_hub_->GetTraceManager()->StartChildSpan(
+      "BlockData::ApplyWrite", ctx->GetTraceSpan());
 
   CHECK_GT(size, 0);
   CHECK_GE(block_offset, 0);
@@ -99,65 +132,20 @@ Status BlockData::Write(ContextSPtr ctx, const char* buf, int32_t size,
   CHECK(block_offset == (block_offset_ + len_) ||
         (block_offset + size) == block_offset_)
       << fmt::format(
-             "{} Write Illegal block_offset: {}, size: {}, block_data: {}",
+             "{} Apply Illegal block_offset: {}, size: {}, block_data: {}",
              UUID(), block_offset, size, ToString());
 
   int32_t page_size = context_.page_size;
   uint32_t page_index = block_offset / page_size;
   int32_t page_offset = block_offset % page_size;
-
-  // Pass 1: pre-allocate every page this write needs. AllocPage may fail (pool
-  // exhausted, bounded-acquire timed out) -- if so, roll back the pages created
-  // this call (DeAllocate + erase) and return NoSpace, leaving block state
-  // untouched (len_/block_offset_ unchanged, no half-written page) so a retry
-  // at the same offset is clean and won't trip PageData's contiguity CHECK.
-  {
-    std::vector<uint32_t> created_this_call;
-    int32_t pre_offset = page_offset;
-    uint32_t pre_index = page_index;
-    int32_t pre_remain = size;
-    bool alloc_failed = false;
-    while (pre_remain > 0) {
-      int32_t write_size = std::min(pre_remain, page_size - pre_offset);
-      bool existed = pages_.find(pre_index) != pages_.end();
-      PageData* page_data = FindOrCreatePageData(pre_index, pre_offset);
-      if (page_data == nullptr) {
-        alloc_failed = true;
-        break;
-      }
-      if (!existed) {
-        created_this_call.push_back(pre_index);
-      }
-      pre_remain -= write_size;
-      pre_offset = 0;
-      ++pre_index;
-    }
-
-    if (alloc_failed) {
-      for (uint32_t idx : created_this_call) {
-        auto it = pages_.find(idx);
-        if (it != pages_.end()) {
-          if (it->second->page != nullptr) {
-            write_buffer_manager_->DeAllocate(it->second->page);
-          }
-          pages_.erase(it);
-        }
-      }
-      VLOG(6) << fmt::format(
-          "{} Write rollback: pool exhausted, freed {} pages", UUID(),
-          created_this_call.size());
-      return Status::NoSpace("write page pool exhausted");
-    }
-  }
-
-  // Pass 2: every page is allocated -- memcpy into them (FindOrCreatePageData
-  // now always hits the existing entry).
   const char* buf_pos = buf;
   int32_t remain_len = size;
 
+  // Every page was reserved already -- FindPageData must hit. No allocation.
   while (remain_len > 0) {
     int32_t write_size = std::min(remain_len, page_size - page_offset);
-    PageData* page_data = FindOrCreatePageData(page_index, page_offset);
+    PageData* page_data = FindPageData(page_index);
+    CHECK_NOTNULL(page_data);
 
     page_data->Write(SpanScope::GetContext(span), buf_pos, write_size,
                      page_offset);
@@ -168,22 +156,14 @@ Status BlockData::Write(ContextSPtr ctx, const char* buf, int32_t size,
     ++page_index;
   }
 
-  {
-    int32_t old_len = len_;
-    int32_t old_block_offset = block_offset_;
+  int32_t old_len = len_;
+  int32_t old_block_offset = block_offset_;
+  block_offset_ = std::min(block_offset_, block_offset);
+  len_ += size;
 
-    block_offset_ = std::min(block_offset_, block_offset);
-    len_ += size;
-
-    VLOG(6) << fmt::format(
-        "{} Update block_data old_block_offset: {}, old_len: {}, "
-        "updated data_block: {}",
-        UUID(), old_block_offset, old_len, ToString());
-  }
-
-  VLOG(6) << fmt::format("{} Write End", UUID());
-
-  return Status::OK();
+  VLOG(6) << fmt::format(
+      "{} ApplyWrite old_block_offset: {}, old_len: {}, updated: {}", UUID(),
+      old_block_offset, old_len, ToString());
 }
 
 static void NoopDeleter(void* data) {}

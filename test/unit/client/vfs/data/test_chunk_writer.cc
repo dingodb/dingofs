@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <gflags/gflags.h>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
@@ -610,14 +609,13 @@ TEST_F(ChunkWriterTest, ConcurrentFlush_HoldsSliceMutexUntilQueuePush) {
 #endif  // NDEBUG
 }
 
-// --- P2 failure-path: pool exhaustion (WriteMemPool::Allocate -> nullptr) ---
+// --- P2 failure-path: pool exhaustion (WriteMemPool::TryAllocate -> nullptr)
+// ---
 
-// Tiny pool + zero acquire timeout makes exhaustion deterministic. A write
+// A tiny pool makes exhaustion deterministic (TryAllocate never waits). A write
 // needing more pages than the pool has must fail with NoSpace AND roll back
-// every page it briefly took (BlockData::Write pass-1 rollback) -- no leak.
+// every page it briefly took (BlockData reserve rollback) -- no leak.
 TEST_F(ChunkWriterTest, PoolExhaustion_WriteReturnsNoSpaceAndRollsBack) {
-  gflags::FlagSaver flag_saver;
-  FLAGS_vfs_write_pool_acquire_timeout_ms = 0;
   auto tiny_pool = std::make_unique<WriteMemPool>(4 * 4096, 4096);  // 4 slots
   ON_CALL(*mock_hub_, GetWriteMemPool()).WillByDefault(Return(tiny_pool.get()));
 
@@ -638,8 +636,6 @@ TEST_F(ChunkWriterTest, PoolExhaustion_WriteReturnsNoSpaceAndRollsBack) {
 // broken a waiter blocks forever and join() hangs (test times out). Reaching
 // the assertions proves no deadlock and no lost writer.
 TEST_F(ChunkWriterTest, PoolExhaustion_ConcurrentWritersAllWokenNoDeadlock) {
-  gflags::FlagSaver flag_saver;
-  FLAGS_vfs_write_pool_acquire_timeout_ms = 0;
   auto tiny_pool = std::make_unique<WriteMemPool>(4 * 4096, 4096);
   ON_CALL(*mock_hub_, GetWriteMemPool()).WillByDefault(Return(tiny_pool.get()));
 
@@ -679,8 +675,6 @@ TEST_F(ChunkWriterTest, PoolExhaustion_ConcurrentWritersAllWokenNoDeadlock) {
 // is flushed), the rest get NoSpace. The fix keeps okcnt > 0; the pre-fix bug
 // made it 0 for any batch that mixed success + failure.
 TEST_F(ChunkWriterTest, PoolExhaustion_PartialBatch_SuccessfulWritersReturnOK) {
-  gflags::FlagSaver flag_saver;
-  FLAGS_vfs_write_pool_acquire_timeout_ms = 0;
   auto tiny_pool = std::make_unique<WriteMemPool>(4 * 4096, 4096);  // 4 slots
   ON_CALL(*mock_hub_, GetWriteMemPool()).WillByDefault(Return(tiny_pool.get()));
 
@@ -716,6 +710,54 @@ TEST_F(ChunkWriterTest, PoolExhaustion_PartialBatch_SuccessfulWritersReturnOK) {
   EXPECT_EQ(tiny_pool->GetUsedBytes(),
             static_cast<int64_t>(okcnt.load()) * 4096)
       << "used should equal successful writers' pages with no leak";
+}
+
+// Cross-block atomicity regression. A single SliceWriter::Write that spans two
+// blocks where block0 reserves fully but block1 hits the exhausted pool must
+// roll back EVERYTHING (no half-write). Pre-fix, block0 was applied + len_ left
+// unbumped, so retrying the same offset re-entered an inconsistent BlockData
+// and tripped its contiguity CHECK (client abort). This asserts: NoSpace, zero
+// pool leak, AND that a retry at the same offset neither crashes nor wedges.
+TEST_F(ChunkWriterTest,
+       PoolExhaustion_CrossBlock_AtomicRollback_NoCrashOnRetry) {
+  // Derive geometry so the test follows the harness page size (and the fs block
+  // size) instead of hard-coding the pages-per-block count. context_.page_size
+  // == this pool's page (ChunkWriter takes it from GetWriteMemPool), so the
+  // page here is what BlockData actually allocates in.
+  constexpr int64_t kPage = 4096;
+  constexpr int64_t kBlockSize = 4 * 1024 * 1024;  // MakeTestFsInfo default
+  constexpr int64_t kBlockPages = kBlockSize / kPage;
+
+  // Pool holds exactly one block: block0 takes every page, block1's first page
+  // then fails.
+  auto pool = std::make_unique<WriteMemPool>(kBlockPages * kPage, kPage);
+  ON_CALL(*mock_hub_, GetWriteMemPool()).WillByDefault(Return(pool.get()));
+
+  auto writer = MakeWriter();
+
+  // block_size + 1 page spans block0 (full) + block1 (1 page) -> one page more
+  // than the pool has.
+  const int32_t kWriteSize = static_cast<int32_t>(kBlockSize + kPage);
+  std::string buf(kWriteSize, 'x');
+
+  Status s1 = writer->Write(ctx_, buf.data(), kWriteSize, /*chunk_offset=*/0);
+  EXPECT_TRUE(s1.IsNoSpace()) << "expected NoSpace, got: " << s1.ToString();
+  EXPECT_EQ(pool->GetUsedBytes(), 0)
+      << "cross-block rollback must free block0's reserved pages";
+
+  // Retry SAME offset: must not abort (the pre-fix crash) and must fail
+  // cleanly.
+  Status s2 = writer->Write(ctx_, buf.data(), kWriteSize, /*chunk_offset=*/0);
+  EXPECT_TRUE(s2.IsNoSpace());
+  EXPECT_EQ(pool->GetUsedBytes(), 0);
+
+  // A write that fits (1 page) at the same offset now succeeds, proving slice
+  // state stayed consistent (End() == 0, no phantom len_).
+  std::string small(kPage, 'y');
+  Status s3 = writer->Write(ctx_, small.data(), static_cast<int32_t>(kPage),
+                            /*chunk_offset=*/0);
+  EXPECT_TRUE(s3.ok()) << s3.ToString();
+  EXPECT_EQ(pool->GetUsedBytes(), kPage);
 }
 
 }  // namespace vfs
