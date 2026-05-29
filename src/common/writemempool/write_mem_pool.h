@@ -17,12 +17,10 @@
 #ifndef DINGOFS_SRC_COMMON_WRITEMEMPOOL_WRITE_MEM_POOL_H_
 #define DINGOFS_SRC_COMMON_WRITEMEMPOOL_WRITE_MEM_POOL_H_
 
-#include <gflags/gflags.h>
 #include <sys/types.h>
 
 #include <cstdint>
 
-#include "bvar/latency_recorder.h"
 #include "bvar/passive_status.h"
 #include "bvar/reducer.h"
 #include "bvar/status.h"
@@ -30,18 +28,19 @@
 
 namespace dingofs {
 
-// Bounded-acquire deadline (ms) for one write-page Allocate(). Defined in
-// write_mem_pool.cc; both DEFINE and DECLARE live in namespace dingofs (dingofs
-// keeps its gflags inside the namespace, see options/client.cc).
-DECLARE_int64(vfs_write_pool_acquire_timeout_ms);
-
 class WriteMemPool {
  public:
   explicit WriteMemPool(int64_t total_bytes, int64_t page_size);
 
   ~WriteMemPool() = default;
 
-  char* Allocate();
+  // Single try, never blocks -- the only allocation primitive. Safe under
+  // write_flush_mutex_ / slice_mutex_ (SliceWriter, BlockData hold them). The
+  // underlying MemoryPool::Require() already sweeps every shard and steals from
+  // other caches, so a nullptr is a strong (near-)exhaustion signal, not a
+  // casual shard-race miss. Any waiting/retry on a null is the caller's job
+  // (FileWriter's lock-free throttle / short-write retry), never this layer.
+  char* TryAllocate();
 
   void DeAllocate(char* page);
 
@@ -89,15 +88,10 @@ class WriteMemPool {
   bvar::PassiveStatus<int64_t> used_pages_var_;
   bvar::PassiveStatus<int64_t> used_bytes_var_;
 
-  // Slow-path counters (lock-free per-thread Adder). Bumped ONLY inside
-  // Allocate's bounded-acquire failure/retry branch -- the fast path (first
-  // Require() hit, ~99%) never touches these, so steady-state alloc cost is
-  // unchanged. The retry branch already yields/sleeps (us~ms), so the Adder's
-  // few ns are noise there.
-  bvar::Adder<int64_t> acquire_fail_num_;    // bounded-acquire timed out
-  bvar::Adder<int64_t> transient_null_num_;  // a TryRequire() returned null
-  bvar::Adder<int64_t> acquire_wait_num_;    // requests that entered retry
-  bvar::LatencyRecorder acquire_wait_us_;    // time spent in bounded-acquire
+  // Count of TryAllocate() failures (pool returned null -> caller surfaces
+  // ENOSPC / short write). Lock-free per-thread Adder, bumped only on the miss
+  // branch.
+  bvar::Adder<int64_t> alloc_fail_num_;
 };
 
 }  // namespace dingofs

@@ -16,31 +16,9 @@
 
 #include "common/writemempool/write_mem_pool.h"
 
-#include <gflags/gflags.h>
 #include <glog/logging.h>
 
-#include <chrono>
-#include <thread>
-
 namespace dingofs {
-
-DEFINE_int64(vfs_write_pool_acquire_timeout_ms, 3000,
-             "Bounded-acquire deadline (ms) for one write-page Allocate(): "
-             "loop MemoryPool::Require() until this elapses before returning "
-             "nullptr. A single Require()==nullptr is transient contention, "
-             "not exhaustion; only a full window with no free buffer is.");
-
-namespace {
-// Bounded-acquire backoff: spin-yield this many times before each short sleep.
-constexpr uint32_t kAcquireSpinYields = 64;
-constexpr uint32_t kAcquireBackoffUs = 50;
-
-int64_t ElapsedUs(std::chrono::steady_clock::time_point start) {
-  return std::chrono::duration_cast<std::chrono::microseconds>(
-             std::chrono::steady_clock::now() - start)
-      .count();
-}
-}  // namespace
 
 WriteMemPool::WriteMemPool(int64_t total_bytes, int64_t page_size)
     : total_bytes_(total_bytes),
@@ -51,50 +29,24 @@ WriteMemPool::WriteMemPool(int64_t total_bytes, int64_t page_size)
                       page_size > 0 ? total_bytes / page_size : 0),
       used_pages_var_("vfs_write_pool_used_pages", UsedPages, this),
       used_bytes_var_("vfs_write_pool_used_bytes", UsedBytes, this),
-      acquire_fail_num_("vfs_write_pool_acquire_fail_num"),
-      transient_null_num_("vfs_write_pool_transient_null_num"),
-      acquire_wait_num_("vfs_write_pool_acquire_wait_num"),
-      acquire_wait_us_("vfs_write_pool_acquire_wait_us") {
+      alloc_fail_num_("vfs_write_pool_alloc_fail_num") {
   CHECK(pool_ != nullptr) << "WriteMemPool failed to create MemoryPool: page="
                           << page_size
                           << " count=" << (total_bytes / page_size);
 }
 
-char* WriteMemPool::Allocate() {
-  // A single Require() is try-semantics: nullptr means this attempt lost a
-  // cache/shard race OR the pool is exhausted -- it does NOT prove exhaustion.
-  // Bounded-retry until the deadline so transient contention under concurrency
-  // doesn't surface as a false failure; only a full window with no free buffer
-  // counts as genuine exhaustion (returns nullptr -> caller maps to ENOSPC).
+char* WriteMemPool::TryAllocate() {
+  // One Require(): try-semantics, never blocks, so it is safe under
+  // write_flush_mutex_ / slice_mutex_. Require() already sweeps all shards and
+  // steals from other caches internally, so a nullptr is a strong (near-)
+  // exhaustion signal; the caller (FileWriter throttle / short-write retry)
+  // owns any waiting, never this lock-holding layer.
   char* page = pool_->Require();
-  if (page == nullptr) {
-    // --- slow path: all metrics live here; the fast path above is untouched
-    // ---
-    transient_null_num_ << 1;  // first miss
-    acquire_wait_num_ << 1;    // this request entered bounded-acquire
-    const auto wait_start = std::chrono::steady_clock::now();
-    const auto deadline =
-        wait_start +
-        std::chrono::milliseconds(FLAGS_vfs_write_pool_acquire_timeout_ms);
-    uint32_t spins = 0;
-    while ((page = pool_->Require()) == nullptr) {
-      transient_null_num_ << 1;  // each retry miss
-      if (std::chrono::steady_clock::now() >= deadline) {
-        acquire_fail_num_ << 1;  // genuine exhaustion (bounded wait elapsed)
-        acquire_wait_us_ << ElapsedUs(wait_start);
-        return nullptr;
-      }
-      if (spins < kAcquireSpinYields) {
-        std::this_thread::yield();
-        ++spins;
-      } else {
-        std::this_thread::sleep_for(
-            std::chrono::microseconds(kAcquireBackoffUs));
-      }
-    }
-    acquire_wait_us_ << ElapsedUs(wait_start);
+  if (page != nullptr) {
+    used_pages_ << 1;
+  } else {
+    alloc_fail_num_ << 1;
   }
-  used_pages_ << 1;
   return page;
 }
 

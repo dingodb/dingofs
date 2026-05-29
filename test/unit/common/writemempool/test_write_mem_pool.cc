@@ -28,22 +28,11 @@ namespace dingofs {
 
 // ─── WriteMemPool ──────────────────────────────────────────────────────
 
-TEST(WriteMemPoolTest, Allocate_ReturnsNonNull_IncreasesUsed) {
-  constexpr int64_t kPageSize = 4096;
-  WriteMemPool mgr(kPageSize * 4, kPageSize);
-
-  char* page = mgr.Allocate();
-  ASSERT_NE(page, nullptr);
-  EXPECT_EQ(mgr.GetUsedBytes(), kPageSize);
-
-  mgr.DeAllocate(page);
-}
-
 TEST(WriteMemPoolTest, DeAllocate_DecreasesUsed) {
   constexpr int64_t kPageSize = 4096;
   WriteMemPool mgr(kPageSize * 4, kPageSize);
 
-  char* page = mgr.Allocate();
+  char* page = mgr.TryAllocate();
   ASSERT_NE(page, nullptr);
   EXPECT_EQ(mgr.GetUsedBytes(), kPageSize);
 
@@ -65,8 +54,8 @@ TEST(WriteMemPoolTest, IsHighPressure_True_WhenAboveThreshold) {
   // 2 pages total; allocate 2 to hit 100% usage
   WriteMemPool mgr(kPageSize * 2, kPageSize);
 
-  char* p1 = mgr.Allocate();
-  char* p2 = mgr.Allocate();
+  char* p1 = mgr.TryAllocate();
+  char* p2 = mgr.TryAllocate();
   ASSERT_NE(p1, nullptr);
   ASSERT_NE(p2, nullptr);
 
@@ -89,7 +78,7 @@ TEST(WriteMemPoolTest, Concurrent_AllocAndDealloc_FinalZero) {
   for (int t = 0; t < kThreads; ++t) {
     threads.emplace_back([&mgr]() {
       for (int i = 0; i < kIters; ++i) {
-        char* page = mgr.Allocate();
+        char* page = mgr.TryAllocate();
         mgr.DeAllocate(page);
       }
     });
@@ -99,6 +88,39 @@ TEST(WriteMemPoolTest, Concurrent_AllocAndDealloc_FinalZero) {
   }
 
   EXPECT_EQ(mgr.GetUsedBytes(), 0);
+}
+
+// ─── TryAllocate ───────────────────────────────────────────────────────
+
+TEST(WriteMemPoolTest, TryAllocate_ReturnsNonNull_IncreasesUsed) {
+  constexpr int64_t kPageSize = 4096;
+  WriteMemPool mgr(kPageSize * 4, kPageSize);
+
+  char* page = mgr.TryAllocate();
+  ASSERT_NE(page, nullptr);
+  EXPECT_EQ(mgr.GetUsedBytes(), kPageSize);
+
+  mgr.DeAllocate(page);
+  EXPECT_EQ(mgr.GetUsedBytes(), 0);
+}
+
+TEST(WriteMemPoolTest, TryAllocate_ReturnsNull_WhenExhausted_NoBlock) {
+  constexpr int64_t kPageSize = 4096;
+  WriteMemPool mgr(kPageSize * 2, kPageSize);  // 2 slots
+
+  char* a = mgr.TryAllocate();
+  char* b = mgr.TryAllocate();
+  ASSERT_NE(a, nullptr);
+  ASSERT_NE(b, nullptr);
+
+  // Pool drained -- TryAllocate returns immediately (no bounded wait) and used
+  // stays at capacity (a null result must not bump used_pages_).
+  char* c = mgr.TryAllocate();
+  EXPECT_EQ(c, nullptr);
+  EXPECT_EQ(mgr.GetUsedBytes(), 2 * kPageSize);
+
+  mgr.DeAllocate(a);
+  mgr.DeAllocate(b);
 }
 
 // ─── Perf: pooled Allocate/DeAllocate vs new char[] baseline ───────────
@@ -117,7 +139,7 @@ double RunPooledBench(WriteMemPool* wmp, int num_threads, int iters) {
     ts.emplace_back([&] {
       while (!start.load(std::memory_order_acquire)) std::this_thread::yield();
       for (int i = 0; i < iters; ++i) {
-        char* p = wmp->Allocate();
+        char* p = wmp->TryAllocate();
         if (p != nullptr) wmp->DeAllocate(p);
       }
     });
