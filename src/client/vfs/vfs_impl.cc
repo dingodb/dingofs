@@ -62,7 +62,7 @@ VFSImpl::VFSImpl(const VFSConfig& vfs_conf, const ClientId& client_id)
     : client_id_(client_id),
       mount_root_path_(
           vfs_conf.mount_root_path.empty() ? "/" : vfs_conf.mount_root_path),
-      vfs_hub_(std::make_unique<VFSHubImpl>(vfs_conf, client_id_)) {};
+      vfs_hub_(std::make_unique<VFSHubImpl>(vfs_conf, client_id_)){};
 
 VFSImpl::VFSImpl(std::unique_ptr<VFSHub> hub)
     : client_id_(), vfs_hub_(std::move(hub)) {
@@ -603,6 +603,10 @@ Status VFSImpl::Read(ContextSPtr ctx, Ino ino, DataBuffer* data_buffer,
 
 Status VFSImpl::Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t size,
                       uint64_t offset, uint64_t fh, uint64_t* out_wsize) {
+  // Define the out-param on every path: the read-only-fh early return below
+  // leaves it 0 instead of relying on the caller to pre-zero.
+  *out_wsize = 0;
+
   Status s;
   auto* handle = handle_manager_->FindHandler(fh);
   VFS_CHECK_HANDLE(handle, ino, fh);
@@ -619,15 +623,24 @@ Status VFSImpl::Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t size,
 
   s = handle->writer->Write(SpanScope::GetContext(span), buf, size, offset,
                             out_wsize);
-  if (s.ok()) {
-    s = meta_system_->Write(SpanScope::GetContext(span), ino, buf, offset, size,
-                            fh);
+  // Use *out_wsize, not size: writer->Write may short-write (OK with
+  // *out_wsize < size) when the page pool is exhausted mid-write. Metadata must
+  // reflect only what is durable -- MetaSystem::Write extends the inode length
+  // to offset + len, so passing the full size would claim bytes that were never
+  // written (reads past the durable prefix would see a phantom hole).
+  if (s.ok() && *out_wsize > 0) {
+    s = meta_system_->Write(SpanScope::GetContext(span), ino, buf, offset,
+                            *out_wsize, fh);
     // Invalidate read cache for all handles of this inode in the written range,
     // so that no other open file descriptor can serve stale cached data.
     handle_manager_->InvalidateByIno(ino, static_cast<int64_t>(offset),
-                                     static_cast<int64_t>(size));
+                                     static_cast<int64_t>(*out_wsize));
   }
 
+  // No status logging here: VFSImpl returns Status without logging per-op
+  // outcomes (like the other ops); the uniform status + out_wsize record lives
+  // in VFSWrapper's access log, the pool-pressure locality in SliceWriter, and
+  // the failure rate in the vfs_write_pool_alloc_fail_num metric.
   return s;
 }
 

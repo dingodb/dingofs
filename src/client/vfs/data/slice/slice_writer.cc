@@ -223,7 +223,10 @@ Status SliceWriter::Write(ContextSPtr ctx, const char* buf, int32_t size,
            ++it) {
         block_datas_.erase(*it);
       }
-      LOG(WARNING) << fmt::format(
+      // Page pool could not back this slice; record the rolled-back range so
+      // the locality is visible by default (the VFSImpl boundary log only knows
+      // the whole-write offset/size, not which slice failed).
+      LOG(INFO) << fmt::format(
           "{} Write reserve failed, rolled back chunk_range: [{}-{}], "
           "status: {}",
           UUID(), chunk_offset, end_in_chunk, fail_status.ToString());

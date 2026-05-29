@@ -165,6 +165,11 @@ void FileWriter::ReleaseRef() {
 
 Status FileWriter::Write(ContextSPtr ctx, const char* buf, uint64_t size,
                          uint64_t offset, uint64_t* out_wsize) {
+  // Define the out-param on every path: the early-return error paths below
+  // (sticky status / throttle timeout / closed) leave it 0 instead of relying
+  // on the caller to pre-zero.
+  *out_wsize = 0;
+
   // Sticky-broken fast-fail.
   DINGOFS_RETURN_NOT_OK(GetStatus());
 
@@ -207,10 +212,17 @@ Status FileWriter::Write(ContextSPtr ctx, const char* buf, uint64_t size,
     s = chunk->Write(SpanScope::GetContext(span), pos, write_size,
                      chunk_offset);
     if (!s.ok()) {
-      LOG(WARNING) << "Fail write chunk, ino: " << ino_
-                   << ", chunk_index: " << chunk_index
-                   << ", chunk_offset: " << chunk_offset
-                   << ", write_size: " << write_size;
+      // Detail-only: this chunk stopped the write (surfaces as a short write if
+      // written_size > 0, else a hard error, decided after the loop). Don't
+      // WARN per chunk -- it floods under back-pressure and misreads a
+      // successful short write; the outcome is recorded uniformly in
+      // VFSWrapper's access log (status + out_wsize), the pool-pressure
+      // locality in SliceWriter, and the failure rate in the
+      // vfs_write_pool_alloc_fail_num metric.
+      VLOG(3) << "stop write at chunk, ino: " << ino_
+              << ", chunk_index: " << chunk_index
+              << ", chunk_offset: " << chunk_offset
+              << ", write_size: " << write_size << ", status: " << s.ToString();
       break;
     }
 
@@ -233,6 +245,15 @@ Status FileWriter::Write(ContextSPtr ctx, const char* buf, uint64_t size,
   }
 
   *out_wsize = written_size;
+
+  // Partial progress is a POSIX short write, not a failure. SliceWriter::Write
+  // is atomic per chunk, so written_size is exactly the prefix of fully-written
+  // chunks; report OK + that prefix so the caller advances and re-issues the
+  // rest (which hits the throttle / backpressure). Only a zero-byte write
+  // surfaces the error (e.g. the very first chunk got ENOSPC).
+  if (written_size > 0) {
+    return Status::OK();
+  }
   return s;
 }
 
