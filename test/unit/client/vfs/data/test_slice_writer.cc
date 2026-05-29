@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <gflags/gflags.h>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
@@ -25,6 +26,7 @@
 #include "client/vfs/data/slice/slice_writer.h"
 #include "common/status.h"
 #include "common/trace/trace_manager.h"
+#include "common/writemempool/write_mem_pool.h"
 #include "test/unit/client/vfs/test_base.h"
 #include "test/unit/client/vfs/test_common.h"
 
@@ -118,6 +120,46 @@ TEST_F(SliceWriterTest, Write_MultiBlock_BoundaryAlignment) {
   EXPECT_EQ(sw_->Len(), write_size);
   // End should be chunk_offset + write_size
   EXPECT_EQ(sw_->End(), write_size);
+}
+
+// 2b. Cross-block pool exhaustion: SliceWriter::Write must be atomic. A write
+//     spanning two blocks where the pool only covers the first must roll back
+//     fully (Len() unchanged, zero leak), and a same-offset retry must not trip
+//     BlockData's contiguity CHECK (the pre-fix half-write crash).
+TEST_F(SliceWriterTest, Write_CrossBlock_PoolExhaustion_AtomicRollback) {
+  // Pool holds exactly one block's pages; block0 takes them all, block1 fails.
+  const int64_t block_pages = kBlockSize / kPageSize;
+  auto tiny =
+      std::make_unique<WriteMemPool>(block_pages * kPageSize, kPageSize);
+  ON_CALL(*mock_hub_, GetWriteMemPool()).WillByDefault(Return(tiny.get()));
+
+  // Use a LOCAL SliceWriter (not the fixture's sw_, which is torn down after
+  // `tiny`): the guard DecRefs it at scope exit, BEFORE `tiny` is destroyed, so
+  // pages from the final successful write are freed into a still-alive pool.
+  auto* sw = new SliceWriter(*context_, mock_hub_, /*chunk_offset=*/0);
+  sw->IncRef();
+  SliceWriterGuard guard(sw);
+
+  // block_size + 1 page spans block0 (full) + block1 (1 page) -> 1 page short.
+  const int32_t write_size = static_cast<int32_t>(kBlockSize + kPageSize);
+  auto buf = MakeBuf(write_size);
+
+  Status s1 = sw->Write(ctx_, buf.data(), write_size, 0);
+  EXPECT_TRUE(s1.IsNoSpace()) << s1.ToString();
+  EXPECT_EQ(sw->Len(), 0u) << "failed write must not bump slice len";
+  EXPECT_EQ(tiny->GetUsedBytes(), 0) << "block0's reserved pages must be freed";
+
+  // Retry same offset: clean, no abort.
+  Status s2 = sw->Write(ctx_, buf.data(), write_size, 0);
+  EXPECT_TRUE(s2.IsNoSpace());
+  EXPECT_EQ(sw->Len(), 0u);
+  EXPECT_EQ(tiny->GetUsedBytes(), 0);
+
+  // A fitting 1-page write at the same offset now succeeds (state consistent).
+  auto small = MakeBuf(kPageSize);
+  Status s3 = sw->Write(ctx_, small.data(), kPageSize, 0);
+  EXPECT_TRUE(s3.ok()) << s3.ToString();
+  EXPECT_EQ(sw->Len(), kPageSize);
 }
 
 // 3. Write data, mock NewSliceId returns id=42, mock PutAsync succeeds.

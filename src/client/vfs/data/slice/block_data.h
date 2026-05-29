@@ -22,6 +22,7 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <vector>
 
 #include "client/vfs/data/slice/common.h"
 #include "client/vfs/data/slice/page_data.h"
@@ -49,8 +50,25 @@ class BlockData {
 
   ~BlockData() { FreePageData(); }
 
-  Status Write(ContextSPtr ctx, const char* buf, int32_t size,
-               int32_t block_offset);
+  // Phase 1: ensure every page this write needs exists; allocate only, no
+  // memcpy, no len_ bump. New pages are appended to *created_pages (existing
+  // pages are skipped, not recorded). Allocates via TryAllocate (never blocks
+  // under the slice lock); on a miss returns NoSpace WITHOUT self-rollback so
+  // the caller can also undo pages it reserved in other blocks of the same
+  // SliceWriter transaction.
+  Status ReservePages(int32_t size, int32_t block_offset,
+                      std::vector<uint32_t>* created_pages);
+
+  // Free + erase the named pages. They MUST be this transaction's newly
+  // created pages (from ReservePages' created_pages) -- never pre-existing
+  // ones.
+  void RollbackPages(const std::vector<uint32_t>& created_pages);
+
+  // Phase 2: memcpy buf into already-reserved pages and bump
+  // block_offset_/len_. Precondition: ReservePages covering this range already
+  // succeeded -- this never allocates (CHECK-fails if a page is missing).
+  void ApplyWrite(ContextSPtr ctx, const char* buf, int32_t size,
+                  int32_t block_offset);
 
   IOBuffer ToIOBuffer() const;
 
@@ -77,11 +95,10 @@ class BlockData {
   }
 
  private:
-  char* AllocPage();
-
   void FreePageData();
 
-  PageData* FindOrCreatePageData(uint32_t page_index, int32_t page_offset);
+  // Lookup only -- never allocates. Returns nullptr if the page is absent.
+  PageData* FindPageData(uint32_t page_index);
 
   const SliceDataContext context_;
   VFSHub* vfs_hub_{nullptr};
