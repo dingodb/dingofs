@@ -14,18 +14,22 @@
  * limitations under the License.
  */
 
+#include <fcntl.h>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include <memory>
 #include <string>
+#include <vector>
 
+#include "client/vfs/data/writer_table.h"
 #include "client/vfs/data_buffer.h"
 #include "client/vfs/vfs_impl.h"
 #include "common/blockaccess/accesser_common.h"
 #include "common/const.h"
 #include "common/status.h"
 #include "common/trace/trace_manager.h"
+#include "common/writemempool/write_mem_pool.h"
 #include "test/unit/client/vfs/mock/mock_meta_system.h"
 #include "test/unit/client/vfs/mock/mock_vfs_hub.h"
 #include "test/unit/client/vfs/test_base.h"
@@ -40,6 +44,7 @@ using ::testing::AnyNumber;
 using ::testing::DoAll;
 using ::testing::Invoke;
 using ::testing::Return;
+using ::testing::SaveArg;
 using ::testing::SetArgPointee;
 
 class VFSImplTest : public test::VFSTestBase {
@@ -112,6 +117,91 @@ TEST_F(VFSImplTest, GetAttr_DelegatesToMetaSystem) {
   Status s = vfs_->GetAttr(ctx_, 55u, &out);
   EXPECT_TRUE(s.ok());
   EXPECT_EQ(out.ino, 55u);
+}
+
+// --- 4b. Write short-write: metadata gets out_wsize, not the requested size.
+// On a cross-chunk write where the page pool is exhausted after chunk0, the
+// writer short-writes; VFSImpl must extend the inode length by only the durable
+// prefix (MetaSystem::Write sets length to offset+len), else reads past the
+// prefix would see a phantom hole. ---
+TEST_F(VFSImplTest, Write_ShortWrite_MetaGetsOutWsizeNotSize) {
+  // Locals ordered so writer_table (and the writer it owns) is destroyed before
+  // `tiny`: vfs_->Release below already tears the writer down synchronously,
+  // but this keeps the ordering safe regardless.
+  auto tiny = std::make_unique<WriteMemPool>(4096, 4096);  // 1 page
+  auto writer_table = std::make_unique<WriterTable>(mock_hub_);
+
+  ON_CALL(*mock_hub_, GetWriteMemPool()).WillByDefault(Return(tiny.get()));
+  EXPECT_CALL(*mock_hub_, GetWriteMemPool()).Times(AnyNumber());
+  ON_CALL(*mock_hub_, GetWriterTable())
+      .WillByDefault(Return(writer_table.get()));
+  EXPECT_CALL(*mock_hub_, GetWriterTable()).Times(AnyNumber());
+
+  const uint64_t ino = 300;
+  ON_CALL(*mock_meta_system_, Open(_, ino, _, _))
+      .WillByDefault(Return(Status::OK()));
+  ON_CALL(*mock_meta_system_, Close(_, ino, _))
+      .WillByDefault(Return(Status::OK()));
+
+  uint64_t fh = 0;
+  ASSERT_TRUE(vfs_->Open(ctx_, ino, O_WRONLY, &fh).ok());
+
+  // Capture the size MetaSystem::Write receives (arg index 4).
+  uint64_t meta_size = 0;
+  EXPECT_CALL(*mock_meta_system_, Write(_, ino, _, _, _, _))
+      .WillOnce(DoAll(SaveArg<4>(&meta_size), Return(Status::OK())));
+
+  const uint64_t chunk_size = mock_hub_->GetFsInfo().chunk_size;
+  const uint64_t offset = chunk_size - 4;  // 4 bytes chunk0, 4 bytes chunk1
+  std::vector<char> buf(8, 'X');
+  uint64_t wsize = 0;
+  Status s = vfs_->Write(ctx_, ino, buf.data(), buf.size(), offset, fh, &wsize);
+
+  EXPECT_TRUE(s.ok()) << s.ToString();
+  EXPECT_EQ(wsize, 4u);
+  EXPECT_EQ(meta_size, 4u)
+      << "metadata must extend by out_wsize (4), not the requested size (8)";
+
+  // Synchronously releases the handle -> writer -> frees pages into `tiny`.
+  vfs_->Release(ctx_, ino, fh);
+}
+
+// --- 4c. Metadata write fails after the data was already buffered. The writer
+// accepts the full write (out_wsize == size, data now dirty in its buffer), but
+// the inode metadata update fails, so VFSImpl::Write returns the error. The
+// buffered data may still be flushed later -- this is pre-existing behavior,
+// not introduced by the short-write change; the test pins the semantic. ---
+TEST_F(VFSImplTest, Write_MetaWriteFails_ReturnsErrorAfterDataBuffered) {
+  auto writer_table = std::make_unique<WriterTable>(mock_hub_);
+  ON_CALL(*mock_hub_, GetWriterTable())
+      .WillByDefault(Return(writer_table.get()));
+  EXPECT_CALL(*mock_hub_, GetWriterTable()).Times(AnyNumber());
+  // Uses the default (64 MiB) write pool from the fixture, so the writer
+  // accepts the whole write.
+
+  const uint64_t ino = 301;
+  ON_CALL(*mock_meta_system_, Open(_, ino, _, _))
+      .WillByDefault(Return(Status::OK()));
+  ON_CALL(*mock_meta_system_, Close(_, ino, _))
+      .WillByDefault(Return(Status::OK()));
+
+  uint64_t fh = 0;
+  ASSERT_TRUE(vfs_->Open(ctx_, ino, O_WRONLY, &fh).ok());
+
+  // Writer accepts the data; the metadata update then fails.
+  EXPECT_CALL(*mock_meta_system_, Write(_, ino, _, _, _, _))
+      .WillOnce(Return(Status::Internal("meta down")));
+
+  std::vector<char> buf(4096, 'X');
+  uint64_t wsize = 0;
+  Status s =
+      vfs_->Write(ctx_, ino, buf.data(), buf.size(), /*offset=*/0, fh, &wsize);
+
+  EXPECT_FALSE(s.ok()) << "metadata failure must surface as an error";
+  EXPECT_EQ(wsize, buf.size()) << "writer accepted the full write before "
+                                  "metadata failed (data buffered)";
+
+  vfs_->Release(ctx_, ino, fh);
 }
 
 // --- 5. GetAttr on .stats inode returns virtual attr ---

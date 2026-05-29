@@ -23,17 +23,18 @@
 
 #include "client/vfs/data/writer/file_writer.h"
 #include "common/trace/trace_manager.h"
+#include "common/writemempool/write_mem_pool.h"
 #include "test/unit/client/vfs/test_base.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 
+using dingofs::client::vfs::test::VFSTestBase;
 using ::testing::_;
 using ::testing::AnyNumber;
 using ::testing::Invoke;
 using ::testing::Return;
-using dingofs::client::vfs::test::VFSTestBase;
 
 class FileWriterTest : public VFSTestBase {
  protected:
@@ -89,6 +90,54 @@ TEST_F(FileWriterTest, Write_CrossingChunkBoundary) {
   Status s = w->Write(ctx_, buf.data(), kWriteSize, offset, &wsize);
   EXPECT_TRUE(s.ok());
   EXPECT_EQ(wsize, kWriteSize);
+
+  w->Close();
+  w->ReleaseRef();
+}
+
+// 2b. Cross-chunk pool exhaustion is a POSIX short write: chunk0 succeeds,
+//     chunk1 hits the exhausted pool. FileWriter must return OK with
+//     out_wsize == the chunk0 prefix (not an error that discards it), so the
+//     caller advances and re-issues the rest.
+TEST_F(FileWriterTest, Write_CrossChunk_PoolExhaustion_ShortWrite) {
+  // 1-page pool: chunk0's page fits, chunk1's page then fails.
+  auto tiny = std::make_unique<WriteMemPool>(4096, 4096);
+  ON_CALL(*mock_hub_, GetWriteMemPool()).WillByDefault(Return(tiny.get()));
+
+  auto* w = MakeOpenWriter();
+
+  const uint64_t chunk_size = mock_hub_->GetFsInfo().chunk_size;
+  // 8 bytes straddling the chunk 0/1 boundary: 4 bytes in each chunk.
+  constexpr uint64_t kWriteSize = 8;
+  uint64_t offset = chunk_size - 4;
+
+  std::vector<char> buf(kWriteSize, 'X');
+  uint64_t wsize = 0;
+  Status s = w->Write(ctx_, buf.data(), kWriteSize, offset, &wsize);
+
+  // Short write: OK, only the 4 bytes that landed in chunk 0.
+  EXPECT_TRUE(s.ok()) << s.ToString();
+  EXPECT_EQ(wsize, 4u);
+
+  w->Close();
+  w->ReleaseRef();
+}
+
+// 2c. First chunk itself exhausts the pool: zero bytes land, so the write is a
+//     hard failure -- NoSpace + out_wsize == 0 (not a short write).
+TEST_F(FileWriterTest, Write_FirstChunkNoSpace_ReturnsNoSpaceZeroWsize) {
+  // 1-page pool; a 2-page write to chunk 0 can't be reserved at all.
+  auto tiny = std::make_unique<WriteMemPool>(4096, 4096);
+  ON_CALL(*mock_hub_, GetWriteMemPool()).WillByDefault(Return(tiny.get()));
+
+  auto* w = MakeOpenWriter();
+
+  std::vector<char> buf(2 * 4096, 'X');  // 2 pages, pool holds 1
+  uint64_t wsize = 12345;                // poison: must end up 0
+  Status s = w->Write(ctx_, buf.data(), buf.size(), /*offset=*/0, &wsize);
+
+  EXPECT_TRUE(s.IsNoSpace()) << s.ToString();
+  EXPECT_EQ(wsize, 0u) << "zero bytes written -> hard failure, not short write";
 
   w->Close();
   w->ReleaseRef();
@@ -199,9 +248,10 @@ TEST_F(FileWriterTest, Write_AfterClose_ReturnsError) {
   w->Close();
 
   const char buf[] = "after close";
-  uint64_t wsize = 0;
+  uint64_t wsize = 12345;  // poison: the fast-fail path must reset it to 0
   Status s = w->Write(ctx_, buf, sizeof(buf), 0, &wsize);
   EXPECT_FALSE(s.ok());
+  EXPECT_EQ(wsize, 0u) << "fast-fail must define out_wsize = 0";
 
   // Release the ref (Close was already called above by test).
   w->ReleaseRef();
@@ -260,10 +310,10 @@ TEST_F(FileWriterTest, StickyStatus_BlocksSubsequentWrites) {
   ASSERT_FALSE(w->GetStatus().ok());
 
   const char buf[] = "blocked";
-  uint64_t wsize = 0;
+  uint64_t wsize = 12345;  // poison: the fast-fail path must reset it to 0
   Status s = w->Write(ctx_, buf, sizeof(buf), 0, &wsize);
-  EXPECT_FALSE(s.ok())
-      << "Write must fast-fail when sticky status is broken";
+  EXPECT_FALSE(s.ok()) << "Write must fast-fail when sticky status is broken";
+  EXPECT_EQ(wsize, 0u) << "fast-fail must define out_wsize = 0";
 
   w->Close();
   w->ReleaseRef();
