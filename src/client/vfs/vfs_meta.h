@@ -144,6 +144,8 @@ struct FsInfo {
   // Trash retention days; 0 means trash is disabled. Pinned at mount time;
   // runtime `updatefs --trash_days=...` requires remount to take effect.
   uint32_t trash_days{0};
+  // 是否对本 fs 启用 uid/gid 自动映射（runtime-mutable，可经心跳热切换）。
+  bool enable_uid_gid_map{false};
 };
 
 using DoneClosure = std::function<void(const Status& status)>;

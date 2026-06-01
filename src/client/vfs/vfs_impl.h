@@ -169,6 +169,19 @@ class VFSImpl : public VFS {
     return (ino == kRootIno) ? mount_root_ino_ : ino;
   }
 
+  // Translate a host-local uid/gid to the hashed id used by MDS, using this
+  // mount's UidGidMapper. Identity when uid/gid mapping is disabled.
+  uint32_t LocalUidToHashed(uint32_t uid) const;
+  uint32_t LocalGidToHashed(uint32_t gid) const;
+
+  // Translate a (uid, gid) outbound pair under a single read lock.
+  void LocalPairToHashed(uint32_t uid, uint32_t gid,
+                         uint32_t& out_uid, uint32_t& out_gid) const;
+
+  // Rewrite an Attr's uid/gid from MDS hashed ids back to host-local, using
+  // this mount's UidGidMapper. No-op when uid/gid mapping is disabled.
+  void TranslateAttrToLocal(Attr* attr) const;
+
   // If `ino` matches the real mount-root inode in subdir mode, rewrite
   // `attr->ino` back to `kRootIno` so FUSE sees a stable root.
   void RewriteRootAttr(Ino req_ino, Attr* attr) const {

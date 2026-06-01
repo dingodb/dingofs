@@ -70,10 +70,21 @@ class MDSClient {
                           mds::FsInfoEntry& fs_info);
   static Status GetFsInfo(RPC& rpc, uint32_t fs_id, mds::FsInfoEntry& fs_info);
 
+  // Refresh the cached fs info from MDS via this client's RPC handle and
+  // current fs name. Caller is responsible for applying side effects (e.g.
+  // propagating to fs_info_).
+  Status RefreshFsInfo(mds::FsInfoEntry& fs_info);
+
   RPC& GetRpc();
 
+  // Out param `last_fs_version` receives the FsInfo.version echoed by MDS
+  // in HeartbeatResponse.client.last_fs_version (zero when the response did
+  // not carry a client reply, e.g. heartbeat for a non-client role or
+  // unknown fs). Callers compare against their locally-held version to
+  // detect runtime-mutable fs changes. Zero on failure.
   Status Heartbeat(
-      const std::map<Ino, std::vector<std::string>>& need_keep_alive_sessions);
+      const std::map<Ino, std::vector<std::string>>& need_keep_alive_sessions,
+      uint64_t& last_fs_version);
 
   Status MountFs(const std::string& name,
                  const pb::mds::MountPoint& mount_point);

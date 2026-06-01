@@ -32,6 +32,7 @@
 #include "client/vfs/data/writer/file_writer.h"
 #include "client/vfs/data_buffer.h"
 #include "client/vfs/handle/handle_manager.h"
+#include "client/vfs/components/uid_gid_mapper.h"
 #include "client/vfs/vfs_fh.h"
 #include "client/vfs/vfs_xattr.h"
 #include "common/blockaccess/accesser_common.h"
@@ -57,6 +58,42 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
+
+// Translate a single host-local uid/gid to the hashed id used by MDS
+// (client->mds).
+static uint32_t LocalIdToHashedId(UidGidMapper* mapper,
+                                  UidGidMapper::Kind kind,
+                                  uint32_t local_id) {
+  return mapper != nullptr ? mapper->LocalIdToHashedId(kind, local_id)
+                           : local_id;
+}
+
+uint32_t VFSImpl::LocalUidToHashed(uint32_t uid) const {
+  return LocalIdToHashedId(vfs_hub_->GetUidGidMapper(),
+                           UidGidMapper::Kind::kUid, uid);
+}
+
+uint32_t VFSImpl::LocalGidToHashed(uint32_t gid) const {
+  return LocalIdToHashedId(vfs_hub_->GetUidGidMapper(),
+                           UidGidMapper::Kind::kGid, gid);
+}
+
+void VFSImpl::TranslateAttrToLocal(Attr* attr) const {
+  auto* mapper = vfs_hub_->GetUidGidMapper();
+  if (mapper == nullptr) return;
+  mapper->HashedPairToLocal(attr->uid, attr->gid, attr->uid, attr->gid);
+}
+
+void VFSImpl::LocalPairToHashed(uint32_t uid, uint32_t gid,
+                                uint32_t& out_uid, uint32_t& out_gid) const {
+  auto* mapper = vfs_hub_->GetUidGidMapper();
+  if (mapper == nullptr) {
+    out_uid = uid;
+    out_gid = gid;
+    return;
+  }
+  mapper->LocalPairToHashed(uid, gid, out_uid, out_gid);
+}
 
 VFSImpl::VFSImpl(const VFSConfig& vfs_conf, const ClientId& client_id)
     : client_id_(client_id),
@@ -237,6 +274,7 @@ Status VFSImpl::Lookup(ContextSPtr ctx, Ino parent, const std::string& name,
 
   Status s = meta_system_->Lookup(ctx, TranslateIno(parent), name, attr);
   if (s.ok()) {
+    TranslateAttrToLocal(attr);
     vfs_hub_->GetFileSuffixWatcher()->Remeber(*attr, name);
   }
   return s;
@@ -255,7 +293,10 @@ Status VFSImpl::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
   }
 
   Status s = meta_system_->GetAttr(ctx, TranslateIno(ino), attr);
-  if (s.ok()) RewriteRootAttr(ino, attr);
+  if (s.ok()) {
+    RewriteRootAttr(ino, attr);
+    TranslateAttrToLocal(attr);
+  }
 
   return s;
 }
@@ -266,9 +307,16 @@ Status VFSImpl::SetAttr(ContextSPtr ctx, Ino ino, int set, const Attr& in_attr,
     return Status::OK();
   }
 
+  Attr send_attr = in_attr;
+  if (set & kSetAttrUid) send_attr.uid = LocalUidToHashed(in_attr.uid);
+  if (set & kSetAttrGid) send_attr.gid = LocalGidToHashed(in_attr.gid);
+
   Status s =
-      meta_system_->SetAttr(ctx, TranslateIno(ino), set, in_attr, out_attr);
-  if (s.ok()) RewriteRootAttr(ino, out_attr);
+      meta_system_->SetAttr(ctx, TranslateIno(ino), set, send_attr, out_attr);
+  if (s.ok()) {
+    RewriteRootAttr(ino, out_attr);
+    TranslateAttrToLocal(out_attr);
+  }
 
   // Truncate (size change) must invalidate cached read buffers — readahead
   // buffers in FileReader::requests_ are indexed by (ino, frange) and would
@@ -344,6 +392,8 @@ Status VFSImpl::CopyFileRange(ContextSPtr ctx, Ino src_ino, uint64_t src_off,
                                   bytes_copied, &dst_attr);
   if (!s.ok()) return s;
 
+  TranslateAttrToLocal(&dst_attr);
+
   // Invalidate any in-flight reader caches for the rewritten dst range.
   if (*bytes_copied > 0) {
     handle_manager_->InvalidateByIno(dst_ino, static_cast<int64_t>(dst_off),
@@ -364,9 +414,12 @@ Status VFSImpl::MkNod(ContextSPtr ctx, Ino parent, const std::string& name,
     return Status::NoPermitted("cannot mknod in trash");
   }
 
-  Status s = meta_system_->MkNod(ctx, TranslateIno(parent), name, uid, gid,
+  uint32_t s_uid = 0, s_gid = 0;
+  LocalPairToHashed(uid, gid, s_uid, s_gid);
+  Status s = meta_system_->MkNod(ctx, TranslateIno(parent), name, s_uid, s_gid,
                                  mode, dev, attr);
   if (s.ok()) {
+    TranslateAttrToLocal(attr);
     vfs_hub_->GetFileSuffixWatcher()->Remeber(*attr, name);
   }
 
@@ -410,8 +463,12 @@ Status VFSImpl::Symlink(ContextSPtr ctx, Ino parent, const std::string& name,
     return Status::NoPermitted("Can not symlink to internal node");
   }
 
-  return meta_system_->Symlink(ctx, TranslateIno(parent), name, uid, gid, link,
-                               attr);
+  uint32_t s_uid = 0, s_gid = 0;
+  LocalPairToHashed(uid, gid, s_uid, s_gid);
+  Status s = meta_system_->Symlink(ctx, TranslateIno(parent), name, s_uid,
+                                   s_gid, link, attr);
+  if (s.ok()) TranslateAttrToLocal(attr);
+  return s;
 }
 
 Status VFSImpl::Rename(ContextSPtr ctx, Ino old_parent,
@@ -456,6 +513,7 @@ Status VFSImpl::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
   Status s = meta_system_->Link(ctx, TranslateIno(ino),
                                 TranslateIno(new_parent), new_name, attr);
   if (s.ok()) {
+    TranslateAttrToLocal(attr);
     vfs_hub_->GetFileSuffixWatcher()->Forget(ino);
   }
 
@@ -523,9 +581,12 @@ Status VFSImpl::Create(ContextSPtr ctx, Ino parent, const std::string& name,
   }
 
   uint64_t gfh = vfs::FhGenerator::GenFh();
-  Status s = meta_system_->Create(ctx, TranslateIno(parent), name, uid, gid,
+  uint32_t s_uid = 0, s_gid = 0;
+  LocalPairToHashed(uid, gid, s_uid, s_gid);
+  Status s = meta_system_->Create(ctx, TranslateIno(parent), name, s_uid, s_gid,
                                   mode, flags, attr, gfh);
   if (s.ok()) {
+    TranslateAttrToLocal(attr);
     CHECK_GT(attr->ino, 0) << "ino in attr is null";
     Ino ino = attr->ino;
 
@@ -754,8 +815,12 @@ Status VFSImpl::MkDir(ContextSPtr ctx, Ino parent, const std::string& name,
     return Status::NoPermitted("cannot mkdir in trash");
   }
 
-  return meta_system_->MkDir(ctx, TranslateIno(parent), name, uid, gid, mode,
-                             attr);
+  uint32_t s_uid = 0, s_gid = 0;
+  LocalPairToHashed(uid, gid, s_uid, s_gid);
+  Status s = meta_system_->MkDir(ctx, TranslateIno(parent), name, s_uid, s_gid,
+                                 mode, attr);
+  if (s.ok()) TranslateAttrToLocal(attr);
+  return s;
 }
 
 Status VFSImpl::OpenDir(ContextSPtr ctx, Ino ino, uint64_t* fh,
@@ -780,8 +845,19 @@ Status VFSImpl::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
     }
   }
 
+  auto* mapper = vfs_hub_->GetUidGidMapper();
+  ReadDirHandler wrapped =
+      (with_attr && mapper != nullptr)
+          ? ReadDirHandler(
+                [this, &handler](const DirEntry& entry, uint64_t off) {
+                  DirEntry e = entry;
+                  TranslateAttrToLocal(&e.attr);
+                  return handler(e, off);
+                })
+          : handler;
+
   return meta_system_->ReadDir(ctx, TranslateIno(ino), fh, offset, with_attr,
-                               handler, count);
+                               wrapped, count);
 }
 
 Status VFSImpl::ReleaseDir(ContextSPtr ctx, Ino ino, uint64_t fh) {

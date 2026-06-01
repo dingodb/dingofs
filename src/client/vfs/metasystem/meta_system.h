@@ -18,6 +18,7 @@
 #define DINGODB_CLIENT_VFS_META_META_SYSTEM_H
 
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 

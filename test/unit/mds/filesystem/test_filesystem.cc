@@ -990,6 +990,50 @@ TEST_F(FileSystemTest, RenameWithDiffDir) {
   }
 }
 
+TEST_F(FileSystemSetTest, CreateFs_PropagatesEnableUidGidMapTrue) {
+  auto fs_set = FsSet();
+
+  FileSystemSet::CreateFsParam param;
+  param.fs_name = "uidgid-on";
+  param.fs_id = 30001;  // explicit id to avoid auto-increment and id-reuse issues
+  param.block_size = 1 << 20;
+  param.chunk_size = 64 << 20;
+  param.fs_type = pb::mds::FsType::S3;
+  *param.fs_extra.mutable_s3_info() = CreateS3Info();
+  param.owner = "tester";
+  param.capacity = 1ULL << 30;
+  param.partition_type = pb::mds::PartitionType::MONOLITHIC_PARTITION;
+  param.candidate_mds_ids = {kMdsId};  // avoid random-select crash on empty mds_meta_map
+  param.enable_uid_gid_map = true;
+
+  pb::mds::FsInfo fs_info;
+  auto status = fs_set->CreateFs(param, fs_info);
+  ASSERT_TRUE(status.ok()) << "create fs fail: " << status.error_str();
+  EXPECT_TRUE(fs_info.enable_uid_gid_map());
+}
+
+TEST_F(FileSystemSetTest, CreateFs_PropagatesEnableUidGidMapDefaultFalse) {
+  auto fs_set = FsSet();
+
+  FileSystemSet::CreateFsParam param;
+  param.fs_name = "uidgid-off";
+  param.fs_id = 30002;  // explicit id to avoid auto-increment and id-reuse issues
+  param.block_size = 1 << 20;
+  param.chunk_size = 64 << 20;
+  param.fs_type = pb::mds::FsType::S3;
+  *param.fs_extra.mutable_s3_info() = CreateS3Info();
+  param.owner = "tester";
+  param.capacity = 1ULL << 30;
+  param.partition_type = pb::mds::PartitionType::MONOLITHIC_PARTITION;
+  param.candidate_mds_ids = {kMdsId};  // avoid random-select crash on empty mds_meta_map
+  // enable_uid_gid_map intentionally left default (false)
+
+  pb::mds::FsInfo fs_info;
+  auto status = fs_set->CreateFs(param, fs_info);
+  ASSERT_TRUE(status.ok()) << "create fs fail: " << status.error_str();
+  EXPECT_FALSE(fs_info.enable_uid_gid_map());
+}
+
 }  // namespace unit_test
 }  // namespace mds
 }  // namespace dingofs

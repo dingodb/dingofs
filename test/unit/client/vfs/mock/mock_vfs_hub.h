@@ -48,6 +48,7 @@ class MockVFSHub : public VFSHub {
   MOCK_METHOD(Compactor*, GetCompactor, (), (override));
   MOCK_METHOD(TraceManager*, GetTraceManager, (), (override));
   MOCK_METHOD(FsInfo, GetFsInfo, (), (override));
+  MOCK_METHOD(UidGidMapper*, GetUidGidMapper, (), (override));
   MOCK_METHOD(blockaccess::BlockAccessOptions, GetBlockAccesserOptions, (),
               (override));
 };

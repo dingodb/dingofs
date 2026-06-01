@@ -27,6 +27,7 @@
 #include "client/vfs/compaction/compactor.h"
 #include "client/vfs/components/file_suffix_watcher.h"
 #include "client/vfs/components/prefetch_manager.h"
+#include "client/vfs/components/uid_gid_mapper.h"
 #include "client/vfs/components/warmup_manager.h"
 #include "client/vfs/handle/handle_manager.h"
 #include "client/vfs/metasystem/meta_wrapper.h"
@@ -94,6 +95,8 @@ class VFSHub {
   virtual FsInfo GetFsInfo() = 0;
 
   virtual blockaccess::BlockAccessOptions GetBlockAccesserOptions() = 0;
+
+  virtual UidGidMapper* GetUidGidMapper() = 0;
 };
 
 class VFSHubImpl : public VFSHub {
@@ -195,6 +198,11 @@ class VFSHubImpl : public VFSHub {
     return blockaccess_options_;
   }
 
+  UidGidMapper* GetUidGidMapper() override {
+    CHECK_NOTNULL(uid_gid_mapper_);
+    return uid_gid_mapper_.get();
+  }
+
  private:
   std::atomic_bool started_{false};
 
@@ -225,6 +233,8 @@ class VFSHubImpl : public VFSHub {
   std::unique_ptr<PrefetchManager> prefetch_manager_;
   std::unique_ptr<WarmupManager> warmup_manager_;
   std::unique_ptr<utils::LogCleanManager> logclean_manager_;
+  // Owns its own /etc passwd/group inotify watch internally (see Init).
+  std::unique_ptr<UidGidMapper> uid_gid_mapper_;
 };
 
 }  // namespace vfs

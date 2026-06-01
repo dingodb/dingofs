@@ -3804,6 +3804,7 @@ FsInfoEntry FileSystemSet::GenFsInfo(uint32_t fs_id, const CreateFsParam& param)
                                                             : FLAGS_mds_filesystem_recycle_time_hour);
   fs_info.set_trash_days(param.trash_days);
   fs_info.set_immediate_trash_quota(param.immediate_trash_quota);
+  fs_info.set_enable_uid_gid_map(param.enable_uid_gid_map);
   fs_info.mutable_extra()->CopyFrom(param.fs_extra);
   fs_info.set_uuid(utils::GenerateUUID());
 

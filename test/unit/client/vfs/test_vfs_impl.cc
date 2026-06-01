@@ -19,9 +19,12 @@
 #include <gtest/gtest.h>
 
 #include <memory>
+#include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
+#include "client/vfs/components/uid_gid_mapper.h"
 #include "client/vfs/data/writer_table.h"
 #include "client/vfs/data_buffer.h"
 #include "client/vfs/vfs_impl.h"
@@ -46,6 +49,38 @@ using ::testing::Invoke;
 using ::testing::Return;
 using ::testing::SaveArg;
 using ::testing::SetArgPointee;
+
+namespace {
+
+// Minimal in-memory PasswdSource for the uid/gid wiring tests. Mirrors the
+// TableSource used by uid_gid_mapper_test.cc, kept local since that helper is
+// not exported in a shared header. These tests don't exercise the fast-path
+// cookie, so primary_gid is always 0.
+class FakePasswdSource : public PasswdSource {
+ public:
+  explicit FakePasswdSource(
+      std::vector<std::pair<std::string, uint32_t>> users,
+      std::vector<std::pair<std::string, uint32_t>> groups)
+      : users_(std::move(users)), groups_(std::move(groups)) {}
+
+  std::vector<UserRecord> ListUsersWithPrimaryGid() override {
+    std::vector<UserRecord> out;
+    out.reserve(users_.size());
+    for (const auto& [name, uid] : users_) {
+      out.push_back({name, uid, 0});
+    }
+    return out;
+  }
+  std::vector<std::pair<std::string, uint32_t>> ListGroups() override {
+    return groups_;
+  }
+
+ private:
+  std::vector<std::pair<std::string, uint32_t>> users_;
+  std::vector<std::pair<std::string, uint32_t>> groups_;
+};
+
+}  // namespace
 
 class VFSImplTest : public test::VFSTestBase {
  protected:
@@ -497,6 +532,100 @@ TEST_F(VFSImplTest, Trash_Rename_IntoTrash_BlockedAtClient) {
                           /*new_parent=*/0x7FFFFFFF00000005ULL, "newname");
   EXPECT_FALSE(s.ok());
   EXPECT_TRUE(s.IsNoPermitted());
+}
+
+// ===========================================================================
+// uid/gid translation wiring (moved from the removed MDS-layer contract tests)
+//
+// The mapper now lives at the VFS layer: VFSImpl translates OUTBOUND (local ->
+// stored hash) before backend calls and INBOUND (stored -> local) on returned
+// attrs. These tests verify that wiring through the public VFSImpl surface.
+// ===========================================================================
+class VFSImplUidGidTest : public VFSImplTest {
+ protected:
+  // Build an enabled mapper preset with alice@kLocalUid and route the hub's
+  // GetUidGidMapper() to it. Stored as a member so it outlives the calls.
+  void EnableMapper() {
+    auto src = std::make_unique<FakePasswdSource>(
+        std::vector<std::pair<std::string, uint32_t>>{{"alice", kLocalUid}},
+        std::vector<std::pair<std::string, uint32_t>>{{"alice", kLocalUid}});
+    mapper_ = std::make_unique<UidGidMapper>(/*enabled=*/true, "salt-X",
+                                             std::move(src));
+    mapper_->Refresh();
+    EXPECT_CALL(*mock_hub_, GetUidGidMapper())
+        .WillRepeatedly(Return(mapper_.get()));
+  }
+
+  static constexpr uint32_t kLocalUid = 1001;
+  std::unique_ptr<UidGidMapper> mapper_;
+};
+
+// Outbound: MkNod with a local uid must reach the meta system as the hashed id.
+TEST_F(VFSImplUidGidTest, UidGid_OutboundTranslates_MkNod) {
+  EnableMapper();
+  const uint32_t hashed =
+      mapper_->LocalIdToHashedId(UidGidMapper::Kind::kUid, kLocalUid);
+  ASSERT_GE(hashed, UidGidMapper::kLocalUidMax);  // actually translated
+  ASSERT_NE(hashed, kLocalUid);
+
+  uint32_t seen_uid = 0;
+  EXPECT_CALL(*mock_meta_system_, MkNod(_, kRootIno, "f", _, _, _, _, _))
+      .WillOnce(DoAll(SaveArg<3>(&seen_uid), Return(Status::OK())));
+
+  Attr out;
+  Status s = vfs_->MkNod(ctx_, kRootIno, "f", /*uid=*/kLocalUid, /*gid=*/0,
+                         /*mode=*/0644, /*dev=*/0, &out);
+  EXPECT_TRUE(s.ok());
+  EXPECT_EQ(seen_uid, hashed);
+}
+
+// Inbound: a stored hashed uid returned by the backend must surface to the
+// caller as the local uid.
+TEST_F(VFSImplUidGidTest, UidGid_InboundTranslates_GetAttr) {
+  EnableMapper();
+  const uint32_t hashed =
+      mapper_->LocalIdToHashedId(UidGidMapper::Kind::kUid, kLocalUid);
+  ASSERT_GE(hashed, UidGidMapper::kLocalUidMax);
+
+  Attr attr;
+  attr.ino = 77;
+  attr.type = dingofs::kFile;
+  attr.uid = hashed;  // backend stores the hashed id
+
+  EXPECT_CALL(*mock_meta_system_, GetAttr(_, 77u, _))
+      .WillOnce(DoAll(SetArgPointee<2>(attr), Return(Status::OK())));
+
+  Attr out;
+  Status s = vfs_->GetAttr(ctx_, 77u, &out);
+  EXPECT_TRUE(s.ok());
+  EXPECT_EQ(out.uid, kLocalUid);
+}
+
+// Passthrough: with a null mapper (the fixture default), uid is unchanged in
+// both directions.
+TEST_F(VFSImplUidGidTest, UidGid_Passthrough_NullMapper) {
+  // GetUidGidMapper() returns nullptr by VFSTestBase default.
+
+  // Outbound: MkNod uid reaches the backend unchanged.
+  uint32_t seen_uid = 0;
+  EXPECT_CALL(*mock_meta_system_, MkNod(_, kRootIno, "f", _, _, _, _, _))
+      .WillOnce(DoAll(SaveArg<3>(&seen_uid), Return(Status::OK())));
+  Attr mk_out;
+  EXPECT_TRUE(vfs_->MkNod(ctx_, kRootIno, "f", /*uid=*/kLocalUid, /*gid=*/0,
+                          /*mode=*/0644, /*dev=*/0, &mk_out)
+                  .ok());
+  EXPECT_EQ(seen_uid, kLocalUid);
+
+  // Inbound: GetAttr uid surfaces unchanged.
+  Attr attr;
+  attr.ino = 88;
+  attr.type = dingofs::kFile;
+  attr.uid = kLocalUid;
+  EXPECT_CALL(*mock_meta_system_, GetAttr(_, 88u, _))
+      .WillOnce(DoAll(SetArgPointee<2>(attr), Return(Status::OK())));
+  Attr out;
+  EXPECT_TRUE(vfs_->GetAttr(ctx_, 88u, &out).ok());
+  EXPECT_EQ(out.uid, kLocalUid);
 }
 
 }  // namespace vfs

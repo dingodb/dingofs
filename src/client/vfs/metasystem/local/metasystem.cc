@@ -518,9 +518,9 @@ Status LocalMetaSystem::WriteSlice(ContextSPtr, Ino ino, uint64_t index,
     const uint64_t chunk_start = index * fs_info_.chunk_size();
     uint64_t new_length = 0;
     for (const auto& slice : slices) {
-      new_length = std::max(
-          new_length,
-          chunk_start + static_cast<uint64_t>(slice.pos) + slice.len);
+      new_length =
+          std::max(new_length,
+                   chunk_start + static_cast<uint64_t>(slice.pos) + slice.len);
 
       auto* slice_entry = chunk_entry.add_slices();
 
@@ -1107,10 +1107,10 @@ Status LocalMetaSystem::SetAttr(ContextSPtr, Ino ino, int to_set,
       // chunk tail; then delete every chunk fully past new_length.
       if (new_length < old_length) {
         const uint64_t chunk_size = fs_info_.chunk_size();
-        const uint32_t old_num = static_cast<uint32_t>(
-            (old_length + chunk_size - 1) / chunk_size);
-        const uint32_t new_num = static_cast<uint32_t>(
-            (new_length + chunk_size - 1) / chunk_size);
+        const uint32_t old_num =
+            static_cast<uint32_t>((old_length + chunk_size - 1) / chunk_size);
+        const uint32_t new_num =
+            static_cast<uint32_t>((new_length + chunk_size - 1) / chunk_size);
 
         if (new_length % chunk_size != 0) {
           const uint64_t chunk_pos = new_length % chunk_size;
@@ -1160,8 +1160,8 @@ Status LocalMetaSystem::Fallocate(ContextSPtr, Ino ino, int mode,
   constexpr int kSupported =
       0x01 /*KEEP_SIZE*/ | 0x02 /*PUNCH_HOLE*/ | 0x10 /*ZERO_RANGE*/;
   if ((mode & ~kSupported) != 0) {
-    return Status::NotSupport(fmt::format("fallocate mode({}) not supported",
-                                          mode));
+    return Status::NotSupport(
+        fmt::format("fallocate mode({}) not supported", mode));
   }
   if (length == 0) return Status::OK();
 
@@ -1208,8 +1208,7 @@ Status LocalMetaSystem::Fallocate(ContextSPtr, Ino ino, int mode,
       const uint64_t chunk_index = cursor / chunk_size;
       const uint64_t chunk_pos = cursor % chunk_size;
       const uint64_t remain = end_offset - cursor;
-      const uint64_t delta =
-          std::min(remain, chunk_size - chunk_pos);
+      const uint64_t delta = std::min(remain, chunk_size - chunk_pos);
 
       status = AppendZeroSliceToChunk(fs_id, ino, chunk_index,
                                       static_cast<uint32_t>(chunk_pos),
@@ -1799,8 +1798,8 @@ Status LocalMetaSystem::InitFsQuota() {
     // sign-flip in downstream consumers (e.g. ReplyStatfs computes
     // total_blocks - used_blocks in uint64 and underflows when either
     // side approaches 2^63).
-    fs_quota_.set_max_bytes(1LL << 50);     // 1 PiB
-    fs_quota_.set_max_inodes(1LL << 40);    // 1T inodes
+    fs_quota_.set_max_bytes(1LL << 50);   // 1 PiB
+    fs_quota_.set_max_inodes(1LL << 40);  // 1T inodes
     fs_quota_.set_used_bytes(0);
     fs_quota_.set_used_inodes(1);
 

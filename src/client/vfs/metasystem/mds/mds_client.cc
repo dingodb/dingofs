@@ -205,10 +205,16 @@ Status MDSClient::GetFsInfo(RPC& rpc, uint32_t fs_id,
   return DoGetFsInfo(rpc, request, fs_info);
 }
 
+Status MDSClient::RefreshFsInfo(mds::FsInfoEntry& fs_info) {
+  return MDSClient::GetFsInfo(rpc_, fs_info_.GetName(), fs_info);
+}
+
 RPC& MDSClient::GetRpc() { return rpc_; }
 
 Status MDSClient::Heartbeat(
-    const std::map<Ino, std::vector<std::string>>& need_keep_alive_sessions) {
+    const std::map<Ino, std::vector<std::string>>& need_keep_alive_sessions,
+    uint64_t& last_fs_version) {
+  last_fs_version = 0;
   if (client_id_.ID().empty()) {
     return Status::InvalidParam("client id is empty");
   }
@@ -252,6 +258,10 @@ Status MDSClient::Heartbeat(
     return status;
   }
 
+  // When the response doesn't carry a ClientReply (oneof unset — e.g.
+  // unknown fs on MDS), response.client() returns the default instance
+  // and last_fs_version() returns 0, matching the "no signal" semantic.
+  last_fs_version = response.client().last_fs_version();
   return Status::OK();
 }
 
