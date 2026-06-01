@@ -247,6 +247,7 @@ static void RenderFsInfo(const std::vector<pb::mds::FsInfo>& fs_infoes, butil::I
   os << "<th>Owner</th>";
   os << "<th>Navigation</th>";
   os << "<th>Time</th>";
+  os << "<th>EnableUidGidMap</th>";
   os << "<th>Trash</th>";
   os << "<th>RecycleTime</th>";
   os << "<th>MountPoint</th>";
@@ -272,6 +273,7 @@ static void RenderFsInfo(const std::vector<pb::mds::FsInfo>& fs_infoes, butil::I
     os << "<td>" << fs_info.owner() << "</td>";
     os << "<td>" << render_navigation_func(fs_info) << "</td>";
     os << "<td>" << render_time_func(fs_info) << "</td>";
+    os << "<td>" << (fs_info.enable_uid_gid_map() ? "On" : "Off") << "</td>";
     os << "<td>"
        << fmt::format("trash_days: {}<br>immediate_trash_quota: {}", fs_info.trash_days(),
                       fs_info.immediate_trash_quota() ? "true" : "false")

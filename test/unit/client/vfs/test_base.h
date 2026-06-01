@@ -121,6 +121,9 @@ class VFSTestBase : public ::testing::Test {
     ON_CALL(*mock_hub_, GetCBExecutor())
         .WillByDefault(Return(cb_executor_.get()));
     ON_CALL(*mock_hub_, GetFsInfo()).WillByDefault(Return(MakeTestFsInfo()));
+    // Null mapper => uid/gid translation passthrough. Tests that exercise the
+    // enabled-mapper path override this with their own real mapper.
+    ON_CALL(*mock_hub_, GetUidGidMapper()).WillByDefault(Return(nullptr));
 
     EXPECT_CALL(*mock_hub_, GetMetaSystem()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetHandleManager()).Times(AnyNumber());
@@ -134,6 +137,7 @@ class VFSTestBase : public ::testing::Test {
     EXPECT_CALL(*mock_hub_, GetBGExecutor()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetCBExecutor()).Times(AnyNumber());
     EXPECT_CALL(*mock_hub_, GetFsInfo()).Times(AnyNumber());
+    EXPECT_CALL(*mock_hub_, GetUidGidMapper()).Times(AnyNumber());
 
     // --- 8. MockBlockStore: synchronous success by default ---
     // Callbacks invoked inline (no async) to eliminate timing non-determinism.

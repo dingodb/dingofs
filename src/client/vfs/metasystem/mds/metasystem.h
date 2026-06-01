@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <utility>
 
 #include "client/vfs/common/client_id.h"
 #include "client/vfs/compaction/compactor.h"
@@ -44,6 +45,7 @@
 #include "json/value.h"
 #include "mds/common/crontab.h"
 #include "mds/common/type.h"
+#include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 namespace client {
@@ -183,12 +185,19 @@ class MDSMetaSystem : public vfs::MetaSystem {
  private:
   friend class OpenTask;
 
+  // Convert the backend-specific mds::FsInfoEntry into the backend-agnostic
+  // vfs::FsInfo consumed by upper layers (GetFsInfo).
+  Status ToVfsFsInfo(const mds::FsInfoEntry& src, FsInfo* dst) const;
+
   bool SetRandomEndpoint();
   bool SetEndpoints();
   bool MountFs();
   bool UnmountFs();
 
   void Heartbeat();
+  // Refresh the cached fs_info from MDS. Driven by the heartbeat when MDS
+  // reports a newer fs version.
+  void RefreshCachedFsInfo();
   void CleanExpiredModifyTimeMemo();
   void CleanExpiredChunkMemo();
   void CleanExpiredChunkCache();

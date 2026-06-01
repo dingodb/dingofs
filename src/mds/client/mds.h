@@ -212,6 +212,9 @@ class MDSClient {
     uint32_t trash_days;
     // Create-time only. When true, trash-move debits parent quota immediately.
     bool immediate_trash_quota{true};
+    // See FsInfo.enable_uid_gid_map. Runtime-mutable (clients hot-apply via
+    // heartbeat).
+    bool enable_uid_gid_map{false};
   };
 
   CreateFsResponse CreateFs(const std::string& fs_name, const CreateFsParams& params);
@@ -296,6 +299,7 @@ class MDSClient {
   void UpdateFsS3Info(const std::string& fs_name, const S3Info& s3_info);
   void UpdateFsRadosInfo(const std::string& fs_name, const RadosInfo& rados_info);
   void UpdateFsTrashDays(const std::string& fs_name, uint32_t trash_days);
+  void UpdateFsEnableUidGidMap(const std::string& fs_name, bool enable);
 
  private:
   uint32_t fs_id_{0};
@@ -339,6 +343,7 @@ class MdsCommandRunner {
     //trash
     uint32_t trash_days{0};
     bool immediate_trash_quota{true};
+    bool enable_uid_gid_map{false};
 
     // trash restore (`restoretrash` subcommand)
     std::vector<std::string> trash_hours;

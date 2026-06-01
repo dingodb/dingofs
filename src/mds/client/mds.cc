@@ -151,6 +151,7 @@ CreateFsResponse MDSClient::CreateFs(const std::string& fs_name, const CreateFsP
   request.set_recycle_time_hour(1);
   request.set_trash_days(params.trash_days);
   request.set_immediate_trash_quota(params.immediate_trash_quota);
+  request.set_enable_uid_gid_map(params.enable_uid_gid_map);
 
   if (params.partition_type == "mono") {
     request.set_partition_type(::dingofs::pb::mds::PartitionType::MONOLITHIC_PARTITION);
@@ -1558,6 +1559,27 @@ void MDSClient::UpdateFsTrashDays(const std::string& fs_name, uint32_t trash_day
   UpdateFs(fs_name, fs_info);
 }
 
+void MDSClient::UpdateFsEnableUidGidMap(const std::string& fs_name, bool enable) {
+  if (fs_name.empty()) {
+    std::cerr << "fs_name is empty\n";
+    return;
+  }
+
+  auto fs_response = GetFs(fs_name);
+  pb::mds::FsInfo fs_info;
+  fs_info.CopyFrom(fs_response.fs_info());
+  if (fs_info.fs_id() == 0) {
+    std::cerr << "not found fs: " << fs_name << "\n";
+    return;
+  }
+
+  // Read-modify-write: every UpdateFsInfo call must round-trip the full
+  // current FsInfo. Only flip the one field; the server merges all known
+  // runtime-mutable fields including this one (store_operation.cc:594).
+  fs_info.set_enable_uid_gid_map(enable);
+  UpdateFs(fs_name, fs_info);
+}
+
 bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr, const std::string& cmd,
                            uint32_t fs_id) {
   static std::set<std::string> mds_cmd = {
@@ -1599,6 +1621,7 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr, 
       "deletemember",
       "restoretrash",
       "updatefstrashdays",
+      "updatefsenableuidgidmap",
   };
 
   if (mds_cmd.count(cmd) == 0) return false;
@@ -1629,6 +1652,7 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr, 
     params.expect_mds_num = options.num;
     params.trash_days = options.trash_days;
     params.immediate_trash_quota = options.immediate_trash_quota;
+    params.enable_uid_gid_map = options.enable_uid_gid_map;
 
     mds_client.CreateFs(options.fs_name, params);
 
@@ -1646,6 +1670,9 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr, 
 
   } else if (cmd == Helper::ToLowerCase("UpdateFsTrashDays")) {
     mds_client.UpdateFsTrashDays(options.fs_name, options.trash_days);
+
+  } else if (cmd == Helper::ToLowerCase("UpdateFsEnableUidGidMap")) {
+    mds_client.UpdateFsEnableUidGidMap(options.fs_name, options.enable_uid_gid_map);
 
   } else if (cmd == Helper::ToLowerCase("GetFs")) {
     mds_client.GetFs(options.fs_name);

@@ -97,6 +97,11 @@ DEFINE_bool(immediate_trash_quota, true,
             "(credited back on restore); when false, the debit is deferred to GC. "
             "Applied at createfs only and immutable thereafter.");
 
+DEFINE_bool(enable_uid_gid_map, true,
+            "per-fs: when true, client hashes local user/group names into "
+            "internal ids in [10000, 2^32). "
+            "ALL mounting clients of this fs must support the feature.");
+
 static std::string GetDefaultCoorAddrPath() {
   if (!FLAGS_coor_addr.empty()) {
     return FLAGS_coor_addr;
@@ -227,6 +232,7 @@ int main(int argc, char* argv[]) {
 
     options.trash_days = FLAGS_trash_days;
     options.immediate_trash_quota = FLAGS_immediate_trash_quota;
+    options.enable_uid_gid_map = FLAGS_enable_uid_gid_map;
     // trash restore
     options.trash_put_back = FLAGS_put_back;
     options.trash_threads = FLAGS_restore_threads;

@@ -178,6 +178,17 @@ Status VFSHubImpl::Start(bool skip_mount) {
     }
   }
 
+  // uid/gid mapper + passwd watcher
+  {
+    // salt = fs uuid; enabled comes from fs_info and is immutable after fs
+    // creation, so there is no runtime toggle. Init() primes the snapshot and
+    // starts the /etc passwd/group inotify watch.
+    uid_gid_mapper_ = std::make_unique<UidGidMapper>(
+        fs_info_.enable_uid_gid_map, fs_info_.uuid,
+        std::make_unique<LibcPasswdSource>());
+    uid_gid_mapper_->Init();
+  }
+
   // block accesser
   {
     // 1) decide backend type from fs_info and set per-backend connection
@@ -310,8 +321,8 @@ Status VFSHubImpl::Start(bool skip_mount) {
           prefetch_manager_->Start(FLAGS_vfs_prefetch_threads));
 
     } else {
-      LOG(INFO)
-          << "[vfs.hub] block cache not enable, skip prefetch manager start.";
+      LOG(INFO) << fmt::format(
+          "[vfs.hub] block cache not enable, skip prefetch manager start.");
     }
   }
 
@@ -349,6 +360,10 @@ Status VFSHubImpl::Stop(bool skip_unmount) {
 
   LOG(INFO) << fmt::format("[vfs.hub] stopping vfs hub, skip_unmount({}).",
                            skip_unmount);
+
+  if (uid_gid_mapper_ != nullptr) {
+    uid_gid_mapper_->StopWatching();
+  }
 
   if (compactor_ != nullptr) {
     compactor_->Stop();

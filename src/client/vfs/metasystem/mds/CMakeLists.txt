@@ -34,6 +34,7 @@ target_link_libraries(vfs_metasystem_mds_lib
     jsoncpp
     spdlog::spdlog
     brpc::brpc
+    OpenSSL::Crypto
     absl::memory
     absl::strings
     absl::synchronization

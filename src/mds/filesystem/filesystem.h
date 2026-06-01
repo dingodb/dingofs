@@ -457,6 +457,9 @@ class FileSystemSet {
     // Create-time only. true = debit parent/ancestor quota immediately at
     // trash-move (restore credits back); false = defer to CleanTrashTask.
     bool immediate_trash_quota{false};
+    // Runtime-mutable. true = clients hash username/groupname into reserved
+    // segment [10000, 2^32). Stored uid/gid become internal IDs.
+    bool enable_uid_gid_map{false};
     pb::mds::PartitionType partition_type;
     uint32_t expect_mds_num{0};  // for hash partition
     std::vector<uint64_t> candidate_mds_ids;

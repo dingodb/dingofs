@@ -591,6 +591,10 @@ Status UpdateFsOperation::Run(TxnUPtr& txn) {
   if (fs_info_.recycle_time_hour() > 0) new_fs_info.set_recycle_time_hour(fs_info_.recycle_time_hour());
   new_fs_info.set_trash_days(fs_info_.trash_days());
   // immediate_trash_quota is create-time only: deliberately not merged here.
+  // enable_uid_gid_map is a runtime-mutable toggle: callers are expected to
+  // GetFsInfo, flip the flag, and UpdateFsInfo with the full record (the
+  // same read-modify-write convention used for trash_days above).
+  new_fs_info.set_enable_uid_gid_map(fs_info_.enable_uid_gid_map());
   if (fs_info_.has_extra() && fs_info_.extra().has_s3_info()) {
     const auto& s3_info = fs_info_.extra().s3_info();
     auto* mut_s3_info = new_fs_info.mutable_extra()->mutable_s3_info();

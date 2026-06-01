@@ -207,6 +207,14 @@ void MDSServiceImpl::DoHeartbeat(google::protobuf::RpcController*, const pb::mds
       file_system->AsyncKeepAliveFileSession(Helper::PbRepeatedToVector(client_info.file_sessions()));
     }
 
+    // Piggyback FsInfo.version so the client can detect runtime-mutable
+    // field changes (e.g. enable_uid_gid_map) without a separate poll.
+    auto file_system = GetFileSystem(client_info.fs_id());
+    if (file_system != nullptr) {
+      response->mutable_client()->set_last_fs_version(
+          file_system->GetFsInfo().version());
+    }
+
   } else if (request->role() == pb::mds::ROLE_CACHE_MEMBER) {
     auto span = StartSpan("MDSServiceImpl::CacheMemberSendHeartbeat", request->info());
     auto cache_member = request->cache_group_member();
@@ -294,6 +302,7 @@ void MDSServiceImpl::DoCreateFs(google::protobuf::RpcController*, const pb::mds:
   param.recycle_time_hour = request->recycle_time_hour();
   param.trash_days = request->trash_days();
   param.immediate_trash_quota = request->immediate_trash_quota();
+  param.enable_uid_gid_map = request->enable_uid_gid_map();
   param.partition_type = request->partition_type();
   param.expect_mds_num = request->expect_mds_num();
   param.candidate_mds_ids = Helper::PbRepeatedToVector(request->candidate_mds_ids());

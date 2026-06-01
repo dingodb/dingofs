@@ -378,41 +378,43 @@ bool MDSMetaSystem::Load(ContextSPtr, const Json::Value& value) {
   return true;
 }
 
-Status MDSMetaSystem::GetFsInfo(ContextSPtr, FsInfo* fs_info) {
-  auto temp_fs_info = fs_info_.Get();
+Status MDSMetaSystem::ToVfsFsInfo(const mds::FsInfoEntry& src,
+                                  FsInfo* dst) const {
+  dst->name = name_;
+  dst->id = src.fs_id();
+  dst->chunk_size = src.chunk_size();
+  dst->block_size = src.block_size();
+  dst->uuid = src.uuid();
+  dst->status = Helper::ToFsStatus(src.status());
+  dst->create_time_s = src.create_time_s();
+  dst->trash_days = src.trash_days();
+  dst->enable_uid_gid_map = src.enable_uid_gid_map();
 
-  fs_info->name = name_;
-  fs_info->id = temp_fs_info.fs_id();
-  fs_info->chunk_size = temp_fs_info.chunk_size();
-  fs_info->block_size = temp_fs_info.block_size();
-  fs_info->uuid = temp_fs_info.uuid();
-  fs_info->status = Helper::ToFsStatus(temp_fs_info.status());
-  fs_info->create_time_s = temp_fs_info.create_time_s();
-  fs_info->trash_days = temp_fs_info.trash_days();
-
-  fs_info->storage_info.store_type =
-      Helper::ToStoreType(temp_fs_info.fs_type());
-  if (fs_info->storage_info.store_type == StoreType::kS3) {
-    CHECK(temp_fs_info.extra().has_s3_info())
+  dst->storage_info.store_type = Helper::ToStoreType(src.fs_type());
+  if (dst->storage_info.store_type == StoreType::kS3) {
+    CHECK(src.extra().has_s3_info())
         << "fs type is S3, but s3 info is not set";
 
-    fs_info->storage_info.s3_info =
-        Helper::ToS3Info(temp_fs_info.extra().s3_info());
+    dst->storage_info.s3_info = Helper::ToS3Info(src.extra().s3_info());
 
-  } else if (fs_info->storage_info.store_type == StoreType::kRados) {
-    CHECK(temp_fs_info.extra().has_rados_info())
+  } else if (dst->storage_info.store_type == StoreType::kRados) {
+    CHECK(src.extra().has_rados_info())
         << "fs type is Rados, but rados info is not set";
 
-    fs_info->storage_info.rados_info =
-        Helper::ToRadosInfo(temp_fs_info.extra().rados_info());
+    dst->storage_info.rados_info =
+        Helper::ToRadosInfo(src.extra().rados_info());
 
   } else {
     LOG(ERROR) << fmt::format("[meta.fs] unknown fs type: {}.",
-                              pb::mds::FsType_Name(temp_fs_info.fs_type()));
+                              pb::mds::FsType_Name(src.fs_type()));
     return Status::InvalidParam("unknown fs type");
   }
 
   return Status::OK();
+}
+
+Status MDSMetaSystem::GetFsInfo(ContextSPtr, FsInfo* fs_info) {
+  return ToVfsFsInfo(fs_info_.Get(), fs_info);
 }
 
 bool MDSMetaSystem::MountFs() {
@@ -454,14 +456,42 @@ void MDSMetaSystem::Heartbeat() {
   static std::atomic<bool> is_running{false};
   if (is_running.exchange(true)) return;
 
-  auto status =
-      mds_client_.Heartbeat(file_session_map_.GetNeedKeepAliveSession());
+  uint64_t last_fs_version = 0;
+  auto status = mds_client_.Heartbeat(
+      file_session_map_.GetNeedKeepAliveSession(), last_fs_version);
   if (!status.IsOK()) {
     LOG(ERROR) << fmt::format("[meta.fs] heartbeat fail, error({}).",
                               status.ToString());
+    is_running = false;
+    return;
+  }
+
+  // Piggyback: if MDS reports a newer fs version, trigger a one-shot
+  // GetFsInfo to pull the full record and refresh the cached fs_info.
+  // last_fs_version == 0 means MDS did not echo a ClientReply (e.g.
+  // pre-feature server or no fs match); fall back to no-op rather than
+  // thrashing.
+  if (last_fs_version > 0 && last_fs_version > fs_info_.GetVersion()) {
+    RefreshCachedFsInfo();
   }
 
   is_running = false;
+}
+
+void MDSMetaSystem::RefreshCachedFsInfo() {
+  // Only ever called from Heartbeat(), which is already serialized by its
+  // own re-entrancy guard, so no guard is needed here.
+  mds::FsInfoEntry new_fs_info;
+  auto status = mds_client_.RefreshFsInfo(new_fs_info);
+  if (!status.ok()) {
+    LOG(WARNING) << fmt::format(
+        "[meta.fs] refresh fs info fail, error({}).", status.ToString());
+    return;
+  }
+
+  // Update() is a no-op when the incoming version is not newer, so it is
+  // safe to call on every tick.
+  fs_info_.Update(new_fs_info);
 }
 
 void MDSMetaSystem::CleanExpiredModifyTimeMemo() {
@@ -525,6 +555,10 @@ bool MDSMetaSystem::InitCrontab() {
       },
   });
 
+  // Note: the cached fs_info refreshes via the 5s heartbeat path — MDS echoes
+  // the current FsInfo.version, and MDSMetaSystem::Heartbeat triggers
+  // RefreshCachedFsInfo on diff. No separate poll crontab is needed.
+
   crontab_manager_.AddCrontab(crontab_configs_);
 
   return true;
@@ -565,9 +599,8 @@ Status MDSMetaSystem::Lookup(ContextSPtr ctx, Ino parent,
     return status;
   }
 
-  *attr = Helper::ToAttr(attr_entry);
-
-  PutInodeToCache(attr_entry);
+  auto inode = PutInodeToCache(attr_entry);
+  *attr = inode->ToAttr();
 
   return Status::OK();
 }
@@ -584,10 +617,9 @@ Status MDSMetaSystem::Create(ContextSPtr ctx, Ino parent,
                                    session_id, attr_entry, parent_attr_entry);
   if (!status.ok()) return status;
 
-  *attr = Helper::ToAttr(attr_entry);
-
   InodeSPtr inode = PutInodeToCache(attr_entry);
   PutInodeToCache(parent_attr_entry);
+  *attr = inode->ToAttr();
   if (FLAGS_vfs_tiny_file_data_enable) {
     tiny_file_data_cache_.Create(attr_entry.ino());
   }
@@ -642,10 +674,9 @@ Status MDSMetaSystem::MkNod(ContextSPtr ctx, Ino parent,
     if (!status.ok()) return status;
   }
 
-  *attr = Helper::ToAttr(attr_entry);
-
-  PutInodeToCache(attr_entry);
+  auto inode = PutInodeToCache(attr_entry);
   PutInodeToCache(parent_attr_entry);
+  *attr = inode->ToAttr();
 
   return Status::OK();
 }
@@ -1175,10 +1206,9 @@ Status MDSMetaSystem::MkDir(ContextSPtr ctx, Ino parent,
     if (!status.ok()) return status;
   }
 
-  *attr = Helper::ToAttr(attr_entry);
-
-  PutInodeToCache(attr_entry);
+  auto inode = PutInodeToCache(attr_entry);
   PutInodeToCache(parent_attr_entry);
+  *attr = inode->ToAttr();
 
   return Status::OK();
 }
@@ -1251,7 +1281,12 @@ Status MDSMetaSystem::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
       CorrectAttr(ctx, dir_iterator->LastFetchTimeNs(), entry.attr, is_amend,
                   "readdir");
 
-      PutInodeToCache(Helper::ToAttr(entry.attr));
+      // entry.attr carries raw hashed uid/gid from the upstream RPC. Route it
+      // through PutInodeToCache so the Inode is created/updated, then
+      // overwrite entry.attr from inode->ToAttr(). ToAttr() now emits hashed
+      // ids as-is; the VFS layer performs the local-host translation.
+      auto inode = PutInodeToCache(Helper::ToAttr(entry.attr));
+      entry.attr = inode->ToAttr();
     }
 
     if (!handler(entry, offset)) {
@@ -1295,10 +1330,9 @@ Status MDSMetaSystem::Link(ContextSPtr ctx, Ino ino, Ino new_parent,
     return status;
   }
 
-  *attr = Helper::ToAttr(attr_entry);
-
-  PutInodeToCache(attr_entry);
+  auto inode = PutInodeToCache(attr_entry);
   PutInodeToCache(parent_attr_entry);
+  *attr = inode->ToAttr();
 
   return Status::OK();
 }
@@ -1354,10 +1388,9 @@ Status MDSMetaSystem::Symlink(ContextSPtr ctx, Ino parent,
     return status;
   }
 
-  *attr = Helper::ToAttr(attr_entry);
-
-  PutInodeToCache(attr_entry);
+  auto inode = PutInodeToCache(attr_entry);
   PutInodeToCache(parent_attr_entry);
+  *attr = inode->ToAttr();
 
   return Status::OK();
 }
@@ -1380,19 +1413,19 @@ Status MDSMetaSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
 
   CHECK(ctx != nullptr) << "context is null";
 
-  AttrEntry attr_entry;
-
   auto inode = GetInodeFromCache(ino);
-  if (inode != nullptr) {
-    attr_entry = inode->ToAttrEntry();
-    // ctx->hit_cache = true;
-
-  } else {
+  if (inode == nullptr) {
+    // Cold path: pull a fresh AttrEntry (carries hashed uid/gid) and
+    // route it through PutInodeToCache so the inode cache is populated/refreshed
+    // before inode->ToAttr() emits the hashed-id attr.  The VFS layer above
+    // (not ToAttr) performs the local-host uid/gid translation.
+    AttrEntry attr_entry;
     auto status = mds_client_.GetAttr(ctx, ino, attr_entry);
     if (!status.ok()) return status;
+    inode = PutInodeToCache(attr_entry);
   }
 
-  *attr = Helper::ToAttr(attr_entry);
+  *attr = inode->ToAttr();
 
   bool is_amend = false;
   auto status =
@@ -1443,7 +1476,8 @@ Status MDSMetaSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
     return status;
   }
 
-  *out_attr = Helper::ToAttr(attr_entry);
+  auto inode = PutInodeToCache(attr_entry);
+  *out_attr = inode->ToAttr();
 
   bool is_amend = false;
   status = CorrectAttr(ctx, ctx->start_time_ns, *out_attr, is_amend, "setattr");
@@ -1460,8 +1494,6 @@ Status MDSMetaSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
     chunk_memo_.Forget(ino);
     chunk_cache_.Delete(ino);
   }
-
-  PutInodeToCache(attr_entry);
 
   return Status::OK();
 }
@@ -1777,7 +1809,8 @@ Status MDSMetaSystem::CorrectAttr(ContextSPtr ctx, uint64_t time_ns, Attr& attr,
           attr.ino, caller, status.ToString());
       return status;
     }
-    attr = Helper::ToAttr(attr_entry);
+    auto inode = PutInodeToCache(attr_entry);
+    attr = inode->ToAttr();
     is_amend = true;
   }
 

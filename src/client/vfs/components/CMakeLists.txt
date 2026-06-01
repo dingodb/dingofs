@@ -16,9 +16,21 @@ add_library(vfs_components
     file_suffix_watcher.cc
     prefetch_manager.cc
     warmup_manager.cc
+    uid_gid_mapper.cc
+    passwd_watcher.cc
 )
 
 target_link_libraries(vfs_components
+    dingofs_common
+    dingofs_utils
+
+    gflags::gflags
     glog::glog
+    fmt::fmt
+    jsoncpp
+    spdlog::spdlog
+    OpenSSL::Crypto
+    absl::strings
+    absl::synchronization
     absl::str_format
 )

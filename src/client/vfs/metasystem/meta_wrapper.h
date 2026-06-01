@@ -21,6 +21,7 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "client/vfs/metasystem/meta_system.h"

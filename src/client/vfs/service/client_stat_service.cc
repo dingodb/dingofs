@@ -288,6 +288,7 @@ static void RenderSummary(Json::Value& json_value, butil::IOBufBuilder& os) {
       {"rpc", "show rpc info at meta."},
       {"blockcache", "show block cache info at meta."},
       {"tinyfiledatacache", "show tiny file data cache info."},
+      {"uidgidmap", "show uid/gid mapper info at meta."},
   };
 
   for (const auto& item : json_value) {
@@ -1418,6 +1419,81 @@ static void RenderBlockCachePage(const Json::Value& json_value,
   os << "<br>";
 }
 
+static void RenderUidGidMapperPage(const Json::Value& json_value,
+                                   butil::IOBufBuilder& os,
+                                   std::string& client_name) {
+  os << "<!DOCTYPE html><html>";
+  os << "<head>" << RenderHead("dingofs uid/gid mapper") << "</head>";
+  os << "<body>";
+  os << fmt::format(
+      R"(<h1 style="text-align:center;">Client({}) UID/GID Mapper</h1>)",
+      client_name);
+
+  const Json::Value& m = json_value["uid_gid_map"];
+  if (!m.isObject()) {
+    LOG(ERROR) << fmt::format("uid_gid_map is not an object.");
+    os << "</body></html>";
+    return;
+  }
+
+  const bool enabled = m["enabled"].asBool();
+  const std::string salt = m["salt"].asString();
+  const uint64_t last_refresh_ms = m["last_refresh_time_ms"].asUInt64();
+  const uint64_t uid_count = m["uid_count"].asUInt64();
+  const uint64_t gid_count = m["gid_count"].asUInt64();
+  const Json::Value& entries = m["entries"];
+
+  // Status card.
+  os << R"(<div style="margin:12px;font-size:smaller;">)";
+  os << R"(<h3>Status</h3>)";
+  os << fmt::format("enabled: {}", enabled ? "true" : "false");
+  os << "<br>";
+  os << fmt::format("salt: {}", salt);
+  os << "<br>";
+  os << fmt::format(
+      "last refresh: {}",
+      last_refresh_ms == 0 ? std::string("never")
+                           : utils::FormatMsTime(last_refresh_ms));
+  os << "<br>";
+  os << fmt::format("uid entries: {}", uid_count);
+  os << "<br>";
+  os << fmt::format("gid entries: {}", gid_count);
+  os << "</div>";
+
+  // Unified entries table.
+  os << R"(<div style="margin:12px;font-size:smaller;">)";
+  os << fmt::format(R"(<h3>Entries [{}]</h3>)", entries.size());
+  os << R"(<table class="gridtable sortable" border=1 style="width:50%;min-width:500px;white-space:nowrap;">)";
+  os << R"(<tr><th style="padding:4px 10px;">Hashed ID</th><th style="padding:4px 4px;width:48px;">Type</th><th style="padding:4px 10px;">Details<br>(uid|gid, name)</th></tr>)";
+  for (const auto& row : entries) {
+    const Json::Value& mappings = row["mappings"];
+    os << "<tr>";
+    os << "<td>" << row["hashed_id"].asUInt64() << "</td>";
+    os << "<td>" << row["type"].asString() << "</td>";
+    os << "<td>";
+    for (Json::ArrayIndex i = 0; i < mappings.size(); ++i) {
+      const auto& m_entry = mappings[i];
+      // mappings[0] = winner (black); mappings[1..] = collision losers (red).
+      const bool loser = (i > 0);
+      const std::string line = fmt::format("{}, {}",
+                                            m_entry["local_id"].asUInt(),
+                                            m_entry["name"].asString());
+      if (loser) {
+        os << fmt::format(R"(<span class="red-text">{}</span>)", line);
+      } else {
+        os << line;
+      }
+      if (i + 1 < mappings.size()) os << "<br>";
+    }
+    os << "</td>";
+    os << "</tr>";
+  }
+  os << "</table></div>";
+
+  os << "<br>";
+  os << "</body></html>";
+}
+
 void ClientStatServiceImpl::RenderMainPage(const brpc::Server* server,
                                            butil::IOBufBuilder& os) {
   os << "<!DOCTYPE html><html>\n";
@@ -1454,6 +1530,10 @@ void ClientStatServiceImpl::RenderMainPage(const brpc::Server* server,
     os << "</html>";
     return;
   }
+
+  Json::Value uid_gid_mapper_value = Json::objectValue;
+  vfs_hub_->GetUidGidMapper()->Summary(uid_gid_mapper_value);
+  summary_value.append(uid_gid_mapper_value);
 
   // client info
   RenderClientInfo(meta_value, os);
@@ -1581,6 +1661,10 @@ void ClientStatServiceImpl::default_method(
       if (blockcache != nullptr && blockcache->Dump(json_value)) {
         RenderBlockCachePage(json_value, os, client_name);
       }
+    } else if (api_name == "uidgidmap") {
+      // /ClientStatService/uidgidmap
+      vfs_hub_->GetUidGidMapper()->Dump(json_value);
+      RenderUidGidMapperPage(json_value, os, client_name);
     } else {
       return cntl->SetFailed("unknown path: " + path);  // NOLINT
     }
