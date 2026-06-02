@@ -142,8 +142,15 @@ Status CompactorImpl::DoCompact(ContextSPtr ctx, Ino ino, int64_t chunk_index,
     Status ret =
         writer->Write(SpanScope::GetContext(span), to_write.data(),
                       static_cast<int32_t>(to_write.size()), offset_in_chunk);
-    CHECK(ret.ok()) << "Compaction write slice failed: " << ret.ToString()
-                    << ", ino: " << ino << ", chunk_index: " << chunk_index;
+    if (!ret.ok()) {
+      // Compaction is best-effort: a write failure (e.g. NoSpace when the write
+      // page pool is under back-pressure) must abort this compaction and be
+      // retried later, never crash the client. Propagate like the read/flush
+      // failures above; the caller (CompactChunkTask::Run) just logs it.
+      LOG(WARNING) << "Fail compaction because write failed: " << ret.ToString()
+                   << ", ino: " << ino << ", chunk_index: " << chunk_index;
+      return ret;
+    }
 
     Status s;
     BSynchronizer sync;
