@@ -392,8 +392,7 @@ Status MDSMetaSystem::ToVfsFsInfo(const mds::FsInfoEntry& src,
 
   dst->storage_info.store_type = Helper::ToStoreType(src.fs_type());
   if (dst->storage_info.store_type == StoreType::kS3) {
-    CHECK(src.extra().has_s3_info())
-        << "fs type is S3, but s3 info is not set";
+    CHECK(src.extra().has_s3_info()) << "fs type is S3, but s3 info is not set";
 
     dst->storage_info.s3_info = Helper::ToS3Info(src.extra().s3_info());
 
@@ -484,8 +483,8 @@ void MDSMetaSystem::RefreshCachedFsInfo() {
   mds::FsInfoEntry new_fs_info;
   auto status = mds_client_.RefreshFsInfo(new_fs_info);
   if (!status.ok()) {
-    LOG(WARNING) << fmt::format(
-        "[meta.fs] refresh fs info fail, error({}).", status.ToString());
+    LOG(WARNING) << fmt::format("[meta.fs] refresh fs info fail, error({}).",
+                                status.ToString());
     return;
   }
 
@@ -601,6 +600,10 @@ Status MDSMetaSystem::Lookup(ContextSPtr ctx, Ino parent,
 
   auto inode = PutInodeToCache(attr_entry);
   *attr = inode->ToAttr();
+
+  bool is_amend = false;
+  status = CorrectAttr(ctx, ctx->start_time_ns, *attr, is_amend, "lookup");
+  if (!status.ok()) return status;
 
   return Status::OK();
 }
@@ -1416,9 +1419,9 @@ Status MDSMetaSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
   auto inode = GetInodeFromCache(ino);
   if (inode == nullptr) {
     // Cold path: pull a fresh AttrEntry (carries hashed uid/gid) and
-    // route it through PutInodeToCache so the inode cache is populated/refreshed
-    // before inode->ToAttr() emits the hashed-id attr.  The VFS layer above
-    // (not ToAttr) performs the local-host uid/gid translation.
+    // route it through PutInodeToCache so the inode cache is
+    // populated/refreshed before inode->ToAttr() emits the hashed-id attr.  The
+    // VFS layer above (not ToAttr) performs the local-host uid/gid translation.
     AttrEntry attr_entry;
     auto status = mds_client_.GetAttr(ctx, ino, attr_entry);
     if (!status.ok()) return status;
