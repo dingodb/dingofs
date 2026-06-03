@@ -549,6 +549,9 @@ Status MDSMetaSystem::Lookup(ContextSPtr ctx, Ino parent,
 
   *attr = Helper::ToAttr(attr_entry);
 
+  bool is_amend = false;
+  CorrectAttr(ctx, ctx->start_time_ns, *attr, is_amend, "lookup");
+
   PutInodeToCache(attr_entry);
 
   return Status::OK();
