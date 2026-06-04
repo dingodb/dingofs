@@ -42,6 +42,11 @@ struct TransportResult {
   bool failed{false};
   int error_code{0};
   std::string error_text;
+  // True only when the connection/QP itself is broken and must be rebuilt. A
+  // transient failure (RPC timeout, momentary buffer shortage) leaves it false:
+  // the caller retries on the same/another connection WITHOUT tearing down and
+  // rebuilding the RDMA QP + huge-page pools + MR (a storm of which is fatal).
+  bool conn_broken{false};
 };
 
 // One physical connection to a cache peer. Hides whether the wire is brpc or

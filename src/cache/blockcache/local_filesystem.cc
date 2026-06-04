@@ -53,6 +53,9 @@ namespace cache {
 DEFINE_bool(fix_buffer, true, "whether to use fixed buffer for aio");
 
 namespace {
+
+constexpr size_t kAlignedIOBlockSize = 4096;
+
 // io_uring fixed buffers = recv-pool (write path) buffers followed by send-pool
 // (read path) buffers. Each slab is at once the io_uring fixed buffer and the
 // RDMA-registered buffer, so disk<->slab<->NIC is fully zero copy. Reads and
@@ -63,13 +66,68 @@ std::vector<iovec> BuildIoUringFixedBuffers() {
   buffers.insert(buffers.end(), reads.begin(), reads.end());
   return buffers;
 }
+
+bool IsAligned(uint64_t n, uint64_t m) { return (n % m) == 0; }
+
+off_t AlignOffset(off_t offset) {
+  if (!IsAligned(offset, kAlignedIOBlockSize)) {
+    offset = offset - (offset % kAlignedIOBlockSize);
+  }
+  return offset;
+}
+
+size_t AlignLength(size_t length) {
+  if (!IsAligned(length, kAlignedIOBlockSize)) {
+    length = (length + kAlignedIOBlockSize - 1) & ~(kAlignedIOBlockSize - 1);
+  }
+  return length;
+}
+
+// Allocate an O_DIRECT-aligned buffer of `aligned_length` into `out`. With
+// --fix_buffer it comes from a global slab pool -- the recv pool for writes, the
+// send pool for reads -- so it is at once the io_uring fixed buffer and the
+// RDMA-registered buffer (its meta carries the RDMA lkey). *buf_index is the
+// absolute io_uring fixed-buffer index (recv buffers are registered first, send
+// buffers after). Without --fix_buffer it falls back to an aligned malloc and
+// *buf_index is -1.
+Status AllocFixedBuffer(IOBuffer* out, size_t aligned_length, bool for_read,
+                        int* buf_index) {
+  if (!FLAGS_fix_buffer) {
+    char* data =
+        (char*)butil::AlignedAlloc(aligned_length, kAlignedIOBlockSize);
+    out->AppendUserData(data, aligned_length, butil::AlignedFree);
+    *buf_index = -1;
+    return Status::OK();
+  }
+
+  // reads come from the send pool, writes from the recv pool.
+  auto& slab_pool =
+      for_read ? GetGlobalSendSlabPool() : GetGlobalRecvSlabPool();
+  auto* slab = slab_pool.Alloc(aligned_length);
+  if (slab == nullptr) {
+    return Status::CacheFull("slab pool exhausted");
+  }
+  // meta carries the RDMA lkey (set once at server start); the deleter returns
+  // the slab to the right pool when the IOBuffer is finally destroyed.
+  out->AppendUserDataWithMeta(
+      slab->data, aligned_length,
+      [for_read, slab](void*) {
+        (for_read ? GetGlobalSendSlabPool() : GetGlobalRecvSlabPool())
+            .Free(slab);
+      },
+      slab->meta);
+  *buf_index =
+      (for_read ? static_cast<int>(GetGlobalRecvSlabPool().BufferCount()) : 0) +
+      static_cast<int>(slab->index);
+  return Status::OK();
+}
+
 }  // namespace
 
 LocalFileSystem::LocalFileSystem(DiskCacheLayoutSPtr layout)
     : running_(false),
       layout_(layout),
       inflight_(FLAGS_iodepth),
-      read_buf_offset_(GetGlobalRecvSlabPool().BufferCount()),
       aio_queue_(std::make_unique<AioQueue>(BuildIoUringFixedBuffers())),
       health_checker_(std::make_unique<DiskHealthChecker>(layout)) {}
 
@@ -229,8 +287,8 @@ Status LocalFileSystem::ReadFile(const std::string& path, off_t offset,
   off_t aligned_offset = AlignOffset(offset);
   size_t aligned_length = AlignLength(length + offset - aligned_offset);
 
-  // Read straight into a slab buffer: it is the io_uring fixed read buffer and,
-  // bubbling up as the out IOBuffer (meta=lkey), the RDMA-write source too.
+  // O_DIRECT requires an aligned buffer and an aligned superset read, so the
+  // read always lands in a freshly allocated aligned slab first.
   IOBuffer aligned;
   int buf_index;
   status = AllocFixedBuffer(&aligned, aligned_length, /*for_read=*/true,
@@ -242,16 +300,27 @@ Status LocalFileSystem::ReadFile(const std::string& path, off_t offset,
 
   status =
       AioRead(fd, aligned_offset, aligned_length, aligned.Fetch1(), buf_index);
-  if (status.ok()) {
-    if (aligned_offset != offset) {
-      aligned.PopFront(offset - aligned_offset);
-    }
-    if (aligned_length != length) {
-      aligned.PopBack(aligned_offset + aligned_length - (offset + length));
-    }
+  if (!status.ok()) {
+    LOG(ERROR) << "Fail to read file=`" << path << "'";
+    return status;
+  }
+
+  if (aligned_offset != offset) {
+    aligned.PopFront(offset - aligned_offset);
+  }
+  if (aligned_length != length) {
+    aligned.PopBack(aligned_offset + aligned_length - (offset + length));
+  }
+
+  if (buffer->Size() == 0) {
+    // No caller destination (cache server / uploader): hand back the slab -- it
+    // is the io_uring fixed buffer and, bubbling up (meta=lkey), the RDMA-write
+    // source too. Zero copy.
     *buffer = std::move(aligned);
   } else {
-    LOG(ERROR) << "Fail to read file=`" << path << "'";
+    // Caller-allocated destination (e.g. the FUSE read-mempool slot, unaligned):
+    // copy the [offset, offset+length) slice in place (one copy).
+    FillDest(buffer, aligned, length);
   }
 
   return status;
@@ -295,54 +364,6 @@ Status LocalFileSystem::AioRead(int fd, off_t offset, size_t length,
   aio_queue_->Submit(&aio);
   aio.Wait();
   return aio.Result().status;
-}
-
-off_t LocalFileSystem::AlignOffset(off_t offset) {
-  auto alignment = kAlignedIOBlockSize;
-  if (!IsAligned(offset, alignment)) {
-    offset = offset - (offset % alignment);
-  }
-  return offset;
-}
-
-size_t LocalFileSystem::AlignLength(size_t length) {
-  auto alignment = kAlignedIOBlockSize;
-  if (!IsAligned(length, alignment)) {
-    length = (length + alignment - 1) & ~(alignment - 1);
-  }
-  return length;
-}
-
-Status LocalFileSystem::AllocFixedBuffer(IOBuffer* out, size_t aligned_length,
-                                         bool for_read, int* buf_index) {
-  if (!FLAGS_fix_buffer) {
-    char* data =
-        (char*)butil::AlignedAlloc(aligned_length, kAlignedIOBlockSize);
-    out->AppendUserData(data, aligned_length, butil::AlignedFree);
-    *buf_index = -1;
-    return Status::OK();
-  }
-
-  // reads come from the send pool, writes from the recv pool.
-  auto& slab_pool =
-      for_read ? GetGlobalSendSlabPool() : GetGlobalRecvSlabPool();
-  auto* slab = slab_pool.Alloc(aligned_length);
-  if (slab == nullptr) {
-    return Status::CacheFull("slab pool exhausted");
-  }
-  // meta carries the RDMA lkey (set once at server start); the deleter returns
-  // the slab to the right pool when the IOBuffer is finally destroyed.
-  out->AppendUserDataWithMeta(
-      slab->data, aligned_length,
-      [for_read, slab](void*) {
-        (for_read ? GetGlobalSendSlabPool() : GetGlobalRecvSlabPool())
-            .Free(slab);
-      },
-      slab->meta);
-  *buf_index =
-      (for_read ? static_cast<int>(read_buf_offset_) : 0) +
-      static_cast<int>(slab->index);
-  return Status::OK();
 }
 
 }  // namespace cache

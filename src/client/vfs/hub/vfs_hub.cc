@@ -40,6 +40,8 @@
 #include "common/blockaccess/prefix_block_accesser.h"
 #include "common/blockaccess/rados/rados_common.h"
 #include "common/directory.h"
+#include "cache/remotecache/rdma_region_registry.h"
+#include "common/options/cache.h"
 #include "common/options/client.h"
 #include "common/options/common.h"
 #include "common/status.h"
@@ -296,6 +298,23 @@ Status VFSHubImpl::Start(bool skip_mount) {
     }
     read_mem_pool_vars_ =
         std::make_unique<ReadMemPoolVars>(read_mem_pool_.get(), "vfs");
+  }
+
+  // Register the read / write mempools once for RDMA so the remote cache server
+  // can RDMA-write a range result straight into a read slot and scatter-read a
+  // multi-page Put block straight out of the write pool -- both zero copy. Each
+  // arena is a single MR; a per-buffer rkey is then a covering lookup. Done here
+  // (not in BlockStore::Start) because the pools are created after the block
+  // store; the block store only resolves rkeys at request time.
+  if (cache::FLAGS_use_rdma) {
+    auto& registry = cache::RdmaRegionRegistry::GetInstance();
+    if (read_mem_pool_->BaseAddr() != nullptr) {
+      registry.Register(read_mem_pool_->BaseAddr(), read_mem_pool_->TotalSize());
+    }
+    if (write_buffer_manager_->BaseAddr() != nullptr) {
+      registry.Register(write_buffer_manager_->BaseAddr(),
+                        write_buffer_manager_->TotalSize());
+    }
   }
 
   file_suffix_watcher_ =

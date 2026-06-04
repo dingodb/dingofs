@@ -69,6 +69,15 @@ class Dialer {
 class Client {
  public:
   explicit Client(DialerUPtr dialer);
+  ~Client() {
+    // Tear the session down (deregister from the event dispatcher + drain the
+    // completion queue) before its references drop, so the dispatcher worker
+    // never invokes HandleEvent() on a freed session.
+    if (session_ != nullptr) {
+      session_->Shutdown();
+    }
+  }
+
   static ClientUPtr Create(const EndPoint& ep);
 
   Status Connect(const std::string& address);
@@ -91,7 +100,9 @@ class Client {
 
  private:
   DialerUPtr dialer_;
-  ClientSessionUPtr session_;
+  // shared_ptr: co-owned with the event dispatcher so the worker can hold a
+  // strong ref while calling HandleEvent() during teardown.
+  ClientSessionSPtr session_;
 };
 
 }  // namespace infiniband

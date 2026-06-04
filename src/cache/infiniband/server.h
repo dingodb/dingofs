@@ -79,7 +79,8 @@ class InfinibandServiceImpl : public pb::infiniband::InfinibandService {
   Listener* listener_;
   ServiceHub* service_hub_;
   std::mutex mutex_;
-  std::vector<std::unique_ptr<ServerSession>> sessions_;
+  // shared_ptr: co-owned with the event dispatcher (see EventDispatcher).
+  std::vector<std::shared_ptr<ServerSession>> sessions_;
 };
 
 class Server {

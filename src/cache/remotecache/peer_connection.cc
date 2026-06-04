@@ -24,6 +24,7 @@
 
 #include <brpc/channel.h>
 #include <brpc/controller.h>
+#include <bthread/mutex.h>
 #include <bthread/rwlock.h>
 #include <fmt/format.h>
 #include <gflags/gflags.h>
@@ -37,6 +38,7 @@
 #include "cache/infiniband/client.h"
 #include "cache/infiniband/connection.h"
 #include "cache/infiniband/controller.h"
+#include "cache/remotecache/rdma_region_registry.h"
 #include "common/options/cache.h"
 #include "dingofs/blockcache.pb.h"
 #include "dingofs/infiniband.pb.h"
@@ -53,10 +55,24 @@ constexpr const char* kServiceName = "dingofs.pb.cache.BlockCacheService";
 std::atomic<uint64_t> g_connection_id{0};
 
 void SetFailed(TransportResult* out, int error_code,
-               const std::string& error_text) {
+               const std::string& error_text, bool conn_broken = false) {
   out->failed = true;
   out->error_code = error_code;
   out->error_text = error_text;
+  out->conn_broken = conn_broken;
+}
+
+// Whether an RDMA transport error means the connection/QP is actually broken
+// (so the caller must rebuild it) versus a transient failure that must NOT
+// trigger a reconnect. Reconnecting tears down + rebuilds the QP, huge-page
+// buffer pools and MR registrations; doing that on every RPC timeout turns a
+// timeout burst into a reconnect storm that exhausts huge pages.
+bool RdmaErrorIsConnBroken(int error_code) {
+  using EC = pb::infiniband::ErrorCode;
+  // QueuePairError: QP went to error state. InternalError: "rdma client is not
+  // connected" / wait failed -- treat as broken. Timeout / NoMem (transient
+  // server-busy or buffer shortage) and ProtocolError are NOT connection death.
+  return error_code == EC::QueuePairError || error_code == EC::InternalError;
 }
 
 }  // namespace
@@ -109,16 +125,17 @@ class TcpTransport : public Transport {
 
   void Execute(const std::string& method,
                const google::protobuf::Message& raw_request,
-               google::protobuf::Message* raw_response, const IOBuffer* req_body,
-               IOBuffer* resp_body, uint32_t timeout_ms,
-               TransportResult* out) override {
+               google::protobuf::Message* raw_response,
+               const IOBuffer* req_body, IOBuffer* resp_body,
+               uint32_t timeout_ms, TransportResult* out) override {
     std::shared_ptr<brpc::Channel> channel;
     {
       bthread::RWLockRdGuard guard(rwlock_);
       channel = channel_;
     }
     if (channel == nullptr) {
-      SetFailed(out, EIO, "brpc channel is not connected");
+      SetFailed(out, EIO, "brpc channel is not connected",
+                /*conn_broken=*/true);
       return;
     }
 
@@ -136,7 +153,9 @@ class TcpTransport : public Transport {
 
     channel->CallMethod(descriptor, &cntl, &raw_request, raw_response, nullptr);
     if (cntl.Failed()) {
-      SetFailed(out, cntl.ErrorCode(), cntl.ErrorText());
+      // brpc manages its own physical links, but preserve the prior behavior of
+      // re-initing our channel wrapper on a brpc failure.
+      SetFailed(out, cntl.ErrorCode(), cntl.ErrorText(), /*conn_broken=*/true);
       return;
     }
 
@@ -160,6 +179,28 @@ class RdmaTransport : public Transport {
  public:
   Status Connect(const std::string& ip, uint32_t port,
                  uint32_t /*timeout_ms*/) override {
+    // Fast path: already connected (a concurrent reconnect won the race).
+    {
+      bthread::RWLockRdGuard guard(rwlock_);
+      if (client_ != nullptr) {
+        return Status::OK();
+      }
+    }
+
+    // Serialize reconnects. A transport failure makes every concurrent request
+    // on this connection see !Connected() and call Connect() -- a thundering
+    // herd. Building a client allocates a QP + huge-page buffer pools + MR, so
+    // a herd of them exhausts huge pages (SIGBUS). Let exactly one thread
+    // rebuild; the rest observe the fresh client under the double-check and
+    // return.
+    std::lock_guard<bthread::Mutex> connect_guard(connect_mutex_);
+    {
+      bthread::RWLockRdGuard guard(rwlock_);
+      if (client_ != nullptr) {
+        return Status::OK();
+      }
+    }
+
     infiniband::EndPoint ep{FLAGS_cache_rdma_device,
                             static_cast<uint8_t>(FLAGS_cache_rdma_port_num)};
     auto client = infiniband::Client::Create(ep);
@@ -187,9 +228,9 @@ class RdmaTransport : public Transport {
 
   void Execute(const std::string& method,
                const google::protobuf::Message& raw_request,
-               google::protobuf::Message* raw_response, const IOBuffer* req_body,
-               IOBuffer* resp_body, uint32_t /*timeout_ms*/,
-               TransportResult* out) override {
+               google::protobuf::Message* raw_response,
+               const IOBuffer* req_body, IOBuffer* resp_body,
+               uint32_t /*timeout_ms*/, TransportResult* out) override {
     std::shared_ptr<infiniband::Client> client;
     {
       bthread::RWLockRdGuard guard(rwlock_);
@@ -197,7 +238,7 @@ class RdmaTransport : public Transport {
     }
     if (client == nullptr) {
       SetFailed(out, pb::infiniband::ErrorCode::InternalError,
-                "rdma client is not connected");
+                "rdma client is not connected", /*conn_broken=*/true);
       return;
     }
 
@@ -211,20 +252,36 @@ class RdmaTransport : public Transport {
             static_cast<uint32_t>(resp_body->GetFirstDataMeta()));
       }
     } else if (method == "Put" || method == "Cache") {
-      // req_body is already a registered block; advertise it for the server's
+      // req_body is already a registered source; advertise it for the server's
       // one-sided RDMA read.
       if (req_body != nullptr && req_body->Size() > 0) {
         auto* body = const_cast<IOBuffer*>(req_body);
-        cntl.SetRequestAttachmentRegion(
-            body->Fetch1(), static_cast<uint32_t>(body->Size()),
-            static_cast<uint32_t>(body->GetFirstDataMeta()));
+        if (body->ConstIOBuf().backing_block_num() == 1) {
+          // Single registered block (lmcache arena / cache pool): one region,
+          // rkey from the block's meta.
+          cntl.SetRequestAttachmentRegion(
+              body->Fetch1(), static_cast<uint32_t>(body->Size()),
+              static_cast<uint32_t>(body->GetFirstDataMeta()));
+        } else {
+          // Multi-segment registered source (e.g. a FUSE write-mempool block
+          // spanning pages): advertise each segment for a scatter RDMA read.
+          // RemoteBlockCache only takes this path when every segment resolves a
+          // non-zero rkey from the region registry.
+          auto& registry = RdmaRegionRegistry::GetInstance();
+          for (const auto& iov : body->Fetch()) {
+            cntl.AddRequestAttachmentRegion(
+                iov.iov_base, static_cast<uint32_t>(iov.iov_len),
+                registry.RkeyFor(iov.iov_base, iov.iov_len));
+          }
+        }
       }
     }
     // Prefetch / Ping carry no attachment.
 
     client->Call(&cntl, kServiceName, method, raw_request, raw_response);
     if (cntl.Failed()) {
-      SetFailed(out, cntl.ErrorCode(), cntl.ErrorText());
+      SetFailed(out, cntl.ErrorCode(), cntl.ErrorText(),
+                RdmaErrorIsConnBroken(cntl.ErrorCode()));
       return;
     }
     // For Range the block was RDMA-written into resp_body in place; nothing
@@ -233,7 +290,8 @@ class RdmaTransport : public Transport {
   }
 
  private:
-  bthread::RWLock rwlock_;
+  bthread::RWLock rwlock_;        // guards client_
+  bthread::Mutex connect_mutex_;  // serializes reconnects (dedup the herd)
   std::shared_ptr<infiniband::Client> client_;
 };
 

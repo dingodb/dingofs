@@ -114,6 +114,13 @@ class IOBuffer {
     return iovecs;
   }
 
+  // Whether this buffer is a caller-allocated, single contiguous writable
+  // destination (see the Range contract in block_cache.h): non-empty and backed
+  // by exactly one block, so Fetch1() is valid.
+  bool IsContiguousDest() const {
+    return iobuf_.length() != 0 && iobuf_.backing_block_num() == 1;
+  }
+
   std::string Describe() const {
     const auto& iovecs = Fetch();
     if (iovecs.empty()) {
@@ -138,6 +145,19 @@ class IOBuffer {
  private:
   butil::IOBuf iobuf_;
 };
+
+// Copy `n` bytes (from position `pos` of `src`) into the caller-allocated,
+// single contiguous destination `dest` in place, then shrink dest's view to
+// exactly `n` bytes. This is the single "deliver into the caller's buffer" point
+// of the cache read path: tiers that cannot hand back the caller's own memory
+// (memory cache, brpc, rdma bounce) produce a block and fill `dest` with it.
+inline void FillDest(IOBuffer* dest, const IOBuffer& src, size_t n,
+                     size_t pos = 0) {
+  src.CopyTo(dest->Fetch1(), n, pos);
+  if (dest->Size() > n) {
+    dest->PopBack(dest->Size() - n);
+  }
+}
 
 }  // namespace dingofs
 

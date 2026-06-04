@@ -70,6 +70,11 @@ void ServerSession::Start() {
 }
 
 void ServerSession::Shutdown() {
+  // Deregister from the event dispatcher first so no HandleEvent() starts after
+  // we drain. An in-flight HandleEvent() keeps this session alive via the
+  // worker's strong ref until it returns.
+  GetGlobalEventDispatcher(conn_->GetFd()).DelEvent(conn_->GetFd());
+
   CHECK_EQ(0, bthread::execution_queue_stop(handle_wc_queue_id_));
   CHECK_EQ(0, bthread::execution_queue_join(handle_wc_queue_id_));
 
@@ -78,7 +83,11 @@ void ServerSession::Shutdown() {
 
 void ServerSession::HandleEvent() {
   conn_->HandleCompletion([this](WorkCompletions cqe) {
-    CHECK_EQ(0, bthread::execution_queue_execute(handle_wc_queue_id_, cqe));
+    // The queue may already be stopped if a teardown raced this event; drop the
+    // completions in that case instead of CHECK-failing.
+    int rc = bthread::execution_queue_execute(handle_wc_queue_id_, cqe);
+    LOG_IF(WARNING, rc != 0)
+        << "Drop " << cqe.size() << " work completions: execution queue stopped";
   });
 }
 
@@ -229,19 +238,6 @@ void ServerSession::ReadRequestAttachment(Controller* cntl) {
     OnError(cntl, ErrorCode::NoMem, "alloc request attachment buffer failed");
     return;
   }
-
-  if (attachment_size > cntl->request_meta().length()) {
-    slab_pool.Free(buffer);
-    OnError(cntl, ErrorCode::ProtocolError,
-            "request attachment exceeds advertised rdma length");
-    return;
-  }
-  if (cntl->request_meta().addr() == 0 || cntl->request_meta().rkey() == 0) {
-    slab_pool.Free(buffer);
-    OnError(cntl, ErrorCode::ProtocolError,
-            "request rdma memory context is missing");
-    return;
-  }
   if (buffer->meta == 0) {
     slab_pool.Free(buffer);
     OnError(cntl, ErrorCode::ProtocolError,
@@ -249,26 +245,70 @@ void ServerSession::ReadRequestAttachment(Controller* cntl) {
     return;
   }
 
-  cntl->request_attachment_read().reset(1);
-
-  WorkRequstContext ctx;
-  SendWorkRequest wr;
-  wr.opcode = OpCode::kRDMARead;
-  wr.signaled = true;
-  wr.addr = reinterpret_cast<uint64_t>(buffer->data);
-  wr.length = static_cast<uint32_t>(attachment_size);
-  wr.lkey = buffer->meta;
-  wr.raddr = cntl->request_meta().addr();
-  wr.rkey = cntl->request_meta().rkey();
-  wr.ctx = &ctx;
-  wr.ctx->on_completion = [this, cntl](const WorkCompletion& wc) {
-    if (!wc.status.ok()) {
-      OnError(cntl, ErrorCode::QueuePairError, wc.status.ToString());
-    }
-    cntl->request_attachment_read().signal();
+  // Collect the remote source segments: either a multi-segment scatter source
+  // (attachment_regions) or the single-region source (addr/length/rkey).
+  struct Seg {
+    uint64_t addr;
+    uint32_t length;
+    uint32_t rkey;
   };
+  const auto& meta = cntl->request_meta();
+  std::vector<Seg> segments;
+  if (meta.attachment_regions_size() > 0) {
+    segments.reserve(meta.attachment_regions_size());
+    for (const auto& r : meta.attachment_regions()) {
+      segments.push_back({r.addr(), r.length(), r.rkey()});
+    }
+  } else {
+    segments.push_back({meta.addr(), meta.length(), meta.rkey()});
+  }
 
-  auto status = conn_->PostSendWorkRequest(wr);
+  size_t total = 0;
+  for (const auto& seg : segments) {
+    if (seg.addr == 0 || seg.rkey == 0) {
+      slab_pool.Free(buffer);
+      OnError(cntl, ErrorCode::ProtocolError,
+              "request rdma memory context is missing");
+      return;
+    }
+    total += seg.length;
+  }
+  if (total != attachment_size) {
+    slab_pool.Free(buffer);
+    OnError(cntl, ErrorCode::ProtocolError,
+            "request attachment size mismatches advertised rdma regions");
+    return;
+  }
+
+  // One RDMA read per segment, each into its slice of the contiguous slab.
+  cntl->request_attachment_read().reset(static_cast<int>(segments.size()));
+  std::vector<WorkRequstContext> ctxs(segments.size());
+  std::vector<SendWorkRequest> wrs;
+  wrs.reserve(segments.size());
+  uint64_t offset = 0;
+  for (size_t i = 0; i < segments.size(); ++i) {
+    const auto& seg = segments[i];
+    SendWorkRequest wr;
+    wr.opcode = OpCode::kRDMARead;
+    wr.signaled = true;
+    wr.addr =
+        reinterpret_cast<uint64_t>(static_cast<char*>(buffer->data) + offset);
+    wr.length = seg.length;
+    wr.lkey = buffer->meta;
+    wr.raddr = seg.addr;
+    wr.rkey = seg.rkey;
+    wr.ctx = &ctxs[i];
+    wr.ctx->on_completion = [this, cntl](const WorkCompletion& wc) {
+      if (!wc.status.ok()) {
+        OnError(cntl, ErrorCode::QueuePairError, wc.status.ToString());
+      }
+      cntl->request_attachment_read().signal();
+    };
+    wrs.push_back(wr);
+    offset += seg.length;
+  }
+
+  auto status = conn_->PostSendWorkRequests(wrs);
   if (!status.ok()) {
     slab_pool.Free(buffer);
     OnError(cntl, ErrorCode::QueuePairError, status.ToString());

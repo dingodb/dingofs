@@ -38,10 +38,10 @@ namespace dingofs {
 namespace cache {
 namespace infiniband {
 
-DEFINE_int32(rdma_send_buffer_size, 1024, "Size of each send buffer in bytes");
+DEFINE_int32(rdma_send_buffer_size, 4096, "Size of each send buffer in bytes");
 DEFINE_int32(rdma_send_queue_size, 4096,
              "Maxinum number of send work requests to post to send queue");
-DEFINE_int32(rdma_recv_buffer_size, 1024,
+DEFINE_int32(rdma_recv_buffer_size, 4096,
              "Size of each receive buffer in bytes");
 DEFINE_int32(
     rdma_recv_queue_size, 4096,

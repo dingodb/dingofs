@@ -111,6 +111,23 @@ class Controller : public ::google::protobuf::RpcController {
     SetRequestAttachmentRegion(reinterpret_cast<uint64_t>(addr), length, rkey);
   }
 
+  // Append one segment of a multi-segment Put/Cache source for the server to
+  // scatter-read. Accumulates attachment_size across segments. Mutually
+  // exclusive with SetRequestAttachmentRegion (single-block source).
+  void AddRequestAttachmentRegion(uint64_t addr, uint32_t length,
+                                  uint32_t rkey) {
+    auto* region = request_meta_.add_attachment_regions();
+    region->set_addr(addr);
+    region->set_length(length);
+    region->set_rkey(rkey);
+    request_meta_.set_attachment_size(request_meta_.attachment_size() + length);
+  }
+
+  void AddRequestAttachmentRegion(const void* addr, uint32_t length,
+                                  uint32_t rkey) {
+    AddRequestAttachmentRegion(reinterpret_cast<uint64_t>(addr), length, rkey);
+  }
+
   bthread::CountdownEvent& request_sent() { return request_sent_; }
   bthread::CountdownEvent& response_sent() { return response_sent_; }
   bthread::CountdownEvent& response_received() { return response_received_; }

@@ -140,7 +140,7 @@ void InfinibandServiceImpl::Sync(google::protobuf::RpcController* controller,
   int fd = conn->GetFd();
   auto* qp = conn->GetQueuePair();
   ConnManagmentMeta local_cm_meta = qp->GetConnManagmentMeta();
-  auto session = std::make_unique<ServerSession>(std::move(conn), service_hub_);
+  auto session = std::make_shared<ServerSession>(std::move(conn), service_hub_);
   session->Start();
 
   status = session->OnEstablished();
@@ -152,7 +152,7 @@ void InfinibandServiceImpl::Sync(google::protobuf::RpcController* controller,
   }
 
   status = GetGlobalEventDispatcher(fd).AddEvent(fd, EventType::kReadEvent,
-                                                 session.get());
+                                                 session);
   if (!status.ok()) {
     LOG(ERROR) << "Fail to register event: " << status.ToString();
     session->Shutdown();

@@ -104,6 +104,7 @@ class MemoryPool {
     return *reinterpret_cast<uint32_t*>(base_ + (idx * buffer_size_));
   }
 
+  uint32_t TryPopFromShard(Shard& shard);
   char* TryRequireFromShard(Shard& shard);
   void RefillCacheFromShards(Cache& c, uint32_t start_shard);
   void FlushCacheToShards(Cache& c, uint32_t flush_count, uint32_t home_shard);

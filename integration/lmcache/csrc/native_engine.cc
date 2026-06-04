@@ -190,7 +190,12 @@ bool NativeEngine::ExistsSync(const TensorKey& key, std::string* err) {
     if (err) *err = "engine shut down";
     return false;
   }
+  // Range requires a caller-allocated destination; a 1-byte stack buffer is
+  // enough for an existence probe (the byte itself is unused). This Range is
+  // synchronous, so the stack buffer outlives the call.
+  char probe;
   IOBuffer tmp;
+  tmp.AppendUserData(&probe, 1, [](void*) {});
   // retrieve_storage=false: ask the cache node to return NotFound rather
   // than falling through to the underlying object store. ~1 byte over wire.
   cache::RangeOption opt;
@@ -275,12 +280,13 @@ uint64_t NativeEngine::SubmitBatchGet(std::vector<GetItem> items) {
   FanIn* fan = queue_.NewFanIn(OpType::kGet, items.size());
   uint64_t fid = fan->future_id();
 
-  // One shared response-buffer vector for the whole batch — 1 heap alloc
-  // instead of N. Each callback captures the shared_ptr by value; the vector
-  // dies when the last callback runs.
+  // Each item's destination is the LMCache arena slice `it.dst`. Wrap it as the
+  // caller-allocated Range destination so the cache fills it in place: when the
+  // slice is RDMA-registered (rkey != 0) the server RDMA-writes straight into
+  // the arena (zero copy); otherwise the cache bounces / brpc-copies into it.
+  // No post-copy, no size dance. One shared vector keeps the wrappers (and thus
+  // the arena's no-op deleters) alive until the last callback runs.
   auto response_bufs = std::make_shared<std::vector<IOBuffer>>(items.size());
-  auto direct_rdma_get =
-      std::make_shared<std::vector<uint8_t>>(items.size(), 0);
 
   // retrieve_storage=false: cache-miss returns NotFound directly instead of
   // falling through to object storage. LMCache writes via AsyncCache only
@@ -290,45 +296,23 @@ uint64_t NativeEngine::SubmitBatchGet(std::vector<GetItem> items) {
   cache::RangeOption opt;
   opt.retrieve_storage = false;
 
-  // Only advertise the arena destination for the server to RDMA-write into
-  // when the cache will actually take its RDMA path (same condition it uses to
-  // pick the transport); otherwise direct_rdma_get must stay 0 so the callback
-  // copies the brpc response into dst.
   const bool rdma_on = cache::RdmaBufferManager::GetInstance().Enabled();
 
   for (size_t i = 0; i < items.size(); ++i) {
     auto& it = items[i];
-    void* dst = it.dst;
-    size_t size = it.size;
     uint32_t rkey = (rdma_on && rdma_registry_ != nullptr)
-                        ? rdma_registry_->RkeyFor(dst, size)
+                        ? rdma_registry_->RkeyFor(it.dst, it.size)
                         : 0;
     if (rkey != 0) {
-      // Pre-registered destination: the server RDMA_WRITEs the block straight
-      // into the arena slice. direct_rdma_get skips the post-copy in the cb.
-      (*response_bufs)[i].AppendUserDataWithMeta(dst, size, [](void*) {}, rkey);
-      (*direct_rdma_get)[i] = 1;
+      (*response_bufs)[i].AppendUserDataWithMeta(it.dst, it.size, [](void*) {},
+                                                 rkey);
+    } else {
+      (*response_bufs)[i].AppendUserData(it.dst, it.size, [](void*) {});
     }
     block_cache_->AsyncRange(
-        BlockHandle(it.key), 0, size, &(*response_bufs)[i],
-        [fan, i, response_bufs, direct_rdma_get, dst, size](Status s) {
+        BlockHandle(it.key), 0, it.size, &(*response_bufs)[i],
+        [fan, i, response_bufs](Status s) {
           if (s.ok()) {
-            // Inert on the direct path (the buffer length is pre-set to size);
-            // still guards the TCP/pooled fallback where the response length is
-            // whatever the server returned.
-            const size_t actual = (*response_bufs)[i].Size();
-            if (actual != size) {
-              fan->Report(i, false,
-                          "response size mismatch: expected " +
-                              std::to_string(size) + ", got " +
-                              std::to_string(actual));
-              return;
-            }
-            // direct_rdma_get == 1: server already RDMA-wrote into dst (arena),
-            // no copy needed. Otherwise pull the brpc/pooled response into dst.
-            if ((*direct_rdma_get)[i] == 0) {
-              (*response_bufs)[i].CopyTo(static_cast<char*>(dst), size);
-            }
             fan->Report(i, true);
           } else if (s.IsNotFound()) {
             fan->Report(i, false);
@@ -350,15 +334,20 @@ uint64_t NativeEngine::SubmitBatchExists(std::vector<TensorKey> keys) {
   FanIn* fan = queue_.NewFanIn(OpType::kExists, keys.size());
   uint64_t fid = fan->future_id();
 
+  // Range requires a caller-allocated destination; a 1-byte buffer per key is
+  // enough for an existence probe (the byte is unused). The shared byte vector
+  // and wrappers outlive the async callbacks.
   auto response_bufs = std::make_shared<std::vector<IOBuffer>>(keys.size());
+  auto probe_bytes = std::make_shared<std::vector<char>>(keys.size());
 
   cache::RangeOption opt;
   opt.retrieve_storage = false;
 
   for (size_t i = 0; i < keys.size(); ++i) {
+    (*response_bufs)[i].AppendUserData(&(*probe_bytes)[i], 1, [](void*) {});
     block_cache_->AsyncRange(
         BlockHandle(keys[i]), 0, 1, &(*response_bufs)[i],
-        [fan, i, response_bufs](Status s) {
+        [fan, i, response_bufs, probe_bytes](Status s) {
           if (s.ok()) {
             fan->Report(i, true);
           } else if (s.IsNotFound()) {

@@ -136,9 +136,15 @@ Response<U> Peer::SendRequest(const Request<T>& request) {
         return response;
       }
 
-      // FIXME: don't reconnect if raise net error?
-      conn->Close();
-      DoConnect(conn);
+      // Only rebuild the connection on a genuine connection/QP failure. A mere
+      // RPC timeout (server busy) is transient: tearing down + rebuilding the
+      // RDMA QP + huge-page pools + MR per timeout turns a timeout burst into a
+      // reconnect storm that exhausts huge pages and thrashes session lifetimes.
+      // For a transient error just retry on the next round-robin connection.
+      if (tr.conn_broken) {
+        conn->Close();
+        DoConnect(conn);
+      }
       continue;
     }
 

@@ -26,6 +26,8 @@
 #include <bthread/execution_queue.h>
 #include <google/protobuf/message.h>
 
+#include <atomic>
+#include <cstdint>
 #include <memory>
 #include <mutex>
 #include <string_view>
@@ -75,9 +77,20 @@ class ClientSession : public EventHandler {
   WorkRequstContext unsignaled_send_wr_context_;
   std::vector<WorkRequstContext> recv_wr_context_;
   bthread::ExecutionQueueId<WorkCompletions> handle_wc_queue_id_;
+
+  // Outstanding requests keyed by correlation id. A response only touches its
+  // Controller while the entry is present; on timeout DoCall removes the entry
+  // (under the lock) so a late response is dropped instead of dereferencing the
+  // already-freed (stack) Controller. A monotonic id avoids pointer reuse (ABA)
+  // matching a late response to an unrelated new request.
+  std::atomic<uint64_t> next_correlation_id_{1};
+  std::atomic<uint64_t> request_send_seq_{0};
+  std::mutex outstanding_mutex_;
+  std::unordered_map<uint64_t, Controller*> outstanding_;
 };
 
 using ClientSessionUPtr = std::unique_ptr<ClientSession>;
+using ClientSessionSPtr = std::shared_ptr<ClientSession>;
 
 }  // namespace infiniband
 }  // namespace cache

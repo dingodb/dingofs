@@ -129,20 +129,36 @@ void EventDispatcher::NotifyAndWaitWorkerStop() {
 }
 
 Status EventDispatcher::AddEvent(int fd, EventType type,
-                                 EventHandler* handler) const {
+                                 std::shared_ptr<EventHandler> handler) {
+  {
+    std::lock_guard<std::mutex> guard(mutex_);
+    handlers_[fd] = std::move(handler);
+  }
+
   epoll_event ee{};
-  ee.data.ptr = handler;
+  // Key by fd, not by handler pointer: the worker resolves the (strong) handler
+  // from handlers_ under the lock, so a torn-down handler is never dereferenced.
+  ee.data.fd = fd;
   ee.events = EPOLLET | (type == EventType::kReadEvent ? EPOLLIN : EPOLLOUT);
   int rc = epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, fd, &ee);
   if (rc != 0) {
     PLOG(ERROR) << "Fail to add event to epoll, fd=" << fd;
+    std::lock_guard<std::mutex> guard(mutex_);
+    handlers_.erase(fd);
     return Status::Internal("add event failed");
   }
   return Status::OK();
 }
 
-Status EventDispatcher::DelEvent(int fd) const {
+Status EventDispatcher::DelEvent(int fd) {
+  // Stop new events first, then drop the dispatcher's reference. A handler the
+  // worker already picked up stays alive via the worker's local strong ref
+  // until HandleEvent() returns.
   int rc = epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, fd, nullptr);
+  {
+    std::lock_guard<std::mutex> guard(mutex_);
+    handlers_.erase(fd);
+  }
   if (rc != 0) {
     PLOG(ERROR) << "Fail to del event from epoll, fd=" << fd;
     return Status::Internal("del event failed");
@@ -160,7 +176,16 @@ void EventDispatcher::EventWorker() {
     }
 
     for (int i = 0; i < n; ++i) {
-      auto* handler = static_cast<EventHandler*>(events[i].data.ptr);
+      // Take a strong reference so the handler cannot be freed by a concurrent
+      // teardown (DelEvent + owner drop) while HandleEvent() runs.
+      std::shared_ptr<EventHandler> handler;
+      {
+        std::lock_guard<std::mutex> guard(mutex_);
+        auto it = handlers_.find(events[i].data.fd);
+        if (it != handlers_.end()) {
+          handler = it->second;
+        }
+      }
       if (handler) {
         handler->HandleEvent();
       }

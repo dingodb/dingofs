@@ -19,6 +19,7 @@
 #include <butil/time.h>
 #include <google/protobuf/descriptor.pb.h>
 
+#include "cache/remotecache/rdma_region_registry.h"
 #include "cache/tiercache/tier_block_cache.h"
 #include "client/vfs/blockstore/block_store_access_log.h"
 #include "client/vfs/hub/vfs_hub.h"
@@ -72,25 +73,32 @@ void BlockStoreImpl::RangeAsync(ContextSPtr ctx, RangeReq req,
   option.retrieve_storage = true;
   option.block_whole_length = req.handle.StoreSize();
 
-  // Transitional adapter -- cache stays unchanged: it allocates its own block
-  // and appends into a temp IOBuffer (callee-allocates), then we copy that into
-  // the request's pool slot (req.dst). When the cache leaf learns to fill a
-  // preset slot block in place, drop the temp + this copy and hand the slot to
-  // the cache directly.
-  auto* tmp = new IOBuffer();
+  // Caller-allocated destination: hand the request's read-mempool slot
+  // (req.dst) straight to the cache, which fills it in place -- no temp, no
+  // copy. `dest` wraps the slot with a no-op deleter; the slot outlives the
+  // callback (it is released only after the FUSE reply). When the read mempool
+  // is RDMA-registered, tag the slot with its rkey so the remote tier has the
+  // server RDMA-write straight into it -- fully zero copy.
+  auto* dest = new IOBuffer();
+  uint32_t rkey = cache::RdmaRegionRegistry::GetInstance().RkeyFor(
+      req.dst.data(), req.dst.len);
+  if (rkey != 0) {
+    dest->AppendUserDataWithMeta(reinterpret_cast<void*>(req.dst.data()),
+                                 req.dst.len, [](void*) {}, rkey);
+  } else {
+    dest->AppendUserData(reinterpret_cast<void*>(req.dst.data()), req.dst.len,
+                         [](void*) {});
+  }
   block_cache_->AsyncRange(
-      req.handle, req.offset, req.dst.len, tmp,
-      [start_us, req, tmp, cb = std::move(callback), span](Status s) {
+      req.handle, req.offset, req.dst.len, dest,
+      [start_us, req, dest, cb = std::move(callback), span](Status s) {
         BlockStoreAccessLogGuard log(start_us, [&]() {
           return fmt::format("range_async ({}, {}, [{}-{})) : {}",
                              req.handle.Filename(), req.length,
                              req.offset, (req.offset + req.length),
                              s.ToString());
         });
-        if (s.ok()) {
-          tmp->CopyTo(reinterpret_cast<char*>(req.dst.data()), req.dst.len);
-        }
-        delete tmp;
+        delete dest;
         SpanScope::End(span);
         cb(s);
       },

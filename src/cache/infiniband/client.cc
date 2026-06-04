@@ -156,7 +156,7 @@ Status Client::Connect(const std::string& address) {
   }
 
   int fd = conn->GetFd();
-  session_ = std::make_unique<ClientSession>(std::move(conn));
+  session_ = std::make_shared<ClientSession>(std::move(conn));
   auto status = session_->OnEstablished();
   if (!status.ok()) {
     return status;
@@ -165,7 +165,7 @@ Status Client::Connect(const std::string& address) {
   session_->Start();
 
   status = GetGlobalEventDispatcher(fd).AddEvent(fd, EventType::kReadEvent,
-                                                 session_.get());
+                                                 session_);
   if (!status.ok()) {
     LOG(ERROR) << "Fail to add event to dispatcher";
     return status;

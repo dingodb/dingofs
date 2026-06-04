@@ -122,6 +122,23 @@ IOBuffer NewBlock(uint64_t blksize) {
   return IOBuffer(pages);
 }
 
+IOBuffer NewRangeBuffer(uint64_t length) {
+  if (FLAGS_use_rdma) {
+    auto& mgr = RdmaBufferManager::GetInstance();
+    if (mgr.Enabled()) {
+      auto out = mgr.NewBuffer(length);
+      if (out.Size() != 0) {
+        return out;
+      }
+    }
+  }
+
+  IOBuffer out;
+  out.AppendUserData(new char[length], length,
+                     [](void* p) { delete[] static_cast<char*>(p); });
+  return out;
+}
+
 Status TaskContext::Init(uint64_t idx) {
   worker_idx = idx;
   if (!FLAGS_bench_rdma_registered_buffers || !FLAGS_use_rdma) {
@@ -227,7 +244,10 @@ TaskResult RangeTaskFactory::RangeAll(const BlockKey& key,
   uint64_t remaining = FLAGS_blksize - FLAGS_offset;
   while (remaining > 0) {
     size_t length = std::min<uint64_t>(remaining, FLAGS_length);
-    IOBuffer out;
+    // Range requires a caller-allocated destination (single contiguous block).
+    // RDMA can write directly into a registered benchmark buffer and avoid the
+    // client-side staging copy.
+    IOBuffer out = NewRangeBuffer(length);
     auto status = Range(key, offset, length, &out);
     if (!status.ok()) {
       return TaskResult{status, done};

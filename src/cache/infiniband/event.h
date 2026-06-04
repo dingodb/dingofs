@@ -26,7 +26,9 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <thread>
+#include <unordered_map>
 
 #include "common/status.h"
 
@@ -53,8 +55,12 @@ class EventDispatcher {
   Status Start();
   Status Shutdown();
 
-  Status AddEvent(int fd, EventType type, EventHandler* handler) const;
-  Status DelEvent(int fd) const;
+  // The dispatcher co-owns the handler (shared_ptr) so the event worker can
+  // safely invoke HandleEvent() even while the handler's other owner tears it
+  // down concurrently -- the worker takes a strong reference for the duration
+  // of the call. DelEvent drops the dispatcher's reference.
+  Status AddEvent(int fd, EventType type, std::shared_ptr<EventHandler> handler);
+  Status DelEvent(int fd);
 
  private:
   static constexpr const int kMaxEvents = 1024;
@@ -65,6 +71,9 @@ class EventDispatcher {
   int epoll_fd_;
   std::atomic<bool> running_;
   std::thread worker_thread_;
+
+  mutable std::mutex mutex_;  // guards handlers_
+  std::unordered_map<int, std::shared_ptr<EventHandler>> handlers_;
 };
 
 void InitializeGlobalDispatchers();
