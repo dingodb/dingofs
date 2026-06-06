@@ -325,8 +325,12 @@ bool DirQuotaMap::GetParent(Ino ino, Ino& parent) {
 
   auto& result = operation.GetResult();
   auto& attr = result.attr_with_mutation.attr;
+  if (attr.nlink() == 0) {
+    LOG(WARNING) << fmt::format("[quota.{}.{}] query parent fail, file is deleted.", fs_id_, ino);
+    return false;
+  }
 
-  CHECK(attr.parents().size() == 1) << fmt::format("[quota.{}.{}] dir should only one parent, attr({}).", fs_id_, ino,
+  CHECK(attr.parents().size() >= 1) << fmt::format("[quota.{}.{}] dir should only one parent, attr({}).", fs_id_, ino,
                                                    attr.ShortDebugString());
 
   parent = attr.parents().at(0);

@@ -1255,11 +1255,14 @@ Status FileSystem::FlushFile(Context& ctx, Ino ino, const FlushFileParam& param,
   auto status = GetInode(ctx, ino, inode);
   if (!status.ok()) return status;
 
+  // update parent memo
+  UpdateParentMemo(ctx.GetAncestors());
+
   FlushFileOperation::ExtraParam extra_param(param.data);
   extra_param.length = param.length;
   extra_param.chunk_size = fs_info_->GetChunkSize();
 
-  if (param.length > inode->Length()) {
+  if (param.length > inode->Length() && inode->Nlink() > 0) {
     // check quota
     if (!quota_manager_.CheckQuota(trace, ino, param.length - inode->Length(), 0)) {
       return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
@@ -1290,8 +1293,14 @@ Status FileSystem::FlushFile(Context& ctx, Ino ino, const FlushFileParam& param,
   entry_out.shrink_file = (delta_bytes < 0) ? true : false;
 
   // update quota
+<<<<<<< HEAD
   std::string reason = fmt::format("flushfile.{}.{}", request_id, ino);
   quota_manager_.UpdateFsUsage(delta_bytes, 0, reason);
+=======
+  if (delta_bytes != 0 && attr.nlink() > 0) {
+    std::string reason = fmt::format("flushfile.{}", ino);
+    quota_manager_.UpdateFsUsage(delta_bytes, 0, reason);
+>>>>>>> 2862afc85 ([fix][mds] Fixup panic cause by check quota.)
 
   for (const auto& parent : attr.parents()) {
     quota_manager_.AsyncUpdateDirUsage(parent, delta_bytes, 0, reason);
