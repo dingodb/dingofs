@@ -767,6 +767,8 @@ Status MDSClient::FlushFile(ContextSPtr& ctx, Ino ino, uint64_t length,
   pb::mds::FlushFileRequest request;
   pb::mds::FlushFileResponse response;
 
+  SetAncestorInContext(request, ino);
+
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
   request.set_length(length);
