@@ -321,7 +321,7 @@ bool DirQuotaMap::GetParent(Ino ino, Ino& parent) {
     return false;
   }
 
-  CHECK(attr.parents().size() == 1) << fmt::format("[quota.{}.{}] dir should only one parent, attr({}).", fs_id_, ino,
+  CHECK(attr.parents().size() >= 1) << fmt::format("[quota.{}.{}] dir should only one parent, attr({}).", fs_id_, ino,
                                                    attr.ShortDebugString());
 
   parent = attr.parents().at(0);
