@@ -1228,12 +1228,15 @@ Status FileSystem::FlushFile(Context& ctx, Ino ino, const FlushFileParam& param,
   auto status = GetInode(ctx, ino, inode);
   if (!status.ok()) return status;
 
+  // update parent memo
+  UpdateParentMemo(ctx.GetAncestors());
+
   FlushFileOperation::ExtraParam extra_param(param.data);
   extra_param.length = param.length;
   extra_param.chunk_size = fs_info_->GetChunkSize();
   extra_param.is_final = param.is_final;
 
-  if (param.length > inode->Length()) {
+  if (param.length > inode->Length() && inode->Nlink() > 0) {
     // check quota
     if (!quota_manager_.CheckQuota(trace, ino, param.length - inode->Length(), 0)) {
       return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
@@ -1263,7 +1266,7 @@ Status FileSystem::FlushFile(Context& ctx, Ino ino, const FlushFileParam& param,
   entry_out.shrink_file = (delta_bytes < 0) ? true : false;
 
   // update quota
-  if (delta_bytes != 0) {
+  if (delta_bytes != 0 && attr.nlink() > 0) {
     std::string reason = fmt::format("flushfile.{}", ino);
     quota_manager_.UpdateFsUsage(delta_bytes, 0, reason);
 
