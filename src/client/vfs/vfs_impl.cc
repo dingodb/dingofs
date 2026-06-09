@@ -499,7 +499,8 @@ Status VFSImpl::OpenDir(ContextSPtr ctx, Ino ino, uint64_t* fh,
 }
 
 Status VFSImpl::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
-                        bool with_attr, ReadDirHandler handler) {
+                        bool with_attr, ReadDirHandler handler,
+                        uint32_t& count) {
   // root dir(add .stats file)
   if (BAIDU_UNLIKELY(ino == kRootIno) && offset == 0) {
     DirEntry stats_entry{kStatsIno, kStatsName,
@@ -507,7 +508,7 @@ Status VFSImpl::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh, uint64_t offset,
     handler(stats_entry, 1);  // pos 0 is the offset for .stats entry
   }
 
-  return meta_system_->ReadDir(ctx, ino, fh, offset, with_attr, handler);
+  return meta_system_->ReadDir(ctx, ino, fh, offset, with_attr, handler, count);
 }
 
 Status VFSImpl::ReleaseDir(ContextSPtr ctx, Ino ino, uint64_t fh) {

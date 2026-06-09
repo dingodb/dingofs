@@ -264,6 +264,7 @@ Status WarmupManager::WalkFile(WarmupTask* task, Ino ino) {
         continue;
       }
 
+      uint32_t count = 0;
       vfs_hub_->GetMetaSystem()->ReadDir(
           SpanScope::GetContext(span), *dirIt, fh, 0, true,
           [task, &childDir, &span, this](const DirEntry& entry,
@@ -285,7 +286,8 @@ Status WarmupManager::WalkFile(WarmupTask* task, Ino ino) {
                            << " not support.";
             }
             return true;  // Continue reading
-          });
+          },
+          count);
       vfs_hub_->GetMetaSystem()->ReleaseDir(SpanScope::GetContext(span), *dirIt,
                                             fh);
 

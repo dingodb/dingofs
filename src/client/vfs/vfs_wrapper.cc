@@ -904,16 +904,17 @@ Status VFSWrapper::ReadDir(Ino ino, uint64_t fh, uint64_t offset,
   auto span = vfs_->GetTraceManager()->StartSpan("VFSWrapper::ReadDir");
 
   Status s;
+  uint32_t count = 0;
   AccessLogGuard log([&]() {
-    return absl::StrFormat("readdir (%d): %s (%d) [fh:%d]", ino, s.ToString(),
-                           offset, fh);
+    return absl::StrFormat("readdir (%d): %s (%d,%u) [fh:%d]", ino,
+                           s.ToString(), offset, count, fh);
   });
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opReadDir, &client_op_metric_->opAll});
 
   s = vfs_->ReadDir(SpanScope::GetContext(span), ino, fh, offset, with_attr,
-                    handler);
+                    handler, count);
 
   VLOG(2) << "VFSReaddir end, status: " << s.ToString();
 
