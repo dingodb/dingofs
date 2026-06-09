@@ -1170,7 +1170,7 @@ Status MDSMetaSystem::OpenDir(ContextSPtr, Ino ino, uint64_t fh,
 
 Status MDSMetaSystem::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
                               uint64_t offset, bool with_attr,
-                              ReadDirHandler handler) {
+                              ReadDirHandler handler, uint32_t& count) {
   AssertStop();
 
   auto dir_iterator = dir_iterator_manager_.Get(ino, fh);
@@ -1197,6 +1197,7 @@ Status MDSMetaSystem::ReadDir(ContextSPtr ctx, Ino ino, uint64_t fh,
     if (!handler(entry, offset)) {
       break;
     }
+    ++count;
   }
 
   return Status::OK();

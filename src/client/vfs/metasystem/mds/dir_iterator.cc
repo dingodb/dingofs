@@ -46,8 +46,9 @@ Status DirIterator::GetValue(ContextSPtr& ctx, uint64_t off, bool with_attr,
   if (off < offset_) {
     LOG(ERROR) << fmt::format("[dir_iterator.{}.{}] off out of range, {} {}.",
                               ino_, fh_, offset_, off);
-    return Status::Internal(
-        fmt::format("off out of range, {} {}", offset_, off));
+
+    auto status = SeekBackward(ctx, off);
+    if (!status.ok()) return status;
   }
 
   with_attr_ = with_attr;
@@ -82,15 +83,37 @@ Status DirIterator::Fetch(ContextSPtr& ctx) {
     return status;
   }
 
+  LOG(INFO) << fmt::format(
+      "[dir_iterator.{}.{}] readdir success, offset({}) last_name({}) "
+      "curr_batch_size({}) batch_size({}).",
+      ino_, fh_, offset_, last_name_, entries_.size(), entries.size());
+
   is_fetch_ = true;
 
   offset_ += entries_.size();
+  last_name_memo_.insert({offset_, last_name_});
+
   entries_ = std::move(entries);
   if (!entries_.empty()) {
     last_name_ = entries_.back().name;
   }
 
   return Status::OK();
+}
+
+Status DirIterator::SeekBackward(ContextSPtr& ctx, uint64_t off) {
+  CHECK(!last_name_memo_.empty()) << fmt::format(
+      "[dir_iterator.{}.{}] last_name_memo is empty.", ino_, fh_);
+
+  // get the nearest offset in memo which less than or equal to off
+  auto it = last_name_memo_.upper_bound(off);
+  if (it != last_name_memo_.begin()) --it;
+
+  entries_.clear();
+  offset_ = it->first;
+  last_name_ = it->second;
+
+  return Fetch(ctx);
 }
 
 size_t DirIterator::Size() { return entries_.size(); }
@@ -107,6 +130,16 @@ bool DirIterator::Dump(Json::Value& value) {
   value["offset"] = offset_;
   value["is_fetch"] = is_fetch_;
   value["last_fetch_time_ns"] = last_fetch_time_ns_.load();
+
+  // dump last_name_memo_
+  Json::Value last_name_memo = Json::arrayValue;
+  for (const auto& [offset, last_name] : last_name_memo_) {
+    Json::Value item;
+    item["offset"] = offset;
+    item["last_name"] = last_name;
+    last_name_memo.append(item);
+  }
+  value["last_name_memo"] = last_name_memo;
 
   Json::Value entries = Json::arrayValue;
   for (const auto& entry : entries_) {
@@ -132,6 +165,18 @@ bool DirIterator::Load(const Json::Value& value) {
   offset_ = value["offset"].asUInt();
   is_fetch_ = value["is_fetch"].asBool();
   last_fetch_time_ns_.store(value["last_fetch_time_ns"].asUInt64());
+
+  // load last_name_memo_
+  const Json::Value& last_name_memo = value["last_name_memo"];
+  if (!last_name_memo.isArray()) {
+    LOG(ERROR) << "[meta.dir_iterator] last_name_memo is not an array.";
+    return false;
+  }
+  for (const auto& item : last_name_memo) {
+    uint64_t offset = item["offset"].asUInt64();
+    std::string last_name = item["last_name"].asString();
+    last_name_memo_.insert({offset, last_name});
+  }
 
   const Json::Value& entries = value["entries"];
   if (!entries.isArray()) {

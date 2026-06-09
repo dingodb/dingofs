@@ -611,7 +611,7 @@ Status MemoryMetaSystem::OpenDir(ContextSPtr ctx, Ino ino, uint64_t fh,
 
 Status MemoryMetaSystem::ReadDir(ContextSPtr ctx, Ino, uint64_t fh,
                                  uint64_t offset, bool with_attr,
-                                 ReadDirHandler handler) {
+                                 ReadDirHandler handler, uint32_t& count) {
   auto dir_iterator = dir_iterator_manager_.Get(fh);
   CHECK(dir_iterator != nullptr) << "dir_iterator is null";
 
@@ -623,6 +623,7 @@ Status MemoryMetaSystem::ReadDir(ContextSPtr ctx, Ino, uint64_t fh,
     }
 
     dir_iterator->Next();
+    ++count;
   }
 
   return Status::OK();
