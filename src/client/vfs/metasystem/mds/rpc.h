@@ -364,8 +364,20 @@ Status RPC::SendRequest(const EndPoint& endpoint,
       return Status::OK();
     }
 
-    if (response.error().errcode() != pb::error::ENOT_FOUND ||
-        api_name != "Lookup") {
+    if (response.error().errcode() == pb::error::ENOT_EMPTY &&
+        api_name == "RmDir") {
+      // rmdir on a non-empty directory is a normal posix outcome(ENOTEMPTY),
+      // e.g. git/rsync probe rmdir and ignore the failure, so log as INFO
+      LOG(INFO) << fmt::format(
+          "[meta.rpc][{}][{}][{}us] fail, retry({}) request({}) response({}) "
+          "doing({}) error({} {}).",
+          EndPointToStr(endpoint), api_name, elapsed_us, retry,
+          request.ShortDebugString(), response.ShortDebugString(),
+          DoingReqCount(), pb::error::Errno_Name(response.error().errcode()),
+          response.error().errmsg());
+
+    } else if (response.error().errcode() != pb::error::ENOT_FOUND ||
+               api_name != "Lookup") {
       LOG(ERROR) << fmt::format(
           "[meta.rpc][{}][{}][{}us] fail, retry({}) request({}) response({}) "
           "doing({}) error({} {}).",
