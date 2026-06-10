@@ -39,9 +39,9 @@ DEFINE_validator(mds_inode_cache_max_count, brpc::PassValidate);
 void Inode::Put(const AttrEntry& attr) {
   // clone new attr
   length_ = attr.length();
-  ctime_ = std::max(ctime_, attr.ctime());
-  mtime_ = std::max(mtime_, attr.mtime());
-  atime_ = std::max(atime_, attr.atime());
+  ctime_ = attr.ctime();
+  mtime_ = attr.mtime();
+  atime_ = attr.atime();
   uid_ = attr.uid();
   gid_ = attr.gid();
   mode_ = attr.mode();
