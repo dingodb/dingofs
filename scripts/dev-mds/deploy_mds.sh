@@ -61,7 +61,7 @@ function deploy_server() {
   if [ -f "${dstpath}/bin/${SERVER_BIN_NAME}" ]; then
     rm -f "${dstpath}/bin/${SERVER_BIN_NAME}"
   fi
-  ln "${srcpath}/build/bin/${SERVER_BIN_NAME}" "${dstpath}/bin/${SERVER_BIN_NAME}"
+  ln -s "${srcpath}/build/bin/${SERVER_BIN_NAME}" "${dstpath}/bin/${SERVER_BIN_NAME}"
 
   # link dingo-mds-client
   if [ -f "${dstpath}/bin/${MDS_CLIENT_BIN_NAME}" ]; then

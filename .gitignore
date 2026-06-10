@@ -87,6 +87,7 @@ build
 build/
 scripts/docker/rocky9/dingofs
 
+dist
 dist/
 .cache
 .playground
