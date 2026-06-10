@@ -1383,6 +1383,12 @@ Status MDSMetaSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
   CHECK(ctx != nullptr) << "context is null";
 
   auto inode = GetInodeFromCache(ino);
+  if (inode != nullptr && !inode->IsAttrFresh()) {
+    // attr ttl expired, treat as cache miss to refetch from mds for
+    // multi-client consistency
+    inode = nullptr;
+  }
+
   if (inode == nullptr) {
     // Cold path: pull a fresh AttrEntry (carries hashed uid/gid) and
     // route it through PutInodeToCache so the inode cache is
@@ -1390,7 +1396,13 @@ Status MDSMetaSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
     // VFS layer above (not ToAttr) performs the local-host uid/gid translation.
     AttrEntry attr_entry;
     auto status = mds_client_.GetAttr(ctx, ino, attr_entry);
-    if (!status.ok()) return status;
+    if (!status.ok()) {
+      if (status.IsNotExist()) {
+        // inode was deleted elsewhere, drop the stale cache entry
+        DeleteInodeFromCache(ino);
+      }
+      return status;
+    }
     inode = PutInodeToCache(attr_entry);
   }
 
