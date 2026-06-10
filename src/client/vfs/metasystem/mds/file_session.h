@@ -43,12 +43,12 @@ class FileSessionMap;
 
 class FileSession {
  public:
-  FileSession(Ino ino, ChunkSetSPtr chunk_set)
-      : ino_(ino), chunk_set_(chunk_set) {}
+  FileSession(Ino ino, uint32_t chunk_size)
+      : ino_(ino), chunk_set_(ChunkSet::New(ino, chunk_size)) {}
   ~FileSession() = default;
 
-  static FileSessionSPtr New(Ino ino, ChunkSetSPtr chunk_set) {
-    return std::make_shared<FileSession>(ino, chunk_set);
+  static FileSessionSPtr New(Ino ino, uint32_t chunk_size) {
+    return std::make_shared<FileSession>(ino, chunk_size);
   }
 
   Ino GetIno() const { return ino_; }
@@ -103,8 +103,8 @@ class FileSession {
 // used by open file
 class FileSessionMap {
  public:
-  FileSessionMap(InodeCache& inode_cache, ChunkCache& chunk_cache)
-      : inode_cache_(inode_cache), chunk_cache_(chunk_cache) {}
+  FileSessionMap(InodeCache& inode_cache, uint32_t chunk_size)
+      : inode_cache_(inode_cache), chunk_size_(chunk_size) {}
   ~FileSessionMap() = default;
 
   FileSessionSPtr Put(Ino ino, uint64_t fh, const std::string& session_id,
@@ -129,7 +129,8 @@ class FileSessionMap {
   void Put(FileSessionSPtr);
 
   InodeCache& inode_cache_;
-  ChunkCache& chunk_cache_;
+
+  const uint32_t chunk_size_{0};
 
   using Map = absl::btree_map<Ino, FileSessionSPtr>;
 
