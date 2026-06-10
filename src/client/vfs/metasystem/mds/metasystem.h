@@ -200,7 +200,6 @@ class MDSMetaSystem : public vfs::MetaSystem {
   void RefreshCachedFsInfo();
   void CleanExpiredModifyTimeMemo();
   void CleanExpiredChunkMemo();
-  void CleanExpiredChunkCache();
   void CleanExpiredInodeCache();
   void CleanExpiredTinyFileDataCache();
   void CleanExpiredDirProfileCache();
@@ -239,7 +238,6 @@ class MDSMetaSystem : public vfs::MetaSystem {
                      bool& is_amend, const std::string& caller);
   bool CorrectAttrLength(Attr& attr, const std::string& caller);
 
-  bool IsPrefetchChunk(Ino ino);
   bool IsPrefetchTinyFileData(Ino ino);
   Status DoOpen(ContextSPtr ctx, Ino ino, int flags, uint64_t fh,
                 const std::string& session_id, FileSessionSPtr file_session);
@@ -269,8 +267,6 @@ class MDSMetaSystem : public vfs::MetaSystem {
   MDSClient mds_client_;
 
   ModifyTimeMemo modify_time_memo_;
-
-  ChunkCache chunk_cache_;
 
   ChunkMemo chunk_memo_;
 
