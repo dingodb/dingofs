@@ -1810,6 +1810,15 @@ void MDSMetaSystem::FlushAllFile() {
       }
     }
 
+    bool has_uncommited = false;
+    for (auto& file_session : file_sessions) {
+      if (file_session->GetChunkSet()->HasUncommitedSlice()) {
+        has_uncommited = true;
+        break;
+      }
+    }
+    if (!has_uncommited) break;
+
     LOG(INFO) << "[meta.fs] flush all slice loop, still has uncommited slice.";
 
   } while (true);
