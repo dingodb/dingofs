@@ -66,7 +66,7 @@ class FileSessionCache {
   const uint32_t fs_id_;
 
   using Map = absl::btree_map<Key, FileSessionSPtr>;
-  constexpr static size_t kShardNum = 64;
+  constexpr static size_t kShardNum = 256;
   utils::Shards<Map, kShardNum> shard_map_;
 
   // statistics

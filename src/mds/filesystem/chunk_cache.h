@@ -77,7 +77,7 @@ class ChunkCache {
 
   // ino/chunk_index -> ChunkEntry
   using Map = absl::btree_map<Key, ChunkSPtr>;
-  constexpr static size_t kShardNum = 64;
+  constexpr static size_t kShardNum = 256;
   utils::Shards<Map, kShardNum> shard_map_;
 
   // statistics

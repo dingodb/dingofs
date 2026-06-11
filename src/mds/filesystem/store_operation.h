@@ -2544,7 +2544,7 @@ class ConflictController {
   // fs_id,ino -> running count
   using Map = absl::flat_hash_map<Key, Value, KeyHash>;
 
-  constexpr static size_t kShardNum = 128;
+  constexpr static size_t kShardNum = 256;
   utils::Shards<Map, kShardNum> running_map_;
 };  // namespace dingofs
 
