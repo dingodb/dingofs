@@ -2487,8 +2487,6 @@ struct BatchOperation {
   uint32_t fs_id{0};
   Ino ino;
 
-  uint32_t dir_attr_mutation_index{0};
-
   // set attr/xattr/chunk
   absl::InlinedVector<Operation*, kStoreOperationBatchSize> setattr_operations;
   // mkdir/mknod/symlink/hardlink
@@ -2546,7 +2544,7 @@ class ConflictController {
   // fs_id,ino -> running count
   using Map = absl::flat_hash_map<Key, Value, KeyHash>;
 
-  constexpr static size_t kShardNum = 64;
+  constexpr static size_t kShardNum = 128;
   utils::Shards<Map, kShardNum> running_map_;
 };  // namespace dingofs
 
