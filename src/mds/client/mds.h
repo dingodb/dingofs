@@ -223,6 +223,7 @@ class MDSClient {
   DeleteFsResponse DeleteFs(const std::string& fs_name, bool is_force);
   UpdateFsInfoResponse UpdateFs(const std::string& fs_name, const pb::mds::FsInfo& fs_info);
   GetFsInfoResponse GetFs(const std::string& fs_name);
+  GetFsInfoResponse GetFs(uint32_t fs_id);
   ListFsInfoResponse ListFs();
 
   MkDirResponse MkDir(Ino parent, const std::string& name);
