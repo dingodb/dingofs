@@ -304,7 +304,7 @@ class InodeCache {
 
   const uint32_t fs_id_{0};
 
-  constexpr static size_t kShardNum = 128;
+  constexpr static size_t kShardNum = 256;
   utils::Shards<Map, kShardNum> shard_map_;
 
   // metric
