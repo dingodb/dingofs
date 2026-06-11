@@ -82,8 +82,7 @@ DEFINE_string(bench_fs_name, "", "Filesystem name");
 DEFINE_string(bench_mount_point, "/mdtest_bench_mount",
               "Logical mount point label");
 DEFINE_string(bench_conf, "", "Config file path (gflags format)");
-DEFINE_string(bench_dir, "/mdtest_bench",
-              "Directory inside FS for bench tree");
+DEFINE_string(bench_dir, "/mdtest_bench", "Directory inside FS for bench tree");
 
 DEFINE_int32(bench_threads, 1, "Number of concurrent worker threads");
 DEFINE_int32(bench_depth, 3, "Directory tree depth (levels, >= 1)");
@@ -93,14 +92,13 @@ DEFINE_string(bench_mode, "unique",
               "Concurrency mode: unique (per-thread subtree) | "
               "shared (global tree, shared task queue)");
 
-DEFINE_bool(bench_cleanup, true, "Remove bench tree after completion");
-DEFINE_bool(bench_force, false,
+DEFINE_bool(bench_cleanup, false, "Remove bench tree after completion");
+DEFINE_bool(bench_force, true,
             "Remove residual tree from a previous run before starting");
 DEFINE_bool(bench_progress, true, "Show live progress during benchmark");
 
-DEFINE_string(bench_log_dir, "/tmp", "Log directory for glog");
-DEFINE_string(bench_log_level, "WARNING",
-              "Log level: INFO/WARNING/ERROR/FATAL");
+DEFINE_string(bench_log_dir, "/tmp/bench_log", "Log directory for glog");
+DEFINE_string(bench_log_level, "INFO", "Log level: INFO/WARNING/ERROR/FATAL");
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -120,8 +118,7 @@ static double SafeOpsPerSec(uint64_t ops, double elapsed_sec) {
 // Directories in one tree: width^1 + ... + width^depth.
 // Leaves in one tree: width^depth.
 // Returns false on overflow.
-static bool TreeCounts(int depth, int width, uint64_t* dirs,
-                       uint64_t* leaves) {
+static bool TreeCounts(int depth, int width, uint64_t* dirs, uint64_t* leaves) {
   uint64_t total = 0;
   uint64_t level = 1;
   for (int d = 1; d <= depth; d++) {
@@ -142,8 +139,9 @@ static bool TreeCounts(int depth, int width, uint64_t* dirs,
 // Directory paths of one tree grouped by level (level index 0 = first level
 // below `root`), generated in BFS order so parents always precede children.
 struct TreePaths {
-  std::vector<std::vector<std::string>> levels;  // levels[d] = dirs at depth d+1
-  std::vector<std::string> files;                // leaf files
+  std::vector<std::vector<std::string>>
+      levels;                      // levels[d] = dirs at depth d+1
+  std::vector<std::string> files;  // leaf files
 };
 
 static TreePaths GenerateTree(const std::string& root, int depth, int width,
@@ -185,13 +183,17 @@ class ProgressTracker {
         num_threads_(num_threads),
         phase_(phase),
         progressed_(0),
-        running_(true) {
-    if (FLAGS_bench_progress && total_ops_ > 0) {
-      thread_ = std::thread([this]() { Run(); });
-    }
-  }
+        running_(false) {}
 
   ~ProgressTracker() { Stop(); }
+
+  // Spawn the printer thread and capture the rate baseline. Call at the
+  // start of the phase this tracker reports on.
+  void Start() {
+    if (!FLAGS_bench_progress || total_ops_ == 0 || running_) return;
+    running_ = true;
+    thread_ = std::thread([this]() { Run(); });
+  }
 
   void Add(uint64_t ops) {
     progressed_.fetch_add(ops, std::memory_order_relaxed);
@@ -241,8 +243,8 @@ struct ThreadResult {
   int thread_id = 0;
   uint64_t dir_ops = 0;
   uint64_t file_ops = 0;
-  int error_code = 0;        // first error (-errno), 0 = OK
-  std::string error_path;    // path of first error
+  int error_code = 0;      // first error (-errno), 0 = OK
+  std::string error_path;  // path of first error
 };
 
 static int CreateDir(uintptr_t h, const std::string& path) {
@@ -269,8 +271,7 @@ static int CreateEmptyFile(uintptr_t h, const std::string& path) {
 static void UniqueWorker(uintptr_t h, const TreePaths* tree,
                          pthread_barrier_t* barrier,
                          ProgressTracker* dir_progress,
-                         ProgressTracker* file_progress,
-                         ThreadResult* result) {
+                         ProgressTracker* file_progress, ThreadResult* result) {
   // ---- Directory phase ----
   pthread_barrier_wait(barrier);
   for (const auto& level : tree->levels) {
@@ -317,8 +318,7 @@ struct SharedBatch {
 static void SharedWorker(uintptr_t h, std::deque<SharedBatch>* dir_batches,
                          SharedBatch* file_batch, pthread_barrier_t* barrier,
                          ProgressTracker* dir_progress,
-                         ProgressTracker* file_progress,
-                         ThreadResult* result) {
+                         ProgressTracker* file_progress, ThreadResult* result) {
   // ---- Directory phase: one batch per level ----
   pthread_barrier_wait(barrier);
   for (auto& batch : *dir_batches) {
@@ -377,8 +377,8 @@ static int RemoveTreeRecursive(uintptr_t h, const std::string& path) {
   int first_err = 0;
   dingofs_dirent_t entries[128];
   for (;;) {
-    int n = dingofs_readdir(h, dh, entries,
-                            sizeof(entries) / sizeof(entries[0]));
+    int n =
+        dingofs_readdir(h, dh, entries, sizeof(entries) / sizeof(entries[0]));
     if (n < 0) {
       first_err = n;
       break;
@@ -388,8 +388,9 @@ static int RemoveTreeRecursive(uintptr_t h, const std::string& path) {
       const char* name = entries[i].d_name;
       if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) continue;
       std::string child = path + "/" + name;
-      int crc = (entries[i].d_type == DT_DIR) ? RemoveTreeRecursive(h, child)
-                                              : dingofs_unlink(h, child.c_str());
+      int crc = (entries[i].d_type == DT_DIR)
+                    ? RemoveTreeRecursive(h, child)
+                    : dingofs_unlink(h, child.c_str());
       if (crc != 0 && first_err == 0) first_err = crc;
     }
   }
@@ -571,8 +572,8 @@ int main(int argc, char** argv) {
   std::vector<TreePaths> trees;
   trees.reserve(ntrees);
   for (int i = 0; i < ntrees; i++) {
-    trees.push_back(GenerateTree(roots[i], FLAGS_bench_depth,
-                                 FLAGS_bench_width, FLAGS_bench_files));
+    trees.push_back(GenerateTree(roots[i], FLAGS_bench_depth, FLAGS_bench_width,
+                                 FLAGS_bench_files));
   }
 
   // ---- Run ----
@@ -599,12 +600,11 @@ int main(int argc, char** argv) {
   workers.reserve(nthreads);
   for (int i = 0; i < nthreads; i++) {
     if (shared_mode) {
-      workers.emplace_back(SharedWorker, h, &dir_batches, &file_batch,
-                           &barrier, &dir_progress, &file_progress,
-                           &results[i]);
-    } else {
-      workers.emplace_back(UniqueWorker, h, &trees[i], &barrier,
+      workers.emplace_back(SharedWorker, h, &dir_batches, &file_batch, &barrier,
                            &dir_progress, &file_progress, &results[i]);
+    } else {
+      workers.emplace_back(UniqueWorker, h, &trees[i], &barrier, &dir_progress,
+                           &file_progress, &results[i]);
     }
   }
 
@@ -616,6 +616,7 @@ int main(int argc, char** argv) {
   std::cout << "Phase 1: directory creation ...\n";
   pthread_barrier_wait(&barrier);  // dirs start
   double dir_start = NowSec();
+  dir_progress.Start();
   if (shared_mode) {
     for (int d = 0; d < FLAGS_bench_depth; d++) {
       pthread_barrier_wait(&barrier);  // level d done
@@ -628,6 +629,7 @@ int main(int argc, char** argv) {
   std::cout << "Phase 2: file creation ...\n";
   pthread_barrier_wait(&barrier);  // files start
   double file_start = NowSec();
+  file_progress.Start();
   pthread_barrier_wait(&barrier);  // files end
   double file_elapsed = NowSec() - file_start;
   file_progress.Stop();
