@@ -3535,16 +3535,21 @@ bool ConflictController::GetIndexAndIncRunningCount(uint32_t fs_id, Ino ino, uin
       [&](Map& map) mutable {
         auto it = map.find(Key{fs_id, ino});
         if (it == map.end()) {
-          map.emplace(Key{fs_id, ino}, Value{.dir_mutation_index = 1, .running_count = 1});
+          map.emplace(Key{fs_id, ino}, Value{.dir_mutation_index = 0, .running_count = 1});
           ret = true;
           index = 0;
 
         } else {
           auto& value = it->second;
-          if (value.running_count == 0) ret = true;
+          if (value.running_count == 0) {
+            ret = true;
+            index = 0;
+
+          } else {
+            index = ++value.dir_mutation_index;
+          }
+
           ++value.running_count;
-          index = value.dir_mutation_index;
-          ++value.dir_mutation_index;
         }
       },
       ino);
@@ -3869,7 +3874,6 @@ static bool IsNeedParentKey(const BatchOperation& batch_operation) {
 void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) {
   const uint32_t fs_id = batch_operation.fs_id;
   const uint64_t ino = batch_operation.ino;
-  const uint32_t dir_attr_mutation_index = batch_operation.dir_attr_mutation_index;
   size_t count = batch_operation.setattr_operations.size() + batch_operation.create_operations.size();
 
   utils::Duration duration;
@@ -3884,7 +3888,8 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
   ON_SCOPE_EXIT([&] {
     if (IsDir(ino)) conflict_controller_.DecRunningCount(fs_id, ino);
   });
-  batch_operation.dir_attr_mutation_index = mutation_index;
+
+  mutation_index = mutation_index % kDirAttrMutationNum;
 
   // get prefetch keys
   std::vector<std::string> prefetch_keys;
@@ -3895,7 +3900,7 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
     prefetch_keys.push_back(parent_key);
 
   } else {
-    parent_mutation_key = MetaCodec::EncodeDirInodeMutationKey(fs_id, ino, dir_attr_mutation_index);
+    parent_mutation_key = MetaCodec::EncodeDirInodeMutationKey(fs_id, ino, mutation_index);
     prefetch_keys.push_back(parent_mutation_key);
   }
   GenPrefetchKey(batch_operation, prefetch_keys);
@@ -3943,7 +3948,7 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
 
     } else {
       shared_param.attr_mutation.set_ino(ino);
-      shared_param.attr_mutation.set_index(dir_attr_mutation_index);
+      shared_param.attr_mutation.set_index(mutation_index);
       std::string value = FindValue(shared_param.prefetch_index, parent_mutation_key);
       if (!value.empty()) shared_param.attr_mutation = MetaCodec::DecodeDirInodeMutationValue(value);
     }
@@ -3989,8 +3994,9 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
     for (auto* operation : batch_operation.create_operations) operation->SetStatus(Status::OK());
 
     LOG(WARNING) << fmt::format(
-        "[operation.{}.{}][{}][{}us] batch run ({}) fail, count({}) txn({}) retry({}) status({}).", fs_id, ino, txn_id,
-        once_duration.ElapsedUs(), op_names, count, commit_type, retry, status.error_str());
+        "[operation.{}.{}][{}][{}us] batch run ({}) fail, count({}) parent_key({},{}) txn({}) retry({}) status({}).",
+        fs_id, ino, txn_id, once_duration.ElapsedUs(), op_names, count, need_parent_key, mutation_index, commit_type,
+        retry, status.error_str());
 
     if (once_duration.ElapsedMs() > FLAGS_mds_txn_timeout_ms) {
       break;
