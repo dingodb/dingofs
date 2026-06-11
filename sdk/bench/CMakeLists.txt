@@ -47,3 +47,26 @@ target_link_libraries(read_bench
         gflags::gflags
         glog::glog
 )
+
+# ============================================================================
+# mdtest_bench: VFS metadata benchmark (mdtest-like) — bypass FUSE
+# ============================================================================
+
+find_package(Threads REQUIRED)
+
+add_executable(mdtest_bench
+    mdtest_bench.cc
+)
+
+target_include_directories(mdtest_bench
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/sdk
+)
+
+target_link_libraries(mdtest_bench
+    PRIVATE
+        dingofs_c
+        gflags::gflags
+        glog::glog
+        Threads::Threads
+)
