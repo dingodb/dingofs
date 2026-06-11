@@ -211,8 +211,7 @@ void MDSServiceImpl::DoHeartbeat(google::protobuf::RpcController*, const pb::mds
     // field changes (e.g. enable_uid_gid_map) without a separate poll.
     auto file_system = GetFileSystem(client_info.fs_id());
     if (file_system != nullptr) {
-      response->mutable_client()->set_last_fs_version(
-          file_system->GetFsInfo().version());
+      response->mutable_client()->set_last_fs_version(file_system->GetFsInfo().version());
     }
 
   } else if (request->role() == pb::mds::ROLE_CACHE_MEMBER) {
@@ -684,6 +683,28 @@ void MDSServiceImpl::DoGetDentry(google::protobuf::RpcController*, const pb::mds
 void MDSServiceImpl::GetDentry(google::protobuf::RpcController* controller, const pb::mds::GetDentryRequest* request,
                                pb::mds::GetDentryResponse* response, google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // validate request
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_id() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs_id is 0");
+    }
+
+    if (request->parent() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "parent is 0");
+    }
+    if (request->name().empty()) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "name is empty");
+    }
+
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
 
   // run in place.
   RunInPlace(GetDentry, controller, request, response, svr_done);
