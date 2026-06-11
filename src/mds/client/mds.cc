@@ -321,6 +321,28 @@ GetFsInfoResponse MDSClient::GetFs(const std::string& fs_name) {
   return response;
 }
 
+GetFsInfoResponse MDSClient::GetFs(uint32_t fs_id) {
+  GetFsInfoRequest request;
+  GetFsInfoResponse response;
+
+  if (fs_id == 0) {
+    response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EILLEGAL_PARAMTETER);
+    response.mutable_error()->set_errmsg("fs_id is 0");
+    return response;
+  }
+
+  request.set_fs_id(fs_id);
+
+  auto status = interaction_->SendRequest("MDSService", "GetFsInfo", request, response);
+  if (!status.ok()) {
+    response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
+    response.mutable_error()->set_errmsg(status.error_str());
+    return response;
+  }
+
+  return response;
+}
+
 ListFsInfoResponse MDSClient::ListFs() {
   ListFsInfoRequest request;
   ListFsInfoResponse response;

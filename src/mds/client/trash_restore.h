@@ -22,6 +22,7 @@
 #include <mutex>
 #include <queue>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -73,8 +74,26 @@ class TrashRestore {
   // (serial directory pre-pass).
   void RestoreOne(Ino bucket_ino, const pb::mds::Dentry& dentry);
 
+  // Fetch the fs partition policy and MDS list, then build one MDSClient per
+  // owner MDS. Returns false on failure.
+  bool InitRouting();
+  // Client connected to the MDS that owns parent's partition under the fs
+  // partition policy. Falls back to the seed client (with a warning) when no
+  // route is known.
+  MDSClient* ClientForParent(Ino parent);
+
   Options options_;
   std::unique_ptr<MDSClient> client_;
+
+  // Restore routing. RestoreFromTrash updates the dst parent's inode and
+  // dentry caches on the MDS that serves the request, so each request must go
+  // to the MDS owning the original parent's partition (same parent-hash
+  // scheme the FUSE client uses); otherwise the owner keeps serving stale
+  // caches and the restored entry stays invisible. Read-only after Init, so
+  // worker threads need no locking.
+  pb::mds::PartitionPolicy partition_policy_;
+  std::unordered_map<uint32_t, uint64_t> bucket_to_mds_;                  // parent-hash only
+  std::unordered_map<uint64_t, std::unique_ptr<MDSClient>> mds_clients_;  // mds_id -> client
 
   // Per-hour state. Reset at the top of each DoRestoreHour.
   std::mutex mu_;

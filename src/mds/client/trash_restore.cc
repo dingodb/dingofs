@@ -73,7 +73,81 @@ bool TrashRestore::Init(const std::string& mds_addr, const Options& options) {
     std::cerr << "init mds client fail\n";
     return false;
   }
+  return InitRouting();
+}
+
+bool TrashRestore::InitRouting() {
+  auto fs_resp = client_->GetFs(options_.fs_id);
+  if (fs_resp.error().errcode() != pb::error::OK) {
+    std::cerr << fmt::format("get fs info fail: {} ({})\n", fs_resp.error().errmsg(),
+                             static_cast<int>(fs_resp.error().errcode()));
+    return false;
+  }
+  partition_policy_ = fs_resp.fs_info().partition_policy();
+
+  auto mds_resp = client_->GetMdsList();
+  if (mds_resp.error().errcode() != pb::error::OK) {
+    std::cerr << fmt::format("get mds list fail: {} ({})\n", mds_resp.error().errmsg(),
+                             static_cast<int>(mds_resp.error().errcode()));
+    return false;
+  }
+  std::unordered_map<uint64_t, std::string> mds_addrs;
+  for (const auto& mds : mds_resp.mdses()) {
+    mds_addrs[mds.id()] = fmt::format("{}:{}", mds.location().host(), mds.location().port());
+  }
+
+  std::unordered_set<uint64_t> owner_mds_ids;
+  if (partition_policy_.type() == pb::mds::PartitionType::MONOLITHIC_PARTITION) {
+    owner_mds_ids.insert(partition_policy_.mono().mds_id());
+
+  } else if (partition_policy_.type() == pb::mds::PartitionType::PARENT_ID_HASH_PARTITION) {
+    if (partition_policy_.parent_hash().bucket_num() == 0) {
+      std::cerr << "parent hash bucket_num is 0\n";
+      return false;
+    }
+    for (const auto& [mds_id, bucket_set] : partition_policy_.parent_hash().distributions()) {
+      owner_mds_ids.insert(mds_id);
+      for (const auto& bucket_id : bucket_set.bucket_ids()) bucket_to_mds_[bucket_id] = mds_id;
+    }
+
+  } else {
+    std::cerr << fmt::format("unknown partition type({})\n", pb::mds::PartitionType_Name(partition_policy_.type()));
+    return false;
+  }
+
+  for (uint64_t mds_id : owner_mds_ids) {
+    auto it = mds_addrs.find(mds_id);
+    if (it == mds_addrs.end()) {
+      LOG(WARNING) << fmt::format("mds({}) not in mds list, its restores fall back to seed mds", mds_id);
+      continue;
+    }
+    auto mds_client = std::make_unique<MDSClient>(options_.fs_id);
+    if (!mds_client->Init(it->second)) {
+      LOG(WARNING) << fmt::format("init client for mds({}) at {} fail, its restores fall back to seed mds", mds_id,
+                                  it->second);
+      continue;
+    }
+    mds_clients_[mds_id] = std::move(mds_client);
+  }
+
   return true;
+}
+
+MDSClient* TrashRestore::ClientForParent(Ino parent) {
+  uint64_t mds_id = 0;
+  if (partition_policy_.type() == pb::mds::PartitionType::MONOLITHIC_PARTITION) {
+    mds_id = partition_policy_.mono().mds_id();
+
+  } else {
+    auto it = bucket_to_mds_.find(static_cast<uint32_t>(parent % partition_policy_.parent_hash().bucket_num()));
+    if (it != bucket_to_mds_.end()) mds_id = it->second;
+  }
+
+  auto it = mds_clients_.find(mds_id);
+  if (it != mds_clients_.end()) return it->second.get();
+
+  LOG(WARNING) << fmt::format("no owner mds for parent({}), send restore to seed mds", parent);
+  return client_.get();
 }
 
 void TrashRestore::Run() {
@@ -223,7 +297,10 @@ void TrashRestore::RestoreOne(Ino bucket_ino, const pb::mds::Dentry& dentry) {
   }
 
   const bool allow_trash_parent = !options_.put_back;
-  auto resp = client_->RestoreFromTrash(bucket_ino, dentry.name(), kRootUid, allow_trash_parent);
+  // Route to the MDS owning orig_parent's partition so its inode/dentry
+  // caches are updated first-hand (the server can only heal misroutes
+  // asynchronously).
+  auto resp = ClientForParent(orig_parent)->RestoreFromTrash(bucket_ino, dentry.name(), kRootUid, allow_trash_parent);
   if (resp.error().errcode() == pb::error::OK) {
     restored_.fetch_add(1);
   } else {
