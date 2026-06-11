@@ -63,9 +63,9 @@
 #include <atomic>
 #include <chrono>
 #include <cstring>
-#include <deque>
 #include <iomanip>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <thread>
 #include <vector>
@@ -133,44 +133,54 @@ static bool TreeCounts(int depth, int width, uint64_t* dirs, uint64_t* leaves) {
 }
 
 // ---------------------------------------------------------------------------
-// Tree path generation
+// Index-based tree spec — replaces TreePaths/GenerateTree.
+//
+// Paths are computed on-demand from (level, index) using the identity:
+//   component at level l of directory (level=d, global index=i):
+//     (i / width^(d-l)) % width
+// This eliminates O(total_files * path_len) pre-allocation; the only
+// per-spec storage is O(depth) for the precomputed power table.
 // ---------------------------------------------------------------------------
 
-// Directory paths of one tree grouped by level (level index 0 = first level
-// below `root`), generated in BFS order so parents always precede children.
-struct TreePaths {
-  std::vector<std::vector<std::string>>
-      levels;                      // levels[d] = dirs at depth d+1
-  std::vector<std::string> files;  // leaf files
+struct TreeSpec {
+  std::string root;
+  int depth;
+  int width;
+  int files_per_leaf;
+  std::vector<uint64_t> pow_width;  // pow_width[k] = width^k
+
+  TreeSpec(std::string r, int d, int w, int f)
+      : root(std::move(r)), depth(d), width(w), files_per_leaf(f) {
+    pow_width.resize(d + 1);
+    pow_width[0] = 1;
+    for (int k = 1; k <= d; k++) pow_width[k] = pow_width[k - 1] * w;
+  }
+
+  // Number of directories at BFS level `d` (0 = first level below root).
+  uint64_t DirsAtLevel(int d) const { return pow_width[d + 1]; }
+  uint64_t TotalLeaves() const { return pow_width[depth]; }
+  uint64_t TotalFiles() const {
+    return TotalLeaves() * static_cast<uint64_t>(files_per_leaf);
+  }
+
+  // Path of the directory at BFS level `d`, global index `idx`.
+  // Index ordering matches the BFS order produced by the old GenerateTree.
+  std::string DirPath(int d, uint64_t idx) const {
+    std::string p = root;
+    for (int l = 0; l <= d; l++) {
+      uint64_t comp = (idx / pow_width[d - l]) % width;
+      p += "/d" + std::to_string(l) + "_" + std::to_string(comp);
+    }
+    return p;
+  }
+
+  // Path of a file identified by its global index across all files in this tree.
+  std::string FilePath(uint64_t global_idx) const {
+    uint64_t leaf_idx = global_idx / static_cast<uint64_t>(files_per_leaf);
+    int file_idx = static_cast<int>(global_idx % files_per_leaf);
+    return DirPath(depth - 1, leaf_idx) + "/f" + std::to_string(file_idx);
+  }
 };
-
-static TreePaths GenerateTree(const std::string& root, int depth, int width,
-                              int files_per_leaf) {
-  TreePaths tree;
-  tree.levels.resize(depth);
-
-  std::vector<std::string> parents = {root};
-  for (int d = 0; d < depth; d++) {
-    auto& level = tree.levels[d];
-    level.reserve(parents.size() * width);
-    for (const auto& parent : parents) {
-      for (int w = 0; w < width; w++) {
-        level.push_back(parent + "/d" + std::to_string(d) + "_" +
-                        std::to_string(w));
-      }
-    }
-    parents = level;
-  }
-
-  // `parents` now holds the leaf directories.
-  tree.files.reserve(parents.size() * files_per_leaf);
-  for (const auto& leaf : parents) {
-    for (int j = 0; j < files_per_leaf; j++) {
-      tree.files.push_back(leaf + "/f" + std::to_string(j));
-    }
-  }
-  return tree;
-}
 
 // ---------------------------------------------------------------------------
 // Progress tracker (ops-based)
@@ -268,35 +278,38 @@ static int CreateEmptyFile(uintptr_t h, const std::string& path) {
 // unique mode: thread i creates its whole subtree (BFS order).
 // On error the thread records it and stops; other threads keep going
 // (the thread still participates in all barriers to avoid deadlock).
-static void UniqueWorker(uintptr_t h, const TreePaths* tree,
+static void UniqueWorker(uintptr_t h, const TreeSpec* spec,
                          pthread_barrier_t* barrier,
                          ProgressTracker* dir_progress,
                          ProgressTracker* file_progress, ThreadResult* result) {
   // ---- Directory phase ----
   pthread_barrier_wait(barrier);
-  for (const auto& level : tree->levels) {
-    for (const auto& path : level) {
+  for (int d = 0; d < spec->depth && result->error_code == 0; d++) {
+    uint64_t count = spec->DirsAtLevel(d);
+    for (uint64_t i = 0; i < count; i++) {
+      std::string path = spec->DirPath(d, i);
       int rc = CreateDir(h, path);
       if (rc != 0) {
         result->error_code = rc;
-        result->error_path = path;
+        result->error_path = std::move(path);
         break;
       }
       result->dir_ops++;
       dir_progress->Add(1);
     }
-    if (result->error_code != 0) break;
   }
   pthread_barrier_wait(barrier);
 
   // ---- File phase ----
   pthread_barrier_wait(barrier);
   if (result->error_code == 0) {
-    for (const auto& path : tree->files) {
+    uint64_t total = spec->TotalFiles();
+    for (uint64_t g = 0; g < total; g++) {
+      std::string path = spec->FilePath(g);
       int rc = CreateEmptyFile(h, path);
       if (rc != 0) {
         result->error_code = rc;
-        result->error_path = path;
+        result->error_path = std::move(path);
         break;
       }
       result->file_ops++;
@@ -306,39 +319,45 @@ static void UniqueWorker(uintptr_t h, const TreePaths* tree,
   pthread_barrier_wait(barrier);
 }
 
-// shared mode: all threads drain a per-batch task list via an atomic
-// cursor. Batches are dispatched level by level (parents before children),
-// with a barrier between batches; leaf files form the final batch.
-// A failed thread stops taking tasks but keeps hitting every barrier.
-struct SharedBatch {
-  const std::vector<std::string>* tasks = nullptr;
-  std::atomic<uint64_t> cursor{0};
+// shared mode: atomic-cursor dispatch over index ranges; paths computed
+// on-demand from indices.  A failed thread stops taking tasks but keeps
+// hitting every barrier to avoid deadlock.
+struct SharedWork {
+  std::unique_ptr<std::atomic<uint64_t>[]> dir_cursors;  // one per level
+  std::atomic<uint64_t> file_cursor{0};
+
+  explicit SharedWork(int depth)
+      : dir_cursors(std::make_unique<std::atomic<uint64_t>[]>(depth)) {
+    for (int d = 0; d < depth; d++)
+      dir_cursors[d].store(0, std::memory_order_relaxed);
+  }
 };
 
-static void SharedWorker(uintptr_t h, std::deque<SharedBatch>* dir_batches,
-                         SharedBatch* file_batch, pthread_barrier_t* barrier,
+static void SharedWorker(uintptr_t h, const TreeSpec* spec, SharedWork* work,
+                         pthread_barrier_t* barrier,
                          ProgressTracker* dir_progress,
                          ProgressTracker* file_progress, ThreadResult* result) {
-  // ---- Directory phase: one batch per level ----
+  // ---- Directory phase: one level at a time ----
   pthread_barrier_wait(barrier);
-  for (auto& batch : *dir_batches) {
+  for (int d = 0; d < spec->depth; d++) {
     if (result->error_code == 0) {
-      const auto& tasks = *batch.tasks;
+      uint64_t count = spec->DirsAtLevel(d);
       for (;;) {
-        uint64_t idx = batch.cursor.fetch_add(1, std::memory_order_relaxed);
-        if (idx >= tasks.size()) break;
-        int rc = CreateDir(h, tasks[idx]);
+        uint64_t idx = work->dir_cursors[d].fetch_add(1, std::memory_order_relaxed);
+        if (idx >= count) break;
+        std::string path = spec->DirPath(d, idx);
+        int rc = CreateDir(h, path);
         if (rc != 0) {
           result->error_code = rc;
-          result->error_path = tasks[idx];
+          result->error_path = std::move(path);
           break;
         }
         result->dir_ops++;
         dir_progress->Add(1);
       }
     }
-    // All threads must finish this level before the next one starts,
-    // so parent directories exist when children are created.
+    // All threads must finish this level before the next starts so that
+    // parent directories exist when child directories are created.
     pthread_barrier_wait(barrier);
   }
   pthread_barrier_wait(barrier);
@@ -346,14 +365,15 @@ static void SharedWorker(uintptr_t h, std::deque<SharedBatch>* dir_batches,
   // ---- File phase ----
   pthread_barrier_wait(barrier);
   if (result->error_code == 0) {
-    const auto& tasks = *file_batch->tasks;
+    uint64_t total = spec->TotalFiles();
     for (;;) {
-      uint64_t idx = file_batch->cursor.fetch_add(1, std::memory_order_relaxed);
-      if (idx >= tasks.size()) break;
-      int rc = CreateEmptyFile(h, tasks[idx]);
+      uint64_t g = work->file_cursor.fetch_add(1, std::memory_order_relaxed);
+      if (g >= total) break;
+      std::string path = spec->FilePath(g);
+      int rc = CreateEmptyFile(h, path);
       if (rc != 0) {
         result->error_code = rc;
-        result->error_path = tasks[idx];
+        result->error_path = std::move(path);
         break;
       }
       result->file_ops++;
@@ -568,12 +588,12 @@ int main(int argc, char** argv) {
     }
   }
 
-  // ---- Generate paths ----
-  std::vector<TreePaths> trees;
-  trees.reserve(ntrees);
+  // ---- Build tree specs (O(depth) memory each, no path pre-allocation) ----
+  std::vector<TreeSpec> specs;
+  specs.reserve(ntrees);
   for (int i = 0; i < ntrees; i++) {
-    trees.push_back(GenerateTree(roots[i], FLAGS_bench_depth, FLAGS_bench_width,
-                                 FLAGS_bench_files));
+    specs.emplace_back(roots[i], FLAGS_bench_depth, FLAGS_bench_width,
+                       FLAGS_bench_files);
   }
 
   // ---- Run ----
@@ -586,24 +606,17 @@ int main(int argc, char** argv) {
   ProgressTracker dir_progress(total_dirs, nthreads, "dirs");
   ProgressTracker file_progress(total_files, nthreads, "files");
 
-  std::deque<SharedBatch> dir_batches;
-  SharedBatch file_batch;
-  if (shared_mode) {
-    for (int d = 0; d < FLAGS_bench_depth; d++) {
-      dir_batches.emplace_back();
-      dir_batches.back().tasks = &trees[0].levels[d];
-    }
-    file_batch.tasks = &trees[0].files;
-  }
+  std::unique_ptr<SharedWork> shared_work;
+  if (shared_mode) shared_work = std::make_unique<SharedWork>(FLAGS_bench_depth);
 
   std::vector<std::thread> workers;
   workers.reserve(nthreads);
   for (int i = 0; i < nthreads; i++) {
     if (shared_mode) {
-      workers.emplace_back(SharedWorker, h, &dir_batches, &file_batch, &barrier,
-                           &dir_progress, &file_progress, &results[i]);
+      workers.emplace_back(SharedWorker, h, &specs[0], shared_work.get(),
+                           &barrier, &dir_progress, &file_progress, &results[i]);
     } else {
-      workers.emplace_back(UniqueWorker, h, &trees[i], &barrier, &dir_progress,
+      workers.emplace_back(UniqueWorker, h, &specs[i], &barrier, &dir_progress,
                            &file_progress, &results[i]);
     }
   }
