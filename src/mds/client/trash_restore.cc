@@ -118,13 +118,13 @@ bool TrashRestore::InitRouting() {
   for (uint64_t mds_id : owner_mds_ids) {
     auto it = mds_addrs.find(mds_id);
     if (it == mds_addrs.end()) {
-      LOG(WARNING) << fmt::format("mds({}) not in mds list, its restores fall back to seed mds", mds_id);
+      LOG(ERROR) << fmt::format("mds({}) not in mds list, entries owned by it will fail to restore", mds_id);
       continue;
     }
     auto mds_client = std::make_unique<MDSClient>(options_.fs_id);
     if (!mds_client->Init(it->second)) {
-      LOG(WARNING) << fmt::format("init client for mds({}) at {} fail, its restores fall back to seed mds", mds_id,
-                                  it->second);
+      LOG(ERROR) << fmt::format("init client for mds({}) at {} fail, entries owned by it will fail to restore", mds_id,
+                                it->second);
       continue;
     }
     mds_clients_[mds_id] = std::move(mds_client);
@@ -146,8 +146,7 @@ MDSClient* TrashRestore::ClientForParent(Ino parent) {
   auto it = mds_clients_.find(mds_id);
   if (it != mds_clients_.end()) return it->second.get();
 
-  LOG(WARNING) << fmt::format("no owner mds for parent({}), send restore to seed mds", parent);
-  return client_.get();
+  return nullptr;
 }
 
 void TrashRestore::Run() {
@@ -298,9 +297,15 @@ void TrashRestore::RestoreOne(Ino bucket_ino, const pb::mds::Dentry& dentry) {
 
   const bool allow_trash_parent = !options_.put_back;
   // Route to the MDS owning orig_parent's partition so its inode/dentry
-  // caches are updated first-hand (the server can only heal misroutes
-  // asynchronously).
-  auto resp = ClientForParent(orig_parent)->RestoreFromTrash(bucket_ino, dentry.name(), kRootUid, allow_trash_parent);
+  // caches are updated first-hand. No route means no restore: sending the
+  // request to another MDS would leave the owner serving stale caches.
+  MDSClient* mds_client = ClientForParent(orig_parent);
+  if (mds_client == nullptr) {
+    LOG(ERROR) << fmt::format("no owner mds for parent({}), restore '{}' fail", orig_parent, dentry.name());
+    failed_.fetch_add(1);
+    return;
+  }
+  auto resp = mds_client->RestoreFromTrash(bucket_ino, dentry.name(), kRootUid, allow_trash_parent);
   if (resp.error().errcode() == pb::error::OK) {
     restored_.fetch_add(1);
   } else {
