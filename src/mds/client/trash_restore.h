@@ -78,8 +78,9 @@ class TrashRestore {
   // owner MDS. Returns false on failure.
   bool InitRouting();
   // Client connected to the MDS that owns parent's partition under the fs
-  // partition policy. Falls back to the seed client (with a warning) when no
-  // route is known.
+  // partition policy. Returns nullptr when no route is known or the owner's
+  // client is unavailable; the caller fails the entry instead of misrouting
+  // it to another MDS.
   MDSClient* ClientForParent(Ino parent);
 
   Options options_;

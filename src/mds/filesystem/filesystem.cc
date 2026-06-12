@@ -3644,21 +3644,6 @@ Status FileSystem::RestoreFromTrash(Context& ctx, Ino trash_parent, const std::s
   // an empty parent_hash() and the notify helpers CHECK(mds_id != 0).
   if (IsParentHashPartition()) {
     NotifyBuddyRefreshInode(dst_parent_attr, cache_reason);
-    NotifyBuddyRefreshInode(file_attr, cache_reason);
-
-    // The restore RPC may have reached an MDS that doesn't own
-    // actual_dst_parent's partition (old CLI sending everything to one node,
-    // or a redistribution racing the restore run). The local cache updates
-    // above then landed on the wrong node, and the owner's caches can't heal
-    // by themselves: partition freshness is judged against the requester's
-    // parent version (see GetPartition), which the owner keeps serving stale.
-    // Push the new parent attr to the owner and drop its dentry cache so the
-    // next access rebuilds from KV and sees the restored entry.
-    const uint64_t dst_owner_mds_id = GetMdsIdByIno(actual_dst_parent);
-    if (dst_owner_mds_id != 0 && dst_owner_mds_id != self_mds_id_) {
-      NotifyBuddyRefreshInode({actual_dst_parent}, {.attr = dst_parent_attr}, cache_reason);
-      NotifyBuddyCleanPartitionCache(actual_dst_parent, cache_reason);
-    }
   }
 
   // Trash partitions don't participate in partition_cache_ (see
