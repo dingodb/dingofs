@@ -15,8 +15,8 @@
  */
 
 /*
- * DingoFS Metadata Benchmark (mdtest-like) — bypass FUSE, call libdingofs
- * C API directly.
+ * DingoFS Metadata Benchmark (mdtest-like) — bypass FUSE, call the client
+ * VFSWrapper C++ API directly.
  *
  * This tool stress-tests the client-side metadata path (VFS -> MDS) with
  * concurrent directory and file creation, similar to mdtest with -I -L
@@ -55,20 +55,30 @@
  */
 
 #include <fcntl.h>
+#include <fmt/format.h>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <pthread.h>
-#include <time.h>
+#include <unistd.h>
 
 #include <atomic>
 #include <chrono>
 #include <cstring>
+#include <ctime>
 #include <iomanip>
 #include <iostream>
 #include <memory>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <vector>
+
+#include "client/vfs/vfs_wrapper.h"
+#include "common/logging.h"
+#include "common/meta.h"
+#include "common/status.h"
+#include "common/types.h"
+#include "utils/concurrent/concurrent.h"
 
 // ---------------------------------------------------------------------------
 // gflags
@@ -96,16 +106,25 @@ DEFINE_bool(bench_force, true,
 DEFINE_bool(bench_progress, true, "Show live progress during benchmark");
 
 DEFINE_string(bench_log_dir, "/tmp/bench_log", "Log directory for glog");
-DEFINE_string(bench_log_level, "INFO", "Log level: INFO/WARNING/ERROR/FATAL");
+DEFINE_string(bench_log_level, "ERROR", "Log level: INFO/WARNING/ERROR/FATAL");
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
+using dingofs::Attr;
+using dingofs::DirEntry;
+using dingofs::Ino;
+using dingofs::Status;
+using dingofs::client::DingofsConfig;
+using dingofs::client::VFSWrapper;
+
 static double NowSec() {
-  struct timespec ts;
-  clock_gettime(CLOCK_MONOTONIC, &ts);
-  return ts.tv_sec + ts.tv_nsec * 1e-9;
+  struct timespec ts{};
+  if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) {
+    return 0.0;
+  }
+  return ts.tv_sec + (ts.tv_nsec * 1e-9);
 }
 
 static double SafeOpsPerSec(uint64_t ops, double elapsed_sec) {
@@ -130,6 +149,81 @@ static bool TreeCounts(int depth, int width, uint64_t* dirs, uint64_t* leaves) {
   return true;
 }
 
+static int StatusToErrno(const Status& s) {
+  if (s.ok()) return 0;
+  return -s.ToSysErrNo();
+}
+
+// /a/b/c -> c
+static std::string BaseName(const std::string& path) {
+  size_t slash = path.rfind('/');
+  if (slash == std::string::npos) return path;
+  return path.substr(slash + 1);
+}
+
+// /a/b/c -> /a/b
+static std::string DirName(const std::string& path) {
+  size_t slash = path.rfind('/');
+  if (slash == std::string::npos) return ".";
+  if (slash == 0) return "/";
+  return path.substr(0, slash);
+}
+
+// Split an absolute path into components. Leading/trailing '/' are ignored and
+// empty components (from consecutive slashes) are skipped.
+static std::vector<std::string> SplitPath(const std::string& path) {
+  std::vector<std::string> parts;
+  size_t i = 0;
+  while (i < path.size() && path[i] == '/') i++;
+  while (i < path.size()) {
+    size_t j = path.find('/', i);
+    if (j == std::string::npos) {
+      parts.push_back(path.substr(i));
+      break;
+    }
+    parts.push_back(path.substr(i, j - i));
+    i = j + 1;
+    while (i < path.size() && path[i] == '/') i++;
+  }
+  return parts;
+}
+
+// Resolve an absolute path to its inode. Returns 0 on success, -errno on
+// failure.
+static int ResolvePath(VFSWrapper* vfs, const std::string& path, Ino* ino) {
+  std::vector<std::string> parts = SplitPath(path);
+  Ino parent = dingofs::kRootIno;
+  for (const auto& name : parts) {
+    Attr attr;
+    Status s = vfs->Lookup(parent, name, &attr);
+    if (!s.ok()) {
+      LOG(ERROR) << fmt::format("resolve path fail, path({}) error({}).", path,
+                                s.ToString());
+      return StatusToErrno(s);
+    }
+    parent = attr.ino;
+  }
+  *ino = parent;
+  return 0;
+}
+
+// Resolve the parent directory of `path` and extract the final component name.
+static int ResolveParent(VFSWrapper* vfs, const std::string& path,
+                         Ino* parent_ino, std::string* name) {
+  if (path.empty() || path[0] != '/') return -EINVAL;
+
+  size_t end = path.size();
+  while (end > 1 && path[end - 1] == '/') end--;
+  size_t slash = path.rfind('/', end - 1);
+  if (slash == std::string::npos) return -EINVAL;
+
+  std::string parent_path = (slash == 0) ? "/" : path.substr(0, slash);
+  *name = path.substr(slash + 1, end - slash - 1);
+
+  if (name->empty()) return -EINVAL;
+  return ResolvePath(vfs, parent_path, parent_ino);
+}
+
 // ---------------------------------------------------------------------------
 // Index-based tree spec — replaces TreePaths/GenerateTree.
 //
@@ -147,8 +241,15 @@ struct TreeSpec {
   int files_per_leaf;
   std::vector<uint64_t> pow_width;  // pow_width[k] = width^k
 
+  mutable std::unique_ptr<dingofs::utils::RWLock> lock_;
+  std::unordered_map<std::string, Ino> dir_ino_map;
+
   TreeSpec(std::string r, int d, int w, int f)
-      : root(std::move(r)), depth(d), width(w), files_per_leaf(f) {
+      : root(std::move(r)),
+        depth(d),
+        width(w),
+        files_per_leaf(f),
+        lock_(std::make_unique<dingofs::utils::RWLock>()) {
     pow_width.resize(d + 1);
     pow_width[0] = 1;
     for (int k = 1; k <= d; k++) pow_width[k] = pow_width[k - 1] * w;
@@ -176,8 +277,33 @@ struct TreeSpec {
   // tree.
   std::string FilePath(uint64_t global_idx) const {
     uint64_t leaf_idx = global_idx / static_cast<uint64_t>(files_per_leaf);
-    int file_idx = static_cast<int>(global_idx % files_per_leaf);
+    uint64_t file_idx = global_idx % files_per_leaf;
     return DirPath(depth - 1, leaf_idx) + "/f" + std::to_string(file_idx);
+  }
+
+  void SaveDirIno(const std::string& path, Ino ino) {
+    dingofs::utils::WriteLockGuard lk(*lock_);
+
+    dir_ino_map[path] = ino;
+    LOG(INFO) << "Saved ino " << ino << " for dir " << path;
+  }
+
+  Ino ResolveParent(VFSWrapper* vfs, const std::string& path) {
+    const std::string dir_path = DirName(path);
+
+    {
+      dingofs::utils::ReadLockGuard lk(*lock_);
+
+      auto it = dir_ino_map.find(dir_path);
+      if (it != dir_ino_map.end()) return it->second;
+    }
+
+    Ino ino;
+    CHECK(ResolvePath(vfs, dir_path, &ino) == 0)
+        << fmt::format("resolve parent dir fail, path({}).", dir_path);
+    SaveDirIno(dir_path, ino);
+
+    return ino;
   }
 };
 
@@ -256,17 +382,82 @@ struct ThreadResult {
   std::string error_path;  // path of first error
 };
 
-static int CreateDir(uintptr_t h, const std::string& path) {
-  // return dingofs_mkdir(h, path.c_str(), 0755);
-  return 0;
+static int CreateDir(VFSWrapper* vfs, const std::string& path) {
+  Ino parent;
+  std::string name;
+  int rc = ResolveParent(vfs, path, &parent, &name);
+  if (rc != 0) return rc;
+  Attr attr;
+  Status s = vfs->MkDir(parent, name, getuid(), getgid(), 0755, &attr);
+  if (!s.ok()) {
+    LOG(ERROR) << fmt::format("create dir fail, parent({}) name({}) error({}).",
+                              parent, name, s.ToString());
+  }
+
+  return StatusToErrno(s);
 }
 
-static int CreateEmptyFile(uintptr_t h, const std::string& path) {
-  // int fd = dingofs_open(h, path.c_str(), O_CREAT | O_WRONLY | O_EXCL, 0644);
-  // if (fd < 0) return fd;
-  // return dingofs_close(h, fd);
+static int CreateDir(VFSWrapper* vfs, Ino parent, const std::string& name,
+                     Ino& ino) {
+  CHECK(parent != 0) << "Invalid parent inode 0 for " << name;
 
-  return 0;
+  Attr attr;
+  Status s = vfs->MkDir(parent, name, getuid(), getgid(), 0755, &attr);
+  if (!s.ok()) {
+    LOG(ERROR) << fmt::format("create dir fail, parent({}) name({}) error({}).",
+                              parent, name, s.ToString());
+  }
+
+  ino = attr.ino;
+
+  return StatusToErrno(s);
+}
+
+static int UnlinkPath(VFSWrapper* vfs, const std::string& path) {
+  Ino parent;
+  std::string name;
+  int rc = ResolveParent(vfs, path, &parent, &name);
+  if (rc != 0) return rc;
+  Status s = vfs->Unlink(parent, name);
+  if (!s.ok()) {
+    LOG(ERROR) << fmt::format("unlink fail, parent({}) name({}) error({}).",
+                              parent, name, s.ToString());
+  }
+  return StatusToErrno(s);
+}
+
+static int RemoveDir(VFSWrapper* vfs, const std::string& path) {
+  Ino parent;
+  std::string name;
+  int rc = ResolveParent(vfs, path, &parent, &name);
+  if (rc != 0) return rc;
+  Status s = vfs->RmDir(parent, name);
+  if (!s.ok()) {
+    LOG(ERROR) << fmt::format("rmdir fail, parent({}) name({}) error({}).",
+                              parent, name, s.ToString());
+  }
+
+  return StatusToErrno(s);
+}
+
+static int CreateEmptyFile(VFSWrapper* vfs, Ino parent,
+                           const std::string& name) {
+  CHECK(parent != 0) << "Invalid parent inode 0 for " << name;
+
+  uint64_t fh = 0;
+  Attr attr;
+  Status s = vfs->Create(parent, name, getuid(), getgid(), 0644,
+                         O_CREAT | O_WRONLY | O_EXCL, &fh, &attr);
+  if (!s.ok()) {
+    LOG(ERROR) << fmt::format(
+        "create file fail, parent({}) name({}) error({}).", parent, name,
+        s.ToString());
+    return StatusToErrno(s);
+  }
+
+  s = vfs->Release(attr.ino, fh);
+
+  return StatusToErrno(s);
 }
 
 // ---------------------------------------------------------------------------
@@ -280,7 +471,7 @@ static int CreateEmptyFile(uintptr_t h, const std::string& path) {
 // unique mode: thread i creates its whole subtree (BFS order).
 // On error the thread records it and stops; other threads keep going
 // (the thread still participates in all barriers to avoid deadlock).
-static void UniqueWorker(uintptr_t h, const TreeSpec* spec,
+static void UniqueWorker(VFSWrapper* vfs, TreeSpec* spec,
                          pthread_barrier_t* barrier,
                          ProgressTracker* dir_progress,
                          ProgressTracker* file_progress, ThreadResult* result) {
@@ -290,12 +481,23 @@ static void UniqueWorker(uintptr_t h, const TreeSpec* spec,
     uint64_t count = spec->DirsAtLevel(d);
     for (uint64_t i = 0; i < count; i++) {
       std::string path = spec->DirPath(d, i);
-      int rc = CreateDir(h, path);
+      std::string name = BaseName(path);
+      Ino parent = spec->ResolveParent(vfs, path);
+      CHECK(parent != 0) << "Parent directory not found for " << path;
+
+      Ino ino;
+      int rc = CreateDir(vfs, parent, name, ino);
       if (rc != 0) {
+        LOG(ERROR) << fmt::format(
+            "create dir fail, thread({}) path({}) error({}).",
+            result->thread_id, path, strerror(-rc));
+
         result->error_code = rc;
         result->error_path = std::move(path);
         break;
       }
+      spec->SaveDirIno(path, ino);
+
       result->dir_ops++;
       dir_progress->Add(1);
     }
@@ -308,10 +510,18 @@ static void UniqueWorker(uintptr_t h, const TreeSpec* spec,
     uint64_t total = spec->TotalFiles();
     for (uint64_t g = 0; g < total; g++) {
       std::string path = spec->FilePath(g);
-      int rc = CreateEmptyFile(h, path);
+      Ino parent = spec->ResolveParent(vfs, path);
+      std::string name = BaseName(path);
+      CHECK(parent != 0) << fmt::format("not found parent directory, path({}).",
+                                        path);
+
+      int rc = CreateEmptyFile(vfs, parent, name);
       if (rc != 0) {
+        LOG(ERROR) << fmt::format(
+            "create file fail, thread({}) path({}) error({}).",
+            result->thread_id, name, strerror(-rc));
         result->error_code = rc;
-        result->error_path = std::move(path);
+        result->error_path = std::move(name);
         break;
       }
       result->file_ops++;
@@ -335,7 +545,7 @@ struct SharedWork {
   }
 };
 
-static void SharedWorker(uintptr_t h, const TreeSpec* spec, SharedWork* work,
+static void SharedWorker(VFSWrapper* vfs, TreeSpec* spec, SharedWork* work,
                          pthread_barrier_t* barrier,
                          ProgressTracker* dir_progress,
                          ProgressTracker* file_progress, ThreadResult* result) {
@@ -349,12 +559,23 @@ static void SharedWorker(uintptr_t h, const TreeSpec* spec, SharedWork* work,
             work->dir_cursors[d].fetch_add(1, std::memory_order_relaxed);
         if (idx >= count) break;
         std::string path = spec->DirPath(d, idx);
-        int rc = CreateDir(h, path);
+        Ino parent = spec->ResolveParent(vfs, path);
+        CHECK(parent != 0) << fmt::format(
+            "not found parent directory, path({}).", path);
+
+        std::string name = BaseName(path);
+        Ino ino = 0;
+        int rc = CreateDir(vfs, parent, name, ino);
         if (rc != 0) {
+          LOG(ERROR) << fmt::format(
+              "create dir fail, thread({}) path({}) error({}).",
+              result->thread_id, path, strerror(-rc));
           result->error_code = rc;
           result->error_path = std::move(path);
           break;
         }
+        spec->SaveDirIno(path, ino);
+
         result->dir_ops++;
         dir_progress->Add(1);
       }
@@ -372,11 +593,20 @@ static void SharedWorker(uintptr_t h, const TreeSpec* spec, SharedWork* work,
     for (;;) {
       uint64_t g = work->file_cursor.fetch_add(1, std::memory_order_relaxed);
       if (g >= total) break;
+
       std::string path = spec->FilePath(g);
-      int rc = CreateEmptyFile(h, path);
+      Ino parent = spec->ResolveParent(vfs, path);
+      std::string name = BaseName(path);
+      CHECK(parent != 0) << fmt::format("not found parent directory, path({}).",
+                                        path);
+
+      int rc = CreateEmptyFile(vfs, parent, name);
       if (rc != 0) {
+        LOG(ERROR) << fmt::format(
+            "create file fail, thread({}) path({}) error({}).",
+            result->thread_id, name, strerror(-rc));
         result->error_code = rc;
-        result->error_path = std::move(path);
+        result->error_path = std::move(name);
         break;
       }
       result->file_ops++;
@@ -392,35 +622,43 @@ static void SharedWorker(uintptr_t h, const TreeSpec* spec, SharedWork* work,
 // Returns 0 on success, first -errno on failure.
 // ---------------------------------------------------------------------------
 
-static int RemoveTreeRecursive(uintptr_t h, const std::string& path) {
-  uint64_t dh = 0;
-  int rc = dingofs_opendir(h, path.c_str(), &dh);
+static int RemoveTreeRecursive(VFSWrapper* vfs, const std::string& path) {
+  Ino dir_ino;
+  int rc = ResolvePath(vfs, path, &dir_ino);
   if (rc != 0) return rc;
 
-  int first_err = 0;
-  dingofs_dirent_t entries[128];
-  for (;;) {
-    int n =
-        dingofs_readdir(h, dh, entries, sizeof(entries) / sizeof(entries[0]));
-    if (n < 0) {
-      first_err = n;
-      break;
-    }
-    if (n == 0) break;
-    for (int i = 0; i < n; i++) {
-      const char* name = entries[i].d_name;
-      if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) continue;
-      std::string child = path + "/" + name;
-      int crc = (entries[i].d_type == DT_DIR)
-                    ? RemoveTreeRecursive(h, child)
-                    : dingofs_unlink(h, child.c_str());
-      if (crc != 0 && first_err == 0) first_err = crc;
-    }
+  uint64_t fh = 0;
+  bool need_cache = false;
+  Status s = vfs->OpenDir(dir_ino, &fh, need_cache);
+  if (!s.ok()) return StatusToErrno(s);
+
+  std::vector<DirEntry> entries;
+  dingofs::ReadDirHandler handler = [&](const DirEntry& entry,
+                                        uint64_t offset) -> bool {
+    (void)offset;
+    if (entry.name == "." || entry.name == "..") return true;
+    entries.push_back(entry);
+    return true;
+  };
+
+  s = vfs->ReadDir(dir_ino, fh, 0, true, handler);
+  if (!s.ok()) {
+    vfs->ReleaseDir(dir_ino, fh);
+    return StatusToErrno(s);
   }
-  dingofs_closedir(h, dh);
+  vfs->ReleaseDir(dir_ino, fh);
+
+  int first_err = 0;
+  for (const auto& entry : entries) {
+    std::string child = path + "/" + entry.name;
+    int crc = (entry.attr.type == dingofs::kDirectory)
+                  ? RemoveTreeRecursive(vfs, child)
+                  : UnlinkPath(vfs, child);
+    if (crc != 0 && first_err == 0) first_err = crc;
+  }
 
   if (first_err != 0) return first_err;
-  return dingofs_rmdir(h, path.c_str());
+  return RemoveDir(vfs, path);
 }
 
 // ---------------------------------------------------------------------------
@@ -509,29 +747,36 @@ int main(int argc, char** argv) {
   std::cout << "  total files: " << total_files << "\n";
   std::cout << "\n";
 
-  // ---- Mount ----
-  uintptr_t h = dingofs_new();
-  dingofs_conf_set(h, "log.dir", FLAGS_bench_log_dir.c_str());
-  dingofs_conf_set(h, "log.level", FLAGS_bench_log_level.c_str());
+  // ---- Configure logging before VFSWrapper starts ----
+  FLAGS_log_dir = FLAGS_bench_log_dir;
+  dingofs::FLAGS_log_level = FLAGS_bench_log_level;
 
   if (!FLAGS_bench_conf.empty()) {
-    int rc = dingofs_conf_load(h, FLAGS_bench_conf.c_str());
-    if (rc != 0) {
-      std::cerr << "Failed to load config " << FLAGS_bench_conf << ": " << rc
-                << "\n";
-      dingofs_delete(h);
+    if (!gflags::ReadFromFlagsFile(FLAGS_bench_conf, argv[0], true)) {
+      std::cerr << "Failed to load config " << FLAGS_bench_conf << "\n";
       return 1;
     }
   }
 
+  // init global log
+  dingofs::Logger::Init("dingo-mdtest-bench");
+
+  // ---- Mount ----
+  auto vfs = std::make_unique<VFSWrapper>();
+  DingofsConfig config;
+  config.mds_addrs = FLAGS_bench_mds_addr;
+  config.fs_name = FLAGS_bench_fs_name;
+  config.mount_point = FLAGS_bench_mount_point;
+  config.metasystem_type =
+      dingofs::MetaSystemTypeToString(dingofs::MetaSystemType::MDS);
+  config.storage_info = "";
+  config.subdir = "/";
+
   std::cout << "Mounting " << FLAGS_bench_mds_addr << "/" << FLAGS_bench_fs_name
             << " ...\n";
-  int rc = dingofs_mount(h, FLAGS_bench_mds_addr.c_str(),
-                         FLAGS_bench_fs_name.c_str(),
-                         FLAGS_bench_mount_point.c_str());
-  if (rc != 0) {
-    std::cerr << "Mount failed: " << rc << "\n";
-    dingofs_delete(h);
+  Status s = vfs->Start(config);
+  if (!s.ok()) {
+    std::cerr << "Mount failed: " << s.ToString() << "\n";
     return 1;
   }
 
@@ -548,8 +793,8 @@ int main(int argc, char** argv) {
 
   bool has_residue = false;
   for (const auto& root : roots) {
-    struct stat st;
-    if (dingofs_stat(h, root.c_str(), &st) == 0) {
+    Ino ino;
+    if (ResolvePath(vfs.get(), root, &ino) == 0) {
       has_residue = true;
       break;
     }
@@ -559,20 +804,18 @@ int main(int argc, char** argv) {
       std::cerr << "Error: residual tree from a previous run exists under "
                 << FLAGS_bench_dir
                 << ". Re-run with --bench_force to remove it first.\n";
-      dingofs_umount(h);
-      dingofs_delete(h);
+      vfs->Stop();
       return 1;
     }
     std::cout << "Removing residual tree (--bench_force) ...\n";
     for (const auto& root : roots) {
-      struct stat st;
-      if (dingofs_stat(h, root.c_str(), &st) != 0) continue;
-      int rrc = RemoveTreeRecursive(h, root);
+      Ino ino;
+      if (ResolvePath(vfs.get(), root, &ino) != 0) continue;
+      int rrc = RemoveTreeRecursive(vfs.get(), root);
       if (rrc != 0) {
         std::cerr << "Failed to remove residual " << root << ": " << rrc
                   << "\n";
-        dingofs_umount(h);
-        dingofs_delete(h);
+        vfs->Stop();
         return 1;
       }
     }
@@ -580,13 +823,12 @@ int main(int argc, char** argv) {
 
   // ---- Pre-create untimed roots serially (avoids MDS TxnWriteConflict
   // on the parent inode, same as write_bench) ----
-  dingofs_mkdir(h, FLAGS_bench_dir.c_str(), 0755);  // may already exist
+  CreateDir(vfs.get(), FLAGS_bench_dir);  // may already exist
   for (const auto& root : roots) {
-    rc = dingofs_mkdir(h, root.c_str(), 0755);
+    int rc = CreateDir(vfs.get(), root);
     if (rc != 0) {
       std::cerr << "Failed to create root " << root << ": " << rc << "\n";
-      dingofs_umount(h);
-      dingofs_delete(h);
+      vfs->Stop();
       return 1;
     }
   }
@@ -617,12 +859,12 @@ int main(int argc, char** argv) {
   workers.reserve(nthreads);
   for (int i = 0; i < nthreads; i++) {
     if (shared_mode) {
-      workers.emplace_back(SharedWorker, h, &specs[0], shared_work.get(),
-                           &barrier, &dir_progress, &file_progress,
-                           &results[i]);
-    } else {
-      workers.emplace_back(UniqueWorker, h, &specs[i], &barrier, &dir_progress,
+      workers.emplace_back(SharedWorker, vfs.get(), specs.data(),
+                           shared_work.get(), &barrier, &dir_progress,
                            &file_progress, &results[i]);
+    } else {
+      workers.emplace_back(UniqueWorker, vfs.get(), &specs[i], &barrier,
+                           &dir_progress, &file_progress, &results[i]);
     }
   }
 
@@ -683,20 +925,19 @@ int main(int argc, char** argv) {
   if (FLAGS_bench_cleanup) {
     std::cout << "\nCleaning up ...\n";
     for (const auto& root : roots) {
-      int crc = RemoveTreeRecursive(h, root);
+      int crc = RemoveTreeRecursive(vfs.get(), root);
       if (crc != 0) {
         std::cerr << "Warning: cleanup of " << root << " failed: " << crc
                   << "\n";
       }
     }
-    dingofs_rmdir(h, FLAGS_bench_dir.c_str());  // best effort
+    RemoveDir(vfs.get(), FLAGS_bench_dir);  // best effort
   } else {
     std::cout << "\nCleanup skipped; tree left under " << FLAGS_bench_dir
               << "\n";
   }
 
-  dingofs_umount(h);
-  dingofs_delete(h);
+  vfs->Stop();
 
   return nerrors > 0 ? 1 : 0;
 }

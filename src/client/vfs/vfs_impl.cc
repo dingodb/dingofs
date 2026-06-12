@@ -27,12 +27,12 @@
 
 #include "client/common/const.h"
 #include "client/vfs/common/helper.h"
+#include "client/vfs/components/uid_gid_mapper.h"
 #include "client/vfs/components/warmup_manager.h"
 #include "client/vfs/data/reader/file_reader.h"
 #include "client/vfs/data/writer/file_writer.h"
 #include "client/vfs/data_buffer.h"
 #include "client/vfs/handle/handle_manager.h"
-#include "client/vfs/components/uid_gid_mapper.h"
 #include "client/vfs/vfs_fh.h"
 #include "client/vfs/vfs_xattr.h"
 #include "common/blockaccess/accesser_common.h"
@@ -61,8 +61,7 @@ namespace vfs {
 
 // Translate a single host-local uid/gid to the hashed id used by MDS
 // (client->mds).
-static uint32_t LocalIdToHashedId(UidGidMapper* mapper,
-                                  UidGidMapper::Kind kind,
+static uint32_t LocalIdToHashedId(UidGidMapper* mapper, UidGidMapper::Kind kind,
                                   uint32_t local_id) {
   return mapper != nullptr ? mapper->LocalIdToHashedId(kind, local_id)
                            : local_id;
@@ -84,8 +83,8 @@ void VFSImpl::TranslateAttrToLocal(Attr* attr) const {
   mapper->HashedPairToLocal(attr->uid, attr->gid, attr->uid, attr->gid);
 }
 
-void VFSImpl::LocalPairToHashed(uint32_t uid, uint32_t gid,
-                                uint32_t& out_uid, uint32_t& out_gid) const {
+void VFSImpl::LocalPairToHashed(uint32_t uid, uint32_t gid, uint32_t& out_uid,
+                                uint32_t& out_gid) const {
   auto* mapper = vfs_hub_->GetUidGidMapper();
   if (mapper == nullptr) {
     out_uid = uid;
@@ -99,7 +98,7 @@ VFSImpl::VFSImpl(const VFSConfig& vfs_conf, const ClientId& client_id)
     : client_id_(client_id),
       mount_root_path_(
           vfs_conf.mount_root_path.empty() ? "/" : vfs_conf.mount_root_path),
-      vfs_hub_(std::make_unique<VFSHubImpl>(vfs_conf, client_id_)){};
+      vfs_hub_(std::make_unique<VFSHubImpl>(vfs_conf, client_id_)) {};
 
 VFSImpl::VFSImpl(std::unique_ptr<VFSHub> hub)
     : client_id_(), vfs_hub_(std::move(hub)) {
@@ -755,6 +754,10 @@ Status VFSImpl::Fsync(ContextSPtr ctx, Ino ino, int datasync, uint64_t fh) {
 
   if (handle->writer != nullptr) {
     s = handle->writer->Flush();
+  }
+
+  if (datasync == 0) {
+    s = meta_system_->Flush(ctx, ino, fh);
   }
 
   return s;

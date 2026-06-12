@@ -20,6 +20,7 @@ add_executable(dingo-mdtest-bench
 target_link_libraries(dingo-mdtest-bench
   PROTO_OBJS
 
+  vfs_lib
   dingofs_common
 
   brpc::brpc
