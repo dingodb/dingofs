@@ -33,7 +33,6 @@ add_subdirectory(storage)
 add_subdirectory(background)
 add_subdirectory(statistics)
 add_subdirectory(quota)
-add_subdirectory(client)
 add_subdirectory(cachegroup)
 
 add_library(mds_lib

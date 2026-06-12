@@ -13,9 +13,18 @@
 # limitations under the License.
 
 
-add_subdirectory(utils)
-add_subdirectory(common)
-add_subdirectory(cache)
-add_subdirectory(client)
-add_subdirectory(mds)
-add_subdirectory(tools)
+add_executable(dingo-mdtest-bench
+  mdtest_bench.cc
+)
+
+target_link_libraries(dingo-mdtest-bench
+  PROTO_OBJS
+
+  dingofs_common
+
+  brpc::brpc
+  fmt::fmt
+  gflags::gflags
+  glog::glog
+  OpenSSL::SSL
+)
