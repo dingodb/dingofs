@@ -21,13 +21,15 @@
 #include "common/const.h"
 #include "common/flag.h"
 #include "gflags/gflags.h"
-#include "mds/client/br.h"
-#include "mds/client/mds.h"
-#include "mds/client/store.h"
 #include "mds/common/codec.h"
 #include "mds/common/helper.h"
+#include "tools/mds-cli/br.h"
+#include "tools/mds-cli/mds.h"
+#include "tools/mds-cli/store.h"
 
-DEFINE_string(coor_addr, "", "coordinator address, etc: list://127.0.0.1:22001 or file://./coor_list");
+DEFINE_string(
+    coor_addr, "",
+    "coordinator address, etc: list://127.0.0.1:22001 or file://./coor_list");
 DEFINE_string(mds_addr, "", "mds address");
 
 DEFINE_string(cmd, "", "command");
@@ -86,16 +88,23 @@ DEFINE_string(storage_path, "", "local storage path");
 DEFINE_string(storage_engine, "dingo-store", "storage engine");
 
 // Trash restore (`restoretrash` subcommand).
-DEFINE_string(hours, "", "comma-separated trash hour buckets to restore, e.g. 2026-04-05-14,2026-04-05-15 (UTC)");
-DEFINE_bool(put_back, false, "if true, restore files back to their original directories");
+DEFINE_string(hours, "",
+              "comma-separated trash hour buckets to restore, e.g. "
+              "2026-04-05-14,2026-04-05-15 (UTC)");
+DEFINE_bool(put_back, false,
+            "if true, restore files back to their original directories");
 DEFINE_uint32(restore_threads, 10, "concurrency for trash restore workers");
-DEFINE_uint32(trash_days, 0,
-              "per-fs trash retention in days: deleted files are kept in trash for this many days before GC; "
-              "0 means trash disabled. Applied at createfs and at updatefs trash_days.");
-DEFINE_bool(immediate_trash_quota, true,
-            "per-fs: when true, trash-move immediately debits the parent/ancestor per-dir quota "
-            "(credited back on restore); when false, the debit is deferred to GC. "
-            "Applied at createfs only and immutable thereafter.");
+DEFINE_uint32(
+    trash_days, 0,
+    "per-fs trash retention in days: deleted files are kept in trash for this "
+    "many days before GC; "
+    "0 means trash disabled. Applied at createfs and at updatefs trash_days.");
+DEFINE_bool(
+    immediate_trash_quota, true,
+    "per-fs: when true, trash-move immediately debits the parent/ancestor "
+    "per-dir quota "
+    "(credited back on restore); when false, the debit is deferred to GC. "
+    "Applied at createfs only and immutable thereafter.");
 
 DEFINE_bool(enable_uid_gid_map, true,
             "per-fs: when true, client hashes local user/group names into "
@@ -107,7 +116,8 @@ static std::string GetDefaultCoorAddrPath() {
     return FLAGS_coor_addr;
   }
 
-  std::vector<std::string> paths = {"./coor_list", "./conf/coor_list", "./bin/coor_list"};
+  std::vector<std::string> paths = {"./coor_list", "./conf/coor_list",
+                                    "./bin/coor_list"};
   for (const auto& path : paths) {
     if (dingofs::mds::Helper::IsExistPath(path)) {
       return "file://" + path;
@@ -172,7 +182,8 @@ int main(int argc, char* argv[]) {
     s3_info.bucket_name = FLAGS_s3_bucketname;
     s3_info.object_name = FLAGS_s3_objectname;
 
-    if (dingofs::mds::br::BackupCommandRunner::Run(options, GetDefaultCoorAddrPath(), lower_cmd)) {
+    if (dingofs::mds::br::BackupCommandRunner::Run(
+            options, GetDefaultCoorAddrPath(), lower_cmd)) {
       return 0;
     }
   }
@@ -195,7 +206,8 @@ int main(int argc, char* argv[]) {
     s3_info.bucket_name = FLAGS_s3_bucketname;
     s3_info.object_name = FLAGS_s3_objectname;
 
-    if (dingofs::mds::br::RestoreCommandRunner::Run(options, GetDefaultCoorAddrPath(), lower_cmd)) {
+    if (dingofs::mds::br::RestoreCommandRunner::Run(
+            options, GetDefaultCoorAddrPath(), lower_cmd)) {
       return 0;
     }
   }
@@ -254,7 +266,8 @@ int main(int argc, char* argv[]) {
     rados_info.key = FLAGS_rados_key;
     rados_info.cluster_name = FLAGS_rados_cluster_name;
 
-    if (dingofs::mds::client::MdsCommandRunner::Run(options, FLAGS_mds_addr, lower_cmd, FLAGS_fs_id)) {
+    if (dingofs::mds::client::MdsCommandRunner::Run(options, FLAGS_mds_addr,
+                                                    lower_cmd, FLAGS_fs_id)) {
       return 0;
     }
   }
@@ -265,8 +278,10 @@ int main(int argc, char* argv[]) {
     options.cluster_id = FLAGS_cluster_id;
     options.fs_id = FLAGS_fs_id;
     options.fs_name = FLAGS_fs_name;
-    options.meta_table_name = fmt::format("{}[{}]", dingofs::kMetaTableName, FLAGS_cluster_id);
-    options.fsstats_table_name = fmt::format("{}[{}]", dingofs::kFsStatsTableName, FLAGS_cluster_id);
+    options.meta_table_name =
+        fmt::format("{}[{}]", dingofs::kMetaTableName, FLAGS_cluster_id);
+    options.fsstats_table_name =
+        fmt::format("{}[{}]", dingofs::kFsStatsTableName, FLAGS_cluster_id);
     options.storage_engine = FLAGS_storage_engine;
 
     auto& s3_info = options.s3_info;
@@ -283,7 +298,8 @@ int main(int argc, char* argv[]) {
     rados_info.key = FLAGS_rados_key;
     rados_info.cluster_name = FLAGS_rados_cluster_name;
 
-    dingofs::mds::client::StoreCommandRunner::Run(options, GetDefaultCoorAddrPath(), lower_cmd);
+    dingofs::mds::client::StoreCommandRunner::Run(
+        options, GetDefaultCoorAddrPath(), lower_cmd);
   }
 
   return 0;

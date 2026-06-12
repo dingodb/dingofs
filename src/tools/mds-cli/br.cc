@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "mds/client/br.h"
+#include "tools/mds-cli/br.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -57,7 +57,8 @@ using FileInputUPtr = std::unique_ptr<FileInput>;
 
 // encode/decode key/value
 // format: key length|value length|key|value
-static std::string EncodeKeyValue(const std::string& key, const std::string& value) {
+static std::string EncodeKeyValue(const std::string& key,
+                                  const std::string& value) {
   std::string encoded;
   encoded.reserve(4 + 4 + key.size() + value.size());
 
@@ -74,11 +75,13 @@ static std::string EncodeKeyValue(const std::string& key, const std::string& val
   return encoded;
 }
 
-static bool DecodeKeyValue(const std::string& encoded, size_t& offset, std::string& key, std::string& value) {
+static bool DecodeKeyValue(const std::string& encoded, size_t& offset,
+                           std::string& key, std::string& value) {
   if (encoded.size() < offset + 8) return false;
 
   // parse key length
-  uint32_t key_length = *reinterpret_cast<const uint32_t*>(encoded.data() + offset);
+  uint32_t key_length =
+      *reinterpret_cast<const uint32_t*>(encoded.data() + offset);
   offset += 4;
 
   if (encoded.size() < offset + key_length + 4) return false;
@@ -86,7 +89,8 @@ static bool DecodeKeyValue(const std::string& encoded, size_t& offset, std::stri
   offset += key_length;
 
   // parse value length
-  uint32_t value_length = *reinterpret_cast<const uint32_t*>(encoded.data() + offset);
+  uint32_t value_length =
+      *reinterpret_cast<const uint32_t*>(encoded.data() + offset);
   offset += 4;
 
   if (encoded.size() < offset + value_length) return false;
@@ -101,17 +105,21 @@ class StdOutput : public Output {
  public:
   StdOutput(bool is_binary = false) : is_binary_(is_binary) {}
 
-  static StdOutputUPtr New(bool is_binary = false) { return std::make_unique<StdOutput>(is_binary); }
+  static StdOutputUPtr New(bool is_binary = false) {
+    return std::make_unique<StdOutput>(is_binary);
+  }
 
   bool Init() override { return true; }
 
   void Append(const std::string& key, const std::string& value) override {
     if (is_binary_) {
-      std::cout << Helper::StringToHex(key) << ": " << Helper::StringToHex(value) << "\n";
+      std::cout << Helper::StringToHex(key) << ": "
+                << Helper::StringToHex(value) << "\n";
 
     } else {
       auto desc = MetaCodec::ParseKey(key, value);
-      std::cout << fmt::format("{}. key({}) value({})\n", ++count_, desc.first, desc.second);
+      std::cout << fmt::format("{}. key({}) value({})\n", ++count_, desc.first,
+                               desc.second);
     }
   }
 
@@ -135,10 +143,14 @@ class FileOutput : public Output {
     if (file_stream_.is_open()) file_stream_.close();
   }
 
-  static FileOutputUPtr New(const std::string& file_path) { return std::make_unique<FileOutput>(file_path); }
+  static FileOutputUPtr New(const std::string& file_path) {
+    return std::make_unique<FileOutput>(file_path);
+  }
 
   bool Init() override { return true; }
-  void Append(const std::string& key, const std::string& value) override { file_stream_ << EncodeKeyValue(key, value); }
+  void Append(const std::string& key, const std::string& value) override {
+    file_stream_ << EncodeKeyValue(key, value);
+  }
 
   void Flush() override { file_stream_.flush(); }
 
@@ -150,13 +162,17 @@ class FileOutput : public Output {
 static blockaccess::BlockAccesserSPtr NewBlockAccesser(const S3Info& s3_info) {
   blockaccess::BlockAccessOptions options;
   options.type = blockaccess::AccesserType::kS3;
-  options.s3_options.s3_info = blockaccess::S3Info{
-      .ak = s3_info.ak, .sk = s3_info.sk, .endpoint = s3_info.endpoint, .bucket_name = s3_info.bucket_name};
+  options.s3_options.s3_info =
+      blockaccess::S3Info{.ak = s3_info.ak,
+                          .sk = s3_info.sk,
+                          .endpoint = s3_info.endpoint,
+                          .bucket_name = s3_info.bucket_name};
 
   auto block_accessor = blockaccess::NewShareBlockAccesser(options);
   auto status = block_accessor->Init();
   if (!status.IsOK()) {
-    std::cerr << (fmt::format("init block accesser fail, error({}).", status.ToString()));
+    std::cerr << (fmt::format("init block accesser fail, error({}).",
+                              status.ToString()));
     return nullptr;
   }
 
@@ -166,9 +182,13 @@ static blockaccess::BlockAccesserSPtr NewBlockAccesser(const S3Info& s3_info) {
 // output to S3
 class S3Output : public Output {
  public:
-  S3Output(const S3Info& s3_info) : s3_info_(s3_info) { data_.reserve(1024 * 1024); }
+  S3Output(const S3Info& s3_info) : s3_info_(s3_info) {
+    data_.reserve(1024 * 1024);
+  }
 
-  static S3OutputUPtr New(const S3Info& s3_info) { return std::make_unique<S3Output>(s3_info); }
+  static S3OutputUPtr New(const S3Info& s3_info) {
+    return std::make_unique<S3Output>(s3_info);
+  }
 
   bool Init() override {
     // Initialize S3 client and prepare to upload
@@ -177,7 +197,9 @@ class S3Output : public Output {
   }
 
   void Append(const std::string& key, const std::string& value) override {
-    LOG(INFO) << fmt::format("append key({}) value({}).", Helper::StringToHex(key), Helper::StringToHex(value));
+    LOG(INFO) << fmt::format("append key({}) value({}).",
+                             Helper::StringToHex(key),
+                             Helper::StringToHex(value));
     data_.append(EncodeKeyValue(key, value));
   }
 
@@ -200,7 +222,9 @@ class FileInput : public Input {
   explicit FileInput(const std::string& file_path) : file_path_(file_path) {}
   ~FileInput() override = default;
 
-  static InputUPtr New(const std::string& file_path) { return std::make_unique<FileInput>(file_path); }
+  static InputUPtr New(const std::string& file_path) {
+    return std::make_unique<FileInput>(file_path);
+  }
 
   bool Init() override {
     std::ifstream file_stream;
@@ -210,7 +234,8 @@ class FileInput : public Input {
       return false;
     }
 
-    data_ = std::string((std::istreambuf_iterator<char>(file_stream)), std::istreambuf_iterator<char>());
+    data_ = std::string((std::istreambuf_iterator<char>(file_stream)),
+                        std::istreambuf_iterator<char>());
 
     file_stream.close();
 
@@ -240,7 +265,9 @@ class S3Input : public Input {
  public:
   S3Input(const S3Info& s3_info) : s3_info_(s3_info) {}
 
-  static InputUPtr New(const S3Info& s3_info) { return std::make_unique<S3Input>(s3_info); }
+  static InputUPtr New(const S3Info& s3_info) {
+    return std::make_unique<S3Input>(s3_info);
+  }
 
   bool Init() override {
     block_accessor_ = NewBlockAccesser(s3_info_);
@@ -250,7 +277,8 @@ class S3Input : public Input {
 
     auto status = block_accessor_->Get(s3_info_.object_name, &data_);
     if (!status.ok()) {
-      std::cerr << fmt::format("get S3 object fail, error({}).", status.ToString());
+      std::cerr << fmt::format("get S3 object fail, error({}).",
+                               status.ToString());
       return false;
     }
 
@@ -264,7 +292,9 @@ class S3Input : public Input {
       return Status(pb::error::EINTERNAL, "decode key/value fail");
     }
 
-    LOG(INFO) << fmt::format("read key({}) value({}).", Helper::StringToHex(key), Helper::StringToHex(value));
+    LOG(INFO) << fmt::format("read key({}) value({}).",
+                             Helper::StringToHex(key),
+                             Helper::StringToHex(value));
 
     return Status::OK();
   }
@@ -357,49 +387,55 @@ Status Backup::BackupMetaTable(OutputUPtr output) {
   CHECK(output != nullptr) << "output is nullptr.";
 
   uint64_t total_count = 0, lock_count = 0, auto_increment_id_count = 0;
-  uint64_t mds_heartbeat_count = 0, client_heartbeat_count = 0, cache_member_heartbeat_count = 0, fs_count = 0,
-           fs_quota_count = 0, fs_oplog_count = 0;
+  uint64_t mds_heartbeat_count = 0, client_heartbeat_count = 0,
+           cache_member_heartbeat_count = 0, fs_count = 0, fs_quota_count = 0,
+           fs_oplog_count = 0;
 
   Trace trace;
-  ScanMetaTableOperation operation(trace, [&](const std::string& key, const std::string& value) -> bool {
-    output->Append(key, value);
+  ScanMetaTableOperation operation(
+      trace, [&](const std::string& key, const std::string& value) -> bool {
+        output->Append(key, value);
 
-    if (MetaCodec::IsLockKey(key)) {
-      ++lock_count;
-    } else if (MetaCodec::IsAutoIncrementIDKey(key)) {
-      ++auto_increment_id_count;
-    } else if (MetaCodec::IsMdsHeartbeatKey(key)) {
-      ++mds_heartbeat_count;
-    } else if (MetaCodec::IsClientHeartbeatKey(key)) {
-      ++client_heartbeat_count;
-    } else if (MetaCodec::IsCacheMemberHeartbeatKey(key)) {
-      ++cache_member_heartbeat_count;
-    } else if (MetaCodec::IsFsKey(key)) {
-      ++fs_count;
-    } else if (MetaCodec::IsFsQuotaKey(key)) {
-      ++fs_quota_count;
-    } else if (MetaCodec::IsFsOpLogKey(key)) {
-      ++fs_oplog_count;
-    } else {
-      std::cerr << fmt::format("unknown key({}).", Helper::StringToHex(key)) << '\n';
-      return false;
-    }
+        if (MetaCodec::IsLockKey(key)) {
+          ++lock_count;
+        } else if (MetaCodec::IsAutoIncrementIDKey(key)) {
+          ++auto_increment_id_count;
+        } else if (MetaCodec::IsMdsHeartbeatKey(key)) {
+          ++mds_heartbeat_count;
+        } else if (MetaCodec::IsClientHeartbeatKey(key)) {
+          ++client_heartbeat_count;
+        } else if (MetaCodec::IsCacheMemberHeartbeatKey(key)) {
+          ++cache_member_heartbeat_count;
+        } else if (MetaCodec::IsFsKey(key)) {
+          ++fs_count;
+        } else if (MetaCodec::IsFsQuotaKey(key)) {
+          ++fs_quota_count;
+        } else if (MetaCodec::IsFsOpLogKey(key)) {
+          ++fs_oplog_count;
+        } else {
+          std::cerr << fmt::format("unknown key({}).", Helper::StringToHex(key))
+                    << '\n';
+          return false;
+        }
 
-    ++total_count;
+        ++total_count;
 
-    return true;
-  });
+        return true;
+      });
 
   auto status = operation_processor_->RunAlone(&operation);
 
   if (status.ok()) output->Flush();
 
   std::cout << fmt::format(
-      "backup meta table done.\nsummary total_count({}) lock_count({}) auto_increment_id_count({}) "
-      "mds_heartbeat_count({}) client_heartbeat_count({}) cache_member_heartbeat_count({}) fs_count({}) "
+      "backup meta table done.\nsummary total_count({}) lock_count({}) "
+      "auto_increment_id_count({}) "
+      "mds_heartbeat_count({}) client_heartbeat_count({}) "
+      "cache_member_heartbeat_count({}) fs_count({}) "
       "fs_quota_count({}) fs_oplog_count({}).\n",
-      total_count, lock_count, auto_increment_id_count, mds_heartbeat_count, client_heartbeat_count,
-      cache_member_heartbeat_count, fs_count, fs_quota_count, fs_oplog_count);
+      total_count, lock_count, auto_increment_id_count, mds_heartbeat_count,
+      client_heartbeat_count, cache_member_heartbeat_count, fs_count,
+      fs_quota_count, fs_oplog_count);
 
   return status;
 }
@@ -408,46 +444,51 @@ Status Backup::BackupFsMetaTable(uint32_t fs_id, OutputUPtr output) {
   CHECK(output != nullptr) << "output is nullptr.";
 
   uint64_t total_count = 0, inode_count = 0, dentry_count = 0, chunk_count = 0;
-  uint64_t dir_quota_count = 0, file_session_count = 0, del_slice_count = 0, del_file_count = 0;
+  uint64_t dir_quota_count = 0, file_session_count = 0, del_slice_count = 0,
+           del_file_count = 0;
 
   Trace trace;
-  ScanFsMetaTableOperation operation(trace, fs_id, [&](const std::string& key, const std::string& value) -> bool {
-    output->Append(key, value);
+  ScanFsMetaTableOperation operation(
+      trace, fs_id,
+      [&](const std::string& key, const std::string& value) -> bool {
+        output->Append(key, value);
 
-    if (MetaCodec::IsDirQuotaKey(key)) {
-      ++dir_quota_count;
-    } else if (MetaCodec::IsInodeKey(key)) {
-      ++inode_count;
-    } else if (MetaCodec::IsDentryKey(key)) {
-      ++dentry_count;
-    } else if (MetaCodec::IsChunkKey(key)) {
-      ++chunk_count;
-    } else if (MetaCodec::IsFileSessionKey(key)) {
-      ++file_session_count;
-    } else if (MetaCodec::IsDelSliceKey(key)) {
-      ++del_slice_count;
-    } else if (MetaCodec::IsDelFileKey(key)) {
-      ++del_file_count;
-    } else {
-      std::cerr << fmt::format("unknown key({}).", Helper::StringToHex(key)) << '\n';
-      return false;
-    }
+        if (MetaCodec::IsDirQuotaKey(key)) {
+          ++dir_quota_count;
+        } else if (MetaCodec::IsInodeKey(key)) {
+          ++inode_count;
+        } else if (MetaCodec::IsDentryKey(key)) {
+          ++dentry_count;
+        } else if (MetaCodec::IsChunkKey(key)) {
+          ++chunk_count;
+        } else if (MetaCodec::IsFileSessionKey(key)) {
+          ++file_session_count;
+        } else if (MetaCodec::IsDelSliceKey(key)) {
+          ++del_slice_count;
+        } else if (MetaCodec::IsDelFileKey(key)) {
+          ++del_file_count;
+        } else {
+          std::cerr << fmt::format("unknown key({}).", Helper::StringToHex(key))
+                    << '\n';
+          return false;
+        }
 
-    ++total_count;
+        ++total_count;
 
-    return true;
-  });
+        return true;
+      });
 
   auto status = operation_processor_->RunAlone(&operation);
 
   if (status.ok()) output->Flush();
 
   std::cout << fmt::format(
-      "backup fsmeta table done.\n summary total_count({}) inode_count({}) dentry_count({}) chunk_count({}) "
+      "backup fsmeta table done.\n summary total_count({}) inode_count({}) "
+      "dentry_count({}) chunk_count({}) "
       "dir_quota_count({}) "
       "file_session_count({}) del_slice_count({}) del_file_count({}).\n",
-      total_count, inode_count, dentry_count, chunk_count, dir_quota_count, file_session_count, del_slice_count,
-      del_file_count);
+      total_count, inode_count, dentry_count, chunk_count, dir_quota_count,
+      file_session_count, del_slice_count, del_file_count);
 
   return status;
 }
@@ -539,9 +580,12 @@ Status Restore::IsExistFsMetaTable(uint32_t fs_id) {
 Status Restore::CreateMetaTable() {
   int64_t table_id = 0;
   auto range = MetaCodec::GetMetaTableRange();
-  auto status = operation_processor_->CreateTable(kMetaTableName, range, table_id);
+  auto status =
+      operation_processor_->CreateTable(kMetaTableName, range, table_id);
   if (!status.ok()) {
-    return Status(pb::error::EINTERNAL, fmt::format("create meta table fail, {}", status.error_str()));
+    return Status(
+        pb::error::EINTERNAL,
+        fmt::format("create meta table fail, {}", status.error_str()));
   }
 
   return Status::OK();
@@ -550,9 +594,12 @@ Status Restore::CreateMetaTable() {
 Status Restore::CreateFsMetaTable(uint32_t fs_id, const std::string& fs_name) {
   int64_t table_id = 0;
   auto range = MetaCodec::GetFsMetaTableRange(fs_id);
-  auto status = operation_processor_->CreateTable(GenFsMetaTableName(fs_name), range, table_id);
+  auto status = operation_processor_->CreateTable(GenFsMetaTableName(fs_name),
+                                                  range, table_id);
   if (!status.ok()) {
-    return Status(pb::error::EINTERNAL, fmt::format("create fs meta table fail, {}", status.error_str()));
+    return Status(
+        pb::error::EINTERNAL,
+        fmt::format("create fs meta table fail, {}", status.error_str()));
   }
 
   return Status::OK();
@@ -564,7 +611,9 @@ Status Restore::GetFsInfo(uint32_t fs_id, FsInfoEntry& fs_info) {
 
   auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
-    return Status(pb::error::EINTERNAL, fmt::format("scan fs info fail, status({})", status.error_str()));
+    return Status(
+        pb::error::EINTERNAL,
+        fmt::format("scan fs info fail, status({})", status.error_str()));
   }
 
   auto& result = operation.GetResult();
@@ -598,7 +647,8 @@ Status Restore::RestoreMetaTable(InputUPtr input) {
 
   // import meta to table
   uint64_t total_count = 0, lock_count = 0, auto_increment_id_count = 0;
-  uint64_t mds_heartbeat_count = 0, client_heartbeat_count = 0, cache_member_heartbeat_count = 0;
+  uint64_t mds_heartbeat_count = 0, client_heartbeat_count = 0,
+           cache_member_heartbeat_count = 0;
   uint64_t fs_count = 0, fs_quota_count = 0, fs_oplog_count = 0;
 
   std::vector<KeyValue> kvs;
@@ -626,7 +676,9 @@ Status Restore::RestoreMetaTable(InputUPtr input) {
     } else if (MetaCodec::IsFsOpLogKey(kv.key)) {
       ++fs_oplog_count;
     } else {
-      status = Status(pb::error::EINTERNAL, fmt::format("unknown key({}).", Helper::StringToHex(kv.key)));
+      status =
+          Status(pb::error::EINTERNAL,
+                 fmt::format("unknown key({}).", Helper::StringToHex(kv.key)));
       break;
     }
 
@@ -647,22 +699,27 @@ Status Restore::RestoreMetaTable(InputUPtr input) {
   }
 
   std::cout << fmt::format(
-      "restore meta table done.\nsummary total_count({}) lock_count({}) auto_increment_id_count({}) "
-      "mds_heartbeat_count({}) client_heartbeat_count({}) cache_member_heartbeat_count({}) fs_count({}) "
+      "restore meta table done.\nsummary total_count({}) lock_count({}) "
+      "auto_increment_id_count({}) "
+      "mds_heartbeat_count({}) client_heartbeat_count({}) "
+      "cache_member_heartbeat_count({}) fs_count({}) "
       "fs_quota_count({}) fs_oplog_count({}) status({}).\n",
-      total_count, lock_count, auto_increment_id_count, mds_heartbeat_count, client_heartbeat_count,
-      cache_member_heartbeat_count, fs_count, fs_quota_count, fs_oplog_count, status.error_str());
+      total_count, lock_count, auto_increment_id_count, mds_heartbeat_count,
+      client_heartbeat_count, cache_member_heartbeat_count, fs_count,
+      fs_quota_count, fs_oplog_count, status.error_str());
 
   return Status::OK();
 }
 
-Status Restore::RestoreFsMetaTable(uint32_t fs_id, InputUPtr input, bool is_force) {
+Status Restore::RestoreFsMetaTable(uint32_t fs_id, InputUPtr input,
+                                   bool is_force) {
   // get fs info
   FsInfoEntry fs_info;
   auto status = GetFsInfo(fs_id, fs_info);
   if (!status.ok()) return status;
   if (fs_info.status() == pb::mds::FsStatus::RECYCLING) {
-    return Status(pb::error::EINTERNAL, "fs status is recycling, can not restore fs meta table");
+    return Status(pb::error::EINTERNAL,
+                  "fs status is recycling, can not restore fs meta table");
   }
 
   // check fs meta table exist
@@ -677,14 +734,17 @@ Status Restore::RestoreFsMetaTable(uint32_t fs_id, InputUPtr input, bool is_forc
     if (!status.ok()) return status;
   } else {
     if (!is_force) {
-      return Status(pb::error::EINTERNAL, "fs meta table exist, use --is_force to override it");
+      return Status(pb::error::EINTERNAL,
+                    "fs meta table exist, use --is_force to override it");
     }
   }
 
   // import fs meta to table
 
-  uint64_t total_count = 0, dir_quota_count = 0, inode_count = 0, dentry_count = 0;
-  uint64_t chunk_count = 0, file_session_count = 0, del_slice_count = 0, del_file_count = 0;
+  uint64_t total_count = 0, dir_quota_count = 0, inode_count = 0,
+           dentry_count = 0;
+  uint64_t chunk_count = 0, file_session_count = 0, del_slice_count = 0,
+           del_file_count = 0;
 
   std::vector<KeyValue> kvs;
   while (true) {
@@ -709,7 +769,9 @@ Status Restore::RestoreFsMetaTable(uint32_t fs_id, InputUPtr input, bool is_forc
     } else if (MetaCodec::IsDelFileKey(kv.key)) {
       ++del_file_count;
     } else {
-      status = Status(pb::error::EINTERNAL, fmt::format("unknown key({}).", Helper::StringToHex(kv.key)));
+      status =
+          Status(pb::error::EINTERNAL,
+                 fmt::format("unknown key({}).", Helper::StringToHex(kv.key)));
       break;
     }
 
@@ -730,15 +792,19 @@ Status Restore::RestoreFsMetaTable(uint32_t fs_id, InputUPtr input, bool is_forc
   }
 
   std::cout << fmt::format(
-      "restore fsmeta table done.\n summary total_count({}) inode_count({}) dentry_count({}) chunk_count({}) "
-      "dir_quota_count({}) file_session_count({}) del_slice_count({}) del_file_count({}) status({}).\n",
-      total_count, inode_count, dentry_count, chunk_count, dir_quota_count, file_session_count, del_slice_count,
-      del_file_count, status.error_str());
+      "restore fsmeta table done.\n summary total_count({}) inode_count({}) "
+      "dentry_count({}) chunk_count({}) "
+      "dir_quota_count({}) file_session_count({}) del_slice_count({}) "
+      "del_file_count({}) status({}).\n",
+      total_count, inode_count, dentry_count, chunk_count, dir_quota_count,
+      file_session_count, del_slice_count, del_file_count, status.error_str());
 
   return Status::OK();
 }
 
-bool BackupCommandRunner::Run(const Options& options, const std::string& coor_addr, const std::string& cmd) {
+bool BackupCommandRunner::Run(const Options& options,
+                              const std::string& coor_addr,
+                              const std::string& cmd) {
   using Helper = dingofs::mds::Helper;
 
   if (cmd != "backup") return false;
@@ -763,7 +829,9 @@ bool BackupCommandRunner::Run(const Options& options, const std::string& coor_ad
     backup_options.type = Type::kS3;
     backup_options.s3_info = options.s3_info;
     if (!options.s3_info.Validate()) {
-      std::cout << fmt::format("s3 info is invalid, {}.", options.s3_info.ToString()) << '\n';
+      std::cout << fmt::format("s3 info is invalid, {}.",
+                               options.s3_info.ToString())
+                << '\n';
       return true;
     }
 
@@ -779,13 +847,17 @@ bool BackupCommandRunner::Run(const Options& options, const std::string& coor_ad
   if (options.type == Helper::ToLowerCase("meta")) {
     auto status = backup.BackupMetaTable(backup_options);
     if (!status.ok()) {
-      std::cerr << fmt::format("backup meta table fail, status({}).", status.error_str()) << '\n';
+      std::cerr << fmt::format("backup meta table fail, status({}).",
+                               status.error_str())
+                << '\n';
     }
 
   } else if (options.type == Helper::ToLowerCase("fsmeta")) {
     auto status = backup.BackupFsMetaTable(backup_options, options.fs_id);
     if (!status.ok()) {
-      std::cerr << fmt::format("backup fsmeta table fail, status({}).", status.error_str()) << '\n';
+      std::cerr << fmt::format("backup fsmeta table fail, status({}).",
+                               status.error_str())
+                << '\n';
     }
 
   } else {
@@ -795,8 +867,9 @@ bool BackupCommandRunner::Run(const Options& options, const std::string& coor_ad
   return true;
 }
 
-bool RestoreCommandRunner::Run(const Options& options, const std::string& coor_addr,  // NOLINT
-                               const std::string& cmd) {                              // NOLINT
+bool RestoreCommandRunner::Run(const Options& options,
+                               const std::string& coor_addr,  // NOLINT
+                               const std::string& cmd) {      // NOLINT
   if (cmd != "restore") return false;
 
   if (coor_addr.empty()) {
@@ -824,7 +897,9 @@ bool RestoreCommandRunner::Run(const Options& options, const std::string& coor_a
     restore_options.type = Type::kS3;
     restore_options.s3_info = options.s3_info;
     if (!options.s3_info.Validate()) {
-      std::cout << fmt::format("s3 info is invalid, {}.", options.s3_info.ToString()) << '\n';
+      std::cout << fmt::format("s3 info is invalid, {}.",
+                               options.s3_info.ToString())
+                << '\n';
       return true;
     }
 
@@ -836,14 +911,17 @@ bool RestoreCommandRunner::Run(const Options& options, const std::string& coor_a
   if (options.type == Helper::ToLowerCase("meta")) {
     // auto status = restore.RestoreMetaTable(restore_options);
     // if (!status.ok()) {
-    //   std::cerr << fmt::format("restore meta table fail, status({}).", status.error_str()) << '\n';
+    //   std::cerr << fmt::format("restore meta table fail, status({}).",
+    //   status.error_str()) << '\n';
     // }
     std::cerr << "not support restore meta table." << '\n';
 
   } else if (options.type == Helper::ToLowerCase("fsmeta")) {
     auto status = restore.RestoreFsMetaTable(restore_options, options.fs_id);
     if (!status.ok()) {
-      std::cerr << fmt::format("restore fsmeta table fail, status({}).", status.error_str()) << '\n';
+      std::cerr << fmt::format("restore fsmeta table fail, status({}).",
+                               status.error_str())
+                << '\n';
     }
 
   } else {

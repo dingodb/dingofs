@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "mds/client/trash_restore.h"
+#include "tools/mds-cli/trash_restore.h"
 
 #include <fmt/format.h>
 #include <glog/logging.h>
@@ -61,7 +61,8 @@ bool TrashRestore::Init(const std::string& mds_addr, const Options& options) {
     return false;
   }
   if (options.hours.empty()) {
-    std::cerr << "at least one HOUR (YYYY-MM-DD-HH) must be provided via --hours\n";
+    std::cerr
+        << "at least one HOUR (YYYY-MM-DD-HH) must be provided via --hours\n";
     return false;
   }
 
@@ -79,7 +80,8 @@ bool TrashRestore::Init(const std::string& mds_addr, const Options& options) {
 bool TrashRestore::InitRouting() {
   auto fs_resp = client_->GetFs(options_.fs_id);
   if (fs_resp.error().errcode() != pb::error::OK) {
-    std::cerr << fmt::format("get fs info fail: {} ({})\n", fs_resp.error().errmsg(),
+    std::cerr << fmt::format("get fs info fail: {} ({})\n",
+                             fs_resp.error().errmsg(),
                              static_cast<int>(fs_resp.error().errcode()));
     return false;
   }
@@ -87,44 +89,56 @@ bool TrashRestore::InitRouting() {
 
   auto mds_resp = client_->GetMdsList();
   if (mds_resp.error().errcode() != pb::error::OK) {
-    std::cerr << fmt::format("get mds list fail: {} ({})\n", mds_resp.error().errmsg(),
+    std::cerr << fmt::format("get mds list fail: {} ({})\n",
+                             mds_resp.error().errmsg(),
                              static_cast<int>(mds_resp.error().errcode()));
     return false;
   }
   std::unordered_map<uint64_t, std::string> mds_addrs;
   for (const auto& mds : mds_resp.mdses()) {
-    mds_addrs[mds.id()] = fmt::format("{}:{}", mds.location().host(), mds.location().port());
+    mds_addrs[mds.id()] =
+        fmt::format("{}:{}", mds.location().host(), mds.location().port());
   }
 
   std::unordered_set<uint64_t> owner_mds_ids;
-  if (partition_policy_.type() == pb::mds::PartitionType::MONOLITHIC_PARTITION) {
+  if (partition_policy_.type() ==
+      pb::mds::PartitionType::MONOLITHIC_PARTITION) {
     owner_mds_ids.insert(partition_policy_.mono().mds_id());
 
-  } else if (partition_policy_.type() == pb::mds::PartitionType::PARENT_ID_HASH_PARTITION) {
+  } else if (partition_policy_.type() ==
+             pb::mds::PartitionType::PARENT_ID_HASH_PARTITION) {
     if (partition_policy_.parent_hash().bucket_num() == 0) {
       std::cerr << "parent hash bucket_num is 0\n";
       return false;
     }
-    for (const auto& [mds_id, bucket_set] : partition_policy_.parent_hash().distributions()) {
+    for (const auto& [mds_id, bucket_set] :
+         partition_policy_.parent_hash().distributions()) {
       owner_mds_ids.insert(mds_id);
-      for (const auto& bucket_id : bucket_set.bucket_ids()) bucket_to_mds_[bucket_id] = mds_id;
+      for (const auto& bucket_id : bucket_set.bucket_ids())
+        bucket_to_mds_[bucket_id] = mds_id;
     }
 
   } else {
-    std::cerr << fmt::format("unknown partition type({})\n", pb::mds::PartitionType_Name(partition_policy_.type()));
+    std::cerr << fmt::format(
+        "unknown partition type({})\n",
+        pb::mds::PartitionType_Name(partition_policy_.type()));
     return false;
   }
 
   for (uint64_t mds_id : owner_mds_ids) {
     auto it = mds_addrs.find(mds_id);
     if (it == mds_addrs.end()) {
-      LOG(ERROR) << fmt::format("mds({}) not in mds list, entries owned by it will fail to restore", mds_id);
+      LOG(ERROR) << fmt::format(
+          "mds({}) not in mds list, entries owned by it will fail to restore",
+          mds_id);
       continue;
     }
     auto mds_client = std::make_unique<MDSClient>(options_.fs_id);
     if (!mds_client->Init(it->second)) {
-      LOG(ERROR) << fmt::format("init client for mds({}) at {} fail, entries owned by it will fail to restore", mds_id,
-                                it->second);
+      LOG(ERROR) << fmt::format(
+          "init client for mds({}) at {} fail, entries owned by it will fail "
+          "to restore",
+          mds_id, it->second);
       continue;
     }
     mds_clients_[mds_id] = std::move(mds_client);
@@ -135,11 +149,13 @@ bool TrashRestore::InitRouting() {
 
 MDSClient* TrashRestore::ClientForParent(Ino parent) {
   uint64_t mds_id = 0;
-  if (partition_policy_.type() == pb::mds::PartitionType::MONOLITHIC_PARTITION) {
+  if (partition_policy_.type() ==
+      pb::mds::PartitionType::MONOLITHIC_PARTITION) {
     mds_id = partition_policy_.mono().mds_id();
 
   } else {
-    auto it = bucket_to_mds_.find(static_cast<uint32_t>(parent % partition_policy_.parent_hash().bucket_num()));
+    auto it = bucket_to_mds_.find(static_cast<uint32_t>(
+        parent % partition_policy_.parent_hash().bucket_num()));
     if (it != bucket_to_mds_.end()) mds_id = it->second;
   }
 
@@ -158,7 +174,8 @@ void TrashRestore::Run() {
 void TrashRestore::DoRestoreHour(const std::string& hour) {
   // Validate HOUR format; skip (with warn) rather than abort the entire run.
   if (ParseTrashBucketName(hour) == 0) {
-    LOG(ERROR) << fmt::format("invalid HOUR format '{}', expected YYYY-MM-DD-HH (UTC)", hour);
+    LOG(ERROR) << fmt::format(
+        "invalid HOUR format '{}', expected YYYY-MM-DD-HH (UTC)", hour);
     return;
   }
 
@@ -173,13 +190,15 @@ void TrashRestore::DoRestoreHour(const std::string& hour) {
   skipped_.store(0);
   failed_.store(0);
 
-  LOG(INFO) << fmt::format("restore trash in {} (put_back={}, threads={})", hour, options_.put_back, options_.threads);
+  LOG(INFO) << fmt::format("restore trash in {} (put_back={}, threads={})",
+                           hour, options_.put_back, options_.threads);
 
   // .trash is synthesized client-side and has no dentry under kRootIno, so
   // we look up the hour bucket under kTrashInodeId directly.
   auto bucket_resp = client_->Lookup(kTrashInodeId, hour);
   if (bucket_resp.error().errcode() != pb::error::OK) {
-    LOG(ERROR) << fmt::format("lookup .trash/{} fail: {} ({})", hour, bucket_resp.error().errmsg(),
+    LOG(ERROR) << fmt::format("lookup .trash/{} fail: {} ({})", hour,
+                              bucket_resp.error().errmsg(),
                               static_cast<int>(bucket_resp.error().errcode()));
     return;
   }
@@ -189,7 +208,8 @@ void TrashRestore::DoRestoreHour(const std::string& hour) {
   {
     auto resp = client_->ListDentry(bucket_ino, /*is_only_dir=*/false);
     if (resp.error().errcode() != pb::error::OK) {
-      LOG(ERROR) << fmt::format("list .trash/{} fail: {} ({})", hour, resp.error().errmsg(),
+      LOG(ERROR) << fmt::format("list .trash/{} fail: {} ({})", hour,
+                                resp.error().errmsg(),
                                 static_cast<int>(resp.error().errcode()));
       return;
     }
@@ -229,9 +249,11 @@ void TrashRestore::DoRestoreHour(const std::string& hour) {
       files.push_back(std::move(d));
     }
   }
-  std::sort(dirs.begin(), dirs.end(), [](const pb::mds::Dentry& a, const pb::mds::Dentry& b) {
-    return ParseTrashEntryName(a.name()) < ParseTrashEntryName(b.name());
-  });
+  std::sort(dirs.begin(), dirs.end(),
+            [](const pb::mds::Dentry& a, const pb::mds::Dentry& b) {
+              return ParseTrashEntryName(a.name()) <
+                     ParseTrashEntryName(b.name());
+            });
 
   // In tree-rebuild mode, we only restore entries whose original parent was
   // also trashed (and therefore appears in this bucket as a directory). Build
@@ -244,7 +266,8 @@ void TrashRestore::DoRestoreHour(const std::string& hour) {
   for (const auto& d : dirs) RestoreOne(bucket_ino, d);
 
   // Phase 2: restore files in parallel. Shuffle to spread txn conflicts.
-  std::mt19937_64 rng(std::chrono::steady_clock::now().time_since_epoch().count());
+  std::mt19937_64 rng(
+      std::chrono::steady_clock::now().time_since_epoch().count());
   std::shuffle(files.begin(), files.end(), rng);
 
   {
@@ -261,7 +284,8 @@ void TrashRestore::DoRestoreHour(const std::string& hour) {
   }
   for (auto& t : workers) t.join();
 
-  LOG(INFO) << fmt::format("restored {} in {} (skipped={}, failed={})", restored_.load(), hour, skipped_.load(),
+  LOG(INFO) << fmt::format("restored {} in {} (skipped={}, failed={})",
+                           restored_.load(), hour, skipped_.load(),
                            failed_.load());
 }
 
@@ -285,7 +309,8 @@ void TrashRestore::RestoreOne(Ino bucket_ino, const pb::mds::Dentry& dentry) {
   // parse is informational only.
   Ino orig_parent = ParseTrashEntryName(dentry.name());
   if (orig_parent == 0) {
-    LOG(WARNING) << fmt::format("skip unparseable trash entry '{}'", dentry.name());
+    LOG(WARNING) << fmt::format("skip unparseable trash entry '{}'",
+                                dentry.name());
     failed_.fetch_add(1);
     return;
   }
@@ -301,15 +326,18 @@ void TrashRestore::RestoreOne(Ino bucket_ino, const pb::mds::Dentry& dentry) {
   // request to another MDS would leave the owner serving stale caches.
   MDSClient* mds_client = ClientForParent(orig_parent);
   if (mds_client == nullptr) {
-    LOG(ERROR) << fmt::format("no owner mds for parent({}), restore '{}' fail", orig_parent, dentry.name());
+    LOG(ERROR) << fmt::format("no owner mds for parent({}), restore '{}' fail",
+                              orig_parent, dentry.name());
     failed_.fetch_add(1);
     return;
   }
-  auto resp = mds_client->RestoreFromTrash(bucket_ino, dentry.name(), kRootUid, allow_trash_parent);
+  auto resp = mds_client->RestoreFromTrash(bucket_ino, dentry.name(), kRootUid,
+                                           allow_trash_parent);
   if (resp.error().errcode() == pb::error::OK) {
     restored_.fetch_add(1);
   } else {
-    LOG(WARNING) << fmt::format("restore '{}' fail: {} ({})", dentry.name(), resp.error().errmsg(),
+    LOG(WARNING) << fmt::format("restore '{}' fail: {} ({})", dentry.name(),
+                                resp.error().errmsg(),
                                 static_cast<int>(resp.error().errcode()));
     failed_.fetch_add(1);
   }

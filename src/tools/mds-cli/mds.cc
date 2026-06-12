@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "mds/client/mds.h"
+#include "tools/mds-cli/mds.h"
 
 #include <fcntl.h>
 #include <sys/types.h>
@@ -26,8 +26,8 @@
 #include "dingofs/mds.pb.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
-#include "mds/client/trash_restore.h"
 #include "mds/common/helper.h"
+#include "tools/mds-cli/trash_restore.h"
 #include "utils/time.h"
 #include "utils/uuid.h"
 
@@ -73,7 +73,8 @@ HeartbeatResponse MDSClient::Heartbeat(uint32_t mds_id) {
   mds->set_state(MdsEntry::NORMAL);
   mds->set_last_online_time_ms(utils::TimestampMs());
 
-  auto status = interaction_->SendRequest("MDSService", "Heartbeat", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "Heartbeat", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -87,7 +88,8 @@ GetMDSListResponse MDSClient::GetMdsList() {
   GetMDSListRequest request;
   GetMDSListResponse response;
 
-  auto status = interaction_->SendRequest("MDSService", "GetMDSList", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "GetMDSList", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -101,7 +103,8 @@ GetMDSListResponse MDSClient::GetMdsList() {
   return response;
 }
 
-CreateFsResponse MDSClient::CreateFs(const std::string& fs_name, const CreateFsParams& params) {
+CreateFsResponse MDSClient::CreateFs(const std::string& fs_name,
+                                     const CreateFsParams& params) {
   CreateFsRequest request;
   CreateFsResponse response;
 
@@ -115,14 +118,15 @@ CreateFsResponse MDSClient::CreateFs(const std::string& fs_name, const CreateFsP
   const auto& local_file_info = params.local_file_info;
 
   if (!s3_info.endpoint.empty()) {
-    if (s3_info.ak.empty() || s3_info.sk.empty() || s3_info.bucket_name.empty()) {
+    if (s3_info.ak.empty() || s3_info.sk.empty() ||
+        s3_info.bucket_name.empty()) {
       std::cerr << "s3 info is empty.\n";
       return response;
     }
 
   } else if (!rados_info.mon_host.empty()) {
-    if (rados_info.user_name.empty() || rados_info.key.empty() || rados_info.pool_name.empty() ||
-        rados_info.cluster_name.empty()) {
+    if (rados_info.user_name.empty() || rados_info.key.empty() ||
+        rados_info.pool_name.empty() || rados_info.cluster_name.empty()) {
       std::cerr << "rados info is empty.\n";
       return response;
     }
@@ -154,9 +158,11 @@ CreateFsResponse MDSClient::CreateFs(const std::string& fs_name, const CreateFsP
   request.set_enable_uid_gid_map(params.enable_uid_gid_map);
 
   if (params.partition_type == "mono") {
-    request.set_partition_type(::dingofs::pb::mds::PartitionType::MONOLITHIC_PARTITION);
+    request.set_partition_type(
+        ::dingofs::pb::mds::PartitionType::MONOLITHIC_PARTITION);
   } else if (params.partition_type == "parent_hash") {
-    request.set_partition_type(::dingofs::pb::mds::PartitionType::PARENT_ID_HASH_PARTITION);
+    request.set_partition_type(
+        ::dingofs::pb::mds::PartitionType::PARENT_ID_HASH_PARTITION);
   }
 
   if (!s3_info.endpoint.empty()) {
@@ -188,7 +194,8 @@ CreateFsResponse MDSClient::CreateFs(const std::string& fs_name, const CreateFsP
 
   std::cout << "request: " << request.ShortDebugString() << "\n";
 
-  auto status = interaction_->SendRequest("MDSService", "CreateFs", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "CreateFs", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -204,7 +211,8 @@ CreateFsResponse MDSClient::CreateFs(const std::string& fs_name, const CreateFsP
   return response;
 }
 
-MountFsResponse MDSClient::MountFs(const std::string& fs_name, const std::string& client_id) {
+MountFsResponse MDSClient::MountFs(const std::string& fs_name,
+                                   const std::string& client_id) {
   MountFsRequest request;
   MountFsResponse response;
 
@@ -215,7 +223,8 @@ MountFsResponse MDSClient::MountFs(const std::string& fs_name, const std::string
   mountpoint->set_port(10000);
   mountpoint->set_path("/mnt/dingo");
 
-  auto status = interaction_->SendRequest("MDSService", "MountFs", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "MountFs", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -231,14 +240,16 @@ MountFsResponse MDSClient::MountFs(const std::string& fs_name, const std::string
   return response;
 }
 
-UmountFsResponse MDSClient::UmountFs(const std::string& fs_name, const std::string& client_id) {
+UmountFsResponse MDSClient::UmountFs(const std::string& fs_name,
+                                     const std::string& client_id) {
   UmountFsRequest request;
   UmountFsResponse response;
 
   request.set_fs_name(fs_name);
   request.set_client_id(client_id);
 
-  auto status = interaction_->SendRequest("MDSService", "UmountFs", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "UmountFs", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -248,13 +259,15 @@ UmountFsResponse MDSClient::UmountFs(const std::string& fs_name, const std::stri
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
     std::cout << "UmountFs success\n";
   } else {
-    std::cerr << "UmountFs fail, error: " << response.ShortDebugString() << "\n";
+    std::cerr << "UmountFs fail, error: " << response.ShortDebugString()
+              << "\n";
   }
 
   return response;
 }
 
-DeleteFsResponse MDSClient::DeleteFs(const std::string& fs_name, bool is_force) {
+DeleteFsResponse MDSClient::DeleteFs(const std::string& fs_name,
+                                     bool is_force) {
   DeleteFsRequest request;
   DeleteFsResponse response;
 
@@ -268,7 +281,8 @@ DeleteFsResponse MDSClient::DeleteFs(const std::string& fs_name, bool is_force) 
 
   std::cout << "request: " << request.ShortDebugString() << "\n";
 
-  auto status = interaction_->SendRequest("MDSService", "DeleteFs", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "DeleteFs", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -280,7 +294,8 @@ DeleteFsResponse MDSClient::DeleteFs(const std::string& fs_name, bool is_force) 
   return response;
 }
 
-UpdateFsInfoResponse MDSClient::UpdateFs(const std::string& fs_name, const pb::mds::FsInfo& fs_info) {
+UpdateFsInfoResponse MDSClient::UpdateFs(const std::string& fs_name,
+                                         const pb::mds::FsInfo& fs_info) {
   UpdateFsInfoRequest request;
   UpdateFsInfoResponse response;
 
@@ -288,7 +303,8 @@ UpdateFsInfoResponse MDSClient::UpdateFs(const std::string& fs_name, const pb::m
 
   request.mutable_fs_info()->CopyFrom(fs_info);
 
-  auto status = interaction_->SendRequest("MDSService", "UpdateFsInfo", request, response);
+  auto status = interaction_->SendRequest("MDSService", "UpdateFsInfo", request,
+                                          response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -309,7 +325,8 @@ GetFsInfoResponse MDSClient::GetFs(const std::string& fs_name) {
 
   request.set_fs_name(fs_name);
 
-  auto status = interaction_->SendRequest("MDSService", "GetFsInfo", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "GetFsInfo", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -347,7 +364,8 @@ ListFsInfoResponse MDSClient::ListFs() {
   ListFsInfoRequest request;
   ListFsInfoResponse response;
 
-  auto status = interaction_->SendRequest("MDSService", "ListFsInfo", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "ListFsInfo", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -375,10 +393,12 @@ MkDirResponse MDSClient::MkDir(Ino parent, const std::string& name) {
   request.set_length(4096);
   request.set_uid(0);
   request.set_gid(0);
-  request.set_mode(S_IFDIR | S_IRUSR | S_IWUSR | S_IRGRP | S_IXUSR | S_IWGRP | S_IXGRP | S_IROTH | S_IWOTH | S_IXOTH);
+  request.set_mode(S_IFDIR | S_IRUSR | S_IWUSR | S_IRGRP | S_IXUSR | S_IWGRP |
+                   S_IXGRP | S_IROTH | S_IWOTH | S_IXOTH);
   request.set_rdev(0);
 
-  auto status = interaction_->SendRequest("MDSService", "MkDir", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "MkDir", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -394,7 +414,8 @@ MkDirResponse MDSClient::MkDir(Ino parent, const std::string& name) {
   return response;
 }
 
-void MDSClient::BatchMkDir(const std::vector<int64_t>& parents, const std::string& prefix, size_t num) {
+void MDSClient::BatchMkDir(const std::vector<int64_t>& parents,
+                           const std::string& prefix, size_t num) {
   for (size_t i = 0; i < num; i++) {
     for (auto parent : parents) {
       std::string name = fmt::format("{}_{}", prefix, utils::TimestampNs());
@@ -415,7 +436,8 @@ RmDirResponse MDSClient::RmDir(Ino parent, const std::string& name) {
   request.set_parent(parent);
   request.set_name(name);
 
-  auto status = interaction_->SendRequest("MDSService", "RmDir", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "RmDir", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -425,7 +447,8 @@ RmDirResponse MDSClient::RmDir(Ino parent, const std::string& name) {
   return response;
 }
 
-ReadDirResponse MDSClient::ReadDir(Ino ino, const std::string& last_name, bool with_attr, bool is_refresh) {
+ReadDirResponse MDSClient::ReadDir(Ino ino, const std::string& last_name,
+                                   bool with_attr, bool is_refresh) {
   CHECK(fs_id_ > 0) << "fs_id_ is zero";
   ReadDirRequest request;
   ReadDirResponse response;
@@ -439,7 +462,8 @@ ReadDirResponse MDSClient::ReadDir(Ino ino, const std::string& last_name, bool w
   request.set_with_attr(with_attr);
   request.set_is_refresh(is_refresh);
 
-  auto status = interaction_->SendRequest("MDSService", "ReadDir", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "ReadDir", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -463,10 +487,12 @@ MkNodResponse MDSClient::MkNod(Ino parent, const std::string& name) {
   request.set_length(0);
   request.set_uid(0);
   request.set_gid(0);
-  request.set_mode(S_IFREG | S_IRUSR | S_IWUSR | S_IRGRP | S_IXUSR | S_IWGRP | S_IXGRP | S_IROTH | S_IWOTH | S_IXOTH);
+  request.set_mode(S_IFREG | S_IRUSR | S_IWUSR | S_IRGRP | S_IXUSR | S_IWGRP |
+                   S_IXGRP | S_IROTH | S_IWOTH | S_IXOTH);
   request.set_rdev(0);
 
-  auto status = interaction_->SendRequest("MDSService", "MkNod", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "MkNod", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -482,7 +508,8 @@ MkNodResponse MDSClient::MkNod(Ino parent, const std::string& name) {
   return response;
 }
 
-void MDSClient::BatchMkNod(const std::vector<int64_t>& parents, const std::string& prefix, size_t num) {
+void MDSClient::BatchMkNod(const std::vector<int64_t>& parents,
+                           const std::string& prefix, size_t num) {
   for (size_t i = 0; i < num; i++) {
     for (auto parent : parents) {
       std::string name = fmt::format("{}_{}", prefix, utils::TimestampNs());
@@ -503,7 +530,8 @@ GetDentryResponse MDSClient::GetDentry(Ino parent, const std::string& name) {
   request.set_parent(parent);
   request.set_name(name);
 
-  auto status = interaction_->SendRequest("MDSService", "GetDentry", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "GetDentry", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -529,7 +557,8 @@ ListDentryResponse MDSClient::ListDentry(Ino parent, bool is_only_dir) {
   request.set_parent(parent);
   request.set_is_only_dir(is_only_dir);
 
-  auto status = interaction_->SendRequest("MDSService", "ListDentry", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "ListDentry", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -554,7 +583,8 @@ GetInodeResponse MDSClient::GetInode(Ino ino) {
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
 
-  auto status = interaction_->SendRequest("MDSService", "GetInode", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "GetInode", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -568,7 +598,8 @@ GetInodeResponse MDSClient::GetInode(Ino ino) {
   return response;
 }
 
-BatchGetInodeResponse MDSClient::BatchGetInode(const std::vector<int64_t>& inos) {
+BatchGetInodeResponse MDSClient::BatchGetInode(
+    const std::vector<int64_t>& inos) {
   CHECK(fs_id_ > 0) << "fs_id_ is zero";
 
   BatchGetInodeRequest request;
@@ -581,7 +612,8 @@ BatchGetInodeResponse MDSClient::BatchGetInode(const std::vector<int64_t>& inos)
     request.add_inoes(ino);
   }
 
-  auto status = interaction_->SendRequest("MDSService", "BatchGetInode", request, response);
+  auto status = interaction_->SendRequest("MDSService", "BatchGetInode",
+                                          request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -595,7 +627,8 @@ BatchGetInodeResponse MDSClient::BatchGetInode(const std::vector<int64_t>& inos)
   return response;
 }
 
-BatchGetXAttrResponse MDSClient::BatchGetXattr(const std::vector<int64_t>& inos) {
+BatchGetXAttrResponse MDSClient::BatchGetXattr(
+    const std::vector<int64_t>& inos) {
   CHECK(fs_id_ > 0) << "fs_id_ is zero";
 
   BatchGetXAttrRequest request;
@@ -608,7 +641,8 @@ BatchGetXAttrResponse MDSClient::BatchGetXattr(const std::vector<int64_t>& inos)
     request.add_inoes(ino);
   }
 
-  auto status = interaction_->SendRequest("MDSService", "BatchGetXAttr", request, response);
+  auto status = interaction_->SendRequest("MDSService", "BatchGetXAttr",
+                                          request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -642,7 +676,8 @@ void MDSClient::SetFsStats(const std::string& fs_name) {
 
   request.mutable_stats()->CopyFrom(stats);
 
-  auto status = interaction_->SendRequest("MDSService", "SetFsStats", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "SetFsStats", request, response);
 }
 
 void MDSClient::ContinueSetFsStats(const std::string& fs_name) {
@@ -658,7 +693,8 @@ void MDSClient::GetFsStats(const std::string& fs_name) {
 
   request.set_fs_name(fs_name);
 
-  auto status = interaction_->SendRequest("MDSService", "GetFsStats", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "GetFsStats", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -676,7 +712,8 @@ void MDSClient::GetFsPerSecondStats(const std::string& fs_name) {
 
   request.set_fs_name(fs_name);
 
-  auto status = interaction_->SendRequest("MDSService", "GetFsPerSecondStats", request, response);
+  auto status = interaction_->SendRequest("MDSService", "GetFsPerSecondStats",
+                                          request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -690,7 +727,9 @@ void MDSClient::GetFsPerSecondStats(const std::string& fs_name) {
   }
 
   for (const auto& [time_s, stats] : sorted_stats) {
-    std::cout << fmt::format("time: {} stats: {}.", utils::FormatTime(time_s), stats.ShortDebugString()) << "\n";
+    std::cout << fmt::format("time: {} stats: {}.", utils::FormatTime(time_s),
+                             stats.ShortDebugString())
+              << "\n";
   }
 }
 
@@ -704,7 +743,8 @@ LookupResponse MDSClient::Lookup(Ino parent, const std::string& name) {
   request.set_parent(parent);
   request.set_name(name);
 
-  auto status = interaction_->SendRequest("MDSService", "Lookup", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "Lookup", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -727,7 +767,8 @@ OpenResponse MDSClient::Open(Ino ino, std::string& session_id) {
   request.set_flags(O_RDWR);
   request.set_session_id(utils::GenerateUUID());
 
-  auto status = interaction_->SendRequest("MDSService", "Open", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "Open", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -749,7 +790,8 @@ ReleaseResponse MDSClient::Release(Ino ino, const std::string& session_id) {
   request.set_ino(ino);
   request.set_session_id(session_id);
 
-  auto status = interaction_->SendRequest("MDSService", "Release", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "Release", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -759,7 +801,8 @@ ReleaseResponse MDSClient::Release(Ino ino, const std::string& session_id) {
   return response;
 }
 
-LinkResponse MDSClient::Link(Ino ino, Ino new_parent, const std::string& new_name) {
+LinkResponse MDSClient::Link(Ino ino, Ino new_parent,
+                             const std::string& new_name) {
   CHECK(fs_id_ > 0) << "fs_id_ is zero";
 
   LinkRequest request;
@@ -772,7 +815,8 @@ LinkResponse MDSClient::Link(Ino ino, Ino new_parent, const std::string& new_nam
   request.set_new_parent(new_parent);
   request.set_new_name(new_name);
 
-  auto status = interaction_->SendRequest("MDSService", "Link", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "Link", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -794,7 +838,8 @@ UnLinkResponse MDSClient::UnLink(Ino parent, const std::string& name) {
   request.set_parent(parent);
   request.set_name(name);
 
-  auto status = interaction_->SendRequest("MDSService", "UnLink", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "UnLink", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -804,7 +849,8 @@ UnLinkResponse MDSClient::UnLink(Ino parent, const std::string& name) {
   return response;
 }
 
-SymlinkResponse MDSClient::Symlink(Ino parent, const std::string& name, const std::string& symlink) {
+SymlinkResponse MDSClient::Symlink(Ino parent, const std::string& name,
+                                   const std::string& symlink) {
   CHECK(fs_id_ > 0) << "fs_id_ is zero";
 
   SymlinkRequest request;
@@ -819,7 +865,8 @@ SymlinkResponse MDSClient::Symlink(Ino parent, const std::string& name, const st
   request.set_uid(0);
   request.set_gid(0);
 
-  auto status = interaction_->SendRequest("MDSService", "Symlink", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "Symlink", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -840,7 +887,8 @@ ReadLinkResponse MDSClient::ReadLink(Ino ino) {
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
 
-  auto status = interaction_->SendRequest("MDSService", "ReadLink", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "ReadLink", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -861,7 +909,8 @@ GetAttrResponse MDSClient::GetAttr(Ino ino) {
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
 
-  auto status = interaction_->SendRequest("MDSService", "GetAttr", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "GetAttr", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -869,7 +918,8 @@ GetAttrResponse MDSClient::GetAttr(Ino ino) {
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-    std::cout << "GetAttr success, inode: " << response.inode().ShortDebugString() << "\n";
+    std::cout << "GetAttr success, inode: "
+              << response.inode().ShortDebugString() << "\n";
   } else {
     std::cerr << "GetAttr fail, error: " << response.ShortDebugString() << "\n";
   }
@@ -877,7 +927,8 @@ GetAttrResponse MDSClient::GetAttr(Ino ino) {
   return response;
 }
 
-SetAttrResponse MDSClient::SetAttr(Ino ino, uint32_t to_set, const pb::mds::Inode& inode) {
+SetAttrResponse MDSClient::SetAttr(Ino ino, uint32_t to_set,
+                                   const pb::mds::Inode& inode) {
   CHECK(fs_id_ > 0) << "fs_id_ is zero";
 
   SetAttrRequest request;
@@ -899,7 +950,8 @@ SetAttrResponse MDSClient::SetAttr(Ino ino, uint32_t to_set, const pb::mds::Inod
   request.set_mode(inode.mode());
   request.set_flags(inode.flags());
 
-  auto status = interaction_->SendRequest("MDSService", "SetAttr", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "SetAttr", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -927,7 +979,8 @@ GetXAttrResponse MDSClient::GetXAttr(Ino ino, const std::string& name) {
   request.set_ino(ino);
   request.set_name(name);
 
-  auto status = interaction_->SendRequest("MDSService", "GetXAttr", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "GetXAttr", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -937,13 +990,15 @@ GetXAttrResponse MDSClient::GetXAttr(Ino ino, const std::string& name) {
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
     std::cout << "GetXAttr success, size: " << response.value().size() << "\n";
   } else {
-    std::cerr << "GetXAttr fail, error: " << response.ShortDebugString() << "\n";
+    std::cerr << "GetXAttr fail, error: " << response.ShortDebugString()
+              << "\n";
   }
 
   return response;
 }
 
-SetXAttrResponse MDSClient::SetXAttr(Ino ino, const std::map<std::string, std::string>& xattrs) {
+SetXAttrResponse MDSClient::SetXAttr(
+    Ino ino, const std::map<std::string, std::string>& xattrs) {
   CHECK(fs_id_ > 0) << "fs_id_ is zero";
 
   SetXAttrRequest request;
@@ -958,7 +1013,8 @@ SetXAttrResponse MDSClient::SetXAttr(Ino ino, const std::map<std::string, std::s
     (*request.mutable_xattrs())[k] = v;
   }
 
-  auto status = interaction_->SendRequest("MDSService", "SetXAttr", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "SetXAttr", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -968,7 +1024,8 @@ SetXAttrResponse MDSClient::SetXAttr(Ino ino, const std::map<std::string, std::s
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
     std::cout << "SetXAttr success\n";
   } else {
-    std::cerr << "SetXAttr fail, error: " << response.ShortDebugString() << "\n";
+    std::cerr << "SetXAttr fail, error: " << response.ShortDebugString()
+              << "\n";
   }
 
   return response;
@@ -986,7 +1043,8 @@ RemoveXAttrResponse MDSClient::RemoveXAttr(Ino ino, const std::string& name) {
   request.set_ino(ino);
   request.set_name(name);
 
-  auto status = interaction_->SendRequest("MDSService", "RemoveXAttr", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "RemoveXAttr", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -1007,7 +1065,8 @@ ListXAttrResponse MDSClient::ListXAttr(Ino ino) {
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
 
-  auto status = interaction_->SendRequest("MDSService", "ListXAttr", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "ListXAttr", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -1017,14 +1076,16 @@ ListXAttrResponse MDSClient::ListXAttr(Ino ino) {
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
     std::cout << "ListXAttr success, count: " << response.xattrs_size() << "\n";
   } else {
-    std::cerr << "ListXAttr fail, error: " << response.ShortDebugString() << "\n";
+    std::cerr << "ListXAttr fail, error: " << response.ShortDebugString()
+              << "\n";
   }
 
   return response;
 }
 
-RenameResponse MDSClient::Rename(Ino old_parent, const std::string& old_name, Ino new_parent,
-                                 const std::string& new_name, const std::vector<int64_t>& old_ancestors,
+RenameResponse MDSClient::Rename(Ino old_parent, const std::string& old_name,
+                                 Ino new_parent, const std::string& new_name,
+                                 const std::vector<int64_t>& old_ancestors,
                                  const std::vector<int64_t>& new_ancestors) {
   CHECK(fs_id_ > 0) << "fs_id_ is zero";
 
@@ -1042,7 +1103,8 @@ RenameResponse MDSClient::Rename(Ino old_parent, const std::string& old_name, In
   for (const auto& a : old_ancestors) request.add_old_ancestors(a);
   for (const auto& a : new_ancestors) request.add_new_ancestors(a);
 
-  auto status = interaction_->SendRequest("MDSService", "Rename", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "Rename", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -1052,8 +1114,9 @@ RenameResponse MDSClient::Rename(Ino old_parent, const std::string& old_name, In
   return response;
 }
 
-RestoreFromTrashResponse MDSClient::RestoreFromTrash(Ino trash_parent, const std::string& trash_name, uint32_t uid,
-                                                     bool allow_trash_parent) {
+RestoreFromTrashResponse MDSClient::RestoreFromTrash(
+    Ino trash_parent, const std::string& trash_name, uint32_t uid,
+    bool allow_trash_parent) {
   CHECK(fs_id_ > 0) << "fs_id_ is zero";
 
   RestoreFromTrashRequest request;
@@ -1067,7 +1130,8 @@ RestoreFromTrashResponse MDSClient::RestoreFromTrash(Ino trash_parent, const std
   request.set_uid(uid);
   request.set_allow_trash_parent(allow_trash_parent);
 
-  auto status = interaction_->SendRequest("MDSService", "RestoreFromTrash", request, response);
+  auto status = interaction_->SendRequest("MDSService", "RestoreFromTrash",
+                                          request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -1077,7 +1141,8 @@ RestoreFromTrashResponse MDSClient::RestoreFromTrash(Ino trash_parent, const std
   return response;
 }
 
-AllocSliceIdResponse MDSClient::AllocSliceId(uint32_t alloc_num, uint64_t min_slice_id) {
+AllocSliceIdResponse MDSClient::AllocSliceId(uint32_t alloc_num,
+                                             uint64_t min_slice_id) {
   AllocSliceIdRequest request;
   AllocSliceIdResponse response;
 
@@ -1086,7 +1151,8 @@ AllocSliceIdResponse MDSClient::AllocSliceId(uint32_t alloc_num, uint64_t min_sl
   request.set_alloc_num(alloc_num);
   request.set_min_slice_id(min_slice_id);
 
-  auto status = interaction_->SendRequest("MDSService", "AllocSliceId", request, response);
+  auto status = interaction_->SendRequest("MDSService", "AllocSliceId", request,
+                                          response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -1096,7 +1162,8 @@ AllocSliceIdResponse MDSClient::AllocSliceId(uint32_t alloc_num, uint64_t min_sl
   return response;
 }
 
-WriteSliceResponse MDSClient::WriteSlice(Ino parent, Ino ino, int64_t chunk_index) {
+WriteSliceResponse MDSClient::WriteSlice(Ino parent, Ino ino,
+                                         int64_t chunk_index) {
   CHECK(fs_id_ > 0) << "fs_id_ is zero";
 
   WriteSliceRequest request;
@@ -1123,7 +1190,8 @@ WriteSliceResponse MDSClient::WriteSlice(Ino parent, Ino ino, int64_t chunk_inde
 
   *request.add_delta_slices() = delta_slice;
 
-  auto status = interaction_->SendRequest("MDSService", "WriteSlice", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "WriteSlice", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -1145,7 +1213,8 @@ ReadSliceResponse MDSClient::ReadSlice(Ino ino, int64_t chunk_index) {
   request.set_ino(ino);
   request.add_chunk_descriptors()->set_index(chunk_index);
 
-  auto status = interaction_->SendRequest("MDSService", "ReadSlice", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "ReadSlice", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -1163,7 +1232,8 @@ SetFsQuotaResponse MDSClient::SetFsQuota(const QuotaEntry& quota) {
 
   request.set_fs_id(fs_id_);
   request.mutable_quota()->CopyFrom(quota);
-  auto status = interaction_->SendRequest("MDSService", "SetFsQuota", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "SetFsQuota", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -1173,7 +1243,8 @@ SetFsQuotaResponse MDSClient::SetFsQuota(const QuotaEntry& quota) {
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
     std::cout << "SetFsQuota success\n";
   } else {
-    std::cerr << "SetFsQuota fail, error: " << response.ShortDebugString() << "\n";
+    std::cerr << "SetFsQuota fail, error: " << response.ShortDebugString()
+              << "\n";
   }
 
   return response;
@@ -1187,7 +1258,8 @@ GetFsQuotaResponse MDSClient::GetFsQuota() {
 
   request.set_fs_id(fs_id_);
 
-  auto status = interaction_->SendRequest("MDSService", "GetFsQuota", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "GetFsQuota", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -1195,9 +1267,11 @@ GetFsQuotaResponse MDSClient::GetFsQuota() {
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-    std::cout << "GetFsQuota success, quota: " << response.quota().ShortDebugString() << "\n";
+    std::cout << "GetFsQuota success, quota: "
+              << response.quota().ShortDebugString() << "\n";
   } else {
-    std::cerr << "GetFsQuota fail, error: " << response.ShortDebugString() << "\n";
+    std::cerr << "GetFsQuota fail, error: " << response.ShortDebugString()
+              << "\n";
   }
 
   return response;
@@ -1214,7 +1288,8 @@ SetDirQuotaResponse MDSClient::SetDirQuota(Ino ino, const QuotaEntry& quota) {
   request.set_ino(ino);
   request.mutable_quota()->CopyFrom(quota);
 
-  auto status = interaction_->SendRequest("MDSService", "SetDirQuota", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "SetDirQuota", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -1224,7 +1299,8 @@ SetDirQuotaResponse MDSClient::SetDirQuota(Ino ino, const QuotaEntry& quota) {
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
     std::cout << "SetDirQuota success\n";
   } else {
-    std::cerr << "SetDirQuota fail, error: " << response.ShortDebugString() << "\n";
+    std::cerr << "SetDirQuota fail, error: " << response.ShortDebugString()
+              << "\n";
   }
 
   return response;
@@ -1240,7 +1316,8 @@ GetDirQuotaResponse MDSClient::GetDirQuota(Ino ino) {
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
 
-  auto status = interaction_->SendRequest("MDSService", "GetDirQuota", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "GetDirQuota", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -1248,9 +1325,11 @@ GetDirQuotaResponse MDSClient::GetDirQuota(Ino ino) {
   }
 
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-    std::cout << "GetDirQuota success, quota: " << response.quota().ShortDebugString() << "\n";
+    std::cout << "GetDirQuota success, quota: "
+              << response.quota().ShortDebugString() << "\n";
   } else {
-    std::cerr << "GetDirQuota fail, error: " << response.ShortDebugString() << "\n";
+    std::cerr << "GetDirQuota fail, error: " << response.ShortDebugString()
+              << "\n";
   }
 
   return response;
@@ -1266,7 +1345,8 @@ DeleteDirQuotaResponse MDSClient::DeleteDirQuota(Ino ino) {
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
 
-  auto status = interaction_->SendRequest("MDSService", "DeleteDirQuota", request, response);
+  auto status = interaction_->SendRequest("MDSService", "DeleteDirQuota",
+                                          request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -1276,13 +1356,15 @@ DeleteDirQuotaResponse MDSClient::DeleteDirQuota(Ino ino) {
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
     std::cout << "DeleteDirQuota success\n";
   } else {
-    std::cerr << "DeleteDirQuota fail, error: " << response.ShortDebugString() << "\n";
+    std::cerr << "DeleteDirQuota fail, error: " << response.ShortDebugString()
+              << "\n";
   }
 
   return response;
 }
 
-JoinFsResponse MDSClient::JoinFs(const std::string& fs_name, uint32_t fs_id, const std::vector<int64_t>& mds_ids) {
+JoinFsResponse MDSClient::JoinFs(const std::string& fs_name, uint32_t fs_id,
+                                 const std::vector<int64_t>& mds_ids) {
   JoinFsRequest request;
   JoinFsResponse response;
 
@@ -1294,7 +1376,8 @@ JoinFsResponse MDSClient::JoinFs(const std::string& fs_name, uint32_t fs_id, con
 
   std::cout << "JoinFs request: " << request.ShortDebugString();
 
-  auto status = interaction_->SendRequest("MDSService", "JoinFs", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "JoinFs", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -1310,7 +1393,8 @@ JoinFsResponse MDSClient::JoinFs(const std::string& fs_name, uint32_t fs_id, con
   return response;
 }
 
-QuitFsResponse MDSClient::QuitFs(const std::string& fs_name, uint32_t fs_id, const std::vector<int64_t>& mds_ids) {
+QuitFsResponse MDSClient::QuitFs(const std::string& fs_name, uint32_t fs_id,
+                                 const std::vector<int64_t>& mds_ids) {
   QuitFsRequest request;
   QuitFsResponse response;
 
@@ -1320,7 +1404,8 @@ QuitFsResponse MDSClient::QuitFs(const std::string& fs_name, uint32_t fs_id, con
     request.add_mds_ids(mds_id);
   }
 
-  auto status = interaction_->SendRequest("MDSService", "QuitFs", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "QuitFs", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -1337,8 +1422,11 @@ QuitFsResponse MDSClient::QuitFs(const std::string& fs_name, uint32_t fs_id, con
 }
 
 // cache member operations
-JoinCacheGroupResponse MDSClient::JoinCacheGroup(const std::string& member_id, const std::string& ip, uint32_t port,
-                                                 const std::string& group_name, uint32_t weight) {
+JoinCacheGroupResponse MDSClient::JoinCacheGroup(const std::string& member_id,
+                                                 const std::string& ip,
+                                                 uint32_t port,
+                                                 const std::string& group_name,
+                                                 uint32_t weight) {
   JoinCacheGroupRequest request;
   JoinCacheGroupResponse response;
 
@@ -1348,7 +1436,8 @@ JoinCacheGroupResponse MDSClient::JoinCacheGroup(const std::string& member_id, c
   request.set_group_name(group_name);
   request.set_weight(weight);
 
-  auto status = interaction_->SendRequest("MDSService", "JoinCacheGroup", request, response);
+  auto status = interaction_->SendRequest("MDSService", "JoinCacheGroup",
+                                          request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -1358,14 +1447,16 @@ JoinCacheGroupResponse MDSClient::JoinCacheGroup(const std::string& member_id, c
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
     std::cout << "JoinCacheGroup success\n";
   } else {
-    std::cerr << "JoinCacheGroup fail, error: " << response.ShortDebugString() << "\n";
+    std::cerr << "JoinCacheGroup fail, error: " << response.ShortDebugString()
+              << "\n";
   }
 
   return response;
 }
 
-LeaveCacheGroupResponse MDSClient::LeaveCacheGroup(const std::string& member_id, const std::string& ip, uint32_t port,
-                                                   const std::string& group_name) {
+LeaveCacheGroupResponse MDSClient::LeaveCacheGroup(
+    const std::string& member_id, const std::string& ip, uint32_t port,
+    const std::string& group_name) {
   LeaveCacheGroupRequest request;
   LeaveCacheGroupResponse response;
 
@@ -1374,7 +1465,8 @@ LeaveCacheGroupResponse MDSClient::LeaveCacheGroup(const std::string& member_id,
   request.set_port(port);
   request.set_group_name(group_name);
 
-  auto status = interaction_->SendRequest("MDSService", "LeaveCacheGroup", request, response);
+  auto status = interaction_->SendRequest("MDSService", "LeaveCacheGroup",
+                                          request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -1384,7 +1476,8 @@ LeaveCacheGroupResponse MDSClient::LeaveCacheGroup(const std::string& member_id,
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
     std::cout << "LeaveCacheGroup success\n";
   } else {
-    std::cerr << "LeaveCacheGroup fail, error: " << response.ShortDebugString() << "\n";
+    std::cerr << "LeaveCacheGroup fail, error: " << response.ShortDebugString()
+              << "\n";
   }
 
   return response;
@@ -1394,7 +1487,8 @@ ListGroupsResponse MDSClient::ListGroups() {
   ListGroupsRequest request;
   ListGroupsResponse response;
 
-  auto status = interaction_->SendRequest("MDSService", "ListGroups", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "ListGroups", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -1408,7 +1502,9 @@ ListGroupsResponse MDSClient::ListGroups() {
   return response;
 }
 
-ReweightMemberResponse MDSClient::ReweightMember(const std::string& member_id, const std::string& ip, uint32_t port,
+ReweightMemberResponse MDSClient::ReweightMember(const std::string& member_id,
+                                                 const std::string& ip,
+                                                 uint32_t port,
                                                  uint32_t weight) {
   ReweightMemberRequest request;
   ReweightMemberResponse response;
@@ -1418,7 +1514,8 @@ ReweightMemberResponse MDSClient::ReweightMember(const std::string& member_id, c
   request.set_port(port);
   request.set_weight(weight);
 
-  auto status = interaction_->SendRequest("MDSService", "ReweightMember", request, response);
+  auto status = interaction_->SendRequest("MDSService", "ReweightMember",
+                                          request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -1428,7 +1525,8 @@ ReweightMemberResponse MDSClient::ReweightMember(const std::string& member_id, c
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
     std::cout << "ReweightMember success\n";
   } else {
-    std::cerr << "ReweightMember fail, error: " << response.ShortDebugString() << "\n";
+    std::cerr << "ReweightMember fail, error: " << response.ShortDebugString()
+              << "\n";
   }
 
   return response;
@@ -1440,7 +1538,8 @@ ListMembersResponse MDSClient::ListMembers(const std::string& group_name) {
 
   request.set_group_name(group_name);
 
-  auto status = interaction_->SendRequest("MDSService", "ListMembers", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "ListMembers", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -1448,7 +1547,8 @@ ListMembersResponse MDSClient::ListMembers(const std::string& group_name) {
   }
 
   if (response.error().errcode() != dingofs::pb::error::Errno::OK) {
-    std::cerr << "ListMembers fail, error: " << response.ShortDebugString() << "\n";
+    std::cerr << "ListMembers fail, error: " << response.ShortDebugString()
+              << "\n";
   }
 
   for (const auto& member : response.members()) {
@@ -1458,7 +1558,9 @@ ListMembersResponse MDSClient::ListMembers(const std::string& group_name) {
   return response;
 }
 
-UnLockMemberResponse MDSClient::UnlockMember(const std::string& member_id, const std::string& ip, uint32_t port) {
+UnLockMemberResponse MDSClient::UnlockMember(const std::string& member_id,
+                                             const std::string& ip,
+                                             uint32_t port) {
   UnLockMemberRequest request;
   UnLockMemberResponse response;
 
@@ -1466,7 +1568,8 @@ UnLockMemberResponse MDSClient::UnlockMember(const std::string& member_id, const
   request.set_ip(ip);
   request.set_port(port);
 
-  auto status = interaction_->SendRequest("MDSService", "UnlockMember", request, response);
+  auto status = interaction_->SendRequest("MDSService", "UnlockMember", request,
+                                          response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -1476,7 +1579,8 @@ UnLockMemberResponse MDSClient::UnlockMember(const std::string& member_id, const
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
     std::cout << "UnlockMember success\n";
   } else {
-    std::cerr << "UnlockMember fail, error: " << response.ShortDebugString() << "\n";
+    std::cerr << "UnlockMember fail, error: " << response.ShortDebugString()
+              << "\n";
   }
 
   return response;
@@ -1488,7 +1592,8 @@ DeleteMemberResponse MDSClient::DeleteMember(const std::string& member_id) {
 
   request.set_member_id(member_id);
 
-  auto status = interaction_->SendRequest("MDSService", "DeleteMember", request, response);
+  auto status = interaction_->SendRequest("MDSService", "DeleteMember", request,
+                                          response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -1498,13 +1603,15 @@ DeleteMemberResponse MDSClient::DeleteMember(const std::string& member_id) {
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
     std::cout << "DeleteMember success\n";
   } else {
-    std::cerr << "DeleteMember fail, error: " << response.ShortDebugString() << "\n";
+    std::cerr << "DeleteMember fail, error: " << response.ShortDebugString()
+              << "\n";
   }
 
   return response;
 }
 
-void MDSClient::UpdateFsS3Info(const std::string& fs_name, const S3Info& s3_info) {
+void MDSClient::UpdateFsS3Info(const std::string& fs_name,
+                               const S3Info& s3_info) {
   if (fs_name.empty()) {
     std::cerr << "fs_name is empty"
               << "\n";
@@ -1532,7 +1639,8 @@ void MDSClient::UpdateFsS3Info(const std::string& fs_name, const S3Info& s3_info
   UpdateFs(fs_name, fs_info);
 }
 
-void MDSClient::UpdateFsRadosInfo(const std::string& fs_name, const RadosInfo& rados_info) {
+void MDSClient::UpdateFsRadosInfo(const std::string& fs_name,
+                                  const RadosInfo& rados_info) {
   if (fs_name.empty()) {
     std::cerr << "fs_name is empty"
               << "\n";
@@ -1562,7 +1670,8 @@ void MDSClient::UpdateFsRadosInfo(const std::string& fs_name, const RadosInfo& r
   UpdateFs(fs_name, fs_info);
 }
 
-void MDSClient::UpdateFsTrashDays(const std::string& fs_name, uint32_t trash_days) {
+void MDSClient::UpdateFsTrashDays(const std::string& fs_name,
+                                  uint32_t trash_days) {
   if (fs_name.empty()) {
     std::cerr << "fs_name is empty"
               << "\n";
@@ -1581,7 +1690,8 @@ void MDSClient::UpdateFsTrashDays(const std::string& fs_name, uint32_t trash_day
   UpdateFs(fs_name, fs_info);
 }
 
-void MDSClient::UpdateFsEnableUidGidMap(const std::string& fs_name, bool enable) {
+void MDSClient::UpdateFsEnableUidGidMap(const std::string& fs_name,
+                                        bool enable) {
   if (fs_name.empty()) {
     std::cerr << "fs_name is empty\n";
     return;
@@ -1602,8 +1712,8 @@ void MDSClient::UpdateFsEnableUidGidMap(const std::string& fs_name, bool enable)
   UpdateFs(fs_name, fs_info);
 }
 
-bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr, const std::string& cmd,
-                           uint32_t fs_id) {
+bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr,
+                           const std::string& cmd, uint32_t fs_id) {
   static std::set<std::string> mds_cmd = {
       "integrationtest",
       "getmdslist",
@@ -1694,7 +1804,8 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr, 
     mds_client.UpdateFsTrashDays(options.fs_name, options.trash_days);
 
   } else if (cmd == Helper::ToLowerCase("UpdateFsEnableUidGidMap")) {
-    mds_client.UpdateFsEnableUidGidMap(options.fs_name, options.enable_uid_gid_map);
+    mds_client.UpdateFsEnableUidGidMap(options.fs_name,
+                                       options.enable_uid_gid_map);
 
   } else if (cmd == Helper::ToLowerCase("GetFs")) {
     mds_client.GetFs(options.fs_name);
@@ -1804,7 +1915,8 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr, 
     if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
       std::cout << "joinfs success." << '\n';
     } else {
-      std::cout << "joinfs fail, error: " << response.ShortDebugString() << '\n';
+      std::cout << "joinfs fail, error: " << response.ShortDebugString()
+                << '\n';
     }
 
   } else if (cmd == Helper::ToLowerCase("QuitFs")) {
@@ -1824,31 +1936,38 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr, 
     if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
       std::cout << "quitfs success." << '\n';
     } else {
-      std::cout << "quitfs fail, error: " << response.ShortDebugString() << '\n';
+      std::cout << "quitfs fail, error: " << response.ShortDebugString()
+                << '\n';
     }
   } else if (cmd == Helper::ToLowerCase("JoinCacheGroup")) {
     auto response =
-        mds_client.JoinCacheGroup(options.member_id, options.ip, options.port, options.group_name, options.weight);
+        mds_client.JoinCacheGroup(options.member_id, options.ip, options.port,
+                                  options.group_name, options.weight);
     if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
       std::cout << "joincachegroup success." << '\n';
     } else {
-      std::cout << "joincachegroup fail, error: " << response.ShortDebugString() << '\n';
+      std::cout << "joincachegroup fail, error: " << response.ShortDebugString()
+                << '\n';
     }
 
   } else if (cmd == Helper::ToLowerCase("LeaveCacheGroup")) {
-    auto response = mds_client.LeaveCacheGroup(options.member_id, options.ip, options.port, options.group_name);
+    auto response = mds_client.LeaveCacheGroup(
+        options.member_id, options.ip, options.port, options.group_name);
     if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
       std::cout << "leavecachegroup success.\n";
     } else {
-      std::cout << "leavecachegroup fail, error: " << response.ShortDebugString() << '\n';
+      std::cout << "leavecachegroup fail, error: "
+                << response.ShortDebugString() << '\n';
     }
 
   } else if (cmd == Helper::ToLowerCase("ReweightMember")) {
-    auto response = mds_client.ReweightMember(options.member_id, options.ip, options.port, options.weight);
+    auto response = mds_client.ReweightMember(options.member_id, options.ip,
+                                              options.port, options.weight);
     if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
       std::cout << "reweightmember success.\n";
     } else {
-      std::cout << "reweightmember fail, error: " << response.ShortDebugString() << '\n';
+      std::cout << "reweightmember fail, error: " << response.ShortDebugString()
+                << '\n';
     }
 
   } else if (cmd == Helper::ToLowerCase("ListGroups")) {
@@ -1858,18 +1977,21 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr, 
     auto response = mds_client.ListMembers(options.group_name);
 
   } else if (cmd == Helper::ToLowerCase("UnlockMember")) {
-    auto response = mds_client.UnlockMember(options.member_id, options.ip, options.port);
+    auto response =
+        mds_client.UnlockMember(options.member_id, options.ip, options.port);
     if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
       std::cout << "unlockmember success.\n";
     } else {
-      std::cout << "unlockmember fail, error: " << response.ShortDebugString() << '\n';
+      std::cout << "unlockmember fail, error: " << response.ShortDebugString()
+                << '\n';
     }
   } else if (cmd == Helper::ToLowerCase("DeleteMember")) {
     auto response = mds_client.DeleteMember(options.member_id);
     if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
       std::cout << "deletemember success.\n";
     } else {
-      std::cout << "deletemember fail, error: " << response.ShortDebugString() << '\n';
+      std::cout << "deletemember fail, error: " << response.ShortDebugString()
+                << '\n';
     }
 
   } else if (cmd == Helper::ToLowerCase("RestoreTrash")) {

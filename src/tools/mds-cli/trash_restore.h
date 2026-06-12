@@ -27,8 +27,8 @@
 #include <vector>
 
 #include "dingofs/mds.pb.h"
-#include "mds/client/mds.h"
 #include "mds/common/type.h"
+#include "tools/mds-cli/mds.h"
 
 namespace dingofs {
 namespace mds {

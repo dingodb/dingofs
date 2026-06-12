@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "mds/client/store.h"
+#include "tools/mds-cli/store.h"
 
 #include <cstdint>
 #include <iostream>
@@ -34,7 +34,8 @@ namespace dingofs {
 namespace mds {
 namespace client {
 
-bool StoreClient::Init(const std::string& engine_type, const std::string& coor_addr) {
+bool StoreClient::Init(const std::string& engine_type,
+                       const std::string& coor_addr) {
   CHECK(!coor_addr.empty()) << "coor addr is empty.";
 
   if (engine_type == "dingo-store") {
@@ -56,15 +57,20 @@ bool StoreClient::Init(const std::string& engine_type, const std::string& coor_a
 bool StoreClient::CreateMetaTable(const std::string& name) {
   int64_t table_id = 0;
   Range range = MetaCodec::GetMetaTableRange();
-  KVStorage::TableOption option = {.start_key = range.start, .end_key = range.end};
+  KVStorage::TableOption option = {.start_key = range.start,
+                                   .end_key = range.end};
   auto status = kv_storage_->CreateTable(name, option, table_id);
   if (!status.ok()) {
-    std::cerr << fmt::format("create meta table fail, error: {}.", status.error_str()) << '\n';
+    std::cerr << fmt::format("create meta table fail, error: {}.",
+                             status.error_str())
+              << '\n';
     return false;
   }
 
-  std::cout << fmt::format("create meta table success, start_key({}), end_key({}).",
-                           Helper::StringToHex(option.start_key), Helper::StringToHex(option.end_key))
+  std::cout << fmt::format(
+                   "create meta table success, start_key({}), end_key({}).",
+                   Helper::StringToHex(option.start_key),
+                   Helper::StringToHex(option.end_key))
             << '\n';
 
   return true;
@@ -73,15 +79,20 @@ bool StoreClient::CreateMetaTable(const std::string& name) {
 bool StoreClient::CreateFsStatsTable(const std::string& name) {
   int64_t table_id = 0;
   Range range = MetaCodec::GetFsStatsTableRange();
-  KVStorage::TableOption option = {.start_key = range.start, .end_key = range.end};
+  KVStorage::TableOption option = {.start_key = range.start,
+                                   .end_key = range.end};
   auto status = kv_storage_->CreateTable(name, option, table_id);
   if (!status.ok()) {
-    std::cerr << fmt::format("create fs stats table fail, error: {}.", status.error_str()) << '\n';
+    std::cerr << fmt::format("create fs stats table fail, error: {}.",
+                             status.error_str())
+              << '\n';
     return false;
   }
 
-  std::cout << fmt::format("create fs stats table success, start_key({}), end_key({}).",
-                           Helper::StringToHex(option.start_key), Helper::StringToHex(option.end_key))
+  std::cout << fmt::format(
+                   "create fs stats table success, start_key({}), end_key({}).",
+                   Helper::StringToHex(option.start_key),
+                   Helper::StringToHex(option.end_key))
             << '\n';
 
   return true;
@@ -91,7 +102,9 @@ bool StoreClient::DropMetaTable() {
   Range range = MetaCodec::GetMetaTableRange();
   auto status = kv_storage_->DropTable(range);
   if (!status.ok()) {
-    std::cerr << fmt::format("drop meta table fail, error: {}.", status.error_str()) << '\n';
+    std::cerr << fmt::format("drop meta table fail, error: {}.",
+                             status.error_str())
+              << '\n';
     return false;
   }
 
@@ -103,7 +116,9 @@ bool StoreClient::DropFsStatsTable() {
   Range range = MetaCodec::GetFsStatsTableRange();
   auto status = kv_storage_->DropTable(range);
   if (!status.ok()) {
-    std::cerr << fmt::format("drop fs stats table fail, error: {}.", status.error_str()) << '\n';
+    std::cerr << fmt::format("drop fs stats table fail, error: {}.",
+                             status.error_str())
+              << '\n';
     return false;
   }
 
@@ -115,11 +130,14 @@ bool StoreClient::DropFsMetaTable(uint32_t fs_id) {
   Range range = MetaCodec::GetFsMetaTableRange(fs_id);
   auto status = kv_storage_->DropTable(range);
   if (!status.ok()) {
-    std::cerr << fmt::format("drop fs meta table fail, error: {}.", status.error_str()) << '\n';
+    std::cerr << fmt::format("drop fs meta table fail, error: {}.",
+                             status.error_str())
+              << '\n';
     return false;
   }
 
-  std::cout << fmt::format("drop fs meta table success, fs_id({}).", fs_id) << '\n';
+  std::cout << fmt::format("drop fs meta table success, fs_id({}).", fs_id)
+            << '\n';
   return true;
 }
 
@@ -137,10 +155,12 @@ static void TraversePrint(FsTreeNode* item, bool is_details, int level) {
     return utils::FormatMsTime(time_ns / 1000000, "%H:%M:%S");
   };
 
-  std::cout << fmt::format("{} [{},{},{}/{},{},{},{},{},{},{},{}]\n", dentry.name(), dentry.ino(),
-                           pb::mds::FileType_Name(attr.type()), attr.mode(), Helper::FsModeToString(attr.mode()),
-                           attr.nlink(), attr.uid(), attr.gid(), attr.length(), format_time_fn(attr.ctime()),
-                           format_time_fn(attr.mtime()), format_time_fn(attr.atime()));
+  std::cout << fmt::format(
+      "{} [{},{},{}/{},{},{},{},{},{},{},{}]\n", dentry.name(), dentry.ino(),
+      pb::mds::FileType_Name(attr.type()), attr.mode(),
+      Helper::FsModeToString(attr.mode()), attr.nlink(), attr.uid(), attr.gid(),
+      attr.length(), format_time_fn(attr.ctime()), format_time_fn(attr.mtime()),
+      format_time_fn(attr.atime()));
 
   if (dentry.type() == pb::mds::FileType::DIRECTORY) {
     for (auto* child : item->children) {
@@ -162,26 +182,32 @@ void StoreClient::PrintDentryTree(uint32_t fs_id, bool is_details) {
     return;
   }
 
-  std::cout << "############ name [ino,type,mode,nlink,uid,gid,size,ctime,mtime,atime] ############\n";
+  std::cout
+      << "############ name "
+         "[ino,type,mode,nlink,uid,gid,size,ctime,mtime,atime] ############\n";
   TraversePrint(root, is_details, 0);
 
   FreeFsTree(root);
 }
 
-bool StoreClient::UpdateFsS3Info(const std::string& fs_name, const S3Info& s3_info) {
+bool StoreClient::UpdateFsS3Info(const std::string& fs_name,
+                                 const S3Info& s3_info) {
   std::string fs_key = MetaCodec::EncodeFsKey(fs_name);
 
   auto txn = kv_storage_->NewTxn();
   std::string value;
   auto status = txn->Get(fs_key, value);
   if (!status.ok()) {
-    std::cerr << fmt::format("get fs meta fail, error: {}.", status.error_str()) << '\n';
+    std::cerr << fmt::format("get fs meta fail, error: {}.", status.error_str())
+              << '\n';
     return false;
   }
 
   auto fs_info = MetaCodec::DecodeFsValue(value);
   if (fs_info.fs_type() != pb::mds::FsType::S3) {
-    std::cerr << fmt::format("fs type({}) is not s3.", pb::mds::FsType_Name(fs_info.fs_type())) << '\n';
+    std::cerr << fmt::format("fs type({}) is not s3.",
+                             pb::mds::FsType_Name(fs_info.fs_type()))
+              << '\n';
     return false;
   }
 
@@ -190,7 +216,8 @@ bool StoreClient::UpdateFsS3Info(const std::string& fs_name, const S3Info& s3_in
   if (!s3_info.ak.empty()) pb_s3_info.set_ak(s3_info.ak);
   if (!s3_info.sk.empty()) pb_s3_info.set_sk(s3_info.sk);
   if (!s3_info.endpoint.empty()) pb_s3_info.set_endpoint(s3_info.endpoint);
-  if (!s3_info.bucket_name.empty()) pb_s3_info.set_bucketname(s3_info.bucket_name);
+  if (!s3_info.bucket_name.empty())
+    pb_s3_info.set_bucketname(s3_info.bucket_name);
   fs_info.mutable_extra()->mutable_s3_info()->CopyFrom(pb_s3_info);
 
   fs_info.set_version(fs_info.version() + 1);
@@ -199,7 +226,9 @@ bool StoreClient::UpdateFsS3Info(const std::string& fs_name, const S3Info& s3_in
 
   status = txn->Commit();
   if (!status.ok()) {
-    std::cerr << fmt::format("update fs s3 info fail, error: {}.", status.error_str()) << '\n';
+    std::cerr << fmt::format("update fs s3 info fail, error: {}.",
+                             status.error_str())
+              << '\n';
     return false;
   }
 
@@ -208,30 +237,38 @@ bool StoreClient::UpdateFsS3Info(const std::string& fs_name, const S3Info& s3_in
   return true;
 }
 
-bool StoreClient::UpdateFsRadosInfo(const std::string& fs_name, const RadosInfo& rados_info) {
+bool StoreClient::UpdateFsRadosInfo(const std::string& fs_name,
+                                    const RadosInfo& rados_info) {
   std::string fs_key = MetaCodec::EncodeFsKey(fs_name);
 
   auto txn = kv_storage_->NewTxn();
   std::string value;
   auto status = txn->Get(fs_key, value);
   if (!status.ok()) {
-    std::cerr << fmt::format("get fs meta fail, error: {}.", status.error_str()) << '\n';
+    std::cerr << fmt::format("get fs meta fail, error: {}.", status.error_str())
+              << '\n';
     return false;
   }
 
   auto fs_info = MetaCodec::DecodeFsValue(value);
   if (fs_info.fs_type() != pb::mds::FsType::RADOS) {
-    std::cerr << fmt::format("fs type({}) is not rados.", pb::mds::FsType_Name(fs_info.fs_type())) << '\n';
+    std::cerr << fmt::format("fs type({}) is not rados.",
+                             pb::mds::FsType_Name(fs_info.fs_type()))
+              << '\n';
     return false;
   }
 
   pb::mds::RadosInfo pb_rados_info;
   pb_rados_info.CopyFrom(fs_info.extra().rados_info());
-  if (!rados_info.mon_host.empty()) pb_rados_info.set_mon_host(rados_info.mon_host);
-  if (!rados_info.pool_name.empty()) pb_rados_info.set_pool_name(rados_info.pool_name);
+  if (!rados_info.mon_host.empty())
+    pb_rados_info.set_mon_host(rados_info.mon_host);
+  if (!rados_info.pool_name.empty())
+    pb_rados_info.set_pool_name(rados_info.pool_name);
   if (!rados_info.key.empty()) pb_rados_info.set_key(rados_info.key);
-  if (!rados_info.cluster_name.empty()) pb_rados_info.set_cluster_name(rados_info.cluster_name);
-  if (!rados_info.user_name.empty()) pb_rados_info.set_user_name(rados_info.user_name);
+  if (!rados_info.cluster_name.empty())
+    pb_rados_info.set_cluster_name(rados_info.cluster_name);
+  if (!rados_info.user_name.empty())
+    pb_rados_info.set_user_name(rados_info.user_name);
 
   fs_info.mutable_extra()->mutable_rados_info()->CopyFrom(pb_rados_info);
 
@@ -241,7 +278,9 @@ bool StoreClient::UpdateFsRadosInfo(const std::string& fs_name, const RadosInfo&
 
   status = txn->Commit();
   if (!status.ok()) {
-    std::cerr << fmt::format("update fs rados info fail, error: {}.", status.error_str()) << '\n';
+    std::cerr << fmt::format("update fs rados info fail, error: {}.",
+                             status.error_str())
+              << '\n';
     return false;
   }
 
@@ -250,7 +289,9 @@ bool StoreClient::UpdateFsRadosInfo(const std::string& fs_name, const RadosInfo&
   return true;
 }
 
-bool StoreCommandRunner::Run(const Options& options, const std::string& coor_addr, const std::string& cmd) {
+bool StoreCommandRunner::Run(const Options& options,
+                             const std::string& coor_addr,
+                             const std::string& cmd) {
   static std::set<std::string> mds_cmd = {
       Helper::ToLowerCase("CreateMetaTable"),
       Helper::ToLowerCase("CreateFsStatsTable"),

@@ -20,8 +20,8 @@
 #include <vector>
 
 #include "dingofs/mds.pb.h"
-#include "mds/client/interaction.h"
 #include "mds/common/type.h"
+#include "tools/mds-cli/interaction.h"
 
 namespace dingofs {
 namespace mds {
@@ -217,22 +217,29 @@ class MDSClient {
     bool enable_uid_gid_map{false};
   };
 
-  CreateFsResponse CreateFs(const std::string& fs_name, const CreateFsParams& params);
-  MountFsResponse MountFs(const std::string& fs_name, const std::string& client_id);
-  UmountFsResponse UmountFs(const std::string& fs_name, const std::string& client_id);
+  CreateFsResponse CreateFs(const std::string& fs_name,
+                            const CreateFsParams& params);
+  MountFsResponse MountFs(const std::string& fs_name,
+                          const std::string& client_id);
+  UmountFsResponse UmountFs(const std::string& fs_name,
+                            const std::string& client_id);
   DeleteFsResponse DeleteFs(const std::string& fs_name, bool is_force);
-  UpdateFsInfoResponse UpdateFs(const std::string& fs_name, const pb::mds::FsInfo& fs_info);
+  UpdateFsInfoResponse UpdateFs(const std::string& fs_name,
+                                const pb::mds::FsInfo& fs_info);
   GetFsInfoResponse GetFs(const std::string& fs_name);
   GetFsInfoResponse GetFs(uint32_t fs_id);
   ListFsInfoResponse ListFs();
 
   MkDirResponse MkDir(Ino parent, const std::string& name);
-  void BatchMkDir(const std::vector<int64_t>& parents, const std::string& prefix, size_t num);
+  void BatchMkDir(const std::vector<int64_t>& parents,
+                  const std::string& prefix, size_t num);
   RmDirResponse RmDir(Ino parent, const std::string& name);
-  ReadDirResponse ReadDir(Ino ino, const std::string& last_name, bool with_attr, bool is_refresh);
+  ReadDirResponse ReadDir(Ino ino, const std::string& last_name, bool with_attr,
+                          bool is_refresh);
 
   MkNodResponse MkNod(Ino parent, const std::string& name);
-  void BatchMkNod(const std::vector<int64_t>& parents, const std::string& prefix, size_t num);
+  void BatchMkNod(const std::vector<int64_t>& parents,
+                  const std::string& prefix, size_t num);
 
   GetDentryResponse GetDentry(Ino parent, const std::string& name);
   ListDentryResponse ListDentry(Ino parent, bool is_only_dir);
@@ -252,23 +259,30 @@ class MDSClient {
 
   LinkResponse Link(Ino ino, Ino new_parent, const std::string& new_name);
   UnLinkResponse UnLink(Ino parent, const std::string& name);
-  SymlinkResponse Symlink(Ino parent, const std::string& name, const std::string& symlink);
+  SymlinkResponse Symlink(Ino parent, const std::string& name,
+                          const std::string& symlink);
   ReadLinkResponse ReadLink(Ino ino);
 
   // attribute operations
   pb::mds::GetAttrResponse GetAttr(Ino ino);
-  pb::mds::SetAttrResponse SetAttr(Ino ino, uint32_t to_set, const pb::mds::Inode& inode);
+  pb::mds::SetAttrResponse SetAttr(Ino ino, uint32_t to_set,
+                                   const pb::mds::Inode& inode);
 
   pb::mds::GetXAttrResponse GetXAttr(Ino ino, const std::string& name);
-  pb::mds::SetXAttrResponse SetXAttr(Ino ino, const std::map<std::string, std::string>& xattrs);
+  pb::mds::SetXAttrResponse SetXAttr(
+      Ino ino, const std::map<std::string, std::string>& xattrs);
   pb::mds::RemoveXAttrResponse RemoveXAttr(Ino ino, const std::string& name);
   pb::mds::ListXAttrResponse ListXAttr(Ino ino);
 
-  pb::mds::RenameResponse Rename(Ino old_parent, const std::string& old_name, Ino new_parent,
-                                 const std::string& new_name, const std::vector<int64_t>& old_ancestors = {},
-                                 const std::vector<int64_t>& new_ancestors = {});
+  pb::mds::RenameResponse Rename(
+      Ino old_parent, const std::string& old_name, Ino new_parent,
+      const std::string& new_name,
+      const std::vector<int64_t>& old_ancestors = {},
+      const std::vector<int64_t>& new_ancestors = {});
 
-  RestoreFromTrashResponse RestoreFromTrash(Ino trash_parent, const std::string& trash_name, uint32_t uid,
+  RestoreFromTrashResponse RestoreFromTrash(Ino trash_parent,
+                                            const std::string& trash_name,
+                                            uint32_t uid,
                                             bool allow_trash_parent);
 
   AllocSliceIdResponse AllocSliceId(uint32_t alloc_num, uint64_t min_slice_id);
@@ -282,23 +296,31 @@ class MDSClient {
   GetDirQuotaResponse GetDirQuota(Ino ino);
   DeleteDirQuotaResponse DeleteDirQuota(Ino ino);
 
-  JoinFsResponse JoinFs(const std::string& fs_name, uint32_t fs_id, const std::vector<int64_t>& mds_ids);
-  QuitFsResponse QuitFs(const std::string& fs_name, uint32_t fs_id, const std::vector<int64_t>& mds_ids);
+  JoinFsResponse JoinFs(const std::string& fs_name, uint32_t fs_id,
+                        const std::vector<int64_t>& mds_ids);
+  QuitFsResponse QuitFs(const std::string& fs_name, uint32_t fs_id,
+                        const std::vector<int64_t>& mds_ids);
 
   // cache member operations
-  JoinCacheGroupResponse JoinCacheGroup(const std::string& member_id, const std::string& ip, uint32_t port,
-                                        const std::string& group_name, uint32_t weight);
-  LeaveCacheGroupResponse LeaveCacheGroup(const std::string& member_id, const std::string& ip, uint32_t port,
+  JoinCacheGroupResponse JoinCacheGroup(const std::string& member_id,
+                                        const std::string& ip, uint32_t port,
+                                        const std::string& group_name,
+                                        uint32_t weight);
+  LeaveCacheGroupResponse LeaveCacheGroup(const std::string& member_id,
+                                          const std::string& ip, uint32_t port,
                                           const std::string& group_name);
   ListGroupsResponse ListGroups();
-  ReweightMemberResponse ReweightMember(const std::string& member_id, const std::string& ip, uint32_t port,
+  ReweightMemberResponse ReweightMember(const std::string& member_id,
+                                        const std::string& ip, uint32_t port,
                                         uint32_t weight);
   ListMembersResponse ListMembers(const std::string& group_name);
-  UnLockMemberResponse UnlockMember(const std::string& member_id, const std::string& ip, uint32_t port);
+  UnLockMemberResponse UnlockMember(const std::string& member_id,
+                                    const std::string& ip, uint32_t port);
   DeleteMemberResponse DeleteMember(const std::string& member_id);
 
   void UpdateFsS3Info(const std::string& fs_name, const S3Info& s3_info);
-  void UpdateFsRadosInfo(const std::string& fs_name, const RadosInfo& rados_info);
+  void UpdateFsRadosInfo(const std::string& fs_name,
+                         const RadosInfo& rados_info);
   void UpdateFsTrashDays(const std::string& fs_name, uint32_t trash_days);
   void UpdateFsEnableUidGidMap(const std::string& fs_name, bool enable);
 
@@ -341,7 +363,7 @@ class MdsCommandRunner {
     std::string group_name;
     uint32_t weight;
 
-    //trash
+    // trash
     uint32_t trash_days{0};
     bool immediate_trash_quota{true};
     bool enable_uid_gid_map{false};
@@ -355,7 +377,8 @@ class MdsCommandRunner {
     RadosInfo rados_info;
   };
 
-  static bool Run(const Options& options, const std::string& mds_addr, const std::string& cmd, uint32_t fs_id);
+  static bool Run(const Options& options, const std::string& mds_addr,
+                  const std::string& cmd, uint32_t fs_id);
 };
 
 }  // namespace client
