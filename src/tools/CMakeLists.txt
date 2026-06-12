@@ -12,10 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+add_compile_options(-Wall -Wno-reorder -Wno-overloaded-virtual)
 
-add_subdirectory(utils)
-add_subdirectory(common)
-add_subdirectory(cache)
-add_subdirectory(client)
-add_subdirectory(mds)
-add_subdirectory(tools)
+add_subdirectory(bench)
+add_subdirectory(mds-cli)
