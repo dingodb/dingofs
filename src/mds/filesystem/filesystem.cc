@@ -1205,9 +1205,7 @@ Status FileSystem::Open(Context& ctx, Ino ino, const OpenParam& param, EntryOut&
     chunk_cache_.Delete(ino);
 
   } else {
-    for (auto& chunk : chunks) {
-      chunk_cache_.PutIf(ino, std::move(chunk));
-    }
+    for (auto& chunk : chunks) chunk_cache_.PutIf(ino, std::move(chunk));
   }
 
   return Status::OK();

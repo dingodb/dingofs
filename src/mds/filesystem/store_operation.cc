@@ -1137,11 +1137,15 @@ Status UpsertChunkOperation::Run(TxnUPtr& txn) {
   result_.effected_chunks.clear();
   for (const auto& delta_slices : delta_slices_) {
     ChunkEntry chunk;
-    const auto& chunk_index = delta_slices.chunk_index();
+    const uint64_t chunk_index = delta_slices.chunk_index();
 
     const std::string key = MetaCodec::EncodeChunkKey(fs_id, ino_, chunk_index);
     auto value = FindValue(kvs, key);
     if (!value.empty()) chunk = MetaCodec::DecodeChunkValue(value);
+
+    LOG(INFO) << fmt::format(
+        "[operation.{}.{}] upsert chunk, chunk_index({}), keys({}) kvs({}) value({}) old_chunk({}).", fs_id, ino_,
+        chunk_index, keys.size(), kvs.size(), value.size(), chunk.ShortDebugString());
 
     bool has_update = false;
     // not exist chunk, create a new one
@@ -1500,17 +1504,6 @@ Status FallocateOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_par
   return Status::OK();
 }
 
-void OpenFileOperation::ResetFileRange(TxnUPtr& txn, uint64_t length) {
-  const uint32_t fs_id = file_session_.fs_id();
-  const Ino ino = file_session_.ino();
-
-  uint32_t old_num = (length / chunk_size_) + ((length % chunk_size_) != 0 ? 1 : 0);
-
-  for (uint32_t i = 0; i < old_num; ++i) {
-    txn->Delete(MetaCodec::EncodeChunkKey(fs_id, ino, i));
-  }
-}
-
 void OpenFileOperation::PrefetchKey(std::vector<std::string>& keys) {
   if (prefetch_chunks_.empty() && !prefetch_data_) return;
 
@@ -1532,8 +1525,6 @@ Status OpenFileOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_para
   }
 
   if (flags_ & O_TRUNC) {
-    ResetFileRange(txn, attr.length());
-
     // delete tiny file data
     if (FLAGS_mds_tiny_file_data_enable && attr.maybe_tiny_file()) {
       txn->Delete(MetaCodec::EncodeTinyFileDataKey(file_session_.fs_id(), file_session_.ino()));
