@@ -1128,8 +1128,6 @@ class OpenFileOperation : public Operation {
   Result& GetResult() { return result_; }
 
  private:
-  void ResetFileRange(TxnUPtr& txn, uint64_t length);
-
   uint32_t flags_;
   FileSessionEntry file_session_;
   uint64_t chunk_size_{0};

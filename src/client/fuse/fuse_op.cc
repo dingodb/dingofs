@@ -86,8 +86,8 @@ void InitFuseConnInfo(struct fuse_conn_info* conn) {
         << "[enabled] FUSE_CAP_PARALLEL_DIROPS";
   }
 
-  LOG_IF(INFO, fuse_set_feature_flag(conn, FUSE_CAP_WRITEBACK_CACHE))
-      << "[enabled] FUSE_CAP_WRITEBACK_CACHE";
+  // LOG_IF(INFO, fuse_set_feature_flag(conn, FUSE_CAP_WRITEBACK_CACHE))
+  //     << "[enabled] FUSE_CAP_WRITEBACK_CACHE";
 
   LOG_IF(INFO, fuse_set_feature_flag(conn, FUSE_CAP_READDIRPLUS))
       << "[enabled] FUSE_CAP_READDIRPLUS";
