@@ -134,7 +134,7 @@ class FileSessionMap {
 
   using Map = absl::btree_map<Ino, FileSessionSPtr>;
 
-  constexpr static size_t kShardNum = 32;
+  constexpr static size_t kShardNum = 128;
   utils::Shards<Map, kShardNum> shard_map_;
 
   // metrics

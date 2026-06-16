@@ -130,7 +130,7 @@ class DirIteratorManager {
 
   using Map = absl::flat_hash_map<Ino, DirIteratorSet>;
 
-  constexpr static size_t kShardNum = 32;
+  constexpr static size_t kShardNum = 128;
   utils::Shards<Map, kShardNum> shard_map_;
 
   // metrics

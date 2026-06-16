@@ -75,7 +75,7 @@ class ChunkMemo {
  private:
   using Map = absl::btree_map<Key, Value>;
 
-  constexpr static size_t kShardNum = 64;
+  constexpr static size_t kShardNum = 128;
   utils::Shards<Map, kShardNum> shard_map_;
 
   // metric

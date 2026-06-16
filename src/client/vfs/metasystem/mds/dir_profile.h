@@ -144,7 +144,7 @@ class DirProfileCache {
  private:
   using Map = absl::btree_map<Ino, DirProfileSPtr>;
 
-  static constexpr size_t kShardNum = 32;
+  static constexpr size_t kShardNum = 128;
   mutable utils::Shards<Map, kShardNum> shard_map_;
 };
 

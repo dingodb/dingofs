@@ -701,21 +701,23 @@ void ChunkCache::Clear() {
 }
 
 void ChunkCache::CleanExpired(uint64_t expire_s) {
-  shard_map_.iterateWLock([&](Map& map) {
-    for (auto it = map.begin(); it != map.end();) {
-      if (it->second->GetLastActiveTimeS() < expire_s) {
-        auto temp = it++;
-        uint64_t ino = temp->first;
-        map.erase(temp);
-        clean_count_ << 1;
-        LOG_DEBUG << fmt::format(
-            "[meta.chunkcache] clean expired chunkset ino({}).", ino);
-
-      } else {
-        ++it;
+  std::vector<ChunkSetSPtr> expired_chunksets;
+  shard_map_.iterate([&](Map& map) {
+    for (auto& [ino, chunkset] : map) {
+      if (chunkset->GetLastActiveTimeS() < expire_s) {
+        expired_chunksets.push_back(chunkset);
       }
     }
   });
+
+  // delete expired chunksets
+  for (const auto& chunkset : expired_chunksets) {
+    Delete(chunkset->GetIno());
+    clean_count_ << 1;
+    LOG_DEBUG << fmt::format(
+        "[meta.chunkcache] clean expired chunkset ino({}).",
+        chunkset->GetIno());
+  }
 }
 
 void ChunkCache::Summary(Json::Value& value) {

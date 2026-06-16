@@ -206,7 +206,7 @@ class TinyFileDataCache {
  private:
   using Map = absl::flat_hash_map<Ino, DataBufferSPtr>;
 
-  constexpr static size_t kShardNum = 32;
+  constexpr static size_t kShardNum = 128;
   utils::Shards<Map, kShardNum> shard_map_;
 
   // metrics
