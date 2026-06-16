@@ -74,6 +74,7 @@ DECLARE_uint32(mds_transfer_max_slice_num);
 // gc config
 DECLARE_uint32(mds_gc_worker_num);
 DECLARE_uint32(mds_gc_max_pending_task_count);
+DECLARE_bool(mds_gc_use_pthread_enable);
 DECLARE_bool(mds_gc_delslice_enable);
 DECLARE_bool(mds_gc_delfile_enable);
 DECLARE_bool(mds_gc_filesession_enable);
