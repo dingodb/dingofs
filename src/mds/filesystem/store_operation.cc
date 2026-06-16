@@ -43,7 +43,6 @@
 #include "mds/common/status.h"
 #include "mds/common/trash.h"
 #include "mds/common/type.h"
-#include "mds/filesystem/parent_memo.h"
 #include "mds/storage/storage.h"
 #include "utils/time.h"
 #include "utils/uuid.h"
@@ -1093,6 +1092,10 @@ Status UpdateXAttrOperation::RunInBatch(TxnUPtr&, BatchSharedParam& shared_param
 
 Status RemoveXAttrOperation::RunInBatch(TxnUPtr&, BatchSharedParam& shared_param) {
   auto& attr = shared_param.attr;
+
+  if (attr.xattrs().find(name_) == attr.xattrs().end()) {
+    return Status(pb::error::ENO_DATA, fmt::format("no xattr {}", name_));
+  }
 
   attr.mutable_xattrs()->erase(name_);
 

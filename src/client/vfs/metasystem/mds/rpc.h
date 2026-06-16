@@ -199,6 +199,9 @@ inline Status TransformError(const pb::error::Error& error) {
     case pb::error::ENOT_FOUND:
       return Status::NotExist(error.errcode(), error.errmsg());
 
+    case pb::error::ENO_DATA:
+      return Status::NoData(error.errcode(), error.errmsg());
+
     case pb::error::ENOT_CAN_CONNECTED:
       return Status::NetError(error.errcode(), error.errmsg());
 

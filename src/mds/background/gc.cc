@@ -348,7 +348,7 @@ bool GcProcessor::Init() {
     return false;
   }
 
-  worker_set_ = ExecqWorkerSet::New(kWorkerSetName, FLAGS_mds_gc_worker_num, FLAGS_mds_gc_max_pending_task_count);
+  worker_set_ = ExecqWorkerSet::New(kWorkerSetName, FLAGS_mds_gc_worker_num, FLAGS_mds_gc_max_pending_task_count, true);
   return worker_set_->Init();
 }
 

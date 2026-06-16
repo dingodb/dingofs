@@ -446,7 +446,7 @@ static int CreateEmptyFile(VFSWrapper* vfs, Ino parent,
 
   uint64_t fh = 0;
   Attr attr;
-  Status s = vfs->Create(parent, name, getuid(), getgid(), 0644,
+  Status s = vfs->Create(parent, name, getuid(), getgid(), 33188,
                          O_CREAT | O_WRONLY | O_EXCL, &fh, &attr);
   if (!s.ok()) {
     LOG(ERROR) << fmt::format(
