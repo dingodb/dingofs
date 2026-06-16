@@ -31,7 +31,8 @@ namespace dingofs {
 namespace blockaccess {
 
 using AsyncContext = std::variant<std::shared_ptr<GetObjectAsyncContext>,
-                                  std::shared_ptr<PutObjectAsyncContext>>;
+                                  std::shared_ptr<PutObjectAsyncContext>,
+                                  std::shared_ptr<DeleteObjectAsyncContext>>;
 
 struct RadosAsyncIOUnit {
   const std::string key;
@@ -49,6 +50,11 @@ struct RadosAsyncIOUnit {
                    std::shared_ptr<PutObjectAsyncContext> put_context)
       : key(std::move(k)),
         async_context(std::move(CHECK_NOTNULL(put_context))) {}
+
+  RadosAsyncIOUnit(std::string k,
+                   std::shared_ptr<DeleteObjectAsyncContext> delete_context)
+      : key(std::move(k)),
+        async_context(std::move(CHECK_NOTNULL(delete_context))) {}
 
   ~RadosAsyncIOUnit();
 
@@ -82,8 +88,13 @@ class RadosAccesser : public Accesser {
   bool BlockExist(const std::string& key) override;
 
   Status Delete(const std::string& key) override;
+  void AsyncDelete(const std::string& key,
+                   std::shared_ptr<DeleteObjectAsyncContext> context) override;
 
   Status BatchDelete(const std::list<std::string>& keys) override;
+  void AsyncBatchDelete(
+      const std::list<std::string>& keys,
+      std::shared_ptr<BatchDeleteObjectAsyncContext> context) override;
 
  private:
   struct BlockStat {

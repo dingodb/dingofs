@@ -55,8 +55,16 @@ class AwsS3Client {
   virtual int DeleteObject(const std::string& bucket,
                            const std::string& key) = 0;
 
+  virtual void AsyncDeleteObject(const std::string& bucket,
+                                 const std::string& key,
+                                 DeleteObjectAsyncContextSPtr user_ctx) = 0;
+
   virtual int DeleteObjects(const std::string& bucket,
                             const std::list<std::string>& key_list) = 0;
+
+  virtual void AsyncDeleteObjects(
+      const std::string& bucket, const std::list<std::string>& key_list,
+      BatchDeleteObjectAsyncContextSPtr user_ctx) = 0;
 
   virtual bool ObjectExist(const std::string& bucket,
                            const std::string& key) = 0;

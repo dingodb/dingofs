@@ -24,6 +24,8 @@
 #include <chrono>
 #include <condition_variable>
 #include <filesystem>
+#include <list>
+#include <memory>
 #include <mutex>
 #include <string>
 
@@ -353,6 +355,103 @@ TEST_F(FileAccesserTest, MultiplePutGetCycles) {
     s = accesser_->Get(key, &retrieved_data);
     ASSERT_TRUE(s.ok()) << "Get failed at cycle " << i;
     ASSERT_EQ(data, retrieved_data) << "Data mismatch at cycle " << i;
+  }
+}
+
+// Test AsyncDelete fires the callback and removes the object.
+TEST_F(FileAccesserTest, AsyncDelete) {
+  const std::string key = "async_delete_key";
+  const std::string data = "to be deleted";
+  ASSERT_TRUE(accesser_->Put(key, data.data(), data.size()).ok());
+  ASSERT_TRUE(accesser_->BlockExist(key));
+
+  std::mutex mtx;
+  std::condition_variable cv;
+  bool called = false;
+  Status async_status;
+
+  auto context = std::make_shared<DeleteObjectAsyncContext>(key);
+  context->cb = [&](const DeleteObjectAsyncContextSPtr& ctx) {
+    std::lock_guard<std::mutex> lock(mtx);
+    async_status = ctx->status;
+    called = true;
+    cv.notify_one();
+  };
+
+  accesser_->AsyncDelete(key, context);
+
+  {
+    std::unique_lock<std::mutex> lock(mtx);
+    ASSERT_TRUE(cv.wait_for(lock, std::chrono::seconds(10), [&] {
+      return called;
+    })) << "AsyncDelete callback timeout";
+  }
+
+  ASSERT_TRUE(async_status.ok()) << async_status.ToString();
+  ASSERT_FALSE(accesser_->BlockExist(key)) << "object not removed";
+}
+
+// Deleting a non-existent object is idempotent -> OK.
+TEST_F(FileAccesserTest, AsyncDeleteNonExistent) {
+  const std::string key = "async_delete_missing_key";
+
+  std::mutex mtx;
+  std::condition_variable cv;
+  bool called = false;
+  Status async_status;
+
+  auto context = std::make_shared<DeleteObjectAsyncContext>(key);
+  context->cb = [&](const DeleteObjectAsyncContextSPtr& ctx) {
+    std::lock_guard<std::mutex> lock(mtx);
+    async_status = ctx->status;
+    called = true;
+    cv.notify_one();
+  };
+
+  accesser_->AsyncDelete(key, context);
+
+  {
+    std::unique_lock<std::mutex> lock(mtx);
+    ASSERT_TRUE(
+        cv.wait_for(lock, std::chrono::seconds(10), [&] { return called; }));
+  }
+  ASSERT_TRUE(async_status.ok()) << async_status.ToString();
+}
+
+// Test AsyncBatchDelete fires the callback and removes all objects.
+TEST_F(FileAccesserTest, AsyncBatchDelete) {
+  std::list<std::string> keys = {"abd_k1", "abd_k2", "abd_k3"};
+  const std::string data = "x";
+  for (const auto& k : keys) {
+    ASSERT_TRUE(accesser_->Put(k, data.data(), data.size()).ok());
+    ASSERT_TRUE(accesser_->BlockExist(k));
+  }
+
+  std::mutex mtx;
+  std::condition_variable cv;
+  bool called = false;
+  Status async_status;
+
+  auto context = std::make_shared<BatchDeleteObjectAsyncContext>(keys);
+  context->cb = [&](const BatchDeleteObjectAsyncContextSPtr& ctx) {
+    std::lock_guard<std::mutex> lock(mtx);
+    async_status = ctx->status;
+    called = true;
+    cv.notify_one();
+  };
+
+  accesser_->AsyncBatchDelete(keys, context);
+
+  {
+    std::unique_lock<std::mutex> lock(mtx);
+    ASSERT_TRUE(cv.wait_for(lock, std::chrono::seconds(10), [&] {
+      return called;
+    })) << "AsyncBatchDelete callback timeout";
+  }
+
+  ASSERT_TRUE(async_status.ok()) << async_status.ToString();
+  for (const auto& k : keys) {
+    ASSERT_FALSE(accesser_->BlockExist(k)) << "object not removed: " << k;
   }
 }
 

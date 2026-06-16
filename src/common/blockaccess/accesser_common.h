@@ -19,6 +19,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <list>
 #include <memory>
 #include <string>
 
@@ -84,12 +85,21 @@ struct BlockAccessOptions {
 // TODO: refact this use one struct
 struct GetObjectAsyncContext;
 struct PutObjectAsyncContext;
+struct DeleteObjectAsyncContext;
+struct BatchDeleteObjectAsyncContext;
 
 using GetObjectAsyncContextSPtr = std::shared_ptr<GetObjectAsyncContext>;
 using PutObjectAsyncContextSPtr = std::shared_ptr<PutObjectAsyncContext>;
+using DeleteObjectAsyncContextSPtr = std::shared_ptr<DeleteObjectAsyncContext>;
+using BatchDeleteObjectAsyncContextSPtr =
+    std::shared_ptr<BatchDeleteObjectAsyncContext>;
 
 using PutObjectAsyncCallBack =
     std::function<void(const PutObjectAsyncContextSPtr&)>;
+using DeleteObjectAsyncCallBack =
+    std::function<void(const DeleteObjectAsyncContextSPtr&)>;
+using BatchDeleteObjectAsyncCallBack =
+    std::function<void(const BatchDeleteObjectAsyncContextSPtr&)>;
 
 struct PutObjectAsyncContext {
   // `origin_key` is set once at construction and never mutated afterwards.
@@ -131,6 +141,40 @@ struct GetObjectAsyncContext {
 
   uint32_t retry{0};
   GetObjectAsyncCallBack cb;
+};
+
+struct DeleteObjectAsyncContext {
+  // See PutObjectAsyncContext::origin_key — same immutable contract: the `key`
+  // parameter on AsyncDelete is what backends use; origin_key is caller-side
+  // correlation/log only.
+  explicit DeleteObjectAsyncContext(std::string k) : origin_key(std::move(k)) {}
+
+  uint64_t start_time{0};
+
+  const std::string origin_key;
+
+  Status status;
+
+  uint32_t retry{0};
+  DeleteObjectAsyncCallBack cb;
+};
+
+struct BatchDeleteObjectAsyncContext {
+  // `origin_keys` is caller-side correlation/log only; backends MUST use the
+  // `keys` parameter on AsyncBatchDelete for the actual storage operation
+  // (wrappers prefix per-call without mutating the context).
+  explicit BatchDeleteObjectAsyncContext(std::list<std::string> ks)
+      : origin_keys(std::move(ks)) {}
+
+  uint64_t start_time{0};
+
+  const std::list<std::string> origin_keys;
+
+  // Aggregate status: any non-idempotent per-key failure makes it non-OK.
+  Status status;
+
+  uint32_t retry{0};
+  BatchDeleteObjectAsyncCallBack cb;
 };
 
 }  // namespace blockaccess

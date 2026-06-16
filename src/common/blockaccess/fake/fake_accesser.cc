@@ -122,9 +122,25 @@ Status FakeAccesser::Delete(const std::string& key) {
   return Status::OK();
 }
 
+void FakeAccesser::AsyncDelete(const std::string& key,
+                               DeleteObjectAsyncContextSPtr context) {
+  std::thread([this, key, context]() {
+    context->status = Delete(key);
+    context->cb(context);
+  }).detach();
+}
+
 Status FakeAccesser::BatchDelete(const std::list<std::string>& keys) {
   (void)keys;
   return Status::OK();
+}
+
+void FakeAccesser::AsyncBatchDelete(const std::list<std::string>& keys,
+                                    BatchDeleteObjectAsyncContextSPtr context) {
+  std::thread([this, keys, context]() {
+    context->status = BatchDelete(keys);
+    context->cb(context);
+  }).detach();
 }
 
 }  // namespace blockaccess

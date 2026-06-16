@@ -45,6 +45,20 @@ struct AwsPutObjectAsyncContext : public Aws::Client::AsyncCallerContext {
 };
 using AwsPutObjectAsyncContextSPtr = std::shared_ptr<AwsPutObjectAsyncContext>;
 
+struct AwsDeleteObjectAsyncContext : public Aws::Client::AsyncCallerContext {
+  std::any request;
+  DeleteObjectAsyncContextSPtr user_ctx;
+};
+using AwsDeleteObjectAsyncContextSPtr =
+    std::shared_ptr<AwsDeleteObjectAsyncContext>;
+
+struct AwsDeleteObjectsAsyncContext : public Aws::Client::AsyncCallerContext {
+  std::any request;
+  BatchDeleteObjectAsyncContextSPtr user_ctx;
+};
+using AwsDeleteObjectsAsyncContextSPtr =
+    std::shared_ptr<AwsDeleteObjectsAsyncContext>;
+
 // https://github.com/aws/aws-sdk-cpp/issues/1430
 class PreallocatedIOStream : public Aws::IOStream {
  public:

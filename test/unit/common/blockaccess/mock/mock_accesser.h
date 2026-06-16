@@ -26,6 +26,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <list>
 #include <memory>
 #include <string>
 
@@ -79,7 +80,17 @@ class MockBlockAccesser : public BlockAccesser {
 
   MOCK_METHOD(Status, Delete, (const std::string& key), (override));
 
+  MOCK_METHOD(void, AsyncDelete,
+              (const std::string& key,
+               std::shared_ptr<DeleteObjectAsyncContext> context),
+              (override));
+
   MOCK_METHOD(Status, BatchDelete, (const std::list<std::string>& keys),
+              (override));
+
+  MOCK_METHOD(void, AsyncBatchDelete,
+              (const std::list<std::string>& keys,
+               std::shared_ptr<BatchDeleteObjectAsyncContext> context),
               (override));
 };
 

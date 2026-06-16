@@ -72,7 +72,29 @@ class BlockAccesser {
 
   virtual Status Delete(const std::string& key) = 0;
 
+  // Async delete. See AsyncPut for why `key` is a separate parameter (not read
+  // from context).
+  //
+  // NOTE: this layer does NOT rate-limit async deletes. The S3 backend has no
+  // submit-side backpressure (the SDK executor just queues — CRT meta-request
+  // queue / legacy thread-pool unbounded queue), so firing too many concurrent
+  // requests grows the executor queue / threads / memory without bound. The
+  // rados backend is bounded by objecter_inflight_ops, but a large fan-out
+  // still hammers OSD-side foreground IO. Callers (e.g. GC) MUST cap the number
+  // of in-flight AsyncDelete/AsyncBatchDelete requests themselves (bounded
+  // pipeline + backoff on 503/SlowDown).
+  virtual void AsyncDelete(
+      const std::string& key,
+      std::shared_ptr<DeleteObjectAsyncContext> context) = 0;
+
   virtual Status BatchDelete(const std::list<std::string>& keys) = 0;
+
+  // Async batch delete. See AsyncDelete — callers MUST bound in-flight
+  // concurrency; this layer does not rate-limit. For the S3 backend, `keys`
+  // must not exceed the DeleteObjects 1000-key limit.
+  virtual void AsyncBatchDelete(
+      const std::list<std::string>& keys,
+      std::shared_ptr<BatchDeleteObjectAsyncContext> context) = 0;
 };
 
 class BlockAccesserImpl : public BlockAccesser {
@@ -107,7 +129,14 @@ class BlockAccesserImpl : public BlockAccesser {
 
   Status Delete(const std::string& key) override;
 
+  void AsyncDelete(const std::string& key,
+                   std::shared_ptr<DeleteObjectAsyncContext> context) override;
+
   Status BatchDelete(const std::list<std::string>& keys) override;
+
+  void AsyncBatchDelete(
+      const std::list<std::string>& keys,
+      std::shared_ptr<BatchDeleteObjectAsyncContext> context) override;
 
  private:
   class AsyncRequestInflightBytesThrottle {
