@@ -14,6 +14,7 @@
 
 #include "client/vfs/metasystem/mds/modify_time_memo.h"
 
+#include "common/logging.h"
 #include "fmt/format.h"
 #include "utils/time.h"
 
@@ -32,17 +33,22 @@ void ModifyTimeMemo::Forget(Ino ino) {
 }
 
 void ModifyTimeMemo::CleanExpired(uint64_t expire_time_ns) {
-  shard_map_.iterateWLock([this, expire_time_ns](Map& map) {
-    for (auto it = map.begin(); it != map.end();) {
-      if (it->second < expire_time_ns) {
-        auto temp_it = it++;
-        map.erase(temp_it);
-        clean_count_ << 1;
-      } else {
-        ++it;
+  std::vector<Ino> expired_inos;
+  shard_map_.iterate([this, expire_time_ns, &expired_inos](Map& map) {
+    for (auto& [ino, modify_time_ns] : map) {
+      if (modify_time_ns < expire_time_ns) {
+        expired_inos.push_back(ino);
       }
     }
   });
+
+  // erase
+  for (const auto& ino : expired_inos) {
+    Forget(ino);
+    clean_count_ << 1;
+    LOG_DEBUG << fmt::format(
+        "[meta.modify_time_memo] clean expired modify time memo ino({}).", ino);
+  }
 }
 
 uint64_t ModifyTimeMemo::Get(Ino ino) {

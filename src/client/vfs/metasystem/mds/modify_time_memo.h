@@ -53,7 +53,7 @@ class ModifyTimeMemo {
   // ino -> modify time ns
   using Map = absl::flat_hash_map<Ino, uint64_t>;
 
-  constexpr static size_t kShardNum = 32;
+  constexpr static size_t kShardNum = 128;
   utils::Shards<Map, kShardNum> shard_map_;
 
   // metric

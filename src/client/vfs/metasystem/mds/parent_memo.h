@@ -65,7 +65,7 @@ class ParentMemo {
 
   using Map = absl::flat_hash_map<Ino, Entry>;
 
-  constexpr static size_t kShardNum = 32;
+  constexpr static size_t kShardNum = 128;
   utils::Shards<Map, kShardNum> shard_map_;
 
   // metrics

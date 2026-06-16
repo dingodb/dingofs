@@ -468,7 +468,7 @@ class ChunkCache {
 
   const uint32_t chunk_size_;
 
-  constexpr static size_t kShardNum = 32;
+  constexpr static size_t kShardNum = 128;
   utils::Shards<Map, kShardNum> shard_map_;
 
   // metric
