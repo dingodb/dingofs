@@ -49,6 +49,9 @@ DEFINE_validator(mds_gc_worker_num, brpc::PassValidate);
 DEFINE_uint32(mds_gc_max_pending_task_count, 8192, "gc max pending task count");
 DEFINE_validator(mds_gc_max_pending_task_count, brpc::PassValidate);
 
+DEFINE_bool(mds_gc_use_pthread_enable, true, "gc use pthread enable");
+DEFINE_validator(mds_gc_use_pthread_enable, brpc::PassValidate);
+
 DEFINE_bool(mds_gc_delslice_enable, true, "gc delslice enable");
 DEFINE_validator(mds_gc_delslice_enable, brpc::PassValidate);
 DEFINE_bool(mds_gc_delfile_enable, true, "gc delfile enable");
@@ -325,7 +328,8 @@ bool GcProcessor::Init() {
     return false;
   }
 
-  worker_set_ = ExecqWorkerSet::New(kWorkerSetName, FLAGS_mds_gc_worker_num, FLAGS_mds_gc_max_pending_task_count);
+  worker_set_ = ExecqWorkerSet::New(kWorkerSetName, FLAGS_mds_gc_worker_num, FLAGS_mds_gc_max_pending_task_count,
+                                    FLAGS_mds_gc_use_pthread_enable);
   return worker_set_->Init();
 }
 
