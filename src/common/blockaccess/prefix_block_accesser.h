@@ -97,12 +97,29 @@ class PrefixBlockAccesser : public BlockAccesser {
     return inner_->Delete(PrefixKey(key));
   }
 
+  void AsyncDelete(const std::string& key,
+                   std::shared_ptr<DeleteObjectAsyncContext> context) override {
+    // Compute prefixed key freshly for THIS call; do not mutate
+    // context->origin_key (see AsyncPut).
+    inner_->AsyncDelete(PrefixKey(key), std::move(context));
+  }
+
   Status BatchDelete(const std::list<std::string>& keys) override {
     std::list<std::string> prefixed_keys;
     for (const auto& key : keys) {
       prefixed_keys.push_back(PrefixKey(key));
     }
     return inner_->BatchDelete(prefixed_keys);
+  }
+
+  void AsyncBatchDelete(
+      const std::list<std::string>& keys,
+      std::shared_ptr<BatchDeleteObjectAsyncContext> context) override {
+    std::list<std::string> prefixed_keys;
+    for (const auto& key : keys) {
+      prefixed_keys.push_back(PrefixKey(key));
+    }
+    inner_->AsyncBatchDelete(prefixed_keys, std::move(context));
   }
 
  private:

@@ -17,6 +17,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <list>
 #include <memory>
 #include <string>
 #include <vector>
@@ -139,6 +140,76 @@ TEST(PrefixBlockAccesserTest, SyncPutPrefixesKeyOnce) {
   static const char kData[] = "hello";
   ASSERT_TRUE(wrapper.Put("a/b/c", kData, sizeof(kData)).ok());
   EXPECT_EQ(seen_key, "fs/a/b/c");
+}
+
+// AsyncDelete must prefix the key per-call and never mutate origin_key.
+TEST(PrefixBlockAccesserTest, AsyncDeleteRetryDoesNotAccumulatePrefix) {
+  auto mock_inner = std::make_unique<MockBlockAccesser>();
+  std::vector<std::string> seen_keys;
+
+  EXPECT_CALL(*mock_inner, AsyncDelete(_, _))
+      .WillRepeatedly(
+          Invoke([&](const std::string& key,
+                     std::shared_ptr<DeleteObjectAsyncContext> ctx) {
+            seen_keys.push_back(key);
+            ctx->status = Status::OK();
+            ctx->cb(ctx);
+          }));
+
+  PrefixBlockAccesser wrapper("myfs", std::move(mock_inner));
+
+  const std::string logical_key = "blocks/300/300/300_0_4096";
+  auto ctx = std::make_shared<DeleteObjectAsyncContext>(logical_key);
+  ctx->cb = [](const DeleteObjectAsyncContextSPtr&) {};
+
+  for (int i = 0; i < 5; ++i) {
+    wrapper.AsyncDelete(logical_key, ctx);
+  }
+
+  ASSERT_EQ(seen_keys.size(), 5u);
+  const std::string expected_prefixed = "myfs/" + logical_key;
+  for (size_t i = 0; i < seen_keys.size(); ++i) {
+    EXPECT_EQ(seen_keys[i], expected_prefixed)
+        << "iteration " << i << " — Delete prefix accumulated.";
+  }
+  EXPECT_EQ(ctx->origin_key, logical_key);
+}
+
+// AsyncBatchDelete must prefix every key per-call and never mutate
+// origin_keys.
+TEST(PrefixBlockAccesserTest, AsyncBatchDeleteRetryDoesNotAccumulatePrefix) {
+  auto mock_inner = std::make_unique<MockBlockAccesser>();
+  std::vector<std::list<std::string>> seen_batches;
+
+  EXPECT_CALL(*mock_inner, AsyncBatchDelete(_, _))
+      .WillRepeatedly(
+          Invoke([&](const std::list<std::string>& keys,
+                     std::shared_ptr<BatchDeleteObjectAsyncContext> ctx) {
+            seen_batches.push_back(keys);
+            ctx->status = Status::OK();
+            ctx->cb(ctx);
+          }));
+
+  PrefixBlockAccesser wrapper("myfs", std::move(mock_inner));
+
+  const std::list<std::string> logical_keys = {"blocks/1/1/1_0_4096",
+                                               "blocks/2/2/2_0_4096"};
+  auto ctx = std::make_shared<BatchDeleteObjectAsyncContext>(logical_keys);
+  ctx->cb = [](const BatchDeleteObjectAsyncContextSPtr&) {};
+
+  for (int i = 0; i < 5; ++i) {
+    wrapper.AsyncBatchDelete(logical_keys, ctx);
+  }
+
+  ASSERT_EQ(seen_batches.size(), 5u);
+  const std::list<std::string> expected = {"myfs/blocks/1/1/1_0_4096",
+                                           "myfs/blocks/2/2/2_0_4096"};
+  for (size_t i = 0; i < seen_batches.size(); ++i) {
+    EXPECT_EQ(seen_batches[i], expected)
+        << "iteration " << i << " — BatchDelete prefix accumulated.";
+  }
+  // origin_keys untouched.
+  EXPECT_EQ(ctx->origin_keys, logical_keys);
 }
 
 }  // namespace blockaccess

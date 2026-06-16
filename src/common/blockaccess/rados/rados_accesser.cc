@@ -21,12 +21,15 @@
 #include <glog/logging.h>
 #include <rados/librados.h>
 
+#include <atomic>
 #include <cstddef>
 #include <cstring>
 #include <functional>
 #include <memory>
 #include <string>
+#include <utility>
 #include <variant>
+#include <vector>
 
 #include "common/options/blockaccess.h"
 #include "common/status.h"
@@ -292,13 +295,61 @@ Status RadosAccesser::Delete(const std::string& key) {
 }
 
 Status RadosAccesser::BatchDelete(const std::list<std::string>& keys) {
-  Status s;
-  for (const auto& key : keys) {
-    Status tmp = Delete(key);
-    if (!tmp.ok()) {
-      s = tmp;
-    }
+  if (keys.empty()) {
+    return Status::OK();
   }
+
+  // librados has no multi-object delete; fan out one aio remove per key so the
+  // N deletes run concurrently instead of N sequential round-trips.
+  // Caller must pre-batch (GC uses 1000); a single batch larger than
+  // objecter_inflight_ops will block mid-submit (librados completes ops on its
+  // own threads and frees budget, so no deadlock).
+  rados_ioctx_t ioctx = nullptr;
+  int rc = CreateIoContext(cluster_, options_.pool_name, &ioctx);
+  if (rc < 0) {
+    LOG(ERROR) << "Failed to create ioctx for batch delete, pool: "
+               << options_.pool_name << ", err: " << strerror(-rc);
+    return Status::IoError("Failed to create ioctx");
+  }
+  auto ioctx_guard = MakeScopedCleanup([&]() { DestroyIoctx(ioctx); });
+
+  Status s;
+  std::vector<std::pair<const std::string*, rados_completion_t>> inflight;
+  inflight.reserve(keys.size());
+
+  for (const auto& key : keys) {
+    rados_completion_t c = nullptr;
+    rc = rados_aio_create_completion(nullptr, nullptr, nullptr, &c);
+    if (rc < 0) {
+      LOG(ERROR) << "Failed to create completion, err: " << strerror(-rc);
+      s = Status::IoError("Failed to create completion");
+      break;  // stop submitting; already-submitted are still drained below
+    }
+
+    rc = rados_aio_remove(ioctx, key.c_str(), c);
+    if (rc < 0) {
+      rados_aio_release(c);
+      LOG(ERROR) << "Failed to submit aio remove, key: " << key
+                 << ", err: " << strerror(-rc);
+      s = Status::IoError("Failed to submit aio remove");
+      continue;  // don't return; keep submitting/draining the rest
+    }
+
+    inflight.push_back({&key, c});
+  }
+
+  // Drain every submitted completion regardless of submit-phase errors.
+  for (auto& [key, c] : inflight) {
+    rados_aio_wait_for_complete(c);
+    int ret = rados_aio_get_return_value(c);
+    if (ret < 0 && ret != -ENOENT) {
+      LOG(ERROR) << "Failed to remove object, key: " << *key
+                 << ", err: " << strerror(-ret);
+      s = Status::IoError("Failed to remove object");
+    }
+    rados_aio_release(c);
+  }
+
   return s;
 }
 
@@ -436,6 +487,146 @@ void RadosAccesser::AsyncPut(const std::string& key,
     }
     return err;
   });
+}
+
+static void AsyncDeleteCallback(RadosAsyncIOUnit* io_unit, int ret_code) {
+  CHECK(std::holds_alternative<std::shared_ptr<DeleteObjectAsyncContext>>(
+      io_unit->async_context))
+      << "AsyncDeleteCallback expects DeleteObjectAsyncContext";
+
+  auto delete_context = std::get<std::shared_ptr<DeleteObjectAsyncContext>>(
+      io_unit->async_context);
+  // ENOENT means the object is already gone -> treat as success (same as
+  // the synchronous Delete).
+  delete_context->status = (ret_code < 0 && ret_code != -ENOENT)
+                               ? Status::IoError(strerror(-ret_code))
+                               : Status::OK();
+  delete_context->cb(delete_context);
+}
+
+void RadosAccesser::AsyncDelete(
+    const std::string& key, std::shared_ptr<DeleteObjectAsyncContext> context) {
+  auto* io_unit = new RadosAsyncIOUnit(key, context);
+  io_unit->callback = &AsyncDeleteCallback;
+
+  // transfer ownership of io_unit to the callback
+  ExecuteAsyncOperation(io_unit, [key](RadosAsyncIOUnit* unit) {
+    int err = rados_aio_remove(unit->ioctx, key.c_str(), unit->completion);
+    if (err < 0) {
+      LOG(ERROR) << "Fail AsyncDelete key: " << key
+                 << ", err: " << strerror(-err);
+    }
+    return err;
+  });
+}
+
+// Aggregator for batch async delete: N completions share one ioctx, so it
+// cannot reuse RadosAsyncIOUnit's per-unit destructor (which destroys ioctx).
+namespace {
+
+struct RadosBatchDeleteCtx {
+  std::shared_ptr<BatchDeleteObjectAsyncContext> user_ctx;
+  rados_ioctx_t ioctx{nullptr};
+  std::atomic<size_t> remaining{1};  // sentinel: submit loop not finished
+  std::atomic<int> first_err{0};
+};
+
+struct RadosBatchDeleteNode {
+  RadosBatchDeleteCtx* agg{nullptr};
+  rados_completion_t completion{nullptr};
+  std::string key;  // own a copy; caller's list must not be referenced
+};
+
+void FinalizeBatchDelete(RadosBatchDeleteCtx* agg) {
+  int err = agg->first_err.load(std::memory_order_relaxed);
+  agg->user_ctx->status =
+      (err == 0) ? Status::OK() : Status::IoError(strerror(-err));
+  agg->user_ctx->cb(agg->user_ctx);
+  DestroyIoctx(agg->ioctx);
+  delete agg;
+}
+
+// remaining's acq_rel ordering carries the happens-before for first_err so the
+// finalizing thread sees every per-key CAS. Do NOT weaken to relaxed.
+void FinishOne(RadosBatchDeleteCtx* agg) {
+  if (agg->remaining.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+    FinalizeBatchDelete(agg);
+  }
+}
+
+void PerKeyComplete(rados_completion_t /*c*/, void* arg) {
+  auto* node = static_cast<RadosBatchDeleteNode*>(arg);
+  auto* agg = node->agg;
+
+  int ret = rados_aio_get_return_value(node->completion);
+  if (ret < 0 && ret != -ENOENT) {
+    int expected = 0;
+    agg->first_err.compare_exchange_strong(expected, ret);
+  }
+
+  rados_aio_release(node->completion);
+  delete node;
+  FinishOne(agg);
+}
+
+}  // namespace
+
+void RadosAccesser::AsyncBatchDelete(
+    const std::list<std::string>& keys,
+    std::shared_ptr<BatchDeleteObjectAsyncContext> context) {
+  CHECK(context->cb) << "AsyncBatchDelete context callback is null";
+
+  if (keys.empty()) {
+    context->status = Status::OK();
+    context->cb(context);
+    return;
+  }
+
+  auto* agg = new RadosBatchDeleteCtx;
+  agg->user_ctx = context;
+
+  int rc = CreateIoContext(cluster_, options_.pool_name, &agg->ioctx);
+  if (rc < 0) {
+    LOG(ERROR) << "Failed to create ioctx for async batch delete, pool: "
+               << options_.pool_name << ", err: " << strerror(-rc);
+    context->status = Status::IoError("Failed to create ioctx");
+    context->cb(context);
+    delete agg;
+    return;
+  }
+
+  for (const auto& key : keys) {
+    auto* node = new RadosBatchDeleteNode;
+    node->agg = agg;
+    node->key = key;
+
+    rc = rados_aio_create_completion(node, &PerKeyComplete, nullptr,
+                                     &node->completion);
+    if (rc < 0) {
+      LOG(ERROR) << "Failed to create completion, key: " << key
+                 << ", err: " << strerror(-rc);
+      int expected = 0;
+      agg->first_err.compare_exchange_strong(expected, rc);
+      delete node;
+      continue;  // no remaining++ -> no completion will fire for this key
+    }
+
+    agg->remaining.fetch_add(1, std::memory_order_relaxed);
+
+    rc = rados_aio_remove(agg->ioctx, node->key.c_str(), node->completion);
+    if (rc < 0) {
+      LOG(ERROR) << "Failed to submit aio remove, key: " << key
+                 << ", err: " << strerror(-rc);
+      int expected = 0;
+      agg->first_err.compare_exchange_strong(expected, rc);
+      rados_aio_release(node->completion);
+      delete node;
+      FinishOne(agg);  // roll back the remaining++ above
+      continue;
+    }
+  }
+
+  FinishOne(agg);  // remove sentinel; may trigger finalize here
 }
 
 }  // namespace blockaccess

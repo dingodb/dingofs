@@ -44,6 +44,9 @@ static bvar::Adder<uint64_t> block_put_async_num("block_put_async_num");
 static bvar::Adder<uint64_t> block_put_sync_num("block_put_sync_num");
 static bvar::Adder<uint64_t> block_get_async_num("block_get_async_num");
 static bvar::Adder<uint64_t> block_get_sync_num("block_get_sync_num");
+static bvar::Adder<uint64_t> block_delete_async_num("block_delete_async_num");
+static bvar::Adder<uint64_t> block_batch_delete_async_num(
+    "block_batch_delete_async_num");
 
 using dingofs::utils::kMB;
 
@@ -284,6 +287,29 @@ Status BlockAccesserImpl::Delete(const std::string& key) {
   return s;
 }
 
+void BlockAccesserImpl::AsyncDelete(
+    const std::string& key, std::shared_ptr<DeleteObjectAsyncContext> context) {
+  int64_t start_us = butil::cpuwide_time_us();
+  block_delete_async_num << 1;
+
+  auto origin_cb = std::move(context->cb);
+  context->cb = [start_us, key, origin = std::move(origin_cb)](
+                    const std::shared_ptr<DeleteObjectAsyncContext>& ctx) {
+    BlockAccessLogGuard log(start_us, [key, ctx]() {
+      return fmt::format("async_delete_block ({}) : {}", key,
+                         ctx->status.ToString());
+    });
+
+    block_delete_async_num << -1;
+
+    // NOTE: restore origin cb because caller may reuse context on retry.
+    ctx->cb = origin;
+    ctx->cb(ctx);
+  };
+
+  data_accesser_->AsyncDelete(key, context);
+}
+
 Status BlockAccesserImpl::BatchDelete(const std::list<std::string>& keys) {
   Status s;
   BlockAccessLogGuard log(butil::cpuwide_time_us(), [&]() {
@@ -292,6 +318,32 @@ Status BlockAccesserImpl::BatchDelete(const std::list<std::string>& keys) {
   });
 
   return (s = data_accesser_->BatchDelete(keys));
+}
+
+void BlockAccesserImpl::AsyncBatchDelete(
+    const std::list<std::string>& keys,
+    std::shared_ptr<BatchDeleteObjectAsyncContext> context) {
+  int64_t start_us = butil::cpuwide_time_us();
+  block_batch_delete_async_num << 1;
+  // Capture only the count (not the list) into the log closure.
+  size_t count = keys.size();
+
+  auto origin_cb = std::move(context->cb);
+  context->cb = [start_us, count, origin = std::move(origin_cb)](
+                    const std::shared_ptr<BatchDeleteObjectAsyncContext>& ctx) {
+    BlockAccessLogGuard log(start_us, [count, ctx]() {
+      return fmt::format("async_delete_objects ({}) : {}", count,
+                         ctx->status.ToString());
+    });
+
+    block_batch_delete_async_num << -1;
+
+    // NOTE: restore origin cb because caller may reuse context on retry.
+    ctx->cb = origin;
+    ctx->cb(ctx);
+  };
+
+  data_accesser_->AsyncBatchDelete(keys, context);
 }
 
 }  // namespace blockaccess

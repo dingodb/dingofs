@@ -61,8 +61,15 @@ class AwsCrtS3Client : public AwsS3Client {
 
   int DeleteObject(const std::string& bucket, const std::string& key) override;
 
+  void AsyncDeleteObject(const std::string& bucket, const std::string& key,
+                         DeleteObjectAsyncContextSPtr user_ctx) override;
+
   int DeleteObjects(const std::string& bucket,
                     const std::list<std::string>& key_list) override;
+
+  void AsyncDeleteObjects(const std::string& bucket,
+                          const std::list<std::string>& key_list,
+                          BatchDeleteObjectAsyncContextSPtr user_ctx) override;
 
   bool ObjectExist(const std::string& bucket, const std::string& key) override;
 

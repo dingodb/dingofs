@@ -198,7 +198,21 @@ Status S3Accesser::Delete(const std::string& key) {
   return Status::OK();
 }
 
+void S3Accesser::AsyncDelete(const std::string& key,
+                             DeleteObjectAsyncContextSPtr context) {
+  CHECK(context->cb) << "AsyncDelete context callback is null";
+
+  client_->AsyncDeleteObject(bucket_, key, context);
+}
+
 Status S3Accesser::BatchDelete(const std::list<std::string>& keys) {
+  // Empty batch: an empty DeleteObjects request is rejected by S3
+  // (MalformedXML). Short-circuit so the public sync BatchDelete has the same
+  // empty-keys semantics as AsyncBatchDelete (and rados/file backends).
+  if (keys.empty()) {
+    return Status::OK();
+  }
+
   int rc = client_->DeleteObjects(bucket_, keys);
   if (rc < 0) {
     LOG(ERROR) << fmt::format(
@@ -208,6 +222,30 @@ Status S3Accesser::BatchDelete(const std::list<std::string>& keys) {
   }
 
   return Status::OK();
+}
+
+void S3Accesser::AsyncBatchDelete(const std::list<std::string>& keys,
+                                  BatchDeleteObjectAsyncContextSPtr context) {
+  CHECK(context->cb) << "AsyncBatchDelete context callback is null";
+
+  // Empty batch: an empty DeleteObjects request is rejected by S3
+  // (MalformedXML), so short-circuit (matches rados/file behavior).
+  if (keys.empty()) {
+    context->status = Status::OK();
+    context->cb(context);
+    return;
+  }
+
+  // S3 DeleteObjects supports at most 1000 keys per request. GC pre-batches by
+  // 1000, but guard here so other callers can't bypass it.
+  if (keys.size() > 1000) {
+    context->status =
+        Status::InvalidParam("S3 DeleteObjects supports at most 1000 keys");
+    context->cb(context);
+    return;
+  }
+
+  client_->AsyncDeleteObjects(bucket_, keys, context);
 }
 
 }  // namespace blockaccess

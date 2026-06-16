@@ -320,6 +320,16 @@ Status FileAccesser::Delete(const std::string& key) {
   return s;
 }
 
+void FileAccesser::AsyncDelete(const std::string& key,
+                               DeleteObjectAsyncContextSPtr context) {
+  // Explicit by-value capture (no [&]): detached thread runs after this
+  // returns.
+  std::thread([this, key, context]() {
+    context->status = Delete(key);
+    context->cb(context);
+  }).detach();
+}
+
 Status FileAccesser::BatchDelete(const std::list<std::string>& keys) {
   for (const auto& key : keys) {
     Status s = Delete(key);
@@ -328,6 +338,14 @@ Status FileAccesser::BatchDelete(const std::list<std::string>& keys) {
     }
   }
   return Status::OK();
+}
+
+void FileAccesser::AsyncBatchDelete(const std::list<std::string>& keys,
+                                    BatchDeleteObjectAsyncContextSPtr context) {
+  std::thread([this, keys, context]() {
+    context->status = BatchDelete(keys);
+    context->cb(context);
+  }).detach();
 }
 
 }  // namespace blockaccess

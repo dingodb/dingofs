@@ -61,7 +61,20 @@ class Accesser {
 
   virtual Status Delete(const std::string& key) = 0;
 
+  // Async delete. See AsyncPut for why `key` is a separate parameter. This
+  // layer does NOT rate-limit; callers must bound in-flight concurrency (see
+  // BlockAccesser::AsyncDelete).
+  virtual void AsyncDelete(
+      const std::string& key,
+      std::shared_ptr<DeleteObjectAsyncContext> context) = 0;
+
   virtual Status BatchDelete(const std::list<std::string>& keys) = 0;
+
+  // Async batch delete. Callers must bound in-flight concurrency; not
+  // rate-limited here (see BlockAccesser::AsyncBatchDelete).
+  virtual void AsyncBatchDelete(
+      const std::list<std::string>& keys,
+      std::shared_ptr<BatchDeleteObjectAsyncContext> context) = 0;
 };
 
 }  // namespace blockaccess

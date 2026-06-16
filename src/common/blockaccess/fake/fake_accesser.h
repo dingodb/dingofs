@@ -48,7 +48,11 @@ class FakeAccesser : public Accesser {
   bool BlockExist(const std::string& key) override;
 
   Status Delete(const std::string& key) override;
+  void AsyncDelete(const std::string& key,
+                   DeleteObjectAsyncContextSPtr context) override;
   Status BatchDelete(const std::list<std::string>& keys) override;
+  void AsyncBatchDelete(const std::list<std::string>& keys,
+                        BatchDeleteObjectAsyncContextSPtr context) override;
 
  private:
   std::string KeyPath(const std::string& key);

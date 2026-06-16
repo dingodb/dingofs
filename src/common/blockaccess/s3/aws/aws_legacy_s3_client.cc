@@ -328,6 +328,100 @@ int AwsLegacyS3Client::DeleteObjects(const std::string& bucket,
   return 0;
 }
 
+void AwsLegacyS3Client::AsyncDeleteObject(
+    const std::string& bucket, const std::string& key,
+    DeleteObjectAsyncContextSPtr user_ctx) {
+  auto aws_ctx = std::make_shared<AwsDeleteObjectAsyncContext>();
+  aws_ctx->user_ctx = user_ctx;
+
+  aws_ctx->request = std::make_any<Model::DeleteObjectRequest>();
+  auto& request = std::any_cast<Model::DeleteObjectRequest&>(aws_ctx->request);
+  request.SetBucket(bucket);
+  request.SetKey(std::string{key.c_str(), key.size()});
+
+  DeleteObjectResponseReceivedHandler handler =
+      [bucket, key](
+          const S3Client* /*client*/,
+          const Model::DeleteObjectRequest& /*request*/,
+          const Model::DeleteObjectOutcome& response,
+          const std::shared_ptr<const Aws::Client::AsyncCallerContext>& ctx) {
+        AwsDeleteObjectAsyncContextSPtr aws_ctx =
+            std::const_pointer_cast<AwsDeleteObjectAsyncContext>(
+                std::dynamic_pointer_cast<const AwsDeleteObjectAsyncContext>(
+                    ctx));
+        auto& user_ctx = aws_ctx->user_ctx;
+
+        LOG_IF(ERROR, !response.IsSuccess()) << fmt::format(
+            "[s3_legacy.{}] AsyncDeleteObject fail, key({}) error({} {}).",
+            bucket, key, response.GetError().GetExceptionName(),
+            response.GetError().GetMessage());
+
+        user_ctx->status =
+            (response.IsSuccess()
+                 ? Status::OK()
+                 : Status::IoError(response.GetError().GetMessage()));
+        user_ctx->cb(user_ctx);
+      };
+
+  client_->DeleteObjectAsync(request, handler, aws_ctx);
+}
+
+void AwsLegacyS3Client::AsyncDeleteObjects(
+    const std::string& bucket, const std::list<std::string>& key_list,
+    BatchDeleteObjectAsyncContextSPtr user_ctx) {
+  auto aws_ctx = std::make_shared<AwsDeleteObjectsAsyncContext>();
+  aws_ctx->user_ctx = user_ctx;
+
+  Model::Delete delete_objects;
+  delete_objects.SetQuiet(false);
+  for (const auto& key : key_list) {
+    Model::ObjectIdentifier obj_ident;
+    obj_ident.SetKey(key);
+    delete_objects.AddObjects(obj_ident);
+  }
+
+  aws_ctx->request = std::make_any<Model::DeleteObjectsRequest>();
+  auto& request = std::any_cast<Model::DeleteObjectsRequest&>(aws_ctx->request);
+  request.WithBucket(bucket).WithDelete(delete_objects);
+
+  DeleteObjectsResponseReceivedHandler handler =
+      [bucket](
+          const S3Client* /*client*/,
+          const Model::DeleteObjectsRequest& /*request*/,
+          const Model::DeleteObjectsOutcome& response,
+          const std::shared_ptr<const Aws::Client::AsyncCallerContext>& ctx) {
+        AwsDeleteObjectsAsyncContextSPtr aws_ctx =
+            std::const_pointer_cast<AwsDeleteObjectsAsyncContext>(
+                std::dynamic_pointer_cast<const AwsDeleteObjectsAsyncContext>(
+                    ctx));
+        auto& user_ctx = aws_ctx->user_ctx;
+
+        // DeleteObjects returns HTTP 200 even on per-key failures; must check
+        // both the request-level outcome and the per-key GetErrors().
+        if (!response.IsSuccess()) {
+          LOG(ERROR) << fmt::format(
+              "[s3_legacy.{}] AsyncDeleteObjects fail, error({} {}).", bucket,
+              response.GetError().GetExceptionName(),
+              response.GetError().GetMessage());
+          user_ctx->status = Status::IoError(response.GetError().GetMessage());
+        } else if (!response.GetResult().GetErrors().empty()) {
+          for (const auto& err : response.GetResult().GetErrors()) {
+            LOG(WARNING) << fmt::format(
+                "[s3_legacy.{}] delete fail, key({}) error({} {}).", bucket,
+                err.GetKey(), err.GetCode(), err.GetMessage());
+          }
+          user_ctx->status = Status::IoError(
+              fmt::format("delete objects partial fail, error_count={}",
+                          response.GetResult().GetErrors().size()));
+        } else {
+          user_ctx->status = Status::OK();
+        }
+        user_ctx->cb(user_ctx);
+      };
+
+  client_->DeleteObjectsAsync(request, handler, aws_ctx);
+}
+
 bool AwsLegacyS3Client::ObjectExist(const std::string& bucket,
                                     const std::string& key) {
   Model::HeadObjectRequest request;
