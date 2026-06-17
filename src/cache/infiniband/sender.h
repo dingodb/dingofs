@@ -55,7 +55,7 @@ class ResponseSender {
   Status Send(RDMABuffer* response, const Attachment& attachment = {});
 
  private:
-  Status CheckRegion(const IOBuffer& buffer, const Region& region);
+  Status CheckAttachment(const IOBuffer& src, const Region& dest);
   Status PrepWorkRequest(const Attachment& attachment, SendWorkRequest* wr);
   void PrepWorkRequest(InflightContext* ctx, RDMABuffer* response,
                        SendWorkRequest* wr);

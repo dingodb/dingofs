@@ -20,8 +20,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_CACHEGROUP_TASK_TRACKER_H_
-#define DINGOFS_SRC_CACHE_CACHEGROUP_TASK_TRACKER_H_
+#ifndef DINGOFS_SRC_CACHE_COMMON_TASK_TRACKER_H_
+#define DINGOFS_SRC_CACHE_COMMON_TASK_TRACKER_H_
 
 #include <bthread/condition_variable.h>
 #include <bthread/mutex.h>
@@ -123,4 +123,4 @@ inline std::ostream& operator<<(std::ostream& os,
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_CACHEGROUP_TASK_TRACKER_H_
+#endif  // DINGOFS_SRC_CACHE_COMMON_TASK_TRACKER_H_

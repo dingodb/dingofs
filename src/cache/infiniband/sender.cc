@@ -102,32 +102,36 @@ Status ResponseSender::Send(RDMABuffer* response,
   return ctx.status;
 }
 
-Status ResponseSender::CheckRegion(const IOBuffer& buffer,
-                                   const Region& region) {
-  if (region.addr == 0 || region.rkey == 0) {
-    return Status::Internal("response rdma memory context is missing");
-  } else if (buffer.Length() > region.length) {
-    return Status::Internal(
+Status ResponseSender::CheckAttachment(const IOBuffer& src,
+                                       const Region& dest) {
+  if (src.ConstIOBuf().backing_block_num() != 1) {
+    return Status::InvalidParam("buffer is not continuous");
+  } else if (src.GetFirstDataMeta() == 0) {
+    return Status::InvalidParam("buffer not register for rdma");
+  } else if (src.Length() > dest.length) {
+    return Status::InvalidParam(
         "response attachment exceeds advertised rdma length");
+  } else if (dest.addr == 0 || dest.rkey == 0) {
+    return Status::Internal("response rdma memory context is missing");
   }
   return Status::OK();
 }
 
 Status ResponseSender::PrepWorkRequest(const Attachment& attachment,
                                        SendWorkRequest* wr) {
-  const auto& buffer = attachment.buffer;
-  const auto& region = attachment.dest;
-  auto status = CheckRegion(buffer, region);
+  const auto& src = attachment.buffer;
+  const auto& dest = attachment.dest;
+  auto status = CheckAttachment(src, dest);
   if (!status.ok()) {
     return status;
   }
 
   wr->opcode = OpCode::kRDMAWrite;
-  wr->addr = reinterpret_cast<uint64_t>(buffer.Fetch1());
-  wr->length = static_cast<uint32_t>(buffer.Length());
-  wr->lkey = buffer.GetFirstDataMeta();
-  wr->raddr = region.addr;
-  wr->rkey = region.rkey;
+  wr->addr = reinterpret_cast<uint64_t>(src.Fetch1());
+  wr->length = static_cast<uint32_t>(src.Length());
+  wr->lkey = src.GetFirstDataMeta();
+  wr->raddr = dest.addr;
+  wr->rkey = dest.rkey;
   wr->signaled = false;
   wr->ctx = nullptr;
 
