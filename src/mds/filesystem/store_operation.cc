@@ -897,7 +897,6 @@ Status HardLinkOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_para
 
   // update inode nlink
   attr.set_nlink(attr.nlink() + 1);
-  attr.set_mtime(std::max(attr.mtime(), GetTime()));
   attr.set_ctime(std::max(attr.ctime(), GetTime()));
   AddParentIno(attr, parent);
   attr.set_version(attr.version() + 1);
@@ -1083,8 +1082,6 @@ Status UpdateXAttrOperation::RunInBatch(TxnUPtr&, BatchSharedParam& shared_param
   }
 
   // update attr
-  attr.set_atime(std::max(attr.atime(), GetTime()));
-  attr.set_mtime(std::max(attr.mtime(), GetTime()));
   attr.set_ctime(std::max(attr.ctime(), GetTime()));
 
   return Status::OK();
@@ -1100,8 +1097,6 @@ Status RemoveXAttrOperation::RunInBatch(TxnUPtr&, BatchSharedParam& shared_param
   attr.mutable_xattrs()->erase(name_);
 
   // update attr
-  attr.set_atime(std::max(attr.atime(), GetTime()));
-  attr.set_mtime(std::max(attr.mtime(), GetTime()));
   attr.set_ctime(std::max(attr.ctime(), GetTime()));
 
   return Status::OK();
@@ -1117,7 +1112,6 @@ Status UpdateShardBoundariesOperation::RunInBatch(TxnUPtr&, BatchSharedParam& sh
   }
 
   // update attr
-  attr.set_mtime(std::max(attr.mtime(), GetTime()));
   attr.set_ctime(std::max(attr.ctime(), GetTime()));
 
   return Status::OK();
