@@ -252,6 +252,9 @@ bool BatchProcessor::Init() {
     // set thread name for better debugging
     utils::SetThreadName("batch_process");
 
+    // bind cpu
+    utils::BindThreadToCpu(utils::GetCpuCount() - 1);
+
     ProcessOperation();
   });
 
