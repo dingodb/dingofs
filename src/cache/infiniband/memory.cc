@@ -44,12 +44,12 @@ RDMABufferPool::RDMABufferPool(MemoryPoolUPtr memory_pool,
                                MemoryRegionUPtr memory_region)
     : memory_pool_(std::move(memory_pool)),
       memory_region_(std::move(memory_region)) {
-  size_t buffer_size = memory_pool_->buffer_size();
-  size_t buffer_count = memory_pool_->buffer_count();
+  size_t buffer_size = memory_pool_->BufferSize();
+  size_t buffer_count = memory_pool_->BufferCount();
   rdma_buffers_.reserve(buffer_count);
   for (int i = 0; i < buffer_count; ++i) {
     RDMABuffer buffer;
-    buffer.data = memory_pool_->base() + (i * buffer_size);
+    buffer.data = memory_pool_->BaseAddr() + (i * buffer_size);
     buffer.capacity = static_cast<uint32_t>(buffer_size);
     buffer.lkey = memory_region_->GetLkey();
     buffer.rkey = memory_region_->GetRkey();
@@ -69,7 +69,7 @@ RDMABufferPoolUPtr RDMABufferPool::Create(ProtectDomain* protect_domain,
   }
 
   auto memory_region = MemoryRegion::Register(
-      protect_domain, memory_pool->base(), buffer_size * buffer_count);
+      protect_domain, memory_pool->BaseAddr(), buffer_size * buffer_count);
   if (memory_region == nullptr) {
     return nullptr;
   }

@@ -21,7 +21,6 @@ add_subdirectory(readmempool)
 add_subdirectory(writemempool)
 
 add_library(dingofs_common
-    io_buffer.cc
     version.cc
     flag.cc
     string_slice.cc

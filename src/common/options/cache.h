@@ -219,11 +219,15 @@ DECLARE_int64(storage_upload_retry_timeout_s);
 // Sets the maximum retry timeout in seconds for downloading block from storage.
 DECLARE_int64(storage_download_retry_timeout_s);
 
-// Sets the MDS addresses for cache group member manager service RPC.
-DECLARE_string(mds_addrs);
-
 // Keepalive connection number per peer
 DECLARE_int32(connections);
+
+// IB device and HCA port (1-based) used by the cache RDMA path.
+DECLARE_string(rdma_device);
+DECLARE_uint32(rdma_port_num);
+
+// Sets the MDS addresses for cache group member manager service RPC.
+DECLARE_string(mds_addrs);
 
 // [onfly]
 DECLARE_int64(mds_rpc_timeout_ms);

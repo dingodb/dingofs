@@ -26,6 +26,8 @@
 #include <sys/mman.h>
 
 #include <atomic>
+#include <cstdlib>
+#include <thread>
 
 namespace dingofs {
 
@@ -87,55 +89,51 @@ uint32_t MemoryPool::ThreadSlot() {
   return slot;
 }
 
-// Pop path: single CAS attempt on this shard. On contention or empty, returns
-// nullptr so the caller can immediately try a different shard instead of
-// spinning on a contested cache line.
-char* MemoryPool::TryRequireFromShard(Shard& shard) {
+// Pop a single buffer index from this shard with one version-checked CAS.
+// Returns kNil on empty or contention.
+//
+// Safe under concurrent pops: the NextOf(idx) read may be stale if idx was
+// concurrently popped and reused, but that value is only ever fed back into the
+// CAS, never dereferenced -- and a stale read implies the head moved, so the CAS
+// fails and we report contention. This is the crucial difference from a batch
+// pop that walks interior next-pointers, which would dereference a reused node
+// (NextOf(garbage)) and fault.
+uint32_t MemoryPool::TryPopFromShard(Shard& shard) {
   uint64_t old_head = shard.head.load(std::memory_order_acquire);
   uint32_t idx = Idx(old_head);
-  if (idx == kNil) return nullptr;
+  if (idx == kNil) return kNil;
   uint32_t next = NextOf(idx);
   uint64_t new_head = Pack(next, Ver(old_head) + 1);
   if (shard.head.compare_exchange_strong(old_head, new_head,
                                          std::memory_order_acquire,
                                          std::memory_order_acquire)) {
-    return base_ + (idx * buffer_size_);
+    return idx;
   }
-  return nullptr;  // contested
+  return kNil;  // contested
 }
 
-// Batch-pop up to kRefillBatch buffers from a shard in one CAS by walking
-// N-1 next pointers. On CAS failure, skip to next shard (don't re-walk).
+// Pop path: single CAS attempt on this shard. On contention or empty, returns
+// nullptr so the caller can immediately try a different shard instead of
+// spinning on a contested cache line.
+char* MemoryPool::TryRequireFromShard(Shard& shard) {
+  uint32_t idx = TryPopFromShard(shard);
+  return idx == kNil ? nullptr : base_ + (idx * buffer_size_);
+}
+
+// Refill the thread cache one version-checked CAS at a time. An earlier version
+// popped a whole batch per CAS by walking interior next-pointers, but that races
+// with concurrent pops that reuse those nodes mid-walk -- NextOf(reused) becomes
+// a wild index and the next hop faults. Popping one node at a time never
+// dereferences anything but the current head, so it is race-safe; the extra CAS
+// per buffer only lands on the cold cache-refill path.
 void MemoryPool::RefillCacheFromShards(Cache& c, uint32_t start_shard) {
-  for (uint32_t i = 0; i < kNumShards; ++i) {
+  for (uint32_t i = 0; i < kNumShards && c.size < kRefillBatch; ++i) {
     Shard& s = shards_[(start_shard + i) % kNumShards];
-    uint64_t old_head = s.head.load(std::memory_order_acquire);
-    uint32_t first = Idx(old_head);
-    if (first == kNil) continue;  // shard empty
-
-    // Walk up to kRefillBatch nodes.
-    uint32_t last = first;
-    uint32_t count = 1;
-    uint32_t after = NextOf(first);
-    while (after != kNil && count < kRefillBatch) {
-      last = after;
-      after = NextOf(after);
-      ++count;
+    while (c.size < kRefillBatch) {
+      uint32_t idx = TryPopFromShard(s);
+      if (idx == kNil) break;  // shard empty or contested -- move on
+      c.entries[c.size++] = idx;
     }
-
-    uint64_t new_head = Pack(after, Ver(old_head) + 1);
-    if (s.head.compare_exchange_strong(old_head, new_head,
-                                       std::memory_order_acquire,
-                                       std::memory_order_acquire)) {
-      // We own chain [first, ..., last]. Pour into cache.
-      uint32_t node = first;
-      for (uint32_t j = 0; j < count; ++j) {
-        c.entries[c.size++] = node;
-        node = NextOf(node);
-      }
-      return;
-    }
-    // CAS failed: skip to next shard (don't re-walk this one).
   }
 }
 
@@ -252,10 +250,12 @@ void* MemoryPool::HugePagesMalloc(size_t size) {
       nullptr, real_size, PROT_READ | PROT_WRITE,
       MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE | MAP_HUGETLB, -1, 0);
   if (ptr == MAP_FAILED) {
-    ptr = (char*)std::malloc(real_size);
-    if (nullptr == ptr) {
+    void* aligned = nullptr;
+    int rc = posix_memalign(&aligned, HUGE_PAGE_SIZE_2MB, real_size);
+    if (rc != 0) {
       return nullptr;
     }
+    ptr = static_cast<char*>(aligned);
     real_size = 0;
   }
 

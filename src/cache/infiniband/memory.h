@@ -49,7 +49,7 @@ class RDMABufferPool {
   RDMABuffer* Alloc();
   void Free(RDMABuffer* buffer);
 
-  size_t BufferCount() { return memory_pool_->buffer_count(); }
+  size_t BufferCount() { return memory_pool_->BufferCount(); }
 
  private:
   MemoryPoolUPtr memory_pool_;
