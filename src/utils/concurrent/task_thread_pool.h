@@ -44,11 +44,9 @@
 namespace dingofs {
 namespace utils {
 
-namespace {
+inline pid_t GetTid() { return syscall(SYS_gettid); }
 
-pid_t GetTid() { return syscall(SYS_gettid); }
-
-void SetThreadName(const char* name) {
+inline void SetThreadName(const char* name) {
   // skip main thread
   if (getpid() == GetTid()) {
     return;
@@ -57,12 +55,27 @@ void SetThreadName(const char* name) {
   int ret = prctl(PR_SET_NAME, name);
 
   if (ret != 0) {
-    LOG(WARNING) << "Failed to set thread name, tid: " << GetTid()
+    LOG(WARNING) << "set thread name fail, tid: " << GetTid()
                  << ", error: " << errno;
   }
 }
 
-}  // namespace
+inline uint32_t GetCpuCount() {
+  static uint32_t cpu_count = std::thread::hardware_concurrency();
+  return cpu_count > 0 ? cpu_count : 1;
+}
+
+inline void BindThreadToCpu(uint32_t cpu_id) {
+  cpu_set_t cpuset;
+  CPU_ZERO(&cpuset);
+  CPU_SET(cpu_id % GetCpuCount(), &cpuset);
+
+  int ret = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+  if (ret != 0) {
+    LOG(WARNING) << "bind thread to cpu fail, tid: " << GetTid()
+                 << ", error: " << errno;
+  }
+}
 
 using Task = std::function<void()>;
 

@@ -59,7 +59,10 @@ DEFINE_validator(mds_txn_max_retry_times, brpc::PassValidate);
 DEFINE_uint32(mds_txn_timeout_ms, 8000, "txn timeout ms.");
 DEFINE_validator(mds_txn_timeout_ms, brpc::PassValidate);
 
-DEFINE_uint32(mds_store_operation_merge_delay_us, 20, "merge operation delay us.");
+DEFINE_bool(mds_store_operation_wait_multi_time, false, "wait multi time before retry.");
+DEFINE_validator(mds_store_operation_wait_multi_time, brpc::PassValidate);
+
+DEFINE_uint32(mds_store_operation_merge_delay_us, 50, "merge operation delay us.");
 DEFINE_validator(mds_store_operation_merge_delay_us, brpc::PassValidate);
 
 DEFINE_bool(mds_tiny_file_data_enable, false, "enable tiny file data feature.");
@@ -3587,6 +3590,9 @@ bool OperationProcessor::Init() {
     // set thread name for better debugging
     utils::SetThreadName("store_operate");
 
+    // bind cpu
+    utils::BindThreadToCpu(utils::GetCpuCount() - 1);
+
     ProcessOperation();
   });
 
@@ -3764,7 +3770,8 @@ void OperationProcessor::ProcessOperation() {
         stage_operations.push_back(operation);
         operation = nullptr;
 
-        if (!waited && FLAGS_mds_store_operation_merge_delay_us > 0) {
+      } else {
+        if ((!waited || FLAGS_mds_store_operation_wait_multi_time) && FLAGS_mds_store_operation_merge_delay_us > 0) {
           waited = true;
           std::this_thread::sleep_for(std::chrono::microseconds(FLAGS_mds_store_operation_merge_delay_us));
         }
@@ -4000,8 +4007,10 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
   SetElapsedTime(batch_operation, "store_operate");
 
   LOG(INFO) << fmt::format(
-      "[operation.{}.{}][{}][{}us] batch run ({}) finish, count({}) txn({}) retry({}) status({}) attr({}).", fs_id, ino,
-      txn_id, duration.ElapsedUs(), op_names, count, commit_type, retry, status.error_str(),
+      "[operation.{}.{}][{}][{}us] batch run ({}) finish, count({}) parent_key({},{}) txn({}) retry({}) status({}) "
+      "attr({}).",
+      fs_id, ino, txn_id, duration.ElapsedUs(), op_names, count, need_parent_key, mutation_index, commit_type, retry,
+      status.error_str(),
       need_parent_key ? DescribeAttr(shared_param.attr) : DescribeAttrMutation(shared_param.attr_mutation));
 
   if (status.ok()) {

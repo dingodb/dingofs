@@ -70,7 +70,7 @@ static constexpr uint64_t kMiB = 1024ULL * kKiB;
 static constexpr uint64_t kGiB = 1024ULL * kMiB;
 static constexpr uint64_t kTiB = 1024ULL * kGiB;
 
-static constexpr uint32_t kDirAttrMutationNum = 8;
+static constexpr uint32_t kDirAttrMutationNum = 16;
 
 constexpr bool HasDirAttrMutation() { return kDirAttrMutationNum != 0; }
 
