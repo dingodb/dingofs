@@ -93,6 +93,7 @@ DEFINE_string(bench_conf, "", "Config file path (gflags format)");
 DEFINE_string(bench_dir, "/mdtest_bench", "Directory inside FS for bench tree");
 
 DEFINE_int32(bench_threads, 1, "Number of concurrent worker threads");
+DEFINE_int32(bench_thread_group, 1, "Number of concurrent worker thread group");
 DEFINE_int32(bench_depth, 3, "Directory tree depth (levels, >= 1)");
 DEFINE_int32(bench_width, 4, "Branching factor per directory (>= 1)");
 DEFINE_int32(bench_files, 10, "Empty files per leaf directory (>= 0)");
@@ -535,13 +536,84 @@ static void UniqueWorker(VFSWrapper* vfs, TreeSpec* spec,
 // on-demand from indices.  A failed thread stops taking tasks but keeps
 // hitting every barrier to avoid deadlock.
 struct SharedWork {
-  std::unique_ptr<std::atomic<uint64_t>[]> dir_cursors;  // one per level
-  std::atomic<uint64_t> file_cursor{0};
+  struct FileCursor {
+    std::atomic<uint64_t> index{0};
+    std::atomic<uint64_t> limit{0};
 
-  explicit SharedWork(int depth)
-      : dir_cursors(std::make_unique<std::atomic<uint64_t>[]>(depth)) {
-    for (int d = 0; d < depth; d++)
-      dir_cursors[d].store(0, std::memory_order_relaxed);
+    FileCursor() = default;
+    FileCursor(FileCursor&& other) noexcept
+        : index(other.index.load()), limit(other.limit.load()) {}
+  };
+  std::unique_ptr<std::atomic<uint64_t>[]> dir_cursors;  // one per level
+
+  uint32_t files_per_leaf{0};
+  uint32_t step_size{0};
+  std::vector<FileCursor> file_cursors;
+
+  explicit SharedWork(int depth, uint32_t thread_groups,
+                      uint32_t files_per_leaf)
+      : dir_cursors(std::make_unique<std::atomic<uint64_t>[]>(depth)),
+        files_per_leaf(files_per_leaf),
+        step_size(files_per_leaf * (thread_groups - 1)) {
+    CHECK(thread_groups > 0) << "thread_groups must be > 0";
+    CHECK(files_per_leaf > 0) << "files_per_leaf must be > 0";
+
+    for (int i = 0; i < depth; ++i) {
+      dir_cursors[i].store(0);
+    }
+
+    file_cursors.resize(thread_groups);
+    for (uint32_t i = 0; i < thread_groups; ++i) {
+      auto& cursor = file_cursors[i];
+      cursor.index.store(i * files_per_leaf);
+      cursor.limit.store(cursor.index.load() + files_per_leaf);
+    }
+
+    Print();
+  }
+
+  uint64_t GetFileIndex(int group_num) {
+    auto& cursor = file_cursors[group_num];
+
+    uint64_t file_index{0};
+    do {
+      uint64_t limit = cursor.limit.load(std::memory_order_relaxed);
+      file_index = cursor.index.fetch_add(1, std::memory_order_relaxed);
+
+      if (file_index < limit) {
+        if (file_index + files_per_leaf >= limit)
+          break;
+        else
+          std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+      } else if (file_index == limit) {
+        // Move to the next batch for this group
+        uint64_t new_index = limit + step_size;
+        cursor.index.store(new_index);
+        cursor.limit.store(new_index + files_per_leaf);
+
+        LOG(INFO) << fmt::format(
+            "[sharedwork] group({}) reached limit({}) moving to next batch "
+            "[{},{})",
+            group_num, limit, new_index, new_index + files_per_leaf);
+
+      } else {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+      }
+
+    } while (true);
+
+    return file_index;
+  }
+
+  void Print() {
+    LOG(INFO) << fmt::format("[sharedwork] files_per_leaf({}) step_size({}).",
+                             files_per_leaf, step_size);
+    for (size_t i = 0; i < file_cursors.size(); ++i) {
+      const auto& cursor = file_cursors[i];
+      LOG(INFO) << fmt::format("[sharedwork] group({}) index[{}, {}).", i,
+                               cursor.index.load(), cursor.limit.load());
+    }
   }
 };
 
@@ -589,12 +661,13 @@ static void SharedWorker(VFSWrapper* vfs, TreeSpec* spec, SharedWork* work,
   // ---- File phase ----
   pthread_barrier_wait(barrier);
   if (result->error_code == 0) {
+    uint32_t group_num = result->thread_id % work->file_cursors.size();
     uint64_t total = spec->TotalFiles();
     for (;;) {
-      uint64_t g = work->file_cursor.fetch_add(1, std::memory_order_relaxed);
-      if (g >= total) break;
+      uint64_t file_index = work->GetFileIndex(group_num);
+      if (file_index >= total) break;
 
-      std::string path = spec->FilePath(g);
+      std::string path = spec->FilePath(file_index);
       Ino parent = spec->ResolveParent(vfs, path);
       std::string name = BaseName(path);
       CHECK(parent != 0) << fmt::format("not found parent directory, path({}).",
@@ -853,7 +926,8 @@ int main(int argc, char** argv) {
 
   std::unique_ptr<SharedWork> shared_work;
   if (shared_mode)
-    shared_work = std::make_unique<SharedWork>(FLAGS_bench_depth);
+    shared_work = std::make_unique<SharedWork>(
+        FLAGS_bench_depth, FLAGS_bench_thread_group, FLAGS_bench_files);
 
   std::vector<std::thread> workers;
   workers.reserve(nthreads);
