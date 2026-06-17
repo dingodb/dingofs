@@ -3589,7 +3589,12 @@ OperationProcessor::OperationProcessor(KVStorageSPtr kv_storage) : kv_storage_(k
 }
 
 bool OperationProcessor::Init() {
-  thread_ = std::thread([this] { ProcessOperation(); });
+  thread_ = std::thread([this] {
+    // set thread name for better debugging
+    utils::SetThreadName("store_operate");
+
+    ProcessOperation();
+  });
 
   if (!async_worker_->Init()) {
     LOG(FATAL) << fmt::format("[operation] async worker init fail.");
