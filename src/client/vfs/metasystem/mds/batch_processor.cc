@@ -371,7 +371,7 @@ void BatchProcessor::LaunchExecuteBatchOperation(
                                .batch_operation = std::move(batch_operation)});
 
   bthread_t tid;
-  bthread_attr_t attr = BTHREAD_ATTR_DEBUG;
+  bthread_attr_t attr = BTHREAD_ATTR_NORMAL;
   if (bthread_start_background(
           &tid, &attr,
           [](void* arg) -> void* {
