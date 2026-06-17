@@ -231,8 +231,8 @@ struct BatchOperation {
 
 class BatchProcessor {
  public:
-  BatchProcessor(MDSClient& mds_client);
-  ~BatchProcessor();
+  BatchProcessor(MDSClient& mds_client) : mds_client_(mds_client) {}
+  ~BatchProcessor() = default;
 
   BatchProcessor(const BatchProcessor&) = delete;
   BatchProcessor& operator=(const BatchProcessor&) = delete;
@@ -267,9 +267,9 @@ class BatchProcessor {
                                     BatchOperation& batch_operation);
 
   // consumer thread
-  bthread_t tid_{0};
-  bthread_mutex_t mutex_;
-  bthread_cond_t cond_;
+  std::thread thread_;
+  std::mutex thread_mutex_;
+  std::condition_variable thread_cond_;
 
   std::atomic<bool> stopped_{false};
 

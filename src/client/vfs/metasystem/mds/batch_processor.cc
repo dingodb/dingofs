@@ -247,43 +247,13 @@ void UnlinkOperation::BatchRun(MDSClient& mds_client,
   for (auto& operation : operations) operation->NotifyEvent();
 }
 
-BatchProcessor::BatchProcessor(MDSClient& mds_client)
-    : mds_client_(mds_client) {
-  CHECK(bthread_mutex_init(&mutex_, nullptr) == 0)
-      << fmt::format("[meta.batch_processor] bthread_mutex_init fail.");
-  CHECK(bthread_cond_init(&cond_, nullptr) == 0)
-      << fmt::format("[meta.batch_processor] bthread_cond_init fail.");
-}
-
-BatchProcessor::~BatchProcessor() {
-  bthread_cond_destroy(&cond_);
-  bthread_mutex_destroy(&mutex_);
-}
-
 bool BatchProcessor::Init() {
-  struct Param {
-    BatchProcessor& self;
-  };
+  thread_ = std::thread([this] {
+    // set thread name for better debugging
+    utils::SetThreadName("batch_process");
 
-  Param* param = new Param({.self = *this});
-
-  const bthread_attr_t attr = BTHREAD_ATTR_NORMAL;
-  if (bthread_start_background(
-          &tid_, &attr,
-          [](void* arg) -> void* {
-            Param* param = reinterpret_cast<Param*>(arg);
-
-            param->self.ProcessOperation();
-
-            delete param;
-            return nullptr;
-          },
-          param) != 0) {
-    tid_ = 0;
-    delete param;
-    LOG(FATAL) << "[meta.batch_processor] start background thread fail.";
-    return false;
-  }
+    ProcessOperation();
+  });
 
   return true;
 }
@@ -291,17 +261,9 @@ bool BatchProcessor::Init() {
 bool BatchProcessor::Stop() {
   stopped_.store(true);
 
-  if (tid_ > 0) {
-    bthread_cond_signal(&cond_);
+  thread_cond_.notify_all();
 
-    if (bthread_stop(tid_) != 0) {
-      LOG(ERROR) << fmt::format("[meta.batch_processor] bthread_stop fail.");
-    }
-
-    if (bthread_join(tid_, nullptr) != 0) {
-      LOG(ERROR) << fmt::format("[meta.batch_processor] bthread_join fail.");
-    }
-  }
+  if (thread_.joinable()) thread_.join();
 
   return true;
 }
@@ -313,7 +275,7 @@ bool BatchProcessor::AsyncRun(OperationSPtr operation) {
 
   operations_.Enqueue(operation);
 
-  bthread_cond_signal(&cond_);
+  thread_cond_.notify_one();
 
   return true;
 }
@@ -325,7 +287,8 @@ bool BatchProcessor::RunBatched(OperationSPtr operation) {
 
   operations_.Enqueue(operation);
 
-  bthread_cond_signal(&cond_);
+  thread_cond_.notify_one();
+
   return true;
 }
 
@@ -340,9 +303,9 @@ void BatchProcessor::ProcessOperation() {
 
     while (!operations_.Dequeue(operation) &&
            !stopped_.load(std::memory_order_relaxed)) {
-      bthread_mutex_lock(&mutex_);
-      bthread_cond_wait(&cond_, &mutex_);
-      bthread_mutex_unlock(&mutex_);
+      std::unique_lock<std::mutex> lk(thread_mutex_);
+      thread_cond_.wait(lk);
+      lk.unlock();
     }
 
     if (operation) stage_operations.push_back(operation);
@@ -358,7 +321,8 @@ void BatchProcessor::ProcessOperation() {
       stage_operations.push_back(operation);
 
       if (!is_waited && FLAGS_vfs_meta_batch_operation_merge_delay_us > 0) {
-        bthread_usleep(FLAGS_vfs_meta_batch_operation_merge_delay_us);
+        std::this_thread::sleep_for(std::chrono::microseconds(
+            FLAGS_vfs_meta_batch_operation_merge_delay_us));
         is_waited = true;
       }
 
@@ -407,7 +371,7 @@ void BatchProcessor::LaunchExecuteBatchOperation(
                                .batch_operation = std::move(batch_operation)});
 
   bthread_t tid;
-  bthread_attr_t attr = BTHREAD_ATTR_SMALL;
+  bthread_attr_t attr = BTHREAD_ATTR_DEBUG;
   if (bthread_start_background(
           &tid, &attr,
           [](void* arg) -> void* {
