@@ -16,15 +16,17 @@
 
 #include "common/readmempool/read_buf.h"
 
-#include "common/readmempool/read_mem_pool.h"  // for the complete ReadMemPool::ReturnSlot type
+#include "common/readmempool/read_mem_pool.h"
 
 namespace dingofs {
 
-// Reset needs the complete ReadMemPool type (it calls the private ReturnSlot,
-// and ReadBuf is its friend), so it is defined in this .cc, not in read_buf.h.
+// Defined here (not inline in the header) because returning the slot needs the
+// complete ReadMemPool type. ReleaseExternal frees by address reverse-lookup --
+// the same path the IOBuf deleter (ReadMemPool::Deleter) takes -- so an owning
+// ReadBuf and a handed-off slot are released identically.
 void ReadBuf::Reset() {
   if (pool_ != nullptr) {
-    pool_->ReturnSlot(off_, meta_);
+    pool_->ReleaseExternal(data_);
     pool_ = nullptr;
     data_ = nullptr;
   }

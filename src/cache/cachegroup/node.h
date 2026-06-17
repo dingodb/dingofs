@@ -28,7 +28,7 @@
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/cachegroup/heartbeat.h"
-#include "cache/cachegroup/task_tracker.h"
+#include "cache/common/task_tracker.h"
 #include "cache/common/mds_client.h"
 #include "cache/common/storage_client.h"
 #include "cache/common/storage_client_pool.h"
@@ -40,16 +40,13 @@ namespace cache {
 class CacheNode {
  public:
   CacheNode();
-
   Status Start();
   Status Shutdown();
 
   Status Put(BlockHandle handle, IOBuffer block);
-  // `cache_hit` (out): true iff the request was satisfied from the local cache
-  // (not from the storage fallback). Used by the RPC handler to set the
-  // response's cache_hit field.
   Status Range(BlockHandle handle, off_t offset, size_t length,
                IOBuffer* buffer, size_t block_length, bool* cache_hit);
+
   Status AsyncCache(BlockHandle handle, IOBuffer block);
   Status AsyncPrefetch(BlockHandle handle, size_t length);
 
@@ -64,7 +61,8 @@ class CacheNode {
   Status RetrieveStorage(const BlockHandle& handle, off_t offset, size_t length,
                          IOBuffer* buffer, size_t block_length);
   Status RetrievePartBlock(const BlockHandle& handle, off_t offset,
-                           size_t length, IOBuffer* buffer, size_t block_length);
+                           size_t length, IOBuffer* buffer,
+                           size_t block_length);
   Status RetrieveWholeBlock(const BlockHandle& handle, size_t block_length,
                             IOBuffer* buffer);
   Status RunTask(StorageClient* storage_client, DownloadTaskSPtr task);

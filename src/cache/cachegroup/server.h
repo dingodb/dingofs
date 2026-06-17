@@ -26,8 +26,12 @@
 #include <brpc/server.h>
 
 #include <csignal>
+#include <memory>
+#include <vector>
 
 #include "cache/cachegroup/node.h"
+#include "cache/infiniband/memory.h"
+#include "cache/infiniband/server.h"
 #include "dingofs/blockcache.pb.h"
 #include "utils/logclean_manager.h"
 
@@ -42,13 +46,18 @@ class Server {
 
  private:
   void InstallSignal();
-  Status StartRpcServer(const std::string& listen_ip, uint32_t listen_port);
+  Status StartRDMAServer();
+  Status StartBrpcServer(const std::string& listen_ip, uint32_t listen_port);
+  void ShutdownRDMAServer() { rdma_server_->Shutdown(); }
+  void ShutdownBrpcServer() { brpc::AskToQuit(); }
 
   std::atomic<bool> running_;
-  CacheNodeSPtr node_;
-  std::unique_ptr<pb::cache::BlockCacheService> service_;
-  std::unique_ptr<brpc::Server> server_;
-  std::unique_ptr<utils::LogCleanManager> log_clean_manager_;
+  std::unique_ptr<CacheNode> node_;
+  std::unique_ptr<pb::cache::BlockCacheService> rdma_service_;
+  std::unique_ptr<pb::cache::BlockCacheService> brpc_service_;
+  std::unique_ptr<infiniband::Server> rdma_server_;
+  std::unique_ptr<brpc::Server> brpc_server_;
+  std::vector<infiniband::MemoryRegionUPtr> slab_regions_;
 };
 
 }  // namespace cache

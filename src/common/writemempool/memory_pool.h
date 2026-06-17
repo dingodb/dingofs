@@ -63,6 +63,16 @@ class MemoryPool {
   char* BaseAddr() const { return base_; }
   size_t TotalSize() const { return buffer_size_ * buffer_count_; }
 
+  char* base() const { return base_; }
+  size_t buffer_size() const { return buffer_size_; }
+  size_t buffer_count() const { return buffer_count_; }
+
+  size_t IndexOf(char* buffer) const {
+    DCHECK_GE(buffer, base_);
+    DCHECK_LT(buffer, base_ + (buffer_size_ * buffer_count_));
+    return (buffer - base_) / buffer_size_;
+  }
+
  private:
   static constexpr uint32_t kNumShards = 32;
   static constexpr uint32_t kNumCaches = 128;
@@ -94,6 +104,7 @@ class MemoryPool {
     return *reinterpret_cast<uint32_t*>(base_ + (idx * buffer_size_));
   }
 
+  uint32_t TryPopFromShard(Shard& shard);
   char* TryRequireFromShard(Shard& shard);
   void RefillCacheFromShards(Cache& c, uint32_t start_shard);
   void FlushCacheToShards(Cache& c, uint32_t flush_count, uint32_t home_shard);

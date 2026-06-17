@@ -125,8 +125,8 @@ Status MemCache::Load(BlockHandle handle, off_t offset, size_t length,
   auto& shard = GetShard(key);
 
   // Hold the shard lock only long enough to look up, promote in the LRU and
-  // grab a refcounted copy of the IOBuffer. The actual data copy (AppendTo)
-  // happens outside the lock.
+  // grab a refcounted copy of the IOBuffer. The actual data copy into the
+  // caller's destination happens outside the lock.
   IOBuffer copy;
   {
     BAIDU_SCOPED_LOCK(shard.mutex);
@@ -146,7 +146,13 @@ Status MemCache::Load(BlockHandle handle, off_t offset, size_t length,
   }
   size_t avail = total - static_cast<size_t>(offset);
   size_t want = std::min(length, avail);
-  copy.AppendTo(buffer, want, static_cast<size_t>(offset));
+  if (buffer->Size() == 0) {
+    // No caller destination (cache server): hand back a refcounted view.
+    copy.AppendTo(buffer, want, static_cast<size_t>(offset));
+  } else {
+    // Caller-allocated destination: copy straight into it (in place).
+    FillDest(buffer, copy, want, static_cast<size_t>(offset));
+  }
 
   vars_->cache_hits << 1;
   return Status::OK();

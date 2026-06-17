@@ -78,6 +78,9 @@ class BlockCacheUploader {
 
   void WaitStoreReady() {
     while (!store_->IsRunning()) {
+      if (!IsRunning()) {
+        return;
+      }
       bthread_usleep(1000);  // 1 second
     }
   }

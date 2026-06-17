@@ -134,8 +134,12 @@ void RangeBlockTask::Run() {
 }
 
 blockaccess::GetObjectAsyncContextSPtr RangeBlockTask::OnPrepare() {
-  char* data = new char[length_];
-  buffer_->AppendUserData(data, length_, iutil::DeleteBuffer);
+  // Fill the caller's destination in place when provided (a single contiguous
+  // block, >= length_) -- zero copy; otherwise allocate one (callee).
+  if (buffer_->Size() == 0) {
+    char* data = new char[length_];
+    buffer_->AppendUserData(data, length_, iutil::DeleteBuffer);
+  }
 
   auto ctx =
       std::make_shared<blockaccess::GetObjectAsyncContext>(handle_.StoreKey());
@@ -156,8 +160,15 @@ void RangeBlockTask::OnCallback(
     const blockaccess::GetObjectAsyncContextSPtr& ctx) {
   auto status = ctx->status;
   if (status.ok()) {
-    CHECK_EQ(ctx->actual_len, length_)
-        << "actual_len: " << ctx->actual_len << ", expected_len: " << length_;
+    if (ctx->actual_len != length_) {
+      OnComplete(Status::Internal("storage range short read"));
+      return;
+    }
+    // Shrink the (possibly O_DIRECT-superset over-allocated) destination view to
+    // exactly the bytes read.
+    if (buffer_->Size() > length_) {
+      buffer_->PopBack(buffer_->Size() - length_);
+    }
     OnComplete(status);
   } else if (status.IsNotFound()) {
     LOG(WARNING) << "Download block failed, object not found : key = "

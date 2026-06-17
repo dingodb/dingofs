@@ -38,12 +38,10 @@ namespace cache {
 
 DEFINE_uint32(iodepth, 128, "aio queue maximum iodepth");
 
-AioQueue::AioQueue(const std::vector<iovec>& fixed_write_buffers,
-                   const std::vector<iovec>& fixed_read_buffers)
+AioQueue::AioQueue(const std::vector<iovec>& fixed_buffers)
     : running_(false),
       io_uring_(std::make_unique<IOUring>(
-          IOUringOptions{.fixed_write_buffers = fixed_write_buffers,
-                         .fixed_read_buffers = fixed_read_buffers})),
+          IOUringOptions{.fixed_buffers = fixed_buffers})),
       prep_io_queue_id_({0}) {}
 
 Status AioQueue::Start() {

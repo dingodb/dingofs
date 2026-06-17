@@ -86,6 +86,14 @@ class BlockCache {
     return Status::NotSupport("not implemented");
   }
 
+  // Reads [offset, offset+length) into the caller-allocated `buffer`. The
+  // distributed-cache interface (TierBlockCache / RemoteBlockCache) is strictly
+  // caller-allocated: `buffer` MUST be a single contiguous writable block of
+  // `length` bytes (wrap caller memory via IOBuffer::AppendUserData, or
+  // AppendUserDataWithMeta with meta = RDMA rkey for a registered region); an
+  // empty `buffer` is rejected. Each tier fills it IN PLACE -- zero copy when
+  // the memory is RDMA-registered, otherwise at most one copy. A tier that
+  // misses must leave `buffer` untouched so the next tier can fill it.
   virtual Status Range(BlockHandle /*handle*/, off_t /*offset*/,
                        size_t /*length*/, IOBuffer* /*buffer*/,
                        RangeOption /*option*/ = {}) {

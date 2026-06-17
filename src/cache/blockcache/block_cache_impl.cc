@@ -166,6 +166,10 @@ Status BlockCacheImpl::Range(BlockHandle handle, off_t offset, size_t length,
                              IOBuffer* buffer, RangeOption /*option*/) {
   DCHECK_RUNNING("BlockCacheImpl");
 
+  // Storage primitive: fills a caller-allocated `buffer` in place when given
+  // one (client local tier), or allocates and hands it back when empty (the
+  // cache server reads lazily into a write-pool slab -- zero copy, no waste on
+  // a miss).
   return store_->Load(std::move(handle), offset, length, buffer);
 }
 

@@ -22,6 +22,7 @@
 
 #include "cache/blockcache/local_filesystem.h"
 
+#include <bits/types/struct_iovec.h>
 #include <butil/memory/aligned_memory.h>
 #include <butil/memory/scope_guard.h>
 #include <fcntl.h>
@@ -37,6 +38,7 @@
 #include "cache/blockcache/disk_cache_layout.h"
 #include "cache/blockcache/disk_health_checker.h"
 #include "cache/common/macro.h"
+#include "cache/infiniband/slab_pool.h"
 #include "cache/iutil/buffer_pool.h"
 #include "cache/iutil/file_util.h"
 #include "cache/iutil/inflight_tracker.h"
@@ -48,18 +50,90 @@
 namespace dingofs {
 namespace cache {
 
+using infiniband::GetGlobalReadSlabPool;
+using infiniband::GetGlobalWriteSlabPool;
+
 DEFINE_bool(fix_buffer, true, "whether to use fixed buffer for aio");
+
+namespace {
+
+constexpr size_t kAlignedIOBlockSize = 4096;
+
+// io_uring fixed buffers = read-pool buffers (disk-write path) followed by
+// write-pool buffers (disk-read path). Each slab is at once the io_uring fixed
+// buffer and the RDMA-registered buffer, so disk<->slab<->NIC is fully zero
+// copy. Reads and writes use separate pools to avoid cross-contention.
+std::vector<iovec> BuildIoUringFixedBuffers() {
+  auto buffers = GetGlobalReadSlabPool().Fetch();
+  auto reads = GetGlobalWriteSlabPool().Fetch();
+  buffers.insert(buffers.end(), reads.begin(), reads.end());
+  return buffers;
+}
+
+bool IsAligned(uint64_t n, uint64_t m) { return (n % m) == 0; }
+
+off_t AlignOffset(off_t offset) {
+  if (!IsAligned(offset, kAlignedIOBlockSize)) {
+    offset = offset - (offset % kAlignedIOBlockSize);
+  }
+  return offset;
+}
+
+size_t AlignLength(size_t length) {
+  if (!IsAligned(length, kAlignedIOBlockSize)) {
+    length = (length + kAlignedIOBlockSize - 1) & ~(kAlignedIOBlockSize - 1);
+  }
+  return length;
+}
+
+// Allocate an O_DIRECT-aligned buffer of `aligned_length` into `out`. With
+// --fix_buffer it comes from a global slab pool, named after the RDMA op on
+// the other end of the pipeline: a disk read fills a buffer to be RDMA-written
+// (write pool), a disk write drains a buffer that was RDMA-read (read pool).
+// The slab is at once the io_uring fixed buffer and the RDMA-registered buffer
+// (its meta carries the RDMA lkey). *buf_index is the absolute io_uring
+// fixed-buffer index (read-pool buffers are registered first, write-pool
+// buffers after). Without --fix_buffer it falls back to an aligned malloc and
+// *buf_index is -1.
+Status AllocFixedBuffer(IOBuffer* out, size_t aligned_length, bool for_read,
+                        int* buf_index) {
+  if (!FLAGS_fix_buffer) {
+    char* data =
+        (char*)butil::AlignedAlloc(aligned_length, kAlignedIOBlockSize);
+    out->AppendUserData(data, aligned_length, butil::AlignedFree);
+    *buf_index = -1;
+    return Status::OK();
+  }
+
+  // disk reads fill the write pool, disk writes drain the read pool.
+  auto& slab_pool =
+      for_read ? GetGlobalWriteSlabPool() : GetGlobalReadSlabPool();
+  auto* slab = slab_pool.Alloc(aligned_length);
+  if (slab == nullptr) {
+    return Status::CacheFull("slab pool exhausted");
+  }
+  // meta carries the RDMA lkey (set once at server start); the deleter returns
+  // the slab to the right pool when the IOBuffer is finally destroyed.
+  out->AppendUserDataWithMeta(
+      slab->data, aligned_length,
+      [for_read, slab](void*) {
+        (for_read ? GetGlobalWriteSlabPool() : GetGlobalReadSlabPool())
+            .Free(slab);
+      },
+      slab->lkey);
+  *buf_index =
+      (for_read ? static_cast<int>(GetGlobalReadSlabPool().BufferCount()) : 0) +
+      static_cast<int>(slab->index);
+  return Status::OK();
+}
+
+}  // namespace
 
 LocalFileSystem::LocalFileSystem(DiskCacheLayoutSPtr layout)
     : running_(false),
       layout_(layout),
-      write_buffer_pool_(std::make_unique<BufferPool>(4 * kMiB, FLAGS_iodepth,
-                                                      kAlignedIOBlockSize)),
-      read_buffer_pool_(std::make_unique<BufferPool>(4 * kMiB, FLAGS_iodepth,
-                                                     kAlignedIOBlockSize)),
       inflight_(FLAGS_iodepth),
-      aio_queue_(std::make_unique<AioQueue>(write_buffer_pool_->Fetch(),
-                                            read_buffer_pool_->Fetch())),
+      aio_queue_(std::make_unique<AioQueue>(BuildIoUringFixedBuffers())),
       health_checker_(std::make_unique<DiskHealthChecker>(layout)) {}
 
 Status LocalFileSystem::Start() {
@@ -152,10 +226,31 @@ Status LocalFileSystem::WriteFile(const std::string& path,
     }
   }
 
-  IOBuffer tbuffer;
-  int buf_index = AllocateAlignedMemory(&tbuffer, aligned_length, false);
-  buffer->CopyTo(tbuffer.Fetch1());
-  status = AioWrite(fd, tbuffer.Fetch1(), aligned_length, buf_index);
+  // Fast path: the source is already a single slab-backed block of the exact
+  // O_DIRECT size (e.g. the RDMA request attachment) — write it in place as an
+  // io_uring fixed buffer, zero copy. Otherwise stage it into an aligned slab
+  // buffer (this also zero-pads when the block is not 4K-aligned).
+  // The write source (e.g. the RDMA request attachment) lives in the read
+  // pool, registered first in io_uring, so its slab index is the absolute
+  // fixed index.
+  auto& slab_pool = GetGlobalReadSlabPool();
+  if (FLAGS_fix_buffer && buffer->Size() == aligned_length &&
+      buffer->ConstIOBuf().backing_block_num() == 1 &&
+      slab_pool.Contains(buffer->Fetch1())) {
+    int buf_index = slab_pool.IndexOf(buffer->Fetch1());
+    status = AioWrite(fd, buffer->Fetch1(), aligned_length, buf_index);
+  } else {
+    IOBuffer tbuffer;
+    int buf_index;
+    status = AllocFixedBuffer(&tbuffer, aligned_length, /*for_read=*/false,
+                              &buf_index);
+    if (!status.ok()) {
+      LOG(ERROR) << "Fail to allocate write buffer for `" << path << "'";
+      return status;
+    }
+    buffer->CopyTo(tbuffer.Fetch1(), buffer->Size());
+    status = AioWrite(fd, tbuffer.Fetch1(), aligned_length, buf_index);
+  }
   if (!status.ok()) {
     LOG(ERROR) << "Fail to write file'`" << tmppath << "'";
     return status;
@@ -163,8 +258,7 @@ Status LocalFileSystem::WriteFile(const std::string& path,
 
   status = iutil::Rename(tmppath, path);
   if (!status.ok()) {
-    LOG(ERROR) << "Fail to rename file from `" << tmppath << "' to `" << path
-               << "'";
+    LOG(ERROR) << "Fail to rename `" << tmppath << "' to `" << path << "'";
     return status;
   }
   return status;
@@ -198,18 +292,41 @@ Status LocalFileSystem::ReadFile(const std::string& path, off_t offset,
 
   off_t aligned_offset = AlignOffset(offset);
   size_t aligned_length = AlignLength(length + offset - aligned_offset);
-  int buf_index = AllocateAlignedMemory(buffer, aligned_length, true);
+
+  // O_DIRECT requires an aligned buffer and an aligned superset read, so the
+  // read always lands in a freshly allocated aligned slab first.
+  IOBuffer aligned;
+  int buf_index;
   status =
-      AioRead(fd, aligned_offset, aligned_length, buffer->Fetch1(), buf_index);
-  if (status.ok()) {
-    if (aligned_offset != offset) {
-      buffer->PopFront(offset - aligned_offset);
-    }
-    if (aligned_length != length) {
-      buffer->PopBack(aligned_offset + aligned_length - (offset + length));
-    }
-  } else {
+      AllocFixedBuffer(&aligned, aligned_length, /*for_read=*/true, &buf_index);
+  if (!status.ok()) {
+    LOG(ERROR) << "Fail to allocate read buffer for `" << path << "'";
+    return status;
+  }
+
+  status =
+      AioRead(fd, aligned_offset, aligned_length, aligned.Fetch1(), buf_index);
+  if (!status.ok()) {
     LOG(ERROR) << "Fail to read file=`" << path << "'";
+    return status;
+  }
+
+  if (aligned_offset != offset) {
+    aligned.PopFront(offset - aligned_offset);
+  }
+  if (aligned_length != length) {
+    aligned.PopBack(aligned_offset + aligned_length - (offset + length));
+  }
+
+  if (buffer->Size() == 0) {
+    // No caller destination (cache server / uploader): hand back the slab -- it
+    // is the io_uring fixed buffer and, bubbling up (meta=lkey), the RDMA-write
+    // source too. Zero copy.
+    *buffer = std::move(aligned);
+  } else {
+    // Caller-allocated destination (e.g. the FUSE read-mempool slot,
+    // unaligned): copy the [offset, offset+length) slice in place (one copy).
+    FillDest(buffer, aligned, length);
   }
 
   return status;
@@ -253,48 +370,6 @@ Status LocalFileSystem::AioRead(int fd, off_t offset, size_t length,
   aio_queue_->Submit(&aio);
   aio.Wait();
   return aio.Result().status;
-}
-
-off_t LocalFileSystem::AlignOffset(off_t offset) {
-  auto alignment = kAlignedIOBlockSize;
-  if (!IsAligned(offset, alignment)) {
-    offset = offset - (offset % alignment);
-  }
-  return offset;
-}
-
-size_t LocalFileSystem::AlignLength(size_t length) {
-  auto alignment = kAlignedIOBlockSize;
-  if (!IsAligned(length, alignment)) {
-    length = (length + alignment - 1) & ~(alignment - 1);
-  }
-  return length;
-}
-
-int LocalFileSystem::AllocateAlignedMemory(IOBuffer* buffer,
-                                           size_t aligned_length,
-                                           bool for_read) {
-  if (!FLAGS_fix_buffer) {
-    char* data =
-        (char*)butil::AlignedAlloc(aligned_length, kAlignedIOBlockSize);
-    buffer->AppendUserData(data, aligned_length, butil::AlignedFree);
-    return -1;
-  }
-
-  // use fixed buffer
-  if (for_read) {
-    char* data = read_buffer_pool_->Alloc();
-    buffer->AppendUserData(data, aligned_length, [this](void* ptr) {
-      read_buffer_pool_->Free((char*)ptr);
-    });
-    return read_buffer_pool_->Index(data);
-  }
-
-  char* data = write_buffer_pool_->Alloc();
-  buffer->AppendUserData(data, aligned_length, [this](void* ptr) {
-    write_buffer_pool_->Free((char*)ptr);
-  });
-  return write_buffer_pool_->Index(data);
 }
 
 }  // namespace cache

@@ -53,18 +53,8 @@ class LocalFileSystem {
   Status AioRead(int fd, off_t offset, size_t length, char* buffer,
                  int buf_index);
 
-  bool IsAligned(uint64_t n, uint64_t m) { return (n % m) == 0; }
-  off_t AlignOffset(off_t offset);
-  size_t AlignLength(size_t length);
-  int AllocateAlignedMemory(IOBuffer* buffer, size_t aligned_length,
-                            bool for_read);
-
-  static constexpr size_t kAlignedIOBlockSize = 4096;
-
   std::atomic<bool> running_;
   DiskCacheLayoutSPtr layout_;
-  BufferPoolUPtr write_buffer_pool_;
-  BufferPoolUPtr read_buffer_pool_;
   iutil::InflightTracker inflight_;
   AioQueueUPtr aio_queue_;
   DiskHealthCheckerUPtr health_checker_;

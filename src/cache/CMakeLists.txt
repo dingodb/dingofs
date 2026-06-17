@@ -14,11 +14,12 @@
 
 add_subdirectory(common)
 add_subdirectory(iutil)
+add_subdirectory(infiniband)
 add_subdirectory(blockcache)
 add_subdirectory(cachegroup)
 add_subdirectory(remotecache)
 add_subdirectory(tiercache)
-#add_subdirectory(benchmark)
+add_subdirectory(benchmark)
 
 file(GLOB CACHE_LIB_SRCS
     "dingo_cache.cc"
@@ -27,6 +28,7 @@ add_library(cache_lib ${CACHE_LIB_SRCS})
 target_link_libraries(cache_lib
     cache_common
     cache_iutil
+    cache_infiniband
     cache_blockcache
     cache_cachegroup
     cache_remotecache

@@ -17,9 +17,22 @@ add_subdirectory(vfs)
 add_subdirectory(fuse)
 
 add_executable(dingo-client main.cc)
+# ibverbs::ibverbs (shared libibverbs.so) MUST come first. fuse_client_lib's
+# transitive storage stack links static librados/librdmacm, which cross-pull
+# libibverbs.a; if that static archive is reached before the .so, the linker
+# binds DingoFS's own ibv_* calls to the static copy. Then at runtime the mlx5
+# provider (dlopen'd via libibverbs.so) registers into a different libibverbs
+# instance, so device open fails with "no userspace device-specific driver
+# found for mlx5_0". Listing the .so first makes ibv_* bind dynamically; the
+# --exclude-libs is belt-and-suspenders so any pulled archive symbols stay
+# hidden and can never shadow the .so.
 target_link_libraries(dingo-client
+    ibverbs::ibverbs
     fuse_client_lib
     glog::glog
+)
+target_link_options(dingo-client PRIVATE
+    "-Wl,--exclude-libs,libibverbs.a"
 )
 
 if(DINGOFS_BUILD_SDK)
