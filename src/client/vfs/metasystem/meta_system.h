@@ -165,10 +165,12 @@ class MetaSystem {
 
   virtual Status GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) = 0;
 
-  // True iff `ino` lives directly under a sub-trash hour bucket (any parent
-  // satisfies `mds::IsTrashBucketChild`). Implementations should answer from
-  // local inode cache when possible to avoid a GetAttr round-trip on the Open
-  // hot path. Default returns false for backends without trash semantics.
+  // True iff `ino` is fully in trash, i.e. ALL of its parents are trash
+  // buckets (mirrors the MDS-side gate). An inode with a surviving hardlink
+  // in a normal directory keeps a real parent and stays mutable, so it is
+  // NOT in trash. Implementations should answer from local inode cache when
+  // possible to avoid a GetAttr round-trip on the Open hot path. Default
+  // returns false for backends without trash semantics.
   virtual bool IsInodeInTrash(ContextSPtr ctx, Ino ino) {
     (void)ctx;
     (void)ino;

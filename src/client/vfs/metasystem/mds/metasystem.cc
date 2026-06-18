@@ -1421,16 +1421,27 @@ Status MDSMetaSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
 bool MDSMetaSystem::IsInodeInTrash(ContextSPtr ctx, Ino ino) {
   AssertStop();
 
+  // An inode is "in trash" only when ALL of its parents are trash buckets,
+  // mirroring the MDS-side gate (mds/filesystem.cc IsInodeInTrash). This is
+  // the deferred-delete-on-last-hardlink model: an inode with a surviving
+  // hardlink in a normal directory keeps that real parent alongside the
+  // sub_trash entry and stays mutable. Note the ALL-of-empty trap -- an
+  // inode with no known parents is NOT in trash.
+  auto all_parents_trashed = [](const auto& parents) {
+    if (parents.empty()) return false;
+    for (auto p : parents) {
+      if (!mds::IsTrashInode(p)) return false;
+    }
+    return true;
+  };
+
   // Hot path: read parents directly from the inode cache (no RPC, no proto
   // round-trip). Cache is populated by Lookup/Open/Unlink and stays in sync
   // with mv-to-trash via PutInodeToCache, so a hit reflects the latest known
   // parent set for this client.
   auto inode = GetInodeFromCache(ino);
   if (inode != nullptr) {
-    for (auto p : inode->Parents()) {
-      if (mds::IsTrashBucketChild(p)) return true;
-    }
-    return false;
+    return all_parents_trashed(inode->Parents());
   }
 
   // Cold cache: fall back to GetAttr (which itself prefers cache, then RPC).
@@ -1439,10 +1450,7 @@ bool MDSMetaSystem::IsInodeInTrash(ContextSPtr ctx, Ino ino) {
   // early-reject guarantee.
   Attr attr;
   if (!GetAttr(ctx, ino, &attr).ok()) return false;
-  for (auto p : attr.parents) {
-    if (mds::IsTrashBucketChild(p)) return true;
-  }
-  return false;
+  return all_parents_trashed(attr.parents);
 }
 
 Status MDSMetaSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
