@@ -28,6 +28,7 @@
 #include <string>
 #include <variant>
 
+#include "common/directory.h"
 #include "common/options/blockaccess.h"
 #include "common/status.h"
 #include "utils/scoped_cleanup.h"
@@ -43,6 +44,12 @@ DEFINE_int64(rados_objecter_inflight_op_bytes, 1048576000,
 DEFINE_int64(rados_ms_async_op_threads, 16, "number of rados async op threads");
 DEFINE_int64(rados_ms_dispatch_throttle_bytes, 1048576000,
              "number of rados ms dispatch throttle bytes");
+
+DEFINE_bool(rados_enable_admin_socket, true,
+            "enable librados admin socket for objecter_requests/perf dump "
+            "introspection; socket goes to the dingofs run dir alongside "
+            "fd_comm_socket: GetDefaultDir(run)/rados.<pid>.asok "
+            "(root -> /var/dingofs/run, non-root -> $HOME/.dingofs/run)");
 
 namespace {
 
@@ -138,6 +145,29 @@ bool RadosAccesser::Init() {
                << FLAGS_rados_ms_dispatch_throttle_bytes
                << ", err: " << strerror(-err);
     return false;
+  }
+
+  // librados admin socket (default on): same dir as dingofs fd_comm_socket via
+  // GetDefaultDir(kSocketDir) -- root -> /var/dingofs/run, non-root ->
+  // $HOME/.dingofs/run -- so it follows whoever runs the process. Keyed by pid.
+  // Non-fatal: a failure here only loses introspection, never blocks mount.
+  if (FLAGS_rados_enable_admin_socket) {
+    const std::string socket_dir = GetDefaultDir(kSocketDir);
+    if (!Helper::CreateDirectory(socket_dir)) {
+      LOG(WARNING)
+          << "Create admin socket dir failed, skip rados admin socket: "
+          << socket_dir;
+    } else {
+      const std::string asok =
+          fmt::format("{}/rados.{}.asok", socket_dir, getpid());
+      int aerr = rados_conf_set(cluster_, "admin_socket", asok.c_str());
+      if (aerr < 0) {
+        LOG(WARNING) << "Set rados admin_socket failed, value: " << asok
+                     << ", err: " << strerror(-aerr);
+      } else {
+        LOG(INFO) << "Rados admin socket enabled: " << asok;
+      }
+    }
   }
 
   err = rados_connect(cluster_);
