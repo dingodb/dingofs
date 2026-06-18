@@ -957,11 +957,11 @@ Status UpdateAttrOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std:
   if (to_set_ & kSetAttrSize) {
     result_.delta_bytes = static_cast<int64_t>(attr_.length()) - static_cast<int64_t>(attr.length());
     // if delta_length<0 then delete chunks beyond new length
-    if (result_.delta_bytes < 0) {
-      auto status = ResetFileRange(txn, attr_.fs_id(), attr_.ino(), attr.length(), attr_.length(),
-                                   extra_param_.slice_id, extra_param_.chunk_size);
-      if (!status.ok()) return status;
-    }
+    // if (result_.delta_bytes < 0) {
+    //   auto status = ResetFileRange(txn, attr_.fs_id(), attr_.ino(), attr.length(), attr_.length(),
+    //                                extra_param_.slice_id, extra_param_.chunk_size);
+    //   if (!status.ok()) return status;
+    // }
 
     attr.set_length(attr_.length());
   }
@@ -1349,7 +1349,7 @@ Status OpenFileOperation::RunInBatch(TxnUPtr& txn, AttrEntry& attr, const std::v
   }
 
   if (flags_ & O_TRUNC) {
-    ResetFileRange(txn, attr.length());
+    // ResetFileRange(txn, attr.length());
 
     // delete tiny file data
     if (FLAGS_mds_tiny_file_data_enable && attr.maybe_tiny_file()) {
@@ -1431,8 +1431,8 @@ Status FlushFileOperation::Run(TxnUPtr& txn) {
         return Status::OK();
       }
 
-      auto status = ResetFileRange(txn, fs_id_, ino_, attr.length(), param_.length, param_.slice_id, param_.chunk_size);
-      if (!status.ok()) return status;
+      // auto status = ResetFileRange(txn, fs_id_, ino_, attr.length(), param_.length, param_.slice_id,
+      // param_.chunk_size); if (!status.ok()) return status;
     }
 
     attr.set_length(param_.length);
