@@ -48,7 +48,7 @@ static const int64_t kSliceIdStartId = 1e10;  // 10 billion
 // Sub-trash directories do NOT use a separate generator: their ino is derived
 // from this allocator + a kTrashInodeId offset inside BuildTrashMove.
 const std::string kInoAutoIncrementIdName = "dingofs-inode-id";
-static const int64_t kInoBatchSize = 102400;
+static const int64_t kInoBatchSize = 1024;
 static const int64_t kInoStartId = 2e10;  // 20 billion
 
 CoorAutoIncrementIdGenerator::CoorAutoIncrementIdGenerator(CoordinatorClientSPtr client, const std::string& name,
