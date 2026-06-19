@@ -22,6 +22,7 @@
 
 #include "cache/tiercache/tier_block_cache.h"
 
+#include <absl/strings/str_format.h>
 #include <glog/logging.h>
 
 #include <atomic>
@@ -200,6 +201,15 @@ Status TierBlockCache::Put(BlockHandle handle, IOBuffer block,
 Status TierBlockCache::Range(BlockHandle handle, off_t offset, size_t length,
                              IOBuffer* buffer, RangeOption option) {
   DCHECK_RUNNING("TierBlockCache");
+
+  // Caller-allocated destination contract: the caller hands in a single
+  // contiguous writable block of `length` bytes; every tier fills it in place
+  // (zero copy when the memory is RDMA-registered). A tier that misses must
+  // leave `buffer` untouched so the next tier can fill it.
+  if (buffer == nullptr || !buffer->IsContiguousDest()) {
+    return Status::InvalidParam(
+        "range requires a caller-allocated contiguous destination");
+  }
 
   option.tier = ResolveTier(handle, option.tier);
 

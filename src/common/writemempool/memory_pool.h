@@ -35,20 +35,6 @@ namespace dingofs {
 class MemoryPool;
 using MemoryPoolUPtr = std::unique_ptr<MemoryPool>;
 
-// Two-layer lock-free fixed-size memory pool, modeled after tcmalloc's
-// ThreadCache + CentralFreeList:
-//
-//   Layer 1 (fast path): per-thread cache slots holding up to kCacheCap
-//     buffers each, protected by std::atomic_flag try-lock. Hits this path
-//     ~99% of the time in steady state; cost ~10ns / op (no cross-core
-//     coherence traffic since each thread mostly owns its slot).
-//
-//   Layer 2 (slow path): kNumShards sharded Treiber stacks. Caches batch-
-//     refill from / batch-flush to a shard (kRefillBatch buffers per CAS),
-//     amortizing the contended atomic over multiple ops.
-//
-// The first sizeof(uint32_t) bytes of each free buffer hold the intrusive
-// free-list "next" index; callers must overwrite them after Require().
 class MemoryPool {
  public:
   MemoryPool(char* base, size_t buffer_size, size_t buffer_count);
