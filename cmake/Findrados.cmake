@@ -39,18 +39,28 @@ if(RADOS_FOUND AND NOT (TARGET ceph::rados))
 
   # find rdma library
   find_library(RDMACM_LIBRARIES NAMES librdmacm.a)
-  find_library(IBVERBS_LIBRARIES NAMES libibverbs.a)
+  find_package(ibverbs REQUIRED)
 
   find_package(udev REQUIRED)
   message(("Using udev: ${UDEV_LIBRARIES}, include dir: ${UDEV_INCLUDE_DIR}"))
   find_package(blkid REQUIRED)
   message("Using blkid: ${BLKID_LIBRARIES}, include dir: ${BLKID_INCLUDE_DIR}")
 
+  # librdmacm.a and libibverbs.a have mutual references (rdmacm refs
+  # rdma-core internals like `ibv_copy_*_from_kern` exported by libibverbs.a).
+  # GNU ld's single-pass archive resolution can't satisfy that on its own.
+  # We wrap both in --start-group/--end-group so ld iterates until all
+  # cross-archive refs resolve. Use the raw path for libibverbs (not the
+  # `ibverbs::ibverbs` imported target) because CMake dedups imported targets
+  # and would otherwise emit libibverbs.a once — earlier in the line, outside
+  # this group — defeating the purpose.
   set(RADOS_DEPS_LIBS
       OpenSSL::SSL
       ${Boost_LIBRARIES}
+      "-Wl,--start-group"
       ${RDMACM_LIBRARIES}
-      ${IBVERBS_LIBRARIES}
+      ${ibverbs_LIBRARIES}
+      "-Wl,--end-group"
       ${UDEV_LIBRARIES}
       ${BLKID_LIBRARIES}
       resolv

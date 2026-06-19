@@ -125,8 +125,8 @@ Status MemCache::Load(BlockHandle handle, off_t offset, size_t length,
   auto& shard = GetShard(key);
 
   // Hold the shard lock only long enough to look up, promote in the LRU and
-  // grab a refcounted copy of the IOBuffer. The actual data copy (AppendTo)
-  // happens outside the lock.
+  // grab a refcounted copy of the IOBuffer. The actual data copy into the
+  // caller's destination happens outside the lock.
   IOBuffer copy;
   {
     BAIDU_SCOPED_LOCK(shard.mutex);
@@ -189,8 +189,8 @@ void MemCache::Insert(Shard& shard, const std::string& key, IOBuffer block) {
     int64_t delta = static_cast<int64_t>(size) -
                     static_cast<int64_t>(it->second->data.Size());
     it->second->data = std::move(block);
-    shard.used_bytes = static_cast<uint64_t>(
-        static_cast<int64_t>(shard.used_bytes) + delta);
+    shard.used_bytes =
+        static_cast<uint64_t>(static_cast<int64_t>(shard.used_bytes) + delta);
     shard.lru.splice(shard.lru.begin(), shard.lru, it->second);
     vars_->used_bytes << delta;
     return;

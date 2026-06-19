@@ -58,11 +58,8 @@ class IOBuffer {
     iobuf_.copy_to(dest, n, pos);
   }
 
-  void CopyTo(IOBuffer* dest, size_t n = (size_t)-1L, size_t pos = 0) const {
-    iobuf_.copy_to(&dest->iobuf_, n, pos);
-  }
-
-  size_t AppendTo(IOBuffer* buffer, size_t n = (size_t)-1L, size_t pos = 0) {
+  size_t AppendTo(IOBuffer* buffer, size_t n = (size_t)-1L,
+                  size_t pos = 0) const {
     return iobuf_.append_to(&buffer->IOBuf(), n, pos);
   }
 

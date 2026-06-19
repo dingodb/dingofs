@@ -22,10 +22,12 @@
 
 #include "cache/infiniband/memory.h"
 
+#include <absl/strings/match.h>
 #include <fmt/format.h>
 #include <glog/logging.h>
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -51,6 +53,7 @@ RDMABufferPool::RDMABufferPool(MemoryPoolUPtr memory_pool,
     RDMABuffer buffer;
     buffer.data = memory_pool_->BaseAddr() + (i * buffer_size);
     buffer.capacity = static_cast<uint32_t>(buffer_size);
+    buffer.length = 0;
     buffer.lkey = memory_region_->GetLkey();
     buffer.rkey = memory_region_->GetRkey();
     buffer.index = i;
@@ -96,6 +99,27 @@ void RDMABufferPool::Free(RDMABuffer* rdma_buffer) {
   DCHECK_GE(rdma_buffer, rdma_buffers_.data());
   DCHECK_LT(rdma_buffer, rdma_buffers_.data() + rdma_buffers_.size());
   memory_pool_->Release(rdma_buffer->data);
+}
+
+int RDMABufferPool::IndexOf(RDMABuffer* buffer) {
+  return memory_pool_->IndexOf(buffer->data);
+}
+
+int RDMABufferPool::IndexOf(const char* data) const {
+  const char* base = memory_pool_->BaseAddr();
+  if (data < base || data >= base + memory_pool_->TotalSize()) {
+    return -1;
+  }
+  return static_cast<int>((data - base) / memory_pool_->BufferSize());
+}
+
+std::vector<iovec> RDMABufferPool::Fetch() {
+  std::vector<iovec> iovecs;
+  iovecs.reserve(rdma_buffers_.size());
+  for (const auto& buffer : rdma_buffers_) {
+    iovecs.push_back(iovec{buffer.data, buffer.capacity});
+  }
+  return iovecs;
 }
 
 Status RegisterMemoryForRDMA(const std::string& device_name, void* addr,

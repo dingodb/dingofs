@@ -29,5 +29,3 @@ target_link_libraries(cache_infiniband
     cache_iutil
     dingofs_common
 )
-
-add_subdirectory(example)

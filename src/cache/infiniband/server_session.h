@@ -74,12 +74,13 @@ class ServerSession : public EventHandler {
                     google::protobuf::Message* response = nullptr,
                     const Attachment& attachment = {});
 
-  RDMABuffer* AllocReadBuffer(size_t size) {
-    return GetGlobalReadSlabPool().Alloc(size);
+  RDMABuffer* AllocReadBuffer(size_t /*size*/) {
+    // TODO: real slab buffer pool
+    return GetGlobalReadSlabPool()->Alloc();
   }
 
   void FreeReadBuffer(RDMABuffer* buffer) {
-    GetGlobalReadSlabPool().Free(buffer);
+    GetGlobalReadSlabPool()->Free(buffer);
   }
 
   ConnectionUPtr conn_;

@@ -23,6 +23,8 @@
 #ifndef DINGOFS_SRC_CACHE_INFINIBAND_MEMORY_H_
 #define DINGOFS_SRC_CACHE_INFINIBAND_MEMORY_H_
 
+#include <bits/types/struct_iovec.h>
+
 #include <cstddef>
 #include <memory>
 #include <string>
@@ -48,8 +50,10 @@ class RDMABufferPool {
 
   RDMABuffer* Alloc();
   void Free(RDMABuffer* buffer);
-
+  int IndexOf(RDMABuffer* buffer);
+  int IndexOf(const char* data) const;
   size_t BufferCount() { return memory_pool_->BufferCount(); }
+  std::vector<iovec> Fetch();
 
  private:
   MemoryPoolUPtr memory_pool_;

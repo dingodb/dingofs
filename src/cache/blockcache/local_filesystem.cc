@@ -22,6 +22,7 @@
 
 #include "cache/blockcache/local_filesystem.h"
 
+#include <bits/types/struct_iovec.h>
 #include <butil/memory/aligned_memory.h>
 #include <butil/memory/scope_guard.h>
 #include <fcntl.h>
@@ -37,6 +38,9 @@
 #include "cache/blockcache/disk_cache_layout.h"
 #include "cache/blockcache/disk_health_checker.h"
 #include "cache/common/macro.h"
+#include "cache/infiniband/common.h"
+#include "cache/infiniband/memory.h"
+#include "cache/infiniband/slab_pool.h"
 #include "cache/iutil/buffer_pool.h"
 #include "cache/iutil/file_util.h"
 #include "cache/iutil/inflight_tracker.h"
@@ -48,18 +52,86 @@
 namespace dingofs {
 namespace cache {
 
-DEFINE_bool(fix_buffer, true, "whether to use fixed buffer for aio");
+FixedBuffers::FixedBuffers()
+    : write_pool_(infiniband::GetGlobalReadSlabPool()),
+      read_pool_(infiniband::GetGlobalWriteSlabPool()) {}
+
+Status FixedBuffers::Alloc(size_t size, bool for_read, IOBuffer* buffer,
+                           int* buf_index) {
+  infiniband::RDMABufferPool* pool = for_read ? read_pool_ : write_pool_;
+  auto* rdma_buffer = pool->Alloc();
+  if (rdma_buffer == nullptr) {
+    return Status::OutOfMemory("out of memory");
+  }
+
+  buffer->AppendUserDataWithMeta(
+      rdma_buffer->data, size,
+      [pool](void* addr) {
+        pool->Free(reinterpret_cast<infiniband::RDMABuffer*>(addr));
+      },
+      rdma_buffer->lkey);
+
+  *buf_index = GetIndex(rdma_buffer, for_read);
+  return Status::OK();
+}
+
+bool FixedBuffers::IsFixed(const IOBuffer* buffer, bool for_read,
+                           int* buf_index) {
+  // A fixed buffer is a single contiguous block carved from a slab pool, so a
+  // multi-block buffer can never be one.
+  if (buffer->ConstIOBuf().backing_block_num() != 1) {
+    *buf_index = -1;
+    return false;
+  }
+
+  infiniband::RDMABufferPool* pool = for_read ? read_pool_ : write_pool_;
+  int index = pool->IndexOf(buffer->Fetch1());
+  if (index < 0) {
+    *buf_index = -1;
+    return false;
+  }
+
+  *buf_index = for_read ? write_pool_->BufferCount() + index : index;
+  return true;
+}
+
+int FixedBuffers::GetIndex(infiniband::RDMABuffer* rdma_buffer, bool for_read) {
+  if (!for_read) {
+    return write_pool_->IndexOf(rdma_buffer);
+  }
+  return write_pool_->BufferCount() + read_pool_->IndexOf(rdma_buffer);
+}
+
+std::vector<iovec> FixedBuffers::Fetch() {
+  auto write_buffers = write_pool_->Fetch();
+  auto read_buffers = write_pool_->Fetch();
+
+  std::vector<iovec> buffers;
+  buffers.reserve(write_buffers.size() + read_buffers.size());
+  buffers.insert(buffers.end(), write_buffers.begin(), write_buffers.end());
+  buffers.insert(buffers.end(), read_buffers.begin(), read_buffers.end());
+
+  return buffers;
+}
+
+struct InflightAioGuard {
+  InflightAioGuard(int fd, iutil::InflightTracker* inflight)
+      : fd(fd), inflight(inflight) {
+    CHECK(inflight->Add(std::to_string(fd)).ok());
+  }
+
+  ~InflightAioGuard() { inflight->Remove(std::to_string(fd)); }
+
+  int fd;
+  iutil::InflightTracker* inflight;
+};
 
 LocalFileSystem::LocalFileSystem(DiskCacheLayoutSPtr layout)
     : running_(false),
       layout_(layout),
-      write_buffer_pool_(std::make_unique<BufferPool>(4 * kMiB, FLAGS_iodepth,
-                                                      kAlignedIOBlockSize)),
-      read_buffer_pool_(std::make_unique<BufferPool>(4 * kMiB, FLAGS_iodepth,
-                                                     kAlignedIOBlockSize)),
+      fixed_buffers_(std::make_unique<FixedBuffers>()),
       inflight_(FLAGS_iodepth),
-      aio_queue_(std::make_unique<AioQueue>(write_buffer_pool_->Fetch(),
-                                            read_buffer_pool_->Fetch())),
+      aio_queue_(std::make_unique<AioQueue>(fixed_buffers_->Fetch())),
       health_checker_(std::make_unique<DiskHealthChecker>(layout)) {}
 
 Status LocalFileSystem::Start() {
@@ -152,10 +224,22 @@ Status LocalFileSystem::WriteFile(const std::string& path,
     }
   }
 
-  IOBuffer tbuffer;
-  int buf_index = AllocateAlignedMemory(&tbuffer, aligned_length, false);
-  buffer->CopyTo(tbuffer.Fetch1());
-  status = AioWrite(fd, tbuffer.Fetch1(), aligned_length, buf_index);
+  IOBuffer fixed;
+  IOBuffer* write_buffer;
+  int buf_index;
+  if (fixed_buffers_->IsFixed(buffer, false, &buf_index)) {
+    write_buffer = const_cast<IOBuffer*>(buffer);
+  } else {
+    status = fixed_buffers_->Alloc(aligned_length, false, &fixed, &buf_index);
+    if (!status.ok()) {
+      LOG(ERROR) << "Fail to allocate fixed write buffer for `" << path << "'";
+      return status;
+    }
+    buffer->AppendTo(&fixed);
+    write_buffer = &fixed;
+  }
+
+  status = AioWrite(fd, write_buffer->Fetch1(), aligned_length, buf_index);
   if (!status.ok()) {
     LOG(ERROR) << "Fail to write file'`" << tmppath << "'";
     return status;
@@ -163,8 +247,7 @@ Status LocalFileSystem::WriteFile(const std::string& path,
 
   status = iutil::Rename(tmppath, path);
   if (!status.ok()) {
-    LOG(ERROR) << "Fail to rename file from `" << tmppath << "' to `" << path
-               << "'";
+    LOG(ERROR) << "Fail to rename `" << tmppath << "' to `" << path << "'";
     return status;
   }
   return status;
@@ -198,42 +281,36 @@ Status LocalFileSystem::ReadFile(const std::string& path, off_t offset,
 
   off_t aligned_offset = AlignOffset(offset);
   size_t aligned_length = AlignLength(length + offset - aligned_offset);
-  int buf_index = AllocateAlignedMemory(buffer, aligned_length, true);
-  status =
-      AioRead(fd, aligned_offset, aligned_length, buffer->Fetch1(), buf_index);
-  if (status.ok()) {
-    if (aligned_offset != offset) {
-      buffer->PopFront(offset - aligned_offset);
-    }
-    if (aligned_length != length) {
-      buffer->PopBack(aligned_offset + aligned_length - (offset + length));
-    }
-  } else {
-    LOG(ERROR) << "Fail to read file=`" << path << "'";
+
+  IOBuffer aligned;
+  int buf_index;
+  status = fixed_buffers_->Alloc(aligned_length, true, &aligned, &buf_index);
+  if (!status.ok()) {
+    LOG(ERROR) << "Fail to allocate read buffer for `" << path << "'";
+    return status;
   }
 
+  status =
+      AioRead(fd, aligned_offset, aligned_length, aligned.Fetch1(), buf_index);
+  if (!status.ok()) {
+    LOG(ERROR) << "Fail to read file=`" << path << "'";
+    return status;
+  }
+
+  if (aligned_offset != offset) {
+    aligned.PopFront(offset - aligned_offset);
+  }
+  if (aligned_length != length) {
+    aligned.PopBack(aligned_offset + aligned_length - (offset + length));
+  }
+
+  if (buffer->Size() == 0) {
+    *buffer = std::move(aligned);
+  } else {  // local disk cache
+    aligned.AppendTo(buffer, length);
+  }
   return status;
 }
-
-// The inflight for aio which use fixed buffer is controlled by buffer pool,
-// others need to be tracked here.
-struct InflightAioGuard {
-  InflightAioGuard(int fd, iutil::InflightTracker* inflight)
-      : fd(fd), inflight(inflight) {
-    if (!FLAGS_fix_buffer) {
-      CHECK(inflight->Add(std::to_string(fd)).ok());
-    }
-  }
-
-  ~InflightAioGuard() {
-    if (!FLAGS_fix_buffer) {
-      inflight->Remove(std::to_string(fd));
-    }
-  }
-
-  int fd;
-  iutil::InflightTracker* inflight;
-};
 
 Status LocalFileSystem::AioWrite(int fd, char* buffer, size_t length,
                                  int buf_index) {
@@ -255,46 +332,20 @@ Status LocalFileSystem::AioRead(int fd, off_t offset, size_t length,
   return aio.Result().status;
 }
 
+bool LocalFileSystem::IsAligned(uint64_t n, uint64_t m) { return (n % m) == 0; }
+
 off_t LocalFileSystem::AlignOffset(off_t offset) {
-  auto alignment = kAlignedIOBlockSize;
-  if (!IsAligned(offset, alignment)) {
-    offset = offset - (offset % alignment);
+  if (!IsAligned(offset, kAlignedIOBlockSize)) {
+    offset = offset - (offset % kAlignedIOBlockSize);
   }
   return offset;
 }
 
 size_t LocalFileSystem::AlignLength(size_t length) {
-  auto alignment = kAlignedIOBlockSize;
-  if (!IsAligned(length, alignment)) {
-    length = (length + alignment - 1) & ~(alignment - 1);
+  if (!IsAligned(length, kAlignedIOBlockSize)) {
+    length = (length + kAlignedIOBlockSize - 1) & ~(kAlignedIOBlockSize - 1);
   }
   return length;
-}
-
-int LocalFileSystem::AllocateAlignedMemory(IOBuffer* buffer,
-                                           size_t aligned_length,
-                                           bool for_read) {
-  if (!FLAGS_fix_buffer) {
-    char* data =
-        (char*)butil::AlignedAlloc(aligned_length, kAlignedIOBlockSize);
-    buffer->AppendUserData(data, aligned_length, butil::AlignedFree);
-    return -1;
-  }
-
-  // use fixed buffer
-  if (for_read) {
-    char* data = read_buffer_pool_->Alloc();
-    buffer->AppendUserData(data, aligned_length, [this](void* ptr) {
-      read_buffer_pool_->Free((char*)ptr);
-    });
-    return read_buffer_pool_->Index(data);
-  }
-
-  char* data = write_buffer_pool_->Alloc();
-  buffer->AppendUserData(data, aligned_length, [this](void* ptr) {
-    write_buffer_pool_->Free((char*)ptr);
-  });
-  return write_buffer_pool_->Index(data);
 }
 
 }  // namespace cache

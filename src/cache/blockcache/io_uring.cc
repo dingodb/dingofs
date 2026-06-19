@@ -40,9 +40,7 @@ IOUring::IOUring(IOUringOptions options)
     : options_(std::move(options)),
       running_(false),
       io_uring_(),
-      fixed_buffers_(std::make_unique<FixedBuffers>(
-          std::move(options_.fixed_write_buffers),
-          std::move(options_.fixed_read_buffers))),
+      fixed_buffers_(options.fixed_buffers),
       epoll_fd_(-1) {}
 
 IOUring::~IOUring() = default;
@@ -125,13 +123,12 @@ Status IOUring::InitIOUring() {
 }
 
 Status IOUring::RegisterBuffers() {
-  auto& buffers = fixed_buffers_->buffers;
-  if (buffers.empty()) {
+  if (fixed_buffers_.empty()) {
     return Status::OK();
   }
 
-  int rc =
-      io_uring_register_buffers(&io_uring_, buffers.data(), buffers.size());
+  int rc = io_uring_register_buffers(&io_uring_, fixed_buffers_.data(),
+                                     fixed_buffers_.size());
   if (rc < 0) {
     LOG(ERROR) << "Fail to register buffers: " << strerror(-rc);
     return Status::Internal("register buffers failed");
@@ -158,7 +155,7 @@ Status IOUring::SetupEpoll() {
 }
 
 void IOUring::Cleanup() {
-  if (!fixed_buffers_->buffers.empty()) {
+  if (!fixed_buffers_.empty()) {
     io_uring_unregister_buffers(&io_uring_);
   }
 
@@ -173,10 +170,8 @@ void IOUring::Cleanup() {
 void IOUring::PrepWrite(io_uring_sqe* sqe, Aio* aio) const {
   const auto& attr = aio->Attr();
   if (attr.buf_index >= 0) {
-    int idx = fixed_buffers_->GetIndex(false, attr.buf_index);
-    CHECK_GE(idx, 0) << "Invalid write buffer index " << attr.buf_index;
     io_uring_prep_write_fixed(sqe, attr.fd, attr.buffer, attr.length,
-                              attr.offset, idx);
+                              attr.offset, attr.buf_index);
   } else {
     io_uring_prep_write(sqe, attr.fd, attr.buffer, attr.length, attr.offset);
   }
@@ -185,10 +180,8 @@ void IOUring::PrepWrite(io_uring_sqe* sqe, Aio* aio) const {
 void IOUring::PrepRead(io_uring_sqe* sqe, Aio* aio) const {
   const auto& attr = aio->Attr();
   if (attr.buf_index >= 0) {
-    int idx = fixed_buffers_->GetIndex(true, attr.buf_index);
-    CHECK_GE(idx, 0) << "Invalid read buffer index " << attr.buf_index;
     io_uring_prep_read_fixed(sqe, attr.fd, attr.buffer, attr.length,
-                             attr.offset, idx);
+                             attr.offset, attr.buf_index);
   } else {
     io_uring_prep_read(sqe, attr.fd, attr.buffer, attr.length, attr.offset);
   }
@@ -266,7 +259,7 @@ void IOUring::OnComplete(Aio* aio, int result) {
 std::ostream& operator<<(std::ostream& os, const IOUring& r) {
   return os << "IOUring{entries=" << r.options_.entries
             << " sqpoll=" << r.options_.use_sqpoll
-            << " fixed_buffers=" << r.fixed_buffers_->buffers.size() << "}";
+            << " fixed_buffers=" << r.fixed_buffers_.size() << "}";
 }
 
 }  // namespace cache

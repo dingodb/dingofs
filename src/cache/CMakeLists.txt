@@ -14,6 +14,7 @@
 
 add_subdirectory(common)
 add_subdirectory(iutil)
+add_subdirectory(infiniband)
 add_subdirectory(blockcache)
 add_subdirectory(cachegroup)
 add_subdirectory(remotecache)
@@ -27,6 +28,7 @@ add_library(cache_lib ${CACHE_LIB_SRCS})
 target_link_libraries(cache_lib
     cache_common
     cache_iutil
+    cache_infiniband
     cache_blockcache
     cache_cachegroup
     cache_remotecache

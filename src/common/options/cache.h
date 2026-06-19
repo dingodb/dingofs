@@ -222,6 +222,8 @@ DECLARE_int64(storage_download_retry_timeout_s);
 // Keepalive connection number per peer
 DECLARE_int32(connections);
 
+DECLARE_bool(use_rdma);
+
 // IB device and HCA port (1-based) used by the cache RDMA path.
 DECLARE_string(rdma_device);
 DECLARE_uint32(rdma_port_num);
@@ -236,9 +238,6 @@ DECLARE_uint32(mds_request_retry_times);
 
 DECLARE_int32(brpc_idle_timeout_second);
 DECLARE_bool(brpc_log_idle_connection_close);
-
-DECLARE_bool(fix_buffer);
-DECLARE_bool(block_prefetch);
 
 }  // namespace cache
 }  // namespace dingofs
