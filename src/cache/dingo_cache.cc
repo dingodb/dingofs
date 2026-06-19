@@ -22,9 +22,12 @@
 
 #include "cache/dingo_cache.h"
 
+#include <gflags/gflags.h>
+
 #include <iostream>
 
 #include "cache/cachegroup/server.h"
+#include "cache/infiniband/slab_pool.h"
 #include "common/flag.h"
 #include "common/helper.h"
 #include "common/logging.h"
@@ -37,7 +40,7 @@
 namespace dingofs {
 namespace cache {
 
-static dingofs::FlagExtraInfo extras = {
+static FlagExtraInfo extras = {
     .program = "dingo-cache",
     .usage = "  dingo-cache [OPTIONS] --id <cache_node_uuid>",
     .examples =
@@ -46,6 +49,31 @@ static dingofs::FlagExtraInfo extras = {
 )",
     .patterns = {"src/cache", "options/common"},
 };
+
+static void PrintShortInfo() {
+  // print config info
+  std::vector<std::pair<std::string, std::string>> configs;
+  configs.emplace_back("id", fmt::format("[{}]", FLAGS_id));
+  // config
+  configs.emplace_back("config", fmt::format("[{}]", dingofs::FLAGS_conf));
+  // log
+  configs.emplace_back(
+      "log", fmt::format("[{} {} {}(verbose)]",
+                         ::FLAGS_log_dir.empty() ? GetDefaultDir(kLogDir)
+                                                 : ::FLAGS_log_dir,
+                         dingofs::FLAGS_log_level, dingofs::FLAGS_log_v));
+  // mds
+  configs.emplace_back("mds", fmt::format("[{}]", FLAGS_mds_addrs));
+  // cache
+  if (FLAGS_enable_cache) {
+    configs.emplace_back("cache",
+                         fmt::format("[{} {} {}%(ratio)]", FLAGS_cache_store,
+                                     Helper::GenCacheConfigInfo(),
+                                     FLAGS_free_space_ratio * 100));
+  }
+
+  Helper::PrintConfigInfo(configs);
+}
 
 int DingoCache::ParseFlags(int argc, char** argv) {
   int rc = dingofs::ParseFlags(&argc, &argv, extras);
@@ -68,37 +96,11 @@ int DingoCache::ParseFlags(int argc, char** argv) {
     std::cerr << "MUST enable cache, please set it by --enable_cache\n";
     return -1;
   }
-
-  // TODO: so ugly implementation :(
-  // refactor ASAP!!!
-
-  // print config info
-  std::vector<std::pair<std::string, std::string>> configs;
-  configs.emplace_back("id", fmt::format("[{}]", FLAGS_id));
-  // config
-  configs.emplace_back("config", fmt::format("[{}]", dingofs::FLAGS_conf));
-  // log
-  configs.emplace_back(
-      "log", fmt::format("[{} {} {}(verbose)]",
-                         ::FLAGS_log_dir.empty() ? GetDefaultDir(kLogDir)
-                                                 : ::FLAGS_log_dir,
-                         dingofs::FLAGS_log_level, dingofs::FLAGS_log_v));
-  // mds
-  configs.emplace_back("mds", fmt::format("[{}]", FLAGS_mds_addrs));
-  // cache
-  if (dingofs::cache::FLAGS_enable_cache) {
-    configs.emplace_back("cache",
-                         fmt::format("[{} {} {}%(ratio)]", FLAGS_cache_store,
-                                     Helper::GenCacheConfigInfo(),
-                                     FLAGS_free_space_ratio * 100));
-  }
-
-  Helper::PrintConfigInfo(configs);
-
   return 0;
 }
 
 void DingoCache::GlobalInitOrDie() {
+  CHECK(infiniband::InitializeGlobalSlabPool().ok());
   Logger::Init("dingo-cache");
   LOG(INFO) << GenCurrentFlags();
 }
@@ -126,21 +128,17 @@ int DingoCache::Run(int argc, char** argv) {
     return rc;
   }
 
-  // Pin process to NUMA node (no-op when --numa_node < 0). Must happen before
-  // any worker threads or large allocations are created so the binding is
-  // inherited by all descendants.
   utils::BindNumaOrDie();
-
   GlobalInitOrDie();
 
-  // run in daemon mode
-  if (dingofs::FLAGS_daemonize) {
+  if (FLAGS_daemonize) {
     if (!utils::DaemonizeExec(orig_args)) {
       std::cerr << "failed to daemonize process.\n";
       return -1;
     }
   }
 
+  PrintShortInfo();
   ExposeDingoVersion();
 
   return StartServer();

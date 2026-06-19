@@ -40,8 +40,7 @@ namespace cache {
 struct IOUringOptions {
   uint32_t entries{4096};
   bool use_sqpoll{true};
-  std::vector<iovec> fixed_write_buffers;
-  std::vector<iovec> fixed_read_buffers;
+  std::vector<iovec> fixed_buffers;
 };
 
 class IOUring {
@@ -61,28 +60,6 @@ class IOUring {
   FRIEND_TEST(IOUringTest, OnComplete);
   friend std::ostream& operator<<(std::ostream& os, const IOUring& r);
 
-  struct FixedBuffers {
-    FixedBuffers(std::vector<iovec> write_buffers,
-                 std::vector<iovec> read_buffers)
-        : write_count(write_buffers.size()) {
-      buffers.reserve(write_buffers.size() + read_buffers.size());
-      buffers.insert(buffers.end(), write_buffers.begin(), write_buffers.end());
-      buffers.insert(buffers.end(), read_buffers.begin(), read_buffers.end());
-    }
-
-    int GetIndex(bool for_read, int buf_index) const {
-      size_t offset = for_read ? write_count : 0;
-      size_t count = for_read ? buffers.size() - write_count : write_count;
-      if (buf_index < 0 || static_cast<size_t>(buf_index) >= count) {
-        return -1;
-      }
-      return static_cast<int>(offset) + buf_index;
-    }
-
-    const size_t write_count{0};
-    std::vector<iovec> buffers;
-  };
-
   static bool Supported();
   Status InitIOUring();
   Status RegisterBuffers();
@@ -96,7 +73,7 @@ class IOUring {
   IOUringOptions options_;
   std::atomic<bool> running_;
   io_uring io_uring_;
-  std::unique_ptr<FixedBuffers> fixed_buffers_;
+  std::vector<iovec> fixed_buffers_;
   int epoll_fd_;
 };
 

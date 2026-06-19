@@ -134,9 +134,6 @@ void RangeBlockTask::Run() {
 }
 
 blockaccess::GetObjectAsyncContextSPtr RangeBlockTask::OnPrepare() {
-  char* data = new char[length_];
-  buffer_->AppendUserData(data, length_, iutil::DeleteBuffer);
-
   auto ctx =
       std::make_shared<blockaccess::GetObjectAsyncContext>(handle_.StoreKey());
   ctx->start_time = butil::gettimeofday_us();

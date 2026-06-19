@@ -22,6 +22,7 @@ target_link_libraries(cache_blockcache
     uring::uring
 
     cache_common
+    cache_infiniband
     cache_iutil
     dingofs_executor
 )

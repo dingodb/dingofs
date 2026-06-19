@@ -26,17 +26,37 @@
 #include <sys/types.h>
 
 #include <cstddef>
+#include <memory>
 #include <string>
 
 #include "cache/blockcache/aio_queue.h"
 #include "cache/blockcache/disk_cache_layout.h"
 #include "cache/blockcache/disk_health_checker.h"
+#include "cache/infiniband/common.h"
+#include "cache/infiniband/memory.h"
 #include "cache/iutil/buffer_pool.h"
 #include "cache/iutil/inflight_tracker.h"
 #include "common/io_buffer.h"
 
 namespace dingofs {
 namespace cache {
+
+class FixedBuffers {
+ public:
+  FixedBuffers();
+
+  Status Alloc(size_t size, bool for_read, IOBuffer* buffer, int* buf_index);
+  bool IsFixed(const IOBuffer* buffer, bool for_read, int* buf_index);
+  std::vector<iovec> Fetch();
+
+ private:
+  int GetIndex(infiniband::RDMABuffer* rdma_buffer, bool for_read);
+
+  infiniband::RDMABufferPool* write_pool_;
+  infiniband::RDMABufferPool* read_pool_;
+};
+
+using FixedBuffersUPtr = std::unique_ptr<FixedBuffers>;
 
 class LocalFileSystem {
  public:
@@ -49,22 +69,20 @@ class LocalFileSystem {
                   IOBuffer* buffer);
 
  private:
+  static constexpr size_t kAlignedIOBlockSize = 4096;
+
   Status AioWrite(int fd, char* buffer, size_t length, int buf_index);
   Status AioRead(int fd, off_t offset, size_t length, char* buffer,
                  int buf_index);
 
-  bool IsAligned(uint64_t n, uint64_t m) { return (n % m) == 0; }
+  bool IsAligned(uint64_t n, uint64_t m);
+  bool IsAligned(IOBuffer* buffer);
   off_t AlignOffset(off_t offset);
   size_t AlignLength(size_t length);
-  int AllocateAlignedMemory(IOBuffer* buffer, size_t aligned_length,
-                            bool for_read);
-
-  static constexpr size_t kAlignedIOBlockSize = 4096;
 
   std::atomic<bool> running_;
   DiskCacheLayoutSPtr layout_;
-  BufferPoolUPtr write_buffer_pool_;
-  BufferPoolUPtr read_buffer_pool_;
+  FixedBuffersUPtr fixed_buffers_;
   iutil::InflightTracker inflight_;
   AioQueueUPtr aio_queue_;
   DiskHealthCheckerUPtr health_checker_;

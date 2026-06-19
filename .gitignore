@@ -103,3 +103,6 @@ mds_deploy_parameters.local
 .context/
 .Yi/
 .docs/
+*egg-info
+*.so.with-debug
+bench_results/

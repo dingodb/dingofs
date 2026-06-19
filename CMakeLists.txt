@@ -250,6 +250,8 @@ message("Using uring ${uring_VERSION}")
 find_library(NUMA_LIBRARY numa REQUIRED)
 message("Using libnuma: ${NUMA_LIBRARY}")
 
+find_package(ibverbs REQUIRED)
+message("Using ibverbs, lib:${ibverbs_LIBRARIES}, include_dir:${ibverbs_INCLUDE_DIR}")
 
 find_package(jsoncpp REQUIRED)
 message("Using jsoncpp ${jsoncpp_VERSION}")

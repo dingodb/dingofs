@@ -70,9 +70,6 @@ class BlockHandle {
     return std::get<TensorKey>(key_).StoreSize();
   }
 
-  // Visit dispatches on internal kind. Used by serialization helpers; regular
-  // callers should prefer the higher-level methods above
-  // (Filename/StoreKey/...).
   template <typename Visitor>
   auto Visit(Visitor&& v) const {
     return std::visit(std::forward<Visitor>(v), key_);
