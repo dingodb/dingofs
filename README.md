@@ -1,5 +1,9 @@
 # DingoFS
 
+![](./docs/images/dingofs_architecture.svg)
+
+# Introduction
+
 [DingoFS](https://github.com/dingodb/dingofs) is a cloud-native distributed high-speed file storage system designed and developed by [DataCanvas](https://www.datacanvas.com/). It integrates multiple features such as elasticity, multi-cloud compatibility, multi-protocol convergence, and exceptional performance.By leveraging its multi-tiered, multi-type, and high-performance distributed multi-level caching architecture, DingoFS accelerates data I/O for AI workflows, effectively addressing burst I/O challenges in AI scenarios. Additionally, it provides local cache storage capabilities to meet the full lifecycle storage requirements of large-scale AI models.
 
 
