@@ -22,6 +22,7 @@
 #include <atomic>
 #include <memory>
 
+#include "cache/infiniband/infiniband.h"
 #include "client/vfs/blockstore/block_store.h"
 #include "client/vfs/common/client_id.h"
 #include "client/vfs/compaction/compactor.h"

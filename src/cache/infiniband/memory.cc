@@ -25,6 +25,7 @@
 #include <absl/strings/match.h>
 #include <fmt/format.h>
 #include <glog/logging.h>
+#include <sys/types.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -157,6 +158,22 @@ Status DeregisterMemoryForRDMA(const std::string& device_name, void* addr) {
 
   g_usr_mrs.erase(key);
   return Status::OK();
+}
+
+uint64_t GetRkey(const std::string& device_name, void* addr, size_t length) {
+  auto* begin = static_cast<char*>(addr);
+  for (const auto& [name, memory_region] : g_usr_mrs) {
+    if (!absl::StartsWith(name, device_name + ":")) {
+      continue;
+    }
+
+    auto* mr = memory_region->GetIbMr();
+    auto* mr_begin = static_cast<char*>(mr->addr);
+    if (begin >= mr_begin && begin + length <= mr_begin + mr->length) {
+      return mr->rkey;
+    }
+  }
+  return 0;
 }
 
 }  // namespace infiniband

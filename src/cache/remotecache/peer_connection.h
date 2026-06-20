@@ -25,37 +25,101 @@
 #define DINGOFS_SRC_CACHE_REMOTECACHE_PEER_CONNECTION_H_
 
 #include <brpc/channel.h>
+#include <bthread/mutex.h>
 #include <bthread/rwlock.h>
+#include <google/protobuf/message.h>
 
 #include <atomic>
+#include <cstdint>
 #include <memory>
 #include <string>
 
+#include "cache/infiniband/client.h"
+#include "common/io_buffer.h"
 #include "common/status.h"
 
 namespace dingofs {
 namespace cache {
-
-static std::atomic<uint64_t> kConnectionId{0};
 
 class PeerConnection;
 using PeerConnectionUPtr = std::unique_ptr<PeerConnection>;
 
 class PeerConnection {
  public:
-  PeerConnection()
-      : id_(kConnectionId.fetch_add(1, std::memory_order_relaxed)) {}
+  struct Result {
+    bool failed{false};
+    int error_code{0};
+    std::string error_text;
+    bool conn_broken{false};
 
-  static PeerConnectionUPtr New() { return std::make_unique<PeerConnection>(); }
+    void SetFailed(int code, const std::string& text, bool broken = false) {
+      failed = true;
+      error_code = code;
+      error_text = text;
+      conn_broken = broken;
+    }
+  };
 
-  Status Connect(const std::string& ip, uint32_t port, uint32_t timeout_ms);
-  void Close();
-  std::shared_ptr<brpc::Channel> GetChannel();
+  static PeerConnectionUPtr New();
+  virtual ~PeerConnection() = default;
+
+  virtual Status Connect(const std::string& ip, uint32_t port,
+                         uint32_t timeout_ms) = 0;
+  virtual void Close() = 0;
+  virtual bool IsConnected() = 0;
+
+  virtual void Send(const std::string& method,
+                    const google::protobuf::Message& raw_request,
+                    google::protobuf::Message* raw_response,
+                    const IOBuffer* request_attachment,
+                    IOBuffer* response_attachment, uint32_t timeout_ms,
+                    Result* result) = 0;
+};
+
+class TCPConnection : public PeerConnection {
+ public:
+  TCPConnection();
+  ~TCPConnection() override;
+
+  Status Connect(const std::string& ip, uint32_t port,
+                 uint32_t timeout_ms) override;
+  void Close() override;
+  bool IsConnected() override;
+  void Send(const std::string& method,
+            const google::protobuf::Message& raw_request,
+            google::protobuf::Message* raw_response,
+            const IOBuffer* request_attachment, IOBuffer* response_attachment,
+            uint32_t timeout_ms, Result* result) override;
 
  private:
-  uint64_t id_;
+  static std::atomic<uint64_t> next_id_;
+  const uint64_t id_;
   bthread::RWLock rwlock_;
   std::shared_ptr<brpc::Channel> channel_;
+};
+
+class RDMAConnection : public PeerConnection {
+ public:
+  ~RDMAConnection() override;
+
+  Status Connect(const std::string& ip, uint32_t port,
+                 uint32_t timeout_ms) override;
+  void Close() override;
+  bool IsConnected() override;
+  void Send(const std::string& method,
+            const google::protobuf::Message& raw_request,
+            google::protobuf::Message* raw_response,
+            const IOBuffer* request_attachment, IOBuffer* response_attachment,
+            uint32_t timeout_ms, Result* result) override;
+
+ private:
+  static constexpr const char* kServiceName =
+      "dingofs.pb.cache.BlockCacheService";
+
+  bool IsConnBroken(int error_code);
+
+  bthread::Mutex mutex_;
+  std::shared_ptr<infiniband::Client> rdma_client_;
 };
 
 }  // namespace cache

@@ -17,8 +17,10 @@
 #include "client/vfs/blockstore/block_store_impl.h"
 
 #include <butil/time.h>
+#include <glog/logging.h>
 #include <google/protobuf/descriptor.pb.h>
 
+#include "cache/infiniband/memory.h"
 #include "cache/tiercache/tier_block_cache.h"
 #include "client/vfs/blockstore/block_store_access_log.h"
 #include "client/vfs/hub/vfs_hub.h"
@@ -68,29 +70,32 @@ void BlockStoreImpl::RangeAsync(ContextSPtr ctx, RangeReq req,
 
   int64_t start_us = butil::cpuwide_time_us();
 
+  // buffer
+  auto* buffer = new IOBuffer();
+  if (cache::FLAGS_use_rdma) {
+    buffer->AppendUserDataWithMeta(
+        reinterpret_cast<void*>(req.dst.data()), req.dst.len, [](void*) {},
+        cache::infiniband::GetRkey(cache::FLAGS_rdma_device, req.dst.data(),
+                                   req.dst.len));
+  } else {
+    buffer->AppendUserData(reinterpret_cast<void*>(req.dst.data()), req.dst.len,
+                           [](void*) {});
+  }
+
+  // option
   cache::RangeOption option;
   option.retrieve_storage = true;
   option.block_whole_length = req.handle.StoreSize();
 
-  // Transitional adapter -- cache stays unchanged: it allocates its own block
-  // and appends into a temp IOBuffer (callee-allocates), then we copy that into
-  // the request's pool slot (req.dst). When the cache leaf learns to fill a
-  // preset slot block in place, drop the temp + this copy and hand the slot to
-  // the cache directly.
-  auto* tmp = new IOBuffer();
   block_cache_->AsyncRange(
-      req.handle, req.offset, req.dst.len, tmp,
-      [start_us, req, tmp, cb = std::move(callback), span](Status s) {
+      req.handle, req.offset, req.dst.len, buffer,
+      [start_us, req, buffer, cb = std::move(callback), span](Status s) {
         BlockStoreAccessLogGuard log(start_us, [&]() {
           return fmt::format("range_async ({}, {}, [{}-{})) : {}",
-                             req.handle.Filename(), req.length,
-                             req.offset, (req.offset + req.length),
-                             s.ToString());
+                             req.handle.Filename(), req.length, req.offset,
+                             (req.offset + req.length), s.ToString());
         });
-        if (s.ok()) {
-          tmp->CopyTo(reinterpret_cast<char*>(req.dst.data()), req.dst.len);
-        }
-        delete tmp;
+        delete buffer;
         SpanScope::End(span);
         cb(s);
       },

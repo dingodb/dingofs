@@ -18,8 +18,12 @@ add_subdirectory(fuse)
 
 add_executable(dingo-client main.cc)
 target_link_libraries(dingo-client
+    ibverbs::ibverbs
     fuse_client_lib
     glog::glog
+)
+target_link_options(dingo-client PRIVATE
+    "-Wl,--exclude-libs,libibverbs.a"
 )
 
 if(DINGOFS_BUILD_SDK)

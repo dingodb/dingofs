@@ -37,20 +37,21 @@ template <typename T>
 struct Request {
   std::string method;
   T raw;
-  const IOBuffer* body;
+  const IOBuffer* request_attachment{nullptr};
+  IOBuffer* response_attachment{nullptr};
 };
 
 template <typename U>
 struct Response {
   Status status;
   U raw;
-  IOBuffer body;
 };
 
 template <typename T>
 inline Request<T> MakeRequest(const std::string& method, const T& raw,
-                              const IOBuffer* body = nullptr) {
-  return Request<T>{method, raw, body};
+                              const IOBuffer* request_attachment = nullptr,
+                              IOBuffer* response_attachment = nullptr) {
+  return Request<T>{method, raw, request_attachment, response_attachment};
 }
 
 template <typename T>
