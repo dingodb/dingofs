@@ -306,8 +306,10 @@ Status LocalFileSystem::ReadFile(const std::string& path, off_t offset,
 
   if (buffer->Size() == 0) {
     *buffer = std::move(aligned);
-  } else {  // local disk cache
-    aligned.AppendTo(buffer, length);
+  } else {
+    CHECK_EQ(buffer->BackingBlockNum(), 1);
+    CHECK_GE(buffer->Size(), length);
+    aligned.CopyTo(buffer->Fetch1(), length);
   }
   return status;
 }

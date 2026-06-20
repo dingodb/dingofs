@@ -22,5 +22,6 @@ target_link_libraries(cache_remotecache
     cache_common
     cache_iutil
     cache_blockcache
+    cache_infiniband
     dingofs_executor
 )

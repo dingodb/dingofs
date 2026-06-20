@@ -25,6 +25,7 @@
 #include <brpc/reloadable_flags.h>
 #include <butil/iobuf.h>
 #include <gflags/gflags.h>
+#include <glog/logging.h>
 
 #include <atomic>
 #include <memory>
@@ -110,11 +111,12 @@ Status RemoteBlockCacheImpl::Range(BlockHandle handle, off_t offset,
                                    size_t length, IOBuffer* buffer,
                                    RangeOption option) {
   DCHECK_RUNNING("RemoteBlockCache");
+  CHECK_NOTNULL(buffer);
+  CHECK_EQ(buffer->BackingBlockNum(), 1);
 
-  Status status;
   bool cache_hit = false;
-  status = upstream_->SendRangeRequest(handle, offset, length, buffer,
-                                       option.block_whole_length, &cache_hit);
+  auto status = upstream_->SendRangeRequest(
+      handle, offset, length, buffer, option.block_whole_length, &cache_hit);
   if (status.ok()) {
     if (cache_hit) {
       vars_->cache_hit_count << 1;

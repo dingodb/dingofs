@@ -120,13 +120,12 @@ Status Upstream::SendRangeRequest(const BlockHandle& handle, off_t offset,
   raw.set_offset(offset);
   raw.set_length(length);
   raw.set_block_size(block_whole_length);
-  auto request = MakeRequest("Range", raw);
+  auto request = MakeRequest("Range", raw, nullptr, buffer);
 
   auto response =
       SendRequest<pb::cache::RangeRequest, pb::cache::RangeResponse>(request);
   status = response.status;
   if (status.ok()) {
-    *buffer = std::move(response.body);
     if (cache_hit != nullptr) {
       *cache_hit = response.raw.cache_hit();
     }

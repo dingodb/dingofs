@@ -89,6 +89,7 @@ class IOBuffer {
 
   size_t Size() const { return iobuf_.length(); }
   size_t Length() const { return iobuf_.length(); }
+  size_t BackingBlockNum() const { return iobuf_.backing_block_num(); }
 
   char* Fetch1() const {
     CHECK_EQ(iobuf_.backing_block_num(), 1);
