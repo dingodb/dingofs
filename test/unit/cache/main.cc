@@ -29,6 +29,13 @@ DECLARE_int32(v);
 int main(int argc, char* argv[]) {
   testing::InitGoogleTest(&argc, argv);
 
+  // These cache-node flags (defined in cachegroup/) have non-empty validators
+  // and the test binary links them. Seed valid values by name so
+  // ParseCommandLineFlags does not reject the empty defaults at startup.
+  google::SetCommandLineOption("id", "test-cache-node");
+  google::SetCommandLineOption("listen_ip", "127.0.0.1");
+  google::SetCommandLineOption("group_name", "test-group");
+
   FLAGS_minloglevel = google::GLOG_INFO;
   FLAGS_logtostdout = true;
   FLAGS_colorlogtostdout = true;

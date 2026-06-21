@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-file(GLOB TEST_CACHE_CACHEGROUP_SRCS "*.cc")
+file(GLOB TEST_CACHE_CACHEGROUP_SRCS CONFIGURE_DEPENDS "*.cc")
 
 add_library(test_cache_cachegroup OBJECT
     ${TEST_CACHE_CACHEGROUP_SRCS}

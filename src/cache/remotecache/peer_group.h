@@ -40,6 +40,10 @@ namespace cache {
 
 struct PeerGroup {
   PeerSPtr SelectPeer(const std::string& key) {
+    if (chash == nullptr) {
+      return nullptr;
+    }
+
     iutil::ConNode node;
     if (chash->Lookup(key, node)) {
       auto iter = peers.find(node.key);
@@ -58,7 +62,7 @@ using PeerGroupSPtr = std::shared_ptr<PeerGroup>;
 
 class PeerGroupBuilder {
  public:
-  PeerGroupBuilder();
+  explicit PeerGroupBuilder(bool start_peers = true);
   ~PeerGroupBuilder();
 
   PeerGroupSPtr Build(const Members& members);
@@ -81,6 +85,7 @@ class PeerGroupBuilder {
                            bthread::TaskIterator<std::vector<PeerSPtr>>& iter);
 
   PeerGroupSPtr old_group_;
+  bool start_peers_;
   bthread::ExecutionQueueId<std::vector<PeerSPtr>> queue_id_;
 };
 

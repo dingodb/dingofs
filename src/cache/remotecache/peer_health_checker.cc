@@ -84,7 +84,8 @@ PeerHealthChecker::PeerHealthChecker(const std::string& ip, uint32_t port)
       ip_(ip),
       port_(port),
       executor_(std::make_unique<BthreadExecutor>()),
-      state_machine_(std::make_unique<iutil::StateMachineImpl>(Configure())),
+      state_machine_(std::make_unique<iutil::StateMachineImpl>(
+          std::make_unique<Configure>())),
       conn_(PeerConnection::New()) {}
 
 void PeerHealthChecker::Start() {

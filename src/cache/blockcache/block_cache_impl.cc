@@ -39,6 +39,7 @@
 #include "cache/common/storage_client_pool.h"
 #include "cache/iutil/bthread.h"
 #include "cache/iutil/inflight_tracker.h"
+#include "cache/iutil/string_util.h"
 #include "common/helper.h"
 #include "common/io_buffer.h"
 #include "common/options/cache.h"
@@ -196,7 +197,11 @@ Status BlockCacheImpl::Prefetch(BlockHandle handle, size_t length,
     return Status::CacheFull("disk cache is full");
   }
 
+  // StorageRange -> StorageClient::Range -> IOBuffer::Fetch1() requires the
+  // output buffer to be a single, pre-allocated backing block.
   IOBuffer buffer;
+  char* data = new char[length];
+  buffer.AppendUserData(data, length, iutil::DeleteBuffer);
   auto status = StorageRange(handle, 0, length, &buffer);
   if (!status.ok()) {
     return status;

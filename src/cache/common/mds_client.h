@@ -116,6 +116,8 @@ class MDSClientImpl : public MDSClient {
                      std::vector<CacheGroupMember>* members) override;
 
  private:
+  friend class MDSClientImplTest;
+
   CacheGroupMemberState ToMemberState(pb::mds::CacheGroupMemberState state);
 
   mds::MDSMeta GetRandomlyMDS(const mds::MDSMeta& old_mds);

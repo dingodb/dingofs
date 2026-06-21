@@ -556,6 +556,57 @@ TEST_F(FileUtilTest, Fallocate) {
   EXPECT_TRUE(Close(fd).ok());
 }
 
+TEST_F(FileUtilTest, StrModeSpecialBits) {
+  EXPECT_EQ(StrMode(0755), "?rwxr-xr-x");  // unknown file type -> '?'
+  // setgid without group-exec -> uppercase 'S'
+  EXPECT_EQ(StrMode(S_IFREG | S_ISGID | 0645), "-rw-r-Sr-x");
+  // sticky without other-exec -> uppercase 'T'
+  EXPECT_EQ(StrMode(S_IFDIR | S_ISVTX | 0754), "drwxr-xr-T");
+}
+
+TEST_F(FileUtilTest, FileIsExistRejectsDirectory) {
+  std::string dir = test_dir_ + "/a_directory";
+  std::filesystem::create_directories(dir);
+  EXPECT_FALSE(FileIsExist(dir));  // exists, but not a regular file
+}
+
+TEST_F(FileUtilTest, LinkErrors) {
+  std::string src = test_dir_ + "/link_src2.txt";
+  {
+    std::ofstream ofs(src);
+    ofs << "x";
+  }
+
+  {  // source does not exist
+    EXPECT_TRUE(
+        Link(test_dir_ + "/no_such_src", test_dir_ + "/dst1.txt").IsNotFound());
+  }
+
+  {  // destination already exists
+    std::string dest = test_dir_ + "/link_dest2.txt";
+    std::ofstream(dest) << "y";
+    EXPECT_TRUE(Link(src, dest).IsExist());
+  }
+}
+
+TEST_F(FileUtilTest, CreateFileParentMissing) {
+  int fd = -1;
+  EXPECT_TRUE(
+      CreateFile(test_dir_ + "/no/such/dir/f.txt", 0644, &fd).IsNotFound());
+}
+
+TEST_F(FileUtilTest, OpenFileWithModeNotFound) {
+  int fd = -1;
+  EXPECT_TRUE(
+      OpenFile(test_dir_ + "/missing.txt", O_RDONLY, 0644, &fd).IsNotFound());
+}
+
+TEST_F(FileUtilTest, CloseInvalidFd) { EXPECT_FALSE(Close(-1).ok()); }
+
+TEST_F(FileUtilTest, FallocateInvalidFd) {
+  EXPECT_FALSE(Fallocate(-1, 0, 0, 4096).ok());
+}
+
 }  // namespace iutil
 }  // namespace cache
 }  // namespace dingofs

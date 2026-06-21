@@ -36,8 +36,8 @@
 namespace dingofs {
 namespace cache {
 
-PeerGroupBuilder::PeerGroupBuilder()
-    : old_group_(std::make_shared<PeerGroup>()) {
+PeerGroupBuilder::PeerGroupBuilder(bool start_peers)
+    : old_group_(std::make_shared<PeerGroup>()), start_peers_(start_peers) {
   bthread::ExecutionQueueOptions options;
   options.use_pthread = true;
   CHECK_EQ(0,
@@ -78,7 +78,9 @@ PeerGroupSPtr PeerGroupBuilder::Build(const Members& members) {
   // removed peers
   to_shutdown = std::move(diff.remove);
 
-  StartPeers(to_start);
+  if (start_peers_) {
+    StartPeers(to_start);
+  }
   DeferShutdownPeers(to_shutdown);
 
   auto group = std::make_shared<PeerGroup>();

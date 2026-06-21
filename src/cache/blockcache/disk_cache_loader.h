@@ -49,7 +49,8 @@ class DiskCacheLoader {
   void Shutdown();
 
   bool StillLoading() {
-    return still_loading_cache_.load(std::memory_order_relaxed);
+    return still_loading_stage_.load(std::memory_order_relaxed) ||
+           still_loading_cache_.load(std::memory_order_relaxed);
   }
 
  private:

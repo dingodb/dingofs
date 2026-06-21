@@ -152,8 +152,8 @@ Status RDMAConnection::Connect(const std::string& ip, uint32_t port,
     return Status::OK();
   }
 
-  infiniband::EndPoint ep{FLAGS_rdma_device,
-                          static_cast<uint8_t>(FLAGS_rdma_port_num)};
+  infiniband::EndPoint ep{FLAGS_cache_rdma_device,
+                          static_cast<uint8_t>(FLAGS_cache_rdma_port_num)};
   auto client = infiniband::Client::Create(ep);
   if (client == nullptr) {
     return Status::Internal("create rdma client failed");
@@ -211,7 +211,7 @@ void RDMAConnection::Send(const std::string& method,
       region->set_addr(reinterpret_cast<uint64_t>(iov.iov_base));
       region->set_length(static_cast<uint32_t>(iov.iov_len));
       region->set_rkey(static_cast<uint32_t>(
-          infiniband::GetRkey(FLAGS_rdma_device, iov.iov_base, iov.iov_len)));
+          infiniband::GetRkey(FLAGS_cache_rdma_device, iov.iov_base, iov.iov_len)));
     }
   }
 

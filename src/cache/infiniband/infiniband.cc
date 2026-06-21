@@ -43,9 +43,9 @@ namespace cache {
 
 DEFINE_bool(use_rdma, false, "Enable Infiniband/RDMA transport for cache RPCs");
 
-DEFINE_string(rdma_device, "", "IB device used by the cache RDMA path");
+DEFINE_string(cache_rdma_device, "", "IB device used by the cache RDMA path");
 
-DEFINE_uint32(rdma_port_num, 1,
+DEFINE_uint32(cache_rdma_port_num, 1,
               "HCA port (1-based) used by the cache RDMA path");
 
 namespace infiniband {

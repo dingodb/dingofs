@@ -124,7 +124,7 @@ class DownState final : public BaseState {
 
 class StateMachineImpl final : public StateMachine {
  public:
-  explicit StateMachineImpl(IConfiguration config);
+  explicit StateMachineImpl(std::unique_ptr<IConfiguration> config);
   ~StateMachineImpl() override = default;
   bool Start() override;
   bool Shutdown() override;
@@ -133,7 +133,7 @@ class StateMachineImpl final : public StateMachine {
   void Error(int n = 1) override;
   State GetState() const override;
   void OnEvent(StateEvent event) override;
-  IConfiguration& Config() override { return config_; }
+  IConfiguration& Config() override { return *config_; }
 
  private:
  private:
@@ -142,7 +142,7 @@ class StateMachineImpl final : public StateMachine {
   void TickTock();
 
   std::atomic<bool> running_;
-  IConfiguration config_;
+  std::unique_ptr<IConfiguration> config_;
   mutable bthread::Mutex mutex_;  // for state_
   BaseStateUPtr state_;
   bthread::ExecutionQueueId<StateEvent> disk_event_queue_id_;

@@ -98,6 +98,12 @@ TEST_F(ErrorTest, IoErrorVsInternal) {
   EXPECT_EQ(internal_err, pb::cache::BlockCacheErrFailure);
 }
 
+TEST_F(ErrorTest, UnknownErrCodeDefaultsToInternal) {
+  // An errcode outside the known enum hits the switch default.
+  EXPECT_TRUE(
+      ToStatus(static_cast<pb::cache::BlockCacheErrCode>(9999)).IsInternal());
+}
+
 TEST_F(ErrorTest, UnknownStatusTypes) {
   // Status types not in the mapping should return Unknown
   EXPECT_EQ(ToPBErr(Status::Exist("exists")), pb::cache::BlockCacheErrUnknown);

@@ -52,7 +52,7 @@ DiskCacheLoader::DiskCacheLoader(DiskCacheLayoutSPtr layout,
 
 void DiskCacheLoader::Start(const std::string& disk_id,
                             CacheStore::UploadFunc uploader) {
-  if (running_.load(std::memory_order_relaxed)) {
+  if (running_.exchange(true, std::memory_order_relaxed)) {
     LOG(WARNING) << "DiskCacheLoader already started";
     return;
   }
@@ -61,12 +61,13 @@ void DiskCacheLoader::Start(const std::string& disk_id,
 
   disk_id_ = disk_id;
   uploader_ = std::move(uploader);
+  still_loading_stage_.store(true, std::memory_order_relaxed);
+  still_loading_cache_.store(true, std::memory_order_relaxed);
+  load_status_.set_value("loading");
 
   t1_ = std::thread([this]() { LoadAllBlocks(BlockType::kStageBlock); });
   t2_ = std::thread([this]() { LoadAllBlocks(BlockType::kCacheBlock); });
 
-  running_.store(true, std::memory_order_relaxed);
-  load_status_.set_value("loading");
   LOG(INFO) << "DiskCacheLoader started";
 }
 

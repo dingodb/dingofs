@@ -43,7 +43,7 @@ static RDMABufferPoolUPtr g_write_slab_pool;
 Status InitializeGlobalSlabPool() {
   Infiniband::Context ctx;
   auto status =
-      Infiniband::Init(FLAGS_rdma_device, fLU::FLAGS_rdma_port_num, &ctx);
+      Infiniband::Init(FLAGS_cache_rdma_device, fLU::FLAGS_cache_rdma_port_num, &ctx);
   if (!status.ok()) {
     return status;
   }
