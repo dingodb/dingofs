@@ -40,7 +40,7 @@ IOUring::IOUring(IOUringOptions options)
     : options_(std::move(options)),
       running_(false),
       io_uring_(),
-      fixed_buffers_(options.fixed_buffers),
+      fixed_buffers_(options_.fixed_buffers),
       epoll_fd_(-1) {}
 
 IOUring::~IOUring() = default;
