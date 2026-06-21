@@ -89,14 +89,15 @@ Status Peer::Start() {
     auto status = connections_[i]->Connect(ip_, port_,
                                            FLAGS_cache_rpc_connect_timeout_ms);
     if (!status.ok()) {
-      LOG(ERROR) << "Fail to connect to " << *this;
+      LOG(WARNING) << "Fail to connect to " << *this
+                   << " during peer startup, it will reconnect on demand: "
+                   << status.ToString();
       has_error = true;
     }
   }
 
   if (has_error) {
-    LOG(ERROR) << "Fail to start peer";
-    return Status::Internal("start peer failed");
+    LOG(WARNING) << "Peer started with disconnected connections: " << *this;
   }
 
   health_checker_->Start();
