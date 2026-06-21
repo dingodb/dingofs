@@ -33,6 +33,10 @@
 #include "cache/infiniband/memory.h"
 #include "common/status.h"
 
+struct ibv_recv_wr;
+struct ibv_send_wr;
+struct ibv_sge;
+
 namespace dingofs {
 namespace cache {
 namespace infiniband {
@@ -46,15 +50,9 @@ class Connection {
 
   Connection(QueuePairUPtr queue_pair, CompletionQueueUPtr completion_queue);
 
-  Status PostSendWorkRequest(const SendWorkRequest& entry) {
-    return PostSendWorkRequests(std::vector<SendWorkRequest>{entry});
-  }
-
-  Status PostRecvWorkRequest(const RecvWorkRequest& entry) {
-    return PostRecvWorkRequests(std::vector<RecvWorkRequest>{entry});
-  }
-
+  Status PostSendWorkRequest(const SendWorkRequest& entry);
   Status PostSendWorkRequests(const std::vector<SendWorkRequest>& entries);
+  Status PostRecvWorkRequest(const RecvWorkRequest& entry);
   Status PostRecvWorkRequests(const std::vector<RecvWorkRequest>& entries);
   void HandleCompletion(CompletionHandler handler);
 
@@ -64,6 +62,11 @@ class Connection {
   RDMABufferPool* GetRecvBufferPool() { return recv_buffer_pool_.get(); }
 
  private:
+  static Status ValidateSendWorkRequest(const SendWorkRequest& entry);
+  static void PrepSendWorkRequest(const SendWorkRequest& entry, ibv_send_wr* wr,
+                                  ibv_sge* sge);
+  static void PrepRecvWorkRequest(const RecvWorkRequest& entry, ibv_recv_wr* wr,
+                                  ibv_sge* sge);
   bool PollCompletionQueue(CompletionHandler handler);
 
   std::unique_ptr<RDMABufferPool> send_buffer_pool_;
