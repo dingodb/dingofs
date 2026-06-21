@@ -62,7 +62,11 @@ Status Connection::PostSendWorkRequests(
   std::vector<ibv_sge> sges(wr_num);
 
   for (int i = 0; i < wr_num; i++) {
-    CHECK_NOTNULL(entries[i].ctx);
+    if (entries[i].signaled && entries[i].ctx == nullptr) {
+      LOG(ERROR) << "Signaled send work request is missing completion context";
+      return Status::InvalidParam(
+          "signaled send work request missing completion context");
+    }
 
     // wr_id
     work_requests[i].wr_id = reinterpret_cast<uint64_t>(entries[i].ctx);
