@@ -102,7 +102,7 @@ int FixedBuffers::GetIndex(infiniband::RDMABuffer* rdma_buffer, bool for_read) {
 
 std::vector<iovec> FixedBuffers::Fetch() {
   auto write_buffers = write_pool_->Fetch();
-  auto read_buffers = write_pool_->Fetch();
+  auto read_buffers = read_pool_->Fetch();
 
   std::vector<iovec> buffers;
   buffers.reserve(write_buffers.size() + read_buffers.size());
