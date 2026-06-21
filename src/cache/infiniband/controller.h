@@ -47,10 +47,13 @@ class Controller : public ::google::protobuf::RpcController {
     error_text_.clear();
     error_code_ = pb::infiniband::ErrorCode::Ok;
     response_attachment_size_ = 0;
+    timeout_ms_ = -1;
   }
 
   int32_t ErrorCode() const { return error_code_; }
   void SetErrorCode(int32_t error_code) { error_code_ = error_code; }
+  int64_t timeout_ms() const { return timeout_ms_; }
+  void set_timeout_ms(int64_t timeout_ms) { timeout_ms_ = timeout_ms; }
 
   bool Failed() const override { return failed_; }
   std::string ErrorText() const override { return error_text_; }
@@ -91,6 +94,7 @@ class Controller : public ::google::protobuf::RpcController {
   pb::infiniband::RDMARegion write_region_;
   google::protobuf::RepeatedPtrField<pb::infiniband::RDMARegion> read_regions_;
   size_t response_attachment_size_{0};
+  int64_t timeout_ms_{-1};
   IOBuffer request_attachment_;
   IOBuffer response_attachment_;
 };
