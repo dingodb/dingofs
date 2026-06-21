@@ -181,7 +181,7 @@ void RDMAConnection::Send(const std::string& method,
                           google::protobuf::Message* raw_response,
                           const IOBuffer* request_attachment,
                           IOBuffer* response_attachment,
-                          uint32_t /*timeout_ms*/, Result* result) {
+                          uint32_t timeout_ms, Result* result) {
   std::shared_ptr<infiniband::Client> client;
   {
     std::lock_guard<bthread::Mutex> guard(mutex_);
@@ -194,6 +194,7 @@ void RDMAConnection::Send(const std::string& method,
   }
 
   infiniband::Controller cntl;
+  cntl.set_timeout_ms(timeout_ms);
   if (method == "Range") {
     if (response_attachment != nullptr && response_attachment->Size() > 0) {
       auto& region = cntl.write_region();
