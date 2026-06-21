@@ -108,6 +108,8 @@ class DiskCacheGroup final : public CacheStore {
   bool Dump(Json::Value& value) const override;
 
  private:
+  friend class DiskCacheGroupTest;
+
   static std::vector<uint64_t> CalcWeights(
       std::vector<DiskCacheOption> options);
   DiskCacheSPtr GetStore(const BlockHandle& handle) const;

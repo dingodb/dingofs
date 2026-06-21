@@ -318,14 +318,14 @@ Status VFSHubImpl::Start(bool skip_mount) {
       CHECK_NOTNULL(write_buffer_manager_->BaseAddr());
 
       auto status = cache::infiniband::RegisterMemoryForRDMA(
-          cache::FLAGS_rdma_device, read_mem_pool_->BaseAddr(),
+          cache::FLAGS_cache_rdma_device, read_mem_pool_->BaseAddr(),
           read_mem_pool_->TotalSize());
       if (!status.ok()) {
         return status;
       }
 
       status = cache::infiniband::RegisterMemoryForRDMA(
-          cache::FLAGS_rdma_device, write_buffer_manager_->BaseAddr(),
+          cache::FLAGS_cache_rdma_device, write_buffer_manager_->BaseAddr(),
           write_buffer_manager_->TotalSize());
       if (!status.ok()) {
         return status;

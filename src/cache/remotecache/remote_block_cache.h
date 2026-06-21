@@ -89,6 +89,8 @@ class RemoteBlockCacheImpl final : public BlockCache {
   }
 
  private:
+  friend class RemoteBlockCacheTest;
+
   BlockCache* GetSelfPtr() { return this; }
 
   std::atomic<bool> running_;

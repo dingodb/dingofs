@@ -30,11 +30,13 @@ namespace dingofs {
 namespace cache {
 namespace iutil {
 
-StateMachineImpl::StateMachineImpl(IConfiguration config)
+StateMachineImpl::StateMachineImpl(std::unique_ptr<IConfiguration> config)
     : running_(false),
-      config_(config),
+      config_(std::move(config)),
       state_(std::make_unique<BaseState>(this)),
-      executor_(std::make_unique<BthreadExecutor>()) {}
+      executor_(std::make_unique<BthreadExecutor>()) {
+  CHECK_NOTNULL(config_);
+}
 
 bool StateMachineImpl::Start() {
   std::lock_guard<bthread::Mutex> lk(mutex_);

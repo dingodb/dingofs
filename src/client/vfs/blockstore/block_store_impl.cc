@@ -75,7 +75,7 @@ void BlockStoreImpl::RangeAsync(ContextSPtr ctx, RangeReq req,
   if (cache::FLAGS_use_rdma) {
     buffer->AppendUserDataWithMeta(
         reinterpret_cast<void*>(req.dst.data()), req.dst.len, [](void*) {},
-        cache::infiniband::GetRkey(cache::FLAGS_rdma_device, req.dst.data(),
+        cache::infiniband::GetRkey(cache::FLAGS_cache_rdma_device, req.dst.data(),
                                    req.dst.len));
   } else {
     buffer->AppendUserData(reinterpret_cast<void*>(req.dst.data()), req.dst.len,

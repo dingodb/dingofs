@@ -71,7 +71,8 @@ struct Configure : public iutil::IConfiguration {
 DiskHealthChecker::DiskHealthChecker(DiskCacheLayoutSPtr layout)
     : running_(false),
       layout_(layout),
-      state_machine_(std::make_unique<iutil::StateMachineImpl>(Configure())),
+      state_machine_(std::make_unique<iutil::StateMachineImpl>(
+          std::make_unique<Configure>())),
       executor_(std::make_unique<BthreadExecutor>()),
       health_status_(absl::StrFormat("dingofs_disk_cache_%d_health_status",
                                      layout->CacheIndex()),

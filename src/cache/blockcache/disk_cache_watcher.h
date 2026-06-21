@@ -56,6 +56,8 @@ class DiskCacheWatcher {
   void Shutdown();
 
  private:
+  friend class DiskCacheWatcherTest;
+
   enum class Should : uint8_t {
     kDoNothing = 0,
     kRestart = 1,

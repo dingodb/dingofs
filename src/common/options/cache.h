@@ -225,8 +225,8 @@ DECLARE_int32(connections);
 DECLARE_bool(use_rdma);
 
 // IB device and HCA port (1-based) used by the cache RDMA path.
-DECLARE_string(rdma_device);
-DECLARE_uint32(rdma_port_num);
+DECLARE_string(cache_rdma_device);
+DECLARE_uint32(cache_rdma_port_num);
 
 // Sets the MDS addresses for cache group member manager service RPC.
 DECLARE_string(mds_addrs);

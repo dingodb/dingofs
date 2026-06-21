@@ -133,8 +133,8 @@ void Server::InstallSignal() { CHECK(SIG_ERR != signal(SIGPIPE, SIG_IGN)); }
 
 Status Server::StartRDMAServer() {
   infiniband::EndPoint endpoint{
-      FLAGS_rdma_device,
-      static_cast<uint8_t>(FLAGS_rdma_port_num),
+      FLAGS_cache_rdma_device,
+      static_cast<uint8_t>(FLAGS_cache_rdma_port_num),
   };
   infiniband::ServerOptions options{.brpc_server = brpc_server_.get()};
   auto status = rdma_server_->Start(endpoint, &options);
@@ -149,13 +149,13 @@ Status Server::StartRDMAServer() {
 
   infiniband::Infiniband::Context ctx;
   status = infiniband::Infiniband::Init(
-      FLAGS_rdma_device, static_cast<uint8_t>(FLAGS_rdma_port_num), &ctx);
+      FLAGS_cache_rdma_device, static_cast<uint8_t>(FLAGS_cache_rdma_port_num), &ctx);
   if (!status.ok()) {
     return status;
   }
 
-  LOG(INFO) << "RDMA cache service is up on device=" << FLAGS_rdma_device
-            << " port_num=" << FLAGS_rdma_port_num;
+  LOG(INFO) << "RDMA cache service is up on device=" << FLAGS_cache_rdma_device
+            << " port_num=" << FLAGS_cache_rdma_port_num;
   return Status::OK();
 }
 

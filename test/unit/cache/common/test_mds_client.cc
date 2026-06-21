@@ -25,6 +25,7 @@
 #include <sstream>
 
 #include "cache/common/mds_client.h"
+#include "dingofs/error.pb.h"
 
 namespace dingofs {
 namespace cache {
@@ -54,6 +55,8 @@ TEST_F(MDSClientTest, CacheGroupMemberEquality) {
       .weight = 100,
       .state = CacheGroupMemberState::kOnline,
   };
+
+  EXPECT_TRUE(member1 == member1);
 
   {
     auto member2 = member1;
@@ -136,6 +139,88 @@ TEST_F(MDSClientTest, CacheGroupMemberStreamOperatorDifferentStates) {
     oss << member;
     EXPECT_NE(oss.str().find("state=offline"), std::string::npos);
   }
+}
+
+class MDSClientImplTest : public ::testing::Test {
+ protected:
+  CacheGroupMemberState ToMemberState(MDSClientImpl& client,
+                                      pb::mds::CacheGroupMemberState state) {
+    return client.ToMemberState(state);
+  }
+
+  bool ShouldRetry(MDSClientImpl& client, Status status) {
+    return client.ShouldRetry(status);
+  }
+
+  bool ShouldSetMDSAbormal(MDSClientImpl& client, Status status) {
+    return client.ShouldSetMDSAbormal(status);
+  }
+
+  bool ShouldRefreshMDSList(MDSClientImpl& client, Status status) {
+    return client.ShouldRefreshMDSList(status);
+  }
+};
+
+TEST_F(MDSClientImplTest, ShutdownBeforeStartIsOk) {
+  MDSClientImpl client;
+
+  EXPECT_TRUE(client.Shutdown().ok());
+}
+
+TEST_F(MDSClientImplTest, ToMemberStateMapsEveryState) {
+  MDSClientImpl client;
+
+  EXPECT_EQ(ToMemberState(client, pb::mds::CacheGroupMemberStateUnknown),
+            CacheGroupMemberState::kUnknown);
+  EXPECT_EQ(ToMemberState(client, pb::mds::CacheGroupMemberStateOnline),
+            CacheGroupMemberState::kOnline);
+  EXPECT_EQ(ToMemberState(client, pb::mds::CacheGroupMemberStateUnstable),
+            CacheGroupMemberState::kUnstable);
+  EXPECT_EQ(ToMemberState(client, pb::mds::CacheGroupMemberStateOffline),
+            CacheGroupMemberState::kOffline);
+  EXPECT_EQ(ToMemberState(client,
+                          static_cast<pb::mds::CacheGroupMemberState>(999)),
+            CacheGroupMemberState::kUnknown);
+}
+
+TEST_F(MDSClientImplTest, ShouldRetryRecognizesRetriableStatuses) {
+  MDSClientImpl client;
+
+  EXPECT_FALSE(ShouldRetry(client, Status::OK()));
+  EXPECT_FALSE(ShouldRetry(client, Status::NotFound("miss")));
+  EXPECT_TRUE(ShouldRetry(client, Status::NetError("network")));
+  EXPECT_TRUE(ShouldRetry(
+      client, Status::Unknown(pb::error::EROUTER_EPOCH_CHANGE, "epoch")));
+  EXPECT_TRUE(
+      ShouldRetry(client, Status::Unknown(pb::error::ENOT_SERVE, "not serve")));
+  EXPECT_TRUE(
+      ShouldRetry(client, Status::Unknown(pb::error::EINTERNAL, "internal")));
+  EXPECT_TRUE(ShouldRetry(
+      client,
+      Status::Unknown(pb::error::ENOT_CAN_CONNECTED, "not connected")));
+}
+
+TEST_F(MDSClientImplTest, ShouldSetMDSAbormalOnlyForInternalOrNetwork) {
+  MDSClientImpl client;
+
+  EXPECT_TRUE(ShouldSetMDSAbormal(client, Status::Internal("internal")));
+  EXPECT_TRUE(ShouldSetMDSAbormal(client, Status::NetError("network")));
+  EXPECT_FALSE(ShouldSetMDSAbormal(
+      client, Status::Unknown(pb::error::EROUTER_EPOCH_CHANGE, "epoch")));
+  EXPECT_FALSE(ShouldSetMDSAbormal(client, Status::OK()));
+}
+
+TEST_F(MDSClientImplTest, ShouldRefreshMDSListOnlyForRoutingErrors) {
+  MDSClientImpl client;
+
+  EXPECT_TRUE(ShouldRefreshMDSList(
+      client, Status::Unknown(pb::error::EROUTER_EPOCH_CHANGE, "epoch")));
+  EXPECT_TRUE(ShouldRefreshMDSList(
+      client, Status::Unknown(pb::error::ENOT_SERVE, "not serve")));
+  EXPECT_FALSE(ShouldRefreshMDSList(
+      client, Status::Unknown(pb::error::EINTERNAL, "internal")));
+  EXPECT_FALSE(ShouldRefreshMDSList(client, Status::NetError("network")));
+  EXPECT_FALSE(ShouldRefreshMDSList(client, Status::OK()));
 }
 
 }  // namespace cache
