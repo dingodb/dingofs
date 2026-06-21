@@ -195,18 +195,25 @@ void ClientSession::SendRequest(Controller* cntl, uint64_t correlation_id,
 
 void ClientSession::WaitingResponse(Waiter* waiter) {
   int rc = 0;
-  if (FLAGS_rdma_rpc_timeout_ms <= 0) {
+  int64_t timeout_ms = waiter->ctx.cntl->timeout_ms();
+  if (timeout_ms < 0) {
+    timeout_ms = FLAGS_rdma_rpc_timeout_ms;
+  }
+
+  if (timeout_ms <= 0) {
     rc = waiter->notify.wait();
   } else {
-    rc = waiter->notify.timed_wait(
-        butil::milliseconds_from_now(FLAGS_rdma_rpc_timeout_ms));
+    rc = waiter->notify.timed_wait(butil::milliseconds_from_now(timeout_ms));
   }
 
   if (rc == 0) {  // response received
     return;
   }
 
-  waiters_->Remove(waiter->correlation_id);
+  if (!waiters_->Remove(waiter->correlation_id)) {
+    waiter->notify.wait();
+    return;
+  }
 
   auto* cntl = waiter->ctx.cntl;
   if (rc == ETIMEDOUT) {
