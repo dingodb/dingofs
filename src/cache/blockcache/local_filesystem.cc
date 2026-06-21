@@ -66,9 +66,7 @@ Status FixedBuffers::Alloc(size_t size, bool for_read, IOBuffer* buffer,
 
   buffer->AppendUserDataWithMeta(
       rdma_buffer->data, size,
-      [pool](void* addr) {
-        pool->Free(reinterpret_cast<infiniband::RDMABuffer*>(addr));
-      },
+      [pool, rdma_buffer](void*) { pool->Free(rdma_buffer); },
       rdma_buffer->lkey);
 
   *buf_index = GetIndex(rdma_buffer, for_read);
