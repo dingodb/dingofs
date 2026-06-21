@@ -68,8 +68,8 @@ class Connection {
 
   std::unique_ptr<RDMABufferPool> send_buffer_pool_;
   std::unique_ptr<RDMABufferPool> recv_buffer_pool_;
-  std::unique_ptr<QueuePair> queue_pair_;
   std::unique_ptr<CompletionQueue> completion_queue_;
+  std::unique_ptr<QueuePair> queue_pair_;
 };
 
 using ConnectionUPtr = std::unique_ptr<Connection>;

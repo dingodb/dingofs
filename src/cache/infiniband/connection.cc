@@ -52,8 +52,8 @@ Connection::Connection(QueuePairUPtr queue_pair,
       recv_buffer_pool_(RDMABufferPool::Create(queue_pair->GetProtectDomain(),
                                                FLAGS_rdma_recv_buffer_size,
                                                FLAGS_rdma_recv_queue_size)),
-      queue_pair_(std::move(queue_pair)),
-      completion_queue_(std::move(completion_queue)) {}
+      completion_queue_(std::move(completion_queue)),
+      queue_pair_(std::move(queue_pair)) {}
 
 Status Connection::PostSendWorkRequests(
     const std::vector<SendWorkRequest>& entries) {
