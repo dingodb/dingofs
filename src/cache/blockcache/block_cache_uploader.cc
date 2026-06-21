@@ -210,13 +210,22 @@ void BlockCacheUploader::AsyncUpload(const StageBlock& sblock) {
     return;
   }
 
-  tracker_->Add(sblock.handle.Filename());
+  auto key = sblock.handle.Filename();
+  auto status = tracker_->Add(key);
+  if (status.IsExist()) {
+    VLOG(9) << "Skip duplicate upload task: key=" << key;
+    return;
+  } else if (!status.ok()) {
+    LOG(ERROR) << "Fail to track upload task: key=" << key
+               << ", status=" << status.ToString();
+    return;
+  }
 
   auto* self = GetSelfPtr();
-  auto tid = iutil::RunInBthread([self, sblock]() {
+  auto tid = iutil::RunInBthread([self, sblock, key]() {
     auto status = self->DoUpload(sblock);
     self->OnComplete(sblock, status);
-    self->tracker_->Remove(sblock.handle.Filename());
+    self->tracker_->Remove(key);
   });
 
   if (tid != 0) {
