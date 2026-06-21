@@ -134,6 +134,7 @@ class QueuePair {
  public:
   QueuePair(ibv_qp* qp, Device* device, Port* port,
             ProtectDomain* protect_domain);
+  ~QueuePair();
   static QueuePairUPtr Create(Device* device, Port* port,
                               ProtectDomain* protect_domain,
                               CompletionQueue* completion_queue);

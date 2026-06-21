@@ -188,6 +188,12 @@ QueuePair::QueuePair(ibv_qp* qp, Device* device, Port* port,
   CHECK_NOTNULL(protect_domain);
 }
 
+QueuePair::~QueuePair() {
+  if (qp_ != nullptr && ibv_destroy_qp(qp_) != 0) {
+    PLOG(ERROR) << "Fail to destroy " << *this;
+  }
+}
+
 QueuePairUPtr QueuePair::Create(Device* device, Port* port,
                                 ProtectDomain* protect_domain,
                                 CompletionQueue* completion_queue) {
