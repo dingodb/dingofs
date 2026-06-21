@@ -38,7 +38,8 @@ Status BodyReader::Read(RDMABuffer* dst, const std::vector<Region>& src,
   }
 
   InflightContext ctx(src.size());
-  std::vector<SendWorkRequest> work_requests(src.size());
+  std::vector<SendWorkRequest> work_requests;
+  work_requests.reserve(src.size());
   PrepWorkRequests(dst, src, &ctx, &work_requests);
   status = conn_->PostSendWorkRequests(work_requests);
   if (!status.ok()) {
