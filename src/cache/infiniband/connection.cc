@@ -26,6 +26,7 @@
 #include <infiniband/verbs.h>
 
 #include <cstdint>
+#include <utility>
 
 #include "cache/infiniband/infiniband.h"
 #include "cache/infiniband/memory.h"
@@ -55,57 +56,101 @@ Connection::Connection(QueuePairUPtr queue_pair,
       completion_queue_(std::move(completion_queue)),
       queue_pair_(std::move(queue_pair)) {}
 
+Status Connection::ValidateSendWorkRequest(const SendWorkRequest& entry) {
+  if (entry.signaled && entry.ctx == nullptr) {
+    LOG(ERROR) << "Signaled send work request is missing completion context";
+    return Status::InvalidParam(
+        "signaled send work request missing completion context");
+  }
+
+  return Status::OK();
+}
+
+void Connection::PrepSendWorkRequest(const SendWorkRequest& entry,
+                                     ibv_send_wr* wr, ibv_sge* sge) {
+  wr->wr_id = reinterpret_cast<uint64_t>(entry.ctx);
+
+  sge->addr = entry.addr;
+  sge->length = entry.length;
+  sge->lkey = entry.lkey;
+  wr->sg_list = sge;
+  wr->num_sge = 1;
+
+  if (entry.opcode == OpCode::kSend) {
+    wr->opcode = IBV_WR_SEND;
+  } else if (entry.opcode == OpCode::kRDMAWrite) {
+    wr->opcode = IBV_WR_RDMA_WRITE;
+  } else if (entry.opcode == OpCode::kRDMARead) {
+    wr->opcode = IBV_WR_RDMA_READ;
+  } else {
+    CHECK(false) << "Unsupport send optype";
+  }
+
+  if (entry.signaled) {
+    wr->send_flags = IBV_SEND_SIGNALED;
+  }
+
+  if (entry.opcode == OpCode::kRDMAWrite || entry.opcode == OpCode::kRDMARead) {
+    wr->wr.rdma.remote_addr = entry.raddr;
+    wr->wr.rdma.rkey = entry.rkey;
+  }
+}
+
+void Connection::PrepRecvWorkRequest(const RecvWorkRequest& entry,
+                                     ibv_recv_wr* wr, ibv_sge* sge) {
+  CHECK_NOTNULL(entry.ctx);
+
+  wr->wr_id = reinterpret_cast<uint64_t>(entry.ctx);
+
+  sge->addr = entry.addr;
+  sge->length = entry.length;
+  sge->lkey = entry.lkey;
+  wr->sg_list = sge;
+  wr->num_sge = 1;
+}
+
+Status Connection::PostSendWorkRequest(const SendWorkRequest& entry) {
+  auto status = ValidateSendWorkRequest(entry);
+  if (!status.ok()) {
+    return status;
+  }
+
+  ibv_send_wr work_request = {};
+  ibv_sge sge = {};
+  PrepSendWorkRequest(entry, &work_request, &sge);
+
+  ibv_send_wr* bad_work_request = nullptr;
+  int rc =
+      ibv_post_send(queue_pair_->GetIbQp(), &work_request, &bad_work_request);
+  if (rc != 0 || bad_work_request != nullptr) {
+    PLOG(ERROR) << "Fail to post send work request";
+    return Status::Internal("post send work request failed");
+  }
+  return Status::OK();
+}
+
 Status Connection::PostSendWorkRequests(
     const std::vector<SendWorkRequest>& entries) {
   int wr_num = entries.size();
+  if (wr_num == 0) {
+    return Status::OK();
+  }
+
   std::vector<ibv_send_wr> work_requests(wr_num);
   std::vector<ibv_sge> sges(wr_num);
 
   for (int i = 0; i < wr_num; i++) {
-    if (entries[i].signaled && entries[i].ctx == nullptr) {
-      LOG(ERROR) << "Signaled send work request is missing completion context";
-      return Status::InvalidParam(
-          "signaled send work request missing completion context");
+    auto status = ValidateSendWorkRequest(entries[i]);
+    if (!status.ok()) {
+      return status;
     }
 
-    // wr_id
-    work_requests[i].wr_id = reinterpret_cast<uint64_t>(entries[i].ctx);
-
-    // next
     work_requests[i].next = nullptr;
     if (i > 0) {
       work_requests[i - 1].next = &work_requests[i];
     }
 
-    // sg_list
-    sges[i].addr = entries[i].addr;
-    sges[i].length = entries[i].length;
-    sges[i].lkey = entries[i].lkey;
-    work_requests[i].sg_list = &sges[i];
-    work_requests[i].num_sge = 1;
-
-    // opcode
-    if (entries[i].opcode == OpCode::kSend) {
-      work_requests[i].opcode = IBV_WR_SEND;
-    } else if (entries[i].opcode == OpCode::kRDMAWrite) {
-      work_requests[i].opcode = IBV_WR_RDMA_WRITE;
-    } else if (entries[i].opcode == OpCode::kRDMARead) {
-      work_requests[i].opcode = IBV_WR_RDMA_READ;
-    } else {
-      CHECK(false) << "Unsupport send optype";
-    }
-
-    // send_flags
-    if (entries[i].signaled) {
-      work_requests[i].send_flags = IBV_SEND_SIGNALED;
-    }
-
-    // wr
-    if (entries[i].opcode == OpCode::kRDMAWrite ||
-        entries[i].opcode == OpCode::kRDMARead) {
-      work_requests[i].wr.rdma.remote_addr = entries[i].raddr;
-      work_requests[i].wr.rdma.rkey = entries[i].rkey;
-    }
+    PrepSendWorkRequest(entries[i], &work_requests[i], &sges[i]);
   }
 
   // TODO: modify qp to error if error
@@ -119,30 +164,38 @@ Status Connection::PostSendWorkRequests(
   return Status::OK();
 }
 
+Status Connection::PostRecvWorkRequest(const RecvWorkRequest& entry) {
+  ibv_recv_wr work_request = {};
+  ibv_sge sge = {};
+  PrepRecvWorkRequest(entry, &work_request, &sge);
+
+  ibv_recv_wr* bad_work_request = nullptr;
+  int rc =
+      ibv_post_recv(queue_pair_->GetIbQp(), &work_request, &bad_work_request);
+  if (rc != 0 || bad_work_request != nullptr) {
+    PLOG(ERROR) << "Fail to post receive work request";
+    return Status::Internal("post receive work request failed");
+  }
+  return Status::OK();
+}
+
 Status Connection::PostRecvWorkRequests(
     const std::vector<RecvWorkRequest>& entries) {
   int wr_num = entries.size();
+  if (wr_num == 0) {
+    return Status::OK();
+  }
+
   std::vector<ibv_recv_wr> work_requests(wr_num);
   std::vector<ibv_sge> sges(wr_num);
 
   for (int i = 0; i < wr_num; i++) {
-    CHECK_NOTNULL(entries[i].ctx);
-
-    // wr_id
-    work_requests[i].wr_id = reinterpret_cast<uint64_t>(entries[i].ctx);
-
-    // next
     work_requests[i].next = nullptr;
     if (i != 0) {
       work_requests[i - 1].next = &work_requests[i];
     }
 
-    // sg_list
-    sges[i].addr = entries[i].addr;
-    sges[i].length = entries[i].length;
-    sges[i].lkey = entries[i].lkey;
-    work_requests[i].sg_list = &sges[i];
-    work_requests[i].num_sge = 1;
+    PrepRecvWorkRequest(entries[i], &work_requests[i], &sges[i]);
   }
 
   // TODO: modify qp to error if error
