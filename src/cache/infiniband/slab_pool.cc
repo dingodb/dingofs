@@ -49,10 +49,15 @@ Status InitializeGlobalSlabPool() {
   }
 
   auto* protect_domain = ctx.protect_domain;
+  constexpr size_t kSlabBufferSize = 4 * kMiB;
   g_read_slab_pool =
-      RDMABufferPool::Create(protect_domain, FLAGS_iodepth, 4 * kMiB);
+      RDMABufferPool::Create(protect_domain, kSlabBufferSize, FLAGS_iodepth);
   g_write_slab_pool =
-      RDMABufferPool::Create(protect_domain, FLAGS_iodepth, 4 * kMiB);
+      RDMABufferPool::Create(protect_domain, kSlabBufferSize, FLAGS_iodepth);
+  if (g_read_slab_pool == nullptr || g_write_slab_pool == nullptr) {
+    return Status::OutOfMemory("create rdma slab pool failed");
+  }
+
   return Status::OK();
 }
 
