@@ -210,7 +210,10 @@ void ClientSession::WaitingResponse(Waiter* waiter) {
     return;
   }
 
-  waiters_->Remove(waiter->correlation_id);
+  if (!waiters_->Remove(waiter->correlation_id)) {
+    waiter->notify.wait();
+    return;
+  }
 
   auto* cntl = waiter->ctx.cntl;
   if (rc == ETIMEDOUT) {

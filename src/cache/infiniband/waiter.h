@@ -52,10 +52,10 @@ class Waiters {
     shard.index[correlation_id] = waiter;
   }
 
-  void Remove(uint64_t correlation_id) {
+  bool Remove(uint64_t correlation_id) {
     auto& shard = GetShard(correlation_id);
     BAIDU_SCOPED_LOCK(shard.mutex);
-    shard.index.erase(correlation_id);
+    return shard.index.erase(correlation_id) != 0;
   }
 
   Waiter* Take(uint64_t correlation_id) {
