@@ -54,9 +54,9 @@ class Dialer {
   ConnectionUPtr Dial(const std::string& address);
 
  private:
-  Status SyncConnManagmentMeta(const std::string& address,
-                               const ConnManagmentMeta& local_cm_meta,
-                               ConnManagmentMeta* remote_cm_meta);
+  Status SyncConnManagementMeta(const std::string& address,
+                               const ConnManagementMeta& local_cm_meta,
+                               ConnManagementMeta* remote_cm_meta);
 
   Device* device_;
   Port* port_;

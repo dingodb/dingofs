@@ -68,11 +68,11 @@ ConnectionUPtr Dialer::Dial(const std::string& address) {
     return nullptr;
   }
 
-  ConnManagmentMeta local_cm_meta = queue_pair->GetConnManagmentMeta();
-  ConnManagmentMeta remote_cm_meta;
-  auto status = SyncConnManagmentMeta(address, local_cm_meta, &remote_cm_meta);
+  ConnManagementMeta local_cm_meta = queue_pair->GetConnManagementMeta();
+  ConnManagementMeta remote_cm_meta;
+  auto status = SyncConnManagementMeta(address, local_cm_meta, &remote_cm_meta);
   if (!status.ok()) {
-    LOG(ERROR) << "Fail to sync connection managment meta: "
+    LOG(ERROR) << "Fail to sync connection management meta: "
                << status.ToString();
     return nullptr;
   }
@@ -93,9 +93,9 @@ ConnectionUPtr Dialer::Dial(const std::string& address) {
                                       std::move(completion_queue));
 }
 
-Status Dialer::SyncConnManagmentMeta(const std::string& address,
-                                     const ConnManagmentMeta& local_cm_meta,
-                                     ConnManagmentMeta* remote_cm_meta) {
+Status Dialer::SyncConnManagementMeta(const std::string& address,
+                                     const ConnManagementMeta& local_cm_meta,
+                                     ConnManagementMeta* remote_cm_meta) {
   butil::EndPoint ep;
   if (butil::str2endpoint(address.c_str(), &ep) != 0) {
     LOG(ERROR) << "Fail to parse address=" << address;

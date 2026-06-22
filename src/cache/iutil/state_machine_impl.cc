@@ -146,7 +146,7 @@ void StateMachineImpl::ProcessEvent(StateEvent event) {
         state_ = std::make_unique<UnstableState>(this);
       }
       break;
-    case kStateUnStable:
+    case kStateUnstable:
       if (event == kStateEventNormal) {
         state_ = std::make_unique<NormalState>(this);
       } else if (event == kStateEventDown) {

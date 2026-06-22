@@ -28,7 +28,7 @@ namespace iutil {
 enum State : uint8_t {
   kStateUnknown = 0,
   kStateNormal = 1,
-  kStateUnStable = 2,
+  kStateUnstable = 2,
   kStateDown = 3,
 };
 
@@ -38,7 +38,7 @@ inline std::string StateToString(State state) {
       return "unknown";
     case kStateNormal:
       return "normal";
-    case kStateUnStable:
+    case kStateUnstable:
       return "unstable";
     case kStateDown:
       return "down";
