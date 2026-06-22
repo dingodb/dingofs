@@ -19,7 +19,7 @@
 
 #include <cstdint>
 
-#include "cache/blockcache/block_cache.h"
+#include "cache/api/block_cache.h"
 #include "client/vfs/common/read_buf_view.h"
 #include "common/block/block_handle.h"
 #include "common/callback.h"

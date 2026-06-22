@@ -32,7 +32,7 @@
 #include <memory>
 #include <utility>
 
-#include "cache/blockcache/block_cache.h"
+#include "cache/api/block_cache.h"
 #include "cache/blockcache/block_cache_impl.h"
 #include "cache/common/macro.h"
 #include "cache/common/mds_client.h"

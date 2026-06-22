@@ -20,7 +20,7 @@
  * Author: AI
  */
 
-#include "cache/blockcache/block_cache.h"
+#include "cache/api/block_cache.h"
 
 #include <gtest/gtest.h>
 

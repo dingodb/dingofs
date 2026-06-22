@@ -29,7 +29,7 @@
 #include <memory>
 #include <utility>
 
-#include "cache/blockcache/block_cache.h"
+#include "cache/api/block_cache.h"
 #include "cache/blockcache/block_cache_impl.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/common/macro.h"

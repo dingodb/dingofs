@@ -26,7 +26,7 @@
 #include "cache/benchmark/factory.h"
 #include "cache/benchmark/reporter.h"
 #include "cache/benchmark/worker.h"
-#include "cache/blockcache/block_cache.h"
+#include "cache/api/block_cache.h"
 #include "cache/common/mds_client.h"
 #include "cache/storage/storage.h"
 #include "cache/storage/storage_pool.h"

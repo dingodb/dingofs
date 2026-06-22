@@ -36,7 +36,7 @@
 #include <string>
 #include <thread>
 
-#include "cache/blockcache/block_cache.h"
+#include "cache/api/block_cache.h"
 #include "cache/common/mds_client.h"
 #include "cache/tiercache/tier_block_cache.h"
 #include "common/block/block_handle.h"
