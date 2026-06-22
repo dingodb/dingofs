@@ -39,7 +39,7 @@ MemCache::MemCache(MemCacheOption option)
       shard_capacity_bytes_((option.cache_size_mb * kMiB + kShardCount - 1) /
                             kShardCount),
       uuid_(utils::GenerateUUID()),
-      vars_(std::make_unique<MemCacheVarsCollector>(option.cache_size_mb)) {}
+      vars_(std::make_unique<MemCacheMetrics>(option.cache_size_mb)) {}
 
 Status MemCache::Start(UploadFunc uploader) {
   CHECK_NOTNULL(uploader);

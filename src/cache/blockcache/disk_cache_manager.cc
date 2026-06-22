@@ -56,7 +56,7 @@ DiskCacheManager::DiskCacheManager(uint64_t capacity,
           std::make_unique<utils::TaskThreadPool<>>("disk_cache_manager")),
       layout_(layout),
       queue_id_({0}),
-      vars_(std::make_unique<DiskCacheManagerVarsCollector>(
+      vars_(std::make_unique<DiskCacheManagerMetrics>(
           layout_->CacheIndex())) {
   Init();
 }

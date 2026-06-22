@@ -65,7 +65,7 @@ DiskCache::DiskCache(DiskCacheOption option)
       manager_(std::make_shared<DiskCacheManager>(option.cache_size_mb * kMiB,
                                                   layout_)),
       loader_(std::make_unique<DiskCacheLoader>(layout_, manager_)),
-      vars_(std::make_unique<DiskCacheVarsCollector>(
+      vars_(std::make_unique<DiskCacheMetrics>(
           option.cache_index, option.cache_dir, option.cache_size_mb,
           FLAGS_free_space_ratio)) {}
 
@@ -185,7 +185,7 @@ Status DiskCache::LoadOrCreateLockFile() {
 Status DiskCache::Stage(BlockHandle handle, IOBuffer block,
                         StageOption option) {
   Status status;
-  DiskCacheVarsRecordGuard guard(__func__, status, vars_.get());
+  DiskCacheMetricsGuard guard(__func__, status, vars_.get());
 
   size_t length = block.Size();
   status = CheckStatus(kWantExec | kWantStage);
@@ -273,7 +273,7 @@ Status DiskCache::Cache(BlockHandle handle, IOBuffer block,
 Status DiskCache::Load(BlockHandle handle, off_t offset, size_t length,
                        IOBuffer* buffer, LoadOption /*option*/) {
   Status status;
-  DiskCacheVarsRecordGuard guard(__func__, status, vars_.get());
+  DiskCacheMetricsGuard guard(__func__, status, vars_.get());
 
   status = CheckStatus(kWantExec);
   if (!status.ok()) {

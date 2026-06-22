@@ -32,8 +32,8 @@
 namespace dingofs {
 namespace cache {
 
-struct DiskCacheGroupVarsCollector {
-  DiskCacheGroupVarsCollector() = default;
+struct DiskCacheGroupMetrics {
+  DiskCacheGroupMetrics() = default;
 
   inline static const std::string prefix = "dingofs_disk_cache_group";
 
@@ -42,20 +42,20 @@ struct DiskCacheGroupVarsCollector {
   OpVar op_load{absl::StrFormat("%s_%s", prefix, "load")};
 };
 
-using DiskCacheGroupVarsCollectorSPtr =
-    std::shared_ptr<DiskCacheGroupVarsCollector>;
+using DiskCacheGroupMetricsSPtr =
+    std::shared_ptr<DiskCacheGroupMetrics>;
 
-struct DiskCacheGroupVarsRecordGuard {
-  DiskCacheGroupVarsRecordGuard(const std::string& op_name, size_t bytes,
+struct DiskCacheGroupMetricsGuard {
+  DiskCacheGroupMetricsGuard(const std::string& op_name, size_t bytes,
                                 Status& status,
-                                DiskCacheGroupVarsCollectorSPtr metric)
+                                DiskCacheGroupMetricsSPtr metric)
       : op_name(op_name), bytes(bytes), status(status), metric(metric) {
     CHECK(op_name == "Stage" || op_name == "Cache" || op_name == "Load")
         << "Invalid operation name: " << op_name;
     timer.start();
   }
 
-  ~DiskCacheGroupVarsRecordGuard() {
+  ~DiskCacheGroupMetricsGuard() {
     timer.stop();
 
     OpVar* op;
@@ -81,7 +81,7 @@ struct DiskCacheGroupVarsRecordGuard {
   size_t bytes;
   Status& status;
   butil::Timer timer;
-  DiskCacheGroupVarsCollectorSPtr metric;
+  DiskCacheGroupMetricsSPtr metric;
 };
 
 class DiskCacheGroup final : public CacheStore {
@@ -120,7 +120,7 @@ class DiskCacheGroup final : public CacheStore {
   std::unique_ptr<iutil::ConHash> chash_;
   std::unordered_map<std::string, DiskCacheSPtr> stores_;
   DiskCacheWatcherUPtr watcher_;
-  DiskCacheGroupVarsCollectorSPtr vars_;
+  DiskCacheGroupMetricsSPtr vars_;
 };
 
 }  // namespace cache

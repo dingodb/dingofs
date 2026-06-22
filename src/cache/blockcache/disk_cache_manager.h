@@ -34,8 +34,8 @@
 namespace dingofs {
 namespace cache {
 
-struct DiskCacheManagerVarsCollector {
-  DiskCacheManagerVarsCollector(uint64_t cache_index)
+struct DiskCacheManagerMetrics {
+  DiskCacheManagerMetrics(uint64_t cache_index)
       : prefix(absl::StrFormat("dingofs_disk_cache_%d", cache_index)),
         used_bytes(Name("used_bytes"), 0),
         stage_blocks(Name("stage_blocks")),
@@ -67,8 +67,8 @@ struct DiskCacheManagerVarsCollector {
   bvar::Status<bool> cache_full;
 };
 
-using DiskCacheManagerVarsCollectorUPtr =
-    std::unique_ptr<DiskCacheManagerVarsCollector>;
+using DiskCacheManagerMetricsUPtr =
+    std::unique_ptr<DiskCacheManagerMetrics>;
 
 // phase: staging -> uploaded -> cached
 enum class BlockPhase : uint8_t {
@@ -129,7 +129,7 @@ class DiskCacheManager {
   utils::TaskThreadPoolUPtr thread_pool_;
   DiskCacheLayoutSPtr layout_;
   bthread::ExecutionQueueId<ToDel> queue_id_;
-  DiskCacheManagerVarsCollectorUPtr vars_;
+  DiskCacheManagerMetricsUPtr vars_;
 };
 
 using DiskCacheManagerSPtr = std::shared_ptr<DiskCacheManager>;

@@ -36,8 +36,8 @@
 namespace dingofs {
 namespace cache {
 
-struct DiskCacheVarsCollector {
-  DiskCacheVarsCollector(uint64_t cache_index, const std::string& cache_dir,
+struct DiskCacheMetrics {
+  DiskCacheMetrics(uint64_t cache_index, const std::string& cache_dir,
                          uint64_t cache_size_mb, double free_space_ratio)
       : cache_index(cache_index),
         prefix(absl::StrFormat("dingofs_disk_cache_%d", cache_index)),
@@ -74,14 +74,14 @@ struct DiskCacheVarsCollector {
   bvar::Adder<int64_t> cache_misses;
 };
 
-using DiskCacheVarsCollectorUPtr = std::unique_ptr<DiskCacheVarsCollector>;
+using DiskCacheMetricsUPtr = std::unique_ptr<DiskCacheMetrics>;
 
-struct DiskCacheVarsRecordGuard {
-  DiskCacheVarsRecordGuard(const std::string& op_name, Status& status,
-                           DiskCacheVarsCollector* vars)
+struct DiskCacheMetricsGuard {
+  DiskCacheMetricsGuard(const std::string& op_name, Status& status,
+                           DiskCacheMetrics* vars)
       : status(status), op_name(op_name), vars(vars) {}
 
-  ~DiskCacheVarsRecordGuard() {
+  ~DiskCacheMetricsGuard() {
     if (op_name == "Load") {
       if (status.ok()) {
         vars->cache_hits << 1;
@@ -97,7 +97,7 @@ struct DiskCacheVarsRecordGuard {
 
   std::string op_name;
   Status& status;
-  DiskCacheVarsCollector* vars;
+  DiskCacheMetrics* vars;
 };
 
 struct DiskCacheOption {
@@ -186,7 +186,7 @@ class DiskCache final : public CacheStore {
   LocalFileSystemUPtr localfs_;
   DiskCacheManagerSPtr manager_;
   DiskCacheLoaderUPtr loader_;
-  DiskCacheVarsCollectorUPtr vars_;
+  DiskCacheMetricsUPtr vars_;
 };
 
 using DiskCacheSPtr = std::shared_ptr<DiskCache>;

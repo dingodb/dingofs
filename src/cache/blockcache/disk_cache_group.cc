@@ -38,7 +38,7 @@ DiskCacheGroup::DiskCacheGroup(std::vector<DiskCacheOption> options)
       options_(options),
       chash_(std::make_unique<iutil::KetamaConHash>()),
       watcher_(std::make_unique<DiskCacheWatcher>()),
-      vars_(std::make_shared<DiskCacheGroupVarsCollector>()) {}
+      vars_(std::make_shared<DiskCacheGroupMetrics>()) {}
 
 Status DiskCacheGroup::Start(UploadFunc uploader) {
   CHECK(!options_.empty());
@@ -101,7 +101,7 @@ Status DiskCacheGroup::Stage(BlockHandle handle, IOBuffer block,
                              StageOption option) {
   Status status;
   size_t length = block.Size();
-  DiskCacheGroupVarsRecordGuard metric_guard(__func__, length, status, vars_);
+  DiskCacheGroupMetricsGuard metric_guard(__func__, length, status, vars_);
   auto store = GetStore(handle);
   status = store->Stage(std::move(handle), std::move(block), option);
 
@@ -126,7 +126,7 @@ Status DiskCacheGroup::Cache(BlockHandle handle, IOBuffer block,
                              CacheOption option) {
   Status status;
   size_t length = block.Size();
-  DiskCacheGroupVarsRecordGuard metric_guard(__func__, length, status, vars_);
+  DiskCacheGroupMetricsGuard metric_guard(__func__, length, status, vars_);
   auto store = GetStore(handle);
   status = store->Cache(std::move(handle), std::move(block), option);
 
@@ -146,7 +146,7 @@ Status DiskCacheGroup::Load(BlockHandle handle, off_t offset, size_t length,
   }
 
   Status status;
-  DiskCacheGroupVarsRecordGuard metirc_guard(__func__, length, status, vars_);
+  DiskCacheGroupMetricsGuard metirc_guard(__func__, length, status, vars_);
   status = store->Load(std::move(handle), offset, length, buffer, option);
 
   return status;
