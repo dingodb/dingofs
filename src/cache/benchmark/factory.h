@@ -23,7 +23,7 @@
 #ifndef DINGOFS_SRC_CACHE_BENCHMARK_FACTORY_H_
 #define DINGOFS_SRC_CACHE_BENCHMARK_FACTORY_H_
 
-#include "cache/blockcache/block_cache.h"
+#include "cache/api/block_cache.h"
 #include "common/block/block_handle.h"
 #include "common/block/block_key.h"
 

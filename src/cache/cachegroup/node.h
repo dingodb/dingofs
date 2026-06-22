@@ -25,7 +25,7 @@
 
 #include <ostream>
 
-#include "cache/blockcache/block_cache.h"
+#include "cache/api/block_cache.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/cachegroup/heartbeat.h"
 #include "cache/common/mds_client.h"

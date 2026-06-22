@@ -23,11 +23,9 @@
 #ifndef DINGOFS_SRC_CACHE_BLOCKCACHE_CACHE_STORE_H_
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_CACHE_STORE_H_
 
-#include <glog/logging.h>
 #include <json/value.h>
 
-#include <ostream>
-
+#include "cache/api/block_cache.h"
 #include "common/block/block_handle.h"
 #include "common/io_buffer.h"
 #include "common/status.h"
@@ -41,49 +39,6 @@ enum class StoreType : uint8_t {
   kDisk = 1,
   kMem = 2,
 };
-
-// block attribute
-struct BlockAttr {
-  enum BlockFrom : uint8_t {
-    kFromWriteback = 0,
-    kFromReload = 1,
-    kFromUnknown = 2,
-  };
-
-  BlockAttr() : from(kFromUnknown), store_id("") {}
-
-  BlockAttr(BlockFrom from) : from(from), store_id("") {}
-
-  BlockAttr(BlockFrom from, const std::string& store_id)
-      : from(from), store_id(store_id) {
-    if (!store_id.empty()) {  // Only for block which from reload
-      CHECK(from == BlockAttr::kFromReload);
-    }
-  }
-
-  BlockFrom from;
-  std::string store_id;  // Specified store id which this block real stored in
-                         // (for disk cache group changed)
-};
-
-inline std::string BlockFromToString(BlockAttr::BlockFrom from) {
-  switch (from) {
-    case BlockAttr::kFromWriteback:
-      return "writeback";
-    case BlockAttr::kFromReload:
-      return "reload";
-    case BlockAttr::kFromUnknown:
-      return "unknown";
-    default:
-      return "invalid";
-  }
-}
-
-inline std::ostream& operator<<(std::ostream& os, const BlockAttr& attr) {
-  os << "BlockAttr{from=" << BlockFromToString(attr.from)
-     << " store_id=" << attr.store_id << "}";
-  return os;
-}
 
 // cache store
 class CacheStore {

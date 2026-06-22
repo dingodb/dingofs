@@ -28,7 +28,7 @@
 
 #include <utility>
 
-#include "cache/blockcache/block_cache.h"
+#include "cache/api/block_cache.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/common/block_handle_helper.h"
 #include "cache/common/error.h"

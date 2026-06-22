@@ -20,21 +20,67 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_BLOCKCACHE_BLOCK_CACHE_H_
-#define DINGOFS_SRC_CACHE_BLOCKCACHE_BLOCK_CACHE_H_
+#ifndef DINGOFS_SRC_CACHE_API_BLOCK_CACHE_H_
+#define DINGOFS_SRC_CACHE_API_BLOCK_CACHE_H_
 
 #include <brpc/server.h>
+#include <glog/logging.h>
 #include <json/value.h>
 
+#include <functional>
+#include <memory>
 #include <ostream>
+#include <string>
 
-#include "cache/blockcache/cache_store.h"
 #include "common/block/block_handle.h"
 #include "common/io_buffer.h"
 #include "common/status.h"
 
 namespace dingofs {
 namespace cache {
+
+// block attribute
+struct BlockAttr {
+  enum BlockFrom : uint8_t {
+    kFromWriteback = 0,
+    kFromReload = 1,
+    kFromUnknown = 2,
+  };
+
+  BlockAttr() : from(kFromUnknown), store_id("") {}
+
+  BlockAttr(BlockFrom from) : from(from), store_id("") {}
+
+  BlockAttr(BlockFrom from, const std::string& store_id)
+      : from(from), store_id(store_id) {
+    if (!store_id.empty()) {  // Only for block which from reload
+      CHECK(from == BlockAttr::kFromReload);
+    }
+  }
+
+  BlockFrom from;
+  std::string store_id;  // Specified store id which this block real stored in
+                         // (for disk cache group changed)
+};
+
+inline std::string BlockFromToString(BlockAttr::BlockFrom from) {
+  switch (from) {
+    case BlockAttr::kFromWriteback:
+      return "writeback";
+    case BlockAttr::kFromReload:
+      return "reload";
+    case BlockAttr::kFromUnknown:
+      return "unknown";
+    default:
+      return "invalid";
+  }
+}
+
+inline std::ostream& operator<<(std::ostream& os, const BlockAttr& attr) {
+  os << "BlockAttr{from=" << BlockFromToString(attr.from)
+     << " store_id=" << attr.store_id << "}";
+  return os;
+}
 
 enum class CacheTier : uint8_t {
   kDefault = 0,
@@ -148,4 +194,4 @@ inline std::ostream& operator<<(std::ostream& os,
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_BLOCKCACHE_BLOCK_CACHE_H_
+#endif  // DINGOFS_SRC_CACHE_API_BLOCK_CACHE_H_

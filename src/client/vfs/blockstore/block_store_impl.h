@@ -19,7 +19,7 @@
 
 #include <atomic>
 
-#include "cache/blockcache/block_cache.h"
+#include "cache/api/block_cache.h"
 #include "client/vfs/blockstore/block_store.h"
 #include "common/blockaccess/block_accesser.h"
 

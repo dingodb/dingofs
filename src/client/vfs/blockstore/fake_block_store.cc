@@ -18,7 +18,7 @@
 
 #include <google/protobuf/descriptor.pb.h>
 
-#include "cache/blockcache/block_cache.h"
+#include "cache/api/block_cache.h"
 #include "client/common/const.h"
 #include "client/vfs/hub/vfs_hub.h"
 

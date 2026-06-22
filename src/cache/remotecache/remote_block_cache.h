@@ -23,7 +23,7 @@
 #ifndef DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_BLOCK_CACHE_H_
 #define DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_BLOCK_CACHE_H_
 
-#include "cache/blockcache/block_cache.h"
+#include "cache/api/block_cache.h"
 #include "cache/common/storage_client.h"
 #include "cache/iutil/bthread.h"
 #include "cache/remotecache/upstream.h"
