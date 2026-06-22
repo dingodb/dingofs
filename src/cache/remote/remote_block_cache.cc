@@ -55,7 +55,7 @@ DEFINE_string(cache_group, "",
 
 RemoteBlockCache::RemoteBlockCache(StorageClient* /*storage_client*/)
     : running_(false),
-      upstream_(std::make_unique<RemoteCacheCluster>()),
+      cluster_(std::make_unique<RemoteCacheCluster>()),
       joiner_(std::make_unique<iutil::BthreadJoiner>()),
       vars_(std::make_unique<RemoteBlockCacheMetrics>()) {
   brpc::FLAGS_idle_timeout_second = FLAGS_brpc_idle_timeout_second;
@@ -73,7 +73,7 @@ Status RemoteBlockCache::Start() {
   LOG(INFO) << "RemoteBlockCache is starting...";
 
   joiner_->Start();
-  upstream_->Start();
+  cluster_->Start();
 
   running_.store(true, std::memory_order_relaxed);
   LOG(INFO) << "RemoteBlockCache is up";
@@ -88,7 +88,7 @@ Status RemoteBlockCache::Shutdown() {
 
   LOG(INFO) << "RemoteBlockCache is shutting down...";
 
-  upstream_->Shutdown();
+  cluster_->Shutdown();
   joiner_->Shutdown();
 
   running_.store(false, std::memory_order_relaxed);
@@ -100,7 +100,7 @@ Status RemoteBlockCache::Put(BlockHandle handle, IOBuffer block,
                                  PutOption /*option*/) {
   DCHECK_RUNNING("RemoteBlockCache");
 
-  auto status = upstream_->SendPutRequest(handle, block);
+  auto status = cluster_->SendPutRequest(handle, block);
   if (!status.ok()) {
     LOG(ERROR) << "Fail to put block to remote cache";
   }
@@ -115,7 +115,7 @@ Status RemoteBlockCache::Range(BlockHandle handle, off_t offset,
   CHECK_EQ(buffer->BackingBlockNum(), 1);
 
   bool cache_hit = false;
-  auto status = upstream_->SendRangeRequest(
+  auto status = cluster_->SendRangeRequest(
       handle, offset, length, buffer, option.block_whole_length, &cache_hit);
   if (status.ok()) {
     if (cache_hit) {
@@ -133,7 +133,7 @@ Status RemoteBlockCache::Cache(BlockHandle handle, IOBuffer block,
                                    CacheOption /*option*/) {
   DCHECK_RUNNING("RemoteBlockCache");
 
-  auto status = upstream_->SendCacheRequest(handle, block);
+  auto status = cluster_->SendCacheRequest(handle, block);
   if (!status.ok()) {
     LOG(ERROR) << "Fail to cache block to remote cache";
   }
@@ -144,7 +144,7 @@ Status RemoteBlockCache::Prefetch(BlockHandle handle, size_t length,
                                       PrefetchOption /*option*/) {
   DCHECK_RUNNING("RemoteBlockCache");
 
-  auto status = upstream_->SendPrefetchRequest(handle, length);
+  auto status = cluster_->SendPrefetchRequest(handle, length);
   if (!status.ok()) {
     LOG(ERROR) << "Fail to submit prefetch task to remote cache";
   }

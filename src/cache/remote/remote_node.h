@@ -89,7 +89,7 @@ class RemoteNode {
 
 using RemoteNodeSPtr = std::shared_ptr<RemoteNode>;
 
-std::ostream& operator<<(std::ostream& os, const RemoteNode& peer);
+std::ostream& operator<<(std::ostream& os, const RemoteNode& node);
 
 template <typename T, typename U>
 Response<U> RemoteNode::SendRequest(const Request<T>& request) {

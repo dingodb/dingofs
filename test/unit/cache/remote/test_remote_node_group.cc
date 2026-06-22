@@ -20,7 +20,7 @@
  * Author: AI
  */
 
-#include "cache/remote/remote_node_group.h"
+#include "cache/remote/remote_cache_cluster.h"
 
 #include <gtest/gtest.h>
 
@@ -71,7 +71,7 @@ TEST(RemoteNodeGroupTest, SelectNodeReturnsNullWhenHashMisses) {
 }
 
 TEST_F(RemoteNodeGroupBuilderTest, BuildFiltersUnavailableMembers) {
-  RemoteNodeGroupBuilder builder(/*start_peers=*/false);
+  RemoteNodeGroupBuilder builder(/*start_nodes=*/false);
 
   Members members{
       Member("member-offline", "10.0.1.1", 9300, 10,
@@ -84,16 +84,16 @@ TEST_F(RemoteNodeGroupBuilderTest, BuildFiltersUnavailableMembers) {
 
   auto group = builder.Build(members);
   ASSERT_NE(group, nullptr);
-  ASSERT_EQ(group->peers.size(), 1u);
-  EXPECT_NE(group->peers.find("044d4698-7bd4-4e44-9e94-aee6312ff06f"),
-            group->peers.end());
+  ASSERT_EQ(group->nodes.size(), 1u);
+  EXPECT_NE(group->nodes.find("044d4698-7bd4-4e44-9e94-aee6312ff06f"),
+            group->nodes.end());
   EXPECT_NE(group->SelectNode("blocks/0/0/1_0_4096"), nullptr);
 
   EXPECT_EQ(builder.Build(members), nullptr);
 }
 
-TEST_F(RemoteNodeGroupBuilderTest, BuildKeepsReplacesAddsAndRemovesPeers) {
-  RemoteNodeGroupBuilder builder(/*start_peers=*/false);
+TEST_F(RemoteNodeGroupBuilderTest, BuildKeepsReplacesAddsAndRemovesNodes) {
+  RemoteNodeGroupBuilder builder(/*start_nodes=*/false);
 
   Members first_members{
       Member("keep-member", "10.0.1.10", 9300, 10,
@@ -106,8 +106,8 @@ TEST_F(RemoteNodeGroupBuilderTest, BuildKeepsReplacesAddsAndRemovesPeers) {
   auto first = builder.Build(first_members);
   ASSERT_NE(first, nullptr);
 
-  auto keep_peer = first->peers["keep-member"];
-  auto replace_peer = first->peers["replace-member"];
+  auto keep_node = first->nodes["keep-member"];
+  auto replace_node = first->nodes["replace-member"];
 
   Members second_members{
       Member("keep-member", "10.0.1.10", 9300, 30,
@@ -120,15 +120,15 @@ TEST_F(RemoteNodeGroupBuilderTest, BuildKeepsReplacesAddsAndRemovesPeers) {
   auto second = builder.Build(second_members);
   ASSERT_NE(second, nullptr);
 
-  EXPECT_EQ(second->peers.size(), 3u);
-  EXPECT_EQ(second->peers["keep-member"], keep_peer);
-  EXPECT_NE(second->peers["replace-member"], replace_peer);
-  EXPECT_NE(second->peers.find("add-member"), second->peers.end());
-  EXPECT_EQ(second->peers.find("remove-member"), second->peers.end());
+  EXPECT_EQ(second->nodes.size(), 3u);
+  EXPECT_EQ(second->nodes["keep-member"], keep_node);
+  EXPECT_NE(second->nodes["replace-member"], replace_node);
+  EXPECT_NE(second->nodes.find("add-member"), second->nodes.end());
+  EXPECT_EQ(second->nodes.find("remove-member"), second->nodes.end());
 }
 
 TEST_F(RemoteNodeGroupBuilderTest, BuildReturnsNullWhenNoOnlineMembersRemain) {
-  RemoteNodeGroupBuilder builder(/*start_peers=*/false);
+  RemoteNodeGroupBuilder builder(/*start_nodes=*/false);
 
   Members first_members{
       Member("member-a", "10.0.1.10", 9300, 10,

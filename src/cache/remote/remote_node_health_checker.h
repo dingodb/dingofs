@@ -56,8 +56,8 @@ class RemoteNodeHealthChecker {
 
  private:
   Status SendPingRequest();
-  void CheckPeer();
-  void PeriodicCheckPeer();
+  void CheckNode();
+  void PeriodicCheckNode();
 
   void CommitStageIOResult();
   void PeriodicCommitStageIOResult();

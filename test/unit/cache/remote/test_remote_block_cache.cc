@@ -102,7 +102,7 @@ TEST_F(RemoteBlockCacheTest, ShutdownBeforeStartIsOk) {
   EXPECT_TRUE(cache.Shutdown().ok());
 }
 
-TEST_F(RemoteBlockCacheTest, DumpDelegatesToUpstream) {
+TEST_F(RemoteBlockCacheTest, DumpDelegatesToCluster) {
   RemoteBlockCache cache(nullptr);
   Json::Value value;
 
@@ -111,7 +111,7 @@ TEST_F(RemoteBlockCacheTest, DumpDelegatesToUpstream) {
   EXPECT_TRUE(value["members"].isArray());
 }
 
-TEST_F(RemoteBlockCacheTest, OperationsReturnNotFoundWithoutPeer) {
+TEST_F(RemoteBlockCacheTest, OperationsReturnNotFoundWithoutNode) {
   RemoteBlockCache cache(nullptr);
   MarkRunning(cache);
 
@@ -130,7 +130,7 @@ TEST_F(RemoteBlockCacheTest, OperationsReturnNotFoundWithoutPeer) {
   MarkShutdown(cache);
 }
 
-TEST_F(RemoteBlockCacheTest, AsyncOperationsReturnNotFoundWithoutPeer) {
+TEST_F(RemoteBlockCacheTest, AsyncOperationsReturnNotFoundWithoutNode) {
   RemoteBlockCache cache(nullptr);
   StartJoinerAndMarkRunning(cache);
 
