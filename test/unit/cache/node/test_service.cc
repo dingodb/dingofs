@@ -20,7 +20,7 @@
  * Author: AI
  */
 
-#include "cache/cachegroup/service.h"
+#include "cache/node/service.h"
 
 #include <brpc/controller.h>
 #include <gtest/gtest.h>

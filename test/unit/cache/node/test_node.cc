@@ -20,7 +20,7 @@
  * Author: AI
  */
 
-#include "cache/cachegroup/node.h"
+#include "cache/node/node.h"
 
 #include <gtest/gtest.h>
 

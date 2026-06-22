@@ -16,12 +16,40 @@
 
 /*
  * Project: DingoFS
- * Created Date: 2025-02-26
+ * Created Date: 2025-01-13
  * Author: Jingli Chen (Wine93)
  */
 
-#include "cache/dingo_cache.h"
+#ifndef DINGOFS_SRC_CACHE_NODE_HEARTBEAT_H_
+#define DINGOFS_SRC_CACHE_NODE_HEARTBEAT_H_
 
-int main(int argc, char** argv) {
-  return dingofs::cache::DingoCache::Run(argc, argv);
-}
+#include <memory>
+
+#include "cache/common/mds_client.h"
+#include "utils/executor/executor.h"
+
+namespace dingofs {
+namespace cache {
+
+class Heartbeat {
+ public:
+  Heartbeat(MDSClientSPtr mds_client);
+  void Start();
+  void Shutdown();
+
+ private:
+  void SendHeartbeat();
+  void PeriodicSendHeartbeat();
+
+ private:
+  std::atomic<bool> running_;
+  MDSClientSPtr mds_client_;
+  ExecutorUPtr executor_;
+};
+
+using HeartbeatUPtr = std::unique_ptr<Heartbeat>;
+
+}  // namespace cache
+}  // namespace dingofs
+
+#endif  // DINGOFS_SRC_CACHE_NODE_HEARTBEAT_H_

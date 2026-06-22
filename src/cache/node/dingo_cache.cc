@@ -20,13 +20,13 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "cache/dingo_cache.h"
+#include "cache/node/dingo_cache.h"
 
 #include <gflags/gflags.h>
 
 #include <iostream>
 
-#include "cache/cachegroup/server.h"
+#include "cache/node/cache_server.h"
 #include "cache/infiniband/slab_pool.h"
 #include "common/flag.h"
 #include "common/helper.h"
@@ -106,7 +106,7 @@ void DingoCache::GlobalInitOrDie() {
 }
 
 int DingoCache::StartServer() {
-  Server server;
+  CacheServer server;
   auto status = server.Start();
   if (!status.ok()) {
     return -1;

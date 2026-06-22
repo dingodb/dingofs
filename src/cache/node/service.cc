@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "cache/cachegroup/service.h"
+#include "cache/node/service.h"
 
 #include <brpc/closure_guard.h>
 #include <brpc/controller.h>

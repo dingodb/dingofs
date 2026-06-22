@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "cache/cachegroup/heartbeat.h"
+#include "cache/node/heartbeat.h"
 
 #include <atomic>
 

@@ -20,7 +20,7 @@
  * Author: AI
  */
 
-#include "cache/cachegroup/heartbeat.h"
+#include "cache/node/heartbeat.h"
 
 #include <gflags/gflags.h>
 #include <gmock/gmock.h>

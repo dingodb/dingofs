@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "cache/cachegroup/node.h"
+#include "cache/node/node.h"
 
 #include <brpc/reloadable_flags.h>
 #include <butil/binary_printer.h>

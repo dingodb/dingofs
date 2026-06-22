@@ -20,8 +20,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_DINGO_CACHE_H_
-#define DINGOFS_SRC_CACHE_DINGO_CACHE_H_
+#ifndef DINGOFS_SRC_CACHE_NODE_DINGO_CACHE_H_
+#define DINGOFS_SRC_CACHE_NODE_DINGO_CACHE_H_
 
 namespace dingofs {
 namespace cache {
@@ -39,4 +39,4 @@ class DingoCache {
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_DINGO_CACHE_H_
+#endif  // DINGOFS_SRC_CACHE_NODE_DINGO_CACHE_H_

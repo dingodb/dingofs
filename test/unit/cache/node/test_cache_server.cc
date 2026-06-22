@@ -20,7 +20,7 @@
  * Author: AI
  */
 
-#include "cache/cachegroup/server.h"
+#include "cache/node/cache_server.h"
 
 #include <gtest/gtest.h>
 
@@ -31,7 +31,7 @@
 namespace dingofs {
 namespace cache {
 
-class CacheGroupServerTest : public ::testing::Test {
+class CacheServerTest : public ::testing::Test {
  protected:
   void SetUp() override {
     saved_cache_store_ = FLAGS_cache_store;
@@ -51,8 +51,8 @@ class CacheGroupServerTest : public ::testing::Test {
   std::string saved_id_;
 };
 
-TEST_F(CacheGroupServerTest, ShutdownBeforeStartIsOk) {
-  Server server;
+TEST_F(CacheServerTest, ShutdownBeforeStartIsOk) {
+  CacheServer server;
 
   EXPECT_TRUE(server.Shutdown().ok());
 }

@@ -20,14 +20,14 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_CACHEGROUP_NODE_H_
-#define DINGOFS_SRC_CACHE_CACHEGROUP_NODE_H_
+#ifndef DINGOFS_SRC_CACHE_NODE_NODE_H_
+#define DINGOFS_SRC_CACHE_NODE_NODE_H_
 
 #include <ostream>
 
 #include "cache/api/block_cache.h"
 #include "cache/local/cache_store.h"
-#include "cache/cachegroup/heartbeat.h"
+#include "cache/node/heartbeat.h"
 #include "cache/common/mds_client.h"
 #include "cache/common/storage_client.h"
 #include "cache/common/storage_client_pool.h"
@@ -90,4 +90,4 @@ std::ostream& operator<<(std::ostream& os, const CacheNode& node);
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_CACHEGROUP_NODE_H_
+#endif  // DINGOFS_SRC_CACHE_NODE_NODE_H_
