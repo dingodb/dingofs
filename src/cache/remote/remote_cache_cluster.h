@@ -21,8 +21,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_REMOTECACHE_UPSTREAM_H_
-#define DINGOFS_SRC_CACHE_REMOTECACHE_UPSTREAM_H_
+#ifndef DINGOFS_SRC_CACHE_REMOTE_REMOTE_CACHE_CLUSTER_H_
+#define DINGOFS_SRC_CACHE_REMOTE_REMOTE_CACHE_CLUSTER_H_
 
 #include <bthread/rwlock.h>
 
@@ -31,17 +31,16 @@
 #include "cache/local/cache_store.h"
 #include "cache/common/mds_client.h"
 #include "cache/common/vars.h"
-#include "cache/remotecache/peer_group.h"
-#include "cache/remotecache/request.h"
+#include "cache/remote/remote_node_group.h"
+#include "cache/remote/request.h"
 #include "common/block/block_handle.h"
 #include "utils/executor/executor.h"
 
 namespace dingofs {
 namespace cache {
 
-struct UpstreamVarsCollector {
-  // FIXME: dingofs_upstream
-  inline static const std::string prefix = "dingofs_remote_node_group";
+struct RemoteCacheClusterMetrics {
+  inline static const std::string prefix = "dingofs_remote_cache_cluster";
 
   OpVar op_put{absl::StrFormat("%s_%s", prefix, "put")};
   OpVar op_range{absl::StrFormat("%s_%s", prefix, "range")};
@@ -49,11 +48,11 @@ struct UpstreamVarsCollector {
   OpVar op_prefetch{absl::StrFormat("%s_%s", prefix, "prefetch")};
 };
 
-using UpstreamVarsCollectorUPtr = std::unique_ptr<UpstreamVarsCollector>;
+using RemoteCacheClusterMetricsUPtr = std::unique_ptr<RemoteCacheClusterMetrics>;
 
-struct UpstreamVarsRecordGuard {
-  UpstreamVarsRecordGuard(const std::string& opname, size_t bytes,
-                          Status& status, UpstreamVarsCollector* vars)
+struct RemoteCacheClusterMetricsGuard {
+  RemoteCacheClusterMetricsGuard(const std::string& opname, size_t bytes,
+                          Status& status, RemoteCacheClusterMetrics* vars)
       : opname(opname), bytes(bytes), status(status), vars(vars) {
     CHECK(opname == "Put" || opname == "Range" || opname == "Cache" ||
           opname == "Prefetch")
@@ -61,7 +60,7 @@ struct UpstreamVarsRecordGuard {
     timer.start();
   }
 
-  ~UpstreamVarsRecordGuard() {
+  ~RemoteCacheClusterMetricsGuard() {
     timer.stop();
 
     OpVar* op;
@@ -89,12 +88,12 @@ struct UpstreamVarsRecordGuard {
   size_t bytes;
   Status& status;
   butil::Timer timer;
-  UpstreamVarsCollector* vars;
+  RemoteCacheClusterMetrics* vars;
 };
 
-class Upstream {
+class RemoteCacheCluster {
  public:
-  Upstream();
+  RemoteCacheCluster();
   void Start();
   void Shutdown();
 
@@ -110,12 +109,12 @@ class Upstream {
   bool Dump(Json::Value& value);
 
  private:
-  PeerGroupSPtr GetPeerGroup() {
+  RemoteNodeGroupSPtr GetRemoteNodeGroup() {
     bthread::RWLockRdGuard guard(rwlock_);
     return group_;
   }
 
-  void SetPeerGroup(const PeerGroupSPtr& group) {
+  void SetRemoteNodeGroup(const RemoteNodeGroupSPtr& group) {
     bthread::RWLockWrGuard guard(rwlock_);
     group_ = group;
   }
@@ -131,14 +130,14 @@ class Upstream {
   MDSClientUPtr mds_client_;
   ExecutorUPtr executor_;
   bthread::RWLock rwlock_;  // for group_
-  PeerGroupSPtr group_;
-  PeerGroupBuilderUPtr builder_;
-  UpstreamVarsCollectorUPtr vars_;
+  RemoteNodeGroupSPtr group_;
+  RemoteNodeGroupBuilderUPtr builder_;
+  RemoteCacheClusterMetricsUPtr vars_;
 };
 
-using UpstreamUPtr = std::unique_ptr<Upstream>;
+using RemoteCacheClusterUPtr = std::unique_ptr<RemoteCacheCluster>;
 
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_REMOTECACHE_UPSTREAM_H_
+#endif  // DINGOFS_SRC_CACHE_REMOTE_REMOTE_CACHE_CLUSTER_H_

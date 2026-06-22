@@ -1,4 +1,4 @@
-# Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
+# Copyright (c) 2026 dingodb.com, Inc. All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,17 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# Define the BASE_FLAGS and DINGO_DEFAULT_COPTS variables
 
-file(GLOB REMOTECACHE_LIB_SRCS
-    "*.cc"
+file(GLOB TEST_CACHE_REMOTE_SRCS "*.cc")
+
+add_library(test_cache_remote OBJECT
+    ${TEST_CACHE_REMOTE_SRCS}
 )
 
-add_library(cache_remotecache ${REMOTECACHE_LIB_SRCS})
-target_link_libraries(cache_remotecache
-    cache_common
-    cache_iutil
-    cache_local
-    cache_infiniband
-    dingofs_executor
+target_link_libraries(test_cache_remote
+    cache_lib
+    ${TEST_DEPS_WITHOUT_MAIN}
 )

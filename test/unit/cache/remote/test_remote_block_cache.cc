@@ -20,7 +20,7 @@
  * Author: AI
  */
 
-#include "cache/remotecache/remote_block_cache.h"
+#include "cache/remote/remote_block_cache.h"
 
 #include <gtest/gtest.h>
 #include <json/value.h>
@@ -64,16 +64,16 @@ class RemoteBlockCacheTest : public ::testing::Test {
 
   void TearDown() override { FLAGS_cache_group = saved_cache_group_; }
 
-  void MarkRunning(RemoteBlockCacheImpl& cache) {
+  void MarkRunning(RemoteBlockCache& cache) {
     cache.running_.store(true, std::memory_order_relaxed);
   }
 
-  void StartJoinerAndMarkRunning(RemoteBlockCacheImpl& cache) {
+  void StartJoinerAndMarkRunning(RemoteBlockCache& cache) {
     cache.joiner_->Start();
     MarkRunning(cache);
   }
 
-  void MarkShutdown(RemoteBlockCacheImpl& cache) {
+  void MarkShutdown(RemoteBlockCache& cache) {
     cache.running_.store(false, std::memory_order_relaxed);
   }
 
@@ -82,7 +82,7 @@ class RemoteBlockCacheTest : public ::testing::Test {
 };
 
 TEST_F(RemoteBlockCacheTest, EnableFlagsFollowCacheGroup) {
-  RemoteBlockCacheImpl cache(nullptr);
+  RemoteBlockCache cache(nullptr);
 
   FLAGS_cache_group = "";
   EXPECT_FALSE(cache.IsEnabled());
@@ -98,12 +98,12 @@ TEST_F(RemoteBlockCacheTest, EnableFlagsFollowCacheGroup) {
 }
 
 TEST_F(RemoteBlockCacheTest, ShutdownBeforeStartIsOk) {
-  RemoteBlockCacheImpl cache(nullptr);
+  RemoteBlockCache cache(nullptr);
   EXPECT_TRUE(cache.Shutdown().ok());
 }
 
 TEST_F(RemoteBlockCacheTest, DumpDelegatesToUpstream) {
-  RemoteBlockCacheImpl cache(nullptr);
+  RemoteBlockCache cache(nullptr);
   Json::Value value;
 
   EXPECT_TRUE(cache.Dump(value));
@@ -112,7 +112,7 @@ TEST_F(RemoteBlockCacheTest, DumpDelegatesToUpstream) {
 }
 
 TEST_F(RemoteBlockCacheTest, OperationsReturnNotFoundWithoutPeer) {
-  RemoteBlockCacheImpl cache(nullptr);
+  RemoteBlockCache cache(nullptr);
   MarkRunning(cache);
 
   EXPECT_TRUE(cache.Put(Handle(), Buffer("remote-block"), {}).IsNotFound());
@@ -131,7 +131,7 @@ TEST_F(RemoteBlockCacheTest, OperationsReturnNotFoundWithoutPeer) {
 }
 
 TEST_F(RemoteBlockCacheTest, AsyncOperationsReturnNotFoundWithoutPeer) {
-  RemoteBlockCacheImpl cache(nullptr);
+  RemoteBlockCache cache(nullptr);
   StartJoinerAndMarkRunning(cache);
 
   std::atomic<int> done{0};
@@ -161,9 +161,9 @@ TEST_F(RemoteBlockCacheTest, AsyncOperationsReturnNotFoundWithoutPeer) {
   cache.Shutdown();
 }
 
-TEST(RemoteBlockCacheVarsCollectorTest, HitRatio) {
-  RemoteBlockCacheVarsCollector vars;
-  EXPECT_EQ(RemoteBlockCacheVarsCollector::GetCacheHitRatio(&vars), 0.0);
+TEST(RemoteBlockCacheMetricsTest, HitRatio) {
+  RemoteBlockCacheMetrics vars;
+  EXPECT_EQ(RemoteBlockCacheMetrics::GetCacheHitRatio(&vars), 0.0);
 }
 
 }  // namespace cache

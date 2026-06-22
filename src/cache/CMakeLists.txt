@@ -17,7 +17,7 @@ add_subdirectory(iutil)
 add_subdirectory(infiniband)
 add_subdirectory(local)
 add_subdirectory(cachegroup)
-add_subdirectory(remotecache)
+add_subdirectory(remote)
 add_subdirectory(tiercache)
 #add_subdirectory(benchmark)
 
@@ -31,7 +31,7 @@ target_link_libraries(cache_lib
     cache_infiniband
     cache_local
     cache_cachegroup
-    cache_remotecache
+    cache_remote
     cache_tiercache
     dingofs_options
 )

@@ -20,21 +20,21 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_BLOCK_CACHE_H_
-#define DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_BLOCK_CACHE_H_
+#ifndef DINGOFS_SRC_CACHE_REMOTE_REMOTE_BLOCK_CACHE_H_
+#define DINGOFS_SRC_CACHE_REMOTE_REMOTE_BLOCK_CACHE_H_
 
 #include "cache/api/block_cache.h"
 #include "cache/common/storage_client.h"
 #include "cache/iutil/bthread.h"
-#include "cache/remotecache/upstream.h"
+#include "cache/remote/remote_cache_cluster.h"
 #include "common/options/cache.h"
 
 namespace dingofs {
 namespace cache {
 
-struct RemoteBlockCacheVarsCollector {
+struct RemoteBlockCacheMetrics {
   static double GetCacheHitRatio(void* arg) {
-    auto* vars = reinterpret_cast<RemoteBlockCacheVarsCollector*>(arg);
+    auto* vars = reinterpret_cast<RemoteBlockCacheMetrics*>(arg);
     const double hit = vars->cache_hit_count_per_second.get_value();
     const double miss = vars->cache_miss_count_per_second.get_value();
     const double total = hit + miss;
@@ -52,12 +52,12 @@ struct RemoteBlockCacheVarsCollector {
                                               GetCacheHitRatio, this};
 };
 
-using RemoteBlockCacheVarsCollectorUPtr =
-    std::unique_ptr<RemoteBlockCacheVarsCollector>;
+using RemoteBlockCacheMetricsUPtr =
+    std::unique_ptr<RemoteBlockCacheMetrics>;
 
-class RemoteBlockCacheImpl final : public BlockCache {
+class RemoteBlockCache final : public BlockCache {
  public:
-  explicit RemoteBlockCacheImpl(StorageClient* storage_client);
+  explicit RemoteBlockCache(StorageClient* storage_client);
 
   Status Start() override;
   Status Shutdown() override;
@@ -94,12 +94,12 @@ class RemoteBlockCacheImpl final : public BlockCache {
   BlockCache* GetSelfPtr() { return this; }
 
   std::atomic<bool> running_;
-  UpstreamUPtr upstream_;
+  RemoteCacheClusterUPtr upstream_;
   iutil::BthreadJoinerUPtr joiner_;
-  RemoteBlockCacheVarsCollectorUPtr vars_;
+  RemoteBlockCacheMetricsUPtr vars_;
 };
 
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_BLOCK_CACHE_H_
+#endif  // DINGOFS_SRC_CACHE_REMOTE_REMOTE_BLOCK_CACHE_H_

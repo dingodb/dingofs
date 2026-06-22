@@ -20,7 +20,7 @@
  * Author: AI
  */
 
-#include "cache/remotecache/peer_group.h"
+#include "cache/remote/remote_node_group.h"
 
 #include <gtest/gtest.h>
 
@@ -48,7 +48,7 @@ CacheGroupMember Member(const std::string& id, const std::string& ip,
 
 }  // namespace
 
-class PeerGroupBuilderTest : public ::testing::Test {
+class RemoteNodeGroupBuilderTest : public ::testing::Test {
  protected:
   void SetUp() override {
     saved_connections_ = FLAGS_connections;
@@ -61,17 +61,17 @@ class PeerGroupBuilderTest : public ::testing::Test {
   int32_t saved_connections_{0};
 };
 
-TEST(PeerGroupTest, SelectPeerReturnsNullWhenHashMisses) {
-  auto group = std::make_shared<PeerGroup>();
+TEST(RemoteNodeGroupTest, SelectNodeReturnsNullWhenHashMisses) {
+  auto group = std::make_shared<RemoteNodeGroup>();
   auto hash = std::make_unique<iutil::KetamaConHash>();
   hash->Final();
   group->chash = std::move(hash);
 
-  EXPECT_EQ(group->SelectPeer("block-key"), nullptr);
+  EXPECT_EQ(group->SelectNode("block-key"), nullptr);
 }
 
-TEST_F(PeerGroupBuilderTest, BuildFiltersUnavailableMembers) {
-  PeerGroupBuilder builder(/*start_peers=*/false);
+TEST_F(RemoteNodeGroupBuilderTest, BuildFiltersUnavailableMembers) {
+  RemoteNodeGroupBuilder builder(/*start_peers=*/false);
 
   Members members{
       Member("member-offline", "10.0.1.1", 9300, 10,
@@ -87,13 +87,13 @@ TEST_F(PeerGroupBuilderTest, BuildFiltersUnavailableMembers) {
   ASSERT_EQ(group->peers.size(), 1u);
   EXPECT_NE(group->peers.find("044d4698-7bd4-4e44-9e94-aee6312ff06f"),
             group->peers.end());
-  EXPECT_NE(group->SelectPeer("blocks/0/0/1_0_4096"), nullptr);
+  EXPECT_NE(group->SelectNode("blocks/0/0/1_0_4096"), nullptr);
 
   EXPECT_EQ(builder.Build(members), nullptr);
 }
 
-TEST_F(PeerGroupBuilderTest, BuildKeepsReplacesAddsAndRemovesPeers) {
-  PeerGroupBuilder builder(/*start_peers=*/false);
+TEST_F(RemoteNodeGroupBuilderTest, BuildKeepsReplacesAddsAndRemovesPeers) {
+  RemoteNodeGroupBuilder builder(/*start_peers=*/false);
 
   Members first_members{
       Member("keep-member", "10.0.1.10", 9300, 10,
@@ -127,8 +127,8 @@ TEST_F(PeerGroupBuilderTest, BuildKeepsReplacesAddsAndRemovesPeers) {
   EXPECT_EQ(second->peers.find("remove-member"), second->peers.end());
 }
 
-TEST_F(PeerGroupBuilderTest, BuildReturnsNullWhenNoOnlineMembersRemain) {
-  PeerGroupBuilder builder(/*start_peers=*/false);
+TEST_F(RemoteNodeGroupBuilderTest, BuildReturnsNullWhenNoOnlineMembersRemain) {
+  RemoteNodeGroupBuilder builder(/*start_peers=*/false);
 
   Members first_members{
       Member("member-a", "10.0.1.10", 9300, 10,

@@ -35,7 +35,7 @@
 #include "cache/common/macro.h"
 #include "cache/common/storage_client.h"
 #include "cache/iutil/string_util.h"
-#include "cache/remotecache/remote_block_cache.h"
+#include "cache/remote/remote_block_cache.h"
 #include "common/blockaccess/block_accesser.h"
 #include "common/options/cache.h"
 #include "common/status.h"
@@ -80,7 +80,7 @@ TierBlockCache::TierBlockCache(StorageClientUPtr storage_client)
 
   if (!FLAGS_cache_group.empty()) {
     remote_block_cache_ =
-        std::make_unique<RemoteBlockCacheImpl>(storage_client_.get());
+        std::make_unique<RemoteBlockCache>(storage_client_.get());
   } else {
     remote_block_cache_ = std::make_unique<BlockCache>();
   }

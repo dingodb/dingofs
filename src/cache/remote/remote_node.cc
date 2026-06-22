@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "cache/remotecache/peer.h"
+#include "cache/remote/remote_node.h"
 
 #include <brpc/channel.h>
 #include <bthread/rwlock.h>
@@ -65,22 +65,22 @@ DEFINE_uint32(cache_rpc_max_timeout_ms, 60000,
               "maximum timeout for rpc request in milliseconds");
 DEFINE_validator(cache_rpc_max_timeout_ms, brpc::PassValidate);
 
-Peer::Peer(const std::string& id, const std::string& ip, uint32_t port,
+RemoteNode::RemoteNode(const std::string& id, const std::string& ip, uint32_t port,
            uint32_t weight)
     : running_(false),
       id_(id),
       ip_(ip),
       port_(port),
       weight_(weight),
-      health_checker_(std::make_unique<PeerHealthChecker>(ip, port)) {
+      health_checker_(std::make_unique<RemoteNodeHealthChecker>(ip, port)) {
   for (int i = 0; i < FLAGS_connections; ++i) {
-    connections_.emplace_back(PeerConnection::New());
+    connections_.emplace_back(RemoteNodeConnection::New());
   }
 }
 
-Status Peer::Start() {
+Status RemoteNode::Start() {
   if (running_.load(std::memory_order_relaxed)) {
-    LOG(WARNING) << "Peer already started";
+    LOG(WARNING) << "RemoteNode already started";
     return Status::OK();
   }
 
@@ -97,24 +97,24 @@ Status Peer::Start() {
   }
 
   if (has_error) {
-    LOG(WARNING) << "Peer started with disconnected connections: " << *this;
+    LOG(WARNING) << "RemoteNode started with disconnected connections: " << *this;
   }
 
   health_checker_->Start();
 
   running_.store(true, std::memory_order_relaxed);
-  LOG(INFO) << "Peer started";
+  LOG(INFO) << "RemoteNode started";
   return Status::OK();
 }
 
-void Peer::Shutdown() {
+void RemoteNode::Shutdown() {
   for (int i = 0; i < FLAGS_connections; ++i) {
     connections_[i]->Close();
   }
   health_checker_->Shutdown();
 }
 
-uint32_t Peer::NextTimeoutMs(const std::string& method, int retry_count) const {
+uint32_t RemoteNode::NextTimeoutMs(const std::string& method, int retry_count) const {
   uint32_t timeout_ms;
   if (method == "Put") {
     timeout_ms = FLAGS_cache_put_rpc_timeout_ms;
@@ -132,15 +132,15 @@ uint32_t Peer::NextTimeoutMs(const std::string& method, int retry_count) const {
   return std::min(timeout_ms, FLAGS_cache_rpc_max_timeout_ms);
 }
 
-bool Peer::ShouldRetry(const std::string& method, int /*retcode*/) const {
+bool RemoteNode::ShouldRetry(const std::string& method, int /*retcode*/) const {
   return method == "Range";
 }
 
-void Peer::DoConnect(PeerConnection* conn) const {
+void RemoteNode::DoConnect(RemoteNodeConnection* conn) const {
   conn->Connect(IP(), Port(), FLAGS_cache_rpc_connect_timeout_ms);
 }
 
-bool Peer::Dump(Json::Value& value) const {
+bool RemoteNode::Dump(Json::Value& value) const {
   value["id"] = Id();
   value["endpoint"] = fmt::format("{}:{}", IP(), Port());
   value["weight"] = Weight();
@@ -149,8 +149,8 @@ bool Peer::Dump(Json::Value& value) const {
   return true;
 }
 
-std::ostream& operator<<(std::ostream& os, const Peer& peer) {
-  os << "Peer{id=" << peer.Id() << " ip=" << peer.IP()
+std::ostream& operator<<(std::ostream& os, const RemoteNode& peer) {
+  os << "RemoteNode{id=" << peer.Id() << " ip=" << peer.IP()
      << " port=" << peer.Port() << " conns=" << FLAGS_connections << "}";
   return os;
 }

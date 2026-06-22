@@ -23,5 +23,5 @@ target_link_libraries(cache_tiercache
     cache_common
     cache_iutil
     cache_local
-    cache_remotecache
+    cache_remote
 )

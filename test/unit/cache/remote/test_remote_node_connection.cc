@@ -20,7 +20,7 @@
  * Author: AI
  */
 
-#include "cache/remotecache/peer_connection.h"
+#include "cache/remote/remote_node_connection.h"
 
 #include <gtest/gtest.h>
 
@@ -35,7 +35,7 @@
 namespace dingofs {
 namespace cache {
 
-class PeerConnectionTest : public ::testing::Test {
+class RemoteNodeConnectionTest : public ::testing::Test {
  protected:
   void SetUp() override {
     saved_use_rdma_ = FLAGS_use_rdma;
@@ -48,8 +48,8 @@ class PeerConnectionTest : public ::testing::Test {
   bool saved_use_rdma_{false};
 };
 
-TEST_F(PeerConnectionTest, ResultSetFailed) {
-  PeerConnection::Result result;
+TEST_F(RemoteNodeConnectionTest, ResultSetFailed) {
+  RemoteNodeConnection::Result result;
   result.SetFailed(ETIMEDOUT, "timeout", true);
 
   EXPECT_TRUE(result.failed);
@@ -58,21 +58,21 @@ TEST_F(PeerConnectionTest, ResultSetFailed) {
   EXPECT_TRUE(result.conn_broken);
 }
 
-TEST_F(PeerConnectionTest, NewReturnsTcpWhenRdmaDisabled) {
-  auto conn = PeerConnection::New();
+TEST_F(RemoteNodeConnectionTest, NewReturnsTcpWhenRdmaDisabled) {
+  auto conn = RemoteNodeConnection::New();
   ASSERT_NE(conn, nullptr);
   EXPECT_NE(dynamic_cast<TCPConnection*>(conn.get()), nullptr);
 }
 
-TEST_F(PeerConnectionTest, NewReturnsRdmaWhenEnabled) {
+TEST_F(RemoteNodeConnectionTest, NewReturnsRdmaWhenEnabled) {
   FLAGS_use_rdma = true;
 
-  auto conn = PeerConnection::New();
+  auto conn = RemoteNodeConnection::New();
   ASSERT_NE(conn, nullptr);
   EXPECT_NE(dynamic_cast<RDMAConnection*>(conn.get()), nullptr);
 }
 
-TEST_F(PeerConnectionTest, TcpConnectRejectsBadEndpoint) {
+TEST_F(RemoteNodeConnectionTest, TcpConnectRejectsBadEndpoint) {
   TCPConnection conn;
   EXPECT_FALSE(conn.IsConnected());
 
@@ -80,7 +80,7 @@ TEST_F(PeerConnectionTest, TcpConnectRejectsBadEndpoint) {
   EXPECT_FALSE(conn.IsConnected());
 }
 
-TEST_F(PeerConnectionTest, TcpConnectAndClose) {
+TEST_F(RemoteNodeConnectionTest, TcpConnectAndClose) {
   TCPConnection conn;
 
   ASSERT_TRUE(conn.Connect("127.0.0.1", 9, 1).ok());
@@ -91,11 +91,11 @@ TEST_F(PeerConnectionTest, TcpConnectAndClose) {
   EXPECT_FALSE(conn.IsConnected());
 }
 
-TEST_F(PeerConnectionTest, TcpSendWithoutConnectionFails) {
+TEST_F(RemoteNodeConnectionTest, TcpSendWithoutConnectionFails) {
   TCPConnection conn;
   pb::cache::PingRequest request;
   pb::cache::PingResponse response;
-  PeerConnection::Result result;
+  RemoteNodeConnection::Result result;
 
   conn.Send("Ping", request, &response, nullptr, nullptr, 1, &result);
 
@@ -105,13 +105,13 @@ TEST_F(PeerConnectionTest, TcpSendWithoutConnectionFails) {
   EXPECT_TRUE(result.conn_broken);
 }
 
-TEST_F(PeerConnectionTest, TcpSendConnectedFailureMarksConnectionBroken) {
+TEST_F(RemoteNodeConnectionTest, TcpSendConnectedFailureMarksConnectionBroken) {
   TCPConnection conn;
   ASSERT_TRUE(conn.Connect("127.0.0.1", 9, 1).ok());
 
   pb::cache::PutRequest request;
   pb::cache::PutResponse response;
-  PeerConnection::Result result;
+  RemoteNodeConnection::Result result;
 
   conn.Send("Put", request, &response, nullptr, nullptr, 1, &result);
 
@@ -121,11 +121,11 @@ TEST_F(PeerConnectionTest, TcpSendConnectedFailureMarksConnectionBroken) {
   EXPECT_TRUE(result.conn_broken);
 }
 
-TEST_F(PeerConnectionTest, RdmaSendWithoutConnectionFails) {
+TEST_F(RemoteNodeConnectionTest, RdmaSendWithoutConnectionFails) {
   RDMAConnection conn;
   pb::cache::PingRequest request;
   pb::cache::PingResponse response;
-  PeerConnection::Result result;
+  RemoteNodeConnection::Result result;
 
   EXPECT_FALSE(conn.IsConnected());
   conn.Close();

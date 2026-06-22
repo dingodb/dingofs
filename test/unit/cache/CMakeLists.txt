@@ -16,7 +16,7 @@ add_subdirectory(common)
 add_subdirectory(iutil)
 add_subdirectory(local)
 add_subdirectory(infiniband)
-add_subdirectory(remotecache)
+add_subdirectory(remote)
 add_subdirectory(cachegroup)
 add_subdirectory(tiercache)
 
@@ -29,7 +29,7 @@ target_link_libraries(test_cache
     $<TARGET_OBJECTS:test_cache_iutil>
     $<TARGET_OBJECTS:test_cache_local>
     $<TARGET_OBJECTS:test_cache_infiniband>
-    $<TARGET_OBJECTS:test_cache_remotecache>
+    $<TARGET_OBJECTS:test_cache_remote>
     $<TARGET_OBJECTS:test_cache_cachegroup>
     $<TARGET_OBJECTS:test_cache_tiercache>
 

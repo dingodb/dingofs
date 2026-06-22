@@ -20,7 +20,7 @@
  * Author: AI
  */
 
-#include "cache/remotecache/request.h"
+#include "cache/remote/request.h"
 
 #include <gtest/gtest.h>
 

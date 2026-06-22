@@ -20,7 +20,7 @@
  * Author: AI
  */
 
-#include "cache/remotecache/peer.h"
+#include "cache/remote/remote_node.h"
 
 #include <gtest/gtest.h>
 #include <json/value.h>
@@ -91,7 +91,7 @@ class PeerTest : public ::testing::Test {
 };
 
 TEST_F(PeerTest, AccessorsDumpAndStream) {
-  Peer peer("044d4698-7bd4-4e44-9e94-aee6312ff06f", "10.0.1.8", 9300,
+  RemoteNode peer("044d4698-7bd4-4e44-9e94-aee6312ff06f", "10.0.1.8", 9300,
             20);
 
   EXPECT_EQ(peer.Id(), "044d4698-7bd4-4e44-9e94-aee6312ff06f");
@@ -110,12 +110,12 @@ TEST_F(PeerTest, AccessorsDumpAndStream) {
 
   std::ostringstream oss;
   oss << peer;
-  EXPECT_NE(oss.str().find("Peer{id=044d4698"), std::string::npos);
+  EXPECT_NE(oss.str().find("RemoteNode{id=044d4698"), std::string::npos);
   EXPECT_NE(oss.str().find("conns=1"), std::string::npos);
 }
 
 TEST_F(PeerTest, StartToleratesDisconnectedConnections) {
-  Peer peer("20f2fc27-2f29-4975-8d08-836ec63b8f91", "not-an-ip", 9300,
+  RemoteNode peer("20f2fc27-2f29-4975-8d08-836ec63b8f91", "not-an-ip", 9300,
             10);
 
   EXPECT_TRUE(peer.Start().ok());
@@ -126,7 +126,7 @@ TEST_F(PeerTest, StartToleratesDisconnectedConnections) {
 }
 
 TEST_F(PeerTest, SendPutReturnsNetErrorWhenConnectedRpcFails) {
-  Peer peer("20f2fc27-2f29-4975-8d08-836ec63b8f92", "127.0.0.1", 9,
+  RemoteNode peer("20f2fc27-2f29-4975-8d08-836ec63b8f92", "127.0.0.1", 9,
             10);
   ASSERT_TRUE(peer.Start().ok());
 
@@ -139,7 +139,7 @@ TEST_F(PeerTest, SendPutReturnsNetErrorWhenConnectedRpcFails) {
 }
 
 TEST_F(PeerTest, SendRangeRetriesThenReturnsInternalWhenRpcKeepsFailing) {
-  Peer peer("20f2fc27-2f29-4975-8d08-836ec63b8f93", "127.0.0.1", 9,
+  RemoteNode peer("20f2fc27-2f29-4975-8d08-836ec63b8f93", "127.0.0.1", 9,
             10);
   ASSERT_TRUE(peer.Start().ok());
 

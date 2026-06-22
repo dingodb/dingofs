@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "cache/remotecache/peer_group.h"
+#include "cache/remote/remote_node_group.h"
 
 #include <bthread/execution_queue.h>
 
@@ -31,38 +31,38 @@
 #include "cache/common/mds_client.h"
 #include "cache/iutil/ketama_con_hash.h"
 #include "cache/iutil/math_util.h"
-#include "cache/remotecache/peer.h"
+#include "cache/remote/remote_node.h"
 
 namespace dingofs {
 namespace cache {
 
-PeerGroupBuilder::PeerGroupBuilder(bool start_peers)
-    : old_group_(std::make_shared<PeerGroup>()), start_peers_(start_peers) {
+RemoteNodeGroupBuilder::RemoteNodeGroupBuilder(bool start_peers)
+    : old_group_(std::make_shared<RemoteNodeGroup>()), start_peers_(start_peers) {
   bthread::ExecutionQueueOptions options;
   options.use_pthread = true;
   CHECK_EQ(0,
            bthread::execution_queue_start(
-               &queue_id_, &options, &PeerGroupBuilder::ShutdownPeers, this));
+               &queue_id_, &options, &RemoteNodeGroupBuilder::ShutdownPeers, this));
 }
 
-PeerGroupBuilder::~PeerGroupBuilder() {
+RemoteNodeGroupBuilder::~RemoteNodeGroupBuilder() {
   CHECK_EQ(0, bthread::execution_queue_stop(queue_id_));
   CHECK_EQ(0, bthread::execution_queue_join(queue_id_));
 }
 
-PeerGroupSPtr PeerGroupBuilder::Build(const Members& members) {
+RemoteNodeGroupSPtr RemoteNodeGroupBuilder::Build(const Members& members) {
   auto new_members = FilterMembers(members);
   auto diff = MakeDiff(new_members);
   if (diff.add.empty() && diff.remove.empty()) {
     return nullptr;
   } else if (new_members.empty()) {
-    LOG(WARNING) << "No peers alive, skip building PeerGroup and use old one";
+    LOG(WARNING) << "No peers alive, skip building RemoteNodeGroup and use old one";
     return nullptr;
   }
 
-  // Create a new PeerGroup
-  std::vector<PeerSPtr> to_start, to_shutdown;
-  std::unordered_map<std::string, PeerSPtr> new_peers;
+  // Create a new RemoteNodeGroup
+  std::vector<RemoteNodeSPtr> to_start, to_shutdown;
+  std::unordered_map<std::string, RemoteNodeSPtr> new_peers;
 
   // kept peers
   for (const auto& old_peer : diff.keep) {
@@ -83,7 +83,7 @@ PeerGroupSPtr PeerGroupBuilder::Build(const Members& members) {
   }
   DeferShutdownPeers(to_shutdown);
 
-  auto group = std::make_shared<PeerGroup>();
+  auto group = std::make_shared<RemoteNodeGroup>();
   group->chash = BuildHashRing(new_members);
   group->peers = std::move(new_peers);
 
@@ -91,7 +91,7 @@ PeerGroupSPtr PeerGroupBuilder::Build(const Members& members) {
   return group;
 }
 
-Members PeerGroupBuilder::FilterMembers(const Members& members) {
+Members RemoteNodeGroupBuilder::FilterMembers(const Members& members) {
   Members members_out;
   for (const auto& member : members) {
     if (member.state != CacheGroupMemberState::kOnline) {
@@ -106,7 +106,7 @@ Members PeerGroupBuilder::FilterMembers(const Members& members) {
   return members_out;
 }
 
-PeerGroupBuilder::Diff PeerGroupBuilder::MakeDiff(const Members& new_members) {
+RemoteNodeGroupBuilder::Diff RemoteNodeGroupBuilder::MakeDiff(const Members& new_members) {
   CHECK_NOTNULL(old_group_);
 
   Diff diff;
@@ -117,7 +117,7 @@ PeerGroupBuilder::Diff PeerGroupBuilder::MakeDiff(const Members& new_members) {
   for (const auto& new_member : new_members) {
     auto iter = old_peers.find(new_member.id);
     if (iter == old_peers.end()) {  // no found in old group
-      diff.add.emplace_back(std::make_shared<Peer>(
+      diff.add.emplace_back(std::make_shared<RemoteNode>(
           new_member.id, new_member.ip, new_member.port, new_member.weight));
     } else {  // found in old group
       auto old_peer = iter->second;
@@ -126,7 +126,7 @@ PeerGroupBuilder::Diff PeerGroupBuilder::MakeDiff(const Members& new_members) {
         diff.keep.emplace_back(old_peer);
       } else {
         diff.remove.emplace_back(old_peer);
-        diff.add.emplace_back(std::make_shared<Peer>(
+        diff.add.emplace_back(std::make_shared<RemoteNode>(
             new_member.id, new_member.ip, new_member.port, new_member.weight));
       }
     }
@@ -143,7 +143,7 @@ PeerGroupBuilder::Diff PeerGroupBuilder::MakeDiff(const Members& new_members) {
   return diff;
 }
 
-std::vector<uint64_t> PeerGroupBuilder::RecalcWeights(const Members& members) {
+std::vector<uint64_t> RemoteNodeGroupBuilder::RecalcWeights(const Members& members) {
   std::vector<uint64_t> weights(members.size());
   for (int i = 0; i < members.size(); i++) {
     weights[i] = members[i].weight;
@@ -151,7 +151,7 @@ std::vector<uint64_t> PeerGroupBuilder::RecalcWeights(const Members& members) {
   return iutil::NormalizeByGcd(weights);  // FIXME: uint32_t
 }
 
-iutil::ConHashUPtr PeerGroupBuilder::BuildHashRing(const Members& members) {
+iutil::ConHashUPtr RemoteNodeGroupBuilder::BuildHashRing(const Members& members) {
   auto chash = std::make_unique<iutil::KetamaConHash>();
   auto weights = RecalcWeights(members);
   for (int i = 0; i < members.size(); i++) {
@@ -166,7 +166,7 @@ iutil::ConHashUPtr PeerGroupBuilder::BuildHashRing(const Members& members) {
   return chash;
 }
 
-void PeerGroupBuilder::StartPeers(std::vector<PeerSPtr> peers) {
+void RemoteNodeGroupBuilder::StartPeers(std::vector<RemoteNodeSPtr> peers) {
   for (const auto& peer : peers) {
     if (peer->Start().ok()) {
       LOG(INFO) << "Successfully started " << *peer;
@@ -176,12 +176,12 @@ void PeerGroupBuilder::StartPeers(std::vector<PeerSPtr> peers) {
   }
 }
 
-void PeerGroupBuilder::DeferShutdownPeers(std::vector<PeerSPtr> peers) {
+void RemoteNodeGroupBuilder::DeferShutdownPeers(std::vector<RemoteNodeSPtr> peers) {
   CHECK_EQ(0, bthread::execution_queue_execute(queue_id_, std::move(peers)));
 }
 
-int PeerGroupBuilder::ShutdownPeers(
-    void*, bthread::TaskIterator<std::vector<PeerSPtr>>& iter) {
+int RemoteNodeGroupBuilder::ShutdownPeers(
+    void*, bthread::TaskIterator<std::vector<RemoteNodeSPtr>>& iter) {
   if (iter.is_queue_stopped()) {
     return 0;
   }

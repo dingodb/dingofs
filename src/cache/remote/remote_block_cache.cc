@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "cache/remotecache/remote_block_cache.h"
+#include "cache/remote/remote_block_cache.h"
 
 #include <brpc/reloadable_flags.h>
 #include <butil/iobuf.h>
@@ -33,7 +33,7 @@
 
 #include "cache/common/macro.h"
 #include "cache/common/storage_client.h"
-#include "cache/remotecache/upstream.h"
+#include "cache/remote/remote_cache_cluster.h"
 #include "common/io_buffer.h"
 #include "common/options/cache.h"
 #include "common/status.h"
@@ -53,16 +53,16 @@ DEFINE_bool(brpc_log_idle_connection_close, true,
 DEFINE_string(cache_group, "",
               "Cache group name to use, empty means not use cache group");
 
-RemoteBlockCacheImpl::RemoteBlockCacheImpl(StorageClient* /*storage_client*/)
+RemoteBlockCache::RemoteBlockCache(StorageClient* /*storage_client*/)
     : running_(false),
-      upstream_(std::make_unique<Upstream>()),
+      upstream_(std::make_unique<RemoteCacheCluster>()),
       joiner_(std::make_unique<iutil::BthreadJoiner>()),
-      vars_(std::make_unique<RemoteBlockCacheVarsCollector>()) {
+      vars_(std::make_unique<RemoteBlockCacheMetrics>()) {
   brpc::FLAGS_idle_timeout_second = FLAGS_brpc_idle_timeout_second;
   brpc::FLAGS_log_idle_connection_close = FLAGS_brpc_log_idle_connection_close;
 }
 
-Status RemoteBlockCacheImpl::Start() {
+Status RemoteBlockCache::Start() {
   CHECK(!FLAGS_cache_group.empty());
 
   if (running_.load(std::memory_order_relaxed)) {
@@ -80,7 +80,7 @@ Status RemoteBlockCacheImpl::Start() {
   return Status::OK();
 }
 
-Status RemoteBlockCacheImpl::Shutdown() {
+Status RemoteBlockCache::Shutdown() {
   if (!running_.exchange(false, std::memory_order_relaxed)) {
     LOG(WARNING) << "RemoteBlockCache already shutdown";
     return Status::OK();
@@ -96,7 +96,7 @@ Status RemoteBlockCacheImpl::Shutdown() {
   return Status::OK();
 }
 
-Status RemoteBlockCacheImpl::Put(BlockHandle handle, IOBuffer block,
+Status RemoteBlockCache::Put(BlockHandle handle, IOBuffer block,
                                  PutOption /*option*/) {
   DCHECK_RUNNING("RemoteBlockCache");
 
@@ -107,7 +107,7 @@ Status RemoteBlockCacheImpl::Put(BlockHandle handle, IOBuffer block,
   return status;
 }
 
-Status RemoteBlockCacheImpl::Range(BlockHandle handle, off_t offset,
+Status RemoteBlockCache::Range(BlockHandle handle, off_t offset,
                                    size_t length, IOBuffer* buffer,
                                    RangeOption option) {
   DCHECK_RUNNING("RemoteBlockCache");
@@ -129,7 +129,7 @@ Status RemoteBlockCacheImpl::Range(BlockHandle handle, off_t offset,
   return status;
 }
 
-Status RemoteBlockCacheImpl::Cache(BlockHandle handle, IOBuffer block,
+Status RemoteBlockCache::Cache(BlockHandle handle, IOBuffer block,
                                    CacheOption /*option*/) {
   DCHECK_RUNNING("RemoteBlockCache");
 
@@ -140,7 +140,7 @@ Status RemoteBlockCacheImpl::Cache(BlockHandle handle, IOBuffer block,
   return status;
 }
 
-Status RemoteBlockCacheImpl::Prefetch(BlockHandle handle, size_t length,
+Status RemoteBlockCache::Prefetch(BlockHandle handle, size_t length,
                                       PrefetchOption /*option*/) {
   DCHECK_RUNNING("RemoteBlockCache");
 
@@ -151,7 +151,7 @@ Status RemoteBlockCacheImpl::Prefetch(BlockHandle handle, size_t length,
   return status;
 }
 
-void RemoteBlockCacheImpl::AsyncPut(BlockHandle handle, IOBuffer block,
+void RemoteBlockCache::AsyncPut(BlockHandle handle, IOBuffer block,
                                     AsyncCallback cb, PutOption option) {
   DCHECK_RUNNING("RemoteBlockCache");
 
@@ -170,7 +170,7 @@ void RemoteBlockCacheImpl::AsyncPut(BlockHandle handle, IOBuffer block,
   }
 }
 
-void RemoteBlockCacheImpl::AsyncRange(BlockHandle handle, off_t offset,
+void RemoteBlockCache::AsyncRange(BlockHandle handle, off_t offset,
                                       size_t length, IOBuffer* buffer,
                                       AsyncCallback cb, RangeOption option) {
   DCHECK_RUNNING("RemoteBlockCache");
@@ -190,7 +190,7 @@ void RemoteBlockCacheImpl::AsyncRange(BlockHandle handle, off_t offset,
   }
 }
 
-void RemoteBlockCacheImpl::AsyncCache(BlockHandle handle, IOBuffer block,
+void RemoteBlockCache::AsyncCache(BlockHandle handle, IOBuffer block,
                                       AsyncCallback cb, CacheOption option) {
   DCHECK_RUNNING("RemoteBlockCache");
 
@@ -209,7 +209,7 @@ void RemoteBlockCacheImpl::AsyncCache(BlockHandle handle, IOBuffer block,
   }
 }
 
-void RemoteBlockCacheImpl::AsyncPrefetch(BlockHandle handle, size_t length,
+void RemoteBlockCache::AsyncPrefetch(BlockHandle handle, size_t length,
                                          AsyncCallback cb,
                                          PrefetchOption option) {
   DCHECK_RUNNING("RemoteBlockCache");
