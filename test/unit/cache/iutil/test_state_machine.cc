@@ -75,7 +75,7 @@ TEST_F(StateMachineTest, NormalToUnstableOnErrors) {
 
   // default normal2unstable_error_num() == 3, so 4 errors trip the transition
   sm.Error(4);
-  EXPECT_TRUE(WaitForState(&sm, kStateUnStable));
+  EXPECT_TRUE(WaitForState(&sm, kStateUnstable));
 
   ASSERT_TRUE(sm.Shutdown());
 }
@@ -85,7 +85,7 @@ TEST_F(StateMachineTest, UnstableToNormalOnSuccesses) {
   ASSERT_TRUE(sm.Start());
 
   sm.Error(4);
-  ASSERT_TRUE(WaitForState(&sm, kStateUnStable));
+  ASSERT_TRUE(WaitForState(&sm, kStateUnstable));
 
   // default unstable2normal_succ_num() == 10, so 11 successes return to normal
   sm.Success(11);
@@ -107,7 +107,7 @@ TEST_F(StateMachineTest, EventDrivenTransitions) {
 
   {  // Normal -> Unstable
     sm.OnEvent(kStateEventUnstable);
-    EXPECT_TRUE(WaitForState(&sm, kStateUnStable));
+    EXPECT_TRUE(WaitForState(&sm, kStateUnstable));
   }
 
   {  // Unstable -> Down
@@ -137,7 +137,7 @@ TEST_F(StateMachineTest, HonorsCustomConfiguration) {
   ASSERT_EQ(sm.GetState(), kStateNormal);
 
   sm.Error(2);  // 2 > 1 honors the custom threshold (not the default 3)
-  EXPECT_TRUE(WaitForState(&sm, kStateUnStable));
+  EXPECT_TRUE(WaitForState(&sm, kStateUnstable));
 
   ASSERT_TRUE(sm.Shutdown());
 }
@@ -145,7 +145,7 @@ TEST_F(StateMachineTest, HonorsCustomConfiguration) {
 TEST_F(StateMachineTest, StateAndEventToString) {
   EXPECT_EQ(StateToString(kStateUnknown), "unknown");
   EXPECT_EQ(StateToString(kStateNormal), "normal");
-  EXPECT_EQ(StateToString(kStateUnStable), "unstable");
+  EXPECT_EQ(StateToString(kStateUnstable), "unstable");
   EXPECT_EQ(StateToString(kStateDown), "down");
 
   EXPECT_EQ(StateEventToString(kStateEventUnkown), "StateEventUnkown");

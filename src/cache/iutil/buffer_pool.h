@@ -54,7 +54,7 @@ class BufferPool {
       iov.iov_base = mem_start_ + (buffer_size_ * i);
       iov.iov_len = buffer_size_;
       iovecs_.push_back(iov);
-      freeindexs_.push(i);
+      free_indices_.push(i);
     }
 
     LOG(INFO) << "Successfully create BufferPool{buffer_size=" << buffer_size_
@@ -66,17 +66,17 @@ class BufferPool {
 
   char* Alloc() {
     std::unique_lock<bthread::Mutex> lock(mutex_);
-    while (freeindexs_.empty()) {
+    while (free_indices_.empty()) {
       can_allocate_.wait(lock);
     }
-    int index = freeindexs_.front();
-    freeindexs_.pop();
+    int index = free_indices_.front();
+    free_indices_.pop();
     return static_cast<char*>(iovecs_[index].iov_base);
   }
 
   void Free(const char* ptr) {
     std::unique_lock<bthread::Mutex> lock(mutex_);
-    freeindexs_.push(Index(ptr));
+    free_indices_.push(Index(ptr));
     can_allocate_.notify_one();
   }
 
@@ -86,7 +86,7 @@ class BufferPool {
  private:
   char* mem_start_;
   size_t buffer_size_;
-  std::queue<int> freeindexs_;  // free buffer index
+  std::queue<int> free_indices_;  // free buffer index
   std::vector<iovec> iovecs_;
   bthread::Mutex mutex_;
   bthread::ConditionVariable can_allocate_;

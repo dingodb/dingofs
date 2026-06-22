@@ -206,7 +206,7 @@ Status DiskCache::Stage(BlockHandle handle, IOBuffer block,
   }
 
   // FIXME: link error maybe cause:
-  //   1) disk capacity managment inaccurate
+  //   1) disk capacity management inaccurate
   //   2) IO error: block which created by writeback will not founded
   status = iutil::Link(stage_path, cache_path);
   if (!status.ok()) {

@@ -31,8 +31,8 @@ namespace dingofs {
 namespace cache {
 namespace infiniband {
 
-TEST(ConnManagmentMetaTest, SerializeParseRoundTrip) {
-  ConnManagmentMeta meta;
+TEST(ConnManagementMetaTest, SerializeParseRoundTrip) {
+  ConnManagementMeta meta;
   meta.qpn = 0x123456;
   meta.lid = 0xABCD;
   for (int i = 0; i < 16; ++i) {
@@ -49,7 +49,7 @@ TEST(ConnManagmentMetaTest, SerializeParseRoundTrip) {
   EXPECT_EQ(pb.gid().size(), sizeof(meta.gid));
   EXPECT_EQ(pb.port_num(), 1u);
 
-  ConnManagmentMeta back;
+  ConnManagementMeta back;
   ASSERT_TRUE(ParseFromPb(pb, &back).ok());
   EXPECT_EQ(back.qpn, meta.qpn);
   EXPECT_EQ(back.lid, meta.lid);
@@ -59,12 +59,12 @@ TEST(ConnManagmentMetaTest, SerializeParseRoundTrip) {
   EXPECT_EQ(back.mtu, meta.mtu);
 }
 
-TEST(ConnManagmentMetaTest, ParseRejectsBadGidSize) {
+TEST(ConnManagementMetaTest, ParseRejectsBadGidSize) {
   pb::infiniband::ConnManagementMeta pb;
   pb.set_qpn(1);
   pb.set_gid("too-short");  // not sizeof(ibv_gid)
 
-  ConnManagmentMeta out;
+  ConnManagementMeta out;
   EXPECT_TRUE(ParseFromPb(pb, &out).IsInternal());
 }
 

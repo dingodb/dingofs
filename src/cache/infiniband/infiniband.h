@@ -62,7 +62,7 @@ enum class PortState : uint8_t {
   kDown = 2,
 };
 
-struct ConnManagmentMeta {
+struct ConnManagementMeta {
   uint32_t qpn;
   uint16_t lid;
   ibv_gid gid;
@@ -140,7 +140,7 @@ class QueuePair {
                               CompletionQueue* completion_queue);
 
   Status ModifyQpToInit();
-  Status ModifyQpToRtr(ConnManagmentMeta remote_cm_meta);
+  Status ModifyQpToRtr(ConnManagementMeta remote_cm_meta);
   Status ModifyQpToRts();
   Status ModifyQpToError();
 
@@ -149,7 +149,7 @@ class QueuePair {
   Device* GetDevice() const { return device_; }
   Port* GetPort() const { return port_; }
   ProtectDomain* GetProtectDomain() const { return protect_domain_; }
-  ConnManagmentMeta GetConnManagmentMeta();
+  ConnManagementMeta GetConnManagementMeta();
 
  private:
   ibv_qp* qp_;
@@ -195,14 +195,14 @@ class Infiniband {
   static std::unordered_map<std::string, ProtectDomainUPtr> protect_domains_;
 };
 
-void SerializeToPb(const ConnManagmentMeta& cm_meta,
+void SerializeToPb(const ConnManagementMeta& cm_meta,
                    pb::infiniband::ConnManagementMeta* pb_cm_meta);
 Status ParseFromPb(const pb::infiniband::ConnManagementMeta& pb_cm_meta,
-                   ConnManagmentMeta* cm_meta);
+                   ConnManagementMeta* cm_meta);
 
 std::ostream& operator<<(std::ostream& os, const QueuePair& queue_pair);
 std::ostream& operator<<(std::ostream& os, LinkLayer link_layer);
-std::ostream& operator<<(std::ostream& os, const ConnManagmentMeta& cm_meta);
+std::ostream& operator<<(std::ostream& os, const ConnManagementMeta& cm_meta);
 
 }  // namespace infiniband
 }  // namespace cache

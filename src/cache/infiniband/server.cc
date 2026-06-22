@@ -56,7 +56,7 @@ Status Listener::Listen(const EndPoint& ep) {
   return Status::OK();
 }
 
-ConnectionUPtr Listener::Accept(const ConnManagmentMeta& remote_cm_meta) {
+ConnectionUPtr Listener::Accept(const ConnManagementMeta& remote_cm_meta) {
   LOG(INFO) << "Accepting infiniband connection: peer=" << remote_cm_meta;
 
   auto completion_queue = CompletionQueue::Create(device_);
@@ -120,11 +120,11 @@ void InfinibandServiceImpl::Sync(google::protobuf::RpcController* controller,
   auto* cntl = static_cast<brpc::Controller*>(controller);
 
   // cm meta
-  ConnManagmentMeta remote_cm_meta;
+  ConnManagementMeta remote_cm_meta;
   auto status = ParseFromPb(request->cm_meta(), &remote_cm_meta);
   if (!status.ok()) {
     cntl->SetFailed(status.ToString());
-    LOG(ERROR) << "Fail to parse conn managment meta proto buffer";
+    LOG(ERROR) << "Fail to parse conn management meta proto buffer";
     return;
   }
 
@@ -139,7 +139,7 @@ void InfinibandServiceImpl::Sync(google::protobuf::RpcController* controller,
   // session
   int fd = conn->GetFd();
   auto* qp = conn->GetQueuePair();
-  ConnManagmentMeta local_cm_meta = qp->GetConnManagmentMeta();
+  ConnManagementMeta local_cm_meta = qp->GetConnManagementMeta();
   auto session = std::make_shared<ServerSession>(std::move(conn), service_hub_);
   status = session->Start();
   if (!status.ok()) {

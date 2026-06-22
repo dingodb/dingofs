@@ -107,7 +107,7 @@ class UnstableState final : public BaseState {
     succ_count_.store(0);
   }
 
-  State GetState() const override { return kStateUnStable; }
+  State GetState() const override { return kStateUnstable; }
 
  private:
   uint64_t start_time_;
@@ -135,7 +135,6 @@ class StateMachineImpl final : public StateMachine {
   void OnEvent(StateEvent event) override;
   IConfiguration& Config() override { return *config_; }
 
- private:
  private:
   static int EventThread(void* meta, bthread::TaskIterator<StateEvent>& iter);
   void ProcessEvent(StateEvent event);

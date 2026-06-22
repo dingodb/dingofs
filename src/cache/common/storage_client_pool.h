@@ -70,7 +70,7 @@ class StorageClientPoolImpl final : public StorageClientPool {
 
   bthread::RWLock rwlock_;
   MDSClientSPtr mds_client_;
-  std::unordered_map<uint32_t, blockaccess::BlockAccesserUPtr> accesseres_;
+  std::unordered_map<uint32_t, blockaccess::BlockAccesserUPtr> accessors_;
   std::unordered_map<uint32_t, StorageClientUPtr> clients_;
 };
 

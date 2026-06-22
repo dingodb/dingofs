@@ -252,7 +252,7 @@ Status QueuePair::ModifyQpToInit() {
   return Status::OK();
 }
 
-Status QueuePair::ModifyQpToRtr(ConnManagmentMeta remote_cm_meta) {
+Status QueuePair::ModifyQpToRtr(ConnManagementMeta remote_cm_meta) {
   // queue pair attributes
   ibv_qp_attr qp_attr;
   memset(&qp_attr, 0, sizeof(qp_attr));
@@ -349,8 +349,8 @@ Status QueuePair::ModifyQpToError() {
   return Status::OK();
 }
 
-ConnManagmentMeta QueuePair::GetConnManagmentMeta() {
-  ConnManagmentMeta cm_meta;
+ConnManagementMeta QueuePair::GetConnManagementMeta() {
+  ConnManagementMeta cm_meta;
   cm_meta.qpn = GetQpNum();
   cm_meta.lid = port_->GetLid();
   cm_meta.gid = port_->GetGid();
@@ -522,7 +522,7 @@ Status Infiniband::Init(const std::string& device_name, uint8_t port_num,
   return Status::OK();
 }
 
-void SerializeToPb(const ConnManagmentMeta& cm_meta,
+void SerializeToPb(const ConnManagementMeta& cm_meta,
                    pb::infiniband::ConnManagementMeta* pb_cm_meta) {
   pb_cm_meta->set_qpn(cm_meta.qpn);
   pb_cm_meta->set_lid(cm_meta.lid);
@@ -533,11 +533,11 @@ void SerializeToPb(const ConnManagmentMeta& cm_meta,
 }
 
 Status ParseFromPb(const pb::infiniband::ConnManagementMeta& pb_cm_meta,
-                   ConnManagmentMeta* cm_meta) {
+                   ConnManagementMeta* cm_meta) {
   if (pb_cm_meta.gid().size() != sizeof(cm_meta->gid)) {
     LOG(ERROR) << "Invalid gid size=" << pb_cm_meta.gid().size()
-               << " in connection managment meta";
-    return Status::Internal("invalid gid size in connection managment meta");
+               << " in connection management meta";
+    return Status::Internal("invalid gid size in connection management meta");
   }
 
   cm_meta->qpn = pb_cm_meta.qpn();
@@ -569,11 +569,11 @@ std::ostream& operator<<(std::ostream& os, LinkLayer link_layer) {
   return os;
 }
 
-std::ostream& operator<<(std::ostream& os, const ConnManagmentMeta& cm_meta) {
+std::ostream& operator<<(std::ostream& os, const ConnManagementMeta& cm_meta) {
   auto flags = os.flags();
   auto fill = os.fill();
 
-  os << "ConnManagmentMeta{qpn=" << cm_meta.qpn << " lid=" << cm_meta.lid
+  os << "ConnManagementMeta{qpn=" << cm_meta.qpn << " lid=" << cm_meta.lid
      << " port_num=" << static_cast<int>(cm_meta.port_num)
      << " link_type=" << cm_meta.link_type
      << " mtu=" << static_cast<int>(cm_meta.mtu) << " gid=" << std::hex

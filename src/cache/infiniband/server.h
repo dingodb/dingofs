@@ -45,7 +45,7 @@ class Listener {
  public:
   Listener() = default;
   Status Listen(const EndPoint& ep);
-  ConnectionUPtr Accept(const ConnManagmentMeta& remote_cm_meta);
+  ConnectionUPtr Accept(const ConnManagementMeta& remote_cm_meta);
 
  private:
   Device* device_{nullptr};
