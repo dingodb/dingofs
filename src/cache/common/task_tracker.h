@@ -31,7 +31,7 @@
 #include <ostream>
 #include <unordered_map>
 
-#include "cache/blockcache/cache_store.h"
+#include "cache/local/cache_store.h"
 #include "cache/common/storage_client.h"
 #include "common/block/block_handle.h"
 #include "common/io_buffer.h"

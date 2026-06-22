@@ -30,8 +30,8 @@
 #include <utility>
 
 #include "cache/api/block_cache.h"
-#include "cache/blockcache/block_cache_impl.h"
-#include "cache/blockcache/cache_store.h"
+#include "cache/local/local_block_cache.h"
+#include "cache/local/cache_store.h"
 #include "cache/common/macro.h"
 #include "cache/common/storage_client.h"
 #include "cache/iutil/string_util.h"
@@ -73,7 +73,7 @@ TierBlockCache::TierBlockCache(StorageClientUPtr storage_client)
       joiner_(std::make_unique<iutil::BthreadJoiner>()) {
   if (FLAGS_cache_store == "disk") {
     local_block_cache_ =
-        std::make_unique<BlockCacheImpl>(storage_client_.get());
+        std::make_unique<LocalBlockCache>(storage_client_.get());
   } else {
     local_block_cache_ = std::make_unique<BlockCache>();
   }

@@ -33,7 +33,7 @@
 #include <memory>
 #include <ostream>
 
-#include "cache/blockcache/cache_store.h"
+#include "cache/local/cache_store.h"
 #include "cache/common/closure.h"
 #include "cache/iutil/task_execution_queue.h"
 #include "common/blockaccess/block_accesser.h"
