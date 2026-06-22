@@ -1,4 +1,4 @@
-# Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
+# Copyright (c) 2026 dingodb.com, Inc. All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,15 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_library(vfs_block_store
-    block_store_impl.cc
-    block_store_access_log.cc
-    fake_block_store.cc
+file(GLOB TEST_CACHE_LOCAL_SRCS CONFIGURE_DEPENDS "*.cc")
+
+add_library(test_cache_local OBJECT
+    ${TEST_CACHE_LOCAL_SRCS}
 )
 
-target_link_libraries(vfs_block_store
-    cache_tiercache
-    cache_local
-    fmt::fmt
-    glog::glog
+target_link_libraries(test_cache_local
+    cache_lib
+    ${TEST_DEPS_WITHOUT_MAIN}
 )

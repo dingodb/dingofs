@@ -33,7 +33,7 @@
 #include <utility>
 
 #include "cache/api/block_cache.h"
-#include "cache/blockcache/block_cache_impl.h"
+#include "cache/local/local_block_cache.h"
 #include "cache/common/macro.h"
 #include "cache/common/mds_client.h"
 #include "cache/common/storage_client.h"
@@ -86,7 +86,7 @@ CacheNode::CacheNode(MDSClientSPtr mds_client,
       num_hit_cache_("dingofs_cache_hit_count"),
       num_miss_cache_("dingofs_cache_miss_count") {
   FLAGS_cache_dir_uuid = FLAGS_id;
-  block_cache_ = std::make_unique<BlockCacheImpl>(storage_client_pool_);
+  block_cache_ = std::make_unique<LocalBlockCache>(storage_client_pool_);
 }
 
 Status CacheNode::Start() {

@@ -11,16 +11,18 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# Define the BASE_FLAGS and DINGO_DEFAULT_COPTS variables
 
-add_library(vfs_block_store
-    block_store_impl.cc
-    block_store_access_log.cc
-    fake_block_store.cc
+file(GLOB LOCAL_LIB_SRCS
+    "*.cc"
 )
 
-target_link_libraries(vfs_block_store
-    cache_tiercache
-    cache_local
-    fmt::fmt
-    glog::glog
+add_library(cache_local ${LOCAL_LIB_SRCS})
+target_link_libraries(cache_local
+    uring::uring
+
+    cache_common
+    cache_infiniband
+    cache_iutil
+    dingofs_executor
 )

@@ -29,7 +29,7 @@
 #include <utility>
 
 #include "cache/api/block_cache.h"
-#include "cache/blockcache/cache_store.h"
+#include "cache/local/cache_store.h"
 #include "cache/common/block_handle_helper.h"
 #include "cache/common/error.h"
 #include "cache/infiniband/controller.h"
