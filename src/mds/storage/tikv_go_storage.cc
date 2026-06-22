@@ -14,6 +14,8 @@
 
 #include "mds/storage/tikv_go_storage.h"
 
+#include <butil/compiler_specific.h>
+
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -23,6 +25,7 @@
 #include <utility>
 #include <vector>
 
+#include "dingofs/error.pb.h"
 #include "fmt/core.h"
 #include "glog/logging.h"
 #include "mds/common/helper.h"
@@ -292,7 +295,9 @@ TikvGoTxn::~TikvGoTxn() {
 int64_t TikvGoTxn::ID() const { return txn_id_; }
 
 Status TikvGoTxn::Put(const std::string& key, const std::string& value) {
-  CHECK(txn_handle_ != 0) << "txn not initialized";
+  if (BAIDU_UNLIKELY(txn_handle_ == 0)) {
+    return Status(pb::error::ESTORE_MAYBE_RETRY, "txn not initialized");
+  }
 
   AsyncContextHolder ctx;
   auto* holder = MakeHolder(&ctx);
@@ -312,7 +317,9 @@ Status TikvGoTxn::PutIfAbsent(const std::string& /*key*/, const std::string& /*v
 }
 
 Status TikvGoTxn::Delete(const std::string& key) {
-  CHECK(txn_handle_ != 0) << "txn not initialized";
+  if (BAIDU_UNLIKELY(txn_handle_ == 0)) {
+    return Status(pb::error::ESTORE_MAYBE_RETRY, "txn not initialized");
+  }
 
   AsyncContextHolder ctx;
   auto* holder = MakeHolder(&ctx);
@@ -328,7 +335,9 @@ Status TikvGoTxn::Delete(const std::string& key) {
 }
 
 Status TikvGoTxn::Get(const std::string& key, std::string& value) {
-  CHECK(txn_handle_ != 0) << "txn not initialized";
+  if (BAIDU_UNLIKELY(txn_handle_ == 0)) {
+    return Status(pb::error::ESTORE_MAYBE_RETRY, "txn not initialized");
+  }
 
   uint64_t start_time = utils::TimestampUs();
   ON_SCOPE_EXIT([&]() { txn_trace_.read_time_us += (utils::TimestampUs() - start_time); });
@@ -346,7 +355,9 @@ Status TikvGoTxn::Get(const std::string& key, std::string& value) {
 }
 
 Status TikvGoTxn::BatchGet(const std::vector<std::string>& keys, std::vector<KeyValue>& kvs) {
-  CHECK(txn_handle_ != 0) << "txn not initialized";
+  if (BAIDU_UNLIKELY(txn_handle_ == 0)) {
+    return Status(pb::error::ESTORE_MAYBE_RETRY, "txn not initialized");
+  }
 
   if (keys.empty()) return Status::OK();
 
@@ -376,7 +387,9 @@ Status TikvGoTxn::BatchGet(const std::vector<std::string>& keys, std::vector<Key
 
 Status TikvGoTxn::DoScan(const Range& range, uint64_t limit,
                          std::function<bool(const std::string&, const std::string&)> handler) {
-  CHECK(txn_handle_ != 0) << "txn not initialized";
+  if (BAIDU_UNLIKELY(txn_handle_ == 0)) {
+    return Status(pb::error::ESTORE_MAYBE_RETRY, "txn not initialized");
+  }
 
   uint64_t start_time = utils::TimestampUs();
   ON_SCOPE_EXIT([&]() { txn_trace_.read_time_us += (utils::TimestampUs() - start_time); });
@@ -435,7 +448,9 @@ Status TikvGoTxn::Scan(const Range& range, std::function<bool(KeyValue&)> handle
 }
 
 Status TikvGoTxn::Commit() {
-  CHECK(txn_handle_ != 0) << "txn not initialized";
+  if (BAIDU_UNLIKELY(txn_handle_ == 0)) {
+    return Status(pb::error::ESTORE_MAYBE_RETRY, "txn not initialized");
+  }
 
   uint64_t start_time = utils::TimestampUs();
   ON_SCOPE_EXIT([&]() { txn_trace_.write_time_us += (utils::TimestampUs() - start_time); });
