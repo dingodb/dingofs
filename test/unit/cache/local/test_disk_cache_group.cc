@@ -20,14 +20,14 @@
  * Author: AI
  */
 
-#include "cache/local/disk_cache_group.h"
-
 #include <gtest/gtest.h>
 #include <unistd.h>
 
 #include <filesystem>
 #include <string>
 #include <vector>
+
+#include "cache/local/disk_cache_group.h"
 
 namespace dingofs {
 namespace cache {
@@ -38,8 +38,7 @@ class DiskCacheGroupTest : public ::testing::Test {
     static int seq = 0;
     base_index_ = 700 + (seq++ * 10);
     base_dir_ = "/tmp/dingofs_test_disk_cache_group_" +
-                std::to_string(getpid()) + "_" +
-                std::to_string(base_index_);
+                std::to_string(getpid()) + "_" + std::to_string(base_index_);
 
     options_.push_back(Option(base_index_, "a", 100));
     options_.push_back(Option(base_index_ + 1, "b", 200));

@@ -29,11 +29,11 @@
 #include <utility>
 
 #include "cache/api/block_cache.h"
-#include "cache/local/cache_store.h"
 #include "cache/common/block_handle_helper.h"
 #include "cache/common/error.h"
 #include "cache/infiniband/controller.h"
 #include "cache/infiniband/slab_pool.h"
+#include "cache/local/cache_store.h"
 #include "common/io_buffer.h"
 #include "common/status.h"
 

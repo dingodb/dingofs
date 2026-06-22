@@ -20,9 +20,9 @@
  * Author: AI
  */
 
-#include "cache/common/closure.h"
-
 #include <gtest/gtest.h>
+
+#include "cache/common/closure.h"
 
 namespace dingofs {
 namespace cache {

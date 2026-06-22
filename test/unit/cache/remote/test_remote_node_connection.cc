@@ -20,14 +20,13 @@
  * Author: AI
  */
 
-#include "cache/remote/remote_node_connection.h"
-
 #include <gtest/gtest.h>
 
 #include <cerrno>
 #include <memory>
 #include <string>
 
+#include "cache/remote/remote_node_connection.h"
 #include "common/options/cache.h"
 #include "dingofs/blockcache.pb.h"
 #include "dingofs/infiniband.pb.h"

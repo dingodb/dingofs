@@ -30,11 +30,11 @@
 #include <utility>
 
 #include "cache/api/block_cache.h"
-#include "cache/local/local_block_cache.h"
-#include "cache/local/cache_store.h"
 #include "cache/common/macro.h"
 #include "cache/common/storage_client.h"
 #include "cache/iutil/string_util.h"
+#include "cache/local/cache_store.h"
+#include "cache/local/local_block_cache.h"
 #include "cache/remote/remote_block_cache.h"
 #include "common/blockaccess/block_accesser.h"
 #include "common/options/cache.h"

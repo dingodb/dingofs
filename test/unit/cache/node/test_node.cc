@@ -20,13 +20,12 @@
  * Author: AI
  */
 
-#include "cache/node/node.h"
-
 #include <gtest/gtest.h>
 
 #include <sstream>
 #include <string>
 
+#include "cache/node/node.h"
 #include "common/block/block_handle.h"
 #include "common/block/block_key.h"
 #include "common/options/cache.h"

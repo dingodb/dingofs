@@ -28,19 +28,17 @@
 #include <memory>
 #include <ostream>
 
-#include "cache/local/cache_store.h"
 #include "cache/common/storage_client_pool.h"
 #include "cache/iutil/bthread.h"
 #include "cache/iutil/inflight_tracker.h"
+#include "cache/local/cache_store.h"
 
 namespace dingofs {
 namespace cache {
 
 struct StageBlock {
   StageBlock(BlockHandle handle, size_t length, BlockAttr block_attr)
-      : handle(std::move(handle)),
-        length(length),
-        block_attr(block_attr) {}
+      : handle(std::move(handle)), length(length), block_attr(block_attr) {}
 
   BlockHandle handle;
   size_t length;

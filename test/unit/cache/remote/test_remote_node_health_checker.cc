@@ -20,13 +20,12 @@
  * Author: AI
  */
 
-#include "cache/remote/remote_node_health_checker.h"
-
 #include <gtest/gtest.h>
 
 #include <chrono>
 #include <thread>
 
+#include "cache/remote/remote_node_health_checker.h"
 #include "common/options/cache.h"
 
 namespace dingofs {

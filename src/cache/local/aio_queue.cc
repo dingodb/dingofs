@@ -28,9 +28,9 @@
 #include <memory>
 #include <thread>
 
+#include "cache/common/macro.h"
 #include "cache/local/aio.h"
 #include "cache/local/io_uring.h"
-#include "cache/common/macro.h"
 #include "common/status.h"
 
 namespace dingofs {

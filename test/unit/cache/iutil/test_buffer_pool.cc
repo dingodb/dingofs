@@ -20,8 +20,6 @@
  * Author: AI
  */
 
-#include "cache/iutil/buffer_pool.h"
-
 #include <gtest/gtest.h>
 
 #include <atomic>
@@ -29,6 +27,8 @@
 #include <cstdint>
 #include <set>
 #include <thread>
+
+#include "cache/iutil/buffer_pool.h"
 
 namespace dingofs {
 namespace cache {

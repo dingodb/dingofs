@@ -20,11 +20,10 @@
  * Author: AI
  */
 
-#include "cache/infiniband/service.h"
-
 #include <google/protobuf/service.h>
 #include <gtest/gtest.h>
 
+#include "cache/infiniband/service.h"
 #include "dingofs/blockcache.pb.h"
 
 namespace dingofs {
@@ -41,11 +40,13 @@ class StubBlockCacheService : public pb::cache::BlockCacheService {
     if (done) done->Run();
   }
   void Range(google::protobuf::RpcController*, const pb::cache::RangeRequest*,
-             pb::cache::RangeResponse*, google::protobuf::Closure* done) override {
+             pb::cache::RangeResponse*,
+             google::protobuf::Closure* done) override {
     if (done) done->Run();
   }
   void Cache(google::protobuf::RpcController*, const pb::cache::CacheRequest*,
-             pb::cache::CacheResponse*, google::protobuf::Closure* done) override {
+             pb::cache::CacheResponse*,
+             google::protobuf::Closure* done) override {
     if (done) done->Run();
   }
   void Prefetch(google::protobuf::RpcController*,
@@ -54,7 +55,8 @@ class StubBlockCacheService : public pb::cache::BlockCacheService {
     if (done) done->Run();
   }
   void Ping(google::protobuf::RpcController*, const pb::cache::PingRequest*,
-            pb::cache::PingResponse*, google::protobuf::Closure* done) override {
+            pb::cache::PingResponse*,
+            google::protobuf::Closure* done) override {
     if (done) done->Run();
   }
 };

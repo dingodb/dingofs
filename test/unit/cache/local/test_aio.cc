@@ -34,9 +34,7 @@ namespace cache {
 
 class AioTest : public ::testing::Test {
  protected:
-  void SetUp() override {
-    buffer_ = new char[4096];
-  }
+  void SetUp() override { buffer_ = new char[4096]; }
 
   void TearDown() override { delete[] buffer_; }
 

@@ -26,12 +26,12 @@
 #include <ostream>
 
 #include "cache/api/block_cache.h"
-#include "cache/local/cache_store.h"
-#include "cache/node/heartbeat.h"
 #include "cache/common/mds_client.h"
 #include "cache/common/storage_client.h"
 #include "cache/common/storage_client_pool.h"
 #include "cache/common/task_tracker.h"
+#include "cache/local/cache_store.h"
+#include "cache/node/heartbeat.h"
 #include "common/io_buffer.h"
 
 namespace dingofs {

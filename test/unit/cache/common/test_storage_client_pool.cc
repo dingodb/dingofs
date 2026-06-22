@@ -20,10 +20,9 @@
  * Author: AI
  */
 
-#include "cache/common/storage_client_pool.h"
-
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <unistd.h>
 
 #include <filesystem>
 #include <memory>
@@ -31,23 +30,22 @@
 #include <thread>
 #include <vector>
 
-#include <unistd.h>
-
+#include "cache/common/storage_client.h"
+#include "cache/common/storage_client_pool.h"
 #include "common/block/block_handle.h"
 #include "common/block/block_key.h"
 #include "common/io_buffer.h"
-#include "cache/common/storage_client.h"
 #include "test/unit/cache/common/mock/mock_mds_client.h"
 #include "test/unit/common/blockaccess/mock/mock_accesser.h"
 
 namespace dingofs {
 namespace cache {
 
+using blockaccess::MockBlockAccesser;
 using ::testing::_;
 using ::testing::Invoke;
 using ::testing::Return;
 using ::testing::StrictMock;
-using blockaccess::MockBlockAccesser;
 
 namespace {
 
@@ -75,8 +73,7 @@ class StorageClientPoolImplTest : public ::testing::Test {
  protected:
   void SetUp() override {
     root_ = (std::filesystem::temp_directory_path() /
-             ("dingofs_test_storage_client_pool_" +
-              std::to_string(::getpid())))
+             ("dingofs_test_storage_client_pool_" + std::to_string(::getpid())))
                 .string();
     std::filesystem::remove_all(root_);
   }

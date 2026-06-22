@@ -24,11 +24,11 @@
 #define DINGOFS_SRC_CACHE_LOCAL_LOCAL_BLOCK_CACHE_H_
 
 #include "cache/api/block_cache.h"
-#include "cache/local/block_cache_uploader.h"
-#include "cache/local/cache_store.h"
 #include "cache/common/storage_client.h"
 #include "cache/common/storage_client_pool.h"
 #include "cache/iutil/inflight_tracker.h"
+#include "cache/local/block_cache_uploader.h"
+#include "cache/local/cache_store.h"
 #include "common/options/cache.h"
 
 namespace dingofs {

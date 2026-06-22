@@ -77,9 +77,8 @@ class DiskCacheLayout {
   std::string GetLockPath() const { return PathJoin(cache_dir_, ".lock"); }
 
   std::string GetStagePath(const BlockHandle& handle) const {
-    return absl::StrJoin({GetStageDir(), std::to_string(handle.FsId()),
-                          handle.StoreKey()},
-                         "/");
+    return absl::StrJoin(
+        {GetStageDir(), std::to_string(handle.FsId()), handle.StoreKey()}, "/");
   }
 
   std::string GetCachePath(const BlockHandle& handle) const {

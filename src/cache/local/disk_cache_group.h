@@ -23,11 +23,11 @@
 #ifndef DINGOFS_SRC_CACHE_LOCAL_DISK_CACHE_GROUP_H_
 #define DINGOFS_SRC_CACHE_LOCAL_DISK_CACHE_GROUP_H_
 
+#include "cache/common/vars.h"
+#include "cache/iutil/con_hash.h"
 #include "cache/local/cache_store.h"
 #include "cache/local/disk_cache.h"
 #include "cache/local/disk_cache_watcher.h"
-#include "cache/common/vars.h"
-#include "cache/iutil/con_hash.h"
 
 namespace dingofs {
 namespace cache {
@@ -42,13 +42,11 @@ struct DiskCacheGroupMetrics {
   OpVar op_load{absl::StrFormat("%s_%s", prefix, "load")};
 };
 
-using DiskCacheGroupMetricsSPtr =
-    std::shared_ptr<DiskCacheGroupMetrics>;
+using DiskCacheGroupMetricsSPtr = std::shared_ptr<DiskCacheGroupMetrics>;
 
 struct DiskCacheGroupMetricsGuard {
   DiskCacheGroupMetricsGuard(const std::string& op_name, size_t bytes,
-                                Status& status,
-                                DiskCacheGroupMetricsSPtr metric)
+                             Status& status, DiskCacheGroupMetricsSPtr metric)
       : op_name(op_name), bytes(bytes), status(status), metric(metric) {
     CHECK(op_name == "Stage" || op_name == "Cache" || op_name == "Load")
         << "Invalid operation name: " << op_name;

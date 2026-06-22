@@ -20,12 +20,11 @@
  * Author: AI
  */
 
-#include "cache/infiniband/controller.h"
-
 #include <gtest/gtest.h>
 
 #include <string>
 
+#include "cache/infiniband/controller.h"
 #include "common/io_buffer.h"
 #include "dingofs/infiniband.pb.h"
 
@@ -91,9 +90,9 @@ TEST(ControllerTest, TimeoutAndRegions) {
 TEST(ControllerTest, CancelIsNoopAndAttachmentsAccessible) {
   Controller cntl;
 
-  cntl.StartCancel();              // no-op for the RDMA controller
+  cntl.StartCancel();  // no-op for the RDMA controller
   EXPECT_FALSE(cntl.IsCanceled());
-  cntl.NotifyOnCancel(nullptr);    // no-op
+  cntl.NotifyOnCancel(nullptr);  // no-op
 
   std::string req = "request-data";
   std::string resp = "response-data";

@@ -25,8 +25,8 @@
 
 #include <ostream>
 
-#include "cache/node/node.h"
 #include "cache/infiniband/memory.h"
+#include "cache/node/node.h"
 #include "common/io_buffer.h"
 #include "dingofs/blockcache.pb.h"
 #include "dingofs/infiniband.pb.h"

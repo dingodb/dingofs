@@ -20,14 +20,14 @@
  * Author: AI
  */
 
-#include "cache/local/disk_cache_watcher.h"
-
 #include <gtest/gtest.h>
 #include <unistd.h>
 
 #include <filesystem>
 #include <fstream>
 #include <string>
+
+#include "cache/local/disk_cache_watcher.h"
 
 namespace dingofs {
 namespace cache {
@@ -38,8 +38,7 @@ class DiskCacheWatcherTest : public ::testing::Test {
     static int seq = 0;
     cache_index_ = 900 + (seq++);
     root_dir_ = "/tmp/dingofs_test_disk_cache_watcher_" +
-                std::to_string(getpid()) + "_" +
-                std::to_string(cache_index_);
+                std::to_string(getpid()) + "_" + std::to_string(cache_index_);
   }
 
   void TearDown() override { std::filesystem::remove_all(root_dir_); }

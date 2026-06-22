@@ -20,8 +20,6 @@
  * Author: AI
  */
 
-#include "cache/tier/tier_block_cache.h"
-
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
@@ -32,6 +30,7 @@
 #include <thread>
 
 #include "cache/common/storage_client.h"
+#include "cache/tier/tier_block_cache.h"
 #include "common/block/block_handle.h"
 #include "common/block/block_key.h"
 #include "common/blockaccess/accesser_common.h"
@@ -42,11 +41,11 @@
 namespace dingofs {
 namespace cache {
 
-using ::testing::_;
-using ::testing::Invoke;
 using blockaccess::GetObjectAsyncContext;
 using blockaccess::MockBlockAccesser;
 using blockaccess::PutObjectAsyncContext;
+using ::testing::_;
+using ::testing::Invoke;
 
 DECLARE_string(cache_store);
 DECLARE_string(cache_group);
@@ -104,22 +103,22 @@ TEST_F(TierBlockCacheTest, CachesDisabled) {
 
 TEST_F(TierBlockCacheTest, PutFallsThroughToStorage) {
   EXPECT_CALL(accesser_, AsyncPut(_, _))
-      .WillOnce(Invoke([](const std::string&,
-                          std::shared_ptr<PutObjectAsyncContext> ctx) {
-        ctx->status = Status::OK();
-        ctx->cb(ctx);
-      }));
+      .WillOnce(Invoke(
+          [](const std::string&, std::shared_ptr<PutObjectAsyncContext> ctx) {
+            ctx->status = Status::OK();
+            ctx->cb(ctx);
+          }));
 
   EXPECT_TRUE(tier_->Put(Handle(100), Buf("hello")).ok());
 }
 
 TEST_F(TierBlockCacheTest, PutWritebackFallsBackToStorageWhenNoLayer) {
   EXPECT_CALL(accesser_, AsyncPut(_, _))
-      .WillOnce(Invoke([](const std::string&,
-                          std::shared_ptr<PutObjectAsyncContext> ctx) {
-        ctx->status = Status::OK();
-        ctx->cb(ctx);
-      }));
+      .WillOnce(Invoke(
+          [](const std::string&, std::shared_ptr<PutObjectAsyncContext> ctx) {
+            ctx->status = Status::OK();
+            ctx->cb(ctx);
+          }));
 
   PutOption option;
   option.writeback = true;
@@ -161,11 +160,11 @@ TEST_F(TierBlockCacheTest, PrefetchWithoutLayerReturnsNotFound) {
 
 TEST_F(TierBlockCacheTest, AsyncPutInvokesCallback) {
   EXPECT_CALL(accesser_, AsyncPut(_, _))
-      .WillOnce(Invoke([](const std::string&,
-                          std::shared_ptr<PutObjectAsyncContext> ctx) {
-        ctx->status = Status::OK();
-        ctx->cb(ctx);
-      }));
+      .WillOnce(Invoke(
+          [](const std::string&, std::shared_ptr<PutObjectAsyncContext> ctx) {
+            ctx->status = Status::OK();
+            ctx->cb(ctx);
+          }));
 
   std::atomic<bool> done{false};
   Status result;

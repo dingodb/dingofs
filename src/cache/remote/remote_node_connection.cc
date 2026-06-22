@@ -180,8 +180,8 @@ void RDMAConnection::Send(const std::string& method,
                           const google::protobuf::Message& raw_request,
                           google::protobuf::Message* raw_response,
                           const IOBuffer* request_attachment,
-                          IOBuffer* response_attachment,
-                          uint32_t timeout_ms, Result* result) {
+                          IOBuffer* response_attachment, uint32_t timeout_ms,
+                          Result* result) {
   std::shared_ptr<infiniband::Client> client;
   {
     std::lock_guard<bthread::Mutex> guard(mutex_);
@@ -210,8 +210,8 @@ void RDMAConnection::Send(const std::string& method,
       auto* region = cntl.read_regions().Add();
       region->set_addr(reinterpret_cast<uint64_t>(iov.iov_base));
       region->set_length(static_cast<uint32_t>(iov.iov_len));
-      region->set_rkey(static_cast<uint32_t>(
-          infiniband::GetRkey(FLAGS_cache_rdma_device, iov.iov_base, iov.iov_len)));
+      region->set_rkey(static_cast<uint32_t>(infiniband::GetRkey(
+          FLAGS_cache_rdma_device, iov.iov_base, iov.iov_len)));
     }
   }
 

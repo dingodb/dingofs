@@ -20,8 +20,6 @@
  * Author: AI
  */
 
-#include "cache/remote/remote_node.h"
-
 #include <gtest/gtest.h>
 #include <json/value.h>
 
@@ -29,6 +27,7 @@
 #include <string>
 
 #include "cache/common/block_handle_helper.h"
+#include "cache/remote/remote_node.h"
 #include "common/options/cache.h"
 #include "dingofs/blockcache.pb.h"
 
@@ -91,8 +90,7 @@ class RemoteNodeTest : public ::testing::Test {
 };
 
 TEST_F(RemoteNodeTest, AccessorsDumpAndStream) {
-  RemoteNode node("044d4698-7bd4-4e44-9e94-aee6312ff06f", "10.0.1.8", 9300,
-            20);
+  RemoteNode node("044d4698-7bd4-4e44-9e94-aee6312ff06f", "10.0.1.8", 9300, 20);
 
   EXPECT_EQ(node.Id(), "044d4698-7bd4-4e44-9e94-aee6312ff06f");
   EXPECT_EQ(node.IP(), "10.0.1.8");
@@ -116,7 +114,7 @@ TEST_F(RemoteNodeTest, AccessorsDumpAndStream) {
 
 TEST_F(RemoteNodeTest, StartToleratesDisconnectedConnections) {
   RemoteNode node("20f2fc27-2f29-4975-8d08-836ec63b8f91", "not-an-ip", 9300,
-            10);
+                  10);
 
   EXPECT_TRUE(node.Start().ok());
   EXPECT_TRUE(node.Start().ok());
@@ -126,8 +124,7 @@ TEST_F(RemoteNodeTest, StartToleratesDisconnectedConnections) {
 }
 
 TEST_F(RemoteNodeTest, SendPutReturnsNetErrorWhenConnectedRpcFails) {
-  RemoteNode node("20f2fc27-2f29-4975-8d08-836ec63b8f92", "127.0.0.1", 9,
-            10);
+  RemoteNode node("20f2fc27-2f29-4975-8d08-836ec63b8f92", "127.0.0.1", 9, 10);
   ASSERT_TRUE(node.Start().ok());
 
   auto request = MakeRawRequest<pb::cache::PutRequest>("Put");
@@ -139,8 +136,7 @@ TEST_F(RemoteNodeTest, SendPutReturnsNetErrorWhenConnectedRpcFails) {
 }
 
 TEST_F(RemoteNodeTest, SendRangeRetriesThenReturnsInternalWhenRpcKeepsFailing) {
-  RemoteNode node("20f2fc27-2f29-4975-8d08-836ec63b8f93", "127.0.0.1", 9,
-            10);
+  RemoteNode node("20f2fc27-2f29-4975-8d08-836ec63b8f93", "127.0.0.1", 9, 10);
   ASSERT_TRUE(node.Start().ok());
 
   auto request = MakeRawRequest<pb::cache::RangeRequest>("Range");

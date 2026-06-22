@@ -20,12 +20,12 @@
  * Author: AI
  */
 
-#include "cache/iutil/string_util.h"
-
 #include <gtest/gtest.h>
 
 #include <cstring>
 #include <string>
+
+#include "cache/iutil/string_util.h"
 
 namespace dingofs {
 namespace cache {

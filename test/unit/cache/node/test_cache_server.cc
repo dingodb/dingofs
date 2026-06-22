@@ -20,12 +20,11 @@
  * Author: AI
  */
 
-#include "cache/node/cache_server.h"
-
 #include <gtest/gtest.h>
 
 #include <string>
 
+#include "cache/node/cache_server.h"
 #include "common/options/cache.h"
 
 namespace dingofs {

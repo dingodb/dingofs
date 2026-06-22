@@ -20,17 +20,15 @@
  * Author: AI
  */
 
-#include "cache/infiniband/protocol.h"
-
+#include <google/protobuf/arena.h>
 #include <gtest/gtest.h>
 
 #include <cstdint>
 #include <string_view>
 #include <vector>
 
-#include <google/protobuf/arena.h>
-
 #include "cache/infiniband/common.h"
+#include "cache/infiniband/protocol.h"
 #include "cache/infiniband/service.h"
 #include "dingofs/blockcache.pb.h"
 #include "dingofs/infiniband.pb.h"
@@ -66,7 +64,8 @@ class StubBlockCacheService : public pb::cache::BlockCacheService {
     if (done) done->Run();
   }
   void Ping(google::protobuf::RpcController*, const pb::cache::PingRequest*,
-            pb::cache::PingResponse*, google::protobuf::Closure* done) override {
+            pb::cache::PingResponse*,
+            google::protobuf::Closure* done) override {
     if (done) done->Run();
   }
 };
@@ -100,8 +99,7 @@ TEST_F(ProtocolTest, RequestRoundTrip) {
   RequestMeta payload;  // any protobuf message works as the data body
   payload.set_service_name("payload-marker");
 
-  ASSERT_TRUE(
-      Protocol::SerializeRequest(0x1234, meta, payload, sb.get()).ok());
+  ASSERT_TRUE(Protocol::SerializeRequest(0x1234, meta, payload, sb.get()).ok());
   EXPECT_GT(sb.get()->length, Protocol::kHeaderSize);
 
   {
@@ -133,8 +131,7 @@ TEST_F(ProtocolTest, ResponseRoundTrip) {
     RequestMeta payload;
     payload.set_service_name("resp-body");
 
-    ASSERT_TRUE(
-        Protocol::SerializeResponse(7, meta, &payload, sb.get()).ok());
+    ASSERT_TRUE(Protocol::SerializeResponse(7, meta, &payload, sb.get()).ok());
 
     uint64_t id = 0;
     pb::infiniband::ResponseMeta parsed_meta;
@@ -156,8 +153,7 @@ TEST_F(ProtocolTest, ResponseRoundTrip) {
     meta.set_error_code(ErrorCode::Unknown);
     meta.set_error_message("boom");
 
-    ASSERT_TRUE(
-        Protocol::SerializeResponse(8, meta, nullptr, sb.get()).ok());
+    ASSERT_TRUE(Protocol::SerializeResponse(8, meta, nullptr, sb.get()).ok());
 
     uint64_t id = 0;
     pb::infiniband::ResponseMeta parsed_meta;

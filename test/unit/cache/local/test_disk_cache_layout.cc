@@ -20,11 +20,10 @@
  * Author: AI
  */
 
-#include "cache/local/disk_cache_layout.h"
-
 #include <absl/strings/match.h>
 #include <gtest/gtest.h>
 
+#include "cache/local/disk_cache_layout.h"
 #include "common/block/block_handle.h"
 #include "common/block/block_key.h"
 

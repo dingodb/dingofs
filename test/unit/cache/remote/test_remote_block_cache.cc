@@ -20,8 +20,6 @@
  * Author: AI
  */
 
-#include "cache/remote/remote_block_cache.h"
-
 #include <gtest/gtest.h>
 #include <json/value.h>
 
@@ -30,6 +28,7 @@
 #include <string>
 #include <thread>
 
+#include "cache/remote/remote_block_cache.h"
 #include "common/block/block_handle.h"
 #include "common/block/block_key.h"
 #include "common/options/cache.h"
@@ -39,9 +38,7 @@ namespace cache {
 
 namespace {
 
-BlockHandle Handle() {
-  return BlockHandle(1, BlockKey(100, 0, 4096));
-}
+BlockHandle Handle() { return BlockHandle(1, BlockKey(100, 0, 4096)); }
 
 IOBuffer Buffer(const std::string& data) {
   return IOBuffer(data.data(), data.size());
@@ -124,8 +121,8 @@ TEST_F(RemoteBlockCacheTest, OperationsReturnNotFoundWithoutNode) {
   RangeOption option;
   option.block_whole_length = 4096;
 
-  EXPECT_TRUE(cache.Range(Handle(), 0, out.size(), &buffer, option)
-                  .IsNotFound());
+  EXPECT_TRUE(
+      cache.Range(Handle(), 0, out.size(), &buffer, option).IsNotFound());
 
   MarkShutdown(cache);
 }
@@ -153,9 +150,8 @@ TEST_F(RemoteBlockCacheTest, AsyncOperationsReturnNotFoundWithoutNode) {
   cache.AsyncCache(Handle(), Buffer("remote-block"), cb, {});
   cache.AsyncPrefetch(Handle(), 4096, cb, {});
 
-  ASSERT_TRUE(WaitUntil([&]() {
-    return done.load(std::memory_order_relaxed) == 4;
-  }));
+  ASSERT_TRUE(
+      WaitUntil([&]() { return done.load(std::memory_order_relaxed) == 4; }));
   EXPECT_EQ(not_found.load(std::memory_order_relaxed), 4);
 
   cache.Shutdown();

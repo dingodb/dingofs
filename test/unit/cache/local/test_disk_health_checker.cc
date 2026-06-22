@@ -20,8 +20,6 @@
  * Author: AI
  */
 
-#include "cache/local/disk_health_checker.h"
-
 #include <gtest/gtest.h>
 #include <unistd.h>
 
@@ -32,6 +30,7 @@
 #include <thread>
 
 #include "cache/local/disk_cache_layout.h"
+#include "cache/local/disk_health_checker.h"
 
 namespace dingofs {
 namespace cache {
@@ -116,7 +115,8 @@ TEST_F(DiskHealthCheckerTest, PeriodicProbeKeepsHealthy) {
   checker.Shutdown();
 }
 
-// Enough errors drive Normal->Unstable, then enough successes recover to Normal.
+// Enough errors drive Normal->Unstable, then enough successes recover to
+// Normal.
 TEST_F(DiskHealthCheckerTest, RecoversFromErrorsToHealthy) {
   DiskHealthChecker checker(layout_);
   checker.Start();

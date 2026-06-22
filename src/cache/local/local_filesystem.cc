@@ -34,10 +34,6 @@
 #include <memory>
 #include <string>
 
-#include "cache/local/aio.h"
-#include "cache/local/aio_queue.h"
-#include "cache/local/disk_cache_layout.h"
-#include "cache/local/disk_health_checker.h"
 #include "cache/common/macro.h"
 #include "cache/infiniband/common.h"
 #include "cache/infiniband/memory.h"
@@ -45,6 +41,10 @@
 #include "cache/iutil/buffer_pool.h"
 #include "cache/iutil/file_util.h"
 #include "cache/iutil/inflight_tracker.h"
+#include "cache/local/aio.h"
+#include "cache/local/aio_queue.h"
+#include "cache/local/disk_cache_layout.h"
+#include "cache/local/disk_health_checker.h"
 #include "common/const.h"
 #include "common/io_buffer.h"
 #include "common/options/cache.h"

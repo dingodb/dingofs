@@ -29,9 +29,9 @@
 #include <memory>
 #include <vector>
 
-#include "cache/node/node.h"
 #include "cache/infiniband/memory.h"
 #include "cache/infiniband/server.h"
+#include "cache/node/node.h"
 #include "dingofs/blockcache.pb.h"
 #include "utils/logclean_manager.h"
 

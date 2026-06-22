@@ -51,7 +51,7 @@ namespace cache {
 class RemoteNode {
  public:
   RemoteNode(const std::string& id, const std::string& ip, uint32_t port,
-       uint32_t weight);
+             uint32_t weight);
   Status Start();
   void Shutdown();
 
@@ -111,8 +111,8 @@ Response<U> RemoteNode::SendRequest(const Request<T>& request) {
     auto* conn = GetConnection();
     CHECK_NOTNULL(conn);
     if (!conn->IsConnected()) {
-      LOG(ERROR) << "RemoteNodeConnection is not connected, reconnect " << IP() << ":"
-                 << Port();
+      LOG(ERROR) << "RemoteNodeConnection is not connected, reconnect " << IP()
+                 << ":" << Port();
       DoConnect(conn);
       continue;  // retry another one
     }

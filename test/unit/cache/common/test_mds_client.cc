@@ -178,9 +178,9 @@ TEST_F(MDSClientImplTest, ToMemberStateMapsEveryState) {
             CacheGroupMemberState::kUnstable);
   EXPECT_EQ(ToMemberState(client, pb::mds::CacheGroupMemberStateOffline),
             CacheGroupMemberState::kOffline);
-  EXPECT_EQ(ToMemberState(client,
-                          static_cast<pb::mds::CacheGroupMemberState>(999)),
-            CacheGroupMemberState::kUnknown);
+  EXPECT_EQ(
+      ToMemberState(client, static_cast<pb::mds::CacheGroupMemberState>(999)),
+      CacheGroupMemberState::kUnknown);
 }
 
 TEST_F(MDSClientImplTest, ShouldRetryRecognizesRetriableStatuses) {
@@ -196,8 +196,7 @@ TEST_F(MDSClientImplTest, ShouldRetryRecognizesRetriableStatuses) {
   EXPECT_TRUE(
       ShouldRetry(client, Status::Unknown(pb::error::EINTERNAL, "internal")));
   EXPECT_TRUE(ShouldRetry(
-      client,
-      Status::Unknown(pb::error::ENOT_CAN_CONNECTED, "not connected")));
+      client, Status::Unknown(pb::error::ENOT_CAN_CONNECTED, "not connected")));
 }
 
 TEST_F(MDSClientImplTest, ShouldSetMDSAbormalOnlyForInternalOrNetwork) {

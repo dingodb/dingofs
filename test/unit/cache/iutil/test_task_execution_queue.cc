@@ -20,12 +20,12 @@
  * Author: AI
  */
 
-#include "cache/iutil/task_execution_queue.h"
-
 #include <gtest/gtest.h>
 
 #include <atomic>
 #include <vector>
+
+#include "cache/iutil/task_execution_queue.h"
 
 namespace dingofs {
 namespace cache {
