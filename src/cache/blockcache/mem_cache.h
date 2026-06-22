@@ -44,8 +44,8 @@ struct MemCacheOption {
   uint64_t cache_size_mb{0};
 };
 
-struct MemCacheVarsCollector {
-  explicit MemCacheVarsCollector(uint64_t cache_size_mb)
+struct MemCacheMetrics {
+  explicit MemCacheMetrics(uint64_t cache_size_mb)
       : capacity(Name("capacity"), cache_size_mb * kMiB),
         running_status(Name("running_status"), "down"),
         used_bytes(Name("used_bytes")),
@@ -73,7 +73,7 @@ struct MemCacheVarsCollector {
   bvar::Adder<int64_t> stage_skips;
 };
 
-using MemCacheVarsCollectorUPtr = std::unique_ptr<MemCacheVarsCollector>;
+using MemCacheMetricsUPtr = std::unique_ptr<MemCacheMetrics>;
 
 // Sharded in-memory CacheStore. Each shard owns an independent mutex, LRU
 // list and index, so concurrent accesses on different keys do not serialize.
@@ -147,7 +147,7 @@ class MemCache final : public CacheStore {
 
   std::array<Shard, kShardCount> shards_;
 
-  MemCacheVarsCollectorUPtr vars_;
+  MemCacheMetricsUPtr vars_;
 };
 
 using MemCacheSPtr = std::shared_ptr<MemCache>;
