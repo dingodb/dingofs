@@ -35,6 +35,7 @@
 #include "cache/common/storage_client.h"
 #include "common/block/block_handle.h"
 #include "common/block/block_key.h"
+#include "common/block/tensor_key.h"
 #include "common/blockaccess/accesser_common.h"
 #include "common/io_buffer.h"
 #include "common/options/cache.h"
@@ -250,6 +251,25 @@ TEST_F(BlockCacheImplTest, AsyncPrefetchInvokesCallback) {
   ASSERT_TRUE(WaitUntil([&done]() { return done.load(); }));
   EXPECT_TRUE(result.ok());
   EXPECT_TRUE(block_cache_->IsCached(handle));
+}
+
+// The BlockHandle key is a oneof{BlockKey, TensorKey}; every other test uses a
+// BlockKey. These cover the TensorKey path (KV-cache / LMCache tensors), whose
+// StoreKey layout differs ("tensor/<hh>/<hhhh>/..."), through BlockCacheImpl.
+TEST_F(BlockCacheImplTest, CacheTensorKeyStoresAndRangeReadsBack) {
+  BlockHandle h(TensorKey("llama-7b", 8, 0, "abcdef123456", "float16"));
+  ASSERT_TRUE(block_cache_->Cache(h, Buf("tensor-bytes")).ok());
+  EXPECT_TRUE(block_cache_->IsCached(h));
+
+  IOBuffer buffer;
+  ASSERT_TRUE(block_cache_->Range(h, 0, 12, &buffer).ok());
+  EXPECT_EQ(ReadAll(buffer), "tensor-bytes");
+}
+
+TEST_F(BlockCacheImplTest, PutTensorKeyCachesBlock) {
+  BlockHandle h(TensorKey("gpt2", 4, 1, "deadbeef99aa", "bfloat16"));
+  ASSERT_TRUE(block_cache_->Put(h, Buf("tk-put")).ok());
+  EXPECT_TRUE(block_cache_->IsCached(h));
 }
 
 TEST_F(BlockCacheImplTest, RangeStorageFetchFailurePropagates) {

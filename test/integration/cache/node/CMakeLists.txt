@@ -1,4 +1,4 @@
-# Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
+# Copyright (c) 2026 dingodb.com, Inc. All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,13 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-file(GLOB TEST_CACHE_BLOCKCACHE_SRCS "*.cc")
+# Cache-node lifecycle suite. Built as an object library and linked into the
+# single integration_test_cache binary (see ../CMakeLists.txt).
+file(GLOB INTEGRATION_CACHE_NODE_SRCS CONFIGURE_DEPENDS "*.cc")
 
-add_library(test_cache_blockcache OBJECT
-    ${TEST_CACHE_BLOCKCACHE_SRCS}
+add_library(integration_cache_node_tests OBJECT
+    ${INTEGRATION_CACHE_NODE_SRCS}
 )
 
-target_link_libraries(test_cache_blockcache
-    cache_lib
-    ${TEST_DEPS_WITHOUT_MAIN}
+target_link_libraries(integration_cache_node_tests
+    integration_cache_deploy
+    ${TEST_INTEGRATION_DEPS_WITHOUT_MAIN}
 )

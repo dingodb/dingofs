@@ -34,11 +34,14 @@
 
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/block_cache_impl.h"
-#include "cache/common/task_tracker.h"
 #include "cache/common/macro.h"
 #include "cache/common/mds_client.h"
 #include "cache/common/storage_client.h"
 #include "cache/common/storage_client_pool.h"
+#include "cache/common/task_tracker.h"
+#include "cache/infiniband/common.h"
+#include "cache/infiniband/memory.h"
+#include "cache/infiniband/slab_pool.h"
 #include "cache/iutil/string_util.h"
 #include "common/const.h"
 #include "common/io_buffer.h"
@@ -68,10 +71,16 @@ DEFINE_uint32(retrieve_storage_lock_timeout_ms, 10000,
 DEFINE_validator(retrieve_storage_lock_timeout_ms, brpc::PassValidate);
 
 CacheNode::CacheNode()
+    : CacheNode(std::make_shared<MDSClientImpl>(), nullptr) {}
+
+CacheNode::CacheNode(MDSClientSPtr mds_client,
+                     StorageClientPoolSPtr storage_client_pool)
     : running_(false),
-      mds_client_(std::make_shared<MDSClientImpl>()),
+      mds_client_(std::move(mds_client)),
       storage_client_pool_(
-          std::make_shared<StorageClientPoolImpl>(mds_client_)),
+          storage_client_pool
+              ? std::move(storage_client_pool)
+              : std::make_shared<StorageClientPoolImpl>(mds_client_)),
       heartbeat_(std::make_unique<Heartbeat>(mds_client_)),
       task_tracker_(std::make_unique<TaskTracker>()),
       num_hit_cache_("dingofs_cache_hit_count"),
@@ -282,6 +291,7 @@ Status CacheNode::RetrievePartBlock(const BlockHandle& handle, off_t offset,
     return status;
   }
 
+  AllocSlabBuffer(buffer, length);
   status = storage_client->Range(handle, offset, length, buffer);
   if (!status.ok() || block_length == 0) {
     return status;
@@ -331,6 +341,7 @@ Status CacheNode::RetrieveWholeBlock(const BlockHandle& handle,
     }
   }
 
+  AllocSlabBuffer(buffer, block_length);
   status = storage_client->Range(handle, 0, block_length, buffer);
   return status;
 }
@@ -339,6 +350,7 @@ Status CacheNode::RunTask(StorageClient* storage_client,
                           DownloadTaskSPtr task) {
   const auto& attr = task->Attr();
   auto& result = task->Result();
+  AllocSlabBuffer(&result.buffer, attr.length);
   auto status =
       storage_client->Range(attr.handle, 0, attr.length, &result.buffer);
   if (!status.ok()) {
@@ -361,6 +373,16 @@ Status CacheNode::WaitTask(DownloadTaskSPtr task) {
                << " timeout=" << FLAGS_retrieve_storage_lock_timeout_ms
                << " ms";
   return Status::Internal("wait download task timeout");
+}
+
+void CacheNode::AllocSlabBuffer(IOBuffer* buffer, size_t length) {
+  auto* pool = infiniband::GetGlobalReadSlabPool();
+  auto* slab = pool->Alloc();
+  CHECK(slab != nullptr) << "rdma read slab pool exhausted";
+  CHECK_LE(length, static_cast<size_t>(slab->capacity));
+  buffer->AppendUserDataWithMeta(
+      slab->data, length, [pool, slab](void*) { pool->Free(slab); },
+      slab->lkey);
 }
 
 std::ostream& operator<<(std::ostream& os, const CacheNode& /*node*/) {
