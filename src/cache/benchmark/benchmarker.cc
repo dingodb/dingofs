@@ -28,7 +28,7 @@
 #include "cache/common/mds_client.h"
 #include "cache/common/type.h"
 #include "cache/storage/storage_pool.h"
-#include "cache/tiercache/tier_block_cache.h"
+#include "cache/tier/tier_block_cache.h"
 #include "common/options/cache.h"
 
 namespace dingofs {

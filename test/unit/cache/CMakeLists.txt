@@ -18,7 +18,7 @@ add_subdirectory(local)
 add_subdirectory(infiniband)
 add_subdirectory(remote)
 add_subdirectory(node)
-add_subdirectory(tiercache)
+add_subdirectory(tier)
 
 add_executable(test_cache
     main.cc
@@ -31,7 +31,7 @@ target_link_libraries(test_cache
     $<TARGET_OBJECTS:test_cache_infiniband>
     $<TARGET_OBJECTS:test_cache_remote>
     $<TARGET_OBJECTS:test_cache_node>
-    $<TARGET_OBJECTS:test_cache_tiercache>
+    $<TARGET_OBJECTS:test_cache_tier>
 
     cache_lib
 

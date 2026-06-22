@@ -21,7 +21,7 @@
 #include <google/protobuf/descriptor.pb.h>
 
 #include "cache/infiniband/memory.h"
-#include "cache/tiercache/tier_block_cache.h"
+#include "cache/tier/tier_block_cache.h"
 #include "client/vfs/blockstore/block_store_access_log.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "common/options/cache.h"
