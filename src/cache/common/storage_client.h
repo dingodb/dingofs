@@ -33,9 +33,9 @@
 #include <memory>
 #include <ostream>
 
-#include "cache/local/cache_store.h"
 #include "cache/common/closure.h"
 #include "cache/iutil/task_execution_queue.h"
+#include "cache/local/cache_store.h"
 #include "common/blockaccess/block_accesser.h"
 #include "utils/concurrent/task_thread_pool.h"
 #include "utils/throttle.h"
@@ -89,8 +89,7 @@ class PutBlockTask final : public TaskClosure {
 class RangeBlockTask final : public TaskClosure {
  public:
   RangeBlockTask(BlockHandle handle, off_t offset, size_t length,
-                 IOBuffer* buffer,
-                 blockaccess::BlockAccesser* block_accesser,
+                 IOBuffer* buffer, blockaccess::BlockAccesser* block_accesser,
                  iutil::TaskExecutionQueueSPtr retry_queue);
 
   void Run() override;

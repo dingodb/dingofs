@@ -24,10 +24,10 @@
 #define DINGOFS_SRC_CACHE_TIER_TIER_BLOCK_CACHE_H_
 
 #include "cache/api/block_cache.h"
-#include "cache/local/cache_store.h"
 #include "cache/common/storage_client.h"
 #include "cache/iutil/bthread.h"
 #include "cache/iutil/inflight_tracker.h"
+#include "cache/local/cache_store.h"
 #include "common/blockaccess/block_accesser.h"
 
 namespace dingofs {

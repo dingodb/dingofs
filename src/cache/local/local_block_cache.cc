@@ -29,17 +29,17 @@
 #include <memory>
 #include <utility>
 
-#include "cache/local/cache_store.h"
-#include "cache/local/disk_cache.h"
-#include "cache/local/disk_cache_group.h"
-#include "cache/local/disk_cache_layout.h"
-#include "cache/local/mem_cache.h"
 #include "cache/common/macro.h"
 #include "cache/common/storage_client.h"
 #include "cache/common/storage_client_pool.h"
 #include "cache/iutil/bthread.h"
 #include "cache/iutil/inflight_tracker.h"
 #include "cache/iutil/string_util.h"
+#include "cache/local/cache_store.h"
+#include "cache/local/disk_cache.h"
+#include "cache/local/disk_cache_group.h"
+#include "cache/local/disk_cache_layout.h"
+#include "cache/local/mem_cache.h"
 #include "common/helper.h"
 #include "common/io_buffer.h"
 #include "common/options/cache.h"
@@ -83,8 +83,8 @@ static CacheStoreSPtr NewCacheStore() {
 }
 
 LocalBlockCache::LocalBlockCache(StorageClient* storage_client)
-    : LocalBlockCache(std::make_shared<SingletonStorageClient>(storage_client)) {
-}
+    : LocalBlockCache(
+          std::make_shared<SingletonStorageClient>(storage_client)) {}
 
 LocalBlockCache::LocalBlockCache(StorageClientPoolSPtr storage_client_pool)
     : running_(false),
@@ -144,7 +144,7 @@ Status LocalBlockCache::Shutdown() {
 }
 
 Status LocalBlockCache::Put(BlockHandle handle, IOBuffer block,
-                           PutOption option) {
+                            PutOption option) {
   DCHECK_RUNNING("LocalBlockCache");
 
   size_t length = block.Size();
@@ -164,14 +164,14 @@ Status LocalBlockCache::Put(BlockHandle handle, IOBuffer block,
 }
 
 Status LocalBlockCache::Range(BlockHandle handle, off_t offset, size_t length,
-                             IOBuffer* buffer, RangeOption /*option*/) {
+                              IOBuffer* buffer, RangeOption /*option*/) {
   DCHECK_RUNNING("LocalBlockCache");
 
   return store_->Load(std::move(handle), offset, length, buffer);
 }
 
 Status LocalBlockCache::Cache(BlockHandle handle, IOBuffer block,
-                             CacheOption /*option*/) {
+                              CacheOption /*option*/) {
   DCHECK_RUNNING("LocalBlockCache");
 
   size_t length = block.Size();
@@ -188,7 +188,7 @@ Status LocalBlockCache::Cache(BlockHandle handle, IOBuffer block,
 }
 
 Status LocalBlockCache::Prefetch(BlockHandle handle, size_t length,
-                                PrefetchOption /*option*/) {
+                                 PrefetchOption /*option*/) {
   DCHECK_RUNNING("LocalBlockCache");
 
   if (IsCached(handle)) {
@@ -215,7 +215,7 @@ Status LocalBlockCache::Prefetch(BlockHandle handle, size_t length,
 }
 
 void LocalBlockCache::AsyncPut(BlockHandle handle, IOBuffer block,
-                              AsyncCallback cb, PutOption option) {
+                               AsyncCallback cb, PutOption option) {
   DCHECK_RUNNING("LocalBlockCache");
 
   auto* self = GetSelfPtr();
@@ -233,9 +233,9 @@ void LocalBlockCache::AsyncPut(BlockHandle handle, IOBuffer block,
   }
 }
 
-void LocalBlockCache::AsyncRange(BlockHandle handle, off_t offset, size_t length,
-                                IOBuffer* buffer, AsyncCallback cb,
-                                RangeOption option) {
+void LocalBlockCache::AsyncRange(BlockHandle handle, off_t offset,
+                                 size_t length, IOBuffer* buffer,
+                                 AsyncCallback cb, RangeOption option) {
   DCHECK_RUNNING("LocalBlockCache");
 
   auto* self = GetSelfPtr();
@@ -254,7 +254,7 @@ void LocalBlockCache::AsyncRange(BlockHandle handle, off_t offset, size_t length
 }
 
 void LocalBlockCache::AsyncCache(BlockHandle handle, IOBuffer block,
-                                AsyncCallback cb, CacheOption option) {
+                                 AsyncCallback cb, CacheOption option) {
   DCHECK_RUNNING("LocalBlockCache");
 
   auto tracker = cache_tracker_;
@@ -282,7 +282,7 @@ void LocalBlockCache::AsyncCache(BlockHandle handle, IOBuffer block,
 }
 
 void LocalBlockCache::AsyncPrefetch(BlockHandle handle, size_t length,
-                                   AsyncCallback cb, PrefetchOption option) {
+                                    AsyncCallback cb, PrefetchOption option) {
   DCHECK_RUNNING("LocalBlockCache");
 
   auto tracker = prefetch_tracker_;
@@ -310,7 +310,7 @@ void LocalBlockCache::AsyncPrefetch(BlockHandle handle, size_t length,
 }
 
 Status LocalBlockCache::StoragePut(const BlockHandle& handle,
-                                  const IOBuffer& block) {
+                                   const IOBuffer& block) {
   StorageClient* storage_client;
   auto status =
       storage_client_pool_->GetStorageClient(handle.FsId(), &storage_client);
@@ -327,7 +327,7 @@ Status LocalBlockCache::StoragePut(const BlockHandle& handle,
 }
 
 Status LocalBlockCache::StorageRange(const BlockHandle& handle, off_t offset,
-                                    size_t length, IOBuffer* buffer) {
+                                     size_t length, IOBuffer* buffer) {
   StorageClient* storage_client;
   auto status =
       storage_client_pool_->GetStorageClient(handle.FsId(), &storage_client);

@@ -20,13 +20,12 @@
  * Author: AI
  */
 
-#include "cache/api/block_cache.h"
-
 #include <gtest/gtest.h>
 
 #include <sstream>
 #include <string>
 
+#include "cache/api/block_cache.h"
 #include "common/block/block_handle.h"
 #include "common/block/block_key.h"
 #include "common/io_buffer.h"

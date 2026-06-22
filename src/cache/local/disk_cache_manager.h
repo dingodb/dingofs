@@ -67,8 +67,7 @@ struct DiskCacheManagerMetrics {
   bvar::Status<bool> cache_full;
 };
 
-using DiskCacheManagerMetricsUPtr =
-    std::unique_ptr<DiskCacheManagerMetrics>;
+using DiskCacheManagerMetricsUPtr = std::unique_ptr<DiskCacheManagerMetrics>;
 
 // phase: staging -> uploaded -> cached
 enum class BlockPhase : uint8_t {

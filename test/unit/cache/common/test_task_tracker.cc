@@ -20,14 +20,13 @@
  * Author: AI
  */
 
-#include "cache/common/task_tracker.h"
-
 #include <gtest/gtest.h>
 
 #include <chrono>
 #include <sstream>
 #include <thread>
 
+#include "cache/common/task_tracker.h"
 #include "common/block/block_handle.h"
 #include "common/block/block_key.h"
 

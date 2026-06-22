@@ -23,10 +23,10 @@
 #ifndef DINGOFS_SRC_CACHE_BENCHMARK_BENCHMARKER_H_
 #define DINGOFS_SRC_CACHE_BENCHMARK_BENCHMARKER_H_
 
+#include "cache/api/block_cache.h"
 #include "cache/benchmark/factory.h"
 #include "cache/benchmark/reporter.h"
 #include "cache/benchmark/worker.h"
-#include "cache/api/block_cache.h"
 #include "cache/common/mds_client.h"
 #include "cache/storage/storage.h"
 #include "cache/storage/storage_pool.h"

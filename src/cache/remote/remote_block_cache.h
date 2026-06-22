@@ -52,8 +52,7 @@ struct RemoteBlockCacheMetrics {
                                               GetCacheHitRatio, this};
 };
 
-using RemoteBlockCacheMetricsUPtr =
-    std::unique_ptr<RemoteBlockCacheMetrics>;
+using RemoteBlockCacheMetricsUPtr = std::unique_ptr<RemoteBlockCacheMetrics>;
 
 class RemoteBlockCache final : public BlockCache {
  public:
@@ -84,9 +83,7 @@ class RemoteBlockCache final : public BlockCache {
   bool EnableStage() const override { return IsEnabled(); }
   bool EnableCache() const override { return IsEnabled(); }
   bool IsCached(const BlockHandle&) const override { return IsEnabled(); }
-  bool Dump(Json::Value& value) const override {
-    return cluster_->Dump(value);
-  }
+  bool Dump(Json::Value& value) const override { return cluster_->Dump(value); }
 
  private:
   friend class RemoteBlockCacheTest;

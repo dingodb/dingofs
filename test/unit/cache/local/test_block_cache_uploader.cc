@@ -20,8 +20,6 @@
  * Author: AI
  */
 
-#include "cache/local/block_cache_uploader.h"
-
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
@@ -30,10 +28,11 @@
 #include <memory>
 #include <thread>
 
-#include "cache/local/cache_store.h"
-#include "cache/local/mock/mock_cache_store.h"
 #include "cache/common/mock/mock_storage_client_pool.h"
 #include "cache/common/storage_client.h"
+#include "cache/local/block_cache_uploader.h"
+#include "cache/local/cache_store.h"
+#include "cache/local/mock/mock_cache_store.h"
 #include "common/block/block_handle.h"
 #include "common/block/block_key.h"
 #include "common/blockaccess/accesser_common.h"
@@ -43,13 +42,13 @@
 namespace dingofs {
 namespace cache {
 
+using blockaccess::MockBlockAccesser;
+using blockaccess::PutObjectAsyncContext;
 using ::testing::_;
 using ::testing::DoAll;
 using ::testing::Invoke;
 using ::testing::NiceMock;
 using ::testing::Return;
-using blockaccess::MockBlockAccesser;
-using blockaccess::PutObjectAsyncContext;
 
 class BlockCacheUploaderTest : public ::testing::Test {
  protected:
@@ -82,18 +81,19 @@ TEST_F(BlockCacheUploaderTest, UploadSuccessRemovesStage) {
 
   std::atomic<bool> removed{false};
   EXPECT_CALL(*store, RemoveStage(_, _))
-      .WillOnce(DoAll(Invoke([&removed](BlockHandle, CacheStore::RemoveStageOption) {
-                        removed = true;
-                      }),
-                      Return(Status::OK())));
+      .WillOnce(
+          DoAll(Invoke([&removed](BlockHandle, CacheStore::RemoveStageOption) {
+                  removed = true;
+                }),
+                Return(Status::OK())));
 
   MockBlockAccesser accesser;
   EXPECT_CALL(accesser, AsyncPut(_, _))
-      .WillOnce(Invoke([](const std::string&,
-                          std::shared_ptr<PutObjectAsyncContext> ctx) {
-        ctx->status = Status::OK();
-        ctx->cb(ctx);
-      }));
+      .WillOnce(Invoke(
+          [](const std::string&, std::shared_ptr<PutObjectAsyncContext> ctx) {
+            ctx->status = Status::OK();
+            ctx->cb(ctx);
+          }));
   StorageClient storage_client(&accesser);
   ASSERT_TRUE(storage_client.Start().ok());
 

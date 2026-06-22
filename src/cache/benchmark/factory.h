@@ -46,8 +46,8 @@ class BlockKeyIterator {
   uint64_t idx_;  // worker index, start with 0
   uint64_t blksize_;
   uint64_t blocks_;
-  uint64_t id_;        // slice id
-  uint64_t index_;     // block index within the slice
+  uint64_t id_;     // slice id
+  uint64_t index_;  // block index within the slice
   uint64_t allocated_;
 };
 

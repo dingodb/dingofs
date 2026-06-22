@@ -90,7 +90,7 @@ void RemoteCacheCluster::Shutdown() {
 }
 
 Status RemoteCacheCluster::SendPutRequest(const BlockHandle& handle,
-                                const IOBuffer& block) {
+                                          const IOBuffer& block) {
   Status status;
   size_t length = block.Size();
   RemoteCacheClusterMetricsGuard guard("Put", length, status, vars_.get());
@@ -111,9 +111,11 @@ Status RemoteCacheCluster::SendPutRequest(const BlockHandle& handle,
   return status;
 }
 
-Status RemoteCacheCluster::SendRangeRequest(const BlockHandle& handle, off_t offset,
-                                  size_t length, IOBuffer* buffer,
-                                  size_t block_whole_length, bool* cache_hit) {
+Status RemoteCacheCluster::SendRangeRequest(const BlockHandle& handle,
+                                            off_t offset, size_t length,
+                                            IOBuffer* buffer,
+                                            size_t block_whole_length,
+                                            bool* cache_hit) {
   Status status;
   RemoteCacheClusterMetricsGuard guard("Range", length, status, vars_.get());
 
@@ -140,7 +142,7 @@ Status RemoteCacheCluster::SendRangeRequest(const BlockHandle& handle, off_t off
 }
 
 Status RemoteCacheCluster::SendCacheRequest(const BlockHandle& handle,
-                                  const IOBuffer& block) {
+                                            const IOBuffer& block) {
   Status status;
   size_t length = block.Size();
   RemoteCacheClusterMetricsGuard guard("Cache", length, status, vars_.get());
@@ -161,7 +163,8 @@ Status RemoteCacheCluster::SendCacheRequest(const BlockHandle& handle,
   return status;
 }
 
-Status RemoteCacheCluster::SendPrefetchRequest(const BlockHandle& handle, size_t length) {
+Status RemoteCacheCluster::SendPrefetchRequest(const BlockHandle& handle,
+                                               size_t length) {
   Status status;
   RemoteCacheClusterMetricsGuard guard("Prefetch", length, status, vars_.get());
 
@@ -258,8 +261,8 @@ RemoteNodeGroupBuilder::RemoteNodeGroupBuilder(bool start_nodes)
   bthread::ExecutionQueueOptions options;
   options.use_pthread = true;
   CHECK_EQ(0, bthread::execution_queue_start(
-                  &queue_id_, &options,
-                  &RemoteNodeGroupBuilder::ShutdownNodes, this));
+                  &queue_id_, &options, &RemoteNodeGroupBuilder::ShutdownNodes,
+                  this));
 }
 
 RemoteNodeGroupBuilder::~RemoteNodeGroupBuilder() {

@@ -20,11 +20,11 @@
  * Author: AI
  */
 
-#include "cache/common/block_handle_helper.h"
-
 #include <gtest/gtest.h>
 
 #include <cstdint>
+
+#include "cache/common/block_handle_helper.h"
 
 namespace dingofs {
 namespace cache {
@@ -69,20 +69,20 @@ TEST_F(BlockHandleHelperTest, ParseTensorKeyFromFilename) {
 
   {  // too few / too many fields are rejected
     TensorKey key;
-    EXPECT_FALSE(ParseFromFilename("a@b@c@d", &key));          // 4 parts
+    EXPECT_FALSE(ParseFromFilename("a@b@c@d", &key));             // 4 parts
     EXPECT_FALSE(ParseFromFilename("m@8@3@hash@f16@e@x", &key));  // 7 parts
   }
 
   {  // world_size / worker_id must be valid uint32
     TensorKey key;
-    EXPECT_FALSE(ParseFromFilename("m@x@3@hash@f16", &key));   // non-numeric
-    EXPECT_FALSE(ParseFromFilename("m@@3@hash@f16", &key));    // empty
-    EXPECT_FALSE(ParseFromFilename("m@8@y@hash@f16", &key));   // non-numeric
+    EXPECT_FALSE(ParseFromFilename("m@x@3@hash@f16", &key));    // non-numeric
+    EXPECT_FALSE(ParseFromFilename("m@@3@hash@f16", &key));     // empty
+    EXPECT_FALSE(ParseFromFilename("m@8@y@hash@f16", &key));    // non-numeric
     EXPECT_FALSE(ParseFromFilename("m@12x@3@hash@f16", &key));  // trailing junk
     EXPECT_FALSE(
         ParseFromFilename("m@99999999999@3@hash@f16", &key));  // > UINT32_MAX
-    EXPECT_FALSE(ParseFromFilename(
-        "m@999999999999999999999@3@hash@f16", &key));  // strtoul overflow/errno
+    EXPECT_FALSE(ParseFromFilename("m@999999999999999999999@3@hash@f16",
+                                   &key));  // strtoul overflow/errno
   }
 }
 

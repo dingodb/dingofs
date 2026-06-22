@@ -127,8 +127,7 @@ void RangeTaskFactory::Range(const BlockKey& key, off_t offset, size_t length,
   option.block_whole_length = FLAGS_blksize;
 
   BlockHandle handle(static_cast<uint32_t>(FLAGS_fsid), key);
-  auto status =
-      block_cache_->Range(handle, offset, length, buffer, option);
+  auto status = block_cache_->Range(handle, offset, length, buffer, option);
 
   if (!status.ok()) {
     LOG(ERROR) << "Range block (key=" << key.Filename()

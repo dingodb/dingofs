@@ -20,13 +20,12 @@
  * Author: AI
  */
 
-#include "cache/remote/remote_cache_cluster.h"
-
 #include <gtest/gtest.h>
 
 #include <string>
 
 #include "cache/iutil/ketama_con_hash.h"
+#include "cache/remote/remote_cache_cluster.h"
 #include "common/options/cache.h"
 
 namespace dingofs {
@@ -78,8 +77,8 @@ TEST_F(RemoteNodeGroupBuilderTest, BuildFiltersUnavailableMembers) {
              CacheGroupMemberState::kOffline),
       Member("member-zero-weight", "10.0.1.2", 9300, 0,
              CacheGroupMemberState::kOnline),
-      Member("044d4698-7bd4-4e44-9e94-aee6312ff06f", "10.0.1.3", 9300,
-             20, CacheGroupMemberState::kOnline),
+      Member("044d4698-7bd4-4e44-9e94-aee6312ff06f", "10.0.1.3", 9300, 20,
+             CacheGroupMemberState::kOnline),
   };
 
   auto group = builder.Build(members);
@@ -131,8 +130,7 @@ TEST_F(RemoteNodeGroupBuilderTest, BuildReturnsNullWhenNoOnlineMembersRemain) {
   RemoteNodeGroupBuilder builder(/*start_nodes=*/false);
 
   Members first_members{
-      Member("member-a", "10.0.1.10", 9300, 10,
-             CacheGroupMemberState::kOnline),
+      Member("member-a", "10.0.1.10", 9300, 10, CacheGroupMemberState::kOnline),
   };
   ASSERT_NE(builder.Build(first_members), nullptr);
 

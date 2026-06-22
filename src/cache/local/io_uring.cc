@@ -29,8 +29,8 @@
 
 #include <cstring>
 
-#include "cache/local/aio.h"
 #include "cache/common/macro.h"
+#include "cache/local/aio.h"
 #include "common/status.h"
 
 namespace dingofs {

@@ -20,8 +20,6 @@
  * Author: AI
  */
 
-#include "cache/local/disk_cache_loader.h"
-
 #include <gtest/gtest.h>
 #include <unistd.h>
 
@@ -36,6 +34,7 @@
 
 #include "cache/local/cache_store.h"
 #include "cache/local/disk_cache_layout.h"
+#include "cache/local/disk_cache_loader.h"
 #include "cache/local/disk_cache_manager.h"
 #include "common/block/block_handle.h"
 #include "common/block/block_key.h"
@@ -127,7 +126,8 @@ TEST_F(DiskCacheLoaderTest, LoadsStageAndCacheBlocks) {
   }
 
   // The valid block files are kept on disk.
-  EXPECT_TRUE(std::filesystem::exists(stage_dir + "/1/blocks/0/4/4098_1_4194304"));
+  EXPECT_TRUE(
+      std::filesystem::exists(stage_dir + "/1/blocks/0/4/4098_1_4194304"));
   EXPECT_TRUE(std::filesystem::exists(cache_dir + "/blocks/0/0/100_0_4096"));
 }
 

@@ -20,8 +20,6 @@
  * Author: AI
  */
 
-#include "cache/local/local_block_cache.h"
-
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
@@ -33,6 +31,7 @@
 
 #include "cache/common/mock/mock_storage_client_pool.h"
 #include "cache/common/storage_client.h"
+#include "cache/local/local_block_cache.h"
 #include "common/block/block_handle.h"
 #include "common/block/block_key.h"
 #include "common/block/tensor_key.h"
@@ -44,20 +43,21 @@
 namespace dingofs {
 namespace cache {
 
-using ::testing::_;
-using ::testing::Invoke;
-using ::testing::NiceMock;
 using blockaccess::GetObjectAsyncContext;
 using blockaccess::MockBlockAccesser;
 using blockaccess::PutObjectAsyncContext;
+using ::testing::_;
+using ::testing::Invoke;
+using ::testing::NiceMock;
 
 DECLARE_string(cache_store);
 DECLARE_bool(enable_stage);
 DECLARE_bool(enable_cache);
 
-// Exercises LocalBlockCache backed by an in-memory MemCache (FLAGS_cache_store =
-// "memory"), so no disk/RDMA hardware is required. A real StorageClient over a
-// mock BlockAccesser serves the background uploader and the storage-fetch path.
+// Exercises LocalBlockCache backed by an in-memory MemCache (FLAGS_cache_store
+// = "memory"), so no disk/RDMA hardware is required. A real StorageClient over
+// a mock BlockAccesser serves the background uploader and the storage-fetch
+// path.
 class BlockCacheImplTest : public ::testing::Test {
  protected:
   void SetUp() override {
@@ -67,18 +67,18 @@ class BlockCacheImplTest : public ::testing::Test {
     // Default storage IO succeeds immediately so the background upload worker
     // never blocks in StorageClient::Put()/Range()::Wait().
     ON_CALL(accesser_, AsyncPut(_, _))
-        .WillByDefault(Invoke([](const std::string&,
-                                 std::shared_ptr<PutObjectAsyncContext> ctx) {
-          ctx->status = Status::OK();
-          ctx->cb(ctx);
-        }));
+        .WillByDefault(Invoke(
+            [](const std::string&, std::shared_ptr<PutObjectAsyncContext> ctx) {
+              ctx->status = Status::OK();
+              ctx->cb(ctx);
+            }));
     ON_CALL(accesser_, AsyncGet(_, _))
-        .WillByDefault(Invoke([](const std::string&,
-                                 std::shared_ptr<GetObjectAsyncContext> ctx) {
-          ctx->actual_len = ctx->len;  // must equal requested length
-          ctx->status = Status::OK();
-          ctx->cb(ctx);
-        }));
+        .WillByDefault(Invoke(
+            [](const std::string&, std::shared_ptr<GetObjectAsyncContext> ctx) {
+              ctx->actual_len = ctx->len;  // must equal requested length
+              ctx->status = Status::OK();
+              ctx->cb(ctx);
+            }));
 
     storage_client_ = std::make_unique<StorageClient>(&accesser_);
     ASSERT_TRUE(storage_client_->Start().ok());
@@ -170,7 +170,8 @@ TEST_F(BlockCacheImplTest, CacheStoresAndRangeReadsBack) {
 }
 
 TEST_F(BlockCacheImplTest, RangeMissReturnsNotFound) {
-  // LocalBlockCache::Range is cache-only; a miss is NotFound, not a storage read.
+  // LocalBlockCache::Range is cache-only; a miss is NotFound, not a storage
+  // read.
   IOBuffer buffer;
   EXPECT_TRUE(block_cache_->Range(Handle(999), 0, 1, &buffer).IsNotFound());
 }

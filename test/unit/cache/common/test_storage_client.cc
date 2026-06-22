@@ -20,14 +20,13 @@
  * Author: AI
  */
 
-#include "cache/common/storage_client.h"
-
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include <memory>
 #include <string>
 
+#include "cache/common/storage_client.h"
 #include "common/block/block_handle.h"
 #include "common/block/block_key.h"
 #include "common/blockaccess/accesser_common.h"
@@ -37,11 +36,11 @@
 namespace dingofs {
 namespace cache {
 
-using ::testing::_;
-using ::testing::Invoke;
 using blockaccess::GetObjectAsyncContext;
 using blockaccess::MockBlockAccesser;
 using blockaccess::PutObjectAsyncContext;
+using ::testing::_;
+using ::testing::Invoke;
 
 DECLARE_int64(storage_upload_retry_timeout_s);
 
@@ -70,11 +69,11 @@ TEST_F(StorageClientTest, PutSuccess) {
   ASSERT_TRUE(client.Start().ok());
 
   EXPECT_CALL(accesser_, AsyncPut(_, _))
-      .WillOnce(Invoke([](const std::string&,
-                          std::shared_ptr<PutObjectAsyncContext> ctx) {
-        ctx->status = Status::OK();
-        ctx->cb(ctx);
-      }));
+      .WillOnce(Invoke(
+          [](const std::string&, std::shared_ptr<PutObjectAsyncContext> ctx) {
+            ctx->status = Status::OK();
+            ctx->cb(ctx);
+          }));
 
   EXPECT_TRUE(client.Put(Handle(100), Buf("hello")).ok());
   ASSERT_TRUE(client.Shutdown().ok());
@@ -87,13 +86,13 @@ TEST_F(StorageClientTest, PutRetriesThenSucceeds) {
   int calls = 0;
   EXPECT_CALL(accesser_, AsyncPut(_, _))
       .Times(2)
-      .WillRepeatedly(Invoke([&calls](const std::string&,
-                                      std::shared_ptr<PutObjectAsyncContext>
-                                          ctx) {
-        ctx->status = (++calls == 1) ? Status::IoError("transient")
-                                     : Status::OK();
-        ctx->cb(ctx);
-      }));
+      .WillRepeatedly(
+          Invoke([&calls](const std::string&,
+                          std::shared_ptr<PutObjectAsyncContext> ctx) {
+            ctx->status =
+                (++calls == 1) ? Status::IoError("transient") : Status::OK();
+            ctx->cb(ctx);
+          }));
 
   EXPECT_TRUE(client.Put(Handle(101), Buf("data")).ok());
   EXPECT_EQ(calls, 2);
@@ -109,11 +108,11 @@ TEST_F(StorageClientTest, PutFailsWhenRetryWindowElapsed) {
   ASSERT_TRUE(client.Start().ok());
 
   EXPECT_CALL(accesser_, AsyncPut(_, _))
-      .WillOnce(Invoke([](const std::string&,
-                          std::shared_ptr<PutObjectAsyncContext> ctx) {
-        ctx->status = Status::IoError("permanent");
-        ctx->cb(ctx);
-      }));
+      .WillOnce(Invoke(
+          [](const std::string&, std::shared_ptr<PutObjectAsyncContext> ctx) {
+            ctx->status = Status::IoError("permanent");
+            ctx->cb(ctx);
+          }));
 
   EXPECT_TRUE(client.Put(Handle(102), Buf("x")).IsIoError());
   ASSERT_TRUE(client.Shutdown().ok());
@@ -173,11 +172,11 @@ TEST_F(StorageClientTest, RangeNotFoundIsNotRetried) {
   ASSERT_TRUE(client.Start().ok());
 
   EXPECT_CALL(accesser_, AsyncGet(_, _))
-      .WillOnce(Invoke([](const std::string&,
-                          std::shared_ptr<GetObjectAsyncContext> ctx) {
-        ctx->status = Status::NotFound("no such object");
-        ctx->cb(ctx);
-      }));
+      .WillOnce(Invoke(
+          [](const std::string&, std::shared_ptr<GetObjectAsyncContext> ctx) {
+            ctx->status = Status::NotFound("no such object");
+            ctx->cb(ctx);
+          }));
 
   std::string storage(4096, '\0');
   IOBuffer buffer(storage.data(), storage.size());

@@ -94,8 +94,8 @@ ConnectionUPtr Dialer::Dial(const std::string& address) {
 }
 
 Status Dialer::SyncConnManagementMeta(const std::string& address,
-                                     const ConnManagementMeta& local_cm_meta,
-                                     ConnManagementMeta* remote_cm_meta) {
+                                      const ConnManagementMeta& local_cm_meta,
+                                      ConnManagementMeta* remote_cm_meta) {
   butil::EndPoint ep;
   if (butil::str2endpoint(address.c_str(), &ep) != 0) {
     LOG(ERROR) << "Fail to parse address=" << address;

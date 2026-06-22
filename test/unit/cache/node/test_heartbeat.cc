@@ -20,8 +20,6 @@
  * Author: AI
  */
 
-#include "cache/node/heartbeat.h"
-
 #include <gflags/gflags.h>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -32,6 +30,7 @@
 #include <thread>
 
 #include "cache/common/mock/mock_mds_client.h"
+#include "cache/node/heartbeat.h"
 
 namespace dingofs {
 namespace cache {
@@ -68,11 +67,11 @@ TEST_F(HeartbeatTest, SendsHeartbeatPeriodically) {
   auto mds = std::make_shared<NiceMock<MockMDSClient>>();
   std::atomic<int> count{0};
   ON_CALL(*mds, Heartbeat(_, _, _))
-      .WillByDefault(Invoke([&count](const std::string&, const std::string&,
-                                     uint32_t) {
-        count.fetch_add(1);
-        return Status::OK();
-      }));
+      .WillByDefault(
+          Invoke([&count](const std::string&, const std::string&, uint32_t) {
+            count.fetch_add(1);
+            return Status::OK();
+          }));
 
   Heartbeat heartbeat(mds);
   heartbeat.Start();
@@ -88,11 +87,11 @@ TEST_F(HeartbeatTest, SurvivesHeartbeatFailure) {
   auto mds = std::make_shared<NiceMock<MockMDSClient>>();
   std::atomic<int> count{0};
   ON_CALL(*mds, Heartbeat(_, _, _))
-      .WillByDefault(Invoke([&count](const std::string&, const std::string&,
-                                     uint32_t) {
-        count.fetch_add(1);
-        return Status::NetError("mds unreachable");
-      }));
+      .WillByDefault(
+          Invoke([&count](const std::string&, const std::string&, uint32_t) {
+            count.fetch_add(1);
+            return Status::NetError("mds unreachable");
+          }));
 
   Heartbeat heartbeat(mds);
   heartbeat.Start();

@@ -20,12 +20,12 @@
  * Author: AI
  */
 
-#include "cache/common/context.h"
-
 #include <gtest/gtest.h>
 
 #include <algorithm>
 #include <cctype>
+
+#include "cache/common/context.h"
 
 namespace dingofs {
 namespace cache {

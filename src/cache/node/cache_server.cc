@@ -25,12 +25,12 @@
 #include <atomic>
 #include <memory>
 
-#include "cache/node/service.h"
 #include "cache/infiniband/connection.h"
 #include "cache/infiniband/infiniband.h"
 #include "cache/infiniband/server.h"
 #include "cache/infiniband/slab_pool.h"
 #include "cache/iutil/string_util.h"
+#include "cache/node/service.h"
 #include "common/options/cache.h"
 #include "fmt/format.h"
 
@@ -129,7 +129,9 @@ Status CacheServer::Shutdown() {
   return status;
 }
 
-void CacheServer::InstallSignal() { CHECK(SIG_ERR != signal(SIGPIPE, SIG_IGN)); }
+void CacheServer::InstallSignal() {
+  CHECK(SIG_ERR != signal(SIGPIPE, SIG_IGN));
+}
 
 Status CacheServer::StartRDMAServer() {
   infiniband::EndPoint endpoint{
@@ -149,7 +151,8 @@ Status CacheServer::StartRDMAServer() {
 
   infiniband::Infiniband::Context ctx;
   status = infiniband::Infiniband::Init(
-      FLAGS_cache_rdma_device, static_cast<uint8_t>(FLAGS_cache_rdma_port_num), &ctx);
+      FLAGS_cache_rdma_device, static_cast<uint8_t>(FLAGS_cache_rdma_port_num),
+      &ctx);
   if (!status.ok()) {
     return status;
   }
@@ -160,7 +163,7 @@ Status CacheServer::StartRDMAServer() {
 }
 
 Status CacheServer::StartBrpcServer(const std::string& listen_ip,
-                               uint32_t listen_port) {
+                                    uint32_t listen_port) {
   butil::EndPoint ep;
   int rc = butil::str2endpoint(listen_ip.c_str(), listen_port, &ep);
   if (rc != 0) {

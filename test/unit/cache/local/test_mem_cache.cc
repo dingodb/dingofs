@@ -20,14 +20,13 @@
  * Author: AI
  */
 
-#include "cache/local/mem_cache.h"
-
 #include <gtest/gtest.h>
 
 #include <string>
 #include <vector>
 
 #include "cache/local/cache_store.h"
+#include "cache/local/mem_cache.h"
 #include "common/block/block_key.h"
 #include "common/io_buffer.h"
 
@@ -91,12 +90,12 @@ TEST_F(MemCacheTest, Stage) {
   MemCache cache({.cache_size_mb = 1});
 
   size_t uploaded_length = 0;
-  ASSERT_TRUE(cache
-                  .Start([&uploaded_length](BlockHandle, size_t length,
-                                            BlockAttr) {
-                    uploaded_length = length;
-                  })
-                  .ok());
+  ASSERT_TRUE(
+      cache
+          .Start([&uploaded_length](BlockHandle, size_t length, BlockAttr) {
+            uploaded_length = length;
+          })
+          .ok());
 
   auto handle = MakeHandle(101, 0, 5);
   ASSERT_TRUE(cache.Stage(handle, MakeBlock("hello")).ok());

@@ -20,9 +20,9 @@
  * Author: AI
  */
 
-#include "cache/common/vars.h"
-
 #include <gtest/gtest.h>
+
+#include "cache/common/vars.h"
 
 namespace dingofs {
 namespace cache {

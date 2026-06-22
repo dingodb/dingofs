@@ -36,9 +36,9 @@
 #include <string>
 #include <vector>
 
+#include "cache/helper/test_log_sink.h"
 #include "cache/local/aio.h"
 #include "cache/local/io_uring.h"
-#include "cache/helper/test_log_sink.h"
 
 DEFINE_string(test_dir, "/tmp", "Base directory for IOUring test files");
 DEFINE_bool(run_perf_test, false, "Run performance benchmark tests");
@@ -166,9 +166,8 @@ TEST_F(IOUringTest, StartAndShutdown) {
     std::vector<iovec> fixed_buffers = {{raw_write_buffer, kBufferSize},
                                         {raw_read_buffer, kBufferSize}};
 
-    IOUringOptions options = {.entries = 1024,
-                              .use_sqpoll = false,
-                              .fixed_buffers = fixed_buffers};
+    IOUringOptions options = {
+        .entries = 1024, .use_sqpoll = false, .fixed_buffers = fixed_buffers};
 
     IOUring io_uring(std::move(options));
     EXPECT_TRUE(io_uring.Start().ok());
@@ -445,9 +444,8 @@ TEST_F(IOUringTest, MixedReadWrite) {
     int block_idx = i * 2;  // 0, 2, 4, 6
     read_buffers[i] = static_cast<char*>(aligned_alloc(4096, kBlockSize));
     std::memset(read_buffers[i], 0, kBlockSize);
-    aios.push_back(std::make_unique<Aio>(fd, block_idx * kBlockSize,
-                                         kBlockSize, read_buffers[i], -1,
-                                         true));
+    aios.push_back(std::make_unique<Aio>(fd, block_idx * kBlockSize, kBlockSize,
+                                         read_buffers[i], -1, true));
   }
 
   // Prepare write operations for odd blocks
@@ -456,9 +454,8 @@ TEST_F(IOUringTest, MixedReadWrite) {
     write_buffers[i] = static_cast<char*>(aligned_alloc(4096, kBlockSize));
     std::memset(write_buffers[i], static_cast<char>('X' + block_idx),
                 kBlockSize);
-    aios.push_back(std::make_unique<Aio>(fd, block_idx * kBlockSize,
-                                         kBlockSize, write_buffers[i], -1,
-                                         false));
+    aios.push_back(std::make_unique<Aio>(fd, block_idx * kBlockSize, kBlockSize,
+                                         write_buffers[i], -1, false));
   }
 
   // Step 3: Submit all operations (reads and writes mixed)
@@ -525,9 +522,8 @@ TEST_F(IOUringTest, WriteWithFixedBuffer) {
 
   std::vector<iovec> fixed_buffers = {{raw_write_buffer, kBufferSize}};
 
-  IOUringOptions options = {.entries = 256,
-                            .use_sqpoll = false,
-                            .fixed_buffers = fixed_buffers};
+  IOUringOptions options = {
+      .entries = 256, .use_sqpoll = false, .fixed_buffers = fixed_buffers};
 
   IOUring io_uring(std::move(options));
   ASSERT_TRUE(io_uring.Start().ok());
@@ -651,8 +647,7 @@ TEST_F(IOUringTest, WaitIO) {
     for (int i = 0; i < kNumOps; ++i) {
       buffers[i] = static_cast<char*>(aligned_alloc(4096, 4096));
       std::memset(buffers[i], 0, 4096);
-      aios.push_back(
-          std::make_unique<Aio>(fd, 0, 4096, buffers[i], -1, true));
+      aios.push_back(std::make_unique<Aio>(fd, 0, 4096, buffers[i], -1, true));
       EXPECT_TRUE(io_uring.PrepareIO(aios[i].get()).ok());
     }
     EXPECT_TRUE(io_uring.SubmitIO().ok());
@@ -885,9 +880,8 @@ TEST_F(IOUringTest, OutputStream) {
     char* raw_buffer = static_cast<char*>(aligned_alloc(4096, 4096));
     std::vector<iovec> fixed_buffers = {{raw_buffer, 4096}, {raw_buffer, 4096}};
 
-    IOUringOptions options = {.entries = 512,
-                              .use_sqpoll = false,
-                              .fixed_buffers = fixed_buffers};
+    IOUringOptions options = {
+        .entries = 512, .use_sqpoll = false, .fixed_buffers = fixed_buffers};
 
     IOUring io_uring(std::move(options));
     ASSERT_TRUE(io_uring.Start().ok());
@@ -1140,8 +1134,8 @@ class IOUringPerfTest : public IOUringTest {
         std::memset(buffers[i], static_cast<char>(i), block_size);
       }
 
-      aios.push_back(std::make_unique<Aio>(fd, offset, block_size,
-                                           buffers[i], -1, is_read));
+      aios.push_back(std::make_unique<Aio>(fd, offset, block_size, buffers[i],
+                                           -1, is_read));
     }
 
     auto start = std::chrono::high_resolution_clock::now();
@@ -1304,9 +1298,8 @@ class IOUringPerfTest : public IOUringTest {
 
     IOUringOptions options;
     if (use_fixed_buffer) {
-      options = {.entries = 1024,
-                 .use_sqpoll = false,
-                 .fixed_buffers = fixed_buffers};
+      options = {
+          .entries = 1024, .use_sqpoll = false, .fixed_buffers = fixed_buffers};
     } else {
       options = {.entries = 1024, .use_sqpoll = false};
     }
@@ -1436,8 +1429,7 @@ TEST_F(IOUringTest, WriteReadDataIntegrity) {
 
   {
     for (int i = 0; i < kNumBlocks; ++i) {
-      Aio aio(fd, i * kBlockSize, kBlockSize, write_buffers[i], -1,
-              false);
+      Aio aio(fd, i * kBlockSize, kBlockSize, write_buffers[i], -1, false);
 
       ASSERT_TRUE(io_uring.PrepareIO(&aio).ok());
       ASSERT_TRUE(io_uring.SubmitIO().ok());

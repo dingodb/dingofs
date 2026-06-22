@@ -97,7 +97,7 @@ Status RemoteBlockCache::Shutdown() {
 }
 
 Status RemoteBlockCache::Put(BlockHandle handle, IOBuffer block,
-                                 PutOption /*option*/) {
+                             PutOption /*option*/) {
   DCHECK_RUNNING("RemoteBlockCache");
 
   auto status = cluster_->SendPutRequest(handle, block);
@@ -107,9 +107,8 @@ Status RemoteBlockCache::Put(BlockHandle handle, IOBuffer block,
   return status;
 }
 
-Status RemoteBlockCache::Range(BlockHandle handle, off_t offset,
-                                   size_t length, IOBuffer* buffer,
-                                   RangeOption option) {
+Status RemoteBlockCache::Range(BlockHandle handle, off_t offset, size_t length,
+                               IOBuffer* buffer, RangeOption option) {
   DCHECK_RUNNING("RemoteBlockCache");
   CHECK_NOTNULL(buffer);
   CHECK_EQ(buffer->BackingBlockNum(), 1);
@@ -130,7 +129,7 @@ Status RemoteBlockCache::Range(BlockHandle handle, off_t offset,
 }
 
 Status RemoteBlockCache::Cache(BlockHandle handle, IOBuffer block,
-                                   CacheOption /*option*/) {
+                               CacheOption /*option*/) {
   DCHECK_RUNNING("RemoteBlockCache");
 
   auto status = cluster_->SendCacheRequest(handle, block);
@@ -141,7 +140,7 @@ Status RemoteBlockCache::Cache(BlockHandle handle, IOBuffer block,
 }
 
 Status RemoteBlockCache::Prefetch(BlockHandle handle, size_t length,
-                                      PrefetchOption /*option*/) {
+                                  PrefetchOption /*option*/) {
   DCHECK_RUNNING("RemoteBlockCache");
 
   auto status = cluster_->SendPrefetchRequest(handle, length);
@@ -152,7 +151,7 @@ Status RemoteBlockCache::Prefetch(BlockHandle handle, size_t length,
 }
 
 void RemoteBlockCache::AsyncPut(BlockHandle handle, IOBuffer block,
-                                    AsyncCallback cb, PutOption option) {
+                                AsyncCallback cb, PutOption option) {
   DCHECK_RUNNING("RemoteBlockCache");
 
   auto* self = GetSelfPtr();
@@ -171,8 +170,8 @@ void RemoteBlockCache::AsyncPut(BlockHandle handle, IOBuffer block,
 }
 
 void RemoteBlockCache::AsyncRange(BlockHandle handle, off_t offset,
-                                      size_t length, IOBuffer* buffer,
-                                      AsyncCallback cb, RangeOption option) {
+                                  size_t length, IOBuffer* buffer,
+                                  AsyncCallback cb, RangeOption option) {
   DCHECK_RUNNING("RemoteBlockCache");
 
   auto* self = GetSelfPtr();
@@ -191,7 +190,7 @@ void RemoteBlockCache::AsyncRange(BlockHandle handle, off_t offset,
 }
 
 void RemoteBlockCache::AsyncCache(BlockHandle handle, IOBuffer block,
-                                      AsyncCallback cb, CacheOption option) {
+                                  AsyncCallback cb, CacheOption option) {
   DCHECK_RUNNING("RemoteBlockCache");
 
   auto* self = GetSelfPtr();
@@ -210,8 +209,7 @@ void RemoteBlockCache::AsyncCache(BlockHandle handle, IOBuffer block,
 }
 
 void RemoteBlockCache::AsyncPrefetch(BlockHandle handle, size_t length,
-                                         AsyncCallback cb,
-                                         PrefetchOption option) {
+                                     AsyncCallback cb, PrefetchOption option) {
   DCHECK_RUNNING("RemoteBlockCache");
 
   auto* self = GetSelfPtr();

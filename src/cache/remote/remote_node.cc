@@ -65,8 +65,8 @@ DEFINE_uint32(cache_rpc_max_timeout_ms, 60000,
               "maximum timeout for rpc request in milliseconds");
 DEFINE_validator(cache_rpc_max_timeout_ms, brpc::PassValidate);
 
-RemoteNode::RemoteNode(const std::string& id, const std::string& ip, uint32_t port,
-           uint32_t weight)
+RemoteNode::RemoteNode(const std::string& id, const std::string& ip,
+                       uint32_t port, uint32_t weight)
     : running_(false),
       id_(id),
       ip_(ip),
@@ -97,7 +97,8 @@ Status RemoteNode::Start() {
   }
 
   if (has_error) {
-    LOG(WARNING) << "RemoteNode started with disconnected connections: " << *this;
+    LOG(WARNING) << "RemoteNode started with disconnected connections: "
+                 << *this;
   }
 
   health_checker_->Start();
@@ -114,7 +115,8 @@ void RemoteNode::Shutdown() {
   health_checker_->Shutdown();
 }
 
-uint32_t RemoteNode::NextTimeoutMs(const std::string& method, int retry_count) const {
+uint32_t RemoteNode::NextTimeoutMs(const std::string& method,
+                                   int retry_count) const {
   uint32_t timeout_ms;
   if (method == "Put") {
     timeout_ms = FLAGS_cache_put_rpc_timeout_ms;

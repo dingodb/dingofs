@@ -33,7 +33,6 @@
 #include <utility>
 
 #include "cache/api/block_cache.h"
-#include "cache/local/local_block_cache.h"
 #include "cache/common/macro.h"
 #include "cache/common/mds_client.h"
 #include "cache/common/storage_client.h"
@@ -43,6 +42,7 @@
 #include "cache/infiniband/memory.h"
 #include "cache/infiniband/slab_pool.h"
 #include "cache/iutil/string_util.h"
+#include "cache/local/local_block_cache.h"
 #include "common/const.h"
 #include "common/io_buffer.h"
 #include "common/options/cache.h"

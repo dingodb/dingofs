@@ -32,9 +32,9 @@
 #include <thread>
 #include <utility>
 
-#include "cache/local/cache_store.h"
 #include "cache/common/block_handle_helper.h"
 #include "cache/iutil/file_util.h"
+#include "cache/local/cache_store.h"
 
 namespace dingofs {
 namespace cache {
@@ -130,8 +130,7 @@ void DiskCacheLoader::LoadStageDir(LoadStats* stats) {
         (entry.path() / BlockKey::kStoreDir).string(), BlockType::kStageBlock,
         [fs_id](BlockKey k) { return BlockHandle(fs_id, k); }, stats);
     LoadKindDir<TensorKey>(
-        (entry.path() / TensorKey::kStoreDir).string(),
-        BlockType::kStageBlock,
+        (entry.path() / TensorKey::kStoreDir).string(), BlockType::kStageBlock,
         [](TensorKey k) { return BlockHandle(std::move(k)); }, stats);
   }
 }
@@ -139,9 +138,9 @@ void DiskCacheLoader::LoadStageDir(LoadStats* stats) {
 void DiskCacheLoader::LoadCacheDir(LoadStats* stats) {
   // cache/{kStoreDir}/...
   fs::path cache_dir(layout_->GetCacheDir());
-  LoadKindDir<BlockKey>(
-      (cache_dir / BlockKey::kStoreDir).string(), BlockType::kCacheBlock,
-      [](BlockKey k) { return BlockHandle(0, k); }, stats);
+  LoadKindDir<BlockKey>((cache_dir / BlockKey::kStoreDir).string(),
+                        BlockType::kCacheBlock,
+                        [](BlockKey k) { return BlockHandle(0, k); }, stats);
   LoadKindDir<TensorKey>(
       (cache_dir / TensorKey::kStoreDir).string(), BlockType::kCacheBlock,
       [](TensorKey k) { return BlockHandle(std::move(k)); }, stats);

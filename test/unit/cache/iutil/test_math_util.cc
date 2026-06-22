@@ -20,12 +20,12 @@
  * Author: AI
  */
 
-#include "cache/iutil/math_util.h"
-
 #include <gtest/gtest.h>
 
 #include <cstdint>
 #include <vector>
+
+#include "cache/iutil/math_util.h"
 
 namespace dingofs {
 namespace cache {

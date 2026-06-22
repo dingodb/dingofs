@@ -21,8 +21,8 @@
 #include <atomic>
 #include <memory>
 
-#include "cache/local/disk_cache_layout.h"
 #include "cache/iutil/state_machine.h"
+#include "cache/local/disk_cache_layout.h"
 #include "utils/executor/executor.h"
 
 namespace dingofs {

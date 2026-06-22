@@ -20,12 +20,12 @@
  * Author: AI
  */
 
-#include "cache/local/cache_store.h"
-
 #include <gtest/gtest.h>
 
 #include <sstream>
 #include <string>
+
+#include "cache/local/cache_store.h"
 
 namespace dingofs {
 namespace cache {

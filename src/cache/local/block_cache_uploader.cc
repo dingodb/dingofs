@@ -29,10 +29,10 @@
 #include <atomic>
 #include <memory>
 
-#include "cache/local/cache_store.h"
 #include "cache/common/macro.h"
 #include "cache/iutil/bthread.h"
 #include "cache/iutil/inflight_tracker.h"
+#include "cache/local/cache_store.h"
 
 namespace dingofs {
 namespace cache {
@@ -285,8 +285,8 @@ Status BlockCacheUploader::DoUpload(const StageBlock& sblock) {
     return status;
   }
 
-  status = store_->RemoveStage(sblock.handle,
-                               {.block_attr = sblock.block_attr});
+  status =
+      store_->RemoveStage(sblock.handle, {.block_attr = sblock.block_attr});
   if (!status.ok()) {
     LOG(WARNING) << "Fail to remove stage block, key="
                  << sblock.handle.Filename();

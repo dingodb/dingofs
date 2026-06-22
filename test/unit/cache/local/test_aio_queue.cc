@@ -20,8 +20,6 @@
  * Author: AI
  */
 
-#include "cache/local/aio_queue.h"
-
 #include <fcntl.h>
 #include <gtest/gtest.h>
 #include <unistd.h>
@@ -36,6 +34,7 @@
 #include <vector>
 
 #include "cache/local/aio.h"
+#include "cache/local/aio_queue.h"
 
 namespace dingofs {
 namespace cache {
@@ -131,7 +130,8 @@ TEST_F(AioQueueTest, SubmitManyExercisesBatching) {
   std::vector<char*> buffers;
   std::vector<std::unique_ptr<Aio>> aios;
   for (int i = 0; i < kNumOps; ++i) {
-    buffers.push_back(AlignedBuffer(kBlockSize, static_cast<char>('A' + i % 26)));
+    buffers.push_back(
+        AlignedBuffer(kBlockSize, static_cast<char>('A' + i % 26)));
     aios.push_back(std::make_unique<Aio>(fd, i * kBlockSize, kBlockSize,
                                          buffers[i], -1, false));
   }

@@ -26,8 +26,8 @@
 
 #include <iostream>
 
-#include "cache/node/cache_server.h"
 #include "cache/infiniband/slab_pool.h"
+#include "cache/node/cache_server.h"
 #include "common/flag.h"
 #include "common/helper.h"
 #include "common/logging.h"

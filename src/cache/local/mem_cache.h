@@ -127,9 +127,7 @@ class MemCache final : public CacheStore {
     std::unordered_map<std::string, EntryList::iterator> index;
   };
 
-  Shard& GetShard(const std::string& key) {
-    return shards_[ShardIndex(key)];
-  }
+  Shard& GetShard(const std::string& key) { return shards_[ShardIndex(key)]; }
   const Shard& GetShard(const std::string& key) const {
     return shards_[ShardIndex(key)];
   }

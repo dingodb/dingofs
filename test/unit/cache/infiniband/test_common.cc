@@ -20,12 +20,11 @@
  * Author: AI
  */
 
-#include "cache/infiniband/common.h"
-
 #include <gtest/gtest.h>
 
 #include <vector>
 
+#include "cache/infiniband/common.h"
 #include "cache/infiniband/controller.h"
 #include "cache/infiniband/memory.h"
 #include "cache/infiniband/slab_pool.h"

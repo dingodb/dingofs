@@ -20,11 +20,10 @@
  * Author: AI
  */
 
-#include "cache/local/lru_cache.h"
-
 #include <gtest/gtest.h>
 
 #include "cache/iutil/time_util.h"
+#include "cache/local/lru_cache.h"
 #include "common/block/block_handle.h"
 #include "common/block/block_key.h"
 
@@ -95,8 +94,8 @@ TEST_F(LRUCacheTest, Evict) {
     cache.Add(Key(2), Val(20));
     cache.Add(Key(3), Val(30));
 
-    auto evicted = cache.Evict(
-        [](const CacheValue&) { return FilterStatus::kEvictIt; });
+    auto evicted =
+        cache.Evict([](const CacheValue&) { return FilterStatus::kEvictIt; });
     EXPECT_EQ(evicted.size(), 3u);
     EXPECT_EQ(cache.Size(), 0u);
   }

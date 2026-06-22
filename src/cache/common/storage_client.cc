@@ -30,9 +30,9 @@
 
 #include <memory>
 
-#include "cache/local/cache_store.h"
 #include "cache/iutil/string_util.h"
 #include "cache/iutil/task_execution_queue.h"
+#include "cache/local/cache_store.h"
 #include "common/blockaccess/block_accesser.h"
 
 namespace dingofs {

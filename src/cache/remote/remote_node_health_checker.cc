@@ -79,7 +79,8 @@ struct Configure : public iutil::IConfiguration {
 
 }  // namespace
 
-RemoteNodeHealthChecker::RemoteNodeHealthChecker(const std::string& ip, uint32_t port)
+RemoteNodeHealthChecker::RemoteNodeHealthChecker(const std::string& ip,
+                                                 uint32_t port)
     : running_(false),
       ip_(ip),
       port_(port),

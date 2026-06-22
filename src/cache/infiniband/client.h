@@ -55,8 +55,8 @@ class Dialer {
 
  private:
   Status SyncConnManagementMeta(const std::string& address,
-                               const ConnManagementMeta& local_cm_meta,
-                               ConnManagementMeta* remote_cm_meta);
+                                const ConnManagementMeta& local_cm_meta,
+                                ConnManagementMeta* remote_cm_meta);
 
   Device* device_;
   Port* port_;

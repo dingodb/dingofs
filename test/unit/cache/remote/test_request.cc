@@ -20,13 +20,12 @@
  * Author: AI
  */
 
-#include "cache/remote/request.h"
-
 #include <gtest/gtest.h>
 
 #include <sstream>
 #include <string>
 
+#include "cache/remote/request.h"
 #include "common/io_buffer.h"
 #include "dingofs/blockcache.pb.h"
 

@@ -20,8 +20,6 @@
  * Author: AI
  */
 
-#include "cache/local/disk_cache_manager.h"
-
 #include <gtest/gtest.h>
 #include <unistd.h>
 
@@ -32,8 +30,9 @@
 #include <string>
 #include <thread>
 
-#include "cache/local/disk_cache_layout.h"
 #include "cache/iutil/time_util.h"
+#include "cache/local/disk_cache_layout.h"
+#include "cache/local/disk_cache_manager.h"
 #include "common/block/block_handle.h"
 #include "common/block/block_key.h"
 

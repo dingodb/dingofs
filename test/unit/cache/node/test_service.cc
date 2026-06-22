@@ -20,8 +20,6 @@
  * Author: AI
  */
 
-#include "cache/node/service.h"
-
 #include <brpc/controller.h>
 #include <gtest/gtest.h>
 
@@ -29,6 +27,7 @@
 
 #include "cache/common/block_handle_helper.h"
 #include "cache/infiniband/controller.h"
+#include "cache/node/service.h"
 #include "common/block/block_handle.h"
 #include "common/block/block_key.h"
 #include "common/options/cache.h"

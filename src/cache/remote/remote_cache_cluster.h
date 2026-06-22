@@ -60,7 +60,7 @@ struct RemoteNodeGroup {
     return nullptr;
   }
 
-  std::unique_ptr<iutil::ConHash> chash;  // member id => vnode
+  std::unique_ptr<iutil::ConHash> chash;                  // member id => vnode
   std::unordered_map<std::string, RemoteNodeSPtr> nodes;  // member id => node
 };
 
@@ -106,11 +106,13 @@ struct RemoteCacheClusterMetrics {
   OpVar op_prefetch{absl::StrFormat("%s_%s", prefix, "prefetch")};
 };
 
-using RemoteCacheClusterMetricsUPtr = std::unique_ptr<RemoteCacheClusterMetrics>;
+using RemoteCacheClusterMetricsUPtr =
+    std::unique_ptr<RemoteCacheClusterMetrics>;
 
 struct RemoteCacheClusterMetricsGuard {
   RemoteCacheClusterMetricsGuard(const std::string& opname, size_t bytes,
-                          Status& status, RemoteCacheClusterMetrics* vars)
+                                 Status& status,
+                                 RemoteCacheClusterMetrics* vars)
       : opname(opname), bytes(bytes), status(status), vars(vars) {
     CHECK(opname == "Put" || opname == "Range" || opname == "Cache" ||
           opname == "Prefetch")
