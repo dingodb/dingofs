@@ -13,13 +13,13 @@
 # limitations under the License.
 # Define the BASE_FLAGS and DINGO_DEFAULT_COPTS variables
 
-file(GLOB TIERCACHE_LIB_SRCS
+file(GLOB TIER_LIB_SRCS
     "*.cc"
 )
 
-add_library(cache_tiercache ${TIERCACHE_LIB_SRCS})
+add_library(cache_tier ${TIER_LIB_SRCS})
 
-target_link_libraries(cache_tiercache
+target_link_libraries(cache_tier
     cache_common
     cache_iutil
     cache_local

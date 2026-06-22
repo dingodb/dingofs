@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "cache/tiercache/tier_block_cache.h"
+#include "cache/tier/tier_block_cache.h"
 
 #include <absl/strings/str_format.h>
 #include <glog/logging.h>

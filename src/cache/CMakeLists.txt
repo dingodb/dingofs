@@ -18,7 +18,7 @@ add_subdirectory(infiniband)
 add_subdirectory(local)
 add_subdirectory(node)
 add_subdirectory(remote)
-add_subdirectory(tiercache)
+add_subdirectory(tier)
 #add_subdirectory(benchmark)
 
 file(GLOB CACHE_LIB_SRCS
@@ -32,7 +32,7 @@ target_link_libraries(cache_lib
     cache_local
     cache_node
     cache_remote
-    cache_tiercache
+    cache_tier
     dingofs_options
 )
 

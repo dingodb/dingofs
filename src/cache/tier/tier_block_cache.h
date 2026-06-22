@@ -20,8 +20,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_TIERCACHE_TIER_BLOCK_CACHE_H_
-#define DINGOFS_SRC_CACHE_TIERCACHE_TIER_BLOCK_CACHE_H_
+#ifndef DINGOFS_SRC_CACHE_TIER_TIER_BLOCK_CACHE_H_
+#define DINGOFS_SRC_CACHE_TIER_TIER_BLOCK_CACHE_H_
 
 #include "cache/api/block_cache.h"
 #include "cache/local/cache_store.h"
@@ -116,4 +116,4 @@ class TierBlockCache final : public BlockCache {
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_TIERCACHE_TIER_BLOCK_CACHE_H_
+#endif  // DINGOFS_SRC_CACHE_TIER_TIER_BLOCK_CACHE_H_

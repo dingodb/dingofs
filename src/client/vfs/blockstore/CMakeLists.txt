@@ -19,7 +19,7 @@ add_library(vfs_block_store
 )
 
 target_link_libraries(vfs_block_store
-    cache_tiercache
+    cache_tier
     cache_local
     fmt::fmt
     glog::glog

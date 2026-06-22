@@ -20,7 +20,7 @@
  * Author: AI
  */
 
-#include "cache/tiercache/tier_block_cache.h"
+#include "cache/tier/tier_block_cache.h"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>

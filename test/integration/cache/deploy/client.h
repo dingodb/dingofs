@@ -38,7 +38,7 @@
 
 #include "cache/api/block_cache.h"
 #include "cache/common/mds_client.h"
-#include "cache/tiercache/tier_block_cache.h"
+#include "cache/tier/tier_block_cache.h"
 #include "common/block/block_handle.h"
 #include "common/block/block_key.h"
 #include "common/blockaccess/accesser_common.h"
