@@ -12,13 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-file(GLOB TEST_CACHE_CACHEGROUP_SRCS CONFIGURE_DEPENDS "*.cc")
+file(GLOB TEST_CACHE_NODE_SRCS CONFIGURE_DEPENDS "*.cc")
 
-add_library(test_cache_cachegroup OBJECT
-    ${TEST_CACHE_CACHEGROUP_SRCS}
+add_library(test_cache_node OBJECT
+    ${TEST_CACHE_NODE_SRCS}
 )
 
-target_link_libraries(test_cache_cachegroup
+target_link_libraries(test_cache_node
     cache_lib
     ${TEST_DEPS_WITHOUT_MAIN}
 )

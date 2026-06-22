@@ -16,13 +16,13 @@ add_subdirectory(common)
 add_subdirectory(iutil)
 add_subdirectory(infiniband)
 add_subdirectory(local)
-add_subdirectory(cachegroup)
+add_subdirectory(node)
 add_subdirectory(remote)
 add_subdirectory(tiercache)
 #add_subdirectory(benchmark)
 
 file(GLOB CACHE_LIB_SRCS
-    "dingo_cache.cc"
+    "node/dingo_cache.cc"
 )
 add_library(cache_lib ${CACHE_LIB_SRCS})
 target_link_libraries(cache_lib
@@ -30,13 +30,13 @@ target_link_libraries(cache_lib
     cache_iutil
     cache_infiniband
     cache_local
-    cache_cachegroup
+    cache_node
     cache_remote
     cache_tiercache
     dingofs_options
 )
 
-add_executable(dingo-cache main.cc)
+add_executable(dingo-cache node/main.cc)
 # NOTE: cache_lib transitively drags in librados, which links the STATIC
 # libibverbs.a. Those static rdma-core symbols cannot dlopen the mlx5 provider
 # plugin, so ibv_get_device_list() returns no devices and the RDMA slab pool

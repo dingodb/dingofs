@@ -20,8 +20,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_CACHEGROUP_SERVER_H_
-#define DINGOFS_SRC_CACHE_CACHEGROUP_SERVER_H_
+#ifndef DINGOFS_SRC_CACHE_NODE_CACHE_SERVER_H_
+#define DINGOFS_SRC_CACHE_NODE_CACHE_SERVER_H_
 
 #include <brpc/server.h>
 
@@ -29,7 +29,7 @@
 #include <memory>
 #include <vector>
 
-#include "cache/cachegroup/node.h"
+#include "cache/node/node.h"
 #include "cache/infiniband/memory.h"
 #include "cache/infiniband/server.h"
 #include "dingofs/blockcache.pb.h"
@@ -38,9 +38,9 @@
 namespace dingofs {
 namespace cache {
 
-class Server {
+class CacheServer {
  public:
-  Server();
+  CacheServer();
   Status Start();
   Status Shutdown();
 
@@ -62,4 +62,4 @@ class Server {
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_CACHEGROUP_SERVER_H_
+#endif  // DINGOFS_SRC_CACHE_NODE_CACHE_SERVER_H_

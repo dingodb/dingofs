@@ -20,12 +20,12 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_CACHEGROUP_SERVICE_H_
-#define DINGOFS_SRC_CACHE_CACHEGROUP_SERVICE_H_
+#ifndef DINGOFS_SRC_CACHE_NODE_SERVICE_H_
+#define DINGOFS_SRC_CACHE_NODE_SERVICE_H_
 
 #include <ostream>
 
-#include "cache/cachegroup/node.h"
+#include "cache/node/node.h"
 #include "cache/infiniband/memory.h"
 #include "common/io_buffer.h"
 #include "dingofs/blockcache.pb.h"
@@ -81,4 +81,4 @@ class BlockCacheServiceImpl final : public pb::cache::BlockCacheService {
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_CACHEGROUP_SERVICE_H_
+#endif  // DINGOFS_SRC_CACHE_NODE_SERVICE_H_

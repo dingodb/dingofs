@@ -20,12 +20,12 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "cache/cachegroup/server.h"
+#include "cache/node/cache_server.h"
 
 #include <atomic>
 #include <memory>
 
-#include "cache/cachegroup/service.h"
+#include "cache/node/service.h"
 #include "cache/infiniband/connection.h"
 #include "cache/infiniband/infiniband.h"
 #include "cache/infiniband/server.h"
@@ -50,7 +50,7 @@ DEFINE_bool(public_address, true,
             "listen on 0.0.0.0 instead of --listen_ip so the cache node is "
             "reachable by remote clients");
 
-Server::Server()
+CacheServer::CacheServer()
     : running_(false),
       node_(std::make_unique<CacheNode>()),
       rdma_service_(std::make_unique<BlockCacheServiceImpl>(ServiceType::kRDMA,
@@ -60,13 +60,13 @@ Server::Server()
       rdma_server_(std::make_unique<infiniband::Server>()),
       brpc_server_(std::make_unique<brpc::Server>()) {}
 
-Status Server::Start() {
+Status CacheServer::Start() {
   if (running_.load(std::memory_order_relaxed)) {
-    LOG(WARNING) << "Server already started";
+    LOG(WARNING) << "CacheServer already started";
     return Status::OK();
   }
 
-  LOG(INFO) << "Server is starting...";
+  LOG(INFO) << "CacheServer is starting...";
 
   InstallSignal();
 
@@ -107,13 +107,13 @@ Status Server::Start() {
   return Status::OK();
 }
 
-Status Server::Shutdown() {
+Status CacheServer::Shutdown() {
   if (!running_.load(std::memory_order_relaxed)) {
-    LOG(WARNING) << "Server already shutdown";
+    LOG(WARNING) << "CacheServer already shutdown";
     return Status::OK();
   }
 
-  LOG(INFO) << "Server is shutting down...";
+  LOG(INFO) << "CacheServer is shutting down...";
 
   ShutdownRDMAServer();
   ShutdownBrpcServer();
@@ -125,13 +125,13 @@ Status Server::Shutdown() {
   }
 
   running_.store(false, std::memory_order_relaxed);
-  LOG(INFO) << "Server is shutdown";
+  LOG(INFO) << "CacheServer is shutdown";
   return status;
 }
 
-void Server::InstallSignal() { CHECK(SIG_ERR != signal(SIGPIPE, SIG_IGN)); }
+void CacheServer::InstallSignal() { CHECK(SIG_ERR != signal(SIGPIPE, SIG_IGN)); }
 
-Status Server::StartRDMAServer() {
+Status CacheServer::StartRDMAServer() {
   infiniband::EndPoint endpoint{
       FLAGS_cache_rdma_device,
       static_cast<uint8_t>(FLAGS_cache_rdma_port_num),
@@ -159,7 +159,7 @@ Status Server::StartRDMAServer() {
   return Status::OK();
 }
 
-Status Server::StartBrpcServer(const std::string& listen_ip,
+Status CacheServer::StartBrpcServer(const std::string& listen_ip,
                                uint32_t listen_port) {
   butil::EndPoint ep;
   int rc = butil::str2endpoint(listen_ip.c_str(), listen_port, &ep);

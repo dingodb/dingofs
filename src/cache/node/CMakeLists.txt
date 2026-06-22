@@ -13,12 +13,19 @@
 # limitations under the License.
 # Define the BASE_FLAGS and DINGO_DEFAULT_COPTS variables
 
-file(GLOB CACHEGROUP_LIB_SRCS
+# The cache server node. dingo_cache.cc (daemon bootstrap) is built into
+# cache_lib, and main.cc is the dingo-cache executable entrypoint; both are
+# excluded from the cache_node library.
+file(GLOB NODE_LIB_SRCS
     "*.cc"
 )
+list(REMOVE_ITEM NODE_LIB_SRCS
+    "${CMAKE_CURRENT_SOURCE_DIR}/main.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dingo_cache.cc"
+)
 
-add_library(cache_cachegroup ${CACHEGROUP_LIB_SRCS})
-target_link_libraries(cache_cachegroup
+add_library(cache_node ${NODE_LIB_SRCS})
+target_link_libraries(cache_node
     cache_common
     cache_infiniband
     cache_iutil
