@@ -85,7 +85,7 @@ class RemoteBlockCache final : public BlockCache {
   bool EnableCache() const override { return IsEnabled(); }
   bool IsCached(const BlockHandle&) const override { return IsEnabled(); }
   bool Dump(Json::Value& value) const override {
-    return upstream_->Dump(value);
+    return cluster_->Dump(value);
   }
 
  private:
@@ -94,7 +94,7 @@ class RemoteBlockCache final : public BlockCache {
   BlockCache* GetSelfPtr() { return this; }
 
   std::atomic<bool> running_;
-  RemoteCacheClusterUPtr upstream_;
+  RemoteCacheClusterUPtr cluster_;
   iutil::BthreadJoinerUPtr joiner_;
   RemoteBlockCacheMetricsUPtr vars_;
 };

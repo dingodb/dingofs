@@ -24,20 +24,78 @@
 #ifndef DINGOFS_SRC_CACHE_REMOTE_REMOTE_CACHE_CLUSTER_H_
 #define DINGOFS_SRC_CACHE_REMOTE_REMOTE_CACHE_CLUSTER_H_
 
+#include <bthread/execution_queue.h>
+#include <bthread/execution_queue_inl.h>
 #include <bthread/rwlock.h>
 
 #include <memory>
+#include <unordered_map>
+#include <vector>
 
-#include "cache/local/cache_store.h"
 #include "cache/common/mds_client.h"
 #include "cache/common/vars.h"
-#include "cache/remote/remote_node_group.h"
+#include "cache/iutil/con_hash.h"
+#include "cache/local/cache_store.h"
+#include "cache/remote/remote_node.h"
 #include "cache/remote/request.h"
 #include "common/block/block_handle.h"
 #include "utils/executor/executor.h"
 
 namespace dingofs {
 namespace cache {
+
+struct RemoteNodeGroup {
+  RemoteNodeSPtr SelectNode(const std::string& key) {
+    if (chash == nullptr) {
+      return nullptr;
+    }
+
+    iutil::ConNode node;
+    if (chash->Lookup(key, node)) {
+      auto iter = nodes.find(node.key);
+      if (iter != nodes.end()) {
+        return iter->second;
+      }
+    }
+    return nullptr;
+  }
+
+  std::unique_ptr<iutil::ConHash> chash;  // member id => vnode
+  std::unordered_map<std::string, RemoteNodeSPtr> nodes;  // member id => node
+};
+
+using RemoteNodeGroupSPtr = std::shared_ptr<RemoteNodeGroup>;
+
+class RemoteNodeGroupBuilder {
+ public:
+  explicit RemoteNodeGroupBuilder(bool start_nodes = true);
+  ~RemoteNodeGroupBuilder();
+
+  RemoteNodeGroupSPtr Build(const Members& members);
+
+ private:
+  struct Diff {
+    std::vector<RemoteNodeSPtr> keep;
+    std::vector<RemoteNodeSPtr> add;
+    std::vector<RemoteNodeSPtr> remove;
+  };
+
+  Members FilterMembers(const Members& members);
+  Diff MakeDiff(const Members& new_members);
+  std::vector<uint64_t> RecalcWeights(const Members& members);
+  iutil::ConHashUPtr BuildHashRing(const Members& members);
+
+  void StartNodes(std::vector<RemoteNodeSPtr> nodes);
+  void DeferShutdownNodes(std::vector<RemoteNodeSPtr> nodes);
+  static int ShutdownNodes(
+      void* meta, bthread::TaskIterator<std::vector<RemoteNodeSPtr>>& iter);
+
+  RemoteNodeGroupSPtr old_group_;
+  bool start_nodes_;
+  bthread::ExecutionQueueId<std::vector<RemoteNodeSPtr>> queue_id_;
+};
+
+using RemoteNodeGroupBuilderUPtr = std::unique_ptr<RemoteNodeGroupBuilder>;
 
 struct RemoteCacheClusterMetrics {
   inline static const std::string prefix = "dingofs_remote_cache_cluster";

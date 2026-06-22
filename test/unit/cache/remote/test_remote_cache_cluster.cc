@@ -46,29 +46,29 @@ IOBuffer Buffer(const std::string& data) {
 
 }  // namespace
 
-TEST(UpstreamTest, DumpEmptyGroup) {
-  RemoteCacheCluster upstream;
+TEST(RemoteCacheClusterTest, DumpEmptyGroup) {
+  RemoteCacheCluster cluster;
   Json::Value value;
 
-  EXPECT_TRUE(upstream.Dump(value));
+  EXPECT_TRUE(cluster.Dump(value));
   ASSERT_TRUE(value.isMember("members"));
   EXPECT_TRUE(value["members"].isArray());
   EXPECT_EQ(value["members"].size(), 0u);
 }
 
-TEST(UpstreamTest, RequestsReturnNotFoundWithoutPeer) {
-  RemoteCacheCluster upstream;
+TEST(RemoteCacheClusterTest, RequestsReturnNotFoundWithoutNode) {
+  RemoteCacheCluster cluster;
   const std::string data = "remote-cache-payload";
   auto payload = Buffer(data);
 
-  EXPECT_TRUE(upstream.SendPutRequest(Handle(1001), payload).IsNotFound());
-  EXPECT_TRUE(upstream.SendCacheRequest(Handle(1002), payload).IsNotFound());
-  EXPECT_TRUE(upstream.SendPrefetchRequest(Handle(1003), 4096).IsNotFound());
+  EXPECT_TRUE(cluster.SendPutRequest(Handle(1001), payload).IsNotFound());
+  EXPECT_TRUE(cluster.SendCacheRequest(Handle(1002), payload).IsNotFound());
+  EXPECT_TRUE(cluster.SendPrefetchRequest(Handle(1003), 4096).IsNotFound());
 
   std::string out(8, '\0');
   IOBuffer out_buffer(out.data(), out.size());
   bool cache_hit = true;
-  EXPECT_TRUE(upstream
+  EXPECT_TRUE(cluster
                   .SendRangeRequest(Handle(1004), 0, out.size(), &out_buffer,
                                     4096, &cache_hit)
                   .IsNotFound());
@@ -91,7 +91,7 @@ TEST(RemoteCacheClusterMetricsGuardTest, RecordsSuccessAndErrors) {
     RemoteCacheClusterMetricsGuard guard("Cache", 4096, status, &vars);
   }
   {
-    Status status = Status::NotFound("no peer");
+    Status status = Status::NotFound("no node");
     RemoteCacheClusterMetricsGuard guard("Prefetch", 4096, status, &vars);
   }
 }

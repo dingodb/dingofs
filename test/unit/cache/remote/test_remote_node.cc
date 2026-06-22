@@ -50,7 +50,7 @@ Request<T> MakeRawRequest(const std::string& method) {
 
 }  // namespace
 
-class PeerTest : public ::testing::Test {
+class RemoteNodeTest : public ::testing::Test {
  protected:
   void SetUp() override {
     saved_connections_ = FLAGS_connections;
@@ -90,66 +90,66 @@ class PeerTest : public ::testing::Test {
   uint32_t saved_max_timeout_ms_{0};
 };
 
-TEST_F(PeerTest, AccessorsDumpAndStream) {
-  RemoteNode peer("044d4698-7bd4-4e44-9e94-aee6312ff06f", "10.0.1.8", 9300,
+TEST_F(RemoteNodeTest, AccessorsDumpAndStream) {
+  RemoteNode node("044d4698-7bd4-4e44-9e94-aee6312ff06f", "10.0.1.8", 9300,
             20);
 
-  EXPECT_EQ(peer.Id(), "044d4698-7bd4-4e44-9e94-aee6312ff06f");
-  EXPECT_EQ(peer.IP(), "10.0.1.8");
-  EXPECT_EQ(peer.Port(), 9300);
-  EXPECT_EQ(peer.Weight(), 20);
-  EXPECT_TRUE(peer.IsHealthy());
+  EXPECT_EQ(node.Id(), "044d4698-7bd4-4e44-9e94-aee6312ff06f");
+  EXPECT_EQ(node.IP(), "10.0.1.8");
+  EXPECT_EQ(node.Port(), 9300);
+  EXPECT_EQ(node.Weight(), 20);
+  EXPECT_TRUE(node.IsHealthy());
 
   Json::Value value;
-  EXPECT_TRUE(peer.Dump(value));
-  EXPECT_EQ(value["id"].asString(), peer.Id());
+  EXPECT_TRUE(node.Dump(value));
+  EXPECT_EQ(value["id"].asString(), node.Id());
   EXPECT_EQ(value["endpoint"].asString(), "10.0.1.8:9300");
   EXPECT_EQ(value["weight"].asUInt(), 20u);
   EXPECT_EQ(value["connections"].asInt(), 1);
   EXPECT_TRUE(value["healthy"].asBool());
 
   std::ostringstream oss;
-  oss << peer;
+  oss << node;
   EXPECT_NE(oss.str().find("RemoteNode{id=044d4698"), std::string::npos);
   EXPECT_NE(oss.str().find("conns=1"), std::string::npos);
 }
 
-TEST_F(PeerTest, StartToleratesDisconnectedConnections) {
-  RemoteNode peer("20f2fc27-2f29-4975-8d08-836ec63b8f91", "not-an-ip", 9300,
+TEST_F(RemoteNodeTest, StartToleratesDisconnectedConnections) {
+  RemoteNode node("20f2fc27-2f29-4975-8d08-836ec63b8f91", "not-an-ip", 9300,
             10);
 
-  EXPECT_TRUE(peer.Start().ok());
-  EXPECT_TRUE(peer.Start().ok());
-  EXPECT_TRUE(peer.IsHealthy());
+  EXPECT_TRUE(node.Start().ok());
+  EXPECT_TRUE(node.Start().ok());
+  EXPECT_TRUE(node.IsHealthy());
 
-  peer.Shutdown();
+  node.Shutdown();
 }
 
-TEST_F(PeerTest, SendPutReturnsNetErrorWhenConnectedRpcFails) {
-  RemoteNode peer("20f2fc27-2f29-4975-8d08-836ec63b8f92", "127.0.0.1", 9,
+TEST_F(RemoteNodeTest, SendPutReturnsNetErrorWhenConnectedRpcFails) {
+  RemoteNode node("20f2fc27-2f29-4975-8d08-836ec63b8f92", "127.0.0.1", 9,
             10);
-  ASSERT_TRUE(peer.Start().ok());
+  ASSERT_TRUE(node.Start().ok());
 
   auto request = MakeRawRequest<pb::cache::PutRequest>("Put");
   auto response =
-      peer.SendRequest<pb::cache::PutRequest, pb::cache::PutResponse>(request);
+      node.SendRequest<pb::cache::PutRequest, pb::cache::PutResponse>(request);
 
   EXPECT_TRUE(response.status.IsNetError());
-  peer.Shutdown();
+  node.Shutdown();
 }
 
-TEST_F(PeerTest, SendRangeRetriesThenReturnsInternalWhenRpcKeepsFailing) {
-  RemoteNode peer("20f2fc27-2f29-4975-8d08-836ec63b8f93", "127.0.0.1", 9,
+TEST_F(RemoteNodeTest, SendRangeRetriesThenReturnsInternalWhenRpcKeepsFailing) {
+  RemoteNode node("20f2fc27-2f29-4975-8d08-836ec63b8f93", "127.0.0.1", 9,
             10);
-  ASSERT_TRUE(peer.Start().ok());
+  ASSERT_TRUE(node.Start().ok());
 
   auto request = MakeRawRequest<pb::cache::RangeRequest>("Range");
   auto response =
-      peer.SendRequest<pb::cache::RangeRequest, pb::cache::RangeResponse>(
+      node.SendRequest<pb::cache::RangeRequest, pb::cache::RangeResponse>(
           request);
 
   EXPECT_TRUE(response.status.IsInternal());
-  peer.Shutdown();
+  node.Shutdown();
 }
 
 }  // namespace cache

@@ -28,10 +28,12 @@
 
 #include <atomic>
 #include <memory>
+#include <unordered_set>
 
 #include "cache/common/block_handle_helper.h"
 #include "cache/common/mds_client.h"
-#include "cache/remote/remote_node_group.h"
+#include "cache/iutil/ketama_con_hash.h"
+#include "cache/iutil/math_util.h"
 #include "common/options/cache.h"
 #include "dingofs/blockcache.pb.h"
 #include "utils/executor/bthread/bthread_executor.h"
@@ -182,20 +184,20 @@ Status RemoteCacheCluster::SendPrefetchRequest(const BlockHandle& handle, size_t
 
 template <typename T, typename U>
 Response<U> RemoteCacheCluster::SendRequest(const Request<T>& request) {
-  auto peer_group = CHECK_NOTNULL(GetRemoteNodeGroup());
-  auto peer =
-      peer_group->SelectNode(FromHandlePB(request.raw.handle()).Filename());
-  if (nullptr == peer) {
-    LOG(ERROR) << "No peer found for " << request;
-    return Response<U>{Status::NotFound("no peer found")};
-  } else if (!peer->IsHealthy()) {
+  auto node_group = CHECK_NOTNULL(GetRemoteNodeGroup());
+  auto node =
+      node_group->SelectNode(FromHandlePB(request.raw.handle()).Filename());
+  if (nullptr == node) {
+    LOG(ERROR) << "No node found for " << request;
+    return Response<U>{Status::NotFound("no node found")};
+  } else if (!node->IsHealthy()) {
     LOG_EVERY_SECOND(WARNING)
-        << "Fail to send request to " << peer << ", because "
-        << "peer is unhealthy";
-    return Response<U>{Status::CacheUnhealthy("peer is unhealthy")};
+        << "Fail to send request to " << node << ", because "
+        << "node is unhealthy";
+    return Response<U>{Status::CacheUnhealthy("node is unhealthy")};
   }
 
-  return peer->template SendRequest<T, U>(request);
+  return node->template SendRequest<T, U>(request);
 }
 
 bool RemoteCacheCluster::SendListMembersRequest(Members* members) {
@@ -221,7 +223,7 @@ bool RemoteCacheCluster::SyncMembers() {
   auto new_group = builder_->Build(members);
   if (new_group != nullptr) {
     SetRemoteNodeGroup(new_group);
-    LOG(INFO) << "Successfully rebuild upstream peer group";
+    LOG(INFO) << "Successfully rebuild remote node group";
   }
   return true;
 }
@@ -239,15 +241,180 @@ bool RemoteCacheCluster::Dump(Json::Value& value) {
   }
 
   Json::Value items = Json::arrayValue;
-  for (const auto& [id, peer] : group->peers) {
+  for (const auto& [id, node] : group->nodes) {
     Json::Value item = Json::objectValue;
-    peer->Dump(item);
+    node->Dump(item);
 
     items.append(item);
   }
 
   value["members"] = items;
   return true;
+}
+
+RemoteNodeGroupBuilder::RemoteNodeGroupBuilder(bool start_nodes)
+    : old_group_(std::make_shared<RemoteNodeGroup>()),
+      start_nodes_(start_nodes) {
+  bthread::ExecutionQueueOptions options;
+  options.use_pthread = true;
+  CHECK_EQ(0, bthread::execution_queue_start(
+                  &queue_id_, &options,
+                  &RemoteNodeGroupBuilder::ShutdownNodes, this));
+}
+
+RemoteNodeGroupBuilder::~RemoteNodeGroupBuilder() {
+  CHECK_EQ(0, bthread::execution_queue_stop(queue_id_));
+  CHECK_EQ(0, bthread::execution_queue_join(queue_id_));
+}
+
+RemoteNodeGroupSPtr RemoteNodeGroupBuilder::Build(const Members& members) {
+  auto new_members = FilterMembers(members);
+  auto diff = MakeDiff(new_members);
+  if (diff.add.empty() && diff.remove.empty()) {
+    return nullptr;
+  } else if (new_members.empty()) {
+    LOG(WARNING)
+        << "No nodes alive, skip building RemoteNodeGroup and use old one";
+    return nullptr;
+  }
+
+  // Create a new RemoteNodeGroup
+  std::vector<RemoteNodeSPtr> to_start, to_shutdown;
+  std::unordered_map<std::string, RemoteNodeSPtr> new_nodes;
+
+  // kept nodes
+  for (const auto& old_node : diff.keep) {
+    new_nodes[old_node->Id()] = old_node;
+  }
+
+  // added nodes
+  for (const auto& new_node : diff.add) {
+    new_nodes[new_node->Id()] = new_node;
+    to_start.emplace_back(new_node);
+  }
+
+  // removed nodes
+  to_shutdown = std::move(diff.remove);
+
+  if (start_nodes_) {
+    StartNodes(to_start);
+  }
+  DeferShutdownNodes(to_shutdown);
+
+  auto group = std::make_shared<RemoteNodeGroup>();
+  group->chash = BuildHashRing(new_members);
+  group->nodes = std::move(new_nodes);
+
+  old_group_ = group;
+  return group;
+}
+
+Members RemoteNodeGroupBuilder::FilterMembers(const Members& members) {
+  Members members_out;
+  for (const auto& member : members) {
+    if (member.state != CacheGroupMemberState::kOnline) {
+      LOG(INFO) << "Filter out non-online " << member;
+      continue;
+    } else if (member.weight == 0) {
+      LOG(INFO) << "Filter out zero-weight " << member;
+      continue;
+    }
+    members_out.emplace_back(member);
+  }
+  return members_out;
+}
+
+RemoteNodeGroupBuilder::Diff RemoteNodeGroupBuilder::MakeDiff(
+    const Members& new_members) {
+  CHECK_NOTNULL(old_group_);
+
+  Diff diff;
+  std::unordered_set<std::string> new_mset;
+  const auto& old_nodes = old_group_->nodes;
+
+  // case 1: exist in new members
+  for (const auto& new_member : new_members) {
+    auto iter = old_nodes.find(new_member.id);
+    if (iter == old_nodes.end()) {  // no found in old group
+      diff.add.emplace_back(std::make_shared<RemoteNode>(
+          new_member.id, new_member.ip, new_member.port, new_member.weight));
+    } else {  // found in old group
+      auto old_node = iter->second;
+      if (old_node->IP() == new_member.ip &&
+          old_node->Port() == new_member.port) {
+        diff.keep.emplace_back(old_node);
+      } else {
+        diff.remove.emplace_back(old_node);
+        diff.add.emplace_back(std::make_shared<RemoteNode>(
+            new_member.id, new_member.ip, new_member.port, new_member.weight));
+      }
+    }
+    new_mset.emplace(new_member.id);
+  }
+
+  // case 2: not exist in new members, it should be removed
+  for (const auto& item : old_nodes) {
+    if (!new_mset.count(item.first)) {        // member_id
+      diff.remove.emplace_back(item.second);  // node
+    }
+  }
+
+  return diff;
+}
+
+std::vector<uint64_t> RemoteNodeGroupBuilder::RecalcWeights(
+    const Members& members) {
+  std::vector<uint64_t> weights(members.size());
+  for (int i = 0; i < members.size(); i++) {
+    weights[i] = members[i].weight;
+  }
+  return iutil::NormalizeByGcd(weights);  // FIXME: uint32_t
+}
+
+iutil::ConHashUPtr RemoteNodeGroupBuilder::BuildHashRing(
+    const Members& members) {
+  auto chash = std::make_unique<iutil::KetamaConHash>();
+  auto weights = RecalcWeights(members);
+  for (int i = 0; i < members.size(); i++) {
+    const auto& member = members[i];
+    chash->AddNode(member.id, weights[i]);
+
+    LOG(INFO) << "Add " << member << " to consistent hash";
+  }
+
+  chash->Final();
+  LOG(INFO) << "Hash ring builded";
+  return chash;
+}
+
+void RemoteNodeGroupBuilder::StartNodes(std::vector<RemoteNodeSPtr> nodes) {
+  for (const auto& node : nodes) {
+    if (node->Start().ok()) {
+      LOG(INFO) << "Successfully started " << *node;
+    } else {
+      LOG(ERROR) << "Fail to start " << *node;
+    }
+  }
+}
+
+void RemoteNodeGroupBuilder::DeferShutdownNodes(
+    std::vector<RemoteNodeSPtr> nodes) {
+  CHECK_EQ(0, bthread::execution_queue_execute(queue_id_, std::move(nodes)));
+}
+
+int RemoteNodeGroupBuilder::ShutdownNodes(
+    void*, bthread::TaskIterator<std::vector<RemoteNodeSPtr>>& iter) {
+  if (iter.is_queue_stopped()) {
+    return 0;
+  }
+
+  for (; iter; iter++) {
+    for (const auto& node : *iter) {
+      node->Shutdown();
+      LOG(INFO) << "Successfully shutdown " << *node;
+    }
+  }
+  return 0;
 }
 
 }  // namespace cache

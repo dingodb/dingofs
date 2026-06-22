@@ -98,7 +98,7 @@ void RemoteNodeHealthChecker::Start() {
 
   CHECK(state_machine_->Start());
   CHECK(executor_->Start());
-  executor_->Schedule([this] { PeriodicCheckPeer(); },
+  executor_->Schedule([this] { PeriodicCheckNode(); },
                       FLAGS_cache_node_state_check_duration_ms);
   executor_->Schedule([this] { PeriodicCommitStageIOResult(); }, 1000);
 
@@ -140,26 +140,26 @@ Status RemoteNodeHealthChecker::SendPingRequest() {
   conn_->Send("Ping", request, &response, nullptr, nullptr, timeout_ms,
               &result);
   if (result.failed) {
-    LOG(ERROR) << "Fail to send ping request to peer: " << result.error_text;
+    LOG(ERROR) << "Fail to send ping request to node: " << result.error_text;
     conn_->Close();
     return Status::NetError(result.error_code, result.error_text);
   }
   return Status::OK();
 }
 
-void RemoteNodeHealthChecker::CheckPeer() {
+void RemoteNodeHealthChecker::CheckNode() {
   auto status = SendPingRequest();
   if (status.ok()) {
     state_machine_->Success();
   } else {
     state_machine_->Error();
-    LOG(ERROR) << "Fail to check peer health";
+    LOG(ERROR) << "Fail to check node health";
   }
 }
 
-void RemoteNodeHealthChecker::PeriodicCheckPeer() {
-  CheckPeer();
-  executor_->Schedule([this] { PeriodicCheckPeer(); },
+void RemoteNodeHealthChecker::PeriodicCheckNode() {
+  CheckNode();
+  executor_->Schedule([this] { PeriodicCheckNode(); },
                       FLAGS_cache_node_state_check_duration_ms);
 }
 

@@ -35,7 +35,7 @@
 namespace dingofs {
 namespace cache {
 
-DEFINE_int32(connections, 16, "keepalive connection number per peer");
+DEFINE_int32(connections, 16, "keepalive connection number per node");
 
 DEFINE_uint32(cache_rpc_connect_timeout_ms, 1000,
               "timeout for rpc channel connect in milliseconds");
@@ -90,7 +90,7 @@ Status RemoteNode::Start() {
                                            FLAGS_cache_rpc_connect_timeout_ms);
     if (!status.ok()) {
       LOG(WARNING) << "Fail to connect to " << *this
-                   << " during peer startup, it will reconnect on demand: "
+                   << " during node startup, it will reconnect on demand: "
                    << status.ToString();
       has_error = true;
     }
@@ -149,9 +149,9 @@ bool RemoteNode::Dump(Json::Value& value) const {
   return true;
 }
 
-std::ostream& operator<<(std::ostream& os, const RemoteNode& peer) {
-  os << "RemoteNode{id=" << peer.Id() << " ip=" << peer.IP()
-     << " port=" << peer.Port() << " conns=" << FLAGS_connections << "}";
+std::ostream& operator<<(std::ostream& os, const RemoteNode& node) {
+  os << "RemoteNode{id=" << node.Id() << " ip=" << node.IP()
+     << " port=" << node.Port() << " conns=" << FLAGS_connections << "}";
   return os;
 }
 
