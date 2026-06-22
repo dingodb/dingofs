@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "cache/remotecache/upstream.h"
+#include "cache/remote/remote_cache_cluster.h"
 
 #include <butil/logging.h>
 #include <gflags/gflags.h>
@@ -31,7 +31,7 @@
 
 #include "cache/common/block_handle_helper.h"
 #include "cache/common/mds_client.h"
-#include "cache/remotecache/peer_group.h"
+#include "cache/remote/remote_node_group.h"
 #include "common/options/cache.h"
 #include "dingofs/blockcache.pb.h"
 #include "utils/executor/bthread/bthread_executor.h"
@@ -42,21 +42,21 @@ namespace cache {
 DEFINE_uint32(periodic_sync_members_ms, 3000,
               "periodic sync members from mds in milliseconds");
 
-Upstream::Upstream()
+RemoteCacheCluster::RemoteCacheCluster()
     : running_(false),
       mds_client_(std::make_unique<MDSClientImpl>()),
       executor_(std::make_unique<BthreadExecutor>()),
-      group_(std::make_shared<PeerGroup>()),
-      builder_(std::make_unique<PeerGroupBuilder>()),
-      vars_(std::make_unique<UpstreamVarsCollector>()) {}
+      group_(std::make_shared<RemoteNodeGroup>()),
+      builder_(std::make_unique<RemoteNodeGroupBuilder>()),
+      vars_(std::make_unique<RemoteCacheClusterMetrics>()) {}
 
-void Upstream::Start() {
+void RemoteCacheCluster::Start() {
   if (running_.load(std::memory_order_relaxed)) {
-    LOG(WARNING) << "Upstream already started";
+    LOG(WARNING) << "RemoteCacheCluster already started";
     return;
   }
 
-  LOG(INFO) << "Upstream is starting...";
+  LOG(INFO) << "RemoteCacheCluster is starting...";
 
   if (!SyncMembers()) {
     LOG(FATAL)
@@ -70,28 +70,28 @@ void Upstream::Start() {
                       FLAGS_periodic_sync_members_ms);
 
   running_.store(true, std::memory_order_relaxed);
-  LOG(INFO) << "Upstream{mds_addr=" << FLAGS_mds_addrs << "} started";
+  LOG(INFO) << "RemoteCacheCluster{mds_addr=" << FLAGS_mds_addrs << "} started";
 }
 
-void Upstream::Shutdown() {
+void RemoteCacheCluster::Shutdown() {
   if (!running_.load(std::memory_order_relaxed)) {
-    LOG(WARNING) << "Upstream already shutdown";
+    LOG(WARNING) << "RemoteCacheCluster already shutdown";
     return;
   }
 
-  LOG(INFO) << "Upstream is shutting down...";
+  LOG(INFO) << "RemoteCacheCluster is shutting down...";
 
   CHECK(executor_->Stop());
 
   running_.store(false, std::memory_order_relaxed);
-  LOG(INFO) << "Upstream shutdown";
+  LOG(INFO) << "RemoteCacheCluster shutdown";
 }
 
-Status Upstream::SendPutRequest(const BlockHandle& handle,
+Status RemoteCacheCluster::SendPutRequest(const BlockHandle& handle,
                                 const IOBuffer& block) {
   Status status;
   size_t length = block.Size();
-  UpstreamVarsRecordGuard guard("Put", length, status, vars_.get());
+  RemoteCacheClusterMetricsGuard guard("Put", length, status, vars_.get());
 
   pb::cache::PutRequest raw;
   *raw.mutable_handle() = ToHandlePB(handle);
@@ -109,11 +109,11 @@ Status Upstream::SendPutRequest(const BlockHandle& handle,
   return status;
 }
 
-Status Upstream::SendRangeRequest(const BlockHandle& handle, off_t offset,
+Status RemoteCacheCluster::SendRangeRequest(const BlockHandle& handle, off_t offset,
                                   size_t length, IOBuffer* buffer,
                                   size_t block_whole_length, bool* cache_hit) {
   Status status;
-  UpstreamVarsRecordGuard guard("Range", length, status, vars_.get());
+  RemoteCacheClusterMetricsGuard guard("Range", length, status, vars_.get());
 
   pb::cache::RangeRequest raw;
   *raw.mutable_handle() = ToHandlePB(handle);
@@ -137,11 +137,11 @@ Status Upstream::SendRangeRequest(const BlockHandle& handle, off_t offset,
   return status;
 }
 
-Status Upstream::SendCacheRequest(const BlockHandle& handle,
+Status RemoteCacheCluster::SendCacheRequest(const BlockHandle& handle,
                                   const IOBuffer& block) {
   Status status;
   size_t length = block.Size();
-  UpstreamVarsRecordGuard guard("Cache", length, status, vars_.get());
+  RemoteCacheClusterMetricsGuard guard("Cache", length, status, vars_.get());
 
   pb::cache::CacheRequest raw;
   *raw.mutable_handle() = ToHandlePB(handle);
@@ -159,9 +159,9 @@ Status Upstream::SendCacheRequest(const BlockHandle& handle,
   return status;
 }
 
-Status Upstream::SendPrefetchRequest(const BlockHandle& handle, size_t length) {
+Status RemoteCacheCluster::SendPrefetchRequest(const BlockHandle& handle, size_t length) {
   Status status;
-  UpstreamVarsRecordGuard guard("Prefetch", length, status, vars_.get());
+  RemoteCacheClusterMetricsGuard guard("Prefetch", length, status, vars_.get());
 
   pb::cache::PrefetchRequest raw;
   *raw.mutable_handle() = ToHandlePB(handle);
@@ -181,10 +181,10 @@ Status Upstream::SendPrefetchRequest(const BlockHandle& handle, size_t length) {
 }
 
 template <typename T, typename U>
-Response<U> Upstream::SendRequest(const Request<T>& request) {
-  auto peer_group = CHECK_NOTNULL(GetPeerGroup());
+Response<U> RemoteCacheCluster::SendRequest(const Request<T>& request) {
+  auto peer_group = CHECK_NOTNULL(GetRemoteNodeGroup());
   auto peer =
-      peer_group->SelectPeer(FromHandlePB(request.raw.handle()).Filename());
+      peer_group->SelectNode(FromHandlePB(request.raw.handle()).Filename());
   if (nullptr == peer) {
     LOG(ERROR) << "No peer found for " << request;
     return Response<U>{Status::NotFound("no peer found")};
@@ -198,7 +198,7 @@ Response<U> Upstream::SendRequest(const Request<T>& request) {
   return peer->template SendRequest<T, U>(request);
 }
 
-bool Upstream::SendListMembersRequest(Members* members) {
+bool RemoteCacheCluster::SendListMembersRequest(Members* members) {
   auto group_name = FLAGS_cache_group;
   auto status = mds_client_->ListMembers(group_name, members);
   if (!status.ok()) {
@@ -212,7 +212,7 @@ bool Upstream::SendListMembersRequest(Members* members) {
   return true;
 }
 
-bool Upstream::SyncMembers() {
+bool RemoteCacheCluster::SyncMembers() {
   Members members;
   if (!SendListMembersRequest(&members)) {
     return false;
@@ -220,20 +220,20 @@ bool Upstream::SyncMembers() {
 
   auto new_group = builder_->Build(members);
   if (new_group != nullptr) {
-    SetPeerGroup(new_group);
+    SetRemoteNodeGroup(new_group);
     LOG(INFO) << "Successfully rebuild upstream peer group";
   }
   return true;
 }
 
-void Upstream::PeriodicSyncMembers() {
+void RemoteCacheCluster::PeriodicSyncMembers() {
   SyncMembers();
   executor_->Schedule([this] { PeriodicSyncMembers(); },
                       FLAGS_periodic_sync_members_ms);
 }
 
-bool Upstream::Dump(Json::Value& value) {
-  auto group = GetPeerGroup();
+bool RemoteCacheCluster::Dump(Json::Value& value) {
+  auto group = GetRemoteNodeGroup();
   if (nullptr == group) {
     return true;
   }

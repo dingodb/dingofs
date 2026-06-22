@@ -21,8 +21,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_REMOTECACHE_PEER_H_
-#define DINGOFS_SRC_CACHE_REMOTECACHE_PEER_H_
+#ifndef DINGOFS_SRC_CACHE_REMOTE_REMOTE_NODE_H_
+#define DINGOFS_SRC_CACHE_REMOTE_REMOTE_NODE_H_
 
 #include <brpc/channel.h>
 #include <bthread/mutex.h>
@@ -37,9 +37,9 @@
 #include <string>
 
 #include "cache/common/error.h"
-#include "cache/remotecache/peer_connection.h"
-#include "cache/remotecache/peer_health_checker.h"
-#include "cache/remotecache/request.h"
+#include "cache/remote/remote_node_connection.h"
+#include "cache/remote/remote_node_health_checker.h"
+#include "cache/remote/request.h"
 #include "common/io_buffer.h"
 #include "common/options/cache.h"
 #include "common/status.h"
@@ -48,9 +48,9 @@
 namespace dingofs {
 namespace cache {
 
-class Peer {
+class RemoteNode {
  public:
-  Peer(const std::string& id, const std::string& ip, uint32_t port,
+  RemoteNode(const std::string& id, const std::string& ip, uint32_t port,
        uint32_t weight);
   Status Start();
   void Shutdown();
@@ -68,14 +68,14 @@ class Peer {
  private:
   std::string EndPoint() { return ip_ + ":" + std::to_string(port_); }
 
-  PeerConnection* GetConnection() {
+  RemoteNodeConnection* GetConnection() {
     return connections_[next_conn_index_.fetch_add(1) % FLAGS_connections]
         .get();
   }
 
   uint32_t NextTimeoutMs(const std::string& method, int retry_count) const;
   bool ShouldRetry(const std::string& method, int retcode) const;
-  void DoConnect(PeerConnection* conn) const;
+  void DoConnect(RemoteNodeConnection* conn) const;
 
   std::atomic<bool> running_;
   std::string id_;
@@ -83,16 +83,16 @@ class Peer {
   uint32_t port_;
   uint32_t weight_;
   std::atomic<int> next_conn_index_{0};
-  std::vector<PeerConnectionUPtr> connections_;
-  PeerHealthCheckerUPtr health_checker_;
+  std::vector<RemoteNodeConnectionUPtr> connections_;
+  RemoteNodeHealthCheckerUPtr health_checker_;
 };
 
-using PeerSPtr = std::shared_ptr<Peer>;
+using RemoteNodeSPtr = std::shared_ptr<RemoteNode>;
 
-std::ostream& operator<<(std::ostream& os, const Peer& peer);
+std::ostream& operator<<(std::ostream& os, const RemoteNode& peer);
 
 template <typename T, typename U>
-Response<U> Peer::SendRequest(const Request<T>& request) {
+Response<U> RemoteNode::SendRequest(const Request<T>& request) {
   Response<U> response;
   BRPC_SCOPE_EXIT {
     auto status = response.status;
@@ -111,13 +111,13 @@ Response<U> Peer::SendRequest(const Request<T>& request) {
     auto* conn = GetConnection();
     CHECK_NOTNULL(conn);
     if (!conn->IsConnected()) {
-      LOG(ERROR) << "PeerConnection is not connected, reconnect " << IP() << ":"
+      LOG(ERROR) << "RemoteNodeConnection is not connected, reconnect " << IP() << ":"
                  << Port();
       DoConnect(conn);
       continue;  // retry another one
     }
 
-    PeerConnection::Result result;
+    RemoteNodeConnection::Result result;
     conn->Send(request.method, request.raw, &response.raw,
                request.request_attachment, request.response_attachment,
                NextTimeoutMs(request.method, retry_count), &result);
@@ -163,4 +163,4 @@ Response<U> Peer::SendRequest(const Request<T>& request) {
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_REMOTECACHE_PEER_H_
+#endif  // DINGOFS_SRC_CACHE_REMOTE_REMOTE_NODE_H_

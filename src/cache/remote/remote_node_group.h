@@ -21,8 +21,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_REMOTECACHE_PEER_GROUP_H_
-#define DINGOFS_SRC_CACHE_REMOTECACHE_PEER_GROUP_H_
+#ifndef DINGOFS_SRC_CACHE_REMOTE_REMOTE_NODE_GROUP_H_
+#define DINGOFS_SRC_CACHE_REMOTE_REMOTE_NODE_GROUP_H_
 
 #include <bthread/execution_queue.h>
 #include <bthread/execution_queue_inl.h>
@@ -33,13 +33,13 @@
 
 #include "cache/common/mds_client.h"
 #include "cache/iutil/con_hash.h"
-#include "cache/remotecache/peer.h"
+#include "cache/remote/remote_node.h"
 
 namespace dingofs {
 namespace cache {
 
-struct PeerGroup {
-  PeerSPtr SelectPeer(const std::string& key) {
+struct RemoteNodeGroup {
+  RemoteNodeSPtr SelectNode(const std::string& key) {
     if (chash == nullptr) {
       return nullptr;
     }
@@ -55,23 +55,23 @@ struct PeerGroup {
   }
 
   std::unique_ptr<iutil::ConHash> chash;            // member id => vnode
-  std::unordered_map<std::string, PeerSPtr> peers;  // member id => Peer*
+  std::unordered_map<std::string, RemoteNodeSPtr> peers;  // member id => RemoteNode*
 };
 
-using PeerGroupSPtr = std::shared_ptr<PeerGroup>;
+using RemoteNodeGroupSPtr = std::shared_ptr<RemoteNodeGroup>;
 
-class PeerGroupBuilder {
+class RemoteNodeGroupBuilder {
  public:
-  explicit PeerGroupBuilder(bool start_peers = true);
-  ~PeerGroupBuilder();
+  explicit RemoteNodeGroupBuilder(bool start_peers = true);
+  ~RemoteNodeGroupBuilder();
 
-  PeerGroupSPtr Build(const Members& members);
+  RemoteNodeGroupSPtr Build(const Members& members);
 
  private:
   struct Diff {
-    std::vector<PeerSPtr> keep;
-    std::vector<PeerSPtr> add;
-    std::vector<PeerSPtr> remove;
+    std::vector<RemoteNodeSPtr> keep;
+    std::vector<RemoteNodeSPtr> add;
+    std::vector<RemoteNodeSPtr> remove;
   };
 
   Members FilterMembers(const Members& members);
@@ -79,19 +79,19 @@ class PeerGroupBuilder {
   std::vector<uint64_t> RecalcWeights(const Members& members);
   iutil::ConHashUPtr BuildHashRing(const Members& members);
 
-  void StartPeers(std::vector<PeerSPtr> peers);
-  void DeferShutdownPeers(std::vector<PeerSPtr> peers);
+  void StartPeers(std::vector<RemoteNodeSPtr> peers);
+  void DeferShutdownPeers(std::vector<RemoteNodeSPtr> peers);
   static int ShutdownPeers(void* meta,
-                           bthread::TaskIterator<std::vector<PeerSPtr>>& iter);
+                           bthread::TaskIterator<std::vector<RemoteNodeSPtr>>& iter);
 
-  PeerGroupSPtr old_group_;
+  RemoteNodeGroupSPtr old_group_;
   bool start_peers_;
-  bthread::ExecutionQueueId<std::vector<PeerSPtr>> queue_id_;
+  bthread::ExecutionQueueId<std::vector<RemoteNodeSPtr>> queue_id_;
 };
 
-using PeerGroupBuilderUPtr = std::unique_ptr<PeerGroupBuilder>;
+using RemoteNodeGroupBuilderUPtr = std::unique_ptr<RemoteNodeGroupBuilder>;
 
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_REMOTECACHE_PEER_GROUP_H_
+#endif  // DINGOFS_SRC_CACHE_REMOTE_REMOTE_NODE_GROUP_H_

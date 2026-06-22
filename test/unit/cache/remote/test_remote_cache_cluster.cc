@@ -20,7 +20,7 @@
  * Author: AI
  */
 
-#include "cache/remotecache/upstream.h"
+#include "cache/remote/remote_cache_cluster.h"
 
 #include <gtest/gtest.h>
 #include <json/value.h>
@@ -47,7 +47,7 @@ IOBuffer Buffer(const std::string& data) {
 }  // namespace
 
 TEST(UpstreamTest, DumpEmptyGroup) {
-  Upstream upstream;
+  RemoteCacheCluster upstream;
   Json::Value value;
 
   EXPECT_TRUE(upstream.Dump(value));
@@ -57,7 +57,7 @@ TEST(UpstreamTest, DumpEmptyGroup) {
 }
 
 TEST(UpstreamTest, RequestsReturnNotFoundWithoutPeer) {
-  Upstream upstream;
+  RemoteCacheCluster upstream;
   const std::string data = "remote-cache-payload";
   auto payload = Buffer(data);
 
@@ -75,24 +75,24 @@ TEST(UpstreamTest, RequestsReturnNotFoundWithoutPeer) {
   EXPECT_TRUE(cache_hit);
 }
 
-TEST(UpstreamVarsRecordGuardTest, RecordsSuccessAndErrors) {
-  UpstreamVarsCollector vars;
+TEST(RemoteCacheClusterMetricsGuardTest, RecordsSuccessAndErrors) {
+  RemoteCacheClusterMetrics vars;
 
   {
     Status status = Status::OK();
-    UpstreamVarsRecordGuard guard("Put", 4096, status, &vars);
+    RemoteCacheClusterMetricsGuard guard("Put", 4096, status, &vars);
   }
   {
     Status status = Status::NetError("network");
-    UpstreamVarsRecordGuard guard("Range", 128, status, &vars);
+    RemoteCacheClusterMetricsGuard guard("Range", 128, status, &vars);
   }
   {
     Status status = Status::OK();
-    UpstreamVarsRecordGuard guard("Cache", 4096, status, &vars);
+    RemoteCacheClusterMetricsGuard guard("Cache", 4096, status, &vars);
   }
   {
     Status status = Status::NotFound("no peer");
-    UpstreamVarsRecordGuard guard("Prefetch", 4096, status, &vars);
+    RemoteCacheClusterMetricsGuard guard("Prefetch", 4096, status, &vars);
   }
 }
 

@@ -21,8 +21,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_REMOTECACHE_PEER_CONNECTION_H_
-#define DINGOFS_SRC_CACHE_REMOTECACHE_PEER_CONNECTION_H_
+#ifndef DINGOFS_SRC_CACHE_REMOTE_REMOTE_NODE_CONNECTION_H_
+#define DINGOFS_SRC_CACHE_REMOTE_REMOTE_NODE_CONNECTION_H_
 
 #include <brpc/channel.h>
 #include <bthread/mutex.h>
@@ -41,10 +41,10 @@
 namespace dingofs {
 namespace cache {
 
-class PeerConnection;
-using PeerConnectionUPtr = std::unique_ptr<PeerConnection>;
+class RemoteNodeConnection;
+using RemoteNodeConnectionUPtr = std::unique_ptr<RemoteNodeConnection>;
 
-class PeerConnection {
+class RemoteNodeConnection {
  public:
   struct Result {
     bool failed{false};
@@ -60,8 +60,8 @@ class PeerConnection {
     }
   };
 
-  static PeerConnectionUPtr New();
-  virtual ~PeerConnection() = default;
+  static RemoteNodeConnectionUPtr New();
+  virtual ~RemoteNodeConnection() = default;
 
   virtual Status Connect(const std::string& ip, uint32_t port,
                          uint32_t timeout_ms) = 0;
@@ -76,7 +76,7 @@ class PeerConnection {
                     Result* result) = 0;
 };
 
-class TCPConnection : public PeerConnection {
+class TCPConnection : public RemoteNodeConnection {
  public:
   TCPConnection();
   ~TCPConnection() override;
@@ -98,7 +98,7 @@ class TCPConnection : public PeerConnection {
   std::shared_ptr<brpc::Channel> channel_;
 };
 
-class RDMAConnection : public PeerConnection {
+class RDMAConnection : public RemoteNodeConnection {
  public:
   ~RDMAConnection() override;
 
@@ -125,4 +125,4 @@ class RDMAConnection : public PeerConnection {
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_REMOTECACHE_PEER_CONNECTION_H_
+#endif  // DINGOFS_SRC_CACHE_REMOTE_REMOTE_NODE_CONNECTION_H_

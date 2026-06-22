@@ -20,10 +20,10 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "cache/remotecache/peer_health_checker.h"
+#include "cache/remote/remote_node_health_checker.h"
 
 #include "cache/iutil/state_machine_impl.h"
-#include "cache/remotecache/peer.h"
+#include "cache/remote/remote_node.h"
 #include "dingofs/blockcache.pb.h"
 #include "utils/executor/bthread/bthread_executor.h"
 
@@ -79,22 +79,22 @@ struct Configure : public iutil::IConfiguration {
 
 }  // namespace
 
-PeerHealthChecker::PeerHealthChecker(const std::string& ip, uint32_t port)
+RemoteNodeHealthChecker::RemoteNodeHealthChecker(const std::string& ip, uint32_t port)
     : running_(false),
       ip_(ip),
       port_(port),
       executor_(std::make_unique<BthreadExecutor>()),
       state_machine_(std::make_unique<iutil::StateMachineImpl>(
           std::make_unique<Configure>())),
-      conn_(PeerConnection::New()) {}
+      conn_(RemoteNodeConnection::New()) {}
 
-void PeerHealthChecker::Start() {
+void RemoteNodeHealthChecker::Start() {
   if (running_.load(std::memory_order_relaxed)) {
-    LOG(WARNING) << "PeerHealthChecker already started";
+    LOG(WARNING) << "RemoteNodeHealthChecker already started";
     return;
   }
 
-  LOG(INFO) << "PeerHealthChecker is starting...";
+  LOG(INFO) << "RemoteNodeHealthChecker is starting...";
 
   CHECK(state_machine_->Start());
   CHECK(executor_->Start());
@@ -103,27 +103,27 @@ void PeerHealthChecker::Start() {
   executor_->Schedule([this] { PeriodicCommitStageIOResult(); }, 1000);
 
   running_.store(true, std::memory_order_relaxed);
-  LOG(INFO) << "PeerHealthChecker started, start checking " << ip_ << ":"
+  LOG(INFO) << "RemoteNodeHealthChecker started, start checking " << ip_ << ":"
             << port_;
 }
 
-void PeerHealthChecker::Shutdown() {
+void RemoteNodeHealthChecker::Shutdown() {
   if (!running_.load(std::memory_order_relaxed)) {
-    LOG(WARNING) << "PeerHealthChecker already shutdown";
+    LOG(WARNING) << "RemoteNodeHealthChecker already shutdown";
     return;
   }
 
-  LOG(INFO) << "PeerHealthChecker is shutting down...";
+  LOG(INFO) << "RemoteNodeHealthChecker is shutting down...";
 
   CHECK(executor_->Stop());
   CHECK(state_machine_->Shutdown());
 
   running_.store(false, std::memory_order_relaxed);
-  LOG(INFO) << "PeerHealthChecker is down, stop checking " << ip_ << ":"
+  LOG(INFO) << "RemoteNodeHealthChecker is down, stop checking " << ip_ << ":"
             << port_;
 }
 
-Status PeerHealthChecker::SendPingRequest() {
+Status RemoteNodeHealthChecker::SendPingRequest() {
   auto timeout_ms = FLAGS_cache_ping_rpc_timeout_ms;
   if (!conn_->IsConnected()) {
     auto status = conn_->Connect(ip_, port_, timeout_ms);
@@ -136,7 +136,7 @@ Status PeerHealthChecker::SendPingRequest() {
 
   pb::cache::PingRequest request;
   pb::cache::PingResponse response;
-  PeerConnection::Result result;
+  RemoteNodeConnection::Result result;
   conn_->Send("Ping", request, &response, nullptr, nullptr, timeout_ms,
               &result);
   if (result.failed) {
@@ -147,7 +147,7 @@ Status PeerHealthChecker::SendPingRequest() {
   return Status::OK();
 }
 
-void PeerHealthChecker::CheckPeer() {
+void RemoteNodeHealthChecker::CheckPeer() {
   auto status = SendPingRequest();
   if (status.ok()) {
     state_machine_->Success();
@@ -157,13 +157,13 @@ void PeerHealthChecker::CheckPeer() {
   }
 }
 
-void PeerHealthChecker::PeriodicCheckPeer() {
+void RemoteNodeHealthChecker::PeriodicCheckPeer() {
   CheckPeer();
   executor_->Schedule([this] { PeriodicCheckPeer(); },
                       FLAGS_cache_node_state_check_duration_ms);
 }
 
-void PeerHealthChecker::CommitStageIOResult() {
+void RemoteNodeHealthChecker::CommitStageIOResult() {
   auto nerror = num_stage_error_.exchange(0, std::memory_order_relaxed);
   auto nsuccess = num_stage_success_.exchange(0, std::memory_order_relaxed);
   if (nerror > nsuccess) {
@@ -179,7 +179,7 @@ void PeerHealthChecker::CommitStageIOResult() {
   }
 }
 
-void PeerHealthChecker::PeriodicCommitStageIOResult() {
+void RemoteNodeHealthChecker::PeriodicCommitStageIOResult() {
   CommitStageIOResult();
   executor_->Schedule([this] { PeriodicCommitStageIOResult(); }, 1000);
 }

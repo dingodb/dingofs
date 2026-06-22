@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "cache/remotecache/peer_connection.h"
+#include "cache/remote/remote_node_connection.h"
 
 #include <brpc/channel.h>
 #include <brpc/controller.h>
@@ -44,7 +44,7 @@
 namespace dingofs {
 namespace cache {
 
-PeerConnectionUPtr PeerConnection::New() {
+RemoteNodeConnectionUPtr RemoteNodeConnection::New() {
   if (FLAGS_use_rdma) {
     return std::make_unique<RDMAConnection>();
   }

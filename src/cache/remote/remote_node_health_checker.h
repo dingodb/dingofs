@@ -21,8 +21,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_REMOTECACHE_PEER_HEALTH_CHECKER_H_
-#define DINGOFS_SRC_CACHE_REMOTECACHE_PEER_HEALTH_CHECKER_H_
+#ifndef DINGOFS_SRC_CACHE_REMOTE_REMOTE_NODE_HEALTH_CHECKER_H_
+#define DINGOFS_SRC_CACHE_REMOTE_REMOTE_NODE_HEALTH_CHECKER_H_
 
 #include <brpc/channel.h>
 #include <bthread/mutex.h>
@@ -35,16 +35,16 @@
 #include <string>
 
 #include "cache/iutil/state_machine.h"
-#include "cache/remotecache/peer_connection.h"
+#include "cache/remote/remote_node_connection.h"
 #include "common/status.h"
 #include "utils/executor/executor.h"
 
 namespace dingofs {
 namespace cache {
 
-class PeerHealthChecker {
+class RemoteNodeHealthChecker {
  public:
-  PeerHealthChecker(const std::string& ip, uint32_t port);
+  RemoteNodeHealthChecker(const std::string& ip, uint32_t port);
   void Start();
   void Shutdown();
 
@@ -70,12 +70,12 @@ class PeerHealthChecker {
   std::atomic<uint64_t> num_stage_error_{0};
   std::atomic<uint64_t> num_stage_success_{0};
   std::atomic<bool> is_healthy_{true};
-  std::unique_ptr<PeerConnection> conn_;
+  std::unique_ptr<RemoteNodeConnection> conn_;
 };
 
-using PeerHealthCheckerUPtr = std::unique_ptr<PeerHealthChecker>;
+using RemoteNodeHealthCheckerUPtr = std::unique_ptr<RemoteNodeHealthChecker>;
 
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_REMOTECACHE_PEER_HEALTH_CHECKER_H_
+#endif  // DINGOFS_SRC_CACHE_REMOTE_REMOTE_NODE_HEALTH_CHECKER_H_

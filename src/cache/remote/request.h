@@ -21,8 +21,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_REMOTECACHE_REQUEST_H_
-#define DINGOFS_SRC_CACHE_REMOTECACHE_REQUEST_H_
+#ifndef DINGOFS_SRC_CACHE_REMOTE_REQUEST_H_
+#define DINGOFS_SRC_CACHE_REMOTE_REQUEST_H_
 
 #include <ostream>
 #include <string>
@@ -70,4 +70,4 @@ inline std::ostream& operator<<(std::ostream& os, const Response<U>& response) {
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_REMOTECACHE_REQUEST_H_
+#endif  // DINGOFS_SRC_CACHE_REMOTE_REQUEST_H_

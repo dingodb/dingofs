@@ -20,7 +20,7 @@
  * Author: AI
  */
 
-#include "cache/remotecache/peer_health_checker.h"
+#include "cache/remote/remote_node_health_checker.h"
 
 #include <gtest/gtest.h>
 
@@ -45,7 +45,7 @@ bool WaitUntil(Pred pred, int timeout_ms = 3000) {
 
 }  // namespace
 
-class PeerHealthCheckerTest : public ::testing::Test {
+class RemoteNodeHealthCheckerTest : public ::testing::Test {
  protected:
   void SetUp() override {
     saved_check_duration_ms_ = FLAGS_cache_node_state_check_duration_ms;
@@ -77,8 +77,8 @@ class PeerHealthCheckerTest : public ::testing::Test {
   uint32_t saved_unstable2down_s_{0};
 };
 
-TEST_F(PeerHealthCheckerTest, StartAndShutdownIdempotent) {
-  PeerHealthChecker checker("127.0.0.1", 9300);
+TEST_F(RemoteNodeHealthCheckerTest, StartAndShutdownIdempotent) {
+  RemoteNodeHealthChecker checker("127.0.0.1", 9300);
 
   checker.Start();
   checker.Start();
@@ -88,8 +88,8 @@ TEST_F(PeerHealthCheckerTest, StartAndShutdownIdempotent) {
   checker.Shutdown();
 }
 
-TEST_F(PeerHealthCheckerTest, StageIoResultsDriveHealth) {
-  PeerHealthChecker checker("127.0.0.1", 9300);
+TEST_F(RemoteNodeHealthCheckerTest, StageIoResultsDriveHealth) {
+  RemoteNodeHealthChecker checker("127.0.0.1", 9300);
   checker.Start();
 
   checker.IOError();
