@@ -1,4 +1,4 @@
-# Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
+# Copyright (c) 2026 dingodb.com, Inc. All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,26 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+# Local on-disk cache suite. Built as an object library and linked into the
+# single integration_test_cache binary (see ../CMakeLists.txt).
+file(GLOB INTEGRATION_CACHE_LOCAL_SRCS CONFIGURE_DEPENDS "*.cc")
 
-set(TEST_INTEGRATION_DEPS
-    GTest::gtest
-    GTest::gmock
-    GTest::gtest_main
-    brpc::brpc
-    glog::glog
-    gflags::gflags
-    dl
+add_library(integration_cache_local_tests OBJECT
+    ${INTEGRATION_CACHE_LOCAL_SRCS}
 )
 
-set(TEST_INTEGRATION_DEPS_WITHOUT_MAIN
-    GTest::gtest
-    GTest::gmock
-    brpc::brpc
-    glog::glog
-    gflags::gflags
-    dl
+target_link_libraries(integration_cache_local_tests
+    integration_cache_deploy
+    ${TEST_INTEGRATION_DEPS_WITHOUT_MAIN}
 )
-
-add_subdirectory(mds)
-add_subdirectory(cache)

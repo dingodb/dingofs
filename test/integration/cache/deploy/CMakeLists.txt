@@ -1,4 +1,4 @@
-# Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
+# Copyright (c) 2026 dingodb.com, Inc. All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,26 +12,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+# Shared deployment harness for the cache integration suites: spawns real
+# dingo-mds / dingo-cache processes. The concrete suites (node / localcache /
+# distributedcache) link this library; the gtest entry point lives in
+# ../main.cc.
+add_library(integration_cache_deploy STATIC
+    process_guard.cc
+    mds_server.cc
+    cache_node.cc
+)
 
-set(TEST_INTEGRATION_DEPS
+target_link_libraries(integration_cache_deploy PUBLIC
+    cache_lib
+    block_accesser
+    dingofs_common
+    dingofs_utils
+    PROTO_OBJS
+
+    absl::strings
+    absl::str_format
+    protobuf::libprotobuf
+
     GTest::gtest
     GTest::gmock
-    GTest::gtest_main
     brpc::brpc
     glog::glog
     gflags::gflags
-    dl
 )
-
-set(TEST_INTEGRATION_DEPS_WITHOUT_MAIN
-    GTest::gtest
-    GTest::gmock
-    brpc::brpc
-    glog::glog
-    gflags::gflags
-    dl
-)
-
-add_subdirectory(mds)
-add_subdirectory(cache)

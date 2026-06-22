@@ -369,6 +369,12 @@ CompletionQueue::CompletionQueue(ibv_cq* cq, ibv_comp_channel* channel)
 
 CompletionQueue::~CompletionQueue() {
   if (cq_) {
+    // ibv_destroy_cq() blocks until every CQ event obtained via
+    // ibv_get_cq_event() has been acknowledged
+    if (num_unack_events_ > 0) {
+      ibv_ack_cq_events(cq_, num_unack_events_);
+      num_unack_events_ = 0;
+    }
     ibv_destroy_cq(cq_);
   }
   if (channel_) {

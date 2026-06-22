@@ -173,8 +173,8 @@ DECLARE_uint32(prefetch_max_inflights);
 DECLARE_uint32(small_block_size_kb);
 
 // Sets the directory to store stage and cache blocks.
-// Multi directories and corresponding cache size are supported, e.g.
-// "/data1:100;/data2:200;/data3:300".
+// Multi directories and corresponding cache size are supported,
+// e.g. "/data1:100,/data2:200,/data3:300".
 DECLARE_string(cache_dir);
 
 // [hiden]
@@ -192,7 +192,7 @@ DECLARE_double(free_space_ratio);
 DECLARE_uint32(cache_expire_s);
 
 // Sets the interval for cleaning up expired cache blocks in milliseconds.
-DECLARE_uint32(cleanup_expire_interval_ms);
+DECLARE_uint32(cache_cleanup_expire_interval_ms);
 
 // Sets the IO depth for iouring.
 DECLARE_uint32(iodepth);

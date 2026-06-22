@@ -37,6 +37,17 @@ target_link_libraries(cache_lib
 )
 
 add_executable(dingo-cache main.cc)
+# NOTE: cache_lib transitively drags in librados, which links the STATIC
+# libibverbs.a. Those static rdma-core symbols cannot dlopen the mlx5 provider
+# plugin, so ibv_get_device_list() returns no devices and the RDMA slab pool
+# (required by the on-disk cache) fails to initialize. List the SHARED
+# libibverbs first so its (dynamic) verbs symbols win, and allow the duplicate
+# definitions from the static copy.
 target_link_libraries(dingo-cache
+    ibverbs::ibverbs
+
     cache_lib
+)
+target_link_options(dingo-cache PRIVATE
+    "-Wl,--allow-multiple-definition"
 )

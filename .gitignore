@@ -86,6 +86,7 @@ thirdparties/etcdclient/*.h
 build
 build/
 build-coverage/
+build-coverage-it/
 scripts/docker/rocky9/dingofs
 
 dist

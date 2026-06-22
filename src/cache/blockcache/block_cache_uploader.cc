@@ -248,8 +248,13 @@ void BlockCacheUploader::OnComplete(const StageBlock& sblock, Status status) {
   LOG(ERROR) << "Fail to upload " << sblock << ", it will retry after "
              << sleep_ms << " ms";
 
+  if (!IsRunning()) {
+    return;
+  }
+  bthread_usleep(sleep_ms * 1000);
+  // Shutdown may have raced while we slept; re-check before re-queuing so a
+  // post-shutdown retry does not trip EnterUploadQueue's running-state check.
   if (IsRunning()) {
-    bthread_usleep(sleep_ms * 1000);
     EnterUploadQueue(sblock);  // retry
   }
 }

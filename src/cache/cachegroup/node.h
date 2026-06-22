@@ -28,10 +28,10 @@
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/cachegroup/heartbeat.h"
-#include "cache/common/task_tracker.h"
 #include "cache/common/mds_client.h"
 #include "cache/common/storage_client.h"
 #include "cache/common/storage_client_pool.h"
+#include "cache/common/task_tracker.h"
 #include "common/io_buffer.h"
 
 namespace dingofs {
@@ -40,6 +40,8 @@ namespace cache {
 class CacheNode {
  public:
   CacheNode();
+  CacheNode(MDSClientSPtr mds_client,
+            StorageClientPoolSPtr storage_client_pool);
   Status Start();
   Status Shutdown();
 
@@ -67,6 +69,7 @@ class CacheNode {
                             IOBuffer* buffer);
   Status RunTask(StorageClient* storage_client, DownloadTaskSPtr task);
   Status WaitTask(DownloadTaskSPtr task);
+  void AllocSlabBuffer(IOBuffer* buffer, size_t length);
 
  private:
   std::atomic<bool> running_;

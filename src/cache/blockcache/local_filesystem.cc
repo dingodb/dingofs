@@ -30,6 +30,7 @@
 
 #include <atomic>
 #include <cstddef>
+#include <cstring>
 #include <memory>
 #include <string>
 
@@ -233,7 +234,7 @@ Status LocalFileSystem::WriteFile(const std::string& path,
       LOG(ERROR) << "Fail to allocate fixed write buffer for `" << path << "'";
       return status;
     }
-    buffer->AppendTo(&fixed);
+    buffer->CopyTo(fixed.Fetch1(), buffer->Size());
     write_buffer = &fixed;
   }
 
