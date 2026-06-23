@@ -20,7 +20,7 @@
  * Author: AI
  */
 
-#include "test/integration/cache/deploy/fixture.h"
+#include "test/integration/cache/node/fixture.h"
 
 namespace dingofs {
 namespace cache {

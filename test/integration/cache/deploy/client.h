@@ -144,8 +144,7 @@ inline bool WaitMemberOnline(MDSClientImpl* mds, const std::string& group,
         std::vector<CacheGroupMember> members;
         if (!mds->ListMembers(group, &members).ok()) return false;
         for (const auto& m : members) {
-          if (m.id == member_id &&
-              m.state == CacheGroupMemberState::kOnline) {
+          if (m.id == member_id && m.state == CacheGroupMemberState::kOnline) {
             return true;
           }
         }

@@ -20,7 +20,7 @@
  * Author: AI
  */
 
-#include "test/integration/cache/deploy/fixture.h"
+#include "test/integration/cache/distributed/fixture.h"
 
 namespace dingofs {
 namespace cache {
@@ -42,15 +42,17 @@ TEST_F(DistributedCacheTest, TwoNodesServeAllBlocks) {
   auto* cache = client_.cache();
 
   for (uint64_t id = 1; id <= kBlocks; ++id) {
-    PutRemote(cache, MakeHandle(fs_id_, id, 0, kSize), PatternFor(id, 0, kSize));
+    PutRemote(cache, MakeHandle(fs_id_, id, 0, kSize),
+              PatternFor(id, 0, kSize));
   }
   for (uint64_t id = 1; id <= kBlocks; ++id) {
     auto h = MakeHandle(fs_id_, id, 0, kSize);
     IOBuffer buf = MakeReadBuf(kSize);
-    ASSERT_TRUE(cache->Range(h, 0, kSize, &buf,
-                             {.retrieve_storage = true,
-                              .block_whole_length = kSize,
-                              .tier = CacheTier::kRemote})
+    ASSERT_TRUE(cache
+                    ->Range(h, 0, kSize, &buf,
+                            {.retrieve_storage = true,
+                             .block_whole_length = kSize,
+                             .tier = CacheTier::kRemote})
                     .ok())
         << "id=" << id;
     EXPECT_EQ(ReadAll(buf), PatternFor(id, 0, kSize)) << "id=" << id;
@@ -77,10 +79,11 @@ TEST_F(DistributedCacheTest, MembershipPicksUpNewNode) {
     auto h = MakeHandle(fs_id_, id, 0, kSize);
     PutRemote(cache, h, PatternFor(id, 0, kSize));
     IOBuffer buf = MakeReadBuf(kSize);
-    ASSERT_TRUE(cache->Range(h, 0, kSize, &buf,
-                             {.retrieve_storage = true,
-                              .block_whole_length = kSize,
-                              .tier = CacheTier::kRemote})
+    ASSERT_TRUE(cache
+                    ->Range(h, 0, kSize, &buf,
+                            {.retrieve_storage = true,
+                             .block_whole_length = kSize,
+                             .tier = CacheTier::kRemote})
                     .ok());
     EXPECT_EQ(ReadAll(buf), PatternFor(id, 0, kSize)) << "id=" << id;
   }
@@ -88,7 +91,8 @@ TEST_F(DistributedCacheTest, MembershipPicksUpNewNode) {
 
 // With two nodes serving (and every block also uploaded to the backend),
 // stopping one node does not lose data: reflow-enabled reads of every block
-// still succeed -- blocks that lived on the downed node reflow from the backend.
+// still succeed -- blocks that lived on the downed node reflow from the
+// backend.
 TEST_F(DistributedCacheTest, DataAvailableAfterNodeLeaves) {
   const auto id2 = utils::GenerateUUID();
   CacheNode node2;
@@ -100,7 +104,8 @@ TEST_F(DistributedCacheTest, DataAvailableAfterNodeLeaves) {
   constexpr uint64_t kBlocks = 8;
   auto* cache = client_.cache();
   for (uint64_t id = 1; id <= kBlocks; ++id) {
-    PutRemote(cache, MakeHandle(fs_id_, id, 0, kSize), PatternFor(id, 0, kSize));
+    PutRemote(cache, MakeHandle(fs_id_, id, 0, kSize),
+              PatternFor(id, 0, kSize));
   }
 
   // Take node2 down and wait until the client sees the smaller ring.
@@ -118,7 +123,8 @@ TEST_F(DistributedCacheTest, DataAvailableAfterNodeLeaves) {
                    .block_whole_length = kSize,
                    .tier = CacheTier::kRemote})
           .ok();
-    })) << "id=" << id;
+    })) << "id="
+        << id;
     EXPECT_EQ(ReadAll(buf), PatternFor(id, 0, kSize)) << "id=" << id;
   }
 }

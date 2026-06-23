@@ -20,7 +20,7 @@
  * Author: AI
  */
 
-#include "test/integration/cache/deploy/fixture.h"
+#include "test/integration/cache/distributed/fixture.h"
 
 namespace dingofs {
 namespace cache {
@@ -57,8 +57,9 @@ TEST_F(DistributedCacheTest, RemoteRangeMissNoReflowReturnsNotFound) {
   constexpr uint32_t kSize = 64 * 1024;
   auto* cache = client_.cache();
 
-  // Probe: a full writeback Put + no-reflow read round-trip proves the no-reflow
-  // remote path itself works (not just reflow), so a later NotFound is genuine.
+  // Probe: a full writeback Put + no-reflow read round-trip proves the
+  // no-reflow remote path itself works (not just reflow), so a later NotFound
+  // is genuine.
   auto probe = MakeHandle(fs_id_, 32, 0, kSize);
   auto probe_content = PatternFor(32, 0, kSize);
   ASSERT_TRUE(WaitUntil([&] {
@@ -91,7 +92,8 @@ TEST_F(DistributedCacheTest, RemoteRangeMissNoReflowReturnsNotFound) {
 // node cache the fetched block: a later no-reflow read then hits the node's
 // cache rather than touching the backend.
 TEST_F(DistributedCacheTest, RemoteReflowCachesWholeBlock) {
-  constexpr uint32_t kSize = 256 * 1024;  // over the 128KiB part-block threshold
+  constexpr uint32_t kSize =
+      256 * 1024;  // over the 128KiB part-block threshold
   auto* cache = client_.cache();
   auto content = PatternFor(34, 0, kSize);
   auto h = MakeHandle(fs_id_, 34, 0, kSize);
@@ -131,15 +133,17 @@ TEST_F(DistributedSmallCacheTest, RemoteEvictionStillServesViaReflow) {
   auto* cache = client_.cache();
 
   for (uint64_t id = 1; id <= kBlocks; ++id) {
-    PutRemote(cache, MakeHandle(fs_id_, id, 0, kSize), PatternFor(id, 0, kSize));
+    PutRemote(cache, MakeHandle(fs_id_, id, 0, kSize),
+              PatternFor(id, 0, kSize));
   }
   for (uint64_t id = 1; id <= kBlocks; ++id) {
     auto h = MakeHandle(fs_id_, id, 0, kSize);
     IOBuffer buf = MakeReadBuf(kSize);
-    ASSERT_TRUE(cache->Range(h, 0, kSize, &buf,
-                             {.retrieve_storage = true,
-                              .block_whole_length = kSize,
-                              .tier = CacheTier::kRemote})
+    ASSERT_TRUE(cache
+                    ->Range(h, 0, kSize, &buf,
+                            {.retrieve_storage = true,
+                             .block_whole_length = kSize,
+                             .tier = CacheTier::kRemote})
                     .ok())
         << "id=" << id;
     EXPECT_EQ(ReadAll(buf), PatternFor(id, 0, kSize)) << "id=" << id;

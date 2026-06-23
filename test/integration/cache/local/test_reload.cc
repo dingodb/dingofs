@@ -21,7 +21,7 @@
  */
 
 #include "common/block/tensor_key.h"
-#include "test/integration/cache/deploy/fixture.h"
+#include "test/integration/cache/local/fixture.h"
 
 namespace dingofs {
 namespace cache {
@@ -35,8 +35,9 @@ TEST_F(LocalCacheRawTest, ReloadRecoversCachedBlocks) {
 
   constexpr uint32_t kSize = 256 * 1024;
   for (uint64_t id = 1; id <= 3; ++id) {
-    ASSERT_TRUE(cache->Cache(MakeHandle(kFsId, id, 0, kSize),
-                             MakeBlock(PatternFor(id, 0, kSize)))
+    ASSERT_TRUE(cache
+                    ->Cache(MakeHandle(kFsId, id, 0, kSize),
+                            MakeBlock(PatternFor(id, 0, kSize)))
                     .ok());
   }
 
@@ -49,9 +50,11 @@ TEST_F(LocalCacheRawTest, ReloadRecoversCachedBlocks) {
     ASSERT_TRUE(WaitUntil([&] { return cache->IsCached(h); }))
         << "block id=" << id << " not recovered after reload";
     IOBuffer buf = MakeReadBuf(kSize);
-    ASSERT_TRUE(cache->Range(h, 0, kSize, &buf,
-                             {.retrieve_storage = false, .block_whole_length = kSize})
-                    .ok());
+    ASSERT_TRUE(
+        cache
+            ->Range(h, 0, kSize, &buf,
+                    {.retrieve_storage = false, .block_whole_length = kSize})
+            .ok());
     EXPECT_EQ(ReadAll(buf), PatternFor(id, 0, kSize));
   }
 }
@@ -73,9 +76,11 @@ TEST_F(LocalCacheRawTest, ExpiredBlockIsEvicted) {
   std::this_thread::sleep_for(std::chrono::seconds(3));
 
   IOBuffer buf = MakeReadBuf(kSize);
-  EXPECT_TRUE(cache->Range(h, 0, kSize, &buf,
-                           {.retrieve_storage = false, .block_whole_length = kSize})
-                  .IsNotFound());
+  EXPECT_TRUE(
+      cache
+          ->Range(h, 0, kSize, &buf,
+                  {.retrieve_storage = false, .block_whole_length = kSize})
+          .IsNotFound());
 }
 
 // Under a small cache budget, writing far more than fits still serves every
@@ -88,17 +93,20 @@ TEST_F(LocalCacheRawTest, EvictionStillServesViaReflow) {
   constexpr uint32_t kSize = 4u * 1024 * 1024;
   constexpr uint64_t kBlocks = 8;
   for (uint64_t id = 1; id <= kBlocks; ++id) {
-    ASSERT_TRUE(cache->Put(MakeHandle(kFsId, id, 0, kSize),
-                           MakeBlock(PatternFor(id, 0, kSize)),
-                           {.writeback = true})
+    ASSERT_TRUE(cache
+                    ->Put(MakeHandle(kFsId, id, 0, kSize),
+                          MakeBlock(PatternFor(id, 0, kSize)),
+                          {.writeback = true})
                     .ok());
   }
   for (uint64_t id = 1; id <= kBlocks; ++id) {
     auto h = MakeHandle(kFsId, id, 0, kSize);
     IOBuffer buf = MakeReadBuf(kSize);
-    ASSERT_TRUE(cache->Range(h, 0, kSize, &buf,
-                             {.retrieve_storage = true, .block_whole_length = kSize})
-                    .ok())
+    ASSERT_TRUE(
+        cache
+            ->Range(h, 0, kSize, &buf,
+                    {.retrieve_storage = true, .block_whole_length = kSize})
+            .ok())
         << "id=" << id;
     EXPECT_EQ(ReadAll(buf), PatternFor(id, 0, kSize)) << "id=" << id;
   }
@@ -121,9 +129,10 @@ TEST_F(LocalCacheRawTest, TensorKeyReloadRecovers) {
 
   ASSERT_TRUE(WaitUntil([&] { return cache->IsCached(h); }));
   IOBuffer buf = MakeReadBuf(content.size());
-  ASSERT_TRUE(cache->Range(h, 0, content.size(), &buf,
-                           {.retrieve_storage = false,
-                            .block_whole_length = content.size()})
+  ASSERT_TRUE(cache
+                  ->Range(h, 0, content.size(), &buf,
+                          {.retrieve_storage = false,
+                           .block_whole_length = content.size()})
                   .ok());
   EXPECT_EQ(ReadAll(buf), content);
 }

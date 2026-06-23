@@ -20,7 +20,7 @@
  * Author: AI
  */
 
-#include "test/integration/cache/deploy/fixture.h"
+#include "test/integration/cache/distributed/fixture.h"
 
 namespace dingofs {
 namespace cache {
@@ -35,7 +35,8 @@ TEST_F(DistributedCacheTest, NodeRestartRecoversCachedBlocks) {
   auto* cache = client_.cache();
 
   for (uint64_t id = 1; id <= kBlocks; ++id) {
-    PutRemote(cache, MakeHandle(fs_id_, id, 0, kSize), PatternFor(id, 0, kSize));
+    PutRemote(cache, MakeHandle(fs_id_, id, 0, kSize),
+              PatternFor(id, 0, kSize));
   }
   // Confirm each is a genuine remote cache hit before the restart.
   for (uint64_t id = 1; id <= kBlocks; ++id) {
@@ -48,17 +49,20 @@ TEST_F(DistributedCacheTest, NodeRestartRecoversCachedBlocks) {
                    .block_whole_length = kSize,
                    .tier = CacheTier::kRemote})
           .ok();
-    })) << "id=" << id << " not cached on node before restart";
+    })) << "id="
+        << id << " not cached on node before restart";
   }
 
-  // Restart the node on the same workdir (same cache dir), id, and port. Reusing
-  // the port matters: the MDS keeps a left member locked, and a relocated
-  // (different port) same-id rejoin is rejected with ELOCKED until it ages out.
+  // Restart the node on the same workdir (same cache dir), id, and port.
+  // Reusing the port matters: the MDS keeps a left member locked, and a
+  // relocated (different port) same-id rejoin is rejected with ELOCKED until it
+  // ages out.
   const int port = node_.Port();
   node_.Stop();
   ASSERT_TRUE(WaitMemberNotOnline(mds_client_.get(), kGroup, node_id_));
-  ASSERT_TRUE(node_.Start(workdir_ + "/node", mds_.Addr(), kGroup, node_id_,
-                          /*cache_size_mb=*/1024, /*fixed_port=*/port)
+  ASSERT_TRUE(node_
+                  .Start(workdir_ + "/node", mds_.Addr(), kGroup, node_id_,
+                         /*cache_size_mb=*/1024, /*fixed_port=*/port)
                   .ok());
   ASSERT_TRUE(WaitMemberOnline(mds_client_.get(), kGroup, node_id_));
 
@@ -74,7 +78,8 @@ TEST_F(DistributedCacheTest, NodeRestartRecoversCachedBlocks) {
                    .block_whole_length = kSize,
                    .tier = CacheTier::kRemote})
           .ok();
-    })) << "id=" << id << " not recovered after node restart";
+    })) << "id="
+        << id << " not recovered after node restart";
     EXPECT_EQ(ReadAll(buf), PatternFor(id, 0, kSize)) << "id=" << id;
   }
 }

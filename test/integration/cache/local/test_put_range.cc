@@ -20,7 +20,7 @@
  * Author: AI
  */
 
-#include "test/integration/cache/deploy/fixture.h"
+#include "test/integration/cache/local/fixture.h"
 
 namespace dingofs {
 namespace cache {
@@ -34,19 +34,20 @@ TEST_F(LocalCacheTest, PutThenRangeRoundTrips) {
 
   for (uint64_t id = 1; id <= 4; ++id) {
     auto h = MakeHandle(kFsId, id, 0, kSize);
-    ASSERT_TRUE(cache->Put(h, MakeBlock(PatternFor(id, 0, kSize)),
-                           {.writeback = true})
-                    .ok())
+    ASSERT_TRUE(
+        cache->Put(h, MakeBlock(PatternFor(id, 0, kSize)), {.writeback = true})
+            .ok())
         << "put id=" << id;
   }
 
   for (uint64_t id = 1; id <= 4; ++id) {
     auto h = MakeHandle(kFsId, id, 0, kSize);
     IOBuffer buf = MakeReadBuf(kSize);
-    ASSERT_TRUE(cache->Range(h, 0, kSize, &buf,
-                             {.retrieve_storage = true,
-                              .block_whole_length = kSize})
-                    .ok())
+    ASSERT_TRUE(
+        cache
+            ->Range(h, 0, kSize, &buf,
+                    {.retrieve_storage = true, .block_whole_length = kSize})
+            .ok())
         << "range id=" << id;
     EXPECT_EQ(ReadAll(buf), PatternFor(id, 0, kSize)) << "mismatch id=" << id;
   }
@@ -59,16 +60,19 @@ TEST_F(LocalCacheTest, MultiIndexBlocksAreDistinct) {
   auto* cache = client_.cache();
   for (uint32_t index = 0; index < 5; ++index) {
     auto h = MakeHandle(kFsId, 7, index, kSize);
-    ASSERT_TRUE(
-        cache->Put(h, MakeBlock(PatternFor(7, index, kSize)), {.writeback = true})
-            .ok());
+    ASSERT_TRUE(cache
+                    ->Put(h, MakeBlock(PatternFor(7, index, kSize)),
+                          {.writeback = true})
+                    .ok());
   }
   for (uint32_t index = 0; index < 5; ++index) {
     auto h = MakeHandle(kFsId, 7, index, kSize);
     IOBuffer buf = MakeReadBuf(kSize);
-    ASSERT_TRUE(cache->Range(h, 0, kSize, &buf,
-                             {.retrieve_storage = true, .block_whole_length = kSize})
-                    .ok());
+    ASSERT_TRUE(
+        cache
+            ->Range(h, 0, kSize, &buf,
+                    {.retrieve_storage = true, .block_whole_length = kSize})
+            .ok());
     EXPECT_EQ(ReadAll(buf), PatternFor(7, index, kSize)) << "index=" << index;
   }
 }
@@ -86,9 +90,11 @@ TEST_F(LocalCacheTest, VariousBlockSizes) {
             .ok())
         << "put size=" << size;
     IOBuffer buf = MakeReadBuf(size);
-    ASSERT_TRUE(cache->Range(h, 0, size, &buf,
-                             {.retrieve_storage = true, .block_whole_length = size})
-                    .ok())
+    ASSERT_TRUE(
+        cache
+            ->Range(h, 0, size, &buf,
+                    {.retrieve_storage = true, .block_whole_length = size})
+            .ok())
         << "range size=" << size;
     EXPECT_EQ(ReadAll(buf), PatternFor(id, 0, size)) << "size=" << size;
     ++id;
@@ -106,13 +112,15 @@ TEST_F(LocalCacheTest, SubRangesAtOffsets) {
   struct {
     off_t off;
     size_t len;
-  } cases[] = {{0, 1}, {0, 4096}, {1024, 64 * 1024}, {kSize - 10, 10},
-               {123456, 654321}};
+  } cases[] = {
+      {0, 1}, {0, 4096}, {1024, 64 * 1024}, {kSize - 10, 10}, {123456, 654321}};
   for (auto c : cases) {
     IOBuffer buf = MakeReadBuf(c.len);
-    ASSERT_TRUE(cache->Range(h, c.off, c.len, &buf,
-                             {.retrieve_storage = true, .block_whole_length = kSize})
-                    .ok())
+    ASSERT_TRUE(
+        cache
+            ->Range(h, c.off, c.len, &buf,
+                    {.retrieve_storage = true, .block_whole_length = kSize})
+            .ok())
         << "off=" << c.off << " len=" << c.len;
     EXPECT_EQ(ReadAll(buf), content.substr(c.off, c.len))
         << "off=" << c.off << " len=" << c.len;
@@ -131,9 +139,11 @@ TEST_F(LocalCacheTest, CacheServesWithoutStorageReflow) {
   EXPECT_TRUE(cache->IsCached(h));
 
   IOBuffer buf = MakeReadBuf(kSize);
-  ASSERT_TRUE(cache->Range(h, 0, kSize, &buf,
-                           {.retrieve_storage = false, .block_whole_length = kSize})
-                  .ok())
+  ASSERT_TRUE(
+      cache
+          ->Range(h, 0, kSize, &buf,
+                  {.retrieve_storage = false, .block_whole_length = kSize})
+          .ok())
       << "cached block was not served locally";
   EXPECT_EQ(ReadAll(buf), content);
 }
@@ -144,9 +154,11 @@ TEST_F(LocalCacheTest, UncachedRangeNoReflowReturnsNotFound) {
   auto* cache = client_.cache();
   auto h = MakeHandle(kFsId, 404, 0, kSize);
   IOBuffer buf = MakeReadBuf(kSize);
-  EXPECT_TRUE(cache->Range(h, 0, kSize, &buf,
-                           {.retrieve_storage = false, .block_whole_length = kSize})
-                  .IsNotFound());
+  EXPECT_TRUE(
+      cache
+          ->Range(h, 0, kSize, &buf,
+                  {.retrieve_storage = false, .block_whole_length = kSize})
+          .IsNotFound());
 }
 
 }  // namespace integration

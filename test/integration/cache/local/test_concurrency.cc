@@ -24,7 +24,7 @@
 #include <thread>
 #include <vector>
 
-#include "test/integration/cache/deploy/fixture.h"
+#include "test/integration/cache/local/fixture.h"
 
 namespace dingofs {
 namespace cache {
@@ -73,10 +73,11 @@ TEST_F(LocalCacheTest, ConcurrentCacheRange) {
   for (uint64_t id = 1; id <= kThreads * kPerThread; ++id) {
     auto h = MakeHandle(kFsId, id, 0, kSize);
     IOBuffer buf = MakeReadBuf(kSize);
-    ASSERT_TRUE(cache->Range(h, 0, kSize, &buf,
-                             {.retrieve_storage = false,
-                              .block_whole_length = kSize})
-                    .ok())
+    ASSERT_TRUE(
+        cache
+            ->Range(h, 0, kSize, &buf,
+                    {.retrieve_storage = false, .block_whole_length = kSize})
+            .ok())
         << "id=" << id;
     EXPECT_EQ(ReadAll(buf), PatternFor(id, 0, kSize)) << "id=" << id;
   }

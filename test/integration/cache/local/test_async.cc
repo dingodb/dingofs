@@ -20,7 +20,7 @@
  * Author: AI
  */
 
-#include "test/integration/cache/deploy/fixture.h"
+#include "test/integration/cache/local/fixture.h"
 
 namespace dingofs {
 namespace cache {
@@ -39,9 +39,9 @@ TEST_F(LocalCacheTest, AsyncPutThenAsyncRange) {
 
   IOBuffer buf = MakeReadBuf(kSize);
   ASSERT_TRUE(AwaitAsync([&](AsyncCallback cb) {
-                cache->AsyncRange(h, 0, kSize, &buf, cb,
-                                  {.retrieve_storage = true,
-                                   .block_whole_length = kSize});
+                cache->AsyncRange(
+                    h, 0, kSize, &buf, cb,
+                    {.retrieve_storage = true, .block_whole_length = kSize});
               }).ok());
   EXPECT_EQ(ReadAll(buf), content);
 }
@@ -59,9 +59,9 @@ TEST_F(LocalCacheTest, AsyncCacheThenAsyncRange) {
 
   IOBuffer buf = MakeReadBuf(kSize);
   ASSERT_TRUE(AwaitAsync([&](AsyncCallback cb) {
-                cache->AsyncRange(h, 0, kSize, &buf, cb,
-                                  {.retrieve_storage = false,
-                                   .block_whole_length = kSize});
+                cache->AsyncRange(
+                    h, 0, kSize, &buf, cb,
+                    {.retrieve_storage = false, .block_whole_length = kSize});
               }).ok());
   EXPECT_EQ(ReadAll(buf), content);
 }
