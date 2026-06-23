@@ -1,4 +1,3 @@
-
 /*
  * Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
  *
@@ -17,33 +16,40 @@
 
 /*
  * Project: DingoFS
- * Created Date: 2025-08-20
+ * Created Date: 2025-06-04
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_BENCHMARK_OPTION_H_
-#define DINGOFS_SRC_CACHE_BENCHMARK_OPTION_H_
+#ifndef DINGOFS_SRC_CACHE_BENCH_WORKER_H_
+#define DINGOFS_SRC_CACHE_BENCH_WORKER_H_
 
-#include <gflags/gflags_declare.h>
+#include "cache/bench/collector.h"
+#include "cache/bench/factory.h"
+#include "cache/common/type.h"
 
 namespace dingofs {
 namespace cache {
 
-DECLARE_uint32(threads);
-DECLARE_string(op);
-DECLARE_uint64(fsid);
-DECLARE_uint64(ino);
-DECLARE_uint64(blksize);
-DECLARE_uint64(blocks);
-DECLARE_uint64(offset);
-DECLARE_uint64(length);
-DECLARE_bool(writeback);
-DECLARE_bool(retrive);
-DECLARE_uint32(async_max_inflight);
-DECLARE_uint32(runtime);
-DECLARE_bool(time_based);
+class Worker {
+ public:
+  Worker(uint64_t idx, TaskFactorySPtr factory, CollectorSPtr collector);
+
+  void Start();
+  void Shutdown();
+
+ private:
+  void ExecAllTasks();
+  void ExecTask(std::function<void()> task);
+
+  uint64_t idx_;
+  TaskFactorySPtr factory_;
+  CollectorSPtr collector_;
+  BthreadCountdownEvent countdown_;
+};
+
+using WorkerUPtr = std::unique_ptr<Worker>;
 
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_BENCHMARK_OPTION_H_
+#endif  // DINGOFS_SRC_CACHE_BENCH_WORKER_H_

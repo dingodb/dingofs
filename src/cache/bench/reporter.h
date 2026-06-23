@@ -20,8 +20,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_BENCHMARK_REPORTER_H_
-#define DINGOFS_SRC_CACHE_BENCHMARK_REPORTER_H_
+#ifndef DINGOFS_SRC_CACHE_BENCH_REPORTER_H_
+#define DINGOFS_SRC_CACHE_BENCH_REPORTER_H_
 
 #include <bthread/execution_queue.h>
 #include <bthread/execution_queue_inl.h>
@@ -29,7 +29,7 @@
 
 #include <memory>
 
-#include "cache/benchmark/collector.h"
+#include "cache/bench/collector.h"
 #include "utils/executor/executor.h"
 
 namespace dingofs {
@@ -61,4 +61,4 @@ using ReporterSPtr = std::shared_ptr<Reporter>;
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_BENCHMARK_REPORTER_H_
+#endif  // DINGOFS_SRC_CACHE_BENCH_REPORTER_H_

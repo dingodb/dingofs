@@ -20,12 +20,12 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "cache/benchmark/reporter.h"
+#include "cache/bench/reporter.h"
 
 #include <absl/strings/str_format.h>
 #include <fmt/format.h>
 
-#include "cache/benchmark/option.h"
+#include "cache/bench/option.h"
 #include "utils/executor/bthread/bthread_executor.h"
 
 namespace dingofs {

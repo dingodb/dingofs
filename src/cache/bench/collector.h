@@ -20,8 +20,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_BENCHMARK_COLLECTOR_H_
-#define DINGOFS_SRC_CACHE_BENCHMARK_COLLECTOR_H_
+#ifndef DINGOFS_SRC_CACHE_BENCH_COLLECTOR_H_
+#define DINGOFS_SRC_CACHE_BENCH_COLLECTOR_H_
 
 #include <bthread/execution_queue.h>
 #include <bthread/execution_queue_inl.h>
@@ -84,4 +84,4 @@ using CollectorSPtr = std::shared_ptr<Collector>;
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_BENCHMARK_COLLECTOR_H_
+#endif  // DINGOFS_SRC_CACHE_BENCH_COLLECTOR_H_

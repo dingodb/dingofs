@@ -20,9 +20,9 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "cache/benchmark/worker.h"
+#include "cache/bench/worker.h"
 
-#include "cache/benchmark/option.h"
+#include "cache/bench/option.h"
 
 namespace dingofs {
 namespace cache {

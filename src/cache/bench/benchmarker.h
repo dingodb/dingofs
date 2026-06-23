@@ -20,13 +20,13 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_BENCHMARK_BENCHMARKER_H_
-#define DINGOFS_SRC_CACHE_BENCHMARK_BENCHMARKER_H_
+#ifndef DINGOFS_SRC_CACHE_BENCH_BENCHMARKER_H_
+#define DINGOFS_SRC_CACHE_BENCH_BENCHMARKER_H_
 
 #include "cache/api/block_cache.h"
-#include "cache/benchmark/factory.h"
-#include "cache/benchmark/reporter.h"
-#include "cache/benchmark/worker.h"
+#include "cache/bench/factory.h"
+#include "cache/bench/reporter.h"
+#include "cache/bench/worker.h"
 #include "cache/common/mds_client.h"
 #include "cache/storage/storage.h"
 #include "cache/storage/storage_pool.h"
@@ -79,4 +79,4 @@ class Benchmarker {
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_BENCHMARK_BENCHMARKER_H_
+#endif  // DINGOFS_SRC_CACHE_BENCH_BENCHMARKER_H_

@@ -20,8 +20,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_BENCHMARK_FACTORY_H_
-#define DINGOFS_SRC_CACHE_BENCHMARK_FACTORY_H_
+#ifndef DINGOFS_SRC_CACHE_BENCH_FACTORY_H_
+#define DINGOFS_SRC_CACHE_BENCH_FACTORY_H_
 
 #include "cache/api/block_cache.h"
 #include "common/block/block_handle.h"
@@ -99,4 +99,4 @@ TaskFactoryUPtr NewFactory(BlockCacheSPtr block_cache, const std::string& op);
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_BENCHMARK_FACTORY_H_
+#endif  // DINGOFS_SRC_CACHE_BENCH_FACTORY_H_

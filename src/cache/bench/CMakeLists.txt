@@ -13,7 +13,7 @@
 # limitations under the License.
 # Define the BASE_FLAGS and DINGO_DEFAULT_COPTS variables
 
-SET(BENCHMARK_LIB_SRCS
+SET(BENCH_LIB_SRCS
     "benchmarker.cc"
     "collector.cc"
     "factory.cc"
@@ -22,8 +22,8 @@ SET(BENCHMARK_LIB_SRCS
     "worker.cc"
 )
 
-add_library(cache_benchmark ${BENCHMARK_LIB_SRCS})
-target_link_libraries(cache_benchmark
+add_library(cache_bench ${BENCH_LIB_SRCS})
+target_link_libraries(cache_bench
     cache_utils
     cache_common
     cache_storage
@@ -32,5 +32,5 @@ target_link_libraries(cache_benchmark
 
 add_executable(cache-bench main.cc)
 target_link_libraries(cache-bench
-    cache_benchmark
+    cache_bench
 )

@@ -3,7 +3,7 @@
 
 #include <iostream>
 
-#include "cache/benchmark/benchmarker.h"
+#include "cache/bench/benchmarker.h"
 #include "cache/utils/logging.h"
 
 int main(int argc, char** argv) {

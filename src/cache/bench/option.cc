@@ -16,40 +16,30 @@
 
 /*
  * Project: DingoFS
- * Created Date: 2025-06-04
+ * Created Date: 2025-08-20
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_BENCHMARK_WORKER_H_
-#define DINGOFS_SRC_CACHE_BENCHMARK_WORKER_H_
+#include "cache/bench/option.h"
 
-#include "cache/benchmark/collector.h"
-#include "cache/benchmark/factory.h"
-#include "cache/common/type.h"
+#include <brpc/reloadable_flags.h>
 
 namespace dingofs {
 namespace cache {
 
-class Worker {
- public:
-  Worker(uint64_t idx, TaskFactorySPtr factory, CollectorSPtr collector);
-
-  void Start();
-  void Shutdown();
-
- private:
-  void ExecAllTasks();
-  void ExecTask(std::function<void()> task);
-
-  uint64_t idx_;
-  TaskFactorySPtr factory_;
-  CollectorSPtr collector_;
-  BthreadCountdownEvent countdown_;
-};
-
-using WorkerUPtr = std::unique_ptr<Worker>;
+DEFINE_uint32(threads, 1, "");
+DEFINE_string(op, "put", "");
+DEFINE_uint64(fsid, 1, "");
+DEFINE_uint64(ino, 0, "");
+DEFINE_uint64(blksize, 4194304, "");
+DEFINE_uint64(blocks, 1, "");
+DEFINE_uint64(offset, 0, "");
+DEFINE_uint64(length, 4194304, "");
+DEFINE_bool(writeback, false, "");
+DEFINE_bool(retrive, true, "");
+DEFINE_uint32(async_max_inflight, 128, "");
+DEFINE_uint32(runtime, 300, "");
+DEFINE_bool(time_based, false, "");
 
 }  // namespace cache
 }  // namespace dingofs
-
-#endif  // DINGOFS_SRC_CACHE_BENCHMARK_WORKER_H_
