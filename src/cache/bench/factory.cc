@@ -20,9 +20,9 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "cache/benchmark/factory.h"
+#include "cache/bench/factory.h"
 
-#include "cache/benchmark/option.h"
+#include "cache/bench/option.h"
 #include "cache/utils/helper.h"
 #include "common/block/block_handle.h"
 

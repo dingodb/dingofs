@@ -1,3 +1,4 @@
+
 /*
  * Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
  *
@@ -20,26 +21,29 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "cache/benchmark/option.h"
+#ifndef DINGOFS_SRC_CACHE_BENCH_OPTION_H_
+#define DINGOFS_SRC_CACHE_BENCH_OPTION_H_
 
-#include <brpc/reloadable_flags.h>
+#include <gflags/gflags_declare.h>
 
 namespace dingofs {
 namespace cache {
 
-DEFINE_uint32(threads, 1, "");
-DEFINE_string(op, "put", "");
-DEFINE_uint64(fsid, 1, "");
-DEFINE_uint64(ino, 0, "");
-DEFINE_uint64(blksize, 4194304, "");
-DEFINE_uint64(blocks, 1, "");
-DEFINE_uint64(offset, 0, "");
-DEFINE_uint64(length, 4194304, "");
-DEFINE_bool(writeback, false, "");
-DEFINE_bool(retrive, true, "");
-DEFINE_uint32(async_max_inflight, 128, "");
-DEFINE_uint32(runtime, 300, "");
-DEFINE_bool(time_based, false, "");
+DECLARE_uint32(threads);
+DECLARE_string(op);
+DECLARE_uint64(fsid);
+DECLARE_uint64(ino);
+DECLARE_uint64(blksize);
+DECLARE_uint64(blocks);
+DECLARE_uint64(offset);
+DECLARE_uint64(length);
+DECLARE_bool(writeback);
+DECLARE_bool(retrive);
+DECLARE_uint32(async_max_inflight);
+DECLARE_uint32(runtime);
+DECLARE_bool(time_based);
 
 }  // namespace cache
 }  // namespace dingofs
+
+#endif  // DINGOFS_SRC_CACHE_BENCH_OPTION_H_

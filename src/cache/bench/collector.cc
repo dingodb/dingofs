@@ -21,7 +21,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "cache/benchmark/collector.h"
+#include "cache/bench/collector.h"
 
 #include "cache/common/const.h"
 

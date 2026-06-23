@@ -20,11 +20,11 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "cache/benchmark/benchmarker.h"
+#include "cache/bench/benchmarker.h"
 
 #include <memory>
 
-#include "cache/benchmark/option.h"
+#include "cache/bench/option.h"
 #include "cache/common/mds_client.h"
 #include "cache/common/type.h"
 #include "cache/storage/storage_pool.h"
