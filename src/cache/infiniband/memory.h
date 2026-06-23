@@ -64,7 +64,10 @@ class RDMABufferPool {
 Status RegisterMemoryForRDMA(const std::string& device_name, void* addr,
                              size_t size);
 Status DeregisterMemoryForRDMA(const std::string& device_name, void* addr);
+uint32_t GetLkey(const std::string& device_name, void* addr, size_t length);
 uint64_t GetRkey(const std::string& device_name, void* addr, size_t length);
+
+Status RegisterGlobalSlabPoolsForRDMA();
 
 }  // namespace infiniband
 }  // namespace cache

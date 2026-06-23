@@ -28,7 +28,6 @@
 #include "cache/infiniband/connection.h"
 #include "cache/infiniband/infiniband.h"
 #include "cache/infiniband/server.h"
-#include "cache/infiniband/slab_pool.h"
 #include "cache/iutil/string_util.h"
 #include "cache/node/service.h"
 #include "common/options/cache.h"

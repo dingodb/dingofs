@@ -26,7 +26,8 @@
 
 #include <iostream>
 
-#include "cache/infiniband/slab_pool.h"
+#include "cache/common/slab_buffer.h"
+#include "cache/infiniband/memory.h"
 #include "cache/node/cache_server.h"
 #include "common/flag.h"
 #include "common/helper.h"
@@ -100,7 +101,10 @@ int DingoCache::ParseFlags(int argc, char** argv) {
 }
 
 void DingoCache::GlobalInitOrDie() {
-  CHECK(infiniband::InitializeGlobalSlabPool().ok());
+  CHECK(InitializeGlobalSlabPool().ok());
+  if (FLAGS_use_rdma) {
+    CHECK(infiniband::RegisterGlobalSlabPoolsForRDMA().ok());
+  }
   Logger::Init("dingo-cache");
   LOG(INFO) << GenCurrentFlags();
 }

@@ -29,9 +29,7 @@
 #include <memory>
 #include <string>
 
-#include "cache/infiniband/common.h"
-#include "cache/infiniband/memory.h"
-#include "cache/iutil/buffer_pool.h"
+#include "cache/common/slab_buffer.h"
 #include "cache/iutil/inflight_tracker.h"
 #include "cache/local/aio_queue.h"
 #include "cache/local/disk_cache_layout.h"
@@ -50,10 +48,10 @@ class FixedBuffers {
   std::vector<iovec> Fetch();
 
  private:
-  int GetIndex(infiniband::RDMABuffer* rdma_buffer, bool for_read);
+  int GetIndex(SlabBuffer* slab_buffer, bool for_read);
 
-  infiniband::RDMABufferPool* write_pool_;
-  infiniband::RDMABufferPool* read_pool_;
+  SlabBufferPool* write_pool_;
+  SlabBufferPool* read_pool_;
 };
 
 using FixedBuffersUPtr = std::unique_ptr<FixedBuffers>;

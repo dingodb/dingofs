@@ -28,6 +28,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "cache/common/slab_buffer.h"
 #include "cache/infiniband/controller.h"
 #include "common/io_buffer.h"
 #include "common/status.h"
@@ -91,14 +92,7 @@ struct WorkCompletion {
 
 using WorkCompletions = std::vector<WorkCompletion>;
 
-struct RDMABuffer {
-  char* data{nullptr};
-  uint32_t capacity{0};
-  uint32_t length{0};
-  uint32_t lkey{0};
-  uint32_t rkey{0};
-  uint32_t index{0};
-};
+using RDMABuffer = ::dingofs::cache::SlabBuffer;
 
 struct Region {
   Region() = default;

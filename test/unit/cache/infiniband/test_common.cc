@@ -24,10 +24,10 @@
 
 #include <vector>
 
+#include "cache/common/slab_buffer.h"
 #include "cache/infiniband/common.h"
 #include "cache/infiniband/controller.h"
 #include "cache/infiniband/memory.h"
-#include "cache/infiniband/slab_pool.h"
 #include "dingofs/infiniband.pb.h"
 
 namespace dingofs {

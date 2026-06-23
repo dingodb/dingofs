@@ -35,12 +35,10 @@
 #include "cache/api/block_cache.h"
 #include "cache/common/macro.h"
 #include "cache/common/mds_client.h"
+#include "cache/common/slab_buffer.h"
 #include "cache/common/storage_client.h"
 #include "cache/common/storage_client_pool.h"
 #include "cache/common/task_tracker.h"
-#include "cache/infiniband/common.h"
-#include "cache/infiniband/memory.h"
-#include "cache/infiniband/slab_pool.h"
 #include "cache/iutil/string_util.h"
 #include "cache/local/local_block_cache.h"
 #include "common/const.h"
@@ -376,7 +374,7 @@ Status CacheNode::WaitTask(DownloadTaskSPtr task) {
 }
 
 void CacheNode::AllocSlabBuffer(IOBuffer* buffer, size_t length) {
-  auto* pool = infiniband::GetGlobalReadSlabPool();
+  auto* pool = GetGlobalReadSlabPool();
   auto* slab = pool->Alloc();
   CHECK(slab != nullptr) << "rdma read slab pool exhausted";
   CHECK_LE(length, static_cast<size_t>(slab->capacity));
