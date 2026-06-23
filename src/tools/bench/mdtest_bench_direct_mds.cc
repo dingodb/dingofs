@@ -171,8 +171,8 @@ class MdsDirectClient {
     trace_manager_->Init();
 
     const std::string hostname = dingofs::Helper::GetHostName();
-    client_id_ = ClientId(dingofs::utils::GenerateUUID(), hostname, 0,
-                          mount_point);
+    client_id_ =
+        ClientId(dingofs::utils::GenerateUUID(), hostname, 0, mount_point);
 
     mds_client_ = std::make_unique<MDSClient>(client_id_, *fs_info_,
                                               std::move(rpc), *trace_manager_);
@@ -222,23 +222,15 @@ class MdsDirectClient {
     return Status::OK();
   }
 
-  Status Create(Ino parent, const std::string& name, uint32_t uid,
-                uint32_t gid, uint32_t mode, int flags, uint64_t* fh,
-                Attr* attr) {
+  Status Create(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
+                uint32_t mode, int flags, Attr* attr) {
     ContextSPtr ctx = NewCtx();
-    const std::string session_id = dingofs::utils::GenerateUUID();
     dingofs::mds::AttrEntry attr_entry, parent_attr_entry;
-    Status s = mds_client_->Create(ctx, parent, name, uid, gid, mode, flags,
-                                   session_id, attr_entry, parent_attr_entry);
+    Status s = mds_client_->MkNod(ctx, parent, name, uid, gid, mode, 0,
+                                  attr_entry, parent_attr_entry);
     if (!s.ok()) return s;
     *attr = Helper::ToAttr(attr_entry);
 
-    const uint64_t handle = next_fh_.fetch_add(1, std::memory_order_relaxed);
-    {
-      dingofs::utils::WriteLockGuard lk(session_lock_);
-      fh_sessions_[handle] = session_id;
-    }
-    *fh = handle;
     return Status::OK();
   }
 
@@ -415,7 +407,8 @@ static std::vector<std::string> SplitPath(const std::string& path) {
 
 // Resolve an absolute path to its inode. Returns 0 on success, -errno on
 // failure.
-static int ResolvePath(MdsDirectClient* client, const std::string& path, Ino* ino) {
+static int ResolvePath(MdsDirectClient* client, const std::string& path,
+                       Ino* ino) {
   std::vector<std::string> parts = SplitPath(path);
   Ino parent = dingofs::kRootIno;
   for (const auto& name : parts) {
@@ -622,8 +615,8 @@ static int CreateDir(MdsDirectClient* client, const std::string& path) {
   return StatusToErrno(s);
 }
 
-static int CreateDir(MdsDirectClient* client, Ino parent, const std::string& name,
-                     Ino& ino) {
+static int CreateDir(MdsDirectClient* client, Ino parent,
+                     const std::string& name, Ino& ino) {
   CHECK(parent != 0) << "Invalid parent inode 0 for " << name;
 
   Attr attr;
@@ -669,18 +662,15 @@ static int CreateEmptyFile(MdsDirectClient* client, Ino parent,
                            const std::string& name) {
   CHECK(parent != 0) << "Invalid parent inode 0 for " << name;
 
-  uint64_t fh = 0;
   Attr attr;
   Status s = client->Create(parent, name, getuid(), getgid(), 33188,
-                         O_CREAT | O_WRONLY | O_EXCL, &fh, &attr);
+                            O_CREAT | O_WRONLY | O_EXCL, &attr);
   if (!s.ok()) {
     LOG(ERROR) << fmt::format(
         "create file fail, parent({}) name({}) error({}).", parent, name,
         s.ToString());
     return StatusToErrno(s);
   }
-
-  s = client->Release(attr.ino, fh);
 
   return StatusToErrno(s);
 }
@@ -841,8 +831,8 @@ struct SharedWork {
   }
 };
 
-static void SharedWorker(MdsDirectClient* client, TreeSpec* spec, SharedWork* work,
-                         pthread_barrier_t* barrier,
+static void SharedWorker(MdsDirectClient* client, TreeSpec* spec,
+                         SharedWork* work, pthread_barrier_t* barrier,
                          ProgressTracker* dir_progress,
                          ProgressTracker* file_progress, ThreadResult* result) {
   // ---- Directory phase: one level at a time ----
@@ -919,7 +909,8 @@ static void SharedWorker(MdsDirectClient* client, TreeSpec* spec, SharedWork* wo
 // Returns 0 on success, first -errno on failure.
 // ---------------------------------------------------------------------------
 
-static int RemoveTreeRecursive(MdsDirectClient* client, const std::string& path) {
+static int RemoveTreeRecursive(MdsDirectClient* client,
+                               const std::string& path) {
   Ino dir_ino;
   int rc = ResolvePath(client, path, &dir_ino);
   if (rc != 0) return rc;

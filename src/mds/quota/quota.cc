@@ -356,6 +356,8 @@ bool DirQuotaMap::HasQuota() {
   return !quota_map_.empty();
 }
 
+void UpdateFsUsageTask::Run() { quota_manager_.UpdateFsUsage(byte_delta_, inode_delta_, reason_); }
+
 void UpdateDirUsageTask::Run() {
   quota_manager_.UpdateDirUsage(parent_, byte_delta_, inode_delta_, reason_, bypass_parent_memo_);
 }
@@ -399,6 +401,17 @@ void QuotaManager::Destroy() {
 
 void QuotaManager::UpdateFsUsage(int64_t byte_delta, int64_t inode_delta, const std::string& reason) {
   fs_quota_.UpdateUsage(byte_delta, inode_delta, reason);
+}
+
+void QuotaManager::AsyncUpdateFsUsage(int64_t byte_delta, int64_t inode_delta, const std::string& reason) {
+  const uint32_t fs_id = fs_info_->GetFsId();
+
+  auto task = UpdateFsUsageTask::New(*this, byte_delta, inode_delta, reason);
+
+  if (!worker_set_->ExecuteHash(fs_id, task)) {
+    LOG(ERROR) << fmt::format("[quota.{}] async update fs usage fail, byte_delta({}), inode_delta({}) reason({}).",
+                              fs_id, byte_delta, inode_delta, reason);
+  }
 }
 
 void QuotaManager::UpdateDirUsage(Ino parent, int64_t byte_delta, int64_t inode_delta, const std::string& reason,

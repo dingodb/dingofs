@@ -194,24 +194,24 @@ InodeSPtr InodeCache::PutIf(const AttrEntry& attr, const std::string& reason) {
     return nullptr;
   }
 
-  InodeSPtr inode;
+  InodeSPtr inode = Inode::New(attr);
 
+  bool is_exist = false;
   shard_map_.withWLock(
       [&](Map& map) mutable {
-        auto it = map.find(attr.ino());
-        if (it == map.end()) {
-          inode = Inode::New(attr);
-          map.emplace(attr.ino(), inode);
-          total_count_ << 1;
-
-          LOG(INFO) << fmt::format("[inode.{}.{}] put inode, version({}).", fs_id_, attr.ino(), attr.version());
+        auto [it, inserted] = map.try_emplace(attr.ino(), inode);
+        if (!inserted) {
+          is_exist = true;
+          inode = it->second;
 
         } else {
-          inode = it->second;
-          inode->PutIf(attr, reason);
+          total_count_ << 1;
+          LOG_DEBUG << fmt::format("[inode.{}.{}] put inode, version({}).", fs_id_, attr.ino(), attr.version());
         }
       },
       attr.ino());
+
+  if (is_exist) inode->PutIf(attr, reason);
 
   return inode;
 }
@@ -223,24 +223,24 @@ InodeSPtr InodeCache::PutIf(const AttrWithMutation& attr_with_mutation, const st
     return nullptr;
   }
 
-  InodeSPtr inode;
+  InodeSPtr inode = Inode::New(attr_with_mutation);
 
+  bool is_exist = false;
   shard_map_.withWLock(
       [&](Map& map) mutable {
-        auto it = map.find(attr.ino());
-        if (it == map.end()) {
-          inode = Inode::New(attr_with_mutation);
-          map.emplace(attr.ino(), inode);
-          total_count_ << 1;
-
-          LOG(INFO) << fmt::format("[inode.{}.{}] put inode, version({}).", fs_id_, attr.ino(), attr.version());
+        auto [it, inserted] = map.try_emplace(attr.ino(), inode);
+        if (!inserted) {
+          is_exist = true;
+          inode = it->second;
 
         } else {
-          inode = it->second;
-          inode->PutIf(attr_with_mutation, reason);
+          total_count_ << 1;
+          LOG_DEBUG << fmt::format("[inode.{}.{}] put inode, version({}).", fs_id_, attr.ino(), attr.version());
         }
       },
       attr.ino());
+
+  if (is_exist) inode->PutIf(attr_with_mutation, reason);
 
   return inode;
 }
