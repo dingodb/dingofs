@@ -20,7 +20,7 @@
  * Author: AI
  */
 
-#include "test/integration/cache/deploy/fixture.h"
+#include "test/integration/cache/distributed/fixture.h"
 
 namespace dingofs {
 namespace cache {
@@ -39,7 +39,8 @@ TEST_F(DistributedCacheTest, AsyncRemotePutThenRange) {
     return AwaitAsync([&](AsyncCallback cb) {
              cache->AsyncPut(h, MakeBlock(content), cb,
                              {.writeback = true, .tier = CacheTier::kRemote});
-           }).ok();
+           })
+        .ok();
   }));
 
   IOBuffer buf = MakeReadBuf(kSize);
@@ -64,7 +65,8 @@ TEST_F(DistributedCacheTest, AsyncRemoteCacheThenRange) {
     return AwaitAsync([&](AsyncCallback cb) {
              cache->AsyncCache(h, MakeBlock(content), cb,
                                {.tier = CacheTier::kRemote});
-           }).ok();
+           })
+        .ok();
   }));
 
   // The node caches asynchronously; poll the no-reflow read until it hits.
@@ -76,7 +78,8 @@ TEST_F(DistributedCacheTest, AsyncRemoteCacheThenRange) {
                                {.retrieve_storage = false,
                                 .block_whole_length = kSize,
                                 .tier = CacheTier::kRemote});
-           }).ok();
+           })
+        .ok();
   })) << "async remote cache hit never materialized";
   EXPECT_EQ(ReadAll(buf), content);
 }
@@ -93,7 +96,8 @@ TEST_F(DistributedCacheTest, AsyncRemotePrefetchWarmsCache) {
   ASSERT_TRUE(WaitUntil([&] {
     return AwaitAsync([&](AsyncCallback cb) {
              cache->AsyncPrefetch(h, kSize, cb, {.tier = CacheTier::kRemote});
-           }).ok();
+           })
+        .ok();
   }));
 
   IOBuffer buf;

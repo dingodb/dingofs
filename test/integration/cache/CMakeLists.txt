@@ -16,18 +16,18 @@
 # and dingo-cache binaries (posix_spawn) and drives the cache client over real
 # RPC. Requires an active RDMA device and pre-built dingo-mds / dingo-cache.
 #
-#   deploy/           - shared harness (process spawning, MDS, cache node)
-#   node/             - cache node lifecycle: startup, registration, deregister
-#   localcache/       - client-side local on-disk cache: Put/Range
-#   distributedcache/ - client -> remote cache node: Put/Range/Cache/Prefetch
+#   deploy/      - shared harness (process spawning, MDS, cache node)
+#   node/        - cache node lifecycle: startup, registration, deregister
+#   local/       - client-side local on-disk cache: Put/Range
+#   distributed/ - client -> remote cache node: Put/Range/Cache/Prefetch
 
 # So that #include "test/integration/cache/deploy/..." resolves.
 include_directories(${CMAKE_SOURCE_DIR})
 
 add_subdirectory(deploy)
 add_subdirectory(node)
-add_subdirectory(localcache)
-add_subdirectory(distributedcache)
+add_subdirectory(local)
+add_subdirectory(distributed)
 
 # Single entry point, mirroring test/unit/cache: main.cc plus all suites compile
 # into one binary, selected at run time with --gtest_filter (e.g. 'NodeTest.*',

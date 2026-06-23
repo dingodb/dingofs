@@ -13,8 +13,8 @@
 # limitations under the License.
 
 # Shared deployment harness for the cache integration suites: spawns real
-# dingo-mds / dingo-cache processes. The concrete suites (node / localcache /
-# distributedcache) link this library; the gtest entry point lives in
+# dingo-mds / dingo-cache processes. The concrete suites (node / local /
+# distributed) link this library; the gtest entry point lives in
 # ../main.cc.
 add_library(integration_cache_deploy STATIC
     process_guard.cc

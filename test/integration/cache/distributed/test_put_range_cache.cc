@@ -22,7 +22,7 @@
 
 #include <vector>
 
-#include "test/integration/cache/deploy/fixture.h"
+#include "test/integration/cache/distributed/fixture.h"
 
 namespace dingofs {
 namespace cache {
@@ -75,10 +75,11 @@ TEST_F(DistributedCacheTest, PutThenRemoteRangeRoundTrips) {
   })) << "remote Put never succeeded";
 
   IOBuffer buf = MakeReadBuf(kSize);
-  ASSERT_TRUE(cache->Range(h, 0, kSize, &buf,
-                           {.retrieve_storage = true,
-                            .block_whole_length = kSize,
-                            .tier = CacheTier::kRemote})
+  ASSERT_TRUE(cache
+                  ->Range(h, 0, kSize, &buf,
+                          {.retrieve_storage = true,
+                           .block_whole_length = kSize,
+                           .tier = CacheTier::kRemote})
                   .ok());
   EXPECT_EQ(ReadAll(buf), content);
 }
@@ -130,11 +131,11 @@ TEST_F(DistributedCacheTest, RemoteSubRangesAtOffsets) {
     size_t len;
     size_t whole;
   } cases[] = {
-      {0, 4096, kSize},            // small partial read
-      {1024, 64 * 1024, kSize},    // small partial read at offset
-      {123456, 512 * 1024, kSize}, // large read -> whole-block fetch + slice
-      {kSize - 10, 10, kSize},     // tail slice
-      {2048, 4096, 0},             // block_whole_length unset
+      {0, 4096, kSize},             // small partial read
+      {1024, 64 * 1024, kSize},     // small partial read at offset
+      {123456, 512 * 1024, kSize},  // large read -> whole-block fetch + slice
+      {kSize - 10, 10, kSize},      // tail slice
+      {2048, 4096, 0},              // block_whole_length unset
   };
   for (auto c : cases) {
     IOBuffer buf = MakeReadBuf(c.len);
@@ -146,7 +147,8 @@ TEST_F(DistributedCacheTest, RemoteSubRangesAtOffsets) {
                    .block_whole_length = c.whole,
                    .tier = CacheTier::kRemote})
           .ok();
-    })) << "off=" << c.off << " len=" << c.len;
+    })) << "off="
+        << c.off << " len=" << c.len;
     EXPECT_EQ(ReadAll(buf), content.substr(c.off, c.len))
         << "off=" << c.off << " len=" << c.len << " whole=" << c.whole;
   }
@@ -162,10 +164,11 @@ TEST_F(DistributedCacheTest, RemoteVariousBlockSizes) {
     auto h = MakeHandle(fs_id_, id, 0, size);
     PutRemote(cache, h, PatternFor(id, 0, size));
     IOBuffer buf = MakeReadBuf(size);
-    ASSERT_TRUE(cache->Range(h, 0, size, &buf,
-                             {.retrieve_storage = true,
-                              .block_whole_length = size,
-                              .tier = CacheTier::kRemote})
+    ASSERT_TRUE(cache
+                    ->Range(h, 0, size, &buf,
+                            {.retrieve_storage = true,
+                             .block_whole_length = size,
+                             .tier = CacheTier::kRemote})
                     .ok())
         << "size=" << size;
     EXPECT_EQ(ReadAll(buf), PatternFor(id, 0, size)) << "size=" << size;

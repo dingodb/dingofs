@@ -26,8 +26,8 @@
 
 #include "test/integration/cache/deploy/rdma_env.h"
 
-// Shared entry point for all cache integration suites (node / localcache /
-// distributedcache). Linked from the integration_cache_deploy static library.
+// Shared entry point for all cache integration suites (node / local /
+// distributed). Linked from the integration_cache_deploy static library.
 int main(int argc, char* argv[]) {
   testing::InitGoogleTest(&argc, argv);
 

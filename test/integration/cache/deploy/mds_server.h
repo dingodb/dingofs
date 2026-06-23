@@ -45,8 +45,8 @@ class MdsServer {
   MdsServer(const MdsServer&) = delete;
   MdsServer& operator=(const MdsServer&) = delete;
 
-  // Renders a minimal dummy-engine config under `workdir`, spawns dingo-mds on a
-  // free port, and waits until the RPC port accepts connections.
+  // Renders a minimal dummy-engine config under `workdir`, spawns dingo-mds on
+  // a free port, and waits until the RPC port accepts connections.
   Status Start(const std::string& workdir);
 
   void Stop() { proc_.Stop(); }

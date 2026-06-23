@@ -20,7 +20,7 @@
  * Author: AI
  */
 
-#include "test/integration/cache/deploy/fixture.h"
+#include "test/integration/cache/local/fixture.h"
 
 namespace dingofs {
 namespace cache {
@@ -39,9 +39,11 @@ TEST_F(LocalCacheTest, PrefetchFromBackendThenServedLocally) {
   ASSERT_TRUE(WaitUntil([&] { return cache->IsCached(h); }));
 
   IOBuffer buf = MakeReadBuf(kSize);
-  ASSERT_TRUE(cache->Range(h, 0, kSize, &buf,
-                           {.retrieve_storage = false, .block_whole_length = kSize})
-                  .ok());
+  ASSERT_TRUE(
+      cache
+          ->Range(h, 0, kSize, &buf,
+                  {.retrieve_storage = false, .block_whole_length = kSize})
+          .ok());
   EXPECT_EQ(ReadAll(buf), content);
 }
 

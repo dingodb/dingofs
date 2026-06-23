@@ -69,7 +69,8 @@ bool ProcessGuard::Start(const std::vector<std::string>& argv,
   posix_spawn_file_actions_destroy(&actions);
 
   if (rc != 0) {
-    LOG(ERROR) << "posix_spawn(" << argv[0] << ") failed: " << std::strerror(rc);
+    LOG(ERROR) << "posix_spawn(" << argv[0]
+               << ") failed: " << std::strerror(rc);
     return false;
   }
 
@@ -94,7 +95,8 @@ bool ProcessGuard::Reap(bool block) {
 bool ProcessGuard::Running() const {
   if (reaped_) return false;
   // const peek: WNOHANG reap without mutating reaped_ here -- a 0 return means
-  // the child is alive; a positive return means it exited (still "not Stopped").
+  // the child is alive; a positive return means it exited (still "not
+  // Stopped").
   int status = 0;
   pid_t rc = ::waitpid(pid_, &status, WNOHANG);
   return rc == 0;

@@ -20,7 +20,7 @@
  * Author: AI
  */
 
-#include "test/integration/cache/deploy/fixture.h"
+#include "test/integration/cache/local/fixture.h"
 
 namespace dingofs {
 namespace cache {
@@ -64,15 +64,18 @@ TEST_F(LocalCacheTest, RangeMissReflowsFromBackend) {
   EXPECT_FALSE(cache->IsCached(h));
 
   IOBuffer buf = MakeReadBuf(kSize);
-  ASSERT_TRUE(cache->Range(h, 0, kSize, &buf,
-                           {.retrieve_storage = true, .block_whole_length = kSize})
-                  .ok());
+  ASSERT_TRUE(
+      cache
+          ->Range(h, 0, kSize, &buf,
+                  {.retrieve_storage = true, .block_whole_length = kSize})
+          .ok());
   EXPECT_EQ(ReadAll(buf), content);
 }
 
 // A client-side reflow (storage fallback) serves the bytes but does NOT
 // implicitly populate the local cache: a following no-reflow read still misses.
-// This pins the TierBlockCache contract that local reflow is a pure passthrough.
+// This pins the TierBlockCache contract that local reflow is a pure
+// passthrough.
 TEST_F(LocalCacheTest, ReflowDoesNotPopulateLocalCache) {
   constexpr uint32_t kSize = 64 * 1024;
   auto* cache = client_.cache();
@@ -81,16 +84,20 @@ TEST_F(LocalCacheTest, ReflowDoesNotPopulateLocalCache) {
   ASSERT_TRUE(client_.SeedStorage(h, content).ok());
 
   IOBuffer buf = MakeReadBuf(kSize);
-  ASSERT_TRUE(cache->Range(h, 0, kSize, &buf,
-                           {.retrieve_storage = true, .block_whole_length = kSize})
-                  .ok());
+  ASSERT_TRUE(
+      cache
+          ->Range(h, 0, kSize, &buf,
+                  {.retrieve_storage = true, .block_whole_length = kSize})
+          .ok());
   EXPECT_EQ(ReadAll(buf), content);
   EXPECT_FALSE(cache->IsCached(h));
 
   IOBuffer buf2 = MakeReadBuf(kSize);
-  EXPECT_TRUE(cache->Range(h, 0, kSize, &buf2,
-                           {.retrieve_storage = false, .block_whole_length = kSize})
-                  .IsNotFound())
+  EXPECT_TRUE(
+      cache
+          ->Range(h, 0, kSize, &buf2,
+                  {.retrieve_storage = false, .block_whole_length = kSize})
+          .IsNotFound())
       << "local reflow unexpectedly populated the cache";
 }
 
@@ -102,9 +109,11 @@ TEST_F(LocalCacheTest, RangeMissNoReflowReturnsNotFound) {
   ASSERT_TRUE(client_.SeedStorage(h, PatternFor(4, 0, kSize)).ok());
 
   IOBuffer buf = MakeReadBuf(kSize);
-  EXPECT_TRUE(cache->Range(h, 0, kSize, &buf,
-                           {.retrieve_storage = false, .block_whole_length = kSize})
-                  .IsNotFound());
+  EXPECT_TRUE(
+      cache
+          ->Range(h, 0, kSize, &buf,
+                  {.retrieve_storage = false, .block_whole_length = kSize})
+          .IsNotFound());
 }
 
 }  // namespace integration

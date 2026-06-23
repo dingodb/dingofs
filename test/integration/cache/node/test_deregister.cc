@@ -20,14 +20,15 @@
  * Author: AI
  */
 
-#include "test/integration/cache/deploy/fixture.h"
+#include "test/integration/cache/node/fixture.h"
 
 namespace dingofs {
 namespace cache {
 namespace integration {
 
 // After a node stops, it stops being Online in the group: either it leaves the
-// group on shutdown, or its heartbeat lapses and the MDS demotes it from Online.
+// group on shutdown, or its heartbeat lapses and the MDS demotes it from
+// Online.
 TEST_F(NodeTest, NoLongerOnlineAfterStop) {
   const auto id = utils::GenerateUUID();
   CacheNode node;

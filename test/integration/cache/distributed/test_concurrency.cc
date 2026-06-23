@@ -24,7 +24,7 @@
 #include <thread>
 #include <vector>
 
-#include "test/integration/cache/deploy/fixture.h"
+#include "test/integration/cache/distributed/fixture.h"
 
 namespace dingofs {
 namespace cache {
