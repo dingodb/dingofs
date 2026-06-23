@@ -29,3 +29,21 @@ target_link_libraries(dingo-mdtest-bench
   glog::glog
   OpenSSL::SSL
 )
+
+
+add_executable(dingo-mdtest-direct-bench
+  mdtest_bench_direct_mds.cc
+)
+
+target_link_libraries(dingo-mdtest-direct-bench
+  PROTO_OBJS
+
+  vfs_metasystem_mds_lib
+  dingofs_common
+
+  brpc::brpc
+  fmt::fmt
+  gflags::gflags
+  glog::glog
+  OpenSSL::SSL
+)
