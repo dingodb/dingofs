@@ -28,6 +28,7 @@
 
 #include <memory>
 
+#include "cache/common/slab_buffer.h"
 #include "cache/infiniband/common.h"
 #include "cache/infiniband/connection.h"
 #include "cache/infiniband/controller.h"
@@ -36,7 +37,6 @@
 #include "cache/infiniband/reader.h"
 #include "cache/infiniband/sender.h"
 #include "cache/infiniband/service.h"
-#include "cache/infiniband/slab_pool.h"
 #include "cache/iutil/bthread.h"
 #include "common/status.h"
 

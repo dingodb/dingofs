@@ -25,104 +25,37 @@
 
 #include <gflags/gflags.h>
 
-#include <filesystem>
-#include <fstream>
-#include <sstream>
-#include <string>
-
-#include "cache/infiniband/slab_pool.h"
+#include "cache/common/slab_buffer.h"
 #include "common/options/cache.h"
 
 namespace dingofs {
 namespace cache {
 namespace integration {
 
-// Whether the process-wide RDMA slab pool was successfully initialized.
+// Whether the process-wide cache slab pool was successfully initialized.
 //
-// The whole integration suite needs RDMA: the on-disk cache (in this test
-// process AND in the spawned dingo-cache) allocates its O_DIRECT/io_uring
-// buffers from the global RDMA slab pool, which only exists after
-// InitializeGlobalSlabPool() succeeds on a real, ACTIVE InfiniBand/RoCE device.
+// The on-disk cache (in this test process AND in the spawned dingo-cache)
+// stages its O_DIRECT/io_uring buffers through the global slab pool. The pool
+// no longer requires RDMA: the whole suite drives everything over TCP (use_rdma
+// off), so the pool is plain pinned memory and the tests run on any host. It is
+// only unavailable when the pool itself cannot be built (e.g. the environment
+// cannot back the pinned mapping).
 inline bool& SlabPoolReady() {
   static bool ready = false;
   return ready;
 }
 
-// Scan sysfs for an RDMA device whose port is ACTIVE. Prefer an InfiniBand
-// link-layer port, otherwise fall back to the first active port of any link
-// layer. Returns "" when none is found.
-inline std::string DetectActiveRdmaDevice(uint32_t* port_out) {
-  namespace fs = std::filesystem;
-  const std::string base = "/sys/class/infiniband";
-  std::error_code ec;
-  if (!fs::exists(base, ec)) {
-    return "";
-  }
-
-  auto read_small = [](const std::string& path) -> std::string {
-    std::ifstream in(path);
-    std::stringstream ss;
-    ss << in.rdbuf();
-    auto s = ss.str();
-    while (!s.empty() && (s.back() == '\n' || s.back() == ' ')) s.pop_back();
-    return s;
-  };
-
-  std::string fallback_dev;
-  uint32_t fallback_port = 0;
-  for (const auto& dev : fs::directory_iterator(base, ec)) {
-    const auto ports_dir = dev.path() / "ports";
-    if (!fs::exists(ports_dir, ec)) {
-      continue;
-    }
-    for (const auto& port : fs::directory_iterator(ports_dir, ec)) {
-      const auto state = read_small((port.path() / "state").string());
-      if (state.find("ACTIVE") == std::string::npos) {
-        continue;
-      }
-      const auto link = read_small((port.path() / "link_layer").string());
-      const auto dev_name = dev.path().filename().string();
-      const uint32_t port_num =
-          static_cast<uint32_t>(std::stoul(port.path().filename().string()));
-      if (link == "InfiniBand") {
-        *port_out = port_num;
-        return dev_name;
-      }
-      if (fallback_dev.empty()) {
-        fallback_dev = dev_name;
-        fallback_port = port_num;
-      }
-    }
-  }
-
-  if (!fallback_dev.empty()) {
-    *port_out = fallback_port;
-  }
-  return fallback_dev;
-}
-
-// Detect a device, point the cache RDMA flags at it (so both this process and
-// the spawned dingo-cache use the same HCA), and initialize the global slab
-// pool. Returns false (a safe no-op) when no usable device exists -- the whole
-// integration suite then GTEST_SKIPs. Call once after ParseCommandLineFlags.
+// Initialize the global slab pool for the suite. No RDMA device is needed: with
+// use_rdma off InitializeGlobalSlabPool() builds a plain pool. Call once after
+// ParseCommandLineFlags.
 inline bool InitSlabPoolForTests() {
-  if (FLAGS_cache_rdma_device.empty()) {
-    uint32_t port = 1;
-    auto dev = DetectActiveRdmaDevice(&port);
-    if (dev.empty()) {
-      return false;
-    }
-    FLAGS_cache_rdma_device = dev;
-    FLAGS_cache_rdma_port_num = port;
-  }
-
-  // The slab pool pins kSlabBufferSize(4MiB) * iodepth * 2 of registered
-  // memory. Keep the test footprint modest (default iodepth is 128 -> ~1GiB).
+  // The slab pool pins kSlabBufferSize(4MiB) * iodepth * 2 of memory. Keep the
+  // test footprint modest (default iodepth is 128 -> ~1GiB).
   if (FLAGS_iodepth > 16) {
     FLAGS_iodepth = 16;
   }
 
-  SlabPoolReady() = infiniband::InitializeGlobalSlabPool().ok();
+  SlabPoolReady() = InitializeGlobalSlabPool().ok();
   return SlabPoolReady();
 }
 

@@ -46,7 +46,7 @@ class NodeTest : public DeployBase, public ::testing::Test {
  protected:
   void SetUp() override {
     if (!SlabPoolReady()) {
-      GTEST_SKIP() << "integration cache tests require an RDMA device";
+      GTEST_SKIP() << "cache slab pool unavailable in this environment";
     }
     MakeWorkDir();
     ASSERT_TRUE(mds_.Start(workdir_).ok());

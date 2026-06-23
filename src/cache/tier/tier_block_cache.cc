@@ -31,6 +31,7 @@
 
 #include "cache/api/block_cache.h"
 #include "cache/common/macro.h"
+#include "cache/common/slab_buffer.h"
 #include "cache/common/storage_client.h"
 #include "cache/iutil/string_util.h"
 #include "cache/local/cache_store.h"
@@ -96,6 +97,15 @@ Status TierBlockCache::Start() {
   }
 
   LOG(INFO) << "TierBlockCache is starting...";
+
+  if (FLAGS_cache_store == "disk") {
+    auto status = InitializeGlobalSlabPool();
+    if (!status.ok()) {
+      LOG(ERROR) << "Fail to initialize global slab pool: "
+                 << status.ToString();
+      return status;
+    }
+  }
 
   auto status = storage_client_->Start();
   if (!status.ok()) {

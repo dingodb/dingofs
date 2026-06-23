@@ -16,10 +16,9 @@ Like `test/unit/cache`, everything compiles into a **single binary**
 
 ## Prerequisites
 
-- **An active RDMA device** (InfiniBand/RoCE, e.g. `mlx5_0`). The on-disk cache
-  pins its O_DIRECT buffers in the global RDMA slab pool, both in the test
-  process and in the spawned `dingo-cache`. Without a device every test
-  `GTEST_SKIP`s (the run still passes).
+- **No RDMA device required.** The suite drives everything over TCP. The on-disk
+  cache stages its O_DIRECT buffers through the global slab pool, which is plain
+  pinned memory unless `--use_rdma` is set, so the tests run on any host.
 - Pre-built `dingo-mds` and `dingo-cache`, located next to the test binary
   (`<bin>/../dingo-mds`) by default; override with `--dingo_mds_bin=<path>` /
   `--dingo_cache_bin=<path>`.
@@ -47,4 +46,5 @@ cmake -S . -B build \
 Notes:
 - Each test starts real processes; individual cases take ~5–28s. Use
   `--gtest_filter` while iterating rather than running the whole suite.
-- A run on a host without an RDMA device skips every test instead of failing.
+- The suite needs no RDMA device; it only skips if the cache slab pool cannot be
+  allocated at all (e.g. the host cannot back the pinned mapping).

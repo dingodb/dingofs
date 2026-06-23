@@ -33,7 +33,9 @@
 #include <string>
 #include <unordered_map>
 
+#include "cache/common/slab_buffer.h"
 #include "cache/infiniband/infiniband.h"
+#include "common/options/cache.h"
 #include "common/status.h"
 #include "common/writemempool/memory_pool.h"
 
@@ -160,7 +162,8 @@ Status DeregisterMemoryForRDMA(const std::string& device_name, void* addr) {
   return Status::OK();
 }
 
-uint64_t GetRkey(const std::string& device_name, void* addr, size_t length) {
+static ibv_mr* FindIbMr(const std::string& device_name, void* addr,
+                        size_t length) {
   auto* begin = static_cast<char*>(addr);
   for (const auto& [name, memory_region] : g_usr_mrs) {
     if (!absl::StartsWith(name, device_name + ":")) {
@@ -170,10 +173,40 @@ uint64_t GetRkey(const std::string& device_name, void* addr, size_t length) {
     auto* mr = memory_region->GetIbMr();
     auto* mr_begin = static_cast<char*>(mr->addr);
     if (begin >= mr_begin && begin + length <= mr_begin + mr->length) {
-      return mr->rkey;
+      return mr;
     }
   }
-  return 0;
+  return nullptr;
+}
+
+uint32_t GetLkey(const std::string& device_name, void* addr, size_t length) {
+  auto* mr = FindIbMr(device_name, addr, length);
+  return mr != nullptr ? mr->lkey : 0;
+}
+
+uint64_t GetRkey(const std::string& device_name, void* addr, size_t length) {
+  auto* mr = FindIbMr(device_name, addr, length);
+  return mr != nullptr ? mr->rkey : 0;
+}
+
+Status RegisterGlobalSlabPoolsForRDMA() {
+  for (auto* pool : {GetGlobalReadSlabPool(), GetGlobalWriteSlabPool()}) {
+    if (pool == nullptr) {
+      return Status::Internal("global slab pool not initialized");
+    }
+
+    void* addr = pool->BaseAddr();
+    size_t size = pool->TotalSize();
+    auto status = RegisterMemoryForRDMA(FLAGS_cache_rdma_device, addr, size);
+    if (!status.ok()) {
+      return status;
+    }
+
+    pool->SetRdmaKeys(
+        GetLkey(FLAGS_cache_rdma_device, addr, size),
+        static_cast<uint32_t>(GetRkey(FLAGS_cache_rdma_device, addr, size)));
+  }
+  return Status::OK();
 }
 
 }  // namespace infiniband

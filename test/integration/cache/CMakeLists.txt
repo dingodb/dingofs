@@ -14,7 +14,8 @@
 
 # Real end-to-end cache integration tests: a gtest process spawns real dingo-mds
 # and dingo-cache binaries (posix_spawn) and drives the cache client over real
-# RPC. Requires an active RDMA device and pre-built dingo-mds / dingo-cache.
+# RPC. Runs over TCP (no RDMA device required); needs pre-built dingo-mds /
+# dingo-cache.
 #
 #   deploy/      - shared harness (process spawning, MDS, cache node)
 #   node/        - cache node lifecycle: startup, registration, deregister

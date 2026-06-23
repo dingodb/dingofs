@@ -35,10 +35,7 @@
 #include <string>
 
 #include "cache/common/macro.h"
-#include "cache/infiniband/common.h"
-#include "cache/infiniband/memory.h"
-#include "cache/infiniband/slab_pool.h"
-#include "cache/iutil/buffer_pool.h"
+#include "cache/common/slab_buffer.h"
 #include "cache/iutil/file_util.h"
 #include "cache/iutil/inflight_tracker.h"
 #include "cache/local/aio.h"
@@ -54,23 +51,23 @@ namespace dingofs {
 namespace cache {
 
 FixedBuffers::FixedBuffers()
-    : write_pool_(infiniband::GetGlobalReadSlabPool()),
-      read_pool_(infiniband::GetGlobalWriteSlabPool()) {}
+    : write_pool_(GetGlobalReadSlabPool()),
+      read_pool_(GetGlobalWriteSlabPool()) {}
 
 Status FixedBuffers::Alloc(size_t size, bool for_read, IOBuffer* buffer,
                            int* buf_index) {
-  infiniband::RDMABufferPool* pool = for_read ? read_pool_ : write_pool_;
-  auto* rdma_buffer = pool->Alloc();
-  if (rdma_buffer == nullptr) {
+  SlabBufferPool* pool = for_read ? read_pool_ : write_pool_;
+  auto* slab_buffer = pool->Alloc();
+  if (slab_buffer == nullptr) {
     return Status::OutOfMemory("out of memory");
   }
 
   buffer->AppendUserDataWithMeta(
-      rdma_buffer->data, size,
-      [pool, rdma_buffer](void*) { pool->Free(rdma_buffer); },
-      rdma_buffer->lkey);
+      slab_buffer->data, size,
+      [pool, slab_buffer](void*) { pool->Free(slab_buffer); },
+      slab_buffer->lkey);
 
-  *buf_index = GetIndex(rdma_buffer, for_read);
+  *buf_index = GetIndex(slab_buffer, for_read);
   return Status::OK();
 }
 
@@ -83,7 +80,7 @@ bool FixedBuffers::IsFixed(const IOBuffer* buffer, bool for_read,
     return false;
   }
 
-  infiniband::RDMABufferPool* pool = for_read ? read_pool_ : write_pool_;
+  SlabBufferPool* pool = for_read ? read_pool_ : write_pool_;
   int index = pool->IndexOf(buffer->Fetch1());
   if (index < 0) {
     *buf_index = -1;
@@ -94,11 +91,11 @@ bool FixedBuffers::IsFixed(const IOBuffer* buffer, bool for_read,
   return true;
 }
 
-int FixedBuffers::GetIndex(infiniband::RDMABuffer* rdma_buffer, bool for_read) {
+int FixedBuffers::GetIndex(SlabBuffer* slab_buffer, bool for_read) {
   if (!for_read) {
-    return write_pool_->IndexOf(rdma_buffer);
+    return write_pool_->IndexOf(slab_buffer);
   }
-  return write_pool_->BufferCount() + read_pool_->IndexOf(rdma_buffer);
+  return write_pool_->BufferCount() + read_pool_->IndexOf(slab_buffer);
 }
 
 std::vector<iovec> FixedBuffers::Fetch() {

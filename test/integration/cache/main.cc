@@ -46,14 +46,15 @@ int main(int argc, char* argv[]) {
   google::InitGoogleLogging(argv[0]);
   google::ParseCommandLineFlags(&argc, &argv, true);
 
-  // The on-disk cache (this process AND the spawned dingo-cache) needs the
-  // global RDMA slab pool. Without an IB device every fixture GTEST_SKIPs.
+  // The on-disk cache (this process AND the spawned dingo-cache) stages buffers
+  // through the global slab pool. It is plain pinned memory (no RDMA device
+  // required), so the suite runs on any host; fixtures only SKIP if the pool
+  // cannot be built at all.
   if (!dingofs::cache::integration::InitSlabPoolForTests()) {
-    LOG(WARNING) << "RDMA slab pool unavailable; cache integration tests SKIP.";
+    LOG(WARNING) << "Cache slab pool unavailable; cache integration tests SKIP.";
   } else {
-    LOG(WARNING) << "RDMA slab pool ready on device="
-                 << dingofs::cache::FLAGS_cache_rdma_device << ":"
-                 << dingofs::cache::FLAGS_cache_rdma_port_num;
+    LOG(WARNING) << "Cache slab pool ready (use_rdma="
+                 << dingofs::cache::FLAGS_use_rdma << ").";
   }
 
   return RUN_ALL_TESTS();
