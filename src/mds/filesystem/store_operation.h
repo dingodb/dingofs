@@ -296,6 +296,8 @@ class Operation {
     if (event_) event_->signal();
   }
 
+  virtual InodeSPtr GetParentInode() const { return nullptr; }
+
   virtual void PrefetchKey(std::vector<std::string>& keys) {}
 
   struct BatchSharedParam {
@@ -611,8 +613,8 @@ class BatchMkDirOperation : public Operation {
 
 class MkNodOperation : public Operation {
  public:
-  MkNodOperation(Trace& trace, const Dentry& dentry, const AttrEntry& attr)
-      : Operation(trace), dentry_(dentry), attr_(attr) {};
+  MkNodOperation(Trace& trace, InodeSPtr parent_inode, const Dentry& dentry, const AttrEntry& attr)
+      : Operation(trace), parent_inode_(parent_inode), dentry_(dentry), attr_(attr) {};
   ~MkNodOperation() override = default;
 
   struct Result {
@@ -625,6 +627,7 @@ class MkNodOperation : public Operation {
   Ino GetIno() const override { return dentry_.ParentIno(); }
 
   void PrefetchKey(std::vector<std::string>& keys) override;
+  InodeSPtr GetParentInode() const override { return parent_inode_; }
 
   Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
 
@@ -636,6 +639,7 @@ class MkNodOperation : public Operation {
   Result& GetResult() { return result_; }
 
  private:
+  InodeSPtr parent_inode_;
   const Dentry& dentry_;
   const AttrEntry& attr_;
 
@@ -644,8 +648,9 @@ class MkNodOperation : public Operation {
 
 class BatchMkNodOperation : public Operation {
  public:
-  BatchMkNodOperation(Trace& trace, const std::vector<Dentry>& dentries, const std::vector<AttrEntry>& attrs)
-      : Operation(trace), dentries_(dentries), attrs_(attrs) {};
+  BatchMkNodOperation(Trace& trace, InodeSPtr parent_inode, const std::vector<Dentry>& dentries,
+                      const std::vector<AttrEntry>& attrs)
+      : Operation(trace), parent_inode_(parent_inode), dentries_(dentries), attrs_(attrs) {};
   ~BatchMkNodOperation() override = default;
 
   struct Result {
@@ -658,6 +663,7 @@ class BatchMkNodOperation : public Operation {
   Ino GetIno() const override { return dentries_[0].ParentIno(); }
 
   void PrefetchKey(std::vector<std::string>& keys) override;
+  InodeSPtr GetParentInode() const override { return parent_inode_; }
 
   Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
 
@@ -669,6 +675,7 @@ class BatchMkNodOperation : public Operation {
   Result& GetResult() { return result_; }
 
  private:
+  InodeSPtr parent_inode_;
   const std::vector<Dentry>& dentries_;
   const std::vector<AttrEntry>& attrs_;
 
@@ -677,8 +684,8 @@ class BatchMkNodOperation : public Operation {
 
 class BatchCreateFileOperation : public Operation {
  public:
-  BatchCreateFileOperation(Trace& trace, const std::vector<Dentry>& dentries, const std::vector<AttrEntry>& attrs,
-                           const std::vector<FileSessionSPtr>& file_sessions)
+  BatchCreateFileOperation(Trace& trace, InodeSPtr parent_inode, const std::vector<Dentry>& dentries,
+                           const std::vector<AttrEntry>& attrs, const std::vector<FileSessionSPtr>& file_sessions)
       : Operation(trace), dentries_(dentries), attrs_(attrs), file_sessions_(file_sessions) {};
   ~BatchCreateFileOperation() override = default;
 
@@ -692,6 +699,7 @@ class BatchCreateFileOperation : public Operation {
   Ino GetIno() const override { return dentries_.front().ParentIno(); }
 
   void PrefetchKey(std::vector<std::string>& keys) override;
+  InodeSPtr GetParentInode() const override { return parent_inode_; }
 
   Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
 
@@ -703,6 +711,7 @@ class BatchCreateFileOperation : public Operation {
   Result& GetResult() { return result_; }
 
  private:
+  InodeSPtr parent_inode_;
   const std::vector<Dentry>& dentries_;
   const std::vector<AttrEntry>& attrs_;
   const std::vector<FileSessionSPtr>& file_sessions_;
@@ -712,7 +721,8 @@ class BatchCreateFileOperation : public Operation {
 
 class HardLinkOperation : public Operation {
  public:
-  HardLinkOperation(Trace& trace, const Dentry& dentry) : Operation(trace), dentry_(dentry) {};
+  HardLinkOperation(Trace& trace, InodeSPtr parent_inode, const Dentry& dentry)
+      : Operation(trace), parent_inode_(parent_inode), dentry_(dentry) {};
   ~HardLinkOperation() override = default;
 
   struct Result {
@@ -725,6 +735,8 @@ class HardLinkOperation : public Operation {
   uint32_t GetFsId() const override { return dentry_.FsId(); }
   Ino GetIno() const override { return dentry_.ParentIno(); }
 
+  InodeSPtr GetParentInode() const override { return parent_inode_; }
+
   void PrefetchKey(std::vector<std::string>& keys) override;
 
   Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
@@ -737,6 +749,7 @@ class HardLinkOperation : public Operation {
   Result& GetResult() { return result_; }
 
  private:
+  InodeSPtr parent_inode_;
   const Dentry& dentry_;
 
   Result result_;
@@ -744,8 +757,8 @@ class HardLinkOperation : public Operation {
 
 class SymLinkOperation : public Operation {
  public:
-  SymLinkOperation(Trace& trace, const Dentry& dentry, const AttrEntry& attr)
-      : Operation(trace), dentry_(dentry), attr_(attr) {};
+  SymLinkOperation(Trace& trace, InodeSPtr parent_inode, const Dentry& dentry, const AttrEntry& attr)
+      : Operation(trace), parent_inode_(parent_inode), dentry_(dentry), attr_(attr) {};
   ~SymLinkOperation() override = default;
 
   struct Result {
@@ -758,6 +771,7 @@ class SymLinkOperation : public Operation {
   Ino GetIno() const override { return dentry_.ParentIno(); }
 
   void PrefetchKey(std::vector<std::string>& keys) override;
+  InodeSPtr GetParentInode() const override { return parent_inode_; }
 
   Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
 
@@ -769,6 +783,7 @@ class SymLinkOperation : public Operation {
   Result& GetResult() { return result_; }
 
  private:
+  InodeSPtr parent_inode_;
   const Dentry& dentry_;
   const AttrEntry& attr_;
 
@@ -1298,8 +1313,8 @@ class RmDirOperation : public Operation {
 // Get-or-creates the hour bucket within the same txn.
 class UnlinkOperation : public Operation {
  public:
-  UnlinkOperation(Trace& trace, const Dentry& dentry, TrashMove trash = {})
-      : Operation(trace), dentry_(dentry), trash_(std::move(trash)) {}
+  UnlinkOperation(Trace& trace, InodeSPtr parent_inode, const Dentry& dentry, TrashMove trash = {})
+      : Operation(trace), parent_inode_(parent_inode), dentry_(dentry), trash_(std::move(trash)) {}
   ~UnlinkOperation() override = default;
 
   struct Result {
@@ -1312,6 +1327,8 @@ class UnlinkOperation : public Operation {
   uint32_t GetFsId() const override { return dentry_.FsId(); }
   Ino GetIno() const override { return dentry_.ParentIno(); }
 
+  InodeSPtr GetParentInode() const override { return parent_inode_; }
+
   void PrefetchKey(std::vector<std::string>& keys) override;
 
   Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
@@ -1331,6 +1348,7 @@ class UnlinkOperation : public Operation {
   Result& GetResult() { return result_; }
 
  private:
+  InodeSPtr parent_inode_;
   const Dentry& dentry_;
   TrashMove trash_;
 
@@ -1339,8 +1357,8 @@ class UnlinkOperation : public Operation {
 
 class BatchUnlinkOperation : public Operation {
  public:
-  BatchUnlinkOperation(Trace& trace, const std::vector<Dentry>& dentries, TrashMove trash = {})
-      : Operation(trace), dentries_(dentries), trash_(std::move(trash)) {};
+  BatchUnlinkOperation(Trace& trace, InodeSPtr parent_inode, const std::vector<Dentry>& dentries, TrashMove trash = {})
+      : Operation(trace), parent_inode_(parent_inode), dentries_(dentries), trash_(std::move(trash)) {};
   ~BatchUnlinkOperation() override = default;
 
   struct Result {
@@ -1353,6 +1371,8 @@ class BatchUnlinkOperation : public Operation {
   uint32_t GetFsId() const override { return dentries_.front().FsId(); }
   Ino GetIno() const override { return dentries_.front().ParentIno(); }
 
+  InodeSPtr GetParentInode() const override { return parent_inode_; }
+
   void PrefetchKey(std::vector<std::string>& keys) override;
 
   Status RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) override;
@@ -1372,6 +1392,7 @@ class BatchUnlinkOperation : public Operation {
   Result& GetResult() { return result_; }
 
  private:
+  InodeSPtr parent_inode_;
   const std::vector<Dentry>& dentries_;
   TrashMove trash_;
 
@@ -1869,8 +1890,7 @@ class BatchSetDirStatOperation : public Operation {
 // Read a single dir stat entry.
 class GetDirStatOperation : public Operation {
  public:
-  GetDirStatOperation(Trace& trace, uint32_t fs_id, Ino ino)
-      : Operation(trace), fs_id_(fs_id), ino_(ino) {}
+  GetDirStatOperation(Trace& trace, uint32_t fs_id, Ino ino) : Operation(trace), fs_id_(fs_id), ino_(ino) {}
   ~GetDirStatOperation() override = default;
 
   struct Result {
@@ -1956,10 +1976,10 @@ class RepairDirStatOperation : public Operation {
   ~RepairDirStatOperation() override = default;
 
   struct Result {
-    bool found{false};        // whether a stored record existed
-    DirStatEntry stored;      // the stored record (valid when found)
-    bool mismatch{false};     // whether stored differs from calc (or was absent)
-    bool wrote{false};        // whether this op wrote a new absolute value
+    bool found{false};     // whether a stored record existed
+    DirStatEntry stored;   // the stored record (valid when found)
+    bool mismatch{false};  // whether stored differs from calc (or was absent)
+    bool wrote{false};     // whether this op wrote a new absolute value
   };
 
   OpType GetOpType() const override { return OpType::kBatchSetDirStat; }

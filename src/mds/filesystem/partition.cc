@@ -689,9 +689,8 @@ PartitionPtr PartitionCache::PutIf(const PartitionPtr& partition) {
 
   shard_map_.withWLock(
       [&](Map& map) mutable {
-        auto it = map.find(ino);
-        if (it == map.end()) {
-          map.emplace(ino, partition);
+        auto [it, inserted] = map.try_emplace(ino, partition);
+        if (inserted) {
           total_count_ << 1;
 
         } else {

@@ -39,6 +39,7 @@
 #include "dingofs/mds.pb.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
+#include "inode.h"
 #include "mds/common/codec.h"
 #include "mds/common/helper.h"
 #include "mds/common/status.h"
@@ -146,6 +147,27 @@ static void SetResultAttr(BatchOperation& batch_operation, Operation::BatchShare
 
   for (auto* operation : batch_operation.create_operations) {
     if (operation->GetStatus().ok()) operation->SetResultAttr(shared_param);
+  }
+}
+
+static void UpdateParentInode(BatchOperation& batch_operation, Operation::BatchSharedParam& shared_param) {
+  Operation* operation = nullptr;
+  if (!batch_operation.setattr_operations.empty()) {
+    operation = batch_operation.setattr_operations[0];
+
+  } else if (!batch_operation.create_operations.empty()) {
+    operation = batch_operation.create_operations[0];
+  }
+
+  CHECK(operation != nullptr) << "batch_operation has no operation.";
+
+  InodeSPtr parent_inode = operation->GetParentInode();
+  if (parent_inode == nullptr) return;
+
+  if (shared_param.UseMutation()) {
+    parent_inode->PutByMutation(shared_param.attr_mutation, "");
+  } else {
+    parent_inode->PutIf(shared_param.attr, "");
   }
 }
 
@@ -4380,6 +4402,7 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
 
   if (status.ok()) {
     SetResultAttr(batch_operation, shared_param);
+    UpdateParentInode(batch_operation, shared_param);
 
     if (count > 1) SetBatchIndex(batch_operation);
 
