@@ -107,7 +107,7 @@ DEFINE_validator(mds_storage_engine, [](const char*, const std::string& value) -
   return value == "dingo-store" || value == "tikv" || value == "tikv-go" || value == "dummy";
 });
 
-DEFINE_string(mds_id_generator_type, "coor", "id generator type, e.g coor|store");
+DEFINE_string(mds_id_generator_type, "store", "id generator type, e.g coor|store");
 DEFINE_validator(mds_id_generator_type,
                  [](const char*, const std::string& value) -> bool { return value == "coor" || value == "store"; });
 
@@ -816,6 +816,8 @@ Status FileSystem::BatchCreate(Context& ctx, Ino parent, const std::vector<MkNod
   }
   names.resize(names.size() - 1);
 
+  trace.RecordElapsedTime("prepare");
+
   BatchCreateFileOperation operation(trace, dentries, attrs, file_sessions);
 
   status = RunOperation(&operation);
@@ -828,21 +830,34 @@ Status FileSystem::BatchCreate(Context& ctx, Ino parent, const std::vector<MkNod
   auto& result = operation.GetResult();
   auto& parent_attr_or_mutation = result.parent_attr_or_mutation;
 
+  // trace.RecordElapsedTime("post_handle_1");
+
   // update cache
   for (auto& file_session : file_sessions) file_session_manager_.Put(file_session);
 
+  // trace.RecordElapsedTime("post_handle_2");
+
   std::string reason = fmt::format("create.{}.{}.{}", request_id, parent, names);
   for (auto& attr : attrs) UpsertInodeCache(attr, reason);
+  // trace.RecordElapsedTime("post_handle_3");
+
   AttrEntry last_parent_attr = UpdateParentInodeCache(parent_inode, parent_attr_or_mutation, reason);
+  // trace.RecordElapsedTime("post_handle_4");
+
   for (auto& dentry : dentries) AddDentryToPartition(parent, dentry, last_parent_attr.version());
+  // trace.RecordElapsedTime("post_handle_5");
 
   // update quota
   quota_manager_.UpdateFsUsage(0, params.size(), reason);
   quota_manager_.AsyncUpdateDirUsage(parent, 0, params.size(), reason);
   UpdateDirStat(parent, 0, static_cast<int64_t>(params.size()), 0, reason);
 
+  // trace.RecordElapsedTime("post_handle_6");
+
   // update parent memo
   for (auto& dentry : dentries) parent_memo_.Remeber(dentry.INo(), parent);
+
+  // trace.RecordElapsedTime("post_handle_7");
 
   // set output
   entry_out.parent_attr = last_parent_attr;
@@ -853,6 +868,8 @@ Status FileSystem::BatchCreate(Context& ctx, Ino parent, const std::vector<MkNod
     std::vector<Ino> parents = Helper::PbRepeatedToVector(last_parent_attr.parents());
     NotifyBuddyRefreshInode(parents, parent_attr_or_mutation, reason);
   }
+
+  trace.RecordElapsedTime("post_handle");
 
   return Status::OK();
 }

@@ -4164,6 +4164,8 @@ void OperationProcessor::LaunchExecuteBatchOperation(BatchOperation&& batch_oper
     BatchOperation batch_operation;
   };
 
+  SetElapsedTime(batch_operation, "store_queue");
+
   Params* params = new Params({.self = this, .batch_operation = std::move(batch_operation)});
 
   bthread_t tid;

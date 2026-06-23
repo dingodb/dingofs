@@ -261,7 +261,7 @@ class PartitionCache {
 
   const uint32_t fs_id_{0};
 
-  constexpr static size_t kShardNum = 256;
+  constexpr static size_t kShardNum = 512;
   utils::Shards<Map, kShardNum> shard_map_;
 
   // metric
