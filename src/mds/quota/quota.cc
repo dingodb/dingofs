@@ -408,7 +408,7 @@ void QuotaManager::AsyncUpdateFsUsage(int64_t byte_delta, int64_t inode_delta, c
 
   auto task = UpdateFsUsageTask::New(*this, byte_delta, inode_delta, reason);
 
-  if (!worker_set_->ExecuteHash(fs_id, task)) {
+  if (!worker_set_->ExecuteRR(task)) {
     LOG(ERROR) << fmt::format("[quota.{}] async update fs usage fail, byte_delta({}), inode_delta({}) reason({}).",
                               fs_id, byte_delta, inode_delta, reason);
   }

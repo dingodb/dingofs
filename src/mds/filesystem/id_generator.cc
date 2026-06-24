@@ -14,12 +14,13 @@
 
 #include "mds/filesystem/id_generator.h"
 
+#include <butil/compiler_specific.h>
+
 #include <algorithm>
 #include <cstdint>
 #include <string>
 
 #include "bthread/mutex.h"
-#include "common/logging.h"
 #include "dingofs/error.pb.h"
 #include "fmt/format.h"
 #include "gflags/gflags_declare.h"
@@ -48,7 +49,7 @@ static const int64_t kSliceIdStartId = 1e10;  // 10 billion
 // Sub-trash directories do NOT use a separate generator: their ino is derived
 // from this allocator + a kTrashInodeId offset inside BuildTrashMove.
 const std::string kInoAutoIncrementIdName = "dingofs-inode-id";
-static const int64_t kInoBatchSize = 102400;
+static const int64_t kInoBatchSize = 1024000;
 static const int64_t kInoStartId = 2e10;  // 20 billion
 
 CoorAutoIncrementIdGenerator::CoorAutoIncrementIdGenerator(CoordinatorClientSPtr client, const std::string& name,
@@ -129,7 +130,7 @@ bool CoorAutoIncrementIdGenerator::GenID(uint32_t num, uint64_t min_slice_id, ui
   return true;
 }
 
-std::string CoorAutoIncrementIdGenerator::Describe() const {
+std::string CoorAutoIncrementIdGenerator::Describe() {
   return fmt::format("[coordinator] name({}) start_id({}) batch_size({}) range[{}, {}) next_id({})", name_, start_id_,
                      batch_size_, bundle_, bundle_end_, next_id_);
 }
@@ -219,7 +220,7 @@ bool StoreAutoIncrementIdGenerator::Destroy() {
 bool StoreAutoIncrementIdGenerator::GenID(uint32_t num, uint64_t& id) { return GenID(num, 0, id); }
 
 bool StoreAutoIncrementIdGenerator::GenID(uint32_t num, uint64_t min_slice_id, uint64_t& id) {
-  if (num == 0) {
+  if (BAIDU_UNLIKELY(num == 0)) {
     LOG(ERROR) << fmt::format("[idalloc.{}] num cant not 0.", name_);
     return false;
   }
@@ -245,7 +246,7 @@ bool StoreAutoIncrementIdGenerator::GenID(uint32_t num, uint64_t min_slice_id, u
   return true;
 }
 
-std::string StoreAutoIncrementIdGenerator::Describe() const {
+std::string StoreAutoIncrementIdGenerator::Describe() {
   return fmt::format("[store] name({}) batch_size({}) last_alloc_id({}) next_id({})", name_, batch_size_,
                      last_alloc_id_, next_id_);
 }
@@ -354,6 +355,197 @@ Status StoreAutoIncrementIdGenerator::DestroyId() {
   return status;
 }
 
+ShardStoreAutoIncrementIdGenerator::ShardStoreAutoIncrementIdGenerator(KVStorageSPtr kv_storage,
+                                                                       const std::string& name, int64_t start_id,
+                                                                       int batch_size)
+    : kv_storage_(kv_storage),
+      name_(name),
+      key_(MetaCodec::EncodeAutoIncrementIDKey(name)),
+      start_id_(start_id),
+      batch_size_(batch_size) {
+  CHECK(bthread_mutex_init(&mutex_, nullptr) == 0) << "init mutex fail.";
+  shard_bundles_.iterateWLock([&](Bunlde& bundle) {
+    bundle.next_id_ = start_id;
+    bundle.last_alloc_id_ = start_id;
+  });
+}
+
+bool ShardStoreAutoIncrementIdGenerator::Init() {
+  uint64_t alloc_id = 0;
+  auto status = GetOrPutAllocId(alloc_id);
+  if (!status.ok()) {
+    LOG(ERROR) << fmt::format("[idalloc.{}] init get alloc id fail, status({}).", name_, status.error_cstr());
+    return false;
+  }
+
+  shard_bundles_.iterateWLock([&](Bunlde& bundle) {
+    bundle.next_id_ = alloc_id;
+    bundle.last_alloc_id_ = alloc_id;
+  });
+
+  return true;
+}
+
+bool ShardStoreAutoIncrementIdGenerator::Destroy() {
+  auto status = DestroyId();
+  if (!status.ok()) {
+    LOG(ERROR) << fmt::format("[idalloc.{}] destroy autoincrement table fail, status({}).", name_, status.error_str());
+    return false;
+  }
+
+  return true;
+}
+
+bool ShardStoreAutoIncrementIdGenerator::GenID(uint32_t num, uint64_t& id) { return GenID(num, 0, id); }
+
+bool ShardStoreAutoIncrementIdGenerator::GenID(uint32_t num, uint64_t min_slice_id, uint64_t& id) {
+  if (BAIDU_UNLIKELY(num == 0)) {
+    LOG(ERROR) << fmt::format("[idalloc.{}] num cant not 0.", name_);
+    return false;
+  }
+
+  size_t shard_pos = next_shard_pos_.fetch_add(1, std::memory_order_relaxed) % kShardNum;
+
+  bool ret = true;
+  shard_bundles_.withWLockAt(
+      [&](Bunlde& bundle) mutable {
+        bundle.next_id_ = std::max(bundle.next_id_, min_slice_id);
+
+        if (bundle.next_id_ + num > bundle.last_alloc_id_) {
+          auto status = AllocateIds(bundle, std::max(num, batch_size_));
+          if (!status.ok()) {
+            LOG(ERROR) << fmt::format("[idalloc.{}] allocate id fail, {}.", name_, status.error_str());
+            ret = false;
+          }
+        }
+
+        // allocate id
+        if (ret) {
+          id = bundle.next_id_;
+          bundle.next_id_ += num;
+        }
+      },
+      shard_pos);
+
+  LOG(INFO) << fmt::format("[idalloc.{}] alloc id({}) num({}).", name_, id, num);
+
+  return ret;
+}
+
+std::string ShardStoreAutoIncrementIdGenerator::Describe() {
+  std::string desc;
+  shard_bundles_.iterate(
+      [&](const Bunlde& bundle) { desc += fmt::format("[{},{}),", bundle.next_id_, bundle.last_alloc_id_); });
+
+  return fmt::format("[store] name({}) batch_size({}) bundles({})", name_, batch_size_, desc);
+}
+
+Status ShardStoreAutoIncrementIdGenerator::GetOrPutAllocId(uint64_t& alloc_id) {
+  Status status;
+  uint32_t retry = 0;
+  do {
+    auto txn = kv_storage_->NewTxn();
+    if (txn == nullptr) {
+      status = Status(pb::error::EBACKEND_STORE, "new transaction fail");
+      continue;
+    }
+
+    std::string value;
+    status = txn->Get(key_, value);
+    if (!status.ok()) {
+      if (status.error_code() != pb::error::ENOT_FOUND) {
+        break;
+      }
+      alloc_id = 0;
+
+    } else {
+      MetaCodec::DecodeAutoIncrementIDValue(value, alloc_id);
+    }
+
+    if (alloc_id < start_id_) {
+      alloc_id = start_id_;
+      txn->Put(key_, MetaCodec::EncodeAutoIncrementIDValue(alloc_id));
+    }
+
+    status = txn->Commit();
+    if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
+      break;
+    }
+
+  } while (++retry < FLAGS_mds_txn_max_retry_times);
+
+  return status;
+}
+
+Status ShardStoreAutoIncrementIdGenerator::AllocateIds(Bunlde& bundle, uint32_t size) {
+  BAIDU_SCOPED_LOCK(mutex_);
+
+  utils::Duration duration;
+  Status status;
+  uint32_t retry = 0;
+  uint64_t start_alloc_id = std::max(bundle.next_id_, bundle.last_alloc_id_);
+  do {
+    auto txn = kv_storage_->NewTxn();
+    if (txn == nullptr) {
+      status = Status(pb::error::EBACKEND_STORE, "new transaction fail");
+      continue;
+    }
+
+    uint64_t alloced_id = 0;
+    std::string value;
+    status = txn->Get(key_, value);
+    if (!status.ok()) {
+      if (status.error_code() != pb::error::ENOT_FOUND) {
+        break;
+      }
+
+    } else {
+      MetaCodec::DecodeAutoIncrementIDValue(value, alloced_id);
+    }
+
+    start_alloc_id = std::max(alloced_id, start_alloc_id);
+    txn->Put(key_, MetaCodec::EncodeAutoIncrementIDValue(start_alloc_id + size));
+
+    status = txn->Commit();
+    if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
+      break;
+    }
+
+  } while (++retry < FLAGS_mds_txn_max_retry_times);
+
+  if (status.ok()) {
+    bundle.last_alloc_id_ = start_alloc_id + size;
+    bundle.next_id_ = start_alloc_id;
+  }
+
+  LOG(INFO) << fmt::format("[idalloc.{}][{}us] take bundle id, bundle[{},{}) size({}) status({}).", name_,
+                           duration.ElapsedUs(), bundle.next_id_, bundle.last_alloc_id_, size, status.error_str());
+
+  return status;
+}
+
+Status ShardStoreAutoIncrementIdGenerator::DestroyId() {
+  Status status;
+  uint32_t retry = 0;
+  do {
+    auto txn = kv_storage_->NewTxn();
+    if (txn == nullptr) {
+      status = Status(pb::error::EBACKEND_STORE, "new transaction fail");
+      continue;
+    }
+
+    txn->Delete(key_);
+
+    status = txn->Commit();
+    if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
+      break;
+    }
+
+  } while (++retry < FLAGS_mds_txn_max_retry_times);
+
+  return status;
+}
+
 IdGeneratorUPtr NewFsIdGenerator(CoordinatorClientSPtr coordinator_client) {
   CHECK(coordinator_client != nullptr) << "coordinator_client is nullptr.";
 
@@ -378,7 +570,7 @@ IdGeneratorUPtr NewInodeIdGenerator(uint32_t fs_id, KVStorageSPtr kv_storage) {
   CHECK(kv_storage != nullptr) << "kv_storage is nullptr.";
   std::string name = fmt::format("{}-{}", kInoAutoIncrementIdName, fs_id);
 
-  return StoreAutoIncrementIdGenerator::New(kv_storage, name, kInoStartId, kInoBatchSize);
+  return ShardStoreAutoIncrementIdGenerator::New(kv_storage, name, kInoStartId, kInoBatchSize);
 }
 
 IdGeneratorSPtr NewSliceIdGenerator(CoordinatorClientSPtr coordinator_client) {
