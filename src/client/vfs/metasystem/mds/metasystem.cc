@@ -996,8 +996,36 @@ Status MDSMetaSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
   AssertStop();
 
   auto file_session = file_session_map_.GetSession(ino);
-  CHECK(file_session != nullptr)
-      << fmt::format("file session is nullptr, ino({}) fh({}).", ino, fh);
+  // directly fetch from mds when file session is not found, just for prefetch
+  // data
+  if (file_session == nullptr) {
+    // set chunk version
+    mds::ChunkDescriptor chunk_descriptor;
+    chunk_descriptor.set_index(static_cast<uint32_t>(index));
+    chunk_descriptor.set_version(
+        chunk_memo_.GetVersion(ino, static_cast<uint32_t>(index)));
+
+    std::vector<mds::ChunkEntry> chunks;
+    auto status = mds_client_.ReadSlice(ctx, ino, {chunk_descriptor}, chunks);
+    if (!status.ok()) {
+      LOG(ERROR) << fmt::format(
+          "[meta.fs.{}.{}.{}] reeadslice fail, error({}).", ino, fh, index,
+          status.ToString());
+      return status;
+    }
+
+    CHECK(chunks.size() == 1) << fmt::format(
+        "[meta.fs.{}.{}.{}] reeadslice fail, chunks size({}) != 1.", ino, fh,
+        index, chunks.size());
+
+    auto& chunk = chunks.front();
+    for (const auto& slice : chunk.slices()) {
+      slices->push_back(Helper::ToSlice(slice));
+    }
+    version = chunk.version();
+
+    return Status::OK();
+  }
 
   auto chunk_set = file_session->GetChunkSet();
 
