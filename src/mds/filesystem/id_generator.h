@@ -15,6 +15,7 @@
 #ifndef DINGOFS_MDS_ID_GENERATOR_H_
 #define DINGOFS_MDS_ID_GENERATOR_H_
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -23,6 +24,7 @@
 #include "mds/common/status.h"
 #include "mds/coordinator/coordinator_client.h"
 #include "mds/storage/storage.h"
+#include "utils/shards.h"
 
 namespace dingofs {
 namespace mds {
@@ -38,7 +40,7 @@ class IdGenerator {
   virtual bool GenID(uint32_t num, uint64_t& id) = 0;
   virtual bool GenID(uint32_t num, uint64_t min_slice_id, uint64_t& id) = 0;
 
-  virtual std::string Describe() const = 0;
+  virtual std::string Describe() = 0;
 };
 
 using IdGeneratorUPtr = std::unique_ptr<IdGenerator>;
@@ -65,7 +67,7 @@ class CoorAutoIncrementIdGenerator : public IdGenerator {
   bool GenID(uint32_t num, uint64_t& id) override;
   bool GenID(uint32_t num, uint64_t min_slice_id, uint64_t& id) override;
 
-  std::string Describe() const override;
+  std::string Describe() override;
 
  private:
   Status IsExistAutoIncrement();
@@ -111,7 +113,7 @@ class StoreAutoIncrementIdGenerator : public IdGenerator {
   bool GenID(uint32_t num, uint64_t& id) override;
   bool GenID(uint32_t num, uint64_t min_slice_id, uint64_t& id) override;
 
-  std::string Describe() const override;
+  std::string Describe() override;
 
  private:
   Status GetOrPutAllocId(uint64_t& alloc_id);
@@ -130,6 +132,64 @@ class StoreAutoIncrementIdGenerator : public IdGenerator {
   uint64_t next_id_;
   // the last id can be allocated in this bunlde
   uint64_t last_alloc_id_;
+
+  // get the numnber of id at a time
+  const uint32_t batch_size_;
+
+  bool is_destroyed_{false};
+};
+
+class ShardStoreAutoIncrementIdGenerator : public IdGenerator {
+ public:
+  ShardStoreAutoIncrementIdGenerator(KVStorageSPtr kv_storage, const std::string& name, int64_t start_id,
+                                     int batch_size);
+  ~ShardStoreAutoIncrementIdGenerator() override {
+    CHECK(bthread_mutex_destroy(&mutex_) == 0) << "destory mutex fail.";
+  }
+
+  static IdGeneratorUPtr New(KVStorageSPtr kv_storage, const std::string& name, int64_t start_id, int batch_size) {
+    return std::make_unique<ShardStoreAutoIncrementIdGenerator>(kv_storage, name, start_id, batch_size);
+  }
+
+  static IdGeneratorSPtr NewShare(KVStorageSPtr kv_storage, const std::string& name, int64_t start_id, int batch_size) {
+    return std::make_shared<ShardStoreAutoIncrementIdGenerator>(kv_storage, name, start_id, batch_size);
+  }
+
+  bool Init() override;
+  bool Destroy() override;
+
+  bool GenID(uint32_t num, uint64_t& id) override;
+  bool GenID(uint32_t num, uint64_t min_slice_id, uint64_t& id) override;
+
+  std::string Describe() override;
+
+ private:
+  struct Bunlde {
+    // the next id can be allocated in this bunlde
+    uint64_t next_id_;
+    // the last id can be allocated in this bunlde
+    uint64_t last_alloc_id_;
+  };
+
+  Status GetOrPutAllocId(uint64_t& alloc_id);
+  Status AllocateIds(Bunlde& bundle, uint32_t size);
+  Status DestroyId();
+
+  KVStorageSPtr kv_storage_;
+
+  bthread_mutex_t mutex_;
+
+  const std::string name_;
+  // the key of id
+  const std::string key_;
+
+  const uint64_t start_id_{0};
+
+  std::atomic<uint32_t> next_shard_pos_{0};
+
+  constexpr static size_t kShardNum = 64;
+  utils::Shards<Bunlde, kShardNum> shard_bundles_;
+
   // get the numnber of id at a time
   const uint32_t batch_size_;
 

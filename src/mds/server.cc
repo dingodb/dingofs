@@ -59,7 +59,7 @@ DECLARE_string(mds_service_worker_set_type);
 
 const std::string kQuotaWorkerSetName = "QUOTA_WORKER_SET";
 DEFINE_uint32(mds_quota_worker_num, 24, "quota worker number");
-DEFINE_uint32(mds_quota_worker_max_pending_num, 4096, "quota worker max pending number");
+DEFINE_uint32(mds_quota_worker_max_pending_num, 1000000, "quota worker max pending number");
 
 const std::string kDirStatWorkerSetName = "DIR_STAT_WORKER_SET";
 DEFINE_uint32(mds_dir_stat_worker_num, 24, "dir stat worker number");
@@ -275,7 +275,7 @@ bool Server::InitFileSystem() {
   CHECK(slice_id_generator->Init()) << "init slice AutoIncrementIdGenerator fail.";
 
   quota_worker_set_ = ExecqWorkerSet::NewUnique(kQuotaWorkerSetName, FLAGS_mds_quota_worker_num,
-                                                FLAGS_mds_quota_worker_max_pending_num);
+                                                FLAGS_mds_quota_worker_max_pending_num, true);
   CHECK(quota_worker_set_ != nullptr) << "new quota worker set fail.";
   CHECK(quota_worker_set_->Init()) << "init quota worker set fail.";
 
