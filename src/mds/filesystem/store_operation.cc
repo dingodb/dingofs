@@ -986,47 +986,6 @@ static Status ScanChunk(TxnUPtr& txn, uint32_t fs_id, Ino ino, std::map<uint64_t
   return status;
 }
 
-static Status ResetFileRange(TxnUPtr& txn, uint32_t fs_id, Ino ino, uint64_t old_length, uint64_t new_length,
-                             uint64_t chunk_size) {
-  CHECK(new_length < old_length) << fmt::format("new_length({}) should be less than old_length({}).", new_length,
-                                                old_length);
-
-  uint32_t old_num = (old_length / chunk_size) + ((old_length % chunk_size) != 0 ? 1 : 0);
-  uint32_t new_num = (new_length / chunk_size) + ((new_length % chunk_size) != 0 ? 1 : 0);
-
-  uint64_t chunk_version = 0;
-  SliceEntry slice;
-  if (new_length % chunk_size != 0) {
-    ChunkEntry chunk;
-    auto status = GetChunk(txn, fs_id, ino, new_num - 1, chunk);
-    if (!status.ok() && status.error_code() != pb::error::ENOT_FOUND) {
-      return Status(status.error_code(), fmt::format("retfilerange fail({})", status.error_str()));
-    }
-
-    slice.set_id(0);
-    slice.set_size(0);
-    slice.set_pos(new_length % chunk_size);
-    slice.set_off(0);
-    slice.set_len(static_cast<uint64_t>(new_num * chunk_size) - new_length);
-
-    *chunk.add_slices() = slice;
-
-    chunk.set_version(chunk.version() + 1);
-    txn->Put(MetaCodec::EncodeChunkKey(fs_id, ino, new_num - 1), MetaCodec::EncodeChunkValue(chunk));
-    chunk_version = chunk.version();
-  }
-
-  for (uint32_t i = new_num; i < old_num; ++i) {
-    txn->Delete(MetaCodec::EncodeChunkKey(fs_id, ino, i));
-  }
-
-  LOG(INFO) << fmt::format("[operation.{}.{}] reset file range, length({},{}) chunk_num({},{},{}) blank_slice({}).",
-                           fs_id, ino, old_length, new_length, old_num, new_num, chunk_version,
-                           slice.ShortDebugString());
-
-  return Status::OK();
-}
-
 Status UpdateAttrOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) {
   auto& attr = shared_param.attr;
 
@@ -1044,12 +1003,6 @@ Status UpdateAttrOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_pa
 
   if (to_set_ & kSetAttrSize) {
     result_.delta_bytes = static_cast<int64_t>(attr_.length()) - static_cast<int64_t>(attr.length());
-    // if delta_length<0 then delete chunks beyond new length
-    if (result_.delta_bytes < 0) {
-      auto status =
-          ResetFileRange(txn, attr_.fs_id(), attr_.ino(), attr.length(), attr_.length(), extra_param_.chunk_size);
-      if (!status.ok()) return status;
-    }
 
     attr.set_length(attr_.length());
   }
@@ -1604,9 +1557,6 @@ Status FlushFileOperation::Run(TxnUPtr& txn) {
         result_.attr = attr;
         return Status::OK();
       }
-
-      auto status = ResetFileRange(txn, fs_id_, ino_, attr.length(), param_.length, param_.chunk_size);
-      if (!status.ok()) return status;
     }
 
     attr.set_length(param_.length);
