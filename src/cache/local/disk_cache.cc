@@ -217,8 +217,7 @@ Status DiskCache::Stage(BlockHandle handle, IOBuffer block,
     status = Status::OK();  // ignore link error
   }
 
-  manager_->Add(handle, CacheValue(length, iutil::TimeNow()),
-                BlockPhase::kStaging);
+  manager_->AddStaging(handle, CacheValue(length, iutil::TimeNow()));
 
   uploader_(handle, length, option.block_attr);
   return status;
@@ -236,7 +235,7 @@ Status DiskCache::RemoveStage(BlockHandle handle,
     LOG(ERROR) << "Fail to remove stage file=`" << stage_path << "'";
   }
 
-  manager_->Add(handle, CacheValue(), BlockPhase::kUploaded);
+  manager_->PromoteStagingToCached(handle);
   return status;
 }
 
@@ -264,8 +263,7 @@ Status DiskCache::Cache(BlockHandle handle, IOBuffer block,
     return status;
   }
 
-  manager_->Add(handle, CacheValue(length, iutil::TimeNow()),
-                BlockPhase::kCached);
+  manager_->AddCached(handle, CacheValue(length, iutil::TimeNow()));
 
   return status;
 }
@@ -294,7 +292,7 @@ Status DiskCache::Load(BlockHandle handle, off_t offset, size_t length,
     LOG(WARNING) << "Cache block file not found, delete the corresponding "
                     "key from lru, path=`"
                  << cache_path << "'";
-    manager_->Delete(handle);
+    manager_->DeleteCached(handle);
   } else if (!status.ok()) {
     LOG(ERROR) << "Fail to read block file=`" << cache_path << "'";
   }

@@ -59,7 +59,7 @@ DiskCacheManager::DiskCacheManager(uint64_t capacity,
       queue_id_({0}),
       vars_(std::make_unique<DiskCacheManagerMetrics>(layout_->CacheIndex())) {
   for (auto& shard : shards_) {
-    shard.cached_blocks = std::make_unique<LRUCache>();
+    shard.cached_lru = std::make_unique<LRUCache>();
   }
   Init();
 }
@@ -72,15 +72,15 @@ void DiskCacheManager::Init() {
 
   for (auto& shard : shards_) {
     BAIDU_SCOPED_LOCK(shard.mutex);
-    shard.cached_blocks->Clear();
-    shard.staging_blocks.clear();
+    shard.cached_lru->Clear();
+    shard.entries.clear();
     shard.used_bytes = 0;
 
-    CHECK_NOTNULL(shard.cached_blocks);
-    CHECK_EQ(shard.cached_blocks->Size(), 0)
-        << "Cached blocks size should be zero at startup.";
-    CHECK_EQ(shard.staging_blocks.size(), 0)
-        << "Staging blocks should be empty at startup.";
+    CHECK_NOTNULL(shard.cached_lru);
+    CHECK_EQ(shard.cached_lru->Size(), 0)
+        << "Cached LRU size should be zero at startup.";
+    CHECK_EQ(shard.entries.size(), 0)
+        << "Cache entries should be empty at startup.";
   }
 
   CHECK_EQ(total_used_bytes_, 0) << "Used bytes should be zero at startup.";
@@ -132,57 +132,123 @@ void DiskCacheManager::Shutdown() {
   LOG(INFO) << "Disk cache manager is down.";
 }
 
-void DiskCacheManager::Add(const CacheKey& key, const CacheValue& value,
-                           BlockPhase phase) {
+void DiskCacheManager::AddStaging(const CacheKey& key,
+                                  const CacheValue& value) {
   auto filename = key.Filename();
   auto& shard = GetShard(filename);
   BAIDU_SCOPED_LOCK(shard.mutex);
 
-  if (phase == BlockPhase::kStaging) {
-    shard.staging_blocks.emplace(filename, value);
-    UpdateUsageLocked(shard, 1, value.size);
+  auto iter = shard.entries.find(filename);
+  if (iter == shard.entries.end()) {
+    shard.entries.emplace(filename,
+                          CacheEntry(key, value, CacheEntryState::kStaging));
+    UpdateUsageLocked(shard, 1, static_cast<int64_t>(value.size));
     vars_->stage_blocks << 1;
-  } else if (phase == BlockPhase::kUploaded) {
-    auto iter = shard.staging_blocks.find(filename);
-    CHECK(iter != shard.staging_blocks.end());  // same shard, must hit
-    shard.cached_blocks->Add(key, iter->second);  // migrate, used_bytes unchanged
-    shard.staging_blocks.erase(iter);
-    vars_->stage_blocks << -1;
-  } else {  // cached
-    shard.cached_blocks->Add(key, value);
-    UpdateUsageLocked(shard, 1, value.size);
+  } else {
+    auto& entry = iter->second;
+    if (entry.state == CacheEntryState::kCached) {
+      CacheValue deleted;
+      CHECK(shard.cached_lru->Delete(entry.key, &deleted));
+      vars_->stage_blocks << 1;
+    }
+
+    int64_t delta = static_cast<int64_t>(value.size) -
+                    static_cast<int64_t>(entry.value.size);
+    entry = CacheEntry(key, value, CacheEntryState::kStaging);
+    UpdateUsageLocked(shard, 0, delta);
   }
 
-  // Per-shard soft quota triggers eviction within this shard's LRU.
-  if (shard.used_bytes >= shard_capacity_bytes_) {
-    uint64_t want_free_bytes = shard.used_bytes - (shard_capacity_bytes_ * 0.95);
-    uint64_t want_free_files = shard.cached_blocks->Size() * 0.05;
-    LOG_EVERY_SECOND(INFO) << absl::StrFormat(
-        "Trigger delete block for size reach capacity: "
-        "shard used = %.2lf MiB, shard capacity = %.2lf MiB, "
-        "want free %.2lf MiB %llu files",
-        shard.used_bytes * 1.0 / kMiB, shard_capacity_bytes_ * 1.0 / kMiB,
-        want_free_bytes * 1.0 / kMiB, want_free_files);
-    CleanupFullLocked(shard, want_free_bytes, want_free_files);
-  }
+  CleanupFullIfNeededLocked(shard);
 }
 
-void DiskCacheManager::Delete(const CacheKey& key) {
-  auto& shard = GetShard(key.Filename());
+void DiskCacheManager::PromoteStagingToCached(const CacheKey& key) {
+  auto filename = key.Filename();
+  auto& shard = GetShard(filename);
   BAIDU_SCOPED_LOCK(shard.mutex);
-  CacheValue value;
-  if (shard.cached_blocks->Delete(key, &value)) {  // exist
-    UpdateUsageLocked(shard, -1, -static_cast<int64_t>(value.size));
+
+  auto iter = shard.entries.find(filename);
+  CHECK(iter != shard.entries.end());
+  auto& entry = iter->second;
+  CHECK(entry.state == CacheEntryState::kStaging);
+
+  entry.state = CacheEntryState::kCached;
+  shard.cached_lru->Add(entry.key, entry.value);
+  vars_->stage_blocks << -1;
+
+  CleanupFullIfNeededLocked(shard);
+}
+
+void DiskCacheManager::AddCached(const CacheKey& key, const CacheValue& value) {
+  auto filename = key.Filename();
+  auto& shard = GetShard(filename);
+  BAIDU_SCOPED_LOCK(shard.mutex);
+
+  auto iter = shard.entries.find(filename);
+  if (iter == shard.entries.end()) {
+    shard.entries.emplace(filename,
+                          CacheEntry(key, value, CacheEntryState::kCached));
+    shard.cached_lru->Add(key, value);
+    UpdateUsageLocked(shard, 1, static_cast<int64_t>(value.size));
+  } else {
+    auto& entry = iter->second;
+    if (entry.state == CacheEntryState::kStaging) {
+      // A not-yet-uploaded block is pinned. A read-cache insert for the same
+      // key must not turn it into an evictable block.
+      return;
+    }
+
+    CacheValue deleted;
+    CHECK(shard.cached_lru->Delete(entry.key, &deleted));
+    int64_t delta = static_cast<int64_t>(value.size) -
+                    static_cast<int64_t>(entry.value.size);
+    entry = CacheEntry(key, value, CacheEntryState::kCached);
+    shard.cached_lru->Add(key, value);
+    UpdateUsageLocked(shard, 0, delta);
   }
+
+  CleanupFullIfNeededLocked(shard);
+}
+
+void DiskCacheManager::DeleteCached(const CacheKey& key) {
+  auto filename = key.Filename();
+  auto& shard = GetShard(filename);
+  BAIDU_SCOPED_LOCK(shard.mutex);
+
+  auto iter = shard.entries.find(filename);
+  if (iter == shard.entries.end() ||
+      iter->second.state == CacheEntryState::kStaging) {
+    return;
+  }
+
+  CacheValue deleted;
+  if (!shard.cached_lru->Delete(iter->second.key, &deleted)) {
+    LOG(WARNING) << "Cached entry is missing from LRU, key=" << filename;
+  }
+  RemoveEntryLocked(shard, filename);
 }
 
 bool DiskCacheManager::Exist(const CacheKey& key) {
   auto filename = key.Filename();
   auto& shard = GetShard(filename);
   BAIDU_SCOPED_LOCK(shard.mutex);
-  CacheValue value;
-  return shard.cached_blocks->Get(key, &value) ||
-         shard.staging_blocks.find(filename) != shard.staging_blocks.end();
+
+  auto iter = shard.entries.find(filename);
+  if (iter == shard.entries.end()) {
+    return false;
+  }
+
+  auto& entry = iter->second;
+  if (entry.state == CacheEntryState::kCached) {
+    CacheValue value;
+    if (shard.cached_lru->Get(entry.key, &value)) {
+      entry.value = value;
+    } else {
+      LOG(WARNING) << "Cached entry is missing from LRU, key=" << filename;
+    }
+  } else {
+    entry.value.atime = iutil::TimeNow();
+  }
+  return true;
 }
 
 bool DiskCacheManager::StageFull() const {
@@ -198,7 +264,6 @@ void DiskCacheManager::CheckFreeSpace() {
 
   struct iutil::StatFS stat;
   uint64_t want_free_bytes, want_free_files;
-  uint64_t goal_bytes, goal_files;
   std::string root_dir = GetRootDir();
 
   while (running_.load(std::memory_order_relaxed)) {
@@ -246,20 +311,42 @@ void DiskCacheManager::CheckFreeSpace() {
 }
 
 // assumes shard.mutex is held
+void DiskCacheManager::CleanupFullIfNeededLocked(Shard& shard) {
+  if (shard.used_bytes < shard_capacity_bytes_) {
+    return;
+  }
+
+  uint64_t goal_bytes = shard_capacity_bytes_ * 95 / 100;
+  uint64_t want_free_bytes =
+      shard.used_bytes > goal_bytes ? shard.used_bytes - goal_bytes : 0;
+  uint64_t want_free_files = shard.cached_lru->Size() * 5 / 100;
+  LOG_EVERY_SECOND(INFO) << absl::StrFormat(
+      "Trigger delete block for size reach capacity: "
+      "shard used = %.2lf MiB, shard capacity = %.2lf MiB, "
+      "want free %.2lf MiB %llu files",
+      shard.used_bytes * 1.0 / kMiB, shard_capacity_bytes_ * 1.0 / kMiB,
+      want_free_bytes * 1.0 / kMiB, want_free_files);
+  CleanupFullLocked(shard, want_free_bytes, want_free_files);
+}
+
+// assumes shard.mutex is held
 void DiskCacheManager::CleanupFullLocked(Shard& shard, uint64_t want_free_bytes,
                                          uint64_t want_free_files) {
   uint64_t freed_bytes = 0;
   uint64_t freed_files = 0;
-  auto to_del = shard.cached_blocks->Evict([&](const CacheValue& value) {
+  auto to_del = shard.cached_lru->Evict([&](const CacheValue& value) {
     if (freed_bytes >= want_free_bytes && freed_files >= want_free_files) {
       return FilterStatus::kFinish;
     }
 
     freed_bytes += value.size;
     freed_files++;
-    UpdateUsageLocked(shard, -1, -static_cast<int64_t>(value.size));
     return FilterStatus::kEvictIt;
   });
+
+  for (const auto& item : to_del) {
+    RemoveEntryLocked(shard, item.key.Filename());
+  }
 
   if (!to_del.empty()) {
     CHECK_EQ(0, bthread::execution_queue_execute(
@@ -294,7 +381,7 @@ void DiskCacheManager::CleanupExpire() {
       uint64_t num_checks = 0;
       {
         BAIDU_SCOPED_LOCK(shard.mutex);
-        to_del = shard.cached_blocks->Evict([&](const CacheValue& value) {
+        to_del = shard.cached_lru->Evict([&](const CacheValue& value) {
           // per-shard check cap keeps the total scan budget on par with the
           // pre-shard single-LRU 1e3 limit
           if (++num_checks > (1e3 / kShardCount) + 1) {
@@ -302,9 +389,12 @@ void DiskCacheManager::CleanupExpire() {
           } else if (value.atime + cache_expire_s > now) {
             return FilterStatus::kSkip;
           }
-          UpdateUsageLocked(shard, -1, -static_cast<int64_t>(value.size));
           return FilterStatus::kEvictIt;
         });
+
+        for (const auto& item : to_del) {
+          RemoveEntryLocked(shard, item.key.Filename());
+        }
       }
 
       if (!to_del.empty()) {
@@ -368,9 +458,33 @@ void DiskCacheManager::DeleteBlocks(const ToDel& to_del) {
 }
 
 // assumes shard.mutex is held
+void DiskCacheManager::RemoveEntryLocked(Shard& shard,
+                                         const std::string& filename) {
+  auto iter = shard.entries.find(filename);
+  if (iter == shard.entries.end()) {
+    return;
+  }
+
+  const auto state = iter->second.state;
+  const auto size = iter->second.value.size;
+  shard.entries.erase(iter);
+  if (state == CacheEntryState::kStaging) {
+    vars_->stage_blocks << -1;
+  }
+  UpdateUsageLocked(shard, -1, -static_cast<int64_t>(size));
+}
+
+// assumes shard.mutex is held
 void DiskCacheManager::UpdateUsageLocked(Shard& shard, int64_t n,
                                          int64_t used_bytes) {
-  shard.used_bytes += used_bytes;
+  if (used_bytes < 0) {
+    auto delta = static_cast<uint64_t>(-used_bytes);
+    CHECK_GE(shard.used_bytes, delta);
+    shard.used_bytes -= delta;
+  } else {
+    shard.used_bytes += static_cast<uint64_t>(used_bytes);
+  }
+
   int64_t total =
       total_used_bytes_.fetch_add(used_bytes, std::memory_order_relaxed) +
       used_bytes;

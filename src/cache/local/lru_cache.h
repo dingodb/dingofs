@@ -39,7 +39,7 @@ struct CacheValue {
   CacheValue() = default;
   CacheValue(size_t size, iutil::TimeSpec atime) : size(size), atime(atime) {}
 
-  size_t size;
+  size_t size{0};
   iutil::TimeSpec atime;  // access time
 };
 

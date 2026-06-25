@@ -110,27 +110,28 @@ TEST_F(DiskCacheManagerTest, AddAndExist) {
 
   EXPECT_FALSE(manager.Exist(Key(1)));
 
-  manager.Add(Key(1), Val(4096), BlockPhase::kStaging);
+  manager.AddStaging(Key(1), Val(4096));
   EXPECT_TRUE(manager.Exist(Key(1)));
 
-  manager.Add(Key(2), Val(4096), BlockPhase::kCached);
+  manager.AddCached(Key(2), Val(4096));
   EXPECT_TRUE(manager.Exist(Key(2)));
 
   EXPECT_FALSE(manager.Exist(Key(3)));
 }
 
-TEST_F(DiskCacheManagerTest, StagingToUploaded) {
+TEST_F(DiskCacheManagerTest, PromoteStagingToCached) {
   DiskCacheManager manager(100 * 1024 * 1024, layout_);
 
-  manager.Add(Key(1), Val(4096), BlockPhase::kStaging);
+  manager.AddStaging(Key(1), Val(4096));
   EXPECT_TRUE(manager.Exist(Key(1)));
 
-  // Upload transitions the block from the staging map into the cached LRU.
-  manager.Add(Key(1), Val(4096), BlockPhase::kUploaded);
+  // Upload completion transitions the block from pinned staging into the cached
+  // LRU.
+  manager.PromoteStagingToCached(Key(1));
   EXPECT_TRUE(manager.Exist(Key(1)));
 
   // Now that it is cached, Delete removes it.
-  manager.Delete(Key(1));
+  manager.DeleteCached(Key(1));
   EXPECT_FALSE(manager.Exist(Key(1)));
 }
 
@@ -138,17 +139,31 @@ TEST_F(DiskCacheManagerTest, DeleteOnlyAffectsCachedBlocks) {
   DiskCacheManager manager(100 * 1024 * 1024, layout_);
 
   {  // a cached block can be deleted
-    manager.Add(Key(1), Val(4096), BlockPhase::kCached);
-    manager.Delete(Key(1));
+    manager.AddCached(Key(1), Val(4096));
+    manager.DeleteCached(Key(1));
     EXPECT_FALSE(manager.Exist(Key(1)));
   }
 
   {  // a staging block is intentionally NOT removed by Delete (it must stay
      // until uploaded, otherwise it is lost from both disk and storage)
-    manager.Add(Key(2), Val(4096), BlockPhase::kStaging);
-    manager.Delete(Key(2));
+    manager.AddStaging(Key(2), Val(4096));
+    manager.DeleteCached(Key(2));
     EXPECT_TRUE(manager.Exist(Key(2)));
   }
+}
+
+TEST_F(DiskCacheManagerTest, AddCachedDoesNotUnpinStaging) {
+  DiskCacheManager manager(100 * 1024 * 1024, layout_);
+  auto key = Key(1);
+
+  manager.AddStaging(key, Val(4096));
+  manager.AddCached(key, Val(4096));
+  manager.DeleteCached(key);
+  EXPECT_TRUE(manager.Exist(key));
+
+  manager.PromoteStagingToCached(key);
+  manager.DeleteCached(key);
+  EXPECT_FALSE(manager.Exist(key));
 }
 
 TEST_F(DiskCacheManagerTest, PerShardCapacityTriggersEviction) {
@@ -161,13 +176,13 @@ TEST_F(DiskCacheManagerTest, PerShardCapacityTriggersEviction) {
 
   auto keys = SameShardKeys(3);
 
-  // No Exist() probing before the trigger: Exist() calls LRUCache::Get(), which
-  // promotes the entry to the active list and would change the eviction victim.
-  manager.Add(keys[0], Val(400), BlockPhase::kCached);
-  manager.Add(keys[1], Val(400), BlockPhase::kCached);
+  // No Exist() probing before the trigger: cached Exist() promotes the entry in
+  // the LRU and would change the eviction victim.
+  manager.AddCached(keys[0], Val(400));
+  manager.AddCached(keys[1], Val(400));
 
   // shard used (1200) >= shard capacity (1000) trips CleanupFull on this shard.
-  manager.Add(keys[2], Val(400), BlockPhase::kCached);
+  manager.AddCached(keys[2], Val(400));
 
   EXPECT_FALSE(manager.Exist(keys[0]));  // oldest in the shard, evicted
   EXPECT_TRUE(manager.Exist(keys[1]));
@@ -182,18 +197,18 @@ TEST_F(DiskCacheManagerTest, EvictionIsPerShardIndependent) {
   DiskCacheManager manager(kShardCap * DiskCacheManager::kShardCount, layout_);
   manager.Start();
 
-  auto keys = SameShardKeys(3);            // all land on the same shard X
-  auto other = KeyInOtherShard(keys[0]);   // lands on a different shard Y
+  auto keys = SameShardKeys(3);           // all land on the same shard X
+  auto other = KeyInOtherShard(keys[0]);  // lands on a different shard Y
 
-  manager.Add(other, Val(400), BlockPhase::kCached);
-  manager.Add(keys[0], Val(400), BlockPhase::kCached);
-  manager.Add(keys[1], Val(400), BlockPhase::kCached);
-  manager.Add(keys[2], Val(400), BlockPhase::kCached);  // X over quota: evict X
+  manager.AddCached(other, Val(400));
+  manager.AddCached(keys[0], Val(400));
+  manager.AddCached(keys[1], Val(400));
+  manager.AddCached(keys[2], Val(400));  // X over quota: evict X
 
   EXPECT_FALSE(manager.Exist(keys[0]));  // evicted within shard X
   EXPECT_TRUE(manager.Exist(keys[1]));
   EXPECT_TRUE(manager.Exist(keys[2]));
-  EXPECT_TRUE(manager.Exist(other));     // shard Y untouched
+  EXPECT_TRUE(manager.Exist(other));  // shard Y untouched
 
   manager.Shutdown();
 }
@@ -207,9 +222,9 @@ TEST_F(DiskCacheManagerTest, StagingBlockSurvivesShardEviction) {
 
   auto keys = SameShardKeys(3);
 
-  manager.Add(keys[0], Val(400), BlockPhase::kStaging);
-  manager.Add(keys[1], Val(400), BlockPhase::kCached);
-  manager.Add(keys[2], Val(400), BlockPhase::kCached);  // shard over quota
+  manager.AddStaging(keys[0], Val(400));
+  manager.AddCached(keys[1], Val(400));
+  manager.AddCached(keys[2], Val(400));  // shard over quota
 
   EXPECT_TRUE(manager.Exist(keys[0]));   // staging: never evicted
   EXPECT_FALSE(manager.Exist(keys[1]));  // oldest cached: evicted
@@ -220,9 +235,10 @@ TEST_F(DiskCacheManagerTest, StagingBlockSurvivesShardEviction) {
 
 TEST_F(DiskCacheManagerTest, DeleteNonExistentKeyIsNoop) {
   DiskCacheManager manager(100 * 1024 * 1024, layout_);
-  manager.Add(Key(1), Val(4096), BlockPhase::kCached);
+  manager.AddCached(Key(1), Val(4096));
 
-  manager.Delete(Key(2));  // not present: must not touch the existing block
+  manager.DeleteCached(
+      Key(2));  // not present: must not touch the existing block
   EXPECT_TRUE(manager.Exist(Key(1)));
   EXPECT_FALSE(manager.Exist(Key(2)));
 }
@@ -242,9 +258,9 @@ TEST_F(DiskCacheManagerTest, EvictionDeletesRealCacheFiles) {
   std::ofstream(victim_path) << "block-data";
   ASSERT_TRUE(std::filesystem::exists(victim_path));
 
-  manager.Add(keys[0], Val(400), BlockPhase::kCached);
-  manager.Add(keys[1], Val(400), BlockPhase::kCached);
-  manager.Add(keys[2], Val(400), BlockPhase::kCached);  // evicts LRU keys[0]
+  manager.AddCached(keys[0], Val(400));
+  manager.AddCached(keys[1], Val(400));
+  manager.AddCached(keys[2], Val(400));  // evicts LRU keys[0]
 
   bool deleted = false;
   for (int i = 0; i < 500 && !deleted; ++i) {
@@ -252,6 +268,42 @@ TEST_F(DiskCacheManagerTest, EvictionDeletesRealCacheFiles) {
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
   EXPECT_TRUE(deleted);
+
+  manager.Shutdown();
+}
+
+TEST_F(DiskCacheManagerTest, StagingHardLinkSurvivesEvictionDeleteTask) {
+  constexpr uint64_t kShardCap = 1000;
+  DiskCacheManager manager(kShardCap * DiskCacheManager::kShardCount, layout_);
+  manager.Start();
+
+  auto keys = SameShardKeys(3);
+  auto stage_path = layout_->GetStagePath(keys[0]);
+  auto cache_path = layout_->GetCachePath(keys[0]);
+  std::filesystem::create_directories(
+      std::filesystem::path(stage_path).parent_path());
+  std::filesystem::create_directories(
+      std::filesystem::path(cache_path).parent_path());
+  std::ofstream(stage_path) << "stage-data";
+  std::filesystem::create_hard_link(stage_path, cache_path);
+
+  auto victim_path = layout_->GetCachePath(keys[1]);
+  std::filesystem::create_directories(
+      std::filesystem::path(victim_path).parent_path());
+  std::ofstream(victim_path) << "victim-data";
+
+  manager.AddStaging(keys[0], Val(400));
+  manager.AddCached(keys[1], Val(400));
+  manager.AddCached(keys[2], Val(400));  // evicts cached keys[1]
+
+  bool victim_deleted = false;
+  for (int i = 0; i < 500 && !victim_deleted; ++i) {
+    victim_deleted = !std::filesystem::exists(victim_path);
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+  EXPECT_TRUE(victim_deleted);
+  EXPECT_TRUE(std::filesystem::exists(stage_path));
+  EXPECT_TRUE(std::filesystem::exists(cache_path));
 
   manager.Shutdown();
 }
@@ -265,8 +317,8 @@ TEST_F(DiskCacheManagerTest, StageAndCacheNotFullByDefault) {
 TEST_F(DiskCacheManagerTest, UploadWithoutStagingDies) {
   GTEST_FLAG_SET(death_test_style, "threadsafe");
   DiskCacheManager manager(100 * 1024 * 1024, layout_);
-  // kUploaded requires the block to already be in the staging map.
-  EXPECT_DEATH(manager.Add(Key(1), Val(4096), BlockPhase::kUploaded), "");
+  // PromoteStagingToCached requires the block to already be staging.
+  EXPECT_DEATH(manager.PromoteStagingToCached(Key(1)), "");
 }
 
 TEST_F(DiskCacheManagerTest, ShardIndexIsStableAndDistributes) {
@@ -302,10 +354,10 @@ TEST_F(DiskCacheManagerTest, ConcurrentAddDeleteExistIsSafe) {
     workers.emplace_back([&, t] {
       for (int i = 0; i < kKeysPerThread; ++i) {
         auto key = Key((t * kKeysPerThread) + i);
-        manager.Add(key, Val(4096), BlockPhase::kCached);
+        manager.AddCached(key, Val(4096));
         manager.Exist(key);
         if (i % 2 == 0) {
-          manager.Delete(key);
+          manager.DeleteCached(key);
         }
       }
     });
