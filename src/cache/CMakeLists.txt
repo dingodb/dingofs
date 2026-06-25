@@ -19,6 +19,7 @@ add_subdirectory(local)
 add_subdirectory(node)
 add_subdirectory(remote)
 add_subdirectory(tier)
+add_subdirectory(tools)
 #add_subdirectory(bench)
 
 file(GLOB CACHE_LIB_SRCS

@@ -11,26 +11,5 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# Define the BASE_FLAGS and DINGO_DEFAULT_COPTS variables
 
-SET(BENCH_LIB_SRCS
-    "benchmarker.cc"
-    "collector.cc"
-    "factory.cc"
-    "option.cc"
-    "reporter.cc"
-    "worker.cc"
-)
-
-add_library(cache_bench ${BENCH_LIB_SRCS})
-target_link_libraries(cache_bench
-    cache_utils
-    cache_common
-    cache_storage
-    cache_tier
-)
-
-add_executable(cache-bench main.cc)
-target_link_libraries(cache-bench
-    cache_bench
-)
+add_subdirectory(cache_bench)
