@@ -211,6 +211,8 @@ Status LocalFileSystem::WriteFile(const std::string& path,
     }
   };
 
+  InflightAioGuard guard(fd, &inflight_);
+
   size_t aligned_length = AlignLength(buffer->Size());
   if (buffer->Size() != aligned_length) {
     status = iutil::Fallocate(fd, 0, 0, aligned_length);
@@ -275,6 +277,8 @@ Status LocalFileSystem::ReadFile(const std::string& path, off_t offset,
 
   BRPC_SCOPE_EXIT { iutil::Close(fd); };
 
+  InflightAioGuard guard(fd, &inflight_);
+
   off_t aligned_offset = AlignOffset(offset);
   size_t aligned_length = AlignLength(length + offset - aligned_offset);
 
@@ -312,8 +316,6 @@ Status LocalFileSystem::ReadFile(const std::string& path, off_t offset,
 
 Status LocalFileSystem::AioWrite(int fd, char* buffer, size_t length,
                                  int buf_index) {
-  InflightAioGuard guard(fd, &inflight_);
-
   auto aio = Aio(fd, 0, length, buffer, buf_index, false);
   aio_queue_->Submit(&aio);
   aio.Wait();
@@ -322,8 +324,6 @@ Status LocalFileSystem::AioWrite(int fd, char* buffer, size_t length,
 
 Status LocalFileSystem::AioRead(int fd, off_t offset, size_t length,
                                 char* buffer, int buf_index) {
-  InflightAioGuard guard(fd, &inflight_);
-
   auto aio = Aio(fd, offset, length, buffer, buf_index, true);
   aio_queue_->Submit(&aio);
   aio.Wait();
