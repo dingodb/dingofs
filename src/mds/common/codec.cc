@@ -1813,5 +1813,247 @@ std::pair<std::string, std::string> MetaCodec::ParseKey(const std::string& key, 
   return {};
 }
 
+namespace {
+
+const char* TableName(unsigned char table_id) {
+  switch (table_id) {
+    case kTableMeta:
+      return "kTableMeta";
+    case kTableFsStats:
+      return "kTableFsStats";
+    case kTableFsMeta:
+      return "kTableFsMeta";
+    default:
+      return "kTableUnknown";
+  }
+}
+
+const char* MetaTypeName(unsigned char meta_type) {
+  switch (meta_type) {
+    case kMetaLock:
+      return "kMetaLock";
+    case kMetaAutoIncrementID:
+      return "kMetaAutoIncrementID";
+    case kMetaHeartbeat:
+      return "kMetaHeartbeat";
+    case kMetaFs:
+      return "kMetaFs";
+    case kMetaFsQuota:
+      return "kMetaFsQuota";
+    case kMetaFsDirQuota:
+      return "kMetaFsDirQuota";
+    case kMetaFsInode:
+      return "kMetaFsInode";
+    case kMetaFsFileSession:
+      return "kMetaFsFileSession";
+    case kMetaFsDelSlice:
+      return "kMetaFsDelSlice";
+    case kMetaFsDelFile:
+      return "kMetaFsDelFile";
+    case kMetaFsStats:
+      return "kMetaFsStats";
+    case kMetaFsOpLog:
+      return "kMetaFsOpLog";
+    case kMetaCacheMember:
+      return "kMetaCacheMember";
+    case kMetaFsTinyFileData:
+      return "kMetaFsTinyFileData";
+    case kMetaFsSliceRef:
+      return "kMetaFsSliceRef";
+    default:
+      return "kMetaUnknown";
+  }
+}
+
+const char* InodeTypeName(unsigned char inode_type) {
+  switch (inode_type) {
+    case kFsInodeAttr:
+      return "kFsInodeAttr";
+    case kFsDirInodeMutation:
+      return "kFsDirInodeMutation";
+    case kFsInodeDentry:
+      return "kFsInodeDentry";
+    case kFsInodeChunk:
+      return "kFsInodeChunk";
+    default:
+      return "kFsInodeUnknown";
+  }
+}
+
+}  // namespace
+
+std::string MetaCodec::ParseKeyFromHex(const std::string& hex_key) {
+  const std::string key = Helper::HexToString(hex_key);
+
+  // Auto-detect prefix (cluster id) so this works without SetClusterID().
+  size_t prefix_size = 0;
+  uint32_t cluster_id = 0;
+  std::string prefix;
+  if (key.compare(0, kOldFixedPrefixSize, kOldFixedPrefix) == 0) {
+    prefix_size = kOldFixedPrefixSize;
+    prefix = kOldFixedPrefix;
+  } else if (key.compare(0, kFixedPrefixSize, kFixedPrefix) == 0 && key.size() >= kFixedPrefixSize + sizeof(uint32_t)) {
+    prefix_size = kFixedPrefixSize + sizeof(uint32_t);
+    cluster_id = SerialHelper::ReadInt(key.substr(kFixedPrefixSize));
+    prefix = fmt::format("{}({})", kFixedPrefix, cluster_id);
+  } else {
+    return fmt::format("unknown key prefix, key({})", hex_key);
+  }
+
+  // Helper to ensure the key has at least n bytes after the prefix.
+  auto enough = [&](size_t n) { return key.size() >= prefix_size + n; };
+
+  const size_t p = prefix_size;
+  if (!enough(1)) {
+    return fmt::format("truncated key (missing table id), key({})", hex_key);
+  }
+
+  const unsigned char table_id = static_cast<unsigned char>(key.at(p));
+  switch (table_id) {
+    case kTableMeta: {
+      if (!enough(2)) {
+        return fmt::format("{} {} truncated (missing meta type), key({})", prefix, TableName(table_id), hex_key);
+      }
+      const unsigned char meta_type = static_cast<unsigned char>(key.at(p + 1));
+      switch (meta_type) {
+        case kMetaLock:
+        case kMetaAutoIncrementID:
+        case kMetaFs: {
+          // format: ${prefix} kTableMeta {meta_type} {name}
+          std::string name = key.substr(p + 2);
+          return fmt::format("{} {} {} name({})", prefix, TableName(table_id), MetaTypeName(meta_type), name);
+        }
+
+        case kMetaHeartbeat: {
+          // format: ${prefix} kTableMeta kMetaHeartbeat {role} {id}
+          if (!enough(3)) {
+            return fmt::format("{} {} {} truncated (missing role), key({})", prefix, TableName(table_id),
+                               MetaTypeName(meta_type), hex_key);
+          }
+          auto role = static_cast<pb::mds::Role>(key.at(p + 2));
+          if (role == pb::mds::ROLE_MDS) {
+            int64_t mds_id = SerialHelper::ReadLong(key.substr(p + 3));
+            return fmt::format("{} {} {} kRoleMds mds_id({})", prefix, TableName(table_id), MetaTypeName(meta_type),
+                               mds_id);
+          }
+          const char* role_name = (role == pb::mds::ROLE_CLIENT) ? "kRoleClient" : "kRoleCacheMember";
+          std::string id = key.substr(p + 3);
+          return fmt::format("{} {} {} {} id({})", prefix, TableName(table_id), MetaTypeName(meta_type), role_name, id);
+        }
+
+        case kMetaFsQuota: {
+          // format: ${prefix} kTableMeta kMetaFsQuota {fs_id}
+          uint32_t fs_id = SerialHelper::ReadInt(key.substr(p + 2));
+          return fmt::format("{} {} {} fs_id({})", prefix, TableName(table_id), MetaTypeName(meta_type), fs_id);
+        }
+
+        case kMetaFsOpLog: {
+          // format: ${prefix} kTableMeta kMetaFsOpLog {fs_id} {time_ns}
+          uint32_t fs_id = SerialHelper::ReadInt(key.substr(p + 2));
+          uint64_t time_ns = SerialHelper::ReadULong(key.substr(p + 2 + 4));
+          return fmt::format("{} {} {} fs_id({}) time_ns({})", prefix, TableName(table_id), MetaTypeName(meta_type),
+                             fs_id, time_ns);
+        }
+
+        case kMetaFsSliceRef: {
+          // format: ${prefix} kTableMeta kMetaFsSliceRef {slice_id}
+          uint64_t slice_id = SerialHelper::ReadULong(key.substr(p + 2));
+          return fmt::format("{} {} {} slice_id({})", prefix, TableName(table_id), MetaTypeName(meta_type), slice_id);
+        }
+
+        default:
+          return fmt::format("{} {} unsupported meta type({}), key({})", prefix, TableName(table_id),
+                             static_cast<int>(meta_type), hex_key);
+      }
+    }
+
+    case kTableFsStats: {
+      // format: ${prefix} kTableFsStats kMetaFsStats {fs_id} {time_ns}
+      if (!enough(1 + 1 + 4 + 8)) {
+        return fmt::format("{} {} truncated, key({})", prefix, TableName(table_id), hex_key);
+      }
+      const unsigned char meta_type = static_cast<unsigned char>(key.at(p + 1));
+      uint32_t fs_id = SerialHelper::ReadInt(key.substr(p + 2));
+      uint64_t time_ns = SerialHelper::ReadULong(key.substr(p + 2 + 4));
+      return fmt::format("{} {} {} fs_id({}) time_ns({})", prefix, TableName(table_id), MetaTypeName(meta_type), fs_id,
+                         time_ns);
+    }
+
+    case kTableFsMeta: {
+      // format: ${prefix} kTableFsMeta {fs_id} {meta_type} {ino} ...
+      if (!enough(1 + 4 + 1)) {
+        return fmt::format("{} {} truncated (missing fs_id/meta type), key({})", prefix, TableName(table_id), hex_key);
+      }
+      uint32_t fs_id = SerialHelper::ReadInt(key.substr(p + 1));
+      const unsigned char meta_type = static_cast<unsigned char>(key.at(p + 1 + 4));
+      const std::string head =
+          fmt::format("{} {} fs_id({}) {}", prefix, TableName(table_id), fs_id, MetaTypeName(meta_type));
+
+      switch (meta_type) {
+        case kMetaFsInode: {
+          // format: ${prefix} kTableFsMeta {fs_id} kMetaFsInode {ino} {inode_type} ...
+          if (!enough(1 + 4 + 1 + 8 + 1)) {
+            return fmt::format("{} truncated (missing ino/inode type), key({})", head, hex_key);
+          }
+          uint64_t ino = SerialHelper::ReadULong(key.substr(p + 1 + 4 + 1));
+          const unsigned char inode_type = static_cast<unsigned char>(key.at(p + 1 + 4 + 1 + 8));
+          switch (inode_type) {
+            case kFsInodeAttr:
+              return fmt::format("{} ino({}) {}", head, ino, InodeTypeName(inode_type));
+
+            case kFsInodeDentry: {
+              std::string name = key.substr(p + 1 + 4 + 1 + 8 + 1);
+              return fmt::format("{} ino({}) {} name({})", head, ino, InodeTypeName(inode_type), name);
+            }
+
+            case kFsInodeChunk: {
+              uint64_t chunk_index = SerialHelper::ReadULong(key.substr(p + 1 + 4 + 1 + 8 + 1));
+              return fmt::format("{} ino({}) {} chunk_index({})", head, ino, InodeTypeName(inode_type), chunk_index);
+            }
+
+            case kFsDirInodeMutation: {
+              uint32_t index = SerialHelper::ReadInt(key.substr(p + 1 + 4 + 1 + 8 + 1));
+              return fmt::format("{} ino({}) {} index({})", head, ino, InodeTypeName(inode_type), index);
+            }
+
+            default:
+              return fmt::format("{} ino({}) unsupported inode type({}), key({})", head, ino,
+                                 static_cast<int>(inode_type), hex_key);
+          }
+        }
+
+        case kMetaFsFileSession: {
+          // format: ${prefix} kTableFsMeta {fs_id} kMetaFsFileSession {ino} {session_id}
+          uint64_t ino = SerialHelper::ReadULong(key.substr(p + 1 + 4 + 1));
+          std::string session_id = key.substr(p + 1 + 4 + 1 + 8);
+          return fmt::format("{} ino({}) session_id({})", head, ino, session_id);
+        }
+
+        case kMetaFsDirQuota:
+        case kMetaFsDelFile:
+        case kMetaFsTinyFileData: {
+          // format: ${prefix} kTableFsMeta {fs_id} {meta_type} {ino}
+          uint64_t ino = SerialHelper::ReadULong(key.substr(p + 1 + 4 + 1));
+          return fmt::format("{} ino({})", head, ino);
+        }
+
+        case kMetaFsDelSlice: {
+          // format: ${prefix} kTableFsMeta {fs_id} kMetaFsDelSlice {ino} {chunk_index} {time_ns}
+          uint64_t ino = SerialHelper::ReadULong(key.substr(p + 1 + 4 + 1));
+          uint64_t chunk_index = SerialHelper::ReadULong(key.substr(p + 1 + 4 + 1 + 8));
+          uint64_t time_ns = SerialHelper::ReadULong(key.substr(p + 1 + 4 + 1 + 8 + 8));
+          return fmt::format("{} ino({}) chunk_index({}) time_ns({})", head, ino, chunk_index, time_ns);
+        }
+
+        default:
+          return fmt::format("{} unsupported meta type({}), key({})", head, static_cast<int>(meta_type), hex_key);
+      }
+    }
+
+    default:
+      return fmt::format("{} unsupported table id({}), key({})", prefix, static_cast<int>(table_id), hex_key);
+  }
+}
+
 }  // namespace mds
 }  // namespace dingofs

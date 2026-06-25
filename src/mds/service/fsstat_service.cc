@@ -535,6 +535,63 @@ static void RenderMdsCacheSummary(Json::Value& json_value, butil::IOBufBuilder& 
   os << "<br>";
 }
 
+static std::string HtmlEscape(const std::string& input) {
+  std::string output;
+  output.reserve(input.size());
+  for (const char c : input) {
+    switch (c) {
+      case '&':
+        output += "&amp;";
+        break;
+      case '<':
+        output += "&lt;";
+        break;
+      case '>':
+        output += "&gt;";
+        break;
+      case '"':
+        output += "&quot;";
+        break;
+      case '\'':
+        output += "&#39;";
+        break;
+      default:
+        output.push_back(c);
+        break;
+    }
+  }
+
+  return output;
+}
+
+// Tools module: parse a raw storage key (hex string) and show its decoded
+// table/type/fs_id/ino/... information.
+static void RenderTools(const std::string& parse_key, butil::IOBufBuilder& os) {
+  os << R"(<div style="margin:12px;margin-top:64px;font-size:smaller">)";
+  os << R"(<h3>Tools</h3>)";
+  os << R"(<div style="font-size:smaller;">)";
+
+  os << R"(<form method="get" action="/FsStatService">)";
+  os << R"(<label>Parse Key (hex):&nbsp;</label>)";
+  os << fmt::format(
+      R"(<input type="text" name="key" size="80" )"
+      R"(placeholder="e.g. 7844494e474f46533a05000027120d00000004a81b94cc01" value="{}">)",
+      HtmlEscape(parse_key));
+  os << R"(&nbsp;<input type="submit" value="Parse">)";
+  os << R"(</form>)";
+
+  if (!parse_key.empty()) {
+    const std::string result = MetaCodec::ParseKeyFromHex(parse_key);
+    os << R"(<div style="margin-top:8px;">)";
+    os << fmt::format(R"(<div><b>Key:</b> {}</div>)", HtmlEscape(parse_key));
+    os << fmt::format(R"(<div><b>Result:</b> {}</div>)", HtmlEscape(result));
+    os << R"(</div>)";
+  }
+
+  os << R"(</div>)";
+  os << R"(</div>)";
+}
+
 static void RenderGitInfo(butil::IOBufBuilder& os) {
   os << R"(<div style="margin:12px;margin-top:64px;font-size:smaller">)";
   os << R"(<h3>Git</h3>)";
@@ -713,7 +770,7 @@ static void RenderCluster(butil::IOBufBuilder& os) {
 }
 
 void FsStatServiceImpl::RenderMainPage(const brpc::Server* server, FileSystemSetSPtr file_system_set,
-                                       butil::IOBufBuilder& os) {
+                                       const std::string& parse_key, butil::IOBufBuilder& os) {
   os << "<!DOCTYPE html><html>\n";
 
   os << "<head>";
@@ -822,6 +879,9 @@ void FsStatServiceImpl::RenderMainPage(const brpc::Server* server, FileSystemSet
   file_system_set->Summary(summary_value);
 
   RenderMdsCacheSummary(summary_value, os);
+
+  // tools
+  RenderTools(parse_key, os);
 
   // git info
   RenderGitInfo(os);
@@ -1763,7 +1823,8 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
   // /FsStatService
   if (params.empty()) {
     auto file_system_set = Server::GetInstance().GetFileSystemSet();
-    RenderMainPage(server, file_system_set, os);
+    const std::string* parse_key = cntl->http_request().uri().GetQuery("key");
+    RenderMainPage(server, file_system_set, parse_key != nullptr ? *parse_key : "", os);
 
   } else if (params.size() == 1 && params[0] == "server") {
     // /FsStatService/server

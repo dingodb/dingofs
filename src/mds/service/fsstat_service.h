@@ -44,7 +44,8 @@ class FsStatServiceImpl : public pb::web::FsStatService, public brpc::Tabbed {
 
  private:
   void RenderAutoIncrementIdGenerator(FileSystemSetSPtr file_system_set, butil::IOBufBuilder& os);
-  void RenderMainPage(const brpc::Server* server, FileSystemSetSPtr file_system_set, butil::IOBufBuilder& os);
+  void RenderMainPage(const brpc::Server* server, FileSystemSetSPtr file_system_set, const std::string& parse_key,
+                      butil::IOBufBuilder& os);
   void RenderServerPage(butil::IOBufBuilder& os);
 };
 

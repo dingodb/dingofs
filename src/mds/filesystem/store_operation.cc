@@ -295,6 +295,18 @@ const char* Operation::OpName() const {
     case OpType::kCleanChunk:
       return "CleanChunk";
 
+    case OpType::kGetSliceRef:
+      return "GetSliceRef";
+
+    case OpType::kDecSliceRef:
+      return "DecSliceRef";
+
+    case OpType::kScanSliceRef:
+      return "ScanSliceRef";
+
+    case OpType::kCopyFileRange:
+      return "CopyFileRange";
+
     case OpType::kSetFsQuota:
       return "SetFsQuota";
 
