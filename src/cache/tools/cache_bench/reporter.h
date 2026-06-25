@@ -14,51 +14,49 @@
  * limitations under the License.
  */
 
-/*
- * Project: DingoFS
- * Created Date: 2025-06-04
- * Author: Jingli Chen (Wine93)
- */
+#ifndef DINGOFS_SRC_CACHE_TOOLS_CACHE_BENCH_REPORTER_H_
+#define DINGOFS_SRC_CACHE_TOOLS_CACHE_BENCH_REPORTER_H_
 
-#ifndef DINGOFS_SRC_CACHE_BENCH_REPORTER_H_
-#define DINGOFS_SRC_CACHE_BENCH_REPORTER_H_
-
-#include <bthread/execution_queue.h>
-#include <bthread/execution_queue_inl.h>
 #include <butil/time.h>
 
+#include <atomic>
+#include <cstdint>
 #include <memory>
 
-#include "cache/bench/collector.h"
+#include "cache/tools/cache_bench/options.h"
+#include "cache/tools/cache_bench/stats.h"
+#include "common/status.h"
 #include "utils/executor/executor.h"
 
 namespace dingofs {
 namespace cache {
 
-class Reporter {
+class ConsoleReporter {
  public:
-  explicit Reporter(CollectorSPtr collector);
+  ConsoleReporter(const Options& options, Stats* stats);
 
   Status Start();
-  void Shutdown();
+  void Stop();
 
  private:
-  constexpr static uint64_t kReportIntervalSeconds = 3;
+  void Tick();
+  void PrintHeader() const;
+  void PrintProgress(const StatsSnapshot& snapshot, uint64_t interval_us,
+                     uint64_t elapsed_us) const;
+  void PrintSummary(uint64_t elapsed_us) const;
 
-  void TickTok();
+  uint64_t ElapsedUs() const;
+  uint64_t IntervalUs(uint64_t elapsed_us) const;
 
-  void OnStart(Stat* stat, Stat* total);
-  void OnShow(Stat* stat, Stat* total);
-  void OnStop(Stat* stat, Stat* total);
-
-  butil::Timer g_timer_;
-  CollectorSPtr collector_;
+  Options options_;
+  Stats* stats_;
   std::unique_ptr<Executor> executor_;
+  butil::Timer timer_;
+  uint64_t last_report_us_{0};
+  std::atomic_bool running_{false};
 };
-
-using ReporterSPtr = std::shared_ptr<Reporter>;
 
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_BENCH_REPORTER_H_
+#endif  // DINGOFS_SRC_CACHE_TOOLS_CACHE_BENCH_REPORTER_H_

@@ -14,32 +14,31 @@
  * limitations under the License.
  */
 
-/*
- * Project: DingoFS
- * Created Date: 2025-08-20
- * Author: Jingli Chen (Wine93)
- */
+#ifndef DINGOFS_SRC_CACHE_TOOLS_CACHE_BENCH_OPERATION_H_
+#define DINGOFS_SRC_CACHE_TOOLS_CACHE_BENCH_OPERATION_H_
 
-#include "cache/bench/option.h"
+#include <memory>
 
-#include <brpc/reloadable_flags.h>
+#include "cache/api/block_cache.h"
+#include "cache/tools/cache_bench/options.h"
+#include "common/block/block_key.h"
 
 namespace dingofs {
 namespace cache {
 
-DEFINE_uint32(threads, 1, "");
-DEFINE_string(op, "put", "");
-DEFINE_uint64(fsid, 1, "");
-DEFINE_uint64(ino, 0, "");
-DEFINE_uint64(blksize, 4194304, "");
-DEFINE_uint64(blocks, 1, "");
-DEFINE_uint64(offset, 0, "");
-DEFINE_uint64(length, 4194304, "");
-DEFINE_bool(writeback, false, "");
-DEFINE_bool(retrive, true, "");
-DEFINE_uint32(async_max_inflight, 128, "");
-DEFINE_uint32(runtime, 300, "");
-DEFINE_bool(time_based, false, "");
+class Operation {
+ public:
+  virtual ~Operation() = default;
+
+  virtual Status Run(const BlockKey& key) = 0;
+  virtual uint64_t BytesPerOp() const = 0;
+};
+
+using OperationUPtr = std::unique_ptr<Operation>;
+
+OperationUPtr NewOperation(BlockCacheSPtr block_cache, const Options& options);
 
 }  // namespace cache
 }  // namespace dingofs
+
+#endif  // DINGOFS_SRC_CACHE_TOOLS_CACHE_BENCH_OPERATION_H_
