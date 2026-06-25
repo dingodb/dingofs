@@ -92,7 +92,6 @@ class TierBlockCache final : public BlockCache {
   // Linearize a possibly multi-block IOBuf into a single contiguous backing
   // block, required by S3 upload (storage_client → IOBuffer::Fetch1()).
   IOBuffer CopyBlock(const IOBuffer& block);
-  void FillGroupCache(const BlockHandle& handle, const IOBuffer& block);
 
   // Returns the effective tier for an operation. If the caller already pinned
   // a tier (kLocal or kRemote) it is honored as-is. Otherwise, small blocks

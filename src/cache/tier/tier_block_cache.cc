@@ -23,6 +23,7 @@
 #include "cache/tier/tier_block_cache.h"
 
 #include <absl/strings/str_format.h>
+#include <bthread/countdown_event.h>
 #include <glog/logging.h>
 
 #include <atomic>
@@ -192,18 +193,29 @@ Status TierBlockCache::Put(BlockHandle handle, IOBuffer block,
                  << ", status=" << status.ToString();
   }
 
-  // S3 upload (storage_client → IOBuffer::Fetch1) requires a single
-  // contiguous backing block; linearize once and share with the optional
-  // fill-group path so downstream consumers see the same flat buffer.
-  IOBuffer contiguous = CopyBlock(block);
-  if (UseRemote(option.tier) && EnableRemoteCache() && FLAGS_fill_group_cache) {
-    FillGroupCache(handle, contiguous);
+  bool wait_fill =
+      UseRemote(option.tier) && EnableRemoteCache() && FLAGS_fill_group_cache;
+  bthread::CountdownEvent fill_done;
+  if (wait_fill) {
+    remote_block_cache_->AsyncCache(
+        handle, block, [&fill_done, handle](Status status) {
+          if (!status.ok()) {
+            LOG(ERROR) << "Fail to fill group cache, key=" << handle.Filename()
+                       << ", status=" << status.ToString();
+          }
+          fill_done.signal();
+        });
   }
 
+  IOBuffer contiguous = CopyBlock(block);
   status = storage_client_->Put(handle, contiguous);
   if (!status.ok()) {
     LOG(ERROR) << "Fail to put block to storage, key=" << handle.Filename()
                << ", status=" << status.ToString();
+  }
+
+  if (wait_fill) {
+    fill_done.wait();
   }
   return status;
 }
@@ -425,17 +437,6 @@ IOBuffer TierBlockCache::CopyBlock(const IOBuffer& block) {
   block.CopyTo(data);
   buffer.AppendUserData(data, size, iutil::DeleteBuffer);
   return buffer;
-}
-
-void TierBlockCache::FillGroupCache(const BlockHandle& handle,
-                                    const IOBuffer& block) {
-  // IOBuffer copy is O(1) refcount-incr on underlying butil::IOBuf blocks;
-  // the lambda holds its own ref so the data outlives the caller's `block`.
-  remote_block_cache_->AsyncCache(handle, block, [handle](Status status) {
-    if (!status.ok()) {
-      LOG(ERROR) << "Fail to async block, status=" << status.ToString();
-    }
-  });
 }
 
 }  // namespace cache
