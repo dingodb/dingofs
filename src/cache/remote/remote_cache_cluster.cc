@@ -42,7 +42,8 @@ namespace dingofs {
 namespace cache {
 
 DEFINE_uint32(periodic_sync_members_ms, 3000,
-              "periodic sync members from mds in milliseconds");
+              "interval for refreshing cache group members from mds in "
+              "milliseconds");
 
 RemoteCacheCluster::RemoteCacheCluster()
     : running_(false),

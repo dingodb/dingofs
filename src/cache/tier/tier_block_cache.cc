@@ -46,17 +46,17 @@ namespace dingofs {
 namespace cache {
 
 DEFINE_bool(fill_group_cache, true,
-            "whether the data blocks uploaded to the storage are "
-            "simultaneously sent to the cache group node.");
+            "send blocks uploaded to storage to the remote cache group at the "
+            "same time");
 DEFINE_validator(fill_group_cache, brpc::PassValidate);
 
 DEFINE_uint32(prefetch_max_inflights, 16,
-              "maximum inflight requests for prefetching blocks");
+              "maximum number of concurrent local prefetch requests");
 
-DEFINE_uint32(small_block_size_kb, 0,
-              "blocks whose whole size is smaller than this many KB are "
-              "automatically pinned to the local cache tier (when local cache "
-              "is enabled). 0 disables this behavior.");
+DEFINE_uint32(
+    small_block_size_kb, 0,
+    "blocks smaller than this size are pinned to the local cache tier "
+    "when local cache is enabled; 0 disables this shortcut");
 
 static bool UseLocal(CacheTier tier) {
   return tier == CacheTier::kDefault || tier == CacheTier::kLocal;

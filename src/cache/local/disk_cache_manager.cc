@@ -37,14 +37,18 @@
 namespace dingofs {
 namespace cache {
 
-DEFINE_double(free_space_ratio, 0.1, "ratio of free space of total disk space");
+DEFINE_double(free_space_ratio, 0.1,
+              "minimum free-space ratio before local cache cleanup is "
+              "triggered");
 
 DEFINE_uint32(cache_expire_s, 259200,
-              "expiration time for cache blocks in seconds");
+              "expiration time for cached blocks in seconds; staged blocks are "
+              "not expired");
 DEFINE_validator(cache_expire_s, brpc::PassValidate);
 
 DEFINE_uint32(cache_cleanup_expire_interval_ms, 1000,
-              "interval for cleaning up expired cache blocks in milliseconds");
+              "interval for scanning and removing expired cached blocks in "
+              "milliseconds");
 DEFINE_validator(cache_cleanup_expire_interval_ms, brpc::PassValidate);
 
 DiskCacheManager::DiskCacheManager(uint64_t capacity,

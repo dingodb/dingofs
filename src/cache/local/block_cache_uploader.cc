@@ -37,9 +37,8 @@
 namespace dingofs {
 namespace cache {
 
-DEFINE_uint32(
-    upload_stage_max_inflights, 32,
-    "maximum inflight requests for uploading stage blocks to storage");
+DEFINE_uint32(upload_stage_max_inflights, 32,
+              "maximum number of concurrent uploads for staged blocks");
 
 // Allow you push one element and pop a bunch of elements at once.
 template <typename T>

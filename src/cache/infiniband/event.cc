@@ -40,7 +40,8 @@ namespace dingofs {
 namespace cache {
 namespace infiniband {
 
-DEFINE_int32(rdma_event_dispatcher_num, 1, "Number of rdma event dispatcher");
+DEFINE_int32(rdma_event_dispatcher_num, 1,
+             "number of rdma event dispatcher threads");
 
 static EventDispatcher* g_dispatchers = nullptr;
 static std::once_flag g_init_once;

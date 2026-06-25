@@ -49,23 +49,27 @@
 namespace dingofs {
 namespace cache {
 
-DEFINE_string(id, "", "specified the cache node id");
+DEFINE_string(id, "",
+              "cache node id; used as the cache directory uuid for cache-node "
+              "processes");
 DEFINE_validator(id, iutil::StringValidator);
 
-DEFINE_string(group_name, "default", "which group this cache node belongs to");
+DEFINE_string(group_name, "default", "cache group this cache node belongs to");
 DEFINE_validator(group_name, iutil::StringValidator);
 
 DEFINE_uint32(group_weight, 100,
-              "weight of this cache node, used for consistent hashing");
+              "node weight used by cache-group consistent hashing");
 
 DEFINE_uint32(max_range_size_kb, 128,
-              "retrieve the whole block if length reach specified size in KB");
+              "retrieve the whole block when a range request is at least this "
+              "many kb");
 
 DEFINE_bool(retrieve_storage_lock, true,
-            "lock when retrieve block from storage");
+            "serialize concurrent storage retrieves for the same block");
 
 DEFINE_uint32(retrieve_storage_lock_timeout_ms, 10000,
-              "timeout of retrieve storage lock");
+              "timeout for waiting on another retrieve-storage task in "
+              "milliseconds");
 DEFINE_validator(retrieve_storage_lock_timeout_ms, brpc::PassValidate);
 
 CacheNode::CacheNode()

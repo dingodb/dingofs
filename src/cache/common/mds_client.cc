@@ -44,16 +44,19 @@ namespace dingofs {
 namespace cache {
 
 DEFINE_string(mds_addrs, "127.0.0.1:7400",
-              "cache group member manager service rpc addresses");
+              "mds addresses used by cache group member management rpcs");
 DEFINE_validator(mds_addrs, iutil::StringValidator);
 
-DEFINE_int64(cache_mds_rpc_timeout_ms, 3000, "mds rpc timeout");
+DEFINE_int64(cache_mds_rpc_timeout_ms, 3000,
+             "timeout for cache mds rpcs in milliseconds");
 DEFINE_validator(cache_mds_rpc_timeout_ms, brpc::PassValidate);
 
-DEFINE_int32(cache_mds_rpc_retry_times, 1, "mds rpc retry time");
+DEFINE_int32(cache_mds_rpc_retry_times, 1,
+             "retry count for each cache mds rpc attempt");
 DEFINE_validator(cache_mds_rpc_retry_times, brpc::PassValidate);
 
-DEFINE_uint32(cache_mds_request_retry_times, 3, "mds rpc request retry time");
+DEFINE_uint32(cache_mds_request_retry_times, 3,
+              "retry count for the cache mds request wrapper");
 DEFINE_validator(cache_mds_request_retry_times, brpc::PassValidate);
 
 MDSClientImpl::MDSClientImpl()

@@ -46,12 +46,14 @@ DECLARE_bool(log_idle_connection_close);
 namespace dingofs {
 namespace cache {
 
-DEFINE_int32(brpc_idle_timeout_second, 300, "alias idle_timeout_second");
+DEFINE_int32(brpc_idle_timeout_second, 300,
+             "cache-specific alias for brpc::idle_timeout_second");
 DEFINE_bool(brpc_log_idle_connection_close, true,
-            "alias log_idle_connection_close");
+            "cache-specific alias for brpc::log_idle_connection_close");
 
 DEFINE_string(cache_group, "",
-              "Cache group name to use, empty means not use cache group");
+              "cache group name used by clients; empty disables the remote "
+              "cache tier");
 
 RemoteBlockCache::RemoteBlockCache(StorageClient* /*storage_client*/)
     : running_(false),

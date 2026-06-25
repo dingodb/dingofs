@@ -31,7 +31,7 @@ namespace dingofs {
 namespace cache {
 
 DEFINE_uint32(periodic_heartbeat_interval_s, 3,
-              "interval to send heartbeat to mds in seconds");
+              "heartbeat interval from cache node to mds in seconds");
 
 Heartbeat::Heartbeat(MDSClientSPtr mds_client)
     : running_(false),

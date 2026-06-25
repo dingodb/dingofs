@@ -39,15 +39,17 @@ namespace dingofs {
 namespace cache {
 
 DEFINE_int64(storage_upload_retry_timeout_s, 1800,
-             "timeout in seconds for upload retry");
+             "maximum retry window for uploading a block to storage in "
+             "seconds");
 DEFINE_validator(storage_upload_retry_timeout_s, brpc::PassValidate);
 
 DEFINE_int64(storage_download_retry_timeout_s, 1800,
-             "timeout in seconds for download retry");
+             "maximum retry window for downloading a block from storage in "
+             "seconds");
 DEFINE_validator(storage_download_retry_timeout_s, brpc::PassValidate);
 
 DEFINE_uint64(storage_upload_thread_pool_size, 4,
-              "thread pool size for upload tasks");
+              "number of worker threads for async storage upload tasks");
 
 static int64_t GetQueueSize(void* meta) {
   iutil::TaskExecutionQueue* queue =

@@ -49,9 +49,12 @@ namespace dingofs {
 namespace cache {
 
 DEFINE_string(cache_store, "disk",
-              "cache store type, can be none, disk or memory");
-DEFINE_bool(enable_stage, true, "whether to enable stage block for writeback");
-DEFINE_bool(enable_cache, true, "whether to enable cache block");
+              "local cache store type: disk or memory; none disables the local "
+              "tier for callers that support it");
+DEFINE_bool(enable_stage, true,
+            "enable local staging for writeback blocks before uploading them "
+            "to storage");
+DEFINE_bool(enable_cache, true, "enable local read cache for blocks");
 
 static std::vector<DiskCacheOption> ParseDiskCacheOption() {
   std::vector<std::pair<std::string, uint64_t>> cache_dirs;

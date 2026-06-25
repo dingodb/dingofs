@@ -22,6 +22,7 @@
 
 #include "cache/infiniband/connection.h"
 
+#include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <infiniband/verbs.h>
 
@@ -36,14 +37,15 @@ namespace dingofs {
 namespace cache {
 namespace infiniband {
 
-DEFINE_int32(rdma_send_buffer_size, 4096, "Size of each send buffer in bytes");
+DEFINE_int32(rdma_send_buffer_size, 4096,
+             "size of each rdma send buffer in bytes");
 DEFINE_int32(rdma_send_queue_size, 4096,
-             "Maxinum number of send work requests to post to send queue");
+             "maximum number of send work requests posted to a send queue");
 DEFINE_int32(rdma_recv_buffer_size, 4096,
-             "Size of each receive buffer in bytes");
+             "size of each rdma receive buffer in bytes");
 DEFINE_int32(
     rdma_recv_queue_size, 4096,
-    "Maxinum number of receiver work requests to post to receive queue");
+    "maximum number of receive work requests posted to a receive queue");
 
 Connection::Connection(QueuePairUPtr queue_pair,
                        CompletionQueueUPtr completion_queue)

@@ -40,15 +40,16 @@ namespace dingofs {
 namespace cache {
 
 DEFINE_string(cache_dir, GetDefaultDir(kCacheDir),
-              "directory to store blocks, mutiple paths are separated by "
-              "commas, e.g.: /mnt/cache1,/mnt/cache2");
+              "directory list for stage and cached blocks; use comma-separated "
+              "path[:size_mb] entries, e.g. /mnt/cache1:1024,/mnt/cache2");
 DEFINE_validator(cache_dir, [](const char* /*name*/, const std::string& value) {
   FLAGS_cache_dir = dingofs::Helper::ExpandPath(value);
 
   return true;
 });
-DEFINE_string(cache_dir_uuid, "", "");
-DEFINE_uint32(cache_size_mb, 102400, "maximum size of the cache in MB");
+DEFINE_string(cache_dir_uuid, "",
+              "uuid suffix appended to each cache directory; set internally");
+DEFINE_uint32(cache_size_mb, 102400, "default maximum local cache size in mb");
 
 DiskCacheOption::DiskCacheOption()
     : cache_index(0),
