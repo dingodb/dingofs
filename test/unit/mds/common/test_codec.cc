@@ -408,6 +408,132 @@ TEST_F(MetaDataCodecTest, FsStatsKey) {
   EXPECT_EQ(stats.s3_write_qps(), actual_stats.s3_write_qps());
 }
 
+TEST_F(MetaDataCodecTest, ParseKeyFromHexInodeAttr) {
+  // The key from the task description: old prefix, fs_id=10002, kMetaFsInode,
+  // ino=20000249036, kFsInodeAttr.
+  std::string desc = MetaCodec::ParseKeyFromHex(
+      "7844494e474f46533a05000027120d00000004a81b94cc01");
+
+  EXPECT_NE(desc.find("xDINGOFS:"), std::string::npos) << desc;
+  EXPECT_NE(desc.find("kTableFsMeta"), std::string::npos) << desc;
+  EXPECT_NE(desc.find("fs_id(10002)"), std::string::npos) << desc;
+  EXPECT_NE(desc.find("kMetaFsInode"), std::string::npos) << desc;
+  EXPECT_NE(desc.find("ino(20000249036)"), std::string::npos) << desc;
+  EXPECT_NE(desc.find("kFsInodeAttr"), std::string::npos) << desc;
+}
+
+TEST_F(MetaDataCodecTest, ParseKeyFromHexDentry) {
+  // old prefix, fs_id=7, ino=12345, kFsInodeDentry, name="hello.txt".
+  std::string desc = MetaCodec::ParseKeyFromHex(
+      "7844494e474f46533a05000000070d00000000000030390568656c6c6f2e747874");
+
+  EXPECT_NE(desc.find("fs_id(7)"), std::string::npos) << desc;
+  EXPECT_NE(desc.find("kMetaFsInode"), std::string::npos) << desc;
+  EXPECT_NE(desc.find("ino(12345)"), std::string::npos) << desc;
+  EXPECT_NE(desc.find("kFsInodeDentry"), std::string::npos) << desc;
+  EXPECT_NE(desc.find("name(hello.txt)"), std::string::npos) << desc;
+}
+
+TEST_F(MetaDataCodecTest, ParseKeyFromHexChunk) {
+  // old prefix, fs_id=3, ino=999, kFsInodeChunk, chunk_index=67890.
+  std::string desc = MetaCodec::ParseKeyFromHex(
+      "7844494e474f46533a05000000030d00000000000003e7070000000000010932");
+
+  EXPECT_NE(desc.find("fs_id(3)"), std::string::npos) << desc;
+  EXPECT_NE(desc.find("ino(999)"), std::string::npos) << desc;
+  EXPECT_NE(desc.find("kFsInodeChunk"), std::string::npos) << desc;
+  EXPECT_NE(desc.find("chunk_index(67890)"), std::string::npos) << desc;
+}
+
+TEST_F(MetaDataCodecTest, ParseKeyFromHexFsQuota) {
+  // old prefix, kTableMeta, kMetaFsQuota, fs_id=12345.
+  std::string desc =
+      MetaCodec::ParseKeyFromHex("7844494e474f46533a010900003039");
+
+  EXPECT_NE(desc.find("kTableMeta"), std::string::npos) << desc;
+  EXPECT_NE(desc.find("kMetaFsQuota"), std::string::npos) << desc;
+  EXPECT_NE(desc.find("fs_id(12345)"), std::string::npos) << desc;
+}
+
+TEST_F(MetaDataCodecTest, ParseKeyFromHexFsStats) {
+  // old prefix, kTableFsStats, kMetaFsStats, fs_id=8, time_ns=1234567890.
+  std::string desc = MetaCodec::ParseKeyFromHex(
+      "7844494e474f46533a03150000000800000000499602d2");
+
+  EXPECT_NE(desc.find("kTableFsStats"), std::string::npos) << desc;
+  EXPECT_NE(desc.find("kMetaFsStats"), std::string::npos) << desc;
+  EXPECT_NE(desc.find("fs_id(8)"), std::string::npos) << desc;
+  EXPECT_NE(desc.find("time_ns(1234567890)"), std::string::npos) << desc;
+}
+
+TEST_F(MetaDataCodecTest, ParseKeyFromHexDelSlice) {
+  // old prefix, fs_id=2, ino=555, chunk_index=111, time_ns=222.
+  std::string desc = MetaCodec::ParseKeyFromHex(
+      "7844494e474f46533a050000000211000000000000022b000000000000006f"
+      "00000000000000de");
+
+  EXPECT_NE(desc.find("fs_id(2)"), std::string::npos) << desc;
+  EXPECT_NE(desc.find("kMetaFsDelSlice"), std::string::npos) << desc;
+  EXPECT_NE(desc.find("ino(555)"), std::string::npos) << desc;
+  EXPECT_NE(desc.find("chunk_index(111)"), std::string::npos) << desc;
+  EXPECT_NE(desc.find("time_ns(222)"), std::string::npos) << desc;
+}
+
+TEST_F(MetaDataCodecTest, ParseKeyFromHexFileSession) {
+  // old prefix, fs_id=4, ino=777, session_id="123e4567-...".
+  std::string desc = MetaCodec::ParseKeyFromHex(
+      "7844494e474f46533a05000000040f00000000000003093132336534353637"
+      "2d653839622d313264332d613435362d343236363134313734303030");
+
+  EXPECT_NE(desc.find("fs_id(4)"), std::string::npos) << desc;
+  EXPECT_NE(desc.find("kMetaFsFileSession"), std::string::npos) << desc;
+  EXPECT_NE(desc.find("ino(777)"), std::string::npos) << desc;
+  EXPECT_NE(desc.find("session_id(123e4567-e89b-12d3-a456-426614174000)"),
+            std::string::npos)
+      << desc;
+}
+
+TEST_F(MetaDataCodecTest, ParseKeyFromHexSliceRef) {
+  // old prefix, kTableMeta, kMetaFsSliceRef, slice_id=987654321.
+  std::string desc =
+      MetaCodec::ParseKeyFromHex("7844494e474f46533a011d000000003ade68b1");
+
+  EXPECT_NE(desc.find("kMetaFsSliceRef"), std::string::npos) << desc;
+  EXPECT_NE(desc.find("slice_id(987654321)"), std::string::npos) << desc;
+}
+
+TEST_F(MetaDataCodecTest, ParseKeyFromHexFs) {
+  // old prefix, kTableMeta, kMetaFs, name="myfs".
+  std::string desc =
+      MetaCodec::ParseKeyFromHex("7844494e474f46533a01076d796673");
+
+  EXPECT_NE(desc.find("kMetaFs"), std::string::npos) << desc;
+  EXPECT_NE(desc.find("name(myfs)"), std::string::npos) << desc;
+}
+
+TEST_F(MetaDataCodecTest, ParseKeyFromHexNewPrefix) {
+  // new prefix: "xdingofs" + cluster_id(16), kTableFsMeta, fs_id=100,
+  // kMetaFsInode, ino=200, kFsInodeAttr.
+  std::string desc = MetaCodec::ParseKeyFromHex(
+      "7864696e676f66730000001005000000640d00000000000000c801");
+
+  EXPECT_NE(desc.find("xdingofs(16)"), std::string::npos) << desc;
+  EXPECT_NE(desc.find("fs_id(100)"), std::string::npos) << desc;
+  EXPECT_NE(desc.find("ino(200)"), std::string::npos) << desc;
+  EXPECT_NE(desc.find("kFsInodeAttr"), std::string::npos) << desc;
+}
+
+TEST_F(MetaDataCodecTest, ParseKeyFromHexUnknownPrefix) {
+  std::string desc = MetaCodec::ParseKeyFromHex("00010203");
+  EXPECT_NE(desc.find("unknown key prefix"), std::string::npos) << desc;
+}
+
+TEST_F(MetaDataCodecTest, ParseKeyFromHexTruncated) {
+  // Only the prefix, no table id.
+  std::string desc = MetaCodec::ParseKeyFromHex("7844494e474f46533a");
+  EXPECT_NE(desc.find("truncated"), std::string::npos) << desc;
+}
+
 }  // namespace unit_test
 }  // namespace mds
 }  // namespace dingofs

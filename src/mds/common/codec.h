@@ -232,6 +232,14 @@ class MetaCodec {
   static std::pair<std::string, std::string> ParseFsStatsTableKey(const std::string& key, const std::string& value);
   static std::pair<std::string, std::string> ParseFsMetaTableKey(const std::string& key, const std::string& value);
   static std::pair<std::string, std::string> ParseKey(const std::string& key, const std::string& value);
+
+  // Parse a hex-encoded key and return a human-readable description of the key,
+  // including its table, type, fs_id, ino, etc. Only the key is required (the
+  // value is not needed). The key prefix (cluster id) is auto-detected, so it
+  // works as a standalone debugging utility without calling SetClusterID().
+  // e.g. input "7844494e474f46533a05000027120d00000004a81b94cc01"
+  //      output "xDINGOFS: kTableFsMeta fs_id(10002) kMetaFsInode ino(...) kFsInodeAttr"
+  static std::string ParseKeyFromHex(const std::string& hex_key);
 };
 
 }  // namespace mds

@@ -107,6 +107,8 @@ class Operation {
     kDecSliceRef = 56,
     kScanSliceRef = 57,
 
+    kCopyFileRange = 58,
+
     kSetFsQuota = 60,
     kGetFsQuota = 61,
     kFlushFsUsage = 62,
@@ -1558,7 +1560,7 @@ class CopyFileRangeOperation : public Operation {
     int64_t length_delta{0};  // for quota accounting
   };
 
-  OpType GetOpType() const override { return OpType::kUpsertChunk; }
+  OpType GetOpType() const override { return OpType::kCopyFileRange; }
 
   uint32_t GetFsId() const override { return fs_info_.fs_id(); }
   Ino GetIno() const override { return param_.dst_ino; }
