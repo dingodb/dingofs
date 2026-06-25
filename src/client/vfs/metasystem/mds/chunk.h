@@ -300,6 +300,11 @@ class ChunkSet {
     last_write_length_ = std::max(last_write_length_, offset + size);
     last_write_time_ns_ = utils::TimestampNs();
   }
+  void SetLastWriteLength(uint64_t length) {
+    utils::WriteLockGuard lk(lock_);
+    last_write_length_ = length;
+    last_write_time_ns_ = utils::TimestampNs();
+  }
   void ResetLastWriteLength() {
     utils::WriteLockGuard lk(lock_);
     last_write_length_ = 0;

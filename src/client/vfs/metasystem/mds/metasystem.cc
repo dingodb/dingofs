@@ -1496,6 +1496,15 @@ Status MDSMetaSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
   auto inode = PutInodeToCache(attr_entry);
   *out_attr = inode->ToAttr();
 
+  // update file length, need update local chunk cache write length
+  if (set & kSetAttrSize) {
+    auto file_session = file_session_map_.GetSession(ino);
+    if (file_session != nullptr) {
+      auto& chunk_set = file_session->GetChunkSet();
+      chunk_set->SetLastWriteLength(attr.length);
+    }
+  }
+
   bool is_amend = false;
   status = CorrectAttr(ctx, ctx->start_time_ns, *out_attr, is_amend, "setattr");
   if (!status.ok()) return status;
