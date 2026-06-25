@@ -27,6 +27,11 @@
 #include <bthread/execution_queue.h>
 #include <bthread/mutex.h>
 
+#include <array>
+#include <atomic>
+#include <functional>
+#include <unordered_map>
+
 #include "cache/local/disk_cache_layout.h"
 #include "cache/local/lru_cache.h"
 #include "utils/concurrent/task_thread_pool.h"
@@ -76,9 +81,26 @@ enum class BlockPhase : uint8_t {
   kCached = 2,
 };
 
-// Manage cache items and its capacity
+// Manage cache items and its capacity.
+//
+// The cache index (cached blocks LRU + staging table + capacity accounting) is
+// sharded by block-key hash into kShardCount independent shards, each with its
+// own mutex/LRU/staging map/byte accounting. Operations on different keys land
+// on different shards and no longer serialize on a single global lock. This
+// mirrors the MemCache sharding paradigm (src/cache/local/mem_cache.h).
 class DiskCacheManager {
  public:
+  static constexpr size_t kShardCount = 32;  // aligned with MemCache, power of 2
+  static_assert((kShardCount & (kShardCount - 1)) == 0,
+                "kShardCount must be a power of 2");
+
+  // Same as MemCache::ShardIndex: low bits of the filename hash. The staging
+  // and cached entries of one block share the same key.Filename(), so all three
+  // phases (staging -> uploaded -> cached) always land on the same shard.
+  static size_t ShardIndex(const std::string& filename) {
+    return std::hash<std::string>{}(filename) & (kShardCount - 1);
+  }
+
   DiskCacheManager(uint64_t capacity, DiskCacheLayoutSPtr layout);
   virtual ~DiskCacheManager() = default;
 
@@ -99,32 +121,53 @@ class DiskCacheManager {
     std::string reason;
   };
 
+  // Cache-line aligned to avoid false sharing between adjacent shards
+  // (mirrors mem_cache.h Shard). Each shard owns:
+  //   cached_blocks: only store cached block key
+  //   staging_blocks: store stage block key which will not deleted by anyone
+  //     until it uploaded to storage. It will causes io error if we delete the
+  //     stage block which not uploaded for we can't get block both local disk
+  //     and remote storage.
+  // staging and cached entries of one block always co-locate in the same shard,
+  // so the staging -> uploaded migration completes within a single shard lock.
+  struct alignas(64) Shard {
+    mutable bthread::Mutex mutex;
+    uint64_t used_bytes{0};  // used bytes of this shard (staging + cached)
+    LRUCacheUPtr cached_blocks;
+    std::unordered_map<std::string, CacheValue> staging_blocks;
+  };
+
+  Shard& GetShard(const std::string& filename) {
+    return shards_[ShardIndex(filename)];
+  }
+
   void Init();
 
   void CheckFreeSpace();
-  void CleanupFull(uint64_t want_free_bytes, uint64_t want_free_files);
+  // Evict from a single shard's LRU; assumes shard.mutex is held.
+  void CleanupFullLocked(Shard& shard, uint64_t want_free_bytes,
+                         uint64_t want_free_files);
+  // Spread a whole-disk want_free across all shards, locking each in turn.
+  void CleanupAllShardsFull(uint64_t want_free_bytes, uint64_t want_free_files);
   void CleanupExpire();
   static int HandleTask(void* meta, bthread::TaskIterator<ToDel>& iter);
   void DeleteBlocks(const ToDel& to_del);
-  void UpdateUsage(int64_t n, int64_t used_bytes);
+  // Update shard.used_bytes (locked) and total_used_bytes_ (atomic) + bvar.
+  // Assumes shard.mutex is held.
+  void UpdateUsageLocked(Shard& shard, int64_t n, int64_t used_bytes);
 
   std::string GetRootDir() const;
   std::string GetCachePath(const CacheKey& key) const;
 
-  // For cache_blocks_ and staging_blocks_:
-  // (1) cache_blocks_: only store cached block key
-  // (2) staging_blocks_: store stage block key which will not deleted by anyone
-  // util it uploaded to storage. It will causes io error if we delete the stage
-  // block which not uploaded for we can't get block both local disk and remote
-  // storage.
   std::atomic<bool> running_;
-  bthread::Mutex mutex_;
-  uint64_t used_bytes_;
-  const uint64_t capacity_bytes_;
+  const uint64_t capacity_bytes_;        // whole-disk capacity
+  const uint64_t shard_capacity_bytes_;  // ceil(capacity_bytes_ / kShardCount)
   std::atomic<bool> stage_full_;
   std::atomic<bool> cache_full_;
-  LRUCacheUPtr cached_blocks_;
-  std::unordered_map<std::string, CacheValue> staging_blocks_;
+  // whole-disk used bytes, only for monitoring; per-shard eviction reads its own
+  // shard.used_bytes instead, so it never contends on this atomic.
+  std::atomic<int64_t> total_used_bytes_;
+  std::array<Shard, kShardCount> shards_;
   utils::TaskThreadPoolUPtr thread_pool_;
   DiskCacheLayoutSPtr layout_;
   bthread::ExecutionQueueId<ToDel> queue_id_;
