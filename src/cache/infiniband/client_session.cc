@@ -46,7 +46,7 @@ namespace cache {
 namespace infiniband {
 
 DEFINE_int32(rdma_rpc_timeout_ms, 3000,
-             "Timeout for an RDMA RPC response in milliseconds");
+             "timeout for an rdma rpc response in milliseconds");
 
 using pb::infiniband::ErrorCode;
 

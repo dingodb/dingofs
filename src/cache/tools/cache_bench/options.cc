@@ -29,19 +29,19 @@
 namespace dingofs {
 namespace cache {
 
-DEFINE_uint32(threads, 1, "Number of worker threads");
-DEFINE_string(op, "put", "Operation to run: put or range");
-DEFINE_uint64(fsid, 1, "Filesystem ID used to fetch storage settings from MDS");
+DEFINE_uint32(threads, 1, "number of worker threads");
+DEFINE_string(op, "put", "operation to run: put or range");
+DEFINE_uint64(fsid, 1, "filesystem id used to fetch storage settings from mds");
 DEFINE_string(block_size, "4MiB",
-              "Whole block size, e.g. 4MiB, 4096KiB, 4194304");
-DEFINE_uint64(blocks, 1, "Number of blocks processed by each worker");
-DEFINE_string(range_offset, "0", "Range-read offset inside each block");
+              "whole block size, e.g. 4mib, 4096kib, 4194304");
+DEFINE_uint64(blocks, 1, "number of blocks processed by each worker");
+DEFINE_string(range_offset, "0", "range-read offset inside each block");
 DEFINE_string(range_length, "",
-              "Range-read length; empty means block_size - range_offset");
-DEFINE_bool(writeback, false, "Put to cache first, then write back to storage");
+              "range-read length; empty means block_size - range_offset");
+DEFINE_bool(writeback, false, "put to cache first, then write back to storage");
 DEFINE_bool(retrieve_storage, true,
-            "Range reads may fall back to storage on cache miss");
-DEFINE_uint32(report_interval, 3, "Progress report interval in seconds");
+            "range reads may fall back to storage on cache miss");
+DEFINE_uint32(report_interval, 3, "progress report interval in seconds");
 
 namespace {
 

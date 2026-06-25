@@ -28,216 +28,229 @@
 namespace dingofs {
 namespace cache {
 
-// Table of Contents
-//   - dingo-client
-//   - dingo-cache
-//   - common (blockcache && mds-related)
+// Local cache tier ------------------------------------------------------------
 
-// ###############################################
-// # dingo-client
-// ###############################################
-
-// Sets the cache group name to use, e.g. "default", "group1" and etc.
-DECLARE_string(cache_group);
-
-// Sets the interval to load cache group members in milliseconds.
-DECLARE_uint32(periodic_sync_members_ms);
-
-// Sets whether the data blocks uploaded to the storage are
-// simultaneously sent to the cache group node.
-DECLARE_bool(fill_group_cache);
-
-// [onfly]
-// Set whether split range request into subrequests.
-// (default is true)
-DECLARE_bool(subrequest_ranges);
-
-// Range size for each subrequest
-DECLARE_uint32(subrequest_range_size);
-
-// [onfly]
-// Sets whether to enable prefetching for remote cache operations.
-DECLARE_bool(block_prefetch);
-
-// [onfly]
-// Sets the max buffer size for cache prefetch blocks in memory
-// (default is 512MB).
-DECLARE_uint32(remote_prefetch_max_buffer_size_mb);
-
-// Timeout (ms) for rpc channel connect
-DECLARE_uint32(cache_rpc_connect_timeout_ms);
-
-// Timeout (ms) for put rpc request
-DECLARE_uint32(cache_put_rpc_timeout_ms);
-
-// Timeout (ms) for range rpc request
-DECLARE_uint32(cache_range_rpc_timeout_ms);
-
-// Timeout (ms) for cache rpc request
-DECLARE_uint32(cache_rpc_timeout_ms);
-
-// Timeout (ms) for prefetch rpc request
-DECLARE_uint32(cache_prefetch_rpc_timeout_ms);
-
-// Timeout (ms) for pinging remote cache node
-DECLARE_uint32(cache_ping_rpc_timeout_ms);
-
-// Maximum retry times for rpc request
-DECLARE_uint32(cache_rpc_max_retry_times);
-
-// Maximum rpc timeout (ms) for rpc request
-DECLARE_uint32(cache_rpc_max_timeout_ms);
-
-// Sets the duration in seconds for the cache node state tick.
-DECLARE_uint32(cache_node_state_tick_duration_s);
-
-// Sets the number of errors to trigger unstable state from normal state.
-DECLARE_uint32(cache_node_state_normal2unstable_error_num);
-
-// Sets the number of successful operations to trigger normal state from
-// unstable state.
-DECLARE_uint32(cache_node_state_unstable2normal_succ_num);
-
-// [onfly]
-// Sets the duration in seconds to trigger down state from unstable state.
-DECLARE_uint32(cache_node_state_unstable2down_s);
-
-// Sets the duration in milliseconds to check the cache group node state.
-DECLARE_uint32(cache_node_state_check_duration_ms);
-
-// ###############################################
-// # dingo-cache
-// ###############################################
-
-// Sets the cache node ID (which only for MDS v2)
-DECLARE_string(id);
-
-// Sets which group this cache node belongs to.
-DECLARE_string(group_name);
-
-// Sets the IP address to listen on for this cache group node.
-DECLARE_string(listen_ip);
-
-// Sets the port to listen on for this cache group node.
-DECLARE_uint32(listen_port);
-
-// Sets the weight of this cache group node, used for consistent hashing.
-DECLARE_uint32(group_weight);
-
-// Retrieve the whole block if length of range request is larger than this
-// value.
-DECLARE_uint32(max_range_size_kb);
-
-// Sets the interval to send heartbeat to MDS in seconds.
-DECLARE_uint32(periodic_heartbeat_interval_s);
-
-// ###############################################
-// # common
-// ###############################################
-
-// Sets whether to enable trace logging for cache.
-DECLARE_bool(cache_trace_logging);
-
-// Sets the cache store type, can be "none", "disk" or "memory".
+// Local cache store type: "disk" or "memory".
+// "none" is accepted by some callers to disable the local tier.
 DECLARE_string(cache_store);
 
-// Sets whether to enable stage block for writeback which will store block in
-// local first then upload to storage.
-// If sets to false, the block will be uploaded directly to storage even if
-// using writeback mode.
+// Enable local staging for writeback blocks before they are uploaded to
+// storage. Disabling this uploads writeback blocks directly to storage.
 DECLARE_bool(enable_stage);
 
-// Sets whether to enable cache block .
-// If sets to false, the block cache will not cache any block.
+// Enable local read cache for blocks.
 DECLARE_bool(enable_cache);
 
-// Sets whether to enable throttling for uploading stage blocks to storage.
-DECLARE_bool(upload_stage_throttle_enable);
+// Send blocks uploaded to storage to the remote cache group at the same time.
+DECLARE_bool(fill_group_cache);
 
-// Sets the maximum bandwidth for uploading stage blocks to storage in MB/s.
-DECLARE_uint64(upload_stage_throttle_bandwidth_mb);
-
-// Sets the maximum IOPS for uploading stage blocks to storage.
-DECLARE_uint64(upload_stage_throttle_iops);
-
-// Sets the maximum inflight requests for uploading stage blocks to storage.
-DECLARE_uint32(upload_stage_max_inflights);
-
-// Sets the maximum inflight requests for prefetching blocks.
+// Maximum number of concurrent local prefetch requests.
 DECLARE_uint32(prefetch_max_inflights);
 
-// Blocks whose whole size is smaller than this many KB are automatically
-// pinned to the local cache tier (when local cache is enabled), instead of
-// going through the local->remote tier fallback. 0 disables this behavior.
-// Intended for routing tiny blocks to the in-memory local store.
+// Blocks smaller than this size are pinned to the local tier when local cache
+// is enabled. 0 disables this shortcut.
 DECLARE_uint32(small_block_size_kb);
 
-// Sets the directory to store stage and cache blocks.
-// Multi directories and corresponding cache size are supported,
-// e.g. "/data1:100,/data2:200,/data3:300".
+// Maximum number of concurrent uploads for staged blocks.
+DECLARE_uint32(upload_stage_max_inflights);
+
+// Local disk cache ------------------------------------------------------------
+
+// Directory list for stage and cached blocks. Use comma-separated
+// path[:size_mb] entries, e.g. "/data1:100,/data2:200".
 DECLARE_string(cache_dir);
 
-// [hiden]
-// Sets the UUID to append to cache directory (only for internal).
+// UUID suffix appended to each cache directory. Set internally by the client or
+// cache node to isolate different cache instances.
 DECLARE_string(cache_dir_uuid);
 
-// Sets the maximum size of the cache in MB.
+// Default maximum local cache size in MB. Per-directory sizes in cache_dir
+// override this value for each corresponding directory.
 DECLARE_uint32(cache_size_mb);
 
-// Sets the ratio of free space of total disk space.
-// If the free space is less than this ratio, will trigger cleanup.
+// Minimum free-space ratio for the underlying disk. Cleanup is triggered when
+// free space drops below this ratio.
 DECLARE_double(free_space_ratio);
 
-// Sets the expiration time for cache blocks in seconds.
+// Expiration time for cached blocks in seconds. Staged blocks are not expired.
 DECLARE_uint32(cache_expire_s);
 
-// Sets the interval for cleaning up expired cache blocks in milliseconds.
+// Interval for scanning and removing expired cached blocks in milliseconds.
 DECLARE_uint32(cache_cleanup_expire_interval_ms);
 
-// Sets the IO depth for iouring.
+// Maximum io_uring queue depth for local cache I/O.
 DECLARE_uint32(iodepth);
 
-// Sets the duration in seconds for the disk state tick.
-DECLARE_uint32(disk_state_tick_duration_s);
+// Disk health state -----------------------------------------------------------
 
-// Sets the number of errors to trigger unstable state from normal state.
-DECLARE_uint32(disk_state_normal2unstable_error_num);
-
-// Sets the number of successful operations to trigger normal state from
-// unstable state.
-DECLARE_uint32(disk_state_unstable2normal_succ_num);
-
-// Sets the duration in seconds to trigger down state from unstable state.
-DECLARE_uint32(disk_state_unstable2down_s);
-
-// Sets the duration in milliseconds to check the disk state.
+// Interval for probing disk health in milliseconds.
 DECLARE_uint32(disk_state_check_duration_ms);
 
-// Sets the maximum retry timeout in seconds for uploading block from storage.
-DECLARE_int64(storage_upload_retry_timeout_s);
+// State-machine tick duration for disk health transitions in seconds.
+DECLARE_uint32(disk_state_tick_duration_s);
 
-// Sets the maximum retry timeout in seconds for downloading block from storage.
-DECLARE_int64(storage_download_retry_timeout_s);
+// Number of disk errors needed to move from normal to unstable.
+DECLARE_uint32(disk_state_normal2unstable_error_num);
 
-// Keepalive connection number per peer
+// Number of successful disk checks needed to move from unstable to normal.
+DECLARE_uint32(disk_state_unstable2normal_succ_num);
+
+// Time in unstable state before moving a disk to down, in seconds.
+DECLARE_uint32(disk_state_unstable2down_s);
+
+// Cache node identity and server ---------------------------------------------
+
+// Cache node ID. Used as the cache directory UUID for cache-node processes.
+DECLARE_string(id);
+
+// Cache group this cache node belongs to.
+DECLARE_string(group_name);
+
+// IP address configured for this cache node.
+DECLARE_string(listen_ip);
+
+// Port configured for this cache node.
+DECLARE_uint32(listen_port);
+
+// Listen on 0.0.0.0 instead of listen_ip so remote clients can connect.
+DECLARE_bool(public_address);
+
+// Node weight used by cache-group consistent hashing.
+DECLARE_uint32(group_weight);
+
+// Retrieve the whole block when a range request is at least this many KB.
+DECLARE_uint32(max_range_size_kb);
+
+// Serialize concurrent storage retrieves for the same block.
+DECLARE_bool(retrieve_storage_lock);
+
+// Timeout for waiting on another retrieve-storage task, in milliseconds.
+DECLARE_uint32(retrieve_storage_lock_timeout_ms);
+
+// Heartbeat interval from cache node to MDS, in seconds.
+DECLARE_uint32(periodic_heartbeat_interval_s);
+
+// Remote cache group and RPC --------------------------------------------------
+
+// Cache group name used by clients. Empty disables the remote cache tier.
+DECLARE_string(cache_group);
+
+// Interval for refreshing cache group members from MDS, in milliseconds.
+DECLARE_uint32(periodic_sync_members_ms);
+
+// Number of keepalive connections per remote cache node.
 DECLARE_int32(connections);
 
+// Timeout for connecting a remote cache RPC channel, in milliseconds.
+DECLARE_uint32(cache_rpc_connect_timeout_ms);
+
+// Timeout for remote cache Put RPCs, in milliseconds.
+DECLARE_uint32(cache_put_rpc_timeout_ms);
+
+// Timeout for remote cache range RPCs, in milliseconds.
+DECLARE_uint32(cache_range_rpc_timeout_ms);
+
+// Timeout for regular remote cache RPCs, in milliseconds.
+DECLARE_uint32(cache_rpc_timeout_ms);
+
+// Timeout for remote cache prefetch RPCs, in milliseconds.
+DECLARE_uint32(cache_prefetch_rpc_timeout_ms);
+
+// Timeout for pinging a remote cache node, in milliseconds.
+DECLARE_uint32(cache_ping_rpc_timeout_ms);
+
+// Maximum retry count for remote cache RPCs.
+DECLARE_uint32(cache_rpc_max_retry_times);
+
+// Maximum timeout cap for remote cache RPC retries, in milliseconds.
+DECLARE_uint32(cache_rpc_max_timeout_ms);
+
+// Remote cache node health state ---------------------------------------------
+
+// State-machine tick duration for remote cache-node health transitions, in
+// seconds.
+DECLARE_uint32(cache_node_state_tick_duration_s);
+
+// Number of errors needed to move a remote cache node from normal to unstable.
+DECLARE_uint32(cache_node_state_normal2unstable_error_num);
+
+// Number of successful pings needed to move from unstable to normal.
+DECLARE_uint32(cache_node_state_unstable2normal_succ_num);
+
+// Time in unstable state before moving a remote cache node to down, in seconds.
+DECLARE_uint32(cache_node_state_unstable2down_s);
+
+// Interval for checking remote cache-node health, in milliseconds.
+DECLARE_uint32(cache_node_state_check_duration_ms);
+
+// Storage and MDS -------------------------------------------------------------
+
+// Maximum retry window for uploading a block to storage, in seconds.
+DECLARE_int64(storage_upload_retry_timeout_s);
+
+// Maximum retry window for downloading a block from storage, in seconds.
+DECLARE_int64(storage_download_retry_timeout_s);
+
+// Number of worker threads for async storage upload tasks.
+DECLARE_uint64(storage_upload_thread_pool_size);
+
+// MDS addresses used by cache group member management RPCs.
+DECLARE_string(mds_addrs);
+
+// Timeout for cache MDS RPCs, in milliseconds.
+DECLARE_int64(cache_mds_rpc_timeout_ms);
+
+// Retry count for each cache MDS RPC attempt.
+DECLARE_int32(cache_mds_rpc_retry_times);
+
+// Retry count for the cache MDS request wrapper.
+DECLARE_uint32(cache_mds_request_retry_times);
+
+// BRPC aliases ---------------------------------------------------------------
+
+// Cache-specific alias for brpc::idle_timeout_second.
+DECLARE_int32(brpc_idle_timeout_second);
+
+// Cache-specific alias for brpc::log_idle_connection_close.
+DECLARE_bool(brpc_log_idle_connection_close);
+
+// RDMA transport --------------------------------------------------------------
+
+// Enable Infiniband/RDMA transport for cache RPCs.
 DECLARE_bool(use_rdma);
 
 // IB device and HCA port (1-based) used by the cache RDMA path.
 DECLARE_string(cache_rdma_device);
 DECLARE_uint32(cache_rdma_port_num);
 
-// Sets the MDS addresses for cache group member manager service RPC.
-DECLARE_string(mds_addrs);
+namespace infiniband {
 
-// [onfly]
-DECLARE_int64(mds_rpc_timeout_ms);
-DECLARE_int32(mds_rpc_retry_times);
-DECLARE_uint32(mds_request_retry_times);
+// GID table index used by RoCE.
+DECLARE_int32(rdma_gid_idx);
 
-DECLARE_int32(brpc_idle_timeout_second);
-DECLARE_bool(brpc_log_idle_connection_close);
+// Size of each RDMA send buffer, in bytes.
+DECLARE_int32(rdma_send_buffer_size);
+
+// Maximum number of send work requests posted to a send queue.
+DECLARE_int32(rdma_send_queue_size);
+
+// Size of each RDMA receive buffer, in bytes.
+DECLARE_int32(rdma_recv_buffer_size);
+
+// Maximum number of receive work requests posted to a receive queue.
+DECLARE_int32(rdma_recv_queue_size);
+
+// Number of RDMA event dispatcher threads.
+DECLARE_int32(rdma_event_dispatcher_num);
+
+// Timeout for an RDMA RPC response, in milliseconds.
+DECLARE_int32(rdma_rpc_timeout_ms);
+
+// Signal one client request SEND every N requests. 0 disables periodic
+// signaled request SENDs.
+DECLARE_uint32(rdma_client_signal_request_send_every);
+
+}  // namespace infiniband
 
 }  // namespace cache
 }  // namespace dingofs

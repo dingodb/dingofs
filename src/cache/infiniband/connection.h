@@ -23,8 +23,6 @@
 #ifndef DINGOFS_SRC_CACHE_INFINIBAND_CONNECTION_H_
 #define DINGOFS_SRC_CACHE_INFINIBAND_CONNECTION_H_
 
-#include <gflags/gflags_declare.h>
-
 #include <functional>
 #include <memory>
 #include <vector>
@@ -40,9 +38,6 @@ struct ibv_sge;
 namespace dingofs {
 namespace cache {
 namespace infiniband {
-
-DECLARE_int32(rdma_send_buffer_size);
-DECLARE_int32(rdma_recv_buffer_size);
 
 class Connection {
  public:

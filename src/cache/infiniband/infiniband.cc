@@ -41,18 +41,16 @@
 namespace dingofs {
 namespace cache {
 
-DEFINE_bool(use_rdma, false, "Enable Infiniband/RDMA transport for cache RPCs");
+DEFINE_bool(use_rdma, false, "enable infiniband/rdma transport for cache rpcs");
 
-DEFINE_string(cache_rdma_device, "", "IB device used by the cache RDMA path");
+DEFINE_string(cache_rdma_device, "", "ib device used by the cache rdma path");
 
 DEFINE_uint32(cache_rdma_port_num, 1,
-              "HCA port (1-based) used by the cache RDMA path");
+              "hca port (1-based) used by the cache rdma path");
 
 namespace infiniband {
 
-DEFINE_int32(rdma_gid_idx, 0,
-             "GID table index for RoCE (use `show_gids` to pick the entry "
-             "matching the desired RoCE version and IP family)");
+DEFINE_int32(rdma_gid_idx, 0, "gid table index used by roce");
 
 std::unordered_map<std::string, DeviceUPtr> Infiniband::devices_;
 std::unordered_map<std::string, PortUPtr> Infiniband::ports_;

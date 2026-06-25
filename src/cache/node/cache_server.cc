@@ -40,10 +40,10 @@ DECLARE_bool(graceful_quit_on_sigterm);
 namespace dingofs {
 namespace cache {
 
-DEFINE_string(listen_ip, "", "ip address to listen on for this cache node");
+DEFINE_string(listen_ip, "", "ip address configured for this cache node");
 DEFINE_validator(listen_ip, iutil::StringValidator);
 
-DEFINE_uint32(listen_port, 9300, "port to listen on for this cache node");
+DEFINE_uint32(listen_port, 9300, "port configured for this cache node");
 
 DEFINE_bool(public_address, true,
             "listen on 0.0.0.0 instead of --listen_ip so the cache node is "

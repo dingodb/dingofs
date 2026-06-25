@@ -35,34 +35,37 @@
 namespace dingofs {
 namespace cache {
 
-DEFINE_int32(connections, 16, "keepalive connection number per node");
+DEFINE_int32(connections, 16,
+             "number of keepalive connections per remote cache node");
 
 DEFINE_uint32(cache_rpc_connect_timeout_ms, 1000,
-              "timeout for rpc channel connect in milliseconds");
+              "timeout for connecting a remote cache rpc channel in "
+              "milliseconds");
 DEFINE_validator(cache_rpc_connect_timeout_ms, brpc::PassValidate);
 
 DEFINE_uint32(cache_put_rpc_timeout_ms, 30000,
-              "timeout for put rpc request in milliseconds");
+              "timeout for remote cache put rpcs in milliseconds");
 DEFINE_validator(cache_put_rpc_timeout_ms, brpc::PassValidate);
 
 DEFINE_uint32(cache_range_rpc_timeout_ms, 30000,
-              "timeout for range rpc request in milliseconds");
+              "timeout for remote cache range rpcs in milliseconds");
 DEFINE_validator(cache_range_rpc_timeout_ms, brpc::PassValidate);
 
 DEFINE_uint32(cache_rpc_timeout_ms, 30000,
-              "timeout for cache rpc request in milliseconds");
+              "timeout for regular remote cache rpcs in milliseconds");
 DEFINE_validator(cache_rpc_timeout_ms, brpc::PassValidate);
 
 DEFINE_uint32(cache_prefetch_rpc_timeout_ms, 3000,
-              "timeout for prefetch rpc request in milliseconds");
+              "timeout for remote cache prefetch rpcs in milliseconds");
 DEFINE_validator(cache_prefetch_rpc_timeout_ms, brpc::PassValidate);
 
 DEFINE_uint32(cache_rpc_max_retry_times, 3,
-              "maximum retry times for rpc request");
+              "maximum retry count for remote cache rpcs");
 DEFINE_validator(cache_rpc_max_retry_times, brpc::PassValidate);
 
 DEFINE_uint32(cache_rpc_max_timeout_ms, 60000,
-              "maximum timeout for rpc request in milliseconds");
+              "maximum timeout cap for remote cache rpc retries in "
+              "milliseconds");
 DEFINE_validator(cache_rpc_max_timeout_ms, brpc::PassValidate);
 
 RemoteNode::RemoteNode(const std::string& id, const std::string& ip,

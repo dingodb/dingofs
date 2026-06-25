@@ -22,6 +22,8 @@
 
 #include "cache/infiniband/sender.h"
 
+#include <gflags/gflags.h>
+
 #include "cache/infiniband/common.h"
 #include "cache/infiniband/connection.h"
 #include "common/io_buffer.h"
@@ -31,9 +33,8 @@ namespace cache {
 namespace infiniband {
 
 DEFINE_uint32(rdma_client_signal_request_send_every, 1024,
-              "Signal one client request SEND every N requests so "
-              "high-concurrency writers do not overrun the QP send queue; "
-              "0 disables signaled request SENDs");
+              "signal one client request send every n requests; 0 disables "
+              "periodic signaled request sends");
 
 RequestSender::RequestSender(Connection* conn) : conn_(conn), seq_num_(0) {}
 

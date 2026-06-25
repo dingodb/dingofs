@@ -36,7 +36,7 @@
 namespace dingofs {
 namespace cache {
 
-DEFINE_uint32(iodepth, 128, "aio queue maximum iodepth");
+DEFINE_uint32(iodepth, 128, "maximum io_uring queue depth for local cache i/o");
 
 AioQueue::AioQueue(const std::vector<iovec>& fixed_buffers)
     : running_(false),

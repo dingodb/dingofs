@@ -31,30 +31,34 @@ namespace dingofs {
 namespace cache {
 
 DEFINE_uint32(cache_ping_rpc_timeout_ms, 1000,
-              "rpc timeout for pinging remote cache node in milliseconds");
+              "timeout for pinging a remote cache node in milliseconds");
 DEFINE_validator(cache_ping_rpc_timeout_ms, brpc::PassValidate);
 
 DEFINE_uint32(cache_node_state_check_duration_ms, 3000,
-              "duration in milliseconds to check the cache group node state");
+              "interval for checking remote cache-node health in milliseconds");
 DEFINE_validator(cache_node_state_check_duration_ms, brpc::PassValidate);
 
 DEFINE_uint32(cache_node_state_tick_duration_s, 30,
-              "duration in seconds for the cache node state tick");
+              "state-machine tick duration for remote cache-node health "
+              "transitions in seconds");
 DEFINE_validator(cache_node_state_tick_duration_s, brpc::PassValidate);
 
 DEFINE_uint32(
     cache_node_state_normal2unstable_error_num, 10,
-    "number of errors to trigger unstable cache state from normal state");
+    "number of errors needed to move a remote cache node from normal to "
+    "unstable");
 DEFINE_validator(cache_node_state_normal2unstable_error_num,
                  brpc::PassValidate);
 
 DEFINE_uint32(cache_node_state_unstable2normal_succ_num, 3,
-              "number of successes to trigger normal state from "
-              "unstable state");
+              "number of successful pings needed to move from unstable to "
+              "normal");
 DEFINE_validator(cache_node_state_unstable2normal_succ_num, brpc::PassValidate);
 
-DEFINE_uint32(cache_node_state_unstable2down_s, 604800,  // 7 days
-              "duration in seconds to trigger down state from unstable state");
+DEFINE_uint32(
+    cache_node_state_unstable2down_s, 604800,  // 7 days
+    "time in unstable state before moving a remote cache node to down "
+    "in seconds");
 DEFINE_validator(cache_node_state_unstable2down_s, brpc::PassValidate);
 
 namespace {
