@@ -20,12 +20,14 @@
 #include <cstdint>
 #include <string>
 
+#include "bthread/bthread.h"
 #include "bthread/mutex.h"
+#include "common/logging.h"
 #include "dingofs/error.pb.h"
 #include "fmt/format.h"
 #include "gflags/gflags_declare.h"
-#include "glog/logging.h"
 #include "mds/common/codec.h"
+#include "mds/common/helper.h"
 #include "mds/common/status.h"
 #include "utils/time.h"
 
@@ -51,6 +53,19 @@ static const int64_t kSliceIdStartId = 1e10;  // 10 billion
 const std::string kInoAutoIncrementIdName = "dingofs-inode-id";
 static const int64_t kInoBatchSize = 1024000;
 static const int64_t kInoStartId = 2e10;  // 20 billion
+
+static uint32_t CalWaitTimeUs(int retry) {
+  // exponential backoff
+  return Helper::GenerateRealRandomInteger(1000, 5000) * (1 << retry);
+}
+
+static bool IsRetry(uint32_t& retry) {
+  if (++retry <= FLAGS_mds_txn_max_retry_times) {
+    bthread_usleep(CalWaitTimeUs(retry));
+    return true;
+  }
+  return false;
+}
 
 CoorAutoIncrementIdGenerator::CoorAutoIncrementIdGenerator(CoordinatorClientSPtr client, const std::string& name,
                                                            int64_t table_id, uint64_t start_id, uint32_t batch_size)
@@ -199,14 +214,16 @@ bool StoreAutoIncrementIdGenerator::Init() {
     return false;
   }
 
-  next_id_ = alloc_id;
-  last_alloc_id_ = alloc_id;
+  next_id_.store(alloc_id, std::memory_order_relaxed);
+  last_alloc_id_.store(alloc_id, std::memory_order_relaxed);
 
   return true;
 }
 
 bool StoreAutoIncrementIdGenerator::Destroy() {
   BAIDU_SCOPED_LOCK(mutex_);
+
+  is_destroyed_.store(true, std::memory_order_release);
 
   auto status = DestroyId();
   if (!status.ok()) {
@@ -225,30 +242,59 @@ bool StoreAutoIncrementIdGenerator::GenID(uint32_t num, uint64_t min_slice_id, u
     return false;
   }
 
-  BAIDU_SCOPED_LOCK(mutex_);
-
-  next_id_ = std::max(next_id_, min_slice_id);
-
-  if (next_id_ + num > last_alloc_id_) {
-    auto status = AllocateIds(std::max(num, batch_size_));
-    if (!status.ok()) {
-      LOG(ERROR) << fmt::format("[idalloc.{}] allocate id fail, {}.", name_, status.error_str());
+  // Lock-free bump allocator. The steady-state path is a single CAS on next_id_;
+  // only bundle refill (rare) touches storage, and refill is non-blocking: just
+  // one elected thread does the IO while others back off and retry the fast path.
+  constexpr int kMaxAttempts = 100000;  // livelock guard
+  for (int attempt = 0; attempt < kMaxAttempts; ++attempt) {
+    if (BAIDU_UNLIKELY(is_destroyed_.load(std::memory_order_acquire))) {
+      LOG(ERROR) << fmt::format("[idalloc.{}] id generator is destroyed.", name_);
       return false;
+    }
+
+    uint64_t cur = next_id_.load(std::memory_order_acquire);
+    uint64_t start = std::max(cur, min_slice_id);
+
+    if (start + num <= last_alloc_id_.load(std::memory_order_acquire)) {
+      // Fast path: claim [start, start + num) atomically.
+      if (next_id_.compare_exchange_weak(cur, start + num, std::memory_order_acq_rel, std::memory_order_relaxed)) {
+        id = start;
+        LOG_DEBUG << fmt::format("[idalloc.{}] alloc id({}) num({}).", name_, id, num);
+        return true;
+      }
+      // Contended: another thread advanced next_id_, retry.
+      continue;
+    }
+
+    // Bundle exhausted: elect a single refiller via trylock so waiters never
+    // block on the storage IO.
+    if (bthread_mutex_trylock(&mutex_) == 0) {
+      Status status;
+      // Double-check under the lock: another thread may have just refilled.
+      uint64_t c2 = next_id_.load(std::memory_order_acquire);
+      uint64_t s2 = std::max(c2, min_slice_id);
+      if (s2 + num > last_alloc_id_.load(std::memory_order_acquire)) {
+        status = AllocateIds(std::max(num, batch_size_), min_slice_id);
+      }
+      bthread_mutex_unlock(&mutex_);
+
+      if (!status.ok()) {
+        LOG(ERROR) << fmt::format("[idalloc.{}] allocate id fail, {}.", name_, status.error_str());
+        return false;
+      }
+    } else {
+      // Another thread is refilling; back off and retry the fast path.
+      bthread_yield();
     }
   }
 
-  // allocate id
-  id = next_id_;
-  next_id_ += num;
-
-  LOG(INFO) << fmt::format("[idalloc.{}] alloc id({}) num({}).", name_, id, num);
-
-  return true;
+  LOG(ERROR) << fmt::format("[idalloc.{}] gen id give up after {} attempts.", name_, kMaxAttempts);
+  return false;
 }
 
 std::string StoreAutoIncrementIdGenerator::Describe() {
   return fmt::format("[store] name({}) batch_size({}) last_alloc_id({}) next_id({})", name_, batch_size_,
-                     last_alloc_id_, next_id_);
+                     last_alloc_id_.load(std::memory_order_acquire), next_id_.load(std::memory_order_acquire));
 }
 
 Status StoreAutoIncrementIdGenerator::GetOrPutAllocId(uint64_t& alloc_id) {
@@ -273,8 +319,8 @@ Status StoreAutoIncrementIdGenerator::GetOrPutAllocId(uint64_t& alloc_id) {
       MetaCodec::DecodeAutoIncrementIDValue(value, alloc_id);
     }
 
-    if (alloc_id < last_alloc_id_) {
-      alloc_id = last_alloc_id_;
+    if (alloc_id < last_alloc_id_.load(std::memory_order_relaxed)) {
+      alloc_id = last_alloc_id_.load(std::memory_order_relaxed);
       txn->Put(key_, MetaCodec::EncodeAutoIncrementIDValue(alloc_id));
     }
 
@@ -288,11 +334,13 @@ Status StoreAutoIncrementIdGenerator::GetOrPutAllocId(uint64_t& alloc_id) {
   return status;
 }
 
-Status StoreAutoIncrementIdGenerator::AllocateIds(uint32_t size) {
+Status StoreAutoIncrementIdGenerator::AllocateIds(uint32_t size, uint64_t floor) {
   utils::Duration duration;
   Status status;
   uint32_t retry = 0;
-  uint64_t start_alloc_id = std::max(next_id_, last_alloc_id_);
+  // Cover the floor (min_slice_id) and any range already handed out.
+  uint64_t start_alloc_id =
+      std::max({next_id_.load(std::memory_order_acquire), last_alloc_id_.load(std::memory_order_acquire), floor});
   do {
     auto txn = kv_storage_->NewTxn();
     if (txn == nullptr) {
@@ -320,15 +368,17 @@ Status StoreAutoIncrementIdGenerator::AllocateIds(uint32_t size) {
       break;
     }
 
-  } while (++retry < FLAGS_mds_txn_max_retry_times);
+  } while (IsRetry(retry));
 
   if (status.ok()) {
-    last_alloc_id_ = start_alloc_id + size;
-    next_id_ = start_alloc_id;
+    // Publish next_id_ before last_alloc_id_ so a fast-path reader that observes
+    // the grown last_alloc_id_ also observes a consistent bundle start (R6).
+    next_id_.store(start_alloc_id, std::memory_order_release);
+    last_alloc_id_.store(start_alloc_id + size, std::memory_order_release);
   }
 
   LOG(INFO) << fmt::format("[idalloc.{}][{}us] take bundle id, bundle[{},{}) size({}) status({}).", name_,
-                           duration.ElapsedUs(), next_id_, last_alloc_id_, size, status.error_str());
+                           duration.ElapsedUs(), start_alloc_id, start_alloc_id + size, size, status.error_str());
 
   return status;
 }
@@ -570,7 +620,7 @@ IdGeneratorUPtr NewInodeIdGenerator(uint32_t fs_id, KVStorageSPtr kv_storage) {
   CHECK(kv_storage != nullptr) << "kv_storage is nullptr.";
   std::string name = fmt::format("{}-{}", kInoAutoIncrementIdName, fs_id);
 
-  return ShardStoreAutoIncrementIdGenerator::New(kv_storage, name, kInoStartId, kInoBatchSize);
+  return StoreAutoIncrementIdGenerator::New(kv_storage, name, kInoStartId, kInoBatchSize);
 }
 
 IdGeneratorSPtr NewSliceIdGenerator(CoordinatorClientSPtr coordinator_client) {

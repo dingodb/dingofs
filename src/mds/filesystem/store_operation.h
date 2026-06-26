@@ -288,6 +288,8 @@ class Operation {
 
   virtual Key GroupingKey() const { return {.fs_id = GetFsId(), .ino = GetIno()}; }
 
+  std::string Describe() const { return fmt::format("{}.{}.{}", GetFsId(), GetIno(), OpName()); }
+
   void SetIsolationLevel(Txn::IsolationLevel level) { isolation_level_ = level; }
   Txn::IsolationLevel GetIsolationLevel() const { return isolation_level_; }
 

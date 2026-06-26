@@ -117,11 +117,16 @@ class StoreAutoIncrementIdGenerator : public IdGenerator {
 
  private:
   Status GetOrPutAllocId(uint64_t& alloc_id);
-  Status AllocateIds(uint32_t bundle_size);
+  // Reserve a new bundle from storage. Only the elected refiller calls this; on
+  // success it publishes next_id_ before last_alloc_id_ (see R6). `floor` is the
+  // min_slice_id that triggered the refill, so the new bundle covers it.
+  Status AllocateIds(uint32_t bundle_size, uint64_t floor);
   Status DestroyId();
 
   KVStorageSPtr kv_storage_;
 
+  // Only guards bundle refill election (trylock) and Destroy; the steady-state
+  // allocation path is lock-free.
   bthread_mutex_t mutex_;
 
   const std::string name_;
@@ -129,14 +134,14 @@ class StoreAutoIncrementIdGenerator : public IdGenerator {
   const std::string key_;
 
   // the next id can be allocated in this bunlde
-  uint64_t next_id_;
+  std::atomic<uint64_t> next_id_;
   // the last id can be allocated in this bunlde
-  uint64_t last_alloc_id_;
+  std::atomic<uint64_t> last_alloc_id_;
 
   // get the numnber of id at a time
   const uint32_t batch_size_;
 
-  bool is_destroyed_{false};
+  std::atomic<bool> is_destroyed_{false};
 };
 
 class ShardStoreAutoIncrementIdGenerator : public IdGenerator {

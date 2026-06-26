@@ -220,7 +220,14 @@ bool FileSystem::Init() {
 
 // odd number is dir inode
 Status FileSystem::GenDirIno(Ino& ino) {
+  // bool ret = ino_id_generator_->GenID(2, ino);
+  // ino = (ino & 1) ? ino : (ino + 1);  // ensure odd number for dir inode
+
+  // return ret ? Status::OK() : Status(pb::error::EALLOC_ID, "generate inode id fail");
+
   bool ret = ino_id_generator_->GenID(2, ino);
+
+  ino = (self_mds_id_ << 40) + (ino & 0xFFFFFFFFFF);
   ino = (ino & 1) ? ino : (ino + 1);  // ensure odd number for dir inode
 
   return ret ? Status::OK() : Status(pb::error::EALLOC_ID, "generate inode id fail");
@@ -228,7 +235,14 @@ Status FileSystem::GenDirIno(Ino& ino) {
 
 // even number is file inode
 Status FileSystem::GenFileIno(Ino& ino) {
+  // bool ret = ino_id_generator_->GenID(2, ino);
+  // ino = (ino & 1) ? (ino + 1) : ino;  // ensure even number for file inode
+
+  // return ret ? Status::OK() : Status(pb::error::EALLOC_ID, "generate inode id fail");
+
   bool ret = ino_id_generator_->GenID(2, ino);
+
+  ino = (self_mds_id_ << 40) + (ino & 0xFFFFFFFFFF);
   ino = (ino & 1) ? (ino + 1) : ino;  // ensure even number for file inode
 
   return ret ? Status::OK() : Status(pb::error::EALLOC_ID, "generate inode id fail");
@@ -935,21 +949,18 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryWithPaOut& 
 
   LOG(INFO) << fmt::format("[fs.{}.{}.{}][{}us] mknod {} finish, status({}).", fs_id_, ctx.RequestId(),
                            trace.GetReqTypeInt(), duration.ElapsedUs(), param.name, status.error_str());
+  trace.RecordElapsedTime("resume");
 
   if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
   auto& parent_attr_or_mutation = result.parent_attr_or_mutation;
 
-  trace.RecordElapsedTime("post_handle_1");
-
   // update cache
   UpsertInodeCache(attr, reason);
-  trace.RecordElapsedTime("post_handle_2");
 
   AttrEntry last_parent_attr = parent_inode->ToAttr();
   AddDentryToPartition(parent, dentry, last_parent_attr.version());
-  trace.RecordElapsedTime("post_handle_3");
 
   // update quota
   quota_manager_.AsyncUpdateFsUsage(0, 1, reason);
@@ -960,7 +971,6 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryWithPaOut& 
 
   // update parent memo
   parent_memo_.Remeber(attr.ino(), param.parent);
-  trace.RecordElapsedTime("post_handle_5");
 
   // set output
   entry_out.parent_attr = last_parent_attr;
@@ -970,9 +980,8 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryWithPaOut& 
     std::vector<Ino> parents = Helper::PbRepeatedToVector(last_parent_attr.parents());
     NotifyBuddyRefreshInode(parents, parent_attr_or_mutation, reason);
   }
-  trace.RecordElapsedTime("post_handle_6");
 
-  // trace.RecordElapsedTime("post_handle");
+  trace.RecordElapsedTime("post_handle");
 
   return Status::OK();
 }
