@@ -2678,6 +2678,9 @@ Status CopyFileRangeOperation::Run(TxnUPtr& txn) {
   const uint64_t chunk_size = fs_info_.chunk_size();
   const uint64_t block_size = fs_info_.block_size();
   const uint64_t now_ns = GetTime();
+  // Same-file copy (src_ino == dst_ino): src and dst resolve to one inode and
+  // one set of chunks, so the dst side must reuse the src reads/writes.
+  const bool same_file = (param_.src_ino == param_.dst_ino);
 
   // 1) batch get src/dst inodes + src chunks in [begin, end)
   const std::string src_inode_key = MetaCodec::EncodeInodeKey(fs_id, param_.src_ino);
@@ -2695,6 +2698,13 @@ Status CopyFileRangeOperation::Run(TxnUPtr& txn) {
   uint32_t dst_chunk_index_end = (param_.dst_off + param_.len + chunk_size - 1) / chunk_size;
   for (uint32_t i = dst_chunk_index_begin; i < dst_chunk_index_end; ++i) {
     phase1_keys.push_back(MetaCodec::EncodeChunkKey(fs_id, param_.dst_ino, i));
+  }
+
+  // Same-file copy duplicates the inode key and any chunk keys shared by the
+  // src/dst ranges; drop duplicates so backends never see repeated keys.
+  if (same_file) {
+    std::sort(phase1_keys.begin(), phase1_keys.end());
+    phase1_keys.erase(std::unique(phase1_keys.begin(), phase1_keys.end()), phase1_keys.end());
   }
 
   std::vector<KeyValue> phase1_kvs;
@@ -2719,12 +2729,19 @@ Status CopyFileRangeOperation::Run(TxnUPtr& txn) {
       MetaCodec::DecodeChunkKey(kv.key, fs_id, ino, chunk_index);
       auto chunk = MetaCodec::DecodeChunkValue(kv.value);
       if (ino == param_.src_ino) {
+        // Same-file copy: the chunk is both a clone source and a destination
+        // whose existing slices must be preserved, so route it into both.
+        if (same_file) dst_chunks[chunk.index()] = chunk;
         src_chunks[chunk.index()] = std::move(chunk);
       } else if (ino == param_.dst_ino) {
         dst_chunks[chunk.index()] = std::move(chunk);
       }
     }
   }
+
+  // Same-file copy: the dst_inode_key branch above is shadowed by the
+  // identical src key, so mirror the single decoded inode as the dst inode.
+  if (same_file) dst_attr = src_attr;
 
   if (src_attr.ino() == 0) return Status(pb::error::ENOT_FOUND, "src inode not found");
   if (dst_attr.ino() == 0) return Status(pb::error::ENOT_FOUND, "dst inode not found");
@@ -2780,14 +2797,19 @@ Status CopyFileRangeOperation::Run(TxnUPtr& txn) {
   dst_attr.set_mtime(std::max(dst_attr.mtime(), now_ns));
   dst_attr.set_ctime(std::max(dst_attr.ctime(), now_ns));
   dst_attr.set_shared_slice(true);
+  // Same-file copy writes the inode only once below, so fold the src-side
+  // atime bump in here to avoid a second Put that would clobber these updates.
+  if (same_file) dst_attr.set_atime(std::max(dst_attr.atime(), now_ns));
   dst_attr.set_version(dst_attr.version() + 1);
   txn->Put(dst_inode_key, MetaCodec::EncodeInodeValue(dst_attr));
 
-  // 7) update src inode
-  src_attr.set_shared_slice(true);
-  src_attr.set_atime(std::max(src_attr.atime(), now_ns));
-  src_attr.set_version(src_attr.version() + 1);
-  txn->Put(src_inode_key, MetaCodec::EncodeInodeValue(src_attr));
+  // 7) update src inode (skipped for same-file: already folded into dst above)
+  if (!same_file) {
+    src_attr.set_shared_slice(true);
+    src_attr.set_atime(std::max(src_attr.atime(), now_ns));
+    src_attr.set_version(src_attr.version() + 1);
+    txn->Put(src_inode_key, MetaCodec::EncodeInodeValue(src_attr));
+  }
 
   result_.bytes_copied = actual_len;
   result_.length_delta = length_delta;
