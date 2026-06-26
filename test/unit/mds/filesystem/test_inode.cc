@@ -79,22 +79,26 @@ TEST_F(InodeCacheTest, Put) {
   InodeCache inode_cache(kFsId);
 
   {
-    inode_cache.PutIf(GenInode(kFsId, 2000, pb::mds::FileType::DIRECTORY), "test");
+    inode_cache.PutIf(GenInode(kFsId, 2000, pb::mds::FileType::DIRECTORY),
+                      "test");
     ASSERT_TRUE(inode_cache.Get(2000) != nullptr);
   }
 
   {
-    inode_cache.PutIf(GenInode(kFsId, 2001, pb::mds::FileType::DIRECTORY), "test");
+    inode_cache.PutIf(GenInode(kFsId, 2001, pb::mds::FileType::DIRECTORY),
+                      "test");
     ASSERT_TRUE(inode_cache.Get(2001) != nullptr);
   }
 
   {
-    inode_cache.PutIf(GenInode(kFsId, 2003, pb::mds::FileType::DIRECTORY), "test");
+    inode_cache.PutIf(GenInode(kFsId, 2003, pb::mds::FileType::DIRECTORY),
+                      "test");
     ASSERT_TRUE(inode_cache.Get(2003) != nullptr);
   }
 
   {
-    inode_cache.PutIf(GenInode(kFsId, 2004, pb::mds::FileType::DIRECTORY), "test");
+    inode_cache.PutIf(GenInode(kFsId, 2004, pb::mds::FileType::DIRECTORY),
+                      "test");
     ASSERT_TRUE(inode_cache.Get(2004) != nullptr);
   }
 
@@ -102,7 +106,8 @@ TEST_F(InodeCacheTest, Put) {
   {
     const Ino ino = 2005;
 
-    inode_cache.PutIf(GenInode(kFsId, ino, pb::mds::FileType::DIRECTORY), "test");
+    inode_cache.PutIf(GenInode(kFsId, ino, pb::mds::FileType::DIRECTORY),
+                      "test");
 
     auto inode = inode_cache.Get(ino);
     ASSERT_TRUE(inode != nullptr);
@@ -156,7 +161,8 @@ TEST_F(InodeCacheTest, Put) {
     const Ino ino = 2008;
 
     // insert
-    inode_cache.PutIf(GenInode(kFsId, ino, pb::mds::FileType::DIRECTORY), "test");
+    inode_cache.PutIf(GenInode(kFsId, ino, pb::mds::FileType::DIRECTORY),
+                      "test");
 
     ASSERT_TRUE(inode_cache.Get(ino) != nullptr);
 
@@ -186,7 +192,8 @@ TEST_F(InodeCacheTest, Put) {
     const Ino ino = 2009;
 
     // insert
-    inode_cache.PutIf(GenInode(kFsId, ino, pb::mds::FileType::DIRECTORY), "test");
+    inode_cache.PutIf(GenInode(kFsId, ino, pb::mds::FileType::DIRECTORY),
+                      "test");
 
     auto inode = inode_cache.Get(ino);
     ASSERT_TRUE(inode != nullptr);
@@ -220,28 +227,32 @@ TEST_F(InodeCacheTest, Delete) {
   InodeCache inode_cache(kFsId);
 
   {
-    inode_cache.PutIf(GenInode(kFsId, 2000, pb::mds::FileType::DIRECTORY), "test");
+    inode_cache.PutIf(GenInode(kFsId, 2000, pb::mds::FileType::DIRECTORY),
+                      "test");
     ASSERT_TRUE(inode_cache.Get(2000) != nullptr);
     inode_cache.Delete(2000);
     ASSERT_TRUE(inode_cache.Get(2000) == nullptr);
   }
 
   {
-    inode_cache.PutIf(GenInode(kFsId, 2001, pb::mds::FileType::DIRECTORY), "test");
+    inode_cache.PutIf(GenInode(kFsId, 2001, pb::mds::FileType::DIRECTORY),
+                      "test");
     ASSERT_TRUE(inode_cache.Get(2001) != nullptr);
     inode_cache.Delete(2001);
     ASSERT_TRUE(inode_cache.Get(2001) == nullptr);
   }
 
   {
-    inode_cache.PutIf(GenInode(kFsId, 2002, pb::mds::FileType::DIRECTORY), "test");
+    inode_cache.PutIf(GenInode(kFsId, 2002, pb::mds::FileType::DIRECTORY),
+                      "test");
     ASSERT_TRUE(inode_cache.Get(2002) != nullptr);
     inode_cache.Delete(2002);
     ASSERT_TRUE(inode_cache.Get(2002) == nullptr);
   }
 
   {
-    inode_cache.PutIf(GenInode(kFsId, 2003, pb::mds::FileType::DIRECTORY), "test");
+    inode_cache.PutIf(GenInode(kFsId, 2003, pb::mds::FileType::DIRECTORY),
+                      "test");
     ASSERT_TRUE(inode_cache.Get(2003) != nullptr);
     inode_cache.Delete(2003);
     ASSERT_TRUE(inode_cache.Get(2003) == nullptr);
@@ -316,29 +327,42 @@ TEST_F(InodeCacheTest, Benchmark) {
   InodeCache inode_cache(kFsId);
 
   std::atomic<Ino> ino_gen{1000000000000};
-  // create 2 thread to put inodes
-  constexpr int kThreadNum = 4;
+  // create thread to put inodes
+  constexpr int kThreadNum = 32;
   std::vector<std::thread> threads;
+  threads.reserve(kThreadNum);
   for (int i = 0; i < kThreadNum; ++i) {
     threads.emplace_back([thread_no = i, &inode_cache, &ino_gen]() {
-      for (;;) {
+      uint64_t start_time_us = utils::TimestampUs();
+      const uint32_t ino_per_thread = 2000000;
+      const uint32_t print_count = 100000;
+      for (uint32_t j = 0; j < ino_per_thread; ++j) {
         Ino ino = ino_gen.fetch_add(1, std::memory_order_relaxed);
-        inode_cache.PutIf(GenInode(kFsId, ino, pb::mds::FileType::FILE), "test");
+        inode_cache.PutIf(GenInode(kFsId, ino, pb::mds::FileType::FILE),
+                          "test");
+
+        if ((j + 1) % print_count == 0) {
+          std::cout << fmt::format(
+                           "thread {} put inodes, cost time: {}us", thread_no,
+                           (utils::TimestampUs() - start_time_us) / print_count)
+                    << std::endl;
+          start_time_us = utils::TimestampUs();
+        }
       }
     });
   }
 
   // create 10 threads to get inodes
-  constexpr int kGetThreadNum = 32;
-  for (int i = 0; i < kGetThreadNum; ++i) {
-    threads.emplace_back([thread_no = i, &inode_cache, &ino_gen]() {
-      for (;;) {
-        Ino ino =
-            1000000000000 + Helper::GenerateRealRandomInteger(0, 100000000);
-        auto inode = inode_cache.Get(ino);
-      }
-    });
-  }
+  // constexpr int kGetThreadNum = 32;
+  // for (int i = 0; i < kGetThreadNum; ++i) {
+  //   threads.emplace_back([thread_no = i, &inode_cache, &ino_gen]() {
+  //     for (;;) {
+  //       Ino ino =
+  //           1000000000000 + Helper::GenerateRealRandomInteger(0, 100000000);
+  //       auto inode = inode_cache.Get(ino);
+  //     }
+  //   });
+  // }
 
   for (auto& t : threads) {
     t.join();

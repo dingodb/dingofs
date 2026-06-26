@@ -61,10 +61,10 @@ DEFINE_validator(mds_txn_max_retry_times, brpc::PassValidate);
 DEFINE_uint32(mds_txn_timeout_ms, 8000, "txn timeout ms.");
 DEFINE_validator(mds_txn_timeout_ms, brpc::PassValidate);
 
-DEFINE_bool(mds_store_operation_wait_multi_time, false, "wait multi time before retry.");
+DEFINE_bool(mds_store_operation_wait_multi_time, true, "wait multi time before retry.");
 DEFINE_validator(mds_store_operation_wait_multi_time, brpc::PassValidate);
 
-DEFINE_uint32(mds_store_operation_merge_delay_us, 50, "merge operation delay us.");
+DEFINE_uint32(mds_store_operation_merge_delay_us, 20, "merge operation delay us.");
 DEFINE_validator(mds_store_operation_merge_delay_us, brpc::PassValidate);
 
 DEFINE_bool(mds_tiny_file_data_enable, false, "enable tiny file data feature.");
@@ -152,22 +152,27 @@ static void SetResultAttr(BatchOperation& batch_operation, Operation::BatchShare
 
 static void UpdateParentInode(BatchOperation& batch_operation, Operation::BatchSharedParam& shared_param) {
   Operation* operation = nullptr;
-  if (!batch_operation.setattr_operations.empty()) {
-    operation = batch_operation.setattr_operations[0];
-
-  } else if (!batch_operation.create_operations.empty()) {
-    operation = batch_operation.create_operations[0];
+  for (auto* op : batch_operation.create_operations) {
+    if (op->GetParentInode() != nullptr) {
+      operation = op;
+      break;
+    }
   }
-
-  CHECK(operation != nullptr) << "batch_operation has no operation.";
+  if (operation == nullptr) {
+    for (auto* op : batch_operation.setattr_operations) {
+      if (op->GetParentInode() != nullptr) {
+        operation = op;
+        break;
+      }
+    }
+  }
+  if (operation == nullptr) return;
 
   InodeSPtr parent_inode = operation->GetParentInode();
-  if (parent_inode == nullptr) return;
-
   if (shared_param.UseMutation()) {
-    parent_inode->PutByMutation(shared_param.attr_mutation, "");
+    parent_inode->PutByMutation(shared_param.attr_mutation, operation->Describe());
   } else {
-    parent_inode->PutIf(shared_param.attr, "");
+    parent_inode->PutIf(shared_param.attr, operation->Describe());
   }
 }
 
@@ -4391,7 +4396,7 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
 
   } while (IsRetry(retry));
 
-  SetElapsedTime(batch_operation, "store_operate");
+  SetElapsedTime(batch_operation, "store_txn");
 
   LOG(INFO) << fmt::format(
       "[operation.{}.{}][{}][{}us] batch run ({}) finish, count({}) parent_key({},{}) txn({}) retry({}) status({}) "
@@ -4409,6 +4414,8 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
   } else {
     SetError(batch_operation, status);
   }
+
+  SetElapsedTime(batch_operation, "store_finish");
 
   // notify operation finish
   Notify(batch_operation);
