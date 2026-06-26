@@ -20,9 +20,11 @@
 
 #include "dingofs/mds.pb.h"
 #include "gtest/gtest.h"
+#include "mds/common/codec.h"
 #include "mds/common/tracing.h"
 #include "mds/common/type.h"
 #include "mds/filesystem/store_operation.h"
+#include "mds/storage/dummy_storage.h"
 
 namespace dingofs {
 namespace mds {
@@ -262,6 +264,170 @@ TEST_F(CopyFileRangeCloneSliceTest, MultipleSlicesPreserved) {
   EXPECT_EQ(out[0][1].pos(), 1024u);
   EXPECT_EQ(out[0][2].id(), 3u);
   EXPECT_EQ(out[0][2].pos(), 2048u);
+}
+
+// ---------------------------------------------------------------------------
+// CopyFileRangeOperation::Run against DummyStorage. These cover the same-file
+// (src_ino == dst_ino) path, where the source and destination resolve to one
+// inode and one set of chunks.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+constexpr uint32_t kFsId = 1;
+constexpr uint64_t kRunChunkSize = 8192;
+constexpr uint64_t kRunBlockSize = 4096;
+
+FsInfoEntry MakeRunFsInfo() {
+  FsInfoEntry fs_info;
+  fs_info.set_fs_id(kFsId);
+  fs_info.set_chunk_size(kRunChunkSize);
+  fs_info.set_block_size(kRunBlockSize);
+  return fs_info;
+}
+
+AttrEntry MakeFileInode(Ino ino, uint64_t length) {
+  AttrEntry attr;
+  attr.set_ino(ino);
+  attr.set_type(pb::mds::FileType::FILE);
+  attr.set_length(length);
+  attr.set_version(1);
+  return attr;
+}
+
+}  // namespace
+
+class CopyFileRangeRunTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    storage_ = DummyStorage::New();
+    ASSERT_TRUE(storage_->Init(""));
+  }
+
+  void Seed(const std::string& key, const std::string& value) {
+    ASSERT_TRUE(storage_->Put(KVStorage::WriteOption(), key, value).ok());
+  }
+
+  AttrEntry GetInode(Ino ino) {
+    std::string value;
+    EXPECT_TRUE(storage_->Get(MetaCodec::EncodeInodeKey(kFsId, ino), value).ok());
+    return MetaCodec::DecodeInodeValue(value);
+  }
+
+  ChunkEntry GetChunk(Ino ino, uint64_t index) {
+    std::string value;
+    EXPECT_TRUE(
+        storage_->Get(MetaCodec::EncodeChunkKey(kFsId, ino, index), value).ok());
+    return MetaCodec::DecodeChunkValue(value);
+  }
+
+  Trace trace_;
+  KVStorageSPtr storage_;
+};
+
+// Copy a range within the same file and the same chunk. The destination chunk
+// must keep its original slice AND gain the cloned one (regression: the dst
+// chunk used to be recreated empty, dropping the original slices).
+TEST_F(CopyFileRangeRunTest, SameFileNonOverlappingSameChunk) {
+  const Ino ino = 100;
+  Seed(MetaCodec::EncodeInodeKey(kFsId, ino),
+       MetaCodec::EncodeInodeValue(MakeFileInode(ino, 2048)));
+
+  ChunkEntry chunk = MakeChunk(0, {MakeSlice(/*id=*/1000, /*off=*/0,
+                                             /*len=*/2048, /*pos=*/0)});
+  chunk.set_chunk_size(kRunChunkSize);
+  chunk.set_block_size(kRunBlockSize);
+  Seed(MetaCodec::EncodeChunkKey(kFsId, ino, 0),
+       MetaCodec::EncodeChunkValue(chunk));
+
+  CopyFileRangeOperation::Param param{};
+  param.src_ino = ino;
+  param.dst_ino = ino;
+  param.src_off = 0;
+  param.dst_off = 4096;
+  param.len = 2048;
+  CopyFileRangeOperation op(trace_, MakeRunFsInfo(), param);
+
+  auto txn = storage_->NewTxn();
+  ASSERT_TRUE(op.Run(txn).ok());
+  ASSERT_TRUE(txn->Commit().ok());
+
+  // Destination chunk keeps the original slice and gains the cloned one.
+  ChunkEntry out_chunk = GetChunk(ino, 0);
+  std::vector<SliceEntry> slices(out_chunk.slices().begin(),
+                                 out_chunk.slices().end());
+  SortByPos(slices);
+  ASSERT_EQ(slices.size(), 2u);
+  EXPECT_EQ(slices[0].id(), 1000u);
+  EXPECT_EQ(slices[0].pos(), 0u);
+  EXPECT_EQ(slices[1].id(), 1000u);
+  EXPECT_EQ(slices[1].pos(), 4096u);
+  EXPECT_EQ(slices[1].len(), 2048u);
+  EXPECT_EQ(slices[1].off(), 0u);
+
+  // The single inode grew once and is now shared.
+  AttrEntry out_attr = GetInode(ino);
+  EXPECT_EQ(out_attr.length(), 6144u);
+  EXPECT_TRUE(out_attr.shared_slice());
+  EXPECT_EQ(out_attr.version(), 2u);
+
+  // Both references are tracked against the same inode.
+  std::string ref_value;
+  ASSERT_TRUE(
+      storage_->Get(MetaCodec::EncodeSliceRefKey(1000), ref_value).ok());
+  SliceRefEntry ref = MetaCodec::DecodeSliceRefValue(ref_value);
+  EXPECT_EQ(ref.ref_count(), 2);
+  ASSERT_EQ(ref.inos_size(), 2);
+  EXPECT_EQ(ref.inos(0), ino);
+  EXPECT_EQ(ref.inos(1), ino);
+
+  EXPECT_EQ(op.GetResult().bytes_copied, 2048u);
+  EXPECT_EQ(op.GetResult().length_delta, 4096);
+}
+
+// Copy within the same file but into a different (new) chunk. The source chunk
+// must stay untouched while the destination chunk is created with the clone.
+TEST_F(CopyFileRangeRunTest, SameFileCopyToDifferentChunk) {
+  const Ino ino = 200;
+  Seed(MetaCodec::EncodeInodeKey(kFsId, ino),
+       MetaCodec::EncodeInodeValue(MakeFileInode(ino, 4096)));
+
+  ChunkEntry chunk0 = MakeChunk(0, {MakeSlice(/*id=*/2000, /*off=*/0,
+                                              /*len=*/4096, /*pos=*/0)});
+  chunk0.set_chunk_size(kRunChunkSize);
+  chunk0.set_block_size(kRunBlockSize);
+  Seed(MetaCodec::EncodeChunkKey(kFsId, ino, 0),
+       MetaCodec::EncodeChunkValue(chunk0));
+
+  CopyFileRangeOperation::Param param{};
+  param.src_ino = ino;
+  param.dst_ino = ino;
+  param.src_off = 0;
+  param.dst_off = kRunChunkSize;  // start of chunk 1
+  param.len = 4096;
+  CopyFileRangeOperation op(trace_, MakeRunFsInfo(), param);
+
+  auto txn = storage_->NewTxn();
+  ASSERT_TRUE(op.Run(txn).ok());
+  ASSERT_TRUE(txn->Commit().ok());
+
+  // Source chunk is left exactly as it was.
+  ChunkEntry out0 = GetChunk(ino, 0);
+  ASSERT_EQ(out0.slices_size(), 1);
+  EXPECT_EQ(out0.slices(0).id(), 2000u);
+  EXPECT_EQ(out0.slices(0).pos(), 0u);
+
+  // Destination chunk is freshly created holding only the cloned slice.
+  ChunkEntry out1 = GetChunk(ino, 1);
+  ASSERT_EQ(out1.slices_size(), 1);
+  EXPECT_EQ(out1.slices(0).id(), 2000u);
+  EXPECT_EQ(out1.slices(0).pos(), 0u);
+  EXPECT_EQ(out1.slices(0).len(), 4096u);
+
+  AttrEntry out_attr = GetInode(ino);
+  EXPECT_EQ(out_attr.length(), kRunChunkSize + 4096);
+  EXPECT_TRUE(out_attr.shared_slice());
+  EXPECT_EQ(op.GetResult().bytes_copied, 4096u);
 }
 
 }  // namespace unit_test

@@ -13,6 +13,7 @@ DEFINE_boolean stop false 'just stop client, do not start'
 DEFINE_boolean upgrade true 'upgrade client'
 DEFINE_boolean loop false 'loop restart client'
 DEFINE_boolean clean_log false 'clean log'
+DEFINE_integer port 11000 'dummy server port'
 
 
 # parse the command-line
@@ -142,7 +143,7 @@ function start() {
         mkdir -p ${mountpoint_dir}
     fi
 
-    dummy_port=11000
+    dummy_port=${FLAGS_port}
     if [ ${index} -gt 1 ]; then
         dummy_port=$(($RANDOM%20000 + 10000))
     fi

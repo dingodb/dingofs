@@ -1014,15 +1014,18 @@ Status MDSMetaSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
       return status;
     }
 
-    CHECK(chunks.size() == 1) << fmt::format(
-        "[meta.fs.{}.{}.{}] reeadslice fail, chunks size({}) != 1.", ino, fh,
-        index, chunks.size());
+    if (!chunks.empty()) {
+      auto& chunk = chunks.front();
+      for (const auto& slice : chunk.slices()) {
+        slices->push_back(Helper::ToSlice(slice));
+      }
+      version = chunk.version();
 
-    auto& chunk = chunks.front();
-    for (const auto& slice : chunk.slices()) {
-      slices->push_back(Helper::ToSlice(slice));
+    } else {
+      LOG(WARNING) << fmt::format(
+          "[meta.fs.{}.{}.{}] reeadslice not found, return empty slice.", ino,
+          fh, index);
     }
-    version = chunk.version();
 
     return Status::OK();
   }
@@ -1420,8 +1423,9 @@ Status MDSMetaSystem::GetAttr(ContextSPtr ctx, Ino ino, Attr* attr) {
   if (inode == nullptr) {
     // Cold path: pull a fresh AttrEntry (carries hashed uid/gid) and
     // route it through PutInodeToCache so the inode cache is
-    // populated/refreshed before inode->ToAttr() emits the hashed-id attr.  The
-    // VFS layer above (not ToAttr) performs the local-host uid/gid translation.
+    // populated/refreshed before inode->ToAttr() emits the hashed-id attr.
+    // The VFS layer above (not ToAttr) performs the local-host uid/gid
+    // translation.
     AttrEntry attr_entry;
     auto status = mds_client_.GetAttr(ctx, ino, attr_entry);
     if (!status.ok()) {
@@ -1958,6 +1962,13 @@ Status MDSMetaSystem::CopyFileRange(ContextSPtr ctx, Ino src_ino,
   *bytes_copied = 0;
 
   if (len == 0) return Status::OK();
+  if (src_ino == dst_ino && src_off == dst_off) {
+    return Status::InvalidParam("src and dst are the same, no need to copy");
+  }
+
+  // flush src file
+  Status status = FlushSliceAndFile(ctx, src_ino);
+  if (!status.ok()) return status;
 
   MDSClient::CopyFileRangeParam param;
   param.src_ino = src_ino;
@@ -1968,8 +1979,7 @@ Status MDSMetaSystem::CopyFileRange(ContextSPtr ctx, Ino src_ino,
   param.flags = flags;
 
   AttrEntry dst_attr_entry;
-  auto status =
-      mds_client_.CopyFileRange(ctx, param, *bytes_copied, dst_attr_entry);
+  status = mds_client_.CopyFileRange(ctx, param, *bytes_copied, dst_attr_entry);
   if (!status.ok()) return status;
 
   PutInodeToCache(dst_attr_entry);
