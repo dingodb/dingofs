@@ -1075,8 +1075,7 @@ Status MDSClient::GetAttr(ContextSPtr& ctx, Ino ino, AttrEntry& attr_entry) {
 }
 
 Status MDSClient::SetAttr(ContextSPtr& ctx, Ino ino, const Attr& attr,
-                          int to_set, AttrEntry& attr_entry,
-                          bool& shrink_file) {
+                          int to_set, AttrWithChunkOut& out) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, ino](bool& is_primary_mds) -> MDSMeta {
@@ -1158,8 +1157,10 @@ Status MDSClient::SetAttr(ContextSPtr& ctx, Ino ino, const Attr& attr,
 
   parent_memo_.UpsertVersion(ino, response.inode().version());
 
-  attr_entry.Swap(response.mutable_inode());
-  shrink_file = response.shrink_file();
+  out.attr_entry.Swap(response.mutable_inode());
+  out.shrink_file = response.shrink_file();
+  out.expand_file = response.expand_file();
+  out.effected_chunks = mds::Helper::PbRepeatedToVector(response.chunks());
 
   return Status::OK();
 }
@@ -1523,7 +1524,7 @@ Status MDSClient::CompactChunk(ContextSPtr& ctx, Ino ino, uint32_t chunk_index,
 
 Status MDSClient::CopyFileRange(ContextSPtr& ctx,
                                 const CopyFileRangeParam& param,
-                                uint64_t& bytes_copied, AttrEntry& dst_inode) {
+                                AttrWithChunkOut& out) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
   CHECK(ctx != nullptr) << "context is nullptr.";
   CHECK(param.src_ino != 0) << "src_ino is zero.";
@@ -1555,14 +1556,16 @@ Status MDSClient::CopyFileRange(ContextSPtr& ctx,
     return status;
   }
 
-  bytes_copied = response.bytes_copied();
-  dst_inode.Swap(response.mutable_dst_inode());
+  out.bytes_copied = response.bytes_copied();
+  out.attr_entry.Swap(response.mutable_dst_inode());
+  out.effected_chunks = mds::Helper::PbRepeatedToVector(response.dst_chunks());
 
   return Status::OK();
 }
 
 Status MDSClient::Fallocate(ContextSPtr& ctx, Ino ino, int32_t mode,
-                            uint64_t offset, uint64_t length) {
+                            uint64_t offset, uint64_t length,
+                            AttrWithChunkOut& out) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto get_mds_fn = [this, ino](bool& is_primary_mds) -> MDSMeta {
@@ -1591,6 +1594,11 @@ Status MDSClient::Fallocate(ContextSPtr& ctx, Ino ino, int32_t mode,
   const auto& attr = response.inode();
 
   parent_memo_.UpsertVersion(attr.ino(), attr.version());
+
+  out.attr_entry.Swap(response.mutable_inode());
+  out.shrink_file = response.shrink_file();
+  out.expand_file = response.expand_file();
+  out.effected_chunks = mds::Helper::PbRepeatedToVector(response.chunks());
 
   return Status::OK();
 }

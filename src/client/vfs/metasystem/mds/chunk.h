@@ -55,7 +55,10 @@ class Chunk {
   Chunk(Ino ino, uint32_t index)
       : ino_(ino), index_(index), last_active_s_(utils::Timestamp()) {}
   Chunk(Ino ino, const ChunkEntry& chunk, const char* reason)
-      : ino_(ino), index_(chunk.index()), last_active_s_(utils::Timestamp()) {
+      : ino_(ino),
+        index_(chunk.index()),
+        is_completed_(true),
+        last_active_s_(utils::Timestamp()) {
     Put(chunk, reason);
   }
 
@@ -300,11 +303,6 @@ class ChunkSet {
     last_write_length_ = std::max(last_write_length_, offset + size);
     last_write_time_ns_ = utils::TimestampNs();
   }
-  void SetLastWriteLength(uint64_t length) {
-    utils::WriteLockGuard lk(lock_);
-    last_write_length_ = length;
-    last_write_time_ns_ = utils::TimestampNs();
-  }
   void ResetLastWriteLength() {
     utils::WriteLockGuard lk(lock_);
     last_write_length_ = 0;
@@ -322,10 +320,20 @@ class ChunkSet {
     utils::ReadLockGuard guard(lock_);
     return last_commited_length_;
   }
+  void ResetLastComitedLength() {
+    utils::WriteLockGuard guard(lock_);
+    last_commited_length_ = 0;
+  }
 
   // chunk operations
   void Append(uint32_t index, const std::vector<Slice>& slices);
   void Put(const std::vector<ChunkEntry>& chunks, const char* reason);
+
+  // Mark every cached chunk not-completed so the next ReadSlice re-fetches
+  // fresh slices from the MDS. Used after operations that change committed
+  // slice lists out-of-band (truncate-down / fallocate hole/zero), where the
+  // cached commited_slices_ would otherwise keep serving the pre-op data.
+  void InvalidateReadCache();
 
   size_t GetChunkSize() const {
     utils::ReadLockGuard guard(lock_);

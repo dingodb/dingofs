@@ -2164,7 +2164,7 @@ Status FileSystem::GetAttr(Context& ctx, Ino ino, EntryOut& entry_out) {
   return Status::OK();
 }
 
-Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, EntryOut& entry_out) {
+Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, EntryWithChunkOut& entry_out) {
   if (!CanServe(ctx)) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -2193,10 +2193,6 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
         return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
       }
     }
-
-    if (!slice_id_generator_->GenID(1, extra_param.slice_id)) {
-      return Status(pb::error::EALLOC_ID, "generate slice id fail");
-    }
   }
 
   // update backend store
@@ -2212,10 +2208,11 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
   auto& result = operation.GetResult();
   auto& attr = result.attr;
   int64_t delta_bytes = result.delta_bytes;
+  auto& effected_chunks = result.effected_chunks;
 
   // update quota
   std::string reason = fmt::format("setattr.{}.{}", request_id, ino);
-  if (param.to_set & kSetAttrSize) {
+  if (param.to_set & kSetAttrSize && attr.nlink() > 0) {
     quota_manager_.UpdateFsUsage(delta_bytes, 0, reason);
 
     for (const auto& parent : attr.parents()) {
@@ -2224,7 +2221,7 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
   }
 
   // update chunk cache
-  if (delta_bytes < 0) chunk_cache_.Delete(ino);
+  for (auto& chunk : effected_chunks) chunk_cache_.PutIf(ino, chunk);
 
   // update cache
   auto last_inode = UpsertInodeCache(attr, reason);
@@ -2232,6 +2229,8 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
   // set output
   entry_out.attr = (IsDir(ino) && HasDirAttrMutation()) ? last_inode->ToAttr() : attr;
   entry_out.shrink_file = (delta_bytes < 0) ? true : false;
+  entry_out.expand_file = (delta_bytes > 0) ? true : false;
+  entry_out.chunks.swap(effected_chunks);
 
   if (IsDir(ino)) RefreshPartitionDeltaVersion(ino, entry_out.attr.version());
 
@@ -2788,8 +2787,7 @@ Status FileSystem::ReadSlice(Context& ctx, Ino ino, const std::vector<ChunkDescr
   return Status::OK();
 }
 
-Status FileSystem::CopyFileRange(Context& ctx, const CopyFileRangeParam& param, uint64_t& bytes_copied,
-                                 AttrEntry& dst_attr) {
+Status FileSystem::CopyFileRange(Context& ctx, const CopyFileRangeParam& param, EntryWithChunkOut& entry_out) {
   if (!CanServe(ctx)) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -2819,25 +2817,33 @@ Status FileSystem::CopyFileRange(Context& ctx, const CopyFileRangeParam& param, 
   if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
-  int64_t length_delat = result.length_delta;
-  bytes_copied = result.bytes_copied;
-  dst_attr = result.dst_attr;
+  auto& dst_attr = result.dst_attr;
+  int64_t length_delta = result.length_delta;
+  int64_t bytes_copied = result.bytes_copied;
+  auto& effect_chunks = result.effected_chunks;
 
   std::string reason = fmt::format("copy_file_range.{}.{}->{}", ctx.RequestId(), param.src_ino, param.dst_ino);
   if (bytes_copied > 0) {
     UpsertInodeCache(dst_attr, reason);
-    chunk_cache_.Delete(param.dst_ino);
   }
 
-  if (length_delat > 0) {
-    quota_manager_.UpdateFsUsage(length_delat, 0, reason);
-    quota_manager_.AsyncUpdateDirUsage(param.dst_ino, length_delat, 0, reason);
+  // update chunk cache
+  for (auto& chunk : effect_chunks) chunk_cache_.PutIf(param.dst_ino, chunk);
+
+  if (length_delta > 0) {
+    quota_manager_.UpdateFsUsage(length_delta, 0, reason);
+    quota_manager_.AsyncUpdateDirUsage(param.dst_ino, length_delta, 0, reason);
   }
+
+  entry_out.attr = dst_attr;
+  entry_out.delta_bytes = bytes_copied;
+  entry_out.chunks.swap(effect_chunks);
 
   return Status::OK();
 }
 
-Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offset, uint64_t len, EntryOut& entry_out) {
+Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offset, uint64_t len,
+                             EntryWithChunkOut& entry_out) {
   if (!CanServe(ctx)) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -2854,6 +2860,19 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
   if (IsInodeInTrash(inode)) {
     return Status(pb::error::ENOT_SUPPORT, "cannot fallocate on trashed inode");
   }
+
+  auto parse_mode_fn = [](int32_t mode) -> const char* {
+    if (mode == 0) {
+      return "PreAlloc";
+    } else if (mode & FALLOC_FL_PUNCH_HOLE) {
+      return "PunchHole";
+    } else if (mode & FALLOC_FL_ZERO_RANGE) {
+      return (mode & FALLOC_FL_KEEP_SIZE) ? "ZeroRangeKeepSize" : "ZeroRange";
+
+    } else {
+      return "Unknown";
+    }
+  };
 
   utils::Duration duration;
 
@@ -2903,21 +2922,36 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
 
   FallocateOperation operation(trace, param);
 
+  LOG(INFO) << fmt::format("[fs.{}.{}][{}us] fallocate finish, param({}|{}|{}|{}|{}) status({}).", fs_id_, ino,
+                           ctx.RequestId(), duration.ElapsedUs(), parse_mode_fn(mode), offset, len, slice_id, slice_num,
+                           status.error_str());
+
   status = RunOperation(&operation);
   if (!status.ok()) return status;
 
   auto& result = operation.GetResult();
   auto& attr = result.attr;
+  int64_t delta_bytes = result.delta_bytes;
   auto& effected_chunks = result.effected_chunks;
 
   std::string reason = fmt::format("fallocate.{}.{}", request_id, ino);
   UpsertInodeCache(attr, reason);
 
-  entry_out.attr = std::move(attr);
-
   // update chunk cache
-  for (auto& chunk : effected_chunks) {
-    chunk_cache_.PutIf(ino, std::move(chunk));
+  for (auto& chunk : effected_chunks) chunk_cache_.PutIf(ino, chunk);
+
+  entry_out.attr = std::move(attr);
+  entry_out.shrink_file = (delta_bytes < 0) ? true : false;
+  entry_out.expand_file = (delta_bytes > 0) ? true : false;
+  entry_out.chunks.swap(effected_chunks);
+
+  // update quota
+  if (delta_bytes != 0 && attr.nlink() > 0) {
+    quota_manager_.UpdateFsUsage(delta_bytes, 0, reason);
+
+    for (const auto& parent : attr.parents()) {
+      quota_manager_.AsyncUpdateDirUsage(parent, delta_bytes, 0, reason);
+    }
   }
 
   return Status::OK();
@@ -3808,7 +3842,7 @@ FsInfoEntry FileSystemSet::GenFsInfo(uint32_t fs_id, const CreateFsParam& param)
   fs_info.set_status(pb::mds::FsStatus::NORMAL);
   fs_info.set_block_size(param.block_size);
   fs_info.set_chunk_size(param.chunk_size);
-  fs_info.set_enable_sum_in_dir(param.enable_sum_in_dir);
+  fs_info.set_enable_dir_stats(param.enable_dir_stats);
   fs_info.set_owner(param.owner);
   fs_info.set_capacity(param.capacity);
   fs_info.set_recycle_time_hour(param.recycle_time_hour > 0 ? param.recycle_time_hour

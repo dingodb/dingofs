@@ -43,7 +43,6 @@ bool Chunk::Put(const ChunkEntry& chunk, const char* reason) {
 
   utils::WriteLockGuard guard(lock_);
 
-  is_completed_ = true;
   last_active_s_ = utils::Timestamp();
 
   LOG_DEBUG << fmt::format(
@@ -53,7 +52,8 @@ bool Chunk::Put(const ChunkEntry& chunk, const char* reason) {
       chunk.slices_size(), stage_slices_.size(), commiting_slices_.size(),
       commited_slices_.size(), reason);
 
-  if (chunk.version() <= commited_version_) return false;
+  if (chunk.version() < commited_version_) return false;
+  if (chunk.version() == commited_version_ && is_completed_) return false;
 
   commited_slices_.clear();
   for (const auto& slice : chunk.slices()) {
@@ -75,6 +75,7 @@ bool Chunk::Put(const ChunkEntry& chunk, const char* reason) {
   }
 
   commited_version_ = chunk.version();
+  is_completed_ = true;
 
   return true;
 }
@@ -359,6 +360,14 @@ void ChunkSet::Put(const std::vector<ChunkEntry>& chunks, const char* reason) {
     } else {
       chunk_map_.emplace(chunk.index(), Chunk::New(ino_, chunk, reason));
     }
+  }
+}
+
+void ChunkSet::InvalidateReadCache() {
+  utils::ReadLockGuard guard(lock_);
+
+  for (auto& [index, chunk] : chunk_map_) {
+    chunk->SetNotCompleted();
   }
 }
 

@@ -1742,7 +1742,7 @@ mds::FsInfoEntry LocalMetaSystem::GenFsInfo() {
   fs_info.set_status(pb::mds::FsStatus::NORMAL);
   fs_info.set_block_size(kBlockSize);
   fs_info.set_chunk_size(kChunkSize);
-  fs_info.set_enable_sum_in_dir(false);
+  fs_info.set_enable_dir_stats(false);
   fs_info.set_owner(std::getenv("USER"));
   fs_info.set_capacity(INT64_MAX);
   fs_info.set_recycle_time_hour(24);

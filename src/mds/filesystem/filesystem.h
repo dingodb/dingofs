@@ -70,6 +70,20 @@ struct EntryOut {
   AttrEntry attr;
   std::vector<AttrEntry> attrs;
   bool shrink_file{false};
+  bool expand_file{false};
+};
+
+struct EntryWithChunkOut {
+  EntryWithChunkOut() = default;
+  using AttrEntry = Inode::AttrEntry;
+
+  explicit EntryWithChunkOut(const AttrEntry& attr) : attr(attr) {}
+
+  AttrEntry attr;
+  int64_t delta_bytes{0};
+  bool shrink_file{false};
+  bool expand_file{false};
+  std::vector<ChunkEntry> chunks;
 };
 
 class FileSystem : public std::enable_shared_from_this<FileSystem> {
@@ -194,7 +208,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
     AttrEntry attr;
   };
 
-  Status SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, EntryOut& entry_out);
+  Status SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, EntryWithChunkOut& entry_out);
   Status GetAttr(Context& ctx, Ino ino, EntryOut& entry_out);
 
   // xattr
@@ -239,10 +253,10 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
     uint64_t dst_off;
     uint64_t len;
   };
-  Status CopyFileRange(Context& ctx, const CopyFileRangeParam& param, uint64_t& bytes_copied, AttrEntry& dst_attr);
+  Status CopyFileRange(Context& ctx, const CopyFileRangeParam& param, EntryWithChunkOut& entry_out);
 
   // fallocate
-  Status Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offset, uint64_t len, EntryOut& entry_out);
+  Status Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offset, uint64_t len, EntryWithChunkOut& entry_out);
 
   // compact
   struct CompactChunkParam {
@@ -450,7 +464,7 @@ class FileSystemSet {
     uint64_t chunk_size;
     pb::mds::FsType fs_type;
     pb::mds::FsExtra fs_extra;
-    bool enable_sum_in_dir;
+    bool enable_dir_stats{false};
     std::string owner;
     uint64_t capacity;
     uint32_t recycle_time_hour;

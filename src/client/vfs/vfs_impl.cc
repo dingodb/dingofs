@@ -310,6 +310,15 @@ Status VFSImpl::SetAttr(ContextSPtr ctx, Ino ino, int set, const Attr& in_attr,
   if (set & kSetAttrUid) send_attr.uid = LocalUidToHashed(in_attr.uid);
   if (set & kSetAttrGid) send_attr.gid = LocalGidToHashed(in_attr.gid);
 
+  // A size change (truncate) must be ordered after buffered writes: flush them
+  // to storage first so the MDS truncate's zero-slices shadow them. Otherwise a
+  // write still buffered here could land *after* the truncate and re-expose the
+  // bytes the truncate was meant to drop.
+  if (set & kSetAttrSize) {
+    Status s = handle_manager_->FlushByIno(ino);
+    if (!s.ok()) return s;
+  }
+
   Status s =
       meta_system_->SetAttr(ctx, TranslateIno(ino), set, send_attr, out_attr);
   if (s.ok()) {
@@ -334,8 +343,13 @@ Status VFSImpl::Fallocate(ContextSPtr ctx, Ino ino, int mode, uint64_t offset,
     return Status::NoPermitted("fallocate on internal node");
   }
 
-  Status s =
-      meta_system_->Fallocate(ctx, TranslateIno(ino), mode, offset, length);
+  // Same ordering requirement as truncate: PUNCH_HOLE / ZERO_RANGE write zero
+  // slices that must shadow already-written data, so flush buffered writes
+  // first — otherwise a late-flushed write lands after and survives the hole.
+  Status s = handle_manager_->FlushByIno(ino);
+  if (!s.ok()) return s;
+
+  s = meta_system_->Fallocate(ctx, TranslateIno(ino), mode, offset, length);
   // Mirror the SetAttr(size) path: PUNCH_HOLE / ZERO_RANGE / extending the
   // file all change byte contents in [offset, offset+length); cached readahead
   // buffers in FileReader::requests_ on the same fd would otherwise serve
@@ -374,24 +388,19 @@ Status VFSImpl::CopyFileRange(ContextSPtr ctx, Ino src_ino, uint64_t src_off,
     }
   }
 
-  Status s;
-
   // Flush both files' buffered writes so MDS observes durable slices.
   // Use FlushByIno to cover all open handles for each inode.
-  s = handle_manager_->FlushByIno(src_ino);
+  Status s = handle_manager_->FlushByIno(src_ino);
   if (!s.ok()) return s;
   if (dst_ino != src_ino) {
     s = handle_manager_->FlushByIno(dst_ino);
     if (!s.ok()) return s;
   }
 
-  Attr dst_attr;
   s = meta_system_->CopyFileRange(ctx, TranslateIno(src_ino), src_off,
                                   TranslateIno(dst_ino), dst_off, len, flags,
-                                  bytes_copied, &dst_attr);
+                                  bytes_copied);
   if (!s.ok()) return s;
-
-  TranslateAttrToLocal(&dst_attr);
 
   // Invalidate any in-flight reader caches for the rewritten dst range.
   if (*bytes_copied > 0) {
