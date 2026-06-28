@@ -98,3 +98,44 @@ def test_truncate_to_zero(test_dir):
     assert os.path.getsize(path) == 0
 
 
+@pytest.mark.standard
+def test_truncate_shrink_then_grow_drops_data(test_dir):
+    """Shrinking past written data then growing back must read zeros, not the
+    stale bytes the shrink dropped (regression for fsx READ BAD DATA)."""
+    path = os.path.join(test_dir, "shrink_grow.bin")
+
+    with open(path, "wb") as f:
+        f.write(os.urandom(_10MB))
+
+    # Drop everything after 1MB, then grow back over the dropped range.
+    os.truncate(path, _1MB)
+    os.truncate(path, _10MB)
+
+    with open(path, "rb") as f:
+        f.seek(_1MB)
+        tail = f.read()
+
+    assert len(tail) == _10MB - _1MB
+    assert tail == b"\x00" * (_10MB - _1MB)
+
+
+@pytest.mark.standard
+def test_truncate_shrink_then_fallocate_drops_data(test_dir):
+    """Same as above, but the file is re-extended via fallocate instead of
+    truncate-up; the dropped range must still read back as zeros."""
+    path = os.path.join(test_dir, "shrink_falloc.bin")
+
+    with open(path, "wb") as f:
+        f.write(os.urandom(_10MB))
+
+    os.truncate(path, _1MB)
+    with open(path, "r+b") as f:
+        os.posix_fallocate(f.fileno(), 0, _10MB)
+
+    with open(path, "rb") as f:
+        f.seek(_1MB)
+        tail = f.read(_10MB - _1MB)
+
+    assert tail == b"\x00" * (_10MB - _1MB)
+
+

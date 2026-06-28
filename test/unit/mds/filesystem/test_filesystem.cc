@@ -65,7 +65,7 @@ static pb::mds::FsInfo CreateFsInfo(
   fs_info.set_status(pb::mds::FsStatus::NORMAL);
   fs_info.set_block_size(1024 * 1024);
   fs_info.set_chunk_size(1024 * 1024 * 64);
-  fs_info.set_enable_sum_in_dir(false);
+  fs_info.set_enable_dir_stats(false);
   fs_info.set_owner("dengzh");
   fs_info.set_capacity(1024 * 1024 * 1024);
   fs_info.set_recycle_time_hour(24);
@@ -109,7 +109,7 @@ class FileSystemSetTest : public testing::Test {
     auto kv_storage = DummyStorage::New();
     ASSERT_TRUE(kv_storage->Init("")) << "init kv storage fail.";
 
-    auto operation_processor = OperationProcessor::New(kv_storage);
+    operation_processor = OperationProcessor::New(kv_storage);
     ASSERT_TRUE(operation_processor->Init()) << "init mutation merger fail.";
 
     MDSMeta mds_meta;
@@ -126,18 +126,27 @@ class FileSystemSetTest : public testing::Test {
     ASSERT_TRUE(fs_set->Init()) << "init fs set fail.";
   }
 
-  static void TearDownTestSuite() {}
+  static void TearDownTestSuite() {
+    fs_set = nullptr;
+
+    if (operation_processor != nullptr) {
+      operation_processor->Destroy();
+      operation_processor = nullptr;
+    }
+  }
 
   void SetUp() override {}
   void TearDown() override {}
 
  public:
   static FileSystemSetSPtr fs_set;
+  static OperationProcessorSPtr operation_processor;
 
   static FileSystemSetSPtr FsSet() { return fs_set; }
 };
 
 FileSystemSetSPtr FileSystemSetTest::fs_set = nullptr;
+OperationProcessorSPtr FileSystemSetTest::operation_processor = nullptr;
 
 // test FileSystem
 class FileSystemTest : public testing::Test {
@@ -157,7 +166,7 @@ class FileSystemTest : public testing::Test {
     auto kv_storage = DummyStorage::New();
     ASSERT_TRUE(kv_storage->Init("")) << "init kv storage fail.";
 
-    auto operation_processor = OperationProcessor::New(kv_storage);
+    operation_processor = OperationProcessor::New(kv_storage);
     ASSERT_TRUE(operation_processor->Init()) << "init mutation merger fail.";
 
     pb::mds::FsInfo fs_info = CreateFsInfo(
@@ -172,18 +181,27 @@ class FileSystemTest : public testing::Test {
         << "create root fail, error: " << status.error_str();
   }
 
-  static void TearDownTestSuite() {}
+  static void TearDownTestSuite() {
+    fs = nullptr;
+
+    if (operation_processor != nullptr) {
+      operation_processor->Destroy();
+      operation_processor = nullptr;
+    }
+  }
 
   void SetUp() override {}
   void TearDown() override {}
 
  public:
   static FileSystemSPtr fs;
+  static OperationProcessorSPtr operation_processor;
 
   static FileSystemSPtr Fs() { return fs; }
 };
 
 FileSystemSPtr FileSystemTest::fs = nullptr;
+OperationProcessorSPtr FileSystemTest::operation_processor = nullptr;
 
 TEST_F(FileSystemSetTest, CreateFs) {
   GTEST_SKIP() << "skip test.";
@@ -195,7 +213,7 @@ TEST_F(FileSystemSetTest, CreateFs) {
   param.block_size = 1024 * 1024;
   param.fs_type = pb::mds::FsType::S3;
   *param.fs_extra.mutable_s3_info() = CreateS3Info();
-  param.enable_sum_in_dir = false;
+  param.enable_dir_stats = false;
   param.owner = "dengzh";
   param.capacity = 1024 * 1024 * 1024;
   param.recycle_time_hour = 24;
@@ -220,7 +238,7 @@ TEST_F(FileSystemSetTest, GetFsInfo) {
   param.block_size = 1024 * 1024;
   param.fs_type = pb::mds::FsType::S3;
   *param.fs_extra.mutable_s3_info() = CreateS3Info();
-  param.enable_sum_in_dir = false;
+  param.enable_dir_stats = false;
   param.owner = "dengzh";
   param.capacity = 1024 * 1024 * 1024;
   param.recycle_time_hour = 24;
@@ -235,7 +253,7 @@ TEST_F(FileSystemSetTest, GetFsInfo) {
   ASSERT_EQ(fs_info.fs_name(), param.fs_name) << "fs name not equal.";
   ASSERT_EQ(fs_info.fs_type(), param.fs_type) << "fs type not equal.";
   ASSERT_EQ(fs_info.block_size(), param.block_size) << "block size not equal.";
-  ASSERT_EQ(fs_info.enable_sum_in_dir(), param.enable_sum_in_dir)
+  ASSERT_EQ(fs_info.enable_dir_stats(), param.enable_dir_stats)
       << "enable sum in dir not equal.";
   ASSERT_EQ(fs_info.owner(), param.owner) << "owner not equal.";
   ASSERT_EQ(fs_info.capacity(), param.capacity) << "capacity not equal.";
@@ -253,7 +271,7 @@ TEST_F(FileSystemSetTest, DeleteFs) {
   param.block_size = 1024 * 1024;
   param.fs_type = pb::mds::FsType::S3;
   *param.fs_extra.mutable_s3_info() = CreateS3Info();
-  param.enable_sum_in_dir = false;
+  param.enable_dir_stats = false;
   param.owner = "dengzh";
   param.capacity = 1024 * 1024 * 1024;
   param.recycle_time_hour = 24;
@@ -286,7 +304,7 @@ TEST_F(FileSystemSetTest, MountFs) {
   param.block_size = 1024 * 1024;
   param.fs_type = pb::mds::FsType::S3;
   *param.fs_extra.mutable_s3_info() = CreateS3Info();
-  param.enable_sum_in_dir = false;
+  param.enable_dir_stats = false;
   param.owner = "dengzh";
   param.capacity = 1024 * 1024 * 1024;
   param.recycle_time_hour = 24;
@@ -329,7 +347,7 @@ TEST_F(FileSystemSetTest, UnMountFs) {
   param.block_size = 1024 * 1024;
   param.fs_type = pb::mds::FsType::S3;
   *param.fs_extra.mutable_s3_info() = CreateS3Info();
-  param.enable_sum_in_dir = false;
+  param.enable_dir_stats = false;
   param.owner = "dengzh";
   param.capacity = 1024 * 1024 * 1024;
   param.recycle_time_hour = 24;
@@ -995,7 +1013,8 @@ TEST_F(FileSystemSetTest, CreateFs_PropagatesEnableUidGidMapTrue) {
 
   FileSystemSet::CreateFsParam param;
   param.fs_name = "uidgid-on";
-  param.fs_id = 30001;  // explicit id to avoid auto-increment and id-reuse issues
+  param.fs_id =
+      30001;  // explicit id to avoid auto-increment and id-reuse issues
   param.block_size = 1 << 20;
   param.chunk_size = 64 << 20;
   param.fs_type = pb::mds::FsType::S3;
@@ -1003,7 +1022,8 @@ TEST_F(FileSystemSetTest, CreateFs_PropagatesEnableUidGidMapTrue) {
   param.owner = "tester";
   param.capacity = 1ULL << 30;
   param.partition_type = pb::mds::PartitionType::MONOLITHIC_PARTITION;
-  param.candidate_mds_ids = {kMdsId};  // avoid random-select crash on empty mds_meta_map
+  param.candidate_mds_ids = {
+      kMdsId};  // avoid random-select crash on empty mds_meta_map
   param.enable_uid_gid_map = true;
 
   pb::mds::FsInfo fs_info;
@@ -1017,7 +1037,8 @@ TEST_F(FileSystemSetTest, CreateFs_PropagatesEnableUidGidMapDefaultFalse) {
 
   FileSystemSet::CreateFsParam param;
   param.fs_name = "uidgid-off";
-  param.fs_id = 30002;  // explicit id to avoid auto-increment and id-reuse issues
+  param.fs_id =
+      30002;  // explicit id to avoid auto-increment and id-reuse issues
   param.block_size = 1 << 20;
   param.chunk_size = 64 << 20;
   param.fs_type = pb::mds::FsType::S3;
@@ -1025,7 +1046,8 @@ TEST_F(FileSystemSetTest, CreateFs_PropagatesEnableUidGidMapDefaultFalse) {
   param.owner = "tester";
   param.capacity = 1ULL << 30;
   param.partition_type = pb::mds::PartitionType::MONOLITHIC_PARTITION;
-  param.candidate_mds_ids = {kMdsId};  // avoid random-select crash on empty mds_meta_map
+  param.candidate_mds_ids = {
+      kMdsId};  // avoid random-select crash on empty mds_meta_map
   // enable_uid_gid_map intentionally left default (false)
 
   pb::mds::FsInfo fs_info;

@@ -295,7 +295,7 @@ void MDSServiceImpl::DoCreateFs(google::protobuf::RpcController*, const pb::mds:
   param.block_size = request->block_size();
   param.fs_type = request->fs_type();
   param.fs_extra = request->fs_extra();
-  param.enable_sum_in_dir = request->enable_sum_in_dir();
+  param.enable_dir_stats = request->enable_dir_stats();
   param.owner = request->owner();
   param.capacity = request->capacity();
   param.recycle_time_hour = request->recycle_time_hour();
@@ -1804,7 +1804,7 @@ void MDSServiceImpl::DoSetAttr(google::protobuf::RpcController*, const pb::mds::
 
   Context ctx(request->context(), request->info().request_id(), __func__);
 
-  EntryOut entry_out;
+  EntryWithChunkOut entry_out;
   status = file_system->SetAttr(ctx, request->ino(), param, entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
@@ -1814,6 +1814,8 @@ void MDSServiceImpl::DoSetAttr(google::protobuf::RpcController*, const pb::mds::
 
   response->mutable_inode()->Swap(&entry_out.attr);
   response->set_shrink_file(entry_out.shrink_file);
+  response->set_expand_file(entry_out.expand_file);
+  Helper::VectorToPbRepeated(entry_out.chunks, response->mutable_chunks());
 }
 
 void MDSServiceImpl::SetAttr(google::protobuf::RpcController* controller, const pb::mds::SetAttrRequest* request,
@@ -2292,16 +2294,19 @@ void MDSServiceImpl::DoCopyFileRange(google::protobuf::RpcController*, const pb:
   param.dst_off = request->dst_off();
   param.len = request->len();
 
-  uint64_t bytes_copied = 0;
-  AttrEntry dst_attr;
-  status = file_system->CopyFileRange(ctx, param, bytes_copied, dst_attr);
+  // uint64_t bytes_copied = 0;
+  // AttrEntry dst_attr;
+  EntryWithChunkOut entry_out;
+  status = file_system->CopyFileRange(ctx, param, entry_out);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     SpanScope::SetStatus(span, status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  response->set_bytes_copied(bytes_copied);
-  response->mutable_dst_inode()->Swap(&dst_attr);
+  response->set_bytes_copied(entry_out.delta_bytes);
+  response->mutable_dst_inode()->Swap(&entry_out.attr);
+  Helper::VectorToPbRepeated(entry_out.chunks, response->mutable_dst_chunks());
 }
 
 void MDSServiceImpl::CopyFileRange(google::protobuf::RpcController* controller,
@@ -2354,14 +2359,18 @@ void MDSServiceImpl::DoFallocate(google::protobuf::RpcController*, const pb::mds
 
   Context ctx(request->context(), request->info().request_id(), __func__);
 
-  EntryOut entry_out;
+  EntryWithChunkOut entry_out;
   status = file_system->Fallocate(ctx, request->ino(), request->mode(), request->offset(), request->len(), entry_out);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     SpanScope::SetStatus(span, status);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
   response->mutable_inode()->Swap(&entry_out.attr);
+  response->set_shrink_file(entry_out.shrink_file);
+  response->set_expand_file(entry_out.expand_file);
+  Helper::VectorToPbRepeated(entry_out.chunks, response->mutable_chunks());
 }
 
 void MDSServiceImpl::Fallocate(google::protobuf::RpcController* controller, const pb::mds::FallocateRequest* request,

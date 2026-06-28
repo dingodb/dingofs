@@ -753,7 +753,6 @@ class UpdateAttrOperation : public Operation {
   struct ExtraParam {
     uint64_t chunk_size{0};
     uint64_t block_size{0};
-    uint64_t slice_id{0};
   };
 
   UpdateAttrOperation(Trace& trace, uint64_t ino, uint32_t to_set, const AttrEntry& attr, ExtraParam& extra_param)
@@ -763,6 +762,7 @@ class UpdateAttrOperation : public Operation {
   struct Result {
     AttrEntry attr;
     int64_t delta_bytes{0};
+    std::vector<ChunkEntry> effected_chunks;
   };
   OpType GetOpType() const override { return OpType::kUpdateAttr; }
 
@@ -1074,6 +1074,7 @@ class FallocateOperation : public Operation {
   struct Result {
     AttrEntry attr;
     std::vector<ChunkEntry> effected_chunks;
+    int64_t delta_bytes{0};
   };
 
   OpType GetOpType() const override { return OpType::kFallocate; }
@@ -1558,6 +1559,7 @@ class CopyFileRangeOperation : public Operation {
     uint64_t bytes_copied{0};
     AttrEntry dst_attr;
     int64_t length_delta{0};  // for quota accounting
+    std::vector<ChunkEntry> effected_chunks;
   };
 
   OpType GetOpType() const override { return OpType::kCopyFileRange; }

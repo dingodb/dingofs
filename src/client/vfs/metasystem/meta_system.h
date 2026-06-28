@@ -132,8 +132,7 @@ class MetaSystem {
                                Ino src_ino, uint64_t src_off,  // NOLINT
                                Ino dst_ino, uint64_t dst_off,  // NOLINT
                                uint64_t len, uint32_t flags,   // NOLINT
-                               uint64_t* bytes_copied,         // NOLINT
-                               Attr* dst_attr) {               // NOLINT
+                               uint64_t* bytes_copied) {       // NOLINT
     return Status::NotSupport("not supported");
   }
 

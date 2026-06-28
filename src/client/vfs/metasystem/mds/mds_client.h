@@ -162,8 +162,15 @@ class MDSClient {
   Status ReadLink(ContextSPtr& ctx, Ino ino, std::string& symlink);
 
   Status GetAttr(ContextSPtr& ctx, Ino ino, AttrEntry& attr_entry);
+  struct AttrWithChunkOut {
+    AttrEntry attr_entry;
+    bool shrink_file;
+    bool expand_file;
+    uint64_t bytes_copied{0};
+    std::vector<mds::ChunkEntry> effected_chunks;
+  };
   Status SetAttr(ContextSPtr& ctx, Ino ino, const Attr& attr, int to_set,
-                 AttrEntry& attr_entry, bool& shrink_file);
+                 AttrWithChunkOut& out);
   Status GetXAttr(ContextSPtr& ctx, Ino ino, const std::string& name,
                   std::string& value);
   Status SetXAttr(ContextSPtr& ctx, Ino ino, const std::string& name,
@@ -213,10 +220,10 @@ class MDSClient {
     uint32_t flags{0};
   };
   Status CopyFileRange(ContextSPtr& ctx, const CopyFileRangeParam& param,
-                       uint64_t& bytes_copied, AttrEntry& dst_inode);
+                       AttrWithChunkOut& out);
 
   Status Fallocate(ContextSPtr& ctx, Ino ino, int32_t mode, uint64_t offset,
-                   uint64_t length);
+                   uint64_t length, AttrWithChunkOut& out);
 
   Status GetFsQuota(ContextSPtr& ctx, FsStat& fs_stat);
   Status GetDirQuota(ContextSPtr& ctx, Ino ino, FsStat& fs_stat);

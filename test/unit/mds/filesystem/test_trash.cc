@@ -66,7 +66,7 @@ static pb::mds::FsInfo CreateFsInfoWithTrash(uint32_t fs_id,
   fs_info.set_status(pb::mds::FsStatus::NORMAL);
   fs_info.set_block_size(1024 * 1024);
   fs_info.set_chunk_size(1024 * 1024 * 64);
-  fs_info.set_enable_sum_in_dir(false);
+  fs_info.set_enable_dir_stats(false);
   fs_info.set_owner("test_user");
   fs_info.set_capacity(1024 * 1024 * 1024);
   fs_info.set_recycle_time_hour(24);
@@ -102,7 +102,7 @@ class TrashFileSystemTest : public testing::Test {
 
     // Create a quota worker set (needed to avoid nullptr crash in
     // AsyncUpdateDirUsage).
-    auto quota_worker_set =
+    quota_worker_set =
         SimpleWorkerSet::New("trash_test_quota", 1, 1024, false, false);
     ASSERT_TRUE(quota_worker_set->Init()) << "init quota worker set fail.";
 
@@ -117,18 +117,44 @@ class TrashFileSystemTest : public testing::Test {
         << "create root fail, error: " << status.error_str();
   }
 
-  static void TearDownTestSuite() {}
+  static void TearDownTestSuite() {
+    fs = nullptr;
+
+    if (quota_worker_set != nullptr) {
+      quota_worker_set->Destroy();
+      quota_worker_set = nullptr;
+    }
+
+    if (operation_processor != nullptr) {
+      operation_processor->Destroy();
+      operation_processor = nullptr;
+    }
+
+    kv_storage = nullptr;
+  }
 
  public:
   static FileSystemSPtr fs;
   static KVStorageSPtr kv_storage;
   static OperationProcessorSPtr operation_processor;
+  static WorkerSetSPtr quota_worker_set;
   static FileSystemSPtr Fs() { return fs; }
 };
 
 FileSystemSPtr TrashFileSystemTest::fs = nullptr;
 KVStorageSPtr TrashFileSystemTest::kv_storage = nullptr;
 OperationProcessorSPtr TrashFileSystemTest::operation_processor = nullptr;
+WorkerSetSPtr TrashFileSystemTest::quota_worker_set = nullptr;
+
+static Ino FindTrashBucketParent(const AttrEntry& attr) {
+  for (Ino parent : attr.parents()) {
+    if (IsTrashBucketChild(parent)) {
+      return parent;
+    }
+  }
+
+  return 0;
+}
 
 // --- Permission guard tests ---
 
@@ -182,7 +208,7 @@ TEST_F(TrashFileSystemTest, SetAttrOnTrashRootRejected) {
   param.attr.set_mtime(1);
   param.attr.set_ctime(1);
 
-  EntryOut entry_out;
+  EntryWithChunkOut entry_out;
   auto status = fs->SetAttr(ctx, kTrashInodeId, param, entry_out);
   ASSERT_FALSE(status.ok());
   EXPECT_EQ(status.error_code(), pb::error::ENOT_SUPPORT)
@@ -236,7 +262,7 @@ TEST_F(TrashFileSystemTest, FallocateOnTrashRootRejected) {
   auto fs = Fs();
   Context ctx;
 
-  EntryOut entry_out;
+  EntryWithChunkOut entry_out;
   auto status = fs->Fallocate(ctx, kTrashInodeId, /*mode=*/0, /*offset=*/0,
                               /*len=*/4096, entry_out);
   ASSERT_FALSE(status.ok());
@@ -762,7 +788,8 @@ TEST_F(TrashFileSystemTest, RestoreHardlinkOneOfTwo) {
   EntryOut unlink_src;
   status = fs->UnLink(ctx, kRootIno, "hl_src", unlink_src);
   ASSERT_TRUE(status.ok()) << status.error_str();
-  Ino sub_trash_ino = unlink_src.attr.parents(0);
+  Ino sub_trash_ino = FindTrashBucketParent(unlink_src.attr);
+  ASSERT_NE(sub_trash_ino, 0);
 
   EntryOut unlink_dst;
   status = fs->UnLink(ctx, kRootIno, "hl_dst", unlink_dst);
@@ -833,14 +860,16 @@ TEST_F(TrashFileSystemTest, LinkOnPartialTrashSurvivor) {
   // state is not user-visible because a real dentry still exists.
   EntryOut new_link_out;
   auto status = fs->Link(ctx, file_ino, live_dir_ino, "hl_new", new_link_out);
-  ASSERT_TRUE(status.ok()) << "Link via partial-trash inode: " << status.error_str();
+  ASSERT_TRUE(status.ok()) << "Link via partial-trash inode: "
+                           << status.error_str();
   EXPECT_EQ(new_link_out.attr.ino(), file_ino);
 
   // Same-directory linking back to root also works (the destination check
   // CheckCreateInTrash does not flag root).
   EntryOut new_root_out;
   status = fs->Link(ctx, file_ino, kRootIno, "hl_back", new_root_out);
-  ASSERT_TRUE(status.ok()) << "Link to root for partial-trash inode: " << status.error_str();
+  ASSERT_TRUE(status.ok()) << "Link to root for partial-trash inode: "
+                           << status.error_str();
 
   // Lookup confirms both new links resolve to the same inode.
   EntryOut look_new;
@@ -1080,7 +1109,8 @@ TEST_F(TrashFileSystemTest, RenameFileOutOfTrashSucceeds) {
   bool still_in_bucket = false;
   ScanTrashDentryOperation scan(trace, /*fs_id=*/2000, bucket_ino,
                                 [&](const DentryEntry& d) -> bool {
-                                  if (d.ino() == file_ino) still_in_bucket = true;
+                                  if (d.ino() == file_ino)
+                                    still_in_bucket = true;
                                   return true;
                                 });
   ASSERT_TRUE(operation_processor->RunAlone(&scan).ok());
@@ -1202,7 +1232,8 @@ TEST_F(TrashFileSystemTest, RenameFlatGraftedFileOutOfTrashSucceeds) {
   bool still_in_bucket = false;
   ScanTrashDentryOperation scan(trace, /*fs_id=*/2000, bucket_ino,
                                 [&](const DentryEntry& d) -> bool {
-                                  if (d.ino() == leaf_ino) still_in_bucket = true;
+                                  if (d.ino() == leaf_ino)
+                                    still_in_bucket = true;
                                   return true;
                                 });
   ASSERT_TRUE(operation_processor->RunAlone(&scan).ok());
@@ -1298,15 +1329,16 @@ TEST_F(TrashFileSystemTest,
 // ============================================================================
 
 // Single symlink unlink → goes to trash bucket; the inode stays alive with
-// parents_ redirected; ReadLink on the inode still resolves the original target.
+// parents_ redirected; ReadLink on the inode still resolves the original
+// target.
 TEST_F(TrashFileSystemTest, SymlinkUnlinkMovesToTrash) {
   auto fs = Fs();
   Context ctx;
 
   const std::string target = "/some/where/foo.txt";
   EntryOut create_out;
-  auto status = fs->Symlink(ctx, target, kRootIno, "lnk_unlink", 1, 1,
-                            create_out);
+  auto status =
+      fs->Symlink(ctx, target, kRootIno, "lnk_unlink", 1, 1, create_out);
   ASSERT_TRUE(status.ok()) << "create symlink fail: " << status.error_str();
   const Ino sym_ino = create_out.attr.ino();
   ASSERT_GT(sym_ino, 0u);
@@ -1533,7 +1565,8 @@ TEST_F(TrashFileSystemTest, SymlinkInTrashAutoExpireCleansInode) {
   std::vector<DentryEntry> bucket_entries;
   ScanTrashDentryOperation scan(trace_scan, /*fs_id=*/2000, bucket_ino,
                                 [&](const DentryEntry& d) -> bool {
-                                  if (d.ino() == sym_ino) bucket_entries.push_back(d);
+                                  if (d.ino() == sym_ino)
+                                    bucket_entries.push_back(d);
                                   return true;
                                 });
   ASSERT_TRUE(operation_processor->RunAlone(&scan).ok());
@@ -1558,7 +1591,8 @@ TEST_F(TrashFileSystemTest, SymlinkInTrashAutoExpireCleansInode) {
   Trace trace_recheck;
   ScanTrashDentryOperation rescan(trace_recheck, /*fs_id=*/2000, bucket_ino,
                                   [&](const DentryEntry& d) -> bool {
-                                    if (d.ino() == sym_ino) remaining.push_back(d);
+                                    if (d.ino() == sym_ino)
+                                      remaining.push_back(d);
                                     return true;
                                   });
   ASSERT_TRUE(operation_processor->RunAlone(&rescan).ok());
@@ -1577,7 +1611,8 @@ TEST_F(TrashFileSystemTest, SymlinkInTrashAutoExpireCleansInode) {
 //
 // Helper: pull a trash-bucket parent ino from a fresh unlink so each test
 // stays self-contained (other tests in this fixture also populate buckets).
-static Ino UnlinkAndCaptureBucket(const FileSystemSPtr& fs, Context& ctx, const std::string& name, Ino& out_file_ino) {
+static Ino UnlinkAndCaptureBucket(const FileSystemSPtr& fs, Context& ctx,
+                                  const std::string& name, Ino& out_file_ino) {
   FileSystem::MkNodParam param;
   param.parent = kRootIno;
   param.name = name;
@@ -1604,7 +1639,8 @@ TEST_F(TrashFileSystemTest, ScanDirShardOperationDecodesBucketEntry) {
   Ino bucket_ino = UnlinkAndCaptureBucket(fs, ctx, original_name, file_ino);
   ASSERT_TRUE(IsTrashBucketChild(bucket_ino));
 
-  const std::string trash_name = BuildTrashEntryName(kRootIno, file_ino, original_name);
+  const std::string trash_name =
+      BuildTrashEntryName(kRootIno, file_ino, original_name);
 
   std::vector<DentryEntry> seen;
   Trace trace;
@@ -1618,11 +1654,13 @@ TEST_F(TrashFileSystemTest, ScanDirShardOperationDecodesBucketEntry) {
   bool found = false;
   for (const auto& d : seen) {
     if (d.name() == trash_name) {
-      EXPECT_EQ(d.ino(), file_ino) << "bucket scan must surface the wrapped TrashDentry's inner ino";
+      EXPECT_EQ(d.ino(), file_ino)
+          << "bucket scan must surface the wrapped TrashDentry's inner ino";
       found = true;
     }
   }
-  EXPECT_TRUE(found) << "trash entry " << trash_name << " missing from bucket scan";
+  EXPECT_TRUE(found) << "trash entry " << trash_name
+                     << " missing from bucket scan";
 }
 
 TEST_F(TrashFileSystemTest, GetDentryOperationDecodesBucketEntry) {
@@ -1634,7 +1672,8 @@ TEST_F(TrashFileSystemTest, GetDentryOperationDecodesBucketEntry) {
   Ino bucket_ino = UnlinkAndCaptureBucket(fs, ctx, original_name, file_ino);
   ASSERT_TRUE(IsTrashBucketChild(bucket_ino));
 
-  const std::string trash_name = BuildTrashEntryName(kRootIno, file_ino, original_name);
+  const std::string trash_name =
+      BuildTrashEntryName(kRootIno, file_ino, original_name);
 
   Trace trace;
   GetDentryOperation op(trace, /*fs_id=*/2000, bucket_ino, trash_name);
@@ -1653,7 +1692,8 @@ TEST_F(TrashFileSystemTest, ScanDentryOperationDecodesBucketEntry) {
   Ino bucket_ino = UnlinkAndCaptureBucket(fs, ctx, original_name, file_ino);
   ASSERT_TRUE(IsTrashBucketChild(bucket_ino));
 
-  const std::string trash_name = BuildTrashEntryName(kRootIno, file_ino, original_name);
+  const std::string trash_name =
+      BuildTrashEntryName(kRootIno, file_ino, original_name);
 
   Trace trace;
   Ino seen_ino = 0;
@@ -1668,7 +1708,8 @@ TEST_F(TrashFileSystemTest, ScanDentryOperationDecodesBucketEntry) {
                            return true;
                          });
   ASSERT_TRUE(operation_processor->RunAlone(&op).ok());
-  EXPECT_EQ(seen_name, trash_name) << "trash entry " << trash_name << " missing from bucket scan";
+  EXPECT_EQ(seen_name, trash_name)
+      << "trash entry " << trash_name << " missing from bucket scan";
   EXPECT_EQ(seen_ino, file_ino);
 }
 

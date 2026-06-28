@@ -998,6 +998,66 @@ static Status ScanChunk(TxnUPtr& txn, uint32_t fs_id, Ino ino, std::map<uint64_t
   return status;
 }
 
+// Append zero slices (id=0) over [offset, end_offset) across every chunk the
+// range touches, shadowing existing data so the range reads back as zeros.
+// Slices are append-ordered (last overlapping wins), so this logically clears
+// the range without removing old slices. Touched chunks are written to txn and
+// collected into effected_chunks. Shared by truncate-shrink and fallocate
+// PUNCH_HOLE/ZERO_RANGE.
+static Status AppendZeroSlices(TxnUPtr& txn, uint32_t fs_id, Ino ino, uint64_t offset, uint64_t end_offset,
+                               uint64_t chunk_size, uint64_t block_size, std::vector<ChunkEntry>& effected_chunks) {
+  // Reset so a txn retry (which re-runs this op) doesn't accumulate duplicates.
+  effected_chunks.clear();
+
+  std::map<uint64_t, ChunkEntry> chunks;
+  auto status = ScanChunk(txn, fs_id, ino, chunks);
+  if (!status.ok()) return status;
+
+  while (offset < end_offset) {
+    const uint64_t chunk_pos = offset % chunk_size;
+    const uint64_t chunk_index = offset / chunk_size;
+    const uint64_t delta_chunk_size = std::min(end_offset - offset, chunk_size - chunk_pos);
+
+    SliceEntry slice;
+    slice.set_id(0);
+    slice.set_size(0);
+    slice.set_pos(chunk_pos);
+    slice.set_off(0);
+    slice.set_len(delta_chunk_size);
+
+    auto it = chunks.find(chunk_index);
+    if (it == chunks.end()) {
+      ChunkEntry chunk;
+      chunk.set_index(chunk_index);
+      chunk.set_chunk_size(chunk_size);
+      chunk.set_block_size(block_size);
+      chunk.set_version(1);
+      chunk.add_slices()->Swap(&slice);
+
+      LOG_DEBUG << fmt::format("[operation.{}.{}] update chunk, range[{},{}) version({}), value({}).", fs_id, ino,
+                               offset, end_offset, chunk.version(), chunk.ShortDebugString());
+
+      txn->Put(MetaCodec::EncodeChunkKey(fs_id, ino, chunk_index), MetaCodec::EncodeChunkValue(chunk));
+      effected_chunks.push_back(std::move(chunk));
+
+    } else {
+      auto& chunk = it->second;
+      chunk.add_slices()->Swap(&slice);
+      // bump version so ChunkCache::PutIf accepts the updated slice list.
+      chunk.set_version(chunk.version() + 1);
+      LOG_DEBUG << fmt::format("[operation.{}.{}] update chunk, range[{},{}) version({}), value({}).", fs_id, ino,
+                               offset, end_offset, chunk.version(), chunk.ShortDebugString());
+
+      txn->Put(MetaCodec::EncodeChunkKey(fs_id, ino, chunk_index), MetaCodec::EncodeChunkValue(chunk));
+      effected_chunks.push_back(chunk);
+    }
+
+    offset += delta_chunk_size;
+  }
+
+  return Status::OK();
+}
+
 Status UpdateAttrOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) {
   auto& attr = shared_param.attr;
 
@@ -1014,9 +1074,21 @@ Status UpdateAttrOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_pa
   }
 
   if (to_set_ & kSetAttrSize) {
-    result_.delta_bytes = static_cast<int64_t>(attr_.length()) - static_cast<int64_t>(attr.length());
+    const uint64_t old_length = attr.length();
+    const uint64_t new_length = attr_.length();
+    result_.delta_bytes = static_cast<int64_t>(new_length) - static_cast<int64_t>(old_length);
 
-    attr.set_length(attr_.length());
+    attr.set_length(new_length);
+
+    // Truncate-down must neutralize data beyond the new size; otherwise a later
+    // extend (truncate-up / fallocate) re-exposes the dropped bytes, because
+    // slices are append-ordered and the stale slice still sits in the chunk.
+    // Mirror fallocate ZERO_RANGE: zero [new_length, old_length).
+    if (new_length < old_length) {
+      auto status = AppendZeroSlices(txn, attr.fs_id(), attr.ino(), new_length, old_length, extra_param_.chunk_size,
+                                     extra_param_.block_size, result_.effected_chunks);
+      if (!status.ok()) return status;
+    }
   }
 
   if (to_set_ & kSetAttrAtime) {
@@ -1163,6 +1235,8 @@ Status UpsertChunkOperation::Run(TxnUPtr& txn) {
 
       chunk.set_version(chunk.version() + 1);
 
+      LOG_DEBUG << fmt::format("[operation.{}.{}] update chunk, version({}), value({}).", fs_id, ino_, chunk.version(),
+                               chunk.ShortDebugString());
       txn->Put(key, MetaCodec::EncodeChunkValue(chunk));
     }
 
@@ -1325,8 +1399,11 @@ Status FallocateOperation::PreAlloc(TxnUPtr& txn, AttrEntry& attr, uint64_t offs
       chunk.set_index(chunk_index);
       chunk.set_chunk_size(chunk_size);
       chunk.set_block_size(block_size);
-      chunk.set_version(0);
+      chunk.set_version(1);
       chunk.add_slices()->Swap(&slice);
+
+      LOG_DEBUG << fmt::format("[operation.{}.{}] update chunk, version({}), value({}).", fs_id, ino, chunk.version(),
+                               chunk.ShortDebugString());
 
       txn->Put(MetaCodec::EncodeChunkKey(fs_id, ino, chunk_index), MetaCodec::EncodeChunkValue(chunk));
       effected_chunks.push_back(std::move(chunk));
@@ -1335,6 +1412,9 @@ Status FallocateOperation::PreAlloc(TxnUPtr& txn, AttrEntry& attr, uint64_t offs
       max_chunk.add_slices()->Swap(&slice);
       // bump version so ChunkCache::PutIf accepts the updated slice list.
       max_chunk.set_version(max_chunk.version() + 1);
+      LOG_DEBUG << fmt::format("[operation.{}.{}] update chunk, version({}), value({}).", fs_id, ino,
+                               max_chunk.version(), max_chunk.ShortDebugString());
+
       txn->Put(MetaCodec::EncodeChunkKey(fs_id, ino, chunk_index), MetaCodec::EncodeChunkValue(max_chunk));
       effected_chunks.push_back(max_chunk);
       // After we append to max_chunk in this iteration, subsequent iterations
@@ -1365,70 +1445,15 @@ Status FallocateOperation::PreAlloc(TxnUPtr& txn, AttrEntry& attr, uint64_t offs
 // 2. [offset, len)    |-------------|
 // 3. [offset, len)                |-----|
 Status FallocateOperation::SetZero(TxnUPtr& txn, AttrEntry& attr, uint64_t offset, uint64_t len, bool keep_size) {
-  const uint32_t fs_id = attr.fs_id();
-  const Ino ino = attr.ino();
-  const uint64_t chunk_size = param_.chunk_size;
-  const uint64_t block_size = param_.block_size;
-  const uint32_t slice_num = param_.slice_num;
-
   uint64_t end_offset = keep_size ? std::min(attr.length(), offset + len) : (offset + len);
 
-  // scan chunks
-  std::map<uint64_t, ChunkEntry> chunks;
-  auto status = ScanChunk(txn, fs_id, ino, chunks);
+  auto status = AppendZeroSlices(txn, attr.fs_id(), attr.ino(), offset, end_offset, param_.chunk_size,
+                                 param_.block_size, result_.effected_chunks);
   if (!status.ok()) return status;
-
-  std::vector<ChunkEntry> effected_chunks;
-  uint32_t count = 0;
-  while (offset < end_offset) {
-    uint64_t chunk_pos = offset % chunk_size;
-    uint64_t chunk_index = offset / chunk_size;
-
-    uint64_t delta_chunk_size = chunk_size - chunk_pos;
-
-    SliceEntry slice;
-    slice.set_id(0);
-    slice.set_size(0);
-    slice.set_pos(chunk_pos);
-    slice.set_off(0);
-    slice.set_len(delta_chunk_size);
-
-    // todo
-    auto it = chunks.find(chunk_index);
-    if (it == chunks.end()) {
-      ChunkEntry chunk;
-      chunk.set_index(chunk_index);
-      chunk.set_chunk_size(chunk_size);
-      chunk.set_block_size(block_size);
-      chunk.set_version(0);
-      chunk.add_slices()->Swap(&slice);
-
-      txn->Put(MetaCodec::EncodeChunkKey(fs_id, ino, chunk_index), MetaCodec::EncodeChunkValue(chunk));
-      effected_chunks.push_back(std::move(chunk));
-
-    } else {
-      auto& chunk = it->second;
-      chunk.add_slices()->Swap(&slice);
-      // bump version so ChunkCache::PutIf (filesystem.cc:2612) accepts the
-      // updated slice list — otherwise server keeps serving the pre-fallocate
-      // cached chunk and client read returns old bytes instead of zeros.
-      chunk.set_version(chunk.version() + 1);
-      txn->Put(MetaCodec::EncodeChunkKey(fs_id, ino, chunk_index), MetaCodec::EncodeChunkValue(chunk));
-      effected_chunks.push_back(chunk);
-    }
-
-    offset += delta_chunk_size;
-    ++count;
-    if (count > slice_num) {
-      return Status(pb::error::EINTERNAL, fmt::format("beyond slice num({})", slice_num));
-    }
-  }
 
   if (!keep_size && end_offset > attr.length()) {
     attr.set_length(end_offset);
   }
-
-  result_.effected_chunks = std::move(effected_chunks);
 
   return Status::OK();
 }
@@ -1438,6 +1463,8 @@ Status FallocateOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_par
   const int32_t mode_ = param_.mode;
   const uint64_t offset = param_.offset;
   const uint64_t len = param_.len;
+
+  const uint64_t file_length = attr.length();
 
   if (mode_ == 0) {
     // pre allocate
@@ -1465,6 +1492,8 @@ Status FallocateOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_par
   } else if (mode_ & FALLOC_FL_COLLAPSE_RANGE) {
     return Status(pb::error::ENOT_SUPPORT, "not support FALLOC_FL_COLLAPSE_RANGE");
   }
+
+  result_.delta_bytes = static_cast<int64_t>(attr.length()) - static_cast<int64_t>(file_length);
 
   return Status::OK();
 }
@@ -1562,20 +1591,20 @@ Status FlushFileOperation::Run(TxnUPtr& txn) {
     }
   }
 
-  if (param_.length > 0) {
-    int64_t delta_bytes = static_cast<int64_t>(param_.length) - static_cast<int64_t>(attr.length());
-    if (delta_bytes < 0) {
-      if (!param_.is_final) {
-        result_.attr = attr;
-        return Status::OK();
-      }
-    }
+  if (param_.length > attr.length()) {
+    // int64_t delta_bytes = static_cast<int64_t>(param_.length) - static_cast<int64_t>(attr.length());
+    // if (delta_bytes < 0) {
+    //   if (!param_.is_final) {
+    //     result_.attr = attr;
+    //     return Status::OK();
+    //   }
+    // }
 
+    result_.delta_bytes = static_cast<int64_t>(param_.length) - static_cast<int64_t>(attr.length());
     attr.set_length(param_.length);
-    result_.delta_bytes = delta_bytes;
   }
   attr.set_mtime(std::max(attr.mtime(), GetTime()));
-  attr.set_ctime(std::max(attr.ctime(), GetTime()));
+  // attr.set_ctime(std::max(attr.ctime(), GetTime()));
   attr.set_version(attr.version() + 1);
 
   txn->Put(key, MetaCodec::EncodeInodeValue(attr));
@@ -2482,6 +2511,9 @@ Status CompactChunkOperation::Run(TxnUPtr& txn) {
       fs_id, ino_, chunk_index, param_.start_pos, param_.end_pos, param_.start_slice_id, param_.end_slice_id,
       Helper::ToString(param_.new_slices), old_slice_size, chunk.slices_size());
 
+  LOG_DEBUG << fmt::format("[operation.{}.{}] update chunk, version({}), value({}).", fs_id, ino_, chunk.version(),
+                           chunk.ShortDebugString());
+
   txn->Put(chunk_key, MetaCodec::EncodeChunkValue(chunk));
 
   // save trash slice list
@@ -2493,109 +2525,139 @@ Status CompactChunkOperation::Run(TxnUPtr& txn) {
   return Status::OK();
 }
 
-// slice range [slice.pos, slice.pos + slice.len) is covered by any slice in chunk
-static bool IsCoveredSlice(const ChunkEntry& chunk, const SliceEntry& slice) {
-  for (const auto& s : chunk.slices()) {
-    if (s.id() == slice.id()) continue;
+struct ByteRange {
+  uint64_t start;
+  uint64_t end;
 
-    if (s.pos() <= slice.pos() && (s.pos() + s.len()) >= (slice.pos() + slice.len())) {
-      return true;
-    }
-  }
+  uint64_t Len() const { return end - start; }
+};
 
-  return false;
+struct VisibleSliceRange {
+  ByteRange range;
+  const SliceEntry* slice{nullptr};  // nullptr means sparse hole
+  uint64_t slice_start{0};
+
+  bool IsZero() const { return slice == nullptr || slice->id() == 0; }
+};
+
+struct DstSlice {
+  uint64_t chunk_index;
+  SliceEntry slice;
+};
+
+static bool IntersectRange(const ByteRange& lhs, const ByteRange& rhs, ByteRange& out) {
+  out.start = std::max(lhs.start, rhs.start);
+  out.end = std::min(lhs.end, rhs.end);
+  return out.start < out.end;
 }
 
-// Clone slice references from a source byte range [src_off, src_off+len) into
-// a destination byte range starting at dst_off. This is the metadata core of
-// reflink-style copy_file_range: no underlying object data is copied; the
-// returned slices reuse the source slices' physical identity (id/off/size)
-// and only their logical placement (pos/len) is recomputed for the dst chunks.
-//
-// Returns a map from destination chunk index -> the new slices that should be
-// appended to that chunk.
-static absl::flat_hash_map<uint64_t, std::vector<SliceEntry>> CloneSlice(
-    absl::flat_hash_map<uint64_t, ChunkEntry> src_chunks, uint64_t src_off, uint64_t dst_off, uint64_t len,
-    uint32_t chunk_size) {
-  // Intermediate (chunk_index, slice) pairs before grouping by destination
-  // chunk. A single source slice may produce multiple entries when it crosses
-  // a destination chunk boundary.
-  struct DstSlice {
-    uint64_t chunk_index;
-    SliceEntry slice;
-  };
-  std::vector<DstSlice> dst_mapped;
-  const uint64_t src_end = src_off + len;
+static void AppendRemainderRanges(const ByteRange& range, const ByteRange& covered, std::vector<ByteRange>& out) {
+  if (range.start < covered.start) {
+    out.push_back({.start = range.start, .end = covered.start});
+  }
+  if (covered.end < range.end) {
+    out.push_back({.start = covered.end, .end = range.end});
+  }
+}
+
+static std::vector<VisibleSliceRange> CollectVisibleSliceRanges(
+    const absl::flat_hash_map<uint64_t, ChunkEntry>& src_chunks, const ByteRange& copy_range, uint32_t chunk_size) {
+  std::vector<ByteRange> unmatched_ranges{copy_range};
+  std::vector<VisibleSliceRange> visible_ranges;
 
   // Iterate only over the source chunks intersecting [src_off, src_end).
   // The end index uses ceiling division so the last partially-covered chunk
   // is included.
-  uint32_t src_chunk_index_begin = src_off / chunk_size;
-  uint32_t src_chunk_index_end = (src_off + len + chunk_size - 1) / chunk_size;
+  uint32_t src_chunk_index_begin = copy_range.start / chunk_size;
+  uint32_t src_chunk_index_end = (copy_range.end + chunk_size - 1) / chunk_size;
 
   for (uint32_t i = src_chunk_index_begin; i < src_chunk_index_end; ++i) {
     auto it = src_chunks.find(i);
-    // Sparse holes between chunks are simply skipped.
     if (it == src_chunks.end()) continue;
     const auto& src_chunk = it->second;
 
-    // Absolute file offset of this source chunk's first byte.
     const uint64_t src_chunk_pos = static_cast<uint64_t>(src_chunk.index()) * chunk_size;
-    for (const auto& slice : src_chunk.slices()) {
-      // id == 0 represents a hole / unreferenced slot; nothing to clone.
-      if (slice.id() == 0) continue;
-      // Older slices that have been fully overwritten by a later slice in the
-      // same chunk are obsolete; do not propagate them to the destination.
-      if (IsCoveredSlice(src_chunk, slice)) continue;
+    for (auto slice_it = src_chunk.slices().rbegin(); slice_it != src_chunk.slices().rend(); ++slice_it) {
+      const auto& slice = *slice_it;
+      if (slice.len() == 0) continue;
 
-      // Project this slice onto the absolute file address space.
-      const uint64_t slice_logical_start = src_chunk_pos + slice.pos();
-      const uint64_t slice_logical_end = slice_logical_start + slice.len();
+      const ByteRange slice_range{.start = src_chunk_pos + slice.pos(),
+                                  .end = src_chunk_pos + slice.pos() + slice.len()};
 
-      // Intersect the slice's logical extent with the requested source range.
-      // If they do not overlap, this slice contributes nothing.
-      const uint64_t inter_start = std::max(slice_logical_start, src_off);
-      const uint64_t inter_end = std::min(slice_logical_end, src_end);
-      if (inter_start >= inter_end) continue;
+      std::vector<ByteRange> next_unmatched_ranges;
+      for (const auto& range : unmatched_ranges) {
+        ByteRange visible_range;
+        if (!IntersectRange(range, slice_range, visible_range)) {
+          next_unmatched_ranges.push_back(range);
+          continue;
+        }
 
-      // Translate the overlap into the slice's physical backing object:
-      //   off_in_slice : how far into the slice the overlap begins
-      //   inter_len    : number of bytes the overlap covers
-      const uint64_t off_in_slice = inter_start - slice_logical_start;
-      const uint64_t inter_len = inter_end - inter_start;
-
-      // Map the overlap onto the destination address space and emit one new
-      // slice per destination chunk it spans. A single source slice can span
-      // multiple destination chunks when src_off and dst_off have different
-      // alignments relative to chunk boundaries.
-      uint64_t dst_logical = dst_off + (inter_start - src_off);
-      uint64_t remaining = inter_len;
-      uint64_t cursor_off = slice.off() + off_in_slice;
-      while (remaining > 0) {
-        const uint64_t dst_chunk_index = dst_logical / chunk_size;
-        const uint64_t dst_chunk_pos = dst_logical % chunk_size;
-        // Number of bytes still available in the current destination chunk.
-        const uint64_t in_chunk_room = chunk_size - dst_chunk_pos;
-        // Emit at most up to the chunk boundary; the rest goes to next chunk.
-        const uint64_t take = std::min(remaining, in_chunk_room);
-
-        // The new slice shares the source slice's physical identity
-        // (id/size) and the running physical cursor (cursor_off); only its
-        // logical position within the destination chunk is recomputed.
-        SliceEntry new_slice;
-        new_slice.set_id(slice.id());
-        new_slice.set_size(slice.size());
-        new_slice.set_off(cursor_off);
-        new_slice.set_len(take);
-        new_slice.set_pos(dst_chunk_pos);
-        dst_mapped.push_back({.chunk_index = dst_chunk_index, .slice = std::move(new_slice)});
-
-        // Advance all three cursors in lockstep for the next iteration.
-        dst_logical += take;
-        cursor_off += take;
-        remaining -= take;
+        visible_ranges.push_back({.range = visible_range, .slice = &slice, .slice_start = slice_range.start});
+        AppendRemainderRanges(range, visible_range, next_unmatched_ranges);
       }
+
+      unmatched_ranges = std::move(next_unmatched_ranges);
+      if (unmatched_ranges.empty()) break;
     }
+  }
+
+  for (const auto& range : unmatched_ranges) {
+    visible_ranges.push_back({.range = range});
+  }
+
+  std::sort(visible_ranges.begin(), visible_ranges.end(),  // NOLINT
+            [](const VisibleSliceRange& a, const VisibleSliceRange& b) { return a.range.start < b.range.start; });
+
+  return visible_ranges;
+}
+
+static void AppendMappedSlices(const VisibleSliceRange& visible, uint64_t src_off, uint64_t dst_off,
+                               uint32_t chunk_size, std::vector<DstSlice>& out) {
+  uint64_t dst_logical = dst_off + (visible.range.start - src_off);
+  uint64_t remaining = visible.range.Len();
+  uint64_t cursor_off = visible.IsZero() ? 0 : visible.slice->off() + visible.range.start - visible.slice_start;
+
+  while (remaining > 0) {
+    const uint64_t dst_chunk_index = dst_logical / chunk_size;
+    const uint64_t dst_chunk_pos = dst_logical % chunk_size;
+    const uint64_t take = std::min(remaining, chunk_size - dst_chunk_pos);
+
+    DstSlice dst_slice;
+    dst_slice.chunk_index = dst_chunk_index;
+    SliceEntry slice;
+    if (visible.IsZero()) {
+      slice.set_id(0);
+      slice.set_size(0);
+      slice.set_off(0);
+    } else {
+      slice.set_id(visible.slice->id());
+      slice.set_size(visible.slice->size());
+      slice.set_off(cursor_off);
+    }
+    slice.set_pos(dst_chunk_pos);
+    slice.set_len(take);
+
+    dst_slice.slice = slice;
+    out.push_back(std::move(dst_slice));
+
+    dst_logical += take;
+    cursor_off += take;
+    remaining -= take;
+  }
+}
+
+// Clone slice references from a source byte range [src_off, src_off+len) into
+// a destination byte range starting at dst_off. Source holes and zero slices are
+// cloned as zero slices so they overwrite any existing destination data.
+static absl::flat_hash_map<uint64_t, std::vector<SliceEntry>> CloneSlice(
+    const absl::flat_hash_map<uint64_t, ChunkEntry>& src_chunks, uint64_t src_off, uint64_t dst_off, uint64_t len,
+    uint32_t chunk_size) {
+  const ByteRange copy_range{.start = src_off, .end = src_off + len};
+  std::vector<DstSlice> dst_mapped;
+
+  auto visible_slice_ranges = CollectVisibleSliceRanges(src_chunks, copy_range, chunk_size);
+  for (const auto& visible : visible_slice_ranges) {
+    AppendMappedSlices(visible, src_off, dst_off, chunk_size, dst_mapped);
   }
 
   // Group the produced slices by destination chunk index for the caller.
@@ -2610,23 +2672,24 @@ static absl::flat_hash_map<uint64_t, std::vector<SliceEntry>> CloneSlice(
 absl::flat_hash_map<uint64_t, std::vector<SliceEntry>> CopyFileRangeOperation::TestCloneSlice(
     absl::flat_hash_map<uint64_t, ChunkEntry> src_chunks, uint64_t src_off, uint64_t dst_off, uint64_t len,
     uint32_t chunk_size) {
-  return CloneSlice(std::move(src_chunks), src_off, dst_off, len, chunk_size);
+  return CloneSlice(src_chunks, src_off, dst_off, len, chunk_size);
 }
 
 static Status UpsertSliceRef(TxnUPtr& txn, absl::flat_hash_map<uint64_t, std::vector<SliceEntry>> copy_slice_map,
                              Ino src_ino, Ino dst_ino) {
   // 5.a) collect unique slice ids
-  std::set<uint64_t> copy_slice_ids;
+  std::map<uint64_t, uint64_t> copy_slice_sizes;
   for (const auto& [_, slices] : copy_slice_map) {
     for (const auto& slice : slices) {
-      copy_slice_ids.insert(slice.id());
+      if (slice.id() == 0) continue;
+      copy_slice_sizes.emplace(slice.id(), slice.size());
     }
   }
 
   // 5.b) batch get slice ref entries
   std::vector<std::string> copy_slice_ref_keys;
-  copy_slice_ref_keys.reserve(copy_slice_ids.size());
-  for (const auto& slice_id : copy_slice_ids) {
+  copy_slice_ref_keys.reserve(copy_slice_sizes.size());
+  for (const auto& [slice_id, _] : copy_slice_sizes) {
     copy_slice_ref_keys.push_back(MetaCodec::EncodeSliceRefKey(slice_id));
   }
 
@@ -2644,24 +2707,22 @@ static Status UpsertSliceRef(TxnUPtr& txn, absl::flat_hash_map<uint64_t, std::ve
       slice_ref_map[slice_ref.id()] = slice_ref;
     }
 
-    for (const auto& [_, slices] : copy_slice_map) {
-      for (const auto& slice : slices) {
-        auto it = slice_ref_map.find(slice.id());
-        if (it != slice_ref_map.end()) {
-          auto& slice_ref = it->second;
-          slice_ref.set_ref_count(slice_ref.ref_count() + 1);
-          slice_ref.add_inos(dst_ino);
+    for (const auto& [slice_id, slice_size] : copy_slice_sizes) {
+      auto it = slice_ref_map.find(slice_id);
+      if (it != slice_ref_map.end()) {
+        auto& slice_ref = it->second;
+        slice_ref.set_ref_count(slice_ref.ref_count() + 1);
+        slice_ref.add_inos(dst_ino);
 
-        } else {
-          SliceRefEntry slice_ref;
-          slice_ref.set_id(slice.id());
-          slice_ref.set_size(slice.size());
-          slice_ref.set_ref_count(2);
-          slice_ref.add_inos(src_ino);
-          slice_ref.add_inos(dst_ino);
+      } else {
+        SliceRefEntry slice_ref;
+        slice_ref.set_id(slice_id);
+        slice_ref.set_size(slice_size);
+        slice_ref.set_ref_count(2);
+        slice_ref.add_inos(src_ino);
+        slice_ref.add_inos(dst_ino);
 
-          slice_ref_map.insert({slice_ref.id(), slice_ref});
-        }
+        slice_ref_map.insert({slice_ref.id(), slice_ref});
       }
     }
 
@@ -2678,8 +2739,7 @@ Status CopyFileRangeOperation::Run(TxnUPtr& txn) {
   const uint64_t chunk_size = fs_info_.chunk_size();
   const uint64_t block_size = fs_info_.block_size();
   const uint64_t now_ns = GetTime();
-  // Same-file copy (src_ino == dst_ino): src and dst resolve to one inode and
-  // one set of chunks, so the dst side must reuse the src reads/writes.
+
   const bool same_file = (param_.src_ino == param_.dst_ino);
 
   // 1) batch get src/dst inodes + src chunks in [begin, end)
@@ -2703,8 +2763,8 @@ Status CopyFileRangeOperation::Run(TxnUPtr& txn) {
   // Same-file copy duplicates the inode key and any chunk keys shared by the
   // src/dst ranges; drop duplicates so backends never see repeated keys.
   if (same_file) {
-    std::sort(phase1_keys.begin(), phase1_keys.end());
-    phase1_keys.erase(std::unique(phase1_keys.begin(), phase1_keys.end()), phase1_keys.end());
+    std::sort(phase1_keys.begin(), phase1_keys.end());                                          // NOLINT
+    phase1_keys.erase(std::unique(phase1_keys.begin(), phase1_keys.end()), phase1_keys.end());  // NOLINT
   }
 
   std::vector<KeyValue> phase1_kvs;
@@ -2762,6 +2822,7 @@ Status CopyFileRangeOperation::Run(TxnUPtr& txn) {
   absl::flat_hash_map<uint64_t, std::vector<SliceEntry>> copy_slice_map =
       CloneSlice(src_chunks, param_.src_off, param_.dst_off, actual_len, chunk_size);
 
+  result_.effected_chunks.clear();
   // 4) update dst chunks; if chunk not exist, create new one; Put
   dst_chunk_index_end = (param_.dst_off + actual_len + chunk_size - 1) / chunk_size;
   for (uint32_t i = dst_chunk_index_begin; i < dst_chunk_index_end; ++i) {
@@ -2783,7 +2844,11 @@ Status CopyFileRangeOperation::Run(TxnUPtr& txn) {
     }
 
     chunk.set_version(chunk.version() + 1);
+    LOG_DEBUG << fmt::format("[operation.{}.{}] update chunk, version({}), value({}).", fs_id, param_.dst_ino,
+                             chunk.version(), chunk.ShortDebugString());
+
     txn->Put(MetaCodec::EncodeChunkKey(fs_id, param_.dst_ino, i), MetaCodec::EncodeChunkValue(chunk));
+    result_.effected_chunks.push_back(chunk);
   }
 
   // 5) upsert slice ref

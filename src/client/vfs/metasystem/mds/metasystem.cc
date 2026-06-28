@@ -1021,9 +1021,13 @@ Status MDSMetaSystem::ReadSlice(ContextSPtr ctx, Ino ino, uint64_t index,
       }
       version = chunk.version();
 
+      LOG_DEBUG << fmt::format(
+          "[meta.fs.{}.{}.{}] readslice, version({}) slices({}).", ino, fh,
+          index, version, Helper::ToString(*slices));
+
     } else {
       LOG(WARNING) << fmt::format(
-          "[meta.fs.{}.{}.{}] reeadslice not found, return empty slice.", ino,
+          "[meta.fs.{}.{}.{}] readslice not found, return empty slice.", ino,
           fh, index);
     }
 
@@ -1489,15 +1493,19 @@ Status MDSMetaSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
                               const Attr& attr, Attr* out_attr) {
   AssertStop();
 
-  AttrEntry attr_entry;
-  bool shrink_file;
-  auto status =
-      mds_client_.SetAttr(ctx, ino, attr, set, attr_entry, shrink_file);
+  if (set & kSetAttrSize) {
+    // flush src file
+    Status status = FlushSliceAndFile(ctx, ino);
+    if (!status.ok()) return status;
+  }
+
+  MDSClient::AttrWithChunkOut out;
+  auto status = mds_client_.SetAttr(ctx, ino, attr, set, out);
   if (!status.ok()) {
     return status;
   }
 
-  auto inode = PutInodeToCache(attr_entry);
+  auto inode = PutInodeToCache(out.attr_entry);
   *out_attr = inode->ToAttr();
 
   // update file length, need update local chunk cache write length
@@ -1505,7 +1513,11 @@ Status MDSMetaSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
     auto file_session = file_session_map_.GetSession(ino);
     if (file_session != nullptr) {
       auto& chunk_set = file_session->GetChunkSet();
-      chunk_set->SetLastWriteLength(attr.length);
+      chunk_set->ResetLastWriteLength();
+      chunk_set->ResetLastComitedLength();
+
+      if (!out.effected_chunks.empty())
+        chunk_set->Put(out.effected_chunks, "setattr");
     }
   }
 
@@ -1514,13 +1526,12 @@ Status MDSMetaSystem::SetAttr(ContextSPtr ctx, Ino ino, int set,
   if (!status.ok()) return status;
 
   modify_time_memo_.Remember(ino);
-  // When the file is shrunk, the MDS appends zero slices covering the
-  // truncated range. The local chunk_cache_ still holds the pre-shrink slice
-  // list, and its cache-hit path in ReadSlice does NOT consult chunk_memo_
-  // versions. Forgetting only chunk_memo_ would leave stale slices visible;
-  // a subsequent grow would then let the old data reappear (data leak).
-  // Delete both caches, matching the Open(O_TRUNC) path.
-  if (shrink_file) {
+  // When the file is shrunk, the MDS appends zero slices covering the truncated
+  // range. Forget chunk_memo_ so the next ReadSlice requests version 0 and the
+  // MDS returns the full current chunk; combined with the chunk_set read-cache
+  // invalidation above, the next read observes the zero slices rather than the
+  // stale pre-shrink data (which a later grow would otherwise re-expose).
+  if (out.shrink_file) {
     chunk_memo_.Forget(ino);
   }
 
@@ -1531,7 +1542,14 @@ Status MDSMetaSystem::Fallocate(ContextSPtr ctx, Ino ino, int mode,
                                 uint64_t offset, uint64_t length) {
   AssertStop();
 
-  auto status = mds_client_.Fallocate(ctx, ino, mode, offset, length);
+  // Like truncate, PUNCH_HOLE / ZERO_RANGE / preallocate append zero slices on
+  // the MDS; drain buffered writes first so a late data slice can't land after
+  // the zero slices and survive the hole.
+  Status status = FlushSliceAndFile(ctx, ino);
+  if (!status.ok()) return status;
+
+  MDSClient::AttrWithChunkOut out;
+  status = mds_client_.Fallocate(ctx, ino, mode, offset, length, out);
 
   // Invalidate caches on success OR ambiguous net error (server may have
   // committed the txn but the response was lost — cache TTL is 3600s, so
@@ -1540,11 +1558,24 @@ Status MDSMetaSystem::Fallocate(ContextSPtr ctx, Ino ino, int mode,
   // cache stays consistent, skip.
   if (status.ok() || status.IsNetError()) {
     chunk_memo_.Forget(ino);
-    DeleteInodeFromCache(ino);
   }
   if (status.ok()) {
     modify_time_memo_.Remember(ino);
+    PutInodeToCache(out.attr_entry);
+
+    auto file_session = file_session_map_.GetSession(ino);
+    if (file_session != nullptr) {
+      auto& chunk_set = file_session->GetChunkSet();
+      if (out.shrink_file || out.expand_file) {
+        chunk_set->ResetLastWriteLength();
+        chunk_set->ResetLastComitedLength();
+      }
+
+      if (!out.effected_chunks.empty())
+        chunk_set->Put(out.effected_chunks, "fallocate");
+    }
   }
+
   return status;
 }
 
@@ -1953,13 +1984,9 @@ Status MDSMetaSystem::Compact(ContextSPtr ctx, Ino ino, uint32_t chunk_index,
 Status MDSMetaSystem::CopyFileRange(ContextSPtr ctx, Ino src_ino,
                                     uint64_t src_off, Ino dst_ino,
                                     uint64_t dst_off, uint64_t len,
-                                    uint32_t flags, uint64_t* bytes_copied,
-                                    Attr* dst_attr) {
+                                    uint32_t flags, uint64_t* bytes_copied) {
   AssertStop();
   CHECK(bytes_copied != nullptr) << "bytes_copied is null";
-  CHECK(dst_attr != nullptr) << "dst_attr is null";
-
-  *bytes_copied = 0;
 
   if (len == 0) return Status::OK();
   if (src_ino == dst_ino && src_off == dst_off) {
@@ -1978,11 +2005,21 @@ Status MDSMetaSystem::CopyFileRange(ContextSPtr ctx, Ino src_ino,
   param.len = len;
   param.flags = flags;
 
-  AttrEntry dst_attr_entry;
-  status = mds_client_.CopyFileRange(ctx, param, *bytes_copied, dst_attr_entry);
+  MDSClient::AttrWithChunkOut out;
+  status = mds_client_.CopyFileRange(ctx, param, out);
   if (!status.ok()) return status;
 
-  PutInodeToCache(dst_attr_entry);
+  *bytes_copied = out.bytes_copied;
+
+  PutInodeToCache(out.attr_entry);
+
+  if (!out.effected_chunks.empty()) {
+    auto file_session = file_session_map_.GetSession(dst_ino);
+    if (file_session != nullptr) {
+      auto& chunk_set = file_session->GetChunkSet();
+      chunk_set->Put(out.effected_chunks, "copyfilerange");
+    }
+  }
 
   chunk_memo_.Forget(dst_ino);
   modify_time_memo_.Remember(dst_ino);

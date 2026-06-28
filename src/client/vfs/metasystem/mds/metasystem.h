@@ -173,8 +173,7 @@ class MDSMetaSystem : public vfs::MetaSystem {
 
   Status CopyFileRange(ContextSPtr ctx, Ino src_ino, uint64_t src_off,
                        Ino dst_ino, uint64_t dst_off, uint64_t len,
-                       uint32_t flags, uint64_t* bytes_copied,
-                       Attr* dst_attr) override;
+                       uint32_t flags, uint64_t* bytes_copied) override;
 
   bool GetDescription(Json::Value& value) override;
 
@@ -227,6 +226,7 @@ class MDSMetaSystem : public vfs::MetaSystem {
   // async flush batch slices of single file
   void AsyncFlushSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set, bool is_force,
                        bool is_wait);
+
   // flush slices and file
   Status FlushSliceAndFile(ContextSPtr ctx, Ino ino);
   // async flush of single slice
