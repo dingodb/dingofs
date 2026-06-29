@@ -400,6 +400,13 @@ Status MDSMetaSystem::ToVfsFsInfo(const mds::FsInfoEntry& src,
     dst->storage_info.rados_info =
         Helper::ToRadosInfo(src.extra().rados_info());
 
+  } else if (dst->storage_info.store_type == StoreType::kLocalFile) {
+    CHECK(src.extra().has_file_info())
+        << "fs type is LocalFile, but file info is not set";
+
+    dst->storage_info.file_info =
+        Helper::ToLocalFileInfo(src.extra().file_info());
+
   } else {
     LOG(ERROR) << fmt::format("[meta.fs] unknown fs type: {}.",
                               pb::mds::FsType_Name(src.fs_type()));

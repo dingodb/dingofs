@@ -130,15 +130,15 @@ TEST(BthreadRWLockTest, basic_test) {
   }
   {
     ReadLockGuard readLockGuard(rwlock);
-    ASSERT_EQ(EINVAL, rwlock.TryRDLock());
-    ASSERT_EQ(EINVAL, rwlock.TryWRLock());
+    ASSERT_EQ(0, rwlock.TryRDLock());
+    ASSERT_EQ(EBUSY, rwlock.TryWRLock());
     /* be careful */
     rwlock.Unlock();
   }
   {
     WriteLockGuard writeLockGuard(rwlock);
-    ASSERT_EQ(EINVAL, rwlock.TryRDLock());
-    ASSERT_EQ(EINVAL, rwlock.TryWRLock());
+    ASSERT_EQ(EBUSY, rwlock.TryRDLock());
+    ASSERT_EQ(EBUSY, rwlock.TryWRLock());
   }
   uint64_t writeCnt = 0;
   auto writeFunc = [&] {

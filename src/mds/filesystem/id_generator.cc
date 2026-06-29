@@ -14,14 +14,14 @@
 
 #include "mds/filesystem/id_generator.h"
 
-#include <butil/compiler_specific.h>
-
 #include <algorithm>
 #include <cstdint>
 #include <string>
 
+#include "brpc/reloadable_flags.h"
 #include "bthread/bthread.h"
 #include "bthread/mutex.h"
+#include "butil/compiler_specific.h"
 #include "common/logging.h"
 #include "dingofs/error.pb.h"
 #include "fmt/format.h"
@@ -44,15 +44,23 @@ static const int64_t kFsIdStartId = 1e4;  // 10 thousand
 // all file systems share the same slice id generator
 const std::string kSliceAutoIncrementIdName = "dingofs-slice-id";
 static const int64_t kSliceTableId = 1002;
-static const int64_t kSliceIdBatchSize = 256;
 static const int64_t kSliceIdStartId = 1e10;  // 10 billion
 
 // each file system has its own inode id generator.
 // Sub-trash directories do NOT use a separate generator: their ino is derived
 // from this allocator + a kTrashInodeId offset inside BuildTrashMove.
 const std::string kInoAutoIncrementIdName = "dingofs-inode-id";
-static const int64_t kInoBatchSize = 1024000;
 static const int64_t kInoStartId = 2e10;  // 20 billion
+
+DEFINE_uint32(mds_slice_id_generator_batch_size, 100000, "slice id generator batch size.");
+DEFINE_validator(mds_slice_id_generator_batch_size, brpc::PassValidate);
+
+DEFINE_uint32(mds_ino_generator_batch_size, 100000, "ino generator batch size.");
+DEFINE_validator(mds_ino_generator_batch_size, brpc::PassValidate);
+
+// all mds share the same inode generator
+DEFINE_bool(mds_ino_generator_share_enable, false, "Inode generator share enable.");
+DEFINE_bool(mds_slice_id_generator_share_enable, true, "Slice ID generator share enable.");
 
 static uint32_t CalWaitTimeUs(int retry) {
   // exponential backoff
@@ -242,53 +250,60 @@ bool StoreAutoIncrementIdGenerator::GenID(uint32_t num, uint64_t min_slice_id, u
     return false;
   }
 
-  // Lock-free bump allocator. The steady-state path is a single CAS on next_id_;
-  // only bundle refill (rare) touches storage, and refill is non-blocking: just
-  // one elected thread does the IO while others back off and retry the fast path.
-  constexpr int kMaxAttempts = 100000;  // livelock guard
-  for (int attempt = 0; attempt < kMaxAttempts; ++attempt) {
-    if (BAIDU_UNLIKELY(is_destroyed_.load(std::memory_order_acquire))) {
-      LOG(ERROR) << fmt::format("[idalloc.{}] id generator is destroyed.", name_);
-      return false;
-    }
-
-    uint64_t cur = next_id_.load(std::memory_order_acquire);
-    uint64_t start = std::max(cur, min_slice_id);
-
-    if (start + num <= last_alloc_id_.load(std::memory_order_acquire)) {
-      // Fast path: claim [start, start + num) atomically.
-      if (next_id_.compare_exchange_weak(cur, start + num, std::memory_order_acq_rel, std::memory_order_relaxed)) {
-        id = start;
-        LOG_DEBUG << fmt::format("[idalloc.{}] alloc id({}) num({}).", name_, id, num);
-        return true;
-      }
-      // Contended: another thread advanced next_id_, retry.
-      continue;
-    }
-
-    // Bundle exhausted: elect a single refiller via trylock so waiters never
-    // block on the storage IO.
-    if (bthread_mutex_trylock(&mutex_) == 0) {
-      Status status;
-      // Double-check under the lock: another thread may have just refilled.
-      uint64_t c2 = next_id_.load(std::memory_order_acquire);
-      uint64_t s2 = std::max(c2, min_slice_id);
-      if (s2 + num > last_alloc_id_.load(std::memory_order_acquire)) {
-        status = AllocateIds(std::max(num, batch_size_), min_slice_id);
-      }
-      bthread_mutex_unlock(&mutex_);
-
-      if (!status.ok()) {
-        LOG(ERROR) << fmt::format("[idalloc.{}] allocate id fail, {}.", name_, status.error_str());
+  do {
+    // Lock-free bump allocator. The steady-state path is a single CAS on next_id_;
+    // only bundle refill (rare) touches storage, and refill is non-blocking: just
+    // one elected thread does the IO while others back off and retry the fast path.
+    constexpr int kMaxAttempts = 100000;  // livelock guard
+    for (int attempt = 0; attempt < kMaxAttempts; ++attempt) {
+      if (BAIDU_UNLIKELY(is_destroyed_.load(std::memory_order_acquire))) {
+        LOG(ERROR) << fmt::format("[idalloc.{}] id generator is destroyed.", name_);
         return false;
       }
-    } else {
-      // Another thread is refilling; back off and retry the fast path.
-      bthread_yield();
-    }
-  }
 
-  LOG(ERROR) << fmt::format("[idalloc.{}] gen id give up after {} attempts.", name_, kMaxAttempts);
+      uint64_t cur = next_id_.load(std::memory_order_acquire);
+      uint64_t start = std::max(cur, min_slice_id);
+
+      if (start + num <= last_alloc_id_.load(std::memory_order_acquire)) {
+        // Fast path: claim [start, start + num) atomically.
+        if (next_id_.compare_exchange_weak(cur, start + num, std::memory_order_acq_rel, std::memory_order_relaxed)) {
+          id = start;
+          LOG_DEBUG << fmt::format("[idalloc.{}] alloc id({}) num({}).", name_, id, num);
+          return true;
+        }
+        // Contended: another thread advanced next_id_, retry.
+        continue;
+      }
+
+      // Bundle exhausted: elect a single refiller via trylock so waiters never
+      // block on the storage IO.
+      if (bthread_mutex_trylock(&mutex_) == 0) {
+        Status status;
+        // Double-check under the lock: another thread may have just refilled.
+        uint64_t c2 = next_id_.load(std::memory_order_acquire);
+        uint64_t s2 = std::max(c2, min_slice_id);
+        if (s2 + num > last_alloc_id_.load(std::memory_order_acquire)) {
+          status = AllocateIds(std::max(num, batch_size_), min_slice_id);
+        }
+        bthread_mutex_unlock(&mutex_);
+
+        if (!status.ok()) {
+          LOG(ERROR) << fmt::format("[idalloc.{}] allocate id fail, {}.", name_, status.error_str());
+          return false;
+        }
+      } else {
+        // Another thread is refilling; back off and retry the fast path.
+        bthread_yield();
+      }
+    }
+
+    LOG(WARNING) << fmt::format("[idalloc.{}] gen id give up after {} attempts.", name_, kMaxAttempts);
+
+    // sleep 3ms
+    bthread_usleep(3000);
+
+  } while (true);
+
   return false;
 }
 
@@ -613,33 +628,68 @@ IdGeneratorUPtr NewInodeIdGenerator(uint32_t fs_id, CoordinatorClientSPtr coordi
 
   std::string name = fmt::format("{}-{}", kInoAutoIncrementIdName, fs_id);
 
-  return CoorAutoIncrementIdGenerator::New(coordinator_client, name, fs_id, kInoStartId, kInoBatchSize);
+  return CoorAutoIncrementIdGenerator::New(coordinator_client, name, fs_id, kInoStartId,
+                                           FLAGS_mds_ino_generator_batch_size);
+}
+
+IdGeneratorUPtr NewInodeIdGenerator(uint32_t fs_id, uint64_t mds_id, CoordinatorClientSPtr coordinator_client) {
+  CHECK(coordinator_client != nullptr) << "coordinator_client is nullptr.";
+
+  std::string name = fmt::format("{}-{}-{}", kInoAutoIncrementIdName, fs_id, mds_id);
+
+  return CoorAutoIncrementIdGenerator::New(coordinator_client, name, fs_id, kInoStartId,
+                                           FLAGS_mds_ino_generator_batch_size);
 }
 
 IdGeneratorUPtr NewInodeIdGenerator(uint32_t fs_id, KVStorageSPtr kv_storage) {
   CHECK(kv_storage != nullptr) << "kv_storage is nullptr.";
   std::string name = fmt::format("{}-{}", kInoAutoIncrementIdName, fs_id);
 
-  return StoreAutoIncrementIdGenerator::New(kv_storage, name, kInoStartId, kInoBatchSize);
+  return StoreAutoIncrementIdGenerator::New(kv_storage, name, kInoStartId, FLAGS_mds_ino_generator_batch_size);
+}
+
+IdGeneratorUPtr NewInodeIdGenerator(uint32_t fs_id, uint64_t mds_id, KVStorageSPtr kv_storage) {
+  CHECK(kv_storage != nullptr) << "kv_storage is nullptr.";
+  std::string name = fmt::format("{}-{}-{}", kInoAutoIncrementIdName, fs_id, mds_id);
+
+  return StoreAutoIncrementIdGenerator::New(kv_storage, name, kInoStartId, FLAGS_mds_ino_generator_batch_size);
 }
 
 IdGeneratorSPtr NewSliceIdGenerator(CoordinatorClientSPtr coordinator_client) {
   CHECK(coordinator_client != nullptr) << "coordinator_client is nullptr.";
   return CoorAutoIncrementIdGenerator::NewShare(coordinator_client, kSliceAutoIncrementIdName, kSliceTableId,
-                                                kSliceIdStartId, kSliceIdBatchSize);
+                                                kSliceIdStartId, FLAGS_mds_slice_id_generator_batch_size);
+}
+
+IdGeneratorSPtr NewSliceIdGenerator(uint64_t mds_id, CoordinatorClientSPtr coordinator_client) {
+  CHECK(coordinator_client != nullptr) << "coordinator_client is nullptr.";
+
+  std::string name = fmt::format("{}-{}", kSliceAutoIncrementIdName, mds_id);
+
+  return CoorAutoIncrementIdGenerator::NewShare(coordinator_client, name, kSliceTableId, kSliceIdStartId,
+                                                FLAGS_mds_slice_id_generator_batch_size);
 }
 
 IdGeneratorSPtr NewSliceIdGenerator(KVStorageSPtr kv_storage) {
   CHECK(kv_storage != nullptr) << "kv_storage is nullptr.";
   return StoreAutoIncrementIdGenerator::NewShare(kv_storage, kSliceAutoIncrementIdName, kSliceIdStartId,
-                                                 kSliceIdBatchSize);
+                                                 FLAGS_mds_slice_id_generator_batch_size);
+}
+
+IdGeneratorSPtr NewSliceIdGenerator(uint64_t mds_id, KVStorageSPtr kv_storage) {
+  CHECK(kv_storage != nullptr) << "kv_storage is nullptr.";
+  std::string name = fmt::format("{}-{}", kSliceAutoIncrementIdName, mds_id);
+
+  return StoreAutoIncrementIdGenerator::NewShare(kv_storage, name, kSliceIdStartId,
+                                                 FLAGS_mds_slice_id_generator_batch_size);
 }
 
 void DestroyInodeIdGenerator(uint32_t fs_id, CoordinatorClientSPtr coordinator_client) {
   CHECK(coordinator_client != nullptr) << "coordinator_client is nullptr.";
   std::string name = fmt::format("{}-{}", kInoAutoIncrementIdName, fs_id);
 
-  auto id_generator = CoorAutoIncrementIdGenerator::New(coordinator_client, name, fs_id, kInoStartId, kInoBatchSize);
+  auto id_generator = CoorAutoIncrementIdGenerator::New(coordinator_client, name, fs_id, kInoStartId,
+                                                        FLAGS_mds_ino_generator_batch_size);
   id_generator->Destroy();
 }
 
@@ -647,7 +697,8 @@ void DestroyInodeIdGenerator(uint32_t fs_id, KVStorageSPtr kv_storage) {
   CHECK(kv_storage != nullptr) << "kv_storage is nullptr.";
   std::string name = fmt::format("{}-{}", kInoAutoIncrementIdName, fs_id);
 
-  auto id_generator = StoreAutoIncrementIdGenerator::New(kv_storage, name, kInoStartId, kInoBatchSize);
+  auto id_generator =
+      StoreAutoIncrementIdGenerator::New(kv_storage, name, kInoStartId, FLAGS_mds_ino_generator_batch_size);
   id_generator->Destroy();
 }
 

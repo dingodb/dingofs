@@ -14,23 +14,35 @@
 
 #include "mds/filesystem/parent_memo.h"
 
+#include <vector>
+
+#include "brpc/reloadable_flags.h"
+#include "utils/time.h"
+
 namespace dingofs {
 namespace mds {
 
-static const std::string kParentMemoTotalCountMetricsName = "dingofs_{}_parent_memo_total_count";
+static const std::string kParentMemoTotalCountMetricsName = "dingofs_{}_parent_memo_{}";
+
+// 0: no limit
+DEFINE_uint32(mds_parent_memo_cache_max_count, 1 * 1024 * 1024, "parent memo cache max count");
+DEFINE_validator(mds_parent_memo_cache_max_count, brpc::PassValidate);
 
 ParentMemo::ParentMemo(uint64_t fs_id)
-    : fs_id_(fs_id), total_count_(fmt::format(kParentMemoTotalCountMetricsName, fs_id)) {}
+    : fs_id_(fs_id),
+      total_count_(fmt::format(kParentMemoTotalCountMetricsName, fs_id, "total_count")),
+      clean_count_(fmt::format(kParentMemoTotalCountMetricsName, fs_id, "clean_count")) {}
 
 void ParentMemo::Remeber(Ino ino, Ino parent) {
   parent_map_.withWLock(
       [this, ino, parent](Map& map) mutable {
         auto it = map.find(ino);
         if (it == map.end()) {
-          map[ino] = parent;
+          map[ino] = {parent, utils::Timestamp()};
           total_count_ << 1;
         } else {
-          it->second = parent;
+          it->second.parent = parent;
+          it->second.last_active_time_s = utils::Timestamp();
         }
       },
       ino);
@@ -47,12 +59,34 @@ bool ParentMemo::GetParent(Ino ino, Ino& parent) {
         auto it = map.find(ino);
         if (it != map.end()) {
           found = true;
-          parent = it->second;
+          parent = it->second.parent;
         }
       },
       ino);
 
   return found;
+}
+
+void ParentMemo::CleanExpired(uint64_t expire_s) {
+  if (Size() < FLAGS_mds_parent_memo_cache_max_count) return;
+
+  std::vector<Ino> delete_inos;
+  parent_map_.iterate([&](const Map& map) {
+    for (const auto& [ino, value] : map) {
+      if (value.last_active_time_s < expire_s) {
+        delete_inos.push_back(ino);
+      }
+    }
+  });
+
+  for (const auto& ino : delete_inos) {
+    Forget(ino);
+  }
+
+  clean_count_ << delete_inos.size();
+
+  LOG(INFO) << fmt::format("[parentmemo.{}] clean expired, stat({}|{}|{}).", fs_id_, Size(), delete_inos.size(),
+                           clean_count_.get_value());
 }
 
 size_t ParentMemo::Size() {
@@ -63,13 +97,17 @@ size_t ParentMemo::Size() {
 
 size_t ParentMemo::Bytes() { return Size() * (sizeof(Ino) + sizeof(Ino)); }
 
-void ParentMemo::DescribeByJson(Json::Value& value) { value["count"] = Size(); }
+void ParentMemo::DescribeByJson(Json::Value& value) {
+  value["count"] = Size();
+  value["cache_clean"] = clean_count_.get_value();
+}
 
 void ParentMemo::Summary(Json::Value& value) {
   value["name"] = "parentmemo";
   value["count"] = Size();
   value["bytes"] = Bytes();
   value["total_count"] = total_count_.get_value();
+  value["clean_count"] = clean_count_.get_value();
 }
 
 }  // namespace mds

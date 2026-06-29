@@ -879,7 +879,7 @@ blockaccess::BlockAccesserSPtr GcProcessor::GetOrCreateDataAccesser(const FsInfo
     options.s3_options.s3_info = blockaccess::S3Info{
         .ak = s3_info.ak(), .sk = s3_info.sk(), .endpoint = s3_info.endpoint(), .bucket_name = s3_info.bucketname()};
 
-  } else {
+  } else if (fs_info.fs_type() == pb::mds::FsType::RADOS) {
     const auto& rados_info = fs_info.extra().rados_info();
     if (rados_info.mon_host().empty() || rados_info.user_name().empty() || rados_info.key().empty() ||
         rados_info.pool_name().empty()) {
@@ -894,6 +894,16 @@ blockaccess::BlockAccesserSPtr GcProcessor::GetOrCreateDataAccesser(const FsInfo
                                                       .key = rados_info.key(),
                                                       .pool_name = rados_info.pool_name(),
                                                       .cluster_name = rados_info.cluster_name()};
+  } else if (fs_info.fs_type() == pb::mds::FsType::LOCALFILE) {
+    const auto& file_info = fs_info.extra().file_info();
+    if (file_info.path().empty()) {
+      LOG(ERROR) << fmt::format("[gc] get localfile info fail, fs_id({}) file_info({}).", fs_id,
+                                file_info.ShortDebugString());
+      return nullptr;
+    }
+
+    options.type = blockaccess::AccesserType::kLocalFile;
+    options.file_options.path = file_info.path();
   }
 
   auto block_accessor = blockaccess::NewSharePrefixBlockAccesser(fs_info.fs_name(), options);

@@ -135,6 +135,12 @@ CreateFsResponse MDSClient::CreateFs(const std::string& fs_name,
       return response;
     }
 
+  } else if (!local_file_info.path.empty()) {
+    if (local_file_info.path.empty()) {
+      std::cerr << "local file info is empty.\n";
+      return response;
+    }
+
   } else {
     std::cerr << "s3 info and rados info is empty.\n";
     return response;

@@ -29,8 +29,7 @@ DECLARE_string(mds_gc_lock_name);
 DECLARE_string(mds_pid_file_name);
 
 // storage config
-DECLARE_string(mds_storage_engine);     // e.g dingo-store|dummy
-DECLARE_string(mds_id_generator_type);  // e.g coor|store
+DECLARE_string(mds_storage_engine);  // e.g dingo-store|dummy
 
 // quota config
 DECLARE_uint32(mds_quota_worker_num);
@@ -49,6 +48,10 @@ DECLARE_uint32(mds_server_id);
 DECLARE_string(mds_server_host);
 DECLARE_string(mds_server_listen_host);
 DECLARE_uint32(mds_server_port);
+
+// all mds share the same inode generator
+DECLARE_bool(mds_ino_generator_share_enable);
+DECLARE_bool(mds_slice_id_generator_share_enable);
 
 // service config
 DECLARE_bool(mds_service_worker_enable);

@@ -85,7 +85,6 @@ DEFINE_uint32(mds_server_port, 7801, "server port");
 DEFINE_bool(mds_cache_member_enable_cache, true, "cache member enable cache, default:true");
 
 DECLARE_string(mds_storage_engine);
-DECLARE_string(mds_id_generator_type);
 
 Server::Server() {
   mds_meta_map_ = MDSMetaMap::New();
@@ -107,13 +106,13 @@ bool Server::InitConfig(const std::string& path) {
   LOG(INFO) << fmt::format("mds_server_id: {}", FLAGS_mds_server_id);
   LOG(INFO) << fmt::format("mds_server_host: {}:{}", FLAGS_mds_server_host, FLAGS_mds_server_port);
   LOG(INFO) << fmt::format("mds_storage_engine: {}", FLAGS_mds_storage_engine);
-  LOG(INFO) << fmt::format("mds_id_generator_type: {}", FLAGS_mds_id_generator_type);
   LOG(INFO) << fmt::format("mds_log_dir: {}", Logger::LogDir());
 
-  if (FLAGS_mds_server_id == 0) {
-    LOG(ERROR) << "mds server id is 0, please set a valid id.";
+  if (FLAGS_mds_server_id == 0 || FLAGS_mds_server_id > kMaxMDSId) {
+    LOG(ERROR) << fmt::format("mds server id is invalid, valid range (0, {}).", kMaxMDSId);
     return false;
   }
+
   if (FLAGS_mds_server_host.empty()) {
     LOG(ERROR) << "mds server host is empty, please set a valid host.";
     return false;
@@ -254,19 +253,10 @@ bool Server::InitFileSystem() {
   CHECK(operation_processor_ != nullptr) << "operation_processor is nullptr.";
   CHECK(notify_buddy_ != nullptr) << "notify_buddy is nullptr.";
 
-  IdGeneratorUPtr fs_id_generator;
-  IdGeneratorSPtr slice_id_generator;
-  if (FLAGS_mds_storage_engine == "dingo-store") {
-    fs_id_generator =
-        (FLAGS_mds_id_generator_type == "coor") ? NewFsIdGenerator(coordinator_client_) : NewFsIdGenerator(kv_storage_);
-
-    slice_id_generator = (FLAGS_mds_id_generator_type == "coor") ? NewSliceIdGenerator(coordinator_client_)
-                                                                 : NewSliceIdGenerator(kv_storage_);
-
-  } else {
-    fs_id_generator = NewFsIdGenerator(kv_storage_);
-    slice_id_generator = NewSliceIdGenerator(kv_storage_);
-  }
+  IdGeneratorUPtr fs_id_generator = NewFsIdGenerator(kv_storage_);
+  IdGeneratorSPtr slice_id_generator = FLAGS_mds_slice_id_generator_share_enable
+                                           ? NewSliceIdGenerator(kv_storage_)
+                                           : NewSliceIdGenerator(self_mds_meta_.ID(), kv_storage_);
 
   CHECK(fs_id_generator != nullptr) << "new fs AutoIncrementIdGenerator fail.";
   CHECK(fs_id_generator->Init()) << "init fs AutoIncrementIdGenerator fail.";

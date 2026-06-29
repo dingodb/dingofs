@@ -205,10 +205,14 @@ IdGeneratorUPtr NewFsIdGenerator(CoordinatorClientSPtr coordinator_client);
 IdGeneratorUPtr NewFsIdGenerator(KVStorageSPtr kv_storage);
 
 IdGeneratorUPtr NewInodeIdGenerator(uint32_t fs_id, CoordinatorClientSPtr coordinator_client);
+IdGeneratorUPtr NewInodeIdGenerator(uint32_t fs_id, uint64_t mds_id, CoordinatorClientSPtr coordinator_client);
 IdGeneratorUPtr NewInodeIdGenerator(uint32_t fs_id, KVStorageSPtr kv_storage);
+IdGeneratorUPtr NewInodeIdGenerator(uint32_t fs_id, uint64_t mds_id, KVStorageSPtr kv_storage);
 
 IdGeneratorSPtr NewSliceIdGenerator(CoordinatorClientSPtr coordinator_client);
+IdGeneratorSPtr NewSliceIdGenerator(uint64_t mds_id, CoordinatorClientSPtr coordinator_client);
 IdGeneratorSPtr NewSliceIdGenerator(KVStorageSPtr kv_storage);
+IdGeneratorSPtr NewSliceIdGenerator(uint64_t mds_id, KVStorageSPtr kv_storage);
 
 void DestroyInodeIdGenerator(uint32_t fs_id, CoordinatorClientSPtr coordinator_client);
 void DestroyInodeIdGenerator(uint32_t fs_id, KVStorageSPtr kv_storage);
