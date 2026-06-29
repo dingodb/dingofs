@@ -35,7 +35,12 @@ class DirStatOperationTest : public ::testing::Test {
     ASSERT_TRUE(processor->Init()) << "init operation processor fail.";
   }
 
-  static void TearDownTestSuite() {}
+  static void TearDownTestSuite() {
+    if (processor != nullptr) {
+      processor->Destroy();
+      processor = nullptr;
+    }
+  }
 
   void SetUp() override {}
   void TearDown() override {}

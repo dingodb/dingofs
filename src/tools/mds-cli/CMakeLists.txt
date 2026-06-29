@@ -19,6 +19,8 @@ add_library(mds_client
   interaction.cc
   br.cc
   trash_restore.cc
+  owner_router.cc
+  dir_tree_walker.cc
 )
 
 target_link_libraries(mds_client

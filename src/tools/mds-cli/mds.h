@@ -181,6 +181,11 @@ using pb::mds::UnLockMemberResponse;
 using pb::mds::DeleteMemberRequest;
 using pb::mds::DeleteMemberResponse;
 
+using pb::mds::GetDirStatRequest;
+using pb::mds::GetDirStatResponse;
+using pb::mds::SyncDirStatRequest;
+using pb::mds::SyncDirStatResponse;
+
 class MDSClient {
  public:
   MDSClient(uint32_t fs_id);
@@ -215,6 +220,8 @@ class MDSClient {
     // See FsInfo.enable_uid_gid_map. Runtime-mutable (clients hot-apply via
     // heartbeat).
     bool enable_uid_gid_map{false};
+    // See FsInfo.enable_dir_stats. Create-time only.
+    bool enable_dir_stats{false};
   };
 
   CreateFsResponse CreateFs(const std::string& fs_name,
@@ -235,7 +242,7 @@ class MDSClient {
                   const std::string& prefix, size_t num);
   RmDirResponse RmDir(Ino parent, const std::string& name);
   ReadDirResponse ReadDir(Ino ino, const std::string& last_name, bool with_attr,
-                          bool is_refresh);
+                          bool is_refresh, uint32_t limit = 100);
 
   MkNodResponse MkNod(Ino parent, const std::string& name);
   void BatchMkNod(const std::vector<int64_t>& parents,
@@ -243,6 +250,9 @@ class MDSClient {
 
   GetDentryResponse GetDentry(Ino parent, const std::string& name);
   ListDentryResponse ListDentry(Ino parent, bool is_only_dir);
+  // Render-silent, paged variant for the client-side tree walk: returns one page
+  // (entries after `last`, up to `limit`) without printing.
+  ListDentryResponse ListDentryPaged(Ino parent, const std::string& last, uint32_t limit, bool is_only_dir);
   GetInodeResponse GetInode(Ino ino);
   BatchGetInodeResponse BatchGetInode(const std::vector<int64_t>& inos);
   BatchGetXAttrResponse BatchGetXattr(const std::vector<int64_t>& inos);
@@ -253,6 +263,11 @@ class MDSClient {
   void GetFsPerSecondStats(const std::string& fs_name);
 
   LookupResponse Lookup(Ino parent, const std::string& name);
+
+  // Resolve an absolute fs path ("/", "/a/b/c") to its inode by walking
+  // components from the root via Lookup. Returns false (and logs) on any
+  // missing component.
+  bool ResolvePath(const std::string& path, Ino& out_ino);
 
   OpenResponse Open(Ino ino, std::string& session_id);
   ReleaseResponse Release(Ino ino, const std::string& session_id);
@@ -288,6 +303,16 @@ class MDSClient {
   AllocSliceIdResponse AllocSliceId(uint32_t alloc_num, uint64_t min_slice_id);
   WriteSliceResponse WriteSlice(Ino parent, Ino ino, int64_t chunk_index);
   ReadSliceResponse ReadSlice(Ino ino, int64_t chunk_index);
+  // Read all chunks [0, chunk_num) of a file in one request (for `info` file
+  // data layout). Always bypasses the chunk cache so the layout is authoritative.
+  ReadSliceResponse ReadSliceAll(Ino ino, int64_t chunk_num);
+
+  // dir-stats operations
+  GetDirStatResponse GetDirStat(Ino ino);
+  // Single-level check/repair for one directory; the recursive tree walk lives in
+  // the CLI (dir_tree_walker) and calls this per directory routed to the owner.
+  // Render-silent: the caller aggregates and prints.
+  SyncDirStatResponse SyncDirStat(Ino ino, bool repair);
 
   // quota operations
   SetFsQuotaResponse SetFsQuota(const QuotaEntry& quota);
@@ -323,6 +348,7 @@ class MDSClient {
                          const RadosInfo& rados_info);
   void UpdateFsTrashDays(const std::string& fs_name, uint32_t trash_days);
   void UpdateFsEnableUidGidMap(const std::string& fs_name, bool enable);
+  void UpdateFsEnableDirStats(const std::string& fs_name, bool enable);
 
  private:
   uint32_t fs_id_{0};
@@ -367,11 +393,24 @@ class MdsCommandRunner {
     uint32_t trash_days{0};
     bool immediate_trash_quota{true};
     bool enable_uid_gid_map{false};
+    bool enable_dir_stats{false};
 
     // trash restore (`restoretrash` subcommand)
     std::vector<std::string> trash_hours;
     bool trash_put_back{false};
     uint32_t trash_threads{10};
+
+    // dir-stats subcommands
+    std::string path;  // absolute fs path, e.g. /a/b/c; resolved to ino if set
+    uint32_t depth{2};
+    uint32_t entries{10};
+    // concurrency for the client-side directory-tree walk (info -r/summary/syncdirstat)
+    uint32_t dir_threads{50};
+    bool strict{false};
+    bool recursive{false};
+    bool repair{false};
+    // info: for a file, show raw chunks/slices instead of objects.
+    bool raw{false};
 
     S3Info s3_info;
     RadosInfo rados_info;
