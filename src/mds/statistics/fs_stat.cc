@@ -74,7 +74,6 @@ Status FsStats::GetFsStatsPerSecond(Context& ctx, uint32_t fs_id,
                                     std::map<uint64_t, FsStatsDataEntry>& stats_per_second) {
   auto& trace = ctx.GetTrace();
 
-  FsStatsDataEntry sum_stats;
   uint64_t mark_time_s = utils::Timestamp() - FLAGS_mds_fsstats_duration_s;
   ScanFsStatsOperation operation(trace, fs_id, mark_time_s * kNsPerSecond,
                                  [&](const std::string& key, const std::string& value) -> bool {
@@ -83,14 +82,7 @@ Status FsStats::GetFsStatsPerSecond(Context& ctx, uint32_t fs_id,
                                    MetaCodec::DecodeFsStatsKey(key, fs_id, time_ns);
 
                                    uint64_t time_s = time_ns / kNsPerSecond;
-                                   if (time_s == mark_time_s) {
-                                     SumFsStats(MetaCodec::DecodeFsStatsValue(value), sum_stats);
-
-                                   } else if (time_s > mark_time_s) {
-                                     stats_per_second.insert(std::make_pair(mark_time_s, sum_stats));
-                                     mark_time_s = time_s;
-                                     sum_stats = MetaCodec::DecodeFsStatsValue(value);
-                                   }
+                                   SumFsStats(MetaCodec::DecodeFsStatsValue(value), stats_per_second[time_s]);
 
                                    return true;
                                  });

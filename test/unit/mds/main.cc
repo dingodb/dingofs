@@ -66,10 +66,15 @@ int main(int argc, char** argv) {
     default_run_case += ":InodeCacheTest.*";
     default_run_case += ":DentryCacheTest.*";
     default_run_case += ":FileSystemTest.*";
+    default_run_case += ":ParentMemoTest.*";
 
+    default_run_case += ":CacheGroupMemberManagerTest.*";
     default_run_case += ":CoorDistributionLockTest.*";
+    default_run_case += ":DirQuotaMapTest.*";
+    default_run_case += ":FsStatsTest.*";
     default_run_case += ":MutationMergerTest.*";
     default_run_case += ":MutationProcessorTest.*";
+    default_run_case += ":QuotaTest.*";
     default_run_case += ":HashPartitionHelperTest.*";
     default_run_case += ":OperationTest.*";
     default_run_case += ":TikvStorageTest.*";

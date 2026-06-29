@@ -277,6 +277,8 @@ void DirQuotaMap::Refresh(const std::unordered_map<Ino, QuotaEntry>& quota_map, 
       if (quota->IncNotFoundCount() >= kMaxNotFoundCount) {
         it = quota_map_.erase(it);
         LOG(INFO) << fmt::format("[quota.{}.{}] not found in store, clean it.", fs_id_, ino);
+      } else {
+        ++it;
       }
     } else {
       // update existing quota
