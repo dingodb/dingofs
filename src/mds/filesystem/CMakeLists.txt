@@ -26,6 +26,7 @@ target_link_libraries(mds_filesystem
     mds_service
     mds_background
     mds_quota
+    mds_statistics
 
     PROTO_OBJS
     protobuf::libprotobuf

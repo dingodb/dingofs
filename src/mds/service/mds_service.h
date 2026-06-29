@@ -190,6 +190,12 @@ class MDSServiceImpl : public pb::mds::MDSService {
   void DeleteDirQuota(google::protobuf::RpcController* controller, const pb::mds::DeleteDirQuotaRequest* request,
                       pb::mds::DeleteDirQuotaResponse* response, google::protobuf::Closure* done) override;
 
+  // dir-stat interface
+  void GetDirStat(google::protobuf::RpcController* controller, const pb::mds::GetDirStatRequest* request,
+                  pb::mds::GetDirStatResponse* response, google::protobuf::Closure* done) override;
+  void SyncDirStat(google::protobuf::RpcController* controller, const pb::mds::SyncDirStatRequest* request,
+                   pb::mds::SyncDirStatResponse* response, google::protobuf::Closure* done) override;
+
   void LoadDirQuotas(google::protobuf::RpcController* controller, const pb::mds::LoadDirQuotasRequest* request,
                      pb::mds::LoadDirQuotasResponse* response, google::protobuf::Closure* done) override;
 
@@ -385,6 +391,12 @@ class MDSServiceImpl : public pb::mds::MDSService {
                         pb::mds::DeleteDirQuotaResponse* response, TraceClosure* done);
   void DoLoadDirQuotas(google::protobuf::RpcController* controller, const pb::mds::LoadDirQuotasRequest* request,
                        pb::mds::LoadDirQuotasResponse* response, TraceClosure* done);
+
+  // dir-stat interface
+  void DoGetDirStat(google::protobuf::RpcController* controller, const pb::mds::GetDirStatRequest* request,
+                    pb::mds::GetDirStatResponse* response, TraceClosure* done);
+  void DoSyncDirStat(google::protobuf::RpcController* controller, const pb::mds::SyncDirStatRequest* request,
+                     pb::mds::SyncDirStatResponse* response, TraceClosure* done);
 
   // fs statistics
   void DoSetFsStats(google::protobuf::RpcController* controller, const pb::mds::SetFsStatsRequest* request,

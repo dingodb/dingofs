@@ -3536,5 +3536,123 @@ void MDSServiceImpl::RestoreFromTrash(google::protobuf::RpcController* controlle
   }
 }
 
+void MDSServiceImpl::DoGetDirStat(google::protobuf::RpcController*, const pb::mds::GetDirStatRequest* request,
+                                  pb::mds::GetDirStatResponse* response, TraceClosure* done) {
+  brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
+
+  auto span = StartSpan("MDSServiceImpl::DoGetDirStat", request->info());
+
+  auto file_system = GetFileSystem(request->fs_id());
+  auto status = SimpleValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    SpanScope::SetStatus(span, status);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  Context ctx(request->context(), request->info().request_id(), __func__);
+
+  DirStatEntry dir_stat;
+  status = file_system->GetDirStatManager().GetDirStat(ctx, request->ino(), dir_stat, /*with_pending=*/true);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    SpanScope::SetStatus(span, status);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  response->mutable_dir_stat()->Swap(&dir_stat);
+}
+
+void MDSServiceImpl::GetDirStat(google::protobuf::RpcController* controller,
+                                const pb::mds::GetDirStatRequest* request, pb::mds::GetDirStatResponse* response,
+                                google::protobuf::Closure* done) {
+  auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_id() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs_id is 0");
+    }
+    if (request->ino() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "ino is 0");
+    }
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  RunInPlace(GetDirStat, controller, request, response, svr_done);
+  RunInQueue(GetDirStat, controller, request, response, svr_done, read_worker_set_);
+}
+
+void MDSServiceImpl::DoSyncDirStat(google::protobuf::RpcController*, const pb::mds::SyncDirStatRequest* request,
+                                   pb::mds::SyncDirStatResponse* response, TraceClosure* done) {
+  brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
+
+  auto span = StartSpan("MDSServiceImpl::DoSyncDirStat", request->info());
+
+  auto file_system = GetFileSystem(request->fs_id());
+  auto status = SimpleValidateRequest(file_system, request, done->GetQueueWaitTimeUs());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    SpanScope::SetStatus(span, status);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  // Single-level check/repair for one directory. Force an authoritative-store
+  // read (critical for repair=true: repairing off a stale cache would overwrite a
+  // correct record). Tree-wide recursion is driven by the client (mds-cli), which
+  // calls this per directory routed to the owning MDS.
+  auto context_entry = request->context();
+  context_entry.set_is_bypass_cache(true);
+  Context ctx(context_entry, request->info().request_id(), __func__);
+
+  std::vector<dir_stat::DirStatManager::DirStatMismatch> mismatches;
+  status = file_system->GetDirStatManager().SyncDirStat(ctx, request->ino(), request->repair(), mismatches);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    SpanScope::SetStatus(span, status);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  for (const auto& brk : mismatches) {
+    auto* out = response->add_mismatches();
+    out->set_ino(brk.ino);
+    out->set_found(brk.found);
+    out->set_want_inodes(brk.want.inodes());
+    out->set_want_length(brk.want.length());
+    out->set_got_inodes(brk.got.inodes());
+    out->set_got_length(brk.got.length());
+  }
+}
+
+void MDSServiceImpl::SyncDirStat(google::protobuf::RpcController* controller,
+                                 const pb::mds::SyncDirStatRequest* request, pb::mds::SyncDirStatResponse* response,
+                                 google::protobuf::Closure* done) {
+  auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_id() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs_id is 0");
+    }
+    if (request->ino() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "ino is 0");
+    }
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  RunInPlace(SyncDirStat, controller, request, response, svr_done);
+  RunInQueue(SyncDirStat, controller, request, response, svr_done, write_worker_set_);
+}
+
 }  // namespace mds
 }  // namespace dingofs

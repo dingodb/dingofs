@@ -41,6 +41,7 @@ DECLARE_uint32(mds_crontab_heartbeat_interval_s);
 DECLARE_uint32(mds_crontab_fsinfosync_interval_s);
 DECLARE_uint32(mds_crontab_mdsmonitor_interval_s);
 DECLARE_uint32(mds_crontab_quota_sync_interval_s);
+DECLARE_uint32(mds_crontab_dir_stats_sync_interval_s);
 DECLARE_uint32(mds_crontab_gc_interval_s);
 
 // server config

@@ -61,11 +61,16 @@ const std::string kQuotaWorkerSetName = "QUOTA_WORKER_SET";
 DEFINE_uint32(mds_quota_worker_num, 24, "quota worker number");
 DEFINE_uint32(mds_quota_worker_max_pending_num, 4096, "quota worker max pending number");
 
+const std::string kDirStatWorkerSetName = "DIR_STAT_WORKER_SET";
+DEFINE_uint32(mds_dir_stat_worker_num, 24, "dir stat worker number");
+DEFINE_uint32(mds_dir_stat_worker_max_pending_num, 4096, "dir stat worker max pending number");
+
 // crontab config
 DEFINE_uint32(mds_crontab_heartbeat_interval_s, 5, "heartbeat interval seconds");
 DEFINE_uint32(mds_crontab_fsinfosync_interval_s, 10, "fs info sync interval seconds");
 DEFINE_uint32(mds_crontab_mdsmonitor_interval_s, 5, "mds monitor interval seconds");
-DEFINE_uint32(mds_crontab_quota_sync_interval_s, 3, "quota sync interval seconds");
+DEFINE_uint32(mds_crontab_quota_sync_interval_s, 3, "quota (load + flush usage) sync interval seconds");
+DEFINE_uint32(mds_crontab_dir_stats_sync_interval_s, 3, "dir-stats flush interval seconds");
 DEFINE_uint32(mds_crontab_gc_interval_s, 60, "gc interval seconds");
 DEFINE_uint32(mds_crontab_gc_trash_interval_s, 3600,
               "gc trash scan interval seconds (aligned with hour-bucket granularity)");
@@ -272,11 +277,16 @@ bool Server::InitFileSystem() {
   quota_worker_set_ = ExecqWorkerSet::NewUnique(kQuotaWorkerSetName, FLAGS_mds_quota_worker_num,
                                                 FLAGS_mds_quota_worker_max_pending_num);
   CHECK(quota_worker_set_ != nullptr) << "new quota worker set fail.";
-  CHECK(quota_worker_set_->Init()) << "init service read worker set fail.";
+  CHECK(quota_worker_set_->Init()) << "init quota worker set fail.";
 
-  file_system_set_ =
-      FileSystemSet::New(coordinator_client_, std::move(fs_id_generator), slice_id_generator, kv_storage_,
-                         self_mds_meta_, mds_meta_map_, operation_processor_, quota_worker_set_, notify_buddy_);
+  dir_stat_worker_set_ = ExecqWorkerSet::NewUnique(kDirStatWorkerSetName, FLAGS_mds_dir_stat_worker_num,
+                                                   FLAGS_mds_dir_stat_worker_max_pending_num);
+  CHECK(dir_stat_worker_set_ != nullptr) << "new dir stat worker set fail.";
+  CHECK(dir_stat_worker_set_->Init()) << "init dir stat worker set fail.";
+
+  file_system_set_ = FileSystemSet::New(coordinator_client_, std::move(fs_id_generator), slice_id_generator, kv_storage_,
+                                        self_mds_meta_, mds_meta_map_, operation_processor_, quota_worker_set_,
+                                        dir_stat_worker_set_, notify_buddy_);
   CHECK(file_system_set_ != nullptr) << "new FileSystem fail.";
 
   return file_system_set_->Init();
@@ -343,6 +353,15 @@ bool Server::InitQuotaSynchronizer() {
   return true;
 }
 
+bool Server::InitDirStatsSynchronizer() {
+  CHECK(file_system_set_ != nullptr) << "file_system_set is nullptr.";
+
+  dir_stats_synchronizer_ = DirStatsSynchronizer::New(file_system_set_);
+  CHECK(dir_stats_synchronizer_ != nullptr) << "new DirStatsSynchronizer fail.";
+
+  return true;
+}
+
 bool Server::InitGcProcessor() {
   CHECK(operation_processor_ != nullptr) << "operation_processor is nullptr.";
   CHECK(file_system_set_ != nullptr) << "file system set is nullptr.";
@@ -390,6 +409,14 @@ bool Server::InitCrontab() {
       FLAGS_mds_crontab_quota_sync_interval_s * 1000,
       true,
       [](void*) { Server::GetInstance().GetQuotaSynchronizer()->Run(); },
+  });
+
+  // Add dir-stats sync crontab
+  crontab_configs_.push_back({
+      "DIR_STATS_SYNC",
+      FLAGS_mds_crontab_dir_stats_sync_interval_s * 1000,
+      true,
+      [](void*) { Server::GetInstance().GetDirStatsSynchronizer()->Run(); },
   });
 
   // Add fs info sync crontab
@@ -519,6 +546,12 @@ QuotaSynchronizerSPtr Server::GetQuotaSynchronizer() {
   CHECK(quota_synchronizer_ != nullptr) << "quota_synchronizer is nullptr.";
 
   return quota_synchronizer_;
+}
+
+DirStatsSynchronizerSPtr Server::GetDirStatsSynchronizer() {
+  CHECK(dir_stats_synchronizer_ != nullptr) << "dir_stats_synchronizer is nullptr.";
+
+  return dir_stats_synchronizer_;
 }
 
 GcProcessorSPtr Server::GetGcProcessor() {

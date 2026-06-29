@@ -48,6 +48,7 @@
 #include "mds/common/partition_helper.h"
 #include "mds/common/status.h"
 #include "mds/common/suffix_set.h"
+#include "mds/common/synchronization.h"
 #include "mds/common/tracing.h"
 #include "mds/common/trash.h"
 #include "mds/common/type.h"
@@ -163,7 +164,8 @@ static bool IsInodeInTrash(const InodeSPtr& inode) {
 FileSystem::FileSystem(uint64_t self_mds_id, FsInfoSPtr fs_info, IdGeneratorUPtr ino_id_generator,
                        IdGeneratorSPtr slice_id_generator, KVStorageSPtr kv_storage,
                        OperationProcessorSPtr operation_processor, MDSMetaMapSPtr mds_meta_map,
-                       WorkerSetSPtr quota_worker_set, notify::NotifyBuddySPtr notify_buddy)
+                       WorkerSetSPtr quota_worker_set, WorkerSetSPtr dir_stat_worker_set,
+                       notify::NotifyBuddySPtr notify_buddy)
     : self_mds_id_(self_mds_id),
       fs_info_(fs_info),
       fs_id_(fs_info_->GetFsId()),
@@ -177,8 +179,13 @@ FileSystem::FileSystem(uint64_t self_mds_id, FsInfoSPtr fs_info, IdGeneratorUPtr
       parent_memo_(fs_id_),
       chunk_cache_(fs_id_),
       quota_manager_(fs_info, parent_memo_, operation_processor, quota_worker_set, notify_buddy),
+      dir_stat_manager_(fs_info, operation_processor, dir_stat_worker_set),
       notify_buddy_(notify_buddy),
       file_session_manager_(fs_id_, operation_processor) {
+  // Inject the live-tree recompute: DirStatManager's seed/repair paths need it
+  // but the scan relies on FileSystem's dentry/inode traversal primitives.
+  dir_stat_manager_.SetRecomputeFn(
+      [this](Context& ctx, Ino ino, DirStatEntry& out) { return CalcDirStat(ctx, ino, out); });
   can_serve_ = CanServe(self_mds_id);
 };
 
@@ -828,6 +835,7 @@ Status FileSystem::BatchCreate(Context& ctx, Ino parent, const std::vector<MkNod
   // update quota
   quota_manager_.UpdateFsUsage(0, params.size(), reason);
   quota_manager_.AsyncUpdateDirUsage(parent, 0, params.size(), reason);
+  UpdateDirStat(parent, 0, static_cast<int64_t>(params.size()), 0, reason);
 
   // update parent memo
   for (auto& dentry : dentries) parent_memo_.Remeber(dentry.INo(), parent);
@@ -930,6 +938,7 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
   // update quota
   quota_manager_.UpdateFsUsage(0, 1, reason);
   quota_manager_.AsyncUpdateDirUsage(param.parent, 0, 1, reason);
+  UpdateDirStat(param.parent, 0, 1, 0, reason);
 
   // update parent memo
   parent_memo_.Remeber(attr.ino(), param.parent);
@@ -1043,6 +1052,7 @@ Status FileSystem::BatchMkNod(Context& ctx, const std::vector<MkNodParam>& param
   // update quota
   quota_manager_.UpdateFsUsage(0, params.size(), reason);
   quota_manager_.AsyncUpdateDirUsage(parent, 0, params.size(), reason);
+  UpdateDirStat(parent, 0, static_cast<int64_t>(params.size()), 0, reason);
 
   // update parent memo
   for (const auto& dentry : dentries) parent_memo_.Remeber(dentry.INo(), parent);
@@ -1194,6 +1204,7 @@ Status FileSystem::Open(Context& ctx, Ino ino, const OpenParam& param, EntryOut&
     quota_manager_.UpdateFsUsage(delta_bytes, 0, reason);
     for (auto parent : attr.parents()) {
       quota_manager_.AsyncUpdateDirUsage(parent, delta_bytes, 0, reason);
+      UpdateDirStat(parent, delta_bytes, 0, 0, reason);
     }
   }
 
@@ -1298,6 +1309,7 @@ Status FileSystem::FlushFile(Context& ctx, Ino ino, const FlushFileParam& param,
 
     for (const auto& parent : attr.parents()) {
       quota_manager_.AsyncUpdateDirUsage(parent, delta_bytes, 0, reason);
+      UpdateDirStat(parent, delta_bytes, 0, 0, reason);
     }
   }
 
@@ -1442,6 +1454,7 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
   // update quota
   quota_manager_.UpdateFsUsage(0, 1, reason);
   quota_manager_.AsyncUpdateDirUsage(param.parent, 0, 1, reason);
+  UpdateDirStat(param.parent, 0, 1, /*dir_delta=*/1, reason);
 
   // update parent memo
   parent_memo_.Remeber(attr.ino(), param.parent);
@@ -1554,6 +1567,8 @@ Status FileSystem::BatchMkDir(Context& ctx, const std::vector<MkDirParam>& param
   // update quota
   quota_manager_.UpdateFsUsage(0, params.size(), reason);
   quota_manager_.AsyncUpdateDirUsage(parent, 0, params.size(), reason);
+  UpdateDirStat(parent, 0, static_cast<int64_t>(params.size()),
+                /*dir_delta=*/static_cast<int64_t>(params.size()), reason);
 
   // update parent memo
   for (const auto& dentry : dentries) parent_memo_.Remeber(dentry.INo(), dentry.ParentIno());
@@ -1669,6 +1684,8 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name, Ino&
       quota_manager_.AsyncUpdateDirUsage(parent, 0, -1, reason);
       quota_manager_.AsyncDeleteDirQuota(dentry.ino());
     }
+
+    UpdateDirStat(parent, 0, -1, /*dir_delta=*/-1, reason);
   }
 
   // update parent memo
@@ -1786,6 +1803,8 @@ Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent, const std::string
   // update quota
   std::string reason = fmt::format("link.{}.{}.{}.{}", request_id, ino, new_parent, new_name);
   quota_manager_.AsyncUpdateDirUsage(new_parent, attr.length(), 1, reason);
+  UpdateDirStat(new_parent, attr.type() == pb::mds::FileType::FILE ? static_cast<int64_t>(attr.length()) : 0, 1, 0,
+                reason);
 
   // update cache
   UpsertInodeCache(attr, reason);
@@ -1894,6 +1913,9 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name, Ent
       if (attr.nlink() == 0) quota_manager_.UpdateFsUsage(-delta_bytes, -1, reason);
       quota_manager_.AsyncUpdateDirUsage(parent, -delta_bytes, -1, reason);
     }
+
+    // dir-stat: debit `parent` at dentry-move time (see UpdateDirStat docs).
+    UpdateDirStat(parent, -delta_bytes, -1, 0, reason);
   }
 
   if (attr.nlink() == 0) chunk_cache_.Delete(attr.ino());
@@ -1989,6 +2011,9 @@ Status FileSystem::BatchUnLink(Context& ctx, Ino parent, const std::vector<std::
   // Quota: same matrix as UnLink, applied per-child. Manual-cleanup parses
   // the per-entry origin parent from names[i] (trash entry name encoding).
   std::string reason = fmt::format("unlink.{}.{}.{}", request_id, parent, join_name);
+  // dir-stat: accumulate all removed children's deltas and apply once (one lock
+  // acquisition) after the loop. See UpdateDirStat docs for trash policy.
+  DirStatDelta dir_stat_delta;
   for (size_t i = 0; i < child_attrs.size(); ++i) {
     const auto& attr = child_attrs[i];
     const int64_t delta_bytes = attr.type() == pb::mds::FILE ? static_cast<int64_t>(attr.length()) : 0;
@@ -2011,9 +2036,15 @@ Status FileSystem::BatchUnLink(Context& ctx, Ino parent, const std::vector<std::
         if (attr.nlink() == 0) quota_manager_.UpdateFsUsage(-delta_bytes, -1, reason);
         quota_manager_.AsyncUpdateDirUsage(parent, -delta_bytes, -1, reason);
       }
+
+      dir_stat_delta.length -= delta_bytes;
+      dir_stat_delta.inodes -= 1;
     }
 
     if (attr.nlink() == 0) chunk_cache_.Delete(attr.ino());
+  }
+  if (dir_stat_delta.inodes != 0) {
+    UpdateDirStat(parent, dir_stat_delta.length, dir_stat_delta.inodes, 0, reason);
   }
 
   // update cache
@@ -2119,6 +2150,9 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_par
 
   quota_manager_.UpdateFsUsage(0, 1, reason);
   quota_manager_.AsyncUpdateDirUsage(new_parent, 0, 1, reason);
+  // symlink contributes 0 length (consistent with
+  // CalcDirStat treating non-FILE as length 0).
+  UpdateDirStat(new_parent, 0, 1, 0, reason);
 
   // set output
   entry_out.parent_attr = last_parent_attr;
@@ -2217,6 +2251,7 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
 
     for (const auto& parent : attr.parents()) {
       quota_manager_.AsyncUpdateDirUsage(parent, delta_bytes, 0, reason);
+      UpdateDirStat(parent, delta_bytes, 0, 0, reason);
     }
   }
 
@@ -2646,6 +2681,25 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
     }
   }
 
+  // update dir-stat. Independent of trash: the dentry physically moves between
+  // parents at rename time, and the overwritten target leaves new_parent now.
+  // (src = renamed entry, tgt = overwritten existing entry.)
+  {
+    const bool src_is_file = (dentry.Type() == pb::mds::FileType::FILE);
+    const bool src_is_dir = (dentry.Type() == pb::mds::FileType::DIRECTORY);
+    const int64_t src_len = src_is_file ? static_cast<int64_t>(old_attr.length()) : 0;
+    if (!is_same_parent) {
+      UpdateDirStat(old_parent, -src_len, -1, /*dir_delta=*/src_is_dir ? -1 : 0, reason);
+      UpdateDirStat(new_parent, +src_len, +1, /*dir_delta=*/src_is_dir ? +1 : 0, reason);
+    }
+    if (is_exist_new_dentry) {
+      const bool tgt_is_file = (prev_new_attr.type() == pb::mds::FileType::FILE);
+      const bool tgt_is_dir = (prev_new_attr.type() == pb::mds::FileType::DIRECTORY);
+      const int64_t tgt_len = tgt_is_file ? static_cast<int64_t>(prev_new_attr.length()) : 0;
+      UpdateDirStat(new_parent, -tgt_len, -1, /*dir_delta=*/tgt_is_dir ? -1 : 0, reason);
+    }
+  }
+
   // If an hour bucket was renamed out of .trash, the cached <bucket_name,
   // bucket_ino> may now point at an inode that no longer lives under .trash.
   // Drop the cache so subsequent trash-move requests re-resolve cleanly.
@@ -2833,6 +2887,13 @@ Status FileSystem::CopyFileRange(Context& ctx, const CopyFileRangeParam& param, 
   if (length_delta > 0) {
     quota_manager_.UpdateFsUsage(length_delta, 0, reason);
     quota_manager_.AsyncUpdateDirUsage(param.dst_ino, length_delta, 0, reason);
+
+    // dir-stat must target the dst file's parent directory(ies) (CalcDirStat
+    // sums over a directory's children), not the file inode. dst_attr carries
+    // the parent list.
+    for (const auto& parent : dst_attr.parents()) {
+      UpdateDirStat(parent, length_delta, 0, 0, reason);
+    }
   }
 
   entry_out.attr = dst_attr;
@@ -2937,6 +2998,20 @@ Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offse
   std::string reason = fmt::format("fallocate.{}.{}", request_id, ino);
   UpsertInodeCache(attr, reason);
 
+  // Preallocate / ZERO_RANGE-without-KEEP_SIZE may have extended the file; charge
+  // the growth to quota and the parent directories' dir-stat, mirroring the other
+  // length-mutating paths (Open/O_TRUNC, FlushFile, SetAttr, CopyFileRange). Use
+  // the delta computed inside the operation's txn from the authoritative
+  // pre-image: re-reading inode->Length() here is wrong because UpsertInodeCache
+  // above mutates the cached inode in-place, which would zero the delta.
+  if (delta_bytes > 0) {
+    quota_manager_.UpdateFsUsage(delta_bytes, 0, reason);
+    quota_manager_.AsyncUpdateDirUsage(ino, delta_bytes, 0, reason);
+    for (const auto& parent : attr.parents()) {
+      UpdateDirStat(parent, delta_bytes, 0, 0, reason);
+    }
+  }
+
   // update chunk cache
   for (auto& chunk : effected_chunks) chunk_cache_.PutIf(ino, chunk);
 
@@ -3013,6 +3088,91 @@ Status FileSystem::GetDentry(Context& ctx, Ino parent, const std::string& name, 
   }
 
   return GetDentryFromStore(parent, name, dentry);
+}
+
+void FileSystem::UpdateDirStat(Ino parent, int64_t length_delta, int64_t inode_delta, int64_t dir_delta,
+                               const std::string& reason) {
+  if (!EnableDirStats()) return;
+  // Trash buckets (kTrashInodeId and the hour-bucket inodes) are never tracked.
+  // Gate here so every caller is covered in one place -- e.g. a Rename rescuing
+  // a child out of an hour bucket, or a flush/setattr on a hardlinked file whose
+  // parents still include a bucket -- instead of each site needing its own guard
+  // (a missed one silently materializes a never-reclaimed bucket record).
+  if (IsTrashInode(parent)) return;
+  dir_stat_manager_.AsyncUpdateDirStat(parent, length_delta, inode_delta, dir_delta, reason);
+}
+
+template <typename Fn>
+Status FileSystem::ForEachDentryPage(Context& ctx, Ino ino, bool is_only_dir, Fn fn) {
+  constexpr uint32_t kDirStatScanPageSize = 1000;
+  std::string last_name;
+  for (;;) {
+    std::vector<Dentry> dentries;
+    auto status = ListDentry(ctx, ino, last_name, kDirStatScanPageSize, is_only_dir, dentries);
+    if (!status.ok()) return status;
+    if (dentries.empty()) break;
+
+    const bool full_page = dentries.size() >= kDirStatScanPageSize;
+    // The store-backed ListDentry scans inclusive of last_name while the cache
+    // path is exclusive; drop the duplicated boundary entry so it is never
+    // processed twice across pages (names are unique within a directory).
+    const bool dup_front = (!last_name.empty() && dentries.front().Name() == last_name);
+    last_name = dentries.back().Name();
+    if (dup_front) dentries.erase(dentries.begin());
+
+    if (!dentries.empty()) {
+      status = fn(dentries);
+      if (!status.ok()) return status;
+    }
+
+    if (!full_page) break;
+  }
+  return Status::OK();
+}
+
+Status FileSystem::CalcDirStat(Context& ctx, Ino ino, DirStatEntry& out) {
+  out.Clear();
+
+  int64_t total_inodes = 0;
+  int64_t total_dirs = 0;
+  int64_t total_length = 0;
+
+  auto status = ForEachDentryPage(ctx, ino, /*is_only_dir=*/false, [&](const std::vector<Dentry>& dentries) -> Status {
+    total_inodes += static_cast<int64_t>(dentries.size());
+
+    // Only files carry a non-zero length; dirs/symlinks contribute none. Collect
+    // the file children of this page and read their inodes in one BatchGetInode
+    // (bypassing the inode cache so a full-directory scan does not evict the hot
+    // working set) instead of a serial per-child store round-trip. Sub-directory
+    // children are counted into `dirs` so non-recursive summaries need no scan.
+    std::vector<uint64_t> file_inos;
+    file_inos.reserve(dentries.size());
+    for (const auto& dentry : dentries) {
+      if (dentry.Type() == pb::mds::FileType::FILE) {
+        file_inos.push_back(dentry.INo());
+      } else if (dentry.Type() == pb::mds::FileType::DIRECTORY) {
+        ++total_dirs;
+      }
+    }
+
+    if (file_inos.empty()) return Status::OK();
+
+    std::vector<InodeSPtr> inodes;
+    auto st = BatchGetInodeFromStore(ctx, file_inos, "CalcDirStat", /*is_cache=*/false, inodes);
+    if (!st.ok()) return st;
+    for (const auto& inode : inodes) {
+      total_length += static_cast<int64_t>(inode->Length());
+    }
+    return Status::OK();
+  });
+
+  if (!status.ok()) return status;
+
+  out.set_inodes(total_inodes);
+  out.set_dirs(total_dirs);
+  out.set_length(total_length);
+
+  return Status::OK();
 }
 
 Status FileSystem::ListDentry(Context& ctx, Ino parent, const std::string& last_name, uint32_t limit, bool is_only_dir,
@@ -3715,6 +3875,22 @@ Status FileSystem::RestoreFromTrash(Context& ctx, Ino trash_parent, const std::s
     quota_manager_.AsyncUpdateDirUsage(actual_dst_parent, delta_bytes, 1, reason);
   }
 
+  // dir-stat: any restore re-adds the dentry to actual_dst_parent, so credit
+  // that directory -- mirroring the trash-move debit symmetrically (debit at
+  // dentry-move time, credit at dentry-restore time), independent of
+  // immediate_trash_quota. This must be gated on "dst is a real user directory"
+  // rather than allow_trash_parent: a tree-rebuild graft (allow_trash_parent)
+  // still moves the dentry into a real (merely trashed) user dir, and that dir
+  // may later be put_back carrying the dentry along -- if we skip the credit
+  // here, the restored dir's stat permanently under-counts the grafted child.
+  // The only dst we must NOT credit is the trash bucket itself (which is never
+  // tracked); a bucket-range dst means the entry stays loose in trash.
+  if (!IsTrashInode(actual_dst_parent)) {
+    UpdateDirStat(actual_dst_parent,
+                  file_attr.type() == pb::mds::FileType::FILE ? static_cast<int64_t>(file_attr.length()) : 0, 1,
+                  /*dir_delta=*/file_attr.type() == pb::mds::FileType::DIRECTORY ? 1 : 0, cache_reason);
+  }
+
   return status;
 }
 
@@ -3746,7 +3922,8 @@ void FileSystem::RecordTrashMoveOutcome(Ino bucket_ino) {
 FileSystemSet::FileSystemSet(CoordinatorClientSPtr coordinator_client, IdGeneratorUPtr fs_id_generator,
                              IdGeneratorSPtr slice_id_generator, KVStorageSPtr kv_storage, MDSMeta self_mds_meta,
                              MDSMetaMapSPtr mds_meta_map, OperationProcessorSPtr operation_processor,
-                             WorkerSetSPtr quota_worker_set, notify::NotifyBuddySPtr notify_buddy)
+                             WorkerSetSPtr quota_worker_set, WorkerSetSPtr dir_stat_worker_set,
+                             notify::NotifyBuddySPtr notify_buddy)
     : coordinator_client_(coordinator_client),
       fs_id_generator_(std::move(fs_id_generator)),
       slice_id_generator_(slice_id_generator),
@@ -3755,6 +3932,7 @@ FileSystemSet::FileSystemSet(CoordinatorClientSPtr coordinator_client, IdGenerat
       mds_meta_map_(mds_meta_map),
       operation_processor_(operation_processor),
       quota_worker_set_(quota_worker_set),
+      dir_stat_worker_set_(dir_stat_worker_set),
       notify_buddy_(notify_buddy) {}
 
 FileSystemSet::~FileSystemSet() {}  // NOLINT
@@ -4023,7 +4201,8 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, FsInfoEntry& fs_info)
   CHECK(ino_id_generator != nullptr) << "new id generator fail.";
 
   auto fs = FileSystem::New(self_mds_meta_.ID(), FsInfo::New(fs_info), std::move(ino_id_generator), slice_id_generator_,
-                            kv_storage_, operation_processor_, mds_meta_map_, quota_worker_set_, notify_buddy_);
+                            kv_storage_, operation_processor_, mds_meta_map_, quota_worker_set_, dir_stat_worker_set_,
+                            notify_buddy_);
   if (!fs->Init()) {
     cleanup(fs_id, table_id, fs_key, "");
     return Status(pb::error::EINTERNAL, "init FileSystem fail");
@@ -4425,7 +4604,8 @@ bool FileSystemSet::LoadFileSystems() {
     CHECK(ino_id_generator != nullptr) << "new id generator fail.";
 
     fs = FileSystem::New(self_mds_meta_.ID(), FsInfo::New(fs_info), std::move(ino_id_generator), slice_id_generator_,
-                         kv_storage_, operation_processor_, mds_meta_map_, quota_worker_set_, notify_buddy_);
+                         kv_storage_, operation_processor_, mds_meta_map_, quota_worker_set_, dir_stat_worker_set_,
+                         notify_buddy_);
     if (!fs->Init()) {
       LOG(ERROR) << fmt::format("[fsset.{}.{}] init filesystem fail.", fs_info.fs_name(), fs_info.fs_id());
       continue;

@@ -107,6 +107,12 @@ class FsInfo {
     return fs_info_.trash_days() != 0;
   }
 
+  bool EnableDirStats() {
+    utils::ReadLockGuard lock(lock_);
+
+    return fs_info_.enable_dir_stats();
+  }
+
   pb::mds::PartitionType GetPartitionType() {
     utils::ReadLockGuard lock(lock_);
 

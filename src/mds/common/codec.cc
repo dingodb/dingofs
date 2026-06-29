@@ -82,6 +82,9 @@ static uint32_t kFileSessionKeySize = 1 + 4 + 1 + 8 + 36;
 // dir quota format: ${prefix} kTableFsMeta {fs_id} kMetaFsDirQuota {ino}
 static uint32_t kDirQuotaKeySize = 1 + 4 + 1 + 8;
 
+// dir stat format: ${prefix} kTableFsMeta {fs_id} kMetaFsDirStat {ino}
+static uint32_t kDirStatKeySize = 1 + 4 + 1 + 8;
+
 // inode delslice format: ${prefix} kTableFsMeta {fs_id} kMetaFsDelSlice {ino} {chunk_index} {time_ns}
 static uint32_t kDelSliceKeySize = 1 + 4 + 1 + 8 + 8 + 8;
 
@@ -139,6 +142,7 @@ enum MetaType : unsigned char {
   kMetaCacheMember = 25,
   kMetaFsTinyFileData = 27,
   kMetaFsSliceRef = 29,
+  kMetaFsDirStat = 31,
 };
 
 // inode meta type:
@@ -182,6 +186,7 @@ void MetaCodec::SetClusterID(uint32_t cluster_id) {
   kChunkKeySize += kPrefixSize;
   kFileSessionKeySize += kPrefixSize;
   kDirQuotaKeySize += kPrefixSize;
+  kDirStatKeySize += kPrefixSize;
   kDelSliceKeySize += kPrefixSize;
   kDelFileKeySize += kPrefixSize;
   kFsStatsKeySize += kPrefixSize;
@@ -509,6 +514,24 @@ Range MetaCodec::GetDirQuotaRange(uint32_t fs_id) {
   end.push_back(kTableFsMeta);
   SerialHelper::WriteInt(fs_id, end);
   end.push_back(kMetaFsDirQuota + 1);
+
+  return range;
+}
+
+Range MetaCodec::GetDirStatRange(uint32_t fs_id) {
+  Range range;
+
+  auto& start = range.start;
+  start = kPrefix;
+  start.push_back(kTableFsMeta);
+  SerialHelper::WriteInt(fs_id, start);
+  start.push_back(kMetaFsDirStat);
+
+  auto& end = range.end;
+  end = kPrefix;
+  end.push_back(kTableFsMeta);
+  SerialHelper::WriteInt(fs_id, end);
+  end.push_back(kMetaFsDirStat + 1);
 
   return range;
 }
@@ -1343,6 +1366,65 @@ QuotaEntry MetaCodec::DecodeDirQuotaValue(const std::string& value) {
   CHECK(dir_quota.ParseFromString(value)) << "parse dir quota fail.";
 
   return dir_quota;
+}
+
+// dir stat format: ${prefix} kTableFsMeta {fs_id} kMetaFsDirStat {ino}
+bool MetaCodec::IsDirStatKey(const std::string& key) {
+  if (key.size() != kDirStatKeySize) {
+    return false;
+  }
+  if (key.at(kPrefixSize) != kTableFsMeta || key.at(kPrefixSize + 1 + 4) != kMetaFsDirStat) {
+    return false;
+  }
+  return true;
+}
+
+std::string MetaCodec::EncodeDirStatKey(uint32_t fs_id, Ino ino) {
+  std::string key;
+  key.reserve(kDirStatKeySize);
+
+  key.append(kPrefix);
+  key.push_back(kTableFsMeta);
+  SerialHelper::WriteInt(fs_id, key);
+  key.push_back(kMetaFsDirStat);
+  SerialHelper::WriteULong(ino, key);
+
+  return key;
+}
+
+void MetaCodec::DecodeDirStatKey(const std::string& key, uint32_t& fs_id, Ino& ino) {
+  CHECK(IsDirStatKey(key)) << fmt::format("invalid dir stat key({}).", Helper::StringToHex(key));
+
+  fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 1));
+  ino = SerialHelper::ReadULong(key.substr(kPrefixSize + 1 + 4 + 1));
+}
+
+std::string MetaCodec::EncodeDirStatValue(const DirStatEntry& dir_stat) {
+  std::string value = dir_stat.SerializeAsString();
+  // An all-zero DirStat (length/inodes/dirs all 0) serializes to empty bytes in
+  // proto3, but dingo-store rejects an empty value ("value is empty"). Emit an
+  // explicit inodes=0 field (tag 0x10 = field 2, varint; value 0x00) so the
+  // stored value is never empty yet still parses back to the same zero record --
+  // proto3 deserializes an explicit default-valued field identically to an
+  // absent one (see DecodeDirStatValue, which also still tolerates legacy empty
+  // values already in the store). Self-cleaning: any non-zero field makes
+  // SerializeAsString non-empty and the sentinel is not appended.
+  if (value.empty()) {
+    value.push_back('\x10');
+    value.push_back('\x00');
+  }
+  return value;
+}
+
+DirStatEntry MetaCodec::DecodeDirStatValue(const std::string& value) {
+  // An all-zero DirStat (a freshly-seeded or fully-emptied directory) serializes
+  // to empty bytes in proto3, so an empty value is valid here and parses to the
+  // zero record. Absence of the key is handled upstream via ENOT_FOUND, never by
+  // an empty value -- so don't reject empty here.
+  DirStatEntry dir_stat;
+  CHECK(dir_stat.ParseFromString(value)) << "parse dir stat fail.";
+
+  return dir_stat;
 }
 
 // inode delslice format: ${prefix} kTableFsMeta {fs_id} kMetaFsDelSlice {ino} {chunk_index} {time_ns}

@@ -18,6 +18,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -161,6 +162,12 @@ class Operation {
     kDeleteCacheMember = 181,
     kScanCacheMember = 182,
     kGetCacheMember = 183,
+
+    kDeleteDirStat = 190,
+    kGetDirStat = 191,
+    kFlushDirStats = 192,
+    kBatchSetDirStat = 193,
+    kScanDirStat = 194,
   };
 
   const char* OpName() const;
@@ -1074,6 +1081,10 @@ class FallocateOperation : public Operation {
   struct Result {
     AttrEntry attr;
     std::vector<ChunkEntry> effected_chunks;
+    // File-size growth (signed) computed in the txn from the authoritative
+    // pre-image so callers need not re-read the inode (a cached inode is mutated
+    // in-place on upsert, which would zero a re-read delta). Drives the
+    // shrink/expand flags and the quota + parent dir-stat charge.
     int64_t delta_bytes{0};
   };
 
@@ -1801,6 +1812,150 @@ class FlushDirUsagesOperation : public Operation {
   Result result_;
 };
 
+// Write a single dir stat entry (overwrite).
+// Delete a directory's dir-stat record (used when a directory is hard-deleted).
+class DeleteDirStatOperation : public Operation {
+ public:
+  DeleteDirStatOperation(Trace& trace, uint32_t fs_id, Ino ino) : Operation(trace), fs_id_(fs_id), ino_(ino) {}
+  ~DeleteDirStatOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kDeleteDirStat; }
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return ino_; }
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  uint32_t fs_id_;
+  Ino ino_;
+};
+
+// Write multiple dir stat entries (overwrite) in a single transaction.
+class BatchSetDirStatOperation : public Operation {
+ public:
+  BatchSetDirStatOperation(Trace& trace, uint32_t fs_id, std::map<uint64_t, DirStatEntry> dir_stats)
+      : Operation(trace), fs_id_(fs_id), dir_stats_(std::move(dir_stats)) {}
+  ~BatchSetDirStatOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kBatchSetDirStat; }
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return 0; }
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  uint32_t fs_id_;
+  std::map<uint64_t, DirStatEntry> dir_stats_;
+};
+
+// Read a single dir stat entry.
+class GetDirStatOperation : public Operation {
+ public:
+  GetDirStatOperation(Trace& trace, uint32_t fs_id, Ino ino)
+      : Operation(trace), fs_id_(fs_id), ino_(ino) {}
+  ~GetDirStatOperation() override = default;
+
+  struct Result {
+    bool found{false};
+    DirStatEntry dir_stat;
+  };
+
+  OpType GetOpType() const override { return OpType::kGetDirStat; }
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return ino_; }
+  Status Run(TxnUPtr& txn) override;
+  Result& GetResult() { return result_; }
+
+ private:
+  uint32_t fs_id_;
+  Ino ino_;
+  Result result_;
+};
+
+// Batch read-add-write dir stat deltas; missing keys are reported, not created.
+class FlushDirStatsOperation : public Operation {
+ public:
+  FlushDirStatsOperation(Trace& trace, uint32_t fs_id, const std::map<uint64_t, DirStatDelta>& delta_map)
+      : Operation(trace), fs_id_(fs_id), delta_map_(delta_map) {}
+  ~FlushDirStatsOperation() override = default;
+
+  struct Result {
+    std::vector<uint64_t> missing_inos;
+  };
+
+  OpType GetOpType() const override { return OpType::kFlushDirStats; }
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return 0; }
+  Status Run(TxnUPtr& txn) override;
+  Result& GetResult() { return result_; }
+
+ private:
+  uint32_t fs_id_;
+  std::map<uint64_t, DirStatDelta> delta_map_;
+  Result result_;
+};
+
+// Create a dir-stat record only if it does not already exist, seeding it with
+// version 1. Implemented as Get-then-conditional-Put in one SI txn (not the
+// store's PutIfAbsent, whose "already exists" only surfaces at commit on the
+// real backend): if the snapshot shows the key present we skip the write; if a
+// concurrent writer creates it between our read and commit, SI write-conflict
+// forces a retry that re-reads and then skips. Used by the GetDirStat read path
+// when a record is missing so a stale just-scanned value never clobbers a newer
+// one written by a concurrent flush/recompute.
+class SeedDirStatOperation : public Operation {
+ public:
+  SeedDirStatOperation(Trace& trace, uint32_t fs_id, Ino ino, DirStatEntry dir_stat)
+      : Operation(trace), fs_id_(fs_id), ino_(ino), dir_stat_(std::move(dir_stat)) {}
+  ~SeedDirStatOperation() override = default;
+
+  struct Result {
+    bool seeded{false};  // true if this op created the record; false if it already existed
+  };
+
+  OpType GetOpType() const override { return OpType::kBatchSetDirStat; }
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return ino_; }
+  Status Run(TxnUPtr& txn) override;
+  Result& GetResult() { return result_; }
+
+ private:
+  uint32_t fs_id_;
+  Ino ino_;
+  DirStatEntry dir_stat_;
+  Result result_;
+};
+
+// Read a dir-stat record, compare against a freshly recomputed absolute value,
+// and (when repair) overwrite a mismatch in the same transaction. Single SI txn
+// under RunAlone: a flush committing between the read and the write forces a
+// retry that re-reads, so the recomputed absolute is never lost-updated against
+// a concurrent flush. A check (repair=false) issues only the read.
+class RepairDirStatOperation : public Operation {
+ public:
+  RepairDirStatOperation(Trace& trace, uint32_t fs_id, Ino ino, DirStatEntry calc, bool repair)
+      : Operation(trace), fs_id_(fs_id), ino_(ino), calc_(std::move(calc)), repair_(repair) {}
+  ~RepairDirStatOperation() override = default;
+
+  struct Result {
+    bool found{false};        // whether a stored record existed
+    DirStatEntry stored;      // the stored record (valid when found)
+    bool mismatch{false};     // whether stored differs from calc (or was absent)
+    bool wrote{false};        // whether this op wrote a new absolute value
+  };
+
+  OpType GetOpType() const override { return OpType::kBatchSetDirStat; }
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return ino_; }
+  Status Run(TxnUPtr& txn) override;
+  Result& GetResult() { return result_; }
+
+ private:
+  uint32_t fs_id_;
+  Ino ino_;
+  DirStatEntry calc_;
+  bool repair_;
+  Result result_;
+};
+
 class UpsertMdsOperation : public Operation {
  public:
   UpsertMdsOperation(Trace& trace, const MdsEntry& mds_meta) : Operation(trace), mds_meta_(mds_meta) {};
@@ -2193,6 +2348,23 @@ class ScanDelFileOperation : public Operation {
   ~ScanDelFileOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kScanDelFile; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  const uint32_t fs_id_{0};
+  Txn::ScanHandlerType scan_handler_;
+};
+
+class ScanDirStatOperation : public Operation {
+ public:
+  ScanDirStatOperation(Trace& trace, uint32_t fs_id, Txn::ScanHandlerType scan_handler)
+      : Operation(trace), fs_id_(fs_id), scan_handler_(scan_handler) {};
+  ~ScanDirStatOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kScanDirStat; }
 
   uint32_t GetFsId() const override { return fs_id_; }
 

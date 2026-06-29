@@ -38,6 +38,18 @@ namespace dingofs {
 namespace mds {
 namespace unit_test {
 
+// Drain the in-memory dir-stat delta log (summed per ino) and clear it -- the
+// new manager has no SwapOut; production flush uses GetFlushSnapshot + Compact.
+static std::map<uint64_t, DirStatDelta> DrainDirStats(dir_stat::DirStatManager& m) {
+  auto snap = m.GetFlushSnapshot();
+  std::map<uint64_t, DirStatDelta> out;
+  for (const auto& [ino, fe] : snap) {
+    out[ino] = fe.delta;
+    m.Compact(ino, fe.timepoint);
+  }
+  return out;
+}
+
 // ============================================================================
 // Unit Tests — Trash FileSystem behavior
 //
@@ -58,7 +70,8 @@ static pb::mds::S3Info CreateS3Info() {
 
 static pb::mds::FsInfo CreateFsInfoWithTrash(uint32_t fs_id,
                                              const std::string& fs_name,
-                                             uint32_t trash_days) {
+                                             uint32_t trash_days,
+                                             bool enable_dir_stats = false) {
   pb::mds::FsInfo fs_info;
   fs_info.set_fs_id(fs_id);
   fs_info.set_fs_name(fs_name);
@@ -66,7 +79,7 @@ static pb::mds::FsInfo CreateFsInfoWithTrash(uint32_t fs_id,
   fs_info.set_status(pb::mds::FsStatus::NORMAL);
   fs_info.set_block_size(1024 * 1024);
   fs_info.set_chunk_size(1024 * 1024 * 64);
-  fs_info.set_enable_dir_stats(false);
+  fs_info.set_enable_dir_stats(enable_dir_stats);
   fs_info.set_owner("test_user");
   fs_info.set_capacity(1024 * 1024 * 1024);
   fs_info.set_recycle_time_hour(24);
@@ -103,7 +116,7 @@ class TrashFileSystemTest : public testing::Test {
     // Create a quota worker set (needed to avoid nullptr crash in
     // AsyncUpdateDirUsage).
     quota_worker_set =
-        SimpleWorkerSet::New("trash_test_quota", 1, 1024, false, false);
+        SimpleWorkerSet::New("trash_test_quota", 1, 1024, false, /*is_inplace_run=*/true);
     ASSERT_TRUE(quota_worker_set->Init()) << "init quota worker set fail.";
 
     pb::mds::FsInfo fs_info = CreateFsInfoWithTrash(kFsId, "trash_test_fs", 7);
@@ -111,7 +124,7 @@ class TrashFileSystemTest : public testing::Test {
     fs = FileSystem::New(kTrashMdsId, FsInfo::New(fs_info),
                          std::move(ino_id_generator), slice_id_generator,
                          kv_storage, operation_processor, nullptr,
-                         quota_worker_set, nullptr);
+                         quota_worker_set, quota_worker_set, nullptr);
     auto status = fs->CreateRoot();
     ASSERT_TRUE(status.ok())
         << "create root fail, error: " << status.error_str();
@@ -788,8 +801,10 @@ TEST_F(TrashFileSystemTest, RestoreHardlinkOneOfTwo) {
   EntryOut unlink_src;
   status = fs->UnLink(ctx, kRootIno, "hl_src", unlink_src);
   ASSERT_TRUE(status.ok()) << status.error_str();
+  // hl_src still has a live hardlink (hl_dst at root), so its parents list is
+  // [root(live), sub_trash_bucket]; pick the actual trash bucket from parents.
   Ino sub_trash_ino = FindTrashBucketParent(unlink_src.attr);
-  ASSERT_NE(sub_trash_ino, 0);
+  ASSERT_NE(sub_trash_ino, 0u) << "no trash bucket in parents";
 
   EntryOut unlink_dst;
   status = fs->UnLink(ctx, kRootIno, "hl_dst", unlink_dst);
@@ -1711,6 +1726,120 @@ TEST_F(TrashFileSystemTest, ScanDentryOperationDecodesBucketEntry) {
   EXPECT_EQ(seen_name, trash_name)
       << "trash entry " << trash_name << " missing from bucket scan";
   EXPECT_EQ(seen_ino, file_ino);
+}
+
+// ============================================================================
+// Trash x dir-stats: a fixture with BOTH trash and per-directory usage stats
+// enabled, to verify dir-stat accounting across trash-move and restore.
+// ============================================================================
+class TrashDirStatTest : public testing::Test {
+ protected:
+  static void SetUpTestSuite() {
+    kv_storage = DummyStorage::New();
+    ASSERT_TRUE(kv_storage->Init("")) << "init kv storage fail.";
+
+    const uint32_t kFsId = 3000;
+    auto ino_id_generator = NewInodeIdGenerator(kFsId, kv_storage);
+    ASSERT_TRUE(ino_id_generator->Init()) << "init inode id generator fail.";
+    auto slice_id_generator = NewSliceIdGenerator(kv_storage);
+    ASSERT_TRUE(slice_id_generator->Init()) << "init slice id generator fail.";
+
+    operation_processor = OperationProcessor::New(kv_storage);
+    ASSERT_TRUE(operation_processor->Init()) << "init operation processor fail.";
+
+    auto quota_worker_set =
+        SimpleWorkerSet::New("trash_ds_quota", 1, 1024, false, /*is_inplace_run=*/true);
+    ASSERT_TRUE(quota_worker_set->Init()) << "init quota worker set fail.";
+
+    pb::mds::FsInfo fs_info = CreateFsInfoWithTrash(
+        kFsId, "trash_ds_fs", /*trash_days=*/7, /*enable_dir_stats=*/true);
+
+    fs = FileSystem::New(kTrashMdsId, FsInfo::New(fs_info),
+                         std::move(ino_id_generator), slice_id_generator,
+                         kv_storage, operation_processor, nullptr,
+                         quota_worker_set, quota_worker_set, nullptr);
+    ASSERT_TRUE(fs->CreateRoot().ok());
+  }
+
+  static void TearDownTestSuite() {}
+
+ public:
+  static FileSystemSPtr fs;
+  static KVStorageSPtr kv_storage;
+  static OperationProcessorSPtr operation_processor;
+  static FileSystemSPtr Fs() { return fs; }
+};
+
+FileSystemSPtr TrashDirStatTest::fs = nullptr;
+KVStorageSPtr TrashDirStatTest::kv_storage = nullptr;
+OperationProcessorSPtr TrashDirStatTest::operation_processor = nullptr;
+
+// Regression: tree-rebuild grafts a child back onto a (trashed) user directory
+// with allow_trash_parent=true. The grafted-into directory is a real user dir
+// (normal-range inode), so its dir-stat MUST be credited -- otherwise a later
+// put_back of the directory carries the child along without ever accounting for
+// it, leaving the restored directory's stat under-counted. The credit must be
+// gated on "dst is not a trash bucket", not on allow_trash_parent.
+TEST_F(TrashDirStatTest, TreeRebuildGraftCreditsGraftedIntoDirStat) {
+  auto fs = Fs();
+  ASSERT_TRUE(fs->EnableDirStats());
+  Context ctx;
+
+  // mkdir /sub
+  FileSystem::MkDirParam dp;
+  dp.parent = kRootIno;
+  dp.name = "sub";
+  dp.mode = 0755;
+  dp.uid = 1;
+  dp.gid = 1;
+  dp.rdev = 0;
+  EntryOut dout;
+  ASSERT_TRUE(fs->MkDir(ctx, dp, dout).ok());
+  Ino sub_ino = dout.attr.ino();
+
+  // create /sub/child and give it length 5000.
+  FileSystem::MkNodParam fp;
+  fp.parent = sub_ino;
+  fp.name = "child";
+  fp.mode = 0644;
+  fp.uid = 1;
+  fp.gid = 1;
+  fp.rdev = 0;
+  EntryOut fo;
+  ASSERT_TRUE(fs->MkNod(ctx, fp, fo).ok());
+  Ino child_ino = fo.attr.ino();
+  {
+    FileSystem::FlushFileParam ffp;
+    ffp.length = 5000;
+    EntryOut ffo;
+    ASSERT_TRUE(fs->FlushFile(ctx, child_ino, ffp, ffo).ok());
+  }
+
+  // unlink child (-> trash, debits sub), then rmdir sub (-> trash). sub is now
+  // a trashed user directory; child is a flat entry in the same hour bucket.
+  EntryOut uo;
+  ASSERT_TRUE(fs->UnLink(ctx, sub_ino, "child", uo).ok());
+  Ino sub_trash_ino = uo.attr.parents(0);
+  Ino removed = 0;
+  EntryOut ro;
+  ASSERT_TRUE(fs->RmDir(ctx, kRootIno, "sub", removed, ro).ok());
+
+  // Drain accumulated deltas so the graft's delta is isolated.
+  DrainDirStats(fs->GetDirStatManager());
+
+  // Tree-rebuild: graft child back onto the trashed sub.
+  std::string child_trash_name =
+      BuildTrashEntryName(sub_ino, child_ino, "child");
+  auto status = fs->RestoreFromTrash(ctx, sub_trash_ino, child_trash_name,
+                                     /*allow_trash_parent=*/true);
+  ASSERT_TRUE(status.ok()) << "tree-rebuild graft fail: " << status.error_str();
+
+  // The graft must credit sub: +1 inode, +5000 length.
+  auto deltas = DrainDirStats(fs->GetDirStatManager());
+  ASSERT_TRUE(deltas.count(sub_ino))
+      << "graft produced no dir-stat delta for the grafted-into directory";
+  EXPECT_EQ(deltas[sub_ino].inodes, 1);
+  EXPECT_EQ(deltas[sub_ino].length, 5000);
 }
 
 }  // namespace unit_test

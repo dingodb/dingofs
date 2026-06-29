@@ -45,7 +45,7 @@ target_link_libraries(test_mds
   mds_quota
   mds_statistics
   mds_storage
-  
+
   dingofs_utils
 
   absl::log_internal_message

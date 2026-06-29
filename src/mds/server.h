@@ -26,6 +26,7 @@
 #include "mds/background/gc.h"
 #include "mds/background/heartbeat.h"
 #include "mds/background/monitor.h"
+#include "mds/background/dir_stats_sync.h"
 #include "mds/background/quota_sync.h"
 #include "mds/cachegroup/member_manager.h"
 #include "mds/common/crontab.h"
@@ -76,6 +77,8 @@ class Server {
 
   bool InitQuotaSynchronizer();
 
+  bool InitDirStatsSynchronizer();
+
   bool InitGcProcessor();
 
   bool InitCrontab();
@@ -96,6 +99,7 @@ class Server {
   MonitorSPtr GetMonitor();
   OperationProcessorSPtr GetOperationProcessor();
   QuotaSynchronizerSPtr GetQuotaSynchronizer();
+  DirStatsSynchronizerSPtr GetDirStatsSynchronizer();
   GcProcessorSPtr GetGcProcessor();
   CacheGroupMemberManagerSPtr GetCacheGroupMemberManager();
   CacheMemberSynchronizerSPtr& GetCacheMemberSynchronizer();
@@ -141,6 +145,9 @@ class Server {
   // worker set for quota
   WorkerSetSPtr quota_worker_set_;
 
+  // worker set for dir stats
+  WorkerSetSPtr dir_stat_worker_set_;
+
   // filesystem
   FileSystemSetSPtr file_system_set_;
 
@@ -162,8 +169,11 @@ class Server {
   // mds monitor
   MonitorSPtr monitor_;
 
-  // quota synchronizer
+  // quota synchronizer (load quota + flush usage)
   QuotaSynchronizerSPtr quota_synchronizer_;
+
+  // dir-stats synchronizer (flush dir-stats)
+  DirStatsSynchronizerSPtr dir_stats_synchronizer_;
 
   // gc
   GcProcessorSPtr gc_processor_;

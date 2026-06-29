@@ -222,6 +222,8 @@ static void RenderFsInfo(const std::vector<pb::mds::FsInfo>& fs_infoes, butil::I
     result += "<br>";
     result += fmt::format(R"(<a href="FsStatService/quota/{}" target="_blank">quota</a>)", fs_info.fs_id());
     result += "<br>";
+    result += fmt::format(R"(<a href="FsStatService/dirstat/{}" target="_blank">dir-stats</a>)", fs_info.fs_id());
+    result += "<br>";
     result += fmt::format(R"(<a href="FsStatService/delfiles/{}" target="_blank">delfiles</a>)", fs_info.fs_id());
     result += "<br>";
     result += fmt::format(R"(<a href="FsStatService/delslices/{}" target="_blank">delslices</a>)", fs_info.fs_id());
@@ -248,6 +250,7 @@ static void RenderFsInfo(const std::vector<pb::mds::FsInfo>& fs_infoes, butil::I
   os << "<th>Navigation</th>";
   os << "<th>Time</th>";
   os << "<th>EnableUidGidMap</th>";
+  os << "<th>EnableDirStats</th>";
   os << "<th>Trash</th>";
   os << "<th>RecycleTime</th>";
   os << "<th>MountPoint</th>";
@@ -274,6 +277,7 @@ static void RenderFsInfo(const std::vector<pb::mds::FsInfo>& fs_infoes, butil::I
     os << "<td>" << render_navigation_func(fs_info) << "</td>";
     os << "<td>" << render_time_func(fs_info) << "</td>";
     os << "<td>" << (fs_info.enable_uid_gid_map() ? "On" : "Off") << "</td>";
+    os << "<td>" << (fs_info.enable_dir_stats() ? "On" : "Off") << "</td>";
     os << "<td>"
        << fmt::format("trash_days: {}<br>immediate_trash_quota: {}", fs_info.trash_days(),
                       fs_info.immediate_trash_quota() ? "true" : "false")
@@ -991,6 +995,60 @@ static void RenderQuotaPage(FileSystemSPtr fs, butil::IOBufBuilder& os) {
     os << "</table>";
   } else {
     os << fmt::format(R"(<span class="red-text">Load dir quota fail, status({}).</span>)", status.error_str());
+  }
+  os << "</div>";
+
+  os << "</body>";
+  os << "</html>";
+}
+
+static void RenderDirStatsPage(FileSystemSPtr fs, butil::IOBufBuilder& os) {
+  os << "<!DOCTYPE html><html>\n";
+
+  os << "<head>";
+  os << RenderHead("dingofs dir stats");
+  os << "</head>";
+
+  os << "<body>";
+  os << R"(<h1 style="text-align:center;">Dir Stats</h1>)";
+
+  std::map<Ino, DirStatEntry> dir_stat_map;
+  auto status = fs->GetDirStatManager().GetAllDirStats(dir_stat_map);
+
+  // Drop empty records (all-zero), e.g. trash hour-bucket dirs and freshly
+  // seeded directories, so the dashboard only lists directories with usage.
+  for (auto it = dir_stat_map.begin(); it != dir_stat_map.end();) {
+    const auto& ds = it->second;
+    if (ds.length() == 0 && ds.inodes() == 0 && ds.dirs() == 0) {
+      it = dir_stat_map.erase(it);
+    } else {
+      ++it;
+    }
+  }
+
+  os << R"(<div style="margin:12px;margin-top:32px;font-size:smaller;">)";
+  os << fmt::format(R"(<h3>Dir Stat [{}]</h3>)", dir_stat_map.size());
+  if (status.ok()) {
+    os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
+    os << "<tr>";
+    os << "<th>Ino</th>";
+    os << "<th>Length(byte)</th>";
+    os << "<th>Inodes</th>";
+    os << "<th>Dirs</th>";
+    os << "</tr>";
+
+    for (const auto& [ino, dir_stat] : dir_stat_map) {
+      os << "<tr>";
+      os << fmt::format(R"(<td>{}</td>)", ino);
+      os << fmt::format(R"(<td>{}</td>)", dir_stat.length());
+      os << fmt::format(R"(<td>{}</td>)", dir_stat.inodes());
+      os << fmt::format(R"(<td>{}</td>)", dir_stat.dirs());
+      os << "</tr>";
+    }
+
+    os << "</table>";
+  } else {
+    os << fmt::format(R"(<span class="red-text">Get dir stats fail, status({}).</span>)", status.error_str());
   }
   os << "</div>";
 
@@ -1896,6 +1954,19 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
     auto file_system = file_system_set->GetFileSystem(fs_id);
     if (file_system != nullptr) {
       RenderQuotaPage(file_system, os);
+
+    } else {
+      os << fmt::format("Not found file system {}.", fs_id);
+    }
+
+  } else if (params.size() == 2 && params[0] == "dirstat") {
+    // /FsStatService/dirstat/{fs_id}
+
+    uint32_t fs_id = Helper::StringToInt32(params[1]);
+    auto file_system_set = Server::GetInstance().GetFileSystemSet();
+    auto file_system = file_system_set->GetFileSystem(fs_id);
+    if (file_system != nullptr) {
+      RenderDirStatsPage(file_system, os);
 
     } else {
       os << fmt::format("Not found file system {}.", fs_id);
