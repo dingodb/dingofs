@@ -14,8 +14,11 @@
 
 
 add_subdirectory(common)
+add_subdirectory(cachegroup)
 add_subdirectory(filesystem)
+add_subdirectory(quota)
 add_subdirectory(service)
+add_subdirectory(statistics)
 add_subdirectory(storage)
 
 add_executable(test_mds
@@ -27,14 +30,20 @@ target_link_libraries(test_mds
   PROTO_OBJS
 
   $<TARGET_OBJECTS:test_mds_common>
+  $<TARGET_OBJECTS:test_mds_cachegroup>
   $<TARGET_OBJECTS:test_mds_filesystem>
+  $<TARGET_OBJECTS:test_mds_quota>
   $<TARGET_OBJECTS:test_mds_service>
+  $<TARGET_OBJECTS:test_mds_statistics>
   $<TARGET_OBJECTS:test_mds_storage>
 
+  mds_cachegroup
   mds_common
   mds_filesystem
   mds_coordinator
   mds_mds
+  mds_quota
+  mds_statistics
   mds_storage
   
   dingofs_utils

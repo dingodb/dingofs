@@ -53,19 +53,16 @@ Status CacheGroupMemberManager::ReweightMember(Context& ctx, const std::string& 
 }
 
 static void SetMemberState(CacheMemberEntry& cache_member) {
-  auto now_ms = utils::TimestampMs();
+  uint64_t now_ms = utils::TimestampMs();
   if (cache_member.last_online_time_ms() == 0) {
     cache_member.set_state(pb::mds::CacheGroupMemberState::CacheGroupMemberStateUnknown);
-  } else if (cache_member.last_online_time_ms() + FLAGS_cache_member_heartbeat_offline_timeout_s * 1000 <
-             static_cast<uint64_t>(now_ms)) {
+  } else if (cache_member.last_online_time_ms() + FLAGS_cache_member_heartbeat_offline_timeout_s * 1000 < now_ms) {
     cache_member.set_state(pb::mds::CacheGroupMemberState::CacheGroupMemberStateOffline);
-  } else if (cache_member.last_online_time_ms() + FLAGS_cache_member_heartbeat_miss_timeout_s * 1000 <
-             static_cast<uint64_t>(now_ms)) {
+  } else if (cache_member.last_online_time_ms() + FLAGS_cache_member_heartbeat_miss_timeout_s * 1000 < now_ms) {
     cache_member.set_state(pb::mds::CacheGroupMemberState::CacheGroupMemberStateUnstable);
   } else {
     cache_member.set_state(pb::mds::CacheGroupMemberState::CacheGroupMemberStateOnline);
   }
-  return;
 }
 
 Status CacheGroupMemberManager::ListMembers(Context& ctx, std::vector<CacheMemberEntry>& members) {
@@ -307,7 +304,7 @@ bool CacheGroupMemberManager::CheckMemberLocked(CacheMemberEntry& cache_member) 
 
 bool CacheGroupMemberManager::CheckMemberOffLine(CacheMemberEntry& cache_member) {
   return cache_member.last_online_time_ms() + FLAGS_cache_member_heartbeat_offline_timeout_s * 1000 <
-                 static_cast<uint64_t>(utils::TimestampMs())
+                 utils::TimestampMs()
              ? true
              : false;
 }
@@ -323,8 +320,10 @@ void CacheGroupMemberManager::UpsertCacheMemberToCache(const CacheMemberEntry& c
     if (it->second.version() >= cache_member.version()) {
       return;
     }
+    it->second = cache_member;
+    return;
   }
-  member_cache_.emplace(cache_member.member_id(), std::move(cache_member));
+  member_cache_.emplace(cache_member.member_id(), cache_member);
 }
 
 void CacheGroupMemberManager::DeleteCacheMemberFromCache(const std::string& member_id) {
