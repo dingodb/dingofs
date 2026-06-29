@@ -339,6 +339,7 @@ int main(int argc, char* argv[]) {
   CHECK(server.InitMonitor()) << "init mds monitor error.";
   CHECK(server.InitGcProcessor()) << "init gc error.";
   CHECK(server.InitQuotaSynchronizer()) << "init quota synchronizer error.";
+  CHECK(server.InitDirStatsSynchronizer()) << "init dir-stats synchronizer error.";
   CHECK(server.InitCrontab()) << "init crontab error.";
   CHECK(server.InitService()) << "init service error.";
 

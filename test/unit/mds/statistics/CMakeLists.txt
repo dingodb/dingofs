@@ -23,6 +23,7 @@ add_library(test_mds_statistics
 target_link_libraries(test_mds_statistics
   PROTO_OBJS
 
+  mds_common
   mds_statistics
   mds_storage
 

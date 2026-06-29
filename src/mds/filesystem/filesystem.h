@@ -30,6 +30,7 @@
 #include "mds/common/status.h"
 #include "mds/common/trash.h"
 #include "mds/common/type.h"
+#include "mds/statistics/dir_stat_manager.h"
 #include "mds/filesystem/chunk_cache.h"
 #include "mds/filesystem/dentry.h"
 #include "mds/filesystem/file_session.h"
@@ -90,7 +91,8 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
  public:
   FileSystem(uint64_t self_mds_id, FsInfoSPtr fs_info, IdGeneratorUPtr ino_id_generator,
              IdGeneratorSPtr slice_id_generator, KVStorageSPtr kv_storage, OperationProcessorSPtr operation_processor,
-             MDSMetaMapSPtr mds_meta_map, WorkerSetSPtr quota_worker_set, notify::NotifyBuddySPtr notify_buddy);
+             MDSMetaMapSPtr mds_meta_map, WorkerSetSPtr quota_worker_set, WorkerSetSPtr dir_stat_worker_set,
+             notify::NotifyBuddySPtr notify_buddy);
   ~FileSystem();
 
   FileSystem(const FileSystem&) = delete;
@@ -101,9 +103,11 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   static FileSystemSPtr New(uint64_t self_mds_id, FsInfoSPtr fs_info, IdGeneratorUPtr ino_id_generator,
                             IdGeneratorSPtr slice_id_generator, KVStorageSPtr kv_storage,
                             OperationProcessorSPtr operation_processor, MDSMetaMapSPtr mds_meta_map,
-                            WorkerSetSPtr quota_worker_set, notify::NotifyBuddySPtr notify_buddy) {
+                            WorkerSetSPtr quota_worker_set, WorkerSetSPtr dir_stat_worker_set,
+                            notify::NotifyBuddySPtr notify_buddy) {
     return std::make_shared<FileSystem>(self_mds_id, fs_info, std::move(ino_id_generator), slice_id_generator,
-                                        kv_storage, operation_processor, mds_meta_map, quota_worker_set, notify_buddy);
+                                        kv_storage, operation_processor, mds_meta_map, quota_worker_set,
+                                        dir_stat_worker_set, notify_buddy);
   }
 
   FileSystemSPtr GetSelfPtr();
@@ -273,6 +277,12 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   };
   Status CompactChunk(Context& ctx, Ino ino, uint32_t index, const CompactChunkParam& param, ChunkEntry& chunk_out);
 
+  // Recompute a directory's single-level stat by scanning the live tree. Stays
+  // in FileSystem because it relies on the dentry/inode traversal primitives
+  // (ForEachDentryPage + BatchGetInodeFromStore); DirStatManager invokes it via
+  // an injected recompute callback for its seed/repair paths.
+  Status CalcDirStat(Context& ctx, Ino ino, DirStatEntry& out);
+
   // dentry/inode
   Status GetDentry(Context& ctx, Ino parent, const std::string& name, Dentry& dentry);
   Status ListDentry(Context& ctx, Ino parent, const std::string& last_name, uint32_t limit, bool is_only_dir,
@@ -299,6 +309,11 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   InodeCache& GetInodeCache() { return inode_cache_; }
 
   quota::QuotaManager& GetQuotaManager() { return quota_manager_; }
+
+  dir_stat::DirStatManager& GetDirStatManager() { return dir_stat_manager_; }
+  // Read live from fs_info_ so a runtime toggle (propagated via RefreshFsInfo)
+  // takes effect without recreating the FileSystem.
+  bool EnableDirStats() const { return fs_info_->EnableDirStats(); }
 
   FileSessionManager& GetFileSessionManager() { return file_session_manager_; }
 
@@ -340,6 +355,11 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status ListDentryFromStore(Ino parent, const std::string& last_name, uint32_t limit, bool is_only_dir,
                              std::vector<Dentry>& dentries);
 
+  // paged iteration handing each page (vector<Dentry>) to fn, so callers can
+  // batch per-page work (e.g. one BatchGetInode instead of one read per child).
+  template <typename Fn>
+  Status ForEachDentryPage(Context& ctx, Ino ino, bool is_only_dir, Fn fn);
+
   // get inode
   Status GetInode(Context& ctx, Ino ino, InodeSPtr& out_inode);
   Status GetInode(Context& ctx, uint64_t version, Ino ino, InodeSPtr& out_inode);
@@ -374,6 +394,13 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   void NotifyBuddyRefreshInode(const std::vector<Ino>& parents, const AttrOrMutation& attr_or_mutation,
                                const std::string& reason);
   void NotifyBuddyCleanPartitionCache(Ino ino, const std::string& reason);
+
+  // Accumulate a single-level dir-stat delta on `parent`: logical-length and
+  // child-count deltas (both signed). Debits (unlink/rmdir/trash-move) pass
+  // negative deltas; a cleaned trash-bucket entry is never a tracked dir so it
+  // contributes nothing. No-op unless EnableDirStats().
+  void UpdateDirStat(Ino parent, int64_t length_delta, int64_t inode_delta, int64_t dir_delta,
+                     const std::string& reason);
 
   TrashMove BuildTrashMove(Ino parent);
 
@@ -419,6 +446,9 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   // quota
   quota::QuotaManager quota_manager_;
 
+  // dir stats
+  dir_stat::DirStatManager dir_stat_manager_;
+
   // renamer
   Renamer renamer_;
 
@@ -437,7 +467,7 @@ class FileSystemSet {
   FileSystemSet(CoordinatorClientSPtr coordinator_client, IdGeneratorUPtr fs_id_generator,
                 IdGeneratorSPtr slice_id_generator, KVStorageSPtr kv_storage, MDSMeta self_mds_meta,
                 MDSMetaMapSPtr mds_meta_map, OperationProcessorSPtr operation_processor, WorkerSetSPtr quota_worker_set,
-                notify::NotifyBuddySPtr notify_buddy);
+                WorkerSetSPtr dir_stat_worker_set, notify::NotifyBuddySPtr notify_buddy);
   ~FileSystemSet();
 
   FileSystemSet(const FileSystemSet&) = delete;
@@ -448,10 +478,11 @@ class FileSystemSet {
   static FileSystemSetSPtr New(CoordinatorClientSPtr coordinator_client, IdGeneratorUPtr fs_id_generator,
                                IdGeneratorSPtr slice_id_generator, KVStorageSPtr kv_storage, MDSMeta self_mds_meta,
                                MDSMetaMapSPtr mds_meta_map, OperationProcessorSPtr operation_processor,
-                               WorkerSetSPtr quota_worker_set, notify::NotifyBuddySPtr notify_buddy) {
+                               WorkerSetSPtr quota_worker_set, WorkerSetSPtr dir_stat_worker_set,
+                               notify::NotifyBuddySPtr notify_buddy) {
     return std::make_shared<FileSystemSet>(coordinator_client, std::move(fs_id_generator),
                                            std::move(slice_id_generator), kv_storage, self_mds_meta, mds_meta_map,
-                                           operation_processor, quota_worker_set, notify_buddy);
+                                           operation_processor, quota_worker_set, dir_stat_worker_set, notify_buddy);
   }
 
   bool Init();
@@ -561,6 +592,8 @@ class FileSystemSet {
   OperationProcessorSPtr operation_processor_;
 
   WorkerSetSPtr quota_worker_set_;
+
+  WorkerSetSPtr dir_stat_worker_set_;
 
   // notify buddy
   notify::NotifyBuddySPtr notify_buddy_;

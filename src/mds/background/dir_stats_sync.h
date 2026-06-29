@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_MDS_BACKGROUND_QUOTA_SYNC_H_
-#define DINGOFS_MDS_BACKGROUND_QUOTA_SYNC_H_
+#ifndef DINGOFS_MDS_BACKGROUND_DIR_STATS_SYNC_H_
+#define DINGOFS_MDS_BACKGROUND_DIR_STATS_SYNC_H_
 
 #include <atomic>
 #include <memory>
@@ -23,21 +23,24 @@
 namespace dingofs {
 namespace mds {
 
-class QuotaSynchronizer;
-using QuotaSynchronizerSPtr = std::shared_ptr<QuotaSynchronizer>;
+class DirStatsSynchronizer;
+using DirStatsSynchronizerSPtr = std::shared_ptr<DirStatsSynchronizer>;
 
-class QuotaSynchronizer {
+// Periodic per-filesystem dir-stats sync: flushes accumulated per-directory
+// dir-stat delta back to store. Flush-only (never loads). Driven by a
+// background crontab tick.
+class DirStatsSynchronizer {
  public:
-  QuotaSynchronizer(FileSystemSetSPtr fs_set) : fs_set_(fs_set) {};
-  ~QuotaSynchronizer() = default;
+  DirStatsSynchronizer(FileSystemSetSPtr fs_set) : fs_set_(fs_set) {};
+  ~DirStatsSynchronizer() = default;
 
-  static QuotaSynchronizerSPtr New(FileSystemSetSPtr fs_set) { return std::make_shared<QuotaSynchronizer>(fs_set); }
+  static DirStatsSynchronizerSPtr New(FileSystemSetSPtr fs_set) { return std::make_shared<DirStatsSynchronizer>(fs_set); }
 
   void Run();
 
  private:
-  // flush and load fs/dir quota
-  void SyncFsQuota();
+  // for each filesystem: flush dir-stats delta
+  void SyncDirStats();
 
   std::atomic<bool> is_running_{false};
 
@@ -47,4 +50,4 @@ class QuotaSynchronizer {
 }  // namespace mds
 }  // namespace dingofs
 
-#endif  // DINGOFS_MDS_BACKGROUND_QUOTA_SYNC_H_
+#endif  // DINGOFS_MDS_BACKGROUND_DIR_STATS_SYNC_H_

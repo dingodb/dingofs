@@ -73,6 +73,9 @@ class MetaCodec {
   // format: ${prefix} kTableFsMeta {fs_id} kMetaDirQuota
   static Range GetDirQuotaRange(uint32_t fs_id);
 
+  // format: ${prefix} kTableFsMeta {fs_id} kMetaFsDirStat
+  static Range GetDirStatRange(uint32_t fs_id);
+
   // format: ${prefix} kTableFsMeta {fs_id} kMetaFsDelSlice
   static Range GetDelSliceRange(uint32_t fs_id);
   // format: ${prefix} kTableFsMeta {fs_id} kMetaFsDelSlice {ino}
@@ -193,6 +196,13 @@ class MetaCodec {
   static void DecodeDirQuotaKey(const std::string& key, uint32_t& fs_id, Ino& ino);
   static std::string EncodeDirQuotaValue(const QuotaEntry& dir_quota);
   static QuotaEntry DecodeDirQuotaValue(const std::string& value);
+
+  // dir stat format: ${prefix} kTableFsMeta {fs_id} kMetaFsDirStat {ino}
+  static bool IsDirStatKey(const std::string& key);
+  static std::string EncodeDirStatKey(uint32_t fs_id, Ino ino);
+  static void DecodeDirStatKey(const std::string& key, uint32_t& fs_id, Ino& ino);
+  static std::string EncodeDirStatValue(const DirStatEntry& dir_stat);
+  static DirStatEntry DecodeDirStatValue(const std::string& value);
 
   // inode delslice format: ${prefix} kTableFsMeta {fs_id} kMetaFsDelSlice {ino} {chunk_index} {time_ns}
   static bool IsDelSliceKey(const std::string& key);

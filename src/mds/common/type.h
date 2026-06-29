@@ -39,6 +39,25 @@ using TrashSliceEntry = pb::mds::TrashSlice;
 using TrashSliceList = pb::mds::TrashSliceList;
 using QuotaEntry = pb::mds::Quota;
 using UsageEntry = pb::mds::Usage;
+using DirStatEntry = pb::mds::DirStat;
+
+// in-memory single-level dir-stat delta (length/inodes/dirs)
+struct DirStatDelta {
+  int64_t length{0};
+  int64_t inodes{0};
+  int64_t dirs{0};
+};
+
+// a single buffered dir-stat delta tagged with a strictly-monotonic logical
+// timestamp. The timestamp lets the flush/recompute paths compact a time-bounded
+// prefix of the per-directory delta log (see DirStatManager) instead of dropping
+// the whole buffer -- mirrors quota's Usage{bytes,inodes,time_ns}.
+struct DirStatDeltaEntry {
+  int64_t length{0};
+  int64_t inodes{0};
+  int64_t dirs{0};
+  uint64_t time_ns{0};
+};
 using MdsEntry = pb::mds::MDS;
 using ClientEntry = pb::mds::Client;
 using FileSessionEntry = pb::mds::FileSession;

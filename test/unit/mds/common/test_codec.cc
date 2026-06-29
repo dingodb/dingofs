@@ -534,6 +534,57 @@ TEST_F(MetaDataCodecTest, ParseKeyFromHexTruncated) {
   EXPECT_NE(desc.find("truncated"), std::string::npos) << desc;
 }
 
+TEST_F(MetaDataCodecTest, DirStatKey) {
+  uint32_t fs_id = 7;
+  Ino ino = 123456;
+  std::string key = MetaCodec::EncodeDirStatKey(fs_id, ino);
+  EXPECT_TRUE(MetaCodec::IsDirStatKey(key));
+  uint32_t out_fs_id = 0;
+  Ino out_ino = 0;
+  MetaCodec::DecodeDirStatKey(key, out_fs_id, out_ino);
+  EXPECT_EQ(out_fs_id, fs_id);
+  EXPECT_EQ(out_ino, ino);
+}
+
+TEST_F(MetaDataCodecTest, DirStatValue) {
+  DirStatEntry in;
+  in.set_length(1000);
+  in.set_inodes(3);
+  in.set_dirs(2);
+  std::string value = MetaCodec::EncodeDirStatValue(in);
+  auto out = MetaCodec::DecodeDirStatValue(value);
+  EXPECT_EQ(out.length(), 1000);
+  EXPECT_EQ(out.inodes(), 3);
+  EXPECT_EQ(out.dirs(), 2);
+}
+
+// Regression: a freshly-seeded (all-zero) DirStat must NOT encode to an empty
+// value. dingo-store rejects empty values ("value is empty"), which otherwise
+// fails every MkDir txn (DummyStorage accepts empty Puts, hiding the bug). The
+// encoded value must be non-empty yet still parse back to the same zero record,
+// and a legacy empty value already in the store must still decode to zero.
+TEST_F(MetaDataCodecTest, DirStatValueZeroIsNonEmpty) {
+  DirStatEntry zero;
+  std::string value = MetaCodec::EncodeDirStatValue(zero);
+  EXPECT_FALSE(value.empty());  // would be "" without the sentinel -> store rejects
+
+  auto out = MetaCodec::DecodeDirStatValue(value);
+  EXPECT_EQ(out.length(), 0);
+  EXPECT_EQ(out.inodes(), 0);
+  EXPECT_EQ(out.dirs(), 0);
+
+  // Back-compat: a legacy empty value already in the store still decodes to zero.
+  auto legacy = MetaCodec::DecodeDirStatValue("");
+  EXPECT_EQ(legacy.length(), 0);
+  EXPECT_EQ(legacy.inodes(), 0);
+  EXPECT_EQ(legacy.dirs(), 0);
+
+  // Self-cleaning: a non-zero record serializes normally (no sentinel appended).
+  DirStatEntry nonzero;
+  nonzero.set_inodes(1);
+  EXPECT_EQ(MetaCodec::EncodeDirStatValue(nonzero), nonzero.SerializeAsString());
+}
+
 }  // namespace unit_test
 }  // namespace mds
 }  // namespace dingofs

@@ -12,33 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "mds/background/quota_sync.h"
+#include "mds/background/dir_stats_sync.h"
 
 #include "mds/common/synchronization.h"
 
 namespace dingofs {
 namespace mds {
 
-void QuotaSynchronizer::Run() {
+void DirStatsSynchronizer::Run() {
   bool running = false;
   if (!is_running_.compare_exchange_strong(running, true)) {
     return;
   }
   DEFER(is_running_.store(false));
 
-  SyncFsQuota();
+  SyncDirStats();
 }
 
-void QuotaSynchronizer::SyncFsQuota() {
+void DirStatsSynchronizer::SyncDirStats() {
   auto fses = fs_set_->GetAllFileSystem();
   for (auto& fs : fses) {
-    auto& quota_manager = fs->GetQuotaManager();
-
-    // load fs and dir quota
-    quota_manager.LoadQuota();
-
-    // flush fs and dir usage
-    quota_manager.FlushUsage();
+    fs->GetDirStatManager().FlushDirStats();
   }
 }
 

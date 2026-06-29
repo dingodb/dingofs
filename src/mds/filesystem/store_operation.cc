@@ -21,6 +21,7 @@
 #include <cstdlib>
 #include <functional>
 #include <map>
+#include <set>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -385,6 +386,9 @@ const char* Operation::OpName() const {
     case OpType::kScanDelFile:
       return "ScanDelFile";
 
+    case OpType::kScanDirStat:
+      return "ScanDirStat";
+
     case OpType::kScanDelSlice:
       return "ScanDelSlice";
 
@@ -429,6 +433,18 @@ const char* Operation::OpName() const {
 
     case OpType::kGetCacheMember:
       return "GetCacheMember";
+
+    case OpType::kDeleteDirStat:
+      return "DeleteDirStat";
+
+    case OpType::kBatchSetDirStat:
+      return "BatchSetDirStat";
+
+    case OpType::kGetDirStat:
+      return "GetDirStat";
+
+    case OpType::kFlushDirStats:
+      return "FlushDirStats";
 
     default:
       return "UnknownOperation";
@@ -609,6 +625,9 @@ Status UpdateFsOperation::Run(TxnUPtr& txn) {
   // GetFsInfo, flip the flag, and UpdateFsInfo with the full record (the
   // same read-modify-write convention used for trash_days above).
   new_fs_info.set_enable_uid_gid_map(fs_info_.enable_uid_gid_map());
+  // enable_dir_stats is likewise a runtime-mutable toggle (hot-switchable):
+  // same GetFsInfo -> flip -> UpdateFsInfo read-modify-write convention.
+  new_fs_info.set_enable_dir_stats(fs_info_.enable_dir_stats());
   if (fs_info_.has_extra() && fs_info_.extra().has_s3_info()) {
     const auto& s3_info = fs_info_.extra().s3_info();
     auto* mut_s3_info = new_fs_info.mutable_extra()->mutable_s3_info();
@@ -738,6 +757,11 @@ Status MkDirOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_param) 
   // create inode
   txn->Put(MetaCodec::EncodeInodeKey(fs_id, dentry_.INo()), MetaCodec::EncodeInodeValue(attr_));
 
+  // seed an empty dir-stat record so the dir is tracked from birth (no first-flush
+  // recompute); the lazy missing_inos->CalcDirStat path still covers pre-existing dirs.
+  DirStatEntry dir_stat;
+  txn->Put(MetaCodec::EncodeDirStatKey(fs_id, dentry_.INo()), MetaCodec::EncodeDirStatValue(dir_stat));
+
   // update parent attr
   parent_attr.set_nlink(parent_attr.nlink() + 1);
   parent_attr.set_mtime(std::max(parent_attr.mtime(), GetTime()));
@@ -762,9 +786,12 @@ Status BatchMkDirOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_pa
     txn->Put(MetaCodec::EncodeDentryKey(fs_id, parent, dentry.Name()), MetaCodec::EncodeDentryValue(dentry.Copy()));
   }
 
-  // create
+  // create inode + seed empty dir-stat in the same txn so each dir is tracked from birth
   for (const auto& attr : attrs_) {
     txn->Put(MetaCodec::EncodeInodeKey(fs_id, attr.ino()), MetaCodec::EncodeInodeValue(attr));
+
+    DirStatEntry dir_stat;
+    txn->Put(MetaCodec::EncodeDirStatKey(fs_id, attr.ino()), MetaCodec::EncodeDirStatValue(dir_stat));
   }
 
   // update parent attr
@@ -1464,6 +1491,8 @@ Status FallocateOperation::RunInBatch(TxnUPtr& txn, BatchSharedParam& shared_par
   const uint64_t offset = param_.offset;
   const uint64_t len = param_.len;
 
+  // Pre-image length, before PreAlloc/SetZero mutate attr. The growth is charged
+  // to quota and dir-stat by the caller via result_.delta_bytes.
   const uint64_t file_length = attr.length();
 
   if (mode_ == 0) {
@@ -1746,11 +1775,14 @@ Status RmDirOperation::Run(TxnUPtr& txn) {
 
   if (!enable_trash) {
     child_attr_key = MetaCodec::EncodeInodeKey(fs_id, dentry.ino());
-    // 6a. Plain rmdir: drop the child inode and its mutation slots.
+    // 6a. Plain rmdir: drop the child inode, its mutation slots and its dir-stat
+    // record. This also covers trash GC permanent deletion, which reuses
+    // RmDirOperation with trash disabled, so the dir-stat record is not leaked.
     txn->Delete(child_attr_key);
     for (uint32_t i = 0; i < kDirAttrMutationNum; ++i) {
       txn->Delete(MetaCodec::EncodeDirInodeMutationKey(fs_id, dentry.ino(), i));
     }
+    txn->Delete(MetaCodec::EncodeDirStatKey(fs_id, dentry.ino()));
   } else {
     CHECK(trash_.bucket_ino != 0) << "invalid trash bucket ino(0)";
 
@@ -3072,6 +3104,124 @@ Status FlushDirUsagesOperation::Run(TxnUPtr& txn) {
   return Status::OK();
 }
 
+Status DeleteDirStatOperation::Run(TxnUPtr& txn) {
+  txn->Delete(MetaCodec::EncodeDirStatKey(fs_id_, ino_));
+  return Status::OK();
+}
+
+Status BatchSetDirStatOperation::Run(TxnUPtr& txn) {
+  for (const auto& [ino, dir_stat] : dir_stats_) {
+    txn->Put(MetaCodec::EncodeDirStatKey(fs_id_, ino), MetaCodec::EncodeDirStatValue(dir_stat));
+  }
+  return Status::OK();
+}
+
+Status GetDirStatOperation::Run(TxnUPtr& txn) {
+  std::string key = MetaCodec::EncodeDirStatKey(fs_id_, ino_);
+  std::string value;
+  auto status = txn->Get(key, value);
+  if (status.error_code() == pb::error::ENOT_FOUND) {
+    result_.found = false;
+    return Status::OK();
+  }
+  if (!status.ok()) return status;
+  result_.found = true;
+  result_.dir_stat = MetaCodec::DecodeDirStatValue(value);
+  return Status::OK();
+}
+
+Status FlushDirStatsOperation::Run(TxnUPtr& txn) {
+  // Clear result state at entry: RunAlone re-invokes Run on the same operation
+  // object on commit-conflict retry, so without this a missing/negative ino
+  // recorded by a failed attempt would survive into a successful retry and get
+  // needlessly recomputed (regressing its version / clobbering its deltas).
+  result_.missing_inos.clear();
+
+  std::vector<std::string> keys;
+  keys.reserve(delta_map_.size());
+  for (const auto& [ino, _] : delta_map_) {
+    keys.push_back(MetaCodec::EncodeDirStatKey(fs_id_, ino));
+  }
+
+  std::vector<KeyValue> kvs;
+  auto status = txn->BatchGet(keys, kvs);
+  if (!status.ok()) return status;
+
+  std::set<uint64_t> found;
+  for (auto& kv : kvs) {
+    uint32_t fs_id;
+    uint64_t ino;
+    MetaCodec::DecodeDirStatKey(kv.key, fs_id, ino);
+    found.insert(ino);
+
+    auto stat = MetaCodec::DecodeDirStatValue(kv.value);
+    const auto& d = delta_map_.at(ino);
+    int64_t length = stat.length() + d.length;
+    int64_t inodes = stat.inodes() + d.inodes;
+    int64_t dirs = stat.dirs() + d.dirs;
+
+    if (length < 0 || inodes < 0 || dirs < 0) {
+      result_.missing_inos.push_back(ino);
+      continue;
+    }
+
+    stat.set_length(length);
+    stat.set_inodes(inodes);
+    stat.set_dirs(dirs);
+    txn->Put(kv.key, MetaCodec::EncodeDirStatValue(stat));
+  }
+
+  for (const auto& [ino, _] : delta_map_) {
+    if (found.find(ino) == found.end()) {
+      result_.missing_inos.push_back(ino);
+    }
+  }
+
+  return Status::OK();
+}
+
+Status SeedDirStatOperation::Run(TxnUPtr& txn) {
+  result_.seeded = false;
+
+  std::string key = MetaCodec::EncodeDirStatKey(fs_id_, ino_);
+  std::string value;
+  auto status = txn->Get(key, value);
+  if (status.ok()) {
+    // Record already exists (created by a concurrent flush/seed). Do not clobber.
+    return Status::OK();
+  }
+  if (status.error_code() != pb::error::ENOT_FOUND) return status;
+
+  txn->Put(key, MetaCodec::EncodeDirStatValue(dir_stat_));
+  result_.seeded = true;
+  return Status::OK();
+}
+
+Status RepairDirStatOperation::Run(TxnUPtr& txn) {
+  result_ = Result{};
+
+  std::string key = MetaCodec::EncodeDirStatKey(fs_id_, ino_);
+  std::string value;
+  auto status = txn->Get(key, value);
+  if (status.ok()) {
+    result_.found = true;
+    result_.stored = MetaCodec::DecodeDirStatValue(value);
+  } else if (status.error_code() != pb::error::ENOT_FOUND) {
+    return status;
+  }
+
+  // Same mismatch criteria as the pre-existing SyncDirStat check (dirs excluded).
+  result_.mismatch = !result_.found || result_.stored.length() != calc_.length() ||
+                     result_.stored.inodes() != calc_.inodes();
+
+  if (repair_ && result_.mismatch) {
+    txn->Put(key, MetaCodec::EncodeDirStatValue(calc_));
+    result_.wrote = true;
+  }
+
+  return Status::OK();
+}
+
 Status UpsertMdsOperation::Run(TxnUPtr& txn) {
   CHECK(mds_meta_.id() > 0) << "mds id is 0";
 
@@ -3378,6 +3528,13 @@ Status ScanDelFileOperation::Run(TxnUPtr& txn) {
   return txn->Scan(range, scan_handler_);
 }
 
+Status ScanDirStatOperation::Run(TxnUPtr& txn) {
+  CHECK(fs_id_ > 0) << "fs_id is 0";
+  Range range = MetaCodec::GetDirStatRange(fs_id_);
+
+  return txn->Scan(range, scan_handler_);
+}
+
 Status ScanMetaTableOperation::Run(TxnUPtr& txn) {
   Range range = MetaCodec::GetMetaTableRange();
 
@@ -3472,9 +3629,11 @@ Status GetInodeAttrOperation::Run(TxnUPtr& txn) {
     range.start = MetaCodec::EncodeInodeKey(fs_id_, ino_);
     range.end = MetaCodec::GetDirInodeUpdateOpRange(fs_id_, ino_).end;
 
-    return txn->Scan(range, [&](const std::string& key, const std::string& value) -> bool {
+    bool found = false;
+    auto status = txn->Scan(range, [&](const std::string& key, const std::string& value) -> bool {
       if (MetaCodec::IsInodeKey(key)) {
         result_.attr_with_mutation.attr = MetaCodec::DecodeInodeValue(value);
+        found = true;
 
       } else if (MetaCodec::IsDirInodeMutationKey(key)) {
         result_.attr_with_mutation.mutations.push_back(MetaCodec::DecodeDirInodeMutationValue(value));
@@ -3485,6 +3644,17 @@ Status GetInodeAttrOperation::Run(TxnUPtr& txn) {
 
       return true;
     });
+    if (!status.ok()) return status;
+
+    // The scan can come back without the base inode key (only mutation keys, or
+    // nothing) when the directory inode was deleted while a client still holds a
+    // stale reference and issues GetAttr. Surface that as ENOT_FOUND instead of
+    // returning a default zero-ino attr, which UpsertInodeCache rejects with
+    // LOG(FATAL) -- crashing the MDS on a GetAttr of any missing directory.
+    if (!found) {
+      return Status(pb::error::ENOT_FOUND, fmt::format("not found inode({})", ino_));
+    }
+    return Status::OK();
 
   } else {
     std::string value;
