@@ -14,14 +14,17 @@
  * limitations under the License.
  */
 
-#include "client/vfs/handle/handle_manager.h"
-
 #include <fcntl.h>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <atomic>
+#include <chrono>
+#include <thread>
+
 #include "client/vfs/data/writer/file_writer.h"
 #include "client/vfs/data/writer_table.h"
+#include "client/vfs/handle/handle_manager.h"
 #include "test/unit/client/vfs/test_base.h"
 
 namespace dingofs {
@@ -63,8 +66,8 @@ class HandleManagerTest : public VFSTestBase {
 TEST_F(HandleManagerTest, NewHandle_RDONLY_NoWriter) {
   auto* h = handle_manager_->NewHandle(/*fh*/ 1, /*ino*/ 100, O_RDONLY);
   ASSERT_NE(h, nullptr);
-  EXPECT_NE(h->reader, nullptr);
-  EXPECT_EQ(h->writer, nullptr);
+  EXPECT_NE(h->resources.reader, nullptr);
+  EXPECT_EQ(h->resources.writer, nullptr);
   EXPECT_EQ(writer_table_->Size(), 0u);
 
   handle_manager_->ReleaseHandler(1);
@@ -74,8 +77,8 @@ TEST_F(HandleManagerTest, NewHandle_RDONLY_NoWriter) {
 TEST_F(HandleManagerTest, NewHandle_WriteMode_HasWriter) {
   auto* h = handle_manager_->NewHandle(/*fh*/ 2, /*ino*/ 200, O_WRONLY);
   ASSERT_NE(h, nullptr);
-  EXPECT_NE(h->reader, nullptr);
-  EXPECT_NE(h->writer, nullptr);
+  EXPECT_NE(h->resources.reader, nullptr);
+  EXPECT_NE(h->resources.writer, nullptr);
   EXPECT_EQ(writer_table_->Size(), 1u);
 
   handle_manager_->ReleaseHandler(2);
@@ -89,11 +92,12 @@ TEST_F(HandleManagerTest, MultipleWritableFhsShareOneWriter) {
   ASSERT_NE(h1, nullptr);
   ASSERT_NE(h2, nullptr);
 
-  EXPECT_EQ(h1->writer, h2->writer) << "shared per-inode writer expected";
+  EXPECT_EQ(h1->resources.writer, h2->resources.writer)
+      << "shared per-inode writer expected";
   EXPECT_EQ(writer_table_->Size(), 1u);
 
   handle_manager_->ReleaseHandler(3);
-  EXPECT_EQ(writer_table_->Size(), 1u);   // h2 still holds
+  EXPECT_EQ(writer_table_->Size(), 1u);  // h2 still holds
 
   handle_manager_->ReleaseHandler(4);
   EXPECT_EQ(writer_table_->Size(), 0u);
@@ -114,9 +118,9 @@ TEST_F(HandleManagerTest, TwoFhsOnSameInoHaveDistinctReaders) {
   ASSERT_NE(h1, nullptr);
   ASSERT_NE(h2, nullptr);
 
-  ASSERT_NE(h1->reader, nullptr);
-  ASSERT_NE(h2->reader, nullptr);
-  EXPECT_NE(h1->reader, h2->reader)
+  ASSERT_NE(h1->resources.reader, nullptr);
+  ASSERT_NE(h2->resources.reader, nullptr);
+  EXPECT_NE(h1->resources.reader, h2->resources.reader)
       << "per-fh reader: each fh must own a distinct FileReader instance";
 
   handle_manager_->ReleaseHandler(10);
@@ -132,8 +136,9 @@ TEST_F(HandleManagerTest, MixedRdonlyWritable_OnlyOneWriterEntry) {
   ASSERT_NE(hr, nullptr);
   ASSERT_NE(hw, nullptr);
 
-  EXPECT_EQ(hr->writer, nullptr) << "O_RDONLY must not allocate a writer";
-  EXPECT_NE(hw->writer, nullptr);
+  EXPECT_EQ(hr->resources.writer, nullptr)
+      << "O_RDONLY must not allocate a writer";
+  EXPECT_NE(hw->resources.writer, nullptr);
   EXPECT_EQ(writer_table_->Size(), 1u);
 
   // RDONLY release must not touch the writer.
@@ -150,7 +155,7 @@ TEST_F(HandleManagerTest, MixedRdonlyWritable_OnlyOneWriterEntry) {
 TEST_F(HandleManagerTest, WriterEvictedThenRecreatedOnReopen) {
   auto* h1 = handle_manager_->NewHandle(/*fh*/ 30, /*ino*/ 700, O_WRONLY);
   ASSERT_NE(h1, nullptr);
-  ASSERT_NE(h1->writer, nullptr);
+  ASSERT_NE(h1->resources.writer, nullptr);
   EXPECT_EQ(writer_table_->Size(), 1u);
 
   handle_manager_->ReleaseHandler(30);
@@ -160,7 +165,7 @@ TEST_F(HandleManagerTest, WriterEvictedThenRecreatedOnReopen) {
   // Reopen — a fresh writer is allocated.
   auto* h2 = handle_manager_->NewHandle(/*fh*/ 31, /*ino*/ 700, O_WRONLY);
   ASSERT_NE(h2, nullptr);
-  ASSERT_NE(h2->writer, nullptr);
+  ASSERT_NE(h2->resources.writer, nullptr);
   EXPECT_EQ(writer_table_->Size(), 1u);
 
   handle_manager_->ReleaseHandler(31);
@@ -183,18 +188,22 @@ TEST_F(HandleManagerTest, FlushByIno_WithWriter_KeepsTableSize) {
   EXPECT_EQ(writer_table_->Size(), 0u);
 }
 
-// FindHandler returns the live handle for a known fh, nullptr for unknown,
-// and nullptr after release.
-TEST_F(HandleManagerTest, FindHandler_KnownAndUnknown) {
+// FindHandlerGuard returns a live guard for a known fh, an empty guard for an
+// unknown fh, and an empty guard after release.
+TEST_F(HandleManagerTest, FindHandlerGuard_KnownAndUnknown) {
   auto* h = handle_manager_->NewHandle(/*fh*/ 70, /*ino*/ 1100, O_RDONLY);
   ASSERT_NE(h, nullptr);
 
-  EXPECT_EQ(handle_manager_->FindHandler(70), h);
-  EXPECT_EQ(handle_manager_->FindHandler(71), nullptr);
+  {
+    auto g = handle_manager_->FindHandlerGuard(70);
+    EXPECT_TRUE(g);
+    EXPECT_EQ(g.get(), h);
+  }
+  EXPECT_FALSE(handle_manager_->FindHandlerGuard(71));
 
   handle_manager_->ReleaseHandler(70);
-  EXPECT_EQ(handle_manager_->FindHandler(70), nullptr)
-      << "after release, FindHandler must not return the handle";
+  EXPECT_FALSE(handle_manager_->FindHandlerGuard(70))
+      << "after release, FindHandlerGuard must be empty";
 }
 
 // ReleaseHandler on an unknown fh must be a safe no-op — it must not crash
@@ -206,27 +215,183 @@ TEST_F(HandleManagerTest, ReleaseHandler_UnknownFh_NoOp) {
 
   handle_manager_->ReleaseHandler(/*fh*/ 999);  // never created
   EXPECT_EQ(writer_table_->Size(), 1u);
-  EXPECT_EQ(handle_manager_->FindHandler(80), h);
+  EXPECT_EQ(handle_manager_->FindHandlerGuard(80).get(), h);
 
   handle_manager_->ReleaseHandler(80);
   EXPECT_EQ(writer_table_->Size(), 0u);
 }
 
-// Stop() must close the per-fh reader (so in-flight reads drain) but must
-// NOT prematurely return the writer to WriterTable — the writer is still
-// owned by the handle until ReleaseHandler is called.
-TEST_F(HandleManagerTest, Stop_KeepsWriterUntilHandleReleased) {
+// --- teardown lifecycle (N1 fix: writer Close happens in Stop, not in the
+// destructor after executors are gone) ---
+
+// Stop() must release the per-fh reader/writer resources WHILE the data-path
+// executors are still alive, so the writer is returned to the table during
+// Stop (not deferred to ~Handle).  This is the inverse of the pre-fix
+// behavior that kept the writer until ReleaseHandler.
+TEST_F(HandleManagerTest, Stop_ReleasesWriterResources) {
   auto* h = handle_manager_->NewHandle(/*fh*/ 50, /*ino*/ 900, O_WRONLY);
   ASSERT_NE(h, nullptr);
   EXPECT_EQ(writer_table_->Size(), 1u);
 
   handle_manager_->Stop();
-  EXPECT_EQ(writer_table_->Size(), 1u)
-      << "Stop must not return the writer to the table";
-
-  handle_manager_->ReleaseHandler(50);
   EXPECT_EQ(writer_table_->Size(), 0u)
-      << "ReleaseHandler after Stop must still return the writer";
+      << "Stop must release the writer while executors are still alive";
+}
+
+// Stop() detaches resources but keeps the handle identity (fh/ino/flags) so
+// hot-upgrade Dump can still persist open handles.
+TEST_F(HandleManagerTest, Stop_PreservesHandleIdentity) {
+  auto* h = handle_manager_->NewHandle(/*fh*/ 51, /*ino*/ 901, O_WRONLY);
+  ASSERT_NE(h, nullptr);
+  const uint64_t fh = h->fh;
+  const Ino ino = h->ino;
+  const int32_t flags = h->flags;
+
+  handle_manager_->Stop();
+  EXPECT_EQ(writer_table_->Size(), 0u) << "Stop released the writer";
+
+  // Identity survives (release path can still see it), resources are detached.
+  auto g = handle_manager_->FindHandlerForRelease(51);
+  ASSERT_TRUE(g);
+  EXPECT_EQ(g->fh, fh);
+  EXPECT_EQ(g->ino, ino);
+  EXPECT_EQ(g->flags, flags);
+  EXPECT_EQ(g->resources.reader, nullptr) << "reader detached by Stop";
+  EXPECT_EQ(g->resources.writer, nullptr) << "writer detached by Stop";
+}
+
+// After Stop(), the data path must not be able to obtain a handle, but the
+// release path must, so a late FUSE_RELEASE can still drop the fh identity.
+TEST_F(HandleManagerTest, FindHandlerGuard_EmptyAfterStop_ReleasePathWorks) {
+  auto* h = handle_manager_->NewHandle(/*fh*/ 52, /*ino*/ 902, O_RDONLY);
+  ASSERT_NE(h, nullptr);
+
+  handle_manager_->Stop();
+
+  EXPECT_FALSE(handle_manager_->FindHandlerGuard(52))
+      << "data path must be closed after Stop";
+  EXPECT_TRUE(handle_manager_->FindHandlerForRelease(52))
+      << "release path must stay open after Stop";
+}
+
+// NewHandle after Stop() must fail (AddHandle rejected) and must not leak the
+// writer it briefly acquired.
+TEST_F(HandleManagerTest, NewHandle_AfterStop_RejectedNoLeak) {
+  handle_manager_->Stop();
+
+  auto* h = handle_manager_->NewHandle(/*fh*/ 53, /*ino*/ 903, O_WRONLY);
+  EXPECT_EQ(h, nullptr) << "NewHandle must fail once HandleManager is stopped";
+  EXPECT_EQ(writer_table_->Size(), 0u)
+      << "rejected NewHandle must not leak the acquired writer";
+}
+
+// A late FUSE_RELEASE after Stop() already detached resources must be
+// idempotent: no double ReleaseWriter (which would underflow holders) and no
+// crash.
+TEST_F(HandleManagerTest, ReleaseHandler_AfterStop_Idempotent) {
+  auto* h = handle_manager_->NewHandle(/*fh*/ 54, /*ino*/ 904, O_WRONLY);
+  ASSERT_NE(h, nullptr);
+
+  handle_manager_->Stop();
+  EXPECT_EQ(writer_table_->Size(), 0u) << "Stop released the writer";
+
+  // Must not double-release the (already detached) writer.
+  handle_manager_->ReleaseHandler(54);
+  EXPECT_EQ(writer_table_->Size(), 0u);
+  EXPECT_FALSE(handle_manager_->FindHandlerForRelease(54))
+      << "identity removed after late release";
+}
+
+// Core of the N1 fix: Stop() must wait for an outstanding HandleGuard (an
+// in-flight request) to be released before tearing down resources.
+TEST_F(HandleManagerTest, Stop_WaitsForOutstandingGuard) {
+  auto* h = handle_manager_->NewHandle(/*fh*/ 55, /*ino*/ 905, O_WRONLY);
+  ASSERT_NE(h, nullptr);
+  EXPECT_EQ(writer_table_->Size(), 1u);
+
+  // Simulate an in-flight request holding the handle.
+  auto guard = handle_manager_->FindHandlerGuard(55);
+  ASSERT_TRUE(guard);
+
+  std::atomic<bool> stop_returned{false};
+  std::thread stopper([&]() {
+    handle_manager_->Stop();
+    stop_returned.store(true);
+  });
+
+  // Stop must block while the guard is held (writer not yet released).
+  std::this_thread::sleep_for(std::chrono::milliseconds(200));
+  EXPECT_FALSE(stop_returned.load())
+      << "Stop must wait for the outstanding guard to be released";
+  EXPECT_EQ(writer_table_->Size(), 1u)
+      << "writer must not be released while a request still holds the handle";
+
+  // Releasing the guard unblocks Stop, which then releases the writer.
+  guard = HandleGuard{};
+  stopper.join();
+  EXPECT_TRUE(stop_returned.load());
+  EXPECT_EQ(writer_table_->Size(), 0u)
+      << "writer released once the in-flight request drained";
+}
+
+// HandleGuard is move-only and transfers ownership; the moved-from guard must
+// not release, the moved-to guard must, with no double release.
+TEST_F(HandleManagerTest, HandleGuard_MoveTransfersOwnership) {
+  auto* h = handle_manager_->NewHandle(/*fh*/ 56, /*ino*/ 906, O_RDONLY);
+  ASSERT_NE(h, nullptr);
+
+  {
+    auto g1 = handle_manager_->FindHandlerGuard(56);
+    ASSERT_TRUE(g1);
+
+    auto g2 = std::move(g1);
+    EXPECT_FALSE(g1) << "moved-from guard must be empty";
+    ASSERT_TRUE(g2);
+    EXPECT_EQ(g2.get(), h);
+  }  // only g2 releases here; a double release would underflow Handle::refs
+
+  // Handle is still alive (only the transient guard ref was dropped).
+  EXPECT_EQ(handle_manager_->FindHandlerGuard(56).get(), h);
+  handle_manager_->ReleaseHandler(56);
+}
+
+// A late FUSE_RELEASE racing an in-progress Stop() must be safe: no deadlock,
+// no double ReleaseWriter (WriterTable holders underflow), no use-after-free.
+// Stop is forced to block in its cv_.wait by pinning handle A with a guard,
+// then handle B is released concurrently while Stop is parked.
+// Best run under TSAN/ASAN; the race window here is probabilistic.
+TEST_F(HandleManagerTest, Stop_ConcurrentReleaseHandler_Safe) {
+  // A: pinned by a guard so Stop blocks.
+  ASSERT_NE(handle_manager_->NewHandle(/*fh*/ 57, /*ino*/ 907, O_WRONLY),
+            nullptr);
+  // B: dropped by a concurrent FUSE_RELEASE while Stop is parked.
+  ASSERT_NE(handle_manager_->NewHandle(/*fh*/ 58, /*ino*/ 908, O_WRONLY),
+            nullptr);
+  EXPECT_EQ(writer_table_->Size(), 2u);
+
+  auto guard = handle_manager_->FindHandlerGuard(57);  // pin A
+  ASSERT_TRUE(guard);
+
+  std::atomic<bool> stop_returned{false};
+  std::thread stopper([&]() {
+    handle_manager_->Stop();  // blocks on A's outstanding guard
+    stop_returned.store(true);
+  });
+
+  // Let Stop enter its wait, then race a release of B against it.
+  std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  handle_manager_->ReleaseHandler(58);  // concurrent with Stop's cv_.wait
+
+  // A is still pinned -> Stop must still be blocked.
+  EXPECT_FALSE(stop_returned.load());
+
+  guard = HandleGuard{};  // release A -> Stop proceeds
+  stopper.join();
+  EXPECT_TRUE(stop_returned.load());
+
+  // Each writer returned exactly once (B by ReleaseHandler, A by Stop); a
+  // double release would have tripped WriterTable's holders CHECK.
+  EXPECT_EQ(writer_table_->Size(), 0u);
 }
 
 // ~HandleManager must release all writers held by surviving handles —

@@ -397,9 +397,9 @@ Status VFSHubImpl::Stop(bool skip_unmount) {
     handle_manager_->Stop();
   }
 
-  // After all Handles are gone, drain residual dirty data and stop the
-  // writer table.  WriterTable::Stop only marks stopped_; FlushAll flushes
-  // any writers that survived (e.g. via lambdas still holding refs).
+  // HandleManager::Stop releases handle-owned reader/writer resources while
+  // preserving handle identities for handover Dump. Drain residual dirty data
+  // and stop the writer table before tearing down executors/meta/block-store.
   if (writer_table_ != nullptr) {
     (void)writer_table_->FlushAll();
     writer_table_->Stop();

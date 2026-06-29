@@ -562,10 +562,12 @@ Status VFSImpl::Open(ContextSPtr ctx, Ino ino, int flags, uint64_t* fh) {
     handler->file_buffer.size = len;
     handler->file_buffer.data = std::move(file_data_ptr);
 
+    if (!handle_manager_->AddHandle(handler)) {
+      delete handler;
+      return Status::BadFd("handle manager stopped");
+    }
+
     *fh = handler->fh;
-
-    handle_manager_->AddHandle(handler);
-
     return Status::OK();
   }
 
@@ -614,8 +616,8 @@ Status VFSImpl::Read(ContextSPtr ctx, Ino ino, DataBuffer* data_buffer,
                      uint64_t size, uint64_t offset, uint64_t fh,
                      uint64_t* out_rsize) {
   Status s;
-  auto* handle = handle_manager_->FindHandler(fh);
-  VFS_CHECK_HANDLE(handle, ino, fh);
+  auto handle = handle_manager_->FindHandlerGuard(fh);
+  VFS_CHECK_HANDLE(handle.get(), ino, fh);
   auto span = vfs_hub_->GetTraceManager()->StartChildSpan("VFSImpl::Read",
                                                           ctx->GetTraceSpan());
   // read .stats file data
@@ -632,7 +634,7 @@ Status VFSImpl::Read(ContextSPtr ctx, Ino ino, DataBuffer* data_buffer,
     return Status::OK();
   }
 
-  if (handle->reader == nullptr) {
+  if (handle->resources.reader == nullptr) {
     LOG(ERROR) << "reader is null in handle, ino: " << ino << ", fh: " << fh;
     s = Status::BadFd(fmt::format("bad fh:{}", fh));
     SpanScope::SetStatus(span, s);
@@ -663,8 +665,8 @@ Status VFSImpl::Read(ContextSPtr ctx, Ino ino, DataBuffer* data_buffer,
     }
   }
 
-  s = handle->reader->Read(SpanScope::GetContext(span), data_buffer, size,
-                           offset, out_rsize);
+  s = handle->resources.reader->Read(SpanScope::GetContext(span), data_buffer,
+                                     size, offset, out_rsize);
   SpanScope::SetStatus(span, s);
 
   return s;
@@ -677,21 +679,21 @@ Status VFSImpl::Write(ContextSPtr ctx, Ino ino, const char* buf, uint64_t size,
   *out_wsize = 0;
 
   Status s;
-  auto* handle = handle_manager_->FindHandler(fh);
-  VFS_CHECK_HANDLE(handle, ino, fh);
+  auto handle = handle_manager_->FindHandlerGuard(fh);
+  VFS_CHECK_HANDLE(handle.get(), ino, fh);
 
   auto span = vfs_hub_->GetTraceManager()->StartChildSpan("VFSImpl::Write",
                                                           ctx->GetTraceSpan());
 
-  if (handle->writer == nullptr) {
+  if (handle->resources.writer == nullptr) {
     LOG(ERROR) << "writer is null (read-only fh), ino: " << ino
                << ", fh: " << fh;
     s = Status::BadFd(fmt::format("read-only fh:{}", fh));
     return s;
   }
 
-  s = handle->writer->Write(SpanScope::GetContext(span), buf, size, offset,
-                            out_wsize);
+  s = handle->resources.writer->Write(SpanScope::GetContext(span), buf, size,
+                                      offset, out_wsize);
   // Use *out_wsize, not size: writer->Write may short-write (OK with
   // *out_wsize < size) when the page pool is exhausted mid-write. Metadata must
   // reflect only what is durable -- MetaSystem::Write extends the inode length
@@ -719,12 +721,12 @@ Status VFSImpl::Flush(ContextSPtr ctx, Ino ino, uint64_t fh) {
   }
 
   Status s;
-  auto* handle = handle_manager_->FindHandler(fh);
-  VFS_CHECK_HANDLE(handle, ino, fh);
+  auto handle = handle_manager_->FindHandlerGuard(fh);
+  VFS_CHECK_HANDLE(handle.get(), ino, fh);
 
   // O_RDONLY fh has no writer — nothing to flush at the data layer.
-  if (handle->writer != nullptr) {
-    s = handle->writer->Flush();
+  if (handle->resources.writer != nullptr) {
+    s = handle->resources.writer->Flush();
     if (!s.ok()) return s;
   }
 
@@ -740,15 +742,28 @@ Status VFSImpl::Release(ContextSPtr ctx, Ino ino, uint64_t fh) {
   }
 
   Status s;
-  auto* handle = handle_manager_->FindHandler(fh);
-  VFS_CHECK_HANDLE(handle, ino, fh);
-
-  // Per-fh reader is closed here; writer release happens via ~Handle when
-  // ReleaseHandler triggers refs→0.
-  if (handle->reader != nullptr) {
-    handle->reader->Close();
+  auto handle = handle_manager_->FindHandlerForRelease(fh);
+  if (!handle) {
+    VLOG(1) << "Release ignored, fh not found, ino: " << ino << ", fh: " << fh;
+    return Status::OK();
   }
-  s = meta_system_->Close(ctx, ino, fh);
+  VFS_CHECK_HANDLE(handle.get(), ino, fh);
+
+  // If Stop() has already detached reader/writer resources, this late release
+  // must only remove the fh identity. The stop/dump path owns the remaining
+  // metadata state; calling meta Close here could race with meta teardown or
+  // erase state needed by hot-upgrade dump.
+  const bool resources_detached = (handle->resources.reader == nullptr &&
+                                   handle->resources.writer == nullptr);
+
+  // Per-fh reader is closed here when resources are still live; writer release
+  // happens via ~Handle when ReleaseHandler triggers refs→0.
+  if (handle->resources.reader != nullptr) {
+    handle->resources.reader->Close();
+  }
+  if (!resources_detached) {
+    s = meta_system_->Close(ctx, ino, fh);
+  }
 
   handle_manager_->ReleaseHandler(fh);
 
@@ -758,11 +773,11 @@ Status VFSImpl::Release(ContextSPtr ctx, Ino ino, uint64_t fh) {
 // TODO: seperate data flush with metadata flush
 Status VFSImpl::Fsync(ContextSPtr ctx, Ino ino, int datasync, uint64_t fh) {
   Status s;
-  auto* handle = handle_manager_->FindHandler(fh);
-  VFS_CHECK_HANDLE(handle, ino, fh);
+  auto handle = handle_manager_->FindHandlerGuard(fh);
+  VFS_CHECK_HANDLE(handle.get(), ino, fh);
 
-  if (handle->writer != nullptr) {
-    s = handle->writer->Flush();
+  if (handle->resources.writer != nullptr) {
+    s = handle->resources.writer->Flush();
   }
 
   if (datasync == 0) {
