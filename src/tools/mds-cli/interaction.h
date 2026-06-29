@@ -82,7 +82,12 @@ butil::Status Interaction::SendRequest(const std::string& service_name, const st
                 std::is_same_v<Request, pb::mds::ListMembersRequest> ||
                 std::is_same_v<Request, pb::mds::UnLockMemberRequest> ||
                 std::is_same_v<Request, pb::mds::DeleteMemberRequest>) {
-  } else {
+  } else if (request.context().epoch() == 0) {
+    // Default epoch for requests whose caller did not set one. A caller that
+    // needs the real partition epoch (e.g. ReadSlice, which the MDS validates)
+    // sets it explicitly via MDSClient::SetEpoch and is honored here -- without
+    // this guard the hardcoded 1 was rejected once the fs was rebalanced past
+    // epoch 1 (JoinFs/QuitFs bump it).
     request.mutable_context()->set_epoch(1);
   }
 

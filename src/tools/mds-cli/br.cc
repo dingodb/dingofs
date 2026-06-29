@@ -444,8 +444,8 @@ Status Backup::BackupFsMetaTable(uint32_t fs_id, OutputUPtr output) {
   CHECK(output != nullptr) << "output is nullptr.";
 
   uint64_t total_count = 0, inode_count = 0, dentry_count = 0, chunk_count = 0;
-  uint64_t dir_quota_count = 0, file_session_count = 0, del_slice_count = 0,
-           del_file_count = 0;
+  uint64_t dir_quota_count = 0, dir_stat_count = 0, file_session_count = 0,
+           del_slice_count = 0, del_file_count = 0;
 
   Trace trace;
   ScanFsMetaTableOperation operation(
@@ -455,6 +455,8 @@ Status Backup::BackupFsMetaTable(uint32_t fs_id, OutputUPtr output) {
 
         if (MetaCodec::IsDirQuotaKey(key)) {
           ++dir_quota_count;
+        } else if (MetaCodec::IsDirStatKey(key)) {
+          ++dir_stat_count;
         } else if (MetaCodec::IsInodeKey(key)) {
           ++inode_count;
         } else if (MetaCodec::IsDentryKey(key)) {
@@ -485,10 +487,10 @@ Status Backup::BackupFsMetaTable(uint32_t fs_id, OutputUPtr output) {
   std::cout << fmt::format(
       "backup fsmeta table done.\n summary total_count({}) inode_count({}) "
       "dentry_count({}) chunk_count({}) "
-      "dir_quota_count({}) "
+      "dir_quota_count({}) dir_stat_count({}) "
       "file_session_count({}) del_slice_count({}) del_file_count({}).\n",
       total_count, inode_count, dentry_count, chunk_count, dir_quota_count,
-      file_session_count, del_slice_count, del_file_count);
+      dir_stat_count, file_session_count, del_slice_count, del_file_count);
 
   return status;
 }
@@ -741,8 +743,8 @@ Status Restore::RestoreFsMetaTable(uint32_t fs_id, InputUPtr input,
 
   // import fs meta to table
 
-  uint64_t total_count = 0, dir_quota_count = 0, inode_count = 0,
-           dentry_count = 0;
+  uint64_t total_count = 0, dir_quota_count = 0, dir_stat_count = 0,
+           inode_count = 0, dentry_count = 0;
   uint64_t chunk_count = 0, file_session_count = 0, del_slice_count = 0,
            del_file_count = 0;
 
@@ -756,6 +758,8 @@ Status Restore::RestoreFsMetaTable(uint32_t fs_id, InputUPtr input,
 
     if (MetaCodec::IsDirQuotaKey(kv.key)) {
       ++dir_quota_count;
+    } else if (MetaCodec::IsDirStatKey(kv.key)) {
+      ++dir_stat_count;
     } else if (MetaCodec::IsInodeKey(kv.key)) {
       ++inode_count;
     } else if (MetaCodec::IsDentryKey(kv.key)) {
@@ -794,10 +798,11 @@ Status Restore::RestoreFsMetaTable(uint32_t fs_id, InputUPtr input,
   std::cout << fmt::format(
       "restore fsmeta table done.\n summary total_count({}) inode_count({}) "
       "dentry_count({}) chunk_count({}) "
-      "dir_quota_count({}) file_session_count({}) del_slice_count({}) "
-      "del_file_count({}) status({}).\n",
+      "dir_quota_count({}) dir_stat_count({}) file_session_count({}) "
+      "del_slice_count({}) del_file_count({}) status({}).\n",
       total_count, inode_count, dentry_count, chunk_count, dir_quota_count,
-      file_session_count, del_slice_count, del_file_count, status.error_str());
+      dir_stat_count, file_session_count, del_slice_count, del_file_count,
+      status.error_str());
 
   return Status::OK();
 }

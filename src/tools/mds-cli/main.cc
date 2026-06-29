@@ -59,6 +59,12 @@ DEFINE_string(name, "", "name");
 DEFINE_string(prefix, "", "prefix");
 
 DEFINE_uint64(ino, 0, "ino");
+DEFINE_string(
+    path, "",
+    "directory path for dir-stats commands; an absolute OS mount path (e.g. "
+    "/mnt/dingofs/a/b) is recommended -- it also renders the full info header; "
+    "a mount-relative path (e.g. a/b) still resolves the inode but the path "
+    "header is degraded; alternative to --ino");
 DEFINE_uint64(parent, 0, "parent");
 DEFINE_string(parents, "", "parents");
 DEFINE_uint32(num, 1, "num");
@@ -111,6 +117,27 @@ DEFINE_bool(enable_uid_gid_map, true,
             "internal ids in [10000, 2^32). "
             "ALL mounting clients of this fs must support the feature.");
 
+DEFINE_bool(enable_dir_stats, true,
+            "per-fs: when true, tracks per-directory usage statistics. "
+            "Set at createfs, or hot-switched later via the "
+            "updatefsenabledirstats command.");
+
+// dir-stats subcommand flags
+DEFINE_uint32(
+    depth, 2,
+    "summary tree depth (0-10; values > 10 are clamped to 10 with a warning)");
+DEFINE_uint32(entries, 10,
+              "summary top-N entries per level (0-100; values > 100 are "
+              "clamped to 100 with a warning)");
+DEFINE_uint32(dir_threads, 50,
+              "concurrency for the client-side directory-tree walk "
+              "(info -r / summary / syncdirstat)");
+DEFINE_bool(strict, false, "strict (accurate, full traversal)");
+DEFINE_bool(recursive, false, "recursive");
+DEFINE_bool(repair, false, "repair inconsistent dir stats");
+DEFINE_bool(
+    raw, false,
+    "info: for a file, show raw chunks/slices (sliceId) instead of objects");
 static std::string GetDefaultCoorAddrPath() {
   if (!FLAGS_coor_addr.empty()) {
     return FLAGS_coor_addr;
@@ -218,6 +245,7 @@ int main(int argc, char* argv[]) {
     options.cluster_id = FLAGS_cluster_id;
     options.fs_id = FLAGS_fs_id;
     options.ino = FLAGS_ino;
+    options.path = FLAGS_path;
     options.parent = FLAGS_parent;
     options.parents = FLAGS_parents;
     options.name = FLAGS_name;
@@ -245,12 +273,21 @@ int main(int argc, char* argv[]) {
     options.trash_days = FLAGS_trash_days;
     options.immediate_trash_quota = FLAGS_immediate_trash_quota;
     options.enable_uid_gid_map = FLAGS_enable_uid_gid_map;
+    options.enable_dir_stats = FLAGS_enable_dir_stats;
     // trash restore
     options.trash_put_back = FLAGS_put_back;
     options.trash_threads = FLAGS_restore_threads;
     if (!FLAGS_hours.empty()) {
       dingofs::mds::Helper::SplitString(FLAGS_hours, ',', options.trash_hours);
     }
+
+    options.depth = FLAGS_depth;
+    options.entries = FLAGS_entries;
+    options.dir_threads = FLAGS_dir_threads;
+    options.strict = FLAGS_strict;
+    options.recursive = FLAGS_recursive;
+    options.repair = FLAGS_repair;
+    options.raw = FLAGS_raw;
 
     auto& s3_info = options.s3_info;
     s3_info.ak = FLAGS_s3_ak;

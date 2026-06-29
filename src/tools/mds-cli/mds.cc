@@ -15,18 +15,26 @@
 #include "tools/mds-cli/mds.h"
 
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 
+#include <algorithm>
+#include <climits>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <string>
 #include <vector>
 
+#include "common/block/block_key.h"
+#include "common/block/block_utils.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
 #include "mds/common/helper.h"
+#include "tools/mds-cli/dir_tree_walker.h"
+#include "tools/mds-cli/owner_router.h"
 #include "tools/mds-cli/trash_restore.h"
 #include "utils/time.h"
 #include "utils/uuid.h"
@@ -96,10 +104,6 @@ GetMDSListResponse MDSClient::GetMdsList() {
     return response;
   }
 
-  for (const auto& mds : response.mdses()) {
-    std::cout << "mds: " << mds.ShortDebugString();
-  }
-
   return response;
 }
 
@@ -156,6 +160,7 @@ CreateFsResponse MDSClient::CreateFs(const std::string& fs_name,
   request.set_trash_days(params.trash_days);
   request.set_immediate_trash_quota(params.immediate_trash_quota);
   request.set_enable_uid_gid_map(params.enable_uid_gid_map);
+  request.set_enable_dir_stats(params.enable_dir_stats);
 
   if (params.partition_type == "mono") {
     request.set_partition_type(
@@ -343,14 +348,16 @@ GetFsInfoResponse MDSClient::GetFs(uint32_t fs_id) {
   GetFsInfoResponse response;
 
   if (fs_id == 0) {
-    response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EILLEGAL_PARAMTETER);
+    response.mutable_error()->set_errcode(
+        dingofs::pb::error::Errno::EILLEGAL_PARAMTETER);
     response.mutable_error()->set_errmsg("fs_id is 0");
     return response;
   }
 
   request.set_fs_id(fs_id);
 
-  auto status = interaction_->SendRequest("MDSService", "GetFsInfo", request, response);
+  auto status =
+      interaction_->SendRequest("MDSService", "GetFsInfo", request, response);
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
@@ -448,7 +455,8 @@ RmDirResponse MDSClient::RmDir(Ino parent, const std::string& name) {
 }
 
 ReadDirResponse MDSClient::ReadDir(Ino ino, const std::string& last_name,
-                                   bool with_attr, bool is_refresh) {
+                                   bool with_attr, bool is_refresh,
+                                   uint32_t limit) {
   CHECK(fs_id_ > 0) << "fs_id_ is zero";
   ReadDirRequest request;
   ReadDirResponse response;
@@ -458,7 +466,7 @@ ReadDirResponse MDSClient::ReadDir(Ino ino, const std::string& last_name,
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
   request.set_last_name(last_name);
-  request.set_limit(100);
+  request.set_limit(limit);
   request.set_with_attr(with_attr);
   request.set_is_refresh(is_refresh);
 
@@ -572,6 +580,33 @@ ListDentryResponse MDSClient::ListDentry(Ino parent, bool is_only_dir) {
   return response;
 }
 
+ListDentryResponse MDSClient::ListDentryPaged(Ino parent,
+                                              const std::string& last,
+                                              uint32_t limit,
+                                              bool is_only_dir) {
+  CHECK(fs_id_ > 0) << "fs_id_ is zero";
+
+  ListDentryRequest request;
+  ListDentryResponse response;
+
+  request.mutable_context()->set_epoch(epoch_);
+
+  request.set_fs_id(fs_id_);
+  request.set_parent(parent);
+  request.set_last(last);
+  request.set_limit(limit);
+  request.set_is_only_dir(is_only_dir);
+
+  auto status =
+      interaction_->SendRequest("MDSService", "ListDentry", request, response);
+  if (!status.ok()) {
+    response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
+    response.mutable_error()->set_errmsg(status.error_str());
+  }
+
+  return response;
+}
+
 GetInodeResponse MDSClient::GetInode(Ino ino) {
   CHECK(fs_id_ > 0) << "fs_id_ is zero";
 
@@ -588,11 +623,6 @@ GetInodeResponse MDSClient::GetInode(Ino ino) {
   if (!status.ok()) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
-    return response;
-  }
-
-  if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-    std::cout << "inode: " << response.inode().ShortDebugString() << "\n";
   }
 
   return response;
@@ -752,6 +782,68 @@ LookupResponse MDSClient::Lookup(Ino parent, const std::string& name) {
   }
 
   return response;
+}
+
+bool MDSClient::ResolvePath(const std::string& path, Ino& out_ino) {
+  // For an ABSOLUTE path that exists locally (the DingoFS mount path, e.g.
+  // /mnt/dingofs/a/b), its st_ino IS the MDS inode -- use it directly. We only
+  // stat absolute paths so a mount-relative arg like "a/b" is never
+  // accidentally resolved against an unrelated directory in the current working
+  // directory.
+  // "/" alone is the mount root; never stat it (that would hit the OS root).
+  //
+  // Trust the OS st_ino only when the path is genuinely INSIDE the DingoFS
+  // mount
+  // -- i.e. the path itself or some ancestor reports st_ino==1 (the fs root).
+  // Otherwise an unrelated OS path like /a/b that merely happens to exist
+  // outside the mount would be silently mis-resolved to its OS inode; such a
+  // path falls through to the mount-relative walk below instead.
+  if (path.size() > 1 && path.front() == '/') {
+    struct stat st;
+    if (::stat(path.c_str(), &st) == 0) {
+      bool in_mount = (st.st_ino == 1);
+      std::string cur = path;
+      while (cur.size() > 1 && cur.back() == '/') cur.pop_back();
+      while (!in_mount) {
+        auto pos = cur.find_last_of('/');
+        if (pos == std::string::npos || pos == 0) break;
+        cur = cur.substr(0, pos);
+        struct stat as;
+        if (::stat(cur.c_str(), &as) == 0 && as.st_ino == 1) in_mount = true;
+      }
+      if (in_mount) {
+        out_ino = st.st_ino;
+        return true;
+      }
+    }
+  }
+
+  // Otherwise treat it as a path relative to the mount point (== fs root), e.g.
+  // "a/b/c", "/a/b/c", or "." / "/" for the root itself. Walk components from
+  // the root via Lookup, skipping empty and "." segments.
+  Ino cur = 1;  // fs root ino is always 1
+  const size_t n = path.size();
+  size_t i = 0;
+  while (i < n) {
+    while (i < n && path[i] == '/') ++i;  // skip slashes
+    size_t j = i;
+    while (j < n && path[j] != '/') ++j;
+    if (j > i) {
+      std::string name = path.substr(i, j - i);
+      if (name != ".") {
+        auto resp = Lookup(cur, name);
+        if (resp.error().errcode() != dingofs::pb::error::Errno::OK) {
+          std::cerr << fmt::format("resolve path '{}' fail at '{}': {}\n", path,
+                                   name, resp.error().errmsg());
+          return false;
+        }
+        cur = resp.inode().ino();
+      }
+    }
+    i = j;
+  }
+  out_ino = cur;
+  return true;
 }
 
 OpenResponse MDSClient::Open(Ino ino, std::string& session_id) {
@@ -1219,6 +1311,32 @@ ReadSliceResponse MDSClient::ReadSlice(Ino ino, int64_t chunk_index) {
     response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
     response.mutable_error()->set_errmsg(status.error_str());
     return response;
+  }
+
+  return response;
+}
+
+ReadSliceResponse MDSClient::ReadSliceAll(Ino ino, int64_t chunk_num) {
+  CHECK(fs_id_ > 0) << "fs_id_ is zero";
+
+  ReadSliceRequest request;
+  ReadSliceResponse response;
+
+  request.mutable_context()->set_epoch(epoch_);
+  // Read the authoritative store, not a possibly-stale chunk cache snapshot.
+  request.mutable_context()->set_is_bypass_cache(true);
+
+  request.set_fs_id(fs_id_);
+  request.set_ino(ino);
+  for (int64_t i = 0; i < chunk_num; ++i) {
+    request.add_chunk_descriptors()->set_index(i);
+  }
+
+  auto status =
+      interaction_->SendRequest("MDSService", "ReadSlice", request, response);
+  if (!status.ok()) {
+    response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
+    response.mutable_error()->set_errmsg(status.error_str());
   }
 
   return response;
@@ -1712,6 +1830,519 @@ void MDSClient::UpdateFsEnableUidGidMap(const std::string& fs_name,
   UpdateFs(fs_name, fs_info);
 }
 
+void MDSClient::UpdateFsEnableDirStats(const std::string& fs_name,
+                                       bool enable) {
+  if (fs_name.empty()) {
+    std::cerr << "fs_name is empty\n";
+    return;
+  }
+
+  auto fs_response = GetFs(fs_name);
+  pb::mds::FsInfo fs_info;
+  fs_info.CopyFrom(fs_response.fs_info());
+  if (fs_info.fs_id() == 0) {
+    std::cerr << "not found fs: " << fs_name << "\n";
+    return;
+  }
+
+  // Read-modify-write: round-trip the full current FsInfo and flip only this
+  // one runtime-mutable field; the server merges it (store_operation.cc).
+  fs_info.set_enable_dir_stats(enable);
+  UpdateFs(fs_name, fs_info);
+}
+
+GetDirStatResponse MDSClient::GetDirStat(Ino ino) {
+  CHECK(fs_id_ > 0) << "fs_id_ is zero";
+  CHECK(ino > 0) << "ino is zero";
+
+  GetDirStatRequest request;
+  GetDirStatResponse response;
+
+  request.set_fs_id(fs_id_);
+  request.set_ino(ino);
+
+  auto status =
+      interaction_->SendRequest("MDSService", "GetDirStat", request, response);
+  if (!status.ok()) {
+    response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
+    response.mutable_error()->set_errmsg(status.error_str());
+    return response;
+  }
+
+  if (response.error().errcode() != dingofs::pb::error::Errno::OK) {
+    std::cerr << "GetDirStat fail, error: " << response.ShortDebugString()
+              << "\n";
+  }
+
+  return response;
+}
+
+namespace {
+
+// Client-side upper bounds for `summary` knobs: a deeper/wider tree walk is
+// costly server-side and the rendered table is unreadable past these. Values
+// above are clamped (with a warning) rather than rejected.
+constexpr uint32_t kMaxSummaryDepth = 10;
+constexpr uint32_t kMaxSummaryEntries = 100;
+
+// Human-readable size in 1024-based units, matching `juicefs summary`
+// (go-humanize IBytes): one decimal below 10 of a unit, none at/above.
+std::string HumanizeIBytes(uint64_t s) {
+  constexpr double kBase = 1024.0;
+  static const char* kSizes[] = {"B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB"};
+  if (s < 1024) return fmt::format("{} B", s);
+  double val = static_cast<double>(s);
+  int i = 0;
+  while (val >= kBase && i < 6) {
+    val /= kBase;
+    ++i;
+  }
+  return val < 10.0 ? fmt::format("{:.1f} {}", val, kSizes[i])
+                    : fmt::format("{:.0f} {}", val, kSizes[i]);
+}
+
+struct SummaryRow {
+  std::string path;
+  std::string length;
+  std::string dirs;
+  std::string files;
+};
+
+// Depth-first preorder flatten into table rows. Each row's PATH is the node's
+// full path: the queried directory (`path`) for the root, and `path/<name>`
+// for descendants (the synthetic "..." aggregate becomes `path/...`).
+void FlattenTree(const pb::mds::TreeSummary& node, const std::string& path,
+                 std::vector<SummaryRow>& rows) {
+  rows.push_back({path, HumanizeIBytes(node.length()),
+                  std::to_string(node.dirs()), std::to_string(node.files())});
+  for (const auto& c : node.children()) {
+    // When this node is the mount root (shown as "/" or "."), children are bare
+    // mount-relative names ("dir11"); otherwise append under the parent path.
+    std::string child_path =
+        (path == "/" || path == ".") ? c.path() : path + "/" + c.path();
+    FlattenTree(c, child_path, rows);
+  }
+}
+
+void PrintSummaryTable(const std::vector<SummaryRow>& rows) {
+  size_t wp = 4, ws = 6, wd = 4,
+         wf = 5;  // header widths: PATH/LENGTH/DIRS/FILES
+  for (const auto& r : rows) {
+    wp = std::max(wp, r.path.size());
+    ws = std::max(ws, r.length.size());
+    wd = std::max(wd, r.dirs.size());
+    wf = std::max(wf, r.files.size());
+  }
+  auto border = [&]() {
+    std::cout << fmt::format("+{}+{}+{}+{}+\n", std::string(wp + 2, '-'),
+                             std::string(ws + 2, '-'), std::string(wd + 2, '-'),
+                             std::string(wf + 2, '-'));
+  };
+  border();
+  std::cout << fmt::format("| {:^{}} | {:^{}} | {:^{}} | {:^{}} |\n", "PATH",
+                           wp, "LENGTH", ws, "DIRS", wd, "FILES", wf);
+  border();
+  for (const auto& r : rows) {
+    std::cout << fmt::format("| {:<{}} | {:>{}} | {:>{}} | {:>{}} |\n", r.path,
+                             wp, r.length, ws, r.dirs, wd, r.files, wf);
+  }
+  border();
+}
+
+// Render a `summary` tree response as a table. The root row's PATH is the
+// queried directory (`base_path`); descendants append under it. Falls back to
+// "/" when only --ino was given, and normalizes the mount root.
+void PrintTreeTable(const pb::mds::TreeSummary& tree,
+                    const std::string& base_path) {
+  std::string base = base_path.empty() ? "/" : base_path;
+  while (base.size() > 1 && base.back() == '/') base.pop_back();
+  if (base == ".") base = "/";
+
+  std::vector<SummaryRow> rows;
+  FlattenTree(tree, base, rows);
+  PrintSummaryTable(rows);
+}
+
+// Canonical whole-system absolute path of the user-supplied --path (e.g.
+// /mnt/dingofs/a/b), via realpath. Empty when --path was not given (--ino
+// mode).
+std::string AbsOsPath(const std::string& input) {
+  if (input.empty()) return "";
+  char buf[PATH_MAX];
+  if (::realpath(input.c_str(), buf) != nullptr) return buf;
+  return input;  // fall back to the raw arg if realpath fails
+}
+
+// Mount-relative absolute fs path (e.g. /a/b) derived from a whole-system
+// absolute path: walk ancestors and find the mount root -- the DingoFS root
+// inode is always 1 (see ResolvePath) -- then strip that prefix. Empty when
+// os_path is empty or no ancestor reports st_ino==1.
+std::string MountRelPath(const std::string& os_path) {
+  if (os_path.empty()) return "";
+  std::string p = os_path;
+  while (p.size() > 1 && p.back() == '/') p.pop_back();
+  std::string mount;
+  for (std::string cur = p;;) {
+    struct stat st;
+    if (::stat(cur.c_str(), &st) == 0 && st.st_ino == 1) {
+      mount = cur;
+      break;
+    }
+    auto pos = cur.find_last_of('/');
+    if (pos == std::string::npos || pos == 0) break;
+    cur = cur.substr(0, pos);
+  }
+  if (mount.empty()) return "";
+  std::string rel = p.substr(mount.size());
+  return rel.empty() ? "/" : rel;
+}
+
+// JuiceFS-style `info` header block (size/tier dimensions intentionally
+// dropped). Header line shows the whole-system absolute path; `path:` shows the
+// mount-relative fs path. Either is omitted when unknown (--ino mode).
+void PrintInfoBlock(const std::string& os_path, const std::string& fs_path,
+                    Ino ino, int64_t files, int64_t dirs, int64_t length) {
+  if (!os_path.empty()) {
+    std::cout << fmt::format("{} :\n", os_path);
+  } else {
+    std::cout << fmt::format("inode {} :\n", ino);
+  }
+  std::cout << fmt::format("  inode: {}\n", ino);
+  std::cout << fmt::format("  files: {}\n", files);
+  std::cout << fmt::format("   dirs: {}\n", dirs);
+  std::cout << fmt::format(" length: {} ({} Bytes)\n", HumanizeIBytes(length),
+                           length);
+  if (!fs_path.empty()) {
+    std::cout << fmt::format("   path: {}\n", fs_path);
+  }
+}
+
+// `info` on a single file, raw view: one row per slice (sliceId dimension),
+// matching `juicefs info --raw`.
+// Render a bordered table with dynamic column widths (header included).
+// `aligns` has one char per column: '<' left-justify, '>' right-justify.
+void PrintTable(const std::vector<std::string>& headers,
+                const std::vector<std::vector<std::string>>& rows,
+                const std::string& aligns) {
+  const size_t n = headers.size();
+  std::vector<size_t> w(n);
+  for (size_t i = 0; i < n; ++i) w[i] = headers[i].size();
+  for (const auto& r : rows) {
+    for (size_t i = 0; i < n; ++i) w[i] = std::max(w[i], r[i].size());
+  }
+  auto border = [&]() {
+    std::string s = "+";
+    for (size_t i = 0; i < n; ++i) s += std::string(w[i] + 2, '-') + "+";
+    std::cout << s << "\n";
+  };
+  border();
+  std::string h = "|";
+  for (size_t i = 0; i < n; ++i)
+    h += fmt::format(" {:^{}} |", headers[i], w[i]);
+  std::cout << h << "\n";
+  border();
+  for (const auto& r : rows) {
+    std::string line = "|";
+    for (size_t i = 0; i < n; ++i) {
+      line += (aligns[i] == '<') ? fmt::format(" {:<{}} |", r[i], w[i])
+                                 : fmt::format(" {:>{}} |", r[i], w[i]);
+    }
+    std::cout << line << "\n";
+  }
+  border();
+}
+
+void PrintChunksTable(
+    const google::protobuf::RepeatedPtrField<pb::mds::Chunk>& chunks) {
+  std::cout << " chunks:\n";
+  std::vector<std::vector<std::string>> rows;
+  for (const auto& chunk : chunks) {
+    for (const auto& slice : chunk.slices()) {
+      rows.push_back({std::to_string(chunk.index()), std::to_string(slice.id()),
+                      std::to_string(slice.size()), std::to_string(slice.pos()),
+                      std::to_string(slice.len())});
+    }
+  }
+  PrintTable({"chunkIndex", "sliceId", "size", "offset", "length"}, rows,
+             ">>>>>");
+}
+
+// `info` on a single file, default view: one row per object (block) in the
+// object store, matching `juicefs info`. objectName is computed client-side via
+// BlockKey (the MDS stores only slice ids). pos is the object's start offset
+// within the whole file. chunk_size/block_size come from FsInfo so the layout
+// is correct even when a stored chunk omits them.
+void PrintObjectsTable(
+    const google::protobuf::RepeatedPtrField<pb::mds::Chunk>& chunks,
+    uint64_t chunk_size, uint32_t block_size) {
+  std::cout << " objects:\n";
+  std::vector<std::vector<std::string>> rows;
+  for (const auto& chunk : chunks) {
+    for (const auto& slice : chunk.slices()) {
+      uint64_t base = chunk.index() * chunk_size + slice.pos();
+      for (const auto& bk :
+           EnumerateBlockKeys(slice.id(), slice.size(), block_size)) {
+        uint64_t pos = base + static_cast<uint64_t>(bk.index) * block_size;
+        rows.push_back({std::to_string(chunk.index()), bk.StoreKey(),
+                        std::to_string(bk.size), std::to_string(pos)});
+      }
+    }
+  }
+  PrintTable({"chunkIndex", "objectName", "size", "pos"}, rows, "><>>");
+}
+
+// Resolve the target inode for a dir-stats subcommand: prefer --path (absolute
+// fs path resolved via Lookup) and fall back to --ino. Returns false (after
+// printing why) when neither yields a usable inode.
+bool ResolveDirStatIno(MDSClient& client,
+                       const MdsCommandRunner::Options& options, Ino& ino) {
+  if (!options.path.empty()) {
+    return client.ResolvePath(options.path, ino);
+  }
+  if (ino == 0) {
+    std::cout << "specify a directory with --path=/a/b/c or --ino=N.\n";
+    return false;
+  }
+  return true;
+}
+
+// Build the owner router and walk options shared by the client-side dir-stat
+// commands (info -r / summary / syncdirstat). Returns false (and prints) when
+// the router cannot be built -- a multi-RPC walk must not silently fall back to
+// a single fixed MDS, which would scatter stale, mis-routed reads across the
+// tree.
+bool SetupWalk(MDSClient& mds_client, uint32_t fs_id,
+               const MdsCommandRunner::Options& options, OwnerRouter& router,
+               WalkOptions& wopts) {
+  auto fs_resp = mds_client.GetFs(fs_id);
+  if (fs_resp.error().errcode() != dingofs::pb::error::Errno::OK) {
+    std::cerr << "get fs info fail: " << fs_resp.ShortDebugString() << "\n";
+    return false;
+  }
+  if (!router.Init(fs_id, mds_client)) {
+    std::cerr << "cannot resolve owner mds routing; aborting walk\n";
+    return false;
+  }
+  wopts.strict = options.strict;
+  wopts.dirstats_enabled = fs_resp.fs_info().enable_dir_stats();
+  wopts.threads = options.dir_threads;
+  return true;
+}
+
+// Print the JuiceFS-style break lines from a (whole-tree) syncdirstat walk.
+void PrintSyncDirStatResult(
+    const std::vector<pb::mds::DirStatMismatch>& mismatches, bool repair) {
+  if (mismatches.empty()) {
+    std::cout << "all dir-stats are consistent\n";
+    return;
+  }
+  for (const auto& b : mismatches) {
+    // Report recomputed (want) vs stored (got); {inodes, length} -- DingoFS has
+    // no separate size dimension.
+    std::cout << fmt::format(
+        "usage stat of inode {} should be {{inodes:{} length:{}}}, but got "
+        "{{inodes:{} length:{}}}{}\n",
+        b.ino(), b.want_inodes(), b.want_length(), b.got_inodes(),
+        b.got_length(), b.found() ? "" : " (no stored record)");
+    std::cout << (repair ? fmt::format(
+                               "  stat of inode {} is successfully synced\n",
+                               b.ino())
+                         : fmt::format("  stat of inode {} should be synced, "
+                                       "re-run with --repair to fix it\n",
+                                       b.ino()));
+  }
+}
+
+void HandleSummary(MDSClient& mds_client, uint32_t fs_id,
+                   const MdsCommandRunner::Options& options) {
+  Ino ino = options.ino;
+  if (!ResolveDirStatIno(mds_client, options, ino)) return;
+
+  uint32_t depth = options.depth;
+  if (depth > kMaxSummaryDepth) {
+    std::cerr << fmt::format("warn: depth should be less than {}\n",
+                             kMaxSummaryDepth + 1);
+    depth = kMaxSummaryDepth;
+  }
+  uint32_t entries = options.entries;
+  if (entries > kMaxSummaryEntries) {
+    std::cerr << fmt::format("warn: entries should be less than {}\n",
+                             kMaxSummaryEntries + 1);
+    entries = kMaxSummaryEntries;
+  }
+
+  OwnerRouter router;
+  WalkOptions wopts;
+  if (!SetupWalk(mds_client, fs_id, options, router, wopts)) return;
+  pb::mds::TreeSummary tree;
+  if (!WalkTree(router, ino, wopts, depth, entries, tree)) {
+    // Fail loud: a summary is only useful if it is complete. Rather than print
+    // a silently-undercounted tree behind a warning, abort so a skipped subtree
+    // (an unreachable/erroring owner mds) can never be mistaken for the truth.
+    std::cerr << "summary: directory walk failed (an owner mds was unreachable "
+                 "or errored); result would be incomplete, aborting\n";
+    return;
+  }
+  PrintTreeTable(tree, AbsOsPath(options.path));
+}
+
+// Check (and optionally repair) a single directory's dir-stat. Routes to the
+// owner and hard-fails on any error: a single level has no partial result to
+// salvage, so there is nothing to print but the failure itself.
+void SyncDirStatOneLevel(OwnerRouter& router, Ino ino, bool repair) {
+  MDSClient* owner = router.ClientForIno(ino);
+  if (owner == nullptr) {
+    std::cerr << fmt::format("no owner mds for ino({})\n", ino);
+    return;
+  }
+  auto resp = owner->SyncDirStat(ino, repair);
+  if (resp.error().errcode() != dingofs::pb::error::Errno::OK) {
+    std::cerr << "syncdirstat fail, error: " << resp.ShortDebugString() << "\n";
+    return;
+  }
+  std::vector<pb::mds::DirStatMismatch> mismatches(resp.mismatches().begin(),
+                                                   resp.mismatches().end());
+  PrintSyncDirStatResult(mismatches, repair);
+}
+
+void HandleSyncDirStat(MDSClient& mds_client, uint32_t fs_id,
+                       const MdsCommandRunner::Options& options) {
+  Ino ino = options.ino;
+  if (!ResolveDirStatIno(mds_client, options, ino)) return;
+  OwnerRouter router;
+  WalkOptions wopts;
+  if (!SetupWalk(mds_client, fs_id, options, router, wopts)) return;
+
+  if (!options.recursive) {
+    SyncDirStatOneLevel(router, ino, options.repair);
+    return;
+  }
+
+  // Recursive: tolerate per-directory errors instead of aborting, so a --repair
+  // that already fixed some directories still reports them. An error only flags
+  // the walk as incomplete (warning), never discards the results gathered so
+  // far.
+  std::vector<pb::mds::DirStatMismatch> mismatches;
+  bool complete =
+      WalkSyncDirStat(router, ino, wopts, options.repair, mismatches);
+  PrintSyncDirStatResult(mismatches, options.repair);
+  if (!complete)
+    std::cerr
+        << "warn: directory walk incomplete; some directories were skipped\n";
+}
+
+void HandleInfo(MDSClient& mds_client, uint32_t fs_id,
+                const MdsCommandRunner::Options& options) {
+  // `info`: directory -> single-level stat (--strict: authoritative dentry
+  // scan; -r: recursive subtree aggregate); file -> data layout (objects, or
+  // chunks/slices with --raw).
+  Ino ino = options.ino;
+  if (!ResolveDirStatIno(mds_client, options, ino)) return;
+  const std::string os_path = AbsOsPath(options.path);
+  const std::string fs_path = MountRelPath(os_path);
+
+  auto inode_resp = mds_client.GetInode(ino);
+  if (inode_resp.error().errcode() != dingofs::pb::error::Errno::OK) {
+    std::cerr << "info: get inode fail, error: "
+              << inode_resp.ShortDebugString() << "\n";
+    return;
+  }
+  const auto& inode = inode_resp.inode();
+
+  if (inode.type() == pb::mds::FileType::DIRECTORY) {
+    // One owner-routed setup serves all three reads (fail-loud: a dir-stat read
+    // never falls back to a fixed --mds_addr, which would scatter stale/mis-
+    // routed values under multi-mds).
+    OwnerRouter router;
+    WalkOptions wopts;
+    if (!SetupWalk(mds_client, fs_id, options, router, wopts)) return;
+
+    DirAgg agg;
+    bool ok;
+    if (options.recursive) {
+      ok = WalkAggregate(router, ino, wopts, agg);  // counts root itself
+    } else if (options.strict) {
+      ok = ReadDirStatStrict(router, ino, agg);  // authoritative dentry scan
+    } else {
+      ok = ReadDirStatFast(router, ino, agg);  // maintained counter
+    }
+    if (!ok) {
+      // Fail loud: an incomplete read (a skipped subtree under -r, or a failed
+      // single-level stat) would print a silently-wrong number. Abort instead.
+      std::cerr
+          << "info: dir-stat read failed (an owner mds was unreachable or "
+             "errored); result would be incomplete, aborting\n";
+      return;
+    }
+    PrintInfoBlock(os_path, fs_path, ino, agg.files, agg.dirs, agg.length);
+  } else {
+    // file / symlink: header block, then (for regular files) the data layout.
+    PrintInfoBlock(os_path, fs_path, ino, 1, 0,
+                   static_cast<int64_t>(inode.length()));
+    if (inode.type() == pb::mds::FileType::FILE && inode.length() > 0) {
+      auto fs_resp = mds_client.GetFs(fs_id);
+      if (fs_resp.error().errcode() != dingofs::pb::error::Errno::OK) {
+        std::cerr << "info: get fs info fail, error: "
+                  << fs_resp.ShortDebugString() << "\n";
+        return;
+      }
+      const uint64_t chunk_size = fs_resp.fs_info().chunk_size();
+      const uint32_t block_size = fs_resp.fs_info().block_size();
+      if (chunk_size == 0 || block_size == 0) {
+        std::cerr << "info: fs chunk_size/block_size is 0\n";
+        return;
+      }
+      const int64_t chunk_num = (inode.length() + chunk_size - 1) / chunk_size;
+      // ReadSlice is epoch-validated on the MDS; without a fresh partition
+      // epoch the default 0 is treated as 1 and rejected once the fs has been
+      // rebalanced (JoinFs/QuitFs bump the epoch). Seed it from the fs_info we
+      // just fetched so `info <file>` works after any partition change.
+      mds_client.SetEpoch(fs_resp.fs_info().partition_policy().epoch());
+      auto rs = mds_client.ReadSliceAll(ino, chunk_num);
+      if (rs.error().errcode() != dingofs::pb::error::Errno::OK) {
+        std::cerr << "info: read slice fail, error: " << rs.ShortDebugString()
+                  << "\n";
+        return;
+      }
+      if (options.raw) {
+        PrintChunksTable(rs.chunks());
+      } else {
+        PrintObjectsTable(rs.chunks(), chunk_size, block_size);
+      }
+    }
+  }
+}
+
+}  // namespace
+
+SyncDirStatResponse MDSClient::SyncDirStat(Ino ino, bool repair) {
+  CHECK(fs_id_ > 0) << "fs_id_ is zero";
+  CHECK(ino > 0) << "ino is zero";
+
+  SyncDirStatRequest request;
+  SyncDirStatResponse response;
+
+  request.mutable_context()->set_epoch(epoch_);
+
+  request.set_fs_id(fs_id_);
+  request.set_ino(ino);
+  request.set_repair(repair);
+  // Single-level check/repair: the server reads the authoritative store
+  // (critical for repair=true, so it never repairs off a stale cache). The
+  // recursive walk lives in the CLI (dir_tree_walker), which calls this per
+  // directory routed to the owning MDS.
+  request.mutable_context()->set_is_bypass_cache(true);
+
+  auto status =
+      interaction_->SendRequest("MDSService", "SyncDirStat", request, response);
+  if (!status.ok()) {
+    response.mutable_error()->set_errcode(dingofs::pb::error::Errno::EINTERNAL);
+    response.mutable_error()->set_errmsg(status.error_str());
+  }
+
+  return response;
+}
+
 bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr,
                            const std::string& cmd, uint32_t fs_id) {
   static std::set<std::string> mds_cmd = {
@@ -1754,6 +2385,10 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr,
       "restoretrash",
       "updatefstrashdays",
       "updatefsenableuidgidmap",
+      "updatefsenabledirstats",
+      "info",
+      "summary",
+      "syncdirstat",
   };
 
   if (mds_cmd.count(cmd) == 0) return false;
@@ -1770,7 +2405,10 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr,
   }
 
   if (cmd == Helper::ToLowerCase("GetMdsList")) {
-    mds_client.GetMdsList();
+    auto response = mds_client.GetMdsList();
+    for (const auto& mds : response.mdses()) {
+      std::cout << "mds: " << mds.ShortDebugString() << "\n";
+    }
 
   } else if (cmd == Helper::ToLowerCase("CreateFs")) {
     dingofs::mds::client::MDSClient::CreateFsParams params;
@@ -1785,6 +2423,7 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr,
     params.trash_days = options.trash_days;
     params.immediate_trash_quota = options.immediate_trash_quota;
     params.enable_uid_gid_map = options.enable_uid_gid_map;
+    params.enable_dir_stats = options.enable_dir_stats;
 
     mds_client.CreateFs(options.fs_name, params);
 
@@ -1806,6 +2445,10 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr,
   } else if (cmd == Helper::ToLowerCase("UpdateFsEnableUidGidMap")) {
     mds_client.UpdateFsEnableUidGidMap(options.fs_name,
                                        options.enable_uid_gid_map);
+
+  } else if (cmd == Helper::ToLowerCase("UpdateFsEnableDirStats")) {
+    mds_client.UpdateFsEnableDirStats(options.fs_name,
+                                      options.enable_dir_stats);
 
   } else if (cmd == Helper::ToLowerCase("GetFs")) {
     mds_client.GetFs(options.fs_name);
@@ -1836,7 +2479,12 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr,
     mds_client.ListDentry(options.parent, false);
 
   } else if (cmd == Helper::ToLowerCase("GetInode")) {
-    mds_client.GetInode(options.parent);
+    auto resp = mds_client.GetInode(options.parent);
+    if (resp.error().errcode() == dingofs::pb::error::Errno::OK) {
+      std::cout << "inode: " << resp.inode().ShortDebugString() << "\n";
+    } else {
+      std::cerr << "GetInode fail, error: " << resp.ShortDebugString() << "\n";
+    }
 
   } else if (cmd == Helper::ToLowerCase("BatchGetInode")) {
     std::vector<int64_t> inos;
@@ -2006,6 +2654,15 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr,
       return true;
     }
     runner.Run();
+
+  } else if (cmd == Helper::ToLowerCase("Info")) {
+    HandleInfo(mds_client, fs_id, options);
+
+  } else if (cmd == Helper::ToLowerCase("Summary")) {
+    HandleSummary(mds_client, fs_id, options);
+
+  } else if (cmd == Helper::ToLowerCase("SyncDirStat")) {
+    HandleSyncDirStat(mds_client, fs_id, options);
   }
 
   return true;
