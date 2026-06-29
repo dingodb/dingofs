@@ -117,6 +117,11 @@ static std::string RenderStorageInfo(const pb::mds::FsExtra& fs_extra) {
     result += fmt::format("user: {}", rados_info.user_name());
     result += "<br>";
     result += fmt::format("cluster: {}", rados_info.cluster_name());
+
+  } else if (!fs_extra.file_info().path().empty()) {
+    result += "local file";
+    result += "<br>";
+    result += fmt::format("path: {}", fs_extra.file_info().path());
   }
 
   return result;
@@ -577,10 +582,9 @@ static void RenderTools(const std::string& parse_key, butil::IOBufBuilder& os) {
 
   os << R"(<form method="get" action="/FsStatService">)";
   os << R"(<label>Parse Key (hex):&nbsp;</label>)";
-  os << fmt::format(
-      R"(<input type="text" name="key" size="80" )"
-      R"(placeholder="e.g. 7844494e474f46533a05000027120d00000004a81b94cc01" value="{}">)",
-      HtmlEscape(parse_key));
+  os << fmt::format(R"(<input type="text" name="key" size="80" )"
+                    R"(placeholder="e.g. 7844494e474f46533a05000027120d00000004a81b94cc01" value="{}">)",
+                    HtmlEscape(parse_key));
   os << R"(&nbsp;<input type="submit" value="Parse">)";
   os << R"(</form>)";
 

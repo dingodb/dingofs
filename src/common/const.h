@@ -74,6 +74,10 @@ static constexpr uint32_t kDirAttrMutationNum = 32;
 
 constexpr bool HasDirAttrMutation() { return kDirAttrMutationNum != 0; }
 
+const uint32_t kMaxMDSId = 65535;
+
+constexpr uint32_t kInoShiftBits = 40;
+
 }  // namespace dingofs
 
 #endif  // DINGOFS_SRC_COMMON_CONST_H_

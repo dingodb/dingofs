@@ -38,19 +38,27 @@ class ParentMemo {
   size_t Size();
   size_t Bytes();
 
+  void CleanExpired(uint64_t expire_s);
+
   void Summary(Json::Value& value);
   void DescribeByJson(Json::Value& value);
 
  private:
   uint64_t fs_id_{0};
 
-  using Map = absl::flat_hash_map<Ino, Ino>;
+  struct Value {
+    Ino parent{0};
+    uint64_t last_active_time_s{0};
+  };
+
+  using Map = absl::flat_hash_map<Ino, Value>;
 
   constexpr static size_t kShardNum = 256;
   utils::Shards<Map, kShardNum> parent_map_;
 
   // statistics
   bvar::Adder<int64_t> total_count_;
+  bvar::Adder<int64_t> clean_count_;
 };
 
 }  // namespace mds

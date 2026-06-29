@@ -14,9 +14,6 @@
 
 #include "mds/filesystem/filesystem.h"
 
-#include <absl/container/flat_hash_set.h>
-#include <bthread/bthread.h>
-#include <bthread/types.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -31,11 +28,15 @@
 #include <utility>
 #include <vector>
 
+#include "absl/container/flat_hash_set.h"
 #include "brpc/reloadable_flags.h"
+#include "bthread/bthread.h"
+#include "bthread/types.h"
 #include "butil/status.h"
 #include "common/const.h"
 #include "common/helper.h"
 #include "common/logging.h"
+#include "common/options/mds.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mds.pb.h"
 #include "fmt/core.h"
@@ -107,9 +108,8 @@ DEFINE_validator(mds_storage_engine, [](const char*, const std::string& value) -
   return value == "dingo-store" || value == "tikv" || value == "tikv-go" || value == "dummy";
 });
 
-DEFINE_string(mds_id_generator_type, "store", "id generator type, e.g coor|store");
-DEFINE_validator(mds_id_generator_type,
-                 [](const char*, const std::string& value) -> bool { return value == "coor" || value == "store"; });
+DEFINE_bool(mds_update_inode_cache_enable, false, "Update inode cache enable.");
+DEFINE_validator(mds_update_inode_cache_enable, brpc::PassValidate);
 
 DECLARE_uint32(mds_txn_max_retry_times);
 
@@ -220,14 +220,11 @@ bool FileSystem::Init() {
 
 // odd number is dir inode
 Status FileSystem::GenDirIno(Ino& ino) {
-  // bool ret = ino_id_generator_->GenID(2, ino);
-  // ino = (ino & 1) ? ino : (ino + 1);  // ensure odd number for dir inode
-
-  // return ret ? Status::OK() : Status(pb::error::EALLOC_ID, "generate inode id fail");
-
   bool ret = ino_id_generator_->GenID(2, ino);
 
-  ino = (self_mds_id_ << 40) + (ino & 0xFFFFFFFFFF);
+  if (!FLAGS_mds_ino_generator_share_enable) {
+    ino = (self_mds_id_ << kInoShiftBits) + (ino & 0xFFFFFFFFFF);
+  }
   ino = (ino & 1) ? ino : (ino + 1);  // ensure odd number for dir inode
 
   return ret ? Status::OK() : Status(pb::error::EALLOC_ID, "generate inode id fail");
@@ -235,14 +232,11 @@ Status FileSystem::GenDirIno(Ino& ino) {
 
 // even number is file inode
 Status FileSystem::GenFileIno(Ino& ino) {
-  // bool ret = ino_id_generator_->GenID(2, ino);
-  // ino = (ino & 1) ? (ino + 1) : ino;  // ensure even number for file inode
-
-  // return ret ? Status::OK() : Status(pb::error::EALLOC_ID, "generate inode id fail");
-
   bool ret = ino_id_generator_->GenID(2, ino);
 
-  ino = (self_mds_id_ << 40) + (ino & 0xFFFFFFFFFF);
+  if (!FLAGS_mds_ino_generator_share_enable) {
+    ino = (self_mds_id_ << kInoShiftBits) + (ino & 0xFFFFFFFFFF);
+  }
   ino = (ino & 1) ? (ino + 1) : ino;  // ensure even number for file inode
 
   return ret ? Status::OK() : Status(pb::error::EALLOC_ID, "generate inode id fail");
@@ -957,7 +951,9 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryWithPaOut& 
   auto& parent_attr_or_mutation = result.parent_attr_or_mutation;
 
   // update cache
-  UpsertInodeCache(attr, reason);
+  if (FLAGS_mds_update_inode_cache_enable) {
+    UpsertInodeCache(attr, reason);
+  }
 
   AttrEntry last_parent_attr = parent_inode->ToAttr();
   AddDentryToPartition(parent, dentry, last_parent_attr.version());
@@ -3795,6 +3791,7 @@ void FileSystem::CleanExpiredCache() {
   partition_cache_.CleanExpired(expired_time);
   inode_cache_.CleanExpired(expired_time);
   chunk_cache_.CleanExpired(expired_time);
+  parent_memo_.CleanExpired(expired_time);
 }
 
 void FileSystem::DescribeByJson(Json::Value& value) {
@@ -4065,31 +4062,11 @@ bool FileSystemSet::Init() {
 }
 
 IdGeneratorUPtr FileSystemSet::NewInoGenerator(uint32_t fs_id) {
-  IdGeneratorUPtr ino_id_generator;
-
-  if (FLAGS_mds_storage_engine == "dingo-store") {
-    ino_id_generator = (FLAGS_mds_id_generator_type == "coor") ? NewInodeIdGenerator(fs_id, coordinator_client_)
-                                                               : NewInodeIdGenerator(fs_id, kv_storage_);
-
-  } else {
-    ino_id_generator = NewInodeIdGenerator(fs_id, kv_storage_);
-  }
-
-  return ino_id_generator;
+  return FLAGS_mds_ino_generator_share_enable ? NewInodeIdGenerator(fs_id, kv_storage_)
+                                              : NewInodeIdGenerator(fs_id, self_mds_meta_.ID(), kv_storage_);
 }
 
-void FileSystemSet::DestroyInoGenerator(uint32_t fs_id) {
-  if (FLAGS_mds_storage_engine == "dingo-store") {
-    if (FLAGS_mds_id_generator_type == "coor") {
-      DestroyInodeIdGenerator(fs_id, coordinator_client_);
-    } else {
-      DestroyInodeIdGenerator(fs_id, kv_storage_);
-    }
-
-  } else {
-    DestroyInodeIdGenerator(fs_id, kv_storage_);
-  }
-}
+void FileSystemSet::DestroyInoGenerator(uint32_t fs_id) { DestroyInodeIdGenerator(fs_id, kv_storage_); }
 
 Status FileSystemSet::GenFsId(uint32_t& fs_id) {
   uint64_t temp_fs_id;
