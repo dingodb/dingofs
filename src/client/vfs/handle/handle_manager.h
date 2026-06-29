@@ -18,6 +18,7 @@
 #define DINGOFS_CLIENT_VFS_HANDLE_MANAGER_H
 
 #include <atomic>
+#include <condition_variable>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -35,11 +36,17 @@ namespace vfs {
 class VFSHub;
 class FileReader;
 class FileWriter;
+class HandleManager;
 
 // temporary store .stats file data
 struct FileBuffer {
   size_t size{0};
   std::unique_ptr<char[]> data{nullptr};
+};
+
+struct HandleResources {
+  FileReader* reader{nullptr};
+  FileWriter* writer{nullptr};  // nullptr for O_RDONLY
 };
 
 // Handle is a pure-data per-fh value object: identity (fh/ino/flags), the
@@ -52,8 +59,7 @@ struct Handle {
   uint64_t fh{0};
   int32_t flags{0};
 
-  FileReader* reader{nullptr};
-  FileWriter* writer{nullptr};   // nullptr for O_RDONLY
+  HandleResources resources;
 
   std::atomic<int64_t> refs{0};
 
@@ -62,9 +68,36 @@ struct Handle {
   std::string ToString() const;
 };
 
+class HandleGuard {
+ public:
+  HandleGuard() = default;
+  ~HandleGuard();
+
+  HandleGuard(const HandleGuard&) = delete;
+  HandleGuard& operator=(const HandleGuard&) = delete;
+
+  HandleGuard(HandleGuard&& other) noexcept;
+  HandleGuard& operator=(HandleGuard&& other) noexcept;
+
+  Handle* get() const { return handle_; }
+  Handle* operator->() const { return handle_; }
+  explicit operator bool() const { return handle_ != nullptr; }
+
+ private:
+  friend class HandleManager;
+
+  HandleGuard(HandleManager* manager, Handle* handle)
+      : manager_(manager), handle_(handle) {}
+
+  void Reset();
+
+  HandleManager* manager_{nullptr};
+  Handle* handle_{nullptr};
+};
+
 class HandleManager {
  public:
-  HandleManager(VFSHub* hub) : vfs_hub_(hub) {};
+  HandleManager(VFSHub* hub) : vfs_hub_(hub){};
 
   ~HandleManager();
 
@@ -77,10 +110,16 @@ class HandleManager {
   // writable open mode.  Returns nullptr on failure.
   Handle* NewHandle(uint64_t fh, Ino ino, int flags);
 
-  // Used by the .stats path — adds an externally-built (data-only) Handle.
-  void AddHandle(Handle* handle);
+  // Used by NewHandle and the .stats path. Returns false after Stop() starts;
+  // ownership stays with the caller in that case.
+  bool AddHandle(Handle* handle);
 
-  Handle* FindHandler(uint64_t fh);
+  // Data-path lookup: returns empty after Stop() starts.
+  HandleGuard FindHandlerGuard(uint64_t fh);
+
+  // Release-path lookup: FUSE_RELEASE must be allowed after Stop() starts so
+  // the fh identity can be removed from handles_.
+  HandleGuard FindHandlerForRelease(uint64_t fh);
 
   void ReleaseHandler(uint64_t fh);
 
@@ -99,6 +138,8 @@ class HandleManager {
   bool Load(const Json::Value& value);
 
  private:
+  friend class HandleGuard;
+
   // Atomic refs ops on Handle::refs. Caller must use these instead of
   // touching Handle::refs directly.
   void AcquireRefHandle(Handle* h);
@@ -111,9 +152,18 @@ class HandleManager {
   // Called from ReleaseRefHandle when refs hit 0.
   void DestroyHandle(Handle* h);
 
+  void ReleaseGuard(Handle* h);
+
+  // Detach resources from the handle identity. Caller must hold mutex_.
+  HandleResources DetachHandleResourcesLocked(Handle* h);
+
+  // Release detached resources without holding mutex_.
+  void ReleaseHandleResources(HandleResources resources);
+
   VFSHub* vfs_hub_{nullptr};
 
   std::mutex mutex_;
+  std::condition_variable cv_;
   bool stopped_{false};
   std::unordered_map<uint64_t, Handle*> handles_;
 
