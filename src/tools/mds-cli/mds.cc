@@ -609,6 +609,7 @@ ListDentryResponse MDSClient::ListDentryPaged(Ino parent,
 
 GetInodeResponse MDSClient::GetInode(Ino ino) {
   CHECK(fs_id_ > 0) << "fs_id_ is zero";
+  CHECK(ino > 0) << "ino is zero";
 
   GetInodeRequest request;
   GetInodeResponse response;
@@ -2479,7 +2480,11 @@ bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr,
     mds_client.ListDentry(options.parent, false);
 
   } else if (cmd == Helper::ToLowerCase("GetInode")) {
-    auto resp = mds_client.GetInode(options.parent);
+    if (options.ino == 0) {
+      std::cout << "ino is empty.\n";
+      return true;
+    }
+    auto resp = mds_client.GetInode(options.ino);
     if (resp.error().errcode() == dingofs::pb::error::Errno::OK) {
       std::cout << "inode: " << resp.inode().ShortDebugString() << "\n";
     } else {

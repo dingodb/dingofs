@@ -786,6 +786,10 @@ void MDSServiceImpl::DoGetInode(google::protobuf::RpcController*, const pb::mds:
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
+  if (BAIDU_UNLIKELY(request->ino() == 0)) {
+    return ServiceHelper::SetError(response->mutable_error(), pb::error::EILLEGAL_PARAMTETER, "ino is zero");
+  }
+
   Context ctx(request->context(), request->info().request_id(), __func__);
 
   EntryOut entry_out;
@@ -3563,9 +3567,8 @@ void MDSServiceImpl::DoGetDirStat(google::protobuf::RpcController*, const pb::md
   response->mutable_dir_stat()->Swap(&dir_stat);
 }
 
-void MDSServiceImpl::GetDirStat(google::protobuf::RpcController* controller,
-                                const pb::mds::GetDirStatRequest* request, pb::mds::GetDirStatResponse* response,
-                                google::protobuf::Closure* done) {
+void MDSServiceImpl::GetDirStat(google::protobuf::RpcController* controller, const pb::mds::GetDirStatRequest* request,
+                                pb::mds::GetDirStatResponse* response, google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
 
   auto validate_fn = [&]() -> Status {
