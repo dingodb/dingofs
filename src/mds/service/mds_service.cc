@@ -1392,9 +1392,6 @@ void MDSServiceImpl::Open(google::protobuf::RpcController* controller, const pb:
     if (request->ino() == 0) {
       return Status(pb::error::EILLEGAL_PARAMTETER, "ino is empty");
     }
-    if (request->flags() == 0) {
-      return Status(pb::error::EILLEGAL_PARAMTETER, "flags is empty");
-    }
     if (request->session_id().empty()) {
       return Status(pb::error::EILLEGAL_PARAMTETER, "session_id is empty");
     }

@@ -3211,8 +3211,8 @@ Status RepairDirStatOperation::Run(TxnUPtr& txn) {
   }
 
   // Same mismatch criteria as the pre-existing SyncDirStat check (dirs excluded).
-  result_.mismatch = !result_.found || result_.stored.length() != calc_.length() ||
-                     result_.stored.inodes() != calc_.inodes();
+  result_.mismatch =
+      !result_.found || result_.stored.length() != calc_.length() || result_.stored.inodes() != calc_.inodes();
 
   if (repair_ && result_.mismatch) {
     txn->Put(key, MetaCodec::EncodeDirStatValue(calc_));
@@ -3488,7 +3488,7 @@ Status ScanDirShardOperation::Run(TxnUPtr& txn) {
     range.end = range_.end.empty() ? complete_range.end : MetaCodec::EncodeDentryKey(fs_id_, ino_, range_.end);
   }
 
-  return txn->Scan(range, [&](const std::string& key, const std::string& value) -> bool {
+  Status status = txn->Scan(range, [&](const std::string& key, const std::string& value) -> bool {
     if (MetaCodec::IsInodeKey(key)) {
       result_.attr_with_mutation.attr = MetaCodec::DecodeInodeValue(value);
       return true;
@@ -3498,6 +3498,14 @@ Status ScanDirShardOperation::Run(TxnUPtr& txn) {
     }
     return handler_(MetaCodec::DecodeDentryValue(value));
   });
+
+  if (!status.ok()) return status;
+
+  if (result_.attr_with_mutation.attr.ino() == 0) {
+    return Status(pb::error::ENOT_FOUND, fmt::format("dir inode not found({})", ino_));
+  }
+
+  return status;
 }
 
 Status ScanDelSliceOperation::Run(TxnUPtr& txn) {
@@ -3624,13 +3632,14 @@ Status GetInodeAttrOperation::Run(TxnUPtr& txn) {
   CHECK(fs_id_ > 0) << "fs_id is 0";
   CHECK(ino_ > 0) << "ino is 0";
 
+  Status status;
   if (IsDir(ino_)) {
     Range range;
     range.start = MetaCodec::EncodeInodeKey(fs_id_, ino_);
     range.end = MetaCodec::GetDirInodeUpdateOpRange(fs_id_, ino_).end;
 
     bool found = false;
-    auto status = txn->Scan(range, [&](const std::string& key, const std::string& value) -> bool {
+    status = txn->Scan(range, [&](const std::string& key, const std::string& value) -> bool {
       if (MetaCodec::IsInodeKey(key)) {
         result_.attr_with_mutation.attr = MetaCodec::DecodeInodeValue(value);
         found = true;
@@ -3646,25 +3655,19 @@ Status GetInodeAttrOperation::Run(TxnUPtr& txn) {
     });
     if (!status.ok()) return status;
 
-    // The scan can come back without the base inode key (only mutation keys, or
-    // nothing) when the directory inode was deleted while a client still holds a
-    // stale reference and issues GetAttr. Surface that as ENOT_FOUND instead of
-    // returning a default zero-ino attr, which UpsertInodeCache rejects with
-    // LOG(FATAL) -- crashing the MDS on a GetAttr of any missing directory.
     if (!found) {
       return Status(pb::error::ENOT_FOUND, fmt::format("not found inode({})", ino_));
     }
-    return Status::OK();
 
   } else {
     std::string value;
-    auto status = txn->Get(MetaCodec::EncodeInodeKey(fs_id_, ino_), value);
+    status = txn->Get(MetaCodec::EncodeInodeKey(fs_id_, ino_), value);
     if (!status.ok()) return status;
 
     result_.attr_with_mutation.attr = MetaCodec::DecodeInodeValue(value);
-
-    return Status::OK();
   }
+
+  return status;
 }
 
 Status BatchGetInodeAttrOperation::Run(TxnUPtr& txn) {
@@ -3706,6 +3709,8 @@ Status BatchGetInodeAttrOperation::Run(TxnUPtr& txn) {
 
   result_.attr_with_mutations.clear();
   for (auto& [_, attr_with_mutation] : attr_with_mutation_map) {
+    CHECK(attr_with_mutation.attr.ino() > 0) << "attr.ino is 0";
+
     result_.attr_with_mutations.push_back(attr_with_mutation);
   }
 
