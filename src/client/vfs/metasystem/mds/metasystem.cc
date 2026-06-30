@@ -977,8 +977,12 @@ Status MDSMetaSystem::Close(ContextSPtr ctx, Ino ino, uint64_t fh) {
   AssertStop();
 
   std::string session_id = file_session_map_.GetSessionID(ino, fh);
-  CHECK(!session_id.empty())
-      << fmt::format("file session is nullptr, ino({}) fh({}).", ino, fh);
+  if (session_id.empty()) {
+    LOG(WARNING) << fmt::format(
+        "[meta.fs.{}.{}] close file session not found, maybe already closed.",
+        ino, fh);
+    return Status::OK();
+  }
 
   file_session_map_.Delete(ino, fh);
 
@@ -1809,8 +1813,11 @@ void MDSMetaSystem::AsyncFlushSlice(ContextSPtr& ctx, ChunkSetSPtr chunk_set,
 
 Status MDSMetaSystem::FlushSliceAndFile(ContextSPtr ctx, Ino ino) {
   auto file_session = file_session_map_.GetSession(ino);
-  CHECK(file_session != nullptr)
-      << fmt::format("file session is nullptr, ino({}).", ino);
+  if (file_session == nullptr) {
+    LOG(WARNING) << fmt::format(
+        "[meta.fs.{}] flush file skip cause no file session.", ino);
+    return Status::OK();
+  }
 
   auto& chunk_set = file_session->GetChunkSet();
 
